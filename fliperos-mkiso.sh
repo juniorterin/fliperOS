@@ -163,7 +163,8 @@ apt-get install -y --no-install-recommends \
   libdrm-dev libgbm-dev libxrandr-dev libxi-dev libxext-dev libfontconfig1-dev \
   joystick dialog whiptail alsa-utils linux-firmware \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
-  openssh-server network-manager wpasupplicant iw python3 pciutils libdrm-tests edid-decode squashfs-tools
+  openssh-server network-manager wpasupplicant iw python3 pciutils libdrm-tests edid-decode squashfs-tools \
+  espeak-ng
 
 systemctl enable ssh
 mkdir -p /etc/systemd/system/ssh.service.d

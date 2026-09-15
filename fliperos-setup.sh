@@ -127,6 +127,7 @@ fase1_base() {
     x11-xserver-utils \
     libdrm-dev \
     libdrm2 pciutils libdrm-tests edid-decode pkg-config \
+    espeak-ng \
     libgbm-dev \
     libgbm1 \
     mesa-vulkan-drivers \

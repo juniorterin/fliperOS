@@ -6,6 +6,7 @@ root=${1:-/}
 [[ -d "$root/etc" ]] || { echo "Rootfs invalido: $root" >&2; exit 2; }
 install -Dm644 "$src/crt15-edid.bin" "$root/lib/firmware/edid/crt15.bin"
 install -Dm755 "$src/fliperos-video-check.py" "$root/usr/local/bin/fliperos-video-check"
+install -Dm755 "$src/fliperos-video-autodetect.py" "$root/usr/local/bin/fliperos-video-autodetect"
 install -Dm755 "$src/fliperos-install.py" "$root/usr/local/bin/fliperos-install"
 install -Dm755 "$src/config/fliperos-edid-hook" "$root/etc/initramfs-tools/hooks/fliperos-edid"
 install -Dm644 "$src/config/switchres.ini" "$root/etc/fliperos/switchres.ini"

@@ -67,6 +67,17 @@ O verificador abre DRM somente para leitura e consulta conector, encoder e CRTC 
 
 Sem filtro, considera todas as saídas ativas. Um LCD a 31 kHz junto do CRT faz o resultado global indicar fora da faixa. Use `--connector` para examinar só o CRT e `--min-khz`/`--max-khz` para os limites específicos do monitor.
 
+## Auto-detecção de conector
+
+`fliperos-video-check` é só leitura: se nenhuma saída já estiver ativa (hardware diferente do padrão `VGA-1`/`DVI-I-1` forçado no GRUB), ele não descobre nada sozinho. Para esse caso existe `fliperos-video-autodetect`, baseado na técnica do GroovyArcade/gatools (`video/video.sh`): liga cada conector analógico (`VGA-*`/`DVI-I-*`) um de cada vez, pede para apertar ENTER se a imagem aparecer dentro de um tempo limite, e desliga antes de testar o próximo — por isso a tela "pisca" durante o teste. Com `espeak-ng` instalado, cada passo também é narrado por voz, útil justamente porque nesse momento pode não haver nada visível ainda.
+
+```bash
+sudo fliperos-video-autodetect
+sudo fliperos-video-autodetect --json --no-voz --timeout 8
+```
+
+Isso identifica **qual porta** o CRT está usando, não confirma 15 kHz — o `fliperos-video-check` continua sendo a prova real do modo. `sudo fliperos-install` já chama a auto-detecção automaticamente quando `fliperos-video-check` não encontra nenhuma saída ativa, antes de aplicar as mesmas checagens de faixa e a confirmação manual de sempre. Assume uma única GPU; em máquinas com mais de uma placa o console pode não estar mapeado pra GPU sob teste.
+
 Essa leitura é o estado informado pelo kernel naquele momento. Não mede eletricamente HSync, não confirma a saída após um conversor e não garante modos escolhidos posteriormente pelos jogos. A medição física exige instrumento ou indicação confiável do monitor/analisador.
 
 ## Switchres e emuladores
@@ -104,6 +115,7 @@ O privilégio acima pertence ao container de build; não monte `/dev` do host ne
 | `fliperos-install.py` | Assistente live/instalação em disco |
 | `fliperos-install-video.sh` | Assets compartilhados entre setup e ISO |
 | `fliperos-video-check.py` | Consulta de modo ativo DRM |
+| `fliperos-video-autodetect.py` | Descobre o conector do CRT ligando/desligando cada saida analogica |
 | `fliperos-detect.sh` | Relatório de sistema e vídeo |
 | `config/` | Xorg, Switchres, GRUB, serviço, hook EDID e launchers |
 | `tools/repack-iso.sh` | Revisão da ISO 0.5 em container de auditoria |

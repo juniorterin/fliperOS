@@ -16,6 +16,7 @@ def load(name, filename):
 
 video = load('video', 'fliperos-video-check.py')
 installer = load('installer', 'fliperos-install.py')
+autodetect = load('autodetect', 'fliperos-video-autodetect.py')
 
 
 class VideoTests(unittest.TestCase):
@@ -117,6 +118,23 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 installer.install(self.disk(), 'VGA-1')
             command.assert_not_called()
+
+
+class AutodetectTests(unittest.TestCase):
+    def test_connector_name_keeps_hyphenated_type(self):
+        self.assertEqual(autodetect.connector_name(Path('/sys/class/drm/card0-DVI-I-1')), 'DVI-I-1')
+        self.assertEqual(autodetect.connector_name(Path('/sys/class/drm/card0-VGA-1')), 'VGA-1')
+
+    def test_classify_digital_monitor_is_skipped(self):
+        self.assertEqual(autodetect.classify('HDMI-A-1', 256, 'connected'), 'edid_present')
+
+    def test_classify_forceable_without_edid(self):
+        self.assertEqual(autodetect.classify('VGA-1', 0, 'disconnected'), 'forceable')
+        self.assertEqual(autodetect.classify('DVI-I-1', 0, 'disconnected'), 'forceable')
+
+    def test_classify_non_forceable_digital_without_signal(self):
+        self.assertEqual(autodetect.classify('DP-1', 0, 'disconnected'), 'skip')
+        self.assertEqual(autodetect.classify('HDMI-A-1', 0, 'disconnected'), 'skip')
 
 
 if __name__ == '__main__':

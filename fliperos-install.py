@@ -108,13 +108,47 @@ def configure_video(root, connector):
     service.write_text(re.sub(r'--connector \S+', '--connector ' + connector, service.read_text()))
 
 
+def autodetect_connector():
+    """Fall back to cycling VGA-*/DVI-I-* connectors when none is active yet.
+
+    Only narrows down the physical port (see fliperos-video-autodetect.py);
+    the 15 kHz check below still applies to whatever it finds.
+    """
+    tool = Path("/usr/local/bin/fliperos-video-autodetect")
+    if not tool.is_file():
+        tool = Path(__file__).with_name("fliperos-video-autodetect.py")
+    proc = subprocess.run([str(tool), "--json"], text=True, capture_output=True)
+    try:
+        result = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        raise ValueError("Auto-deteccao de conector falhou: " + (proc.stderr or "sem saida").strip())
+    confirmed = result.get("confirmed", [])
+    if not confirmed:
+        raise ValueError("Nenhum conector confirmado na auto-deteccao. Consulte sudo fliperos-video-check.")
+    if len(confirmed) == 1:
+        return confirmed[0]
+    for i, name in enumerate(confirmed, 1):
+        print(f'{i}. {name}')
+    index = int(input("Mais de um conector respondeu; qual e o CRT? ")) - 1
+    if not 0 <= index < len(confirmed):
+        raise ValueError("Selecao invalida")
+    return confirmed[index]
+
+
 def select_connector():
     checker = Path("/usr/local/bin/fliperos-video-check")
     proc = subprocess.run([str(checker), "--json"], text=True, capture_output=True)
     report = json.loads(proc.stdout)
     active = [o for o in report["outputs"] if o["active"]]
     if not active:
-        raise ValueError("Nenhuma saida ativa legivel. Consulte sudo fliperos-video-check.")
+        found = autodetect_connector()
+        print("Conector " + found + " confirmado visualmente. Verificando o modo agora...")
+        proc = subprocess.run([str(checker), "--json"], text=True, capture_output=True)
+        report = json.loads(proc.stdout)
+        active = [o for o in report["outputs"] if o["active"] and o["connector"] == found]
+        if not active:
+            raise ValueError(found + " nao produziu um modo ativo legivel pelo DRM; "
+                              "ajuste o EDID/boot antes de instalar.")
     for i, output in enumerate(active, 1):
         print(f'{i}. {output["card"]} {output["connector"]}: {output["horizontal_khz"]:.4f} kHz')
     index = int(input("Saida conectada ao CRT: ")) - 1
