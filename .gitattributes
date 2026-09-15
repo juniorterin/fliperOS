@@ -4,3 +4,7 @@
 # patches pra CRLF e corrompeu os arquivos).
 *.sh text eol=lf
 patches/** -text
+# Scripts em config/ sem extensao (fliperos-x11-run, fliperos-kms-run,
+# fliperos-launcher, fliperos-x11-client, fliperos-edid-hook) — mesmo
+# risco de CRLF que os .sh acima, so que sem sufixo pro *.sh pegar.
+config/fliperos-* text eol=lf

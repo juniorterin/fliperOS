@@ -1,6 +1,6 @@
 # Build isolado do fliperos-mkiso.sh — evita o vazamento de /dev do host
 # que o WSL2 causa com chroot+debootstrap nativo (ver CLAUDE.md).
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -13,4 +13,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 COPY fliperos-*.sh fliperos-*.py crt15-edid.bin ./
 COPY config/ ./config/
+COPY patches/ ./patches/
 RUN chmod +x ./*.sh

@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
     --fase) [[ $# -ge 2 ]] || { echo "--fase requer valor"; exit 2; }; FASE_ALVO="$2"; shift 2 ;;
     --dry-run)  DRY_RUN=true;   shift   ;;
     --user) [[ $# -ge 2 ]] || { echo "--user requer valor"; exit 2; }; FLIPEROS_USER="$2"; shift 2 ;;
-    *) echo "Uso: sudo bash fliperos-setup.sh [--fase 1-5] [--dry-run] [--user <nome>]"; exit 1 ;;
+    *) echo "Uso: sudo bash fliperos-setup.sh [--fase 1-6] [--dry-run] [--user <nome>]"; exit 1 ;;
   esac
 done
 
@@ -255,15 +255,17 @@ fase4_groovymame() {
 
   info "Compilando GroovyMAME com SwitchRes integrado..."
   info "(isso leva 20-40 min dependendo do hardware)"
+  # SUBTARGET=arcade nao existe mais (MAME unificou os subtargets ha um
+  # tempo); o binario resultante agora se chama so "mame".
   run "make -C '$GMAME_DIR' -j$(nproc) \
     NOWERROR=1 \
     NO_USE_PORTAUDIO=1 \
+    USE_QTDEBUG=0 \
     SWITCHRES=1 \
     SDL_INI_PATH=/etc/fliperos/mame \
-    TARGET=mame \
-    SUBTARGET=arcade"
+    TARGET=mame"
 
-  run "install -m755 '$GMAME_DIR/mamearcade' /usr/local/bin/groovymame"
+  run "install -m755 '$GMAME_DIR/mame' /usr/local/bin/groovymame"
   ok "GroovyMAME instalado em /usr/local/bin/groovymame"
 
   install -Dm644 "$(dirname "$(realpath "$0")")/config/mame.ini" /etc/fliperos/mame/mame.ini
@@ -273,6 +275,92 @@ fase4_groovymame() {
   run "chown -R '$FLIPEROS_USER':'$FLIPEROS_USER' /etc/fliperos/mame"
   ok "mame.ini configurado em /etc/fliperos/mame/"
   ok "Fase 4 concluída"
+}
+
+# ════════════════════════════════════════════════════════════
+#  FASE 6 — RetroArch (KMS/DRM), Flycast (KMS), PCSX2, Supermodel
+# ════════════════════════════════════════════════════════════
+fase6_emuladores() {
+  step "FASE 6 — RetroArch/Flycast (KMS) + PCSX2/Supermodel (X11)"
+
+  info "Instalando dependencias de build (RetroArch KMS + Flycast + PCSX2 + Supermodel)..."
+  run "apt-get install -y --no-install-recommends \
+    libegl1-mesa-dev libgles2-mesa-dev libudev-dev \
+    libcurl4-openssl-dev libminiupnpc-dev libzip-dev libao-dev libpng-dev \
+    qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-multimedia-dev \
+    libqt6svg6-dev libgtk-3-dev libaio-dev liblzma-dev libpcap0.8-dev \
+    libglew-dev zlib1g-dev"
+
+  # RetroArch em KMS/DRM puro — flags validadas manualmente antes de
+  # entrar aqui (ver comentario em build_retroarch_chroot() no
+  # fliperos-mkiso.sh): sem X11/Wayland/SDL, so o driver KMS compilado.
+  RA_DIR="/tmp/retroarch-build"
+  info "Clonando e compilando RetroArch (KMS/DRM)..."
+  run "rm -rf '$RA_DIR'"
+  run "git clone --depth=1 https://github.com/libretro/RetroArch '$RA_DIR'"
+  run "cd '$RA_DIR' && ./configure --enable-kms --enable-egl --disable-x11 --disable-wayland --disable-sdl --disable-sdl2"
+  run "make -C '$RA_DIR' -j$(nproc)"
+  run "make -C '$RA_DIR' install"
+
+  mkdir -p /etc/fliperos/retroarch/autoconfig /etc/fliperos/retroarch/cores
+  RA_AUTOCONFIG_DIR="/tmp/ra-autoconfig"
+  run "rm -rf '$RA_AUTOCONFIG_DIR'"
+  run "git clone --depth=1 https://github.com/libretro/retroarch-joypad-autoconfig '$RA_AUTOCONFIG_DIR'"
+  run "cp -a '$RA_AUTOCONFIG_DIR/udev' /etc/fliperos/retroarch/autoconfig/"
+
+  info "Compilando cores libretro (NES/SNES/Mega Drive/GBA/PS1/mame2010)..."
+  for repo in libretro/libretro-fceumm libretro/snes9x libretro/Genesis-Plus-GX \
+              libretro/mgba libretro/pcsx_rearmed libretro/mame2010-libretro; do
+    core_dir="/tmp/core-$(basename "$repo")"
+    run "rm -rf '$core_dir'"
+    run "git clone --depth=1 --recursive https://github.com/$repo '$core_dir'"
+    if [[ -f "$core_dir/libretro/Makefile" ]]; then
+      run "make -C '$core_dir/libretro' -f Makefile -j$(nproc)"
+      run "find '$core_dir/libretro' -maxdepth 2 -name '*_libretro.so' -exec cp {} /etc/fliperos/retroarch/cores/ \\;"
+    elif [[ -f "$core_dir/Makefile.libretro" ]]; then
+      run "make -C '$core_dir' -f Makefile.libretro -j$(nproc)"
+      run "find '$core_dir' -maxdepth 2 -name '*_libretro.so' -exec cp {} /etc/fliperos/retroarch/cores/ \\;"
+    else
+      run "make -C '$core_dir' -f Makefile -j$(nproc)"
+      run "find '$core_dir' -maxdepth 2 -name '*_libretro.so' -exec cp {} /etc/fliperos/retroarch/cores/ \\;"
+    fi
+  done
+  install -Dm644 "$(dirname "$(realpath "$0")")/config/retroarch.cfg" /etc/fliperos/retroarch/retroarch.cfg
+  ok "RetroArch instalado (KMS/DRM) com cores e autoconfig de joypad"
+
+  # Flycast — standalone, KMS via SDL_VIDEODRIVER=kmsdrm em runtime (sem
+  # flag de build especifica, ver fliperos-kms-run).
+  FC_DIR="/tmp/flycast-build"
+  info "Clonando e compilando Flycast (Dreamcast)..."
+  run "rm -rf '$FC_DIR'"
+  run "git clone --depth=1 https://github.com/flyinghead/flycast '$FC_DIR'"
+  run "cd '$FC_DIR' && git submodule update --init --recursive"
+  run "cmake -B '$FC_DIR/build' -S '$FC_DIR' -DCMAKE_BUILD_TYPE=Release -DUSE_VULKAN=OFF"
+  run "cmake --build '$FC_DIR/build' -j$(nproc)"
+  run "install -m755 '$FC_DIR/build/flycast' /usr/local/bin/flycast"
+  ok "Flycast instalado (KMS)"
+
+  # PCSX2 — Qt-only, sem caminho KMS suportado; fica em X11.
+  PS_DIR="/tmp/pcsx2-build"
+  info "Clonando e compilando PCSX2 (PS2, X11 — build mais longo do grupo)..."
+  run "rm -rf '$PS_DIR'"
+  run "git clone --depth=1 --recursive https://github.com/PCSX2/pcsx2 '$PS_DIR'"
+  run "cmake -B '$PS_DIR/build' -S '$PS_DIR' -DCMAKE_BUILD_TYPE=Release"
+  run "cmake --build '$PS_DIR/build' -j$(nproc)"
+  run "find '$PS_DIR/build' -maxdepth 3 -iname 'pcsx2*' -type f -executable -exec install -m755 {} /usr/local/bin/pcsx2 \\; -quit"
+  ok "PCSX2 instalado (X11)"
+
+  # Supermodel — SDL2+OpenGL, sem caminho KMS documentado; fica em X11.
+  SM_DIR="/tmp/supermodel-build"
+  info "Clonando e compilando Supermodel (Model 3, X11)..."
+  run "rm -rf '$SM_DIR'"
+  run "git clone --depth=1 https://github.com/trzy/Supermodel '$SM_DIR'"
+  run "cmake -B '$SM_DIR/build' -S '$SM_DIR' -DCMAKE_BUILD_TYPE=Release -DNET_BOARD=OFF"
+  run "cmake --build '$SM_DIR/build' -j$(nproc)"
+  run "find '$SM_DIR/build' -maxdepth 2 -iname 'supermodel' -type f -executable -exec install -m755 {} /usr/local/bin/supermodel \\; -quit"
+  ok "Supermodel instalado (X11)"
+
+  ok "Fase 6 concluída"
 }
 
 # ════════════════════════════════════════════════════════════
@@ -330,9 +418,9 @@ resumo_final() {
 #  MAIN
 # ════════════════════════════════════════════════════════════
 if $DRY_RUN; then
-  case "$FASE_ALVO" in ""|all|[1-5]) ;; *) echo "Fase invalida"; exit 2 ;; esac
+  case "$FASE_ALVO" in ""|all|[1-6]) ;; *) echo "Fase invalida"; exit 2 ;; esac
   echo "SIMULACAO: nenhuma alteracao sera executada."
-  echo "Fases: 1 dependencias; 2 EDID/GRUB; 3 Switchres; 4 GroovyMAME; 5 launcher."
+  echo "Fases: 1 dependencias; 2 EDID/GRUB; 3 Switchres; 4 GroovyMAME; 5 launcher; 6 RetroArch/Flycast/PCSX2/Supermodel."
   echo "Selecao: ${FASE_ALVO:-all}; usuario: $FLIPEROS_USER"
   exit 0
 fi
@@ -350,6 +438,7 @@ case "$FASE_ALVO" in
     fase3_switchres
     fase4_groovymame
     fase5_launcher
+    fase6_emuladores
     resumo_final
     ;;
   1) fase1_base      ;;
@@ -357,5 +446,6 @@ case "$FASE_ALVO" in
   3) fase3_switchres ;;
   4) fase4_groovymame;;
   5) fase5_launcher  ;;
-  *) err "Fase inválida: $FASE_ALVO (válido: 1-5 ou all)" ;;
+  6) fase6_emuladores;;
+  *) err "Fase inválida: $FASE_ALVO (válido: 1-6 ou all)" ;;
 esac

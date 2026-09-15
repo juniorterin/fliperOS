@@ -2,8 +2,10 @@
 # ============================================================
 #  FliperOS mkiso v0.6
 #  Gera uma ISO Ubuntu customizada com FliperOS pré-instalado
-#  Base: Ubuntu 22.04 LTS minimal (jammy)
-#  Uso: sudo bash fliperos-mkiso.sh [/caminho/saida.iso] [--skip-switchres] [--with-15khz-kernel]
+#  Base: Ubuntu 24.04 LTS minimal (noble)
+#  Uso: sudo bash fliperos-mkiso.sh [/caminho/saida.iso] [--skip-switchres]
+#       [--skip-groovymame] [--skip-retroarch] [--skip-flycast]
+#       [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel]
 #  No Windows, execute somente dentro do container Docker.
 # ============================================================
 
@@ -17,7 +19,7 @@ BLU='\033[0;34m'; CYN='\033[0;36m'; DIM='\033[2m'
 BLD='\033[1m'; RST='\033[0m'
 
 FLIPEROS_VERSION="0.6"
-UBUNTU_CODENAME="jammy"
+UBUNTU_CODENAME="noble"
 UBUNTU_MIRROR="http://archive.ubuntu.com/ubuntu"
 WORK_DIR=$(mktemp -d /tmp/fliperos-iso-build.XXXXXX)
 CHROOT_DIR="$WORK_DIR/chroot"
@@ -27,8 +29,12 @@ ARCH="amd64"
 LOG_FILE="/var/log/fliperos-mkiso.log"
 SKIP_SWITCHRES=false
 SKIP_GROOVYMAME=false
+SKIP_RETROARCH=false
+SKIP_FLYCAST=false
+SKIP_PCSX2=false
+SKIP_SUPERMODEL=false
 WITH_15KHZ_KERNEL=false
-KERNEL_15KHZ_VERSION="6.6.152"
+KERNEL_15KHZ_VERSION="6.12.104"
 
 # ── Args ─────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -38,9 +44,13 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_ISO="$2"; shift 2 ;;
     --skip-switchres)  SKIP_SWITCHRES=true; shift ;;
     --skip-groovymame) SKIP_GROOVYMAME=true; shift ;;
+    --skip-retroarch)  SKIP_RETROARCH=true; shift ;;
+    --skip-flycast)    SKIP_FLYCAST=true; shift ;;
+    --skip-pcsx2)      SKIP_PCSX2=true; shift ;;
+    --skip-supermodel) SKIP_SUPERMODEL=true; shift ;;
     --with-15khz-kernel) WITH_15KHZ_KERNEL=true; shift ;;
     /*.iso|*.iso)     OUTPUT_ISO="$1"; shift ;;
-    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame] [--with-15khz-kernel]"; exit 1 ;;
+    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame] [--skip-retroarch] [--skip-flycast] [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel]"; exit 1 ;;
   esac
 done
 
@@ -245,6 +255,7 @@ SDIR="/opt/fliperos"
 [[ -f "$SDIR/fliperos-setup.sh" ]] || { echo "fliperos-setup.sh nao encontrado"; exit 1; }
 bash "$SDIR/fliperos-setup.sh" --fase 3
 bash "$SDIR/fliperos-setup.sh" --fase 4
+bash "$SDIR/fliperos-setup.sh" --fase 6
 POST
 chmod +x /usr/local/bin/fliperos-postinstall
 
@@ -328,14 +339,16 @@ apt-get install -y --no-install-recommends \
   libpulse-dev libflac-dev libjpeg-dev libpng-dev \
   libasound2-dev python3-dev
 git clone --depth=1 https://github.com/antonioginer/GroovyMAME /tmp/groovymame-build
+# SUBTARGET=arcade nao existe mais (MAME unificou os subtargets ha um
+# tempo); o binario resultante agora se chama so "mame".
 make -C /tmp/groovymame-build -j$(nproc) \
   NOWERROR=1 \
   NO_USE_PORTAUDIO=1 \
+  USE_QTDEBUG=0 \
   SWITCHRES=1 \
   SDL_INI_PATH=/etc/fliperos/mame \
-  TARGET=mame \
-  SUBTARGET=arcade
-install -m755 /tmp/groovymame-build/mamearcade /usr/local/bin/groovymame
+  TARGET=mame
+install -m755 /tmp/groovymame-build/mame /usr/local/bin/groovymame
 rm -rf /tmp/groovymame-build
 echo "GroovyMAME OK"
 GMSCRIPT
@@ -345,12 +358,181 @@ GMSCRIPT
     || err "GroovyMAME falhou; use --skip-groovymame explicitamente para ISO de diagnostico"
 }
 
+# ── Compilar RetroArch em KMS/DRM, sem X11 ────────────────────
+# Flags validadas num container Ubuntu 24.04 descartavel antes de entrar
+# aqui: --enable-kms --enable-egl --disable-x11 --disable-wayland
+# --disable-sdl --disable-sdl2 builda limpo (config.h confirma
+# HAVE_KMS/HAVE_EGL/HAVE_GBM=1, sem HAVE_X11/HAVE_WAYLAND) e o binario
+# resultante reporta "KMS: yes", "EGL: yes", "udev: yes" em --features.
+# Por isso RetroArch/Flycast usam fliperos-kms-run (sem Xorg), diferente
+# de PCSX2/Supermodel que continuam em fliperos-x11-run.
+build_retroarch_chroot() {
+  if $SKIP_RETROARCH; then
+    warn "RetroArch pulado — compile apos o boot: sudo fliperos-postinstall"
+    return
+  fi
+  step "Compilando RetroArch (KMS/DRM, sem X11) no chroot"
+  cat > "$CHROOT_DIR/tmp/build-retroarch.sh" << 'RASCRIPT'
+#!/bin/bash
+set -e
+apt-get update -qq
+apt-get install -y --no-install-recommends \
+  libegl1-mesa-dev libgles2-mesa-dev libudev-dev
+
+git clone --depth=1 https://github.com/libretro/RetroArch /tmp/retroarch
+cd /tmp/retroarch
+./configure --enable-kms --enable-egl --disable-x11 --disable-wayland \
+  --disable-sdl --disable-sdl2
+make -j"$(nproc)"
+make install
+cd /
+rm -rf /tmp/retroarch
+
+mkdir -p /etc/fliperos/retroarch/autoconfig /etc/fliperos/retroarch/cores
+
+# Perfis de autoconfig de joypad (deteccao automatica por vendor/product ID).
+git clone --depth=1 https://github.com/libretro/retroarch-joypad-autoconfig /tmp/ra-autoconfig
+cp -a /tmp/ra-autoconfig/udev /etc/fliperos/retroarch/autoconfig/
+rm -rf /tmp/ra-autoconfig
+
+# Cores libretro pre-instalados: NES/SNES/Mega Drive/GBA (essenciais
+# 8/16-bit), PS1 e um core de arcade leve (mame2010, complementar ao
+# GroovyMAME standalone que continua sendo o caminho principal de arcade).
+build_core() {
+  local repo="$1" name dir mk
+  name="$(basename "$repo")"
+  dir="/tmp/core-${name}"
+  git clone --depth=1 --recursive "https://github.com/${repo}" "$dir"
+  if [[ -f "$dir/libretro/Makefile" ]]; then
+    dir="$dir/libretro"; mk="Makefile"
+  elif [[ -f "$dir/Makefile.libretro" ]]; then
+    mk="Makefile.libretro"
+  else
+    mk="Makefile"
+  fi
+  make -C "$dir" -f "$mk" -j"$(nproc)"
+  find "$dir" -maxdepth 2 -name '*_libretro.so' -exec cp {} /etc/fliperos/retroarch/cores/ \;
+  rm -rf "/tmp/core-${name}"
+}
+build_core libretro/libretro-fceumm
+build_core libretro/snes9x
+build_core libretro/Genesis-Plus-GX
+build_core libretro/mgba
+build_core libretro/pcsx_rearmed
+build_core libretro/mame2010-libretro
+
+echo "RetroArch OK"
+RASCRIPT
+  chmod +x "$CHROOT_DIR/tmp/build-retroarch.sh"
+  chroot "$CHROOT_DIR" /tmp/build-retroarch.sh >> "$LOG_FILE" 2>&1 \
+    && ok "RetroArch compilado (KMS/DRM) com cores e autoconfig de joypad" \
+    || err "RetroArch falhou; use --skip-retroarch explicitamente para ISO sem ele"
+}
+
+# ── Compilar Flycast (Dreamcast), KMS via SDL2 kmsdrm ─────────
+# Recipe identica a testada no container de validacao: precisa de
+# 'git submodule update --init --recursive' (nao vem no clone raso) e das
+# deps de build abaixo. Saida em KMS/DRM vem so de rodar com
+# SDL_VIDEODRIVER=kmsdrm (ver fliperos-kms-run) — libsdl2 do Ubuntu ja
+# vem com esse driver, nao precisa recompilar SDL2. USE_VULKAN=OFF porque
+# adiciona deps novas (glslang/SPIRV) sem necessidade pro caminho OpenGL
+# via EGL/GBM ja validado.
+build_flycast_chroot() {
+  if $SKIP_FLYCAST; then
+    warn "Flycast pulado — compile apos o boot: sudo fliperos-postinstall"
+    return
+  fi
+  step "Compilando Flycast (Dreamcast, KMS 640x240) no chroot"
+  cat > "$CHROOT_DIR/tmp/build-flycast.sh" << 'FCSCRIPT'
+#!/bin/bash
+set -e
+apt-get install -y --no-install-recommends \
+  libcurl4-openssl-dev libminiupnpc-dev libzip-dev libao-dev libpng-dev
+git clone --depth=1 https://github.com/flyinghead/flycast /tmp/flycast
+cd /tmp/flycast
+git submodule update --init --recursive
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_VULKAN=OFF
+cmake --build build -j"$(nproc)"
+install -m755 build/flycast /usr/local/bin/flycast
+cd /
+rm -rf /tmp/flycast
+echo "Flycast OK"
+FCSCRIPT
+  chmod +x "$CHROOT_DIR/tmp/build-flycast.sh"
+  chroot "$CHROOT_DIR" /tmp/build-flycast.sh >> "$LOG_FILE" 2>&1 \
+    && ok "Flycast compilado (KMS)" \
+    || err "Flycast falhou; use --skip-flycast explicitamente para ISO sem ele"
+}
+
+# ── Compilar PCSX2 (PS2), X11 ──────────────────────────────────
+# Qt nao tem backend KMS/DRM suportado oficialmente (so um plugin eglfs
+# experimental que o proprio PCSX2 nao testa) — fica em X11 via
+# fliperos-x11-run, igual o launcher ja espera. Build mais pesado do
+# grupo (Qt6 + C++ grande).
+build_pcsx2_chroot() {
+  if $SKIP_PCSX2; then
+    warn "PCSX2 pulado — compile apos o boot: sudo fliperos-postinstall"
+    return
+  fi
+  step "Compilando PCSX2 (PS2, X11) no chroot — build mais longo do grupo"
+  cat > "$CHROOT_DIR/tmp/build-pcsx2.sh" << 'PSSCRIPT'
+#!/bin/bash
+set -e
+apt-get install -y --no-install-recommends \
+  qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-multimedia-dev \
+  libqt6svg6-dev libgtk-3-dev libaio-dev liblzma-dev libpcap0.8-dev \
+  libudev-dev
+git clone --depth=1 --recursive https://github.com/PCSX2/pcsx2 /tmp/pcsx2
+cd /tmp/pcsx2
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+find build -maxdepth 3 -iname 'pcsx2*' -type f -executable \
+  -exec install -m755 {} /usr/local/bin/pcsx2 \; -quit
+cd /
+rm -rf /tmp/pcsx2
+echo "PCSX2 OK"
+PSSCRIPT
+  chmod +x "$CHROOT_DIR/tmp/build-pcsx2.sh"
+  chroot "$CHROOT_DIR" /tmp/build-pcsx2.sh >> "$LOG_FILE" 2>&1 \
+    && ok "PCSX2 compilado" \
+    || err "PCSX2 falhou; use --skip-pcsx2 explicitamente para ISO sem ele"
+}
+
+# ── Compilar Supermodel (Sega Model 3), X11 ───────────────────
+# SDL2+OpenGL, sem caminho KMS/DRM documentado pelo projeto — fica em
+# X11 via fliperos-x11-run.
+build_supermodel_chroot() {
+  if $SKIP_SUPERMODEL; then
+    warn "Supermodel pulado — compile apos o boot: sudo fliperos-postinstall"
+    return
+  fi
+  step "Compilando Supermodel (Model 3, X11) no chroot"
+  cat > "$CHROOT_DIR/tmp/build-supermodel.sh" << 'SMSCRIPT'
+#!/bin/bash
+set -e
+apt-get install -y --no-install-recommends libglew-dev zlib1g-dev
+git clone --depth=1 https://github.com/trzy/Supermodel /tmp/supermodel
+cd /tmp/supermodel
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DNET_BOARD=OFF
+cmake --build build -j"$(nproc)"
+find build -maxdepth 2 -iname 'supermodel' -type f -executable \
+  -exec install -m755 {} /usr/local/bin/supermodel \; -quit
+cd /
+rm -rf /tmp/supermodel
+echo "Supermodel OK"
+SMSCRIPT
+  chmod +x "$CHROOT_DIR/tmp/build-supermodel.sh"
+  chroot "$CHROOT_DIR" /tmp/build-supermodel.sh >> "$LOG_FILE" 2>&1 \
+    && ok "Supermodel compilado" \
+    || err "Supermodel falhou; use --skip-supermodel explicitamente para ISO sem ele"
+}
+
 # ── Compilar kernel 15kHz patcheado (opt-in) ──────────────────
 # Kernel vanilla kernel.org + patches D0023R/linux_kernel_15khz
 # vendorizados em patches/kernel-15khz/ (ver README la dentro). So roda
 # com --with-15khz-kernel; sem a flag, o kernel continua sendo o
 # linux-image-generic normal com o metodo EDID-only (ver configure_chroot).
-# A semente de .config vem do proprio kernel jammy (baixado sem instalar,
+# A semente de .config vem do proprio kernel noble (baixado sem instalar,
 # so pra extrair o .config ja ajustado) em vez de defconfig do zero.
 build_15khz_kernel_chroot() {
   if ! $WITH_15KHZ_KERNEL; then
@@ -370,7 +552,7 @@ apt-get install -y --no-install-recommends \
 mkdir -p /usr/src/fliperos-kernel
 cd /usr/src/fliperos-kernel
 
-# Semente de .config: baixa so o pacote real do kernel jammy (sem
+# Semente de .config: baixa so o pacote real do kernel noble (sem
 # instalar/rodar postinst) e reaproveita o .config ja ajustado pela
 # Canonical, em vez de partir de defconfig do zero.
 REALPKG=$(apt-cache depends linux-image-generic | awk '/Depends:/{print $2; exit}')
@@ -491,6 +673,10 @@ summary() {
   echo -e "\n  Login: fliperos / fliperos"
   $SKIP_SWITCHRES  && echo -e "  ${YLW}SwitchRes nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
   $SKIP_GROOVYMAME && echo -e "  ${YLW}GroovyMAME nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
+  $SKIP_RETROARCH  && echo -e "  ${YLW}RetroArch nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
+  $SKIP_FLYCAST    && echo -e "  ${YLW}Flycast nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
+  $SKIP_PCSX2      && echo -e "  ${YLW}PCSX2 nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
+  $SKIP_SUPERMODEL && echo -e "  ${YLW}Supermodel nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
   $WITH_15KHZ_KERNEL && echo -e "  ${CYN}Kernel 15kHz patcheado: ${KERNEL_15KHZ_VERSION}-15khz (D0023R) — KMS/switchres sem X${RST}"
   $WITH_15KHZ_KERNEL && echo -e "  ${YLW}Kernel proprio nao assinado — desabilite Secure Boot na UEFI${RST}"
   echo -e "  ${DIM}Log: $LOG_FILE${RST}\n"
@@ -525,6 +711,10 @@ bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" "$CHROOT_DIR"
 chroot "$CHROOT_DIR" update-initramfs -u -k all
 build_switchres_chroot
 build_groovymame_chroot
+build_retroarch_chroot
+build_flycast_chroot
+build_pcsx2_chroot
+build_supermodel_chroot
 build_15khz_kernel_chroot
 rm -f "$CHROOT_DIR/usr/sbin/policy-rc.d"
 unmount_chroot

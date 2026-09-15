@@ -1,6 +1,6 @@
 # FliperOS 0.6 — Ubuntu para CRT 15 kHz
 
-Base Ubuntu 22.04 amd64. Configuração de vídeo e instalador revisados usando as fontes oficiais do Switchres, kernel DRM e GroovyArcade/gasetup. A ISO é live e oferece instalação em disco. A saída física ainda precisa ser validada na GPU e no CRT reais.
+Base Ubuntu 24.04 amd64. Configuração de vídeo e instalador revisados usando as fontes oficiais do Switchres, kernel DRM e GroovyArcade/gasetup. A ISO é live e oferece instalação em disco. A saída física ainda precisa ser validada na GPU e no CRT reais.
 
 ## Instalação no estilo GroovyArcade
 
@@ -97,6 +97,20 @@ O wrapper usa `--launch` para manter Switchres acompanhando o emulador e restaur
 
 A ISO de diagnóstico reaproveita o Switchres compilado da imagem anterior. GroovyMAME e demais emuladores só estão disponíveis se seus binários tiverem sido instalados. O launcher informa componentes ausentes. Não certificamos desempenho ou troca dinâmica sem testes no hardware.
 
+## RetroArch/Flycast em KMS, PCSX2/Supermodel em X11
+
+Nem todo emulador tem um caminho real de KMS/DRM sem servidor gráfico —
+testamos cada um antes de decidir, em vez de assumir:
+
+- **RetroArch** builda com `--enable-kms --enable-egl --disable-x11 --disable-wayland --disable-sdl --disable-sdl2` — testado num container Ubuntu 24.04 descartável nesta sessão; `--features` confirma `KMS: yes`, `EGL: yes`, `udev: yes`. Roda via `fliperos-kms-run`, sem Xorg.
+- **Flycast** (Dreamcast) não tem flag de build específica pra KMS — a saída vem de `SDL_VIDEODRIVER=kmsdrm` em tempo de execução, suportado pelo `libsdl2` padrão do Ubuntu. Também via `fliperos-kms-run`, em 640x240 (o modo do EDID customizado, que já vale pra qualquer consumidor de KMS, não só Xorg).
+- **PCSX2** (PS2) é Qt-only — X11/Wayland via QPA, sem backend KMS suportado pelo projeto (existe um plugin `eglfs` experimental do próprio Qt, não testado/suportado pelo PCSX2). Fica em `fliperos-x11-run`.
+- **Supermodel** (Model 3) é SDL2+OpenGL sem caminho KMS documentado. Fica em `fliperos-x11-run`.
+
+RetroArch vem com cores libretro pré-instalados: NES (`fceumm`), SNES (`snes9x`), Mega Drive/Genesis (`genesis_plus_gx`), GBA/GB/GBC (`mgba`), PS1 (`pcsx_rearmed`) e um core de arcade leve (`mame2010`) — complementar ao GroovyMAME standalone, que continua sendo o caminho principal de arcade. Autoconfig de joypad (detecção automática por vendor/product ID via `retroarch-joypad-autoconfig`) cobre só o RetroArch; o GroovyMAME/MAME continua com configuração manual de controles como já era.
+
+Cada um desses quatro emuladores pode ser pulado individualmente no build com `--skip-retroarch`, `--skip-flycast`, `--skip-pcsx2` ou `--skip-supermodel`.
+
 ## Build
 
 Use Docker para isolar o build. `CLAUDE.md` proíbe bind de `/dev` do host em chroots de build no WSL. O gerador recusa execução direta em WSL e não remove recursivamente um workspace com mounts restantes.
@@ -108,7 +122,7 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 
 O privilégio acima pertence ao container de build; não monte `/dev` do host nele. Build não testa sinal de vídeo. Compilações solicitadas devem falhar explicitamente se não concluírem; omissões usam `--skip-*`.
 
-Por padrão o kernel é o `linux-image-generic` do jammy, com o método EDID-only (sem patch de kernel, ver seção Timing de vídeo). A flag `--with-15khz-kernel` troca isso por um kernel próprio compilado no chroot — kernel.org vanilla 6.6 LTS + os patches vendorizados em `patches/kernel-15khz/` (fonte: D0023R/linux_kernel_15khz), habilitando troca dinâmica de modo via KMS sem X:
+Por padrão o kernel é o `linux-image-generic` do noble, com o método EDID-only (sem patch de kernel, ver seção Timing de vídeo). A flag `--with-15khz-kernel` troca isso por um kernel próprio compilado no chroot — kernel.org vanilla 6.12 LTS + os patches vendorizados em `patches/kernel-15khz/` (fonte: D0023R/linux_kernel_15khz), habilitando troca dinâmica de modo via KMS sem X:
 
 ```powershell
 docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-15khz.iso --with-15khz-kernel
@@ -125,7 +139,8 @@ Kernel próprio não vem assinado — Secure Boot precisa ficar desabilitado na 
 | `fliperos-video-check.py` | Consulta de modo ativo DRM |
 | `fliperos-video-autodetect.py` | Descobre o conector do CRT ligando/desligando cada saida analogica |
 | `fliperos-detect.sh` | Relatório de sistema e vídeo |
-| `config/` | Xorg, Switchres, GRUB, serviço, hook EDID e launchers |
+| `config/` | Xorg, Switchres, RetroArch, GRUB, serviço, hook EDID e launchers |
+| `config/fliperos-kms-run` | Lança RetroArch/Flycast direto em KMS/DRM, sem Xorg |
 | `patches/kernel-15khz/` | Patches D0023R vendorizados pro kernel opcional `--with-15khz-kernel` |
 | `tools/repack-iso.sh` | Revisão da ISO 0.5 em container de auditoria |
 | `tests/test_video.py` | Testes de frequência, EDID e discos |

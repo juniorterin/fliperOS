@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# RetroArch/Flycast tomam o DRM master direto (sem Xorg no meio) — ao
+# contrario do fliperos-x11-run, nao usa xinit/fliperos-x11-client. So pra
+# emuladores com suporte nativo a KMS/DRM confirmado (ver
+# build_retroarch_chroot()/build_flycast_chroot() em fliperos-mkiso.sh).
+# O modo fixo 640x240 vem do EDID customizado (crt15-edid.bin, injetado no
+# initramfs) — isso ja vale pra qualquer consumidor de KMS, nao so Xorg.
+set -euo pipefail
+[[ $# -gt 0 ]] || { echo "Uso: fliperos-kms-run emulador [argumentos]" >&2; exit 2; }
+case "${FLIPEROS_MONITOR:-arcade_15}" in
+  arcade_15|generic_15|pal|ntsc) ;;
+  *) echo "Perfil recusado: este launcher e exclusivo para CRT 15 kHz." >&2; exit 1 ;;
+esac
+[[ -z "${DISPLAY:-}" ]] || { echo "Execute no console TTY, fora de uma sessao X." >&2; exit 2; }
+command -v "$1" >/dev/null || { echo "Emulador nao instalado: $1" >&2; exit 127; }
+# SDL_VIDEODRIVER so importa pro Flycast (SDL2); RetroArch foi compilado
+# sem X11/Wayland/SDL, entao o driver KMS/DRM e o unico disponivel e essa
+# variavel nao faz diferenca pra ele.
+export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"
+exec "$@"

@@ -8,7 +8,7 @@ while true; do
         0) exit 0 ;;
         6) /usr/local/bin/fliperos-video-check; continue ;;
         7) sudo /usr/local/bin/fliperos-install; continue ;;
-        2) /opt/fliperos/bin/fliperos-x11-run retroarch --fullscreen; continue ;;
+        2) /opt/fliperos/bin/fliperos-kms-run retroarch --config /etc/fliperos/retroarch/retroarch.cfg --fullscreen; continue ;;
         1|3|4|5) ;;
         *) continue ;;
     esac
@@ -17,7 +17,7 @@ while true; do
     case "$choice" in
         1) /opt/fliperos/bin/fliperos-x11-run groovymame "$game" -nowindow ;;
         3) FLIPEROS_RES_W=640 FLIPEROS_RES_H=480 /opt/fliperos/bin/fliperos-x11-run pcsx2 --fullscreen "$game" ;;
-        4) FLIPEROS_RES_W=640 FLIPEROS_RES_H=480 /opt/fliperos/bin/fliperos-x11-run flycast "$game" ;;
+        4) /opt/fliperos/bin/fliperos-kms-run flycast "$game" ;;
         5) FLIPEROS_RES_W=640 FLIPEROS_RES_H=480 /opt/fliperos/bin/fliperos-x11-run supermodel "$game" -fullscreen -res=640,480 ;;
     esac
 done

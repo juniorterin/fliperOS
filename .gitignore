@@ -7,6 +7,8 @@ docker-varlog/
 # Logs de build (gerados a cada rodada, ficam grandes rapido)
 build-iso*.log
 build-iso*.out.txt
+logs/
+logs-noble/
 
 # Estado local do Claude Code (config/lock de sessao — nao compartilhar)
 .claude/

@@ -15,12 +15,13 @@ install -Dm644 "$src/config/xorg.conf" "$root/etc/fliperos/xorg.conf"
 if [[ ! -f "$root/etc/fliperos/connector" ]]; then
     printf 'VGA-1\n' > "$root/etc/fliperos/connector"
 fi
-for name in fliperos-x11-run fliperos-x11-client fliperos-launcher; do
+for name in fliperos-x11-run fliperos-kms-run fliperos-x11-client fliperos-launcher; do
     install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done
 mkdir -p "$root/usr/local/bin"
 ln -sf /opt/fliperos/bin/fliperos-launcher "$root/usr/local/bin/fliperos-launcher"
 install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"
+install -Dm644 "$src/config/retroarch.cfg" "$root/etc/fliperos/retroarch/retroarch.cfg"
 install -Dm644 "$src/config/fliperos-video-check.service" "$root/etc/systemd/system/fliperos-video-check.service"
 mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
 ln -sf ../fliperos-video-check.service "$root/etc/systemd/system/multi-user.target.wants/fliperos-video-check.service"
