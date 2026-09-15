@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Small text menu fits the 40-column console of the 320x240 boot mode.
+set -uo pipefail
+while true; do
+    printf '\nFliperOS\n1 Arcade\n2 RetroArch\n3 PCSX2\n4 Flycast\n5 Supermodel\n6 Diagnostico\n7 Instalar\n0 Shell\n'
+    read -r -p '> ' choice || exit 0
+    case "$choice" in
+        0) exit 0 ;;
+        6) /usr/local/bin/fliperos-video-check; continue ;;
+        7) sudo /usr/local/bin/fliperos-install; continue ;;
+        2) /opt/fliperos/bin/fliperos-x11-run retroarch --fullscreen; continue ;;
+        1|3|4|5) ;;
+        *) continue ;;
+    esac
+    read -r -p 'ROM (nome MAME ou caminho): ' game || exit 0
+    [[ -n "$game" ]] || continue
+    case "$choice" in
+        1) /opt/fliperos/bin/fliperos-x11-run groovymame "$game" -nowindow ;;
+        3) FLIPEROS_RES_W=640 FLIPEROS_RES_H=480 /opt/fliperos/bin/fliperos-x11-run pcsx2 --fullscreen "$game" ;;
+        4) FLIPEROS_RES_W=640 FLIPEROS_RES_H=480 /opt/fliperos/bin/fliperos-x11-run flycast "$game" ;;
+        5) FLIPEROS_RES_W=640 FLIPEROS_RES_H=480 /opt/fliperos/bin/fliperos-x11-run supermodel "$game" -fullscreen -res=640,480 ;;
+    esac
+done

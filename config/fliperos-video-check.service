@@ -1,0 +1,13 @@
+[Unit]
+Description=FliperOS read-only active CRT timing check
+After=systemd-udev-trigger.service
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fliperos-video-check --connector VGA-1 --wait 15
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

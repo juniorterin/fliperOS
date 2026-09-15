@@ -1,0 +1,19 @@
+# ISOs e artefatos de build (gerados, nao versionados — GB de tamanho)
+output/
+docker-work/
+docker-varlog/
+*.iso
+
+# Logs de build (gerados a cada rodada, ficam grandes rapido)
+build-iso*.log
+build-iso*.out.txt
+
+# Estado local do Claude Code (config/lock de sessao — nao compartilhar)
+.claude/
+
+# Lixo comum de Windows
+Thumbs.db
+desktop.ini
+
+__pycache__/
+*.pyc

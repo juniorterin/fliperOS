@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Stop before launching a game if X selected a fallback outside 15 kHz.
+connector=$(cat /etc/fliperos/connector)
+[[ "$connector" =~ ^(VGA|DVI-I|DVI-A|DP|HDMI-A)-[1-9][0-9]*$ ]] || exit 2
+/usr/local/bin/fliperos-video-check --connector "$connector"
+emulator_command=$(python3 -c 'import shlex, sys; print(shlex.join(sys.argv[1:]))' "$@")
+exec /usr/local/bin/switchres "$FLIPEROS_RES_W" "$FLIPEROS_RES_H" "$FLIPEROS_RES_HZ" \
+    --ini /etc/fliperos/switchres.ini --api xrandr --display "$connector" --monitor arcade_15 \
+    --switch --launch "$emulator_command"

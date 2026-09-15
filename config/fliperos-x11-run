@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Start X in the EDID mode, then let Switchres/XRandR own the emulator lifetime.
+set -euo pipefail
+[[ $# -gt 0 ]] || { echo "Uso: fliperos-x11-run emulador [argumentos]" >&2; exit 2; }
+case "${FLIPEROS_MONITOR:-arcade_15}" in
+  arcade_15|generic_15|pal|ntsc) ;;
+  *) echo "Perfil recusado: este launcher e exclusivo para CRT 15 kHz." >&2; exit 1 ;;
+esac
+[[ -z "${DISPLAY:-}" ]] || { echo "Execute no console TTY, fora de uma sessao X." >&2; exit 2; }
+command -v "$1" >/dev/null || { echo "Emulador nao instalado: $1" >&2; exit 127; }
+export FLIPEROS_RES_W="${FLIPEROS_RES_W:-320}" FLIPEROS_RES_H="${FLIPEROS_RES_H:-240}"
+export FLIPEROS_RES_HZ="${FLIPEROS_RES_HZ:-60}"
+exec xinit /opt/fliperos/bin/fliperos-x11-client "$@" -- :0 \
+    -nolisten tcp -nocursor -config /etc/fliperos/xorg.conf

@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+PREREQ=""
+case "${1:-}" in prereqs) echo "$PREREQ"; exit 0 ;; esac
+mkdir -p "$DESTDIR/lib/firmware/edid"
+cp /lib/firmware/edid/crt15.bin "$DESTDIR/lib/firmware/edid/crt15.bin"

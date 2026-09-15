@@ -1,0 +1,149 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FliperOS — documentação técnica</title>
+<style>
+body{max-width:1000px;margin:40px auto;padding:0 24px;background:#111820;color:#e2e9ef;font:17px/1.65 system-ui,sans-serif}
+h1,h2{line-height:1.25;color:#8fd5bb}h2{margin-top:2.5em}a{color:#8ccfff}
+pre{overflow:auto;background:#202b36;padding:20px;border-radius:6px}code{font-size:.9em}
+table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1px solid #405060;text-align:left;padding:12px}
+strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
+</style><main><h1 id="fliperos-06-ubuntu-para-crt-15-khz">FliperOS 0.6 — Ubuntu para CRT 15 kHz</h1>
+<p>Base Ubuntu 22.04 amd64. Configuração de vídeo e instalador revisados usando as fontes oficiais do Switchres, kernel DRM e GroovyArcade/gasetup. A ISO é live e oferece instalação em disco. A saída física ainda precisa ser validada na GPU e no CRT reais.</p>
+<h2 id="instalacao-no-estilo-groovyarcade">Instalação no estilo GroovyArcade</h2>
+<p>O fluxo segue a instalação pela ISO do gasetup: iniciar live, identificar a saída do CRT, confirmar a imagem, escolher live ou disco, revisar o destino, extrair o sistema e configurar o boot.</p>
+<ol>
+<li>Grave <code>output/fliperos-0.6.iso</code> em um pendrive e inicie o computador por ele. Desative Secure Boot; esta ISO não oferece uma cadeia de boot assinada validada.</li>
+<li>A entrada CRT usa <strong>VGA-1</strong>. Se o conector for outro, edite os nomes em <code>video=</code> e <code>drm.edid_firmware=</code> no GRUB. Nomes repetidos em múltiplas GPUs exigem configuração manual.</li>
+<li>Login live: <code>fliperos</code>, senha <code>fliperos</code>. O assistente abre no TTY1. Para reabrir: <code>sudo fliperos-install</code>.</li>
+<li>Escolha live ou instalação. Selecione a saída ativa do CRT e confirme que a imagem está visível e estável. O assistente não testa novos modos automaticamente.</li>
+<li>Na instalação, selecione o disco por caminho, modelo, capacidade e serial. Discos montados, mídia live, swap ativa e dispositivos com dependentes ativos são recusados.</li>
+<li>Revise o plano e digite <code>APAGAR /dev/…</code> com o dispositivo exato. <strong>O disco inteiro será apagado; não há dual boot.</strong></li>
+<li>O instalador extrai o squashfs, grava fstab com UUIDs, reconstrói o initramfs e instala GRUB. Defina uma senha nova e reinicie sem o pendrive.</li>
+</ol>
+<p>Particionamento: GPT, BIOS boot de 1 MiB, ESP FAT32 de 512 MiB, restante ext4. Instala GRUB BIOS e UEFI pelo caminho removível, sem alterar NVRAM. Mínimo: 16 GiB.</p>
+<p>É uma implementação própria do fluxo, adaptada ao Ubuntu. Não copia <code>pacstrap</code>, <code>pacman</code>, <code>mkinitcpio</code>, o kernel Arch ou todos os menus do gasetup. Não inclui net-install nem perfis de 25/31 kHz. O gasetup oferece outros bootloaders; aqui é usado GRUB.</p>
+<p>Plano sem nenhuma escrita:</p>
+<pre><code class="language-bash">sudo fliperos-install --plan /dev/sdX --connector VGA-1
+</code></pre>
+<p>A instalação real é bloqueada em Docker/WSL. Não execute instalação contra discos de trabalho durante testes.</p>
+<h2 id="timing-de-video">Timing de vídeo</h2>
+<p>15 kHz é a frequência horizontal. Resolução e refresh vertical isoladamente não a determinam. No modo DRM comum, <strong>HSync em kHz = clock em kHz / total horizontal</strong>, incluindo apagamento.</p>
+<p>O <code>crt15-edid.bin</code> anuncia somente um timing detalhado:</p>
+<pre><code class="language-text">640x240 progressivo, 13,020 MHz
+Horizontal: 640 666 728 832
+Vertical:   240 242 245 261
+Polaridade: -HSync -VSync
+HSync: 15,649038 kHz; refresh: 59,958 Hz
+</code></pre>
+<p>640 pixels de largura não transformam esse modo em 480p. São 240 linhas progressivas. O timing é genérico, não uma calibração específica do monitor. O antigo <code>320x240-edid.bin</code> foi preservado apenas como referência e não é usado: também anunciava um modo GTF de 14,940 kHz e seu clock baixo falhava na validação EDID utilizada.</p>
+<p>O boot usa <code>video=VGA-1:e drm.edid_firmware=VGA-1:edid/crt15.bin</code>. O EDID está no initramfs para o driver encontrá-lo no início do KMS.</p>
+<p><strong>BIOS/UEFI e GRUB vêm antes desse mecanismo e podem emitir frequências acima de 15 kHz.</strong> O override não garante toda a sequência desde ligar o computador. GPU, adaptadores e circuito RGBHV/RGBS precisam de teste. Não conecte um CRT de frequência fixa a sinal desconhecido para testar por tentativa.</p>
+<p>Os parâmetros SI/CIK selecionam <code>radeon</code> apenas nas famílias compartilhadas com <code>amdgpu</code>, sem blacklist geral. Identifique o chip por PCI ID e driver real. A R7 240 normalmente é Oland, não Cape Verde.</p>
+<h2 id="diagnostico-do-modo-ativo">Diagnóstico do modo ativo</h2>
+<pre><code class="language-bash">sudo fliperos-video-check --connector VGA-1
+sudo fliperos-video-check --json
+sudo bash /opt/fliperos/fliperos-detect.sh
+journalctl -b -u fliperos-video-check.service --no-pager
+</code></pre>
+<p>O verificador abre DRM somente para leitura e consulta conector, encoder e CRTC atual via libdrm. Não toma DRM master, não troca modos e não usa a lista de modos anunciados como comprovação de atividade. DPMS desligado é tratado como inativo quando esse estado está disponível.</p>
+<table>
+<thead>
+<tr>
+<th>Resultado</th>
+<th>Código</th>
+<th>Significado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MODO_ATIVO_15KHZ</code></td>
+<td>0</td>
+<td>Saídas selecionadas ativas dentro de 15–16 kHz</td>
+</tr>
+<tr>
+<td><code>FORA_DA_FAIXA</code></td>
+<td>1</td>
+<td>Existe saída ativa fora da faixa</td>
+</tr>
+<tr>
+<td><code>INCONCLUSIVO</code></td>
+<td>2</td>
+<td>Sem saída ativa, acesso, GPU ou dados completos</td>
+</tr>
+</tbody>
+</table>
+<p>Sem filtro, considera todas as saídas ativas. Um LCD a 31 kHz junto do CRT faz o resultado global indicar fora da faixa. Use <code>--connector</code> para examinar só o CRT e <code>--min-khz</code>/<code>--max-khz</code> para os limites específicos do monitor.</p>
+<p>Essa leitura é o estado informado pelo kernel naquele momento. Não mede eletricamente HSync, não confirma a saída após um conversor e não garante modos escolhidos posteriormente pelos jogos. A medição física exige instrumento ou indicação confiável do monitor/analisador.</p>
+<h2 id="switchres-e-emuladores">Switchres e emuladores</h2>
+<p>O console inicia pelo EDID. O serviço de boot apenas verifica. Os emuladores abrem Xorg inicialmente em 640x240 e usam Switchres/XRandR durante a execução.</p>
+<p>O backend KMS do Switchres chama-se <code>drmkms</code>, não <code>kms</code>, e upstream o identifica como trabalho em andamento. Troca dinâmica sem X pode exigir patches adicionais; não é prometida nesse kernel Ubuntu padrão.</p>
+<p>O INI usa <code>chave valor</code>, sem seções nem <code>=</code>. O caminho é passado com <code>--ini</code>. O cálculo usa <code>--calc</code>, não <code>--dryrun</code>. Gerar uma modeline não comprova saída física.</p>
+<pre><code class="language-bash">switchres 640 240 60 --calc --ini /etc/fliperos/switchres.ini
+fliperos-launcher
+</code></pre>
+<p>O wrapper usa <code>--launch</code> para manter Switchres acompanhando o emulador e restaurar o modo ao sair. Recusa perfis acima de 15 kHz. A solicitação 640x480 dos emuladores 3D usa arcade_15 com interlace habilitado; ainda exige teste da GPU e do emulador. Jogos que trocam o modo por conta própria também precisam de validação.</p>
+<p>A ISO de diagnóstico reaproveita o Switchres compilado da imagem anterior. GroovyMAME e demais emuladores só estão disponíveis se seus binários tiverem sido instalados. O launcher informa componentes ausentes. Não certificamos desempenho ou troca dinâmica sem testes no hardware.</p>
+<h2 id="build">Build</h2>
+<p>Use Docker para isolar o build. <code>CLAUDE.md</code> proíbe bind de <code>/dev</code> do host em chroots de build no WSL. O gerador recusa execução direta em WSL e não remove recursivamente um workspace com mounts restantes.</p>
+<pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-novo.iso --skip-groovymame
+</code></pre>
+<p>O privilégio acima pertence ao container de build; não monte <code>/dev</code> do host nele. Build não testa sinal de vídeo. Compilações solicitadas devem falhar explicitamente se não concluírem; omissões usam <code>--skip-*</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Arquivo</th>
+<th>Função</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fliperos-mkiso.sh</code></td>
+<td>Build de uma ISO Ubuntu nova</td>
+</tr>
+<tr>
+<td><code>fliperos-setup.sh</code></td>
+<td>Setup em Ubuntu existente; <code>--dry-run</code> não escreve</td>
+</tr>
+<tr>
+<td><code>fliperos-install.py</code></td>
+<td>Assistente live/instalação em disco</td>
+</tr>
+<tr>
+<td><code>fliperos-install-video.sh</code></td>
+<td>Assets compartilhados entre setup e ISO</td>
+</tr>
+<tr>
+<td><code>fliperos-video-check.py</code></td>
+<td>Consulta de modo ativo DRM</td>
+</tr>
+<tr>
+<td><code>fliperos-detect.sh</code></td>
+<td>Relatório de sistema e vídeo</td>
+</tr>
+<tr>
+<td><code>config/</code></td>
+<td>Xorg, Switchres, GRUB, serviço, hook EDID e launchers</td>
+</tr>
+<tr>
+<td><code>tools/repack-iso.sh</code></td>
+<td>Revisão da ISO 0.5 em container de auditoria</td>
+</tr>
+<tr>
+<td><code>tests/test_video.py</code></td>
+<td>Testes de frequência, EDID e discos</td>
+</tr>
+</tbody>
+</table>
+<h2 id="fontes-consultadas">Fontes consultadas</h2>
+<ul>
+<li><a href="https://github.com/substring/os">GroovyArcade e fluxo de instalação</a></li>
+<li><a href="https://gitlab.com/groovyarcade/gasetup/-/blob/master/core/libs/lib-install.sh">gasetup: instalação</a></li>
+<li><a href="https://gitlab.com/groovyarcade/gasetup/-/blob/master/core/procedures/interactive">gasetup: fluxo interativo</a></li>
+<li><a href="https://gitlab.com/groovyarcade/gasetup/-/blob/master/core/libs/lib-bootloaders.sh">gasetup: bootloaders</a></li>
+<li><a href="https://github.com/antonioginer/switchres">Switchres: CLI e uso</a></li>
+<li><a href="https://github.com/antonioginer/switchres/blob/master/switchres.ini">Switchres: opções e sintaxe</a></li>
+<li><a href="https://github.com/D0023R/linux_kernel_15khz">Kernel 15 kHz: EDID e patches KMS</a></li>
+<li><a href="https://kernel.org/doc/html/v6.16/gpu/drm-uapi.html">DRM: estruturas e unidades dos modos</a></li>
+</ul>
+<p>Revisões consultadas: gasetup <code>f190da5f7b5157f1122e37c49a6b73dc62970269</code>; Switchres <code>da27cc69b59c9c274bffae51ab148dedcf2b0a75</code>. O antigo link para <code>switchres/doc/switchres_kms.md</code> não existe nessa revisão. <code>get-docker.sh</code> é um instalador externo de Docker preservado no repositório; não integra o instalador FliperOS.</p></main><footer>Gerado de README.md. Consulte AUDITORIA.md para os resultados dos testes.</footer></html>
