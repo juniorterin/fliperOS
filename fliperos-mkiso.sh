@@ -552,19 +552,25 @@ apt-get install -y --no-install-recommends \
 mkdir -p /usr/src/fliperos-kernel
 cd /usr/src/fliperos-kernel
 
-# Semente de .config: baixa so o pacote real do kernel noble (sem
+# Semente de .config: baixa so o pacote de buildinfo do kernel noble (sem
 # instalar/rodar postinst) e reaproveita o .config ja ajustado pela
-# Canonical, em vez de partir de defconfig do zero.
+# Canonical, em vez de partir de defconfig do zero. O Ubuntu separou o
+# linux-buildinfo-<versao> do linux-image-<versao> pra nao inflar o
+# pacote de imagem assinado — confirmado testando os dois pacotes reais
+# do noble antes de escrever isso: linux-image-*-generic hoje so tem o
+# vmlinuz, o .config mora em /usr/lib/linux/<versao>/config dentro do
+# linux-buildinfo-*-generic (nao mais em /boot/config-<versao>).
 REALPKG=$(apt-cache depends linux-image-generic | awk '/Depends:/{print $2; exit}')
-apt-get download "$REALPKG"
-dpkg-deb -x "${REALPKG}"*.deb /usr/src/fliperos-kernel/genericpkg
-CONFIG_SEED=$(find /usr/src/fliperos-kernel/genericpkg/boot -name 'config-*' | head -1)
+BUILDINFO_PKG="${REALPKG/linux-image-/linux-buildinfo-}"
+apt-get download "$BUILDINFO_PKG"
+dpkg-deb -x "${BUILDINFO_PKG}"*.deb /usr/src/fliperos-kernel/genericpkg
+CONFIG_SEED=$(find /usr/src/fliperos-kernel/genericpkg -type f \( -name 'config' -o -name 'config-*' \) | head -1)
 [[ -n "$CONFIG_SEED" ]] || { echo "config-seed nao encontrado" >&2; exit 1; }
 
 wget -q "https://cdn.kernel.org/pub/linux/kernel/v__KERNEL_MAJOR__.x/linux-__KERNEL_VERSION__.tar.xz"
 tar xf "linux-__KERNEL_VERSION__.tar.xz"
 cp "$CONFIG_SEED" "linux-__KERNEL_VERSION__/.config"
-rm -rf /usr/src/fliperos-kernel/genericpkg "${REALPKG}"*.deb
+rm -rf /usr/src/fliperos-kernel/genericpkg "${BUILDINFO_PKG}"*.deb
 cd "linux-__KERNEL_VERSION__"
 
 for P in /opt/fliperos/kernel-patches/__KERNEL_MINOR__/*.patch; do
