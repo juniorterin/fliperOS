@@ -3,7 +3,7 @@
 #  FliperOS mkiso v0.6
 #  Gera uma ISO Ubuntu customizada com FliperOS pré-instalado
 #  Base: Ubuntu 22.04 LTS minimal (jammy)
-#  Uso: sudo bash fliperos-mkiso.sh [/caminho/saida.iso] [--skip-switchres]
+#  Uso: sudo bash fliperos-mkiso.sh [/caminho/saida.iso] [--skip-switchres] [--with-15khz-kernel]
 #  No Windows, execute somente dentro do container Docker.
 # ============================================================
 
@@ -27,6 +27,8 @@ ARCH="amd64"
 LOG_FILE="/var/log/fliperos-mkiso.log"
 SKIP_SWITCHRES=false
 SKIP_GROOVYMAME=false
+WITH_15KHZ_KERNEL=false
+KERNEL_15KHZ_VERSION="6.6.152"
 
 # ── Args ─────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -36,8 +38,9 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_ISO="$2"; shift 2 ;;
     --skip-switchres)  SKIP_SWITCHRES=true; shift ;;
     --skip-groovymame) SKIP_GROOVYMAME=true; shift ;;
+    --with-15khz-kernel) WITH_15KHZ_KERNEL=true; shift ;;
     /*.iso|*.iso)     OUTPUT_ISO="$1"; shift ;;
-    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame]"; exit 1 ;;
+    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame] [--with-15khz-kernel]"; exit 1 ;;
   esac
 done
 
@@ -135,6 +138,13 @@ configure_chroot() {
     err "EDID obrigatorio ausente"
   fi
 
+  # Kernel generico (apt) por padrao; com --with-15khz-kernel o kernel
+  # patcheado e compilado em build_15khz_kernel_chroot() mais adiante, entao
+  # nao instala linux-image-generic aqui (copy_kernel() pegaria o kernel
+  # errado se os dois coexistissem).
+  local KERNEL_APT_PKGS="linux-image-generic linux-headers-generic"
+  $WITH_15KHZ_KERNEL && KERNEL_APT_PKGS=""
+
   cat > "$CHROOT_DIR/tmp/fliperos-chroot-setup.sh" << 'CHROOT_SCRIPT'
 #!/bin/bash
 set -e
@@ -151,7 +161,7 @@ apt-get update -qq
 
 # live-boot necessário para boot=live no kernel da ISO
 apt-get install -y --no-install-recommends \
-  linux-image-generic linux-headers-generic \
+  __KERNEL_PKGS__ \
   live-boot live-boot-initramfs-tools \
   grub-pc-bin grub-efi-amd64-bin grub2-common \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -250,6 +260,7 @@ CHROOT_SCRIPT
   sed -i \
     -e "s|__MIRROR__|${UBUNTU_MIRROR}|g" \
     -e "s|__CODENAME__|${UBUNTU_CODENAME}|g" \
+    -e "s|__KERNEL_PKGS__|${KERNEL_APT_PKGS}|g" \
     "$CHROOT_DIR/tmp/fliperos-chroot-setup.sh"
 
   chmod +x "$CHROOT_DIR/tmp/fliperos-chroot-setup.sh"
@@ -334,6 +345,81 @@ GMSCRIPT
     || err "GroovyMAME falhou; use --skip-groovymame explicitamente para ISO de diagnostico"
 }
 
+# ── Compilar kernel 15kHz patcheado (opt-in) ──────────────────
+# Kernel vanilla kernel.org + patches D0023R/linux_kernel_15khz
+# vendorizados em patches/kernel-15khz/ (ver README la dentro). So roda
+# com --with-15khz-kernel; sem a flag, o kernel continua sendo o
+# linux-image-generic normal com o metodo EDID-only (ver configure_chroot).
+# A semente de .config vem do proprio kernel jammy (baixado sem instalar,
+# so pra extrair o .config ja ajustado) em vez de defconfig do zero.
+build_15khz_kernel_chroot() {
+  if ! $WITH_15KHZ_KERNEL; then
+    return
+  fi
+  step "Compilando kernel 15kHz patcheado ($KERNEL_15KHZ_VERSION) no chroot"
+  local KERNEL_MINOR="${KERNEL_15KHZ_VERSION%.*}"
+  local KERNEL_MAJOR="${KERNEL_15KHZ_VERSION%%.*}"
+  cat > "$CHROOT_DIR/tmp/build-15khz-kernel.sh" << 'KERNELSCRIPT'
+#!/bin/bash
+set -e
+apt-get update -qq
+apt-get install -y --no-install-recommends \
+  libncurses-dev bison flex libssl-dev libelf-dev bc \
+  rsync cpio kmod fakeroot dwarves zstd xz-utils
+
+mkdir -p /usr/src/fliperos-kernel
+cd /usr/src/fliperos-kernel
+
+# Semente de .config: baixa so o pacote real do kernel jammy (sem
+# instalar/rodar postinst) e reaproveita o .config ja ajustado pela
+# Canonical, em vez de partir de defconfig do zero.
+REALPKG=$(apt-cache depends linux-image-generic | awk '/Depends:/{print $2; exit}')
+apt-get download "$REALPKG"
+dpkg-deb -x "${REALPKG}"*.deb /usr/src/fliperos-kernel/genericpkg
+CONFIG_SEED=$(find /usr/src/fliperos-kernel/genericpkg/boot -name 'config-*' | head -1)
+[[ -n "$CONFIG_SEED" ]] || { echo "config-seed nao encontrado" >&2; exit 1; }
+
+wget -q "https://cdn.kernel.org/pub/linux/kernel/v__KERNEL_MAJOR__.x/linux-__KERNEL_VERSION__.tar.xz"
+tar xf "linux-__KERNEL_VERSION__.tar.xz"
+cp "$CONFIG_SEED" "linux-__KERNEL_VERSION__/.config"
+rm -rf /usr/src/fliperos-kernel/genericpkg "${REALPKG}"*.deb
+cd "linux-__KERNEL_VERSION__"
+
+for P in /opt/fliperos/kernel-patches/__KERNEL_MINOR__/*.patch; do
+  echo "Aplicando $(basename "$P")"
+  patch -p1 < "$P"
+done
+
+# Kernel proprio nao e assinado (sem Secure Boot) — desliga assinatura de
+# modulo/certificados do Ubuntu (referenciam arquivo que nao existe fora
+# da arvore deles) e BTF/pahole (irrelevante pro caso de uso, e uma fonte
+# comum de falha de build ao reaproveitar um .config do Ubuntu).
+./scripts/config --set-str LOCALVERSION "-15khz"
+./scripts/config --disable SYSTEM_TRUSTED_KEYS
+./scripts/config --disable SYSTEM_REVOCATION_KEYS
+./scripts/config --disable MODULE_SIG
+./scripts/config --disable DEBUG_INFO_BTF
+make olddefconfig
+make -j"$(nproc)" bindeb-pkg
+
+cd /usr/src/fliperos-kernel
+apt-get install -y ./linux-image-*.deb ./linux-headers-*.deb
+rm -rf /usr/src/fliperos-kernel/linux-__KERNEL_VERSION__ \
+       /usr/src/fliperos-kernel/*.tar.xz /usr/src/fliperos-kernel/*.deb \
+       /usr/src/fliperos-kernel/*.buildinfo /usr/src/fliperos-kernel/*.changes
+echo "KERNEL_15KHZ_OK"
+KERNELSCRIPT
+  sed -i \
+    -e "s|__KERNEL_VERSION__|${KERNEL_15KHZ_VERSION}|g" \
+    -e "s|__KERNEL_MAJOR__|${KERNEL_MAJOR}|g" \
+    -e "s|__KERNEL_MINOR__|${KERNEL_MINOR}|g" \
+    "$CHROOT_DIR/tmp/build-15khz-kernel.sh"
+  chmod +x "$CHROOT_DIR/tmp/build-15khz-kernel.sh"
+  chroot "$CHROOT_DIR" /tmp/build-15khz-kernel.sh >> "$LOG_FILE" 2>&1 \
+    && ok "Kernel 15kHz compilado (${KERNEL_15KHZ_VERSION}-15khz)" \
+    || err "Build do kernel 15kHz falhou; rode sem --with-15khz-kernel para ISO EDID-only"
+}
+
 # ── squashfs ──────────────────────────────────────────────────
 create_squashfs() {
   step "Criando squashfs"
@@ -405,6 +491,8 @@ summary() {
   echo -e "\n  Login: fliperos / fliperos"
   $SKIP_SWITCHRES  && echo -e "  ${YLW}SwitchRes nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
   $SKIP_GROOVYMAME && echo -e "  ${YLW}GroovyMAME nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
+  $WITH_15KHZ_KERNEL && echo -e "  ${CYN}Kernel 15kHz patcheado: ${KERNEL_15KHZ_VERSION}-15khz (D0023R) — KMS/switchres sem X${RST}"
+  $WITH_15KHZ_KERNEL && echo -e "  ${YLW}Kernel proprio nao assinado — desabilite Secure Boot na UEFI${RST}"
   echo -e "  ${DIM}Log: $LOG_FILE${RST}\n"
 }
 
@@ -432,10 +520,12 @@ build_rootfs
 configure_chroot
 copy_fliperos_scripts
 cp -a "$(dirname "$(realpath "$0")")/config" "$CHROOT_DIR/opt/fliperos/"
+cp -a "$(dirname "$(realpath "$0")")/patches/kernel-15khz" "$CHROOT_DIR/opt/fliperos/kernel-patches"
 bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" "$CHROOT_DIR"
 chroot "$CHROOT_DIR" update-initramfs -u -k all
 build_switchres_chroot
 build_groovymame_chroot
+build_15khz_kernel_chroot
 rm -f "$CHROOT_DIR/usr/sbin/policy-rc.d"
 unmount_chroot
 create_squashfs

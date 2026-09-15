@@ -1,0 +1,6 @@
+# Todo o build roda dentro de Linux (Docker/chroot) — CRLF quebra os
+# scripts e, mais criticamente, o "patch -p1" dos patches de kernel
+# vendorizados (ja aconteceu uma vez: git clone no Windows converteu os
+# patches pra CRLF e corrompeu os arquivos).
+*.sh text eol=lf
+patches/** -text

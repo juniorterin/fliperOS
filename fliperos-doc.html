@@ -73,10 +73,16 @@ journalctl -b -u fliperos-video-check.service --no-pager
 </tbody>
 </table>
 <p>Sem filtro, considera todas as saídas ativas. Um LCD a 31 kHz junto do CRT faz o resultado global indicar fora da faixa. Use <code>--connector</code> para examinar só o CRT e <code>--min-khz</code>/<code>--max-khz</code> para os limites específicos do monitor.</p>
+<h2 id="auto-deteccao-de-conector">Auto-detecção de conector</h2>
+<p><code>fliperos-video-check</code> é só leitura: se nenhuma saída já estiver ativa (hardware diferente do padrão <code>VGA-1</code>/<code>DVI-I-1</code> forçado no GRUB), ele não descobre nada sozinho. Para esse caso existe <code>fliperos-video-autodetect</code>, baseado na técnica do GroovyArcade/gatools (<code>video/video.sh</code>): liga cada conector analógico (<code>VGA-*</code>/<code>DVI-I-*</code>) um de cada vez, pede para apertar ENTER se a imagem aparecer dentro de um tempo limite, e desliga antes de testar o próximo — por isso a tela "pisca" durante o teste. Com <code>espeak-ng</code> instalado, cada passo também é narrado por voz, útil justamente porque nesse momento pode não haver nada visível ainda.</p>
+<pre><code class="language-bash">sudo fliperos-video-autodetect
+sudo fliperos-video-autodetect --json --no-voz --timeout 8
+</code></pre>
+<p>Isso identifica <strong>qual porta</strong> o CRT está usando, não confirma 15 kHz — o <code>fliperos-video-check</code> continua sendo a prova real do modo. <code>sudo fliperos-install</code> já chama a auto-detecção automaticamente quando <code>fliperos-video-check</code> não encontra nenhuma saída ativa, antes de aplicar as mesmas checagens de faixa e a confirmação manual de sempre. Assume uma única GPU; em máquinas com mais de uma placa o console pode não estar mapeado pra GPU sob teste.</p>
 <p>Essa leitura é o estado informado pelo kernel naquele momento. Não mede eletricamente HSync, não confirma a saída após um conversor e não garante modos escolhidos posteriormente pelos jogos. A medição física exige instrumento ou indicação confiável do monitor/analisador.</p>
 <h2 id="switchres-e-emuladores">Switchres e emuladores</h2>
 <p>O console inicia pelo EDID. O serviço de boot apenas verifica. Os emuladores abrem Xorg inicialmente em 640x240 e usam Switchres/XRandR durante a execução.</p>
-<p>O backend KMS do Switchres chama-se <code>drmkms</code>, não <code>kms</code>, e upstream o identifica como trabalho em andamento. Troca dinâmica sem X pode exigir patches adicionais; não é prometida nesse kernel Ubuntu padrão.</p>
+<p>O backend KMS do Switchres chama-se <code>drmkms</code>, não <code>kms</code>, e upstream o identifica como trabalho em andamento. Troca dinâmica sem X pode exigir patches adicionais; não é prometida nesse kernel Ubuntu padrão. O build aceita <code>--with-15khz-kernel</code> pra compilar um kernel próprio com o patch de KMS necessário (ver seção Build) — ainda não validado em hardware real.</p>
 <p>O INI usa <code>chave valor</code>, sem seções nem <code>=</code>. O caminho é passado com <code>--ini</code>. O cálculo usa <code>--calc</code>, não <code>--dryrun</code>. Gerar uma modeline não comprova saída física.</p>
 <pre><code class="language-bash">switchres 640 240 60 --calc --ini /etc/fliperos/switchres.ini
 fliperos-launcher
@@ -89,6 +95,10 @@ fliperos-launcher
 docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-novo.iso --skip-groovymame
 </code></pre>
 <p>O privilégio acima pertence ao container de build; não monte <code>/dev</code> do host nele. Build não testa sinal de vídeo. Compilações solicitadas devem falhar explicitamente se não concluírem; omissões usam <code>--skip-*</code>.</p>
+<p>Por padrão o kernel é o <code>linux-image-generic</code> do jammy, com o método EDID-only (sem patch de kernel, ver seção Timing de vídeo). A flag <code>--with-15khz-kernel</code> troca isso por um kernel próprio compilado no chroot — kernel.org vanilla 6.6 LTS + os patches vendorizados em <code>patches/kernel-15khz/</code> (fonte: D0023R/linux_kernel_15khz), habilitando troca dinâmica de modo via KMS sem X:</p>
+<pre><code class="language-powershell">docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-15khz.iso --with-15khz-kernel
+</code></pre>
+<p>Kernel próprio não vem assinado — Secure Boot precisa ficar desabilitado na UEFI de destino. Compilar o kernel adiciona bastante tempo ao build (compilação completa a partir da fonte). Caminho ainda não exercitado num build real; espere iterar em gaps de config/patch na primeira tentativa.</p>
 <table>
 <thead>
 <tr>
@@ -118,12 +128,20 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <td>Consulta de modo ativo DRM</td>
 </tr>
 <tr>
+<td><code>fliperos-video-autodetect.py</code></td>
+<td>Descobre o conector do CRT ligando/desligando cada saida analogica</td>
+</tr>
+<tr>
 <td><code>fliperos-detect.sh</code></td>
 <td>Relatório de sistema e vídeo</td>
 </tr>
 <tr>
 <td><code>config/</code></td>
 <td>Xorg, Switchres, GRUB, serviço, hook EDID e launchers</td>
+</tr>
+<tr>
+<td><code>patches/kernel-15khz/</code></td>
+<td>Patches D0023R vendorizados pro kernel opcional <code>--with-15khz-kernel</code></td>
 </tr>
 <tr>
 <td><code>tools/repack-iso.sh</code></td>
@@ -146,4 +164,4 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <li><a href="https://github.com/D0023R/linux_kernel_15khz">Kernel 15 kHz: EDID e patches KMS</a></li>
 <li><a href="https://kernel.org/doc/html/v6.16/gpu/drm-uapi.html">DRM: estruturas e unidades dos modos</a></li>
 </ul>
-<p>Revisões consultadas: gasetup <code>f190da5f7b5157f1122e37c49a6b73dc62970269</code>; Switchres <code>da27cc69b59c9c274bffae51ab148dedcf2b0a75</code>. O antigo link para <code>switchres/doc/switchres_kms.md</code> não existe nessa revisão. <code>get-docker.sh</code> é um instalador externo de Docker preservado no repositório; não integra o instalador FliperOS.</p></main><footer>Gerado de README.md. Consulte AUDITORIA.md para os resultados dos testes.</footer></html>
+<p>Revisões consultadas: gasetup <code>f190da5f7b5157f1122e37c49a6b73dc62970269</code>; Switchres <code>da27cc69b59c9c274bffae51ab148dedcf2b0a75</code>; patches de kernel 15kHz em <code>patches/kernel-15khz/</code> vendorizados de D0023R/linux_kernel_15khz <code>97968a0bdb682f2b6e1469de24449a4536bd8ecb</code> (ver README naquela pasta). O antigo link para <code>switchres/doc/switchres_kms.md</code> não existe nessa revisão. <code>get-docker.sh</code> é um instalador externo de Docker preservado no repositório; não integra o instalador FliperOS.</p></main><footer>Gerado de README.md. Consulte AUDITORIA.md para os resultados dos testes.</footer></html>

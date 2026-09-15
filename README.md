@@ -84,7 +84,7 @@ Essa leitura é o estado informado pelo kernel naquele momento. Não mede eletri
 
 O console inicia pelo EDID. O serviço de boot apenas verifica. Os emuladores abrem Xorg inicialmente em 640x240 e usam Switchres/XRandR durante a execução.
 
-O backend KMS do Switchres chama-se `drmkms`, não `kms`, e upstream o identifica como trabalho em andamento. Troca dinâmica sem X pode exigir patches adicionais; não é prometida nesse kernel Ubuntu padrão.
+O backend KMS do Switchres chama-se `drmkms`, não `kms`, e upstream o identifica como trabalho em andamento. Troca dinâmica sem X pode exigir patches adicionais; não é prometida nesse kernel Ubuntu padrão. O build aceita `--with-15khz-kernel` pra compilar um kernel próprio com o patch de KMS necessário (ver seção Build) — ainda não validado em hardware real.
 
 O INI usa `chave valor`, sem seções nem `=`. O caminho é passado com `--ini`. O cálculo usa `--calc`, não `--dryrun`. Gerar uma modeline não comprova saída física.
 
@@ -108,6 +108,14 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 
 O privilégio acima pertence ao container de build; não monte `/dev` do host nele. Build não testa sinal de vídeo. Compilações solicitadas devem falhar explicitamente se não concluírem; omissões usam `--skip-*`.
 
+Por padrão o kernel é o `linux-image-generic` do jammy, com o método EDID-only (sem patch de kernel, ver seção Timing de vídeo). A flag `--with-15khz-kernel` troca isso por um kernel próprio compilado no chroot — kernel.org vanilla 6.6 LTS + os patches vendorizados em `patches/kernel-15khz/` (fonte: D0023R/linux_kernel_15khz), habilitando troca dinâmica de modo via KMS sem X:
+
+```powershell
+docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-15khz.iso --with-15khz-kernel
+```
+
+Kernel próprio não vem assinado — Secure Boot precisa ficar desabilitado na UEFI de destino. Compilar o kernel adiciona bastante tempo ao build (compilação completa a partir da fonte). Caminho ainda não exercitado num build real; espere iterar em gaps de config/patch na primeira tentativa.
+
 | Arquivo | Função |
 | --- | --- |
 | `fliperos-mkiso.sh` | Build de uma ISO Ubuntu nova |
@@ -118,6 +126,7 @@ O privilégio acima pertence ao container de build; não monte `/dev` do host ne
 | `fliperos-video-autodetect.py` | Descobre o conector do CRT ligando/desligando cada saida analogica |
 | `fliperos-detect.sh` | Relatório de sistema e vídeo |
 | `config/` | Xorg, Switchres, GRUB, serviço, hook EDID e launchers |
+| `patches/kernel-15khz/` | Patches D0023R vendorizados pro kernel opcional `--with-15khz-kernel` |
 | `tools/repack-iso.sh` | Revisão da ISO 0.5 em container de auditoria |
 | `tests/test_video.py` | Testes de frequência, EDID e discos |
 
@@ -132,4 +141,4 @@ O privilégio acima pertence ao container de build; não monte `/dev` do host ne
 - [Kernel 15 kHz: EDID e patches KMS](https://github.com/D0023R/linux_kernel_15khz)
 - [DRM: estruturas e unidades dos modos](https://kernel.org/doc/html/v6.16/gpu/drm-uapi.html)
 
-Revisões consultadas: gasetup `f190da5f7b5157f1122e37c49a6b73dc62970269`; Switchres `da27cc69b59c9c274bffae51ab148dedcf2b0a75`. O antigo link para `switchres/doc/switchres_kms.md` não existe nessa revisão. `get-docker.sh` é um instalador externo de Docker preservado no repositório; não integra o instalador FliperOS.
+Revisões consultadas: gasetup `f190da5f7b5157f1122e37c49a6b73dc62970269`; Switchres `da27cc69b59c9c274bffae51ab148dedcf2b0a75`; patches de kernel 15kHz em `patches/kernel-15khz/` vendorizados de D0023R/linux_kernel_15khz `97968a0bdb682f2b6e1469de24449a4536bd8ecb` (ver README naquela pasta). O antigo link para `switchres/doc/switchres_kms.md` não existe nessa revisão. `get-docker.sh` é um instalador externo de Docker preservado no repositório; não integra o instalador FliperOS.
