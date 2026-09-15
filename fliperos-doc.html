@@ -21,7 +21,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li>O instalador extrai o squashfs, grava fstab com UUIDs, reconstrói o initramfs e instala GRUB. Defina uma senha nova e reinicie sem o pendrive.</li>
 </ol>
 <p>Particionamento: GPT, BIOS boot de 1 MiB, ESP FAT32 de 512 MiB, restante ext4. Instala GRUB BIOS e UEFI pelo caminho removível, sem alterar NVRAM. Mínimo: 16 GiB.</p>
-<p>É uma implementação própria do fluxo, adaptada ao Ubuntu. Não copia <code>pacstrap</code>, <code>pacman</code>, <code>mkinitcpio</code>, o kernel Arch ou todos os menus do gasetup. Não inclui net-install nem perfis de 25/31 kHz. O gasetup oferece outros bootloaders; aqui é usado GRUB.</p>
+<p>É uma implementação própria do fluxo, adaptada ao Ubuntu. Não copia <code>pacstrap</code>, <code>pacman</code>, <code>mkinitcpio</code>, o kernel Arch ou todos os menus do gasetup. Não inclui net-install. O gasetup oferece outros bootloaders; aqui é usado GRUB.</p>
 <p>Plano sem nenhuma escrita:</p>
 <pre><code class="language-bash">sudo fliperos-install --plan /dev/sdX --connector VGA-1
 </code></pre>
@@ -38,6 +38,58 @@ HSync: 15,649038 kHz; refresh: 59,958 Hz
 <p>640 pixels de largura não transformam esse modo em 480p. São 240 linhas progressivas. O timing é genérico, não uma calibração específica do monitor. O antigo <code>320x240-edid.bin</code> foi preservado apenas como referência e não é usado: também anunciava um modo GTF de 14,940 kHz e seu clock baixo falhava na validação EDID utilizada.</p>
 <p>O boot usa <code>video=VGA-1:e drm.edid_firmware=VGA-1:edid/crt15.bin</code>. O EDID está no initramfs para o driver encontrá-lo no início do KMS.</p>
 <p><strong>BIOS/UEFI e GRUB vêm antes desse mecanismo e podem emitir frequências acima de 15 kHz.</strong> O override não garante toda a sequência desde ligar o computador. GPU, adaptadores e circuito RGBHV/RGBS precisam de teste. Não conecte um CRT de frequência fixa a sinal desconhecido para testar por tentativa.</p>
+<h2 id="perfis-de-monitor-152531-khz">Perfis de monitor (15/25/31 kHz)</h2>
+<p>O build aceita <code>--monitor-profile 15khz|25khz|31khz</code> (padrão <code>15khz</code>) — uma
+ISO por perfil, escolhido no momento do build, não na instalação. Cada
+perfil troca o EDID (<code>crt15-edid.bin</code>/<code>crt25-edid.bin</code>/<code>crt31-edid.bin</code>),
+o <code>xorg.conf</code>, o <code>mame.ini</code> e o <code>switchres.ini</code> instalados, mas o nome do
+arquivo de EDID <em>dentro</em> da imagem continua sendo <code>crt15.bin</code> nos três
+casos — só o conteúdo muda. Isso é proposital: <code>fliperos-install.py</code>,
+<code>config/grub.cfg</code>, <code>config/fliperos-edid-hook</code> e as ferramentas de
+auditoria em <code>tools/</code> referenciam esse nome fixo e não precisam saber
+qual perfil foi escolhido.</p>
+<p>As faixas de frequência vêm direto do código do Switchres
+(<code>monitor.cpp</code>, presets <code>arcade_15</code>/<code>arcade_25</code>/<code>arcade_31</code>), não são
+inventadas:</p>
+<table>
+<thead>
+<tr>
+<th>Perfil</th>
+<th>Faixa horizontal (Switchres)</th>
+<th>Timing do EDID</th>
+<th>Origem do timing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>15kHz</td>
+<td>15625-16200 Hz</td>
+<td>640x240 progressivo, 13.020 MHz, 15.649 kHz</td>
+<td>Já existia (D0023R)</td>
+</tr>
+<tr>
+<td>25kHz</td>
+<td>24960 Hz (fixo)</td>
+<td>512x384 progressivo, 15.600 MHz, 24.960 kHz exatos</td>
+<td>Calculado mirando o preset do Switchres — sem padrão VESA equivalente</td>
+</tr>
+<tr>
+<td>31kHz</td>
+<td>31400-31500 Hz</td>
+<td>640x480 progressivo, 25.200 MHz, 31.500 kHz</td>
+<td>VGA industrial-padrão (modeline <code>25.200 640 656 752 800 480 490 492 525</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Os dois EDIDs novos foram gerados a partir do <code>crt15-edid.bin</code> como molde
+(mesma estrutura de bytes já validada em produção, só o DTD/timing e o
+Display Range Limits mudam) e conferidos com <code>edid-decode</code> — estrutura
+válida, HSync/VSync batendo com o alvo. <strong>Não foram testados em hardware
+real</strong> (mesma ressalva que já vale pro 15kHz): a validação aqui é
+matemática e estrutural, não uma confirmação com osciloscópio ou monitor
+físico. O perfil 31kHz não tem entrelaçado (o preset <code>arcade_31</code> do
+Switchres não define linhas entrelaçadas) — <code>mame-31khz.ini</code> e
+<code>switchres-31khz.ini</code> já vêm com <code>interlace 0</code>.</p>
 <p>Os parâmetros SI/CIK selecionam <code>radeon</code> apenas nas famílias compartilhadas com <code>amdgpu</code>, sem blacklist geral. Identifique o chip por PCI ID e driver real. A R7 240 normalmente é Oland, não Cape Verde.</p>
 <h2 id="diagnostico-do-modo-ativo">Diagnóstico do modo ativo</h2>
 <pre><code class="language-bash">sudo fliperos-video-check --connector VGA-1
@@ -110,6 +162,9 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <pre><code class="language-powershell">docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-15khz.iso --with-15khz-kernel
 </code></pre>
 <p>Kernel próprio não vem assinado — Secure Boot precisa ficar desabilitado na UEFI de destino. Compilar o kernel adiciona bastante tempo ao build (compilação completa a partir da fonte). Caminho ainda não exercitado num build real; espere iterar em gaps de config/patch na primeira tentativa.</p>
+<p>Por padrão o perfil de monitor é <code>15khz</code>. <code>--monitor-profile 25khz</code> ou <code>--monitor-profile 31khz</code> geram uma ISO pro perfil correspondente (ver seção Perfis de monitor) — uma ISO por frequência, não uma escolha em tempo de instalação:</p>
+<pre><code class="language-powershell">docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-31khz.iso --monitor-profile 31khz
+</code></pre>
 <table>
 <thead>
 <tr>
@@ -153,6 +208,14 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <tr>
 <td><code>config/fliperos-kms-run</code></td>
 <td>Lança RetroArch/Flycast direto em KMS/DRM, sem Xorg</td>
+</tr>
+<tr>
+<td><code>config/{xorg,mame,switchres}-{25,31}khz.{conf,ini}</code></td>
+<td>Variantes de config por perfil de monitor (padrão 15kHz usa os arquivos sem sufixo)</td>
+</tr>
+<tr>
+<td><code>crt{15,25,31}-edid.bin</code></td>
+<td>EDID customizado por perfil de monitor — só um vai pra ISO, conforme <code>--monitor-profile</code></td>
 </tr>
 <tr>
 <td><code>patches/kernel-15khz/</code></td>

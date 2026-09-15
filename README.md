@@ -16,7 +16,7 @@ O fluxo segue a instalação pela ISO do gasetup: iniciar live, identificar a sa
 
 Particionamento: GPT, BIOS boot de 1 MiB, ESP FAT32 de 512 MiB, restante ext4. Instala GRUB BIOS e UEFI pelo caminho removível, sem alterar NVRAM. Mínimo: 16 GiB.
 
-É uma implementação própria do fluxo, adaptada ao Ubuntu. Não copia `pacstrap`, `pacman`, `mkinitcpio`, o kernel Arch ou todos os menus do gasetup. Não inclui net-install nem perfis de 25/31 kHz. O gasetup oferece outros bootloaders; aqui é usado GRUB.
+É uma implementação própria do fluxo, adaptada ao Ubuntu. Não copia `pacstrap`, `pacman`, `mkinitcpio`, o kernel Arch ou todos os menus do gasetup. Não inclui net-install. O gasetup oferece outros bootloaders; aqui é usado GRUB.
 
 Plano sem nenhuma escrita:
 
@@ -45,6 +45,38 @@ HSync: 15,649038 kHz; refresh: 59,958 Hz
 O boot usa `video=VGA-1:e drm.edid_firmware=VGA-1:edid/crt15.bin`. O EDID está no initramfs para o driver encontrá-lo no início do KMS.
 
 **BIOS/UEFI e GRUB vêm antes desse mecanismo e podem emitir frequências acima de 15 kHz.** O override não garante toda a sequência desde ligar o computador. GPU, adaptadores e circuito RGBHV/RGBS precisam de teste. Não conecte um CRT de frequência fixa a sinal desconhecido para testar por tentativa.
+
+## Perfis de monitor (15/25/31 kHz)
+
+O build aceita `--monitor-profile 15khz|25khz|31khz` (padrão `15khz`) — uma
+ISO por perfil, escolhido no momento do build, não na instalação. Cada
+perfil troca o EDID (`crt15-edid.bin`/`crt25-edid.bin`/`crt31-edid.bin`),
+o `xorg.conf`, o `mame.ini` e o `switchres.ini` instalados, mas o nome do
+arquivo de EDID *dentro* da imagem continua sendo `crt15.bin` nos três
+casos — só o conteúdo muda. Isso é proposital: `fliperos-install.py`,
+`config/grub.cfg`, `config/fliperos-edid-hook` e as ferramentas de
+auditoria em `tools/` referenciam esse nome fixo e não precisam saber
+qual perfil foi escolhido.
+
+As faixas de frequência vêm direto do código do Switchres
+(`monitor.cpp`, presets `arcade_15`/`arcade_25`/`arcade_31`), não são
+inventadas:
+
+| Perfil | Faixa horizontal (Switchres) | Timing do EDID | Origem do timing |
+| --- | --- | --- | --- |
+| 15kHz | 15625-16200 Hz | 640x240 progressivo, 13.020 MHz, 15.649 kHz | Já existia (D0023R) |
+| 25kHz | 24960 Hz (fixo) | 512x384 progressivo, 15.600 MHz, 24.960 kHz exatos | Calculado mirando o preset do Switchres — sem padrão VESA equivalente |
+| 31kHz | 31400-31500 Hz | 640x480 progressivo, 25.200 MHz, 31.500 kHz | VGA industrial-padrão (modeline `25.200 640 656 752 800 480 490 492 525`) |
+
+Os dois EDIDs novos foram gerados a partir do `crt15-edid.bin` como molde
+(mesma estrutura de bytes já validada em produção, só o DTD/timing e o
+Display Range Limits mudam) e conferidos com `edid-decode` — estrutura
+válida, HSync/VSync batendo com o alvo. **Não foram testados em hardware
+real** (mesma ressalva que já vale pro 15kHz): a validação aqui é
+matemática e estrutural, não uma confirmação com osciloscópio ou monitor
+físico. O perfil 31kHz não tem entrelaçado (o preset `arcade_31` do
+Switchres não define linhas entrelaçadas) — `mame-31khz.ini` e
+`switchres-31khz.ini` já vêm com `interlace 0`.
 
 Os parâmetros SI/CIK selecionam `radeon` apenas nas famílias compartilhadas com `amdgpu`, sem blacklist geral. Identifique o chip por PCI ID e driver real. A R7 240 normalmente é Oland, não Cape Verde.
 
@@ -130,6 +162,12 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 
 Kernel próprio não vem assinado — Secure Boot precisa ficar desabilitado na UEFI de destino. Compilar o kernel adiciona bastante tempo ao build (compilação completa a partir da fonte). Caminho ainda não exercitado num build real; espere iterar em gaps de config/patch na primeira tentativa.
 
+Por padrão o perfil de monitor é `15khz`. `--monitor-profile 25khz` ou `--monitor-profile 31khz` geram uma ISO pro perfil correspondente (ver seção Perfis de monitor) — uma ISO por frequência, não uma escolha em tempo de instalação:
+
+```powershell
+docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-31khz.iso --monitor-profile 31khz
+```
+
 | Arquivo | Função |
 | --- | --- |
 | `fliperos-mkiso.sh` | Build de uma ISO Ubuntu nova |
@@ -141,6 +179,8 @@ Kernel próprio não vem assinado — Secure Boot precisa ficar desabilitado na 
 | `fliperos-detect.sh` | Relatório de sistema e vídeo |
 | `config/` | Xorg, Switchres, RetroArch, GRUB, serviço, hook EDID e launchers |
 | `config/fliperos-kms-run` | Lança RetroArch/Flycast direto em KMS/DRM, sem Xorg |
+| `config/{xorg,mame,switchres}-{25,31}khz.{conf,ini}` | Variantes de config por perfil de monitor (padrão 15kHz usa os arquivos sem sufixo) |
+| `crt{15,25,31}-edid.bin` | EDID customizado por perfil de monitor — só um vai pra ISO, conforme `--monitor-profile` |
 | `patches/kernel-15khz/` | Patches D0023R vendorizados pro kernel opcional `--with-15khz-kernel` |
 | `tools/repack-iso.sh` | Revisão da ISO 0.5 em container de auditoria |
 | `tests/test_video.py` | Testes de frequência, EDID e discos |

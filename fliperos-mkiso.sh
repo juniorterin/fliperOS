@@ -6,6 +6,7 @@
 #  Uso: sudo bash fliperos-mkiso.sh [/caminho/saida.iso] [--skip-switchres]
 #       [--skip-groovymame] [--skip-retroarch] [--skip-flycast]
 #       [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel]
+#       [--monitor-profile 15khz|25khz|31khz]
 #  No Windows, execute somente dentro do container Docker.
 # ============================================================
 
@@ -35,6 +36,7 @@ SKIP_PCSX2=false
 SKIP_SUPERMODEL=false
 WITH_15KHZ_KERNEL=false
 KERNEL_15KHZ_VERSION="6.12.104"
+MONITOR_PROFILE="15khz"
 
 # ── Args ─────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -49,8 +51,15 @@ while [[ $# -gt 0 ]]; do
     --skip-pcsx2)      SKIP_PCSX2=true; shift ;;
     --skip-supermodel) SKIP_SUPERMODEL=true; shift ;;
     --with-15khz-kernel) WITH_15KHZ_KERNEL=true; shift ;;
+    --monitor-profile)
+      [[ $# -ge 2 ]] || { echo "Erro: --monitor-profile requer valor."; exit 1; }
+      case "$2" in
+        15khz|25khz|31khz) MONITOR_PROFILE="$2" ;;
+        *) echo "Erro: --monitor-profile invalido: $2 (15khz, 25khz ou 31khz)"; exit 1 ;;
+      esac
+      shift 2 ;;
     /*.iso|*.iso)     OUTPUT_ISO="$1"; shift ;;
-    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame] [--skip-retroarch] [--skip-flycast] [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel]"; exit 1 ;;
+    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame] [--skip-retroarch] [--skip-flycast] [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel] [--monitor-profile 15khz|25khz|31khz]"; exit 1 ;;
   esac
 done
 
@@ -136,14 +145,21 @@ configure_chroot() {
   chmod +x "$CHROOT_DIR/usr/sbin/policy-rc.d"
 
   # EDID customizado (metodo D0023R/linux_kernel_15khz — "no kernel patch
-  # required"): declara pro kernel que o monitor suporta 640x240, sem
-  # depender da negociacao DDC/EDID real com um CRT fixed-frequency.
-  local SCRIPT_SRC
+  # required"): declara pro kernel o modo fixo do perfil de monitor
+  # escolhido (--monitor-profile), sem depender da negociacao DDC/EDID
+  # real com um CRT fixed-frequency. O nome instalado (crt15.bin) fica
+  # fixo pros tres perfis de proposito — so o CONTEUDO muda (ver README).
+  local SCRIPT_SRC EDID_SRC
   SCRIPT_SRC="$(dirname "$(realpath "$0")")"
-  if [[ -f "$SCRIPT_SRC/crt15-edid.bin" ]]; then
+  case "$MONITOR_PROFILE" in
+    15khz) EDID_SRC="crt15-edid.bin" ;;
+    25khz) EDID_SRC="crt25-edid.bin" ;;
+    31khz) EDID_SRC="crt31-edid.bin" ;;
+  esac
+  if [[ -f "$SCRIPT_SRC/$EDID_SRC" ]]; then
     mkdir -p "$CHROOT_DIR/lib/firmware/edid"
-    cp "$SCRIPT_SRC/crt15-edid.bin" "$CHROOT_DIR/lib/firmware/edid/crt15.bin"
-    ok "EDID customizado copiado: /lib/firmware/edid/crt15.bin"
+    cp "$SCRIPT_SRC/$EDID_SRC" "$CHROOT_DIR/lib/firmware/edid/crt15.bin"
+    ok "EDID customizado copiado ($MONITOR_PROFILE): /lib/firmware/edid/crt15.bin"
   else
     err "EDID obrigatorio ausente"
   fi
@@ -284,7 +300,7 @@ copy_fliperos_scripts() {
   step "Copiando scripts FliperOS"
   local SCRIPT_SRC
   SCRIPT_SRC="$(dirname "$(realpath "$0")")"
-  for S in fliperos-setup.sh fliperos-detect.sh fliperos-mkiso.sh fliperos-install-video.sh fliperos-video-check.py fliperos-install.py crt15-edid.bin; do
+  for S in fliperos-setup.sh fliperos-detect.sh fliperos-mkiso.sh fliperos-install-video.sh fliperos-video-check.py fliperos-install.py crt15-edid.bin crt25-edid.bin crt31-edid.bin; do
     if [[ -f "$SCRIPT_SRC/$S" ]]; then
       cp "$SCRIPT_SRC/$S" "$CHROOT_DIR/opt/fliperos/"
       chmod +x "$CHROOT_DIR/opt/fliperos/$S"
@@ -637,7 +653,14 @@ copy_kernel() {
 
 # ── GRUB config ───────────────────────────────────────────────
 create_grub_config() {
+  local MONITOR_LABEL
+  case "$MONITOR_PROFILE" in
+    15khz) MONITOR_LABEL="CRT 15kHz" ;;
+    25khz) MONITOR_LABEL="CRT 25kHz" ;;
+    31khz) MONITOR_LABEL="CRT 31kHz" ;;
+  esac
   install -Dm644 "$(dirname "$(realpath "$0")")/config/grub.cfg" "$ISO_DIR/boot/grub/grub.cfg"
+  sed -i "s|__MONITOR_LABEL__|${MONITOR_LABEL}|g" "$ISO_DIR/boot/grub/grub.cfg"
 }
 
 # ── Gerar ISO (BIOS + EFI via grub-mkrescue) ──────────────────
@@ -674,6 +697,7 @@ summary() {
   echo -e "\n${GRN}${BLD}ISO gerada com sucesso!${RST}"
   echo -e "  Arquivo : ${CYN}$OUTPUT_ISO${RST}"
   echo -e "  Tamanho : ${CYN}$(du -sh "$OUTPUT_ISO" | cut -f1)${RST}"
+  echo -e "  Monitor : ${CYN}$MONITOR_PROFILE${RST}"
   echo -e "\n  Gravar em USB:"
   echo -e "  ${CYN}sudo dd if=$OUTPUT_ISO of=/dev/sdX bs=4M status=progress oflag=sync${RST}"
   echo -e "\n  Login: fliperos / fliperos"
@@ -702,7 +726,7 @@ mkdir -p "$(dirname "$LOG_FILE")"
 echo "FliperOS mkiso v${FLIPEROS_VERSION} - $(date)" > "$LOG_FILE"
 
 echo -e "${GRN}${BLD}FliperOS mkiso v${FLIPEROS_VERSION}${RST}"
-echo -e "${DIM}Ubuntu $UBUNTU_CODENAME — saida: $OUTPUT_ISO${RST}\n"
+echo -e "${DIM}Ubuntu $UBUNTU_CODENAME — monitor: $MONITOR_PROFILE — saida: $OUTPUT_ISO${RST}\n"
 
 mkdir -p "$ISO_DIR"
 
@@ -713,7 +737,7 @@ configure_chroot
 copy_fliperos_scripts
 cp -a "$(dirname "$(realpath "$0")")/config" "$CHROOT_DIR/opt/fliperos/"
 cp -a "$(dirname "$(realpath "$0")")/patches/kernel-15khz" "$CHROOT_DIR/opt/fliperos/kernel-patches"
-bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" "$CHROOT_DIR"
+bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" "$CHROOT_DIR" "$MONITOR_PROFILE"
 chroot "$CHROOT_DIR" update-initramfs -u -k all
 build_switchres_chroot
 build_groovymame_chroot

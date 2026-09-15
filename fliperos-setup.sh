@@ -18,6 +18,7 @@ INSTALL_DIR="/opt/fliperos"
 LOG_FILE="/var/log/fliperos-setup.log"
 DRY_RUN=false
 FASE_ALVO=""
+MONITOR_PROFILE="15khz"
 
 # ── Args ─────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -25,7 +26,14 @@ while [[ $# -gt 0 ]]; do
     --fase) [[ $# -ge 2 ]] || { echo "--fase requer valor"; exit 2; }; FASE_ALVO="$2"; shift 2 ;;
     --dry-run)  DRY_RUN=true;   shift   ;;
     --user) [[ $# -ge 2 ]] || { echo "--user requer valor"; exit 2; }; FLIPEROS_USER="$2"; shift 2 ;;
-    *) echo "Uso: sudo bash fliperos-setup.sh [--fase 1-6] [--dry-run] [--user <nome>]"; exit 1 ;;
+    --monitor-profile)
+      [[ $# -ge 2 ]] || { echo "--monitor-profile requer valor"; exit 2; }
+      case "$2" in
+        15khz|25khz|31khz) MONITOR_PROFILE="$2" ;;
+        *) echo "--monitor-profile invalido: $2 (15khz, 25khz ou 31khz)"; exit 2 ;;
+      esac
+      shift 2 ;;
+    *) echo "Uso: sudo bash fliperos-setup.sh [--fase 1-6] [--dry-run] [--user <nome>] [--monitor-profile 15khz|25khz|31khz]"; exit 1 ;;
   esac
 done
 
@@ -180,7 +188,7 @@ fase2_driver() {
   if grep -Eq 'nomodeset|video=|drm.edid_firmware=|modprobe.blacklist=amdgpu' /etc/default/grub; then
     err "Remova parametros de video antigos de /etc/default/grub antes da fase 2"
   fi
-  bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh"
+  bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" / "$MONITOR_PROFILE"
   mkdir -p /etc/default/grub.d
   cat > /etc/default/grub.d/99-fliperos.cfg <<'GRUB'
 GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT} video=VGA-1:e drm.edid_firmware=VGA-1:edid/crt15.bin radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0"
@@ -207,7 +215,7 @@ fase3_switchres() {
   run "install -m755 '$SWITCHRES_DIR/switchres' /usr/local/bin/switchres"
   run "ldconfig"
 
-  bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh"
+  bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" / "$MONITOR_PROFILE"
   run "systemctl daemon-reload"
   # Teste rápido")")/fliperos-install-video.sh"
   run "systemctl daemon-reload"
@@ -391,7 +399,7 @@ PROFILE
   run "chown '$FLIPEROS_USER':'$FLIPEROS_USER' '$PROFILE_FILE'"
   ok ".bash_profile configurado"
 
-  bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh"
+  bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" / "$MONITOR_PROFILE"
   ok "Fase 5 concluída"
 }
 
@@ -421,7 +429,7 @@ if $DRY_RUN; then
   case "$FASE_ALVO" in ""|all|[1-6]) ;; *) echo "Fase invalida"; exit 2 ;; esac
   echo "SIMULACAO: nenhuma alteracao sera executada."
   echo "Fases: 1 dependencias; 2 EDID/GRUB; 3 Switchres; 4 GroovyMAME; 5 launcher; 6 RetroArch/Flycast/PCSX2/Supermodel."
-  echo "Selecao: ${FASE_ALVO:-all}; usuario: $FLIPEROS_USER"
+  echo "Selecao: ${FASE_ALVO:-all}; usuario: $FLIPEROS_USER; monitor: $MONITOR_PROFILE"
   exit 0
 fi
 mkdir -p "$(dirname "$LOG_FILE")"
