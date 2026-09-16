@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-COPY fliperos-*.sh fliperos-*.py crt15-edid.bin ./
+COPY fliperos-*.sh fliperos-*.py crt15-edid.bin crt25-edid.bin crt31-edid.bin ./
 COPY config/ ./config/
 COPY patches/ ./patches/
 RUN chmod +x ./*.sh
