@@ -120,6 +120,107 @@ class InstallerTests(unittest.TestCase):
             command.assert_not_called()
 
 
+class RecoveryTests(unittest.TestCase):
+    """Existing-install detection and the 3 repair paths (GPU swap,
+    launcher/emulator config, lost/corrupted packages)."""
+
+    def test_existing_installs_matches_labeled_unmounted_partition(self):
+        device = {'path': '/dev/testdisk', 'type': 'disk', 'model': 'X', 'serial': 'S1',
+                  'size': 20 * 1024**3, 'children': [
+                      {'path': '/dev/testdisk1', 'type': 'part', 'label': 'BIOS', 'mountpoints': []},
+                      {'path': '/dev/testdisk3', 'type': 'part', 'label': 'FliperOS', 'mountpoints': []}]}
+        with mock.patch.object(installer, 'inventory', return_value=[device]), \
+             mock.patch.object(installer, 'probe_marker',
+                                return_value={'installed': 'x', 'connector': 'VGA-1'}) as probe:
+            found = installer.existing_installs()
+        probe.assert_called_once_with('/dev/testdisk3')
+        self.assertEqual(found, [{'disk': '/dev/testdisk', 'partition': '/dev/testdisk3',
+                                  'model': 'X', 'serial': 'S1', 'bytes': 20 * 1024**3,
+                                  'installed': 'x', 'connector': 'VGA-1'}])
+
+    def test_existing_installs_skips_mounted_partition(self):
+        device = {'path': '/dev/testdisk', 'type': 'disk', 'size': 20 * 1024**3, 'children': [
+            {'path': '/dev/testdisk3', 'type': 'part', 'label': 'FliperOS', 'mountpoints': ['/mnt/x']}]}
+        with mock.patch.object(installer, 'inventory', return_value=[device]), \
+             mock.patch.object(installer, 'probe_marker') as probe:
+            self.assertEqual(installer.existing_installs(), [])
+            probe.assert_not_called()
+
+    def test_existing_installs_skips_unrelated_label(self):
+        device = {'path': '/dev/testdisk', 'type': 'disk', 'size': 20 * 1024**3, 'children': [
+            {'path': '/dev/testdisk1', 'type': 'part', 'label': 'FLIPERBOOT', 'mountpoints': []}]}
+        with mock.patch.object(installer, 'inventory', return_value=[device]), \
+             mock.patch.object(installer, 'probe_marker') as probe:
+            self.assertEqual(installer.existing_installs(), [])
+            probe.assert_not_called()
+
+    def test_mounted_target_rejects_unknown_disk(self):
+        with mock.patch.object(installer, 'existing_installs', return_value=[]):
+            with self.assertRaises(ValueError):
+                with installer.mounted_target('/dev/sdz'):
+                    pass
+
+    def test_service_khz_reads_min_khz(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = root / 'etc/systemd/system/fliperos-video-check.service'
+            service.parent.mkdir(parents=True)
+            service.write_text(
+                (ROOT / 'config/fliperos-video-check.service').read_text().replace(
+                    '--wait 15', '--wait 15 --min-khz 24.5 --max-khz 25.5'))
+            self.assertEqual(installer.service_khz(root), '24.5')
+
+    def test_service_khz_missing_file_returns_none(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIsNone(installer.service_khz(Path(directory)))
+
+    def test_repair_configs_rejects_monitor_profile_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+
+            def fake_khz(root):
+                return '31.0' if root == Path('/') else '15.0'
+
+            lock = mock.MagicMock()
+            mounted = mock.MagicMock()
+            mounted.__enter__.return_value = target
+            mounted.__exit__.return_value = False
+            with mock.patch.object(installer, 'preflight', return_value=lock), \
+                 mock.patch.object(installer, 'service_khz', side_effect=fake_khz), \
+                 mock.patch.object(installer, 'mounted_target', return_value=mounted):
+                with self.assertRaises(ValueError):
+                    installer.repair_configs('/dev/testdisk')
+            lock.close.assert_called_once()
+
+    def test_config_paths_are_preserved_during_package_repair(self):
+        # Package repair (case 3) must never clobber the video/launcher
+        # config that config repair (case 2) owns, or the two would fight.
+        for path in installer.CONFIG_PATHS:
+            self.assertTrue(installer.preserved(path), path)
+
+    def test_preserved_matches_prefix_not_substring(self):
+        self.assertTrue(installer.preserved('opt/fliperos/roms/mame/pacman.zip'))
+        self.assertTrue(installer.preserved('home/fliperos/.config/retroarch/retroarch.cfg'))
+        self.assertFalse(installer.preserved('usr/local/bin/groovymame'))
+        # 'boot' must not accidentally match an unrelated 'bootstrap' path.
+        self.assertFalse(installer.preserved('usr/lib/bootstrap/file'))
+
+    def test_overlay_squashfs_overwrites_binaries_but_keeps_user_data(self):
+        with tempfile.TemporaryDirectory() as src_dir, tempfile.TemporaryDirectory() as dst_dir:
+            src, dst = Path(src_dir), Path(dst_dir)
+            (src / 'usr/bin').mkdir(parents=True)
+            (src / 'usr/bin/mame').write_text('fresh-binary')
+            (src / 'opt/fliperos/roms').mkdir(parents=True)
+            (src / 'opt/fliperos/roms/pacman.zip').write_text('pristine-placeholder')
+            (dst / 'usr/bin').mkdir(parents=True)
+            (dst / 'usr/bin/mame').write_text('corrupted')
+            (dst / 'opt/fliperos/roms').mkdir(parents=True)
+            (dst / 'opt/fliperos/roms/pacman.zip').write_text('the-users-rom')
+            installer.overlay_squashfs(src, dst)
+            self.assertEqual((dst / 'usr/bin/mame').read_text(), 'fresh-binary')
+            self.assertEqual((dst / 'opt/fliperos/roms/pacman.zip').read_text(), 'the-users-rom')
+
+
 class AutodetectTests(unittest.TestCase):
     def test_connector_name_keeps_hyphenated_type(self):
         self.assertEqual(autodetect.connector_name(Path('/sys/class/drm/card0-DVI-I-1')), 'DVI-I-1')

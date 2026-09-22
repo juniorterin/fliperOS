@@ -26,6 +26,22 @@ sudo fliperos-install --plan /dev/sdX --connector VGA-1
 
 A instalação real é bloqueada em Docker/WSL. Não execute instalação contra discos de trabalho durante testes.
 
+## Detecção de instalação existente e reparo
+
+O assistente procura, a cada abertura, discos que já tenham um FliperOS instalado (partição ext4 rotulada `FliperOS` com o marcador `/etc/fliperos/installed`). Essa checagem é só leitura: monta a partição rotulada como somente-leitura, lê o marcador e o conector salvo, e desmonta.
+
+- Se um disco com instalação existente aparecer na lista de destino da opção 2 (instalar), ele é marcado como `[FliperOS já instalado]` e, ao confirmar, o instalador avisa antes de deixar apagar tudo — a opção normal é cancelar e reparar em vez de reinstalar do zero.
+- Quando pelo menos um disco já instalado é encontrado, aparece a opção **3. Reparar instalação existente**, com três casos, todos preservando ROMs, saves e a identidade do sistema (nada é reparticionado ou reformatado):
+  1. **GPU trocada** — reconfigura o conector detectado agora (com a placa nova) e regrava os parâmetros de boot/EDID e o initramfs do disco.
+  2. **Launcher/emulador mal configurado** — restaura os arquivos de configuração (Xorg, MAME, Switchres, RetroArch, os scripts `fliperos-x11-run`/`fliperos-kms-run`/`fliperos-launcher`) para o estado de fábrica dessa mídia live, mantendo o conector que o disco já tinha salvo. Recusa restaurar se a mídia live for de outro perfil de monitor (15/25/31 kHz) do que o disco instalado.
+  3. **Pacotes/binários corrompidos ou faltando** — reextrai o squashfs da mídia live por cima do disco, pulando ROMs, `/home`, identidade SSH/machine-id, `/boot`, `fstab` e a configuração de vídeo/launcher atual (isso é o que o caso 2 cuida).
+
+Listar sem nenhuma escrita:
+
+```bash
+sudo fliperos-install --detect-installed
+```
+
 ## Timing de vídeo
 
 15 kHz é a frequência horizontal. Resolução e refresh vertical isoladamente não a determinam. No modo DRM comum, **HSync em kHz = clock em kHz / total horizontal**, incluindo apagamento.
