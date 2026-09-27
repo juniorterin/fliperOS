@@ -106,6 +106,69 @@ Switchres não define linhas entrelaçadas) — `mame-31khz.ini` e
 
 Os parâmetros SI/CIK selecionam `radeon` apenas nas famílias compartilhadas com `amdgpu`, sem blacklist geral. Identifique o chip por PCI ID e driver real. A R7 240 normalmente é Oland, não Cape Verde.
 
+## Componentes pós-instalação e o repositório APT
+
+A ISO entrega o sistema base: kernel, stack de vídeo para CRT, `fliperos-config`
+e o menu de texto. Launchers e emuladores **não vêm na imagem** — são instalados
+depois, pelo wizard em `fliperos-config` → **Instalar componentes**.
+
+Isso só funciona porque existe um repositório APT próprio com os pacotes já
+compilados. A razão é prática: quase nada disso existe no apt do Ubuntu, e
+compilar na máquina do usuário no momento do wizard levaria horas num PC de
+gabinete. É o mesmo desenho do `groovy-ux-repo` do GroovyArcade.
+
+Gerar os pacotes (roda em container na **mesma** base da ISO, Ubuntu 24.04 — o
+`Depends` é calculado com `dpkg-shlibdeps` contra as libs de lá, então outra base
+produz dependência que não resolve no destino):
+
+```powershell
+docker build -f Dockerfile.packages -t fliperos-packager .
+docker run --rm --mount "type=bind,source=$PWD/packaging,target=/pkg/packaging,readonly" --mount "type=bind,source=$PWD/output,target=/pkg/output" fliperos-packager bash packaging/build-deb.sh --list
+docker run --rm --mount "type=bind,source=$PWD/packaging,target=/pkg/packaging,readonly" --mount "type=bind,source=$PWD/output,target=/pkg/output" fliperos-packager bash packaging/build-deb.sh fliperos-attractplus
+```
+
+Montar o repositório a partir dos `.deb` gerados:
+
+```powershell
+docker run --rm --mount "type=bind,source=$PWD/packaging,target=/pkg/packaging,readonly" --mount "type=bind,source=$PWD/output,target=/pkg/output" fliperos-packager bash packaging/make-repo.sh
+```
+
+O repositório é **plano** (sem `dists/` nem `pool/`), que é o único formato que
+serve tanto em GitHub Pages quanto em GitHub Releases — nos Releases todos os
+arquivos ficam no mesmo nível de URL. O cliente aponta para ele com `./` no fim:
+
+```text
+deb [trusted=yes] https://HOST/CAMINHO/ ./
+```
+
+`make-repo.sh --sign KEYID` gera `InRelease`/`Release.gpg` e dispensa o
+`trusted=yes`. Enquanto o repositório não é assinado, o wizard **exige HTTPS**:
+com `trusted=yes` sobre HTTP, qualquer um no caminho poderia entregar um pacote
+que instala como root.
+
+Escrever uma receita nova: um arquivo em `packaging/packages/<pacote>.sh`
+declarando `PKG_NAME`, `PKG_VERSION`, `PKG_BUILD_DEPS`, `PKG_SHLIB_TARGETS` e
+`pkg_build()`. **Encadeie os passos de `pkg_build()` com `&&`**: o `errexit` fica
+suspenso dentro de uma função chamada em `|| err`, e re-setar `set -e` num
+subshell não reverte isso no bash — sem o encadeamento, um build que falha segue
+para o `make install`. Há teste de regressão para isso.
+
+### Estado dos pacotes
+
+| Pacote | Situação |
+| --- | --- |
+| `fliperos-attractplus` | receita pronta — build KMS/DRM, Attract-Mode Plus 3.2.3 |
+| `fliperos-emulationstation` | pendente |
+| `fliperos-retrofe` | pendente |
+| `fliperos-pegasus` | pendente |
+| `fliperos-advancemenu` | pendente |
+
+O `attractplus` é compilado com `USE_DRM=1`, que o Makefile dele descreve como
+*alternative to X11* e mantém comentado por padrão. Build DRM e build X11 são
+**mutuamente exclusivos**: este pacote não roda dentro de uma sessão Xorg. O SFML
+não entra como dependência porque o projeto compila o próprio, de `extlibs/SFML`,
+que é justamente onde está o backend DRM.
+
 ## Sessão ao ligar (qual launcher abre)
 
 O que abre ao ligar é um dado de configuração, não uma linha fixa no script de
@@ -178,6 +241,8 @@ da tty1, a sessão escolhida roda primeiro e, ao sair dela, cai neste menu.
 sudo fliperos-config
 ```
 
+- **Instalar componentes** — wizard que configura o repositório APT e instala
+  launchers/emuladores (ver seção acima).
 - **Sessão ao ligar** — qual launcher abre (ver seção acima).
 - **Vídeo** — trocar o perfil de monitor (15/25/31 kHz); gerar uma
   **resolução customizada** fora dos três perfis, com `switchres -e`
@@ -322,6 +387,10 @@ gráfico). `evangelion` baixa o tema durante o build e precisa de rede.
 | `config/fliperos-sessions.conf` | Tabela de sessões: backend, binário e pacote de cada launcher |
 | `config/fliperos-session` | Despacha a sessão escolhida em `/etc/fliperos/session` |
 | `config/plymouth/` | Tema de splash próprio, sem asset binário |
+| `packaging/build-deb.sh` | Gera os `.deb` dos componentes pós-instalação |
+| `packaging/make-repo.sh` | Monta o repositório APT plano a partir dos `.deb` |
+| `packaging/packages/` | Uma receita por pacote |
+| `Dockerfile.packages` | Base de empacotamento (mesma versão do Ubuntu da ISO) |
 | `fliperos-install-video.sh` | Assets compartilhados entre setup e ISO |
 | `fliperos-video-check.py` | Consulta de modo ativo DRM |
 | `fliperos-video-autodetect.py` | Descobre o conector do CRT ligando/desligando cada saida analogica |

@@ -194,6 +194,105 @@ def menu_session():
     pause()
 
 
+# ════════════════════════════════════════════════════════════
+#  Wizard de componentes (repositorio APT do FliperOS)
+# ════════════════════════════════════════════════════════════
+REPO_CONF = ETC / "repo.conf"
+APT_SOURCE = Path("/etc/apt/sources.list.d/fliperos.list")
+
+
+def repo_url():
+    if REPO_CONF.is_file():
+        for line in REPO_CONF.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                return line
+    return ""
+
+
+def repo_source_line(url):
+    """Monta a linha do sources.list pro repositorio plano do FliperOS.
+
+    Exige HTTPS: o repositorio pode ainda nao estar assinado, e 'trusted=yes'
+    sobre HTTP deixaria qualquer um no caminho entregar pacote que instala como
+    root. O './' no fim e o que indica repositorio plano, sem dists/."""
+    if not url.startswith("https://"):
+        raise ValueError("URL do repositorio precisa ser HTTPS: " + url)
+    if not url.endswith("/"):
+        url += "/"
+    return "deb [trusted=yes] " + url + " ./\n"
+
+
+def configure_repo():
+    """Aponta o apt pro repositorio de onde vem launcher e emulador."""
+    current = repo_url()
+    print("\nRepositorio de componentes do FliperOS")
+    print("Atual: " + (current or "nenhum configurado"))
+    url = ask("URL base (ENTER mantem)", current)
+    if not url:
+        print("Sem repositorio configurado, nao ha o que instalar.")
+        return False
+    try:
+        line = repo_source_line(url)
+    except ValueError as exc:
+        print("Recusado: " + str(exc))
+        print("Sem assinatura, HTTP permitiria injetar pacote com root.")
+        return False
+    APT_SOURCE.write_text(line)
+    print("Repositorio configurado. Atualizando a lista de pacotes...")
+    if subprocess.run(["apt-get", "update"]).returncode:
+        # Uma entrada invalida em sources.list.d faz TODO apt falhar depois,
+        # nao so a instalacao de componentes — melhor desfazer do que deixar o
+        # sistema sem conseguir instalar nada.
+        APT_SOURCE.unlink(missing_ok=True)
+        print("apt-get update falhou; a URL foi descartada. Confira e tente de novo.")
+        return False
+    REPO_CONF.write_text(line.split()[2] + "\n")
+    return True
+
+
+def menu_components():
+    rows = [row for row in sessions() if row["package"]]
+    if not rows:
+        print("Nenhum componente instalavel na tabela de sessoes.")
+        return pause()
+    if not repo_url():
+        print("\nO repositorio de componentes ainda nao esta configurado.")
+        if not confirm("Configurar agora?"):
+            return
+        if not configure_repo():
+            return pause()
+    print("\n── Instalar componentes ──")
+    for i, row in enumerate(rows, 1):
+        state = "instalado" if row["available"] else "disponivel"
+        print("%d. %s (%s) — %s" % (i, row["name"], state, row["package"]))
+        print("     " + row["description"])
+    print("r. Trocar o repositorio")
+    print("0. Voltar")
+    choice = ask("Opcao")
+    if choice == "r":
+        configure_repo()
+        return pause()
+    if choice == "0" or not choice.isdigit() or not 1 <= int(choice) <= len(rows):
+        return
+    row = rows[int(choice) - 1]
+    if row["available"]:
+        print(row["name"] + " ja esta instalado.")
+        if confirm("Usar como sessao ao ligar?"):
+            (ETC / "session").write_text(row["name"] + "\n")
+            print("Sessao definida: " + row["name"])
+        return pause()
+    print("\nInstalando " + row["package"] + "...")
+    if subprocess.run(["apt-get", "install", "-y", row["package"]]).returncode:
+        print("Instalacao falhou. Veja a saida acima.")
+        return pause()
+    print(row["name"] + " instalado.")
+    if confirm("Usar como sessao ao ligar?"):
+        (ETC / "session").write_text(row["name"] + "\n")
+        print("Sessao definida: " + row["name"] + ". Vale no proximo login.")
+    pause()
+
+
 def sync_switchres():
     """O switchres le /etc/switchres.ini; a copia canonica fica em /etc/fliperos."""
     source = ETC / "switchres.ini"
@@ -759,13 +858,14 @@ def main():
         print("as opcoes de video aqui valem so ate reiniciar.")
     while True:
         header()
-        print("1. Sessao ao ligar (qual launcher abre)")
-        print("2. Video (monitor, resolucao, orientacao, geometria)")
-        print("3. Rede (Wi-Fi)")
-        print("4. Compartilhamento (Samba, SSH/SFTP)")
-        print("5. Sistema e diagnostico")
-        print("6. Abrir a sessao agora")
-        print("7. Reiniciar / desligar")
+        print("1. Instalar componentes (launchers e emuladores)")
+        print("2. Sessao ao ligar (qual launcher abre)")
+        print("3. Video (monitor, resolucao, orientacao, geometria)")
+        print("4. Rede (Wi-Fi)")
+        print("5. Compartilhamento (Samba, SSH/SFTP)")
+        print("6. Sistema e diagnostico")
+        print("7. Abrir a sessao agora")
+        print("8. Reiniciar / desligar")
         print("0. Sair para o shell")
         try:
             choice = ask("Opcao")
@@ -774,18 +874,20 @@ def main():
             return 0
         try:
             if choice == "1":
-                menu_session()
+                menu_components()
             elif choice == "2":
-                menu_video()
+                menu_session()
             elif choice == "3":
-                menu_network()
+                menu_video()
             elif choice == "4":
-                menu_sharing()
+                menu_network()
             elif choice == "5":
-                menu_system()
+                menu_sharing()
             elif choice == "6":
-                subprocess.run(["/opt/fliperos/bin/fliperos-session"])
+                menu_system()
             elif choice == "7":
+                subprocess.run(["/opt/fliperos/bin/fliperos-session"])
+            elif choice == "8":
                 menu_power()
             elif choice == "0":
                 return 0

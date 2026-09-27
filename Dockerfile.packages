@@ -1,0 +1,14 @@
+# Base de empacotamento: MESMA versao do Ubuntu da ISO (24.04).
+# O Depends de cada .deb e calculado com dpkg-shlibdeps contra as libs
+# instaladas aqui, entao compilar em outra base produz dependencia errada.
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+
+# apt-utils traz o apt-ftparchive, usado por make-repo.sh pro arquivo Release.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential pkg-config git ca-certificates curl \
+      dpkg-dev fakeroot apt-utils gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /pkg
+COPY packaging/ ./packaging/

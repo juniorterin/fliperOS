@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+import re
 import unittest
 from unittest import mock
 import tempfile
@@ -374,6 +375,81 @@ class SessionTests(unittest.TestCase):
     def test_no_live_use_mode_in_installer_menu(self):
         installer_text = (ROOT / 'fliperos-install.py').read_text()
         self.assertNotIn('testar live', installer_text)
+
+
+class RepoTests(unittest.TestCase):
+    """O repositorio e instalado com trusted=yes, entao a exigencia de HTTPS
+    e o que impede alguem no caminho de entregar um pacote que roda como root."""
+
+    def test_https_required(self):
+        for bad in ('http://exemplo.test/repo/', 'ftp://exemplo.test/',
+                    'exemplo.test/repo/'):
+            with self.assertRaises(ValueError, msg=bad):
+                config.repo_source_line(bad)
+
+    def test_flat_repo_line_ends_with_dot_slash(self):
+        line = config.repo_source_line('https://exemplo.test/fliperos')
+        self.assertEqual(line, 'deb [trusted=yes] https://exemplo.test/fliperos/ ./\n')
+
+    def test_trailing_slash_not_duplicated(self):
+        self.assertEqual(config.repo_source_line('https://exemplo.test/r/'),
+                         config.repo_source_line('https://exemplo.test/r'))
+
+
+class PackagingTests(unittest.TestCase):
+    RECIPES = ROOT / 'packaging/packages'
+
+    def recipe_files(self):
+        return sorted(self.RECIPES.glob('*.sh'))
+
+    def test_at_least_one_recipe(self):
+        self.assertTrue(self.recipe_files())
+
+    def test_recipes_declare_the_full_contract(self):
+        for recipe in self.recipe_files():
+            text = recipe.read_text()
+            for field in ('PKG_NAME=', 'PKG_VERSION=', 'PKG_SUMMARY=',
+                          'PKG_BUILD_DEPS=', 'PKG_SHLIB_TARGETS=', 'pkg_build()'):
+                self.assertIn(field, text, '%s sem %s' % (recipe.name, field))
+
+    def test_recipe_filename_matches_package_name(self):
+        for recipe in self.recipe_files():
+            declared = re.search(r'^PKG_NAME="([^"]+)"', recipe.read_text(),
+                                 flags=re.M).group(1)
+            self.assertEqual(declared, recipe.stem)
+
+    def test_pkg_build_chains_steps(self):
+        """Regressao: o errexit do driver fica suspenso dentro de pkg_build
+        (chamada em "|| err"), e um subshell com set -e nao reverte isso no
+        bash. Sem o encadeamento, um build falho seguia pro make install."""
+        for recipe in self.recipe_files():
+            body = recipe.read_text().split('pkg_build()')[1]
+            commands = [line.strip() for line in body.splitlines()
+                        if line.strip() and not line.strip().startswith('#')
+                        and line.strip() not in ('{', '}')]
+            if len(commands) > 1:
+                joined = ' '.join(commands)
+                self.assertIn('&&', joined,
+                              '%s: passos de pkg_build sem &&' % recipe.name)
+
+    def test_no_orphan_recipe_outside_sessions_table(self):
+        table = (ROOT / 'config/fliperos-sessions.conf').read_text()
+        for recipe in self.recipe_files():
+            self.assertIn(recipe.stem, table,
+                          '%s nao aparece na tabela de sessoes' % recipe.stem)
+
+    def test_packager_base_matches_iso_base(self):
+        """O Depends sai do dpkg-shlibdeps contra as libs desta base; outra
+        versao de Ubuntu geraria dependencia que nao resolve na ISO."""
+        packager = (ROOT / 'Dockerfile.packages').read_text()
+        iso = (ROOT / 'Dockerfile.fliperos').read_text()
+        self.assertIn('ubuntu:24.04', packager)
+        self.assertIn('ubuntu:24.04', iso)
+
+    def test_repo_generator_uses_flat_layout(self):
+        script = (ROOT / 'packaging/make-repo.sh').read_text()
+        self.assertIn('dpkg-scanpackages', script)
+        self.assertIn('apt-ftparchive', script)
 
 
 class SplashTests(unittest.TestCase):
