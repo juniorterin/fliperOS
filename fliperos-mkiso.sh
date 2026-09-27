@@ -582,12 +582,19 @@ WHEELSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-input.sh"
   if chroot "$CHROOT_DIR" /tmp/build-input.sh >> "$LOG_FILE" 2>&1; then
     ok "GunCon 2 compilado via DKMS"
-    $WITH_WHEEL_DRIVERS && ok "hid-tmff2 e new-lg4ff compilados via DKMS"
+    if $WITH_WHEEL_DRIVERS; then
+      ok "hid-tmff2 e new-lg4ff compilados via DKMS"
+    fi
   else
     echo -e "${DIM}--- fim do log do chroot ---${RST}" >&2
     tail -25 "$LOG_FILE" >&2 || true
     err "Compilacao dos drivers de input falhou"
   fi
+  # O return 0 e necessario: o status do ultimo comando vira o status da
+  # funcao, e a funcao e chamada nua no fluxo principal, onde o set -e aborta
+  # com status 1. Foi assim que "$WITH_WHEEL_DRIVERS && ok ..." — que sozinho
+  # nao aborta nada — derrubou um build inteiro depois do driver ja compilado.
+  return 0
 }
 
 # ── Splash grafico (Plymouth) ─────────────────────────────────

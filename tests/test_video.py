@@ -492,6 +492,58 @@ class HiddenWifiTests(unittest.TestCase):
         self.assertNotIn('Nenhuma rede encontrada', menu)
 
 
+class ShellErrexitTests(unittest.TestCase):
+    """Sob "set -e", uma funcao cujo ULTIMO comando e uma lista "&&" devolve 1
+    quando a condicao e falsa. A lista em si nao aborta (o bash isenta o que
+    vem antes do && final), mas o status vira o retorno da FUNCAO — e a chamada
+    nua dela no fluxo principal ai sim aborta. Derrubou um build de ISO depois
+    do driver ja ter compilado, e antes disso um build-deb bem-sucedido saiu 1
+    pelo mesmo motivo num trap."""
+
+    SCRIPTS = ('fliperos-mkiso.sh', 'fliperos-install-video.sh',
+               'packaging/build-deb.sh', 'packaging/make-repo.sh')
+    RISKY = re.compile(r'^\s*(\$[A-Za-z_]+|\[\[.*\]\]|\[.*\])\s*&&')
+
+    def functions(self, text):
+        """Devolve (nome, ultima linha significativa) de cada funcao."""
+        found, name, body = [], None, []
+        for line in text.splitlines():
+            start = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*)\(\)\s*\{', line)
+            if start:
+                name, body = start.group(1), []
+                continue
+            if name is None:
+                continue
+            if line == '}':
+                meaningful = [b for b in body
+                              if b.strip() and not b.strip().startswith('#')]
+                if meaningful:
+                    found.append((name, meaningful[-1]))
+                name = None
+                continue
+            body.append(line)
+        return found
+
+    def test_no_function_ends_with_a_boolean_and_list(self):
+        for script in self.SCRIPTS:
+            path = ROOT / script
+            if not path.is_file():
+                continue
+            for name, last in self.functions(path.read_text()):
+                self.assertIsNone(
+                    self.RISKY.match(last),
+                    '%s: %s() termina em lista && e devolveria 1 quando falsa: %s'
+                    % (script, name, last.strip()))
+
+    def test_the_parser_actually_finds_functions(self):
+        """Sem isso o teste acima passaria por nao encontrar nada."""
+        found = self.functions((ROOT / 'fliperos-mkiso.sh').read_text())
+        names = {name for name, _ in found}
+        self.assertIn('build_input_drivers_chroot', names)
+        self.assertIn('summary', names)
+        self.assertGreater(len(found), 5)
+
+
 class BuildImageTests(unittest.TestCase):
     """Regressao: o Dockerfile copiava "fliperos-*.py" e o modulo compartilhado
     e fliperos_tui.py, com underscore — o glob nao o pegava e a imagem de build
