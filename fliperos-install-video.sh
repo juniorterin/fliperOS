@@ -34,6 +34,23 @@ install -Dm755 "$src/fliperos-config.py" "$root/usr/local/bin/fliperos-config"
 # scripts procuram aqui e tambem ao lado deles (que e o caso no repositorio).
 install -Dm644 "$src/fliperos_tui.py" "$root/usr/local/lib/fliperos/fliperos_tui.py"
 
+# Light gun e volantes. A calibracao do GunCon 2 se perde a cada reconexao do
+# USB, entao a regra de udev a reaplica chamando este script.
+install -Dm755 "$src/config/fliperos-guncon2-calibrate" \
+  "$root/usr/local/bin/fliperos-guncon2-calibrate"
+install -Dm644 "$src/config/99-fliperos-input.rules" \
+  "$root/etc/udev/rules.d/99-fliperos-input.rules"
+if [[ ! -f "$root/etc/fliperos/guncon2.conf" ]]; then
+    cat > "$root/etc/fliperos/guncon2.conf" <<'EOF'
+# Faixa util do GunCon 2 neste monitor. Os valores abaixo sao o exemplo do
+# upstream e NAO servem pra todo tubo — calibre no seu e ajuste aqui.
+X_MIN=175
+X_MAX=720
+Y_MIN=20
+Y_MAX=240
+EOF
+fi
+
 # Sessao de boot: qual launcher abre ao ligar e um dado de configuracao, nao
 # uma linha fixa no .bash_profile (ver config/fliperos-sessions.conf).
 install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions.conf"

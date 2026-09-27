@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Reaplica a calibracao do GunCon 2 num dispositivo de evento.
+#
+# O driver entrega ABS_X/ABS_Y crus do canhao, e a faixa util depende do
+# monitor. Pior: a calibracao NAO persiste — se perde a cada reconexao do USB,
+# por isso existe a regra de udev que chama este script.
+#
+# Uso: fliperos-guncon2-calibrate /dev/input/eventN
+set -uo pipefail
+
+CONF=/etc/fliperos/guncon2.conf
+device=${1:-}
+[[ -n "$device" ]] || { echo "Uso: $0 /dev/input/eventN" >&2; exit 2; }
+
+# Valores do exemplo do upstream (beardypig/guncon2). NAO sao universais: cada
+# tubo e cada posicao de canhao pedem a sua faixa. Ajuste em $CONF.
+X_MIN=175
+X_MAX=720
+Y_MIN=20
+Y_MAX=240
+
+# shellcheck source=/dev/null
+[[ -r "$CONF" ]] && source "$CONF"
+
+command -v evdev-joystick >/dev/null \
+  || { echo "evdev-joystick ausente (pacote joystick)" >&2; exit 1; }
+
+evdev-joystick --e "$device" -m "$X_MIN" -M "$X_MAX" -a 0 >/dev/null 2>&1
+evdev-joystick --e "$device" -m "$Y_MIN" -M "$Y_MAX" -a 1 >/dev/null 2>&1

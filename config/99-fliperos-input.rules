@@ -1,0 +1,18 @@
+# Perifericos de gabinete: light gun e volantes.
+
+# GunCon 2 (Namco, USB 0b9a:016a). A calibracao nao persiste no dispositivo e
+# se perde a cada reconexao, entao e reaplicada aqui — e o mesmo contorno que
+# o README do driver sugere. Os valores ficam em /etc/fliperos/guncon2.conf.
+SUBSYSTEM=="input", ATTRS{idVendor}=="0b9a", ATTRS{idProduct}=="016a", \
+  ACTION=="add", ENV{DEVNAME}!="", \
+  RUN+="/usr/local/bin/fliperos-guncon2-calibrate %E{DEVNAME}"
+
+# Volantes: acesso ao no de event sem precisar de root, pro emulador que abre
+# /dev/input/event* direto em vez de passar pelo SDL.
+# Logitech: G25, G27, G29, Driving Force GT, Momo, G920.
+SUBSYSTEM=="input", ATTRS{idVendor}=="046d", \
+  ATTRS{idProduct}=="c294|c295|c298|c299|c29a|c29b|c24f|c260|c262", \
+  MODE="0660", GROUP="input"
+# Thrustmaster: T150, T300, TX, T248, TMX e o modo inicial "bootloader" que
+# alguns expoem antes do hid-tminit chavear pro modo real.
+SUBSYSTEM=="input", ATTRS{idVendor}=="044f", MODE="0660", GROUP="input"

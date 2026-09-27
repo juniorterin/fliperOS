@@ -398,6 +398,58 @@ class SessionTests(unittest.TestCase):
         self.assertNotIn('menu_connector', menu)
 
 
+class InputDriverTests(unittest.TestCase):
+    """GunCon 2 nao existe no kernel mainline; Logitech e Thrustmaster antigo
+    existem (hid-logitech com lg4ff, hid-tmff). Por isso o GunCon entra por
+    padrao e os out-of-tree de volante ficam opcionais."""
+
+    RULES = ROOT / 'config/99-fliperos-input.rules'
+    CALIBRATE = ROOT / 'config/fliperos-guncon2-calibrate'
+
+    def test_guncon2_usb_id_and_calibration_hook(self):
+        rules = self.RULES.read_text()
+        # 0b9a:016a e o ID do GunCon 2 documentado pelo driver.
+        self.assertIn('0b9a', rules)
+        self.assertIn('016a', rules)
+        self.assertIn('fliperos-guncon2-calibrate', rules)
+
+    def test_calibration_reads_config_instead_of_hardcoding(self):
+        """Os valores do upstream sao do monitor DELE; cada tubo pede outros."""
+        script = self.CALIBRATE.read_text()
+        self.assertIn('/etc/fliperos/guncon2.conf', script)
+        for key in ('X_MIN', 'X_MAX', 'Y_MIN', 'Y_MAX'):
+            self.assertIn(key, script)
+
+    def test_guncon2_builds_by_default_wheels_behind_flag(self):
+        script = (ROOT / 'fliperos-mkiso.sh').read_text()
+        self.assertIn('SKIP_INPUT_DRIVERS=false', script)
+        self.assertIn('WITH_WHEEL_DRIVERS=false', script)
+        self.assertIn('--with-wheel-drivers', script)
+        self.assertIn('beardypig/guncon2', script)
+        self.assertIn('dkms linux-headers-generic', script)
+
+    def test_guncon2_module_loads_at_boot(self):
+        """Compilar nao basta: sem modules-load o modulo fica so em disco."""
+        self.assertIn('modules-load.d', (ROOT / 'fliperos-mkiso.sh').read_text())
+
+    def test_tmff2_version_comes_from_dkms_conf(self):
+        """O dkms-install.sh do upstream usa 0.83 e o dkms.conf diz 0.82; o
+        dkms recusa quando diretorio e PACKAGE_VERSION divergem, entao a versao
+        e lida do dkms.conf em vez de rodar o script deles."""
+        script = (ROOT / 'fliperos-mkiso.sh').read_text()
+        self.assertIn("s/^PACKAGE_VERSION=", script)
+        # O script do upstream pode ser citado em comentario, mas nao executado.
+        for line in script.splitlines():
+            code = line.split('#')[0]
+            self.assertNotIn('dkms-install.sh', code)
+
+    def test_rules_and_config_are_installed(self):
+        script = (ROOT / 'fliperos-install-video.sh').read_text()
+        self.assertIn('99-fliperos-input.rules', script)
+        self.assertIn('fliperos-guncon2-calibrate', script)
+        self.assertIn('guncon2.conf', script)
+
+
 class TuiTests(unittest.TestCase):
     """O console do CRT em 640x240 tem 80x15 caracteres; um dialogo maior que
     isso fica cortado na tela, que foi o sintoma do GRUB ilegivel."""

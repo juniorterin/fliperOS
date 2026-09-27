@@ -38,6 +38,10 @@ WITH_15KHZ_KERNEL=false
 KERNEL_15KHZ_VERSION="6.12.104"
 MONITOR_PROFILE="15khz"
 SPLASH_THEME="fliperos"
+SKIP_INPUT_DRIVERS=false
+# Volante: o mainline ja cobre Logitech e Thrustmaster antigo. Estes dois sao
+# out-of-tree e um deles substitui driver do kernel, entao ficam opcionais.
+WITH_WHEEL_DRIVERS=false
 # Wi-Fi opcional gravado na imagem: numa maquina sem cabo de rede, e o unico
 # jeito de ela subir acessivel por SSH sem interacao no console.
 WIFI_SSID=""
@@ -58,6 +62,8 @@ while [[ $# -gt 0 ]]; do
     --skip-flycast)    SKIP_FLYCAST=true; shift ;;
     --skip-pcsx2)      SKIP_PCSX2=true; shift ;;
     --skip-supermodel) SKIP_SUPERMODEL=true; shift ;;
+    --skip-input-drivers) SKIP_INPUT_DRIVERS=true; shift ;;
+    --with-wheel-drivers) WITH_WHEEL_DRIVERS=true; shift ;;
     --with-15khz-kernel) WITH_15KHZ_KERNEL=true; shift ;;
     --monitor-profile)
       [[ $# -ge 2 ]] || { echo "Erro: --monitor-profile requer valor."; exit 1; }
@@ -219,6 +225,7 @@ apt-get install -y --no-install-recommends \
   libsdl2-2.0-0 libsdl2-dev build-essential cmake \
   libdrm-dev libgbm-dev libxrandr-dev libxi-dev libxext-dev libfontconfig1-dev \
   joystick dialog whiptail alsa-utils linux-firmware \
+  dkms linux-headers-generic evtest \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 pciutils libdrm-tests edid-decode squashfs-tools \
   samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
@@ -484,6 +491,91 @@ install_wifi_profile() {
   chmod 600 "$file"
   chown 0:0 "$file"
   ok "Wi-Fi \"$WIFI_SSID\" gravado; conecta sozinho no boot"
+}
+
+# ── Drivers de input out-of-tree ──────────────────────────────
+# O kernel do Ubuntu JA cobre boa parte: hid-logitech traz o lg4ff (force
+# feedback de G25/G27/G29/DFGT), hid-logitech-hidpp cobre G920, e hid-tmff
+# cobre Thrustmaster antigo. O que falta e:
+#   - GunCon 2: nao existe no mainline, so como modulo externo (o gap real);
+#   - Thrustmaster moderno (T300/T248/TX): hid-tmff2;
+#   - refinamento de FFB Logitech: new-lg4ff, que SUBSTITUI o hid-logitech.
+# Por isso o GunCon 2 entra por padrao e os dois de volante ficam opcionais:
+# trocar um driver mainline que funciona por um out-of-tree nao testado aqui
+# nao e troca que se faz calada.
+build_input_drivers_chroot() {
+  if $SKIP_INPUT_DRIVERS; then
+    warn "Drivers de input pulados — GunCon 2 nao vai funcionar"
+    return
+  fi
+  step "Compilando drivers de input (DKMS)"
+  cat > "$CHROOT_DIR/tmp/build-input.sh" << 'INPUTSCRIPT'
+#!/bin/bash
+set -e
+apt-get update -qq
+apt-get install -y --no-install-recommends dkms git build-essential
+KVER=$(ls /lib/modules | sort -V | tail -1)
+echo "Compilando para o kernel $KVER"
+
+# GunCon 2 (0b9a:016a). O repo nao traz dkms.conf, entao escrevemos um; o
+# Makefile dele aceita KVERSION, que e o nome que o dkms expande em $kernelver.
+git clone --depth 1 https://github.com/beardypig/guncon2 /usr/src/guncon2-1.0
+cat > /usr/src/guncon2-1.0/dkms.conf << 'DKMSCONF'
+PACKAGE_NAME="guncon2"
+PACKAGE_VERSION="1.0"
+MAKE[0]="make KVERSION=$kernelver modules"
+CLEAN="make clean"
+BUILT_MODULE_NAME[0]="guncon2"
+DEST_MODULE_LOCATION[0]="/kernel/drivers/input/joystick"
+AUTOINSTALL="yes"
+DKMSCONF
+dkms add -m guncon2 -v 1.0
+dkms build -m guncon2 -v 1.0 -k "$KVER"
+dkms install -m guncon2 -v 1.0 -k "$KVER"
+# Carrega no boot: sem isso o modulo so existe em disco.
+echo guncon2 > /etc/modules-load.d/fliperos-guncon2.conf
+echo "GUNCON2_OK"
+INPUTSCRIPT
+
+  if $WITH_WHEEL_DRIVERS; then
+    cat >> "$CHROOT_DIR/tmp/build-input.sh" << 'WHEELSCRIPT'
+
+# Thrustmaster moderno. Precisa dos submodulos: deps/hid-tminit chaveia o
+# volante do modo inicial pro modo real. A versao vem do dkms.conf do projeto,
+# nao do dkms-install.sh dele — os dois divergem no upstream (0.82 vs 0.83) e
+# o dkms recusa quando o diretorio e a PACKAGE_VERSION nao batem.
+git clone --depth 1 --recurse-submodules \
+  https://github.com/Kimplul/hid-tmff2 /tmp/hid-tmff2
+TM_VER=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"/\1/p' /tmp/hid-tmff2/dkms/dkms.conf)
+[ -n "$TM_VER" ] || { echo "nao deu pra ler a versao do hid-tmff2"; exit 1; }
+cp -r /tmp/hid-tmff2 "/usr/src/hid-tmff2-$TM_VER"
+cp /tmp/hid-tmff2/dkms/dkms.conf "/usr/src/hid-tmff2-$TM_VER/dkms.conf"
+dkms add -m hid-tmff2 -v "$TM_VER"
+dkms build -m hid-tmff2 -v "$TM_VER" -k "$KVER"
+dkms install -m hid-tmff2 -v "$TM_VER" -k "$KVER"
+
+# new-lg4ff substitui o hid-logitech do kernel (DEST_MODULE_NAME=hid-logitech).
+git clone --depth 1 https://github.com/berarma/new-lg4ff /tmp/new-lg4ff
+LG_VER=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"/\1/p' /tmp/new-lg4ff/dkms.conf)
+[ -n "$LG_VER" ] || { echo "nao deu pra ler a versao do new-lg4ff"; exit 1; }
+cp -r /tmp/new-lg4ff "/usr/src/new-lg4ff-$LG_VER"
+dkms add -m new-lg4ff -v "$LG_VER"
+dkms build -m new-lg4ff -v "$LG_VER" -k "$KVER"
+dkms install -m new-lg4ff -v "$LG_VER" -k "$KVER"
+rm -rf /tmp/hid-tmff2 /tmp/new-lg4ff
+echo "WHEELS_OK"
+WHEELSCRIPT
+  fi
+
+  chmod +x "$CHROOT_DIR/tmp/build-input.sh"
+  if chroot "$CHROOT_DIR" /tmp/build-input.sh >> "$LOG_FILE" 2>&1; then
+    ok "GunCon 2 compilado via DKMS"
+    $WITH_WHEEL_DRIVERS && ok "hid-tmff2 e new-lg4ff compilados via DKMS"
+  else
+    echo -e "${DIM}--- fim do log do chroot ---${RST}" >&2
+    tail -25 "$LOG_FILE" >&2 || true
+    err "Compilacao dos drivers de input falhou"
+  fi
 }
 
 # ── Splash grafico (Plymouth) ─────────────────────────────────
@@ -979,6 +1071,7 @@ bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" "$CHROOT_DIR" "$M
 # marcado como default, e o initramfs e o unico lugar onde ele existe no boot.
 install_wifi_profile
 install_splash_theme
+build_input_drivers_chroot
 chroot "$CHROOT_DIR" update-initramfs -u -k all
 build_switchres_chroot
 build_groovymame_chroot
