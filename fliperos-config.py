@@ -137,6 +137,63 @@ def set_cfg_value(path, key, value):
     return True
 
 
+def sessions():
+    """Le a tabela de sessoes instalaveis (nome|backend|binario|pacote|descricao)."""
+    table = ETC / "sessions.conf"
+    if not table.is_file():
+        return []
+    rows = []
+    for line in table.read_text().splitlines():
+        if line.strip().startswith("#") or not line.strip():
+            continue
+        fields = line.split("|")
+        if len(fields) != 5:
+            continue
+        name, backend, binary, package, description = fields
+        available = not binary or bool(shutil.which(binary)) or Path(binary).is_file()
+        rows.append({"name": name, "backend": backend, "binary": binary,
+                     "package": package, "description": description,
+                     "available": available})
+    return rows
+
+
+def active_session():
+    path = ETC / "session"
+    return path.read_text().strip() if path.is_file() else "launcher"
+
+
+def menu_session():
+    """Escolhe o que abre ao ligar. Sessao sem binario aparece marcada, em vez
+    de ser escondida: e assim que o usuario descobre o que o wizard pode
+    instalar."""
+    current = active_session()
+    rows = sessions()
+    if not rows:
+        print("Tabela de sessoes ausente (/etc/fliperos/sessions.conf).")
+        return pause()
+    print("\n── Sessao ao ligar ──  atual: " + current)
+    for i, row in enumerate(rows, 1):
+        marks = " (atual)" if row["name"] == current else ""
+        if not row["available"]:
+            marks += " [NAO INSTALADO: " + (row["package"] or "?") + "]"
+        backend = {"kms": "KMS", "x": "Xorg", "text": "texto", "none": "-"}.get(
+            row["backend"], row["backend"])
+        print("%d. %s [%s]%s" % (i, row["name"], backend, marks))
+        print("     " + row["description"])
+    print("0. Voltar")
+    choice = ask("Opcao")
+    if choice == "0" or not choice.isdigit() or not 1 <= int(choice) <= len(rows):
+        return
+    row = rows[int(choice) - 1]
+    if not row["available"]:
+        print("\n'%s' ainda nao esta instalado (pacote %s)." % (row["name"], row["package"]))
+        print("Instale pelo wizard de componentes antes de escolher essa sessao.")
+        return pause()
+    (ETC / "session").write_text(row["name"] + "\n")
+    print("Sessao definida: " + row["name"] + ". Vale no proximo login da tty1.")
+    pause()
+
+
 def sync_switchres():
     """O switchres le /etc/switchres.ini; a copia canonica fica em /etc/fliperos."""
     source = ETC / "switchres.ini"
@@ -688,7 +745,8 @@ def header():
     ip = ", ".join(addrs) if addrs else "sem rede"
     print("\n" + "=" * 52)
     print("FliperOS — configuracao")
-    print("%s (%s)%s  perfil %s" % (host, ip, usage, active_profile()))
+    print("%s (%s)%s" % (host, ip, usage))
+    print("perfil %s   sessao %s" % (active_profile(), active_session()))
     print("=" * 52)
 
 
@@ -701,12 +759,13 @@ def main():
         print("as opcoes de video aqui valem so ate reiniciar.")
     while True:
         header()
-        print("1. Video (monitor, resolucao, orientacao, geometria)")
-        print("2. Rede (Wi-Fi)")
-        print("3. Compartilhamento (Samba, SSH/SFTP)")
-        print("4. Sistema e diagnostico")
-        print("5. Iniciar o launcher de emuladores")
-        print("6. Reiniciar / desligar")
+        print("1. Sessao ao ligar (qual launcher abre)")
+        print("2. Video (monitor, resolucao, orientacao, geometria)")
+        print("3. Rede (Wi-Fi)")
+        print("4. Compartilhamento (Samba, SSH/SFTP)")
+        print("5. Sistema e diagnostico")
+        print("6. Abrir a sessao agora")
+        print("7. Reiniciar / desligar")
         print("0. Sair para o shell")
         try:
             choice = ask("Opcao")
@@ -715,16 +774,18 @@ def main():
             return 0
         try:
             if choice == "1":
-                menu_video()
+                menu_session()
             elif choice == "2":
-                menu_network()
+                menu_video()
             elif choice == "3":
-                menu_sharing()
+                menu_network()
             elif choice == "4":
-                menu_system()
+                menu_sharing()
             elif choice == "5":
-                subprocess.run(["/opt/fliperos/bin/fliperos-launcher"])
+                menu_system()
             elif choice == "6":
+                subprocess.run(["/opt/fliperos/bin/fliperos-session"])
+            elif choice == "7":
                 menu_power()
             elif choice == "0":
                 return 0

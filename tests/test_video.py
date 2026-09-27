@@ -324,6 +324,99 @@ class ConfigIniTests(unittest.TestCase):
         self.assertIn('video_driver = "gl"', path.read_text())
 
 
+class SessionTests(unittest.TestCase):
+    """A tabela de sessoes e o contrato entre fliperos-config, o dispatcher
+    fliperos-session e o futuro wizard de instalacao."""
+
+    VALID_BACKENDS = {'kms', 'x', 'text', 'none'}
+
+    def rows(self):
+        directory = Path(tempfile.mkdtemp())
+        (directory / 'sessions.conf').write_text(
+            (ROOT / 'config/fliperos-sessions.conf').read_text())
+        with mock.patch.object(config, 'ETC', directory):
+            return config.sessions()
+
+    def test_every_row_parses_with_a_known_backend(self):
+        rows = self.rows()
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertIn(row['backend'], self.VALID_BACKENDS, row['name'])
+            self.assertTrue(row['description'], row['name'])
+
+    def test_text_launcher_always_present_as_fallback(self):
+        names = {row['name']: row for row in self.rows()}
+        self.assertIn('launcher', names)
+        self.assertEqual(names['launcher']['backend'], 'text')
+        # Nao precisa de pacote: e o fallback que sempre existe na imagem.
+        self.assertEqual(names['launcher']['package'], '')
+
+    def test_attract_mode_plus_not_plain_attract(self):
+        # O Attract-Mode original nao roda em KMS; so o fork Plus roda
+        # (tabela de capacidades do GroovyArcade, galauncher/videodata.conf).
+        names = {row['name'] for row in self.rows()}
+        self.assertIn('attractplus', names)
+        self.assertNotIn('attract', names)
+
+    def test_sessions_needing_install_declare_a_package(self):
+        for row in self.rows():
+            if row['backend'] in ('kms', 'x') and row['name'] not in ('retroarch', 'groovymame'):
+                self.assertTrue(row['package'],
+                                '%s precisa declarar pacote' % row['name'])
+
+    def test_dispatcher_and_table_are_installed(self):
+        script = (ROOT / 'fliperos-install-video.sh').read_text()
+        self.assertIn('fliperos-sessions.conf', script)
+        self.assertIn('fliperos-session', script)
+        # O login tem que chamar o dispatcher, nao um launcher fixo.
+        self.assertIn('/opt/fliperos/bin/fliperos-session', script)
+
+    def test_no_live_use_mode_in_installer_menu(self):
+        installer_text = (ROOT / 'fliperos-install.py').read_text()
+        self.assertNotIn('testar live', installer_text)
+
+
+class SplashTests(unittest.TestCase):
+    def test_boot_parameters_enable_plymouth(self):
+        params = installer.boot_parameters('VGA-1')
+        self.assertIn('splash', params.split())
+        self.assertIn('quiet', params.split())
+
+    def test_diagnostic_grub_entry_has_no_splash(self):
+        # A entrada de diagnostico e a saida de emergencia quando o tema
+        # falha: ela nao pode ganhar splash junto com a entrada normal.
+        entries = (ROOT / 'config/grub.cfg').read_text().split('menuentry')
+        normal = [e for e in entries if 'nomodeset' not in e and 'linux ' in e]
+        diagnostic = [e for e in entries if 'nomodeset' in e]
+        self.assertTrue(normal and diagnostic)
+        for entry in normal:
+            self.assertIn('splash', entry)
+        for entry in diagnostic:
+            self.assertNotIn('splash', entry)
+
+    def test_theme_files_are_installed(self):
+        script = (ROOT / 'fliperos-install-video.sh').read_text()
+        self.assertIn('fliperos.plymouth', script)
+        self.assertIn('fliperos.script', script)
+
+    def test_theme_script_uses_only_verified_api(self):
+        """Erro no tema = boot sem imagem num CRT, difícil de diagnosticar.
+        Estas chamadas foram conferidas no script.so do Ubuntu 24.04."""
+        text = (ROOT / 'config/plymouth/fliperos.script').read_text()
+        for call in ('Window.SetBackgroundTopColor', 'Window.GetWidth',
+                     'Image.Text', 'Math.Int',
+                     'Plymouth.SetBootProgressFunction'):
+            self.assertIn(call, text)
+        # Nenhum asset binario: o tema tem que se sustentar em texto.
+        self.assertNotIn('Image(', text)
+
+    def test_every_monitor_profile_has_a_splash_geometry(self):
+        script = (ROOT / 'fliperos-mkiso.sh').read_text()
+        geometry = script.split('splash_mode_geometry()')[1].split('}')[0]
+        for profile in config.PROFILE_KHZ:
+            self.assertIn(profile + ')', geometry)
+
+
 class ConfigProfileTests(unittest.TestCase):
     ASSETS = {
         '15khz': ('crt15-edid.bin', 'config/switchres.ini',

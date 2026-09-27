@@ -37,6 +37,10 @@ SKIP_SUPERMODEL=false
 WITH_15KHZ_KERNEL=false
 KERNEL_15KHZ_VERSION="6.12.104"
 MONITOR_PROFILE="15khz"
+SPLASH_THEME="fliperos"
+# ID do "Evangelion UI Plymouth Theme" no Pling. A URL de download e assinada
+# com JWT e expira, entao e resolvida pela API no momento do build.
+EVANGELION_PLING_ID="2354544"
 
 # ── Args ─────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -58,8 +62,15 @@ while [[ $# -gt 0 ]]; do
         *) echo "Erro: --monitor-profile invalido: $2 (15khz, 25khz ou 31khz)"; exit 1 ;;
       esac
       shift 2 ;;
+    --splash)
+      [[ $# -ge 2 ]] || { echo "Erro: --splash requer valor."; exit 1; }
+      case "$2" in
+        fliperos|evangelion|none) SPLASH_THEME="$2" ;;
+        *) echo "Erro: --splash invalido: $2 (fliperos, evangelion ou none)"; exit 1 ;;
+      esac
+      shift 2 ;;
     /*.iso|*.iso)     OUTPUT_ISO="$1"; shift ;;
-    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame] [--skip-retroarch] [--skip-flycast] [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel] [--monitor-profile 15khz|25khz|31khz]"; exit 1 ;;
+    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame] [--skip-retroarch] [--skip-flycast] [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel] [--monitor-profile 15khz|25khz|31khz] [--splash fliperos|evangelion|none]"; exit 1 ;;
   esac
 done
 
@@ -201,6 +212,7 @@ apt-get install -y --no-install-recommends \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 pciutils libdrm-tests edid-decode squashfs-tools \
   samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
+  plymouth plymouth-label fonts-dejavu-core openbox \
   espeak-ng
 
 systemctl enable ssh
@@ -376,6 +388,74 @@ SRSCRIPT
   chroot "$CHROOT_DIR" /tmp/build-switchres.sh >> "$LOG_FILE" 2>&1 \
     && ok "SwitchRes2 compilado" \
     || err "SwitchRes2 falhou; ISO nao sera publicada como completa"
+}
+
+# ── Splash grafico (Plymouth) ─────────────────────────────────
+# Resolucao do modo que o EDID do perfil anuncia — o splash tem que ser
+# gerado nela, nao na resolucao de um monitor moderno.
+splash_mode_geometry() {
+  case "$MONITOR_PROFILE" in
+    15khz) echo "640x240" ;;
+    25khz) echo "512x384" ;;
+    31khz) echo "640x480" ;;
+  esac
+}
+
+install_splash_theme() {
+  if [[ "$SPLASH_THEME" == none ]]; then
+    warn "Splash desabilitado (--splash none); boot em modo texto"
+    return
+  fi
+  if [[ "$SPLASH_THEME" == fliperos ]]; then
+    chroot "$CHROOT_DIR" plymouth-set-default-theme fliperos \
+      && ok "Splash: tema fliperos (texto renderizado, sem asset binario)" \
+      || err "plymouth-set-default-theme falhou; splash nao entraria no initramfs"
+    return
+  fi
+
+  step "Instalando o splash Evangelion UI (Pling ${EVANGELION_PLING_ID})"
+  warn "O autor do tema declara RISCO DE CONVULSAO (luzes piscando)."
+  warn "Tema fan-made, sem arquivo de licenca no pacote — revise antes de redistribuir a ISO."
+  local geom url tarball vendored
+  geom=$(splash_mode_geometry)
+  tarball="$CHROOT_DIR/tmp/evangelion-ui.tar.gz"
+  vendored="$(dirname "$(realpath "$0")")/themes/evangelion-ui.tar.gz"
+  if [[ -f "$vendored" ]]; then
+    cp "$vendored" "$tarball"
+    ok "Tema obtido de themes/evangelion-ui.tar.gz (copia local)"
+  else
+    url=$(curl -sL --max-time 60 \
+      "https://api.pling.com/ocs/v1/content/data/${EVANGELION_PLING_ID}?format=json" \
+      | tr ',' '\n' | grep '"downloadlink1"' | cut -d'"' -f4)
+    [[ -n "$url" ]] || err "Nao foi possivel resolver o link do tema no Pling"
+    curl -sL --max-time 900 -o "$tarball" "$url" || err "Download do tema Evangelion falhou"
+    ok "Tema baixado ($(du -h "$tarball" | cut -f1))"
+  fi
+
+  cat > "$CHROOT_DIR/tmp/install-splash.sh" << SPLASHSCRIPT
+#!/bin/bash
+set -e
+apt-get install -y --no-install-recommends imagemagick
+dest=/usr/share/plymouth/themes/evangelion-ui
+mkdir -p "\$dest"
+cd /tmp && rm -rf eva && mkdir eva && tar xzf evangelion-ui.tar.gz -C eva
+cp eva/evangelion-ui.plymouth eva/evangelion-ui.script "\$dest/"
+tar xzf eva/images.tar.gz -C "\$dest/"
+# O script do tema centraliza os frames sem escalar, entao 720x480 apareceria
+# recortado no modo do CRT. O "!" forca as dimensoes exatas: achatar para
+# ${geom} e o que corrige a proporcao num tubo de pixel nao-quadrado.
+mogrify -resize '${geom}!' "\$dest"/*.png
+sed -i 's|EVANGELION_UI_PATH|/usr|g' "\$dest/evangelion-ui.plymouth"
+plymouth-set-default-theme evangelion-ui
+apt-get remove -y --purge imagemagick
+apt-get autoremove -y -qq
+rm -rf /tmp/eva /tmp/evangelion-ui.tar.gz
+du -sh "\$dest"
+SPLASHSCRIPT
+  chmod +x "$CHROOT_DIR/tmp/install-splash.sh"
+  chroot "$CHROOT_DIR" /tmp/install-splash.sh >> "$LOG_FILE" 2>&1 \
+    && ok "Splash: Evangelion UI, 202 frames reescalados para $geom" \
+    || err "Instalacao do splash Evangelion falhou"
 }
 
 # ── Compilar GroovyMAME no chroot ─────────────────────────────
@@ -777,6 +857,9 @@ copy_fliperos_scripts
 cp -a "$(dirname "$(realpath "$0")")/config" "$CHROOT_DIR/opt/fliperos/"
 cp -a "$(dirname "$(realpath "$0")")/patches/kernel-15khz" "$CHROOT_DIR/opt/fliperos/kernel-patches"
 bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" "$CHROOT_DIR" "$MONITOR_PROFILE"
+# Antes do update-initramfs: o hook do Plymouth so embarca o tema que estiver
+# marcado como default, e o initramfs e o unico lugar onde ele existe no boot.
+install_splash_theme
 chroot "$CHROOT_DIR" update-initramfs -u -k all
 build_switchres_chroot
 build_groovymame_chroot

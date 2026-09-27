@@ -1,0 +1,78 @@
+// Splash do FliperOS.
+//
+// Sem nenhum arquivo de imagem de proposito: o modo do CRT e 640x240 (ou
+// 320x240), e arte pensada para 1080p fica ilegivel ou cortada nessa
+// resolucao. Tudo aqui e texto renderizado pelo plugin label (pango) sobre um
+// fundo em gradiente, o que escala sem depender de asset binario no repo.
+//
+// Image.Text(texto, r, g, b, alpha, fonte, alinhamento) — assinatura conferida
+// no script.so do Ubuntu 24.04; alinhamento aceita left, center ou right.
+// Se este script falhar, o boot fica sem splash: a entrada "Diagnostico" do
+// GRUB nao passa "splash" e continua sendo o caminho sem Plymouth.
+
+Window.SetBackgroundTopColor(0.05, 0.07, 0.13);
+Window.SetBackgroundBottomColor(0.01, 0.01, 0.03);
+
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+
+BAR_SLOTS = 24;
+
+fun centered_sprite(image, y_fraction) {
+        sprite = Sprite(image);
+        sprite.SetX((screen_width - image.GetWidth()) / 2);
+        sprite.SetY(screen_height * y_fraction);
+        return sprite;
+}
+
+title_image = Image.Text("FliperOS", 0.85, 0.90, 1.0, 1, "DejaVu Sans Bold 26", "center");
+title = centered_sprite(title_image, 0.22);
+
+subtitle_image = Image.Text("15 kHz", 0.35, 0.55, 0.85, 1, "DejaVu Sans 10", "center");
+subtitle = centered_sprite(subtitle_image, 0.45);
+
+// A barra e um texto de largura fixa: as fatias preenchidas viram '#' e o
+// resto fica '.', entao a largura nao muda conforme o progresso avanca e a
+// barra nao "pula" no centro.
+fun bar_string(filled) {
+        text = "";
+        slot = 0;
+        while (slot < BAR_SLOTS) {
+                if (slot < filled) {
+                        text = text + "#";
+                } else {
+                        text = text + ".";
+                }
+                slot = slot + 1;
+        }
+        return text;
+}
+
+bar = NULL;
+fun draw_bar(filled) {
+        image = Image.Text(bar_string(filled), 0.30, 0.85, 0.45, 1,
+                           "DejaVu Sans Mono 11", "center");
+        bar = centered_sprite(image, 0.62);
+}
+
+draw_bar(0);
+
+last_filled = -1;
+fun progress_callback(duration, progress) {
+        filled = Math.Int(progress * BAR_SLOTS);
+        if (filled != last_filled) {
+                last_filled = filled;
+                draw_bar(filled);
+        }
+}
+Plymouth.SetBootProgressFunction(progress_callback);
+
+// Mensagens do sistema (fsck, espera de dispositivo). Sem isso, uma espera
+// longa fica sem explicacao na tela.
+message = NULL;
+fun message_callback(text) {
+        image = Image.Text(text, 0.55, 0.58, 0.65, 1, "DejaVu Sans 9", "center");
+        message = centered_sprite(image, 0.80);
+}
+Plymouth.SetMessageFunction(message_callback);
+Plymouth.SetUpdateStatusFunction(message_callback);

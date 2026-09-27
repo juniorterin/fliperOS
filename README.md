@@ -1,15 +1,17 @@
 # FliperOS 0.6 — Ubuntu para CRT 15 kHz
 
-Base Ubuntu 24.04 amd64. Configuração de vídeo e instalador revisados usando as fontes oficiais do Switchres, kernel DRM e GroovyArcade/gasetup. A ISO é live e oferece instalação em disco. A saída física ainda precisa ser validada na GPU e no CRT reais.
+Base Ubuntu 24.04 amd64. Configuração de vídeo e instalador revisados usando as fontes oficiais do Switchres, kernel DRM e GroovyArcade/gasetup. **A ISO é só de instalação** — não há modo de uso live. A saída física ainda precisa ser validada na GPU e no CRT reais.
 
 ## Instalação no estilo GroovyArcade
 
-O fluxo segue a instalação pela ISO do gasetup: iniciar live, identificar a saída do CRT, confirmar a imagem, escolher live ou disco, revisar o destino, extrair o sistema e configurar o boot.
+O fluxo segue a instalação pela ISO do gasetup: iniciar a mídia, identificar a saída do CRT, confirmar a imagem, revisar o destino, extrair o sistema e configurar o boot.
+
+O squashfs live existe apenas como veículo do assistente: a mídia não oferece "testar sem instalar". Quem quiser avaliar sem tocar no disco usa `--plan` (abaixo), que não escreve nada.
 
 1. Grave `output/fliperos-0.6.iso` em um pendrive e inicie o computador por ele. Desative Secure Boot; esta ISO não oferece uma cadeia de boot assinada validada.
 2. A entrada CRT usa **VGA-1**. Se o conector for outro, edite os nomes em `video=` e `drm.edid_firmware=` no GRUB. Nomes repetidos em múltiplas GPUs exigem configuração manual.
-3. Login live: `fliperos`, senha `fliperos`. O assistente abre no TTY1. Para reabrir: `sudo fliperos-install`.
-4. Escolha live ou instalação. Selecione a saída ativa do CRT e confirme que a imagem está visível e estável. O assistente não testa novos modos automaticamente.
+3. Login: `fliperos`, senha `fliperos`. O assistente abre no TTY1. Para reabrir: `sudo fliperos-install`.
+4. Selecione a saída ativa do CRT e confirme que a imagem está visível e estável. O assistente não testa novos modos automaticamente.
 5. Na instalação, selecione o disco por caminho, modelo, capacidade e serial. Discos montados, mídia live, swap ativa e dispositivos com dependentes ativos são recusados.
 6. Revise o plano e digite `APAGAR /dev/…` com o dispositivo exato. **O disco inteiro será apagado; não há dual boot.**
 7. O instalador extrai o squashfs, grava fstab com UUIDs, reconstrói o initramfs e instala GRUB. Defina uma senha nova e reinicie sem o pendrive.
@@ -104,16 +106,79 @@ Switchres não define linhas entrelaçadas) — `mame-31khz.ini` e
 
 Os parâmetros SI/CIK selecionam `radeon` apenas nas famílias compartilhadas com `amdgpu`, sem blacklist geral. Identifique o chip por PCI ID e driver real. A R7 240 normalmente é Oland, não Cape Verde.
 
+## Sessão ao ligar (qual launcher abre)
+
+O que abre ao ligar é um dado de configuração, não uma linha fixa no script de
+login: `/etc/fliperos/session` guarda a escolha e
+`/opt/fliperos/bin/fliperos-session` a despacha. `fliperos-config` → **Sessão ao
+ligar** escolhe entre o que está instalado.
+
+Quais frontends funcionam em **KMS** (sem servidor gráfico) não é chute: vem da
+tabela de capacidades do GroovyArcade (`galauncher/videodata.conf`).
+
+| Sessão | Backend | Vem na imagem? |
+| --- | --- | --- |
+| `launcher` | texto | sim — menu do FliperOS, fallback que sempre existe |
+| `attractplus` | KMS | não — `fliperos-attractplus` |
+| `emulationstation` | KMS | não — `fliperos-emulationstation` |
+| `retrofe` | KMS | não — `fliperos-retrofe` |
+| `pegasus` | KMS | não — `fliperos-pegasus` |
+| `advancemenu` | KMS | não — `fliperos-advancemenu` |
+| `retroarch` | KMS | sim (interface própria, só cores libretro) |
+| `groovymame` | KMS | sim (interface própria, só ROMs de MAME) |
+| `openbox` | Xorg | sim — WM leve, para baixa resolução |
+| `shell` | — | cai direto no shell |
+
+Duas armadilhas que a tabela evita: o **Attract-Mode original não roda em KMS**
+(só o fork *Plus*), e o **AdvanceMENU foi abandonado pelo GroovyArcade** — o
+pacote está comentado no `packages.x86_64` deles e o item no menu também. Ele
+está aqui porque foi pedido, não porque o upstream o mantém.
+
+O dispatcher nunca deixa a máquina sem interface: sessão escolhida cujo binário
+não existe cai no menu de texto com um aviso, em vez de falhar no boot.
+
+## Splash gráfico
+
+O splash usa Plymouth, e o tema é escolhido no build com `--splash`:
+
+| Valor | O que faz |
+| --- | --- |
+| `fliperos` (padrão) | Tema próprio, **sem nenhum arquivo de imagem**: texto renderizado pelo plugin `label` sobre gradiente. Escala em qualquer modo e não pesa na ISO. |
+| `evangelion` | *Evangelion UI* (Pling 2354544), 202 frames, animado. |
+| `none` | Sem splash; boot com as mensagens do kernel. |
+
+O `splash` na linha de comando do kernel é o que liga o Plymouth. A entrada
+**Diagnóstico** do GRUB não leva `splash` nem `quiet` de propósito: se o tema
+falhar, ela continua sendo o caminho com as mensagens do kernel na tela.
+
+Sobre o tema Evangelion, três coisas que o build avisa e que valem decisão
+consciente:
+
+- O próprio autor declara **RISCO DE CONVULSÃO — luzes piscando**. É um splash
+  que roda a cada vez que a máquina liga.
+- O script original **centraliza os frames sem escalar**, então os 720x480
+  apareceriam recortados no modo do CRT. O build pré-escala os 202 frames para a
+  resolução do perfil (640x240 no 15 kHz) com o `!` do ImageMagick, forçando as
+  dimensões exatas — achatar verticalmente é justamente o que corrige a
+  proporção num tubo de pixel não-quadrado.
+- É fan-made de propriedade licenciada e **não traz arquivo de licença** no
+  pacote (só a tag `apache-license` no site). Revise antes de redistribuir a ISO.
+
+A URL de download é assinada com JWT e expira, então o build a resolve pela API
+do Pling. Para build sem rede, coloque o tarball em `themes/evangelion-ui.tar.gz`
+e ele é usado no lugar.
+
 ## Menu de configuração do sistema instalado
 
 `fliperos-config` fica no sistema depois da instalação, em vez de congelar
 tudo no build. É o equivalente ao `mainmenu` do gasetup: no `.bash_profile`
-da tty1, o launcher roda primeiro e, ao sair dele, cai neste menu.
+da tty1, a sessão escolhida roda primeiro e, ao sair dela, cai neste menu.
 
 ```bash
 sudo fliperos-config
 ```
 
+- **Sessão ao ligar** — qual launcher abre (ver seção acima).
 - **Vídeo** — trocar o perfil de monitor (15/25/31 kHz); gerar uma
   **resolução customizada** fora dos três perfis, com `switchres -e`
   escrevendo um EDID novo e `update-initramfs` em seguida; orientação do
@@ -245,12 +310,18 @@ Por padrão o perfil de monitor é `15khz`. `--monitor-profile 25khz` ou `--moni
 docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-31khz.iso --monitor-profile 31khz
 ```
 
+O splash é escolhido com `--splash fliperos|evangelion|none` (ver seção Splash
+gráfico). `evangelion` baixa o tema durante o build e precisa de rede.
+
 | Arquivo | Função |
 | --- | --- |
 | `fliperos-mkiso.sh` | Build de uma ISO Ubuntu nova |
 | `fliperos-setup.sh` | Setup em Ubuntu existente; `--dry-run` não escreve |
 | `fliperos-install.py` | Assistente live/instalação em disco, reparo e shell de resgate |
-| `fliperos-config.py` | Menu de configuração do sistema instalado (vídeo, rede, compartilhamento) |
+| `fliperos-config.py` | Menu de configuração do sistema instalado (sessão, vídeo, rede, compartilhamento) |
+| `config/fliperos-sessions.conf` | Tabela de sessões: backend, binário e pacote de cada launcher |
+| `config/fliperos-session` | Despacha a sessão escolhida em `/etc/fliperos/session` |
+| `config/plymouth/` | Tema de splash próprio, sem asset binário |
 | `fliperos-install-video.sh` | Assets compartilhados entre setup e ISO |
 | `fliperos-video-check.py` | Consulta de modo ativo DRM |
 | `fliperos-video-autodetect.py` | Descobre o conector do CRT ligando/desligando cada saida analogica |

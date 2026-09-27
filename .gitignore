@@ -4,6 +4,10 @@ docker-work/
 docker-varlog/
 *.iso
 
+# Copia local de tema de splash de terceiros (~56 MB, baixado do Pling
+# durante o build; fica aqui so pra permitir build sem rede)
+themes/
+
 # Logs de build (gerados a cada rodada, ficam grandes rapido)
 build-iso*.log
 build-iso*.out.txt

@@ -30,6 +30,21 @@ install -Dm755 "$src/fliperos-video-autodetect.py" "$root/usr/local/bin/fliperos
 install -Dm755 "$src/fliperos-install.py" "$root/usr/local/bin/fliperos-install"
 install -Dm755 "$src/fliperos-config.py" "$root/usr/local/bin/fliperos-config"
 
+# Sessao de boot: qual launcher abre ao ligar e um dado de configuracao, nao
+# uma linha fixa no .bash_profile (ver config/fliperos-sessions.conf).
+install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions.conf"
+install -Dm755 "$src/config/fliperos-session" "$root/opt/fliperos/bin/fliperos-session"
+if [[ ! -f "$root/etc/fliperos/session" ]]; then
+    printf 'launcher\n' > "$root/etc/fliperos/session"
+fi
+
+# Splash grafico. O tema nao usa imagem: no modo do CRT (640x240) arte feita
+# pra 1080p fica ilegivel, entao e texto renderizado pelo plugin label.
+install -Dm644 "$src/config/plymouth/fliperos.plymouth" \
+  "$root/usr/share/plymouth/themes/fliperos/fliperos.plymouth"
+install -Dm644 "$src/config/plymouth/fliperos.script" \
+  "$root/usr/share/plymouth/themes/fliperos/fliperos.script"
+
 # Os TRES perfis vao pra imagem, nao so o escolhido no build: fliperos-config
 # troca de perfil no sistema instalado (regravando o EDID e o initramfs), o que
 # tira a escolha de frequencia do momento do build. O perfil ativo fica aqui.
@@ -78,14 +93,15 @@ options amdgpu si_support=0 cik_support=0
 EOF
 # Show the live installation wizard automatically, as gasetup does.
 if [[ -d "$root/home/fliperos" ]]; then
-    # Instalado: sai do launcher e cai no menu de configuracao, como o
-    # gasetup faz no .bash_profile do usuario arcade (frontend -> setup).
+    # Na midia de instalacao so existe o assistente — nao ha modo de uso live.
+    # No disco, abre a sessao escolhida e, ao sair dela, o menu de configuracao
+    # (o gasetup faz o mesmo no .bash_profile: frontend -> setup).
     cat > "$root/home/fliperos/.bash_profile" <<'EOF'
 if [[ -z "${DISPLAY:-}" && "$(tty)" == /dev/tty1 ]]; then
     if [[ ! -f /etc/fliperos/installed ]]; then
         sudo /usr/local/bin/fliperos-install
     else
-        /opt/fliperos/bin/fliperos-launcher
+        /opt/fliperos/bin/fliperos-session
         sudo /usr/local/bin/fliperos-config
     fi
 fi
@@ -98,8 +114,11 @@ fi
 # Both live and installed systems enter the setup menu, not an untested game.
 cat > "$root/etc/profile.d/fliperos.sh" <<'EOF'
 if [ "$(tty 2>/dev/null)" = /dev/tty1 ]; then
-    echo "FliperOS: sudo fliperos-install (monitor / live / instalar em disco)"
-    echo "Configuracao: sudo fliperos-config (video, rede, compartilhamento)"
+    if [ ! -f /etc/fliperos/installed ]; then
+        echo "FliperOS: sudo fliperos-install (verificar monitor e instalar em disco)"
+    else
+        echo "Configuracao: sudo fliperos-config (sessao, video, rede, compartilhamento)"
+    fi
     echo "Diagnostico: sudo fliperos-video-check"
 fi
 EOF

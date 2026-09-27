@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=FliperOS
+Description=Splash do FliperOS, dimensionado para CRT de baixa resolucao
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/fliperos
+ScriptFile=/usr/share/plymouth/themes/fliperos/fliperos.script

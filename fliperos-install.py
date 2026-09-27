@@ -84,8 +84,12 @@ def partition_commands(disk):
 def boot_parameters(connector):
     if not re.fullmatch(r"(?:VGA|DVI-I|DVI-A|DP|HDMI-A)-[1-9][0-9]*", connector):
         raise ValueError("Conector invalido")
+    # quiet splash: sem "splash" o Plymouth nao aparece. A entrada
+    # "Diagnostico" do GRUB nao leva esses dois, e continua sendo o caminho
+    # com as mensagens do kernel na tela.
     return (f"video={connector}:e drm.edid_firmware={connector}:edid/crt15.bin "
-            "radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0")
+            "radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0 "
+            "quiet splash")
 
 
 def plan(device, connector):
@@ -552,25 +556,20 @@ def main():
         if args.detect_installed:
             print(json.dumps(existing_installs(), indent=2, ensure_ascii=False))
             return 0
+        # A midia e de instalacao, nao de uso: o squashfs live existe so pra
+        # carregar este assistente. Nao ha modo "testar sem instalar".
         print("FliperOS — assistente de instalacao (fluxo inspirado no GroovyArcade/gasetup)")
         found = existing_installs()
-        print("1. Verificar monitor e testar live")
-        print("2. Verificar monitor e instalar em disco")
+        print("1. Verificar monitor e instalar em disco")
         if found:
-            print(f"3. Reparar instalacao existente ({len(found)} disco(s) com FliperOS)")
+            print(f"2. Reparar instalacao existente ({len(found)} disco(s) com FliperOS)")
         print("0. Sair")
         choice = input("Opcao: ")
-        if choice == "3" and found:
+        if choice == "2" and found:
             return menu_repair(found)
-        if choice not in ("1", "2"):
+        if choice != "1":
             return 0
         connector = select_connector()
-        if choice == "1":
-            if os.geteuid() != 0:
-                raise ValueError("Execute com sudo para salvar a selecao de monitor")
-            configure_video(Path('/'), connector)
-            print("Monitor confirmado. Use fliperos-launcher como usuario fliperos para testar os emuladores.")
-            return 0
         disks = [d for d in inventory() if not rejection(d)]
         installed_paths = {entry["disk"] for entry in found}
         for i, device in enumerate(disks, 1):
