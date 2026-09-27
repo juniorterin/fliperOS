@@ -450,6 +450,69 @@ class InputDriverTests(unittest.TestCase):
         self.assertIn('guncon2.conf', script)
 
 
+class HiddenWifiTests(unittest.TestCase):
+    """Rede oculta nao aparece na varredura (nao anuncia o SSID), entao precisa
+    de entrada manual — e o nmcli exige 'hidden yes' pra achar o ponto."""
+
+    def args_of(self, ssid, secret, hidden):
+        with mock.patch.object(config.subprocess, 'run') as runner:
+            runner.return_value = mock.Mock(returncode=0, stdout='', stderr='')
+            config.wifi_connect(ssid, secret, hidden=hidden)
+        return runner.call_args[0][0]
+
+    def test_hidden_network_passes_hidden_yes(self):
+        args = self.args_of('MinhaOculta', 'senha123', True)
+        self.assertEqual(args[:5], ['nmcli', 'device', 'wifi', 'connect', 'MinhaOculta'])
+        self.assertIn('hidden', args)
+        self.assertEqual(args[args.index('hidden') + 1], 'yes')
+        self.assertEqual(args[args.index('password') + 1], 'senha123')
+
+    def test_visible_network_does_not_pass_hidden(self):
+        self.assertNotIn('hidden', self.args_of('Rede', 'senha', False))
+
+    def test_open_hidden_network_omits_password(self):
+        args = self.args_of('Aberta', '', True)
+        self.assertNotIn('password', args)
+        self.assertIn('hidden', args)
+
+    def test_failure_returns_the_nmcli_message(self):
+        with mock.patch.object(config.subprocess, 'run') as runner:
+            runner.return_value = mock.Mock(returncode=1, stdout='',
+                                            stderr='Error: no network with SSID')
+            ok, detail = config.wifi_connect('X', 'y', hidden=True)
+        self.assertFalse(ok)
+        self.assertIn('no network with SSID', detail)
+
+    def test_hidden_option_is_offered_even_with_no_visible_networks(self):
+        """A lista pode vir vazia e o item de rede oculta tem de sobrar."""
+        source = (ROOT / 'fliperos-config.py').read_text()
+        menu = source.split('def menu_wifi')[1].split('def menu_regdom')[0]
+        self.assertIn('HIDDEN_TAG', menu)
+        # Nao deve haver retorno antecipado por lista vazia antes do menu.
+        self.assertNotIn('Nenhuma rede encontrada', menu)
+
+
+class BuildImageTests(unittest.TestCase):
+    """Regressao: o Dockerfile copiava "fliperos-*.py" e o modulo compartilhado
+    e fliperos_tui.py, com underscore — o glob nao o pegava e a imagem de build
+    saia sem ele."""
+
+    def test_dockerfile_copies_every_source_that_install_video_needs(self):
+        dockerfile = (ROOT / 'Dockerfile.fliperos').read_text()
+        installer = (ROOT / 'fliperos-install-video.sh').read_text()
+        needed = set(re.findall(r'"\$src/([A-Za-z0-9_.-]+\.py)"', installer))
+        self.assertIn('fliperos_tui.py', needed)
+        for name in needed:
+            matched = ('fliperos*.py' in dockerfile
+                       or name in dockerfile
+                       or ('fliperos-*.py' in dockerfile and name.startswith('fliperos-')))
+            self.assertTrue(matched, '%s nao e copiado pelo Dockerfile' % name)
+
+    def test_config_directory_is_copied_wholesale(self):
+        """As regras de udev e o tema do plymouth vivem em config/."""
+        self.assertIn('COPY config/', (ROOT / 'Dockerfile.fliperos').read_text())
+
+
 class TuiTests(unittest.TestCase):
     """O console do CRT em 640x240 tem 80x15 caracteres; um dialogo maior que
     isso fica cortado na tela, que foi o sintoma do GRUB ilegivel."""
@@ -470,14 +533,44 @@ class TuiTests(unittest.TestCase):
         self.assertLessEqual(width, tui.MAX_WIDTH)
         self.assertLessEqual(height, tui.MAX_HEIGHT)
 
-    def test_password_uses_passwordbox(self):
-        """A senha do Wi-Fi nao deve aparecer na tela."""
+    VALID_NEWT_COLORS = {
+        'black', 'red', 'green', 'brown', 'blue', 'magenta', 'cyan', 'lightgray',
+        'gray', 'brightred', 'brightgreen', 'yellow', 'brightblue',
+        'brightmagenta', 'brightcyan', 'white', '',
+    }
+
+    def test_palette_uses_only_valid_newt_colors(self):
+        """O newt so conhece as 16 cores do console; nome invalido e ignorado
+        em silencio, entao o erro apareceria como cor que nao mudou."""
+        for line in tui.DEFAULT_PALETTE.strip().splitlines():
+            element, _, spec = line.partition('=')
+            self.assertTrue(element.strip(), line)
+            for color in spec.split(','):
+                self.assertIn(color.strip(), self.VALID_NEWT_COLORS,
+                              'cor invalida em: ' + line)
+
+    def test_palette_is_passed_to_whiptail(self):
         source = (ROOT / 'fliperos_tui.py').read_text()
-        self.assertIn('--passwordbox', source)
+        self.assertIn('NEWT_COLORS', source)
+
+    def test_palette_can_be_overridden_on_the_machine(self):
+        with tempfile.TemporaryDirectory() as directory:
+            custom = Path(directory) / 'newt-palette'
+            custom.write_text('root=white,brightcyan\n')
+            with mock.patch.object(tui, 'PALETTE_FILE', custom):
+                self.assertIn('brightcyan', tui.palette())
+        self.assertEqual(tui.palette(), tui.DEFAULT_PALETTE)
+
+    def test_password_uses_passwordbox(self):
+        """A senha do Wi-Fi nao deve aparecer na tela. O inputbox e legitimo
+        para o SSID de rede oculta, entao a checagem e sobre o que cada chamada
+        pede, nao sobre a presenca do inputbox."""
+        self.assertIn('--passwordbox', (ROOT / 'fliperos_tui.py').read_text())
         config_source = (ROOT / 'fliperos-config.py').read_text()
         wifi = config_source.split('def menu_wifi')[1].split('def menu_regdom')[0]
         self.assertIn('tui.password', wifi)
-        self.assertNotIn('tui.inputbox', wifi)
+        for call in re.findall(r'tui\.inputbox\((.*?)title=', wifi, flags=re.S):
+            self.assertNotIn('Senha', call, 'senha pedida por inputbox: ' + call)
 
 
 class RepoTests(unittest.TestCase):

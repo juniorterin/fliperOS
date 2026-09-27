@@ -523,14 +523,26 @@ git clone --depth 1 https://github.com/beardypig/guncon2 /usr/src/guncon2-1.0
 cat > /usr/src/guncon2-1.0/dkms.conf << 'DKMSCONF'
 PACKAGE_NAME="guncon2"
 PACKAGE_VERSION="1.0"
-MAKE[0]="make KVERSION=$kernelver modules"
-CLEAN="make clean"
+# O 'make' entre aspas NAO e enfeite: sem isso o dkms acrescenta
+# KERNELRELEASE= na linha de comando, e o Makefile do guncon2 usa
+# justamente "ifeq ($(KERNELRELEASE),)" pra decidir se foi chamado pelo
+# Kbuild — com a variavel definida ele cai no ramo que so declara obj-m, onde
+# o alvo "modules" nao existe, e o build morre com exit 2. Aspas suprimem
+# esse acrescimo (documentado no dkms(8) e no dkms.conf do hid-tmff2).
+MAKE[0]="'make' KVERSION=$kernelver modules"
+CLEAN="'make' clean"
 BUILT_MODULE_NAME[0]="guncon2"
 DEST_MODULE_LOCATION[0]="/kernel/drivers/input/joystick"
 AUTOINSTALL="yes"
 DKMSCONF
 dkms add -m guncon2 -v 1.0
-dkms build -m guncon2 -v 1.0 -k "$KVER"
+# O dkms diz "consulte o make.log" e o make.log fica dentro do chroot, que
+# desaparece com o container: sem despejar aqui, o erro do compilador se perde.
+if ! dkms build -m guncon2 -v 1.0 -k "$KVER"; then
+  echo "--- make.log do guncon2 ---"
+  cat /var/lib/dkms/guncon2/1.0/build/make.log 2>/dev/null || echo "(sem make.log)"
+  exit 1
+fi
 dkms install -m guncon2 -v 1.0 -k "$KVER"
 # Carrega no boot: sem isso o modulo so existe em disco.
 echo guncon2 > /etc/modules-load.d/fliperos-guncon2.conf

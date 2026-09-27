@@ -6,10 +6,56 @@ dois scripts divergiriam com o tempo.
 Mecanica do whiptail que os wrappers escondem: a selecao sai no *stderr*, nao
 no stdout, e o codigo de saida distingue OK (0), Cancelar (1) e ESC (255).
 """
+import os
 import shutil
 import subprocess
+from pathlib import Path
 
 BACKTITLE = "FliperOS"
+
+# Paleta do newt. O formato e "elemento=frente,fundo" por linha, e as cores
+# sao as 16 do console — NAO existe RGB aqui, entao "azul ceu" e brightcyan
+# ou brightblue, nao um tom arbitrario. Nomes validos:
+#   black red green brown blue magenta cyan lightgray
+#   gray brightred brightgreen yellow brightblue brightmagenta brightcyan white
+# ("brown" e o amarelo escuro, "lightgray" o branco normal e "white" o
+# branco brilhante.)
+PALETTE_FILE = Path("/etc/fliperos/newt-palette")
+DEFAULT_PALETTE = """
+root=white,brightblue
+border=black,lightgray
+window=black,lightgray
+shadow=black,gray
+title=blue,lightgray
+button=lightgray,blue
+actbutton=white,brightblue
+checkbox=black,lightgray
+actcheckbox=white,blue
+entry=black,lightgray
+label=blue,lightgray
+listbox=black,lightgray
+actlistbox=white,blue
+sellistbox=white,brightblue
+actsellistbox=white,brightblue
+textbox=black,lightgray
+acttextbox=white,blue
+helpline=white,brightblue
+roottext=white,brightblue
+emptyscale=,gray
+fullscale=,brightblue
+disentry=gray,lightgray
+compactbutton=black,lightgray
+"""
+
+
+def palette():
+    """A paleta pode ser trocada na maquina sem rebuildar a imagem."""
+    if PALETTE_FILE.is_file():
+        try:
+            return PALETTE_FILE.read_text()
+        except OSError:
+            pass
+    return DEFAULT_PALETTE
 
 # O console do CRT em 640x240 com fonte 8x16 tem 80x15 caracteres. O
 # auto-size do whiptail (passar 0 0) estoura essa tela, entao as dimensoes
@@ -39,7 +85,8 @@ def _box(extra_lines=0):
 def _call(args, capture=True):
     """Roda o whiptail. A resposta vem no stderr; devolve (ok, texto)."""
     base = ["whiptail", "--backtitle", BACKTITLE]
-    result = subprocess.run(base + args, stderr=subprocess.PIPE, text=True)
+    env = dict(os.environ, NEWT_COLORS=palette())
+    result = subprocess.run(base + args, stderr=subprocess.PIPE, text=True, env=env)
     return result.returncode == 0, (result.stderr or "").strip()
 
 
