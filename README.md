@@ -12,11 +12,15 @@ O squashfs live existe apenas como veículo do assistente: a mídia não oferece
 
    A ISO é gerada por `grub-mkrescue`: é uma imagem **híbrida**, com GPT, uma EFI System Partition real e código de boot no MBR. Gravadores que *reconstroem* a estrutura de boot a quebram — **Rufus no modo padrão ("ISO image"), Ventoy e UNetbootin**. O sintoma é característico: o GRUB imprime "Welcome to GRUB!" e **fica parado para sempre**, porque o core carregou mas não acha mais os módulos.
 
-   Use um gravador que copie sem interpretar:
+   **Use o balenaEtcher.** É o gravador validado neste projeto: grava byte a byte, não tem modo a escolher e portanto não tem como errar. O Rufus *funciona* em "DD Image mode", mas o modo padrão dele é o "ISO image", que quebra a imagem — não vale o risco de clicar errado.
 
-   - **Rufus**: escolha **"DD Image mode"** quando ele perguntar (não o "ISO image mode")
-   - **balenaEtcher**: grava byte a byte, sem opção a escolher
-   - **Linux/macOS**: `sudo dd if=fliperos-0.6-base.iso of=/dev/sdX bs=4M status=progress conv=fsync` (confirme `/dev/sdX` com `lsblk`; o dispositivo errado apaga o disco errado)
+   Em Linux ou macOS, `dd` também serve:
+
+   ```bash
+   sudo dd if=fliperos-0.6-base.iso of=/dev/sdX bs=4M status=progress conv=fsync
+   ```
+
+   Confirme o `/dev/sdX` com `lsblk` antes: o dispositivo errado apaga o disco errado.
 2. A entrada CRT usa **VGA-1**. Se o conector for outro, edite os nomes em `video=` e `drm.edid_firmware=` no GRUB. Nomes repetidos em múltiplas GPUs exigem configuração manual.
 
    **Num CRT de 15 kHz você não vai conseguir ler o menu do GRUB**, e isso é esperado: o GRUB usa modo texto VGA (720x400, cerca de 31 kHz), que vem antes do override de EDID e um monitor só-15kHz não sincroniza. O `timeout=5` do `config/grub.cfg` faz a primeira entrada iniciar sozinha, então o boot prossegue às cegas. A primeira coisa que deve aparecer legível é o splash, já em 640x240 — se ele aparecer, o override de EDID funcionou. Para *escolher* a entrada de diagnóstico, ligue um LCD temporariamente.
@@ -397,6 +401,23 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 
 O splash é escolhido com `--splash fliperos|evangelion|none` (ver seção Splash
 gráfico). `evangelion` baixa o tema durante o build e precisa de rede.
+
+### Wi-Fi gravado na imagem
+
+Numa máquina **sem cabo de rede**, é o único jeito de ela subir acessível por
+SSH sem ninguém mexer no console:
+
+```powershell
+docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.6-base.iso --skip-groovymame --skip-retroarch --skip-flycast --skip-pcsx2 --skip-supermodel --wifi-ssid "MinhaRede" --wifi-psk "minhasenha"
+```
+
+Isso grava um perfil do NetworkManager em
+`/etc/NetworkManager/system-connections/`, com `autoconnect=true` e permissão
+`0600` — o NetworkManager **ignora o arquivo em silêncio** se a permissão for
+outra, por isso o build a força.
+
+**A ISO passa a conter a senha do Wi-Fi em texto claro.** O build avisa. Não
+distribua uma imagem gerada assim.
 
 | Arquivo | Função |
 | --- | --- |

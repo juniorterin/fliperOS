@@ -38,6 +38,10 @@ WITH_15KHZ_KERNEL=false
 KERNEL_15KHZ_VERSION="6.12.104"
 MONITOR_PROFILE="15khz"
 SPLASH_THEME="fliperos"
+# Wi-Fi opcional gravado na imagem: numa maquina sem cabo de rede, e o unico
+# jeito de ela subir acessivel por SSH sem interacao no console.
+WIFI_SSID=""
+WIFI_PSK=""
 # ID do "Evangelion UI Plymouth Theme" no Pling. A URL de download e assinada
 # com JWT e expira, entao e resolvida pela API no momento do build.
 EVANGELION_PLING_ID="2354544"
@@ -62,6 +66,12 @@ while [[ $# -gt 0 ]]; do
         *) echo "Erro: --monitor-profile invalido: $2 (15khz, 25khz ou 31khz)"; exit 1 ;;
       esac
       shift 2 ;;
+    --wifi-ssid)
+      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --wifi-ssid requer valor."; exit 1; }
+      WIFI_SSID="$2"; shift 2 ;;
+    --wifi-psk)
+      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --wifi-psk requer valor."; exit 1; }
+      WIFI_PSK="$2"; shift 2 ;;
     --splash)
       [[ $# -ge 2 ]] || { echo "Erro: --splash requer valor."; exit 1; }
       case "$2" in
@@ -70,7 +80,7 @@ while [[ $# -gt 0 ]]; do
       esac
       shift 2 ;;
     /*.iso|*.iso)     OUTPUT_ISO="$1"; shift ;;
-    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame] [--skip-retroarch] [--skip-flycast] [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel] [--monitor-profile 15khz|25khz|31khz] [--splash fliperos|evangelion|none]"; exit 1 ;;
+    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame] [--skip-retroarch] [--skip-flycast] [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel] [--monitor-profile 15khz|25khz|31khz] [--splash fliperos|evangelion|none] [--wifi-ssid NOME --wifi-psk SENHA]"; exit 1 ;;
   esac
 done
 
@@ -217,8 +227,19 @@ apt-get install -y --no-install-recommends \
   espeak-ng
 
 systemctl enable ssh
+# As host keys sao apagadas abaixo pra que cada instalacao gere as suas, e
+# precisam ser regeradas no boot. O ssh.service do Ubuntu ja traz
+# "ExecStartPre=/usr/sbin/sshd -t", e drop-in SOMA comandos DEPOIS dos do
+# pacote — sem host key o "sshd -t" falha com "no hostkeys available" e o
+# servico morre antes de chegar no keygen. A linha ExecStartPre vazia zera a
+# lista herdada pra reordenar: gerar a chave primeiro, validar depois.
 mkdir -p /etc/systemd/system/ssh.service.d
-printf '[Service]\nExecStartPre=/usr/bin/ssh-keygen -A\n' > /etc/systemd/system/ssh.service.d/keys.conf
+cat > /etc/systemd/system/ssh.service.d/keys.conf << 'SSHKEYS'
+[Service]
+ExecStartPre=
+ExecStartPre=/usr/bin/ssh-keygen -A
+ExecStartPre=/usr/sbin/sshd -t
+SSHKEYS
 rm -f /etc/ssh/ssh_host_*
 truncate -s 0 /etc/machine-id
 systemctl enable NetworkManager
@@ -250,6 +271,21 @@ SMB
 systemctl enable smbd
 systemctl enable nmbd
 systemctl enable avahi-daemon
+
+# O lxde-core puxa o lightdm como dependencia obrigatoria, e ele briga com o
+# modelo de sessao daqui: quem inicia a sessao e o login da tty1, nao um
+# display manager. Pior, o lightdm falhando em loop trava o boot — o
+# plymouth-quit e ordenado depois do display-manager, entao nunca roda, e o
+# plymouth-quit-wait espera sem limite. "mask" e nao "disable" porque ele
+# tambem e puxado como dependencia de display-manager.service.
+systemctl mask lightdm
+systemctl mask light-locker 2>/dev/null || true
+
+# Rede de seguranca: mesmo com o lightdm fora, nada deve poder pendurar o boot
+# indefinidamente esperando o splash sair.
+mkdir -p /etc/systemd/system/plymouth-quit-wait.service.d
+printf '[Unit]\nJobTimeoutSec=20\n[Service]\nTimeoutStartSec=20\n' \
+  > /etc/systemd/system/plymouth-quit-wait.service.d/timeout.conf
 
 # Painel do LXDE em resolucao de CRT: o padrao de 26px consome 11% das 240
 # linhas, e num tubo esses pixels aparecem dobrados. 16px mantem o painel
@@ -399,6 +435,45 @@ SRSCRIPT
   chroot "$CHROOT_DIR" /tmp/build-switchres.sh >> "$LOG_FILE" 2>&1 \
     && ok "SwitchRes2 compilado" \
     || err "SwitchRes2 falhou; ISO nao sera publicada como completa"
+}
+
+# ── Wi-Fi gravado na imagem (opcional) ────────────────────────
+# Escrito direto no filesystem do chroot, nao pelo sed do script de setup:
+# uma senha com | ou & quebraria a substituicao.
+install_wifi_profile() {
+  [[ -n "$WIFI_SSID" ]] || return 0
+  step "Gravando perfil de Wi-Fi na imagem"
+  warn "A ISO passa a CONTER a senha do Wi-Fi em texto. Nao a distribua."
+  local dir="$CHROOT_DIR/etc/NetworkManager/system-connections"
+  mkdir -p "$dir"
+  local file="$dir/fliperos-wifi.nmconnection"
+  {
+    echo "[connection]"
+    echo "id=fliperos-wifi"
+    echo "type=wifi"
+    echo "autoconnect=true"
+    echo "autoconnect-priority=10"
+    echo
+    echo "[wifi]"
+    echo "mode=infrastructure"
+    echo "ssid=$WIFI_SSID"
+    echo
+    if [[ -n "$WIFI_PSK" ]]; then
+      echo "[wifi-security]"
+      echo "key-mgmt=wpa-psk"
+      echo "psk=$WIFI_PSK"
+      echo
+    fi
+    echo "[ipv4]"
+    echo "method=auto"
+    echo
+    echo "[ipv6]"
+    echo "method=auto"
+  } > "$file"
+  # O NetworkManager IGNORA o arquivo em silencio se ele nao for 0600 do root.
+  chmod 600 "$file"
+  chown 0:0 "$file"
+  ok "Wi-Fi \"$WIFI_SSID\" gravado; conecta sozinho no boot"
 }
 
 # ── Splash grafico (Plymouth) ─────────────────────────────────
@@ -892,6 +967,7 @@ cp -a "$(dirname "$(realpath "$0")")/patches/kernel-15khz" "$CHROOT_DIR/opt/flip
 bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" "$CHROOT_DIR" "$MONITOR_PROFILE"
 # Antes do update-initramfs: o hook do Plymouth so embarca o tema que estiver
 # marcado como default, e o initramfs e o unico lugar onde ele existe no boot.
+install_wifi_profile
 install_splash_theme
 chroot "$CHROOT_DIR" update-initramfs -u -k all
 build_switchres_chroot
