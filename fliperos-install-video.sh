@@ -29,6 +29,10 @@ install -Dm755 "$src/fliperos-video-check.py" "$root/usr/local/bin/fliperos-vide
 install -Dm755 "$src/fliperos-video-autodetect.py" "$root/usr/local/bin/fliperos-video-autodetect"
 install -Dm755 "$src/fliperos-install.py" "$root/usr/local/bin/fliperos-install"
 install -Dm755 "$src/fliperos-config.py" "$root/usr/local/bin/fliperos-config"
+# Wrappers de whiptail compartilhados pelo setup e pelo instalador. Ficam numa
+# lib porque duplicar primitivas de interface nos dois scripts divergiria; os
+# scripts procuram aqui e tambem ao lado deles (que e o caso no repositorio).
+install -Dm644 "$src/fliperos_tui.py" "$root/usr/local/lib/fliperos/fliperos_tui.py"
 
 # Sessao de boot: qual launcher abre ao ligar e um dado de configuracao, nao
 # uma linha fixa no .bash_profile (ver config/fliperos-sessions.conf).

@@ -1,4 +1,5 @@
 import importlib.util
+import os
 from pathlib import Path
 import re
 import unittest
@@ -19,6 +20,7 @@ video = load('video', 'fliperos-video-check.py')
 installer = load('installer', 'fliperos-install.py')
 autodetect = load('autodetect', 'fliperos-video-autodetect.py')
 config = load('config', 'fliperos-config.py')
+tui = load('tui', 'fliperos_tui.py')
 
 
 class VideoTests(unittest.TestCase):
@@ -390,10 +392,40 @@ class SessionTests(unittest.TestCase):
         text = (ROOT / 'fliperos-config.py').read_text()
         menu = text.split('def menu_setup_media')[1].split('def menu_installed')[0]
         self.assertIn('menu_network', menu)
-        self.assertIn('run_installer', menu)
+        self.assertIn('fliperos-install', menu)
         # Itens que exigem GRUB instalado nao entram no menu da midia.
         self.assertNotIn('menu_orientation', menu)
         self.assertNotIn('menu_connector', menu)
+
+
+class TuiTests(unittest.TestCase):
+    """O console do CRT em 640x240 tem 80x15 caracteres; um dialogo maior que
+    isso fica cortado na tela, que foi o sintoma do GRUB ilegivel."""
+
+    def test_box_fits_a_small_console(self):
+        with mock.patch.object(tui.shutil, 'get_terminal_size',
+                               return_value=os.terminal_size((80, 15))):
+            height, width, list_height = tui._box(20)
+        self.assertLessEqual(height, 15)
+        self.assertLessEqual(width, 78)
+        self.assertGreaterEqual(list_height, 3)
+        self.assertLess(list_height, height)
+
+    def test_box_is_capped_on_a_large_console(self):
+        with mock.patch.object(tui.shutil, 'get_terminal_size',
+                               return_value=os.terminal_size((200, 60))):
+            height, width, _ = tui._box(5)
+        self.assertLessEqual(width, tui.MAX_WIDTH)
+        self.assertLessEqual(height, tui.MAX_HEIGHT)
+
+    def test_password_uses_passwordbox(self):
+        """A senha do Wi-Fi nao deve aparecer na tela."""
+        source = (ROOT / 'fliperos_tui.py').read_text()
+        self.assertIn('--passwordbox', source)
+        config_source = (ROOT / 'fliperos-config.py').read_text()
+        wifi = config_source.split('def menu_wifi')[1].split('def menu_regdom')[0]
+        self.assertIn('tui.password', wifi)
+        self.assertNotIn('tui.inputbox', wifi)
 
 
 class RepoTests(unittest.TestCase):
@@ -413,6 +445,29 @@ class RepoTests(unittest.TestCase):
     def test_trailing_slash_not_duplicated(self):
         self.assertEqual(config.repo_source_line('https://exemplo.test/r/'),
                          config.repo_source_line('https://exemplo.test/r'))
+
+
+class NmcliParsingTests(unittest.TestCase):
+    """O nmcli -t escapa ':' dentro dos valores. Um split cru truncaria o SSID
+    na lista e a conexao sairia com o nome errado."""
+
+    def test_plain_line(self):
+        self.assertEqual(config.nmcli_fields('MinhaRede:80:WPA2'),
+                         ['MinhaRede', '80', 'WPA2'])
+
+    def test_ssid_with_escaped_colon(self):
+        self.assertEqual(config.nmcli_fields(r'Casa\:2G:72:WPA2'),
+                         ['Casa:2G', '72', 'WPA2'])
+
+    def test_ssid_with_escaped_backslash(self):
+        self.assertEqual(config.nmcli_fields(r'Rede\\Teste:60:'),
+                         ['Rede\\Teste', '60', ''])
+
+    def test_empty_ssid_of_hidden_network_is_preserved_as_empty(self):
+        self.assertEqual(config.nmcli_fields(':45:WPA2'), ['', '45', 'WPA2'])
+
+    def test_device_line(self):
+        self.assertEqual(config.nmcli_fields('wlan0:wifi'), ['wlan0', 'wifi'])
 
 
 class PackagingTests(unittest.TestCase):

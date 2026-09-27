@@ -71,6 +71,20 @@ grep -q 'multi-user.target.wants/ssh.service' "$work/files.txt" \
     || { echo "ssh.service nao habilitado no boot" >&2; exit 1; }
 echo "ssh habilitado no boot"
 
+# Sem display manager: o graphical.target puxa display-manager.service, que o
+# postinst do lightdm cria apontando pro unit file e escapando da mascara no
+# nome "lightdm". Com isso o lightdm falha em loop, o plymouth-quit (ordenado
+# depois do display-manager) nunca roda e o boot pendura no plymouth-quit-wait.
+unsquashfs -lls "$work/filesystem.squashfs" > "$work/links.txt" 2>/dev/null
+grep -E 'etc/systemd/system/default.target ->' "$work/links.txt" \
+    | grep -q 'multi-user.target' \
+    || { echo "default.target nao aponta pra multi-user (boot pode pendurar no display manager)" >&2; exit 1; }
+for unit in lightdm.service display-manager.service; do
+    grep -E "etc/systemd/system/$unit ->" "$work/links.txt" | grep -q '/dev/null' \
+        || { echo "$unit nao esta mascarado" >&2; exit 1; }
+done
+echo "sem display manager: default.target em multi-user, lightdm e display-manager mascarados"
+
 xorriso -indev "$iso" -report_el_torito plain > "$work/boot.txt" 2>&1
 grep 'BIOS' "$work/boot.txt"
 grep 'UEFI' "$work/boot.txt"

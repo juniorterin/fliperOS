@@ -280,6 +280,16 @@ systemctl enable avahi-daemon
 # tambem e puxado como dependencia de display-manager.service.
 systemctl mask lightdm
 systemctl mask light-locker 2>/dev/null || true
+# Mascarar "lightdm" nao basta: o postinst dele cria display-manager.service
+# apontando direto pro unit file, o que passa por cima da mascara no nome. E o
+# graphical.target puxa display-manager.service. Dai o alvo padrao tem de ser
+# multi-user: aqui nao existe display manager, a sessao sai do login da tty1
+# (o LXDE tambem, via startlxde no xinit, nao via greeter).
+systemctl set-default multi-user.target
+# ln -sf em vez de "systemctl mask": o postinst do lightdm ja criou esse
+# symlink, e o mask se recusa a sobrescrever um arquivo existente. Apontar
+# pra /dev/null e exatamente o que mascarar faz.
+ln -sf /dev/null /etc/systemd/system/display-manager.service
 
 # Rede de seguranca: mesmo com o lightdm fora, nada deve poder pendurar o boot
 # indefinidamente esperando o splash sair.
