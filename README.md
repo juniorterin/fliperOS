@@ -8,8 +8,18 @@ O fluxo segue a instalação pela ISO do gasetup: iniciar a mídia, identificar 
 
 O squashfs live existe apenas como veículo do assistente: a mídia não oferece "testar sem instalar". Quem quiser avaliar sem tocar no disco usa `--plan` (abaixo), que não escreve nada.
 
-1. Grave `output/fliperos-0.6.iso` em um pendrive e inicie o computador por ele. Desative Secure Boot; esta ISO não oferece uma cadeia de boot assinada validada.
+1. Grave a ISO em um pendrive **byte a byte** e inicie o computador por ele. Desative Secure Boot; esta ISO não oferece uma cadeia de boot assinada validada.
+
+   A ISO é gerada por `grub-mkrescue`: é uma imagem **híbrida**, com GPT, uma EFI System Partition real e código de boot no MBR. Gravadores que *reconstroem* a estrutura de boot a quebram — **Rufus no modo padrão ("ISO image"), Ventoy e UNetbootin**. O sintoma é característico: o GRUB imprime "Welcome to GRUB!" e **fica parado para sempre**, porque o core carregou mas não acha mais os módulos.
+
+   Use um gravador que copie sem interpretar:
+
+   - **Rufus**: escolha **"DD Image mode"** quando ele perguntar (não o "ISO image mode")
+   - **balenaEtcher**: grava byte a byte, sem opção a escolher
+   - **Linux/macOS**: `sudo dd if=fliperos-0.6-base.iso of=/dev/sdX bs=4M status=progress conv=fsync` (confirme `/dev/sdX` com `lsblk`; o dispositivo errado apaga o disco errado)
 2. A entrada CRT usa **VGA-1**. Se o conector for outro, edite os nomes em `video=` e `drm.edid_firmware=` no GRUB. Nomes repetidos em múltiplas GPUs exigem configuração manual.
+
+   **Num CRT de 15 kHz você não vai conseguir ler o menu do GRUB**, e isso é esperado: o GRUB usa modo texto VGA (720x400, cerca de 31 kHz), que vem antes do override de EDID e um monitor só-15kHz não sincroniza. O `timeout=5` do `config/grub.cfg` faz a primeira entrada iniciar sozinha, então o boot prossegue às cegas. A primeira coisa que deve aparecer legível é o splash, já em 640x240 — se ele aparecer, o override de EDID funcionou. Para *escolher* a entrada de diagnóstico, ligue um LCD temporariamente.
 3. Login: `fliperos`, senha `fliperos`. O assistente abre no TTY1. Para reabrir: `sudo fliperos-install`.
 4. Selecione a saída ativa do CRT e confirme que a imagem está visível e estável. O assistente não testa novos modos automaticamente.
 5. Na instalação, selecione o disco por caminho, modelo, capacidade e serial. Discos montados, mídia live, swap ativa e dispositivos com dependentes ativos são recusados.
