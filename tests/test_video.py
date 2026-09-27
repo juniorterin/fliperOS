@@ -376,6 +376,25 @@ class SessionTests(unittest.TestCase):
         installer_text = (ROOT / 'fliperos-install.py').read_text()
         self.assertNotIn('testar live', installer_text)
 
+    def test_setup_media_opens_config_not_installer(self):
+        """A midia tem de abrir no menu de setup: sem cabo de rede, o Wi-Fi
+        precisa ser configurado antes de instalar, e o instalador sozinho nao
+        oferece isso."""
+        script = (ROOT / 'fliperos-install-video.sh').read_text()
+        live_branch = script.split('if [[ ! -f /etc/fliperos/installed ]]; then')[1]
+        live_branch = live_branch.split('else')[0]
+        self.assertIn('fliperos-config', live_branch)
+        self.assertNotIn('fliperos-install', live_branch)
+
+    def test_setup_media_menu_offers_wifi_and_install(self):
+        text = (ROOT / 'fliperos-config.py').read_text()
+        menu = text.split('def menu_setup_media')[1].split('def menu_installed')[0]
+        self.assertIn('menu_network', menu)
+        self.assertIn('run_installer', menu)
+        # Itens que exigem GRUB instalado nao entram no menu da midia.
+        self.assertNotIn('menu_orientation', menu)
+        self.assertNotIn('menu_connector', menu)
+
 
 class RepoTests(unittest.TestCase):
     """O repositorio e instalado com trusted=yes, entao a exigencia de HTTPS

@@ -93,13 +93,14 @@ options amdgpu si_support=0 cik_support=0
 EOF
 # Show the live installation wizard automatically, as gasetup does.
 if [[ -d "$root/home/fliperos" ]]; then
-    # Na midia de instalacao so existe o assistente — nao ha modo de uso live.
-    # No disco, abre a sessao escolhida e, ao sair dela, o menu de configuracao
-    # (o gasetup faz o mesmo no .bash_profile: frontend -> setup).
+    # A midia abre no MENU DE SETUP, nao no instalador: numa maquina sem cabo
+    # de rede o Wi-Fi tem de ser configurado antes, e o instalador e um item
+    # dentro do menu. No disco, abre a sessao escolhida e, ao sair dela, o
+    # mesmo menu (o gasetup faz assim no .bash_profile: frontend -> setup).
     cat > "$root/home/fliperos/.bash_profile" <<'EOF'
 if [[ -z "${DISPLAY:-}" && "$(tty)" == /dev/tty1 ]]; then
     if [[ ! -f /etc/fliperos/installed ]]; then
-        sudo /usr/local/bin/fliperos-install
+        sudo /usr/local/bin/fliperos-config
     else
         /opt/fliperos/bin/fliperos-session
         sudo /usr/local/bin/fliperos-config
@@ -115,7 +116,7 @@ fi
 cat > "$root/etc/profile.d/fliperos.sh" <<'EOF'
 if [ "$(tty 2>/dev/null)" = /dev/tty1 ]; then
     if [ ! -f /etc/fliperos/installed ]; then
-        echo "FliperOS: sudo fliperos-install (verificar monitor e instalar em disco)"
+        echo "FliperOS: sudo fliperos-config (Wi-Fi, video e instalar em disco)"
     else
         echo "Configuracao: sudo fliperos-config (sessao, video, rede, compartilhamento)"
     fi

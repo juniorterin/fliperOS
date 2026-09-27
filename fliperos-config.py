@@ -849,13 +849,63 @@ def header():
     print("=" * 52)
 
 
-def main():
-    if os.geteuid() != 0:
-        print("Execute com sudo: sudo fliperos-config")
-        return 1
-    if not installed():
-        print("Este e o sistema live. Use sudo fliperos-install pra instalar em disco;")
-        print("as opcoes de video aqui valem so ate reiniciar.")
+def run_installer():
+    subprocess.run(["/usr/local/bin/fliperos-install"])
+
+
+def menu_setup_media():
+    """Menu da midia de instalacao.
+
+    A midia abre AQUI, nao no instalador: numa maquina sem cabo de rede e
+    preciso configurar o Wi-Fi e conferir o video antes de instalar em disco.
+    Os itens que dependem de GRUB instalado ficam de fora, em vez de estarem
+    presentes e recusarem."""
+    while True:
+        header()
+        print("Midia de instalacao — configure antes de instalar.\n")
+        print("1. Rede (Wi-Fi) — necessario pra acessar por SSH")
+        print("2. Verificar o modo de video ativo")
+        print("3. Descobrir qual conector e o do CRT")
+        print("4. Calibrar geometria da imagem")
+        print("5. Instalar em disco (ou reparar instalacao existente)")
+        print("6. Compartilhamento (Samba, SSH/SFTP)")
+        print("7. Sistema e diagnostico")
+        print("8. Reiniciar / desligar")
+        print("0. Sair para o shell")
+        try:
+            choice = ask("Opcao")
+        except (KeyboardInterrupt, EOFError):
+            print()
+            return 0
+        try:
+            if choice == "1":
+                menu_network()
+            elif choice == "2":
+                subprocess.run(["/usr/local/bin/fliperos-video-check"])
+                pause()
+            elif choice == "3":
+                subprocess.run(["/usr/local/bin/fliperos-video-autodetect"])
+                pause()
+            elif choice == "4":
+                menu_geometry()
+            elif choice == "5":
+                run_installer()
+            elif choice == "6":
+                menu_sharing()
+            elif choice == "7":
+                menu_system()
+            elif choice == "8":
+                menu_power()
+            elif choice == "0":
+                return 0
+        except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+            print("Falhou: " + str(exc))
+            pause()
+        except KeyboardInterrupt:
+            print()
+
+
+def menu_installed():
     while True:
         header()
         print("1. Instalar componentes (launchers e emuladores)")
@@ -896,6 +946,13 @@ def main():
             pause()
         except KeyboardInterrupt:
             print()
+
+
+def main():
+    if os.geteuid() != 0:
+        print("Execute com sudo: sudo fliperos-config")
+        return 1
+    return menu_installed() if installed() else menu_setup_media()
 
 
 if __name__ == "__main__":

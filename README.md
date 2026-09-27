@@ -24,8 +24,11 @@ O squashfs live existe apenas como veículo do assistente: a mídia não oferece
 2. A entrada CRT usa **VGA-1**. Se o conector for outro, edite os nomes em `video=` e `drm.edid_firmware=` no GRUB. Nomes repetidos em múltiplas GPUs exigem configuração manual.
 
    **Num CRT de 15 kHz você não vai conseguir ler o menu do GRUB**, e isso é esperado: o GRUB usa modo texto VGA (720x400, cerca de 31 kHz), que vem antes do override de EDID e um monitor só-15kHz não sincroniza. O `timeout=5` do `config/grub.cfg` faz a primeira entrada iniciar sozinha, então o boot prossegue às cegas. A primeira coisa que deve aparecer legível é o splash, já em 640x240 — se ele aparecer, o override de EDID funcionou. Para *escolher* a entrada de diagnóstico, ligue um LCD temporariamente.
-3. Login: `fliperos`, senha `fliperos`. O assistente abre no TTY1. Para reabrir: `sudo fliperos-install`.
-4. Selecione a saída ativa do CRT e confirme que a imagem está visível e estável. O assistente não testa novos modos automaticamente.
+3. Login: `fliperos`, senha `fliperos`. O **menu de setup** abre no TTY1 — não o instalador. Para reabrir: `sudo fliperos-config`.
+
+   A mídia abre no setup de propósito, como o gasetup: numa máquina sem cabo de rede o Wi-Fi precisa ser configurado *antes* de qualquer coisa, e é lá que se confere o vídeo. Instalar em disco é um item **dentro** do menu, não o ponto de partida.
+
+4. Configure o Wi-Fi (item 1) se não houver cabo, confira o modo de vídeo (item 2) e só então instale (item 5). Selecione a saída ativa do CRT e confirme que a imagem está visível e estável. O assistente não testa novos modos automaticamente.
 5. Na instalação, selecione o disco por caminho, modelo, capacidade e serial. Discos montados, mídia live, swap ativa e dispositivos com dependentes ativos são recusados.
 6. Revise o plano e digite `APAGAR /dev/…` com o dispositivo exato. **O disco inteiro será apagado; não há dual boot.**
 7. O instalador extrai o squashfs, grava fstab com UUIDs, reconstrói o initramfs e instala GRUB. Defina uma senha nova e reinicie sem o pendrive.
