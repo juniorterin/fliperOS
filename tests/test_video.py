@@ -492,6 +492,89 @@ class HiddenWifiTests(unittest.TestCase):
         self.assertNotIn('Nenhuma rede encontrada', menu)
 
 
+class WizardTests(unittest.TestCase):
+    """Passos em sequencia, na ordem do gasetup: video antes de particionar."""
+
+    def test_step_order_puts_keyboard_first_and_install_last(self):
+        keys = [key for key, _, _ in config.WIZARD_STEPS]
+        self.assertEqual(keys[0], 'teclado',
+                         'teclado vem primeiro: os passos seguintes pedem senha')
+        self.assertEqual(keys[-1], 'instalar')
+        # O gasetup confirma video ANTES de particionar.
+        self.assertLess(keys.index('video'), keys.index('instalar'))
+
+    def test_every_step_has_a_callable(self):
+        for key, label, action in config.WIZARD_STEPS:
+            self.assertTrue(key and label)
+            self.assertTrue(callable(action), key)
+
+    def test_completed_steps_are_remembered(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / 'wizard-done'
+            with mock.patch.object(config, 'WIZARD_STATE', state):
+                self.assertEqual(config.wizard_done(), set())
+                config.mark_done('teclado')
+                config.mark_done('rede')
+                self.assertEqual(config.wizard_done(), {'teclado', 'rede'})
+                config.mark_done('teclado')
+                self.assertEqual(config.wizard_done(), {'teclado', 'rede'})
+
+    def test_keyboard_layouts_include_abnt2(self):
+        """O build define locale pt_BR mas o console fica em us: sem ABNT2 o
+        acento, o c-cedilha, / e ? saem errados ao digitar senha."""
+        tags = [tag for tag, _ in config.LAYOUTS]
+        self.assertIn('br:abnt2', tags)
+
+    def test_build_sets_a_keyboard_layout(self):
+        script = (ROOT / 'fliperos-mkiso.sh').read_text()
+        self.assertIn('/etc/default/keyboard', script)
+        self.assertIn('XKBLAYOUT', script)
+        self.assertIn('kbd console-setup', script)
+
+
+class VoiceTests(unittest.TestCase):
+    """A voz existe porque ao trazer um CRT a vida a tela pode nao mostrar
+    nada, e uma pergunta que so existe na tela fica sem resposta."""
+
+    def test_voice_defaults_on_for_install_media_off_once_installed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            flag = Path(directory) / 'voice'
+            marker = Path(directory) / 'installed'
+            with mock.patch.object(tui, 'VOICE_FLAG', flag), \
+                 mock.patch.object(tui, 'Path', lambda p: marker
+                                   if 'installed' in str(p) else Path(p)):
+                self.assertTrue(tui.voice_enabled())
+                marker.write_text('x')
+                self.assertFalse(tui.voice_enabled())
+
+    def test_explicit_flag_wins_over_the_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            flag = Path(directory) / 'voice'
+            with mock.patch.object(tui, 'VOICE_FLAG', flag):
+                flag.write_text('off\n')
+                self.assertFalse(tui.voice_enabled())
+                flag.write_text('on\n')
+                self.assertTrue(tui.voice_enabled())
+
+    def test_speak_is_best_effort_and_never_raises(self):
+        """Sem placa, com mixer mudo ou dispositivo ocupado, a voz falha em
+        silencio — nao pode derrubar a interface."""
+        with mock.patch.object(tui, 'voice_enabled', return_value=True), \
+             mock.patch.object(tui.shutil, 'which', return_value='/usr/bin/espeak-ng'), \
+             mock.patch.object(tui.subprocess, 'Popen', side_effect=OSError('sem audio')):
+            tui.speak('teste')
+
+    def test_speak_used_where_the_screen_may_be_unreadable(self):
+        source = (ROOT / 'fliperos-config.py').read_text()
+        grid = source.split('def confirm_mode')[1].split('def apply_profile')[0]
+        self.assertIn('tui.speak', grid)
+        video = source.split('def step_video')[1].split('def step_password')[0]
+        self.assertIn('tui.speak', video)
+
+    def test_voice_uses_brazilian_portuguese(self):
+        self.assertIn('pt-br', (ROOT / 'fliperos_tui.py').read_text())
+
+
 class ShellErrexitTests(unittest.TestCase):
     """Sob "set -e", uma funcao cujo ULTIMO comando e uma lista "&&" devolve 1
     quando a condicao e falsa. A lista em si nao aborta (o bash isenta o que

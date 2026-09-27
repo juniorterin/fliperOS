@@ -11,7 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-COPY fliperos-*.sh fliperos-*.py crt15-edid.bin crt25-edid.bin crt31-edid.bin ./
+# O glob e "fliperos*.py", nao "fliperos-*.py": o modulo compartilhado de
+# interface e fliperos_tui.py, com underscore, e o hifen nao o pegaria.
+COPY fliperos-*.sh fliperos*.py crt15-edid.bin crt25-edid.bin crt31-edid.bin ./
 COPY config/ ./config/
 COPY patches/ ./patches/
 RUN chmod +x ./*.sh

@@ -326,10 +326,15 @@ def confirm_mode(width, height, refresh, geometry=None):
                      "seguinte.\n\nMostrar a grade agora?"
                      % (width, height, refresh), default_no=False):
         return False
+    # A voz e o unico canal que sobrevive a uma tela preta: se o modo nao
+    # sincronizar, a pergunta seguinte fica invisivel.
+    tui.speak("Mostrando a grade de teste. Se a tela ficar preta, espere e "
+              "responda nao na proxima pergunta.")
     if not show_grid(width, height, refresh,
                      "Teste %sx%s@%s" % (width, height, refresh), geometry):
         tui.message("O switchres nao conseguiu aplicar esse modo.")
         return False
+    tui.speak("A grade apareceu inteira e estavel? Responda sim ou nao.")
     return tui.yesno("A grade apareceu inteira e estavel?", default_no=False)
 
 
@@ -590,6 +595,25 @@ def wifi_device():
     return None
 
 
+HIDDEN_TAG = "__oculta__"
+
+
+def wifi_connect(ssid, secret, hidden=False):
+    """Conecta e devolve (ok, mensagem).
+
+    'hidden yes' e obrigatorio pra rede oculta: ela nao anuncia o SSID, e sem
+    essa flag o NetworkManager simplesmente nao acha o ponto de acesso."""
+    args = ["nmcli", "device", "wifi", "connect", ssid]
+    if secret:
+        args += ["password", secret]
+    if hidden:
+        args += ["hidden", "yes"]
+    result = subprocess.run(args, text=True, capture_output=True)
+    if result.returncode:
+        return False, (result.stderr or result.stdout).strip()
+    return True, ssid
+
+
 def menu_wifi():
     """Wi-Fi via nmcli. O gasetup usa iwctl/iwd porque e Arch; aqui o
     NetworkManager ja persiste a conexao, sem editar arquivo de rede."""
@@ -604,33 +628,48 @@ def menu_wifi():
     networks, seen = [], set()
     for line in out.splitlines():
         fields = nmcli_fields(line)
-        # SSID vazio e rede oculta: nao da pra listar pelo nome.
+        # SSID vazio: rede oculta aparece na varredura sem nome, entao nao da
+        # pra lista-la — o item de rede oculta abaixo cobre esse caso.
         if not fields or not fields[0] or fields[0] in seen:
             continue
         seen.add(fields[0])
         networks.append((fields[0], fields[1] if len(fields) > 1 else "?",
                          fields[2] if len(fields) > 2 else ""))
-    if not networks:
-        tui.message("Nenhuma rede encontrada.")
-        return
     options = [(ssid, "sinal %s%%%s" % (signal, "" if security else "  (aberta)"))
                for ssid, signal, security in networks]
+    # Sempre oferecido, mesmo sem nenhuma rede visivel.
+    options.append((HIDDEN_TAG, "Rede oculta — digitar o SSID"))
     chosen = tui.menu("Interface: %s" % device, options, title="Redes Wi-Fi")
     if chosen is None:
         return
-    security = next(s for ssid, _, s in networks if ssid == chosen)
-    args = ["nmcli", "device", "wifi", "connect", chosen]
-    if security:
-        secret = tui.password("Senha de " + chosen, title="Wi-Fi")
-        if not secret:
+
+    hidden = chosen == HIDDEN_TAG
+    if hidden:
+        ssid = tui.inputbox("Nome da rede (SSID), exatamente como configurado\n"
+                            "no roteador — maiusculas e minusculas contam:",
+                            title="Rede oculta")
+        if not ssid:
             return
-        args += ["password", secret]
-    result = subprocess.run(args, text=True, capture_output=True)
-    if result.returncode:
-        tui.message("Falhou:\n\n" + (result.stderr or result.stdout).strip())
+        # Numa rede oculta a varredura nao diz se ha senha, entao a pergunta
+        # nao pode ser inferida: deixar em branco conecta como rede aberta.
+        secret = tui.password("Senha de %s\n\n(em branco = rede aberta)" % ssid,
+                              title="Rede oculta")
+        if secret is None:
+            return
+    else:
+        ssid = chosen
+        secret = ""
+        if next(s for name, _, s in networks if name == chosen):
+            secret = tui.password("Senha de " + ssid, title="Wi-Fi")
+            if secret is None:
+                return
+
+    ok, detail = wifi_connect(ssid, secret, hidden=hidden)
+    if not ok:
+        tui.message("Falhou:\n\n" + detail)
     else:
         tui.message("Conectado em %s.\n\nO NetworkManager reconecta sozinho no boot."
-                    % chosen)
+                    % ssid)
 
 
 def menu_regdom():
@@ -802,8 +841,46 @@ def menu_collect_logs():
                 "\\\\<ip>\\FliperOS\\logs  ou  sftp fliperos@<ip>" % bundle)
 
 
+def menu_voice():
+    """A voz narra os passos criticos pra quem esta com a tela ilegivel.
+    O teste desmuta o mixer antes de falar: ALSA mudo faz a voz falhar em
+    silencio, e ai a culpa cai na feature e nao no volume."""
+    while True:
+        estado = "ligada" if tui.voice_enabled() else "desligada"
+        chosen = tui.menu("A voz narra os passos de video e a configuracao\n"
+                          "inicial — serve pra quando a tela nao mostra nada.\n\n"
+                          "Estado: %s" % estado,
+                          [("testar", "Testar a voz agora"),
+                           ("ligar", "Ligar"),
+                           ("desligar", "Desligar")],
+                          title="Voz")
+        if chosen is None:
+            return
+        if chosen == "testar":
+            for control in ("Master", "PCM", "Speaker"):
+                quiet("amixer", "sset", control, "80%", "unmute")
+            if not shutil.which("espeak-ng"):
+                tui.message("espeak-ng nao esta instalado.")
+                continue
+            # Fala direto, sem passar pelo voice_enabled(), pra que o teste
+            # funcione mesmo com a voz desligada.
+            subprocess.run(["espeak-ng", "-v", "pt-br", "-s", "150",
+                            "Teste de voz do FliperOS. Se voce ouviu isso, "
+                            "a narracao vai funcionar."], check=False)
+            if not tui.yesno("Voce ouviu a voz?", default_no=False):
+                tui.message("Sem audio.\n\nConfira o cabo, e o volume em\n"
+                            "Sistema > alsamixer. A voz e opcional: todos os\n"
+                            "passos funcionam sem ela.")
+        elif chosen == "ligar":
+            tui.set_voice(True)
+            tui.speak("Voz ligada.")
+        elif chosen == "desligar":
+            tui.set_voice(False)
+
+
 def menu_system():
     options = [("senha", "Trocar senha do fliperos"),
+               ("voz", "Voz (narracao dos passos)"),
                ("usb", "Montar pendrive (copiar ROMs)"),
                ("log", "Nivel de log (diagnostico)"),
                ("coletar", "Reunir logs num arquivo"),
@@ -814,6 +891,8 @@ def menu_system():
             return
         if chosen == "senha":
             menu_password()
+        elif chosen == "voz":
+            menu_voice()
         elif chosen == "usb":
             menu_usb()
         elif chosen == "log":
@@ -850,6 +929,147 @@ def status_line():
     return "%s (%s)%s" % (host, ", ".join(addrs) if addrs else "sem rede", usage)
 
 
+# ════════════════════════════════════════════════════════════
+#  Wizard em passos (midia de instalacao)
+# ════════════════════════════════════════════════════════════
+WIZARD_STATE = ETC / "wizard-done"
+KEYBOARD_CONF = Path("/etc/default/keyboard")
+LAYOUTS = [("br:abnt2", "Portugues do Brasil (ABNT2)"),
+           ("br:", "Portugues do Brasil (sem ABNT2)"),
+           ("us:intl", "Ingles (EUA) internacional, com acentos"),
+           ("us:", "Ingles (EUA)")]
+
+
+def wizard_done():
+    if not WIZARD_STATE.is_file():
+        return set()
+    return {line.strip() for line in WIZARD_STATE.read_text().splitlines() if line.strip()}
+
+
+def mark_done(step):
+    done = wizard_done() | {step}
+    WIZARD_STATE.write_text("\n".join(sorted(done)) + "\n")
+
+
+def current_layout():
+    if not KEYBOARD_CONF.is_file():
+        return ""
+    text = KEYBOARD_CONF.read_text()
+    layout = re.search(r'XKBLAYOUT="([^"]*)"', text)
+    variant = re.search(r'XKBVARIANT="([^"]*)"', text)
+    return "%s:%s" % (layout.group(1) if layout else "",
+                      variant.group(1) if variant else "")
+
+
+def step_keyboard():
+    """Primeiro passo de proposito: o layout errado atrapalha digitar senha de
+    Wi-Fi e do sistema, que sao os passos seguintes."""
+    chosen = tui.menu("O layout atual e: %s\n\nUm layout errado troca acento, c-cedilha,\n"
+                      "/ e ? de lugar — e os proximos passos pedem senha."
+                      % (current_layout() or "desconhecido"),
+                      LAYOUTS, title="Passo 1 de 5 — Teclado", default=current_layout())
+    if chosen is None:
+        return False
+    layout, _, variant = chosen.partition(":")
+    text = KEYBOARD_CONF.read_text() if KEYBOARD_CONF.is_file() else ""
+    for key, value in (("XKBLAYOUT", layout), ("XKBVARIANT", variant)):
+        pattern = key + '="[^"]*"'
+        line = '%s="%s"' % (key, value)
+        text = (re.sub(pattern, line, text) if re.search(pattern, text)
+                else text.rstrip("\n") + "\n" + line + "\n")
+    KEYBOARD_CONF.write_text(text)
+    # setupcon aplica no console agora; sem isso so valeria no proximo boot.
+    quiet("setupcon", "--save")
+    tui.message("Teclado: %s\n\nTeste digitando aqui se quiser conferir." % chosen)
+    return True
+
+
+def step_network():
+    if network_summary() != "sem endereco IPv4":
+        if not tui.yesno("Ja existe rede:\n\n%s\n\nConfigurar Wi-Fi mesmo assim?"
+                         % network_summary()):
+            return True
+    menu_wifi()
+    return True
+
+
+def step_video():
+    """O gasetup confirma o video ANTES de particionar, e por bom motivo: sem
+    imagem estavel nao da pra conduzir uma instalacao que apaga disco."""
+    tui.speak("Passo de video. Vamos medir a frequencia do monitor.")
+    if not tui.yesno("Vamos medir o modo de video ativo.\n\n"
+                     "O que importa e a frequencia horizontal ficar entre\n"
+                     "15 e 16 kHz, e o conector ativo ser o do seu CRT.\n\n"
+                     "Rodar a medicao agora?", default_no=False):
+        return True
+    tui.run_visible(["/usr/local/bin/fliperos-video-check"], "Modo de video ativo")
+    tui.speak("A medicao mostrou entre 15 e 16 quilohertz no conector do "
+              "seu monitor? Responda sim ou nao.")
+    if tui.yesno("A medicao mostrou 15 a 16 kHz no conector do CRT?", default_no=False):
+        return True
+    if tui.yesno("Quer tentar descobrir qual conector e o do CRT?", default_no=False):
+        tui.speak("Vou ligar e desligar cada saida de video. Diga qual delas "
+                  "acendeu o seu monitor.")
+        tui.run_visible(["/usr/local/bin/fliperos-video-autodetect"],
+                        "Descobrindo o conector do CRT")
+    return True
+
+
+def step_password():
+    """A imagem sai com fliperos/fliperos e com SSH ligado: trocar a senha
+    antes de instalar evita a maquina nascer acessivel com senha publica."""
+    if not tui.yesno("A senha padrao e 'fliperos', e o SSH esta ligado.\n\n"
+                     "Trocar a senha agora?", default_no=False):
+        return True
+    menu_password()
+    return True
+
+
+def step_install():
+    if not tui.yesno("Instalar em disco agora?\n\n"
+                     "O instalador vai pedir o conector do CRT e exigir que\n"
+                     "voce digite APAGAR com o dispositivo exato. O disco\n"
+                     "escolhido e apagado inteiro — nao ha dual boot."):
+        return True
+    tui.run_visible(["/usr/local/bin/fliperos-install"], "Instalacao", pause_after=False)
+    return True
+
+
+WIZARD_STEPS = [("teclado", "Teclado", step_keyboard),
+                ("rede", "Rede (Wi-Fi)", step_network),
+                ("video", "Confirmar o CRT", step_video),
+                ("senha", "Senha do sistema", step_password),
+                ("instalar", "Instalar em disco", step_install)]
+
+
+def wizard(resume=True):
+    """Passos em sequencia, na ordem do gasetup: video antes de particionar, e
+    senha como passo proprio. Passo ja concluido e pulado ao reabrir, como o
+    gasetup faz ao checar se o monitor ja esta configurado."""
+    done = wizard_done() if resume else set()
+    total = len(WIZARD_STEPS)
+    for index, (key, label, action) in enumerate(WIZARD_STEPS, 1):
+        if key in done:
+            continue
+        titled = "Passo %d de %d — %s" % (index, total, label)
+        tui.speak("Passo %d de %d: %s." % (index, total, label))
+        if not tui.yesno("%s\n\n%s\n\nSeguir com este passo?\n\n"
+                         "(NAO pula para o proximo)" % (titled, label),
+                         title="Configuracao inicial", default_no=False):
+            continue
+        if action():
+            mark_done(key)
+    tui.speak("Configuracao inicial concluida.")
+    tui.message("Passos concluidos.\n\nO menu de setup segue disponivel para\n"
+                "ajustes e para reabrir qualquer passo.")
+
+
+def menu_wizard_reset():
+    if tui.yesno("Refazer todos os passos desde o inicio?"):
+        WIZARD_STATE.unlink(missing_ok=True)
+        wizard(resume=False)
+
+
 def menu_setup_media():
     """Menu da midia de instalacao.
 
@@ -857,7 +1077,9 @@ def menu_setup_media():
     preciso configurar o Wi-Fi e conferir o video antes de instalar em disco.
     Os itens que dependem de GRUB instalado ficam de fora, em vez de estarem
     presentes e recusarem."""
-    options = [("rede", "Rede (Wi-Fi) — necessario pra acessar por SSH"),
+    options = [("wizard", "Configuracao inicial (passo a passo)"),
+               ("teclado", "Teclado"),
+               ("rede", "Rede (Wi-Fi) — necessario pra acessar por SSH"),
                ("video", "Verificar o modo de video ativo"),
                ("detectar", "Descobrir qual conector e o do CRT"),
                ("geometria", "Calibrar geometria da imagem"),
@@ -867,13 +1089,18 @@ def menu_setup_media():
                ("energia", "Reiniciar / desligar"),
                ("shell", "Sair para o shell")]
     while True:
-        chosen = tui.menu("%s\n\nMidia de instalacao — configure antes de instalar."
-                          % status_line(), options, title="FliperOS — setup",
-                          cancel="Sair")
+        pending = len(WIZARD_STEPS) - len(wizard_done() & {k for k, _, _ in WIZARD_STEPS})
+        chosen = tui.menu("%s\n\nMidia de instalacao — %d passo(s) pendente(s)."
+                          % (status_line(), pending), options,
+                          title="FliperOS — setup", cancel="Sair")
         if chosen is None or chosen == "shell":
             return 0
         try:
-            if chosen == "rede":
+            if chosen == "wizard":
+                menu_wizard_reset() if pending == 0 else wizard()
+            elif chosen == "teclado":
+                step_keyboard()
+            elif chosen == "rede":
                 menu_network()
             elif chosen == "video":
                 tui.run_visible(["/usr/local/bin/fliperos-video-check"],

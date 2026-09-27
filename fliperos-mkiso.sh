@@ -226,6 +226,7 @@ apt-get install -y --no-install-recommends \
   libdrm-dev libgbm-dev libxrandr-dev libxi-dev libxext-dev libfontconfig1-dev \
   joystick dialog whiptail alsa-utils linux-firmware \
   dkms linux-headers-generic evtest \
+  kbd console-setup \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 pciutils libdrm-tests edid-decode squashfs-tools \
   samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
@@ -316,6 +317,18 @@ fi
 
 locale-gen pt_BR.UTF-8
 update-locale LANG=pt_BR.UTF-8
+
+# O locale sozinho NAO define o layout do teclado: sem isto o console fica em
+# "us", e num ABNT2 acento, c-cedilha, / e ? saem errados — justamente ao
+# digitar senha. /etc/default/keyboard e o mecanismo do Ubuntu e vale pro
+# console e pro Xorg de uma vez; o wizard troca por aqui.
+cat > /etc/default/keyboard << 'KEYBOARD'
+XKBMODEL="pc105"
+XKBLAYOUT="br"
+XKBVARIANT="abnt2"
+XKBOPTIONS=""
+BACKSPACE="guess"
+KEYBOARD
 ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
 dpkg-reconfigure -f noninteractive tzdata
 

@@ -64,6 +64,45 @@ MAX_WIDTH = 72
 MAX_HEIGHT = 20
 
 
+# ── Voz ──────────────────────────────────────────────────────
+# Narracao falada dos passos criticos. A razao e concreta: ao trazer um CRT a
+# vida a tela pode nao mostrar NADA, e uma pergunta que so existe na tela fica
+# sem resposta. O GroovyArcade mantem o livecd-talk do archiso habilitado (o
+# gasetup em si nao narra nada); aqui a voz e usada onde ela resolve o
+# problema, em vez de anunciar o boot.
+VOICE_FLAG = Path("/etc/fliperos/voice")
+
+
+def voice_enabled():
+    """Ligada por padrao na midia de instalacao, que e quando a tela pode
+    estar ilegivel; no sistema instalado ela incomoda mais do que ajuda."""
+    if VOICE_FLAG.is_file():
+        return VOICE_FLAG.read_text().strip().lower() not in ("0", "off", "nao", "no")
+    return not Path("/etc/fliperos/installed").is_file()
+
+
+def set_voice(on):
+    VOICE_FLAG.parent.mkdir(parents=True, exist_ok=True)
+    VOICE_FLAG.write_text("on\n" if on else "off\n")
+
+
+def speak(text, wait=False):
+    """Fala em pt-br, sempre best-effort: sem placa, com mixer mudo ou com o
+    dispositivo ocupado, isso falha em silencio e nao pode travar a interface."""
+    if not voice_enabled() or not shutil.which("espeak-ng"):
+        return
+    args = ["espeak-ng", "-v", "pt-br", "-s", "150", text]
+    try:
+        if wait:
+            subprocess.run(args, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=30)
+        else:
+            subprocess.Popen(args, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def available():
     return shutil.which("whiptail") is not None
 
