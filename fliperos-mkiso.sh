@@ -213,6 +213,7 @@ apt-get install -y --no-install-recommends \
   openssh-server network-manager wpasupplicant iw python3 pciutils libdrm-tests edid-decode squashfs-tools \
   samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
   plymouth plymouth-label fonts-dejavu-core openbox \
+  lxde-core lxterminal \
   espeak-ng
 
 systemctl enable ssh
@@ -249,6 +250,16 @@ SMB
 systemctl enable smbd
 systemctl enable nmbd
 systemctl enable avahi-daemon
+
+# Painel do LXDE em resolucao de CRT: o padrao de 26px consome 11% das 240
+# linhas, e num tubo esses pixels aparecem dobrados. 16px mantem o painel
+# utilizavel sem engolir a area de trabalho. Editado no lugar em vez de
+# substituir o arquivo, pra nao divergir do default a cada atualizacao.
+LXPANEL=/etc/xdg/lxpanel/LXDE/panels/panel
+if [[ -f "$LXPANEL" ]]; then
+  sed -i -e 's/^\([[:space:]]*\)height=26$/\1height=16/' \
+         -e 's/^\([[:space:]]*\)iconsize=[0-9]*$/\1iconsize=16/' "$LXPANEL"
+fi
 
 locale-gen pt_BR.UTF-8
 update-locale LANG=pt_BR.UTF-8
@@ -401,15 +412,28 @@ splash_mode_geometry() {
   esac
 }
 
+# O Ubuntu 24.04 NAO traz plymouth-set-default-theme: o pacote plymouth
+# fornece apenas /usr/bin/plymouth e /usr/sbin/plymouthd. O tema padrao e um
+# alternative — mesmo mecanismo que o install.sh do tema Evangelion usa.
+set_default_plymouth_theme() {
+  local theme="$1"
+  local file="/usr/share/plymouth/themes/${theme}/${theme}.plymouth"
+  chroot "$CHROOT_DIR" test -f "$file" \
+    || err "Tema de splash ausente no chroot: $file"
+  chroot "$CHROOT_DIR" update-alternatives --install \
+      /usr/share/plymouth/themes/default.plymouth default.plymouth "$file" 100 \
+    && chroot "$CHROOT_DIR" update-alternatives --set default.plymouth "$file" \
+    || err "Nao foi possivel definir $theme como tema padrao do Plymouth"
+}
+
 install_splash_theme() {
   if [[ "$SPLASH_THEME" == none ]]; then
     warn "Splash desabilitado (--splash none); boot em modo texto"
     return
   fi
   if [[ "$SPLASH_THEME" == fliperos ]]; then
-    chroot "$CHROOT_DIR" plymouth-set-default-theme fliperos \
-      && ok "Splash: tema fliperos (texto renderizado, sem asset binario)" \
-      || err "plymouth-set-default-theme falhou; splash nao entraria no initramfs"
+    set_default_plymouth_theme fliperos
+    ok "Splash: tema fliperos (texto renderizado, sem asset binario)"
     return
   fi
 
@@ -435,6 +459,9 @@ install_splash_theme() {
   cat > "$CHROOT_DIR/tmp/install-splash.sh" << SPLASHSCRIPT
 #!/bin/bash
 set -e
+# O configure_chroot limpa /var/lib/apt/lists, entao sem este update o
+# apt nao acha o imagemagick.
+apt-get update -qq
 apt-get install -y --no-install-recommends imagemagick
 dest=/usr/share/plymouth/themes/evangelion-ui
 mkdir -p "\$dest"
@@ -446,16 +473,22 @@ tar xzf eva/images.tar.gz -C "\$dest/"
 # ${geom} e o que corrige a proporcao num tubo de pixel nao-quadrado.
 mogrify -resize '${geom}!' "\$dest"/*.png
 sed -i 's|EVANGELION_UI_PATH|/usr|g' "\$dest/evangelion-ui.plymouth"
-plymouth-set-default-theme evangelion-ui
 apt-get remove -y --purge imagemagick
 apt-get autoremove -y -qq
 rm -rf /tmp/eva /tmp/evangelion-ui.tar.gz
 du -sh "\$dest"
 SPLASHSCRIPT
   chmod +x "$CHROOT_DIR/tmp/install-splash.sh"
-  chroot "$CHROOT_DIR" /tmp/install-splash.sh >> "$LOG_FILE" 2>&1 \
-    && ok "Splash: Evangelion UI, 202 frames reescalados para $geom" \
-    || err "Instalacao do splash Evangelion falhou"
+  if chroot "$CHROOT_DIR" /tmp/install-splash.sh >> "$LOG_FILE" 2>&1; then
+    set_default_plymouth_theme evangelion-ui
+    ok "Splash: Evangelion UI, 202 frames reescalados para $geom"
+  else
+    # O $LOG_FILE fica DENTRO do container e desaparece com --rm, entao o
+    # motivo da falha tem de ir pra saida padrao ou nao ha como diagnosticar.
+    echo -e "${DIM}--- fim do log do chroot ---${RST}" >&2
+    tail -25 "$LOG_FILE" >&2 || true
+    err "Instalacao do splash Evangelion falhou"
+  fi
 }
 
 # ── Compilar GroovyMAME no chroot ─────────────────────────────
