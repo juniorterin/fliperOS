@@ -377,6 +377,15 @@ def repair_packages(disk):
         lock.close()
 
 
+def repair_shell(disk):
+    """Caso 4: shell root dentro do sistema instalado, via chroot a partir da
+    midia live (equivalente ao rescue_mode do gasetup). Serve pro que os casos
+    fechados nao cobrem — reinstalar um pacote, editar fstab, ver journal."""
+    with mounted_target(disk, chroot=True) as target:
+        print("Shell root em " + disk + " (via chroot). Digite exit pra sair e desmontar.")
+        subprocess.run(["chroot", str(target), "/bin/bash", "--login"])
+
+
 def preflight():
     """Checagens comuns a qualquer operacao que monta/faz chroot num disco
     real: root, boot live genuino (nao Docker/WSL2 — ver aviso no
@@ -504,6 +513,7 @@ def menu_repair(found):
     print("1. GPU trocada (reconfigurar conector e parametros de boot)")
     print("2. Configuracao padrao de launcher/emuladores (restaura arquivos originais)")
     print("3. Pacotes/binarios corrompidos ou faltando (reextrai do sistema live)")
+    print("4. Shell root dentro da instalacao (chroot, pra reparo manual)")
     print("0. Cancelar")
     what = input("Opcao: ")
     if what == "1":
@@ -521,6 +531,8 @@ def menu_repair(found):
             return 0
         repair_packages(disk)
         print("Pacotes reinstalados nesse disco. Reinicie sem a midia live para validar.")
+    elif what == "4":
+        repair_shell(disk)
     else:
         print("Cancelado.")
     return 0

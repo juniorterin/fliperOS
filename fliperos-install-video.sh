@@ -28,6 +28,24 @@ install -Dm644 "$src/$EDID_SRC" "$root/lib/firmware/edid/crt15.bin"
 install -Dm755 "$src/fliperos-video-check.py" "$root/usr/local/bin/fliperos-video-check"
 install -Dm755 "$src/fliperos-video-autodetect.py" "$root/usr/local/bin/fliperos-video-autodetect"
 install -Dm755 "$src/fliperos-install.py" "$root/usr/local/bin/fliperos-install"
+install -Dm755 "$src/fliperos-config.py" "$root/usr/local/bin/fliperos-config"
+
+# Os TRES perfis vao pra imagem, nao so o escolhido no build: fliperos-config
+# troca de perfil no sistema instalado (regravando o EDID e o initramfs), o que
+# tira a escolha de frequencia do momento do build. O perfil ativo fica aqui.
+printf '%s\n' "$profile" > "$root/etc/fliperos/profile"
+install -Dm644 "$src/crt15-edid.bin"        "$root/etc/fliperos/profiles/15khz/edid.bin"
+install -Dm644 "$src/config/switchres.ini"  "$root/etc/fliperos/profiles/15khz/switchres.ini"
+install -Dm644 "$src/config/xorg.conf"      "$root/etc/fliperos/profiles/15khz/xorg.conf"
+install -Dm644 "$src/config/mame.ini"       "$root/etc/fliperos/profiles/15khz/mame.ini"
+install -Dm644 "$src/crt25-edid.bin"             "$root/etc/fliperos/profiles/25khz/edid.bin"
+install -Dm644 "$src/config/switchres-25khz.ini" "$root/etc/fliperos/profiles/25khz/switchres.ini"
+install -Dm644 "$src/config/xorg-25khz.conf"     "$root/etc/fliperos/profiles/25khz/xorg.conf"
+install -Dm644 "$src/config/mame-25khz.ini"      "$root/etc/fliperos/profiles/25khz/mame.ini"
+install -Dm644 "$src/crt31-edid.bin"             "$root/etc/fliperos/profiles/31khz/edid.bin"
+install -Dm644 "$src/config/switchres-31khz.ini" "$root/etc/fliperos/profiles/31khz/switchres.ini"
+install -Dm644 "$src/config/xorg-31khz.conf"     "$root/etc/fliperos/profiles/31khz/xorg.conf"
+install -Dm644 "$src/config/mame-31khz.ini"      "$root/etc/fliperos/profiles/31khz/mame.ini"
 install -Dm755 "$src/config/fliperos-edid-hook" "$root/etc/initramfs-tools/hooks/fliperos-edid"
 install -Dm644 "$src/$SR_SRC" "$root/etc/fliperos/switchres.ini"
 install -Dm644 "$src/$SR_SRC" "$root/etc/switchres.ini"
@@ -60,12 +78,15 @@ options amdgpu si_support=0 cik_support=0
 EOF
 # Show the live installation wizard automatically, as gasetup does.
 if [[ -d "$root/home/fliperos" ]]; then
+    # Instalado: sai do launcher e cai no menu de configuracao, como o
+    # gasetup faz no .bash_profile do usuario arcade (frontend -> setup).
     cat > "$root/home/fliperos/.bash_profile" <<'EOF'
 if [[ -z "${DISPLAY:-}" && "$(tty)" == /dev/tty1 ]]; then
     if [[ ! -f /etc/fliperos/installed ]]; then
         sudo /usr/local/bin/fliperos-install
     else
         /opt/fliperos/bin/fliperos-launcher
+        sudo /usr/local/bin/fliperos-config
     fi
 fi
 EOF
@@ -78,6 +99,7 @@ fi
 cat > "$root/etc/profile.d/fliperos.sh" <<'EOF'
 if [ "$(tty 2>/dev/null)" = /dev/tty1 ]; then
     echo "FliperOS: sudo fliperos-install (monitor / live / instalar em disco)"
+    echo "Configuracao: sudo fliperos-config (video, rede, compartilhamento)"
     echo "Diagnostico: sudo fliperos-video-check"
 fi
 EOF

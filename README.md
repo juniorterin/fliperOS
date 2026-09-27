@@ -35,6 +35,7 @@ O assistente procura, a cada abertura, discos que já tenham um FliperOS instala
   1. **GPU trocada** — reconfigura o conector detectado agora (com a placa nova) e regrava os parâmetros de boot/EDID e o initramfs do disco.
   2. **Launcher/emulador mal configurado** — restaura os arquivos de configuração (Xorg, MAME, Switchres, RetroArch, os scripts `fliperos-x11-run`/`fliperos-kms-run`/`fliperos-launcher`) para o estado de fábrica dessa mídia live, mantendo o conector que o disco já tinha salvo. Recusa restaurar se a mídia live for de outro perfil de monitor (15/25/31 kHz) do que o disco instalado.
   3. **Pacotes/binários corrompidos ou faltando** — reextrai o squashfs da mídia live por cima do disco, pulando ROMs, `/home`, identidade SSH/machine-id, `/boot`, `fstab` e a configuração de vídeo/launcher atual (isso é o que o caso 2 cuida).
+  4. **Shell root dentro da instalação** — entra por `chroot` no sistema do disco, com `/dev`, `/proc`, `/sys` e `/run` propagados, para o que os casos fechados não cobrem (reinstalar um pacote, editar `fstab`, ler o journal). Desmonta tudo ao sair. Equivale ao `rescue_mode` do gasetup.
 
 Listar sem nenhuma escrita:
 
@@ -64,15 +65,22 @@ O boot usa `video=VGA-1:e drm.edid_firmware=VGA-1:edid/crt15.bin`. O EDID está 
 
 ## Perfis de monitor (15/25/31 kHz)
 
-O build aceita `--monitor-profile 15khz|25khz|31khz` (padrão `15khz`) — uma
-ISO por perfil, escolhido no momento do build, não na instalação. Cada
-perfil troca o EDID (`crt15-edid.bin`/`crt25-edid.bin`/`crt31-edid.bin`),
-o `xorg.conf`, o `mame.ini` e o `switchres.ini` instalados, mas o nome do
-arquivo de EDID *dentro* da imagem continua sendo `crt15.bin` nos três
-casos — só o conteúdo muda. Isso é proposital: `fliperos-install.py`,
+O build aceita `--monitor-profile 15khz|25khz|31khz` (padrão `15khz`), que
+define o perfil **ativo** na imagem. Cada perfil troca o EDID
+(`crt15-edid.bin`/`crt25-edid.bin`/`crt31-edid.bin`), o `xorg.conf`, o
+`mame.ini` e o `switchres.ini` instalados, mas o nome do arquivo de EDID
+*dentro* da imagem continua sendo `crt15.bin` nos três casos — só o
+conteúdo muda. Isso é proposital: `fliperos-install.py`,
 `config/grub.cfg`, `config/fliperos-edid-hook` e as ferramentas de
 auditoria em `tools/` referenciam esse nome fixo e não precisam saber
 qual perfil foi escolhido.
+
+Os **três** perfis vão para a imagem, em
+`/etc/fliperos/profiles/{15khz,25khz,31khz}/`, e o perfil ativo fica em
+`/etc/fliperos/profile`. Isso tira a frequência da decisão de build:
+`fliperos-config` troca de perfil no sistema instalado, regravando EDID,
+configs e initramfs. A flag do build passa a ser só o padrão de fábrica da
+ISO, não uma amarra.
 
 As faixas de frequência vêm direto do código do Switchres
 (`monitor.cpp`, presets `arcade_15`/`arcade_25`/`arcade_31`), não são
@@ -95,6 +103,59 @@ Switchres não define linhas entrelaçadas) — `mame-31khz.ini` e
 `switchres-31khz.ini` já vêm com `interlace 0`.
 
 Os parâmetros SI/CIK selecionam `radeon` apenas nas famílias compartilhadas com `amdgpu`, sem blacklist geral. Identifique o chip por PCI ID e driver real. A R7 240 normalmente é Oland, não Cape Verde.
+
+## Menu de configuração do sistema instalado
+
+`fliperos-config` fica no sistema depois da instalação, em vez de congelar
+tudo no build. É o equivalente ao `mainmenu` do gasetup: no `.bash_profile`
+da tty1, o launcher roda primeiro e, ao sair dele, cai neste menu.
+
+```bash
+sudo fliperos-config
+```
+
+- **Vídeo** — trocar o perfil de monitor (15/25/31 kHz); gerar uma
+  **resolução customizada** fora dos três perfis, com `switchres -e`
+  escrevendo um EDID novo e `update-initramfs` em seguida; orientação do
+  monitor para gabinete vertical (*tate*), que ajusta `ror`/`rol` do MAME,
+  `fbcon=rotate:` e `panel_orientation` de uma vez; trocar o conector
+  (troca de GPU ou cabo) sem reinstalar; calibrar geometria (`h_size`,
+  `h_shift`, `v_shift` no `switchres.ini`).
+- **Rede** — Wi-Fi via `nmcli` (o NetworkManager persiste a conexão sozinho,
+  sem editar arquivo de rede) e domínio regulatório, porque país errado
+  derruba canais.
+- **Compartilhamento** — ligar/desligar Samba e SSH, ver por onde acessar.
+- **Sistema e diagnóstico** — senha (Unix e Samba), montar pendrive de ROMs,
+  nível de log, reunir logs num arquivo, shell root.
+
+Nenhum modo novo é gravado sem confirmação visual: antes de escrever o EDID,
+a carta de teste (`grid`) é exibida no modo pedido e a pergunta é se a grade
+apareceu inteira. Responder não aborta sem alterar nada — é o que evita
+reiniciar numa tela preta. O `grid` é um target separado do switchres que
+`make all` não cobre e `make install` não instala, então o build compila e
+instala ele explicitamente (precisa de SDL2_ttf).
+
+## Acesso pela rede (Samba, SSH/SFTP)
+
+O GroovyArcade expõe `/home/arcade/shared` por Samba e habilita `smb`, `nmb`
+e `sshd`; **não** traz servidor FTP — transferência de arquivo é SFTP por
+cima do SSH. O FliperOS segue o mesmo desenho:
+
+| Serviço | Unidade | Para quê |
+| --- | --- | --- |
+| Samba | `smbd`, `nmbd` | `\\<ip>\FliperOS` → `/opt/fliperos` (ROMs, BIOS, saves, logs) |
+| SSH/SFTP | `ssh` | shell remoto e `sftp fliperos@<ip>` |
+| Avahi | `avahi-daemon` | descoberta por `fliperos.local` |
+
+`nmbd` responde por nome NetBIOS (`\\FLIPEROS` no Explorer do Windows) e o
+Avahi cobre mDNS; o GroovyArcade não traz mDNS, e é por isso que o menu dele
+mostra o IP no título — aqui o IP também aparece, mas o nome costuma bastar.
+
+Uma diferença deliberada: o share do GroovyArcade é `public = yes`, gravável
+sem senha. Aqui a escrita exige o usuário `fliperos`, porque a mesma imagem
+sobe SSH com senha padrão — um share aberto somaria dois caminhos de escrita
+não autenticados na mesma máquina. A senha do Samba é definida junto com a do
+sistema em `fliperos-config` → Sistema → senha.
 
 ## Diagnóstico do modo ativo
 
@@ -188,7 +249,8 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 | --- | --- |
 | `fliperos-mkiso.sh` | Build de uma ISO Ubuntu nova |
 | `fliperos-setup.sh` | Setup em Ubuntu existente; `--dry-run` não escreve |
-| `fliperos-install.py` | Assistente live/instalação em disco |
+| `fliperos-install.py` | Assistente live/instalação em disco, reparo e shell de resgate |
+| `fliperos-config.py` | Menu de configuração do sistema instalado (vídeo, rede, compartilhamento) |
 | `fliperos-install-video.sh` | Assets compartilhados entre setup e ISO |
 | `fliperos-video-check.py` | Consulta de modo ativo DRM |
 | `fliperos-video-autodetect.py` | Descobre o conector do CRT ligando/desligando cada saida analogica |
@@ -196,7 +258,7 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 | `config/` | Xorg, Switchres, RetroArch, GRUB, serviço, hook EDID e launchers |
 | `config/fliperos-kms-run` | Lança RetroArch/Flycast direto em KMS/DRM, sem Xorg |
 | `config/{xorg,mame,switchres}-{25,31}khz.{conf,ini}` | Variantes de config por perfil de monitor (padrão 15kHz usa os arquivos sem sufixo) |
-| `crt{15,25,31}-edid.bin` | EDID customizado por perfil de monitor — só um vai pra ISO, conforme `--monitor-profile` |
+| `crt{15,25,31}-edid.bin` | EDID customizado por perfil — os três vão pra ISO; `--monitor-profile` escolhe qual fica ativo |
 | `patches/kernel-15khz/` | Patches D0023R vendorizados pro kernel opcional `--with-15khz-kernel` |
 | `tools/repack-iso.sh` | Revisão da ISO 0.5 em container de auditoria |
 | `tests/test_video.py` | Testes de frequência, EDID e discos |

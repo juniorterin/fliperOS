@@ -17,6 +17,7 @@ def load(name, filename):
 video = load('video', 'fliperos-video-check.py')
 installer = load('installer', 'fliperos-install.py')
 autodetect = load('autodetect', 'fliperos-video-autodetect.py')
+config = load('config', 'fliperos-config.py')
 
 
 class VideoTests(unittest.TestCase):
@@ -236,6 +237,122 @@ class AutodetectTests(unittest.TestCase):
     def test_classify_non_forceable_digital_without_signal(self):
         self.assertEqual(autodetect.classify('DP-1', 0, 'disconnected'), 'skip')
         self.assertEqual(autodetect.classify('HDMI-A-1', 0, 'disconnected'), 'skip')
+
+
+class ConfigCmdlineTests(unittest.TestCase):
+    """Edicao da cmdline do GRUB feita pelo fliperos-config (orientacao,
+    troca de conector). Um erro aqui deixa a maquina sem video no boot."""
+
+    BASE = ('video=VGA-1:e drm.edid_firmware=VGA-1:edid/crt15.bin '
+            'radeon.si_support=1 amdgpu.si_support=0')
+
+    def test_set_param_replaces_without_duplicating(self):
+        once = config.set_param(self.BASE, 'video', 'DVI-I-1:e')
+        self.assertEqual(once.count('video='), 1)
+        self.assertIn('video=DVI-I-1:e', once)
+        self.assertIn('radeon.si_support=1', once)
+
+    def test_set_param_none_removes_key(self):
+        self.assertIsNone(config.get_param(
+            config.set_param(self.BASE + ' fbcon=rotate:1', 'fbcon', None), 'fbcon'))
+
+    def test_get_param_does_not_match_prefix_of_other_key(self):
+        # drm.edid_firmware nao deve ser lido como se fosse a chave "drm".
+        self.assertIsNone(config.get_param(self.BASE, 'drm'))
+        self.assertEqual(config.get_param(self.BASE, 'video'), 'VGA-1:e')
+
+    def test_video_subparam_appends_and_replaces(self):
+        rotated = config.set_video_subparam(self.BASE, 'panel_orientation', 'left_side_up')
+        self.assertEqual(config.get_param(rotated, 'video'),
+                         'VGA-1:e,panel_orientation=left_side_up')
+        flipped = config.set_video_subparam(rotated, 'panel_orientation', 'upside_down')
+        self.assertEqual(config.get_param(flipped, 'video'),
+                         'VGA-1:e,panel_orientation=upside_down')
+
+    def test_video_subparam_removal_keeps_connector(self):
+        rotated = config.set_video_subparam(self.BASE, 'panel_orientation', 'left_side_up')
+        self.assertEqual(config.get_param(
+            config.set_video_subparam(rotated, 'panel_orientation', None), 'video'), 'VGA-1:e')
+
+    def test_video_subparam_without_video_param_is_noop(self):
+        self.assertEqual(config.set_video_subparam('quiet splash', 'panel_orientation', 'x'),
+                         'quiet splash')
+
+
+class ConfigIniTests(unittest.TestCase):
+    """Os .ini que a imagem instala sao minimos (switchres.ini tem so
+    'monitor arcade_15'), entao o upsert TEM que inserir a chave que falta —
+    um sub puro nao gravaria rotacao, geometria nem verbosidade."""
+
+    def ini(self, text):
+        path = Path(tempfile.mkdtemp()) / 'switchres.ini'
+        path.write_text(text)
+        return path
+
+    def test_inserts_missing_key(self):
+        path = self.ini('monitor arcade_15\n')
+        self.assertTrue(config.set_ini_value(path, 'h_size', '0.950'))
+        self.assertIn('monitor arcade_15', path.read_text())
+        self.assertIn('h_size 0.950', path.read_text())
+
+    def test_replaces_existing_key_keeping_indent(self):
+        path = self.ini('monitor arcade_15\n\th_size                    1.0\n')
+        config.set_ini_value(path, 'h_size', '0.900')
+        self.assertIn('\th_size 0.900', path.read_text())
+        self.assertNotIn('1.0', path.read_text())
+
+    def test_does_not_confuse_key_with_longer_key(self):
+        # v_shift_correct nao pode ser tratado como v_shift.
+        path = self.ini('\tv_shift_correct           0\n')
+        config.set_ini_value(path, 'v_shift', '3')
+        text = path.read_text()
+        self.assertIn('v_shift_correct           0', text)
+        self.assertIn('v_shift 3', text)
+
+    def test_missing_file_reports_false(self):
+        self.assertFalse(config.set_ini_value(Path('/nao/existe.ini'), 'h_size', '1'))
+        self.assertFalse(config.set_cfg_value(Path('/nao/existe.cfg'), 'k', 'v'))
+
+    def test_retroarch_style_insert_and_replace(self):
+        path = Path(tempfile.mkdtemp()) / 'retroarch.cfg'
+        path.write_text('video_driver = "gl"\n')
+        config.set_cfg_value(path, 'log_verbosity', 'true')
+        self.assertIn('log_verbosity = "true"', path.read_text())
+        config.set_cfg_value(path, 'log_verbosity', 'false')
+        self.assertIn('log_verbosity = "false"', path.read_text())
+        self.assertNotIn('"true"', path.read_text())
+        self.assertIn('video_driver = "gl"', path.read_text())
+
+
+class ConfigProfileTests(unittest.TestCase):
+    ASSETS = {
+        '15khz': ('crt15-edid.bin', 'config/switchres.ini',
+                  'config/xorg.conf', 'config/mame.ini'),
+        '25khz': ('crt25-edid.bin', 'config/switchres-25khz.ini',
+                  'config/xorg-25khz.conf', 'config/mame-25khz.ini'),
+        '31khz': ('crt31-edid.bin', 'config/switchres-31khz.ini',
+                  'config/xorg-31khz.conf', 'config/mame-31khz.ini'),
+    }
+
+    def test_every_profile_has_assets_and_khz_range(self):
+        self.assertEqual(set(config.PROFILE_KHZ), set(self.ASSETS))
+        for profile, (low, high) in config.PROFILE_KHZ.items():
+            self.assertLess(low, high)
+            for source in self.ASSETS[profile]:
+                self.assertTrue((ROOT / source).is_file(),
+                                'perfil %s exige %s no repo' % (profile, source))
+
+    def test_installer_ships_config_tool_for_every_profile(self):
+        script = (ROOT / 'fliperos-install-video.sh').read_text()
+        self.assertIn('fliperos-config.py', script)
+        for profile in config.PROFILE_KHZ:
+            self.assertIn('profiles/' + profile + '/edid.bin', script)
+
+    def test_khz_ranges_match_install_video_script(self):
+        script = (ROOT / 'fliperos-install-video.sh').read_text()
+        for profile, (low, high) in config.PROFILE_KHZ.items():
+            self.assertRegex(script, r'%s\)[^)]*?MIN_KHZ=%s; MAX_KHZ=%s'
+                             % (profile, low, high))
 
 
 if __name__ == '__main__':

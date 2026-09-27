@@ -200,6 +200,7 @@ apt-get install -y --no-install-recommends \
   joystick dialog whiptail alsa-utils linux-firmware \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 pciutils libdrm-tests edid-decode squashfs-tools \
+  samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
   espeak-ng
 
 systemctl enable ssh
@@ -209,15 +210,47 @@ rm -f /etc/ssh/ssh_host_*
 truncate -s 0 /etc/machine-id
 systemctl enable NetworkManager
 
+# Compartilhamento do acervo pela rede (equivalente ao share [GroovyArcade]
+# do gasetup, que exporta /home/arcade/shared). Diferenca deliberada: o
+# GroovyArcade usa "public = yes" (gravavel sem senha); aqui a escrita exige
+# o usuario fliperos, porque a ISO tambem sobe SSH com senha padrao.
+cat > /etc/samba/smb.conf << 'SMB'
+[global]
+   workgroup = WORKGROUP
+   server string = FliperOS
+   security = user
+   map to guest = never
+   disable netbios = no
+   server min protocol = SMB2
+
+[FliperOS]
+   comment = Acervo do FliperOS (roms, bios, saves)
+   path = /opt/fliperos
+   available = yes
+   browseable = yes
+   writable = yes
+   printable = no
+   valid users = fliperos
+   create mask = 0664
+   directory mask = 0775
+SMB
+systemctl enable smbd
+systemctl enable nmbd
+systemctl enable avahi-daemon
+
 locale-gen pt_BR.UTF-8
 update-locale LANG=pt_BR.UTF-8
 ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
 dpkg-reconfigure -f noninteractive tzdata
 
-useradd -m -s /bin/bash -G video,audio,input,dialout,sudo fliperos
+# render: acesso a /dev/dri/renderD* (KMS sem X). netdev: NetworkManager sem root.
+# plugdev: montar pendrive via udisks2. tty: console.
+useradd -m -s /bin/bash -G video,render,audio,input,dialout,tty,plugdev,netdev,games,sudo fliperos
 echo "fliperos:fliperos" | chpasswd
+printf 'fliperos\nfliperos\n' | smbpasswd -s -a fliperos
 cat > /etc/sudoers.d/fliperos << SUDOERS
 fliperos ALL=(ALL) NOPASSWD: /sbin/poweroff, /sbin/reboot, /usr/sbin/reboot, /usr/sbin/poweroff
+fliperos ALL=(ALL) NOPASSWD: /usr/local/bin/fliperos-config
 SUDOERS
 chmod 440 /etc/sudoers.d/fliperos
 
@@ -300,7 +333,7 @@ copy_fliperos_scripts() {
   step "Copiando scripts FliperOS"
   local SCRIPT_SRC
   SCRIPT_SRC="$(dirname "$(realpath "$0")")"
-  for S in fliperos-setup.sh fliperos-detect.sh fliperos-mkiso.sh fliperos-install-video.sh fliperos-video-check.py fliperos-install.py crt15-edid.bin crt25-edid.bin crt31-edid.bin; do
+  for S in fliperos-setup.sh fliperos-detect.sh fliperos-mkiso.sh fliperos-install-video.sh fliperos-video-check.py fliperos-install.py fliperos-config.py crt15-edid.bin crt25-edid.bin crt31-edid.bin; do
     if [[ -f "$SCRIPT_SRC/$S" ]]; then
       cp "$SCRIPT_SRC/$S" "$CHROOT_DIR/opt/fliperos/"
       chmod +x "$CHROOT_DIR/opt/fliperos/$S"
@@ -323,12 +356,18 @@ build_switchres_chroot() {
 set -e
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-  libdrm-dev libgbm-dev libxrandr-dev libxi-dev libxext-dev pkg-config git build-essential
+  libdrm-dev libgbm-dev libxrandr-dev libxi-dev libxext-dev pkg-config git build-essential \
+  libsdl2-dev libsdl2-ttf-dev
 git clone --depth=1 https://github.com/antonioginer/switchres /tmp/srs
 # Projeto usa makefile proprio (sem CMakeLists.txt) — build via make direto.
 make -C /tmp/srs -j$(nproc) all
+# "grid" e um target separado que "all" nao cobre e "install" nao instala:
+# e a carta de teste usada pra confirmar um modo novo ANTES de gravar o EDID
+# e pra calibrar geometria (fliperos-config). Precisa de SDL2_ttf.
+make -C /tmp/srs grid
 make -C /tmp/srs install PREFIX=/usr/local
 install -m755 /tmp/srs/switchres /usr/local/bin/switchres
+install -m755 /tmp/srs/grid /usr/local/bin/grid
 ldconfig
 rm -rf /tmp/srs
 echo "SwitchRes2 OK"
