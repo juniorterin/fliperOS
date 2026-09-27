@@ -40,6 +40,18 @@ install -Dm755 "$src/config/fliperos-guncon2-calibrate" \
   "$root/usr/local/bin/fliperos-guncon2-calibrate"
 install -Dm644 "$src/config/99-fliperos-input.rules" \
   "$root/etc/udev/rules.d/99-fliperos-input.rules"
+
+# Entrada de configuracao no ambiente grafico, nos DOIS caminhos: o LXDE monta
+# o menu a partir dos .desktop, enquanto o menu do openbox e estatico e nao le
+# /usr/share/applications — precisa do menu.xml. E o openbox sem painel nao da
+# nenhuma pista de como abrir nada sem ele.
+install -Dm644 "$src/config/fliperos-config.desktop" \
+  "$root/usr/share/applications/fliperos-config.desktop"
+if [[ -d "$root/home/fliperos" ]]; then
+    install -Dm644 "$src/config/openbox-menu.xml" \
+      "$root/home/fliperos/.config/openbox/menu.xml"
+    chown -R 1000:1000 "$root/home/fliperos/.config" 2>/dev/null || true
+fi
 if [[ ! -f "$root/etc/fliperos/guncon2.conf" ]]; then
     cat > "$root/etc/fliperos/guncon2.conf" <<'EOF'
 # Faixa util do GunCon 2 neste monitor. Os valores abaixo sao o exemplo do

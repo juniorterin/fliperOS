@@ -841,6 +841,133 @@ def menu_collect_logs():
                 "\\\\<ip>\\FliperOS\\logs  ou  sftp fliperos@<ip>" % bundle)
 
 
+# ════════════════════════════════════════════════════════════
+#  Audio
+# ════════════════════════════════════════════════════════════
+# O gasetup grava a placa padrao em ~/.asoundrc (worker_default_card), o que
+# serve pra ele porque tudo roda como o usuario arcade. Aqui usamos
+# /etc/asound.conf de proposito: o fliperos-config roda via sudo, entao o
+# espeak da narracao fala como ROOT e nao leria o .asoundrc do usuario — a voz
+# ficaria muda justo no passo em que ela existe pra ajudar.
+ASOUND_CONF = Path("/etc/asound.conf")
+
+
+def audio_devices():
+    """Enumera placa e dispositivo do aplay, como o worker_default_card faz."""
+    out = run("aplay", "--list-devices", capture=True, check=False) or ""
+    devices = []
+    for line in out.splitlines():
+        match = re.match(r"^card (\d+): \S+ \[(.*?)\], device (\d+): .*?\[(.*?)\]\s*$",
+                         line)
+        if match:
+            card, card_name, device, device_name = match.groups()
+            devices.append((card, device, "%s — %s" % (card_name, device_name)))
+    return devices
+
+
+def current_audio_card():
+    if not ASOUND_CONF.is_file():
+        return "0"
+    match = re.search(r"defaults\.pcm\.card\s+(\d+)", ASOUND_CONF.read_text())
+    return match.group(1) if match else "0"
+
+
+def menu_default_card():
+    devices = audio_devices()
+    if not devices:
+        tui.message("Nenhuma placa de som encontrada.\n\n"
+                    "Se o gabinete usa a saida analogica da placa-mae,\n"
+                    "confira se ela nao esta desabilitada na BIOS.")
+        return
+    options = [("%s,%s" % (card, device), label) for card, device, label in devices]
+    chosen = tui.menu("Placa atual: %s\n\nNum PC com video HDMI a placa padrao\n"
+                      "costuma ser a do HDMI, e o som do gabinete sai\n"
+                      "pela analogica — por isso isto importa."
+                      % current_audio_card(), options, title="Placa de som")
+    if chosen is None:
+        return
+    card, _, device = chosen.partition(",")
+    ASOUND_CONF.write_text(
+        "# Escrito por fliperos-config. Vale pro sistema todo, incluindo root,\n"
+        "# porque a narracao por voz roda com privilegio.\n"
+        "defaults.pcm.card %s\n"
+        "defaults.ctl.card %s\n"
+        "defaults.pcm.device %s\n" % (card, card, device))
+    for control in ("Master", "PCM", "Speaker", "Front"):
+        quiet("amixer", "-c", card, "sset", control, "80%", "unmute")
+    quiet("alsactl", "store", card)
+    tui.message("Placa padrao: %s (dispositivo %s).\n\n"
+                "Desmutei e coloquei em 80%%. Use 'Testar som'\n"
+                "pra confirmar." % (card, device))
+
+
+def menu_volume():
+    card = current_audio_card()
+    value = tui.inputbox("Volume de 0 a 100 na placa %s:" % card, default="80",
+                         title="Volume")
+    if not value or not value.isdigit() or not 0 <= int(value) <= 100:
+        return
+    for control in ("Master", "PCM", "Speaker", "Front"):
+        quiet("amixer", "-c", card, "sset", control, value + "%", "unmute")
+    # alsactl store grava em /var/lib/alsa/asound.state, e o alsa-restore que
+    # ja vem habilitado no sound.target reaplica no boot.
+    quiet("alsactl", "store", card)
+    tui.message("Volume em %s%% na placa %s, e salvo pro proximo boot."
+                % (value, card))
+
+
+def audio_test():
+    card = current_audio_card()
+    for control in ("Master", "PCM", "Speaker", "Front"):
+        quiet("amixer", "-c", card, "sset", control, "80%", "unmute")
+    if shutil.which("espeak-ng"):
+        subprocess.run(["espeak-ng", "-v", "pt-br", "-s", "150",
+                        "Teste de som na placa %s." % card], check=False)
+    elif shutil.which("speaker-test"):
+        subprocess.run(["speaker-test", "-c", "2", "-t", "wav", "-l", "1"],
+                       check=False)
+    return tui.yesno("Voce ouviu o som?", default_no=False)
+
+
+def menu_audio(full=True):
+    """full=False na midia de instalacao: a latencia do MAME nao faz sentido
+    la, porque o MAME so e instalado depois."""
+    options = [("placa", "Placa de som padrao"),
+               ("volume", "Volume"),
+               ("mixer", "Abrir o alsamixer"),
+               ("testar", "Testar som")]
+    if full:
+        options.append(("latencia", "Latencia de audio do MAME"))
+    while True:
+        chosen = tui.menu("Placa padrao atual: %s" % current_audio_card(),
+                          options, title="Audio")
+        if chosen is None:
+            return
+        if chosen == "placa":
+            menu_default_card()
+        elif chosen == "volume":
+            menu_volume()
+        elif chosen == "mixer":
+            card = current_audio_card()
+            tui.run_visible(["alsamixer", "-c", card], "alsamixer (ESC sai)",
+                            pause_after=False)
+            quiet("alsactl", "store", card)
+        elif chosen == "testar":
+            if not audio_test():
+                tui.message("Sem som.\n\nTente outra placa em 'Placa de som\n"
+                            "padrao' — num PC com HDMI a escolhida\n"
+                            "costuma ser a errada pro gabinete.")
+        elif chosen == "latencia":
+            mame = ETC / "mame/mame.ini"
+            value = tui.inputbox("Latencia de audio do MAME.\n\n"
+                                 "Padrao 2.0, minimo 0. Menor reduz atraso e\n"
+                                 "aumenta risco de estalo.", default="2.0",
+                                 title="Latencia")
+            if value and re.fullmatch(r"\d+(\.\d+)?", value):
+                set_ini_value(mame, "audio_latency", value)
+                tui.message("audio_latency = " + value)
+
+
 def menu_voice():
     """A voz narra os passos criticos pra quem esta com a tela ilegivel.
     O teste desmuta o mixer antes de falar: ALSA mudo faz a voz falhar em
@@ -1077,12 +1204,19 @@ def menu_setup_media():
     preciso configurar o Wi-Fi e conferir o video antes de instalar em disco.
     Os itens que dependem de GRUB instalado ficam de fora, em vez de estarem
     presentes e recusarem."""
+    # Regra da divisao: aqui fica so o que afeta INSTALAR BEM. O que nao
+    # persiste no pendrive e nao e pre-requisito da instalacao (perfil de
+    # monitor, resolucao customizada, orientacao, geometria, sessao,
+    # componentes, latencia do MAME) fica pro sistema instalado — configurar
+    # la e jogar fora no reboot seria enganar o usuario.
+    # O audio esta aqui de proposito: a narracao por voz depende dele, e a voz
+    # existe justamente pra quando a tela nao mostra nada.
     options = [("wizard", "Configuracao inicial (passo a passo)"),
                ("teclado", "Teclado"),
+               ("audio", "Audio (placa de som, volume, teste)"),
                ("rede", "Rede (Wi-Fi) — necessario pra acessar por SSH"),
                ("video", "Verificar o modo de video ativo"),
                ("detectar", "Descobrir qual conector e o do CRT"),
-               ("geometria", "Calibrar geometria da imagem"),
                ("instalar", "Instalar em disco (ou reparar existente)"),
                ("compartilhar", "Compartilhamento (Samba, SSH/SFTP)"),
                ("sistema", "Sistema e diagnostico"),
@@ -1100,6 +1234,8 @@ def menu_setup_media():
                 menu_wizard_reset() if pending == 0 else wizard()
             elif chosen == "teclado":
                 step_keyboard()
+            elif chosen == "audio":
+                menu_audio(full=False)
             elif chosen == "rede":
                 menu_network()
             elif chosen == "video":
@@ -1108,8 +1244,6 @@ def menu_setup_media():
             elif chosen == "detectar":
                 tui.run_visible(["/usr/local/bin/fliperos-video-autodetect"],
                                 "Descobrindo o conector do CRT")
-            elif chosen == "geometria":
-                menu_geometry()
             elif chosen == "instalar":
                 tui.run_visible(["/usr/local/bin/fliperos-install"],
                                 "Instalacao", pause_after=False)
@@ -1127,6 +1261,7 @@ def menu_installed():
     options = [("componentes", "Instalar componentes (launchers, emuladores)"),
                ("sessao", "Sessao ao ligar (qual launcher abre)"),
                ("video", "Video (monitor, resolucao, orientacao, geometria)"),
+               ("audio", "Audio (placa, volume, latencia do MAME)"),
                ("rede", "Rede (Wi-Fi)"),
                ("compartilhar", "Compartilhamento (Samba, SSH/SFTP)"),
                ("sistema", "Sistema e diagnostico"),
@@ -1146,6 +1281,8 @@ def menu_installed():
                 menu_session()
             elif chosen == "video":
                 menu_video()
+            elif chosen == "audio":
+                menu_audio()
             elif chosen == "rede":
                 menu_network()
             elif chosen == "compartilhar":

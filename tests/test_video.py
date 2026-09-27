@@ -532,6 +532,55 @@ class WizardTests(unittest.TestCase):
         self.assertIn('kbd console-setup', script)
 
 
+class MenuSplitTests(unittest.TestCase):
+    """Na midia fica so o que afeta instalar bem. O que nao persiste no
+    pendrive e nao e pre-requisito da instalacao vai pro sistema instalado —
+    configurar la e perder no reboot seria enganar o usuario."""
+
+    def menus(self):
+        source = (ROOT / 'fliperos-config.py').read_text()
+        media = source.split('def menu_setup_media')[1].split('def menu_installed')[0]
+        inst = source.split('def menu_installed')[1].split('def main(')[0]
+        return media, inst
+
+    def test_media_has_what_the_install_depends_on(self):
+        media, _ = self.menus()
+        for needed in ('teclado', 'audio', 'menu_network', 'fliperos-install',
+                       'fliperos-video-check'):
+            self.assertIn(needed, media, 'falta na midia: ' + needed)
+
+    def test_media_excludes_what_does_not_persist(self):
+        media, _ = self.menus()
+        for post in ('menu_components', 'menu_session', 'menu_profile',
+                     'menu_custom_mode', 'menu_orientation', 'menu_connector',
+                     'menu_geometry'):
+            self.assertNotIn(post, media, 'nao deveria estar na midia: ' + post)
+
+    def test_installed_menu_has_the_post_install_items(self):
+        _, inst = self.menus()
+        for item in ('menu_components', 'menu_session', 'menu_video',
+                     'menu_audio'):
+            self.assertIn(item, inst, 'falta no instalado: ' + item)
+
+    def test_mame_latency_only_in_the_full_audio_menu(self):
+        """O MAME so e instalado depois; latencia na midia nao teria efeito."""
+        media, _ = self.menus()
+        self.assertIn('menu_audio(full=False)', media)
+
+    def test_window_manager_menu_opens_the_config(self):
+        """O menu do openbox e estatico e nao le os .desktop; o LXDE le. Os
+        dois caminhos tem de apontar pro fliperos-config."""
+        desktop = (ROOT / 'config/fliperos-config.desktop').read_text()
+        self.assertIn('fliperos-config', desktop)
+        self.assertIn('Terminal=true', desktop)
+        self.assertIn('Categories=System', desktop)
+        obmenu = (ROOT / 'config/openbox-menu.xml').read_text()
+        self.assertIn('fliperos-config', obmenu)
+        installer = (ROOT / 'fliperos-install-video.sh').read_text()
+        self.assertIn('fliperos-config.desktop', installer)
+        self.assertIn('openbox/menu.xml', installer)
+
+
 class VoiceTests(unittest.TestCase):
     """A voz existe porque ao trazer um CRT a vida a tela pode nao mostrar
     nada, e uma pergunta que so existe na tela fica sem resposta."""
