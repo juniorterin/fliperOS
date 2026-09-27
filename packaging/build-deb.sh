@@ -29,7 +29,14 @@ RECIPES="$ROOT/packaging/packages"
 OUTPUT="$ROOT/output/packages"
 WORK=""
 
-cleanup() { [[ -n "$WORK" && -d "$WORK" ]] && rm -rf "$WORK"; }
+# O return 0 e necessario: o ultimo comando do trap EXIT define o status de
+# saida do script, e um teste falso no fim faria um build bem-sucedido sair 1.
+cleanup() {
+  if [[ -n "$WORK" && -d "$WORK" ]]; then
+    rm -rf "$WORK"
+  fi
+  return 0
+}
 trap cleanup EXIT
 
 list_recipes() {

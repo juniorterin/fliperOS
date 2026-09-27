@@ -19,7 +19,11 @@ PKG_DESCRIPTION="Frontend grafico para lancar emuladores, compilado com
 USE_DRM=1: desenha direto no KMS/DRM, sem Xorg.
 
 Este build nao roda dentro de uma sessao X — no attractplus o caminho DRM
-substitui o X11, nao convive com ele."
+substitui o X11, nao convive com ele.
+
+Inclui o tema AdvanceMenu, que reproduz a aparencia do AdvanceMENU (lista de
+texto com snapshot) e se dimensiona pela resolucao, para ficar legivel em
+640x240."
 
 # cmake entra porque o SFML embarcado e compilado por cmake, nao pelo make
 # do attractplus (regra sfmlbuild do Makefile).
@@ -46,5 +50,7 @@ pkg_build() {
   git clone --depth 1 --branch "$PKG_VERSION" \
       https://github.com/oomek/attractplus.git "$SRC/attractplus" \
     && make -C "$SRC/attractplus" USE_DRM=1 prefix=/usr -j"$(nproc)" \
-    && make -C "$SRC/attractplus" install USE_DRM=1 prefix=/usr DESTDIR="$STAGING"
+    && make -C "$SRC/attractplus" install USE_DRM=1 prefix=/usr DESTDIR="$STAGING" \
+    && cp -r "$(dirname "${BASH_SOURCE[0]}")/../assets/attractplus-layouts/AdvanceMenu" \
+             "$STAGING/usr/share/attractplus/layouts/AdvanceMenu"
 }

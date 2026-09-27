@@ -157,11 +157,23 @@ para o `make install`. Há teste de regressão para isso.
 
 | Pacote | Situação |
 | --- | --- |
-| `fliperos-attractplus` | receita pronta — build KMS/DRM, Attract-Mode Plus 3.2.3 |
+| `fliperos-attractplus` | receita pronta — build KMS/DRM, Attract-Mode Plus 3.2.3, com o tema AdvanceMenu |
 | `fliperos-emulationstation` | pendente |
 | `fliperos-retrofe` | pendente |
 | `fliperos-pegasus` | pendente |
-| `fliperos-advancemenu` | pendente |
+
+O **AdvanceMENU não é empacotado**. O projeto foi abandonado pelo GroovyArcade
+(pacote comentado no `packages.x86_64` deles) e o caminho KMS dele não é
+documentado em lugar nenhum. O que se queria dele era a aparência, e ela cabe
+num tema: o pacote do attractplus inclui o layout **AdvanceMenu**
+(`packaging/assets/attractplus-layouts/AdvanceMenu/`), que reproduz o visual de
+lista de texto com snapshot e se dimensiona pela resolução da tela.
+
+Esse layout corrige o pixel não-quadrado do CRT: em 640x240 a tela continua 4:3,
+então cada pixel aparece duas vezes mais alto que largo, e a caixa do snapshot é
+calculada como `largura × (altura_tela / largura_tela)` para aparecer em 4:3 no
+tubo. Ele também usa `set_sel_bg_rgb`, e não o `set_selbg_rgb` que os layouts
+embutidos ainda usam — esse último está deprecado desde a 3.2.3.
 
 O `attractplus` é compilado com `USE_DRM=1`, que o Makefile dele descreve como
 *alternative to X11* e mantém comentado por padrão. Build DRM e build X11 são
@@ -182,20 +194,18 @@ tabela de capacidades do GroovyArcade (`galauncher/videodata.conf`).
 | Sessão | Backend | Vem na imagem? |
 | --- | --- | --- |
 | `launcher` | texto | sim — menu do FliperOS, fallback que sempre existe |
-| `attractplus` | KMS | não — `fliperos-attractplus` |
+| `attractplus` | KMS | não — `fliperos-attractplus` (traz o tema AdvanceMenu) |
 | `emulationstation` | KMS | não — `fliperos-emulationstation` |
 | `retrofe` | KMS | não — `fliperos-retrofe` |
 | `pegasus` | KMS | não — `fliperos-pegasus` |
-| `advancemenu` | KMS | não — `fliperos-advancemenu` |
 | `retroarch` | KMS | sim (interface própria, só cores libretro) |
 | `groovymame` | KMS | sim (interface própria, só ROMs de MAME) |
 | `openbox` | Xorg | sim — WM leve, para baixa resolução |
 | `shell` | — | cai direto no shell |
 
-Duas armadilhas que a tabela evita: o **Attract-Mode original não roda em KMS**
-(só o fork *Plus*), e o **AdvanceMENU foi abandonado pelo GroovyArcade** — o
-pacote está comentado no `packages.x86_64` deles e o item no menu também. Ele
-está aqui porque foi pedido, não porque o upstream o mantém.
+Uma armadilha que a tabela evita: o **Attract-Mode original não roda em KMS** —
+só o fork *Plus*. O AdvanceMENU não aparece como sessão porque não é um launcher
+aqui, e sim um tema do attractplus (ver seção acima).
 
 O dispatcher nunca deixa a máquina sem interface: sessão escolhida cujo binário
 não existe cai no menu de texto com um aviso, em vez de falhar no boot.

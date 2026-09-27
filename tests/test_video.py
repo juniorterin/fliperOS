@@ -446,6 +446,38 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('ubuntu:24.04', packager)
         self.assertIn('ubuntu:24.04', iso)
 
+    LAYOUT = ROOT / 'packaging/assets/attractplus-layouts/AdvanceMenu/layout.nut'
+
+    def test_advancemenu_theme_ships_with_attractplus(self):
+        """O AdvanceMENU nao e empacotado como launcher; a aparencia dele vem
+        como tema do attractplus, entao a receita tem que copiar o layout."""
+        self.assertTrue(self.LAYOUT.is_file())
+        recipe = (self.RECIPES / 'fliperos-attractplus.sh').read_text()
+        self.assertIn('attractplus-layouts/AdvanceMenu', recipe)
+        self.assertIn('layouts/AdvanceMenu', recipe)
+
+    def test_advancemenu_not_a_session(self):
+        table = (ROOT / 'config/fliperos-sessions.conf').read_text()
+        entries = [line.split('|')[0] for line in table.splitlines()
+                   if line.strip() and not line.strip().startswith('#')]
+        self.assertNotIn('advancemenu', entries)
+
+    def test_theme_avoids_deprecated_listbox_call(self):
+        """set_selbg_rgb esta deprecado desde a 3.2.3, a versao empacotada;
+        os layouts embutidos ainda usam, este nao deve copiar o erro."""
+        text = self.LAYOUT.read_text()
+        self.assertIn('set_sel_bg_rgb', text)
+        self.assertNotIn('set_selbg_rgb(', text.replace('set_sel_bg_rgb', ''))
+
+    def test_theme_is_resolution_adaptive(self):
+        """Coordenada fixa quebraria nos outros perfis de monitor: o tema tem
+        de sair de fe.layout.width/height, que trazem a resolucao real."""
+        text = self.LAYOUT.read_text()
+        self.assertIn('fe.layout.width', text)
+        self.assertIn('fe.layout.height', text)
+        # A correcao de pixel nao-quadrado do CRT e o ponto do tema.
+        self.assertIn('box_height', text)
+
     def test_repo_generator_uses_flat_layout(self):
         script = (ROOT / 'packaging/make-repo.sh').read_text()
         self.assertIn('dpkg-scanpackages', script)
