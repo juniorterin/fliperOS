@@ -23,6 +23,7 @@ installer = load('installer', 'fliperos-install.py')
 autodetect = load('autodetect', 'fliperos-video-autodetect.py')
 config = load('config', 'fliperos-config.py')
 tui = load('tui', 'fliperos_tui.py')
+limine_update = load('limine_update', 'fliperos-limine-update.py')
 
 
 class VideoTests(unittest.TestCase):
@@ -266,7 +267,7 @@ class AutodetectTests(unittest.TestCase):
 
 
 class ConfigCmdlineTests(unittest.TestCase):
-    """Edicao da cmdline do GRUB feita pelo fliperos-config (orientacao,
+    """Edicao da cmdline do boot feita pelo fliperos-config (orientacao,
     troca de conector). Um erro aqui deixa a maquina sem video no boot."""
 
     BASE = ('video=VGA-1:e drm.edid_firmware=VGA-1:edid/crt15.bin '
@@ -920,19 +921,181 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('apt-ftparchive', script)
 
 
+class LimineTests(unittest.TestCase):
+    """O Limine so le FAT: no disco instalado kernel e initrd vivem na ESP,
+    copiados pelo fliperos-limine-update. Erro aqui e gabinete sem boot."""
+
+    def boot_dir(self, root, versions):
+        boot = root / 'boot'
+        boot.mkdir()
+        for version in versions:
+            (boot / ('vmlinuz-' + version)).write_bytes(b'kernel ' + version.encode())
+            (boot / ('initrd.img-' + version)).write_bytes(b'initrd ' + version.encode())
+        return boot
+
+    def test_newest_kernel_first_in_natural_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            boot = self.boot_dir(Path(directory),
+                                 ['6.8.0-45-generic', '6.12.104-15khz', '6.8.0-9-generic'])
+            self.assertEqual(limine_update.kernels(boot),
+                             ['6.12.104-15khz', '6.8.0-45-generic', '6.8.0-9-generic'])
+
+    def test_kernel_without_initrd_is_skipped(self):
+        # O initrd pode sair depois do kernel (trigger do dpkg): ate la o menu
+        # nao pode apontar pra um initrd que nao existe.
+        with tempfile.TemporaryDirectory() as directory:
+            boot = self.boot_dir(Path(directory), ['6.8.0-45-generic'])
+            (boot / 'vmlinuz-6.8.0-50-generic').write_bytes(b'x')
+            self.assertEqual(limine_update.kernels(boot), ['6.8.0-45-generic'])
+
+    def test_installed_entries(self):
+        text = limine_update.render(['6.8.0-50-generic', '6.8.0-45-generic'], 'UUID=abc',
+                                    installer.boot_parameters('VGA-1'), '3')
+        self.assertIn('graphics: no', text)
+        self.assertIn('timeout: 3', text)
+        entries = text.split('\n/')[1:]
+        self.assertEqual(len(entries), 3)
+        normal, previous, diagnostic = entries
+        self.assertIn('vmlinuz-6.8.0-50-generic', normal)
+        self.assertIn('vmlinuz-6.8.0-45-generic', previous)
+        for entry in entries:
+            self.assertIn('cmdline: root=UUID=abc ro ', entry)
+            self.assertIn('drm.edid_firmware=VGA-1:edid/crt15.bin', entry)
+            self.assertIn('textmode: yes', entry)
+        cmdline = {name: re.search(r'cmdline: (.*)', entry).group(1).split()
+                   for name, entry in (('normal', normal), ('diagnostic', diagnostic))}
+        self.assertIn('splash', cmdline['normal'])
+        self.assertNotIn('splash', cmdline['diagnostic'])
+        self.assertNotIn('quiet', cmdline['diagnostic'])
+
+    def test_single_kernel_has_no_previous_entry(self):
+        text = limine_update.render(['6.8.0-50-generic'], 'UUID=abc', 'quiet splash', '3')
+        self.assertNotIn('anterior', text)
+        self.assertEqual(len(text.split('\n/')[1:]), 2)
+
+    def test_update_keeps_two_kernels_and_drops_stale(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            boot = self.boot_dir(root, ['6.8.0-9-generic', '6.8.0-45-generic', '6.8.0-50-generic'])
+            esp = root / 'esp'
+            (esp / 'fliperos').mkdir(parents=True)
+            (esp / 'fliperos/vmlinuz-5.15.0-1-generic').write_bytes(b'old')
+            versions = limine_update.update(boot, esp, 'UUID=abc', 'quiet splash', '3')
+            self.assertEqual(versions, ['6.8.0-50-generic', '6.8.0-45-generic'])
+            self.assertEqual(sorted(p.name for p in (esp / 'fliperos').iterdir()),
+                             ['initrd.img-6.8.0-45-generic', 'initrd.img-6.8.0-50-generic',
+                              'vmlinuz-6.8.0-45-generic', 'vmlinuz-6.8.0-50-generic'])
+            self.assertIn('initrd.img-6.8.0-50-generic', (esp / 'limine/limine.conf').read_text())
+
+    def test_update_refreshes_regenerated_initrd(self):
+        # update-initramfs (EDID novo, tema novo) regrava o initrd com o mesmo
+        # nome: a ESP precisa receber o conteudo novo.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            boot = self.boot_dir(root, ['6.8.0-50-generic'])
+            esp = root / 'esp'
+            limine_update.update(boot, esp, 'UUID=abc', '', '3')
+            (boot / 'initrd.img-6.8.0-50-generic').write_bytes(b'initrd com EDID novo')
+            limine_update.update(boot, esp, 'UUID=abc', '', '3')
+            self.assertEqual((esp / 'fliperos/initrd.img-6.8.0-50-generic').read_bytes(),
+                             b'initrd com EDID novo')
+
+    def test_root_from_installer_fstab(self):
+        fstab = ('# / comentario\nUUID=aaa / ext4 defaults 0 1\n'
+                 'UUID=bbb /boot/efi vfat umask=0077 0 2\n')
+        self.assertEqual(limine_update.root_device(fstab), 'UUID=aaa')
+
+    def test_boot_defaults_round_trip(self):
+        """O instalador grava, o fliperos-config edita e o fliperos-limine-update
+        le: os tres precisam concordar no formato do arquivo."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'etc/default').mkdir(parents=True)
+            installer.write_boot_cmdline(root, installer.boot_parameters('VGA-1'))
+            path = root / installer.BOOT_DEFAULTS
+            with mock.patch.object(config, 'BOOT_CFG', path), \
+                    mock.patch.object(config, 'run') as command:
+                self.assertEqual(config.read_cmdline(), installer.boot_parameters('VGA-1'))
+                rotated = config.set_param(config.read_cmdline(), 'fbcon', 'rotate:1')
+                config.write_cmdline(rotated)
+                command.assert_called_once_with(config.LIMINE_UPDATE)
+            defaults = limine_update.read_defaults(path.read_text())
+            self.assertEqual(defaults['FLIPEROS_CMDLINE'], rotated)
+            self.assertEqual(defaults['FLIPEROS_TIMEOUT'], '3')
+            # Reparo de GPU: troca so a cmdline, o resto do arquivo fica.
+            installer.write_boot_cmdline(root, installer.boot_parameters('DVI-I-1'))
+            defaults = limine_update.read_defaults(path.read_text())
+            self.assertIn('video=DVI-I-1:e', defaults['FLIPEROS_CMDLINE'])
+            self.assertEqual(defaults['FLIPEROS_TIMEOUT'], '3')
+
+    def test_bios_stage2_goes_to_the_bios_boot_partition(self):
+        parted = installer.partition_commands('/dev/sdz')[1]
+        first = parted.index('set')
+        self.assertEqual(parted[first:first + 4], ['set', '1', 'bios_grub', 'on'])
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(installer, 'run') as command:
+            target = Path(directory)
+            share = target / installer.LIMINE_SHARE
+            share.mkdir(parents=True)
+            for name in ('BOOTX64.EFI', 'limine-bios.sys'):
+                (share / name).write_bytes(name.encode())
+            installer.install_bootloader(target, '/dev/sdz')
+            # Caminho removivel: UEFI boota sem entrada na NVRAM.
+            self.assertEqual((target / 'boot/efi/EFI/BOOT/BOOTX64.EFI').read_bytes(),
+                             b'BOOTX64.EFI')
+            self.assertTrue((target / 'boot/efi/limine/limine-bios.sys').is_file())
+        command.assert_any_call('chroot', target, installer.LIMINE_UPDATE)
+        command.assert_any_call('chroot', target, '/usr/local/bin/limine',
+                                'bios-install', '/dev/sdz', '1')
+
+    def test_iso_entries_boot_live_in_text_mode(self):
+        text = (ROOT / 'config/limine.conf').read_text()
+        self.assertIn('graphics: no', text)
+        entries = text.split('\n/')[1:]
+        self.assertEqual(len(entries), 2)
+        for entry in entries:
+            self.assertIn('protocol: linux', entry)
+            # copy_kernel do fliperos-mkiso.sh grava nesses dois caminhos.
+            self.assertIn('path: boot():/boot/vmlinuz\n', entry)
+            self.assertIn('module_path: boot():/boot/initrd.img\n', entry)
+            self.assertIn('textmode: yes', entry)
+            self.assertIn('boot=live', entry)
+
+    def test_titles_fit_limine_limit(self):
+        # O Limine guarda o titulo num buffer de 64 bytes junto com a "/" e o
+        # terminador: acima de 62 caracteres ele corta o fim sem avisar.
+        iso = (ROOT / 'config/limine.conf').read_text().replace('__MONITOR_LABEL__', 'CRT 15kHz')
+        installed = limine_update.render(['6.12.104-15khz', '6.8.0-45-generic'], 'UUID=abc', '', '3')
+        for text in (iso, installed):
+            for line in text.splitlines():
+                if line.startswith('/'):
+                    self.assertLessEqual(len(line[1:]), 62, line)
+
+    def test_build_uses_limine_not_grub(self):
+        mkiso = (ROOT / 'fliperos-mkiso.sh').read_text()
+        self.assertNotIn('grub-mkrescue', mkiso)
+        self.assertIn('fliperos-limine.sh" iso', mkiso)
+        self.assertIn('fliperos-limine.sh" rootfs', mkiso)
+        pinned = (ROOT / 'fliperos-limine.sh').read_text()
+        self.assertRegex(pinned, r'LIMINE_COMMIT="[0-9a-f]{40}"')
+
+
 class SplashTests(unittest.TestCase):
     def test_boot_parameters_enable_plymouth(self):
         params = installer.boot_parameters('VGA-1')
         self.assertIn('splash', params.split())
         self.assertIn('quiet', params.split())
 
-    def test_diagnostic_grub_entry_has_no_splash(self):
+    def test_diagnostic_boot_entry_has_no_splash(self):
         # A entrada de diagnostico e a saida de emergencia quando o tema
         # falha: ela nao pode ganhar splash junto com a entrada normal.
-        entries = (ROOT / 'config/grub.cfg').read_text().split('menuentry')
-        normal = [e for e in entries if 'nomodeset' not in e and 'linux ' in e]
+        # O bootloader e o Limine; as entradas comecam com "/" no limine.conf.
+        entries = [e for e in (ROOT / 'config/limine.conf').read_text().split('\n/')
+                   if 'cmdline:' in e]
+        normal = [e for e in entries if 'nomodeset' not in e]
         diagnostic = [e for e in entries if 'nomodeset' in e]
-        self.assertTrue(normal and diagnostic)
+        self.assertTrue(normal, 'nenhuma entrada normal no limine.conf')
+        self.assertTrue(diagnostic, 'nenhuma entrada de diagnostico no limine.conf')
         for entry in normal:
             self.assertIn('splash', entry)
         for entry in diagnostic:

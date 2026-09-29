@@ -7,7 +7,7 @@ profile=${2:-15khz}
 [[ -d "$root/etc" ]] || { echo "Rootfs invalido: $root" >&2; exit 2; }
 
 # Nome instalado (crt15.bin) fica fixo pros tres perfis de proposito —
-# fliperos-install.py, config/grub.cfg, config/fliperos-edid-hook e as
+# fliperos-install.py, config/limine.conf, config/fliperos-edid-hook e as
 # ferramentas de auditoria em tools/ todos referenciam esse nome fixo e
 # nao precisam saber qual perfil de frequencia foi escolhido no build; so
 # o CONTEUDO do arquivo muda (ver README, secao de perfis de monitor).

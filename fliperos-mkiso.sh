@@ -102,7 +102,9 @@ step() { echo -e "\n${BLD}${CYN}══ $* ══${RST}" | tee -a "$LOG_FILE"; }
 # ── Dependências do host ──────────────────────────────────────
 check_host_deps() {
   step "Verificando dependências do host"
-  local DEPS=(debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools)
+  # git/gcc/libc6-dev/make: o Limine vem do upstream e o utilitario "limine"
+  # e compilado no build (ver fliperos-limine.sh).
+  local DEPS=(debootstrap squashfs-tools xorriso git gcc libc6-dev make)
   local MISSING=()
   for D in "${DEPS[@]}"; do
     dpkg -s "$D" &>/dev/null && ok "$D" || MISSING+=("$D")
@@ -216,7 +218,6 @@ apt-get update -qq
 apt-get install -y --no-install-recommends \
   __KERNEL_PKGS__ \
   live-boot live-boot-initramfs-tools \
-  grub-pc-bin grub-efi-amd64-bin grub2-common \
   locales tzdata systemd systemd-sysv udev sudo bash \
   coreutils util-linux e2fsprogs dosfstools parted \
   wget curl git ca-certificates \
@@ -1000,7 +1001,7 @@ create_squashfs() {
 # ── Kernel e initrd ───────────────────────────────────────────
 copy_kernel() {
   step "Copiando kernel e initrd"
-  mkdir -p "$ISO_DIR/boot/grub"
+  mkdir -p "$ISO_DIR/boot/limine"
   local VMLINUZ INITRD
   VMLINUZ=$(find "$CHROOT_DIR/boot" -name "vmlinuz-*" | sort -V | tail -1)
   INITRD=$(find  "$CHROOT_DIR/boot" -name "initrd.img-*" | sort -V | tail -1)
@@ -1012,32 +1013,40 @@ copy_kernel() {
   ok "Initrd: $(basename "$INITRD")"
 }
 
-# ── GRUB config ───────────────────────────────────────────────
-create_grub_config() {
+# ── Limine ────────────────────────────────────────────────────
+# Baixado ANTES do debootstrap: um problema de rede aqui aparece em segundos,
+# nao depois de uma hora de compilacao.
+fetch_limine() {
+  step "Limine"
+  LIMINE_DIR="$WORK_DIR/limine"
+  bash "$(dirname "$(realpath "$0")")/fliperos-limine.sh" fetch "$LIMINE_DIR" >> "$LOG_FILE" 2>&1 \
+    || err "Falha ao obter o Limine (ver $LOG_FILE)"
+  ok "Limine $("$LIMINE_DIR/limine" version --version-only)"
+}
+
+install_limine_rootfs() {
+  bash "$(dirname "$(realpath "$0")")/fliperos-limine.sh" rootfs "$CHROOT_DIR" "$LIMINE_DIR"
+  ok "Limine e fliperos-limine-update no rootfs"
+}
+
+create_boot_config() {
   local MONITOR_LABEL
   case "$MONITOR_PROFILE" in
     15khz) MONITOR_LABEL="CRT 15kHz" ;;
     25khz) MONITOR_LABEL="CRT 25kHz" ;;
     31khz) MONITOR_LABEL="CRT 31kHz" ;;
   esac
-  install -Dm644 "$(dirname "$(realpath "$0")")/config/grub.cfg" "$ISO_DIR/boot/grub/grub.cfg"
-  sed -i "s|__MONITOR_LABEL__|${MONITOR_LABEL}|g" "$ISO_DIR/boot/grub/grub.cfg"
+  install -Dm644 "$(dirname "$(realpath "$0")")/config/limine.conf" "$ISO_DIR/boot/limine/limine.conf"
+  sed -i "s|__MONITOR_LABEL__|${MONITOR_LABEL}|g" "$ISO_DIR/boot/limine/limine.conf"
 }
 
-# ── Gerar ISO (BIOS + EFI via grub-mkrescue) ──────────────────
-# grub-mkrescue substitui o antigo par grub-mkstandalone+xorriso manual:
-# um core image "i386-pc" com o modulo "normal" (obrigatorio pro menu)
-# estoura o teto de ~480KB do formato — nao e' questao de --format, o
-# teto e do proprio conceito de core image embutido do i386-pc. O
-# grub-mkrescue contorna isso gerando um core minimo que so localiza o
-# filesystem e carrega o resto (normal/video/menu) do disco em tempo de
-# boot, e ja cobre El Torito BIOS + EFI hibrido sem loop mount.
+# ── Gerar ISO (BIOS + EFI via Limine) ─────────────────────────
 create_iso() {
   step "Gerando ISO: $OUTPUT_ISO"
   mkdir -p "$(dirname "$OUTPUT_ISO")"
-  grub-mkrescue -o "$OUTPUT_ISO" "$ISO_DIR" \
-    -- -volid "FLIPEROS_${FLIPEROS_VERSION//./_}" \
-    >> "$LOG_FILE" 2>&1
+  bash "$(dirname "$(realpath "$0")")/fliperos-limine.sh" iso "$LIMINE_DIR" "$ISO_DIR" \
+    "$OUTPUT_ISO" "FLIPEROS_${FLIPEROS_VERSION//./_}" >> "$LOG_FILE" 2>&1 \
+    || err "ISO nao gerada (ver $LOG_FILE)"
   [[ -f "$OUTPUT_ISO" ]] || err "ISO nao gerada"
   ok "ISO pronta: $OUTPUT_ISO ($(du -sh "$OUTPUT_ISO" | cut -f1))"
 }
@@ -1093,9 +1102,11 @@ mkdir -p "$ISO_DIR"
 
 [[ -c /dev/null ]] || err "/dev/null invalido; build recusado"
 check_host_deps
+fetch_limine
 build_rootfs
 configure_chroot
 copy_fliperos_scripts
+install_limine_rootfs
 cp -a "$(dirname "$(realpath "$0")")/config" "$CHROOT_DIR/opt/fliperos/"
 cp -a "$(dirname "$(realpath "$0")")/patches/kernel-15khz" "$CHROOT_DIR/opt/fliperos/kernel-patches"
 bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" "$CHROOT_DIR" "$MONITOR_PROFILE"
@@ -1116,7 +1127,7 @@ rm -f "$CHROOT_DIR/usr/sbin/policy-rc.d"
 unmount_chroot
 create_squashfs
 copy_kernel
-create_grub_config
+create_boot_config
 create_iso
 cleanup
 summary

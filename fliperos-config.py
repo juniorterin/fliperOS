@@ -27,7 +27,8 @@ import fliperos_tui as tui  # noqa: E402
 
 ETC = Path("/etc/fliperos")
 PROFILES = ETC / "profiles"
-GRUB_CFG = Path("/etc/default/grub.d/99-fliperos.cfg")
+BOOT_CFG = Path("/etc/default/fliperos-boot")
+LIMINE_UPDATE = "/usr/local/sbin/fliperos-limine-update"
 EDID_LIVE = Path("/lib/firmware/edid/crt15.bin")
 VIDEO_CHECK = Path("/etc/systemd/system/fliperos-video-check.service")
 PROFILE_KHZ = {"15khz": (15.0, 16.0), "25khz": (24.5, 25.5), "31khz": (31.0, 32.0)}
@@ -67,23 +68,23 @@ def connector():
 
 
 # ════════════════════════════════════════════════════════════
-#  Parametros de boot (GRUB da instalacao)
+#  Parametros de boot (Limine da instalacao)
 # ════════════════════════════════════════════════════════════
 def read_cmdline():
-    if not GRUB_CFG.is_file():
+    if not BOOT_CFG.is_file():
         return ""
-    match = re.search(r'GRUB_CMDLINE_LINUX_DEFAULT="([^"]*)"', GRUB_CFG.read_text())
+    match = re.search(r'^FLIPEROS_CMDLINE="([^"]*)"', BOOT_CFG.read_text(), re.M)
     return match.group(1) if match else ""
 
 
 def write_cmdline(cmdline):
-    if not GRUB_CFG.is_file():
-        # Live boot: o GRUB da ISO nao e editavel e nada persiste mesmo.
-        raise ValueError("Sem GRUB instalado; parametros de boot so no sistema em disco")
-    text = GRUB_CFG.read_text()
-    GRUB_CFG.write_text(re.sub(r'(GRUB_CMDLINE_LINUX_DEFAULT=")[^"]*(")',
-                               lambda m: m.group(1) + cmdline + m.group(2), text))
-    run("update-grub")
+    if not BOOT_CFG.is_file():
+        # Live boot: o limine.conf da ISO nao e editavel e nada persiste mesmo.
+        raise ValueError("Sem Limine instalado; parametros de boot so no sistema em disco")
+    text = BOOT_CFG.read_text()
+    BOOT_CFG.write_text(re.sub(r'^(FLIPEROS_CMDLINE=")[^"]*(")',
+                               lambda m: m.group(1) + cmdline + m.group(2), text, flags=re.M))
+    run(LIMINE_UPDATE)
 
 
 def set_param(cmdline, key, value):
@@ -431,7 +432,7 @@ def menu_custom_mode():
                     "Regravando o initramfs com o EDID novo")
     (ETC / "custom-mode").write_text("%s %s %s\n" % (width, height, refresh))
     tui.message("EDID gravado e initramfs atualizado.\n\nA cmdline ja aponta pra esse "
-                "arquivo, entao nao\nprecisa mexer no GRUB.")
+                "arquivo, entao nao\nprecisa mexer no boot.")
 
 
 def menu_orientation():

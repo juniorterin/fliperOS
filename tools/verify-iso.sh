@@ -6,21 +6,29 @@ src=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 work=$(mktemp -d /tmp/fliperos-verify.XXXXXX)
 echo "Auditoria extraida em $work"
 xorriso -osirrox on -indev "$iso" \
-    -extract /boot/grub/grub.cfg "$work/grub.cfg" \
+    -extract /boot/limine/limine.conf "$work/limine.conf" \
     -extract /live/filesystem.squashfs "$work/filesystem.squashfs" \
     -extract /boot/initrd.img "$work/initrd.img" > "$work/extract.log" 2>&1
 # O build substitui __MONITOR_LABEL__ pelo rotulo do perfil, entao comparar
 # com o template cru sempre falharia. A comparacao e feita contra o template
 # com a mesma substituicao aplicada, e o rotulo sai do proprio arquivo da ISO.
-label=$(grep -oE 'CRT [0-9]+kHz' "$work/grub.cfg" | head -1)
-[[ -n "$label" ]] || { echo "grub.cfg da ISO sem rotulo de monitor" >&2; exit 1; }
-sed "s|__MONITOR_LABEL__|${label}|g" "$src/config/grub.cfg" > "$work/grub.expected"
-cmp "$work/grub.expected" "$work/grub.cfg"
-echo "grub.cfg: confere com o template ($label)"
+label=$(grep -oE 'CRT [0-9]+kHz' "$work/limine.conf" | head -1)
+[[ -n "$label" ]] || { echo "limine.conf da ISO sem rotulo de monitor" >&2; exit 1; }
+sed "s|__MONITOR_LABEL__|${label}|g" "$src/config/limine.conf" > "$work/limine.expected"
+cmp "$work/limine.expected" "$work/limine.conf"
+echo "limine.conf: confere com o template ($label)"
 unsquashfs -cat "$work/filesystem.squashfs" usr/local/bin/fliperos-video-check > "$work/check.py"
 cmp "$src/fliperos-video-check.py" "$work/check.py"
 unsquashfs -cat "$work/filesystem.squashfs" usr/local/bin/fliperos-install > "$work/install.py"
 cmp "$src/fliperos-install.py" "$work/install.py"
+# O instalador grava o Limine no disco a partir destes arquivos do rootfs.
+unsquashfs -cat "$work/filesystem.squashfs" usr/local/sbin/fliperos-limine-update > "$work/limine-update.py"
+cmp "$src/fliperos-limine-update.py" "$work/limine-update.py"
+for path in usr/local/bin/limine usr/local/share/limine/limine-bios.sys \
+            usr/local/share/limine/BOOTX64.EFI; do
+    unsquashfs -cat "$work/filesystem.squashfs" "$path" > /dev/null \
+        || { echo "Ausente na ISO: $path" >&2; exit 1; }
+done
 unsquashfs -cat "$work/filesystem.squashfs" usr/lib/firmware/edid/crt15.bin > "$work/edid.bin"
 cmp "$src/crt15-edid.bin" "$work/edid.bin"
 edid-decode --check "$work/edid.bin" > "$work/edid.txt"
@@ -84,6 +92,15 @@ for unit in lightdm.service display-manager.service; do
         || { echo "$unit nao esta mascarado" >&2; exit 1; }
 done
 echo "sem display manager: default.target em multi-user, lightdm e display-manager mascarados"
+
+# Sem os hooks, kernel novo ou initramfs regravado (EDID) nao chegam a ESP e
+# o Limine segue bootando o antigo.
+for hook in etc/kernel/postinst.d etc/kernel/postrm.d etc/initramfs/post-update.d; do
+    grep -E "$hook/zz-fliperos-limine ->" "$work/links.txt" \
+        | grep -q '/usr/local/sbin/fliperos-limine-update' \
+        || { echo "Hook do Limine ausente: $hook" >&2; exit 1; }
+done
+echo "Limine no rootfs, com hooks de kernel e de initramfs"
 
 xorriso -indev "$iso" -report_el_torito plain > "$work/boot.txt" 2>&1
 grep 'BIOS' "$work/boot.txt"

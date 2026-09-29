@@ -48,7 +48,7 @@ wait('VMROOT> ')
 print('INSTALL: succeeded; configuring serial boot on test disk only', flush=True)
 send('mount /dev/vda3 /mnt; mount /dev/vda2 /mnt/boot/efi; mount --bind /dev /mnt/dev; mount -t proc proc /mnt/proc; mount -t sysfs sys /mnt/sys')
 wait('VMROOT> ')
-send("printf 'GRUB_TERMINAL=serial\\nGRUB_SERIAL_COMMAND=\"serial --speed=115200\"\\nGRUB_CMDLINE_LINUX=\"console=ttyS0,115200n8\"\\n' > /mnt/etc/default/grub.d/zz-vm-test.cfg; chroot /mnt update-grub; sync")
+send("sed -i 's|^FLIPEROS_CMDLINE=\"\\(.*\\)\"$|FLIPEROS_CMDLINE=\"\\1 console=ttyS0,115200n8\"|' /mnt/etc/default/fliperos-boot; chroot /mnt /usr/local/sbin/fliperos-limine-update; sync")
 wait('VMROOT> ')
 send('umount /mnt/dev /mnt/proc /mnt/sys /mnt/boot/efi /mnt; poweroff')
 wait('Power down')
@@ -61,7 +61,7 @@ code = Path('/workspace/tools/test-vm.py').read_text().split("print('LIVE: booti
 exec(compile(code, 'vm-harness', 'exec'), namespace)
 Guest = namespace['Guest']
 for mode in ('bios', 'uefi'):
-    print(mode.upper() + ': booting installed disk through GRUB', flush=True)
+    print(mode.upper() + ': booting installed disk through Limine', flush=True)
     guest = Guest(mode)
     try:
         guest.login('Vm-test-only-9264')

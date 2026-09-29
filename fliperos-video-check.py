@@ -186,7 +186,7 @@ def main():
                 print(f'{row["card"]} {row["connector"]}: inativo')
         for error in errors:
             print(error)
-        print("Leitura do kernel; nao mede o sinal eletrico nem certifica BIOS/GRUB ou outros momentos.")
+        print("Leitura do kernel; nao mede o sinal eletrico nem certifica BIOS/bootloader ou outros momentos.")
     return code
 
 

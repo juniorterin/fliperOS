@@ -10,7 +10,7 @@ O squashfs live existe apenas como veículo do assistente: a mídia não oferece
 
 1. Grave a ISO em um pendrive **byte a byte** e inicie o computador por ele. Desative Secure Boot; esta ISO não oferece uma cadeia de boot assinada validada.
 
-   A ISO é gerada por `grub-mkrescue`: é uma imagem **híbrida**, com GPT, uma EFI System Partition real e código de boot no MBR. Gravadores que *reconstroem* a estrutura de boot a quebram — **Rufus no modo padrão ("ISO image"), Ventoy e UNetbootin**. O sintoma é característico: o GRUB imprime "Welcome to GRUB!" e **fica parado para sempre**, porque o core carregou mas não acha mais os módulos.
+   A ISO usa o bootloader **Limine** e é uma imagem **híbrida** (`xorriso` + `limine bios-install`): uma partição EFI dentro da imagem e código de boot no MBR, para a mesma imagem bootar como CD e como pendrive, em BIOS e em UEFI. Gravadores que *reconstroem* a estrutura de boot podem quebrá-la — **Rufus no modo padrão ("ISO image"), Ventoy e UNetbootin** não são suportados.
 
    **Use o balenaEtcher.** É o gravador validado neste projeto: grava byte a byte, não tem modo a escolher e portanto não tem como errar. O Rufus *funciona* em "DD Image mode", mas o modo padrão dele é o "ISO image", que quebra a imagem — não vale o risco de clicar errado.
 
@@ -21,9 +21,9 @@ O squashfs live existe apenas como veículo do assistente: a mídia não oferece
    ```
 
    Confirme o `/dev/sdX` com `lsblk` antes: o dispositivo errado apaga o disco errado.
-2. A entrada CRT usa **VGA-1**. Se o conector for outro, edite os nomes em `video=` e `drm.edid_firmware=` no GRUB. Nomes repetidos em múltiplas GPUs exigem configuração manual.
+2. A entrada CRT usa **VGA-1**. Se o conector for outro, edite os nomes em `video=` e `drm.edid_firmware=` no menu do Limine (tecla `E` sobre a entrada). Nomes repetidos em múltiplas GPUs exigem configuração manual.
 
-   **Num CRT de 15 kHz você não vai conseguir ler o menu do GRUB**, e isso é esperado: o GRUB usa modo texto VGA (720x400, cerca de 31 kHz), que vem antes do override de EDID e um monitor só-15kHz não sincroniza. O `timeout=5` do `config/grub.cfg` faz a primeira entrada iniciar sozinha, então o boot prossegue às cegas. A primeira coisa que deve aparecer legível é o splash, já em 640x240 — se ele aparecer, o override de EDID funcionou. Para *escolher* a entrada de diagnóstico, ligue um LCD temporariamente.
+   **Num CRT de 15 kHz você não vai conseguir ler o menu do Limine**, e isso é esperado: o menu usa modo texto (em BIOS, VGA 720x400, cerca de 31 kHz; em UEFI, o modo do firmware), que vem antes do override de EDID e um monitor só-15kHz não sincroniza. O `timeout: 5` do `config/limine.conf` faz a primeira entrada iniciar sozinha, então o boot prossegue às cegas. Em BIOS, as entradas levam `textmode: yes`: o kernel recebe o modo texto, como acontecia com o GRUB, em vez de um modo VBE escolhido pelo Limine. A primeira coisa que deve aparecer legível é o splash, já em 640x240 — se ele aparecer, o override de EDID funcionou. Para *escolher* a entrada de diagnóstico, ligue um LCD temporariamente.
 3. Login: `fliperos`, senha `fliperos`. O **menu de setup** abre no TTY1 — não o instalador. Para reabrir: `sudo fliperos-config`.
 
    A mídia abre no setup de propósito, como o gasetup: numa máquina sem cabo de rede o Wi-Fi precisa ser configurado *antes* de qualquer coisa, e é lá que se confere o vídeo. Instalar em disco é um item **dentro** do menu, não o ponto de partida.
@@ -31,11 +31,15 @@ O squashfs live existe apenas como veículo do assistente: a mídia não oferece
 4. Configure o Wi-Fi (item 1) se não houver cabo, confira o modo de vídeo (item 2) e só então instale (item 5). Selecione a saída ativa do CRT e confirme que a imagem está visível e estável. O assistente não testa novos modos automaticamente.
 5. Na instalação, selecione o disco por caminho, modelo, capacidade e serial. Discos montados, mídia live, swap ativa e dispositivos com dependentes ativos são recusados.
 6. Revise o plano e digite `APAGAR /dev/…` com o dispositivo exato. **O disco inteiro será apagado; não há dual boot.**
-7. O instalador extrai o squashfs, grava fstab com UUIDs, reconstrói o initramfs e instala GRUB. Defina uma senha nova e reinicie sem o pendrive.
+7. O instalador extrai o squashfs, grava fstab com UUIDs, reconstrói o initramfs e instala o Limine. Defina uma senha nova e reinicie sem o pendrive.
 
-Particionamento: GPT, BIOS boot de 1 MiB, ESP FAT32 de 512 MiB, restante ext4. Instala GRUB BIOS e UEFI pelo caminho removível, sem alterar NVRAM. Mínimo: 16 GiB.
+Particionamento: GPT, BIOS boot de 1 MiB, ESP FAT32 de 1 GiB, restante ext4. Instala o Limine para BIOS (estágio 2 na partição BIOS boot) e para UEFI (`EFI/BOOT/BOOTX64.EFI`, o caminho removível), sem alterar NVRAM. Mínimo: 16 GiB.
 
-É uma implementação própria do fluxo, adaptada ao Ubuntu. Não copia `pacstrap`, `pacman`, `mkinitcpio`, o kernel Arch ou todos os menus do gasetup. Não inclui net-install. O gasetup oferece outros bootloaders; aqui é usado GRUB.
+O Limine só lê FAT e ISO9660, então no disco instalado o kernel e o initrd ficam **na ESP**, em `/boot/efi/fliperos/`, e o menu em `/boot/efi/limine/limine.conf`. Quem os mantém é o `fliperos-limine-update` — o equivalente do `update-grub`: copia o kernel mais novo e o anterior (entrada de reserva no menu) e regrava o menu, com uma entrada de diagnóstico sem splash. Ele roda sozinho pelos hooks de kernel (instalação e remoção) e de `update-initramfs`, então kernel novo e EDID regravado chegam à ESP sem intervenção. Os parâmetros do kernel ficam em `/etc/default/fliperos-boot` (`FLIPEROS_CMDLINE`); o `fliperos-config` edita esse arquivo, e quem editar à mão roda `sudo fliperos-limine-update` depois.
+
+É uma implementação própria do fluxo, adaptada ao Ubuntu. Não copia `pacstrap`, `pacman`, `mkinitcpio`, o kernel Arch ou todos os menus do gasetup. Não inclui net-install. O gasetup oferece outros bootloaders; aqui é usado o Limine (versão fixada em `fliperos-limine.sh`, baixada do upstream no build, porque o Ubuntu 24.04 não o empacota). O `fliperos-setup.sh`, que adapta um Ubuntu já existente, não troca o bootloader: continua usando o GRUB daquele sistema.
+
+Um disco instalado por uma versão anterior, com GRUB, migra para o Limine pela opção de reparo "pacotes/binários corrompidos" (reextrai o sistema e instala o Limine). A opção "GPU trocada" recusa esse disco até a migração.
 
 Plano sem nenhuma escrita:
 
@@ -80,7 +84,7 @@ HSync: 15,649038 kHz; refresh: 59,958 Hz
 
 O boot usa `video=VGA-1:e drm.edid_firmware=VGA-1:edid/crt15.bin`. O EDID está no initramfs para o driver encontrá-lo no início do KMS.
 
-**BIOS/UEFI e GRUB vêm antes desse mecanismo e podem emitir frequências acima de 15 kHz.** O override não garante toda a sequência desde ligar o computador. GPU, adaptadores e circuito RGBHV/RGBS precisam de teste. Não conecte um CRT de frequência fixa a sinal desconhecido para testar por tentativa.
+**BIOS/UEFI e o Limine vêm antes desse mecanismo e podem emitir frequências acima de 15 kHz.** O override não garante toda a sequência desde ligar o computador. GPU, adaptadores e circuito RGBHV/RGBS precisam de teste. Não conecte um CRT de frequência fixa a sinal desconhecido para testar por tentativa.
 
 ## Perfis de monitor (15/25/31 kHz)
 
@@ -90,7 +94,7 @@ define o perfil **ativo** na imagem. Cada perfil troca o EDID
 `mame.ini` e o `switchres.ini` instalados, mas o nome do arquivo de EDID
 *dentro* da imagem continua sendo `crt15.bin` nos três casos — só o
 conteúdo muda. Isso é proposital: `fliperos-install.py`,
-`config/grub.cfg`, `config/fliperos-edid-hook` e as ferramentas de
+`config/limine.conf`, `config/fliperos-edid-hook` e as ferramentas de
 auditoria em `tools/` referenciam esse nome fixo e não precisam saber
 qual perfil foi escolhido.
 
@@ -238,7 +242,7 @@ O splash usa Plymouth, e o tema é escolhido no build com `--splash`:
 | `none` | Sem splash; boot com as mensagens do kernel. |
 
 O `splash` na linha de comando do kernel é o que liga o Plymouth. A entrada
-**Diagnóstico** do GRUB não leva `splash` nem `quiet` de propósito: se o tema
+**Diagnóstico** do Limine (na ISO e no disco instalado) não leva `splash` nem `quiet` de propósito: se o tema
 falhar, ela continua sendo o caminho com as mensagens do kernel na tela.
 
 Sobre o tema Evangelion, três coisas que o build avisa e que valem decisão
@@ -335,7 +339,7 @@ Sem filtro, considera todas as saídas ativas. Um LCD a 31 kHz junto do CRT faz 
 
 ## Auto-detecção de conector
 
-`fliperos-video-check` é só leitura: se nenhuma saída já estiver ativa (hardware diferente do padrão `VGA-1`/`DVI-I-1` forçado no GRUB), ele não descobre nada sozinho. Para esse caso existe `fliperos-video-autodetect`, baseado na técnica do GroovyArcade/gatools (`video/video.sh`): liga cada conector analógico (`VGA-*`/`DVI-I-*`) um de cada vez, pede para apertar ENTER se a imagem aparecer dentro de um tempo limite, e desliga antes de testar o próximo — por isso a tela "pisca" durante o teste. Com `espeak-ng` instalado, cada passo também é narrado por voz, útil justamente porque nesse momento pode não haver nada visível ainda.
+`fliperos-video-check` é só leitura: se nenhuma saída já estiver ativa (hardware diferente do padrão `VGA-1`/`DVI-I-1` forçado na linha de comando do kernel), ele não descobre nada sozinho. Para esse caso existe `fliperos-video-autodetect`, baseado na técnica do GroovyArcade/gatools (`video/video.sh`): liga cada conector analógico (`VGA-*`/`DVI-I-*`) um de cada vez, pede para apertar ENTER se a imagem aparecer dentro de um tempo limite, e desliga antes de testar o próximo — por isso a tela "pisca" durante o teste. Com `espeak-ng` instalado, cada passo também é narrado por voz, útil justamente porque nesse momento pode não haver nada visível ainda.
 
 ```bash
 sudo fliperos-video-autodetect
@@ -427,6 +431,8 @@ distribua uma imagem gerada assim.
 | `fliperos-mkiso.sh` | Build de uma ISO Ubuntu nova |
 | `fliperos-setup.sh` | Setup em Ubuntu existente; `--dry-run` não escreve |
 | `fliperos-install.py` | Assistente live/instalação em disco, reparo e shell de resgate |
+| `fliperos-limine.sh` | Versão fixada do Limine: baixa, instala no rootfs e gera a ISO híbrida |
+| `fliperos-limine-update.py` | Equivalente do `update-grub`: kernel/initrd na ESP e `limine.conf` do disco instalado |
 | `fliperos-config.py` | Menu de configuração do sistema instalado (sessão, vídeo, rede, compartilhamento) |
 | `config/fliperos-sessions.conf` | Tabela de sessões: backend, binário e pacote de cada launcher |
 | `config/fliperos-session` | Despacha a sessão escolhida em `/etc/fliperos/session` |
@@ -439,7 +445,7 @@ distribua uma imagem gerada assim.
 | `fliperos-video-check.py` | Consulta de modo ativo DRM |
 | `fliperos-video-autodetect.py` | Descobre o conector do CRT ligando/desligando cada saida analogica |
 | `fliperos-detect.sh` | Relatório de sistema e vídeo |
-| `config/` | Xorg, Switchres, RetroArch, GRUB, serviço, hook EDID e launchers |
+| `config/` | Xorg, Switchres, RetroArch, Limine (ISO), serviço, hook EDID e launchers |
 | `config/fliperos-kms-run` | Lança RetroArch/Flycast direto em KMS/DRM, sem Xorg |
 | `config/{xorg,mame,switchres}-{25,31}khz.{conf,ini}` | Variantes de config por perfil de monitor (padrão 15kHz usa os arquivos sem sufixo) |
 | `crt{15,25,31}-edid.bin` | EDID customizado por perfil — os três vão pra ISO; `--monitor-profile` escolhe qual fica ativo |

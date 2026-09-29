@@ -2,7 +2,7 @@
 """Ubuntu live-to-disk installer following the gasetup workflow.
 
 Independent implementation: select display, try live or select disk, review,
-extract the ISO filesystem, configure UUIDs/initramfs, install BIOS/UEFI GRUB.
+extract the ISO filesystem, configure UUIDs/initramfs, install BIOS/UEFI Limine.
 No physical disk is modified without an interactive, exact-device confirmation.
 """
 import argparse
@@ -18,6 +18,10 @@ import tempfile
 
 LIVE_IMAGE = Path("/run/live/medium/live/filesystem.squashfs")
 MIN_SIZE = 16 * 1024**3
+# Relativos a raiz do sistema instalado (ver fliperos-limine.sh rootfs).
+LIMINE_SHARE = "usr/local/share/limine"
+LIMINE_UPDATE = "/usr/local/sbin/fliperos-limine-update"
+BOOT_DEFAULTS = "etc/default/fliperos-boot"
 
 
 def run(*args, capture=False):
@@ -69,12 +73,15 @@ def partition_path(disk, number):
 
 def partition_commands(disk):
     # One GPT layout supports both BIOS and UEFI, with no NVRAM changes.
+    # Partition 1 holds Limine's BIOS stage 2 ("bios_grub" is just parted's
+    # name for the BIOS boot type). The ESP is 1 GiB because Limine only
+    # reads FAT: kernel and initrd live there, two of each.
     return [
         ["wipefs", "--all", disk],
         ["parted", "--script", disk, "mklabel", "gpt",
          "mkpart", "BIOS", "1MiB", "2MiB", "set", "1", "bios_grub", "on",
-         "mkpart", "EFI", "fat32", "2MiB", "514MiB", "set", "2", "esp", "on",
-         "mkpart", "FliperOS", "ext4", "514MiB", "100%"],
+         "mkpart", "EFI", "fat32", "2MiB", "1026MiB", "set", "2", "esp", "on",
+         "mkpart", "FliperOS", "ext4", "1026MiB", "100%"],
         ["partprobe", disk], ["udevadm", "settle"],
         ["mkfs.vfat", "-F32", "-n", "FLIPERBOOT", partition_path(disk, 2)],
         ["mkfs.ext4", "-F", "-L", "FliperOS", partition_path(disk, 3)],
@@ -85,7 +92,7 @@ def boot_parameters(connector):
     if not re.fullmatch(r"(?:VGA|DVI-I|DVI-A|DP|HDMI-A)-[1-9][0-9]*", connector):
         raise ValueError("Conector invalido")
     # quiet splash: sem "splash" o Plymouth nao aparece. A entrada
-    # "Diagnostico" do GRUB nao leva esses dois, e continua sendo o caminho
+    # "Diagnostico" do Limine nao leva esses dois, e continua sendo o caminho
     # com as mensagens do kernel na tela.
     return (f"video={connector}:e drm.edid_firmware={connector}:edid/crt15.bin "
             "radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0 "
@@ -96,9 +103,53 @@ def plan(device, connector):
     return {"disk": device["path"], "model": device.get("model"),
             "serial": device.get("serial"), "bytes": device["size"],
             "erases_entire_disk": True, "source": str(LIVE_IMAGE),
-            "partitions": ["1 MiB BIOS boot", "512 MiB EFI FAT32", "restante ext4 /"],
-            "boot": "GRUB BIOS + UEFI removivel (Secure Boot desativado)",
+            "partitions": ["1 MiB BIOS boot", "1 GiB EFI FAT32 (kernel e initrd)", "restante ext4 /"],
+            "boot": "Limine BIOS + UEFI removivel (Secure Boot desativado)",
             "kernel_parameters": boot_parameters(connector)}
+
+
+def boot_defaults(cmdline):
+    """/etc/default/fliperos-boot: o equivalente do /etc/default/grub, lido
+    pelo fliperos-limine-update."""
+    return ('# Parametros do kernel do FliperOS. Depois de editar a mao:\n'
+            '#   sudo fliperos-limine-update\n'
+            'FLIPEROS_CMDLINE="' + cmdline + '"\n'
+            'FLIPEROS_TIMEOUT="3"\n')
+
+
+def write_boot_cmdline(root, cmdline):
+    """Troca so a cmdline e mantem o resto do arquivo. Sem arquivo (disco
+    novo, ou instalado na epoca do GRUB), cria um."""
+    path = root / BOOT_DEFAULTS
+    if not path.is_file():
+        path.write_text(boot_defaults(cmdline))
+        return
+    path.write_text(re.sub(r'^FLIPEROS_CMDLINE="[^"]*"',
+                           lambda m: 'FLIPEROS_CMDLINE="' + cmdline + '"',
+                           path.read_text(), flags=re.M))
+
+
+def install_bootloader(target, disk):
+    """Limine BIOS + UEFI a partir dos arquivos do PROPRIO disco alvo, nao da
+    midia: o estagio 2 gravado pelo bios-install e o limine-bios.sys da ESP
+    precisam ser da mesma versao, senao o boot BIOS para. Exige a ESP em
+    target/boot/efi e /dev montado no chroot (o bios-install escreve no disco)."""
+    share = target / LIMINE_SHARE
+    esp = target / "boot/efi"
+    # Caminho removivel do UEFI: boota sem entrada na NVRAM.
+    for name, dest in (("BOOTX64.EFI", esp / "EFI/BOOT/BOOTX64.EFI"),
+                       ("limine-bios.sys", esp / "limine/limine-bios.sys")):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(share / name, dest)
+    # Kernel, initrd e limine.conf na ESP.
+    run("chroot", target, LIMINE_UPDATE)
+    # Estagio 1 no MBR, estagio 2 na particao 1 (BIOS boot).
+    run("chroot", target, "/usr/local/bin/limine", "bios-install", disk, "1")
+
+
+def saved_connector(root):
+    path = root / "etc/fliperos/connector"
+    return path.read_text().strip() if path.is_file() else "VGA-1"
 
 
 def configure_video(root, connector):
@@ -240,7 +291,7 @@ def service_khz(root):
 def mounted_target(disk, chroot=False):
     """Monta um disco com FliperOS ja instalado pra reparo: raiz e EFI e,
     com chroot=True, tambem /dev,/proc,/sys,/run do sistema live (pra
-    update-initramfs/update-grub rodarem dentro do chroot do disco alvo).
+    update-initramfs e o Limine rodarem dentro do chroot do disco alvo).
     Sempre desmonta, mesmo em erro."""
     match = next((entry for entry in existing_installs() if entry["disk"] == disk), None)
     if match is None:
@@ -287,7 +338,7 @@ CONFIG_PATHS = (
 PRESERVE_PREFIXES = (
     "opt/fliperos/roms", "home/fliperos", "etc/machine-id", "etc/ssh",
     "etc/fstab", "etc/fliperos/connector",
-) + CONFIG_PATHS + ("etc/default/grub.d/99-fliperos.cfg", "boot")
+) + CONFIG_PATHS + (BOOT_DEFAULTS, "boot")
 
 
 def repair_configs(disk):
@@ -304,8 +355,7 @@ def repair_configs(disk):
                     "Esta midia live e de outro perfil de monitor (min-khz " + live_khz +
                     ") e o disco foi instalado com min-khz " + target_khz +
                     "; inicie a ISO do perfil correto antes de restaurar configuracoes.")
-            connector_file = target / "etc/fliperos/connector"
-            connector = connector_file.read_text().strip() if connector_file.is_file() else "VGA-1"
+            connector = saved_connector(target)
             extraction = Path(tempfile.mkdtemp(prefix="fliperos-repair-src-", dir="/mnt"))
             try:
                 run("unsquashfs", "-f", "-d", extraction, LIVE_IMAGE, *CONFIG_PATHS)
@@ -330,15 +380,14 @@ def repair_video(disk, connector):
     lock = preflight()
     try:
         with mounted_target(disk, chroot=True) as target:
+            if not (target / LIMINE_UPDATE.lstrip("/")).is_file():
+                raise ValueError("Disco instalado com GRUB (versao anterior do FliperOS). Use antes a "
+                                 "opcao 3, que reextrai o sistema e troca o bootloader pelo Limine.")
             configure_video(target, connector)
-            cfg = target / "etc/default/grub.d/99-fliperos.cfg"
-            if cfg.is_file():
-                cfg.write_text(re.sub(
-                    r'GRUB_CMDLINE_LINUX_DEFAULT="[^"]*"',
-                    'GRUB_CMDLINE_LINUX_DEFAULT="' + boot_parameters(connector) + '"',
-                    cfg.read_text()))
+            write_boot_cmdline(target, boot_parameters(connector))
+            # O hook do initramfs leva o initrd novo pra ESP e regrava o
+            # limine.conf com a cmdline acima.
             run("chroot", target, "update-initramfs", "-u", "-k", "all")
-            run("chroot", target, "update-grub")
     finally:
         lock.close()
 
@@ -381,7 +430,13 @@ def repair_packages(disk):
                 overlay_squashfs(extraction, target)
             finally:
                 shutil.rmtree(extraction, ignore_errors=True)
+            # Disco da epoca do GRUB: a reextracao trouxe o Limine, falta a
+            # cmdline. Com isso esta opcao tambem migra o bootloader.
+            if not (target / BOOT_DEFAULTS).is_file():
+                write_boot_cmdline(target, boot_parameters(saved_connector(target)))
             run("chroot", target, "update-initramfs", "-u", "-k", "all")
+            # Reinstala o Limine: a midia pode trazer outra versao dele.
+            install_bootloader(target, disk)
     finally:
         lock.close()
 
@@ -427,10 +482,12 @@ def install(device, connector):
         if not shutil.which(tool):
             lock.close()
             raise ValueError("Dependencia ausente: " + tool)
-    # Verify required bootloader assets BEFORE destroying a disk.
-    for required in ("/usr/lib/grub/i386-pc/modinfo.sh", "/usr/lib/grub/x86_64-efi/modinfo.sh",
-                     "/usr/sbin/grub-install", "/usr/sbin/update-initramfs"):
+    # Verify required bootloader assets BEFORE destroying a disk. The target
+    # is extracted from this same squashfs, so the live paths stand in for it.
+    for required in ("/usr/local/bin/limine", "/" + LIMINE_SHARE + "/limine-bios.sys",
+                     "/" + LIMINE_SHARE + "/BOOTX64.EFI", LIMINE_UPDATE, "/usr/sbin/update-initramfs"):
         if not Path(required).is_file():
+            lock.close()
             raise ValueError("ISO incompleta: " + required)
     run("unsquashfs", "-s", LIVE_IMAGE, capture=True)
     expected = get_disk(device["path"])
@@ -471,12 +528,7 @@ def install(device, connector):
         efi_uuid = run("blkid", "-s", "UUID", "-o", "value", partition_path(disk, 2), capture=True).strip()
         (target / "etc/fstab").write_text(
             f"UUID={root_uuid} / ext4 defaults 0 1\nUUID={efi_uuid} /boot/efi vfat umask=0077 0 2\n")
-        grubdir = target / "etc/default/grub.d"
-        grubdir.mkdir(exist_ok=True)
-        (grubdir / "99-fliperos.cfg").write_text(
-            'GRUB_CMDLINE_LINUX_DEFAULT="' + boot_parameters(connector) + '"\n'
-            'GRUB_CMDLINE_LINUX=""\nGRUB_DISABLE_OS_PROBER=true\n'
-            'GRUB_TERMINAL_OUTPUT=console\nGRUB_TIMEOUT=3\nGRUB_DISTRIBUTOR=FliperOS\n')
+        write_boot_cmdline(target, boot_parameters(connector))
         configure_video(target, connector)
         (target / "etc/fliperos/installed").write_text("Installed from FliperOS live ISO\n")
         (target / "etc/machine-id").write_text("")
@@ -491,10 +543,7 @@ def install(device, connector):
             run("mount", "--make-rslave", dest)
         run("chroot", target, "ssh-keygen", "-A")
         run("chroot", target, "update-initramfs", "-u", "-k", "all")
-        run("chroot", target, "grub-install", "--target=i386-pc", disk)
-        run("chroot", target, "grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi",
-            "--bootloader-id=FliperOS", "--removable", "--no-nvram")
-        run("chroot", target, "update-grub")
+        install_bootloader(target, disk)
         print("Defina a senha do usuario fliperos para o sistema instalado:")
         run("chroot", target, "passwd", "fliperos")
         run("sync")

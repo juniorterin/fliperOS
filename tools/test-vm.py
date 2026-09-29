@@ -29,7 +29,9 @@ class Guest:
                     '-append', 'boot=live components console=ttyS0,115200n8 systemd.wants=serial-getty@ttyS0.service',
                     '-cdrom', '/audit/fliperos-0.6.iso']
         elif mode == 'uefi':
-            cmd += ['-bios', '/usr/share/OVMF/OVMF_CODE.fd']
+            # Imagem combinada (codigo + variaveis): o noble nao tem mais o
+            # OVMF_CODE.fd avulso em /usr/share/OVMF.
+            cmd += ['-bios', '/usr/share/ovmf/OVMF.fd']
         self.proc = subprocess.Popen(cmd, stdout=self.log, stderr=self.log)
         for _ in range(100):
             if Path(serial).exists():
@@ -103,7 +105,7 @@ try:
     print('INSTALL: succeeded; enabling serial console on test disk only', flush=True)
     guest.send("mount /dev/vda3 /mnt; mount /dev/vda2 /mnt/boot/efi; mount --bind /dev /mnt/dev; mount -t proc proc /mnt/proc; mount -t sysfs sys /mnt/sys")
     guest.wait('VMROOT> ')
-    guest.send("printf 'GRUB_TERMINAL=serial\\nGRUB_SERIAL_COMMAND=\"serial --speed=115200\"\\nGRUB_CMDLINE_LINUX=\"console=ttyS0,115200n8\"\\n' > /mnt/etc/default/grub.d/zz-vm-test.cfg; chroot /mnt update-grub; sync")
+    guest.send("sed -i 's|^FLIPEROS_CMDLINE=\"\\(.*\\)\"$|FLIPEROS_CMDLINE=\"\\1 console=ttyS0,115200n8\"|' /mnt/etc/default/fliperos-boot; chroot /mnt /usr/local/sbin/fliperos-limine-update; sync")
     guest.wait('VMROOT> ', timeout=120)
     guest.send('umount /mnt/dev /mnt/proc /mnt/sys /mnt/boot/efi /mnt; poweroff')
     guest.wait('Power down', timeout=120)
@@ -111,7 +113,7 @@ finally:
     guest.close()
 
 for mode in ('bios', 'uefi'):
-    print(mode.upper() + ': booting installed disk through GRUB', flush=True)
+    print(mode.upper() + ': booting installed disk through Limine', flush=True)
     guest = Guest(mode)
     try:
         guest.login('Vm-test-only-9264')
