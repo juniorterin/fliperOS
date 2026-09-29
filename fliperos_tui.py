@@ -103,6 +103,27 @@ def speak(text, wait=False):
         pass
 
 
+# ── Densidade do console ─────────────────────────────────────
+# O modo do CRT e 640x240. Com a fonte padrao de 16 pixels de altura sobram
+# 80x15 caracteres, apertado demais pros dialogos. Uma fonte de 8 pixels da
+# 80x30 — a MESMA grade que 640x480 daria, e sem interlace.
+#
+# Por que nao 640x480 de verdade: a 15,6 kHz horizontais, 480 linhas
+# progressivas exigiriam ~31 kHz. Num tubo de 15 kHz so existe 640x480
+# ENTRELACADO, e texto entrelacado treme de forma cansativa. A fonte menor
+# entrega a mesma area util com imagem estavel.
+COMPACT_FONT = "Lat15-VGA8"
+
+
+def use_compact_font():
+    """Best-effort: sem setfont ou sem a fonte, segue com a densidade atual."""
+    if not shutil.which("setfont"):
+        return False
+    return subprocess.run(["setfont", COMPACT_FONT],
+                          stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL).returncode == 0
+
+
 def available():
     return shutil.which("whiptail") is not None
 

@@ -1089,13 +1089,14 @@ def current_layout():
                       variant.group(1) if variant else "")
 
 
-def step_keyboard():
+def step_keyboard(index=1, total=6):
     """Primeiro passo de proposito: o layout errado atrapalha digitar senha de
     Wi-Fi e do sistema, que sao os passos seguintes."""
     chosen = tui.menu("O layout atual e: %s\n\nUm layout errado troca acento, c-cedilha,\n"
                       "/ e ? de lugar — e os proximos passos pedem senha."
-                      % (current_layout() or "desconhecido"),
-                      LAYOUTS, title="Passo 1 de 5 — Teclado", default=current_layout())
+                      % (current_layout() or "desconhecido"), LAYOUTS,
+                      title="Passo %d de %d — Teclado" % (index, total),
+                      default=current_layout())
     if chosen is None:
         return False
     layout, _, variant = chosen.partition(":")
@@ -1112,7 +1113,22 @@ def step_keyboard():
     return True
 
 
-def step_network():
+def step_audio(index=2, total=6):
+    """Antes da rede e do video porque a narracao por voz depende dele, e a
+    voz existe pra guiar quem esta com a tela ilegivel nos passos seguintes."""
+    if not audio_devices():
+        tui.message("Nenhuma placa de som detectada.\n\n"
+                    "O sistema funciona sem audio; a narracao por voz e\n"
+                    "que nao vai existir.")
+        return True
+    menu_default_card()
+    if not audio_test():
+        tui.message("Sem som.\n\nTente outra placa: num PC com HDMI a\n"
+                    "escolhida costuma ser a errada pro gabinete.")
+    return True
+
+
+def step_network(index=3, total=6):
     if network_summary() != "sem endereco IPv4":
         if not tui.yesno("Ja existe rede:\n\n%s\n\nConfigurar Wi-Fi mesmo assim?"
                          % network_summary()):
@@ -1121,7 +1137,7 @@ def step_network():
     return True
 
 
-def step_video():
+def step_video(index=4, total=6):
     """O gasetup confirma o video ANTES de particionar, e por bom motivo: sem
     imagem estavel nao da pra conduzir uma instalacao que apaga disco."""
     tui.speak("Passo de video. Vamos medir a frequencia do monitor.")
@@ -1143,7 +1159,7 @@ def step_video():
     return True
 
 
-def step_password():
+def step_password(index=5, total=6):
     """A imagem sai com fliperos/fliperos e com SSH ligado: trocar a senha
     antes de instalar evita a maquina nascer acessivel com senha publica."""
     if not tui.yesno("A senha padrao e 'fliperos', e o SSH esta ligado.\n\n"
@@ -1153,7 +1169,7 @@ def step_password():
     return True
 
 
-def step_install():
+def step_install(index=6, total=6):
     if not tui.yesno("Instalar em disco agora?\n\n"
                      "O instalador vai pedir o conector do CRT e exigir que\n"
                      "voce digite APAGAR com o dispositivo exato. O disco\n"
@@ -1166,39 +1182,52 @@ def step_install():
     return True
 
 
-WIZARD_STEPS = [("teclado", "Teclado", step_keyboard),
-                ("rede", "Rede (Wi-Fi)", step_network),
-                ("video", "Confirmar o CRT", step_video),
-                ("senha", "Senha do sistema", step_password),
-                ("instalar", "Instalar em disco", step_install)]
+WIZARD_STEPS = [("teclado", "Teclado", step_keyboard, "Layout do teclado"),
+                ("audio", "Audio", step_audio, "Placa de som e volume"),
+                ("rede", "Rede", step_network, "Wi-Fi, se nao houver cabo"),
+                ("video", "Video", step_video, "Confirmar o CRT em 15 kHz"),
+                ("senha", "Senha", step_password, "Trocar a senha padrao"),
+                ("instalar", "Instalar", step_install, "Gravar no disco")]
+
+
+def wizard_navigate(index, total, label, detail, first):
+    """Navegacao linear: avancar, voltar ou sair. Nao ha escolha livre de
+    passo — a ordem existe porque um passo depende do anterior (sem teclado
+    certo nao se digita senha; sem video confirmado nao se conduz uma
+    instalacao que apaga disco)."""
+    options = [("avancar", "Avancar para o proximo passo")]
+    if not first:
+        options.append(("voltar", "Voltar ao passo anterior"))
+    options.append(("sair", "Sair da configuracao inicial"))
+    chosen = tui.menu("Passo %d de %d — %s\n\n%s" % (index, total, label, detail),
+                      options, title="Configuracao inicial",
+                      cancel="Sair", default="avancar")
+    return chosen or "sair"
 
 
 def wizard(resume=True):
-    """Passos em sequencia, na ordem do gasetup: video antes de particionar, e
-    senha como passo proprio. Passo ja concluido e pulado ao reabrir, como o
-    gasetup faz ao checar se o monitor ja esta configurado."""
-    done = wizard_done() if resume else set()
-    total = len(WIZARD_STEPS)
-    for index, (key, label, action) in enumerate(WIZARD_STEPS, 1):
-        if key in done:
-            continue
-        titled = "Passo %d de %d — %s" % (index, total, label)
-        tui.speak("Passo %d de %d: %s." % (index, total, label))
-        if not tui.yesno("%s\n\n%s\n\nSeguir com este passo?\n\n"
-                         "(NAO pula para o proximo)" % (titled, label),
-                         title="Configuracao inicial", default_no=False):
-            continue
-        if action():
-            mark_done(key)
-    tui.speak("Configuracao inicial concluida.")
-    tui.message("Passos concluidos.\n\nO menu de setup segue disponivel para\n"
-                "ajustes e para reabrir qualquer passo.")
-
-
-def menu_wizard_reset():
-    if tui.yesno("Refazer todos os passos desde o inicio?"):
+    """Sequencia linear, na ordem do gasetup: video antes de particionar, e
+    senha como passo proprio. O usuario avanca ou volta um passo; nao escolhe
+    passo solto."""
+    if not resume:
         WIZARD_STATE.unlink(missing_ok=True)
-        wizard(resume=False)
+    total = len(WIZARD_STEPS)
+    index = 0
+    while 0 <= index < total:
+        key, label, action, detail = WIZARD_STEPS[index]
+        tui.speak("Passo %d de %d: %s." % (index + 1, total, label))
+        action(index + 1, total)
+        mark_done(key)
+        move = wizard_navigate(index + 1, total, label, detail, first=index == 0)
+        if move == "voltar":
+            index -= 1
+        elif move == "sair":
+            return
+        else:
+            index += 1
+    tui.speak("Configuracao inicial concluida.")
+    tui.message("Todos os passos foram percorridos.\n\n"
+                "Para refazer algum, abra a configuracao inicial de novo.")
 
 
 def menu_setup_media():
@@ -1206,7 +1235,7 @@ def menu_setup_media():
 
     A midia abre AQUI, nao no instalador: numa maquina sem cabo de rede e
     preciso configurar o Wi-Fi e conferir o video antes de instalar em disco.
-    Os itens que dependem de GRUB instalado ficam de fora, em vez de estarem
+    Os itens que dependem de bootloader instalado ficam de fora, em vez de estarem
     presentes e recusarem."""
     # Regra da divisao: aqui fica so o que afeta INSTALAR BEM. O que nao
     # persiste no pendrive e nao e pre-requisito da instalacao (perfil de
@@ -1215,42 +1244,26 @@ def menu_setup_media():
     # la e jogar fora no reboot seria enganar o usuario.
     # O audio esta aqui de proposito: a narracao por voz depende dele, e a voz
     # existe justamente pra quando a tela nao mostra nada.
-    options = [("wizard", "Configuracao inicial (passo a passo)"),
-               ("teclado", "Teclado"),
-               ("audio", "Audio (placa de som, volume, teste)"),
-               ("rede", "Rede (Wi-Fi) — necessario pra acessar por SSH"),
-               ("video", "Verificar o modo de video ativo"),
-               ("detectar", "Descobrir qual conector e o do CRT"),
-               ("instalar", "Instalar em disco (ou reparar existente)"),
+    # Sem passos soltos: os passos sao percorridos pelo wizard, em ordem,
+    # porque cada um depende do anterior. Aqui ficam so as acoes que NAO sao
+    # passo — refazer o percurso, diagnosticar e encerrar.
+    options = [("wizard", "Refazer a configuracao inicial (passo a passo)"),
+               ("reparar", "Reparar uma instalacao existente"),
                ("compartilhar", "Compartilhamento (Samba, SSH/SFTP)"),
                ("sistema", "Sistema e diagnostico"),
                ("energia", "Reiniciar / desligar"),
                ("shell", "Sair para o shell")]
     while True:
-        pending = len(WIZARD_STEPS) - len(wizard_done() & {k for k, _, _ in WIZARD_STEPS})
-        chosen = tui.menu("%s\n\nMidia de instalacao — %d passo(s) pendente(s)."
-                          % (status_line(), pending), options,
+        chosen = tui.menu("%s\n\nMidia de instalacao." % status_line(), options,
                           title="FliperOS — setup", cancel="Sair")
         if chosen is None or chosen == "shell":
             return 0
         try:
             if chosen == "wizard":
-                menu_wizard_reset() if pending == 0 else wizard()
-            elif chosen == "teclado":
-                step_keyboard()
-            elif chosen == "audio":
-                menu_audio(full=False)
-            elif chosen == "rede":
-                menu_network()
-            elif chosen == "video":
-                tui.run_visible(["/usr/local/bin/fliperos-video-check"],
-                                "Modo de video ativo")
-            elif chosen == "detectar":
-                tui.run_visible(["/usr/local/bin/fliperos-video-autodetect"],
-                                "Descobrindo o conector do CRT")
-            elif chosen == "instalar":
+                wizard(resume=False)
+            elif chosen == "reparar":
                 tui.run_visible(["/usr/local/bin/fliperos-install"],
-                                "Instalacao")
+                                "Reparo de instalacao existente")
             elif chosen == "compartilhar":
                 menu_sharing()
             elif chosen == "sistema":
@@ -1307,8 +1320,17 @@ def main():
         print("Execute com sudo: sudo fliperos-config")
         return 1
     tui.require()
+    # 80x30 em vez de 80x15: ver o comentario de COMPACT_FONT sobre por que
+    # isto, e nao um modo 640x480, e o caminho num CRT de 15 kHz.
+    tui.use_compact_font()
     try:
-        return menu_installed() if installed() else menu_setup_media()
+        if installed():
+            return menu_installed()
+        # Na midia o usuario PERCORRE os passos; nao ha escolha solta de passo,
+        # porque cada um depende do anterior.
+        if not wizard_done():
+            wizard()
+        return menu_setup_media()
     except KeyboardInterrupt:
         return 130
 

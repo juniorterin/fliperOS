@@ -413,11 +413,17 @@ class SessionTests(unittest.TestCase):
         self.assertNotIn('fliperos-install', live_branch)
 
     def test_setup_media_menu_offers_wifi_and_install(self):
+        """Wi-Fi e instalacao sao passos do wizard, nao itens soltos: o menu
+        da midia so precisa levar ao wizard e ao instalador (reparo)."""
         text = (ROOT / 'fliperos-config.py').read_text()
         menu = text.split('def menu_setup_media')[1].split('def menu_installed')[0]
-        self.assertIn('menu_network', menu)
+        self.assertIn('wizard(', menu)
         self.assertIn('fliperos-install', menu)
-        # Itens que exigem GRUB instalado nao entram no menu da midia.
+        network = text.split('def step_network')[1].split('def step_video')[0]
+        self.assertIn('menu_wifi', network)
+        install = text.split('def step_install')[1].split('WIZARD_STEPS')[0]
+        self.assertIn('fliperos-install', install)
+        # Itens que exigem bootloader instalado nao entram no menu da midia.
         self.assertNotIn('menu_orientation', menu)
         self.assertNotIn('menu_connector', menu)
 
@@ -530,7 +536,7 @@ class WizardTests(unittest.TestCase):
     """Passos em sequencia, na ordem do gasetup: video antes de particionar."""
 
     def test_step_order_puts_keyboard_first_and_install_last(self):
-        keys = [key for key, _, _ in config.WIZARD_STEPS]
+        keys = [step[0] for step in config.WIZARD_STEPS]
         self.assertEqual(keys[0], 'teclado',
                          'teclado vem primeiro: os passos seguintes pedem senha')
         self.assertEqual(keys[-1], 'instalar')
@@ -538,9 +544,53 @@ class WizardTests(unittest.TestCase):
         self.assertLess(keys.index('video'), keys.index('instalar'))
 
     def test_every_step_has_a_callable(self):
-        for key, label, action in config.WIZARD_STEPS:
-            self.assertTrue(key and label)
+        for key, label, action, detail in config.WIZARD_STEPS:
+            self.assertTrue(key and label and detail)
             self.assertTrue(callable(action), key)
+
+    def test_navigation_is_linear_not_free_choice(self):
+        """O percurso e sequencial: avancar ou voltar um passo. Nao ha escolha
+        solta de passo, porque cada um depende do anterior."""
+        captured = {}
+
+        def fake_menu(text, options, **kwargs):
+            captured['tags'] = [tag for tag, _ in options]
+            return 'avancar'
+
+        with mock.patch.object(config.tui, 'menu', side_effect=fake_menu):
+            self.assertEqual(
+                config.wizard_navigate(2, 6, 'Audio', 'Placa', first=False),
+                'avancar')
+        self.assertEqual(captured['tags'], ['avancar', 'voltar', 'sair'])
+        # Nenhuma opcao deve permitir pular direto para um passo arbitrario.
+        for key, _, _, _ in config.WIZARD_STEPS:
+            self.assertNotIn(key, captured['tags'])
+
+    def test_first_step_offers_no_back(self):
+        captured = {}
+
+        def fake_menu(text, options, **kwargs):
+            captured['tags'] = [tag for tag, _ in options]
+            return 'avancar'
+
+        with mock.patch.object(config.tui, 'menu', side_effect=fake_menu):
+            config.wizard_navigate(1, 6, 'Teclado', 'Layout', first=True)
+        self.assertNotIn('voltar', captured['tags'])
+
+    def test_cancelling_the_navigation_leaves_the_wizard(self):
+        with mock.patch.object(config.tui, 'menu', return_value=None):
+            self.assertEqual(
+                config.wizard_navigate(3, 6, 'Rede', 'Wi-Fi', first=False), 'sair')
+
+    def test_media_menu_does_not_expose_individual_steps(self):
+        """Regressao do pedido: na midia o usuario percorre os passos, nao
+        escolhe qual fazer."""
+        source = (ROOT / 'fliperos-config.py').read_text()
+        menu = source.split('def menu_setup_media')[1].split('def menu_installed')[0]
+        options = menu.split('while True')[0]
+        for step_key in ('teclado', 'audio', 'video', 'detectar'):
+            self.assertNotIn('("%s"' % step_key, options,
+                             'passo %s exposto como item solto' % step_key)
 
     def test_completed_steps_are_remembered(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -578,10 +628,14 @@ class MenuSplitTests(unittest.TestCase):
         return media, inst
 
     def test_media_has_what_the_install_depends_on(self):
+        """Na midia os passos sao percorridos pelo wizard, em ordem; o menu
+        so precisa levar ao wizard e ao instalador."""
         media, _ = self.menus()
-        for needed in ('teclado', 'audio', 'menu_network', 'fliperos-install',
-                       'fliperos-video-check'):
-            self.assertIn(needed, media, 'falta na midia: ' + needed)
+        keys = [step[0] for step in config.WIZARD_STEPS]
+        for needed in ('teclado', 'audio', 'rede', 'video', 'instalar'):
+            self.assertIn(needed, keys, 'falta no wizard: ' + needed)
+        self.assertIn('wizard(', media)
+        self.assertIn('fliperos-install', media)
 
     def test_media_excludes_what_does_not_persist(self):
         media, _ = self.menus()
@@ -599,7 +653,11 @@ class MenuSplitTests(unittest.TestCase):
     def test_mame_latency_only_in_the_full_audio_menu(self):
         """O MAME so e instalado depois; latencia na midia nao teria efeito."""
         media, _ = self.menus()
-        self.assertIn('menu_audio(full=False)', media)
+        source = (ROOT / 'fliperos-config.py').read_text()
+        step = source.split('def step_audio')[1].split('def step_network')[0]
+        self.assertIn('menu_default_card', step)
+        # menu_audio() sem full=False traria o item de latencia.
+        self.assertNotIn('menu_audio(', step + media)
 
     def test_window_manager_menu_opens_the_config(self):
         """O menu do openbox e estatico e nao le os .desktop; o LXDE le. Os
