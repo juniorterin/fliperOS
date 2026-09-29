@@ -11,3 +11,5 @@ config/fliperos-* text eol=lf
 # Os .py viram executaveis com shebang na imagem. O fliperos-limine-update
 # roda nos hooks de kernel: com CRLF, instalar um kernel novo falharia.
 *.py text eol=lf
+# O ponto de entrada do fliperos-setup nao tem extensao.
+fliperos-setup/fliperos-setup text eol=lf

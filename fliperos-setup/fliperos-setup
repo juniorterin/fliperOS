@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# fliperos-setup: o equivalente do gasetup do GroovyArcade.
+#
+# Na midia de instalacao testa as saidas de video e abre o "FliperOS Setup"
+# (instalar, recuperar, terminal, desligar). No sistema instalado e o menu
+# que aparece quando o frontend fecha.
+#
+#   sudo fliperos-setup                 fluxo normal
+#   sudo fliperos-setup --first-boot    escolhe o launcher padrao
+#   sudo fliperos-setup --output-test   refaz o teste de saidas
+#   sudo fliperos-setup --video-setup   abre direto o Video Setup
+#
+# lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
+# screens/ tem as telas.
+
+set -o pipefail
+shopt -s extglob
+
+FLIPEROS_SETUP_VERSION=0.7
+SETUP_DIR=${FLIPEROS_SETUP_DIR:-$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")}
+
+# Lista explicita (e nao um laco): a ordem importa e o shellcheck -x segue
+# cada arquivo, entao confere as variaveis entre eles.
+# shellcheck source=lib/common.sh
+source "$SETUP_DIR/lib/common.sh"
+# shellcheck source=lib/config.sh
+source "$SETUP_DIR/lib/config.sh"
+# shellcheck source=lib/progress.sh
+source "$SETUP_DIR/lib/progress.sh"
+# shellcheck source=lib/speech.sh
+source "$SETUP_DIR/lib/speech.sh"
+# shellcheck source=lib/monitor.sh
+source "$SETUP_DIR/lib/monitor.sh"
+# shellcheck source=lib/drm.sh
+source "$SETUP_DIR/lib/drm.sh"
+# shellcheck source=lib/video.sh
+source "$SETUP_DIR/lib/video.sh"
+# shellcheck source=lib/xorg.sh
+source "$SETUP_DIR/lib/xorg.sh"
+# shellcheck source=lib/bootloader.sh
+source "$SETUP_DIR/lib/bootloader.sh"
+# shellcheck source=lib/disk.sh
+source "$SETUP_DIR/lib/disk.sh"
+# shellcheck source=lib/install.sh
+source "$SETUP_DIR/lib/install.sh"
+# shellcheck source=lib/recovery.sh
+source "$SETUP_DIR/lib/recovery.sh"
+# shellcheck source=lib/launcher.sh
+source "$SETUP_DIR/lib/launcher.sh"
+# shellcheck source=lib/audio.sh
+source "$SETUP_DIR/lib/audio.sh"
+# shellcheck source=lib/network.sh
+source "$SETUP_DIR/lib/network.sh"
+# shellcheck source=lib/status.sh
+source "$SETUP_DIR/lib/status.sh"
+# shellcheck source=lib/scraper.sh
+source "$SETUP_DIR/lib/scraper.sh"
+# shellcheck source=lib/update.sh
+source "$SETUP_DIR/lib/update.sh"
+# shellcheck source=lib/ui.sh
+source "$SETUP_DIR/lib/ui.sh"
+# shellcheck source=screens/progress.sh
+source "$SETUP_DIR/screens/progress.sh"
+# shellcheck source=screens/output-test.sh
+source "$SETUP_DIR/screens/output-test.sh"
+# shellcheck source=screens/video-setup.sh
+source "$SETUP_DIR/screens/video-setup.sh"
+# shellcheck source=screens/disk-selection.sh
+source "$SETUP_DIR/screens/disk-selection.sh"
+# shellcheck source=screens/install-progress.sh
+source "$SETUP_DIR/screens/install-progress.sh"
+# shellcheck source=screens/recovery.sh
+source "$SETUP_DIR/screens/recovery.sh"
+# shellcheck source=screens/main-menu.sh
+source "$SETUP_DIR/screens/main-menu.sh"
+# shellcheck source=screens/setup-menu.sh
+source "$SETUP_DIR/screens/setup-menu.sh"
+# shellcheck source=screens/first-boot.sh
+source "$SETUP_DIR/screens/first-boot.sh"
+
+usage() {
+  sed -n '8,11p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
+}
+
+restore_terminal() {
+  speak_stop
+  printf '\e[?25h' > /dev/tty 2> /dev/null
+  stty echo < /dev/tty 2> /dev/null
+  return 0
+}
+
+main() {
+  local rc=0
+  case ${1:-} in
+    --version)
+      echo "fliperos-setup $FLIPEROS_SETUP_VERSION"
+      return 0
+      ;;
+    --help | -h)
+      usage
+      return 0
+      ;;
+  esac
+  if ((EUID != 0)); then
+    echo "Run with sudo: sudo fliperos-setup" >&2
+    return 1
+  fi
+  if ! have gum; then
+    echo "gum was not found; the setup screens need it." >&2
+    return 1
+  fi
+  if [[ ! -r /dev/tty ]]; then
+    echo "fliperos-setup needs a terminal." >&2
+    return 1
+  fi
+  # E um menu de gabinete: sai-se dele pelo menu. Ctrl+C no meio de uma
+  # instalacao deixaria o disco pela metade.
+  trap '' INT QUIT TSTP
+  trap restore_terminal EXIT
+  log_info "fliperos-setup $FLIPEROS_SETUP_VERSION $* (live=$(is_live && echo yes || echo no))"
+  ui_init
+
+  case ${1:-} in
+    --first-boot)
+      screen_first_boot
+      return 0
+      ;;
+    --output-test)
+      screen_video_detection
+      return 0
+      ;;
+    --video-setup)
+      screen_video_setup
+      return 0
+      ;;
+  esac
+
+  if is_live; then
+    # O teste roda uma vez por boot da midia (o fliperos.conf da midia
+    # vive na RAM e comeca vazio a cada boot).
+    if ! conf_get output_test > /dev/null 2>&1; then
+      if screen_video_detection; then
+        conf_set output_test "done"
+      else
+        conf_set output_test skipped
+      fi
+    fi
+    screen_live_menu
+    rc=$?
+  else
+    [[ -f $FLIPEROS_ETC/firstboot ]] && screen_first_boot
+    screen_main_menu
+    rc=$?
+  fi
+  ((rc == SETUP_EXIT_SHELL)) && return 0
+  return "$rc"
+}
+
+main "$@"
