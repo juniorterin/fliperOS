@@ -3,8 +3,9 @@
 # contrario do fliperos-x11-run, nao usa xinit/fliperos-x11-client. So pra
 # emuladores com suporte nativo a KMS/DRM confirmado (ver
 # build_retroarch_chroot()/build_flycast_chroot() em fliperos-mkiso.sh).
-# O modo fixo 640x240 vem do EDID customizado (crt15-edid.bin, injetado no
-# initramfs) — isso ja vale pra qualquer consumidor de KMS, nao so Xorg.
+# O modo inicial 640x240 vem do EDID customizado (crt15-edid.bin, injetado no
+# initramfs) — isso ja vale pra qualquer consumidor de KMS, nao so Xorg. O
+# RetroArch depois troca de modo sozinho por jogo (CRT SwitchRes).
 set -euo pipefail
 [[ $# -gt 0 ]] || { echo "Uso: fliperos-kms-run emulador [argumentos]" >&2; exit 2; }
 case "${FLIPEROS_MONITOR:-arcade_15}" in
@@ -13,6 +14,14 @@ case "${FLIPEROS_MONITOR:-arcade_15}" in
 esac
 [[ -z "${DISPLAY:-}" ]] || { echo "Execute no console TTY, fora de uma sessao X." >&2; exit 2; }
 command -v "$1" >/dev/null || { echo "Emulador nao instalado: $1" >&2; exit 127; }
+# A config do FliperOS entra por cima da do usuario (ver o cabecalho de
+# config/retroarch.cfg). Fica aqui, e nao em quem chama, porque a sessao de
+# boot so passa o nome do binario — sem isto ela abria o RetroArch com a
+# config de fabrica dele, sem CRT SwitchRes.
+if [[ "$(basename -- "$1")" == retroarch ]]; then
+    mkdir -p /opt/fliperos/saves/retroarch 2>/dev/null || true
+    set -- "$1" --appendconfig /etc/fliperos/retroarch/retroarch.cfg "${@:2}"
+fi
 # SDL_VIDEODRIVER so importa pro Flycast (SDL2); RetroArch foi compilado
 # sem X11/Wayland/SDL, entao o driver KMS/DRM e o unico disponivel e essa
 # variavel nao faz diferenca pra ele.

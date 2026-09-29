@@ -3,6 +3,7 @@ import io
 import os
 from pathlib import Path
 import re
+import subprocess
 import unittest
 from unittest import mock
 import tempfile
@@ -989,6 +990,93 @@ class ConfigProfileTests(unittest.TestCase):
         for profile, (low, high) in config.PROFILE_KHZ.items():
             self.assertRegex(script, r'%s\)[^)]*?MIN_KHZ=%s; MAX_KHZ=%s'
                              % (profile, low, high))
+
+
+class RetroArchConfigTests(unittest.TestCase):
+    """config/retroarch.cfg e config de sistema: o fliperos-kms-run a passa
+    com --appendconfig, por cima da do usuario. Cada chave abaixo, errada,
+    deixa o CRT sem troca de modo, o RetroArch mudo ou sem abrir."""
+
+    CFG = ROOT / 'config/retroarch.cfg'
+    KMS_RUN = ROOT / 'config/fliperos-kms-run'
+
+    def values(self):
+        found = {}
+        for line in self.CFG.read_text().splitlines():
+            if not line.strip() or line.startswith('#'):
+                continue
+            match = re.match(r'^([a-z0-9_]+) = "([^"]*)"$', line)
+            self.assertIsNotNone(match, 'linha fora do formato do RetroArch: ' + line)
+            self.assertNotIn(match.group(1), found, 'chave repetida: ' + match.group(1))
+            found[match.group(1)] = match.group(2)
+        return found
+
+    def test_crt_switchres_uses_the_system_switchres_ini(self):
+        # 4 = monitor e geometria do /etc/switchres.ini, o que o
+        # fliperos-config grava; os presets fixos ignorariam a calibracao.
+        self.assertEqual(self.values()['crt_switch_resolution'], '4')
+        self.assertEqual(self.values()['crt_switch_hires_menu'], 'false')
+
+    def test_video_driver_can_modeswitch_in_kms(self):
+        # Vulkan em KMS vira khr_display, que gera o modo mas nao aplica.
+        self.assertEqual(self.values()['video_driver'], 'gl')
+        self.assertEqual(self.values()['video_scale_integer'], 'false')
+
+    def test_initial_mode_comes_from_the_edid(self):
+        # Tamanho fixo que o conector nao liste faz o RetroArch abortar.
+        values = self.values()
+        self.assertEqual((values['video_fullscreen_x'], values['video_fullscreen_y']),
+                         ('0', '0'))
+
+    def test_audio_is_alsa_not_the_compiled_default(self):
+        # O build herda libpulse-dev do GroovyMAME e o padrao vira pulse,
+        # mudo num sistema sem servidor de som.
+        self.assertIn('libpulse-dev', (ROOT / 'fliperos-mkiso.sh').read_text())
+        self.assertEqual(self.values()['audio_driver'], 'alsa')
+
+    def test_menu_is_readable_at_240_lines(self):
+        self.assertEqual(self.values()['menu_driver'], 'rgui')
+
+    def test_nothing_the_user_writes_points_at_etc(self):
+        # O RetroArch roda como o usuario fliperos; /etc nao e gravavel.
+        values = self.values()
+        self.assertNotIn('rgui_config_directory', values)
+        for key in ('savefile_directory', 'savestate_directory', 'system_directory'):
+            self.assertTrue(values[key].startswith('/opt/fliperos/'), key)
+
+    def test_only_real_keys(self):
+        # joypad_autoconfig_enable nunca existiu; o nome certo e este.
+        values = self.values()
+        self.assertNotIn('joypad_autoconfig_enable', values)
+        self.assertEqual(values['input_autodetect_enable'], 'true')
+
+    def test_launcher_does_not_replace_the_user_config(self):
+        # --config trocaria a config do usuario (gravavel) pela de /etc.
+        self.assertNotIn('--config', (ROOT / 'config/fliperos-launcher').read_text())
+
+    def run_kms_run(self, *args):
+        """Roda o fliperos-kms-run com retroarch/flycast/mkdir falsos no PATH,
+        que so registram os argumentos."""
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / 'calls'
+            for name in ('retroarch', 'flycast', 'mkdir'):
+                fake = Path(tmp) / name
+                fake.write_text('#!/bin/sh\necho "%s $*" >> "%s"\n' % (name, log))
+                fake.chmod(0o755)
+            env = {key: value for key, value in os.environ.items() if key != 'DISPLAY'}
+            env['PATH'] = tmp + os.pathsep + env.get('PATH', '/usr/bin:/bin')
+            env.pop('FLIPEROS_MONITOR', None)
+            subprocess.run(['bash', str(self.KMS_RUN), *args], env=env, check=True)
+            return log.read_text().splitlines()
+
+    def test_kms_run_appends_the_system_config_for_retroarch(self):
+        calls = self.run_kms_run('retroarch', '-L', 'core.so', 'jogo.bin')
+        self.assertIn('mkdir -p /opt/fliperos/saves/retroarch', calls)
+        self.assertIn('retroarch --appendconfig /etc/fliperos/retroarch/retroarch.cfg '
+                      '-L core.so jogo.bin', calls)
+
+    def test_kms_run_leaves_other_emulators_alone(self):
+        self.assertEqual(self.run_kms_run('flycast', 'jogo.gdi'), ['flycast jogo.gdi'])
 
 
 if __name__ == '__main__':
