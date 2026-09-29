@@ -1158,7 +1158,10 @@ def step_install():
                      "voce digite APAGAR com o dispositivo exato. O disco\n"
                      "escolhido e apagado inteiro — nao ha dual boot."):
         return True
-    tui.run_visible(["/usr/local/bin/fliperos-install"], "Instalacao", pause_after=False)
+    # pause_after=True e essencial: com False, uma recusa do instalador
+    # ("Inicie pela ISO live", dependencia ausente) era apagada pelo dialogo
+    # seguinte e o usuario via o menu voltar sem explicacao nenhuma.
+    tui.run_visible(["/usr/local/bin/fliperos-install"], "Instalacao")
     return True
 
 
@@ -1246,7 +1249,7 @@ def menu_setup_media():
                                 "Descobrindo o conector do CRT")
             elif chosen == "instalar":
                 tui.run_visible(["/usr/local/bin/fliperos-install"],
-                                "Instalacao", pause_after=False)
+                                "Instalacao")
             elif chosen == "compartilhar":
                 menu_sharing()
             elif chosen == "sistema":

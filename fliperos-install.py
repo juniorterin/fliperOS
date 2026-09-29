@@ -122,11 +122,14 @@ def autodetect_connector():
     tool = Path("/usr/local/bin/fliperos-video-autodetect")
     if not tool.is_file():
         tool = Path(__file__).with_name("fliperos-video-autodetect.py")
-    proc = subprocess.run([str(tool), "--json"], text=True, capture_output=True)
+    # So o stdout e capturado: o auto-detect conversa com a pessoa pelo stderr
+    # ("Testando VGA-1", "Pressione ENTER..."), e isso precisa chegar na tela.
+    proc = subprocess.run([str(tool), "--json"], text=True, stdout=subprocess.PIPE)
     try:
         result = json.loads(proc.stdout)
     except json.JSONDecodeError:
-        raise ValueError("Auto-deteccao de conector falhou: " + (proc.stderr or "sem saida").strip())
+        raise ValueError("Auto-deteccao de conector falhou (codigo %d); veja as mensagens acima."
+                         % proc.returncode)
     confirmed = result.get("confirmed", [])
     if not confirmed:
         raise ValueError("Nenhum conector confirmado na auto-deteccao. Consulte sudo fliperos-video-check.")
@@ -166,7 +169,9 @@ def select_connector():
     boot_parameters(connector)
     if sum(o["connector"] == connector for o in report["outputs"]) != 1:
         raise ValueError("Conector ambiguo entre GPUs; configurar manualmente antes de instalar")
-    if input("A imagem esta visivel e estavel nesse CRT? Digite SIM: ") != "SIM":
+    # Maiuscula/minuscula nao importa aqui: esta confirmacao nao apaga nada, e
+    # "sim" digitado em minusculas abortava a instalacao inteira.
+    if input("A imagem esta visivel e estavel nesse CRT? Digite SIM: ").strip().upper() != "SIM":
         raise ValueError("Monitor nao confirmado")
     return connector
 
@@ -570,14 +575,26 @@ def main():
         if choice != "1":
             return 0
         connector = select_connector()
-        disks = [d for d in inventory() if not rejection(d)]
+        # Disco recusado aparece com o motivo, em vez de sumir da lista: sem
+        # isso, um HD em uso ou pequeno demais so gerava "nenhum disco" e a
+        # pessoa nao tinha como saber o que corrigir.
+        disks, refused = [], []
+        for device in inventory():
+            why = rejection(device)
+            if not why:
+                disks.append(device)
+            elif device.get("type") == "disk":
+                refused.append((device, why))
         installed_paths = {entry["disk"] for entry in found}
         for i, device in enumerate(disks, 1):
             flag = " [FliperOS ja instalado]" if device["path"] in installed_paths else ""
             print(f'{i}. {device["path"]} {device.get("model", "")} '
                   f'{int(device["size"]) / 1024**3:.1f} GiB serial={device.get("serial", "")}{flag}')
+        for device, why in refused:
+            print(f'-  {device["path"]} {device.get("model") or ""} '
+                  f'{int(device["size"]) / 1024**3:.1f} GiB: indisponivel ({why})')
         if not disks:
-            raise ValueError("Nenhum disco livre elegivel; discos em uso sao excluidos")
+            raise ValueError("Nenhum disco elegivel; o motivo de cada um esta listado acima")
         index = int(input("Disco de destino (0 cancela): ")) - 1
         if index == -1:
             return 0

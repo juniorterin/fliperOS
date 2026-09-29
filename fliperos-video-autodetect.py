@@ -51,14 +51,18 @@ def classify(name, edid_size, status):
 
 
 def say(message, voice):
-    print(message)
+    # stderr, nao stdout: com --json o stdout e so o JSON, e quem chama (o
+    # instalador) captura o stdout. Os avisos no stdout sumiam da tela E
+    # quebravam o json.loads do lado de la.
+    print(message, file=sys.stderr, flush=True)
     if voice:
         subprocess.run(['espeak-ng', '-s', '120', message],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def wait_for_enter(timeout):
-    print(f'  Pressione ENTER se a imagem aparecer (aguardando {timeout:.0f}s)...')
+    print(f'  Pressione ENTER se a imagem aparecer (aguardando {timeout:.0f}s)...',
+          file=sys.stderr, flush=True)
     ready, _, _ = select.select([sys.stdin], [], [], timeout)
     if ready:
         sys.stdin.readline()

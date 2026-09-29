@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import os
 from pathlib import Path
 import re
@@ -241,6 +242,27 @@ class AutodetectTests(unittest.TestCase):
         self.assertEqual(autodetect.classify('DP-1', 0, 'disconnected'), 'skip')
         self.assertEqual(autodetect.classify('HDMI-A-1', 0, 'disconnected'), 'skip')
 
+    def test_prompts_stay_out_of_the_json_stdout(self):
+        """Com --json o instalador captura o stdout: aviso ali some da tela e
+        quebra o json.loads. Os avisos vao pro stderr."""
+        with mock.patch('sys.stdout', new=io.StringIO()) as out, \
+                mock.patch('sys.stderr', new=io.StringIO()) as err, \
+                mock.patch.object(autodetect.select, 'select', return_value=([], [], [])):
+            autodetect.say('Testando VGA-1', False)
+            autodetect.wait_for_enter(0.01)
+        self.assertEqual(out.getvalue(), '')
+        self.assertIn('Testando VGA-1', err.getvalue())
+        self.assertIn('ENTER', err.getvalue())
+
+    def test_installer_leaves_autodetect_stderr_on_screen(self):
+        report = mock.Mock(returncode=0, stdout='{"confirmed": ["VGA-1"], "edid_present": []}')
+        with mock.patch.object(installer.subprocess, 'run', return_value=report) as runner:
+            self.assertEqual(installer.autodetect_connector(), 'VGA-1')
+        kwargs = runner.call_args.kwargs
+        self.assertNotIn('capture_output', kwargs)
+        self.assertNotIn('stderr', kwargs)
+        self.assertEqual(kwargs['stdout'], installer.subprocess.PIPE)
+
 
 class ConfigCmdlineTests(unittest.TestCase):
     """Edicao da cmdline do GRUB feita pelo fliperos-config (orientacao,
@@ -396,6 +418,16 @@ class SessionTests(unittest.TestCase):
         # Itens que exigem GRUB instalado nao entram no menu da midia.
         self.assertNotIn('menu_orientation', menu)
         self.assertNotIn('menu_connector', menu)
+
+    def test_installer_errors_stay_on_screen(self):
+        """Sem pausa, a recusa do instalador ("Inicie pela ISO live", disco
+        recusado, monitor nao confirmado) era apagada pelo dialogo seguinte e
+        o menu voltava sem explicacao nenhuma."""
+        text = (ROOT / 'fliperos-config.py').read_text()
+        calls = re.findall(r'run_visible\(\["/usr/local/bin/fliperos-install"\][^)]*\)', text)
+        self.assertTrue(calls)
+        for call in calls:
+            self.assertNotIn('pause_after=False', call)
 
 
 class InputDriverTests(unittest.TestCase):
