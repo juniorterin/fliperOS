@@ -1,6 +1,11 @@
 #!/bin/sh
+# Leva os EDIDs para o initramfs: o KMS le o drm.edid_firmware antes de a
+# raiz montar. Sao os EDIDs de cada preset do Switchres (gerados pelo
+# fliperos-rebuild-edids), os super res das entradas "EDID" do boot e a
+# resolucao personalizada do Video Setup.
 set -e
 PREREQ=""
 case "${1:-}" in prereqs) echo "$PREREQ"; exit 0 ;; esac
+[ -d /lib/firmware/edid ] || exit 0
 mkdir -p "$DESTDIR/lib/firmware/edid"
-cp /lib/firmware/edid/crt15.bin "$DESTDIR/lib/firmware/edid/crt15.bin"
+cp /lib/firmware/edid/*.bin "$DESTDIR/lib/firmware/edid/" 2> /dev/null || true

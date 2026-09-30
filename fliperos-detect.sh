@@ -21,11 +21,11 @@ for status in /sys/class/drm/card*-*/status; do
     cat "$status"
 done
 printf '\nComponentes instalados:\n'
-for executable in switchres groovymame retroarch pcsx2 flycast supermodel; do
+for executable in switchres grid geometry groovymame retroarch pcsx2 flycast supermodel Skyscraper; do
     command -v "$executable" || printf '%s: ausente\n' "$executable"
 done
-printf '\nServico de verificacao no boot:\n'
-systemctl --no-pager status fliperos-video-check.service 2>/dev/null || true
+printf '\nConfiguracao do fliperos-setup (/etc/fliperos/fliperos.conf):\n'
+cat /etc/fliperos/fliperos.conf 2>/dev/null || printf '(ainda sem teste de saidas)\n'
 printf '\nModo ativo:\n'
 python3 "$checker" "$@"
 exit $?

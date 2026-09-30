@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================
-#  FliperOS mkiso v0.6
-#  Gera uma ISO Ubuntu customizada com FliperOS pré-instalado
-#  Base: Ubuntu 24.04 LTS minimal (noble)
-#  Uso: sudo bash fliperos-mkiso.sh [/caminho/saida.iso] [--skip-switchres]
-#       [--skip-groovymame] [--skip-retroarch] [--skip-flycast]
-#       [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel]
-#       [--monitor-profile 15khz|25khz|31khz]
+#  FliperOS mkiso v0.7
+#  Gera a midia de instalacao do FliperOS (Ubuntu 24.04 + kernel 15 kHz)
+#  Uso: sudo bash fliperos-mkiso.sh [--output /caminho/saida.iso]
+#       [--skip-switchres] [--skip-groovymame] [--skip-retroarch]
+#       [--skip-flycast] [--skip-pcsx2] [--skip-supermodel]
+#       [--skip-skyscraper] [--skip-input-drivers] [--with-wheel-drivers]
+#       [--kernel-cache DIR] [--splash fliperos|evangelion|none]
+#       [--wifi-ssid NOME --wifi-psk SENHA]
 #  No Windows, execute somente dentro do container Docker.
 # ============================================================
 
@@ -19,7 +20,7 @@ GRN='\033[0;32m'; YLW='\033[1;33m'; RED='\033[0;31m'
 BLU='\033[0;34m'; CYN='\033[0;36m'; DIM='\033[2m'
 BLD='\033[1m'; RST='\033[0m'
 
-FLIPEROS_VERSION="0.6"
+FLIPEROS_VERSION="0.7"
 UBUNTU_CODENAME="noble"
 UBUNTU_MIRROR="http://archive.ubuntu.com/ubuntu"
 WORK_DIR=$(mktemp -d /tmp/fliperos-iso-build.XXXXXX)
@@ -34,9 +35,12 @@ SKIP_RETROARCH=false
 SKIP_FLYCAST=false
 SKIP_PCSX2=false
 SKIP_SUPERMODEL=false
-WITH_15KHZ_KERNEL=false
-KERNEL_15KHZ_VERSION="6.12.104"
-MONITOR_PROFILE="15khz"
+SKIP_SKYSCRAPER=false
+# Kernel 15 kHz (fliperos-kernel.sh): compilar leva a maior parte do build,
+# entao os .deb ficam num cache chaveado por versao e patches. Com o
+# diretorio /output montado (o jeito documentado de rodar), o cache fica la.
+KERNEL_CACHE=""
+[[ -d /output ]] && KERNEL_CACHE="/output/kernel-cache"
 SPLASH_THEME="fliperos"
 SKIP_INPUT_DRIVERS=false
 # Volante: o mainline ja cobre Logitech e Thrustmaster antigo. Estes dois sao
@@ -50,7 +54,26 @@ WIFI_PSK=""
 # com JWT e expira, entao e resolvida pela API no momento do build.
 EVANGELION_PLING_ID="2354544"
 
+# Versoes fixadas do que nao existe no Ubuntu 24.04. O hash confere que o
+# arquivo baixado e o mesmo que foi testado.
+# Gum: as telas do fliperos-setup.
+GUM_VERSION="2.0.2"
+GUM_SHA256="9aad8600d9d280d91544439f35db4c9583cc0201bb718ac6afcc0f4989ea945b"
+# AntiMicroX (joystick -> teclado/mouse), como no GroovyArcade. O noble so
+# tem o qjoypad; o antimicrox vem do .deb oficial do projeto.
+ANTIMICROX_VERSION="3.6.1"
+ANTIMICROX_SHA256="033cfdf7651d59fcc372c0fab38df0257508c9722dbebd8931aec3df45983948"
+# Switchres: a mesma versao do pacote switchres do GroovyArcade.
+SWITCHRES_TAG="v2.2.1"
+# Skyscraper (Setup > Scraper): o fork mantido, o mesmo do pacote do
+# GroovyArcade. O commit confere que a tag nao foi movida.
+SKYSCRAPER_TAG="3.21.0"
+SKYSCRAPER_COMMIT="8a95bb924f094e0f111fc188e66022903ea9f7d4"
+
 # ── Args ─────────────────────────────────────────────────────
+usage() {
+  sed -n '5,10p' "$0" | sed 's/^# *//'
+}
 while [[ $# -gt 0 ]]; do
   case $1 in
     --output)
@@ -62,16 +85,12 @@ while [[ $# -gt 0 ]]; do
     --skip-flycast)    SKIP_FLYCAST=true; shift ;;
     --skip-pcsx2)      SKIP_PCSX2=true; shift ;;
     --skip-supermodel) SKIP_SUPERMODEL=true; shift ;;
+    --skip-skyscraper) SKIP_SKYSCRAPER=true; shift ;;
     --skip-input-drivers) SKIP_INPUT_DRIVERS=true; shift ;;
     --with-wheel-drivers) WITH_WHEEL_DRIVERS=true; shift ;;
-    --with-15khz-kernel) WITH_15KHZ_KERNEL=true; shift ;;
-    --monitor-profile)
-      [[ $# -ge 2 ]] || { echo "Erro: --monitor-profile requer valor."; exit 1; }
-      case "$2" in
-        15khz|25khz|31khz) MONITOR_PROFILE="$2" ;;
-        *) echo "Erro: --monitor-profile invalido: $2 (15khz, 25khz ou 31khz)"; exit 1 ;;
-      esac
-      shift 2 ;;
+    --kernel-cache)
+      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --kernel-cache requer diretorio."; exit 1; }
+      KERNEL_CACHE="$2"; shift 2 ;;
     --wifi-ssid)
       [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --wifi-ssid requer valor."; exit 1; }
       WIFI_SSID="$2"; shift 2 ;;
@@ -86,7 +105,8 @@ while [[ $# -gt 0 ]]; do
       esac
       shift 2 ;;
     /*.iso|*.iso)     OUTPUT_ISO="$1"; shift ;;
-    *) echo "Uso: sudo bash fliperos-mkiso.sh [/saida.iso] [--skip-switchres] [--skip-groovymame] [--skip-retroarch] [--skip-flycast] [--skip-pcsx2] [--skip-supermodel] [--with-15khz-kernel] [--monitor-profile 15khz|25khz|31khz] [--splash fliperos|evangelion|none] [--wifi-ssid NOME --wifi-psk SENHA]"; exit 1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage; exit 1 ;;
   esac
 done
 
@@ -173,33 +193,9 @@ configure_chroot() {
   printf '#!/bin/sh\nexit 101\n' > "$CHROOT_DIR/usr/sbin/policy-rc.d"
   chmod +x "$CHROOT_DIR/usr/sbin/policy-rc.d"
 
-  # EDID customizado (metodo D0023R/linux_kernel_15khz — "no kernel patch
-  # required"): declara pro kernel o modo fixo do perfil de monitor
-  # escolhido (--monitor-profile), sem depender da negociacao DDC/EDID
-  # real com um CRT fixed-frequency. O nome instalado (crt15.bin) fica
-  # fixo pros tres perfis de proposito — so o CONTEUDO muda (ver README).
-  local SCRIPT_SRC EDID_SRC
-  SCRIPT_SRC="$(dirname "$(realpath "$0")")"
-  case "$MONITOR_PROFILE" in
-    15khz) EDID_SRC="crt15-edid.bin" ;;
-    25khz) EDID_SRC="crt25-edid.bin" ;;
-    31khz) EDID_SRC="crt31-edid.bin" ;;
-  esac
-  if [[ -f "$SCRIPT_SRC/$EDID_SRC" ]]; then
-    mkdir -p "$CHROOT_DIR/lib/firmware/edid"
-    cp "$SCRIPT_SRC/$EDID_SRC" "$CHROOT_DIR/lib/firmware/edid/crt15.bin"
-    ok "EDID customizado copiado ($MONITOR_PROFILE): /lib/firmware/edid/crt15.bin"
-  else
-    err "EDID obrigatorio ausente"
-  fi
-
-  # Kernel generico (apt) por padrao; com --with-15khz-kernel o kernel
-  # patcheado e compilado em build_15khz_kernel_chroot() mais adiante, entao
-  # nao instala linux-image-generic aqui (copy_kernel() pegaria o kernel
-  # errado se os dois coexistissem).
-  local KERNEL_APT_PKGS="linux-image-generic linux-headers-generic"
-  $WITH_15KHZ_KERNEL && KERNEL_APT_PKGS=""
-
+  # O kernel NAO vem do apt: e o 15 kHz, instalado a partir dos .deb do
+  # fliperos-kernel.sh em install_15khz_kernel(). Com o linux-image-generic
+  # junto, o copy_kernel() poderia pegar o kernel errado.
   cat > "$CHROOT_DIR/tmp/fliperos-chroot-setup.sh" << 'CHROOT_SCRIPT'
 #!/bin/bash
 set -e
@@ -214,25 +210,27 @@ SOURCES
 
 apt-get update -qq
 
-# live-boot necessário para boot=live no kernel da ISO
+# live-boot necessário para boot=live no kernel da ISO. O lxde e as
+# ferramentas de joystick/diagnostico sao as do GroovyArcade (lxde, xterm,
+# htop, evtest, joy2key, qjoypad, hwinfo, lshw, read-edid, i2c-tools).
+# fbset traz o con2fbmap do teste de saidas; jq e rsync sao do fliperos-setup.
 apt-get install -y --no-install-recommends \
-  __KERNEL_PKGS__ \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
   coreutils util-linux e2fsprogs dosfstools parted \
-  wget curl git ca-certificates \
-  xserver-xorg-core xinit x11-xserver-utils \
+  wget curl git ca-certificates jq rsync fbset \
+  xserver-xorg-core xserver-xorg-input-libinput xinit x11-xserver-utils x11-utils \
   libdrm2 libgbm1 mesa-vulkan-drivers mesa-utils \
   libsdl2-2.0-0 libsdl2-dev build-essential cmake \
   libdrm-dev libgbm-dev libxrandr-dev libxi-dev libxext-dev libfontconfig1-dev \
-  joystick dialog whiptail alsa-utils linux-firmware \
-  dkms linux-headers-generic evtest \
+  joystick alsa-utils linux-firmware \
+  dkms evtest \
   kbd console-setup \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 pciutils libdrm-tests edid-decode squashfs-tools \
   samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
-  plymouth plymouth-label fonts-dejavu-core openbox \
-  lxde-core lxterminal \
+  plymouth plymouth-label fonts-dejavu-core \
+  lxde gnome-themes-extra xterm htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
   espeak-ng
 
 systemctl enable ssh
@@ -281,7 +279,7 @@ systemctl enable smbd
 systemctl enable nmbd
 systemctl enable avahi-daemon
 
-# O lxde-core puxa o lightdm como dependencia obrigatoria, e ele briga com o
+# O lxde puxa o lightdm como dependencia obrigatoria, e ele briga com o
 # modelo de sessao daqui: quem inicia a sessao e o login da tty1, nao um
 # display manager. Pior, o lightdm falhando em loop trava o boot — o
 # plymouth-quit e ordenado depois do display-manager, entao nunca roda, e o
@@ -305,16 +303,6 @@ ln -sf /dev/null /etc/systemd/system/display-manager.service
 mkdir -p /etc/systemd/system/plymouth-quit-wait.service.d
 printf '[Unit]\nJobTimeoutSec=20\n[Service]\nTimeoutStartSec=20\n' \
   > /etc/systemd/system/plymouth-quit-wait.service.d/timeout.conf
-
-# Painel do LXDE em resolucao de CRT: o padrao de 26px consome 11% das 240
-# linhas, e num tubo esses pixels aparecem dobrados. 16px mantem o painel
-# utilizavel sem engolir a area de trabalho. Editado no lugar em vez de
-# substituir o arquivo, pra nao divergir do default a cada atualizacao.
-LXPANEL=/etc/xdg/lxpanel/LXDE/panels/panel
-if [[ -f "$LXPANEL" ]]; then
-  sed -i -e 's/^\([[:space:]]*\)height=26$/\1height=16/' \
-         -e 's/^\([[:space:]]*\)iconsize=[0-9]*$/\1iconsize=16/' "$LXPANEL"
-fi
 
 locale-gen pt_BR.UTF-8
 update-locale LANG=pt_BR.UTF-8
@@ -340,7 +328,6 @@ echo "fliperos:fliperos" | chpasswd
 printf 'fliperos\nfliperos\n' | smbpasswd -s -a fliperos
 cat > /etc/sudoers.d/fliperos << SUDOERS
 fliperos ALL=(ALL) NOPASSWD: /sbin/poweroff, /sbin/reboot, /usr/sbin/reboot, /usr/sbin/poweroff
-fliperos ALL=(ALL) NOPASSWD: /usr/local/bin/fliperos-config
 SUDOERS
 chmod 440 /etc/sudoers.d/fliperos
 
@@ -349,26 +336,6 @@ cat > /etc/hosts << HOSTS
 127.0.0.1 localhost
 127.0.1.1 fliperos
 HOSTS
-
-
-# Garante que o EDID customizado entre no initramfs — o KMS early-boot
-# do driver radeon roda antes do rootfs real, entao o arquivo tem que
-# estar dentro do initramfs, nao so no rootfs (ver README do
-# D0023R/linux_kernel_15khz, secao "Custom EDID method").
-if [[ -f /lib/firmware/edid/crt15.bin ]]; then
-  cat > /etc/initramfs-tools/hooks/fliperos-edid << 'HOOK'
-#!/bin/sh
-PREREQ=""
-prereqs() { echo "$PREREQ"; }
-case "$1" in prereqs) prereqs; exit 0 ;; esac
-. /usr/share/initramfs-tools/hook-functions
-mkdir -p "$DESTDIR/lib/firmware/edid"
-cp /lib/firmware/edid/crt15.bin "$DESTDIR/lib/firmware/edid/crt15.bin"
-HOOK
-  chmod +x /etc/initramfs-tools/hooks/fliperos-edid
-fi
-
-update-initramfs -u -k all
 
 mkdir -p /opt/fliperos/{bin,config,roms/{mame,ps2,dreamcast,model3},bios,logs}
 mkdir -p /etc/fliperos/mame
@@ -383,21 +350,6 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin fliperos --noclear %I \$TERM
 UNIT
 
-
-
-
-
-cat > /usr/local/bin/fliperos-postinstall << 'POST'
-#!/bin/bash
-set -e
-SDIR="/opt/fliperos"
-[[ -f "$SDIR/fliperos-setup.sh" ]] || { echo "fliperos-setup.sh nao encontrado"; exit 1; }
-bash "$SDIR/fliperos-setup.sh" --fase 3
-bash "$SDIR/fliperos-setup.sh" --fase 4
-bash "$SDIR/fliperos-setup.sh" --fase 6
-POST
-chmod +x /usr/local/bin/fliperos-postinstall
-
 apt-get remove -y --purge snapd apport whoopsie 2>/dev/null || true
 apt-get autoremove -y -qq
 apt-get clean
@@ -410,7 +362,6 @@ CHROOT_SCRIPT
   sed -i \
     -e "s|__MIRROR__|${UBUNTU_MIRROR}|g" \
     -e "s|__CODENAME__|${UBUNTU_CODENAME}|g" \
-    -e "s|__KERNEL_PKGS__|${KERNEL_APT_PKGS}|g" \
     "$CHROOT_DIR/tmp/fliperos-chroot-setup.sh"
 
   chmod +x "$CHROOT_DIR/tmp/fliperos-chroot-setup.sh"
@@ -418,29 +369,86 @@ CHROOT_SCRIPT
   ok "Chroot configurado"
 }
 
-# ── Copiar scripts FliperOS ───────────────────────────────────
-copy_fliperos_scripts() {
-  step "Copiando scripts FliperOS"
-  local SCRIPT_SRC
-  SCRIPT_SRC="$(dirname "$(realpath "$0")")"
-  for S in fliperos-setup.sh fliperos-detect.sh fliperos-mkiso.sh fliperos-install-video.sh fliperos-video-check.py fliperos-install.py fliperos-config.py crt15-edid.bin crt25-edid.bin crt31-edid.bin; do
-    if [[ -f "$SCRIPT_SRC/$S" ]]; then
-      cp "$SCRIPT_SRC/$S" "$CHROOT_DIR/opt/fliperos/"
-      chmod +x "$CHROOT_DIR/opt/fliperos/$S"
-      ok "Copiado: $S"
-    else
-      warn "Nao encontrado: $S"
-    fi
-  done
+# ── Arquivos do FliperOS ──────────────────────────────────────
+# fliperos-setup, sessao de boot, LXDE, paleta do console (fliperos-rootfs.sh).
+install_fliperos_files() {
+  step "Instalando o fliperos-setup e a configuracao do FliperOS"
+  FLIPEROS_ROOTFS_CHROOT=1 bash "$(dirname "$(realpath "$0")")/fliperos-rootfs.sh" "$CHROOT_DIR" \
+    >> "$LOG_FILE" 2>&1 || err "fliperos-rootfs.sh falhou (ver $LOG_FILE)"
+  ok "fliperos-setup em /usr/local/lib/fliperos-setup"
+}
+
+# ── Pacotes que nao existem no Ubuntu 24.04 ───────────────────
+# Baixados antes do debootstrap, como o Limine: rede ruim aparece em
+# segundos, nao depois de uma hora de build.
+fetch_debs() {
+  step "Gum e AntiMicroX"
+  DEBS_DIR="$WORK_DIR/debs"
+  mkdir -p "$DEBS_DIR"
+  fetch_deb "https://github.com/charmbracelet/gum/releases/download/v${GUM_VERSION}/gum_${GUM_VERSION}_amd64.deb" \
+    "$GUM_SHA256" gum.deb
+  fetch_deb "https://github.com/AntiMicroX/antimicrox/releases/download/${ANTIMICROX_VERSION}/antimicrox-${ANTIMICROX_VERSION}-ubuntu-24.04-x86_64.deb" \
+    "$ANTIMICROX_SHA256" antimicrox.deb
+}
+
+fetch_deb() {
+  local url=$1 sha=$2 name=$3
+  curl -sSfL --retry 3 --max-time 600 -o "$DEBS_DIR/$name" "$url" >> "$LOG_FILE" 2>&1 \
+    || err "Download falhou: $url"
+  echo "$sha  $DEBS_DIR/$name" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
+    || err "Hash diferente do fixado: $url"
+  ok "$name ($(du -h "$DEBS_DIR/$name" | cut -f1))"
+}
+
+install_debs_chroot() {
+  step "Instalando Gum e AntiMicroX no chroot"
+  cp "$DEBS_DIR"/*.deb "$CHROOT_DIR/tmp/"
+  chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y --no-install-recommends /tmp/gum.deb /tmp/antimicrox.deb' >> "$LOG_FILE" 2>&1 \
+    || err "Instalacao do gum/antimicrox falhou (ver $LOG_FILE)"
+  rm -f "$CHROOT_DIR"/tmp/*.deb
+  ok "gum $(chroot "$CHROOT_DIR" gum --version | awk '{print $3}'), antimicrox $ANTIMICROX_VERSION"
+}
+
+# ── Kernel 15 kHz ─────────────────────────────────────────────
+# Kernel.org LTS com os patches D0023R (fliperos-kernel.sh), o equivalente do
+# linux-15khz do GroovyArcade. E ele que entende o video=640x480iS do menu de
+# boot. Compilado no container (nao no chroot) e guardado no cache.
+install_15khz_kernel() {
+  step "Kernel 15 kHz"
+  local src key dir
+  src="$(dirname "$(realpath "$0")")"
+  key=$(bash "$src/fliperos-kernel.sh" key)
+  if [[ -n $KERNEL_CACHE ]]; then
+    dir="$KERNEL_CACHE/$key"
+  else
+    dir="$WORK_DIR/kernel"
+  fi
+  if compgen -G "$dir/linux-image-*.deb" > /dev/null && compgen -G "$dir/linux-headers-*.deb" > /dev/null; then
+    ok "Kernel $key do cache ($dir)"
+  else
+    info "Compilando o kernel $key (demora; fica no cache para os proximos builds)"
+    mkdir -p "$dir"
+    bash "$src/fliperos-kernel.sh" build "$dir" >> "$LOG_FILE" 2>&1 \
+      || { rm -f "$dir"/*.deb; err "Compilacao do kernel falhou (ver $LOG_FILE)"; }
+    ok "Kernel $key compilado"
+  fi
+  cp "$dir"/linux-image-*.deb "$dir"/linux-headers-*.deb "$CHROOT_DIR/tmp/"
+  # O postinst do linux-image gera o initrd e chama os hooks (Limine, DKMS).
+  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y /tmp/linux-image-*.deb /tmp/linux-headers-*.deb' \
+    >> "$LOG_FILE" 2>&1 || err "Instalacao do kernel falhou (ver $LOG_FILE)"
+  rm -f "$CHROOT_DIR"/tmp/linux-*.deb
+  KERNEL_RELEASE=$(ls "$CHROOT_DIR/lib/modules")
+  ok "Kernel instalado: $KERNEL_RELEASE"
 }
 
 # ── Compilar SwitchRes2 no chroot ─────────────────────────────
 build_switchres_chroot() {
   if $SKIP_SWITCHRES; then
-    warn "SwitchRes2 pulado — compile apos o boot: sudo fliperos-postinstall"
+    warn "SwitchRes pulado — sem ele nao ha EDIDs por monitor, geometria nem as entradas EDID do boot"
     return
   fi
-  step "Compilando SwitchRes2 no chroot"
+  step "Compilando SwitchRes ($SWITCHRES_TAG) no chroot"
   cat > "$CHROOT_DIR/tmp/build-switchres.sh" << 'SRSCRIPT'
 #!/bin/bash
 set -e
@@ -448,24 +456,78 @@ apt-get update -qq
 apt-get install -y --no-install-recommends \
   libdrm-dev libgbm-dev libxrandr-dev libxi-dev libxext-dev pkg-config git build-essential \
   libsdl2-dev libsdl2-ttf-dev
-git clone --depth=1 https://github.com/antonioginer/switchres /tmp/srs
+git clone --depth=1 --branch __SWITCHRES_TAG__ https://github.com/antonioginer/switchres /tmp/srs
 # Projeto usa makefile proprio (sem CMakeLists.txt) — build via make direto.
 make -C /tmp/srs -j$(nproc) all
 # "grid" e um target separado que "all" nao cobre e "install" nao instala:
-# e a carta de teste usada pra confirmar um modo novo ANTES de gravar o EDID
-# e pra calibrar geometria (fliperos-config). Precisa de SDL2_ttf.
+# e a carta de teste do geometry e da resolucao personalizada do
+# fliperos-setup. Precisa de SDL2_ttf.
 make -C /tmp/srs grid
 make -C /tmp/srs install PREFIX=/usr/local
 install -m755 /tmp/srs/switchres /usr/local/bin/switchres
 install -m755 /tmp/srs/grid /usr/local/bin/grid
+# O "geometry" que o gasetup chama e o geometry.py do proprio Switchres
+# (o PKGBUILD do GroovyArcade o instala assim, com o shebang acrescentado).
+{ echo '#!/usr/bin/env python3'; cat /tmp/srs/geometry.py; } > /usr/local/bin/geometry
+chmod 755 /usr/local/bin/geometry
+# switchres.ini do upstream, como o pacote do GroovyArcade; o fliperos-setup
+# grava nele o monitor escolhido.
+[ -f /etc/switchres.ini ] || sed 's/\r$//' /tmp/srs/switchres.ini > /etc/switchres.ini
 ldconfig
 rm -rf /tmp/srs
-echo "SwitchRes2 OK"
+# Um EDID por preset de monitor, mais os de super resolucao das entradas
+# "EDID" do menu de boot.
+/usr/local/sbin/fliperos-rebuild-edids /lib/firmware/edid
+echo "SwitchRes OK"
 SRSCRIPT
+  sed -i "s|__SWITCHRES_TAG__|${SWITCHRES_TAG}|g" "$CHROOT_DIR/tmp/build-switchres.sh"
   chmod +x "$CHROOT_DIR/tmp/build-switchres.sh"
   chroot "$CHROOT_DIR" /tmp/build-switchres.sh >> "$LOG_FILE" 2>&1 \
-    && ok "SwitchRes2 compilado" \
-    || err "SwitchRes2 falhou; ISO nao sera publicada como completa"
+    && ok "SwitchRes, grid, geometry e $(ls "$CHROOT_DIR/lib/firmware/edid" | wc -l) EDIDs" \
+    || err "SwitchRes falhou; ISO nao sera publicada como completa"
+  for edid in generic_15_super_resp generic_15_super_resi generic_15 arcade_15; do
+    [[ -s "$CHROOT_DIR/lib/firmware/edid/$edid.bin" ]] || err "EDID ausente: $edid.bin"
+  done
+}
+
+# ── Skyscraper (Setup > Scraper) ──────────────────────────────
+# Qt6, a mesma do AntiMicroX. As bibliotecas que o binario usa ficam marcadas
+# como instaladas a mao, senao o autoremove as levaria junto com os -dev.
+build_skyscraper_chroot() {
+  if $SKIP_SKYSCRAPER; then
+    warn "Skyscraper pulado — o Scraper do Setup nao vai funcionar"
+    return
+  fi
+  step "Compilando Skyscraper ($SKYSCRAPER_TAG) no chroot"
+  cat > "$CHROOT_DIR/tmp/build-skyscraper.sh" << 'SKYSCRIPT'
+#!/bin/bash
+set -e
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+BUILD_DEPS="qt6-base-dev qt6-base-dev-tools qmake6"
+apt-get install -y --no-install-recommends $BUILD_DEPS libqt6sql6-sqlite p7zip-full
+git clone --depth=1 --branch __SKYSCRAPER_TAG__ https://github.com/Gemba/skyscraper /tmp/skyscraper
+[ "$(git -C /tmp/skyscraper rev-parse HEAD)" = __SKYSCRAPER_COMMIT__ ] || { echo "Skyscraper: commit inesperado"; exit 1; }
+cd /tmp/skyscraper
+qmake6 PREFIX=/usr/local
+make -j"$(nproc)"
+make install
+cd /
+ldd /usr/local/bin/Skyscraper | awk '/=> \// { print $3 }' | xargs -r dpkg -S 2> /dev/null \
+  | cut -d: -f1 | sort -u | xargs -r apt-mark manual > /dev/null
+apt-mark manual libqt6sql6-sqlite p7zip-full > /dev/null
+apt-get remove -y $BUILD_DEPS
+apt-get autoremove -y -qq
+rm -rf /tmp/skyscraper
+/usr/local/bin/Skyscraper --version | head -1
+echo "SKYSCRAPER_OK"
+SKYSCRIPT
+  sed -i -e "s|__SKYSCRAPER_TAG__|${SKYSCRAPER_TAG}|g" \
+         -e "s|__SKYSCRAPER_COMMIT__|${SKYSCRAPER_COMMIT}|g" "$CHROOT_DIR/tmp/build-skyscraper.sh"
+  chmod +x "$CHROOT_DIR/tmp/build-skyscraper.sh"
+  chroot "$CHROOT_DIR" /tmp/build-skyscraper.sh >> "$LOG_FILE" 2>&1 \
+    && ok "Skyscraper compilado" \
+    || err "Skyscraper falhou; use --skip-skyscraper para uma ISO sem o Scraper"
 }
 
 # ── Wi-Fi gravado na imagem (opcional) ────────────────────────
@@ -612,14 +674,10 @@ WHEELSCRIPT
 }
 
 # ── Splash grafico (Plymouth) ─────────────────────────────────
-# Resolucao do modo que o EDID do perfil anuncia — o splash tem que ser
+# Resolucao do modo de boot padrao (640x480i, 15 kHz): o splash tem de ser
 # gerado nela, nao na resolucao de um monitor moderno.
 splash_mode_geometry() {
-  case "$MONITOR_PROFILE" in
-    15khz) echo "640x240" ;;
-    25khz) echo "512x384" ;;
-    31khz) echo "640x480" ;;
-  esac
+  echo "640x480"
 }
 
 # O Ubuntu 24.04 NAO traz plymouth-set-default-theme: o pacote plymouth
@@ -704,7 +762,7 @@ SPLASHSCRIPT
 # ── Compilar GroovyMAME no chroot ─────────────────────────────
 build_groovymame_chroot() {
   if $SKIP_GROOVYMAME; then
-    warn "GroovyMAME pulado — compile apos o boot: sudo fliperos-postinstall"
+    warn "GroovyMAME pulado (--skip-groovymame)"
     return
   fi
   step "Compilando GroovyMAME no chroot (SWITCHRES=1)"
@@ -746,7 +804,7 @@ GMSCRIPT
 # de PCSX2/Supermodel que continuam em fliperos-x11-run.
 build_retroarch_chroot() {
   if $SKIP_RETROARCH; then
-    warn "RetroArch pulado — compile apos o boot: sudo fliperos-postinstall"
+    warn "RetroArch pulado (--skip-retroarch)"
     return
   fi
   step "Compilando RetroArch (KMS/DRM, sem X11) no chroot"
@@ -817,7 +875,7 @@ RASCRIPT
 # via EGL/GBM ja validado.
 build_flycast_chroot() {
   if $SKIP_FLYCAST; then
-    warn "Flycast pulado — compile apos o boot: sudo fliperos-postinstall"
+    warn "Flycast pulado (--skip-flycast)"
     return
   fi
   step "Compilando Flycast (Dreamcast, KMS 640x240) no chroot"
@@ -849,7 +907,7 @@ FCSCRIPT
 # grupo (Qt6 + C++ grande).
 build_pcsx2_chroot() {
   if $SKIP_PCSX2; then
-    warn "PCSX2 pulado — compile apos o boot: sudo fliperos-postinstall"
+    warn "PCSX2 pulado (--skip-pcsx2)"
     return
   fi
   step "Compilando PCSX2 (PS2, X11) no chroot — build mais longo do grupo"
@@ -881,7 +939,7 @@ PSSCRIPT
 # X11 via fliperos-x11-run.
 build_supermodel_chroot() {
   if $SKIP_SUPERMODEL; then
-    warn "Supermodel pulado — compile apos o boot: sudo fliperos-postinstall"
+    warn "Supermodel pulado (--skip-supermodel)"
     return
   fi
   step "Compilando Supermodel (Model 3, X11) no chroot"
@@ -903,87 +961,6 @@ SMSCRIPT
   chroot "$CHROOT_DIR" /tmp/build-supermodel.sh >> "$LOG_FILE" 2>&1 \
     && ok "Supermodel compilado" \
     || err "Supermodel falhou; use --skip-supermodel explicitamente para ISO sem ele"
-}
-
-# ── Compilar kernel 15kHz patcheado (opt-in) ──────────────────
-# Kernel vanilla kernel.org + patches D0023R/linux_kernel_15khz
-# vendorizados em patches/kernel-15khz/ (ver README la dentro). So roda
-# com --with-15khz-kernel; sem a flag, o kernel continua sendo o
-# linux-image-generic normal com o metodo EDID-only (ver configure_chroot).
-# A semente de .config vem do proprio kernel noble (baixado sem instalar,
-# so pra extrair o .config ja ajustado) em vez de defconfig do zero.
-build_15khz_kernel_chroot() {
-  if ! $WITH_15KHZ_KERNEL; then
-    return
-  fi
-  step "Compilando kernel 15kHz patcheado ($KERNEL_15KHZ_VERSION) no chroot"
-  local KERNEL_MINOR="${KERNEL_15KHZ_VERSION%.*}"
-  local KERNEL_MAJOR="${KERNEL_15KHZ_VERSION%%.*}"
-  cat > "$CHROOT_DIR/tmp/build-15khz-kernel.sh" << 'KERNELSCRIPT'
-#!/bin/bash
-set -e
-apt-get update -qq
-apt-get install -y --no-install-recommends \
-  libncurses-dev bison flex libssl-dev libelf-dev bc \
-  rsync cpio kmod fakeroot dwarves zstd xz-utils
-
-mkdir -p /usr/src/fliperos-kernel
-cd /usr/src/fliperos-kernel
-
-# Semente de .config: baixa so o pacote de buildinfo do kernel noble (sem
-# instalar/rodar postinst) e reaproveita o .config ja ajustado pela
-# Canonical, em vez de partir de defconfig do zero. O Ubuntu separou o
-# linux-buildinfo-<versao> do linux-image-<versao> pra nao inflar o
-# pacote de imagem assinado — confirmado testando os dois pacotes reais
-# do noble antes de escrever isso: linux-image-*-generic hoje so tem o
-# vmlinuz, o .config mora em /usr/lib/linux/<versao>/config dentro do
-# linux-buildinfo-*-generic (nao mais em /boot/config-<versao>).
-REALPKG=$(apt-cache depends linux-image-generic | awk '/Depends:/{print $2; exit}')
-BUILDINFO_PKG="${REALPKG/linux-image-/linux-buildinfo-}"
-apt-get download "$BUILDINFO_PKG"
-dpkg-deb -x "${BUILDINFO_PKG}"*.deb /usr/src/fliperos-kernel/genericpkg
-CONFIG_SEED=$(find /usr/src/fliperos-kernel/genericpkg -type f \( -name 'config' -o -name 'config-*' \) | head -1)
-[[ -n "$CONFIG_SEED" ]] || { echo "config-seed nao encontrado" >&2; exit 1; }
-
-wget -q "https://cdn.kernel.org/pub/linux/kernel/v__KERNEL_MAJOR__.x/linux-__KERNEL_VERSION__.tar.xz"
-tar xf "linux-__KERNEL_VERSION__.tar.xz"
-cp "$CONFIG_SEED" "linux-__KERNEL_VERSION__/.config"
-rm -rf /usr/src/fliperos-kernel/genericpkg "${BUILDINFO_PKG}"*.deb
-cd "linux-__KERNEL_VERSION__"
-
-for P in /opt/fliperos/kernel-patches/__KERNEL_MINOR__/*.patch; do
-  echo "Aplicando $(basename "$P")"
-  patch -p1 < "$P"
-done
-
-# Kernel proprio nao e assinado (sem Secure Boot) — desliga assinatura de
-# modulo/certificados do Ubuntu (referenciam arquivo que nao existe fora
-# da arvore deles) e BTF/pahole (irrelevante pro caso de uso, e uma fonte
-# comum de falha de build ao reaproveitar um .config do Ubuntu).
-./scripts/config --set-str LOCALVERSION "-15khz"
-./scripts/config --disable SYSTEM_TRUSTED_KEYS
-./scripts/config --disable SYSTEM_REVOCATION_KEYS
-./scripts/config --disable MODULE_SIG
-./scripts/config --disable DEBUG_INFO_BTF
-make olddefconfig
-make -j"$(nproc)" bindeb-pkg
-
-cd /usr/src/fliperos-kernel
-apt-get install -y ./linux-image-*.deb ./linux-headers-*.deb
-rm -rf /usr/src/fliperos-kernel/linux-__KERNEL_VERSION__ \
-       /usr/src/fliperos-kernel/*.tar.xz /usr/src/fliperos-kernel/*.deb \
-       /usr/src/fliperos-kernel/*.buildinfo /usr/src/fliperos-kernel/*.changes
-echo "KERNEL_15KHZ_OK"
-KERNELSCRIPT
-  sed -i \
-    -e "s|__KERNEL_VERSION__|${KERNEL_15KHZ_VERSION}|g" \
-    -e "s|__KERNEL_MAJOR__|${KERNEL_MAJOR}|g" \
-    -e "s|__KERNEL_MINOR__|${KERNEL_MINOR}|g" \
-    "$CHROOT_DIR/tmp/build-15khz-kernel.sh"
-  chmod +x "$CHROOT_DIR/tmp/build-15khz-kernel.sh"
-  chroot "$CHROOT_DIR" /tmp/build-15khz-kernel.sh >> "$LOG_FILE" 2>&1 \
-    && ok "Kernel 15kHz compilado (${KERNEL_15KHZ_VERSION}-15khz)" \
-    || err "Build do kernel 15kHz falhou; rode sem --with-15khz-kernel para ISO EDID-only"
 }
 
 # ── squashfs ──────────────────────────────────────────────────
@@ -1029,15 +1006,15 @@ install_limine_rootfs() {
   ok "Limine e fliperos-limine-update no rootfs"
 }
 
+# Parametros comuns a todas as entradas do menu de boot da midia: splash,
+# console sem apagar (consoleblank=0, como no GroovyArcade) e o radeon nas
+# placas SI/CIK, onde o 15 kHz foi validado no gabinete.
+BOOT_COMMON="quiet splash consoleblank=0 radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0"
+
 create_boot_config() {
-  local MONITOR_LABEL
-  case "$MONITOR_PROFILE" in
-    15khz) MONITOR_LABEL="CRT 15kHz" ;;
-    25khz) MONITOR_LABEL="CRT 25kHz" ;;
-    31khz) MONITOR_LABEL="CRT 31kHz" ;;
-  esac
   install -Dm644 "$(dirname "$(realpath "$0")")/config/limine.conf" "$ISO_DIR/boot/limine/limine.conf"
-  sed -i "s|__MONITOR_LABEL__|${MONITOR_LABEL}|g" "$ISO_DIR/boot/limine/limine.conf"
+  sed -i -e "s|__VERSION__|${FLIPEROS_VERSION}|g" -e "s|__COMMON__|${BOOT_COMMON}|g" \
+    "$ISO_DIR/boot/limine/limine.conf"
 }
 
 # ── Gerar ISO (BIOS + EFI via Limine) ─────────────────────────
@@ -1067,18 +1044,18 @@ summary() {
   echo -e "\n${GRN}${BLD}ISO gerada com sucesso!${RST}"
   echo -e "  Arquivo : ${CYN}$OUTPUT_ISO${RST}"
   echo -e "  Tamanho : ${CYN}$(du -sh "$OUTPUT_ISO" | cut -f1)${RST}"
-  echo -e "  Monitor : ${CYN}$MONITOR_PROFILE${RST}"
+  echo -e "  Kernel  : ${CYN}${KERNEL_RELEASE:-?} (patches 15 kHz D0023R)${RST}"
   echo -e "\n  Gravar em USB:"
   echo -e "  ${CYN}sudo dd if=$OUTPUT_ISO of=/dev/sdX bs=4M status=progress oflag=sync${RST}"
   echo -e "\n  Login: fliperos / fliperos"
-  $SKIP_SWITCHRES  && echo -e "  ${YLW}SwitchRes nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
-  $SKIP_GROOVYMAME && echo -e "  ${YLW}GroovyMAME nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
-  $SKIP_RETROARCH  && echo -e "  ${YLW}RetroArch nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
-  $SKIP_FLYCAST    && echo -e "  ${YLW}Flycast nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
-  $SKIP_PCSX2      && echo -e "  ${YLW}PCSX2 nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
-  $SKIP_SUPERMODEL && echo -e "  ${YLW}Supermodel nao incluido — execute apos boot: sudo fliperos-postinstall${RST}"
-  $WITH_15KHZ_KERNEL && echo -e "  ${CYN}Kernel 15kHz patcheado: ${KERNEL_15KHZ_VERSION}-15khz (D0023R) — KMS/switchres sem X${RST}"
-  $WITH_15KHZ_KERNEL && echo -e "  ${YLW}Kernel proprio nao assinado — desabilite Secure Boot na UEFI${RST}"
+  echo -e "  ${YLW}Kernel proprio nao assinado — desabilite o Secure Boot na UEFI${RST}"
+  $SKIP_SWITCHRES  && echo -e "  ${YLW}Sem SwitchRes: sem EDIDs por monitor, geometria nem as entradas EDID do boot${RST}"
+  $SKIP_GROOVYMAME && echo -e "  ${YLW}GroovyMAME nao incluido${RST}"
+  $SKIP_RETROARCH  && echo -e "  ${YLW}RetroArch nao incluido${RST}"
+  $SKIP_FLYCAST    && echo -e "  ${YLW}Flycast nao incluido${RST}"
+  $SKIP_PCSX2      && echo -e "  ${YLW}PCSX2 nao incluido${RST}"
+  $SKIP_SUPERMODEL && echo -e "  ${YLW}Supermodel nao incluido${RST}"
+  $SKIP_SKYSCRAPER && echo -e "  ${YLW}Skyscraper nao incluido (Setup > Scraper indisponivel)${RST}"
   echo -e "  ${DIM}Log: $LOG_FILE${RST}\n"
 }
 
@@ -1096,33 +1073,36 @@ mkdir -p "$(dirname "$LOG_FILE")"
 echo "FliperOS mkiso v${FLIPEROS_VERSION} - $(date)" > "$LOG_FILE"
 
 echo -e "${GRN}${BLD}FliperOS mkiso v${FLIPEROS_VERSION}${RST}"
-echo -e "${DIM}Ubuntu $UBUNTU_CODENAME — monitor: $MONITOR_PROFILE — saida: $OUTPUT_ISO${RST}\n"
+echo -e "${DIM}Ubuntu $UBUNTU_CODENAME — kernel 15 kHz — saida: $OUTPUT_ISO${RST}\n"
 
 mkdir -p "$ISO_DIR"
 
 [[ -c /dev/null ]] || err "/dev/null invalido; build recusado"
 check_host_deps
 fetch_limine
+fetch_debs
 build_rootfs
 configure_chroot
-copy_fliperos_scripts
 install_limine_rootfs
-cp -a "$(dirname "$(realpath "$0")")/config" "$CHROOT_DIR/opt/fliperos/"
-cp -a "$(dirname "$(realpath "$0")")/patches/kernel-15khz" "$CHROOT_DIR/opt/fliperos/kernel-patches"
-bash "$(dirname "$(realpath "$0")")/fliperos-install-video.sh" "$CHROOT_DIR" "$MONITOR_PROFILE"
-# Antes do update-initramfs: o hook do Plymouth so embarca o tema que estiver
-# marcado como default, e o initramfs e o unico lugar onde ele existe no boot.
+install_fliperos_files
+install_debs_chroot
+# O kernel antes dos drivers DKMS (compilados para ele) e antes do
+# update-initramfs final.
+install_15khz_kernel
 install_wifi_profile
 install_splash_theme
 build_input_drivers_chroot
-chroot "$CHROOT_DIR" update-initramfs -u -k all
 build_switchres_chroot
+# Depois dos EDIDs (switchres) e do tema do splash: o hook do Plymouth so
+# embarca o tema marcado como padrao, e o initramfs e o unico lugar onde os
+# EDIDs das entradas "EDID" do boot existem na hora do KMS.
+chroot "$CHROOT_DIR" update-initramfs -u -k all >> "$LOG_FILE" 2>&1 || err "update-initramfs falhou"
+build_skyscraper_chroot
 build_groovymame_chroot
 build_retroarch_chroot
 build_flycast_chroot
 build_pcsx2_chroot
 build_supermodel_chroot
-build_15khz_kernel_chroot
 rm -f "$CHROOT_DIR/usr/sbin/policy-rc.d"
 unmount_chroot
 create_squashfs

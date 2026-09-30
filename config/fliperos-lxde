@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Sessao LXDE no monitor do gabinete: o .xinitrc do GroovyArcade (sem descanso
+# de tela, sem DPMS) mais a orientacao escolhida no Video Setup.
+xset -dpms
+xset s off
+xset s noblank
+xsetroot -cursor_name left_ptr
+
+orientation=$(sed -n 's/^orientation=//p' /etc/fliperos/fliperos.conf 2> /dev/null)
+case $orientation in
+  vertical-cw) xrandr -o right ;;
+  vertical-ccw) xrandr -o left ;;
+esac
+
+exec startlxde

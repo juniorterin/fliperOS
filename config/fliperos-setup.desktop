@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=FliperOS Setup
+Comment=Video, audio, network, frontend, scraper and system update
+# Terminal=true: a interface e de terminal (gum). O sudo nao pede senha
+# (/etc/sudoers.d/fliperos). Categories=System poe o atalho em "System Tools"
+# no menu do LXDE, como o gasetup.desktop do GroovyArcade.
+Exec=sudo /usr/local/bin/fliperos-setup
+Terminal=true
+Icon=preferences-system
+Categories=System;
+Keywords=fliperos;arcade;crt;setup;

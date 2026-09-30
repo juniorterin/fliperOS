@@ -1,54 +1,50 @@
 #!/usr/bin/env bash
-# Abre a sessao escolhida em /etc/fliperos/session.
-#
-# Existe pra que "o que abre ao ligar" seja um dado de configuracao, nao uma
-# linha fixa no .bash_profile: o wizard de instalacao acrescenta launchers e
-# esta escolha passa a valer sem mexer em script de login.
+# Abre o launcher padrao (/etc/fliperos/session) ou o passado como argumento,
+# como o startfe.sh do galauncher do GroovyArcade. Volta quando ele fecha: o
+# .bash_profile chama o fliperos-setup em seguida.
 set -uo pipefail
 
 TABLE=/etc/fliperos/sessions.conf
 CHOICE_FILE=/etc/fliperos/session
-FALLBACK=/opt/fliperos/bin/fliperos-launcher
 
-choice=launcher
-[[ -r "$CHOICE_FILE" ]] && choice=$(tr -d '[:space:]' < "$CHOICE_FILE")
-[[ -n "$choice" ]] || choice=launcher
+choice=${1:-}
+if [[ -z $choice ]]; then
+  choice=setup
+  [[ -r $CHOICE_FILE ]] && choice=$(tr -d '[:space:]' < "$CHOICE_FILE")
+  [[ -n $choice ]] || choice=setup
+fi
 
 row=""
-[[ -r "$TABLE" ]] && row=$(grep -v '^[[:space:]]*#' "$TABLE" | grep "^${choice}|" | head -1)
-if [[ -z "$row" ]]; then
-    echo "Sessao '$choice' nao esta na tabela; abrindo o menu de texto." >&2
-    choice=launcher
-    row="launcher|text|$FALLBACK||"
+[[ -r $TABLE ]] && row=$(grep -v '^[[:space:]]*#' "$TABLE" | grep "^${choice}|" | head -1)
+if [[ -z $row ]]; then
+  echo "Unknown launcher '$choice'; opening the setup menu." >&2
+  exit 0
 fi
 
 IFS='|' read -r _name backend binary _package _description <<< "$row"
+[[ $backend == none ]] && exit 0
 
-[[ "$backend" == none ]] && exit 0
-
-if [[ -n "$binary" ]] && ! command -v "$binary" >/dev/null 2>&1 && [[ ! -x "$binary" ]]; then
-    echo "A sessao '$choice' esta escolhida, mas '$binary' nao esta instalado." >&2
-    echo "Instale pelo wizard (sudo fliperos-config) ou escolha outra sessao." >&2
-    echo "Abrindo o menu de texto no lugar." >&2
-    sleep 3
-    backend=text
-    binary="$FALLBACK"
+if ! command -v "$binary" > /dev/null 2>&1 && [[ ! -x $binary ]]; then
+  echo "'$choice' is selected, but '$binary' is not installed." >&2
+  echo "Choose another one in the setup: Setup > Frontend." >&2
+  sleep 3
+  exit 0
 fi
 
-case "$backend" in
-    kms)
-        exec /opt/fliperos/bin/fliperos-kms-run "$binary"
-        ;;
-    x)
-        # Sessao de window manager: ao contrario do fliperos-x11-run, aqui o
-        # Xorg nao e efemero por jogo — o WM e a sessao inteira.
-        exec xinit "$binary" -- :0 -nolisten tcp -config /etc/fliperos/xorg.conf
-        ;;
-    text)
-        exec "$binary"
-        ;;
-    *)
-        echo "Backend desconhecido para '$choice': $backend" >&2
-        exec "$FALLBACK"
-        ;;
+case $backend in
+  kms)
+    exec /opt/fliperos/bin/fliperos-kms-run "$binary"
+    ;;
+  x)
+    # Sessao X no proprio terminal (tty1). A configuracao do monitor vem do
+    # /etc/X11/xorg.conf.d/10-fliperos.conf que o fliperos-setup gera.
+    vt=$(tty 2> /dev/null)
+    vt=${vt#/dev/tty}
+    [[ $vt =~ ^[0-9]+$ ]] || vt=1
+    exec xinit "$binary" -- :0 -nolisten tcp "vt$vt" -keeptty
+    ;;
+  *)
+    echo "Unknown backend for '$choice': $backend" >&2
+    exit 0
+    ;;
 esac

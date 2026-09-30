@@ -1,0 +1,139 @@
+# lxpanel do FliperOS: o mesmo painel do GroovyArcade (embaixo, 26 px, menu,
+# lancadores, tarefas, CPU, volume, bandeja, rede e relogio), com as cores do
+# tema Dracula. 26 px em 480 linhas deixam a area util intacta.
+
+Global {
+  edge=bottom
+  align=left
+  margin=0
+  widthtype=percent
+  width=100
+  height=26
+  transparent=1
+  tintcolor=#282a36
+  alpha=255
+  setdocktype=1
+  setpartialstrut=1
+  autohide=0
+  heightwhenhidden=0
+  usefontcolor=1
+  fontcolor=#f8f8f2
+  background=0
+  backgroundfile=/usr/share/lxpanel/images/background.png
+}
+Plugin {
+  type=space
+  Config {
+    Size=2
+  }
+}
+Plugin {
+  type=menu
+  Config {
+    image=/usr/share/lxde/images/lxde-icon.png
+    system {
+    }
+    separator {
+    }
+    item {
+      command=run
+    }
+    separator {
+    }
+    item {
+      image=gnome-logout
+      command=logout
+    }
+  }
+}
+Plugin {
+  type=launchbar
+  Config {
+    Button {
+      id=pcmanfm.desktop
+    }
+    Button {
+      id=lxterminal.desktop
+    }
+    Button {
+      id=fliperos-setup.desktop
+    }
+  }
+}
+Plugin {
+  type=space
+  Config {
+    Size=4
+  }
+}
+Plugin {
+  type=wincmd
+  Config {
+    Button1=iconify
+    Button2=shade
+  }
+}
+Plugin {
+  type=space
+  Config {
+    Size=4
+  }
+}
+Plugin {
+  type=taskbar
+  expand=1
+  Config {
+    tooltips=1
+    IconsOnly=0
+    AcceptSkipPager=1
+    ShowIconified=1
+    ShowMapped=1
+    ShowAllDesks=0
+    UseMouseWheel=1
+    UseUrgencyHint=1
+    FlatButton=0
+    MaxTaskWidth=150
+    spacing=1
+  }
+}
+Plugin {
+  type=cpu
+  Config {
+  }
+}
+Plugin {
+  type=volume
+  Config {
+    VolumeMuteKey=XF86AudioMute
+    VolumeDownKey=XF86AudioLowerVolume
+    VolumeUpKey=XF86AudioRaiseVolume
+  }
+}
+Plugin {
+  type=tray
+  Config {
+  }
+}
+Plugin {
+  type=netstatus
+  Config {
+  }
+}
+Plugin {
+  type=dclock
+  Config {
+    ClockFmt=%R
+    TooltipFmt=%A %x
+    BoldFont=0
+    IconOnly=0
+    CenterText=0
+  }
+}
+Plugin {
+  type=launchbar
+  Config {
+    Button {
+      id=lxde-logout.desktop
+    }
+  }
+}

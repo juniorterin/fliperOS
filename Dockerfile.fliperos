@@ -3,6 +3,8 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
+# O kernel 15 kHz e compilado aqui mesmo (fliperos-kernel.sh instala as
+# dependencias dele quando precisa compilar, e nao quando ha cache).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       debootstrap squashfs-tools xorriso \
       gcc libc6-dev make \
@@ -10,9 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-# O glob e "fliperos*.py", nao "fliperos-*.py": o modulo compartilhado de
-# interface e fliperos_tui.py, com underscore, e o hifen nao o pegaria.
-COPY fliperos-*.sh fliperos*.py crt15-edid.bin crt25-edid.bin crt31-edid.bin ./
+COPY fliperos-*.sh fliperos*.py ./
+COPY fliperos-setup/ ./fliperos-setup/
 COPY config/ ./config/
 COPY patches/ ./patches/
-RUN chmod +x ./*.sh
+RUN chmod +x ./*.sh ./fliperos-setup/fliperos-setup

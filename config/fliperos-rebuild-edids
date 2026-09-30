@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Gera um EDID para cada preset de monitor do Switchres, mais os dois EDIDs
+# de super resolucao das entradas "EDID progressive/interlaced" do boot. E o
+# rebuild_edids do pacote switchres do GroovyArcade, com os mesmos modos.
+#
+#   fliperos-rebuild-edids [DESTINO]    (padrao: /lib/firmware/edid)
+#
+# O Switchres grava "Switchres200" no numero de serie do EDID e o preset no
+# nome: e assim que o teste de saidas reconhece um EDID dele.
+set -euo pipefail
+dest=${1:-/lib/firmware/edid}
+work=$(mktemp -d /tmp/fliperos-edid.XXXXXX)
+trap 'rm -rf "$work"' EXIT
+cd "$work"
+
+for m in generic_15 arcade_15 arcade_15ex k7000 k7131 h9110 polo; do
+  switchres 640 480 60 --edid --monitor "$m" > /dev/null
+done
+for m in arcade_25 arcade_15_25; do
+  switchres 512 384 60 --edid --monitor "$m" > /dev/null
+done
+for m in arcade_31 arcade_15_31 arcade_15_25_31 m2929 d9200 d9400 d9800 m3129 pstar ms2930 ms929 r666b pc_31_120 vesa_480; do
+  switchres 640 480 60 --edid --monitor "$m" > /dev/null
+done
+switchres 768 576 50 --edid --monitor pal > /dev/null
+switchres 720 480 60 --edid --monitor ntsc > /dev/null
+switchres 800 600 60 --edid --monitor vesa_600 > /dev/null
+switchres 1024 768 60 --edid --monitor pc_70_120 > /dev/null
+switchres 1024 768 60 --edid --monitor vesa_768 > /dev/null
+switchres 1280 1024 60 --edid --monitor vesa_1024 > /dev/null
+
+# Super resolucao de 15 kHz a partir do generic_15, com o switchres.ini
+# local (o Switchres le primeiro o do diretorio atual): dotclock minimo de
+# 25 MHz obriga a largura a crescer; sem entrelacado para o progressivo.
+mkdir superres
+cd superres
+cp /etc/switchres.ini .
+sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\125.0/' switchres.ini
+switchres 640 480 60 --edid --monitor generic_15 > /dev/null
+mv generic_15.bin generic_15_super_resi.bin
+echo "interlace 0" >> switchres.ini
+switchres 640 240 60 --edid --monitor generic_15 > /dev/null
+mv generic_15.bin generic_15_super_resp.bin
+cd ..
+
+install -d "$dest"
+install -m 644 ./*.bin superres/*.bin "$dest/"
+ls "$dest" | wc -l
