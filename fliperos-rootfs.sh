@@ -33,11 +33,26 @@ install -Dm755 "$src/config/fliperos-edid-hook" "$root/etc/initramfs-tools/hooks
 mkdir -p "$root/etc/fliperos" "$root/etc/fliperos/mame" "$root/etc/fliperos/retroarch"
 install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions.conf"
 [[ -f "$root/etc/fliperos/session" ]] || printf 'setup\n' > "$root/etc/fliperos/session"
-for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-client fliperos-lxde; do
+for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-client fliperos-lxde fliperos-launch \
+  fliperos-tty1; do
   install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"
+# Cores Dracula da interface do GroovyMAME; o ui.ini e do usuario porque o
+# MAME o regrava quando a interface e personalizada pelo proprio menu.
+[[ -f "$root/etc/fliperos/mame/ui.ini" ]] || install -Dm644 "$src/config/mame-ui.ini" "$root/etc/fliperos/mame/ui.ini"
+chown -R 1000:1000 "$root/etc/fliperos/mame" 2> /dev/null || true
 install -Dm644 "$src/config/retroarch.cfg" "$root/etc/fliperos/retroarch/retroarch.cfg"
+
+# Emuladores no menu do LXDE (Jogos). O TryExec esconde o que nao foi
+# compilado; os icones dos projetos vem do build de cada um, e os dois que
+# nao tem icone (GroovyMAME, Supermodel) vem de config/icons.
+for file in "$src"/config/applications/*.desktop; do
+  install -Dm644 "$file" "$root/usr/local/share/applications/${file##*/}"
+done
+for file in "$src"/config/icons/*.svg; do
+  install -Dm644 "$file" "$root/usr/local/share/pixmaps/${file##*/}"
+done
 
 # Xorg sem descanso de tela ate o fliperos-setup gerar a configuracao do
 # monitor (ele reescreve este arquivo).
@@ -118,24 +133,41 @@ rm -f "$root/etc/systemd/system/multi-user.target.wants/fliperos-video-check.ser
 
 # ── Usuario: login no tty1, frontend e setup ──────────────────────
 if [[ -d "$home" ]]; then
-  # O fluxo do .bash_profile do GroovyArcade: no disco instalado abre o
-  # launcher padrao e, quando ele fecha, o setup; na midia de instalacao
-  # abre direto o setup (teste de saidas e o menu FliperOS Setup).
+  # O fluxo do .bash_profile do GroovyArcade (config/fliperos-tty1): no
+  # disco instalado abre o launcher padrao e, quando ele fecha, o setup; na
+  # midia de instalacao abre direto o setup. O shell do usuario e o zsh
+  # (Oh My Zsh + Dracula); o .bash_profile fica para quem voltar ao bash.
+  cat > "$home/.zprofile" << 'EOF'
+if [[ -z "${DISPLAY:-}" && "$(tty)" == /dev/tty1 ]]; then
+    /opt/fliperos/bin/fliperos-tty1
+fi
+EOF
   cat > "$home/.bash_profile" << 'EOF'
 [[ -f ~/.bashrc ]] && . ~/.bashrc
 if [[ -z "${DISPLAY:-}" && "$(tty)" == /dev/tty1 ]]; then
-    sudo setterm --blank 0 --powerdown 0 2> /dev/null
-    if [[ -f /etc/fliperos/installed ]]; then
-        [[ -f /etc/fliperos/firstboot ]] && sudo /usr/local/bin/fliperos-setup --first-boot
-        /opt/fliperos/bin/fliperos-session
-    fi
-    sudo /usr/local/bin/fliperos-setup
+    /opt/fliperos/bin/fliperos-tty1
 fi
 EOF
+  install -m644 "$src/config/zshrc" "$home/.zshrc"
   # LXDE como o do GroovyArcade (ver config/lxde).
   mkdir -p "$home/.config"
   cp -r "$src/config/lxde/." "$home/.config/"
-  chown -R 1000:1000 "$home/.bash_profile" "$home/.config" 2> /dev/null || true
+  # Janelas e menus do Openbox no tema Dracula (fliperos-dracula.sh): o
+  # openbox-lxde le ~/.config/openbox/lxde-rc.xml, que nasce da copia do
+  # padrao do sistema; so o nome do tema muda.
+  # O do LXDE e do openbox-lxde-session; o do openbox puro fica de reserva.
+  for rc in etc/xdg/openbox/LXDE/rc.xml etc/xdg/openbox/rc.xml; do
+    [[ -f "$root/$rc" ]] || continue
+    mkdir -p "$home/.config/openbox"
+    sed '/<theme>/,/<\/theme>/ s|<name>[^<]*</name>|<name>Dracula</name>|' "$root/$rc" \
+      > "$home/.config/openbox/lxde-rc.xml"
+    break
+  done
+  chown -R 1000:1000 "$home/.zprofile" "$home/.bash_profile" "$home/.zshrc" "$home/.config" 2> /dev/null || true
+fi
+# zsh como shell do usuario, se estiver na imagem (o root continua no bash).
+if [[ -x "$root/usr/bin/zsh" ]]; then
+  sed -i 's|^\(fliperos:.*:\)/bin/bash$|\1/usr/bin/zsh|' "$root/etc/passwd"
 fi
 # fliperos-setup sem senha tambem cobre o --session-start/--session-end que
 # o fliperos-session chama em volta do launcher (governador da CPU).

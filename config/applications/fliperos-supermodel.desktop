@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Supermodel
+GenericName=Sega Model 3 emulator
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch supermodel
+TryExec=/usr/local/bin/supermodel
+Icon=/usr/local/share/pixmaps/fliperos-supermodel.svg
+Terminal=false
+Categories=Game;Emulator;

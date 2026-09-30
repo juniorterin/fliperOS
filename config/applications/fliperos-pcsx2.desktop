@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=PCSX2
+GenericName=PlayStation 2 emulator
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch pcsx2
+TryExec=/usr/local/bin/pcsx2
+Icon=/usr/local/share/pixmaps/pcsx2.png
+Terminal=false
+Categories=Game;Emulator;

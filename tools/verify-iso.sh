@@ -137,6 +137,37 @@ grep -q -- '--user' "$work/f" && fail "triggerhappy ainda roda como outro usuari
 grep -q 'multi-user.target.wants/triggerhappy.service' "$work/files.txt" || fail "triggerhappy nao habilitado"
 echo "teclas de volume: triggerhappy habilitado, como root, com as teclas do FliperOS"
 
+# ── Tema Dracula e emuladores no menu do LXDE ─────────────────
+for path in usr/share/themes/Dracula/gtk-2.0/gtkrc usr/share/themes/Dracula/gtk-3.20/gtk.css \
+  usr/share/themes/Dracula/openbox-3/themerc home/fliperos/.config/openbox/lxde-rc.xml \
+  etc/fliperos/mame/ui.ini; do
+  has "$path"
+done
+unsquashfs -cat "$work/filesystem.squashfs" home/fliperos/.config/openbox/lxde-rc.xml > "$work/f"
+grep -q '<name>Dracula</name>' "$work/f" || fail "o Openbox do LXDE nao usa o tema Dracula"
+for file in "$src"/config/applications/*.desktop; do
+  has "usr/local/share/applications/${file##*/}"
+  # Com o emulador na imagem, o icone tem de estar la tambem.
+  exe=$(sed -n 's/^TryExec=//p' "$file")
+  icon=$(sed -n 's/^Icon=//p' "$file")
+  if grep -q "squashfs-root$exe\$" "$work/files.txt"; then
+    has "${icon#/}"
+  fi
+done
+echo "tema Dracula (GTK, Openbox, GroovyMAME) e emuladores no menu do LXDE"
+
+# ── Terminal: zsh com Oh My Zsh e o tema Dracula ──────────────
+for path in usr/bin/zsh usr/local/share/oh-my-zsh/oh-my-zsh.sh \
+  usr/local/share/oh-my-zsh/custom/themes/dracula.zsh-theme \
+  usr/local/share/oh-my-zsh/custom/themes/lib/async.zsh opt/fliperos/bin/fliperos-tty1; do
+  has "$path"
+done
+unsquashfs -cat "$work/filesystem.squashfs" home/fliperos/.zshrc > "$work/f" || fail "ausente: /home/fliperos/.zshrc"
+cmp -s "$src/config/zshrc" "$work/f" || fail "/home/fliperos/.zshrc difere de config/zshrc"
+unsquashfs -cat "$work/filesystem.squashfs" etc/passwd > "$work/f"
+grep -q '^fliperos:.*:/usr/bin/zsh$' "$work/f" || fail "o shell do usuario fliperos nao e o zsh"
+echo "terminal: zsh do usuario com Oh My Zsh e o tema Dracula"
+
 xorriso -indev "$iso" -report_el_torito plain > "$work/boot.txt" 2>&1
 grep -q 'BIOS' "$work/boot.txt" || fail "sem boot BIOS"
 grep -q 'UEFI' "$work/boot.txt" || fail "sem boot UEFI"

@@ -312,11 +312,19 @@ class ImageTests(unittest.TestCase):
 
     def test_tty1_flow_like_groovyarcade(self):
         """No disco: primeiro boot, launcher e depois o setup. Na midia: setup."""
-        profile = ROOTFS.split('.bash_profile" << \'EOF\'')[1].split('\nEOF')[0]
-        installed = profile.split('if [[ -f /etc/fliperos/installed ]]; then')[1]
+        flow = (ROOT / 'config/fliperos-tty1').read_text()
+        installed = flow.split('if [[ -f /etc/fliperos/installed ]]; then')[1]
         self.assertLess(installed.index('--first-boot'), installed.index('fliperos-session'))
         # O setup "normal" e a ultima chamada, depois do launcher fechar.
         self.assertLess(installed.index('fliperos-session'), installed.rindex('sudo /usr/local/bin/fliperos-setup\n'))
+
+    def test_both_shells_run_the_tty1_flow(self):
+        # O shell do usuario e o zsh; o .bash_profile fica para quem voltar ao bash.
+        for profile in ('.zprofile', '.bash_profile'):
+            body = ROOTFS.split(profile + '" << \'EOF\'')[1].split('\nEOF')[0]
+            self.assertIn('"$(tty)" == /dev/tty1', body, profile)
+            self.assertIn('/opt/fliperos/bin/fliperos-tty1', body, profile)
+        self.assertIn('fliperos-tty1', ROOTFS.split('for name in fliperos-session')[1].split('done')[0])
 
     def test_sudo_only_for_the_setup(self):
         self.assertIn('NOPASSWD: /usr/local/bin/fliperos-setup', ROOTFS)
@@ -531,6 +539,109 @@ class AudioBuildTests(unittest.TestCase):
         panel = (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text()
         self.assertIn('type=volume', panel)
         self.assertNotIn('XF86Audio', panel)
+
+
+class DraculaThemeTests(unittest.TestCase):
+    """Tema Dracula no LXDE, no RGUI do RetroArch e na UI do GroovyMAME."""
+
+    def test_lxde_uses_the_pinned_dracula_gtk(self):
+        self.assertIn('sNet/ThemeName=Dracula', (ROOT / 'config/lxde/lxsession/LXDE/desktop.conf').read_text())
+        script = (ROOT / 'fliperos-dracula.sh').read_text()
+        self.assertRegex(script, r'DRACULA_GTK_COMMIT="[0-9a-f]{40}"')
+        self.assertIn('config/openbox-3/themerc', script)
+        self.assertIn('fliperos-dracula.sh', MKISO)
+        for pkg in ('gtk2-engines-murrine', 'gtk2-engines-pixbuf', 'librsvg2-common'):
+            self.assertIn(pkg, MKISO)
+
+    def test_openbox_theme_uses_the_palette(self):
+        theme = (ROOT / 'config/openbox-3/themerc').read_text()
+        self.assertIn('window.active.title.bg.color: #282a36', theme)
+        self.assertIn('menu.items.active.text.color: #ff79c6', theme)
+        self.assertIn('lxde-rc.xml', ROOTFS)
+
+    def test_retroarch_rgui_dracula(self):
+        # RGUI_THEME_DRACULA e o 18o item de menu/menu_defines.h (indice 17).
+        self.assertIn('rgui_menu_color_theme = "17"', (ROOT / 'config/retroarch.cfg').read_text())
+
+    def test_groovymame_ui_colors(self):
+        rows = [line.split() for line in (ROOT / 'config/mame-ui.ini').read_text().splitlines()
+                if line.strip() and not line.startswith('#')]
+        keys = {key for key, _ in rows}
+        self.assertEqual(len(keys), 16)
+        for key, value in rows:
+            self.assertTrue(key.startswith('ui_') and key.endswith('_color'), key)
+            self.assertRegex(value, r'^[0-9a-f]{8}$', key)
+        self.assertIn('config/mame-ui.ini', ROOTFS)
+        self.assertIn('etc/fliperos/mame/ui.ini', ROOTFS)
+
+
+class TerminalThemeTests(unittest.TestCase):
+    """Terminal escuro: zsh com Oh My Zsh e o tema Dracula."""
+
+    def test_pinned_ohmyzsh_and_dracula_zsh(self):
+        script = (ROOT / 'fliperos-dracula.sh').read_text()
+        for name in ('OHMYZSH_COMMIT', 'DRACULA_ZSH_COMMIT'):
+            self.assertRegex(script, name + r'="[0-9a-f]{40}"')
+        self.assertIn('custom/themes/dracula.zsh-theme', script)
+        # O tema procura o lib/async.zsh ao lado do proprio arquivo.
+        self.assertIn('custom/themes/lib/async.zsh', script)
+        self.assertIn(' zsh', MKISO.split('apt-get install -y --no-install-recommends')[1].split('\n\n')[0])
+
+    def test_zshrc(self):
+        zshrc = (ROOT / 'config/zshrc').read_text()
+        self.assertIn('export ZSH=/usr/local/share/oh-my-zsh', zshrc)
+        self.assertIn('ZSH_THEME=dracula', zshrc)
+        self.assertIn("zstyle ':omz:update' mode disabled", zshrc)
+        # Cache no home: /usr/local/share/oh-my-zsh e do root.
+        self.assertIn('ZSH_CACHE_DIR=$HOME/.cache/oh-my-zsh', zshrc)
+        # No console do Linux, sem os simbolos que a fonte nao tem.
+        self.assertIn('[[ $TERM == linux ]] && DRACULA_ARROW_ICON="> "', zshrc)
+        self.assertLess(zshrc.index('DRACULA_ARROW_ICON'), zshrc.index('source "$ZSH/oh-my-zsh.sh"'))
+        self.assertIn('config/zshrc', ROOTFS)
+
+    def test_user_shell_is_zsh_when_installed(self):
+        self.assertIn('usr/bin/zsh', ROOTFS)
+        self.assertIn(r's|^\(fliperos:.*:\)/bin/bash$|\1/usr/bin/zsh|', ROOTFS)
+
+
+class EmulatorMenuTests(unittest.TestCase):
+    """Emuladores no menu do LXDE: saem do desktop pelo fliperos-launch."""
+
+    APPS = sorted((ROOT / 'config/applications').glob('fliperos-*.desktop'))
+
+    def entry(self, path):
+        return dict(line.split('=', 1) for line in path.read_text().splitlines() if '=' in line)
+
+    def test_every_emulator_has_an_entry(self):
+        names = {p.stem.replace('fliperos-', '') for p in self.APPS}
+        self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'supermodel'})
+
+    def test_entries_go_through_the_launcher(self):
+        launcher = (ROOT / 'config/fliperos-launch').read_text()
+        for path in self.APPS:
+            name = path.stem.replace('fliperos-', '')
+            e = self.entry(path)
+            self.assertEqual(e['Exec'], '/opt/fliperos/bin/fliperos-launch ' + name)
+            self.assertEqual(e['TryExec'], '/usr/local/bin/' + name)
+            self.assertIn('Game;', e['Categories'])
+            self.assertIn(name, launcher)
+
+    def test_every_icon_is_installed(self):
+        own = {p.name for p in (ROOT / 'config/icons').glob('*.svg')}
+        for path in self.APPS:
+            icon = self.entry(path)['Icon']
+            self.assertTrue(icon.startswith('/usr/local/share/pixmaps/'), icon)
+            name = icon.rsplit('/', 1)[1]
+            # Os proprios (config/icons) ou os que o build copia de cada projeto.
+            self.assertTrue(name in own or ('pixmaps/' + name) in MKISO or name == 'com.libretro.RetroArch.svg',
+                            name)
+        self.assertIn('rm -f /usr/local/share/applications/com.libretro.RetroArch.desktop', MKISO)
+
+    def test_session_only_runs_known_requests(self):
+        session = (ROOT / 'config/fliperos-session').read_text()
+        self.assertIn('fliperos-next', session)
+        self.assertIn('/opt/fliperos/bin/fliperos-kms-run | /opt/fliperos/bin/fliperos-x11-run)', session)
+        self.assertIn('fliperos-launch', ROOTFS)
 
 
 class DockerfileTests(unittest.TestCase):

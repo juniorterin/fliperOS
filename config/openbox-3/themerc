@@ -1,0 +1,100 @@
+# Dracula para o Openbox (janelas e menus do LXDE), com a paleta oficial:
+# fundo #282a36, linha atual #44475a, texto #f8f8f2, comentario #6272a4,
+# roxo #bd93f9, rosa #ff79c6. Instalado em /usr/share/themes/Dracula/openbox-3
+# pelo fliperos-dracula.sh.
+
+border.width: 1
+padding.width: 4
+padding.height: 3
+window.handle.width: 0
+window.client.padding.width: 0
+window.client.padding.height: 0
+window.label.text.justify: center
+menu.overlap.x: 0
+menu.overlap.y: 0
+
+# ── Janela ativa ──────────────────────────────────────────────
+window.active.border.color: #bd93f9
+window.active.client.color: #282a36
+window.active.title.bg: flat solid
+window.active.title.bg.color: #282a36
+window.active.title.separator.color: #44475a
+window.active.label.bg: parentrelative
+window.active.label.text.color: #f8f8f2
+window.active.handle.bg: flat solid
+window.active.handle.bg.color: #282a36
+window.active.grip.bg: flat solid
+window.active.grip.bg.color: #bd93f9
+window.active.button.unpressed.bg: parentrelative
+window.active.button.unpressed.image.color: #f8f8f2
+window.active.button.hover.bg: flat solid
+window.active.button.hover.bg.color: #44475a
+window.active.button.hover.image.color: #ff79c6
+window.active.button.pressed.bg: flat solid
+window.active.button.pressed.bg.color: #6272a4
+window.active.button.pressed.image.color: #ff79c6
+window.active.button.disabled.bg: parentrelative
+window.active.button.disabled.image.color: #6272a4
+window.active.button.toggled.bg: parentrelative
+window.active.button.toggled.image.color: #50fa7b
+
+# ── Janela inativa ────────────────────────────────────────────
+window.inactive.border.color: #44475a
+window.inactive.client.color: #21222c
+window.inactive.title.bg: flat solid
+window.inactive.title.bg.color: #21222c
+window.inactive.title.separator.color: #282a36
+window.inactive.label.bg: parentrelative
+window.inactive.label.text.color: #6272a4
+window.inactive.handle.bg: flat solid
+window.inactive.handle.bg.color: #21222c
+window.inactive.grip.bg: flat solid
+window.inactive.grip.bg.color: #44475a
+window.inactive.button.unpressed.bg: parentrelative
+window.inactive.button.unpressed.image.color: #6272a4
+window.inactive.button.hover.bg: flat solid
+window.inactive.button.hover.bg.color: #44475a
+window.inactive.button.hover.image.color: #f8f8f2
+window.inactive.button.pressed.bg: flat solid
+window.inactive.button.pressed.bg.color: #6272a4
+window.inactive.button.pressed.image.color: #f8f8f2
+window.inactive.button.disabled.bg: parentrelative
+window.inactive.button.disabled.image.color: #44475a
+window.inactive.button.toggled.bg: parentrelative
+window.inactive.button.toggled.image.color: #6272a4
+
+# ── Menus ─────────────────────────────────────────────────────
+menu.border.color: #bd93f9
+menu.title.bg: flat solid
+menu.title.bg.color: #44475a
+menu.title.text.color: #bd93f9
+menu.title.text.justify: center
+menu.items.bg: flat solid
+menu.items.bg.color: #282a36
+menu.items.text.color: #f8f8f2
+menu.items.disabled.text.color: #6272a4
+menu.items.active.bg: flat solid
+menu.items.active.bg.color: #44475a
+menu.items.active.text.color: #ff79c6
+menu.items.active.disabled.text.color: #6272a4
+menu.separator.color: #44475a
+menu.separator.width: 1
+menu.separator.padding.width: 6
+menu.separator.padding.height: 3
+
+# ── Janelas de aviso (Alt+Tab, mover, redimensionar) ──────────
+osd.border.color: #bd93f9
+osd.bg: flat solid
+osd.bg.color: #282a36
+osd.label.bg: parentrelative
+osd.label.text.color: #f8f8f2
+osd.hilight.bg: flat solid
+osd.hilight.bg.color: #bd93f9
+osd.unhilight.bg: flat solid
+osd.unhilight.bg.color: #44475a
+osd.button.unpressed.bg: flat solid
+osd.button.unpressed.bg.color: #282a36
+osd.button.unpressed.image.color: #f8f8f2
+osd.button.focused.bg: flat solid
+osd.button.focused.bg.color: #44475a
+osd.button.focused.image.color: #ff79c6

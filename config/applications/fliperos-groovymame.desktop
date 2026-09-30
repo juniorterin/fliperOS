@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=GroovyMAME
+GenericName=Arcade emulator
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch groovymame
+TryExec=/usr/local/bin/groovymame
+Icon=/usr/local/share/pixmaps/fliperos-groovymame.svg
+Terminal=false
+Categories=Game;Emulator;

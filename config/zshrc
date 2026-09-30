@@ -1,0 +1,20 @@
+# zsh do usuario fliperos: Oh My Zsh com o tema Dracula, os dois fixados por
+# commit e instalados pelo fliperos-dracula.sh em /usr/local/share/oh-my-zsh.
+# Sem atualizacao automatica: a versao e a da imagem (Setup > System Update
+# nao mexe nele).
+export ZSH=/usr/local/share/oh-my-zsh
+ZSH_THEME=dracula
+ZSH_CACHE_DIR=$HOME/.cache/oh-my-zsh
+zstyle ':omz:update' mode disabled
+plugins=(git)
+
+# A fonte do console do Linux (tty) nao tem a seta nem o check/x do tema.
+[[ $TERM == linux ]] && DRACULA_ARROW_ICON="> "
+
+mkdir -p "$ZSH_CACHE_DIR"
+source "$ZSH/oh-my-zsh.sh"
+
+if [[ $TERM == linux ]]; then
+  ZSH_THEME_GIT_PROMPT_CLEAN=") %F{green}%Bok "
+  ZSH_THEME_GIT_PROMPT_DIRTY=") %F{yellow}%B* "
+fi

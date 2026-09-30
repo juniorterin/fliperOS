@@ -88,7 +88,7 @@ Procura discos com FliperOS (partição `FliperOS` com o marcador `/etc/fliperos
 
 ## 5. Sistema instalado
 
-O tty1 faz o login sozinho e segue o `.bash_profile` do GroovyArcade: abre o **launcher padrão** e, quando ele fecha, o **menu do FliperOS**.
+O tty1 faz o login sozinho e segue o fluxo do `.bash_profile` do GroovyArcade (`config/fliperos-tty1`, chamado pelo `~/.zprofile`): abre o **launcher padrão** e, quando ele fecha, o **menu do FliperOS**. O shell do usuário é o **zsh com Oh My Zsh** e o tema Dracula (seção 6); o `~/.bash_profile` chama o mesmo fluxo, para quem voltar ao bash.
 
 **Primeiro boot:** *Choose default launcher*, com a lista gerada dos launchers instalados de fato (Attract-Mode Plus, RetroArch, EmulationStation..., LXDE) e o próprio *FliperOS Setup*. Muda depois em Setup > Frontend.
 
@@ -111,9 +111,25 @@ O tty1 faz o login sozinho e segue o `.bash_profile` do GroovyArcade: abre o **l
 
 ### Desktop LXDE
 
-O LXDE do GroovyArcade: `lxde` completo com o openbox-lxde, painel embaixo (menu, gerenciador de arquivos, terminal, tarefas, CPU, volume, bandeja, rede, relógio), sem compositor, sem DPMS nem descanso de tela, fonte Sans 10 e a orientação do Video Setup. Vêm também as ferramentas do GroovyArcade: **AntiMicroX** e **QJoyPad** (controle como teclado/mouse), `xterm`, `htop`, `evtest`, `joy2key`, `hwinfo`, `lshw`, `read-edid`, `i2c-tools`. O **FliperOS Setup** fica em **System Tools** (e no painel), como o `gasetup.desktop`. O terminal usa as cores do Dracula. Sair do desktop volta ao menu.
+O LXDE do GroovyArcade: `lxde` completo com o openbox-lxde, painel embaixo (menu, gerenciador de arquivos, terminal, tarefas, CPU, volume, bandeja, rede, relógio), sem compositor, sem DPMS nem descanso de tela, fonte Sans 10 e a orientação do Video Setup. Tudo no tema Dracula (seção 6).
 
-## 6. Tema Dracula no console
+**Emuladores no menu (Jogos):** RetroArch, GroovyMAME, Flycast, PCSX2 e Supermodel, com os ícones dos próprios projetos (GroovyMAME e Supermodel não têm ícone para Linux; os deles são do FliperOS, em `config/icons`). Nenhum deles roda dentro do X do desktop — RetroArch, GroovyMAME e Flycast usam o KMS, PCSX2 e Supermodel sobem um Xorg próprio com o modo do jogo —, então o atalho (`fliperos-launch`) grava o pedido e fecha o desktop, o `fliperos-session` abre o emulador no CRT e, quando ele fecha, **o desktop volta**. Emulador que não foi compilado (`--skip-*`) não aparece no menu. Vêm também as ferramentas do GroovyArcade: **AntiMicroX** e **QJoyPad** (controle como teclado/mouse), `xterm`, `htop`, `evtest`, `joy2key`, `hwinfo`, `lshw`, `read-edid`, `i2c-tools`. O **FliperOS Setup** fica em **System Tools** (e no painel), como o `gasetup.desktop`. O terminal usa as cores do Dracula. Sair do desktop volta ao menu.
+
+## 6. Tema Dracula
+
+O [Dracula](https://draculatheme.com) é o tema de tudo o que o FliperOS desenha:
+
+| Onde | Como |
+| --- | --- |
+| Console e `fliperos-setup` | paleta do VT (abaixo) e o Gum com os índices dela |
+| LXDE — janelas e programas GTK 2/3 | tema oficial `dracula/gtk`, fixado por commit (`fliperos-dracula.sh`), com as engines `murrine`/`pixbuf` do GTK 2 |
+| LXDE — bordas e menus do Openbox | `config/openbox-3/themerc` (o `dracula/gtk` não tem Openbox), escolhido no `lxde-rc.xml` |
+| LXDE — painel, fundo, terminal | cores em `config/lxde` (lxpanel, pcmanfm, lxterminal) |
+| Terminal (zsh) | **Oh My Zsh** com o tema oficial `dracula/zsh`, os dois fixados por commit em `/usr/local/share/oh-my-zsh` (`fliperos-dracula.sh`), sem atualização automática; `~/.zshrc` é o `config/zshrc`. No console do Linux a seta e o ✓/✗ do git viram `>`, `ok` e `*` (a fonte do console não tem esses símbolos) |
+| RetroArch | o tema **Dracula embutido no RGUI** (`rgui_menu_color_theme = 17`) |
+| GroovyMAME | cores da interface (menus, lista de jogos, sliders) em `/etc/fliperos/mame/ui.ini` (`config/mame-ui.ini`, ARGB) |
+
+### No console
 
 No console do Linux só existem 16 cores, e o fundo só aceita as 8 primeiras. A paleta do VT é reprogramada com os tons do Dracula no boot (`/etc/vtrgb`, aplicada pelo `setvtrgb.service` do Ubuntu, com `config/vtrgb-dracula` como alternativa de maior prioridade) e de novo pelo `fliperos-setup`; os estilos do Gum usam os **índices** da paleta, não cores hexadecimais. Assim o tubo e um terminal gráfico mostram o mesmo. A fonte do console (Lat15/Uni2) tem as bordas arredondadas, os blocos da barra e as setas que as telas usam.
 
@@ -262,6 +278,10 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 | `config/vtrgb-dracula` | Paleta Dracula do console |
 | `config/fliperos-latency.service` | Aplica o modo de latência no boot |
 | `config/fliperos-volume.triggers` | Teclas de volume (triggerhappy) |
+| `fliperos-dracula.sh`, `config/openbox-3/themerc` | Tema Dracula do LXDE (GTK fixado por commit + Openbox) e do terminal (Oh My Zsh + dracula/zsh) |
+| `config/zshrc`, `config/fliperos-tty1` | zsh do usuário; fluxo do tty1 (setup, primeiro boot, launcher) |
+| `config/mame-ui.ini` | Cores Dracula da interface do GroovyMAME |
+| `config/applications/`, `config/icons/`, `config/fliperos-launch` | Emuladores no menu do LXDE e a saída do desktop para abri-los |
 | `config/retroarch.cfg`, `config/mame.ini` | Configuração de sistema do RetroArch e do GroovyMAME (valores do modo Standard) |
 | `patches/kernel-15khz/6.18/` | Patches D0023R |
 | `packaging/` | `.deb` dos frontends e o repositório APT |
@@ -279,4 +299,4 @@ Código atual do GroovyArcade, no GitLab do grupo `groovyarcade`:
 
 Nomes das opções de latência conferidos no código atual: [GroovyMAME](https://github.com/antonioginer/GroovyMAME) `953db38` (`src/emu/emuopts.h`: `lowlatency`, `autoframedelay`, `framedelay`) e [RetroArch](https://github.com/libretro/RetroArch) `6fe0b87` (`settings/settings_def_frame_delay.h`, `settings_def_video_sync.h`, `configuration.c`).
 
-E também: [Switchres](https://github.com/antonioginer/switchres) (`geometry.py`, `edid.cpp`, `switchres.ini`), [D0023R/linux_kernel_15khz](https://github.com/D0023R/linux_kernel_15khz) `ece6ef15eca9480eaf75870a44764f47118e9cfe`, [Gum](https://github.com/charmbracelet/gum) v2.0.2 e o [Dracula](https://draculatheme.com).
+E também: [Switchres](https://github.com/antonioginer/switchres) (`geometry.py`, `edid.cpp`, `switchres.ini`), [D0023R/linux_kernel_15khz](https://github.com/D0023R/linux_kernel_15khz) `ece6ef15eca9480eaf75870a44764f47118e9cfe`, [Gum](https://github.com/charmbracelet/gum) v2.0.2 e o [Dracula](https://draculatheme.com) ([dracula/gtk](https://github.com/dracula/gtk) `71640b9456110f3bac2130d0b387a3154a9fb4d2`, [dracula/zsh](https://github.com/dracula/zsh) `a3e27d47ea2ed1e3b435f44aa71caf71d3219af6`, [Oh My Zsh](https://github.com/ohmyzsh/ohmyzsh) `4d4cfc287e9d887b81242c0e431b5f49f9cec5c1`; o tema do RGUI é `RGUI_THEME_DRACULA` em `menu/menu_defines.h` do RetroArch; as opções de cor da UI do GroovyMAME estão em `src/frontend/mame/ui/moptions.cpp`).

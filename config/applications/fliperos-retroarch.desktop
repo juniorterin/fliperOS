@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=RetroArch
+GenericName=Multi-system emulator
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch retroarch
+TryExec=/usr/local/bin/retroarch
+Icon=/usr/local/share/pixmaps/com.libretro.RetroArch.svg
+Terminal=false
+Categories=Game;Emulator;

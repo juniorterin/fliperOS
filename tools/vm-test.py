@@ -22,6 +22,9 @@ import zlib
 BASE = Path('/audit')
 assert Path('/.dockerenv').exists(), 'rode dentro do container'
 PASSWORD = 'fliperos'
+# O shell do usuario e o zsh com o tema Dracula (seta), o bash ("$ ") ou o
+# tema no console do Linux ("> ").
+PROMPT = r'(\$ |➜ |> )'
 LIB = '/usr/local/lib/fliperos-setup'
 
 
@@ -96,7 +99,7 @@ class Guest:
         self.send('fliperos')
         self.wait('Password:')
         self.send(PASSWORD)
-        self.wait(r'\$ ')
+        self.wait(PROMPT)
         self.send("sudo -p 'TEST_SUDO:' bash")
         self.wait('TEST_SUDO:')
         self.send(PASSWORD)

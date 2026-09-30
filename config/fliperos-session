@@ -52,8 +52,21 @@ case $backend in
     vt=$(tty 2> /dev/null)
     vt=${vt#/dev/tty}
     [[ $vt =~ ^[0-9]+$ ]] || vt=1
-    xinit "$binary" -- :0 -nolisten tcp "vt$vt" -keeptty
-    rc=$?
+    # Um emulador escolhido no menu do desktop (fliperos-launch) roda depois
+    # que o X fecha, e o desktop volta quando ele termina.
+    request="${XDG_RUNTIME_DIR:-/tmp}/fliperos-next"
+    rm -f "$request"
+    while true; do
+      xinit "$binary" -- :0 -nolisten tcp "vt$vt" -keeptty
+      rc=$?
+      [[ -s $request ]] || break
+      mapfile -t next < "$request"
+      rm -f "$request"
+      case ${next[0]:-} in
+        /opt/fliperos/bin/fliperos-kms-run | /opt/fliperos/bin/fliperos-x11-run) "${next[@]}" ;;
+        *) echo "Ignoring an unknown request: ${next[*]}" >&2 ;;
+      esac
+    done
     ;;
 esac
 

@@ -220,7 +220,10 @@ apt-get update -qq
 # ferramentas de joystick/diagnostico sao as do GroovyArcade (lxde, xterm,
 # htop, evtest, joy2key, qjoypad, hwinfo, lshw, read-edid, i2c-tools).
 # fbset traz o con2fbmap do teste de saidas; jq e rsync sao do fliperos-setup;
-# triggerhappy le as teclas de volume em qualquer tela (fliperos-rootfs.sh).
+# triggerhappy le as teclas de volume em qualquer tela (fliperos-rootfs.sh);
+# as engines murrine e pixbuf sao do GTK 2 do tema Dracula, o librsvg2
+# desenha os icones SVG do menu e o gxmessage (GTK 3) e a confirmacao do
+# fliperos-launch antes de fechar o desktop.
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -237,8 +240,9 @@ apt-get install -y --no-install-recommends \
   openssh-server network-manager wpasupplicant iw python3 pciutils libdrm-tests edid-decode squashfs-tools \
   samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
   plymouth plymouth-label fonts-dejavu-core \
-  lxde gnome-themes-extra xterm htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
-  espeak-ng triggerhappy
+  lxde gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
+  xterm htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
+  espeak-ng triggerhappy zsh
 
 systemctl enable ssh
 # As host keys sao apagadas abaixo pra que cada instalacao gere as suas, e
@@ -383,6 +387,11 @@ install_fliperos_files() {
   FLIPEROS_ROOTFS_CHROOT=1 bash "$(dirname "$(realpath "$0")")/fliperos-rootfs.sh" "$CHROOT_DIR" \
     >> "$LOG_FILE" 2>&1 || err "fliperos-rootfs.sh falhou (ver $LOG_FILE)"
   ok "fliperos-setup em /usr/local/lib/fliperos-setup"
+  # Tema Dracula do LXDE (GTK fixado por commit + Openbox), baixado aqui no
+  # container do build, que tem o git.
+  bash "$(dirname "$(realpath "$0")")/fliperos-dracula.sh" "$CHROOT_DIR" \
+    >> "$LOG_FILE" 2>&1 || err "Tema Dracula falhou (ver $LOG_FILE)"
+  ok "Tema Dracula no LXDE"
 }
 
 # ── Pacotes que nao existem no Ubuntu 24.04 ───────────────────
@@ -832,6 +841,10 @@ cd /tmp/retroarch
   --disable-sdl --disable-sdl2
 make -j"$(nproc)"
 make install
+# O atalho do proprio RetroArch abriria o binario dentro do X do desktop,
+# onde este build (so KMS) nao roda; o do FliperOS passa pelo
+# fliperos-launch. O icone (share/pixmaps) fica.
+rm -f /usr/local/share/applications/com.libretro.RetroArch.desktop
 cd /
 rm -rf /tmp/retroarch
 
@@ -901,6 +914,8 @@ git submodule update --init --recursive
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_VULKAN=OFF
 cmake --build build -j"$(nproc)"
 install -m755 build/flycast /usr/local/bin/flycast
+# Icone do menu do LXDE (config/applications/fliperos-flycast.desktop).
+install -Dm644 shell/linux/flycast.png /usr/local/share/pixmaps/flycast.png
 cd /
 rm -rf /tmp/flycast
 echo "Flycast OK"
@@ -935,6 +950,8 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
 find build -maxdepth 3 -iname 'pcsx2*' -type f -executable \
   -exec install -m755 {} /usr/local/bin/pcsx2 \; -quit
+# Icone do menu do LXDE (config/applications/fliperos-pcsx2.desktop).
+install -Dm644 bin/resources/icons/AppIconLarge.png /usr/local/share/pixmaps/pcsx2.png
 cd /
 rm -rf /tmp/pcsx2
 echo "PCSX2 OK"

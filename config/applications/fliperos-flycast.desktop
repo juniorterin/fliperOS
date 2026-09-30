@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Flycast
+GenericName=Dreamcast and Naomi emulator
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch flycast
+TryExec=/usr/local/bin/flycast
+Icon=/usr/local/share/pixmaps/flycast.png
+Terminal=false
+Categories=Game;Emulator;

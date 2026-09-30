@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Abre um emulador pelo menu do LXDE (Jogos). Os emuladores do FliperOS nao
+# rodam dentro do X do desktop: RetroArch, GroovyMAME e Flycast usam o KMS,
+# e PCSX2 e Supermodel sobem um Xorg proprio com o modo do jogo. Por isso o
+# pedido fica gravado, o desktop fecha, o fliperos-session abre o emulador e,
+# quando ele fecha, volta para o desktop.
+set -euo pipefail
+
+case ${1:-} in
+  retroarch) label=RetroArch ;;
+  groovymame) label=GroovyMAME ;;
+  flycast) label=Flycast ;;
+  pcsx2) label=PCSX2 ;;
+  supermodel) label=Supermodel ;;
+  *)
+    echo "Uso: fliperos-launch retroarch|groovymame|flycast|pcsx2|supermodel" >&2
+    exit 2
+    ;;
+esac
+case $1 in
+  pcsx2 | supermodel) run=(/opt/fliperos/bin/fliperos-x11-run "$1") ;;
+  *) run=(/opt/fliperos/bin/fliperos-kms-run "$1") ;;
+esac
+
+# open_windows conta as janelas abertas no desktop, fora o proprio desktop
+# (pcmanfm) e o painel (lxpanel).
+open_windows() {
+  local id type n=0
+  for id in $(xprop -root _NET_CLIENT_LIST 2> /dev/null | sed -n 's/.*# //p' | tr ',' ' '); do
+    type=$(xprop -id "$id" _NET_WM_WINDOW_TYPE 2> /dev/null) || continue
+    case $type in
+      *_NET_WM_WINDOW_TYPE_DESKTOP* | *_NET_WM_WINDOW_TYPE_DOCK*) continue ;;
+    esac
+    n=$((n + 1))
+  done
+  printf '%s\n' "$n"
+}
+
+# Com algo aberto, confirma antes: fechar o desktop fecha essas janelas, e o
+# que nao foi salvo nelas se perde.
+if (($(open_windows) > 0)); then
+  # -wrap e o tamanho fixo: sem eles o texto passa da largura de uma tela
+  # de 640x480 e fica cortado.
+  gxmessage -center -wrap -geometry 520x220 -title "FliperOS" -buttons "Continue:0,Cancel:1" -default "Cancel" \
+    "The desktop will close to open $label on the CRT. It comes back when $label closes.
+
+The open windows will be closed, and unsaved work in them will be lost.
+
+Continue?" || exit 0
+fi
+
+request="${XDG_RUNTIME_DIR:-/tmp}/fliperos-next"
+printf '%s\n' "${run[@]}" > "$request"
+# Fecha a sessao do LXDE sem perguntar (o lxsession exporta o proprio PID).
+if [[ -n ${_LXSESSION_PID:-} ]]; then
+  kill -TERM "$_LXSESSION_PID"
+else
+  openbox --exit
+fi
