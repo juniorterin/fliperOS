@@ -957,20 +957,19 @@ RASCRIPT
     || err "RetroArch falhou; use --skip-retroarch explicitamente para ISO sem ele"
 }
 
-# ── Compilar Flycast (Dreamcast), KMS via SDL2 kmsdrm ─────────
+# ── Compilar Flycast (Dreamcast/Naomi), X11 ──────────────────
 # Recipe identica a testada no container de validacao: precisa de
 # 'git submodule update --init --recursive' (nao vem no clone raso) e das
-# deps de build abaixo. Saida em KMS/DRM vem so de rodar com
-# SDL_VIDEODRIVER=kmsdrm (ver fliperos-kms-run) — libsdl2 do Ubuntu ja
-# vem com esse driver, nao precisa recompilar SDL2. USE_VULKAN=OFF porque
-# adiciona deps novas (glslang/SPIRV) sem necessidade pro caminho OpenGL
-# via EGL/GBM ja validado.
+# deps de build abaixo. Roda pelo fliperos-x11-run, onde o Switchres cria o
+# modo da tabela emulator-modes.conf (640x240 no 15 kHz). O SDL2 do Ubuntu
+# tambem tem o kmsdrm, se um dia voltar para o KMS. USE_VULKAN=OFF porque
+# adiciona deps novas (glslang/SPIRV) sem necessidade pro caminho OpenGL.
 build_flycast_chroot() {
   if $SKIP_FLYCAST; then
     warn "Flycast pulado (--skip-flycast)"
     return
   fi
-  step "Compilando Flycast (Dreamcast, KMS 640x240) no chroot"
+  step "Compilando Flycast (Dreamcast/Naomi, X11) no chroot"
   cat > "$CHROOT_DIR/tmp/build-flycast.sh" << 'FCSCRIPT'
 #!/bin/bash
 set -e
@@ -990,7 +989,7 @@ echo "Flycast OK"
 FCSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-flycast.sh"
   chroot "$CHROOT_DIR" /tmp/build-flycast.sh >> "$LOG_FILE" 2>&1 \
-    && ok "Flycast compilado (KMS)" \
+    && ok "Flycast compilado" \
     || err "Flycast falhou; use --skip-flycast explicitamente para ISO sem ele"
 }
 
