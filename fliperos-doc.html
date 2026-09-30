@@ -7,164 +7,221 @@ h1,h2{line-height:1.25;color:#8fd5bb}h2{margin-top:2.5em}a{color:#8ccfff}
 pre{overflow:auto;background:#202b36;padding:20px;border-radius:6px}code{font-size:.9em}
 table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1px solid #405060;text-align:left;padding:12px}
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
-</style><main><h1 id="fliperos-06-ubuntu-para-crt-15-khz">FliperOS 0.6 — Ubuntu para CRT 15 kHz</h1>
-<p>Base Ubuntu 24.04 amd64. Configuração de vídeo e instalador revisados usando as fontes oficiais do Switchres, kernel DRM e GroovyArcade/gasetup. A ISO é live e oferece instalação em disco. A saída física ainda precisa ser validada na GPU e no CRT reais.</p>
-<h2 id="instalacao-no-estilo-groovyarcade">Instalação no estilo GroovyArcade</h2>
-<p>O fluxo segue a instalação pela ISO do gasetup: iniciar live, identificar a saída do CRT, confirmar a imagem, escolher live ou disco, revisar o destino, extrair o sistema e configurar o boot.</p>
+</style><main><h1 id="fliperos-07-instalador-para-gabinetes-crt-no-estilo-do-groovyarcade">FliperOS 0.7 — instalador para gabinetes CRT, no estilo do GroovyArcade</h1>
+<p>Ubuntu 24.04 amd64 com o <strong>kernel 15 kHz</strong> (kernel.org 6.18 LTS + patches D0023R, os mesmos do <code>linux-15khz</code> do GroovyArcade). A mídia é <strong>só de instalação</strong> e segue o fluxo do GroovyArcade: menu de boot com a faixa de frequência, teste das saídas de vídeo com voz, <em>Testing Results</em>, menu <strong>FliperOS Setup</strong> e instalação no HD com barra de progresso. No sistema instalado, o mesmo programa vira o menu de configuração que aparece quando o frontend fecha.</p>
+<p>As telas são do <strong><code>fliperos-setup</code></strong>, em Bash com <a href="https://github.com/charmbracelet/gum">Gum</a> (Charmbracelet, feito sobre Bubble Tea), tema <strong>Dracula</strong> e textos em inglês, como no GroovyArcade. Pensadas para <strong>640x480i</strong>: 80x30 caracteres, nada animado nem piscando.</p>
+<blockquote>
+<p>15 kHz foi validado no gabinete com a versão anterior (kernel padrão + EDID, 640x240). O kernel 15 kHz, o 640x480i, o teste de saídas e o instalador desta versão foram validados em VM (QEMU); o gabinete real ainda precisa confirmar.</p>
+</blockquote>
+<h2 id="1-gravar-a-midia">1. Gravar a mídia</h2>
+<p>Grave a ISO <strong>byte a byte</strong> num pendrive e desative o Secure Boot (o kernel 15 kHz é próprio, não assinado).</p>
+<p>A ISO usa o bootloader <strong>Limine</strong> e é <strong>híbrida</strong> (<code>xorriso</code> + <code>limine bios-install</code>): a mesma imagem boota como CD e como pendrive, em BIOS e em UEFI. Gravadores que reconstroem a estrutura de boot a quebram — <strong>Rufus no modo padrão ("ISO image"), Ventoy e UNetbootin não servem</strong>. Use o <strong>balenaEtcher</strong>, ou o Rufus em "DD Image mode", ou <code>dd</code>:</p>
+<pre><code class="language-bash">sudo dd if=fliperos-0.7.iso of=/dev/sdX bs=4M status=progress conv=fsync
+</code></pre>
+<p>Confirme o <code>/dev/sdX</code> com <code>lsblk</code> antes: o dispositivo errado apaga o disco errado.</p>
+<h2 id="2-menu-de-boot">2. Menu de boot</h2>
+<p>As mesmas opções do GroovyArcade (<code>os/groovyarcade/syslinux/syslinux.cfg</code>). Aqui só se escolhe em que faixa o Linux sobe; a saída e o monitor são decididos depois, pelo teste de saídas.</p>
+<table>
+<thead>
+<tr>
+<th>Entrada</th>
+<th>Parâmetros</th>
+<th>Para</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>15 kHz</strong> (padrão)</td>
+<td><code>video=640x480iS</code></td>
+<td>Monitor arcade ou TV, 640x480 entrelaçado</td>
+</tr>
+<tr>
+<td>25 kHz</td>
+<td><code>video=512x384S</code></td>
+<td>Monitor de média resolução</td>
+</tr>
+<tr>
+<td>31 kHz</td>
+<td><code>video=640x480S</code></td>
+<td>Monitor de alta resolução</td>
+</tr>
+<tr>
+<td>SVGA / LCD monitor</td>
+<td>—</td>
+<td>Monitor de PC ou LCD (vale o EDID dele)</td>
+</tr>
+<tr>
+<td>Intel 15 kHz</td>
+<td><code>video=1280x480iS i915.no_ytiled_scanout=1</code></td>
+<td>Intel: super resolução; o parâmetro é do patch 09 e liga o entrelaçado na Gen9</td>
+</tr>
+<tr>
+<td>NVIDIA 15 kHz</td>
+<td><code>video=1280x480iS</code></td>
+<td>NVIDIA: super resolução</td>
+</tr>
+<tr>
+<td>NTSC</td>
+<td><code>video=720x480iS</code></td>
+<td>TV NTSC</td>
+</tr>
+<tr>
+<td>PAL</td>
+<td><code>video=768x576iS</code></td>
+<td>TV PAL</td>
+</tr>
+<tr>
+<td>EDID progressive</td>
+<td><code>drm.edid_firmware=edid/generic_15_super_resp.bin video=e</code></td>
+<td>EDID do Switchres, todas as saídas forçadas</td>
+</tr>
+<tr>
+<td>EDID interlaced</td>
+<td><code>drm.edid_firmware=edid/generic_15_super_resi.bin video=e</code></td>
+<td>Idem, entrelaçado</td>
+</tr>
+</tbody>
+</table>
+<p>O <code>S</code> no fim do modo é do patch 15 kHz: usa a tabela fixa de modos de baixo dotclock do kernel (<code>drm_modes_low_dotclock.c</code>), e o <code>i</code> é entrelaçado. Todas as entradas levam <code>quiet splash consoleblank=0</code> e o <code>radeon</code> nas placas SI/CIK.</p>
+<p><strong>Timer de 30 segundos.</strong> Sem tecla, sobe a entrada <strong>15 kHz</strong>, que é a segura para um gabinete: um LCD recebendo 15 kHz só mostra "fora de faixa", mas 31 kHz num tubo só de 15 kHz pode danificá-lo.</p>
+<p>O menu em si <strong>não aparece num CRT de 15 kHz</strong> — ele sai no modo texto do firmware (~31 kHz), antes do kernel. É o mesmo no GroovyArcade. Para escolher outra entrada num gabinete só de 15 kHz, ligue um LCD temporariamente; com o CRT, espere os 30 s. A primeira coisa legível no tubo é o splash, já no modo de boot.</p>
+<h2 id="3-teste-de-saidas-e-testing-results">3. Teste de saídas e <em>Testing Results</em></h2>
+<p>Portado do <code>gatools</code> (<code>video/video.sh</code>): assim que a mídia sobe, o <code>fliperos-setup</code>:</p>
 <ol>
-<li>Grave <code>output/fliperos-0.6.iso</code> em um pendrive e inicie o computador por ele. Desative Secure Boot; esta ISO não oferece uma cadeia de boot assinada validada.</li>
-<li>A entrada CRT usa <strong>VGA-1</strong>. Se o conector for outro, edite os nomes em <code>video=</code> e <code>drm.edid_firmware=</code> no GRUB. Nomes repetidos em múltiplas GPUs exigem configuração manual.</li>
-<li>Login live: <code>fliperos</code>, senha <code>fliperos</code>. O assistente abre no TTY1. Para reabrir: <code>sudo fliperos-install</code>.</li>
-<li>Escolha live ou instalação. Selecione a saída ativa do CRT e confirme que a imagem está visível e estável. O assistente não testa novos modos automaticamente.</li>
-<li>Na instalação, selecione o disco por caminho, modelo, capacidade e serial. Discos montados, mídia live, swap ativa e dispositivos com dependentes ativos são recusados.</li>
-<li>Revise o plano e digite <code>APAGAR /dev/…</code> com o dispositivo exato. <strong>O disco inteiro será apagado; não há dual boot.</strong></li>
-<li>O instalador extrai o squashfs, grava fstab com UUIDs, reconstrói o initramfs e instala GRUB. Defina uma senha nova e reinicie sem o pendrive.</li>
+<li>força ligadas as saídas analógicas ("Lights on") e explica o teste, falando pelo <code>espeak-ng</code>;</li>
+<li>apaga todas as saídas e liga <strong>uma de cada vez</strong>, escrevendo <code>on</code>/<code>off</code>/<code>detect</code> em <code>/sys/class/drm/cardN-CONECTOR/status</code> (analógica sem monitor detectado é forçada; digital sem nada ligado é pulada);</li>
+<li>em cada uma, diz em voz "Testing output V G A 1. If you can see this screen, press Enter." e mostra <em>"If you can see this screen clearly, press ENTER."</em> por 10 s;</li>
+<li><strong>no primeiro ENTER para</strong> e vai para a tela <em>Testing Results</em> (o gatools testa todas e escolhe a melhor; aqui quem está olhando para a tela já decidiu). Sem ENTER, repete a volta até três vezes.</li>
 </ol>
-<p>Particionamento: GPT, BIOS boot de 1 MiB, ESP FAT32 de 512 MiB, restante ext4. Instala GRUB BIOS e UEFI pelo caminho removível, sem alterar NVRAM. Mínimo: 16 GiB.</p>
-<p>É uma implementação própria do fluxo, adaptada ao Ubuntu. Não copia <code>pacstrap</code>, <code>pacman</code>, <code>mkinitcpio</code>, o kernel Arch ou todos os menus do gasetup. Não inclui net-install. O gasetup oferece outros bootloaders; aqui é usado GRUB.</p>
-<p>Plano sem nenhuma escrita:</p>
-<pre><code class="language-bash">sudo fliperos-install --plan /dev/sdX --connector VGA-1
-</code></pre>
-<p>A instalação real é bloqueada em Docker/WSL. Não execute instalação contra discos de trabalho durante testes.</p>
-<h2 id="timing-de-video">Timing de vídeo</h2>
-<p>15 kHz é a frequência horizontal. Resolução e refresh vertical isoladamente não a determinam. No modo DRM comum, <strong>HSync em kHz = clock em kHz / total horizontal</strong>, incluindo apagamento.</p>
-<p>O <code>crt15-edid.bin</code> anuncia somente um timing detalhado:</p>
-<pre><code class="language-text">640x240 progressivo, 13,020 MHz
-Horizontal: 640 666 728 832
-Vertical:   240 242 245 261
-Polaridade: -HSync -VSync
-HSync: 15,649038 kHz; refresh: 59,958 Hz
-</code></pre>
-<p>640 pixels de largura não transformam esse modo em 480p. São 240 linhas progressivas. O timing é genérico, não uma calibração específica do monitor. O antigo <code>320x240-edid.bin</code> foi preservado apenas como referência e não é usado: também anunciava um modo GTF de 14,940 kHz e seu clock baixo falhava na validação EDID utilizada.</p>
-<p>O boot usa <code>video=VGA-1:e drm.edid_firmware=VGA-1:edid/crt15.bin</code>. O EDID está no initramfs para o driver encontrá-lo no início do KMS.</p>
-<p><strong>BIOS/UEFI e GRUB vêm antes desse mecanismo e podem emitir frequências acima de 15 kHz.</strong> O override não garante toda a sequência desde ligar o computador. GPU, adaptadores e circuito RGBHV/RGBS precisam de teste. Não conecte um CRT de frequência fixa a sinal desconhecido para testar por tentativa.</p>
-<h2 id="perfis-de-monitor-152531-khz">Perfis de monitor (15/25/31 kHz)</h2>
-<p>O build aceita <code>--monitor-profile 15khz|25khz|31khz</code> (padrão <code>15khz</code>) — uma
-ISO por perfil, escolhido no momento do build, não na instalação. Cada
-perfil troca o EDID (<code>crt15-edid.bin</code>/<code>crt25-edid.bin</code>/<code>crt31-edid.bin</code>),
-o <code>xorg.conf</code>, o <code>mame.ini</code> e o <code>switchres.ini</code> instalados, mas o nome do
-arquivo de EDID <em>dentro</em> da imagem continua sendo <code>crt15.bin</code> nos três
-casos — só o conteúdo muda. Isso é proposital: <code>fliperos-install.py</code>,
-<code>config/grub.cfg</code>, <code>config/fliperos-edid-hook</code> e as ferramentas de
-auditoria em <code>tools/</code> referenciam esse nome fixo e não precisam saber
-qual perfil foi escolhido.</p>
-<p>As faixas de frequência vêm direto do código do Switchres
-(<code>monitor.cpp</code>, presets <code>arcade_15</code>/<code>arcade_25</code>/<code>arcade_31</code>), não são
-inventadas:</p>
-<table>
-<thead>
-<tr>
-<th>Perfil</th>
-<th>Faixa horizontal (Switchres)</th>
-<th>Timing do EDID</th>
-<th>Origem do timing</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>15kHz</td>
-<td>15625-16200 Hz</td>
-<td>640x240 progressivo, 13.020 MHz, 15.649 kHz</td>
-<td>Já existia (D0023R)</td>
-</tr>
-<tr>
-<td>25kHz</td>
-<td>24960 Hz (fixo)</td>
-<td>512x384 progressivo, 15.600 MHz, 24.960 kHz exatos</td>
-<td>Calculado mirando o preset do Switchres — sem padrão VESA equivalente</td>
-</tr>
-<tr>
-<td>31kHz</td>
-<td>31400-31500 Hz</td>
-<td>640x480 progressivo, 25.200 MHz, 31.500 kHz</td>
-<td>VGA industrial-padrão (modeline <code>25.200 640 656 752 800 480 490 492 525</code>)</td>
-</tr>
-</tbody>
-</table>
-<p>Os dois EDIDs novos foram gerados a partir do <code>crt15-edid.bin</code> como molde
-(mesma estrutura de bytes já validada em produção, só o DTD/timing e o
-Display Range Limits mudam) e conferidos com <code>edid-decode</code> — estrutura
-válida, HSync/VSync batendo com o alvo. <strong>Não foram testados em hardware
-real</strong> (mesma ressalva que já vale pro 15kHz): a validação aqui é
-matemática e estrutural, não uma confirmação com osciloscópio ou monitor
-físico. O perfil 31kHz não tem entrelaçado (o preset <code>arcade_31</code> do
-Switchres não define linhas entrelaçadas) — <code>mame-31khz.ini</code> e
-<code>switchres-31khz.ini</code> já vêm com <code>interlace 0</code>.</p>
-<p>Os parâmetros SI/CIK selecionam <code>radeon</code> apenas nas famílias compartilhadas com <code>amdgpu</code>, sem blacklist geral. Identifique o chip por PCI ID e driver real. A R7 240 normalmente é Oland, não Cape Verde.</p>
-<h2 id="diagnostico-do-modo-ativo">Diagnóstico do modo ativo</h2>
-<pre><code class="language-bash">sudo fliperos-video-check --connector VGA-1
-sudo fliperos-video-check --json
-sudo bash /opt/fliperos/fliperos-detect.sh
-journalctl -b -u fliperos-video-check.service --no-pager
-</code></pre>
-<p>O verificador abre DRM somente para leitura e consulta conector, encoder e CRTC atual via libdrm. Não toma DRM master, não troca modos e não usa a lista de modos anunciados como comprovação de atividade. DPMS desligado é tratado como inativo quando esse estado está disponível.</p>
-<table>
-<thead>
-<tr>
-<th>Resultado</th>
-<th>Código</th>
-<th>Significado</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>MODO_ATIVO_15KHZ</code></td>
-<td>0</td>
-<td>Saídas selecionadas ativas dentro de 15–16 kHz</td>
-</tr>
-<tr>
-<td><code>FORA_DA_FAIXA</code></td>
-<td>1</td>
-<td>Existe saída ativa fora da faixa</td>
-</tr>
-<tr>
-<td><code>INCONCLUSIVO</code></td>
-<td>2</td>
-<td>Sem saída ativa, acesso, GPU ou dados completos</td>
-</tr>
-</tbody>
-</table>
-<p>Sem filtro, considera todas as saídas ativas. Um LCD a 31 kHz junto do CRT faz o resultado global indicar fora da faixa. Use <code>--connector</code> para examinar só o CRT e <code>--min-khz</code>/<code>--max-khz</code> para os limites específicos do monitor.</p>
-<h2 id="auto-deteccao-de-conector">Auto-detecção de conector</h2>
-<p><code>fliperos-video-check</code> é só leitura: se nenhuma saída já estiver ativa (hardware diferente do padrão <code>VGA-1</code>/<code>DVI-I-1</code> forçado no GRUB), ele não descobre nada sozinho. Para esse caso existe <code>fliperos-video-autodetect</code>, baseado na técnica do GroovyArcade/gatools (<code>video/video.sh</code>): liga cada conector analógico (<code>VGA-*</code>/<code>DVI-I-*</code>) um de cada vez, pede para apertar ENTER se a imagem aparecer dentro de um tempo limite, e desliga antes de testar o próximo — por isso a tela "pisca" durante o teste. Com <code>espeak-ng</code> instalado, cada passo também é narrado por voz, útil justamente porque nesse momento pode não haver nada visível ainda.</p>
-<pre><code class="language-bash">sudo fliperos-video-autodetect
-sudo fliperos-video-autodetect --json --no-voz --timeout 8
-</code></pre>
-<p>Isso identifica <strong>qual porta</strong> o CRT está usando, não confirma 15 kHz — o <code>fliperos-video-check</code> continua sendo a prova real do modo. <code>sudo fliperos-install</code> já chama a auto-detecção automaticamente quando <code>fliperos-video-check</code> não encontra nenhuma saída ativa, antes de aplicar as mesmas checagens de faixa e a confirmação manual de sempre. Assume uma única GPU; em máquinas com mais de uma placa o console pode não estar mapeado pra GPU sob teste.</p>
-<p>Essa leitura é o estado informado pelo kernel naquele momento. Não mede eletricamente HSync, não confirma a saída após um conversor e não garante modos escolhidos posteriormente pelos jogos. A medição física exige instrumento ou indicação confiável do monitor/analisador.</p>
-<h2 id="switchres-e-emuladores">Switchres e emuladores</h2>
-<p>O console inicia pelo EDID. O serviço de boot apenas verifica. Os emuladores abrem Xorg inicialmente em 640x240 e usam Switchres/XRandR durante a execução.</p>
-<p>O backend KMS do Switchres chama-se <code>drmkms</code>, não <code>kms</code>, e upstream o identifica como trabalho em andamento. Troca dinâmica sem X pode exigir patches adicionais; não é prometida nesse kernel Ubuntu padrão. O build aceita <code>--with-15khz-kernel</code> pra compilar um kernel próprio com o patch de KMS necessário (ver seção Build) — ainda não validado em hardware real.</p>
-<p>O INI usa <code>chave valor</code>, sem seções nem <code>=</code>. O caminho é passado com <code>--ini</code>. O cálculo usa <code>--calc</code>, não <code>--dryrun</code>. Gerar uma modeline não comprova saída física.</p>
-<pre><code class="language-bash">switchres 640 240 60 --calc --ini /etc/fliperos/switchres.ini
-fliperos-launcher
-</code></pre>
-<p>O wrapper usa <code>--launch</code> para manter Switchres acompanhando o emulador e restaurar o modo ao sair. Recusa perfis acima de 15 kHz. A solicitação 640x480 dos emuladores 3D usa arcade_15 com interlace habilitado; ainda exige teste da GPU e do emulador. Jogos que trocam o modo por conta própria também precisam de validação.</p>
-<p>A ISO de diagnóstico reaproveita o Switchres compilado da imagem anterior. GroovyMAME e demais emuladores só estão disponíveis se seus binários tiverem sido instalados. O launcher informa componentes ausentes. Não certificamos desempenho ou troca dinâmica sem testes no hardware.</p>
-<h2 id="retroarchflycast-em-kms-pcsx2supermodel-em-x11">RetroArch/Flycast em KMS, PCSX2/Supermodel em X11</h2>
-<p>Nem todo emulador tem um caminho real de KMS/DRM sem servidor gráfico —
-testamos cada um antes de decidir, em vez de assumir:</p>
+<p>Com duas placas, o console é levado para o framebuffer da placa testada (<code>con2fbmap</code>), como no gatools.</p>
+<p>A tela <strong>Testing Results</strong> mostra GPU, driver, conector, modo atual e frequência horizontal (lidos do CRTC ativo pelo <code>fliperos-video-check</code>), se a placa gera dotclock baixo, se há modo entrelaçado, EDID, se o monitor foi identificado e se a saída será forçada no boot — com as mesmas frases do <code>inform_user</code> do gatools — e oferece <strong>Validate settings</strong> ou <strong>Repeat test</strong>.</p>
+<p>Validado, vale o <code>configure_from_connector</code> do gatools:</p>
 <ul>
-<li><strong>RetroArch</strong> builda com <code>--enable-kms --enable-egl --disable-x11 --disable-wayland --disable-sdl --disable-sdl2</code> — testado num container Ubuntu 24.04 descartável nesta sessão; <code>--features</code> confirma <code>KMS: yes</code>, <code>EGL: yes</code>, <code>udev: yes</code>. Roda via <code>fliperos-kms-run</code>, sem Xorg.</li>
-<li><strong>Flycast</strong> (Dreamcast) não tem flag de build específica pra KMS — a saída vem de <code>SDL_VIDEODRIVER=kmsdrm</code> em tempo de execução, suportado pelo <code>libsdl2</code> padrão do Ubuntu. Também via <code>fliperos-kms-run</code>, em 640x240 (o modo do EDID customizado, que já vale pra qualquer consumidor de KMS, não só Xorg).</li>
-<li><strong>PCSX2</strong> (PS2) é Qt-only — X11/Wayland via QPA, sem backend KMS suportado pelo projeto (existe um plugin <code>eglfs</code> experimental do próprio Qt, não testado/suportado pelo PCSX2). Fica em <code>fliperos-x11-run</code>.</li>
-<li><strong>Supermodel</strong> (Model 3) é SDL2+OpenGL sem caminho KMS documentado. Fica em <code>fliperos-x11-run</code>.</li>
+<li>EDID do Switchres (dongle) → o monitor vem do próprio EDID;</li>
+<li>sem isso, o tipo de monitor é <strong>obrigatório</strong> (a lista abre na sugestão da entrada de boot);</li>
+<li>a linha do kernel sai do monitor: <code>video=VGA-1:640x480iSe</code> (o <code>e</code> quando foi preciso forçar a saída); placa sem dotclock baixo (Intel, NVIDIA) → super resolução <code>1280x480iS</code> e <code>dotclock_min 25.0</code> no Switchres; APU → <code>interlace_force_even 1</code>; boot por EDID → <code>drm.edid_firmware=CONECTOR:edid/&lt;monitor&gt;.bin</code>; LCD → nada (vale o EDID dele).</li>
 </ul>
-<p>RetroArch vem com cores libretro pré-instalados: NES (<code>fceumm</code>), SNES (<code>snes9x</code>), Mega Drive/Genesis (<code>genesis_plus_gx</code>), GBA/GB/GBC (<code>mgba</code>), PS1 (<code>pcsx_rearmed</code>) e um core de arcade leve (<code>mame2010</code>) — complementar ao GroovyMAME standalone, que continua sendo o caminho principal de arcade. Autoconfig de joypad (detecção automática por vendor/product ID via <code>retroarch-joypad-autoconfig</code>) cobre só o RetroArch; o GroovyMAME/MAME continua com configuração manual de controles como já era.</p>
-<p>Cada um desses quatro emuladores pode ser pulado individualmente no build com <code>--skip-retroarch</code>, <code>--skip-flycast</code>, <code>--skip-pcsx2</code> ou <code>--skip-supermodel</code>.</p>
-<h2 id="build">Build</h2>
-<p>Use Docker para isolar o build. <code>CLAUDE.md</code> proíbe bind de <code>/dev</code> do host em chroots de build no WSL. O gerador recusa execução direta em WSL e não remove recursivamente um workspace com mounts restantes.</p>
+<p>Tudo é gravado em <strong><code>/etc/fliperos/fliperos.conf</code></strong> (GPU, driver, conector, detecção, monitor, faixa, modo de boot, parâmetros do kernel, orientação, launcher), o equivalente do <code>ga.conf</code>, e no <code>switchres.ini</code>/<code>mame.ini</code>.</p>
+<h2 id="4-fliperos-setup">4. FliperOS Setup</h2>
+<p>Menu da mídia (o <code>isomainmenu</code> do gasetup): <strong>Install to HD</strong>, <strong>Recovery Mode</strong>, <strong>Terminal</strong> e <strong>Shutdown</strong>. O título mostra o host e o IP.</p>
+<h3 id="install-to-hd">Install to HD</h3>
+<ol>
+<li><strong>Do you want to configure video?</strong> — <em>Yes</em> abre o <strong>Video Setup</strong>:</li>
+<li><strong>Monitor Type</strong>: os 29 presets do Switchres, na lista do gatools;</li>
+<li><strong>Monitor Orientation</strong>: horizontal, vertical horário, vertical anti-horário (console girado com <code>fbcon=rotate</code>, <code>panel_orientation</code> no <code>video=</code>, <code>ror</code>/<code>rol</code> do MAME e o desktop pelo <code>xrandr</code>);</li>
+<li><strong>Resolution</strong>: só os modos da tabela do kernel que a faixa do monitor e a placa aceitam (sem dotclock baixo, só as super resoluções), mais <strong>resolução personalizada</strong>: testa no <code>grid</code> do Switchres e gera um EDID (<code>switchres -e</code>), como o <code>worker_custom_video_mode</code>;</li>
+<li><strong>Geometry</strong>: o mesmo <strong><code>geometry</code></strong> do GroovyArcade — o <code>geometry.py</code> do Switchres, que desenha o grid e devolve o <code>crt_range</code>, gravado como <code>monitor custom</code> no <code>/etc/switchres.ini</code>.</li>
+<li><strong>Automatically Partition</strong> — lista os discos pelo <strong>modelo, tamanho, caminho e barramento</strong> (USB/NVMe/SATA). Não aparecem: a própria mídia de instalação, discos com menos de 16 GiB, montados ou em swap, com RAID/LVM/criptografia ou dependentes ativos — cada um com o motivo, acima da lista.</li>
+<li><strong>WARNING</strong> — modelo, caminho e tamanho do disco que será apagado; <em>No</em> volta para a escolha do disco. Se o disco já tem FliperOS, o aviso sugere o Recovery Mode.</li>
+<li><strong>Installing FliperOS</strong> — uma tela só, com o disco de destino, barra de progresso <strong>real</strong> (a cópia do sistema vem do percentual do <code>unsquashfs</code>, como o <code>dialog --gauge</code> do gasetup), a etapa e mensagens curtas. A saída dos comandos vai para <code>/var/log/fliperos-setup.log</code>. Em erro: etapa, erro, <strong>View log / Retry / Return</strong>.</li>
+<li><strong>Installation completed successfully. Remove the installation CD/DVD/USB.</strong> — e <strong>Reboot now?</strong></li>
+</ol>
+<p>Particionamento: GPT, BIOS boot de 1 MiB, ESP FAT32 de 1 GiB, o resto em ext4. O Limine é instalado para BIOS (estágio 2 na partição BIOS boot) e para UEFI (<code>EFI/BOOT/BOOTX64.EFI</code>, o caminho removível), sem mexer na NVRAM. O Limine só lê FAT, então kernel e initrd ficam <strong>na ESP</strong> (<code>/boot/efi/fliperos/</code>), mantidos pelo <code>fliperos-limine-update</code> — o equivalente do <code>update-grub</code>, chamado pelos hooks de kernel e de initramfs. Os parâmetros do kernel ficam em <code>/etc/default/fliperos-boot</code>.</p>
+<p>O disco novo leva o que foi decidido na mídia: <code>fliperos.conf</code>, Switchres, MAME, Xorg, a linha do kernel, as redes Wi-Fi configuradas e a placa de som.</p>
+<h3 id="recovery-mode">Recovery Mode</h3>
+<p>Procura discos com FliperOS (partição <code>FliperOS</code> com o marcador <code>/etc/fliperos/installed</code>) e oferece: terminal dentro do sistema instalado (<code>chroot</code>, o <code>rescue_mode</code> do gasetup), <strong>reinstalar o bootloader</strong> (o "Fix UEFI boot", para BIOS e UEFI), <strong>aplicar o vídeo desta sessão</strong> (placa de vídeo trocada) e <strong>restaurar os arquivos do sistema</strong> a partir da mídia, preservando ROMs, saves, home, rede, áudio e vídeo.</p>
+<h2 id="5-sistema-instalado">5. Sistema instalado</h2>
+<p>O tty1 faz o login sozinho e segue o <code>.bash_profile</code> do GroovyArcade: abre o <strong>launcher padrão</strong> e, quando ele fecha, o <strong>menu do FliperOS</strong>.</p>
+<p><strong>Primeiro boot:</strong> <em>Choose default launcher</em>, com a lista gerada dos launchers instalados de fato (Attract-Mode Plus, RetroArch, EmulationStation..., LXDE) e o próprio <em>FliperOS Setup</em>. Muda depois em Setup &gt; Frontend.</p>
+<p><strong>Menu principal</strong> (o <code>mainmenu</code> do gasetup; o título mostra <code>host (IP) - N% used on /</code>):</p>
+<ul>
+<li><strong>Start frontend</strong></li>
+<li><strong>Setup (video, audio, network...)</strong></li>
+<li><strong>Video Setup</strong> — o mesmo da instalação; grava a linha do kernel e oferece reiniciar;</li>
+<li><strong>Audio Setup</strong> — placa padrão (<code>/etc/asound.conf</code>), volume, AlsaMixer, teste de som;</li>
+<li><strong>Network Setup</strong> — Wi-Fi pela lista de redes (com sinal) ou <strong>rede oculta digitando o SSID</strong>; ao conectar, o IP aparece no título, ao lado do uso do disco;</li>
+<li><strong>Frontend</strong> — o launcher padrão; um que não está instalado pode ser instalado do repositório do FliperOS;</li>
+<li><strong>Scraper</strong> — capas, screenshots, logos, vídeos e informações de cada ROM encontrada em <code>/opt/fliperos/roms/&lt;sistema&gt;</code>, com o <strong>Skyscraper</strong> (o mesmo que o GroovyArcade empacota), de ScreenScraper, ArcadeDB ou TheGamesDB, no formato do launcher padrão;</li>
+<li><strong>System Update</strong> — <code>apt-get update</code> e <code>upgrade</code>, com o progresso real do apt;</li>
+<li><strong>Start desktop</strong> — o LXDE;</li>
+<li><strong>Exit to shell</strong> — <code>sudo fliperos-setup</code> volta ao menu;</li>
+<li><strong>Shutdown / Reboot</strong>.</li>
+</ul>
+<h3 id="desktop-lxde">Desktop LXDE</h3>
+<p>O LXDE do GroovyArcade: <code>lxde</code> completo com o openbox-lxde, painel embaixo (menu, gerenciador de arquivos, terminal, tarefas, CPU, volume, bandeja, rede, relógio), sem compositor, sem DPMS nem descanso de tela, fonte Sans 10 e a orientação do Video Setup. Vêm também as ferramentas do GroovyArcade: <strong>AntiMicroX</strong> e <strong>QJoyPad</strong> (controle como teclado/mouse), <code>xterm</code>, <code>htop</code>, <code>evtest</code>, <code>joy2key</code>, <code>hwinfo</code>, <code>lshw</code>, <code>read-edid</code>, <code>i2c-tools</code>. O <strong>FliperOS Setup</strong> fica em <strong>System Tools</strong> (e no painel), como o <code>gasetup.desktop</code>. O terminal usa as cores do Dracula. Sair do desktop volta ao menu.</p>
+<h2 id="6-tema-dracula-no-console">6. Tema Dracula no console</h2>
+<p>No console do Linux só existem 16 cores, e o fundo só aceita as 8 primeiras. A paleta do VT é reprogramada com os tons do Dracula no boot (<code>/etc/vtrgb</code>, aplicada pelo <code>setvtrgb.service</code> do Ubuntu, com <code>config/vtrgb-dracula</code> como alternativa de maior prioridade) e de novo pelo <code>fliperos-setup</code>; os estilos do Gum usam os <strong>índices</strong> da paleta, não cores hexadecimais. Assim o tubo e um terminal gráfico mostram o mesmo. A fonte do console (Lat15/Uni2) tem as bordas arredondadas, os blocos da barra e as setas que as telas usam.</p>
+<h2 id="7-arquitetura-do-fliperos-setup">7. Arquitetura do <code>fliperos-setup</code></h2>
+<pre><code>fliperos-setup/
+├── fliperos-setup        ponto de entrada (mídia ou sistema instalado)
+├── lib/                  lógica — nenhum arquivo daqui chama o gum, exceto ui.sh
+│   ├── common.sh config.sh progress.sh speech.sh
+│   ├── drm.sh video.sh monitor.sh xorg.sh bootloader.sh
+│   ├── disk.sh install.sh recovery.sh
+│   ├── launcher.sh audio.sh network.sh status.sh scraper.sh update.sh
+│   └── ui.sh             Gum, tema, quadro da tela
+└── screens/              telas — só combinam ui.sh com a lógica
+    ├── output-test.sh (teste + Testing Results)  main-menu.sh  setup-menu.sh
+    ├── video-setup.sh  disk-selection.sh  install-progress.sh  progress.sh
+    └── recovery.sh  first-boot.sh
+</code></pre>
+<p>As operações longas (instalar, reparar, atualizar, scraper) não conhecem a tela: escrevem eventos (<code>@step</code>, <code>@pct</code>, <code>@msg</code>, <code>@fail</code>) que <code>screens/progress.sh</code> desenha. Tudo vai para <code>/var/log/fliperos-setup.log</code>.</p>
+<h2 id="8-kernel-15-khz">8. Kernel 15 kHz</h2>
+<p><code>fliperos-kernel.sh</code> baixa o kernel.org <strong>6.18.54</strong>, aplica <code>patches/kernel-15khz/6.18/</code> (D0023R, 01 a 09) sobre o <code>.config</code> do kernel do próprio Ubuntu 24.04 e gera os <code>.deb</code>. Sem assinatura de módulo e sem informação de depuração. Compilar leva horas, então os <code>.deb</code> ficam num cache chaveado por versão e hash dos patches (<code>/output/kernel-cache/&lt;chave&gt;/</code>): o próximo build reaproveita.</p>
+<p>O Switchres (<code>v2.2.1</code>, a mesma versão do pacote do GroovyArcade) é compilado com o <code>grid</code> e o <code>geometry</code>, e gera no build um EDID por preset de monitor mais os dois de super resolução das entradas EDID do boot (<code>fliperos-rebuild-edids</code>, o <code>rebuild_edids</code> do GroovyArcade). O hook do initramfs leva todos para o initramfs.</p>
+<h2 id="9-build">9. Build</h2>
+<p>Sempre em Docker (<code>CLAUDE.md</code> proíbe chroot com <code>/dev</code> do host no WSL).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-novo.iso --skip-groovymame
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.7.iso
 </code></pre>
-<p>O privilégio acima pertence ao container de build; não monte <code>/dev</code> do host nele. Build não testa sinal de vídeo. Compilações solicitadas devem falhar explicitamente se não concluírem; omissões usam <code>--skip-*</code>.</p>
-<p>Por padrão o kernel é o <code>linux-image-generic</code> do noble, com o método EDID-only (sem patch de kernel, ver seção Timing de vídeo). A flag <code>--with-15khz-kernel</code> troca isso por um kernel próprio compilado no chroot — kernel.org vanilla 6.12 LTS + os patches vendorizados em <code>patches/kernel-15khz/</code> (fonte: D0023R/linux_kernel_15khz), habilitando troca dinâmica de modo via KMS sem X:</p>
-<pre><code class="language-powershell">docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-15khz.iso --with-15khz-kernel
+<table>
+<thead>
+<tr>
+<th>Opção</th>
+<th>Efeito</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--skip-groovymame</code>, <code>--skip-retroarch</code>, <code>--skip-flycast</code>, <code>--skip-pcsx2</code>, <code>--skip-supermodel</code></td>
+<td>Não compila o emulador (cada um leva de minutos a horas)</td>
+</tr>
+<tr>
+<td><code>--skip-skyscraper</code></td>
+<td>Sem o Scraper do Setup</td>
+</tr>
+<tr>
+<td><code>--skip-switchres</code></td>
+<td>Sem Switchres: sem EDIDs por monitor, geometria e entradas EDID do boot</td>
+</tr>
+<tr>
+<td><code>--skip-input-drivers</code>, <code>--with-wheel-drivers</code></td>
+<td>GunCon 2 (padrão) e drivers de volante out-of-tree</td>
+</tr>
+<tr>
+<td><code>--kernel-cache DIR</code></td>
+<td>Onde guardar/reaproveitar os <code>.deb</code> do kernel (padrão <code>/output/kernel-cache</code>)</td>
+</tr>
+<tr>
+<td><code>--splash fliperos\|evangelion\|none</code></td>
+<td>Tema do Plymouth</td>
+</tr>
+<tr>
+<td><code>--wifi-ssid NOME --wifi-psk SENHA</code></td>
+<td>Grava uma rede Wi-Fi na imagem (<strong>a senha fica em texto na ISO</strong>; não a distribua)</td>
+</tr>
+</tbody>
+</table>
+<p>O que não existe no Ubuntu 24.04 é baixado com versão e hash fixados: Limine 11.4.1, Gum 2.0.2, AntiMicroX 3.6.1 (<code>.deb</code> oficial para 24.04), Skyscraper 3.21.0 (fork Gemba, compilado com Qt6).</p>
+<p>Auditoria da ISO gerada (só leitura, no container <code>fliperos-vmtest</code>): <code>tools/verify-iso.sh saida.iso</code>.</p>
+<h2 id="10-testes">10. Testes</h2>
+<pre><code class="language-powershell">docker build -t fliperos-tests -f tests/Dockerfile tests
+docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
+docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_build.py
 </code></pre>
-<p>Kernel próprio não vem assinado — Secure Boot precisa ficar desabilitado na UEFI de destino. Compilar o kernel adiciona bastante tempo ao build (compilação completa a partir da fonte). Caminho ainda não exercitado num build real; espere iterar em gaps de config/patch na primeira tentativa.</p>
-<p>Por padrão o perfil de monitor é <code>15khz</code>. <code>--monitor-profile 25khz</code> ou <code>--monitor-profile 31khz</code> geram uma ISO pro perfil correspondente (ver seção Perfis de monitor) — uma ISO por frequência, não uma escolha em tempo de instalação:</p>
-<pre><code class="language-powershell">docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-31khz.iso --monitor-profile 31khz
-</code></pre>
+<ul>
+<li><code>tests/test_setup.py</code> — a lógica do <code>fliperos-setup</code> com sysfs do DRM, EDIDs, <code>lsblk</code>, <code>nmcli</code> e <code>aplay</code> falsos, no mesmo Ubuntu (e mesmo <code>mawk</code>/<code>jq</code>) da ISO.</li>
+<li><code>tests/test_build.py</code> — menu de boot, kernel e patches, pins, arquivos da imagem, Limine do disco instalado, <code>fliperos-video-check</code>.</li>
+<li><code>tools/ui-snapshot.sh TELA [LARG ALT]</code> — fotografa uma tela em texto num tmux 80x30 (ou 64x24, o 512x384 de 25 kHz), com um sistema falso (<code>tools/ui-demo.sh</code>).</li>
+<li><code>tools/vm-test.py install ISO</code> — em QEMU: instala pela lib do setup num disco descartável e boota o disco em BIOS e UEFI. <code>tools/vm-test.py screens ISO</code> e <code>tools/vm-monitor.py</code> fotografam o tty1 de verdade (Gum no console do Linux) tela a tela.</li>
+</ul>
+<h2 id="11-outros-componentes">11. Outros componentes</h2>
+<p><strong>Repositório APT e frontends.</strong> Os frontends (Attract-Mode Plus, EmulationStation, RetroFE, Pegasus) vêm de um repositório APT próprio de <code>.deb</code> pré-compilados, como o <code>groovy-ux-repo</code> do GroovyArcade (<code>packaging/build-deb.sh</code>, <code>packaging/make-repo.sh</code>, <code>Dockerfile.packages</code>, receitas em <code>packaging/packages/</code>). A tabela <code>config/fliperos-sessions.conf</code> diz, para cada launcher, se roda em KMS ou X (da tabela <code>videodata.conf</code> do galauncher) e de que pacote vem.</p>
+<p><strong>Splash.</strong> Plymouth com o tema próprio <code>fliperos</code> (texto, sem imagem), <code>evangelion</code> (202 quadros, com <strong>risco de convulsão</strong> declarado pelo autor e sem licença no pacote) ou nenhum.</p>
+<p><strong>Rede.</strong> Samba (<code>\\&lt;ip&gt;\FliperOS</code> → <code>/opt/fliperos</code>, escrita só com o usuário <code>fliperos</code>), SSH/SFTP e Avahi (<code>fliperos.local</code>). Login padrão <code>fliperos</code>/<code>fliperos</code>, como o <code>arcade</code>/<code>arcade</code> do GroovyArcade.</p>
+<p><strong>Emuladores.</strong> GroovyMAME, RetroArch (KMS, com cores libretro), Flycast (KMS), PCSX2 e Supermodel (X, via <code>fliperos-x11-run</code> e Switchres). O RetroArch usa <code>crt_switch_resolution 4</code> (o <code>/etc/switchres.ini</code> do Setup).</p>
+<p><strong>Diagnóstico.</strong> <code>sudo fliperos-video-check --json</code> lê o modo ativo de cada saída (CRTC atual via libdrm, só leitura): conector, resolução, kHz, Hz, entrelaçado.</p>
+<h2 id="12-arquivos">12. Arquivos</h2>
 <table>
 <thead>
 <tr>
@@ -174,72 +231,78 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 </thead>
 <tbody>
 <tr>
+<td><code>fliperos-setup/</code></td>
+<td>O setup (mídia e sistema instalado)</td>
+</tr>
+<tr>
 <td><code>fliperos-mkiso.sh</code></td>
-<td>Build de uma ISO Ubuntu nova</td>
+<td>Build da ISO</td>
 </tr>
 <tr>
-<td><code>fliperos-setup.sh</code></td>
-<td>Setup em Ubuntu existente; <code>--dry-run</code> não escreve</td>
+<td><code>fliperos-kernel.sh</code></td>
+<td>Kernel 15 kHz em <code>.deb</code>, com cache</td>
 </tr>
 <tr>
-<td><code>fliperos-install.py</code></td>
-<td>Assistente live/instalação em disco</td>
+<td><code>fliperos-rootfs.sh</code></td>
+<td>Instala na imagem o setup, a sessão, o LXDE, a paleta e a configuração de partida</td>
 </tr>
 <tr>
-<td><code>fliperos-install-video.sh</code></td>
-<td>Assets compartilhados entre setup e ISO</td>
+<td><code>fliperos-limine.sh</code></td>
+<td>Limine fixado: baixa, instala no rootfs, gera a ISO híbrida</td>
+</tr>
+<tr>
+<td><code>fliperos-limine-update.py</code></td>
+<td>O <code>update-grub</code> do Limine no disco instalado</td>
 </tr>
 <tr>
 <td><code>fliperos-video-check.py</code></td>
-<td>Consulta de modo ativo DRM</td>
-</tr>
-<tr>
-<td><code>fliperos-video-autodetect.py</code></td>
-<td>Descobre o conector do CRT ligando/desligando cada saida analogica</td>
+<td>Modo ativo das saídas (DRM, só leitura)</td>
 </tr>
 <tr>
 <td><code>fliperos-detect.sh</code></td>
 <td>Relatório de sistema e vídeo</td>
 </tr>
 <tr>
-<td><code>config/</code></td>
-<td>Xorg, Switchres, RetroArch, GRUB, serviço, hook EDID e launchers</td>
+<td><code>config/limine.conf</code></td>
+<td>Menu de boot da mídia</td>
 </tr>
 <tr>
-<td><code>config/fliperos-kms-run</code></td>
-<td>Lança RetroArch/Flycast direto em KMS/DRM, sem Xorg</td>
+<td><code>config/fliperos-rebuild-edids</code>, <code>config/fliperos-edid-hook</code></td>
+<td>EDIDs do Switchres e o hook do initramfs</td>
 </tr>
 <tr>
-<td><code>config/{xorg,mame,switchres}-{25,31}khz.{conf,ini}</code></td>
-<td>Variantes de config por perfil de monitor (padrão 15kHz usa os arquivos sem sufixo)</td>
+<td><code>config/fliperos-session</code>, <code>config/fliperos-sessions.conf</code></td>
+<td>Abre o launcher padrão; tabela de launchers</td>
 </tr>
 <tr>
-<td><code>crt{15,25,31}-edid.bin</code></td>
-<td>EDID customizado por perfil de monitor — só um vai pra ISO, conforme <code>--monitor-profile</code></td>
+<td><code>config/fliperos-lxde</code>, <code>config/lxde/</code></td>
+<td>Sessão e configuração do LXDE</td>
 </tr>
 <tr>
-<td><code>patches/kernel-15khz/</code></td>
-<td>Patches D0023R vendorizados pro kernel opcional <code>--with-15khz-kernel</code></td>
+<td><code>config/vtrgb-dracula</code></td>
+<td>Paleta Dracula do console</td>
 </tr>
 <tr>
-<td><code>tools/repack-iso.sh</code></td>
-<td>Revisão da ISO 0.5 em container de auditoria</td>
+<td><code>patches/kernel-15khz/6.18/</code></td>
+<td>Patches D0023R</td>
 </tr>
 <tr>
-<td><code>tests/test_video.py</code></td>
-<td>Testes de frequência, EDID e discos</td>
+<td><code>packaging/</code></td>
+<td><code>.deb</code> dos frontends e o repositório APT</td>
+</tr>
+<tr>
+<td><code>tests/</code>, <code>tools/</code></td>
+<td>Testes e ferramentas de verificação</td>
 </tr>
 </tbody>
 </table>
 <h2 id="fontes-consultadas">Fontes consultadas</h2>
+<p>Código atual do GroovyArcade, no GitLab do grupo <code>groovyarcade</code>:</p>
 <ul>
-<li><a href="https://github.com/substring/os">GroovyArcade e fluxo de instalação</a></li>
-<li><a href="https://gitlab.com/groovyarcade/gasetup/-/blob/master/core/libs/lib-install.sh">gasetup: instalação</a></li>
-<li><a href="https://gitlab.com/groovyarcade/gasetup/-/blob/master/core/procedures/interactive">gasetup: fluxo interativo</a></li>
-<li><a href="https://gitlab.com/groovyarcade/gasetup/-/blob/master/core/libs/lib-bootloaders.sh">gasetup: bootloaders</a></li>
-<li><a href="https://github.com/antonioginer/switchres">Switchres: CLI e uso</a></li>
-<li><a href="https://github.com/antonioginer/switchres/blob/master/switchres.ini">Switchres: opções e sintaxe</a></li>
-<li><a href="https://github.com/D0023R/linux_kernel_15khz">Kernel 15 kHz: EDID e patches KMS</a></li>
-<li><a href="https://kernel.org/doc/html/v6.16/gpu/drm-uapi.html">DRM: estruturas e unidades dos modos</a></li>
+<li><code>gasetup</code> <code>2dbaa5297c716b4f32b0b55d5439c1f08f8cedda</code> — <code>core/procedures/interactive</code> (isomainmenu, mainmenu, setup), <code>core/libs/lib-video.sh</code>, <code>lib-install.sh</code>, <code>lib-network.sh</code>, <code>lib-troubleshoot.sh</code></li>
+<li><code>tools/gatools</code> <code>28cef9faeec9d85d001ea5259af2d7e2fa343430</code> — <code>video/video.sh</code> (teste de saídas, Testing results), <code>video/monitor.sh</code>, <code>video/inform.sh</code></li>
+<li><code>tools/galauncher</code> <code>7e4950e3a4b92faf5eeebcae7c3a29a9e73689be</code> — <code>startfe.sh</code>, <code>videodata.conf</code></li>
+<li><code>os</code> <code>59670f3d476331e7c18bc3a03fea6e7860fa1b7a</code> — menu de boot, <code>.bash_profile</code>, LXDE, AntiMicroX, QJoyPad</li>
+<li><code>packages</code> <code>608bd30c3799c6a14c0b21823c53919c40ab8e9a</code> — kernel <code>linux-15khz</code>, <code>switchres</code> (<code>rebuild_edids</code>, <code>geometry</code>), <code>skyscraper</code></li>
 </ul>
-<p>Revisões consultadas: gasetup <code>f190da5f7b5157f1122e37c49a6b73dc62970269</code>; Switchres <code>da27cc69b59c9c274bffae51ab148dedcf2b0a75</code>; patches de kernel 15kHz em <code>patches/kernel-15khz/</code> vendorizados de D0023R/linux_kernel_15khz <code>97968a0bdb682f2b6e1469de24449a4536bd8ecb</code> (ver README naquela pasta). O antigo link para <code>switchres/doc/switchres_kms.md</code> não existe nessa revisão. <code>get-docker.sh</code> é um instalador externo de Docker preservado no repositório; não integra o instalador FliperOS.</p></main><footer>Gerado de README.md. Consulte AUDITORIA.md para os resultados dos testes.</footer></html>
+<p>E também: <a href="https://github.com/antonioginer/switchres">Switchres</a> (<code>geometry.py</code>, <code>edid.cpp</code>, <code>switchres.ini</code>), <a href="https://github.com/D0023R/linux_kernel_15khz">D0023R/linux_kernel_15khz</a> <code>ece6ef15eca9480eaf75870a44764f47118e9cfe</code>, <a href="https://github.com/charmbracelet/gum">Gum</a> v2.0.2 e o <a href="https://draculatheme.com">Dracula</a>.</p></main><footer>Gerado de README.md. Consulte AUDITORIA.md para os resultados dos testes.</footer></html>
