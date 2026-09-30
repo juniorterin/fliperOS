@@ -69,6 +69,10 @@ SWITCHRES_TAG="v2.2.1"
 # GroovyArcade. O commit confere que a tag nao foi movida.
 SKYSCRAPER_TAG="3.21.0"
 SKYSCRAPER_COMMIT="8a95bb924f094e0f111fc188e66022903ea9f7d4"
+# PCSX2: o AppImage oficial (o codigo atual nao compila com as bibliotecas
+# do Ubuntu 24.04; ver build_pcsx2_chroot).
+PCSX2_VERSION="2.8.2"
+PCSX2_SHA256="0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea"
 
 # ── Args ─────────────────────────────────────────────────────
 usage() {
@@ -937,40 +941,36 @@ FCSCRIPT
     || err "Flycast falhou; use --skip-flycast explicitamente para ISO sem ele"
 }
 
-# ── Compilar PCSX2 (PS2), X11 ──────────────────────────────────
-# Qt nao tem backend KMS/DRM suportado oficialmente (so um plugin eglfs
-# experimental que o proprio PCSX2 nao testa) — fica em X11 via
-# fliperos-x11-run, igual o launcher ja espera. Build mais pesado do
-# grupo (Qt6 + C++ grande).
+# ── PCSX2 (PS2), X11 ──────────────────────────────────────────
+# O AppImage oficial, fixado por versao e hash: o PCSX2 atual exige SDL3,
+# Qt 6.10, plutosvg, ryml e Shaderc, que o Ubuntu 24.04 nao tem (o Qt dele
+# e o 6.4). O AppImage traz as bibliotecas dele e e extraido em /opt/pcsx2,
+# sem precisar de FUSE. Qt nao tem backend KMS suportado: fica em X11 via
+# fliperos-x11-run.
 build_pcsx2_chroot() {
   if $SKIP_PCSX2; then
     warn "PCSX2 pulado (--skip-pcsx2)"
     return
   fi
-  step "Compilando PCSX2 (PS2, X11) no chroot — build mais longo do grupo"
-  cat > "$CHROOT_DIR/tmp/build-pcsx2.sh" << 'PSSCRIPT'
-#!/bin/bash
-set -e
-apt-get install -y --no-install-recommends \
-  qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-multimedia-dev \
-  libqt6svg6-dev libgtk-3-dev libaio-dev liblzma-dev libpcap0.8-dev \
-  libudev-dev
-git clone --depth=1 --recursive https://github.com/PCSX2/pcsx2 /tmp/pcsx2
-cd /tmp/pcsx2
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j"$(nproc)"
-find build -maxdepth 3 -iname 'pcsx2*' -type f -executable \
-  -exec install -m755 {} /usr/local/bin/pcsx2 \; -quit
-# Icone do menu do LXDE (config/applications/fliperos-pcsx2.desktop).
-install -Dm644 bin/resources/icons/AppIconLarge.png /usr/local/share/pixmaps/pcsx2.png
-cd /
-rm -rf /tmp/pcsx2
-echo "PCSX2 OK"
-PSSCRIPT
-  chmod +x "$CHROOT_DIR/tmp/build-pcsx2.sh"
-  chroot "$CHROOT_DIR" /tmp/build-pcsx2.sh >> "$LOG_FILE" 2>&1 \
-    && ok "PCSX2 compilado" \
-    || err "PCSX2 falhou; use --skip-pcsx2 explicitamente para ISO sem ele"
+  step "PCSX2 ${PCSX2_VERSION} (AppImage oficial, X11)"
+  local image="$WORK_DIR/pcsx2.AppImage"
+  curl -sSfL --retry 3 --max-time 900 -o "$image" \
+    "https://github.com/PCSX2/pcsx2/releases/download/v${PCSX2_VERSION}/pcsx2-v${PCSX2_VERSION}-linux-appimage-x64-Qt.AppImage" \
+    >> "$LOG_FILE" 2>&1 || err "Download do PCSX2 falhou"
+  echo "$PCSX2_SHA256  $image" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
+    || err "PCSX2: hash diferente do fixado"
+  chmod +x "$image"
+  (cd "$WORK_DIR" && rm -rf squashfs-root && "$image" --appimage-extract > /dev/null) \
+    || err "PCSX2: o AppImage nao extraiu"
+  rm -rf "$CHROOT_DIR/opt/pcsx2"
+  mv "$WORK_DIR/squashfs-root" "$CHROOT_DIR/opt/pcsx2"
+  chmod -R a+rX "$CHROOT_DIR/opt/pcsx2"
+  printf '#!/bin/sh\nexec /opt/pcsx2/AppRun "$@"\n' > "$CHROOT_DIR/usr/local/bin/pcsx2"
+  chmod 755 "$CHROOT_DIR/usr/local/bin/pcsx2"
+  # Icone do menu do LXDE (config/applications/fliperos-pcsx2.desktop).
+  install -Dm644 "$CHROOT_DIR/opt/pcsx2/PCSX2.png" "$CHROOT_DIR/usr/local/share/pixmaps/pcsx2.png"
+  rm -f "$image"
+  ok "PCSX2 ${PCSX2_VERSION} em /opt/pcsx2"
 }
 
 # ── Compilar Supermodel (Sega Model 3), X11 ───────────────────
@@ -985,13 +985,15 @@ build_supermodel_chroot() {
   cat > "$CHROOT_DIR/tmp/build-supermodel.sh" << 'SMSCRIPT'
 #!/bin/bash
 set -e
-apt-get install -y --no-install-recommends libglew-dev zlib1g-dev
+apt-get install -y --no-install-recommends libsdl2-dev libsdl2-net-dev libglu1-mesa-dev zlib1g-dev
 git clone --depth=1 https://github.com/trzy/Supermodel /tmp/supermodel
 cd /tmp/supermodel
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DNET_BOARD=OFF
-cmake --build build -j"$(nproc)"
-find build -maxdepth 2 -iname 'supermodel' -type f -executable \
-  -exec install -m755 {} /usr/local/bin/supermodel \; -quit
+# Makefile proprio (sem CMake), como o README do projeto manda no Linux.
+make -f Makefiles/Makefile.UNIX -j"$(nproc)"
+install -m755 bin/supermodel /usr/local/bin/supermodel
+# Games.xml (a lista de jogos que ele reconhece) e a configuracao padrao.
+mkdir -p /usr/local/share/supermodel
+cp -r Config Assets /usr/local/share/supermodel/
 cd /
 rm -rf /tmp/supermodel
 echo "Supermodel OK"

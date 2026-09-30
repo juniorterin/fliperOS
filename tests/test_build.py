@@ -275,6 +275,16 @@ class PinnedDownloadTests(unittest.TestCase):
             self.assertRegex(MKISO, r'%s_SHA256="[0-9a-f]{64}"' % name)
         self.assertIn('sha256sum -c', MKISO)
 
+    def test_pcsx2_is_the_pinned_appimage(self):
+        # O PCSX2 atual nao compila com as bibliotecas do noble (SDL3, Qt 6.10).
+        self.assertRegex(MKISO, r'PCSX2_VERSION="[0-9.]+"')
+        self.assertRegex(MKISO, r'PCSX2_SHA256="[0-9a-f]{64}"')
+        body = MKISO.split('build_pcsx2_chroot() {')[1].split('\n}\n')[0]
+        self.assertIn('echo "$PCSX2_SHA256  $image" | sha256sum -c', body)
+        self.assertIn('--appimage-extract', body)
+        self.assertIn('exec /opt/pcsx2/AppRun', body)
+        self.assertNotIn('git clone', body)
+
     def test_sources_are_pinned(self):
         self.assertRegex(MKISO, r'SWITCHRES_TAG="v[0-9.]+"')
         self.assertRegex(MKISO, r'SKYSCRAPER_COMMIT="[0-9a-f]{40}"')
