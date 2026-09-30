@@ -156,6 +156,19 @@ for file in "$src"/config/applications/*.desktop; do
 done
 echo "tema Dracula (GTK, Openbox, GroovyMAME) e emuladores no menu do LXDE"
 
+# ── RetroArch: cores de fabrica e pasta do Online Updater ─────
+if grep -q 'squashfs-root/usr/local/bin/retroarch$' "$work/files.txt"; then
+  for core in fceumm snes9x genesis_plus_gx mgba pcsx_rearmed mame2010; do
+    has "opt/fliperos/retroarch/cores/${core}_libretro.so"
+  done
+  grep -q 'squashfs-root/opt/fliperos/retroarch/info/snes9x_libretro.info$' "$work/files.txt" \
+    || fail "RetroArch sem os .info dos cores"
+  unsquashfs -lln "$work/filesystem.squashfs" > "$work/numeric.txt" 2> /dev/null
+  grep -E ' 1000/1000 .* squashfs-root/opt/fliperos/retroarch/cores$' "$work/numeric.txt" > /dev/null \
+    || fail "a pasta de cores do RetroArch nao e do usuario (o Core Downloader nao grava)"
+  echo "RetroArch: 6 cores de fabrica, .info e pasta do usuario para o Core Downloader"
+fi
+
 # ── Terminal: zsh com Oh My Zsh e o tema Dracula ──────────────
 for path in usr/bin/zsh usr/local/share/oh-my-zsh/oh-my-zsh.sh \
   usr/local/share/oh-my-zsh/custom/themes/dracula.zsh-theme \

@@ -748,6 +748,21 @@ class RetroArchConfigTests(unittest.TestCase):
         self.assertEqual(values['preemptive_frames_enable'], 'false')
         self.assertEqual(values['run_ahead_enabled'], 'false')
 
+    def test_online_updater_can_write(self):
+        # Pastas do usuario: o Core Downloader e as atualizacoes do menu
+        # gravam sem root. Nada disso em /etc.
+        values = self.values()
+        self.assertEqual(values['libretro_directory'], '/opt/fliperos/retroarch/cores')
+        self.assertEqual(values['libretro_info_path'], '/opt/fliperos/retroarch/info')
+        self.assertEqual(values['joypad_autoconfig_dir'], '/opt/fliperos/retroarch/autoconfig')
+        body = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
+        self.assertIn('RA_DIR=/opt/fliperos/retroarch', body)
+        self.assertIn('chown -R fliperos:fliperos "$RA_DIR"', body)
+        self.assertIn('libretro/libretro-core-info __RA_CORE_INFO_COMMIT__', body)
+        self.assertNotIn('/etc/fliperos/retroarch/cores', MKISO)
+        for name in ('RA_CORE_INFO_COMMIT', 'RA_AUTOCONFIG_COMMIT'):
+            self.assertRegex(MKISO, name + r'="[0-9a-f]{40}"')
+
     def test_retroarch_gets_the_system_config(self):
         self.assertIn('--appendconfig /etc/fliperos/retroarch/retroarch.cfg',
                       (ROOT / 'config/fliperos-kms-run').read_text())

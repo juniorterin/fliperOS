@@ -72,6 +72,10 @@ SKYSCRAPER_COMMIT="8a95bb924f094e0f111fc188e66022903ea9f7d4"
 # PCSX2: o AppImage oficial (o codigo atual nao compila com as bibliotecas
 # do Ubuntu 24.04; ver build_pcsx2_chroot).
 PCSX2_VERSION="2.8.2"
+# RetroArch: informacoes dos cores e perfis de controle de fabrica (o
+# Online Updater atualiza os dois depois, na pasta do usuario).
+RA_CORE_INFO_COMMIT="5a74858ab2f7a50cebb5a6330895bc38899531c0"
+RA_AUTOCONFIG_COMMIT="3579625fa24e61c86c48d03de9d5f9fd7b323a16"
 PCSX2_SHA256="0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea"
 
 # ── Args ─────────────────────────────────────────────────────
@@ -852,16 +856,35 @@ rm -f /usr/local/share/applications/com.libretro.RetroArch.desktop
 cd /
 rm -rf /tmp/retroarch
 
-mkdir -p /etc/fliperos/retroarch/autoconfig /etc/fliperos/retroarch/cores
+# Cores, informacoes dos cores e perfis de controle ficam em /opt/fliperos,
+# do usuario fliperos: o Online Updater do RetroArch baixa outros cores do
+# buildbot da libretro e atualiza os .info e os perfis sem precisar de root.
+RA_DIR=/opt/fliperos/retroarch
+mkdir -p "$RA_DIR/cores" "$RA_DIR/info" "$RA_DIR/autoconfig"
 
+# fetch_pinned REPO COMMIT DESTINO: so os arquivos daquele commit.
+fetch_pinned() {
+  rm -rf /tmp/pinned && git init -q /tmp/pinned
+  git -C /tmp/pinned fetch -q --depth 1 "https://github.com/$1" "$2"
+  mkdir -p "$3"
+  git -C /tmp/pinned archive FETCH_HEAD | tar -x -C "$3"
+  rm -rf /tmp/pinned
+}
 # Perfis de autoconfig de joypad (deteccao automatica por vendor/product ID).
-git clone --depth=1 https://github.com/libretro/retroarch-joypad-autoconfig /tmp/ra-autoconfig
-cp -a /tmp/ra-autoconfig/udev /etc/fliperos/retroarch/autoconfig/
+fetch_pinned libretro/retroarch-joypad-autoconfig __RA_AUTOCONFIG_COMMIT__ /tmp/ra-autoconfig
+cp -a /tmp/ra-autoconfig/udev "$RA_DIR/autoconfig/"
 rm -rf /tmp/ra-autoconfig
+# Informacoes dos cores (nome, sistemas, BIOS, savestate): sem elas o menu
+# so mostra o nome do arquivo e nao sabe o que cada core roda.
+fetch_pinned libretro/libretro-core-info __RA_CORE_INFO_COMMIT__ /tmp/ra-info
+cp /tmp/ra-info/*.info "$RA_DIR/info/"
+rm -rf /tmp/ra-info
 
-# Cores libretro pre-instalados: NES/SNES/Mega Drive/GBA (essenciais
-# 8/16-bit), PS1 e um core de arcade leve (mame2010, complementar ao
-# GroovyMAME standalone que continua sendo o caminho principal de arcade).
+# Cores de fabrica, para funcionar sem rede: NES/SNES/Mega Drive/GBA
+# (essenciais 8/16-bit), PS1 e um core de arcade leve (mame2010,
+# complementar ao GroovyMAME standalone, o caminho principal de arcade).
+# Compilados aqui: no buildbot os cores avulsos sao "nightly" e nao dao
+# para fixar por hash.
 build_core() {
   local repo="$1" name dir mk=""
   name="$(basename "$repo")"
@@ -886,7 +909,7 @@ build_core() {
   # Um core que nao gerou o .so falha aqui, e nao calado.
   compgen -G "$dir/*_libretro.so" > /dev/null || compgen -G "$dir/build/*_libretro.so" > /dev/null \
     || { echo "core ${name}: nenhum *_libretro.so gerado"; exit 1; }
-  find "$dir" -maxdepth 2 -name '*_libretro.so' -exec cp {} /etc/fliperos/retroarch/cores/ \;
+  find "$dir" -maxdepth 2 -name '*_libretro.so' -exec cp {} "$RA_DIR/cores/" \;
   rm -rf "/tmp/core-${name}"
 }
 build_core libretro/libretro-fceumm
@@ -895,9 +918,12 @@ build_core libretro/Genesis-Plus-GX
 build_core libretro/mgba
 build_core libretro/pcsx_rearmed
 build_core libretro/mame2010-libretro
+chown -R fliperos:fliperos "$RA_DIR"
 
 echo "RetroArch OK"
 RASCRIPT
+  sed -i -e "s|__RA_AUTOCONFIG_COMMIT__|${RA_AUTOCONFIG_COMMIT}|g" \
+         -e "s|__RA_CORE_INFO_COMMIT__|${RA_CORE_INFO_COMMIT}|g" "$CHROOT_DIR/tmp/build-retroarch.sh"
   chmod +x "$CHROOT_DIR/tmp/build-retroarch.sh"
   chroot "$CHROOT_DIR" /tmp/build-retroarch.sh >> "$LOG_FILE" 2>&1 \
     && ok "RetroArch compilado (KMS/DRM) com cores e autoconfig de joypad" \

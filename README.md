@@ -255,7 +255,9 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 
 **Rede.** Samba (`\\<ip>\FliperOS` → `/opt/fliperos`, escrita só com o usuário `fliperos`), SSH/SFTP e Avahi (`fliperos.local`). Login padrão `fliperos`/`fliperos`, como o `arcade`/`arcade` do GroovyArcade.
 
-**Emuladores.** GroovyMAME, RetroArch (KMS, com cores libretro), Flycast (KMS), PCSX2 e Supermodel (X, via `fliperos-x11-run` e Switchres). O RetroArch usa `crt_switch_resolution 4` (o `/etc/switchres.ini` do Setup).
+**Emuladores.** GroovyMAME, RetroArch (KMS), Flycast (KMS), PCSX2 e Supermodel (X, via `fliperos-x11-run` e Switchres). O RetroArch usa `crt_switch_resolution 4` (o `/etc/switchres.ini` do Setup). O PCSX2 é o AppImage oficial (fixado por versão e sha256, extraído em `/opt/pcsx2`): o código atual dele exige SDL3 e Qt 6.10, que o Ubuntu 24.04 não tem.
+
+**Cores do RetroArch.** Vêm 6 compilados, para funcionar sem rede: FCEUmm (NES), Snes9x, Genesis Plus GX (Mega Drive/Master System), mGBA, PCSX ReARMed (PS1) e MAME 2010. Qualquer outro se baixa no próprio RetroArch, em **Online Updater > Core Downloader** (do buildbot da libretro): cores, `.info` e perfis de controle ficam em `/opt/fliperos/retroarch`, do usuário `fliperos`, então o menu grava sem root. Os `.info` e os perfis de fábrica vêm fixados por commit (`libretro-core-info`, `retroarch-joypad-autoconfig`).
 
 **Diagnóstico.** `sudo fliperos-video-check --json` lê o modo ativo de cada saída (CRTC atual via libdrm, só leitura): conector, resolução, kHz, Hz, entrelaçado.
 
