@@ -1,38 +1,36 @@
 # Patches de kernel 15kHz (D0023R)
 
 Vendorizados de <https://github.com/D0023R/linux_kernel_15khz>, commit
-`97968a0bdb682f2b6e1469de24449a4536bd8ecb` (2026-09-13), licença GPLv3
-(`LICENSE` do repositório de origem).
+`ece6ef15eca9480eaf75870a44764f47118e9cfe` (2026-09-29), licença GPLv3
+(`LICENSE` do repositório de origem). É o mesmo conjunto que o GroovyArcade
+aplica no pacote `linux-15khz`.
 
-Usados por `fliperos-mkiso.sh --with-15khz-kernel` como alternativa ao
-método EDID-only (`crt15-edid.bin`) que o build usa por padrão. Diferença:
-o EDID-only força o modo fixo no boot sem tocar no kernel; esse conjunto de
-patches habilita troca dinâmica de modo via KMS sem X (patch 06,
-"groovyarcade kms enabler"), que o EDID-only não garante.
+O `fliperos-mkiso.sh` sempre compila o kernel com eles: é o que dá o modo de
+boot `video=640x480iS` (e os demais da tabela) usado pelo menu do Limine e
+pelo `fliperos-setup`, igual ao GroovyArcade.
 
-## Pasta `6.12/`
+## Pasta `6.18/`
 
-Alvo: kernel.org vanilla **6.12.104** (série Longterm, patch set ativamente
-mantido). Escolhido em vez do 6.6 porque o FliperOS passou a usar Ubuntu
-24.04 (noble) como base — cujo próprio kernel GA já é 6.8 — e o 6.12 cobre
-mais gerações de hardware AMD (DCN3, ver tabela) que o 6.6 não cobre. Se
-`KERNEL_15KHZ_VERSION` em `fliperos-mkiso.sh` for atualizado para outra
-série, vendorizar a pasta correspondente do repositório D0023R junto — os
-patches são específicos de versão.
+Alvo: kernel.org vanilla **6.18.54** (série Longterm). Escolhida por ser a
+série LTS mais nova com o conjunto completo, incluindo o patch 09 (entrelaçado
+em Intel Gen9). Se `KERNEL_15KHZ_VERSION` em `fliperos-mkiso.sh` mudar de
+série, vendorizar a pasta correspondente do D0023R junto — os patches são
+específicos de versão.
 
 | Arquivo | Escopo |
 | --- | --- |
-| `01_linux_15khz.patch` | Patch principal — suporte a modo 15kHz (DRM core) |
-| `02_linux_15khz_interlaced_mode_fix.patch` | Fix de vertical blank interrupt — necessário para o driver **radeon** |
-| `03_linux_15khz_dcn1_dcn2_dcn3_interlaced_mode_fix.patch` | Habilita modo entrelaçado — **amdgpu/DCN1-3** (standalone/APU, inclui placas mais recentes que o patch set do 6.6 não cobria) |
-| `04_linux_15khz_dce_interlaced_mode_fix.patch` | Habilita modo entrelaçado — **amdgpu/DCE** (placas mais antigas) |
-| `05_linux_15khz_amdgpu_pll_fix.patch` | Fix de cálculo de PLL — **amdgpu** |
-| `06_linux_switchres_kms_drm_modesetting.patch` | Manipulação de modesetting via KMS para uso do Switchres sem X (`drmkms`) — o recurso que motivou adotar esse caminho |
-| `07_linux_15khz_fix_ddc.patch` | Desde o kernel 6.7 — corrige kernel oops ao sondar DDC sem adaptador conectado (não existe no patch set do 6.6) |
+| `01_linux_15khz.patch` | Patch principal: flag `S` no `video=` e a tabela fixa de modos de baixo dotclock (15/25/31 kHz) |
+| `02_linux_15khz_interlaced_mode_fix.patch` | Interrupção de vertical blank em modo entrelaçado — driver **radeon** |
+| `03_linux_15khz_dcn1_dcn2_dcn3_interlaced_mode_fix.patch` | Entrelaçado em **amdgpu/DCN1-3** (placas e APUs) |
+| `04_linux_15khz_dce_interlaced_mode_fix.patch` | Entrelaçado em **amdgpu/DCE** (placas mais antigas) |
+| `05_linux_15khz_amdgpu_pll_fix.patch` | Cálculo de PLL — **amdgpu** |
+| `06_linux_switchres_kms_drm_modesetting.patch` | Troca de modo via KMS para o Switchres sem X (`drmkms`) |
+| `07_linux_15khz_fix_ddc.patch` | Oops ao sondar DDC sem adaptador conectado |
+| `08_linux_15khz_interlace_force_even.patch` | Campos pares no entrelaçado em **amdgpu/DCN1** |
+| `09_linux_15khz_i915_gen9_interlace.patch` | Entrelaçado em **Intel Gen9** com `i915.no_ytiled_scanout=1` (a entrada "Intel 15 kHz" do boot passa esse parâmetro) |
 
-Cobre **radeon** e **amdgpu** (DCE e DCN1-3). Não há patch de **i915/Intel**
-nesse conjunto — o hack de iGPU Intel mencionado no escopo de hardware do
-projeto é independente disso.
+Cobre **radeon**, **amdgpu** (DCE e DCN1-3) e, pelo 09, **i915 Gen9**.
+NVIDIA (nouveau) e as demais Intel usam a super resolução `1280x480iS`.
 
-Aplicação: `patch -p1 < arquivo.patch`, a partir da raiz da árvore de
-source do kernel extraída, em ordem numérica.
+Aplicação: `patch -p1 < arquivo.patch`, a partir da raiz da árvore do kernel,
+em ordem numérica.
