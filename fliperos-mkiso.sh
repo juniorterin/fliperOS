@@ -859,7 +859,7 @@ rm -rf /tmp/ra-autoconfig
 # 8/16-bit), PS1 e um core de arcade leve (mame2010, complementar ao
 # GroovyMAME standalone que continua sendo o caminho principal de arcade).
 build_core() {
-  local repo="$1" name dir mk
+  local repo="$1" name dir mk=""
   name="$(basename "$repo")"
   dir="/tmp/core-${name}"
   git clone --depth=1 --recursive "https://github.com/${repo}" "$dir"
@@ -867,10 +867,21 @@ build_core() {
     dir="$dir/libretro"; mk="Makefile"
   elif [[ -f "$dir/Makefile.libretro" ]]; then
     mk="Makefile.libretro"
-  else
+  elif [[ -f "$dir/Makefile" ]]; then
     mk="Makefile"
+  else
+    # So CMake (o mGBA desde 2025): o core sai com BUILD_LIBRETRO, sem o
+    # frontend proprio (Qt/SDL) nem as bibliotecas opcionais.
+    cmake -S "$dir" -B "$dir/build" -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBRETRO=ON \
+      -DBUILD_QT=OFF -DBUILD_SDL=OFF -DBUILD_GL=OFF -DBUILD_GLES2=OFF -DBUILD_GLES3=OFF \
+      -DUSE_FFMPEG=OFF -DUSE_DISCORD_RPC=OFF -DUSE_LUA=OFF -DUSE_SQLITE3=OFF -DUSE_ELF=OFF \
+      -DUSE_EDITLINE=OFF -DUSE_MINIZIP=OFF -DUSE_LIBZIP=OFF -DUSE_EPOXY=OFF -DENABLE_SCRIPTING=OFF
+    cmake --build "$dir/build" -j"$(nproc)"
   fi
-  make -C "$dir" -f "$mk" -j"$(nproc)"
+  [[ -z $mk ]] || make -C "$dir" -f "$mk" -j"$(nproc)"
+  # Um core que nao gerou o .so falha aqui, e nao calado.
+  compgen -G "$dir/*_libretro.so" > /dev/null || compgen -G "$dir/build/*_libretro.so" > /dev/null \
+    || { echo "core ${name}: nenhum *_libretro.so gerado"; exit 1; }
   find "$dir" -maxdepth 2 -name '*_libretro.so' -exec cp {} /etc/fliperos/retroarch/cores/ \;
   rm -rf "/tmp/core-${name}"
 }
