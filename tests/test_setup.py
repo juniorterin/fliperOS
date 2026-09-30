@@ -616,6 +616,68 @@ class InstallEventsTests(Base):
         self.assertNotEqual(r.returncode, 0)
 
 
+class RecoveryTests(Base):
+    def target_conf(self, target):
+        path = Path(str(target) + str(self.env.etc / "fliperos.conf"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def test_new_video_card_keeps_the_rest_of_the_disk_settings(self):
+        # Sessao da midia com a placa nova (teste de saidas feito agora).
+        (self.env.etc / "fliperos.conf").write_text(
+            "output_test=done\ncard=card1\ngpu=AMD Radeon R7 240\ndriver=radeon\nconnector=DVI-I-1\n"
+            "kernel_video=video=DVI-I-1:640x480iSe\nboot_resolution=640x480iS\nmonitor=arcade_15\nfrequency=15\n")
+        target = self.env.dir / "target"
+        conf = self.target_conf(target)
+        conf.write_text("latency=low\nalsa=1,0\nvolume=60\nlauncher=retroarch\norientation=vertical-cw\n"
+                        "card=card0\nconnector=VGA-1\nkernel_video=video=VGA-1:640x480iSe\nmonitor=generic_15\n"
+                        "geometry=15625.0-15750.0,49.5-65.0\n")
+        self.env.out("install_configure_video '%s' video" % target)
+        text = conf.read_text()
+        for line in ("connector=DVI-I-1", "card=card1", "kernel_video=video=DVI-I-1:640x480iSe",
+                     "monitor=arcade_15", "latency=low", "alsa=1,0", "volume=60", "launcher=retroarch",
+                     "orientation=vertical-cw"):
+            self.assertIn(line + "\n", text)
+        # Geometria e da saida antiga; o que so a midia tem nao vai.
+        self.assertNotIn("geometry=", text)
+        self.assertNotIn("output_test", text)
+        boot = Path(str(target) + str(self.env.etc / "fliperos-boot")).read_text()
+        self.assertIn("preempt=full", boot)
+        self.assertIn("video=DVI-I-1:640x480iSe", boot)
+        self.assertIn("fbcon=rotate:1", boot)
+
+    def test_new_install_copies_the_whole_session(self):
+        (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nalsa=1,0\n")
+        target = self.env.dir / "target"
+        conf = self.target_conf(target)
+        self.env.out("install_configure_video '%s'" % target)
+        self.assertEqual(conf.read_text(), "connector=VGA-1\nalsa=1,0\n")
+
+    def test_dpkg_keeps_packages_installed_later(self):
+        old = self.env.dir / "old-status"
+        new = self.env.dir / "status"
+        old.write_text(
+            "Package: bash\nStatus: install ok installed\nArchitecture: amd64\nVersion: 5.2-3\n\n"
+            "Package: attractplus\nStatus: install ok installed\nArchitecture: amd64\nVersion: 3.0\n"
+            "Description: frontend\n a longer description line\n\n"
+            "Package: libc6\nStatus: install ok installed\nArchitecture: i386\nVersion: 2.39\n\n"
+            "Package: libsfml\nStatus: install ok installed\nArchitecture: amd64\nVersion: 2.6\n")
+        new.write_text(
+            "Package: bash\nStatus: install ok installed\nArchitecture: amd64\nVersion: 5.2-2\n\n"
+            "Package: libc6\nStatus: install ok installed\nArchitecture: amd64\nVersion: 2.39\n\n")
+        self.env.out("recovery_dpkg_merge '%s' '%s'" % (old, new))
+        text = new.read_text()
+        packages = [(l.split(": ")[1]) for l in text.splitlines() if l.startswith("Package: ")]
+        self.assertEqual(packages, ["bash", "libc6", "attractplus", "libc6", "libsfml"])
+        # O bash fica o da midia, e a descricao de varias linhas vem inteira.
+        self.assertIn("Version: 5.2-2\n", text)
+        self.assertNotIn("Version: 5.2-3", text)
+        self.assertIn(" a longer description line\n", text)
+        # Rodar de novo nao duplica nada.
+        self.env.out("recovery_dpkg_merge '%s' '%s'" % (old, new))
+        self.assertEqual(new.read_text(), text)
+
+
 class NetworkTests(Base):
     def test_parse_scan(self):
         scan = "Casa:80:WPA2\\nCasa:40:WPA2\\nCafe\\\\:Bar:55:WPA1 WPA2\\n:30:WPA2\\nAberta:20:\\n"

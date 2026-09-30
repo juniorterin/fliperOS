@@ -76,12 +76,27 @@ install_write_fstab() {
     "$root_uuid" "$efi_uuid" > "$target/etc/fstab"
 }
 
-# install_configure_video ALVO leva para o disco o que foi decidido nesta
-# sessao: fliperos.conf, Switchres, MAME, Xorg e a linha do kernel.
+# install_configure_video ALVO [video] leva para o disco o que foi decidido
+# nesta sessao: fliperos.conf, Switchres, MAME, Xorg e a linha do kernel.
+# Com "video" (Recovery Mode, placa trocada) so as chaves de video mudam no
+# fliperos.conf do disco; latencia, audio, launcher e o resto ficam.
 install_configure_video() {
-  local target=$1 file
+  local target=$1 only=${2:-} file key value
   mkdir -p "$target$FLIPEROS_ETC"
-  [[ -f $FLIPEROS_CONF ]] && cp -f "$FLIPEROS_CONF" "$target$FLIPEROS_CONF"
+  if [[ $only == video ]]; then
+    for key in $VIDEO_CONF_KEYS; do
+      if value=$(conf_get "$key" 2> /dev/null); then
+        conf_set "$key" "$value" "$target$FLIPEROS_CONF"
+      else
+        conf_unset "$key" "$target$FLIPEROS_CONF"
+      fi
+    done
+    for key in $VIDEO_CONF_KEEP; do
+      value=$(conf_get "$key" 2> /dev/null) && conf_set "$key" "$value" "$target$FLIPEROS_CONF"
+    done
+  elif [[ -f $FLIPEROS_CONF ]]; then
+    cp -f "$FLIPEROS_CONF" "$target$FLIPEROS_CONF"
+  fi
   for file in "$SWITCHRES_INI" "$MAME_INI"; do
     [[ -f $file ]] && cp -p "$file" "$target$file"
   done
@@ -91,7 +106,8 @@ install_configure_video() {
     install -D -m 644 "$EDID_DIR/custom_resolution.bin" "$target$EDID_DIR/custom_resolution.bin"
   fi
   xorg_generate "$target$XORG_CONF" || return 1
-  boot_write_cmdline "$(boot_install_cmdline)" "$target$BOOT_DEFAULTS"
+  # A linha sai do fliperos.conf do disco: nele esta o modo de latencia.
+  boot_write_cmdline "$(FLIPEROS_CONF=$target$FLIPEROS_CONF boot_install_cmdline)" "$target$BOOT_DEFAULTS"
 }
 
 # install_configure_user ALVO: rede e audio configurados na midia vao

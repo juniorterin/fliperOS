@@ -45,7 +45,8 @@ screen_recovery() {
       restore)
         ui_yesno "Restore system files" "$(printf 'All system files will be copied again from this media.\n\nROMs, saves, network, audio and video settings are kept.\n\nContinue?')" no &&
           run_with_progress "Restoring system files" "$(disk_describe "$disk")" recovery_restore "$disk" &&
-          ui_msg "Recovery Mode" "The system files were restored."
+          ui_msg "Recovery Mode" "The system files were restored." "" \
+            "System packages are back to the versions on this media. Use Setup > System Update to update them again."
         ;;
       return) return 0 ;;
     esac

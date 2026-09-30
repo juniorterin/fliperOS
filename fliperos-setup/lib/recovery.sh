@@ -80,13 +80,14 @@ recovery_bootloader() {
 
 # recovery_video DISCO leva para o disco a configuracao de video desta
 # sessao (teste de saidas e Video Setup): para quando a placa de video foi
-# trocada e o sistema instalado ficou sem imagem.
+# trocada e o sistema instalado ficou sem imagem. So o video: o modo de
+# latencia, o audio e o launcher do disco ficam como estavam.
 recovery_video() {
   local disk=$1
   ev_step 10 "Mounting $disk"
   recovery_mount "$disk" || { ev_fail "Could not mount the installed system"; return 1; }
   ev_step 30 "Writing the video settings"
-  if ! install_configure_video "$RECOVERY_TARGET"; then
+  if ! install_configure_video "$RECOVERY_TARGET" video; then
     recovery_umount
     ev_fail "Could not write the video settings"
     return 1
@@ -99,16 +100,54 @@ recovery_video() {
   ev_step 100 "Video settings applied"
 }
 
+# recovery_dpkg_extra ANTIGO NOVO imprime os paragrafos do status do dpkg
+# ANTIGO cujo pacote (nome e arquitetura) nao esta no NOVO.
+recovery_dpkg_extra() {
+  awk '
+    function key(p,   pkg, arch) {
+      pkg = p
+      sub(/^(.*\n)?Package: */, "", pkg)
+      sub(/\n.*/, "", pkg)
+      arch = ""
+      if (p ~ /(^|\n)Architecture: /) {
+        arch = p
+        sub(/^(.*\n)?Architecture: */, "", arch)
+        sub(/\n.*/, "", arch)
+      }
+      return pkg ":" arch
+    }
+    BEGIN { RS = ""; ORS = "\n\n" }
+    FNR == NR { seen[key($0)] = 1; next }
+    !(key($0) in seen) { print }' "$2" "$1"
+}
+
+# recovery_dpkg_merge ANTIGO NOVO: o banco do dpkg fica o da midia (coerente
+# com os arquivos que voltaram) mais os pacotes instalados depois da
+# instalacao (frontends do repositorio e suas dependencias), cujos arquivos o
+# rsync nao apaga. Sem isso o apt esqueceria que eles existem.
+recovery_dpkg_merge() {
+  local old=$1 new=$2 extra
+  [[ -s $old && -f $new ]] || return 0
+  extra=$(recovery_dpkg_extra "$old" "$new") || return 1
+  [[ -n $extra ]] || return 0
+  printf '\n%s\n' "$extra" >> "$new"
+  log_info "recovery: $(grep -c '^Package:' <<< "$extra") pacote(s) instalados depois mantidos no dpkg"
+}
+
 # recovery_restore DISCO reextrai o sistema da midia por cima do disco,
-# preservando RECOVERY_PRESERVE: conserta pacotes e binarios corrompidos.
+# preservando RECOVERY_PRESERVE: conserta pacotes e binarios corrompidos. Os
+# pacotes do sistema voltam a versao da midia (o System Update os atualiza
+# de novo); os instalados depois continuam registrados.
 recovery_restore() {
-  local disk=$1 src excludes=() p
+  local disk=$1 src excludes=() p status
   ev_step 5 "Mounting $disk"
   recovery_mount "$disk" || { ev_fail "Could not mount the installed system"; return 1; }
-  src=$(mktemp -d /mnt/fliperos-restore.XXXXXX) || { recovery_umount; return 1; }
+  status=$(mktemp /tmp/fliperos-dpkg-status.XXXXXX) || { recovery_umount; return 1; }
+  cp -f "$RECOVERY_TARGET/var/lib/dpkg/status" "$status" 2> /dev/null || : > "$status"
+  src=$(mktemp -d /mnt/fliperos-restore.XXXXXX) || { rm -f "$status"; recovery_umount; return 1; }
   ev_step 10 "Extracting the system from the installation media"
   if ! ev_run unsquashfs -f -d "$src" "$LIVE_IMAGE"; then
-    rm -rf "$src"
+    rm -rf "$src" "$status"
     recovery_umount
     return 1
   fi
@@ -117,11 +156,19 @@ recovery_restore() {
   done
   ev_step 60 "Restoring system files"
   if ! ev_run rsync -aHAX "${excludes[@]}" "$src/" "$RECOVERY_TARGET/"; then
-    rm -rf "$src"
+    rm -rf "$src" "$status"
     recovery_umount
     return 1
   fi
   rm -rf "$src"
+  ev_step 75 "Keeping the packages installed later"
+  if ! recovery_dpkg_merge "$status" "$RECOVERY_TARGET/var/lib/dpkg/status"; then
+    rm -f "$status"
+    recovery_umount
+    ev_fail "Could not update the package database"
+    return 1
+  fi
+  rm -f "$status"
   ev_step 80 "Generating the initramfs"
   ev_run chroot "$RECOVERY_TARGET" update-initramfs -u -k all || { recovery_umount; return 1; }
   ev_step 90 "Installing the bootloader"

@@ -235,6 +235,13 @@ video_apply_monitor() {
   log_info "monitor: $monitor"
 }
 
+# Chaves do fliperos.conf que dependem da placa e da saida: e o que o
+# Recovery Mode leva para o disco quando a placa foi trocada. A orientacao
+# e do gabinete, nao da placa, e so vai se foi escolhida nesta sessao.
+VIDEO_CONF_KEYS="gpu driver card connector detection forced kernel_video boot_resolution fb_map
+  monitor frequency geometry custom_width custom_height custom_refresh"
+VIDEO_CONF_KEEP="orientation"
+
 # video_save_result CONECTOR FLAGS MONITOR grava o resultado validado do
 # teste de saidas para o instalador e para o sistema instalado.
 video_save_result() {
