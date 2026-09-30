@@ -148,6 +148,12 @@ mount_chroot() {
   mknod -m 666 "$CHROOT_DIR/dev/urandom" c 1 9
   mknod -m 666 "$CHROOT_DIR/dev/tty"     c 5 0
   ln -s pts/ptmx "$CHROOT_DIR/dev/ptmx"
+  # Sem /dev/fd o "<(...)" do bash falha: o dkms (hooks do kernel) avisava
+  # "/dev/fd/63: No such file or directory".
+  ln -s /proc/self/fd   "$CHROOT_DIR/dev/fd"
+  ln -s /proc/self/fd/0 "$CHROOT_DIR/dev/stdin"
+  ln -s /proc/self/fd/1 "$CHROOT_DIR/dev/stdout"
+  ln -s /proc/self/fd/2 "$CHROOT_DIR/dev/stderr"
   mkdir -p "$CHROOT_DIR/dev/pts" "$CHROOT_DIR/dev/shm"
   mount -t devpts devpts "$CHROOT_DIR/dev/pts" -o newinstance,gid=5,mode=620,ptmxmode=666
   mount -t tmpfs  tmpfs  "$CHROOT_DIR/dev/shm"
@@ -218,7 +224,7 @@ apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
   coreutils util-linux e2fsprogs dosfstools parted \
-  wget curl git ca-certificates jq rsync fbset \
+  wget curl git ca-certificates jq rsync fbset zstd \
   xserver-xorg-core xserver-xorg-input-libinput xinit x11-xserver-utils x11-utils \
   libdrm2 libgbm1 mesa-vulkan-drivers mesa-utils \
   libsdl2-2.0-0 libsdl2-dev build-essential cmake \
@@ -492,7 +498,9 @@ SRSCRIPT
 
 # ── Skyscraper (Setup > Scraper) ──────────────────────────────
 # Qt6, a mesma do AntiMicroX. As bibliotecas que o binario usa ficam marcadas
-# como instaladas a mao, senao o autoremove as levaria junto com os -dev.
+# como instaladas a mao, senao o autoremove as levaria junto com os -dev. O
+# ldd mostra os caminhos por /lib, que com o /usr unificado nao estao no
+# banco do dpkg: o readlink -f leva ao arquivo real em /usr/lib.
 build_skyscraper_chroot() {
   if $SKIP_SKYSCRAPER; then
     warn "Skyscraper pulado — o Scraper do Setup nao vai funcionar"
@@ -501,7 +509,7 @@ build_skyscraper_chroot() {
   step "Compilando Skyscraper ($SKYSCRAPER_TAG) no chroot"
   cat > "$CHROOT_DIR/tmp/build-skyscraper.sh" << 'SKYSCRIPT'
 #!/bin/bash
-set -e
+set -eo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 BUILD_DEPS="qt6-base-dev qt6-base-dev-tools qmake6"
@@ -513,13 +521,15 @@ qmake6 PREFIX=/usr/local
 make -j"$(nproc)"
 make install
 cd /
-ldd /usr/local/bin/Skyscraper | awk '/=> \// { print $3 }' | xargs -r dpkg -S 2> /dev/null \
-  | cut -d: -f1 | sort -u | xargs -r apt-mark manual > /dev/null
-apt-mark manual libqt6sql6-sqlite p7zip-full > /dev/null
+libs=$(ldd /usr/local/bin/Skyscraper | awk '/=> \// { print $3 }' | xargs -r readlink -f)
+pkgs=$(dpkg -S $libs | cut -d: -f1 | sort -u)
+apt-mark manual $pkgs libqt6sql6-sqlite p7zip-full > /dev/null
 apt-get remove -y $BUILD_DEPS
 apt-get autoremove -y -qq
 rm -rf /tmp/skyscraper
-/usr/local/bin/Skyscraper --version | head -1
+# Sem pipe: e aqui que uma biblioteca levada pelo autoremove aparece.
+/usr/local/bin/Skyscraper --version > /tmp/skyscraper-version
+head -1 /tmp/skyscraper-version
 echo "SKYSCRAPER_OK"
 SKYSCRIPT
   sed -i -e "s|__SKYSCRAPER_TAG__|${SKYSCRAPER_TAG}|g" \

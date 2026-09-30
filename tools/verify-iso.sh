@@ -63,13 +63,28 @@ done
 echo "ferramentas, sessao, LXDE e paleta conferem"
 
 # ── Programas que o setup usa ─────────────────────────────────
-for path in usr/bin/gum usr/bin/antimicrox usr/bin/qjoypad usr/bin/jq usr/bin/espeak-ng bin/con2fbmap \
+for path in usr/bin/gum usr/bin/antimicrox usr/bin/qjoypad usr/bin/jq usr/bin/espeak-ng usr/bin/con2fbmap \
   usr/local/bin/switchres usr/local/bin/grid usr/local/bin/geometry usr/local/bin/Skyscraper \
   usr/local/bin/limine usr/local/share/limine/limine-bios.sys usr/local/share/limine/BOOTX64.EFI \
   usr/bin/startlxde etc/switchres.ini; do
   has "$path"
 done
 echo "gum, antimicrox, qjoypad, switchres/grid/geometry, Skyscraper, Limine, LXDE presentes"
+
+# O autoremove do fim de cada compilacao pode levar uma biblioteca que o
+# binario usa (o Skyscraper ja perdeu a libQt6Xml assim): toda NEEDED dos
+# programas compilados no build tem de existir na imagem.
+for bin in usr/local/bin/switchres usr/local/bin/grid usr/local/bin/Skyscraper usr/bin/antimicrox; do
+  unsquashfs -cat "$work/filesystem.squashfs" "$bin" > "$work/bin"
+  for lib in $(readelf -d "$work/bin" | sed -n 's/.*(NEEDED).*\[\(.*\)\]$/\1/p'); do
+    found=false
+    for dir in usr/lib/x86_64-linux-gnu usr/lib usr/local/lib; do
+      grep -qxF "squashfs-root/$dir/$lib" "$work/files.txt" && { found=true; break; }
+    done
+    $found || fail "/$bin precisa de $lib, que nao esta na imagem"
+  done
+done
+echo "bibliotecas dos programas compilados presentes"
 
 # ── EDIDs: um por preset e os de super resolucao, no rootfs e no initramfs ─
 for edid in generic_15 arcade_15 arcade_25 arcade_31 ntsc pal vesa_480 generic_15_super_resp generic_15_super_resi; do
