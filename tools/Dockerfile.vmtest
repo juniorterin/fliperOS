@@ -1,0 +1,15 @@
+# Container das auditorias e testes em VM (tools/verify-iso.sh,
+# tools/vm-test.py, tools/vm-monitor.py). So ferramentas: o repositorio entra
+# montado em /w e os discos de teste num volume em /audit.
+#
+#   docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+
+# zstd: o initramfs da ISO sai em zstd e o lsinitramfs precisa dele para
+# listar. binutils: readelf e strings da auditoria.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      qemu-system-x86 qemu-utils ovmf \
+      xorriso squashfs-tools initramfs-tools-core zstd cpio \
+      edid-decode binutils fdisk python3 \
+    && rm -rf /var/lib/apt/lists/*

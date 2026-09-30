@@ -160,7 +160,12 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 
 O que não existe no Ubuntu 24.04 é baixado com versão e hash fixados: Limine 11.4.1, Gum 2.0.2, AntiMicroX 3.6.1 (`.deb` oficial para 24.04), Skyscraper 3.21.0 (fork Gemba, compilado com Qt6).
 
-Auditoria da ISO gerada (só leitura, no container `fliperos-vmtest`): `tools/verify-iso.sh saida.iso`.
+Auditoria da ISO gerada (só leitura): confere menu de boot, kernel, arquivos do setup, bibliotecas dos programas compilados, EDIDs e boot BIOS/UEFI.
+
+```powershell
+docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
+docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.7.iso
+```
 
 ## 10. Testes
 
