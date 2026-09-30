@@ -243,12 +243,15 @@ ui_timed_confirm() {
   esac
 }
 
-# ui_pager TITULO ARQUIVO mostra um arquivo longo (log) com rolagem.
+# ui_pager TITULO ARQUIVO mostra o fim de um arquivo longo (log) com
+# rolagem. O conteudo vai como argumento: a entrada padrao do gum tem de
+# ser o teclado.
 ui_pager() {
   ui_size
   ui_clear
   ui_topbar
-  gum pager --border rounded --height $((UI_ROWS - 3)) < "$2" > /dev/tty 2> /dev/tty
+  gum pager --border rounded --height $((UI_ROWS - 3)) "$(tail -n 400 "$2" 2> /dev/null)" \
+    < /dev/tty > /dev/tty 2> /dev/tty
 }
 
 # ui_flush_input descarta teclas apertadas enquanto nada era perguntado:

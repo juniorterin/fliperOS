@@ -4,6 +4,10 @@
 # Todo caminho de sistema passa por uma variavel sobrescrevivel: os testes
 # apontam para arvores falsas (sysfs, /etc) em vez do sistema real.
 
+# O sistema e pt_BR, mas os numeros que o setup le e escreve (kHz, Hz,
+# tamanhos) usam ponto: sem isto o printf '%.2f' do bash recusa "59.98".
+export LC_NUMERIC=C
+
 FLIPEROS_ETC=${FLIPEROS_ETC:-/etc/fliperos}
 FLIPEROS_CONF=${FLIPEROS_CONF:-$FLIPEROS_ETC/fliperos.conf}
 FLIPEROS_LOG=${FLIPEROS_LOG:-/var/log/fliperos-setup.log}
