@@ -562,6 +562,15 @@ class DiskTests(Base):
         self.assertEqual(by["/dev/sdc"][5], "Smaller than 16 GiB")
         self.assertEqual(by["/dev/nvme0n1"][5], "Has RAID/LVM/encryption")
 
+    def test_virtio_and_floppy(self):
+        # Como o QEMU mostra: virtio sem modelo, fabricante "0x1af4", e o fd0.
+        env = self.inventory([
+            self.dev("/dev/fd0", 4096, tran=None),
+            self.dev("/dev/vda", 21 * 10**9, vendor="0x1af4", tran=None),
+        ])
+        rows = [r.split("|") for r in self.env.out("disk_list", env).splitlines()]
+        self.assertEqual([r[:2] for r in rows], [["/dev/vda", "Virtual disk"]])
+
     def test_describe(self):
         env = self.inventory([self.dev("/dev/sda", 500 * 10**9, vendor="ATA", model="Samsung SSD", tran="usb")])
         self.assertEqual(self.env.out("disk_describe /dev/sda", env).strip(),

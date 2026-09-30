@@ -36,7 +36,9 @@ disk_live_device() {
 #   caminho|modelo|tamanho em bytes|barramento|removivel|motivo da recusa
 # (motivo vazio = disco elegivel). Recusa como o instalador anterior: disco
 # pequeno, somente leitura, montado (midia live, swap), com RAID/LVM/cripto
-# ou com dependentes ativos; e a propria midia de instalacao.
+# ou com dependentes ativos; e a propria midia de instalacao. Disquete nem
+# aparece. O fabricante sai quando e so um codigo ("ATA", ou o "0x1af4"
+# do virtio, que nao tem modelo).
 disk_list() {
   local live
   live=$(disk_live_device 2> /dev/null) || live=""
@@ -44,7 +46,7 @@ disk_list() {
     def tree: ., (.children // [] | .[] | tree);
     .blockdevices[]
     | select(.type == "disk")
-    | select((.path | test("^/dev/(loop|ram|zram|sr)")) | not)
+    | select((.path | test("^/dev/(loop|ram|zram|sr|fd)")) | not)
     | . as $d
     | ([$d | tree | .mountpoints // [] | .[] | select(. != null)] | length) as $mounted
     | ([$d | tree | select(.type != "disk" and .type != "part")] | length) as $complex
@@ -54,9 +56,11 @@ disk_list() {
        elif ($mounted > 0) then "In use (mounted or swap)"
        elif ($complex > 0) then "Has RAID/LVM/encryption"
        else "" end) as $why
+    | ([$d.vendor, $d.model] | map(select(. != null) | gsub("^\\s+|\\s+$"; ""))
+        | map(select(. != "" and . != "ATA" and (test("^0x[0-9a-fA-F]+$") | not)))
+        | join(" ")) as $name
     | [ $d.path,
-        ([$d.vendor, $d.model] | map(select(. != null) | gsub("^\\s+|\\s+$"; ""))
-          | map(select(. != "" and . != "ATA")) | join(" ")),
+        (if $name == "" and ($d.path | test("^/dev/vd")) then "Virtual disk" else $name end),
         ($d.size | tostring),
         ($d.tran // ""),
         (if ($d.rm == true or $d.rm == "1" or $d.hotplug == true or $d.hotplug == "1" or $d.tran == "usb") then "1" else "0" end),
