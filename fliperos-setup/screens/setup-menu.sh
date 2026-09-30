@@ -41,10 +41,12 @@ screen_audio() {
       [[ ${entry%%|*} == "$current" ]] && card_label=${entry#*|}
     done
     choice=$(ui_menu "Audio Setup" \
-      "$(ui_fields "Default card|$card_label" "Volume|$(audio_volume)%")" "$last" \
+      "$(ui_fields "Default card|$card_label" "Volume|$(audio_volume)% (keyboard volume keys work too)" \
+        "MAME latency|$(audio_mame_latency)")" "$last" \
       "card|Default card" \
       "volume|Volume" \
       "mixer|AlsaMixer" \
+      "latency|MAME audio latency" \
       "test|Test sound" \
       "return|Return") || return 0
     last=$choice
@@ -71,6 +73,12 @@ screen_audio() {
         alsamixer -c "${current%,*}" < /dev/tty > /dev/tty 2>&1
         run_logged alsactl store "${current%,*}"
         ui_flush_input
+        ;;
+      latency)
+        choice=$(ui_input "MAME audio latency" \
+          "GroovyMAME audio latency, 0.0 to 50.0 (0 = default). Lower responds faster; raise it if the sound crackles." \
+          "$(audio_mame_latency)") || continue
+        audio_set_mame_latency "$choice" || ui_msg "MAME audio latency" "Type a number from 0.0 to 50.0."
         ;;
       test)
         ui_info "Test sound" "Playing a test sound..."

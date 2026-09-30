@@ -127,6 +127,16 @@ for param in $base; do
 done
 echo "latencia: servico no boot, timers do apt mascarados, $base"
 
+# ── Teclas de volume ──────────────────────────────────────────
+unsquashfs -cat "$work/filesystem.squashfs" etc/triggerhappy/triggers.d/fliperos-volume.conf > "$work/f" \
+  || fail "ausente: teclas de volume do triggerhappy"
+cmp -s "$src/config/fliperos-volume.triggers" "$work/f" || fail "teclas de volume diferem do repositorio"
+unsquashfs -cat "$work/filesystem.squashfs" etc/systemd/system/triggerhappy.service.d/fliperos.conf > "$work/f" \
+  || fail "ausente: drop-in do triggerhappy"
+grep -q -- '--user' "$work/f" && fail "triggerhappy ainda roda como outro usuario (sem acesso ao audio)"
+grep -q 'multi-user.target.wants/triggerhappy.service' "$work/files.txt" || fail "triggerhappy nao habilitado"
+echo "teclas de volume: triggerhappy habilitado, como root, com as teclas do FliperOS"
+
 xorriso -indev "$iso" -report_el_torito plain > "$work/boot.txt" 2>&1
 grep -q 'BIOS' "$work/boot.txt" || fail "sem boot BIOS"
 grep -q 'UEFI' "$work/boot.txt" || fail "sem boot UEFI"

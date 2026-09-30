@@ -500,6 +500,39 @@ class LatencyBuildTests(unittest.TestCase):
         self.assertNotIn('frame_delay', ini)
 
 
+class AudioBuildTests(unittest.TestCase):
+    """Som sem servidor de som: tudo direto no ALSA, e as teclas de volume
+    valendo em qualquer tela."""
+
+    def test_emulators_use_alsa(self):
+        self.assertIn('\nsound sdl\n', (ROOT / 'config/mame.ini').read_text())
+        for script in ('config/fliperos-kms-run', 'config/fliperos-x11-run'):
+            self.assertIn('export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"', (ROOT / script).read_text(), script)
+
+    def test_volume_keys_are_mapped(self):
+        rows = [line.split(None, 2) for line in (ROOT / 'config/fliperos-volume.triggers').read_text().splitlines()
+                if line.strip() and not line.startswith('#')]
+        mapped = {(event, value): command for event, value, command in rows}
+        for event, action in (('KEY_VOLUMEUP', 'up'), ('KEY_VOLUMEDOWN', 'down')):
+            for value in ('1', '2'):
+                self.assertEqual(mapped[(event, value)], '/usr/local/bin/fliperos-setup --volume ' + action)
+        self.assertEqual(mapped[('KEY_MUTE', '1')], '/usr/local/bin/fliperos-setup --volume mute')
+
+    def test_triggerhappy_is_installed_and_runs_as_root(self):
+        self.assertIn(' triggerhappy', MKISO.split('apt-get install -y --no-install-recommends')[1].split('\n\n')[0])
+        self.assertIn('etc/triggerhappy/triggers.d/fliperos-volume.conf', ROOTFS)
+        dropin = ROOTFS.split('triggerhappy.service.d/fliperos.conf')[1].split('EOF')[1]
+        self.assertIn('ExecStart=\nExecStart=/usr/sbin/thd', dropin)
+        self.assertNotIn('--user', dropin)
+        entry = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        self.assertLess(entry.index('--volume)'), entry.index('if ! have gum'))
+
+    def test_lxpanel_leaves_the_keys_to_triggerhappy(self):
+        panel = (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text()
+        self.assertIn('type=volume', panel)
+        self.assertNotIn('XF86Audio', panel)
+
+
 class DockerfileTests(unittest.TestCase):
     DOCKERFILE = (ROOT / 'Dockerfile.fliperos').read_text()
 

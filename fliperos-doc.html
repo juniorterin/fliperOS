@@ -128,7 +128,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Start frontend</strong></li>
 <li><strong>Setup (video, audio, network...)</strong></li>
 <li><strong>Video Setup</strong> — o mesmo da instalação; grava a linha do kernel e oferece reiniciar;</li>
-<li><strong>Audio Setup</strong> — placa padrão (<code>/etc/asound.conf</code>), volume, AlsaMixer, teste de som;</li>
+<li><strong>Audio Setup</strong> — placa padrão (<code>/etc/asound.conf</code>), volume, AlsaMixer, <strong>MAME audio latency</strong> (<code>audio_latency</code> do <code>mame.ini</code>, 0.0 a 50.0, 0 = padrão; o "Audio Latency MAME" do GA) e teste de som. Como no GA, o volume move <code>Master</code>/<code>Front</code>/<code>Speaker</code>/<code>Headphone</code> e deixa o <code>PCM</code> no máximo (placa só com <code>PCM</code> usa o <code>PCM</code>). Não há servidor de som: RetroArch (<code>audio_driver = alsa</code>), GroovyMAME (<code>sound sdl</code>) e os emuladores SDL (<code>SDL_AUDIODRIVER=alsa</code>) tocam direto no ALSA, então esse volume vale para todos, em KMS ou X;</li>
 <li><strong>Network Setup</strong> — Wi-Fi pela lista de redes (com sinal) ou <strong>rede oculta digitando o SSID</strong>; ao conectar, o IP aparece no título, ao lado do uso do disco;</li>
 <li><strong>Frontend</strong> — o launcher padrão; um que não está instalado pode ser instalado do repositório do FliperOS;</li>
 <li><strong>Latency</strong> — modo <strong>Standard</strong> (qualquer máquina) ou <strong>Low latency</strong> (CPUs modernas), com a conferência desta máquina contra a recomendação e a lista do hardware ideal (seção 9, Latência);</li>
@@ -138,6 +138,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Exit to shell</strong> — <code>sudo fliperos-setup</code> volta ao menu;</li>
 <li><strong>Shutdown / Reboot</strong>.</li>
 </ul>
+<p><strong>Teclas de volume:</strong> as teclas de volume do teclado (ou de um encoder de painel programado para mandá-las) funcionam em qualquer tela — emulador em KMS, desktop, console. O <code>triggerhappy</code> lê o <code>/dev/input</code> e chama <code>fliperos-setup --volume up|down|mute</code> (passos de 5% na placa do Audio Setup, gravados a cada toque porque gabinete costuma ser desligado na tomada); <code>config/fliperos-volume.triggers</code> diz quais teclas. O painel do LXDE fica só com o mouse, para não mudar o volume duas vezes. Durante o jogo não aparece barra de volume (nada desenha por cima de um emulador em KMS).</p>
 <h3 id="desktop-lxde">Desktop LXDE</h3>
 <p>O LXDE do GroovyArcade: <code>lxde</code> completo com o openbox-lxde, painel embaixo (menu, gerenciador de arquivos, terminal, tarefas, CPU, volume, bandeja, rede, relógio), sem compositor, sem DPMS nem descanso de tela, fonte Sans 10 e a orientação do Video Setup. Vêm também as ferramentas do GroovyArcade: <strong>AntiMicroX</strong> e <strong>QJoyPad</strong> (controle como teclado/mouse), <code>xterm</code>, <code>htop</code>, <code>evtest</code>, <code>joy2key</code>, <code>hwinfo</code>, <code>lshw</code>, <code>read-edid</code>, <code>i2c-tools</code>. O <strong>FliperOS Setup</strong> fica em <strong>System Tools</strong> (e no painel), como o <code>gasetup.desktop</code>. O terminal usa as cores do Dracula. Sair do desktop volta ao menu.</p>
 <h2 id="6-tema-dracula-no-console">6. Tema Dracula no console</h2>
@@ -413,6 +414,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <td>Aplica o modo de latência no boot</td>
 </tr>
 <tr>
+<td><code>config/fliperos-volume.triggers</code></td>
+<td>Teclas de volume (triggerhappy)</td>
+</tr>
+<tr>
 <td><code>config/retroarch.cfg</code>, <code>config/mame.ini</code></td>
 <td>Configuração de sistema do RetroArch e do GroovyMAME (valores do modo Standard)</td>
 </tr>
@@ -433,7 +438,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <h2 id="fontes-consultadas">Fontes consultadas</h2>
 <p>Código atual do GroovyArcade, no GitLab do grupo <code>groovyarcade</code>:</p>
 <ul>
-<li><code>gasetup</code> <code>2dbaa5297c716b4f32b0b55d5439c1f08f8cedda</code> — <code>core/procedures/interactive</code> (isomainmenu, mainmenu, setup), <code>core/libs/lib-video.sh</code>, <code>lib-install.sh</code>, <code>lib-network.sh</code>, <code>lib-troubleshoot.sh</code>; latência: <code>core/libs/lib-bootloaders.sh</code> (linha padrão do kernel), <code>core/configs/groovymame/groovymame.sh</code> e <code>core/configs/retroarch/retroarch.sh</code></li>
+<li><code>gasetup</code> <code>2dbaa5297c716b4f32b0b55d5439c1f08f8cedda</code> — <code>core/procedures/interactive</code> (isomainmenu, mainmenu, setup; áudio: <code>worker_audio_menu</code>, <code>worker_set_volume</code>, <code>worker_audio_latency</code>), <code>core/libs/lib-video.sh</code>, <code>lib-install.sh</code>, <code>lib-network.sh</code>, <code>lib-troubleshoot.sh</code>; latência: <code>core/libs/lib-bootloaders.sh</code> (linha padrão do kernel), <code>core/configs/groovymame/groovymame.sh</code> e <code>core/configs/retroarch/retroarch.sh</code></li>
 <li><code>tools/gatools</code> <code>28cef9faeec9d85d001ea5259af2d7e2fa343430</code> — <code>video/video.sh</code> (teste de saídas, Testing results), <code>video/monitor.sh</code>, <code>video/inform.sh</code></li>
 <li><code>tools/galauncher</code> <code>7e4950e3a4b92faf5eeebcae7c3a29a9e73689be</code> — <code>startfe.sh</code>, <code>videodata.conf</code>, <code>modules/cpu_governor.sh</code></li>
 <li><code>os</code> <code>59670f3d476331e7c18bc3a03fea6e7860fa1b7a</code> — menu de boot, <code>.bash_profile</code>, LXDE, AntiMicroX, QJoyPad</li>

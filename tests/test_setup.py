@@ -705,6 +705,60 @@ class AudioTests(Base):
         self.assertIn("defaults.pcm.card 1\n", conf.read_text())
         self.assertIn("defaults.pcm.device 3\n", conf.read_text())
 
+    def mixer(self, controls, level=60):
+        """amixer falso: lista os controles da placa, responde o nivel e
+        registra cada sset."""
+        self.calls = self.env.dir / "amixer.log"
+        self.calls.write_text("")
+        listing = "".join("Simple mixer control '%s',0\\n" % c for c in controls)
+        self.env.stub("amixer", textwrap.dedent("""\
+            args="$*"
+            case $args in
+              *scontrols*) printf "%s" ;;
+              *sget*) echo "  Front Left: Playback 52 [%d%%] [-10.00dB] [on]" ;;
+              *sset*) echo "${args#*sset }" >> "%s" ;;
+            esac""") % (listing, level, self.calls))
+        self.env.stub("alsactl", "true")
+        (self.env.etc / "fliperos.conf").write_text("alsa=1,0\n")
+
+    def test_volume_keeps_pcm_at_max_like_ga(self):
+        self.mixer(["Master", "PCM", "Front", "Capture"])
+        self.env.out("audio_set_volume 60")
+        self.assertEqual(self.calls.read_text().splitlines(),
+                         ["PCM 100% unmute", "Master 60% unmute", "Front 60% unmute"])
+        self.assertIn("volume=60\n", (self.env.etc / "fliperos.conf").read_text())
+
+    def test_card_with_only_pcm_uses_pcm_as_volume(self):
+        self.mixer(["PCM"])
+        self.env.out("audio_set_volume 40")
+        self.assertEqual(self.calls.read_text().splitlines(), ["PCM 40% unmute"])
+
+    def test_volume_keys(self):
+        self.mixer(["Master", "PCM", "Speaker"])
+        self.env.out("audio_step up; audio_step down; audio_step mute")
+        self.assertEqual(self.calls.read_text().splitlines(), [
+            "Master 5%+ unmute", "Speaker 5%+ unmute",
+            "Master 5%-", "Speaker 5%-",
+            "Master toggle", "Speaker toggle"])
+        self.assertEqual(self.env.run("audio_step sideways").returncode, 1)
+
+    def test_volume_shown_is_the_mixer_level(self):
+        # As teclas mudam o mixer sem passar pelo Setup: vale o nivel real.
+        self.mixer(["Master"], level=35)
+        (self.env.etc / "fliperos.conf").write_text("alsa=1,0\nvolume=80\n")
+        self.assertEqual(self.env.out("audio_volume").strip(), "35")
+
+    def test_mame_audio_latency(self):
+        mame = self.env.etc / "mame.ini"
+        mame.write_text("sound sdl\n")
+        self.assertEqual(self.env.out("audio_mame_latency").strip(), "0.0")
+        for bad in ("51", "-1", "abc", "1.2.3", ""):
+            self.assertEqual(self.env.run("audio_set_mame_latency '%s'" % bad).returncode, 1, bad)
+        self.env.out("audio_set_mame_latency 2.5")
+        self.assertEqual(self.env.out("audio_mame_latency").strip(), "2.5")
+        self.env.out("audio_set_mame_latency 50")
+        self.assertIn("audio_latency", mame.read_text())
+
 
 class LauncherTests(Base):
     def setUp(self):

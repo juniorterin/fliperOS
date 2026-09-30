@@ -219,7 +219,8 @@ apt-get update -qq
 # live-boot necessário para boot=live no kernel da ISO. O lxde e as
 # ferramentas de joystick/diagnostico sao as do GroovyArcade (lxde, xterm,
 # htop, evtest, joy2key, qjoypad, hwinfo, lshw, read-edid, i2c-tools).
-# fbset traz o con2fbmap do teste de saidas; jq e rsync sao do fliperos-setup.
+# fbset traz o con2fbmap do teste de saidas; jq e rsync sao do fliperos-setup;
+# triggerhappy le as teclas de volume em qualquer tela (fliperos-rootfs.sh).
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -237,7 +238,7 @@ apt-get install -y --no-install-recommends \
   samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
   plymouth plymouth-label fonts-dejavu-core \
   lxde gnome-themes-extra xterm htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
-  espeak-ng
+  espeak-ng triggerhappy
 
 systemctl enable ssh
 # As host keys sao apagadas abaixo pra que cada instalacao gere as suas, e

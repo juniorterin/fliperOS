@@ -101,12 +101,12 @@ Plugin {
   Config {
   }
 }
+# Volume so pelo mouse: as teclas de volume ficam com o triggerhappy
+# (config/fliperos-volume.triggers), que vale tambem fora do X. Com as duas,
+# cada toque mudaria o volume duas vezes.
 Plugin {
   type=volume
   Config {
-    VolumeMuteKey=XF86AudioMute
-    VolumeDownKey=XF86AudioLowerVolume
-    VolumeUpKey=XF86AudioRaiseVolume
   }
 }
 Plugin {

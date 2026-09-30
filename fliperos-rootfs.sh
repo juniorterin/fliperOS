@@ -66,6 +66,19 @@ Y_MAX=240
 EOF
 fi
 
+# ── Teclas de volume ──────────────────────────────────────────────
+# O triggerhappy le o /dev/input e roda o fliperos-setup --volume: vale em
+# qualquer tela (KMS, X, console). O servico do pacote roda os comandos como
+# "nobody", sem acesso ao /dev/snd; aqui ele roda como root, e so executa o
+# que esta em /etc/triggerhappy/triggers.d (de root).
+install -Dm644 "$src/config/fliperos-volume.triggers" "$root/etc/triggerhappy/triggers.d/fliperos-volume.conf"
+mkdir -p "$root/etc/systemd/system/triggerhappy.service.d"
+cat > "$root/etc/systemd/system/triggerhappy.service.d/fliperos.conf" << 'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/sbin/thd --triggers /etc/triggerhappy/triggers.d/ --socket /run/thd.socket --deviceglob /dev/input/event*
+EOF
+
 # ── Splash e console ──────────────────────────────────────────────
 install -Dm644 "$src/config/plymouth/fliperos.plymouth" "$root/usr/share/plymouth/themes/fliperos/fliperos.plymouth"
 install -Dm644 "$src/config/plymouth/fliperos.script" "$root/usr/share/plymouth/themes/fliperos/fliperos.script"

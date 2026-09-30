@@ -97,7 +97,7 @@ O tty1 faz o login sozinho e segue o `.bash_profile` do GroovyArcade: abre o **l
 - **Start frontend**
 - **Setup (video, audio, network...)**
   - **Video Setup** — o mesmo da instalação; grava a linha do kernel e oferece reiniciar;
-  - **Audio Setup** — placa padrão (`/etc/asound.conf`), volume, AlsaMixer, teste de som;
+  - **Audio Setup** — placa padrão (`/etc/asound.conf`), volume, AlsaMixer, **MAME audio latency** (`audio_latency` do `mame.ini`, 0.0 a 50.0, 0 = padrão; o "Audio Latency MAME" do GA) e teste de som. Como no GA, o volume move `Master`/`Front`/`Speaker`/`Headphone` e deixa o `PCM` no máximo (placa só com `PCM` usa o `PCM`). Não há servidor de som: RetroArch (`audio_driver = alsa`), GroovyMAME (`sound sdl`) e os emuladores SDL (`SDL_AUDIODRIVER=alsa`) tocam direto no ALSA, então esse volume vale para todos, em KMS ou X;
   - **Network Setup** — Wi-Fi pela lista de redes (com sinal) ou **rede oculta digitando o SSID**; ao conectar, o IP aparece no título, ao lado do uso do disco;
   - **Frontend** — o launcher padrão; um que não está instalado pode ser instalado do repositório do FliperOS;
   - **Latency** — modo **Standard** (qualquer máquina) ou **Low latency** (CPUs modernas), com a conferência desta máquina contra a recomendação e a lista do hardware ideal (seção 9, Latência);
@@ -106,6 +106,8 @@ O tty1 faz o login sozinho e segue o `.bash_profile` do GroovyArcade: abre o **l
 - **Start desktop** — o LXDE;
 - **Exit to shell** — `sudo fliperos-setup` volta ao menu;
 - **Shutdown / Reboot**.
+
+**Teclas de volume:** as teclas de volume do teclado (ou de um encoder de painel programado para mandá-las) funcionam em qualquer tela — emulador em KMS, desktop, console. O `triggerhappy` lê o `/dev/input` e chama `fliperos-setup --volume up|down|mute` (passos de 5% na placa do Audio Setup, gravados a cada toque porque gabinete costuma ser desligado na tomada); `config/fliperos-volume.triggers` diz quais teclas. O painel do LXDE fica só com o mouse, para não mudar o volume duas vezes. Durante o jogo não aparece barra de volume (nada desenha por cima de um emulador em KMS).
 
 ### Desktop LXDE
 
@@ -259,6 +261,7 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 | `config/fliperos-lxde`, `config/lxde/` | Sessão e configuração do LXDE |
 | `config/vtrgb-dracula` | Paleta Dracula do console |
 | `config/fliperos-latency.service` | Aplica o modo de latência no boot |
+| `config/fliperos-volume.triggers` | Teclas de volume (triggerhappy) |
 | `config/retroarch.cfg`, `config/mame.ini` | Configuração de sistema do RetroArch e do GroovyMAME (valores do modo Standard) |
 | `patches/kernel-15khz/6.18/` | Patches D0023R |
 | `packaging/` | `.deb` dos frontends e o repositório APT |
@@ -268,7 +271,7 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 
 Código atual do GroovyArcade, no GitLab do grupo `groovyarcade`:
 
-- `gasetup` `2dbaa5297c716b4f32b0b55d5439c1f08f8cedda` — `core/procedures/interactive` (isomainmenu, mainmenu, setup), `core/libs/lib-video.sh`, `lib-install.sh`, `lib-network.sh`, `lib-troubleshoot.sh`; latência: `core/libs/lib-bootloaders.sh` (linha padrão do kernel), `core/configs/groovymame/groovymame.sh` e `core/configs/retroarch/retroarch.sh`
+- `gasetup` `2dbaa5297c716b4f32b0b55d5439c1f08f8cedda` — `core/procedures/interactive` (isomainmenu, mainmenu, setup; áudio: `worker_audio_menu`, `worker_set_volume`, `worker_audio_latency`), `core/libs/lib-video.sh`, `lib-install.sh`, `lib-network.sh`, `lib-troubleshoot.sh`; latência: `core/libs/lib-bootloaders.sh` (linha padrão do kernel), `core/configs/groovymame/groovymame.sh` e `core/configs/retroarch/retroarch.sh`
 - `tools/gatools` `28cef9faeec9d85d001ea5259af2d7e2fa343430` — `video/video.sh` (teste de saídas, Testing results), `video/monitor.sh`, `video/inform.sh`
 - `tools/galauncher` `7e4950e3a4b92faf5eeebcae7c3a29a9e73689be` — `startfe.sh`, `videodata.conf`, `modules/cpu_governor.sh`
 - `os` `59670f3d476331e7c18bc3a03fea6e7860fa1b7a` — menu de boot, `.bash_profile`, LXDE, AntiMicroX, QJoyPad

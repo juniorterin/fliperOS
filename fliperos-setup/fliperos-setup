@@ -11,8 +11,9 @@
 #   sudo fliperos-setup --video-setup   abre direto o Video Setup
 #   sudo fliperos-setup --latency       abre direto o Setup > Latency
 #
-# Sem tela (servico de boot e sessao de jogo, ver lib/latency.sh):
-#   --latency-boot, --session-start, --session-end
+# Sem tela (servico de boot, sessao de jogo e teclas de volume, ver
+# lib/latency.sh e lib/audio.sh):
+#   --latency-boot, --session-start, --session-end, --volume up|down|mute
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
 # screens/ tem as telas.
@@ -89,7 +90,7 @@ source "$SETUP_DIR/screens/first-boot.sh"
 source "$SETUP_DIR/screens/latency.sh"
 
 usage() {
-  sed -n '8,15p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
+  sed -n '8,16p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
 }
 
 restore_terminal() {
@@ -127,6 +128,10 @@ main() {
     --session-end)
       latency_session_end
       return 0
+      ;;
+    --volume)
+      audio_step "${2:-}"
+      return
       ;;
   esac
   if ! have gum; then

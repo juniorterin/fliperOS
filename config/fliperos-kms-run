@@ -16,6 +16,8 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   set -- "$1" --appendconfig /etc/fliperos/retroarch/retroarch.cfg "${@:2}"
 fi
 # SDL_VIDEODRIVER vale para quem usa SDL2 (Flycast); o RetroArch foi
-# compilado so com KMS.
+# compilado so com KMS. Audio SDL (GroovyMAME, Flycast) direto no ALSA: sem
+# servidor de som, tentar PipeWire e PulseAudio antes so atrasa a abertura.
 export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"
+export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
 exec "$@"

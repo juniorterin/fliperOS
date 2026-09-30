@@ -9,6 +9,8 @@ set -euo pipefail
 command -v "$1" > /dev/null || { echo "Emulador nao instalado: $1" >&2; exit 127; }
 export FLIPEROS_RES_W="${FLIPEROS_RES_W:-320}" FLIPEROS_RES_H="${FLIPEROS_RES_H:-240}"
 export FLIPEROS_RES_HZ="${FLIPEROS_RES_HZ:-60}"
+# Audio SDL direto no ALSA (o FliperOS nao tem servidor de som).
+export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
 vt=$(tty 2> /dev/null)
 vt=${vt#/dev/tty}
 [[ $vt =~ ^[0-9]+$ ]] || vt=1
