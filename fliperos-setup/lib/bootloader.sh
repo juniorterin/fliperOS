@@ -25,8 +25,8 @@ boot_driver_params() {
 }
 
 # boot_compose LINHA aplica a uma linha do kernel o que o setup decidiu:
-# parametros de video do teste de saidas (se houve teste), console na placa
-# certa (fbcon=map) e orientacao.
+# modo de latencia, parametros de video do teste de saidas (se houve teste),
+# console na placa certa (fbcon=map) e orientacao.
 boot_compose() {
   local line=$1 conn video orientation fb word out=()
   conn=$(conf_get connector 2> /dev/null) || conn=""
@@ -37,7 +37,7 @@ boot_compose() {
     [[ $word == fbcon=map:* ]] && continue
     out+=("$word")
   done
-  line=${out[*]}
+  line=$(latency_cmdline "${out[*]}")
   if [[ -n $conn ]]; then
     line=$(words "$(cmdline_without_video "$line") $video")
   fi
@@ -85,9 +85,10 @@ boot_write_cmdline() {
     chmod 644 "$tmp" && mv -f "$tmp" "$file"
 }
 
-# boot_apply_video grava no sistema instalado a configuracao de video atual
-# (modo de boot, EDID e orientacao) e atualiza o menu do Limine.
-boot_apply_video() {
+# boot_apply grava no sistema instalado a linha do kernel da configuracao
+# atual (modo de boot, EDID, orientacao e latencia) e atualiza o menu do
+# Limine.
+boot_apply() {
   local line
   line=$(boot_read_cmdline) || line=$BOOT_BASE_CMDLINE
   line=$(boot_compose "$line")

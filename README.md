@@ -100,6 +100,7 @@ O tty1 faz o login sozinho e segue o `.bash_profile` do GroovyArcade: abre o **l
   - **Audio Setup** — placa padrão (`/etc/asound.conf`), volume, AlsaMixer, teste de som;
   - **Network Setup** — Wi-Fi pela lista de redes (com sinal) ou **rede oculta digitando o SSID**; ao conectar, o IP aparece no título, ao lado do uso do disco;
   - **Frontend** — o launcher padrão; um que não está instalado pode ser instalado do repositório do FliperOS;
+  - **Latency** — modo **Standard** (qualquer máquina) ou **Low latency** (CPUs modernas), com a conferência desta máquina contra a recomendação e a lista do hardware ideal (seção 9, Latência);
   - **Scraper** — capas, screenshots, logos, vídeos e informações de cada ROM encontrada em `/opt/fliperos/roms/<sistema>`, com o **Skyscraper** (o mesmo que o GroovyArcade empacota), de ScreenScraper, ArcadeDB ou TheGamesDB, no formato do launcher padrão;
   - **System Update** — `apt-get update` e `upgrade`, com o progresso real do apt;
 - **Start desktop** — o LXDE;
@@ -124,11 +125,12 @@ fliperos-setup/
 │   ├── drm.sh video.sh monitor.sh xorg.sh bootloader.sh
 │   ├── disk.sh install.sh recovery.sh
 │   ├── launcher.sh audio.sh network.sh status.sh scraper.sh update.sh
+│   ├── hardware.sh latency.sh   CPU/memória/GPU e os modos de latência
 │   └── ui.sh             Gum, tema, quadro da tela
 └── screens/              telas — só combinam ui.sh com a lógica
     ├── output-test.sh (teste + Testing Results)  main-menu.sh  setup-menu.sh
     ├── video-setup.sh  disk-selection.sh  install-progress.sh  progress.sh
-    └── recovery.sh  first-boot.sh
+    └── recovery.sh  first-boot.sh  latency.sh
 ```
 
 As operações longas (instalar, reparar, atualizar, scraper) não conhecem a tela: escrevem eventos (`@step`, `@pct`, `@msg`, `@fail`) que `screens/progress.sh` desenha. Tudo vai para `/var/log/fliperos-setup.log`.
@@ -139,7 +141,54 @@ As operações longas (instalar, reparar, atualizar, scraper) não conhecem a te
 
 O Switchres (`v2.2.1`, a mesma versão do pacote do GroovyArcade) é compilado com o `grid` e o `geometry`, e gera no build um EDID por preset de monitor mais os dois de super resolução das entradas EDID do boot (`fliperos-rebuild-edids`, o `rebuild_edids` do GroovyArcade). O hook do initramfs leva todos para o initramfs.
 
-## 9. Build
+## 9. Latência
+
+O que mais pesa no atraso entre apertar o botão e a imagem mudar é igual no FliperOS e no GroovyArcade: os mesmos patches de kernel (a mesma saída de vídeo no radeon/amdgpu), o mesmo Switchres e GroovyMAME, e o CRT, que não processa a imagem. O FliperOS aplica os ajustes que o GA já faz e acrescenta outros, em dois modos escolhidos em **Setup > Latency** (`fliperos-setup/lib/latency.sh`).
+
+| Ajuste | GroovyArcade | FliperOS Standard | FliperOS Low latency |
+| --- | --- | --- | --- |
+| `mitigations=off audit=0` no kernel | sim | sim | sim |
+| USB lido a 1000 Hz (`usbhid.jspoll=1 kbpoll=1 mousepoll=1`) | não | sim | sim |
+| CPU no governador `performance` | enquanto o frontend roda | enquanto o frontend roda | sempre, desde o boot |
+| Preempção do kernel | `linux-15khz` (há também um `linux-rt`) | 6.18 `PREEMPT_DYNAMIC`, modo voluntary | `preempt=full` |
+| GroovyMAME `lowlatency 1`, `autoframedelay 1`, `framedelay 0` | `lowlatency` (o resto é padrão) | sim | sim |
+| RetroArch `video_max_swapchain_images = 2` | sim | sim | sim |
+| RetroArch `video_threaded` desligado, `input_poll_type_behavior = 2` | padrão | sim | sim |
+| RetroArch frame delay automático | não | não | sim |
+| RetroArch preemptive frames (1 quadro) | não | não | sim |
+| apt e man-db rodando sozinhos | não existem (Arch) | mascarados | mascarados |
+
+**O que cada ajuste faz:**
+
+- **`mitigations=off audit=0`** — a linha padrão do GA. Desliga as proteções do kernel contra Spectre/Meltdown, que custam mais nas CPUs antigas (sem correção no hardware) típicas de gabinete. É troca de segurança por desempenho, aceitável numa máquina que só roda jogos.
+- **USB a 1000 Hz** — um controle full-speed é lido a cada 8 ms (125 Hz); a espera média cai de ~4 ms para ~0,5 ms. Vale para o que usa o driver `usbhid` (encoders tipo Zero Delay/Xin-Mo, I-PAC como teclado, trackball); controles de Xbox usam o `xpad` e não mudam. Se algum controle se comportar mal, `usb_poll=default` no `/etc/fliperos/fliperos.conf` e aplicar o modo de novo volta ao polling original.
+- **Governador `performance`** — o frame delay conta com um tempo fixo de emulação por quadro; com a CPU subindo o clock só depois que a carga aparece, esse tempo varia. No modo padrão vale só durante a sessão (o `fliperos-session` chama `fliperos-setup --session-start/--session-end`, como o `cpu_governor.sh` do galauncher); no de baixa latência, desde o boot (`fliperos-latency.service`).
+- **`preempt=full`** — o kernel 6.18 do FliperOS é `PREEMPT_DYNAMIC`; com este parâmetro ele passa a interromper qualquer trabalho do kernel para rodar o emulador, o que o antigo kernel `lowlatency` do Ubuntu fazia. Reduz mais a variação (jitter) do que a média.
+- **Frame delay** (`autoframedelay` do GroovyMAME, `video_frame_delay_auto` do RetroArch) — o emulador espera parte do quadro antes de emular, e lê os controles mais perto da hora em que a imagem sai: até quase um quadro (16,7 ms) a menos. O automático recua sozinho quando a CPU não dá conta.
+- **Preemptive frames** — tira o atraso interno do próprio jogo (1 quadro), refazendo o último quadro só quando a entrada muda (mais leve que o run-ahead, que refaz todo quadro). Precisa de core com savestate; os que não têm desligam o recurso com aviso.
+- **apt e man-db** — os timers do Ubuntu rodariam `apt update` e a reindexação do `man` no meio de uma partida. Atualizar fica no Setup > System Update, como no GA.
+
+**O que ficou de fora, e por quê:** kernel `PREEMPT_RT` (o GA tem um `linux-rt`), porque o `preempt=full` cobre o uso de gabinete e o RT troca vazão por previsibilidade, que só vale com medição mostrando ganho; limitar os C-states da CPU, porque o ganho seria de microssegundos ao acordar a CPU, contra mais consumo e calor; e o `video_hard_sync` do RetroArch, porque no KMS a swapchain de 2 imagens já espera cada flip.
+
+**Comparado com o GA:** no mesmo hardware, espere empate no modo Standard (com uma vantagem de poucos ms do USB a 1000 Hz) e até 1 a 2 quadros a menos nos jogos do RetroArch no modo Low latency. Um GA configurado à mão chega ao mesmo; a diferença é o FliperOS vir assim de fábrica.
+
+### Hardware recomendado
+
+| Uso | CPU | Memória e disco | GPU |
+| --- | --- | --- | --- |
+| **Standard** (até PS1 e a maior parte do arcade) | x86-64 com 2 núcleos | 4 GB, 16 GB de disco | AMD com saída VGA ou DVI-I, da faixa do CRT_EmuDriver (HD 2000 a R7/R9 GCN 1.0) |
+| **Low latency** | AVX2 (x86-64-v3: Intel Core de 4ª geração, AMD Ryzen ou mais novos), 4 threads, 3,0 GHz ou mais | 4 GB (8 GB melhor) | idem |
+| **Tudo** (PS2, Model 3, Dreamcast) | 4 núcleos físicos com AVX2 e single-thread PassMark ≥ 2000 (Core i7-7700, Ryzen 5 3600 ou mais novos) | 16 GB, SSD | idem: em resolução de CRT até a R7 240 passa do mínimo do PCSX2 (G3D ≥ 600) |
+
+A faixa "Tudo" segue o nível *Moderate* dos [requisitos do PCSX2](https://pcsx2.net/docs/setup/requirements), o emulador mais pesado da ISO; a GPU mais forte que o PCSX2 pede nesse nível é para resolução aumentada, que não existe num CRT. Placas sem saída analógica (as AMD depois da GCN 1.0, as NVIDIA recentes) precisam de conversor DisplayPort/HDMI para VGA.
+
+**Conferir a máquina:** Setup > Latency mostra CPU, núcleos, clock, nível de instruções, memória, GPU e as saídas analógicas, e **Check this computer** compara com o mínimo do modo Low latency (`lib/hardware.sh`: x86-64-v3, 4 threads, 3,0 GHz, 4 GB). Escolher Low latency numa máquina abaixo disso pede confirmação.
+
+### Medir
+
+A única comparação confiável é medir, no mesmo gabinete, o mesmo jogo e a mesma versão do emulador. Filme o botão e a tela juntos com um celular em câmera lenta de 240 fps (~4 ms por quadro de vídeo), 20 a 30 apertos por configuração, e conte os quadros do vídeo entre o botão descer e a imagem reagir.
+
+## 10. Build
 
 Sempre em Docker (`CLAUDE.md` proíbe chroot com `/dev` do host no WSL).
 
@@ -167,7 +216,7 @@ docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.7.iso
 ```
 
-## 10. Testes
+## 11. Testes
 
 ```powershell
 docker build -t fliperos-tests -f tests/Dockerfile tests
@@ -180,7 +229,7 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 - `tools/ui-snapshot.sh TELA [LARG ALT]` — fotografa uma tela em texto num tmux 80x30 (ou 64x24, o 512x384 de 25 kHz), com um sistema falso (`tools/ui-demo.sh`).
 - `tools/vm-test.py install ISO` — em QEMU: instala pela lib do setup num disco descartável e boota o disco em BIOS e UEFI. `tools/vm-test.py screens ISO` e `tools/vm-monitor.py` fotografam o tty1 de verdade (Gum no console do Linux) tela a tela.
 
-## 11. Outros componentes
+## 12. Outros componentes
 
 **Repositório APT e frontends.** Os frontends (Attract-Mode Plus, EmulationStation, RetroFE, Pegasus) vêm de um repositório APT próprio de `.deb` pré-compilados, como o `groovy-ux-repo` do GroovyArcade (`packaging/build-deb.sh`, `packaging/make-repo.sh`, `Dockerfile.packages`, receitas em `packaging/packages/`). A tabela `config/fliperos-sessions.conf` diz, para cada launcher, se roda em KMS ou X (da tabela `videodata.conf` do galauncher) e de que pacote vem.
 
@@ -192,7 +241,7 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 
 **Diagnóstico.** `sudo fliperos-video-check --json` lê o modo ativo de cada saída (CRTC atual via libdrm, só leitura): conector, resolução, kHz, Hz, entrelaçado.
 
-## 12. Arquivos
+## 13. Arquivos
 
 | Arquivo | Função |
 | --- | --- |
@@ -209,6 +258,8 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 | `config/fliperos-session`, `config/fliperos-sessions.conf` | Abre o launcher padrão; tabela de launchers |
 | `config/fliperos-lxde`, `config/lxde/` | Sessão e configuração do LXDE |
 | `config/vtrgb-dracula` | Paleta Dracula do console |
+| `config/fliperos-latency.service` | Aplica o modo de latência no boot |
+| `config/retroarch.cfg`, `config/mame.ini` | Configuração de sistema do RetroArch e do GroovyMAME (valores do modo Standard) |
 | `patches/kernel-15khz/6.18/` | Patches D0023R |
 | `packaging/` | `.deb` dos frontends e o repositório APT |
 | `tests/`, `tools/` | Testes e ferramentas de verificação |
@@ -217,10 +268,12 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 
 Código atual do GroovyArcade, no GitLab do grupo `groovyarcade`:
 
-- `gasetup` `2dbaa5297c716b4f32b0b55d5439c1f08f8cedda` — `core/procedures/interactive` (isomainmenu, mainmenu, setup), `core/libs/lib-video.sh`, `lib-install.sh`, `lib-network.sh`, `lib-troubleshoot.sh`
+- `gasetup` `2dbaa5297c716b4f32b0b55d5439c1f08f8cedda` — `core/procedures/interactive` (isomainmenu, mainmenu, setup), `core/libs/lib-video.sh`, `lib-install.sh`, `lib-network.sh`, `lib-troubleshoot.sh`; latência: `core/libs/lib-bootloaders.sh` (linha padrão do kernel), `core/configs/groovymame/groovymame.sh` e `core/configs/retroarch/retroarch.sh`
 - `tools/gatools` `28cef9faeec9d85d001ea5259af2d7e2fa343430` — `video/video.sh` (teste de saídas, Testing results), `video/monitor.sh`, `video/inform.sh`
-- `tools/galauncher` `7e4950e3a4b92faf5eeebcae7c3a29a9e73689be` — `startfe.sh`, `videodata.conf`
+- `tools/galauncher` `7e4950e3a4b92faf5eeebcae7c3a29a9e73689be` — `startfe.sh`, `videodata.conf`, `modules/cpu_governor.sh`
 - `os` `59670f3d476331e7c18bc3a03fea6e7860fa1b7a` — menu de boot, `.bash_profile`, LXDE, AntiMicroX, QJoyPad
 - `packages` `608bd30c3799c6a14c0b21823c53919c40ab8e9a` — kernel `linux-15khz`, `switchres` (`rebuild_edids`, `geometry`), `skyscraper`
+
+Nomes das opções de latência conferidos no código atual: [GroovyMAME](https://github.com/antonioginer/GroovyMAME) `953db38` (`src/emu/emuopts.h`: `lowlatency`, `autoframedelay`, `framedelay`) e [RetroArch](https://github.com/libretro/RetroArch) `6fe0b87` (`settings/settings_def_frame_delay.h`, `settings_def_video_sync.h`, `configuration.c`).
 
 E também: [Switchres](https://github.com/antonioginer/switchres) (`geometry.py`, `edid.cpp`, `switchres.ini`), [D0023R/linux_kernel_15khz](https://github.com/D0023R/linux_kernel_15khz) `ece6ef15eca9480eaf75870a44764f47118e9cfe`, [Gum](https://github.com/charmbracelet/gum) v2.0.2 e o [Dracula](https://draculatheme.com).

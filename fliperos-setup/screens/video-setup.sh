@@ -161,7 +161,7 @@ screen_video_setup() {
   if is_installed && ! is_live; then
     ui_info "Video Setup" "Saving the boot settings..."
     xorg_generate
-    if ! boot_apply_video; then
+    if ! boot_apply; then
       ui_msg "Video Setup" "Could not update the boot settings (see the log)."
       return 1
     fi

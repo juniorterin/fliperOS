@@ -18,7 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "update"]
+        "status", "scraper", "update", "hardware", "latency"]
+LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 
 
 def edid(serial=None, name=None):
@@ -105,6 +106,11 @@ class Env:
             "SESSION_FILE": str(self.etc / "session"),
             "DRM_MODULE_PARAMS": str(self.dir / "drmparams"),
             "FBCON_SYSFS": str(self.dir / "fbcon"),
+            "RETROARCH_CFG": str(self.etc / "retroarch.cfg"),
+            "PROC_CPUINFO": str(self.dir / "cpuinfo"),
+            "PROC_MEMINFO": str(self.dir / "meminfo"),
+            "CPU_SYSFS": str(self.dir / "cpu"),
+            "LATENCY_STATE": str(self.dir / "run" / "governor"),
             "FLIPEROS_NO_SPEECH": "1",
             "LC_ALL": "C.UTF-8",
         })
@@ -477,20 +483,21 @@ class BootTests(Base):
         self.env.cmdline.write_text("boot=live fliperos.boot=15khz video=640x480iS quiet splash\n")
         out = self.env.out("boot_install_cmdline").strip()
         self.assertEqual(out, "quiet splash consoleblank=0 radeon.si_support=1 radeon.cik_support=1 "
-                              "amdgpu.si_support=0 amdgpu.cik_support=0 "
+                              "amdgpu.si_support=0 amdgpu.cik_support=0 " + LATENCY_BASE + " "
                               "video=VGA-1:640x480iSe,panel_orientation=right_side_up fbcon=rotate:1")
 
     def test_install_cmdline_without_test_keeps_the_boot_entry(self):
         self.env.cmdline.write_text("boot=live fliperos.boot=intel video=1280x480iS i915.no_ytiled_scanout=1\n")
         out = self.env.out("boot_install_cmdline").strip()
-        self.assertTrue(out.endswith("i915.no_ytiled_scanout=1 video=1280x480iS"), out)
+        self.assertIn("i915.no_ytiled_scanout=1 video=1280x480iS", out)
+        self.assertTrue(out.endswith(LATENCY_BASE), out)
         self.assertNotIn("boot=live", out)
         self.assertNotIn("fliperos.boot", out)
 
     def test_secondary_card_maps_the_console(self):
         (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nkernel_video=video=VGA-1:640x480iSe\nfb_map=1\n")
         out = self.env.out("boot_compose 'quiet fbcon=map:0 video=640x480iS'").strip()
-        self.assertEqual(out, "quiet video=VGA-1:640x480iSe fbcon=map:1")
+        self.assertEqual(out, "quiet " + LATENCY_BASE + " video=VGA-1:640x480iSe fbcon=map:1")
 
     def test_write_cmdline_keeps_the_rest(self):
         f = self.env.etc / "fliperos-boot"
@@ -683,6 +690,163 @@ class GeometryTests(Base):
 
     def test_cancelled(self):
         self.assertEqual(self.env.out("geometry_parse 'Aborted!'").strip(), "")
+
+
+# Flags reais de /proc/cpuinfo, reduzidas ao que o nivel x86-64 olha.
+FLAGS_CORE2 = "fpu sse sse2 ssse3 cx16 sse4_1 lahf_lm"
+FLAGS_NEHALEM = FLAGS_CORE2 + " popcnt sse4_2"
+FLAGS_HASWELL = FLAGS_NEHALEM + " avx avx2 bmi1 bmi2 f16c fma abm movbe xsave"
+FLAGS_ZEN4 = FLAGS_HASWELL + " avx512f avx512bw avx512cd avx512dq avx512vl"
+
+
+class HardwareTests(Base):
+    def machine(self, flags, threads, cores, max_khz=None, mhz=None, ram_kb=16300000,
+                model="AMD Ryzen 5 3600 6-Core Processor"):
+        blocks = []
+        for i in range(threads):
+            block = "processor\t: %d\nmodel name\t: %s\n" % (i, model)
+            if cores:
+                block += "physical id\t: 0\ncore id\t\t: %d\n" % (i % cores)
+            if mhz:
+                block += "cpu MHz\t\t: %s\n" % mhz
+            blocks.append(block + "flags\t\t: %s\n" % flags)
+        (self.env.dir / "cpuinfo").write_text("\n".join(blocks))
+        (self.env.dir / "meminfo").write_text("MemTotal:       %d kB\nMemFree:        1 kB\n" % ram_kb)
+        if max_khz:
+            freq = self.env.dir / "cpu" / "cpu0" / "cpufreq"
+            freq.mkdir(parents=True, exist_ok=True)
+            (freq / "cpuinfo_max_freq").write_text("%d\n" % max_khz)
+
+    def test_modern_cpu_is_ready(self):
+        self.machine(FLAGS_HASWELL, 12, 6, max_khz=4208000)
+        out = self.env.out("hw_cpu_model; hw_cpu_threads; hw_cpu_cores; hw_cpu_max_mhz; hw_cpu_level; "
+                           "hw_ram_label $(hw_ram_mb); hw_mhz_label 4208").splitlines()
+        self.assertEqual(out, ["AMD Ryzen 5 3600 6-Core Processor", "12", "6", "4208", "3", "16 GB", "4.2 GHz"])
+        self.assertEqual(self.env.run("hw_low_latency_ok").returncode, 0)
+        self.assertEqual(self.env.out("hw_low_latency_missing").strip(), "")
+
+    def test_levels(self):
+        for flags, level in ((FLAGS_CORE2, "1"), (FLAGS_NEHALEM, "2"), (FLAGS_HASWELL, "3"), (FLAGS_ZEN4, "4")):
+            self.machine(flags, 1, 1)
+            self.assertEqual(self.env.out("hw_cpu_level").strip(), level, flags)
+
+    def test_old_cpu_lists_what_is_missing(self):
+        self.machine(FLAGS_CORE2, 2, 2, max_khz=2400000, ram_kb=1950000, model="Intel(R) Core(TM)2 Duo CPU E6600")
+        self.assertEqual(self.env.run("hw_low_latency_ok").returncode, 1)
+        rows = self.env.out("hw_low_latency_check").splitlines()
+        self.assertEqual(rows, [
+            "low|CPU instructions|x86-64 (no AVX2)|x86-64-v3 (AVX2)",
+            "low|CPU threads|2|4 or more",
+            "low|Max clock|2.4 GHz|3.0 GHz or more",
+            "low|Memory|2 GB|4 GB or more"])
+        self.assertIn("CPU threads: 2, need 4 or more; Max clock", self.env.out("hw_low_latency_missing"))
+
+    def test_one_missing_requirement(self):
+        # i3-4130: Haswell (AVX2), 2 nucleos / 4 threads, 3.4 GHz, 4 GB.
+        self.machine(FLAGS_HASWELL, 4, 2, max_khz=3400000, ram_kb=3900000)
+        self.assertEqual(self.env.run("hw_low_latency_ok").returncode, 0)
+        self.machine(FLAGS_HASWELL, 2, 2, max_khz=3400000, ram_kb=3900000)
+        self.assertEqual(self.env.out("hw_low_latency_missing").strip(), "CPU threads: 2, need 4 or more")
+
+    def test_vm_without_cpufreq(self):
+        # Sem cpufreq vale o "cpu MHz"; sem nenhum dos dois, o clock nao reprova.
+        self.machine(FLAGS_HASWELL, 4, None, mhz="2995.210")
+        self.assertEqual(self.env.out("hw_cpu_max_mhz; hw_cpu_cores").split(), ["2995", "4"])
+        self.machine(FLAGS_HASWELL, 4, None)
+        self.assertEqual(self.env.out("hw_cpu_max_mhz").strip(), "0")
+        self.assertIn("ok|Max clock|unknown|", self.env.out("hw_low_latency_check"))
+
+    def test_gpu_and_analog_outputs(self):
+        self.env.card("card0", "radeon")
+        self.env.connector("card0-VGA-1")
+        self.env.connector("card0-HDMI-A-1")
+        self.env.connector("card0-DVI-I-1")
+        self.assertEqual(self.env.out("hw_gpu").strip(), "AMD Radeon HD 5000/6000/7350/8350 Series (radeon)")
+        self.assertEqual(self.env.out("hw_analog_outputs").strip(), "DVI-I-1,VGA-1")
+
+
+class LatencyTests(Base):
+    def test_cmdline_per_mode(self):
+        out = self.env.out("latency_cmdline 'quiet preempt=full mitigations=auto' standard").strip()
+        self.assertEqual(out, "quiet " + LATENCY_BASE)
+        out = self.env.out("latency_cmdline 'quiet' low").strip()
+        self.assertEqual(out, "quiet " + LATENCY_BASE + " preempt=full")
+
+    def test_usb_poll_can_go_back_to_the_default(self):
+        (self.env.etc / "fliperos.conf").write_text("usb_poll=default\n")
+        out = self.env.out("latency_cmdline 'quiet usbhid.jspoll=1' low").strip()
+        self.assertEqual(out, "quiet mitigations=off audit=0 preempt=full")
+
+    def test_boot_compose_follows_the_saved_mode(self):
+        conf = self.env.etc / "fliperos.conf"
+        conf.write_text("latency=low\n")
+        low = self.env.out("boot_compose 'quiet splash'").strip()
+        self.assertTrue(low.endswith("preempt=full"), low)
+        conf.write_text("latency=standard\n")
+        standard = self.env.out("boot_compose '%s'" % low).strip()
+        self.assertEqual(standard, "quiet splash " + LATENCY_BASE)
+        # Sem modo gravado vale o padrao.
+        conf.write_text("")
+        self.assertEqual(self.env.out("latency_mode").strip(), "standard")
+
+    def test_emulators_low_and_back_to_the_shipped_files(self):
+        shutil.copy(ROOT / "config/retroarch.cfg", self.env.etc / "retroarch.cfg")
+        shutil.copy(ROOT / "config/mame.ini", self.env.etc / "mame.ini")
+        self.env.out("latency_apply low")
+        cfg = self.env.etc / "retroarch.cfg"
+        for key, value in (("video_frame_delay_auto", "true"), ("preemptive_frames_enable", "true"),
+                           ("run_ahead_enabled", "false"), ("run_ahead_frames", "1"),
+                           ("video_max_swapchain_images", "2")):
+            self.assertEqual(self.env.out("rcfg_get '%s' %s" % (cfg, key)).strip(), value, key)
+        self.assertIn("latency=low\n", (self.env.etc / "fliperos.conf").read_text())
+        # O modo padrao devolve exatamente os arquivos que a ISO instala: os
+        # valores de latency_emulators e os de config/ nao podem divergir.
+        self.env.out("latency_apply standard")
+        self.assertEqual(cfg.read_text(), (ROOT / "config/retroarch.cfg").read_text())
+        self.assertEqual((self.env.etc / "mame.ini").read_text(), (ROOT / "config/mame.ini").read_text())
+
+    def governors(self, available="performance schedutil", current="schedutil"):
+        files = []
+        for n in (0, 1):
+            policy = self.env.dir / "cpu" / "cpufreq" / ("policy%d" % n)
+            policy.mkdir(parents=True, exist_ok=True)
+            (policy / "scaling_available_governors").write_text(available + "\n")
+            (policy / "scaling_governor").write_text(current + "\n")
+            files.append(policy / "scaling_governor")
+        return files
+
+    def test_session_switches_to_performance_and_back(self):
+        files = self.governors()
+        self.env.out("latency_session_start")
+        self.assertEqual([f.read_text() for f in files], ["performance", "performance"])
+        self.assertEqual((self.env.dir / "run" / "governor").read_text(), "schedutil\n")
+        # Uma sessao dentro da outra nao sobrescreve o governador guardado.
+        self.env.out("latency_session_start")
+        self.assertEqual((self.env.dir / "run" / "governor").read_text(), "schedutil\n")
+        self.env.out("latency_session_end")
+        self.assertEqual([f.read_text() for f in files], ["schedutil", "schedutil"])
+        self.assertFalse((self.env.dir / "run" / "governor").exists())
+
+    def test_low_mode_keeps_performance(self):
+        files = self.governors()
+        (self.env.etc / "fliperos.conf").write_text("latency=low\n")
+        self.env.out("latency_boot")
+        self.assertEqual(files[0].read_text(), "performance")
+        self.env.out("latency_session_start; latency_session_end")
+        self.assertEqual(files[0].read_text(), "performance")
+
+    def test_back_to_standard_restores_the_default_governor(self):
+        files = self.governors(available="performance powersave", current="performance")
+        self.env.out("latency_apply standard")
+        self.assertEqual(files[1].read_text(), "powersave")
+        # Modo padrao no boot nao mexe na CPU.
+        files[1].write_text("powersave")
+        self.env.out("latency_boot")
+        self.assertEqual(files[1].read_text(), "powersave")
+
+    def test_no_cpufreq_is_not_an_error(self):
+        self.env.out("latency_session_start; latency_session_end; latency_boot")
+        self.assertFalse((self.env.dir / "run" / "governor").exists())
 
 
 class StructureTests(unittest.TestCase):

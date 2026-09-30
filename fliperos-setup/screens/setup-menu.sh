@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Setup do sistema instalado (worker_setup_menu do gasetup): video, audio,
-# rede, frontend, scraper e atualizacao.
+# rede, frontend, latencia, scraper e atualizacao.
 
 screen_setup_menu() {
   local choice last=video
@@ -11,6 +11,7 @@ screen_setup_menu() {
       "audio|Audio Setup" \
       "network|Network Setup" \
       "frontend|Frontend" \
+      "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
       "update|System Update" \
       "return|Return") || return 0
@@ -20,6 +21,7 @@ screen_setup_menu() {
       audio) screen_audio ;;
       network) screen_network ;;
       frontend) screen_frontend ;;
+      latency) screen_latency ;;
       scraper) screen_scraper ;;
       update) screen_update ;;
       return) return 0 ;;

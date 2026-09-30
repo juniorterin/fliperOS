@@ -112,6 +112,21 @@ for hook in etc/kernel/postinst.d etc/kernel/postrm.d etc/initramfs/post-update.
 done
 echo "splash no initramfs, ssh, sem display manager, paleta Dracula, hooks do Limine"
 
+# ── Latencia ──────────────────────────────────────────────────
+unsquashfs -cat "$work/filesystem.squashfs" etc/systemd/system/fliperos-latency.service > "$work/f" \
+  || fail "ausente: fliperos-latency.service"
+cmp -s "$src/config/fliperos-latency.service" "$work/f" || fail "fliperos-latency.service difere do repositorio"
+grep -E 'multi-user.target.wants/fliperos-latency.service ->' "$work/links.txt" | grep -q 'fliperos-latency.service' \
+  || fail "fliperos-latency.service nao habilitado"
+for unit in apt-daily.timer apt-daily-upgrade.timer man-db.timer; do
+  grep -E "etc/systemd/system/$unit ->" "$work/links.txt" | grep -q '/dev/null' || fail "$unit nao mascarado"
+done
+base=$(sed -n 's/^LATENCY_BASE_PARAMS="\(.*\)"$/\1/p' "$src/fliperos-setup/lib/latency.sh")
+for param in $base; do
+  grep -q -- " $param " <<< " $(grep -m1 'cmdline:' "$work/limine.conf") " || fail "boot da midia sem $param"
+done
+echo "latencia: servico no boot, timers do apt mascarados, $base"
+
 xorriso -indev "$iso" -report_el_torito plain > "$work/boot.txt" 2>&1
 grep -q 'BIOS' "$work/boot.txt" || fail "sem boot BIOS"
 grep -q 'UEFI' "$work/boot.txt" || fail "sem boot UEFI"

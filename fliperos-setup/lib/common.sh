@@ -24,6 +24,12 @@ VIDEO_CHECK=${VIDEO_CHECK:-/usr/local/bin/fliperos-video-check}
 SESSIONS_TABLE=${SESSIONS_TABLE:-$FLIPEROS_ETC/sessions.conf}
 SESSION_FILE=${SESSION_FILE:-$FLIPEROS_ETC/session}
 EDID_DIR=${EDID_DIR:-/lib/firmware/edid}
+RETROARCH_CFG=${RETROARCH_CFG:-$FLIPEROS_ETC/retroarch/retroarch.cfg}
+PROC_CPUINFO=${PROC_CPUINFO:-/proc/cpuinfo}
+PROC_MEMINFO=${PROC_MEMINFO:-/proc/meminfo}
+CPU_SYSFS=${CPU_SYSFS:-/sys/devices/system/cpu}
+# Governador da CPU de antes da sessao de jogo (volta quando ela fecha).
+LATENCY_STATE=${LATENCY_STATE:-/run/fliperos/governor}
 
 log_line() {
   local level=$1

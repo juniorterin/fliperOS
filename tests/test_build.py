@@ -450,6 +450,56 @@ class ShellErrexitTests(unittest.TestCase):
         self.assertIn('summary', names)
 
 
+class LatencyBuildTests(unittest.TestCase):
+    """O modo de latencia padrao ja vem na midia e no sistema instalado
+    (README, secao "Latencia")."""
+
+    LIB = (ROOT / 'fliperos-setup/lib/latency.sh').read_text()
+
+    def base_params(self):
+        return re.search(r'^LATENCY_BASE_PARAMS="([^"]*)"', self.LIB, flags=re.M).group(1).split()
+
+    def test_live_media_boots_with_the_standard_mode(self):
+        common = re.search(r'BOOT_COMMON="([^"]*)"', MKISO).group(1).split()
+        for param in self.base_params():
+            self.assertIn(param, common)
+        self.assertIn('mitigations=off', self.base_params())
+        self.assertIn('usbhid.jspoll=1', self.base_params())
+        self.assertNotIn('preempt=full', common)
+
+    def test_service_applies_the_mode_at_boot(self):
+        unit = (ROOT / 'config/fliperos-latency.service').read_text()
+        self.assertIn('ExecStart=/usr/local/bin/fliperos-setup --latency-boot', unit)
+        self.assertIn('WantedBy=multi-user.target', unit)
+        self.assertIn('config/fliperos-latency.service', ROOTFS)
+        self.assertIn('multi-user.target.wants/fliperos-latency.service', ROOTFS)
+        entry = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        for option in ('--latency-boot)', '--session-start)', '--session-end)'):
+            self.assertIn(option, entry)
+        # As opcoes sem tela rodam antes de exigir o gum e um terminal.
+        self.assertLess(entry.index('--latency-boot)'), entry.index('if ! have gum'))
+
+    def test_background_apt_is_masked(self):
+        for timer in ('apt-daily.timer', 'apt-daily-upgrade.timer', 'man-db.timer'):
+            self.assertIn(timer, ROOTFS)
+
+    def test_session_sets_the_governor_around_the_launcher(self):
+        script = (ROOT / 'config/fliperos-session').read_text()
+        start = script.index('--session-start')
+        end = script.index('--session-end')
+        self.assertLess(start, script.index('fliperos-kms-run "$binary"'))
+        self.assertLess(script.index('xinit "$binary"'), end)
+        self.assertNotIn('exec /opt/fliperos/bin/fliperos-kms-run', script)
+        self.assertNotIn('exec xinit', script)
+
+    def test_groovymame_uses_the_current_option_names(self):
+        # GroovyMAME chama de "framedelay" (sem _) e ja tem o automatico.
+        ini = (ROOT / 'config/mame.ini').read_text()
+        for line in ('lowlatency 1', 'autoframedelay 1', 'framedelay 0'):
+            self.assertIn('\n' + line + '\n', ini)
+        self.assertNotIn('frame_delay', ini)
+
+
 class DockerfileTests(unittest.TestCase):
     DOCKERFILE = (ROOT / 'Dockerfile.fliperos').read_text()
 
@@ -533,6 +583,16 @@ class RetroArchConfigTests(unittest.TestCase):
 
     def test_audio_is_alsa(self):
         self.assertEqual(self.values()['audio_driver'], 'alsa')
+
+    def test_standard_latency_values(self):
+        values = self.values()
+        self.assertEqual(values['video_max_swapchain_images'], '2')
+        self.assertEqual(values['video_threaded'], 'false')
+        self.assertEqual(values['input_poll_type_behavior'], '2')
+        # Os do modo de baixa latencia ficam desligados no arquivo da ISO.
+        self.assertEqual(values['video_frame_delay_auto'], 'false')
+        self.assertEqual(values['preemptive_frames_enable'], 'false')
+        self.assertEqual(values['run_ahead_enabled'], 'false')
 
     def test_retroarch_gets_the_system_config(self):
         self.assertIn('--appendconfig /etc/fliperos/retroarch/retroarch.cfg',

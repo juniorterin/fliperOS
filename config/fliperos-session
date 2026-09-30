@@ -31,9 +31,20 @@ if ! command -v "$binary" > /dev/null 2>&1 && [[ ! -x $binary ]]; then
   exit 0
 fi
 
+[[ $backend == kms || $backend == x ]] || {
+  echo "Unknown backend for '$choice': $backend" >&2
+  exit 0
+}
+
+# CPU no governador "performance" enquanto o launcher roda, e de volta ao
+# anterior quando ele fecha (o cpu_governor.sh do galauncher). No modo de
+# baixa latencia a CPU ja fica em performance desde o boot.
+sudo -n /usr/local/bin/fliperos-setup --session-start > /dev/null 2>&1 || true
+
 case $backend in
   kms)
-    exec /opt/fliperos/bin/fliperos-kms-run "$binary"
+    /opt/fliperos/bin/fliperos-kms-run "$binary"
+    rc=$?
     ;;
   x)
     # Sessao X no proprio terminal (tty1). A configuracao do monitor vem do
@@ -41,10 +52,10 @@ case $backend in
     vt=$(tty 2> /dev/null)
     vt=${vt#/dev/tty}
     [[ $vt =~ ^[0-9]+$ ]] || vt=1
-    exec xinit "$binary" -- :0 -nolisten tcp "vt$vt" -keeptty
-    ;;
-  *)
-    echo "Unknown backend for '$choice': $backend" >&2
-    exit 0
+    xinit "$binary" -- :0 -nolisten tcp "vt$vt" -keeptty
+    rc=$?
     ;;
 esac
+
+sudo -n /usr/local/bin/fliperos-setup --session-end > /dev/null 2>&1 || true
+exit "$rc"

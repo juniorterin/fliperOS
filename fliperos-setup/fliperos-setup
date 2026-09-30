@@ -9,6 +9,10 @@
 #   sudo fliperos-setup --first-boot    escolhe o launcher padrao
 #   sudo fliperos-setup --output-test   refaz o teste de saidas
 #   sudo fliperos-setup --video-setup   abre direto o Video Setup
+#   sudo fliperos-setup --latency       abre direto o Setup > Latency
+#
+# Sem tela (servico de boot e sessao de jogo, ver lib/latency.sh):
+#   --latency-boot, --session-start, --session-end
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
 # screens/ tem as telas.
@@ -57,6 +61,10 @@ source "$SETUP_DIR/lib/status.sh"
 source "$SETUP_DIR/lib/scraper.sh"
 # shellcheck source=lib/update.sh
 source "$SETUP_DIR/lib/update.sh"
+# shellcheck source=lib/hardware.sh
+source "$SETUP_DIR/lib/hardware.sh"
+# shellcheck source=lib/latency.sh
+source "$SETUP_DIR/lib/latency.sh"
 # shellcheck source=lib/ui.sh
 source "$SETUP_DIR/lib/ui.sh"
 # shellcheck source=screens/progress.sh
@@ -77,9 +85,11 @@ source "$SETUP_DIR/screens/main-menu.sh"
 source "$SETUP_DIR/screens/setup-menu.sh"
 # shellcheck source=screens/first-boot.sh
 source "$SETUP_DIR/screens/first-boot.sh"
+# shellcheck source=screens/latency.sh
+source "$SETUP_DIR/screens/latency.sh"
 
 usage() {
-  sed -n '8,11p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
+  sed -n '8,15p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
 }
 
 restore_terminal() {
@@ -105,6 +115,20 @@ main() {
     echo "Run with sudo: sudo fliperos-setup" >&2
     return 1
   fi
+  case ${1:-} in
+    --latency-boot)
+      latency_boot
+      return 0
+      ;;
+    --session-start)
+      latency_session_start
+      return 0
+      ;;
+    --session-end)
+      latency_session_end
+      return 0
+      ;;
+  esac
   if ! have gum; then
     echo "gum was not found; the setup screens need it." >&2
     return 1
@@ -131,6 +155,10 @@ main() {
       ;;
     --video-setup)
       screen_video_setup
+      return 0
+      ;;
+    --latency)
+      screen_latency
       return 0
       ;;
   esac

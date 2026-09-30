@@ -1017,9 +1017,10 @@ install_limine_rootfs() {
 }
 
 # Parametros comuns a todas as entradas do menu de boot da midia: splash,
-# console sem apagar (consoleblank=0, como no GroovyArcade) e o radeon nas
-# placas SI/CIK, onde o 15 kHz foi validado no gabinete.
-BOOT_COMMON="quiet splash consoleblank=0 radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0"
+# console sem apagar (consoleblank=0, como no GroovyArcade), o radeon nas
+# placas SI/CIK, onde o 15 kHz foi validado no gabinete, e os do modo de
+# latencia padrao (LATENCY_BASE_PARAMS em fliperos-setup/lib/latency.sh).
+BOOT_COMMON="quiet splash consoleblank=0 radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0 mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 
 create_boot_config() {
   install -Dm644 "$(dirname "$(realpath "$0")")/config/limine.conf" "$ISO_DIR/boot/limine/limine.conf"

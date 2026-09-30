@@ -86,6 +86,31 @@ ini_set() {
   log_info "ini: $file $key=$value"
 }
 
+# rcfg_get ARQUIVO CHAVE le 'chave = "valor"' do retroarch.cfg.
+rcfg_get() {
+  local file=$1 key=$2
+  [[ -f $file ]] || return 1
+  awk -v k="$key" '
+    { sub(/\r$/, "") }
+    $1 == k && $2 == "=" { v = $0; sub(/^[^"]*"/, "", v); sub(/"[ \t]*$/, "", v); print v; found = 1; exit }
+    END { exit !found }' "$file"
+}
+
+# rcfg_set ARQUIVO CHAVE VALOR troca a linha da chave ou acrescenta no fim,
+# reescrevendo no lugar (mantem os comentarios, o dono e a permissao).
+rcfg_set() {
+  local file=$1 key=$2 value=$3 out
+  mkdir -p "$(dirname "$file")"
+  [[ -f $file ]] || : > "$file"
+  out=$(awk -v k="$key" -v v="$value" '
+    { sub(/\r$/, "") }
+    $1 == k && $2 == "=" { print k " = \"" v "\""; found = 1; next }
+    { print }
+    END { if (!found) print k " = \"" v "\"" }' "$file") || return 1
+  printf '%s\n' "$out" > "$file"
+  log_info "retroarch: $key = $value"
+}
+
 # ── Linha do kernel ──────────────────────────────────────────────
 # As funcoes recebem a linha como texto e imprimem a linha nova.
 

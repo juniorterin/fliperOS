@@ -87,6 +87,18 @@ options amdgpu si_support=0 cik_support=0
 EOF
 # O live-config do Debian criaria um usuario padrao no mesmo UID 1000.
 ln -sf /dev/null "$root/etc/systemd/system/live-config.service"
+
+# ── Latencia (README, secao "Latencia") ───────────────────────────
+# O modo escolhido em Setup > Latency vale desde o boot.
+install -Dm644 "$src/config/fliperos-latency.service" "$root/etc/systemd/system/fliperos-latency.service"
+mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
+ln -sfn /etc/systemd/system/fliperos-latency.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-latency.service"
+# Nada de apt nem man-db rodando sozinho no meio de uma partida (picos de
+# CPU e disco). Atualizar fica no Setup > System Update, como no GA.
+for timer in apt-daily.timer apt-daily-upgrade.timer man-db.timer; do
+  ln -sfn /dev/null "$root/etc/systemd/system/$timer"
+done
 # Servicos de versoes anteriores (conferencia fixa de VGA-1 a 15 kHz).
 rm -f "$root/etc/systemd/system/multi-user.target.wants/fliperos-video-check.service" \
   "$root/etc/systemd/system/fliperos-video-check.service"
@@ -112,6 +124,8 @@ EOF
   cp -r "$src/config/lxde/." "$home/.config/"
   chown -R 1000:1000 "$home/.bash_profile" "$home/.config" 2> /dev/null || true
 fi
+# fliperos-setup sem senha tambem cobre o --session-start/--session-end que
+# o fliperos-session chama em volta do launcher (governador da CPU).
 cat > "$root/etc/sudoers.d/fliperos-setup" << 'EOF'
 fliperos ALL=(root) NOPASSWD: /usr/local/bin/fliperos-setup, /usr/bin/setterm
 EOF

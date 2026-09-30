@@ -1,0 +1,13 @@
+# Modo de latencia do FliperOS no boot (Setup > Latency): no modo de baixa
+# latencia a CPU fica no governador "performance" desde o boot. No modo
+# padrao nao faz nada (a sessao de jogo liga o performance so enquanto roda).
+[Unit]
+Description=FliperOS latency mode
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fliperos-setup --latency-boot
+
+[Install]
+WantedBy=multi-user.target
