@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Dolphin
+GenericName=GameCube and Wii emulator
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch dolphin
+TryExec=/usr/local/bin/dolphin-emu
+Icon=/usr/local/share/pixmaps/dolphin-emu.png
+Terminal=false
+Categories=Game;Emulator;

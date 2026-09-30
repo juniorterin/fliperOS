@@ -1,17 +1,70 @@
 #!/usr/bin/env bash
-# Abre um emulador que so roda em X (PCSX2, Supermodel) num Xorg so para ele;
-# o fliperos-x11-client pede ao Switchres o modo do jogo. A configuracao do
-# monitor vem do /etc/X11/xorg.conf.d/10-fliperos.conf gerado pelo
-# fliperos-setup.
+# Abre um programa num Xorg so para ele, num modo de video criado pelo
+# Switchres (fliperos-x11-client) no monitor escolhido no Setup:
+#
+#   fliperos-x11-run [--mode LARGURAxALTURA@HZ] programa [argumentos]
+#
+# Sem --mode, o modo vem de /etc/fliperos/emulator-modes.conf (um para
+# monitor de 15 kHz, outro para 25/31 kHz e LCD) ou, fora da tabela,
+# 320x240@60. README, secao "Rodar um programa em 640x240".
 set -euo pipefail
-[[ $# -gt 0 ]] || { echo "Uso: fliperos-x11-run emulador [argumentos]" >&2; exit 2; }
+MODES=${FLIPEROS_MODES:-/etc/fliperos/emulator-modes.conf}
+CONF=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+
+mode=""
+if [[ ${1:-} == --mode ]]; then
+  mode=${2:-}
+  shift 2 || true
+fi
+[[ $# -gt 0 ]] || { echo "Uso: fliperos-x11-run [--mode 640x240@60] programa [argumentos]" >&2; exit 2; }
 [[ -z "${DISPLAY:-}" ]] || { echo "Execute no console (TTY), fora de uma sessao X." >&2; exit 2; }
-command -v "$1" > /dev/null || { echo "Emulador nao instalado: $1" >&2; exit 127; }
-export FLIPEROS_RES_W="${FLIPEROS_RES_W:-320}" FLIPEROS_RES_H="${FLIPEROS_RES_H:-240}"
-export FLIPEROS_RES_HZ="${FLIPEROS_RES_HZ:-60}"
+command -v "$1" > /dev/null || { echo "Nao instalado: $1" >&2; exit 127; }
+name=$(basename -- "$1")
+
+if [[ -z $mode ]]; then
+  column=3
+  [[ $(sed -n 's/^frequency=//p' "$CONF" 2> /dev/null) == 15 ]] && column=2
+  mode=$(awk -v p="$name" -v c="$column" '!/^[[:space:]]*#/ && $1 == p { print $c; exit }' "$MODES" 2> /dev/null)
+fi
+[[ -n $mode ]] || mode=320x240@60
+if [[ ! $mode =~ ^([0-9]+)x([0-9]+)@([0-9.]+)$ ]]; then
+  echo "Modo invalido: $mode (use LARGURAxALTURA@HZ, ex. 640x240@60)" >&2
+  exit 2
+fi
+export FLIPEROS_RES_W=${BASH_REMATCH[1]} FLIPEROS_RES_H=${BASH_REMATCH[2]} FLIPEROS_RES_HZ=${BASH_REMATCH[3]}
+
+# Tela cheia e imagem esticada: num modo como 640x240 (tela 8:3 em pixels,
+# que o tubo mostra em 4:3) um emulador que "mantem 4:3" usaria so metade da
+# largura. stretch e quanto esticar na horizontal para o 4:3 preencher o modo.
+stretch=$((300 * FLIPEROS_RES_W / (4 * FLIPEROS_RES_H)))
+case $name in
+  flycast)
+    ((stretch < 100)) && stretch=100
+    ((stretch > 250)) && stretch=250
+    set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch" "${@:2}"
+    ;;
+  dolphin-emu)
+    set -- "$1" -C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3 "${@:2}"
+    ;;
+  pcsx2)
+    # O PCSX2 descarta um ini que nao criou; o ajuste vale a partir da
+    # segunda abertura (a primeira passa pelo assistente da BIOS).
+    ini="$HOME/.config/PCSX2/inis/PCSX2.ini"
+    if [[ -f $ini ]]; then
+      /opt/fliperos/bin/fliperos-ini-set "$ini" EmuCore/GS AspectRatio Stretch
+      /opt/fliperos/bin/fliperos-ini-set "$ini" UI StartFullscreen true
+    fi
+    set -- "$1" -fullscreen "${@:2}"
+    ;;
+  hypseus | singe)
+    set -- "$1" -fullscreen "${@:2}"
+    ;;
+esac
+
 # Audio SDL direto no ALSA (o FliperOS nao tem servidor de som).
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
-vt=$(tty 2> /dev/null)
+# Sem terminal (chamado por um frontend), o tty falha: vale o vt1.
+vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}
 [[ $vt =~ ^[0-9]+$ ]] || vt=1
 exec xinit /opt/fliperos/bin/fliperos-x11-client "$@" -- :0 -nolisten tcp -nocursor "vt$vt" -keeptty

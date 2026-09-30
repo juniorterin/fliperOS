@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# fliperos-ini-set ARQUIVO SECAO CHAVE VALOR: troca "CHAVE = VALOR" dentro
+# de [SECAO] de um ini (o do PCSX2, por exemplo), acrescentando a chave ou a
+# secao se faltarem. O resto do arquivo fica como estava.
+set -euo pipefail
+file=$1 section=$2 key=$3 value=$4
+[[ -f $file ]] || : > "$file"
+tmp=$(mktemp "$file.XXXXXX")
+awk -v s="[$section]" -v k="$key" -v v="$value" '
+  function flush() { if (in_s && !done) { print k " = " v; done = 1 } }
+  {
+    line = $0; sub(/\r$/, "", line)
+    if (line ~ /^\[.*\]$/) { flush(); in_s = (line == s); if (in_s) seen = 1; print; next }
+    if (in_s && !done) {
+      split(line, kv, "="); name = kv[1]; gsub(/^[ \t]+|[ \t]+$/, "", name)
+      if (name == k) { print k " = " v; done = 1; next }
+    }
+    print
+  }
+  END { flush(); if (!seen) { print ""; print s; print k " = " v } }' "$file" > "$tmp"
+chmod --reference="$file" "$tmp" 2> /dev/null || true
+mv -f "$tmp" "$file"

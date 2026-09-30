@@ -156,6 +156,41 @@ for file in "$src"/config/applications/*.desktop; do
 done
 echo "tema Dracula (GTK, Openbox, GroovyMAME) e emuladores no menu do LXDE"
 
+# ── Modo de video dos emuladores (640x240 nos de 480i) ────────
+for path in etc/fliperos/emulator-modes.conf opt/fliperos/bin/fliperos-ini-set opt/fliperos/bin/fliperos-x11-run; do
+  has "$path"
+done
+unsquashfs -cat "$work/filesystem.squashfs" etc/fliperos/emulator-modes.conf > "$work/f"
+cmp -s "$src/config/fliperos-emulator-modes.conf" "$work/f" || fail "emulator-modes.conf difere do repositorio"
+echo "modos: tabela por emulador e fliperos-x11-run --mode"
+
+# ── Emuladores e lojas novos (so o que foi incluido no build) ─
+present() { grep -q "squashfs-root/$1\$" "$work/files.txt"; }
+if present usr/local/bin/hypseus.bin; then
+  has usr/local/bin/hypseus
+  has opt/fliperos/roms/hypseus/fonts
+  grep -E 'home/fliperos/.hypseus ->' "$work/links.txt" | grep -q '/opt/fliperos/roms/hypseus' \
+    || fail "/home/fliperos/.hypseus nao aponta para /opt/fliperos/roms/hypseus"
+  echo "Hypseus Singe: binario, scripts e home no acervo"
+fi
+if present usr/local/lib/openbor/OpenBOR; then
+  has usr/local/bin/openbor
+  has opt/fliperos/roms/openbor/Paks
+  echo "OpenBOR: wrapper e Paks no acervo"
+fi
+if present usr/local/bin/dolphin-emu; then
+  has usr/local/share/pixmaps/dolphin-emu.png
+  present usr/local/share/applications/dolphin-emu.desktop && fail "o atalho do proprio Dolphin nao saiu"
+  echo "Dolphin: sem o atalho proprio (abre pelo fliperos-launch)"
+fi
+if present usr/bin/wine; then
+  has usr/local/bin/fliperos-model2
+  has opt/fliperos/model2/roms
+  echo "Wine e o lancador do Model 2 (o emulador o usuario copia)"
+fi
+present usr/games/steam && echo "Steam: steam-installer"
+present opt/Heroic/heroic && echo "Heroic (GOG)"
+
 # ── RetroArch: cores de fabrica e pasta do Online Updater ─────
 if grep -q 'squashfs-root/usr/local/bin/retroarch$' "$work/files.txt"; then
   for core in fceumm snes9x genesis_plus_gx mgba pcsx_rearmed mame2010; do

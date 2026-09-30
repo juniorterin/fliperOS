@@ -5,6 +5,8 @@
 #  Uso: sudo bash fliperos-mkiso.sh [--output /caminho/saida.iso]
 #       [--skip-switchres] [--skip-groovymame] [--skip-retroarch]
 #       [--skip-flycast] [--skip-pcsx2] [--skip-supermodel]
+#       [--skip-dolphin] [--skip-hypseus] [--skip-openbor]
+#       [--skip-wine] [--skip-steam] [--skip-heroic]
 #       [--skip-skyscraper] [--skip-input-drivers] [--with-wheel-drivers]
 #       [--kernel-cache DIR] [--splash fliperos|evangelion|none]
 #       [--wifi-ssid NOME --wifi-psk SENHA]
@@ -35,6 +37,12 @@ SKIP_RETROARCH=false
 SKIP_FLYCAST=false
 SKIP_PCSX2=false
 SKIP_SUPERMODEL=false
+SKIP_DOLPHIN=false
+SKIP_HYPSEUS=false
+SKIP_OPENBOR=false
+SKIP_WINE=false
+SKIP_STEAM=false
+SKIP_HEROIC=false
 SKIP_SKYSCRAPER=false
 # Kernel 15 kHz (fliperos-kernel.sh): compilar leva a maior parte do build,
 # entao os .deb ficam num cache chaveado por versao e patches. Com o
@@ -76,11 +84,20 @@ PCSX2_VERSION="2.8.2"
 # Online Updater atualiza os dois depois, na pasta do usuario).
 RA_CORE_INFO_COMMIT="5a74858ab2f7a50cebb5a6330895bc38899531c0"
 RA_AUTOCONFIG_COMMIT="3579625fa24e61c86c48d03de9d5f9fd7b323a16"
+# Hypseus Singe (laserdisc): a serie 3 exige SDL3, que o noble nao tem.
+HYPSEUS_TAG="v2.12.1"
+# OpenBOR: as tags antigas nao tem o CMake; o commit e o do master.
+OPENBOR_COMMIT="787b6770409935137579715febf80cf7a529b748"
+# Dolphin (GameCube/Wii): a versao estavel.
+DOLPHIN_TAG="2609"
+# Heroic Games Launcher (GOG, Epic e Amazon): o .deb oficial.
+HEROIC_VERSION="2.22.3"
+HEROIC_SHA256="f89eed7e0eb900fbe3051edfedbe7532db14328241cbf8c1fb766462dfc0b849"
 PCSX2_SHA256="0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea"
 
 # ── Args ─────────────────────────────────────────────────────
 usage() {
-  sed -n '5,10p' "$0" | sed 's/^# *//'
+  sed -n '5,12p' "$0" | sed 's/^# *//'
 }
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -93,6 +110,12 @@ while [[ $# -gt 0 ]]; do
     --skip-flycast)    SKIP_FLYCAST=true; shift ;;
     --skip-pcsx2)      SKIP_PCSX2=true; shift ;;
     --skip-supermodel) SKIP_SUPERMODEL=true; shift ;;
+    --skip-dolphin)    SKIP_DOLPHIN=true; shift ;;
+    --skip-hypseus)    SKIP_HYPSEUS=true; shift ;;
+    --skip-openbor)    SKIP_OPENBOR=true; shift ;;
+    --skip-wine)       SKIP_WINE=true; shift ;;
+    --skip-steam)      SKIP_STEAM=true; shift ;;
+    --skip-heroic)     SKIP_HEROIC=true; shift ;;
     --skip-skyscraper) SKIP_SKYSCRAPER=true; shift ;;
     --skip-input-drivers) SKIP_INPUT_DRIVERS=true; shift ;;
     --with-wheel-drivers) WITH_WHEEL_DRIVERS=true; shift ;;
@@ -406,13 +429,17 @@ install_fliperos_files() {
 # Baixados antes do debootstrap, como o Limine: rede ruim aparece em
 # segundos, nao depois de uma hora de build.
 fetch_debs() {
-  step "Gum e AntiMicroX"
+  step "Gum, AntiMicroX e Heroic"
   DEBS_DIR="$WORK_DIR/debs"
   mkdir -p "$DEBS_DIR"
   fetch_deb "https://github.com/charmbracelet/gum/releases/download/v${GUM_VERSION}/gum_${GUM_VERSION}_amd64.deb" \
     "$GUM_SHA256" gum.deb
   fetch_deb "https://github.com/AntiMicroX/antimicrox/releases/download/${ANTIMICROX_VERSION}/antimicrox-${ANTIMICROX_VERSION}-ubuntu-24.04-x86_64.deb" \
     "$ANTIMICROX_SHA256" antimicrox.deb
+  if ! $SKIP_HEROIC; then
+    fetch_deb "https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/download/v${HEROIC_VERSION}/Heroic-${HEROIC_VERSION}-linux-amd64.deb" \
+      "$HEROIC_SHA256" heroic.deb
+  fi
 }
 
 fetch_deb() {
@@ -1030,6 +1057,187 @@ SMSCRIPT
     || err "Supermodel falhou; use --skip-supermodel explicitamente para ISO sem ele"
 }
 
+# ── Hypseus Singe (laserdisc: Dragon's Lair, Space Ace...), X11 ──
+# Instalado como o README do projeto manda: o binario como hypseus.bin e os
+# scripts run.sh/singe.sh como os comandos hypseus e singe, que usam o
+# ~/.hypseus. O ~/.hypseus e o /opt/fliperos/roms/hypseus (o acervo do
+# Samba): ROMs em roms/, videos de laserdisc em vldp/, jogos Singe em singe/.
+build_hypseus_chroot() {
+  if $SKIP_HYPSEUS; then
+    warn "Hypseus Singe pulado (--skip-hypseus)"
+    return
+  fi
+  step "Compilando Hypseus Singe ($HYPSEUS_TAG) no chroot"
+  cat > "$CHROOT_DIR/tmp/build-hypseus.sh" << 'HSSCRIPT'
+#!/bin/bash
+set -e
+apt-get install -y --no-install-recommends autoconf automake libtool pkg-config \
+  libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev zlib1g-dev libzip-dev libogg-dev libvorbis-dev
+git clone --depth=1 --branch __HYPSEUS_TAG__ https://github.com/DirtBagXon/hypseus-singe /tmp/hypseus
+cd /tmp/hypseus
+mkdir build
+(cd build && cmake ../src -DCMAKE_BUILD_TYPE=Release && make -j"$(nproc)")
+install -m755 build/hypseus /usr/local/bin/hypseus.bin
+install -m755 scripts/run.sh /usr/local/bin/hypseus
+install -m755 scripts/singe.sh /usr/local/bin/singe
+home=/opt/fliperos/roms/hypseus
+mkdir -p "$home/roms" "$home/vldp" "$home/singe"
+cp -R pics sound fonts midi "$home/"
+chown -R fliperos:fliperos "$home"
+ln -sfn "$home" /home/fliperos/.hypseus
+chown -h fliperos:fliperos /home/fliperos/.hypseus
+cd /
+rm -rf /tmp/hypseus
+echo "Hypseus OK"
+HSSCRIPT
+  sed -i "s|__HYPSEUS_TAG__|${HYPSEUS_TAG}|g" "$CHROOT_DIR/tmp/build-hypseus.sh"
+  chmod +x "$CHROOT_DIR/tmp/build-hypseus.sh"
+  chroot "$CHROOT_DIR" /tmp/build-hypseus.sh >> "$LOG_FILE" 2>&1 \
+    && ok "Hypseus Singe compilado" \
+    || err "Hypseus Singe falhou; use --skip-hypseus para ISO sem ele"
+}
+
+# ── OpenBOR (beat 'em ups), X11 ───────────────────────────────
+# O OpenBOR procura Paks/, Saves/ e Logs/ na pasta em que roda: o comando
+# openbor entra em /opt/fliperos/roms/openbor (o acervo do Samba) antes.
+build_openbor_chroot() {
+  if $SKIP_OPENBOR; then
+    warn "OpenBOR pulado (--skip-openbor)"
+    return
+  fi
+  step "Compilando OpenBOR (${OPENBOR_COMMIT:0:7}) no chroot"
+  cat > "$CHROOT_DIR/tmp/build-openbor.sh" << 'OBSCRIPT'
+#!/bin/bash
+set -e
+apt-get install -y --no-install-recommends ninja-build libsdl2-dev libvorbis-dev libpng-dev libvpx-dev
+git init -q /tmp/openbor
+git -C /tmp/openbor fetch -q --depth 1 https://github.com/DCurrent/openbor __OPENBOR_COMMIT__
+git -C /tmp/openbor -c advice.detachedHead=false checkout -q FETCH_HEAD
+cd /tmp/openbor
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_LINUX=ON -DTARGET_ARCH=AMD64
+cmake --build build --parallel
+install -Dm755 engine/releases/LINUX/OpenBOR /usr/local/lib/openbor/OpenBOR
+install -Dm644 engine/resources/OpenBOR_Icon_128x128.png /usr/local/share/pixmaps/openbor.png
+games=/opt/fliperos/roms/openbor
+mkdir -p "$games/Paks" "$games/Saves" "$games/Logs" "$games/ScreenShots"
+chown -R fliperos:fliperos "$games"
+cat > /usr/local/bin/openbor << 'EOF'
+#!/bin/sh
+# Os jogos (.pak) vao em /opt/fliperos/roms/openbor/Paks.
+cd /opt/fliperos/roms/openbor && exec /usr/local/lib/openbor/OpenBOR "$@"
+EOF
+chmod 755 /usr/local/bin/openbor
+cd /
+rm -rf /tmp/openbor
+echo "OpenBOR OK"
+OBSCRIPT
+  sed -i "s|__OPENBOR_COMMIT__|${OPENBOR_COMMIT}|g" "$CHROOT_DIR/tmp/build-openbor.sh"
+  chmod +x "$CHROOT_DIR/tmp/build-openbor.sh"
+  chroot "$CHROOT_DIR" /tmp/build-openbor.sh >> "$LOG_FILE" 2>&1 \
+    && ok "OpenBOR compilado" \
+    || err "OpenBOR falhou; use --skip-openbor para ISO sem ele"
+}
+
+# ── Dolphin (GameCube/Wii), X11 ───────────────────────────────
+# Compilado da versao estavel: a distribuicao oficial para Linux e o
+# Flatpak, que traria o runtime do KDE (~1 GB). Sem atualizacao automatica
+# nem estatisticas. O atalho do proprio Dolphin sai (ele abriria o emulador
+# dentro do X do desktop); o do FliperOS passa pelo fliperos-launch.
+build_dolphin_chroot() {
+  if $SKIP_DOLPHIN; then
+    warn "Dolphin pulado (--skip-dolphin)"
+    return
+  fi
+  step "Compilando Dolphin ($DOLPHIN_TAG) no chroot"
+  cat > "$CHROOT_DIR/tmp/build-dolphin.sh" << 'DOLSCRIPT'
+#!/bin/bash
+set -e
+apt-get install -y --no-install-recommends \
+  qt6-base-dev qt6-base-private-dev libqt6svg6-dev pkg-config \
+  libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
+  libxi-dev libxrandr-dev libudev-dev libevdev-dev libsfml-dev libminiupnpc-dev \
+  libmbedtls-dev libcurl4-openssl-dev libhidapi-dev libsystemd-dev libbluetooth-dev \
+  libasound2-dev libpulse-dev libpugixml-dev libbz2-dev libzstd-dev liblzo2-dev \
+  libpng-dev libusb-1.0-0-dev gettext
+git clone --depth=1 --branch __DOLPHIN_TAG__ https://github.com/dolphin-emu/dolphin /tmp/dolphin
+cd /tmp/dolphin
+git submodule update --init --recursive --depth 1
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
+  -DENABLE_AUTOUPDATE=OFF -DENABLE_ANALYTICS=OFF -DENABLE_TESTS=OFF
+cmake --build build -j"$(nproc)"
+cmake --install build
+rm -f /usr/local/share/applications/dolphin-emu.desktop
+install -Dm644 Data/dolphin-emu.png /usr/local/share/pixmaps/dolphin-emu.png
+cd /
+rm -rf /tmp/dolphin
+echo "Dolphin OK"
+DOLSCRIPT
+  sed -i "s|__DOLPHIN_TAG__|${DOLPHIN_TAG}|g" "$CHROOT_DIR/tmp/build-dolphin.sh"
+  chmod +x "$CHROOT_DIR/tmp/build-dolphin.sh"
+  chroot "$CHROOT_DIR" /tmp/build-dolphin.sh >> "$LOG_FILE" 2>&1 \
+    && ok "Dolphin compilado" \
+    || err "Dolphin falhou; use --skip-dolphin para ISO sem ele"
+}
+
+# ── Arquitetura i386 (Wine de 32 bits e Steam) ────────────────
+enable_i386_chroot() {
+  chroot "$CHROOT_DIR" dpkg --print-foreign-architectures | grep -qx i386 && return 0
+  chroot "$CHROOT_DIR" dpkg --add-architecture i386
+  chroot "$CHROOT_DIR" apt-get update -qq >> "$LOG_FILE" 2>&1 || err "apt-get update (i386) falhou"
+}
+
+# ── Wine (Model 2 Emulator e jogos do Windows) ────────────────
+# O Model 2 Emulator nao vem na imagem (freeware de codigo fechado, sem
+# permissao clara de redistribuicao): o fliperos-model2 o procura em
+# /opt/fliperos/model2, onde o usuario o copia.
+install_wine_chroot() {
+  if $SKIP_WINE; then
+    warn "Wine pulado (--skip-wine) — sem Model 2"
+    return
+  fi
+  step "Wine (Model 2 Emulator e jogos do Windows)"
+  enable_i386_chroot
+  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    wine wine64 wine32:i386' >> "$LOG_FILE" 2>&1 || err "Instalacao do Wine falhou"
+  mkdir -p "$CHROOT_DIR/opt/fliperos/model2/roms"
+  chroot "$CHROOT_DIR" chown -R fliperos:fliperos /opt/fliperos/model2
+  ok "Wine $(chroot "$CHROOT_DIR" wine --version 2> /dev/null | head -1)"
+}
+
+# ── Steam ─────────────────────────────────────────────────────
+# O steam-installer do Ubuntu (multiverse): o cliente de verdade e baixado
+# pela Valve na primeira abertura, com rede. Roda dentro do desktop (X).
+install_steam_chroot() {
+  if $SKIP_STEAM; then
+    warn "Steam pulado (--skip-steam)"
+    return
+  fi
+  step "Steam"
+  enable_i386_chroot
+  # O pacote do noble so tem avisos no debconf (need-nvidia-i386, purge),
+  # que o modo noninteractive pula; a licenca da Valve aparece no proprio
+  # cliente, na primeira abertura.
+  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y steam-installer' \
+    >> "$LOG_FILE" 2>&1 || err "Instalacao do Steam falhou"
+  ok "Steam (o cliente baixa o resto na primeira abertura)"
+}
+
+# ── Heroic Games Launcher (GOG, Epic e Amazon) ────────────────
+# Nao existe cliente do GOG para Linux; o Heroic e o que se usa (tambem no
+# Steam Deck). O .deb oficial, fixado por hash, baixado no fetch_debs.
+install_heroic_chroot() {
+  if $SKIP_HEROIC; then
+    warn "Heroic pulado (--skip-heroic) — sem GOG"
+    return
+  fi
+  step "Heroic Games Launcher $HEROIC_VERSION (GOG)"
+  cp "$DEBS_DIR/heroic.deb" "$CHROOT_DIR/tmp/heroic.deb"
+  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends /tmp/heroic.deb' \
+    >> "$LOG_FILE" 2>&1 || err "Instalacao do Heroic falhou"
+  rm -f "$CHROOT_DIR/tmp/heroic.deb"
+  ok "Heroic $HEROIC_VERSION"
+}
+
 # ── squashfs ──────────────────────────────────────────────────
 create_squashfs() {
   step "Criando squashfs"
@@ -1123,6 +1331,12 @@ summary() {
   $SKIP_FLYCAST    && echo -e "  ${YLW}Flycast nao incluido${RST}"
   $SKIP_PCSX2      && echo -e "  ${YLW}PCSX2 nao incluido${RST}"
   $SKIP_SUPERMODEL && echo -e "  ${YLW}Supermodel nao incluido${RST}"
+  $SKIP_DOLPHIN    && echo -e "  ${YLW}Dolphin nao incluido${RST}"
+  $SKIP_HYPSEUS    && echo -e "  ${YLW}Hypseus Singe nao incluido${RST}"
+  $SKIP_OPENBOR    && echo -e "  ${YLW}OpenBOR nao incluido${RST}"
+  $SKIP_WINE       && echo -e "  ${YLW}Wine nao incluido (sem Model 2)${RST}"
+  $SKIP_STEAM      && echo -e "  ${YLW}Steam nao incluido${RST}"
+  $SKIP_HEROIC     && echo -e "  ${YLW}Heroic nao incluido (sem GOG)${RST}"
   $SKIP_SKYSCRAPER && echo -e "  ${YLW}Skyscraper nao incluido (Setup > Scraper indisponivel)${RST}"
   echo -e "  ${DIM}Log: $LOG_FILE${RST}\n"
 }
@@ -1171,6 +1385,12 @@ build_retroarch_chroot
 build_flycast_chroot
 build_pcsx2_chroot
 build_supermodel_chroot
+build_hypseus_chroot
+build_openbor_chroot
+build_dolphin_chroot
+install_wine_chroot
+install_steam_chroot
+install_heroic_chroot
 rm -f "$CHROOT_DIR/usr/sbin/policy-rc.d"
 unmount_chroot
 create_squashfs

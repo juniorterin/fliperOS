@@ -5,6 +5,7 @@ build, o menu de boot, o Limine do disco instalado, o fliperos-video-check
 e as configuracoes que o fliperos-rootfs.sh instala.
 """
 import importlib.util
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -618,13 +619,17 @@ class EmulatorMenuTests(unittest.TestCase):
     """Emuladores no menu do LXDE: saem do desktop pelo fliperos-launch."""
 
     APPS = sorted((ROOT / 'config/applications').glob('fliperos-*.desktop'))
+    # O que mostra o atalho (TryExec): o binario do emulador; o Model 2 so
+    # precisa do Wine (o emulador o usuario copia).
+    TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/bin/wine'}
 
     def entry(self, path):
         return dict(line.split('=', 1) for line in path.read_text().splitlines() if '=' in line)
 
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
-        self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'supermodel'})
+        self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'supermodel',
+                                 'dolphin', 'openbor', 'model2'})
 
     def test_entries_go_through_the_launcher(self):
         launcher = (ROOT / 'config/fliperos-launch').read_text()
@@ -632,9 +637,9 @@ class EmulatorMenuTests(unittest.TestCase):
             name = path.stem.replace('fliperos-', '')
             e = self.entry(path)
             self.assertEqual(e['Exec'], '/opt/fliperos/bin/fliperos-launch ' + name)
-            self.assertEqual(e['TryExec'], '/usr/local/bin/' + name)
+            self.assertEqual(e['TryExec'], self.TRYEXEC.get(name, '/usr/local/bin/' + name))
             self.assertIn('Game;', e['Categories'])
-            self.assertIn(name, launcher)
+            self.assertIn('  %s) label=' % name, launcher)
 
     def test_every_icon_is_installed(self):
         own = {p.name for p in (ROOT / 'config/icons').glob('*.svg')}
@@ -652,6 +657,106 @@ class EmulatorMenuTests(unittest.TestCase):
         self.assertIn('fliperos-next', session)
         self.assertIn('/opt/fliperos/bin/fliperos-kms-run | /opt/fliperos/bin/fliperos-x11-run)', session)
         self.assertIn('fliperos-launch', ROOTFS)
+
+
+class EmulatorModeTests(unittest.TestCase):
+    """fliperos-x11-run: o modo de cada emulador (640x240 nos de 480i num
+    monitor de 15 kHz), o --mode para qualquer programa e a imagem esticada
+    para preencher o modo."""
+
+    def run_x11(self, args, frequency='15', modes=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            bin_dir = tmp / 'bin'
+            bin_dir.mkdir()
+            # xinit falso: mostra o modo pedido e o comando.
+            (bin_dir / 'xinit').write_text('#!/bin/bash\necho "MODE=$FLIPEROS_RES_W $FLIPEROS_RES_H $FLIPEROS_RES_HZ"\n'
+                                           'echo "ARGS=$*"\n')
+            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog'):
+                (bin_dir / prog).write_text('#!/bin/sh\n')
+            for p in bin_dir.iterdir():
+                p.chmod(0o755)
+            (tmp / 'fliperos.conf').write_text('frequency=%s\n' % frequency)
+            (tmp / 'modes.conf').write_text(modes or (ROOT / 'config/fliperos-emulator-modes.conf').read_text())
+            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), HOME=str(tmp),
+                       FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_MODES=str(tmp / 'modes.conf'))
+            env.pop('DISPLAY', None)
+            return subprocess.run(['bash', str(ROOT / 'config/fliperos-x11-run')] + args,
+                                  capture_output=True, text=True, env=env)
+
+    def test_480i_emulators_run_at_640x240_on_15khz(self):
+        out = self.run_x11(['flycast', 'game.gdi']).stdout
+        self.assertIn('MODE=640 240 60', out)
+        # 4:3 esticado para preencher o 640x240 (8:3 em pixels).
+        self.assertIn('-config window:fullscreen=yes,config:rend.ScreenStretching=200 game.gdi', out)
+        out = self.run_x11(['dolphin-emu']).stdout
+        self.assertIn('MODE=640 240 60', out)
+        self.assertIn('-C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3', out)
+
+    def test_other_monitors_keep_480(self):
+        out = self.run_x11(['flycast'], frequency='31').stdout
+        self.assertIn('MODE=640 480 60', out)
+        self.assertIn('rend.ScreenStretching=100', out)
+
+    def test_any_program_with_mode(self):
+        out = self.run_x11(['--mode', '640x240@60', 'myprog', '-x']).stdout
+        self.assertIn('MODE=640 240 60', out)
+        self.assertIn('myprog -x', out)
+        self.assertIn('MODE=320 240 60', self.run_x11(['myprog']).stdout)
+        r = self.run_x11(['--mode', '640x240', 'myprog'])
+        self.assertEqual(r.returncode, 2)
+
+    def test_pcsx2_ini_is_adjusted_after_first_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ini = Path(tmp) / 'PCSX2.ini'
+            ini.write_text('[UI]\nSettingsVersion = 1\nStartFullscreen = false\n\n[EmuCore/GS]\nAspectRatio = Auto 4:3/3:2\n')
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-ini-set'), str(ini), 'EmuCore/GS', 'AspectRatio', 'Stretch'], check=True)
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-ini-set'), str(ini), 'UI', 'StartFullscreen', 'true'], check=True)
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-ini-set'), str(ini), 'New', 'Key', 'v'], check=True)
+            self.assertEqual(ini.read_text(), '[UI]\nSettingsVersion = 1\nStartFullscreen = true\n\n'
+                                              '[EmuCore/GS]\nAspectRatio = Stretch\n\n[New]\nKey = v\n')
+
+    def test_modes_table_is_valid(self):
+        for line in (ROOT / 'config/fliperos-emulator-modes.conf').read_text().splitlines():
+            if not line.strip() or line.startswith('#'):
+                continue
+            cols = line.split()
+            self.assertEqual(len(cols), 3, line)
+            for mode in cols[1:]:
+                self.assertRegex(mode, r'^\d+x\d+@[\d.]+$', line)
+        self.assertIn('emulator-modes.conf', ROOTFS)
+
+
+class NewEmulatorBuildTests(unittest.TestCase):
+    """Hypseus, OpenBOR, Dolphin, Wine (Model 2), Steam e Heroic (GOG)."""
+
+    def test_pinned_versions(self):
+        self.assertRegex(MKISO, r'HYPSEUS_TAG="v2\.[0-9.]+"')   # a serie 3 exige SDL3
+        self.assertRegex(MKISO, r'OPENBOR_COMMIT="[0-9a-f]{40}"')
+        self.assertRegex(MKISO, r'DOLPHIN_TAG="[0-9]{4}[a-z]?"')
+        self.assertRegex(MKISO, r'HEROIC_SHA256="[0-9a-f]{64}"')
+
+    def test_every_one_can_be_skipped_and_runs_in_order(self):
+        main = MKISO.split('# ── Main')[1]
+        for flag, step in (('--skip-hypseus', 'build_hypseus_chroot'), ('--skip-openbor', 'build_openbor_chroot'),
+                           ('--skip-dolphin', 'build_dolphin_chroot'), ('--skip-wine', 'install_wine_chroot'),
+                           ('--skip-steam', 'install_steam_chroot'), ('--skip-heroic', 'install_heroic_chroot')):
+            self.assertIn(flag + ')', MKISO)
+            self.assertIn('\n' + step + '\n', main)
+        self.assertLess(main.index('build_supermodel_chroot'), main.index('build_hypseus_chroot'))
+        self.assertLess(main.index('install_heroic_chroot'), main.index('create_squashfs'))
+
+    def test_steam_installs_without_questions(self):
+        body = MKISO.split('install_steam_chroot() {')[1].split('\n}\n')[0]
+        self.assertIn('DEBIAN_FRONTEND=noninteractive apt-get install -y steam-installer', body)
+        self.assertLess(body.index('enable_i386_chroot'), body.index('steam-installer'))
+
+    def test_model2_emulator_is_not_redistributed(self):
+        # Freeware de codigo fechado, sem permissao clara: o usuario copia.
+        self.assertNotRegex(MKISO, r'(?i)m2emulator.*(http|zip)')
+        helper = (ROOT / 'config/fliperos-model2').read_text()
+        self.assertIn('/opt/fliperos/model2', helper)
+        self.assertIn('WINEPREFIX=', helper)
 
 
 class DockerfileTests(unittest.TestCase):

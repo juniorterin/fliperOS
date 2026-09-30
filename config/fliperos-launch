@@ -1,25 +1,37 @@
 #!/usr/bin/env bash
 # Abre um emulador pelo menu do LXDE (Jogos). Os emuladores do FliperOS nao
-# rodam dentro do X do desktop: RetroArch, GroovyMAME e Flycast usam o KMS,
-# e PCSX2 e Supermodel sobem um Xorg proprio com o modo do jogo. Por isso o
-# pedido fica gravado, o desktop fecha, o fliperos-session abre o emulador e,
-# quando ele fecha, volta para o desktop.
+# rodam dentro do X do desktop: RetroArch e GroovyMAME usam o KMS (e trocam
+# de modo sozinhos por jogo); os outros sobem um Xorg proprio no modo da
+# tabela /etc/fliperos/emulator-modes.conf. Por isso o pedido fica gravado,
+# o desktop fecha, o fliperos-session abre o emulador e, quando ele fecha,
+# volta para o desktop.
+#
+#   fliperos-launch retroarch|groovymame|flycast|pcsx2|supermodel|dolphin|openbor|model2
+#   fliperos-launch --mode 640x240@60 programa [argumentos]   (qualquer programa)
 set -euo pipefail
 
+usage() {
+  echo "Uso: fliperos-launch retroarch|groovymame|flycast|pcsx2|supermodel|dolphin|openbor|model2" >&2
+  echo "     fliperos-launch --mode LARGURAxALTURA@HZ programa [argumentos]" >&2
+  exit 2
+}
+
+x11=/opt/fliperos/bin/fliperos-x11-run
 case ${1:-} in
-  retroarch) label=RetroArch ;;
-  groovymame) label=GroovyMAME ;;
-  flycast) label=Flycast ;;
-  pcsx2) label=PCSX2 ;;
-  supermodel) label=Supermodel ;;
-  *)
-    echo "Uso: fliperos-launch retroarch|groovymame|flycast|pcsx2|supermodel" >&2
-    exit 2
+  retroarch) label=RetroArch run=(/opt/fliperos/bin/fliperos-kms-run retroarch) ;;
+  groovymame) label=GroovyMAME run=(/opt/fliperos/bin/fliperos-kms-run groovymame) ;;
+  flycast) label=Flycast run=("$x11" flycast) ;;
+  pcsx2) label=PCSX2 run=("$x11" pcsx2) ;;
+  supermodel) label=Supermodel run=("$x11" supermodel) ;;
+  dolphin) label=Dolphin run=("$x11" dolphin-emu) ;;
+  openbor) label=OpenBOR run=("$x11" openbor) ;;
+  model2) label="Model 2" run=("$x11" fliperos-model2) ;;
+  --mode)
+    [[ $# -ge 3 ]] || usage
+    label=$(basename -- "$3")
+    run=("$x11" --mode "$2" "${@:3}")
     ;;
-esac
-case $1 in
-  pcsx2 | supermodel) run=(/opt/fliperos/bin/fliperos-x11-run "$1") ;;
-  *) run=(/opt/fliperos/bin/fliperos-kms-run "$1") ;;
+  *) usage ;;
 esac
 
 # open_windows conta as janelas abertas no desktop, fora o proprio desktop

@@ -34,9 +34,15 @@ mkdir -p "$root/etc/fliperos" "$root/etc/fliperos/mame" "$root/etc/fliperos/retr
 install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions.conf"
 [[ -f "$root/etc/fliperos/session" ]] || printf 'setup\n' > "$root/etc/fliperos/session"
 for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-client fliperos-lxde fliperos-launch \
-  fliperos-tty1; do
+  fliperos-tty1 fliperos-ini-set; do
   install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done
+# Modo de video de cada emulador do fliperos-x11-run (640x240 nos de 480i
+# num monitor de 15 kHz). O usuario pode editar: a imagem nao sobrescreve.
+[[ -f "$root/etc/fliperos/emulator-modes.conf" ]] \
+  || install -Dm644 "$src/config/fliperos-emulator-modes.conf" "$root/etc/fliperos/emulator-modes.conf"
+# Model 2 no Wine: no PATH, para os frontends tambem chamarem.
+install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model2"
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"
 # Cores Dracula da interface do GroovyMAME; o ui.ini e do usuario porque o
 # MAME o regrava quando a interface e personalizada pelo proprio menu.

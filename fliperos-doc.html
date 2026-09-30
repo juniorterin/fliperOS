@@ -141,7 +141,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <p><strong>Teclas de volume:</strong> as teclas de volume do teclado (ou de um encoder de painel programado para mandá-las) funcionam em qualquer tela — emulador em KMS, desktop, console. O <code>triggerhappy</code> lê o <code>/dev/input</code> e chama <code>fliperos-setup --volume up|down|mute</code> (passos de 5% na placa do Audio Setup, gravados a cada toque porque gabinete costuma ser desligado na tomada); <code>config/fliperos-volume.triggers</code> diz quais teclas. O painel do LXDE fica só com o mouse, para não mudar o volume duas vezes. Durante o jogo não aparece barra de volume (nada desenha por cima de um emulador em KMS).</p>
 <h3 id="desktop-lxde">Desktop LXDE</h3>
 <p>O LXDE do GroovyArcade: <code>lxde</code> completo com o openbox-lxde, painel embaixo (menu, gerenciador de arquivos, terminal, tarefas, CPU, volume, bandeja, rede, relógio), sem compositor, sem DPMS nem descanso de tela, fonte Sans 10 e a orientação do Video Setup. Tudo no tema Dracula (seção 6).</p>
-<p><strong>Emuladores no menu (Jogos):</strong> RetroArch, GroovyMAME, Flycast, PCSX2 e Supermodel, com os ícones dos próprios projetos (GroovyMAME e Supermodel não têm ícone para Linux; os deles são do FliperOS, em <code>config/icons</code>). Nenhum deles roda dentro do X do desktop — RetroArch, GroovyMAME e Flycast usam o KMS, PCSX2 e Supermodel sobem um Xorg próprio com o modo do jogo —, então o atalho (<code>fliperos-launch</code>) grava o pedido e fecha o desktop, o <code>fliperos-session</code> abre o emulador no CRT e, quando ele fecha, <strong>o desktop volta</strong>. Emulador que não foi compilado (<code>--skip-*</code>) não aparece no menu. Vêm também as ferramentas do GroovyArcade: <strong>AntiMicroX</strong> e <strong>QJoyPad</strong> (controle como teclado/mouse), <code>xterm</code>, <code>htop</code>, <code>evtest</code>, <code>joy2key</code>, <code>hwinfo</code>, <code>lshw</code>, <code>read-edid</code>, <code>i2c-tools</code>. O <strong>FliperOS Setup</strong> fica em <strong>System Tools</strong> (e no painel), como o <code>gasetup.desktop</code>. O terminal usa as cores do Dracula. Sair do desktop volta ao menu.</p>
+<p><strong>Emuladores no menu (Jogos):</strong> RetroArch, GroovyMAME, Flycast, PCSX2, Supermodel, Dolphin, OpenBOR e Model 2, com os ícones dos próprios projetos (GroovyMAME, Supermodel e Model 2 não têm ícone para Linux; os deles são do FliperOS, em <code>config/icons</code>). Nenhum deles roda dentro do X do desktop — RetroArch e GroovyMAME usam o KMS, os outros sobem um Xorg próprio no modo da tabela de modos (seção 12) —, então o atalho (<code>fliperos-launch</code>) grava o pedido e fecha o desktop (com uma confirmação se houver janelas abertas), o <code>fliperos-session</code> abre o emulador no CRT e, quando ele fecha, <strong>o desktop volta</strong>. Emulador que não foi compilado (<code>--skip-*</code>) não aparece no menu. Steam e Heroic (GOG) também estão em Jogos, mas abrem dentro do próprio desktop. Vêm também as ferramentas do GroovyArcade: <strong>AntiMicroX</strong> e <strong>QJoyPad</strong> (controle como teclado/mouse), <code>xterm</code>, <code>htop</code>, <code>evtest</code>, <code>joy2key</code>, <code>hwinfo</code>, <code>lshw</code>, <code>read-edid</code>, <code>i2c-tools</code>. O <strong>FliperOS Setup</strong> fica em <strong>System Tools</strong> (e no painel), como o <code>gasetup.desktop</code>. O terminal usa as cores do Dracula. Sair do desktop volta ao menu.</p>
 <h2 id="6-tema-dracula">6. Tema Dracula</h2>
 <p>O <a href="https://draculatheme.com">Dracula</a> é o tema de tudo o que o FliperOS desenha:</p>
 <table>
@@ -383,14 +383,125 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li><code>tools/ui-snapshot.sh TELA [LARG ALT]</code> — fotografa uma tela em texto num tmux 80x30 (ou 64x24, o 512x384 de 25 kHz), com um sistema falso (<code>tools/ui-demo.sh</code>).</li>
 <li><code>tools/vm-test.py install ISO</code> — em QEMU: instala pela lib do setup num disco descartável e boota o disco em BIOS e UEFI. <code>tools/vm-test.py screens ISO</code> e <code>tools/vm-monitor.py</code> fotografam o tty1 de verdade (Gum no console do Linux) tela a tela.</li>
 </ul>
-<h2 id="12-outros-componentes">12. Outros componentes</h2>
+<h2 id="12-emuladores">12. Emuladores</h2>
+<table>
+<thead>
+<tr>
+<th>Emulador</th>
+<th>Sistemas</th>
+<th>Como abre</th>
+<th>Modo de vídeo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GroovyMAME</td>
+<td>arcade</td>
+<td>KMS</td>
+<td>troca sozinho por jogo (Switchres)</td>
+</tr>
+<tr>
+<td>RetroArch</td>
+<td>vários (cores)</td>
+<td>KMS</td>
+<td>troca sozinho por jogo (CRT SwitchRes)</td>
+</tr>
+<tr>
+<td>Flycast</td>
+<td>Dreamcast, Naomi, Atomiswave</td>
+<td>Xorg próprio (<code>fliperos-x11-run</code>)</td>
+<td>640x240 no 15 kHz, 640x480 nos outros</td>
+</tr>
+<tr>
+<td>PCSX2 (AppImage oficial)</td>
+<td>PS2</td>
+<td>Xorg próprio</td>
+<td>idem</td>
+</tr>
+<tr>
+<td>Dolphin</td>
+<td>GameCube, Wii</td>
+<td>Xorg próprio</td>
+<td>idem</td>
+</tr>
+<tr>
+<td>Hypseus Singe</td>
+<td>laserdisc (Dragon's Lair, Space Ace...)</td>
+<td>Xorg próprio</td>
+<td>idem</td>
+</tr>
+<tr>
+<td>OpenBOR</td>
+<td>beat 'em ups</td>
+<td>Xorg próprio</td>
+<td>320x240</td>
+</tr>
+<tr>
+<td>Supermodel</td>
+<td>Sega Model 3</td>
+<td>Xorg próprio</td>
+<td>496x384@57.524</td>
+</tr>
+<tr>
+<td>Model 2 Emulator (Wine)</td>
+<td>Sega Model 2</td>
+<td>Xorg próprio</td>
+<td>496x384@57.524</td>
+</tr>
+<tr>
+<td>Steam, Heroic (GOG, Epic, Amazon)</td>
+<td>jogos de PC</td>
+<td>dentro do desktop LXDE</td>
+<td>o do desktop</td>
+</tr>
+</tbody>
+</table>
+<p>Todos aparecem no menu <strong>Jogos</strong> do LXDE (seção 5). O RetroArch usa <code>crt_switch_resolution 4</code> (o <code>/etc/switchres.ini</code> do Setup). O PCSX2 é o AppImage oficial (fixado por versão e sha256, extraído em <code>/opt/pcsx2</code>): o código atual dele exige SDL3 e Qt 6.10, que o Ubuntu 24.04 não tem. O Dolphin é compilado da versão estável (a distribuição oficial para Linux é o Flatpak, que traria ~1 GB de runtime).</p>
+<p><strong>Cores do RetroArch.</strong> Vêm 6 compilados, para funcionar sem rede: FCEUmm (NES), Snes9x, Genesis Plus GX (Mega Drive/Master System), mGBA, PCSX ReARMed (PS1) e MAME 2010. Qualquer outro se baixa no próprio RetroArch, em <strong>Online Updater &gt; Core Downloader</strong> (do buildbot da libretro): cores, <code>.info</code> e perfis de controle ficam em <code>/opt/fliperos/retroarch</code>, do usuário <code>fliperos</code>, então o menu grava sem root. Os <code>.info</code> e os perfis de fábrica vêm fixados por commit (<code>libretro-core-info</code>, <code>retroarch-joypad-autoconfig</code>).</p>
+<h3 id="rodar-um-programa-em-640x240">Rodar um programa em 640x240</h3>
+<p>Num monitor de 15 kHz, 480 linhas só existem entrelaçadas (480i), e o entrelaçado cintila. Em <strong>640x240 progressivo</strong> o programa desenha as 480 linhas dele em 240: perde metade da resolução vertical, mas a imagem fica estável — é como o FliperOS roda Dreamcast, PS2, GameCube/Wii e laserdisc no 15 kHz. Quem faz isso é o <code>fliperos-x11-run</code>: ele abre o programa num Xorg só para ele, e o Switchres cria o modo pedido nas faixas do monitor escolhido no Video Setup.</p>
+<p>Três jeitos, do mais pontual ao permanente:</p>
+<ol>
+<li><strong>Na hora, no console</strong> (Setup &gt; Exit to shell, no gabinete):</li>
+</ol>
+<p><code>sh
+   /opt/fliperos/bin/fliperos-x11-run --mode 640x240@60 programa [argumentos]</code></p>
+<p>Qualquer modo serve (<code>LARGURAxALTURA@HZ</code>, ex. <code>320x240@60</code>, <code>640x240@59.94</code>, <code>384x224@59.64</code>).</p>
+<ol>
+<li><strong>No menu do desktop</strong>: um atalho em <code>~/.local/share/applications/meu-programa.desktop</code>. O <code>fliperos-launch --mode</code> sai do desktop, abre o programa no modo pedido e volta ao desktop quando ele fecha (com a mesma confirmação dos emuladores do menu):</li>
+</ol>
+<p><code>ini
+   [Desktop Entry]
+   Type=Application
+   Name=Meu programa
+   Exec=/opt/fliperos/bin/fliperos-launch --mode 640x240@60 /caminho/do/programa
+   Categories=Game;</code></p>
+<ol>
+<li><strong>Sempre para aquele programa</strong>: uma linha em <code>/etc/fliperos/emulator-modes.conf</code> (nome do comando, modo no 15 kHz, modo nos outros monitores). Daí em diante qualquer caminho que passe pelo <code>fliperos-x11-run</code> — o menu, um frontend, o console sem <code>--mode</code> — usa esse modo:</li>
+</ol>
+<p><code>meuemulador         640x240@60      640x480@60</code></p>
+<p>A imagem nova não sobrescreve esse arquivo depois de editado.</p>
+<p>Num frontend (Attract-Mode e outros), o comando do emulador fica <code>/opt/fliperos/bin/fliperos-x11-run --mode 640x240@60 emulador "[romfilename]"</code> (ou sem <code>--mode</code>, com a linha na tabela).</p>
+<p><strong>A imagem tem de ser esticada.</strong> 640x240 é uma tela 8:3 em pixels, que o tubo mostra em 4:3. Um programa que "mantém a proporção 4:3" usaria só metade da largura (320 colunas) e sairia espremido no meio. Configure o programa para <strong>esticar/preencher a tela</strong> — para Flycast (<code>rend.ScreenStretching = 200</code>, via <code>-config</code>), Dolphin (<code>AspectRatio = 3</code>, via <code>-C</code>) e PCSX2 (<code>AspectRatio = Stretch</code>, no <code>PCSX2.ini</code> a partir da segunda abertura) o <code>fliperos-x11-run</code> já faz isso sozinho. A conta, para outro modo: esticar <code>300 × largura ÷ (4 × altura)</code> por cento.</p>
+<p><strong>GroovyMAME e RetroArch</strong> não passam por aqui: eles trocam de modo sozinhos a cada jogo. No GroovyMAME, <code>interlace 0</code> no <code>/etc/fliperos/mame/mame.ini</code> faz o Switchres nunca escolher um modo entrelaçado (os jogos de 480 linhas saem em 240p).</p>
+<h3 id="laserdisc-hypseus-singe">Laserdisc (Hypseus Singe)</h3>
+<p>Os jogos de laserdisc ficam em <code>/opt/fliperos/roms/hypseus</code>, que é o <code>~/.hypseus</code> (pela rede: <code>\\fliperos\FliperOS\roms\hypseus</code>): a ROM em <code>roms/&lt;jogo&gt;.zip</code>, o vídeo do laserdisc em <code>vldp/&lt;jogo&gt;/</code> com o framefile <code>&lt;jogo&gt;.txt</code>, e os jogos Singe em <code>singe/&lt;jogo&gt;/</code>. Para abrir no CRT (640x240 no 15 kHz, tela cheia):</p>
+<pre><code class="language-sh">/opt/fliperos/bin/fliperos-x11-run hypseus lair     # Dragon's Lair
+/opt/fliperos/bin/fliperos-x11-run singe timegal    # um jogo Singe
+</code></pre>
+<p>no console ou como comando de um frontend. O Hypseus não tem menu próprio (precisa do nome do jogo), por isso não tem atalho em Jogos. É o Hypseus Singe v2.12.1 (a série 3 exige SDL3, que o Ubuntu 24.04 não tem), instalado como o README do projeto manda (<code>hypseus</code>/<code>singe</code> são os scripts dele, <code>hypseus.bin</code> o programa).</p>
+<h3 id="openbor">OpenBOR</h3>
+<p>Os jogos (<code>.pak</code>) vão em <code>/opt/fliperos/roms/openbor/Paks</code> (pela rede: <code>\\fliperos\FliperOS\roms\openbor\Paks</code>). Menu <strong>Jogos &gt; OpenBOR</strong> abre o menu do próprio OpenBOR, que lista os paks.</p>
+<h3 id="model-2-wine">Model 2 (Wine)</h3>
+<p>O Model 2 Emulator (ElSemi) é freeware de código fechado, só para Windows, sem permissão clara de redistribuição — por isso <strong>não vem na imagem</strong>. Copie os arquivos do <code>m2emulator</code> 1.1a (o <code>emulator_multicpu.exe</code> e o resto) para <code>/opt/fliperos/model2</code> e as ROMs para <code>/opt/fliperos/model2/roms</code> (pela rede: <code>\\fliperos\FliperOS\model2</code>). O menu <strong>Jogos &gt; Model 2</strong> abre o emulador no Wine (<code>fliperos-model2</code>, com um prefixo do Wine só dele em <code>~/.local/share/fliperos/wine-model2</code>); sem o emulador copiado, ele mostra essas instruções. Tela cheia e resolução se ajustam no <code>EMULATOR.INI</code> do próprio emulador.</p>
+<h3 id="steam-e-gog">Steam e GOG</h3>
+<p><strong>Steam</strong>: o <code>steam-installer</code> do Ubuntu; na primeira abertura a Valve baixa o cliente (centenas de MB, precisa de rede). <strong>GOG</strong>: não existe cliente oficial para Linux; vem o <strong>Heroic Games Launcher</strong> (GOG, Epic e Amazon; o mesmo do Steam Deck), que roda os jogos de Windows com o Wine/Proton que ele mesmo baixa. Os dois abrem <strong>dentro do desktop LXDE</strong> (são programas do X), pelo menu <strong>Jogos</strong>. A interface deles foi feita para telas maiores: num CRT de 15 kHz a 640x480 ela fica apertada — num monitor de 31 kHz ou LCD o uso é bem melhor.</p>
+<h2 id="13-outros-componentes">13. Outros componentes</h2>
 <p><strong>Repositório APT e frontends.</strong> Os frontends (Attract-Mode Plus, EmulationStation, RetroFE, Pegasus) vêm de um repositório APT próprio de <code>.deb</code> pré-compilados, como o <code>groovy-ux-repo</code> do GroovyArcade (<code>packaging/build-deb.sh</code>, <code>packaging/make-repo.sh</code>, <code>Dockerfile.packages</code>, receitas em <code>packaging/packages/</code>). A tabela <code>config/fliperos-sessions.conf</code> diz, para cada launcher, se roda em KMS ou X (da tabela <code>videodata.conf</code> do galauncher) e de que pacote vem.</p>
 <p><strong>Splash.</strong> Plymouth com o tema próprio <code>fliperos</code> (texto, sem imagem), <code>evangelion</code> (202 quadros, com <strong>risco de convulsão</strong> declarado pelo autor e sem licença no pacote) ou nenhum.</p>
 <p><strong>Rede.</strong> Samba (<code>\\&lt;ip&gt;\FliperOS</code> → <code>/opt/fliperos</code>, escrita só com o usuário <code>fliperos</code>), SSH/SFTP e Avahi (<code>fliperos.local</code>). Login padrão <code>fliperos</code>/<code>fliperos</code>, como o <code>arcade</code>/<code>arcade</code> do GroovyArcade.</p>
-<p><strong>Emuladores.</strong> GroovyMAME, RetroArch (KMS), Flycast (KMS), PCSX2 e Supermodel (X, via <code>fliperos-x11-run</code> e Switchres). O RetroArch usa <code>crt_switch_resolution 4</code> (o <code>/etc/switchres.ini</code> do Setup). O PCSX2 é o AppImage oficial (fixado por versão e sha256, extraído em <code>/opt/pcsx2</code>): o código atual dele exige SDL3 e Qt 6.10, que o Ubuntu 24.04 não tem.</p>
-<p><strong>Cores do RetroArch.</strong> Vêm 6 compilados, para funcionar sem rede: FCEUmm (NES), Snes9x, Genesis Plus GX (Mega Drive/Master System), mGBA, PCSX ReARMed (PS1) e MAME 2010. Qualquer outro se baixa no próprio RetroArch, em <strong>Online Updater &gt; Core Downloader</strong> (do buildbot da libretro): cores, <code>.info</code> e perfis de controle ficam em <code>/opt/fliperos/retroarch</code>, do usuário <code>fliperos</code>, então o menu grava sem root. Os <code>.info</code> e os perfis de fábrica vêm fixados por commit (<code>libretro-core-info</code>, <code>retroarch-joypad-autoconfig</code>).</p>
 <p><strong>Diagnóstico.</strong> <code>sudo fliperos-video-check --json</code> lê o modo ativo de cada saída (CRTC atual via libdrm, só leitura): conector, resolução, kHz, Hz, entrelaçado.</p>
-<h2 id="13-arquivos">13. Arquivos</h2>
+<h2 id="14-arquivos">14. Arquivos</h2>
 <table>
 <thead>
 <tr>
@@ -474,6 +585,14 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <tr>
 <td><code>config/applications/</code>, <code>config/icons/</code>, <code>config/fliperos-launch</code></td>
 <td>Emuladores no menu do LXDE e a saída do desktop para abri-los</td>
+</tr>
+<tr>
+<td><code>config/fliperos-x11-run</code>, <code>config/fliperos-emulator-modes.conf</code></td>
+<td>Abre um programa num Xorg próprio no modo pedido (<code>--mode 640x240@60</code>) ou no da tabela por emulador</td>
+</tr>
+<tr>
+<td><code>config/fliperos-model2</code>, <code>config/fliperos-ini-set</code></td>
+<td>Model 2 Emulator no Wine; ajuste de ini por seção (PCSX2)</td>
 </tr>
 <tr>
 <td><code>config/retroarch.cfg</code>, <code>config/mame.ini</code></td>

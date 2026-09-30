@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=OpenBOR
+GenericName=Beat 'em up engine
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch openbor
+TryExec=/usr/local/bin/openbor
+Icon=/usr/local/share/pixmaps/openbor.png
+Terminal=false
+Categories=Game;Emulator;

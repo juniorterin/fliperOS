@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Sega Model 2 pelo Model 2 Emulator (ElSemi) no Wine.
+#
+# O emulador e freeware de codigo fechado, so para Windows, sem permissao
+# clara de redistribuicao: nao vem na imagem. Copie o conteudo do
+# m2emulator (1.1a) para /opt/fliperos/model2 (pela rede:
+# \\fliperos\FliperOS\model2) e as ROMs para /opt/fliperos/model2/roms.
+# Aberto pelo menu (fliperos-launch model2) ou por um frontend, via
+# fliperos-x11-run, no modo da tabela emulator-modes.conf.
+#
+#   fliperos-model2 [jogo]      (o nome da ROM sem .zip, ex. daytona)
+set -euo pipefail
+dir=/opt/fliperos/model2
+exe=""
+for candidate in emulator_multicpu.exe EMULATOR_MULTICPU.EXE emulator.exe EMULATOR.EXE; do
+  [[ -f $dir/$candidate ]] && { exe=$candidate; break; }
+done
+if [[ -z $exe ]]; then
+  message="Model 2 Emulator not found.
+
+Copy the m2emulator files (emulator_multicpu.exe and the rest) to
+/opt/fliperos/model2 - over the network: \\\\fliperos\\FliperOS\\model2 -
+and the ROMs to /opt/fliperos/model2/roms."
+  if [[ -n ${DISPLAY:-} ]] && command -v gxmessage > /dev/null; then
+    gxmessage -center -wrap -geometry 460x200 -title "Model 2" -buttons "OK:0" "$message"
+  else
+    echo "$message" >&2
+  fi
+  exit 1
+fi
+# Um prefixo do Wine so para ele, no home (o de outros programas nao muda).
+export WINEPREFIX="$HOME/.local/share/fliperos/wine-model2"
+export WINEDEBUG=-all
+mkdir -p "$WINEPREFIX"
+cd "$dir"
+exec wine "$exe" "$@"
