@@ -262,7 +262,9 @@ apt-get update -qq
 # as engines murrine e pixbuf sao do GTK 2 do tema Dracula, o librsvg2
 # desenha os icones SVG do menu e o gxmessage (GTK 3) e a confirmacao do
 # fliperos-launch antes de fechar o desktop. usbutils (lsusb) mostra o
-# vendor:produto dos controles em Setup > Quirks.
+# vendor:produto dos controles em Setup > Quirks. systemd-timesyncd acerta o
+# relogio pela rede: no gabinete o relogio da BIOS estava 2 meses atrasado e
+# o apt recusava todo repositorio ("not valid yet").
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -277,6 +279,7 @@ apt-get install -y --no-install-recommends \
   kbd console-setup \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 pciutils usbutils libdrm-tests edid-decode squashfs-tools \
+  systemd-timesyncd \
   samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
   plymouth plymouth-label fonts-dejavu-core \
   lxde gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
@@ -1274,6 +1277,10 @@ install_heroic_chroot() {
 # ── squashfs ──────────────────────────────────────────────────
 create_squashfs() {
   step "Criando squashfs"
+  # O resolv.conf do container do build (o DNS interno do Docker) servia so
+  # ao apt do chroot; na imagem o NetworkManager o escreve com o DNS do DHCP
+  # (fliperos-rootfs.sh).
+  printf '# Escrito pelo NetworkManager com o DNS da rede.\n' > "$CHROOT_DIR/etc/resolv.conf"
   mkdir -p "$ISO_DIR/live"
   rm -f "$ISO_DIR/live/filesystem.squashfs"
   mksquashfs "$CHROOT_DIR" "$ISO_DIR/live/filesystem.squashfs" \

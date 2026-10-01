@@ -109,6 +109,21 @@ ExecStart=
 ExecStart=/usr/sbin/thd --triggers /etc/triggerhappy/triggers.d/ --socket /run/thd.socket --deviceglob /dev/input/event*
 EOF
 
+# ── Rede ──────────────────────────────────────────────────────────
+# O Ubuntu manda o NetworkManager entregar o DNS ao systemd-resolved, que nao
+# esta na imagem: o /etc/resolv.conf nunca era atualizado (ficava o DNS do
+# container do build) e o gabinete nao resolvia nome nenhum — sem System
+# Update nem frontends pelo apt. Aqui o proprio NM escreve o resolv.conf com
+# o DNS do DHCP. O 10-globally-managed-devices.conf vazio anula o do Ubuntu
+# (que so deixa o NM cuidar do Wi-Fi): o cabo de rede tambem pega IP.
+mkdir -p "$root/etc/NetworkManager/conf.d"
+cat > "$root/etc/NetworkManager/conf.d/90-fliperos-dns.conf" << 'EOF'
+[main]
+dns=default
+rc-manager=file
+EOF
+: > "$root/etc/NetworkManager/conf.d/10-globally-managed-devices.conf"
+
 # ── Splash e console ──────────────────────────────────────────────
 install -Dm644 "$src/config/plymouth/fliperos.plymouth" "$root/usr/share/plymouth/themes/fliperos/fliperos.plymouth"
 install -Dm644 "$src/config/plymouth/fliperos.script" "$root/usr/share/plymouth/themes/fliperos/fliperos.script"

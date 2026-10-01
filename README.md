@@ -255,6 +255,14 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 - `tests/test_build.py` — menu de boot, kernel e patches, pins, arquivos da imagem, Limine do disco instalado, `fliperos-video-check`.
 - `tools/ui-snapshot.sh TELA [LARG ALT]` — fotografa uma tela em texto num tmux 80x30 (ou 64x24, o 512x384 de 25 kHz), com um sistema falso (`tools/ui-demo.sh`).
 - `tools/vm-test.py install ISO` — em QEMU: instala pela lib do setup num disco descartável e boota o disco em BIOS e UEFI. `tools/vm-test.py screens ISO` e `tools/vm-monitor.py` fotografam o tty1 de verdade (Gum no console do Linux) tela a tela. `tools/vm-test.py desktop ISO` abre o LXDE no disco instalado (pelo boot e pelo menu, com o `xorg.conf` de 15 kHz). `tools/vm-test.py dev ISO` leva os arquivos do repositório de agora para o disco instalado, sem ISO nova, e usa o menu com um gamepad falso (`tools/vm-fakepad.py`, uinput) até o desktop, a troca de resolução e os quirks.
+- **Atualizar o gabinete sem ISO nova** (pela rede, com o login padrão):
+
+  ```powershell
+  docker build -t fliperos-ssh -f tools/Dockerfile.ssh tools
+  docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-ssh sh tools/cabinet-push.sh 192.168.1.111
+  ```
+
+  O `tools/cabinet-push.sh` envia o setup, o `config/`, o `fliperos-rootfs.sh` e o repositório de frontends; lá o `tools/cabinet-update.sh` guarda uma cópia do que muda em `/root/fliperos-backup-DATA.tgz`, roda o mesmo `fliperos-rootfs.sh` do build e aplica o que vem de fora dele: `fliperos-limine-update`, login automático, DNS, relógio, pacotes novos (pelo apt), linha do kernel e serviços. No fim reinicia o tty1.
 
 ## 12. Emuladores
 
@@ -342,7 +350,7 @@ O Model 2 Emulator (ElSemi) é freeware de código fechado, só para Windows, se
 
 **Splash.** Plymouth com o tema próprio `fliperos` (texto, sem imagem), `evangelion` (202 quadros, com **risco de convulsão** declarado pelo autor e sem licença no pacote) ou nenhum.
 
-**Rede.** Samba (`\\<ip>\FliperOS` → `/opt/fliperos`, escrita só com o usuário `fliperos`), SSH/SFTP e Avahi (`fliperos.local`). Login padrão `fliperos`/`fliperos`, como o `arcade`/`arcade` do GroovyArcade.
+**Rede.** Samba (`\\<ip>\FliperOS` → `/opt/fliperos`, escrita só com o usuário `fliperos`), SSH/SFTP e Avahi (`fliperos.local`). Login padrão `fliperos`/`fliperos`, como o `arcade`/`arcade` do GroovyArcade. O NetworkManager cuida do Wi-Fi **e do cabo** (o `10-globally-managed-devices.conf` vazio anula o do Ubuntu, que só gerenciava Wi-Fi) e escreve ele mesmo o `/etc/resolv.conf` com o DNS do DHCP (`90-fliperos-dns.conf`: o Ubuntu entregaria o DNS ao `systemd-resolved`, que não está na imagem). O relógio vem da rede (`systemd-timesyncd`). No primeiro teste no gabinete faltavam os três: o `resolv.conf` era o do container do build, o relógio da BIOS estava dois meses atrasado, e o apt não funcionava (nem System Update, nem frontends).
 
 **Diagnóstico.** `sudo fliperos-video-check --json` lê o modo ativo de cada saída (CRTC atual via libdrm, só leitura): conector, resolução, kHz, Hz, entrelaçado.
 

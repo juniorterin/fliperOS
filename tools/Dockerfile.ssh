@@ -1,0 +1,5 @@
+# ssh + sshpass para o tools/cabinet-push.sh (o ssh do Windows nao aceita
+# senha por linha de comando).
+FROM ubuntu:24.04
+RUN apt-get update -qq && apt-get install -y -qq openssh-client sshpass > /dev/null \
+    && rm -rf /var/lib/apt/lists/*

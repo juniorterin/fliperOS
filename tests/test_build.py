@@ -557,6 +557,22 @@ class RootfsRunTests(unittest.TestCase):
         self.assertEqual(os.readlink(wants), '/etc/systemd/system/fliperos-padkeys.service')
         self.assertIn('fliperos-menu', (self.root / 'etc/profile.d/fliperos.sh').read_text())
 
+    def test_networkmanager_writes_dns_and_manages_ethernet(self):
+        # No gabinete o resolv.conf era o do container do build (192.168.65.7)
+        # e o cabo de rede ficava sem IP.
+        nm = self.root / 'etc/NetworkManager/conf.d'
+        dns = (nm / '90-fliperos-dns.conf').read_text()
+        self.assertIn('dns=default', dns)
+        self.assertIn('rc-manager=file', dns)
+        self.assertEqual((nm / '10-globally-managed-devices.conf').read_text(), '')
+        squash = MKISO.split('create_squashfs() {')[1].split('mksquashfs')[0]
+        self.assertIn('> "$CHROOT_DIR/etc/resolv.conf"', squash)
+
+    def test_clock_is_synced_over_the_network(self):
+        # O relogio da BIOS do gabinete estava 2 meses atrasado e o apt
+        # recusava os repositorios.
+        self.assertRegex(MKISO, r'\bsystemd-timesyncd\b')
+
 
 class ResolutionAppTests(unittest.TestCase):
     """config/fliperos-resolution com xrandr e switchres falsos."""
