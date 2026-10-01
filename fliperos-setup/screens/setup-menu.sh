@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Setup do sistema instalado (worker_setup_menu do gasetup): video, audio,
-# rede, frontend, latencia, scraper e atualizacao.
+# rede, frontend, latencia, scraper, quirks e atualizacao.
 
 screen_setup_menu() {
   local choice last=video
@@ -13,6 +13,7 @@ screen_setup_menu() {
       "frontend|Frontend" \
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
+      "quirks|Quirks (USB controller fixes)" \
       "update|System Update" \
       "return|Return") || return 0
     last=$choice
@@ -23,6 +24,7 @@ screen_setup_menu() {
       frontend) screen_frontend ;;
       latency) screen_latency ;;
       scraper) screen_scraper ;;
+      quirks) screen_quirks ;;
       update) screen_update ;;
       return) return 0 ;;
     esac
@@ -116,7 +118,10 @@ screen_wifi() {
   local hidden=$1 devs=() dev ssid pass nets=() entries=() line sig sec
   mapfile -t devs < <(net_wifi_devices)
   if ((${#devs[@]} == 0)); then
-    ui_msg "Wi-Fi" "No Wi-Fi adapter was found. You may need additional drivers."
+    local hw=()
+    mapfile -t hw < <(net_hardware)
+    ui_msg "Wi-Fi" "No Wi-Fi adapter was found. You may need additional drivers." "" \
+      "Network hardware seen by Linux:" "${hw[@]}"
     return 0
   fi
   dev=${devs[0]}
@@ -165,16 +170,19 @@ screen_frontend() {
   while IFS='|' read -r name desc; do
     if launcher_installed "$name"; then
       entries+=("$name|$desc")
-    else
+    elif launcher_package_available "$name"; then
       entries+=("$name|$desc (not installed)")
+    else
+      entries+=("$name|$desc (not available yet)")
     fi
   done < <(launcher_all)
   choice=$(ui_menu "Frontend" "Choose what starts when the computer turns on. Now: $(launcher_label "$current")." \
     "$current" "${entries[@]}") || return 0
   if ! launcher_installed "$choice"; then
     pkg=$(launcher_package "$choice")
-    if [[ -z $pkg ]]; then
-      ui_msg "Frontend" "$(launcher_label "$choice") is not installed and has no package."
+    if [[ -z $pkg ]] || ! launcher_package_available "$choice"; then
+      ui_msg "Frontend" "$(launcher_label "$choice") is not in the FliperOS repository yet." "" \
+        "Choose another frontend; this one will come in a later version."
       return 0
     fi
     ui_yesno "Frontend" "$(launcher_label "$choice") is not installed. Install the $pkg package now?" yes || return 0
@@ -229,6 +237,81 @@ screen_scraper() {
       scraper_run "$dir" "$platform" "$source" "$videos" "$creds" || return 0
   done
   ui_msg "Scraper" "Done. The game lists were updated for $(launcher_label "$(launcher_current)")."
+}
+
+# ── Quirks ───────────────────────────────────────────────────────
+# Quirks do usbhid com nome (lib/quirks.sh): a lista, adicionar e apagar.
+
+screen_quirks() {
+  local entries code name choice last=add
+  while true; do
+    entries=()
+    while IFS='|' read -r code name; do
+      [[ -n $code ]] && entries+=("$code|$name ($code)")
+    done < <(quirks_list)
+    entries+=("add|Add a quirk" "usb|USB devices connected now" "return|Return")
+    choice=$(ui_menu "Quirks" "Kernel fixes for USB controllers (usbhid.quirks). Choose a quirk to delete it. Changes apply after a restart." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
+    case $choice in
+      add) screen_quirk_add ;;
+      usb)
+        {
+          echo "Vendor:product in the quirk format, then the device name."
+          echo
+          quirks_usb_devices
+        } > /tmp/fliperos-usb.txt
+        ui_pager "USB devices" /tmp/fliperos-usb.txt
+        ;;
+      return) return 0 ;;
+      *) screen_quirk_delete "$choice" ;;
+    esac
+  done
+}
+
+screen_quirk_add() {
+  local name code rc
+  if (($(quirks_count) >= QUIRKS_MAX)); then
+    ui_msg "Add a quirk" "The kernel reads at most $QUIRKS_MAX quirks." "" "Delete one before adding another."
+    return 0
+  fi
+  name=$(ui_input "Add a quirk" "Name, to recognize it in the list (e.g. Xin-Mo dual encoder)") || return 0
+  code=$(ui_input "Add a quirk" "Code: 0xVENDOR:0xPRODUCT:0xFLAGS (e.g. 0x16c0:0x05e1:0x40). IDs are in Quirks > USB devices. Flags: 0x40 one device per player (dual encoders), 0x8 no GET requests, 0x400 always poll.") || return 0
+  quirk_add "$name" "$code"
+  rc=$?
+  case $rc in
+    0) screen_quirks_save "Quirk saved." ;;
+    1) ui_msg "Add a quirk" "Invalid code: $code" "" \
+      "Use three hexadecimal numbers starting with 0x, separated by colons:" \
+      "0xVENDOR:0xPRODUCT:0xFLAGS (e.g. 0x16c0:0x05e1:0x40)." ;;
+    2) ui_msg "Add a quirk" "The kernel reads at most $QUIRKS_MAX quirks." ;;
+    3) ui_msg "Add a quirk" "This device (${code%:*}) already has a quirk." "" \
+      "Delete it first to change its code." ;;
+  esac
+}
+
+screen_quirk_delete() {
+  local code=$1 name
+  name=$(quirks_list | awk -F'|' -v c="$code" '$1 == c { print $2; exit }')
+  ui_yesno "Delete quirk" "Delete \"$name\" ($code)?" no || return 0
+  if ! quirk_delete "$code"; then
+    ui_msg "Delete quirk" "Could not delete it (see /var/log/fliperos-setup.log)."
+    return 0
+  fi
+  screen_quirks_save "Quirk deleted."
+}
+
+# screen_quirks_save MENSAGEM leva os quirks para a linha do kernel do
+# sistema instalado. Na midia de instalacao eles vao junto na instalacao.
+screen_quirks_save() {
+  if is_installed && ! is_live; then
+    ui_info "Quirks" "Saving the boot settings..."
+    if ! boot_apply; then
+      ui_msg "Quirks" "Could not update the boot settings (see /var/log/fliperos-setup.log)."
+      return 1
+    fi
+  fi
+  ui_msg "Quirks" "$1" "" "Restart the computer to apply it."
 }
 
 # ── Atualizacao ──────────────────────────────────────────────────

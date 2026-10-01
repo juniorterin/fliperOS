@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""Controle no lugar do teclado nos menus do FliperOS (o joy2key do
+RetroPie, para o fliperos-setup no console).
+
+    direcional, hat ou analogico esquerdo  setas (repetem segurando)
+    botao 1 / A / Start                    Enter
+    botao 2 / B / Select                   Esc
+    L / R                                  Page Up / Page Down
+
+Roda como servico (root, por causa do /dev/uinput), mas so traduz enquanto
+/run/fliperos/padkeys existe: o fliperos-setup cria o arquivo ao abrir o
+menu e o apaga ao sair, inclusive para abrir um frontend, emulador ou o
+desktop, que leem o controle sozinhos (senao cada botao valeria duas
+vezes). Fora disso os controles ficam fechados.
+
+As teclas saem por um teclado virtual (uinput): o console recebe a seta
+inteira (ESC [ A) de uma vez, o que o TIOCSTI do joy2key nao garante.
+Sem dependencias: o evdev e o uinput sao lidos e escritos com struct.
+"""
+import errno
+import fcntl
+import glob
+import os
+import select
+import struct
+import time
+
+FLAG = os.environ.get('FLIPEROS_PADKEYS_FLAG', '/run/fliperos/padkeys')
+NAME = b'FliperOS pad keys'
+
+EV_SYN, EV_KEY, EV_ABS = 0x00, 0x01, 0x03
+ABS_X, ABS_Y, ABS_HAT0X, ABS_HAT0Y = 0x00, 0x01, 0x10, 0x11
+
+KEY_ESC, KEY_ENTER = 1, 28
+KEY_UP, KEY_PAGEUP, KEY_LEFT, KEY_RIGHT, KEY_DOWN, KEY_PAGEDOWN = 103, 104, 105, 106, 108, 109
+
+BUTTONS = {
+    0x120: KEY_ENTER,     # BTN_TRIGGER: botao 1 de joystick e de encoder de fliperama
+    0x121: KEY_ESC,       # BTN_THUMB: botao 2
+    0x130: KEY_ENTER,     # BTN_SOUTH (A)
+    0x131: KEY_ESC,       # BTN_EAST (B)
+    0x136: KEY_PAGEUP,    # BTN_TL
+    0x137: KEY_PAGEDOWN,  # BTN_TR
+    0x13a: KEY_ESC,       # BTN_SELECT
+    0x13b: KEY_ENTER,     # BTN_START
+    0x220: KEY_UP, 0x221: KEY_DOWN, 0x222: KEY_LEFT, 0x223: KEY_RIGHT,  # BTN_DPAD_*
+    # xpad com o direcional como botoes (BTN_TRIGGER_HAPPY1-4).
+    0x2c0: KEY_LEFT, 0x2c1: KEY_RIGHT, 0x2c2: KEY_UP, 0x2c3: KEY_DOWN,
+}
+KEYS = sorted(set(BUTTONS.values()))
+REPEAT = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_PAGEUP, KEY_PAGEDOWN}
+# Mais lento que o teclado: num modo entrelacado o menu redesenha devagar.
+REPEAT_DELAY, REPEAT_RATE = 0.40, 0.12
+AXES = {ABS_X: (KEY_LEFT, KEY_RIGHT), ABS_Y: (KEY_UP, KEY_DOWN),
+        ABS_HAT0X: (KEY_LEFT, KEY_RIGHT), ABS_HAT0Y: (KEY_UP, KEY_DOWN)}
+# Controle e quem tem botao de joystick ou de gamepad (BTN_JOYSTICK e
+# BTN_GAMEPAD): teclado, mouse e touchpad nao tem. Pistola de luz (GunCon 2)
+# tem, mas mira pelos eixos X/Y e tem botao de mouse (BTN_LEFT): mirar
+# andaria pelo menu.
+PAD_BUTTONS = range(0x120, 0x140)
+BTN_LEFT = 0x110
+
+
+def is_pad(name, keys):
+    return name != NAME and BTN_LEFT not in keys and bool(keys.intersection(PAD_BUTTONS))
+
+
+class Mapper:
+    """Eventos de um controle -> [(tecla, 1 apertou / 0 soltou)]."""
+
+    def __init__(self, ranges):
+        self.ranges = ranges  # eixo -> (minimo, maximo), do EVIOCGABS
+        self.held = {}        # eixo -> tecla que ele segura agora
+
+    def direction(self, axis, value):
+        if axis in (ABS_HAT0X, ABS_HAT0Y):
+            return (value > 0) - (value < 0)
+        low, high = self.ranges.get(axis, (-32768, 32767))
+        if high <= low:
+            return 0
+        center = (low + high) / 2
+        # Metade do curso para cada lado: o analogico em repouso, mesmo
+        # gasto, nao anda sozinho; o encoder digital (0/127/255) vai ao fim.
+        dead = (high - low) / 4
+        if value < center - dead:
+            return -1
+        if value > center + dead:
+            return 1
+        return 0
+
+    def event(self, etype, code, value):
+        if etype == EV_KEY and code in BUTTONS:
+            # 2 e a repeticao do proprio controle: a nossa vem de Keys.
+            return [(BUTTONS[code], value)] if value in (0, 1) else []
+        if etype == EV_ABS and code in AXES:
+            negative, positive = AXES[code]
+            new = {-1: negative, 0: None, 1: positive}[self.direction(code, value)]
+            old = self.held.get(code)
+            if new == old:
+                return []
+            self.held[code] = new
+            out = [(old, 0)] if old else []
+            return out + ([(new, 1)] if new else [])
+        return []
+
+    def release(self):
+        out = [(key, 0) for key in self.held.values() if key]
+        self.held.clear()
+        return out
+
+
+class Keys:
+    """Teclas do teclado virtual: conta quem segura cada uma (o hat e o
+    analogico podem segurar a mesma seta) e repete as de mover."""
+
+    def __init__(self, emit):
+        self.emit = emit   # emit(tecla, valor): 1 aperta, 0 solta, 2 repete
+        self.count = {}
+        self.due = {}      # tecla -> hora da proxima repeticao
+
+    def apply(self, key, value, now):
+        n = self.count.get(key, 0)
+        if value:
+            self.count[key] = n + 1
+            if n == 0:
+                self.emit(key, 1)
+                if key in REPEAT:
+                    self.due[key] = now + REPEAT_DELAY
+        elif n == 1:
+            del self.count[key]
+            self.due.pop(key, None)
+            self.emit(key, 0)
+        elif n > 1:
+            self.count[key] = n - 1
+
+    def tick(self, now):
+        for key, when in list(self.due.items()):
+            if now >= when:
+                self.emit(key, 2)
+                self.due[key] = now + REPEAT_RATE
+
+    def timeout(self, now, idle):
+        if not self.due:
+            return idle
+        return max(0.0, min(min(self.due.values()) - now, idle))
+
+    def release_all(self):
+        for key in list(self.count):
+            self.emit(key, 0)
+        self.count.clear()
+        self.due.clear()
+
+
+# ── evdev e uinput (linux/input.h, linux/uinput.h) ──────────────────
+
+def _ioc(direction, kind, nr, size):
+    return (direction << 30) | (size << 16) | (ord(kind) << 8) | nr
+
+
+def eviocgbit(ev, length):
+    return _ioc(2, 'E', 0x20 + ev, length)
+
+
+def eviocgabs(axis):
+    return _ioc(2, 'E', 0x40 + axis, 24)
+
+
+EVIOCGNAME = _ioc(2, 'E', 0x06, 256)
+UI_DEV_CREATE = _ioc(0, 'U', 1, 0)
+UI_DEV_SETUP = _ioc(1, 'U', 3, 92)
+UI_SET_EVBIT = _ioc(1, 'U', 100, 4)
+UI_SET_KEYBIT = _ioc(1, 'U', 101, 4)
+EVENT = struct.Struct('llHHi')
+
+
+def bits(fd, ev, count):
+    buf = bytearray((count + 7) // 8)
+    fcntl.ioctl(fd, eviocgbit(ev, len(buf)), buf)
+    return {i for i in range(count) if buf[i // 8] >> (i % 8) & 1}
+
+
+class Pad:
+    def __init__(self, path):
+        self.path = path
+        self.fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        try:
+            name = bytearray(256)
+            fcntl.ioctl(self.fd, EVIOCGNAME, name)
+            keys = bits(self.fd, EV_KEY, 0x300)
+            if not is_pad(bytes(name).split(b'\0')[0], keys):
+                raise ValueError('nao e controle')
+            ranges = {}
+            for axis in bits(self.fd, EV_ABS, 0x40) & {ABS_X, ABS_Y}:
+                info = bytearray(24)
+                fcntl.ioctl(self.fd, eviocgabs(axis), info)
+                _value, low, high = struct.unpack('6i', info)[:3]
+                ranges[axis] = (low, high)
+        except (OSError, ValueError):
+            os.close(self.fd)
+            raise
+        self.mapper = Mapper(ranges)
+
+    def read(self):
+        """Eventos pendentes; OSError quando o controle foi desligado."""
+        try:
+            data = os.read(self.fd, EVENT.size * 64)
+        except BlockingIOError:
+            return []
+        if not data:
+            raise OSError(errno.ENODEV, 'desligado')
+        return [EVENT.unpack_from(data, i)[2:] for i in range(0, len(data) - EVENT.size + 1, EVENT.size)]
+
+    def close(self):
+        os.close(self.fd)
+
+
+def uinput_open():
+    fd = os.open('/dev/uinput', os.O_WRONLY | os.O_NONBLOCK)
+    fcntl.ioctl(fd, UI_SET_EVBIT, EV_KEY)
+    for key in KEYS:
+        fcntl.ioctl(fd, UI_SET_KEYBIT, key)
+    # BUS_VIRTUAL; vendor/produto sem significado.
+    fcntl.ioctl(fd, UI_DEV_SETUP, struct.pack('HHHH80sI', 0x06, 0x1209, 0x0001, 1, NAME, 0))
+    fcntl.ioctl(fd, UI_DEV_CREATE)
+    return fd
+
+
+def main():
+    out = uinput_open()
+
+    def emit(key, value):
+        os.write(out, EVENT.pack(0, 0, EV_KEY, key, value) + EVENT.pack(0, 0, EV_SYN, 0, 0))
+
+    keys = Keys(emit)
+    pads = {}
+    scanned = 0.0
+    while True:
+        if not os.path.exists(FLAG):
+            if pads:
+                for pad in pads.values():
+                    pad.close()
+                pads.clear()
+                keys.release_all()
+            time.sleep(0.5)
+            continue
+        now = time.monotonic()
+        if now - scanned >= 2:
+            scanned = now
+            for path in sorted(glob.glob('/dev/input/event*')):
+                if path not in pads:
+                    try:
+                        pads[path] = Pad(path)
+                    except (OSError, ValueError):
+                        pass
+        ready, _, _ = select.select([p.fd for p in pads.values()], [], [], keys.timeout(now, 0.5))
+        for pad in list(pads.values()):
+            if pad.fd not in ready:
+                continue
+            try:
+                events = pad.read()
+            except OSError:
+                events = None
+            now = time.monotonic()
+            if events is None:
+                for key, value in pad.mapper.release():
+                    keys.apply(key, value, now)
+                pad.close()
+                del pads[pad.path]
+                continue
+            for etype, code, value in events:
+                for key, pressed in pad.mapper.event(etype, code, value):
+                    keys.apply(key, pressed, now)
+        keys.tick(time.monotonic())
+
+
+if __name__ == '__main__':
+    main()

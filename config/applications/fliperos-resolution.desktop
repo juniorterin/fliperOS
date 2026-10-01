@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Screen Resolution
+GenericName=Desktop resolution
+Comment=Changes the desktop resolution now (Switchres + xrandr)
+Exec=lxterminal -t "Screen Resolution" -e /opt/fliperos/bin/fliperos-resolution
+Icon=preferences-desktop-display
+Terminal=false
+Categories=Settings;DesktopSettings;

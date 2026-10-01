@@ -6,16 +6,27 @@
     python3 tools/vm-test.py screens ISO   boota pelo menu do Limine e
                                            fotografa o tty1 (o Gum no console
                                            de verdade) tela a tela
+    python3 tools/vm-test.py desktop ISO   no disco do modo install: abre o
+                                           LXDE pelo fluxo do tty1, fotografa
+                                           e traz os logs do X e do LXDE
+    python3 tools/vm-test.py dev ISO       no disco do modo install, com os
+                                           arquivos do repositorio de agora
+                                           (sem ISO nova): menu por gamepad
+                                           falso, Start desktop, resolucao do
+                                           desktop e quirks
 
 Tudo acontece em /audit (um volume do Docker, nunca uma pasta do Windows):
 disco qcow2, logs e as fotos em PNG.
 """
+import base64
+import io
 from pathlib import Path
 import re
 import socket
 import struct
 import subprocess
 import sys
+import tarfile
 import time
 import zlib
 
@@ -249,8 +260,141 @@ def screens(iso):
         guest.close()
 
 
+def desktop(iso):
+    """Disco ja instalado (o do modo install): o launcher vira o LXDE, o tty1
+    faz o login de novo pelo fluxo normal (.zprofile -> fliperos-tty1 ->
+    fliperos-session) e a tela e fotografada, com os logs do X e do LXDE."""
+    print('DESKTOP: boot do disco instalado, launcher = LXDE', flush=True)
+    guest = Guest('desktop', disk(False) + ['-vga', 'std'], monitor=True)
+    try:
+        guest.root_shell()
+        guest.run('echo lxde > /etc/fliperos/session; rm -f /etc/fliperos/firstboot')
+        guest.run('systemctl restart getty@tty1')
+        time.sleep(150)
+        guest.screenshot('desktop-01')
+        guest.run("ps -eo user,args | grep -E 'Xorg|xinit|lxsession|openbox|lxpanel|pcmanfm' | grep -v grep")
+        guest.run('tail -n 40 /home/fliperos/.local/share/xorg/Xorg.0.log 2>/dev/null || tail -n 40 /var/log/Xorg.0.log')
+        guest.run('tail -n 30 /home/fliperos/.cache/lxsession/LXDE/run.log 2>/dev/null')
+        guest.run('journalctl -b --no-pager -n 40 _COMM=Xorg 2>/dev/null; journalctl -b --no-pager -u getty@tty1 -n 20')
+        time.sleep(30)
+        guest.screenshot('desktop-02')
+
+        # Fase 2, o caminho do gabinete: menu principal > Start desktop (o
+        # setup como root abre o LXDE por runuser) com o xorg.conf de 15 kHz
+        # que a lib gera para um monitor de arcade.
+        print('DESKTOP: menu principal > Start desktop, xorg.conf de 15 kHz', flush=True)
+        load = 'for f in %s/lib/*.sh; do . "$f"; done' % LIB
+        guest.run("bash -c '%s; conf_set monitor generic_15; conf_set connector Virtual-1; "
+                  "conf_set boot_resolution 640x240S; xorg_generate' && cat /etc/X11/xorg.conf.d/10-fliperos.conf" % load)
+        guest.run('rm -f /home/fliperos/.local/share/xorg/Xorg.0.log; echo setup > /etc/fliperos/session; '
+                  'pkill -u fliperos -x xinit; true')
+        time.sleep(60)
+        guest.screenshot('desktop-03-menu')
+        for key in ('down', 'down', 'ret'):
+            guest.key(key)
+            time.sleep(3)
+        time.sleep(150)
+        guest.screenshot('desktop-04')
+        guest.run("ps -eo user,args | grep -E 'Xorg|xinit|lxsession|openbox|lxpanel|pcmanfm' | grep -v grep")
+        guest.run("grep -E '\\(EE\\)|\\(WW\\)|Modeline|Output|modeset' /home/fliperos/.local/share/xorg/Xorg.0.log | tail -n 60")
+        guest.run('tail -n 30 /var/log/fliperos-setup.log')
+    finally:
+        guest.close()
+
+
+def push(guest, paths, dest='/tmp/repo'):
+    """Leva arquivos do repositorio (cwd) para a VM pelo console serial."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode='w:gz') as tar:
+        for p in paths:
+            tar.add(p, arcname=p, filter=lambda ti: None if '__pycache__' in ti.name else ti)
+    lines = base64.encodebytes(buf.getvalue()).decode().splitlines()
+    guest.run("export PS2=''; rm -rf %s /tmp/push.tgz; mkdir -p %s" % (dest, dest))
+    guest.send("base64 -d > /tmp/push.tgz << 'B64EOF'")
+    for line in lines:
+        guest.send(line)
+    guest.send('B64EOF')
+    guest.wait('VMROOT> ')
+    assert guest.run('tar xzf /tmp/push.tgz -C %s' % dest) == 0, 'push falhou'
+
+
+def dev(iso):
+    """Sem ISO nova: o disco do modo install recebe os arquivos do
+    repositorio de agora (o fliperos-rootfs.sh roda dentro da VM). O menu e
+    usado por um gamepad falso (uinput) ate o Start desktop, que abre pelo
+    laco do fliperos-tty1; depois a resolucao do desktop e os quirks."""
+    print('DEV: disco instalado + arquivos do repositorio', flush=True)
+    guest = Guest('dev', disk(False) + ['-vga', 'std'], monitor=True)
+    load = 'for f in %s/lib/*.sh; do . "$f"; done' % LIB
+    # Sem o LC_ALL=C deste shell: o lxterminal leria as bordas do Gum como ASCII.
+    as_user = "runuser -u fliperos -- env -u LC_ALL LANG=C.UTF-8 DISPLAY=:0 "
+    try:
+        guest.root_shell()
+        push(guest, ['fliperos-setup', 'config', 'fliperos-rootfs.sh', 'fliperos-video-check.py',
+                     'tools/vm-fakepad.py'])
+        assert guest.run('bash /tmp/repo/fliperos-rootfs.sh / > /tmp/rootfs.log 2>&1 || '
+                         '{ tail /tmp/rootfs.log; false; }') == 0, 'fliperos-rootfs.sh falhou'
+        guest.run('grep -o "<application title=.Screen Resolution.*" /home/fliperos/.config/openbox/lxde-rc.xml')
+        guest.run('systemctl daemon-reload; systemctl restart fliperos-padkeys; sleep 2; '
+                  'systemctl is-active fliperos-padkeys')
+        guest.run('echo setup > /etc/fliperos/session; rm -f /etc/fliperos/firstboot '
+                  '/home/fliperos/.local/share/xorg/Xorg.0.log; systemctl restart getty@tty1')
+        time.sleep(45)
+        guest.screenshot('dev-01-menu')
+        guest.run('ls -l /run/fliperos/padkeys')
+
+        print('DEV: gamepad falso: baixo, baixo, A (Start desktop)', flush=True)
+        guest.run('python3 /tmp/repo/tools/vm-fakepad.py down down a', timeout=120)
+        time.sleep(120)
+        guest.screenshot('dev-02-desktop')
+        guest.run("ps -eo user,args | grep -E 'Xorg|lxsession|fliperos-setup' | grep -v grep")
+        guest.run("grep -E '\\(EE\\) +[^ ]' /home/fliperos/.local/share/xorg/Xorg.0.log | tail; "
+                  "ls -l /run/fliperos/padkeys; cat /run/fliperos/launch")
+
+        print('DEV: resolucao guardada (320x240) aplicada no desktop', flush=True)
+        guest.run("runuser -u fliperos -- sh -c 'mkdir -p ~/.config/fliperos; "
+                  "echo 320 240 60 > ~/.config/fliperos/desktop-mode'")
+        guest.run(as_user + '/opt/fliperos/bin/fliperos-resolution --apply-saved; echo apply=$?; '
+                  + as_user + 'xrandr --query | head -3')
+        time.sleep(10)
+        guest.screenshot('dev-03-320x240')
+
+        print('DEV: Screen Resolution: 384x288 sem confirmar (volta), depois o do boot', flush=True)
+        guest.run("runuser -u fliperos -- rm -f /home/fliperos/.config/fliperos/desktop-mode; ("
+                  + as_user + "setsid lxterminal -t 'Screen Resolution' "
+                  "-e /opt/fliperos/bin/fliperos-resolution > /dev/null 2>&1 &)")
+        time.sleep(25)
+        guest.screenshot('dev-04-app')
+        for key in ('down', 'down', 'ret'):
+            guest.key(key)
+            time.sleep(2)
+        time.sleep(10)
+        guest.screenshot('dev-05-384x288-confirm')
+        guest.run(as_user + 'xrandr --query | head -3')
+        time.sleep(25)
+        guest.screenshot('dev-06-reverted')
+        guest.run(as_user + 'xrandr --query | head -3')
+        for key in ('ret', 'up', 'up', 'ret'):
+            guest.key(key)
+            time.sleep(3)
+        time.sleep(8)
+        guest.screenshot('dev-07-boot-confirm')
+        guest.key('ret')
+        time.sleep(8)
+        guest.screenshot('dev-08-back-to-list')
+        guest.run(as_user + 'xrandr --query | head -3; ls -l /home/fliperos/.config/fliperos/')
+
+        print('DEV: quirk salvo na linha do kernel', flush=True)
+        guest.run("bash -c '%s; quirk_add \"Test encoder\" 0x16c0:0x05e1:0x40 && boot_apply'; "
+                  "cat /etc/fliperos/quirks.conf; grep -o 'usbhid.quirks=[^ ]*' /etc/default/fliperos-boot "
+                  "/boot/efi/limine/limine.conf" % load, 300)
+    finally:
+        guest.close()
+
+
 if __name__ == '__main__':
-    if len(sys.argv) != 3 or sys.argv[1] not in ('install', 'screens'):
+    modes = {'install': install, 'screens': screens, 'desktop': desktop, 'dev': dev}
+    if len(sys.argv) != 3 or sys.argv[1] not in modes:
         print(__doc__)
         sys.exit(2)
-    {'install': install, 'screens': screens}[sys.argv[1]](Path(sys.argv[2]))
+    modes[sys.argv[1]](Path(sys.argv[2]))

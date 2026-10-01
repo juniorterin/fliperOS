@@ -94,8 +94,9 @@ install_configure_video() {
     for key in $VIDEO_CONF_KEEP; do
       value=$(conf_get "$key" 2> /dev/null) && conf_set "$key" "$value" "$target$FLIPEROS_CONF"
     done
-  elif [[ -f $FLIPEROS_CONF ]]; then
-    cp -f "$FLIPEROS_CONF" "$target$FLIPEROS_CONF"
+  else
+    [[ -f $FLIPEROS_CONF ]] && cp -f "$FLIPEROS_CONF" "$target$FLIPEROS_CONF"
+    [[ -f $QUIRKS_FILE ]] && cp -p "$QUIRKS_FILE" "$target$QUIRKS_FILE"
   fi
   for file in "$SWITCHRES_INI" "$MAME_INI"; do
     [[ -f $file ]] && cp -p "$file" "$target$file"
@@ -106,8 +107,10 @@ install_configure_video() {
     install -D -m 644 "$EDID_DIR/custom_resolution.bin" "$target$EDID_DIR/custom_resolution.bin"
   fi
   xorg_generate "$target$XORG_CONF" || return 1
-  # A linha sai do fliperos.conf do disco: nele esta o modo de latencia.
-  boot_write_cmdline "$(FLIPEROS_CONF=$target$FLIPEROS_CONF boot_install_cmdline)" "$target$BOOT_DEFAULTS"
+  # A linha sai do fliperos.conf e dos quirks do disco: nele esta o modo de
+  # latencia, e o Recovery Mode nao apaga os quirks que ja estavam la.
+  boot_write_cmdline "$(FLIPEROS_CONF=$target$FLIPEROS_CONF QUIRKS_FILE=$target$QUIRKS_FILE \
+    boot_install_cmdline)" "$target$BOOT_DEFAULTS"
 }
 
 # install_configure_user ALVO: rede e audio configurados na midia vao
@@ -144,7 +147,10 @@ install_bootloader() {
   install -D -m 644 "$target/$LIMINE_SHARE/BOOTX64.EFI" "$esp/EFI/BOOT/BOOTX64.EFI" || return 1
   install -D -m 644 "$target/$LIMINE_SHARE/limine-bios.sys" "$esp/limine/limine-bios.sys" || return 1
   run_logged chroot "$target" "$LIMINE_UPDATE" || return 1
-  run_logged chroot "$target" /usr/local/bin/limine bios-install "$disk" 1
+  # --force: a particao 1 e a de BIOS boot que o proprio instalador criou e
+  # zerou. Sem ele, um resto de sistema de arquivos do disco antigo naquele
+  # trecho ("contains a recognised filesystem") barra a instalacao.
+  run_logged chroot "$target" /usr/local/bin/limine bios-install --force "$disk" 1
 }
 
 # install_run DISCO IDENTIDADE instala no disco. IDENTIDADE e o

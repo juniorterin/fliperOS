@@ -8,8 +8,13 @@ ZSH_CACHE_DIR=$HOME/.cache/oh-my-zsh
 zstyle ':omz:update' mode disabled
 plugins=(git)
 
-# A fonte do console do Linux (tty) nao tem a seta nem o check/x do tema.
-[[ $TERM == linux ]] && DRACULA_ARROW_ICON="> "
+# A fonte do console do Linux (tty) nao tem a seta nem o check/x do tema. O
+# boot esconde o cursor do console (vt.global_cursor_default=0, para ir
+# direto ao Plymouth); no shell ele volta.
+if [[ $TERM == linux ]]; then
+  DRACULA_ARROW_ICON="> "
+  printf '\e[?25h'
+fi
 
 mkdir -p "$ZSH_CACHE_DIR"
 source "$ZSH/oh-my-zsh.sh"

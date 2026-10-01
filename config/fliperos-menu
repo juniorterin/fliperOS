@@ -1,0 +1,4 @@
+#!/bin/sh
+# Volta do shell do tty1 ao menu do FliperOS: o laco do fliperos-tty1 (o
+# setup e, quando ele pede, o frontend ou o desktop).
+exec /opt/fliperos/bin/fliperos-tty1 --menu

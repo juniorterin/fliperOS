@@ -7,8 +7,11 @@
 
 # Base de todo sistema instalado: splash, console sem apagar (o
 # consoleblank=0 do GroovyArcade) e o radeon nas placas SI/CIK, que e onde
-# o 15 kHz foi validado no gabinete.
-BOOT_BASE_CMDLINE="quiet splash consoleblank=0 radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0"
+# o 15 kHz foi validado no gabinete. BOOT_SILENT: boot direto no Plymouth,
+# sem mensagens do kernel e do udev nem o cursor piscando antes dele (o
+# rd.udev.log-priority=3 do GA, no nome atual).
+BOOT_SILENT="loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
+BOOT_BASE_CMDLINE="quiet splash $BOOT_SILENT consoleblank=0 radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0"
 
 # boot_driver_params LINHA imprime os parametros de driver de uma linha do
 # kernel: a entrada "Intel 15 kHz" do boot leva o i915.no_ytiled_scanout=1,
@@ -25,8 +28,8 @@ boot_driver_params() {
 }
 
 # boot_compose LINHA aplica a uma linha do kernel o que o setup decidiu:
-# modo de latencia, parametros de video do teste de saidas (se houve teste),
-# console na placa certa (fbcon=map) e orientacao.
+# modo de latencia, quirks do usbhid, parametros de video do teste de saidas
+# (se houve teste), console na placa certa (fbcon=map) e orientacao.
 boot_compose() {
   local line=$1 conn video orientation fb word out=()
   conn=$(conf_get connector 2> /dev/null) || conn=""
@@ -38,6 +41,7 @@ boot_compose() {
     out+=("$word")
   done
   line=$(latency_cmdline "${out[*]}")
+  line=$(quirks_cmdline "$line")
   if [[ -n $conn ]]; then
     line=$(words "$(cmdline_without_video "$line") $video")
   fi

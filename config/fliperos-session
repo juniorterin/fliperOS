@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Abre o launcher padrao (/etc/fliperos/session) ou o passado como argumento,
 # como o startfe.sh do galauncher do GroovyArcade. Volta quando ele fecha: o
-# .bash_profile chama o fliperos-setup em seguida.
+# fliperos-tty1 abre o menu do setup em seguida.
 set -uo pipefail
 
 TABLE=/etc/fliperos/sessions.conf
@@ -36,10 +36,28 @@ fi
   exit 0
 }
 
+# O X caiu logo ao abrir: os erros do log dele ficam na tela (para uma
+# foto) ate o Enter, em vez de o menu voltar sem explicacao. Uma copia do
+# log vai para /opt/fliperos/logs.
+x_failed() {
+  local log=${XDG_DATA_HOME:-$HOME/.local/share}/xorg/Xorg.0.log
+  [[ -r $log ]] || log=/var/log/Xorg.0.log
+  printf '\n\e[1;31mThe X server did not start (exit code %s).\e[0m\n' "$1"
+  if [[ -r $log ]]; then
+    printf 'Errors in %s:\n\n' "$log"
+    grep -E '^\[ *[0-9.]+\] \(EE\) +[^ ]' "$log" | tail -n 12
+    cp -f "$log" /opt/fliperos/logs/Xorg-failed.log 2> /dev/null
+  fi
+  printf '\nPress Enter to return to the menu.'
+  read -r -t 600 _ || true
+}
+
 # CPU no governador "performance" enquanto o launcher roda, e de volta ao
 # anterior quando ele fecha (o cpu_governor.sh do galauncher). No modo de
 # baixa latencia a CPU ja fica em performance desde o boot.
 sudo -n /usr/local/bin/fliperos-setup --session-start > /dev/null 2>&1 || true
+# Tela limpa e sem cursor ate o launcher assumir o monitor.
+printf '\e[H\e[2J\e[?25l'
 
 case $backend in
   kms)
@@ -57,8 +75,13 @@ case $backend in
     request="${XDG_RUNTIME_DIR:-/tmp}/fliperos-next"
     rm -f "$request"
     while true; do
+      started=$SECONDS
       xinit "$binary" -- :0 -nolisten tcp "vt$vt" -keeptty
       rc=$?
+      if ((rc != 0 && SECONDS - started < 20)); then
+        x_failed "$rc"
+        break
+      fi
       [[ -s $request ]] || break
       mapfile -t next < "$request"
       rm -f "$request"

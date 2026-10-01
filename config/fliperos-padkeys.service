@@ -1,0 +1,14 @@
+[Unit]
+Description=FliperOS: controller as keyboard in the setup menus
+# Sem /dev/uinput nao ha o que fazer: depois de 5 falhas em 1 minuto, para.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+ExecStartPre=-/sbin/modprobe uinput
+ExecStart=/usr/bin/python3 /opt/fliperos/bin/fliperos-padkeys
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

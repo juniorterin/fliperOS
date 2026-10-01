@@ -34,9 +34,18 @@ mkdir -p "$root/etc/fliperos" "$root/etc/fliperos/mame" "$root/etc/fliperos/retr
 install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions.conf"
 [[ -f "$root/etc/fliperos/session" ]] || printf 'setup\n' > "$root/etc/fliperos/session"
 for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-client fliperos-lxde fliperos-launch \
-  fliperos-tty1 fliperos-ini-set; do
+  fliperos-tty1 fliperos-ini-set fliperos-resolution; do
   install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done
+# fliperos-menu: do shell de volta ao menu (o laco do fliperos-tty1).
+install -Dm755 "$src/config/fliperos-menu" "$root/usr/local/bin/fliperos-menu"
+# Controle como teclado nos menus do setup (o servico so age com o menu na
+# tela; ver config/fliperos-padkeys).
+install -Dm755 "$src/config/fliperos-padkeys" "$root/opt/fliperos/bin/fliperos-padkeys"
+install -Dm644 "$src/config/fliperos-padkeys.service" "$root/etc/systemd/system/fliperos-padkeys.service"
+mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
+ln -sfn /etc/systemd/system/fliperos-padkeys.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-padkeys.service"
 # Modo de video de cada emulador do fliperos-x11-run (640x240 nos de 480i
 # num monitor de 15 kHz). O usuario pode editar: a imagem nao sobrescreve.
 [[ -f "$root/etc/fliperos/emulator-modes.conf" ]] \
@@ -155,21 +164,25 @@ if [[ -z "${DISPLAY:-}" && "$(tty)" == /dev/tty1 ]]; then
 fi
 EOF
   install -m644 "$src/config/zshrc" "$home/.zshrc"
+  # Sem MOTD nem "Last login" entre o Plymouth e o setup/frontend.
+  : > "$home/.hushlogin"
   # LXDE como o do GroovyArcade (ver config/lxde).
   mkdir -p "$home/.config"
   cp -r "$src/config/lxde/." "$home/.config/"
   # Janelas e menus do Openbox no tema Dracula (fliperos-dracula.sh): o
   # openbox-lxde le ~/.config/openbox/lxde-rc.xml, que nasce da copia do
-  # padrao do sistema; so o nome do tema muda.
+  # padrao do sistema; so o nome do tema muda, e a janela do Screen
+  # Resolution abre maximizada (o Openbox a reajusta a cada troca de modo).
   # O do LXDE e do openbox-lxde-session; o do openbox puro fica de reserva.
   for rc in etc/xdg/openbox/LXDE/rc.xml etc/xdg/openbox/rc.xml; do
     [[ -f "$root/$rc" ]] || continue
     mkdir -p "$home/.config/openbox"
-    sed '/<theme>/,/<\/theme>/ s|<name>[^<]*</name>|<name>Dracula</name>|' "$root/$rc" \
-      > "$home/.config/openbox/lxde-rc.xml"
+    sed -e '/<theme>/,/<\/theme>/ s|<name>[^<]*</name>|<name>Dracula</name>|' \
+      -e 's|</applications>|  <application title="Screen Resolution"><maximized>yes</maximized></application>\n</applications>|' \
+      "$root/$rc" > "$home/.config/openbox/lxde-rc.xml"
     break
   done
-  chown -R 1000:1000 "$home/.zprofile" "$home/.bash_profile" "$home/.zshrc" "$home/.config" 2> /dev/null || true
+  chown -R 1000:1000 "$home/.zprofile" "$home/.bash_profile" "$home/.zshrc" "$home/.hushlogin" "$home/.config" 2> /dev/null || true
 fi
 # zsh como shell do usuario, se estiver na imagem (o root continua no bash).
 if [[ -x "$root/usr/bin/zsh" ]]; then
@@ -185,6 +198,6 @@ rm -f "$root/etc/sudoers.d/fliperos-installer"
 
 cat > "$root/etc/profile.d/fliperos.sh" << 'EOF'
 if [ "$(tty 2> /dev/null)" = /dev/tty1 ] && [ -z "${DISPLAY:-}" ]; then
-    echo "FliperOS: type  sudo fliperos-setup  to open the setup menu."
+    echo "FliperOS: type  fliperos-menu  to open the menu."
 fi
 EOF

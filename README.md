@@ -1,6 +1,6 @@
 # FliperOS 0.7 — instalador para gabinetes CRT, no estilo do GroovyArcade
 
-Ubuntu 24.04 amd64 com o **kernel 15 kHz** (kernel.org 6.18 LTS + patches D0023R, os mesmos do `linux-15khz` do GroovyArcade). A mídia é **só de instalação** e segue o fluxo do GroovyArcade: menu de boot com a faixa de frequência, teste das saídas de vídeo com voz, *Testing Results*, menu **FliperOS Setup** e instalação no HD com barra de progresso. No sistema instalado, o mesmo programa vira o menu de configuração que aparece quando o frontend fecha.
+Ubuntu 24.04 amd64 com o **kernel 15 kHz** (kernel.org 6.18 LTS + patches D0023R, os mesmos do `linux-15khz` do GroovyArcade). A mídia é **só de instalação** e segue o fluxo do GroovyArcade: menu de boot com a faixa de frequência, teste das saídas de vídeo com voz, *Testing Results*, menu **FliperOS Setup** e instalação no HD/SSD com barra de progresso. No sistema instalado, o mesmo programa vira o menu de configuração que aparece quando o frontend fecha.
 
 As telas são do **`fliperos-setup`**, em Bash com [Gum](https://github.com/charmbracelet/gum) (Charmbracelet, feito sobre Bubble Tea), tema **Dracula** e textos em inglês, como no GroovyArcade. Pensadas para **640x480i**: 80x30 caracteres, nada animado nem piscando.
 
@@ -64,21 +64,21 @@ Tudo é gravado em **`/etc/fliperos/fliperos.conf`** (GPU, driver, conector, det
 
 ## 4. FliperOS Setup
 
-Menu da mídia (o `isomainmenu` do gasetup): **Install to HD**, **Recovery Mode**, **Terminal** e **Shutdown**. O título mostra o host e o IP.
+Menu da mídia (o `isomainmenu` do gasetup): **Install to HD/SSD**, **Recovery Mode**, **Terminal** e **Shutdown**. O título mostra o host e o IP.
 
-### Install to HD
+### Install to HD/SSD
 
 1. **Do you want to configure video?** — *Yes* abre o **Video Setup**:
    - **Monitor Type**: os 29 presets do Switchres, na lista do gatools;
    - **Monitor Orientation**: horizontal, vertical horário, vertical anti-horário (console girado com `fbcon=rotate`, `panel_orientation` no `video=`, `ror`/`rol` do MAME e o desktop pelo `xrandr`);
    - **Resolution**: só os modos da tabela do kernel que a faixa do monitor e a placa aceitam (sem dotclock baixo, só as super resoluções), mais **resolução personalizada**: testa no `grid` do Switchres e gera um EDID (`switchres -e`), como o `worker_custom_video_mode`;
-   - **Geometry**: o mesmo **`geometry`** do GroovyArcade — o `geometry.py` do Switchres, que desenha o grid e devolve o `crt_range`, gravado como `monitor custom` no `/etc/switchres.ini`.
-2. **Automatically Partition** — lista os discos pelo **modelo, tamanho, caminho e barramento** (USB/NVMe/SATA). Não aparecem: a própria mídia de instalação, discos com menos de 16 GiB, montados ou em swap, com RAID/LVM/criptografia ou dependentes ativos — cada um com o motivo, acima da lista.
+   - **Geometry**: o mesmo **`geometry`** do GroovyArcade — o `geometry.py` do Switchres, que desenha o grid e devolve o `crt_range`, gravado como `monitor custom` no `/etc/switchres.ini`. O grid sai na resolução escolhida acima, com o refresh dela (50 Hz nos modos PAL; sem escolha, 640x480). Para baixo a imagem só anda enquanto houver linhas em branco abaixo dela (o Switchres não passa do *front porch*); quando parar, o ajuste é o **V-POS** do monitor.
+2. **Automatically Partition** — lista os discos pelo **modelo, tamanho, caminho e barramento** (USB/NVMe/SATA). Não aparecem: a própria mídia de instalação, discos com menos de 16 GiB, montados ou em swap, com RAID/LVM/criptografia ou dependentes ativos — cada um com o motivo, acima da lista. **My drive is not listed (details)** mostra tudo o que o Linux enxerga (o `lsblk`, as controladoras e as mensagens do kernel): um HD/SSD que nem ali aparece está escondido antes do Linux, quase sempre pelo modo SATA da BIOS em RAID/Intel RST (troque para AHCI) ou pelo Intel VMD.
 3. **WARNING** — modelo, caminho e tamanho do disco que será apagado; *No* volta para a escolha do disco. Se o disco já tem FliperOS, o aviso sugere o Recovery Mode.
 4. **Installing FliperOS** — uma tela só, com o disco de destino, barra de progresso **real** (a cópia do sistema vem do percentual do `unsquashfs`, como o `dialog --gauge` do gasetup), a etapa e mensagens curtas. A saída dos comandos vai para `/var/log/fliperos-setup.log`. Em erro: etapa, erro, **View log / Retry / Return**.
 5. **Installation completed successfully. Remove the installation CD/DVD/USB.** — e **Reboot now?**
 
-Particionamento: GPT, BIOS boot de 1 MiB, ESP FAT32 de 1 GiB, o resto em ext4. O Limine é instalado para BIOS (estágio 2 na partição BIOS boot) e para UEFI (`EFI/BOOT/BOOTX64.EFI`, o caminho removível), sem mexer na NVRAM. O Limine só lê FAT, então kernel e initrd ficam **na ESP** (`/boot/efi/fliperos/`), mantidos pelo `fliperos-limine-update` — o equivalente do `update-grub`, chamado pelos hooks de kernel e de initramfs. Os parâmetros do kernel ficam em `/etc/default/fliperos-boot`.
+Particionamento: GPT, BIOS boot de 1 MiB, ESP FAT32 de 1 GiB, o resto em ext4. As partições novas têm as assinaturas antigas apagadas e a de BIOS boot é zerada (um resto de sistema de arquivos do disco anterior ali fazia o `limine bios-install` recusar; ele também roda com `--force`). O Limine é instalado para BIOS (estágio 2 na partição BIOS boot) e para UEFI (`EFI/BOOT/BOOTX64.EFI`, o caminho removível), sem mexer na NVRAM. O Limine só lê FAT, então kernel e initrd ficam **na ESP** (`/boot/efi/fliperos/`), mantidos pelo `fliperos-limine-update` — o equivalente do `update-grub`, chamado pelos hooks de kernel e de initramfs. Os parâmetros do kernel ficam em `/etc/default/fliperos-boot`.
 
 O disco novo leva o que foi decidido na mídia: `fliperos.conf`, Switchres, MAME, Xorg, a linha do kernel, as redes Wi-Fi configuradas e a placa de som.
 
@@ -88,7 +88,11 @@ Procura discos com FliperOS (partição `FliperOS` com o marcador `/etc/fliperos
 
 ## 5. Sistema instalado
 
-O tty1 faz o login sozinho e segue o fluxo do `.bash_profile` do GroovyArcade (`config/fliperos-tty1`, chamado pelo `~/.zprofile`): abre o **launcher padrão** e, quando ele fecha, o **menu do FliperOS**. O shell do usuário é o **zsh com Oh My Zsh** e o tema Dracula (seção 6); o `~/.bash_profile` chama o mesmo fluxo, para quem voltar ao bash.
+**Boot sem texto:** do Limine direto ao Plymouth. O menu do Limine fica escondido (`quiet: yes`; uma tecla nos 3 segundos dele o mostra, com a entrada de diagnóstico), o kernel e o udev ficam calados (`quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3`), o cursor do console some (`vt.global_cursor_default=0`, e volta no shell) e o login automático não escreve nada (`agetty --skip-login --noissue`, `~/.hushlogin`).
+
+O tty1 faz o login sozinho e segue o fluxo do `.bash_profile` do GroovyArcade (`config/fliperos-tty1`, chamado pelo `~/.zprofile`): abre o **launcher padrão** e, quando ele fecha, o **menu do FliperOS**. O menu é um laço: **Start frontend** e **Start desktop** fazem o setup sair e o `fliperos-tty1` abre o launcher no próprio tty1, como no boot, e volta ao menu quando ele fecha. O setup roda como root dentro do pseudo-terminal do `sudo`; aberto de lá, o X não tem o tty1 como terminal e não consegue trocar de VT (`xf86OpenConsole: VT_ACTIVATE failed`) — era o "desktop não inicia" do gabinete. Se o X cair ao abrir, os erros do log dele ficam na tela até o Enter (cópia em `/opt/fliperos/logs/Xorg-failed.log`). O shell do usuário é o **zsh com Oh My Zsh** e o tema Dracula (seção 6); o `~/.bash_profile` chama o mesmo fluxo, para quem voltar ao bash.
+
+**Controle nos menus:** com o menu do setup na tela, o controle faz as vezes do teclado — direcional, hat ou analógico = setas (repetem segurando), botão 1 / A / Start = Enter, botão 2 / B / Select = Esc, L / R = Page Up / Page Down. Vale para encoders de fliperama (eixo digital 0–255), gamepads e joysticks USB; pistolas de luz ficam de fora (mirar andaria pelo menu). O serviço `fliperos-padkeys` (Python puro, `uinput` do kernel) só traduz enquanto existe `/run/fliperos/padkeys`, que o setup cria ao abrir e apaga ao sair: frontends, emuladores e o desktop leem o controle sozinhos, sem botão valendo duas vezes.
 
 **Primeiro boot:** *Choose default launcher*, com a lista gerada dos launchers instalados de fato (Attract-Mode Plus, RetroArch, EmulationStation..., LXDE) e o próprio *FliperOS Setup*. Muda depois em Setup > Frontend.
 
@@ -99,12 +103,13 @@ O tty1 faz o login sozinho e segue o fluxo do `.bash_profile` do GroovyArcade (`
   - **Video Setup** — o mesmo da instalação; grava a linha do kernel e oferece reiniciar;
   - **Audio Setup** — placa padrão (`/etc/asound.conf`), volume, AlsaMixer, **MAME audio latency** (`audio_latency` do `mame.ini`, 0.0 a 50.0, 0 = padrão; o "Audio Latency MAME" do GA) e teste de som. Como no GA, o volume move `Master`/`Front`/`Speaker`/`Headphone` e deixa o `PCM` no máximo (placa só com `PCM` usa o `PCM`). Não há servidor de som: RetroArch (`audio_driver = alsa`), GroovyMAME (`sound sdl`) e os emuladores SDL (`SDL_AUDIODRIVER=alsa`) tocam direto no ALSA, então esse volume vale para todos, em KMS ou X;
   - **Network Setup** — Wi-Fi pela lista de redes (com sinal) ou **rede oculta digitando o SSID**; ao conectar, o IP aparece no título, ao lado do uso do disco;
-  - **Frontend** — o launcher padrão; um que não está instalado pode ser instalado do repositório do FliperOS;
+  - **Frontend** — o launcher padrão; um que não está instalado pode ser instalado do repositório do FliperOS, que vem dentro da imagem (`/opt/fliperos/repo`, seção 13). O que ainda não tem pacote aparece como *not available yet*;
   - **Latency** — modo **Standard** (qualquer máquina) ou **Low latency** (CPUs modernas), com a conferência desta máquina contra a recomendação e a lista do hardware ideal (seção 9, Latência);
   - **Scraper** — capas, screenshots, logos, vídeos e informações de cada ROM encontrada em `/opt/fliperos/roms/<sistema>`, com o **Skyscraper** (o mesmo que o GroovyArcade empacota), de ScreenScraper, ArcadeDB ou TheGamesDB, no formato do launcher padrão;
+  - **Quirks** — correções do kernel para controles USB que chegam errados (o parâmetro `usbhid.quirks`). Cada quirk tem um **nome** dado pela pessoa e um **código** `0xVENDOR:0xPRODUTO:0xFLAGS`, por exemplo `0x16c0:0x05e1:0x40` para um encoder Xin-Mo duplo aparecer como dois jogadores. Escolher um da lista o apaga; **USB devices connected now** mostra o vendor:produto de cada dispositivo ligado. Flags úteis: `0x40` um dispositivo por jogador (MULTI_INPUT, encoders duplos), `0x8` sem pedidos GET (NOGET, encoder que trava), `0x400` sempre consultar (ALWAYS_POLL). O kernel lê no máximo 4 quirks e só no boot: a lista fica em `/etc/fliperos/quirks.conf`, vai para a linha do kernel (`/etc/default/fliperos-boot`) e vale depois de reiniciar. Feito na mídia de instalação, vai junto para o disco;
   - **System Update** — `apt-get update` e `upgrade`, com o progresso real do apt;
 - **Start desktop** — o LXDE;
-- **Exit to shell** — `sudo fliperos-setup` volta ao menu;
+- **Exit to shell** — `fliperos-menu` volta ao menu;
 - **Shutdown / Reboot**.
 
 **Teclas de volume:** as teclas de volume do teclado (ou de um encoder de painel programado para mandá-las) funcionam em qualquer tela — emulador em KMS, desktop, console. O `triggerhappy` lê o `/dev/input` e chama `fliperos-setup --volume up|down|mute` (passos de 5% na placa do Audio Setup, gravados a cada toque porque gabinete costuma ser desligado na tomada); `config/fliperos-volume.triggers` diz quais teclas. O painel do LXDE fica só com o mouse, para não mudar o volume duas vezes. Durante o jogo não aparece barra de volume (nada desenha por cima de um emulador em KMS).
@@ -114,6 +119,8 @@ O tty1 faz o login sozinho e segue o fluxo do `.bash_profile` do GroovyArcade (`
 O LXDE do GroovyArcade: `lxde` completo com o openbox-lxde, painel embaixo (menu, gerenciador de arquivos, terminal, tarefas, CPU, volume, bandeja, rede, relógio), sem compositor, sem DPMS nem descanso de tela, fonte Sans 10 e a orientação do Video Setup. Tudo no tema Dracula (seção 6).
 
 **Emuladores no menu (Jogos):** RetroArch, GroovyMAME, Flycast, PCSX2, Supermodel, Dolphin, OpenBOR e Model 2, com os ícones dos próprios projetos (GroovyMAME, Supermodel e Model 2 não têm ícone para Linux; os deles são do FliperOS, em `config/icons`). Nenhum deles roda dentro do X do desktop — RetroArch e GroovyMAME usam o KMS, os outros sobem um Xorg próprio no modo da tabela de modos (seção 12) —, então o atalho (`fliperos-launch`) grava o pedido e fecha o desktop (com uma confirmação se houver janelas abertas), o `fliperos-session` abre o emulador no CRT e, quando ele fecha, **o desktop volta**. Emulador que não foi compilado (`--skip-*`) não aparece no menu. Steam e Heroic (GOG) também estão em Jogos, mas abrem dentro do próprio desktop. Vêm também as ferramentas do GroovyArcade: **AntiMicroX** e **QJoyPad** (controle como teclado/mouse), `xterm`, `htop`, `evtest`, `joy2key`, `hwinfo`, `lshw`, `read-edid`, `i2c-tools`. O **FliperOS Setup** fica em **System Tools** (e no painel), como o `gasetup.desktop`. O terminal usa as cores do Dracula. Sair do desktop volta ao menu.
+
+**Screen Resolution (Preferências):** troca a resolução do desktop **na hora**. A lista é a das resoluções do monitor escolhido no Video Setup, mais *Other resolution...* (qualquer `LARGURAxALTURA@HZ`). O Switchres calcula o modo nas faixas do `/etc/switchres.ini` (`switchres --calc`, o mesmo cálculo dos emuladores) e o `xrandr` o aplica, ajustando o tamanho da tela; a janela abre maximizada e acompanha a troca. Sem confirmar em 15 segundos, volta a resolução anterior. *Use every time the desktop starts* guarda o modo em `~/.config/fliperos/desktop-mode`, que o `fliperos-lxde` aplica ao abrir o desktop; escolher a resolução do boot esquece o guardado. Só o desktop muda: o console, o setup e os frontends seguem a resolução do Video Setup. Com monitor LCD, a lista é a dos modos do EDID dele.
 
 ## 6. Tema Dracula
 
@@ -144,6 +151,7 @@ fliperos-setup/
 │   ├── disk.sh install.sh recovery.sh
 │   ├── launcher.sh audio.sh network.sh status.sh scraper.sh update.sh
 │   ├── hardware.sh latency.sh   CPU/memória/GPU e os modos de latência
+│   ├── quirks.sh padkeys.sh     quirks do usbhid; controle nos menus
 │   └── ui.sh             Gum, tema, quadro da tela
 └── screens/              telas — só combinam ui.sh com a lógica
     ├── output-test.sh (teste + Testing Results)  main-menu.sh  setup-menu.sh
@@ -224,6 +232,7 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 | `--kernel-cache DIR` | Onde guardar/reaproveitar os `.deb` do kernel (padrão `/output/kernel-cache`) |
 | `--splash fliperos\|evangelion\|none` | Tema do Plymouth |
 | `--wifi-ssid NOME --wifi-psk SENHA` | Grava uma rede Wi-Fi na imagem (**a senha fica em texto na ISO**; não a distribua) |
+| `--repo DIR` | Repositório APT dos frontends levado para a imagem (padrão `/output/repo`, se existir) |
 
 O que não existe no Ubuntu 24.04 é baixado com versão e hash fixados: Limine 11.4.1, Gum 2.0.2, AntiMicroX 3.6.1 (`.deb` oficial para 24.04), Skyscraper 3.21.0 (fork Gemba, compilado com Qt6).
 
@@ -245,7 +254,7 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 - `tests/test_setup.py` — a lógica do `fliperos-setup` com sysfs do DRM, EDIDs, `lsblk`, `nmcli` e `aplay` falsos, no mesmo Ubuntu (e mesmo `mawk`/`jq`) da ISO.
 - `tests/test_build.py` — menu de boot, kernel e patches, pins, arquivos da imagem, Limine do disco instalado, `fliperos-video-check`.
 - `tools/ui-snapshot.sh TELA [LARG ALT]` — fotografa uma tela em texto num tmux 80x30 (ou 64x24, o 512x384 de 25 kHz), com um sistema falso (`tools/ui-demo.sh`).
-- `tools/vm-test.py install ISO` — em QEMU: instala pela lib do setup num disco descartável e boota o disco em BIOS e UEFI. `tools/vm-test.py screens ISO` e `tools/vm-monitor.py` fotografam o tty1 de verdade (Gum no console do Linux) tela a tela.
+- `tools/vm-test.py install ISO` — em QEMU: instala pela lib do setup num disco descartável e boota o disco em BIOS e UEFI. `tools/vm-test.py screens ISO` e `tools/vm-monitor.py` fotografam o tty1 de verdade (Gum no console do Linux) tela a tela. `tools/vm-test.py desktop ISO` abre o LXDE no disco instalado (pelo boot e pelo menu, com o `xorg.conf` de 15 kHz). `tools/vm-test.py dev ISO` leva os arquivos do repositório de agora para o disco instalado, sem ISO nova, e usa o menu com um gamepad falso (`tools/vm-fakepad.py`, uinput) até o desktop, a troca de resolução e os quirks.
 
 ## 12. Emuladores
 
@@ -329,7 +338,7 @@ O Model 2 Emulator (ElSemi) é freeware de código fechado, só para Windows, se
 
 ## 13. Outros componentes
 
-**Repositório APT e frontends.** Os frontends (Attract-Mode Plus, EmulationStation, RetroFE, Pegasus) vêm de um repositório APT próprio de `.deb` pré-compilados, como o `groovy-ux-repo` do GroovyArcade (`packaging/build-deb.sh`, `packaging/make-repo.sh`, `Dockerfile.packages`, receitas em `packaging/packages/`). A tabela `config/fliperos-sessions.conf` diz, para cada launcher, se roda em KMS ou X (da tabela `videodata.conf` do galauncher) e de que pacote vem.
+**Repositório APT e frontends.** Os frontends (Attract-Mode Plus, EmulationStation, RetroFE, Pegasus) vêm de um repositório APT próprio de `.deb` pré-compilados, como o `groovy-ux-repo` do GroovyArcade (`packaging/build-deb.sh`, `packaging/make-repo.sh`, `Dockerfile.packages`, receitas em `packaging/packages/`). A tabela `config/fliperos-sessions.conf` diz, para cada launcher, se roda em KMS ou X (da tabela `videodata.conf` do galauncher) e de que pacote vem. O build leva o repositório para dentro da imagem (`/opt/fliperos/repo`, `deb [trusted=yes] file:/opt/fliperos/repo ./`, opção `--repo`) e já instala o Attract-Mode Plus; sem isso o apt do gabinete dizia "Impossível encontrar o pacote". Hoje só o Attract-Mode Plus tem receita: os outros aparecem em Setup > Frontend como *not available yet*.
 
 **Splash.** Plymouth com o tema próprio `fliperos` (texto, sem imagem), `evangelion` (202 quadros, com **risco de convulsão** declarado pelo autor e sem licença no pacote) ou nenhum.
 
@@ -357,7 +366,9 @@ O Model 2 Emulator (ElSemi) é freeware de código fechado, só para Windows, se
 | `config/fliperos-latency.service` | Aplica o modo de latência no boot |
 | `config/fliperos-volume.triggers` | Teclas de volume (triggerhappy) |
 | `fliperos-dracula.sh`, `config/openbox-3/themerc` | Tema Dracula do LXDE (GTK fixado por commit + Openbox) e do terminal (Oh My Zsh + dracula/zsh) |
-| `config/zshrc`, `config/fliperos-tty1` | zsh do usuário; fluxo do tty1 (setup, primeiro boot, launcher) |
+| `config/zshrc`, `config/fliperos-tty1`, `config/fliperos-menu` | zsh do usuário; fluxo do tty1 (primeiro boot, launcher, o laço do menu); do shell de volta ao menu |
+| `config/fliperos-padkeys`, `config/fliperos-padkeys.service` | Controle como teclado nos menus do setup |
+| `config/fliperos-resolution`, `config/applications/fliperos-resolution.desktop` | Screen Resolution: a resolução do desktop na hora |
 | `config/mame-ui.ini` | Cores Dracula da interface do GroovyMAME |
 | `config/applications/`, `config/icons/`, `config/fliperos-launch` | Emuladores no menu do LXDE e a saída do desktop para abri-los |
 | `config/fliperos-x11-run`, `config/fliperos-emulator-modes.conf` | Abre um programa num Xorg próprio no modo pedido (`--mode 640x240@60`) ou no da tabela por emulador |

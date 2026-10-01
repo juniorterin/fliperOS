@@ -406,6 +406,32 @@ video_set_custom_edid() {
 # Switchres criar um modo novo em vez de reaproveitar o do boot.
 
 # geometry_parse SAIDA imprime o crt_range final (vazio se abortou).
+# geometry_mode imprime "LARGURA ALTURA HZ" do teste de geometria: a
+# resolucao escolhida no Video Setup (o grid tem de estar no modo que o
+# monitor vai mostrar; um 640x480 entrelacado quase nao tem linha sobrando
+# para descer a imagem), ou 640x480@60 sem escolha.
+geometry_mode() {
+  local res w="" h="" r=60 whr
+  res=$(conf_get boot_resolution 2> /dev/null) || res=""
+  if [[ $res == custom ]]; then
+    w=$(conf_get custom_width 2> /dev/null) || w=""
+    h=$(conf_get custom_height 2> /dev/null) || h=""
+    r=$(conf_get custom_refresh 2> /dev/null) || r=60
+  elif whr=$(mode_whr "$res" 2> /dev/null); then
+    read -r w h r <<< "$whr"
+  elif [[ $res =~ ^([0-9]+)x([0-9]+) ]]; then
+    w=${BASH_REMATCH[1]}
+    h=${BASH_REMATCH[2]}
+    [[ $res =~ @([0-9.]+) ]] && r=${BASH_REMATCH[1]}
+  fi
+  if [[ ! $w =~ ^[0-9]+$ || ! $h =~ ^[0-9]+$ ]]; then
+    w=640
+    h=480
+  fi
+  [[ $r =~ ^[0-9]+(\.[0-9]+)?$ ]] || r=60
+  printf '%s %s %s\n' "$w" "$h" "$r"
+}
+
 geometry_parse() {
   sed -n 's/^.*Final crt_range: //p' <<< "$1" | tail -1
 }

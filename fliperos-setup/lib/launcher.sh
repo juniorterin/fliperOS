@@ -65,10 +65,27 @@ launcher_package() {
   launcher_field "$1" 4
 }
 
-# launcher_exec [NOME] abre o launcher (o padrao, ou NOME) como o usuario
-# do sistema, no mesmo terminal (tty1), e espera ele fechar. O setup roda
-# como root; o frontend nao.
-launcher_exec() {
-  log_info "abrindo o launcher ${1:-padrao}"
-  runuser -u "$FLIPEROS_USER" -- /opt/fliperos/bin/fliperos-session "$@"
+# launcher_package_available NOME: o pacote do launcher existe em algum
+# repositorio que o apt conhece (o local da imagem, /opt/fliperos/repo, ou
+# outro). Sem isso, tentar instalar so da "Impossivel encontrar o pacote".
+launcher_package_available() {
+  local pkg
+  pkg=$(launcher_package "$1")
+  [[ -n $pkg ]] || return 1
+  apt-cache show "$pkg" > /dev/null 2>&1
+}
+
+# O launcher nao abre de dentro do setup: o setup roda como root no pty do
+# sudo, e o X precisa do tty1 como terminal de controle (aberto dali, para
+# no "xf86OpenConsole: VT_ACTIVATE failed: Operation not permitted").
+# launcher_request grava o pedido (o padrao ou NOME) e o setup sai com
+# SETUP_EXIT_LAUNCH; o laco do fliperos-tty1, no shell do login, abre o
+# launcher como no boot e volta ao setup quando ele fecha.
+LAUNCH_REQUEST=${LAUNCH_REQUEST:-/run/fliperos/launch}
+
+launcher_request() {
+  mkdir -p "$(dirname "$LAUNCH_REQUEST")" 2> /dev/null
+  printf '%s\n' "${1:-default}" > "$LAUNCH_REQUEST" 2> /dev/null || return 1
+  chmod 644 "$LAUNCH_REQUEST" 2> /dev/null
+  log_info "launcher pedido: ${1:-padrao}"
 }

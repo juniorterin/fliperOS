@@ -8,7 +8,7 @@
 #       [--skip-dolphin] [--skip-hypseus] [--skip-openbor]
 #       [--skip-wine] [--skip-steam] [--skip-heroic]
 #       [--skip-skyscraper] [--skip-input-drivers] [--with-wheel-drivers]
-#       [--kernel-cache DIR] [--splash fliperos|evangelion|none]
+#       [--kernel-cache DIR] [--repo DIR] [--splash fliperos|evangelion|none]
 #       [--wifi-ssid NOME --wifi-psk SENHA]
 #  No Windows, execute somente dentro do container Docker.
 # ============================================================
@@ -49,6 +49,10 @@ SKIP_SKYSCRAPER=false
 # diretorio /output montado (o jeito documentado de rodar), o cache fica la.
 KERNEL_CACHE=""
 [[ -d /output ]] && KERNEL_CACHE="/output/kernel-cache"
+# Repositorio dos frontends (packaging/build-deb.sh + make-repo.sh): vai
+# para dentro da imagem como fonte local do apt.
+FLIPEROS_REPO=""
+[[ -d /output/repo ]] && FLIPEROS_REPO="/output/repo"
 SPLASH_THEME="fliperos"
 SKIP_INPUT_DRIVERS=false
 # Volante: o mainline ja cobre Logitech e Thrustmaster antigo. Estes dois sao
@@ -122,6 +126,9 @@ while [[ $# -gt 0 ]]; do
     --kernel-cache)
       [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --kernel-cache requer diretorio."; exit 1; }
       KERNEL_CACHE="$2"; shift 2 ;;
+    --repo)
+      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --repo requer diretorio."; exit 1; }
+      FLIPEROS_REPO="$2"; shift 2 ;;
     --wifi-ssid)
       [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --wifi-ssid requer valor."; exit 1; }
       WIFI_SSID="$2"; shift 2 ;;
@@ -254,7 +261,8 @@ apt-get update -qq
 # triggerhappy le as teclas de volume em qualquer tela (fliperos-rootfs.sh);
 # as engines murrine e pixbuf sao do GTK 2 do tema Dracula, o librsvg2
 # desenha os icones SVG do menu e o gxmessage (GTK 3) e a confirmacao do
-# fliperos-launch antes de fechar o desktop.
+# fliperos-launch antes de fechar o desktop. usbutils (lsusb) mostra o
+# vendor:produto dos controles em Setup > Quirks.
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -268,7 +276,7 @@ apt-get install -y --no-install-recommends \
   dkms evtest \
   kbd console-setup \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
-  openssh-server network-manager wpasupplicant iw python3 pciutils libdrm-tests edid-decode squashfs-tools \
+  openssh-server network-manager wpasupplicant iw python3 pciutils usbutils libdrm-tests edid-decode squashfs-tools \
   samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
   plymouth plymouth-label fonts-dejavu-core \
   lxde gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
@@ -386,10 +394,12 @@ chown -R fliperos:fliperos /opt/fliperos
 chown -R fliperos:fliperos /etc/fliperos/mame
 
 mkdir -p /etc/systemd/system/getty@tty1.service.d
+# Login automatico calado: sem o "fliperos login: (automatic login)"
+# (--skip-login), sem o /etc/issue e limpando o que o kernel deixou na tela.
 cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << UNIT
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin fliperos --noclear %I \$TERM
+ExecStart=-/sbin/agetty --autologin fliperos --skip-login --noissue %I \$TERM
 UNIT
 
 apt-get remove -y --purge snapd apport whoopsie 2>/dev/null || true
@@ -459,6 +469,30 @@ install_debs_chroot() {
     || err "Instalacao do gum/antimicrox falhou (ver $LOG_FILE)"
   rm -f "$CHROOT_DIR"/tmp/*.deb
   ok "gum $(chroot "$CHROOT_DIR" gum --version | awk '{print $3}'), antimicrox $ANTIMICROX_VERSION"
+}
+
+# ── Repositorio local do FliperOS (frontends) ─────────────────
+# Os .deb do packaging/ (build-deb.sh + make-repo.sh) vao para
+# /opt/fliperos/repo, uma fonte do apt dentro da propria imagem: o Setup >
+# Frontend instala dali sem rede. O Attract-Mode Plus ja vem instalado (as
+# dependencias dele vem do Ubuntu, e o gabinete pode nao ter rede).
+install_local_repo_chroot() {
+  if [[ -z $FLIPEROS_REPO ]] || ! compgen -G "$FLIPEROS_REPO/*.deb" > /dev/null; then
+    warn "Sem repositorio de frontends: gere com packaging/build-deb.sh e packaging/make-repo.sh"
+    return
+  fi
+  step "Repositorio local do FliperOS (frontends)"
+  local repo="$CHROOT_DIR/opt/fliperos/repo"
+  rm -rf "$repo"
+  mkdir -p "$repo"
+  cp "$FLIPEROS_REPO"/*.deb "$FLIPEROS_REPO"/Packages "$FLIPEROS_REPO"/Packages.gz "$FLIPEROS_REPO"/Release "$repo/" \
+    || err "Repositorio incompleto em $FLIPEROS_REPO (falta o Packages ou o Release do make-repo.sh)"
+  chmod -R a+rX "$repo"
+  echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > "$CHROOT_DIR/etc/apt/sources.list.d/fliperos.list"
+  chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y --no-install-recommends fliperos-attractplus' >> "$LOG_FILE" 2>&1 \
+    || err "Instalacao do Attract-Mode Plus do repositorio local falhou (ver $LOG_FILE)"
+  ok "Repositorio local com $(ls "$repo"/*.deb | wc -l) pacote(s); Attract-Mode Plus instalado"
 }
 
 # ── Kernel 15 kHz ─────────────────────────────────────────────
@@ -1283,8 +1317,9 @@ install_limine_rootfs() {
 # Parametros comuns a todas as entradas do menu de boot da midia: splash,
 # console sem apagar (consoleblank=0, como no GroovyArcade), o radeon nas
 # placas SI/CIK, onde o 15 kHz foi validado no gabinete, e os do modo de
-# latencia padrao (LATENCY_BASE_PARAMS em fliperos-setup/lib/latency.sh).
-BOOT_COMMON="quiet splash consoleblank=0 radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0 mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
+# latencia padrao (LATENCY_BASE_PARAMS em fliperos-setup/lib/latency.sh) e
+# do boot calado (BOOT_SILENT em fliperos-setup/lib/bootloader.sh).
+BOOT_COMMON="quiet splash loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0 mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 
 create_boot_config() {
   install -Dm644 "$(dirname "$(realpath "$0")")/config/limine.conf" "$ISO_DIR/boot/limine/limine.conf"
@@ -1367,6 +1402,7 @@ configure_chroot
 install_limine_rootfs
 install_fliperos_files
 install_debs_chroot
+install_local_repo_chroot
 # O kernel antes dos drivers DKMS (compilados para ele) e antes do
 # update-initramfs final.
 install_15khz_kernel

@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+# Troca a resolucao do desktop (LXDE) na hora: Preferencias > Screen
+# Resolution. O Switchres calcula o modo para o monitor do /etc/switchres.ini
+# (o mesmo dos emuladores) e o xrandr o aplica, ajustando o tamanho da tela.
+# Sem confirmacao em 15 s, volta o modo anterior. "Use every time the desktop
+# starts" guarda o modo em ~/.config/fliperos/desktop-mode, que o
+# fliperos-lxde aplica ao abrir o desktop. O modo do boot (console, setup,
+# frontends) continua o do Video Setup.
+#
+#   fliperos-resolution                 a tela (num lxterminal, pelo menu)
+#   fliperos-resolution --apply-saved   aplica o modo guardado, se houver
+set -o pipefail
+LIB=${FLIPEROS_SETUP_LIB:-/usr/local/lib/fliperos-setup/lib}
+for lib in "$LIB"/*.sh; do
+  # shellcheck source=/dev/null
+  . "$lib"
+done
+STATE=${XDG_CONFIG_HOME:-$HOME/.config}/fliperos/desktop-mode
+TITLE="Screen Resolution"
+
+# res_output imprime a saida que esta com imagem agora (VGA-1, DVI-D-1...).
+res_output() {
+  xrandr --query 2> /dev/null |
+    awk '$2 == "connected" && / [0-9]+x[0-9]+\+[0-9]+\+[0-9]+ / { print $1; exit }'
+}
+
+# res_current_id SAIDA imprime o id do modo atual (0x4a), para voltar a ele.
+res_current_id() {
+  xrandr --verbose 2> /dev/null | awk -v o="$1" '
+    /^[^ \t]/ { inside = ($1 == o) }
+    inside && /\*current/ { gsub(/[()]/, "", $2); print $2; exit }'
+}
+
+# res_current_size SAIDA imprime "LARGURAxALTURA" do modo atual.
+res_current_size() {
+  xrandr --query 2> /dev/null | awk -v o="$1" '$1 == o {
+    for (i = 2; i <= NF; i++) if ($i ~ /^[0-9]+x[0-9]+\+/) { split($i, a, "+"); print a[1]; exit } }'
+}
+
+# res_calc LARGURA ALTURA HZ imprime os campos do modeline que o Switchres
+# calcula para o monitor do switchres.ini:
+#   Switchres: Modeline "640x240_60 15.660000KHz 60.000000Hz" 13.013460 640 ... -hsync -vsync
+res_calc() {
+  local out line
+  out=$(switchres "$1" "$2" "$3" --ini "$SWITCHRES_INI" --calc 2>&1) || return 1
+  line=$(grep -m1 'Modeline "' <<< "$out") || return 1
+  printf '%s\n' "${line##*\" }"
+}
+
+# res_apply SAIDA LARGURA ALTURA HZ cria o modo (uma vez) e troca para ele.
+res_apply() {
+  local out=$1 name params
+  params=$(res_calc "$2" "$3" "$4") || return 1
+  name="fliperos-$2x$3@$4"
+  # Numa segunda troca o modo ja existe e o --newmode so reclama.
+  # shellcheck disable=SC2086 # os campos do modeline, um por argumento
+  xrandr --newmode "$name" $params 2> /dev/null
+  xrandr --addmode "$out" "$name" 2> /dev/null
+  xrandr --output "$out" --mode "$name"
+}
+
+# res_lcd_modes SAIDA lista os modos do EDID (monitor LCD, sem Switchres).
+res_lcd_modes() {
+  xrandr --query 2> /dev/null | awk -v o="$1" '
+    /^[^ \t]/ { inside = ($1 == o); next }
+    inside && $1 ~ /^[0-9]+x[0-9]+$/ && !seen[$1]++ { print $1 }'
+}
+
+# res_set SAIDA MODO aplica "LARGURA ALTURA HZ" (CRT) ou "LARGURAxALTURA"
+# (LCD).
+res_set() {
+  local out=$1 w h r
+  read -r w h r <<< "$2"
+  if [[ -n $h ]]; then
+    res_apply "$out" "$w" "$h" "$r"
+  else
+    xrandr --output "$out" --mode "$w"
+  fi
+}
+
+apply_saved() {
+  local out mode
+  [[ -s $STATE ]] || return 0
+  mode=$(head -n 1 "$STATE")
+  out=$(res_output)
+  [[ -n $out ]] || return 1
+  res_set "$out" "$mode"
+}
+
+# res_try SAIDA MODO ROTULO troca, pede confirmacao e volta se nao vier.
+res_try() {
+  local out=$1 mode=$2 label=$3 prev
+  prev=$(res_current_id "$out")
+  ui_info "$TITLE" "Switching to $label..."
+  if ! res_set "$out" "$mode" > /dev/null 2>&1; then
+    ui_msg "$TITLE" "Could not switch to $label."
+    return 1
+  fi
+  # O Openbox reajusta a janela maximizada a tela nova antes da pergunta.
+  sleep 1
+  # Textos curtos: em 320x240 o terminal tem umas 9 linhas.
+  if ! ui_timed_confirm "$TITLE" 15 "Keep $label" "The previous one comes back in 15 s."; then
+    [[ -n $prev ]] && xrandr --output "$out" --mode "$prev"
+    sleep 1
+    ui_msg "$TITLE" "The previous resolution is back."
+    return 1
+  fi
+  # O modo do boot e o que o desktop ja abre: escolhe-lo esquece o guardado.
+  if [[ $mode == "$(geometry_mode)" ]]; then
+    rm -f "$STATE"
+  elif ui_yesno "$TITLE" "Use $label every time the desktop starts?" no; then
+    mkdir -p "$(dirname "$STATE")"
+    printf '%s\n' "$mode" > "$STATE"
+  fi
+}
+
+screen() {
+  local out monitor freq entries=() line mode label w h r size choice last="" custom
+  out=$(res_output)
+  if [[ -z $out ]]; then
+    ui_msg "$TITLE" "No active output was found (xrandr)."
+    return 1
+  fi
+  monitor=$(conf_get monitor 2> /dev/null) || monitor=""
+  freq=$(monitor_frequency "$monitor" 2> /dev/null) || freq=""
+  while true; do
+    entries=()
+    size=$(res_current_size "$out")
+    if [[ -n $freq ]]; then
+      read -r w h r <<< "$(geometry_mode)"
+      entries+=("$w $h $r|Boot resolution: ${w}x$h $r Hz")
+      while IFS='|' read -r mode label; do
+        mode=$(mode_whr "$mode") || continue
+        entries+=("$mode|$label")
+      done < <(video_resolution_choices)
+      entries+=("other|Other resolution...")
+    else
+      while IFS= read -r mode; do
+        entries+=("$mode|$mode")
+      done < <(res_lcd_modes "$out")
+    fi
+    entries+=("close|Close")
+    choice=$(ui_menu "$TITLE" "Now: ${size:-?} ($out)" "$last" "${entries[@]}") || return 0
+    last=$choice
+    case $choice in
+      close) return 0 ;;
+      other)
+        custom=$(ui_input "$TITLE" "WIDTHxHEIGHT@HZ, e.g. 512x224@60") || continue
+        if [[ ! $custom =~ ^([0-9]+)x([0-9]+)(@([0-9]+(\.[0-9]+)?))?$ ]]; then
+          ui_msg "$TITLE" "Invalid resolution: $custom" "" "Use WIDTHxHEIGHT@HZ, e.g. 512x224@60."
+          continue
+        fi
+        res_try "$out" "${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[4]:-60}" \
+          "${BASH_REMATCH[1]}x${BASH_REMATCH[2]}"
+        ;;
+      *)
+        label=$choice
+        for line in "${entries[@]}"; do
+          [[ ${line%%|*} == "$choice" ]] && label=${line#*|}
+        done
+        label=${label#Boot resolution: }
+        res_try "$out" "$choice" "${label%% *}"
+        ;;
+    esac
+  done
+}
+
+if [[ ${1:-} == --apply-saved ]]; then
+  apply_saved
+  exit
+fi
+if [[ -z ${DISPLAY:-} ]]; then
+  echo "Run it inside the desktop (it changes the X resolution)." >&2
+  exit 2
+fi
+ui_init
+screen

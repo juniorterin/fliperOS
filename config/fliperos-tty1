@@ -4,9 +4,35 @@
 # do setup; na midia de instalacao, direto o setup (teste de saidas e o
 # FliperOS Setup). Chamado pelo ~/.zprofile (o shell do usuario e o zsh) e
 # pelo ~/.bash_profile; quando o setup sai para o shell, o shell segue.
-sudo setterm --blank 0 --powerdown 0 2> /dev/null
-if [[ -f /etc/fliperos/installed ]]; then
-    [[ -f /etc/fliperos/firstboot ]] && sudo /usr/local/bin/fliperos-setup --first-boot
-    /opt/fliperos/bin/fliperos-session
+#
+#   fliperos-tty1          o boot: launcher padrao e depois o menu
+#   fliperos-tty1 --menu   so o menu (o comando fliperos-menu do shell)
+#
+# O menu e um laco. "Start frontend" e "Start desktop" fazem o setup gravar
+# o pedido em /run/fliperos/launch e sair com 20; o launcher abre aqui, no
+# shell do login, com o tty1 como terminal de controle. De dentro do setup
+# (root, no pty do sudo) o X nao consegue trocar de VT e nao abre.
+ETC=${FLIPEROS_ETC:-/etc/fliperos}
+BIN=${FLIPEROS_BIN:-/opt/fliperos/bin}
+REQUEST=${FLIPEROS_LAUNCH_REQUEST:-/run/fliperos/launch}
+
+menu() {
+  local rc name
+  while true; do
+    sudo /usr/local/bin/fliperos-setup --menu
+    rc=$?
+    ((rc == 20)) || return 0
+    name=$(cat "$REQUEST" 2> /dev/null)
+    [[ $name == default ]] && name=""
+    "$BIN/fliperos-session" ${name:+"$name"}
+  done
+}
+
+if [[ ${1:-} != --menu ]]; then
+  sudo setterm --blank 0 --powerdown 0 2> /dev/null
+  if [[ -f $ETC/installed ]]; then
+    [[ -f $ETC/firstboot ]] && sudo /usr/local/bin/fliperos-setup --first-boot
+    "$BIN/fliperos-session"
+  fi
 fi
-sudo /usr/local/bin/fliperos-setup
+menu

@@ -18,8 +18,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "update", "hardware", "latency"]
+        "status", "scraper", "update", "hardware", "latency", "quirks", "padkeys"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
+# Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
+BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
 
 
 def edid(serial=None, name=None):
@@ -55,9 +57,12 @@ class Env:
         self.cmdline.write_text("boot=live quiet splash\n")
         self.writes = self.dir / "writes"
         self.writes.write_text("")
-        self.stub("lspci", 'echo \'"01:00.0" "VGA compatible controller" '
+        # Como o lspci -mm de verdade: o slot sem aspas e o fabricante da
+        # placa no fim (no gabinete, "Advanced Micro Devices" de novo).
+        self.stub("lspci", 'echo \'01:00.0 "VGA compatible controller" '
                            '"Advanced Micro Devices, Inc. [AMD/ATI]" '
-                           '"Cedar [Radeon HD 5000/6000/7350/8350 Series]" "" ""\'')
+                           '"Cedar [Radeon HD 5000/6000/7350/8350 Series]" -r87 '
+                           '"Advanced Micro Devices, Inc. [AMD/ATI]" "Device 0b0c"\'')
         self.cards = 0
 
     def stub(self, name, body):
@@ -274,6 +279,15 @@ class DrmTests(Base):
         self.assertEqual(self.env.out("gpu_short_name 'Intel Corporation' 'HD Graphics 530'").strip(),
                          "Intel HD Graphics 530")
 
+    def test_card_name_from_real_lspci_line(self):
+        # No gabinete o nome saia "Oland PRO [...] Advanced Micro Devices,
+        # Inc. [AMD/ATI]": os campos eram lidos deslocados em um.
+        self.env.card("card0", "radeon")
+        self.env.stub("lspci", 'echo \'01:00.0 "VGA compatible controller" "Advanced Micro Devices, Inc. [AMD/ATI]" '
+                               '"Oland PRO [Radeon R7 240/340 / Radeon 520]" -r87 '
+                               '"Advanced Micro Devices, Inc. [AMD/ATI]" "Device 0b0c"\'')
+        self.assertEqual(self.env.out("drm_card_name card0").strip(), "AMD Radeon R7 240/340 / Radeon 520")
+
     def test_switchres_edid(self):
         path = self.env.dir / "sr.bin"
         path.write_bytes(edid("Switchres200", "generic_15"))
@@ -482,7 +496,7 @@ class BootTests(Base):
             "connector=VGA-1\nkernel_video=video=VGA-1:640x480iSe\norientation=vertical-cw\nfb_map=0\n")
         self.env.cmdline.write_text("boot=live fliperos.boot=15khz video=640x480iS quiet splash\n")
         out = self.env.out("boot_install_cmdline").strip()
-        self.assertEqual(out, "quiet splash consoleblank=0 radeon.si_support=1 radeon.cik_support=1 "
+        self.assertEqual(out, "quiet splash " + BOOT_SILENT + " consoleblank=0 radeon.si_support=1 radeon.cik_support=1 "
                               "amdgpu.si_support=0 amdgpu.cik_support=0 " + LATENCY_BASE + " "
                               "video=VGA-1:640x480iSe,panel_orientation=right_side_up fbcon=rotate:1")
 
@@ -592,6 +606,12 @@ class DiskTests(Base):
         self.assertIn("mkpart EFI fat32 2MiB 1026MiB set 2 esp on", cmds[1])
         self.assertEqual(cmds[-2], "mkfs.vfat -F32 -n FLIPERBOOT /dev/sda2")
         self.assertEqual(cmds[-1], "mkfs.ext4 -F -L FliperOS /dev/sda3")
+        # Restos do disco antigo nas particoes novas: o Limine recusava a de
+        # BIOS boot ("contains a recognised filesystem").
+        self.assertIn("wipefs --all /dev/sda1 /dev/sda2 /dev/sda3", cmds)
+        self.assertIn("dd if=/dev/zero of=/dev/sda1 bs=1M count=1 conv=fsync status=none", cmds)
+        nvme = self.env.out("disk_partition_commands /dev/nvme0n1")
+        self.assertIn("wipefs --all /dev/nvme0n1p1 /dev/nvme0n1p2 /dev/nvme0n1p3", nvme)
 
     def test_human_size(self):
         self.assertEqual(self.env.out("human_size 500107862016").strip(), "500 GB")
@@ -689,6 +709,24 @@ class NetworkTests(Base):
                             "echo '3: wlan0    inet 10.0.0.5/24 brd 10.0.0.255 scope global wlan0'")
         self.assertEqual(self.env.out("net_ips").strip(), "192.168.0.20 10.0.0.5")
 
+    def test_hardware_when_no_wifi_adapter_shows_up(self):
+        # No gabinete: "No Wi-Fi adapter was found" sem dizer o que existe.
+        self.env.stub("lspci", "echo '00:1f.6 Ethernet controller: Intel Corporation Ethernet I219-V'; "
+                               "echo '03:00.0 Network controller: Intel Corporation Wi-Fi 6 AX200 (rev 1a)'")
+        self.env.stub("lsusb", "echo 'Bus 001 Device 003: ID 0bda:8179 Realtek Semiconductor Corp. "
+                               "RTL8188EUS 802.11n Wireless Network Adapter'; "
+                               "echo 'Bus 001 Device 002: ID 046d:c52b Logitech, Inc. Unifying Receiver'")
+        self.env.stub("rfkill", "echo '0: phy0: Wireless LAN'; echo '	Soft blocked: yes'")
+        self.assertEqual(self.env.out("net_hardware").splitlines(), [
+            "PCI: Intel Corporation Wi-Fi 6 AX200 (rev 1a)",
+            "USB: Realtek Semiconductor Corp. RTL8188EUS 802.11n Wireless Network Adapter",
+            "Wi-Fi is switched off (rfkill): check the Wi-Fi key or the BIOS."])
+        self.env.stub("lspci", "true")
+        self.env.stub("lsusb", "true")
+        self.env.stub("rfkill", "true")
+        self.assertEqual(self.env.out("net_hardware").splitlines(),
+                         ["No network adapter besides Ethernet was found."])
+
 
 class AudioTests(Base):
     def test_devices(self):
@@ -781,6 +819,63 @@ class LauncherTests(Base):
         self.assertIn("launcher=retroarch\n", (self.env.etc / "fliperos.conf").read_text())
         self.assertEqual(self.env.out("launcher_package attractplus").strip(), "fliperos-attractplus")
 
+    def test_request_is_left_for_the_tty1_loop(self):
+        request = self.env.dir / "run" / "launch"
+        env = {"LAUNCH_REQUEST": str(request)}
+        self.env.out("launcher_request lxde", env)
+        self.assertEqual(request.read_text(), "lxde\n")
+        self.env.out("launcher_request", env)
+        self.assertEqual(request.read_text(), "default\n")
+
+
+class QuirksTests(Base):
+    def quirks(self):
+        f = self.env.etc / "quirks.conf"
+        return f.read_text().splitlines() if f.exists() else []
+
+    def test_add_normalizes_and_keeps_the_name(self):
+        self.env.out("quirk_add 'Xin-Mo | dual' ' 0x16C0:0x05E1:0x40 '")
+        self.assertEqual(self.quirks(), ["0x16c0:0x05e1:0x40|Xin-Mo   dual"])
+        # Sem nome, vale o vendor:produto.
+        self.env.out("quirk_add '' 0x0079:0x0006:0x8")
+        self.assertEqual(self.quirks()[1], "0x0079:0x0006:0x8|0x0079:0x0006")
+
+    def test_codes_the_kernel_would_not_parse_are_refused(self):
+        # O kernel le "0x%hx:0x%hx:0x%x": o 0x e os tres campos sao obrigatorios.
+        for bad in ("16c0:05e1:40", "0x16c0:0x05e1", "0xzz:0x1:0x1", "0x12345:0x1:0x1",
+                    "0x1:0x1:0x123456789", ""):
+            self.assertEqual(self.env.run("quirk_add n '%s'" % bad).returncode, 1, bad)
+        self.assertEqual(self.quirks(), [])
+
+    def test_one_quirk_per_device_and_at_most_four(self):
+        self.env.out("quirk_add a 0x16c0:0x05e1:0x40")
+        self.assertEqual(self.env.run("quirk_add b 0x16c0:0x05e1:0x8").returncode, 3)
+        for i in range(2, 5):
+            self.env.out("quirk_add q%d 0x000%d:0x0001:0x40" % (i, i))
+        self.assertEqual(self.env.out("quirks_count").strip(), "4")
+        self.assertEqual(self.env.run("quirk_add q5 0x0005:0x0001:0x40").returncode, 2)
+
+    def test_delete(self):
+        self.env.out("quirk_add a 0x16c0:0x05e1:0x40; quirk_add b 0x0079:0x0006:0x8")
+        self.env.out("quirk_delete 0x16c0:0x05e1:0x40")
+        self.assertEqual(self.quirks(), ["0x0079:0x0006:0x8|b"])
+
+    def test_kernel_line(self):
+        line = "quiet splash usbhid.quirks=0x1:0x1:0x1 consoleblank=0"
+        self.assertEqual(self.env.out("quirks_cmdline '%s'" % line).strip(), "quiet splash consoleblank=0")
+        self.env.out("quirk_add a 0x16c0:0x05e1:0x40; quirk_add b 0x0079:0x0006:0x8")
+        self.assertEqual(self.env.out("quirks_cmdline '%s'" % line).strip(),
+                         "quiet splash consoleblank=0 usbhid.quirks=0x16c0:0x05e1:0x40,0x0079:0x0006:0x8")
+        self.env.cmdline.write_text("boot=live quiet splash\n")
+        self.assertIn("usbhid.quirks=0x16c0:0x05e1:0x40,0x0079:0x0006:0x8",
+                      self.env.out("boot_install_cmdline").split())
+
+    def test_usb_devices_in_the_code_format(self):
+        self.env.stub("lsusb", "echo 'Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub'; "
+                               "echo 'Bus 001 Device 004: ID 16C0:05e1 Van Ooijen Technische Informatica Xin-Mo'")
+        self.assertEqual(self.env.out("quirks_usb_devices").splitlines(),
+                         ["0x16c0:0x05e1  Van Ooijen Technische Informatica Xin-Mo"])
+
 
 class UpdateTests(Base):
     def test_status_fd_to_events(self):
@@ -806,6 +901,23 @@ class GeometryTests(Base):
 
     def test_cancelled(self):
         self.assertEqual(self.env.out("geometry_parse 'Aborted!'").strip(), "")
+
+    def test_grid_uses_the_chosen_resolution(self):
+        # No gabinete o grid saia sempre em 648x480, qualquer que fosse a
+        # resolucao escolhida no Video Setup.
+        conf = self.env.etc / "fliperos.conf"
+        # Os modos PAL da tabela do kernel sao de 50 Hz (o refresh vem do
+        # modeline; no entrelacado conta o campo).
+        for res, mode in (("640x240S", "640 240 60"), ("320x240", "320 240 60"),
+                          ("640x480iS", "640 480 60"), ("384x224@59.64", "384 224 59.64"),
+                          ("384x288S", "384 288 50"), ("768x576iS", "768 576 50"),
+                          ("1280x480iS", "1280 480 60")):
+            conf.write_text("boot_resolution=%s\n" % res)
+            self.assertEqual(self.env.out("geometry_mode").strip(), mode, res)
+        conf.write_text("boot_resolution=custom\ncustom_width=512\ncustom_height=240\ncustom_refresh=57.5\n")
+        self.assertEqual(self.env.out("geometry_mode").strip(), "512 240 57.5")
+        conf.write_text("")
+        self.assertEqual(self.env.out("geometry_mode").strip(), "640 480 60")
 
 
 # Flags reais de /proc/cpuinfo, reduzidas ao que o nivel x86-64 olha.

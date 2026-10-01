@@ -39,7 +39,7 @@ screen_disk_selection() {
         refused+=("$path ${model:+($model) }- $why")
       fi
     done
-    text="Select installation drive. The whole drive will be used."
+    text="Select the HD/SSD for the installation. The whole drive will be used."
     if ((${#refused[@]})); then
       text+=$'\n\n'"Not available:"
       for line in "${refused[@]}"; do
@@ -50,9 +50,14 @@ screen_disk_selection() {
       text+=$'\n\n'"No drive can receive the installation (at least 16 GiB, not in use)."
     fi
     choice=$(ui_menu "Automatically Partition" "$text" "" "${entries[@]}" \
-      "rescan|Rescan drives" "return|Return") || return 1
+      "rescan|Rescan drives" "details|My drive is not listed (details)" "return|Return") || return 1
     case $choice in
       rescan) continue ;;
+      details)
+        disk_details > "/tmp/fliperos-drives.txt" 2>&1
+        ui_pager "Drives" "/tmp/fliperos-drives.txt"
+        continue
+        ;;
       return) return 1 ;;
     esac
     DISK_CHOSEN=$choice

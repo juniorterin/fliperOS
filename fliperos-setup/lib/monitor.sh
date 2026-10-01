@@ -187,6 +187,17 @@ mode_modeline() {
   esac
 }
 
+# mode_whr MODO imprime "LARGURA ALTURA HZ" de um modo da tabela do kernel.
+# O refresh sai do proprio modeline: 50 Hz em 384x288 e 768x576i, e num
+# entrelacado conta cada campo (640x480i e 60, nao 30).
+mode_whr() {
+  local modeline
+  modeline=$(mode_modeline "$1") || return 1
+  awk '{ r = $2 * 1000000 / ($6 * $10)
+    if ($0 ~ /Interlace/) r *= 2
+    printf "%s %s %.0f\n", $3, $7, r }' <<< "$modeline"
+}
+
 # mode_hsync_range FREQ imprime a faixa HorizSync do Xorg para a faixa.
 mode_hsync_range() {
   case $1 in

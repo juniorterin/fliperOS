@@ -4,11 +4,13 @@ Rodam com python3 puro (sem Docker, sem chroot): conferem os scripts de
 build, o menu de boot, o Limine do disco instalado, o fliperos-video-check
 e as configuracoes que o fliperos-rootfs.sh instala.
 """
+from importlib.machinery import SourceFileLoader
 import importlib.util
 import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -22,8 +24,20 @@ def load(name, filename):
     return module
 
 
+def load_script(name, filename):
+    """Script Python sem extensao (os de config/). Sem .pyc: um
+    config/__pycache__ iria junto em quem copia a pasta inteira."""
+    sys.dont_write_bytecode = True
+    loader = SourceFileLoader(name, str(ROOT / filename))
+    spec = importlib.util.spec_from_loader(name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
 video = load('video', 'fliperos-video-check.py')
 limine_update = load('limine_update', 'fliperos-limine-update.py')
+padkeys = load_script('padkeys', 'config/fliperos-padkeys')
 MKISO = (ROOT / 'fliperos-mkiso.sh').read_text()
 ROOTFS = (ROOT / 'fliperos-rootfs.sh').read_text()
 
@@ -321,13 +335,56 @@ class ImageTests(unittest.TestCase):
         self.assertIn('Exec=sudo /usr/local/bin/fliperos-setup', desktop)
         self.assertIn('Terminal=true', desktop)
 
+    def tty1(self, installed, setup_codes, requests, *args):
+        """Roda o config/fliperos-tty1 com sudo e fliperos-session falsos.
+        setup_codes: status de cada "fliperos-setup --menu"; requests: o
+        pedido gravado antes de cada um. Devolve as chamadas, em ordem."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'bin').mkdir()
+            (tmp / 'etc').mkdir()
+            if installed:
+                (tmp / 'etc/installed').write_text('')
+                (tmp / 'etc/firstboot').write_text('')
+            log = tmp / 'calls'
+            codes = ' '.join(str(c) for c in setup_codes)
+            reqs = ' '.join(requests)
+            (tmp / 'bin/sudo').write_text(
+                '#!/bin/bash\necho "sudo $*" >> %s\n'
+                'if [[ $2 == --menu ]]; then\n'
+                '  n=$(grep -c -- --menu %s); codes=(%s); reqs=(%s)\n'
+                '  echo "${reqs[n-1]}" > %s/request\n'
+                '  exit "${codes[n-1]}"\nfi\n' % (log, log, codes, reqs, tmp))
+            (tmp / 'bin/fliperos-session').write_text('#!/bin/bash\necho "session $*" >> %s\n' % log)
+            for f in ('sudo', 'fliperos-session'):
+                (tmp / 'bin' / f).chmod(0o755)
+            env = dict(os.environ, PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']),
+                       FLIPEROS_ETC=str(tmp / 'etc'), FLIPEROS_BIN=str(tmp / 'bin'),
+                       FLIPEROS_LAUNCH_REQUEST=str(tmp / 'request'))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-tty1')] + list(args),
+                           env=env, check=True, timeout=30)
+            return [line.strip() for line in log.read_text().splitlines()]
+
     def test_tty1_flow_like_groovyarcade(self):
-        """No disco: primeiro boot, launcher e depois o setup. Na midia: setup."""
-        flow = (ROOT / 'config/fliperos-tty1').read_text()
-        installed = flow.split('if [[ -f /etc/fliperos/installed ]]; then')[1]
-        self.assertLess(installed.index('--first-boot'), installed.index('fliperos-session'))
-        # O setup "normal" e a ultima chamada, depois do launcher fechar.
-        self.assertLess(installed.index('fliperos-session'), installed.rindex('sudo /usr/local/bin/fliperos-setup\n'))
+        """No disco: primeiro boot, launcher e depois o menu. Na midia: menu."""
+        calls = self.tty1(True, [0], ['-'])
+        self.assertEqual(calls, ['sudo setterm --blank 0 --powerdown 0',
+                                 'sudo /usr/local/bin/fliperos-setup --first-boot',
+                                 'session', 'sudo /usr/local/bin/fliperos-setup --menu'])
+        calls = self.tty1(False, [0], ['-'])
+        self.assertEqual(calls[1:], ['sudo /usr/local/bin/fliperos-setup --menu'])
+
+    def test_menu_opens_the_requested_launcher_outside_the_setup(self):
+        # O X aberto de dentro do setup (pty do sudo) falhava no gabinete com
+        # "VT_ACTIVATE failed": o setup sai com 20 e o laco abre o launcher.
+        calls = self.tty1(False, [20, 20, 0], ['lxde', 'default', '-'], '--menu')
+        self.assertEqual(calls, ['sudo /usr/local/bin/fliperos-setup --menu', 'session lxde',
+                                 'sudo /usr/local/bin/fliperos-setup --menu', 'session',
+                                 'sudo /usr/local/bin/fliperos-setup --menu'])
+        menu = (ROOT / 'config/fliperos-menu').read_text()
+        self.assertIn('exec /opt/fliperos/bin/fliperos-tty1 --menu', menu)
+        self.assertIn('/usr/local/bin/fliperos-menu', ROOTFS)
+        self.assertNotIn('runuser', (ROOT / 'fliperos-setup/lib/launcher.sh').read_text())
 
     def test_both_shells_run_the_tty1_flow(self):
         # O shell do usuario e o zsh; o .bash_profile fica para quem voltar ao bash.
@@ -376,6 +433,177 @@ class ImageTests(unittest.TestCase):
         panel = (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text()
         self.assertIn('fliperos-setup.desktop', panel)
         self.assertIn('edge=bottom', panel)
+
+
+class PadKeysTests(unittest.TestCase):
+    """Controle como teclado nos menus do setup (config/fliperos-padkeys)."""
+    P = padkeys
+
+    def test_buttons(self):
+        P = self.P
+        m = P.Mapper({})
+        self.assertEqual(m.event(P.EV_KEY, 0x130, 1), [(P.KEY_ENTER, 1)])  # A
+        self.assertEqual(m.event(P.EV_KEY, 0x131, 0), [(P.KEY_ESC, 0)])    # B solto
+        self.assertEqual(m.event(P.EV_KEY, 0x120, 1), [(P.KEY_ENTER, 1)])  # botao 1 do encoder
+        self.assertEqual(m.event(P.EV_KEY, 0x121, 1), [(P.KEY_ESC, 1)])    # botao 2
+        self.assertEqual(m.event(P.EV_KEY, 0x13b, 1), [(P.KEY_ENTER, 1)])  # Start
+        self.assertEqual(m.event(P.EV_KEY, 0x136, 1), [(P.KEY_PAGEUP, 1)])  # L
+        self.assertEqual(m.event(P.EV_KEY, 0x221, 1), [(P.KEY_DOWN, 1)])   # direcional
+        self.assertEqual(m.event(P.EV_KEY, 0x130, 2), [])  # repeticao do proprio controle
+        self.assertEqual(m.event(P.EV_KEY, 0x133, 1), [])  # X/Y: sem tecla
+
+    def test_digital_stick_of_an_arcade_encoder(self):
+        # Encoder de fliperama (DragonRise, Xin-Mo): eixo 0..255, repouso 127/128.
+        P = self.P
+        m = P.Mapper({P.ABS_X: (0, 255), P.ABS_Y: (0, 255)})
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_Y, 0), [(P.KEY_UP, 1)])
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_Y, 0), [])
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_Y, 255), [(P.KEY_UP, 0), (P.KEY_DOWN, 1)])
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_Y, 128), [(P.KEY_DOWN, 0)])
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_X, 127), [])
+
+    def test_analog_dead_zone_and_hat(self):
+        P = self.P
+        m = P.Mapper({P.ABS_X: (-32768, 32767)})
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_X, 12000), [])  # analogico gasto em repouso
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_X, 30000), [(P.KEY_RIGHT, 1)])
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_HAT0X, -1), [(P.KEY_LEFT, 1)])
+        self.assertEqual(sorted(m.release()), sorted([(P.KEY_RIGHT, 0), (P.KEY_LEFT, 0)]))
+
+    def test_repeat_and_two_sources_on_one_key(self):
+        P = self.P
+        sent = []
+        keys = P.Keys(lambda k, v: sent.append((k, v)))
+        keys.apply(P.KEY_DOWN, 1, 0.0)
+        keys.apply(P.KEY_DOWN, 1, 0.0)  # hat e analogico juntos
+        keys.tick(0.3)
+        self.assertEqual(sent, [(P.KEY_DOWN, 1)])
+        for t in (0.41, 0.45, 0.54):
+            keys.tick(t)
+        self.assertEqual(sent, [(P.KEY_DOWN, 1), (P.KEY_DOWN, 2), (P.KEY_DOWN, 2)])
+        keys.apply(P.KEY_DOWN, 0, 0.6)
+        self.assertEqual(sent[-1], (P.KEY_DOWN, 2))  # o outro ainda segura
+        keys.apply(P.KEY_DOWN, 0, 0.6)
+        self.assertEqual(sent[-1], (P.KEY_DOWN, 0))
+        keys.tick(5)
+        # Enter nao repete; soltar o que nao foi apertado nao emite nada.
+        keys.apply(P.KEY_ENTER, 1, 6)
+        keys.tick(9)
+        keys.apply(P.KEY_ESC, 0, 9)
+        self.assertEqual(sent[-1], (P.KEY_ENTER, 1))
+        keys.release_all()
+        self.assertEqual(sent[-1], (P.KEY_ENTER, 0))
+
+    def test_only_controllers_are_read(self):
+        P = self.P
+        self.assertTrue(P.is_pad(b'Xbox pad', {0x130, 0x131, 0x13b}))
+        self.assertTrue(P.is_pad(b'DragonRise Generic USB Joystick', {0x120, 0x121}))
+        self.assertFalse(P.is_pad(b'AT keyboard', {1, 28, 30}))
+        self.assertFalse(P.is_pad(b'mouse', {0x110, 0x111}))
+        self.assertFalse(P.is_pad(b'GunCon2', {0x110, 0x130, 0x13b}))
+        self.assertFalse(P.is_pad(P.NAME, {0x130}))
+
+    def test_ioctl_numbers(self):
+        # Os valores de linux/uinput.h e linux/input.h no x86_64.
+        P = self.P
+        self.assertEqual(P.UI_SET_EVBIT, 0x40045564)
+        self.assertEqual(P.UI_SET_KEYBIT, 0x40045565)
+        self.assertEqual(P.UI_DEV_SETUP, 0x405c5503)
+        self.assertEqual(P.UI_DEV_CREATE, 0x5501)
+        self.assertEqual(P.eviocgabs(0), 0x80184540)
+        self.assertEqual(P.EVENT.size, 24)
+
+    def test_on_only_while_the_setup_menu_is_up(self):
+        self.assertIn('multi-user.target.wants/fliperos-padkeys.service', ROOTFS)
+        setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        self.assertIn('padkeys_off', setup.split('restore_terminal() {')[1].split('}')[0])
+        self.assertLess(setup.index('  ui_init\n'), setup.index('  padkeys_on\n'))
+
+
+class RootfsRunTests(unittest.TestCase):
+    """O fliperos-rootfs.sh de verdade numa raiz falsa."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        root = Path(cls.tmp.name)
+        for d in ('home/fliperos', 'etc/xdg/openbox/LXDE', 'etc/modprobe.d', 'etc/sudoers.d',
+                  'etc/profile.d', 'etc/systemd/system'):
+            (root / d).mkdir(parents=True)
+        (root / 'etc/xdg/openbox/LXDE/rc.xml').write_text(
+            '<openbox_config>\n<theme>\n  <name>Clearlooks</name>\n</theme>\n'
+            '<applications>\n<!-- exemplos -->\n</applications>\n</openbox_config>\n')
+        (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+        subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                       capture_output=True, timeout=120)
+        cls.root = root
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_openbox_rc_dracula_and_resolution_window(self):
+        rc = (self.root / 'home/fliperos/.config/openbox/lxde-rc.xml').read_text()
+        self.assertIn('<name>Dracula</name>', rc)
+        self.assertIn('<application title="Screen Resolution"><maximized>yes</maximized></application>\n'
+                      '</applications>', rc)
+
+    def test_new_programs_are_installed(self):
+        for path in ('usr/local/bin/fliperos-menu', 'opt/fliperos/bin/fliperos-padkeys',
+                     'opt/fliperos/bin/fliperos-resolution', 'opt/fliperos/bin/fliperos-tty1'):
+            self.assertTrue(os.access(self.root / path, os.X_OK), path)
+        self.assertTrue((self.root / 'usr/local/share/applications/fliperos-resolution.desktop').is_file())
+        wants = self.root / 'etc/systemd/system/multi-user.target.wants/fliperos-padkeys.service'
+        self.assertEqual(os.readlink(wants), '/etc/systemd/system/fliperos-padkeys.service')
+        self.assertIn('fliperos-menu', (self.root / 'etc/profile.d/fliperos.sh').read_text())
+
+
+class ResolutionAppTests(unittest.TestCase):
+    """config/fliperos-resolution com xrandr e switchres falsos."""
+
+    def run_app(self, saved):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'bin').mkdir()
+            log = tmp / 'xrandr.log'
+            (tmp / 'bin/xrandr').write_text(
+                '#!/bin/bash\necho "$*" >> %s\n'
+                'if [[ $1 == --query ]]; then\n'
+                '  echo "Screen 0: minimum 320 x 200, current 640 x 480, maximum 16384 x 16384"\n'
+                '  echo "DVI-D-1 disconnected (normal left inverted right x axis y axis)"\n'
+                '  echo "VGA-1 connected primary 640x480+0+0 (normal left inverted right x axis y axis) 0mm x 0mm"\n'
+                '  echo "   640x480i     59.99*+"\nfi\n' % log)
+            (tmp / 'bin/switchres').write_text(
+                '#!/bin/bash\necho "Switchres: Calculating best video mode for $1x$2@$3"\n'
+                'echo "Switchres: Modeline \\"640x240_60 15.660000KHz 60.000000Hz\\" '
+                '13.013460 640 666 727 831 240 242 245 261   -hsync -vsync"\n')
+            for f in ('xrandr', 'switchres'):
+                (tmp / 'bin' / f).chmod(0o755)
+            (tmp / 'fliperos').mkdir()
+            if saved:
+                (tmp / 'fliperos/desktop-mode').write_text(saved)
+            env = dict(os.environ, PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']),
+                       XDG_CONFIG_HOME=str(tmp), FLIPEROS_SETUP_LIB=str(ROOT / 'fliperos-setup/lib'),
+                       FLIPEROS_LOG=str(tmp / 'log'))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-resolution'), '--apply-saved'],
+                           env=env, check=True, timeout=30)
+            return log.read_text().splitlines() if log.exists() else []
+
+    def test_saved_mode_is_calculated_by_switchres_and_set_by_xrandr(self):
+        calls = self.run_app('640 240 60\n')
+        self.assertEqual(calls[1:], [
+            '--newmode fliperos-640x240@60 13.013460 640 666 727 831 240 242 245 261 -hsync -vsync',
+            '--addmode VGA-1 fliperos-640x240@60',
+            '--output VGA-1 --mode fliperos-640x240@60'])
+
+    def test_nothing_saved_changes_nothing(self):
+        self.assertEqual(self.run_app(None), [])
+
+    def test_lxde_applies_it_and_the_menu_has_it(self):
+        self.assertIn('fliperos-resolution --apply-saved', (ROOT / 'config/fliperos-lxde').read_text())
+        entry = (ROOT / 'config/applications/fliperos-resolution.desktop').read_text()
+        self.assertIn('Exec=lxterminal -t "Screen Resolution" -e /opt/fliperos/bin/fliperos-resolution', entry)
+        self.assertIn('Categories=Settings;', entry)
 
 
 class SessionTableTests(unittest.TestCase):
@@ -586,6 +814,33 @@ class DraculaThemeTests(unittest.TestCase):
         self.assertIn('etc/fliperos/mame/ui.ini', ROOTFS)
 
 
+class SilentBootTests(unittest.TestCase):
+    """Boot direto no Plymouth, sem texto (pedido no teste do gabinete)."""
+
+    SILENT = ('loglevel=3', 'rd.udev.log_level=3', 'udev.log_level=3', 'vt.global_cursor_default=0')
+
+    def test_kernel_lines_are_silent(self):
+        common = re.search(r'BOOT_COMMON="([^"]*)"', MKISO).group(1).split()
+        installed = re.search(r'BOOT_SILENT="([^"]*)"',
+                              (ROOT / 'fliperos-setup/lib/bootloader.sh').read_text()).group(1).split()
+        for param in self.SILENT:
+            self.assertIn(param, common)
+            self.assertIn(param, installed)
+
+    def test_installed_limine_is_quiet_but_keeps_the_menu_on_a_key(self):
+        text = limine_update.render(['6.18.54-15khz'], 'UUID=abc', 'quiet splash', '3')
+        self.assertIn('\nquiet: yes\n', text)
+        # A contagem invisivel continua: uma tecla nela mostra o menu.
+        self.assertIn('timeout: 3\n', text)
+        self.assertIn('Diagnostico', text)
+
+    def test_autologin_prints_nothing(self):
+        unit = MKISO.split('autologin.conf << UNIT')[1].split('UNIT\n')[0]
+        self.assertIn('--skip-login --noissue', unit)
+        self.assertNotIn('--noclear', unit)
+        self.assertIn('.hushlogin', ROOTFS)
+
+
 class TerminalThemeTests(unittest.TestCase):
     """Terminal escuro: zsh com Oh My Zsh e o tema Dracula."""
 
@@ -605,8 +860,11 @@ class TerminalThemeTests(unittest.TestCase):
         self.assertIn("zstyle ':omz:update' mode disabled", zshrc)
         # Cache no home: /usr/local/share/oh-my-zsh e do root.
         self.assertIn('ZSH_CACHE_DIR=$HOME/.cache/oh-my-zsh', zshrc)
-        # No console do Linux, sem os simbolos que a fonte nao tem.
-        self.assertIn('[[ $TERM == linux ]] && DRACULA_ARROW_ICON="> "', zshrc)
+        # No console do Linux, sem os simbolos que a fonte nao tem, e com o
+        # cursor de volta (o boot o esconde ate o Plymouth).
+        console = zshrc.split('if [[ $TERM == linux ]]; then')[1].split('fi\n')[0]
+        self.assertIn('DRACULA_ARROW_ICON="> "', console)
+        self.assertIn("printf '\\e[?25h'", console)
         self.assertLess(zshrc.index('DRACULA_ARROW_ICON'), zshrc.index('source "$ZSH/oh-my-zsh.sh"'))
         self.assertIn('config/zshrc', ROOTFS)
 
@@ -618,7 +876,9 @@ class TerminalThemeTests(unittest.TestCase):
 class EmulatorMenuTests(unittest.TestCase):
     """Emuladores no menu do LXDE: saem do desktop pelo fliperos-launch."""
 
-    APPS = sorted((ROOT / 'config/applications').glob('fliperos-*.desktop'))
+    # So os de jogos (Game;): o Screen Resolution fica em Preferencias.
+    APPS = sorted(p for p in (ROOT / 'config/applications').glob('fliperos-*.desktop')
+                  if 'Categories=Game;' in p.read_text())
     # O que mostra o atalho (TryExec): o binario do emulador; o Model 2 so
     # precisa do Wine (o emulador o usuario copia).
     TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/bin/wine'}

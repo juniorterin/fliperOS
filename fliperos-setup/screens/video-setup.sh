@@ -114,13 +114,16 @@ screen_custom_resolution() {
 # screen_geometry roda o mesmo "geometry 648 480 60" do gasetup (o
 # geometry.py do Switchres, que desenha o grid e devolve o crt_range).
 screen_geometry() {
-  local out range
+  local out range w h r
   have geometry || { ui_msg "Geometry" "The geometry tool (Switchres) is not installed."; return 0; }
-  ui_msg "Geometry" "A test grid will be shown to adjust the picture." "" \
+  read -r w h r <<< "$(geometry_mode)"
+  ui_msg "Geometry" "A test grid will be shown at ${w}x${h} (${r} Hz) to adjust the picture." "" \
     "Arrows: move the picture   Page Up/Down: width" \
-    "ENTER: save   ESC: cancel   DEL: reset   CTRL + key: bigger steps"
+    "ENTER: save   ESC: cancel   DEL: reset   CTRL + key: bigger steps" "" \
+    "The picture only moves down while there are blank lines below it." \
+    "If it stops, use the monitor's V-POS (vertical position) adjustment."
   ui_clear
-  out=$(geometry 648 480 60 2>&1)
+  out=$(geometry "$w" "$h" "$r" 2>&1)
   printf '%s\n' "$out" >> "$FLIPEROS_LOG"
   ui_flush_input
   range=$(geometry_parse "$out")

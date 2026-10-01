@@ -6,6 +6,8 @@
 # que aparece quando o frontend fecha.
 #
 #   sudo fliperos-setup                 fluxo normal
+#   sudo fliperos-setup --menu          o mesmo, pelo laco do fliperos-tty1
+#                                       (sai com 20 para abrir um launcher)
 #   sudo fliperos-setup --first-boot    escolhe o launcher padrao
 #   sudo fliperos-setup --output-test   refaz o teste de saidas
 #   sudo fliperos-setup --video-setup   abre direto o Video Setup
@@ -66,6 +68,10 @@ source "$SETUP_DIR/lib/update.sh"
 source "$SETUP_DIR/lib/hardware.sh"
 # shellcheck source=lib/latency.sh
 source "$SETUP_DIR/lib/latency.sh"
+# shellcheck source=lib/quirks.sh
+source "$SETUP_DIR/lib/quirks.sh"
+# shellcheck source=lib/padkeys.sh
+source "$SETUP_DIR/lib/padkeys.sh"
 # shellcheck source=lib/ui.sh
 source "$SETUP_DIR/lib/ui.sh"
 # shellcheck source=screens/progress.sh
@@ -90,10 +96,11 @@ source "$SETUP_DIR/screens/first-boot.sh"
 source "$SETUP_DIR/screens/latency.sh"
 
 usage() {
-  sed -n '8,16p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
+  sed -n '8,18p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
 }
 
 restore_terminal() {
+  padkeys_off
   speak_stop
   printf '\e[?25h' > /dev/tty 2> /dev/null
   stty echo < /dev/tty 2> /dev/null
@@ -142,12 +149,18 @@ main() {
     echo "fliperos-setup needs a terminal." >&2
     return 1
   fi
+  if [[ ${1:-} == --menu ]]; then
+    SETUP_MENU_LOOP=1
+    shift
+  fi
   # E um menu de gabinete: sai-se dele pelo menu. Ctrl+C no meio de uma
   # instalacao deixaria o disco pela metade.
   trap '' INT QUIT TSTP
   trap restore_terminal EXIT
   log_info "fliperos-setup $FLIPEROS_SETUP_VERSION $* (live=$(is_live && echo yes || echo no))"
   ui_init
+  # Controle como teclado enquanto o menu esta na tela (lib/padkeys.sh).
+  padkeys_on
 
   case ${1:-} in
     --first-boot)

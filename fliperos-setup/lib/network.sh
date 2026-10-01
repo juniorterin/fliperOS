@@ -9,6 +9,28 @@ net_wifi_devices() {
   nmcli -t -f DEVICE,TYPE device status 2> /dev/null | awk -F: '$2 == "wifi" { print $1 }'
 }
 
+# net_hardware descreve o hardware de rede que o Linux enxerga, para quando
+# nenhuma placa Wi-Fi aparece: placa sem driver (aparece aqui e nao no
+# nmcli) ou desligada pelo rfkill (botao ou BIOS).
+net_hardware() {
+  local found=0 line
+  while IFS= read -r line; do
+    printf 'PCI: %s\n' "$line"
+    found=1
+  done < <(lspci 2> /dev/null | grep -iE 'network|wireless|wi-?fi|802\.11' | cut -d' ' -f2- |
+    sed -E 's/^[^:]*: //')
+  while IFS= read -r line; do
+    printf 'USB: %s\n' "$line"
+    found=1
+  done < <(lsusb 2> /dev/null | grep -iE 'wireless|wi-?fi|wlan|802\.11|ralink|realtek.*(rtl8|wlan)|mediatek|atheros|tp-link' |
+    sed -E 's/^.*ID [0-9a-fA-F:]+ //')
+  ((found)) || echo "No network adapter besides Ethernet was found."
+  if rfkill list wifi 2> /dev/null | grep -q 'blocked: yes'; then
+    echo "Wi-Fi is switched off (rfkill): check the Wi-Fi key or the BIOS."
+  fi
+  return 0
+}
+
 # net_parse_scan le a saida de "nmcli -t -f SSID,SIGNAL,SECURITY" e imprime
 # "SSID|sinal|seguranca", uma linha por rede (a de sinal mais forte quando
 # o mesmo SSID aparece em mais de um ponto de acesso), da mais forte para a

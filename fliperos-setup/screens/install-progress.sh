@@ -1,11 +1,11 @@
 # shellcheck shell=bash
-# "Install to HD": video (opcional), disco, confirmacao, instalacao com
+# "Install to HD/SSD": video (opcional), disco, confirmacao, instalacao com
 # progresso e o fim (remover a midia, reiniciar). Mesmo roteiro do
 # worker_select_install/pre_install/post_install do gasetup.
 
 screen_install() {
   local choice
-  if ui_yesno "Install to HD" "Do you want to configure video?" no; then
+  if ui_yesno "Install to HD/SSD" "Do you want to configure video?" no; then
     screen_video_setup
   fi
   while true; do

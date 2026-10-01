@@ -3,15 +3,19 @@
 # isomainmenu do gasetup); no sistema instalado, o mainmenu que aparece
 # quando o frontend fecha.
 
-# Codigo de saida do setup quando a pessoa pede o terminal.
+# Codigos de saida do setup: a pessoa pediu o terminal, ou pediu um
+# launcher, que o fliperos-tty1 abre (lib/launcher.sh).
 SETUP_EXIT_SHELL=10
+SETUP_EXIT_LAUNCH=20
+# 1 com --menu, que so o laco do fliperos-tty1 (fliperos-menu) passa.
+SETUP_MENU_LOOP=${SETUP_MENU_LOOP:-0}
 
 screen_live_menu() {
   local choice last=install
   while true; do
     UI_STATUS=$(status_line)
     choice=$(ui_menu "FliperOS Setup" "" "$last" \
-      "install|Install to HD" \
+      "install|Install to HD/SSD" \
       "recovery|Recovery Mode" \
       "terminal|Terminal" \
       "shutdown|Shutdown") || continue
@@ -37,9 +41,9 @@ screen_main_menu() {
       "power|Shutdown / Reboot") || continue
     last=$choice
     case $choice in
-      frontend) screen_start_frontend ;;
+      frontend) screen_start_frontend && return "$SETUP_EXIT_LAUNCH" ;;
       setup) screen_setup_menu ;;
-      desktop) screen_start_desktop ;;
+      desktop) screen_start_desktop && return "$SETUP_EXIT_LAUNCH" ;;
       shell) screen_terminal && return "$SETUP_EXIT_SHELL" ;;
       power) screen_power ;;
     esac
@@ -48,7 +52,7 @@ screen_main_menu() {
 
 screen_terminal() {
   ui_clear
-  printf '%s\n\n' "To return to the setup, type:  sudo fliperos-setup" > /dev/tty
+  printf '%s\n\n' "To return to the menu, type:  fliperos-menu" > /dev/tty
   return 0
 }
 
@@ -75,36 +79,46 @@ screen_power() {
   esac
 }
 
-# screen_start_frontend abre o launcher padrao como o usuario do sistema e
-# volta ao menu quando ele fecha (worker_start_fe do gasetup).
+# screen_start_frontend pede o launcher padrao (worker_start_fe do gasetup).
+# Status 0: o pedido foi gravado e o setup deve sair com SETUP_EXIT_LAUNCH;
+# o fliperos-tty1 abre o launcher e reabre o setup quando ele fecha.
 screen_start_frontend() {
   local current
   current=$(launcher_current)
   if [[ $current == setup ]]; then
     ui_msg "Start frontend" "No frontend is set: FliperOS starts in this menu." "" \
       "Choose one in Setup > Frontend."
-    return 0
+    return 1
   fi
   if ! launcher_installed "$current"; then
     ui_msg "Start frontend" "$(launcher_label "$current") is not installed." "" \
       "Choose another one in Setup > Frontend."
-    return 0
+    return 1
   fi
-  ui_clear
-  printf '\e[?25l' > /dev/tty
-  launcher_exec < /dev/tty > /dev/tty 2>&1
-  printf '\e[?25h' > /dev/tty
-  ui_palette > /dev/tty
-  ui_flush_input
+  screen_launch "Start frontend" default
 }
 
 screen_start_desktop() {
   if ! launcher_installed lxde; then
     ui_msg "Start desktop" "The LXDE desktop is not installed."
-    return 0
+    return 1
+  fi
+  screen_launch "Start desktop" lxde
+}
+
+# screen_launch TITULO NOME grava o pedido do launcher (lib/launcher.sh).
+# So o laco do fliperos-tty1 (--menu) abre o pedido; num "sudo
+# fliperos-setup" digitado no shell ninguem o abriria.
+screen_launch() {
+  if ((SETUP_MENU_LOOP != 1)); then
+    ui_msg "$1" "This setup was opened from the shell." "" \
+      "Leave it and type  fliperos-menu  to start from the FliperOS menu."
+    return 1
+  fi
+  if ! launcher_request "$2"; then
+    ui_msg "$1" "Could not start it (see /var/log/fliperos-setup.log)."
+    return 1
   fi
   ui_clear
-  launcher_exec lxde < /dev/tty > /dev/tty 2>&1
-  ui_palette > /dev/tty
-  ui_flush_input
+  return 0
 }

@@ -37,7 +37,7 @@ printf 'disconnected\n' > "$DRM_SYSFS/card0-DVI-D-1/status"
 printf '%s\n' "${DEMO_CMDLINE:-boot=live fliperos.boot=15khz video=640x480iS quiet splash}" > "$PROC_CMDLINE"
 cat > "$FAKE/bin/lspci" << 'EOF'
 #!/bin/bash
-echo '"01:00.0" "VGA compatible controller" "Advanced Micro Devices, Inc. [AMD/ATI]" "Oland [Radeon HD 8570 / R7 240/340]" "" ""'
+echo '01:00.0 "VGA compatible controller" "Advanced Micro Devices, Inc. [AMD/ATI]" "Oland PRO [Radeon R7 240/340 / Radeon 520]" -r87 "Advanced Micro Devices, Inc. [AMD/ATI]" "Device 0b0c"'
 EOF
 cat > "$FAKE/bin/fliperos-video-check" << 'EOF'
 #!/bin/bash

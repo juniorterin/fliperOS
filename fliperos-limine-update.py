@@ -76,6 +76,10 @@ def render(versions, root, cmdline, timeout):
     text = ("# Gerado por fliperos-limine-update; editar aqui nao adianta.\n"
             "# Parametros do kernel: /etc/default/fliperos-boot\n"
             "timeout: %s\n"
+            # Boot direto no Plymouth, sem menu nem "Loading kernel": a
+            # contagem continua, invisivel, e uma tecla nela revela o menu
+            # (a entrada de diagnostico).
+            "quiet: yes\n"
             # Menu em modo texto: igual ao "terminal_output console" do GRUB.
             "graphics: no\n"
             "interface_branding: FliperOS\n\n" % timeout)

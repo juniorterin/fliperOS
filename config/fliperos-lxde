@@ -12,4 +12,7 @@ case $orientation in
   vertical-ccw) xrandr -o left ;;
 esac
 
+# Resolucao guardada pelo Screen Resolution (fliperos-resolution).
+/opt/fliperos/bin/fliperos-resolution --apply-saved > /dev/null 2>&1
+
 exec startlxde

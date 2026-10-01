@@ -84,13 +84,16 @@ drm_card_pci() {
 }
 
 # drm_card_name CARD imprime o nome curto da GPU, como o short_gpu_name do
-# gatools ("Radeon HD 5450" em vez da linha inteira do lspci).
+# gatools ("Radeon HD 5450" em vez da linha inteira do lspci). A linha do
+# "lspci -mm" e: 01:00.0 "classe" "fabricante" "dispositivo" -rREV
+# "fabricante da placa" "placa" — o slot sem aspas, entao, separando por
+# aspas, o fabricante e o 4o campo e o dispositivo o 6o.
 drm_card_name() {
   local pci line vendor device
   pci=$(drm_card_pci "$1") || { echo "Unknown GPU"; return; }
   line=$(lspci -mms "$pci" 2>/dev/null)
-  vendor=$(awk -F'"' '{print $6}' <<< "$line")
-  device=$(awk -F'"' '{print $8}' <<< "$line")
+  vendor=$(awk -F'"' '{print $4}' <<< "$line")
+  device=$(awk -F'"' '{print $6}' <<< "$line")
   gpu_short_name "$vendor" "$device"
 }
 
