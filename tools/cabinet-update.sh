@@ -91,6 +91,13 @@ systemctl enable fliperos-padkeys.service > /dev/null 2>&1 || true
 systemctl restart fliperos-padkeys.service
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
 
-echo "== Reiniciando o tty1 no fluxo novo"
-systemctl restart getty@tty1.service
-echo "Pronto. Para ver o boot sem texto, reinicie o gabinete."
+# So reinicia o tty1 se nele estiver o menu (login, shell, sudo): um jogo,
+# frontend ou o desktop aberto agora seria fechado no meio.
+busy=$(pgrep -l -t tty1 | awk '{ print $2 }' | grep -vxE 'login|zsh|bash|sudo|fliperos-tty1' | sort -u | tr '\n' ' ')
+if [[ -z $busy ]]; then
+  echo "== Reiniciando o tty1 no fluxo novo"
+  systemctl restart getty@tty1.service
+  echo "Pronto. Para ver o boot sem texto, reinicie o gabinete."
+else
+  echo "== tty1 em uso ($busy): nao reiniciado. O menu novo aparece quando ele voltar."
+fi

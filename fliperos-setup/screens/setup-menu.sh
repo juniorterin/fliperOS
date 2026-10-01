@@ -14,6 +14,7 @@ screen_setup_menu() {
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
       "quirks|Quirks (USB controller fixes)" \
+      "lpt|LPT joysticks (parallel port)" \
       "update|System Update" \
       "return|Return") || return 0
     last=$choice
@@ -25,6 +26,7 @@ screen_setup_menu() {
       latency) screen_latency ;;
       scraper) screen_scraper ;;
       quirks) screen_quirks ;;
+      lpt) screen_lpt ;;
       update) screen_update ;;
       return) return 0 ;;
     esac

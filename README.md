@@ -107,6 +107,7 @@ O tty1 faz o login sozinho e segue o fluxo do `.bash_profile` do GroovyArcade (`
   - **Latency** — modo **Standard** (qualquer máquina) ou **Low latency** (CPUs modernas), com a conferência desta máquina contra a recomendação e a lista do hardware ideal (seção 9, Latência);
   - **Scraper** — capas, screenshots, logos, vídeos e informações de cada ROM encontrada em `/opt/fliperos/roms/<sistema>`, com o **Skyscraper** (o mesmo que o GroovyArcade empacota), de ScreenScraper, ArcadeDB ou TheGamesDB, no formato do launcher padrão;
   - **Quirks** — correções do kernel para controles USB que chegam errados (o parâmetro `usbhid.quirks`). Cada quirk tem um **nome** dado pela pessoa e um **código** `0xVENDOR:0xPRODUTO:0xFLAGS`, por exemplo `0x16c0:0x05e1:0x40` para um encoder Xin-Mo duplo aparecer como dois jogadores. Escolher um da lista o apaga; **USB devices connected now** mostra o vendor:produto de cada dispositivo ligado. Flags úteis: `0x40` um dispositivo por jogador (MULTI_INPUT, encoders duplos), `0x8` sem pedidos GET (NOGET, encoder que trava), `0x400` sempre consultar (ALWAYS_POLL). O kernel lê no máximo 4 quirks e só no boot: a lista fica em `/etc/fliperos/quirks.conf`, vai para a linha do kernel (`/etc/default/fliperos-boot`) e vale depois de reiniciar. Feito na mídia de instalação, vai junto para o disco;
+  - **LPT joysticks** — joysticks e pads na **porta paralela**, pelos drivers do próprio kernel: **adaptador de gamepad** (`gamecon`: NES, SNES, N64, PlayStation, tapete DDR, Multisystem; até 5 por porta, nos pinos 10, 11, 12, 13 e 15), **adaptador DB9** (`db9`: Atari/Amiga/Master System, Genesis de 3/5/6 botões, Saturn, CD32; precisa da porta em EPP ou ECP na BIOS) e **interface TurboGraFX** (`turbografx`: até 7 joysticks Multisystem). O adaptador não tem como ser detectado: a pessoa diz qual é e o que está ligado em cada entrada, e o setup grava `/etc/modprobe.d/fliperos-lpt.conf` (as opções do módulo, mais `blacklist lp`: o driver de impressora registraria a porta, e os de joystick a querem só para eles) e `/etc/modules-load.d/fliperos-lpt.conf` (carrega no boot), carrega o driver na hora e mostra os joysticks criados. A porta em si o kernel acha sozinho (`parport_pc`) quando ela existe — na placa-mãe costuma vir **desligada na BIOS** (Super I/O > Parallel Port); sem ela, uma placa paralela PCI/PCIe. Os joysticks da paralela também movem os menus;
   - **System Update** — `apt-get update` e `upgrade`, com o progresso real do apt;
 - **Start desktop** — o LXDE;
 - **Exit to shell** — `fliperos-menu` volta ao menu;
@@ -152,11 +153,12 @@ fliperos-setup/
 │   ├── launcher.sh audio.sh network.sh status.sh scraper.sh update.sh
 │   ├── hardware.sh latency.sh   CPU/memória/GPU e os modos de latência
 │   ├── quirks.sh padkeys.sh     quirks do usbhid; controle nos menus
+│   ├── lpt.sh            joysticks na porta paralela (db9, gamecon, turbografx)
 │   └── ui.sh             Gum, tema, quadro da tela
 └── screens/              telas — só combinam ui.sh com a lógica
     ├── output-test.sh (teste + Testing Results)  main-menu.sh  setup-menu.sh
     ├── video-setup.sh  disk-selection.sh  install-progress.sh  progress.sh
-    └── recovery.sh  first-boot.sh  latency.sh
+    └── recovery.sh  first-boot.sh  latency.sh  lpt.sh
 ```
 
 As operações longas (instalar, reparar, atualizar, scraper) não conhecem a tela: escrevem eventos (`@step`, `@pct`, `@msg`, `@fail`) que `screens/progress.sh` desenha. Tudo vai para `/var/log/fliperos-setup.log`.

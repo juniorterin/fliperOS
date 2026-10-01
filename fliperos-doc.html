@@ -136,6 +136,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Latency</strong> — modo <strong>Standard</strong> (qualquer máquina) ou <strong>Low latency</strong> (CPUs modernas), com a conferência desta máquina contra a recomendação e a lista do hardware ideal (seção 9, Latência);</li>
 <li><strong>Scraper</strong> — capas, screenshots, logos, vídeos e informações de cada ROM encontrada em <code>/opt/fliperos/roms/&lt;sistema&gt;</code>, com o <strong>Skyscraper</strong> (o mesmo que o GroovyArcade empacota), de ScreenScraper, ArcadeDB ou TheGamesDB, no formato do launcher padrão;</li>
 <li><strong>Quirks</strong> — correções do kernel para controles USB que chegam errados (o parâmetro <code>usbhid.quirks</code>). Cada quirk tem um <strong>nome</strong> dado pela pessoa e um <strong>código</strong> <code>0xVENDOR:0xPRODUTO:0xFLAGS</code>, por exemplo <code>0x16c0:0x05e1:0x40</code> para um encoder Xin-Mo duplo aparecer como dois jogadores. Escolher um da lista o apaga; <strong>USB devices connected now</strong> mostra o vendor:produto de cada dispositivo ligado. Flags úteis: <code>0x40</code> um dispositivo por jogador (MULTI_INPUT, encoders duplos), <code>0x8</code> sem pedidos GET (NOGET, encoder que trava), <code>0x400</code> sempre consultar (ALWAYS_POLL). O kernel lê no máximo 4 quirks e só no boot: a lista fica em <code>/etc/fliperos/quirks.conf</code>, vai para a linha do kernel (<code>/etc/default/fliperos-boot</code>) e vale depois de reiniciar. Feito na mídia de instalação, vai junto para o disco;</li>
+<li><strong>LPT joysticks</strong> — joysticks e pads na <strong>porta paralela</strong>, pelos drivers do próprio kernel: <strong>adaptador de gamepad</strong> (<code>gamecon</code>: NES, SNES, N64, PlayStation, tapete DDR, Multisystem; até 5 por porta, nos pinos 10, 11, 12, 13 e 15), <strong>adaptador DB9</strong> (<code>db9</code>: Atari/Amiga/Master System, Genesis de 3/5/6 botões, Saturn, CD32; precisa da porta em EPP ou ECP na BIOS) e <strong>interface TurboGraFX</strong> (<code>turbografx</code>: até 7 joysticks Multisystem). O adaptador não tem como ser detectado: a pessoa diz qual é e o que está ligado em cada entrada, e o setup grava <code>/etc/modprobe.d/fliperos-lpt.conf</code> (as opções do módulo, mais <code>blacklist lp</code>: o driver de impressora registraria a porta, e os de joystick a querem só para eles) e <code>/etc/modules-load.d/fliperos-lpt.conf</code> (carrega no boot), carrega o driver na hora e mostra os joysticks criados. A porta em si o kernel acha sozinho (<code>parport_pc</code>) quando ela existe — na placa-mãe costuma vir <strong>desligada na BIOS</strong> (Super I/O &gt; Parallel Port); sem ela, uma placa paralela PCI/PCIe. Os joysticks da paralela também movem os menus;</li>
 <li><strong>System Update</strong> — <code>apt-get update</code> e <code>upgrade</code>, com o progresso real do apt;</li>
 <li><strong>Start desktop</strong> — o LXDE;</li>
 <li><strong>Exit to shell</strong> — <code>fliperos-menu</code> volta ao menu;</li>
@@ -198,11 +199,12 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 │   ├── launcher.sh audio.sh network.sh status.sh scraper.sh update.sh
 │   ├── hardware.sh latency.sh   CPU/memória/GPU e os modos de latência
 │   ├── quirks.sh padkeys.sh     quirks do usbhid; controle nos menus
+│   ├── lpt.sh            joysticks na porta paralela (db9, gamecon, turbografx)
 │   └── ui.sh             Gum, tema, quadro da tela
 └── screens/              telas — só combinam ui.sh com a lógica
     ├── output-test.sh (teste + Testing Results)  main-menu.sh  setup-menu.sh
     ├── video-setup.sh  disk-selection.sh  install-progress.sh  progress.sh
-    └── recovery.sh  first-boot.sh  latency.sh
+    └── recovery.sh  first-boot.sh  latency.sh  lpt.sh
 </code></pre>
 <p>As operações longas (instalar, reparar, atualizar, scraper) não conhecem a tela: escrevem eventos (<code>@step</code>, <code>@pct</code>, <code>@msg</code>, <code>@fail</code>) que <code>screens/progress.sh</code> desenha. Tudo vai para <code>/var/log/fliperos-setup.log</code>.</p>
 <h2 id="8-kernel-15-khz">8. Kernel 15 kHz</h2>

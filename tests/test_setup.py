@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "update", "hardware", "latency", "quirks", "padkeys"]
+        "status", "scraper", "update", "hardware", "latency", "quirks", "padkeys", "lpt"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -875,6 +875,73 @@ class QuirksTests(Base):
                                "echo 'Bus 001 Device 004: ID 16C0:05e1 Van Ooijen Technische Informatica Xin-Mo'")
         self.assertEqual(self.env.out("quirks_usb_devices").splitlines(),
                          ["0x16c0:0x05e1  Van Ooijen Technische Informatica Xin-Mo"])
+
+
+class LptTests(Base):
+    """Joysticks na porta paralela: db9, gamecon e turbografx do kernel."""
+
+    def setUp(self):
+        super().setUp()
+        d = self.env.dir
+        self.modprobe = d / "modprobe.d" / "fliperos-lpt.conf"
+        self.modules = d / "modules-load.d" / "fliperos-lpt.conf"
+        self.lpt_env = {"LPT_MODPROBE_CONF": str(self.modprobe), "LPT_MODULES_CONF": str(self.modules),
+                        "PARPORT_SYSFS": str(d / "parport-sys"), "PARPORT_PROC": str(d / "parport-proc"),
+                        "PROC_INPUT": str(d / "input-devices")}
+
+    def out(self, script):
+        return self.env.out(script, self.lpt_env)
+
+    def test_module_options_follow_the_kernel_parameters(self):
+        # Os nomes e numeros de db9.c, gamecon.c e turbografx.c.
+        self.assertEqual(self.out("lpt_options gamecon 0 7 7").strip(), "options gamecon map=0,7,7")
+        self.assertEqual(self.out("lpt_options gamecon 1 0 1").strip(), "options gamecon map=1,0,1")
+        self.assertEqual(self.out("lpt_options db9 0 1").strip(), "options db9 dev=0,1")
+        self.assertEqual(self.out("lpt_options turbografx 0 2 2 2").strip(), "options turbografx map=0,2,2,2")
+        for bad in ("db9 0 4", "db9 0 0", "db9 0 1 2", "db9 0 13", "gamecon 0 0 0", "gamecon 0 10",
+                    "gamecon 0 1 1 1 1 1 1", "turbografx 0 6", "turbografx 0 1 1 1 1 1 1 1 1",
+                    "gamecon x 7", "gamecon 0", "foo 0 1"):
+            self.assertEqual(self.env.run("lpt_options %s" % bad, self.lpt_env).returncode, 1, bad)
+
+    def test_set_writes_the_module_options_and_the_boot_load(self):
+        self.out("lpt_set gamecon 0 7 7")
+        self.assertIn("lpt=gamecon 0 7 7\n", (self.env.etc / "fliperos.conf").read_text())
+        conf = self.modprobe.read_text()
+        self.assertIn("options gamecon map=0,7,7\n", conf)
+        self.assertIn("blacklist lp\n", conf)
+        self.assertEqual(self.modules.read_text(), "parport_pc\ngamecon\n")
+        self.assertEqual(self.out("lpt_describe").strip(), "gamecon on parport0: PlayStation pad; PlayStation pad")
+        self.assertEqual(self.env.run("lpt_set gamecon 0 0", self.lpt_env).returncode, 1)
+        self.out("lpt_disable")
+        self.assertFalse(self.modprobe.exists())
+        self.assertFalse(self.modules.exists())
+        self.assertEqual(self.out("lpt_describe").strip(), "off")
+
+    def test_reload_swaps_the_driver(self):
+        log = self.env.dir / "modprobe.log"
+        self.env.stub("modprobe", 'echo "$*" >> %s' % log)
+        self.out("lpt_set db9 0 2; lpt_reload")
+        self.assertEqual(log.read_text().splitlines(), ["-r db9 gamecon turbografx lp", "parport_pc", "db9"])
+        log.unlink()
+        self.out("lpt_disable; lpt_reload")
+        self.assertEqual(log.read_text().splitlines(), ["-r db9 gamecon turbografx lp"])
+
+    def test_ports_and_joysticks_found(self):
+        d = self.env.dir
+        (d / "parport-sys" / "parport0").mkdir(parents=True)
+        (d / "parport-proc" / "parport0").mkdir(parents=True)
+        (d / "parport-proc" / "parport0" / "base-addr").write_text("888\t1912\n")
+        (d / "parport-proc" / "parport0" / "modes").write_text("PCSPP,TRISTATE,EPP\n")
+        self.assertEqual(self.out("lpt_ports").splitlines(), ["0|parport0 (0x378, PCSPP,TRISTATE,EPP)"])
+        (d / "input-devices").write_text(
+            'I: Bus=0011 Vendor=0001 Product=0001 Version=ab41\nN: Name="AT Translated Set 2 keyboard"\n'
+            'P: Phys=isa0060/serio0/input0\n\n'
+            'I: Bus=0000 Vendor=0001 Product=0007 Version=0100\nN: Name="PSX controller"\n'
+            'P: Phys=parport0/input0\n\n'
+            'I: Bus=0000 Vendor=0001 Product=0007 Version=0100\nN: Name="PSX controller"\n'
+            'P: Phys=parport0/input1\n')
+        self.assertEqual(self.out("lpt_devices").splitlines(),
+                         ["parport0: PSX controller", "parport0: PSX controller"])
 
 
 class UpdateTests(Base):
