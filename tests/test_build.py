@@ -929,7 +929,7 @@ class GroovyMameTests(unittest.TestCase):
             self.assertTrue(text.startswith('#\n# CORE SEARCH PATH OPTIONS\n#\n'))
             for line in ('homepath                  $HOME/.mame', 'rompath                   /home/fliperos/roms/mame',
                          'inipath                   %s' % out.parent, 'monitor                   arcade_15',
-                         'modesetting               1', 'lowlatency                1', 'filter                    1',
+                         'modesetting               0', 'lowlatency                1', 'filter                    1',
                          'plugin                    hiscore', 'uifont                    uismall.bdf'):
                 self.assertIn(line + '\n', text, line)
             self.assertEqual(text.count('\nrompath '), 1)
@@ -967,7 +967,7 @@ class GroovyMameTests(unittest.TestCase):
         # latencia do Setup.
         ini = self.ini('mame.ini')
         for key, value in (('plugin', 'hiscore'), ('skip_gameinfo', '1'), ('uifont', 'uismall.bdf'),
-                           ('video', 'opengl'), ('lowlatency', '1'), ('switchres_ini', '1'), ('modesetting', '1'),
+                           ('video', 'opengl'), ('lowlatency', '1'), ('switchres_ini', '1'), ('modesetting', '0'),
                            ('sound', 'sdl'), ('aspect', '4:3'), ('autoframedelay', '1'), ('framedelay', '0')):
             self.assertEqual(ini[key], value, key)
         self.assertEqual(ini['homepath'], '$HOME/.mame')
@@ -1006,7 +1006,7 @@ class GroovyMameTests(unittest.TestCase):
             text = mame.read_text()
             self.assertTrue(text.startswith('monitor generic_15\nlowlatency 0\n'))
             self.assertEqual(text.count('\nplugin '), 1)
-            self.assertRegex(text, r'(?m)^modesetting +1$')
+            self.assertRegex(text, r'(?m)^modesetting +0$')
             self.assertNotRegex(text, r'(?m)^monitor +arcade_15$')
             ui = (root / 'etc/fliperos/mame/ui.ini').read_text()
             self.assertTrue(ui.startswith('font_rows 30\n'))
@@ -1056,14 +1056,14 @@ class QuietLaunchTests(unittest.TestCase):
             return out, log.read_text() if log.exists() else None
 
     def test_groovymame_creates_native_modes(self):
-        # Como no GroovyArcade: o Switchres troca o modo (modesetting 1) e o
-        # SDL fica com o DRM. Com SDL_KMSDRM_REQUIRE_DRM_MASTER=0 junto, o jogo
-        # rodava com som e tela preta no gabinete (pageflip -13).
+        # O SDL deixa o DRM para o Switchres (hint em 0) com modesetting 0. No
+        # gabinete: com modesetting 1 e o SDL dono do DRM (o jeito do
+        # GroovyArcade) o modo do jogo nao era aplicado e ele saia pequeno;
+        # com 1 e o hint, som e tela preta (pageflip -13).
         kms = (ROOT / 'config/fliperos-kms-run').read_text()
-        self.assertIn('unset SDL_KMSDRM_REQUIRE_DRM_MASTER', kms)
-        self.assertNotIn('export SDL_KMSDRM_REQUIRE_DRM_MASTER', kms)
-        self.assertLess(kms.index('unset SDL_KMSDRM_REQUIRE_DRM_MASTER'), kms.index('exec "$@"'))
-        self.assertIn('\nmodesetting 1\n', (ROOT / 'config/mame.ini').read_text())
+        self.assertIn('export SDL_KMSDRM_REQUIRE_DRM_MASTER="${SDL_KMSDRM_REQUIRE_DRM_MASTER:-0}"', kms)
+        self.assertLess(kms.index('SDL_KMSDRM_REQUIRE_DRM_MASTER'), kms.index('exec "$@"'))
+        self.assertIn('\nmodesetting 0\n', (ROOT / 'config/mame.ini').read_text())
 
     def test_emulator_output_goes_to_the_log(self):
         out, log = self.run_kms(debug=False)

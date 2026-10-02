@@ -20,12 +20,14 @@ fi
 # servidor de som, tentar PipeWire e PulseAudio antes so atrasa a abertura.
 export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
-# GroovyMAME no KMS como no GroovyArcade (o launch_KMS do startfe.sh): sem
-# variavel nenhuma, o SDL fica com o DRM e o Switchres troca o modo pelo
-# modesetting 1 do mame.ini. Com SDL_KMSDRM_REQUIRE_DRM_MASTER=0 (o que o
-# FliperOS exportava) o SDL perde o DRM para o Switchres e o jogo roda com
-# som e tela preta.
-unset SDL_KMSDRM_REQUIRE_DRM_MASTER
+# GroovyMAME no KMS: so com este hint em 0 o SDL deixa o DRM para o
+# Switchres, que aplica o modo nativo de cada jogo (modesetting 0 no
+# mame.ini). Sem ele (o jeito do GroovyArcade, que depende do kernel e da
+# libdrm de la), o Switchres calcula o modo mas nao o aplica: a tela fica no
+# modo do boot e o jogo sai pequeno ("espremido", visto no gabinete), ou
+# dobra a largura para caber num modo que ja existe (384x224 virava
+# 768x224). Vale para os frontends KMS tambem: o que eles abrem herda.
+export SDL_KMSDRM_REQUIRE_DRM_MASTER="${SDL_KMSDRM_REQUIRE_DRM_MASTER:-0}"
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).
 export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}"
 # A saida do programa vai para /opt/fliperos/logs/<programa>.log, nao para a
