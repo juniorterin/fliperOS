@@ -877,6 +877,38 @@ class ControllerMappingTests(unittest.TestCase):
         self.assertEqual(self.M.flycast_filename('vusb.wikidot.com/project:x Pad', arcade=True),
                          'SDL_vusb.wikidot.com-project-x Pad_arcade.cfg')
 
+    def test_retroarch_profile_in_panel_order(self):
+        # Painel de 8 botoes com o direcional em eixos: 1 2 3 = Y X L,
+        # 4 5 6 = B A R, depois Start e Select, na numeracao do udev.
+        binds = self.M.complete(self.M.parse_mapping(self.AUTO), 8, 2, 0, {0, 1}, scratch=False)
+        self.assertTrue(self.M.is_arcade(binds))
+        ra = self.M.retroarch_binds(binds, 8)
+        self.assertEqual([ra[k + '_btn'] for k in ('y', 'x', 'l', 'b', 'a', 'r', 'start', 'select')],
+                         [str(i) for i in range(8)])
+        self.assertEqual([ra[k + '_axis'] for k in ('up', 'down', 'left', 'right')], ['-1', '+1', '-0', '+0'])
+        # Encoder de 12 com hat: os extras de painel de 8, Select/Start nos 9 e 10.
+        hat = self.M.complete({}, 12, 0, 1, set(), scratch=True)
+        ra = self.M.retroarch_binds(hat, 12)
+        self.assertEqual([ra[k + '_btn'] for k in ('l2', 'r2', 'select', 'start', 'l3', 'r3')],
+                         ['6', '7', '8', '9', '10', '11'])
+        self.assertEqual((ra['up_btn'], ra['left_btn']), ('h0up', 'h0left'))
+        # Com analogico de verdade nao e painel: fica com o RetroArch.
+        analog = self.M.complete(self.M.parse_mapping(self.AUTO), 8, 2, 0, set(), scratch=False)
+        self.assertFalse(self.M.is_arcade(analog))
+        text = self.M.retroarch_profile('Painel', (5824, 1503), binds, 8)
+        for line in ('input_driver = "udev"', 'input_device = "Painel"', 'input_vendor_id = "5824"',
+                     'input_product_id = "1503"', 'input_start_btn = "6"', 'input_up_axis = "-1"'):
+            self.assertIn(line + '\n', text, line)
+
+    def test_retroarch_profile_only_when_none_matches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertFalse(self.M.retroarch_has_profile(tmp, 'Painel', (5824, 1503)))
+            Path(tmp, 'a.cfg').write_text('input_device = "Outro"\ninput_vendor_id = 5824\ninput_product_id = 1503\n')
+            self.assertTrue(self.M.retroarch_has_profile(tmp, 'Painel', (5824, 1503)))
+            self.assertFalse(self.M.retroarch_has_profile(tmp, 'Painel', (1, 2)))
+            Path(tmp, 'b.cfg').write_text('input_driver = "udev"\ninput_device = "Painel"\n')
+            self.assertTrue(self.M.retroarch_has_profile(tmp, 'Painel', (0, 0)))
+
     def test_runs_at_boot_and_on_hotplug(self):
         rules = (ROOT / 'config/99-fliperos-input.rules').read_text()
         self.assertIn('ENV{SYSTEMD_WANTS}+="fliperos-controllers.service"', rules)

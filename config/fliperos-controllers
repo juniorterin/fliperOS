@@ -23,6 +23,11 @@ direcional ligado a meio eixo: para esses controles ele ganha tambem os
 arquivos de mapeamento (Dreamcast e arcade, na convencao do proprio Flycast),
 so se ainda nao houver um.
 
+O RetroArch (driver udev, que mostra o numero de verdade de cada botao) nao
+tem perfil para painel e encoder de fliperama ("not configured"): os que tem
+direcional digital e nenhum analogico ganham um, so se nao houver, com os
+botoes na ordem do painel no layout dos cores de arcade.
+
 Roda no boot e a cada controle ligado (fliperos-controllers.service, regra do
 udev). Sem dependencias alem do libSDL2 e do evdev (struct/ioctl).
 """
@@ -36,6 +41,7 @@ import sys
 
 DB = os.environ.get('FLIPEROS_SDL_DB', '/var/lib/fliperos/gamecontrollerdb.txt')
 FLYCAST_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_MAPPINGS', '/home/fliperos/.config/flycast/mappings')
+RA_AUTOCONFIG = os.environ.get('FLIPEROS_RA_AUTOCONFIG', '/opt/fliperos/retroarch/autoconfig/udev')
 USER_ID = 1000
 
 # Para onde vao os botoes que o mapeamento automatico deixou de fora, nesta
@@ -57,6 +63,17 @@ FLYCAST_STD = {'a': 'btn_a', 'b': 'btn_b', 'x': 'btn_x', 'y': 'btn_y', 'leftshou
 FLYCAST_ARCADE = dict(FLYCAST_STD, x='btn_c', y='btn_x', rightshoulder='btn_y')
 FLYCAST_STICKS = {'leftx': ('btn_analog_left', 'btn_analog_right'), 'lefty': ('btn_analog_up', 'btn_analog_down'),
                   'rightx': ('axis2_left', 'axis2_right'), 'righty': ('axis2_up', 'axis2_down')}
+
+# RetroArch, botoes na ordem do painel (1 2 3 em cima, 4 5 6 embaixo) no
+# layout dos cores de arcade (FBNeo, MAME): Y X L / B A R. Depois, num painel
+# de ate 9 botoes, Start e Select (ficha); com 10 ou mais, os dois botoes
+# extras de painel de 8 e Select/Start nos 9 e 10, como nos encoders USB.
+RA_ACTIONS = ['y', 'x', 'l', 'b', 'a', 'r']
+RA_REST_SHORT = ['start', 'select', 'l2']
+RA_REST_LONG = ['l2', 'r2', 'select', 'start', 'l3', 'r3']
+RA_DPAD = {'dpup': 'up', 'dpdown': 'down', 'dpleft': 'left', 'dpright': 'right'}
+RA_HAT = {'1': 'up', '2': 'right', '4': 'down', '8': 'left'}
+STICKS = ('leftx', 'lefty', 'rightx', 'righty')
 
 
 # ── Mapeamento (testado em tests/test_build.py) ─────────────────────
@@ -143,6 +160,73 @@ def flycast_cfg(name, binds, arcade):
     return text
 
 
+def is_arcade(binds):
+    """Painel/encoder: direcional digital (hat ou meio eixo) e nenhum analogico."""
+    return any(k in binds for k in DPAD) and not any(k in binds for k in STICKS)
+
+
+def retroarch_binds(binds, nbuttons):
+    """{tecla do autoconfig: valor} na numeracao do driver udev do RetroArch."""
+    out = {}
+    rest = RA_REST_SHORT if nbuttons < 10 else RA_REST_LONG
+    for slot, n in zip(RA_ACTIONS + rest, range(nbuttons)):
+        out[slot + '_btn'] = str(n)
+    for key, ra in RA_DPAD.items():
+        value = binds.get(key, '')
+        axis = re.fullmatch(r'([+-])a(\d+)', value)
+        hat = re.fullmatch(r'h(\d+)\.([1248])', value)
+        if axis:
+            out[ra + '_axis'] = axis.group(1) + axis.group(2)
+        elif hat:
+            out[ra + '_btn'] = 'h%s%s' % (hat.group(1), RA_HAT[hat.group(2)])
+        elif BUTTON.match(value):
+            out[ra + '_btn'] = value[1:]
+    return out
+
+
+def retroarch_profile(name, ids, binds, nbuttons):
+    lines = ['# Gerado por fliperos-controllers: botoes na ordem do painel (README, "Controles no SDL").',
+             'input_driver = "udev"', 'input_device = "%s"' % name]
+    if ids != (0, 0):
+        lines += ['input_vendor_id = "%d"' % ids[0], 'input_product_id = "%d"' % ids[1]]
+    lines += ['input_%s = "%s"' % kv for kv in sorted(retroarch_binds(binds, nbuttons).items())]
+    return '\n'.join(lines) + '\n'
+
+
+def retroarch_has_profile(directory, name, ids):
+    """Algum perfil do RetroArch ja casa com o controle (nome ou VID+PID)?"""
+    try:
+        files = [f for f in os.listdir(directory) if f.endswith('.cfg')]
+    except OSError:
+        return False
+    for f in files:
+        try:
+            text = open(os.path.join(directory, f), errors='replace').read()
+        except OSError:
+            continue
+        values = dict(re.findall(r'^\s*(input_device|input_vendor_id|input_product_id)\s*=\s*"?([^"\n]*)"?',
+                                 text, re.M))
+        if values.get('input_device', '').strip() == name:
+            return True
+        try:
+            if ids != (0, 0) and (int(values['input_vendor_id']), int(values['input_product_id'])) == ids:
+                return True
+        except (KeyError, ValueError):
+            pass
+    return False
+
+
+def evdev_ids(path):
+    """(nome, (VID, PID)) do evdev, como o driver udev do RetroArch os ve."""
+    sysdir = '/sys/class/input/%s/device' % os.path.basename(path)
+    try:
+        name = open(sysdir + '/name').read().strip()
+        ids = tuple(int(open('%s/id/%s' % (sysdir, k)).read(), 16) for k in ('vendor', 'product'))
+        return name, ids
+    except (OSError, ValueError):
+        return None, (0, 0)
+
+
 # ── evdev: quais eixos sao digitais ─────────────────────────────────
 
 def _ioc(direction, nr, size):
@@ -150,18 +234,21 @@ def _ioc(direction, nr, size):
 
 
 def digital_axes(path):
-    """Indices (na ordem do SDL: eixos sem os hats) dos eixos de -1 a +1, e
-    se o aparelho tem botao de mouse (pistola de luz: fica de fora)."""
+    """Indices (na ordem do SDL: eixos sem os hats) dos eixos de -1 a +1, se
+    o aparelho tem botao de mouse (pistola de luz: fica de fora) e se tem
+    tecla de teclado (abaixo de BTN_MISC: o udev do RetroArch numera os
+    botoes em outra ordem)."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
     except OSError:
-        return set(), False
+        return set(), False, False
     try:
         bits = bytearray(8)
         fcntl.ioctl(fd, _ioc(2, 0x20 + 0x03, len(bits)), bits)
         keys = bytearray(96)
         fcntl.ioctl(fd, _ioc(2, 0x20 + 0x01, len(keys)), keys)
         gun = bool(keys[0x110 // 8] >> (0x110 % 8) & 1)
+        keyboard = any(keys[:0x100 // 8])
         out, index = set(), 0
         for code in range(0x40):
             if not bits[code // 8] >> (code % 8) & 1 or 0x10 <= code <= 0x17:
@@ -172,9 +259,9 @@ def digital_axes(path):
             if high - low <= 2:
                 out.add(index)
             index += 1
-        return out, gun
+        return out, gun, keyboard
     except OSError:
-        return set(), False
+        return set(), False, False
     finally:
         os.close(fd)
 
@@ -227,11 +314,12 @@ def controllers():
 def main():
     new = {}
     flycast = []
+    retro = []
     for guid, name, path, mapping, nbuttons, naxes, nhats in controllers():
         # Do banco do SDL (tem "platform:"): curado, fica como esta.
         if mapping and 'platform:' in mapping:
             continue
-        digital, gun = digital_axes(path)
+        digital, gun, keyboard = digital_axes(path)
         if gun or nbuttons < 2:
             continue
         scratch = mapping is None
@@ -239,6 +327,8 @@ def main():
             continue  # sem mapeamento e com analogico de verdade: volante, manche
         base = parse_mapping(mapping)
         binds = complete(base, nbuttons, naxes, nhats, digital, scratch)
+        if is_arcade(binds) and not keyboard:
+            retro.append((path, binds, nbuttons))
         if binds == base:
             continue
         new[guid] = mapping_line(guid, name, binds)
@@ -268,6 +358,23 @@ def main():
                 os.chown(target, USER_ID, USER_ID)
             except OSError:
                 pass
+    # Perfil do RetroArch: so se nenhum casar (de fabrica, salvo pelo menu ou
+    # gerado antes). Leva nome e VID+PID, que no RetroArch valem mais que um
+    # perfil so de VID+PID: o do V-USB (16c0:05df), por exemplo, e o mesmo
+    # em projetos diferentes.
+    for path, binds, nbuttons in retro:
+        name, ids = evdev_ids(path)
+        if not name or '"' in name or retroarch_has_profile(RA_AUTOCONFIG, name, ids):
+            continue
+        target = os.path.join(RA_AUTOCONFIG, re.sub(r'[/\\:*?"<>|]', '-', name) + '.cfg')
+        os.makedirs(RA_AUTOCONFIG, exist_ok=True)
+        with open(target, 'w') as f:
+            f.write(retroarch_profile(name, ids, binds, nbuttons))
+        try:
+            os.chown(target, USER_ID, USER_ID)
+        except OSError:
+            pass
+        print('RetroArch: %s' % target)
     return 0
 
 
