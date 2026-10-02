@@ -1274,8 +1274,9 @@ install_steam_chroot() {
   # que o modo noninteractive pula; a licenca da Valve aparece no proprio
   # cliente, na primeira abertura. O steam-libs:i386 recomenda "xterm |
   # x-terminal-emulator", e o Alacritty (amd64) nao vale para um pacote i386:
-  # sem o "xterm-", o xterm voltava para a imagem (so o Alacritty fica).
-  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y steam-installer xterm-' \
+  # o xterm voltava para a imagem (so o Alacritty fica). Fora as duas
+  # arquiteturas: sem o amd64, o apt pegava o xterm:i386.
+  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y steam-installer xterm- xterm:i386-' \
     >> "$LOG_FILE" 2>&1 || err "Instalacao do Steam falhou"
   ok "Steam (o cliente baixa o resto na primeira abertura)"
 }

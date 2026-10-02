@@ -245,7 +245,7 @@ echo "acervo: ~/roms com uma pasta por emulador e por core do RetroArch"
 
 # ── Terminal do desktop: so o Alacritty ───────────────────────
 # O lxterminal e o xterm nao desenhavam as bordas do Gum; uma dependencia
-# nova nao pode traze-los de volta.
+# nova nao pode traze-los de volta (o Steam trazia: install_steam_chroot).
 has usr/bin/alacritty
 has home/fliperos/.config/alacritty/alacritty.toml
 for bin in usr/bin/lxterminal usr/bin/xterm usr/bin/lxterm usr/bin/uxterm; do

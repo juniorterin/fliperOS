@@ -661,7 +661,7 @@ class DesktopTerminalTests(unittest.TestCase):
         # Alacritty (amd64) nao vale para um pacote i386: o xterm voltou na
         # ISO e virou o x-terminal-emulator.
         steam = MKISO.split('install_steam_chroot() {')[1].split('\n}\n')[0]
-        self.assertIn('apt-get install -y steam-installer xterm-', steam)
+        self.assertIn('apt-get install -y steam-installer xterm- xterm:i386-', steam)
 
     def test_dracula_palette_of_the_setup(self):
         import tomllib
