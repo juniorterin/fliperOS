@@ -214,8 +214,14 @@ if present usr/local/libexec/groovymame; then
     usr/local/share/groovymame/bgfx/chains/default.json usr/local/share/groovymame/hash/nes.xml; do
     has "$path"
   done
+  # O mame.ini da imagem e o do -createconfig (fliperos-mame-ini): cada
+  # opcao do config/mame.ini tem de estar nele com o mesmo valor.
   unsquashfs -cat "$work/filesystem.squashfs" etc/fliperos/mame/mame.ini > "$work/f"
-  cmp -s "$src/config/mame.ini" "$work/f" || fail "/etc/fliperos/mame/mame.ini difere de config/mame.ini"
+  (($(wc -l < "$work/f") > 100)) || fail "/etc/fliperos/mame/mame.ini nao e o completo do -createconfig"
+  while read -r key value; do
+    got=$(awk -v k="$key" '$1 == k { sub("^[ \t]*" k "[ \t]+", ""); print; exit }' "$work/f")
+    [[ $got == "$value" ]] || fail "mame.ini da imagem: $key e '$got', o config/mame.ini diz '$value'"
+  done < <(grep -vE '^[[:space:]]*(#|$)' "$src/config/mame.ini")
   echo "GroovyMAME: release em /usr/local/libexec, atalho groovymame, plugins/fonte/bgfx/hash e mame.ini do GroovyArcade"
 fi
 
