@@ -135,6 +135,20 @@ screen_geometry() {
   ui_msg "Geometry" "Geometry saved (monitor set to custom):" "" "$range"
 }
 
+# screen_geometry_reset volta a geometria ao padrao do monitor escolhido.
+screen_geometry_reset() {
+  local monitor
+  if ! conf_get geometry > /dev/null 2>&1; then
+    ui_msg "Reset Geometry" "No geometry was saved: the monitor's default is already in use."
+    return 0
+  fi
+  monitor=$(monitor_label "$(conf_get monitor 2> /dev/null || echo generic_15)")
+  ui_yesno "Reset Geometry" "Discard the saved geometry and go back to the default of the monitor ($monitor)?" no ||
+    return 0
+  geometry_reset
+  ui_msg "Reset Geometry" "Geometry reset: games and RetroArch use the default of the monitor ($monitor)."
+}
+
 # screen_video_setup e o menu; ao sair, no sistema instalado, grava a linha
 # do kernel e oferece reiniciar.
 screen_video_setup() {
@@ -144,12 +158,14 @@ screen_video_setup() {
     summary=$(ui_fields \
       "Monitor|$(monitor_label "$(conf_get monitor 2> /dev/null || echo "not set")")" \
       "Orientation|$(orientation_label "$(conf_get orientation 2> /dev/null || echo horizontal)")" \
-      "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "from boot menu")")")
+      "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "from boot menu")")" \
+      "Geometry|$(conf_get geometry > /dev/null 2>&1 && echo "adjusted" || echo "monitor default")")
     choice=$(ui_menu "Video Setup" "$summary" "$last" \
       "monitor|Monitor Type" \
       "orientation|Monitor Orientation" \
       "resolution|Resolution" \
       "geometry|Geometry" \
+      "geometry_reset|Reset Geometry" \
       "return|Return") || choice="return"
     last=$choice
     case $choice in
@@ -157,6 +173,7 @@ screen_video_setup() {
       orientation) screen_orientation ;;
       resolution) screen_resolution ;;
       geometry) screen_geometry ;;
+      geometry_reset) screen_geometry_reset ;;
       return) break ;;
     esac
   done

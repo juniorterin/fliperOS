@@ -479,3 +479,17 @@ geometry_apply() {
   conf_set geometry "$range"
   log_info "geometria: $range"
 }
+
+# geometry_reset desfaz o geometry_apply: o Switchres (e o modo 4 do
+# RetroArch, que le o mesmo switchres.ini) volta ao preset do monitor
+# escolhido, e o GroovyMAME, aos proprios ajustes do mame.ini.
+geometry_reset() {
+  local monitor
+  monitor=$(conf_get monitor 2> /dev/null) || monitor=""
+  [[ -n $monitor && $monitor != custom ]] || monitor=generic_15
+  ini_set "$SWITCHRES_INI" crt_range0 auto
+  [[ -f $MAME_INI ]] && ini_set "$MAME_INI" switchres_ini 0
+  conf_unset geometry
+  video_apply_monitor "$monitor"
+  log_info "geometria: padrao do monitor $monitor"
+}

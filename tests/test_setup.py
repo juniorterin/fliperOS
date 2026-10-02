@@ -1027,6 +1027,19 @@ class GeometryTests(Base):
         self.assertIn("crt_range0", ini)
         self.assertIn("switchres_ini 1", (self.env.etc / "mame.ini").read_text())
 
+    def test_reset_goes_back_to_the_monitor_preset(self):
+        (self.env.etc / "switchres.ini").write_text("\tmonitor                   custom\n"
+                                                    "\tcrt_range0                15625.0-15750.0,49.5-65.0\n")
+        (self.env.etc / "mame.ini").write_text("monitor arcade_15\nswitchres_ini 1\n")
+        self.env.out("conf_set monitor arcade_15; conf_set geometry 15625.0-15750.0,49.5-65.0; geometry_reset")
+        ini = (self.env.etc / "switchres.ini").read_text()
+        self.assertRegex(ini, r"(?m)^\s*monitor\s+arcade_15$")
+        self.assertRegex(ini, r"(?m)^\s*crt_range0\s+auto$")
+        mame = (self.env.etc / "mame.ini").read_text()
+        self.assertRegex(mame, r"(?m)^switchres_ini\s+0$")
+        self.assertRegex(mame, r"(?m)^aspect\s+4:3$")
+        self.assertEqual(self.env.out("conf_get geometry || echo none").strip(), "none")
+
     def test_cancelled(self):
         self.assertEqual(self.env.out("geometry_parse 'Aborted!'").strip(), "")
 
