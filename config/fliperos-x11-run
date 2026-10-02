@@ -87,7 +87,7 @@ esac
 # Audio SDL direto no ALSA (o FliperOS nao tem servidor de som).
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).
-export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/etc/fliperos/gamecontrollerdb.txt}"
+export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}"
 # Sem terminal (chamado por um frontend), o tty falha: vale o vt1.
 vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}

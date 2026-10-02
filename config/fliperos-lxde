@@ -10,7 +10,7 @@ xsetroot -cursor_name left_ptr
 # num CRT de 15 kHz isso da 50 DPI ou menos e letra pela metade.
 export WINIT_X11_SCALE_FACTOR=1
 # Mapeamentos de controle do SDL (AntiMicroX): fliperos-rootfs.sh.
-export SDL_GAMECONTROLLERCONFIG_FILE=${SDL_GAMECONTROLLERCONFIG_FILE:-/etc/fliperos/gamecontrollerdb.txt}
+export SDL_GAMECONTROLLERCONFIG_FILE=${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}
 
 orientation=$(sed -n 's/^orientation=//p' /etc/fliperos/fliperos.conf 2> /dev/null)
 case $orientation in

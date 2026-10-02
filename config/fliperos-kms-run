@@ -21,7 +21,7 @@ fi
 export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).
-export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/etc/fliperos/gamecontrollerdb.txt}"
+export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}"
 # A saida do programa vai para /opt/fliperos/logs/<programa>.log, nao para a
 # tela; no modo debug (Setup > Debug mode) ela aparece. Sem como gravar o
 # log, o programa abre assim mesmo.

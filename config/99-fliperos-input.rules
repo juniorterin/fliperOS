@@ -7,6 +7,11 @@ SUBSYSTEM=="input", ATTRS{idVendor}=="0b9a", ATTRS{idProduct}=="016a", \
   ACTION=="add", ENV{DEVNAME}!="", \
   RUN+="/usr/local/bin/fliperos-guncon2-calibrate %E{DEVNAME}"
 
+# Controle ligado: o fliperos-controllers completa o mapeamento automatico do
+# SDL (botoes que sobram, direcional digital mandado como eixos).
+SUBSYSTEM=="input", KERNEL=="event*", ACTION=="add", ENV{ID_INPUT_JOYSTICK}=="1", \
+  TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-controllers.service"
+
 # Volantes, pedais e analogicos calibrados em Setup > Joysticks
 # (fliperos-calibrate): o evdev tambem esquece essa calibracao a cada conexao.
 SUBSYSTEM=="input", KERNEL=="event*", ACTION=="add", ENV{ID_INPUT_JOYSTICK}=="1", \

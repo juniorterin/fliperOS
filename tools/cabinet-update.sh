@@ -126,6 +126,10 @@ sed -n 's/^FLIPEROS_CMDLINE=//p' /etc/default/fliperos-boot
 echo "== Servicos"
 systemctl daemon-reload
 systemctl enable --now systemd-timesyncd.service > /dev/null 2>&1 || true
+# Mapeamentos de controle do SDL dos controles ligados agora (o servico tambem
+# roda no boot e a cada controle ligado).
+systemctl start fliperos-controllers.service 2> /dev/null || true
+echo "mapeamentos do SDL: $(grep -vc '^#' /var/lib/fliperos/gamecontrollerdb.txt 2> /dev/null || echo 0)"
 systemctl enable fliperos-padkeys.service > /dev/null 2>&1 || true
 systemctl restart fliperos-padkeys.service
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"

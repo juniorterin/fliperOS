@@ -1,0 +1,10 @@
+[Unit]
+Description=FliperOS: SDL mappings for controllers SDL maps incompletely
+After=systemd-udevd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/fliperos/bin/fliperos-controllers
+
+[Install]
+WantedBy=multi-user.target

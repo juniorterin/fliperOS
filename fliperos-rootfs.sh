@@ -116,14 +116,19 @@ Y_MAX=240
 EOF
 fi
 
-# Mapeamentos de controle do SDL2 (AntiMicroX, emuladores SDL): sem eles o
-# SDL esconde os botoes que nao tem par num controle moderno (o C e o Z do
-# V-USB Mame Panel 32). Todo login le o /etc/environment; o fliperos-lxde e
-# os lancadores tambem exportam, para valer sem novo login.
-install -Dm644 "$src/config/gamecontrollerdb.txt" "$root/etc/fliperos/gamecontrollerdb.txt"
-if ! grep -q '^SDL_GAMECONTROLLERCONFIG_FILE=' "$root/etc/environment" 2> /dev/null; then
-  echo 'SDL_GAMECONTROLLERCONFIG_FILE=/etc/fliperos/gamecontrollerdb.txt' >> "$root/etc/environment"
-fi
+# Mapeamentos de controle do SDL2 (AntiMicroX, emuladores SDL): o
+# fliperos-controllers completa o mapeamento automatico do SDL (botoes que ele
+# deixa de fora, direcional digital mandado como eixos) no boot e a cada
+# controle ligado, em /var/lib/fliperos/gamecontrollerdb.txt. Todo login le o
+# /etc/environment; o fliperos-lxde e os lancadores tambem exportam.
+install -Dm755 "$src/config/fliperos-controllers" "$root/opt/fliperos/bin/fliperos-controllers"
+install -Dm644 "$src/config/fliperos-controllers.service" "$root/etc/systemd/system/fliperos-controllers.service"
+mkdir -p "$root/etc/systemd/system/multi-user.target.wants" "$root/var/lib/fliperos"
+ln -sfn /etc/systemd/system/fliperos-controllers.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-controllers.service"
+rm -f "$root/etc/fliperos/gamecontrollerdb.txt"
+sed -i '/^SDL_GAMECONTROLLERCONFIG_FILE=/d' "$root/etc/environment" 2> /dev/null || true
+echo 'SDL_GAMECONTROLLERCONFIG_FILE=/var/lib/fliperos/gamecontrollerdb.txt' >> "$root/etc/environment"
 
 # ── Teclas de volume ──────────────────────────────────────────────
 # O triggerhappy le o /dev/input e roda o fliperos-setup --volume: vale em
@@ -242,14 +247,6 @@ EOF
   if [[ ! -f $home/.config/flycast/emu.cfg ]]; then
     install -Dm644 "$src/config/flycast-emu.cfg" "$home/.config/flycast/emu.cfg"
   fi
-  # Mapeamentos do Flycast para controles conhecidos (config/flycast/mappings):
-  # o painel V-USB Mame Panel 32 manda o direcional como eixos, que o Flycast
-  # poria no analogico; aqui ele vai para o direcional. So se nao houver um da
-  # pessoa.
-  for map in "$src"/config/flycast/mappings/*.cfg; do
-    [[ -e $home/.config/flycast/mappings/${map##*/} ]] ||
-      install -Dm644 "$map" "$home/.config/flycast/mappings/${map##*/}"
-  done
   chown -R 1000:1000 "$home/.config/flycast" 2> /dev/null || true
   # Sem MOTD nem "Last login" entre o Plymouth e o setup/frontend.
   : > "$home/.hushlogin"

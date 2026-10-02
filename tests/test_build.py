@@ -39,6 +39,7 @@ video = load('video', 'fliperos-video-check.py')
 limine_update = load('limine_update', 'fliperos-limine-update.py')
 padkeys = load_script('padkeys', 'config/fliperos-padkeys')
 calibrate = load_script('calibrate', 'config/fliperos-calibrate')
+controllers = load_script('controllers', 'config/fliperos-controllers')
 MKISO = (ROOT / 'fliperos-mkiso.sh').read_text()
 ROOTFS = (ROOT / 'fliperos-rootfs.sh').read_text()
 
@@ -761,20 +762,6 @@ class RomFoldersTests(unittest.TestCase):
         self.assertIn('path = /home/fliperos/roms', smb)
         self.assertIn('wide links = yes', smb)
 
-    def test_flycast_panel_stick_is_the_dpad(self):
-        # O painel manda o direcional como eixos 0/1; o "Reset to default" do
-        # Flycast os deixava sem nada (axis2_* em eixos 2/3 que nao existem).
-        maps = ROOT / 'config/flycast/mappings'
-        name = 'SDL_vusb.wikidot.com-project-mamepanel V-USB Mame Panel 32'
-        for suffix in ('', '_arcade'):
-            cfg = (maps / (name + suffix + '.cfg')).read_text()
-            for bind in ('0-:btn_dpad1_left', '0+:btn_dpad1_right', '1-:btn_dpad1_up', '1+:btn_dpad1_down'):
-                self.assertIn(bind + '\n', cfg, suffix)
-            self.assertIn('version = 4\n', cfg)
-        self.assertIn('6:btn_start\n', (maps / (name + '_arcade.cfg')).read_text())
-        self.assertIn('7:btn_d\n', (maps / (name + '_arcade.cfg')).read_text())
-        self.assertIn('config/flycast/mappings/*.cfg', ROOTFS)
-
     def test_flycast_player_2_has_a_controller(self):
         cfg = (ROOT / 'config/flycast-emu.cfg').read_text()
         self.assertIn('device2 = 0\n', cfg)
@@ -830,28 +817,67 @@ class QuietLaunchTests(unittest.TestCase):
             self.assertIn('/etc/fliperos/debug', (ROOT / script).read_text(), script)
 
 
-class SdlControllerMappingTests(unittest.TestCase):
-    """O mapeamento automatico do SDL tirava dois botoes de cada jogador do
-    V-USB Mame Panel 32 (BTN_C e BTN_Z) e o AntiMicroX nao os mostrava."""
+class ControllerMappingTests(unittest.TestCase):
+    """fliperos-controllers: completa o mapeamento automatico do SDL2 (botoes
+    que ele deixa de fora, direcional digital mandado como eixos)."""
+    M = controllers
+    # Encoder comum: gamepad de 8 botoes (BTN_A B C X Y Z TL TR) com o
+    # direcional em dois eixos de -1 a +1. O SDL so mapeia 6 botoes e poe o
+    # direcional no analogico.
+    AUTO = 'guid,Encoder,a:b0,b:b1,x:b3,y:b4,leftshoulder:b6,rightshoulder:b7,leftx:a0,lefty:a1,crc:1234,'
 
-    def test_panel_has_all_eight_buttons(self):
-        lines = [l for l in (ROOT / 'config/gamecontrollerdb.txt').read_text().splitlines()
-                 if l and not l.startswith('#')]
-        self.assertEqual(len(lines), 1)
-        fields = lines[0].rstrip(',').split(',')
-        # GUID do SDL 2.30 para 16c0:05df com o CRC do nome (0x4098).
-        self.assertEqual(fields[0], '03009840c0160000df05000001010000')
-        binds = dict(f.split(':', 1) for f in fields[2:])
-        self.assertEqual(sorted(v for k, v in binds.items() if v.startswith('b')),
-                         ['b%d' % i for i in range(8)])
-        self.assertEqual(binds['platform'], 'Linux')
+    def test_leftover_buttons_and_digital_stick(self):
+        base = self.M.parse_mapping(self.AUTO)
+        self.assertNotIn('crc', base)
+        out = self.M.complete(base, 8, 2, 0, {0, 1}, scratch=False)
+        self.assertEqual((out['lefttrigger'], out['righttrigger']), ('b2', 'b5'))
+        self.assertEqual([out[k] for k in ('dpleft', 'dpright', 'dpup', 'dpdown')], ['-a0', '+a0', '-a1', '+a1'])
+        self.assertNotIn('leftx', out)
+        self.assertEqual(sorted(v for v in out.values() if v.startswith('b')), ['b%d' % i for i in range(8)])
 
-    def test_every_sdl_program_reads_it(self):
-        self.assertIn('/etc/fliperos/gamecontrollerdb.txt', ROOTFS)
-        self.assertIn("SDL_GAMECONTROLLERCONFIG_FILE=/etc/fliperos/gamecontrollerdb.txt' >> \"$root/etc/environment\"",
-                      ROOTFS)
+    def test_real_analog_stick_and_complete_pads_stay(self):
+        base = self.M.parse_mapping(self.AUTO)
+        out = self.M.complete(base, 8, 2, 0, set(), scratch=False)
+        self.assertEqual((out['leftx'], out['lefty']), ('a0', 'a1'))
+        full = self.M.parse_mapping('g,Pad,a:b0,b:b1,x:b2,y:b3,dpup:h0.1,leftx:a0,lefty:a1,')
+        self.assertEqual(self.M.complete(full, 4, 2, 1, set(), scratch=False), full)
+
+    def test_controllers_without_any_mapping(self):
+        out = self.M.complete({}, 10, 2, 0, {0, 1}, scratch=True)
+        self.assertEqual((out['a'], out['b'], out['x'], out['start']), ('b0', 'b1', 'b2', 'b9'))
+        self.assertEqual(out['dpup'], '-a1')
+        hat = self.M.complete({}, 4, 0, 1, set(), scratch=True)
+        self.assertEqual((hat['dpup'], hat['dpleft']), ('h0.1', 'h0.8'))
+
+    def test_db_line_and_merge(self):
+        self.assertEqual(self.M.mapping_line('abc', 'Pad, X', {'b': 'b1', 'a': 'b0'}),
+                         'abc,Pad  X,a:b0,b:b1,platform:Linux,')
+        self.assertEqual(self.M.merge_db(['# gerado', 'abc,old', 'def,keep'], {'abc': 'abc,new'}),
+                         ['def,keep', 'abc,new'])
+
+    def test_flycast_files_follow_its_convention(self):
+        # O Flycast nao entende direcional em meio eixo: o arquivo dele vem
+        # pronto, na convencao do DefaultInputMapping (padrao e arcade).
+        binds = self.M.complete(self.M.parse_mapping(self.AUTO), 8, 2, 0, {0, 1}, scratch=False)
+        std = self.M.flycast_cfg('Encoder', binds, arcade=False)
+        for bind in ('0-:btn_dpad1_left', '1+:btn_dpad1_down', '0:btn_a', '3:btn_x', '6:btn_z', '7:btn_c',
+                     '2:btn_trigger_left', '5:btn_trigger_right'):
+            self.assertIn(bind + '\n', std, bind)
+        arcade = self.M.flycast_cfg('Encoder', binds, arcade=True)
+        for bind in ('3:btn_c', '4:btn_x', '7:btn_y', '6:btn_z'):
+            self.assertIn(bind + '\n', arcade, bind)
+        self.assertIn('version = 4\n', arcade)
+        self.assertEqual(self.M.flycast_filename('vusb.wikidot.com/project:x Pad', arcade=True),
+                         'SDL_vusb.wikidot.com-project-x Pad_arcade.cfg')
+
+    def test_runs_at_boot_and_on_hotplug(self):
+        rules = (ROOT / 'config/99-fliperos-input.rules').read_text()
+        self.assertIn('ENV{SYSTEMD_WANTS}+="fliperos-controllers.service"', rules)
+        self.assertIn('multi-user.target.wants/fliperos-controllers.service', ROOTFS)
+        self.assertIn("echo 'SDL_GAMECONTROLLERCONFIG_FILE=/var/lib/fliperos/gamecontrollerdb.txt'", ROOTFS)
         for script in ('config/fliperos-lxde', 'config/fliperos-kms-run', 'config/fliperos-x11-run'):
-            self.assertIn('SDL_GAMECONTROLLERCONFIG_FILE', (ROOT / script).read_text(), script)
+            self.assertIn('/var/lib/fliperos/gamecontrollerdb.txt', (ROOT / script).read_text(), script)
+        self.assertFalse((ROOT / 'config/gamecontrollerdb.txt').exists())
 
 
 class AppStoreTests(unittest.TestCase):
