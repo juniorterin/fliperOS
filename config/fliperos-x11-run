@@ -23,7 +23,9 @@ name=$(basename -- "$1")
 
 if [[ -z $mode ]]; then
   column=3
-  [[ $(sed -n 's/^frequency=//p' "$CONF" 2> /dev/null) == 15 ]] && column=2
+  # O setup grava "15k" (e versoes antigas "15"). Comparar so com "15" fazia
+  # todo emulador cair na coluna de 31 kHz: 640x480, entrelacado no tubo.
+  [[ $(sed -n 's/^frequency=//p' "$CONF" 2> /dev/null) == 15* ]] && column=2
   mode=$(awk -v p="$name" -v c="$column" '!/^[[:space:]]*#/ && $1 == p { print $c; exit }' "$MODES" 2> /dev/null)
 fi
 [[ -n $mode ]] || mode=320x240@60
@@ -60,7 +62,25 @@ case $name in
     set -- "$1" -fullscreen "${@:2}"
     ;;
   hypseus | singe)
-    set -- "$1" -fullscreen "${@:2}"
+    # O Hypseus le o jogo e o player primeiro ("hypseus lair vldp ..."); as
+    # opcoes vao no fim. Sem -x/-y ele abriria em 640x480, e sem
+    # -ignore_aspect_ratio manteria o 4:3 do video, com faixas pretas no
+    # 640x240 (o esticado de 200% dos outros).
+    set -- "$@" -fullscreen -x "$FLIPEROS_RES_W" -y "$FLIPEROS_RES_H" -ignore_aspect_ratio
+    ;;
+  supermodel)
+    # Sem -res ele abre em 496x384 (o nativo do Model 3), que no 15 kHz so
+    # existe entrelacado; aqui ocupa o modo da tabela, esticado para o 4:3.
+    set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${@:2}"
+    ;;
+  fliperos-model2)
+    # O Model 2 Emulator le a tela cheia do proprio EMULATOR.INI.
+    for m2ini in /opt/fliperos/model2/EMULATOR.INI /opt/fliperos/model2/emulator.ini; do
+      if [[ -f $m2ini ]]; then
+        /opt/fliperos/bin/fliperos-ini-set "$m2ini" Renderer FullScreenWidth "$FLIPEROS_RES_W"
+        /opt/fliperos/bin/fliperos-ini-set "$m2ini" Renderer FullScreenHeight "$FLIPEROS_RES_H"
+      fi
+    done
     ;;
 esac
 

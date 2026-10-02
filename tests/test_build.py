@@ -1202,7 +1202,9 @@ class EmulatorModeTests(unittest.TestCase):
     monitor de 15 kHz), o --mode para qualquer programa e a imagem esticada
     para preencher o modo."""
 
-    def run_x11(self, args, frequency='15', modes=None):
+    # "15k" e o que o setup grava (monitor_frequency); com "15" o teste nao
+    # pegava que o script so aceitava "15" e mandava o gabinete para 480i.
+    def run_x11(self, args, frequency='15k', modes=None):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             bin_dir = tmp / 'bin'
@@ -1210,7 +1212,7 @@ class EmulatorModeTests(unittest.TestCase):
             # xinit falso: mostra o modo pedido e o comando.
             (bin_dir / 'xinit').write_text('#!/bin/bash\necho "MODE=$FLIPEROS_RES_W $FLIPEROS_RES_H $FLIPEROS_RES_HZ"\n'
                                            'echo "ARGS=$*"\n')
-            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog'):
+            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog', 'supermodel', 'hypseus'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')
             for p in bin_dir.iterdir():
                 p.chmod(0o755)
@@ -1231,8 +1233,50 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertIn('MODE=640 240 60', out)
         self.assertIn('-C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3', out)
 
+    def test_nothing_interlaced_on_15khz(self):
+        # No gabinete o Flycast abria em 640x480 (480i): frequency=15k nao
+        # batia com "15". Versoes antigas gravavam "15".
+        for freq in ('15k', '15'):
+            self.assertIn('MODE=640 240 60', self.run_x11(['flycast'], frequency=freq).stdout, freq)
+        for line in (ROOT / 'config/fliperos-emulator-modes.conf').read_text().splitlines():
+            if line.strip() and not line.startswith('#'):
+                height = int(line.split()[1].split('x')[1].split('@')[0])
+                self.assertLessEqual(height, 240, line)
+        out = self.run_x11(['supermodel', 'game.zip']).stdout
+        self.assertIn('MODE=640 240 57.524', out)
+        self.assertIn('-fullscreen -res=640,240 -stretch game.zip', out)
+        self.assertIn('-res=496,384', self.run_x11(['supermodel'], frequency='31k').stdout)
+
+    def test_stretched_200_percent_at_640x240(self):
+        # 640x240 tem pixels 8:3; para o 4:3 encher o tubo, cada emulador estica
+        # a imagem para a largura toda (o "200%").
+        self.assertIn('rend.ScreenStretching=200', self.run_x11(['flycast']).stdout)
+        self.assertIn('GFX.Settings.AspectRatio=3', self.run_x11(['dolphin-emu']).stdout)
+        self.assertIn('-stretch', self.run_x11(['supermodel']).stdout)
+        # Hypseus: jogo e player primeiro, opcoes no fim.
+        out = self.run_x11(['hypseus', 'lair', 'vldp', '-framefile', 'f.txt']).stdout
+        self.assertIn('hypseus lair vldp -framefile f.txt -fullscreen -x 640 -y 240 -ignore_aspect_ratio', out)
+
+    def test_old_tables_lose_the_384_line_modes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'etc/fliperos', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            (root / 'etc/fliperos/emulator-modes.conf').write_text(
+                'flycast             640x240@60      640x480@60\n'
+                'supermodel          496x384@57.524  496x384@57.524\n'
+                'fliperos-model2     320x240@60      496x384@57.524\n')
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            table = (root / 'etc/fliperos/emulator-modes.conf').read_text()
+            self.assertIn('supermodel          640x240@57.524  496x384@57.524\n', table)
+            # Linha mudada pela pessoa fica como esta.
+            self.assertIn('fliperos-model2     320x240@60      496x384@57.524\n', table)
+
     def test_other_monitors_keep_480(self):
-        out = self.run_x11(['flycast'], frequency='31').stdout
+        out = self.run_x11(['flycast'], frequency='31k').stdout
         self.assertIn('MODE=640 480 60', out)
         self.assertIn('rend.ScreenStretching=100', out)
 

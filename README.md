@@ -285,11 +285,13 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 | Dolphin | GameCube, Wii | Xorg próprio | idem |
 | Hypseus Singe | laserdisc (Dragon's Lair, Space Ace...) | Xorg próprio | idem |
 | OpenBOR | beat 'em ups | Xorg próprio | 320x240 |
-| Supermodel | Sega Model 3 | Xorg próprio | 496x384@57.524 |
-| Model 2 Emulator (Wine) | Sega Model 2 | Xorg próprio | 496x384@57.524 |
+| Supermodel | Sega Model 3 | Xorg próprio | 640x240@57.524 no 15 kHz, 496x384 nos outros |
+| Model 2 Emulator (Wine) | Sega Model 2 | Xorg próprio | idem |
 | Steam, Heroic (GOG, Epic, Amazon) | jogos de PC | dentro do desktop LXDE | o do desktop |
 
 Todos aparecem no menu **Jogos** do LXDE (seção 5). O RetroArch usa `crt_switch_resolution 4` (o `/etc/switchres.ini` do Setup) na **largura nativa** de cada jogo quando a placa gera dotclock baixo (o "s" no resultado do teste de saídas: radeon/amdgpu), como o GroovyArcade; a super resolução 2560 fica só para as placas que não geram (Intel, NVIDIA). Em 2560 o RetroArch desenha as notificações nessa largura, e no tubo elas saíam espremidas (`video_retroarch_super`, gravado com o teste de saídas e na instalação).
+
+**Nada entrelaçado no 15 kHz.** No tubo de 15 kHz nenhum emulador do `fliperos-x11-run` abre em 480i: os de 480 linhas e os de 384 (Model 2 e 3) rodam em **640x240 progressivo** e **esticados a 200%** na horizontal — 640x240 tem pixels 8:3, e a imagem 4:3 só enche o tubo esticada: Flycast `rend.ScreenStretching=200` (300·L/4A), PCSX2 `AspectRatio = Stretch`, Dolphin `AspectRatio=3`, Supermodel `-fullscreen -res=640,240 -stretch`, Hypseus `-x 640 -y 240 -ignore_aspect_ratio` (opções no fim da linha: o Hypseus lê o jogo e o player primeiro) e o Model 2 com a tela cheia do `EMULATOR.INI` no modo da tabela. No gabinete o Flycast abria em 640x480i: o setup grava `frequency=15k`, e o script só reconhecia `15`, então todo emulador caía na coluna de 31 kHz.
 
 **Sem texto ao abrir.** A saída do X, do Switchres e do emulador vai para `/opt/fliperos/logs/<programa>.log` (o último uso de cada um), e entre o desktop e o emulador a tela fica limpa; o Debug mode do Setup mostra tudo. O cursor do mouse só aparece nos emuladores com interface de mouse — PCSX2 (lista de jogos, assistente da BIOS), Dolphin, Flycast e o Model 2 no Wine —, que o escondem sozinhos durante o jogo em tela cheia; os outros abrem com o Xorg `-nocursor`.
 

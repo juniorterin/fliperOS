@@ -54,6 +54,10 @@ ln -sfn /etc/systemd/system/fliperos-padkeys.service \
 # num monitor de 15 kHz). O usuario pode editar: a imagem nao sobrescreve.
 [[ -f "$root/etc/fliperos/emulator-modes.conf" ]] \
   || install -Dm644 "$src/config/fliperos-emulator-modes.conf" "$root/etc/fliperos/emulator-modes.conf"
+# Tabelas de versoes anteriores: Model 2 e 3 em 496x384 no 15 kHz, que so
+# existe entrelacado. So muda a linha que ainda e a de fabrica.
+sed -i -E 's/^(supermodel|fliperos-model2)( +)496x384@57\.524  496x384@57\.524$/\1\2640x240@57.524  496x384@57.524/' \
+  "$root/etc/fliperos/emulator-modes.conf"
 # Model 2 no Wine: no PATH, para os frontends tambem chamarem.
 install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model2"
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"
