@@ -410,6 +410,18 @@ class OutputTestTests(Base):
             self.assertIn(line + "\n", conf)
         self.assertIn("monitor                   generic_15", (self.env.etc / "switchres.ini").read_text())
         self.assertIn("monitor generic_15", (self.env.etc / "mame.ini").read_text())
+        # CRT: 4:3. Com "auto" o GroovyMAME tirava o formato do modo de boot
+        # (640x240 = 8:3) e dobrava a largura de todo jogo.
+        self.assertRegex((self.env.etc / "mame.ini").read_text(), r"(?m)^aspect +4:3$")
+
+    def test_mame_aspect_is_auto_only_on_lcd(self):
+        (self.env.etc / "mame.ini").write_text("monitor lcd\naspect 4:3\n")
+        (self.env.etc / "switchres.ini").write_text("\tmonitor                   lcd\n")
+        self.env.out("video_apply_monitor lcd")
+        self.assertRegex((self.env.etc / "mame.ini").read_text(), r"(?m)^aspect +auto$")
+        self.env.out("video_apply_monitor arcade_15")
+        self.assertRegex((self.env.etc / "mame.ini").read_text(), r"(?m)^aspect +4:3$")
+        self.assertIn("\naspect 4:3\n", (ROOT / "config/mame.ini").read_text())
 
     def test_save_result_without_low_dotclock_sets_dotclock_min(self):
         self.env.connector("card1-VGA-1", "disconnected")

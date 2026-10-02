@@ -232,7 +232,20 @@ video_apply_monitor() {
   [[ -f $MAME_INI ]] && ini_set "$MAME_INI" monitor "$monitor"
   conf_set monitor "$monitor"
   conf_set frequency "$(monitor_frequency "$monitor" || echo lcd)"
+  video_mame_aspect
   log_info "monitor: $monitor"
+}
+
+# video_mame_aspect grava o formato da tela no mame.ini: 4:3 num CRT, como o
+# gasetup do GroovyArcade (-aspect "4:3"); "auto" num LCD. Com "auto" o
+# GroovyMAME tira o formato do modo atual, e num boot em 640x240 (8:3) o
+# Switchres dobrava a largura de todo jogo (384x224 virava 768x224, o
+# aspect_corrector de modeline.cpp).
+video_mame_aspect() {
+  local monitor
+  [[ -f $MAME_INI ]] || return 0
+  monitor=$(conf_get monitor 2> /dev/null) || monitor=""
+  ini_set "$MAME_INI" aspect "$([[ $monitor == lcd ]] && echo auto || echo 4:3)"
 }
 
 # Chaves do fliperos.conf que dependem da placa e da saida: e o que o

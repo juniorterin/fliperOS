@@ -111,7 +111,9 @@ echo "== Linha do kernel (boot direto no Plymouth)"
   # O fliperos-rootfs.sh reinstalou o retroarch.cfg da imagem: o que o setup
   # decide por maquina volta (largura do CRT SwitchRes, modo de latencia).
   video_retroarch_super
+  video_mame_aspect
   latency_emulators "$(latency_mode)"
+  grep -E '^aspect' "$MAME_INI"
   grep -E '^crt_switch_resolution_super' "$RETROARCH_CFG"
 )
 
