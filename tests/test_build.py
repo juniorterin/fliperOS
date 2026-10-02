@@ -834,7 +834,7 @@ class GroovyMameTests(unittest.TestCase):
         # latencia do Setup.
         ini = self.ini('mame.ini')
         for key, value in (('plugin', 'hiscore'), ('skip_gameinfo', '1'), ('uifont', 'uismall.bdf'),
-                           ('video', 'opengl'), ('lowlatency', '1'), ('switchres_ini', '1'), ('modesetting', '1'),
+                           ('video', 'opengl'), ('lowlatency', '1'), ('switchres_ini', '1'), ('modesetting', '0'),
                            ('sound', 'sdl'), ('aspect', '4:3'), ('autoframedelay', '1'), ('framedelay', '0')):
             self.assertEqual(ini[key], value, key)
         self.assertEqual(ini['homepath'], '$HOME/.mame')
@@ -872,7 +872,7 @@ class GroovyMameTests(unittest.TestCase):
             text = mame.read_text()
             self.assertTrue(text.startswith('monitor generic_15\nlowlatency 0\n'))
             self.assertEqual(text.count('\nplugin '), 1)
-            self.assertRegex(text, r'(?m)^modesetting +1$')
+            self.assertRegex(text, r'(?m)^modesetting +0$')
             self.assertNotRegex(text, r'(?m)^monitor +arcade_15$')
             ui = (root / 'etc/fliperos/mame/ui.ini').read_text()
             self.assertTrue(ui.startswith('font_rows 30\n'))

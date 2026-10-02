@@ -1290,17 +1290,99 @@ class ScraperTests(Base):
         env, _, _ = self.scraper_env()
         (self.env.etc / "sessions.conf").write_text("attractplus|kms|attractplus|fliperos-attractplus|AM+\n"
                                                     "pegasus|kms|pegasus-fe|fliperos-pegasus|Pegasus\n")
-        for session, expected in (("attractplus", "attractmode"), ("pegasus", "pegasus"),
-                                  ("setup", "emulationstation")):
+        for session, key, expected in (("attractplus", "mame", "attractmode"), ("pegasus", "mame", "pegasus"),
+                                       ("setup", "mame", "emulationstation"),
+                                       # Com o GroovyMAME de launcher, a lista dele.
+                                       ("groovymame", "mame", "mameui"),
+                                       ("groovymame", "retroarch/snes9x", "emulationstation")):
             (self.env.etc / "session").write_text(session + "\n")
-            self.assertEqual(self.env.out("scraper_frontend_format", env).strip(), expected, session)
+            self.assertEqual(self.env.out("scraper_target %s" % key, env).strip(), expected, session)
         # Sem frontend, o Attract-Mode Plus se estiver instalado.
         (self.env.bin / "attractplus").write_text("#!/bin/sh\n")
         (self.env.bin / "attractplus").chmod(0o755)
-        self.assertEqual(self.env.out("scraper_frontend_format", env).strip(), "attractmode")
+        self.assertEqual(self.env.out("scraper_target retroarch/snes9x", env).strip(), "attractmode")
         # Fora do Attract-Mode, lista e arte na pasta das ROMs, nao em ~/RetroPie.
         body = (SETUP / "lib" / "scraper.sh").read_text()
         self.assertIn('gen=(-f "$format" -g "$dir" -o "$dir/media")', body)
+
+    def test_groovymame_list_gets_the_images(self):
+        # Pastas do Skyscraper na frente das do ui.ini; capturas depois da do
+        # F12; o que ja estava fica, e rodar de novo nao repete.
+        ui = self.env.etc / "ui.ini"
+        ui.write_text("covers_directory          covers\nmarquees_directory        marquees\n"
+                      "logos_directory           logo\nflyers_directory          flyers\n")
+        (self.env.etc / "mame.ini").write_text("snapshot_directory $HOME/.mame/snap\n")
+        for _ in range(2):
+            self.env.out("scraper_mame_ui /s")
+        text = ui.read_text()
+        self.assertIn("covers_directory          /s/covers;covers\n", text)
+        self.assertIn("marquees_directory        /s/marquees;marquees\n", text)
+        self.assertIn("logos_directory           /s/wheels;logo\n", text)
+        self.assertIn("flyers_directory          flyers\n", text)
+        self.assertEqual((self.env.etc / "mame.ini").read_text(),
+                         "snapshot_directory $HOME/.mame/snap;/s/screenshots\n")
+
+    def fake_tools(self, fail_on=None):
+        # runuser, groovymame -listclones e um Skyscraper que anota cada lote
+        # (e falha no lote que tiver FAIL_ON, como um desligamento no meio).
+        log = self.env.dir / "sky.log"
+        tools = {
+            "runuser": '#!/bin/sh\nshift 3\nexec "$@"\n',
+            "groovymame": '#!/bin/sh\nprintf "Name:            Clone of:\\n'
+                          'mvscu            mvsc\\nmvscj            mvsc\\nsf2ce            sf2\\n"\n',
+            "Skyscraper": '#!/bin/bash\nfor ((i = 1; i <= $#; i++)); do\n'
+                          '  [[ ${!i} == --includefrom ]] && { j=$((i + 1)); f=${!j}; }\ndone\n'
+                          'if [[ -n $f ]]; then\n  printf "lote:%%s\\n" "$(xargs -n1 basename < "$f" | tr "\\n" " ")" >> "%s"\n'
+                          '  [[ -n "%s" ]] && grep -q "%s" "$f" && exit 1\nelse\n  echo gera "$@" >> "%s"\nfi\n'
+                          'exit 0\n' % (log, fail_on or "", fail_on or "", log),
+        }
+        for name, body in tools.items():
+            (self.env.bin / name).write_text(body)
+            (self.env.bin / name).chmod(0o755)
+        return log
+
+    def test_job_is_recorded_and_finished(self):
+        env, roms, _ = self.scraper_env()
+        env["SCRAPER_JOB_DIR"] = str(self.env.dir / "job")
+        self.env.out("scraper_job_start screenscraper 0 1 'eu:segredo' 'mame|/r/mame|arcade|2' "
+                     "'retroarch/snes9x|/r/snes|snes|1'", env)
+        job = self.env.dir / "job"
+        self.assertEqual(oct((job / "options").stat().st_mode & 0o777), "0o600")
+        self.assertEqual((job / "options").read_text(), "screenscraper|0|1|eu:segredo\n")
+        self.env.out("scraper_job_done mame", env)
+        self.assertEqual(self.env.out("scraper_job_pending", env), "retroarch/snes9x|/r/snes|snes|1\n")
+        self.env.out("scraper_job_done retroarch/snes9x", env)
+        self.assertFalse(job.exists())
+
+    def test_batches_resume_and_clones(self):
+        env, roms, attract = self.scraper_env()
+        for g in ("mvsc", "sf2", "kof98", "pacman"):
+            (roms / "mame" / (g + ".zip")).write_text(g)
+        env.update({"SCRAPER_JOB_DIR": str(self.env.dir / "job"), "SCRAPER_CHUNK": "3",
+                    "SCRAPER_STAGE": str(self.env.dir / "stage"), "MAME_SCRAPED": str(self.env.dir / "scraped"),
+                    "MAME_INI": str(self.env.etc / "mame.ini")})
+        (self.env.etc / "session").write_text("groovymame\n")
+        log = self.fake_tools(fail_on="pacman")
+        # 4 jogos + 3 clones dos que existem, em lotes de 3; o segundo lote
+        # (com o pacman) "cai".
+        r = self.env.run("scraper_run mame %s/mame arcade arcadedb 0 '' 1" % roms, env)
+        self.assertNotEqual(r.returncode, 0)
+        lots = log.read_text().splitlines()
+        self.assertEqual(lots[0], "lote:kof98.zip mvsc.zip mvscj.zip ")
+        self.assertIn("pacman.zip", lots[1])
+        self.assertFalse(any(l.startswith("gera") for l in lots))
+        stage = self.env.dir / "stage" / "mame"
+        self.assertTrue((stage / "mvsc.zip").is_symlink())
+        self.assertIn("clone de mvsc", (stage / "mvscu.zip").read_text())
+        self.assertFalse((stage / "kof98u.zip").exists())
+        # Retomando: so o que faltou, e depois a lista do GroovyMAME.
+        log.write_text("")
+        self.fake_tools()
+        self.env.out("scraper_run mame %s/mame arcade arcadedb 0 '' 1" % roms, env)
+        lots = log.read_text().splitlines()
+        self.assertEqual(lots[0], "lote:mvscu.zip pacman.zip sf2.zip ")
+        self.assertEqual(lots[1], "lote:sf2ce.zip ")
+        self.assertIn("-f emulationstation -g %s/scraped -o %s/scraped" % (self.env.dir, self.env.dir), lots[2])
 
 
 if __name__ == "__main__":

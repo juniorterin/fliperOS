@@ -3,7 +3,9 @@
 # (o GroovyArcade tambem o empacota). Duas fases, como o proprio Skyscraper
 # pede: "gather" baixa para o cache, "generate" monta a lista do frontend.
 #
-# A lista vai para onde o frontend le. No Attract-Mode Plus (o frontend do
+# A lista vai para onde o frontend le. Com o GroovyMAME de launcher, as
+# imagens da pasta do MAME vao para a lista de jogos dele (scraper_mame_ui).
+# No Attract-Mode Plus (o frontend do
 # repositorio do FliperOS) o Skyscraper precisa do .cfg do emulador em
 # ~/.attract/emulators e escreve a romlist em ~/.attract/romlists e a arte
 # nas pastas das linhas "artwork" desse .cfg; o Setup cria o emulador (com o
@@ -17,6 +19,8 @@ RA_INFO_DIR=${RA_INFO_DIR:-/opt/fliperos/retroarch/info}
 RA_CORES_DIR=${RA_CORES_DIR:-/opt/fliperos/retroarch/cores}
 ATTRACT_DIR=${ATTRACT_DIR:-/home/fliperos/.attract}
 FLIPEROS_BIN=${FLIPEROS_BIN:-/opt/fliperos/bin}
+# Imagens para a lista de jogos do GroovyMAME (scraper_mame_ui).
+MAME_SCRAPED=${MAME_SCRAPED:-/home/fliperos/.mame/scraped/mame}
 
 # scraper_platform PASTA: pasta de emulador de ~/roms (fliperos-roms) ->
 # plataforma do Skyscraper. Os consoles do RetroArch vem pelos cores
@@ -129,11 +133,18 @@ scraper_detect() {
   return 0
 }
 
-# scraper_frontend_format imprime o formato de lista do Skyscraper: o do
-# launcher padrao; sem frontend (o Setup, um emulador, o desktop), o do
-# Attract-Mode Plus se ele estiver instalado.
-scraper_frontend_format() {
-  case $(launcher_current) in
+# scraper_target CHAVE imprime para onde vai a lista da pasta: a lista de
+# jogos do proprio GroovyMAME (mameui) quando ele e o launcher padrao e a
+# pasta e a do MAME; senao o formato do launcher padrao; sem frontend (o
+# Setup, um emulador, o desktop), o Attract-Mode Plus se estiver instalado.
+scraper_target() {
+  local launcher
+  launcher=$(launcher_current)
+  if [[ $launcher == groovymame && $1 == mame ]]; then
+    echo mameui
+    return
+  fi
+  case $launcher in
     attractplus) echo attractmode ;;
     emulationstation) echo emulationstation ;;
     pegasus) echo pegasus ;;
@@ -143,10 +154,31 @@ scraper_frontend_format() {
 
 scraper_format_label() {
   case $1 in
+    mameui) echo "GroovyMAME" ;;
     attractmode) echo "Attract-Mode Plus" ;;
     pegasus) echo "Pegasus" ;;
     *) echo "EmulationStation" ;;
   esac
+}
+
+# scraper_mame_ui PASTA poe as imagens do Skyscraper (formato do
+# EmulationStation em PASTA: covers, marquees, wheels, screenshots) na lista
+# de jogos do GroovyMAME: na frente das pastas do ui.ini (capas, marquees,
+# logos) e depois da pasta de capturas do mame.ini (a primeira e onde o F12
+# grava). O que ja estava nessas pastas fica.
+scraper_mame_ui() {
+  local dir=$1 ui pair key sub cur
+  ui="$(dirname "$MAME_INI")/ui.ini"
+  for pair in covers_directory:covers marquees_directory:marquees logos_directory:wheels; do
+    key=${pair%%:*}
+    sub=$dir/${pair#*:}
+    cur=$(ini_get "$ui" "$key" 2> /dev/null) || cur=""
+    [[ ";$cur;" == *";$sub;"* ]] || ini_set "$ui" "$key" "$sub${cur:+;$cur}"
+  done
+  sub=$dir/screenshots
+  cur=$(ini_get "$MAME_INI" snapshot_directory 2> /dev/null) || cur='$HOME/.mame/snap'
+  [[ ";$cur;" == *";$sub;"* ]] || ini_set "$MAME_INI" snapshot_directory "${cur:+$cur;}$sub"
+  return 0
 }
 
 # scraper_attract_emulator CHAVE imprime "nome|executavel|argumentos|extensoes"
@@ -210,32 +242,175 @@ scraper_attract_prepare() {
   printf '%s\n' "$name"
 }
 
-# scraper_run CHAVE PASTA PLATAFORMA FONTE VIDEOS [USUARIO:SENHA] junta e
-# gera a lista de uma pasta, falando com a tela por eventos.
+# ── Retomada ──────────────────────────────────────────────────────
+# O Skyscraper so grava o cache no fim de cada execucao: um desligamento no
+# meio perdia tudo. Os jogos vao em lotes (SCRAPER_CHUNK por execucao, com
+# --includefrom), e o trabalho fica anotado em SCRAPER_JOB_DIR:
+#   options        "fonte|videos|clones|usuario:senha" (so o root le)
+#   pending        as pastas que faltam, uma linha do scraper_detect cada
+#   done.<pasta>   os arquivos da pasta atual que ja estao no cache
+# O Setup > Scraper oferece retomar enquanto houver pasta pendente.
+SCRAPER_JOB_DIR=${SCRAPER_JOB_DIR:-/var/lib/fliperos/scraper}
+SCRAPER_CHUNK=${SCRAPER_CHUNK:-20}
+# Onde ficam os clones (arquivos de referencia) da pasta do MAME. Fora do
+# ~/.skyscraper: com a pasta ja existindo, o Skyscraper nao copia os
+# arquivos dele na primeira vez (peas.json) e para.
+SCRAPER_STAGE=${SCRAPER_STAGE:-/home/fliperos/.cache/fliperos-scraper}
+GROOVYMAME=${GROOVYMAME:-groovymame}
+
+# scraper_job_start FONTE VIDEOS CLONES CREDENCIAIS ALVO... anota um trabalho.
+scraper_job_start() {
+  local source=$1 videos=$2 clones=$3 creds=$4
+  shift 4
+  rm -rf "$SCRAPER_JOB_DIR"
+  mkdir -p "$SCRAPER_JOB_DIR" && chmod 700 "$SCRAPER_JOB_DIR" || return 1
+  (
+    umask 077
+    printf '%s|%s|%s|%s\n' "$source" "$videos" "$clones" "$creds" > "$SCRAPER_JOB_DIR/options"
+  )
+  printf '%s\n' "$@" > "$SCRAPER_JOB_DIR/pending"
+}
+
+scraper_job_pending() {
+  [[ -s $SCRAPER_JOB_DIR/pending && -f $SCRAPER_JOB_DIR/options ]] && cat "$SCRAPER_JOB_DIR/pending"
+}
+
+scraper_job_options() {
+  cat "$SCRAPER_JOB_DIR/options" 2> /dev/null
+}
+
+# scraper_job_done CHAVE tira a pasta do trabalho; sem nada pendente, o
+# trabalho acaba.
+scraper_job_done() {
+  local key=$1
+  [[ -f $SCRAPER_JOB_DIR/pending ]] || return 0
+  awk -F'|' -v k="$key" '$1 != k' "$SCRAPER_JOB_DIR/pending" > "$SCRAPER_JOB_DIR/pending.new"
+  mv -f "$SCRAPER_JOB_DIR/pending.new" "$SCRAPER_JOB_DIR/pending"
+  rm -f "$SCRAPER_JOB_DIR/done.${key//\//-}"
+  [[ -s $SCRAPER_JOB_DIR/pending ]] || scraper_job_clear
+}
+
+scraper_job_clear() {
+  rm -rf "$SCRAPER_JOB_DIR"
+}
+
+# ── Clones ───────────────────────────────────────────────────────
+# Num romset merged os clones (mvscu, mvscj...) estao dentro do zip do pai e
+# nao tem arquivo: o Skyscraper nao os veria. Para a lista do GroovyMAME e a
+# do Attract-Mode (que acham o jogo pelo nome), a pasta raspada passa a ser
+# uma copia de referencias: os arquivos de verdade (links) e um arquivo
+# pequeno com o nome de cada clone dos jogos que existem.
+
+# scraper_clones_input PASTA imprime a pasta com os jogos e os clones.
+scraper_clones_input() {
+  local dir=$1 stage="$SCRAPER_STAGE/mame" f clone parent
+  rm -rf "$stage"
+  mkdir -p "$stage" || return 1
+  for f in "$dir"/*.zip "$dir"/*.7z; do
+    [[ -e $f ]] && ln -s "$f" "$stage/${f##*/}"
+  done
+  while read -r clone parent; do
+    [[ -e $stage/$parent.zip || -e $stage/$parent.7z ]] || continue
+    [[ -e $stage/$clone.zip || -e $stage/$clone.7z ]] && continue
+    # Conteudo diferente por clone: o cache do Skyscraper usa o hash.
+    printf 'FliperOS: %s, clone de %s\n' "$clone" "$parent" > "$stage/$clone.zip"
+  done < <(runuser -u "$FLIPEROS_USER" -- "$GROOVYMAME" -listclones 2> /dev/null | awk 'NR > 1 && NF == 2 { print $1, $2 }')
+  chown -R "$FLIPEROS_USER:" "$SCRAPER_STAGE" 2> /dev/null
+  printf '%s\n' "$stage"
+}
+
+# scraper_artwork imprime o artwork.xml do Setup: cada imagem como veio
+# (captura, capa, logo, marquee), cada uma na sua pasta. O padrao do
+# Skyscraper monta a captura com a capa e o logo por cima e nao exporta os
+# dois; a lista do GroovyMAME e as telas do Attract-Mode montam sozinhas.
+scraper_artwork() {
+  local file="$SCRAPER_STAGE/artwork.xml"
+  mkdir -p "$SCRAPER_STAGE" || return 1
+  cat > "$file" << 'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<artwork>
+  <output type="screenshot"/>
+  <output type="cover"/>
+  <output type="wheel"/>
+  <output type="marquee"/>
+</artwork>
+XML
+  chown -R "$FLIPEROS_USER:" "$SCRAPER_STAGE" 2> /dev/null
+  chmod 644 "$file"
+  printf '%s\n' "$file"
+}
+
+# scraper_files CHAVE PASTA lista os jogos da pasta (as extensoes do
+# emulador da pasta), um por linha.
+scraper_files() {
+  local key=$1 dir=$2 exts e args=()
+  IFS='|' read -r _ _ _ exts <<< "$(scraper_attract_emulator "$key")"
+  for e in ${exts//;/ }; do
+    args+=(-o -iname "*$e")
+  done
+  ((${#args[@]})) || return 0
+  find "$dir" -maxdepth 1 \( -type f -o -type l \) \( "${args[@]:1}" \) 2> /dev/null | sort
+}
+
+# scraper_run CHAVE PASTA PLATAFORMA FONTE VIDEOS [USUARIO:SENHA] [CLONES]
+# junta (em lotes, retomando o que ja foi) e gera a lista de uma pasta,
+# falando com a tela por eventos.
 scraper_run() {
-  local key=$1 dir=$2 platform=$3 source=$4 videos=$5 creds=${6:-} flags=unattend format name args gen
+  local key=$1 dir=$2 platform=$3 source=$4 videos=$5 creds=${6:-} clones=${7:-0}
+  local flags=unattend format name args gen input done_file chunk files=() todo=() i n from to
   have "$SKYSCRAPER" || { ev_fail "Skyscraper is not installed"; return 1; }
   ((videos)) && flags+=,videos
-  format=$(scraper_frontend_format)
-  args=(-p "$platform" -i "$dir" --flags "$flags")
-  if [[ $format == attractmode ]]; then
-    name=$(scraper_attract_prepare "$key" "$dir" "$platform") ||
-      { ev_fail "Attract-Mode has no emulator for $key"; return 1; }
-    gen=(-f attractmode -e "$name")
-  else
-    gen=(-f "$format" -g "$dir" -o "$dir/media")
+  format=$(scraper_target "$key")
+  input=$dir
+  if [[ $key == mame && $clones == 1 && $format =~ ^(mameui|attractmode)$ ]]; then
+    ev_msg "Looking for the clones of the games found"
+    input=$(scraper_clones_input "$dir") || { ev_fail "Could not list the MAME clones"; return 1; }
+  fi
+  args=(-p "$platform" -i "$input" --flags "$flags")
+  case $format in
+    attractmode)
+      name=$(scraper_attract_prepare "$key" "$dir" "$platform") ||
+        { ev_fail "Attract-Mode has no emulator for $key"; return 1; }
+      gen=(-f attractmode -e "$name")
+      ;;
+    mameui) gen=(-f emulationstation -g "$MAME_SCRAPED" -o "$MAME_SCRAPED") ;;
+    *) gen=(-f "$format" -g "$dir" -o "$dir/media") ;;
+  esac
+  # O que ainda nao esta no cache, em lotes; cada lote gravado fica anotado.
+  mkdir -p "$SCRAPER_JOB_DIR"
+  done_file="$SCRAPER_JOB_DIR/done.${key//\//-}"
+  touch "$done_file"
+  mapfile -t files < <(scraper_files "$key" "$input")
+  mapfile -t todo < <(printf '%s\n' "${files[@]}" | grep -vxF -f "$done_file" | grep -v '^$')
+  if ((${#files[@]} > ${#todo[@]})); then
+    ev_msg "Resuming: $((${#files[@]} - ${#todo[@]})) of ${#files[@]} games already fetched"
   fi
   ev_step 5 "Fetching $platform data from $source"
-  local gather=("$SKYSCRAPER" "${args[@]}" -s "$source")
-  [[ -n $creds ]] && gather+=(-u "$creds")
-  if ! scraper_stream 5 80 runuser -u "$FLIPEROS_USER" -- "${gather[@]}"; then
-    ev_fail "Skyscraper could not fetch the $platform data"
-    return 1
-  fi
+  # O lote fica fora da pasta do trabalho (so do root): o Skyscraper roda
+  # como o usuario.
+  chunk=$(mktemp /tmp/fliperos-scraper.XXXXXX) || { ev_fail "No space for the scraper"; return 1; }
+  chmod 644 "$chunk"
+  n=${#todo[@]}
+  for ((i = 0; i < n; i += SCRAPER_CHUNK)); do
+    printf '%s\n' "${todo[@]:i:SCRAPER_CHUNK}" > "$chunk"
+    from=$((5 + 75 * i / n))
+    to=$((5 + 75 * (i + SCRAPER_CHUNK < n ? i + SCRAPER_CHUNK : n) / n))
+    local gather=("$SKYSCRAPER" "${args[@]}" -s "$source" --includefrom "$chunk")
+    [[ -n $creds ]] && gather+=(-u "$creds")
+    if ! scraper_stream "$from" "$to" runuser -u "$FLIPEROS_USER" -- "${gather[@]}"; then
+      rm -f "$chunk"
+      ev_fail "Skyscraper could not fetch the $platform data"
+      return 1
+    fi
+    cat "$chunk" >> "$done_file"
+  done
+  rm -f "$chunk"
   ev_step 85 "Building the $(scraper_format_label "$format") game list"
+  gen+=(-a "$(scraper_artwork)")
   if ! ev_run runuser -u "$FLIPEROS_USER" -- "$SKYSCRAPER" "${args[@]}" "${gen[@]}"; then
     return 1
   fi
+  [[ $format == mameui ]] && scraper_mame_ui "$MAME_SCRAPED"
   ev_step 100 "$platform: done"
 }
 

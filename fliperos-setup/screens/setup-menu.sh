@@ -204,10 +204,28 @@ screen_frontend() {
 
 screen_scraper() {
   local found=() entries=() line key dir platform count choice targets=() source creds="" user pass videos=0 t
-  local failed=() format
+  local clones=0 pending=() rc
   if ! have "$SKYSCRAPER"; then
     ui_msg "Scraper" "Skyscraper is not installed."
     return 0
+  fi
+  # Um trabalho interrompido (desligou, fechou o Setup): retoma de onde
+  # parou, com as mesmas escolhas. ESC volta sem perder o trabalho.
+  mapfile -t pending < <(scraper_job_pending)
+  if ((${#pending[@]})); then
+    entries=()
+    for line in "${pending[@]}"; do entries+=("${line%%|*}"); done
+    rc=0
+    ui_choice2 "Scraper" "Resume" "Start over" \
+      "A scrape was interrupted. Systems left: ${entries[*]}" "" \
+      "Resume where it stopped? The games already fetched are kept." || rc=$?
+    if ((rc == 0)); then
+      IFS='|' read -r source videos clones creds <<< "$(scraper_job_options)"
+      scraper_scrape_targets "$source" "$videos" "$creds" "$clones" "${pending[@]}"
+      return 0
+    fi
+    ((rc == 1)) || return 0
+    scraper_job_clear
   fi
   mapfile -t found < <(scraper_detect)
   if ((${#found[@]} == 0)); then
@@ -237,18 +255,41 @@ screen_scraper() {
     fi
   fi
   ui_yesno "Scraper" "Download videos too? They use much more disk space." no && videos=1
-  # Um sistema que falha nao para os outros; o resumo diz quais.
   for t in "${targets[@]}"; do
-    IFS='|' read -r key dir platform count <<< "$t"
-    run_with_progress "Scraping $platform" "$key ($count files)" \
-      scraper_run "$key" "$dir" "$platform" "$source" "$videos" "$creds" || failed+=("$key")
+    if [[ ${t%%|*} == mame ]]; then
+      ui_yesno "Scraper" "Also fetch the clones of the MAME games found (other versions of the same game)? It takes longer." &&
+        clones=1
+      break
+    fi
   done
-  format=$(scraper_format_label "$(scraper_frontend_format)")
+  scraper_scrape_targets "$source" "$videos" "$creds" "$clones" "${targets[@]}"
+}
+
+# scraper_scrape_targets FONTE VIDEOS CREDENCIAIS CLONES ALVO... anota o
+# trabalho e raspa pasta por pasta. Uma que falha nao para as outras e fica
+# pendente para o "Resume".
+scraper_scrape_targets() {
+  local source=$1 videos=$2 creds=$3 clones=$4 t key dir platform count failed=() labels=() label
+  shift 4
+  scraper_job_start "$source" "$videos" "$clones" "$creds" "$@"
+  for t in "$@"; do
+    IFS='|' read -r key dir platform count <<< "$t"
+    if run_with_progress "Scraping $platform" "$key ($count files)" \
+      scraper_run "$key" "$dir" "$platform" "$source" "$videos" "$creds" "$clones"; then
+      scraper_job_done "$key"
+      label=$(scraper_format_label "$(scraper_target "$key")")
+      [[ " ${labels[*]} " == *" $label "* ]] || labels+=("$label")
+    else
+      failed+=("$key")
+    fi
+  done
   if ((${#failed[@]})); then
-    ui_msg "Scraper" "Game lists updated for $format, except: ${failed[*]}" "" \
+    ui_msg "Scraper" "Not finished: ${failed[*]}" "" \
+      "Open Setup > Scraper again to resume (the games already fetched are kept)." \
       "Details in $FLIPEROS_LOG."
   else
-    ui_msg "Scraper" "Done. The game lists were updated for $format."
+    label=$(printf '%s, ' "${labels[@]}")
+    ui_msg "Scraper" "Done. Game lists updated for: ${label%, }."
   fi
 }
 
