@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+"""MAME ROM Cleaner do FliperOS (Setup > MAME ROM Cleaner).
+
+Tira de uma pasta de ROMs do MAME os sets que as regras escolhidas
+excluem, pelo XML da versao do MAME daquele romset (-listxml):
+
+  fliperos-romclean scan --xml ARQUIVO|- --roms PASTA --plan PLANO
+                         [--only REGRA]... [--exclude REGRA]...
+  fliperos-romclean apply PLANO (--move-to PASTA | --delete)
+  fliperos-romclean fetch-mame2010 DESTINO
+
+Um jogo fica se casa com todas as --only e com nenhuma --exclude. Fica
+tambem o que os jogos que ficam usam: o pai (num romset merged o clone
+esta no zip dele), a BIOS e os dispositivos com ROM (romof, cloneof e
+device_ref, em cadeia). O que nao esta no XML fica como esta. O scan so
+escreve o plano (o que sai, um arquivo por linha) e o resumo; o apply move
+ou apaga o que o plano diz.
+
+Regras: clone, bios, device, mechanical, notworking, vertical, horizontal,
+vector, chd e psx (placa com a CPU do PlayStation: ZN-1/ZN-2, Namco System
+10/11/12, Konami GV/GQ/573/Twinkle, Taito G-NET; "PSX CPU" e CXD8661R no
+XML do 0.139, "Sony CXD8530/8606/8661" no atual).
+"""
+import argparse
+import hashlib
+import lzma
+import os
+import re
+import shutil
+import sys
+import tempfile
+import urllib.request
+import xml.etree.ElementTree as ET
+
+# O XML do MAME 2010 (0.139), o do core mame2010 do RetroArch: o MAME daquela
+# versao nao esta instalado para gerar o -listxml.
+MAME2010_COMMIT = 'dff8aadd1c3f38215af3955746d6e19abe0ddcea'
+MAME2010_SHA256 = '20eb4b0a9404cc2b0df6489d0370e215ec5f3d255c1321f7037df899dfdeec36'
+MAME2010_URL = ('https://raw.githubusercontent.com/libretro/mame2010-libretro/%s/metadata/mame2010.xml'
+                % MAME2010_COMMIT)
+
+PSX_CPU = re.compile(r'^(PSX CPU|(Sony )?CXD8(530|606|661)[A-Z]*)$')
+SET_EXTENSIONS = ('.zip', '.7z')
+
+RULES = {
+    'clone': lambda m: bool(m['cloneof']),
+    'bios': lambda m: m['isbios'],
+    'device': lambda m: m['isdevice'],
+    'mechanical': lambda m: m['ismechanical'],
+    'notworking': lambda m: m['status'] == 'preliminary',
+    'vertical': lambda m: m['display'] is not None and m['rotate'] in (90, 270),
+    'horizontal': lambda m: m['display'] is not None and m['rotate'] in (0, 180),
+    'vector': lambda m: m['display'] == 'vector',
+    'chd': lambda m: m['disk'],
+    'psx': lambda m: any(PSX_CPU.match(cpu) for cpu in m['cpus']),
+}
+
+
+def open_xml(src):
+    if src == '-':
+        return sys.stdin.buffer
+    if src.endswith('.xz'):
+        return lzma.open(src)
+    return open(src, 'rb')
+
+
+def read_machines(src):
+    """Os jogos do XML (<machine> do MAME atual, <game> do 0.139 e antes)."""
+    machines = {}
+    events = ET.iterparse(open_xml(src), events=('start', 'end'))
+    _, root = next(events)
+    for event, el in events:
+        if event != 'end' or el.tag not in ('machine', 'game'):
+            continue
+        a = el.attrib
+        display = el.find('display')
+        driver = el.find('driver')
+        machines[a['name'].lower()] = {
+            'description': (el.findtext('description') or '').strip(),
+            'cloneof': a.get('cloneof', '').lower(),
+            'romof': a.get('romof', '').lower(),
+            'isbios': a.get('isbios') == 'yes',
+            'isdevice': a.get('isdevice') == 'yes' or a.get('runnable') == 'no',
+            'ismechanical': a.get('ismechanical') == 'yes',
+            'status': driver.get('status', '') if driver is not None else '',
+            'display': display.get('type', 'raster') if display is not None else None,
+            'rotate': int(display.get('rotate', '0')) if display is not None else 0,
+            'disk': el.find('disk') is not None,
+            'cpus': [c.get('name', '') for c in el.iter('chip') if c.get('type') == 'cpu'],
+            'devices': [d.get('name', '').lower() for d in el.iter('device_ref')],
+        }
+        root.clear()
+    return machines
+
+
+def sets_in(folder):
+    """{nome do set: [arquivos]}: os .zip/.7z e as pastas (CHD, set solto)."""
+    sets = {}
+    for entry in os.scandir(folder):
+        if entry.is_dir(follow_symlinks=False):
+            name = entry.name
+        else:
+            name, ext = os.path.splitext(entry.name)
+            if ext.lower() not in SET_EXTENSIONS:
+                continue
+        sets.setdefault(name.lower(), []).append(entry.name)
+    return sets
+
+
+def size_of(path):
+    if os.path.isdir(path) and not os.path.islink(path):
+        return sum(size_of(os.path.join(path, f)) for f in os.listdir(path))
+    return os.lstat(path).st_size
+
+
+def plan(machines, present, only, exclude):
+    """(ficam, so como dependencia, saem) entre os sets da pasta."""
+    def chosen(m):
+        return all(RULES[r](m) for r in only) and not any(RULES[r](m) for r in exclude)
+
+    # Os escolhidos que existem na pasta, e os clones escolhidos que, num
+    # romset merged, estao no zip do pai que existe.
+    wanted = {n for n in present if n in machines and chosen(machines[n])}
+    wanted |= {n for n, m in machines.items() if m['cloneof'] in present and chosen(m)}
+    needed, todo = set(), list(wanted)
+    while todo:
+        m = machines.get(todo.pop())
+        if m is None:
+            continue
+        for dep in [m['romof'], m['cloneof'], *m['devices']]:
+            if dep and dep not in needed and dep not in wanted:
+                needed.add(dep)
+                todo.append(dep)
+    known = {n for n in present if n in machines}
+    keep = known & (wanted | needed)
+    return keep, keep & needed - wanted, known - keep
+
+
+def cmd_scan(args):
+    folder = os.path.abspath(args.roms)
+    for rule in args.only + args.exclude:
+        if rule not in RULES:
+            sys.exit('regra desconhecida: %s (use %s)' % (rule, ', '.join(RULES)))
+    machines = read_machines(args.xml)
+    present = sets_in(folder)
+    keep, needed, remove = plan(machines, present, args.only, args.exclude)
+    total = 0
+    with open(args.plan, 'w', encoding='utf-8') as out:
+        out.write('# roms\t%s\n' % folder)
+        for name in sorted(remove):
+            for filename in sorted(present[name]):
+                size = size_of(os.path.join(folder, filename))
+                total += size
+                desc = machines[name]['description'].replace('\t', ' ').replace('\n', ' ')
+                out.write('%s\t%s\t%d\t%s\n' % (name, filename, size, desc))
+    print('machines=%d' % len(machines))
+    print('sets=%d' % len([n for n in present if n in machines]))
+    print('keep=%d' % len(keep))
+    print('needed=%d' % len(needed))
+    print('remove=%d' % len(remove))
+    print('bytes=%d' % total)
+    print('unknown=%d' % len([n for n in present if n not in machines]))
+
+
+def read_plan(path):
+    folder, files = None, []
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            line = line.rstrip('\n')
+            if line.startswith('# roms\t'):
+                folder = line.split('\t', 1)[1]
+            elif line and not line.startswith('#'):
+                files.append(line.split('\t')[1])
+    if not folder:
+        sys.exit('plano sem a pasta das ROMs: %s' % path)
+    return folder, files
+
+
+def cmd_apply(args):
+    folder, files = read_plan(args.plan)
+    st = os.stat(folder)
+    if args.move_to:
+        dest = os.path.abspath(args.move_to)
+        if not os.path.isdir(dest):
+            os.makedirs(dest)
+            # Do dono da pasta das ROMs (o Setup roda como root).
+            try:
+                os.chown(dest, st.st_uid, st.st_gid)
+            except OSError:
+                pass
+    done = skipped = 0
+    for filename in files:
+        # So um arquivo da propria pasta, nunca um caminho.
+        if '/' in filename or filename in ('.', '..'):
+            skipped += 1
+            continue
+        path = os.path.join(folder, filename)
+        if not os.path.lexists(path):
+            skipped += 1
+            continue
+        if args.move_to:
+            target = os.path.join(dest, filename)
+            if os.path.lexists(target):
+                skipped += 1
+                continue
+            shutil.move(path, target)
+        elif os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
+        done += 1
+    print('%s=%d' % ('moved' if args.move_to else 'deleted', done))
+    print('skipped=%d' % skipped)
+
+
+def cmd_fetch_mame2010(args):
+    if os.path.exists(args.dest):
+        print('ok %s' % args.dest)
+        return
+    os.makedirs(os.path.dirname(os.path.abspath(args.dest)), exist_ok=True)
+    digest = hashlib.sha256()
+    tmp = tempfile.NamedTemporaryFile(dir=os.path.dirname(os.path.abspath(args.dest)), delete=False)
+    try:
+        with urllib.request.urlopen(MAME2010_URL, timeout=120) as resp, lzma.open(tmp, 'wb', preset=9) as out:
+            while True:
+                chunk = resp.read(1 << 20)
+                if not chunk:
+                    break
+                digest.update(chunk)
+                out.write(chunk)
+        tmp.close()
+        if digest.hexdigest() != MAME2010_SHA256:
+            sys.exit('mame2010.xml: hash diferente do fixado')
+        os.chmod(tmp.name, 0o644)
+        os.replace(tmp.name, args.dest)
+    finally:
+        if os.path.exists(tmp.name):
+            os.remove(tmp.name)
+    print('ok %s' % args.dest)
+
+
+def main():
+    parser = argparse.ArgumentParser(prog='fliperos-romclean')
+    sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('scan')
+    p.add_argument('--xml', required=True)
+    p.add_argument('--roms', required=True)
+    p.add_argument('--plan', required=True)
+    p.add_argument('--only', action='append', default=[])
+    p.add_argument('--exclude', action='append', default=[])
+    p.set_defaults(func=cmd_scan)
+    p = sub.add_parser('apply')
+    p.add_argument('plan')
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument('--move-to')
+    group.add_argument('--delete', action='store_true')
+    p.set_defaults(func=cmd_apply)
+    p = sub.add_parser('fetch-mame2010')
+    p.add_argument('dest')
+    p.set_defaults(func=cmd_fetch_mame2010)
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()

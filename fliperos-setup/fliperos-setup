@@ -62,6 +62,8 @@ source "$SETUP_DIR/lib/network.sh"
 source "$SETUP_DIR/lib/status.sh"
 # shellcheck source=lib/scraper.sh
 source "$SETUP_DIR/lib/scraper.sh"
+# shellcheck source=lib/romclean.sh
+source "$SETUP_DIR/lib/romclean.sh"
 # shellcheck source=lib/update.sh
 source "$SETUP_DIR/lib/update.sh"
 # shellcheck source=lib/hardware.sh
@@ -102,6 +104,8 @@ source "$SETUP_DIR/screens/latency.sh"
 source "$SETUP_DIR/screens/lpt.sh"
 # shellcheck source=screens/joysticks.sh
 source "$SETUP_DIR/screens/joysticks.sh"
+# shellcheck source=screens/rom-cleaner.sh
+source "$SETUP_DIR/screens/rom-cleaner.sh"
 
 usage() {
   sed -n '8,18p' "${BASH_SOURCE[0]}" | sed 's/^# *//'

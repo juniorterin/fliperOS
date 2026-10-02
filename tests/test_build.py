@@ -1064,6 +1064,192 @@ class GroovyMameTests(unittest.TestCase):
                              (ROOT / 'config/fliperos-groovymame').read_text())
 
 
+class RomCleanTests(unittest.TestCase):
+    """config/fliperos-romclean: o que sai de uma pasta de ROMs do MAME."""
+
+    # Como o -listxml do MAME atual (<machine>), com um caso de cada regra.
+    XML = '''<?xml version="1.0"?>
+<mame build="0.289">
+  <machine name="neogeo" isbios="yes"><description>Neo-Geo</description>
+    <chip type="cpu" tag="maincpu" name="Motorola MC68000"/>
+    <display type="raster" rotate="0" width="320" height="224"/></machine>
+  <machine name="pgm" isbios="yes"><description>PGM</description></machine>
+  <machine name="mslug" romof="neogeo"><description>Metal Slug</description>
+    <display type="raster" rotate="0" width="320" height="224"/><driver status="good"/></machine>
+  <machine name="mslugb" cloneof="mslug" romof="mslug"><description>Metal Slug (bootleg)</description>
+    <display type="raster" rotate="0" width="320" height="224"/><driver status="good"/></machine>
+  <machine name="1942"><description>1942</description>
+    <display type="raster" rotate="270" width="256" height="224"/><driver status="good"/></machine>
+  <machine name="asteroid"><description>Asteroids</description>
+    <display type="vector" rotate="0"/><driver status="good"/></machine>
+  <machine name="coh1000c" isbios="yes"><description>ZN-1</description>
+    <chip type="cpu" tag="maincpu" name="Sony CXD8530CQ"/></machine>
+  <machine name="sfex" romof="coh1000c"><description>Street Fighter EX</description>
+    <chip type="cpu" tag="maincpu" name="Sony CXD8530CQ"/>
+    <display type="raster" rotate="0" width="368" height="240"/><driver status="good"/></machine>
+  <machine name="tekken3"><description>Tekken 3</description>
+    <chip type="cpu" tag="maincpu" name="Sony CXD8661R"/>
+    <display type="raster" rotate="0" width="640" height="480"/><driver status="imperfect"/></machine>
+  <machine name="kpython2"><description>Python 2</description>
+    <chip type="cpu" tag="iop" name="Sony Playstation 2 IOP"/>
+    <display type="raster" rotate="0" width="640" height="480"/><driver status="preliminary"/></machine>
+  <machine name="broken"><description>Broken</description>
+    <display type="raster" rotate="0" width="320" height="240"/><driver status="preliminary"/></machine>
+  <machine name="wbml"><description>Wonder Boy in Monster Land</description>
+    <display type="raster" rotate="0" width="256" height="224"/><driver status="preliminary"/></machine>
+  <machine name="wbmlb" cloneof="wbml" romof="wbml"><description>WBML (bootleg)</description>
+    <display type="raster" rotate="0" width="256" height="224"/><driver status="good"/></machine>
+  <machine name="qsound_hle" isdevice="yes" runnable="no"><description>QSound</description></machine>
+  <machine name="sfa2"><description>Street Fighter Alpha 2</description>
+    <display type="raster" rotate="0" width="384" height="224"/><driver status="good"/>
+    <device_ref name="qsound_hle"/></machine>
+  <machine name="pinball" ismechanical="yes"><description>Pinball</description></machine>
+  <machine name="kinst"><description>Killer Instinct</description><disk name="kinst"/>
+    <display type="raster" rotate="0" width="320" height="240"/><driver status="good"/></machine>
+</mame>
+'''
+    # O 0.139 (MAME 2010): <game>, e a CPU do PlayStation como "PSX CPU".
+    XML_0139 = '''<?xml version="1.0"?>
+<!DOCTYPE mame [
+<!ELEMENT mame (game+)>
+	<!ATTLIST mame build CDATA #IMPLIED>
+]>
+<mame build="0.139 (Jul 29 2010)">
+	<game name="tekken3" sourcefile="namcos12.c"><description>Tekken 3 (Japan, TET1/VER.E1)</description>
+		<chip type="cpu" tag="maincpu" name="CXD8661R" clock="100000000"/>
+		<display type="raster" rotate="0" width="640" height="480" refresh="60.000000" />
+		<driver status="imperfect" emulation="good"/></game>
+	<game name="sfex" sourcefile="zn.c" romof="coh1000c"><description>Street Fighter EX</description>
+		<chip type="cpu" tag="maincpu" name="PSX CPU" clock="33868800"/>
+		<driver status="good"/></game>
+	<game name="coh1000c" sourcefile="zn.c" isbios="yes"><description>ZN1</description>
+		<chip type="cpu" tag="maincpu" name="PSX CPU" clock="33868800"/></game>
+	<game name="mslug" sourcefile="neodrvr.c" romof="neogeo"><description>Metal Slug</description>
+		<chip type="cpu" tag="maincpu" name="68000" clock="12000000"/></game>
+	<game name="neogeo" sourcefile="neodrvr.c" isbios="yes"><description>Neo-Geo</description></game>
+	<game name="harddriv" sourcefile="harddriv.c"><description>Hard Drivin</description>
+		<chip type="cpu" tag="maincpu" name="R3000 (big)" clock="25000000"/></game>
+</mame>
+'''
+    FILES = ['neogeo.zip', 'pgm.zip', 'mslug.zip', 'mslugb.zip', '1942.zip', 'asteroid.zip', 'coh1000c.zip',
+             'sfex.zip', 'tekken3.zip', 'kpython2.zip', 'broken.zip', 'wbml.zip', 'qsound_hle.zip', 'sfa2.7z',
+             'pinball.zip', 'kinst.zip', 'unknown.zip', 'readme.txt']
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.roms = self.tmp / 'mame'
+        self.roms.mkdir()
+        for name in self.FILES:
+            (self.roms / name).write_bytes(b'x' * 10)
+        (self.roms / 'kinst').mkdir()
+        (self.roms / 'kinst' / 'kinst.chd').write_bytes(b'c' * 100)
+        (self.tmp / 'mame.xml').write_text(self.XML)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def romclean(self, *args, stdin=None):
+        return subprocess.run(['python3', str(ROOT / 'config/fliperos-romclean'), *args], input=stdin,
+                              capture_output=True, text=True, timeout=60, check=True).stdout
+
+    def scan(self, *rules, xml=None, roms=None):
+        plan = self.tmp / 'plan.tsv'
+        args = ['scan', '--xml', str(xml or self.tmp / 'mame.xml'), '--roms', str(roms or self.roms),
+                '--plan', str(plan)]
+        for rule in rules:
+            mode, name = rule.split(':')
+            args += ['--' + mode, name]
+        summary = dict(line.split('=', 1) for line in self.romclean(*args).splitlines())
+        files = [line.split('\t')[1] for line in plan.read_text().splitlines() if not line.startswith('#')]
+        return summary, sorted(files)
+
+    def test_each_rule(self):
+        cases = {
+            'exclude:clone': ['mslugb.zip'],
+            'exclude:vertical': ['1942.zip'],
+            'exclude:vector': ['asteroid.zip'],
+            'exclude:mechanical': ['pinball.zip'],
+            'exclude:chd': ['kinst', 'kinst.zip'],
+            # BIOS e dispositivo que um jogo da pasta usa ficam: so o pgm sai.
+            'exclude:bios': ['pgm.zip'],
+            'exclude:device': [],
+        }
+        for rule, gone in cases.items():
+            summary, files = self.scan(rule)
+            self.assertEqual(files, gone, rule)
+            self.assertEqual(summary['unknown'], '1', rule)
+            self.assertEqual(summary['sets'], '16', rule)
+
+    def test_parent_stays_for_a_clone_that_stays(self):
+        # Num romset merged o wbmlb esta dentro do wbml.zip: o pai que nao
+        # funciona fica porque o clone funciona.
+        summary, files = self.scan('exclude:notworking')
+        self.assertEqual(files, ['broken.zip', 'kpython2.zip'])
+        self.assertEqual(summary['needed'], '1')
+
+    def test_only_playstation_hardware(self):
+        # ZN (com a BIOS) e System 12; o PS2 (kpython2) nao.
+        summary, files = self.scan('only:psx')
+        kept = {f for f in self.FILES + ['kinst'] if f not in files}
+        self.assertEqual(kept, {'coh1000c.zip', 'sfex.zip', 'tekken3.zip', 'unknown.zip', 'readme.txt'})
+        self.assertEqual(summary['keep'], '3')
+        self.assertEqual(int(summary['bytes']), 10 * (len(files) - 1) + 100)
+
+    def test_mame_2010_xml(self):
+        (self.tmp / 'mame2010.xml').write_text(self.XML_0139)
+        roms = self.tmp / 'mame2010'
+        roms.mkdir()
+        for name in ('tekken3.zip', 'sfex.zip', 'coh1000c.zip', 'mslug.zip', 'neogeo.zip', 'harddriv.zip'):
+            (roms / name).write_bytes(b'x')
+        import lzma
+        with lzma.open(self.tmp / 'mame2010.xml.xz', 'wt') as f:
+            f.write(self.XML_0139)
+        for xml in ('mame2010.xml', 'mame2010.xml.xz'):
+            _, files = self.scan('only:psx', xml=self.tmp / xml, roms=roms)
+            self.assertEqual(files, ['harddriv.zip', 'mslug.zip', 'neogeo.zip'], xml)
+
+    def test_xml_from_stdin(self):
+        plan = self.tmp / 'plan.tsv'
+        out = self.romclean('scan', '--xml', '-', '--roms', str(self.roms), '--plan', str(plan),
+                            '--exclude', 'clone', stdin=self.XML)
+        self.assertIn('remove=1\n', out)
+
+    def test_move_and_delete(self):
+        self.scan('exclude:chd')
+        dest = self.tmp / 'mame-removed'
+        out = self.romclean('apply', str(self.tmp / 'plan.tsv'), '--move-to', str(dest))
+        self.assertIn('moved=2\n', out)
+        self.assertEqual(sorted(p.name for p in dest.iterdir()), ['kinst', 'kinst.zip'])
+        self.assertTrue((dest / 'kinst' / 'kinst.chd').exists())
+        self.assertFalse((self.roms / 'kinst.zip').exists())
+        self.assertTrue((self.roms / 'unknown.zip').exists())
+        # O plano de novo: o que ja saiu e pulado, nada quebra.
+        self.assertIn('skipped=2\n', self.romclean('apply', str(self.tmp / 'plan.tsv'), '--move-to', str(dest)))
+        self.scan('exclude:vertical')
+        self.assertIn('deleted=1\n', self.romclean('apply', str(self.tmp / 'plan.tsv'), '--delete'))
+        self.assertFalse((self.roms / '1942.zip').exists())
+
+    def test_apply_only_touches_the_folder(self):
+        # Um plano adulterado nao sai da pasta das ROMs.
+        (self.tmp / 'fora.zip').write_bytes(b'x')
+        plan = self.tmp / 'plan.tsv'
+        plan.write_text('# roms\t%s\nx\t../fora.zip\t1\tX\n' % self.roms)
+        self.assertIn('skipped=1\n', self.romclean('apply', str(plan), '--delete'))
+        self.assertTrue((self.tmp / 'fora.zip').exists())
+
+    def test_mame2010_xml_is_pinned_and_installed(self):
+        text = (ROOT / 'config/fliperos-romclean').read_text()
+        self.assertRegex(text, r"MAME2010_COMMIT = '[0-9a-f]{40}'")
+        self.assertRegex(text, r"MAME2010_SHA256 = '[0-9a-f]{64}'")
+        self.assertRegex(MKISO, r'(?m)^install_mame2010_xml$')
+        self.assertIn('fetch-mame2010 \\\n    "$CHROOT_DIR/usr/local/share/fliperos/mame2010.xml.xz"', MKISO)
+        self.assertIn('install -Dm755 "$src/config/fliperos-romclean" "$root/opt/fliperos/bin/fliperos-romclean"',
+                      (ROOT / 'fliperos-rootfs.sh').read_text())
+        self.assertIn('fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz',
+                      (ROOT / 'tools/cabinet-update.sh').read_text())
+
+
 class QuietLaunchTests(unittest.TestCase):
     """Sem texto na tela ao abrir emuladores; o modo debug mostra tudo."""
 

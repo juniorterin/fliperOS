@@ -269,15 +269,78 @@ ui_timed_confirm() {
   esac
 }
 
-# ui_pager TITULO ARQUIVO mostra o fim de um arquivo longo (log) com
-# rolagem. O conteudo vai como argumento: a entrada padrao do gum tem de
-# ser o teclado.
+# ui_pager TITULO ARQUIVO [inicio] mostra o fim de um arquivo longo (log)
+# com rolagem; com "inicio", o comeco (uma lista). O conteudo vai como
+# argumento (ate 128 KB): a entrada padrao do gum tem de ser o teclado.
 ui_pager() {
+  local content
+  if [[ ${3:-} == inicio ]]; then
+    content=$(head -n 1200 "$2" 2> /dev/null)
+  else
+    content=$(tail -n 400 "$2" 2> /dev/null)
+  fi
   ui_size
   ui_clear
   ui_topbar
-  gum pager --border rounded --height $((UI_ROWS - 1 - UI_TOPBAR_ROWS)) "$(tail -n 400 "$2" 2> /dev/null)" \
+  gum pager --border rounded --height $((UI_ROWS - 1 - UI_TOPBAR_ROWS)) "$content" \
     < /dev/tty > /dev/tty 2> /dev/tty
+}
+
+# ui_browse TITULO TEXTO PASTA dir|file [EXTENSAO...] navega pelas pastas a
+# partir de PASTA no menu de sempre (teclado e joystick) e imprime a pasta
+# escolhida ("Use this folder") ou, com file, o arquivo (so os de EXTENSAO,
+# ex. .xml). Enter abre uma pasta, ".." volta. Status 1 = Esc. Nao e o gum
+# file: ele ignora o --height e ocupa a tela inteira, sem a caixa do titulo.
+ui_browse() {
+  local title=$1 text=$2 dir=$3 mode=$4 from="" path name ext ok choice default i
+  local -a exts=("${@:5}") paths entries
+  dir=$(cd -- "$dir" 2> /dev/null && pwd) || dir=/
+  while true; do
+    paths=() entries=() default=""
+    [[ $mode == dir ]] && entries+=("use|Use this folder")
+    [[ $dir != / ]] && entries+=("up|..")
+    for path in "$dir"/*/; do
+      [[ -d $path ]] || continue
+      path=${path%/}
+      name=${path##*/}
+      [[ $name == "$from" ]] && default=${#paths[@]}
+      entries+=("${#paths[@]}|$name/")
+      paths+=("$path")
+    done
+    if [[ $mode == file ]]; then
+      for path in "$dir"/*; do
+        [[ -f $path ]] || continue
+        ok=$((${#exts[@]} == 0))
+        for ext in "${exts[@]}"; do
+          [[ ${path,,} == *"$ext" ]] && ok=1
+        done
+        ((ok)) || continue
+        entries+=("${#paths[@]}|${path##*/}")
+        paths+=("$path")
+      done
+    fi
+    choice=$(ui_menu "$title" "$text"$'\n'"$(ui_c "$C_CYAN" "$dir")" "$default" "${entries[@]}") || return 1
+    case $choice in
+      use)
+        printf '%s\n' "$dir"
+        return 0
+        ;;
+      up)
+        from=${dir##*/}
+        dir=${dir%/*}
+        [[ -n $dir ]] || dir=/
+        ;;
+      *)
+        i=$choice
+        if [[ -d ${paths[i]} ]]; then
+          from="" dir=${paths[i]}
+        else
+          printf '%s\n' "${paths[i]}"
+          return 0
+        fi
+        ;;
+    esac
+  done
 }
 
 # ui_flush_input descarta teclas apertadas enquanto nada era perguntado:

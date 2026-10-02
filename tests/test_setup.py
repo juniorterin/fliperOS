@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "debug"]
+        "status", "scraper", "romclean", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "debug"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -1424,6 +1424,66 @@ class ScraperTests(Base):
         self.assertEqual(lots[0], "lote:mvscu.zip pacman.zip sf2.zip ")
         self.assertEqual(lots[1], "lote:sf2ce.zip ")
         self.assertIn("-f emulationstation -g %s/scraped -o %s/scraped" % (self.env.dir, self.env.dir), lots[2])
+
+
+class RomCleanerTests(Base):
+    """lib/romclean.sh: o Setup > MAME ROM Cleaner (config/fliperos-romclean)."""
+
+    XML = ('<mame build="0.289"><machine name="mslug"><description>Metal Slug</description></machine>'
+           '<machine name="mslugb" cloneof="mslug" romof="mslug"><description>Metal Slug (bootleg)</description>'
+           '</machine></mame>')
+
+    def setUp(self):
+        super().setUp()
+        self.roms = self.env.dir / "roms" / "mame"
+        self.roms.mkdir(parents=True)
+        for name in ("mslug.zip", "mslugb.zip"):
+            (self.roms / name).write_bytes(b"x" * 1536)
+        xml = self.env.dir / "listxml.xml"
+        xml.write_text(self.XML)
+        self.env.stub("groovymame", 'case "$1" in -listxml) cat "%s" ;; '
+                                    '-version) echo "0.289 (GroovyMAME 0.289.222f)" ;; esac' % xml)
+        self.env.stub("fliperos-romclean", 'exec python3 %s "$@"' % (ROOT / "config/fliperos-romclean"))
+        self.vars = {"ROMCLEAN": str(self.env.bin / "fliperos-romclean"),
+                     "MAME2010_XML": str(self.env.dir / "mame2010.xml.xz")}
+
+    def test_scan_list_and_move(self):
+        out = self.env.out("""
+            plan=$(mktemp)
+            s=$(romclean_scan %s groovymame "$plan" exclude:clone)
+            echo "remove=$(romclean_value "$s" remove) bytes=$(romclean_value "$s" bytes)"
+            romclean_list "$plan"
+            r=$(romclean_apply "$plan" move "$(romclean_dest %s)")
+            romclean_value "$r" moved
+        """ % (self.roms, self.roms), self.vars)
+        lines = out.splitlines()
+        self.assertEqual(lines[0], "remove=1 bytes=1536")
+        self.assertEqual(lines[1], "mslugb           Metal Slug (bootleg)")
+        self.assertEqual(lines[2], "1")
+        self.assertTrue((self.env.dir / "roms" / "mame-removed" / "mslugb.zip").exists())
+        self.assertTrue((self.roms / "mslug.zip").exists())
+        self.assertIn("ROM cleaner: move 1 arquivos", (self.env.dir / "setup.log").read_text())
+
+    def test_default_xml_source(self):
+        # O MAME 2010 so numa pasta "2010" e com o XML instalado.
+        script = "romclean_default_source /r/retroarch/mame2010; romclean_default_source /r/mame"
+        self.assertEqual(self.env.out(script, self.vars).split(), ["groovymame", "groovymame"])
+        (self.env.dir / "mame2010.xml.xz").write_bytes(b"")
+        self.assertEqual(self.env.out(script, self.vars).split(), ["mame2010", "groovymame"])
+        self.assertEqual(self.env.out("romclean_source_label groovymame", self.vars), "GroovyMAME 0.289\n")
+
+    def test_human_bytes(self):
+        self.assertEqual(self.env.out("human_bytes 0; human_bytes 1536; human_bytes 3221225472").split("\n")[:3],
+                         ["0 B", "1.5 KB", "3.0 GB"])
+
+    def test_in_the_setup_menu(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn('"romcleaner|MAME ROM Cleaner"', menu)
+        self.assertIn("romcleaner) screen_rom_cleaner ;;", menu)
+        rules = self.env.out('printf "%s\\n" "${ROMCLEAN_RULES[@]%%|*}"').split()
+        engine = (ROOT / "config/fliperos-romclean").read_text()
+        for rule in rules:
+            self.assertIn("    '%s': lambda m:" % rule.split(":")[1], engine, rule)
 
 
 if __name__ == "__main__":

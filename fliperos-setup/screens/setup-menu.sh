@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Setup do sistema instalado (worker_setup_menu do gasetup): video, audio,
-# rede, frontend, latencia, scraper, quirks e atualizacao.
+# rede, frontend, latencia, scraper, ROM cleaner, quirks e atualizacao.
 
 screen_setup_menu() {
   local choice last=video
@@ -13,6 +13,7 @@ screen_setup_menu() {
       "frontend|Frontend" \
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
+      "romcleaner|MAME ROM Cleaner" \
       "quirks|Quirks (USB controller fixes)" \
       "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))" \
@@ -26,6 +27,7 @@ screen_setup_menu() {
       frontend) screen_frontend ;;
       latency) screen_latency ;;
       scraper) screen_scraper ;;
+      romcleaner) screen_rom_cleaner ;;
       quirks) screen_quirks ;;
       joysticks) screen_joysticks ;;
       debug) screen_debug ;;

@@ -225,6 +225,18 @@ if present usr/local/libexec/groovymame; then
   echo "GroovyMAME: release em /usr/local/libexec, atalho groovymame, plugins/fonte/bgfx/hash e mame.ini do GroovyArcade"
 fi
 
+# ── MAME ROM Cleaner: o programa e o XML do MAME 2010 ─────────
+unsquashfs -cat "$work/filesystem.squashfs" opt/fliperos/bin/fliperos-romclean > "$work/f" \
+  || fail "ausente: /opt/fliperos/bin/fliperos-romclean"
+cmp -s "$src/config/fliperos-romclean" "$work/f" || fail "fliperos-romclean difere de config/fliperos-romclean"
+unsquashfs -cat "$work/filesystem.squashfs" usr/local/share/fliperos/mame2010.xml.xz > "$work/f" \
+  || fail "ausente: /usr/local/share/fliperos/mame2010.xml.xz"
+got=$(python3 -c 'import hashlib, lzma, sys; print(hashlib.sha256(lzma.open(sys.argv[1]).read()).hexdigest())' \
+  "$work/f")
+[[ $got == "$(sed -n "s/^MAME2010_SHA256 = '\(.*\)'$/\1/p" "$src/config/fliperos-romclean")" ]] \
+  || fail "mame2010.xml.xz da imagem nao e o XML fixado"
+echo "ROM cleaner: fliperos-romclean e o XML do MAME 2010 (0.139)"
+
 # ── Terminal: zsh com Oh My Zsh e o tema Dracula ──────────────
 for path in usr/bin/zsh usr/local/share/oh-my-zsh/oh-my-zsh.sh \
   usr/local/share/oh-my-zsh/custom/themes/dracula.zsh-theme \

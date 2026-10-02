@@ -946,6 +946,18 @@ install_groovymame_chroot() {
   ok "GroovyMAME ${GROOVYMAME_TAG} em /usr/local/libexec/groovymame ($n jogos com a proporcao do CRT)"
 }
 
+# ── XML do MAME 2010 (ROM cleaner) ────────────────────────────
+# O Setup > MAME ROM Cleaner filtra um romset do MAME 2010 (0.139, o do core
+# mame2010) pelo XML dessa versao, que o MAME instalado nao gera. Commit e
+# sha256 fixados no config/fliperos-romclean; vai comprimido (43 MB -> 3 MB).
+install_mame2010_xml() {
+  step "XML do MAME 2010 (ROM cleaner)"
+  python3 "$(dirname "$(realpath "$0")")/config/fliperos-romclean" fetch-mame2010 \
+    "$CHROOT_DIR/usr/local/share/fliperos/mame2010.xml.xz" >> "$LOG_FILE" 2>&1 \
+    || err "XML do MAME 2010 nao baixou"
+  ok "XML do MAME 2010 em /usr/local/share/fliperos/mame2010.xml.xz"
+}
+
 # ── Compilar RetroArch em KMS/DRM, sem X11 ────────────────────
 # Flags validadas num container Ubuntu 24.04 descartavel antes de entrar
 # aqui: --enable-kms --enable-egl --disable-x11 --disable-wayland builda
@@ -1491,6 +1503,7 @@ build_switchres_chroot
 chroot "$CHROOT_DIR" update-initramfs -u -k all >> "$LOG_FILE" 2>&1 || err "update-initramfs falhou"
 build_skyscraper_chroot
 install_groovymame_chroot
+install_mame2010_xml
 build_retroarch_chroot
 build_flycast_chroot
 build_pcsx2_chroot
