@@ -656,6 +656,13 @@ class DesktopTerminalTests(unittest.TestCase):
             self.assertIn(part, pkgs, part)
         self.assertLess(update.index('apt-mark manual'), update.index('apt-get purge -y -q lxterminal xterm'))
 
+    def test_steam_does_not_bring_xterm_back(self):
+        # O steam-libs:i386 recomenda "xterm | x-terminal-emulator", e o
+        # Alacritty (amd64) nao vale para um pacote i386: o xterm voltou na
+        # ISO e virou o x-terminal-emulator.
+        steam = MKISO.split('install_steam_chroot() {')[1].split('\n}\n')[0]
+        self.assertIn('apt-get install -y steam-installer xterm-', steam)
+
     def test_dracula_palette_of_the_setup(self):
         import tomllib
         conf = tomllib.loads((ROOT / 'config/lxde/alacritty/alacritty.toml').read_text())

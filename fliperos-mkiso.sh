@@ -1272,8 +1272,10 @@ install_steam_chroot() {
   enable_i386_chroot
   # O pacote do noble so tem avisos no debconf (need-nvidia-i386, purge),
   # que o modo noninteractive pula; a licenca da Valve aparece no proprio
-  # cliente, na primeira abertura.
-  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y steam-installer' \
+  # cliente, na primeira abertura. O steam-libs:i386 recomenda "xterm |
+  # x-terminal-emulator", e o Alacritty (amd64) nao vale para um pacote i386:
+  # sem o "xterm-", o xterm voltava para a imagem (so o Alacritty fica).
+  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y steam-installer xterm-' \
     >> "$LOG_FILE" 2>&1 || err "Instalacao do Steam falhou"
   ok "Steam (o cliente baixa o resto na primeira abertura)"
 }

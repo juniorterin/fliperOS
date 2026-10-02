@@ -147,10 +147,11 @@ unsquashfs -cat "$work/filesystem.squashfs" home/fliperos/.config/openbox/lxde-r
 grep -q '<name>Dracula</name>' "$work/f" || fail "o Openbox do LXDE nao usa o tema Dracula"
 for file in "$src"/config/applications/*.desktop; do
   has "usr/local/share/applications/${file##*/}"
-  # Com o emulador na imagem, o icone tem de estar la tambem.
+  # Com o emulador na imagem, o icone tem de estar la tambem. Um nome sem
+  # caminho (preferences-desktop-display) e do tema de icones.
   exe=$(sed -n 's/^TryExec=//p' "$file")
   icon=$(sed -n 's/^Icon=//p' "$file")
-  if grep -q "squashfs-root$exe\$" "$work/files.txt"; then
+  if [[ $icon == /* ]] && grep -q "squashfs-root$exe\$" "$work/files.txt"; then
     has "${icon#/}"
   fi
 done
@@ -168,14 +169,14 @@ echo "modos: tabela por emulador e fliperos-x11-run --mode"
 present() { grep -q "squashfs-root/$1\$" "$work/files.txt"; }
 if present usr/local/bin/hypseus.bin; then
   has usr/local/bin/hypseus
-  has opt/fliperos/roms/hypseus/fonts
+  has home/fliperos/roms/hypseus/fonts
   grep -E 'home/fliperos/.hypseus ->' "$work/links.txt" | grep -q '/opt/fliperos/roms/hypseus' \
     || fail "/home/fliperos/.hypseus nao aponta para /opt/fliperos/roms/hypseus"
   echo "Hypseus Singe: binario, scripts e home no acervo"
 fi
 if present usr/local/lib/openbor/OpenBOR; then
   has usr/local/bin/openbor
-  has opt/fliperos/roms/openbor/Paks
+  has home/fliperos/roms/openbor/Paks
   echo "OpenBOR: wrapper e Paks no acervo"
 fi
 if present usr/local/bin/dolphin-emu; then
@@ -202,6 +203,20 @@ if grep -q 'squashfs-root/usr/local/bin/retroarch$' "$work/files.txt"; then
   grep -E ' 1000/1000 .* squashfs-root/opt/fliperos/retroarch/cores$' "$work/numeric.txt" > /dev/null \
     || fail "a pasta de cores do RetroArch nao e do usuario (o Core Downloader nao grava)"
   echo "RetroArch: 6 cores de fabrica, .info e pasta do usuario para o Core Downloader"
+fi
+
+# ── GroovyMAME: release, atalho e arquivos da tag ─────────────
+if present usr/local/libexec/groovymame; then
+  unsquashfs -cat "$work/filesystem.squashfs" usr/local/bin/groovymame > "$work/f" \
+    || fail "ausente: /usr/local/bin/groovymame (o atalho)"
+  cmp -s "$src/config/fliperos-groovymame" "$work/f" || fail "/usr/local/bin/groovymame difere de config/fliperos-groovymame"
+  for path in usr/local/share/groovymame/fonts/uismall.bdf usr/local/share/groovymame/plugins/hiscore/init.lua \
+    usr/local/share/groovymame/bgfx/chains/default.json usr/local/share/groovymame/hash/nes.xml; do
+    has "$path"
+  done
+  unsquashfs -cat "$work/filesystem.squashfs" etc/fliperos/mame/mame.ini > "$work/f"
+  cmp -s "$src/config/mame.ini" "$work/f" || fail "/etc/fliperos/mame/mame.ini difere de config/mame.ini"
+  echo "GroovyMAME: release em /usr/local/libexec, atalho groovymame, plugins/fonte/bgfx/hash e mame.ini do GroovyArcade"
 fi
 
 # ── Terminal: zsh com Oh My Zsh e o tema Dracula ──────────────
