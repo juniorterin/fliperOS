@@ -203,7 +203,8 @@ screen_frontend() {
 # ── Scraper ──────────────────────────────────────────────────────
 
 screen_scraper() {
-  local found=() entries=() line dir platform count choice targets=() source creds="" user pass videos=0 t
+  local found=() entries=() line key dir platform count choice targets=() source creds="" user pass videos=0 t
+  local failed=() format
   if ! have "$SKYSCRAPER"; then
     ui_msg "Scraper" "Skyscraper is not installed."
     return 0
@@ -211,13 +212,14 @@ screen_scraper() {
   mapfile -t found < <(scraper_detect)
   if ((${#found[@]} == 0)); then
     ui_msg "Scraper" "No ROMs were found in $ROMS_DIR." "" \
-      "Copy your ROMs to $ROMS_DIR/<system> (e.g. $ROMS_DIR/mame) and try again."
+      "Copy your ROMs to the folder of the emulator (e.g. $ROMS_DIR/mame," \
+      "or $ROMS_DIR/retroarch/<core> for RetroArch) and try again."
     return 0
   fi
   entries=("all|All systems (${#found[@]})")
   for line in "${found[@]}"; do
-    IFS='|' read -r dir platform count <<< "$line"
-    entries+=("$line|$(basename "$dir") - $count files ($platform)")
+    IFS='|' read -r key dir platform count <<< "$line"
+    entries+=("$line|$key - $count files ($platform)")
   done
   choice=$(ui_menu "Scraper" "Covers, screenshots, logos, videos and game information for the ROMs found." \
     all "${entries[@]}") || return 0
@@ -235,12 +237,19 @@ screen_scraper() {
     fi
   fi
   ui_yesno "Scraper" "Download videos too? They use much more disk space." no && videos=1
+  # Um sistema que falha nao para os outros; o resumo diz quais.
   for t in "${targets[@]}"; do
-    IFS='|' read -r dir platform count <<< "$t"
-    run_with_progress "Scraping $platform" "$(basename "$dir") ($count files)" \
-      scraper_run "$dir" "$platform" "$source" "$videos" "$creds" || return 0
+    IFS='|' read -r key dir platform count <<< "$t"
+    run_with_progress "Scraping $platform" "$key ($count files)" \
+      scraper_run "$key" "$dir" "$platform" "$source" "$videos" "$creds" || failed+=("$key")
   done
-  ui_msg "Scraper" "Done. The game lists were updated for $(launcher_label "$(launcher_current)")."
+  format=$(scraper_format_label "$(scraper_frontend_format)")
+  if ((${#failed[@]})); then
+    ui_msg "Scraper" "Game lists updated for $format, except: ${failed[*]}" "" \
+      "Details in $FLIPEROS_LOG."
+  else
+    ui_msg "Scraper" "Done. The game lists were updated for $format."
+  fi
 }
 
 # ── Modo debug ───────────────────────────────────────────────────

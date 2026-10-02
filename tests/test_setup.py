@@ -1237,5 +1237,71 @@ class StructureTests(unittest.TestCase):
             self.assertIn('source "$SETUP_DIR/%s"' % rel, entry, rel)
 
 
+class ScraperTests(Base):
+    """Setup > Scraper: o que o Skyscraper raspa e onde a lista vai parar."""
+
+    def scraper_env(self):
+        roms, info, attract = self.env.dir / "roms", self.env.dir / "info", self.env.dir / "attract"
+        for d in ("mame", "ps2", "dolphin", "retroarch/snes9x", "retroarch/fceumm", "retroarch/semnada"):
+            (roms / d).mkdir(parents=True)
+            (roms / d / "_info.txt").write_text("o que vai nesta pasta\n")
+        (roms / "mame" / "sf2.zip").write_text("rom")
+        (roms / "mame" / "chds").mkdir()
+        (roms / "mame" / "chds" / "kinst.chd").write_text("chd")
+        (roms / "retroarch" / "snes9x" / "Super Mario World (USA).sfc").write_text("rom")
+        (roms / "retroarch" / "semnada" / "jogo.bin").write_text("rom")
+        info.mkdir()
+        (info / "snes9x_libretro.info").write_text(
+            'display_name = "Nintendo - SNES / SFC (Snes9x - Current)"\n'
+            'supported_extensions = "smc|sfc|swc"\ncorename = "Snes9x"\n'
+            'systemname = "Super Nintendo Entertainment System"\nsystemid = "super_nes"\n')
+        (info / "semnada_libretro.info").write_text('systemid = "tamagotchi"\n')
+        return {"ROMS_DIR": str(roms), "RA_INFO_DIR": str(info), "ATTRACT_DIR": str(attract),
+                "RA_CORES_DIR": "/opt/fliperos/retroarch/cores", "FLIPEROS_USER": "ninguem"}, roms, attract
+
+    def test_detect_ignores_info_txt_and_finds_retroarch_cores(self):
+        # O _info.txt de toda pasta contava como jogo: as vazias entravam e o
+        # "All systems" parava na primeira.
+        env, roms, _ = self.scraper_env()
+        found = self.env.out("scraper_detect", env).splitlines()
+        self.assertEqual(found, ["mame|%s/mame|arcade|2" % roms,
+                                 "retroarch/snes9x|%s/retroarch/snes9x|snes|1" % roms])
+
+    def test_attract_mode_gets_emulator_and_display_once(self):
+        env, roms, attract = self.scraper_env()
+        for _ in range(2):
+            name = self.env.out("scraper_attract_prepare retroarch/snes9x %s/retroarch/snes9x snes" % roms,
+                                env).strip()
+        self.assertEqual(name, "Super Nintendo Entertainment System (Snes9x)")
+        cfg = (attract / "emulators" / (name + ".cfg")).read_text()
+        self.assertRegex(cfg, r'(?m)^args +retroarch -L /opt/fliperos/retroarch/cores/snes9x_libretro\.so '
+                              r'"\[romfilename\]"$')
+        self.assertRegex(cfg, r'(?m)^romext +\.smc;\.sfc;\.swc$')
+        self.assertIn("artwork    snap            %s/scraped/retroarch-snes9x/snap;" % attract, cfg)
+        self.assertTrue((attract / "romlists").is_dir())
+        acfg = (attract / "attract.cfg").read_text()
+        self.assertEqual(acfg.count("display\t"), 1)
+        self.assertIn("\tromlist              %s\n" % name, acfg)
+        self.assertEqual(self.env.out("scraper_attract_prepare mame %s/mame arcade" % roms, env).strip(), "MAME")
+        self.assertRegex((attract / "emulators" / "MAME.cfg").read_text(), r"(?m)^args +groovymame \[name\]$")
+        self.assertNotEqual(self.env.run("scraper_attract_prepare outra /x pc", env).returncode, 0)
+
+    def test_list_goes_where_the_frontend_reads(self):
+        env, _, _ = self.scraper_env()
+        (self.env.etc / "sessions.conf").write_text("attractplus|kms|attractplus|fliperos-attractplus|AM+\n"
+                                                    "pegasus|kms|pegasus-fe|fliperos-pegasus|Pegasus\n")
+        for session, expected in (("attractplus", "attractmode"), ("pegasus", "pegasus"),
+                                  ("setup", "emulationstation")):
+            (self.env.etc / "session").write_text(session + "\n")
+            self.assertEqual(self.env.out("scraper_frontend_format", env).strip(), expected, session)
+        # Sem frontend, o Attract-Mode Plus se estiver instalado.
+        (self.env.bin / "attractplus").write_text("#!/bin/sh\n")
+        (self.env.bin / "attractplus").chmod(0o755)
+        self.assertEqual(self.env.out("scraper_frontend_format", env).strip(), "attractmode")
+        # Fora do Attract-Mode, lista e arte na pasta das ROMs, nao em ~/RetroPie.
+        body = (SETUP / "lib" / "scraper.sh").read_text()
+        self.assertIn('gen=(-f "$format" -g "$dir" -o "$dir/media")', body)
+
+
 if __name__ == "__main__":
     unittest.main()
