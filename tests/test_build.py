@@ -1847,6 +1847,22 @@ class EmulatorModeTests(unittest.TestCase):
         client = (ROOT / 'config/fliperos-x11-client').read_text()
         self.assertIn('xsetroot -cursor_name left_ptr', client)
 
+    def test_window_manager_fits_the_window_to_each_mode(self):
+        # Como o galauncher.xinitrc do GroovyArcade: sem gerenciador de
+        # janelas, a janela do GroovyMAME ficava com o tamanho do modo em que
+        # abriu (320x240 numa tela de 640x480, visto no gabinete).
+        client = (ROOT / 'config/fliperos-x11-client').read_text()
+        wm = client.index('openbox --config-file "${FLIPEROS_OPENBOX_RC:-/etc/fliperos/openbox-x11-run.xml}" &')
+        self.assertLess(client.index('_NET_SUPPORTING_WM_CHECK'), client.index('exec /usr/local/bin/switchres'))
+        self.assertLess(wm, client.index('exec /usr/local/bin/switchres'))
+        import xml.etree.ElementTree as ET
+        rc = ET.parse(ROOT / 'config/openbox-x11-run.xml').getroot()
+        ns = {'o': 'http://openbox.org/3.4/rc'}
+        self.assertEqual(rc.find('o:applications/o:application/o:decor', ns).text, 'no')
+        self.assertIsNone(rc.find('o:keyboard/o:keybind', ns))
+        self.assertIn('install -Dm644 "$src/config/openbox-x11-run.xml" "$root/etc/fliperos/openbox-x11-run.xml"',
+                      ROOTFS)
+
     def test_pcsx2_ini_is_adjusted_after_first_run(self):
         with tempfile.TemporaryDirectory() as tmp:
             ini = Path(tmp) / 'PCSX2.ini'

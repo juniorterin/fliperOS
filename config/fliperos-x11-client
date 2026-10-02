@@ -9,6 +9,19 @@ connector=$(sed -n 's/^connector=//p' /etc/fliperos/fliperos.conf 2> /dev/null)
 if [[ ${FLIPEROS_X11_CURSOR:-0} == 1 ]]; then
   xsetroot -cursor_name left_ptr 2> /dev/null || true
 fi
+# Gerenciador de janelas, como o galauncher.xinitrc do GroovyArcade: quando o
+# programa troca de modo pelo XRandR (o Switchres do GroovyMAME, a cada
+# jogo), o openbox encaixa a janela de tela cheia na tela nova. Sem ele a
+# janela ficava no tamanho do modo em que abriu: no gabinete, a interface do
+# GroovyMAME num quarto da tela de 640x480 e o jogo fora do lugar. O
+# programa so abre com ele pronto (_NET_SUPPORTING_WM_CHECK na raiz).
+if command -v openbox > /dev/null; then
+  openbox --config-file "${FLIPEROS_OPENBOX_RC:-/etc/fliperos/openbox-x11-run.xml}" &
+  for _ in $(seq 1 50); do
+    xprop -root _NET_SUPPORTING_WM_CHECK 2> /dev/null | grep -q 'window id' && break
+    sleep 0.1
+  done
+fi
 args=()
 [[ -n $connector ]] && args+=(--display "$connector")
 emulator_command=$(printf '%q ' "$@")
