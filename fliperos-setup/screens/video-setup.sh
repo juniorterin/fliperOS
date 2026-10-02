@@ -135,6 +135,21 @@ screen_geometry() {
   ui_msg "Geometry" "Geometry saved (monitor set to custom):" "" "$range"
 }
 
+# screen_mame_aspect liga ou desliga a proporcao 4:3 dos jogos de menos de
+# 240 linhas no GroovyMAME (config/fliperos-groovymame). Ligada por padrao.
+screen_mame_aspect() {
+  if ui_choice2 "GroovyMAME 4:3" "Keep 4:3" "Full width" \
+    "On a 15 kHz CRT the picture is adjusted for 240 lines to fill the height." \
+    "A game with fewer lines (224: CPS2, Neo Geo) is shorter with the same width" \
+    "and looks stretched sideways." "" \
+    "Keep 4:3: those games get the right width, with thin black bands on the sides." \
+    "Full width: they fill the width and look stretched."; then
+    conf_set mame_crt_aspect yes
+  else
+    conf_set mame_crt_aspect no
+  fi
+}
+
 # screen_geometry_reset volta a geometria ao padrao do monitor escolhido.
 screen_geometry_reset() {
   local monitor
@@ -159,13 +174,15 @@ screen_video_setup() {
       "Monitor|$(monitor_label "$(conf_get monitor 2> /dev/null || echo "not set")")" \
       "Orientation|$(orientation_label "$(conf_get orientation 2> /dev/null || echo horizontal)")" \
       "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "from boot menu")")" \
-      "Geometry|$(conf_get geometry > /dev/null 2>&1 && echo "adjusted" || echo "monitor default")")
+      "Geometry|$(conf_get geometry > /dev/null 2>&1 && echo "adjusted" || echo "monitor default")" \
+      "GroovyMAME|$([[ $(conf_get mame_crt_aspect 2> /dev/null) == no ]] && echo "full width" || echo "4:3")")
     choice=$(ui_menu "Video Setup" "$summary" "$last" \
       "monitor|Monitor Type" \
       "orientation|Monitor Orientation" \
       "resolution|Resolution" \
       "geometry|Geometry" \
       "geometry_reset|Reset Geometry" \
+      "mame_aspect|GroovyMAME 4:3" \
       "return|Return") || choice="return"
     last=$choice
     case $choice in
@@ -174,6 +191,7 @@ screen_video_setup() {
       resolution) screen_resolution ;;
       geometry) screen_geometry ;;
       geometry_reset) screen_geometry_reset ;;
+      mame_aspect) screen_mame_aspect ;;
       return) break ;;
     esac
   done

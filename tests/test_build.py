@@ -809,22 +809,72 @@ class RomFoldersTests(unittest.TestCase):
 class GroovyMameTests(unittest.TestCase):
     """O release oficial do GroovyMAME e o atalho config/fliperos-groovymame."""
 
-    def run_wrapper(self, *args):
+    FAKE = r'''#!/bin/bash
+# Binario falso: -listxml JOGO imprime a tela do jogo; o resto, os argumentos.
+if [[ " $* " == *" -listxml "* ]]; then
+  game=${@: -1}
+  case $game in
+    mvsc) d='type="raster" rotate="0" width="384" height="224"' ;;
+    pacman) d='type="raster" rotate="90" width="288" height="224"' ;;
+    full) d='type="raster" rotate="0" width="320" height="240"' ;;
+    tall) d='type="raster" rotate="0" width="320" height="256"' ;;
+    hires) d='type="raster" rotate="0" width="640" height="448"' ;;
+    asteroid) d='type="vector" rotate="0" width="400" height="300"' ;;
+    *) exit 1 ;;
+  esac
+  printf '<?xml version="1.0"?>\n<!DOCTYPE mame [\n<!ATTLIST display rotate CDATA>\n]>\n<mame>\n'
+  printf '\t<machine name="%s" sourcefile="x.cpp">\n\t\t<display tag="screen" %s refresh="60" />\n' "$game" "$d"
+  printf '\t</machine>\n\t<machine name="dev" isdevice="yes">\n\t\t<display tag="x" type="raster" rotate="0" height="100" />\n'
+  printf '\t</machine>\n</mame>\n'
+  exit 0
+fi
+printf '%s\n' "$@"
+'''
+
+    def run_wrapper(self, *args, conf='frequency=15k\n', ini=None):
         with tempfile.TemporaryDirectory() as tmp:
-            fake = Path(tmp, 'groovymame')
-            fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            tmp = Path(tmp)
+            fake = tmp / 'groovymame'
+            fake.write_text(self.FAKE)
             fake.chmod(0o755)
-            env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake), FLIPEROS_MAME_INI_DIR='/etc/fliperos/mame')
+            (tmp / 'ini').mkdir()
+            if ini:
+                (tmp / 'ini' / ini[0]).write_text(ini[1])
+            (tmp / 'fliperos.conf').write_text(conf)
+            env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake), FLIPEROS_MAME_INI_DIR=str(tmp / 'ini'),
+                       FLIPEROS_CONF=str(tmp / 'fliperos.conf'))
             out = subprocess.run(['bash', str(ROOT / 'config/fliperos-groovymame'), *args], env=env,
                                  capture_output=True, text=True, timeout=60, check=True).stdout
-            return out.split('\n')[:-1]
+            return out.split('\n')[:-1], str(tmp / 'ini')
 
     def test_wrapper_passes_the_system_ini(self):
         # O padrao do release (".;ini") depende da pasta de onde se abre.
-        self.assertEqual(self.run_wrapper('mvsc'), ['-inipath', '/etc/fliperos/mame', 'mvsc'])
-        self.assertEqual(self.run_wrapper('-showconfig'), ['-inipath', '/etc/fliperos/mame', '-showconfig'])
-        self.assertEqual(self.run_wrapper('-inipath', '/x', 'mvsc'), ['-inipath', '/x', 'mvsc'])
+        args, ini = self.run_wrapper('-showconfig')
+        self.assertEqual(args, ['-inipath', ini, '-showconfig'])
+        self.assertEqual(self.run_wrapper('-inipath', '/x', 'full')[0], ['-inipath', '/x', 'full'])
         self.assertIn('/usr/local/libexec/groovymame', (ROOT / 'config/fliperos-groovymame').read_text())
+
+    def test_4_3_for_every_game_with_fewer_lines(self):
+        # 224 linhas: a tela "mais larga" na mesma proporcao (320:224 = 10:7)
+        # e o 4:3 do jogo mantido: 411x224 com o jogo nos 384 pontos.
+        args, ini = self.run_wrapper('mvsc')
+        self.assertEqual(args, ['-inipath', ini, 'mvsc', '-aspect', '320:224', '-keepaspect'])
+        # O valor de uma opcao antes do jogo, e um caminho de zip.
+        args, _ = self.run_wrapper('-rompath', 'roms', '/home/fliperos/roms/mame/mvsc.zip')
+        self.assertEqual(args[-3:], ['-aspect', '320:224', '-keepaspect'])
+        # Entrelacado: cada campo tem a metade das linhas.
+        self.assertEqual(self.run_wrapper('hires')[0][-3:], ['-aspect', '320:224', '-keepaspect'])
+
+    def test_games_left_alone(self):
+        for game in ('pacman', 'full', 'tall', 'asteroid', 'naoexiste'):
+            args, ini = self.run_wrapper(game)
+            self.assertEqual(args, ['-inipath', ini, game], game)
+        args, ini = self.run_wrapper('mvsc', '-aspect', '4:3')
+        self.assertEqual(args, ['-inipath', ini, 'mvsc', '-aspect', '4:3'])
+        args, ini = self.run_wrapper('mvsc', ini=('mvsc.ini', 'keepaspect 0\n'))
+        self.assertEqual(args, ['-inipath', ini, 'mvsc'])
+        for conf in ('frequency=15k\nmame_crt_aspect=no\n', 'frequency=31k\n', 'frequency=15k\norientation=vertical\n'):
+            self.assertEqual(self.run_wrapper('mvsc', conf=conf)[0][-1], 'mvsc', conf)
 
     def test_release_is_pinned_and_installed_behind_the_wrapper(self):
         body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]
