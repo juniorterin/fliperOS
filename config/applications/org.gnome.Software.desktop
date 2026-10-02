@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=App Store
+GenericName=GNOME Software
+Comment=Install apps and games: Ubuntu packages and Flatpak (Flathub)
+Exec=gnome-software %U
+TryExec=gnome-software
+Icon=org.gnome.Software
+Terminal=false
+StartupNotify=true
+Categories=System;PackageManager;
+MimeType=x-scheme-handler/appstream;

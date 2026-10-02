@@ -28,8 +28,9 @@ boot_driver_params() {
 }
 
 # boot_compose LINHA aplica a uma linha do kernel o que o setup decidiu:
-# modo de latencia, quirks do usbhid, parametros de video do teste de saidas
-# (se houve teste), console na placa certa (fbcon=map) e orientacao.
+# modo de latencia, quirks do usbhid, modo debug (boot calado ou nao),
+# parametros de video do teste de saidas (se houve teste), console na placa
+# certa (fbcon=map) e orientacao.
 boot_compose() {
   local line=$1 conn video orientation fb word out=()
   conn=$(conf_get connector 2> /dev/null) || conn=""
@@ -42,6 +43,7 @@ boot_compose() {
   done
   line=$(latency_cmdline "${out[*]}")
   line=$(quirks_cmdline "$line")
+  line=$(debug_cmdline "$line")
   if [[ -n $conn ]]; then
     line=$(words "$(cmdline_without_video "$line") $video")
   fi
@@ -86,6 +88,19 @@ boot_write_cmdline() {
     /^FLIPEROS_CMDLINE=/ { print "FLIPEROS_CMDLINE=\"" l "\""; found = 1; next }
     { print }
     END { if (!found) print "FLIPEROS_CMDLINE=\"" l "\"" }' "$file" > "$tmp" &&
+    chmod 644 "$tmp" && mv -f "$tmp" "$file"
+}
+
+# boot_write_var CHAVE VALOR [ARQUIVO] troca outra variavel do
+# /etc/default/fliperos-boot (FLIPEROS_QUIET, FLIPEROS_TIMEOUT).
+boot_write_var() {
+  local key=$1 value=$2 file=${3:-$BOOT_DEFAULTS} tmp
+  [[ -f $file ]] || return 0
+  tmp=$(mktemp "$file.XXXXXX") || return 1
+  awk -v k="$key" -v v="$value" '
+    $0 ~ "^" k "=" { print k "=\"" v "\""; found = 1; next }
+    { print }
+    END { if (!found) print k "=\"" v "\"" }' "$file" > "$tmp" &&
     chmod 644 "$tmp" && mv -f "$tmp" "$file"
 }
 

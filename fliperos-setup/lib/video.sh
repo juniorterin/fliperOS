@@ -242,6 +242,24 @@ VIDEO_CONF_KEYS="gpu driver card connector detection forced kernel_video boot_re
   monitor frequency geometry custom_width custom_height custom_refresh"
 VIDEO_CONF_KEEP="orientation"
 
+# video_retroarch_super [ARQUIVO] grava a largura dos modos do CRT SwitchRes
+# do RetroArch: nativa (0, como no GroovyArcade) quando a placa gera
+# dotclock baixo — o "s" no comeco do resultado do teste de saidas —, e a
+# super resolucao 2560 so nas que nao geram (Intel, NVIDIA). Em 2560 o
+# RetroArch desenha as notificacoes nessa largura e no tubo elas saem
+# espremidas (o que aconteceu no gabinete, com uma R7 240).
+video_retroarch_super() {
+  local file=${1:-$RETROARCH_CFG} flags card width=2560
+  flags=$(conf_get detection 2> /dev/null) || flags=""
+  card=$(conf_get card 2> /dev/null) || card=""
+  if [[ $flags == s* ]]; then
+    width=0
+  elif [[ -z $flags && -n $card ]] && drm_card_low_dotclock "$card" 2> /dev/null; then
+    width=0
+  fi
+  rcfg_set "$file" crt_switch_resolution_super "$width"
+}
+
 # video_save_result CONECTOR FLAGS MONITOR grava o resultado validado do
 # teste de saidas para o instalador e para o sistema instalado.
 video_save_result() {
@@ -270,6 +288,7 @@ video_save_result() {
   if [[ $flags == *a ]]; then
     ini_set "$SWITCHRES_INI" interlace_force_even 1
   fi
+  video_retroarch_super
   log_info "resultado: $name flags=$flags monitor=$monitor params=$params"
 }
 

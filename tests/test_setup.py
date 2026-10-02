@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "update", "hardware", "latency", "quirks", "padkeys", "lpt"]
+        "status", "scraper", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "debug"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -511,7 +511,9 @@ class BootTests(Base):
     def test_secondary_card_maps_the_console(self):
         (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nkernel_video=video=VGA-1:640x480iSe\nfb_map=1\n")
         out = self.env.out("boot_compose 'quiet fbcon=map:0 video=640x480iS'").strip()
-        self.assertEqual(out, "quiet " + LATENCY_BASE + " video=VGA-1:640x480iSe fbcon=map:1")
+        # Fora do modo debug o boot calado sempre volta (lib/debug.sh).
+        self.assertEqual(out, "quiet splash " + BOOT_SILENT + " " + LATENCY_BASE
+                         + " video=VGA-1:640x480iSe fbcon=map:1")
 
     def test_write_cmdline_keeps_the_rest(self):
         f = self.env.etc / "fliperos-boot"
@@ -877,6 +879,53 @@ class QuirksTests(Base):
                          ["0x16c0:0x05e1  Van Ooijen Technische Informatica Xin-Mo"])
 
 
+class DebugModeTests(Base):
+    """Setup > Debug mode: boot e programas com ou sem texto na tela."""
+
+    def test_boot_line_with_and_without_debug(self):
+        line = "quiet splash %s consoleblank=0 video=VGA-1:640x240Se" % BOOT_SILENT
+        self.assertEqual(self.env.out("debug_cmdline '%s'" % line).strip(), line)
+        (self.env.etc / "debug").write_text("")
+        self.assertEqual(self.env.out("debug_cmdline '%s'" % line).strip(), "consoleblank=0 video=VGA-1:640x240Se")
+        # Desligar devolve o boot calado, na frente.
+        (self.env.etc / "debug").unlink()
+        self.assertEqual(self.env.out("debug_cmdline 'consoleblank=0'").strip(),
+                         "quiet splash %s consoleblank=0" % BOOT_SILENT)
+
+    def test_set_writes_the_flag_and_the_limine_quiet(self):
+        boot = self.env.etc / "fliperos-boot"
+        boot.write_text('FLIPEROS_CMDLINE="quiet"\nFLIPEROS_TIMEOUT="3"\n')
+        self.env.out("debug_set on")
+        self.assertTrue((self.env.etc / "debug").exists())
+        self.assertIn('FLIPEROS_QUIET="no"\n', boot.read_text())
+        self.assertIn("debug=1\n", (self.env.etc / "fliperos.conf").read_text())
+        self.env.out("debug_set off")
+        self.assertFalse((self.env.etc / "debug").exists())
+        self.assertIn('FLIPEROS_QUIET="yes"\n', boot.read_text())
+        self.assertIn('FLIPEROS_TIMEOUT="3"\n', boot.read_text())
+
+
+class RetroArchSuperTests(Base):
+    """crt_switch_resolution_super: nativo (0) em placa com dotclock baixo; no
+    gabinete (R7 240) as notificacoes saiam espremidas em 2560."""
+
+    def test_native_when_the_card_does_low_dotclocks(self):
+        cfg = self.env.etc / "retroarch.cfg"
+        shutil.copy(ROOT / "config/retroarch.cfg", cfg)
+        conf = self.env.etc / "fliperos.conf"
+        for detection, width in (("se", "0"), ("sr", "0"), ("sdo", "0"), ("e", "2560"), ("r", "2560")):
+            conf.write_text("detection=%s\n" % detection)
+            self.env.out("video_retroarch_super")
+            self.assertIn('crt_switch_resolution_super = "%s"\n' % width, cfg.read_text(), detection)
+
+    def test_saved_with_the_output_test_result(self):
+        cfg = self.env.etc / "retroarch.cfg"
+        shutil.copy(ROOT / "config/retroarch.cfg", cfg)
+        self.env.connector("card0-VGA-1", "disconnected")
+        self.env.out("video_save_result card0-VGA-1 se generic_15")
+        self.assertIn('crt_switch_resolution_super = "0"\n', cfg.read_text())
+
+
 class LptTests(Base):
     """Joysticks na porta paralela: db9, gamecon e turbografx do kernel."""
 
@@ -1079,7 +1128,7 @@ class LatencyTests(Base):
         self.assertTrue(low.endswith("preempt=full"), low)
         conf.write_text("latency=standard\n")
         standard = self.env.out("boot_compose '%s'" % low).strip()
-        self.assertEqual(standard, "quiet splash " + LATENCY_BASE)
+        self.assertEqual(standard, "quiet splash " + BOOT_SILENT + " " + LATENCY_BASE)
         # Sem modo gravado vale o padrao.
         conf.write_text("")
         self.assertEqual(self.env.out("latency_mode").strip(), "standard")

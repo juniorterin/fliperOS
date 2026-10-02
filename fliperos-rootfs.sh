@@ -37,6 +37,10 @@ for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-clie
   fliperos-tty1 fliperos-ini-set fliperos-resolution; do
   install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done
+# Pastas do acervo em ~/roms (uma por emulador e por core do RetroArch).
+install -Dm755 "$src/config/fliperos-roms" "$root/opt/fliperos/bin/fliperos-roms"
+# Samba: \\fliperos\FliperOS (/opt/fliperos) e \\fliperos\roms.
+install -Dm644 "$src/config/smb.conf" "$root/etc/samba/smb.conf"
 # fliperos-menu: do shell de volta ao menu (o laco do fliperos-tty1).
 install -Dm755 "$src/config/fliperos-menu" "$root/usr/local/bin/fliperos-menu"
 # Controle como teclado nos menus do setup (o servico so age com o menu na
@@ -69,6 +73,16 @@ for file in "$src"/config/icons/*.svg; do
   install -Dm644 "$file" "$root/usr/local/share/pixmaps/${file##*/}"
 done
 
+# App Store (GNOME Software + Flathub): sem atualizacao sozinha nem tela de
+# boas-vindas. O org.gnome.Software.desktop de config/applications, com o
+# mesmo ID do pacote, vem antes dele (/usr/local/share) e a chama de "App
+# Store" no menu; o painel tem um botao para ela.
+install -Dm644 "$src/config/fliperos-software.gschema.override" \
+  "$root/usr/share/glib-2.0/schemas/90_fliperos-software.gschema.override"
+if [[ -x "$root/usr/bin/glib-compile-schemas" ]] && [[ -d "$root/proc/1" || -n ${FLIPEROS_ROOTFS_CHROOT:-} ]]; then
+  chroot "$root" glib-compile-schemas /usr/share/glib-2.0/schemas || true
+fi
+
 # Xorg sem descanso de tela ate o fliperos-setup gerar a configuracao do
 # monitor (ele reescreve este arquivo).
 mkdir -p "$root/etc/X11/xorg.conf.d"
@@ -84,6 +98,8 @@ EOF
 
 # ── Perifericos (light gun, volantes) ─────────────────────────────
 install -Dm755 "$src/config/fliperos-guncon2-calibrate" "$root/usr/local/bin/fliperos-guncon2-calibrate"
+# Calibrador do Setup > Joysticks (GunCon 2, volante, pedais, analogico).
+install -Dm755 "$src/config/fliperos-calibrate" "$root/opt/fliperos/bin/fliperos-calibrate"
 install -Dm644 "$src/config/99-fliperos-input.rules" "$root/etc/udev/rules.d/99-fliperos-input.rules"
 if [[ ! -f "$root/etc/fliperos/guncon2.conf" ]]; then
   cat > "$root/etc/fliperos/guncon2.conf" << 'EOF'
@@ -94,6 +110,15 @@ X_MAX=720
 Y_MIN=20
 Y_MAX=240
 EOF
+fi
+
+# Mapeamentos de controle do SDL2 (AntiMicroX, emuladores SDL): sem eles o
+# SDL esconde os botoes que nao tem par num controle moderno (o C e o Z do
+# V-USB Mame Panel 32). Todo login le o /etc/environment; o fliperos-lxde e
+# os lancadores tambem exportam, para valer sem novo login.
+install -Dm644 "$src/config/gamecontrollerdb.txt" "$root/etc/fliperos/gamecontrollerdb.txt"
+if ! grep -q '^SDL_GAMECONTROLLERCONFIG_FILE=' "$root/etc/environment" 2> /dev/null; then
+  echo 'SDL_GAMECONTROLLERCONFIG_FILE=/etc/fliperos/gamecontrollerdb.txt' >> "$root/etc/environment"
 fi
 
 # ── Teclas de volume ──────────────────────────────────────────────
@@ -179,6 +204,41 @@ if [[ -z "${DISPLAY:-}" && "$(tty)" == /dev/tty1 ]]; then
 fi
 EOF
   install -m644 "$src/config/zshrc" "$home/.zshrc"
+  # Acervo em ~/roms; /opt/fliperos/roms vira um link para la, e os caminhos
+  # antigos (mame.ini, frontends, Hypseus, OpenBOR) continuam valendo. Uma
+  # instalacao com ROMs em /opt/fliperos/roms as leva junto: so renomeia
+  # (mesmo disco), sem sobrescrever nada; se sobrar algo, fica onde esta.
+  roms_merge() {
+    local from=$1 to=$2 item
+    mkdir -p "$to"
+    for item in "$from"/* "$from"/.[!.]*; do
+      [[ -e $item || -L $item ]] || continue
+      if [[ ! -e $to/${item##*/} && ! -L $to/${item##*/} ]]; then
+        mv "$item" "$to/"
+      elif [[ -d $item && ! -L $item && -d $to/${item##*/} ]]; then
+        roms_merge "$item" "$to/${item##*/}"
+      fi
+    done
+    rmdir "$from" 2> /dev/null || true
+  }
+  old_roms="$root/opt/fliperos/roms"
+  mkdir -p "$home/roms"
+  if [[ -d $old_roms && ! -L $old_roms ]]; then
+    roms_merge "$old_roms" "$home/roms"
+  fi
+  if [[ ! -e $old_roms && ! -L $old_roms ]]; then
+    mkdir -p "$(dirname "$old_roms")"
+    ln -s /home/fliperos/roms "$old_roms"
+  elif [[ ! -L $old_roms ]]; then
+    echo "aviso: $old_roms tem arquivos que tambem existem em ~/roms; nada foi apagado" >&2
+  fi
+  chown 1000:1000 "$home/roms" 2> /dev/null || true
+  # Flycast: o jogador 2 (porta B) com controle, que o padrao deixa sem, e as
+  # ROMs em ~/roms/dreamcast. So na primeira vez: depois o arquivo e dele.
+  if [[ ! -f $home/.config/flycast/emu.cfg ]]; then
+    install -Dm644 "$src/config/flycast-emu.cfg" "$home/.config/flycast/emu.cfg"
+    chown -R 1000:1000 "$home/.config/flycast" 2> /dev/null || true
+  fi
   # Sem MOTD nem "Last login" entre o Plymouth e o setup/frontend.
   : > "$home/.hushlogin"
   # LXDE como o do GroovyArcade (ver config/lxde).

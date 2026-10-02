@@ -38,6 +38,7 @@ def load_script(name, filename):
 video = load('video', 'fliperos-video-check.py')
 limine_update = load('limine_update', 'fliperos-limine-update.py')
 padkeys = load_script('padkeys', 'config/fliperos-padkeys')
+calibrate = load_script('calibrate', 'config/fliperos-calibrate')
 MKISO = (ROOT / 'fliperos-mkiso.sh').read_text()
 ROOTFS = (ROOT / 'fliperos-rootfs.sh').read_text()
 
@@ -316,7 +317,7 @@ class ImageTests(unittest.TestCase):
     """O que o fliperos-rootfs.sh e o fliperos-mkiso.sh poem na imagem."""
 
     def test_groovyarcade_desktop_tools(self):
-        for pkg in ('lxde', 'xterm', 'htop', 'evtest', 'joy2key', 'qjoypad', 'hwinfo', 'read-edid'):
+        for pkg in ('lxde-core', 'htop', 'evtest', 'joy2key', 'qjoypad', 'hwinfo', 'read-edid'):
             self.assertRegex(MKISO, r'\b%s\b' % re.escape(pkg), pkg)
         self.assertIn('antimicrox', MKISO)
         self.assertIn('/tmp/gum.deb /tmp/antimicrox.deb', MKISO)
@@ -553,6 +554,14 @@ class RootfsRunTests(unittest.TestCase):
                      'opt/fliperos/bin/fliperos-resolution', 'opt/fliperos/bin/fliperos-tty1'):
             self.assertTrue(os.access(self.root / path, os.X_OK), path)
         self.assertTrue((self.root / 'usr/local/share/applications/fliperos-resolution.desktop').is_file())
+        self.assertTrue((self.root / 'usr/local/share/applications/org.gnome.Software.desktop').is_file())
+        self.assertTrue((self.root / 'usr/share/glib-2.0/schemas/90_fliperos-software.gschema.override').is_file())
+        self.assertTrue((self.root / 'home/fliperos/.config/alacritty/alacritty.toml').is_file())
+        for path in ('opt/fliperos/bin/fliperos-calibrate', 'opt/fliperos/bin/fliperos-roms'):
+            self.assertTrue(os.access(self.root / path, os.X_OK), path)
+        self.assertEqual(os.readlink(self.root / 'opt/fliperos/roms'), '/home/fliperos/roms')
+        self.assertTrue((self.root / 'etc/samba/smb.conf').is_file())
+        self.assertTrue((self.root / 'home/fliperos/.config/flycast/emu.cfg').is_file())
         wants = self.root / 'etc/systemd/system/multi-user.target.wants/fliperos-padkeys.service'
         self.assertEqual(os.readlink(wants), '/etc/systemd/system/fliperos-padkeys.service')
         self.assertIn('fliperos-menu', (self.root / 'etc/profile.d/fliperos.sh').read_text())
@@ -618,8 +627,244 @@ class ResolutionAppTests(unittest.TestCase):
     def test_lxde_applies_it_and_the_menu_has_it(self):
         self.assertIn('fliperos-resolution --apply-saved', (ROOT / 'config/fliperos-lxde').read_text())
         entry = (ROOT / 'config/applications/fliperos-resolution.desktop').read_text()
-        self.assertIn('Exec=lxterminal -t "Screen Resolution" -e /opt/fliperos/bin/fliperos-resolution', entry)
+        self.assertIn('Exec=alacritty --title "Screen Resolution" -e /opt/fliperos/bin/fliperos-resolution', entry)
         self.assertIn('Categories=Settings;', entry)
+
+
+def apt_list():
+    """Os pacotes do apt-get install principal do chroot."""
+    block = MKISO.split('apt-get install -y --no-install-recommends \\\n')[1].split('\n\n')[0]
+    return block.replace('\\', ' ').split()
+
+
+class DesktopTerminalTests(unittest.TestCase):
+    """O lxterminal e o xterm nao desenhavam as bordas do Gum: o terminal do
+    desktop e o Alacritty."""
+
+    def test_only_alacritty_in_the_image(self):
+        pkgs = apt_list()
+        self.assertIn('alacritty', pkgs)
+        for old in ('lxterminal', 'xterm', 'lxde'):
+            self.assertNotIn(old, pkgs, old)
+        # O metapacote lxde depende do lxterminal; os componentes vem a mao, e
+        # o cabinet-update.sh protege os mesmos antes de tirar os terminais.
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        parts = update.split('lxde_parts=(')[1].split(')')[0].split()
+        self.assertIn('lxde-core', parts)
+        for part in parts:
+            self.assertIn(part, pkgs, part)
+        self.assertLess(update.index('apt-mark manual'), update.index('apt-get purge -y -q lxterminal xterm'))
+
+    def test_dracula_palette_of_the_setup(self):
+        import tomllib
+        conf = tomllib.loads((ROOT / 'config/lxde/alacritty/alacritty.toml').read_text())
+        ui = (ROOT / 'fliperos-setup/lib/ui.sh').read_text()
+        palette = ui.split('UI_PALETTE=(')[1].split(')')[0].split()
+        order = ('black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white')
+        colors = [conf['colors']['normal'][c] for c in order] + [conf['colors']['bright'][c] for c in order]
+        # O 0 e o preto dos terminais do Dracula; o fundo e o primary.
+        self.assertEqual([c.lstrip('#') for c in colors[1:]], palette[1:])
+        self.assertEqual(conf['colors']['primary']['background'], '#' + palette[0])
+        self.assertEqual(conf['font']['normal']['family'], 'DejaVu Sans Mono')
+        self.assertEqual(conf['cursor']['style']['blinking'], 'Never')
+
+    def test_desktop_uses_it(self):
+        self.assertIn('id=Alacritty.desktop', (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text())
+        self.assertNotIn('lxterminal', (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text())
+        self.assertIn('terminal_manager/command=alacritty',
+                      (ROOT / 'config/lxde/lxsession/LXDE/desktop.conf').read_text())
+        session = (ROOT / 'config/fliperos-lxde').read_text()
+        self.assertLess(session.index('export WINIT_X11_SCALE_FACTOR=1'), session.index('exec startlxde'))
+        self.assertFalse((ROOT / 'config/lxde/lxterminal').exists())
+
+
+class CalibrateTests(unittest.TestCase):
+    """Setup > Joysticks: GunCon 2 e volante/pedais/analogico
+    (config/fliperos-calibrate)."""
+    C = calibrate
+
+    def test_guncon_range_from_two_targets(self):
+        # Tiros a 15% e 85% da tela leram 257 e 638 (faixa real 175..720).
+        lo, hi = self.C.guncon_range(257, 638, 0.15, 0.85)
+        self.assertAlmostEqual(lo, 175, delta=1)
+        self.assertAlmostEqual(hi, 720, delta=1)
+        self.assertEqual(self.C.median([300, 900, 310]), 310)
+
+    def test_centered_axis_is_symmetric_around_rest(self):
+        # Volante: repouso fora do meio do curso; os dois lados chegam ao fim.
+        self.assertEqual(self.C.axis_calibration(100, 900, 520, 0, 1023), (140, 900, 8))
+        # Pedal: repouso numa ponta, faixa vista e sem zona morta.
+        self.assertEqual(self.C.axis_calibration(30, 990, 990, 0, 1023), (30, 990, 0))
+        # Eixo que nao se mexeu fica como esta.
+        self.assertIsNone(self.C.axis_calibration(500, 510, 505, 0, 1023))
+
+    def test_conf_keeps_the_other_controllers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / 'calibration.conf')
+            self.C.write_axes_conf(path, (0x046d, 0xc24f), 'G29', {0: (140, 900, 8)})
+            self.C.write_axes_conf(path, (0x044f, 0xb66e), 'T300', {0: (0, 65535, 300), 2: (10, 1000, 0)})
+            self.C.write_axes_conf(path, (0x046d, 0xc24f), 'G29', {0: (120, 910, 8)})
+            conf = self.C.read_axes_conf(path)
+            self.assertEqual(conf[(0x046d, 0xc24f)], {0: (120, 910, 8)})
+            self.assertEqual(conf[(0x044f, 0xb66e)], {0: (0, 65535, 300), 2: (10, 1000, 0)})
+            gun = Path(tmp) / 'guncon2.conf'
+            self.C.write_guncon_conf(str(gun), (175, 720), (20, 240))
+            self.assertIn('X_MIN=175\nX_MAX=720\nY_MIN=20\nY_MAX=240\n', gun.read_text())
+
+    def test_ioctl_numbers(self):
+        # linux/input.h no x86_64: EVIOCGID e EVIOCSABS(ABS_X).
+        self.assertEqual(self.C.EVIOCGID, 0x80084502)
+        self.assertEqual(self.C.eviocsabs(0), 0x401845c0)
+        self.assertEqual(self.C.eviocgabs(1), 0x80184541)
+
+    def test_wired_into_the_setup_and_udev(self):
+        rules = (ROOT / 'config/99-fliperos-input.rules').read_text()
+        self.assertIn('ENV{ID_INPUT_JOYSTICK}=="1"', rules)
+        self.assertIn('/opt/fliperos/bin/fliperos-calibrate apply $env{DEVNAME}', rules)
+        menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
+        self.assertIn('joysticks|Joysticks (GunCon 2, wheel, LPT)', menu)
+        screens = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
+        for item in ('guncon|Calibrate GunCon 2', 'axes|Calibrate wheel', 'lpt|LPT joysticks'):
+            self.assertIn(item, screens)
+
+
+class RomFoldersTests(unittest.TestCase):
+    """~/roms com uma pasta por emulador e por core do RetroArch."""
+
+    def test_one_folder_per_emulator_and_core(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            info = tmp / 'info'
+            info.mkdir()
+            (info / 'snes9x_libretro.info').write_text(
+                'display_name = "Nintendo - SNES / SFC (Snes9x - Current)"\n'
+                'supported_extensions = "smc|sfc|swc|fig|bs|st"\n')
+            (info / 'mpv_libretro.info').write_text('display_name = "Video (MPV)"\n')
+            env = dict(os.environ, FLIPEROS_ROMS=str(tmp / 'roms'), FLIPEROS_CORE_INFO=str(info))
+            for _ in range(2):  # a segunda rodada nao muda nada
+                subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            roms = tmp / 'roms'
+            for emu in ('mame', 'ps2', 'dreamcast', 'model3', 'dolphin', 'openbor/Paks', 'hypseus'):
+                self.assertTrue((roms / emu / '_info.txt').is_file(), emu)
+            self.assertEqual((roms / 'retroarch/snes9x/_info.txt').read_text(),
+                             'RetroArch, core snes9x: Nintendo - SNES / SFC (Snes9x - Current) '
+                             '(.smc .sfc .swc .fig .bs .st)\n')
+            self.assertEqual((roms / 'retroarch/mpv/_info.txt').read_text(), 'RetroArch, core mpv: Video (MPV)\n')
+
+    def test_emulators_point_there(self):
+        self.assertIn('rgui_browser_directory = "/home/fliperos/roms"', (ROOT / 'config/retroarch.cfg').read_text())
+        self.assertIn('rompath /home/fliperos/roms/mame', (ROOT / 'config/mame.ini').read_text())
+        self.assertIn('Dreamcast.ContentPath = /home/fliperos/roms/dreamcast',
+                      (ROOT / 'config/flycast-emu.cfg').read_text())
+        smb = (ROOT / 'config/smb.conf').read_text()
+        self.assertIn('[roms]\n', smb)
+        self.assertIn('path = /home/fliperos/roms', smb)
+        self.assertIn('wide links = yes', smb)
+
+    def test_flycast_player_2_has_a_controller(self):
+        cfg = (ROOT / 'config/flycast-emu.cfg').read_text()
+        self.assertIn('device2 = 0\n', cfg)
+        self.assertIn('maple_sdl_joystick_1 = 1\n', cfg)
+
+    def test_old_roms_move_to_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos/roms/mame', 'opt/fliperos/roms/mame', 'opt/fliperos/roms/ps2',
+                      'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d', 'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            (root / 'opt/fliperos/roms/mame/sf2.zip').write_text('rom')
+            (root / 'opt/fliperos/roms/ps2/game.iso').write_text('iso')
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            self.assertEqual((root / 'home/fliperos/roms/mame/sf2.zip').read_text(), 'rom')
+            self.assertEqual((root / 'home/fliperos/roms/ps2/game.iso').read_text(), 'iso')
+            self.assertEqual(os.readlink(root / 'opt/fliperos/roms'), '/home/fliperos/roms')
+
+
+class QuietLaunchTests(unittest.TestCase):
+    """Sem texto na tela ao abrir emuladores; o modo debug mostra tudo."""
+
+    def test_limine_menu_shows_in_debug(self):
+        self.assertIn('quiet: yes\n', limine_update.render(['6.18.54-15khz'], 'UUID=abc', '', '3'))
+        self.assertIn('quiet: no\n', limine_update.render(['6.18.54-15khz'], 'UUID=abc', '', '3', 'no'))
+
+    def run_kms(self, debug):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'logs').mkdir()
+            prog = tmp / 'emu'
+            prog.write_text('#!/bin/sh\necho saida-do-emulador\n')
+            prog.chmod(0o755)
+            flag = tmp / 'debug'
+            if debug:
+                flag.write_text('')
+            env = dict(os.environ, FLIPEROS_LOGS=str(tmp / 'logs'), FLIPEROS_DEBUG_FLAG=str(flag))
+            env.pop('DISPLAY', None)
+            out = subprocess.run(['bash', str(ROOT / 'config/fliperos-kms-run'), str(prog)],
+                                 capture_output=True, text=True, env=env).stdout
+            log = tmp / 'logs' / 'emu.log'
+            return out, log.read_text() if log.exists() else None
+
+    def test_emulator_output_goes_to_the_log(self):
+        out, log = self.run_kms(debug=False)
+        self.assertEqual(out, '')
+        self.assertEqual(log, 'saida-do-emulador\n')
+        out, log = self.run_kms(debug=True)
+        self.assertEqual(out, 'saida-do-emulador\n')
+        for script in ('config/fliperos-x11-run', 'config/fliperos-session'):
+            self.assertIn('/etc/fliperos/debug', (ROOT / script).read_text(), script)
+
+
+class SdlControllerMappingTests(unittest.TestCase):
+    """O mapeamento automatico do SDL tirava dois botoes de cada jogador do
+    V-USB Mame Panel 32 (BTN_C e BTN_Z) e o AntiMicroX nao os mostrava."""
+
+    def test_panel_has_all_eight_buttons(self):
+        lines = [l for l in (ROOT / 'config/gamecontrollerdb.txt').read_text().splitlines()
+                 if l and not l.startswith('#')]
+        self.assertEqual(len(lines), 1)
+        fields = lines[0].rstrip(',').split(',')
+        # GUID do SDL 2.30 para 16c0:05df com o CRC do nome (0x4098).
+        self.assertEqual(fields[0], '03009840c0160000df05000001010000')
+        binds = dict(f.split(':', 1) for f in fields[2:])
+        self.assertEqual(sorted(v for k, v in binds.items() if v.startswith('b')),
+                         ['b%d' % i for i in range(8)])
+        self.assertEqual(binds['platform'], 'Linux')
+
+    def test_every_sdl_program_reads_it(self):
+        self.assertIn('/etc/fliperos/gamecontrollerdb.txt', ROOTFS)
+        self.assertIn("SDL_GAMECONTROLLERCONFIG_FILE=/etc/fliperos/gamecontrollerdb.txt' >> \"$root/etc/environment\"",
+                      ROOTFS)
+        for script in ('config/fliperos-lxde', 'config/fliperos-kms-run', 'config/fliperos-x11-run'):
+            self.assertIn('SDL_GAMECONTROLLERCONFIG_FILE', (ROOT / script).read_text(), script)
+
+
+class AppStoreTests(unittest.TestCase):
+    """App Store do LXDE: GNOME Software com Flatpak (Flathub), sem snap."""
+
+    def test_packages_and_flathub(self):
+        pkgs = apt_list()
+        for pkg in ('gnome-software', 'gnome-software-plugin-flatpak', 'flatpak', 'xdg-desktop-portal-gtk'):
+            self.assertIn(pkg, pkgs)
+            self.assertIn(pkg, (ROOT / 'tools/cabinet-update.sh').read_text())
+        self.assertNotIn('gnome-software-plugin-snap', MKISO)
+        self.assertIn('flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo',
+                      MKISO)
+
+    def test_no_background_updates(self):
+        override = (ROOT / 'config/fliperos-software.gschema.override').read_text()
+        self.assertIn('[org.gnome.software]', override)
+        for key in ('download-updates=false', 'download-updates-notify=false', 'first-run=false'):
+            self.assertIn(key + '\n', override)
+        self.assertIn('90_fliperos-software.gschema.override', ROOTFS)
+
+    def test_menu_entry_and_panel_button(self):
+        entry = (ROOT / 'config/applications/org.gnome.Software.desktop').read_text()
+        for line in ('Name=App Store', 'Exec=gnome-software %U', 'TryExec=gnome-software',
+                     'Categories=System;PackageManager;'):
+            self.assertIn(line + '\n', entry)
+        self.assertIn('id=org.gnome.Software.desktop', (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text())
 
 
 class SessionTableTests(unittest.TestCase):
@@ -649,8 +894,8 @@ class SessionTableTests(unittest.TestCase):
 
 
 class InputDriverTests(unittest.TestCase):
-    """GunCon 2 nao existe no kernel mainline; Logitech e Thrustmaster antigo
-    existem. Por isso o GunCon entra por padrao e os de volante sao opcionais."""
+    """GunCon 2 (fora do mainline) e os drivers de volante hid-tmff2 e
+    new-lg4ff entram sempre; --skip-* os deixa de fora."""
 
     def test_guncon2_usb_id_and_calibration_hook(self):
         rules = (ROOT / 'config/99-fliperos-input.rules').read_text()
@@ -658,9 +903,12 @@ class InputDriverTests(unittest.TestCase):
         self.assertIn('016a', rules)
         self.assertIn('fliperos-guncon2-calibrate', rules)
 
-    def test_guncon2_builds_by_default_wheels_behind_flag(self):
+    def test_guncon2_and_wheel_drivers_build_by_default(self):
         self.assertIn('SKIP_INPUT_DRIVERS=false', MKISO)
-        self.assertIn('WITH_WHEEL_DRIVERS=false', MKISO)
+        self.assertIn('\nWITH_WHEEL_DRIVERS=true\n', MKISO)
+        self.assertIn('--skip-wheel-drivers) WITH_WHEEL_DRIVERS=false', MKISO)
+        for repo in ('Kimplul/hid-tmff2', 'berarma/new-lg4ff'):
+            self.assertIn(repo, MKISO)
         self.assertIn('beardypig/guncon2', MKISO)
         self.assertIn('modules-load.d', MKISO)
 
@@ -981,6 +1229,14 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertIn('MODE=320 240 60', self.run_x11(['myprog']).stdout)
         r = self.run_x11(['--mode', '640x240', 'myprog'])
         self.assertEqual(r.returncode, 2)
+
+    def test_mouse_cursor_only_for_emulators_with_a_mouse_interface(self):
+        # No gabinete o mouse sumia ao abrir o PCSX2 (lista de jogos, BIOS).
+        for prog in ('pcsx2', 'dolphin-emu', 'flycast'):
+            self.assertNotIn('-nocursor', self.run_x11([prog]).stdout, prog)
+        self.assertIn('-nocursor', self.run_x11(['myprog']).stdout)
+        client = (ROOT / 'config/fliperos-x11-client').read_text()
+        self.assertIn('xsetroot -cursor_name left_ptr', client)
 
     def test_pcsx2_ini_is_adjusted_after_first_run(self):
         with tempfile.TemporaryDirectory() as tmp:

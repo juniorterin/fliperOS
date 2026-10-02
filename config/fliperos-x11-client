@@ -4,6 +4,11 @@
 # emulador nele.
 set -euo pipefail
 connector=$(sed -n 's/^connector=//p' /etc/fliperos/fliperos.conf 2> /dev/null)
+# Com cursor (fliperos-x11-run): a seta normal fora das janelas, nao o "X"
+# do Xorg sem gerenciador de janelas.
+if [[ ${FLIPEROS_X11_CURSOR:-0} == 1 ]]; then
+  xsetroot -cursor_name left_ptr 2> /dev/null || true
+fi
 args=()
 [[ -n $connector ]] && args+=(--display "$connector")
 emulator_command=$(printf '%q ' "$@")

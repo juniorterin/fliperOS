@@ -326,7 +326,8 @@ def dev(iso):
     print('DEV: disco instalado + arquivos do repositorio', flush=True)
     guest = Guest('dev', disk(False) + ['-vga', 'std'], monitor=True)
     load = 'for f in %s/lib/*.sh; do . "$f"; done' % LIB
-    # Sem o LC_ALL=C deste shell: o lxterminal leria as bordas do Gum como ASCII.
+    # Sem o LC_ALL=C deste shell (um terminal VTE leria as bordas do Gum como
+    # ASCII).
     as_user = "runuser -u fliperos -- env -u LC_ALL LANG=C.UTF-8 DISPLAY=:0 "
     try:
         guest.root_shell()
@@ -361,7 +362,7 @@ def dev(iso):
 
         print('DEV: Screen Resolution: 384x288 sem confirmar (volta), depois o do boot', flush=True)
         guest.run("runuser -u fliperos -- rm -f /home/fliperos/.config/fliperos/desktop-mode; ("
-                  + as_user + "setsid lxterminal -t 'Screen Resolution' "
+                  + as_user + "WINIT_X11_SCALE_FACTOR=1 setsid alacritty --title 'Screen Resolution' "
                   "-e /opt/fliperos/bin/fliperos-resolution > /dev/null 2>&1 &)")
         time.sleep(25)
         guest.screenshot('dev-04-app')

@@ -1,0 +1,483 @@
+#!/usr/bin/env python3
+"""Calibracao de light gun (GunCon 2) e de eixos (volante, pedais,
+analogico), pelo Setup > Joysticks do fliperos-setup ou na mao:
+
+    fliperos-calibrate list               controles que dao para calibrar
+    fliperos-calibrate guncon2 EVENTO     alvos na tela; grava guncon2.conf
+    fliperos-calibrate axes EVENTO        volante, pedais, analogico
+    fliperos-calibrate apply EVENTO       reaplica o que foi salvo (udev)
+
+O evdev nao guarda calibracao no aparelho: ela se perde a cada conexao, e a
+regra do udev (config/99-fliperos-input.rules) a reaplica. O GunCon 2 segue
+em /etc/fliperos/guncon2.conf (X_MIN, X_MAX, Y_MIN, Y_MAX), que o
+fliperos-guncon2-calibrate le; os eixos ficam em
+/etc/fliperos/calibration.conf, uma linha por eixo.
+
+Sem dependencias: evdev lido e calibrado com struct e ioctl.
+"""
+import fcntl
+import glob
+import os
+import select
+import struct
+import sys
+import termios
+import time
+import tty
+
+GUNCON_CONF = os.environ.get('FLIPEROS_GUNCON_CONF', '/etc/fliperos/guncon2.conf')
+AXES_CONF = os.environ.get('FLIPEROS_CALIBRATION_CONF', '/etc/fliperos/calibration.conf')
+GUNCON_ID = (0x0b9a, 0x016a)
+PADKEYS_NAME = b'FliperOS pad keys'
+
+EV_KEY, EV_ABS = 0x01, 0x03
+ABS_X, ABS_Y = 0x00, 0x01
+BTN_LEFT, BTN_MIDDLE = 0x110, 0x112
+BTN_B, BTN_SELECT = 0x131, 0x13a
+KEY_ESC = 1
+ABS_NAMES = {0: 'X', 1: 'Y', 2: 'Z', 3: 'RX', 4: 'RY', 5: 'RZ', 6: 'Throttle', 7: 'Rudder',
+             8: 'Wheel', 9: 'Gas', 10: 'Brake'}
+HATS = range(0x10, 0x18)
+EVENT = struct.Struct('llHHi')
+ABSINFO = struct.Struct('6i')   # value, minimum, maximum, fuzz, flat, resolution
+
+
+def _ioc(direction, nr, size):
+    return (direction << 30) | (size << 16) | (ord('E') << 8) | nr
+
+
+EVIOCGID = _ioc(2, 0x02, 8)
+EVIOCGNAME = _ioc(2, 0x06, 256)
+
+
+def eviocgbit(ev, length):
+    return _ioc(2, 0x20 + ev, length)
+
+
+def eviocgabs(axis):
+    return _ioc(2, 0x40 + axis, ABSINFO.size)
+
+
+def eviocsabs(axis):
+    return _ioc(1, 0xc0 + axis, ABSINFO.size)
+
+
+# ── Contas (testadas em tests/test_build.py) ────────────────────────
+
+def guncon_range(raw1, raw2, frac1, frac2):
+    """Valor cru nas bordas da tela (fracao 0 e 1) a partir de dois tiros em
+    pontos conhecidos: o GunCon 2 e linear ao longo da linha e da coluna."""
+    slope = (raw2 - raw1) / (frac2 - frac1)
+    return round(raw1 - slope * frac1), round(raw1 + slope * (1 - frac1))
+
+
+def median(values):
+    s = sorted(values)
+    return s[len(s) // 2]
+
+
+def axis_calibration(seen_min, seen_max, rest, orig_min, orig_max):
+    """(min, max, zona morta) de um eixo pelo curso visto e pelo repouso, ou
+    None se ele quase nao se mexeu. Eixo centrado (volante, analogico): faixa
+    simetrica em volta do repouso, para o centro dar 0, com 1% de zona morta;
+    o lado mais longo satura no fim do curso. Eixo de repouso numa ponta
+    (pedal): a faixa vista, sem zona morta."""
+    span = orig_max - orig_min
+    seen = seen_max - seen_min
+    if span <= 0 or seen < span * 0.05:
+        return None
+    if rest - seen_min > seen * 0.2 and seen_max - rest > seen * 0.2:
+        half = min(rest - seen_min, seen_max - rest)
+        return rest - half, rest + half, max(1, round(2 * half * 0.01))
+    return seen_min, seen_max, 0
+
+
+def read_axes_conf(path):
+    """{(vendor, produto): {eixo: (min, max, zona)}} do calibration.conf."""
+    out = {}
+    try:
+        lines = open(path).read().splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        line = line.split('#', 1)[0].split()
+        if len(line) != 5 or ':' not in line[0]:
+            continue
+        vid, pid = (int(v, 16) for v in line[0].split(':'))
+        out.setdefault((vid, pid), {})[int(line[1])] = tuple(int(v) for v in line[2:])
+    return out
+
+
+def write_axes_conf(path, ident, name, axes):
+    """Troca as linhas do controle (vendor, produto) pelas novas."""
+    key = '%04x:%04x' % ident
+    keep = []
+    try:
+        for line in open(path).read().splitlines():
+            if line.split(' ', 1)[0] != key and not line.startswith('#'):
+                keep.append(line)
+    except OSError:
+        pass
+    new = ['%s %d %d %d %d  # %s %s' % (key, axis, lo, hi, flat, name, ABS_NAMES.get(axis, axis))
+           for axis, (lo, hi, flat) in sorted(axes.items())]
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    with open(path + '.new', 'w') as f:
+        f.write('# Calibracao de eixos (Setup > Joysticks, fliperos-calibrate). Uma\n'
+                '# linha por eixo: VENDOR:PRODUTO EIXO MINIMO MAXIMO ZONA_MORTA\n')
+        f.write(''.join(l + '\n' for l in keep + new))
+    os.chmod(path + '.new', 0o644)
+    os.replace(path + '.new', path)
+
+
+def write_guncon_conf(path, x, y):
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    with open(path + '.new', 'w') as f:
+        f.write('# Faixa util do GunCon 2 neste monitor, medida em Setup > Joysticks >\n'
+                '# Calibrate GunCon 2 (fliperos-calibrate). Refaca se mudar o modo de\n'
+                '# video, a geometria ou a posicao do tubo.\n')
+        f.write('X_MIN=%d\nX_MAX=%d\nY_MIN=%d\nY_MAX=%d\n' % (x[0], x[1], y[0], y[1]))
+    os.chmod(path + '.new', 0o644)
+    os.replace(path + '.new', path)
+
+
+# ── evdev ──────────────────────────────────────────────────────────
+
+class Device:
+    def __init__(self, path, write=False):
+        self.path = path
+        self.fd = os.open(path, (os.O_RDWR if write else os.O_RDONLY) | os.O_NONBLOCK)
+        buf = bytearray(256)
+        fcntl.ioctl(self.fd, EVIOCGNAME, buf)
+        self.name = bytes(buf).split(b'\0')[0]
+        ident = bytearray(8)
+        fcntl.ioctl(self.fd, EVIOCGID, ident)
+        _bus, vid, pid, _ver = struct.unpack('4H', ident)
+        self.ident = (vid, pid)
+        self.keys = self.bits(EV_KEY, 0x300)
+        self.abs = self.bits(EV_ABS, 0x40)
+
+    def bits(self, ev, count):
+        buf = bytearray((count + 7) // 8)
+        fcntl.ioctl(self.fd, eviocgbit(ev, len(buf)), buf)
+        return {i for i in range(count) if buf[i // 8] >> (i % 8) & 1}
+
+    def absinfo(self, axis):
+        buf = bytearray(ABSINFO.size)
+        fcntl.ioctl(self.fd, eviocgabs(axis), buf)
+        return list(ABSINFO.unpack(buf))
+
+    def set_abs(self, axis, lo, hi, flat=None):
+        info = self.absinfo(axis)
+        info[1], info[2] = lo, hi
+        if flat is not None:
+            info[4] = flat
+        fcntl.ioctl(self.fd, eviocsabs(axis), ABSINFO.pack(*info))
+
+    def analog_axes(self):
+        return sorted(a for a in self.abs if a not in HATS and self.absinfo(a)[2] - self.absinfo(a)[1] > 2)
+
+    def is_gun(self):
+        return self.ident == GUNCON_ID or (b'guncon' in self.name.lower() and BTN_LEFT in self.keys)
+
+    def has_axes(self):
+        joyish = any(0x120 <= k < 0x140 or 0x2c0 <= k < 0x2e8 for k in self.keys)
+        return (joyish and not self.is_gun() and BTN_LEFT not in self.keys
+                and self.name != PADKEYS_NAME and bool(self.analog_axes()))
+
+    def events(self):
+        try:
+            data = os.read(self.fd, EVENT.size * 64)
+        except BlockingIOError:
+            return []
+        return [EVENT.unpack_from(data, i)[2:] for i in range(0, len(data) - EVENT.size + 1, EVENT.size)]
+
+    def close(self):
+        os.close(self.fd)
+
+
+def devices():
+    for path in sorted(glob.glob('/dev/input/event*'), key=lambda p: int(p.rsplit('event', 1)[1])):
+        try:
+            yield Device(path)
+        except OSError:
+            continue
+
+
+# ── Tela ───────────────────────────────────────────────────────────
+
+class Screen:
+    """Desenho direto no terminal (o console do gabinete): o Gum nao pinta a
+    tela inteira de branco, e a pistola precisa de luz onde mira."""
+
+    def __init__(self):
+        self.out = sys.stdout
+        self.fd = sys.stdin.fileno()
+        self.saved = termios.tcgetattr(self.fd) if os.isatty(self.fd) else None
+        if self.saved:
+            tty.setcbreak(self.fd)
+        try:
+            self.cols, self.rows = os.get_terminal_size(self.out.fileno())
+        except OSError:
+            self.cols, self.rows = 80, 30
+
+    def write(self, text):
+        self.out.write(text)
+        self.out.flush()
+
+    def at(self, row, col, text):
+        self.write('\033[%d;%dH%s' % (row, col, text))
+
+    def key(self):
+        """Tecla apertada, sem esperar (Enter = "\\n", Esc = "\\033")."""
+        if select.select([self.fd], [], [], 0)[0]:
+            return os.read(self.fd, 16).decode(errors='replace')[:1]
+        return ''
+
+    def restore(self):
+        self.write('\033[0m\033[2J\033[H\033[?25h')
+        if self.saved:
+            termios.tcsetattr(self.fd, termios.TCSADRAIN, self.saved)
+
+
+class Cancelled(Exception):
+    pass
+
+
+def white(screen, *lines):
+    """Tela toda branca (o fundo 7 da paleta) com o texto em cima."""
+    screen.write('\033[?25l\033[30;47m\033[2J')
+    for i, line in enumerate(lines):
+        screen.at(2 + i, max(1, (screen.cols - len(line)) // 2 + 1), line)
+
+
+def draw_target(screen, row, col):
+    # A mira e a celula branca do meio: o sensor precisa de luz onde aponta.
+    screen.write('\033[1;31;47m')
+    screen.at(row, col, '+')
+    screen.at(row, col - 3, '>>')
+    screen.at(row, col + 2, '<<')
+    screen.at(row - 1, col, 'v')
+    screen.at(row + 1, col, '^')
+    screen.write('\033[0;30;47m')
+
+
+def shoot(screen, gun, need):
+    """Coordenadas cruas de `need` tiros (gatilho). Esc ou B cancela."""
+    x = y = 0
+    shots = []
+    while len(shots) < need:
+        if screen.key() == '\033':
+            raise Cancelled()
+        if not select.select([gun.fd], [], [], 0.05)[0]:
+            continue
+        for etype, code, value in gun.events():
+            if etype == EV_ABS and code == ABS_X:
+                x = value
+            elif etype == EV_ABS and code == ABS_Y:
+                y = value
+            elif etype == EV_KEY and value == 1 and code in (BTN_B, BTN_MIDDLE, BTN_SELECT):
+                raise Cancelled()
+            elif etype == EV_KEY and value == 1 and code == BTN_LEFT:
+                if x <= 0 or y <= 0:
+                    screen.at(screen.rows, 2, 'The gun did not see the screen: aim at the white area.   ')
+                    continue
+                shots.append((x, y))
+                screen.at(screen.rows, 2, 'Shot %d of %d: x=%d y=%d%s' % (len(shots), need, x, y, ' ' * 30))
+    return shots
+
+
+def calibrate_guncon(path):
+    gun = Device(path)
+    screen = Screen()
+    try:
+        # Alvos a 15% e 85% da tela, longe da borda, onde o tubo distorce.
+        t1 = (max(3, round(screen.rows * 0.15)), max(5, round(screen.cols * 0.15)))
+        t2 = (min(screen.rows - 2, round(screen.rows * 0.85)), min(screen.cols - 4, round(screen.cols * 0.85)))
+        points = []
+        for target, label in ((t1, 'top left'), (t2, 'bottom right')):
+            white(screen, 'GunCon 2 calibration: aim at the + of the %s target' % label,
+                  'and pull the trigger 3 times. B or Esc cancels.')
+            draw_target(screen, *target)
+            shots = shoot(screen, gun, 3)
+            points.append((median([s[0] for s in shots]), median([s[1] for s in shots])))
+            time.sleep(0.3)
+        fx = [(c - 0.5) / screen.cols for _, c in (t1, t2)]
+        fy = [(r - 0.5) / screen.rows for r, _ in (t1, t2)]
+        xr = guncon_range(points[0][0], points[1][0], fx[0], fx[1])
+        yr = guncon_range(points[0][1], points[1][1], fy[0], fy[1])
+        if xr[1] - xr[0] < 20 or yr[1] - yr[0] < 20:
+            white(screen, 'The two targets read almost the same position.',
+                  'Nothing was saved. Press Enter.')
+            wait_enter(screen, gun)
+            return 1
+        # Conferencia no centro, ja com a faixa nova.
+        center = (screen.rows // 2, screen.cols // 2)
+        white(screen, 'Check: aim at the + of the center target and shoot once.')
+        draw_target(screen, *center)
+        cx, cy = shoot(screen, gun, 1)[0]
+        hit = (100 * (cx - xr[0]) / (xr[1] - xr[0]), 100 * (cy - yr[0]) / (yr[1] - yr[0]))
+        want = (100 * (center[1] - 0.5) / screen.cols, 100 * (center[0] - 0.5) / screen.rows)
+        white(screen, 'Center shot at %.0f%% x %.0f%% (target %.0f%% x %.0f%%).' % (hit + want),
+              'Range: X %d to %d, Y %d to %d.' % (xr + yr), '',
+              'Trigger or Enter saves. B or Esc discards.')
+        if not confirm(screen, gun):
+            return 1
+        write_guncon_conf(GUNCON_CONF, xr, yr)
+        apply_guncon(path, xr, yr)
+        return 0
+    except Cancelled:
+        return 1
+    finally:
+        screen.restore()
+        gun.close()
+
+
+def wait_enter(screen, dev):
+    while True:
+        if screen.key() in ('\n', '\r', '\033'):
+            return
+        if select.select([dev.fd], [], [], 0.05)[0]:
+            if any(t == EV_KEY and v == 1 for t, _, v in dev.events()):
+                return
+
+
+def confirm(screen, dev):
+    while True:
+        k = screen.key()
+        if k in ('\n', '\r'):
+            return True
+        if k == '\033':
+            return False
+        if select.select([dev.fd], [], [], 0.05)[0]:
+            for t, code, v in dev.events():
+                if t == EV_KEY and v == 1:
+                    if code in (BTN_B, BTN_MIDDLE, BTN_SELECT):
+                        return False
+                    return True
+
+
+def apply_guncon(path, xr, yr):
+    dev = Device(path, write=True)
+    try:
+        dev.set_abs(ABS_X, *xr)
+        dev.set_abs(ABS_Y, *yr)
+    finally:
+        dev.close()
+
+
+def bar(value, lo, hi, width=20):
+    if hi <= lo:
+        return '-' * width
+    n = max(0, min(width, round(width * (value - lo) / (hi - lo))))
+    return '#' * n + '-' * (width - n)
+
+
+def calibrate_axes(path):
+    dev = Device(path)
+    screen = Screen()
+    try:
+        axes = dev.analog_axes()
+        info = {a: dev.absinfo(a) for a in axes}
+        cur = {a: info[a][0] for a in axes}
+        seen = {a: [cur[a], cur[a]] for a in axes}
+
+        def table(title, *lines):
+            screen.write('\033[?25l\033[0m\033[2J')
+            screen.at(1, 2, '\033[1;35m%s\033[0m' % title)
+            for i, line in enumerate(lines):
+                screen.at(2 + i, 2, line)
+            top = 3 + len(lines)
+            for i, a in enumerate(axes):
+                screen.at(top + i, 2, '%-8s %7d  [%s]  %7d .. %-7d' % (
+                    ABS_NAMES.get(a, a), cur[a], bar(cur[a], info[a][1], info[a][2]), seen[a][0], seen[a][1]))
+
+        def follow(title, *lines):
+            """Acompanha os eixos ate um botao do controle ou o Enter."""
+            last = 0
+            while True:
+                k = screen.key()
+                if k == '\033':
+                    raise Cancelled()
+                if k in ('\n', '\r'):
+                    return
+                if select.select([dev.fd], [], [], 0.05)[0]:
+                    for etype, code, value in dev.events():
+                        if etype == EV_ABS and code in cur:
+                            cur[code] = value
+                            seen[code][0] = min(seen[code][0], value)
+                            seen[code][1] = max(seen[code][1], value)
+                        elif etype == EV_KEY and value == 1:
+                            return
+                if time.monotonic() - last > 0.1:
+                    table(title, *lines)
+                    last = time.monotonic()
+
+        name = dev.name.decode(errors='replace')
+        follow('Calibrate: %s' % name, 'Turn the wheel (or the stick) fully to both sides and press',
+               'each pedal all the way. Then press any button, or Enter. Esc cancels.')
+        time.sleep(0.4)
+        dev.events()
+        follow('Calibrate: %s' % name, 'Now leave everything at rest: wheel centered, pedals',
+               'released, stick released. Then press any button, or Enter.')
+        result = {}
+        for a in axes:
+            cal = axis_calibration(seen[a][0], seen[a][1], cur[a], info[a][1], info[a][2])
+            if cal:
+                result[a] = cal
+        screen.write('\033[0m\033[2J')
+        if not result:
+            screen.at(2, 2, 'No axis moved enough. Nothing was saved. Press Enter.')
+            wait_enter(screen, dev)
+            return 1
+        screen.at(2, 2, 'New calibration (min .. max, dead zone):')
+        for i, (a, (lo, hi, flat)) in enumerate(sorted(result.items())):
+            screen.at(4 + i, 4, '%-8s %7d .. %-7d %d' % (ABS_NAMES.get(a, a), lo, hi, flat))
+        screen.at(6 + len(result), 2, 'Enter or a button saves. Esc discards.')
+        dev.events()
+        if not confirm(screen, dev):
+            return 1
+        write_axes_conf(AXES_CONF, dev.ident, name, result)
+        apply(path)
+        return 0
+    except Cancelled:
+        return 1
+    finally:
+        screen.restore()
+        dev.close()
+
+
+def apply(path):
+    """Reaplica a calibracao salva do controle (regra do udev)."""
+    try:
+        dev = Device(path, write=True)
+    except OSError:
+        return 0
+    try:
+        for axis, (lo, hi, flat) in read_axes_conf(AXES_CONF).get(dev.ident, {}).items():
+            if axis in dev.abs:
+                dev.set_abs(axis, lo, hi, flat)
+    finally:
+        dev.close()
+    return 0
+
+
+def main(argv):
+    if len(argv) >= 2 and argv[1] == 'list':
+        for dev in devices():
+            kind = 'gun' if dev.is_gun() else 'axes' if dev.has_axes() else ''
+            if kind and (len(argv) < 3 or argv[2] == kind):
+                print('%s|%s|%s' % (dev.path, dev.name.decode(errors='replace'), kind))
+            dev.close()
+        return 0
+    if len(argv) == 3 and argv[1] == 'guncon2':
+        return calibrate_guncon(argv[2])
+    if len(argv) == 3 and argv[1] == 'axes':
+        return calibrate_axes(argv[2])
+    if len(argv) == 3 and argv[1] == 'apply':
+        return apply(argv[2])
+    print(__doc__.split('\n\n')[1], file=sys.stderr)
+    return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

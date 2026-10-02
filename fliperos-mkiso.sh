@@ -7,7 +7,7 @@
 #       [--skip-flycast] [--skip-pcsx2] [--skip-supermodel]
 #       [--skip-dolphin] [--skip-hypseus] [--skip-openbor]
 #       [--skip-wine] [--skip-steam] [--skip-heroic]
-#       [--skip-skyscraper] [--skip-input-drivers] [--with-wheel-drivers]
+#       [--skip-skyscraper] [--skip-input-drivers] [--skip-wheel-drivers]
 #       [--kernel-cache DIR] [--repo DIR] [--splash fliperos|evangelion|none]
 #       [--wifi-ssid NOME --wifi-psk SENHA]
 #  No Windows, execute somente dentro do container Docker.
@@ -55,9 +55,10 @@ FLIPEROS_REPO=""
 [[ -d /output/repo ]] && FLIPEROS_REPO="/output/repo"
 SPLASH_THEME="fliperos"
 SKIP_INPUT_DRIVERS=false
-# Volante: o mainline ja cobre Logitech e Thrustmaster antigo. Estes dois sao
-# out-of-tree e um deles substitui driver do kernel, entao ficam opcionais.
-WITH_WHEEL_DRIVERS=false
+# Volante: hid-tmff2 (Thrustmaster T150/T300/TX/T248...) e new-lg4ff
+# (Logitech, com force feedback completo; substitui o hid-logitech do
+# kernel) vem sempre; --skip-wheel-drivers os deixa de fora.
+WITH_WHEEL_DRIVERS=true
 # Wi-Fi opcional gravado na imagem: numa maquina sem cabo de rede, e o unico
 # jeito de ela subir acessivel por SSH sem interacao no console.
 WIFI_SSID=""
@@ -122,6 +123,8 @@ while [[ $# -gt 0 ]]; do
     --skip-heroic)     SKIP_HEROIC=true; shift ;;
     --skip-skyscraper) SKIP_SKYSCRAPER=true; shift ;;
     --skip-input-drivers) SKIP_INPUT_DRIVERS=true; shift ;;
+    --skip-wheel-drivers) WITH_WHEEL_DRIVERS=false; shift ;;
+    # Compatibilidade: era opcional antes; agora e o padrao.
     --with-wheel-drivers) WITH_WHEEL_DRIVERS=true; shift ;;
     --kernel-cache)
       [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --kernel-cache requer diretorio."; exit 1; }
@@ -254,9 +257,13 @@ SOURCES
 
 apt-get update -qq
 
-# live-boot necessário para boot=live no kernel da ISO. O lxde e as
-# ferramentas de joystick/diagnostico sao as do GroovyArcade (lxde, xterm,
-# htop, evtest, joy2key, qjoypad, hwinfo, lshw, read-edid, i2c-tools).
+# live-boot necessário para boot=live no kernel da ISO. O LXDE e as
+# ferramentas de joystick/diagnostico sao as do GroovyArcade (htop, evtest,
+# joy2key, qjoypad, hwinfo, lshw, read-edid, i2c-tools). O LXDE vem pelos
+# componentes do metapacote lxde menos os terminais: o lxterminal e o xterm
+# (o x-terminal-emulator padrao, com fontes bitmap que a imagem nem tem) nao
+# desenhavam as bordas do Gum. O terminal e o Alacritty. Sem o metapacote,
+# nada depende do lxterminal e o autoremove nao leva o desktop junto.
 # fbset traz o con2fbmap do teste de saidas; jq e rsync sao do fliperos-setup;
 # triggerhappy le as teclas de volume em qualquer tela (fliperos-rootfs.sh);
 # as engines murrine e pixbuf sao do GTK 2 do tema Dracula, o librsvg2
@@ -264,7 +271,10 @@ apt-get update -qq
 # fliperos-launch antes de fechar o desktop. usbutils (lsusb) mostra o
 # vendor:produto dos controles em Setup > Quirks. systemd-timesyncd acerta o
 # relogio pela rede: no gabinete o relogio da BIOS estava 2 meses atrasado e
-# o apt recusava todo repositorio ("not valid yet").
+# o apt recusava todo repositorio ("not valid yet"). A App Store do LXDE e o
+# GNOME Software (o App Center do Ubuntu 24.04 depende do snap, que nao vai
+# na imagem), com o plugin de Flatpak; o portal GTK da as janelas de abrir
+# arquivo aos apps Flatpak.
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -280,11 +290,18 @@ apt-get install -y --no-install-recommends \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 pciutils usbutils libdrm-tests edid-decode squashfs-tools \
   systemd-timesyncd \
+  gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk \
   samba samba-common-bin avahi-daemon avahi-utils udisks2 wireless-regdb \
   plymouth plymouth-label fonts-dejavu-core \
-  lxde gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
-  xterm htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
+  lxde-core lxsession openbox-lxde-session lxpolkit lxappearance lxappearance-obconf lxde-icon-theme \
+  lxhotkey-gtk lxinput lxrandr lxsession-edit galculator gpicview mousepad xarchiver alacritty \
+  gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
+  htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
   espeak-ng triggerhappy zsh
+
+# Flathub como fonte de Flatpak da App Store, para o sistema todo.
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo \
+  || echo "AVISO: Flathub nao foi adicionado (sem rede no build?)"
 
 systemctl enable ssh
 # As host keys sao apagadas abaixo pra que cada instalacao gere as suas, e
@@ -305,29 +322,7 @@ truncate -s 0 /etc/machine-id
 systemctl enable NetworkManager
 
 # Compartilhamento do acervo pela rede (equivalente ao share [GroovyArcade]
-# do gasetup, que exporta /home/arcade/shared). Diferenca deliberada: o
-# GroovyArcade usa "public = yes" (gravavel sem senha); aqui a escrita exige
-# o usuario fliperos, porque a ISO tambem sobe SSH com senha padrao.
-cat > /etc/samba/smb.conf << 'SMB'
-[global]
-   workgroup = WORKGROUP
-   server string = FliperOS
-   security = user
-   map to guest = never
-   disable netbios = no
-   server min protocol = SMB2
-
-[FliperOS]
-   comment = Acervo do FliperOS (roms, bios, saves)
-   path = /opt/fliperos
-   available = yes
-   browseable = yes
-   writable = yes
-   printable = no
-   valid users = fliperos
-   create mask = 0664
-   directory mask = 0775
-SMB
+# do gasetup): o smb.conf e o config/smb.conf, que o fliperos-rootfs.sh poe.
 systemctl enable smbd
 systemctl enable nmbd
 systemctl enable avahi-daemon
@@ -1433,6 +1428,10 @@ build_dolphin_chroot
 install_wine_chroot
 install_steam_chroot
 install_heroic_chroot
+# Pastas do acervo (~/roms): uma por emulador e por core do RetroArch, das
+# informacoes dos cores que o build do RetroArch deixou.
+chroot "$CHROOT_DIR" env HOME=/home/fliperos /opt/fliperos/bin/fliperos-roms >> "$LOG_FILE" 2>&1
+chroot "$CHROOT_DIR" chown -R fliperos:fliperos /home/fliperos/roms
 rm -f "$CHROOT_DIR/usr/sbin/policy-rc.d"
 unmount_chroot
 create_squashfs

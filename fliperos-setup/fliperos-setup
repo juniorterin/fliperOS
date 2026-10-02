@@ -74,6 +74,8 @@ source "$SETUP_DIR/lib/quirks.sh"
 source "$SETUP_DIR/lib/padkeys.sh"
 # shellcheck source=lib/lpt.sh
 source "$SETUP_DIR/lib/lpt.sh"
+# shellcheck source=lib/debug.sh
+source "$SETUP_DIR/lib/debug.sh"
 # shellcheck source=lib/ui.sh
 source "$SETUP_DIR/lib/ui.sh"
 # shellcheck source=screens/progress.sh
@@ -98,6 +100,8 @@ source "$SETUP_DIR/screens/first-boot.sh"
 source "$SETUP_DIR/screens/latency.sh"
 # shellcheck source=screens/lpt.sh
 source "$SETUP_DIR/screens/lpt.sh"
+# shellcheck source=screens/joysticks.sh
+source "$SETUP_DIR/screens/joysticks.sh"
 
 usage() {
   sed -n '8,18p' "${BASH_SOURCE[0]}" | sed 's/^# *//'

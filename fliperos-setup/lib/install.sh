@@ -107,6 +107,9 @@ install_configure_video() {
     install -D -m 644 "$EDID_DIR/custom_resolution.bin" "$target$EDID_DIR/custom_resolution.bin"
   fi
   xorg_generate "$target$XORG_CONF" || return 1
+  # O retroarch.cfg do disco vem da imagem (super resolucao); a largura sai
+  # da placa testada nesta sessao.
+  [[ -f $target$RETROARCH_CFG ]] && video_retroarch_super "$target$RETROARCH_CFG"
   # A linha sai do fliperos.conf e dos quirks do disco: nele esta o modo de
   # latencia, e o Recovery Mode nao apaga os quirks que ja estavam la.
   boot_write_cmdline "$(FLIPEROS_CONF=$target$FLIPEROS_CONF QUIRKS_FILE=$target$QUIRKS_FILE \

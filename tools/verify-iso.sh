@@ -216,6 +216,38 @@ unsquashfs -cat "$work/filesystem.squashfs" etc/passwd > "$work/f"
 grep -q '^fliperos:.*:/usr/bin/zsh$' "$work/f" || fail "o shell do usuario fliperos nao e o zsh"
 echo "terminal: zsh do usuario com Oh My Zsh e o tema Dracula"
 
+# ── Acervo em ~/roms ───────────────────────────────────────────
+grep -E 'opt/fliperos/roms ->' "$work/links.txt" | grep -q '/home/fliperos/roms' \
+  || fail "/opt/fliperos/roms nao aponta para /home/fliperos/roms"
+for path in home/fliperos/roms/mame home/fliperos/roms/ps2/_info.txt etc/samba/smb.conf \
+  opt/fliperos/bin/fliperos-roms opt/fliperos/bin/fliperos-calibrate; do
+  has "$path"
+done
+if present opt/fliperos/retroarch/info/snes9x_libretro.info; then
+  has home/fliperos/roms/retroarch/snes9x/_info.txt
+fi
+echo "acervo: ~/roms com uma pasta por emulador e por core do RetroArch"
+
+# ── Terminal do desktop: so o Alacritty ───────────────────────
+# O lxterminal e o xterm nao desenhavam as bordas do Gum; uma dependencia
+# nova nao pode traze-los de volta.
+has usr/bin/alacritty
+has home/fliperos/.config/alacritty/alacritty.toml
+for bin in usr/bin/lxterminal usr/bin/xterm usr/bin/lxterm usr/bin/uxterm; do
+  present "$bin" && fail "terminal que devia ter saido: /$bin"
+done
+echo "terminal do desktop: Alacritty (sem lxterminal nem xterm)"
+
+# ── App Store: GNOME Software + Flathub ───────────────────────
+for path in usr/bin/gnome-software usr/bin/flatpak usr/share/glib-2.0/schemas/90_fliperos-software.gschema.override \
+  usr/local/share/applications/org.gnome.Software.desktop; do
+  has "$path"
+done
+unsquashfs -cat "$work/filesystem.squashfs" var/lib/flatpak/repo/config > "$work/f" 2> /dev/null || true
+grep -q '^\[remote "flathub"\]' "$work/f" || fail "Flathub nao esta nas fontes de Flatpak"
+present 'usr/lib/x86_64-linux-gnu/gnome-software/plugins-.*/libgs_plugin_snap.so' && fail "App Store com o plugin de snap"
+echo "App Store: GNOME Software com Flatpak e Flathub, sem atualizacao automatica"
+
 xorriso -indev "$iso" -report_el_torito plain > "$work/boot.txt" 2>&1
 grep -q 'BIOS' "$work/boot.txt" || fail "sem boot BIOS"
 grep -q 'UEFI' "$work/boot.txt" || fail "sem boot UEFI"

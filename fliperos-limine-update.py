@@ -68,7 +68,7 @@ def entry(title, comment, version, cmdline):
             % (title, comment, KERNEL_DIR, version, KERNEL_DIR, version, cmdline))
 
 
-def render(versions, root, cmdline, timeout):
+def render(versions, root, cmdline, timeout, quiet="yes"):
     normal = " ".join(["root=" + root, "ro"] + cmdline.split())
     # Mesmo video/EDID do CRT, so sem o splash: o caminho com as mensagens do
     # kernel na tela quando o tema do Plymouth falha.
@@ -78,11 +78,12 @@ def render(versions, root, cmdline, timeout):
             "timeout: %s\n"
             # Boot direto no Plymouth, sem menu nem "Loading kernel": a
             # contagem continua, invisivel, e uma tecla nela revela o menu
-            # (a entrada de diagnostico).
-            "quiet: yes\n"
+            # (a entrada de diagnostico). O modo debug do Setup (FLIPEROS_QUIET
+            # = "no") mostra o menu.
+            "quiet: %s\n"
             # Menu em modo texto: igual ao "terminal_output console" do GRUB.
             "graphics: no\n"
-            "interface_branding: FliperOS\n\n" % timeout)
+            "interface_branding: FliperOS\n\n" % (timeout, "no" if quiet == "no" else "yes"))
     text += entry("FliperOS", "Kernel " + versions[0], versions[0], normal)
     if len(versions) > 1:
         text += "\n" + entry("FliperOS - kernel anterior",
@@ -104,7 +105,7 @@ def replace(dest, write):
     os.replace(tmp, dest)
 
 
-def update(boot, esp, root, cmdline, timeout):
+def update(boot, esp, root, cmdline, timeout, quiet="yes"):
     versions = kernels(boot)[:KEEP]
     if not versions:
         raise ValueError("Nenhum kernel com initrd em " + str(boot))
@@ -118,7 +119,7 @@ def update(boot, esp, root, cmdline, timeout):
                 replace(target / name, lambda tmp, src=boot / name: shutil.copyfile(src, tmp))
     config = esp / CONFIG
     config.parent.mkdir(parents=True, exist_ok=True)
-    text = render(versions, root, cmdline, timeout)
+    text = render(versions, root, cmdline, timeout, quiet)
     replace(config, lambda tmp: tmp.write_text(text))
     # So depois do menu novo: ate aqui o menu antigo ainda aponta pra eles.
     for stale in target.iterdir():
@@ -143,7 +144,8 @@ def main():
         defaults = read_defaults(DEFAULTS.read_text())
         versions = update(BOOT, ESP, root_device(FSTAB.read_text()),
                           defaults.get("FLIPEROS_CMDLINE", ""),
-                          defaults.get("FLIPEROS_TIMEOUT", "3"))
+                          defaults.get("FLIPEROS_TIMEOUT", "3"),
+                          defaults.get("FLIPEROS_QUIET", "yes"))
     except (OSError, ValueError) as exc:
         print("fliperos-limine-update: " + str(exc), file=sys.stderr)
         return 1

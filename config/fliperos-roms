@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Pastas do acervo em ~/roms (README, secao "ROMs"): uma por emulador e uma
+# por core do RetroArch em ~/roms/retroarch/<core>, cada uma com um
+# _info.txt do que vai nela. Os cores vem das informacoes que o proprio
+# RetroArch usa (/opt/fliperos/retroarch/info): um core novo do Online
+# Updater ganha pasta no login seguinte. So cria o que falta; roda a cada
+# login (fliperos-tty1) e no build da imagem.
+set -u
+roms=${FLIPEROS_ROMS:-$HOME/roms}
+info=${FLIPEROS_CORE_INFO:-/opt/fliperos/retroarch/info}
+mkdir -p "$roms/retroarch" 2> /dev/null || exit 0
+
+# folder PASTA TEXTO
+folder() {
+  [[ -d $1 ]] || mkdir -p "$1" 2> /dev/null || return 0
+  [[ -e $1/_info.txt ]] || printf '%s\n' "$2" > "$1/_info.txt" 2> /dev/null
+  return 0
+}
+
+folder "$roms/mame" "GroovyMAME: ROM sets (.zip/.7z, without unzipping) and CHD folders."
+folder "$roms/ps2" "PCSX2 (PlayStation 2): .iso .chd .cso .bin/.cue. The BIOS goes in ~/.config/PCSX2/bios."
+folder "$roms/dreamcast" "Flycast: Dreamcast (.gdi .cdi .chd) and Naomi/Atomiswave (.zip). BIOS in ~/.local/share/flycast."
+folder "$roms/model3" "Supermodel (Sega Model 3): MAME .zip sets."
+folder "$roms/dolphin" "Dolphin: GameCube and Wii (.iso .gcm .rvz .wbfs .ciso)."
+folder "$roms/openbor/Paks" "OpenBOR: .pak games."
+folder "$roms/hypseus" "Hypseus Singe (laserdisc): roms/, vldp/<game>/ and singe/<game>/."
+# O Model 2 roda no Wine com as ROMs dentro da pasta dele.
+if [[ -d /opt/fliperos/model2/roms && ! -e $roms/model2 ]]; then
+  ln -s /opt/fliperos/model2/roms "$roms/model2" 2> /dev/null
+fi
+
+# Um core por .info: "core|nome|.ext .ext".
+while IFS='|' read -r core name exts; do
+  [[ -n $core ]] || continue
+  folder "$roms/retroarch/$core" "RetroArch, core ${core}: ${name:-$core}${exts:+ ($exts)}"
+done < <(awk -F' = ' '
+  FNR == 1 {
+    if (core != "") print core "|" name "|" ext
+    core = FILENAME; sub(/.*\//, "", core); sub(/_libretro\.info$/, "", core); name = ""; ext = ""
+  }
+  $1 == "display_name" { name = $2; gsub(/"/, "", name) }
+  $1 == "supported_extensions" { ext = $2; gsub(/"/, "", ext); if (ext != "") { gsub(/\|/, " .", ext); ext = "." ext } }
+  END { if (core != "") print core "|" name "|" ext }' "$info"/*_libretro.info 2> /dev/null)
+exit 0

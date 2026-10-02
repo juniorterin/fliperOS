@@ -74,9 +74,15 @@ case $backend in
     # que o X fecha, e o desktop volta quando ele termina.
     request="${XDG_RUNTIME_DIR:-/tmp}/fliperos-next"
     rm -f "$request"
+    # Saida do X e da sessao: no log, nao na tela (o modo debug do Setup a
+    # mostra; o x_failed le o log do proprio Xorg).
+    xlog=/dev/stdout
+    if [[ ! -f /etc/fliperos/debug ]] && { : > /opt/fliperos/logs/desktop.log; } 2> /dev/null; then
+      xlog=/opt/fliperos/logs/desktop.log
+    fi
     while true; do
       started=$SECONDS
-      xinit "$binary" -- :0 -nolisten tcp "vt$vt" -keeptty
+      xinit "$binary" -- :0 -nolisten tcp "vt$vt" -keeptty >> "$xlog" 2>&1
       rc=$?
       if ((rc != 0 && SECONDS - started < 20)); then
         x_failed "$rc"
@@ -85,6 +91,8 @@ case $backend in
       [[ -s $request ]] || break
       mapfile -t next < "$request"
       rm -f "$request"
+      # Entre o desktop e o emulador, so a tela limpa.
+      printf '\e[H\e[2J\e[?25l'
       case ${next[0]:-} in
         /opt/fliperos/bin/fliperos-kms-run | /opt/fliperos/bin/fliperos-x11-run) "${next[@]}" ;;
         *) echo "Ignoring an unknown request: ${next[*]}" >&2 ;;

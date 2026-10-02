@@ -58,11 +58,38 @@ fi
 date
 
 echo "== Pacotes novos"
-packages=(usbutils systemd-timesyncd)
+# Os que a imagem ganhou depois da instalacao (fliperos-mkiso.sh).
+packages=(usbutils systemd-timesyncd gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk
+  alacritty)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 apt-get update -qq || echo "aviso: apt-get update com erros (sem rede?)"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" ||
   echo "aviso: nao instalou ${packages[*]}"
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo ||
+  echo "aviso: Flathub nao foi adicionado"
+# O override da App Store (fliperos-rootfs.sh) pode ter chegado depois do
+# pacote.
+glib-compile-schemas /usr/share/glib-2.0/schemas 2> /dev/null || true
+
+echo "== Terminais: so o Alacritty"
+# O metapacote lxde depende do lxterminal: os componentes dele (a mesma lista
+# do fliperos-mkiso.sh) passam a "instalados a mao" antes, senao um
+# autoremove levaria o desktop junto com o metapacote.
+lxde_parts=(lxde-core lxsession openbox-lxde-session lxpolkit lxappearance lxappearance-obconf lxde-icon-theme
+  lxhotkey-gtk lxinput lxrandr lxsession-edit galculator gpicview mousepad xarchiver)
+keep=()
+for p in "${lxde_parts[@]}"; do
+  dpkg -s "$p" > /dev/null 2>&1 && keep+=("$p")
+done
+((${#keep[@]})) && apt-mark manual "${keep[@]}" > /dev/null
+if command -v alacritty > /dev/null; then
+  DEBIAN_FRONTEND=noninteractive apt-get purge -y -q lxterminal xterm > /dev/null 2>&1 || true
+  echo "lxterminal/xterm: $(dpkg -l lxterminal xterm 2> /dev/null | grep -c '^ii') instalados"
+  echo "x-terminal-emulator: $(readlink -f /usr/bin/x-terminal-emulator)"
+  echo "autoremove levaria: $(apt-get autoremove -s 2> /dev/null | grep -c '^Remv') pacotes"
+else
+  echo "aviso: Alacritty nao instalou; os terminais antigos ficam"
+fi
 
 echo "== Linha do kernel (boot direto no Plymouth)"
 (
@@ -81,7 +108,19 @@ echo "== Linha do kernel (boot direto no Plymouth)"
   done
   boot_write_cmdline "${new[*]}"
   boot_apply || { echo "boot_apply falhou (ver /var/log/fliperos-setup.log)"; exit 1; }
+  # O fliperos-rootfs.sh reinstalou o retroarch.cfg da imagem: o que o setup
+  # decide por maquina volta (largura do CRT SwitchRes, modo de latencia).
+  video_retroarch_super
+  latency_emulators "$(latency_mode)"
+  grep -E '^crt_switch_resolution_super' "$RETROARCH_CFG"
 )
+
+echo "== Acervo em ~/roms"
+runuser -u fliperos -- /opt/fliperos/bin/fliperos-roms
+ls -ld /opt/fliperos/roms
+echo "pastas de core: $(find /home/fliperos/roms/retroarch -mindepth 1 -maxdepth 1 -type d | wc -l)"
+systemctl restart smbd 2> /dev/null || true
+udevadm control --reload 2> /dev/null || true
 sed -n 's/^FLIPEROS_CMDLINE=//p' /etc/default/fliperos-boot
 
 echo "== Servicos"

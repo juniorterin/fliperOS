@@ -7,6 +7,11 @@ SUBSYSTEM=="input", ATTRS{idVendor}=="0b9a", ATTRS{idProduct}=="016a", \
   ACTION=="add", ENV{DEVNAME}!="", \
   RUN+="/usr/local/bin/fliperos-guncon2-calibrate %E{DEVNAME}"
 
+# Volantes, pedais e analogicos calibrados em Setup > Joysticks
+# (fliperos-calibrate): o evdev tambem esquece essa calibracao a cada conexao.
+SUBSYSTEM=="input", KERNEL=="event*", ACTION=="add", ENV{ID_INPUT_JOYSTICK}=="1", \
+  RUN+="/opt/fliperos/bin/fliperos-calibrate apply $env{DEVNAME}"
+
 # Volantes: acesso ao no de event sem precisar de root, pro emulador que abre
 # /dev/input/event* direto em vez de passar pelo SDL.
 # Logitech: G25, G27, G29, Driving Force GT, Momo, G920.

@@ -53,6 +53,9 @@ case $name in
     if [[ -f $ini ]]; then
       /opt/fliperos/bin/fliperos-ini-set "$ini" EmuCore/GS AspectRatio Stretch
       /opt/fliperos/bin/fliperos-ini-set "$ini" UI StartFullscreen true
+      # Lista de jogos em ~/roms/ps2, se a pessoa ainda nao escolheu pastas.
+      grep -q '^RecursivePaths' "$ini" ||
+        /opt/fliperos/bin/fliperos-ini-set "$ini" GameList RecursivePaths /home/fliperos/roms/ps2
     fi
     set -- "$1" -fullscreen "${@:2}"
     ;;
@@ -63,8 +66,26 @@ esac
 
 # Audio SDL direto no ALSA (o FliperOS nao tem servidor de som).
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
+# Mapeamentos de controle do SDL (fliperos-rootfs.sh).
+export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/etc/fliperos/gamecontrollerdb.txt}"
 # Sem terminal (chamado por um frontend), o tty falha: vale o vt1.
 vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}
 [[ $vt =~ ^[0-9]+$ ]] || vt=1
-exec xinit /opt/fliperos/bin/fliperos-x11-client "$@" -- :0 -nolisten tcp -nocursor "vt$vt" -keeptty
+# Cursor so para quem tem interface de mouse: PCSX2 (lista de jogos e o
+# assistente da BIOS), Dolphin, Flycast e o Model 2 no Wine. Eles mesmos o
+# escondem durante o jogo em tela cheia. Os demais abrem direto no jogo.
+cursor=(-nocursor)
+case $name in
+  pcsx2 | dolphin-emu | flycast | fliperos-model2) cursor=() ;;
+esac
+export FLIPEROS_X11_CURSOR=$((${#cursor[@]} == 0))
+# A saida do X, do Switchres e do emulador vai para
+# /opt/fliperos/logs/<programa>.log, nao para a tela; no modo debug (Setup >
+# Debug mode) ela aparece. Sem como gravar o log, abre assim mesmo.
+log="${FLIPEROS_LOGS:-/opt/fliperos/logs}/$name.log"
+if [[ ! -f ${FLIPEROS_DEBUG_FLAG:-/etc/fliperos/debug} ]] && { : > "$log"; } 2> /dev/null; then
+  exec xinit /opt/fliperos/bin/fliperos-x11-client "$@" -- :0 -nolisten tcp "${cursor[@]}" "vt$vt" -keeptty \
+    >> "$log" 2>&1
+fi
+exec xinit /opt/fliperos/bin/fliperos-x11-client "$@" -- :0 -nolisten tcp "${cursor[@]}" "vt$vt" -keeptty

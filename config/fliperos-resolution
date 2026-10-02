@@ -7,7 +7,7 @@
 # fliperos-lxde aplica ao abrir o desktop. O modo do boot (console, setup,
 # frontends) continua o do Video Setup.
 #
-#   fliperos-resolution                 a tela (num lxterminal, pelo menu)
+#   fliperos-resolution                 a tela (no Alacritty, pelo menu)
 #   fliperos-resolution --apply-saved   aplica o modo guardado, se houver
 set -o pipefail
 LIB=${FLIPEROS_SETUP_LIB:-/usr/local/lib/fliperos-setup/lib}

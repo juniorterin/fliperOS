@@ -1,0 +1,8 @@
+# App Store (GNOME Software) no FliperOS: nada de baixar atualizacoes sozinha
+# (o mesmo motivo dos timers do apt mascarados: disco e rede no meio de uma
+# partida) nem a tela de boas-vindas. Atualizar fica na propria App Store ou
+# em Setup > System Update.
+[org.gnome.software]
+download-updates=false
+download-updates-notify=false
+first-run=false

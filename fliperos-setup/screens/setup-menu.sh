@@ -14,7 +14,8 @@ screen_setup_menu() {
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
       "quirks|Quirks (USB controller fixes)" \
-      "lpt|LPT joysticks (parallel port)" \
+      "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
+      "debug|Debug mode ($(debug_enabled && echo on || echo off))" \
       "update|System Update" \
       "return|Return") || return 0
     last=$choice
@@ -26,7 +27,8 @@ screen_setup_menu() {
       latency) screen_latency ;;
       scraper) screen_scraper ;;
       quirks) screen_quirks ;;
-      lpt) screen_lpt ;;
+      joysticks) screen_joysticks ;;
+      debug) screen_debug ;;
       update) screen_update ;;
       return) return 0 ;;
     esac
@@ -239,6 +241,30 @@ screen_scraper() {
       scraper_run "$dir" "$platform" "$source" "$videos" "$creds" || return 0
   done
   ui_msg "Scraper" "Done. The game lists were updated for $(launcher_label "$(launcher_current)")."
+}
+
+# ── Modo debug ───────────────────────────────────────────────────
+# lib/debug.sh: todo texto na tela (boot, frontends, emuladores) ou nenhum.
+
+screen_debug() {
+  if debug_enabled; then
+    ui_yesno "Debug mode" "Debug mode is on. Turn it off? The boot goes straight to the splash again and the output of frontends and emulators is only saved in /opt/fliperos/logs." yes ||
+      return 0
+    debug_set off
+  else
+    ui_yesno "Debug mode" "Show all text? The boot menu and the kernel and system messages at boot, and the output of frontends and emulators (now hidden and saved in /opt/fliperos/logs)." no ||
+      return 0
+    debug_set on
+  fi
+  if is_installed && ! is_live; then
+    ui_info "Debug mode" "Saving the boot settings..."
+    if ! boot_apply; then
+      ui_msg "Debug mode" "Could not update the boot settings (see /var/log/fliperos-setup.log)."
+      return 1
+    fi
+  fi
+  ui_msg "Debug mode" "Debug mode is $(debug_enabled && echo on || echo off)." "" \
+    "Frontends and emulators follow it now; the boot, after a restart."
 }
 
 # ── Quirks ───────────────────────────────────────────────────────

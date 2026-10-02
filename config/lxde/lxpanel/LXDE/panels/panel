@@ -53,10 +53,13 @@ Plugin {
       id=pcmanfm.desktop
     }
     Button {
-      id=lxterminal.desktop
+      id=Alacritty.desktop
     }
     Button {
       id=fliperos-setup.desktop
+    }
+    Button {
+      id=org.gnome.Software.desktop
     }
   }
 }

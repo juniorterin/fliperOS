@@ -1,0 +1,47 @@
+# Terminal do desktop do FliperOS: Alacritty no tema Dracula, com a mesma
+# paleta do console e do fliperos-setup (o indice 11 e o laranja). O
+# Alacritty desenha sozinho as bordas e blocos que o Gum usa, sem depender
+# da fonte. O tamanho da letra nao segue o DPI do EDID do CRT: o
+# fliperos-lxde exporta WINIT_X11_SCALE_FACTOR=1.
+
+[font]
+size = 10.0
+
+[font.normal]
+family = "DejaVu Sans Mono"
+
+[cursor.style]
+# Piscar redesenha a tela, o que tremula num modo entrelacado.
+blinking = "Never"
+
+[window]
+padding = { x = 2, y = 2 }
+
+[colors.primary]
+background = "#282a36"
+foreground = "#f8f8f2"
+bright_foreground = "#ffffff"
+
+[colors.selection]
+text = "CellForeground"
+background = "#44475a"
+
+[colors.normal]
+black = "#21222c"
+red = "#ff5555"
+green = "#50fa7b"
+yellow = "#f1fa8c"
+blue = "#bd93f9"
+magenta = "#ff79c6"
+cyan = "#8be9fd"
+white = "#f8f8f2"
+
+[colors.bright]
+black = "#6272a4"
+red = "#ff6e6e"
+green = "#69ff94"
+yellow = "#ffb86c"
+blue = "#d6acff"
+magenta = "#ff92df"
+cyan = "#a4ffff"
+white = "#ffffff"

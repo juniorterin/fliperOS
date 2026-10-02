@@ -3,7 +3,7 @@
 # (o GroovyArcade tambem o empacota). Duas fases, como o proprio Skyscraper
 # pede: "gather" baixa para o cache, "generate" monta a lista do frontend.
 
-ROMS_DIR=${ROMS_DIR:-/opt/fliperos/roms}
+ROMS_DIR=${ROMS_DIR:-/home/fliperos/roms}
 SKYSCRAPER=${SKYSCRAPER:-Skyscraper}
 
 # Pasta de ROMs do FliperOS -> plataforma do Skyscraper.

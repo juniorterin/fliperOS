@@ -20,4 +20,13 @@ fi
 # servidor de som, tentar PipeWire e PulseAudio antes so atrasa a abertura.
 export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
+# Mapeamentos de controle do SDL (fliperos-rootfs.sh).
+export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/etc/fliperos/gamecontrollerdb.txt}"
+# A saida do programa vai para /opt/fliperos/logs/<programa>.log, nao para a
+# tela; no modo debug (Setup > Debug mode) ela aparece. Sem como gravar o
+# log, o programa abre assim mesmo.
+log="${FLIPEROS_LOGS:-/opt/fliperos/logs}/$(basename -- "$1").log"
+if [[ ! -f ${FLIPEROS_DEBUG_FLAG:-/etc/fliperos/debug} ]] && { : > "$log"; } 2> /dev/null; then
+  exec "$@" >> "$log" 2>&1
+fi
 exec "$@"
