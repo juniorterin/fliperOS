@@ -244,7 +244,7 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 | `--wifi-ssid NOME --wifi-psk SENHA` | Grava uma rede Wi-Fi na imagem (**a senha fica em texto na ISO**; não a distribua) |
 | `--repo DIR` | Repositório APT dos frontends levado para a imagem (padrão `/output/repo`, se existir) |
 
-O que não existe no Ubuntu 24.04 é baixado com versão e hash fixados: Limine 11.4.1, Gum 2.0.2, AntiMicroX 3.6.1 (`.deb` oficial para 24.04), Skyscraper 3.21.0 (fork Gemba, compilado com Qt6).
+O que não existe no Ubuntu 24.04 é baixado com versão e hash fixados: Limine 11.4.1, Gum 2.0.2 (o `.deb` fica pelas páginas de manual; o binário é o do código da mesma versão com `patches/gum`, compilado com o Go 1.26.7: setas ▲/▼ em vez dos pontos na paginação dos menus, posto no lugar do `/usr/bin/gum` com `dpkg-divert`), AntiMicroX 3.6.1 (`.deb` oficial para 24.04), Skyscraper 3.21.0 (fork Gemba, compilado com Qt6).
 
 Auditoria da ISO gerada (só leitura): confere menu de boot, kernel, arquivos do setup, bibliotecas dos programas compilados, EDIDs e boot BIOS/UEFI.
 

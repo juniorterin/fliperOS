@@ -72,6 +72,11 @@ EVANGELION_PLING_ID="2354544"
 # Gum: as telas do fliperos-setup.
 GUM_VERSION="2.0.2"
 GUM_SHA256="9aad8600d9d280d91544439f35db4c9583cc0201bb718ac6afcc0f4989ea945b"
+# O binario do gum e o do codigo da mesma versao com patches/gum (setas em
+# vez dos pontos na paginacao dos menus), compilado com o Go que ela pede.
+GUM_COMMIT="879f048103adf0214b85943b52d8d65b08d772c5"
+GO_VERSION="1.26.7"
+GO_SHA256="ffb5f8de10c62550dfddab66b36b57030721e0a44a3218e9e1181d7b59f121ca"
 # AntiMicroX (joystick -> teclado/mouse), como no GroovyArcade. O noble so
 # tem o qjoypad; o antimicrox vem do .deb oficial do projeto.
 ANTIMICROX_VERSION="3.6.1"
@@ -456,6 +461,32 @@ fetch_debs() {
   fi
 }
 
+# build_gum compila o gum com patches/gum no container do build (binario
+# estatico, sem nada do chroot); install_debs_chroot o poe no lugar do
+# /usr/bin/gum do .deb, que fica com as paginas de manual e o completion.
+build_gum() {
+  step "Gum ${GUM_VERSION} com as setas na paginacao (patches/gum)"
+  local here gsrc="$WORK_DIR/gum-src" go="$WORK_DIR/go"
+  here=$(dirname "$(realpath "$0")")
+  curl -sSfL --retry 3 --max-time 600 -o "$WORK_DIR/go.tgz" \
+    "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" >> "$LOG_FILE" 2>&1 || err "Download do Go falhou"
+  echo "$GO_SHA256  $WORK_DIR/go.tgz" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
+    || err "Go: hash diferente do fixado"
+  rm -rf "$go" "$gsrc"
+  mkdir -p "$go"
+  tar xzf "$WORK_DIR/go.tgz" -C "$go" --strip-components=1 || err "Go: o pacote nao extraiu"
+  git clone -q --depth 1 --branch "v${GUM_VERSION}" https://github.com/charmbracelet/gum "$gsrc" >> "$LOG_FILE" 2>&1 \
+    || err "Gum: o codigo nao baixou"
+  [[ $(git -C "$gsrc" rev-parse HEAD) == "$GUM_COMMIT" ]] || err "Gum: a tag v${GUM_VERSION} nao e mais o commit fixado"
+  git -C "$gsrc" apply "$here"/patches/gum/*.patch >> "$LOG_FILE" 2>&1 || err "Gum: o patch nao aplicou"
+  (cd "$gsrc" && CGO_ENABLED=0 GOPATH="$WORK_DIR/gopath" GOCACHE="$WORK_DIR/gocache" \
+    "$go/bin/go" build -trimpath -ldflags "-s -w -X main.Version=${GUM_VERSION}-fliperos" -o "$WORK_DIR/gum" .) \
+    >> "$LOG_FILE" 2>&1 || err "Gum: o build falhou"
+  chmod -R u+w "$WORK_DIR/gopath" 2> /dev/null || true
+  rm -rf "$gsrc" "$go" "$WORK_DIR/go.tgz" "$WORK_DIR/gocache" "$WORK_DIR/gopath"
+  ok "gum $("$WORK_DIR/gum" --version | awk '{print $3}')"
+}
+
 fetch_deb() {
   local url=$1 sha=$2 name=$3
   curl -sSfL --retry 3 --max-time 600 -o "$DEBS_DIR/$name" "$url" >> "$LOG_FILE" 2>&1 \
@@ -472,6 +503,10 @@ install_debs_chroot() {
     apt-get install -y --no-install-recommends /tmp/gum.deb /tmp/antimicrox.deb' >> "$LOG_FILE" 2>&1 \
     || err "Instalacao do gum/antimicrox falhou (ver $LOG_FILE)"
   rm -f "$CHROOT_DIR"/tmp/*.deb
+  # O gum com patches/gum (build_gum) no lugar do binario do .deb.
+  chroot "$CHROOT_DIR" dpkg-divert --local --rename --add /usr/bin/gum >> "$LOG_FILE" 2>&1 \
+    || err "Gum: dpkg-divert falhou"
+  install -m755 "$WORK_DIR/gum" "$CHROOT_DIR/usr/bin/gum"
   ok "gum $(chroot "$CHROOT_DIR" gum --version | awk '{print $3}'), antimicrox $ANTIMICROX_VERSION"
 }
 
@@ -1427,6 +1462,7 @@ mkdir -p "$ISO_DIR"
 check_host_deps
 fetch_limine
 fetch_debs
+build_gum
 build_rootfs
 configure_chroot
 install_limine_rootfs

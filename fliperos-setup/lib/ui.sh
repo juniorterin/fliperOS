@@ -149,9 +149,10 @@ ui_screen() {
 # caixa, deixando espaco para a linha de ajuda do gum.
 ui_list_height() {
   local items=$1 free
-  # Sobra para a ajuda do gum (2 linhas) e, se a lista rolar, para os
-  # pontos de paginacao (2 linhas).
-  free=$((UI_ROWS - UI_USED_ROWS - 5))
+  # Sobra para a ajuda do gum (2 linhas) e, se a lista rolar, para as setas
+  # da paginacao (patches/gum: a de cima numa linha antes da lista, a de
+  # baixo depois de uma em branco).
+  free=$((UI_ROWS - UI_USED_ROWS - 6))
   ((free < 3)) && free=3
   ((items < free)) && free=$items
   printf '%s\n' "$free"

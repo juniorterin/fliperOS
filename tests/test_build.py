@@ -323,6 +323,22 @@ class ImageTests(unittest.TestCase):
         self.assertIn('antimicrox', MKISO)
         self.assertIn('/tmp/gum.deb /tmp/antimicrox.deb', MKISO)
 
+    def test_gum_menus_page_with_arrows(self):
+        # Setas em vez dos pontos da paginacao: o gum do .deb e trocado pelo
+        # do codigo da mesma versao com patches/gum, com o Go fixado.
+        patch = (ROOT / 'patches/gum/0001-choose-setas.patch').read_text()
+        self.assertIn('+			up = "▲"', patch)
+        self.assertIn('+			down = "▼"', patch)
+        self.assertIn('-		s.WriteString("  " + m.paginator.View())', patch)
+        body = MKISO.split('build_gum() {')[1].split('\n}\n')[0]
+        for name in ('GUM_COMMIT', 'GO_SHA256'):
+            self.assertRegex(MKISO, name + r'="[0-9a-f]{40,64}"')
+        self.assertIn('rev-parse HEAD) == "$GUM_COMMIT"', body)
+        self.assertIn('git -C "$gsrc" apply "$here"/patches/gum/*.patch', body)
+        self.assertIn('dpkg-divert --local --rename --add /usr/bin/gum', MKISO)
+        self.assertRegex(MKISO, r'(?m)^fetch_debs\nbuild_gum$')
+        self.assertIn('patches/', (ROOT / 'Dockerfile.fliperos').read_text())
+
     def test_old_menus_are_gone(self):
         for old in ('fliperos-config', 'fliperos-install.py', 'fliperos_tui', 'whiptail',
                     'MONITOR_PROFILE', 'fliperos-install-video'):
