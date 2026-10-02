@@ -339,6 +339,32 @@ class ImageTests(unittest.TestCase):
         self.assertRegex(MKISO, r'(?m)^fetch_debs\nbuild_gum$')
         self.assertIn('patches/', (ROOT / 'Dockerfile.fliperos').read_text())
 
+    def test_gum_menu_sounds(self):
+        # O cursor que anda e o Enter tocam os WAV de GUM_SOUND_MOVE e
+        # GUM_SOUND_SELECT (aplay), no choose e no confirm. Sem CR: o git
+        # apply do build recusaria.
+        patch = (ROOT / 'patches/gum/0002-sons-do-menu.patch').read_bytes()
+        self.assertNotIn(b'\r', patch)
+        text = patch.decode()
+        self.assertIn('+func Move() { play("GUM_SOUND_MOVE") }', text)
+        self.assertIn('+func Select() { play("GUM_SOUND_SELECT") }', text)
+        self.assertIn('+	cmd := exec.Command("aplay", "-q", file)', text)
+        self.assertEqual(text.count('+			sfx.Select()'), 3)
+        self.assertIn('+			sfx.Move() // FliperOS', text)
+        self.assertIn('+				sfx.Move()', text)
+        # A pasta dos sons e da pessoa (gravavel pelo Samba).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'etc/fliperos/mame', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            menu = root / 'opt/fliperos/sounds/menu'
+            self.assertIn('select.wav', (menu / '_info.txt').read_text())
+            self.assertEqual(menu.stat().st_uid, 1000)
+
     def test_old_menus_are_gone(self):
         for old in ('fliperos-config', 'fliperos-install.py', 'fliperos_tui', 'whiptail',
                     'MONITOR_PROFILE', 'fliperos-install-video'):

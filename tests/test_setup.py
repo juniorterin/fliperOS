@@ -1426,6 +1426,39 @@ class ScraperTests(Base):
         self.assertIn("-f emulationstation -g %s/scraped -o %s/scraped" % (self.env.dir, self.env.dir), lots[2])
 
 
+class MenuSoundsTests(Base):
+    """Sons do menu (lib/audio.sh e ui_sounds): os WAV da pessoa no gum."""
+
+    def setUp(self):
+        super().setUp()
+        self.dir = self.env.dir / "sounds"
+        self.dir.mkdir()
+        self.vars = {"MENU_SOUNDS_DIR": str(self.dir)}
+
+    def sounds(self):
+        script = 'source %s/lib/ui.sh; ui_sounds; echo "$(menu_sounds_label)|${GUM_SOUND_MOVE:-}|${GUM_SOUND_SELECT:-}"'
+        return self.env.out(script % SETUP, self.vars).strip()
+
+    def test_on_when_the_files_are_there(self):
+        self.assertEqual(self.sounds(), "no sound files||")
+        (self.dir / "select.wav").write_bytes(b"RIFF")
+        self.assertEqual(self.sounds(), "on||%s/select.wav" % self.dir)
+        (self.dir / "move.wav").write_bytes(b"RIFF")
+        self.assertEqual(self.sounds(), "on|%s/move.wav|%s/select.wav" % (self.dir, self.dir))
+
+    def test_turned_off_in_the_setup(self):
+        (self.dir / "move.wav").write_bytes(b"RIFF")
+        self.env.out("menu_sounds_set off", self.vars)
+        self.assertEqual(self.sounds(), "off||")
+        self.env.out("menu_sounds_set on", self.vars)
+        self.assertEqual(self.sounds(), "on|%s/move.wav|" % self.dir)
+
+    def test_in_the_audio_setup(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn('"sounds|Menu sounds ($(menu_sounds_label))"', menu)
+        self.assertIn("ui_sounds", (SETUP / "lib" / "ui.sh").read_text().split("ui_init() {")[1].split("\n}\n")[0])
+
+
 class RomCleanerTests(Base):
     """lib/romclean.sh: o Setup > MAME ROM Cleaner (config/fliperos-romclean)."""
 

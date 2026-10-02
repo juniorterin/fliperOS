@@ -63,6 +63,18 @@ ui_init() {
   export GUM_PAGER_BORDER_FOREGROUND=$C_PURPLE
   export GUM_PAGER_HELP_FOREGROUND=$C_COMMENT
   export GUM_PAGER_LINE_NUMBER_FOREGROUND=$C_COMMENT
+  ui_sounds
+}
+
+# ui_sounds liga ou desliga os sons do menu no gum (menu_sounds_env, em
+# lib/audio.sh).
+ui_sounds() {
+  local line
+  unset GUM_SOUND_MOVE GUM_SOUND_SELECT
+  while IFS= read -r line; do
+    [[ -n $line ]] && export "${line?}"
+  done < <(menu_sounds_env)
+  return 0
 }
 
 # ui_size le o tamanho do console, que muda quando o teste de saidas liga

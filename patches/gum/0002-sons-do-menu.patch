@@ -1,0 +1,108 @@
+diff --git a/choose/choose.go b/choose/choose.go
+--- a/choose/choose.go
++++ b/choose/choose.go
+@@ -17,6 +17,7 @@ import (
+ 	"charm.land/bubbles/v2/key"
+ 	"charm.land/bubbles/v2/paginator"
+ 	tea "charm.land/bubbletea/v2"
++	"charm.land/gum/v2/internal/sfx"
+ 	"charm.land/lipgloss/v2"
+ 	"github.com/charmbracelet/x/exp/ordered"
+ )
+@@ -143,6 +144,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+ 	case tea.KeyPressMsg:
+ 		start, end := m.paginator.GetSliceBounds(len(m.items))
+ 		km := m.keymap
++		// FliperOS: o som do cursor quando ele anda (internal/sfx).
++		defer func(prev int) {
++			if m.index != prev {
++				sfx.Move()
++			}
++		}(m.index)
+ 		switch {
+ 		case key.Matches(msg, km.Down):
+ 			m.index++
+@@ -209,6 +216,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+ 				m.items[m.index].selected = true
+ 			}
+ 			m.submitted = true
++			sfx.Select()
+ 			return m, tea.Quit
+ 		}
+ 	}
+diff --git a/confirm/confirm.go b/confirm/confirm.go
+--- a/confirm/confirm.go
++++ b/confirm/confirm.go
+@@ -15,6 +15,7 @@ import (
+ 	"charm.land/bubbles/v2/key"
+
+ 	tea "charm.land/bubbletea/v2"
++	"charm.land/gum/v2/internal/sfx"
+ 	"charm.land/lipgloss/v2"
+ )
+
+@@ -118,12 +119,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+ 				break
+ 			}
+ 			m.confirmation = !m.confirmation
++			sfx.Move() // FliperOS: os sons do menu (internal/sfx).
+ 		case key.Matches(msg, m.keys.Submit):
+ 			m.quitting = true
++			sfx.Select()
+ 			return m, tea.Quit
+ 		case key.Matches(msg, m.keys.Affirmative):
+ 			m.quitting = true
+ 			m.confirmation = true
++			sfx.Select()
+ 			return m, tea.Quit
+ 		}
+ 	}
+diff --git a/internal/sfx/sfx.go b/internal/sfx/sfx.go
+new file mode 100644
+--- /dev/null
++++ b/internal/sfx/sfx.go
+@@ -0,0 +1,44 @@
++// Package sfx plays the FliperOS menu sounds: GUM_SOUND_MOVE when the cursor
++// moves and GUM_SOUND_SELECT on submit (WAV files, played with aplay). Unset
++// or missing files are silent.
++package sfx
++
++import (
++	"os"
++	"os/exec"
++	"sync"
++)
++
++var (
++	mu   sync.Mutex
++	last *exec.Cmd
++)
++
++func play(env string) {
++	file := os.Getenv(env)
++	if file == "" {
++		return
++	}
++	if _, err := os.Stat(file); err != nil {
++		return
++	}
++	mu.Lock()
++	defer mu.Unlock()
++	// A new sound cuts the one still playing (scrolling fast).
++	if last != nil && last.Process != nil {
++		_ = last.Process.Kill()
++	}
++	cmd := exec.Command("aplay", "-q", file)
++	if err := cmd.Start(); err != nil {
++		last = nil
++		return
++	}
++	last = cmd
++	go func() { _ = cmd.Wait() }()
++}
++
++// Move plays the cursor sound.
++func Move() { play("GUM_SOUND_MOVE") }
++
++// Select plays the selection sound. It keeps playing after gum exits.
++func Select() { play("GUM_SOUND_SELECT") }

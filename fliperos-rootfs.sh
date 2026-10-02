@@ -41,6 +41,17 @@ done
 install -Dm755 "$src/config/fliperos-roms" "$root/opt/fliperos/bin/fliperos-roms"
 # Samba: \\fliperos\FliperOS (/opt/fliperos) e \\fliperos\roms.
 install -Dm644 "$src/config/smb.conf" "$root/etc/samba/smb.conf"
+# Sons do menu do Setup (Audio Setup > Menu sounds): os WAV da pessoa, que
+# ela grava pela rede (\\fliperos\FliperOS\sounds\menu).
+install -d -m 775 "$root/opt/fliperos/sounds/menu"
+[[ -f "$root/opt/fliperos/sounds/menu/_info.txt" ]] || cat > "$root/opt/fliperos/sounds/menu/_info.txt" << 'EOF'
+Menu sounds of the FliperOS Setup (WAV):
+  move.wav    when the cursor moves
+  select.wav  on Enter
+They play once they are here; Setup > Audio Setup > Menu sounds turns them
+on and off. FliperOS doesn't come with game sounds: use your own.
+EOF
+chown -R 1000:1000 "$root/opt/fliperos/sounds" 2> /dev/null || true
 # fliperos-menu: do shell de volta ao menu (o laco do fliperos-tty1).
 install -Dm755 "$src/config/fliperos-menu" "$root/usr/local/bin/fliperos-menu"
 # Controle como teclado nos menus do setup (o servico so age com o menu na

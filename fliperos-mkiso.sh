@@ -73,7 +73,8 @@ EVANGELION_PLING_ID="2354544"
 GUM_VERSION="2.0.2"
 GUM_SHA256="9aad8600d9d280d91544439f35db4c9583cc0201bb718ac6afcc0f4989ea945b"
 # O binario do gum e o do codigo da mesma versao com patches/gum (setas em
-# vez dos pontos na paginacao dos menus), compilado com o Go que ela pede.
+# vez dos pontos na paginacao dos menus e os sons do menu), compilado com o
+# Go que ela pede.
 GUM_COMMIT="879f048103adf0214b85943b52d8d65b08d772c5"
 GO_VERSION="1.26.7"
 GO_SHA256="ffb5f8de10c62550dfddab66b36b57030721e0a44a3218e9e1181d7b59f121ca"
@@ -465,7 +466,7 @@ fetch_debs() {
 # estatico, sem nada do chroot); install_debs_chroot o poe no lugar do
 # /usr/bin/gum do .deb, que fica com as paginas de manual e o completion.
 build_gum() {
-  step "Gum ${GUM_VERSION} com as setas na paginacao (patches/gum)"
+  step "Gum ${GUM_VERSION} com as setas na paginacao e os sons do menu (patches/gum)"
   local here gsrc="$WORK_DIR/gum-src" go="$WORK_DIR/go"
   here=$(dirname "$(realpath "$0")")
   curl -sSfL --retry 3 --max-time 600 -o "$WORK_DIR/go.tgz" \

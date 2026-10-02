@@ -132,3 +132,45 @@ audio_set_mame_latency() {
 audio_test() {
   speak_wait "Sound test. If you can hear this, the audio output is working."
 }
+
+# ── Sons do menu ─────────────────────────────────────────────────
+# O gum do FliperOS (patches/gum/0002-sons-do-menu.patch) toca
+# GUM_SOUND_MOVE quando o cursor anda e GUM_SOUND_SELECT no Enter. Os sons
+# sao da pessoa (o FliperOS nao traz sons de jogo): move.wav e select.wav
+# nesta pasta, que na rede e o compartilhamento FliperOS, sounds/menu.
+MENU_SOUNDS_DIR=${MENU_SOUNDS_DIR:-/opt/fliperos/sounds/menu}
+
+# menu_sounds_state imprime on, off ou missing (nem move.wav nem select.wav
+# na pasta). Com os arquivos la, liga sozinho; o Setup desliga.
+menu_sounds_state() {
+  if [[ ! -f $MENU_SOUNDS_DIR/move.wav && ! -f $MENU_SOUNDS_DIR/select.wav ]]; then
+    echo missing
+  elif [[ $(conf_get menu_sounds) == off ]]; then
+    echo off
+  else
+    echo on
+  fi
+}
+
+# menu_sounds_label imprime o estado para o menu: on, off ou "no sound
+# files".
+menu_sounds_label() {
+  local state
+  state=$(menu_sounds_state)
+  [[ $state == missing ]] && state="no sound files"
+  printf '%s\n' "$state"
+}
+
+# menu_sounds_set on|off liga ou desliga os sons do menu.
+menu_sounds_set() {
+  conf_set menu_sounds "$1"
+}
+
+# menu_sounds_env imprime as variaveis do gum dos sons que existem, uma por
+# linha (GUM_SOUND_MOVE=...), se os sons estiverem ligados.
+menu_sounds_env() {
+  [[ $(menu_sounds_state) == on ]] || return 0
+  [[ -f $MENU_SOUNDS_DIR/move.wav ]] && echo "GUM_SOUND_MOVE=$MENU_SOUNDS_DIR/move.wav"
+  [[ -f $MENU_SOUNDS_DIR/select.wav ]] && echo "GUM_SOUND_SELECT=$MENU_SOUNDS_DIR/select.wav"
+  return 0
+}
