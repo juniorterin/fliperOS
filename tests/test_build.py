@@ -841,7 +841,8 @@ class GroovyMameTests(unittest.TestCase):
         self.assertEqual(ini['cfg_directory'], '$HOME/.mame/cfg')
         self.assertEqual(ini['rompath'], '/home/fliperos/roms/mame')
         ui = self.ini('mame-ui.ini')
-        self.assertEqual((ui['font_rows'], ui['infos_text_size']), ('19', '1.00'))
+        # 20 e o minimo do MAME (20-40): o 19 do GroovyArcade e descartado.
+        self.assertEqual((ui['font_rows'], ui['infos_text_size']), ('20', '1.00'))
 
     def test_support_files_come_from_the_tag(self):
         # As pastas do mame.ini existem na imagem: o codigo da mesma tag.
