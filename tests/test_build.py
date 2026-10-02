@@ -1611,6 +1611,24 @@ class SilentBootTests(unittest.TestCase):
         self.assertNotIn('--noclear', unit)
         self.assertIn('.hushlogin', ROOTFS)
 
+    def test_console_stays_quiet_after_boot(self):
+        # O 10-console-messages.conf do Ubuntu (kernel.printk = 4 4 1 7)
+        # passava por cima do loglevel=3: um erro do kernel depois do Plymouth
+        # ia para a tela (no gabinete, o do hdaudio). O 99- vem depois.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'etc/fliperos/mame', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            conf = root / 'etc/sysctl.d/99-fliperos-console.conf'
+            self.assertEqual(conf.read_text(), 'kernel.printk = 3 4 1 3\n')
+            self.assertGreater(conf.name, '10-console-messages.conf')
+        self.assertIn('sysctl -q -p /etc/sysctl.d/99-fliperos-console.conf',
+                      (ROOT / 'tools/cabinet-update.sh').read_text())
+
 
 class TerminalThemeTests(unittest.TestCase):
     """Terminal escuro: zsh com Oh My Zsh e o tema Dracula."""

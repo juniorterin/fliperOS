@@ -39,6 +39,13 @@ for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-clie
 done
 # Pastas do acervo em ~/roms (uma por emulador e por core do RetroArch).
 install -Dm755 "$src/config/fliperos-roms" "$root/opt/fliperos/bin/fliperos-roms"
+# Console calado depois do boot tambem: o 10-console-messages.conf do Ubuntu
+# volta o nivel do console para 4 (kernel.printk = 4 4 1 7) no meio do boot,
+# por cima do loglevel=3 da linha do kernel, e um erro do kernel depois que o
+# Plymouth sai aparecia na tela (no gabinete, "hdaudio hdaudioC0D3: Unable
+# to configure", o codec HDMI da Intel sem uso). 3: so os criticos.
+mkdir -p "$root/etc/sysctl.d"
+printf 'kernel.printk = 3 4 1 3\n' > "$root/etc/sysctl.d/99-fliperos-console.conf"
 # Samba: \\fliperos\FliperOS (/opt/fliperos) e \\fliperos\roms.
 install -Dm644 "$src/config/smb.conf" "$root/etc/samba/smb.conf"
 # Sons do menu do Setup (Audio Setup > Menu sounds): os WAV da pessoa, que

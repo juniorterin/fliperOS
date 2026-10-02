@@ -117,6 +117,9 @@ echo "== Linha do kernel (boot direto no Plymouth)"
   grep -E '^crt_switch_resolution_super' "$RETROARCH_CFG"
 )
 
+echo "== Console calado (kernel.printk do fliperos-rootfs.sh) ja neste boot"
+sysctl -q -p /etc/sysctl.d/99-fliperos-console.conf && cat /proc/sys/kernel/printk
+
 echo "== XML do MAME 2010 (ROM cleaner)"
 /opt/fliperos/bin/fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz || echo "falhou (sem rede?)"
 
