@@ -34,7 +34,8 @@ _progress_draw() {
   barw=$((inner - 6))
   full=$((barw * pct / 100))
   {
-    printf '\e[4;1H'
+    # Logo abaixo do topo (2 linhas, ou 3 com o status numa linha propria).
+    printf '\e[%d;1H' $((UI_TOPBAR_ROWS + 2))
     printf '  %s\n' "$(ui_c "$C_PURPLE" "╭$(_repeat ─ $((w - 2)))╮")"
     _progress_line "$(ui_c "$C_PINK" "$title")" "$inner"
     _progress_line "" "$inner"

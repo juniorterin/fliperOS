@@ -1,13 +1,15 @@
 diff --git a/choose/choose.go b/choose/choose.go
-index 61afb5e..ac64dff 100644
+index 61afb5e..5556486 100644
 --- a/choose/choose.go
 +++ b/choose/choose.go
-@@ -271,14 +271,20 @@ func (m model) View() tea.View {
+@@ -271,14 +271,22 @@ func (m model) View() tea.View {
  		}
  	}
  
-+	// FliperOS: setas em vez dos pontos da paginacao: ▲ em cima quando ha
-+	// itens acima, ▼ embaixo quando ha itens abaixo.
++	// FliperOS: setas em vez dos pontos da paginacao: ▲ logo acima da lista
++	// quando ha itens acima, ▼ logo abaixo quando ha itens abaixo (sem a
++	// linha em branco que separava os pontos; a ultima pagina, mais curta,
++	// completa com linhas vazias e a seta fica no mesmo lugar).
 +	top := ""
  	if m.paginator.TotalPages > 1 {
 -		lightDark := lipgloss.LightDark(m.hasDarkBG)
@@ -15,6 +17,8 @@ index 61afb5e..ac64dff 100644
 -		verySubduedStyle := lipgloss.NewStyle().Foreground(lightDark(lipgloss.Color("#DDDADA"), lipgloss.Color("#3C3C3C")))
 -		m.paginator.ActiveDot = subduedStyle.Render("•")
 -		m.paginator.InactiveDot = verySubduedStyle.Render("•")
+-		s.WriteString(strings.Repeat("\n", m.height-m.paginator.ItemsOnPage(len(m.items))+1))
+-		s.WriteString("  " + m.paginator.View())
 +		up, down := " ", " "
 +		if m.paginator.Page > 0 {
 +			up = "▲"
@@ -23,13 +27,12 @@ index 61afb5e..ac64dff 100644
 +			down = "▼"
 +		}
 +		top = "  " + m.cursorStyle.Render(up) + "\n"
- 		s.WriteString(strings.Repeat("\n", m.height-m.paginator.ItemsOnPage(len(m.items))+1))
--		s.WriteString("  " + m.paginator.View())
++		s.WriteString(strings.Repeat("\n", m.height-m.paginator.ItemsOnPage(len(m.items))))
 +		s.WriteString("  " + m.cursorStyle.Render(down))
  	}
  
  	var parts []string
-@@ -286,7 +292,7 @@ func (m model) View() tea.View {
+@@ -286,7 +294,7 @@ func (m model) View() tea.View {
  	if m.header != "" {
  		parts = append(parts, m.headerStyle.Render(m.header))
  	}

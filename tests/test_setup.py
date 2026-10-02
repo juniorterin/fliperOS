@@ -8,6 +8,7 @@ ISO, com o mesmo mawk e jq.
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -1235,6 +1236,44 @@ class StructureTests(unittest.TestCase):
         for path in list((SETUP / "lib").glob("*.sh")) + list((SETUP / "screens").glob("*.sh")):
             rel = "%s/%s" % (path.parent.name, path.name)
             self.assertIn('source "$SETUP_DIR/%s"' % rel, entry, rel)
+
+
+class TopbarTests(Base):
+    """O IP e o uso do disco no topo, ate em 320x240 (40 colunas)."""
+
+    STATUS = "fliperos (192.168.1.111 10.0.0.5) - 42% used on /"
+
+    def topbar(self, cols, title="FliperOS", status=STATUS):
+        # ui_topbar escreve em /dev/tty: um terminal falso (script).
+        cmd = ("UI_COLS=%d UI_TITLE='%s' UI_STATUS='%s'; ui_topbar; echo \"rows=$UI_TOPBAR_ROWS\""
+               % (cols, title, status))
+        script = self.env.dir / "topbar.sh"
+        script.write_text(cmd)
+        out = self.env.out('script -qec "bash -c \'%s\'" /dev/null' %
+                           ("source %s/lib/ui.sh; source %s" % (SETUP, script)))
+        lines = re.sub(r"\x1b\[[0-9;]*m|\r", "", out).splitlines()
+        return [l.rstrip() for l in lines if l.strip()]
+
+    def test_short_status(self):
+        for status, short in ((self.STATUS, "192.168.1.111 - 42%"),
+                              ("fliperos (no network) - 7% used on /", "no network - 7%"),
+                              ("fliperos (192.168.1.111)", "192.168.1.111")):
+            out = self.env.out("source %s/lib/ui.sh; UI_STATUS='%s'; ui_status_short" % (SETUP, status)).strip()
+            self.assertEqual(out, short, status)
+
+    def test_full_short_or_own_line(self):
+        lines = self.topbar(80)
+        self.assertTrue(lines[0].endswith(self.STATUS), lines)
+        self.assertIn("rows=2", lines)
+        # 40 colunas: o curto ao lado do titulo.
+        lines = self.topbar(40)
+        self.assertRegex(lines[0], r"^ FliperOS +192\.168\.1\.111 - 42%$")
+        self.assertIn("rows=2", lines)
+        # Titulo comprido: o status numa linha propria, a direita.
+        lines = self.topbar(40, title="Scraping retroarch/snes9x")
+        self.assertEqual(lines[0], " Scraping retroarch/snes9x")
+        self.assertRegex(lines[1], r"^ +192\.168\.1\.111 - 42%$")
+        self.assertIn("rows=3", lines)
 
 
 class ScraperTests(Base):

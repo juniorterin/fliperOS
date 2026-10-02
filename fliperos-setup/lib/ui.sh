@@ -101,20 +101,46 @@ ui_clear() {
   printf '\e[H\e[2J\e[3J' > /dev/tty
 }
 
-# ui_topbar desenha a primeira linha: titulo a esquerda, status a direita.
+# ui_status_short imprime o status sem o nome da maquina: o primeiro IP e o
+# uso do disco ("192.168.1.111 - 42%").
+ui_status_short() {
+  local ips="" used=""
+  [[ $UI_STATUS =~ \(([^\)]*)\) ]] && ips=${BASH_REMATCH[1]}
+  [[ $UI_STATUS =~ ([0-9?]+%)\ used ]] && used=${BASH_REMATCH[1]}
+  [[ $ips == "no network" ]] || ips=${ips%% *}
+  printf '%s%s\n' "${ips:-$UI_STATUS}" "${used:+ - $used}"
+}
+
+# ui_topbar desenha o topo: titulo a esquerda, status (IP e uso do disco) a
+# direita e a linha. Sem espaco para o status inteiro ao lado do titulo vai
+# o curto; sem espaco nem para ele (320x240: 40 colunas), o status ganha
+# uma linha propria embaixo do titulo. UI_TOPBAR_ROWS e quantas linhas o
+# topo ocupou.
+UI_TOPBAR_ROWS=2
 ui_topbar() {
-  local left=" $UI_TITLE" right="$UI_STATUS " space
-  space=$((UI_COLS - ${#left} - ${#right}))
-  if ((space < 1)); then
-    right=""
-    space=$((UI_COLS - ${#left}))
+  local left=" $UI_TITLE" right="" line2="" space
+  UI_TOPBAR_ROWS=2
+  if [[ -n $UI_STATUS ]]; then
+    right="$UI_STATUS "
+    ((UI_COLS - ${#left} - ${#right} >= 1)) || right="$(ui_status_short) "
+    if ((UI_COLS - ${#left} - ${#right} < 1)); then
+      line2=${right:0:UI_COLS}
+      right=""
+      UI_TOPBAR_ROWS=3
+    fi
   fi
+  space=$((UI_COLS - ${#left} - ${#right}))
   ((space < 0)) && space=0
   {
     ui_c "$C_PURPLE" "$left"
     printf '%*s' "$space" ""
     ui_c "$C_CYAN" "$right"
     printf '\n'
+    if [[ -n $line2 ]]; then
+      printf '%*s' $((UI_COLS - ${#line2})) ""
+      ui_c "$C_CYAN" "$line2"
+      printf '\n'
+    fi
     ui_c "$C_COMMENT" "$(printf '%*s' "$UI_COLS" '' | sed 's/ /─/g')"
     printf '\n'
   } > /dev/tty
@@ -142,7 +168,7 @@ ui_screen() {
   ui_clear
   ui_topbar
   printf '\n%s\n\n' "$box" > /dev/tty
-  UI_USED_ROWS=$((2 + 1 + $(printf '%s\n' "$box" | wc -l) + 1))
+  UI_USED_ROWS=$((UI_TOPBAR_ROWS + 1 + $(printf '%s\n' "$box" | wc -l) + 1))
 }
 
 # ui_list_height ITENS calcula quantas linhas a lista pode ocupar abaixo da
@@ -150,9 +176,8 @@ ui_screen() {
 ui_list_height() {
   local items=$1 free
   # Sobra para a ajuda do gum (2 linhas) e, se a lista rolar, para as setas
-  # da paginacao (patches/gum: a de cima numa linha antes da lista, a de
-  # baixo depois de uma em branco).
-  free=$((UI_ROWS - UI_USED_ROWS - 6))
+  # da paginacao (patches/gum: uma linha antes da lista, outra depois).
+  free=$((UI_ROWS - UI_USED_ROWS - 5))
   ((free < 3)) && free=3
   ((items < free)) && free=$items
   printf '%s\n' "$free"
@@ -251,7 +276,7 @@ ui_pager() {
   ui_size
   ui_clear
   ui_topbar
-  gum pager --border rounded --height $((UI_ROWS - 3)) "$(tail -n 400 "$2" 2> /dev/null)" \
+  gum pager --border rounded --height $((UI_ROWS - 1 - UI_TOPBAR_ROWS)) "$(tail -n 400 "$2" 2> /dev/null)" \
     < /dev/tty > /dev/tty 2> /dev/tty
 }
 
