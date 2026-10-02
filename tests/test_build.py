@@ -1900,6 +1900,14 @@ class EmulatorModeTests(unittest.TestCase):
         ns = {'o': 'http://openbox.org/3.4/rc'}
         self.assertEqual(rc.find('o:applications/o:application/o:decor', ns).text, 'no')
         self.assertIsNone(rc.find('o:keyboard/o:keybind', ns))
+        # Preto na troca de modo: o fundo do X e a moldura do openbox (branca
+        # no tema padrao, vista no gabinete entre a interface e o jogo).
+        self.assertEqual(rc.find('o:theme/o:name', ns).text, 'FliperOS-Black')
+        theme = (ROOT / 'config/openbox-black-themerc').read_text()
+        for key in ('window.active.client.color', 'window.inactive.client.color'):
+            self.assertIn('%s: #000000\n' % key, theme)
+        self.assertLess(client.index('xsetroot -solid black'), client.index('openbox --config-file'))
+        self.assertIn('"$root/usr/share/themes/FliperOS-Black/openbox-3/themerc"', ROOTFS)
         self.assertIn('install -Dm644 "$src/config/openbox-x11-run.xml" "$root/etc/fliperos/openbox-x11-run.xml"',
                       ROOTFS)
 

@@ -71,6 +71,7 @@ ln -sfn /etc/systemd/system/fliperos-padkeys.service \
 # O openbox do fliperos-x11-run (encaixa a janela na tela a cada troca de
 # modo; config/fliperos-x11-client).
 install -Dm644 "$src/config/openbox-x11-run.xml" "$root/etc/fliperos/openbox-x11-run.xml"
+install -Dm644 "$src/config/openbox-black-themerc" "$root/usr/share/themes/FliperOS-Black/openbox-3/themerc"
 # Modo de video de cada emulador do fliperos-x11-run (640x240 nos de 480i
 # num monitor de 15 kHz). O usuario pode editar: a imagem nao sobrescreve.
 [[ -f "$root/etc/fliperos/emulator-modes.conf" ]] \

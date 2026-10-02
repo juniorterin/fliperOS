@@ -14,6 +14,11 @@
   <placement>
     <policy>Smart</policy>
   </placement>
+  <!-- Tudo preto (config/openbox-black-themerc): no tema padrao a moldura,
+       que aparece na troca de modo, e branca. -->
+  <theme>
+    <name>FliperOS-Black</name>
+  </theme>
   <desktops>
     <number>1</number>
   </desktops>
