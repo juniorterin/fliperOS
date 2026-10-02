@@ -187,7 +187,7 @@ scraper_attract_emulator() {
   local key=$1 core name corename exts
   case $key in
     mame)
-      echo "MAME|$FLIPEROS_BIN/fliperos-kms-run|groovymame [name]|.zip;.7z" ;;
+      echo "MAME|$FLIPEROS_BIN/fliperos-x11-run|groovymame [name]|.zip;.7z" ;;
     dreamcast)
       echo "Flycast|$FLIPEROS_BIN/fliperos-x11-run|flycast \"[romfilename]\"|.gdi;.cdi;.chd;.cue;.zip;.7z" ;;
     ps2)

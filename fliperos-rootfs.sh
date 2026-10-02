@@ -88,6 +88,9 @@ for ini in mame.ini:mame.ini ui.ini:mame-ui.ini; do
     grep -qE "^${key}[[:space:]]" "$target" || printf '%-25s %s\n' "$key" "$value" >> "$target"
   done < <(grep -vE '^[[:space:]]*(#|$)' "$src/config/${ini#*:}")
 done
+# O modesetting 0 de antes (o GroovyMAME no KMS) no X nao troca o modo do
+# jogo: passa para o 1 do config/mame.ini.
+sed -i -E 's/^(modesetting[[:space:]]+)0[[:space:]]*$/\11/' "$root/etc/fliperos/mame/mame.ini"
 chown -R 1000:1000 "$root/etc/fliperos/mame" 2> /dev/null || true
 install -Dm644 "$src/config/retroarch.cfg" "$root/etc/fliperos/retroarch/retroarch.cfg"
 

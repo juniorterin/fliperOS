@@ -1322,7 +1322,9 @@ class ScraperTests(Base):
         self.assertEqual(acfg.count("display\t"), 1)
         self.assertIn("\tromlist              %s\n" % name, acfg)
         self.assertEqual(self.env.out("scraper_attract_prepare mame %s/mame arcade" % roms, env).strip(), "MAME")
-        self.assertRegex((attract / "emulators" / "MAME.cfg").read_text(), r"(?m)^args +groovymame \[name\]$")
+        mame_cfg = (attract / "emulators" / "MAME.cfg").read_text()
+        self.assertRegex(mame_cfg, r"(?m)^args +groovymame \[name\]$")
+        self.assertRegex(mame_cfg, r"(?m)^executable +/opt/fliperos/bin/fliperos-x11-run$")
         self.assertNotEqual(self.env.run("scraper_attract_prepare outra /x pc", env).returncode, 0)
 
     def test_list_goes_where_the_frontend_reads(self):

@@ -853,18 +853,49 @@ class GroovyMameTests(unittest.TestCase):
         fake.chmod(0o755)
         return fake
 
-    def run_wrapper(self, *args, conf='frequency=15k\n', aspect_dir=True):
+    def run_wrapper(self, *args, conf='frequency=15k\n', aspect_dir=True, display=':0'):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             (tmp / 'ini').mkdir()
             if aspect_dir:
                 (tmp / 'ini' / 'aspect').mkdir()
             (tmp / 'fliperos.conf').write_text(conf)
+            x11run = tmp / 'fliperos-x11-run'
+            x11run.write_text('#!/bin/sh\necho x11-run\nprintf "%s\\n" "$@"\n')
+            x11run.chmod(0o755)
             env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(self.fake_bin(tmp)),
-                       FLIPEROS_MAME_INI_DIR=str(tmp / 'ini'), FLIPEROS_CONF=str(tmp / 'fliperos.conf'))
+                       FLIPEROS_MAME_INI_DIR=str(tmp / 'ini'), FLIPEROS_CONF=str(tmp / 'fliperos.conf'),
+                       FLIPEROS_X11_RUN=str(x11run))
+            env.pop('DISPLAY', None)
+            if display:
+                env['DISPLAY'] = display
             out = subprocess.run(['bash', str(ROOT / 'config/fliperos-groovymame'), *args], env=env,
                                  capture_output=True, text=True, timeout=60, check=True).stdout
             return out.split('\n')[:-1], str(tmp / 'ini')
+
+    def test_wrapper_opens_in_its_own_x(self):
+        # No console, o GroovyMAME se abre num Xorg so para ele, onde o
+        # Switchres troca o modo pelo XRandR (no KMS o SDL ficava no tamanho do
+        # modo do boot). Comandos sem tela rodam direto, sem subir o X.
+        wrapper = str(ROOT / 'config/fliperos-groovymame')
+        self.assertEqual(self.run_wrapper('mvsc', display=None)[0], ['x11-run', wrapper, 'mvsc'])
+        self.assertEqual(self.run_wrapper(display=None)[0], ['x11-run', wrapper])
+        for args in (('-listclones',), ('-listfull', 'mvsc'),('-verifyroms', 'mvsc'), ('-showconfig',),
+                     ('-createconfig',), ('-version',), ('-validate',), ('-romident', 'x.zip'), ('-help',)):
+            out, ini = self.run_wrapper(*args, display=None)
+            self.assertEqual(out, ['-inipath', ini, *args], args)
+
+    def test_groovymame_switches_modes_in_x(self):
+        # modesetting 1: o Switchres troca o modo de cada jogo (no X, pelo
+        # XRandR; no gabinete, SR-1_384x224@59.64 no MvC). Chamado de dentro do
+        # fliperos-kms-run, o X nao herda o kmsdrm do SDL.
+        self.assertIn('\nmodesetting 1\n', (ROOT / 'config/mame.ini').read_text())
+        self.assertNotIn('SDL_KMSDRM_REQUIRE_DRM_MASTER', (ROOT / 'config/fliperos-kms-run').read_text())
+        x11 = (ROOT / 'config/fliperos-x11-run').read_text()
+        self.assertIn('\nexport SDL_VIDEODRIVER=x11\n', x11)
+        self.assertLess(x11.index('SDL_VIDEODRIVER=x11'), x11.index('exec xinit'))
+        launcher = (ROOT / 'config/fliperos-launch').read_text()
+        self.assertIn('groovymame) label=GroovyMAME run=("$x11" groovymame) ;;', launcher)
 
     def test_wrapper_inipath(self):
         # O mame.ini do sistema (o padrao do release, ".;ini", depende da pasta
@@ -929,7 +960,7 @@ class GroovyMameTests(unittest.TestCase):
             self.assertTrue(text.startswith('#\n# CORE SEARCH PATH OPTIONS\n#\n'))
             for line in ('homepath                  $HOME/.mame', 'rompath                   /home/fliperos/roms/mame',
                          'inipath                   %s' % out.parent, 'monitor                   arcade_15',
-                         'modesetting               0', 'lowlatency                1', 'filter                    1',
+                         'modesetting               1', 'lowlatency                1', 'filter                    1',
                          'plugin                    hiscore', 'uifont                    uismall.bdf'):
                 self.assertIn(line + '\n', text, line)
             self.assertEqual(text.count('\nrompath '), 1)
@@ -967,7 +998,7 @@ class GroovyMameTests(unittest.TestCase):
         # latencia do Setup.
         ini = self.ini('mame.ini')
         for key, value in (('plugin', 'hiscore'), ('skip_gameinfo', '1'), ('uifont', 'uismall.bdf'),
-                           ('video', 'opengl'), ('lowlatency', '1'), ('switchres_ini', '1'), ('modesetting', '0'),
+                           ('video', 'opengl'), ('lowlatency', '1'), ('switchres_ini', '1'), ('modesetting', '1'),
                            ('sound', 'sdl'), ('aspect', '4:3'), ('autoframedelay', '1'), ('framedelay', '0')):
             self.assertEqual(ini[key], value, key)
         self.assertEqual(ini['homepath'], '$HOME/.mame')
@@ -998,7 +1029,8 @@ class GroovyMameTests(unittest.TestCase):
             (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
             (root / 'home/fliperos/cfg/default.cfg').write_text('<mameconfig/>')
             mame = root / 'etc/fliperos/mame/mame.ini'
-            mame.write_text('monitor generic_15\nlowlatency 0\n')
+            # O modesetting 0 de antes (o GroovyMAME no KMS) passa para o 1.
+            mame.write_text('monitor generic_15\nlowlatency 0\nmodesetting               0\n')
             (root / 'etc/fliperos/mame/ui.ini').write_text('font_rows 30\n')
             for _ in range(2):
                 subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
@@ -1006,7 +1038,8 @@ class GroovyMameTests(unittest.TestCase):
             text = mame.read_text()
             self.assertTrue(text.startswith('monitor generic_15\nlowlatency 0\n'))
             self.assertEqual(text.count('\nplugin '), 1)
-            self.assertRegex(text, r'(?m)^modesetting +0$')
+            self.assertRegex(text, r'(?m)^modesetting +1$')
+            self.assertEqual(text.count('modesetting '), 1)
             self.assertNotRegex(text, r'(?m)^monitor +arcade_15$')
             ui = (root / 'etc/fliperos/mame/ui.ini').read_text()
             self.assertTrue(ui.startswith('font_rows 30\n'))
@@ -1054,16 +1087,6 @@ class QuietLaunchTests(unittest.TestCase):
                                  capture_output=True, text=True, env=env).stdout
             log = tmp / 'logs' / 'emu.log'
             return out, log.read_text() if log.exists() else None
-
-    def test_groovymame_creates_native_modes(self):
-        # O SDL deixa o DRM para o Switchres (hint em 0) com modesetting 0. No
-        # gabinete: com modesetting 1 e o SDL dono do DRM (o jeito do
-        # GroovyArcade) o modo do jogo nao era aplicado e ele saia pequeno;
-        # com 1 e o hint, som e tela preta (pageflip -13).
-        kms = (ROOT / 'config/fliperos-kms-run').read_text()
-        self.assertIn('export SDL_KMSDRM_REQUIRE_DRM_MASTER="${SDL_KMSDRM_REQUIRE_DRM_MASTER:-0}"', kms)
-        self.assertLess(kms.index('SDL_KMSDRM_REQUIRE_DRM_MASTER'), kms.index('exec "$@"'))
-        self.assertIn('\nmodesetting 0\n', (ROOT / 'config/mame.ini').read_text())
 
     def test_emulator_output_goes_to_the_log(self):
         out, log = self.run_kms(debug=False)

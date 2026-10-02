@@ -1,25 +1,44 @@
 #!/usr/bin/env bash
 # O comando groovymame do FliperOS (fliperos-launch, frontends, terminal). O
-# binario e o release do GroovyMAME, em /usr/local/libexec/groovymame; este
-# atalho passa o inipath:
+# binario e o release do GroovyMAME, em /usr/local/libexec/groovymame.
 #
-#  - /etc/fliperos/mame: o mame.ini do sistema, que o Setup grava. O padrao
-#    do release e ".;ini", relativo a pasta de onde se abre.
-#  - se ligado em Setup > Video Setup > GroovyMAME 4:3 (mame_crt_aspect=yes;
+#  - Roda no X, como o GroovyArcade no modo X: chamado no console, abre-se
+#    num Xorg so para ele (fliperos-x11-run), e o Switchres do GroovyMAME
+#    cria e troca o modo de cada jogo pelo XRandR (modesetting 1 no
+#    mame.ini). No KMS desta instalacao o Switchres calculava o modo mas o
+#    SDL continuava desenhando no tamanho do modo do boot: jogo esticado,
+#    espremido ou no centro com barras pretas, conforme a resolucao do Setup.
+#    Comandos sem tela (-listxml, -showconfig, -verifyroms...) rodam direto.
+#  - -inipath /etc/fliperos/mame: o mame.ini do sistema, que o Setup grava.
+#    O padrao do release e ".;ini", relativo a pasta de onde se abre. Se
+#    ligado em Setup > Video Setup > GroovyMAME 4:3 (mame_crt_aspect=yes;
 #    desligado por padrao, como no GroovyArcade), num CRT de 15 kHz, depois
-#    dela, /etc/fliperos/mame/aspect: um .ini por jogo de menos de 240 linhas
-#    com a proporcao corrigida (fliperos-mame-aspect). Vale para o jogo
-#    escolhido na lista do proprio GroovyMAME tambem; um .ini do usuario na
-#    pasta principal vale mais.
-#
-# Um -inipath na linha de comando vale mais.
+#    dela /etc/fliperos/mame/aspect (fliperos-mame-aspect). Um -inipath na
+#    linha de comando vale mais.
 real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
 inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/mame}
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+x11run=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
 
 conf_value() {
   sed -n "s/^$1=//p" "$conf" 2> /dev/null | tail -1
 }
+
+# opens_video ARGUMENTOS: o comando abre a tela (um jogo ou a lista do MAME)?
+opens_video() {
+  local arg
+  for arg in "$@"; do
+    case $arg in
+      -list* | --list* | -verify* | --verify* | -show* | --show* | -create* | --create* | -valid* | -help | --help | \
+        -h | -romident | -getsoftlist | -version | --version) return 1 ;;
+    esac
+  done
+  return 0
+}
+
+if [[ -z ${DISPLAY:-} && -z ${FLIPEROS_GROOVYMAME_NO_X:-} ]] && opens_video "$@"; then
+  exec "$x11run" "$0" "$@"
+fi
 
 inipath=$inidir
 if [[ -d $inidir/aspect && $(conf_value mame_crt_aspect) == yes && $(conf_value frequency) == 15* &&

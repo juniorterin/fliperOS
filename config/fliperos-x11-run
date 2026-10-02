@@ -84,6 +84,9 @@ case $name in
     ;;
 esac
 
+# SDL no X: chamado de dentro do fliperos-kms-run (o GroovyMAME, que se abre
+# no X sozinho), herdaria o kmsdrm de la.
+export SDL_VIDEODRIVER=x11
 # Audio SDL direto no ALSA (o FliperOS nao tem servidor de som).
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).
