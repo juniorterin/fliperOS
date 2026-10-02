@@ -135,15 +135,16 @@ screen_geometry() {
   ui_msg "Geometry" "Geometry saved (monitor set to custom):" "" "$range"
 }
 
-# screen_mame_aspect liga ou desliga a proporcao 4:3 dos jogos de menos de
-# 240 linhas no GroovyMAME (config/fliperos-groovymame). Ligada por padrao.
+# screen_mame_aspect liga ou desliga a correcao de proporcao dos jogos de
+# menos de 240 linhas no GroovyMAME (config/fliperos-groovymame). Desligada
+# por padrao, como no GroovyArcade.
 screen_mame_aspect() {
-  if ui_choice2 "GroovyMAME 4:3" "Keep 4:3" "Full width" \
-    "On a 15 kHz CRT the picture is adjusted for 240 lines to fill the height." \
-    "A game with fewer lines (224: CPS2, Neo Geo) is shorter with the same width" \
-    "and looks stretched sideways." "" \
-    "Keep 4:3: those games get the right width, with thin black bands on the sides." \
-    "Full width: they fill the width and look stretched."; then
+  if ui_choice2 "GroovyMAME 4:3" "Narrow them" "Full width" \
+    "GroovyMAME (and GroovyArcade) shows every game at the full width." \
+    "When the monitor is adjusted for 240 lines, a game with fewer lines" \
+    "(224: CPS2, Neo Geo) is shorter with the same width and may look wide." "" \
+    "Narrow them: those games get a slightly narrower picture." \
+    "Full width: as GroovyArcade (default)."; then
     conf_set mame_crt_aspect yes
   else
     conf_set mame_crt_aspect no
@@ -175,7 +176,7 @@ screen_video_setup() {
       "Orientation|$(orientation_label "$(conf_get orientation 2> /dev/null || echo horizontal)")" \
       "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "from boot menu")")" \
       "Geometry|$(conf_get geometry > /dev/null 2>&1 && echo "adjusted" || echo "monitor default")" \
-      "GroovyMAME|$([[ $(conf_get mame_crt_aspect 2> /dev/null) == no ]] && echo "full width" || echo "4:3")")
+      "GroovyMAME|$([[ $(conf_get mame_crt_aspect 2> /dev/null) == yes ]] && echo "narrowed below 240 lines" || echo "full width")")
     choice=$(ui_menu "Video Setup" "$summary" "$last" \
       "monitor|Monitor Type" \
       "orientation|Monitor Orientation" \

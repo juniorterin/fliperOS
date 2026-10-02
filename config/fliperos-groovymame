@@ -5,11 +5,12 @@
 #
 #  - /etc/fliperos/mame: o mame.ini do sistema, que o Setup grava. O padrao
 #    do release e ".;ini", relativo a pasta de onde se abre.
-#  - num CRT de 15 kHz, depois dela, /etc/fliperos/mame/aspect: um .ini por
-#    jogo de menos de 240 linhas com a proporcao certa (fliperos-mame-aspect).
-#    Vale para o jogo escolhido na lista do proprio GroovyMAME tambem; um
-#    .ini do usuario na pasta principal vale mais. Desliga em Setup > Video
-#    Setup > GroovyMAME 4:3 (mame_crt_aspect=no).
+#  - se ligado em Setup > Video Setup > GroovyMAME 4:3 (mame_crt_aspect=yes;
+#    desligado por padrao, como no GroovyArcade), num CRT de 15 kHz, depois
+#    dela, /etc/fliperos/mame/aspect: um .ini por jogo de menos de 240 linhas
+#    com a proporcao corrigida (fliperos-mame-aspect). Vale para o jogo
+#    escolhido na lista do proprio GroovyMAME tambem; um .ini do usuario na
+#    pasta principal vale mais.
 #
 # Um -inipath na linha de comando vale mais.
 real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
@@ -21,7 +22,7 @@ conf_value() {
 }
 
 inipath=$inidir
-if [[ -d $inidir/aspect && $(conf_value mame_crt_aspect) != no && $(conf_value frequency) == 15* &&
+if [[ -d $inidir/aspect && $(conf_value mame_crt_aspect) == yes && $(conf_value frequency) == 15* &&
   $(conf_value orientation) =~ ^(horizontal)?$ ]]; then
   inipath="$inidir;$inidir/aspect"
 fi
