@@ -73,6 +73,15 @@ install -Dm755 "$src/config/fliperos-groovymame" "$gm"
 # Cores Dracula da interface do GroovyMAME; o ui.ini e do usuario porque o
 # MAME o regrava quando a interface e personalizada pelo proprio menu.
 [[ -f "$root/etc/fliperos/mame/ui.ini" ]] || install -Dm644 "$src/config/mame-ui.ini" "$root/etc/fliperos/mame/ui.ini"
+# Numa instalacao anterior, o mame.ini e o ui.ini ganham as chaves de
+# config/ que ainda nao tem; as que o Setup, o MAME ou o usuario ja
+# gravaram ficam como estao.
+for ini in mame.ini:mame.ini ui.ini:mame-ui.ini; do
+  target="$root/etc/fliperos/mame/${ini%%:*}"
+  while read -r key value; do
+    grep -qE "^${key}[[:space:]]" "$target" || printf '%-25s %s\n' "$key" "$value" >> "$target"
+  done < <(grep -vE '^[[:space:]]*(#|$)' "$src/config/${ini#*:}")
+done
 chown -R 1000:1000 "$root/etc/fliperos/mame" 2> /dev/null || true
 install -Dm644 "$src/config/retroarch.cfg" "$root/etc/fliperos/retroarch/retroarch.cfg"
 
@@ -257,6 +266,17 @@ EOF
     install -Dm644 "$src/config/flycast-emu.cfg" "$home/.config/flycast/emu.cfg"
   fi
   chown -R 1000:1000 "$home/.config/flycast" 2> /dev/null || true
+  # GroovyMAME: o que ele grava vai para ~/.mame (config/mame.ini). Antes ia
+  # para a pasta de onde ele era aberto (a home, pelo menu): cfg, nvram e
+  # companhia mudam para la, sem sobrescrever. O ~/snap fica: no Ubuntu e do
+  # snapd.
+  mkdir -p "$home/.mame"
+  for dir in cfg nvram sta inp diff comments hiscore; do
+    if [[ -d $home/$dir && ! -e $home/.mame/$dir ]]; then
+      mv "$home/$dir" "$home/.mame/$dir"
+    fi
+  done
+  chown -R 1000:1000 "$home/.mame" 2> /dev/null || true
   # Sem MOTD nem "Last login" entre o Plymouth e o setup/frontend.
   : > "$home/.hushlogin"
   # LXDE como o do GroovyArcade (ver config/lxde).

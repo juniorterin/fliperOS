@@ -1036,7 +1036,8 @@ class GeometryTests(Base):
         self.assertRegex(ini, r"(?m)^\s*monitor\s+arcade_15$")
         self.assertRegex(ini, r"(?m)^\s*crt_range0\s+auto$")
         mame = (self.env.etc / "mame.ini").read_text()
-        self.assertRegex(mame, r"(?m)^switchres_ini\s+0$")
+        # O GroovyMAME continua lendo o switchres.ini, como no GroovyArcade.
+        self.assertRegex(mame, r"(?m)^switchres_ini\s+1$")
         self.assertRegex(mame, r"(?m)^aspect\s+4:3$")
         self.assertEqual(self.env.out("conf_get geometry || echo none").strip(), "none")
 

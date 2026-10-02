@@ -103,6 +103,8 @@ PCSX2_SHA256="0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea"
 GROOVYMAME_TAG="gm0289sr222f"
 GROOVYMAME_FILE="groovymame_0289.222f_linux.tar.bz2"
 GROOVYMAME_SHA256="d5bd539776ace64db42301252d80be2af60b2f89862b0d4391c646083f323f62"
+# O commit da tag: plugins, fonte e o resto que o release nao traz.
+GROOVYMAME_COMMIT="953db38f4aaab1d75faa4ac79e1b45686214f987"
 
 # ── Args ─────────────────────────────────────────────────────
 usage() {
@@ -872,6 +874,24 @@ install_groovymame_chroot() {
     "$tarball" "$WORK_DIR" || err "GroovyMAME: o pacote nao extraiu"
   install -Dm755 "$WORK_DIR/groovymame" "$CHROOT_DIR/usr/local/libexec/groovymame"
   rm -f "$tarball" "$WORK_DIR/groovymame"
+  # O release so traz o binario. Como o pacote do GroovyArcade, os arquivos
+  # do codigo da mesma tag: plugins (hiscore), a fonte uismall.bdf da
+  # interface, bgfx, artwork, language, ctrlr, keymaps e hash (listas de
+  # software), em /usr/local/share/groovymame (as pastas do config/mame.ini).
+  local gm_src="$WORK_DIR/groovymame-src" gm_share="$CHROOT_DIR/usr/local/share/groovymame"
+  git clone -q --depth 1 --branch "$GROOVYMAME_TAG" --filter=blob:none --sparse \
+    https://github.com/antonioginer/GroovyMAME "$gm_src" >> "$LOG_FILE" 2>&1 \
+    || err "GroovyMAME: o codigo da tag nao baixou"
+  [[ $(git -C "$gm_src" rev-parse HEAD) == "$GROOVYMAME_COMMIT" ]] \
+    || err "GroovyMAME: a tag ${GROOVYMAME_TAG} nao e mais o commit fixado"
+  git -C "$gm_src" sparse-checkout set artwork bgfx plugins language ctrlr keymaps hash >> "$LOG_FILE" 2>&1 \
+    || err "GroovyMAME: os arquivos do codigo nao baixaram"
+  rm -rf "$gm_share"
+  mkdir -p "$gm_share/fonts"
+  cp -r "$gm_src"/{artwork,bgfx,plugins,language,ctrlr,keymaps,hash} "$gm_share/"
+  install -m644 "$gm_src/uismall.bdf" "$gm_share/fonts/uismall.bdf"
+  chmod -R a+rX "$gm_share"
+  rm -rf "$gm_src"
   # O que o binario pede (objdump -p); o Qt6 e o do depurador.
   chroot "$CHROOT_DIR" apt-get install -y --no-install-recommends \
     libsdl2-2.0-0 libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 \

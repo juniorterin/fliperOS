@@ -810,8 +810,69 @@ class GroovyMameTests(unittest.TestCase):
         self.assertIn('sha256sum -c', body)
         self.assertIn('/usr/local/libexec/groovymame', body)
         self.assertIn('libqt6widgets6t64', body)
-        self.assertNotIn('git clone', body)
+        self.assertNotIn('make ', body)
         self.assertRegex(MKISO, r'(?m)^install_groovymame_chroot$')
+
+    def ini(self, name):
+        values = {}
+        for line in (ROOT / 'config' / name).read_text().splitlines():
+            if line.strip() and not line.startswith('#'):
+                key, value = line.split(None, 1)
+                self.assertNotIn(key, values, 'chave repetida: ' + key)
+                values[key] = value
+        return values
+
+    def test_groovyarcade_options(self):
+        # As do -createconfig do gasetup (core/configs/groovymame), mais a
+        # latencia do Setup.
+        ini = self.ini('mame.ini')
+        for key, value in (('plugin', 'hiscore'), ('skip_gameinfo', '1'), ('uifont', 'uismall.bdf'),
+                           ('video', 'opengl'), ('lowlatency', '1'), ('switchres_ini', '1'), ('modesetting', '1'),
+                           ('sound', 'sdl'), ('aspect', '4:3'), ('autoframedelay', '1'), ('framedelay', '0')):
+            self.assertEqual(ini[key], value, key)
+        self.assertEqual(ini['homepath'], '$HOME/.mame')
+        self.assertEqual(ini['cfg_directory'], '$HOME/.mame/cfg')
+        self.assertEqual(ini['rompath'], '/home/fliperos/roms/mame')
+        ui = self.ini('mame-ui.ini')
+        self.assertEqual((ui['font_rows'], ui['infos_text_size']), ('19', '1.00'))
+
+    def test_support_files_come_from_the_tag(self):
+        # As pastas do mame.ini existem na imagem: o codigo da mesma tag.
+        body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]
+        self.assertRegex(MKISO, r'GROOVYMAME_COMMIT="[0-9a-f]{40}"')
+        self.assertIn('rev-parse HEAD) == "$GROOVYMAME_COMMIT"', body)
+        self.assertIn('"$gm_src/uismall.bdf" "$gm_share/fonts/uismall.bdf"', body)
+        ini = self.ini('mame.ini')
+        for key in ('pluginspath', 'fontpath', 'bgfx_path', 'hashpath', 'languagepath', 'artpath', 'ctrlrpath'):
+            shared = [p for p in ini[key].split(';') if p.startswith('/usr/local/share/groovymame/')]
+            self.assertEqual(len(shared), 1, key)
+            self.assertIn(shared[0].rsplit('/', 1)[1], body, key)
+
+    def test_rootfs_merges_new_keys_into_an_older_mame_ini(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos/cfg', 'home/fliperos/snap', 'etc/fliperos/mame', 'etc/modprobe.d',
+                      'etc/sudoers.d', 'etc/profile.d', 'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            (root / 'home/fliperos/cfg/default.cfg').write_text('<mameconfig/>')
+            mame = root / 'etc/fliperos/mame/mame.ini'
+            mame.write_text('monitor generic_15\nlowlatency 0\n')
+            (root / 'etc/fliperos/mame/ui.ini').write_text('font_rows 30\n')
+            for _ in range(2):
+                subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                               capture_output=True, timeout=120)
+            text = mame.read_text()
+            self.assertTrue(text.startswith('monitor generic_15\nlowlatency 0\n'))
+            self.assertEqual(text.count('\nplugin '), 1)
+            self.assertRegex(text, r'(?m)^modesetting +1$')
+            self.assertNotRegex(text, r'(?m)^monitor +arcade_15$')
+            ui = (root / 'etc/fliperos/mame/ui.ini').read_text()
+            self.assertTrue(ui.startswith('font_rows 30\n'))
+            self.assertRegex(ui, r'(?m)^ui_bg_color +ef282a36$')
+            # O que o binario antigo gravava na home vai para ~/.mame.
+            self.assertTrue((root / 'home/fliperos/.mame/cfg/default.cfg').is_file())
+            self.assertTrue((root / 'home/fliperos/snap').is_dir())
 
     def test_rootfs_moves_the_old_binary_and_installs_the_wrapper(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1194,11 +1255,12 @@ class DraculaThemeTests(unittest.TestCase):
     def test_groovymame_ui_colors(self):
         rows = [line.split() for line in (ROOT / 'config/mame-ui.ini').read_text().splitlines()
                 if line.strip() and not line.startswith('#')]
-        keys = {key for key, _ in rows}
-        self.assertEqual(len(keys), 16)
-        for key, value in rows:
-            self.assertTrue(key.startswith('ui_') and key.endswith('_color'), key)
+        colors = [(key, value) for key, value in rows if key.startswith('ui_') and key.endswith('_color')]
+        self.assertEqual(len({key for key, _ in colors}), 16)
+        for key, value in colors:
             self.assertRegex(value, r'^[0-9a-f]{8}$', key)
+        # Fora as cores, so o tamanho do texto do GroovyArcade.
+        self.assertEqual({key for key, _ in rows} - {key for key, _ in colors}, {'font_rows', 'infos_text_size'})
         self.assertIn('config/mame-ui.ini', ROOTFS)
         self.assertIn('etc/fliperos/mame/ui.ini', ROOTFS)
 
