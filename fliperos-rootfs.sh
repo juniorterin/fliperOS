@@ -97,6 +97,9 @@ rm -rf "$root/opt/fliperos/bin/fliperos-mame-aspect" "$root/etc/fliperos/mame/as
 # O mame.ini completo, como o GroovyArcade (o -createconfig do GroovyMAME com
 # as opcoes do config/mame.ini por cima): o build o roda.
 install -Dm755 "$src/config/fliperos-mame-ini" "$root/opt/fliperos/bin/fliperos-mame-ini"
+# Setup > Joysticks > Button mapping: os botoes de cada jogador no RetroArch
+# e no GroovyMAME.
+install -Dm755 "$src/config/fliperos-buttons" "$root/opt/fliperos/bin/fliperos-buttons"
 # Setup > MAME ROM Cleaner: o que sai de uma pasta de ROMs, pelo XML do MAME.
 install -Dm755 "$src/config/fliperos-romclean" "$root/opt/fliperos/bin/fliperos-romclean"
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"

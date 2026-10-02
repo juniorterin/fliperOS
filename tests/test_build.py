@@ -2078,8 +2078,105 @@ class RetroArchConfigTests(unittest.TestCase):
         self.assertNotIn('--disable-sdl2', body)
 
     def test_retroarch_gets_the_system_config(self):
-        self.assertIn('--appendconfig /etc/fliperos/retroarch/retroarch.cfg',
-                      (ROOT / 'config/fliperos-kms-run').read_text())
+        # E, se o Setup gravou, os botoes de cada jogador por cima.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            prog = tmp / 'retroarch'
+            prog.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            prog.chmod(0o755)
+            buttons = tmp / 'buttons.cfg'
+            (tmp / 'debug').write_text('')  # modo debug: a saida na tela, nao no log
+            env = dict(os.environ, FLIPEROS_RA_BUTTONS=str(buttons), FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'),
+                       PATH='%s:%s' % (tmp, os.environ['PATH']))
+            env.pop('DISPLAY', None)
+            run = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-kms-run'), 'retroarch', '-L', 'x'],
+                                         capture_output=True, text=True, env=env).stdout.split('\n')
+            self.assertEqual(run()[:3], ['--appendconfig', '/etc/fliperos/retroarch/retroarch.cfg', '-L'])
+            buttons.write_text('')
+            self.assertEqual(run()[:2], ['--appendconfig', '/etc/fliperos/retroarch/retroarch.cfg|%s' % buttons])
+
+
+class ButtonMappingTests(unittest.TestCase):
+    """config/fliperos-buttons: os botoes de cada jogador no RetroArch e no GroovyMAME."""
+
+    def setUp(self):
+        self.rc = load_script('buttons', 'config/fliperos-buttons')
+
+    def test_mame_codes(self):
+        # Na numeracao do SDL (joystickprovider sdljoy): botao 0 = BUTTON1.
+        code = self.rc.mame_code
+        self.assertEqual(code(0, 'b0'), 'JOYCODE_1_BUTTON1')
+        self.assertEqual(code(1, 'b7'), 'JOYCODE_2_BUTTON8')
+        self.assertEqual(code(0, '-a0'), 'JOYCODE_1_XAXIS_LEFT_SWITCH')
+        self.assertEqual(code(0, '+a1'), 'JOYCODE_1_YAXIS_DOWN_SWITCH')
+        self.assertEqual(code(0, '+a2'), 'JOYCODE_1_ZAXIS_POS_SWITCH')
+        self.assertEqual(code(2, 'h0.1'), 'JOYCODE_3_HAT1UP')
+        self.assertEqual(code(0, 'h1.8'), 'JOYCODE_1_HAT2LEFT')
+
+    def test_retroarch_binds(self):
+        # Os botoes do painel no layout dos cores de arcade: 1 2 3 = Y X L,
+        # 4 5 6 = B A R, ficha = Select. O outro tipo de bind fica vazio.
+        lines = self.rc.retroarch_lines
+        self.assertEqual(lines(1, 'b1', 'b2'), ['input_player1_y_btn = "2"', 'input_player1_y_axis = "nul"'])
+        self.assertEqual(lines(2, 'b4', 'b0'), ['input_player2_b_btn = "0"', 'input_player2_b_axis = "nul"'])
+        self.assertEqual(lines(1, 'coin', 'b9'), ['input_player1_select_btn = "9"',
+                                                  'input_player1_select_axis = "nul"'])
+        self.assertEqual(lines(1, 'up', '-a1'), ['input_player1_up_axis = "-1"', 'input_player1_up_btn = "nul"'])
+        self.assertEqual(lines(1, 'left', 'h0.8'), ['input_player1_left_btn = "h0left"',
+                                                    'input_player1_left_axis = "nul"'])
+
+    def test_save_both(self):
+        # Painel V-USB do gabinete: dois aparelhos iguais, um por jogador.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            name = 'vusb.wikidot.com/project:mamepanel V-USB Mame Panel 32'
+            lines = ['1 up 0 -a1 %s' % name, '1 b1 0 b0 %s' % name, '1 coin 0 b7 %s' % name,
+                     '2 up 1 -a1 %s' % name, '2 b1 1 b0 %s' % name, '2 start 1 b6 %s' % name]
+            (tmp / 'map').write_text('\n'.join(lines) + '\n')
+            env = dict(os.environ, FLIPEROS_RA_BUTTONS=str(tmp / 'ra' / 'buttons.cfg'),
+                       FLIPEROS_MAME_CTRLR=str(tmp / 'ctrlr' / 'fliperos.cfg'))
+            subprocess.run(['python3', str(ROOT / 'config/fliperos-buttons'), 'save', str(tmp / 'map')], env=env,
+                           check=True, capture_output=True, timeout=30)
+            ra = (tmp / 'ra' / 'buttons.cfg').read_text()
+            for line in ('input_player1_joypad_index = "0"', 'input_player2_joypad_index = "1"',
+                         'input_player1_up_axis = "-1"', 'input_player1_y_btn = "0"', 'input_player1_select_btn = "7"',
+                         'input_player2_start_btn = "6"'):
+                self.assertIn(line + '\n', ra, line)
+            import xml.etree.ElementTree as ET
+            text = (tmp / 'ctrlr' / 'fliperos.cfg').read_text()
+            ports = {p.get('type'): p.find('newseq').text
+                     for p in ET.fromstring(text).iter('port')}
+            self.assertEqual(ports['P1_JOYSTICK_UP'], 'JOYCODE_1_YAXIS_UP_SWITCH OR KEYCODE_UP')
+            self.assertEqual(ports['P1_BUTTON1'], 'JOYCODE_1_BUTTON1 OR KEYCODE_LCONTROL')
+            self.assertEqual(ports['COIN1'], 'JOYCODE_1_BUTTON8 OR KEYCODE_5')
+            self.assertEqual(ports['P2_BUTTON1'], 'JOYCODE_2_BUTTON1 OR KEYCODE_A')
+            self.assertEqual(ports['START2'], 'JOYCODE_2_BUTTON7 OR KEYCODE_2')
+            self.assertIn('<system name="default">', text)
+
+    def test_capture_waits_for_release(self):
+        # O que estava apertado no comeco nao conta; soltar um eixo nao e o
+        # lado oposto; um gatilho em -32768 e repouso.
+        rest = ([1, 0], [-32767, -32768, 0], [4])
+        self.assertIsNone(self.rc.pressed(rest, ([1, 0], [-32767, -32768, 0], [4])))
+        settled = self.rc.settle(rest, ([0, 0], [0, -32768, 0], [0]))
+        self.assertEqual(settled, ([0, 0], [0, -32768, 0], [0]))
+        self.assertIsNone(self.rc.pressed(settled, ([0, 0], [0, -32768, 0], [0])))
+        self.assertEqual(self.rc.pressed(settled, ([0, 1], [0, -32768, 0], [0])), 'b1')
+        self.assertEqual(self.rc.pressed(settled, ([0, 0], [0, 32767, 0], [0])), '+a1')
+        self.assertEqual(self.rc.pressed(settled, ([0, 0], [-32767, -32768, 0], [0])), '-a0')
+        self.assertEqual(self.rc.pressed(settled, ([0, 0], [0, -32768, 0], [2])), 'h0.2')
+
+    def test_setup_saves_the_mame_options(self):
+        lib = (ROOT / 'fliperos-setup/lib/buttons.sh').read_text()
+        self.assertIn('ini_set "$MAME_INI" ctrlr fliperos', lib)
+        self.assertIn('ini_set "$MAME_INI" joystickprovider sdljoy', lib)
+        self.assertIn('install -Dm755 "$src/config/fliperos-buttons" "$root/opt/fliperos/bin/fliperos-buttons"',
+                      ROOTFS)
+        screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
+        self.assertIn('"buttons|Button mapping (RetroArch and GroovyMAME)"', screen)
+        body = screen.split('screen_buttons() {')[1].split('\n}\n')[0]
+        self.assertLess(body.index('padkeys_off'), body.index('buttons_capture'))
+        self.assertLess(body.rindex('buttons_capture'), body.index('padkeys_on'))
 
 
 if __name__ == '__main__':

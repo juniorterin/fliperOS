@@ -76,6 +76,8 @@ source "$SETUP_DIR/lib/quirks.sh"
 source "$SETUP_DIR/lib/padkeys.sh"
 # shellcheck source=lib/lpt.sh
 source "$SETUP_DIR/lib/lpt.sh"
+# shellcheck source=lib/buttons.sh
+source "$SETUP_DIR/lib/buttons.sh"
 # shellcheck source=lib/debug.sh
 source "$SETUP_DIR/lib/debug.sh"
 # shellcheck source=lib/ui.sh

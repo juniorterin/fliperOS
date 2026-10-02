@@ -13,7 +13,12 @@ command -v "$1" > /dev/null || [[ -x $1 ]] || { echo "Nao instalado: $1" >&2; ex
 # boot so passa o nome do binario.
 if [[ "$(basename -- "$1")" == retroarch ]]; then
   mkdir -p /opt/fliperos/saves/retroarch 2> /dev/null || true
-  set -- "$1" --appendconfig /etc/fliperos/retroarch/retroarch.cfg "${@:2}"
+  # Os botoes de cada jogador do Setup > Joysticks > Button mapping
+  # (config/fliperos-buttons), por cima do perfil automatico do controle.
+  appendconfig=/etc/fliperos/retroarch/retroarch.cfg
+  buttons=${FLIPEROS_RA_BUTTONS:-/etc/fliperos/retroarch/buttons.cfg}
+  [[ -f $buttons ]] && appendconfig+="|$buttons"
+  set -- "$1" --appendconfig "$appendconfig" "${@:2}"
 fi
 # SDL_VIDEODRIVER vale para quem usa SDL2 (Flycast); o RetroArch foi
 # compilado so com KMS. Audio SDL (GroovyMAME, Flycast) direto no ALSA: sem
