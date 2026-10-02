@@ -939,12 +939,7 @@ install_groovymame_chroot() {
   # com as opcoes do config/mame.ini por cima (config/fliperos-mame-ini).
   chroot "$CHROOT_DIR" /opt/fliperos/bin/fliperos-mame-ini /etc/fliperos/mame/mame.ini /etc/fliperos/mame/mame.ini \
     >> "$LOG_FILE" 2>&1 || err "GroovyMAME: o mame.ini nao foi gerado"
-  # Proporcao no CRT dos jogos de menos de 240 linhas, do XML desta versao
-  # (config/fliperos-mame-aspect, que o fliperos-rootfs.sh ja instalou).
-  local n
-  n=$(chroot "$CHROOT_DIR" /opt/fliperos/bin/fliperos-mame-aspect 2>> "$LOG_FILE") \
-    || err "GroovyMAME: os .ini de proporcao nao foram gerados"
-  ok "GroovyMAME ${GROOVYMAME_TAG} em /usr/local/libexec/groovymame ($n jogos com a proporcao do CRT)"
+  ok "GroovyMAME ${GROOVYMAME_TAG} em /usr/local/libexec/groovymame"
 }
 
 # ── XML do MAME 2010 (ROM cleaner) ────────────────────────────

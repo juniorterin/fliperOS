@@ -117,12 +117,6 @@ echo "== Linha do kernel (boot direto no Plymouth)"
   grep -E '^crt_switch_resolution_super' "$RETROARCH_CFG"
 )
 
-echo "== GroovyMAME: proporcao no CRT"
-# Um .ini por jogo de menos de 240 linhas, do XML do GroovyMAME instalado.
-if [[ -x /usr/local/libexec/groovymame ]]; then
-  echo "jogos com a proporcao do CRT: $(/opt/fliperos/bin/fliperos-mame-aspect || echo falhou)"
-fi
-
 echo "== XML do MAME 2010 (ROM cleaner)"
 /opt/fliperos/bin/fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz || echo "falhou (sem rede?)"
 

@@ -80,9 +80,10 @@ if [[ -f $gm ]] && [[ $(head -c 4 "$gm" | od -An -c | tr -d ' ') == '177ELF' ]];
   mv -f "$gm" "$root/usr/local/libexec/groovymame"
 fi
 install -Dm755 "$src/config/fliperos-groovymame" "$gm"
-# Proporcao dos jogos de menos de 240 linhas no CRT (um .ini por jogo, do
-# XML do GroovyMAME): o build e o cabinet-update.sh o rodam.
-install -Dm755 "$src/config/fliperos-mame-aspect" "$root/opt/fliperos/bin/fliperos-mame-aspect"
+# A opcao GroovyMAME 4:3 saiu do Video Setup: o gerador, os .ini por jogo e
+# a chave de uma instalacao anterior vao embora.
+rm -rf "$root/opt/fliperos/bin/fliperos-mame-aspect" "$root/etc/fliperos/mame/aspect"
+[[ -f "$root/etc/fliperos/fliperos.conf" ]] && sed -i '/^mame_crt_aspect=/d' "$root/etc/fliperos/fliperos.conf"
 # O mame.ini completo, como o GroovyArcade (o -createconfig do GroovyMAME com
 # as opcoes do config/mame.ini por cima): o build o roda.
 install -Dm755 "$src/config/fliperos-mame-ini" "$root/opt/fliperos/bin/fliperos-mame-ini"

@@ -835,62 +835,18 @@ class RomFoldersTests(unittest.TestCase):
 class GroovyMameTests(unittest.TestCase):
     """O release oficial do GroovyMAME e o atalho config/fliperos-groovymame."""
 
-    # -listxml de um GroovyMAME falso: um jogo de cada tipo.
-    XML = '''<?xml version="1.0"?>
-<!DOCTYPE mame [
-<!ATTLIST display rotate CDATA>
-]>
-<mame build="0.289">
-	<machine name="mvsc" sourcefile="capcom/cps2.cpp">
-		<display tag="screen" type="raster" rotate="0" width="384" height="224" refresh="59.6" />
-		<display tag="extra" type="raster" rotate="0" width="384" height="240" refresh="59.6" />
-	</machine>
-	<machine name="mvscu" sourcefile="capcom/cps2.cpp" cloneof="mvsc" romof="mvsc">
-		<display tag="screen" type="raster" rotate="0" width="384" height="224" refresh="59.6" />
-	</machine>
-	<machine name="pacman" sourcefile="namco/pacman.cpp">
-		<display tag="screen" type="raster" rotate="90" width="288" height="224" refresh="60.6" />
-	</machine>
-	<machine name="sfiii" sourcefile="capcom/cps3.cpp">
-		<display tag="screen" type="raster" rotate="0" width="384" height="240" refresh="59.6" />
-	</machine>
-	<machine name="tall" sourcefile="x.cpp">
-		<display tag="screen" type="raster" rotate="0" width="320" height="256" refresh="50" />
-	</machine>
-	<machine name="hires" sourcefile="x.cpp">
-		<display tag="screen" type="raster" rotate="0" width="640" height="448" refresh="60" />
-	</machine>
-	<machine name="asteroid" sourcefile="atari/asteroid.cpp">
-		<display tag="screen" type="vector" rotate="0" width="400" height="300" refresh="60" />
-	</machine>
-	<machine name="qsound_hle" sourcefile="sound/qsound.cpp" isdevice="yes">
-		<display tag="screen" type="raster" rotate="0" width="256" height="200" refresh="60" />
-	</machine>
-	<machine name="semtela" sourcefile="x.cpp">
-	</machine>
-</mame>
-'''
-
-    def fake_bin(self, tmp):
-        (tmp / 'listxml.xml').write_text(self.XML)
-        fake = tmp / 'groovymame'
-        fake.write_text('#!/bin/bash\n[[ " $* " == *" -listxml "* ]] && exec cat "%s"\nprintf "%%s\\n" "$@"\n'
-                        % (tmp / 'listxml.xml'))
-        fake.chmod(0o755)
-        return fake
-
-    def run_wrapper(self, *args, conf='frequency=15k\n', aspect_dir=True, display=':0'):
+    def run_wrapper(self, *args, display=':0'):
+        # O GroovyMAME e o fliperos-x11-run falsos so imprimem os argumentos.
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             (tmp / 'ini').mkdir()
-            if aspect_dir:
-                (tmp / 'ini' / 'aspect').mkdir()
-            (tmp / 'fliperos.conf').write_text(conf)
+            fake = tmp / 'groovymame'
+            fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            fake.chmod(0o755)
             x11run = tmp / 'fliperos-x11-run'
             x11run.write_text('#!/bin/sh\necho x11-run\nprintf "%s\\n" "$@"\n')
             x11run.chmod(0o755)
-            env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(self.fake_bin(tmp)),
-                       FLIPEROS_MAME_INI_DIR=str(tmp / 'ini'), FLIPEROS_CONF=str(tmp / 'fliperos.conf'),
+            env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake), FLIPEROS_MAME_INI_DIR=str(tmp / 'ini'),
                        FLIPEROS_X11_RUN=str(x11run))
             env.pop('DISPLAY', None)
             if display:
@@ -925,44 +881,11 @@ class GroovyMameTests(unittest.TestCase):
 
     def test_wrapper_inipath(self):
         # O mame.ini do sistema (o padrao do release, ".;ini", depende da pasta
-        # de onde se abre). A correcao de proporcao e opcional (o GroovyArcade
-        # nao tem): so com mame_crt_aspect=yes, num CRT de 15 kHz, os .ini dela
-        # entram depois, e valem tambem para o jogo escolhido na lista do MAME.
-        on = 'frequency=15k\nmame_crt_aspect=yes\n'
-        args, ini = self.run_wrapper('mvsc', conf=on)
-        self.assertEqual(args, ['-inipath', '%s;%s/aspect' % (ini, ini), 'mvsc'])
-        for conf in ('frequency=15k\n', 'frequency=15k\nmame_crt_aspect=no\n', 'frequency=31k\nmame_crt_aspect=yes\n',
-                     on + 'orientation=vertical\n'):
-            args, ini = self.run_wrapper('mvsc', conf=conf)
-            self.assertEqual(args, ['-inipath', ini, 'mvsc'], conf)
-        args, ini = self.run_wrapper('mvsc', conf=on, aspect_dir=False)
+        # de onde se abre); um -inipath na linha de comando vale mais.
+        args, ini = self.run_wrapper('mvsc')
         self.assertEqual(args, ['-inipath', ini, 'mvsc'])
         self.assertEqual(self.run_wrapper('-inipath', '/x', 'mvsc')[0], ['-inipath', '/x', 'mvsc'])
         self.assertIn('/usr/local/libexec/groovymame', (ROOT / 'config/fliperos-groovymame').read_text())
-
-    def test_aspect_ini_for_every_game_with_fewer_lines(self):
-        # 224 linhas: a tela "mais larga" na mesma proporcao (320:224 = 10:7)
-        # e o 4:3 do jogo mantido: 411x224 com o jogo nos 384 pontos (visto no
-        # gabinete). Clones tambem; vertical, vetorial, dispositivo e 240 ou
-        # mais linhas ficam de fora.
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            out = tmp / 'mame' / 'aspect'
-            out.parent.mkdir()
-            env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(self.fake_bin(tmp)))
-            r = subprocess.run(['bash', str(ROOT / 'config/fliperos-mame-aspect'), str(out)], env=env,
-                               capture_output=True, text=True, timeout=60, check=True)
-            self.assertEqual(r.stdout.strip(), '3')
-            self.assertEqual(sorted(p.name for p in out.iterdir()), ['hires.ini', 'mvsc.ini', 'mvscu.ini'])
-            text = (out / 'mvsc.ini').read_text()
-            self.assertRegex(text, r'(?m)^aspect +320:224$')
-            self.assertRegex(text, r'(?m)^keepaspect +1$')
-            self.assertRegex((out / 'hires.ini').read_text(), r'(?m)^aspect +320:224$')
-            # Rodar de novo troca a pasta inteira (um jogo que saiu do XML sai).
-            (out / 'velho.ini').write_text('aspect 1:1\n')
-            subprocess.run(['bash', str(ROOT / 'config/fliperos-mame-aspect'), str(out)], env=env,
-                           capture_output=True, text=True, timeout=60, check=True)
-            self.assertFalse((out / 'velho.ini').exists())
 
     def test_full_mame_ini_like_groovyarcade(self):
         # O -createconfig do proprio GroovyMAME (todas as opcoes da versao) com
@@ -994,11 +917,29 @@ class GroovyMameTests(unittest.TestCase):
         body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]
         self.assertIn('fliperos-mame-ini /etc/fliperos/mame/mame.ini /etc/fliperos/mame/mame.ini', body)
 
-    def test_aspect_ini_made_at_build_and_update(self):
-        self.assertIn('fliperos-mame-aspect" "$root/opt/fliperos/bin/fliperos-mame-aspect', ROOTFS)
-        body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]
-        self.assertIn('chroot "$CHROOT_DIR" /opt/fliperos/bin/fliperos-mame-aspect', body)
-        self.assertIn('/opt/fliperos/bin/fliperos-mame-aspect', (ROOT / 'tools/cabinet-update.sh').read_text())
+    def test_old_aspect_option_is_removed(self):
+        # A opcao GroovyMAME 4:3 saiu: numa instalacao anterior vao embora o
+        # gerador, os .ini por jogo e a chave do fliperos.conf.
+        self.assertFalse((ROOT / 'config/fliperos-mame-aspect').exists())
+        for path in (ROOT / 'fliperos-setup/screens/video-setup.sh', ROOT / 'tools/cabinet-update.sh',
+                     ROOT / 'config/fliperos-groovymame'):
+            self.assertNotIn('mame_crt_aspect', path.read_text(), path)
+            self.assertNotIn('fliperos-mame-aspect', path.read_text(), path)
+        self.assertNotIn('fliperos-mame-aspect', MKISO)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'etc/fliperos/mame/aspect', 'opt/fliperos/bin', 'etc/modprobe.d',
+                      'etc/sudoers.d', 'etc/profile.d', 'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            (root / 'etc/fliperos/mame/aspect/mvsc.ini').write_text('aspect 320:224\n')
+            (root / 'opt/fliperos/bin/fliperos-mame-aspect').write_text('#!/bin/sh\n')
+            (root / 'etc/fliperos/fliperos.conf').write_text('monitor=arcade_15\nmame_crt_aspect=yes\n')
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            self.assertFalse((root / 'etc/fliperos/mame/aspect').exists())
+            self.assertFalse((root / 'opt/fliperos/bin/fliperos-mame-aspect').exists())
+            self.assertEqual((root / 'etc/fliperos/fliperos.conf').read_text(), 'monitor=arcade_15\n')
 
     def test_release_is_pinned_and_installed_behind_the_wrapper(self):
         body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]

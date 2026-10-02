@@ -10,19 +10,11 @@
 #    espremido ou no centro com barras pretas, conforme a resolucao do Setup.
 #    Comandos sem tela (-listxml, -showconfig, -verifyroms...) rodam direto.
 #  - -inipath /etc/fliperos/mame: o mame.ini do sistema, que o Setup grava.
-#    O padrao do release e ".;ini", relativo a pasta de onde se abre. Se
-#    ligado em Setup > Video Setup > GroovyMAME 4:3 (mame_crt_aspect=yes;
-#    desligado por padrao, como no GroovyArcade), num CRT de 15 kHz, depois
-#    dela /etc/fliperos/mame/aspect (fliperos-mame-aspect). Um -inipath na
-#    linha de comando vale mais.
+#    O padrao do release e ".;ini", relativo a pasta de onde se abre. Um
+#    -inipath na linha de comando vale mais.
 real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
 inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/mame}
-conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 x11run=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
-
-conf_value() {
-  sed -n "s/^$1=//p" "$conf" 2> /dev/null | tail -1
-}
 
 # opens_video ARGUMENTOS: o comando abre a tela (um jogo ou a lista do MAME)?
 opens_video() {
@@ -40,13 +32,8 @@ if [[ -z ${DISPLAY:-} && -z ${FLIPEROS_GROOVYMAME_NO_X:-} ]] && opens_video "$@"
   exec "$x11run" "$0" "$@"
 fi
 
-inipath=$inidir
-if [[ -d $inidir/aspect && $(conf_value mame_crt_aspect) == yes && $(conf_value frequency) == 15* &&
-  $(conf_value orientation) =~ ^(horizontal)?$ ]]; then
-  inipath="$inidir;$inidir/aspect"
-fi
 case " $* " in
   *" -inipath "* | *" --inipath "*) ;;
-  *) set -- -inipath "$inipath" "$@" ;;
+  *) set -- -inipath "$inidir" "$@" ;;
 esac
 exec "$real" "$@"
