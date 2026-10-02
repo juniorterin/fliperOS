@@ -259,6 +259,7 @@ EOF
 if [[ -z "${DISPLAY:-}" && "$(tty)" == /dev/tty1 ]]; then
     /opt/fliperos/bin/fliperos-tty1
 fi
+command -v fliperos-motd > /dev/null && fliperos-motd
 EOF
   install -m644 "$src/config/zshrc" "$home/.zshrc"
   # Acervo em ~/roms; /opt/fliperos/roms vira um link para la, e os caminhos
@@ -339,8 +340,8 @@ EOF
 chmod 440 "$root/etc/sudoers.d/fliperos-setup"
 rm -f "$root/etc/sudoers.d/fliperos-installer"
 
-cat > "$root/etc/profile.d/fliperos.sh" << 'EOF'
-if [ "$(tty 2> /dev/null)" = /dev/tty1 ] && [ -z "${DISPLAY:-}" ]; then
-    echo "FliperOS: type  fliperos-menu  to open the menu."
-fi
-EOF
+# MOTD: ao entrar no shell, como abrir o menu (config/fliperos-motd, chamado
+# pelo ~/.zshrc, pelo ~/.bash_profile e pelo fliperos-menu). O aviso de uma
+# linha de antes, no /etc/profile.d, saia no boot, antes do launcher.
+install -Dm755 "$src/config/fliperos-motd" "$root/usr/local/bin/fliperos-motd"
+rm -f "$root/etc/profile.d/fliperos.sh"

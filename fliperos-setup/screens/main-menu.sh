@@ -50,9 +50,10 @@ screen_main_menu() {
   done
 }
 
+# screen_terminal limpa a tela; no shell, o MOTD (config/fliperos-motd) diz
+# como voltar ao menu.
 screen_terminal() {
   ui_clear
-  printf '%s\n\n' "To return to the menu, type:  fliperos-menu" > /dev/tty
   return 0
 }
 

@@ -1,4 +1,6 @@
 #!/bin/sh
 # Volta do shell do tty1 ao menu do FliperOS: o laco do fliperos-tty1 (o
-# setup e, quando ele pede, o frontend ou o desktop).
-exec /opt/fliperos/bin/fliperos-tty1 --menu
+# setup e, quando ele pede, o frontend ou o desktop). Saindo do menu para o
+# shell, o MOTD lembra como voltar.
+/opt/fliperos/bin/fliperos-tty1 --menu
+exec /usr/local/bin/fliperos-motd

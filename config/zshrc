@@ -23,3 +23,9 @@ if [[ $TERM == linux ]]; then
   ZSH_THEME_GIT_PROMPT_CLEAN=") %F{green}%Bok "
   ZSH_THEME_GIT_PROMPT_DIRTY=") %F{yellow}%B* "
 fi
+
+# Ao entrar (login no tty1 depois do menu, SSH): como abrir o menu. Um
+# terminal do desktop nao e login e fica sem.
+if [[ -o login ]] && (( $+commands[fliperos-motd] )); then
+  fliperos-motd
+fi

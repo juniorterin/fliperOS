@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# MOTD do FliperOS: ao entrar no shell (o login do tty1 depois do menu, o SSH
+# e o fliperos-menu ao voltar) mostra como abrir o menu para configurar, no
+# visual do Setup: caixa arredondada roxa do gum, titulo rosa, tema Dracula.
+# No console as cores sao os indices da paleta que o boot reprograma com o
+# Dracula (como o lib/ui.sh do Setup); no SSH, os tons de 256 cores. Numa
+# tela pequena (320x240: 40x15) sai sem o desenho; sem o gum, sem a caixa.
+#
+#   FLIPEROS_MOTD_SIZE   "LINHAS COLUNAS" (padrao: o tamanho do terminal)
+
+if [[ ${TERM:-} == linux ]]; then
+  purple=4 pink=5 fg=7 comment=8 cyan=6 green=2
+else
+  purple=141 pink=212 fg=255 comment=61 cyan=117 green=84
+fi
+
+# c COR TEXTO: o texto na cor (indice do console ou de 256 cores).
+c() {
+  if (($1 < 8)); then
+    printf '\e[3%dm%s\e[0m' "$1" "$2"
+  elif [[ ${TERM:-} == linux ]]; then
+    printf '\e[9%dm%s\e[0m' $(($1 - 8)) "$2"
+  else
+    printf '\e[38;5;%dm%s\e[0m' "$1" "$2"
+  fi
+}
+
+size=${FLIPEROS_MOTD_SIZE:-$(stty size < /dev/tty 2> /dev/null)}
+read -r rows cols <<< "$size"
+[[ $rows =~ ^[0-9]+$ && $cols =~ ^[0-9]+$ ]] || { rows=30 cols=80; }
+big=0
+((rows >= 24 && cols >= 48)) && big=1
+
+ip=$(hostname -I 2> /dev/null | awk '{ print $1 }')
+used=$(df -P / 2> /dev/null | awk 'NR == 2 { print $5 }')
+host="$(hostname 2> /dev/null)${ip:+ ($ip)}"
+disk=${used:+$used used on /}
+
+lines=()
+if ((big)); then
+  while IFS= read -r art; do
+    lines+=("$(c "$pink" "$art")")
+  done << 'ART'
+ ___ _ _                ___  ___
+| __| (_)_ __  ___ _ _ / _ \/ __|
+| _|| | | '_ \/ -_) '_| (_) \__ \
+|_| |_|_| .__/\___|_|  \___/|___/
+        |_|
+ART
+  lines+=("$(c "$comment" "Arcade system for 15 kHz CRTs")" "")
+else
+  lines+=("$(c "$pink" "FliperOS")")
+fi
+if ((big)); then
+  lines+=("$(c "$cyan" "$host${disk:+ - $disk}")" "")
+else
+  lines+=("$(c "$cyan" "$host")")
+  [[ -n $disk ]] && lines+=("$(c "$cyan" "$disk")")
+fi
+lines+=("$(c "$fg" "To configure, type:")")
+if [[ -n ${SSH_CONNECTION:-} ]]; then
+  lines+=("  $(c "$green" "sudo fliperos-setup")")
+  lines+=("  $(c "$comment" "the Setup: video, audio, network...")")
+  lines+=("  $(c "$green" "fliperos-menu")$(c "$comment" "  on the cabinet's screen")")
+else
+  lines+=("  $(c "$green" "fliperos-menu")")
+  lines+=("  $(c "$comment" "Setup, frontend and desktop")")
+fi
+
+if command -v gum > /dev/null; then
+  margin="1 1"
+  ((big)) || margin="0 1"
+  gum style --border rounded --border-foreground "$purple" --padding "0 1" --margin "$margin" "${lines[@]}"
+else
+  printf '\n'
+  printf '  %s\n' "${lines[@]}"
+  printf '\n'
+fi

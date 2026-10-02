@@ -426,7 +426,7 @@ class ImageTests(unittest.TestCase):
                                  'sudo /usr/local/bin/fliperos-setup --menu', 'session',
                                  'sudo /usr/local/bin/fliperos-setup --menu'])
         menu = (ROOT / 'config/fliperos-menu').read_text()
-        self.assertIn('exec /opt/fliperos/bin/fliperos-tty1 --menu', menu)
+        self.assertIn('\n/opt/fliperos/bin/fliperos-tty1 --menu\nexec /usr/local/bin/fliperos-motd\n', menu)
         self.assertIn('/usr/local/bin/fliperos-menu', ROOTFS)
         self.assertNotIn('runuser', (ROOT / 'fliperos-setup/lib/launcher.sh').read_text())
 
@@ -607,7 +607,8 @@ class RootfsRunTests(unittest.TestCase):
         self.assertTrue((self.root / 'home/fliperos/.config/flycast/emu.cfg').is_file())
         wants = self.root / 'etc/systemd/system/multi-user.target.wants/fliperos-padkeys.service'
         self.assertEqual(os.readlink(wants), '/etc/systemd/system/fliperos-padkeys.service')
-        self.assertIn('fliperos-menu', (self.root / 'etc/profile.d/fliperos.sh').read_text())
+        self.assertTrue(os.access(self.root / 'usr/local/bin/fliperos-motd', os.X_OK))
+        self.assertFalse((self.root / 'etc/profile.d/fliperos.sh').exists())
 
     def test_networkmanager_writes_dns_and_manages_ethernet(self):
         # No gabinete o resolv.conf era o do container do build (192.168.65.7)
@@ -1628,6 +1629,45 @@ class SilentBootTests(unittest.TestCase):
             self.assertGreater(conf.name, '10-console-messages.conf')
         self.assertIn('sysctl -q -p /etc/sysctl.d/99-fliperos-console.conf',
                       (ROOT / 'tools/cabinet-update.sh').read_text())
+
+
+class MotdTests(unittest.TestCase):
+    """config/fliperos-motd: como abrir o menu, ao entrar no shell."""
+
+    def motd(self, size, term='linux', ssh=False):
+        env = {'PATH': '/usr/bin:/bin', 'TERM': term, 'FLIPEROS_MOTD_SIZE': size}
+        if ssh:
+            env['SSH_CONNECTION'] = '192.168.1.2 50000 192.168.1.111 22'
+        return subprocess.run(['bash', str(ROOT / 'config/fliperos-motd')], env=env, capture_output=True,
+                              text=True, timeout=30, check=True).stdout
+
+    def test_console_shows_the_menu_command_in_the_setup_colors(self):
+        out = self.motd('30 80')
+        self.assertIn('|_| |_|_| .__/', out)
+        self.assertIn('\x1b[35m', out)  # rosa: o indice 5 da paleta Dracula do console
+        self.assertIn('fliperos-menu', out)
+        self.assertNotIn('sudo fliperos-setup', out)
+
+    def test_ssh_points_to_the_setup(self):
+        # No SSH o fliperos-menu abriria o frontend no terminal da rede.
+        out = self.motd('40 120', term='xterm-256color', ssh=True)
+        self.assertIn('sudo fliperos-setup', out)
+        self.assertIn('\x1b[38;5;212m', out)
+
+    def test_small_screen_has_no_art(self):
+        # 320x240: 40x15 caracteres.
+        out = self.motd('15 40')
+        self.assertNotIn('|_|', out)
+        self.assertIn('FliperOS', out)
+        self.assertLessEqual(len(out.splitlines()), 15)
+
+    def test_shown_when_entering_the_shell(self):
+        self.assertIn('if [[ -o login ]] && (( $+commands[fliperos-motd] )); then\n  fliperos-motd\nfi',
+                      (ROOT / 'config/zshrc').read_text())
+        self.assertIn('command -v fliperos-motd > /dev/null && fliperos-motd', ROOTFS)
+        self.assertIn('install -Dm755 "$src/config/fliperos-motd" "$root/usr/local/bin/fliperos-motd"', ROOTFS)
+        self.assertNotIn('printf', (ROOT / 'fliperos-setup/screens/main-menu.sh').read_text()
+                         .split('screen_terminal() {')[1].split('\n}\n')[0])
 
 
 class TerminalThemeTests(unittest.TestCase):
