@@ -1,25 +1,41 @@
 #!/usr/bin/env python3
 """MAME ROM Cleaner do FliperOS (Setup > MAME ROM Cleaner).
 
-Tira de uma pasta de ROMs do MAME os sets que as regras escolhidas
-excluem, pelo XML da versao do MAME daquele romset (-listxml):
+Escolhe, de uma pasta com um romset do MAME, os jogos que interessam, pelo
+XML da versao do MAME daquele romset (-listxml), e os move para a pasta do
+MAME; o que sobra na pasta de origem fica listado para o Setup perguntar se
+apaga. Os filtros seguem o MAME Smart ROM Sorter
+(github.com/Cyborgbob/MAME-Smart-ROM-Sorter), so com o que o XML diz:
 
-  fliperos-romclean scan --xml ARQUIVO|- --roms PASTA --plan PLANO
-                         [--only REGRA]... [--exclude REGRA]...
-  fliperos-romclean apply PLANO (--move-to PASTA | --delete)
+  fliperos-romclean scan --xml ARQUIVO|- --roms ORIGEM --dest PASTA_DO_MAME
+                         --plan PLANO [filtros]
+  fliperos-romclean apply PLANO move|delete-rest
   fliperos-romclean fetch-mame2010 DESTINO
 
-Um jogo fica se casa com todas as --only e com nenhuma --exclude. Fica
-tambem o que os jogos que ficam usam: o pai (num romset merged o clone
-esta no zip dele), a BIOS e os dispositivos com ROM (romof, cloneof e
-device_ref, em cadeia). O que nao esta no XML fica como esta. O scan so
-escreve o plano (o que sai, um arquivo por linha) e o resumo; o apply move
-ou apaga o que o plano diz.
+Filtros:
+  --arcade-only          so maquinas de ficha (input coins): sem consoles,
+                         computadores, BIOS e dispositivos avulsos
+  --status working|imperfect|all   emulacao: so "good", "good" e
+                         "imperfect", ou tudo (padrao)
+  --orientation any|horizontal|vertical
+  --max-players N        --max-buttons N   (0: qualquer)
+  --controls any|FAMILIA,...  os controles que o painel tem: joystick,
+                         analog, trackball, spinner, pedal, lightgun,
+                         keyboard, mahjong. Jogo so de botoes sempre passa.
+  --clones keep|none|1g1r    1g1r: uma versao por jogo, pela --regions
+  --regions World,USA,...    ordem das regioes da descricao (1g1r)
+  --no-bootlegs  --no-prototypes  (pela descricao)
+  --years 1980-1999
+  --only REGRA / --exclude REGRA  clone, bios, device, mechanical,
+                         notworking, vertical, horizontal, vector, chd, psx
+                         (placa com a CPU do PlayStation: ZN-1/ZN-2, Namco
+                         System 10/11/12, Konami GV/GQ/573/Twinkle, Taito
+                         G-NET; "PSX CPU" e CXD8661R no XML do 0.139, "Sony
+                         CXD8530/8606/8661" no atual)
 
-Regras: clone, bios, device, mechanical, notworking, vertical, horizontal,
-vector, chd e psx (placa com a CPU do PlayStation: ZN-1/ZN-2, Namco System
-10/11/12, Konami GV/GQ/573/Twinkle, Taito G-NET; "PSX CPU" e CXD8661R no
-XML do 0.139, "Sony CXD8530/8606/8661" no atual).
+O que um jogo escolhido usa vai junto: o pai (num romset merged o clone
+esta no zip dele), a BIOS e os dispositivos com ROM (romof, cloneof e
+device_ref, em cadeia). O que nao esta no XML fica como esta.
 """
 import argparse
 import hashlib
@@ -55,6 +71,32 @@ RULES = {
     'psx': lambda m: any(PSX_CPU.match(cpu) for cpu in m['cpus']),
 }
 
+# Os tipos de controle do XML (o 0.139 escreve joy8way, vjoy2way,
+# doublejoy8way; o atual, joy com o atributo ways) em familias de painel.
+CONTROL_FAMILIES = {
+    'joy': 'joystick', 'doublejoy': 'joystick', 'triplejoy': 'joystick',
+    'stick': 'analog',
+    'trackball': 'trackball', 'mouse': 'trackball',
+    'dial': 'spinner', 'paddle': 'spinner', 'positional': 'spinner',
+    'pedal': 'pedal',
+    'lightgun': 'lightgun',
+    'keyboard': 'keyboard', 'keypad': 'keyboard',
+    'mahjong': 'mahjong', 'hanafuda': 'mahjong', 'gambling': 'mahjong',
+}
+FAMILIES = sorted(set(CONTROL_FAMILIES.values()))
+
+# Regioes da descricao ("(World 960909)", "(USA, rev. B)") para o 1g1r.
+REGION_WORDS = {
+    'world': 'World', 'usa': 'USA', 'us': 'USA', 'euro': 'Europe', 'europe': 'Europe',
+    'uk': 'Europe', 'germany': 'Europe', 'france': 'Europe', 'italy': 'Europe', 'spain': 'Europe',
+    'brazil': 'Brazil', 'hispanic': 'Hispanic', 'latin america': 'Hispanic', 'japan': 'Japan',
+    'asia': 'Asia', 'korea': 'Asia', 'taiwan': 'Asia', 'hong kong': 'Asia', 'china': 'Asia',
+    'oceania': 'Oceania', 'australia': 'Oceania',
+}
+REGION_ORDER = ['World', 'USA', 'Europe', 'Brazil', 'Hispanic', 'Oceania', 'Asia', 'Japan', 'Unknown']
+BOOTLEG = re.compile(r'\((?:[^)]*\b)?(bootleg|hack)\b', re.I)
+PROTOTYPE = re.compile(r'\((?:[^)]*\b)?(prototype|beta|location test)\b', re.I)
+
 
 def open_xml(src):
     if src == '-':
@@ -62,6 +104,23 @@ def open_xml(src):
     if src.endswith('.xz'):
         return lzma.open(src)
     return open(src, 'rb')
+
+
+def control_family(kind):
+    kind = re.sub(r'^v(?=(double|triple)?joy)', '', kind.lower())
+    kind = re.sub(r'\d+way$', '', kind)
+    return CONTROL_FAMILIES.get(kind, kind)
+
+
+def regions_of(desc):
+    found = set()
+    for group in re.findall(r'\(([^)]*)\)', desc):
+        for part in re.split(r'[,/]', group):
+            words = part.strip().lower()
+            for key, region in REGION_WORDS.items():
+                if re.search(r'\b%s\b' % re.escape(key), words):
+                    found.add(region)
+    return found
 
 
 def read_machines(src):
@@ -75,8 +134,18 @@ def read_machines(src):
         a = el.attrib
         display = el.find('display')
         driver = el.find('driver')
+        inp = el.find('input')
+        desc = (el.findtext('description') or '').strip()
+        buttons, controls = 0, set()
+        if inp is not None:
+            buttons = int(inp.get('buttons', '0') or 0)
+            for ctrl in inp.iter('control'):
+                if ctrl.get('type'):
+                    controls.add(control_family(ctrl.get('type')))
+                buttons = max(buttons, int(ctrl.get('buttons', '0') or 0))
+        year = (el.findtext('year') or '').strip()
         machines[a['name'].lower()] = {
-            'description': (el.findtext('description') or '').strip(),
+            'description': desc,
             'cloneof': a.get('cloneof', '').lower(),
             'romof': a.get('romof', '').lower(),
             'isbios': a.get('isbios') == 'yes',
@@ -88,6 +157,14 @@ def read_machines(src):
             'disk': el.find('disk') is not None,
             'cpus': [c.get('name', '') for c in el.iter('chip') if c.get('type') == 'cpu'],
             'devices': [d.get('name', '').lower() for d in el.iter('device_ref')],
+            'coins': int(inp.get('coins', '0') or 0) if inp is not None else 0,
+            'players': int(inp.get('players', '0') or 0) if inp is not None else 0,
+            'buttons': buttons,
+            'controls': controls,
+            'decade': int(year[:3]) * 10 if year[:3].isdigit() else None,
+            'regions': regions_of(desc),
+            'bootleg': bool(BOOTLEG.search(desc)),
+            'prototype': bool(PROTOTYPE.search(desc)),
         }
         root.clear()
     return machines
@@ -113,27 +190,79 @@ def size_of(path):
     return os.lstat(path).st_size
 
 
-def plan(machines, present, only, exclude):
-    """(ficam, so como dependencia, saem) entre os sets da pasta."""
-    def chosen(m):
-        return all(RULES[r](m) for r in only) and not any(RULES[r](m) for r in exclude)
+def passes(m, f):
+    """O jogo passa nos filtros f (o dicionario do argparse)?"""
+    if f.arcade_only and (m['coins'] == 0 or m['isbios'] or m['isdevice'] or m['ismechanical']):
+        return False
+    allowed = {'working': ('good', ''), 'imperfect': ('good', 'imperfect', '')}.get(f.status)
+    if allowed and m['status'] not in allowed:
+        return False
+    if f.orientation == 'horizontal' and m['rotate'] in (90, 270):
+        return False
+    if f.orientation == 'vertical' and m['rotate'] not in (90, 270):
+        return False
+    if f.max_players and m['players'] > f.max_players:
+        return False
+    if f.max_buttons and m['buttons'] > f.max_buttons:
+        return False
+    if f.controls != 'any' and not m['controls'] <= set(f.controls.split(',')):
+        return False
+    if f.clones == 'none' and m['cloneof']:
+        return False
+    if (f.no_bootlegs and m['bootleg']) or (f.no_prototypes and m['prototype']):
+        return False
+    if f.years:
+        first, last = (int(y) for y in f.years.split('-'))
+        if m['decade'] is None or not first // 10 * 10 <= m['decade'] <= last:
+            return False
+    return all(RULES[r](m) for r in f.only) and not any(RULES[r](m) for r in f.exclude)
 
-    # Os escolhidos que existem na pasta, e os clones escolhidos que, num
-    # romset merged, estao no zip do pai que existe.
-    wanted = {n for n in present if n in machines and chosen(machines[n])}
-    wanted |= {n for n, m in machines.items() if m['cloneof'] in present and chosen(m)}
-    needed, todo = set(), list(wanted)
+
+def root_of(machines, name):
+    for _ in range(8):
+        parent = machines.get(name, {}).get('cloneof')
+        if not parent:
+            break
+        name = parent
+    return name
+
+
+def best_of_each_game(machines, names, regions):
+    """1g1r: de cada familia (pai e clones), a versao da regiao preferida;
+    no empate, a que nao e bootleg e depois o pai."""
+    order = {r: i for i, r in enumerate(regions)}
+    unknown = order.get('Unknown', len(order))
+    families = {}
+    for n in names:
+        families.setdefault(root_of(machines, n), []).append(n)
+
+    def score(n):
+        m = machines[n]
+        rank = min((order.get(r, unknown) for r in m['regions']), default=unknown)
+        return (rank, m['bootleg'], bool(m['cloneof']), n)
+    return {min(members, key=score) for members in families.values()}
+
+
+def plan(machines, present, f):
+    """(vao, so como dependencia, ficam na origem) entre os sets da pasta."""
+    games = {n for n, m in machines.items() if not m['isbios'] and not m['isdevice'] and passes(m, f)}
+    # Os que existem na pasta, e os clones que, num romset merged, estao no
+    # zip do pai que existe.
+    games = {n for n in games if n in present or machines[n]['cloneof'] in present}
+    if f.clones == '1g1r':
+        games = best_of_each_game(machines, games, f.regions.split(','))
+    needed, todo = set(), list(games)
     while todo:
         m = machines.get(todo.pop())
         if m is None:
             continue
         for dep in [m['romof'], m['cloneof'], *m['devices']]:
-            if dep and dep not in needed and dep not in wanted:
+            if dep and dep not in needed and dep not in games:
                 needed.add(dep)
                 todo.append(dep)
     known = {n for n in present if n in machines}
-    keep = known & (wanted | needed)
-    return keep, keep & needed - wanted, known - keep
+    move = known & (games | needed)
+    return move, move & needed - games, known - move
 
 
 def cmd_scan(args):
@@ -141,75 +270,87 @@ def cmd_scan(args):
     for rule in args.only + args.exclude:
         if rule not in RULES:
             sys.exit('regra desconhecida: %s (use %s)' % (rule, ', '.join(RULES)))
+    if args.controls != 'any':
+        for family in args.controls.split(','):
+            if family not in FAMILIES:
+                sys.exit('controle desconhecido: %s (use any ou %s)' % (family, ', '.join(FAMILIES)))
     machines = read_machines(args.xml)
     present = sets_in(folder)
-    keep, needed, remove = plan(machines, present, args.only, args.exclude)
-    total = 0
+    move, needed, rest = plan(machines, present, args)
+    sizes = {'move': 0, 'rest': 0}
     with open(args.plan, 'w', encoding='utf-8') as out:
-        out.write('# roms\t%s\n' % folder)
-        for name in sorted(remove):
-            for filename in sorted(present[name]):
-                size = size_of(os.path.join(folder, filename))
-                total += size
-                desc = machines[name]['description'].replace('\t', ' ').replace('\n', ' ')
-                out.write('%s\t%s\t%d\t%s\n' % (name, filename, size, desc))
+        out.write('# roms\t%s\n# dest\t%s\n' % (folder, os.path.abspath(args.dest)))
+        for kind, names in (('move', move), ('rest', rest)):
+            for name in sorted(names):
+                for filename in sorted(present[name]):
+                    size = size_of(os.path.join(folder, filename))
+                    sizes[kind] += size
+                    desc = machines[name]['description'].replace('\t', ' ').replace('\n', ' ')
+                    out.write('%s\t%s\t%s\t%d\t%s\n' % (kind, name, filename, size, desc))
     print('machines=%d' % len(machines))
     print('sets=%d' % len([n for n in present if n in machines]))
-    print('keep=%d' % len(keep))
+    print('move=%d' % len(move))
     print('needed=%d' % len(needed))
-    print('remove=%d' % len(remove))
-    print('bytes=%d' % total)
+    print('move_bytes=%d' % sizes['move'])
+    print('rest=%d' % len(rest))
+    print('rest_bytes=%d' % sizes['rest'])
     print('unknown=%d' % len([n for n in present if n not in machines]))
 
 
 def read_plan(path):
-    folder, files = None, []
+    header, files = {}, {'move': [], 'rest': []}
     with open(path, encoding='utf-8') as f:
         for line in f:
             line = line.rstrip('\n')
-            if line.startswith('# roms\t'):
-                folder = line.split('\t', 1)[1]
-            elif line and not line.startswith('#'):
-                files.append(line.split('\t')[1])
-    if not folder:
-        sys.exit('plano sem a pasta das ROMs: %s' % path)
-    return folder, files
+            if line.startswith('# '):
+                key, _, value = line[2:].partition('\t')
+                header[key] = value
+            elif line:
+                kind, _, filename = line.split('\t')[:3]
+                files.setdefault(kind, []).append(filename)
+    if not header.get('roms') or not header.get('dest'):
+        sys.exit('plano sem a pasta das ROMs ou o destino: %s' % path)
+    return header['roms'], header['dest'], files
+
+
+def chown_like(path, st):
+    """O que foi movido fica do dono da pasta do MAME (o Setup roda como root)."""
+    try:
+        os.chown(path, st.st_uid, st.st_gid, follow_symlinks=False)
+        if os.path.isdir(path) and not os.path.islink(path):
+            for top, dirs, files in os.walk(path):
+                for name in dirs + files:
+                    os.chown(os.path.join(top, name), st.st_uid, st.st_gid, follow_symlinks=False)
+    except OSError:
+        pass
 
 
 def cmd_apply(args):
-    folder, files = read_plan(args.plan)
-    st = os.stat(folder)
-    if args.move_to:
-        dest = os.path.abspath(args.move_to)
-        if not os.path.isdir(dest):
-            os.makedirs(dest)
-            # Do dono da pasta das ROMs (o Setup roda como root).
-            try:
-                os.chown(dest, st.st_uid, st.st_gid)
-            except OSError:
-                pass
+    folder, dest, files = read_plan(args.plan)
     done = skipped = 0
-    for filename in files:
+    if args.action == 'move':
+        os.makedirs(dest, exist_ok=True)
+        st = os.stat(dest)
+    for filename in files['move' if args.action == 'move' else 'rest']:
         # So um arquivo da propria pasta, nunca um caminho.
-        if '/' in filename or filename in ('.', '..'):
-            skipped += 1
-            continue
         path = os.path.join(folder, filename)
-        if not os.path.lexists(path):
+        if '/' in filename or filename in ('.', '..') or not os.path.lexists(path):
             skipped += 1
             continue
-        if args.move_to:
+        if args.action == 'move':
             target = os.path.join(dest, filename)
+            # Ja esta la (ou a origem e a propria pasta do MAME): fica.
             if os.path.lexists(target):
                 skipped += 1
                 continue
             shutil.move(path, target)
+            chown_like(target, st)
         elif os.path.isdir(path) and not os.path.islink(path):
             shutil.rmtree(path)
         else:
             os.remove(path)
         done += 1
-    print('%s=%d' % ('moved' if args.move_to else 'deleted', done))
+    print('%s=%d' % ('moved' if args.action == 'move' else 'deleted', done))
     print('skipped=%d' % skipped)
 
 
@@ -245,15 +386,26 @@ def main():
     p = sub.add_parser('scan')
     p.add_argument('--xml', required=True)
     p.add_argument('--roms', required=True)
+    p.add_argument('--dest', required=True)
     p.add_argument('--plan', required=True)
+    p.add_argument('--arcade-only', action='store_true')
+    p.add_argument('--status', choices=('working', 'imperfect', 'all'), default='all')
+    p.add_argument('--orientation', choices=('any', 'horizontal', 'vertical'), default='any')
+    p.add_argument('--max-players', type=int, default=0)
+    p.add_argument('--max-buttons', type=int, default=0)
+    p.add_argument('--controls', default='any')
+    p.add_argument('--clones', choices=('keep', 'none', '1g1r'), default='keep')
+    p.add_argument('--regions', default=','.join(REGION_ORDER))
+    p.add_argument('--no-bootlegs', action='store_true')
+    p.add_argument('--no-prototypes', action='store_true')
+    p.add_argument('--years', type=lambda v: v if re.fullmatch(r'\d{4}-\d{4}', v) else
+                   parser.error('use --years 1980-1999'))
     p.add_argument('--only', action='append', default=[])
     p.add_argument('--exclude', action='append', default=[])
     p.set_defaults(func=cmd_scan)
     p = sub.add_parser('apply')
     p.add_argument('plan')
-    group = p.add_mutually_exclusive_group(required=True)
-    group.add_argument('--move-to')
-    group.add_argument('--delete', action='store_true')
+    p.add_argument('action', choices=('move', 'delete-rest'))
     p.set_defaults(func=cmd_apply)
     p = sub.add_parser('fetch-mame2010')
     p.add_argument('dest')

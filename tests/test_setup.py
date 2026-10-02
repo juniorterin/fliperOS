@@ -1462,48 +1462,96 @@ class MenuSoundsTests(Base):
 class RomCleanerTests(Base):
     """lib/romclean.sh: o Setup > MAME ROM Cleaner (config/fliperos-romclean)."""
 
-    XML = ('<mame build="0.289"><machine name="mslug"><description>Metal Slug</description></machine>'
+    XML = ('<mame build="0.289">'
+           '<machine name="mslug"><description>Metal Slug</description><year>1996</year>'
+           '<input players="2" coins="1"><control type="joy" buttons="4"/></input><driver status="good"/></machine>'
            '<machine name="mslugb" cloneof="mslug" romof="mslug"><description>Metal Slug (bootleg)</description>'
-           '</machine></mame>')
+           '<year>1996</year><input players="2" coins="1"><control type="joy" buttons="4"/></input>'
+           '<driver status="good"/></machine>'
+           '<machine name="cent"><description>Centipede</description><year>1980</year>'
+           '<input players="2" coins="1"><control type="trackball" buttons="1"/></input>'
+           '<driver status="good"/></machine></mame>')
 
     def setUp(self):
         super().setUp()
-        self.roms = self.env.dir / "roms" / "mame"
-        self.roms.mkdir(parents=True)
-        for name in ("mslug.zip", "mslugb.zip"):
-            (self.roms / name).write_bytes(b"x" * 1536)
+        self.full = self.env.dir / "full"
+        self.full.mkdir()
+        for name in ("mslug.zip", "mslugb.zip", "cent.zip"):
+            (self.full / name).write_bytes(b"x" * 1536)
         xml = self.env.dir / "listxml.xml"
         xml.write_text(self.XML)
         self.env.stub("groovymame", 'case "$1" in -listxml) cat "%s" ;; '
                                     '-version) echo "0.289 (GroovyMAME 0.289.222f)" ;; esac' % xml)
         self.env.stub("fliperos-romclean", 'exec python3 %s "$@"' % (ROOT / "config/fliperos-romclean"))
         self.vars = {"ROMCLEAN": str(self.env.bin / "fliperos-romclean"),
-                     "MAME2010_XML": str(self.env.dir / "mame2010.xml.xz")}
+                     "MAME2010_XML": str(self.env.dir / "mame2010.xml.xz"),
+                     "ROMS_ROOT": str(self.env.dir / "roms")}
 
-    def test_scan_list_and_move(self):
+    def test_cabinet_preset_moves_then_deletes_the_rest(self):
         out = self.env.out("""
+            mapfile -t kv < <(romclean_preset cabinet)
+            mapfile -t args < <(romclean_args "${kv[@]}")
             plan=$(mktemp)
-            s=$(romclean_scan %s groovymame "$plan" exclude:clone)
-            echo "remove=$(romclean_value "$s" remove) bytes=$(romclean_value "$s" bytes)"
-            romclean_list "$plan"
-            r=$(romclean_apply "$plan" move "$(romclean_dest %s)")
+            s=$(romclean_scan %s groovymame "$(romclean_default_dest groovymame)" "$plan" "${args[@]}")
+            echo "move=$(romclean_value "$s" move) rest=$(romclean_value "$s" rest) bytes=$(romclean_value "$s" rest_bytes)"
+            romclean_list "$plan" move
+            romclean_list "$plan" rest
+            r=$(romclean_apply "$plan" move)
             romclean_value "$r" moved
-        """ % (self.roms, self.roms), self.vars)
+            r=$(romclean_apply "$plan" delete-rest)
+            romclean_value "$r" deleted
+        """ % self.full, self.vars)
         lines = out.splitlines()
-        self.assertEqual(lines[0], "remove=1 bytes=1536")
-        self.assertEqual(lines[1], "mslugb           Metal Slug (bootleg)")
-        self.assertEqual(lines[2], "1")
-        self.assertTrue((self.env.dir / "roms" / "mame-removed" / "mslugb.zip").exists())
-        self.assertTrue((self.roms / "mslug.zip").exists())
-        self.assertIn("ROM cleaner: move 1 arquivos", (self.env.dir / "setup.log").read_text())
+        self.assertEqual(lines[0], "move=1 rest=2 bytes=3072")
+        self.assertEqual(lines[1], "mslug            Metal Slug")
+        self.assertEqual(lines[2:4], ["cent             Centipede", "mslugb           Metal Slug (bootleg)"])
+        self.assertEqual(lines[4:], ["1", "2"])
+        self.assertTrue((self.env.dir / "roms" / "mame" / "mslug.zip").exists())
+        self.assertEqual(list(self.full.iterdir()), [])
+        self.assertIn("ROM cleaner: move (%s -> %s/roms/mame)" % (self.full, self.env.dir),
+                      (self.env.dir / "setup.log").read_text())
 
-    def test_default_xml_source(self):
-        # O MAME 2010 so numa pasta "2010" e com o XML instalado.
+    def test_presets_and_options(self):
+        # Os tres presets tem todos os filtros, e cada filtro vira as opcoes
+        # do fliperos-romclean.
+        keys = self.env.out('echo "${ROMCLEAN_KEYS[@]}"').split()
+        for preset in ("cabinet", "working", "psx"):
+            kv = self.env.out("romclean_preset %s" % preset).split()
+            self.assertEqual([k.split("=")[0] for k in kv], keys, preset)
+        self.assertNotEqual(self.env.run("romclean_preset outro").returncode, 0)
+        args = self.env.out("romclean_args $(romclean_preset cabinet)").split()
+        self.assertEqual(args, ["--arcade-only", "--status", "imperfect", "--orientation", "any", "--max-players", "2",
+                                "--max-buttons", "6", "--controls", "joystick", "--clones", "1g1r", "--no-bootlegs",
+                                "--no-prototypes"])
+        self.assertIn("--only psx", " ".join(self.env.out("romclean_args $(romclean_preset psx)").split()))
+        self.assertIn("--exclude chd", " ".join(self.env.out("romclean_args chd=no vector=yes").split()))
+        # Enter passa ao valor seguinte e volta ao primeiro.
+        self.assertEqual(self.env.out("romclean_next players 2; romclean_next players 0").split(), ["1", "2"])
+        self.assertEqual(self.env.out("romclean_label buttons 0").strip(), "Buttons: any")
+        self.assertEqual(self.env.out("romclean_label controls joystick").strip(), "Controls: joystick and buttons")
+
+    def test_every_value_is_known_by_the_engine(self):
+        # Os valores da tela sao os que o fliperos-romclean aceita.
+        engine = (ROOT / "config/fliperos-romclean").read_text()
+        for control in self.env.out('echo "${ROMCLEAN_VALUES[controls]}"').split():
+            for family in control.split(",") if control != "any" else ():
+                self.assertIn("'%s'" % family, engine, family)
+        for status in self.env.out('echo "${ROMCLEAN_VALUES[status]}"').split():
+            self.assertIn("'%s'" % status, engine, status)
+
+    def test_default_xml_and_folder(self):
+        # O MAME 2010 so numa pasta "2010" e com o XML instalado; vai para a
+        # pasta do core mame2010, se existir.
         script = "romclean_default_source /r/retroarch/mame2010; romclean_default_source /r/mame"
         self.assertEqual(self.env.out(script, self.vars).split(), ["groovymame", "groovymame"])
         (self.env.dir / "mame2010.xml.xz").write_bytes(b"")
         self.assertEqual(self.env.out(script, self.vars).split(), ["mame2010", "groovymame"])
         self.assertEqual(self.env.out("romclean_source_label groovymame", self.vars), "GroovyMAME 0.289\n")
+        roms = self.env.dir / "roms"
+        self.assertEqual(self.env.out("romclean_default_dest mame2010", self.vars).strip(), "%s/mame" % roms)
+        (roms / "retroarch" / "mame2010").mkdir(parents=True)
+        self.assertEqual(self.env.out("romclean_default_dest mame2010", self.vars).strip(),
+                         "%s/retroarch/mame2010" % roms)
 
     def test_human_bytes(self):
         self.assertEqual(self.env.out("human_bytes 0; human_bytes 1536; human_bytes 3221225472").split("\n")[:3],
@@ -1513,10 +1561,6 @@ class RomCleanerTests(Base):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         self.assertIn('"romcleaner|MAME ROM Cleaner"', menu)
         self.assertIn("romcleaner) screen_rom_cleaner ;;", menu)
-        rules = self.env.out('printf "%s\\n" "${ROMCLEAN_RULES[@]%%|*}"').split()
-        engine = (ROOT / "config/fliperos-romclean").read_text()
-        for rule in rules:
-            self.assertIn("    '%s': lambda m:" % rule.split(":")[1], engine, rule)
 
 
 if __name__ == "__main__":

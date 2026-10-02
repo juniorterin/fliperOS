@@ -32,6 +32,17 @@ if [[ -z ${DISPLAY:-} && -z ${FLIPEROS_GROOVYMAME_NO_X:-} ]] && opens_video "$@"
   exec "$x11run" "$0" "$@"
 fi
 
+# Aberto sem jogo (a interface do MAME: a sessao e o menu do desktop), o jogo
+# escolhido nela roda no mesmo processo, e o emusync do GroovyMAME no X
+# (src/osd/modules/emusync/emusync_linux.cpp, gm0289sr222f) usa o
+# /dev/dri/card0 que fechou ao sair da interface: o osd_deinit fecha o fd
+# mas nao o zera, e o osd_init seguinte nao reabre ("drmCrtcGetSequence(-1)").
+# Com o autosync, o Switchres liga o syncrefresh, que tira o throttle e
+# deixa a velocidade com esse vblank quebrado: o jogo corria acelerado (no
+# gabinete, o MvC escolhido na interface). Sem o autosync, a velocidade e a
+# do throttle e o vsync e o do OpenGL (waitvsync). Aberto ja com o jogo
+# (frontends, linha de comando) o vblank funciona e fica tudo como esta.
+(($# == 0)) && set -- -noautosync -waitvsync
 case " $* " in
   *" -inipath "* | *" --inipath "*) ;;
   *) set -- -inipath "$inidir" "$@" ;;

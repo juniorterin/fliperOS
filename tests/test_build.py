@@ -885,6 +885,10 @@ class GroovyMameTests(unittest.TestCase):
         # de onde se abre); um -inipath na linha de comando vale mais.
         args, ini = self.run_wrapper('mvsc')
         self.assertEqual(args, ['-inipath', ini, 'mvsc'])
+        # Sem jogo (a interface): sem o autosync, que no jogo escolhido nela
+        # deixava a velocidade com um vblank quebrado (acelerado no gabinete).
+        args, ini = self.run_wrapper()
+        self.assertEqual(args, ['-inipath', ini, '-noautosync', '-waitvsync'])
         self.assertEqual(self.run_wrapper('-inipath', '/x', 'mvsc')[0], ['-inipath', '/x', 'mvsc'])
         self.assertIn('/usr/local/libexec/groovymame', (ROOT / 'config/fliperos-groovymame').read_text())
 
@@ -1033,81 +1037,60 @@ class GroovyMameTests(unittest.TestCase):
 
 
 class RomCleanTests(unittest.TestCase):
-    """config/fliperos-romclean: o que sai de uma pasta de ROMs do MAME."""
+    """config/fliperos-romclean: os jogos que vao para a pasta do MAME."""
 
-    # Como o -listxml do MAME atual (<machine>), com um caso de cada regra.
-    XML = '''<?xml version="1.0"?>
-<mame build="0.289">
-  <machine name="neogeo" isbios="yes"><description>Neo-Geo</description>
-    <chip type="cpu" tag="maincpu" name="Motorola MC68000"/>
-    <display type="raster" rotate="0" width="320" height="224"/></machine>
-  <machine name="pgm" isbios="yes"><description>PGM</description></machine>
-  <machine name="mslug" romof="neogeo"><description>Metal Slug</description>
-    <display type="raster" rotate="0" width="320" height="224"/><driver status="good"/></machine>
-  <machine name="mslugb" cloneof="mslug" romof="mslug"><description>Metal Slug (bootleg)</description>
-    <display type="raster" rotate="0" width="320" height="224"/><driver status="good"/></machine>
-  <machine name="1942"><description>1942</description>
-    <display type="raster" rotate="270" width="256" height="224"/><driver status="good"/></machine>
-  <machine name="asteroid"><description>Asteroids</description>
-    <display type="vector" rotate="0"/><driver status="good"/></machine>
-  <machine name="coh1000c" isbios="yes"><description>ZN-1</description>
-    <chip type="cpu" tag="maincpu" name="Sony CXD8530CQ"/></machine>
-  <machine name="sfex" romof="coh1000c"><description>Street Fighter EX</description>
-    <chip type="cpu" tag="maincpu" name="Sony CXD8530CQ"/>
-    <display type="raster" rotate="0" width="368" height="240"/><driver status="good"/></machine>
-  <machine name="tekken3"><description>Tekken 3</description>
-    <chip type="cpu" tag="maincpu" name="Sony CXD8661R"/>
-    <display type="raster" rotate="0" width="640" height="480"/><driver status="imperfect"/></machine>
-  <machine name="kpython2"><description>Python 2</description>
-    <chip type="cpu" tag="iop" name="Sony Playstation 2 IOP"/>
-    <display type="raster" rotate="0" width="640" height="480"/><driver status="preliminary"/></machine>
-  <machine name="broken"><description>Broken</description>
-    <display type="raster" rotate="0" width="320" height="240"/><driver status="preliminary"/></machine>
-  <machine name="wbml"><description>Wonder Boy in Monster Land</description>
-    <display type="raster" rotate="0" width="256" height="224"/><driver status="preliminary"/></machine>
-  <machine name="wbmlb" cloneof="wbml" romof="wbml"><description>WBML (bootleg)</description>
-    <display type="raster" rotate="0" width="256" height="224"/><driver status="good"/></machine>
-  <machine name="qsound_hle" isdevice="yes" runnable="no"><description>QSound</description></machine>
-  <machine name="sfa2"><description>Street Fighter Alpha 2</description>
-    <display type="raster" rotate="0" width="384" height="224"/><driver status="good"/>
-    <device_ref name="qsound_hle"/></machine>
-  <machine name="pinball" ismechanical="yes"><description>Pinball</description></machine>
-  <machine name="kinst"><description>Killer Instinct</description><disk name="kinst"/>
-    <display type="raster" rotate="0" width="320" height="240"/><driver status="good"/></machine>
-</mame>
-'''
-    # O 0.139 (MAME 2010): <game>, e a CPU do PlayStation como "PSX CPU".
-    XML_0139 = '''<?xml version="1.0"?>
-<!DOCTYPE mame [
-<!ELEMENT mame (game+)>
-	<!ATTLIST mame build CDATA #IMPLIED>
-]>
-<mame build="0.139 (Jul 29 2010)">
-	<game name="tekken3" sourcefile="namcos12.c"><description>Tekken 3 (Japan, TET1/VER.E1)</description>
-		<chip type="cpu" tag="maincpu" name="CXD8661R" clock="100000000"/>
-		<display type="raster" rotate="0" width="640" height="480" refresh="60.000000" />
-		<driver status="imperfect" emulation="good"/></game>
-	<game name="sfex" sourcefile="zn.c" romof="coh1000c"><description>Street Fighter EX</description>
-		<chip type="cpu" tag="maincpu" name="PSX CPU" clock="33868800"/>
-		<driver status="good"/></game>
-	<game name="coh1000c" sourcefile="zn.c" isbios="yes"><description>ZN1</description>
-		<chip type="cpu" tag="maincpu" name="PSX CPU" clock="33868800"/></game>
-	<game name="mslug" sourcefile="neodrvr.c" romof="neogeo"><description>Metal Slug</description>
-		<chip type="cpu" tag="maincpu" name="68000" clock="12000000"/></game>
-	<game name="neogeo" sourcefile="neodrvr.c" isbios="yes"><description>Neo-Geo</description></game>
-	<game name="harddriv" sourcefile="harddriv.c"><description>Hard Drivin</description>
-		<chip type="cpu" tag="maincpu" name="R3000 (big)" clock="25000000"/></game>
-</mame>
-'''
-    FILES = ['neogeo.zip', 'pgm.zip', 'mslug.zip', 'mslugb.zip', '1942.zip', 'asteroid.zip', 'coh1000c.zip',
-             'sfex.zip', 'tekken3.zip', 'kpython2.zip', 'broken.zip', 'wbml.zip', 'qsound_hle.zip', 'sfa2.7z',
-             'pinball.zip', 'kinst.zip', 'unknown.zip', 'readme.txt']
+    @staticmethod
+    def machine(name, desc, attrs='', coins=1, players=2, controls=(('joy', 6),), year='1996', status='good',
+                extra=''):
+        ctrl = ''.join('<control type="%s" buttons="%d"/>' % c for c in controls)
+        inp = ('<input players="%d" coins="%d">%s</input>' % (players, coins, ctrl)) if coins is not None else ''
+        drv = '<driver status="%s"/>' % status if status else ''
+        return ('<machine name="%s" %s><description>%s</description><year>%s</year>%s%s%s</machine>\n'
+                % (name, attrs, desc, year, extra, inp, drv))
 
     def setUp(self):
+        m = self.machine
+        raster = '<display type="raster" rotate="0" width="320" height="224"/>'
+        self.XML = '<?xml version="1.0"?>\n<mame build="0.289">\n' + ''.join([
+            m('neogeo', 'Neo-Geo', 'isbios="yes"', coins=None, status=''),
+            m('pgm', 'PGM', 'isbios="yes"', coins=None, status=''),
+            m('mslug', 'Metal Slug - Super Vehicle-001', 'romof="neogeo"', controls=(('joy', 4),), extra=raster),
+            m('mslugb', 'Metal Slug (bootleg)', 'cloneof="mslug" romof="mslug"', extra=raster),
+            m('1942', '1942 (Revision B)', controls=(('joy', 2),), year='1984',
+              extra='<display type="raster" rotate="270"/>'),
+            m('asteroid', 'Asteroids (rev 4)', controls=(), year='1979', extra='<display type="vector" rotate="0"/>'),
+            m('coh1000c', 'ZN-1', 'isbios="yes"', coins=None, status='',
+              extra='<chip type="cpu" name="Sony CXD8530CQ"/>'),
+            m('sfex', 'Street Fighter EX (USA 961219)', 'romof="coh1000c"',
+              extra='<chip type="cpu" name="Sony CXD8530CQ"/>' + raster),
+            m('tekken3', 'Tekken 3 (Japan, TET1/VER.E1)', controls=(('joy', 4),), status='imperfect',
+              extra='<chip type="cpu" name="Sony CXD8661R"/>' + raster),
+            m('kpython2', 'Python 2', status='preliminary', extra='<chip type="cpu" name="Sony Playstation 2 IOP"/>'),
+            m('broken', 'Broken', status='preliminary'),
+            m('wbml', 'Wonder Boy in Monster Land (Japan New Ver.)', status='preliminary', year='1987'),
+            m('wbmlb', 'Wonder Boy in Monster Land (English bootleg set 1)', 'cloneof="wbml" romof="wbml"',
+              year='1987'),
+            m('qsound_hle', 'QSound', 'isdevice="yes" runnable="no"', coins=None, status=''),
+            m('sfa2', 'Street Fighter Alpha 2 (Europe 960229)', extra='<device_ref name="qsound_hle"/>' + raster),
+            m('pinball', 'Pinball', 'ismechanical="yes"', controls=()),
+            m('kinst', 'Killer Instinct (v1.5d)', year='1994', extra='<disk name="kinst"/>' + raster),
+            m('cent', 'Centipede (revision 4)', controls=(('trackball', 1),), year='1980'),
+            m('area51', 'Area 51 (R3000)', controls=(('lightgun', 1),), year='1995'),
+            m('nes', 'Nintendo Entertainment System', coins=0, year='1985'),
+            m('mvsc', 'Marvel Vs. Capcom (Europe 980123)', year='1998', extra=raster),
+            m('mvscu', 'Marvel Vs. Capcom (USA 980123)', 'cloneof="mvsc" romof="mvsc"', year='1998', extra=raster),
+            m('mvscj', 'Marvel Vs. Capcom (Japan 980123)', 'cloneof="mvsc" romof="mvsc"', year='1998',
+              extra=raster),
+            m('xmen6p', 'X-Men (6 Players ver EAA)', players=6, controls=(('joy', 3),), year='1992'),
+            m('sf2proto', 'Street Fighter II (prototype)', year='1991'),
+        ]) + '</mame>\n'
         self.tmp = Path(tempfile.mkdtemp())
-        self.roms = self.tmp / 'mame'
+        self.roms = self.tmp / 'full'
         self.roms.mkdir()
-        for name in self.FILES:
+        self.dest = self.tmp / 'mame'
+        names = re.findall(r'<machine name="([^"]+)"', self.XML)
+        self.files = ['%s.zip' % n for n in names if n != 'wbmlb'] + ['unknown.zip', 'readme.txt']
+        for name in self.files:
             (self.roms / name).write_bytes(b'x' * 10)
         (self.roms / 'kinst').mkdir()
         (self.roms / 'kinst' / 'kinst.chd').write_bytes(b'c' * 100)
@@ -1121,89 +1104,146 @@ class RomCleanTests(unittest.TestCase):
         return subprocess.run(['python3', str(ROOT / 'config/fliperos-romclean'), *args], input=stdin,
                               capture_output=True, text=True, timeout=60, check=True).stdout
 
-    def scan(self, *rules, xml=None, roms=None):
+    def scan(self, *flags, xml=None, roms=None):
         plan = self.tmp / 'plan.tsv'
-        args = ['scan', '--xml', str(xml or self.tmp / 'mame.xml'), '--roms', str(roms or self.roms),
-                '--plan', str(plan)]
-        for rule in rules:
-            mode, name = rule.split(':')
-            args += ['--' + mode, name]
-        summary = dict(line.split('=', 1) for line in self.romclean(*args).splitlines())
-        files = [line.split('\t')[1] for line in plan.read_text().splitlines() if not line.startswith('#')]
-        return summary, sorted(files)
+        out = self.romclean('scan', '--xml', str(xml or self.tmp / 'mame.xml'), '--roms', str(roms or self.roms),
+                            '--dest', str(self.dest), '--plan', str(plan), *flags)
+        summary = dict(line.split('=', 1) for line in out.splitlines())
+        parts = {'move': [], 'rest': []}
+        for line in plan.read_text().splitlines():
+            if not line.startswith('#'):
+                kind, _, filename = line.split('\t')[:3]
+                parts[kind].append(filename)
+        return summary, sorted(parts['move']), sorted(parts['rest'])
 
-    def test_each_rule(self):
-        cases = {
-            'exclude:clone': ['mslugb.zip'],
-            'exclude:vertical': ['1942.zip'],
-            'exclude:vector': ['asteroid.zip'],
-            'exclude:mechanical': ['pinball.zip'],
-            'exclude:chd': ['kinst', 'kinst.zip'],
-            # BIOS e dispositivo que um jogo da pasta usa ficam: so o pgm sai.
-            'exclude:bios': ['pgm.zip'],
-            'exclude:device': [],
-        }
+    CABINET = ('--arcade-only', '--status', 'imperfect', '--max-players', '2', '--max-buttons', '6',
+               '--controls', 'joystick', '--clones', '1g1r', '--no-bootlegs', '--no-prototypes')
+
+    def test_joystick_cabinet(self):
+        # O preset do Setup: arcade, ate 2 jogadores e 6 botoes, so joystick,
+        # uma versao por jogo (a USA antes da europeia), sem bootleg/prototipo.
+        summary, move, rest = self.scan(*self.CABINET)
+        self.assertEqual(move, ['1942.zip', 'asteroid.zip', 'coh1000c.zip', 'kinst', 'kinst.zip', 'mslug.zip',
+                                'mvsc.zip', 'mvscu.zip', 'neogeo.zip', 'qsound_hle.zip', 'sfa2.zip', 'sfex.zip',
+                                'tekken3.zip'])
+        self.assertEqual(rest, ['area51.zip', 'broken.zip', 'cent.zip', 'kpython2.zip', 'mslugb.zip', 'mvscj.zip',
+                                'nes.zip', 'pgm.zip', 'pinball.zip', 'sf2proto.zip', 'wbml.zip', 'xmen6p.zip'])
+        # Pai, BIOS e dispositivo: mvsc (do mvscu), neogeo, coh1000c, qsound_hle.
+        self.assertEqual(summary['needed'], '4')
+        self.assertEqual(summary['unknown'], '1')
+        self.assertEqual(int(summary['move_bytes']), 10 * 12 + 100)
+
+    def test_controls_years_and_regions(self):
+        _, move, _ = self.scan('--controls', 'joystick,trackball', '--arcade-only')
+        self.assertIn('cent.zip', move)
+        self.assertNotIn('area51.zip', move)
+        self.assertNotIn('nes.zip', move)
+        _, move, _ = self.scan('--years', '1980-1989')
+        self.assertEqual([f for f in move if f in self.files], ['1942.zip', 'cent.zip', 'nes.zip', 'wbml.zip'])
+        _, move, rest = self.scan('--clones', '1g1r', '--regions', 'Japan,USA')
+        self.assertIn('mvscj.zip', move)
+        self.assertIn('mvscu.zip', rest)
+        _, move, rest = self.scan('--clones', 'none')
+        self.assertIn('mvsc.zip', move)
+        self.assertIn('mslugb.zip', rest)
+
+    def test_rules(self):
+        cases = {'vertical': '1942.zip', 'vector': 'asteroid.zip', 'mechanical': 'pinball.zip', 'chd': 'kinst.zip',
+                 'clone': 'mslugb.zip', 'notworking': 'broken.zip', 'bios': 'pgm.zip'}
         for rule, gone in cases.items():
-            summary, files = self.scan(rule)
-            self.assertEqual(files, gone, rule)
-            self.assertEqual(summary['unknown'], '1', rule)
-            self.assertEqual(summary['sets'], '16', rule)
+            _, move, rest = self.scan('--exclude', rule)
+            self.assertIn(gone, rest, rule)
+            self.assertIn('mslug.zip', move, rule)
+        # Um BIOS usado vai junto mesmo excluindo os BIOS.
+        self.assertIn('neogeo.zip', self.scan('--exclude', 'bios')[1])
+        # So a placa do PlayStation: ZN (com a BIOS) e System 12; o PS2 nao.
+        _, move, _ = self.scan('--only', 'psx')
+        self.assertEqual(move, ['coh1000c.zip', 'sfex.zip', 'tekken3.zip'])
 
-    def test_parent_stays_for_a_clone_that_stays(self):
+    def test_parent_goes_for_a_clone_in_its_zip(self):
         # Num romset merged o wbmlb esta dentro do wbml.zip: o pai que nao
-        # funciona fica porque o clone funciona.
-        summary, files = self.scan('exclude:notworking')
-        self.assertEqual(files, ['broken.zip', 'kpython2.zip'])
-        self.assertEqual(summary['needed'], '1')
-
-    def test_only_playstation_hardware(self):
-        # ZN (com a BIOS) e System 12; o PS2 (kpython2) nao.
-        summary, files = self.scan('only:psx')
-        kept = {f for f in self.FILES + ['kinst'] if f not in files}
-        self.assertEqual(kept, {'coh1000c.zip', 'sfex.zip', 'tekken3.zip', 'unknown.zip', 'readme.txt'})
-        self.assertEqual(summary['keep'], '3')
-        self.assertEqual(int(summary['bytes']), 10 * (len(files) - 1) + 100)
+        # funciona vai porque o clone funciona.
+        summary, move, _ = self.scan('--status', 'working')
+        self.assertIn('wbml.zip', move)
+        self.assertNotIn('broken.zip', move)
 
     def test_mame_2010_xml(self):
-        (self.tmp / 'mame2010.xml').write_text(self.XML_0139)
-        roms = self.tmp / 'mame2010'
-        roms.mkdir()
-        for name in ('tekken3.zip', 'sfex.zip', 'coh1000c.zip', 'mslug.zip', 'neogeo.zip', 'harddriv.zip'):
-            (roms / name).write_bytes(b'x')
+        xml = ('<?xml version="1.0"?>\n<!DOCTYPE mame [\n<!ELEMENT mame (game+)>\n]>\n<mame build="0.139">\n'
+               '<game name="tekken3" sourcefile="namcos12.c"><description>Tekken 3</description>'
+               '<chip type="cpu" tag="maincpu" name="CXD8661R"/><input players="2" buttons="4" coins="2">'
+               '<control type="joy8way"/></input><driver status="imperfect"/></game>\n'
+               '<game name="sfex" sourcefile="zn.c" romof="coh1000c"><description>Street Fighter EX</description>'
+               '<chip type="cpu" name="PSX CPU"/><input players="2" buttons="6" coins="2">'
+               '<control type="joy8way"/></input><driver status="good"/></game>\n'
+               '<game name="coh1000c" sourcefile="zn.c" isbios="yes"><description>ZN1</description>'
+               '<chip type="cpu" name="PSX CPU"/></game>\n'
+               '<game name="cent" sourcefile="centiped.c"><description>Centipede</description>'
+               '<input players="2" buttons="1" coins="3"><control type="trackball"/></input></game>\n'
+               '<game name="harddriv" sourcefile="harddriv.c"><description>Hard Drivin</description>'
+               '<chip type="cpu" name="R3000 (big)"/><input players="1" buttons="4" coins="2">'
+               '<control type="paddle"/><control type="pedal"/></input></game>\n</mame>\n')
+        (self.tmp / 'mame2010.xml').write_text(xml)
         import lzma
         with lzma.open(self.tmp / 'mame2010.xml.xz', 'wt') as f:
-            f.write(self.XML_0139)
-        for xml in ('mame2010.xml', 'mame2010.xml.xz'):
-            _, files = self.scan('only:psx', xml=self.tmp / xml, roms=roms)
-            self.assertEqual(files, ['harddriv.zip', 'mslug.zip', 'neogeo.zip'], xml)
+            f.write(xml)
+        roms = self.tmp / 'mame2010'
+        roms.mkdir()
+        for name in ('tekken3.zip', 'sfex.zip', 'coh1000c.zip', 'cent.zip', 'harddriv.zip'):
+            (roms / name).write_bytes(b'x')
+        for path in ('mame2010.xml', 'mame2010.xml.xz'):
+            _, move, rest = self.scan('--only', 'psx', xml=self.tmp / path, roms=roms)
+            self.assertEqual(move, ['coh1000c.zip', 'sfex.zip', 'tekken3.zip'], path)
+            self.assertEqual(rest, ['cent.zip', 'harddriv.zip'], path)
+        # joy8way e o joystick; um painel com volante e pedal pega o Hard Drivin.
+        _, move, _ = self.scan('--controls', 'joystick', '--arcade-only', xml=self.tmp / 'mame2010.xml', roms=roms)
+        self.assertEqual(move, ['coh1000c.zip', 'sfex.zip', 'tekken3.zip'])
+        _, move, _ = self.scan('--controls', 'joystick,spinner,pedal', xml=self.tmp / 'mame2010.xml', roms=roms)
+        self.assertIn('harddriv.zip', move)
+
+    def test_control_types_of_both_versions(self):
+        rc = load_script('romclean', 'config/fliperos-romclean')
+        for kind, family in (('joy', 'joystick'), ('joy8way', 'joystick'), ('vjoy2way', 'joystick'),
+                             ('doublejoy8way', 'joystick'), ('vdoublejoy2way', 'joystick'), ('stick', 'analog'),
+                             ('dial', 'spinner'), ('paddle', 'spinner'), ('lightgun', 'lightgun'),
+                             ('hanafuda', 'mahjong'), ('mouse', 'trackball')):
+            self.assertEqual(rc.control_family(kind), family, kind)
+        self.assertEqual(rc.regions_of('Marvel Vs. Capcom (USA 980123)'), {'USA'})
+        self.assertEqual(rc.regions_of('Street Fighter Alpha 2 (Euro 960229)'), {'Europe'})
+        self.assertEqual(rc.regions_of('Galaga (Namco rev. B)'), set())
 
     def test_xml_from_stdin(self):
         plan = self.tmp / 'plan.tsv'
-        out = self.romclean('scan', '--xml', '-', '--roms', str(self.roms), '--plan', str(plan),
-                            '--exclude', 'clone', stdin=self.XML)
-        self.assertIn('remove=1\n', out)
+        out = self.romclean('scan', '--xml', '-', '--roms', str(self.roms), '--dest', str(self.dest),
+                            '--plan', str(plan), '--only', 'psx', stdin=self.XML)
+        self.assertIn('move=3\n', out)
 
-    def test_move_and_delete(self):
-        self.scan('exclude:chd')
-        dest = self.tmp / 'mame-removed'
-        out = self.romclean('apply', str(self.tmp / 'plan.tsv'), '--move-to', str(dest))
-        self.assertIn('moved=2\n', out)
-        self.assertEqual(sorted(p.name for p in dest.iterdir()), ['kinst', 'kinst.zip'])
-        self.assertTrue((dest / 'kinst' / 'kinst.chd').exists())
-        self.assertFalse((self.roms / 'kinst.zip').exists())
-        self.assertTrue((self.roms / 'unknown.zip').exists())
-        # O plano de novo: o que ja saiu e pulado, nada quebra.
-        self.assertIn('skipped=2\n', self.romclean('apply', str(self.tmp / 'plan.tsv'), '--move-to', str(dest)))
-        self.scan('exclude:vertical')
-        self.assertIn('deleted=1\n', self.romclean('apply', str(self.tmp / 'plan.tsv'), '--delete'))
-        self.assertFalse((self.roms / '1942.zip').exists())
+    def test_move_then_delete_what_is_left(self):
+        self.dest.mkdir()
+        (self.dest / 'neogeo.zip').write_bytes(b'ja estava')
+        self.scan('--only', 'psx', '--exclude', 'bios')
+        out = self.romclean('apply', str(self.tmp / 'plan.tsv'), 'move')
+        self.assertIn('moved=3\n', out)
+        self.assertEqual(sorted(p.name for p in self.dest.iterdir()),
+                         ['coh1000c.zip', 'neogeo.zip', 'sfex.zip', 'tekken3.zip'])
+        self.assertEqual((self.dest / 'neogeo.zip').read_bytes(), b'ja estava')
+        self.assertFalse((self.roms / 'sfex.zip').exists())
+        out = self.romclean('apply', str(self.tmp / 'plan.tsv'), 'delete-rest')
+        # Ficam so o que nao esta no XML.
+        self.assertEqual(sorted(p.name for p in self.roms.iterdir()), ['readme.txt', 'unknown.zip'])
+        self.assertIn('deleted=%d\n' % (len(self.files) - 2 - 3 + 1), out)
+
+    def test_the_mame_folder_itself(self):
+        # A origem e a propria pasta do MAME: o que passou fica onde esta.
+        self.dest = self.roms
+        self.scan('--only', 'psx')
+        self.assertIn('skipped=3\n', self.romclean('apply', str(self.tmp / 'plan.tsv'), 'move'))
+        self.assertTrue((self.roms / 'tekken3.zip').exists())
 
     def test_apply_only_touches_the_folder(self):
-        # Um plano adulterado nao sai da pasta das ROMs.
         (self.tmp / 'fora.zip').write_bytes(b'x')
         plan = self.tmp / 'plan.tsv'
-        plan.write_text('# roms\t%s\nx\t../fora.zip\t1\tX\n' % self.roms)
-        self.assertIn('skipped=1\n', self.romclean('apply', str(plan), '--delete'))
+        plan.write_text('# roms\t%s\n# dest\t%s\nrest\tx\t../fora.zip\t1\tX\n' % (self.roms, self.dest))
+        self.assertIn('skipped=1\n', self.romclean('apply', str(plan), 'delete-rest'))
         self.assertTrue((self.tmp / 'fora.zip').exists())
 
     def test_mame2010_xml_is_pinned_and_installed(self):
