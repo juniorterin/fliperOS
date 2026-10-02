@@ -69,6 +69,9 @@ if [[ -f $gm ]] && [[ $(head -c 4 "$gm" | od -An -c | tr -d ' ') == '177ELF' ]];
   mv -f "$gm" "$root/usr/local/libexec/groovymame"
 fi
 install -Dm755 "$src/config/fliperos-groovymame" "$gm"
+# Proporcao dos jogos de menos de 240 linhas no CRT (um .ini por jogo, do
+# XML do GroovyMAME): o build e o cabinet-update.sh o rodam.
+install -Dm755 "$src/config/fliperos-mame-aspect" "$root/opt/fliperos/bin/fliperos-mame-aspect"
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"
 # Cores Dracula da interface do GroovyMAME; o ui.ini e do usuario porque o
 # MAME o regrava quando a interface e personalizada pelo proprio menu.

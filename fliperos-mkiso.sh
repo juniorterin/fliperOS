@@ -934,7 +934,12 @@ install_groovymame_chroot() {
     || err "GroovyMAME: as bibliotecas nao instalaram"
   chroot "$CHROOT_DIR" /usr/local/libexec/groovymame -version >> "$LOG_FILE" 2>&1 \
     || err "GroovyMAME: o binario nao abre (biblioteca faltando?)"
-  ok "GroovyMAME ${GROOVYMAME_TAG} em /usr/local/libexec/groovymame"
+  # Proporcao no CRT dos jogos de menos de 240 linhas, do XML desta versao
+  # (config/fliperos-mame-aspect, que o fliperos-rootfs.sh ja instalou).
+  local n
+  n=$(chroot "$CHROOT_DIR" /opt/fliperos/bin/fliperos-mame-aspect 2>> "$LOG_FILE") \
+    || err "GroovyMAME: os .ini de proporcao nao foram gerados"
+  ok "GroovyMAME ${GROOVYMAME_TAG} em /usr/local/libexec/groovymame ($n jogos com a proporcao do CRT)"
 }
 
 # ── Compilar RetroArch em KMS/DRM, sem X11 ────────────────────

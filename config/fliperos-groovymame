@@ -1,23 +1,17 @@
 #!/usr/bin/env bash
 # O comando groovymame do FliperOS (fliperos-launch, frontends, terminal). O
 # binario e o release do GroovyMAME, em /usr/local/libexec/groovymame; este
-# atalho acrescenta:
+# atalho passa o inipath:
 #
-#  - -inipath /etc/fliperos/mame: o mame.ini do sistema, que o Setup grava.
-#    O padrao do release e ".;ini", relativo a pasta de onde se abre.
-#  - num CRT de 15 kHz, a proporcao certa de todo jogo de menos de 240
-#    linhas. A tela e ajustada para 240 linhas encherem a altura; um jogo de
-#    224 (CPS2, Neo Geo) fica 7% mais baixo com a mesma largura e parece
-#    esticado. Aqui o MAME ouve que a tela e mais larga na mesma proporcao
-#    (-aspect 320:LINHAS, o 4:3 vezes 240/linhas) e mantem o 4:3 do jogo
-#    (-keepaspect): o Switchres faz o modo um pouco mais largo (411x224 para
-#    um jogo de 384x224) e o jogo ocupa nele os mesmos 384 pontos, 1 para 1,
-#    com uma faixa preta fina dos lados. Jogo vertical, vetorial ou de 240
-#    linhas ou mais fica como esta; aspect/keepaspect na linha de comando ou
-#    no .ini do jogo valem mais. Desliga em Setup > Video Setup
-#    (mame_crt_aspect=no).
+#  - /etc/fliperos/mame: o mame.ini do sistema, que o Setup grava. O padrao
+#    do release e ".;ini", relativo a pasta de onde se abre.
+#  - num CRT de 15 kHz, depois dela, /etc/fliperos/mame/aspect: um .ini por
+#    jogo de menos de 240 linhas com a proporcao certa (fliperos-mame-aspect).
+#    Vale para o jogo escolhido na lista do proprio GroovyMAME tambem; um
+#    .ini do usuario na pasta principal vale mais. Desliga em Setup > Video
+#    Setup > GroovyMAME 4:3 (mame_crt_aspect=no).
 #
-# README, "GroovyMAME na resolucao nativa".
+# Um -inipath na linha de comando vale mais.
 real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
 inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/mame}
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
@@ -26,55 +20,13 @@ conf_value() {
   sed -n "s/^$1=//p" "$conf" 2> /dev/null | tail -1
 }
 
-# aspect_auto ARGUMENTOS imprime as linhas do jogo da linha de comando quando
-# ele precisa da correcao, ou falha.
-aspect_auto() {
-  local arg game xml="" name="" display rotate type height lines
-  local -a games=()
-  [[ $(conf_value mame_crt_aspect) != no ]] || return 1
-  [[ $(conf_value frequency) == 15* ]] || return 1
-  [[ $(conf_value orientation) =~ ^(horizontal)?$ ]] || return 1
-  for arg in "$@"; do
-    case $arg in
-      -aspect* | --aspect* | -keepaspect | -nokeepaspect | --keepaspect | -ka | -noka | -list* | --list* | \
-        -verify* | -show* | -create* | -valid* | -help | -romident | -getsoftlist | -version) return 1 ;;
-      -*) ;;
-      # O sistema pelo nome; um caminho de zip vira o nome do arquivo.
-      *)
-        game=${arg##*/}
-        game=${game%.zip}
-        game=${game%.7z}
-        [[ $game =~ ^[a-z0-9_]+$ ]] && games+=("$game")
-        ;;
-    esac
-  done
-  # O primeiro argumento solto pode ser o valor de uma opcao (-rompath x
-  # jogo): vale o primeiro que o MAME conhece.
-  for game in "${games[@]}"; do
-    xml=$(timeout 20 "$real" -inipath "$inidir" -listxml "$game" 2> /dev/null | sed '/<\/machine>/q')
-    name=$(sed -n 's/.*<machine name="\([^"]*\)".*/\1/p' <<< "$xml" | head -1)
-    [[ -n $name ]] && break
-  done
-  [[ -n $name ]] || return 1
-  display=$(grep -m1 '<display ' <<< "$xml") || return 1
-  type=$(sed -n 's/.* type="\([a-z]*\)".*/\1/p' <<< "$display")
-  rotate=$(sed -n 's/.* rotate="\([0-9]*\)".*/\1/p' <<< "$display")
-  height=$(sed -n 's/.* height="\([0-9]*\)".*/\1/p' <<< "$display")
-  [[ $type == raster && $rotate =~ ^(0|180)$ && $height =~ ^[0-9]+$ ]] || return 1
-  grep -qsE '^[[:space:]]*(aspect|keepaspect)[[:space:]]' "$inidir/$name.ini" && return 1
-  # Acima de 288 linhas e entrelacado: cada campo tem a metade.
-  lines=$height
-  ((lines <= 288)) || lines=$((lines / 2))
-  ((lines >= 120 && lines < 240)) || return 1
-  printf '%s\n' "$lines"
-}
-
-if lines=$(aspect_auto "$@"); then
-  echo "fliperos-groovymame: -aspect 320:$lines -keepaspect (jogo de $lines linhas, 4:3 no CRT)" >&2
-  set -- "$@" -aspect "320:$lines" -keepaspect
+inipath=$inidir
+if [[ -d $inidir/aspect && $(conf_value mame_crt_aspect) != no && $(conf_value frequency) == 15* &&
+  $(conf_value orientation) =~ ^(horizontal)?$ ]]; then
+  inipath="$inidir;$inidir/aspect"
 fi
 case " $* " in
   *" -inipath "* | *" --inipath "*) ;;
-  *) set -- -inipath "$inidir" "$@" ;;
+  *) set -- -inipath "$inipath" "$@" ;;
 esac
 exec "$real" "$@"
