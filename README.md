@@ -235,7 +235,7 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 
 | Opção | Efeito |
 | --- | --- |
-| `--skip-groovymame`, `--skip-retroarch`, `--skip-flycast`, `--skip-pcsx2`, `--skip-supermodel` | Não compila o emulador (cada um leva de minutos a horas) |
+| `--skip-groovymame`, `--skip-retroarch`, `--skip-flycast`, `--skip-pcsx2`, `--skip-supermodel` | Não põe o emulador na imagem (os compilados levam de minutos a horas; GroovyMAME e PCSX2 são os releases oficiais) |
 | `--skip-skyscraper` | Sem o Scraper do Setup |
 | `--skip-switchres` | Sem Switchres: sem EDIDs por monitor, geometria e entradas EDID do boot |
 | `--skip-input-drivers`, `--skip-wheel-drivers` | Sem os drivers de entrada (GunCon 2 e volantes), ou só sem os de volante. Por padrão vêm o `guncon2`, o `hid-tmff2` (Thrustmaster T150/T300/TX/T248...) e o `new-lg4ff` (Logitech com force feedback completo, no lugar do `hid-logitech`), via DKMS — validados no 6.18 do gabinete |
@@ -292,6 +292,10 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 Todos aparecem no menu **Jogos** do LXDE (seção 5). O RetroArch usa `crt_switch_resolution 4` (o `/etc/switchres.ini` do Setup) na **largura nativa** de cada jogo quando a placa gera dotclock baixo (o "s" no resultado do teste de saídas: radeon/amdgpu), como o GroovyArcade; a super resolução 2560 fica só para as placas que não geram (Intel, NVIDIA). Em 2560 o RetroArch desenha as notificações nessa largura, e no tubo elas saíam espremidas (`video_retroarch_super`, gravado com o teste de saídas e na instalação).
 
 **GroovyMAME na resolução nativa.** No KMS o Switchres do GroovyMAME só cria o modo de cada jogo se cuidar ele mesmo da troca de modo (`kms_modesetting`), o que ele faz quando o SDL recebe `SDL_KMSDRM_REQUIRE_DRM_MASTER=0` — o `fliperos-kms-run` exporta. Sem isso (e sem libdrm com hook nem kernel com "user modes"), ele só reaproveita os modos que já existem e dobra a largura para caber neles: 384x224 virava 768x224, 640x480 virava 1280x480i. O outro motivo da largura dobrada é o formato da tela: com `aspect auto` o GroovyMAME tira o formato do modo atual, e o boot em 640x240 dá 8:3 — o dobro de 4:3, então o Switchres dobrava a largura de todo jogo ("SR(0): 768x224"). O `mame.ini` vem com `aspect 4:3`, como o GroovyArcade (`-aspect "4:3"`); o Setup só volta para `auto` quando o monitor escolhido é LCD.
+
+**GroovyMAME: o release e o comando `groovymame`.** O build não compila mais o GroovyMAME (levava mais de uma hora): usa o release oficial para Linux (`gm0289sr222f`, MAME 0.289 com Switchres 2.22f, conferido por sha256), em `/usr/local/libexec/groovymame`, com as bibliotecas que ele pede (Qt6 é a do depurador). O comando `groovymame` — o que o `fliperos-launch`, os frontends e o terminal chamam — é o `config/fliperos-groovymame`, que passa `-inipath /etc/fliperos/mame`: o padrão do release é `.;ini`, relativo à pasta de onde se abre, então um `~/.mame/mame.ini` não vale; o que vale é o `/etc/fliperos/mame/mame.ini` (do usuário `fliperos`), que o Setup grava. Num sistema instalado antes, o `fliperos-rootfs.sh` move o binário compilado para `/usr/local/libexec` e põe o atalho no lugar.
+
+**Reset Geometry.** O Setup > Video Setup > Geometry grava a geometria medida no grid (`crt_range0` com monitor `custom` no `/etc/switchres.ini`, e `switchres_ini 1` no `mame.ini`). **Reset Geometry** desfaz: o Switchres (e o modo 4 do RetroArch, que lê o mesmo arquivo) volta ao preset do monitor escolhido, o GroovyMAME aos próprios ajustes do `mame.ini`.
 
 **Nada entrelaçado no 15 kHz.** No tubo de 15 kHz nenhum emulador do `fliperos-x11-run` abre em 480i: os de 480 linhas e os de 384 (Model 2 e 3) rodam em **640x240 progressivo** e **esticados a 200%** na horizontal — 640x240 tem pixels 8:3, e a imagem 4:3 só enche o tubo esticada: Flycast `rend.ScreenStretching=200` (300·L/4A), PCSX2 `AspectRatio = Stretch`, Dolphin `AspectRatio=3`, Supermodel `-fullscreen -res=640,240 -stretch`, Hypseus `-x 640 -y 240 -ignore_aspect_ratio` (opções no fim da linha: o Hypseus lê o jogo e o player primeiro) e o Model 2 com a tela cheia do `EMULATOR.INI` no modo da tabela. No gabinete o Flycast abria em 640x480i: o setup grava `frequency=15k`, e o script só reconhecia `15`, então todo emulador caía na coluna de 31 kHz.
 
@@ -410,6 +414,7 @@ O Model 2 Emulator (ElSemi) é freeware de código fechado, só para Windows, se
 | `config/applications/`, `config/icons/`, `config/fliperos-launch` | Emuladores no menu do LXDE e a saída do desktop para abri-los |
 | `config/fliperos-x11-run`, `config/fliperos-emulator-modes.conf` | Abre um programa num Xorg próprio no modo pedido (`--mode 640x240@60`) ou no da tabela por emulador |
 | `config/fliperos-model2`, `config/fliperos-ini-set` | Model 2 Emulator no Wine; ajuste de ini por seção (PCSX2) |
+| `config/fliperos-groovymame` | O comando `groovymame`: o release em `/usr/local/libexec` com o `mame.ini` do sistema |
 | `config/retroarch.cfg`, `config/mame.ini` | Configuração de sistema do RetroArch e do GroovyMAME (valores do modo Standard) |
 | `patches/kernel-15khz/6.18/` | Patches D0023R |
 | `packaging/` | `.deb` dos frontends e o repositório APT |

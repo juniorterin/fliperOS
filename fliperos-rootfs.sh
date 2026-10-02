@@ -60,6 +60,15 @@ sed -i -E 's/^(supermodel|fliperos-model2)( +)496x384@57\.524  496x384@57\.524$/
   "$root/etc/fliperos/emulator-modes.conf"
 # Model 2 no Wine: no PATH, para os frontends tambem chamarem.
 install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model2"
+# groovymame: o atalho (config/fliperos-groovymame) na frente do binario do
+# release, em /usr/local/libexec. Num sistema de antes, o binario compilado
+# estava no lugar do atalho: muda de pasta.
+gm="$root/usr/local/bin/groovymame"
+if [[ -f $gm ]] && [[ $(head -c 4 "$gm" | od -An -c | tr -d ' ') == '177ELF' ]]; then
+  mkdir -p "$root/usr/local/libexec"
+  mv -f "$gm" "$root/usr/local/libexec/groovymame"
+fi
+install -Dm755 "$src/config/fliperos-groovymame" "$gm"
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"
 # Cores Dracula da interface do GroovyMAME; o ui.ini e do usuario porque o
 # MAME o regrava quando a interface e personalizada pelo proprio menu.

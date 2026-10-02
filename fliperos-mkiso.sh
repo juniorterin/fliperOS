@@ -99,6 +99,10 @@ DOLPHIN_TAG="2609"
 HEROIC_VERSION="2.22.3"
 HEROIC_SHA256="f89eed7e0eb900fbe3051edfedbe7532db14328241cbf8c1fb766462dfc0b849"
 PCSX2_SHA256="0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea"
+# GroovyMAME: o release oficial para Linux (MAME 0.289, Switchres 2.22f).
+GROOVYMAME_TAG="gm0289sr222f"
+GROOVYMAME_FILE="groovymame_0289.222f_linux.tar.bz2"
+GROOVYMAME_SHA256="d5bd539776ace64db42301252d80be2af60b2f89862b0d4391c646083f323f62"
 
 # ── Args ─────────────────────────────────────────────────────
 usage() {
@@ -846,39 +850,36 @@ SPLASHSCRIPT
   fi
 }
 
-# ── Compilar GroovyMAME no chroot ─────────────────────────────
-build_groovymame_chroot() {
+# ── GroovyMAME (release oficial) ──────────────────────────────
+# O binario do release do projeto, em vez de compilar (mais de uma hora do
+# build). Vai para /usr/local/libexec/groovymame; o comando groovymame e o
+# config/fliperos-groovymame (fliperos-rootfs.sh), que passa o mame.ini do
+# sistema (o padrao do release e ".;ini", relativo a pasta de onde se abre).
+install_groovymame_chroot() {
   if $SKIP_GROOVYMAME; then
     warn "GroovyMAME pulado (--skip-groovymame)"
     return
   fi
-  step "Compilando GroovyMAME no chroot (SWITCHRES=1)"
-  cat > "$CHROOT_DIR/tmp/build-groovymame.sh" << 'GMSCRIPT'
-#!/bin/bash
-set -e
-apt-get install -y --no-install-recommends \
-  libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev \
-  libxinerama-dev libxi-dev libxext-dev libfontconfig-dev \
-  libpulse-dev libflac-dev libjpeg-dev libpng-dev \
-  libasound2-dev python3-dev
-git clone --depth=1 https://github.com/antonioginer/GroovyMAME /tmp/groovymame-build
-# SUBTARGET=arcade nao existe mais (MAME unificou os subtargets ha um
-# tempo); o binario resultante agora se chama so "mame".
-make -C /tmp/groovymame-build -j$(nproc) \
-  NOWERROR=1 \
-  NO_USE_PORTAUDIO=1 \
-  USE_QTDEBUG=0 \
-  SWITCHRES=1 \
-  SDL_INI_PATH=/etc/fliperos/mame \
-  TARGET=mame
-install -m755 /tmp/groovymame-build/mame /usr/local/bin/groovymame
-rm -rf /tmp/groovymame-build
-echo "GroovyMAME OK"
-GMSCRIPT
-  chmod +x "$CHROOT_DIR/tmp/build-groovymame.sh"
-  chroot "$CHROOT_DIR" /tmp/build-groovymame.sh >> "$LOG_FILE" 2>&1 \
-    && ok "GroovyMAME compilado" \
-    || err "GroovyMAME falhou; use --skip-groovymame explicitamente para ISO de diagnostico"
+  step "GroovyMAME ${GROOVYMAME_TAG} (release oficial)"
+  local tarball="$WORK_DIR/$GROOVYMAME_FILE"
+  curl -sSfL --retry 3 --max-time 900 -o "$tarball" \
+    "https://github.com/antonioginer/GroovyMAME/releases/download/${GROOVYMAME_TAG}/${GROOVYMAME_FILE}" \
+    >> "$LOG_FILE" 2>&1 || err "Download do GroovyMAME falhou"
+  echo "$GROOVYMAME_SHA256  $tarball" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
+    || err "GroovyMAME: hash diferente do fixado"
+  # O container do build nao tem bzip2; o tarfile do Python le .tar.bz2.
+  python3 -c 'import sys, tarfile; tarfile.open(sys.argv[1]).extract("groovymame", sys.argv[2])' \
+    "$tarball" "$WORK_DIR" || err "GroovyMAME: o pacote nao extraiu"
+  install -Dm755 "$WORK_DIR/groovymame" "$CHROOT_DIR/usr/local/libexec/groovymame"
+  rm -f "$tarball" "$WORK_DIR/groovymame"
+  # O que o binario pede (objdump -p); o Qt6 e o do depurador.
+  chroot "$CHROOT_DIR" apt-get install -y --no-install-recommends \
+    libsdl2-2.0-0 libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 \
+    libpulse0 libasound2t64 libfontconfig1 libxi6 libgl1 libdrm2 >> "$LOG_FILE" 2>&1 \
+    || err "GroovyMAME: as bibliotecas nao instalaram"
+  chroot "$CHROOT_DIR" /usr/local/libexec/groovymame -version >> "$LOG_FILE" 2>&1 \
+    || err "GroovyMAME: o binario nao abre (biblioteca faltando?)"
+  ok "GroovyMAME ${GROOVYMAME_TAG} em /usr/local/libexec/groovymame"
 }
 
 # ── Compilar RetroArch em KMS/DRM, sem X11 ────────────────────
@@ -1421,7 +1422,7 @@ build_switchres_chroot
 # EDIDs das entradas "EDID" do boot existem na hora do KMS.
 chroot "$CHROOT_DIR" update-initramfs -u -k all >> "$LOG_FILE" 2>&1 || err "update-initramfs falhou"
 build_skyscraper_chroot
-build_groovymame_chroot
+install_groovymame_chroot
 build_retroarch_chroot
 build_flycast_chroot
 build_pcsx2_chroot

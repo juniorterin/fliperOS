@@ -783,6 +783,52 @@ class RomFoldersTests(unittest.TestCase):
             self.assertEqual(os.readlink(root / 'opt/fliperos/roms'), '/home/fliperos/roms')
 
 
+class GroovyMameTests(unittest.TestCase):
+    """O release oficial do GroovyMAME e o atalho config/fliperos-groovymame."""
+
+    def run_wrapper(self, *args):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp, 'groovymame')
+            fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            fake.chmod(0o755)
+            env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake), FLIPEROS_MAME_INI_DIR='/etc/fliperos/mame')
+            out = subprocess.run(['bash', str(ROOT / 'config/fliperos-groovymame'), *args], env=env,
+                                 capture_output=True, text=True, timeout=60, check=True).stdout
+            return out.split('\n')[:-1]
+
+    def test_wrapper_passes_the_system_ini(self):
+        # O padrao do release (".;ini") depende da pasta de onde se abre.
+        self.assertEqual(self.run_wrapper('mvsc'), ['-inipath', '/etc/fliperos/mame', 'mvsc'])
+        self.assertEqual(self.run_wrapper('-showconfig'), ['-inipath', '/etc/fliperos/mame', '-showconfig'])
+        self.assertEqual(self.run_wrapper('-inipath', '/x', 'mvsc'), ['-inipath', '/x', 'mvsc'])
+        self.assertIn('/usr/local/libexec/groovymame', (ROOT / 'config/fliperos-groovymame').read_text())
+
+    def test_release_is_pinned_and_installed_behind_the_wrapper(self):
+        body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]
+        self.assertRegex(MKISO, r'GROOVYMAME_SHA256="[0-9a-f]{64}"')
+        self.assertIn('releases/download/${GROOVYMAME_TAG}/${GROOVYMAME_FILE}', body)
+        self.assertIn('sha256sum -c', body)
+        self.assertIn('/usr/local/libexec/groovymame', body)
+        self.assertIn('libqt6widgets6t64', body)
+        self.assertNotIn('git clone', body)
+        self.assertRegex(MKISO, r'(?m)^install_groovymame_chroot$')
+
+    def test_rootfs_moves_the_old_binary_and_installs_the_wrapper(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'usr/local/bin', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            (root / 'usr/local/bin/groovymame').write_bytes(b'\x7fELF binario compilado')
+            for _ in range(2):
+                subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                               capture_output=True, timeout=120)
+            self.assertEqual((root / 'usr/local/libexec/groovymame').read_bytes(), b'\x7fELF binario compilado')
+            self.assertEqual((root / 'usr/local/bin/groovymame').read_text(),
+                             (ROOT / 'config/fliperos-groovymame').read_text())
+
+
 class QuietLaunchTests(unittest.TestCase):
     """Sem texto na tela ao abrir emuladores; o modo debug mostra tudo."""
 

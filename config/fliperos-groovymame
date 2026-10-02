@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# O comando groovymame do FliperOS (fliperos-launch, frontends, terminal). O
+# binario e o release do GroovyMAME, em /usr/local/libexec/groovymame; este
+# atalho passa o mame.ini do sistema, que o Setup grava (-inipath
+# /etc/fliperos/mame). O padrao do release e ".;ini", relativo a pasta de
+# onde se abre. Um -inipath na linha de comando vale mais.
+real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
+inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/mame}
+
+case " $* " in
+  *" -inipath "* | *" --inipath "*) ;;
+  *) set -- -inipath "$inidir" "$@" ;;
+esac
+exec "$real" "$@"
