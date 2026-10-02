@@ -138,7 +138,10 @@ echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
 
 # So reinicia o tty1 se nele estiver o menu (login, shell, sudo): um jogo,
 # frontend ou o desktop aberto agora seria fechado no meio.
-busy=$(pgrep -l -t tty1 | awk '{ print $2 }' | grep -vxE 'login|zsh|bash|sudo|fliperos-tty1' | sort -u | tr '\n' ' ')
+# Sem nada alem do menu, o grep -v nao acha nada e sai com 1: com pipefail
+# isso parava o script aqui.
+busy=$(pgrep -l -t tty1 | awk '{ print $2 }' | { grep -vxE 'login|zsh|bash|sudo|fliperos-tty1' || true; } |
+  sort -u | tr '\n' ' ')
 if [[ -z $busy ]]; then
   echo "== Reiniciando o tty1 no fluxo novo"
   systemctl restart getty@tty1.service
