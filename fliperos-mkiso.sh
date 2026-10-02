@@ -883,12 +883,16 @@ GMSCRIPT
 
 # ── Compilar RetroArch em KMS/DRM, sem X11 ────────────────────
 # Flags validadas num container Ubuntu 24.04 descartavel antes de entrar
-# aqui: --enable-kms --enable-egl --disable-x11 --disable-wayland
-# --disable-sdl --disable-sdl2 builda limpo (config.h confirma
-# HAVE_KMS/HAVE_EGL/HAVE_GBM=1, sem HAVE_X11/HAVE_WAYLAND) e o binario
-# resultante reporta "KMS: yes", "EGL: yes", "udev: yes" em --features.
+# aqui: --enable-kms --enable-egl --disable-x11 --disable-wayland builda
+# limpo (config.h confirma HAVE_KMS/HAVE_EGL/HAVE_GBM=1, sem
+# HAVE_X11/HAVE_WAYLAND) e o binario resultante reporta "KMS: yes",
+# "EGL: yes", "udev: yes" em --features.
 # Por isso RetroArch/Flycast usam fliperos-kms-run (sem Xorg), diferente
 # de PCSX2/Supermodel que continuam em fliperos-x11-run.
+# Com SDL2 para o driver de controle "sdl2" existir em Drivers > Controle
+# (mapeamentos do fliperos-controllers, como os outros emuladores; sem
+# perfil, o "Standard Gamepad" embutido). O padrao segue udev; video e audio
+# continuam fixos no retroarch.cfg (gl/KMS e alsa). SDL 1.x fica fora.
 build_retroarch_chroot() {
   if $SKIP_RETROARCH; then
     warn "RetroArch pulado (--skip-retroarch)"
@@ -900,12 +904,12 @@ build_retroarch_chroot() {
 set -e
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-  libegl1-mesa-dev libgles2-mesa-dev libudev-dev
+  libegl1-mesa-dev libgles2-mesa-dev libudev-dev libsdl2-dev
 
 git clone --depth=1 https://github.com/libretro/RetroArch /tmp/retroarch
 cd /tmp/retroarch
 ./configure --enable-kms --enable-egl --disable-x11 --disable-wayland \
-  --disable-sdl --disable-sdl2
+  --disable-sdl --enable-sdl2
 make -j"$(nproc)"
 make install
 # O atalho do proprio RetroArch abriria o binario dentro do X do desktop,

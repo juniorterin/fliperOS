@@ -1491,6 +1491,18 @@ class RetroArchConfigTests(unittest.TestCase):
         for name in ('RA_CORE_INFO_COMMIT', 'RA_AUTOCONFIG_COMMIT'):
             self.assertRegex(MKISO, name + r'="[0-9a-f]{40}"')
 
+    def test_sdl2_joypad_driver_can_be_chosen(self):
+        # O sdl2 so aparece em Drivers > Controle se o RetroArch tiver SDL2; o
+        # arquivo do sistema vem por cima do do usuario a cada abertura, entao
+        # nao fixa o driver de controle (padrao compilado: udev).
+        values = self.values()
+        self.assertNotIn('input_joypad_driver', values)
+        self.assertEqual(values['input_driver'], 'udev')
+        body = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
+        self.assertIn('libsdl2-dev', body)
+        self.assertIn('--enable-sdl2', body)
+        self.assertNotIn('--disable-sdl2', body)
+
     def test_retroarch_gets_the_system_config(self):
         self.assertIn('--appendconfig /etc/fliperos/retroarch/retroarch.cfg',
                       (ROOT / 'config/fliperos-kms-run').read_text())
