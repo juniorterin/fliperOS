@@ -237,8 +237,16 @@ EOF
   # ROMs em ~/roms/dreamcast. So na primeira vez: depois o arquivo e dele.
   if [[ ! -f $home/.config/flycast/emu.cfg ]]; then
     install -Dm644 "$src/config/flycast-emu.cfg" "$home/.config/flycast/emu.cfg"
-    chown -R 1000:1000 "$home/.config/flycast" 2> /dev/null || true
   fi
+  # Mapeamentos do Flycast para controles conhecidos (config/flycast/mappings):
+  # o painel V-USB Mame Panel 32 manda o direcional como eixos, que o Flycast
+  # poria no analogico; aqui ele vai para o direcional. So se nao houver um da
+  # pessoa.
+  for map in "$src"/config/flycast/mappings/*.cfg; do
+    [[ -e $home/.config/flycast/mappings/${map##*/} ]] ||
+      install -Dm644 "$map" "$home/.config/flycast/mappings/${map##*/}"
+  done
+  chown -R 1000:1000 "$home/.config/flycast" 2> /dev/null || true
   # Sem MOTD nem "Last login" entre o Plymouth e o setup/frontend.
   : > "$home/.hushlogin"
   # LXDE como o do GroovyArcade (ver config/lxde).

@@ -761,6 +761,20 @@ class RomFoldersTests(unittest.TestCase):
         self.assertIn('path = /home/fliperos/roms', smb)
         self.assertIn('wide links = yes', smb)
 
+    def test_flycast_panel_stick_is_the_dpad(self):
+        # O painel manda o direcional como eixos 0/1; o "Reset to default" do
+        # Flycast os deixava sem nada (axis2_* em eixos 2/3 que nao existem).
+        maps = ROOT / 'config/flycast/mappings'
+        name = 'SDL_vusb.wikidot.com-project-mamepanel V-USB Mame Panel 32'
+        for suffix in ('', '_arcade'):
+            cfg = (maps / (name + suffix + '.cfg')).read_text()
+            for bind in ('0-:btn_dpad1_left', '0+:btn_dpad1_right', '1-:btn_dpad1_up', '1+:btn_dpad1_down'):
+                self.assertIn(bind + '\n', cfg, suffix)
+            self.assertIn('version = 4\n', cfg)
+        self.assertIn('6:btn_start\n', (maps / (name + '_arcade.cfg')).read_text())
+        self.assertIn('7:btn_d\n', (maps / (name + '_arcade.cfg')).read_text())
+        self.assertIn('config/flycast/mappings/*.cfg', ROOTFS)
+
     def test_flycast_player_2_has_a_controller(self):
         cfg = (ROOT / 'config/flycast-emu.cfg').read_text()
         self.assertIn('device2 = 0\n', cfg)
