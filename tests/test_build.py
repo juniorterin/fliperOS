@@ -904,6 +904,36 @@ class GroovyMameTests(unittest.TestCase):
                            capture_output=True, text=True, timeout=60, check=True)
             self.assertFalse((out / 'velho.ini').exists())
 
+    def test_full_mame_ini_like_groovyarcade(self):
+        # O -createconfig do proprio GroovyMAME (todas as opcoes da versao) com
+        # as do config/mame.ini por cima, na linha de cada uma.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fake = tmp / 'groovymame'
+            fake.write_text('#!/bin/bash\n[[ " $* " == *" -createconfig "* ]] || exit 1\n'
+                            'printf "#\\n# CORE SEARCH PATH OPTIONS\\n#\\nhomepath                  .\\n'
+                            'rompath                   roms\\ninipath                   .;ini\\n'
+                            'switchres                 1\\nmodesetting               0\\nmonitor                   generic_15\\n'
+                            'lowlatency                0\\nfilter                    1\\n" > mame.ini\n')
+            fake.chmod(0o755)
+            (tmp / 'mame').mkdir()
+            out = tmp / 'mame' / 'mame.ini'
+            out.write_text((ROOT / 'config/mame.ini').read_text())
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-mame-ini'), str(out), str(out)],
+                           env=dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake)),
+                           capture_output=True, text=True, timeout=60, check=True)
+            text = out.read_text()
+            self.assertTrue(text.startswith('#\n# CORE SEARCH PATH OPTIONS\n#\n'))
+            for line in ('homepath                  $HOME/.mame', 'rompath                   /home/fliperos/roms/mame',
+                         'inipath                   %s' % out.parent, 'monitor                   arcade_15',
+                         'modesetting               0', 'lowlatency                1', 'filter                    1',
+                         'plugin                    hiscore', 'uifont                    uismall.bdf'):
+                self.assertIn(line + '\n', text, line)
+            self.assertEqual(text.count('\nrompath '), 1)
+        self.assertIn('fliperos-mame-ini" "$root/opt/fliperos/bin/fliperos-mame-ini', ROOTFS)
+        body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]
+        self.assertIn('fliperos-mame-ini /etc/fliperos/mame/mame.ini /etc/fliperos/mame/mame.ini', body)
+
     def test_aspect_ini_made_at_build_and_update(self):
         self.assertIn('fliperos-mame-aspect" "$root/opt/fliperos/bin/fliperos-mame-aspect', ROOTFS)
         body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]

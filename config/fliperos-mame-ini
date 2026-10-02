@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Gera o mame.ini completo como o GroovyArcade faz (core/configs/groovymame
+# do gasetup): o -createconfig do proprio GroovyMAME, com todas as opcoes
+# desta versao no padrao dela, e por cima as opcoes do FliperOS.
+#
+#   fliperos-mame-ini OPCOES.ini SAIDA.ini
+#
+# OPCOES.ini e o config/mame.ini (chave valor, como o mame.ini); SAIDA.ini
+# pode ser o mesmo arquivo. Roda no build e no cabinet-update.sh.
+set -euo pipefail
+src=${1:?Uso: fliperos-mame-ini OPCOES.ini SAIDA.ini}
+out=${2:?Uso: fliperos-mame-ini OPCOES.ini SAIDA.ini}
+bin=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
+[[ -x $bin ]] || { echo "GroovyMAME nao instalado: $bin" >&2; exit 1; }
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+# Na pasta vazia, com -inipath dela: nenhum mame.ini de outro lugar entra.
+(cd "$tmp" && "$bin" -inipath . -createconfig > /dev/null 2>&1) || true
+[[ -s $tmp/mame.ini ]] || { echo "O GroovyMAME nao criou o mame.ini" >&2; exit 1; }
+# As opcoes do FliperOS na linha de cada uma (as que a versao nao tem vao
+# no fim), e o inipath do sistema (o comando groovymame tambem o passa).
+awk -v inipath="$(dirname "$out")" '
+  NR == FNR {
+    if ($0 ~ /^[[:space:]]*(#|$)/) next
+    key = $1
+    sub(/^[[:space:]]*[^[:space:]]+[[:space:]]+/, "")
+    want[key] = $0
+    order[++n] = key
+    next
+  }
+  $1 == "inipath" { printf "%-25s %s\n", "inipath", inipath; next }
+  ($1 in want) && !($1 in done) { printf "%-25s %s\n", $1, want[$1]; done[$1] = 1; next }
+  { print }
+  END { for (i = 1; i <= n; i++) if (!(order[i] in done)) printf "%-25s %s\n", order[i], want[order[i]] }
+' "$src" "$tmp/mame.ini" > "$tmp/out.ini"
+install -m644 "$tmp/out.ini" "$out.new"
+mv -f "$out.new" "$out"
+chown 1000:1000 "$out" 2> /dev/null || true

@@ -72,6 +72,9 @@ install -Dm755 "$src/config/fliperos-groovymame" "$gm"
 # Proporcao dos jogos de menos de 240 linhas no CRT (um .ini por jogo, do
 # XML do GroovyMAME): o build e o cabinet-update.sh o rodam.
 install -Dm755 "$src/config/fliperos-mame-aspect" "$root/opt/fliperos/bin/fliperos-mame-aspect"
+# O mame.ini completo, como o GroovyArcade (o -createconfig do GroovyMAME com
+# as opcoes do config/mame.ini por cima): o build o roda.
+install -Dm755 "$src/config/fliperos-mame-ini" "$root/opt/fliperos/bin/fliperos-mame-ini"
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"
 # Cores Dracula da interface do GroovyMAME; o ui.ini e do usuario porque o
 # MAME o regrava quando a interface e personalizada pelo proprio menu.

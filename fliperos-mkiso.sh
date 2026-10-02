@@ -934,6 +934,10 @@ install_groovymame_chroot() {
     || err "GroovyMAME: as bibliotecas nao instalaram"
   chroot "$CHROOT_DIR" /usr/local/libexec/groovymame -version >> "$LOG_FILE" 2>&1 \
     || err "GroovyMAME: o binario nao abre (biblioteca faltando?)"
+  # O mame.ini completo, como o GroovyArcade: o -createconfig desta versao
+  # com as opcoes do config/mame.ini por cima (config/fliperos-mame-ini).
+  chroot "$CHROOT_DIR" /opt/fliperos/bin/fliperos-mame-ini /etc/fliperos/mame/mame.ini /etc/fliperos/mame/mame.ini \
+    >> "$LOG_FILE" 2>&1 || err "GroovyMAME: o mame.ini nao foi gerado"
   # Proporcao no CRT dos jogos de menos de 240 linhas, do XML desta versao
   # (config/fliperos-mame-aspect, que o fliperos-rootfs.sh ja instalou).
   local n
