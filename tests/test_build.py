@@ -807,6 +807,13 @@ class QuietLaunchTests(unittest.TestCase):
             log = tmp / 'logs' / 'emu.log'
             return out, log.read_text() if log.exists() else None
 
+    def test_groovymame_creates_native_modes(self):
+        # Sem o hint, o Switchres do GroovyMAME no KMS nao cria modos e dobra
+        # a largura (384x224 -> 768x224 no gabinete).
+        kms = (ROOT / 'config/fliperos-kms-run').read_text()
+        self.assertIn('export SDL_KMSDRM_REQUIRE_DRM_MASTER="${SDL_KMSDRM_REQUIRE_DRM_MASTER:-0}"', kms)
+        self.assertLess(kms.index('SDL_KMSDRM_REQUIRE_DRM_MASTER'), kms.index('exec "$@"'))
+
     def test_emulator_output_goes_to_the_log(self):
         out, log = self.run_kms(debug=False)
         self.assertEqual(out, '')

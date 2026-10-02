@@ -20,6 +20,13 @@ fi
 # servidor de som, tentar PipeWire e PulseAudio antes so atrasa a abertura.
 export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
+# GroovyMAME no KMS: so com este hint em 0 o Switchres dele aplica os modos
+# por conta propria (kms_modesetting, display_sdl2.cpp) e cria o modo nativo
+# de cada jogo. Sem ele, sem libdrm com hook nem kernel com "user modes", o
+# Switchres so reaproveita os modos que ja existem e dobra a largura para
+# caber neles (384x224 virava 768x224; 640x480 virava 1280x480i). Vale para
+# os frontends KMS tambem: o que eles abrem herda.
+export SDL_KMSDRM_REQUIRE_DRM_MASTER="${SDL_KMSDRM_REQUIRE_DRM_MASTER:-0}"
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).
 export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}"
 # A saida do programa vai para /opt/fliperos/logs/<programa>.log, nao para a
