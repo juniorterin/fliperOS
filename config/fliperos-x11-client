@@ -26,6 +26,10 @@ if command -v openbox > /dev/null; then
 fi
 args=()
 [[ -n $connector ]] && args+=(--display "$connector")
+# Opcoes a mais do Switchres (as do switchres.ini, como opcao longa), de
+# quem chamou: o groovymame na interface pede o modo dela sem entrelacar.
+# shellcheck disable=SC2206 # uma opcao por palavra
+args+=(${FLIPEROS_SWITCHRES_OPTS:-})
 emulator_command=$(printf '%q ' "$@")
 exec /usr/local/bin/switchres "$FLIPEROS_RES_W" "$FLIPEROS_RES_H" "$FLIPEROS_RES_HZ" \
   --ini /etc/switchres.ini --api xrandr "${args[@]}" --switch --launch "$emulator_command"

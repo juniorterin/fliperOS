@@ -424,6 +424,17 @@ class OutputTestTests(Base):
         self.assertRegex((self.env.etc / "mame.ini").read_text(), r"(?m)^aspect +4:3$")
         self.assertIn("\naspect 4:3\n", (ROOT / "config/mame.ini").read_text())
 
+    def test_mame_monitor_follows_the_setup(self):
+        # Um mame.ini refeito volta ao arcade_15 de fabrica; a atualizacao o
+        # poe de novo no monitor do Setup (no gabinete, generic_15).
+        mame = self.env.etc / "mame.ini"
+        mame.write_text("monitor                   arcade_15\n")
+        self.env.out("video_mame_monitor")
+        self.assertIn("arcade_15", mame.read_text())
+        self.env.out("conf_set monitor generic_15; video_mame_monitor")
+        self.assertRegex(mame.read_text(), r"(?m)^monitor +generic_15$")
+        self.assertIn("  video_mame_monitor\n", (ROOT / "tools/cabinet-update.sh").read_text())
+
     def test_save_result_without_low_dotclock_sets_dotclock_min(self):
         self.env.connector("card1-VGA-1", "disconnected")
         self.env.out("video_save_result card1-VGA-1 e generic_15")

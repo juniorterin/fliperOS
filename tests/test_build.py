@@ -845,7 +845,7 @@ class GroovyMameTests(unittest.TestCase):
             fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
             fake.chmod(0o755)
             x11run = tmp / 'fliperos-x11-run'
-            x11run.write_text('#!/bin/sh\necho x11-run\nprintf "%s\\n" "$@"\n')
+            x11run.write_text('#!/bin/sh\necho x11-run ${FLIPEROS_SWITCHRES_OPTS:-}\nprintf "%s\\n" "$@"\n')
             x11run.chmod(0o755)
             env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake), FLIPEROS_MAME_INI_DIR=str(tmp / 'ini'),
                        FLIPEROS_X11_RUN=str(x11run))
@@ -862,7 +862,8 @@ class GroovyMameTests(unittest.TestCase):
         # modo do boot). Comandos sem tela rodam direto, sem subir o X.
         wrapper = str(ROOT / 'config/fliperos-groovymame')
         self.assertEqual(self.run_wrapper('mvsc', display=None)[0], ['x11-run', wrapper, 'mvsc'])
-        self.assertEqual(self.run_wrapper(display=None)[0], ['x11-run', wrapper])
+        # A interface: o X ja no modo dela, sem entrelacar.
+        self.assertEqual(self.run_wrapper(display=None)[0], ['x11-run --interlace 0', '--mode', '640x480@30', wrapper])
         for args in (('-listclones',), ('-listfull', 'mvsc'),('-verifyroms', 'mvsc'), ('-showconfig',),
                      ('-createconfig',), ('-version',), ('-validate',), ('-romident', 'x.zip'), ('-help',)):
             out, ini = self.run_wrapper(*args, display=None)
@@ -888,7 +889,7 @@ class GroovyMameTests(unittest.TestCase):
         # Sem jogo (a interface): sem o autosync, que no jogo escolhido nela
         # deixava a velocidade com um vblank quebrado (acelerado no gabinete).
         args, ini = self.run_wrapper()
-        self.assertEqual(args, ['-inipath', ini, '-noautosync', '-waitvsync'])
+        self.assertEqual(args, ['-inipath', ini, '-noautosync', '-waitvsync', '-nointerlace'])
         self.assertEqual(self.run_wrapper('-inipath', '/x', 'mvsc')[0], ['-inipath', '/x', 'mvsc'])
         self.assertIn('/usr/local/libexec/groovymame', (ROOT / 'config/fliperos-groovymame').read_text())
 
@@ -1907,6 +1908,10 @@ class EmulatorModeTests(unittest.TestCase):
         for key in ('window.active.client.color', 'window.inactive.client.color'):
             self.assertIn('%s: #000000\n' % key, theme)
         self.assertLess(client.index('xsetroot -solid black'), client.index('openbox --config-file'))
+        # Opcoes a mais do Switchres de quem chamou (a interface do GroovyMAME
+        # pede --interlace 0).
+        self.assertIn('args+=(${FLIPEROS_SWITCHRES_OPTS:-})', client)
+        self.assertLess(client.index('FLIPEROS_SWITCHRES_OPTS'), client.index('exec /usr/local/bin/switchres'))
         self.assertIn('"$root/usr/share/themes/FliperOS-Black/openbox-3/themerc"', ROOTFS)
         self.assertIn('install -Dm644 "$src/config/openbox-x11-run.xml" "$root/etc/fliperos/openbox-x11-run.xml"',
                       ROOTFS)

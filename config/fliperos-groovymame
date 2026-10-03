@@ -28,7 +28,16 @@ opens_video() {
   return 0
 }
 
+# A interface do MAME (aberto sem jogo) tem 640x480 a 30 Hz: num CRT de
+# 15 kHz o Switchres a poria em 480 linhas entrelacadas. Ela vai sem
+# entrelacar (-nointerlace; no gabinete, 640x248 a 60 Hz) e o X ja abre no
+# mesmo modo (o Switchres de fora com o mesmo pedido e --interlace 0): entre
+# a interface e o jogo o GroovyMAME volta ao modo em que o X abriu, e sendo o
+# mesmo o tubo nao troca de sincronismo. Um jogo de mais de 240 linhas
+# escolhido na interface tambem fica sem entrelacar; aberto com o jogo
+# (frontends) nao muda nada.
 if [[ -z ${DISPLAY:-} && -z ${FLIPEROS_GROOVYMAME_NO_X:-} ]] && opens_video "$@"; then
+  (($# == 0)) && export FLIPEROS_SWITCHRES_OPTS="--interlace 0" && exec "$x11run" --mode 640x480@30 "$0"
   exec "$x11run" "$0" "$@"
 fi
 
@@ -42,7 +51,7 @@ fi
 # gabinete, o MvC escolhido na interface). Sem o autosync, a velocidade e a
 # do throttle e o vsync e o do OpenGL (waitvsync). Aberto ja com o jogo
 # (frontends, linha de comando) o vblank funciona e fica tudo como esta.
-(($# == 0)) && set -- -noautosync -waitvsync
+(($# == 0)) && set -- -noautosync -waitvsync -nointerlace
 case " $* " in
   *" -inipath "* | *" --inipath "*) ;;
   *) set -- -inipath "$inidir" "$@" ;;

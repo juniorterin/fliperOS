@@ -248,6 +248,18 @@ video_mame_aspect() {
   ini_set "$MAME_INI" aspect "$([[ $monitor == lcd ]] && echo auto || echo 4:3)"
 }
 
+# video_mame_monitor poe no mame.ini o monitor do Setup. Um mame.ini refeito
+# (o -createconfig com o config/mame.ini por cima) volta ao arcade_15 de
+# fabrica, e o GroovyMAME usava a faixa dele (16,14 kHz no gabinete) com o
+# Switchres e o Setup em outro monitor.
+video_mame_monitor() {
+  local monitor
+  [[ -f $MAME_INI ]] || return 0
+  monitor=$(conf_get monitor 2> /dev/null) || return 0
+  [[ -n $monitor ]] && ini_set "$MAME_INI" monitor "$monitor"
+  return 0
+}
+
 # Chaves do fliperos.conf que dependem da placa e da saida: e o que o
 # Recovery Mode leva para o disco quando a placa foi trocada. A orientacao
 # e do gabinete, nao da placa, e so vai se foi escolhida nesta sessao.

@@ -112,8 +112,9 @@ echo "== Linha do kernel (boot direto no Plymouth)"
   # decide por maquina volta (largura do CRT SwitchRes, modo de latencia).
   video_retroarch_super
   video_mame_aspect
+  video_mame_monitor
   latency_emulators "$(latency_mode)"
-  grep -E '^aspect' "$MAME_INI"
+  grep -E '^(aspect|monitor) ' "$MAME_INI"
   grep -E '^crt_switch_resolution_super' "$RETROARCH_CFG"
 )
 
