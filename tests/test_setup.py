@@ -1025,6 +1025,44 @@ class UpdateTests(Base):
         self.assertEqual(out, ["@step 10 Retrieving file 1 of 2", "@step 30 Retrieving file 2 of 2",
                                "@step 50 Preparing mesa", "@step 99 Installed mesa"])
 
+    def test_waits_for_another_program_using_the_package_manager(self):
+        # No gabinete, instalar um frontend durante uma atualizacao falhava na
+        # hora com "Impossivel criar acesso exclusivo". A trava e de registro
+        # (fcntl), como a do apt.
+        lock = self.env.dir / "lock-frontend"
+        lock.write_text("")
+        env = {"APT_LOCKS": "%s %s" % (lock, self.env.dir / "nao-existe")}
+        self.assertEqual(self.env.run("update_locked", env).returncode, 1)
+        holder = subprocess.Popen(
+            ["python3", "-c", "import fcntl, sys, time\nf = open(sys.argv[1], 'a')\nfcntl.lockf(f, fcntl.LOCK_EX)\n"
+                              "print('ok', flush=True)\ntime.sleep(60)", str(lock)],
+            stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(holder.stdout.readline().strip(), "ok")
+            self.assertEqual(self.env.run("update_locked", env).returncode, 0)
+            # Espera (o sleep dos testes nao dorme) e, no limite, diz o que ha.
+            r = self.env.run("update_wait_lock", dict(env, APT_LOCK_WAIT="6"))
+            self.assertEqual(r.returncode, 1)
+            self.assertEqual(r.stdout.count("@msg Another program is installing or updating packages"), 1)
+            self.assertIn("Try again in a few minutes", r.stdout)
+            self.assertEqual(self.env.run("update_install_package x", dict(env, APT_LOCK_WAIT="3")).returncode, 1)
+        finally:
+            holder.kill()
+            holder.wait()
+            holder.stdout.close()
+        self.assertEqual(self.env.out("update_wait_lock; echo livre", env).strip(), "livre")
+
+    def test_install_waits_then_lets_apt_wait_too(self):
+        calls = self.env.dir / "apt.calls"
+        self.env.stub("apt-get", 'echo "$*" >> "%s"' % calls)
+        out = self.env.out("update_install_package fliperos-pegasus",
+                           {"APT_LOCKS": str(self.env.dir / "nao-existe")}).splitlines()
+        self.assertEqual(out[-1], "@step 100 fliperos-pegasus installed")
+        self.assertEqual(calls.read_text().splitlines(),
+                         ["update", "-y -o DPkg::Lock::Timeout=120 -o APT::Status-Fd=3 install fliperos-pegasus"])
+        body = (SETUP / "lib" / "update.sh").read_text().split("update_run() {")[1]
+        self.assertLess(body.index("update_wait_lock || return 1"), body.index("ev_run apt-get update"))
+
 
 class GeometryTests(Base):
     def test_parse_and_apply(self):

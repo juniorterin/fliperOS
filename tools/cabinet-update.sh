@@ -38,6 +38,9 @@ nmcli general reload conf > /dev/null && nmcli general reload dns-full > /dev/nu
 sleep 2
 grep nameserver /etc/resolv.conf || true
 
+# O indice do repositorio local antes e depois: mudou, o apt tem de reler.
+repo_index() { cat /opt/fliperos/repo/Packages* 2> /dev/null | cksum; }
+repo_before=$(repo_index)
 if compgen -G "$src/repo/*.deb" > /dev/null; then
   echo "== Repositorio local (/opt/fliperos/repo)"
   rm -rf /opt/fliperos/repo
@@ -46,6 +49,7 @@ if compgen -G "$src/repo/*.deb" > /dev/null; then
   chmod -R a+rX /opt/fliperos/repo
   echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > /etc/apt/sources.list.d/fliperos.list
 fi
+repo_after=$(repo_index)
 
 echo "== Relogio"
 # Sem servico de hora (imagens ate o commit 11f715a), vale o relogio da BIOS,
@@ -62,9 +66,21 @@ echo "== Pacotes novos"
 packages=(usbutils systemd-timesyncd gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk
   alacritty libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 cifs-utils smbclient)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
-apt-get update -qq || echo "aviso: apt-get update com erros (sem rede?)"
-DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" ||
-  echo "aviso: nao instalou ${packages[*]}"
+# So mexe no apt se falta algum pacote ou se o repositorio local mudou: o
+# apt-get segura a trava dos pacotes, e quem estivesse instalando um
+# frontend pelo Setup naquela hora recebia "Impossivel criar acesso
+# exclusivo". Quando mexe, espera a trava de quem estiver com ela.
+missing=()
+for p in "${packages[@]}"; do
+  dpkg -s "$p" > /dev/null 2>&1 || missing+=("$p")
+done
+if ((${#missing[@]})) || [[ $repo_before != "$repo_after" ]]; then
+  apt-get update -qq || echo "aviso: apt-get update com erros (sem rede, ou outro programa com a trava?)"
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -y -q --no-install-recommends \
+    "${packages[@]}" || echo "aviso: nao instalou ${packages[*]}"
+else
+  echo "todos instalados e o repositorio local nao mudou: o apt nao foi usado"
+fi
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo ||
   echo "aviso: Flathub nao foi adicionado"
 # O override da App Store (fliperos-rootfs.sh) pode ter chegado depois do
