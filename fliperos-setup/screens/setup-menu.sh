@@ -15,6 +15,7 @@ screen_setup_menu() {
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
       "romcleaner|MAME ROM Cleaner" \
+      "chdcleaner|MAME CHD Cleaner" \
       "freeroms|Free games (open-source homebrew)" \
       "quirks|Quirks (USB controller fixes)" \
       "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
@@ -30,6 +31,7 @@ screen_setup_menu() {
       latency) screen_latency ;;
       scraper) screen_scraper ;;
       romcleaner) screen_rom_cleaner ;;
+      chdcleaner) screen_chd_cleaner ;;
       freeroms) screen_free_roms ;;
       quirks) screen_quirks ;;
       joysticks) screen_joysticks ;;
@@ -245,8 +247,9 @@ screen_frontend() {
 # ── Scraper ──────────────────────────────────────────────────────
 
 screen_scraper() {
-  local found=() entries=() line key dir platform count choice targets=() source creds="" user pass videos=0 t
+  local found=() entries=() line key dir platform count choice targets=() source creds="" user pass media t
   local clones=0 pending=() rc
+  local -a options
   if ! have "$SKYSCRAPER"; then
     ui_msg "Scraper" "Skyscraper is not installed."
     return 0
@@ -262,8 +265,8 @@ screen_scraper() {
       "A scrape was interrupted. Systems left: ${entries[*]}" "" \
       "Resume where it stopped? The games already fetched are kept." || rc=$?
     if ((rc == 0)); then
-      IFS='|' read -r source videos clones creds <<< "$(scraper_job_options)"
-      scraper_scrape_targets "$source" "$videos" "$creds" "$clones" "${pending[@]}"
+      IFS='|' read -r source media clones creds <<< "$(scraper_job_options)"
+      scraper_scrape_targets "$source" "$media" "$creds" "$clones" "${pending[@]}"
       return 0
     fi
     ((rc == 1)) || return 0
@@ -296,7 +299,12 @@ screen_scraper() {
       conf_set screenscraper_user "$user"
     fi
   fi
-  ui_yesno "Scraper" "Download videos too? They use much more disk space." no && videos=1
+  # Os tipos de midia a buscar, de marcar; a escolha fica para a proxima vez.
+  mapfile -t options < <(scraper_media_options)
+  media=$(ui_checklist "Scraper: Media" "Mark what to fetch. Each type goes to its folder in ~/media." \
+    "$(scraper_media_saved)" "${options[@]}") || return 0
+  [[ -n $media ]] || media=none
+  conf_set scraper_media "$media"
   for t in "${targets[@]}"; do
     if [[ ${t%%|*} == mame ]]; then
       ui_yesno "Scraper" "Also fetch the clones of the MAME games found (other versions of the same game)? It takes longer." &&
@@ -304,20 +312,20 @@ screen_scraper() {
       break
     fi
   done
-  scraper_scrape_targets "$source" "$videos" "$creds" "$clones" "${targets[@]}"
+  scraper_scrape_targets "$source" "$media" "$creds" "$clones" "${targets[@]}"
 }
 
-# scraper_scrape_targets FONTE VIDEOS CREDENCIAIS CLONES ALVO... anota o
+# scraper_scrape_targets FONTE MIDIA CREDENCIAIS CLONES ALVO... anota o
 # trabalho e raspa pasta por pasta. Uma que falha nao para as outras e fica
 # pendente para o "Resume".
 scraper_scrape_targets() {
-  local source=$1 videos=$2 creds=$3 clones=$4 t key dir platform count failed=() labels=() label
+  local source=$1 media=$2 creds=$3 clones=$4 t key dir platform count failed=() labels=() label
   shift 4
-  scraper_job_start "$source" "$videos" "$clones" "$creds" "$@"
+  scraper_job_start "$source" "$media" "$clones" "$creds" "$@"
   for t in "$@"; do
     IFS='|' read -r key dir platform count <<< "$t"
     if run_with_progress "Scraping $platform" "$key ($count files)" \
-      scraper_run "$key" "$dir" "$platform" "$source" "$videos" "$creds" "$clones"; then
+      scraper_run "$key" "$dir" "$platform" "$source" "$media" "$creds" "$clones"; then
       scraper_job_done "$key"
       label=$(scraper_format_label "$(scraper_target "$key")")
       [[ " ${labels[*]} " == *" $label "* ]] || labels+=("$label")

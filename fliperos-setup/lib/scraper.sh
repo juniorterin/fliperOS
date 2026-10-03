@@ -401,7 +401,8 @@ scraper_attract_prepare() {
 # O Skyscraper so grava o cache no fim de cada execucao: um desligamento no
 # meio perdia tudo. Os jogos vao em lotes (SCRAPER_CHUNK por execucao, com
 # --includefrom), e o trabalho fica anotado em SCRAPER_JOB_DIR:
-#   options        "fonte|videos|clones|usuario:senha" (so o root le)
+#   options        "fonte|midia|clones|usuario:senha" (so o root le; midia e
+#                  a lista de tipos, ou 0/1 = videos num trabalho antigo)
 #   pending        as pastas que faltam, uma linha do scraper_detect cada
 #   done.<pasta>   os arquivos da pasta atual que ja estao no cache
 # O Setup > Scraper oferece retomar enquanto houver pasta pendente.
@@ -413,7 +414,7 @@ SCRAPER_CHUNK=${SCRAPER_CHUNK:-20}
 SCRAPER_STAGE=${SCRAPER_STAGE:-/home/fliperos/.cache/fliperos-scraper}
 GROOVYMAME=${GROOVYMAME:-groovymame}
 
-# scraper_job_start FONTE VIDEOS CLONES CREDENCIAIS ALVO... anota um trabalho.
+# scraper_job_start FONTE MIDIA CLONES CREDENCIAIS ALVO... anota um trabalho.
 scraper_job_start() {
   local source=$1 videos=$2 clones=$3 creds=$4
   shift 4
@@ -474,22 +475,99 @@ scraper_clones_input() {
   printf '%s\n' "$stage"
 }
 
-# scraper_artwork imprime o artwork.xml do Setup: cada imagem como veio
-# (captura, capa, logo, marquee), cada uma na sua pasta. O padrao do
-# Skyscraper monta a captura com a capa e o logo por cima e nao exporta os
-# dois; a lista do GroovyMAME e as telas do Attract-Mode montam sozinhas.
+# ── Tipos de midia ────────────────────────────────────────────────
+# O que o Scraper busca, pelos nomes das pastas de ~/media. A pessoa marca na
+# tela (Setup > Scraper) e a escolha fica no fliperos.conf (scraper_media);
+# sem escolha, tudo menos os videos, que ocupam muito mais.
+SCRAPER_MEDIA_DEFAULT="snap,logo,box,marquee,texto"
+
+# scraper_media_options imprime "tipo|rotulo" de cada tipo, para a tela.
+scraper_media_options() {
+  printf '%s\n' "snap|Screenshots (snap)" "logo|Logos (logo)" "box|Box art and flyers (box)" \
+    "marquee|Marquees (marquee)" "texto|Descriptions (texto)" "preview|Videos (preview: much more disk space)"
+}
+
+# scraper_media_saved imprime a escolha guardada (ou o padrao).
+scraper_media_saved() {
+  conf_get scraper_media 2> /dev/null || printf '%s\n' "$SCRAPER_MEDIA_DEFAULT"
+}
+
+# scraper_media_list VALOR imprime a lista de tipos: a propria lista, ou a
+# de um trabalho anotado antes desta escolha, que so dizia videos sim (1) ou
+# nao (0).
+scraper_media_list() {
+  case $1 in
+    1) printf '%s\n' "$SCRAPER_MEDIA_DEFAULT,preview" ;;
+    0 | "") printf '%s\n' "$SCRAPER_MEDIA_DEFAULT" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+# scraper_media_has LISTA TIPO
+scraper_media_has() {
+  [[ ",$1," == *",$2,"* ]]
+}
+
+# Os tipos ja buscados para cada pasta ("chave=lista"). O Skyscraper nao
+# volta a um jogo que ja esta no cache: um tipo de arte marcado agora e que
+# a pasta ainda nao tinha so chega aos jogos ja raspados com o --refresh.
+SCRAPER_MEDIA_STATE=${SCRAPER_MEDIA_STATE:-/var/lib/fliperos/scraper-media}
+
+# scraper_media_fetched CHAVE imprime os tipos ja buscados para a pasta. Sem
+# registro, o padrao: o que o Scraper buscava antes de haver escolha (numa
+# pasta nunca raspada o --refresh nao custa nada).
+scraper_media_fetched() {
+  conf_get "$1" "$SCRAPER_MEDIA_STATE" 2> /dev/null || printf '%s\n' "$SCRAPER_MEDIA_DEFAULT"
+}
+
+# scraper_media_adds ANTES AGORA: a escolha de agora tem algum tipo de arte
+# que a de antes nao tinha?
+scraper_media_adds() {
+  local t
+  for t in snap logo box marquee preview; do
+    scraper_media_has "$2" "$t" && ! scraper_media_has "$1" "$t" && return 0
+  done
+  return 1
+}
+
+# scraper_media_record CHAVE LISTA junta a lista aos tipos ja buscados da
+# pasta.
+scraper_media_record() {
+  local have t
+  have=$(scraper_media_fetched "$1")
+  for t in snap logo box marquee preview texto; do
+    scraper_media_has "$2" "$t" && ! scraper_media_has "$have" "$t" && have+=",$t"
+  done
+  conf_set "$1" "$have" "$SCRAPER_MEDIA_STATE"
+}
+
+# scraper_media_flags LISTA imprime as flags do Skyscraper: so baixa os tipos
+# marcados.
+scraper_media_flags() {
+  local flags=unattend
+  scraper_media_has "$1" preview && flags+=,videos
+  scraper_media_has "$1" snap || flags+=,noscreenshots
+  scraper_media_has "$1" box || flags+=,nocovers
+  scraper_media_has "$1" logo || flags+=,nowheels
+  scraper_media_has "$1" marquee || flags+=,nomarquees
+  printf '%s\n' "$flags"
+}
+
+# scraper_artwork [LISTA] imprime o artwork.xml do Setup: cada imagem dos
+# tipos marcados como veio (captura, capa, logo, marquee), cada uma na sua
+# pasta. O padrao do Skyscraper monta a captura com a capa e o logo por cima
+# e nao exporta os dois; a lista do GroovyMAME e as telas do Attract-Mode
+# montam sozinhas.
 scraper_artwork() {
-  local file="$SCRAPER_STAGE/artwork.xml"
+  local media=${1:-$SCRAPER_MEDIA_DEFAULT} file="$SCRAPER_STAGE/artwork.xml" pair
   mkdir -p "$SCRAPER_STAGE" || return 1
-  cat > "$file" << 'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<artwork>
-  <output type="screenshot"/>
-  <output type="cover"/>
-  <output type="wheel"/>
-  <output type="marquee"/>
-</artwork>
-XML
+  {
+    printf '<?xml version="1.0" encoding="UTF-8"?>\n<artwork>\n'
+    for pair in snap:screenshot box:cover logo:wheel marquee:marquee; do
+      scraper_media_has "$media" "${pair%%:*}" && printf '  <output type="%s"/>\n' "${pair#*:}"
+    done
+    printf '</artwork>\n'
+  } > "$file"
   chown -R "$FLIPEROS_USER:" "$SCRAPER_STAGE" 2> /dev/null
   chmod 644 "$file"
   printf '%s\n' "$file"
@@ -507,14 +585,18 @@ scraper_files() {
   find "$dir" -maxdepth 1 \( -type f -o -type l \) \( "${args[@]:1}" \) 2> /dev/null | sort
 }
 
-# scraper_run CHAVE PASTA PLATAFORMA FONTE VIDEOS [USUARIO:SENHA] [CLONES]
+# scraper_run CHAVE PASTA PLATAFORMA FONTE MIDIA [USUARIO:SENHA] [CLONES]
 # junta (em lotes, retomando o que ja foi) e gera a lista de uma pasta,
-# falando com a tela por eventos.
+# falando com a tela por eventos. MIDIA: os tipos a buscar
+# (scraper_media_list). Um tipo de arte que a pasta ainda nao tinha faz
+# buscar de novo os jogos que ja estao no cache.
 scraper_run() {
-  local key=$1 dir=$2 platform=$3 source=$4 videos=$5 creds=${6:-} clones=${7:-0}
-  local flags=unattend format name exe cmd args gen input done_file chunk farm list="" files=() todo=() i n from to
+  local key=$1 dir=$2 platform=$3 source=$4 media creds=${6:-} clones=${7:-0} refresh=0
+  local flags format name exe cmd args gen input done_file chunk farm list="" files=() todo=() i n from to
   have "$SKYSCRAPER" || { ev_fail "Skyscraper is not installed"; return 1; }
-  ((videos)) && flags+=,videos
+  media=$(scraper_media_list "$5")
+  flags=$(scraper_media_flags "$media")
+  scraper_media_adds "$(scraper_media_fetched "$key")" "$media" && refresh=1
   format=$(scraper_target "$key")
   # O ES-DE quer o caminho do jogo relativo a pasta do sistema ("./x.zip").
   [[ $format == esde ]] && flags+=,relative
@@ -574,6 +656,7 @@ scraper_run() {
     to=$((5 + 75 * (i + SCRAPER_CHUNK < n ? i + SCRAPER_CHUNK : n) / n))
     local gather=("$SKYSCRAPER" "${args[@]}" -s "$source" --includefrom "$chunk")
     [[ -n $creds ]] && gather+=(-u "$creds")
+    ((refresh)) && gather+=(--refresh)
     if ! scraper_stream "$from" "$to" runuser -u "$FLIPEROS_USER" -- "${gather[@]}"; then
       rm -f "$chunk"
       ev_fail "Skyscraper could not fetch the $platform data"
@@ -583,7 +666,7 @@ scraper_run() {
   done
   rm -f "$chunk"
   ev_step 85 "Building the $(scraper_format_label "$format") game list"
-  gen+=(-a "$(scraper_artwork)")
+  gen+=(-a "$(scraper_artwork "$media")")
   if [[ $format == esde ]]; then
     mkdir -p "$ESDE_DIR/gamelists/${key//\//-}"
     chown -R "$FLIPEROS_USER:" "$ESDE_DIR" 2> /dev/null
@@ -591,7 +674,10 @@ scraper_run() {
   if ! ev_run runuser -u "$FLIPEROS_USER" -- "$SKYSCRAPER" "${args[@]}" "${gen[@]}"; then
     return 1
   fi
-  [[ -n $list ]] && scraper_texts "$list" "$platform"
+  # As descricoes em ~/media/texto, se marcadas (no Attract-Mode quem as
+  # grava e o proprio Skyscraper, junto da lista).
+  [[ -n $list ]] && scraper_media_has "$media" texto && scraper_texts "$list" "$platform"
+  scraper_media_record "$key" "$media"
   # O sistema no ES-DE, com a arte de ~/media (lib/frontends.sh).
   [[ $format == esde ]] && frontends_esde
   ev_step 100 "$platform: done"

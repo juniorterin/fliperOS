@@ -1346,7 +1346,8 @@ class ScraperTests(Base):
         (info / "semnada_libretro.info").write_text('systemid = "tamagotchi"\n')
         return {"ROMS_DIR": str(roms), "RA_INFO_DIR": str(info), "ATTRACT_DIR": str(attract),
                 "RA_CORES_DIR": "/opt/fliperos/retroarch/cores", "FLIPEROS_USER": "ninguem",
-                "MEDIA_DIR": str(self.env.dir / "media"), "ESDE_DIR": str(self.env.dir / "es-de")}, roms, attract
+                "MEDIA_DIR": str(self.env.dir / "media"), "ESDE_DIR": str(self.env.dir / "es-de"),
+                "SCRAPER_MEDIA_STATE": str(self.env.dir / "scraper-media")}, roms, attract
 
     def test_detect_ignores_info_txt_and_finds_retroarch_cores(self):
         # O _info.txt de toda pasta contava como jogo: as vazias entravam e o
@@ -1531,7 +1532,7 @@ class ScraperTests(Base):
             "runuser": '#!/bin/sh\nshift 3\nexec "$@"\n',
             "groovymame": '#!/bin/sh\nprintf "Name:            Clone of:\\n'
                           'mvscu            mvsc\\nmvscj            mvsc\\nsf2ce            sf2\\n"\n',
-            "Skyscraper": '#!/bin/bash\nfor ((i = 1; i <= $#; i++)); do\n'
+            "Skyscraper": '#!/bin/bash\necho "$*" >> "%s.args"\nfor ((i = 1; i <= $#; i++)); do\n' % log +
                           '  [[ ${!i} == --includefrom ]] && { j=$((i + 1)); f=${!j}; }\ndone\n'
                           'if [[ -n $f ]]; then\n  printf "lote:%%s\\n" "$(xargs -n1 basename < "$f" | tr "\\n" " ")" >> "%s"\n'
                           '  [[ -n "%s" ]] && grep -q "%s" "$f" && exit 1\nelse\n  echo gera "$@" >> "%s"\nfi\n'
@@ -1554,6 +1555,65 @@ class ScraperTests(Base):
         self.assertEqual(self.env.out("scraper_job_pending", env), "retroarch/snes9x|/r/snes|snes|1\n")
         self.env.out("scraper_job_done retroarch/snes9x", env)
         self.assertFalse(job.exists())
+
+    def test_media_types_to_fetch(self):
+        # Os tipos marcados na tela viram as flags do Skyscraper (so baixa o
+        # que foi marcado) e o artwork.xml (so exporta o que foi marcado).
+        env, roms, _ = self.scraper_env()
+        env.update({"SCRAPER_STAGE": str(self.env.dir / "stage")})
+        for media, flags in (("snap,logo,box,marquee,texto", "unattend"),
+                             ("snap,logo,box,marquee,texto,preview", "unattend,videos"),
+                             ("snap", "unattend,nocovers,nowheels,nomarquees"),
+                             ("logo,preview", "unattend,videos,noscreenshots,nocovers,nomarquees"),
+                             ("none", "unattend,noscreenshots,nocovers,nowheels,nomarquees")):
+            self.assertEqual(self.env.out("scraper_media_flags %s" % media).strip(), flags, media)
+        options = self.env.out("scraper_media_options").splitlines()
+        self.assertEqual([o.split("|")[0] for o in options], ["snap", "logo", "box", "marquee", "texto", "preview"])
+        # Sem escolha guardada: tudo menos os videos. Um trabalho anotado antes
+        # (videos 0 ou 1) continua valendo.
+        self.assertEqual(self.env.out("scraper_media_saved; scraper_media_list 0; scraper_media_list 1; "
+                                      "scraper_media_list snap,box").split(),
+                         ["snap,logo,box,marquee,texto", "snap,logo,box,marquee,texto",
+                          "snap,logo,box,marquee,texto,preview", "snap,box"])
+        self.env.out("conf_set scraper_media logo,preview")
+        self.assertEqual(self.env.out("scraper_media_saved").strip(), "logo,preview")
+        art = Path(self.env.out("scraper_artwork snap,logo", env).strip()).read_text()
+        self.assertEqual(re.findall(r'<output type="(\w+)"/>', art), ["screenshot", "wheel"])
+        art = Path(self.env.out("scraper_artwork", env).strip()).read_text()
+        self.assertEqual(re.findall(r'<output type="(\w+)"/>', art), ["screenshot", "cover", "wheel", "marquee"])
+        screen = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_scraper() {")[1].split("\n}\n")[0]
+        self.assertIn('media=$(ui_checklist "Scraper: Media"', screen)
+        self.assertIn('conf_set scraper_media "$media"', screen)
+        self.assertNotIn("Download videos too", screen)
+
+    def test_new_media_type_fetches_cached_games_again(self):
+        # O Skyscraper nao volta a um jogo que ja esta no cache: um tipo de
+        # arte que a pasta ainda nao tinha pede o --refresh; o que ela ja tem
+        # fica anotado por pasta.
+        env, roms, _ = self.scraper_env()
+        env.update({"SCRAPER_JOB_DIR": str(self.env.dir / "job"), "SCRAPER_STAGE": str(self.env.dir / "stage")})
+        (self.env.etc / "sessions.conf").write_text("emulationstation|kms|es-de|fliperos-emulationstation|ES-DE\n")
+        (self.env.etc / "session").write_text("emulationstation\n")
+        log = self.fake_tools()
+        args = Path(str(log) + ".args")
+        run = "scraper_job_clear; scraper_run retroarch/snes9x %s/retroarch/snes9x snes screenscraper %%s" % roms
+
+        def gather(media):
+            args.write_text("")
+            self.env.out(run % media, env)
+            return [line for line in args.read_text().splitlines() if "--includefrom" in line][0]
+        first = gather("snap,logo,box,marquee,texto")
+        self.assertIn("--flags unattend,relative ", first)
+        self.assertNotIn("--refresh", first)
+        second = gather("snap,preview")
+        self.assertIn("--flags unattend,videos,nocovers,nowheels,nomarquees,relative ", second)
+        self.assertTrue(second.endswith("--refresh"), second)
+        # Os videos ja estao na pasta: de novo sem o --refresh, mesmo voltando
+        # a marcar um tipo que ela ja teve.
+        self.assertNotIn("--refresh", gather("snap,logo,preview"))
+        state = (self.env.dir / "scraper-media").read_text()
+        self.assertEqual(state, "retroarch/snes9x=snap,logo,box,marquee,texto,preview\n")
+        self.assertEqual(self.env.out("scraper_media_fetched mame", env).strip(), "snap,logo,box,marquee,texto")
 
     def test_batches_resume_and_clones(self):
         env, roms, attract = self.scraper_env()
@@ -1810,6 +1870,45 @@ class RomCleanerTests(Base):
         self.assertEqual(sorted(p.name for p in (self.env.dir / "bios" / "dc").iterdir()),
                          ["awbios.zip", "naomi.zip"])
         self.assertFalse((self.roms / "naomi" / "mslug.zip").exists())
+
+    def test_chd_cleaner_copies_the_chds_of_the_games_in_the_rom_folder(self):
+        self.xml.write_text(self.XML.replace(
+            '</mame>', '<machine name="kinst"><description>Killer Instinct</description><disk name="kinst"/>'
+                       '</machine><machine name="ikaruga" romof="naomi"><description>Ikaruga</description>'
+                       '<disk name="gdl-0010"/></machine></mame>'))
+        chds = self.env.dir / "chds"
+        for folder, name in (("kinst", "kinst.chd"), ("ikaruga", "gdl-0010.chd"), ("area51", "area51.chd")):
+            (chds / folder).mkdir(parents=True)
+            (chds / folder / name).write_bytes(b"c" * 2048)
+        for folder, rom in (("mame", "kinst.zip"), ("mame", "mslug.zip"), ("naomi", "ikaruga.zip")):
+            (self.roms / folder).mkdir(parents=True, exist_ok=True)
+            (self.roms / folder / rom).write_bytes(b"x")
+        script = """
+            plan=%(dir)s/plan
+            s=$(romclean_chd_scan %(chds)s %(target)s "" "$(romclean_default_dest %(target)s)" "$plan")
+            echo "games=$(romclean_value "$s" games) move=$(romclean_value "$s" move) bytes=$(romclean_value "$s" move_bytes)"
+            romclean_list "$plan" move
+            romclean_transfer "$plan" copy | tail -1
+        """
+        mame = self.env.out(script % {"dir": self.env.dir, "chds": chds, "target": "groovymame"},
+                            self.vars).splitlines()
+        self.assertEqual(mame, ["games=1 move=1 bytes=2048", "kinst            Killer Instinct", "@step 100 Done"])
+        self.assertTrue((self.roms / "mame" / "kinst" / "kinst.chd").exists())
+        # No Flycast, para dentro das pastas de Naomi (os jogos de GD-ROM).
+        flycast = self.env.out(script % {"dir": self.env.dir, "chds": chds, "target": "flycast"},
+                               self.vars).splitlines()
+        self.assertEqual(flycast[:2], ["games=1 move=1 bytes=2048", "ikaruga          Ikaruga"])
+        self.assertTrue((self.roms / "naomi" / "ikaruga" / "gdl-0010.chd").exists())
+        self.assertFalse((self.roms / "mame" / "area51").exists())
+        self.assertEqual(self.env.out("romclean_chd_folders flycast /r; romclean_chd_folders groovymame /r/mame",
+                                      self.vars).split(), ["/r/naomi", "/r/naomi2", "/r/mame"])
+        home = {"FLIPEROS_USER": "fliperos"}
+        self.assertEqual(self.env.out("romclean_chd_label flycast /home/fliperos/roms; "
+                                      "romclean_chd_label groovymame /home/fliperos/roms/mame", home).split(),
+                         ["~/roms/{naomi,naomi2}", "~/roms/mame"])
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn('"chdcleaner|MAME CHD Cleaner"', menu)
+        self.assertIn("chdcleaner) screen_chd_cleaner ;;", menu)
 
     def test_the_xml_is_read_once_per_mame_version(self):
         self.scan()

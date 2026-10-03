@@ -36,7 +36,7 @@ screen_rom_cleaner_close() {
 # desta maquina ou numa pasta compartilhada da rede (montada so para
 # leitura). Status 1 = desistiu.
 screen_rom_cleaner_source() {
-  local title="MAME ROM Cleaner" choice start
+  local title=${1:-MAME ROM Cleaner} what=${2:-romset} choice start
   local -a entries
   while true; do
     entries=("local|A folder on this machine (disk, USB drive)")
@@ -45,7 +45,7 @@ screen_rom_cleaner_source() {
     if ((${#entries[@]} == 1)); then
       choice=local
     else
-      choice=$(ui_menu "$title" "Where is the romset?" "" "${entries[@]}") || return 1
+      choice=$(ui_menu "$title" "Where is the $what?" "" "${entries[@]}") || return 1
     fi
     case $choice in
       mounted) start=$NETSHARE_DIR ;;
@@ -58,9 +58,113 @@ screen_rom_cleaner_source() {
         [[ -d $start ]] || start=/
         ;;
     esac
-    ui_browse "$title" "Open the folder with the romset, then Use this folder." "$start" dir && return 0
+    ui_browse "$title" "Open the folder with the $what, then Use this folder." "$start" dir && return 0
     ((${#entries[@]} == 1)) && return 1
   done
+}
+
+# ── MAME CHD Cleaner ──────────────────────────────────────────────
+
+# screen_chd_cleaner: onde estao os CHDs (uma pasta daqui ou da rede, com uma
+# subpasta por jogo), de que emulador sao e, pelos jogos que ja estao na
+# pasta de ROMs dele, a copia so dos CHDs que eles usam (lib/romclean.sh).
+screen_chd_cleaner() {
+  local title="MAME CHD Cleaner" folder target xml="" had=0 options
+  netshare_mounted && had=1
+  folder=$(screen_rom_cleaner_source "$title" "CHD collection") || {
+    screen_rom_cleaner_close "$had"
+    return 0
+  }
+  if [[ -d $folder ]]; then
+    mapfile -t options < <(romclean_targets)
+    if target=$(ui_menu "$title" "Which emulator are these CHDs for? Its ROM folder says which games need one." \
+      "$(romclean_default_target "$folder")" "${options[@]}"); then
+      if [[ $target != file ]] || xml=$(ui_browse "$title" "Choose the XML file (from mame -listxml)." \
+        "$(dirname -- "$folder")" file .xml .xml.xz); then
+        screen_chd_cleaner_run "$folder" "$target" "$xml"
+      fi
+    fi
+  fi
+  screen_rom_cleaner_close "$had"
+}
+
+# screen_chd_cleaner_run ORIGEM ALVO XML: le o XML e a pasta de ROMs, mostra
+# quantos jogos usam CHD, quantos foram achados e o tamanho, e copia (ou
+# move, de uma pasta em que da para gravar).
+screen_chd_cleaner_run() {
+  local folder=$1 target=$2 xml=$3 title="MAME CHD Cleaner" clones=no dest plan list summary rc
+  local games move missing bytes free fields choice result line where action verb past
+  local -a rows entries args
+  dest=$(romclean_default_dest "$target")
+  plan=$(mktemp) list=$(mktemp)
+  while true; do
+    where=$(romclean_chd_label "$target" "$dest")
+    ui_info "$title" "Reading the MAME XML, $where and the CHD folder..." \
+      "The first time with each MAME version takes about a minute."
+    args=()
+    [[ $clones == yes ]] && args=(--clones)
+    summary=$(romclean_chd_scan "$folder" "$target" "$xml" "$dest" "$plan" "${args[@]}" 2> "$list")
+    rc=$?
+    cat "$list" >> "$FLIPEROS_LOG"
+    if ((rc != 0)); then
+      ui_msg "$title" "$(ui_bad "The CHD folder could not be read.")" \
+        "$(grep -v '^[[:space:]]*$' "$list" | tail -n 1 | cut -c1-200)" "" "Details in $FLIPEROS_LOG."
+      break
+    fi
+    games=$(romclean_value "$summary" games)
+    move=$(romclean_value "$summary" move)
+    missing=$(romclean_value "$summary" missing)
+    bytes=$(romclean_value "$summary" move_bytes)
+    free=$(romclean_value "$summary" free_bytes)
+    rows=("CHDs from|$folder" "Games|$games in $where use a CHD"
+      "Found|$move CHD folders, $(human_bytes "$bytes")")
+    ((missing > 0)) && rows+=("Not found|the CHD of $missing games")
+    if ((bytes > free)); then
+      rows+=("Free space|$(ui_bad "$(human_bytes "$free"): not enough")")
+    else
+      rows+=("Free space|$(human_bytes "$free")")
+    fi
+    fields=$(ui_fields "${rows[@]}")
+    entries=()
+    if ((move > 0)); then
+      entries+=("copy|Copy them")
+      [[ -w $folder ]] && entries+=("move|Move them (out of the CHD folder)")
+      entries+=("list|See the list")
+    fi
+    ((missing > 0)) && entries+=("missing|See what was not found")
+    entries+=("clones|CHDs of the clones inside the zips too: $clones" "dest|ROM folder: $where" "cancel|Cancel")
+    ((games == 0)) && fields+=$'\n\n'"No game there uses a CHD. Copy the games first (MAME ROM Cleaner)."
+    choice=$(ui_menu "$title" "$fields" "${entries[0]%%|*}" "${entries[@]}") || break
+    case $choice in
+      list)
+        romclean_list "$plan" move > "$list"
+        ui_pager "$title" "$list" inicio
+        ;;
+      missing)
+        awk -F'\t' '$1 == "missing" { printf "%-16s %s\n", $2, $3 }' "$plan" > "$list"
+        ui_pager "$title" "$list" inicio
+        ;;
+      clones) [[ $clones == yes ]] && clones=no || clones=yes ;;
+      dest) line=$(ui_browse "$title" "Choose the ROM folder the games are in." "$ROMS_ROOT" dir) && dest=$line ;;
+      copy | move)
+        action=$choice verb=Copy past=copied
+        [[ $action == move ]] && verb=Move past=moved
+        if ((bytes > free)) && [[ $action == copy ]]; then
+          ui_msg "$title" "$(ui_bad "Not enough free space for $(human_bytes "$bytes").")"
+          continue
+        fi
+        if run_with_progress "$verb the CHDs" "$where" romclean_transfer "$plan" "$action"; then
+          result=$(cat "$plan.result" 2> /dev/null)
+          ui_msg "$title" "$(romclean_value "$result" "$past") CHD folders $past." \
+            "$(romclean_value "$result" skipped) were already there."
+        fi
+        break
+        ;;
+      *) break ;;
+    esac
+  done
+  rm -f "$plan" "$plan.result" "$list"
+  return 0
 }
 
 # screen_netshare_connect TITULO pergunta o computador, o usuario, a senha e

@@ -14,6 +14,9 @@ deles, os filtros que dependem dele deixam passar tudo.
   fliperos-romclean scan (--xml ARQUIVO|- | --xml-command COMANDO)
                          [--cache ARQUIVO] --roms ORIGEM --dest PASTA
                          --plan PLANO [destinos] [dados] [filtros]
+  fliperos-romclean chds (--xml ARQUIVO|- | --xml-command COMANDO)
+                         [--cache ARQUIVO] --chds ORIGEM --roms PASTA...
+                         --plan PLANO [--clones]
   fliperos-romclean apply PLANO copy|move|delete-rest [--progress]
                           [--result ARQUIVO]
   fliperos-romclean options [dados]
@@ -78,6 +81,15 @@ device_ref, em cadeia). O mesmo vale para os jogos que ja estao no destino:
 a BIOS de um jogo escolhido nunca sobra para apagar. O que nao esta no XML
 fica como esta.
 
+chds (Setup > MAME CHD Cleaner) faz o caminho inverso com os CHDs, que
+costumam vir numa colecao a parte e enorme: olha os jogos que ja estao em
+cada pasta de ROMs (--roms), ve no XML quais usam disco e planeja copiar, da
+pasta dos CHDs (--chds, uma subpasta por jogo), so as deles, para dentro da
+pasta de ROMs onde o jogo esta. O disco de um clone que e o mesmo do pai
+fica na pasta do pai: a cadeia de romof e seguida. Disco sem dump (nodump)
+nao conta. --clones inclui os clones dos jogos presentes (num romset merged
+eles estao dentro do zip do pai). O plano e o do apply.
+
 Os sets do Flycast (Naomi, Naomi 2, Naomi GD-ROM, Atomiswave, System SP: os
 que chegam pelo romof as BIOS naomi, naomi2, naomigd, awbios, segasp e as
 especiais) passam pelos filtros como os outros, mas nunca entram na lista
@@ -106,7 +118,7 @@ MAME2010_URL = ('https://raw.githubusercontent.com/libretro/mame2010-libretro/%s
                 % MAME2010_COMMIT)
 
 # Muda quando o que o read_machines guarda muda: um cache antigo e refeito.
-CACHE_FORMAT = 1
+CACHE_FORMAT = 2
 
 PSX_CPU = re.compile(r'^(PSX CPU|(Sony )?CXD8(530|606|661)[A-Z]*)$')
 SET_EXTENSIONS = ('.zip', '.7z')
@@ -283,6 +295,8 @@ def read_machines(stream):
             'rotate': int(display.get('rotate', '0')) if display is not None else 0,
             'scan': scan_rate(display),
             'disk': el.find('disk') is not None,
+            # Os discos com dump: o CHD de cada um e <nome>.chd.
+            'disks': [d.get('name') for d in el.iter('disk') if d.get('name') and d.get('status') != 'nodump'],
             'cpus': [c.get('name', '') for c in el.iter('chip') if c.get('type') == 'cpu'],
             'devices': [d.get('name', '').lower() for d in el.iter('device_ref')],
             'coins': int(inp.get('coins', '0') or 0) if inp is not None else 0,
@@ -617,6 +631,63 @@ def cmd_scan(args):
     print('free_bytes=%d' % free_bytes(dest))
 
 
+def cmd_chds(args):
+    source = os.path.abspath(args.chds)
+    machines = load_machines(args)
+    annotate(machines, {}, {}, {})
+    try:
+        with os.scandir(source) as entries:
+            available = {e.name.lower(): e.name for e in entries if e.is_dir()}
+    except OSError as e:
+        sys.exit('could not read the CHD folder: %s' % e)
+    folders = [os.path.abspath(f) for f in args.roms]
+    copies, missing, sets, games = {}, [], 0, 0
+    for folder in folders:
+        try:
+            names = {n for n in sets_in(folder) if n in machines}
+        except OSError:
+            continue
+        sets += len(names)
+        if args.clones:
+            names |= {n for n, m in machines.items() if m['cloneof'] in names}
+        for name in sorted(names):
+            m = machines[name]
+            if not m['disks']:
+                continue
+            games += 1
+            # A pasta do proprio jogo e as dos pais, nessa ordem.
+            chain = [n for n in dict.fromkeys([name, m['cloneof']] + m['roots']) if n]
+            lost = []
+            for disk in m['disks']:
+                for owner in chain:
+                    folder_name = available.get(owner)
+                    if folder_name and os.path.isfile(os.path.join(source, folder_name, disk + '.chd')):
+                        copies.setdefault((folder_name, folder), owner)
+                        break
+                else:
+                    lost.append(disk)
+            if lost:
+                missing.append((name, lost))
+    total = 0
+    with open(args.plan, 'w', encoding='utf-8') as out:
+        out.write('# roms\t%s\n# dest\t%s\n' % (source, folders[0]))
+        for (folder_name, folder), owner in sorted(copies.items()):
+            size = size_of(os.path.join(source, folder_name))
+            total += size
+            desc = machines[owner]['description'].replace('\t', ' ').replace('\n', ' ')
+            out.write('move\t%s\t%s\t%d\t%s\t%s\n' % (owner, folder_name, size, desc, folder))
+        for name, lost in missing:
+            desc = machines[name]['description'].replace('\t', ' ').replace('\n', ' ')
+            out.write('missing\t%s\t%s\t0\t%s\t\n' % (name, ','.join(d + '.chd' for d in lost), desc))
+    print('machines=%d' % len(machines))
+    print('sets=%d' % sets)
+    print('games=%d' % games)
+    print('move=%d' % len(copies))
+    print('move_bytes=%d' % total)
+    print('missing=%d' % len(missing))
+    print('free_bytes=%d' % free_bytes(folders[0]))
+
+
 def read_plan(path):
     """(origem, destino, {move|rest: [(arquivo, pasta de destino, bytes)]})."""
     header, files = {}, {'move': [], 'rest': []}
@@ -864,6 +935,15 @@ def main():
     p.add_argument('--only', action='append', default=[])
     p.add_argument('--exclude', action='append', default=[])
     p.set_defaults(func=cmd_scan)
+    p = sub.add_parser('chds')
+    p.add_argument('--xml')
+    p.add_argument('--xml-command')
+    p.add_argument('--cache')
+    p.add_argument('--chds', required=True)
+    p.add_argument('--roms', action='append', required=True)
+    p.add_argument('--plan', required=True)
+    p.add_argument('--clones', action='store_true')
+    p.set_defaults(func=cmd_chds)
     p = sub.add_parser('apply')
     p.add_argument('plan')
     p.add_argument('action', choices=('copy', 'move', 'delete-rest'))

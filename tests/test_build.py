@@ -1487,7 +1487,7 @@ class RomCleanTests(unittest.TestCase):
         cache.write_text('{"format": 0, "machines": {"x": {}}}')
         out = self.romclean('scan', '--cache', str(cache), '--xml-command', 'cat %s' % (self.tmp / 'mame.xml'), *args)
         self.assertIn('move=%s\n' % first['move'], out)
-        self.assertIn('"format":1', cache.read_text()[:40].replace(' ', ''))
+        self.assertIn('"format":2', cache.read_text()[:40].replace(' ', ''))
         # Sem XML nem cache, com um XML vazio e com uma pasta que nao existe:
         # erro em uma linha (a que o Setup mostra), nao um plano vazio.
         for extra, message in (((), 'no MAME XML'), (('--xml-command', 'true'), 'could not read the MAME XML'),
@@ -1519,6 +1519,80 @@ class RomCleanTests(unittest.TestCase):
         (self.dest / 'mslug.zip').write_bytes(b'cortado')
         self.assertIn('copied=1\nskipped=12\nerrors=0\n', self.romclean('apply', plan, 'copy'))
         self.assertEqual((self.dest / 'mslug.zip').read_bytes(), b'x' * 10)
+
+    CHD_XML = ('<mame>'
+               '<machine name="kinst"><description>Killer Instinct</description><disk name="kinst" region="ata"/>'
+               '</machine>'
+               # O clone com o mesmo disco do pai (merge): o CHD esta na pasta do pai.
+               '<machine name="kinst13" cloneof="kinst" romof="kinst"><description>Killer Instinct (v1.3)'
+               '</description><disk name="kinst" merge="kinst" region="ata"/></machine>'
+               # O clone com disco proprio: na pasta dele.
+               '<machine name="kinstp" cloneof="kinst" romof="kinst"><description>Killer Instinct (proto)'
+               '</description><disk name="kinstp" region="ata"/></machine>'
+               '<machine name="area51"><description>Area 51</description><disk name="area51"/></machine>'
+               '<machine name="gdrom" romof="naomigd"><description>GD-ROM game</description>'
+               '<disk name="gdl-0010"/><disk name="pic" status="nodump"/></machine>'
+               '<machine name="naomigd" isbios="yes" romof="naomi"><description>Naomi GD</description></machine>'
+               '<machine name="naomi" isbios="yes"><description>Naomi</description></machine>'
+               '<machine name="nodump"><description>No dump</description><disk name="x" status="nodump"/></machine>'
+               '<machine name="mslug"><description>Metal Slug</description></machine>'
+               '</mame>')
+
+    def chds(self, *flags, roms=('mame',)):
+        base = self.tmp / 'chd'
+        if not base.exists():
+            (base / 'xml').mkdir(parents=True)
+            (base / 'mame.xml').write_text(self.CHD_XML)
+            for folder, chd, size in (('kinst', 'kinst.chd', 300), ('kinstp', 'kinstp.chd', 200),
+                                      ('gdrom', 'gdl-0010.chd', 500), ('outro', 'outro.chd', 900)):
+                (base / 'chds' / folder).mkdir(parents=True)
+                (base / 'chds' / folder / chd).write_bytes(b'c' * size)
+            (base / 'chds' / 'solto.chd').write_bytes(b'x')
+            for folder, sets in (('mame', ('kinst13', 'area51', 'nodump', 'mslug', 'unknown')), ('naomi', ('gdrom',))):
+                (base / folder).mkdir()
+                for name in sets:
+                    (base / folder / (name + '.zip')).write_bytes(b'x')
+        plan = base / 'plan.tsv'
+        args = [a for r in roms for a in ('--roms', str(base / r))]
+        out = self.romclean('chds', '--xml', str(base / 'mame.xml'), '--chds', str(base / 'chds'), *args,
+                            '--plan', str(plan), *flags)
+        rows = [line.split('\t') for line in plan.read_text().splitlines() if not line.startswith('#')]
+        return (dict(line.split('=', 1) for line in out.splitlines()),
+                {r[2]: Path(r[5]).name for r in rows if r[0] == 'move'},
+                {r[1]: r[2] for r in rows if r[0] == 'missing'}, base)
+
+    def test_chds_of_the_games_in_the_rom_folder(self):
+        # So os CHDs dos jogos que estao na pasta de ROMs: o do clone que usa o
+        # disco do pai vem da pasta do pai; disco sem dump nao conta; o que a
+        # colecao nao tem fica na lista do que falta.
+        summary, copies, missing, base = self.chds()
+        self.assertEqual(copies, {'kinst': 'mame'})
+        self.assertEqual(missing, {'area51': 'area51.chd'})
+        self.assertEqual((summary['games'], summary['move'], summary['missing'], summary['move_bytes']),
+                         ('2', '1', '1', '300'))
+        self.assertEqual(summary['sets'], '4')
+        # Os clones dentro do zip do pai (romset merged), se pedido.
+        (base / 'mame' / 'kinst.zip').write_bytes(b'x')
+        summary, copies, _, _ = self.chds('--clones')
+        self.assertEqual(copies, {'kinst': 'mame', 'kinstp': 'mame'})
+        self.assertEqual(self.chds()[1], {'kinst': 'mame'})
+        # Cada pasta de ROMs recebe os CHDs dos jogos dela (as do Flycast).
+        summary, copies, _, _ = self.chds(roms=('mame', 'naomi', 'naomi2'))
+        self.assertEqual(copies, {'kinst': 'mame', 'gdrom': 'naomi'})
+        # O plano e o do apply: copia a pasta, com progresso, e o que ja esta
+        # la fica.
+        out = self.romclean('apply', str(base / 'plan.tsv'), 'copy', '--progress')
+        self.assertIn('copied=2\nskipped=0\nerrors=0\n', out)
+        self.assertEqual((base / 'mame' / 'kinst' / 'kinst.chd').read_bytes(), b'c' * 300)
+        self.assertEqual((base / 'naomi' / 'gdrom' / 'gdl-0010.chd').stat().st_size, 500)
+        self.assertTrue((base / 'chds' / 'kinst' / 'kinst.chd').exists())
+        self.assertFalse((base / 'mame' / 'outro').exists())
+        self.assertIn('copied=0\nskipped=2\n', self.romclean('apply', str(base / 'plan.tsv'), 'copy'))
+        r = subprocess.run(['python3', str(ROOT / 'config/fliperos-romclean'), 'chds', '--xml',
+                            str(base / 'mame.xml'), '--chds', '/nao/existe', '--roms', str(base / 'mame'),
+                            '--plan', str(base / 'p')], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('could not read the CHD folder', r.stderr)
 
     def test_copy_reports_what_failed(self):
         # Um arquivo que nao da para ler (aqui, uma pasta com o nome do zip no

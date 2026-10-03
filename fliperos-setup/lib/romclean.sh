@@ -474,21 +474,66 @@ groovymame_version() {
 # -listxml do GroovyMAME, o do core mame2010 ou o arquivo XML) e escreve o
 # plano; imprime o resumo do fliperos-romclean (chave=valor).
 romclean_scan() {
-  local folder=$1 target=$2 xml=$3 dest=$4 plan=$5 version
+  local folder=$1 target=$2 xml=$3 dest=$4 plan=$5
   local -a source data where
   shift 5
-  case $target in
-    groovymame | flycast)
-      source=(--xml-command "$GROOVYMAME -listxml")
-      version=$(groovymame_version)
-      [[ -n $version ]] && source+=(--cache "$ROMCLEAN_CACHE/romclean-groovymame-$version.json")
-      ;;
-    mame2010) source=(--xml "$MAME2010_XML" --cache "$ROMCLEAN_CACHE/romclean-mame2010.json") ;;
-    *) source=(--xml "$xml") ;;
-  esac
+  mapfile -t source < <(romclean_xml_args "$target" "$xml")
   mapfile -t data < <(romclean_data_args)
   mapfile -t where < <(romclean_target_args "$target" "$dest")
   "$ROMCLEAN" scan "${source[@]}" --roms "$folder" "${where[@]}" --plan "$plan" "${data[@]}" "$@"
+}
+
+# romclean_xml_args ALVO XML imprime as opcoes do XML do alvo, uma por linha:
+# o -listxml do GroovyMAME (com o cache da versao dele), o do core mame2010
+# ou o arquivo escolhido.
+romclean_xml_args() {
+  local version
+  case $1 in
+    groovymame | flycast)
+      printf '%s\n' --xml-command "$GROOVYMAME -listxml"
+      version=$(groovymame_version)
+      [[ -n $version ]] && printf '%s\n' --cache "$ROMCLEAN_CACHE/romclean-groovymame-$version.json"
+      ;;
+    mame2010) printf '%s\n' --xml "$MAME2010_XML" --cache "$ROMCLEAN_CACHE/romclean-mame2010.json" ;;
+    *) printf '%s\n' --xml "$2" ;;
+  esac
+  return 0
+}
+
+# ── CHDs ─────────────────────────────────────────────────────────
+# O MAME CHD Cleaner: os CHDs costumam vir numa colecao a parte, enorme. Ele
+# olha os jogos que ja estao na pasta de ROMs do emulador e copia, da pasta
+# dos CHDs, so os dos jogos que usam disco (fliperos-romclean chds).
+
+# romclean_chd_folders ALVO DESTINO imprime as pastas de ROMs do emulador
+# onde os CHDs entram, uma por linha (no Flycast, as de Naomi e Naomi 2: os
+# jogos de GD-ROM; o Atomiswave nao tem disco).
+romclean_chd_folders() {
+  case $1 in
+    flycast) printf '%s\n' "$2/naomi" "$2/naomi2" ;;
+    *) printf '%s\n' "$2" ;;
+  esac
+}
+
+# romclean_chd_label ALVO DESTINO imprime essas pastas para a tela.
+romclean_chd_label() {
+  local dest=$2 home="/home/$FLIPEROS_USER"
+  [[ $1 == flycast ]] && dest+="/{naomi,naomi2}"
+  printf '%s\n' "${dest//$home\//\~/}"
+}
+
+# romclean_chd_scan ORIGEM ALVO XML DESTINO PLANO [--clones] le o XML do alvo
+# e as pastas de ROMs e escreve o plano dos CHDs a copiar; imprime o resumo
+# (games=, move=, move_bytes=, missing=, free_bytes=).
+romclean_chd_scan() {
+  local folder=$1 target=$2 xml=$3 dest=$4 plan=$5 dir
+  local -a source where=()
+  shift 5
+  mapfile -t source < <(romclean_xml_args "$target" "$xml")
+  while IFS= read -r dir; do
+    where+=(--roms "$dir")
+  done < <(romclean_chd_folders "$target" "$dest")
+  "$ROMCLEAN" chds "${source[@]}" --chds "$folder" "${where[@]}" --plan "$plan" "$@"
 }
 
 # romclean_value RESUMO CHAVE imprime um valor do resumo do scan.
