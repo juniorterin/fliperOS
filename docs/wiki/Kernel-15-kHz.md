@@ -1,0 +1,3 @@
+`fliperos-kernel.sh` baixa o kernel.org **6.18.54**, aplica `patches/kernel-15khz/6.18/` (D0023R, 01 a 09) sobre o `.config` do kernel do próprio Ubuntu 24.04 e gera os `.deb`. Sem assinatura de módulo e sem informação de depuração. Compilar leva horas, então os `.deb` ficam num cache chaveado por versão e hash dos patches (`/output/kernel-cache/<chave>/`): o próximo build reaproveita.
+
+O Switchres (`v2.2.1`, a mesma versão do pacote do GroovyArcade) é compilado com o `grid` e o `geometry`, e gera no build um EDID por preset de monitor mais os dois de super resolução das entradas EDID do boot (`fliperos-rebuild-edids`, o `rebuild_edids` do GroovyArcade). O hook do initramfs leva todos para o initramfs.

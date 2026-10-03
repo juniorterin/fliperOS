@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# As pastas do usuario em ~ (README, secao "Pastas em ~"), cada uma com um
+# As pastas do usuario em ~ (docs/wiki/ROMs.md), cada uma com um
 # _info.txt do que vai nela:
 #   ~/roms    o acervo: uma por emulador e uma por core do RetroArch em
 #             ~/roms/retroarch/<core>. Os cores vem das informacoes que o

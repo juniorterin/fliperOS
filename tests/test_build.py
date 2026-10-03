@@ -2556,7 +2556,7 @@ class ShellErrexitTests(unittest.TestCase):
 
 class LatencyBuildTests(unittest.TestCase):
     """O modo de latencia padrao ja vem na midia e no sistema instalado
-    (README, secao "Latencia")."""
+    (docs/wiki/Latency.md)."""
 
     LIB = (ROOT / 'fliperos-setup/lib/latency.sh').read_text()
 
@@ -3080,6 +3080,74 @@ class PackagingTests(unittest.TestCase):
         table = (ROOT / 'config/fliperos-sessions.conf').read_text()
         for recipe in self.recipe_files():
             self.assertIn(recipe.stem, table)
+
+
+class DocsTests(unittest.TestCase):
+    """O README e o resumo; o detalhe fica nas paginas de docs/wiki, que o
+    tools/wiki-publish.sh publica na wiki do GitHub."""
+    WIKI = ROOT / 'docs/wiki'
+    URL = 'https://github.com/juniorterin/fliperOS/wiki'
+    PAGE = r'[A-Za-z0-9_-]+'
+
+    def pages(self):
+        return {p.stem for p in self.WIKI.glob('*.md')} - {'Home', '_Sidebar'}
+
+    def test_links_between_pages_exist(self):
+        for page in self.WIKI.glob('*.md'):
+            text = page.read_text()
+            for target in re.findall(r'\]\(([^)]+)\)', text):
+                if target.startswith(('https://', 'http://', '#')):
+                    continue
+                # Fora isso, so outra pagina da wiki: la nao ha os arquivos do repositorio.
+                match = re.fullmatch(r'(%s)\.md(#.*)?' % self.PAGE, target)
+                self.assertTrue(match, '%s: link %s' % (page.name, target))
+                self.assertIn(match.group(1), self.pages() | {'Home'}, '%s: link %s' % (page.name, target))
+            # As referencias "secao N" eram do README de uma pagina so.
+            self.assertNotRegex(text, r'se[cç][aã]o \d', page.name)
+
+    def test_every_page_is_in_the_index_and_in_the_sidebar(self):
+        self.assertGreaterEqual(len(self.pages()), 10)
+        for index in ('Home.md', '_Sidebar.md'):
+            listed = set(re.findall(r'\]\((%s)\.md\)' % self.PAGE, (self.WIKI / index).read_text())) - {'Home'}
+            self.assertEqual(listed, self.pages(), index)
+
+    def test_readme_is_the_short_version(self):
+        readme = (ROOT / 'README.md').read_text()
+        self.assertLess(len(readme), 8000)
+        # Leva a cada pagina da wiki, e so a paginas que existem.
+        linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
+        self.assertEqual(linked, self.pages())
+        for needed in ('dd if=fliperos-0.7.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py', 'tools/wiki-publish.sh'):
+            self.assertIn(needed, readme)
+
+    def test_publish_writes_wiki_links(self):
+        # Aqui os links levam o .md (funcionam no repositorio); na wiki, nao.
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(['bash', str(ROOT / 'tools/wiki-publish.sh'), '--to', tmp], check=True,
+                           capture_output=True, timeout=60)
+            out = Path(tmp)
+            self.assertEqual({p.name for p in out.iterdir()}, {p.name for p in self.WIKI.glob('*.md')})
+            home = (out / 'Home.md').read_text()
+            self.assertIn('[Emuladores](Emuladores)', home)
+            self.assertIn('[Fightcade 2](Fightcade-2)', (out / '_Sidebar.md').read_text())
+            for page in out.iterdir():
+                self.assertNotRegex(page.read_text(), r'\]\(%s\.md' % self.PAGE, page.name)
+            # Os enderecos de fora ficam como estao.
+            self.assertIn('(https://github.com/charmbracelet/gum)', home)
+            self.assertIn('tree/main/docs/wiki)', home)
+
+    def test_html_reference_is_built_from_both(self):
+        script = (ROOT / 'tools/render-docs.py').read_text()
+        self.assertIn("root / 'README.md'", script)
+        self.assertIn("'_Sidebar.md'", script)
+        html = (ROOT / 'fliperos-doc.html').read_text()
+        for title in ('Fightcade 2', 'Sistema instalado', 'Build e testes'):
+            self.assertIn('>%s</h1>' % title, html)
+        # Os links entre paginas viram links dentro do arquivo.
+        self.assertIn('href="#Fightcade-2"', html)
+        for page in self.pages():
+            self.assertNotIn('href="%s.md' % page, html)
+            self.assertNotIn('href="%s/%s"' % (self.URL, page), html)
 
 
 class SplashTests(unittest.TestCase):

@@ -6,7 +6,7 @@
 #
 # Sem --mode, o modo vem de /etc/fliperos/emulator-modes.conf (um para
 # monitor de 15 kHz, outro para 25/31 kHz e LCD) ou, fora da tabela,
-# 320x240@60. README, secao "Rodar um programa em 640x240".
+# 320x240@60. docs/wiki/Emuladores.md, "Rodar um programa em 640x240".
 set -euo pipefail
 MODES=${FLIPEROS_MODES:-/etc/fliperos/emulator-modes.conf}
 CONF=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}

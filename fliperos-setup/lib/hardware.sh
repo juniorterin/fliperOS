@@ -2,7 +2,7 @@
 # O que a maquina tem (CPU, memoria, GPU) e se ela esta dentro da
 # recomendacao do modo de baixa latencia (Setup > Latency).
 #
-# A recomendacao e a mesma do README ("Latencia"): o modo de baixa latencia
+# A recomendacao e a mesma do docs/wiki/Latency.md: o modo de baixa latencia
 # liga o frame delay automatico e os preemptive frames do RetroArch, que
 # gastam CPU a cada quadro. O que conta e a CPU; a GPU pesa pouco nas
 # resolucoes de um CRT.

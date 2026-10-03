@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Modos de latencia (Setup > Latency). Documentado no README, secao
-# "Latencia".
+# Modos de latencia (Setup > Latency). Documentado em
+# docs/wiki/Latency.md.
 #
 # standard (padrao, qualquer maquina) e o que o GroovyArcade ja faz, mais o
 # polling de 1 ms do USB:

@@ -311,7 +311,7 @@ EOF
 # O live-config do Debian criaria um usuario padrao no mesmo UID 1000.
 ln -sf /dev/null "$root/etc/systemd/system/live-config.service"
 
-# ── Latencia (README, secao "Latencia") ───────────────────────────
+# ── Latencia (docs/wiki/Latency.md) ───────────────────────────────
 # O modo escolhido em Setup > Latency vale desde o boot.
 install -Dm644 "$src/config/fliperos-latency.service" "$root/etc/systemd/system/fliperos-latency.service"
 mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
