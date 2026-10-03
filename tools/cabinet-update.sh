@@ -138,10 +138,27 @@ fi
 echo "== XML do MAME 2010 (ROM cleaner)"
 /opt/fliperos/bin/fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz || echo "falhou (sem rede?)"
 
-echo "== Acervo em ~/roms"
+echo "== Pastas em ~ (roms, bios, media, config)"
 runuser -u fliperos -- /opt/fliperos/bin/fliperos-roms
-ls -ld /opt/fliperos/roms
+ls -ld /opt/fliperos/roms /opt/fliperos/bios
 echo "pastas de core: $(find /home/fliperos/roms/retroarch -mindepth 1 -maxdepth 1 -type d | wc -l)"
+echo "config: $(find /home/fliperos/config -mindepth 1 -maxdepth 1 -type l -printf '%f ')"
+
+echo "== Arte do Scraper em ~/media"
+(
+  set +eu
+  for f in "$lib"/*.sh; do
+    # shellcheck source=/dev/null
+    . "$f"
+  done
+  # A de antes (~/.mame/scraped, ~/.attract/scraped, <pasta>/media) vai para
+  # ~/media, e o frontend padrao passa a ler de la.
+  scraper_media_migrate
+  frontends_configure "$(launcher_current)"
+  for t in $MEDIA_TYPES; do
+    echo "$t: $(find "$MEDIA_DIR/$t" -mindepth 2 -type f | wc -l) arquivo(s)"
+  done
+)
 systemctl restart smbd 2> /dev/null || true
 udevadm control --reload 2> /dev/null || true
 sed -n 's/^FLIPEROS_CMDLINE=//p' /etc/default/fliperos-boot

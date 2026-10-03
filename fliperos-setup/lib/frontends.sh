@@ -61,10 +61,15 @@ frontends_pegasus() {
   log_info "Pegasus: ${#dirs[@]} pasta(s) de jogos"
 }
 
-# frontends_esde: os sistemas em custom_systems/es_systems.xml e a pasta das
-# ROMs no es_settings.xml.
+# ES-DE: os tipos de arte dele (subpastas de MediaDirectory/<sistema>) e as
+# pastas de ~/media (lib/scraper.sh). O "marquee" do ES-DE e o logo.
+ESDE_MEDIA_LINKS="screenshots:snap videos:preview marquees:logo covers:box"
+
+# frontends_esde: os sistemas em custom_systems/es_systems.xml e, no
+# es_settings.xml, a pasta das ROMs e a da arte (~/media/.es-de, com um
+# link por tipo para ~/media).
 frontends_esde() {
-  local key dir platform name exe args exts n=0 settings
+  local key dir platform name exe args exts n=0 systems=()
   mkdir -p "$ESDE_DIR/custom_systems" "$ESDE_DIR/settings"
   {
     printf '<?xml version="1.0"?>\n<!-- Gerado pelo FliperOS Setup (Frontend). -->\n<systemList>\n'
@@ -76,20 +81,32 @@ frontends_esde() {
       printf '    <command label="%s">%s</command>\n' "$(xml_escape "$name")" \
         "$(xml_escape "$(frontends_esde_command "$exe $args")")"
       printf '    <platform>%s</platform>\n    <theme>%s</theme>\n  </system>\n' "$platform" "$platform"
+      systems+=("${key//\//-}|$platform")
       n=$((n + 1))
     done < <(frontends_systems)
     printf '</systemList>\n'
   } > "$ESDE_DIR/custom_systems/es_systems.xml"
-  settings="$ESDE_DIR/settings/es_settings.xml"
-  if [[ ! -f $settings ]]; then
-    printf '<?xml version="1.0"?>\n<string name="ROMDirectory" value="%s" />\n' "$ROMS_DIR" > "$settings"
-  elif grep -q 'name="ROMDirectory"' "$settings"; then
-    sed -i "s|<string name=\"ROMDirectory\" value=\"[^\"]*\" />|<string name=\"ROMDirectory\" value=\"$ROMS_DIR\" />|" "$settings"
-  else
-    printf '<string name="ROMDirectory" value="%s" />\n' "$ROMS_DIR" >> "$settings"
-  fi
+  for key in "${systems[@]}"; do
+    # shellcheck disable=SC2086 # um par por palavra
+    media_farm "$MEDIA_DIR/.es-de/${key%%|*}" "${key#*|}" $ESDE_MEDIA_LINKS
+  done
+  esde_setting ROMDirectory "$ROMS_DIR"
+  esde_setting MediaDirectory "$MEDIA_DIR/.es-de"
   chown -R "$FLIPEROS_USER:" "$ESDE_DIR" 2> /dev/null
   log_info "ES-DE: $n sistema(s)"
+}
+
+# esde_setting NOME VALOR grava uma opcao de texto no es_settings.xml.
+esde_setting() {
+  local settings="$ESDE_DIR/settings/es_settings.xml" line
+  line="<string name=\"$1\" value=\"$2\" />"
+  if [[ ! -f $settings ]]; then
+    printf '<?xml version="1.0"?>\n%s\n' "$line" > "$settings"
+  elif grep -q "name=\"$1\"" "$settings"; then
+    sed -i "s|<string name=\"$1\" value=\"[^\"]*\" />|$line|" "$settings"
+  else
+    printf '%s\n' "$line" >> "$settings"
+  fi
 }
 
 # frontends_attract: o emulador e a tela de cada pasta no Attract-Mode Plus

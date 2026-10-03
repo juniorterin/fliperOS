@@ -3,15 +3,16 @@
 # (o GroovyArcade tambem o empacota). Duas fases, como o proprio Skyscraper
 # pede: "gather" baixa para o cache, "generate" monta a lista do frontend.
 #
-# A lista vai para onde o frontend le. Com o GroovyMAME de launcher, as
-# imagens da pasta do MAME vao para a lista de jogos dele (scraper_mame_ui).
-# No Attract-Mode Plus (o frontend do
-# repositorio do FliperOS) o Skyscraper precisa do .cfg do emulador em
-# ~/.attract/emulators e escreve a romlist em ~/.attract/romlists e a arte
-# nas pastas das linhas "artwork" desse .cfg; o Setup cria o emulador (com o
-# comando que abre o jogo) e a tela (display) que faltarem, como o efc.sh do
-# GroovyArcade. Para EmulationStation e Pegasus a lista e a arte ficam na
-# propria pasta das ROMs (sem -g/-o o Skyscraper as poria em ~/RetroPie).
+# A arte e os textos vao para ~/media (media_farm, abaixo), de onde todos os
+# frontends leem; a lista vai para onde o frontend a procura. Com o
+# GroovyMAME de launcher, a pasta do MAME so ganha a arte: o mame.ini e o
+# ui.ini ja procuram em ~/media/<tipo>/arcade. No Attract-Mode Plus (o
+# frontend do repositorio do FliperOS) o Skyscraper precisa do .cfg do
+# emulador em ~/.attract/emulators e escreve a romlist em ~/.attract/romlists
+# e a arte nas pastas das linhas "artwork" desse .cfg; o Setup cria o
+# emulador (com o comando que abre o jogo) e a tela (display) que faltarem,
+# como o efc.sh do GroovyArcade. O ES-DE le a lista de
+# ~/ES-DE/gamelists/<sistema> e o Pegasus a da propria pasta das ROMs.
 
 ROMS_DIR=${ROMS_DIR:-/home/fliperos/roms}
 SKYSCRAPER=${SKYSCRAPER:-Skyscraper}
@@ -19,8 +20,168 @@ RA_INFO_DIR=${RA_INFO_DIR:-/opt/fliperos/retroarch/info}
 RA_CORES_DIR=${RA_CORES_DIR:-/opt/fliperos/retroarch/cores}
 ATTRACT_DIR=${ATTRACT_DIR:-/home/fliperos/.attract}
 FLIPEROS_BIN=${FLIPEROS_BIN:-/opt/fliperos/bin}
-# Imagens para a lista de jogos do GroovyMAME (scraper_mame_ui).
+# Onde ficava a arte da lista de jogos do GroovyMAME antes do ~/media
+# (scraper_media_migrate).
 MAME_SCRAPED=${MAME_SCRAPED:-/home/fliperos/.mame/scraped/mame}
+
+# ── Midia ─────────────────────────────────────────────────────────
+# ~/media tem uma pasta por tipo e, dentro, uma por sistema (a plataforma do
+# Skyscraper: arcade, snes, dreamcast...):
+#   snap     capturas da tela       logo     logos (wheel)
+#   preview  videos                 box      capas e flyers
+#   marquee  marquees               texto    descricoes (.txt)
+# O Skyscraper e o ES-DE usam subpastas de nome fixo por sistema
+# (screenshots, covers...): para eles, ~/media/.skyscraper/<sistema> e
+# ~/media/.es-de/<sistema do ES-DE> sao links com esses nomes para as
+# pastas daqui. O Attract-Mode le pelas linhas "artwork" do emulador e o
+# GroovyMAME pelo mame.ini e o ui.ini (config/).
+MEDIA_DIR=${MEDIA_DIR:-/home/fliperos/media}
+MEDIA_TYPES="snap preview logo box marquee texto"
+# subpasta do Skyscraper:tipo
+SCRAPER_MEDIA_LINKS="screenshots:snap videos:preview wheels:logo covers:box marquees:marquee"
+
+# media_system PLATAFORMA cria a pasta do sistema em cada tipo de ~/media.
+media_system() {
+  local t
+  for t in $MEDIA_TYPES; do
+    mkdir -p "$MEDIA_DIR/$t/$1" || return 1
+    chown "$FLIPEROS_USER:" "$MEDIA_DIR" "$MEDIA_DIR/$t" "$MEDIA_DIR/$t/$1" 2> /dev/null
+  done
+  return 0
+}
+
+# media_farm PASTA PLATAFORMA SUBPASTA:TIPO... cria as pastas do sistema
+# (media_system) e, em PASTA (dois niveis abaixo de ~/media), um link
+# relativo por SUBPASTA para a do tipo. Uma SUBPASTA que ja e pasta de
+# verdade fica.
+media_farm() {
+  local farm=$1 platform=$2 pair link
+  shift 2
+  media_system "$platform" || return 1
+  mkdir -p "$farm" || return 1
+  for pair in "$@"; do
+    link="$farm/${pair%%:*}"
+    [[ -d $link && ! -L $link ]] && continue
+    ln -sfn "../../${pair#*:}/$platform" "$link" || return 1
+  done
+  chown -h "$FLIPEROS_USER:" "$MEDIA_DIR" "$(dirname "$farm")" "$farm" "$farm"/* 2> /dev/null
+  return 0
+}
+
+# scraper_media PLATAFORMA imprime a pasta de midia do Skyscraper (-o) para
+# o sistema.
+scraper_media() {
+  local farm="$MEDIA_DIR/.skyscraper/$1"
+  # shellcheck disable=SC2086 # um par por palavra
+  media_farm "$farm" "$1" $SCRAPER_MEDIA_LINKS || return 1
+  printf '%s\n' "$farm"
+}
+
+# media_link_dir LINK PASTA faz de LINK um link para PASTA. Se LINK era uma
+# pasta, o que tem nela vai para PASTA (sem sobrescrever) antes; se sobrar
+# algo, ela fica.
+media_link_dir() {
+  local link=$1 real=$2
+  [[ -L $link ]] && return 0
+  mkdir -p "$real" "$(dirname "$link")" || return 1
+  if [[ -d $link ]]; then
+    find "$link" -mindepth 1 -maxdepth 1 -exec mv -n -t "$real" {} + 2> /dev/null
+    rmdir "$link" 2> /dev/null || return 0
+  fi
+  ln -s "$real" "$link"
+}
+
+# media_move PASTA PLATAFORMA SUBPASTA:TIPO... passa o que tem em
+# PASTA/SUBPASTA para ~/media/TIPO/PLATAFORMA, sem sobrescrever; as pastas
+# que ficarem vazias saem.
+media_move() {
+  local old=$1 platform=$2 pair sub
+  shift 2
+  [[ -d $old && ! -L $old ]] || return 0
+  for pair in "$@"; do
+    sub="$old/${pair%%:*}"
+    [[ -d $sub && ! -L $sub ]] || continue
+    mkdir -p "$MEDIA_DIR/${pair#*:}/$platform" || continue
+    find "$sub" -mindepth 1 -maxdepth 1 -exec mv -n -t "$MEDIA_DIR/${pair#*:}/$platform" {} + 2> /dev/null
+    rmdir "$sub" 2> /dev/null
+    chown -R "$FLIPEROS_USER:" "$MEDIA_DIR/${pair#*:}/$platform" 2> /dev/null
+    log_info "Midia: $sub -> $MEDIA_DIR/${pair#*:}/$platform"
+  done
+  rmdir "$old" 2> /dev/null
+  return 0
+}
+
+# scraper_media_migrate passa para ~/media a arte de antes dele: a da lista
+# do GroovyMAME (~/.mame/scraped/mame), a do Attract-Mode
+# (~/.attract/scraped/<pasta>) e a do EmulationStation e do Pegasus
+# (<pasta das ROMs>/media). As listas antigas apontam para la: o Scraper as
+# refaz do cache. Roda no tools/cabinet-update.sh.
+scraper_media_migrate() {
+  local key dir platform
+  # shellcheck disable=SC2086 # um par por palavra
+  media_move "$MAME_SCRAPED" arcade $SCRAPER_MEDIA_LINKS
+  rm -f "$MAME_SCRAPED/gamelist.xml"
+  rmdir "$MAME_SCRAPED" "$(dirname "$MAME_SCRAPED")" 2> /dev/null
+  while IFS='|' read -r key dir platform _; do
+    # shellcheck disable=SC2086
+    media_move "$dir/media" "$platform" $SCRAPER_MEDIA_LINKS
+    media_move "$ATTRACT_DIR/scraped/${key//\//-}" "$platform" snap:snap video:preview wheel:logo flyer:box \
+      marquee:marquee
+  done < <(scraper_detect)
+  rmdir "$ATTRACT_DIR/scraped" 2> /dev/null
+  return 0
+}
+
+# scraper_texts LISTA PLATAFORMA grava a descricao de cada jogo da lista
+# (gamelist.xml ou metadata.pegasus.txt) em ~/media/texto/PLATAFORMA/<rom>.txt.
+# No Attract-Mode o proprio Skyscraper as grava la (o overview do emulador e
+# um link).
+scraper_texts() {
+  local list=$1 dest="$MEDIA_DIR/texto/$2" n
+  [[ -f $list ]] || return 0
+  mkdir -p "$dest" || return 0
+  n=$(python3 - "$list" "$dest" << 'PY'
+import os, re, sys
+import xml.etree.ElementTree as ET
+
+lst, dest = sys.argv[1], sys.argv[2]
+games = []
+if lst.endswith('.xml'):
+    for g in ET.parse(lst).getroot().iter('game'):
+        games.append((g.findtext('path') or '', g.findtext('desc') or ''))
+else:
+    # Pegasus: "chave: valor", continuacao recuada e " ." entre paragrafos.
+    cur = key = None
+    with open(lst, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            line = line.rstrip('\n')
+            if line[:1] in (' ', '\t'):
+                if cur is not None and key == 'description':
+                    text = line.strip()
+                    cur['description'] += '\n' + ('' if text == '.' else text)
+                continue
+            m = re.match(r'([^:#\s][^:]*):\s?(.*)$', line)
+            key = m.group(1).strip() if m else None
+            if key == 'game':
+                cur = {'file': '', 'description': ''}
+                games.append(cur)
+            elif cur is not None and key in ('file', 'description'):
+                cur[key] = m.group(2)
+    games = [(g['file'], g['description']) for g in games]
+n = 0
+for path, desc in games:
+    desc = desc.strip()
+    if path and desc:
+        name = os.path.splitext(os.path.basename(path))[0]
+        with open(os.path.join(dest, name + '.txt'), 'w', encoding='utf-8') as f:
+            f.write(desc + '\n')
+        n += 1
+print(n)
+PY
+  ) || n=0
+  chown -R "$FLIPEROS_USER:" "$dest" 2> /dev/null
+  log_info "Textos: $n em $dest"
+}
 
 # scraper_platform PASTA: pasta de emulador de ~/roms (fliperos-roms) ->
 # plataforma do Skyscraper. Os consoles do RetroArch vem pelos cores
@@ -135,8 +296,9 @@ scraper_detect() {
 
 # scraper_target CHAVE imprime para onde vai a lista da pasta: a lista de
 # jogos do proprio GroovyMAME (mameui) quando ele e o launcher padrao e a
-# pasta e a do MAME; senao o formato do launcher padrao; sem frontend (o
-# Setup, um emulador, o desktop), o Attract-Mode Plus se estiver instalado.
+# pasta e a do MAME; senao o formato do launcher padrao (o EmulationStation
+# do FliperOS e o ES-DE); sem frontend (o Setup, um emulador, o desktop), o
+# Attract-Mode Plus se estiver instalado.
 scraper_target() {
   local launcher
   launcher=$(launcher_current)
@@ -146,9 +308,9 @@ scraper_target() {
   fi
   case $launcher in
     attractplus) echo attractmode ;;
-    emulationstation) echo emulationstation ;;
+    emulationstation) echo esde ;;
     pegasus) echo pegasus ;;
-    *) launcher_installed attractplus && echo attractmode || echo emulationstation ;;
+    *) launcher_installed attractplus && echo attractmode || echo esde ;;
   esac
 }
 
@@ -157,28 +319,9 @@ scraper_format_label() {
     mameui) echo "GroovyMAME" ;;
     attractmode) echo "Attract-Mode Plus" ;;
     pegasus) echo "Pegasus" ;;
+    esde) echo "ES-DE" ;;
     *) echo "EmulationStation" ;;
   esac
-}
-
-# scraper_mame_ui PASTA poe as imagens do Skyscraper (formato do
-# EmulationStation em PASTA: covers, marquees, wheels, screenshots) na lista
-# de jogos do GroovyMAME: na frente das pastas do ui.ini (capas, marquees,
-# logos) e depois da pasta de capturas do mame.ini (a primeira e onde o F12
-# grava). O que ja estava nessas pastas fica.
-scraper_mame_ui() {
-  local dir=$1 ui pair key sub cur
-  ui="$(dirname "$MAME_INI")/ui.ini"
-  for pair in covers_directory:covers marquees_directory:marquees logos_directory:wheels; do
-    key=${pair%%:*}
-    sub=$dir/${pair#*:}
-    cur=$(ini_get "$ui" "$key" 2> /dev/null) || cur=""
-    [[ ";$cur;" == *";$sub;"* ]] || ini_set "$ui" "$key" "$sub${cur:+;$cur}"
-  done
-  sub=$dir/screenshots
-  cur=$(ini_get "$MAME_INI" snapshot_directory 2> /dev/null) || cur='$HOME/.mame/snap'
-  [[ ";$cur;" == *";$sub;"* ]] || ini_set "$MAME_INI" snapshot_directory "${cur:+$cur;}$sub"
-  return 0
 }
 
 # scraper_attract_emulator CHAVE imprime "nome|executavel|argumentos|extensoes"
@@ -210,27 +353,31 @@ scraper_attract_emulator() {
 
 # scraper_attract_prepare CHAVE PASTA PLATAFORMA cria o que falta no
 # Attract-Mode para a pasta (o .cfg do emulador, a pasta das romlists e a
-# tela) e imprime o nome do emulador. O que ja existe fica como esta.
+# tela) e imprime o nome do emulador. Um .cfg do Setup e refeito (a arte
+# passou para ~/media); um mudado pelo Attract-Mode ou a mao fica.
 scraper_attract_prepare() {
-  local key=$1 dir=$2 platform=$3 name exe args exts media cfg acfg t
+  local key=$1 dir=$2 platform=$3 name exe args exts media cfg acfg
   IFS='|' read -r name exe args exts <<< "$(scraper_attract_emulator "$key")"
   [[ -n $name ]] || return 1
-  media="$ATTRACT_DIR/scraped/${key//\//-}"
+  media=$MEDIA_DIR
   cfg="$ATTRACT_DIR/emulators/$name.cfg"
-  mkdir -p "$ATTRACT_DIR/emulators" "$ATTRACT_DIR/romlists" "$media" || return 1
-  if [[ ! -f $cfg ]]; then
+  mkdir -p "$ATTRACT_DIR/emulators" "$ATTRACT_DIR/romlists" || return 1
+  media_system "$platform" || return 1
+  if [[ ! -f $cfg ]] || head -1 "$cfg" | grep -q '^# Criado pelo FliperOS Setup'; then
     {
       printf '# Criado pelo FliperOS Setup (Scraper).\n'
       printf '%-20s %s\n' executable "$exe" args "$args" workdir "\$HOME" rompath "$dir/" romext "$exts" \
         system "$platform"
-      for t in flyer marquee wheel; do
-        printf 'artwork    %-15s %s\n' "$t" "$media/$t"
-      done
+      printf 'artwork    %-15s %s\n' flyer "$media/box/$platform" marquee "$media/marquee/$platform" \
+        wheel "$media/logo/$platform"
       # Video junto da captura, como no efc.sh: o Skyscraper acha a pasta
       # do video na linha do snap.
-      printf 'artwork    %-15s %s\n' snap "$media/snap;$media/video"
+      printf 'artwork    %-15s %s\n' snap "$media/snap/$platform;$media/preview/$platform"
     } > "$cfg"
   fi
+  # A descricao de cada jogo: o Skyscraper a grava (e o Attract-Mode a le) em
+  # scraper/<emulador>/overview, um link para ~/media/texto.
+  media_link_dir "$ATTRACT_DIR/scraper/$name/overview" "$MEDIA_DIR/texto/$platform"
   # Uma tela por emulador, com o tema AdvanceMenu (legivel em 640x240).
   acfg="$ATTRACT_DIR/attract.cfg"
   if ! awk -v n="$name" '$1 == "romlist" { sub(/^[ \t]*romlist[ \t]+/, ""); if ($0 == n) f = 1 } END { exit !f }' \
@@ -357,15 +504,21 @@ scraper_files() {
 # falando com a tela por eventos.
 scraper_run() {
   local key=$1 dir=$2 platform=$3 source=$4 videos=$5 creds=${6:-} clones=${7:-0}
-  local flags=unattend format name args gen input done_file chunk files=() todo=() i n from to
+  local flags=unattend format name exe cmd args gen input done_file chunk farm list="" files=() todo=() i n from to
   have "$SKYSCRAPER" || { ev_fail "Skyscraper is not installed"; return 1; }
   ((videos)) && flags+=,videos
   format=$(scraper_target "$key")
+  # O ES-DE quer o caminho do jogo relativo a pasta do sistema ("./x.zip").
+  [[ $format == esde ]] && flags+=,relative
   input=$dir
   if [[ $key == mame && $clones == 1 && $format =~ ^(mameui|attractmode)$ ]]; then
     ev_msg "Looking for the clones of the games found"
     input=$(scraper_clones_input "$dir") || { ev_fail "Could not list the MAME clones"; return 1; }
   fi
+  # A arte da pasta que ficou de antes do ~/media vai para la primeiro.
+  # shellcheck disable=SC2086 # um par por palavra
+  media_move "$dir/media" "$platform" $SCRAPER_MEDIA_LINKS
+  farm=$(scraper_media "$platform") || { ev_fail "Could not create the folders in $MEDIA_DIR"; return 1; }
   args=(-p "$platform" -i "$input" --flags "$flags")
   case $format in
     attractmode)
@@ -373,14 +526,24 @@ scraper_run() {
         { ev_fail "Attract-Mode has no emulator for $key"; return 1; }
       gen=(-f attractmode -e "$name")
       ;;
-    mameui) gen=(-f emulationstation -g "$MAME_SCRAPED" -o "$MAME_SCRAPED") ;;
+    # A lista do GroovyMAME e a do proprio MAME: do gamelist.xml so saem os
+    # textos.
+    mameui)
+      gen=(-f emulationstation -g "$farm" -o "$farm")
+      list="$farm/gamelist.xml"
+      ;;
+    esde)
+      gen=(-f esde -g "$ESDE_DIR/gamelists/${key//\//-}" -o "$farm")
+      list="$ESDE_DIR/gamelists/${key//\//-}/gamelist.xml"
+      ;;
     pegasus)
       # O metadata.pegasus.txt que o Skyscraper grava leva o comando da
       # pasta (lib/frontends.sh), senao o Pegasus lista e nao abre.
-      IFS='|' read -r _ exe args _ <<< "$(scraper_attract_emulator "$key")"
-      gen=(-f pegasus -g "$dir" -o "$dir/media" -e "$(frontends_pegasus_launch "$exe $args")")
+      IFS='|' read -r _ exe cmd _ <<< "$(scraper_attract_emulator "$key")"
+      gen=(-f pegasus -g "$dir" -o "$farm" -e "$(frontends_pegasus_launch "$exe $cmd")")
+      list="$dir/metadata.pegasus.txt"
       ;;
-    *) gen=(-f "$format" -g "$dir" -o "$dir/media") ;;
+    *) gen=(-f "$format" -g "$dir" -o "$farm") ;;
   esac
   # O que ainda nao esta no cache, em lotes; cada lote gravado fica anotado.
   mkdir -p "$SCRAPER_JOB_DIR"
@@ -413,10 +576,16 @@ scraper_run() {
   rm -f "$chunk"
   ev_step 85 "Building the $(scraper_format_label "$format") game list"
   gen+=(-a "$(scraper_artwork)")
+  if [[ $format == esde ]]; then
+    mkdir -p "$ESDE_DIR/gamelists/${key//\//-}"
+    chown -R "$FLIPEROS_USER:" "$ESDE_DIR" 2> /dev/null
+  fi
   if ! ev_run runuser -u "$FLIPEROS_USER" -- "$SKYSCRAPER" "${args[@]}" "${gen[@]}"; then
     return 1
   fi
-  [[ $format == mameui ]] && scraper_mame_ui "$MAME_SCRAPED"
+  [[ -n $list ]] && scraper_texts "$list" "$platform"
+  # O sistema no ES-DE, com a arte de ~/media (lib/frontends.sh).
+  [[ $format == esde ]] && frontends_esde
   ev_step 100 "$platform: done"
 }
 

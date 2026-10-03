@@ -829,14 +829,48 @@ class RomFoldersTests(unittest.TestCase):
                              '(.smc .sfc .swc .fig .bs .st)\n')
             self.assertEqual((roms / 'retroarch/mpv/_info.txt').read_text(), 'RetroArch, core mpv: Video (MPV)\n')
 
+    def test_bios_media_and_config_folders(self):
+        # Ao lado de ~/roms: ~/bios (com as subpastas dos emuladores), ~/media
+        # (um tipo por pasta) e ~/config (links para o que ja existe).
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            for d in ('.config/retroarch', '.config/flycast', 'etc/mame', 'ES-DE'):
+                (home / d).mkdir(parents=True)
+            # Uma pasta bios do PCSX2 com a BIOS dentro vira link para ~/bios/ps2.
+            (home / '.config/PCSX2/bios').mkdir(parents=True)
+            (home / '.config/PCSX2/bios/scph39001.bin').write_text('bios')
+            env = dict(os.environ, HOME=str(home), FLIPEROS_CORE_INFO=str(home / 'nada'),
+                       FLIPEROS_ETC=str(home / 'etc'))
+            for _ in range(2):
+                subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            for d in ('bios', 'bios/dc', 'bios/ps2', 'bios/mame', 'media', 'media/snap', 'media/preview',
+                      'media/logo', 'media/box', 'media/marquee', 'media/texto', 'config'):
+                self.assertTrue((home / d / '_info.txt').is_file(), d)
+            self.assertTrue((home / '.config/PCSX2/bios').is_symlink())
+            self.assertEqual((home / 'bios/ps2/scph39001.bin').read_text(), 'bios')
+            links = {p.name: os.readlink(p) for p in (home / 'config').iterdir() if p.is_symlink()}
+            # So o que existe (o OpenBOR, o Dolphin... ainda nao criaram a sua).
+            self.assertEqual(links, {'retroarch': str(home / '.config/retroarch'),
+                                     'flycast': str(home / '.config/flycast'),
+                                     'pcsx2': str(home / '.config/PCSX2'), 'groovymame': str(home / 'etc/mame'),
+                                     'es-de': str(home / 'ES-DE')})
+            # O programa saiu: o link sem destino vai embora no login seguinte.
+            (home / 'ES-DE').rmdir()
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertFalse((home / 'config/es-de').is_symlink())
+
     def test_emulators_point_there(self):
         self.assertIn('rgui_browser_directory = "/home/fliperos/roms"', (ROOT / 'config/retroarch.cfg').read_text())
+        self.assertIn('system_directory = "/home/fliperos/bios"', (ROOT / 'config/retroarch.cfg').read_text())
         self.assertIn('rompath /home/fliperos/roms/mame', (ROOT / 'config/mame.ini').read_text())
-        self.assertIn('Dreamcast.ContentPath = /home/fliperos/roms/dreamcast',
-                      (ROOT / 'config/flycast-emu.cfg').read_text())
+        flycast = (ROOT / 'config/flycast-emu.cfg').read_text()
+        self.assertIn('Dreamcast.ContentPath = /home/fliperos/roms/dreamcast', flycast)
+        self.assertIn('Dreamcast.BiosPath = /home/fliperos/bios/dc', flycast)
+        self.assertIn('FLYCAST_BIOS_PATH=', (ROOT / 'config/fliperos-x11-run').read_text())
         smb = (ROOT / 'config/smb.conf').read_text()
-        self.assertIn('[roms]\n', smb)
-        self.assertIn('path = /home/fliperos/roms', smb)
+        for share in ('roms', 'bios', 'media', 'config'):
+            self.assertIn('[%s]\n' % share, smb)
+            self.assertIn('path = /home/fliperos/%s\n' % share, smb)
         self.assertIn('wide links = yes', smb)
 
     def test_flycast_player_2_has_a_controller(self):
@@ -853,11 +887,42 @@ class RomFoldersTests(unittest.TestCase):
             (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
             (root / 'opt/fliperos/roms/mame/sf2.zip').write_text('rom')
             (root / 'opt/fliperos/roms/ps2/game.iso').write_text('iso')
-            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
-                           capture_output=True, timeout=120)
+            # A BIOS de /opt/fliperos/bios vai junto para ~/bios.
+            (root / 'opt/fliperos/bios').mkdir(parents=True)
+            (root / 'opt/fliperos/bios/scph5501.bin').write_text('bios')
+            # Num mame.ini/ui.ini de antes, as pastas de ~/bios e ~/media entram
+            # na lista que ja existe; as do Scraper antigo saem.
+            mame = root / 'etc/fliperos/mame'
+            mame.mkdir(parents=True)
+            (mame / 'mame.ini').write_text(
+                'rompath                   /home/fliperos/roms/mame;/mnt/pendrive\n'
+                'snapshot_directory        $HOME/.mame/snap;/home/fliperos/.mame/scraped/mame/screenshots\n'
+                'samplepath                /home/fliperos/roms/mame/samples\n')
+            (mame / 'ui.ini').write_text('covers_directory          /home/fliperos/.mame/scraped/mame/covers;covers\n'
+                                         'logos_directory           logo\n')
+            # Um emu.cfg do Flycast de antes ganha a pasta da BIOS.
+            (root / 'home/fliperos/.config/flycast').mkdir(parents=True)
+            (root / 'home/fliperos/.config/flycast/emu.cfg').write_text('[config]\nrend.Resolution = 480\n')
+            for _ in range(2):
+                subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                               capture_output=True, timeout=120)
             self.assertEqual((root / 'home/fliperos/roms/mame/sf2.zip').read_text(), 'rom')
             self.assertEqual((root / 'home/fliperos/roms/ps2/game.iso').read_text(), 'iso')
             self.assertEqual(os.readlink(root / 'opt/fliperos/roms'), '/home/fliperos/roms')
+            self.assertEqual((root / 'home/fliperos/bios/scph5501.bin').read_text(), 'bios')
+            self.assertEqual(os.readlink(root / 'opt/fliperos/bios'), '/home/fliperos/bios')
+            ini = (mame / 'mame.ini').read_text()
+            self.assertIn('rompath                   /home/fliperos/roms/mame;/mnt/pendrive;/home/fliperos/bios/mame\n',
+                          ini)
+            self.assertIn('snapshot_directory        $HOME/.mame/snap;/home/fliperos/media/snap/arcade\n', ini)
+            self.assertIn('samplepath                /home/fliperos/roms/mame/samples\n', ini)
+            ui = (mame / 'ui.ini').read_text()
+            self.assertIn('covers_directory          covers;/home/fliperos/media/box/arcade\n', ui)
+            self.assertIn('logos_directory           logo;/home/fliperos/media/logo/arcade\n', ui)
+            self.assertIn('marquees_directory        /home/fliperos/media/marquee/arcade\n', ui)
+            self.assertEqual(ui.count('covers_directory'), 1)
+            self.assertIn('Dreamcast.BiosPath = /home/fliperos/bios/dc',
+                          (root / 'home/fliperos/.config/flycast/emu.cfg').read_text())
 
 
 class GroovyMameTests(unittest.TestCase):
@@ -940,7 +1005,8 @@ class GroovyMameTests(unittest.TestCase):
                            capture_output=True, text=True, timeout=60, check=True)
             text = out.read_text()
             self.assertTrue(text.startswith('#\n# CORE SEARCH PATH OPTIONS\n#\n'))
-            for line in ('homepath                  $HOME/.mame', 'rompath                   /home/fliperos/roms/mame',
+            for line in ('homepath                  $HOME/.mame',
+                         'rompath                   /home/fliperos/roms/mame;/home/fliperos/bios/mame',
                          'inipath                   %s' % out.parent, 'monitor                   arcade_15',
                          'modesetting               1', 'lowlatency                1', 'filter                    1',
                          'plugin                    hiscore', 'uifont                    uismall.bdf'):
@@ -1003,8 +1069,12 @@ class GroovyMameTests(unittest.TestCase):
             self.assertEqual(ini[key], value, key)
         self.assertEqual(ini['homepath'], '$HOME/.mame')
         self.assertEqual(ini['cfg_directory'], '$HOME/.mame/cfg')
-        self.assertEqual(ini['rompath'], '/home/fliperos/roms/mame')
+        self.assertEqual(ini['rompath'], '/home/fliperos/roms/mame;/home/fliperos/bios/mame')
+        self.assertEqual(ini['snapshot_directory'], '$HOME/.mame/snap;/home/fliperos/media/snap/arcade')
         ui = self.ini('mame-ui.ini')
+        for key, kind in (('covers_directory', 'box'), ('flyers_directory', 'box'),
+                          ('marquees_directory', 'marquee'), ('logos_directory', 'logo')):
+            self.assertEqual(ui[key], '/home/fliperos/media/%s/arcade' % kind, key)
         # 20 e o minimo do MAME (20-40): o 19 do GroovyArcade e descartado.
         self.assertEqual((ui['font_rows'], ui['infos_text_size']), ('20', '1.00'))
 
@@ -1690,8 +1760,11 @@ class DraculaThemeTests(unittest.TestCase):
         self.assertEqual(len({key for key, _ in colors}), 16)
         for key, value in colors:
             self.assertRegex(value, r'^[0-9a-f]{8}$', key)
-        # Fora as cores, so o tamanho do texto do GroovyArcade.
-        self.assertEqual({key for key, _ in rows} - {key for key, _ in colors}, {'font_rows', 'infos_text_size'})
+        # Fora as cores, so o tamanho do texto do GroovyArcade e as pastas da
+        # arte em ~/media.
+        self.assertEqual({key for key, _ in rows} - {key for key, _ in colors},
+                         {'font_rows', 'infos_text_size', 'covers_directory', 'flyers_directory',
+                          'marquees_directory', 'logos_directory'})
         self.assertIn('config/mame-ui.ini', ROOTFS)
         self.assertIn('etc/fliperos/mame/ui.ini', ROOTFS)
 

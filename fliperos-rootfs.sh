@@ -115,6 +115,34 @@ for ini in mame.ini:mame.ini ui.ini:mame-ui.ini; do
   while read -r key value; do
     grep -qE "^${key}[[:space:]]" "$target" || printf '%-25s %s\n' "$key" "$value" >> "$target"
   done < <(grep -vE '^[[:space:]]*(#|$)' "$src/config/${ini#*:}")
+  # As pastas de procura do config/ (a BIOS em ~/bios/mame, a arte em
+  # ~/media/<tipo>/arcade) entram tambem na lista de uma chave que ja existe,
+  # sem tirar as que estao la; as de ~/.mame/scraped (o Scraper de antes do
+  # ~/media) saem.
+  while read -r key value; do
+    case $key in
+      rompath | snapshot_directory | covers_directory | flyers_directory | marquees_directory | logos_directory) ;;
+      *) continue ;;
+    esac
+    awk -v k="$key" -v want="$value" '
+      $1 == k && !done {
+        cur = $0
+        sub(/^[[:space:]]*[^[:space:]]+[[:space:]]*/, "", cur)
+        n = split(cur, have, ";")
+        out = ""
+        for (i = 1; i <= n; i++) {
+          if (have[i] == "" || have[i] ~ /\/\.mame\/scraped\//) continue
+          out = out (out == "" ? "" : ";") have[i]
+          seen[have[i]] = 1
+        }
+        m = split(want, add, ";")
+        for (i = 1; i <= m; i++) if (!(add[i] in seen)) out = out (out == "" ? "" : ";") add[i]
+        printf "%-25s %s\n", k, out
+        done = 1
+        next
+      }
+      { print }' "$target" > "$target.new" && mv -f "$target.new" "$target"
+  done < <(grep -vE '^[[:space:]]*(#|$)' "$src/config/${ini#*:}")
 done
 # O modesetting 0 de antes (o GroovyMAME no KMS) no X nao troca o modo do
 # jogo: passa para o 1 do config/mame.ini.
@@ -301,22 +329,29 @@ EOF
     done
     rmdir "$from" 2> /dev/null || true
   }
-  old_roms="$root/opt/fliperos/roms"
-  mkdir -p "$home/roms"
-  if [[ -d $old_roms && ! -L $old_roms ]]; then
-    roms_merge "$old_roms" "$home/roms"
-  fi
-  if [[ ! -e $old_roms && ! -L $old_roms ]]; then
-    mkdir -p "$(dirname "$old_roms")"
-    ln -s /home/fliperos/roms "$old_roms"
-  elif [[ ! -L $old_roms ]]; then
-    echo "aviso: $old_roms tem arquivos que tambem existem em ~/roms; nada foi apagado" >&2
-  fi
-  chown 1000:1000 "$home/roms" 2> /dev/null || true
+  # O mesmo com a BIOS: ~/bios e o system_directory do RetroArch.
+  for dir in roms bios; do
+    old="$root/opt/fliperos/$dir"
+    mkdir -p "$home/$dir"
+    if [[ -d $old && ! -L $old ]]; then
+      roms_merge "$old" "$home/$dir"
+    fi
+    if [[ ! -e $old && ! -L $old ]]; then
+      mkdir -p "$(dirname "$old")"
+      ln -s "/home/fliperos/$dir" "$old"
+    elif [[ ! -L $old ]]; then
+      echo "aviso: $old tem arquivos que tambem existem em ~/$dir; nada foi apagado" >&2
+    fi
+    chown 1000:1000 "$home/$dir" 2> /dev/null || true
+  done
   # Flycast: o jogador 2 (porta B) com controle, que o padrao deixa sem, e as
   # ROMs em ~/roms/dreamcast. So na primeira vez: depois o arquivo e dele.
   if [[ ! -f $home/.config/flycast/emu.cfg ]]; then
     install -Dm644 "$src/config/flycast-emu.cfg" "$home/.config/flycast/emu.cfg"
+  fi
+  # A BIOS em ~/bios/dc (fliperos-roms), tambem num emu.cfg de antes dela.
+  if ! grep -q '^Dreamcast.BiosPath' "$home/.config/flycast/emu.cfg"; then
+    bash "$src/config/fliperos-ini-set" "$home/.config/flycast/emu.cfg" config Dreamcast.BiosPath /home/fliperos/bios/dc
   fi
   chown -R 1000:1000 "$home/.config/flycast" 2> /dev/null || true
   # GroovyMAME: o que ele grava vai para ~/.mame (config/mame.ini). Antes ia
@@ -325,8 +360,11 @@ EOF
   # snapd.
   mkdir -p "$home/.mame"
   for dir in cfg nvram sta inp diff comments hiscore; do
-    if [[ -d $home/$dir && ! -e $home/.mame/$dir ]]; then
+    if [[ -d $home/$dir && ! -L $home/$dir && ! -e $home/.mame/$dir ]]; then
       mv "$home/$dir" "$home/.mame/$dir"
+    elif [[ -d $home/$dir && ! -L $home/$dir && -d $home/.mame/$dir ]]; then
+      # As duas: o que nao existe em ~/.mame vai; o resto fica.
+      roms_merge "$home/$dir" "$home/.mame/$dir"
     fi
   done
   chown -R 1000:1000 "$home/.mame" 2> /dev/null || true

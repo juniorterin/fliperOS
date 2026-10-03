@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
-# Pastas do acervo em ~/roms (README, secao "ROMs"): uma por emulador e uma
-# por core do RetroArch em ~/roms/retroarch/<core>, cada uma com um
-# _info.txt do que vai nela. Os cores vem das informacoes que o proprio
-# RetroArch usa (/opt/fliperos/retroarch/info): um core novo do Online
-# Updater ganha pasta no login seguinte. So cria o que falta; roda a cada
-# login (fliperos-tty1) e no build da imagem.
+# As pastas do usuario em ~ (README, secao "Pastas em ~"), cada uma com um
+# _info.txt do que vai nela:
+#   ~/roms    o acervo: uma por emulador e uma por core do RetroArch em
+#             ~/roms/retroarch/<core>. Os cores vem das informacoes que o
+#             proprio RetroArch usa (/opt/fliperos/retroarch/info): um core
+#             novo do Online Updater ganha pasta no login seguinte.
+#   ~/bios    a pasta "system" do RetroArch e uma subpasta por emulador que
+#             procura em outro lugar.
+#   ~/media   a arte e os textos dos frontends (lib/scraper.sh do Setup).
+#   ~/config  links para as configuracoes de cada emulador e frontend
+#             instalado (os que ja criaram a sua).
+# So cria o que falta; roda a cada login (fliperos-tty1) e no build da imagem.
 set -u
 roms=${FLIPEROS_ROMS:-$HOME/roms}
+bios=${FLIPEROS_BIOS:-$HOME/bios}
+media=${FLIPEROS_MEDIA:-$HOME/media}
+config=${FLIPEROS_CONFIG_LINKS:-$HOME/config}
 info=${FLIPEROS_CORE_INFO:-/opt/fliperos/retroarch/info}
+etc=${FLIPEROS_ETC:-/etc/fliperos}
 mkdir -p "$roms/retroarch" 2> /dev/null || exit 0
 
 # folder PASTA TEXTO
@@ -18,8 +28,8 @@ folder() {
 }
 
 folder "$roms/mame" "GroovyMAME: ROM sets (.zip/.7z, without unzipping) and CHD folders."
-folder "$roms/ps2" "PCSX2 (PlayStation 2): .iso .chd .cso .bin/.cue. The BIOS goes in ~/.config/PCSX2/bios."
-folder "$roms/dreamcast" "Flycast: Dreamcast (.gdi .cdi .chd) and Naomi/Atomiswave (.zip). BIOS in ~/.local/share/flycast."
+folder "$roms/ps2" "PCSX2 (PlayStation 2): .iso .chd .cso .bin/.cue. The BIOS goes in ~/bios/ps2."
+folder "$roms/dreamcast" "Flycast: Dreamcast (.gdi .cdi .chd) and Naomi/Atomiswave (.zip). BIOS in ~/bios/dc."
 folder "$roms/model3" "Supermodel (Sega Model 3): MAME .zip sets."
 folder "$roms/dolphin" "Dolphin: GameCube and Wii (.iso .gcm .rvz .wbfs .ciso)."
 folder "$roms/openbor/Paks" "OpenBOR: .pak games."
@@ -41,4 +51,67 @@ done < <(awk -F' = ' '
   $1 == "display_name" { name = $2; gsub(/"/, "", name) }
   $1 == "supported_extensions" { ext = $2; gsub(/"/, "", ext); if (ext != "") { gsub(/\|/, " .", ext); ext = "." ext } }
   END { if (core != "") print core "|" name "|" ext }' "$info"/*_libretro.info 2> /dev/null)
+
+# ── ~/bios ──────────────────────────────────────────────────────────
+# A propria ~/bios e o system_directory do RetroArch (config/retroarch.cfg):
+# os arquivos soltos nela, e as subpastas que os cores procuram (dc/ do
+# Flycast). O Flycast le a dc (Dreamcast.BiosPath), o GroovyMAME a mame
+# (rompath, config/mame.ini) e o PCSX2 a ps2 (a pasta bios dele e um link).
+folder "$bios" "BIOS. RetroArch reads the files placed right here (its system folder) and the subfolders its cores use; the other emulators read their own subfolder."
+folder "$bios/dc" "Flycast and the RetroArch Flycast core: dc_boot.bin, dc_flash.bin, naomi.zip, naomi2.zip, awbios.zip..."
+folder "$bios/ps2" "PCSX2: the PlayStation 2 BIOS (.bin)."
+folder "$bios/mame" "GroovyMAME: BIOS and device sets (neogeo.zip, qsound.zip...). They also work from ~/roms/mame."
+
+# link_dir LINK PASTA faz de LINK um link para PASTA. Se LINK era uma pasta,
+# o que tem nela vai para PASTA (sem sobrescrever) antes; se sobrar algo,
+# ela fica como esta.
+link_dir() {
+  [[ -L $1 ]] && return 0
+  mkdir -p "$2" "$(dirname "$1")" 2> /dev/null || return 0
+  if [[ -d $1 ]]; then
+    find "$1" -mindepth 1 -maxdepth 1 -exec mv -n -t "$2" {} + 2> /dev/null
+    rmdir "$1" 2> /dev/null || return 0
+  fi
+  ln -s "$2" "$1" 2> /dev/null
+  return 0
+}
+if command -v pcsx2 > /dev/null 2>&1 || [[ -d $HOME/.config/PCSX2 ]]; then
+  link_dir "$HOME/.config/PCSX2/bios" "$bios/ps2"
+fi
+
+# ── ~/media ─────────────────────────────────────────────────────────
+folder "$media" "Art and texts of the frontends, one folder per type and, inside it, one per system (arcade, snes, dreamcast...). Setup > Scraper saves here; Attract-Mode, ES-DE, Pegasus and the GroovyMAME game list read from here."
+folder "$media/snap" "Screenshots (.png), one folder per system: snap/arcade/sf2.png"
+folder "$media/preview" "Videos (.mp4), one folder per system: preview/arcade/sf2.mp4"
+folder "$media/logo" "Logos (wheel art, .png), one folder per system: logo/arcade/sf2.png"
+folder "$media/box" "Box art and flyers (.png), one folder per system: box/arcade/sf2.png"
+folder "$media/marquee" "Marquees (.png), one folder per system: marquee/arcade/sf2.png"
+folder "$media/texto" "Game descriptions (.txt), one folder per system: texto/arcade/sf2.txt"
+
+# ── ~/config ────────────────────────────────────────────────────────
+folder "$config" "Shortcuts to the settings of each installed emulator and frontend. They appear at login once the program has created its settings; a deleted one comes back."
+# cfglink NOME ALVO: o link, se o ALVO existe; um link nosso que ficou sem
+# alvo (o programa saiu) vai embora.
+cfglink() {
+  local link="$config/$1"
+  if [[ -e $2 ]]; then
+    [[ -e $link || -L $link ]] || ln -s "$2" "$link" 2> /dev/null
+  elif [[ -L $link && ! -e $link ]]; then
+    rm -f "$link"
+  fi
+  return 0
+}
+cfglink retroarch "$HOME/.config/retroarch"
+cfglink groovymame "$etc/mame"
+cfglink flycast "$HOME/.config/flycast"
+cfglink pcsx2 "$HOME/.config/PCSX2"
+cfglink dolphin "$HOME/.config/dolphin-emu"
+cfglink supermodel "$HOME/.config/supermodel"
+cfglink openbor "$roms/openbor/Saves"
+cfglink hypseus "$HOME/.hypseus"
+cfglink model2 /opt/fliperos/model2
+cfglink attractmode "$HOME/.attract"
+cfglink es-de "$HOME/ES-DE"
+cfglink pegasus "$HOME/.config/pegasus-frontend"
+cfglink skyscraper "$HOME/.skyscraper"
 exit 0

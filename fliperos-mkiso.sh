@@ -1519,10 +1519,13 @@ build_dolphin_chroot
 install_wine_chroot
 install_steam_chroot
 install_heroic_chroot
-# Pastas do acervo (~/roms): uma por emulador e por core do RetroArch, das
-# informacoes dos cores que o build do RetroArch deixou.
+# Pastas do usuario (~/roms, ~/bios, ~/media, ~/config): uma por emulador e
+# por core do RetroArch, das informacoes dos cores que o build do RetroArch
+# deixou. O chown -R muda os links de ~/config, nao o que eles apontam.
 chroot "$CHROOT_DIR" env HOME=/home/fliperos /opt/fliperos/bin/fliperos-roms >> "$LOG_FILE" 2>&1
-chroot "$CHROOT_DIR" chown -R fliperos:fliperos /home/fliperos/roms
+chroot "$CHROOT_DIR" chown -R fliperos:fliperos /home/fliperos/roms /home/fliperos/bios /home/fliperos/media \
+  /home/fliperos/config
+[[ -e $CHROOT_DIR/home/fliperos/.config/PCSX2 ]] && chroot "$CHROOT_DIR" chown -R fliperos:fliperos /home/fliperos/.config/PCSX2
 rm -f "$CHROOT_DIR/usr/sbin/policy-rc.d"
 unmount_chroot
 create_squashfs

@@ -43,6 +43,9 @@ case $name in
   flycast)
     ((stretch < 100)) && stretch=100
     ((stretch > 250)) && stretch=250
+    # A BIOS em ~/bios/dc (fliperos-roms): o emu.cfg tem o Dreamcast.BiosPath,
+    # e a variavel vale tambem num emu.cfg recriado pelo Flycast.
+    export FLYCAST_BIOS_PATH="${FLYCAST_BIOS_PATH:+$FLYCAST_BIOS_PATH:}$HOME/bios/dc"
     set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch" "${@:2}"
     ;;
   dolphin-emu)
