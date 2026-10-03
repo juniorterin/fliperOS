@@ -1034,7 +1034,7 @@ class GroovyMameTests(unittest.TestCase):
                          'rompath                   /home/fliperos/roms/mame;/home/fliperos/bios/mame',
                          'inipath                   %s' % out.parent, 'monitor                   arcade_15',
                          'modesetting               1', 'lowlatency                1', 'filter                    1',
-                         'plugin                    hiscore', 'uifont                    uismall.bdf'):
+                         'plugin                    hiscore', 'uifont                    default'):
                 self.assertIn(line + '\n', text, line)
             self.assertEqual(text.count('\nrompath '), 1)
         self.assertIn('fliperos-mame-ini" "$root/opt/fliperos/bin/fliperos-mame-ini', ROOTFS)
@@ -1088,7 +1088,9 @@ class GroovyMameTests(unittest.TestCase):
         # As do -createconfig do gasetup (core/configs/groovymame), mais a
         # latencia do Setup.
         ini = self.ini('mame.ini')
-        for key, value in (('plugin', 'hiscore'), ('skip_gameinfo', '1'), ('uifont', 'uismall.bdf'),
+        # A fonte e a do MAME: a uismall.bdf do GroovyArcade ficava pequena
+        # demais no gabinete.
+        for key, value in (('plugin', 'hiscore'), ('skip_gameinfo', '1'), ('uifont', 'default'),
                            ('video', 'opengl'), ('lowlatency', '1'), ('switchres_ini', '1'), ('modesetting', '1'),
                            ('sound', 'sdl'), ('aspect', '4:3'), ('autoframedelay', '1'), ('framedelay', '0')):
             self.assertEqual(ini[key], value, key)
