@@ -168,6 +168,18 @@ done
 for file in "$src"/config/icons/*.svg; do
   install -Dm644 "$file" "$root/usr/local/share/pixmaps/${file##*/}"
 done
+# Falkon e Transmission (vem na imagem): no menu do LXDE o nome diz para que
+# servem, "Falkon (browser)" e "Transmission (torrent)". A entrada do pacote
+# e copiada para /usr/local/share/applications (que vem antes) com o nome
+# trocado em todos os idiomas, so no grupo principal: as acoes ficam.
+for pair in org.kde.falkon.desktop:browser transmission-gtk.desktop:torrent; do
+  entry="$root/usr/share/applications/${pair%%:*}"
+  [[ -f $entry ]] || continue
+  awk -v suffix=" (${pair#*:})" '
+    /^\[/ { main = ($0 == "[Desktop Entry]") }
+    main && /^Name(\[[^]]*\])?=/ && index($0, suffix) == 0 { $0 = $0 suffix }
+    { print }' "$entry" > "$root/usr/local/share/applications/${pair%%:*}"
+done
 
 # App Store (GNOME Software + Flathub): sem atualizacao sozinha nem tela de
 # boas-vindas. O org.gnome.Software.desktop de config/applications, com o

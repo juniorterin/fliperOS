@@ -302,7 +302,7 @@ apt-get install -y --no-install-recommends \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 pciutils usbutils libdrm-tests edid-decode squashfs-tools \
   systemd-timesyncd \
-  gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk \
+  gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk falkon transmission-gtk \
   samba samba-common-bin cifs-utils smbclient avahi-daemon avahi-utils udisks2 wireless-regdb \
   plymouth plymouth-label fonts-dejavu-core \
   lxde-core lxsession openbox-lxde-session lxpolkit lxappearance lxappearance-obconf lxde-icon-theme \

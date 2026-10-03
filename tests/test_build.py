@@ -1945,6 +1945,43 @@ class AppStoreTests(unittest.TestCase):
         self.assertIn('id=org.gnome.Software.desktop', (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text())
 
 
+class DesktopAppsTests(unittest.TestCase):
+    """Falkon e Transmission na imagem, com o nome dizendo para que servem."""
+
+    def test_in_the_image(self):
+        pkgs = apt_list()
+        for pkg in ('falkon', 'transmission-gtk'):
+            self.assertIn(pkg, pkgs)
+            self.assertIn(pkg, (ROOT / 'tools/cabinet-update.sh').read_text())
+
+    def test_menu_names_say_what_they_are(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'usr/share/applications', 'etc/modprobe.d', 'etc/sudoers.d',
+                      'etc/profile.d', 'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            (root / 'usr/share/applications/org.kde.falkon.desktop').write_text(
+                '[Desktop Entry]\nName=Falkon\nName[pt_BR]=Falkon\nGenericName=Web Browser\nExec=falkon %u\n\n'
+                '[Desktop Action NewTab]\nName=Open new tab\nName[pt_BR]=Abrir uma nova aba\n'
+                'Exec=falkon --new-tab\n')
+            (root / 'usr/share/applications/transmission-gtk.desktop').write_text(
+                '[Desktop Entry]\nName=Transmission\nGenericName=BitTorrent Client\nExec=transmission-gtk %U\n')
+            for _ in range(2):  # de novo, o sufixo nao dobra
+                subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                               capture_output=True, timeout=120)
+            apps = root / 'usr/local/share/applications'
+            # /usr/local/share vem antes de /usr/share: a entrada com o mesmo
+            # ID troca a do pacote. So o nome do programa muda; as acoes ficam.
+            self.assertEqual((apps / 'org.kde.falkon.desktop').read_text(),
+                             '[Desktop Entry]\nName=Falkon (browser)\nName[pt_BR]=Falkon (browser)\n'
+                             'GenericName=Web Browser\nExec=falkon %u\n\n'
+                             '[Desktop Action NewTab]\nName=Open new tab\nName[pt_BR]=Abrir uma nova aba\n'
+                             'Exec=falkon --new-tab\n')
+            self.assertIn('Name=Transmission (torrent)\n', (apps / 'transmission-gtk.desktop').read_text())
+            self.assertEqual((root / 'usr/share/applications/transmission-gtk.desktop').read_text().count('torrent'), 0)
+
+
 class SessionTableTests(unittest.TestCase):
     TABLE = ROOT / 'config/fliperos-sessions.conf'
 
