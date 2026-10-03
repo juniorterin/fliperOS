@@ -894,12 +894,27 @@ class RomFoldersTests(unittest.TestCase):
             # na lista que ja existe; as do Scraper antigo saem.
             mame = root / 'etc/fliperos/mame'
             mame.mkdir(parents=True)
+            # As relativas do -createconfig puro (homepath ".", cfg_directory
+            # "cfg") enchiam a home: saem, e sem absoluta vale a do config/.
             (mame / 'mame.ini').write_text(
-                'rompath                   /home/fliperos/roms/mame;/mnt/pendrive\n'
-                'snapshot_directory        $HOME/.mame/snap;/home/fliperos/.mame/scraped/mame/screenshots\n'
-                'samplepath                /home/fliperos/roms/mame/samples\n')
+                'homepath                  .\n'
+                'rompath                   roms;/home/fliperos/roms/mame;/mnt/pendrive\n'
+                'snapshot_directory        snap;$HOME/.mame/snap;/home/fliperos/.mame/scraped/mame/screenshots\n'
+                'samplepath                /home/fliperos/roms/mame/samples\n'
+                'cfg_directory             cfg\n'
+                'nvram_directory           /mnt/nvram\n'
+                'plugin                    \n')
             (mame / 'ui.ini').write_text('covers_directory          /home/fliperos/.mame/scraped/mame/covers;covers\n'
-                                         'logos_directory           logo\n')
+                                         'logos_directory           logo\nui_path                   ui\n')
+            # O cfg/nvram que esse mame.ini gravou na home: vale o mais novo.
+            home = root / 'home/fliperos'
+            for d in ('cfg', '.mame/cfg'):
+                (home / d).mkdir(parents=True)
+            (home / '.mame/cfg/mvsc.cfg').write_text('velho')
+            (home / '.mame/cfg/sf2.cfg').write_text('so no .mame')
+            (home / 'cfg/mvsc.cfg').write_text('novo')
+            (home / 'cfg/default.cfg').write_text('so na home')
+            os.utime(home / '.mame/cfg/mvsc.cfg', (1000, 1000))
             # Um emu.cfg do Flycast de antes ganha a pasta da BIOS.
             (root / 'home/fliperos/.config/flycast').mkdir(parents=True)
             (root / 'home/fliperos/.config/flycast/emu.cfg').write_text('[config]\nrend.Resolution = 480\n')
@@ -912,15 +927,25 @@ class RomFoldersTests(unittest.TestCase):
             self.assertEqual((root / 'home/fliperos/bios/scph5501.bin').read_text(), 'bios')
             self.assertEqual(os.readlink(root / 'opt/fliperos/bios'), '/home/fliperos/bios')
             ini = (mame / 'mame.ini').read_text()
+            self.assertIn('homepath                  $HOME/.mame\n', ini)
             self.assertIn('rompath                   /home/fliperos/roms/mame;/mnt/pendrive;/home/fliperos/bios/mame\n',
                           ini)
             self.assertIn('snapshot_directory        $HOME/.mame/snap;/home/fliperos/media/snap/arcade\n', ini)
             self.assertIn('samplepath                /home/fliperos/roms/mame/samples\n', ini)
+            self.assertIn('cfg_directory             $HOME/.mame/cfg\n', ini)
+            # Uma absoluta escolhida fica; o que nao e pasta tambem.
+            self.assertIn('nvram_directory           /mnt/nvram\n', ini)
+            self.assertIn('plugin                    \n', ini)
             ui = (mame / 'ui.ini').read_text()
-            self.assertIn('covers_directory          covers;/home/fliperos/media/box/arcade\n', ui)
-            self.assertIn('logos_directory           logo;/home/fliperos/media/logo/arcade\n', ui)
+            self.assertIn('covers_directory          /home/fliperos/media/box/arcade\n', ui)
+            self.assertIn('logos_directory           /home/fliperos/media/logo/arcade\n', ui)
             self.assertIn('marquees_directory        /home/fliperos/media/marquee/arcade\n', ui)
+            self.assertIn('ui_path                   $HOME/.mame/ui\n', ui)
             self.assertEqual(ui.count('covers_directory'), 1)
+            self.assertFalse((home / 'cfg').exists())
+            self.assertEqual((home / '.mame/cfg/mvsc.cfg').read_text(), 'novo')
+            self.assertEqual((home / '.mame/cfg/sf2.cfg').read_text(), 'so no .mame')
+            self.assertEqual((home / '.mame/cfg/default.cfg').read_text(), 'so na home')
             self.assertIn('Dreamcast.BiosPath = /home/fliperos/bios/dc',
                           (root / 'home/fliperos/.config/flycast/emu.cfg').read_text())
 
@@ -1763,7 +1788,7 @@ class DraculaThemeTests(unittest.TestCase):
         # Fora as cores, so o tamanho do texto do GroovyArcade e as pastas da
         # arte em ~/media.
         self.assertEqual({key for key, _ in rows} - {key for key, _ in colors},
-                         {'font_rows', 'infos_text_size', 'covers_directory', 'flyers_directory',
+                         {'font_rows', 'infos_text_size', 'ui_path', 'covers_directory', 'flyers_directory',
                           'marquees_directory', 'logos_directory'})
         self.assertIn('config/mame-ui.ini', ROOTFS)
         self.assertIn('etc/fliperos/mame/ui.ini', ROOTFS)

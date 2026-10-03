@@ -115,28 +115,32 @@ for ini in mame.ini:mame.ini ui.ini:mame-ui.ini; do
   while read -r key value; do
     grep -qE "^${key}[[:space:]]" "$target" || printf '%-25s %s\n' "$key" "$value" >> "$target"
   done < <(grep -vE '^[[:space:]]*(#|$)' "$src/config/${ini#*:}")
-  # As pastas de procura do config/ (a BIOS em ~/bios/mame, a arte em
-  # ~/media/<tipo>/arcade) entram tambem na lista de uma chave que ja existe,
-  # sem tirar as que estao la; as de ~/.mame/scraped (o Scraper de antes do
-  # ~/media) saem.
+  # As pastas: uma relativa (o "cfg", "snap", "." do -createconfig puro)
+  # depende da pasta de onde o GroovyMAME e aberto, e ele enchia a home de
+  # cfg/nvram; sai, e sem nenhuma absoluta vale a do config/. As de procura
+  # do config/ (a BIOS em ~/bios/mame, a arte em ~/media/<tipo>/arcade)
+  # entram tambem na lista que ja existe, sem tirar as que estao la; as de
+  # ~/.mame/scraped (o Scraper de antes do ~/media) saem.
   while read -r key value; do
+    case $key in *path | *_directory) ;; *) continue ;; esac
+    add=0
     case $key in
-      rompath | snapshot_directory | covers_directory | flyers_directory | marquees_directory | logos_directory) ;;
-      *) continue ;;
+      rompath | snapshot_directory | covers_directory | flyers_directory | marquees_directory | logos_directory) add=1 ;;
     esac
-    awk -v k="$key" -v want="$value" '
+    awk -v k="$key" -v want="$value" -v add="$add" '
       $1 == k && !done {
         cur = $0
         sub(/^[[:space:]]*[^[:space:]]+[[:space:]]*/, "", cur)
         n = split(cur, have, ";")
         out = ""
         for (i = 1; i <= n; i++) {
-          if (have[i] == "" || have[i] ~ /\/\.mame\/scraped\//) continue
+          if (have[i] !~ /^[\/$~]/ || have[i] ~ /\/\.mame\/scraped\//) continue
           out = out (out == "" ? "" : ";") have[i]
           seen[have[i]] = 1
         }
-        m = split(want, add, ";")
-        for (i = 1; i <= m; i++) if (!(add[i] in seen)) out = out (out == "" ? "" : ";") add[i]
+        m = split(want, extra, ";")
+        if (add || out == "")
+          for (i = 1; i <= m; i++) if (!(extra[i] in seen)) out = out (out == "" ? "" : ";") extra[i]
         printf "%-25s %s\n", k, out
         done = 1
         next
@@ -359,12 +363,32 @@ EOF
   # companhia mudam para la, sem sobrescrever. O ~/snap fica: no Ubuntu e do
   # snapd.
   mkdir -p "$home/.mame"
+  # Com as duas (um mame.ini de pastas relativas gravou na home depois),
+  # cada arquivo fica na versao mais nova: e o mesmo arquivo do MAME, e o da
+  # home costuma ser o do ultimo jogo.
+  mame_merge() {
+    local from=$1 to=$2 item
+    for item in "$from"/* "$from"/.[!.]*; do
+      [[ -e $item || -L $item ]] || continue
+      if [[ ! -e $to/${item##*/} && ! -L $to/${item##*/} ]]; then
+        mv "$item" "$to/"
+      elif [[ -d $item && ! -L $item && -d $to/${item##*/} ]]; then
+        mame_merge "$item" "$to/${item##*/}"
+      elif [[ -f $item && -f $to/${item##*/} ]]; then
+        if [[ $item -nt $to/${item##*/} ]]; then
+          mv -f "$item" "$to/${item##*/}"
+        else
+          rm -f "$item"
+        fi
+      fi
+    done
+    rmdir "$from" 2> /dev/null || true
+  }
   for dir in cfg nvram sta inp diff comments hiscore; do
     if [[ -d $home/$dir && ! -L $home/$dir && ! -e $home/.mame/$dir ]]; then
       mv "$home/$dir" "$home/.mame/$dir"
     elif [[ -d $home/$dir && ! -L $home/$dir && -d $home/.mame/$dir ]]; then
-      # As duas: o que nao existe em ~/.mame vai; o resto fica.
-      roms_merge "$home/$dir" "$home/.mame/$dir"
+      mame_merge "$home/$dir" "$home/.mame/$dir"
     fi
   done
   chown -R 1000:1000 "$home/.mame" 2> /dev/null || true
