@@ -2170,6 +2170,41 @@ class RetroArchConfigTests(unittest.TestCase):
             self.assertEqual(run()[:2], ['--appendconfig', '/etc/fliperos/retroarch/retroarch.cfg|%s' % buttons])
 
 
+class RetroArchMameRemapTests(unittest.TestCase):
+    """Os cores de MAME do RetroArch leem Button 1-6 do RetroPad numa ordem
+    propria: o remap leva o painel (Y X L / B A R) ao botao de mesmo numero."""
+
+    IDS = {'b': 0, 'y': 1, 'a': 8, 'x': 9, 'l': 10, 'r': 11}
+    PANEL = ['y', 'x', 'l', 'b', 'a', 'r']   # botoes 1 a 6 do painel no RetroPad
+    CORES = {'MAME': ['b', 'a', 'y', 'x', 'l', 'r'],          # input_retro.cpp
+             'MAME 2010': ['a', 'b', 'x', 'y', 'l', 'r']}     # retromain.c
+
+    def test_panel_button_n_is_game_button_n(self):
+        for core, order in self.CORES.items():
+            text = (ROOT / 'config/retroarch-remaps' / (core + '.rmp')).read_text()
+            self.assertTrue(text.startswith('# FliperOS'), core)
+            for player in range(1, 5):
+                for n, pad in enumerate(self.PANEL):
+                    self.assertIn('input_player%d_btn_%s = "%d"\n' % (player, pad, self.IDS[order[n]]), text,
+                                  (core, player, n + 1))
+
+    def test_installed_without_overwriting_a_user_remap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'etc/fliperos/mame', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            remaps = root / 'home/fliperos/.config/retroarch/config/remaps'
+            (remaps / 'MAME 2010').mkdir(parents=True)
+            (remaps / 'MAME 2010' / 'MAME 2010.rmp').write_text('input_player1_btn_b = "0"\n')
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            self.assertEqual((remaps / 'MAME' / 'MAME.rmp').read_text(),
+                             (ROOT / 'config/retroarch-remaps/MAME.rmp').read_text())
+            self.assertEqual((remaps / 'MAME 2010' / 'MAME 2010.rmp').read_text(), 'input_player1_btn_b = "0"\n')
+
+
 class ButtonMappingTests(unittest.TestCase):
     """config/fliperos-buttons: os botoes de cada jogador no RetroArch e no GroovyMAME."""
 

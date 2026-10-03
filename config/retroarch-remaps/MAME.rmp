@@ -1,0 +1,31 @@
+# FliperOS: os botoes do painel na ordem do MAME (o botao N do painel e o
+# Button N do jogo), como no GroovyMAME. O painel chega ao RetroPad no
+# layout dos cores de arcade (1 2 3 = Y X L, 4 5 6 = B A R: o
+# fliperos-controllers e o Setup > Joysticks > Button mapping), e o core MAME
+# le Button 1-6 de B A Y X L R (src/osd/modules/input/input_retro.cpp, sem
+# os perfis por jogo). Valores: os IDs do RetroPad (B 0, Y 1, A 8, X 9,
+# L 10, R 11).
+input_player1_btn_y = "0"
+input_player1_btn_x = "8"
+input_player1_btn_l = "1"
+input_player1_btn_b = "9"
+input_player1_btn_a = "10"
+input_player1_btn_r = "11"
+input_player2_btn_y = "0"
+input_player2_btn_x = "8"
+input_player2_btn_l = "1"
+input_player2_btn_b = "9"
+input_player2_btn_a = "10"
+input_player2_btn_r = "11"
+input_player3_btn_y = "0"
+input_player3_btn_x = "8"
+input_player3_btn_l = "1"
+input_player3_btn_b = "9"
+input_player3_btn_a = "10"
+input_player3_btn_r = "11"
+input_player4_btn_y = "0"
+input_player4_btn_x = "8"
+input_player4_btn_l = "1"
+input_player4_btn_b = "9"
+input_player4_btn_a = "10"
+input_player4_btn_r = "11"

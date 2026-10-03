@@ -273,6 +273,17 @@ fi
 command -v fliperos-motd > /dev/null && fliperos-motd
 EOF
   install -m644 "$src/config/zshrc" "$home/.zshrc"
+  # Remaps dos cores de MAME do RetroArch: o botao N do painel e o Button N
+  # (config/retroarch-remaps). Um remap salvo pelo menu do RetroArch (sem o
+  # cabecalho "# FliperOS") fica.
+  for rmp in "$src"/config/retroarch-remaps/*.rmp; do
+    name=$(basename "$rmp" .rmp)
+    target="$home/.config/retroarch/config/remaps/$name/$name.rmp"
+    if [[ ! -f $target ]] || head -1 "$target" | grep -q '^# FliperOS'; then
+      install -Dm644 "$rmp" "$target"
+    fi
+  done
+  chown -R 1000:1000 "$home/.config/retroarch" 2> /dev/null || true
   # Acervo em ~/roms; /opt/fliperos/roms vira um link para la, e os caminhos
   # antigos (mame.ini, frontends, Hypseus, OpenBOR) continuam valendo. Uma
   # instalacao com ROMs em /opt/fliperos/roms as leva junto: so renomeia
