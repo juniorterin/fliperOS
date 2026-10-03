@@ -191,7 +191,21 @@ if present usr/bin/wine; then
   has usr/local/bin/fliperos-model2
   has opt/fliperos/model2/roms
   echo "Wine e o lancador do Model 2 (o emulador o usuario copia)"
+  # O OpenGL de 32 bits: sem ele o Direct3D do Wine de 32 bits nao abre (o
+  # FBNeo do Fightcade para em "Couldn't initialise DirectX9").
+  for lib in libGL.so.1 libGLX_mesa.so.0; do
+    has "usr/lib/i386-linux-gnu/$lib"
+  done
+  echo "Wine: OpenGL de 32 bits"
 fi
+# Fightcade 2: o que o baixa e abre vem na imagem; o programa, nao.
+for path in opt/fliperos/bin/fliperos-fightcade etc/fliperos/openbox-fightcade.xml; do
+  has "$path"
+done
+grep -q '^fightcade|kms|/opt/fliperos/fightcade/fightcade|fetch:fliperos-fightcade|' "$src/config/fliperos-sessions.conf" ||
+  fail "a tabela de sessoes nao tem o Fightcade"
+present opt/fliperos/fightcade/Fightcade2.sh && fail "o Fightcade veio dentro da imagem (e de codigo fechado: so por download)"
+echo "Fightcade 2: lancador na imagem, programa por download (Setup > Frontend)"
 present usr/games/steam && echo "Steam: steam-installer"
 present opt/Heroic/heroic && echo "Heroic (GOG)"
 

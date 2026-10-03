@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# Fightcade 2 (fightcade.com): partidas online de jogos de arcade e console,
+# com os emuladores dele (FBNeo, SNES9x e o FBA antigo no Wine, Flycast
+# nativo).
+#
+# E freeware de codigo fechado, sem permissao clara de redistribuicao: nao
+# vem na imagem nem no repositorio do FliperOS. O Setup > Frontend baixa o
+# pacote oficial para Linux do site dele (fetch), para /opt/fliperos/fightcade
+# - pasta do usuario, porque o Fightcade se atualiza sozinho gravando nela.
+# As ROMs ficam em ~/roms/fightcade (config/fliperos-roms).
+#
+#   fliperos-fightcade fetch [--progress]   baixa e instala (de novo: repara)
+#   fliperos-fightcade [argumentos]         abre
+#
+# Instalado, /opt/fliperos/fightcade/fightcade e um link para este script: e
+# o "binario" da tabela de sessoes, que so existe depois do download. Aberto
+# no console, sobe num Xorg so para ele (fliperos-x11-run) no modo da tabela
+# emulator-modes.conf: 640x480, que num monitor de 15 kHz sai entrelacado - a
+# sala de jogos e uma pagina de desktop e nao cabe em 240 linhas. Os jogos
+# abrem dentro desse mesmo modo. Ctrl+W (Window > Close) fecha; Alt+Tab troca
+# entre a sala e o emulador (config/openbox-fightcade.xml).
+set -uo pipefail
+dir=${FIGHTCADE_DIR:-/opt/fliperos/fightcade}
+url=${FIGHTCADE_URL:-https://www.fightcade.com/download/linux}
+user=${FLIPEROS_USER:-fliperos}
+x11run=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
+folders=${FLIPEROS_ROMS_SCRIPT:-/opt/fliperos/bin/fliperos-roms}
+self=$(readlink -f -- "${BASH_SOURCE[0]}")
+
+# say PORCENTAGEM TEXTO: uma etapa para a tela de progresso do Setup
+# (lib/progress.sh), ou so o texto.
+progress=0
+say() {
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+# fail TEXTO: sai com erro, avisando a tela de progresso.
+fail() {
+  if ((progress)); then printf '@fail Fightcade|%s\n' "$1"; else printf 'fliperos-fightcade: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+fetch() {
+  local part="$dir/.download.part" link keep=()
+  [[ ${1:-} == --progress ]] && progress=1
+  # Pelo Setup (root): a pasta e do usuario, e o download roda como ele.
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    if ! mkdir -p "$dir" || ! chown "$user:" "$dir"; then
+      fail "could not create $dir"
+    fi
+    exec runuser -u "$user" -- "$self" fetch "$@"
+  fi
+  mkdir -p "$dir" 2> /dev/null && [[ -w $dir ]] || fail "$dir is not writable"
+  say 0 "Downloading Fightcade from fightcade.com"
+  # De 0 a 85%: o download (uns 160 MB), para um arquivo temporario.
+  python3 - "$url" "$part" "$progress" << 'PY' || { rm -f "$part"; fail "the download failed (no network?)"; }
+import sys
+import urllib.request
+
+url, part, progress = sys.argv[1], sys.argv[2], sys.argv[3] == '1'
+last = -1
+for attempt in range(3):
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'fliperos-fightcade'})
+        with urllib.request.urlopen(req, timeout=60) as resp, open(part, 'wb') as out:
+            total = int(resp.headers.get('Content-Length') or 0)
+            done = 0
+            while True:
+                chunk = resp.read(1 << 18)
+                if not chunk:
+                    break
+                out.write(chunk)
+                done += len(chunk)
+                pct = done * 85 // total if total else 0
+                if progress and pct != last:
+                    last = pct
+                    print('@step %d Downloading Fightcade (%d of %d MB)' % (pct, done >> 20, total >> 20), flush=True)
+            if total and done != total:
+                raise OSError('incomplete download')
+        break
+    except OSError as e:
+        print('fliperos-fightcade: %s' % e, file=sys.stderr)
+        if attempt == 2:
+            sys.exit(1)
+PY
+  say 88 "Unpacking"
+  # O pacote traz tudo dentro de Fightcade/. Num reparo, as pastas de ROMs
+  # que ja sao links para ~/roms/fightcade ficam (--keep-directory-symlink)
+  # e o que o pacote traz dentro delas fica de fora: o tar nao grava por um
+  # link que sai da pasta ("Invalid cross-device link").
+  for link in "$dir"/emulator/*/ROMs; do
+    [[ -L $link ]] && keep+=("--exclude=*/emulator/$(basename "$(dirname "$link")")/ROMs/*")
+  done
+  if ! tar -xzf "$part" -C "$dir" --strip-components=1 --keep-directory-symlink --no-same-owner "${keep[@]}" \
+    2> /dev/null ||
+    [[ ! -x $dir/Fightcade2.sh || ! -x $dir/fc2-electron/fc2-electron ]]; then
+    rm -f "$part"
+    fail "the downloaded file is not the Fightcade package"
+  fi
+  rm -f "$part"
+  ln -sfn "$self" "$dir/fightcade"
+  say 96 "ROM folders in ~/roms/fightcade"
+  [[ -x $folders ]] && "$folders"
+  say 100 "Fightcade $(tr -d '[:space:]' < "$dir/VERSION.txt" 2> /dev/null) installed"
+}
+
+if [[ ${1:-} == fetch ]]; then
+  shift
+  fetch "$@"
+  exit 0
+fi
+
+if [[ ! -x $dir/Fightcade2.sh ]]; then
+  echo "Fightcade is not installed. Setup > Frontend > Fightcade 2 downloads it." >&2
+  exit 1
+fi
+
+# Fora do X (a sessao de boot, o fliperos-launch): num Xorg so para ele. O
+# nome do comando (fightcade) e a linha da tabela de modos.
+if [[ -z ${DISPLAY:-} ]]; then
+  export FLIPEROS_OPENBOX_RC="${FLIPEROS_OPENBOX_RC:-/etc/fliperos/openbox-fightcade.xml}"
+  exec "$x11run" "$dir/fightcade" "$@"
+fi
+
+cd "$dir" || exit 1
+# Um prefixo do Wine so para ele, como o Model 2. Sem o Mono e o Gecko: os
+# emuladores nao os usam, e sem isto o Wine abre uma janela pedindo para
+# baixa-los na primeira vez.
+export WINEPREFIX="${WINEPREFIX:-$HOME/.local/share/fliperos/wine-fightcade}"
+export WINEDEBUG=-all
+export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-mscoree,mshtml=}"
+mkdir -p "$(dirname "$WINEPREFIX")"
+
+# A pagina e desenhada para um desktop (janela de 1280x800): numa tela
+# menor ela encolhe na proporcao da altura, ate a metade. FIGHTCADE_SCALE
+# fixa outro valor; na janela, Text > Zoom In/Out (Ctrl+= e Ctrl+-) ajusta
+# na hora.
+scale=${FIGHTCADE_SCALE:-}
+if [[ -z $scale ]]; then
+  height=${FLIPEROS_RES_H:-$(xrandr --current 2> /dev/null | awk '/\*/ { split($1, a, "x"); print a[2] + 0; exit }')}
+  # LC_ALL=C: com o sistema em portugues o awk escreveria "0,67".
+  scale=$(LC_ALL=C awk -v h="${height:-720}" 'BEGIN { s = h / 720; if (s > 1) s = 1; if (s < 0.5) s = 0.5; printf "%.2f", s }')
+fi
+
+# O Fightcade2.sh prepara a configuracao do FBNeo, registra o fcade:// (por
+# onde o cliente abre os emuladores), deixa o cliente em segundo plano e sai.
+./Fightcade2.sh "--force-device-scale-factor=$scale" "$@"
+
+# A sessao fica ate o cliente fechar. Numa atualizacao automatica ele fecha e
+# reabre sozinho (fcade-upd): so vale como fechado depois de uns segundos sem
+# nenhum dos dois.
+gone=0
+while ((gone < ${FIGHTCADE_QUIT_WAIT:-5})); do
+  sleep 1
+  if pgrep -u "$(id -u)" -f 'fc2-electron/fc2-electron|fcade-upd' > /dev/null; then
+    gone=0
+  else
+    gone=$((gone + 1))
+  fi
+done
+exit 0

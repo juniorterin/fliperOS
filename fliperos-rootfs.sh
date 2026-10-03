@@ -80,8 +80,17 @@ install -Dm644 "$src/config/openbox-black-themerc" "$root/usr/share/themes/Flipe
 # existe entrelacado. So muda a linha que ainda e a de fabrica.
 sed -i -E 's/^(supermodel|fliperos-model2)( +)496x384@57\.524  496x384@57\.524$/\1\2640x240@57.524  496x384@57.524/' \
   "$root/etc/fliperos/emulator-modes.conf"
+# Tabelas de antes do Fightcade ganham a linha dele (640x480: a sala de jogos
+# nao cabe em 240 linhas); sem ela o fliperos-x11-run o abriria em 320x240.
+grep -q '^fightcade[[:space:]]' "$root/etc/fliperos/emulator-modes.conf" ||
+  printf 'fightcade           640x480@60      640x480@60\n' >> "$root/etc/fliperos/emulator-modes.conf"
 # Model 2 no Wine: no PATH, para os frontends tambem chamarem.
 install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model2"
+# Fightcade 2 (Setup > Frontend): o que o baixa do site dele e o abre, e o
+# openbox dele (Alt+Tab entre a sala de jogos e o emulador). O programa em si
+# nao vem na imagem (codigo fechado).
+install -Dm755 "$src/config/fliperos-fightcade" "$root/opt/fliperos/bin/fliperos-fightcade"
+install -Dm644 "$src/config/openbox-fightcade.xml" "$root/etc/fliperos/openbox-fightcade.xml"
 # groovymame: o atalho (config/fliperos-groovymame) na frente do binario do
 # release, em /usr/local/libexec. Num sistema de antes, o binario compilado
 # estava no lugar do atalho: muda de pasta.

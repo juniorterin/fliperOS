@@ -845,6 +845,43 @@ class LauncherTests(Base):
         self.assertIn("launcher=retroarch\n", (self.env.etc / "fliperos.conf").read_text())
         self.assertEqual(self.env.out("launcher_package attractplus").strip(), "fliperos-attractplus")
 
+    def test_program_fetched_from_its_own_site(self):
+        # "fetch:COMANDO" na coluna do pacote: um programa de codigo fechado,
+        # que nao vem na imagem nem no repositorio. Nao e pacote do apt: o
+        # Setup roda "COMANDO fetch --progress", que fala com a tela de
+        # progresso, e o binario da linha so existe depois.
+        target = self.env.dir / "fc" / "fightcade"
+        with open(self.env.etc / "sessions.conf", "a") as table:
+            table.write("fightcade|kms|%s|fetch:fliperos-fightcade|Fightcade 2\n" % target)
+        fbin = self.env.dir / "fbin"
+        fbin.mkdir()
+        command = fbin / "fliperos-fightcade"
+        command.write_text('#!/bin/sh\necho "@step 50 args=$*"\nmkdir -p "%s"\nprintf "#!/bin/sh\\n" > "%s"\n'
+                           'chmod +x "%s"\n' % (target.parent, target, target))
+        command.chmod(0o755)
+        env = {"FLIPEROS_BIN": str(fbin)}
+        self.assertEqual(self.env.out("launcher_package fightcade", env), "")
+        self.assertEqual(self.env.out("launcher_fetcher fightcade", env).strip(), str(command))
+        self.assertEqual(self.env.out("launcher_fetcher attractplus; launcher_fetcher retroarch", env), "")
+        self.assertEqual(self.env.run("launcher_installed fightcade", env).returncode, 1)
+        self.assertNotIn("fightcade", self.env.out("launcher_available", env))
+        self.assertEqual(self.env.out("launcher_fetch fightcade", env).splitlines(),
+                         ["@step 0 Starting", "@step 50 args=fetch --progress"])
+        self.assertEqual(self.env.run("launcher_installed fightcade", env).returncode, 0)
+        self.assertIn("fightcade|Fightcade 2", self.env.out("launcher_available", env))
+        # Sem o comando na imagem: a tela recebe a falha, nao um erro do shell.
+        command.unlink()
+        run = self.env.run("launcher_fetch fightcade", env)
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("@fail Starting|the installer of Fightcade 2 is missing", run.stdout)
+        # A tela: quem tem fetch aparece como "not installed" e e baixado.
+        screen = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_frontend() {")[1].split("\n}\n")[0]
+        self.assertIn('launcher_package_available "$name" || [[ -n $(launcher_fetcher "$name") ]]', screen)
+        self.assertIn('run_with_progress "Downloading $label" "" launcher_fetch "$choice" || return 0', screen)
+        self.assertLess(screen.index("launcher_fetch "), screen.index('launcher_set "$choice"'))
+        self.assertIn("roms/fightcade", self.env.out("frontends_hint fightcade"))
+        self.assertEqual(self.env.out("frontends_hint pegasus"), "")
+
     def test_request_is_left_for_the_tty1_loop(self):
         request = self.env.dir / "run" / "launch"
         env = {"LAUNCH_REQUEST": str(request)}

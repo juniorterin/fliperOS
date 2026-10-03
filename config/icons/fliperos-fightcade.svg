@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Icone do Fightcade 2 no menu do LXDE (o programa e baixado depois, pelo Setup). Paleta Dracula. -->
+  <rect x="3" y="3" width="58" height="58" rx="12" fill="#282a36" stroke="#8be9fd" stroke-width="4"/>
+  <text x="32" y="42" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="26" fill="#8be9fd">FC</text>
+  <rect x="14" y="48" width="36" height="4" rx="2" fill="#bd93f9"/>
+</svg>

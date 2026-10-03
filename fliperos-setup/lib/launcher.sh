@@ -38,6 +38,8 @@ launcher_available() {
   while IFS='|' read -r name _ _ _ desc; do
     launcher_installed "$name" && printf '%s|%s\n' "$name" "$desc"
   done < <(launcher_rows)
+  # Sem isto, o status era o da ultima linha da tabela (1, se nao instalado).
+  return 0
 }
 
 launcher_all() {
@@ -60,9 +62,36 @@ launcher_set() {
 }
 
 # launcher_package NOME imprime o pacote que traz o launcher (repositorio
-# do FliperOS), vazio se ele ja vem na imagem.
+# do FliperOS), vazio se ele ja vem na imagem ou e baixado do site dele.
 launcher_package() {
-  launcher_field "$1" 4
+  local pkg
+  pkg=$(launcher_field "$1" 4)
+  [[ $pkg == fetch:* ]] || printf '%s\n' "$pkg"
+}
+
+# launcher_fetcher NOME imprime o comando que baixa o launcher do site dele
+# (a coluna do pacote com "fetch:COMANDO": programa de codigo fechado, que
+# nao pode vir na imagem nem no repositorio); vazio para os demais.
+launcher_fetcher() {
+  local pkg
+  pkg=$(launcher_field "$1" 4)
+  if [[ $pkg == fetch:* ]]; then
+    printf '%s\n' "${FLIPEROS_BIN:-/opt/fliperos/bin}/${pkg#fetch:}"
+  fi
+}
+
+# launcher_fetch NOME baixa e instala o launcher, falando com a tela de
+# progresso por eventos (lib/progress.sh): o proprio comando os escreve.
+launcher_fetch() {
+  local cmd
+  cmd=$(launcher_fetcher "$1")
+  ev_step 0 "Starting"
+  if [[ -z $cmd || ! -x $cmd ]]; then
+    ev_fail "the installer of $(launcher_label "$1") is missing"
+    return 1
+  fi
+  log_line cmd "\$ $cmd fetch --progress"
+  "$cmd" fetch --progress 2>> "$FLIPEROS_LOG"
 }
 
 # launcher_package_available NOME: o pacote do launcher existe em algum

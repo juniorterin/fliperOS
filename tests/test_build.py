@@ -6,11 +6,13 @@ e as configuracoes que o fliperos-rootfs.sh instala.
 """
 from importlib.machinery import SourceFileLoader
 import importlib.util
+import io
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from xml.etree import ElementTree
@@ -829,12 +831,35 @@ class RomFoldersTests(unittest.TestCase):
                 subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             roms = tmp / 'roms'
             for emu in ('mame', 'ps2', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'dolphin',
-                        'openbor/Paks', 'hypseus'):
+                        'openbor/Paks', 'hypseus', 'fightcade', 'fightcade/fbneo', 'fightcade/flycast',
+                        'fightcade/snes9x', 'fightcade/fc1'):
                 self.assertTrue((roms / emu / '_info.txt').is_file(), emu)
             self.assertEqual((roms / 'retroarch/snes9x/_info.txt').read_text(),
                              'RetroArch, core snes9x: Nintendo - SNES / SFC (Snes9x - Current) '
                              '(.smc .sfc .swc .fig .bs .st)\n')
             self.assertEqual((roms / 'retroarch/mpv/_info.txt').read_text(), 'RetroArch, core mpv: Video (MPV)\n')
+
+    def test_fightcade_reads_its_roms_from_the_roms_folder(self):
+        # O Fightcade procura as ROMs dentro da pasta de cada emulador dele:
+        # elas viram links para ~/roms/fightcade, e o que ja estava la vai junto.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fc = tmp / 'fightcade'
+            for emu in ('fbneo', 'flycast', 'snes9x', 'ggpofba'):
+                (fc / 'emulator' / emu / 'ROMs').mkdir(parents=True)
+            (fc / 'emulator/fbneo/ROMs/sf2.zip').write_text('rom')
+            env = dict(os.environ, HOME=str(tmp), FLIPEROS_CORE_INFO=str(tmp / 'nada'), FIGHTCADE_DIR=str(fc))
+            for _ in range(2):
+                subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            for emu, folder in (('fbneo', 'fbneo'), ('flycast', 'flycast'), ('snes9x', 'snes9x'), ('ggpofba', 'fc1')):
+                link = fc / 'emulator' / emu / 'ROMs'
+                self.assertTrue(link.is_symlink(), emu)
+                self.assertEqual(os.readlink(link), str(tmp / 'roms/fightcade' / folder))
+            self.assertEqual((tmp / 'roms/fightcade/fbneo/sf2.zip').read_text(), 'rom')
+            # Sem o Fightcade instalado, as pastas existem e nada mais.
+            env['FIGHTCADE_DIR'] = str(tmp / 'nenhum')
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertFalse((tmp / 'nenhum').exists())
 
     def test_bios_media_and_config_folders(self):
         # Ao lado de ~/roms: ~/bios (com as subpastas dos emuladores), ~/media
@@ -2085,6 +2110,201 @@ class SessionTableTests(unittest.TestCase):
         self.assertIn('[[ $backend == none ]] && exit 0', script)
         self.assertNotIn('fliperos-launcher', script)
 
+    def test_programs_fetched_from_their_site(self):
+        # "fetch:COMANDO" na coluna do pacote: o que nao pode vir na imagem. O
+        # comando vem na imagem, e o binario da linha so existe depois do fetch.
+        fetched = {r[0]: r for r in self.rows() if r[3].startswith('fetch:')}
+        self.assertEqual(sorted(fetched), ['fightcade'])
+        for row in fetched.values():
+            command = row[3][len('fetch:'):]
+            self.assertTrue((ROOT / 'config' / command).is_file(), command)
+            self.assertIn('"$root/opt/fliperos/bin/%s"' % command, ROOTFS)
+            self.assertFalse(row[2].startswith('/opt/fliperos/bin/'), row)
+        self.assertEqual(fetched['fightcade'],
+                         ['fightcade', 'kms', '/opt/fliperos/fightcade/fightcade', 'fetch:fliperos-fightcade',
+                          'Fightcade 2'])
+
+
+def fightcade_package(path, files=None):
+    """Um pacote como o do Fightcade para Linux: tudo dentro de Fightcade/."""
+    files = files if files is not None else {
+        'Fightcade2.sh': '#!/bin/sh\necho "$@" > "${0%/*}/args"\nenv > "${0%/*}/env"\n',
+        'fc2-electron/fc2-electron': '#!/bin/sh\n',
+        'VERSION.txt': '9.9.9',
+        'emulator/fbneo/fcadefbneo.exe': 'MZ',
+        'emulator/fbneo/ROMs/neogeo.zip': 'bios',
+        'emulator/flycast/flycast.elf': 'ELF',
+        'emulator/flycast/ROMs/.keep': '',
+        'emulator/snes9x/ROMs/.keep': '',
+        'emulator/ggpofba/ROMs/.keep': '',
+    }
+    with tarfile.open(path, 'w:gz') as tar:
+        for name, content in files.items():
+            data = content.encode()
+            info = tarfile.TarInfo('Fightcade/' + name)
+            info.size = len(data)
+            info.mode = 0o755 if name.endswith(('.sh', 'fc2-electron', '.elf')) else 0o644
+            tar.addfile(info, io.BytesIO(data))
+
+
+class FightcadeTests(unittest.TestCase):
+    """config/fliperos-fightcade: o Fightcade 2 baixado do site dele (nao vem
+    na imagem) e aberto num Xorg proprio."""
+    SCRIPT = ROOT / 'config/fliperos-fightcade'
+
+    def env(self, tmp, **extra):
+        (tmp / 'home').mkdir(exist_ok=True)
+        env = dict(os.environ, HOME=str(tmp / 'home'), FIGHTCADE_DIR=str(tmp / 'fc'), FLIPEROS_USER='root',
+                   FIGHTCADE_URL=(tmp / 'pkg.tar.gz').as_uri(), FLIPEROS_ROMS_SCRIPT=str(ROOT / 'config/fliperos-roms'),
+                   FLIPEROS_CORE_INFO=str(tmp / 'nada'))
+        env.pop('DISPLAY', None)
+        env.update(extra)
+        return env
+
+    def fetch(self, tmp, *args, **extra):
+        return subprocess.run(['bash', str(self.SCRIPT), 'fetch'] + list(args), capture_output=True, text=True,
+                              env=self.env(tmp, **extra), timeout=120)
+
+    def test_fetch_installs_the_package_and_links_the_rom_folders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            run = self.fetch(tmp, '--progress')
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            steps = [line for line in run.stdout.splitlines() if line.startswith('@step')]
+            self.assertEqual(steps[0], '@step 0 Downloading Fightcade from fightcade.com')
+            self.assertIn('@step 88 Unpacking', steps)
+            self.assertEqual(steps[-1], '@step 100 Fightcade 9.9.9 installed')
+            fc = tmp / 'fc'
+            # Sem a pasta Fightcade/ do pacote, e sem o arquivo baixado.
+            self.assertTrue(os.access(fc / 'Fightcade2.sh', os.X_OK))
+            self.assertFalse((fc / 'Fightcade').exists())
+            self.assertFalse((fc / '.download.part').exists())
+            # O "binario" da tabela de sessoes: so existe depois do download.
+            self.assertEqual(os.readlink(fc / 'fightcade'), str(self.SCRIPT))
+            # As ROMs em ~/roms/fightcade; o que veio na pasta vai junto.
+            roms = tmp / 'home/roms/fightcade'
+            self.assertEqual(os.readlink(fc / 'emulator/fbneo/ROMs'), str(roms / 'fbneo'))
+            self.assertEqual(os.readlink(fc / 'emulator/ggpofba/ROMs'), str(roms / 'fc1'))
+            self.assertEqual((roms / 'fbneo/neogeo.zip').read_text(), 'bios')
+            # De novo (reparo): os links e as ROMs da pessoa ficam.
+            (roms / 'fbneo/sf2.zip').write_text('rom')
+            (fc / 'Fightcade2.sh').unlink()
+            run = self.fetch(tmp)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertNotIn('@step', run.stdout)
+            self.assertIn('Fightcade 9.9.9 installed', run.stdout)
+            self.assertTrue((fc / 'Fightcade2.sh').exists())
+            self.assertTrue((fc / 'emulator/fbneo/ROMs').is_symlink())
+            self.assertEqual((roms / 'fbneo/sf2.zip').read_text(), 'rom')
+
+    def test_fetch_refuses_what_is_not_the_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            # Sem rede (o arquivo nao existe).
+            run = self.fetch(tmp, '--progress')
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail Fightcade|the download failed (no network?)', run.stdout)
+            # Outro arquivo no lugar do pacote (uma pagina de erro, um pacote sem o cliente).
+            (tmp / 'pkg.tar.gz').write_text('<html>not found</html>')
+            run = self.fetch(tmp, '--progress')
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail Fightcade|the downloaded file is not the Fightcade package', run.stdout)
+            fightcade_package(tmp / 'pkg.tar.gz', {'README.txt': 'x'})
+            self.assertEqual(self.fetch(tmp).returncode, 1)
+            self.assertFalse((tmp / 'fc/fightcade').exists())
+            self.assertFalse((tmp / 'fc/.download.part').exists())
+
+    def test_opens_in_its_own_xorg(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            x11 = tmp / 'x11-run'
+            x11.write_text('#!/bin/sh\necho "RUN=$*"\necho "RC=$FLIPEROS_OPENBOX_RC"\n')
+            x11.chmod(0o755)
+            env = self.env(tmp, FLIPEROS_X11_RUN=str(x11))
+            # Sem o download: diz onde instalar, e nao abre nada.
+            run = subprocess.run(['bash', str(self.SCRIPT)], capture_output=True, text=True, env=env)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('Setup > Frontend', run.stderr)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            # No console: o fliperos-x11-run com o nome da linha da tabela de
+            # modos (fightcade) e o openbox dele.
+            run = subprocess.run(['bash', str(tmp / 'fc/fightcade')], capture_output=True, text=True, env=env)
+            self.assertEqual(run.stdout, 'RUN=%s/fc/fightcade\nRC=/etc/fliperos/openbox-fightcade.xml\n' % tmp)
+
+    def test_inside_x_starts_the_client_and_waits_for_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            bin_dir = tmp / 'bin'
+            bin_dir.mkdir()
+            # O cliente "aberto" nas duas primeiras conferidas, depois fechado.
+            (bin_dir / 'pgrep').write_text('#!/bin/sh\nn=$(cat "%s/n" 2> /dev/null || echo 0)\n'
+                                           'echo $((n + 1)) > "%s/n"\n[ "$n" -lt 2 ]\n' % (tmp, tmp))
+            (bin_dir / 'pgrep').chmod(0o755)
+            fc = tmp / 'fc'
+            for height, scale, extra in (('480', '0.67', {}), ('768', '1.00', {}), ('240', '0.50', {}),
+                                         ('480', '0.8', {'FIGHTCADE_SCALE': '0.8'})):
+                (tmp / 'n').unlink(missing_ok=True)
+                env = self.env(tmp, DISPLAY=':9', FLIPEROS_RES_H=height, FIGHTCADE_QUIT_WAIT='1',
+                               PATH='%s:%s' % (bin_dir, os.environ['PATH']), **extra)
+                run = subprocess.run(['bash', str(fc / 'fightcade')], capture_output=True, text=True, env=env,
+                                     timeout=60)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertEqual((fc / 'args').read_text(), '--force-device-scale-factor=%s\n' % scale)
+                # Saiu so depois de o cliente fechar (tres conferidas).
+                self.assertEqual((tmp / 'n').read_text().strip(), '3')
+            env_file = (fc / 'env').read_text()
+            self.assertIn('WINEPREFIX=%s/home/.local/share/fliperos/wine-fightcade\n' % tmp, env_file)
+            self.assertIn('WINEDLLOVERRIDES=mscoree,mshtml=\n', env_file)
+            self.assertIn('WINEDEBUG=-all\n', env_file)
+
+    def test_window_shortcuts(self):
+        rc = ElementTree.parse(ROOT / 'config/openbox-fightcade.xml').getroot()
+        ns = {'ob': 'http://openbox.org/3.4/rc'}
+        keys = {k.get('key'): k.find('ob:action', ns).get('name') for k in rc.findall('ob:keyboard/ob:keybind', ns)}
+        self.assertEqual(keys, {'A-Tab': 'NextWindow', 'A-F4': 'Close'})
+        # O resto como o do fliperos-x11-run: sem bordas e as janelas maximizadas.
+        base = ElementTree.parse(ROOT / 'config/openbox-x11-run.xml').getroot()
+        for tree in (rc, base):
+            apps = tree.findall('ob:applications/ob:application', ns)
+            self.assertEqual([a.findtext('ob:decor', namespaces=ns) for a in apps], ['no', None])
+            self.assertEqual(apps[1].findtext('ob:maximized', namespaces=ns), 'yes')
+
+    def test_image_has_what_it_needs(self):
+        # O cliente (Electron) e os emuladores de 32 bits no Wine, com o
+        # OpenGL de 32 bits por onde o Direct3D do Wine desenha.
+        pkgs = apt_list()
+        for pkg in ('libnss3', 'libxss1', 'libxtst6', 'libcups2t64', 'libatk-bridge2.0-0t64', 'libatspi2.0-0t64',
+                    'libgtk-3-0t64', 'libasound2t64', 'libgbm1', 'xdg-utils'):
+            self.assertIn(pkg, pkgs)
+            if pkg != 'libgbm1':
+                self.assertIn(pkg, (ROOT / 'tools/cabinet-update.sh').read_text())
+        for text in (MKISO, (ROOT / 'tools/cabinet-update.sh').read_text()):
+            self.assertIn('libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386', text)
+        self.assertIn('wine wine64 wine32:i386 libgl1:i386', MKISO)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'etc/fliperos', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            # Uma tabela de modos de antes do Fightcade ganha a linha dele.
+            (root / 'etc/fliperos/emulator-modes.conf').write_text('flycast             640x240@60      640x480@60\n')
+            for _ in range(2):
+                subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                               capture_output=True, timeout=120)
+            self.assertTrue(os.access(root / 'opt/fliperos/bin/fliperos-fightcade', os.X_OK))
+            self.assertTrue((root / 'etc/fliperos/openbox-fightcade.xml').is_file())
+            self.assertEqual((root / 'etc/fliperos/emulator-modes.conf').read_text(),
+                             'flycast             640x240@60      640x480@60\n'
+                             'fightcade           640x480@60      640x480@60\n')
+            # O programa em si nao vem na imagem.
+            self.assertFalse((root / 'opt/fliperos/fightcade').exists())
+            self.assertTrue((root / 'usr/local/share/applications/fliperos-fightcade.desktop').is_file())
+
 
 class InputDriverTests(unittest.TestCase):
     """GunCon 2 (fora do mainline) e os drivers de volante hid-tmff2 e
@@ -2406,8 +2626,10 @@ class EmulatorMenuTests(unittest.TestCase):
     APPS = sorted(p for p in (ROOT / 'config/applications').glob('fliperos-*.desktop')
                   if 'Categories=Game;' in p.read_text())
     # O que mostra o atalho (TryExec): o binario do emulador; o Model 2 so
-    # precisa do Wine (o emulador o usuario copia).
-    TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/bin/wine'}
+    # precisa do Wine (o emulador o usuario copia), e o Fightcade aparece
+    # depois de baixado pelo Setup.
+    TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/bin/wine',
+               'fightcade': '/opt/fliperos/fightcade/fightcade'}
 
     def entry(self, path):
         return dict(line.split('=', 1) for line in path.read_text().splitlines() if '=' in line)
@@ -2415,7 +2637,7 @@ class EmulatorMenuTests(unittest.TestCase):
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
         self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'supermodel',
-                                 'dolphin', 'openbor', 'model2'})
+                                 'dolphin', 'openbor', 'model2', 'fightcade'})
 
     def test_entries_go_through_the_launcher(self):
         launcher = (ROOT / 'config/fliperos-launch').read_text()
@@ -2460,7 +2682,7 @@ class EmulatorModeTests(unittest.TestCase):
             # xinit falso: mostra o modo pedido e o comando.
             (bin_dir / 'xinit').write_text('#!/bin/bash\necho "MODE=$FLIPEROS_RES_W $FLIPEROS_RES_H $FLIPEROS_RES_HZ"\n'
                                            'echo "ARGS=$*"\n')
-            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog', 'supermodel', 'hypseus'):
+            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog', 'supermodel', 'hypseus', 'fightcade'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')
             for p in bin_dir.iterdir():
                 p.chmod(0o755)
@@ -2489,7 +2711,8 @@ class EmulatorModeTests(unittest.TestCase):
         for line in (ROOT / 'config/fliperos-emulator-modes.conf').read_text().splitlines():
             if line.strip() and not line.startswith('#'):
                 height = int(line.split()[1].split('x')[1].split('@')[0])
-                self.assertLessEqual(height, 240, line)
+                # So o Fightcade: a sala de jogos e uma pagina de desktop.
+                self.assertLessEqual(height, 480 if line.split()[0] == 'fightcade' else 240, line)
         out = self.run_x11(['supermodel', 'game.zip']).stdout
         self.assertIn('MODE=640 240 57.524', out)
         self.assertIn('-fullscreen -res=640,240 -stretch game.zip', out)
@@ -2522,6 +2745,15 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertIn('supermodel          640x240@57.524  496x384@57.524\n', table)
             # Linha mudada pela pessoa fica como esta.
             self.assertIn('fliperos-model2     320x240@60      496x384@57.524\n', table)
+
+    def test_fightcade_lobby_gets_480_lines_and_a_mouse_cursor(self):
+        # A sala de jogos nao cabe em 240 linhas: 640x480 (entrelacado no
+        # 15 kHz), com o cursor, que os emuladores de jogo direto nao tem.
+        for freq in ('15k', '31k'):
+            out = self.run_x11(['fightcade'], frequency=freq).stdout
+            self.assertIn('MODE=640 480 60', out, freq)
+            self.assertNotIn('-nocursor', out)
+        self.assertIn('-nocursor', self.run_x11(['myprog']).stdout)
 
     def test_other_monitors_keep_480(self):
         out = self.run_x11(['flycast'], frequency='31k').stdout

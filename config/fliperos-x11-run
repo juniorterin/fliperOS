@@ -116,11 +116,12 @@ vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}
 [[ $vt =~ ^[0-9]+$ ]] || vt=1
 # Cursor so para quem tem interface de mouse: PCSX2 (lista de jogos e o
-# assistente da BIOS), Dolphin, Flycast e o Model 2 no Wine. Eles mesmos o
-# escondem durante o jogo em tela cheia. Os demais abrem direto no jogo.
+# assistente da BIOS), Dolphin, Flycast, o Model 2 no Wine e o Fightcade (a
+# sala de jogos). Eles mesmos o escondem durante o jogo em tela cheia. Os
+# demais abrem direto no jogo.
 cursor=(-nocursor)
 case $name in
-  pcsx2 | dolphin-emu | flycast | fliperos-model2) cursor=() ;;
+  pcsx2 | dolphin-emu | flycast | fliperos-model2 | fightcade) cursor=() ;;
 esac
 export FLIPEROS_X11_CURSOR=$((${#cursor[@]} == 0))
 # A saida do X, do Switchres e do emulador vai para

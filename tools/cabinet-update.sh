@@ -65,8 +65,11 @@ echo "== Pacotes novos"
 # Os que a imagem ganhou depois da instalacao (fliperos-mkiso.sh).
 packages=(usbutils systemd-timesyncd gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk
   alacritty libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 cifs-utils smbclient
-  falkon transmission-gtk)
+  falkon transmission-gtk
+  libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
+# O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine.
+dpkg --print-foreign-architectures | grep -qx i386 && packages+=(libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386)
 # So mexe no apt se falta algum pacote ou se o repositorio local mudou: o
 # apt-get segura a trava dos pacotes, e quem estivesse instalando um
 # frontend pelo Setup naquela hora recebia "Impossivel criar acesso

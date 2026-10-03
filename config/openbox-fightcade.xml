@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Openbox do Fightcade (/etc/fliperos/openbox-fightcade.xml): o do
+  fliperos-x11-run (sem bordas, as janelas normais maximizadas) com dois
+  atalhos, porque aqui ha duas janelas - a sala de jogos e o emulador da
+  partida: Alt+Tab troca entre elas (e traz de volta uma minimizada), Alt+F4
+  fecha a que esta na frente.
+-->
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+  </focus>
+  <placement>
+    <policy>Smart</policy>
+  </placement>
+  <theme>
+    <name>FliperOS-Black</name>
+  </theme>
+  <desktops>
+    <number>1</number>
+  </desktops>
+  <margins>
+    <top>0</top>
+    <bottom>0</bottom>
+    <left>0</left>
+    <right>0</right>
+  </margins>
+  <keyboard>
+    <keybind key="A-Tab">
+      <action name="NextWindow">
+        <dialog>none</dialog>
+        <finalactions>
+          <action name="Focus"/>
+          <action name="Raise"/>
+          <action name="Unshade"/>
+        </finalactions>
+      </action>
+    </keybind>
+    <keybind key="A-F4">
+      <action name="Close"/>
+    </keybind>
+  </keyboard>
+  <mouse>
+    <context name="Client">
+      <mousebind button="Left" action="Press">
+        <action name="Focus"/>
+        <action name="Raise"/>
+      </mousebind>
+    </context>
+  </mouse>
+  <applications>
+    <application class="*">
+      <decor>no</decor>
+    </application>
+    <application class="*" type="normal">
+      <maximized>yes</maximized>
+    </application>
+  </applications>
+</openbox_config>

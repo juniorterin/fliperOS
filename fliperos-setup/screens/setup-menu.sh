@@ -210,12 +210,12 @@ screen_wifi() {
 # ── Frontend ─────────────────────────────────────────────────────
 
 screen_frontend() {
-  local entries=() name desc current choice pkg
+  local entries=() name desc current choice pkg label lines=()
   current=$(launcher_current)
   while IFS='|' read -r name desc; do
     if launcher_installed "$name"; then
       entries+=("$name|$desc")
-    elif launcher_package_available "$name"; then
+    elif launcher_package_available "$name" || [[ -n $(launcher_fetcher "$name") ]]; then
       entries+=("$name|$desc (not installed)")
     else
       entries+=("$name|$desc (not available yet)")
@@ -223,25 +223,38 @@ screen_frontend() {
   done < <(launcher_all)
   choice=$(ui_menu "Frontend" "Choose what starts when the computer turns on. Now: $(launcher_label "$current")." \
     "$current" "${entries[@]}") || return 0
-  if ! launcher_installed "$choice"; then
+  label=$(launcher_label "$choice")
+  if ! launcher_installed "$choice" && [[ -n $(launcher_fetcher "$choice") ]]; then
+    # De codigo fechado: nao vem na imagem nem no repositorio, o Setup baixa
+    # do site do proprio programa.
+    ui_yesno "Frontend" "$label is not installed, and it does not come with FliperOS. Download it now from its own website?" yes ||
+      return 0
+    run_with_progress "Downloading $label" "" launcher_fetch "$choice" || return 0
+    if ! launcher_installed "$choice"; then
+      ui_msg "Frontend" "$label was downloaded, but it was not found afterwards (details in the log)."
+      return 0
+    fi
+  elif ! launcher_installed "$choice"; then
     pkg=$(launcher_package "$choice")
     if [[ -z $pkg ]] || ! launcher_package_available "$choice"; then
-      ui_msg "Frontend" "$(launcher_label "$choice") is not in the FliperOS repository yet." "" \
+      ui_msg "Frontend" "$label is not in the FliperOS repository yet." "" \
         "Choose another frontend; this one will come in a later version."
       return 0
     fi
-    ui_yesno "Frontend" "$(launcher_label "$choice") is not installed. Install the $pkg package now?" yes || return 0
+    ui_yesno "Frontend" "$label is not installed. Install the $pkg package now?" yes || return 0
     run_with_progress "Installing $pkg" "" update_install_package "$pkg" || return 0
     if ! launcher_installed "$choice"; then
-      ui_msg "Frontend" "$pkg was installed, but $(launcher_label "$choice") was not found."
+      ui_msg "Frontend" "$pkg was installed, but $label was not found."
       return 0
     fi
   fi
   launcher_set "$choice"
   # As pastas de ~/roms e o comando de cada uma no frontend (lib/frontends.sh).
-  ui_info "Frontend" "Putting the game folders in $(launcher_label "$choice")..."
+  ui_info "Frontend" "Putting the game folders in $label..."
   frontends_configure "$choice"
-  ui_msg "Frontend" "$(launcher_label "$choice") will start when the computer turns on."
+  lines=("$label will start when the computer turns on.")
+  mapfile -t -O 1 lines < <(frontends_hint "$choice")
+  ui_msg "Frontend" "${lines[@]}"
 }
 
 # ── Scraper ──────────────────────────────────────────────────────

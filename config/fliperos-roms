@@ -41,6 +41,13 @@ folder "$roms/hypseus" "Hypseus Singe (laserdisc): roms/, vldp/<game>/ and singe
 if [[ -d /opt/fliperos/model2/roms && ! -e $roms/model2 ]]; then
   ln -s /opt/fliperos/model2/roms "$roms/model2" 2> /dev/null
 fi
+# Fightcade 2 (Setup > Frontend): uma pasta por emulador dele. Os romsets
+# sao os que cada um pede, nao os do MAME atual.
+folder "$roms/fightcade" "Fightcade 2: one folder per emulator it uses. They work once Fightcade is installed (Setup > Frontend)."
+folder "$roms/fightcade/fbneo" "Fightcade 2, FBNeo: arcade .zip sets of FBNeo (romset 0.2.97.44), neogeo.zip included. Console games go in subfolders: megadrive, nes, sms, pce, tg16, msx, coleco, gamegear, sg1000, spectrum..."
+folder "$roms/fightcade/flycast" "Fightcade 2, Flycast: Naomi and Atomiswave .zip sets, Dreamcast games (.chd .gdi .cdi)."
+folder "$roms/fightcade/snes9x" "Fightcade 2, SNES9x: Super Nintendo games in .zip."
+folder "$roms/fightcade/fc1" "Fightcade 1 games (FBA): .zip sets of FB Alpha 0.2.96.74. They do not work in FBNeo, and FBNeo sets do not work here."
 
 # Um core por .info: "core|nome|.ext .ext".
 while IFS='|' read -r core name exts; do
@@ -80,6 +87,14 @@ link_dir() {
 }
 if command -v pcsx2 > /dev/null 2>&1 || [[ -d $HOME/.config/PCSX2 ]]; then
   link_dir "$HOME/.config/PCSX2/bios" "$bios/ps2"
+fi
+# O Fightcade procura as ROMs dentro da pasta de cada emulador dele: cada
+# uma vira um link para ~/roms/fightcade (o que ja estava nela vai junto).
+fightcade=${FIGHTCADE_DIR:-/opt/fliperos/fightcade}
+if [[ -d $fightcade/emulator ]]; then
+  for pair in fbneo:fbneo flycast:flycast snes9x:snes9x ggpofba:fc1; do
+    [[ -d $fightcade/emulator/${pair%%:*} ]] && link_dir "$fightcade/emulator/${pair%%:*}/ROMs" "$roms/fightcade/${pair#*:}"
+  done
 fi
 
 # ── ~/media ─────────────────────────────────────────────────────────

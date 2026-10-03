@@ -286,7 +286,9 @@ apt-get update -qq
 # o apt recusava todo repositorio ("not valid yet"). A App Store do LXDE e o
 # GNOME Software (o App Center do Ubuntu 24.04 depende do snap, que nao vai
 # na imagem), com o plugin de Flatpak; o portal GTK da as janelas de abrir
-# arquivo aos apps Flatpak.
+# arquivo aos apps Flatpak. libnss3 a xdg-utils sao do cliente do Fightcade 2
+# (um Electron, que o Setup > Frontend baixa do site dele): as bibliotecas
+# que ele pede e o xdg-open, por onde ele abre os emuladores (fcade://).
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -303,6 +305,7 @@ apt-get install -y --no-install-recommends \
   openssh-server network-manager wpasupplicant iw python3 pciutils usbutils libdrm-tests edid-decode squashfs-tools \
   systemd-timesyncd \
   gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk falkon transmission-gtk \
+  libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils \
   samba samba-common-bin cifs-utils smbclient avahi-daemon avahi-utils udisks2 wireless-regdb \
   plymouth plymouth-label fonts-dejavu-core \
   lxde-core lxsession openbox-lxde-session lxpolkit lxappearance lxappearance-obconf lxde-icon-theme \
@@ -1306,16 +1309,20 @@ enable_i386_chroot() {
 # ── Wine (Model 2 Emulator e jogos do Windows) ────────────────
 # O Model 2 Emulator nao vem na imagem (freeware de codigo fechado, sem
 # permissao clara de redistribuicao): o fliperos-model2 o procura em
-# /opt/fliperos/model2, onde o usuario o copia.
+# /opt/fliperos/model2, onde o usuario o copia. Os emuladores do Fightcade 2
+# (FBNeo, SNES9x) tambem sao de 32 bits. O OpenGL de 32 bits vai junto: o
+# Direct3D do Wine desenha por ele, e sem ele o FBNeo do Fightcade para em
+# "Couldn't initialise DirectX9 Alternate video output".
 install_wine_chroot() {
   if $SKIP_WINE; then
-    warn "Wine pulado (--skip-wine) — sem Model 2"
+    warn "Wine pulado (--skip-wine) — sem Model 2 e sem os emuladores do Fightcade"
     return
   fi
-  step "Wine (Model 2 Emulator e jogos do Windows)"
+  step "Wine (Model 2 Emulator, Fightcade e jogos do Windows)"
   enable_i386_chroot
   chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    wine wine64 wine32:i386' >> "$LOG_FILE" 2>&1 || err "Instalacao do Wine falhou"
+    wine wine64 wine32:i386 libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386' >> "$LOG_FILE" 2>&1 ||
+    err "Instalacao do Wine falhou"
   mkdir -p "$CHROOT_DIR/opt/fliperos/model2/roms"
   chroot "$CHROOT_DIR" chown -R fliperos:fliperos /opt/fliperos/model2
   ok "Wine $(chroot "$CHROOT_DIR" wine --version 2> /dev/null | head -1)"

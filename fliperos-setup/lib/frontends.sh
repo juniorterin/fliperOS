@@ -219,6 +219,19 @@ frontends_configure() {
   return 0
 }
 
+# frontends_hint NOME imprime as linhas a mais da mensagem final do Setup >
+# Frontend, para quem nao usa as pastas dos emuladores do FliperOS: o
+# Fightcade tem as ROMs dele (config/fliperos-roms) e nao sai com Esc.
+frontends_hint() {
+  case $1 in
+    fightcade)
+      printf '%s\n' "" "Its ROMs go in $ROMS_DIR/fightcade, one folder per emulator." \
+        "It needs a keyboard and a mouse; Ctrl+W closes it."
+      ;;
+  esac
+  return 0
+}
+
 # xml_escape TEXTO: &, < e > para XML.
 xml_escape() {
   local s=$1
