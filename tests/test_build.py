@@ -2162,6 +2162,15 @@ def fightcade_package(path, files=None):
         'VERSION.txt': '9.9.9',
         'emulator/fbneo/fcadefbneo.exe': 'MZ',
         'emulator/fbneo/ROMs/neogeo.zip': 'bios',
+        # Os arquivos de configuracao que vem no pacote, com fim de linha do
+        # Windows (os dos emuladores do Wine) e os padroes de la.
+        'emulator/fbneo/config/fcadefbneo.default.ini':
+            '// The display mode to use for fullscreen\r\nnVidHorWidth 1280\r\nnVidHorHeight 720\r\n\r\n'
+            'nVidScrnAspectX 16\r\nnVidScrnAspectY 9 \r\nnVidVerWidth 1280\r\nbVidAutoSwitchFull 0\r\nnVidSelect 4\r\n',
+        'emulator/ggpofba/config/ggpofba-ng.default.ini':
+            'nVidWidth 1024\r\nnVidHeight 768\r\nnVidScrnAspectX 16\r\nnVidScrnAspectY 9\r\n',
+        'emulator/flycast/emu.default.cfg':
+            '[config]\nrend.Resolution = 480\nrend.ScreenStretching = 100\n\n[window]\nfullscreen = no\nheight = 480\n',
         'emulator/flycast/flycast.elf': 'ELF',
         'emulator/flycast/ROMs/.keep': '',
         'emulator/snes9x/ROMs/.keep': '',
@@ -2262,33 +2271,168 @@ class FightcadeTests(unittest.TestCase):
             run = subprocess.run(['bash', str(tmp / 'fc/fightcade')], capture_output=True, text=True, env=env)
             self.assertEqual(run.stdout, 'RUN=%s/fc/fightcade\nRC=/etc/fliperos/openbox-fightcade.xml\n' % tmp)
 
+    CLIENT = '10 ./fc2-electron/fc2-electron --no-sandbox'
+
+    def session(self, tmp, checks, frequency='15k', modes=None, switchres=True, **extra):
+        """Abre o Fightcade dentro de um X de mentira. checks: o que o pgrep
+        mostra a cada conferida (processos separados por "|"); depois da
+        ultima, nada. Devolve o processo; os pedidos ao xrandr ficam em
+        tmp/xrandr.log."""
+        bin_dir = tmp / 'bin'
+        bin_dir.mkdir(exist_ok=True)
+        (tmp / 'pgrep.checks').write_text(''.join(line + '\n' for line in checks))
+        (tmp / 'n').write_text('0\n')
+        for name in ('xrandr.log', 'xrandr.modes'):
+            (tmp / name).unlink(missing_ok=True)
+        fakes = {
+            'pgrep': 'n=$(cat "$FAKE/n")\necho $((n + 1)) > "$FAKE/n"\n'
+                     'sed -n "$((n + 1))p" "$FAKE/pgrep.checks" | tr "|" "\\n" | grep .\n',
+            # Como o xrandr de verdade: a saida com imagem, o id do modo atual
+            # e os modos acrescentados na lista.
+            'xrandr': 'case $1 in\n'
+                      '  --query)\n'
+                      '    echo "VGA-1 connected primary 640x480+0+0 (normal left inverted right) 0mm x 0mm"\n'
+                      '    echo "   SR-1_640x480@60i  59.94*+"\n'
+                      '    sed "s/.*/   &  60.00 /" "$FAKE/xrandr.modes" 2> /dev/null ;;\n'
+                      '  --verbose)\n'
+                      '    echo "VGA-1 connected primary 640x480+0+0 (0x4a) normal (normal left) 0mm x 0mm"\n'
+                      '    echo "  SR-1_640x480@60i (0x4a) 13.0MHz -HSync -VSync Interlace *current +preferred" ;;\n'
+                      '  --addmode) echo "$*" >> "$FAKE/xrandr.log"; echo "$3" >> "$FAKE/xrandr.modes" ;;\n'
+                      '  --newmode | --output) echo "$*" >> "$FAKE/xrandr.log" ;;\n'
+                      'esac\n',
+            'switchres': 'echo "Switchres: Modeline \\"$1x$2_$3 15.700000KHz 60.000000Hz\\" 6.700 $1 336 368 426 '
+                         '$2 244 247 262 -hsync -vsync"\n' if switchres else
+                         'echo "Switchres: could not find a video mode"; exit 1\n',
+        }
+        for name, body in fakes.items():
+            (bin_dir / name).write_text('#!/bin/bash\n' + body)
+            (bin_dir / name).chmod(0o755)
+        (tmp / 'fliperos.conf').write_text('frequency=%s\n' % frequency)
+        (tmp / 'modes.conf').write_text(modes or (ROOT / 'config/fliperos-emulator-modes.conf').read_text())
+        env = self.env(tmp, DISPLAY=':9', FLIPEROS_RES_H='480', FIGHTCADE_QUIT_WAIT='1', FAKE=str(tmp),
+                       FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_MODES=str(tmp / 'modes.conf'),
+                       PATH='%s:%s' % (bin_dir, os.environ['PATH']))
+        env.update(extra)
+        return subprocess.run(['bash', str(tmp / 'fc/fightcade')], capture_output=True, text=True, env=env,
+                              timeout=60)
+
+    def xrandr_log(self, tmp):
+        log = tmp / 'xrandr.log'
+        return log.read_text().splitlines() if log.exists() else []
+
     def test_inside_x_starts_the_client_and_waits_for_it(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             fightcade_package(tmp / 'pkg.tar.gz')
             self.assertEqual(self.fetch(tmp).returncode, 0)
-            bin_dir = tmp / 'bin'
-            bin_dir.mkdir()
-            # O cliente "aberto" nas duas primeiras conferidas, depois fechado.
-            (bin_dir / 'pgrep').write_text('#!/bin/sh\nn=$(cat "%s/n" 2> /dev/null || echo 0)\n'
-                                           'echo $((n + 1)) > "%s/n"\n[ "$n" -lt 2 ]\n' % (tmp, tmp))
-            (bin_dir / 'pgrep').chmod(0o755)
             fc = tmp / 'fc'
+            # O cliente aberto nas duas primeiras conferidas, depois fechado.
             for height, scale, extra in (('480', '0.67', {}), ('768', '1.00', {}), ('240', '0.50', {}),
                                          ('480', '0.8', {'FIGHTCADE_SCALE': '0.8'})):
-                (tmp / 'n').unlink(missing_ok=True)
-                env = self.env(tmp, DISPLAY=':9', FLIPEROS_RES_H=height, FIGHTCADE_QUIT_WAIT='1',
-                               PATH='%s:%s' % (bin_dir, os.environ['PATH']), **extra)
-                run = subprocess.run(['bash', str(fc / 'fightcade')], capture_output=True, text=True, env=env,
-                                     timeout=60)
+                run = self.session(tmp, [self.CLIENT, self.CLIENT], FLIPEROS_RES_H=height, **extra)
                 self.assertEqual(run.returncode, 0, run.stderr)
                 self.assertEqual((fc / 'args').read_text(), '--force-device-scale-factor=%s\n' % scale)
                 # Saiu so depois de o cliente fechar (tres conferidas).
                 self.assertEqual((tmp / 'n').read_text().strip(), '3')
+            # Uma atualizacao automatica (o cliente fecha e o fcade-upd o reabre) nao encerra a sessao.
+            run = self.session(tmp, [self.CLIENT, '11 ./fcade-upd update.tar.gz', self.CLIENT])
+            self.assertEqual((tmp / 'n').read_text().strip(), '4')
             env_file = (fc / 'env').read_text()
             self.assertIn('WINEPREFIX=%s/home/.local/share/fliperos/wine-fightcade\n' % tmp, env_file)
             self.assertIn('WINEDLLOVERRIDES=mscoree,mshtml=\n', env_file)
             self.assertIn('WINEDEBUG=-all\n', env_file)
+            # O Flycast dele e um AppImage: sem o FUSE, extrai e roda.
+            self.assertIn('APPIMAGE_EXTRACT_AND_RUN=1\n', env_file)
+
+    def test_each_match_runs_in_the_mode_of_its_emulator(self):
+        # A sala fica em 640x480; com um emulador aberto a tela vai para o
+        # modo dele na tabela (320x240 nos do Wine, 640x240 no Flycast, num
+        # monitor de 15 kHz) e volta ao da sala quando ele fecha.
+        fbneo = self.CLIENT + '|20 /usr/lib/wine/wine /opt/fliperos/fightcade/emulator/fbneo/fcadefbneo.exe sf2'
+        flycast = self.CLIENT + '|30 ./flycast.elf|31 /tmp/appimage_extracted_0/usr/bin/flycast-dojo'
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            run = self.session(tmp, [self.CLIENT, fbneo, fbneo, self.CLIENT, flycast, self.CLIENT])
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(self.xrandr_log(tmp), [
+                # Os modos ja entram na lista da saida antes de abrir a sala:
+                # o Wine os enxerga quando o emulador pede a tela cheia.
+                '--newmode fliperos-320x240@60 6.700 320 336 368 426 240 244 247 262 -hsync -vsync',
+                '--addmode VGA-1 fliperos-320x240@60',
+                '--newmode fliperos-640x240@60 6.700 640 336 368 426 240 244 247 262 -hsync -vsync',
+                '--addmode VGA-1 fliperos-640x240@60',
+                # Uma troca por partida, e a volta ao modo em que a sala abriu.
+                '--output VGA-1 --mode fliperos-320x240@60',
+                '--output VGA-1 --mode 0x4a',
+                '--output VGA-1 --mode fliperos-640x240@60',
+                '--output VGA-1 --mode 0x4a'])
+            # A sala fechada com o emulador ainda aberto: a tela volta antes de sair.
+            self.session(tmp, [self.CLIENT + '|40 wine fcadesnes9x.exe', '40 wine fcadesnes9x.exe'])
+            self.assertEqual(self.xrandr_log(tmp)[-2:], ['--output VGA-1 --mode fliperos-320x240@60',
+                                                         '--output VGA-1 --mode 0x4a'])
+            # O modo e o da tabela, que a pessoa pode editar.
+            table = (ROOT / 'config/fliperos-emulator-modes.conf').read_text().replace(
+                'fightcade-fbneo     320x240@60', 'fightcade-fbneo     384x224@59.6')
+            self.session(tmp, [fbneo, self.CLIENT], modes=table)
+            self.assertIn('--output VGA-1 --mode fliperos-384x224@59.6', self.xrandr_log(tmp))
+            # Noutros monitores a partida fica no modo da sala: nenhuma troca.
+            self.session(tmp, [self.CLIENT, fbneo, flycast, self.CLIENT], frequency='31k')
+            self.assertEqual(self.xrandr_log(tmp), [])
+            # O Switchres sem modo para o monitor: fica na sala, avisa uma vez
+            # e nao tenta de novo a cada segundo. Fechado o emulador, o modo
+            # da sala e posto de novo (o emulador pode ter trocado sozinho).
+            run = self.session(tmp, [fbneo, fbneo, fbneo, self.CLIENT], switchres=False)
+            self.assertEqual(self.xrandr_log(tmp), ['--output VGA-1 --mode 0x4a'])
+            self.assertEqual(run.stderr.count('could not switch to 320x240@60'), 1)
+
+    def test_emulators_fill_the_mode_of_the_table(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            emu = tmp / 'fc/emulator'
+            fbneo, fba, flycast = (emu / 'fbneo/config/fcadefbneo.ini', emu / 'ggpofba/config/ggpofba-ng.ini',
+                                   emu / 'flycast/emu.cfg')
+            self.session(tmp, [self.CLIENT])
+
+            def text(path):
+                return path.read_bytes().decode()
+
+            # Os arquivos saem dos "default" do pacote; a tela cheia no modo
+            # da tabela, o jogo ja em tela cheia e o monitor 4:3 (um tubo). O
+            # fim de linha do Windows fica.
+            self.assertEqual(text(fbneo), '// The display mode to use for fullscreen\r\nnVidHorWidth 320\r\n'
+                                          'nVidHorHeight 240\r\n\r\nnVidScrnAspectX 4\r\nnVidScrnAspectY 3\r\n'
+                                          'nVidVerWidth 1280\r\nbVidAutoSwitchFull 1\r\nnVidSelect 4\r\n')
+            self.assertEqual(text(fba), 'nVidWidth 320\r\nnVidHeight 240\r\nnVidScrnAspectX 4\r\nnVidScrnAspectY 3\r\n')
+            # Flycast: tela cheia e 200% de estiramento em 640x240 (pixels 8:3).
+            self.assertEqual(text(flycast), '[config]\nrend.Resolution = 480\nrend.ScreenStretching = 200\n\n'
+                                            '[window]\nfullscreen = yes\nheight = 480\n')
+            # O que a pessoa muda no emulador fica; o tamanho segue a tabela.
+            fbneo.write_bytes(text(fbneo).replace('bVidAutoSwitchFull 1', 'bVidAutoSwitchFull 0')
+                              .replace('nVidScrnAspectX 4', 'nVidScrnAspectX 16').encode())
+            flycast.write_text(text(flycast).replace('fullscreen = yes', 'fullscreen = no'))
+            table = (ROOT / 'config/fliperos-emulator-modes.conf').read_text().replace(
+                'fightcade-fbneo     320x240@60', 'fightcade-fbneo     640x240@60').replace(
+                'fightcade-flycast   640x240@60', 'fightcade-flycast   320x240@60')
+            self.session(tmp, [self.CLIENT], modes=table)
+            self.assertIn('nVidHorWidth 640\r\nnVidHorHeight 240\r\n', text(fbneo))
+            self.assertIn('nVidScrnAspectX 16\r\n', text(fbneo))
+            self.assertIn('bVidAutoSwitchFull 0\r\n', text(fbneo))
+            self.assertIn('rend.ScreenStretching = 100\n', text(flycast))
+            self.assertIn('fullscreen = no\n', text(flycast))
+        # Noutro monitor: o modo da sala, sem esticar, e o formato do pacote (16:9).
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            self.session(tmp, [self.CLIENT], frequency='31k')
+            fbneo = (tmp / 'fc/emulator/fbneo/config/fcadefbneo.ini').read_bytes().decode()
+            self.assertIn('nVidHorWidth 640\r\nnVidHorHeight 480\r\n\r\nnVidScrnAspectX 16\r\n', fbneo)
+            self.assertIn('bVidAutoSwitchFull 1\r\n', fbneo)
+            self.assertIn('rend.ScreenStretching = 100\n', (tmp / 'fc/emulator/flycast/emu.cfg').read_text())
 
     def test_window_shortcuts(self):
         rc = ElementTree.parse(ROOT / 'config/openbox-fightcade.xml').getroot()
@@ -2320,8 +2464,11 @@ class FightcadeTests(unittest.TestCase):
                       'etc/systemd/system'):
                 (root / d).mkdir(parents=True)
             (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
-            # Uma tabela de modos de antes do Fightcade ganha a linha dele.
-            (root / 'etc/fliperos/emulator-modes.conf').write_text('flycast             640x240@60      640x480@60\n')
+            # Uma tabela de modos de antes do Fightcade ganha as linhas dele: a
+            # da sala e a de cada emulador das partidas. Uma que a pessoa ja
+            # mudou fica como esta.
+            (root / 'etc/fliperos/emulator-modes.conf').write_text('flycast             640x240@60      640x480@60\n'
+                                                                   'fightcade-fc1       640x240@60      640x480@60\n')
             for _ in range(2):
                 subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
                                capture_output=True, timeout=120)
@@ -2329,7 +2476,11 @@ class FightcadeTests(unittest.TestCase):
             self.assertTrue((root / 'etc/fliperos/openbox-fightcade.xml').is_file())
             self.assertEqual((root / 'etc/fliperos/emulator-modes.conf').read_text(),
                              'flycast             640x240@60      640x480@60\n'
-                             'fightcade           640x480@60      640x480@60\n')
+                             'fightcade-fc1       640x240@60      640x480@60\n'
+                             'fightcade           640x480@60      640x480@60\n'
+                             'fightcade-fbneo     320x240@60      640x480@60\n'
+                             'fightcade-snes9x    320x240@60      640x480@60\n'
+                             'fightcade-flycast   640x240@60      640x480@60\n')
             # O programa em si nao vem na imagem.
             self.assertFalse((root / 'opt/fliperos/fightcade').exists())
             self.assertTrue((root / 'usr/local/share/applications/fliperos-fightcade.desktop').is_file())

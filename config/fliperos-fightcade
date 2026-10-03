@@ -16,15 +16,25 @@
 # o "binario" da tabela de sessoes, que so existe depois do download. Aberto
 # no console, sobe num Xorg so para ele (fliperos-x11-run) no modo da tabela
 # emulator-modes.conf: 640x480, que num monitor de 15 kHz sai entrelacado - a
-# sala de jogos e uma pagina de desktop e nao cabe em 240 linhas. Os jogos
-# abrem dentro desse mesmo modo. Ctrl+W (Window > Close) fecha; Alt+Tab troca
-# entre a sala e o emulador (config/openbox-fightcade.xml).
+# sala de jogos e uma pagina de desktop e nao cabe em 240 linhas. Ctrl+W
+# (Window > Close) fecha; Alt+Tab troca entre a sala e o emulador
+# (config/openbox-fightcade.xml).
+#
+# Cada partida abre no modo do emulador dela, tambem da tabela (as linhas
+# fightcade-fbneo, fightcade-fc1, fightcade-snes9x e fightcade-flycast): no
+# 15 kHz, 320x240 nos do Wine e 640x240 no Flycast, esticado a 200% como o
+# Flycast do sistema. Enquanto o emulador esta aberto a tela fica nesse modo
+# (o Switchres calcula o modeline e o xrandr troca); fechado, volta ao da
+# sala.
 set -uo pipefail
 dir=${FIGHTCADE_DIR:-/opt/fliperos/fightcade}
 url=${FIGHTCADE_URL:-https://www.fightcade.com/download/linux}
 user=${FLIPEROS_USER:-fliperos}
 x11run=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
 folders=${FLIPEROS_ROMS_SCRIPT:-/opt/fliperos/bin/fliperos-roms}
+modes=${FLIPEROS_MODES:-/etc/fliperos/emulator-modes.conf}
+conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+switchres_ini=${SWITCHRES_INI:-/etc/switchres.ini}
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 # say PORCENTAGEM TEXTO: uma etapa para a tela de progresso do Setup
@@ -129,6 +139,11 @@ export WINEPREFIX="${WINEPREFIX:-$HOME/.local/share/fliperos/wine-fightcade}"
 export WINEDEBUG=-all
 export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-mscoree,mshtml=}"
 mkdir -p "$(dirname "$WINEPREFIX")"
+# Na primeira vez o Wine leva uns 15 s criando o prefixo: ja comeca agora,
+# com a sala abrindo, e nao na primeira partida.
+if [[ ! -d $WINEPREFIX ]] && command -v wineboot > /dev/null; then
+  wineboot --init > /dev/null 2>&1 &
+fi
 
 # A pagina e desenhada para um desktop (janela de 1280x800): numa tela
 # menor ela encolhe na proporcao da altura, ate a metade. FIGHTCADE_SCALE
@@ -141,20 +156,148 @@ if [[ -z $scale ]]; then
   scale=$(LC_ALL=C awk -v h="${height:-720}" 'BEGIN { s = h / 720; if (s > 1) s = 1; if (s < 0.5) s = 0.5; printf "%.2f", s }')
 fi
 
+# ── O modo de cada emulador ───────────────────────────────────────
+# table_mode NOME: o modo de NOME na tabela (LARGURAxALTURA@HZ), na coluna
+# do monitor escolhido no Setup, como o fliperos-x11-run.
+table_mode() {
+  local column=3
+  [[ $(sed -n 's/^frequency=//p' "$conf" 2> /dev/null) == 15* ]] && column=2
+  awk -v p="$1" -v c="$column" '!/^[[:space:]]*#/ && $1 == p { print $c; exit }' "$modes" 2> /dev/null
+}
+
+# A saida com imagem e o modo em que a sala abriu (o id do xrandr, para
+# voltar a ele depois de uma partida), como o fliperos-resolution.
+output=$(xrandr --query 2> /dev/null |
+  awk '$2 == "connected" && / [0-9]+x[0-9]+\+[0-9]+\+[0-9]+ / { print $1; exit }')
+lobby_id=$(xrandr --verbose 2> /dev/null | awk -v o="$output" '
+  /^[^ \t]/ { inside = ($1 == o) }
+  inside && /\*current/ { gsub(/[()]/, "", $2); print $2; exit }')
+lobby_mode=$(table_mode fightcade)
+
+# mode_add MODO cria o modo na saida (uma vez) e imprime o nome dele. O
+# Switchres calcula o modeline para o monitor do switchres.ini:
+#   Switchres: Modeline "320x240_60 15.660000KHz 60.000000Hz" 6.7 320 ... -hsync -vsync
+mode_add() {
+  local line name
+  [[ -n $output && $1 =~ ^([0-9]+)x([0-9]+)@([0-9.]+)$ ]] || return 1
+  name="fliperos-$1"
+  if ! xrandr --query 2> /dev/null | grep -q "^ *$name "; then
+    line=$(switchres "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" --ini "$switchres_ini" --calc 2>&1 |
+      grep -m1 'Modeline "') || return 1
+    # shellcheck disable=SC2086 # os campos do modeline, um por argumento
+    xrandr --newmode "$name" ${line##*\" } 2> /dev/null
+    xrandr --addmode "$output" "$name" 2> /dev/null || return 1
+  fi
+  printf '%s\n' "$name"
+}
+
+# mode_game MODO troca a tela para o modo do emulador; mode_lobby volta ao
+# da sala.
+mode_game() {
+  local name
+  name=$(mode_add "$1") && xrandr --output "$output" --mode "$name"
+}
+mode_lobby() {
+  [[ -n $output && -n $lobby_id ]] && xrandr --output "$output" --mode "$lobby_id"
+}
+
+# ── A configuracao dos emuladores ─────────────────────────────────
+# once NOME: verdadeiro so na primeira vez (o que e padrao do FliperOS e a
+# pessoa pode mudar depois no proprio emulador fica anotado em .fliperos).
+once() {
+  grep -qx "$1" .fliperos 2> /dev/null && return 1
+  printf '%s\n' "$1" >> .fliperos
+}
+# keyval_set ARQUIVO CHAVE VALOR troca "CHAVE valor" (os ini do FBNeo e do
+# FBA, com fim de linha do Windows), se a chave existe no arquivo.
+keyval_set() {
+  sed -i -E "s/^($2)[[:space:]]+[^\r]*(\r?)\$/\1 $3\2/" "$1"
+}
+# cfg_set ARQUIVO CHAVE VALOR troca "CHAVE = valor" (o emu.cfg do Flycast).
+cfg_set() {
+  sed -i -E "s/^($2) = .*\$/\1 = $3/" "$1"
+}
+
+# emulators_setup: a tela cheia de cada emulador no modo da tabela. Cada um
+# le o proprio arquivo, criado do "default" que vem no pacote (como o
+# Fightcade faz na primeira partida).
+emulators_setup() {
+  local row ini mode name wkey hkey stretch crt=0
+  [[ $(sed -n 's/^frequency=//p' "$conf" 2> /dev/null) == 15* ]] && crt=1
+  # FBNeo e FBA (o do Fightcade 1): "nome:arquivo:chave da largura:da altura".
+  for row in fightcade-fbneo:emulator/fbneo/config/fcadefbneo:nVidHorWidth:nVidHorHeight \
+    fightcade-fc1:emulator/ggpofba/config/ggpofba-ng:nVidWidth:nVidHeight; do
+    IFS=: read -r name ini wkey hkey <<< "$row"
+    [[ -f $ini.ini ]] || cp "$ini.default.ini" "$ini.ini" 2> /dev/null || continue
+    mode=$(table_mode "$name")
+    [[ $mode =~ ^([0-9]+)x([0-9]+)@ ]] || continue
+    keyval_set "$ini.ini" "$wkey" "${BASH_REMATCH[1]}"
+    keyval_set "$ini.ini" "$hkey" "${BASH_REMATCH[2]}"
+    # So na primeira vez: o jogo ja abre em tela cheia e, num tubo, o
+    # formato do monitor e 4:3 (o padrao do pacote e 16:9).
+    if once "$name"; then
+      keyval_set "$ini.ini" bVidAutoSwitchFull 1
+      ((crt)) && keyval_set "$ini.ini" nVidScrnAspectX 4 && keyval_set "$ini.ini" nVidScrnAspectY 3
+    fi
+  done
+  # Flycast: quanto esticar na horizontal para o 4:3 encher o modo (640x240
+  # tem pixels 8:3: 200%), como o fliperos-x11-run faz no Flycast do sistema.
+  ini=emulator/flycast/emu
+  if [[ -f $ini.cfg ]] || cp "$ini.default.cfg" "$ini.cfg" 2> /dev/null; then
+    mode=$(table_mode fightcade-flycast)
+    if [[ $mode =~ ^([0-9]+)x([0-9]+)@ ]]; then
+      stretch=$((300 * BASH_REMATCH[1] / (4 * BASH_REMATCH[2])))
+      ((stretch < 100)) && stretch=100
+      ((stretch > 250)) && stretch=250
+      cfg_set "$ini.cfg" rend.ScreenStretching "$stretch"
+    fi
+    once fightcade-flycast && cfg_set "$ini.cfg" fullscreen yes
+  fi
+  return 0
+}
+emulators_setup
+# O Flycast do Fightcade e um AppImage, que pede o FUSE (a imagem nao o tem):
+# assim ele se extrai em /tmp a cada abertura e roda de la.
+export APPIMAGE_EXTRACT_AND_RUN=1
+# Os modos ja ficam na lista da saida: o Wine os enxerga, e um emulador que
+# entre em tela cheia antes da troca abaixo acha o modo dele.
+for name in fightcade-fbneo fightcade-fc1 fightcade-snes9x fightcade-flycast; do
+  mode=$(table_mode "$name")
+  [[ -n $mode && $mode != "$lobby_mode" ]] && mode_add "$mode" > /dev/null
+done
+
 # O Fightcade2.sh prepara a configuracao do FBNeo, registra o fcade:// (por
 # onde o cliente abre os emuladores), deixa o cliente em segundo plano e sai.
 ./Fightcade2.sh "--force-device-scale-factor=$scale" "$@"
 
 # A sessao fica ate o cliente fechar. Numa atualizacao automatica ele fecha e
 # reabre sozinho (fcade-upd): so vale como fechado depois de uns segundos sem
-# nenhum dos dois.
-gone=0
+# nenhum dos dois. Enquanto isso, a cada segundo: com um emulador aberto a
+# tela vai para o modo dele; sem nenhum, volta ao da sala.
+gone=0 current=""
 while ((gone < ${FIGHTCADE_QUIT_WAIT:-5})); do
   sleep 1
-  if pgrep -u "$(id -u)" -f 'fc2-electron/fc2-electron|fcade-upd' > /dev/null; then
-    gone=0
-  else
-    gone=$((gone + 1))
+  running=$(pgrep -u "$(id -u)" -af 'fc2-electron/fc2-electron|fcade-upd|flycast\.elf|fcadefbneo\.exe|fcv39\.exe|ggpofba-ng\.exe|fcadesnes9x\.exe')
+  case $running in
+    *fc2-electron/fc2-electron* | *fcade-upd*) gone=0 ;;
+    *) gone=$((gone + 1)) ;;
+  esac
+  case $running in
+    *flycast.elf*) want=$(table_mode fightcade-flycast) ;;
+    *fcadefbneo.exe* | *fcv39.exe*) want=$(table_mode fightcade-fbneo) ;;
+    *ggpofba-ng.exe*) want=$(table_mode fightcade-fc1) ;;
+    *fcadesnes9x.exe*) want=$(table_mode fightcade-snes9x) ;;
+    *) want="" ;;
+  esac
+  [[ $want == "$lobby_mode" ]] && want=""
+  [[ $want == "$current" ]] && continue
+  if [[ -z $want ]]; then
+    mode_lobby
+  elif ! mode_game "$want"; then
+    echo "fliperos-fightcade: could not switch to $want" >&2
   fi
+  # Trocou ou nao, e o estado pedido: sem nova tentativa a cada segundo.
+  current=$want
 done
+[[ -n $current ]] && mode_lobby
 exit 0
