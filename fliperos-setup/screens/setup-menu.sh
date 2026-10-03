@@ -5,6 +5,7 @@
 screen_setup_menu() {
   local choice last=video
   while true; do
+    screen_reload_if_updated
     UI_STATUS=$(status_line)
     choice=$(ui_menu "Setup" "" "$last" \
       "video|Video Setup" \

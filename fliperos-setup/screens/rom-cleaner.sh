@@ -195,14 +195,20 @@ screen_rom_cleaner_filters() {
 # o que sobrou. Status 2 = voltar aos parametros.
 screen_rom_cleaner_run() {
   local folder=$1 target=$2 xml=$3 dest=$4 transfer=$5 title="MAME ROM Cleaner"
-  local plan list summary move rest bytes free fields choice result verb=Copy
+  local plan list summary move rest bytes free fields choice result verb=Copy rc
   local -a rows
   shift 5
   [[ $transfer == move ]] && verb=Move
   plan=$(mktemp) list=$(mktemp)
   ui_info "$title" "Reading the MAME XML and the folder..." "The first time with each MAME version takes about a minute."
-  if ! summary=$(romclean_scan "$folder" "$target" "$xml" "$dest" "$plan" "$@" 2>> "$FLIPEROS_LOG"); then
-    ui_msg "$title" "$(ui_bad "Could not read the XML or the folder.")" "Details in $FLIPEROS_LOG."
+  # O que o fliperos-romclean reclama vai para o log e, na falha, a ultima
+  # linha vai para a tela: "nao deu" sem o motivo nao ajuda ninguem.
+  summary=$(romclean_scan "$folder" "$target" "$xml" "$dest" "$plan" "$@" 2> "$list")
+  rc=$?
+  cat "$list" >> "$FLIPEROS_LOG"
+  if ((rc != 0)); then
+    ui_msg "$title" "$(ui_bad "The romset could not be read.")" \
+      "$(grep -v '^[[:space:]]*$' "$list" | tail -n 1 | cut -c1-200)" "" "Details in $FLIPEROS_LOG."
     rm -f "$plan" "$list"
     return 2
   fi

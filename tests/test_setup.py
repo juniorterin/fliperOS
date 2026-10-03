@@ -1973,6 +1973,42 @@ class RomCleanerTests(Base):
         self.assertIn("source \"$SETUP_DIR/lib/netshare.sh\"", (SETUP / "fliperos-setup").read_text())
 
 
+class ReloadTests(Base):
+    """O Setup atualizado com a tela aberta se reabre: as telas ja carregadas
+    sao as de antes e chamariam os programas novos com as opcoes antigas (no
+    gabinete, o ROM cleaner antigo chamou o motor novo com --flycast)."""
+
+    def test_stamp_changes_when_a_file_of_the_setup_changes(self):
+        d = self.env.dir / "setup"
+        (d / "lib").mkdir(parents=True)
+        (d / "lib" / "a.sh").write_text("um\n")
+        env = {"SETUP_DIR": str(d)}
+        first = self.env.out("setup_stamp", env)
+        self.assertEqual(self.env.out("setup_stamp", env), first)
+        (d / "lib" / "a.sh").write_text("dois, maior\n")
+        second = self.env.out("setup_stamp", env)
+        self.assertNotEqual(second, first)
+        (d / "lib" / "novo.sh").write_text("x\n")
+        self.assertNotEqual(self.env.out("setup_stamp", env), second)
+
+    def test_menus_reopen_the_setup(self):
+        main = (SETUP / "fliperos-setup").read_text()
+        self.assertIn("SETUP_STAMP=$(setup_stamp)\nSETUP_ARGS=(\"$@\")\n", main)
+        menu = (SETUP / "screens" / "main-menu.sh").read_text()
+        reload = menu.split("screen_reload_if_updated() {")[1].split("\n}\n")[0]
+        self.assertIn('$(setup_stamp) != "$SETUP_STAMP"', reload)
+        self.assertIn('exec "$SETUP_DIR/fliperos-setup" "${SETUP_ARGS[@]}"', reload)
+        # No comeco dos dois menus do sistema instalado.
+        for path, name in (("main-menu.sh", "screen_main_menu"), ("setup-menu.sh", "screen_setup_menu")):
+            body = (SETUP / "screens" / path).read_text().split(name + "() {")[1].split("\n}\n")[0]
+            self.assertIn("  while true; do\n    screen_reload_if_updated\n", body, name)
+
+    def test_rom_cleaner_shows_why_the_scan_failed(self):
+        screen = (SETUP / "screens" / "rom-cleaner.sh").read_text()
+        self.assertIn('2> "$list")\n  rc=$?\n  cat "$list" >> "$FLIPEROS_LOG"', screen)
+        self.assertIn("tail -n 1", screen.split("if ((rc != 0)); then")[1].split("fi\n")[0])
+
+
 class FreeRomsTests(Base):
     """lib/freeroms.sh: Setup > Free games (config/fliperos-freeroms)."""
 

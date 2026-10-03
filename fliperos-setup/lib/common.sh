@@ -102,3 +102,11 @@ words() {
 have() {
   command -v "$1" > /dev/null 2>&1
 }
+
+# setup_stamp imprime a "versao" do Setup em disco: o nome, o tamanho e a
+# hora de cada arquivo dele. O fliperos-setup guarda a de quando abriu
+# (SETUP_STAMP); se a de agora for outra, ele foi atualizado com a tela
+# aberta (screen_reload_if_updated).
+setup_stamp() {
+  find "${SETUP_DIR:-/usr/local/lib/fliperos-setup}" -type f -printf '%p %s %T@\n' 2> /dev/null | sort | cksum
+}

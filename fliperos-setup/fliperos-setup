@@ -115,6 +115,14 @@ source "$SETUP_DIR/screens/joysticks.sh"
 # shellcheck source=screens/rom-cleaner.sh
 source "$SETUP_DIR/screens/rom-cleaner.sh"
 
+# A versao do Setup em disco quando este processo abriu e os argumentos dele:
+# atualizado com a tela aberta (System Update, tools/cabinet-update.sh), ele
+# se reabre no proximo menu (screen_reload_if_updated). As telas ja
+# carregadas aqui sao as de antes e chamariam os programas novos com as
+# opcoes antigas.
+SETUP_STAMP=$(setup_stamp)
+SETUP_ARGS=("$@")
+
 usage() {
   sed -n '8,18p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
 }

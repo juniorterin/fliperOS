@@ -29,9 +29,22 @@ screen_live_menu() {
   done
 }
 
+# screen_reload_if_updated: os arquivos do Setup mudaram em disco com ele
+# aberto? Avisa e o reabre no lugar deste processo, com os mesmos argumentos.
+# Chamado no comeco dos menus (o principal e o Setup).
+screen_reload_if_updated() {
+  [[ -n ${SETUP_STAMP:-} && $(setup_stamp) != "$SETUP_STAMP" ]] || return 0
+  [[ -x $SETUP_DIR/fliperos-setup ]] || return 0
+  log_info "fliperos-setup foi atualizado com a tela aberta: reabrindo"
+  ui_msg "FliperOS Setup" "FliperOS Setup was updated while it was open." "" "It reopens now, with the new version."
+  restore_terminal
+  exec "$SETUP_DIR/fliperos-setup" "${SETUP_ARGS[@]}"
+}
+
 screen_main_menu() {
   local choice last=frontend
   while true; do
+    screen_reload_if_updated
     UI_STATUS=$(status_line)
     choice=$(ui_menu "FliperOS" "" "$last" \
       "frontend|Start frontend" \

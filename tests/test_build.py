@@ -1488,11 +1488,16 @@ class RomCleanTests(unittest.TestCase):
         out = self.romclean('scan', '--cache', str(cache), '--xml-command', 'cat %s' % (self.tmp / 'mame.xml'), *args)
         self.assertIn('move=%s\n' % first['move'], out)
         self.assertIn('"format":1', cache.read_text()[:40].replace(' ', ''))
-        # Sem XML nem cache, e com um XML vazio: erro, nao um plano vazio.
-        for extra in ((), ('--xml-command', 'true')):
-            r = subprocess.run(['python3', str(ROOT / 'config/fliperos-romclean'), 'scan', *extra, *args],
+        # Sem XML nem cache, com um XML vazio e com uma pasta que nao existe:
+        # erro em uma linha (a que o Setup mostra), nao um plano vazio.
+        for extra, message in (((), 'no MAME XML'), (('--xml-command', 'true'), 'could not read the MAME XML'),
+                               (('--xml', str(self.tmp / 'mame.xml'), '--roms', '/nao/existe'),
+                                'could not read the romset folder')):
+            r = subprocess.run(['python3', str(ROOT / 'config/fliperos-romclean'), 'scan', *args, *extra],
                                capture_output=True, text=True)
             self.assertNotEqual(r.returncode, 0, extra)
+            self.assertIn(message, r.stderr.strip().splitlines()[-1], extra)
+            self.assertNotIn('Traceback', r.stderr, extra)
 
     def test_copy_keeps_the_romset_and_shows_progress(self):
         bios = self.tmp / 'bios-mame'

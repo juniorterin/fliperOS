@@ -318,14 +318,14 @@ def load_machines(args):
         elif args.xml:
             machines = read_machines(open_xml(args.xml))
         else:
-            sys.exit('falta o XML: --xml ARQUIVO ou --xml-command COMANDO')
+            sys.exit('no MAME XML: use --xml FILE or --xml-command COMMAND')
     except (ET.ParseError, StopIteration, OSError) as e:
-        sys.exit('nao consegui ler o XML do MAME: %s' % e)
+        sys.exit('could not read the MAME XML: %s' % e)
     finally:
         if proc is not None:
             proc.wait()
     if not machines:
-        sys.exit('o XML do MAME nao tem jogos')
+        sys.exit('the MAME XML has no games (is the emulator of this romset installed?)')
     if args.cache:
         try:
             os.makedirs(os.path.dirname(os.path.abspath(args.cache)), exist_ok=True)
@@ -557,19 +557,19 @@ def cmd_scan(args):
     folder = os.path.abspath(args.roms)
     for rule in args.only + args.exclude + args.hardware:
         if rule not in RULES:
-            sys.exit('regra desconhecida: %s (use %s)' % (rule, ', '.join(RULES)))
+            sys.exit('unknown rule: %s (use %s)' % (rule, ', '.join(RULES)))
     if args.controls is not None:
         families = set()
         for family in args.controls:
             if family not in FAMILIES and family not in CONTROL_ALIASES:
-                sys.exit('controle desconhecido: %s (use any ou %s)' % (family, ', '.join(FAMILIES)))
+                sys.exit('unknown control: %s (use any or %s)' % (family, ', '.join(FAMILIES)))
             families.update(CONTROL_ALIASES.get(family, (family,)))
         args.controls = families
     routes = {}
     for route in args.route:
         system, _, target = route.partition('=')
         if system not in FLYCAST_SYSTEMS or not target:
-            sys.exit('use --route SISTEMA=PASTA (%s)' % ', '.join(FLYCAST_SYSTEMS))
+            sys.exit('use --route SYSTEM=FOLDER (%s)' % ', '.join(FLYCAST_SYSTEMS))
         routes[system] = os.path.abspath(target)
     dest = os.path.abspath(args.dest)
     bios_dest = os.path.abspath(args.bios_dest) if args.bios_dest else None
@@ -578,7 +578,10 @@ def cmd_scan(args):
              read_catver(args.catver) if args.catver else {},
              read_ini(args.nplayers, 'nplayers') if args.nplayers else {},
              read_controls(args.controls_xml) if args.controls_xml else {})
-    present = sets_in(folder)
+    try:
+        present = sets_in(folder)
+    except OSError as e:
+        sys.exit('could not read the romset folder: %s' % e)
     kept = set()
     for target in {dest, bios_dest, *routes.values()} - {None}:
         if os.path.isdir(target) and os.path.realpath(target) != os.path.realpath(folder):
@@ -629,7 +632,7 @@ def read_plan(path):
                 size = int(fields[3]) if len(fields) > 3 and fields[3].isdigit() else 0
                 files.setdefault(fields[0], []).append((fields[2], target, size))
     if not header.get('roms') or not header.get('dest'):
-        sys.exit('plano sem a pasta das ROMs ou o destino: %s' % path)
+        sys.exit('plan without the ROM folder or the destination: %s' % path)
     return header['roms'], header['dest'], files
 
 
