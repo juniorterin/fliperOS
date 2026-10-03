@@ -1205,6 +1205,22 @@ class RomCleanTests(unittest.TestCase):
         self.assertEqual(summary['flycast'], '0')
         self.assertFalse(set(flycast) & set(rest))
 
+    def test_bios_of_a_game_already_in_the_mame_folder_is_kept(self):
+        # O mslug ja esta na pasta do MAME (limpeza anterior): a neogeo.zip
+        # que ficou na origem vai para la, nao para a lista de apagar. O mesmo
+        # com o pai de um clone (mvsc do mvscu) e o dispositivo do sfa2.
+        self.dest.mkdir()
+        for name in ('mslug.zip', 'mvscu.zip', 'sfa2.zip'):
+            (self.roms / name).rename(self.dest / name)
+        summary, move, rest = self.scan(*self.CABINET)
+        for name in ('neogeo.zip', 'mvsc.zip', 'qsound_hle.zip'):
+            self.assertIn(name, move)
+            self.assertNotIn(name, rest)
+        self.assertIn('pgm.zip', rest)
+        # Limpando a propria pasta do MAME, ela nao conta como destino.
+        _, move, rest = self.scan(*self.CABINET, roms=self.dest)
+        self.assertEqual(sorted(move), ['mslug.zip', 'mvscu.zip', 'sfa2.zip'])
+
     def test_parent_goes_for_a_clone_in_its_zip(self):
         # Num romset merged o wbmlb esta dentro do wbml.zip: o pai que nao
         # funciona vai porque o clone funciona.

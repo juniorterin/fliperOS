@@ -35,7 +35,9 @@ Filtros:
 
 O que um jogo escolhido usa vai junto: o pai (num romset merged o clone
 esta no zip dele), a BIOS e os dispositivos com ROM (romof, cloneof e
-device_ref, em cadeia). O que nao esta no XML fica como esta.
+device_ref, em cadeia). O mesmo vale para os jogos que ja estao no destino:
+a BIOS de um jogo escolhido nunca sobra para apagar. O que nao esta no XML
+fica como esta.
 
 Os sets do Flycast (Naomi, Naomi 2, Naomi GD-ROM, Atomiswave, System SP:
 os de BIOS naomi, naomi2, naomigd, awbios, segasp e as especiais), que
@@ -264,15 +266,20 @@ def best_of_each_game(machines, names, regions):
     return {min(members, key=score) for members in families.values()}
 
 
-def plan(machines, present, f):
-    """(vao, so como dependencia, ficam na origem) entre os sets da pasta."""
+def plan(machines, present, f, kept=()):
+    """(vao, so como dependencia, ficam na origem) entre os sets da pasta.
+    kept: os sets que ja estao no destino (outra pasta); o que eles usam
+    tambem vai, nunca sobra para apagar."""
     games = {n for n, m in machines.items() if not m['isbios'] and not m['isdevice'] and passes(m, f)}
     # Os que existem na pasta, e os clones que, num romset merged, estao no
     # zip do pai que existe.
     games = {n for n in games if n in present or machines[n]['cloneof'] in present}
     if f.clones == '1g1r':
         games = best_of_each_game(machines, games, f.regions.split(','))
-    needed, todo = set(), list(games)
+    # O pai, a BIOS e os dispositivos dos jogos escolhidos e dos que ja estao
+    # no destino (de uma limpeza anterior ou postos a mao): sem eles o jogo
+    # nao abre.
+    needed, todo = set(), list(games | {n for n in kept if n in machines})
     while todo:
         m = machines.get(todo.pop())
         if m is None:
@@ -301,7 +308,9 @@ def cmd_scan(args):
                 sys.exit('controle desconhecido: %s (use any ou %s)' % (family, ', '.join(FAMILIES)))
     machines = read_machines(args.xml)
     present = sets_in(folder)
-    move, needed, rest, flycast = plan(machines, present, args)
+    dest = os.path.abspath(args.dest)
+    kept = sets_in(dest) if os.path.isdir(dest) and os.path.realpath(dest) != os.path.realpath(folder) else {}
+    move, needed, rest, flycast = plan(machines, present, args, kept)
     sizes = {'move': 0, 'rest': 0}
     with open(args.plan, 'w', encoding='utf-8') as out:
         out.write('# roms\t%s\n# dest\t%s\n' % (folder, os.path.abspath(args.dest)))
