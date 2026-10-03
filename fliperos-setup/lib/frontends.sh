@@ -109,12 +109,20 @@ esde_setting() {
   fi
 }
 
+ATTRACTPLUS=${ATTRACTPLUS:-attractplus}
+
 # frontends_attract: o emulador e a tela de cada pasta no Attract-Mode Plus
-# (os mesmos que o scraper cria; o que ja existe fica).
+# (os mesmos que o scraper cria; o que ja existe fica). Uma tela sem lista
+# de jogos ganha a que o proprio Attract-Mode monta dos arquivos da pasta
+# (--build-romlist); a do Scraper, com titulo, ano e arte, fica.
 frontends_attract() {
-  local key dir platform n=0
+  local key dir platform name n=0
   while IFS='|' read -r key dir platform _; do
-    scraper_attract_prepare "$key" "$dir" "$platform" > /dev/null && n=$((n + 1))
+    name=$(scraper_attract_prepare "$key" "$dir" "$platform") || continue
+    n=$((n + 1))
+    if [[ ! -s $ATTRACT_DIR/romlists/$name.txt ]] && have "$ATTRACTPLUS"; then
+      runuser -u "$FLIPEROS_USER" -- "$ATTRACTPLUS" --build-romlist "$name" -o "$name" >> "$FLIPEROS_LOG" 2>&1
+    fi
   done < <(frontends_systems)
   log_info "Attract-Mode Plus: $n sistema(s)"
 }

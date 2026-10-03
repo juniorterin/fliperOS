@@ -1605,6 +1605,22 @@ class FrontendsTests(Base):
         settings = (self.env.dir / "es-de" / "settings" / "es_settings.xml").read_text()
         self.assertEqual(settings.count('name="MediaDirectory"'), 1)
 
+    def test_attract_mode_screens_get_a_game_list(self):
+        # Uma tela sem lista ganha a que o proprio Attract-Mode monta da pasta
+        # (--build-romlist, como o usuario); a que ja existe (do Scraper) fica.
+        env, roms = self.frontends_env()
+        attract = self.env.dir / "attract"
+        calls = self.env.dir / "attractplus.calls"
+        self.env.stub("runuser", 'echo "runuser $1 $2" >> "%s"; shift 3; exec "$@"' % calls)
+        self.env.stub("attractplus", 'echo "$*" >> "%s"' % calls)
+        (attract / "romlists").mkdir(parents=True)
+        (attract / "romlists" / "MAME.txt").write_text("#Name;Title\nsf2;Street Fighter II\n")
+        self.env.out("frontends_configure attractplus", env)
+        snes = "Super Nintendo Entertainment System (Snes9x)"
+        self.assertEqual(calls.read_text().splitlines(),
+                         ["runuser -u ninguem", "--build-romlist %s -o %s" % (snes, snes)])
+        self.assertTrue((attract / "emulators" / "MAME.cfg").exists())
+
     def test_chosen_frontend_is_configured(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_frontend() {")[1].split("\n}\n")[0]
         self.assertLess(menu.index('launcher_set "$choice"'), menu.index('frontends_configure "$choice"'))

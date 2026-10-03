@@ -50,9 +50,12 @@ screen_free_roms() {
   result=$(mktemp)
   if run_with_progress "Downloading the free games" "" freeroms_fetch "$result"; then
     out=$(cat "$result")
+    # As pastas novas com jogos entram no frontend padrao.
+    ui_info "$title" "Putting the games in the frontend..."
+    frontends_configure "$(launcher_current)"
     ui_msg "$title" "$(romclean_value "$out" downloaded) games downloaded." \
       "$(romclean_value "$out" present) were already there; $(romclean_value "$out" skipped) are for cores that are not installed." \
-      "" "Setup > Frontend puts them in the frontend; Setup > Scraper gets their art."
+      "" "Setup > Scraper gets their art and descriptions."
   fi
   rm -f "$result"
 }
@@ -233,6 +236,7 @@ screen_frontend() {
   fi
   launcher_set "$choice"
   # As pastas de ~/roms e o comando de cada uma no frontend (lib/frontends.sh).
+  ui_info "Frontend" "Putting the game folders in $(launcher_label "$choice")..."
   frontends_configure "$choice"
   ui_msg "Frontend" "$(launcher_label "$choice") will start when the computer turns on."
 }
