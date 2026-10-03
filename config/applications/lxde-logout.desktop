@@ -1,0 +1,13 @@
+[Desktop Entry]
+# O botao Desconectar do painel do LXDE (o mesmo ID do lxde-logout.desktop
+# do pacote, que /usr/local/share/applications passa na frente): o menu do
+# FliperOS no gum em vez da janela do lxsession-logout (config/fliperos-logout).
+Type=Application
+Name=Logout
+Name[pt_BR]=Desconectar
+Comment=Back to the FliperOS menu, reboot or power off
+Comment[pt_BR]=Voltar ao menu do FliperOS, reiniciar ou desligar
+Icon=gnome-logout
+Exec=/opt/fliperos/bin/fliperos-logout
+Categories=System;
+NoDisplay=true

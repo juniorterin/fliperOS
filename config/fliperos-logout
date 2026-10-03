@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# O "Desconectar" do LXDE (o item do menu, o botao do painel e o
+# quit_manager do lxsession): em vez da janela do lxsession-logout, de
+# icones ilegiveis numa tela de baixa resolucao, um terminal em tela cheia
+# com as opcoes no gum, no visual do Setup (tema Dracula, sons do menu).
+if [[ -z ${FLIPEROS_LOGOUT_TERMINAL:-} ]] && command -v alacritty > /dev/null; then
+  exec alacritty --class fliperos-logout -o 'window.startup_mode="Fullscreen"' \
+    -e env FLIPEROS_LOGOUT_TERMINAL=1 "$0"
+fi
+
+# Os sons do menu, como no Setup (Audio Setup > Menu sounds).
+sounds=${FLIPEROS_MENU_SOUNDS_DIR:-/opt/fliperos/sounds/menu}
+if ! grep -qx 'menu_sounds=off' "${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}" 2> /dev/null; then
+  [[ -f $sounds/move.wav ]] && export GUM_SOUND_MOVE=$sounds/move.wav
+  [[ -f $sounds/select.wav ]] && export GUM_SOUND_SELECT=$sounds/select.wav
+fi
+
+# Indices da paleta Dracula do terminal, como o lib/ui.sh: 4 roxo, 5 rosa.
+printf '\e[H\e[2J\e[?25l'
+gum style --border rounded --border-foreground 4 --padding "0 1" --margin "1 2" --foreground 5 \
+  "Leave the desktop"
+choice=$(gum choose --padding "0 4" --header "" --cursor "> " --cursor.foreground 5 --item.foreground 7 \
+  --selected.foreground 5 "Back to the FliperOS menu" "Reboot" "Power off" "Cancel") || exit 0
+case $choice in
+  "Back to the FliperOS menu")
+    # Fechar o lxsession fecha o desktop; o fliperos-session volta ao menu.
+    kill -TERM "${_LXSESSION_PID:-0}" 2> /dev/null || pkill -u "$(id -u)" -x lxsession
+    ;;
+  Reboot) sudo -n /sbin/reboot ;;
+  "Power off") sudo -n /sbin/poweroff ;;
+esac
+exit 0

@@ -681,6 +681,33 @@ def apt_list():
     return block.replace('\\', ' ').split()
 
 
+class DesktopLogoutTests(unittest.TestCase):
+    """O Desconectar do LXDE abre o menu do FliperOS no gum: a janela do
+    lxsession-logout era ilegivel numa tela de baixa resolucao."""
+
+    def test_every_logout_path_opens_the_gum_menu(self):
+        logout = '/opt/fliperos/bin/fliperos-logout'
+        # O quit_manager do lxsession, o item do menu (Logout do lxpanel) e o
+        # botao do painel (o lxde-logout.desktop, com o mesmo ID do pacote).
+        self.assertIn('quit_manager/command=%s\n' % logout,
+                      (ROOT / 'config/lxde/lxsession/LXDE/desktop.conf').read_text())
+        self.assertEqual((ROOT / 'config/lxde/lxpanel/LXDE/config').read_text(), '[Command]\nLogout=%s\n' % logout)
+        entry = (ROOT / 'config/applications/lxde-logout.desktop').read_text()
+        self.assertIn('\nExec=%s\n' % logout, entry)
+        self.assertIn('id=lxde-logout.desktop', (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text())
+        self.assertIn(' fliperos-logout; do', ROOTFS)
+
+    def test_logout_menu(self):
+        # Fora do terminal ele se reabre no Alacritty em tela cheia; dentro,
+        # o gum: voltar ao menu fecha o lxsession, os outros pelo sudo.
+        script = (ROOT / 'config/fliperos-logout').read_text()
+        self.assertIn('exec alacritty --class fliperos-logout -o \'window.startup_mode="Fullscreen"\'', script)
+        for line in ('"Back to the FliperOS menu" "Reboot" "Power off" "Cancel"',
+                     'kill -TERM "${_LXSESSION_PID:-0}"', 'Reboot) sudo -n /sbin/reboot ;;',
+                     '"Power off") sudo -n /sbin/poweroff ;;', 'export GUM_SOUND_MOVE=$sounds/move.wav'):
+            self.assertIn(line, script, line)
+
+
 class DesktopTerminalTests(unittest.TestCase):
     """O lxterminal e o xterm nao desenhavam as bordas do Gum: o terminal do
     desktop e o Alacritty."""

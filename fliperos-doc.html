@@ -146,7 +146,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </li>
 <li><strong>Debug mode</strong> — desligado (o padrão), o boot vai direto ao Plymouth e a saída dos frontends e emuladores (X, Switchres, o próprio programa) vai para <code>/opt/fliperos/logs/&lt;programa&gt;.log</code>, refeito a cada abertura: na tela só a imagem. Ligado, aparece tudo: o menu do Limine (<code>FLIPEROS_QUIET="no"</code> em <code>/etc/default/fliperos-boot</code>), as mensagens do kernel e do systemd no boot (sem <code>quiet splash</code> nem os parâmetros que calam) e a saída dos programas no console. Os programas seguem na hora; o boot, depois de reiniciar;</li>
 <li><strong>System Update</strong> — <code>apt-get update</code> e <code>upgrade</code>, com o progresso real do apt;</li>
-<li><strong>Start desktop</strong> — o LXDE;</li>
+<li><strong>Start desktop</strong> — o LXDE. O <strong>Desconectar</strong> (o item do menu, o botão do painel e o fim da sessão do lxsession) abre um terminal em tela cheia com o menu no gum, no visual do Setup: voltar ao menu do FliperOS, reiniciar, desligar ou cancelar (<code>config/fliperos-logout</code>; a janela de ícones do <code>lxsession-logout</code> ficava ilegível numa tela de baixa resolução);</li>
 <li><strong>Exit to shell</strong> — <code>fliperos-menu</code> volta ao menu;</li>
 <li><strong>Shutdown / Reboot</strong>.</li>
 </ul>
