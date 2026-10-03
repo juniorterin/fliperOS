@@ -2,7 +2,10 @@
 # Auditoria so de leitura de uma ISO gerada: confere que o que foi para a
 # imagem e o que esta no repositorio, sem montar nada nem tocar em hardware.
 #
-#   tools/verify-iso.sh caminho.iso      (no container do build)
+#   docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.7.iso
+#
+# No container fliperos-vmtest (tools/Dockerfile.vmtest): o do build nao tem
+# o lsinitramfs.
 set -euo pipefail
 iso=${1:?Uso: verify-iso.sh caminho.iso}
 src=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
