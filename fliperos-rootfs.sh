@@ -103,6 +103,8 @@ install -Dm755 "$src/config/fliperos-mame-ini" "$root/opt/fliperos/bin/fliperos-
 install -Dm755 "$src/config/fliperos-buttons" "$root/opt/fliperos/bin/fliperos-buttons"
 # Setup > MAME ROM Cleaner: o que sai de uma pasta de ROMs, pelo XML do MAME.
 install -Dm755 "$src/config/fliperos-romclean" "$root/opt/fliperos/bin/fliperos-romclean"
+# Setup > Free games: homebrew de codigo aberto para as pastas de ~/roms.
+install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-freeroms"
 # catver.ini, nplayers.ini e controls.xml do ROM cleaner: junto do romset ou
 # nesta pasta (lib/romclean.sh); e onde ele guarda o que leu do XML do MAME.
 mkdir -p "$root/usr/local/share/fliperos/romclean" "$root/var/cache/fliperos"

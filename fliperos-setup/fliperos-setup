@@ -66,6 +66,8 @@ source "$SETUP_DIR/lib/scraper.sh"
 source "$SETUP_DIR/lib/romclean.sh"
 # shellcheck source=lib/netshare.sh
 source "$SETUP_DIR/lib/netshare.sh"
+# shellcheck source=lib/freeroms.sh
+source "$SETUP_DIR/lib/freeroms.sh"
 # shellcheck source=lib/frontends.sh
 source "$SETUP_DIR/lib/frontends.sh"
 # shellcheck source=lib/update.sh

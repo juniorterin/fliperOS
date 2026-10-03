@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""Jogos livres para as pastas de ~/roms (Setup > Free games).
+
+Homebrew de codigo aberto, para os frontends nao comecarem vazios e para
+testar video, som e controle sem depender de ROM de ninguem: cada arquivo
+vem da pagina de versoes do proprio projeto, com o sha256 fixado, e a
+licenca de cada um esta na lista. So entra o que tem licenca livre conferida
+no repositorio do projeto.
+
+  fliperos-freeroms list
+  fliperos-freeroms fetch [--roms PASTA] [--progress]
+
+fetch baixa o que falta para a pasta do core do RetroArch que abre o jogo
+(so dos cores instalados); o que ja esta la com o hash certo fica. Com
+--progress fala com a tela de progresso do Setup (lib/progress.sh).
+"""
+import argparse
+import hashlib
+import os
+import sys
+import urllib.request
+
+ROMS = os.environ.get('FLIPEROS_ROMS', '/home/fliperos/roms')
+CORES = os.environ.get('FLIPEROS_RA_CORES', '/opt/fliperos/retroarch/cores')
+
+# (core do RetroArch, arquivo, titulo, licenca, sha256, endereco)
+GAMES = [
+    ('fceumm', '240pee.nes', '240p Test Suite (NES)', 'GPL-2.0-or-later',
+     '04f01d7372f66ea2befe325b9bd655a9fcc395a31fa46d9466286bb8f9d2e62e',
+     'https://github.com/pinobatch/240p-test-mini/releases/download/v0.23/240pee.nes'),
+    ('fceumm', 'thwaite.nes', 'Thwaite', 'GPL-3.0-or-later',
+     'a2df24d9c9f72e56c2fdc4c703becc47a5700ad0158da8208247635ebeb3779c',
+     'https://github.com/pinobatch/thwaite-nes/releases/download/v0.04/thwaite.nes'),
+    ('fceumm', 'nova.nes', 'Nova the Squirrel', 'GPL-3.0-or-later',
+     'e4780e90b9d1587489bfb797d2ca395be21371ea9262fa9f87f99324ec6960ab',
+     'https://github.com/NovaSquirrel/NovaTheSquirrel/releases/download/v1.0.6a/nova.nes'),
+    ('mgba', 'gb240p.gb', '144p Test Suite (Game Boy)', 'GPL-2.0-or-later',
+     '733eb6e7ec0719752ddd5fcda4e715c2f2e20f4ac4bc971c4bd1d49272f9bb04',
+     'https://github.com/pinobatch/240p-test-mini/releases/download/v0.23/gb240p.gb'),
+    ('mgba', 'libbet.gb', 'Libbet and the Magic Floor', 'Zlib',
+     '3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9',
+     'https://github.com/pinobatch/libbet/releases/download/v0.08/libbet.gb'),
+    ('mgba', 'ucity.gbc', 'uCity', 'GPL-3.0-or-later',
+     '9422ee2ca7b7ea1d46b58b2a429fff3f354dfd3e732dee1e7ae6220f148ce6e0',
+     'https://github.com/AntonioND/ucity/releases/download/v1.3/ucity.gbc'),
+    ('mgba', '240pee_mb.gba', '160p Test Suite (Game Boy Advance)', 'GPL-2.0-or-later',
+     '47844f7140738a06f8f3bc09780da3ab095539a250b870f614feed561d9d6f34',
+     'https://github.com/pinobatch/240p-test-mini/releases/download/v0.23/240pee_mb.gba'),
+]
+
+
+def sha256_of(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def download(url, dest, sha256):
+    """Baixa para dest.part, confere o hash e so entao da o nome."""
+    part = dest + '.part'
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'fliperos-freeroms'})
+        with urllib.request.urlopen(req, timeout=60) as resp, open(part, 'wb') as out:
+            while True:
+                chunk = resp.read(1 << 16)
+                if not chunk:
+                    break
+                out.write(chunk)
+        if sha256_of(part) != sha256:
+            raise OSError('hash diferente do fixado')
+        os.replace(part, dest)
+    finally:
+        if os.path.exists(part):
+            os.remove(part)
+
+
+def fetch(roms, cores, progress=False, games=None):
+    """Baixa o que falta; devolve (baixados, ja estavam, sem o core, falhas)."""
+    games = GAMES if games is None else games
+    downloaded = present = skipped = failed = 0
+    for index, (core, name, title, _, sha256, url) in enumerate(games):
+        if progress:
+            print('@step %d %s' % (index * 100 // len(games), title), flush=True)
+        if not os.path.isfile(os.path.join(cores, core + '_libretro.so')):
+            skipped += 1
+            continue
+        folder = os.path.join(roms, 'retroarch', core)
+        dest = os.path.join(folder, name)
+        if os.path.isfile(dest) and sha256_of(dest) == sha256:
+            present += 1
+            continue
+        try:
+            os.makedirs(folder, exist_ok=True)
+            for attempt in range(3):
+                try:
+                    download(url, dest, sha256)
+                    break
+                except OSError:
+                    if attempt == 2:
+                        raise
+            # Do dono da pasta (o Setup roda como root).
+            st = os.stat(folder)
+            os.chown(dest, st.st_uid, st.st_gid)
+            os.chmod(dest, 0o644)
+            downloaded += 1
+        except OSError as e:
+            failed += 1
+            print('fliperos-freeroms: %s: %s' % (name, e), file=sys.stderr)
+    return downloaded, present, skipped, failed
+
+
+def main():
+    parser = argparse.ArgumentParser(prog='fliperos-freeroms')
+    sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('list')
+    p = sub.add_parser('fetch')
+    p.add_argument('--roms', default=ROMS)
+    p.add_argument('--progress', action='store_true')
+    args = parser.parse_args()
+    if args.command == 'list':
+        for core, name, title, license_, _, _ in GAMES:
+            print('%s\t%s\t%s\t%s' % (core, name, title, license_))
+        return
+    downloaded, present, skipped, failed = fetch(args.roms, CORES, args.progress)
+    print('downloaded=%d\npresent=%d\nskipped=%d\nfailed=%d' % (downloaded, present, skipped, failed))
+    if args.progress:
+        if failed:
+            print('@fail Downloading|%d games did not download (no network?)' % failed, flush=True)
+        else:
+            print('@step 100 Done', flush=True)
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == '__main__':
+    main()

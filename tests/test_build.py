@@ -1653,6 +1653,63 @@ class RomCleanTests(unittest.TestCase):
                       (ROOT / 'tools/cabinet-update.sh').read_text())
 
 
+class FreeRomsTests(unittest.TestCase):
+    """config/fliperos-freeroms: jogos livres para as pastas de ~/roms."""
+
+    def test_every_game_is_pinned_and_has_a_free_license(self):
+        fr = load_script('freeroms', 'config/fliperos-freeroms')
+        self.assertGreaterEqual(len(fr.GAMES), 5)
+        seen = set()
+        for core, name, title, license_, sha256, url in fr.GAMES:
+            self.assertRegex(sha256, r'^[0-9a-f]{64}$', name)
+            # Da pagina de versoes do proprio projeto, numa tag fixa.
+            self.assertRegex(url, r'^https://github\.com/[^/]+/[^/]+/releases/download/v[0-9.a-z]+/[^/]+$', name)
+            self.assertTrue(url.endswith('/' + name), name)
+            self.assertIn(license_, ('GPL-2.0-or-later', 'GPL-3.0-or-later', 'Zlib'), name)
+            self.assertTrue(title)
+            self.assertNotIn((core, name), seen)
+            seen.add((core, name))
+
+    def test_fetch_checks_the_hash_and_only_installed_cores(self):
+        import hashlib
+        fr = load_script('freeroms', 'config/fliperos-freeroms')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'src').mkdir()
+            (tmp / 'cores').mkdir()
+            (tmp / 'cores' / 'fceumm_libretro.so').write_bytes(b'')
+            games = []
+            for core, name in (('fceumm', 'a.nes'), ('fceumm', 'b.nes'), ('mgba', 'c.gb')):
+                (tmp / 'src' / name).write_bytes(name.encode() * 100)
+                games.append((core, name, name, 'Zlib', hashlib.sha256(name.encode() * 100).hexdigest(),
+                              (tmp / 'src' / name).as_uri()))
+            roms = tmp / 'roms'
+            # O do core que nao esta instalado (mgba) fica de fora.
+            self.assertEqual(fr.fetch(str(roms), str(tmp / 'cores'), games=games), (2, 0, 1, 0))
+            self.assertEqual((roms / 'retroarch/fceumm/a.nes').read_bytes(), b'a.nes' * 100)
+            self.assertFalse((roms / 'retroarch/mgba').exists())
+            self.assertEqual(fr.fetch(str(roms), str(tmp / 'cores'), games=games), (0, 2, 1, 0))
+            # Um arquivo estragado e baixado de novo; um hash que nao bate nao
+            # deixa arquivo nenhum.
+            (roms / 'retroarch/fceumm/a.nes').write_bytes(b'estragado')
+            games[1] = games[1][:4] + ('0' * 64,) + games[1][5:]
+            (roms / 'retroarch/fceumm/b.nes').unlink()
+            self.assertEqual(fr.fetch(str(roms), str(tmp / 'cores'), games=games), (1, 0, 1, 1))
+            self.assertEqual((roms / 'retroarch/fceumm/a.nes').read_bytes(), b'a.nes' * 100)
+            self.assertEqual(sorted(p.name for p in (roms / 'retroarch/fceumm').iterdir()), ['a.nes'])
+
+    def test_list_and_install(self):
+        out = subprocess.run(['python3', str(ROOT / 'config/fliperos-freeroms'), 'list'], capture_output=True,
+                             text=True, check=True).stdout.splitlines()
+        self.assertIn('fceumm\t240pee.nes\t240p Test Suite (NES)\tGPL-2.0-or-later', out)
+        self.assertIn('install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-freeroms"',
+                      ROOTFS)
+        menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
+        self.assertIn('"freeroms|Free games (open-source homebrew)"', menu)
+        self.assertIn('freeroms) screen_free_roms ;;', menu)
+        self.assertIn('run_with_progress "Downloading the free games" "" freeroms_fetch "$result"', menu)
+
+
 class QuietLaunchTests(unittest.TestCase):
     """Sem texto na tela ao abrir emuladores; o modo debug mostra tudo."""
 

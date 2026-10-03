@@ -235,7 +235,16 @@ got=$(python3 -c 'import hashlib, lzma, sys; print(hashlib.sha256(lzma.open(sys.
   "$work/f")
 [[ $got == "$(sed -n "s/^MAME2010_SHA256 = '\(.*\)'$/\1/p" "$src/config/fliperos-romclean")" ]] \
   || fail "mame2010.xml.xz da imagem nao e o XML fixado"
-echo "ROM cleaner: fliperos-romclean e o XML do MAME 2010 (0.139)"
+# A pasta da rede (cifs-utils, smbclient) e as pastas de dados e de cache.
+for path in usr/sbin/mount.cifs usr/bin/smbclient usr/local/lib/fliperos-setup/lib/netshare.sh \
+  usr/local/share/fliperos/romclean var/cache/fliperos opt/fliperos/bin/fliperos-freeroms; do
+  has "$path"
+done
+# O gum e o compilado com patches/gum (o Espaco marcando nas listas de
+# marcar e o 0003; o build falha se um patch nao aplica), nao o do .deb.
+unsquashfs -cat "$work/filesystem.squashfs" usr/bin/gum > "$work/f" || fail "ausente: /usr/bin/gum"
+grep -qa -- '-fliperos' "$work/f" || fail "/usr/bin/gum e o do .deb, sem os patches do FliperOS"
+echo "ROM cleaner: fliperos-romclean, o XML do MAME 2010 (0.139) e a pasta da rede (mount.cifs, smbclient)"
 
 # ── Terminal: zsh com Oh My Zsh e o tema Dracula ──────────────
 for path in usr/bin/zsh usr/local/share/oh-my-zsh/oh-my-zsh.sh \

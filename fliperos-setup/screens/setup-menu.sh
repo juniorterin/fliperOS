@@ -14,6 +14,7 @@ screen_setup_menu() {
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
       "romcleaner|MAME ROM Cleaner" \
+      "freeroms|Free games (open-source homebrew)" \
       "quirks|Quirks (USB controller fixes)" \
       "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))" \
@@ -28,6 +29,7 @@ screen_setup_menu() {
       latency) screen_latency ;;
       scraper) screen_scraper ;;
       romcleaner) screen_rom_cleaner ;;
+      freeroms) screen_free_roms ;;
       quirks) screen_quirks ;;
       joysticks) screen_joysticks ;;
       debug) screen_debug ;;
@@ -35,6 +37,24 @@ screen_setup_menu() {
       return) return 0 ;;
     esac
   done
+}
+
+# ── Jogos livres ─────────────────────────────────────────────────
+
+# screen_free_roms baixa os jogos livres do config/fliperos-freeroms para as
+# pastas dos cores do RetroArch (lib/freeroms.sh).
+screen_free_roms() {
+  local title="Free games" names result out
+  names=$(freeroms_list | paste -sd'|' - | sed 's/|/, /g')
+  ui_yesno "$title" "$(printf 'Open-source homebrew, from the releases of each project, so the frontends have something to show:\n\n%s\n\nDownload them to ~/roms/retroarch?' "$names")" || return 0
+  result=$(mktemp)
+  if run_with_progress "Downloading the free games" "" freeroms_fetch "$result"; then
+    out=$(cat "$result")
+    ui_msg "$title" "$(romclean_value "$out" downloaded) games downloaded." \
+      "$(romclean_value "$out" present) were already there; $(romclean_value "$out" skipped) are for cores that are not installed." \
+      "" "Setup > Frontend puts them in the frontend; Setup > Scraper gets their art."
+  fi
+  rm -f "$result"
 }
 
 # ── Audio ────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "frontends", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
+        "status", "scraper", "romclean", "netshare", "freeroms", "frontends", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -1955,6 +1955,29 @@ class RomCleanerTests(Base):
         # De uma pasta so de leitura (a da rede) nao se move.
         self.assertIn('[[ -w $folder ]] && writable=1', screen)
         self.assertIn("source \"$SETUP_DIR/lib/netshare.sh\"", (SETUP / "fliperos-setup").read_text())
+
+
+class FreeRomsTests(Base):
+    """lib/freeroms.sh: Setup > Free games (config/fliperos-freeroms)."""
+
+    def test_list_and_fetch_events(self):
+        self.env.stub("fliperos-freeroms", """
+            case $1 in
+              list) printf 'fceumm\\t240pee.nes\\t240p Test Suite (NES)\\tGPL-2.0-or-later\\nmgba\\tlibbet.gb\\tLibbet\\tZlib\\n' ;;
+              fetch) echo "$*" > "%s/fetch.args"; printf '@step 50 Libbet\\ndownloaded=2\\npresent=0\\n@step 100 Done\\n'; exit ${FAIL:-0} ;;
+            esac
+        """ % self.env.dir)
+        env = {"FREEROMS": str(self.env.bin / "fliperos-freeroms")}
+        self.assertEqual(self.env.out("freeroms_list", env).splitlines(),
+                         ["240p Test Suite (NES) (fceumm, GPL-2.0-or-later)", "Libbet (mgba, Zlib)"])
+        result = self.env.dir / "result"
+        out = self.env.out("freeroms_fetch %s" % result, env).splitlines()
+        self.assertEqual(out[0], "@step 0 Starting")
+        self.assertEqual(out[-1], "@step 100 Done")
+        self.assertIn("downloaded=2", result.read_text())
+        self.assertEqual((self.env.dir / "fetch.args").read_text(), "fetch --progress\n")
+        # O status e o do programa, nao o do tee.
+        self.assertEqual(self.env.run("freeroms_fetch %s" % result, dict(env, FAIL="1")).returncode, 1)
 
 
 class NetShareTests(Base):
