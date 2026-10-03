@@ -121,6 +121,13 @@ echo "== Linha do kernel (boot direto no Plymouth)"
 echo "== Console calado (kernel.printk do fliperos-rootfs.sh) ja neste boot"
 sysctl -q -p /etc/sysctl.d/99-fliperos-console.conf && cat /proc/sys/kernel/printk
 
+echo "== Som HDA sempre ligado (power_save do fliperos-rootfs.sh) ja neste boot"
+if [[ -d /sys/module/snd_hda_intel/parameters ]]; then
+  echo 0 > /sys/module/snd_hda_intel/parameters/power_save
+  echo N > /sys/module/snd_hda_intel/parameters/power_save_controller
+  echo "power_save=$(cat /sys/module/snd_hda_intel/parameters/power_save)"
+fi
+
 echo "== XML do MAME 2010 (ROM cleaner)"
 /opt/fliperos/bin/fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz || echo "falhou (sem rede?)"
 

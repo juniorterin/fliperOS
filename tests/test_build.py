@@ -1563,6 +1563,14 @@ class AudioBuildTests(unittest.TestCase):
     """Som sem servidor de som: tudo direto no ALSA, e as teclas de volume
     valendo em qualquer tela."""
 
+    def test_hda_codec_never_sleeps(self):
+        # O power_save do Ubuntu (1 s) desligava o codec em silencio e cada
+        # liga-desliga estalava nas caixas ("puffs" no gabinete).
+        self.assertIn('options snd_hda_intel power_save=0 power_save_controller=N', ROOTFS)
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn('echo 0 > /sys/module/snd_hda_intel/parameters/power_save', update)
+        self.assertIn('echo N > /sys/module/snd_hda_intel/parameters/power_save_controller', update)
+
     def test_emulators_use_alsa(self):
         self.assertIn('\nsound sdl\n', (ROOT / 'config/mame.ini').read_text())
         for script in ('config/fliperos-kms-run', 'config/fliperos-x11-run'):
