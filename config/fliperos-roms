@@ -29,7 +29,10 @@ folder() {
 
 folder "$roms/mame" "GroovyMAME: ROM sets (.zip/.7z, without unzipping) and CHD folders."
 folder "$roms/ps2" "PCSX2 (PlayStation 2): .iso .chd .cso .bin/.cue. The BIOS goes in ~/bios/ps2."
-folder "$roms/dreamcast" "Flycast: Dreamcast (.gdi .cdi .chd) and Naomi/Atomiswave (.zip). BIOS in ~/bios/dc."
+folder "$roms/dreamcast" "Flycast: Dreamcast (.gdi .cdi .chd). BIOS in ~/bios/dc."
+folder "$roms/naomi" "Flycast: Sega Naomi (MAME .zip sets; a GD-ROM game also needs its CHD folder). BIOS (naomi.zip) in ~/bios/dc."
+folder "$roms/naomi2" "Flycast: Sega Naomi 2 (MAME .zip sets). BIOS (naomi2.zip) in ~/bios/dc."
+folder "$roms/atomiswave" "Flycast: Sammy Atomiswave (MAME .zip sets). BIOS (awbios.zip) in ~/bios/dc."
 folder "$roms/model3" "Supermodel (Sega Model 3): MAME .zip sets."
 folder "$roms/dolphin" "Dolphin: GameCube and Wii (.iso .gcm .rvz .wbfs .ciso)."
 folder "$roms/openbor/Paks" "OpenBOR: .pak games."

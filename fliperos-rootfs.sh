@@ -103,6 +103,9 @@ install -Dm755 "$src/config/fliperos-mame-ini" "$root/opt/fliperos/bin/fliperos-
 install -Dm755 "$src/config/fliperos-buttons" "$root/opt/fliperos/bin/fliperos-buttons"
 # Setup > MAME ROM Cleaner: o que sai de uma pasta de ROMs, pelo XML do MAME.
 install -Dm755 "$src/config/fliperos-romclean" "$root/opt/fliperos/bin/fliperos-romclean"
+# catver.ini, nplayers.ini e controls.xml do ROM cleaner: junto do romset ou
+# nesta pasta (lib/romclean.sh); e onde ele guarda o que leu do XML do MAME.
+mkdir -p "$root/usr/local/share/fliperos/romclean" "$root/var/cache/fliperos"
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"
 # Cores Dracula da interface do GroovyMAME; o ui.ini e do usuario porque o
 # MAME o regrava quando a interface e personalizada pelo proprio menu.
@@ -357,6 +360,13 @@ EOF
   if ! grep -q '^Dreamcast.BiosPath' "$home/.config/flycast/emu.cfg"; then
     bash "$src/config/fliperos-ini-set" "$home/.config/flycast/emu.cfg" config Dreamcast.BiosPath /home/fliperos/bios/dc
   fi
+  # As pastas dos arcades do Flycast (~/roms/naomi, naomi2, atomiswave, do
+  # MAME ROM Cleaner) na lista de jogos dele, junto das que ja estao la.
+  for dir in naomi naomi2 atomiswave; do
+    grep -qE "^Dreamcast\.ContentPath = .*/home/fliperos/roms/$dir(;|\$)" "$home/.config/flycast/emu.cfg" ||
+      sed -i -E "s|^(Dreamcast\.ContentPath = .*[^;[:space:]]);?[[:space:]]*\$|\1;/home/fliperos/roms/$dir|" \
+        "$home/.config/flycast/emu.cfg"
+  done
   chown -R 1000:1000 "$home/.config/flycast" 2> /dev/null || true
   # GroovyMAME: o que ele grava vai para ~/.mame (config/mame.ini). Antes ia
   # para a pasta de onde ele era aberto (a home, pelo menu): cfg, nvram e

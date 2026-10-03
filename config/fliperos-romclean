@@ -1,16 +1,38 @@
 #!/usr/bin/env python3
 """MAME ROM Cleaner do FliperOS (Setup > MAME ROM Cleaner).
 
-Escolhe, de uma pasta com um romset do MAME, os jogos que interessam, pelo
-XML da versao do MAME daquele romset (-listxml), e os move para a pasta do
-MAME; o que sobra na pasta de origem fica listado para o Setup perguntar se
-apaga. Os filtros seguem o MAME Smart ROM Sorter
-(github.com/Cyborgbob/MAME-Smart-ROM-Sorter), so com o que o XML diz:
+De uma pasta com um romset do MAME (no disco, num pendrive ou numa pasta da
+rede), escolhe os jogos que interessam e os copia (ou move) para a pasta do
+emulador; o pai, a BIOS e os dispositivos de que eles precisam vao junto.
+Funciona como o ROMLister (waste.org/~winkles/ROMLister): junta o XML da
+versao do MAME do romset (-listxml) com o catver.ini (categorias e jogos
+adultos), o nplayers.ini (como se joga a dois: alternado ou ao mesmo tempo)
+e o controls.xml do Controls.dat (os botoes que o jogo usa de verdade), e
+filtra pelo que o gabinete tem. Os tres arquivos sao opcionais: sem um
+deles, os filtros que dependem dele deixam passar tudo.
 
-  fliperos-romclean scan --xml ARQUIVO|- --roms ORIGEM --dest PASTA_DO_MAME
-                         --plan PLANO [filtros]
-  fliperos-romclean apply PLANO move|delete-rest
+  fliperos-romclean scan (--xml ARQUIVO|- | --xml-command COMANDO)
+                         [--cache ARQUIVO] --roms ORIGEM --dest PASTA
+                         --plan PLANO [destinos] [dados] [filtros]
+  fliperos-romclean apply PLANO copy|move|delete-rest [--progress]
+                          [--result ARQUIVO]
+  fliperos-romclean options [dados]
   fliperos-romclean fetch-mame2010 DESTINO
+
+O XML: um arquivo (.xml ou .xml.xz), a entrada padrao (-) ou a saida de um
+comando ("groovymame -listxml"). Com --cache, o que foi lido do XML fica
+guardado e a leitura seguinte leva um segundo em vez de um minuto.
+
+Destinos:
+  --dest PASTA           a pasta dos jogos
+  --bios-dest PASTA      a das BIOS e dos dispositivos (sem ela, vao com os
+                         jogos)
+  --route SISTEMA=PASTA  a dos jogos de um sistema do Flycast (naomi, naomi2,
+                         atomiswave)
+  --no-devices           sem os dispositivos (o Flycast nao os usa)
+
+Dados:
+  --catver ARQUIVO  --nplayers ARQUIVO  --controls-xml ARQUIVO
 
 Filtros:
   --arcade-only          so maquinas de ficha (input coins): sem consoles,
@@ -19,19 +41,36 @@ Filtros:
                          "imperfect", ou tudo (padrao)
   --orientation any|horizontal|vertical
   --max-players N        --max-buttons N   (0: qualquer)
-  --controls any|FAMILIA,...  os controles que o painel tem: joystick,
-                         analog, trackball, spinner, pedal, lightgun,
-                         keyboard, mahjong. Jogo so de botoes sempre passa.
+  --controls any|FAMILIA,...  os controles que o painel tem: joy8, joy4,
+                         joy2 (joystick de 8, 4 e 2 direcoes), twin (dois
+                         joysticks por jogador), trackball, spinner, paddle,
+                         positional, analog, pedal, lightgun, keyboard,
+                         mahjong; "joystick" vale joy8,joy4,joy2,twin. Jogo so
+                         de botoes sempre passa.
+  --categories GENERO,...  os generos do catver.ini (a parte antes da barra:
+                         Fighter, Shooter, Maze...)
+  --no-mature            sem os jogos adultos (* Mature * no catver.ini)
+  --play-modes MODO,...  single (1 jogador), alt (dois ou mais, um de cada
+                         vez), sim (ao mesmo tempo), unknown (o nplayers.ini
+                         nao diz)
+  --scan-rates 15,25,31  a frequencia horizontal do jogo em kHz: 15 (padrao,
+                         ate uns 288 linhas), 25 (media resolucao) e 31
   --clones keep|none|1g1r    1g1r: uma versao por jogo, pela --regions
   --regions World,USA,...    ordem das regioes da descricao (1g1r)
   --no-bootlegs  --no-prototypes  (pela descricao)
-  --years 1980-1999
+  --years 1980-1999      --decades 1980,1990
+  --systems SISTEMA,...  so estes sistemas do Flycast (naomi, naomi2,
+                         atomiswave)
+  --hardware PLACA,...   so estas placas: neogeo, cps1, cps2, cps3, psx,
+                         midway (T/W/X/Y-unit, as do Mortal Kombat)
   --only REGRA / --exclude REGRA  clone, bios, device, mechanical,
-                         notworking, vertical, horizontal, vector, chd, psx
-                         (placa com a CPU do PlayStation: ZN-1/ZN-2, Namco
-                         System 10/11/12, Konami GV/GQ/573/Twinkle, Taito
-                         G-NET; "PSX CPU" e CXD8661R no XML do 0.139, "Sony
-                         CXD8530/8606/8661" no atual)
+                         notworking, vertical, horizontal, vector, chd,
+                         mature, flycast, naomi, naomi2, atomiswave e as
+                         placas do --hardware. psx: placa com a CPU do
+                         PlayStation (ZN-1/ZN-2, Namco System 10/11/12,
+                         Konami GV/GQ/573/Twinkle, Taito G-NET; "PSX CPU" e
+                         CXD8661R no XML do 0.139, "Sony CXD8530/8606/8661" no
+                         atual)
 
 O que um jogo escolhido usa vai junto: o pai (num romset merged o clone
 esta no zip dele), a BIOS e os dispositivos com ROM (romof, cloneof e
@@ -39,20 +78,23 @@ device_ref, em cadeia). O mesmo vale para os jogos que ja estao no destino:
 a BIOS de um jogo escolhido nunca sobra para apagar. O que nao esta no XML
 fica como esta.
 
-Os sets do Flycast (Naomi, Naomi 2, Naomi GD-ROM, Atomiswave, System SP:
-os de BIOS naomi, naomi2, naomigd, awbios, segasp e as especiais), que
-ficam na pasta do MAME, nunca sao apagados; com --flycast move (o destino
-e a pasta do MAME) vao junto, passando ou nao nos filtros, e com --flycast
-keep (o padrao) ficam onde estao.
+Os sets do Flycast (Naomi, Naomi 2, Naomi GD-ROM, Atomiswave, System SP: os
+que chegam pelo romof as BIOS naomi, naomi2, naomigd, awbios, segasp e as
+especiais) passam pelos filtros como os outros, mas nunca entram na lista
+de apagar.
 """
 import argparse
 import hashlib
+import json
 import lzma
 import os
 import re
+import shlex
 import shutil
+import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 import xml.etree.ElementTree as ET
 
@@ -63,8 +105,19 @@ MAME2010_SHA256 = '20eb4b0a9404cc2b0df6489d0370e215ec5f3d255c1321f7037df899dfdee
 MAME2010_URL = ('https://raw.githubusercontent.com/libretro/mame2010-libretro/%s/metadata/mame2010.xml'
                 % MAME2010_COMMIT)
 
+# Muda quando o que o read_machines guarda muda: um cache antigo e refeito.
+CACHE_FORMAT = 1
+
 PSX_CPU = re.compile(r'^(PSX CPU|(Sony )?CXD8(530|606|661)[A-Z]*)$')
 SET_EXTENSIONS = ('.zip', '.7z')
+
+# As BIOS dos sistemas arcade do Flycast: o sistema de um set e o da primeira
+# delas na cadeia de romof (o naomigd, dos GD-ROM, e Naomi).
+FLYCAST_BIOS = {
+    'awbios': 'atomiswave', 'naomi2': 'naomi2', 'naomi': 'naomi', 'naomigd': 'naomi', 'hod2bios': 'naomi',
+    'f355bios': 'naomi', 'f355dlx': 'naomi', 'airlbios': 'naomi', 'segasp': 'systemsp',
+}
+FLYCAST_SYSTEMS = ('naomi', 'naomi2', 'atomiswave')
 
 RULES = {
     'clone': lambda m: bool(m['cloneof']),
@@ -76,22 +129,53 @@ RULES = {
     'horizontal': lambda m: m['display'] is not None and m['rotate'] in (0, 180),
     'vector': lambda m: m['display'] == 'vector',
     'chd': lambda m: m['disk'],
+    'mature': lambda m: m['mature'],
+    'flycast': lambda m: m['system'] is not None,
+    'naomi': lambda m: m['system'] == 'naomi',
+    'naomi2': lambda m: m['system'] == 'naomi2',
+    'atomiswave': lambda m: m['system'] == 'atomiswave',
+    # As placas (--hardware): pelo arquivo do driver e pela BIOS.
+    'neogeo': lambda m: 'neogeo' in m['roots'] or m['source'] in ('neogeo', 'neopcb'),
+    'cps1': lambda m: m['source'].startswith('cps1') or m['source'] == 'fcrash',
+    'cps2': lambda m: m['source'] == 'cps2',
+    'cps3': lambda m: m['source'] == 'cps3',
+    'midway': lambda m: m['source'] in ('midtunit', 'midwunit', 'midxunit', 'midyunit'),
     'psx': lambda m: any(PSX_CPU.match(cpu) for cpu in m['cpus']),
 }
+HARDWARE = ('neogeo', 'cps1', 'cps2', 'cps3', 'psx', 'midway')
 
-# Os tipos de controle do XML (o 0.139 escreve joy8way, vjoy2way,
-# doublejoy8way; o atual, joy com o atributo ways) em familias de painel.
+# Os tipos de controle do XML em familias de painel. O joystick vem a parte
+# (control_family): o 0.139 escreve joy8way, vjoy2way, doublejoy8way; o
+# atual, joy e doublejoy com o atributo ways.
 CONTROL_FAMILIES = {
-    'joy': 'joystick', 'doublejoy': 'joystick', 'triplejoy': 'joystick',
     'stick': 'analog',
     'trackball': 'trackball', 'mouse': 'trackball',
-    'dial': 'spinner', 'paddle': 'spinner', 'positional': 'spinner',
+    'dial': 'spinner',
+    'paddle': 'paddle',
+    'positional': 'positional',
     'pedal': 'pedal',
     'lightgun': 'lightgun',
     'keyboard': 'keyboard', 'keypad': 'keyboard',
     'mahjong': 'mahjong', 'hanafuda': 'mahjong', 'gambling': 'mahjong',
 }
-FAMILIES = sorted(set(CONTROL_FAMILIES.values()))
+JOYSTICKS = ('joy8', 'joy4', 'joy2', 'twin')
+FAMILIES = sorted(set(CONTROL_FAMILIES.values()) | set(JOYSTICKS))
+CONTROL_ALIASES = {'joystick': JOYSTICKS}
+
+PLAY_MODES = ('single', 'alt', 'sim', 'unknown')
+SCAN_RATES = ('15', '25', '31')
+
+# Generos do catver.ini que nao sao jogo de gabinete (caca-niqueis, maquinas
+# de premio, computadores, consoles, aparelhos): comecam desmarcados na tela.
+GENRES_OFF = {
+    'Slot Machine', 'Gambling', 'Casino', 'Card Games', 'Electromechanical', 'Medal Game', 'Redemption Game',
+    'Whac-A-Mole', 'Arcade', 'System', 'Computer', 'Handheld', 'Game Console', 'Game Console/Computer',
+    'Board Game', 'Utilities', 'Calculator', 'Musical Instrument', 'Musical Instrument Accessory', 'Music Player',
+    'Telephone', 'Printer', 'Player', 'Tablet', 'Watch', 'Medical Equipment', 'Digital Camera', 'Robot',
+    'Road Indicator', 'Radio', 'Luna Park', 'Digital Simulator', 'TV Bundle', 'Computer Graphic Workstation',
+    'Non Arcade', 'Touchscreen', 'Bartop',
+}
+MATURE = re.compile(r'\s*\*\s*Mature\s*\*\s*', re.I)
 
 # Regioes da descricao ("(World 960909)", "(USA, rev. B)") para o 1g1r.
 REGION_WORDS = {
@@ -102,9 +186,6 @@ REGION_WORDS = {
     'oceania': 'Oceania', 'australia': 'Oceania',
 }
 REGION_ORDER = ['World', 'USA', 'Europe', 'Brazil', 'Hispanic', 'Oceania', 'Asia', 'Japan', 'Unknown']
-# As BIOS dos sistemas arcade do Flycast: um set cuja cadeia de romof chega
-# a uma delas e do Flycast.
-FLYCAST_BIOS = {'naomi', 'naomi2', 'naomigd', 'awbios', 'segasp', 'hod2bios', 'f355bios', 'f355dlx', 'airlbios'}
 BOOTLEG = re.compile(r'\((?:[^)]*\b)?(bootleg|hack)\b', re.I)
 PROTOTYPE = re.compile(r'\((?:[^)]*\b)?(prototype|beta|location test)\b', re.I)
 
@@ -117,10 +198,22 @@ def open_xml(src):
     return open(src, 'rb')
 
 
-def control_family(kind):
-    kind = re.sub(r'^v(?=(double|triple)?joy)', '', kind.lower())
-    kind = re.sub(r'\d+way$', '', kind)
-    return CONTROL_FAMILIES.get(kind, kind)
+def control_family(ctrl):
+    """A familia de painel de um <control> do XML (None: so botoes)."""
+    kind = ctrl.get('type', '').lower()
+    old = re.match(r'^v?(double|triple)?joy(\d+)way$', kind)
+    if old:
+        twin, ways = old.group(1), old.group(2)
+    elif kind in ('joy', 'doublejoy', 'triplejoy'):
+        twin, ways = kind != 'joy', ctrl.get('ways', '8')
+    else:
+        return CONTROL_FAMILIES.get(kind) if kind != 'only_buttons' else None
+    if twin:
+        return 'twin'
+    # ways: 1, 2, vertical2, strange2, 4, 3 (half4), 8, 5 (half8), 16.
+    first = re.match(r'\d+', ways)
+    count = int(first.group()) if first else 2
+    return 'joy8' if count in (5, 8, 16) else 'joy4' if count in (3, 4) else 'joy2'
 
 
 def regions_of(desc):
@@ -134,10 +227,30 @@ def regions_of(desc):
     return found
 
 
-def read_machines(src):
+def scan_rate(display):
+    """A frequencia horizontal do jogo: '15', '25' ou '31' kHz (None: nao e
+    raster ou o XML nao diz). Pelo pixclock/htotal; sem eles, pelas linhas
+    visiveis e uns 10% de retraco."""
+    if display is None or display.get('type', 'raster') != 'raster':
+        return None
+    try:
+        pixclock, htotal = float(display.get('pixclock') or 0), float(display.get('htotal') or 0)
+        if pixclock and htotal:
+            hz = pixclock / htotal
+        else:
+            lines = int(display.get('height') or 0)
+            if not lines:
+                return None
+            hz = lines * 1.1 * float(display.get('refresh') or 60)
+    except ValueError:
+        return None
+    return '15' if hz < 20000 else '25' if hz < 28500 else '31'
+
+
+def read_machines(stream):
     """Os jogos do XML (<machine> do MAME atual, <game> do 0.139 e antes)."""
     machines = {}
-    events = ET.iterparse(open_xml(src), events=('start', 'end'))
+    events = ET.iterparse(stream, events=('start', 'end'))
     _, root = next(events)
     for event, el in events:
         if event != 'end' or el.tag not in ('machine', 'game'):
@@ -151,10 +264,12 @@ def read_machines(src):
         if inp is not None:
             buttons = int(inp.get('buttons', '0') or 0)
             for ctrl in inp.iter('control'):
-                if ctrl.get('type'):
-                    controls.add(control_family(ctrl.get('type')))
+                family = control_family(ctrl)
+                if family:
+                    controls.add(family)
                 buttons = max(buttons, int(ctrl.get('buttons', '0') or 0))
         year = (el.findtext('year') or '').strip()
+        source = os.path.splitext(os.path.basename(a.get('sourcefile', '')))[0].lower()
         machines[a['name'].lower()] = {
             'description': desc,
             'cloneof': a.get('cloneof', '').lower(),
@@ -162,18 +277,20 @@ def read_machines(src):
             'isbios': a.get('isbios') == 'yes',
             'isdevice': a.get('isdevice') == 'yes' or a.get('runnable') == 'no',
             'ismechanical': a.get('ismechanical') == 'yes',
+            'source': source,
             'status': driver.get('status', '') if driver is not None else '',
             'display': display.get('type', 'raster') if display is not None else None,
             'rotate': int(display.get('rotate', '0')) if display is not None else 0,
+            'scan': scan_rate(display),
             'disk': el.find('disk') is not None,
             'cpus': [c.get('name', '') for c in el.iter('chip') if c.get('type') == 'cpu'],
             'devices': [d.get('name', '').lower() for d in el.iter('device_ref')],
             'coins': int(inp.get('coins', '0') or 0) if inp is not None else 0,
             'players': int(inp.get('players', '0') or 0) if inp is not None else 0,
             'buttons': buttons,
-            'controls': controls,
+            'controls': sorted(controls),
             'decade': int(year[:3]) * 10 if year[:3].isdigit() else None,
-            'regions': regions_of(desc),
+            'regions': sorted(regions_of(desc)),
             'bootleg': bool(BOOTLEG.search(desc)),
             'prototype': bool(PROTOTYPE.search(desc)),
         }
@@ -181,17 +298,141 @@ def read_machines(src):
     return machines
 
 
-def sets_in(folder):
-    """{nome do set: [arquivos]}: os .zip/.7z e as pastas (CHD, set solto)."""
-    sets = {}
-    for entry in os.scandir(folder):
-        if entry.is_dir(follow_symlinks=False):
-            name = entry.name
+def load_machines(args):
+    """Os jogos do XML: do cache, se houver um deste formato, senao do
+    arquivo, da entrada padrao ou do comando (e o cache e gravado)."""
+    if args.cache and os.path.isfile(args.cache):
+        try:
+            with open(args.cache, encoding='utf-8') as f:
+                data = json.load(f)
+            if data.get('format') == CACHE_FORMAT and data.get('machines'):
+                return data['machines']
+        except (OSError, ValueError):
+            pass
+    proc = None
+    try:
+        if args.xml_command:
+            proc = subprocess.Popen(shlex.split(args.xml_command), stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL)
+            machines = read_machines(proc.stdout)
+        elif args.xml:
+            machines = read_machines(open_xml(args.xml))
         else:
-            name, ext = os.path.splitext(entry.name)
-            if ext.lower() not in SET_EXTENSIONS:
-                continue
-        sets.setdefault(name.lower(), []).append(entry.name)
+            sys.exit('falta o XML: --xml ARQUIVO ou --xml-command COMANDO')
+    except (ET.ParseError, StopIteration, OSError) as e:
+        sys.exit('nao consegui ler o XML do MAME: %s' % e)
+    finally:
+        if proc is not None:
+            proc.wait()
+    if not machines:
+        sys.exit('o XML do MAME nao tem jogos')
+    if args.cache:
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(args.cache)), exist_ok=True)
+            tmp = '%s.%d.tmp' % (args.cache, os.getpid())
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump({'format': CACHE_FORMAT, 'machines': machines}, f, separators=(',', ':'))
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, args.cache)
+        except OSError:
+            pass
+    return machines
+
+
+def read_ini(path, section):
+    """{set: valor} de uma secao de um .ini do MAME (catver.ini, nplayers.ini)."""
+    values, current = {}, None
+    with open(path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('['):
+                current = line.strip('[]').lower()
+            elif current == section and '=' in line and not line.startswith(';'):
+                key, value = line.split('=', 1)
+                values[key.strip().lower()] = value.strip()
+    return values
+
+
+def file_version(path, pattern):
+    """A versao escrita no comeco do arquivo ("catver.ini 0.289")."""
+    try:
+        with open(path, encoding='utf-8', errors='replace') as f:
+            found = re.search(pattern, f.read(8192), re.I)
+    except OSError:
+        return ''
+    return found.group(1) if found else '?'
+
+
+def read_catver(path):
+    """{set: (genero, adulto)}: "Fighter / Versus * Mature *" -> (Fighter, True)."""
+    out = {}
+    for name, value in read_ini(path, 'category').items():
+        genre = MATURE.sub('', value.split(' / ')[0]).strip()
+        out[name] = (genre or 'Unknown', bool(MATURE.search(value)))
+    return out
+
+
+def play_modes(value):
+    """"4P alt / 2P sim" -> {alt, sim}; "1P" -> {single}; "???", "Device",
+    "Pinball" e o que nao esta no nplayers.ini -> {unknown}."""
+    modes = set()
+    for part in (value or '').split('/'):
+        found = re.match(r'(\d+)p(?:\s+(alt|sim))?$', part.strip().lower())
+        if found:
+            modes.add('single' if found.group(1) == '1' else found.group(2) or 'sim')
+    return modes or {'unknown'}
+
+
+def read_controls(path):
+    """{set: botoes do jogador 1} do controls.xml (Controls.dat)."""
+    out = {}
+    for _, el in ET.iterparse(path):
+        if el.tag != 'game':
+            continue
+        for player in el.findall('player'):
+            if player.get('number') == '1' and (player.get('numButtons') or '').isdigit():
+                out[(el.get('romname') or '').lower()] = int(player.get('numButtons'))
+        el.clear()
+    return out
+
+
+def annotate(machines, catver, nplayers, buttons):
+    """O que depende da cadeia de romof e dos arquivos de dados: a placa, o
+    sistema do Flycast, o genero, o modo de jogo e os botoes do Controls.dat
+    (o clone sem dado proprio fica com o do pai)."""
+    for name, m in machines.items():
+        m['controls'] = set(m['controls'])
+        m['regions'] = set(m['regions'])
+        roots, parent = [], m['romof']
+        while parent and parent not in roots and len(roots) < 8:
+            roots.append(parent)
+            parent = machines.get(parent, {}).get('romof')
+        m['roots'] = roots
+        m['system'] = next((FLYCAST_BIOS[n] for n in [name] + roots if n in FLYCAST_BIOS), None)
+        m['genre'], m['mature'] = catver.get(name) or catver.get(m['cloneof']) or (None, False)
+        m['modes'] = play_modes(nplayers.get(name) or nplayers.get(m['cloneof']))
+        if name in buttons or m['cloneof'] in buttons:
+            m['buttons'] = buttons.get(name, buttons.get(m['cloneof']))
+
+
+def sets_in(folder):
+    """{nome do set: [(arquivo, tamanho)]}: os .zip/.7z e as pastas (CHD, set
+    solto; tamanho None, medido so se preciso). O tamanho vem da propria
+    listagem: numa pasta da rede, um stat por arquivo levaria minutos."""
+    sets = {}
+    with os.scandir(folder) as entries:
+        for entry in entries:
+            if entry.is_dir(follow_symlinks=False):
+                name, size = entry.name, None
+            else:
+                name, ext = os.path.splitext(entry.name)
+                if ext.lower() not in SET_EXTENSIONS:
+                    continue
+                try:
+                    size = entry.stat(follow_symlinks=False).st_size
+                except OSError:
+                    size = 0
+            sets.setdefault(name.lower(), []).append((entry.name, size))
     return sets
 
 
@@ -199,6 +440,10 @@ def size_of(path):
     if os.path.isdir(path) and not os.path.islink(path):
         return sum(size_of(os.path.join(path, f)) for f in os.listdir(path))
     return os.lstat(path).st_size
+
+
+def csv(value):
+    return [v.strip() for v in (value or '').split(',') if v.strip()]
 
 
 def passes(m, f):
@@ -216,7 +461,15 @@ def passes(m, f):
         return False
     if f.max_buttons and m['buttons'] > f.max_buttons:
         return False
-    if f.controls != 'any' and not m['controls'] <= set(f.controls.split(',')):
+    if f.controls is not None and not m['controls'] <= f.controls:
+        return False
+    if f.categories is not None and m['genre'] is not None and m['genre'] not in f.categories:
+        return False
+    if f.no_mature and m['mature']:
+        return False
+    if f.play_modes is not None and not m['modes'] & f.play_modes:
+        return False
+    if f.scan_rates is not None and m['scan'] is not None and m['scan'] not in f.scan_rates:
         return False
     if f.clones == 'none' and m['cloneof']:
         return False
@@ -226,6 +479,12 @@ def passes(m, f):
         first, last = (int(y) for y in f.years.split('-'))
         if m['decade'] is None or not first // 10 * 10 <= m['decade'] <= last:
             return False
+    if f.decades is not None and m['decade'] not in f.decades:
+        return False
+    if f.systems is not None and m['system'] not in f.systems:
+        return False
+    if f.hardware and not any(RULES[h](m) for h in f.hardware):
+        return False
     return all(RULES[r](m) for r in f.only) and not any(RULES[r](m) for r in f.exclude)
 
 
@@ -236,18 +495,6 @@ def root_of(machines, name):
             break
         name = parent
     return name
-
-
-def is_flycast(machines, name):
-    """O set e de um sistema arcade do Flycast (a cadeia de romof chega a uma
-    das BIOS dele)?"""
-    for _ in range(8):
-        if name in FLYCAST_BIOS:
-            return True
-        name = machines.get(name, {}).get('romof')
-        if not name:
-            return False
-    return False
 
 
 def best_of_each_game(machines, names, regions):
@@ -267,9 +514,9 @@ def best_of_each_game(machines, names, regions):
 
 
 def plan(machines, present, f, kept=()):
-    """(vao, so como dependencia, ficam na origem) entre os sets da pasta.
-    kept: os sets que ja estao no destino (outra pasta); o que eles usam
-    tambem vai, nunca sobra para apagar."""
+    """(vao, so como dependencia, sobram na origem, do Flycast que ficam)
+    entre os sets da pasta. kept: os sets que ja estao no destino (outra
+    pasta); o que eles usam tambem vai, nunca sobra para apagar."""
     games = {n for n, m in machines.items() if not m['isbios'] and not m['isdevice'] and passes(m, f)}
     # Os que existem na pasta, e os clones que, num romset merged, estao no
     # zip do pai que existe.
@@ -284,43 +531,77 @@ def plan(machines, present, f, kept=()):
         m = machines.get(todo.pop())
         if m is None:
             continue
-        for dep in [m['romof'], m['cloneof'], *m['devices']]:
+        for dep in [m['romof'], m['cloneof']] + ([] if f.no_devices else m['devices']):
             if dep and dep not in needed and dep not in games:
                 needed.add(dep)
                 todo.append(dep)
     known = {n for n in present if n in machines}
     move = known & (games | needed)
-    # Os do Flycast nunca sobram para apagar: vao todos para a pasta do MAME
-    # (move) ou ficam todos onde estao (keep).
-    flycast = {n for n in known if is_flycast(machines, n)}
-    move = move | flycast if f.flycast == 'move' else move - flycast
+    # Os do Flycast nunca sobram para apagar.
+    flycast = {n for n in known if machines[n]['system']}
     return move, move & needed - games, known - move - flycast, flycast - move
+
+
+def free_bytes(path):
+    """O espaco livre onde a pasta fica (ou vai ficar)."""
+    path = os.path.abspath(path)
+    while not os.path.isdir(path) and path != os.path.dirname(path):
+        path = os.path.dirname(path)
+    try:
+        return shutil.disk_usage(path).free
+    except OSError:
+        return 0
 
 
 def cmd_scan(args):
     folder = os.path.abspath(args.roms)
-    for rule in args.only + args.exclude:
+    for rule in args.only + args.exclude + args.hardware:
         if rule not in RULES:
             sys.exit('regra desconhecida: %s (use %s)' % (rule, ', '.join(RULES)))
-    if args.controls != 'any':
-        for family in args.controls.split(','):
-            if family not in FAMILIES:
+    if args.controls is not None:
+        families = set()
+        for family in args.controls:
+            if family not in FAMILIES and family not in CONTROL_ALIASES:
                 sys.exit('controle desconhecido: %s (use any ou %s)' % (family, ', '.join(FAMILIES)))
-    machines = read_machines(args.xml)
-    present = sets_in(folder)
+            families.update(CONTROL_ALIASES.get(family, (family,)))
+        args.controls = families
+    routes = {}
+    for route in args.route:
+        system, _, target = route.partition('=')
+        if system not in FLYCAST_SYSTEMS or not target:
+            sys.exit('use --route SISTEMA=PASTA (%s)' % ', '.join(FLYCAST_SYSTEMS))
+        routes[system] = os.path.abspath(target)
     dest = os.path.abspath(args.dest)
-    kept = sets_in(dest) if os.path.isdir(dest) and os.path.realpath(dest) != os.path.realpath(folder) else {}
+    bios_dest = os.path.abspath(args.bios_dest) if args.bios_dest else None
+    machines = load_machines(args)
+    annotate(machines,
+             read_catver(args.catver) if args.catver else {},
+             read_ini(args.nplayers, 'nplayers') if args.nplayers else {},
+             read_controls(args.controls_xml) if args.controls_xml else {})
+    present = sets_in(folder)
+    kept = set()
+    for target in {dest, bios_dest, *routes.values()} - {None}:
+        if os.path.isdir(target) and os.path.realpath(target) != os.path.realpath(folder):
+            kept.update(sets_in(target))
     move, needed, rest, flycast = plan(machines, present, args, kept)
+
+    def dest_of(name):
+        m = machines[name]
+        if bios_dest and (m['isbios'] or m['isdevice']):
+            return bios_dest
+        return routes.get(m['system'], dest)
     sizes = {'move': 0, 'rest': 0}
     with open(args.plan, 'w', encoding='utf-8') as out:
-        out.write('# roms\t%s\n# dest\t%s\n' % (folder, os.path.abspath(args.dest)))
+        out.write('# roms\t%s\n# dest\t%s\n' % (folder, dest))
         for kind, names in (('move', move), ('rest', rest)):
             for name in sorted(names):
-                for filename in sorted(present[name]):
-                    size = size_of(os.path.join(folder, filename))
+                for filename, size in sorted(present[name]):
+                    if size is None:
+                        size = size_of(os.path.join(folder, filename))
                     sizes[kind] += size
                     desc = machines[name]['description'].replace('\t', ' ').replace('\n', ' ')
-                    out.write('%s\t%s\t%s\t%d\t%s\n' % (kind, name, filename, size, desc))
+                    out.write('%s\t%s\t%s\t%d\t%s\t%s\n' % (kind, name, filename, size, desc,
+                                                          dest_of(name) if kind == 'move' else ''))
     print('machines=%d' % len(machines))
     print('sets=%d' % len([n for n in present if n in machines]))
     print('move=%d' % len(move))
@@ -330,9 +611,11 @@ def cmd_scan(args):
     print('rest_bytes=%d' % sizes['rest'])
     print('unknown=%d' % len([n for n in present if n not in machines]))
     print('flycast=%d' % len(flycast))
+    print('free_bytes=%d' % free_bytes(dest))
 
 
 def read_plan(path):
+    """(origem, destino, {move|rest: [(arquivo, pasta de destino, bytes)]})."""
     header, files = {}, {'move': [], 'rest': []}
     with open(path, encoding='utf-8') as f:
         for line in f:
@@ -341,15 +624,17 @@ def read_plan(path):
                 key, _, value = line[2:].partition('\t')
                 header[key] = value
             elif line:
-                kind, _, filename = line.split('\t')[:3]
-                files.setdefault(kind, []).append(filename)
+                fields = line.split('\t')
+                target = fields[5] if len(fields) > 5 and fields[5] else header.get('dest', '')
+                size = int(fields[3]) if len(fields) > 3 and fields[3].isdigit() else 0
+                files.setdefault(fields[0], []).append((fields[2], target, size))
     if not header.get('roms') or not header.get('dest'):
         sys.exit('plano sem a pasta das ROMs ou o destino: %s' % path)
     return header['roms'], header['dest'], files
 
 
 def chown_like(path, st):
-    """O que foi movido fica do dono da pasta do MAME (o Setup roda como root)."""
+    """O que chegou fica do dono da pasta do emulador (o Setup roda como root)."""
     try:
         os.chown(path, st.st_uid, st.st_gid, follow_symlinks=False)
         if os.path.isdir(path) and not os.path.islink(path):
@@ -360,33 +645,142 @@ def chown_like(path, st):
         pass
 
 
+class Progress:
+    """Os eventos da tela de progresso do Setup (lib/progress.sh), no maximo
+    tres por segundo: a tela e redesenhada a cada um."""
+
+    def __init__(self, enabled, total_bytes, total_files):
+        self.enabled, self.total, self.files = enabled, max(total_bytes, 1), total_files
+        self.done = self.index = 0
+        self.last = 0.0
+        self.name = ''
+
+    def start(self, name):
+        self.index += 1
+        self.name = name
+        self.emit()
+
+    def add(self, count):
+        self.done += count
+        self.emit()
+
+    def emit(self, force=False):
+        now = time.monotonic()
+        if not self.enabled or (not force and now - self.last < 0.33):
+            return
+        self.last = now
+        # 99 no maximo: o 100 e o fim, depois de tudo conferido.
+        print('@step %d %d of %d: %s' % (min(99, self.done * 100 // self.total), self.index, self.files,
+                                         self.name), flush=True)
+
+
+def copy_path(src, dst, st, progress):
+    """Copia um arquivo ou uma pasta (CHD) para dst. O que ja esta la com o
+    mesmo tamanho fica; cada arquivo chega como .part e so entao ganha o
+    nome, para uma copia cortada no meio nao passar por inteira. Devolve
+    (copiados, ja estavam)."""
+    if os.path.isdir(src):
+        os.makedirs(dst, exist_ok=True)
+        chown_like(dst, st)
+        copied = skipped = 0
+        for name in sorted(os.listdir(src)):
+            c, s = copy_path(os.path.join(src, name), os.path.join(dst, name), st, progress)
+            copied, skipped = copied + c, skipped + s
+        return copied, skipped
+    size = os.path.getsize(src)
+    if os.path.isfile(dst) and os.path.getsize(dst) == size:
+        progress.add(size)
+        return 0, 1
+    part = dst + '.part'
+    try:
+        with open(src, 'rb') as fin, open(part, 'wb') as fout:
+            while True:
+                chunk = fin.read(1 << 20)
+                if not chunk:
+                    break
+                fout.write(chunk)
+                progress.add(len(chunk))
+        os.replace(part, dst)
+    except BaseException:
+        if os.path.exists(part):
+            os.remove(part)
+        raise
+    chown_like(dst, st)
+    return 1, 0
+
+
 def cmd_apply(args):
-    folder, dest, files = read_plan(args.plan)
-    done = skipped = 0
-    if args.action == 'move':
-        os.makedirs(dest, exist_ok=True)
-        st = os.stat(dest)
-    for filename in files['move' if args.action == 'move' else 'rest']:
+    folder, _, files = read_plan(args.plan)
+    transfer = args.action in ('copy', 'move')
+    todo = files['move' if transfer else 'rest']
+    progress = Progress(args.progress and transfer, sum(size for _, _, size in todo), len(todo))
+    done = skipped = errors = 0
+    stats = {}
+    for filename, target_dir, _ in todo:
         # So um arquivo da propria pasta, nunca um caminho.
         path = os.path.join(folder, filename)
         if '/' in filename or filename in ('.', '..') or not os.path.lexists(path):
             skipped += 1
             continue
-        if args.action == 'move':
-            target = os.path.join(dest, filename)
-            # Ja esta la (ou a origem e a propria pasta do MAME): fica.
-            if os.path.lexists(target):
-                skipped += 1
+        try:
+            if not transfer:
+                if os.path.isdir(path) and not os.path.islink(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+                done += 1
                 continue
-            shutil.move(path, target)
-            chown_like(target, st)
-        elif os.path.isdir(path) and not os.path.islink(path):
-            shutil.rmtree(path)
+            if target_dir not in stats:
+                os.makedirs(target_dir, exist_ok=True)
+                stats[target_dir] = os.stat(target_dir)
+            target = os.path.join(target_dir, filename)
+            progress.start(filename)
+            if args.action == 'copy':
+                copied, _ = copy_path(path, target, stats[target_dir], progress)
+                done, skipped = done + bool(copied), skipped + (not copied)
+            elif os.path.lexists(target):
+                # Ja esta la (ou a origem e a propria pasta do emulador): fica.
+                skipped += 1
+            else:
+                shutil.move(path, target)
+                chown_like(target, stats[target_dir])
+                done += 1
+        except OSError as e:
+            errors += 1
+            print('fliperos-romclean: %s: %s' % (filename, e), file=sys.stderr)
+            # A origem sumiu (a pasta da rede caiu, o pendrive saiu): para.
+            if not os.path.isdir(folder):
+                break
+    lines = ['%s=%d' % ({'copy': 'copied', 'move': 'moved'}.get(args.action, 'deleted'), done),
+             'skipped=%d' % skipped, 'errors=%d' % errors]
+    if args.result:
+        with open(args.result, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines) + '\n')
+    print('\n'.join(lines))
+    if progress.enabled:
+        if errors:
+            print('@fail Copying|%d sets could not be copied (details in the log)' % errors, flush=True)
         else:
-            os.remove(path)
-        done += 1
-    print('%s=%d' % ('moved' if args.action == 'move' else 'deleted', done))
-    print('skipped=%d' % skipped)
+            print('@step 100 Done', flush=True)
+    sys.exit(1 if errors else 0)
+
+
+def cmd_options(args):
+    """O que os arquivos de dados oferecem a tela: a versao de cada um
+    ("# catver<TAB>0.289") e os generos do catver.ini, os de jogo primeiro e
+    cada grupo do mais comum ao mais raro
+    ("genre<TAB>nome<TAB>quantos<TAB>marcado")."""
+    if args.catver:
+        counts = {}
+        for genre, _ in read_catver(args.catver).values():
+            counts[genre] = counts.get(genre, 0) + 1
+        print('# catver\t%s' % file_version(args.catver, r'catver\.ini\s+([0-9][0-9.]*)'))
+        for genre in sorted(counts, key=lambda g: (g in GENRES_OFF, -counts[g], g)):
+            print('genre\t%s\t%d\t%d' % (genre, counts[genre], genre not in GENRES_OFF))
+    if args.nplayers:
+        print('# nplayers\t%s' % file_version(args.nplayers, r'NPlayers\s+([0-9][0-9.]*)'))
+    if args.controls_xml:
+        print('# controls\t%s' % file_version(args.controls_xml, r'<version\s+name="([^"]*)"'))
 
 
 def cmd_fetch_mame2010(args):
@@ -415,34 +809,67 @@ def cmd_fetch_mame2010(args):
     print('ok %s' % args.dest)
 
 
+def data_arguments(p):
+    p.add_argument('--catver')
+    p.add_argument('--nplayers')
+    p.add_argument('--controls-xml', '--controls-file', dest='controls_xml')
+
+
 def main():
     parser = argparse.ArgumentParser(prog='fliperos-romclean')
     sub = parser.add_subparsers(dest='command', required=True)
+
+    def choices_of(allowed, name):
+        def parse(value):
+            values = csv(value)
+            for v in values:
+                if v not in allowed:
+                    parser.error('%s: %s (use %s)' % (name, v, ', '.join(allowed)))
+            return set(values)
+        return parse
+
     p = sub.add_parser('scan')
-    p.add_argument('--xml', required=True)
+    p.add_argument('--xml')
+    p.add_argument('--xml-command')
+    p.add_argument('--cache')
     p.add_argument('--roms', required=True)
     p.add_argument('--dest', required=True)
+    p.add_argument('--bios-dest')
+    p.add_argument('--route', action='append', default=[])
+    p.add_argument('--no-devices', action='store_true')
     p.add_argument('--plan', required=True)
+    data_arguments(p)
     p.add_argument('--arcade-only', action='store_true')
     p.add_argument('--status', choices=('working', 'imperfect', 'all'), default='all')
     p.add_argument('--orientation', choices=('any', 'horizontal', 'vertical'), default='any')
     p.add_argument('--max-players', type=int, default=0)
     p.add_argument('--max-buttons', type=int, default=0)
-    p.add_argument('--controls', default='any')
+    p.add_argument('--controls', type=lambda v: None if v == 'any' else csv(v))
+    p.add_argument('--categories', type=lambda v: set(csv(v)))
+    p.add_argument('--no-mature', action='store_true')
+    p.add_argument('--play-modes', type=choices_of(PLAY_MODES, '--play-modes'))
+    p.add_argument('--scan-rates', type=choices_of(SCAN_RATES, '--scan-rates'))
     p.add_argument('--clones', choices=('keep', 'none', '1g1r'), default='keep')
     p.add_argument('--regions', default=','.join(REGION_ORDER))
     p.add_argument('--no-bootlegs', action='store_true')
     p.add_argument('--no-prototypes', action='store_true')
     p.add_argument('--years', type=lambda v: v if re.fullmatch(r'\d{4}-\d{4}', v) else
                    parser.error('use --years 1980-1999'))
+    p.add_argument('--decades', type=lambda v: {int(d) for d in csv(v)})
+    p.add_argument('--systems', type=choices_of(FLYCAST_SYSTEMS, '--systems'))
+    p.add_argument('--hardware', type=csv, default=[])
     p.add_argument('--only', action='append', default=[])
     p.add_argument('--exclude', action='append', default=[])
-    p.add_argument('--flycast', choices=('keep', 'move'), default='keep')
     p.set_defaults(func=cmd_scan)
     p = sub.add_parser('apply')
     p.add_argument('plan')
-    p.add_argument('action', choices=('move', 'delete-rest'))
+    p.add_argument('action', choices=('copy', 'move', 'delete-rest'))
+    p.add_argument('--progress', action='store_true')
+    p.add_argument('--result')
     p.set_defaults(func=cmd_apply)
+    p = sub.add_parser('options')
+    data_arguments(p)
+    p.set_defaults(func=cmd_options)
     p = sub.add_parser('fetch-mame2010')
     p.add_argument('dest')
     p.set_defaults(func=cmd_fetch_mame2010)

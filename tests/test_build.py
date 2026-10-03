@@ -494,7 +494,12 @@ class PadKeysTests(unittest.TestCase):
         self.assertEqual(m.event(P.EV_KEY, 0x136, 1), [(P.KEY_PAGEUP, 1)])  # L
         self.assertEqual(m.event(P.EV_KEY, 0x221, 1), [(P.KEY_DOWN, 1)])   # direcional
         self.assertEqual(m.event(P.EV_KEY, 0x130, 2), [])  # repeticao do proprio controle
-        self.assertEqual(m.event(P.EV_KEY, 0x133, 1), [])  # X/Y: sem tecla
+        # Botao 3 e X/Y: Espaco, que marca nas listas de marcar (ui_checklist).
+        self.assertEqual(m.event(P.EV_KEY, 0x122, 1), [(P.KEY_SPACE, 1)])
+        self.assertEqual(m.event(P.EV_KEY, 0x133, 1), [(P.KEY_SPACE, 1)])
+        self.assertEqual(m.event(P.EV_KEY, 0x134, 0), [(P.KEY_SPACE, 0)])
+        self.assertEqual(P.KEY_SPACE, 57)
+        self.assertEqual(m.event(P.EV_KEY, 0x132, 1), [])  # C: sem tecla
 
     def test_digital_stick_of_an_arcade_encoder(self):
         # Encoder de fliperama (DragonRise, Xin-Mo): eixo 0..255, repouso 127/128.
@@ -822,7 +827,8 @@ class RomFoldersTests(unittest.TestCase):
             for _ in range(2):  # a segunda rodada nao muda nada
                 subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             roms = tmp / 'roms'
-            for emu in ('mame', 'ps2', 'dreamcast', 'model3', 'dolphin', 'openbor/Paks', 'hypseus'):
+            for emu in ('mame', 'ps2', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'dolphin',
+                        'openbor/Paks', 'hypseus'):
                 self.assertTrue((roms / emu / '_info.txt').is_file(), emu)
             self.assertEqual((roms / 'retroarch/snes9x/_info.txt').read_text(),
                              'RetroArch, core snes9x: Nintendo - SNES / SFC (Snes9x - Current) '
@@ -864,7 +870,9 @@ class RomFoldersTests(unittest.TestCase):
         self.assertIn('system_directory = "/home/fliperos/bios"', (ROOT / 'config/retroarch.cfg').read_text())
         self.assertIn('rompath /home/fliperos/roms/mame', (ROOT / 'config/mame.ini').read_text())
         flycast = (ROOT / 'config/flycast-emu.cfg').read_text()
-        self.assertIn('Dreamcast.ContentPath = /home/fliperos/roms/dreamcast', flycast)
+        # Os discos do Dreamcast e os arcades (uma pasta por sistema).
+        self.assertIn('Dreamcast.ContentPath = /home/fliperos/roms/dreamcast;/home/fliperos/roms/naomi;'
+                      '/home/fliperos/roms/naomi2;/home/fliperos/roms/atomiswave\n', flycast)
         self.assertIn('Dreamcast.BiosPath = /home/fliperos/bios/dc', flycast)
         self.assertIn('FLYCAST_BIOS_PATH=', (ROOT / 'config/fliperos-x11-run').read_text())
         smb = (ROOT / 'config/smb.conf').read_text()
@@ -917,7 +925,8 @@ class RomFoldersTests(unittest.TestCase):
             os.utime(home / '.mame/cfg/mvsc.cfg', (1000, 1000))
             # Um emu.cfg do Flycast de antes ganha a pasta da BIOS.
             (root / 'home/fliperos/.config/flycast').mkdir(parents=True)
-            (root / 'home/fliperos/.config/flycast/emu.cfg').write_text('[config]\nrend.Resolution = 480\n')
+            (root / 'home/fliperos/.config/flycast/emu.cfg').write_text(
+                '[config]\nDreamcast.ContentPath = /home/fliperos/roms/dreamcast;/mnt/dc\nrend.Resolution = 480\n')
             for _ in range(2):
                 subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
                                capture_output=True, timeout=120)
@@ -946,8 +955,11 @@ class RomFoldersTests(unittest.TestCase):
             self.assertEqual((home / '.mame/cfg/mvsc.cfg').read_text(), 'novo')
             self.assertEqual((home / '.mame/cfg/sf2.cfg').read_text(), 'so no .mame')
             self.assertEqual((home / '.mame/cfg/default.cfg').read_text(), 'so na home')
-            self.assertIn('Dreamcast.BiosPath = /home/fliperos/bios/dc',
-                          (root / 'home/fliperos/.config/flycast/emu.cfg').read_text())
+            flycast = (root / 'home/fliperos/.config/flycast/emu.cfg').read_text()
+            self.assertIn('Dreamcast.BiosPath = /home/fliperos/bios/dc', flycast)
+            # ...e as pastas dos arcades na lista de jogos, junto das que tinha.
+            self.assertIn('Dreamcast.ContentPath = /home/fliperos/roms/dreamcast;/mnt/dc;/home/fliperos/roms/naomi;'
+                          '/home/fliperos/roms/naomi2;/home/fliperos/roms/atomiswave\n', flycast)
 
 
 class GroovyMameTests(unittest.TestCase):
@@ -1240,14 +1252,20 @@ class RomCleanTests(unittest.TestCase):
                             '--dest', str(self.dest), '--plan', str(plan), *flags)
         summary = dict(line.split('=', 1) for line in out.splitlines())
         parts = {'move': [], 'rest': []}
+        # self.dests: a pasta de destino de cada arquivo que vai.
+        self.dests = {}
         for line in plan.read_text().splitlines():
             if not line.startswith('#'):
-                kind, _, filename = line.split('\t')[:3]
-                parts[kind].append(filename)
+                fields = line.split('\t')
+                parts[fields[0]].append(fields[2])
+                if fields[0] == 'move':
+                    self.dests[fields[2]] = fields[5]
         return summary, sorted(parts['move']), sorted(parts['rest'])
 
+    # O preset do Setup para o GroovyMAME: os arcades do Flycast ficam para ele.
     CABINET = ('--arcade-only', '--status', 'imperfect', '--max-players', '2', '--max-buttons', '6',
-               '--controls', 'joystick', '--clones', '1g1r', '--no-bootlegs', '--no-prototypes')
+               '--controls', 'joystick', '--clones', '1g1r', '--no-bootlegs', '--no-prototypes',
+               '--exclude', 'flycast')
 
     def test_joystick_cabinet(self):
         # O preset do Setup: arcade, ate 2 jogadores e 6 botoes, so joystick,
@@ -1290,17 +1308,225 @@ class RomCleanTests(unittest.TestCase):
         _, move, _ = self.scan('--only', 'psx')
         self.assertEqual(move, ['coh1000c.zip', 'sfex.zip', 'tekken3.zip'])
 
-    def test_flycast_sets_are_never_deleted(self):
-        # Naomi e Atomiswave, do Flycast, ficam na pasta do MAME: nunca sobram
-        # para apagar, e vao todos quando o destino e a pasta do MAME.
+    def test_flycast_systems_go_to_their_folders(self):
+        # Naomi e Atomiswave, do Flycast: fora do alvo dele nao vao nem sobram
+        # para apagar.
         flycast = ['awbios.zip', 'kofxi.zip', 'mvsc2.zip', 'naomi.zip']
         summary, move, rest = self.scan(*self.CABINET)
         self.assertEqual(summary['flycast'], '4')
         self.assertFalse(set(flycast) & set(move + rest))
-        summary, move, rest = self.scan('--only', 'psx', '--flycast', 'move')
-        self.assertEqual(move, sorted(flycast + ['coh1000c.zip', 'sfex.zip', 'tekken3.zip']))
+        # No alvo Flycast: so os sistemas dele, cada um na sua pasta, a BIOS na
+        # dela e sem os dispositivos do MAME.
+        naomi, aw, bios = (str(self.tmp / d) for d in ('naomi', 'atomiswave', 'bios-dc'))
+        target = ('--dest', naomi, '--route', 'naomi=' + naomi, '--route', 'atomiswave=' + aw,
+                  '--bios-dest', bios, '--no-devices')
+        summary, move, rest = self.scan('--systems', 'naomi,atomiswave', *target)
+        self.assertEqual(self.dests, {'mvsc2.zip': naomi, 'kofxi.zip': aw, 'naomi.zip': bios, 'awbios.zip': bios})
         self.assertEqual(summary['flycast'], '0')
+        self.assertNotIn('mvsc2.zip', rest)
+        self.assertIn('mslug.zip', rest)
+        _, move, rest = self.scan('--systems', 'atomiswave', *target)
+        self.assertEqual(move, ['awbios.zip', 'kofxi.zip'])
         self.assertFalse(set(flycast) & set(rest))
+        # Os filtros valem para eles como para os outros (o kofxi e imperfeito).
+        _, move, _ = self.scan('--systems', 'naomi,atomiswave', '--status', 'working', *target)
+        self.assertEqual(move, ['mvsc2.zip', 'naomi.zip'])
+        self.assertEqual(subprocess.run(
+            ['python3', str(ROOT / 'config/fliperos-romclean'), 'scan', '--xml', str(self.tmp / 'mame.xml'),
+             '--roms', str(self.roms), '--dest', naomi, '--plan', str(self.tmp / 'p'), '--systems', 'dreamcast'],
+            capture_output=True).returncode, 2)
+
+    def test_bios_and_devices_go_to_the_bios_folder(self):
+        # --bios-dest: a BIOS e os dispositivos numa pasta, os jogos (e o pai
+        # de um clone) na outra.
+        bios = str(self.tmp / 'bios-mame')
+        _, move, _ = self.scan(*self.CABINET, '--bios-dest', bios)
+        for name in ('neogeo.zip', 'coh1000c.zip', 'qsound_hle.zip'):
+            self.assertEqual(self.dests[name], bios, name)
+        for name in ('mslug.zip', 'mvsc.zip', 'mvscu.zip', 'kinst', 'kinst.zip'):
+            self.assertEqual(self.dests[name], str(self.dest), name)
+        _, move, _ = self.scan(*self.CABINET, '--bios-dest', bios, '--no-devices')
+        self.assertNotIn('qsound_hle.zip', move)
+        self.assertIn('neogeo.zip', move)
+        # O que ja esta na pasta das BIOS tambem e destino: a BIOS do jogo de
+        # la nunca sobra para apagar.
+        Path(bios).mkdir()
+        (self.roms / 'mslug.zip').rename(Path(bios) / 'mslug.zip')
+        _, move, rest = self.scan('--only', 'psx', '--bios-dest', bios)
+        self.assertIn('neogeo.zip', move)
+        self.assertNotIn('neogeo.zip', rest)
+
+    def data_files(self):
+        catver = self.tmp / 'catver.ini'
+        catver.write_text(';; catver.ini 0.289 / 21-Aug-26 / MAME 0.289 ;;\n\n[Category]\n'
+                          'mslug=Platform / Run, Jump & Shoot\nsfa2=Fighter / Versus\nmvsc=Fighter / Versus\n'
+                          '1942=Shooter / Flying Vertical\nbroken=Tabletop / Mahjong * Mature *\n'
+                          'pinball=Arcade / Pinball\nnes=Game Console / Home Videogame\n'
+                          'neogeo=System / BIOS\n\n[VerAdded]\nmslug=0.36b5\n')
+        nplayers = self.tmp / 'nplayers.ini'
+        nplayers.write_text(';; NPlayers 0.278 / 06-jul-25 / MAME .278 ;;\n\n[NPlayers]\nmslug=2P sim\n'
+                            '1942=2P alt\nsfa2=2P sim\ncent=1P\nxmen6p=6P alt / 2P sim\nneogeo=BIOS\nbroken=???\n')
+        controls = self.tmp / 'controls.xml'
+        controls.write_text('<?xml version="1.0"?>\n<dat><meta><version name="0.141.1"/></meta>\n'
+                            '<game romname="mslug" numPlayers="2"><player number="1" numButtons="3"/></game>\n'
+                            '<game romname="mvsc" numPlayers="2"><player number="1" numButtons="6"/>'
+                            '<player number="2" numButtons="6"/></game>\n'
+                            '<game romname="sfex"><player number="1"/></game>\n</dat>\n')
+        return str(catver), str(nplayers), str(controls)
+
+    def test_categories_play_modes_and_buttons_from_the_data_files(self):
+        catver, nplayers, controls = self.data_files()
+        # catver.ini: o genero e a parte antes da barra; o clone sem linha
+        # fica com o do pai; o que o catver nao conhece passa.
+        _, move, rest = self.scan('--catver', catver, '--categories', 'Fighter,Shooter')
+        for name in ('sfa2.zip', 'mvsc.zip', 'mvscu.zip', '1942.zip', 'tekken3.zip'):
+            self.assertIn(name, move, name)
+        for name in ('mslug.zip', 'broken.zip', 'pinball.zip', 'nes.zip'):
+            self.assertIn(name, rest, name)
+        self.assertIn('broken.zip', self.scan('--catver', catver, '--no-mature')[2])
+        self.assertIn('broken.zip', self.scan('--catver', catver, '--only', 'mature')[1])
+        # nplayers.ini: dois ao mesmo tempo, um de cada vez, um so, ou nao diz.
+        _, move, rest = self.scan('--nplayers', nplayers, '--play-modes', 'sim')
+        self.assertEqual([f for f in move if f in ('mslug.zip', 'sfa2.zip', 'xmen6p.zip', '1942.zip', 'cent.zip',
+                                                   'tekken3.zip', 'broken.zip')],
+                         ['mslug.zip', 'sfa2.zip', 'xmen6p.zip'])
+        _, move, _ = self.scan('--nplayers', nplayers, '--play-modes', 'alt,single')
+        self.assertIn('1942.zip', move)
+        self.assertIn('cent.zip', move)
+        self.assertIn('xmen6p.zip', move)
+        self.assertNotIn('sfa2.zip', move)
+        self.assertNotIn('tekken3.zip', move)
+        self.assertIn('tekken3.zip', self.scan('--nplayers', nplayers, '--play-modes', 'sim,unknown')[1])
+        # controls.xml: os botoes que o jogo usa (o Metal Slug tem 4 no MAME, usa 3).
+        self.assertIn('mslug.zip', self.scan('--max-buttons', '3')[2])
+        self.assertIn('mslug.zip', self.scan('--max-buttons', '3', '--controls-xml', controls)[1])
+        self.assertIn('sfex.zip', self.scan('--max-buttons', '6', '--controls-xml', controls)[1])
+
+    def test_options_for_the_screen(self):
+        catver, nplayers, controls = self.data_files()
+        out = self.romclean('options', '--catver', catver, '--nplayers', nplayers, '--controls-xml', controls)
+        lines = out.splitlines()
+        self.assertEqual(lines[0], '# catver\t0.289')
+        # Os generos de jogo primeiro (do mais comum ao mais raro), marcados;
+        # BIOS, pinball e console depois, desmarcados.
+        self.assertEqual(lines[1:8], ['genre\tFighter\t2\t1', 'genre\tPlatform\t1\t1', 'genre\tShooter\t1\t1',
+                                      'genre\tTabletop\t1\t1', 'genre\tArcade\t1\t0', 'genre\tGame Console\t1\t0',
+                                      'genre\tSystem\t1\t0'])
+        self.assertEqual(lines[8:], ['# nplayers\t0.278', '# controls\t0.141.1'])
+        self.assertEqual(self.romclean('options'), '')
+
+    FAMILIES_XML = ('<mame>'
+                    '<machine name="pacman"><description>Pac-Man</description><year>1980</year>'
+                    '<display type="raster" rotate="90" width="288" height="224" refresh="60.6"/>'
+                    '<input players="2" coins="1"><control type="joy" ways="4"/></input></machine>'
+                    '<machine name="robotron"><description>Robotron</description><year>1982</year>'
+                    '<input players="2" coins="1"><control type="doublejoy" ways="8" ways2="8"/></input></machine>'
+                    '<machine name="tempest"><description>Tempest</description><year>1980</year>'
+                    '<display type="vector" rotate="270"/>'
+                    '<input players="2" coins="1"><control type="dial" buttons="2"/></input></machine>'
+                    '<machine name="pong"><description>Pong</description><year>1972</year>'
+                    '<input players="2" coins="1"><control type="paddle"/></input></machine>'
+                    '<machine name="quiz"><description>Quiz</description><year>1995</year>'
+                    '<display type="raster" rotate="0" width="512" height="384" refresh="60"/>'
+                    '<input players="2" coins="1"><control type="only_buttons" buttons="4"/></input></machine>'
+                    '<machine name="tekken" sourcefile="namco/namcos11.cpp"><description>Tekken</description>'
+                    '<year>1994</year><display type="raster" rotate="0" width="640" height="480" refresh="60"/>'
+                    '<input players="2" coins="1"><control type="joy" ways="8" buttons="4"/></input></machine>'
+                    '<machine name="mk" sourcefile="midway/midyunit.cpp"><description>Mortal Kombat</description>'
+                    '<year>1992</year><display type="raster" rotate="0" width="400" height="254" refresh="53.2" '
+                    'pixclock="8000000" htotal="506" vtotal="289"/>'
+                    '<input players="2" coins="1"><control type="joy" ways="8" buttons="6"/></input></machine>'
+                    '<machine name="sf2" sourcefile="capcom/cps1.cpp"><description>Street Fighter II</description>'
+                    '<year>1991</year><display type="raster" rotate="0" width="384" height="224" refresh="59.6"/>'
+                    '<input players="2" coins="1"><control type="joy" ways="8" buttons="6"/></input></machine>'
+                    '</mame>')
+
+    def families(self, *flags):
+        roms = self.tmp / 'families'
+        if not roms.exists():
+            roms.mkdir()
+            (self.tmp / 'families.xml').write_text(self.FAMILIES_XML)
+            for name in re.findall(r'<machine name="([^"]+)"', self.FAMILIES_XML):
+                (roms / (name + '.zip')).write_bytes(b'x')
+        return [f[:-4] for f in self.scan(*flags, xml=self.tmp / 'families.xml', roms=roms)[1]]
+
+    def test_controls_the_panel_has(self):
+        # Jogo so de botoes passa sempre; "joystick" vale os quatro tipos.
+        self.assertEqual(self.families('--controls', 'joy8'), ['mk', 'quiz', 'sf2', 'tekken'])
+        self.assertEqual(self.families('--controls', 'joy8,joy4'), ['mk', 'pacman', 'quiz', 'sf2', 'tekken'])
+        self.assertEqual(self.families('--controls', 'twin,spinner'), ['quiz', 'robotron', 'tempest'])
+        self.assertEqual(self.families('--controls', 'joystick'),
+                         ['mk', 'pacman', 'quiz', 'robotron', 'sf2', 'tekken'])
+        self.assertEqual(self.families('--controls', 'paddle'), ['pong', 'quiz'])
+        self.assertEqual(self.families('--controls', ''), ['quiz'])
+        self.assertEqual(len(self.families('--controls', 'any')), 8)
+
+    def test_resolution_decades_and_hardware(self):
+        # A resolucao: pelo pixclock/htotal quando o XML os tem (o MK, de 254
+        # linhas a 15,8 kHz), senao pelas linhas; o que nao e raster passa.
+        self.assertEqual(self.families('--scan-rates', '15'), ['mk', 'pacman', 'pong', 'robotron', 'sf2', 'tempest'])
+        self.assertEqual(self.families('--scan-rates', '25,31'), ['pong', 'quiz', 'robotron', 'tekken', 'tempest'])
+        self.assertEqual(self.families('--decades', '1970,1980'), ['pacman', 'pong', 'robotron', 'tempest'])
+        self.assertEqual(self.families('--hardware', 'cps1,midway'), ['mk', 'sf2'])
+        self.assertEqual(self.families('--orientation', 'vertical'), ['pacman', 'tempest'])
+        _, move, _ = self.scan('--hardware', 'neogeo')
+        self.assertEqual(move, ['mslug.zip', 'mslugb.zip', 'neogeo.zip'])
+
+    def test_cache_and_xml_from_a_command(self):
+        cache = self.tmp / 'cache' / 'mame.json'
+        first, move, _ = self.scan(*self.CABINET, '--cache', str(cache))
+        self.assertTrue(cache.is_file())
+        # Com o cache, o XML nem e lido (aqui nem existe).
+        args = ['--roms', str(self.roms), '--dest', str(self.dest), '--plan', str(self.tmp / 'plan.tsv'),
+                *self.CABINET]
+        out = self.romclean('scan', '--cache', str(cache), '--xml', str(self.tmp / 'sumiu.xml'), *args)
+        self.assertIn('move=%s\n' % first['move'], out)
+        out = self.romclean('scan', '--cache', str(cache), *args)
+        self.assertIn('move=%s\n' % first['move'], out)
+        # Um cache de outro formato e refeito.
+        cache.write_text('{"format": 0, "machines": {"x": {}}}')
+        out = self.romclean('scan', '--cache', str(cache), '--xml-command', 'cat %s' % (self.tmp / 'mame.xml'), *args)
+        self.assertIn('move=%s\n' % first['move'], out)
+        self.assertIn('"format":1', cache.read_text()[:40].replace(' ', ''))
+        # Sem XML nem cache, e com um XML vazio: erro, nao um plano vazio.
+        for extra in ((), ('--xml-command', 'true')):
+            r = subprocess.run(['python3', str(ROOT / 'config/fliperos-romclean'), 'scan', *extra, *args],
+                               capture_output=True, text=True)
+            self.assertNotEqual(r.returncode, 0, extra)
+
+    def test_copy_keeps_the_romset_and_shows_progress(self):
+        bios = self.tmp / 'bios-mame'
+        _, move, _ = self.scan(*self.CABINET, '--bios-dest', str(bios))
+        plan, result = str(self.tmp / 'plan.tsv'), self.tmp / 'result.txt'
+        out = self.romclean('apply', plan, 'copy', '--progress', '--result', str(result))
+        self.assertRegex(out, r'(?m)^@step \d+ 1 of 13: 1942\.zip$')
+        self.assertTrue(out.rstrip().endswith('@step 100 Done'))
+        self.assertEqual(result.read_text(), 'copied=13\nskipped=0\nerrors=0\n')
+        # O romset fica inteiro; os jogos numa pasta, a BIOS na outra, a pasta
+        # do CHD com o que tinha dentro.
+        self.assertEqual(len(list(self.roms.iterdir())), len(self.files) + 1)
+        self.assertEqual((self.dest / 'mslug.zip').read_bytes(), b'x' * 10)
+        self.assertEqual((self.dest / 'kinst' / 'kinst.chd').read_bytes(), b'c' * 100)
+        self.assertEqual(sorted(p.name for p in bios.iterdir()), ['coh1000c.zip', 'neogeo.zip', 'qsound_hle.zip'])
+        self.assertFalse(list(self.dest.glob('*.part')))
+        # De novo: o que ja esta la com o mesmo tamanho fica; um arquivo
+        # cortado (tamanho diferente) e copiado outra vez.
+        (self.dest / 'mslug.zip').write_bytes(b'cortado')
+        self.assertIn('copied=1\nskipped=12\nerrors=0\n', self.romclean('apply', plan, 'copy'))
+        self.assertEqual((self.dest / 'mslug.zip').read_bytes(), b'x' * 10)
+
+    def test_copy_reports_what_failed(self):
+        # Um arquivo que nao da para ler (aqui, uma pasta com o nome do zip no
+        # destino): os outros vao, a tela recebe o erro e o status e 1.
+        self.scan('--only', 'psx')
+        (self.dest / 'sfex.zip').mkdir(parents=True)
+        r = subprocess.run(['python3', str(ROOT / 'config/fliperos-romclean'), 'apply', str(self.tmp / 'plan.tsv'),
+                            'copy', '--progress'], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('copied=2\nskipped=0\nerrors=1\n', r.stdout)
+        self.assertIn('@fail Copying|1 sets could not be copied', r.stdout)
+        self.assertNotIn('@step 100', r.stdout)
+        self.assertIn('sfex.zip', r.stderr)
 
     def test_bios_of_a_game_already_in_the_mame_folder_is_kept(self):
         # O mslug ja esta na pasta do MAME (limpeza anterior): a neogeo.zip
@@ -1355,16 +1581,26 @@ class RomCleanTests(unittest.TestCase):
         # joy8way e o joystick; um painel com volante e pedal pega o Hard Drivin.
         _, move, _ = self.scan('--controls', 'joystick', '--arcade-only', xml=self.tmp / 'mame2010.xml', roms=roms)
         self.assertEqual(move, ['coh1000c.zip', 'sfex.zip', 'tekken3.zip'])
-        _, move, _ = self.scan('--controls', 'joystick,spinner,pedal', xml=self.tmp / 'mame2010.xml', roms=roms)
+        _, move, _ = self.scan('--controls', 'joystick,paddle,pedal', xml=self.tmp / 'mame2010.xml', roms=roms)
         self.assertIn('harddriv.zip', move)
 
     def test_control_types_of_both_versions(self):
+        # O 0.139 escreve joy8way, vjoy2way, doublejoy8way; o atual, joy e
+        # doublejoy com o atributo ways.
         rc = load_script('romclean', 'config/fliperos-romclean')
-        for kind, family in (('joy', 'joystick'), ('joy8way', 'joystick'), ('vjoy2way', 'joystick'),
-                             ('doublejoy8way', 'joystick'), ('vdoublejoy2way', 'joystick'), ('stick', 'analog'),
-                             ('dial', 'spinner'), ('paddle', 'spinner'), ('lightgun', 'lightgun'),
-                             ('hanafuda', 'mahjong'), ('mouse', 'trackball')):
-            self.assertEqual(rc.control_family(kind), family, kind)
+        import xml.etree.ElementTree as ET
+        for kind, ways, family in (
+                ('joy', None, 'joy8'), ('joy', '8', 'joy8'), ('joy', '5 (half8)', 'joy8'), ('joy', '16', 'joy8'),
+                ('joy', '4', 'joy4'), ('joy', '3 (half4)', 'joy4'), ('joy', '2', 'joy2'),
+                ('joy', 'vertical2', 'joy2'), ('doublejoy', '8', 'twin'), ('joy8way', None, 'joy8'),
+                ('joy4way', None, 'joy4'), ('vjoy2way', None, 'joy2'), ('doublejoy8way', None, 'twin'),
+                ('vdoublejoy2way', None, 'twin'), ('stick', None, 'analog'), ('dial', None, 'spinner'),
+                ('paddle', None, 'paddle'), ('positional', None, 'positional'), ('lightgun', None, 'lightgun'),
+                ('hanafuda', None, 'mahjong'), ('mouse', None, 'trackball'), ('only_buttons', None, None)):
+            el = ET.Element('control', type=kind)
+            if ways:
+                el.set('ways', ways)
+            self.assertEqual(rc.control_family(el), family, (kind, ways))
         self.assertEqual(rc.regions_of('Marvel Vs. Capcom (USA 980123)'), {'USA'})
         self.assertEqual(rc.regions_of('Street Fighter Alpha 2 (Euro 960229)'), {'Europe'})
         self.assertEqual(rc.regions_of('Galaga (Namco rev. B)'), set())

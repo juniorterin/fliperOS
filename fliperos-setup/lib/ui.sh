@@ -214,7 +214,9 @@ ui_menu() {
   fi
   height=$(ui_list_height "${#labels[@]}")
   local args=(--height "$height" --padding "0 4" --header "")
-  [[ -n $selected ]] && args+=(--selected "$selected")
+  # O --selected e uma lista separada por virgulas: a virgula do rotulo vai
+  # escapada, senao o cursor voltava ao primeiro item.
+  [[ -n $selected ]] && args+=(--selected "${selected//,/\\,}")
   choice=$(gum choose "${args[@]}" -- "${labels[@]}" < /dev/tty 2> /dev/tty)
   rc=$?
   ((rc == 0)) || return 1
@@ -225,6 +227,50 @@ ui_menu() {
     fi
   done
   return 1
+}
+
+# ui_radio TITULO TEXTO ATUAL "valor|rotulo"... escolhe uma opcao: a atual
+# vem marcada "(*)" e com o cursor nela. Imprime o valor escolhido; status 1
+# = Esc (fica a atual).
+ui_radio() {
+  local title=$1 text=$2 current=$3 entry entries=()
+  shift 3
+  for entry in "$@"; do
+    if [[ ${entry%%|*} == "$current" ]]; then
+      entries+=("${entry%%|*}|(*) ${entry#*|}")
+    else
+      entries+=("${entry%%|*}|( ) ${entry#*|}")
+    fi
+  done
+  ui_menu "$title" "$text" "$current" "${entries[@]}"
+}
+
+# ui_checklist TITULO TEXTO MARCADOS "valor|rotulo"... escolhe varias opcoes
+# (MARCADOS: os valores marcados ao abrir, separados por virgula). Espaco
+# marca e desmarca, "a" marca ou desmarca todas, Enter confirma. Imprime os
+# valores marcados separados por virgula (nada, se nenhum); status 1 = Esc
+# (fica como estava).
+ui_checklist() {
+  local title=$1 text=$2 current=",$3," entry choice height i out="" selected=""
+  local -a labels=() values=() args
+  shift 3
+  for entry in "$@"; do
+    values+=("${entry%%|*}")
+    labels+=("${entry#*|}")
+    if [[ $current == *",${entry%%|*},"* ]]; then
+      entry=${entry#*|}
+      selected+="${selected:+,}${entry//,/\\,}"
+    fi
+  done
+  ui_screen "$title" "$text" "$(ui_dim "Space (button 3) marks, A marks all, Enter confirms.")"
+  height=$(ui_list_height "${#labels[@]}")
+  args=(--no-limit --height "$height" --padding "0 4" --header "")
+  [[ -n $selected ]] && args+=(--selected "$selected")
+  choice=$(gum choose "${args[@]}" -- "${labels[@]}" < /dev/tty 2> /dev/tty) || return 1
+  for i in "${!labels[@]}"; do
+    grep -qxF -- "${labels[i]}" <<< "$choice" && out+="${out:+,}${values[i]}"
+  done
+  printf '%s\n' "$out"
 }
 
 # ui_yesno TITULO TEXTO [padrao-nao] pergunta sim ou nao. Status 0 = Yes.

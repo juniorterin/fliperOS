@@ -1,135 +1,258 @@
 # shellcheck shell=bash
-# Setup > MAME ROM Cleaner: a pasta com o romset (seletor de pastas), a
-# versao do MAME dele (o XML), os filtros (presets como os do MAME Smart ROM
-# Sorter), a previa, mover o que passou para a pasta do MAME e perguntar se
-# apaga o que sobrou na origem. A logica e a lib/romclean.sh.
+# Setup > MAME ROM Cleaner: onde esta o romset (uma pasta daqui ou uma pasta
+# da rede), para que emulador ele e (GroovyMAME, Flycast, MAME 2010), a tela
+# dos parametros (Enter num parametro abre as opcoes dele, de escolher uma ou
+# de marcar varias, e volta com a escolha), a previa e a copia para a pasta
+# do emulador. A logica e a lib/romclean.sh; a pasta da rede, lib/netshare.sh.
 
 screen_rom_cleaner() {
-  local title="MAME ROM Cleaner" folder source start entries
-  start=$ROMS_ROOT
-  [[ -d $start ]] || start=/
-  folder=$(ui_browse "$title" "Open the folder with the romset, then Use this folder." "$start" dir) || return 0
-  [[ -d $folder ]] || return 0
-
-  entries=("groovymame|$(romclean_source_label groovymame), this system's MAME")
-  [[ -f $MAME2010_XML ]] && entries+=("mame2010|MAME 2010 (0.139), the RetroArch mame2010 core")
-  entries+=("file|Another XML file (from mame -listxml)")
-  source=$(ui_menu "$title" "Which MAME version is this romset for? Its XML says what each set is. Folder: $folder" \
-    "$(romclean_default_source "$folder")" "${entries[@]}") || return 0
-  if [[ $source == file ]]; then
-    source=$(ui_browse "$title" "Choose the XML file (from mame -listxml)." "$(dirname -- "$folder")" file \
-      .xml .xml.xz) || return 0
+  local title="MAME ROM Cleaner" folder target xml="" had=0 options
+  netshare_mounted && had=1
+  folder=$(screen_rom_cleaner_source) || {
+    screen_rom_cleaner_close "$had"
+    return 0
+  }
+  if [[ -d $folder ]]; then
+    mapfile -t options < <(romclean_targets)
+    if target=$(ui_menu "$title" "Which emulator is this romset for? Folder: $folder" \
+      "$(romclean_default_target "$folder")" "${options[@]}"); then
+      if [[ $target != file ]] || xml=$(ui_browse "$title" "Choose the XML file (from mame -listxml)." \
+        "$(dirname -- "$folder")" file .xml .xml.xz); then
+        screen_rom_cleaner_filters "$folder" "$target" "$xml"
+      fi
+    fi
   fi
-  screen_rom_cleaner_filters "$folder" "$source"
+  screen_rom_cleaner_close "$had"
 }
 
-# screen_rom_cleaner_filters ORIGEM FONTE: o preset, cada filtro (Enter passa
-# para o valor seguinte, joystick incluso) e o destino; depois a previa.
+# screen_rom_cleaner_close JA_ESTAVA: a pasta da rede que esta tela montou
+# sai com ela.
+screen_rom_cleaner_close() {
+  (($1)) || netshare_umount
+  return 0
+}
+
+# screen_rom_cleaner_source imprime a pasta do romset: escolhida nas pastas
+# desta maquina ou numa pasta compartilhada da rede (montada so para
+# leitura). Status 1 = desistiu.
+screen_rom_cleaner_source() {
+  local title="MAME ROM Cleaner" choice start
+  local -a entries
+  while true; do
+    entries=("local|A folder on this machine (disk, USB drive)")
+    netshare_mounted && entries+=("mounted|The network folder $(netshare_source)")
+    netshare_available && entries+=("network|A shared folder on the network (Windows, NAS)")
+    if ((${#entries[@]} == 1)); then
+      choice=local
+    else
+      choice=$(ui_menu "$title" "Where is the romset?" "" "${entries[@]}") || return 1
+    fi
+    case $choice in
+      mounted) start=$NETSHARE_DIR ;;
+      network)
+        screen_netshare_connect "$title" || continue
+        start=$NETSHARE_DIR
+        ;;
+      *)
+        start=$ROMS_ROOT
+        [[ -d $start ]] || start=/
+        ;;
+    esac
+    ui_browse "$title" "Open the folder with the romset, then Use this folder." "$start" dir && return 0
+    ((${#entries[@]} == 1)) && return 1
+  done
+}
+
+# screen_netshare_connect TITULO pergunta o computador, o usuario, a senha e
+# a pasta compartilhada, e a monta. Status 1 = desistiu ou nao abriu.
+screen_netshare_connect() {
+  local title=$1 host user pass="" share saved=0 s
+  local -a shares=() entries=()
+  host=$(ui_input "$title" "The computer that shares the folder: its IP or name (192.168.1.10)." \
+    "$(netshare_saved host)") || return 1
+  host=${host#"${host%%[!/\\]*}"}
+  host=${host%%[/\\]*}
+  [[ -n $host ]] || return 1
+  user=$(ui_input "$title" "Your user name on $host (empty: as a guest, no password)." \
+    "$(netshare_saved user)") || return 1
+  if [[ -n $user ]]; then
+    if [[ $host == "$(netshare_saved host)" ]] && pass=$(netshare_saved_password "$user") &&
+      ui_yesno "$title" "Use the password saved for $user?"; then
+      saved=1
+    else
+      pass=$(ui_input "$title" "Password of $user on $host." "" password) || return 1
+    fi
+  fi
+  ui_info "$title" "Looking for the shared folders of $host..."
+  mapfile -t shares < <(netshare_shares "$host" "$user" "$pass")
+  if ((${#shares[@]})); then
+    for s in "${shares[@]}"; do
+      entries+=("$s|$s")
+    done
+    share=$(ui_menu "$title" "Which shared folder of $host?" "$(netshare_saved share)" "${entries[@]}") || return 1
+  else
+    share=$(ui_input "$title" "The name of the shared folder on $host (what comes after \\\\$host\\)." \
+      "$(netshare_saved share)") || return 1
+  fi
+  [[ -n $share ]] || return 1
+  ui_info "$title" "Opening //$host/$share..."
+  if ! netshare_mount "$host" "$share" "$user" "$pass"; then
+    ui_msg "$title" "$(ui_bad "Could not open //$host/$share.")" "$NETSHARE_ERROR" "" "Details in $FLIPEROS_LOG."
+    return 1
+  fi
+  if [[ -n $user ]] && { ((saved)) || ui_yesno "$title" \
+    "Save this password for the next time? It stays on this machine, where only the system reads it." no; }; then
+    netshare_save "$host" "$share" "$user" "$pass"
+  else
+    netshare_save "$host" "$share" "$user"
+  fi
+  return 0
+}
+
+# screen_rom_cleaner_pick CHAVE VALOR abre as opcoes do parametro (de
+# escolher uma ou de marcar varias) e imprime a escolha nova. Status 1 = Esc.
+screen_rom_cleaner_pick() {
+  local key=$1 value=$2 title="ROM Cleaner: ${ROMCLEAN_TITLE[$1]}"
+  local -a options
+  mapfile -t options < <(romclean_options "$key")
+  if [[ ${ROMCLEAN_TYPE[$key]} == check ]]; then
+    ui_checklist "$title" "${ROMCLEAN_HELP[$key]}" "$value" "${options[@]}"
+  else
+    ui_radio "$title" "${ROMCLEAN_HELP[$key]}" "$value" "${options[@]}"
+  fi
+}
+
+# screen_rom_cleaner_filters ORIGEM ALVO XML: a tela dos parametros (o preset,
+# cada filtro, copiar ou mover e o destino) e, no Continue, a previa.
 screen_rom_cleaner_filters() {
-  local folder=$1 source=$2 title="MAME ROM Cleaner" last=preset preset=cabinet dest key line choice entries
+  local folder=$1 target=$2 xml=$3 title="MAME ROM Cleaner" last=preset preset=cabinet transfer=copy
+  local dest key line choice value writable=0
   local -A opt=()
-  local -a args kv
-  dest=$(romclean_default_dest "$source")
+  local -a entries args kv presets
+  ui_info "$title" "Looking for catver.ini, nplayers.ini and controls.xml..."
+  romclean_data_load "$folder"
+  dest=$(romclean_default_dest "$target")
+  # De uma pasta so de leitura (a da rede) so da para copiar.
+  [[ -w $folder ]] && writable=1
   while IFS= read -r line; do
     opt[${line%%=*}]=${line#*=}
-  done < <(romclean_preset "$preset")
+  done < <(romclean_preset "$preset" "$target")
+  presets=("cabinet|$(romclean_preset_label cabinet)" "working|$(romclean_preset_label working)"
+    "psx|$(romclean_preset_label psx)" "all|$(romclean_preset_label all)")
   while true; do
-    entries=("preset|Preset: $(screen_rom_cleaner_preset_label "$preset")")
+    entries=("preset|Preset: $(romclean_preset_label "$preset")")
     for key in "${ROMCLEAN_KEYS[@]}"; do
-      entries+=("$key|$(romclean_label "$key" "${opt[$key]}")")
+      romclean_visible "$key" "$target" && entries+=("$key|$(romclean_label "$key" "${opt[$key]}")")
     done
-    entries+=("dest|To: $dest" "scan|Continue" "return|Return")
-    choice=$(ui_menu "$title" \
-      "Choose what goes to the MAME folder (Enter changes). The parent, BIOS and devices of those games go too." \
+    ((writable)) && entries+=("transfer|$(romclean_label transfer "$transfer")")
+    entries+=("dest|To: $(romclean_dest_label "$target" "$dest")" "data|Data files: $ROMCLEAN_DATA_LABEL"
+      "scan|Continue" "return|Return")
+    choice=$(ui_menu "$title" "$folder -> $(romclean_target_label "$target"). Enter opens a parameter." \
       "$last" "${entries[@]}") || return 0
     last=$choice
     case $choice in
       return) return 0 ;;
       preset)
-        case $preset in
-          cabinet) preset=working ;;
-          working) preset=psx ;;
-          *) preset=cabinet ;;
-        esac
+        value=$(ui_radio "$title" "Start from a preset; each parameter can be changed after." "$preset" \
+          "${presets[@]}") || continue
+        preset=$value
         while IFS= read -r line; do
           opt[${line%%=*}]=${line#*=}
-        done < <(romclean_preset "$preset")
+        done < <(romclean_preset "$preset" "$target")
         ;;
+      transfer) value=$(screen_rom_cleaner_pick transfer "$transfer") && transfer=$value ;;
       dest)
-        line=$(ui_browse "$title" "Choose the MAME folder the games go to." "$ROMS_ROOT" dir) && dest=$line
+        line=$(ui_browse "$title" "Choose the folder the games go to." "$ROMS_ROOT" dir) && dest=$line
+        ;;
+      data)
+        ui_msg "$title" "$(ui_fields "catver.ini|${ROMCLEAN_CATVER:-not found (no category filters)}" \
+          "nplayers.ini|${ROMCLEAN_NPLAYERS:-not found (no play mode filter)}" \
+          "controls.xml|${ROMCLEAN_CONTROLS:-not found (buttons as MAME says)}")" "" \
+          "Put them in the romset folder, the one above it, or $ROMCLEAN_DATA."
         ;;
       scan)
         kv=()
         for key in "${ROMCLEAN_KEYS[@]}"; do
           kv+=("$key=${opt[$key]}")
         done
-        mapfile -t args < <(romclean_args "${kv[@]}")
-        args+=(--flycast "$(romclean_flycast_mode "$dest")")
-        screen_rom_cleaner_run "$folder" "$source" "$dest" "${args[@]}"
-        return 0
+        mapfile -t args < <(romclean_args "$target" "${kv[@]}")
+        screen_rom_cleaner_run "$folder" "$target" "$xml" "$dest" "$transfer" "${args[@]}"
+        # 2 = voltar aos parametros.
+        (($? == 2)) || return 0
         ;;
       *)
-        opt[$choice]=$(romclean_next "$choice" "${opt[$choice]}")
-        preset=custom
+        if value=$(screen_rom_cleaner_pick "$choice" "${opt[$choice]}"); then
+          opt[$choice]=$value
+          preset=custom
+        fi
         ;;
     esac
   done
 }
 
-# screen_rom_cleaner_preset_label NOME imprime o nome do preset para a tela.
-screen_rom_cleaner_preset_label() {
-  case $1 in
-    cabinet) echo "Joystick cabinet (2 players, 6 buttons)" ;;
-    working) echo "Everything that works" ;;
-    psx) echo "PlayStation-based hardware (Tekken 3...)" ;;
-    *) echo "Custom" ;;
-  esac
-}
-
-# screen_rom_cleaner_run ORIGEM FONTE DESTINO OPCAO...: le o XML, mostra o
-# que vai, move e pergunta se apaga o que sobrou.
+# screen_rom_cleaner_run ORIGEM ALVO XML DESTINO copy|move FILTRO...: le o
+# XML, mostra o que vai, copia ou move e, depois de mover, pergunta se apaga
+# o que sobrou. Status 2 = voltar aos parametros.
 screen_rom_cleaner_run() {
-  local folder=$1 source=$2 dest=$3 title="MAME ROM Cleaner" plan list summary move rest fields choice result same=0
-  shift 3
+  local folder=$1 target=$2 xml=$3 dest=$4 transfer=$5 title="MAME ROM Cleaner"
+  local plan list summary move rest bytes free fields choice result verb=Copy
+  local -a rows
+  shift 5
+  [[ $transfer == move ]] && verb=Move
   plan=$(mktemp) list=$(mktemp)
-  ui_info "$title" "Reading the MAME XML and the folder..." "With GroovyMAME this takes about a minute."
-  if ! summary=$(romclean_scan "$folder" "$source" "$dest" "$plan" "$@" 2>> "$FLIPEROS_LOG"); then
+  ui_info "$title" "Reading the MAME XML and the folder..." "The first time with each MAME version takes about a minute."
+  if ! summary=$(romclean_scan "$folder" "$target" "$xml" "$dest" "$plan" "$@" 2>> "$FLIPEROS_LOG"); then
     ui_msg "$title" "$(ui_bad "Could not read the XML or the folder.")" "Details in $FLIPEROS_LOG."
     rm -f "$plan" "$list"
-    return 0
+    return 2
   fi
   if [[ $(romclean_value "$summary" sets) == 0 ]]; then
-    ui_msg "$title" "No set of this MAME version in $folder." "Is it the right folder, and the right version?"
+    ui_msg "$title" "No set of this MAME version in $folder." "Is it the right folder, and the right emulator?"
     rm -f "$plan" "$list"
-    return 0
+    return 2
   fi
-  [[ $(cd -- "$folder" && pwd -P) == $(cd -- "$dest" 2> /dev/null && pwd -P) ]] && same=1
   move=$(romclean_value "$summary" move)
   rest=$(romclean_value "$summary" rest)
-  fields=$(ui_fields \
-    "From|$folder" \
-    "MAME|$(romclean_source_label "$source")" \
-    "Sets found|$(romclean_value "$summary" sets)" \
-    "MAME folder|$dest" \
-    "Going there|$move ($(human_bytes "$(romclean_value "$summary" move_bytes)"), $(romclean_value "$summary" needed) as parent, BIOS or device)" \
-    "Left over|$rest ($(human_bytes "$(romclean_value "$summary" rest_bytes)"))" \
-    "Not in the XML|$(romclean_value "$summary" unknown) (left alone)" \
-    "Flycast arcade|$(romclean_value "$summary" flycast) left where they are (Naomi, Atomiswave: never deleted)")
+  bytes=$(romclean_value "$summary" move_bytes)
+  free=$(romclean_value "$summary" free_bytes)
+  rows=("From|$folder ($(romclean_value "$summary" sets) sets)"
+    "To|$(romclean_dest_label "$target" "$dest")"
+    "Going|$move sets, $(human_bytes "$bytes") ($(romclean_value "$summary" needed) as parent, BIOS or device)")
+  if ((bytes > free)); then
+    rows+=("Free space|$(ui_bad "$(human_bytes "$free"): not enough")")
+  else
+    rows+=("Free space|$(human_bytes "$free")")
+  fi
+  [[ $transfer == move ]] && rows+=("Left over|$rest sets ($(human_bytes "$(romclean_value "$summary" rest_bytes)"))")
+  (($(romclean_value "$summary" unknown) > 0)) &&
+    rows+=("Not in the XML|$(romclean_value "$summary" unknown) (left alone)")
+  fields=$(ui_fields "${rows[@]}")
   romclean_list "$plan" move > "$list"
   (($(wc -l < "$list") > 1200)) && printf '\n... and %d more.\n' $(($(wc -l < "$list") - 1200)) >> "$list"
-  while ((!same && move > 0)); do
-    choice=$(ui_menu "$title" "$fields" move \
-      "move|Move them to $dest" \
+  if ((move == 0)); then
+    ui_msg "$title" "$fields" "" "No game passed the filters."
+    rm -f "$plan" "$list"
+    return 2
+  fi
+  while true; do
+    choice=$(ui_menu "$title" "$fields" go \
+      "go|$verb them" \
       "list|See the list" \
-      "cancel|Cancel") || choice=cancel
+      "filters|Change the parameters" \
+      "cancel|Cancel") || choice=filters
     case $choice in
       list) ui_pager "$title" "$list" inicio ;;
-      move)
-        ui_info "$title" "Moving $move sets to $dest..."
-        result=$(romclean_apply "$plan" move 2>> "$FLIPEROS_LOG")
-        ui_msg "$title" "$(romclean_value "$result" moved) files moved to $dest." \
-          "$(romclean_value "$result" skipped) were already there."
+      go)
+        if ((bytes > free)) && [[ $transfer == copy ]]; then
+          ui_msg "$title" "$(ui_bad "Not enough free space for $(human_bytes "$bytes").")" \
+            "Change the parameters to take fewer games."
+          continue
+        fi
         break
+        ;;
+      filters)
+        rm -f "$plan" "$list"
+        return 2
         ;;
       *)
         rm -f "$plan" "$list"
@@ -137,16 +260,21 @@ screen_rom_cleaner_run() {
         ;;
     esac
   done
-  if ((same)); then
-    ui_msg "$title" "$fields" "" "This is the MAME folder already: the games that passed stay in it."
-  elif ((move == 0)); then
-    ui_msg "$title" "$fields" "" "No game passed the filters: nothing to move."
-  fi
-  if ((rest > 0)); then
-    if ui_yesno "$title" "$rest sets didn't pass the filters and are still in $folder ($(human_bytes "$(romclean_value "$summary" rest_bytes)")). Delete them for good? This can't be undone." no; then
+  if run_with_progress "$verb the games" "$(romclean_dest_label "$target" "$dest")" romclean_transfer "$plan" "$transfer"; then
+    result=$(cat "$plan.result" 2> /dev/null)
+    if [[ $transfer == move ]]; then
+      ui_msg "$title" "$(romclean_value "$result" moved) sets moved." \
+        "$(romclean_value "$result" skipped) were already there."
+    else
+      ui_msg "$title" "$(romclean_value "$result" copied) sets copied." \
+        "$(romclean_value "$result" skipped) were already there."
+    fi
+    if [[ $transfer == move ]] && ((rest > 0)) && ui_yesno "$title" \
+      "$rest sets didn't pass the filters and are still in $folder ($(human_bytes "$(romclean_value "$summary" rest_bytes)")). Delete them for good? This can't be undone." no; then
       result=$(romclean_apply "$plan" delete-rest 2>> "$FLIPEROS_LOG")
       ui_msg "$title" "$(romclean_value "$result" deleted) files deleted."
     fi
   fi
-  rm -f "$plan" "$list"
+  rm -f "$plan" "$plan.result" "$list"
+  return 0
 }

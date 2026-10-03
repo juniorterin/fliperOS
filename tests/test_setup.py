@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "frontends", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
+        "status", "scraper", "romclean", "netshare", "frontends", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -1318,6 +1318,24 @@ class ScraperTests(Base):
         self.assertEqual(found, ["mame|%s/mame|arcade|2" % roms,
                                  "retroarch/snes9x|%s/retroarch/snes9x|snes|1" % roms])
 
+    def test_flycast_arcade_folders_are_systems_of_their_own(self):
+        # ~/roms/naomi, naomi2 e atomiswave (MAME ROM Cleaner): cada uma e um
+        # sistema nos frontends, raspada pela plataforma dela e aberta no Flycast.
+        env, roms, _ = self.scraper_env()
+        for d, rom in (("naomi", "mvsc2.zip"), ("naomi2", "vf4.zip"), ("atomiswave", "kofxi.zip")):
+            (roms / d).mkdir()
+            (roms / d / "_info.txt").write_text("o que vai nesta pasta\n")
+            (roms / d / rom).write_text("rom")
+        found = self.env.out("scraper_detect", env).splitlines()
+        for d in ("naomi", "naomi2", "atomiswave"):
+            self.assertIn("%s|%s/%s|%s|1" % (d, roms, d, d), found)
+        run = '/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z'
+        self.assertEqual(self.env.out("scraper_attract_emulator naomi; scraper_attract_emulator naomi2; "
+                                      "scraper_attract_emulator atomiswave", env).splitlines(),
+                         ["Naomi|" + run, "Naomi 2|" + run, "Atomiswave|" + run])
+        systems = [line.split("|")[3] for line in self.env.out("frontends_systems", env).splitlines()]
+        self.assertEqual(systems[:4], ["Atomiswave", "MAME", "Naomi", "Naomi 2"])
+
     def test_attract_mode_gets_emulator_and_display_once(self):
         env, roms, attract = self.scraper_env()
         for _ in range(2):
@@ -1629,114 +1647,399 @@ class MenuSoundsTests(Base):
         self.assertIn("ui_sounds", (SETUP / "lib" / "ui.sh").read_text().split("ui_init() {")[1].split("\n}\n")[0])
 
 
+def load_engine():
+    """O config/fliperos-romclean como modulo (nao tem extensao .py)."""
+    import importlib.machinery
+    import importlib.util
+    loader = importlib.machinery.SourceFileLoader("romclean", str(ROOT / "config/fliperos-romclean"))
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader("romclean", loader))
+    loader.exec_module(module)
+    return module
+
+
 class RomCleanerTests(Base):
     """lib/romclean.sh: o Setup > MAME ROM Cleaner (config/fliperos-romclean)."""
 
     XML = ('<mame build="0.289">'
-           '<machine name="mslug"><description>Metal Slug</description><year>1996</year>'
+           '<machine name="neogeo" isbios="yes"><description>Neo-Geo</description></machine>'
+           '<machine name="mslug" romof="neogeo"><description>Metal Slug</description><year>1996</year>'
            '<input players="2" coins="1"><control type="joy" buttons="4"/></input><driver status="good"/></machine>'
            '<machine name="mslugb" cloneof="mslug" romof="mslug"><description>Metal Slug (bootleg)</description>'
            '<year>1996</year><input players="2" coins="1"><control type="joy" buttons="4"/></input>'
            '<driver status="good"/></machine>'
            '<machine name="cent"><description>Centipede</description><year>1980</year>'
            '<input players="2" coins="1"><control type="trackball" buttons="1"/></input>'
-           '<driver status="good"/></machine></mame>')
+           '<driver status="good"/></machine>'
+           '<machine name="naomi" isbios="yes"><description>Naomi BIOS</description></machine>'
+           '<machine name="mvsc2" romof="naomi"><description>Marvel Vs. Capcom 2</description><year>2000</year>'
+           '<input players="2" coins="1"><control type="joy" buttons="6"/></input>'
+           '<driver status="preliminary"/></machine>'
+           '<machine name="awbios" isbios="yes"><description>Atomiswave BIOS</description></machine>'
+           '<machine name="kofxi" romof="awbios"><description>The King of Fighters XI</description>'
+           '<year>2005</year><input players="2" coins="1"><control type="joy" buttons="5"/></input>'
+           '<driver status="imperfect"/></machine></mame>')
+    SETS = ("neogeo", "mslug", "mslugb", "cent", "naomi", "mvsc2", "awbios", "kofxi")
 
     def setUp(self):
         super().setUp()
-        self.full = self.env.dir / "full"
-        self.full.mkdir()
-        for name in ("mslug.zip", "mslugb.zip", "cent.zip"):
-            (self.full / name).write_bytes(b"x" * 1536)
-        xml = self.env.dir / "listxml.xml"
-        xml.write_text(self.XML)
-        self.env.stub("groovymame", 'case "$1" in -listxml) cat "%s" ;; '
-                                    '-version) echo "0.289 (GroovyMAME 0.289.222f)" ;; esac' % xml)
+        self.full = self.env.dir / "romsets" / "full"
+        self.full.mkdir(parents=True)
+        for name in self.SETS:
+            (self.full / (name + ".zip")).write_bytes(b"x" * 1536)
+        self.xml = self.env.dir / "listxml.xml"
+        self.xml.write_text(self.XML)
+        # O -listxml fica anotado: com o cache, so roda uma vez.
+        self.env.stub("groovymame", 'case "$1" in -listxml) echo x >> "%s/listxml.calls"; cat "%s" ;; '
+                                    '-version) echo "0.289 (GroovyMAME 0.289.222f)" ;; esac'
+                      % (self.env.dir, self.xml))
         self.env.stub("fliperos-romclean", 'exec python3 %s "$@"' % (ROOT / "config/fliperos-romclean"))
+        self.roms = self.env.dir / "roms"
         self.vars = {"ROMCLEAN": str(self.env.bin / "fliperos-romclean"),
                      "MAME2010_XML": str(self.env.dir / "mame2010.xml.xz"),
-                     "ROMS_ROOT": str(self.env.dir / "roms")}
+                     "ROMS_ROOT": str(self.roms), "BIOS_ROOT": str(self.env.dir / "bios"),
+                     "ROMCLEAN_CACHE": str(self.env.dir / "cache"), "ROMCLEAN_DATA": str(self.env.dir / "data")}
 
-    def test_cabinet_preset_moves_then_deletes_the_rest(self):
-        out = self.env.out("""
-            mapfile -t kv < <(romclean_preset cabinet)
-            mapfile -t args < <(romclean_args "${kv[@]}")
-            plan=$(mktemp)
-            s=$(romclean_scan %s groovymame "$(romclean_default_dest groovymame)" "$plan" "${args[@]}")
-            echo "move=$(romclean_value "$s" move) rest=$(romclean_value "$s" rest) bytes=$(romclean_value "$s" rest_bytes)"
+    SCAN = """
+        romclean_data_load %(full)s
+        mapfile -t kv < <(romclean_preset cabinet %(target)s)
+        mapfile -t args < <(romclean_args %(target)s "${kv[@]}")
+        plan=%(plan)s
+        s=$(romclean_scan %(full)s %(target)s "" "$(romclean_default_dest %(target)s)" "$plan" "${args[@]}")
+        echo "move=$(romclean_value "$s" move) rest=$(romclean_value "$s" rest) bytes=$(romclean_value "$s" rest_bytes)"
+    """
+
+    def scan(self, target="groovymame", then=""):
+        return self.env.out(self.SCAN % {"full": self.full, "target": target, "plan": self.env.dir / "plan"} + then,
+                            self.vars).splitlines()
+
+    def test_cabinet_preset_copies_and_the_romset_stays(self):
+        lines = self.scan(then="""
             romclean_list "$plan" move
+            echo --
             romclean_list "$plan" rest
-            r=$(romclean_apply "$plan" move)
-            romclean_value "$r" moved
-            r=$(romclean_apply "$plan" delete-rest)
-            romclean_value "$r" deleted
-        """ % self.full, self.vars)
-        lines = out.splitlines()
-        self.assertEqual(lines[0], "move=1 rest=2 bytes=3072")
-        self.assertEqual(lines[1], "mslug            Metal Slug")
-        self.assertEqual(lines[2:4], ["cent             Centipede", "mslugb           Metal Slug (bootleg)"])
-        self.assertEqual(lines[4:], ["1", "2"])
-        self.assertTrue((self.env.dir / "roms" / "mame" / "mslug.zip").exists())
-        self.assertEqual(list(self.full.iterdir()), [])
-        self.assertIn("ROM cleaner: move (%s -> %s/roms/mame)" % (self.full, self.env.dir),
+            echo --
+            romclean_transfer "$plan" copy | grep -c '^@step'
+            cat "$plan.result"
+        """)
+        # O Metal Slug e a BIOS dele vao; o bootleg e o de trackball sobram; os
+        # do Flycast nao entram na conta.
+        self.assertEqual(lines[0], "move=2 rest=2 bytes=3072")
+        self.assertEqual(lines[1:4], ["mslug            Metal Slug", "neogeo           Neo-Geo", "--"])
+        self.assertEqual(lines[4:7], ["cent             Centipede", "mslugb           Metal Slug (bootleg)", "--"])
+        self.assertGreaterEqual(int(lines[7]), 2)
+        self.assertEqual(lines[8:], ["copied=2", "skipped=0", "errors=0"])
+        # Os jogos em ~/roms/mame, a BIOS em ~/bios/mame, o romset inteiro.
+        self.assertTrue((self.roms / "mame" / "mslug.zip").exists())
+        self.assertTrue((self.env.dir / "bios" / "mame" / "neogeo.zip").exists())
+        self.assertFalse((self.roms / "mame" / "neogeo.zip").exists())
+        self.assertEqual(len(list(self.full.iterdir())), len(self.SETS))
+        self.assertIn("ROM cleaner: copy (%s -> %s/mame)" % (self.full, self.roms),
                       (self.env.dir / "setup.log").read_text())
 
-    def test_presets_and_options(self):
-        # Os tres presets tem todos os filtros, e cada filtro vira as opcoes
-        # do fliperos-romclean.
+    def test_move_then_delete_the_rest(self):
+        lines = self.scan(then="""
+            r=$(romclean_apply "$plan" move); romclean_value "$r" moved
+            r=$(romclean_apply "$plan" delete-rest); romclean_value "$r" deleted
+        """)
+        self.assertEqual(lines[1:], ["2", "2"])
+        # Na origem ficam os do Flycast: nunca sao apagados.
+        self.assertEqual(sorted(p.name for p in self.full.iterdir()),
+                         ["awbios.zip", "kofxi.zip", "mvsc2.zip", "naomi.zip"])
+
+    def test_flycast_gets_one_folder_per_system(self):
+        lines = self.scan("flycast", then="""
+            r=$(romclean_apply "$plan" copy); romclean_value "$r" copied
+        """)
+        self.assertEqual(lines, ["move=4 rest=4 bytes=6144", "4"])
+        self.assertTrue((self.roms / "naomi" / "mvsc2.zip").exists())
+        self.assertTrue((self.roms / "atomiswave" / "kofxi.zip").exists())
+        self.assertEqual(sorted(p.name for p in (self.env.dir / "bios" / "dc").iterdir()),
+                         ["awbios.zip", "naomi.zip"])
+        self.assertFalse((self.roms / "naomi" / "mslug.zip").exists())
+
+    def test_the_xml_is_read_once_per_mame_version(self):
+        self.scan()
+        self.scan("flycast")
+        self.assertEqual((self.env.dir / "listxml.calls").read_text(), "x\n")
+        self.assertTrue((self.env.dir / "cache" / "romclean-groovymame-0.289.json").is_file())
+
+    def test_every_parameter_has_a_picker(self):
+        # Cada parametro: de escolher uma (radio) ou de marcar varias (check),
+        # com titulo, a pergunta e as opcoes "valor|rotulo".
         keys = self.env.out('echo "${ROMCLEAN_KEYS[@]}"').split()
-        for preset in ("cabinet", "working", "psx"):
-            kv = self.env.out("romclean_preset %s" % preset).split()
-            self.assertEqual([k.split("=")[0] for k in kv], keys, preset)
+        self.assertEqual(len(keys), 20)
+        for key in keys + ["transfer"]:
+            kind, title, text = self.env.out(
+                'echo "${ROMCLEAN_TYPE[%s]}"; echo "${ROMCLEAN_TITLE[%s]}"; echo "${ROMCLEAN_HELP[%s]}"'
+                % (key, key, key)).splitlines()
+            self.assertIn(kind, ("radio", "check"), key)
+            self.assertTrue(title and text, key)
+            # Uma linha na caixa de 72 colunas: numa tela de 240 linhas sobra
+            # pouco para a lista.
+            self.assertLessEqual(len(text), 66, key)
+            options = self.env.out("romclean_options %s; true" % key).splitlines()
+            if key != "genres":
+                self.assertGreaterEqual(len(options), 2, key)
+            for option in options:
+                self.assertRegex(option, r"^[a-z0-9]+\|\S", key)
+        kinds = dict(line.split("=") for line in self.env.out(
+            'for k in "${ROMCLEAN_KEYS[@]}"; do echo "$k=${ROMCLEAN_TYPE[$k]}"; done').split())
+        self.assertEqual(sorted(k for k, v in kinds.items() if v == "check"),
+                         ["controls", "decades", "genres", "hardware", "lines", "modes", "orientation", "systems"])
+
+    def test_presets(self):
+        keys = self.env.out('echo "${ROMCLEAN_KEYS[@]}"').split()
+        for preset in ("cabinet", "working", "psx", "all"):
+            kv = dict(line.split("=", 1) for line in self.env.out("romclean_preset %s" % preset).splitlines())
+            self.assertEqual(list(kv), keys, preset)
+            for key, value in kv.items():
+                options = [o.split("|")[0] for o in self.env.out("romclean_options %s; true" % key).splitlines()]
+                for v in value.split(",") if value else ():
+                    self.assertIn(v, options, (preset, key))
         self.assertNotEqual(self.env.run("romclean_preset outro").returncode, 0)
-        args = self.env.out("romclean_args $(romclean_preset cabinet)").split()
-        self.assertEqual(args, ["--arcade-only", "--status", "imperfect", "--orientation", "any", "--max-players", "2",
-                                "--max-buttons", "6", "--controls", "joystick", "--clones", "1g1r", "--no-bootlegs",
-                                "--no-prototypes"])
-        self.assertIn("--only psx", " ".join(self.env.out("romclean_args $(romclean_preset psx)").split()))
-        self.assertIn("--exclude chd", " ".join(self.env.out("romclean_args chd=no vector=yes").split()))
-        # Enter passa ao valor seguinte e volta ao primeiro.
-        self.assertEqual(self.env.out("romclean_next players 2; romclean_next players 0").split(), ["1", "2"])
-        self.assertEqual(self.env.out("romclean_label buttons 0").strip(), "Buttons: any")
-        self.assertEqual(self.env.out("romclean_label controls joystick").strip(), "Controls: joystick and buttons")
+        # No Flycast o status do MAME nao filtra.
+        self.assertIn("status=all\n", self.env.out("romclean_preset cabinet flycast"))
+        self.assertIn("status=imperfect\n", self.env.out("romclean_preset cabinet groovymame"))
+        self.assertEqual(self.env.out("romclean_preset_label cabinet; romclean_preset_label custom").splitlines(),
+                         ["Joystick cabinet (2 players, 6 buttons)", "Custom"])
+
+    def args(self, target, *kv):
+        return self.env.out("romclean_args %s %s" % (target, " ".join("'%s'" % x for x in kv)),
+                            self.vars).splitlines()
+
+    def test_parameters_become_engine_options(self):
+        cabinet = self.env.out('mapfile -t kv < <(romclean_preset cabinet); romclean_args groovymame "${kv[@]}"',
+                               self.vars).splitlines()
+        # Sem o catver.ini e o nplayers.ini os filtros deles nao entram; uma
+        # lista com tudo marcado nao filtra.
+        self.assertEqual(cabinet, ["--arcade-only", "--status", "imperfect", "--max-players", "2", "--max-buttons",
+                                   "6", "--controls", "joy8,joy4,joy2,twin", "--clones", "1g1r", "--regions",
+                                   "World,USA,Europe,Brazil,Hispanic,Oceania,Asia,Japan,Unknown", "--no-bootlegs",
+                                   "--no-prototypes", "--exclude", "flycast"])
+        flycast = self.env.out('mapfile -t kv < <(romclean_preset cabinet flycast); romclean_args flycast "${kv[@]}"',
+                               self.vars).splitlines()
+        self.assertEqual(flycast[flycast.index("--status") + 1], "all")
+        self.assertEqual(flycast[-2:], ["--systems", "naomi,naomi2,atomiswave"])
+        self.assertNotIn("flycast", flycast)
+        self.assertEqual(self.args("flycast", "systems=atomiswave", "hardware=neogeo"), ["--systems", "atomiswave"])
+        self.assertEqual(self.args("flycast", "systems="), ["--systems", "naomi,naomi2,atomiswave"])
+        for kv, expected in (
+                ("chd=only", ["--only", "chd"]), ("chd=no", ["--exclude", "chd"]), ("chd=yes", []),
+                ("vector=no", ["--exclude", "vector"]), ("lines=15", ["--scan-rates", "15"]),
+                ("lines=15,25,31", []), ("lines=", []), ("orientation=vertical", ["--orientation", "vertical"]),
+                ("orientation=horizontal,vertical", []), ("decades=1980,1990", ["--decades", "1980,1990"]),
+                ("controls=", ["--controls", ""]), ("controls=joy8,trackball", ["--controls", "joy8,trackball"]),
+                ("hardware=neogeo,cps2", ["--hardware", "neogeo,cps2"]), ("hardware=", []),
+                ("region=japan", ["--regions", "Japan,World,USA,Europe,Asia,Brazil,Hispanic,Oceania,Unknown"]),
+                ("flycast=yes", []), ("mature=no", []), ("genres=Fighter", []), ("modes=sim", [])):
+            self.assertEqual(self.args("groovymame", kv), expected, kv)
+        every = self.env.out("romclean_all controls").strip()
+        self.assertEqual(self.args("groovymame", "controls=" + every), ["--controls", "any"])
+
+    def test_labels_of_the_parameter_screen(self):
+        for key, value, label in (
+                ("players", "0", "Players: Any"), ("buttons", "6", "Buttons: Up to 6"),
+                ("arcade", "yes", "Games: Arcade machines only"), ("clones", "1g1r", "Clones: Best version of each game"),
+                ("controls", "joy8,joy4", "Controls: 8-way joystick, 4-way joystick"),
+                ("controls", "", "Controls: buttons only"), ("hardware", "", "Hardware: any"),
+                ("hardware", "neogeo,cps2", "Hardware: Neo-Geo, Capcom CPS-2"),
+                ("lines", "15", "Resolution: Low"), ("lines", "15,25,31", "Resolution: all"),
+                ("decades", "1980,1990", "Years: 1980s, 1990s"), ("systems", "naomi,naomi2", "Systems: Naomi, Naomi 2"),
+                ("controls", "joy8,joy4,joy2,twin", "Controls: 8-way joystick, 4-way joystick, 2-way joystick, Twin sticks"),
+                ("controls", "joy8,joy4,joy2,twin,trackball,spinner", "Controls: 6 of 13"),
+                ("transfer", "copy", "Transfer: Copy"), ("chd", "only", "Games with CHD: Only those")):
+            self.assertEqual(self.env.out("romclean_label %s '%s'" % (key, value)).strip(), label)
+
+    def test_data_files_come_with_the_romset(self):
+        # catver.ini na pasta de cima do romset, nplayers.ini na subpasta
+        # folders (a da interface do MAME), controls.xml na pasta do sistema;
+        # o nome sem diferenciar maiusculas.
+        (self.full.parent / "Catver.ini").write_text(
+            ";; catver.ini 0.289 / 21-Aug-26 ;;\n[Category]\nmslug=Platform / Run Jump\ncent=Shooter / Gallery\n"
+            "sf2=Fighter / Versus\nkof98=Fighter / Versus\nslots=Slot Machine / Reels\n")
+        (self.full / "folders").mkdir()
+        (self.full / "folders" / "nplayers.ini").write_text(";; NPlayers 0.278 ;;\n[NPlayers]\nmslug=2P sim\n")
+        (self.env.dir / "data").mkdir()
+        (self.env.dir / "data" / "controls.xml").write_text('<dat><meta><version name="0.141.1"/></meta></dat>')
+        script = """
+            romclean_data_load %s
+            echo "$ROMCLEAN_CATVER"; echo "$ROMCLEAN_NPLAYERS"; echo "$ROMCLEAN_CONTROLS"
+            echo "$ROMCLEAN_DATA_LABEL"; echo "$ROMCLEAN_GENRES_DEFAULT"
+            romclean_options genres
+            echo --
+            romclean_label genres "$ROMCLEAN_GENRES_DEFAULT"
+            romclean_args groovymame "genres=$ROMCLEAN_GENRES_DEFAULT" mature=no modes=sim
+            romclean_args groovymame "genres=$(romclean_all genres)" mature=yes "modes=$(romclean_all modes)"
+        """ % self.full
+        lines = self.env.out(script, self.vars).splitlines()
+        self.assertEqual(lines[:3], [str(self.full.parent / "Catver.ini"), str(self.full / "folders" / "nplayers.ini"),
+                                     str(self.env.dir / "data" / "controls.xml")])
+        self.assertEqual(lines[3], "catver.ini 0.289, nplayers.ini 0.278, controls.xml 0.141.1")
+        self.assertEqual(lines[4], "Fighter,Platform,Shooter")
+        self.assertEqual(lines[5:10], ["Fighter|Fighter (2)", "Platform|Platform (1)", "Shooter|Shooter (1)",
+                                       "Slot Machine|Slot Machine (1)", "--"])
+        self.assertEqual(lines[10], "Categories: Fighter, Platform, Shooter")
+        self.assertEqual(lines[11:], ["--categories", "Fighter,Platform,Shooter", "--no-mature", "--play-modes", "sim"])
+        # Sem nenhum: os filtros deles somem da tela e a tela diz o que falta.
+        lines = self.env.out('romclean_data_load /nada; echo "$ROMCLEAN_DATA_LABEL"; '
+                             "for k in genres mature modes players; do romclean_visible $k groovymame && echo $k; done",
+                             dict(self.vars, ROMCLEAN_DATA="/nada")).splitlines()
+        self.assertEqual(lines, ["none (missing: catver.ini, nplayers.ini, controls.xml)", "players"])
+
+    def test_emulators_and_where_the_games_go(self):
+        out = self.env.out("romclean_targets", self.vars).splitlines()
+        self.assertEqual([o.split("|")[0] for o in out], ["groovymame", "flycast", "file"])
+        self.assertEqual(out[0], "groovymame|GroovyMAME 0.289")
+        (self.env.dir / "mame2010.xml.xz").write_bytes(b"")
+        self.assertIn("mame2010|MAME 2010 (0.139), the RetroArch mame2010 core",
+                      self.env.out("romclean_targets", self.vars).splitlines())
+        # O emulador provavel pelo nome da pasta.
+        script = ("romclean_default_target /r/retroarch/mame2010; romclean_default_target /r/mame; "
+                  "romclean_default_target /pc/Naomi; romclean_default_target /pc/naomi-roms/full")
+        self.assertEqual(self.env.out(script, self.vars).split(), ["mame2010", "groovymame", "flycast", "groovymame"])
+        roms, bios = self.roms, self.env.dir / "bios"
+        self.assertEqual(self.env.out("romclean_default_dest mame2010", self.vars).strip(), "%s/mame" % roms)
+        (roms / "retroarch" / "mame2010").mkdir(parents=True)
+        self.assertEqual(self.env.out("romclean_default_dest mame2010; romclean_default_dest flycast; "
+                                      "romclean_default_dest groovymame", self.vars).split(),
+                         ["%s/retroarch/mame2010" % roms, str(roms), "%s/mame" % roms])
+        # A BIOS: ~/bios/mame com os jogos em ~/roms/mame, ~/bios/dc no
+        # Flycast; no core mame2010 e numa pasta escolhida a mao, com os jogos.
+        self.assertEqual(self.env.out("romclean_target_args groovymame %s/mame/" % roms, self.vars).splitlines(),
+                         ["--dest", "%s/mame/" % roms, "--bios-dest", "%s/mame" % bios])
+        self.assertEqual(self.env.out("romclean_target_args groovymame /mnt/usb; "
+                                      "romclean_target_args mame2010 %s/retroarch/mame2010" % roms,
+                                      self.vars).splitlines(),
+                         ["--dest", "/mnt/usb", "--dest", "%s/retroarch/mame2010" % roms])
+        self.assertEqual(self.env.out("romclean_target_args flycast %s" % roms, self.vars).splitlines(),
+                         ["--dest", "%s/naomi" % roms, "--no-devices", "--route", "naomi=%s/naomi" % roms,
+                          "--route", "naomi2=%s/naomi2" % roms, "--route", "atomiswave=%s/atomiswave" % roms,
+                          "--bios-dest", "%s/dc" % bios])
+        home = {"FLIPEROS_USER": "fliperos", "ROMS_ROOT": "/home/fliperos/roms", "BIOS_ROOT": "/home/fliperos/bios"}
+        self.assertEqual(self.env.out("romclean_dest_label flycast /home/fliperos/roms; "
+                                      "romclean_dest_label groovymame /home/fliperos/roms/mame; "
+                                      "romclean_dest_label mame2010 /mnt/usb", home).splitlines(),
+                         ["~/roms/{naomi,naomi2,atomiswave} (BIOS: ~/bios/dc)", "~/roms/mame (BIOS: ~/bios/mame)",
+                          "/mnt/usb"])
 
     def test_every_value_is_known_by_the_engine(self):
         # Os valores da tela sao os que o fliperos-romclean aceita.
-        engine = (ROOT / "config/fliperos-romclean").read_text()
-        for control in self.env.out('echo "${ROMCLEAN_VALUES[controls]}"').split():
-            for family in control.split(",") if control != "any" else ():
-                self.assertIn("'%s'" % family, engine, family)
-        for status in self.env.out('echo "${ROMCLEAN_VALUES[status]}"').split():
-            self.assertIn("'%s'" % status, engine, status)
-
-    def test_default_xml_and_folder(self):
-        # O MAME 2010 so numa pasta "2010" e com o XML instalado; vai para a
-        # pasta do core mame2010, se existir.
-        script = "romclean_default_source /r/retroarch/mame2010; romclean_default_source /r/mame"
-        self.assertEqual(self.env.out(script, self.vars).split(), ["groovymame", "groovymame"])
-        (self.env.dir / "mame2010.xml.xz").write_bytes(b"")
-        self.assertEqual(self.env.out(script, self.vars).split(), ["mame2010", "groovymame"])
-        self.assertEqual(self.env.out("romclean_source_label groovymame", self.vars), "GroovyMAME 0.289\n")
-        roms = self.env.dir / "roms"
-        self.assertEqual(self.env.out("romclean_default_dest mame2010", self.vars).strip(), "%s/mame" % roms)
-        (roms / "retroarch" / "mame2010").mkdir(parents=True)
-        self.assertEqual(self.env.out("romclean_default_dest mame2010", self.vars).strip(),
-                         "%s/retroarch/mame2010" % roms)
-
-    def test_flycast_sets_go_only_to_the_mame_folder(self):
-        roms = self.env.dir / "roms"
-        out = self.env.out("romclean_flycast_mode %s/mame/; romclean_flycast_mode %s/retroarch/mame2010" % (roms, roms),
-                           self.vars).split()
-        self.assertEqual(out, ["move", "keep"])
+        engine = load_engine()
+        values = {key: self.env.out("romclean_all %s" % key).strip().split(",")
+                  for key in ("controls", "status", "modes", "lines", "hardware", "systems", "clones", "decades")}
+        self.assertEqual(sorted(values["controls"]), engine.FAMILIES)
+        self.assertEqual(tuple(values["modes"]), engine.PLAY_MODES)
+        self.assertEqual(tuple(values["lines"]), engine.SCAN_RATES)
+        self.assertEqual(tuple(values["hardware"]), engine.HARDWARE)
+        self.assertEqual(tuple(values["systems"]), engine.FLYCAST_SYSTEMS)
+        self.assertEqual(sorted(values["status"]), ["all", "imperfect", "working"])
+        self.assertEqual(sorted(values["clones"]), ["1g1r", "keep", "none"])
+        for name in ("world", "usa", "europe", "japan", "brazil"):
+            regions = self.env.out("romclean_regions %s" % name).strip().split(",")
+            self.assertEqual(sorted(regions), sorted(engine.REGION_ORDER), name)
 
     def test_human_bytes(self):
         self.assertEqual(self.env.out("human_bytes 0; human_bytes 1536; human_bytes 3221225472").split("\n")[:3],
                          ["0 B", "1.5 KB", "3.0 GB"])
 
-    def test_in_the_setup_menu(self):
+    def test_the_screen(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         self.assertIn('"romcleaner|MAME ROM Cleaner"', menu)
         self.assertIn("romcleaner) screen_rom_cleaner ;;", menu)
+        screen = (SETUP / "screens" / "rom-cleaner.sh").read_text()
+        # Enter num parametro abre as opcoes dele (uma ou varias) e volta.
+        pick = screen.split("screen_rom_cleaner_pick() {")[1].split("\n}\n")[0]
+        self.assertIn('ui_checklist "$title" "${ROMCLEAN_HELP[$key]}" "$value" "${options[@]}"', pick)
+        self.assertIn('ui_radio "$title" "${ROMCLEAN_HELP[$key]}" "$value" "${options[@]}"', pick)
+        self.assertIn("run_with_progress", screen)
+        # De uma pasta so de leitura (a da rede) nao se move.
+        self.assertIn('[[ -w $folder ]] && writable=1', screen)
+        self.assertIn("source \"$SETUP_DIR/lib/netshare.sh\"", (SETUP / "fliperos-setup").read_text())
+
+
+class NetShareTests(Base):
+    """lib/netshare.sh: a pasta compartilhada da rede (SMB), so para leitura."""
+
+    def setUp(self):
+        super().setUp()
+        self.calls = self.env.dir / "mount.calls"
+        self.mnt = self.env.dir / "mnt"
+        # mount falso: anota a linha e o arquivo de credenciais; falha com a
+        # mensagem do mount.cifs quando MOUNT_FAIL diz qual.
+        self.env.stub("mount", """
+            echo "$*" >> "%(calls)s"
+            cred=$(sed -n 's/.*credentials=\\([^,]*\\).*/\\1/p' <<< "$*")
+            [[ -n $cred ]] && { stat -c %%a "$cred"; cat "$cred"; } >> "%(calls)s"
+            case ${MOUNT_FAIL:-} in
+              13) echo "mount error(13): Permission denied" >&2; exit 32 ;;
+              2) echo "mount error(2): No such file or directory" >&2; exit 32 ;;
+              113) echo "mount error(113): could not connect to 10.0.0.9Unable to find suitable address." >&2; exit 32 ;;
+              utf8) [[ $* == *iocharset=utf8* ]] && { echo "mount error(79): Can not access a needed shared library" >&2; exit 32; } ;;
+            esac
+            : > "%(dir)s/mounted"
+        """ % {"calls": self.calls, "dir": self.env.dir})
+        self.env.stub("mount.cifs", "exit 0")
+        self.env.stub("mountpoint", '[[ -f "%s/mounted" ]]' % self.env.dir)
+        self.env.stub("umount", 'echo "umount $*" >> "%s"; rm -f "%s/mounted"' % (self.calls, self.env.dir))
+        self.vars = {"NETSHARE_DIR": str(self.mnt), "NETSHARE_CRED": str(self.env.etc / "netshare.cred"),
+                     "FLIPEROS_USER": "root"}
+
+    def test_mount_is_read_only_and_hides_the_password(self):
+        self.env.out("netshare_mount 192.168.1.10 romsets ana 's3 nha,x'", self.vars)
+        lines = self.calls.read_text().splitlines()
+        self.assertRegex(lines[0], r"^-t cifs //192\.168\.1\.10/romsets %s -o ro,uid=0,gid=0,actimeo=60,"
+                                   r"credentials=\S+,iocharset=utf8$" % self.mnt)
+        # A senha so no arquivo de credenciais (600), que some depois.
+        self.assertNotIn("s3 nha", lines[0])
+        self.assertEqual(lines[1:], ["600", "username=ana", "password=s3 nha,x"])
+        cred = re.search(r"credentials=([^,]+)", lines[0]).group(1)
+        self.assertFalse(os.path.exists(cred))
+        self.assertEqual(self.env.out("netshare_mounted && echo sim", self.vars).strip(), "sim")
+        # Como convidado; e a anterior e desmontada antes.
+        self.calls.write_text("")
+        self.env.out("netshare_mount nas roms '' ''", self.vars)
+        lines = self.calls.read_text().splitlines()
+        self.assertEqual(lines[0], "umount %s" % self.mnt)
+        self.assertIn("-o ro,uid=0,gid=0,actimeo=60,guest,iocharset=utf8", lines[1])
+
+    def test_errors_in_plain_words(self):
+        for code, text in (("13", "Wrong user or password"), ("2", "no shared folder with this name"),
+                           ("113", "did not answer")):
+            out = self.env.out('netshare_mount h s u p || echo "$NETSHARE_ERROR"', dict(self.vars, MOUNT_FAIL=code))
+            self.assertIn(text, out, code)
+        self.assertIn("mount.cifs //h/s: mount error(13)", (self.env.dir / "setup.log").read_text())
+        # Um kernel sem o nls_utf8: monta sem o iocharset.
+        self.env.out("netshare_mount h s u p", dict(self.vars, MOUNT_FAIL="utf8"))
+        self.assertTrue((self.env.dir / "mounted").exists())
+        (self.env.bin / "mount.cifs").unlink()
+        self.assertEqual(self.env.run("netshare_available", self.vars).returncode, 1)
+        self.assertIn("cifs-utils", self.env.out('netshare_mount h s u p || echo "$NETSHARE_ERROR"', self.vars))
+
+    def test_the_share_is_remembered_and_the_password_only_if_asked(self):
+        self.env.out("netshare_save 192.168.1.10 romsets ana 'se=nha'", self.vars)
+        cred = self.env.etc / "netshare.cred"
+        self.assertEqual(oct(cred.stat().st_mode & 0o777), "0o600")
+        self.assertEqual(self.env.out("netshare_saved host; netshare_saved share; netshare_saved user; "
+                                      "netshare_saved_password ana", self.vars).splitlines(),
+                         ["192.168.1.10", "romsets", "ana", "se=nha"])
+        self.assertEqual(self.env.run("netshare_saved_password outro", self.vars).returncode, 1)
+        self.env.out("netshare_save 192.168.1.10 romsets ana", self.vars)
+        self.assertFalse(cred.exists())
+        self.assertEqual(self.env.run("netshare_saved_password ana", self.vars).returncode, 1)
+
+    def test_shares_of_a_computer(self):
+        self.env.stub("smbclient", """
+            echo "$*" >> "%s"
+            printf 'Disk|romsets|Romsets\\nDisk|C$|Default\\nIPC|IPC$|Remote IPC\\nDisk|Fotos da casa|\\nPrinter|hp|\\n'
+        """ % self.calls)
+        self.assertEqual(self.env.out("netshare_shares 192.168.1.10 ana senha", self.vars).splitlines(),
+                         ["romsets", "Fotos da casa"])
+        self.assertRegex(self.calls.read_text(), r"^-g -L //192\.168\.1\.10 -A \S+\n$")
+        self.assertNotIn("senha", self.calls.read_text())
+
+    def test_in_the_image(self):
+        self.assertIn("cifs-utils smbclient", (ROOT / "fliperos-mkiso.sh").read_text())
+        self.assertIn("cifs-utils smbclient", (ROOT / "tools/cabinet-update.sh").read_text())
 
 
 if __name__ == "__main__":

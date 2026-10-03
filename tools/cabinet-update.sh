@@ -60,7 +60,7 @@ date
 echo "== Pacotes novos"
 # Os que a imagem ganhou depois da instalacao (fliperos-mkiso.sh).
 packages=(usbutils systemd-timesyncd gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk
-  alacritty libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64)
+  alacritty libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 cifs-utils smbclient)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 apt-get update -qq || echo "aviso: apt-get update com erros (sem rede?)"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" ||

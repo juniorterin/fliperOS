@@ -1,0 +1,15 @@
+diff --git a/choose/choose.go b/choose/choose.go
+index 67527bb..68edf11 100644
+--- a/choose/choose.go
++++ b/choose/choose.go
+@@ -48,8 +48,8 @@ func defaultKeymap() keymap {
+ 			key.WithDisabled(),
+ 		),
+ 		Toggle: key.NewBinding(
+-			key.WithKeys(" ", "tab", "x", "ctrl+@"),
+-			key.WithHelp("x", "toggle"),
++			key.WithKeys("space", " ", "tab", "x", "ctrl+@"),
++			key.WithHelp("space", "toggle"),
+ 			key.WithDisabled(),
+ 		),
+ 		Abort: key.NewBinding(

@@ -190,6 +190,8 @@ scraper_platform() {
   case $1 in
     mame) echo arcade ;;
     dreamcast) echo dreamcast ;;
+    # Os arcades do Flycast, uma pasta por sistema (MAME ROM Cleaner).
+    naomi | naomi2 | atomiswave) echo "$1" ;;
     ps2) echo ps2 ;;
     dolphin) echo gc ;;
     *) return 1 ;;
@@ -333,6 +335,12 @@ scraper_attract_emulator() {
       echo "MAME|$FLIPEROS_BIN/fliperos-x11-run|groovymame [name]|.zip;.7z" ;;
     dreamcast)
       echo "Flycast|$FLIPEROS_BIN/fliperos-x11-run|flycast \"[romfilename]\"|.gdi;.cdi;.chd;.cue;.zip;.7z" ;;
+    naomi)
+      echo "Naomi|$FLIPEROS_BIN/fliperos-x11-run|flycast \"[romfilename]\"|.zip;.7z" ;;
+    naomi2)
+      echo "Naomi 2|$FLIPEROS_BIN/fliperos-x11-run|flycast \"[romfilename]\"|.zip;.7z" ;;
+    atomiswave)
+      echo "Atomiswave|$FLIPEROS_BIN/fliperos-x11-run|flycast \"[romfilename]\"|.zip;.7z" ;;
     ps2)
       echo "PCSX2|$FLIPEROS_BIN/fliperos-x11-run|pcsx2 \"[romfilename]\"|.iso;.chd;.cso;.bin;.gz" ;;
     dolphin)

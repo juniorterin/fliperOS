@@ -5,6 +5,7 @@ RetroPie, para o fliperos-setup no console).
     direcional, hat ou analogico esquerdo  setas (repetem segurando)
     botao 1 / A / Start                    Enter
     botao 2 / B / Select                   Esc
+    botao 3 / X / Y                        Espaco (marca nas listas de marcar)
     L / R                                  Page Up / Page Down
 
 Roda como servico (root, por causa do /dev/uinput), mas so traduz enquanto
@@ -31,14 +32,17 @@ NAME = b'FliperOS pad keys'
 EV_SYN, EV_KEY, EV_ABS = 0x00, 0x01, 0x03
 ABS_X, ABS_Y, ABS_HAT0X, ABS_HAT0Y = 0x00, 0x01, 0x10, 0x11
 
-KEY_ESC, KEY_ENTER = 1, 28
+KEY_ESC, KEY_ENTER, KEY_SPACE = 1, 28, 57
 KEY_UP, KEY_PAGEUP, KEY_LEFT, KEY_RIGHT, KEY_DOWN, KEY_PAGEDOWN = 103, 104, 105, 106, 108, 109
 
 BUTTONS = {
     0x120: KEY_ENTER,     # BTN_TRIGGER: botao 1 de joystick e de encoder de fliperama
     0x121: KEY_ESC,       # BTN_THUMB: botao 2
+    0x122: KEY_SPACE,     # BTN_THUMB2: botao 3
     0x130: KEY_ENTER,     # BTN_SOUTH (A)
     0x131: KEY_ESC,       # BTN_EAST (B)
+    0x133: KEY_SPACE,     # BTN_NORTH (X)
+    0x134: KEY_SPACE,     # BTN_WEST (Y)
     0x136: KEY_PAGEUP,    # BTN_TL
     0x137: KEY_PAGEDOWN,  # BTN_TR
     0x13a: KEY_ESC,       # BTN_SELECT
