@@ -58,6 +58,23 @@ case $name in
       # Lista de jogos em ~/roms/ps2, se a pessoa ainda nao escolheu pastas.
       grep -q '^RecursivePaths' "$ini" ||
         /opt/fliperos/bin/fliperos-ini-set "$ini" GameList RecursivePaths /home/fliperos/roms/ps2
+      # Os controles pelo SDL, Pad1 e Pad2 nos dois primeiros: o painel ja
+      # chega como fight stick (o mapeamento do Setup > Joysticks > Button
+      # mapping no gamecontrollerdb), entao X Y RB / A B RT = Quadrado
+      # Triangulo R1 / X Bola R2. So enquanto nada estiver no SDL: um ajuste
+      # feito no proprio PCSX2 fica.
+      if ! grep -q 'SDL-[0-9]/' "$ini"; then
+        /opt/fliperos/bin/fliperos-ini-set "$ini" InputSources SDL true
+        for pad in 1 2; do
+          for kv in Type=DualShock2 Up=DPadUp Down=DPadDown Left=DPadLeft Right=DPadRight Cross=FaceSouth \
+            Circle=FaceEast Square=FaceWest Triangle=FaceNorth L1=LeftShoulder R1=RightShoulder L2=+LeftTrigger \
+            R2=+RightTrigger Start=Start Select=Back; do
+            value=${kv#*=}
+            [[ ${kv%%=*} == Type ]] || value="SDL-$((pad - 1))/$value"
+            /opt/fliperos/bin/fliperos-ini-set "$ini" "Pad$pad" "${kv%%=*}" "$value"
+          done
+        done
+      fi
     fi
     set -- "$1" -fullscreen "${@:2}"
     ;;

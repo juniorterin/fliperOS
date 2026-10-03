@@ -2243,7 +2243,10 @@ class ButtonMappingTests(unittest.TestCase):
                      '2 up 1 -a1 %s' % name, '2 b1 1 b0 %s' % name, '2 start 1 b6 %s' % name]
             (tmp / 'map').write_text('\n'.join(lines) + '\n')
             env = dict(os.environ, FLIPEROS_RA_BUTTONS=str(tmp / 'ra' / 'buttons.cfg'),
-                       FLIPEROS_MAME_CTRLR=str(tmp / 'ctrlr' / 'fliperos.cfg'))
+                       FLIPEROS_MAME_CTRLR=str(tmp / 'ctrlr' / 'fliperos.cfg'),
+                       FLIPEROS_FLYCAST_MAPPINGS=str(tmp / 'flycast'), FLIPEROS_SDL_USER_DB=str(tmp / 'sdl-user.txt'),
+                       FLIPEROS_OPENBOR_SAVES=str(tmp / 'Saves'), FLIPEROS_BUTTONS_MAP=str(tmp / 'buttons.map'),
+                       FLIPEROS_CONTROLLERS=str(tmp / 'nada'))
             subprocess.run(['python3', str(ROOT / 'config/fliperos-buttons'), 'save', str(tmp / 'map')], env=env,
                            check=True, capture_output=True, timeout=30)
             ra = (tmp / 'ra' / 'buttons.cfg').read_text()
@@ -2261,6 +2264,67 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertEqual(ports['P2_BUTTON1'], 'JOYCODE_2_BUTTON1 OR KEYCODE_A')
             self.assertEqual(ports['START2'], 'JOYCODE_2_BUTTON7 OR KEYCODE_2')
             self.assertIn('<system name="default">', text)
+            # Flycast por nome de aparelho, e o mapa guardado para a atualizacao.
+            self.assertIn('0:btn_a', (tmp / 'flycast' / ('SDL_' + name.replace('/', '-').replace(':', '-') + '_arcade.cfg')).read_text())
+            self.assertEqual((tmp / 'buttons.map').read_text(), (tmp / 'map').read_text())
+
+    PANEL = {'up': (0, '-a1'), 'down': (0, '+a1'), 'left': (0, '-a0'), 'right': (0, '+a0'), 'b1': (0, 'b0'),
+             'b2': (0, 'b1'), 'b3': (0, 'b2'), 'b4': (0, 'b3'), 'b5': (0, 'b4'), 'b6': (0, 'b5'),
+             'start': (0, 'b6'), 'coin': (0, 'b7')}
+
+    def test_sdl_mapping_is_a_fight_stick(self):
+        # X Y RB em cima, A B RT embaixo; a notacao e a do proprio SDL.
+        line = self.rc.sdl_mapping_line('0300abcd', 'Painel, 2', self.PANEL)
+        fields = dict(f.split(':', 1) for f in line.split(',')[2:] if ':' in f)
+        self.assertTrue(line.startswith('0300abcd,Painel  2,'))
+        self.assertEqual((fields['x'], fields['y'], fields['rightshoulder']), ('b0', 'b1', 'b2'))
+        self.assertEqual((fields['a'], fields['b'], fields['righttrigger']), ('b3', 'b4', 'b5'))
+        self.assertEqual((fields['dpup'], fields['dpleft'], fields['back']), ('-a1', '-a0', 'b7'))
+        self.assertEqual(fields['platform'], 'Linux')
+        # Dois paineis iguais (o mesmo GUID): uma linha so.
+        devices = {0: ('g', 'P', 8, 2), 1: ('g', 'P', 8, 2)}
+        p2 = {c: (1, e) for c, (_, e) in self.PANEL.items()}
+        self.assertEqual(list(self.rc.sdl_user_db({1: self.PANEL, 2: p2}, devices)), ['g'])
+
+    def test_user_mapping_wins_in_the_sdl_db(self):
+        ctl = load_script('controllers', 'config/fliperos-controllers')
+        merged = ctl.merge_db(['g1,auto,a:b0,', 'g2,outro,a:b0,'], {'g1': 'g1,gerado,a:b1,'}, ['g1,meu,a:b3,'])
+        self.assertEqual(merged, ['g2,outro,a:b0,', 'g1,meu,a:b3,'])
+
+    def test_openbor_codes_and_settings(self):
+        # 600 + 1 + aparelho * 64 + botao; eixos depois dos botoes (2 por
+        # eixo, o negativo primeiro), hats depois dos eixos.
+        code = self.rc.openbor_code
+        self.assertEqual(code(0, 'b0', 8, 2), 601)
+        self.assertEqual(code(1, 'b5', 8, 2), 601 + 64 + 5)
+        self.assertEqual(code(0, '-a1', 8, 2), 601 + 8 + 2)
+        self.assertEqual(code(0, '+a1', 8, 2), 601 + 8 + 3)
+        self.assertEqual(code(0, 'h0.4', 8, 2), 601 + 8 + 4 + 2)
+        data = self.rc.openbor_default()
+        self.assertEqual(len(data), 320)
+        import struct
+        self.assertEqual(struct.unpack_from('<I', data)[0], 0x33749)
+        self.assertEqual(struct.unpack_from('<i', data, 288)[0], 1)   # fullscreen
+        devices = {0: ('g', 'P', 8, 2)}
+        keys = struct.unpack_from('<52i', self.rc.openbor_with_keys(data, {1: self.PANEL}, devices), 40)
+        self.assertEqual(keys[:13], (601 + 10, 601 + 11, 601 + 8, 601 + 9, 601, 604, 605, 606, 602, 603, 607, 69,
+                                     608))
+        self.assertEqual(keys[13], 601 + 64 * 99)   # jogador 2 sem nada
+
+    def test_flycast_arcade_is_panel_order(self):
+        text = self.rc.flycast_cfg('P', self.PANEL, self.rc.FLYCAST_ARCADE)
+        for bind in ('0:btn_a', '1:btn_b', '2:btn_c', '3:btn_x', '4:btn_y', '5:btn_z', '6:btn_start', '7:btn_d',
+                     '1-:btn_dpad1_up', '0+:btn_dpad1_right'):
+            self.assertIn(bind + '\n', text)
+        self.assertEqual(self.rc.flycast_filename('a/b: c', True), 'SDL_a-b- c_arcade.cfg')
+
+    def test_pcsx2_pads_on_sdl(self):
+        x11 = (ROOT / 'config/fliperos-x11-run').read_text()
+        self.assertIn("if ! grep -q 'SDL-[0-9]/' \"$ini\"; then", x11)
+        self.assertIn('Cross=FaceSouth', x11)
+        self.assertIn('[[ ${kv%%=*} == Type ]] || value="SDL-$((pad - 1))/$value"', x11)
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn('/opt/fliperos/bin/fliperos-buttons save /etc/fliperos/buttons.map', update)
 
     def test_capture_waits_for_release(self):
         # O que estava apertado no comeco nao conta; soltar um eixo nao e o

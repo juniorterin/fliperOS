@@ -128,6 +128,13 @@ if [[ -d /sys/module/snd_hda_intel/parameters ]]; then
   echo "power_save=$(cat /sys/module/snd_hda_intel/parameters/power_save)"
 fi
 
+echo "== Botoes do Setup > Joysticks > Button mapping em todos os emuladores"
+if [[ -f /etc/fliperos/buttons.map ]]; then
+  /opt/fliperos/bin/fliperos-buttons save /etc/fliperos/buttons.map | sed 's/^/gravado: /'
+else
+  echo "sem mapa (Setup > Joysticks > Button mapping)"
+fi
+
 echo "== XML do MAME 2010 (ROM cleaner)"
 /opt/fliperos/bin/fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz || echo "falhou (sem rede?)"
 

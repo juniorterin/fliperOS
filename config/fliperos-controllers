@@ -40,6 +40,8 @@ import struct
 import sys
 
 DB = os.environ.get('FLIPEROS_SDL_DB', '/var/lib/fliperos/gamecontrollerdb.txt')
+# O mapeamento do Setup > Joysticks > Button mapping (fliperos-buttons).
+USER_DB = os.environ.get('FLIPEROS_SDL_USER_DB', '/var/lib/fliperos/gamecontrollerdb-user.txt')
 FLYCAST_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_MAPPINGS', '/home/fliperos/.config/flycast/mappings')
 RA_AUTOCONFIG = os.environ.get('FLIPEROS_RA_AUTOCONFIG', '/opt/fliperos/retroarch/autoconfig/udev')
 USER_ID = 1000
@@ -124,10 +126,14 @@ def mapping_line(guid, name, binds):
     return ','.join([guid, name.replace(',', ' ')] + fields + ['platform:Linux']) + ','
 
 
-def merge_db(lines, new):
-    """Troca as linhas dos GUIDs de `new` ({guid: linha}), mantendo as demais."""
-    keep = [l for l in lines if l and not l.startswith('#') and l.split(',', 1)[0] not in new]
-    return keep + [new[g] for g in sorted(new)]
+def merge_db(lines, new, user=()):
+    """Troca as linhas dos GUIDs de `new` ({guid: linha}), mantendo as demais.
+    As de `user` (o Setup > Joysticks > Button mapping) vao por ultimo e
+    valem mais: no SDL, a ultima linha de um GUID e a que fica."""
+    user = [l for l in user if l and not l.startswith('#')]
+    mine = {l.split(',', 1)[0] for l in user}
+    keep = [l for l in lines if l and not l.startswith('#') and l.split(',', 1)[0] not in set(new) | mine]
+    return keep + [new[g] for g in sorted(new) if g not in mine] + user
 
 
 def flycast_filename(name, arcade):
@@ -339,10 +345,14 @@ def main():
         lines = open(DB).read().splitlines()
     except OSError:
         lines = []
+    try:
+        user = open(USER_DB).read().splitlines()
+    except OSError:
+        user = []
     os.makedirs(os.path.dirname(DB), exist_ok=True)
     with open(DB + '.new', 'w') as f:
         f.write('# Gerado por fliperos-controllers (Setup e README, "Controles no SDL").\n')
-        f.write(''.join(l + '\n' for l in merge_db(lines, new)))
+        f.write(''.join(l + '\n' for l in merge_db(lines, new, user)))
     os.chmod(DB + '.new', 0o644)
     os.replace(DB + '.new', DB)
     for name, binds in flycast:

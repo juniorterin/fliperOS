@@ -24,17 +24,40 @@ jogador, e no mame.ini "ctrlr fliperos" e "joystickprovider sdljoy" (o
 Setup grava): no sdljoy o MAME numera os botoes como o SDL, na ordem do
 aparelho; no sdlgame (o padrao) ele os ve pelo mapeamento de game
 controller (A, B, X, Y...), que num painel nao segue a ordem.
+
+SDL game controller (PCSX2, Dolphin, Flycast, AntiMicroX...): o mapeamento
+de cada aparelho (GUID) no layout de fight stick, X Y RB em cima e A B RT
+embaixo, Start e Back (ficha), em gamecontrollerdb-user.txt; o
+fliperos-controllers o poe por ultimo no gamecontrollerdb.txt, que vale
+mais que o automatico.
+
+Flycast: o mapeamento do Dreamcast (o do SDL) e o do arcade (Naomi,
+Atomiswave: o botao N do painel e o botao N do jogo, a ficha no D), por
+nome de aparelho, em ~/.config/flycast/mappings.
+
+OpenBOR: as teclas de cada jogador (o codigo do joystick do OpenBOR:
+600 + 1 + aparelho * 64 + botao; os eixos e os hats depois dos botoes) no
+struct do Saves/default.cfg e no .cfg de cada pak.
+
+O mapa fica em /etc/fliperos/buttons.map: a atualizacao do sistema o grava
+de novo (fliperos-buttons save /etc/fliperos/buttons.map).
 """
 import argparse
 import ctypes
 import ctypes.util
 import os
+import re
+import struct
 import sys
 import time
 from xml.sax.saxutils import escape
 
 RA_BUTTONS = os.environ.get('FLIPEROS_RA_BUTTONS', '/etc/fliperos/retroarch/buttons.cfg')
 MAME_CTRLR = os.environ.get('FLIPEROS_MAME_CTRLR', '/home/fliperos/.mame/ctrlr/fliperos.cfg')
+SDL_USER_DB = os.environ.get('FLIPEROS_SDL_USER_DB', '/var/lib/fliperos/gamecontrollerdb-user.txt')
+FLYCAST_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_MAPPINGS', '/home/fliperos/.config/flycast/mappings')
+OPENBOR_SAVES = os.environ.get('FLIPEROS_OPENBOR_SAVES', '/opt/fliperos/roms/openbor/Saves')
+CONTROLLERS = os.environ.get('FLIPEROS_CONTROLLERS', '/opt/fliperos/bin/fliperos-controllers')
 USER_ID = 1000
 
 CONTROLS = ['up', 'down', 'left', 'right', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'start', 'coin']
@@ -151,6 +174,173 @@ def write(path, text, owner=None):
             pass
 
 
+def write_bytes(path, data, owner=None):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + '.new', 'wb') as f:
+        f.write(data)
+    os.chmod(path + '.new', 0o644)
+    os.replace(path + '.new', path)
+    if owner is not None:
+        try:
+            os.chown(path, owner, owner)
+        except OSError:
+            pass
+
+
+# ── SDL game controller ─────────────────────────────────────────
+
+# O painel como fight stick: X Y RB em cima, A B RT embaixo; a ficha e o Back.
+# A notacao dos elementos (b3, -a1, h0.1) e a do proprio mapeamento do SDL.
+SDL_SLOTS = {'up': 'dpup', 'down': 'dpdown', 'left': 'dpleft', 'right': 'dpright', 'b1': 'x', 'b2': 'y',
+             'b3': 'rightshoulder', 'b4': 'a', 'b5': 'b', 'b6': 'righttrigger', 'start': 'start', 'coin': 'back'}
+
+
+def sdl_mapping_line(guid, name, binds):
+    fields = ['%s:%s' % (SDL_SLOTS[c], e) for c, (_, e) in sorted(binds.items())]
+    return ','.join([guid, name.replace(',', ' ')] + sorted(fields) + ['platform:Linux']) + ','
+
+
+def sdl_user_db(players, devices):
+    """As linhas do gamecontrollerdb-user.txt: um aparelho (GUID) por linha,
+    pelo primeiro jogador que o usa (dois paineis iguais tem o mesmo GUID)."""
+    lines = {}
+    for player in sorted(players):
+        binds = players[player]
+        index = next(iter(binds.values()))[0]
+        if index in devices and devices[index][0] not in lines:
+            guid, name = devices[index][:2]
+            lines[guid] = sdl_mapping_line(guid, name, binds)
+    return lines
+
+
+# ── Flycast ─────────────────────────────────────────────────────
+
+# Dreamcast pelo layout do SDL (como o fliperos-controllers); arcade (Naomi,
+# Atomiswave) com o botao N do painel no botao N do jogo e a ficha no D.
+FLYCAST_DC = {'up': 'btn_dpad1_up', 'down': 'btn_dpad1_down', 'left': 'btn_dpad1_left', 'right': 'btn_dpad1_right',
+              'b1': 'btn_x', 'b2': 'btn_y', 'b3': 'btn_c', 'b4': 'btn_a', 'b5': 'btn_b', 'b6': 'btn_trigger_right',
+              'start': 'btn_start', 'coin': 'btn_menu'}
+FLYCAST_ARCADE = dict(FLYCAST_DC, b1='btn_a', b2='btn_b', b3='btn_c', b4='btn_x', b5='btn_y', b6='btn_z',
+                      coin='btn_d')
+
+
+def flycast_cfg(name, binds, keys):
+    digital, analog = [], []
+    for control, (_, element) in sorted(binds.items()):
+        key = keys.get(control)
+        if element.startswith('b'):
+            digital.append('%s:%s' % (element[1:], key))
+        elif element[0] in '+-':
+            analog.append('%s%s:%s' % (element[2:], element[0], key))
+    text = '[analog]\n' + ''.join('bind%d = %s\n' % (i, b) for i, b in enumerate(analog))
+    text += '\n[digital]\n' + ''.join('bind%d = %s\n' % (i, b) for i, b in enumerate(digital))
+    text += ('\n[emulator]\ndead_zone = 10\nmapping_name = %s\nrumble_power = 100\nsaturation = 100\n'
+             'triggers = \nversion = 4\n' % name)
+    return text
+
+
+def flycast_filename(name, arcade):
+    clean = re.sub(r'[/\\:*?"<>|]', '-', name)
+    return 'SDL_%s%s.cfg' % (clean, '_arcade' if arcade else '')
+
+
+# ── OpenBOR ─────────────────────────────────────────────────────
+
+# O struct s_savedata (engine/source/savedata.h, #pragma pack(1), com SDL):
+# 10 ints, keys[4][13], joyrumble[4], 12 ints, hwscale (float), hwfilter.
+OPENBOR_VERSION = 0x00033749      # COMPATIBLEVERSION
+OPENBOR_SIZE = 320
+OPENBOR_KEYS_AT = 40
+OPENBOR_NONE = 600 + 1 + 64 * 99  # CONTROL_NONE
+# SDID: MOVEUP MOVEDOWN MOVELEFT MOVERIGHT ATTACK ATTACK2 ATTACK3 ATTACK4 JUMP
+# SPECIAL START SCREENSHOT ESC. O painel: 1 ataque, 2 pulo, 3 especial, 4 5 6
+# os outros ataques; a ficha e o Esc (o menu do OpenBOR).
+OPENBOR_ACTIONS = {'up': 0, 'down': 1, 'left': 2, 'right': 3, 'b1': 4, 'b4': 5, 'b5': 6, 'b6': 7, 'b2': 8,
+                   'b3': 9, 'start': 10, 'coin': 12}
+# As teclas do jogador 1 do clearbuttons() (scancodes do SDL).
+OPENBOR_P1_KEYS = [82, 81, 80, 79, 4, 22, 29, 27, 7, 9, 40, 69, 0]
+
+
+def openbor_code(index, element, nbuttons, naxes):
+    """O codigo do OpenBOR (engine/sdl/control.c) de um elemento do SDL."""
+    base = 600 + 1 + index * 64
+    if element.startswith('b'):
+        return base + int(element[1:])
+    if element.startswith('h'):
+        hat, direction = element[1:].split('.')
+        return base + nbuttons + 2 * naxes + 4 * int(hat) + {'1': 0, '2': 1, '4': 2, '8': 3}[direction]
+    return base + nbuttons + 2 * int(element[2:]) + (1 if element[0] == '+' else 0)
+
+
+def openbor_default():
+    """O s_savedata do clearsettings(), com a tela cheia do FliperOS."""
+    keys = OPENBOR_P1_KEYS + [OPENBOR_NONE] * 13 * 3
+    data = struct.pack('<I9i', OPENBOR_VERSION, 0, 0, 100, 1, 100, 100, 1, 0, 0)
+    data += struct.pack('<52i', *keys) + struct.pack('<4i', 0, 0, 0, 0)
+    # showtitles videoNTSC swfilter logo uselog debuginfo fullscreen stretch
+    # screen[0][0] screen[0][1] fpslimit usegl
+    data += struct.pack('<12i', 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1)
+    return data + struct.pack('<fi', 1.0, 1)
+
+
+def openbor_with_keys(data, players, devices):
+    keys = list(struct.unpack_from('<52i', data, OPENBOR_KEYS_AT))
+    for player, binds in players.items():
+        if not 1 <= player <= 4:
+            continue
+        for control, (index, element) in binds.items():
+            if control in OPENBOR_ACTIONS and index in devices:
+                nbuttons, naxes = devices[index][2:4]
+                keys[(player - 1) * 13 + OPENBOR_ACTIONS[control]] = openbor_code(index, element, nbuttons, naxes)
+    return data[:OPENBOR_KEYS_AT] + struct.pack('<52i', *keys) + data[OPENBOR_KEYS_AT + 52 * 4:]
+
+
+def openbor_save(players, devices):
+    """O default.cfg (criado, se nao existe) e o .cfg de cada pak."""
+    os.makedirs(OPENBOR_SAVES, exist_ok=True)
+    paths = {os.path.join(OPENBOR_SAVES, f) for f in os.listdir(OPENBOR_SAVES) if f.endswith('.cfg')}
+    paths.add(os.path.join(OPENBOR_SAVES, 'default.cfg'))
+    for path in sorted(paths):
+        try:
+            with open(path, 'rb') as f:
+                data = f.read()
+        except OSError:
+            data = openbor_default()
+        if len(data) != OPENBOR_SIZE or struct.unpack_from('<I', data)[0] != OPENBOR_VERSION:
+            continue
+        write_bytes(path, openbor_with_keys(data, players, devices), USER_ID)
+
+
+def sdl_devices():
+    """{indice: (guid, nome, botoes, eixos)} dos controles ligados; vazio sem
+    o SDL."""
+    try:
+        lib = sdl()
+    except OSError:
+        return {}
+
+    class GUID(ctypes.Structure):
+        _fields_ = [('data', ctypes.c_uint8 * 16)]
+    lib.SDL_JoystickGetDeviceGUID.restype = GUID
+    lib.SDL_JoystickGetGUIDString.argtypes = [GUID, ctypes.c_char_p, ctypes.c_int]
+    lib.SDL_JoystickNameForIndex.restype = ctypes.c_char_p
+    if lib.SDL_Init(0x200) != 0:
+        return {}
+    out = {}
+    try:
+        for i in range(lib.SDL_NumJoysticks()):
+            buf = ctypes.create_string_buffer(33)
+            lib.SDL_JoystickGetGUIDString(lib.SDL_JoystickGetDeviceGUID(i), buf, 33)
+            js = lib.SDL_JoystickOpen(i)
+            if not js:
+                continue
+            out[i] = (buf.value.decode(), (lib.SDL_JoystickNameForIndex(i) or b'').decode(errors='replace'),
+                      lib.SDL_JoystickNumButtons(js), lib.SDL_JoystickNumAxes(js))
+    finally:
+        lib.SDL_Quit()
+    return out
+
+
 def cmd_save(args):
     players, names = read_map(args.map)
     if not players:
@@ -159,6 +349,32 @@ def cmd_save(args):
     write(MAME_CTRLR, mame_cfg(players, names), USER_ID)
     print(RA_BUTTONS)
     print(MAME_CTRLR)
+    # Flycast: por nome de aparelho (o do primeiro jogador que o usa).
+    done = set()
+    for player in sorted(players):
+        binds = players[player]
+        name = names.get(next(iter(binds.values()))[0], '')
+        if name and name not in done:
+            done.add(name)
+            for arcade, keys in ((False, FLYCAST_DC), (True, FLYCAST_ARCADE)):
+                path = os.path.join(FLYCAST_MAPPINGS, flycast_filename(name, arcade))
+                write(path, flycast_cfg(name, binds, keys), USER_ID)
+                print(path)
+    devices = sdl_devices()
+    if devices:
+        lines = sdl_user_db(players, devices)
+        write(SDL_USER_DB, ''.join(line + '\n' for line in lines.values()))
+        print(SDL_USER_DB)
+        openbor_save(players, devices)
+        print(OPENBOR_SAVES)
+        # O gamecontrollerdb.txt de novo, com o mapeamento por ultimo.
+        if os.access(CONTROLLERS, os.X_OK):
+            os.system('"%s" > /dev/null 2>&1' % CONTROLLERS)
+    # O mapa, para a atualizacao do sistema gravar tudo de novo.
+    keep = os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map')
+    if os.path.abspath(args.map) != os.path.abspath(keep):
+        with open(args.map, encoding='utf-8') as f:
+            write(keep, f.read())
 
 
 # ── SDL: o proximo comando ──────────────────────────────────────
