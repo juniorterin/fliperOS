@@ -2009,6 +2009,14 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertLess(main.index('build_supermodel_chroot'), main.index('build_hypseus_chroot'))
         self.assertLess(main.index('install_heroic_chroot'), main.index('create_squashfs'))
 
+    def test_openbor_starts_fullscreen(self):
+        # Em janela ele abria em 2x de tamanho fixo (640x480 num modo de
+        # 320x240, so o meio aparecia): tela cheia no seletor de paks e no jogo.
+        body = MKISO.split('build_openbor_chroot() {')[1].split('\n}\n')[0]
+        self.assertIn("sed -i 's/^static int isFull = 0;/static int isFull = 1;/' engine/sdl/menu.c", body)
+        self.assertIn("sed -i 's/^\\([[:space:]]*savedata\\.fullscreen = \\)0;/\\11;/' engine/openbor.c", body)
+        self.assertLess(body.index("grep -q 'savedata.fullscreen = 1;'"), body.index('cmake -S . -B build'))
+
     def test_steam_installs_without_questions(self):
         body = MKISO.split('install_steam_chroot() {')[1].split('\n}\n')[0]
         self.assertIn('DEBIAN_FRONTEND=noninteractive apt-get install -y steam-installer', body)

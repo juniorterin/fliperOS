@@ -1222,6 +1222,15 @@ git init -q /tmp/openbor
 git -C /tmp/openbor fetch -q --depth 1 https://github.com/DCurrent/openbor __OPENBOR_COMMIT__
 git -C /tmp/openbor -c advice.detachedHead=false checkout -q FETCH_HEAD
 cd /tmp/openbor
+# Tela cheia de fabrica, no seletor de paks (engine/sdl/menu.c, isFull) e
+# no jogo (sem o Saves/default.cfg): em janela o OpenBOR abre em 2x de
+# tamanho fixo (640x480 num modo de 320x240, so o meio aparece, visto no
+# gabinete); em tela cheia (SDL_WINDOW_FULLSCREEN_DESKTOP) escala para o
+# modo. O menu de video dele ainda troca.
+sed -i 's/^static int isFull = 0;/static int isFull = 1;/' engine/sdl/menu.c
+sed -i 's/^\([[:space:]]*savedata\.fullscreen = \)0;/\11;/' engine/openbor.c
+grep -q '^static int isFull = 1;' engine/sdl/menu.c
+grep -q 'savedata.fullscreen = 1;' engine/openbor.c
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_LINUX=ON -DTARGET_ARCH=AMD64
 cmake --build build --parallel
 install -Dm755 engine/releases/LINUX/OpenBOR /usr/local/lib/openbor/OpenBOR
