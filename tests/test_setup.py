@@ -1719,6 +1719,57 @@ class FrontendsTests(Base):
                          ["runuser -u ninguem", "--build-romlist %s -o %s" % (snes, snes)])
         self.assertTrue((attract / "emulators" / "MAME.cfg").exists())
 
+    def test_240p_settings_are_saved_once_on_a_15khz_monitor(self):
+        # Num tubo de 15 kHz os frontends rodam em 320x240: o tema e a fonte
+        # legiveis ja ficam gravados, uma vez so; o que a pessoa mudar depois
+        # no proprio frontend fica.
+        env, roms = self.frontends_env()
+        theme = self.env.dir / "themes" / "fliperos-240p"
+        theme.mkdir(parents=True)
+        (theme / "theme.qml").write_text("import QtQuick 2.7\n")
+        env["PEGASUS_THEME"] = str(theme)
+        self.env.stub("pgrep", "exit 1")
+        settings = self.env.dir / "es-de" / "settings" / "es_settings.xml"
+        settings.parent.mkdir(parents=True)
+        # O arquivo que o ES-DE grava na primeira vez, com os padroes dele.
+        settings.write_text('<?xml version="1.0"?>\n<bool name="MenuBlurBackground" value="true" />\n'
+                            '<string name="Theme" value="slate-es-de" />\n<string name="ThemeFontSize" value="medium" />\n'
+                            '<string name="ThemeVariant" value="withVideos" />\n')
+        peg = self.env.dir / "pegasus" / "settings.txt"
+        # Monitor LCD (ou ainda nao escolhido): os padroes de cada frontend ficam.
+        self.env.out("frontends_configure emulationstation; frontends_configure pegasus", env)
+        self.assertIn('<string name="Theme" value="slate-es-de" />', settings.read_text())
+        self.assertFalse(peg.exists())
+        self.env.out("conf_set frequency 15k; frontends_configure emulationstation; frontends_configure pegasus", env)
+        text = settings.read_text()
+        for line in ('<string name="Theme" value="linear-es-de" />', '<string name="ThemeFontSize" value="large" />',
+                     '<string name="ThemeVariant" value="simpleTextlistWithVideos" />',
+                     '<bool name="MenuBlurBackground" value="false" />',
+                     '<string name="ApplicationUpdaterFrequency" value="never" />'):
+            self.assertEqual(text.count(line), 1, line)
+        self.assertEqual(text.count('name="Theme"'), 1)
+        self.assertEqual(peg.read_text(), "general.theme: %s/\ngeneral.fullscreen: true\n"
+                                          "general.input-mouse-support: false\n" % theme)
+        # A pessoa troca o tema no frontend: a vez seguinte nao mexe.
+        settings.write_text(text.replace("linear-es-de", "modern-es-de"))
+        peg.write_text("general.theme: :/themes/pegasus-theme-grid/\ngeneral.fullscreen: true\n")
+        self.env.out("frontends_configure emulationstation; frontends_configure pegasus", env)
+        self.assertIn('<string name="Theme" value="modern-es-de" />', settings.read_text())
+        self.assertEqual(peg.read_text(), "general.theme: :/themes/pegasus-theme-grid/\ngeneral.fullscreen: true\n")
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("esde_240p=1\n", conf)
+        self.assertIn("pegasus_240p=1\n", conf)
+
+    def test_240p_settings_wait_while_the_frontend_is_open(self):
+        # O frontend regrava o arquivo dele ao fechar: aberto, fica para depois.
+        env, roms = self.frontends_env()
+        self.env.stub("pgrep", "exit 0")
+        self.env.out("conf_set frequency 15k; frontends_configure emulationstation", env)
+        settings = (self.env.dir / "es-de" / "settings" / "es_settings.xml").read_text()
+        self.assertNotIn("ThemeFontSize", settings)
+        self.assertIn('name="ROMDirectory"', settings)
+        self.assertNotIn("esde_240p", (self.env.etc / "fliperos.conf").read_text())
+
     def test_chosen_frontend_is_configured(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_frontend() {")[1].split("\n}\n")[0]
         self.assertLess(menu.index('launcher_set "$choice"'), menu.index('frontends_configure "$choice"'))

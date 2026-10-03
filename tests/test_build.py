@@ -1945,6 +1945,41 @@ class AppStoreTests(unittest.TestCase):
         self.assertIn('id=org.gnome.Software.desktop', (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text())
 
 
+class PegasusThemeTests(unittest.TestCase):
+    """config/pegasus-theme-fliperos: o tema do Pegasus para 240p."""
+    THEME = ROOT / 'config/pegasus-theme-fliperos'
+
+    def test_theme_files(self):
+        cfg = dict(line.split(': ', 1) for line in (self.THEME / 'theme.cfg').read_text().splitlines())
+        self.assertEqual(cfg['name'], 'FliperOS 240p')
+        for key in ('author', 'version', 'summary', 'description'):
+            self.assertTrue(cfg[key], key)
+        qml = (self.THEME / 'theme.qml').read_text()
+        self.assertEqual(qml.count('{'), qml.count('}'))
+        self.assertEqual(qml.count('('), qml.count(')'))
+        # As medidas sao de uma tela de 240 linhas; a letra da lista tem 12.
+        self.assertIn('readonly property real s: Math.max(1, height / 240)', qml)
+        self.assertIn('pixelSize: px(12)', qml)
+        # So o QtQuick: um modulo QML que faltasse derrubaria o tema inteiro.
+        self.assertEqual(re.findall(r'(?m)^import (\S+)', qml), ['QtQuick'])
+        for api in ('api.collections', 'game.launch()', 'api.keys.isAccept(event)', 'api.memory.set('):
+            self.assertIn(api, qml)
+
+    def test_installed_where_pegasus_looks_for_themes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d', 'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            theme = root / 'usr/share/pegasus-frontend/themes/fliperos-240p'
+            self.assertEqual(sorted(p.name for p in theme.iterdir()), ['theme.cfg', 'theme.qml'])
+            self.assertEqual((theme / 'theme.qml').read_text(), (self.THEME / 'theme.qml').read_text())
+        self.assertIn('PEGASUS_THEME=${PEGASUS_THEME:-/usr/share/pegasus-frontend/themes/fliperos-240p}',
+                      (ROOT / 'fliperos-setup/lib/frontends.sh').read_text())
+
+
 class DesktopAppsTests(unittest.TestCase):
     """Falkon e Transmission na imagem, com o nome dizendo para que servem."""
 

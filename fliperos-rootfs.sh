@@ -168,6 +168,12 @@ done
 for file in "$src"/config/icons/*.svg; do
   install -Dm644 "$file" "$root/usr/local/share/pixmaps/${file##*/}"
 done
+# O tema do FliperOS para o Pegasus em 240p (lib/frontends.sh o deixa
+# escolhido num monitor de 15 kHz): na pasta de temas do sistema, onde o
+# Pegasus os procura.
+for file in "$src"/config/pegasus-theme-fliperos/*; do
+  install -Dm644 "$file" "$root/usr/share/pegasus-frontend/themes/fliperos-240p/${file##*/}"
+done
 # Falkon e Transmission (vem na imagem): no menu do LXDE o nome diz para que
 # servem, "Falkon (browser)" e "Transmission (torrent)". A entrada do pacote
 # e copiada para /usr/local/share/applications (que vem antes) com o nome

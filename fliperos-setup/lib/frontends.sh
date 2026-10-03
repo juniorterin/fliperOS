@@ -57,8 +57,68 @@ frontends_pegasus() {
   done < <(frontends_systems)
   mkdir -p "$PEGASUS_DIR"
   printf '%s\n' "${dirs[@]}" > "$PEGASUS_DIR/game_dirs.txt"
+  frontends_pegasus_240p
   chown -R "$FLIPEROS_USER:" "$PEGASUS_DIR" 2> /dev/null
   log_info "Pegasus: ${#dirs[@]} pasta(s) de jogos"
+}
+
+# ── 240p ──────────────────────────────────────────────────────────
+# Num tubo de 15 kHz os frontends rodam em 320x240, e o padrao de cada um e
+# desenhado para 720 linhas ou mais: o texto fica com 4 a 8 pixels. As
+# configuracoes abaixo ja ficam gravadas, uma vez so (o que a pessoa mudar
+# depois, no proprio frontend, fica): o FliperOS anota no fliperos.conf que
+# ja gravou. Com o frontend aberto nada e gravado (ele regrava o arquivo ao
+# fechar); fica para a vez seguinte.
+
+# O tema do FliperOS para o Pegasus (config/pegasus-theme-fliperos).
+PEGASUS_THEME=${PEGASUS_THEME:-/usr/share/pegasus-frontend/themes/fliperos-240p}
+
+# frontends_crt: o monitor escolhido no Setup e de 15 kHz?
+frontends_crt() {
+  [[ $(conf_get frequency 2> /dev/null) == 15* ]]
+}
+
+# frontends_pegasus_240p: o tema FliperOS 240p (lista em letra de 12 pixels e
+# a imagem do jogo), tela cheia e sem mouse.
+frontends_pegasus_240p() {
+  frontends_crt && [[ -f $PEGASUS_THEME/theme.qml ]] || return 0
+  [[ $(conf_get pegasus_240p 2> /dev/null) == 1 ]] && return 0
+  pgrep -x pegasus-fe > /dev/null 2>&1 && return 0
+  pegasus_setting general.theme "$PEGASUS_THEME/"
+  pegasus_setting general.fullscreen true
+  pegasus_setting general.input-mouse-support false
+  conf_set pegasus_240p 1
+  log_info "Pegasus: configuracao de 240p gravada (tema $PEGASUS_THEME)"
+}
+
+# pegasus_setting CHAVE VALOR grava uma opcao no settings.txt do Pegasus
+# ("chave: valor").
+pegasus_setting() {
+  local file="$PEGASUS_DIR/settings.txt"
+  mkdir -p "$PEGASUS_DIR"
+  if [[ -f $file ]] && grep -q "^${1//./\\.}:" "$file"; then
+    sed -i "s|^${1//./\\.}:.*|$1: $2|" "$file"
+  else
+    printf '%s: %s\n' "$1" "$2" >> "$file"
+  fi
+}
+
+# frontends_esde_240p: dos temas que o ES-DE traz, o Linear com a fonte
+# grande e a lista simples (os nomes e a imagem do jogo, sem a coluna de
+# dados em letra miuda; o video do jogo, se houver, no lugar da imagem). Sem
+# o desfoque do fundo do menu e sem o aviso de versao nova.
+frontends_esde_240p() {
+  frontends_crt || return 0
+  [[ $(conf_get esde_240p 2> /dev/null) == 1 ]] && return 0
+  pgrep -x es-de > /dev/null 2>&1 && return 0
+  esde_setting Theme linear-es-de
+  esde_setting ThemeVariant simpleTextlistWithVideos
+  esde_setting ThemeFontSize large
+  esde_setting ThemeAspectRatio automatic
+  esde_setting ApplicationUpdaterFrequency never
+  esde_setting MenuBlurBackground false bool
+  conf_set esde_240p 1
+  log_info "ES-DE: configuracao de 240p gravada (Linear, fonte grande, lista simples)"
 }
 
 # ES-DE: os tipos de arte dele (subpastas de MediaDirectory/<sistema>) e as
@@ -92,18 +152,20 @@ frontends_esde() {
   done
   esde_setting ROMDirectory "$ROMS_DIR"
   esde_setting MediaDirectory "$MEDIA_DIR/.es-de"
+  frontends_esde_240p
   chown -R "$FLIPEROS_USER:" "$ESDE_DIR" 2> /dev/null
   log_info "ES-DE: $n sistema(s)"
 }
 
-# esde_setting NOME VALOR grava uma opcao de texto no es_settings.xml.
+# esde_setting NOME VALOR [string|bool] grava uma opcao no es_settings.xml.
 esde_setting() {
-  local settings="$ESDE_DIR/settings/es_settings.xml" line
-  line="<string name=\"$1\" value=\"$2\" />"
+  local settings="$ESDE_DIR/settings/es_settings.xml" kind=${3:-string} line
+  line="<$kind name=\"$1\" value=\"$2\" />"
+  mkdir -p "$ESDE_DIR/settings"
   if [[ ! -f $settings ]]; then
     printf '<?xml version="1.0"?>\n%s\n' "$line" > "$settings"
   elif grep -q "name=\"$1\"" "$settings"; then
-    sed -i "s|<string name=\"$1\" value=\"[^\"]*\" />|$line|" "$settings"
+    sed -i "s|<$kind name=\"$1\" value=\"[^\"]*\" />|$line|" "$settings"
   else
     printf '%s\n' "$line" >> "$settings"
   fi
