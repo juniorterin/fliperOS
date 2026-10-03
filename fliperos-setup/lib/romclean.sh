@@ -300,7 +300,16 @@ romclean_args() {
 # interface do MAME os guarda) ou na pasta do sistema.
 romclean_data_find() {
   local name=$1 folder=$2 dir file
-  for dir in "$folder" "$(dirname -- "$folder")" "$folder/folders" "$ROMCLEAN_DATA"; do
+  local -a dirs=("$folder" "$(dirname -- "$folder")" "$folder/folders" "$ROMCLEAN_DATA")
+  # Primeiro pelo nome exato: listar a pasta do romset (dezenas de milhares
+  # de arquivos, talvez pela rede) so se for preciso.
+  for dir in "${dirs[@]}"; do
+    if [[ -f $dir/$name ]]; then
+      printf '%s\n' "$dir/$name"
+      return 0
+    fi
+  done
+  for dir in "${dirs[@]}"; do
     [[ -d $dir ]] || continue
     file=$(find "$dir" -maxdepth 1 -type f -iname "$name" 2> /dev/null | head -1)
     if [[ -n $file ]]; then
