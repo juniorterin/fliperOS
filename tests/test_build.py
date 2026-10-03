@@ -912,6 +912,35 @@ class RomFoldersTests(unittest.TestCase):
         self.assertIn('device2 = 0\n', cfg)
         self.assertIn('maple_sdl_joystick_1 = 1\n', cfg)
 
+    def test_flycast_linear_interpolation_is_off_by_default(self):
+        # O padrao do Flycast (yes) borra a imagem ao leva-la para o modo do
+        # tubo. Desligada de fabrica; num emu.cfg de antes, so se a opcao
+        # ainda nao esta gravada (gravada, a escolha e da pessoa).
+        cfg = (ROOT / 'config/flycast-emu.cfg').read_text()
+        self.assertIn('[config]\n', cfg)
+        self.assertIn('rend.LinearInterpolation = no\n', cfg.split('[input]')[0])
+        for before, value in (
+                (None, 'no'),
+                ('[config]\nDreamcast.BiosPath = /x\n\n[input]\ndevice1 = 0\n', 'no'),
+                ('[config]\nrend.LinearInterpolation = yes\nrend.Resolution = 480\n\n[input]\ndevice1 = 0\n', 'yes')):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                for d in ('home/fliperos/.config/flycast', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                          'etc/systemd/system'):
+                    (root / d).mkdir(parents=True)
+                (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+                emu = root / 'home/fliperos/.config/flycast/emu.cfg'
+                if before is not None:
+                    emu.write_text(before)
+                for _ in range(2):
+                    subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                                   capture_output=True, timeout=120)
+                text = emu.read_text()
+                self.assertEqual(text.count('rend.LinearInterpolation'), 1, text)
+                # Na secao [config], que e onde o Flycast a le.
+                config = text.split('[config]\n')[1].split('[input]')[0]
+                self.assertIn('rend.LinearInterpolation = %s\n' % value, config, text)
+
     def test_old_roms_move_to_home(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

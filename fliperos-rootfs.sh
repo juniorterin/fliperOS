@@ -385,10 +385,17 @@ EOF
     fi
     chown 1000:1000 "$home/$dir" 2> /dev/null || true
   done
-  # Flycast: o jogador 2 (porta B) com controle, que o padrao deixa sem, e as
-  # ROMs em ~/roms/dreamcast. So na primeira vez: depois o arquivo e dele.
+  # Flycast: o jogador 2 (porta B) com controle, que o padrao deixa sem, as
+  # ROMs em ~/roms/dreamcast e a interpolacao linear desligada (o padrao dele
+  # borra a imagem ao leva-la para o modo do tubo). So na primeira vez:
+  # depois o arquivo e dele.
   if [[ ! -f $home/.config/flycast/emu.cfg ]]; then
     install -Dm644 "$src/config/flycast-emu.cfg" "$home/.config/flycast/emu.cfg"
+  fi
+  # Num emu.cfg de antes, a interpolacao so e desligada se a opcao ainda nao
+  # esta gravada: gravada (o Flycast grava todas ao fechar), a escolha e dele.
+  if ! grep -q '^rend\.LinearInterpolation' "$home/.config/flycast/emu.cfg"; then
+    bash "$src/config/fliperos-ini-set" "$home/.config/flycast/emu.cfg" config rend.LinearInterpolation no
   fi
   # A BIOS em ~/bios/dc (fliperos-roms), tambem num emu.cfg de antes dela.
   if ! grep -q '^Dreamcast.BiosPath' "$home/.config/flycast/emu.cfg"; then
