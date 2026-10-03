@@ -212,6 +212,8 @@ screen_frontend() {
     fi
   fi
   launcher_set "$choice"
+  # As pastas de ~/roms e o comando de cada uma no frontend (lib/frontends.sh).
+  frontends_configure "$choice"
   ui_msg "Frontend" "$(launcher_label "$choice") will start when the computer turns on."
 }
 

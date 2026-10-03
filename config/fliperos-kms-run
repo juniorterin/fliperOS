@@ -25,6 +25,11 @@ fi
 # servidor de som, tentar PipeWire e PulseAudio antes so atrasa a abertura.
 export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
+# Qt no console (o Pegasus): eglfs no KMS, sem cursor, como o
+# "pegasus-fe -platform eglfs" do GroovyArcade.
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-eglfs}"
+export QT_QPA_EGLFS_INTEGRATION="${QT_QPA_EGLFS_INTEGRATION:-eglfs_kms}"
+export QT_QPA_EGLFS_HIDECURSOR=1
 # O GroovyMAME nao roda aqui: o comando groovymame se abre num Xorg proprio
 # (config/fliperos-groovymame), onde o Switchres troca o modo pelo XRandR.
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).

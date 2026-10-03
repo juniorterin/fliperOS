@@ -374,6 +374,12 @@ scraper_run() {
       gen=(-f attractmode -e "$name")
       ;;
     mameui) gen=(-f emulationstation -g "$MAME_SCRAPED" -o "$MAME_SCRAPED") ;;
+    pegasus)
+      # O metadata.pegasus.txt que o Skyscraper grava leva o comando da
+      # pasta (lib/frontends.sh), senao o Pegasus lista e nao abre.
+      IFS='|' read -r _ exe args _ <<< "$(scraper_attract_emulator "$key")"
+      gen=(-f pegasus -g "$dir" -o "$dir/media" -e "$(frontends_pegasus_launch "$exe $args")")
+      ;;
     *) gen=(-f "$format" -g "$dir" -o "$dir/media") ;;
   esac
   # O que ainda nao esta no cache, em lotes; cada lote gravado fica anotado.

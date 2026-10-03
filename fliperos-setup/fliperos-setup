@@ -64,6 +64,8 @@ source "$SETUP_DIR/lib/status.sh"
 source "$SETUP_DIR/lib/scraper.sh"
 # shellcheck source=lib/romclean.sh
 source "$SETUP_DIR/lib/romclean.sh"
+# shellcheck source=lib/frontends.sh
+source "$SETUP_DIR/lib/frontends.sh"
 # shellcheck source=lib/update.sh
 source "$SETUP_DIR/lib/update.sh"
 # shellcheck source=lib/hardware.sh

@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
+        "status", "scraper", "romclean", "frontends", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -1435,6 +1435,61 @@ class ScraperTests(Base):
         self.assertEqual(lots[0], "lote:mvscu.zip pacman.zip sf2.zip ")
         self.assertEqual(lots[1], "lote:sf2ce.zip ")
         self.assertIn("-f emulationstation -g %s/scraped -o %s/scraped" % (self.env.dir, self.env.dir), lots[2])
+
+
+class FrontendsTests(Base):
+    """lib/frontends.sh: as pastas de ~/roms e o comando de cada uma no
+    Pegasus e no ES-DE, os mesmos do Attract-Mode."""
+
+    def frontends_env(self):
+        env, roms, _ = ScraperTests.scraper_env(self)
+        env.update(PEGASUS_DIR=str(self.env.dir / "pegasus"), ESDE_DIR=str(self.env.dir / "es-de"),
+                   FLIPEROS_BIN="/opt/fliperos/bin")
+        return env, roms
+
+    def test_pegasus_collections_and_launch(self):
+        env, roms = self.frontends_env()
+        self.env.out("frontends_configure pegasus", env)
+        mame = (roms / "mame" / "metadata.pegasus.txt").read_text()
+        self.assertIn("collection: MAME\n", mame)
+        self.assertIn("extensions: zip, 7z\n", mame)
+        self.assertIn("launch: /opt/fliperos/bin/fliperos-x11-run groovymame {file.basename}\n", mame)
+        snes = (roms / "retroarch" / "snes9x" / "metadata.pegasus.txt").read_text()
+        self.assertIn('launch: /opt/fliperos/bin/fliperos-kms-run retroarch -L '
+                      '/opt/fliperos/retroarch/cores/snes9x_libretro.so "{file.path}"\n', snes)
+        dirs = (self.env.dir / "pegasus" / "game_dirs.txt").read_text().split()
+        self.assertEqual(dirs, ["%s/mame" % roms, "%s/retroarch/snes9x" % roms])
+        # Um metadata do Skyscraper (com os jogos) fica; so ganha o launch.
+        (roms / "mame" / "metadata.pegasus.txt").write_text("collection: Arcade\n\ngame: Street Fighter II\n")
+        self.env.out("frontends_configure pegasus", env)
+        self.assertEqual((roms / "mame" / "metadata.pegasus.txt").read_text(),
+                         "collection: Arcade\nlaunch: /opt/fliperos/bin/fliperos-x11-run groovymame {file.basename}\n"
+                         "\ngame: Street Fighter II\n")
+
+    def test_esde_systems_and_rom_folder(self):
+        env, roms = self.frontends_env()
+        self.env.out("frontends_configure emulationstation", env)
+        import xml.etree.ElementTree as ET
+        systems = ET.parse(self.env.dir / "es-de" / "custom_systems" / "es_systems.xml").getroot()
+        by_name = {s.findtext("name"): s for s in systems.iter("system")}
+        self.assertEqual(sorted(by_name), ["mame", "retroarch-snes9x"])
+        mame = by_name["mame"]
+        self.assertEqual(mame.findtext("command"), "/opt/fliperos/bin/fliperos-x11-run groovymame %BASENAME%")
+        self.assertEqual(mame.findtext("extension"), ".zip .7z .ZIP .7Z")
+        self.assertEqual(mame.findtext("theme"), "arcade")
+        self.assertEqual(by_name["retroarch-snes9x"].findtext("command"),
+                         "/opt/fliperos/bin/fliperos-kms-run retroarch -L "
+                         "/opt/fliperos/retroarch/cores/snes9x_libretro.so %ROM%")
+        settings = (self.env.dir / "es-de" / "settings" / "es_settings.xml").read_text()
+        self.assertIn('<string name="ROMDirectory" value="%s" />' % roms, settings)
+
+    def test_chosen_frontend_is_configured(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_frontend() {")[1].split("\n}\n")[0]
+        self.assertLess(menu.index('launcher_set "$choice"'), menu.index('frontends_configure "$choice"'))
+        kms = (ROOT / "config/fliperos-kms-run").read_text()
+        self.assertIn('export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-eglfs}"', kms)
+        scraper = (SETUP / "lib" / "scraper.sh").read_text()
+        self.assertIn('-e "$(frontends_pegasus_launch "$exe $args")"', scraper)
 
 
 class MenuSoundsTests(Base):
