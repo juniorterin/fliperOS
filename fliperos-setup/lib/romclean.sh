@@ -159,6 +159,17 @@ romclean_default_dest() {
   fi
 }
 
+# romclean_flycast_mode DESTINO: os sets arcade do Flycast (Naomi,
+# Atomiswave) ficam na pasta do MAME; indo para ela, vao junto (move), senao
+# ficam onde estao (keep). Apagados, nunca.
+romclean_flycast_mode() {
+  if [[ $(realpath -m -- "$1") == "$(realpath -m -- "$ROMS_ROOT/mame")" ]]; then
+    echo move
+  else
+    echo keep
+  fi
+}
+
 # romclean_source_label FONTE imprime o nome da fonte do XML para a tela.
 romclean_source_label() {
   case $1 in

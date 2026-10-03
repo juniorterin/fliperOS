@@ -1084,6 +1084,11 @@ class RomCleanTests(unittest.TestCase):
               extra=raster),
             m('xmen6p', 'X-Men (6 Players ver EAA)', players=6, controls=(('joy', 3),), year='1992'),
             m('sf2proto', 'Street Fighter II (prototype)', year='1991'),
+            # Do Flycast: Naomi e Atomiswave (nunca apagados).
+            m('naomi', 'Naomi', 'isbios="yes"', coins=None, status=''),
+            m('mvsc2', 'Marvel Vs. Capcom 2 (USA)', 'romof="naomi"', year='2000'),
+            m('awbios', 'Atomiswave BIOS', 'isbios="yes"', coins=None, status=''),
+            m('kofxi', 'The King of Fighters XI', 'romof="awbios"', year='2005', status='imperfect'),
         ]) + '</mame>\n'
         self.tmp = Path(tempfile.mkdtemp())
         self.roms = self.tmp / 'full'
@@ -1161,6 +1166,18 @@ class RomCleanTests(unittest.TestCase):
         _, move, _ = self.scan('--only', 'psx')
         self.assertEqual(move, ['coh1000c.zip', 'sfex.zip', 'tekken3.zip'])
 
+    def test_flycast_sets_are_never_deleted(self):
+        # Naomi e Atomiswave, do Flycast, ficam na pasta do MAME: nunca sobram
+        # para apagar, e vao todos quando o destino e a pasta do MAME.
+        flycast = ['awbios.zip', 'kofxi.zip', 'mvsc2.zip', 'naomi.zip']
+        summary, move, rest = self.scan(*self.CABINET)
+        self.assertEqual(summary['flycast'], '4')
+        self.assertFalse(set(flycast) & set(move + rest))
+        summary, move, rest = self.scan('--only', 'psx', '--flycast', 'move')
+        self.assertEqual(move, sorted(flycast + ['coh1000c.zip', 'sfex.zip', 'tekken3.zip']))
+        self.assertEqual(summary['flycast'], '0')
+        self.assertFalse(set(flycast) & set(rest))
+
     def test_parent_goes_for_a_clone_in_its_zip(self):
         # Num romset merged o wbmlb esta dentro do wbml.zip: o pai que nao
         # funciona vai porque o clone funciona.
@@ -1229,9 +1246,10 @@ class RomCleanTests(unittest.TestCase):
         self.assertEqual((self.dest / 'neogeo.zip').read_bytes(), b'ja estava')
         self.assertFalse((self.roms / 'sfex.zip').exists())
         out = self.romclean('apply', str(self.tmp / 'plan.tsv'), 'delete-rest')
-        # Ficam so o que nao esta no XML.
-        self.assertEqual(sorted(p.name for p in self.roms.iterdir()), ['readme.txt', 'unknown.zip'])
-        self.assertIn('deleted=%d\n' % (len(self.files) - 2 - 3 + 1), out)
+        # Ficam so o que nao esta no XML e os do Flycast.
+        self.assertEqual(sorted(p.name for p in self.roms.iterdir()),
+                         ['awbios.zip', 'kofxi.zip', 'mvsc2.zip', 'naomi.zip', 'readme.txt', 'unknown.zip'])
+        self.assertIn('deleted=%d\n' % (len(self.files) - 2 - 3 - 4 + 1), out)
 
     def test_the_mame_folder_itself(self):
         # A origem e a propria pasta do MAME: o que passou fica onde esta.

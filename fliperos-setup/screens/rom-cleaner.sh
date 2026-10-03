@@ -64,6 +64,7 @@ screen_rom_cleaner_filters() {
           kv+=("$key=${opt[$key]}")
         done
         mapfile -t args < <(romclean_args "${kv[@]}")
+        args+=(--flycast "$(romclean_flycast_mode "$dest")")
         screen_rom_cleaner_run "$folder" "$source" "$dest" "${args[@]}"
         return 0
         ;;
@@ -112,7 +113,8 @@ screen_rom_cleaner_run() {
     "MAME folder|$dest" \
     "Going there|$move ($(human_bytes "$(romclean_value "$summary" move_bytes)"), $(romclean_value "$summary" needed) as parent, BIOS or device)" \
     "Left over|$rest ($(human_bytes "$(romclean_value "$summary" rest_bytes)"))" \
-    "Not in the XML|$(romclean_value "$summary" unknown) (left alone)")
+    "Not in the XML|$(romclean_value "$summary" unknown) (left alone)" \
+    "Flycast arcade|$(romclean_value "$summary" flycast) left where they are (Naomi, Atomiswave: never deleted)")
   romclean_list "$plan" move > "$list"
   (($(wc -l < "$list") > 1200)) && printf '\n... and %d more.\n' $(($(wc -l < "$list") - 1200)) >> "$list"
   while ((!same && move > 0)); do

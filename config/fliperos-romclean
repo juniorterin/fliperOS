@@ -36,6 +36,12 @@ Filtros:
 O que um jogo escolhido usa vai junto: o pai (num romset merged o clone
 esta no zip dele), a BIOS e os dispositivos com ROM (romof, cloneof e
 device_ref, em cadeia). O que nao esta no XML fica como esta.
+
+Os sets do Flycast (Naomi, Naomi 2, Naomi GD-ROM, Atomiswave, System SP:
+os de BIOS naomi, naomi2, naomigd, awbios, segasp e as especiais), que
+ficam na pasta do MAME, nunca sao apagados; com --flycast move (o destino
+e a pasta do MAME) vao junto, passando ou nao nos filtros, e com --flycast
+keep (o padrao) ficam onde estao.
 """
 import argparse
 import hashlib
@@ -94,6 +100,9 @@ REGION_WORDS = {
     'oceania': 'Oceania', 'australia': 'Oceania',
 }
 REGION_ORDER = ['World', 'USA', 'Europe', 'Brazil', 'Hispanic', 'Oceania', 'Asia', 'Japan', 'Unknown']
+# As BIOS dos sistemas arcade do Flycast: um set cuja cadeia de romof chega
+# a uma delas e do Flycast.
+FLYCAST_BIOS = {'naomi', 'naomi2', 'naomigd', 'awbios', 'segasp', 'hod2bios', 'f355bios', 'f355dlx', 'airlbios'}
 BOOTLEG = re.compile(r'\((?:[^)]*\b)?(bootleg|hack)\b', re.I)
 PROTOTYPE = re.compile(r'\((?:[^)]*\b)?(prototype|beta|location test)\b', re.I)
 
@@ -227,6 +236,18 @@ def root_of(machines, name):
     return name
 
 
+def is_flycast(machines, name):
+    """O set e de um sistema arcade do Flycast (a cadeia de romof chega a uma
+    das BIOS dele)?"""
+    for _ in range(8):
+        if name in FLYCAST_BIOS:
+            return True
+        name = machines.get(name, {}).get('romof')
+        if not name:
+            return False
+    return False
+
+
 def best_of_each_game(machines, names, regions):
     """1g1r: de cada familia (pai e clones), a versao da regiao preferida;
     no empate, a que nao e bootleg e depois o pai."""
@@ -262,7 +283,11 @@ def plan(machines, present, f):
                 todo.append(dep)
     known = {n for n in present if n in machines}
     move = known & (games | needed)
-    return move, move & needed - games, known - move
+    # Os do Flycast nunca sobram para apagar: vao todos para a pasta do MAME
+    # (move) ou ficam todos onde estao (keep).
+    flycast = {n for n in known if is_flycast(machines, n)}
+    move = move | flycast if f.flycast == 'move' else move - flycast
+    return move, move & needed - games, known - move - flycast, flycast - move
 
 
 def cmd_scan(args):
@@ -276,7 +301,7 @@ def cmd_scan(args):
                 sys.exit('controle desconhecido: %s (use any ou %s)' % (family, ', '.join(FAMILIES)))
     machines = read_machines(args.xml)
     present = sets_in(folder)
-    move, needed, rest = plan(machines, present, args)
+    move, needed, rest, flycast = plan(machines, present, args)
     sizes = {'move': 0, 'rest': 0}
     with open(args.plan, 'w', encoding='utf-8') as out:
         out.write('# roms\t%s\n# dest\t%s\n' % (folder, os.path.abspath(args.dest)))
@@ -295,6 +320,7 @@ def cmd_scan(args):
     print('rest=%d' % len(rest))
     print('rest_bytes=%d' % sizes['rest'])
     print('unknown=%d' % len([n for n in present if n not in machines]))
+    print('flycast=%d' % len(flycast))
 
 
 def read_plan(path):
@@ -402,6 +428,7 @@ def main():
                    parser.error('use --years 1980-1999'))
     p.add_argument('--only', action='append', default=[])
     p.add_argument('--exclude', action='append', default=[])
+    p.add_argument('--flycast', choices=('keep', 'move'), default='keep')
     p.set_defaults(func=cmd_scan)
     p = sub.add_parser('apply')
     p.add_argument('plan')

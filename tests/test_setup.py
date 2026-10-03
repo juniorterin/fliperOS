@@ -1564,6 +1564,12 @@ class RomCleanerTests(Base):
         self.assertEqual(self.env.out("romclean_default_dest mame2010", self.vars).strip(),
                          "%s/retroarch/mame2010" % roms)
 
+    def test_flycast_sets_go_only_to_the_mame_folder(self):
+        roms = self.env.dir / "roms"
+        out = self.env.out("romclean_flycast_mode %s/mame/; romclean_flycast_mode %s/retroarch/mame2010" % (roms, roms),
+                           self.vars).split()
+        self.assertEqual(out, ["move", "keep"])
+
     def test_human_bytes(self):
         self.assertEqual(self.env.out("human_bytes 0; human_bytes 1536; human_bytes 3221225472").split("\n")[:3],
                          ["0 B", "1.5 KB", "3.0 GB"])
