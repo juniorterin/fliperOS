@@ -1,0 +1,214 @@
+<!--
+    FliperOS 240p (fliperos-240p-es-de)
+    Tema do ES-DE para tubo de 15 kHz. Os temas que o ES-DE traz sao
+    desenhados para 720 linhas ou mais: em 320x240, mesmo com a fonte grande,
+    a letra da lista e fina e de pouco contraste e a ajuda do rodape fica com
+    uns 6 pixels. Aqui o tamanho da letra e fracao da altura da tela pensada
+    em 240 linhas (0.05 = 12 pixels): a lista dos sistemas e a dos jogos em
+    letra de 12 ou mais, a imagem do jogo (o video, se houver) com o ano, a
+    produtora e a descricao. Cores do Dracula, como o resto do FliperOS. Sem
+    imagens proprias alem do fill.svg (um quadrado branco, pintado com a cor
+    de cada faixa): os sistemas aparecem pelo nome.
+-->
+
+<theme>
+    <variables>
+        <!-- Das fontes que vem com o ES-DE (":/" = a pasta de recursos dele). -->
+        <mainFont>:/fonts/DejaVuSans.ttf</mainFont>
+        <colorBackground>282A36</colorBackground>
+        <colorBar>44475A</colorBar>
+        <colorPanel>21222C</colorPanel>
+        <colorText>F8F8F2</colorText>
+        <colorDim>6272A4</colorDim>
+        <colorPurple>BD93F9</colorPurple>
+        <colorCyan>8BE9FD</colorCyan>
+        <colorYellow>F1FA8C</colorYellow>
+    </variables>
+
+    <view name="system, gamelist">
+        <image name="background">
+            <pos>0 0</pos>
+            <size>1 1</size>
+            <path>./fill.svg</path>
+            <color>${colorBackground}</color>
+            <zIndex>0</zIndex>
+        </image>
+        <image name="topBar">
+            <pos>0 0</pos>
+            <size>1 0.1</size>
+            <path>./fill.svg</path>
+            <color>${colorBar}</color>
+            <zIndex>5</zIndex>
+        </image>
+        <image name="bottomBar">
+            <pos>0 0.94</pos>
+            <size>1 0.06</size>
+            <path>./fill.svg</path>
+            <color>${colorBar}</color>
+            <zIndex>5</zIndex>
+        </image>
+        <helpsystem name="help">
+            <pos>0.025 0.946</pos>
+            <origin>0 0</origin>
+            <fontPath>${mainFont}</fontPath>
+            <fontSize>0.038</fontSize>
+            <entrySpacing>0.02</entrySpacing>
+            <iconTextSpacing>0.006</iconTextSpacing>
+            <textColor>${colorText}</textColor>
+            <iconColor>${colorCyan}</iconColor>
+            <textColorDimmed>${colorDim}</textColorDimmed>
+            <iconColorDimmed>${colorDim}</iconColorDimmed>
+            <letterCase>capitalize</letterCase>
+            <!-- So o que cabe em 320 pixels: o resto passaria da borda. -->
+            <entries>a, b, x, y, start</entries>
+        </helpsystem>
+    </view>
+
+    <view name="system">
+        <text name="title">
+            <pos>0.025 0.05</pos>
+            <origin>0 0.5</origin>
+            <size>0.6 0.08</size>
+            <text>FliperOS</text>
+            <fontPath>${mainFont}</fontPath>
+            <fontSize>0.058</fontSize>
+            <color>${colorPurple}</color>
+            <horizontalAlignment>left</horizontalAlignment>
+            <zIndex>50</zIndex>
+        </text>
+        <text name="gameCounter">
+            <pos>0.975 0.05</pos>
+            <origin>1 0.5</origin>
+            <size>0.36 0.07</size>
+            <systemdata>gamecountGames</systemdata>
+            <fontPath>${mainFont}</fontPath>
+            <fontSize>0.045</fontSize>
+            <color>${colorCyan}</color>
+            <horizontalAlignment>right</horizontalAlignment>
+            <zIndex>50</zIndex>
+        </text>
+        <textlist name="systemTextlist">
+            <pos>0.0125 0.125</pos>
+            <size>0.975 0.8</size>
+            <selectorColor>${colorPurple}</selectorColor>
+            <selectedColor>${colorBackground}</selectedColor>
+            <primaryColor>${colorText}</primaryColor>
+            <secondaryColor>${colorCyan}</secondaryColor>
+            <fontPath>${mainFont}</fontPath>
+            <fontSize>0.058</fontSize>
+            <lineSpacing>1.4</lineSpacing>
+            <horizontalAlignment>left</horizontalAlignment>
+            <horizontalMargin>0.0125</horizontalMargin>
+            <letterCase>none</letterCase>
+            <zIndex>50</zIndex>
+        </textlist>
+    </view>
+
+    <view name="gamelist">
+        <text name="systemName">
+            <pos>0.025 0.05</pos>
+            <origin>0 0.5</origin>
+            <size>0.7 0.08</size>
+            <text>${system.fullName}</text>
+            <!-- Nome que nao cabe corre de lado, em vez de ser cortado. -->
+            <container>true</container>
+            <containerType>horizontal</containerType>
+            <containerScrollSpeed>0.7</containerScrollSpeed>
+            <containerStartDelay>2.5</containerStartDelay>
+            <fontPath>${mainFont}</fontPath>
+            <fontSize>0.058</fontSize>
+            <color>${colorPurple}</color>
+            <horizontalAlignment>left</horizontalAlignment>
+            <zIndex>50</zIndex>
+        </text>
+        <gamelistinfo name="gamelistInfo">
+            <pos>0.975 0.05</pos>
+            <origin>1 0.5</origin>
+            <size>0.24 0.07</size>
+            <fontPath>${mainFont}</fontPath>
+            <fontSize>0.045</fontSize>
+            <color>${colorCyan}</color>
+            <horizontalAlignment>right</horizontalAlignment>
+            <zIndex>50</zIndex>
+        </gamelistinfo>
+        <textlist name="gamelistTextlist">
+            <pos>0.0125 0.115</pos>
+            <size>0.495 0.81</size>
+            <selectorColor>${colorPurple}</selectorColor>
+            <selectedColor>${colorBackground}</selectedColor>
+            <primaryColor>${colorText}</primaryColor>
+            <secondaryColor>${colorCyan}</secondaryColor>
+            <fontPath>${mainFont}</fontPath>
+            <fontSize>0.05</fontSize>
+            <lineSpacing>1.33</lineSpacing>
+            <horizontalAlignment>left</horizontalAlignment>
+            <horizontalMargin>0.0125</horizontalMargin>
+            <letterCase>none</letterCase>
+            <indicators>ascii</indicators>
+            <collectionIndicators>ascii</collectionIndicators>
+            <zIndex>50</zIndex>
+        </textlist>
+        <image name="pictureFrame">
+            <pos>0.525 0.125</pos>
+            <size>0.455 0.4275</size>
+            <path>./fill.svg</path>
+            <color>${colorPanel}</color>
+            <zIndex>10</zIndex>
+        </image>
+        <!-- O video do jogo, depois de um instante; sem video, a captura
+             (senao a capa). -->
+        <video name="gameVideo">
+            <pos>0.7525 0.33875</pos>
+            <origin>0.5 0.5</origin>
+            <maxSize>0.455 0.4275</maxSize>
+            <imageType>screenshot, titlescreen, cover</imageType>
+            <interpolation>nearest</interpolation>
+            <delay>1.5</delay>
+            <scrollFadeIn>false</scrollFadeIn>
+            <zIndex>30</zIndex>
+        </video>
+        <datetime name="year">
+            <pos>0.525 0.565</pos>
+            <size>0.12 0.05</size>
+            <metadata>releasedate</metadata>
+            <format>%Y</format>
+            <!-- Jogo sem dados: nada, em vez de "unknown". -->
+            <defaultValue>:space:</defaultValue>
+            <fontPath>${mainFont}</fontPath>
+            <fontSize>0.042</fontSize>
+            <color>${colorYellow}</color>
+            <horizontalAlignment>left</horizontalAlignment>
+            <zIndex>40</zIndex>
+        </datetime>
+        <text name="developer">
+            <pos>0.65 0.565</pos>
+            <size>0.33 0.05</size>
+            <metadata>developer</metadata>
+            <defaultValue>:space:</defaultValue>
+            <container>true</container>
+            <containerType>horizontal</containerType>
+            <containerScrollSpeed>0.7</containerScrollSpeed>
+            <containerStartDelay>2.5</containerStartDelay>
+            <fontPath>${mainFont}</fontPath>
+            <fontSize>0.042</fontSize>
+            <color>${colorYellow}</color>
+            <horizontalAlignment>left</horizontalAlignment>
+            <zIndex>40</zIndex>
+        </text>
+        <text name="description">
+            <pos>0.525 0.625</pos>
+            <size>0.455 0.3</size>
+            <metadata>description</metadata>
+            <container>true</container>
+            <containerVerticalSnap>true</containerVerticalSnap>
+            <containerScrollSpeed>1</containerScrollSpeed>
+            <containerStartDelay>4.5</containerStartDelay>
+            <containerResetDelay>7</containerResetDelay>
+            <fontPath>${mainFont}</fontPath>
+            <fontSize>0.042</fontSize>
+            <lineSpacing>1.2</lineSpacing>
+            <color>${colorText}</color>
+            <zIndex>40</zIndex>
+        </text>
+    </view>
+</theme>

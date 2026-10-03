@@ -1657,6 +1657,17 @@ class FrontendsTests(Base):
                    FLIPEROS_BIN="/opt/fliperos/bin")
         return env, roms
 
+    def themes_240p(self, env):
+        """Os temas do FliperOS instalados; devolve a pasta do tema do Pegasus."""
+        pegasus = self.env.dir / "themes" / "fliperos-240p"
+        esde = self.env.dir / "themes" / "fliperos-240p-es-de"
+        pegasus.mkdir(parents=True)
+        esde.mkdir(parents=True)
+        (pegasus / "theme.qml").write_text("import QtQuick 2.7\n")
+        (esde / "theme.xml").write_text("<theme></theme>\n")
+        env.update(PEGASUS_THEME=str(pegasus), ESDE_THEME=str(esde))
+        return pegasus
+
     def test_pegasus_collections_and_launch(self):
         env, roms = self.frontends_env()
         self.env.out("frontends_configure pegasus", env)
@@ -1720,14 +1731,11 @@ class FrontendsTests(Base):
         self.assertTrue((attract / "emulators" / "MAME.cfg").exists())
 
     def test_240p_settings_are_saved_once_on_a_15khz_monitor(self):
-        # Num tubo de 15 kHz os frontends rodam em 320x240: o tema e a fonte
-        # legiveis ja ficam gravados, uma vez so; o que a pessoa mudar depois
-        # no proprio frontend fica.
+        # Num tubo de 15 kHz os frontends rodam em 320x240: o tema FliperOS
+        # 240p de cada um ja fica escolhido, uma vez so; o que a pessoa mudar
+        # depois no proprio frontend fica.
         env, roms = self.frontends_env()
-        theme = self.env.dir / "themes" / "fliperos-240p"
-        theme.mkdir(parents=True)
-        (theme / "theme.qml").write_text("import QtQuick 2.7\n")
-        env["PEGASUS_THEME"] = str(theme)
+        theme = self.themes_240p(env)
         self.env.stub("pgrep", "exit 1")
         settings = self.env.dir / "es-de" / "settings" / "es_settings.xml"
         settings.parent.mkdir(parents=True)
@@ -1742,8 +1750,8 @@ class FrontendsTests(Base):
         self.assertFalse(peg.exists())
         self.env.out("conf_set frequency 15k; frontends_configure emulationstation; frontends_configure pegasus", env)
         text = settings.read_text()
-        for line in ('<string name="Theme" value="linear-es-de" />', '<string name="ThemeFontSize" value="large" />',
-                     '<string name="ThemeVariant" value="simpleTextlistWithVideos" />',
+        for line in ('<string name="Theme" value="fliperos-240p-es-de" />',
+                     '<string name="ThemeAspectRatio" value="automatic" />',
                      '<bool name="MenuBlurBackground" value="false" />',
                      '<string name="ApplicationUpdaterFrequency" value="never" />'):
             self.assertEqual(text.count(line), 1, line)
@@ -1751,7 +1759,7 @@ class FrontendsTests(Base):
         self.assertEqual(peg.read_text(), "general.theme: %s/\ngeneral.fullscreen: true\n"
                                           "general.input-mouse-support: false\n" % theme)
         # A pessoa troca o tema no frontend: a vez seguinte nao mexe.
-        settings.write_text(text.replace("linear-es-de", "modern-es-de"))
+        settings.write_text(text.replace("fliperos-240p-es-de", "modern-es-de"))
         peg.write_text("general.theme: :/themes/pegasus-theme-grid/\ngeneral.fullscreen: true\n")
         self.env.out("frontends_configure emulationstation; frontends_configure pegasus", env)
         self.assertIn('<string name="Theme" value="modern-es-de" />', settings.read_text())
@@ -1763,12 +1771,47 @@ class FrontendsTests(Base):
     def test_240p_settings_wait_while_the_frontend_is_open(self):
         # O frontend regrava o arquivo dele ao fechar: aberto, fica para depois.
         env, roms = self.frontends_env()
+        self.themes_240p(env)
         self.env.stub("pgrep", "exit 0")
         self.env.out("conf_set frequency 15k; frontends_configure emulationstation", env)
         settings = (self.env.dir / "es-de" / "settings" / "es_settings.xml").read_text()
-        self.assertNotIn("ThemeFontSize", settings)
+        self.assertNotIn('name="Theme"', settings)
         self.assertIn('name="ROMDirectory"', settings)
         self.assertNotIn("esde_240p", (self.env.etc / "fliperos.conf").read_text())
+
+    def test_240p_settings_need_the_theme_installed(self):
+        # Sem o tema na pasta do frontend nada e escolhido (nem anotado): o
+        # frontend abriria com um tema que nao existe.
+        env, roms = self.frontends_env()
+        env.update(PEGASUS_THEME=str(self.env.dir / "nenhum"), ESDE_THEME=str(self.env.dir / "nenhum"))
+        self.env.stub("pgrep", "exit 1")
+        self.env.out("conf_set frequency 15k; frontends_configure emulationstation; frontends_configure pegasus", env)
+        self.assertNotIn('name="Theme"', (self.env.dir / "es-de" / "settings" / "es_settings.xml").read_text())
+        self.assertFalse((self.env.dir / "pegasus" / "settings.txt").exists())
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertNotIn("esde_240p", conf)
+        self.assertNotIn("pegasus_240p", conf)
+
+    def test_pending_240p_settings_are_saved_before_a_launcher_opens(self):
+        # fliperos-setup --session-start (antes de abrir um launcher, com
+        # nenhum frontend aberto): so os instalados, e a pasta fica do usuario.
+        env, roms = self.frontends_env()
+        self.themes_240p(env)
+        self.env.stub("pgrep", "exit 1")
+        (self.env.etc / "sessions.conf").write_text("emulationstation|kms|emulationstation|fliperos-emulationstation|ES\n"
+                                                    "pegasus|kms|pegasus-fe|fliperos-pegasus|Pegasus\n")
+        self.env.stub("pegasus-fe", "exit 0")
+        self.env.out("conf_set frequency 15k; frontends_240p", env)
+        self.assertTrue((self.env.dir / "pegasus" / "settings.txt").exists())
+        self.assertFalse((self.env.dir / "es-de").exists())   # o ES-DE nao esta instalado
+        self.env.stub("emulationstation", "exit 0")
+        self.env.out("frontends_240p", env)
+        self.assertIn('<string name="Theme" value="fliperos-240p-es-de" />',
+                      (self.env.dir / "es-de" / "settings" / "es_settings.xml").read_text())
+        main = (SETUP / "fliperos-setup").read_text()
+        self.assertIn("latency_session_start\n      # A configuracao de 240p", main)
+        self.assertIn("      frontends_240p\n      return 0", main)
+        self.assertIn("  frontends_240p\n", (ROOT / "tools/cabinet-update.sh").read_text())
 
     def test_chosen_frontend_is_configured(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_frontend() {")[1].split("\n}\n")[0]

@@ -158,6 +158,9 @@ main() {
       ;;
     --session-start)
       latency_session_start
+      # A configuracao de 240p dos frontends que ainda nao a tem (nenhum
+      # esta aberto agora).
+      frontends_240p
       return 0
       ;;
     --session-end)

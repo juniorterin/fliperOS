@@ -172,6 +172,8 @@ echo "== Arte do Scraper em ~/media"
   # ~/media, e o frontend padrao passa a ler de la.
   scraper_media_migrate
   frontends_configure "$(launcher_current)"
+  # A configuracao de 240p do ES-DE e do Pegasus instalados (lib/frontends.sh).
+  frontends_240p
   for t in $MEDIA_TYPES; do
     echo "$t: $(find "$MEDIA_DIR/$t" -mindepth 2 -type f | wc -l) arquivo(s)"
   done

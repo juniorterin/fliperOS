@@ -1,0 +1,9 @@
+<!--
+    FliperOS 240p: tema do ES-DE para tubo de 15 kHz (320x240).
+-->
+
+<themeCapabilities>
+    <themeName>FliperOS 240p</themeName>
+
+    <aspectRatio>4:3</aspectRatio>
+</themeCapabilities>

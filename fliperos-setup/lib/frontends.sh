@@ -70,12 +70,35 @@ frontends_pegasus() {
 # ja gravou. Com o frontend aberto nada e gravado (ele regrava o arquivo ao
 # fechar); fica para a vez seguinte.
 
-# O tema do FliperOS para o Pegasus (config/pegasus-theme-fliperos).
+# Os temas do FliperOS: o do Pegasus (config/pegasus-theme-fliperos) e o do
+# ES-DE (config/esde-theme-fliperos), os dois com a lista em letra de 12
+# pixels e a imagem do jogo.
 PEGASUS_THEME=${PEGASUS_THEME:-/usr/share/pegasus-frontend/themes/fliperos-240p}
+ESDE_THEME=${ESDE_THEME:-/usr/share/es-de/themes/fliperos-240p-es-de}
 
 # frontends_crt: o monitor escolhido no Setup e de 15 kHz?
 frontends_crt() {
   [[ $(conf_get frequency 2> /dev/null) == 15* ]]
+}
+
+# frontends_240p grava a configuracao de 240p dos frontends instalados que
+# ainda nao a tem. Chamado logo antes de abrir um launcher (fliperos-setup
+# --session-start, quando nenhum frontend esta aberto) e no
+# tools/cabinet-update.sh: assim ela nao depende de a pessoa passar de novo
+# pelo Setup > Frontend.
+frontends_240p() {
+  frontends_crt || return 0
+  if launcher_installed emulationstation && [[ $(conf_get esde_240p 2> /dev/null) != 1 ]]; then
+    frontends_esde_240p
+    # A pasta e do usuario: criada aqui (pelo root), o ES-DE nao gravaria nela.
+    chown "$FLIPEROS_USER:" "$ESDE_DIR" 2> /dev/null
+    chown -R "$FLIPEROS_USER:" "$ESDE_DIR/settings" 2> /dev/null
+  fi
+  if launcher_installed pegasus && [[ $(conf_get pegasus_240p 2> /dev/null) != 1 ]]; then
+    frontends_pegasus_240p
+    chown -R "$FLIPEROS_USER:" "$PEGASUS_DIR" 2> /dev/null
+  fi
+  return 0
 }
 
 # frontends_pegasus_240p: o tema FliperOS 240p (lista em letra de 12 pixels e
@@ -103,22 +126,19 @@ pegasus_setting() {
   fi
 }
 
-# frontends_esde_240p: dos temas que o ES-DE traz, o Linear com a fonte
-# grande e a lista simples (os nomes e a imagem do jogo, sem a coluna de
-# dados em letra miuda; o video do jogo, se houver, no lugar da imagem). Sem
-# o desfoque do fundo do menu e sem o aviso de versao nova.
+# frontends_esde_240p: o tema FliperOS 240p (o ES-DE o conhece pelo nome da
+# pasta; o video do jogo, se houver, entra no lugar da imagem). Sem o
+# desfoque do fundo do menu e sem o aviso de versao nova.
 frontends_esde_240p() {
-  frontends_crt || return 0
+  frontends_crt && [[ -f $ESDE_THEME/theme.xml ]] || return 0
   [[ $(conf_get esde_240p 2> /dev/null) == 1 ]] && return 0
   pgrep -x es-de > /dev/null 2>&1 && return 0
-  esde_setting Theme linear-es-de
-  esde_setting ThemeVariant simpleTextlistWithVideos
-  esde_setting ThemeFontSize large
+  esde_setting Theme "${ESDE_THEME##*/}"
   esde_setting ThemeAspectRatio automatic
   esde_setting ApplicationUpdaterFrequency never
   esde_setting MenuBlurBackground false bool
   conf_set esde_240p 1
-  log_info "ES-DE: configuracao de 240p gravada (Linear, fonte grande, lista simples)"
+  log_info "ES-DE: configuracao de 240p gravada (tema $ESDE_THEME)"
 }
 
 # ES-DE: os tipos de arte dele (subpastas de MediaDirectory/<sistema>) e as

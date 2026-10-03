@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -1945,9 +1946,47 @@ class AppStoreTests(unittest.TestCase):
         self.assertIn('id=org.gnome.Software.desktop', (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text())
 
 
-class PegasusThemeTests(unittest.TestCase):
-    """config/pegasus-theme-fliperos: o tema do Pegasus para 240p."""
+class FrontendThemeTests(unittest.TestCase):
+    """Os temas do FliperOS para 240p: config/pegasus-theme-fliperos e
+    config/esde-theme-fliperos."""
     THEME = ROOT / 'config/pegasus-theme-fliperos'
+    ESDE = ROOT / 'config/esde-theme-fliperos'
+
+    def test_esde_theme_files(self):
+        caps = ElementTree.parse(self.ESDE / 'capabilities.xml').getroot()
+        self.assertEqual(caps.tag, 'themeCapabilities')
+        self.assertEqual(caps.findtext('themeName'), 'FliperOS 240p')
+        self.assertEqual([a.text for a in caps.findall('aspectRatio')], ['4:3'])
+        theme = ElementTree.parse(self.ESDE / 'theme.xml').getroot()
+        self.assertEqual(theme.tag, 'theme')
+        views = {name.strip(): view for view in theme.findall('view') for name in view.get('name').split(',')}
+        self.assertEqual(set(views), {'system', 'gamelist'})
+        # O tamanho da letra e fracao da altura: em 240 linhas, a das listas
+        # tem 12 pixels ou mais, e nenhuma tem menos de 9.
+        for view, name in (('system', 'systemTextlist'), ('gamelist', 'gamelistTextlist')):
+            lists = [v.find("textlist[@name='%s']" % name) for v in theme.findall('view')
+                     if view in v.get('name') and v.find("textlist[@name='%s']" % name) is not None]
+            self.assertEqual(len(lists), 1, name)
+            self.assertGreaterEqual(round(float(lists[0].findtext('fontSize')) * 240), 12, name)
+        sizes = [round(float(size.text) * 240) for size in theme.iter('fontSize')]
+        self.assertGreaterEqual(min(sizes), 9)
+        # A imagem do jogo, o video no lugar dela, e a descricao.
+        gamelist = [v for v in theme.findall('view') if v.get('name') == 'gamelist'][0]
+        self.assertIn('screenshot', gamelist.find("video[@name='gameVideo']").findtext('imageType'))
+        self.assertEqual(gamelist.find("text[@name='description']").findtext('metadata'), 'description')
+        # Jogo sem dados: nada, em vez de "unknown".
+        for element in (gamelist.find("datetime[@name='year']"), gamelist.find("text[@name='developer']")):
+            self.assertEqual(element.findtext('defaultValue'), ':space:')
+        # Variaveis usadas existem, e os arquivos sao do tema (./) ou do ES-DE (:/).
+        text = (self.ESDE / 'theme.xml').read_text()
+        known = {v.tag for v in theme.find('variables')} | {'system.fullName'}
+        self.assertLessEqual(set(re.findall(r'\$\{([^}]+)\}', text)), known)
+        for path in [p.text for p in theme.iter('path')] + [theme.find('variables').findtext('mainFont')]:
+            if path.startswith('./'):
+                self.assertTrue((self.ESDE / path[2:]).is_file(), path)
+            else:
+                self.assertTrue(path.startswith(':/'), path)
+        self.assertEqual(ElementTree.parse(self.ESDE / 'fill.svg').getroot().tag, '{http://www.w3.org/2000/svg}svg')
 
     def test_theme_files(self):
         cfg = dict(line.split(': ', 1) for line in (self.THEME / 'theme.cfg').read_text().splitlines())
@@ -1965,7 +2004,7 @@ class PegasusThemeTests(unittest.TestCase):
         for api in ('api.collections', 'game.launch()', 'api.keys.isAccept(event)', 'api.memory.set('):
             self.assertIn(api, qml)
 
-    def test_installed_where_pegasus_looks_for_themes(self):
+    def test_installed_where_each_frontend_looks_for_themes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for d in ('home/fliperos', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d', 'etc/systemd/system'):
@@ -1976,8 +2015,12 @@ class PegasusThemeTests(unittest.TestCase):
             theme = root / 'usr/share/pegasus-frontend/themes/fliperos-240p'
             self.assertEqual(sorted(p.name for p in theme.iterdir()), ['theme.cfg', 'theme.qml'])
             self.assertEqual((theme / 'theme.qml').read_text(), (self.THEME / 'theme.qml').read_text())
-        self.assertIn('PEGASUS_THEME=${PEGASUS_THEME:-/usr/share/pegasus-frontend/themes/fliperos-240p}',
-                      (ROOT / 'fliperos-setup/lib/frontends.sh').read_text())
+            esde = root / 'usr/share/es-de/themes/fliperos-240p-es-de'
+            self.assertEqual(sorted(p.name for p in esde.iterdir()), ['capabilities.xml', 'fill.svg', 'theme.xml'])
+            self.assertEqual((esde / 'theme.xml').read_text(), (self.ESDE / 'theme.xml').read_text())
+        lib = (ROOT / 'fliperos-setup/lib/frontends.sh').read_text()
+        self.assertIn('PEGASUS_THEME=${PEGASUS_THEME:-/usr/share/pegasus-frontend/themes/fliperos-240p}', lib)
+        self.assertIn('ESDE_THEME=${ESDE_THEME:-/usr/share/es-de/themes/fliperos-240p-es-de}', lib)
 
 
 class DesktopAppsTests(unittest.TestCase):
