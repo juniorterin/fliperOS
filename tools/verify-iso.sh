@@ -219,6 +219,12 @@ if grep -q 'squashfs-root/usr/local/bin/retroarch$' "$work/files.txt"; then
   unsquashfs -lln "$work/filesystem.squashfs" > "$work/numeric.txt" 2> /dev/null
   grep -E ' 1000/1000 .* squashfs-root/opt/fliperos/retroarch/cores$' "$work/numeric.txt" > /dev/null \
     || fail "a pasta de cores do RetroArch nao e do usuario (o Core Downloader nao grava)"
+  # Com o _FORTIFY_SOURCE do gcc do Ubuntu o mame2010 aborta ao abrir os jogos
+  # de Namco System 12 (build_core em fliperos-mkiso.sh).
+  unsquashfs -cat "$work/filesystem.squashfs" opt/fliperos/retroarch/cores/mame2010_libretro.so > "$work/f" \
+    || fail "nao deu para ler o core mame2010"
+  symbols=$(readelf -Ws --dyn-syms "$work/f")
+  [[ $symbols != *__strcat_chk* ]] || fail "o core mame2010 foi compilado com _FORTIFY_SOURCE"
   echo "RetroArch: 6 cores de fabrica, .info e pasta do usuario para o Core Downloader"
 fi
 

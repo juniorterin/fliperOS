@@ -30,7 +30,7 @@ Todos aparecem no menu **Jogos** do LXDE ([Desktop e tema](Desktop.md)). O Retro
 
 O PCSX2 é o AppImage oficial (fixado por versão e sha256, extraído em `/opt/pcsx2`): o código atual dele exige SDL3 e Qt 6.10, que o Ubuntu 24.04 não tem. O Dolphin é compilado da versão estável (a distribuição oficial para Linux é o Flatpak, que traria ~1 GB de runtime).
 
-**Cores do RetroArch.** Vêm 6 compilados, para funcionar sem rede: FCEUmm (NES), Snes9x, Genesis Plus GX (Mega Drive/Master System), mGBA, PCSX ReARMed (PS1) e MAME 2010. Qualquer outro se baixa no próprio RetroArch, em **Online Updater > Core Downloader** (do buildbot da libretro): cores, `.info` e perfis de controle ficam em `/opt/fliperos/retroarch`, do usuário `fliperos`, então o menu grava sem root. Os `.info` e os perfis de fábrica vêm fixados por commit (`libretro-core-info`, `retroarch-joypad-autoconfig`).
+**Cores do RetroArch.** Vêm 6 compilados, para funcionar sem rede: FCEUmm (NES), Snes9x, Genesis Plus GX (Mega Drive/Master System), mGBA, PCSX ReARMed (PS1) e MAME 2010. Qualquer outro se baixa no próprio RetroArch, em **Online Updater > Core Downloader** (do buildbot da libretro): cores, `.info` e perfis de controle ficam em `/opt/fliperos/retroarch`, do usuário `fliperos`, então o menu grava sem root. Os `.info` e os perfis de fábrica vêm fixados por commit (`libretro-core-info`, `retroarch-joypad-autoconfig`). O MAME 2010 é compilado sem o `_FORTIFY_SOURCE` que o gcc do Ubuntu liga sozinho (`ARCHOPTS=-U_FORTIFY_SOURCE`): o MAME 0.139 escreve 9 bytes num `char[8]` ao iniciar a CPU H8/3002, e com a checagem a glibc fechava o RetroArch (`buffer overflow detected`) em todo jogo de Namco System 12 (Tekken 3, Tekken Tag, Soul Calibur), System 23 e ND-1.
 
 ## Rodar um programa em 640x240
 

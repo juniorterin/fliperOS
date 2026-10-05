@@ -3252,6 +3252,14 @@ class RetroArchConfigTests(unittest.TestCase):
         self.assertIn('--enable-sdl2', body)
         self.assertNotIn('--disable-sdl2', body)
 
+    def test_mame2010_is_built_without_fortify(self):
+        # O gcc do Ubuntu liga o _FORTIFY_SOURCE sozinho, e com ele a glibc
+        # aborta o MAME 0.139 ao iniciar uma CPU H8/3002 (Namco System 12).
+        body = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
+        self.assertIn('make -C "$dir" -f "$mk" -j"$(nproc)" "$@"', body)
+        self.assertIn('\nbuild_core libretro/mame2010-libretro ARCHOPTS=-U_FORTIFY_SOURCE\n', body)
+        self.assertIn('[[ $symbols != *__strcat_chk* ]]', (ROOT / 'tools/verify-iso.sh').read_text())
+
     def test_retroarch_gets_the_system_config(self):
         # E, se o Setup gravou, os botoes de cada jogador por cima.
         with tempfile.TemporaryDirectory() as tmp:

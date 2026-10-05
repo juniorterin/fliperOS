@@ -1023,9 +1023,10 @@ rm -rf /tmp/ra-info
 # (essenciais 8/16-bit), PS1 e um core de arcade leve (mame2010,
 # complementar ao GroovyMAME standalone, o caminho principal de arcade).
 # Compilados aqui: no buildbot os cores avulsos sao "nightly" e nao dao
-# para fixar por hash.
+# para fixar por hash. Depois do repositorio vem o que for para o make.
 build_core() {
   local repo="$1" name dir mk=""
+  shift
   name="$(basename "$repo")"
   dir="/tmp/core-${name}"
   git clone --depth=1 --recursive "https://github.com/${repo}" "$dir"
@@ -1044,7 +1045,7 @@ build_core() {
       -DUSE_EDITLINE=OFF -DUSE_MINIZIP=OFF -DUSE_LIBZIP=OFF -DUSE_EPOXY=OFF -DENABLE_SCRIPTING=OFF
     cmake --build "$dir/build" -j"$(nproc)"
   fi
-  [[ -z $mk ]] || make -C "$dir" -f "$mk" -j"$(nproc)"
+  [[ -z $mk ]] || make -C "$dir" -f "$mk" -j"$(nproc)" "$@"
   # Um core que nao gerou o .so falha aqui, e nao calado.
   compgen -G "$dir/*_libretro.so" > /dev/null || compgen -G "$dir/build/*_libretro.so" > /dev/null \
     || { echo "core ${name}: nenhum *_libretro.so gerado"; exit 1; }
@@ -1056,7 +1057,14 @@ build_core libretro/snes9x
 build_core libretro/Genesis-Plus-GX
 build_core libretro/mgba
 build_core libretro/pcsx_rearmed
-build_core libretro/mame2010-libretro
+# O MAME 0.139 estoura buffers por 1 byte sem consequencia (o h8_get_ccr_str
+# do H8/3002 escreve 9 bytes num char[8]), mas o gcc do Ubuntu liga o
+# _FORTIFY_SOURCE por conta propria e ai a glibc derruba o RetroArch
+# ("buffer overflow detected") ao iniciar a maquina: nenhum jogo com essa CPU
+# abria (Namco System 12 — Tekken 3, Tekken Tag, Soul Calibur —, System 23,
+# ND-1). ARCHOPTS e a variavel que o Makefile dele deixa para as flags de
+# quem compila.
+build_core libretro/mame2010-libretro ARCHOPTS=-U_FORTIFY_SOURCE
 chown -R fliperos:fliperos "$RA_DIR"
 
 echo "RetroArch OK"
