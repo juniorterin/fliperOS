@@ -968,7 +968,8 @@ install_mame2010_xml() {
 # Com SDL2 para o driver de controle "sdl2" existir em Drivers > Controle
 # (mapeamentos do fliperos-controllers, como os outros emuladores; sem
 # perfil, o "Standard Gamepad" embutido). O padrao segue udev; video e audio
-# continuam fixos no retroarch.cfg (gl/KMS e alsa). SDL 1.x fica fora.
+# continuam fixos no retroarch.cfg (glcore/KMS e sdl2, que sai pelo ALSA).
+# SDL 1.x fica fora.
 build_retroarch_chroot() {
   if $SKIP_RETROARCH; then
     warn "RetroArch pulado (--skip-retroarch)"

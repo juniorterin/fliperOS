@@ -8,14 +8,31 @@ set -euo pipefail
 [[ $# -gt 0 ]] || { echo "Uso: fliperos-kms-run programa [argumentos]" >&2; exit 2; }
 [[ -z "${DISPLAY:-}" ]] || { echo "Execute no console (TTY), fora de uma sessao X." >&2; exit 2; }
 command -v "$1" > /dev/null || [[ -x $1 ]] || { echo "Nao instalado: $1" >&2; exit 127; }
+# 0 se a placa cria um contexto OpenGL 3.2 core no KMS (GBM), o que o driver
+# de video "glcore" do RetroArch pede. Quem responde e o Mesa, pelo eglinfo;
+# sem o eglinfo, ou sem o EGL abrir, nao da para saber e vale o glcore.
+gl_core_ok() {
+  local out
+  out=$(timeout 5 eglinfo -B -p gbm -a glcore 2> /dev/null) || return 0
+  [[ $out == *"EGL client APIs"* ]] || return 0
+  [[ $out =~ OpenGL\ core\ profile\ version:\ ([0-9]+)\.([0-9]+) ]] || return 1
+  ((BASH_REMATCH[1] > 3 || (BASH_REMATCH[1] == 3 && BASH_REMATCH[2] >= 2)))
+}
 # A config do FliperOS entra por cima da do usuario (ver o cabecalho de
 # config/retroarch.cfg). Fica aqui, e nao em quem chama, porque a sessao de
 # boot so passa o nome do binario.
 if [[ "$(basename -- "$1")" == retroarch ]]; then
   mkdir -p /opt/fliperos/saves/retroarch 2> /dev/null || true
+  appendconfig=${FLIPEROS_RA_CFG:-/etc/fliperos/retroarch/retroarch.cfg}
+  # O glcore do retroarch.cfg nao abre em placa que so tem OpenGL 2.x (Radeon
+  # X300 a X1950, Intel ate o Core de 1a geracao, GeForce FX/6/7) e o
+  # RetroArch fecha com "Cannot open video driver": nela entra o "gl".
+  gl=${FLIPEROS_RA_GL:-/etc/fliperos/retroarch/retroarch-gl.cfg}
+  if [[ -f $gl ]] && grep -q '^video_driver = "glcore"' "$appendconfig" 2> /dev/null && ! gl_core_ok; then
+    appendconfig+="|$gl"
+  fi
   # Os botoes de cada jogador do Setup > Joysticks > Button mapping
   # (config/fliperos-buttons), por cima do perfil automatico do controle.
-  appendconfig=/etc/fliperos/retroarch/retroarch.cfg
   buttons=${FLIPEROS_RA_BUTTONS:-/etc/fliperos/retroarch/buttons.cfg}
   [[ -f $buttons ]] && appendconfig+="|$buttons"
   set -- "$1" --appendconfig "$appendconfig" "${@:2}"

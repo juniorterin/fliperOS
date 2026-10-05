@@ -170,6 +170,7 @@ done
 sed -i -E 's/^(modesetting[[:space:]]+)0[[:space:]]*$/\11/' "$root/etc/fliperos/mame/mame.ini"
 chown -R 1000:1000 "$root/etc/fliperos/mame" 2> /dev/null || true
 install -Dm644 "$src/config/retroarch.cfg" "$root/etc/fliperos/retroarch/retroarch.cfg"
+install -Dm644 "$src/config/retroarch-gl.cfg" "$root/etc/fliperos/retroarch/retroarch-gl.cfg"
 
 # Emuladores no menu do LXDE (Jogos). O TryExec esconde o que nao foi
 # compilado; os icones dos projetos vem do build de cada um, e os dois que

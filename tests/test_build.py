@@ -3206,14 +3206,23 @@ class RetroArchConfigTests(unittest.TestCase):
         self.assertEqual(self.values()['crt_switch_resolution'], '4')
 
     def test_video_driver_can_modeswitch_in_kms(self):
-        self.assertEqual(self.values()['video_driver'], 'gl')
+        # glcore e gl usam o contexto KMS; o vulkan (khr_display) nao troca.
+        self.assertEqual(self.values()['video_driver'], 'glcore')
+        gl = [line for line in (ROOT / 'config/retroarch-gl.cfg').read_text().splitlines()
+              if line and not line.startswith('#')]
+        self.assertEqual(gl, ['video_driver = "gl"'])
+        self.assertIn('install -Dm644 "$src/config/retroarch-gl.cfg" "$root/etc/fliperos/retroarch/retroarch-gl.cfg"',
+                      (ROOT / 'fliperos-rootfs.sh').read_text())
 
     def test_initial_mode_is_the_active_one(self):
         values = self.values()
         self.assertEqual((values['video_fullscreen_x'], values['video_fullscreen_y']), ('0', '0'))
 
-    def test_audio_is_alsa(self):
-        self.assertEqual(self.values()['audio_driver'], 'alsa')
+    def test_audio_is_sdl2_over_alsa(self):
+        # Sem servidor de som: o SDL do RetroArch sai direto no ALSA.
+        self.assertEqual(self.values()['audio_driver'], 'sdl2')
+        self.assertIn('export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"',
+                      (ROOT / 'config/fliperos-kms-run').read_text())
 
     def test_standard_latency_values(self):
         values = self.values()
@@ -3277,6 +3286,49 @@ class RetroArchConfigTests(unittest.TestCase):
             self.assertEqual(run()[:3], ['--appendconfig', '/etc/fliperos/retroarch/retroarch.cfg', '-L'])
             buttons.write_text('')
             self.assertEqual(run()[:2], ['--appendconfig', '/etc/fliperos/retroarch/retroarch.cfg|%s' % buttons])
+
+    def test_glcore_falls_back_to_gl_without_opengl_3_2_core(self):
+        # O glcore nao abre em placa que so tem OpenGL 2.x: o fliperos-kms-run
+        # pergunta ao Mesa (eglinfo) e passa o "gl" por cima. Sem resposta
+        # (sem eglinfo, EGL que nao abre), vale o glcore do arquivo.
+        head = 'GBM platform:\nEGL API version: 1.5\nEGL client APIs: OpenGL OpenGL_ES \n'
+        core = 'OpenGL core profile version: %s (Core Profile) Mesa 25.2.8\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            prog = tmp / 'retroarch'
+            prog.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            prog.chmod(0o755)
+            cfg = tmp / 'retroarch.cfg'
+            gl = ROOT / 'config/retroarch-gl.cfg'
+            (tmp / 'debug').write_text('')
+            env = dict(os.environ, FLIPEROS_RA_CFG=str(cfg), FLIPEROS_RA_GL=str(gl),
+                       FLIPEROS_RA_BUTTONS=str(tmp / 'buttons.cfg'), FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'),
+                       PATH='%s:%s' % (tmp, os.environ['PATH']))
+            env.pop('DISPLAY', None)
+
+            def appended(driver, eglinfo):
+                cfg.write_text('video_driver = "%s"\n' % driver)
+                fake = tmp / 'eglinfo'
+                if eglinfo is None:
+                    fake.unlink(missing_ok=True)
+                else:
+                    (tmp / 'eglinfo.txt').write_text(eglinfo)
+                    fake.write_text('#!/bin/sh\necho "$*" > "%s/eglinfo.args"\ncat "%s/eglinfo.txt"\n' % (tmp, tmp))
+                    fake.chmod(0o755)
+                out = subprocess.run(['bash', str(ROOT / 'config/fliperos-kms-run'), 'retroarch', '-L', 'x'],
+                                     capture_output=True, text=True, env=env).stdout.split('\n')
+                self.assertEqual((out[0], out[2]), ('--appendconfig', '-L'))
+                return out[1].split('|')[1:]
+
+            self.assertEqual(appended('glcore', head), [str(gl)])  # so OpenGL 2.x: sem perfil core
+            self.assertEqual((tmp / 'eglinfo.args').read_text().split(), ['-B', '-p', 'gbm', '-a', 'glcore'])
+            self.assertEqual(appended('glcore', head + core % '3.1'), [str(gl)])
+            for version in ('3.2', '3.3', '4.5', '10.0'):
+                self.assertEqual(appended('glcore', head + core % version), [], version)
+            self.assertEqual(appended('glcore', 'GBM platform:\neglinfo: eglInitialize failed\n'), [])
+            self.assertEqual(appended('glcore', None), [])
+            # Quem trocou o driver no arquivo do sistema fica com o dele.
+            self.assertEqual(appended('vulkan', head), [])
 
 
 class RetroArchMameRemapTests(unittest.TestCase):
