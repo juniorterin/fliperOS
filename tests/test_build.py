@@ -3113,7 +3113,7 @@ class DocsTests(unittest.TestCase):
 
     def test_readme_is_the_short_version(self):
         readme = (ROOT / 'README.md').read_text()
-        self.assertLess(len(readme), 8000)
+        self.assertLess(len(readme), 4000)
         # Leva a cada pagina da wiki, e so a paginas que existem.
         linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
         self.assertEqual(linked, self.pages())
@@ -3135,6 +3135,24 @@ class DocsTests(unittest.TestCase):
             # Os enderecos de fora ficam como estao.
             self.assertIn('(https://github.com/charmbracelet/gum)', home)
             self.assertIn('tree/main/docs/wiki)', home)
+
+    def test_wikipedia_draft_is_wikitext_and_cites_existing_pages(self):
+        text = (ROOT / 'docs/wikipedia/FliperOS.wiki').read_text()
+        # Wikitexto, nao Markdown (o link "[x](y)"), e com tudo o que abre fechado.
+        self.assertNotIn('](', text)
+        for opened, closed in (('{{', '}}'), ('[[', ']]')):
+            self.assertEqual(text.count(opened), text.count(closed), opened)
+        self.assertEqual(len(re.findall(r'<ref[ >]', text)), text.count('</ref>') + len(re.findall(r'<ref [^>]*/>', text)))
+        # Cada nome de referencia e definido uma vez so.
+        named = re.findall(r'<ref name="([^"]+)">', text)
+        self.assertEqual(len(named), len(set(named)))
+        for used in re.findall(r'<ref name="([^"]+)" />', text):
+            self.assertIn(used, named)
+        # As referencias sao as paginas daqui: uma renomeada quebraria o artigo.
+        cited = re.findall(r'fliperOS/blob/main/([^ |}]+)', text)
+        self.assertGreaterEqual(len(cited), 10)
+        for path in cited:
+            self.assertTrue((ROOT / path).is_file(), path)
 
     def test_html_reference_is_built_from_both(self):
         script = (ROOT / 'tools/render-docs.py').read_text()

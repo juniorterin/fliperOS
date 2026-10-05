@@ -8,123 +8,40 @@ pre{overflow:auto;background:#202b36;padding:20px;border-radius:6px}code{font-si
 table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1px solid #405060;text-align:left;padding:12px}
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </style><main><h1 id="fliperos-07">FliperOS 0.7</h1>
-<p>Ubuntu 24.04 (amd64) para gabinetes de fliperama com monitor CRT, no estilo do GroovyArcade: <strong>kernel 15 kHz</strong>, Switchres, emuladores e frontends prontos, e um menu de configuração feito para a tela do tubo (Bash + <a href="https://github.com/charmbracelet/gum">Gum</a>, tema Dracula, textos em inglês).</p>
-<p>A mídia é só de instalação: menu de boot com a faixa de frequência, teste das saídas de vídeo com voz, instalação no HD/SSD. No sistema instalado, o mesmo programa (<code>fliperos-setup</code>) é o menu que aparece quando o frontend fecha.</p>
-<blockquote>
-<p>15 kHz foi validado no gabinete com a versão anterior (kernel padrão + EDID, 640x240). O kernel 15 kHz, o 640x480i, o teste de saídas e o instalador desta versão foram validados em VM (QEMU); o gabinete real ainda precisa confirmar.</p>
-</blockquote>
-<p>A documentação completa está na <strong><a href="#Instalar">wiki</a></strong>.</p>
+<p>Ubuntu 24.04 (amd64) para gabinetes de fliperama com monitor CRT, no estilo do GroovyArcade: <strong>kernel 15 kHz</strong>, Switchres, emuladores e frontends prontos, e um menu de configuração (<code>fliperos-setup</code>) feito para a tela do tubo.</p>
+<p>Em desenvolvimento: a 0.7 é testada em VM (QEMU) e num gabinete com CRT de 15 kHz. A documentação completa está na <strong><a href="#Instalar">wiki</a></strong>.</p>
 <h2 id="o-que-vem">O que vem</h2>
 <ul>
-<li><strong>Vídeo</strong>: kernel.org 6.18 LTS com os patches de 15 kHz do GroovyArcade, entradas de boot para 15, 25 e 31 kHz e LCD, Switchres, e o Video Setup (monitor, orientação, resolução, geometria).</li>
-<li><strong>Emuladores</strong>: GroovyMAME, RetroArch (6 cores e o Online Updater), Flycast, PCSX2, Dolphin, Supermodel, Hypseus Singe e OpenBOR; Model 2 no Wine; Steam e Heroic no desktop. Cada um abre no modo de vídeo certo para o tubo.</li>
-<li><strong>Frontends</strong>: Attract-Mode Plus, EmulationStation (ES-DE) e Pegasus, com temas de 240p; <strong>Fightcade 2</strong>, baixado do site dele pelo Setup.</li>
-<li><strong>Ferramentas do Setup</strong>: Scraper (capas, vídeos e textos dos jogos), MAME ROM Cleaner e CHD Cleaner, jogos livres, mapa de botões por jogador, calibração de pistola e volante, quirks de controles USB, modos de latência.</li>
-<li><strong>Pastas em <code>~</code></strong>, também pela rede (Samba): <code>roms</code>, <code>bios</code>, <code>media</code> e <code>config</code>.</li>
-<li><strong>Desktop LXDE</strong> com tema Dracula, loja de aplicativos (Flatpak), navegador e cliente de torrent.</li>
+<li><strong>Vídeo</strong>: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.</li>
+<li><strong>Emuladores</strong>: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Model 2, Hypseus Singe e OpenBOR; Steam e Heroic no desktop.</li>
+<li><strong>Frontends</strong>: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus e Fightcade 2.</li>
+<li><strong>Setup</strong>: vídeo e geometria, áudio, rede, scraper, limpeza de romsets do MAME, controles (botões, pistola, volante) e latência.</li>
+<li><strong>Pastas</strong> <code>roms</code>, <code>bios</code>, <code>media</code> e <code>config</code> em <code>~</code> e pela rede (Samba); desktop LXDE com loja de aplicativos.</li>
 </ul>
 <h2 id="instalar">Instalar</h2>
 <ol>
-<li>Grave a ISO <strong>byte a byte</strong> num pendrive (balenaEtcher, Rufus em "DD Image mode" ou <code>dd</code>) e desative o Secure Boot. Rufus no modo padrão, Ventoy e UNetbootin não servem.</li>
+<li>Grave a ISO <strong>byte a byte</strong> (balenaEtcher, Rufus em "DD Image mode" ou <code>dd</code>; Rufus no modo padrão e Ventoy não servem) e desative o Secure Boot.</li>
 </ol>
 <p><code>bash
    sudo dd if=fliperos-0.7.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
 <ol>
-<li>Ligue o gabinete pela mídia. Sem tecla, em 30 segundos sobe a entrada <strong>15 kHz</strong> (o menu de boot não aparece num tubo de 15 kHz; a primeira coisa legível é o splash).</li>
-<li>No teste de saídas, aperte <strong>Enter</strong> quando enxergar a tela, confira o <em>Testing Results</em> e escolha o tipo de monitor.</li>
-<li><strong>Install to HD/SSD</strong> apaga o disco escolhido e instala; depois, <strong>Reboot</strong>.</li>
-<li>No primeiro boot, escolha o launcher padrão. As ROMs vão em <code>~/roms</code> (pela rede, <code>\\fliperos\roms</code>).</li>
+<li>Ligue o gabinete pela mídia e espere 30 segundos: ela sobe em <strong>15 kHz</strong> (o menu de boot não aparece num tubo de 15 kHz).</li>
+<li>Aperte <strong>Enter</strong> quando enxergar a tela, escolha o monitor e <strong>Install to HD/SSD</strong>, que apaga o disco escolhido.</li>
+<li>Reinicie, escolha o launcher padrão e ponha as ROMs em <code>~/roms</code> (pela rede, <code>\\fliperos\roms</code>).</li>
 </ol>
-<p>Detalhes: <a href="#Instalar">Instalar</a>.</p>
-<h2 id="build">Build</h2>
-<p>Sempre em Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> proíbe chroot com o <code>/dev</code> do host no WSL).</p>
+<h2 id="build-e-testes">Build e testes</h2>
+<p>Sempre em Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> diz por quê).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
 docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.7.iso
-</code></pre>
-<p>Opções do build, auditoria da ISO e como atualizar um gabinete pela rede sem ISO nova: <a href="#Build-e-testes">Build e testes</a>.</p>
-<h2 id="testes">Testes</h2>
-<pre><code class="language-powershell">docker build -t fliperos-tests -f tests/Dockerfile tests
+
+docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_build.py
 </code></pre>
 <h2 id="documentacao">Documentação</h2>
-<table>
-<thead>
-<tr>
-<th>Para usar</th>
-<th></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="#Instalar">Instalar</a></td>
-<td>Gravar a mídia, menu de boot, teste das saídas, instalação, Recovery Mode</td>
-</tr>
-<tr>
-<td><a href="#Sistema-instalado">Sistema instalado</a></td>
-<td>O boot, o launcher padrão e o menu do Setup, item por item</td>
-</tr>
-<tr>
-<td><a href="#Frontends">Frontends</a></td>
-<td>O frontend do boot, os temas de 240p, o repositório APT</td>
-</tr>
-<tr>
-<td><a href="#Emuladores">Emuladores</a></td>
-<td>Cada emulador e o modo de vídeo em que abre</td>
-</tr>
-<tr>
-<td><a href="#Fightcade-2">Fightcade 2</a></td>
-<td>Partidas online: download, ROMs, modos de vídeo, teclas</td>
-</tr>
-<tr>
-<td><a href="#ROMs">ROMs, BIOS e arte</a></td>
-<td>As pastas de <code>~</code>, o ROM Cleaner, o CHD Cleaner, os jogos livres</td>
-</tr>
-<tr>
-<td><a href="#Scraper">Scraper</a></td>
-<td>Arte e textos dos jogos para os frontends</td>
-</tr>
-<tr>
-<td><a href="#Controles">Controles</a></td>
-<td>Botões, pistola, volante, porta paralela, quirks USB</td>
-</tr>
-<tr>
-<td><a href="#Desktop">Desktop e tema</a></td>
-<td>O LXDE, a troca de resolução, o tema Dracula</td>
-</tr>
-<tr>
-<td><a href="#Latency">Latência</a></td>
-<td>Os modos de latência, hardware recomendado, como medir</td>
-</tr>
-</tbody>
-</table>
-<table>
-<thead>
-<tr>
-<th>Para mexer</th>
-<th></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="#Kernel-15-kHz">Kernel 15 kHz</a></td>
-<td>O kernel e os patches</td>
-</tr>
-<tr>
-<td><a href="#Build-e-testes">Build e testes</a></td>
-<td>A ISO, as opções do build, os testes, o gabinete pela rede</td>
-</tr>
-<tr>
-<td><a href="#Arquitetura">Arquitetura</a></td>
-<td>O <code>fliperos-setup</code>, os outros componentes, o que é cada arquivo</td>
-</tr>
-<tr>
-<td><a href="#Fontes">Fontes</a></td>
-<td>GroovyArcade, Switchres e os demais projetos consultados</td>
-</tr>
-</tbody>
-</table>
-<p>As páginas da wiki são mantidas neste repositório, em <a href="docs/wiki"><code>docs/wiki</code></a>, junto com o código: muda-se o arquivo de lá, e <code>bash tools/wiki-publish.sh</code> publica. O <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> é a mesma documentação num arquivo só, para ler sem rede (<code>tools/render-docs.py</code>).</p>
+<p><strong>Para usar:</strong> <a href="#Instalar">Instalar</a> · <a href="#Sistema-instalado">Sistema instalado</a> · <a href="#Frontends">Frontends</a> · <a href="#Emuladores">Emuladores</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS e arte</a> · <a href="#Scraper">Scraper</a> · <a href="#Controles">Controles</a> · <a href="#Desktop">Desktop e tema</a> · <a href="#Latency">Latência</a></p>
+<p><strong>Para mexer:</strong> <a href="#Kernel-15-kHz">Kernel 15 kHz</a> · <a href="#Build-e-testes">Build e testes</a> · <a href="#Arquitetura">Arquitetura</a> · <a href="#Fontes">Fontes</a></p>
+<p>As páginas ficam em <a href="docs/wiki"><code>docs/wiki</code></a> e vão para a wiki com <code>bash tools/wiki-publish.sh</code>. O <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> é tudo num arquivo só, para ler sem rede (<code>tools/render-docs.py</code>), e <a href="docs/wikipedia"><code>docs/wikipedia</code></a> guarda o rascunho de um artigo para a Wikipédia.</p>
 <h1 id="Instalar">Instalar</h1>
 <p>Da mídia gravada ao sistema no disco: gravar a ISO, o menu de boot, o teste das saídas de vídeo e a instalação pelo <strong>FliperOS Setup</strong>.</p>
 <h2 id="gravar-a-midia">Gravar a mídia</h2>
@@ -852,6 +769,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <tr>
 <td><code>tools/wiki-publish.sh</code>, <code>tools/render-docs.py</code></td>
 <td>Publica <code>docs/wiki</code> na wiki do GitHub; gera o <code>fliperos-doc.html</code> (tudo num arquivo só, para ler sem rede)</td>
+</tr>
+<tr>
+<td><code>docs/wikipedia/FliperOS.wiki</code></td>
+<td>Rascunho de um artigo para a Wikipédia em português, em wikitexto; as referências dele apontam para as páginas de <code>docs/wiki</code></td>
 </tr>
 </tbody>
 </table>

@@ -69,3 +69,4 @@ As operações longas (instalar, reparar, atualizar, scraper) não conhecem a te
 | `tests/`, `tools/` | Testes e ferramentas de verificação |
 | `README.md`, `docs/wiki/` | O resumo e a documentação completa: as páginas desta wiki, mantidas junto do código |
 | `tools/wiki-publish.sh`, `tools/render-docs.py` | Publica `docs/wiki` na wiki do GitHub; gera o `fliperos-doc.html` (tudo num arquivo só, para ler sem rede) |
+| `docs/wikipedia/FliperOS.wiki` | Rascunho de um artigo para a Wikipédia em português, em wikitexto; as referências dele apontam para as páginas de `docs/wiki` |

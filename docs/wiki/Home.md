@@ -2,7 +2,7 @@
 
 A mídia é **só de instalação** e segue o fluxo do GroovyArcade: menu de boot com a faixa de frequência, teste das saídas de vídeo com voz, *Testing Results*, menu **FliperOS Setup** e instalação no HD/SSD. No sistema instalado, o mesmo programa vira o menu de configuração que aparece quando o frontend fecha. As telas são do **`fliperos-setup`**, em Bash com [Gum](https://github.com/charmbracelet/gum), tema **Dracula** e textos em inglês, pensadas para **640x480i**: 80x30 caracteres, nada animado nem piscando.
 
-> 15 kHz foi validado no gabinete com a versão anterior (kernel padrão + EDID, 640x240). O kernel 15 kHz, o 640x480i, o teste de saídas e o instalador desta versão foram validados em VM (QEMU); o gabinete real ainda precisa confirmar.
+> Em desenvolvimento: a 0.7 é testada em VM (QEMU) e num gabinete com CRT de 15 kHz.
 
 ## Para usar
 
