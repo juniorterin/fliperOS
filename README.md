@@ -14,6 +14,8 @@ Em desenvolvimento: a 0.7 é testada em VM (QEMU) e num gabinete com CRT de 15 k
 
 ## Instalar
 
+A ISO de cada versão sai em [Releases](https://github.com/juniorterin/fliperOS/releases), com o que mudou ([CHANGELOG.md](CHANGELOG.md)).
+
 1. Grave a ISO **byte a byte** (balenaEtcher, Rufus em "DD Image mode" ou `dd`; Rufus no modo padrão e Ventoy não servem) e desative o Secure Boot.
 
    ```bash

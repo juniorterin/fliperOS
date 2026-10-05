@@ -27,6 +27,31 @@ docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.7.iso
 ```
 
+## Release
+
+Toda ISO nova vai para os [Releases](https://github.com/juniorterin/fliperOS/releases) do GitHub, com o changelog da versão, como os releases do GroovyArcade ([substring/os](https://github.com/substring/os/releases)): o texto por área (sistema, pacotes, `fliperos-setup`, ferramentas) e, junto da ISO, a lista de pacotes.
+
+1. Escreva em `CHANGELOG.md` a seção `## VERSÃO` com o que mudou desde o release anterior (`git log VERSÃO_ANTERIOR..HEAD` lista os commits). Uma ISO nova depois de um release pede versão nova (`FLIPEROS_VERSION` no `fliperos-mkiso.sh`).
+2. Faça o commit e o push: o release é marcado no commit de que a ISO saiu.
+3. Publique, no container da auditoria:
+
+   ```powershell
+   docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
+   docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
+   docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.7.iso
+   ```
+
+   O `gh auth login` é uma vez só: o login fica no volume `fliperos-gh`.
+
+O `tools/release-publish.sh` só publica o que pode ir a público:
+
+- a ISO passa pela auditoria (`tools/verify-iso.sh`), então é a do repositorio de agora — uma ISO antiga, gerada antes dos últimos commits, é recusada;
+- uma ISO com rede gravada (`--wifi-ssid`, `--wifi-psk`) é recusada: a senha iria junto;
+- sem a seção da versão no `CHANGELOG.md`, nada é publicado;
+- um release que já existe não é trocado sem `--replace` (apaga e publica de novo).
+
+O GitHub aceita até 2 GiB por arquivo. A ISO maior que isso vai em partes de 1900 MiB (`fliperos-0.7.iso.001`, `.002`...), e o texto do release ganha a instrução de juntar (`copy /b` no Windows, `cat` no Linux). Vão também o `fliperos-0.7.sha256` (a ISO inteira e cada parte) e o `fliperos-0.7-pkglist.txt` (pacote, versão e arquitetura do que está na imagem). `--prerelease` marca como pré-release; `--to PASTA` só prepara os arquivos e o texto (`notes.md`), sem tocar no GitHub; `--notes VERSÃO` mostra o texto da versão.
+
 ## Testes
 
 ```powershell

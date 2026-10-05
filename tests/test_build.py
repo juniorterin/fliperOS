@@ -3168,6 +3168,67 @@ class DocsTests(unittest.TestCase):
             self.assertNotIn('href="%s/%s"' % (self.URL, page), html)
 
 
+class ReleaseTests(unittest.TestCase):
+    """Toda ISO nova vai para os Releases do GitHub com o changelog da versao,
+    no formato dos releases do GroovyArcade (tools/release-publish.sh)."""
+    SCRIPT = ROOT / 'tools/release-publish.sh'
+    VERSION = re.search(r'^FLIPEROS_VERSION="(.*)"$', MKISO, re.M).group(1)
+
+    def notes(self, version):
+        return subprocess.run(['bash', str(self.SCRIPT), '--notes', version], capture_output=True, text=True, timeout=60)
+
+    def test_changelog_has_the_version_of_the_build(self):
+        # Subir o FLIPEROS_VERSION sem escrever o que mudou quebra aqui.
+        changelog = (ROOT / 'CHANGELOG.md').read_text()
+        versions = re.findall(r'^## (\S+)$', changelog, re.M)
+        self.assertEqual(versions[0], self.VERSION)
+        self.assertEqual(len(versions), len(set(versions)))
+        self.assertEqual(len(versions), len(re.findall(r'^## ', changelog, re.M)))
+
+    def test_release_text_is_the_section_of_the_version(self):
+        result = self.notes(self.VERSION)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # As secoes do GroovyArcade: OS, Packages, gasetup, gatools.
+        for heading in ('**Mudanças no sistema:**', '**Mudanças nos pacotes:**',
+                        '**Mudanças no fliperos-setup:**', '**Mudanças nas ferramentas:**'):
+            self.assertIn(heading + '\n\n- ', result.stdout)
+        self.assertNotIn('\n## ', '\n' + result.stdout)
+        self.assertNotIn('# Changelog', result.stdout)
+        self.assertNotEqual(result.stdout[0], '\n')
+
+    def test_version_without_section_is_not_published(self):
+        result = self.notes('99.9')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('CHANGELOG.md', result.stderr)
+        self.assertEqual(result.stdout, '')
+
+    def test_only_the_audited_iso_without_wifi_goes_public(self):
+        script = self.SCRIPT.read_text()
+        audit = script.index('tools/verify-iso.sh" "$iso"')
+        wifi = script.index('NetworkManager/system-connections/')
+        self.assertLess(audit, wifi)
+        self.assertLess(wifi, script.index('gh release create'))
+        # O verify-iso extrai onde o release-publish vai ler.
+        self.assertIn('FLIPEROS_VERIFY_DIR=$audit', script)
+        self.assertIn('work=${FLIPEROS_VERIFY_DIR:-', (ROOT / 'tools/verify-iso.sh').read_text())
+        # A senha do --wifi-psk vai em texto para a imagem.
+        self.assertIn('/etc/NetworkManager/system-connections', MKISO)
+
+    def test_iso_over_the_github_limit_goes_in_parts(self):
+        script = self.SCRIPT.read_text()
+        self.assertIn('limit=2147483648 part=1900M', script)
+        self.assertIn('split -b "$part" -a 3 --numeric-suffixes=1', script)
+        self.assertIn('copy /b', script)
+        # O release e do commit de que a ISO saiu, e nao troca um que ja existe sem pedir.
+        self.assertIn('--target "$commit"', script)
+        self.assertRegex(script, r'\(\(replace\)\) \|\| die')
+
+    def test_release_tools_are_in_the_vmtest_image(self):
+        dockerfile = (ROOT / 'tools/Dockerfile.vmtest').read_text()
+        for package in ('gh', 'git', 'ca-certificates', 'xorriso', 'squashfs-tools'):
+            self.assertRegex(dockerfile, r'\s%s\s' % re.escape(package))
+
+
 class SplashTests(unittest.TestCase):
     def test_theme_files_are_installed(self):
         self.assertIn('fliperos.plymouth', ROOTFS)

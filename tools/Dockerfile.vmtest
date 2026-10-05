@@ -13,3 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       xorriso squashfs-tools initramfs-tools-core zstd cpio \
       edid-decode binutils fdisk python3 \
     && rm -rf /var/lib/apt/lists/*
+
+# gh e git: o tools/release-publish.sh publica a ISO auditada nos Releases
+# do GitHub (o login do gh fica num volume em /root/.config/gh).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      gh git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*

@@ -24,7 +24,7 @@ A mídia é **só de instalação** e segue o fluxo do GroovyArcade: menu de boo
 | Página | O que tem |
 | --- | --- |
 | [Kernel 15 kHz](Kernel-15-kHz.md) | O kernel e os patches |
-| [Build e testes](Build-e-testes.md) | Gerar a ISO em Docker, as opções do build, a auditoria da ISO, os testes, atualizar um gabinete pela rede |
+| [Build e testes](Build-e-testes.md) | Gerar a ISO em Docker, as opções do build, a auditoria da ISO, publicar o release, os testes, atualizar um gabinete pela rede |
 | [Arquitetura](Arquitetura.md) | Como o `fliperos-setup` é organizado, os outros componentes (splash, rede, diagnóstico) e o que é cada arquivo do repositório |
 | [Fontes](Fontes.md) | De onde veio cada parte: GroovyArcade, Switchres e os demais projetos consultados |
 

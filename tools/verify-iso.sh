@@ -9,7 +9,10 @@
 set -euo pipefail
 iso=${1:?Uso: verify-iso.sh caminho.iso}
 src=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-work=$(mktemp -d /tmp/fliperos-verify.XXXXXX)
+# FLIPEROS_VERIFY_DIR: onde extrair, para quem usa o resultado depois (o
+# tools/release-publish.sh le de la a lista de arquivos e o squashfs).
+work=${FLIPEROS_VERIFY_DIR:-$(mktemp -d /tmp/fliperos-verify.XXXXXX)}
+mkdir -p "$work"
 fail() { echo "FALHOU: $*" >&2; exit 1; }
 echo "Auditoria extraida em $work"
 
