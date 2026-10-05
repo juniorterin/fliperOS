@@ -68,7 +68,7 @@ Num frontend (Attract-Mode e outros), o comando do emulador fica `/opt/fliperos/
 
 **A imagem tem de ser esticada.** 640x240 é uma tela 8:3 em pixels, que o tubo mostra em 4:3. Um programa que "mantém a proporção 4:3" usaria só metade da largura (320 colunas) e sairia espremido no meio. Configure o programa para **esticar/preencher a tela** — para Flycast (`rend.ScreenStretching = 200`, via `-config`), Dolphin (`AspectRatio = 3`, via `-C`) e PCSX2 (`AspectRatio = Stretch`, no `PCSX2.ini` a partir da segunda abertura) o `fliperos-x11-run` já faz isso sozinho. A conta, para outro modo: esticar `300 × largura ÷ (4 × altura)` por cento.
 
-**GroovyMAME e RetroArch** não passam por aqui: eles trocam de modo sozinhos a cada jogo. No GroovyMAME, `interlace 0` no `/etc/fliperos/mame/mame.ini` faz o Switchres nunca escolher um modo entrelaçado (os jogos de 480 linhas saem em 240p).
+**GroovyMAME e RetroArch** não passam por aqui: eles trocam de modo sozinhos a cada jogo. No GroovyMAME, `interlace 0` no `/etc/fliperos/mame/mame.ini` faz o Switchres nunca escolher um modo entrelaçado (os jogos de 480 linhas saem em 240p). No RetroArch, o core **MAME 2010** já vem assim: o CRT SwitchRes lê um `switchres.ini` só do core, por cima do `/etc/switchres.ini`, em `~/.config/retroarch/config/MAME 2010/MAME 2010.switchres.ini` (de `config/retroarch-switchres`), com `interlace 0` — um jogo de 640x480 (Namco System 12) abre em 640x240 progressivo, com a imagem encolhida na vertical, em vez de 480i. O mesmo arquivo com o nome de outro core (`config/<Core>/<Core>.switchres.ini`) faz o mesmo nele; para voltar ao 480i, `interlace 1` e sem a linha `# FliperOS` do começo (as atualizações só regravam o arquivo que a tem).
 
 ## Laserdisc (Hypseus Singe)
 

@@ -19,6 +19,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Pastas</strong> <code>roms</code>, <code>bios</code>, <code>media</code> e <code>config</code> em <code>~</code> e pela rede (Samba); desktop LXDE com loja de aplicativos.</li>
 </ul>
 <h2 id="instalar">Instalar</h2>
+<p>A ISO de cada versão sai em <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, com o que mudou (<a href="CHANGELOG.md">CHANGELOG.md</a>).</p>
 <ol>
 <li>Grave a ISO <strong>byte a byte</strong> (balenaEtcher, Rufus em "DD Image mode" ou <code>dd</code>; Rufus no modo padrão e Ventoy não servem) e desative o Secure Boot.</li>
 </ol>
@@ -295,7 +296,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>A imagem nova não sobrescreve esse arquivo depois de editado.</p>
 <p>Num frontend (Attract-Mode e outros), o comando do emulador fica <code>/opt/fliperos/bin/fliperos-x11-run --mode 640x240@60 emulador "[romfilename]"</code> (ou sem <code>--mode</code>, com a linha na tabela).</p>
 <p><strong>A imagem tem de ser esticada.</strong> 640x240 é uma tela 8:3 em pixels, que o tubo mostra em 4:3. Um programa que "mantém a proporção 4:3" usaria só metade da largura (320 colunas) e sairia espremido no meio. Configure o programa para <strong>esticar/preencher a tela</strong> — para Flycast (<code>rend.ScreenStretching = 200</code>, via <code>-config</code>), Dolphin (<code>AspectRatio = 3</code>, via <code>-C</code>) e PCSX2 (<code>AspectRatio = Stretch</code>, no <code>PCSX2.ini</code> a partir da segunda abertura) o <code>fliperos-x11-run</code> já faz isso sozinho. A conta, para outro modo: esticar <code>300 × largura ÷ (4 × altura)</code> por cento.</p>
-<p><strong>GroovyMAME e RetroArch</strong> não passam por aqui: eles trocam de modo sozinhos a cada jogo. No GroovyMAME, <code>interlace 0</code> no <code>/etc/fliperos/mame/mame.ini</code> faz o Switchres nunca escolher um modo entrelaçado (os jogos de 480 linhas saem em 240p).</p>
+<p><strong>GroovyMAME e RetroArch</strong> não passam por aqui: eles trocam de modo sozinhos a cada jogo. No GroovyMAME, <code>interlace 0</code> no <code>/etc/fliperos/mame/mame.ini</code> faz o Switchres nunca escolher um modo entrelaçado (os jogos de 480 linhas saem em 240p). No RetroArch, o core <strong>MAME 2010</strong> já vem assim: o CRT SwitchRes lê um <code>switchres.ini</code> só do core, por cima do <code>/etc/switchres.ini</code>, em <code>~/.config/retroarch/config/MAME 2010/MAME 2010.switchres.ini</code> (de <code>config/retroarch-switchres</code>), com <code>interlace 0</code> — um jogo de 640x480 (Namco System 12) abre em 640x240 progressivo, com a imagem encolhida na vertical, em vez de 480i. O mesmo arquivo com o nome de outro core (<code>config/&lt;Core&gt;/&lt;Core&gt;.switchres.ini</code>) faz o mesmo nele; para voltar ao 480i, <code>interlace 1</code> e sem a linha <code># FliperOS</code> do começo (as atualizações só regravam o arquivo que a tem).</p>
 <h2 id="laserdisc-hypseus-singe">Laserdisc (Hypseus Singe)</h2>
 <p>Os jogos de laserdisc ficam em <code>/opt/fliperos/roms/hypseus</code>, que é o <code>~/.hypseus</code> (pela rede: <code>\\fliperos\FliperOS\roms\hypseus</code>): a ROM em <code>roms/&lt;jogo&gt;.zip</code>, o vídeo do laserdisc em <code>vldp/&lt;jogo&gt;/</code> com o framefile <code>&lt;jogo&gt;.txt</code>, e os jogos Singe em <code>singe/&lt;jogo&gt;/</code>. Para abrir no CRT (640x240 no 15 kHz, tela cheia):</p>
 <pre><code class="language-sh">/opt/fliperos/bin/fliperos-x11-run hypseus lair     # Dragon's Lair
@@ -577,6 +578,26 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.7.iso
 </code></pre>
+<h2 id="release">Release</h2>
+<p>Toda ISO nova vai para os <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> do GitHub, com o changelog da versão, como os releases do GroovyArcade (<a href="https://github.com/substring/os/releases">substring/os</a>): o texto por área (sistema, pacotes, <code>fliperos-setup</code>, ferramentas) e, junto da ISO, a lista de pacotes.</p>
+<ol>
+<li>Escreva em <code>CHANGELOG.md</code> a seção <code>## VERSÃO</code> com o que mudou desde o release anterior (<code>git log VERSÃO_ANTERIOR..HEAD</code> lista os commits). Uma ISO nova depois de um release pede versão nova (<code>FLIPEROS_VERSION</code> no <code>fliperos-mkiso.sh</code>).</li>
+<li>Faça o commit e o push: o release é marcado no commit de que a ISO saiu.</li>
+<li>Publique, no container da auditoria:</li>
+</ol>
+<p><code>powershell
+   docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
+   docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
+   docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.7.iso</code></p>
+<p>O <code>gh auth login</code> é uma vez só: o login fica no volume <code>fliperos-gh</code>.</p>
+<p>O <code>tools/release-publish.sh</code> só publica o que pode ir a público:</p>
+<ul>
+<li>a ISO passa pela auditoria (<code>tools/verify-iso.sh</code>), então é a do repositorio de agora — uma ISO antiga, gerada antes dos últimos commits, é recusada;</li>
+<li>uma ISO com rede gravada (<code>--wifi-ssid</code>, <code>--wifi-psk</code>) é recusada: a senha iria junto;</li>
+<li>sem a seção da versão no <code>CHANGELOG.md</code>, nada é publicado;</li>
+<li>um release que já existe não é trocado sem <code>--replace</code> (apaga e publica de novo).</li>
+</ul>
+<p>O GitHub aceita até 2 GiB por arquivo. A ISO maior que isso vai em partes de 1900 MiB (<code>fliperos-0.7.iso.001</code>, <code>.002</code>...), e o texto do release ganha a instrução de juntar (<code>copy /b</code> no Windows, <code>cat</code> no Linux). Vão também o <code>fliperos-0.7.sha256</code> (a ISO inteira e cada parte) e o <code>fliperos-0.7-pkglist.txt</code> (pacote, versão e arquitetura do que está na imagem). <code>--prerelease</code> marca como pré-release; <code>--to PASTA</code> só prepara os arquivos e o texto (<code>notes.md</code>), sem tocar no GitHub; <code>--notes VERSÃO</code> mostra o texto da versão.</p>
 <h2 id="testes">Testes</h2>
 <pre><code class="language-powershell">docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -769,6 +790,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <tr>
 <td><code>tools/wiki-publish.sh</code>, <code>tools/render-docs.py</code></td>
 <td>Publica <code>docs/wiki</code> na wiki do GitHub; gera o <code>fliperos-doc.html</code> (tudo num arquivo só, para ler sem rede)</td>
+</tr>
+<tr>
+<td><code>CHANGELOG.md</code>, <code>tools/release-publish.sh</code></td>
+<td>O que mudou em cada versão, no formato dos releases do GroovyArcade; publica a ISO auditada nos Releases do GitHub com a seção da versão</td>
 </tr>
 <tr>
 <td><code>docs/wikipedia/FliperOS.wiki</code></td>

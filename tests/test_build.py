@@ -3427,6 +3427,36 @@ class RetroArchMameRemapTests(unittest.TestCase):
             self.assertEqual((remaps / 'MAME 2010' / 'MAME 2010.rmp').read_text(), 'input_player1_btn_b = "0"\n')
 
 
+class RetroArchCoreSwitchresTests(unittest.TestCase):
+    """config/retroarch-switchres: o switchres.ini que o CRT SwitchRes do
+    RetroArch le so para um core (config/<Core>/<Core>.switchres.ini)."""
+
+    INI = ROOT / 'config/retroarch-switchres/MAME 2010.switchres.ini'
+
+    def test_mame2010_never_interlaces(self):
+        # Um jogo de 480 linhas sai em 240p (640x240 a 15 kHz), nao em 480i.
+        lines = self.INI.read_text().splitlines()
+        self.assertTrue(lines[0].startswith('# FliperOS'))
+        self.assertEqual([line for line in lines if not line.startswith('#')], ['interlace 0'])
+
+    def test_installed_without_overwriting_a_user_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'etc/fliperos/mame', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            target = root / 'home/fliperos/.config/retroarch/config/MAME 2010/MAME 2010.switchres.ini'
+            run = lambda: subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                                         capture_output=True, timeout=120)
+            run()
+            self.assertEqual(target.read_text(), self.INI.read_text())
+            # Sem o cabecalho o arquivo e da pessoa.
+            target.write_text('interlace 1\n')
+            run()
+            self.assertEqual(target.read_text(), 'interlace 1\n')
+
+
 class ButtonMappingTests(unittest.TestCase):
     """config/fliperos-buttons: os botoes de cada jogador no RetroArch e no GroovyMAME."""
 

@@ -356,6 +356,16 @@ EOF
       install -Dm644 "$rmp" "$target"
     fi
   done
+  # switchres.ini de um core so (config/retroarch-switchres): o CRT SwitchRes
+  # do RetroArch o le por cima do /etc/switchres.ini ao abrir um jogo naquele
+  # core. Como nos remaps, um arquivo sem o cabecalho "# FliperOS" fica.
+  for ini in "$src"/config/retroarch-switchres/*.switchres.ini; do
+    name=$(basename "$ini" .switchres.ini)
+    target="$home/.config/retroarch/config/$name/$name.switchres.ini"
+    if [[ ! -f $target ]] || head -1 "$target" | grep -q '^# FliperOS'; then
+      install -Dm644 "$ini" "$target"
+    fi
+  done
   chown -R 1000:1000 "$home/.config/retroarch" 2> /dev/null || true
   # Acervo em ~/roms; /opt/fliperos/roms vira um link para la, e os caminhos
   # antigos (mame.ini, frontends, Hypseus, OpenBOR) continuam valendo. Uma
