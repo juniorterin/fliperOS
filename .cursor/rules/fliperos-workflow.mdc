@@ -1,0 +1,38 @@
+---
+description: FliperOS ? como trabalhar neste repo (commit/push, aplicar no gabinete, correç?es gerais, testes)
+alwaysApply: true
+---
+
+# FliperOS ? fluxo de trabalho (memórias do Claude, 2026-09/10)
+
+FliperOS = ISO Ubuntu 24.04 (noble) para gabinetes arcade com CRT 15 kHz, no estilo GroovyArcade.
+Repo `git@github.com:juniorterin/fliperOS.git`, branch `main`. UI do Setup em ingl?s; docs,
+comentários e mensagens de commit em PT-BR.
+
+## Regras que o usuário pediu
+- **Sempre commit + push**: todo trabalho concluído é commitado e depois `git push origin main`, sem perguntar.
+  Nunca force-push; se o push for rejeitado, faça fetch e avise. Um commit por mudança lógica.
+  Outras sess?es podem estar mexendo na mesma árvore: commite só os seus hunks.
+- **Aplicar no gabinete também**: toda mudança vai pro repo E pro gabinete via SSH. Uma ISO inteira leva cerca de 2 h, e o gabinete é a bancada de testes.
+- **Correç?es gerais**: corrija a classe do problema para qualquer gabinete. Nunca commite mapeamentos,
+  GUIDs, nomes do painel (V-USB "Mame Panel 32") ou de jogos do usuário. Configs pessoais ficam só no gabinete.
+- Nunca rode `debootstrap`/`chroot` com bind de `/dev` no WSL2 (ver CLAUDE.md). Builds com chroot rodam no Docker.
+
+## Gabinete
+- IP via DHCP, atualmente **192.168.1.155**. Se n?o responder: `Resolve-DnsName fliperos.local -Type A`. Se nem assim responder, deve estar desligado; n?o fique em loop tentando.
+- Login `fliperos`/`fliperos`. Use PuTTY: `plink -batch -ssh -pw fliperos fliperos@IP "bash -s" < script` e `pscp -batch -pw fliperos`.
+  O shell de login remoto é zsh, ent?o mande os comandos por `bash -s`.
+- `sudo -S` l? a senha do stdin (`echo fliperos | sudo -S -p ''`). Nunca passe dados pelo pipe nem heredoc para um `sudo -S`: grave um script antes e rode esse script com sudo.
+- `pkill -f padrao` pode matar o próprio shell. Use `[p]adrao`.
+- Push completo: `tools/cabinet-push.sh IP`, que precisa da imagem Docker `fliperos-ssh`. Mantenha a lista `packages=` de `tools/cabinet-update.sh` em sincronia com `fliperos-mkiso.sh`.
+- Nunca rode binário de GUI/emulador por SSH só para consultá-lo (`flycast -version` abriu o Flycast). Use `grep -a` no binário.
+- Para testar sem atrapalhar o usuário, suba um X separado em `:1`. Depois devolva o tty1 ao menu (`fliperos-tty1` / `fliperos-setup --menu`).
+
+## Testes e git neste PC Windows
+- O Python do Windows n?o serve. Rode no WSL como root:
+  `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-22.04 -u root -e bash -c "cd /mnt/c/Users/dssds/Desktop/Trabalho/ubuntu-15khz && python3 tests/test_build.py [Classe]"`.
+  Falhas que s?o só do ambiente: `tomllib` (Python 3.10) e 3 DiskTests (falta `jq`).
+  Alternativa: imagem Docker `fliperos-tests` (`docker run --rm -v "$(pwd -W):/w" -w /w fliperos-tests python3 tests/test_setup.py`).
+- O wrapper do git injeta `--trailer`, que este git n?o suporta. Commite com `"$(type -P git)" commit -F arquivo`.
+- `.gitattributes` força LF. Ao vendorizar algo clonado do GitHub neste PC, confira se veio com CRLF.
+- `api.github.com` n?o é alcançável daqui, e o `gh` n?o está autenticado. Use páginas do github.com ou raw.githubusercontent.com.
