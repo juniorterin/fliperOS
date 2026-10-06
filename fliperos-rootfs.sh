@@ -171,6 +171,9 @@ sed -i -E 's/^(modesetting[[:space:]]+)0[[:space:]]*$/\11/' "$root/etc/fliperos/
 chown -R 1000:1000 "$root/etc/fliperos/mame" 2> /dev/null || true
 install -Dm644 "$src/config/retroarch.cfg" "$root/etc/fliperos/retroarch/retroarch.cfg"
 install -Dm644 "$src/config/retroarch-gl.cfg" "$root/etc/fliperos/retroarch/retroarch-gl.cfg"
+# PCSX2.ini de partida: o fliperos-x11-run o copia para o usuario na
+# primeira abertura (sem o assistente, Big Picture, BIOS e jogos em ~).
+install -Dm644 "$src/config/pcsx2.ini" "$root/etc/fliperos/pcsx2.ini"
 
 # Emuladores no menu do LXDE (Jogos). O TryExec esconde o que nao foi
 # compilado; os icones dos projetos vem do build de cada um, e os dois que
@@ -400,16 +403,20 @@ EOF
     chown 1000:1000 "$home/$dir" 2> /dev/null || true
   done
   # Flycast: o jogador 2 (porta B) com controle, que o padrao deixa sem, as
-  # ROMs em ~/roms/dreamcast e a interpolacao linear desligada (o padrao dele
-  # borra a imagem ao leva-la para o modo do tubo). So na primeira vez:
-  # depois o arquivo e dele.
+  # ROMs em ~/roms/dreamcast, a interpolacao linear desligada (o padrao dele
+  # borra a imagem ao leva-la para o modo do tubo) e a classificacao de
+  # transparencia por pixel (pvr.rend 3, OpenGL com OIT; o padrao e por
+  # tira). So na primeira vez: depois o arquivo e dele.
   if [[ ! -f $home/.config/flycast/emu.cfg ]]; then
     install -Dm644 "$src/config/flycast-emu.cfg" "$home/.config/flycast/emu.cfg"
   fi
-  # Num emu.cfg de antes, a interpolacao so e desligada se a opcao ainda nao
-  # esta gravada: gravada (o Flycast grava todas ao fechar), a escolha e dele.
+  # Num emu.cfg de antes, cada uma so muda se a opcao ainda nao esta gravada:
+  # gravada (o Flycast grava todas ao fechar), a escolha e dele.
   if ! grep -q '^rend\.LinearInterpolation' "$home/.config/flycast/emu.cfg"; then
     bash "$src/config/fliperos-ini-set" "$home/.config/flycast/emu.cfg" config rend.LinearInterpolation no
+  fi
+  if ! grep -q '^pvr\.rend' "$home/.config/flycast/emu.cfg"; then
+    bash "$src/config/fliperos-ini-set" "$home/.config/flycast/emu.cfg" config pvr.rend 3
   fi
   # A BIOS em ~/bios/dc (fliperos-roms), tambem num emu.cfg de antes dela.
   if ! grep -q '^Dreamcast.BiosPath' "$home/.config/flycast/emu.cfg"; then

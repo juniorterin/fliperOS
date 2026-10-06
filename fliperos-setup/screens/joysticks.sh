@@ -8,7 +8,7 @@ screen_joysticks() {
   local choice last=guncon
   while true; do
     choice=$(ui_menu "Joysticks" "" "$last" \
-      "buttons|Button mapping (RetroArch and GroovyMAME)" \
+      "buttons|Button mapping (all emulators)" \
       "guncon|Calibrate GunCon 2 (light gun)" \
       "axes|Calibrate wheel, pedals or analog stick" \
       "lpt|LPT joysticks (parallel port)" \
@@ -32,7 +32,7 @@ screen_joysticks() {
 screen_buttons() {
   local title="Button mapping" players p control dev name got index element tries summary map n
   players=$(ui_menu "$title" \
-    "Map the panel for RetroArch and GroovyMAME, one player at a time: press each control when asked. How many players?" \
+    "Map the panel for all emulators, one player at a time: press each control when asked. How many players?" \
     2 "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
   [[ $players == return ]] && return 0
   map=$(mktemp)
@@ -65,9 +65,9 @@ screen_buttons() {
     return 0
   fi
   summary=$(awk '{ print $1 }' "$map" | sort | uniq -c | awk '{ printf "player %s: %d of 12, ", $2, $1 }')
-  if ui_yesno "$title" "Save the mapping for RetroArch and GroovyMAME? Controls mapped: ${summary%, }."; then
+  if ui_yesno "$title" "Save the mapping for all emulators? Controls mapped: ${summary%, }."; then
     if buttons_save "$map"; then
-      ui_msg "$title" "Saved. RetroArch and GroovyMAME use it from the next game."
+      ui_msg "$title" "Saved. The emulators use it from the next game."
     else
       ui_msg "$title" "$(ui_bad "Could not save the mapping.")" "Details in $FLIPEROS_LOG."
     fi

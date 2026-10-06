@@ -23,10 +23,11 @@ direcional ligado a meio eixo: para esses controles ele ganha tambem os
 arquivos de mapeamento (Dreamcast e arcade, na convencao do proprio Flycast),
 so se ainda nao houver um.
 
-O RetroArch (driver udev, que mostra o numero de verdade de cada botao) nao
-tem perfil para painel e encoder de fliperama ("not configured"): os que tem
-direcional digital e nenhum analogico ganham um, so se nao houver, com os
-botoes na ordem do painel no layout dos cores de arcade.
+O RetroArch nao tem perfil para painel e encoder de fliperama ("not
+configured"): os que tem direcional digital e nenhum analogico ganham um
+para o driver udev e outro para o linuxraw (o /dev/input/js*, onde os hats
+sao eixos), so se nao houver, com os botoes na ordem do painel no layout dos
+cores de arcade.
 
 Roda no boot e a cada controle ligado (fliperos-controllers.service, regra do
 udev). Sem dependencias alem do libSDL2 e do evdev (struct/ioctl).
@@ -43,7 +44,8 @@ DB = os.environ.get('FLIPEROS_SDL_DB', '/var/lib/fliperos/gamecontrollerdb.txt')
 # O mapeamento do Setup > Joysticks > Button mapping (fliperos-buttons).
 USER_DB = os.environ.get('FLIPEROS_SDL_USER_DB', '/var/lib/fliperos/gamecontrollerdb-user.txt')
 FLYCAST_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_MAPPINGS', '/home/fliperos/.config/flycast/mappings')
-RA_AUTOCONFIG = os.environ.get('FLIPEROS_RA_AUTOCONFIG', '/opt/fliperos/retroarch/autoconfig/udev')
+RA_AUTOCONFIG = os.environ.get('FLIPEROS_RA_AUTOCONFIG', '/opt/fliperos/retroarch/autoconfig')
+RA_DRIVERS = ('udev', 'linuxraw')
 USER_ID = 1000
 
 # Para onde vao os botoes que o mapeamento automatico deixou de fora, nesta
@@ -171,8 +173,10 @@ def is_arcade(binds):
     return any(k in binds for k in DPAD) and not any(k in binds for k in STICKS)
 
 
-def retroarch_binds(binds, nbuttons):
-    """{tecla do autoconfig: valor} na numeracao do driver udev do RetroArch."""
+def retroarch_binds(binds, nbuttons, js=None):
+    """{tecla do autoconfig: valor} na numeracao do driver udev do RetroArch
+    ou, com `js` (js_axes), na do linuxraw: os eixos na ordem do joystick do
+    kernel, com os hats entre eles."""
     out = {}
     rest = RA_REST_SHORT if nbuttons < 10 else RA_REST_LONG
     for slot, n in zip(RA_ACTIONS + rest, range(nbuttons)):
@@ -182,7 +186,13 @@ def retroarch_binds(binds, nbuttons):
         axis = re.fullmatch(r'([+-])a(\d+)', value)
         hat = re.fullmatch(r'h(\d+)\.([1248])', value)
         if axis:
-            out[ra + '_axis'] = axis.group(1) + axis.group(2)
+            index = int(axis.group(2))
+            out[ra + '_axis'] = axis.group(1) + str(js[0].get(index, index) if js else index)
+        elif hat and js:
+            x, y = js[1].get(int(hat.group(1)), (None, None))
+            if x is not None:
+                sign, idx = {'1': ('-', y), '4': ('+', y), '8': ('-', x), '2': ('+', x)}[hat.group(2)]
+                out[ra + '_axis'] = sign + str(idx)
         elif hat:
             out[ra + '_btn'] = 'h%s%s' % (hat.group(1), RA_HAT[hat.group(2)])
         elif BUTTON.match(value):
@@ -190,12 +200,12 @@ def retroarch_binds(binds, nbuttons):
     return out
 
 
-def retroarch_profile(name, ids, binds, nbuttons):
+def retroarch_profile(name, ids, binds, nbuttons, driver='udev', js=None):
     lines = ['# Gerado por fliperos-controllers: botoes na ordem do painel (wiki do FliperOS, pagina Controles).',
-             'input_driver = "udev"', 'input_device = "%s"' % name]
+             'input_driver = "%s"' % driver, 'input_device = "%s"' % name]
     if ids != (0, 0):
         lines += ['input_vendor_id = "%d"' % ids[0], 'input_product_id = "%d"' % ids[1]]
-    lines += ['input_%s = "%s"' % kv for kv in sorted(retroarch_binds(binds, nbuttons).items())]
+    lines += ['input_%s = "%s"' % kv for kv in sorted(retroarch_binds(binds, nbuttons, js).items())]
     return '\n'.join(lines) + '\n'
 
 
@@ -270,6 +280,33 @@ def digital_axes(path):
         return set(), False, False
     finally:
         os.close(fd)
+
+
+def js_axes(path):
+    """({eixo do SDL: eixo do joystick do kernel}, {hat: (eixo x, eixo y)}):
+    o joydev (linuxraw) numera todos os eixos do evdev em ordem, hats junto;
+    o SDL e o udev do RetroArch pulam os hats."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    except OSError:
+        return {}, {}
+    try:
+        bits = bytearray(8)
+        fcntl.ioctl(fd, _ioc(2, 0x20 + 0x03, len(bits)), bits)
+    except OSError:
+        return {}, {}
+    finally:
+        os.close(fd)
+    axes, hats, sdl_index = {}, {}, 0
+    codes = [c for c in range(0x40) if bits[c // 8] >> (c % 8) & 1]
+    for js_index, code in enumerate(codes):
+        if 0x10 <= code <= 0x17:
+            hat = hats.setdefault((code - 0x10) // 2, [None, None])
+            hat[(code - 0x10) % 2] = js_index
+        else:
+            axes[sdl_index] = js_index
+            sdl_index += 1
+    return axes, {h: tuple(v) for h, v in hats.items() if None not in v}
 
 
 # ── SDL ────────────────────────────────────────────────────────────
@@ -374,17 +411,23 @@ def main():
     # em projetos diferentes.
     for path, binds, nbuttons in retro:
         name, ids = evdev_ids(path)
-        if not name or '"' in name or retroarch_has_profile(RA_AUTOCONFIG, name, ids):
+        if not name or '"' in name:
             continue
-        target = os.path.join(RA_AUTOCONFIG, re.sub(r'[/\\:*?"<>|]', '-', name) + '.cfg')
-        os.makedirs(RA_AUTOCONFIG, exist_ok=True)
-        with open(target, 'w') as f:
-            f.write(retroarch_profile(name, ids, binds, nbuttons))
-        try:
-            os.chown(target, USER_ID, USER_ID)
-        except OSError:
-            pass
-        print('RetroArch: %s' % target)
+        for driver in RA_DRIVERS:
+            directory = os.path.join(RA_AUTOCONFIG, driver)
+            if retroarch_has_profile(directory, name, ids):
+                continue
+            target = os.path.join(directory, re.sub(r'[/\\:*?"<>|]', '-', name) + '.cfg')
+            os.makedirs(directory, exist_ok=True)
+            js = js_axes(path) if driver == 'linuxraw' else None
+            with open(target, 'w') as f:
+                f.write(retroarch_profile(name, ids, binds, nbuttons, driver, js))
+            try:
+                os.chown(directory, USER_ID, USER_ID)
+                os.chown(target, USER_ID, USER_ID)
+            except OSError:
+                pass
+            print('RetroArch: %s' % target)
     return 0
 
 

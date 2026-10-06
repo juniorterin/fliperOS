@@ -280,7 +280,8 @@ apt-get update -qq
 # triggerhappy le as teclas de volume em qualquer tela (fliperos-rootfs.sh);
 # as engines murrine e pixbuf sao do GTK 2 do tema Dracula, o librsvg2
 # desenha os icones SVG do menu e o gxmessage (GTK 3) e a confirmacao do
-# fliperos-launch antes de fechar o desktop. usbutils (lsusb) mostra o
+# fliperos-launch antes de fechar o desktop; o zenity, a escolha do jogo do
+# Supermodel (que nao tem tela propria). usbutils (lsusb) mostra o
 # vendor:produto dos controles em Setup > Quirks. systemd-timesyncd acerta o
 # relogio pela rede: no gabinete o relogio da BIOS estava 2 meses atrasado e
 # o apt recusava todo repositorio ("not valid yet"). A App Store do LXDE e o
@@ -310,7 +311,7 @@ apt-get install -y --no-install-recommends \
   plymouth plymouth-label fonts-dejavu-core \
   lxde-core lxsession openbox-lxde-session lxpolkit lxappearance lxappearance-obconf lxde-icon-theme \
   lxhotkey-gtk lxinput lxrandr lxsession-edit galculator gpicview mousepad xarchiver alacritty \
-  gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
+  gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage zenity \
   htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
   espeak-ng triggerhappy zsh
 
@@ -967,8 +968,9 @@ install_mame2010_xml() {
 # de PCSX2/Supermodel que continuam em fliperos-x11-run.
 # Com SDL2 para o driver de controle "sdl2" existir em Drivers > Controle
 # (mapeamentos do fliperos-controllers, como os outros emuladores; sem
-# perfil, o "Standard Gamepad" embutido). O padrao segue udev; video e audio
-# continuam fixos no retroarch.cfg (glcore/KMS e sdl2, que sai pelo ALSA).
+# perfil, o "Standard Gamepad" embutido). Entrada e controle ficam no
+# linuxraw, video e audio no glcore/KMS e no sdl2 (que sai pelo ALSA), todos
+# fixos no retroarch.cfg.
 # SDL 1.x fica fora.
 build_retroarch_chroot() {
   if $SKIP_RETROARCH; then
@@ -1012,7 +1014,7 @@ fetch_pinned() {
 }
 # Perfis de autoconfig de joypad (deteccao automatica por vendor/product ID).
 fetch_pinned libretro/retroarch-joypad-autoconfig __RA_AUTOCONFIG_COMMIT__ /tmp/ra-autoconfig
-cp -a /tmp/ra-autoconfig/udev "$RA_DIR/autoconfig/"
+cp -a /tmp/ra-autoconfig/udev /tmp/ra-autoconfig/linuxraw "$RA_DIR/autoconfig/"
 rm -rf /tmp/ra-autoconfig
 # Informacoes dos cores (nome, sistemas, BIOS, savestate): sem elas o menu
 # so mostra o nome do arquivo e nao sabe o que cada core roda.

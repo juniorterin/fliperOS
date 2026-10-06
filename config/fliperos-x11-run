@@ -52,34 +52,58 @@ case $name in
     set -- "$1" -C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3 "${@:2}"
     ;;
   pcsx2)
-    # O PCSX2 descarta um ini que nao criou; o ajuste vale a partir da
-    # segunda abertura (a primeira passa pelo assistente da BIOS).
+    # Sem PCSX2.ini, o de partida do FliperOS (/etc/fliperos/pcsx2.ini): com
+    # o SettingsVersion dele o PCSX2 o aceita e completa o resto. Em todo
+    # caso, a cada abertura: sem o assistente, tela cheia no Big Picture,
+    # sem o ponteiro do mouse, a BIOS em ~/bios/ps2 e a imagem esticada.
     ini="$HOME/.config/PCSX2/inis/PCSX2.ini"
+    iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
+    [[ -f $ini ]] || install -Dm600 "${FLIPEROS_PCSX2_INI:-/etc/fliperos/pcsx2.ini}" "$ini" 2> /dev/null || true
     if [[ -f $ini ]]; then
-      /opt/fliperos/bin/fliperos-ini-set "$ini" EmuCore/GS AspectRatio Stretch
-      /opt/fliperos/bin/fliperos-ini-set "$ini" UI StartFullscreen true
+      "$iniset" "$ini" EmuCore/GS AspectRatio Stretch
+      "$iniset" "$ini" UI SetupWizardIncomplete false
+      "$iniset" "$ini" UI StartFullscreen true
+      "$iniset" "$ini" UI StartBigPictureMode true
+      "$iniset" "$ini" UI HideMouseCursor true
+      "$iniset" "$ini" Folders Bios "$HOME/bios/ps2"
       # Lista de jogos em ~/roms/ps2, se a pessoa ainda nao escolheu pastas.
       grep -q '^RecursivePaths' "$ini" ||
-        /opt/fliperos/bin/fliperos-ini-set "$ini" GameList RecursivePaths /home/fliperos/roms/ps2
+        "$iniset" "$ini" GameList RecursivePaths /home/fliperos/roms/ps2
       # Os controles pelo SDL, Pad1 e Pad2 nos dois primeiros: o painel ja
       # chega como fight stick (o mapeamento do Setup > Joysticks > Button
       # mapping no gamecontrollerdb), entao X Y RB / A B RT = Quadrado
       # Triangulo R1 / X Bola R2. So enquanto nada estiver no SDL: um ajuste
       # feito no proprio PCSX2 fica.
       if ! grep -q 'SDL-[0-9]/' "$ini"; then
-        /opt/fliperos/bin/fliperos-ini-set "$ini" InputSources SDL true
+        "$iniset" "$ini" InputSources SDL true
         for pad in 1 2; do
           for kv in Type=DualShock2 Up=DPadUp Down=DPadDown Left=DPadLeft Right=DPadRight Cross=FaceSouth \
             Circle=FaceEast Square=FaceWest Triangle=FaceNorth L1=LeftShoulder R1=RightShoulder L2=+LeftTrigger \
             R2=+RightTrigger Start=Start Select=Back; do
             value=${kv#*=}
             [[ ${kv%%=*} == Type ]] || value="SDL-$((pad - 1))/$value"
-            /opt/fliperos/bin/fliperos-ini-set "$ini" "Pad$pad" "${kv%%=*}" "$value"
+            "$iniset" "$ini" "Pad$pad" "${kv%%=*}" "$value"
           done
         done
       fi
+      # O direcional do painel tambem no analogico esquerdo: jogo de corrida
+      # (NFS Underground 2) so vira por ele. Enquanto o analogico estiver
+      # vazio ou nas teclas padrao do PCSX2 (W A S D).
+      for pad in 1 2; do
+        for kv in LUp=DPadUp LDown=DPadDown LLeft=DPadLeft LRight=DPadRight; do
+          value=$(awk -v s="[Pad$pad]" -v k="${kv%%=*}" '/^\[/ { in_pad = ($0 == s) }
+            in_pad && $1 == k && $2 == "=" { print $3; exit }' "$ini")
+          if [[ -z $value || $value == Keyboard/* ]]; then
+            "$iniset" "$ini" "Pad$pad" "${kv%%=*}" "SDL-$((pad - 1))/${kv#*=}"
+          fi
+        done
+      done
     fi
     set -- "$1" -fullscreen "${@:2}"
+    # O driver OpenGL do Mesa numa thread propria: a thread GS do PCSX2 e o
+    # gargalo num processador fraco (NFS Underground 2 no i3 540: 28 -> 35
+    # quadros/s so com isso).
+    export mesa_glthread="${mesa_glthread:-true}"
     ;;
   hypseus | singe)
     # O Hypseus le o jogo e o player primeiro ("hypseus lair vldp ..."); as
@@ -89,6 +113,17 @@ case $name in
     set -- "$@" -fullscreen -x "$FLIPEROS_RES_W" -y "$FLIPEROS_RES_H" -ignore_aspect_ratio
     ;;
   supermodel)
+    # Com ~/.config/supermodel (criado na primeira abertura) ele procura ali
+    # o Games.xml e o Music.xml, e os Assets em ~/.local/share/supermodel; o
+    # build os deixa em /usr/local/share/supermodel. Sem o Games.xml nenhuma
+    # ROM e reconhecida ("No complete Model 3 games found").
+    share=/usr/local/share/supermodel
+    mkdir -p "$HOME/.config/supermodel/Config" "$HOME/.local/share/supermodel"
+    for f in Config/Games.xml Config/Music.xml; do
+      [[ -e $HOME/.config/supermodel/$f || ! -e $share/$f ]] || ln -s "$share/$f" "$HOME/.config/supermodel/$f"
+    done
+    [[ -e $HOME/.local/share/supermodel/Assets || ! -d $share/Assets ]] ||
+      ln -s "$share/Assets" "$HOME/.local/share/supermodel/Assets"
     # Sem -res ele abre em 496x384 (o nativo do Model 3), que no 15 kHz so
     # existe entrelacado; aqui ocupa o modo da tabela, esticado para o 4:3.
     set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${@:2}"
@@ -115,13 +150,13 @@ export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/
 vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}
 [[ $vt =~ ^[0-9]+$ ]] || vt=1
-# Cursor so para quem tem interface de mouse: PCSX2 (lista de jogos e o
-# assistente da BIOS), Dolphin, Flycast, o Model 2 no Wine e o Fightcade (a
-# sala de jogos). Eles mesmos o escondem durante o jogo em tela cheia. Os
-# demais abrem direto no jogo.
+# Cursor so para quem tem interface de mouse: Dolphin, Flycast, o Model 2 no
+# Wine e o Fightcade (a sala de jogos). Eles mesmos o escondem durante o
+# jogo em tela cheia. O PCSX2 abre no Big Picture, que se usa pelo controle;
+# os demais abrem direto no jogo.
 cursor=(-nocursor)
 case $name in
-  pcsx2 | dolphin-emu | flycast | fliperos-model2 | fightcade) cursor=() ;;
+  dolphin-emu | flycast | fliperos-model2 | fightcade) cursor=() ;;
 esac
 export FLIPEROS_X11_CURSOR=$((${#cursor[@]} == 0))
 # A saida do X, do Switchres e do emulador vai para

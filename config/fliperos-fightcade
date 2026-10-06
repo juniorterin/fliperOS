@@ -35,6 +35,7 @@ folders=${FLIPEROS_ROMS_SCRIPT:-/opt/fliperos/bin/fliperos-roms}
 modes=${FLIPEROS_MODES:-/etc/fliperos/emulator-modes.conf}
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 switchres_ini=${SWITCHRES_INI:-/etc/switchres.ini}
+flycast_maps=${FLIPEROS_FLYCAST_MAPPINGS:-/home/fliperos/.config/flycast/mappings}
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 # say PORCENTAGEM TEXTO: uma etapa para a tela de progresso do Setup
@@ -107,6 +108,11 @@ PY
     fail "the downloaded file is not the Fightcade package"
   fi
   rm -f "$part"
+  # Os botoes do Setup > Joysticks > Button mapping no Flycast Dojo: os
+  # mesmos mapeamentos do Flycast (fliperos-buttons os grava nos dois).
+  for map in "$flycast_maps"/SDL_*.cfg; do
+    [[ -f $map ]] && mkdir -p "$dir/emulator/flycast/mappings" && cp -f "$map" "$dir/emulator/flycast/mappings/"
+  done
   ln -sfn "$self" "$dir/fightcade"
   say 96 "ROM folders in ~/roms/fightcade"
   [[ -x $folders ]] && "$folders"

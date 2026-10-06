@@ -919,6 +919,8 @@ class RomFoldersTests(unittest.TestCase):
         cfg = (ROOT / 'config/flycast-emu.cfg').read_text()
         self.assertIn('[config]\n', cfg)
         self.assertIn('rend.LinearInterpolation = no\n', cfg.split('[input]')[0])
+        # Transparencia classificada por pixel (OpenGL com OIT).
+        self.assertIn('pvr.rend = 3\n', cfg.split('[input]')[0])
         for before, value in (
                 (None, 'no'),
                 ('[config]\nDreamcast.BiosPath = /x\n\n[input]\ndevice1 = 0\n', 'no'),
@@ -1954,6 +1956,20 @@ class ControllerMappingTests(unittest.TestCase):
                      'input_product_id = "1503"', 'input_start_btn = "6"', 'input_up_axis = "-1"'):
             self.assertIn(line + '\n', text, line)
 
+    def test_retroarch_linuxraw_profile(self):
+        # No joystick do kernel os hats sao eixos, na ordem dos codigos do
+        # evdev: X Y (0, 1), HAT0X HAT0Y (2, 3), e um eixo depois deles (4).
+        hat = self.M.complete({}, 12, 0, 1, set(), scratch=True)
+        js = ({0: 0, 1: 1, 2: 4}, {0: (2, 3)})
+        ra = self.M.retroarch_binds(hat, 12, js)
+        self.assertEqual([ra[k + '_axis'] for k in ('up', 'down', 'left', 'right')], ['-3', '+3', '-2', '+2'])
+        self.assertNotIn('up_btn', ra)
+        binds = dict(hat, dpup='-a2', dpdown='+a2', dpleft='-a0', dpright='+a0')
+        self.assertEqual(self.M.retroarch_binds(binds, 12, js)['up_axis'], '-4')
+        text = self.M.retroarch_profile('Painel', (5824, 1503), hat, 12, 'linuxraw', js)
+        self.assertIn('input_driver = "linuxraw"\n', text)
+        self.assertEqual(self.M.RA_DRIVERS, ('udev', 'linuxraw'))
+
     def test_retroarch_profile_only_when_none_matches(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertFalse(self.M.retroarch_has_profile(tmp, 'Painel', (5824, 1503)))
@@ -2854,7 +2870,7 @@ class EmulatorModeTests(unittest.TestCase):
 
     # "15k" e o que o setup grava (monitor_frequency); com "15" o teste nao
     # pegava que o script so aceitava "15" e mandava o gabinete para 480i.
-    def run_x11(self, args, frequency='15k', modes=None):
+    def run_x11(self, args, frequency='15k', modes=None, home=None, extra=None):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             bin_dir = tmp / 'bin'
@@ -2868,8 +2884,9 @@ class EmulatorModeTests(unittest.TestCase):
                 p.chmod(0o755)
             (tmp / 'fliperos.conf').write_text('frequency=%s\n' % frequency)
             (tmp / 'modes.conf').write_text(modes or (ROOT / 'config/fliperos-emulator-modes.conf').read_text())
-            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), HOME=str(tmp),
-                       FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_MODES=str(tmp / 'modes.conf'))
+            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), HOME=str(home or tmp),
+                       FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_MODES=str(tmp / 'modes.conf'),
+                       **(extra or {}))
             env.pop('DISPLAY', None)
             return subprocess.run(['bash', str(ROOT / 'config/fliperos-x11-run')] + args,
                                   capture_output=True, text=True, env=env)
@@ -2949,10 +2966,11 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
 
     def test_mouse_cursor_only_for_emulators_with_a_mouse_interface(self):
-        # No gabinete o mouse sumia ao abrir o PCSX2 (lista de jogos, BIOS).
-        for prog in ('pcsx2', 'dolphin-emu', 'flycast'):
+        for prog in ('dolphin-emu', 'flycast'):
             self.assertNotIn('-nocursor', self.run_x11([prog]).stdout, prog)
         self.assertIn('-nocursor', self.run_x11(['myprog']).stdout)
+        # O PCSX2 abre no Big Picture, que se usa pelo controle.
+        self.assertIn('-nocursor', self.run_x11(['pcsx2']).stdout)
         client = (ROOT / 'config/fliperos-x11-client').read_text()
         self.assertIn('xsetroot -cursor_name left_ptr', client)
 
@@ -2983,6 +3001,50 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertIn('"$root/usr/share/themes/FliperOS-Black/openbox-3/themerc"', ROOTFS)
         self.assertIn('install -Dm644 "$src/config/openbox-x11-run.xml" "$root/etc/fliperos/openbox-x11-run.xml"',
                       ROOTFS)
+
+    def test_pcsx2_starts_from_the_fliperos_ini(self):
+        # Sem o assistente, no Big Picture, sem o mouse, BIOS e jogos em ~.
+        seed = (ROOT / 'config/pcsx2.ini').read_text()
+        for line in ('SettingsVersion = 1', 'SetupWizardIncomplete = false', 'StartBigPictureMode = true',
+                     'HideMouseCursor = true', 'VsyncEnable = true', 'Bios = /home/fliperos/bios/ps2',
+                     'RecursivePaths = /home/fliperos/roms/ps2', 'OpenPauseMenu = Keyboard/Escape'):
+            self.assertIn(line + '\n', seed, line)
+        self.assertIn('install -Dm644 "$src/config/pcsx2.ini" "$root/etc/fliperos/pcsx2.ini"', ROOTFS)
+        with tempfile.TemporaryDirectory() as home:
+            extra = {'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini'),
+                     'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set')}
+            out = self.run_x11(['pcsx2', 'game.iso'], home=home, extra=extra).stdout
+            self.assertIn('pcsx2 -fullscreen game.iso', out)
+            ini = (Path(home) / '.config/PCSX2/inis/PCSX2.ini').read_text()
+            self.assertIn('Bios = %s/bios/ps2\n' % home, ini)
+            self.assertIn('Up = SDL-0/DPadUp\n', ini)
+            # O direcional do painel tambem no analogico esquerdo (corrida).
+            self.assertIn('LLeft = SDL-0/DPadLeft\n', ini)
+            self.assertIn('LUp = SDL-1/DPadUp\n', ini.split('[Pad2]')[1])
+            # Mudado pela pessoa, volta a cada abertura; o teclado padrao do
+            # analogico vira o painel, outro bind fica.
+            ini_path = Path(home) / '.config/PCSX2/inis/PCSX2.ini'
+            ini = ini.replace('StartBigPictureMode = true', 'StartBigPictureMode = false')
+            ini = ini.replace('LLeft = SDL-0/DPadLeft', 'LLeft = Keyboard/A')
+            ini = ini.replace('LRight = SDL-0/DPadRight', 'LRight = SDL-0/LeftX+')
+            ini_path.write_text(ini)
+            self.run_x11(['pcsx2'], home=home, extra=extra)
+            ini = ini_path.read_text()
+            self.assertIn('StartBigPictureMode = true\n', ini)
+            self.assertIn('LLeft = SDL-0/DPadLeft\n', ini)
+            self.assertIn('LRight = SDL-0/LeftX+\n', ini)
+
+    def test_supermodel_finds_its_game_list(self):
+        # Com ~/.config/supermodel ele procura ali o Games.xml; o build o deixa
+        # em /usr/local/share/supermodel ("No complete Model 3 games found").
+        x11 = (ROOT / 'config/fliperos-x11-run').read_text()
+        self.assertIn('share=/usr/local/share/supermodel', x11)
+        self.assertIn('for f in Config/Games.xml Config/Music.xml; do', x11)
+        self.assertIn('ln -s "$share/Assets" "$HOME/.local/share/supermodel/Assets"', x11)
+        # Pelo menu do desktop, sem jogo, o .zip se escolhe antes.
+        launch = (ROOT / 'config/fliperos-launch').read_text()
+        self.assertIn('zenity --file-selection', launch)
+        self.assertIn('librsvg2-common gxmessage zenity', MKISO)
 
     def test_pcsx2_ini_is_adjusted_after_first_run(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -3310,17 +3372,21 @@ class RetroArchConfigTests(unittest.TestCase):
         for name in ('RA_CORE_INFO_COMMIT', 'RA_AUTOCONFIG_COMMIT'):
             self.assertRegex(MKISO, name + r'="[0-9a-f]{40}"')
 
-    def test_sdl2_joypad_driver_can_be_chosen(self):
-        # O sdl2 so aparece em Drivers > Controle se o RetroArch tiver SDL2; o
-        # arquivo do sistema vem por cima do do usuario a cada abertura, entao
-        # nao fixa o driver de controle (padrao compilado: udev).
+    def test_input_and_joypad_drivers_are_linuxraw(self):
         values = self.values()
-        self.assertNotIn('input_joypad_driver', values)
-        self.assertEqual(values['input_driver'], 'udev')
+        self.assertEqual(values['input_driver'], 'linuxraw')
+        self.assertEqual(values['input_joypad_driver'], 'linuxraw')
         body = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
+        # Os perfis de fabrica dos dois drivers.
+        self.assertIn('cp -a /tmp/ra-autoconfig/udev /tmp/ra-autoconfig/linuxraw "$RA_DIR/autoconfig/"', body)
         self.assertIn('libsdl2-dev', body)
         self.assertIn('--enable-sdl2', body)
         self.assertNotIn('--disable-sdl2', body)
+
+    def test_no_onscreen_notifications(self):
+        values = self.values()
+        self.assertEqual(values['video_font_enable'], 'false')
+        self.assertEqual(values['menu_enable_widgets'], 'false')
 
     def test_mame2010_is_built_without_fortify(self):
         # O gcc do Ubuntu liga o _FORTIFY_SOURCE sozinho, e com ele a glibc
@@ -3498,9 +3564,27 @@ class ButtonMappingTests(unittest.TestCase):
                        FLIPEROS_MAME_CTRLR=str(tmp / 'ctrlr' / 'fliperos.cfg'),
                        FLIPEROS_FLYCAST_MAPPINGS=str(tmp / 'flycast'), FLIPEROS_SDL_USER_DB=str(tmp / 'sdl-user.txt'),
                        FLIPEROS_OPENBOR_SAVES=str(tmp / 'Saves'), FLIPEROS_BUTTONS_MAP=str(tmp / 'buttons.map'),
-                       FLIPEROS_CONTROLLERS=str(tmp / 'nada'))
+                       FLIPEROS_CONTROLLERS=str(tmp / 'nada'),
+                       FLIPEROS_SUPERMODEL_INI=str(tmp / 'supermodel' / 'Config' / 'Supermodel.ini'),
+                       FLIPEROS_HYPSEUS_INI=str(tmp / 'hypseus' / 'hypinput.ini'),
+                       FLIPEROS_DOLPHIN_DIR=str(tmp / 'dolphin'),
+                       FLIPEROS_FLYCAST_DOJO_MAPPINGS=str(tmp / 'dojo' / 'mappings'))
+            (tmp / 'dojo').mkdir()
             subprocess.run(['python3', str(ROOT / 'config/fliperos-buttons'), 'save', str(tmp / 'map')], env=env,
                            check=True, capture_output=True, timeout=30)
+            hyp = (tmp / 'hypseus' / 'hypinput.ini').read_text()
+            self.assertRegex(hyp, r'(?m)^KEY_UP +\= SDLK_UP +0 +0 +-002$')
+            self.assertRegex(hyp, r'(?m)^KEY_COIN1 +\= SDLK_5 +0 +008$')
+            self.assertRegex(hyp, r'(?m)^KEY_START2 +\= SDLK_2 +0 +107$')
+            self.assertIn('[MOUSE]\n', hyp)
+            arcade = 'SDL_' + name.replace('/', '-').replace(':', '-') + '_arcade.cfg'
+            self.assertTrue((tmp / 'dojo' / 'mappings' / arcade).is_file())
+            sm = (tmp / 'supermodel' / 'Config' / 'Supermodel.ini').read_text()
+            self.assertTrue(sm.startswith('[ Global ]\n'), sm)
+            for line in ('InputCoin1 = "KEY_3,JOY1_BUTTON8"', 'InputPunch = "KEY_A,JOY1_BUTTON1"',
+                         'InputJoyUp = "KEY_UP,JOY1_YAXIS_NEG"', 'InputStart2 = "KEY_2,JOY2_BUTTON7"',
+                         'InputPunch2 = "JOY2_BUTTON1"'):
+                self.assertIn(line + '\n', sm, line)
             ra = (tmp / 'ra' / 'buttons.cfg').read_text()
             for line in ('input_player1_joypad_index = "0"', 'input_player2_joypad_index = "1"',
                          'input_player1_up_axis = "-1"', 'input_player1_y_btn = "0"', 'input_player1_select_btn = "7"',
@@ -3563,6 +3647,60 @@ class ButtonMappingTests(unittest.TestCase):
                                      608))
         self.assertEqual(keys[13], 601 + 64 * 99)   # jogador 2 sem nada
 
+    def test_supermodel_start_and_coin_on_the_panel(self):
+        # O padrao do Supermodel poe Start e ficha nos botoes 9 e 10; o painel
+        # de 8 botoes do gabinete tem Start no 7 e a ficha no 8.
+        code = self.rc.supermodel_code
+        self.assertEqual(code(0, 'b6'), 'JOY1_BUTTON7')
+        self.assertEqual(code(1, '+a0'), 'JOY2_XAXIS_POS')
+        self.assertEqual(code(0, 'h0.4'), 'JOY1_POV1_DOWN')
+        values = self.rc.supermodel_values({1: self.PANEL})
+        self.assertEqual(values['InputStart1'], '"KEY_1,JOY1_BUTTON7"')
+        self.assertEqual(values['InputEscape'], '"KEY_F,JOY1_BUTTON4"')
+        self.assertNotIn('InputStart2', values)
+        # As chaves que existem sao trocadas no lugar; o resto do arquivo fica.
+        old = '[ Global ]\nInputStart1 = "KEY_1,JOY1_BUTTON9"\nWideScreen = 0\n'
+        text = self.rc.supermodel_ini(old, {'InputStart1': '"X"', 'InputCoin1': '"Y"'})
+        self.assertEqual(text, '[ Global ]\nInputCoin1 = "Y"\nInputStart1 = "X"\nWideScreen = 0\n')
+
+    def test_dolphin_gamecube_pads_on_sdl(self):
+        # Dois paineis iguais: SDL/0 e SDL/1 com o mesmo nome; o teclado do
+        # GCPad1 sai, o resto do arquivo fica; a porta 2 passa a ter controle.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'GCPadNew.ini').write_text('[GCPad1]\nDevice = XInput2/0/Virtual core pointer\n'
+                                              'Buttons/A = `X`\n[GCPad3]\nDevice = XInput2/0/x\n')
+            (tmp / 'Dolphin.ini').write_text('[Core]\nSIDevice0 = 12\nCPUThread = True\n[Display]\nX = 1\n')
+            self.rc.DOLPHIN_DIR = str(tmp)
+            devices = {0: ('g', 'Painel/1, A', 8, 2), 1: ('g', 'Painel/1, A', 8, 2)}
+            p2 = {c: (1, e) for c, (_, e) in self.PANEL.items()}
+            self.rc.dolphin_save({1: self.PANEL, 2: p2}, devices)
+            gc = (tmp / 'GCPadNew.ini').read_text()
+            pad1 = gc.split('[GCPad1]\n')[1].split('\n[')[0]
+            self.assertIn('Device = SDL/0/Painel/1  A\n', pad1)
+            self.assertNotIn('`X`', pad1)
+            for line in ('Buttons/A = `Button S`', 'Buttons/B = `Button W`', 'Main Stick/Up = `Pad N`',
+                         'Triggers/R = `Trigger R`', 'Triforce/Coin = `Back`'):
+                self.assertIn(line + '\n', pad1, line)
+            self.assertIn('[GCPad2]\nDevice = SDL/1/Painel/1  A\n', gc)
+            self.assertIn('[GCPad3]\nDevice = XInput2/0/x\n', gc)
+            core = (tmp / 'Dolphin.ini').read_text()
+            # O adaptador de GameCube (12) na porta 1 fica.
+            self.assertEqual(core, '[Core]\nSIDevice0 = 12\nCPUThread = True\nSIDevice1 = 6\n\n[Display]\nX = 1\n')
+
+    def test_hypseus_joystick_codes(self):
+        # 100 * controle + botao + 1; eixo com sinal; hat pelo KEY_UP.
+        text = self.rc.hypseus_keyboard({1: self.PANEL})
+        self.assertRegex(text, r'(?m)^KEY_BUTTON1 +\= SDLK_LCTRL +0 +001$')
+        self.assertRegex(text, r'(?m)^KEY_SKILL3 +\= SDLK_x +0 +006$')
+        self.assertRegex(text, r'(?m)^KEY_RIGHT +\= SDLK_RIGHT +0 +0 +\+001$')
+        self.assertRegex(text, r'(?m)^KEY_START2 +\= SDLK_2 +0 +0$')
+        hat = dict(self.PANEL, up=(1, 'h0.1'), down=(1, 'h0.4'))
+        text = self.rc.hypseus_keyboard({1: hat})
+        self.assertRegex(text, r'(?m)^KEY_UP +\= SDLK_UP +0 +100$')
+        self.assertRegex(text, r'(?m)^KEY_DOWN +\= SDLK_DOWN +0 +0$')
+        self.assertTrue(text.startswith('[KEYBOARD]\n') and text.endswith('\nEND\n'))
+
     def test_flycast_arcade_is_panel_order(self):
         text = self.rc.flycast_cfg('P', self.PANEL, self.rc.FLYCAST_ARCADE)
         for bind in ('0:btn_a', '1:btn_b', '2:btn_c', '3:btn_x', '4:btn_y', '5:btn_z', '6:btn_start', '7:btn_d',
@@ -3598,7 +3736,7 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-buttons" "$root/opt/fliperos/bin/fliperos-buttons"',
                       ROOTFS)
         screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
-        self.assertIn('"buttons|Button mapping (RetroArch and GroovyMAME)"', screen)
+        self.assertIn('"buttons|Button mapping (all emulators)"', screen)
         body = screen.split('screen_buttons() {')[1].split('\n}\n')[0]
         self.assertLess(body.index('padkeys_off'), body.index('buttons_capture'))
         self.assertLess(body.rindex('buttons_capture'), body.index('padkeys_on'))

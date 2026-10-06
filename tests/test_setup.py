@@ -1412,6 +1412,15 @@ class ScraperTests(Base):
         systems = [line.split("|")[3] for line in self.env.out("frontends_systems", env).splitlines()]
         self.assertEqual(systems[:4], ["Atomiswave", "MAME", "Naomi", "Naomi 2"])
 
+    def test_model3_folder_opens_in_supermodel(self):
+        # ~/roms/model3: raspada como arcade (o ScreenScraper nao tem Model 3).
+        env, roms, _ = self.scraper_env()
+        (roms / "model3").mkdir()
+        (roms / "model3" / "vf3.zip").write_text("rom")
+        self.assertIn("model3|%s/model3|arcade|1" % roms, self.env.out("scraper_detect", env).splitlines())
+        self.assertEqual(self.env.out("scraper_attract_emulator model3", env).strip(),
+                         'Supermodel|/opt/fliperos/bin/fliperos-x11-run|supermodel "[romfilename]"|.zip')
+
     def test_attract_mode_gets_emulator_and_display_once(self):
         env, roms, attract = self.scraper_env()
         for _ in range(2):

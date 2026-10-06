@@ -5,7 +5,7 @@
       espera o proximo comando de qualquer controle e imprime
       "INDICE ELEMENTO NOME" (status 1 se o tempo acabou)
   fliperos-buttons save MAPA
-      grava os botoes no RetroArch e no GroovyMAME
+      grava os botoes em todos os emuladores (abaixo)
 
 ELEMENTO na numeracao do SDL (joystick, nao game controller): b3 (botao),
 -a1 / +a1 (meio eixo), h0.1 / h0.2 / h0.4 / h0.8 (hat: cima, direita,
@@ -39,6 +39,20 @@ OpenBOR: as teclas de cada jogador (o codigo do joystick do OpenBOR:
 600 + 1 + aparelho * 64 + botao; os eixos e os hats depois dos botoes) no
 struct do Saves/default.cfg e no .cfg de cada pak.
 
+Supermodel: Start, ficha, direcional e os botoes 1 a 4 (Punch, Kick, Guard,
+Escape, a ordem do padrao dele) dos jogadores 1 e 2 no Supermodel.ini, com
+as teclas padrao junto. O padrao dele poe Start e ficha nos botoes 9 e 10,
+que um painel de 8 botoes nao tem.
+
+Dolphin: GCPad1 a GCPad4 no GCPadNew.ini pelo SDL (o layout de fight stick
+acima vira A B X Y Z R do GameCube, a ficha a Coin do Triforce) e a porta
+de cada jogador ligada no Dolphin.ini.
+
+Hypseus Singe: o [KEYBOARD] do ~/.hypseus/hypinput.ini, com o joystick de
+cada comando (Start e ficha tambem do jogador 2) junto das teclas padrao.
+
+Flycast Dojo (Fightcade): os mesmos mapeamentos do Flycast, na pasta dele.
+
 O mapa fica em /etc/fliperos/buttons.map: a atualizacao do sistema o grava
 de novo (fliperos-buttons save /etc/fliperos/buttons.map).
 """
@@ -57,6 +71,11 @@ MAME_CTRLR = os.environ.get('FLIPEROS_MAME_CTRLR', '/home/fliperos/.mame/ctrlr/f
 SDL_USER_DB = os.environ.get('FLIPEROS_SDL_USER_DB', '/var/lib/fliperos/gamecontrollerdb-user.txt')
 FLYCAST_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_MAPPINGS', '/home/fliperos/.config/flycast/mappings')
 OPENBOR_SAVES = os.environ.get('FLIPEROS_OPENBOR_SAVES', '/opt/fliperos/roms/openbor/Saves')
+SUPERMODEL_INI = os.environ.get('FLIPEROS_SUPERMODEL_INI', '/home/fliperos/.config/supermodel/Config/Supermodel.ini')
+DOLPHIN_DIR = os.environ.get('FLIPEROS_DOLPHIN_DIR', '/home/fliperos/.config/dolphin-emu')
+HYPSEUS_INI = os.environ.get('FLIPEROS_HYPSEUS_INI', '/home/fliperos/.hypseus/hypinput.ini')
+FLYCAST_DOJO_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_DOJO_MAPPINGS',
+                                       '/opt/fliperos/fightcade/emulator/flycast/mappings')
 CONTROLLERS = os.environ.get('FLIPEROS_CONTROLLERS', '/opt/fliperos/bin/fliperos-controllers')
 USER_ID = 1000
 
@@ -311,6 +330,233 @@ def openbor_save(players, devices):
         write_bytes(path, openbor_with_keys(data, players, devices), USER_ID)
 
 
+# ── Supermodel ──────────────────────────────────────────────────
+
+# controle: (chave do jogador 1, chave do jogador 2, tecla padrao do jogador 1)
+SUPERMODEL_KEYS = {
+    'start': ('InputStart1', 'InputStart2', 'KEY_1'), 'coin': ('InputCoin1', 'InputCoin2', 'KEY_3'),
+    'up': ('InputJoyUp', 'InputJoyUp2', 'KEY_UP'), 'down': ('InputJoyDown', 'InputJoyDown2', 'KEY_DOWN'),
+    'left': ('InputJoyLeft', 'InputJoyLeft2', 'KEY_LEFT'), 'right': ('InputJoyRight', 'InputJoyRight2', 'KEY_RIGHT'),
+    'b1': ('InputPunch', 'InputPunch2', 'KEY_A'), 'b2': ('InputKick', 'InputKick2', 'KEY_S'),
+    'b3': ('InputGuard', 'InputGuard2', 'KEY_D'), 'b4': ('InputEscape', 'InputEscape2', 'KEY_F'),
+}
+SUPERMODEL_P2_KEYS = {'start': 'KEY_2', 'coin': 'KEY_4'}
+SUPERMODEL_AXES = ['XAXIS', 'YAXIS', 'ZAXIS', 'RXAXIS', 'RYAXIS', 'RZAXIS']
+SUPERMODEL_HAT = {'1': 'UP', '2': 'RIGHT', '4': 'DOWN', '8': 'LEFT'}
+
+
+def supermodel_code(index, element):
+    """O nome de entrada do Supermodel (SDL: JOY1 e o controle 0) de um elemento."""
+    joy = 'JOY%d_' % (index + 1)
+    if element.startswith('b'):
+        return joy + 'BUTTON%d' % (int(element[1:]) + 1)
+    if element.startswith('h'):
+        hat, direction = element[1:].split('.')
+        return joy + 'POV%d_%s' % (int(hat) + 1, SUPERMODEL_HAT[direction])
+    axis = int(element[2:])
+    name = SUPERMODEL_AXES[axis] if axis < len(SUPERMODEL_AXES) else SUPERMODEL_AXES[-1]
+    return joy + '%s_%s' % (name, 'NEG' if element[0] == '-' else 'POS')
+
+
+def supermodel_values(players):
+    """{chave do Supermodel.ini: valor} dos jogadores 1 e 2."""
+    out = {}
+    for player in (1, 2):
+        for control, (index, element) in players.get(player, {}).items():
+            if control not in SUPERMODEL_KEYS:
+                continue
+            key = SUPERMODEL_KEYS[control][player - 1]
+            default = SUPERMODEL_KEYS[control][2] if player == 1 else SUPERMODEL_P2_KEYS.get(control)
+            code = supermodel_code(index, element)
+            out[key] = '"%s,%s"' % (default, code) if default else '"%s"' % code
+    return out
+
+
+def supermodel_ini(text, values):
+    """O Supermodel.ini com as chaves de `values` na secao [ Global ]: as que
+    ja existem trocadas, as que faltam logo depois do cabecalho."""
+    lines = text.splitlines()
+    rest = dict(values)
+    for i, line in enumerate(lines):
+        m = re.match(r'\s*(\w+)\s*=', line)
+        if m and m.group(1) in rest:
+            lines[i] = '%s = %s' % (m.group(1), rest.pop(m.group(1)))
+    if rest:
+        new = ['%s = %s' % kv for kv in sorted(rest.items())]
+        head = next((i for i, l in enumerate(lines) if re.match(r'\s*\[\s*Global\s*\]', l)), None)
+        if head is None:
+            lines = ['[ Global ]'] + new + [''] + lines
+        else:
+            lines[head + 1:head + 1] = new
+    return '\n'.join(lines) + '\n'
+
+
+def supermodel_save(players):
+    try:
+        with open(SUPERMODEL_INI, encoding='utf-8', errors='replace') as f:
+            text = f.read()
+    except OSError:
+        text = ''
+    write(SUPERMODEL_INI, supermodel_ini(text, supermodel_values(players)), USER_ID)
+    try:
+        os.chown(os.path.dirname(os.path.dirname(SUPERMODEL_INI)), USER_ID, USER_ID)
+    except OSError:
+        pass
+
+
+def read_text(path):
+    try:
+        with open(path, encoding='utf-8', errors='replace') as f:
+            return f.read()
+    except OSError:
+        return ''
+
+
+def ini_get(text, section, key):
+    current = None
+    for line in text.splitlines():
+        m = re.match(r'\s*\[(.*)\]\s*$', line)
+        if m:
+            current = m.group(1).strip()
+            continue
+        m = re.match(r'\s*([^=]+?)\s*=\s*(.*?)\s*$', line)
+        if m and current == section and m.group(1) == key:
+            return m.group(2)
+    return None
+
+
+def ini_section(text, section, values, replace=False):
+    """`text` com os pares de `values` na secao [section]: os que ja existem
+    trocados, os que faltam no fim dela (e a secao no fim do arquivo, se
+    faltar). Com replace, a secao fica so com `values`."""
+    lines = text.splitlines()
+    start = next((i for i, l in enumerate(lines) if l.strip() == '[%s]' % section), None)
+    new = ['%s = %s' % kv for kv in values]
+    if start is None:
+        while lines and not lines[-1].strip():
+            lines.pop()
+        return '\n'.join(lines + ([''] if lines else []) + ['[%s]' % section] + new) + '\n'
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith('[')), len(lines))
+    if replace:
+        body = new
+    else:
+        body, rest = lines[start + 1:end], dict(values)
+        for i, line in enumerate(body):
+            m = re.match(r'\s*([^=]+?)\s*=', line)
+            if m and m.group(1) in rest:
+                body[i] = '%s = %s' % (m.group(1), rest.pop(m.group(1)))
+        while body and not body[-1].strip():
+            body.pop()
+        body += ['%s = %s' % (k, v) for k, v in values if k in rest]
+    tail = lines[end:]
+    return '\n'.join(lines[:start + 1] + body + ([''] if tail else []) + tail) + '\n'
+
+
+# ── Dolphin ─────────────────────────────────────────────────────
+
+# O Dolphin abre o painel como game controller do SDL (o gamecontrollerdb):
+# o controle de GameCube pelo layout de fight stick, 4 = A, 1 = B, 5 = X,
+# 2 = Y, 3 = Z, 6 = R, e a ficha na Coin do Triforce. O L fica no LB, que um
+# painel de 6 botoes nao tem.
+DOLPHIN_GCPAD = [
+    ('Buttons/A', 'Button S'), ('Buttons/B', 'Button W'), ('Buttons/X', 'Button E'), ('Buttons/Y', 'Button N'),
+    ('Buttons/Z', 'Shoulder R'), ('Buttons/Start', 'Start'),
+    ('Main Stick/Up', 'Pad N'), ('Main Stick/Down', 'Pad S'), ('Main Stick/Left', 'Pad W'),
+    ('Main Stick/Right', 'Pad E'),
+    ('Triggers/L', 'Shoulder L'), ('Triggers/R', 'Trigger R'), ('Triggers/L-Analog', 'Shoulder L'),
+    ('Triggers/R-Analog', 'Trigger R'), ('Triforce/Coin', 'Back'),
+]
+DOLPHIN_CALIBRATION = ' '.join(['100.00 141.42'] * 4)
+DOLPHIN_GC_CONTROLLER = '6'  # SIDEVICE_GC_CONTROLLER
+
+
+def dolphin_save(players, devices):
+    """GCPad1 a GCPad4 no GCPadNew.ini, e no Dolphin.ini a porta de cada
+    jogador como controle de GameCube (sem nada nela, a 2 a 4 vem vazia)."""
+    gcpad = os.path.join(DOLPHIN_DIR, 'GCPadNew.ini')
+    text = read_text(gcpad)
+    ports = []
+    for player in sorted(p for p in players if p <= 4):
+        index = next(iter(players[player].values()))[0]
+        if index not in devices:
+            continue
+        name = devices[index][1].replace(',', ' ')
+        # Aparelhos de mesmo nome: 0, 1... na ordem do SDL.
+        cid = sum(1 for i in devices if i < index and devices[i][1].replace(',', ' ') == name)
+        values = [('Device', 'SDL/%d/%s' % (cid, name))]
+        values += [(k, '`%s`' % v) for k, v in DOLPHIN_GCPAD]
+        values += [('Main Stick/Calibration', DOLPHIN_CALIBRATION)]
+        text = ini_section(text, 'GCPad%d' % player, values, replace=True)
+        ports.append(player)
+    if not ports:
+        return []
+    write(gcpad, text, USER_ID)
+    main = os.path.join(DOLPHIN_DIR, 'Dolphin.ini')
+    text = read_text(main)
+    keys = ['SIDevice%d' % (p - 1) for p in ports]
+    keys = [k for k in keys if ini_get(text, 'Core', k) in (None, '0')]
+    if keys:
+        write(main, ini_section(text, 'Core', [(k, DOLPHIN_GC_CONTROLLER) for k in keys]), USER_ID)
+    return [gcpad, main]
+
+
+# ── Hypseus Singe ───────────────────────────────────────────────
+
+# [KEYBOARD] do hypinput.ini: nome, tecla 1, tecla 2 (as do exemplo do
+# projeto). O botao do joystick e 100 * controle + botao + 1; o eixo,
+# o mesmo com o sinal; o hat (so o primeiro de um controle) se liga pelo
+# botao do KEY_UP, 100 * controle.
+HYPSEUS_DEFAULT = [
+    ('KEY_UP', 'SDLK_UP', '0'), ('KEY_DOWN', 'SDLK_DOWN', '0'), ('KEY_LEFT', 'SDLK_LEFT', '0'),
+    ('KEY_RIGHT', 'SDLK_RIGHT', '0'), ('KEY_COIN1', 'SDLK_5', '0'), ('KEY_COIN2', 'SDLK_6', '0'),
+    ('KEY_START1', 'SDLK_1', '0'), ('KEY_START2', 'SDLK_2', '0'), ('KEY_BUTTON1', 'SDLK_LCTRL', '0'),
+    ('KEY_BUTTON2', 'SDLK_LALT', '0'), ('KEY_BUTTON3', 'SDLK_SPACE', '0'), ('KEY_SKILL1', 'SDLK_LSHIFT', '0'),
+    ('KEY_SKILL2', 'SDLK_z', '0'), ('KEY_SKILL3', 'SDLK_x', '0'), ('KEY_SERVICE', 'SDLK_9', '0'),
+    ('KEY_TEST', 'SDLK_F2', 'SDLK_F4'), ('KEY_RESET', 'SDLK_0', '0'), ('KEY_SCREENSHOT', 'SDLK_F12', '0'),
+    ('KEY_QUIT', 'SDLK_ESCAPE', '0'), ('KEY_PAUSE', 'SDLK_p', '0'), ('KEY_CONSOLE', 'SDLK_BACKSLASH', '0'),
+    ('KEY_TILT', 'SDLK_t', '0'),
+]
+HYPSEUS_KEYS = {'up': 'KEY_UP', 'down': 'KEY_DOWN', 'left': 'KEY_LEFT', 'right': 'KEY_RIGHT',
+                'b1': 'KEY_BUTTON1', 'b2': 'KEY_BUTTON2', 'b3': 'KEY_BUTTON3', 'b4': 'KEY_SKILL1',
+                'b5': 'KEY_SKILL2', 'b6': 'KEY_SKILL3', 'start': 'KEY_START1', 'coin': 'KEY_COIN1'}
+HYPSEUS_P2_KEYS = {'start': 'KEY_START2', 'coin': 'KEY_COIN2'}
+HYPSEUS_MOUSE = '[MOUSE]\nMOUSE_BUTTON1   = KEY_BUTTON3\nMOUSE_BUTTON2   = KEY_BUTTON1\nMOUSE_BUTTON3   = KEY_BUTTON2\nEND\n'
+
+
+def hypseus_keyboard(players):
+    joy = {}
+    for player, keys in ((1, HYPSEUS_KEYS), (2, HYPSEUS_P2_KEYS)):
+        for control, (index, element) in players.get(player, {}).items():
+            if control not in keys:
+                continue
+            name = keys[control]
+            if element.startswith('b'):
+                joy[name] = ('%03d' % (index * 100 + int(element[1:]) + 1), None)
+            elif element.startswith('h'):
+                if name == 'KEY_UP':
+                    joy[name] = ('%03d' % (index * 100), None)
+            else:
+                joy[name] = (None, '%s%03d' % (element[0], index * 100 + int(element[2:]) + 1))
+    lines = ['[KEYBOARD]']
+    for name, key1, key2 in HYPSEUS_DEFAULT:
+        button, axis = joy.get(name, (None, None))
+        line = '%-15s = %-15s %-12s %-10s %s' % (name, key1, key2, button or '0', axis or '')
+        lines.append(line.rstrip())
+    return '\n'.join(lines + ['END']) + '\n'
+
+
+def hypseus_save(players):
+    text = read_text(HYPSEUS_INI)
+    keyboard = hypseus_keyboard(players)
+    m = re.search(r'(?ims)^\[KEYBOARD\].*?^END[ \t]*\n?', text)
+    if m:
+        text = text[:m.start()] + keyboard + text[m.end():]
+    else:
+        text = ('# Gerado pelo Setup > Joysticks > Button mapping (fliperos-buttons).\n\n'
+                + keyboard + '\n' + HYPSEUS_MOUSE)
+    write(HYPSEUS_INI, text, USER_ID)
+
+
 def sdl_devices():
     """{indice: (guid, nome, botoes, eixos)} dos controles ligados; vazio sem
     o SDL."""
@@ -347,19 +593,28 @@ def cmd_save(args):
         sys.exit('mapa vazio: %s' % args.map)
     write(RA_BUTTONS, retroarch_cfg(players, names))
     write(MAME_CTRLR, mame_cfg(players, names), USER_ID)
+    supermodel_save(players)
+    hypseus_save(players)
     print(RA_BUTTONS)
     print(MAME_CTRLR)
-    # Flycast: por nome de aparelho (o do primeiro jogador que o usa).
+    print(SUPERMODEL_INI)
+    print(HYPSEUS_INI)
+    # Flycast, e o Flycast Dojo do Fightcade se ja baixado: por nome de
+    # aparelho (o do primeiro jogador que o usa).
+    dirs = [FLYCAST_MAPPINGS]
+    if os.path.isdir(os.path.dirname(FLYCAST_DOJO_MAPPINGS)):
+        dirs.append(FLYCAST_DOJO_MAPPINGS)
     done = set()
     for player in sorted(players):
         binds = players[player]
         name = names.get(next(iter(binds.values()))[0], '')
         if name and name not in done:
             done.add(name)
-            for arcade, keys in ((False, FLYCAST_DC), (True, FLYCAST_ARCADE)):
-                path = os.path.join(FLYCAST_MAPPINGS, flycast_filename(name, arcade))
-                write(path, flycast_cfg(name, binds, keys), USER_ID)
-                print(path)
+            for folder in dirs:
+                for arcade, keys in ((False, FLYCAST_DC), (True, FLYCAST_ARCADE)):
+                    path = os.path.join(folder, flycast_filename(name, arcade))
+                    write(path, flycast_cfg(name, binds, keys), USER_ID)
+                    print(path)
     devices = sdl_devices()
     if devices:
         lines = sdl_user_db(players, devices)
@@ -367,6 +622,8 @@ def cmd_save(args):
         print(SDL_USER_DB)
         openbor_save(players, devices)
         print(OPENBOR_SAVES)
+        for path in dolphin_save(players, devices):
+            print(path)
         # O gamecontrollerdb.txt de novo, com o mapeamento por ultimo.
         if os.access(CONTROLLERS, os.X_OK):
             os.system('"%s" > /dev/null 2>&1' % CONTROLLERS)

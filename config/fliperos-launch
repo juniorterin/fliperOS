@@ -23,7 +23,17 @@ case ${1:-} in
   groovymame) label=GroovyMAME run=("$x11" groovymame) ;;
   flycast) label=Flycast run=("$x11" flycast) ;;
   pcsx2) label=PCSX2 run=("$x11" pcsx2) ;;
-  supermodel) label=Supermodel run=("$x11" supermodel) ;;
+  supermodel) label=Supermodel run=("$x11" supermodel)
+    # Sem tela propria, sem jogo o Supermodel fecha na hora: pelo menu, o
+    # jogo (o .zip do MAME) se escolhe aqui.
+    if [[ $# -ge 2 ]]; then
+      run+=("${@:2}")
+    else
+      rom=$(zenity --file-selection --title="Supermodel - choose a Model 3 game" \
+        --filename="$HOME/roms/model3/" --file-filter="Model 3 (zip) | *.zip" 2> /dev/null) || exit 0
+      run+=("$rom")
+    fi
+    ;;
   dolphin) label=Dolphin run=("$x11" dolphin-emu) ;;
   openbor) label=OpenBOR run=("$x11" openbor) ;;
   model2) label="Model 2" run=("$x11" fliperos-model2) ;;
