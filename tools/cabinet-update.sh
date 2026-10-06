@@ -12,7 +12,7 @@
 set -euo pipefail
 src=$(cd "$(dirname "$0")/.." && pwd)
 lib=/usr/local/lib/fliperos-setup/lib
-[[ $EUID -eq 0 ]] || { echo "Rode como root (sudo)." >&2; exit 1; }
+[[ $EUID -eq 0 ]] || { echo "Run as root (sudo)." >&2; exit 1; }
 [[ -f /etc/fliperos/installed ]] || { echo "This is not an installed FliperOS." >&2; exit 1; }
 
 backup=/root/fliperos-backup-$(date +%Y%m%d-%H%M%S).tgz
@@ -42,7 +42,7 @@ grep nameserver /etc/resolv.conf || true
 repo_index() { cat /opt/fliperos/repo/Packages* 2> /dev/null | cksum; }
 repo_before=$(repo_index)
 if compgen -G "$src/repo/*.deb" > /dev/null; then
-  echo "== Repositorio local (/opt/fliperos/repo)"
+  echo "== Local repository (/opt/fliperos/repo)"
   rm -rf /opt/fliperos/repo
   mkdir -p /opt/fliperos/repo
   cp "$src"/repo/* /opt/fliperos/repo/
@@ -51,7 +51,7 @@ if compgen -G "$src/repo/*.deb" > /dev/null; then
 fi
 repo_after=$(repo_index)
 
-echo "== Relogio"
+echo "== Clock"
 # Sem servico de hora (imagens ate o commit 11f715a), vale o relogio da BIOS,
 # que pode estar meses errado: o apt recusa os repositorios ("not valid
 # yet"). Acerta pela hora do servidor do Ubuntu antes do apt.
@@ -61,7 +61,7 @@ if ! systemctl is-active --quiet systemd-timesyncd; then
 fi
 date
 
-echo "== Pacotes novos"
+echo "== New packages"
 # Os que a imagem ganhou depois da instalacao (fliperos-mkiso.sh).
 packages=(usbutils systemd-timesyncd gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk
   alacritty libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 cifs-utils smbclient
@@ -105,9 +105,9 @@ done
 ((${#keep[@]})) && apt-mark manual "${keep[@]}" > /dev/null
 if command -v alacritty > /dev/null; then
   DEBIAN_FRONTEND=noninteractive apt-get purge -y -q lxterminal xterm > /dev/null 2>&1 || true
-  echo "lxterminal/xterm: $(dpkg -l lxterminal xterm 2> /dev/null | grep -c '^ii') instalados"
+  echo "lxterminal/xterm: $(dpkg -l lxterminal xterm 2> /dev/null | grep -c '^ii') installed"
   echo "x-terminal-emulator: $(readlink -f /usr/bin/x-terminal-emulator)"
-  echo "autoremove levaria: $(apt-get autoremove -s 2> /dev/null | grep -c '^Remv') pacotes"
+  echo "autoremove would take: $(apt-get autoremove -s 2> /dev/null | grep -c '^Remv') packages"
 else
   echo "warning: Alacritty did not install; the old terminals stay"
 fi
@@ -128,7 +128,7 @@ echo "== Kernel line (boot straight to Plymouth)"
     [[ $word == splash ]] && new+=($BOOT_SILENT)
   done
   boot_write_cmdline "${new[*]}"
-  boot_apply || { echo "boot_apply falhou (ver /var/log/fliperos-setup.log)"; exit 1; }
+  boot_apply || { echo "boot_apply failed (see /var/log/fliperos-setup.log)"; exit 1; }
   # O fliperos-rootfs.sh reinstalou o retroarch.cfg da imagem: o que o setup
   # decide por maquina volta (largura do CRT SwitchRes, modo de latencia).
   video_retroarch_super
@@ -151,7 +151,7 @@ fi
 
 echo "== Setup > Joysticks > Button mapping buttons in every emulator"
 if [[ -f /etc/fliperos/buttons.map ]]; then
-  /opt/fliperos/bin/fliperos-buttons save /etc/fliperos/buttons.map | sed 's/^/gravado: /'
+  /opt/fliperos/bin/fliperos-buttons save /etc/fliperos/buttons.map | sed 's/^/saved: /'
 else
   echo "no map (Setup > Joysticks > Button mapping)"
 fi
@@ -186,7 +186,7 @@ systemctl restart smbd 2> /dev/null || true
 udevadm control --reload 2> /dev/null || true
 sed -n 's/^FLIPEROS_CMDLINE=//p' /etc/default/fliperos-boot
 
-echo "== Servicos"
+echo "== Services"
 systemctl daemon-reload
 systemctl enable --now systemd-timesyncd.service > /dev/null 2>&1 || true
 # Mapeamentos de controle do SDL dos controles ligados agora (o servico tambem
