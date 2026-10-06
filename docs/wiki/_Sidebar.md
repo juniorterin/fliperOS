@@ -1,21 +1,21 @@
 **[FliperOS](Home.md)**
 
-Para usar
+Using it
 
-- [Instalar](Instalar.md)
-- [Sistema instalado](Sistema-instalado.md)
+- [Install](Install.md)
+- [Installed system](Installed-system.md)
 - [Frontends](Frontends.md)
-- [Emuladores](Emuladores.md)
+- [Emulators](Emulators.md)
 - [Fightcade 2](Fightcade-2.md)
-- [ROMs, BIOS e arte](ROMs.md)
+- [ROMs, BIOS and artwork](ROMs.md)
 - [Scraper](Scraper.md)
-- [Controles](Controles.md)
-- [Desktop e tema](Desktop.md)
-- [Latência](Latency.md)
+- [Controls](Controls.md)
+- [Desktop and theme](Desktop.md)
+- [Latency](Latency.md)
 
-Para mexer
+Hacking on it
 
-- [Kernel 15 kHz](Kernel-15-kHz.md)
-- [Build e testes](Build-e-testes.md)
-- [Arquitetura](Arquitetura.md)
-- [Fontes](Fontes.md)
+- [15 kHz kernel](Kernel-15-kHz.md)
+- [Build and tests](Build-and-tests.md)
+- [Architecture](Architecture.md)
+- [Sources](Sources.md)

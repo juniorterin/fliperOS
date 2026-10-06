@@ -1,34 +1,34 @@
 # FliperOS 0.7
 
-Ubuntu 24.04 (amd64) para gabinetes de fliperama com monitor CRT, no estilo do GroovyArcade: **kernel 15 kHz**, Switchres, emuladores e frontends prontos, e um menu de configuração (`fliperos-setup`) feito para a tela do tubo.
+Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a **15 kHz kernel**, Switchres, emulators and frontends ready to play, and a setup menu (`fliperos-setup`) made for the tube's screen.
 
-Em desenvolvimento: a 0.7 é testada em VM (QEMU) e num gabinete com CRT de 15 kHz. A documentação completa está na **[wiki](https://github.com/juniorterin/fliperOS/wiki)**.
+In development: 0.7 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT. The full documentation is in the **[wiki](https://github.com/juniorterin/fliperOS/wiki)**. Website: [`website/`](website).
 
-## O que vem
+## What's included
 
-- **Vídeo**: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.
-- **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Model 2, Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Extras.
-- **Frontends**: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus e Fightcade 2.
-- **Setup**: vídeo e geometria, áudio, rede, scraper, limpeza de romsets do MAME, controles (botões, pistola, volante) e latência.
-- **Pastas** `roms`, `bios`, `media` e `config` em `~` e pela rede (Samba); desktop LXDE com loja de aplicativos.
+- **Video**: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.
+- **Emulators**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Model 2, Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup > Extras.
+- **Frontends**: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus and Fightcade 2.
+- **Setup**: video and geometry, audio, network, scraper, MAME romset cleaning, controls (buttons, light gun, wheel) and latency.
+- **Folders** `roms`, `bios`, `media` and `config` in `~` and over the network (Samba); LXDE desktop with an app store.
 
-## Instalar
+## Install
 
-A ISO de cada versão sai em [Releases](https://github.com/juniorterin/fliperOS/releases), com o que mudou ([CHANGELOG.md](CHANGELOG.md)).
+Each version's ISO is published in [Releases](https://github.com/juniorterin/fliperOS/releases), along with what changed ([CHANGELOG.md](CHANGELOG.md)).
 
-1. Grave a ISO **byte a byte** (balenaEtcher, Rufus em "DD Image mode" ou `dd`; Rufus no modo padrão e Ventoy não servem) e desative o Secure Boot.
+1. Write the ISO **byte for byte** (balenaEtcher, Rufus in "DD Image mode" or `dd`; Rufus in its default mode and Ventoy don't work) and disable Secure Boot.
 
    ```bash
    sudo dd if=fliperos-0.7.iso of=/dev/sdX bs=4M status=progress conv=fsync
    ```
 
-2. Ligue o gabinete pela mídia e espere 30 segundos: ela sobe em **15 kHz** (o menu de boot não aparece num tubo de 15 kHz).
-3. Aperte **Enter** quando enxergar a tela, escolha o monitor e **Install to HD/SSD**, que apaga o disco escolhido.
-4. Reinicie, escolha o launcher padrão e ponha as ROMs em `~/roms` (pela rede, `\\fliperos\roms`).
+2. Boot the cabinet from the media and wait 30 seconds: it comes up at **15 kHz** (the boot menu doesn't show on a 15 kHz tube).
+3. Press **Enter** when you see the screen, choose the monitor and **Install to HD/SSD**, which erases the chosen disk.
+4. Reboot, choose the default launcher and put your ROMs in `~/roms` (over the network, `\\fliperos\roms`).
 
-## Build e testes
+## Build and tests
 
-Sempre em Docker ([`CLAUDE.md`](CLAUDE.md) diz por quê).
+Always in Docker ([`CLAUDE.md`](CLAUDE.md) explains why).
 
 ```powershell
 docker build -f Dockerfile.fliperos -t fliperos-builder .
@@ -39,10 +39,10 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_setup.py
 docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 ```
 
-## Documentação
+## Documentation
 
-**Para usar:** [Instalar](https://github.com/juniorterin/fliperOS/wiki/Instalar) · [Sistema instalado](https://github.com/juniorterin/fliperOS/wiki/Sistema-instalado) · [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends) · [Emuladores](https://github.com/juniorterin/fliperOS/wiki/Emuladores) · [Fightcade 2](https://github.com/juniorterin/fliperOS/wiki/Fightcade-2) · [ROMs, BIOS e arte](https://github.com/juniorterin/fliperOS/wiki/ROMs) · [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper) · [Controles](https://github.com/juniorterin/fliperOS/wiki/Controles) · [Desktop e tema](https://github.com/juniorterin/fliperOS/wiki/Desktop) · [Latência](https://github.com/juniorterin/fliperOS/wiki/Latency)
+**Using it:** [Install](https://github.com/juniorterin/fliperOS/wiki/Install) · [Installed system](https://github.com/juniorterin/fliperOS/wiki/Installed-system) · [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends) · [Emulators](https://github.com/juniorterin/fliperOS/wiki/Emulators) · [Fightcade 2](https://github.com/juniorterin/fliperOS/wiki/Fightcade-2) · [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs) · [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper) · [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls) · [Desktop and theme](https://github.com/juniorterin/fliperOS/wiki/Desktop) · [Latency](https://github.com/juniorterin/fliperOS/wiki/Latency)
 
-**Para mexer:** [Kernel 15 kHz](https://github.com/juniorterin/fliperOS/wiki/Kernel-15-kHz) · [Build e testes](https://github.com/juniorterin/fliperOS/wiki/Build-e-testes) · [Arquitetura](https://github.com/juniorterin/fliperOS/wiki/Arquitetura) · [Fontes](https://github.com/juniorterin/fliperOS/wiki/Fontes)
+**Hacking on it:** [15 kHz kernel](https://github.com/juniorterin/fliperOS/wiki/Kernel-15-kHz) · [Build and tests](https://github.com/juniorterin/fliperOS/wiki/Build-and-tests) · [Architecture](https://github.com/juniorterin/fliperOS/wiki/Architecture) · [Sources](https://github.com/juniorterin/fliperOS/wiki/Sources)
 
-As páginas ficam em [`docs/wiki`](docs/wiki) e vão para a wiki com `bash tools/wiki-publish.sh`. O [`fliperos-doc.html`](fliperos-doc.html) é tudo num arquivo só, para ler sem rede (`tools/render-docs.py`), e [`docs/wikipedia`](docs/wikipedia) guarda o rascunho de um artigo para a Wikipédia.
+The pages live in [`docs/wiki`](docs/wiki) and go to the wiki with `bash tools/wiki-publish.sh`. [`fliperos-doc.html`](fliperos-doc.html) is everything in a single file, for offline reading (`tools/render-docs.py`), and [`docs/wikipedia`](docs/wikipedia) holds a draft Wikipedia article.

@@ -1,36 +1,37 @@
-# Patches de kernel 15kHz (D0023R)
+# 15kHz kernel patches (D0023R)
 
-Vendorizados de <https://github.com/D0023R/linux_kernel_15khz>, commit
-`ece6ef15eca9480eaf75870a44764f47118e9cfe` (2026-09-29), licença GPLv3
-(`LICENSE` do repositório de origem). É o mesmo conjunto que o GroovyArcade
-aplica no pacote `linux-15khz`.
+Vendored from <https://github.com/D0023R/linux_kernel_15khz>, commit
+`ece6ef15eca9480eaf75870a44764f47118e9cfe` (2026-09-29), GPLv3 license
+(`LICENSE` of the source repository). It is the same set GroovyArcade
+applies in its `linux-15khz` package.
 
-O `fliperos-mkiso.sh` sempre compila o kernel com eles: é o que dá o modo de
-boot `video=640x480iS` (e os demais da tabela) usado pelo menu do Limine e
-pelo `fliperos-setup`, igual ao GroovyArcade.
+`fliperos-mkiso.sh` always compiles the kernel with them: they provide the
+`video=640x480iS` boot mode (and the others in the table) used by the Limine
+menu and by `fliperos-setup`, as in GroovyArcade.
 
-## Pasta `6.18/`
+## Folder `6.18/`
 
-Alvo: kernel.org vanilla **6.18.54** (série Longterm). Escolhida por ser a
-série LTS mais nova com o conjunto completo, incluindo o patch 09 (entrelaçado
-em Intel Gen9). Se `KERNEL_15KHZ_VERSION` em `fliperos-mkiso.sh` mudar de
-série, vendorizar a pasta correspondente do D0023R junto — os patches são
-específicos de versão.
+Target: vanilla kernel.org **6.18.54** (Longterm series). Chosen because it is
+the newest LTS series with the complete set, including patch 09 (interlacing
+on Intel Gen9). If `KERNEL_15KHZ_VERSION` in `fliperos-mkiso.sh` changes
+series, vendor D0023R's matching folder along with it — the patches are
+version-specific.
 
-| Arquivo | Escopo |
+| File | Scope |
 | --- | --- |
-| `01_linux_15khz.patch` | Patch principal: flag `S` no `video=` e a tabela fixa de modos de baixo dotclock (15/25/31 kHz) |
-| `02_linux_15khz_interlaced_mode_fix.patch` | Interrupção de vertical blank em modo entrelaçado — driver **radeon** |
-| `03_linux_15khz_dcn1_dcn2_dcn3_interlaced_mode_fix.patch` | Entrelaçado em **amdgpu/DCN1-3** (placas e APUs) |
-| `04_linux_15khz_dce_interlaced_mode_fix.patch` | Entrelaçado em **amdgpu/DCE** (placas mais antigas) |
-| `05_linux_15khz_amdgpu_pll_fix.patch` | Cálculo de PLL — **amdgpu** |
-| `06_linux_switchres_kms_drm_modesetting.patch` | Troca de modo via KMS para o Switchres sem X (`drmkms`) |
-| `07_linux_15khz_fix_ddc.patch` | Oops ao sondar DDC sem adaptador conectado |
-| `08_linux_15khz_interlace_force_even.patch` | Campos pares no entrelaçado em **amdgpu/DCN1** |
-| `09_linux_15khz_i915_gen9_interlace.patch` | Entrelaçado em **Intel Gen9** com `i915.no_ytiled_scanout=1` (a entrada "Intel 15 kHz" do boot passa esse parâmetro) |
+| `01_linux_15khz.patch` | Main patch: the `S` flag in `video=` and the fixed table of low-dotclock modes (15/25/31 kHz) |
+| `02_linux_15khz_interlaced_mode_fix.patch` | Vertical blank interrupt in interlaced mode — **radeon** driver |
+| `03_linux_15khz_dcn1_dcn2_dcn3_interlaced_mode_fix.patch` | Interlacing on **amdgpu/DCN1-3** (cards and APUs) |
+| `04_linux_15khz_dce_interlaced_mode_fix.patch` | Interlacing on **amdgpu/DCE** (older cards) |
+| `05_linux_15khz_amdgpu_pll_fix.patch` | PLL calculation — **amdgpu** |
+| `06_linux_switchres_kms_drm_modesetting.patch` | Mode switching through KMS for Switchres without X (`drmkms`) |
+| `07_linux_15khz_fix_ddc.patch` | Oops when probing DDC with no adapter connected |
+| `08_linux_15khz_interlace_force_even.patch` | Even fields in interlaced mode on **amdgpu/DCN1** |
+| `09_linux_15khz_i915_gen9_interlace.patch` | Interlacing on **Intel Gen9** with `i915.no_ytiled_scanout=1` (the "Intel 15 kHz" boot entry passes this parameter) |
 
-Cobre **radeon**, **amdgpu** (DCE e DCN1-3) e, pelo 09, **i915 Gen9**.
-NVIDIA (nouveau) e as demais Intel usam a super resolução `1280x480iS`.
+Covers **radeon**, **amdgpu** (DCE and DCN1-3) and, through 09, **i915 Gen9**.
+NVIDIA (nouveau) and the other Intel generations use the `1280x480iS` super
+resolution.
 
-Aplicação: `patch -p1 < arquivo.patch`, a partir da raiz da árvore do kernel,
-em ordem numérica.
+Applying: `patch -p1 < file.patch`, from the root of the kernel tree, in
+numeric order.

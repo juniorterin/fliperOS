@@ -1,76 +1,76 @@
 # Changelog
 
-O que mudou em cada ISO publicada em [Releases](https://github.com/juniorterin/fliperOS/releases), no formato dos releases do GroovyArcade. A seção de cada versão é o texto do release dela: o `tools/release-publish.sh` não publica uma ISO sem a seção.
+What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
 ## 0.7
 
-Primeira ISO publicada. As mudanças são em relação à 0.6, que não saiu daqui.
+First published ISO. The changes are relative to 0.6, which never left the workbench.
 
-**Mudanças no sistema:**
+**System changes:**
 
-- Kernel 15 kHz: kernel.org 6.18.54 LTS com os patches D0023R, os do `linux-15khz` do GroovyArcade
-- Limine no lugar do GRUB, na ISO (híbrida, BIOS e UEFI) e no disco instalado
-- Menu de boot com as entradas do GroovyArcade: 15, 25 e 31 kHz, LCD, Intel e NVIDIA em super resolução, NTSC, PAL e EDID
-- Boot sem texto, direto ao splash, e console calado depois dele
-- Rede no sistema instalado: DNS do DHCP, cabo pelo NetworkManager e relógio pela rede
-- Pastas em `~`: `roms`, `bios`, `media` e `config`, também pela rede (Samba)
-- Som: codec HDA sempre ligado (sem estalos com o menu parado) e teclas de volume em qualquer tela
-- Desktop LXDE com tema Dracula, Alacritty como terminal, App Store (GNOME Software com Flathub), Falkon e Transmission
-- Desconectar do LXDE abre o menu do FliperOS
-- Terminal zsh com Oh My Zsh e tema Dracula
-- Drivers de entrada por DKMS: GunCon 2, volantes Thrustmaster (`hid-tmff2`) e Logitech (`new-lg4ff`)
-- Mapeamento do SDL completado para qualquer controle ligado
-- ISO enxuta, abaixo dos 2 GiB de um arquivo do GitHub: sem os pacotes de compilação, sem o cache do apt, sem firmware fora do escopo (NVIDIA, redes de datacenter, SoCs Qualcomm) e com o sistema em xz
+- 15 kHz kernel: kernel.org 6.18.54 LTS with the D0023R patches, the ones in GroovyArcade's `linux-15khz`
+- Limine instead of GRUB, on the ISO (hybrid, BIOS and UEFI) and on the installed disk
+- Boot menu with GroovyArcade's entries: 15, 25 and 31 kHz, LCD, Intel and NVIDIA in super resolution, NTSC, PAL and EDID
+- Boot without text, straight to the splash, and a quiet console after it
+- Network on the installed system: DNS from DHCP, wired through NetworkManager and the clock from the network
+- Folders in `~`: `roms`, `bios`, `media` and `config`, also over the network (Samba)
+- Sound: HDA codec always on (no pops with the menu idle) and volume keys on any screen
+- LXDE desktop with the Dracula theme, Alacritty as the terminal, App Store (GNOME Software with Flathub), Falkon and Transmission
+- Logging out of LXDE opens the FliperOS menu
+- zsh terminal with Oh My Zsh and the Dracula theme
+- Input drivers through DKMS: GunCon 2, Thrustmaster (`hid-tmff2`) and Logitech (`new-lg4ff`) wheels
+- SDL mapping completed for any connected controller
+- Slim ISO, below GitHub's 2 GiB per-file limit: no build packages, no apt cache, no out-of-scope firmware (NVIDIA, datacenter networking, Qualcomm SoCs) and the system in xz
 
-**Mudanças nos pacotes:**
+**Package changes:**
 
-- GroovyMAME: release oficial `gm0289sr222f` (MAME 0.289, Switchres 2.22f) em vez de compilar
-- GroovyMAME: `mame.ini` como o do GroovyArcade, num Xorg próprio com `modesetting 1`, na resolução nativa de cada jogo
-- RetroArch: CRT SwitchRes ligado, 6 cores na imagem e o Core Downloader liberado
-- RetroArch: perfil automático para painel e encoder, remap dos cores de MAME, entrada e controle em linuxraw
-- RetroArch: vídeo glcore e áudio sdl2 por padrão, sem notificações na tela
-- MAME 2010: compilado sem `_FORTIFY_SOURCE` (Tekken Tag não abria)
-- Flycast, PCSX2, Dolphin, Supermodel, Hypseus Singe e Model 2: no 15 kHz abrem em 640x240 progressivo, esticado a 200%, nunca em 480i
-- PCSX2 pelo AppImage oficial; Supermodel pelo Makefile do projeto; Model 2 no Wine
-- Flycast: direcional do painel no D-pad, interpolação linear desligada, transparência por pixel
-- PCSX2: sem o assistente, em Big Picture, vsync, sem o ponteiro do mouse, BIOS em `~/bios/ps2` e jogos em `~/roms/ps2`
-- PCSX2: thread de OpenGL do Mesa ligada; direcional do painel também no analógico esquerdo
-- Supermodel: abre pelo menu (lista de jogos num terminal), acha a lista de jogos, botões do Button mapping; pasta `model3` nos frontends
-- Supermodel: CPU emulada a 75 MHz nos jogos Step 1.5 e 2.x, que ficavam lentos (Virtua Fighter 3tb de 35 para 59 fps)
-- OpenBOR em tela cheia de fábrica
-- Wine (Model 2, emuladores do Fightcade), Steam e Heroic (GOG, Epic, Amazon) fora da ISO: o Setup > Extras os instala pela rede
-- Frontends: Attract-Mode Plus, EmulationStation (ES-DE) e Pegasus em `.deb`, num repositório APT dentro da imagem, com os jogos já configurados
-- Tema FliperOS 240p para o EmulationStation e o Pegasus
-- Fightcade 2 como opção de frontend, baixado do site dele; cada partida no modo do emulador dela
-- Flycast Dojo do Fightcade com as opções do Flycast do sistema (interpolação, transparência e os dois controles)
-- Attract-Mode: tela nova já nasce com a lista de jogos da pasta
-- Skyscraper 3.21.0, Gum 2.0.2 (setas na paginação e sons do menu), AntiMicroX 3.6.1, Switchres 2.2.1
+- GroovyMAME: official release `gm0289sr222f` (MAME 0.289, Switchres 2.22f) instead of compiling
+- GroovyMAME: `mame.ini` like GroovyArcade's, in its own Xorg with `modesetting 1`, at each game's native resolution
+- RetroArch: CRT SwitchRes on, 6 cores in the image and the Core Downloader enabled
+- RetroArch: automatic profile for panels and encoders, remaps for the MAME cores, input and joypad in linuxraw
+- RetroArch: glcore video and sdl2 audio by default, no on-screen notifications
+- MAME 2010: compiled without `_FORTIFY_SOURCE` (Tekken Tag didn't open)
+- Flycast, PCSX2, Dolphin, Supermodel, Hypseus Singe and Model 2: at 15 kHz they open at 640x240 progressive, stretched to 200%, never at 480i
+- PCSX2 from the official AppImage; Supermodel through the project's Makefile; Model 2 in Wine
+- Flycast: the panel's directions on the D-pad, linear interpolation off, per-pixel transparency
+- PCSX2: no setup wizard, in Big Picture, vsync, no mouse pointer, BIOS in `~/bios/ps2` and games in `~/roms/ps2`
+- PCSX2: Mesa's OpenGL thread on; the panel's directions also on the left analog stick
+- Supermodel: opens from the menu (game list in a terminal), finds the game list, Button mapping buttons; `model3` folder in the frontends
+- Supermodel: CPU emulated at 75 MHz in Step 1.5 and 2.x games, which were slow (Virtua Fighter 3tb from 35 to 59 fps)
+- OpenBOR in full screen out of the box
+- Wine (Model 2, the Fightcade emulators), Steam and Heroic (GOG, Epic, Amazon) out of the ISO: Setup > Extras installs them over the network
+- Frontends: Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus as `.deb`s, in an APT repository inside the image, with the games already configured
+- FliperOS 240p theme for EmulationStation and Pegasus
+- Fightcade 2 as a frontend option, downloaded from its website; each match in its emulator's mode
+- Fightcade's Flycast Dojo with the system Flycast's options (interpolation, transparency and both controllers)
+- Attract-Mode: a new display starts with the folder's game list
+- Skyscraper 3.21.0, Gum 2.0.2 (arrows in the pagination and menu sounds), AntiMicroX 3.6.1, Switchres 2.2.1
 
-**Mudanças no fliperos-setup:**
+**fliperos-setup changes:**
 
-- Novo: o equivalente do gasetup, em Bash e Gum, com tema Dracula, feito para 640x480i (80x30)
-- Teste das saídas de vídeo com voz e *Testing Results*, portados do gatools
-- Instalação no HD/SSD e Recovery Mode
-- Video Setup: monitor, orientação, resolução, geometria e Reset Geometry
-- Audio Setup como o do GroovyArcade, e sons do menu com os WAV da pessoa
-- Network Setup: Wi-Fi pela lista de redes ou rede oculta
-- Frontend: escolhe o launcher do boot e instala o que não veio na imagem
-- Extras: instala o Wine, o Steam e o Heroic pela rede
-- Latency: modos Standard e Low latency, com a conferência do hardware
-- Scraper: capas, vídeos e textos para todos os frontends, com a escolha dos tipos de mídia
-- MAME ROM Cleaner (parâmetros de marcar, como o ROMLister; Flycast; pasta da rede) e MAME CHD Cleaner
-- Free games: homebrew de código aberto para preencher os frontends
-- Joysticks: Button mapping para todos os emuladores (RetroArch, GroovyMAME, Flycast e Flycast Dojo, PCSX2, Dolphin, Supermodel, Hypseus Singe, OpenBOR), calibração de pistola e volante, joysticks na porta paralela
-- Quirks do `usbhid` para controles USB
-- Controle do gabinete nos menus
-- Debug mode e System Update; o Setup espera a trava dos pacotes em vez de falhar
-- Start frontend e Start desktop pelo tty1 (o desktop não abria pelo menu)
+- New: the equivalent of gasetup, in Bash and Gum, with the Dracula theme, made for 640x480i (80x30)
+- Video output test with voice and *Testing Results*, ported from gatools
+- Installation to HD/SSD and Recovery Mode
+- Video Setup: monitor, orientation, resolution, geometry and Reset Geometry
+- Audio Setup like GroovyArcade's, and menu sounds with your own WAV files
+- Network Setup: Wi-Fi from the list of networks or a hidden network
+- Frontend: chooses the boot launcher and installs what didn't come in the image
+- Extras: installs Wine, Steam and Heroic over the network
+- Latency: Standard and Low latency modes, with a hardware check
+- Scraper: covers, videos and text for every frontend, with the choice of media types
+- MAME ROM Cleaner (checklist parameters, like ROMLister; Flycast; network folder) and MAME CHD Cleaner
+- Free games: open-source homebrew to fill the frontends
+- Joysticks: Button mapping for every emulator (RetroArch, GroovyMAME, Flycast and Flycast Dojo, PCSX2, Dolphin, Supermodel, Hypseus Singe, OpenBOR), light gun and wheel calibration, parallel port joysticks
+- `usbhid` quirks for USB controllers
+- The cabinet's controller in the menus
+- Debug mode and System Update; the Setup waits for the package lock instead of failing
+- Start frontend and Start desktop through tty1 (the desktop didn't open from the menu)
 
-**Mudanças nas ferramentas:**
+**Tool changes:**
 
-- `tools/vm-test.py`: instala em QEMU e boota o disco em BIOS e UEFI; fotografa as telas; modo `dev` com gamepad falso
-- `tools/verify-iso.sh`: auditoria só de leitura da ISO gerada
-- `tools/cabinet-push.sh`: atualiza um gabinete pela rede, sem ISO nova
-- Documentação na wiki (`docs/wiki`, `tools/wiki-publish.sh`) e num HTML só (`tools/render-docs.py`)
-- `tools/release-publish.sh`: publica a ISO em Releases com este changelog
-- Release automático: o push de uma tag de versão gera a ISO no GitHub Actions e a publica (`.github/workflows/release.yml`)
+- `tools/vm-test.py`: installs in QEMU and boots the disk on BIOS and UEFI; captures the screens; `dev` mode with a fake gamepad
+- `tools/verify-iso.sh`: read-only audit of the generated ISO
+- `tools/cabinet-push.sh`: updates a cabinet over the network, without a new ISO
+- Documentation in the wiki (`docs/wiki`, `tools/wiki-publish.sh`) and in a single HTML file (`tools/render-docs.py`)
+- `tools/release-publish.sh`: publishes the ISO to Releases with this changelog
+- Automatic release: pushing a version tag builds the ISO on GitHub Actions and publishes it (`.github/workflows/release.yml`)

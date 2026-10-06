@@ -1,85 +1,86 @@
-{{Info/SO
-| nome            = FliperOS
-| fabricante      = Ademir Terin Junior
-| família_so      = [[Linux]]
-| estado          = Em desenvolvimento
-| lançamento      = 2026
-| versão_em_teste = 0.7
-| mercado         = Gabinetes de [[arcade]] com monitor [[Tubo de raios catódicos|CRT]]
-| idioma          = [[Língua inglesa|Inglês]]
-| gestor_pacotes  = [[Advanced Packaging Tool|APT]] ([[dpkg]])
-| arquitetura     = [[x86-64]]
-| núcleo          = [[Linux (núcleo)|Linux]] 6.18 com ''patches'' de 15 kHz
-| ui              = Menu em modo texto; [[LXDE]]
-| repositório     = {{URL|https://github.com/juniorterin/fliperOS}}
+{{Infobox OS
+| name               = FliperOS
+| developer          = Ademir Terin Junior
+| family             = [[Linux]] ([[Unix-like]])
+| working_state      = In development
+| released           = 2026
+| latest_test_version = 0.7
+| marketing_target   = [[Arcade cabinet]]s with a [[Cathode-ray tube|CRT]] monitor
+| language           = English
+| package_manager    = [[APT (software)|APT]] ([[dpkg]])
+| supported_platforms = [[x86-64]]
+| kernel_type        = [[Linux kernel|Linux]] 6.18 with 15 kHz patches
+| ui                 = Text-mode menu; [[LXDE]]
+| website            = {{URL|https://github.com/juniorterin/fliperOS}}
 }}
-'''FliperOS''' é uma [[distribuição Linux]] baseada no [[Ubuntu]] 24.04 LTS, para a arquitetura [[x86-64]], destinada a gabinetes de [[arcade]] (fliperama) com monitor de [[tubo de raios catódicos]] (CRT) de 15 kHz. Reúne um [[Linux (núcleo)|núcleo Linux]] modificado para gerar os modos de vídeo desses monitores, o utilitário Switchres, [[emulador]]es de arcades e de consoles, programas de seleção de jogos (''front-ends'') e um menu de instalação e configuração em modo texto.<ref name="readme">{{citar web |url=https://github.com/juniorterin/fliperOS |título=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref> O projeto segue o modelo do GroovyArcade, distribuição baseada em [[Arch Linux]] com a mesma finalidade, da qual aproveita os ''patches'' do núcleo e o fluxo de instalação.<ref name="fontes">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Fontes.md |título=Fontes |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
+'''FliperOS''' is a [[Linux distribution]] based on [[Ubuntu]] 24.04 LTS, for the [[x86-64]] architecture, aimed at [[arcade cabinet]]s with a 15 kHz [[cathode-ray tube]] (CRT) monitor. It combines a [[Linux kernel]] modified to generate the video modes of those monitors, the Switchres utility, arcade and console [[emulator]]s, game selection programs (''front-ends'') and a text-mode installation and configuration menu.<ref name="readme">{{cite web |url=https://github.com/juniorterin/fliperOS |title=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref> The project follows the model of GroovyArcade, an [[Arch Linux]]-based distribution with the same purpose, from which it takes the kernel patches and the installation flow.<ref name="sources">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Sources.md |title=Sources |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
-== História ==
-O desenvolvimento começou em setembro de 2026, com um sistema de construção da [[imagem ISO]], um instalador nos moldes do GroovyArcade e testes da instalação em [[máquina virtual]]. Ainda naquele mês a base passou a ser o Ubuntu 24.04. Em 29 de setembro, o [[GNU GRUB|GRUB]] foi substituído pelo carregador de inicialização Limine, o instalador foi reescrito como o programa <code>fliperos-setup</code> e o núcleo passou a ser o da série 6.18. A versão em desenvolvimento em outubro de 2026 é a 0.7.<ref name="commits">{{citar web |url=https://github.com/juniorterin/fliperOS/commits/main |título=Histórico de alterações |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
+== History ==
+Development started in September 2026, with a build system for the [[ISO image]], an installer modeled on GroovyArcade's and installation tests in a [[virtual machine]]. In that same month the base became Ubuntu 24.04. On 29 September, [[GNU GRUB|GRUB]] was replaced by the Limine boot loader, the installer was rewritten as the <code>fliperos-setup</code> program and the kernel moved to the 6.18 series. The version in development in October 2026 is 0.7.<ref name="commits">{{cite web |url=https://github.com/juniorterin/fliperOS/commits/main |title=Commit history |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
-== Características ==
+== Features ==
 
-=== Vídeo ===
-Monitores de arcade e televisores CRT de definição padrão trabalham com frequência de varredura horizontal próxima de 15 kHz, cerca de metade da usada pelo padrão [[Video Graphics Array|VGA]], e os sistemas operacionais atuais não oferecem esses modos de vídeo por padrão. O FliperOS usa o núcleo Linux 6.18 com o conjunto de ''patches'' de 15 kHz mantido por D0023R, o mesmo do pacote <code>linux-15khz</code> do GroovyArcade, compilado com a configuração do núcleo do Ubuntu 24.04.<ref name="kernel">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Kernel-15-kHz.md |título=Kernel 15 kHz |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref><ref name="d0023r">{{citar web |url=https://github.com/D0023R/linux_kernel_15khz |título=linux_kernel_15khz |autor=D0023R |publicado=GitHub |língua=en |acessodata=5 de outubro de 2026}}</ref>
+=== Video ===
+Arcade monitors and standard-definition CRT televisions work with a horizontal scan rate close to 15 kHz, about half of that used by the [[Video Graphics Array|VGA]] standard, and current operating systems don't offer those video modes by default. FliperOS uses the Linux 6.18 kernel with the 15 kHz patch set maintained by D0023R, the same as GroovyArcade's <code>linux-15khz</code> package, compiled with the kernel configuration of Ubuntu 24.04.<ref name="kernel">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Kernel-15-kHz.md |title=15 kHz kernel |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref><ref name="d0023r">{{cite web |url=https://github.com/D0023R/linux_kernel_15khz |title=linux_kernel_15khz |author=D0023R |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
-O menu de inicialização tem entradas para monitores de 15, 25 e 31 kHz, para monitores [[LCD]], para televisores [[NTSC]] e [[PAL]] e para placas de vídeo [[Intel]] e [[Nvidia]], que usam modos de largura ampliada (''super resolutions''). Sem intervenção, a entrada de 15 kHz é escolhida depois de 30 segundos, porque um sinal de 31 kHz pode danificar um monitor que só aceita 15 kHz.<ref name="instalar">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Instalar.md |título=Instalar |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
+The boot menu has entries for 15, 25 and 31 kHz monitors, for [[Liquid-crystal display|LCD]] monitors, for [[NTSC]] and [[PAL]] televisions and for [[Intel]] and [[Nvidia]] graphics cards, which use wider modes (''super resolutions''). With no input, the 15 kHz entry is chosen after 30 seconds, because a 31 kHz signal can damage a monitor that only accepts 15 kHz.<ref name="install">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Install.md |title=Install |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
-O Switchres calcula os modos de vídeo dentro das faixas de frequência do monitor escolhido e gera os dados de identificação (EDID) de cada modelo de monitor previsto.<ref name="kernel" /><ref name="switchres">{{citar web |url=https://github.com/antonioginer/switchres |título=Switchres |autor=Antonio Giner |publicado=GitHub |língua=en |acessodata=5 de outubro de 2026}}</ref> O GroovyMAME e o [[RetroArch]] trocam de modo a cada jogo, para a resolução e a taxa de atualização do sistema original. Os outros emuladores abrem em modos progressivos de 240 linhas nos monitores de 15 kHz, o que evita a cintilação do modo entrelaçado de 480 linhas.<ref name="emuladores">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Emuladores.md |título=Emuladores |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
+Switchres computes the video modes within the frequency ranges of the chosen monitor and generates the identification data (EDID) for each supported monitor model.<ref name="kernel" /><ref name="switchres">{{cite web |url=https://github.com/antonioginer/switchres |title=Switchres |author=Antonio Giner |publisher=GitHub |language=en |access-date=6 October 2026}}</ref> GroovyMAME and [[RetroArch]] switch modes on every game, to the resolution and refresh rate of the original system. The other emulators open in 240-line progressive modes on 15 kHz monitors, which avoids the flicker of the 480-line interlaced mode.<ref name="emulators">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Emulators.md |title=Emulators |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
-=== Instalação e configuração ===
-A imagem ISO serve apenas para instalar o sistema. É híbrida, inicia por [[BIOS]] ou [[UEFI]] e usa o carregador Limine. Ao iniciar, o sistema liga uma saída de vídeo de cada vez e anuncia o teste por [[síntese de fala]], para que a pessoa confirme em qual delas o monitor está ligado; o procedimento foi portado do GroovyArcade. Seguem-se a escolha do tipo de monitor e a instalação no disco.<ref name="instalar" />
+=== Installation and configuration ===
+The ISO image is only used to install the system. It is hybrid, boots through [[BIOS]] or [[UEFI]] and uses the Limine loader. On startup, the system enables one video output at a time and announces the test through [[speech synthesis]], so that the user confirms which output the monitor is connected to; the procedure was ported from GroovyArcade. Then come the choice of monitor type and the installation to disk.<ref name="install" />
 
-Essas telas pertencem ao <code>fliperos-setup</code>, escrito em [[Bash]] com a ferramenta Gum, com textos em inglês e desenhado para 640×480 entrelaçado (80 colunas por 30 linhas). No sistema instalado, o mesmo programa é o menu que aparece quando o ''front-end'' é fechado. Ele configura vídeo (monitor, orientação, resolução e geometria da imagem), áudio, rede, o ''front-end'' padrão e a atualização do sistema, e pode ser operado com o controle do gabinete.<ref name="sistema">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Sistema-instalado.md |título=Sistema instalado |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
+Those screens belong to <code>fliperos-setup</code>, written in [[Bash (Unix shell)|Bash]] with the Gum tool, with English text and designed for 640×480 interlaced (80 columns by 30 lines). On the installed system, the same program is the menu that appears when the front-end is closed. It configures video (monitor, orientation, resolution and picture geometry), audio, network, the default front-end and system updates, and can be operated with the cabinet's controls.<ref name="installed">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Installed-system.md |title=Installed system |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
-=== Emuladores e ''front-ends'' ===
+=== Emulators and front-ends ===
 {| class="wikitable"
-! Emulador !! Sistemas
+! Emulator !! Systems
 |-
-| GroovyMAME (variante do [[MAME]] com Switchres) || Arcades
+| GroovyMAME (a [[MAME]] variant with Switchres) || Arcade
 |-
-| [[RetroArch]] || Vários, por núcleos libretro; seis vêm instalados
+| [[RetroArch]] || Several, through libretro cores; six come installed
 |-
-| Flycast || [[Dreamcast]], [[Sega NAOMI]] e Atomiswave
+| Flycast || [[Dreamcast]], [[Sega NAOMI]] and Atomiswave
 |-
 | [[PCSX2]] || [[PlayStation 2]]
 |-
-| [[Dolphin (emulador)|Dolphin]] || [[Nintendo GameCube|GameCube]] e [[Wii]]
+| [[Dolphin (emulator)|Dolphin]] || [[GameCube]] and [[Wii]]
 |-
 | Supermodel || [[Sega Model 3]]
 |-
-| Model 2 Emulator (por meio do [[Wine]]) || [[Sega Model 2]]
+| Model 2 Emulator (through [[Wine (software)|Wine]]) || [[Sega Model 2]]
 |-
-| Hypseus Singe || Jogos de [[Laserdisc]]
+| Hypseus Singe || [[Laserdisc video game]]s
 |-
-| OpenBOR || Jogos de luta do tipo ''[[beat 'em up]]''
+| OpenBOR || ''[[Beat 'em up]]'' games
 |}
 
-Cada emulador abre no modo de vídeo previsto para o tipo de monitor configurado.<ref name="emuladores" /> Os ''front-ends'' são o Attract-Mode Plus, o EmulationStation (ES-DE) e o Pegasus, distribuídos em pacotes <code>.deb</code> de um repositório APT do próprio projeto, incluído na imagem; os dois últimos recebem temas feitos para telas de 240 linhas.<ref name="frontends">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Frontends.md |título=Frontends |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref> O cliente de partidas em rede Fightcade 2 pode ser baixado pelo menu de configuração.<ref name="fightcade">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Fightcade-2.md |título=Fightcade 2 |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref> O ambiente de trabalho [[LXDE]] dá acesso aos emuladores, ao [[Steam]] e a uma loja de aplicativos [[Flatpak]].<ref name="desktop">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Desktop.md |título=Desktop e tema |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
+Each emulator opens in the video mode intended for the configured monitor type.<ref name="emulators" /> The front-ends are Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus, distributed as <code>.deb</code> packages from the project's own APT repository, included in the image; the last two get themes made for 240-line screens.<ref name="frontends">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Frontends.md |title=Frontends |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref> The Fightcade 2 online play client can be downloaded from the configuration menu.<ref name="fightcade">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Fightcade-2.md |title=Fightcade 2 |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref> The [[LXDE]] desktop environment gives access to the emulators, to [[Steam (service)|Steam]] and to a [[Flatpak]] app store.<ref name="desktop">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Desktop.md |title=Desktop and theme |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
-=== Ferramentas ===
-O menu de configuração inclui:
-* um ''scraper'', que obtém capas, vídeos e descrições dos jogos para os ''front-ends'';<ref name="scraper">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Scraper.md |título=Scraper |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
-* um filtro de coleções de ROMs do MAME, por categoria, número de jogadores e tipo de controle, e outro que copia as imagens de disco (CHD) dos jogos mantidos;<ref name="roms">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/ROMs.md |título=ROMs, BIOS e arte |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
-* o mapeamento dos botões de cada jogador, a calibração de pistolas de luz e de volantes e o uso de ''joysticks'' ligados à [[porta paralela]];<ref name="controles">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Controles.md |título=Controles |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
-* dois modos de latência, um para qualquer computador e outro, de menor atraso, para processadores recentes.<ref name="latencia">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Latency.md |título=Latência |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
+=== Tools ===
+The configuration menu includes:
+* a ''scraper'', which fetches covers, videos and descriptions of the games for the front-ends;<ref name="scraper">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Scraper.md |title=Scraper |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
+* a filter for MAME ROM collections, by category, number of players and control type, and another that copies the disk images (CHD) of the games kept;<ref name="roms">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/ROMs.md |title=ROMs, BIOS and artwork |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
+* button mapping for each player, calibration of light guns and wheels and the use of joysticks connected to the [[parallel port]];<ref name="controls">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Controls.md |title=Controls |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
+* two latency modes, one for any computer and another, with less delay, for recent processors.<ref name="latency">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Latency.md |title=Latency |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
-As pastas de ROMs, de BIOS, de arte e de configuração ficam acessíveis pela rede local por [[Samba (servidor)|Samba]], e o sistema aceita acesso remoto por [[Secure Shell|SSH]].<ref name="arquitetura">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Arquitetura.md |título=Arquitetura |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
+The ROM, BIOS, artwork and configuration folders are accessible over the local network through [[Samba (software)|Samba]], and the system accepts remote access through [[Secure Shell|SSH]].<ref name="architecture">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Architecture.md |title=Architecture |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
-== Desenvolvimento ==
-A imagem é construída em um contêiner [[Docker (software)|Docker]]. Testes automatizados em [[Python]] verificam a lógica do programa de configuração e o conteúdo da imagem, e a instalação é exercitada em máquinas virtuais [[QEMU]], por BIOS e por UEFI. Os componentes que o Ubuntu 24.04 não oferece, como o Limine, o Gum, o GroovyMAME e o PCSX2, são baixados em versões fixas, conferidas por ''[[Função hash|hash]]''.<ref name="build">{{citar web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Build-e-testes.md |título=Build e testes |obra=FliperOS |publicado=GitHub |língua=pt |acessodata=5 de outubro de 2026}}</ref>
+== Development ==
+The image is built in a [[Docker (software)|Docker]] container. Automated tests in [[Python (programming language)|Python]] check the logic of the configuration program and the contents of the image, and the installation is exercised in [[QEMU]] virtual machines, through BIOS and UEFI. Components that Ubuntu 24.04 doesn't offer, such as Limine, Gum, GroovyMAME and PCSX2, are downloaded in pinned versions, verified by [[Cryptographic hash function|hash]].<ref name="build">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Build-and-tests.md |title=Build and tests |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
-== Ver também ==
+== See also ==
 * [[MAME]]
 * [[RetroArch]]
-* [[Emulador]]
+* [[Emulator]]
 
-{{referências}}
+== References ==
+{{reflist}}
 
-== Ligações externas ==
-* {{Link|pt|https://github.com/juniorterin/fliperOS|Repositório do FliperOS no GitHub}}
-* {{Link|en|https://gitlab.com/groovyarcade|GroovyArcade no GitLab}}
+== External links ==
+* [https://github.com/juniorterin/fliperOS FliperOS repository on GitHub]
+* [https://gitlab.com/groovyarcade GroovyArcade on GitLab]
 
-[[Categoria:Distribuições baseadas em Ubuntu Linux]]
-[[Categoria:Distribuições Linux do Brasil]]
-[[Categoria:Emuladores de arcade]]
+[[Category:Ubuntu derivatives]]
+[[Category:Linux distributions]]
+[[Category:Arcade emulators]]

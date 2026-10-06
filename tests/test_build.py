@@ -2743,7 +2743,7 @@ class SilentBootTests(unittest.TestCase):
         self.assertIn('\nquiet: yes\n', text)
         # A contagem invisivel continua: uma tecla nela mostra o menu.
         self.assertIn('timeout: 3\n', text)
-        self.assertIn('Diagnostico', text)
+        self.assertIn('Diagnostics', text)
 
     def test_autologin_prints_nothing(self):
         unit = MKISO.split('autologin.conf << UNIT')[1].split('UNIT\n')[0]
@@ -3194,7 +3194,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('keep="build-essential dkms', slim)
         self.assertIn("'linux-headers-*'", slim)
         self.assertLess(slim.index('apt-mark manual'), slim.index('apt-get purge -y'))
-        self.assertIn('Bibliotecas que sumiram com o purge', slim)
+        self.assertIn('Libraries that disappeared with the purge', slim)
         self.assertIn('path-exclude=/usr/lib/firmware/nvidia/*', slim)
         self.assertNotIn('amdgpu', slim.split('DPKGCFG')[1])
         self.assertIn('update-initramfs -u -k all', slim)
@@ -3282,7 +3282,7 @@ class DocsTests(unittest.TestCase):
                 self.assertTrue(match, '%s: link %s' % (page.name, target))
                 self.assertIn(match.group(1), self.pages() | {'Home'}, '%s: link %s' % (page.name, target))
             # As referencias "secao N" eram do README de uma pagina so.
-            self.assertNotRegex(text, r'se[cç][aã]o \d', page.name)
+            self.assertNotRegex(text, r'(se[cç][aã]o|[Ss]ection) \d', page.name)
 
     def test_every_page_is_in_the_index_and_in_the_sidebar(self):
         self.assertGreaterEqual(len(self.pages()), 10)
@@ -3307,7 +3307,7 @@ class DocsTests(unittest.TestCase):
             out = Path(tmp)
             self.assertEqual({p.name for p in out.iterdir()}, {p.name for p in self.WIKI.glob('*.md')})
             home = (out / 'Home.md').read_text()
-            self.assertIn('[Emuladores](Emuladores)', home)
+            self.assertIn('[Emulators](Emulators)', home)
             self.assertIn('[Fightcade 2](Fightcade-2)', (out / '_Sidebar.md').read_text())
             for page in out.iterdir():
                 self.assertNotRegex(page.read_text(), r'\]\(%s\.md' % self.PAGE, page.name)
@@ -3338,7 +3338,7 @@ class DocsTests(unittest.TestCase):
         self.assertIn("root / 'README.md'", script)
         self.assertIn("'_Sidebar.md'", script)
         html = (ROOT / 'fliperos-doc.html').read_text()
-        for title in ('Fightcade 2', 'Sistema instalado', 'Build e testes'):
+        for title in ('Fightcade 2', 'Installed system', 'Build and tests'):
             self.assertIn('>%s</h1>' % title, html)
         # Os links entre paginas viram links dentro do arquivo.
         self.assertIn('href="#Fightcade-2"', html)
@@ -3368,8 +3368,8 @@ class ReleaseTests(unittest.TestCase):
         result = self.notes(self.VERSION)
         self.assertEqual(result.returncode, 0, result.stderr)
         # As secoes do GroovyArcade: OS, Packages, gasetup, gatools.
-        for heading in ('**Mudanças no sistema:**', '**Mudanças nos pacotes:**',
-                        '**Mudanças no fliperos-setup:**', '**Mudanças nas ferramentas:**'):
+        for heading in ('**System changes:**', '**Package changes:**',
+                        '**fliperos-setup changes:**', '**Tool changes:**'):
             self.assertIn(heading + '\n\n- ', result.stdout)
         self.assertNotIn('\n## ', '\n' + result.stdout)
         self.assertNotIn('# Changelog', result.stdout)

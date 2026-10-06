@@ -36,22 +36,22 @@ notes() {
 while (($#)); do
   case $1 in
     --notes)
-      text=$(notes "${2:?--notes pede a versao}")
-      [[ -n $text ]] || die "CHANGELOG.md sem a secao \"## $2\""
+      text=$(notes "${2:?--notes needs the version}")
+      [[ -n $text ]] || die "CHANGELOG.md has no \"## $2\" section"
       printf '%s\n' "$text"
       exit 0 ;;
     --replace) replace=1; shift ;;
     --prerelease) flags+=(--prerelease); shift ;;
-    --to) to=${2:?--to pede uma pasta}; shift 2 ;;
+    --to) to=${2:?--to needs a folder}; shift 2 ;;
     *) iso=$1; shift ;;
   esac
 done
-[[ -f $iso ]] || die "Uso: release-publish.sh [--prerelease] [--replace] [--to DIR] caminho/fliperos-VERSAO.iso"
+[[ -f $iso ]] || die "Usage: release-publish.sh [--prerelease] [--replace] [--to DIR] path/fliperos-VERSION.iso"
 name=${iso##*/}
 version=$(sed -n 's/^fliperos-\(.*\)\.iso$/\1/p' <<< "$name")
-[[ -n $version ]] || die "o nome da ISO tem de ser fliperos-VERSAO.iso: $name"
+[[ -n $version ]] || die "the ISO name must be fliperos-VERSION.iso: $name"
 body=$(notes "$version")
-[[ -n $body ]] || die "CHANGELOG.md sem a secao \"## $version\": escreva o que mudou antes de publicar"
+[[ -n $body ]] || die "CHANGELOG.md has no \"## $version\" section: write what changed before publishing"
 
 repo=$(g remote get-url origin | sed -E 's|^.*github\.com[:/]||; s|\.git$||')
 
@@ -61,10 +61,10 @@ mkdir -p "$out"
 
 # ── A ISO e a do repositorio, e nao leva nada da pessoa ───────
 FLIPEROS_VERIFY_DIR=$audit bash "$root/tools/verify-iso.sh" "$iso" \
-  || die "a ISO nao passou na auditoria: so se publica a ISO gerada do repositorio de agora"
+  || die "the ISO failed the audit: only an ISO built from the current repository is published"
 if grep -q 'squashfs-root/etc/NetworkManager/system-connections/.' "$audit/files.txt"; then
   grep 'squashfs-root/etc/NetworkManager/system-connections/.' "$audit/files.txt" >&2
-  die "a ISO leva uma rede gravada (--wifi-ssid/--wifi-psk): a senha iria a publico. Gere outra sem ela"
+  die "the ISO carries a saved network (--wifi-ssid/--wifi-psk): the password would go public. Build another without it"
 fi
 
 # ── Lista de pacotes (o pkglist do GroovyArcade) ──────────────
@@ -72,7 +72,7 @@ pkglist=$out/fliperos-$version-pkglist.txt
 unsquashfs -cat "$audit/filesystem.squashfs" var/lib/dpkg/status > "$audit/status"
 awk '/^Package: / { name = $2 } /^Status: / { ok = /install ok installed/ } /^Architecture: / { arch = $2 }
      /^Version: / { if (ok) print name, $2, arch }' "$audit/status" | sort > "$pkglist"
-[[ -s $pkglist ]] || die "lista de pacotes vazia"
+[[ -s $pkglist ]] || die "empty package list"
 
 # ── A ISO, inteira ou em partes ───────────────────────────────
 size=$(stat -c %s "$iso")
@@ -93,34 +93,34 @@ fi
   printf '%s\n\n**Download:**\n\n' "$body"
   if ((${#assets[@]} > 1)); then
     joined=$(printf ' + %s' "${assets[@]##*/}")
-    echo "A ISO tem $(numfmt --to=iec-i --suffix=B "$size") e o GitHub aceita até 2 GiB por arquivo, então ela vem em ${#assets[@]} partes. Baixe todas e junte:"
+    echo "The ISO is $(numfmt --to=iec-i --suffix=B "$size") and GitHub accepts up to 2 GiB per file, so it comes in ${#assets[@]} parts. Download all of them and join them:"
     echo
-    echo "- Windows (Prompt de Comando): \`copy /b ${joined# + } $name\`"
-    echo "- Linux e macOS: \`cat $name.0* > $name\`"
+    echo "- Windows (Command Prompt): \`copy /b ${joined# + } $name\`"
+    echo "- Linux and macOS: \`cat $name.0* > $name\`"
     echo
   fi
-  echo "SHA-256 de \`$name\`: \`$sha\` (\`sha256sum -c ${sums##*/}\` confere tudo o que foi baixado)."
+  echo "SHA-256 of \`$name\`: \`$sha\` (\`sha256sum -c ${sums##*/}\` checks everything downloaded)."
   echo
-  echo "Grave a ISO byte a byte e desative o Secure Boot: [Instalar](https://github.com/$repo/wiki/Instalar)."
+  echo "Write the ISO byte for byte and disable Secure Boot: [Install](https://github.com/$repo/wiki/Install)."
 } > "$out/notes.md"
 assets+=("$sums" "$pkglist")
 
 if [[ -n $to ]]; then
-  echo "Release $version preparado em $to (texto em notes.md):"
+  echo "Release $version prepared in $to (text in notes.md):"
   ls -l "${assets[@]}"
   exit 0
 fi
 
 # ── GitHub ────────────────────────────────────────────────────
-command -v gh > /dev/null || die "falta o gh (GitHub CLI)"
-gh auth status > /dev/null 2>&1 || die "o gh esta sem login: gh auth login"
+command -v gh > /dev/null || die "gh (GitHub CLI) is missing"
+gh auth status > /dev/null 2>&1 || die "gh is not logged in: gh auth login"
 commit=$(g rev-parse HEAD)
 gh api "repos/$repo/commits/$commit" > /dev/null 2>&1 \
-  || die "o commit ${commit:0:7} nao esta no GitHub: faca o push antes de publicar"
+  || die "commit ${commit:0:7} is not on GitHub: push before publishing"
 if gh release view "$version" -R "$repo" > /dev/null 2>&1; then
-  ((replace)) || die "o release $version ja existe: ISO nova pede versao nova (FLIPEROS_VERSION), ou --replace para trocar a deste"
+  ((replace)) || die "release $version already exists: a new ISO needs a new version (FLIPEROS_VERSION), or --replace to replace this one"
   gh release delete "$version" -R "$repo" --yes --cleanup-tag
 fi
 gh release create "$version" "${assets[@]}" -R "$repo" --target "$commit" \
   --title "FliperOS $version" --notes-file "$out/notes.md" "${flags[@]}"
-echo "Release publicado: https://github.com/$repo/releases/tag/$version"
+echo "Release published: https://github.com/$repo/releases/tag/$version"

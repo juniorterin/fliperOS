@@ -15,7 +15,7 @@ prune=0 to="" remote=""
 while (($#)); do
   case $1 in
     --prune) prune=1; shift ;;
-    --to) to=${2:?--to pede uma pasta}; shift 2 ;;
+    --to) to=${2:?--to needs a folder}; shift 2 ;;
     *) remote=$1; shift ;;
   esac
 done
@@ -32,7 +32,7 @@ convert() {
 
 if [[ -n $to ]]; then
   convert "$to"
-  echo "Paginas gravadas em $to"
+  echo "Pages written to $to"
   exit 0
 fi
 
@@ -46,10 +46,10 @@ if ! git clone -q "$remote" "$work/wiki" 2> "$work/err"; then
   cat "$work/err" >&2
   cat >&2 << 'EOF'
 
-A wiki ainda nao existe no GitHub: o repositorio dela so e criado quando a
-primeira pagina e salva pelo site. Abra a aba Wiki do repositorio, clique em
-"Create the first page" e salve (o conteudo nao importa: e substituido).
-Depois rode este script de novo.
+The wiki doesn't exist on GitHub yet: its repository is only created when the
+first page is saved through the website. Open the repository's Wiki tab, click
+"Create the first page" and save it (the content doesn't matter: it gets
+replaced). Then run this script again.
 EOF
   exit 1
 fi
@@ -64,20 +64,20 @@ convert "$work/wiki"
 if ((${#extra[@]})); then
   if ((prune)); then
     (cd "$work/wiki" && rm -f -- "${extra[@]}")
-    echo "Apagadas da wiki (nao existem em docs/wiki): ${extra[*]}"
+    echo "Deleted from the wiki (not in docs/wiki): ${extra[*]}"
   else
-    echo "So existem na wiki e ficaram como estao (--prune apaga): ${extra[*]}"
+    echo "Only on the wiki, left as they are (--prune deletes them): ${extra[*]}"
   fi
 fi
 
 cd "$work/wiki"
 git add -A
 if git diff --cached --quiet; then
-  echo "A wiki ja esta igual a docs/wiki."
+  echo "The wiki already matches docs/wiki."
   exit 0
 fi
 # O autor e o do repositorio principal.
 git -c "user.name=$(git -C "$root" config user.name)" -c "user.email=$(git -C "$root" config user.email)" \
-  commit -q -m "docs/wiki de $(git -C "$root" rev-parse --short HEAD)"
+  commit -q -m "docs/wiki from $(git -C "$root" rev-parse --short HEAD)"
 git push -q origin HEAD
-echo "Wiki publicada: $(git diff --name-only HEAD~1 HEAD 2> /dev/null | wc -l) pagina(s) mudaram"
+echo "Wiki published: $(git diff --name-only HEAD~1 HEAD 2> /dev/null | wc -l) page(s) changed"

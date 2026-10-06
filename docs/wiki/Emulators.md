@@ -1,0 +1,98 @@
+| Emulator | Systems | How it opens | Video mode |
+| --- | --- | --- | --- |
+| GroovyMAME | arcade | KMS | switches per game by itself (Switchres) |
+| RetroArch | many (cores) | KMS | switches per game by itself (CRT SwitchRes) |
+| Flycast | Dreamcast, Naomi, Atomiswave | its own Xorg (`fliperos-x11-run`) | 640x240 at 15 kHz, 640x480 on the others |
+| PCSX2 (official AppImage) | PS2 | its own Xorg | same |
+| Dolphin | GameCube, Wii | its own Xorg | same |
+| Hypseus Singe | laserdisc (Dragon's Lair, Space Ace...) | its own Xorg | same |
+| OpenBOR | beat 'em ups | its own Xorg | 320x240 |
+| Supermodel | Sega Model 3 | its own Xorg | 640x240@57.524 at 15 kHz, 496x384 on the others |
+| Model 2 Emulator (Wine) | Sega Model 2 | its own Xorg | same |
+| Fightcade 2 (downloaded through the Setup) | online matches: FBNeo, SNES9x and FBA (Wine), Flycast | its own Xorg | the lobby at 640x480 (interlaced at 15 kHz); the matches at 320x240 (Wine) and 640x240 (Flycast) |
+| Steam, Heroic (GOG, Epic, Amazon), through Setup > Extras | PC games | inside the LXDE desktop | the desktop's |
+
+Dedicated pages: [Fightcade 2](Fightcade-2.md), [ROMs, BIOS and artwork](ROMs.md) (the folders in `~`) and [Controls](Controls.md) (buttons, SDL, calibration).
+
+All of them appear in LXDE's **Games** menu ([Desktop and theme](Desktop.md)). RetroArch uses `crt_switch_resolution 4` (the Setup's `/etc/switchres.ini`) at each game's **native width** when the card generates low dotclocks (the "s" in the output test result: radeon/amdgpu), like GroovyArcade; the 2560 super resolution is only for cards that don't (Intel, NVIDIA). At 2560 RetroArch draws its notifications at that width, and on the tube they came out squashed (`video_retroarch_super`, saved by the output test and at installation). RetroArch's video is the `glcore` driver (OpenGL 3.2 core) and its audio is `sdl2`, which goes straight into ALSA; both come from the system `retroarch.cfg` (`/etc/fliperos/retroarch`), which is applied on top of the user's on each launch. From there also come input and joypad in `linuxraw` (the kernel's `/dev/input/js*`; `fliperos-controllers` generates the automatic controller profiles for `udev` and `linuxraw`) and RetroArch without on-screen notifications. On cards with only OpenGL 2.x (Radeon X300 to X1950, Intel up to 1st-generation Core, GeForce FX/6/7) `glcore` doesn't open: `fliperos-kms-run` asks Mesa (`eglinfo`) and, on those, passes `gl` instead.
+
+**GroovyMAME at native resolution.** GroovyMAME runs in X, like GroovyArcade's X mode: called from the console (by `fliperos-launch`, by the boot session, by a frontend or in the terminal), the `groovymame` command opens in an Xorg of its own (`fliperos-x11-run`) and, with `modesetting 1` in `mame.ini`, GroovyMAME's Switchres creates and switches each game's mode through XRandR — on the cabinet, MvC at `SR-1_384x224@59.64`, full screen. Commands without a screen (`-listxml`, `-listclones`, `-verifyroms`, `-showconfig`, `-createconfig`, `-version`...) run directly, without starting X. As in GroovyArcade's `galauncher.xinitrc`, `fliperos-x11-client` starts **openbox** before the program (`config/openbox-x11-run.xml`: no borders, no shortcuts): it is what fits the full-screen window to the new screen on each mode switch through XRandR; without it the window kept the size of the mode it opened in (the UI in a quarter of the 640x480 screen, the game out of place). Opened without a game (the UI), `groovymame` passes `-noautosync -waitvsync`: the game chosen in the UI runs in the same process, and GroovyMAME's emusync in X (`emusync_linux.cpp` from gm0289sr222f) uses the `/dev/dri/card0` that it closed when leaving the UI (`osd_deinit` closes the fd and doesn't reset it; "drmCrtcGetSequence(-1)") — with `autosync`, `syncrefresh` removed the throttle and the game ran too fast. Opened directly with the game (frontends, command line), vblank works and `autosync` stays. In KMS this didn't work on this installation: with `modesetting 0` and `SDL_KMSDRM_REQUIRE_DRM_MASTER=0` Switchres applied the game's mode, but SDL kept drawing at the size of the boot mode (in radeon's debugfs `framebuffer`, GroovyMAME's frames at 320x240 with the screen at 384x224) — the game came out stretched, squashed or in the middle with black bars, depending on the resolution chosen in the Setup; with `modesetting 1` the mode wasn't even applied ("No way to get master rights") or the screen went black ("Could not queue pageflip: -13"). RetroArch, in KMS, creates its frames already at the game's size (384x224) and switches correctly. On an earlier installation, `fliperos-rootfs.sh` replaces the old `modesetting 0` with 1. The other reason for the doubled width is the screen's aspect: with `aspect auto` GroovyMAME takes the aspect from the current mode, and booting at 640x240 gives 8:3 — twice 4:3, so Switchres doubled the width of every game ("SR(0): 768x224"). `mame.ini` ships with `aspect 4:3`, like GroovyArcade (`-aspect "4:3"`); the Setup only goes back to `auto` when the chosen monitor is an LCD.
+
+**GroovyMAME: the release and the `groovymame` command.** The build no longer compiles GroovyMAME (it took over an hour): it uses the official Linux release (`gm0289sr222f`, MAME 0.289 with Switchres 2.22f, verified by sha256), in `/usr/local/libexec/groovymame`, with the libraries it needs (Qt6 is the debugger's). The `groovymame` command — the one `fliperos-launch`, the frontends and the terminal call — is `config/fliperos-groovymame`, which passes `-inipath /etc/fliperos/mame`: the release's default is `.;ini`, relative to the folder it is opened from, so a `~/.mame/mame.ini` doesn't apply; what applies is `/etc/fliperos/mame/mame.ini` (owned by the `fliperos` user), which the Setup writes. The release only ships the binary; like GroovyArcade's package, the build puts in `/usr/local/share/groovymame` the source files of the same tag (commit `953db38`): `plugins` (`hiscore`), the `uismall.bdf` font, `bgfx`, `artwork`, `language`, `ctrlr`, `keymaps` and `hash`. `mame.ini` is made like GroovyArcade's: GroovyMAME's own `-createconfig` (every option of the version, at its default), with those of `config/mame.ini` on top, each on its own line (`config/fliperos-mame-ini`, at build time). The GroovyArcade options (gasetup's `-createconfig`): `plugin hiscore`, `skip_gameinfo 1`, `video opengl`, `switchres_ini 1`, `sound sdl`, `aspect 4:3` — plus the Setup's latency (`lowlatency`, `autoframedelay`, `framedelay`); the UI font stays MAME's own (`uifont default`), because GroovyArcade's pixel font (`uismall.bdf`) was too small on the cabinet. `modesetting 1` is also GroovyArcade's, with GroovyMAME in X (the "GroovyMAME at native resolution" paragraph). What GroovyMAME writes (cfg, nvram, hiscore records, savestates) goes to `~/.mame`; `ui.ini` gets GroovyArcade's `infos_text_size 1.00` and `font_rows 20`, together with the Dracula colors — GroovyArcade uses 19, but MAME only accepts 20 to 40 and replaces 19 with the default 30, which at 224 lines leaves the font 7 pixels tall and unreadable; with 20 it is 11. On an earlier installation, `fliperos-rootfs.sh` only adds to `mame.ini` and `ui.ini` the keys they don't have yet (what was already saved stays, theme included); among the paths, the relative ones (the `.`, `cfg`, `snap` of a plain `-createconfig`: relative to the folder GroovyMAME is opened from, they filled the home folder with `cfg` and `nvram`) are removed, and with no absolute one left, the one from `config/` applies. The `cfg`/`nvram` left in the home folder moves to `~/.mame`; when both exist, each file keeps its newest version. On a system installed earlier, `fliperos-rootfs.sh` moves the compiled binary to `/usr/local/libexec` and puts the shortcut in its place.
+
+**Reset Geometry.** Setup > Video Setup > Geometry saves the geometry measured on the grid (`crt_range0` with monitor `custom` in `/etc/switchres.ini`, and `switchres_ini 1` in `mame.ini`). **Reset Geometry** undoes it: Switchres goes back to the chosen monitor's preset, which applies to GroovyMAME (`switchres_ini 1`, as in GroovyArcade) and to RetroArch's mode 4, which read the same file.
+
+**Nothing interlaced at 15 kHz.** On a 15 kHz tube no `fliperos-x11-run` emulator opens at 480i (the exception is the Fightcade 2 lobby, which doesn't fit in 240 lines; its matches do): the 480-line ones and the 384-line ones (Model 2 and 3) run at **640x240 progressive**, **stretched to 200%** horizontally — 640x240 has 8:3 pixels, and the 4:3 image only fills the tube when stretched: Flycast `rend.ScreenStretching=200` (300·W/4H), PCSX2 `AspectRatio = Stretch`, Dolphin `AspectRatio=3`, Supermodel `-fullscreen -res=640,240 -stretch`, Hypseus `-x 640 -y 240 -ignore_aspect_ratio` (options at the end of the line: Hypseus reads the game and the player first) and Model 2 with `EMULATOR.INI`'s full screen in the table's mode. On the cabinet Flycast opened at 640x480i: the setup saves `frequency=15k`, and the script only recognized `15`, so every emulator fell into the 31 kHz column.
+
+**No text on launch.** The output of X, Switchres and the emulator goes to `/opt/fliperos/logs/<program>.log` (the last run of each), and between the desktop and the emulator the screen stays clean; the Setup's Debug mode shows everything. The mouse cursor only appears in emulators with a mouse UI — PCSX2 (game list, BIOS wizard), Dolphin, Flycast, Model 2 in Wine and Fightcade —, which hide it themselves during full-screen play; the others open with Xorg `-nocursor`.
+
+**GroovyMAME: what's missing.** When a game stops at "System media audit failed", the reason is in `/opt/fliperos/logs/groovymame.log`, and `groovymame -verifyroms GAME` lists the missing files — BIOS and device ROMs come in zips separate from the game. Everything goes in `~/roms/mame` (BIOS can also go in `~/bios/mame`), from the same MAME version (0.289).
+
+PCSX2 is the official AppImage (pinned by version and sha256, extracted to `/opt/pcsx2`): its current code requires SDL3 and Qt 6.10, which Ubuntu 24.04 doesn't have. Dolphin is compiled from the stable version (the official Linux distribution is the Flatpak, which would bring ~1 GB of runtime).
+
+**PCSX2: performance and controls.** `fliperos-x11-run` opens PCSX2 with `mesa_glthread=true` (Mesa's OpenGL thread, which takes the sending of commands to the card off the main CPU thread; to run without it, export `mesa_glthread=false`). Per-game tweaks go in that game's ini, `~/.config/PCSX2/gamesettings/<serial>_<crc>.ini`. Turning on `UserHacks = true` there disables the fixes PCSX2's GameDB applies to that game. The panel's D-pad also works as the **left analog stick** (`LUp`/`LDown`/`LLeft`/`LRight` in `PCSX2.ini` point to the controller's D-pad when they are empty or on the keyboard): many PS2 games only move with the analog stick.
+
+**Supermodel: game choice and speed.** Opened without a game (from the desktop menu), `fliperos-launch` opens a terminal (Alacritty) with the list of games in `~/roms/model3`, by the names in Supermodel's `Games.xml`; Enter opens the chosen one, Esc exits. Supermodel's bottleneck is the emulated PowerPC CPU, not the video: games on the Step 1.5 (100 MHz) and Step 2.x (166 MHz) boards were slow on an i3 (Virtua Fighter 3tb at 35 fps). For them `fliperos-x11-run` passes `-ppc-frequency=75`, which emulates the CPU at 75 MHz (Virtua Fighter 3tb at 59 fps); Step 1.0 games (66 MHz) stay as they are. `FLIPEROS_SUPERMODEL_PPC=100` changes the value, and `FLIPEROS_SUPERMODEL_PPC=0` turns it off. If a game shows internal slowdown or wrong parts, raise the value for it.
+
+**RetroArch cores.** Six come compiled, to work without network: FCEUmm (NES), Snes9x, Genesis Plus GX (Mega Drive/Master System), mGBA, PCSX ReARMed (PS1) and MAME 2010. Any other can be downloaded in RetroArch itself, in **Online Updater > Core Downloader** (from the libretro buildbot): cores, `.info` files and controller profiles live in `/opt/fliperos/retroarch`, owned by the `fliperos` user, so the menu saves without root. The factory `.info` files and profiles are pinned by commit (`libretro-core-info`, `retroarch-joypad-autoconfig`). MAME 2010 is compiled without the `_FORTIFY_SOURCE` that Ubuntu's gcc turns on by itself (`ARCHOPTS=-U_FORTIFY_SOURCE`): MAME 0.139 writes 9 bytes into a `char[8]` when starting the H8/3002 CPU, and with the check glibc closed RetroArch (`buffer overflow detected`) on every Namco System 12 game (Tekken 3, Tekken Tag, Soul Calibur), System 23 and ND-1.
+
+## Running a program at 640x240
+
+On a 15 kHz monitor, 480 lines only exist interlaced (480i), and interlacing flickers. At **640x240 progressive** the program draws its 480 lines in 240: it loses half the vertical resolution, but the image is stable — that's how FliperOS runs Dreamcast, PS2, GameCube/Wii and laserdisc at 15 kHz. The one doing this is `fliperos-x11-run`: it opens the program in an Xorg of its own, and Switchres creates the requested mode within the ranges of the monitor chosen in Video Setup.
+
+Three ways, from the one-off to the permanent:
+
+1. **On the spot, in the console** (Setup > Exit to shell, on the cabinet):
+
+   ```sh
+   /opt/fliperos/bin/fliperos-x11-run --mode 640x240@60 program [arguments]
+   ```
+
+   Any mode works (`WIDTHxHEIGHT@HZ`, e.g. `320x240@60`, `640x240@59.94`, `384x224@59.64`).
+
+2. **In the desktop menu**: a shortcut in `~/.local/share/applications/my-program.desktop`. `fliperos-launch --mode` leaves the desktop, opens the program in the requested mode and returns to the desktop when it closes (with the same confirmation as the menu's emulators):
+
+   ```ini
+   [Desktop Entry]
+   Type=Application
+   Name=My program
+   Exec=/opt/fliperos/bin/fliperos-launch --mode 640x240@60 /path/to/the/program
+   Categories=Game;
+   ```
+
+3. **Always for that program**: a line in `/etc/fliperos/emulator-modes.conf` (command name, mode at 15 kHz, mode on the other monitors). From then on any path that goes through `fliperos-x11-run` — the menu, a frontend, the console without `--mode` — uses that mode:
+
+   ```
+   myemulator          640x240@60      640x480@60
+   ```
+
+   A new image doesn't overwrite this file once it has been edited.
+
+In a frontend (Attract-Mode and others), the emulator command becomes `/opt/fliperos/bin/fliperos-x11-run --mode 640x240@60 emulator "[romfilename]"` (or without `--mode`, with the line in the table).
+
+**The image has to be stretched.** 640x240 is an 8:3 screen in pixels, which the tube shows as 4:3. A program that "keeps the 4:3 aspect ratio" would use only half the width (320 columns) and come out squashed in the middle. Set the program to **stretch/fill the screen** — for Flycast (`rend.ScreenStretching = 200`, via `-config`), Dolphin (`AspectRatio = 3`, via `-C`) and PCSX2 (`AspectRatio = Stretch`, in `PCSX2.ini` from the second launch on) `fliperos-x11-run` already does it by itself. The math, for another mode: stretch by `300 × width ÷ (4 × height)` percent.
+
+**GroovyMAME and RetroArch** don't go through here: they switch modes by themselves on every game. In GroovyMAME, `interlace 0` in `/etc/fliperos/mame/mame.ini` makes Switchres never choose an interlaced mode (480-line games come out at 240p). In RetroArch, the **MAME 2010** core already ships that way: CRT SwitchRes reads a `switchres.ini` of the core only, on top of `/etc/switchres.ini`, in `~/.config/retroarch/config/MAME 2010/MAME 2010.switchres.ini` (from `config/retroarch-switchres`), with `interlace 0` — a 640x480 game (Namco System 12) opens at 640x240 progressive, with the image shrunk vertically, instead of 480i. The same file named after another core (`config/<Core>/<Core>.switchres.ini`) does the same for it; to go back to 480i, `interlace 1` and without the `# FliperOS` line at the top (updates only rewrite the file that has it).
+
+## Laserdisc (Hypseus Singe)
+
+Laserdisc games live in `/opt/fliperos/roms/hypseus`, which is `~/.hypseus` (over the network: `\\fliperos\FliperOS\roms\hypseus`): the ROM in `roms/<game>.zip`, the laserdisc video in `vldp/<game>/` with the framefile `<game>.txt`, and Singe games in `singe/<game>/`. To open on the CRT (640x240 at 15 kHz, full screen):
+
+```sh
+/opt/fliperos/bin/fliperos-x11-run hypseus lair     # Dragon's Lair
+/opt/fliperos/bin/fliperos-x11-run singe timegal    # a Singe game
+```
+
+in the console or as a frontend command. Hypseus has no menu of its own (it needs the game name), which is why it has no shortcut in Games. It is Hypseus Singe v2.12.1 (the 3.x series requires SDL3, which Ubuntu 24.04 doesn't have), installed as the project's README says (`hypseus`/`singe` are its scripts, `hypseus.bin` the program).
+
+## OpenBOR
+
+The games (`.pak`) go in `/opt/fliperos/roms/openbor/Paks` (over the network: `\\fliperos\FliperOS\roms\openbor\Paks`). The **Games > OpenBOR** menu opens OpenBOR's own menu, which lists the paks.
+
+## Model 2 (Wine)
+
+Model 2 Emulator (ElSemi) is closed-source freeware, Windows-only, with no clear permission to redistribute — that's why it **isn't in the image**. Neither is Wine (on its own it went over 1 GB and the ISO wouldn't fit in a single GitHub file): install it through **Setup > Extras > Wine**, which needs the network once. On a cabinet that never goes online, Model 2 doesn't run. Copy the files of `m2emulator` 1.1a (`emulator_multicpu.exe` and the rest) to `/opt/fliperos/model2` and the ROMs to `/opt/fliperos/model2/roms` (over the network: `\\fliperos\FliperOS\model2`). The **Games > Model 2** menu opens the emulator in Wine (`fliperos-model2`, with a Wine prefix of its own in `~/.local/share/fliperos/wine-model2`); without Wine or without the emulator copied, it shows what is missing. Full screen and resolution are set in the emulator's own `EMULATOR.INI`.
+
+## Steam and GOG
+
+Neither ships in the image (they would take over 500 MB, and are useless without network): **Setup > Extras** installs them. **Steam**: Ubuntu's `steam-installer`; on first launch Valve downloads the client (hundreds of MB, needs network). **GOG**: there is no official Linux client; the Setup installs **Heroic Games Launcher** (official `.deb`, with a pinned hash) (GOG, Epic and Amazon; the same as on the Steam Deck), which runs Windows games with the Wine/Proton it downloads itself. Both open **inside the LXDE desktop** (they are X programs), from the **Games** menu. Their UIs were made for larger screens: on a 15 kHz CRT at 640x480 they are cramped — on a 31 kHz monitor or an LCD they are much better.
