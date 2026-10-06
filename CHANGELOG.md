@@ -72,3 +72,4 @@ Primeira ISO publicada. As mudanças são em relação à 0.6, que não saiu daq
 - `tools/cabinet-push.sh`: atualiza um gabinete pela rede, sem ISO nova
 - Documentação na wiki (`docs/wiki`, `tools/wiki-publish.sh`) e num HTML só (`tools/render-docs.py`)
 - `tools/release-publish.sh`: publica a ISO em Releases com este changelog
+- Release automático: o push de uma tag de versão gera a ISO no GitHub Actions e a publica (`.github/workflows/release.yml`)

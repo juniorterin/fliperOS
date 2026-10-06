@@ -32,16 +32,25 @@ docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh
 Toda ISO nova vai para os [Releases](https://github.com/juniorterin/fliperOS/releases) do GitHub, com o changelog da versão, como os releases do GroovyArcade ([substring/os](https://github.com/substring/os/releases)): o texto por área (sistema, pacotes, `fliperos-setup`, ferramentas) e, junto da ISO, a lista de pacotes.
 
 1. Escreva em `CHANGELOG.md` a seção `## VERSÃO` com o que mudou desde o release anterior (`git log VERSÃO_ANTERIOR..HEAD` lista os commits). Uma ISO nova depois de um release pede versão nova (`FLIPEROS_VERSION` no `fliperos-mkiso.sh`).
-2. Faça o commit e o push: o release é marcado no commit de que a ISO saiu.
-3. Publique, no container da auditoria:
+2. Faça o commit e o push.
+3. Marque a versão e envie a tag (o nome é a versão, sem "v"):
 
    ```powershell
-   docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-   docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-   docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.7.iso
+   git tag 0.7
+   git push origin 0.7
    ```
 
-   O `gh auth login` é uma vez só: o login fica no volume `fliperos-gh`.
+O push da tag dispara o workflow **Release** do GitHub Actions (`.github/workflows/release.yml`). Ele confere se a tag é o `FLIPEROS_VERSION` e se o `CHANGELOG.md` tem a seção dela, monta o repositório dos frontends (`Dockerfile.packages`) e gera a ISO no mesmo `Dockerfile.fliperos` do build local. Depois publica pelo `tools/release-publish.sh`, com o token do próprio workflow. Os `.deb` do kernel e dos frontends ficam no cache do Actions, então só recompilam quando muda a versão, um patch ou uma receita. Sem cache, o build leva umas 3 horas num runner de 4 núcleos (o limite é 6 h). Se ele falhar, o `fliperos-mkiso.log` fica como artifact do workflow. Rodado à mão (*Actions > Release > Run workflow*), ele gera a ISO da versão atual e a deixa como artifact por 3 dias, sem publicar.
+
+Para publicar uma ISO gerada aqui, no container da auditoria:
+
+```powershell
+docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
+docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
+docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.7.iso
+```
+
+O `gh auth login` é uma vez só: o login fica no volume `fliperos-gh`.
 
 O `tools/release-publish.sh` só publica o que pode ir a público:
 
