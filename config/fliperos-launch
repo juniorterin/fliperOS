@@ -18,6 +18,52 @@ usage() {
 }
 
 x11=/opt/fliperos/bin/fliperos-x11-run
+model3=${FLIPEROS_MODEL3_DIR:-$HOME/roms/model3}
+games_xml=${FLIPEROS_SUPERMODEL_GAMES:-/usr/local/share/supermodel/Config/Games.xml}
+
+# supermodel_games: "nome<TAB>arquivo" dos .zip de ~/roms/model3, pelo nome
+# do Games.xml do Supermodel (o .zip que ele nao conhece fica pelo nome).
+supermodel_games() {
+  python3 - "$model3" "$games_xml" << 'PY'
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+folder, games_xml = sys.argv[1:3]
+names = {}
+try:
+    for game in ET.parse(games_xml).getroot().iter('game'):
+        identity = game.find('identity')
+        if identity is None:
+            continue
+        title, version = identity.findtext('title', ''), identity.findtext('version', '')
+        names[game.get('name')] = '%s (%s)' % (title, version) if version else title
+except (OSError, ET.ParseError):
+    pass
+try:
+    files = [f for f in os.listdir(folder) if f.lower().endswith('.zip')]
+except OSError:
+    files = []
+rows = sorted(((names.get(f[:-4], f[:-4]), os.path.join(folder, f)) for f in files), key=lambda r: r[0].lower())
+for label, path in rows:
+    print('%s\t%s' % (label, path))
+PY
+}
+
+# --pick-supermodel ARQUIVO: roda no terminal; a lista dos jogos, e o
+# escolhido (o caminho do .zip) vai para ARQUIVO.
+if [[ ${1:-} == --pick-supermodel ]]; then
+  games=$(supermodel_games)
+  if [[ -z $games ]]; then
+    printf 'No Model 3 games in %s.\nCopy the MAME .zip files there.\n\nPress Enter to close.' "$model3"
+    read -r _
+    exit 0
+  fi
+  gum choose --header "Supermodel - choose a game (Esc cancels)" --height "$(($(tput lines 2> /dev/null || echo 24) - 2))" \
+    --label-delimiter $'\t' <<< "$games" > "$2" || true
+  exit 0
+fi
+
 case ${1:-} in
   retroarch) label=RetroArch run=(/opt/fliperos/bin/fliperos-kms-run retroarch) ;;
   groovymame) label=GroovyMAME run=("$x11" groovymame) ;;
@@ -25,12 +71,16 @@ case ${1:-} in
   pcsx2) label=PCSX2 run=("$x11" pcsx2) ;;
   supermodel) label=Supermodel run=("$x11" supermodel)
     # Sem tela propria, sem jogo o Supermodel fecha na hora: pelo menu, o
-    # jogo (o .zip do MAME) se escolhe aqui.
+    # jogo (o .zip do MAME) se escolhe aqui, numa lista no terminal.
     if [[ $# -ge 2 ]]; then
       run+=("${@:2}")
     else
-      rom=$(zenity --file-selection --title="Supermodel - choose a Model 3 game" \
-        --filename="$HOME/roms/model3/" --file-filter="Model 3 (zip) | *.zip" 2> /dev/null) || exit 0
+      pick=$(mktemp)
+      ${FLIPEROS_TERMINAL:-alacritty} -T Supermodel -e bash "$(readlink -f -- "${BASH_SOURCE[0]}")" \
+        --pick-supermodel "$pick" || true
+      rom=$(< "$pick")
+      rm -f "$pick"
+      [[ -n $rom ]] || exit 0
       run+=("$rom")
     fi
     ;;

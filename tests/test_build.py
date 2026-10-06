@@ -3038,13 +3038,52 @@ class EmulatorModeTests(unittest.TestCase):
         # Com ~/.config/supermodel ele procura ali o Games.xml; o build o deixa
         # em /usr/local/share/supermodel ("No complete Model 3 games found").
         x11 = (ROOT / 'config/fliperos-x11-run').read_text()
-        self.assertIn('share=/usr/local/share/supermodel', x11)
+        self.assertIn('share=${FLIPEROS_SUPERMODEL_SHARE:-/usr/local/share/supermodel}', x11)
+        # PowerPC a 75 MHz nos jogos de 100 e 166 MHz; os de 66 ficam.
+        with tempfile.TemporaryDirectory() as share:
+            (Path(share) / 'Config').mkdir()
+            (Path(share) / 'Config/Games.xml').write_text(
+                '<games>\n<game name="fvipers2">\n<hardware>\n<stepping>2.0</stepping>\n</hardware>\n</game>\n'
+                '<game name="fvipers2o" parent="fvipers2">\n<hardware>\n<stepping>1.5</stepping>\n</hardware>\n'
+                '</game>\n<game name="vf3">\n<hardware>\n<stepping>1.0</stepping>\n</hardware>\n</game>\n</games>\n')
+            extra = {'FLIPEROS_SUPERMODEL_SHARE': share}
+            for rom, ppc in (('/r/fvipers2.zip', True), ('/r/fvipers2o.zip', True), ('/r/vf3.zip', False),
+                             ('/r/outro.zip', False)):
+                out = self.run_x11(['supermodel', rom], extra=extra).stdout
+                self.assertEqual('-stretch -ppc-frequency=75 %s' % rom in out, ppc, out)
+            out = self.run_x11(['supermodel', '/r/fvipers2.zip'],
+                               extra=dict(extra, FLIPEROS_SUPERMODEL_PPC='0')).stdout
+            self.assertIn('-stretch /r/fvipers2.zip', out)
         self.assertIn('for f in Config/Games.xml Config/Music.xml; do', x11)
         self.assertIn('ln -s "$share/Assets" "$HOME/.local/share/supermodel/Assets"', x11)
-        # Pelo menu do desktop, sem jogo, o .zip se escolhe antes.
+        # Pelo menu do desktop, sem jogo, o .zip se escolhe antes, numa lista
+        # no terminal com o nome de cada jogo do Games.xml.
         launch = (ROOT / 'config/fliperos-launch').read_text()
-        self.assertIn('zenity --file-selection', launch)
-        self.assertIn('librsvg2-common gxmessage zenity', MKISO)
+        self.assertIn('--pick-supermodel "$pick"', launch)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            roms, bin_dir = tmp / 'model3', tmp / 'bin'
+            roms.mkdir()
+            bin_dir.mkdir()
+            for f in ('vf3.zip', 'scud.zip', 'zzz.zip', '_info.txt'):
+                (roms / f).write_text('x')
+            (tmp / 'Games.xml').write_text(
+                '<games><game name="vf3"><identity><title>Virtua Fighter 3</title>'
+                '<version>Japan, Revision D</version></identity></game>'
+                '<game name="scud"><identity><title>Scud Race</title></identity></game></games>')
+            # O gum escolhe o primeiro e devolve o valor (depois do TAB).
+            gum = bin_dir / 'gum'
+            gum.write_text('#!/bin/sh\ntee "$GUM_IN" | head -1 | cut -f2\n')
+            gum.chmod(0o755)
+            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), FLIPEROS_MODEL3_DIR=str(roms),
+                       FLIPEROS_SUPERMODEL_GAMES=str(tmp / 'Games.xml'), GUM_IN=str(tmp / 'list'))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-launch'), '--pick-supermodel', str(tmp / 'out')],
+                           env=env, check=True, capture_output=True, timeout=30)
+            self.assertEqual((tmp / 'list').read_text().splitlines(),
+                             ['Scud Race\t%s/scud.zip' % roms, 'Virtua Fighter 3 (Japan, Revision D)\t%s/vf3.zip' % roms,
+                              'zzz\t%s/zzz.zip' % roms])
+            self.assertEqual((tmp / 'out').read_text().strip(), '%s/scud.zip' % roms)
+        self.assertNotIn('zenity', MKISO)
 
     def test_pcsx2_ini_is_adjusted_after_first_run(self):
         with tempfile.TemporaryDirectory() as tmp:

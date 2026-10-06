@@ -280,8 +280,7 @@ apt-get update -qq
 # triggerhappy le as teclas de volume em qualquer tela (fliperos-rootfs.sh);
 # as engines murrine e pixbuf sao do GTK 2 do tema Dracula, o librsvg2
 # desenha os icones SVG do menu e o gxmessage (GTK 3) e a confirmacao do
-# fliperos-launch antes de fechar o desktop; o zenity, a escolha do jogo do
-# Supermodel (que nao tem tela propria). usbutils (lsusb) mostra o
+# fliperos-launch antes de fechar o desktop. usbutils (lsusb) mostra o
 # vendor:produto dos controles em Setup > Quirks. systemd-timesyncd acerta o
 # relogio pela rede: no gabinete o relogio da BIOS estava 2 meses atrasado e
 # o apt recusava todo repositorio ("not valid yet"). A App Store do LXDE e o
@@ -311,7 +310,7 @@ apt-get install -y --no-install-recommends \
   plymouth plymouth-label fonts-dejavu-core \
   lxde-core lxsession openbox-lxde-session lxpolkit lxappearance lxappearance-obconf lxde-icon-theme \
   lxhotkey-gtk lxinput lxrandr lxsession-edit galculator gpicview mousepad xarchiver alacritty \
-  gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage zenity \
+  gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
   htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
   espeak-ng triggerhappy zsh
 

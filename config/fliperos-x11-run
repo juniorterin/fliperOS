@@ -117,7 +117,7 @@ case $name in
     # o Games.xml e o Music.xml, e os Assets em ~/.local/share/supermodel; o
     # build os deixa em /usr/local/share/supermodel. Sem o Games.xml nenhuma
     # ROM e reconhecida ("No complete Model 3 games found").
-    share=/usr/local/share/supermodel
+    share=${FLIPEROS_SUPERMODEL_SHARE:-/usr/local/share/supermodel}
     mkdir -p "$HOME/.config/supermodel/Config" "$HOME/.local/share/supermodel"
     for f in Config/Games.xml Config/Music.xml; do
       [[ -e $HOME/.config/supermodel/$f || ! -e $share/$f ]] || ln -s "$share/$f" "$HOME/.config/supermodel/$f"
@@ -126,7 +126,19 @@ case $name in
       ln -s "$share/Assets" "$HOME/.local/share/supermodel/Assets"
     # Sem -res ele abre em 496x384 (o nativo do Model 3), que no 15 kHz so
     # existe entrelacado; aqui ocupa o modo da tabela, esticado para o 4:3.
-    set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${@:2}"
+    # O PowerPC emulado e o gargalo num processador fraco (Fighting Vipers 2
+    # no i3 540: 35 quadros/s a 166 MHz, 59 a 75 MHz): nos jogos de stepping
+    # 1.5 e 2.x (100 e 166 MHz) ele roda a FLIPEROS_SUPERMODEL_PPC; os de 1.0
+    # ja sao 66 MHz.
+    ppc=()
+    game=$(basename -- "${*: -1}" .zip)
+    step=$(awk -v g="<game name=\"$game\"" 'index($0, g) { found = 1 }
+      found && /<stepping>/ { gsub(/.*<stepping>|<\/stepping>.*/, ""); print; exit }' \
+      "$share/Config/Games.xml" 2> /dev/null) || step=""
+    if [[ $step == 1.5 || $step == 2.* ]] && [[ ${FLIPEROS_SUPERMODEL_PPC:-75} != 0 ]]; then
+      ppc=(-ppc-frequency="${FLIPEROS_SUPERMODEL_PPC:-75}")
+    fi
+    set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${ppc[@]}" "${@:2}"
     ;;
   fliperos-model2)
     # O Model 2 Emulator le a tela cheia do proprio EMULATOR.INI.
