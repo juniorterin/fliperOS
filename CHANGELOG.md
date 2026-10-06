@@ -33,8 +33,9 @@ Primeira ISO publicada. As mudanças são em relação à 0.6, que não saiu daq
 - PCSX2 pelo AppImage oficial; Supermodel pelo Makefile do projeto; Model 2 no Wine
 - Flycast: direcional do painel no D-pad, interpolação linear desligada, transparência por pixel
 - PCSX2: sem o assistente, em Big Picture, vsync, sem o ponteiro do mouse, BIOS em `~/bios/ps2` e jogos em `~/roms/ps2`
-- Supermodel: abre pelo menu (escolha do jogo), acha a lista de jogos, botões do Button mapping; pasta `model3` nos frontends
-- OpenBOR em tela cheia de fábrica
+- PCSX2: thread de OpenGL do Mesa ligada; direcional do painel também no analógico esquerdo
+- Supermodel: abre pelo menu (lista de jogos num terminal), acha a lista de jogos, botões do Button mapping; pasta `model3` nos frontends
+- Supermodel: CPU emulada a 75 MHz nos jogos Step 1.5 e 2.x, que ficavam lentos (Virtua Fighter 3tb de 35 para 59 fps)- OpenBOR em tela cheia de fábrica
 - Steam e Heroic (GOG, Epic, Amazon) no desktop
 - Frontends: Attract-Mode Plus, EmulationStation (ES-DE) e Pegasus em `.deb`, num repositório APT dentro da imagem, com os jogos já configurados
 - Tema FliperOS 240p para o EmulationStation e o Pegasus
