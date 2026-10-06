@@ -45,6 +45,7 @@ calibrate = load_script('calibrate', 'config/fliperos-calibrate')
 controllers = load_script('controllers', 'config/fliperos-controllers')
 MKISO = (ROOT / 'fliperos-mkiso.sh').read_text()
 ROOTFS = (ROOT / 'fliperos-rootfs.sh').read_text()
+EXTRAS = (ROOT / 'config/fliperos-extras').read_text()
 
 
 def boot_entries(text=None):
@@ -737,9 +738,8 @@ class DesktopTerminalTests(unittest.TestCase):
     def test_steam_does_not_bring_xterm_back(self):
         # O steam-libs:i386 recomenda "xterm | x-terminal-emulator", e o
         # Alacritty (amd64) nao vale para um pacote i386: o xterm voltou na
-        # ISO e virou o x-terminal-emulator.
-        steam = MKISO.split('install_steam_chroot() {')[1].split('\n}\n')[0]
-        self.assertIn('apt-get install -y steam-installer xterm- xterm:i386-', steam)
+        # ISO e virou o x-terminal-emulator. O Steam vem pelo Setup > Extras.
+        self.assertIn('STEAM_PACKAGES="steam-installer xterm- xterm:i386-"', EXTRAS)
 
     def test_dracula_palette_of_the_setup(self):
         import tomllib
@@ -2471,9 +2471,13 @@ class FightcadeTests(unittest.TestCase):
             self.assertIn(pkg, pkgs)
             if pkg != 'libgbm1':
                 self.assertIn(pkg, (ROOT / 'tools/cabinet-update.sh').read_text())
-        for text in (MKISO, (ROOT / 'tools/cabinet-update.sh').read_text()):
+        for text in (EXTRAS, (ROOT / 'tools/cabinet-update.sh').read_text()):
             self.assertIn('libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386', text)
-        self.assertIn('wine wine64 wine32:i386 libgl1:i386', MKISO)
+        self.assertIn('wine wine64 wine32:i386 libgl1:i386', EXTRAS)
+        # O Wine nao vem na imagem: o download do Fightcade o instala antes.
+        helper = (ROOT / 'config/fliperos-fightcade').read_text()
+        fetch = helper.split('\nfetch() {')[1].split('\n}\n')[0]
+        self.assertLess(fetch.index('"$extras" install wine'), fetch.index('exec runuser'))
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for d in ('home/fliperos', 'etc/fliperos', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
@@ -2821,10 +2825,11 @@ class EmulatorMenuTests(unittest.TestCase):
     # So os de jogos (Game;): o Screen Resolution fica em Preferencias.
     APPS = sorted(p for p in (ROOT / 'config/applications').glob('fliperos-*.desktop')
                   if 'Categories=Game;' in p.read_text())
-    # O que mostra o atalho (TryExec): o binario do emulador; o Model 2 so
-    # precisa do Wine (o emulador o usuario copia), e o Fightcade aparece
-    # depois de baixado pelo Setup.
-    TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/bin/wine',
+    # O que mostra o atalho (TryExec): o binario do emulador; o do Model 2 e
+    # o lancador, que avisa quando falta o Wine (Setup > Extras) ou o
+    # emulador (o usuario copia), e o Fightcade aparece depois de baixado
+    # pelo Setup.
+    TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/local/bin/fliperos-model2',
                'fightcade': '/opt/fliperos/fightcade/fightcade'}
 
     def entry(self, path):
@@ -3107,23 +3112,74 @@ class EmulatorModeTests(unittest.TestCase):
 
 
 class NewEmulatorBuildTests(unittest.TestCase):
-    """Hypseus, OpenBOR, Dolphin, Wine (Model 2), Steam e Heroic (GOG)."""
+    """Hypseus, OpenBOR, Dolphin; Wine (Model 2), Steam e Heroic (GOG) sob demanda."""
 
     def test_pinned_versions(self):
         self.assertRegex(MKISO, r'HYPSEUS_TAG="v2\.[0-9.]+"')   # a serie 3 exige SDL3
         self.assertRegex(MKISO, r'OPENBOR_COMMIT="[0-9a-f]{40}"')
         self.assertRegex(MKISO, r'DOLPHIN_TAG="[0-9]{4}[a-z]?"')
-        self.assertRegex(MKISO, r'HEROIC_SHA256="[0-9a-f]{64}"')
+        self.assertRegex(EXTRAS, r'HEROIC_SHA256="[0-9a-f]{64}"')
 
     def test_every_one_can_be_skipped_and_runs_in_order(self):
         main = MKISO.split('# ── Main')[1]
         for flag, step in (('--skip-hypseus', 'build_hypseus_chroot'), ('--skip-openbor', 'build_openbor_chroot'),
-                           ('--skip-dolphin', 'build_dolphin_chroot'), ('--skip-wine', 'install_wine_chroot'),
-                           ('--skip-steam', 'install_steam_chroot'), ('--skip-heroic', 'install_heroic_chroot')):
+                           ('--skip-dolphin', 'build_dolphin_chroot')):
             self.assertIn(flag + ')', MKISO)
             self.assertIn('\n' + step + '\n', main)
         self.assertLess(main.index('build_supermodel_chroot'), main.index('build_hypseus_chroot'))
-        self.assertLess(main.index('install_heroic_chroot'), main.index('create_squashfs'))
+        self.assertLess(main.index('prepare_extras_chroot'), main.index('create_squashfs'))
+        # As opcoes antigas ainda sao aceitas (scripts de quem ja gera a ISO).
+        self.assertIn('--skip-wine|--skip-steam|--skip-heroic) shift ;;', MKISO)
+
+    def test_extras_are_not_in_the_image(self):
+        # Wine, Steam e Heroic passavam de 1,5 GB: o Setup > Extras instala.
+        for gone in ('apt-get install -y steam-installer', 'wine32:i386', 'heroic.deb'):
+            self.assertNotIn(gone, MKISO)
+        prep = MKISO.split('prepare_extras_chroot() {')[1].split('\n}\n')[0]
+        self.assertIn('dpkg --add-architecture i386', prep)
+        self.assertIn('/opt/fliperos/model2/roms', prep)
+        self.assertIn('install -Dm755 "$src/config/fliperos-extras" "$root/opt/fliperos/bin/fliperos-extras"', ROOTFS)
+
+    def test_extras_helper(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            wine = Path(tmp) / 'wine'
+            wine.write_text('#!/bin/sh\n')
+            wine.chmod(0o755)
+            env = dict(os.environ, FLIPEROS_WINE=str(wine), FLIPEROS_STEAM=tmp + '/none',
+                       FLIPEROS_HEROIC=tmp + '/none')
+            run = lambda *a: subprocess.run(['bash', str(ROOT / 'config/fliperos-extras'), *a], env=env,
+                                            capture_output=True, text=True)
+            rows = [line.split('|') for line in run('list').stdout.splitlines()]
+            self.assertEqual([(r[0], r[1]) for r in rows], [('wine', '1'), ('steam', '0'), ('heroic', '0')])
+            self.assertEqual(run('installed', 'wine').returncode, 0)
+            self.assertNotEqual(run('installed', 'steam').returncode, 0)
+            if os.geteuid() != 0:
+                out = run('install', 'steam', '--progress')
+                self.assertNotEqual(out.returncode, 0)
+                self.assertIn('@fail Steam|', out.stdout)
+            out = run('install', 'nada', '--progress')
+            self.assertNotEqual(out.returncode, 0)
+            self.assertIn('unknown extra', out.stdout)
+
+    def test_image_is_slimmed_before_the_squashfs(self):
+        main = MKISO.split('# ── Main')[1]
+        self.assertLess(main.index('prepare_extras_chroot'), main.index('slim_rootfs_chroot'))
+        self.assertLess(main.index('slim_rootfs_chroot'), main.index('unmount_chroot\ncreate_squashfs'))
+        slim = MKISO.split('slim_rootfs_chroot() {')[1].split('# ── squashfs')[0]
+        # Sem autoremove: os plugins do Qt e o Vulkan (dlopen) nao aparecem no ldd.
+        self.assertNotIn('autoremove', slim)
+        # Os drivers DKMS recompilam com o build-essential e os headers do kernel.
+        self.assertIn('keep="build-essential dkms', slim)
+        self.assertIn("'linux-headers-*'", slim)
+        self.assertLess(slim.index('apt-mark manual'), slim.index('apt-get purge -y'))
+        self.assertIn('Bibliotecas que sumiram com o purge', slim)
+        self.assertIn('path-exclude=/usr/lib/firmware/nvidia/*', slim)
+        self.assertNotIn('amdgpu', slim.split('DPKGCFG')[1])
+        self.assertIn('update-initramfs -u -k all', slim)
+        self.assertIn('apt-get clean', slim)
+        self.assertIn('rm -rf /var/lib/apt/lists/*', slim)
+        squash = MKISO.split('create_squashfs() {')[1].split('\n}\n')[0]
+        self.assertIn('-comp xz -Xbcj x86', squash)
 
     def test_openbor_starts_fullscreen(self):
         # Em janela ele abria em 2x de tamanho fixo (640x480 num modo de
@@ -3134,9 +3190,9 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertLess(body.index("grep -q 'savedata.fullscreen = 1;'"), body.index('cmake -S . -B build'))
 
     def test_steam_installs_without_questions(self):
-        body = MKISO.split('install_steam_chroot() {')[1].split('\n}\n')[0]
-        self.assertIn('DEBIAN_FRONTEND=noninteractive apt-get install -y steam-installer', body)
-        self.assertLess(body.index('enable_i386_chroot'), body.index('steam-installer'))
+        body = EXTRAS.split('apt_install() {')[1].split('\n}\n')[0]
+        self.assertIn('export DEBIAN_FRONTEND=noninteractive', body)
+        self.assertLess(body.index('dpkg --add-architecture i386'), body.index('install "$@"'))
 
     def test_model2_emulator_is_not_redistributed(self):
         # Freeware de codigo fechado, sem permissao clara: o usuario copia.

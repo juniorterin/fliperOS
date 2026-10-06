@@ -68,8 +68,9 @@ packages=(usbutils systemd-timesyncd gnome-software gnome-software-plugin-flatpa
   falkon transmission-gtk
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
-# O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine.
-dpkg --print-foreign-architectures | grep -qx i386 && packages+=(libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386)
+# O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
+# Wine em si nao vem mais na imagem (Setup > Extras, config/fliperos-extras).
+dpkg -s wine32:i386 > /dev/null 2>&1 && packages+=(libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386)
 # So mexe no apt se falta algum pacote ou se o repositorio local mudou: o
 # apt-get segura a trava dos pacotes, e quem estivesse instalando um
 # frontend pelo Setup naquela hora recebia "Impossivel criar acesso

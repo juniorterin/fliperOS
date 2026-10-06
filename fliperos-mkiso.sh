@@ -6,7 +6,6 @@
 #       [--skip-switchres] [--skip-groovymame] [--skip-retroarch]
 #       [--skip-flycast] [--skip-pcsx2] [--skip-supermodel]
 #       [--skip-dolphin] [--skip-hypseus] [--skip-openbor]
-#       [--skip-wine] [--skip-steam] [--skip-heroic]
 #       [--skip-skyscraper] [--skip-input-drivers] [--skip-wheel-drivers]
 #       [--kernel-cache DIR] [--repo DIR] [--splash fliperos|evangelion|none]
 #       [--wifi-ssid NOME --wifi-psk SENHA]
@@ -40,9 +39,6 @@ SKIP_SUPERMODEL=false
 SKIP_DOLPHIN=false
 SKIP_HYPSEUS=false
 SKIP_OPENBOR=false
-SKIP_WINE=false
-SKIP_STEAM=false
-SKIP_HEROIC=false
 SKIP_SKYSCRAPER=false
 # Kernel 15 kHz (fliperos-kernel.sh): compilar leva a maior parte do build,
 # entao os .deb ficam num cache chaveado por versao e patches. Com o
@@ -101,9 +97,6 @@ HYPSEUS_TAG="v2.12.1"
 OPENBOR_COMMIT="787b6770409935137579715febf80cf7a529b748"
 # Dolphin (GameCube/Wii): a versao estavel.
 DOLPHIN_TAG="2609"
-# Heroic Games Launcher (GOG, Epic e Amazon): o .deb oficial.
-HEROIC_VERSION="2.22.3"
-HEROIC_SHA256="f89eed7e0eb900fbe3051edfedbe7532db14328241cbf8c1fb766462dfc0b849"
 PCSX2_SHA256="0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea"
 # GroovyMAME: o release oficial para Linux (MAME 0.289, Switchres 2.22f).
 GROOVYMAME_TAG="gm0289sr222f"
@@ -114,7 +107,7 @@ GROOVYMAME_COMMIT="953db38f4aaab1d75faa4ac79e1b45686214f987"
 
 # ── Args ─────────────────────────────────────────────────────
 usage() {
-  sed -n '5,12p' "$0" | sed 's/^# *//'
+  sed -n '5,11p' "$0" | sed 's/^# *//'
 }
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -130,9 +123,8 @@ while [[ $# -gt 0 ]]; do
     --skip-dolphin)    SKIP_DOLPHIN=true; shift ;;
     --skip-hypseus)    SKIP_HYPSEUS=true; shift ;;
     --skip-openbor)    SKIP_OPENBOR=true; shift ;;
-    --skip-wine)       SKIP_WINE=true; shift ;;
-    --skip-steam)      SKIP_STEAM=true; shift ;;
-    --skip-heroic)     SKIP_HEROIC=true; shift ;;
+    # Compatibilidade: Wine, Steam e Heroic nao vem mais na imagem (Setup > Extras).
+    --skip-wine|--skip-steam|--skip-heroic) shift ;;
     --skip-skyscraper) SKIP_SKYSCRAPER=true; shift ;;
     --skip-input-drivers) SKIP_INPUT_DRIVERS=true; shift ;;
     --skip-wheel-drivers) WITH_WHEEL_DRIVERS=false; shift ;;
@@ -452,17 +444,13 @@ install_fliperos_files() {
 # Baixados antes do debootstrap, como o Limine: rede ruim aparece em
 # segundos, nao depois de uma hora de build.
 fetch_debs() {
-  step "Gum, AntiMicroX e Heroic"
+  step "Gum e AntiMicroX"
   DEBS_DIR="$WORK_DIR/debs"
   mkdir -p "$DEBS_DIR"
   fetch_deb "https://github.com/charmbracelet/gum/releases/download/v${GUM_VERSION}/gum_${GUM_VERSION}_amd64.deb" \
     "$GUM_SHA256" gum.deb
   fetch_deb "https://github.com/AntiMicroX/antimicrox/releases/download/${ANTIMICROX_VERSION}/antimicrox-${ANTIMICROX_VERSION}-ubuntu-24.04-x86_64.deb" \
     "$ANTIMICROX_SHA256" antimicrox.deb
-  if ! $SKIP_HEROIC; then
-    fetch_deb "https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/download/v${HEROIC_VERSION}/Heroic-${HEROIC_VERSION}-linux-amd64.deb" \
-      "$HEROIC_SHA256" heroic.deb
-  fi
 }
 
 # build_gum compila o gum com patches/gum no container do build (binario
@@ -1309,70 +1297,120 @@ DOLSCRIPT
     || err "Dolphin falhou; use --skip-dolphin para ISO sem ele"
 }
 
-# ── Arquitetura i386 (Wine de 32 bits e Steam) ────────────────
-enable_i386_chroot() {
-  chroot "$CHROOT_DIR" dpkg --print-foreign-architectures | grep -qx i386 && return 0
-  chroot "$CHROOT_DIR" dpkg --add-architecture i386
-  chroot "$CHROOT_DIR" apt-get update -qq >> "$LOG_FILE" 2>&1 || err "apt-get update (i386) falhou"
-}
-
-# ── Wine (Model 2 Emulator e jogos do Windows) ────────────────
-# O Model 2 Emulator nao vem na imagem (freeware de codigo fechado, sem
-# permissao clara de redistribuicao): o fliperos-model2 o procura em
-# /opt/fliperos/model2, onde o usuario o copia. Os emuladores do Fightcade 2
-# (FBNeo, SNES9x) tambem sao de 32 bits. O OpenGL de 32 bits vai junto: o
-# Direct3D do Wine desenha por ele, e sem ele o FBNeo do Fightcade para em
-# "Couldn't initialise DirectX9 Alternate video output".
-install_wine_chroot() {
-  if $SKIP_WINE; then
-    warn "Wine pulado (--skip-wine) — sem Model 2 e sem os emuladores do Fightcade"
-    return
-  fi
-  step "Wine (Model 2 Emulator, Fightcade e jogos do Windows)"
-  enable_i386_chroot
-  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    wine wine64 wine32:i386 libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386' >> "$LOG_FILE" 2>&1 ||
-    err "Instalacao do Wine falhou"
+# ── Wine, Steam e Heroic: sob demanda (Setup > Extras) ────────
+# Nao vem na imagem (passavam de 1,5 GB, e a ISO tem de caber num arquivo
+# do GitHub): o config/fliperos-extras os instala pela rede, com os mesmos
+# pacotes. Aqui fica o que eles pedem e nao baixa nada: a arquitetura i386
+# (Wine de 32 bits e Steam) e a pasta do Model 2 Emulator, que o usuario
+# copia (freeware de codigo fechado, sem permissao clara de redistribuicao).
+prepare_extras_chroot() {
+  step "Wine, Steam e Heroic: Setup > Extras"
+  chroot "$CHROOT_DIR" dpkg --print-foreign-architectures | grep -qx i386 ||
+    chroot "$CHROOT_DIR" dpkg --add-architecture i386 || err "dpkg --add-architecture i386 falhou"
   mkdir -p "$CHROOT_DIR/opt/fliperos/model2/roms"
   chroot "$CHROOT_DIR" chown -R fliperos:fliperos /opt/fliperos/model2
-  ok "Wine $(chroot "$CHROOT_DIR" wine --version 2> /dev/null | head -1)"
+  ok "i386 habilitado e /opt/fliperos/model2; Wine, Steam e Heroic pelo Setup > Extras"
 }
 
-# ── Steam ─────────────────────────────────────────────────────
-# O steam-installer do Ubuntu (multiverse): o cliente de verdade e baixado
-# pela Valve na primeira abertura, com rede. Roda dentro do desktop (X).
-install_steam_chroot() {
-  if $SKIP_STEAM; then
-    warn "Steam pulado (--skip-steam)"
-    return
-  fi
-  step "Steam"
-  enable_i386_chroot
-  # O pacote do noble so tem avisos no debconf (need-nvidia-i386, purge),
-  # que o modo noninteractive pula; a licenca da Valve aparece no proprio
-  # cliente, na primeira abertura. O steam-libs:i386 recomenda "xterm |
-  # x-terminal-emulator", e o Alacritty (amd64) nao vale para um pacote i386:
-  # o xterm voltava para a imagem (so o Alacritty fica). Fora as duas
-  # arquiteturas: sem o amd64, o apt pegava o xterm:i386.
-  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y steam-installer xterm- xterm:i386-' \
-    >> "$LOG_FILE" 2>&1 || err "Instalacao do Steam falhou"
-  ok "Steam (o cliente baixa o resto na primeira abertura)"
-}
+# ── Imagem enxuta (o GitHub aceita ate 2 GiB por arquivo) ─────
+# O que so serviu para compilar sai da imagem: os pacotes -dev e as
+# ferramentas de build (ficam o build-essential, o dkms e os headers do
+# kernel, que os drivers DKMS usam para recompilar), o cache do apt (cada
+# apt-get install depois do configure_chroot deixava os .deb) e as listas
+# (o Setup roda apt-get update antes de instalar). Sem autoremove: as
+# bibliotecas que os emuladores abrem por dlopen (plugins do Qt, Vulkan) nao
+# aparecem no ldd. As que aparecem ficam marcadas como instaladas a mao, e um
+# ldd antes e depois derruba o build se faltar alguma.
+#
+# Firmware de hardware fora do escopo (GPU NVIDIA, redes de datacenter que o
+# kernel nem compila, switches Marvell, SoCs Qualcomm de celular) sai por
+# path-exclude do dpkg, para uma atualizacao do linux-firmware nao o trazer
+# de volta.
+slim_rootfs_chroot() {
+  step "Enxugando a imagem"
+  cat > "$CHROOT_DIR/tmp/slim-rootfs.sh" << 'SLIMSCRIPT'
+#!/bin/bash
+set -eo pipefail
+export DEBIAN_FRONTEND=noninteractive
 
-# ── Heroic Games Launcher (GOG, Epic e Amazon) ────────────────
-# Nao existe cliente do GOG para Linux; o Heroic e o que se usa (tambem no
-# Steam Deck). O .deb oficial, fixado por hash, baixado no fetch_debs.
-install_heroic_chroot() {
-  if $SKIP_HEROIC; then
-    warn "Heroic pulado (--skip-heroic) — sem GOG"
-    return
-  fi
-  step "Heroic Games Launcher $HEROIC_VERSION (GOG)"
-  cp "$DEBS_DIR/heroic.deb" "$CHROOT_DIR/tmp/heroic.deb"
-  chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends /tmp/heroic.deb' \
-    >> "$LOG_FILE" 2>&1 || err "Instalacao do Heroic falhou"
-  rm -f "$CHROOT_DIR/tmp/heroic.deb"
-  ok "Heroic $HEROIC_VERSION"
+# scan_libs: as bibliotecas dos binarios que nao vem do apt; as que faltam
+# saem como "MISSING biblioteca binario".
+scan_libs() {
+  find /usr/local /opt -xdev -type f \( -perm -u+x -o -name '*.so*' \) -not -path '/opt/fliperos/repo/*' -print0 |
+    while IFS= read -r -d '' f; do
+      [ "$(head -c4 "$f" 2> /dev/null | tail -c3)" = ELF ] || continue
+      { ldd "$f" 2> /dev/null || true; } | awk -v f="$f" '/=> not found/ { print "MISSING", $1, f; next } /=> \// { print $3 }'
+    done | sort -u
+}
+scan_libs > /tmp/libs-before
+grep '^MISSING' /tmp/libs-before > /tmp/missing-before || true
+{ grep -v '^MISSING' /tmp/libs-before || true; } | xargs -r readlink -f | sort -u > /tmp/lib-paths
+pkgs=$(xargs -r dpkg -S < /tmp/lib-paths 2> /dev/null | grep -v '^diversion' | cut -d: -f1 | sort -u || true)
+[ -z "$pkgs" ] || apt-mark manual $pkgs > /dev/null
+
+keep="build-essential dkms $(dpkg-query -W -f='${Package}\n' 'linux-headers-*' 2> /dev/null | tr '\n' ' ')"
+apt-cache depends --recurse --installed --no-recommends --no-suggests --no-conflicts --no-breaks \
+  --no-replaces --no-enhances $keep 2> /dev/null | grep -v '^ ' | tr -d '<>' | sed 's/:.*//' | sort -u > /tmp/protect
+dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" { print $2 }' | sort -u > /tmp/installed
+{
+  grep -- '-dev$' /tmp/installed || true
+  grep -xE 'cmake|cmake-data|ninja-build|autoconf|automake|libtool|qt6-base-dev-tools|qmake6|qmake6-bin' /tmp/installed || true
+} | sort -u | comm -23 - /tmp/protect > /tmp/purge
+
+# Um pacote de fora da lista que dependa de um -dev iria junto no purge: o
+# -dev de que ele depende fica.
+for _ in 1 2 3 4 5 6 7 8; do
+  apt-get -s purge $(cat /tmp/purge) | awk '/^Purg / { print $2 }' | sed 's/:.*//' | sort -u \
+    | comm -23 - /tmp/purge > /tmp/extra
+  [ -s /tmp/extra ] || break
+  apt-cache depends --installed $(cat /tmp/extra) | awk '/Depends:/ { print $2 }' | tr -d '<>' | sed 's/:.*//' \
+    | sort -u | comm -23 /tmp/purge - > /tmp/purge.new
+  mv /tmp/purge.new /tmp/purge
+done
+if [ -s /tmp/extra ]; then
+  echo "O purge dos -dev levaria junto:"; cat /tmp/extra
+  exit 1
+fi
+echo "Removendo $(wc -l < /tmp/purge) pacotes de compilacao"
+apt-get purge -y $(cat /tmp/purge)
+
+scan_libs | grep '^MISSING' | comm -13 /tmp/missing-before - > /tmp/missing-new || true
+if [ -s /tmp/missing-new ]; then
+  echo "Bibliotecas que sumiram com o purge:"; cat /tmp/missing-new
+  exit 1
+fi
+
+cat > /etc/dpkg/dpkg.cfg.d/fliperos-firmware << 'DPKGCFG'
+# Firmware fora do escopo do FliperOS (GPU AMD/Intel, PC de gabinete):
+# NVIDIA, redes de datacenter, switches Marvell e SoCs Qualcomm.
+path-exclude=/lib/firmware/nvidia/*
+path-exclude=/lib/firmware/mellanox/*
+path-exclude=/lib/firmware/mrvl/prestera/*
+path-exclude=/lib/firmware/qcom/*
+path-exclude=/lib/firmware/qed/*
+path-exclude=/usr/lib/firmware/nvidia/*
+path-exclude=/usr/lib/firmware/mellanox/*
+path-exclude=/usr/lib/firmware/mrvl/prestera/*
+path-exclude=/usr/lib/firmware/qcom/*
+path-exclude=/usr/lib/firmware/qed/*
+DPKGCFG
+rm -rf /usr/lib/firmware/nvidia /usr/lib/firmware/mellanox /usr/lib/firmware/mrvl/prestera \
+  /usr/lib/firmware/qcom /usr/lib/firmware/qed
+find /usr/lib/firmware -xtype l -delete
+update-initramfs -u -k all
+
+apt-get clean
+rm -rf /var/lib/apt/lists/* /tmp/libs-before /tmp/missing-before /tmp/lib-paths /tmp/protect \
+  /tmp/installed /tmp/purge /tmp/extra /tmp/missing-new
+echo "SLIM_OK"
+SLIMSCRIPT
+  chmod +x "$CHROOT_DIR/tmp/slim-rootfs.sh"
+  chroot "$CHROOT_DIR" /tmp/slim-rootfs.sh >> "$LOG_FILE" 2>&1 || {
+    tail -25 "$LOG_FILE" >&2 || true
+    err "Nao deu para enxugar a imagem (ver $LOG_FILE)"
+  }
+  rm -f "$CHROOT_DIR/tmp/slim-rootfs.sh"
+  ok "Imagem enxuta: sem -dev, cache do apt e firmware fora do escopo ($(du -sh --one-file-system "$CHROOT_DIR" | cut -f1))"
 }
 
 # ── squashfs ──────────────────────────────────────────────────
@@ -1384,8 +1422,11 @@ create_squashfs() {
   printf '# Escrito pelo NetworkManager com o DNS da rede.\n' > "$CHROOT_DIR/etc/resolv.conf"
   mkdir -p "$ISO_DIR/live"
   rm -f "$ISO_DIR/live/filesystem.squashfs"
+  # xz com o filtro x86 e blocos de 1 MiB: uns 15% menor que o zstd, para a
+  # ISO caber num arquivo do GitHub. So a midia live descomprime mais devagar;
+  # o sistema instalado fica num ext4 comum.
   mksquashfs "$CHROOT_DIR" "$ISO_DIR/live/filesystem.squashfs" \
-    -comp zstd -Xcompression-level 6 -wildcards \
+    -comp xz -Xbcj x86 -b 1M -wildcards \
     -no-progress -e "proc/*" "sys/*" "dev/*" "tmp/*" "run/*" \
     2>&1 | tail -3 | tee -a "$LOG_FILE"
   ok "squashfs: $(du -sh "$ISO_DIR/live/filesystem.squashfs" | cut -f1)"
@@ -1476,9 +1517,6 @@ summary() {
   $SKIP_DOLPHIN    && echo -e "  ${YLW}Dolphin nao incluido${RST}"
   $SKIP_HYPSEUS    && echo -e "  ${YLW}Hypseus Singe nao incluido${RST}"
   $SKIP_OPENBOR    && echo -e "  ${YLW}OpenBOR nao incluido${RST}"
-  $SKIP_WINE       && echo -e "  ${YLW}Wine nao incluido (sem Model 2)${RST}"
-  $SKIP_STEAM      && echo -e "  ${YLW}Steam nao incluido${RST}"
-  $SKIP_HEROIC     && echo -e "  ${YLW}Heroic nao incluido (sem GOG)${RST}"
   $SKIP_SKYSCRAPER && echo -e "  ${YLW}Skyscraper nao incluido (Setup > Scraper indisponivel)${RST}"
   echo -e "  ${DIM}Log: $LOG_FILE${RST}\n"
 }
@@ -1533,9 +1571,7 @@ build_supermodel_chroot
 build_hypseus_chroot
 build_openbor_chroot
 build_dolphin_chroot
-install_wine_chroot
-install_steam_chroot
-install_heroic_chroot
+prepare_extras_chroot
 # Pastas do usuario (~/roms, ~/bios, ~/media, ~/config): uma por emulador e
 # por core do RetroArch, das informacoes dos cores que o build do RetroArch
 # deixou. O chown -R muda os links de ~/config, nao o que eles apontam.
@@ -1543,6 +1579,7 @@ chroot "$CHROOT_DIR" env HOME=/home/fliperos /opt/fliperos/bin/fliperos-roms >> 
 chroot "$CHROOT_DIR" chown -R fliperos:fliperos /home/fliperos/roms /home/fliperos/bios /home/fliperos/media \
   /home/fliperos/config
 [[ -e $CHROOT_DIR/home/fliperos/.config/PCSX2 ]] && chroot "$CHROOT_DIR" chown -R fliperos:fliperos /home/fliperos/.config/PCSX2
+slim_rootfs_chroot
 rm -f "$CHROOT_DIR/usr/sbin/policy-rc.d"
 unmount_chroot
 create_squashfs

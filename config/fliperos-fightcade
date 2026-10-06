@@ -36,6 +36,7 @@ modes=${FLIPEROS_MODES:-/etc/fliperos/emulator-modes.conf}
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 switchres_ini=${SWITCHRES_INI:-/etc/switchres.ini}
 flycast_maps=${FLIPEROS_FLYCAST_MAPPINGS:-/home/fliperos/.config/flycast/mappings}
+extras=${FLIPEROS_EXTRAS:-/opt/fliperos/bin/fliperos-extras}
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 # say PORCENTAGEM TEXTO: uma etapa para a tela de progresso do Setup
@@ -53,8 +54,12 @@ fail() {
 fetch() {
   local part="$dir/.download.part" link keep=()
   [[ ${1:-} == --progress ]] && progress=1
-  # Pelo Setup (root): a pasta e do usuario, e o download roda como ele.
+  # Pelo Setup (root): a pasta e do usuario, e o download roda como ele. Os
+  # emuladores dele rodam no Wine, que nao vem na imagem: vai junto.
   if ((EUID == 0)) && [[ $user != root ]]; then
+    if ! "$extras" installed wine; then
+      if ((progress)); then "$extras" install wine --progress || exit 1; else "$extras" install wine || exit 1; fi
+    fi
     if ! mkdir -p "$dir" || ! chown "$user:" "$dir"; then
       fail "could not create $dir"
     fi
@@ -129,6 +134,8 @@ if [[ ! -x $dir/Fightcade2.sh ]]; then
   echo "Fightcade is not installed. Setup > Frontend > Fightcade 2 downloads it." >&2
   exit 1
 fi
+# Sem o Wine a sala abre, mas so as partidas do Flycast rodam.
+command -v wine > /dev/null || echo "Wine is not installed: Setup > Extras installs it (FBNeo and SNES9x need it)." >&2
 
 # Fora do X (a sessao de boot, o fliperos-launch): num Xorg so para ele. O
 # nome do comando (fightcade) e a linha da tabela de modos.

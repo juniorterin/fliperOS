@@ -15,17 +15,27 @@ exe=""
 for candidate in emulator_multicpu.exe EMULATOR_MULTICPU.EXE emulator.exe EMULATOR.EXE; do
   [[ -f $dir/$candidate ]] && { exe=$candidate; break; }
 done
+say() {
+  if [[ -n ${DISPLAY:-} ]] && command -v gxmessage > /dev/null; then
+    gxmessage -center -wrap -geometry 460x200 -title "Model 2" -buttons "OK:0" "$1"
+  else
+    echo "$1" >&2
+  fi
+}
+# O Wine nao vem na imagem (Setup > Extras).
+if ! command -v wine > /dev/null; then
+  say "Wine is not installed.
+
+The Model 2 Emulator runs in Wine: Setup > Extras > Wine installs it
+(it needs the network once)."
+  exit 1
+fi
 if [[ -z $exe ]]; then
-  message="Model 2 Emulator not found.
+  say "Model 2 Emulator not found.
 
 Copy the m2emulator files (emulator_multicpu.exe and the rest) to
 /opt/fliperos/model2 - over the network: \\\\fliperos\\FliperOS\\model2 -
 and the ROMs to /opt/fliperos/model2/roms."
-  if [[ -n ${DISPLAY:-} ]] && command -v gxmessage > /dev/null; then
-    gxmessage -center -wrap -geometry 460x200 -title "Model 2" -buttons "OK:0" "$message"
-  else
-    echo "$message" >&2
-  fi
   exit 1
 fi
 # Um prefixo do Wine so para ele, no home (o de outros programas nao muda).

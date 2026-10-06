@@ -94,6 +94,8 @@ install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model
 # nao vem na imagem (codigo fechado).
 install -Dm755 "$src/config/fliperos-fightcade" "$root/opt/fliperos/bin/fliperos-fightcade"
 install -Dm644 "$src/config/openbox-fightcade.xml" "$root/etc/fliperos/openbox-fightcade.xml"
+# Wine, Steam e Heroic nao vem na imagem: o Setup > Extras os instala.
+install -Dm755 "$src/config/fliperos-extras" "$root/opt/fliperos/bin/fliperos-extras"
 # groovymame: o atalho (config/fliperos-groovymame) na frente do binario do
 # release, em /usr/local/libexec. Num sistema de antes, o binario compilado
 # estava no lugar do atalho: muda de pasta.

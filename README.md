@@ -7,7 +7,7 @@ Em desenvolvimento: a 0.7 é testada em VM (QEMU) e num gabinete com CRT de 15 k
 ## O que vem
 
 - **Vídeo**: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.
-- **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Model 2, Hypseus Singe e OpenBOR; Steam e Heroic no desktop.
+- **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Model 2, Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Extras.
 - **Frontends**: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus e Fightcade 2.
 - **Setup**: vídeo e geometria, áudio, rede, scraper, limpeza de romsets do MAME, controles (botões, pistola, volante) e latência.
 - **Pastas** `roms`, `bios`, `media` e `config` em `~` e pela rede (Samba); desktop LXDE com loja de aplicativos.

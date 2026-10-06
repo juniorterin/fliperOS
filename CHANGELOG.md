@@ -20,6 +20,7 @@ Primeira ISO publicada. As mudanças são em relação à 0.6, que não saiu daq
 - Terminal zsh com Oh My Zsh e tema Dracula
 - Drivers de entrada por DKMS: GunCon 2, volantes Thrustmaster (`hid-tmff2`) e Logitech (`new-lg4ff`)
 - Mapeamento do SDL completado para qualquer controle ligado
+- ISO enxuta, abaixo dos 2 GiB de um arquivo do GitHub: sem os pacotes de compilação, sem o cache do apt, sem firmware fora do escopo (NVIDIA, redes de datacenter, SoCs Qualcomm) e com o sistema em xz
 
 **Mudanças nos pacotes:**
 
@@ -35,8 +36,9 @@ Primeira ISO publicada. As mudanças são em relação à 0.6, que não saiu daq
 - PCSX2: sem o assistente, em Big Picture, vsync, sem o ponteiro do mouse, BIOS em `~/bios/ps2` e jogos em `~/roms/ps2`
 - PCSX2: thread de OpenGL do Mesa ligada; direcional do painel também no analógico esquerdo
 - Supermodel: abre pelo menu (lista de jogos num terminal), acha a lista de jogos, botões do Button mapping; pasta `model3` nos frontends
-- Supermodel: CPU emulada a 75 MHz nos jogos Step 1.5 e 2.x, que ficavam lentos (Virtua Fighter 3tb de 35 para 59 fps)- OpenBOR em tela cheia de fábrica
-- Steam e Heroic (GOG, Epic, Amazon) no desktop
+- Supermodel: CPU emulada a 75 MHz nos jogos Step 1.5 e 2.x, que ficavam lentos (Virtua Fighter 3tb de 35 para 59 fps)
+- OpenBOR em tela cheia de fábrica
+- Wine (Model 2, emuladores do Fightcade), Steam e Heroic (GOG, Epic, Amazon) fora da ISO: o Setup > Extras os instala pela rede
 - Frontends: Attract-Mode Plus, EmulationStation (ES-DE) e Pegasus em `.deb`, num repositório APT dentro da imagem, com os jogos já configurados
 - Tema FliperOS 240p para o EmulationStation e o Pegasus
 - Fightcade 2 como opção de frontend, baixado do site dele; cada partida no modo do emulador dela
@@ -52,6 +54,7 @@ Primeira ISO publicada. As mudanças são em relação à 0.6, que não saiu daq
 - Audio Setup como o do GroovyArcade, e sons do menu com os WAV da pessoa
 - Network Setup: Wi-Fi pela lista de redes ou rede oculta
 - Frontend: escolhe o launcher do boot e instala o que não veio na imagem
+- Extras: instala o Wine, o Steam e o Heroic pela rede
 - Latency: modos Standard e Low latency, com a conferência do hardware
 - Scraper: capas, vídeos e textos para todos os frontends, com a escolha dos tipos de mídia
 - MAME ROM Cleaner (parâmetros de marcar, como o ROMLister; Flycast; pasta da rede) e MAME CHD Cleaner

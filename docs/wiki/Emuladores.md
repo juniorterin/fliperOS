@@ -10,7 +10,7 @@
 | Supermodel | Sega Model 3 | Xorg próprio | 640x240@57.524 no 15 kHz, 496x384 nos outros |
 | Model 2 Emulator (Wine) | Sega Model 2 | Xorg próprio | idem |
 | Fightcade 2 (baixado pelo Setup) | partidas online: FBNeo, SNES9x e FBA (Wine), Flycast | Xorg próprio | a sala em 640x480 (entrelaçado no 15 kHz); as partidas em 320x240 (Wine) e 640x240 (Flycast) |
-| Steam, Heroic (GOG, Epic, Amazon) | jogos de PC | dentro do desktop LXDE | o do desktop |
+| Steam, Heroic (GOG, Epic, Amazon), pelo Setup > Extras | jogos de PC | dentro do desktop LXDE | o do desktop |
 
 Páginas próprias: [Fightcade 2](Fightcade-2.md), [ROMs, BIOS e arte](ROMs.md) (as pastas de `~`) e [Controles](Controles.md) (botões, SDL, calibração).
 
@@ -91,8 +91,8 @@ Os jogos (`.pak`) vão em `/opt/fliperos/roms/openbor/Paks` (pela rede: `\\flipe
 
 ## Model 2 (Wine)
 
-O Model 2 Emulator (ElSemi) é freeware de código fechado, só para Windows, sem permissão clara de redistribuição — por isso **não vem na imagem**. Copie os arquivos do `m2emulator` 1.1a (o `emulator_multicpu.exe` e o resto) para `/opt/fliperos/model2` e as ROMs para `/opt/fliperos/model2/roms` (pela rede: `\\fliperos\FliperOS\model2`). O menu **Jogos > Model 2** abre o emulador no Wine (`fliperos-model2`, com um prefixo do Wine só dele em `~/.local/share/fliperos/wine-model2`); sem o emulador copiado, ele mostra essas instruções. Tela cheia e resolução se ajustam no `EMULATOR.INI` do próprio emulador.
+O Model 2 Emulator (ElSemi) é freeware de código fechado, só para Windows, sem permissão clara de redistribuição — por isso **não vem na imagem**. O Wine também não (sozinho, ele passava de 1 GB e a ISO não caberia num arquivo do GitHub): instale pelo **Setup > Extras > Wine**, que precisa de rede uma vez. Num gabinete que nunca vai à internet, o Model 2 não roda. Copie os arquivos do `m2emulator` 1.1a (o `emulator_multicpu.exe` e o resto) para `/opt/fliperos/model2` e as ROMs para `/opt/fliperos/model2/roms` (pela rede: `\\fliperos\FliperOS\model2`). O menu **Jogos > Model 2** abre o emulador no Wine (`fliperos-model2`, com um prefixo do Wine só dele em `~/.local/share/fliperos/wine-model2`); sem o Wine ou sem o emulador copiado, ele mostra o que falta. Tela cheia e resolução se ajustam no `EMULATOR.INI` do próprio emulador.
 
 ## Steam e GOG
 
-**Steam**: o `steam-installer` do Ubuntu; na primeira abertura a Valve baixa o cliente (centenas de MB, precisa de rede). **GOG**: não existe cliente oficial para Linux; vem o **Heroic Games Launcher** (GOG, Epic e Amazon; o mesmo do Steam Deck), que roda os jogos de Windows com o Wine/Proton que ele mesmo baixa. Os dois abrem **dentro do desktop LXDE** (são programas do X), pelo menu **Jogos**. A interface deles foi feita para telas maiores: num CRT de 15 kHz a 640x480 ela fica apertada — num monitor de 31 kHz ou LCD o uso é bem melhor.
+Os dois não vêm na imagem (ficariam em mais de 500 MB, e sem rede não servem): o **Setup > Extras** os instala. **Steam**: o `steam-installer` do Ubuntu; na primeira abertura a Valve baixa o cliente (centenas de MB, precisa de rede). **GOG**: não existe cliente oficial para Linux; o Setup instala o **Heroic Games Launcher** (`.deb` oficial, com hash fixado) (GOG, Epic e Amazon; o mesmo do Steam Deck), que roda os jogos de Windows com o Wine/Proton que ele mesmo baixa. Os dois abrem **dentro do desktop LXDE** (são programas do X), pelo menu **Jogos**. A interface deles foi feita para telas maiores: num CRT de 15 kHz a 640x480 ela fica apertada — num monitor de 31 kHz ou LCD o uso é bem melhor.

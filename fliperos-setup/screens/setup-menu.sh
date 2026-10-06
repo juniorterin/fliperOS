@@ -12,6 +12,7 @@ screen_setup_menu() {
       "audio|Audio Setup" \
       "network|Network Setup" \
       "frontend|Frontend" \
+      "extras|Extras (Wine, Steam, Heroic)" \
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
       "romcleaner|MAME ROM Cleaner" \
@@ -28,6 +29,7 @@ screen_setup_menu() {
       audio) screen_audio ;;
       network) screen_network ;;
       frontend) screen_frontend ;;
+      extras) screen_extras ;;
       latency) screen_latency ;;
       scraper) screen_scraper ;;
       romcleaner) screen_rom_cleaner ;;
@@ -255,6 +257,34 @@ screen_frontend() {
   lines=("$label will start when the computer turns on.")
   mapfile -t -O 1 lines < <(frontends_hint "$choice")
   ui_msg "Frontend" "${lines[@]}"
+}
+
+# ── Extras ───────────────────────────────────────────────────────
+# Wine, Steam e Heroic: nao vem na imagem, o Setup instala pela rede
+# (lib/extras.sh).
+
+screen_extras() {
+  local entries=() name inst desc choice label last=wine
+  while true; do
+    entries=()
+    while IFS='|' read -r name inst desc; do
+      if ((inst)); then entries+=("$name|$desc (installed)"); else entries+=("$name|$desc"); fi
+    done < <(extras_list)
+    entries+=("return|Return")
+    choice=$(ui_menu "Extras" "Programs that don't come with FliperOS, to keep the download small. Installing one needs the network." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
+    [[ $choice == return ]] && return 0
+    label=$(extras_label "$choice")
+    if extras_installed "$choice"; then
+      ui_msg "Extras" "$label is already installed."
+      continue
+    fi
+    ui_yesno "Extras" "Download and install $label now?" yes || continue
+    if run_with_progress "Installing $label" "" extras_install "$choice"; then
+      ui_msg "Extras" "$label installed."
+    fi
+  done
 }
 
 # ── Scraper ──────────────────────────────────────────────────────

@@ -190,17 +190,28 @@ if present usr/local/bin/dolphin-emu; then
   present usr/local/share/applications/dolphin-emu.desktop && fail "o atalho do proprio Dolphin nao saiu"
   echo "Dolphin: sem o atalho proprio (abre pelo fliperos-launch)"
 fi
-if present usr/bin/wine; then
-  has usr/local/bin/fliperos-model2
-  has opt/fliperos/model2/roms
-  echo "Wine e o lancador do Model 2 (o emulador o usuario copia)"
-  # O OpenGL de 32 bits: sem ele o Direct3D do Wine de 32 bits nao abre (o
-  # FBNeo do Fightcade para em "Couldn't initialise DirectX9").
-  for lib in libGL.so.1 libGLX_mesa.so.0; do
-    has "usr/lib/i386-linux-gnu/$lib"
-  done
-  echo "Wine: OpenGL de 32 bits"
-fi
+# Wine, Steam e Heroic: pelo Setup > Extras (config/fliperos-extras), fora
+# da imagem para a ISO caber num arquivo do GitHub.
+for path in usr/local/bin/fliperos-model2 opt/fliperos/model2/roms opt/fliperos/bin/fliperos-extras; do
+  has "$path"
+done
+for path in usr/bin/wine usr/games/steam opt/Heroic/heroic; do
+  present "$path" && fail "/$path veio na imagem (devia ser pelo Setup > Extras)"
+done
+unsquashfs -cat "$work/filesystem.squashfs" var/lib/dpkg/arch > "$work/f" 2> /dev/null
+grep -qx i386 "$work/f" || fail "a arquitetura i386 nao esta habilitada (o Wine de 32 bits nao instalaria)"
+echo "Wine, Steam e Heroic: fora da imagem, com o fliperos-extras e a arquitetura i386"
+# Imagem enxuta (slim_rootfs_chroot): sem cache do apt, sem -dev e sem o
+# firmware fora do escopo.
+grep -qE 'squashfs-root/var/cache/apt/archives/[^/]+\.deb$' "$work/files.txt" && fail "a imagem leva .deb no cache do apt"
+grep -qE 'squashfs-root/usr/lib/firmware/(nvidia|mellanox|qcom)/' "$work/files.txt" && fail "a imagem leva firmware fora do escopo"
+grep -q 'squashfs-root/usr/lib/firmware/amdgpu/' "$work/files.txt" || fail "a imagem perdeu o firmware da amdgpu"
+unsquashfs -cat "$work/filesystem.squashfs" var/lib/dpkg/status > "$work/f"
+awk '/^Package: / { p = $2 } /^Status: install ok installed/ { print p }' "$work/f" \
+  | grep -xE 'qt6-base-dev|libsdl2-dev|libavcodec-dev|libdrm-dev|libcurl4-openssl-dev|cmake|ninja-build' \
+  > "$work/dev.txt" || true
+[[ -s $work/dev.txt ]] && fail "pacotes de compilacao na imagem: $(paste -sd' ' "$work/dev.txt")"
+echo "imagem enxuta: sem .deb no cache, sem -dev de compilacao e sem firmware fora do escopo"
 # Fightcade 2: o que o baixa e abre vem na imagem; o programa, nao.
 for path in opt/fliperos/bin/fliperos-fightcade etc/fliperos/openbox-fightcade.xml; do
   has "$path"
@@ -209,9 +220,6 @@ grep -q '^fightcade|kms|/opt/fliperos/fightcade/fightcade|fetch:fliperos-fightca
   fail "a tabela de sessoes nao tem o Fightcade"
 present opt/fliperos/fightcade/Fightcade2.sh && fail "o Fightcade veio dentro da imagem (e de codigo fechado: so por download)"
 echo "Fightcade 2: lancador na imagem, programa por download (Setup > Frontend)"
-present usr/games/steam && echo "Steam: steam-installer"
-present opt/Heroic/heroic && echo "Heroic (GOG)"
-
 # ── RetroArch: cores de fabrica e pasta do Online Updater ─────
 if grep -q 'squashfs-root/usr/local/bin/retroarch$' "$work/files.txt"; then
   for core in fceumm snes9x genesis_plus_gx mgba pcsx_rearmed mame2010; do
@@ -298,7 +306,8 @@ echo "acervo: ~/roms com uma pasta por emulador e por core do RetroArch"
 
 # ── Terminal do desktop: so o Alacritty ───────────────────────
 # O lxterminal e o xterm nao desenhavam as bordas do Gum; uma dependencia
-# nova nao pode traze-los de volta (o Steam trazia: install_steam_chroot).
+# nova nao pode traze-los de volta (o Steam trazia: STEAM_PACKAGES em
+# config/fliperos-extras).
 has usr/bin/alacritty
 has home/fliperos/.config/alacritty/alacritty.toml
 for bin in usr/bin/lxterminal usr/bin/xterm usr/bin/lxterm usr/bin/uxterm; do

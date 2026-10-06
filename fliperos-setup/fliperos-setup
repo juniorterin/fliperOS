@@ -72,6 +72,8 @@ source "$SETUP_DIR/lib/freeroms.sh"
 source "$SETUP_DIR/lib/frontends.sh"
 # shellcheck source=lib/update.sh
 source "$SETUP_DIR/lib/update.sh"
+# shellcheck source=lib/extras.sh
+source "$SETUP_DIR/lib/extras.sh"
 # shellcheck source=lib/hardware.sh
 source "$SETUP_DIR/lib/hardware.sh"
 # shellcheck source=lib/latency.sh
