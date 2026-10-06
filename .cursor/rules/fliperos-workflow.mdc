@@ -6,8 +6,10 @@ alwaysApply: true
 # FliperOS ? fluxo de trabalho (memórias do Claude, 2026-09/10)
 
 FliperOS = ISO Ubuntu 24.04 (noble) para gabinetes arcade com CRT 15 kHz, no estilo GroovyArcade.
-Repo `git@github.com:juniorterin/fliperOS.git`, branch `main`. UI do Setup em ingl?s; docs,
-comentários e mensagens de commit em PT-BR.
+Repo `git@github.com:juniorterin/fliperOS.git`, branch `main`. Interface (Setup, menu do boot,
+mensagens de build/CLI) e documentaç?o (README, CHANGELOG, docs/wiki com nomes de página em
+ingl?s) em inglês; comentários de código e mensagens de commit em PT-BR. Site oficial em
+`website/` (Next.js, i18n pt-BR/en-US em `website/src/i18n`).
 
 ## Regras que o usuário pediu
 - **Sempre commit + push**: todo trabalho concluído é commitado e depois `git push origin main`, sem perguntar.
