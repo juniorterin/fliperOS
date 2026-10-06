@@ -1,5 +1,5 @@
 ---
-description: FliperOS ? arquitetura, decis?es e estado (setup Gum, kernel, Limine, vÌdeo 15 kHz, hardware, docs/wiki). Use ao mexer no setup, build da ISO, boot, vÌdeo ou documentaÁ?o.
+description: FliperOS ? arquitetura, decis?es e estado (setup Gum, kernel, Limine, v√≠deo 15 kHz, hardware, docs/wiki). Use ao mexer no setup, build da ISO, boot, v√≠deo ou documenta√ß?o.
 alwaysApply: false
 ---
 
@@ -7,40 +7,40 @@ alwaysApply: false
 
 ## Setup (fliperos-setup, desde 2026-09-29)
 - Bash + Gum, tema Dracula, tela 640x480i, fluxo do GroovyArcade (gasetup). A UI fica em `fliperos-setup/screens` + `lib/ui.sh`.
-  O resto de `lib/` nunca chama gum (h· teste que verifica). Cores s?o Ìndices da paleta, nunca hex. As telas cabem em 80x30 (64x24 para 25 kHz).
-- O Setup nunca lanÁa X/KMS diretamente: grava `/run/fliperos/launch` e sai com cÛdigo 20, e o loop `config/fliperos-tty1` abre o programa.
+  O resto de `lib/` nunca chama gum (h√° teste que verifica). Cores s?o √≠ndices da paleta, nunca hex. As telas cabem em 80x30 (64x24 para 25 kHz).
+- O Setup nunca lan√ßa X/KMS diretamente: grava `/run/fliperos/launch` e sai com c√≥digo 20, e o loop `config/fliperos-tty1` abre o programa.
 - O Setup se recarrega quando os arquivos dele mudam (`screen_reload_if_updated`).
-- Gum 2.0.2 com patches prÛprios (`patches/gum/`, por exemplo Space no `choose --no-limit`).
-- Latency: Standard = paridade com GA (`mitigations=off`, governor performance...). Low = + `preempt=full`, frame delay autom·tico e preemptive frames no RetroArch.
-- `fliperos-padkeys`: o joystick controla o Setup via uinput, ativo sÛ com o Setup na tela (`/run/fliperos/padkeys`). Setup > Quirks = `usbhid.quirks`.
-- Zsh + Oh My Zsh + Dracula como shell do usu·rio. Os emuladores ficam no menu Games do LXDE via `fliperos-launch`.
+- Gum 2.0.2 com patches pr√≥prios (`patches/gum/`, por exemplo Space no `choose --no-limit`).
+- Latency: Standard = paridade com GA (`mitigations=off`, governor performance...). Low = + `preempt=full`, frame delay autom√°tico e preemptive frames no RetroArch.
+- `fliperos-padkeys`: o joystick controla o Setup via uinput, ativo s√≥ com o Setup na tela (`/run/fliperos/padkeys`). Setup > Quirks = `usbhid.quirks`.
+- Zsh + Oh My Zsh + Dracula como shell do usu√°rio. Os emuladores ficam no menu Games do LXDE via `fliperos-launch`.
 
-## Kernel, boot, vÌdeo
+## Kernel, boot, v√≠deo
 - Kernel 6.18 LTS com os patches D0023R 01?09, sempre compilado (`fliperos-kernel.sh`, cache em `output/kernel-cache/`).
 - Bootloader **Limine** (n?o GRUB), v11.4.1 fixado. Em disco instalado, kernel e initrd ficam na ESP (`/boot/efi/fliperos/`), sincronizados por `fliperos-limine-update`.
-  Par‚metros do kernel em `/etc/default/fliperos-boot`. N?o reintroduza o GRUB.
+  Par√¢metros do kernel em `/etc/default/fliperos-boot`. N?o reintroduza o GRUB.
 - 15 kHz validado no hardware (2026-09-27), servindo de baseline de regress?o: VGA-1, 15.649 kHz, 59.958 Hz, 640x240p real, clock 13020, htotal 832, vtotal 261.
-- Escopo de hardware: todas as AMD/ATI cobertas pelo CRT_EmuDriver (radeon + amdgpu, HD2000?HD7000) + Intel iGPU como gambiarra experimental. Nunca assuma uma placa sÛ.
+- Escopo de hardware: todas as AMD/ATI cobertas pelo CRT_EmuDriver (radeon + amdgpu, HD2000?HD7000) + Intel iGPU como gambiarra experimental. Nunca assuma uma placa s√≥.
 - Gabinete: i3-540, 6 GB de RAM, placa H55, R7 240 na VGA-1, SSD Kingston 240 GB, Wi-Fi USB TP-Link 8822BU, painel V-USB (quirk MULTI_INPUT ? 2 gamepads).
 
-## Build e distribuiÁ?o
+## Build e distribui√ß?o
 - O build da ISO roda inteiro no Docker (`fliperos-mkiso.sh`), com testes em QEMU/TCG (`tools/verify-iso.sh`, `tools/vm-test.py`).
-- Antes de uma ISO completa, prÈ-valide qualquer build novo num container noble limpo.
-- O repositÛrio APT prÛprio vai dentro da imagem (`/opt/fliperos/repo`). Frontends (Attract-Mode Plus, ES-DE, Pegasus...) v?m de .debs prÛprios.
-- Programas fechados (Model 2 Emulator, Fightcade 2) n?o entram na imagem: usam linhas `fetch:` em `config/fliperos-sessions.conf` ou s?o copiados pelo usu·rio.
-- Download de BIOS e romsets: recusado. `~/bios` È onde o usu·rio coloca os dele.
+- Antes de uma ISO completa, pr√©-valide qualquer build novo num container noble limpo.
+- O reposit√≥rio APT pr√≥prio vai dentro da imagem (`/opt/fliperos/repo`). Frontends (Attract-Mode Plus, ES-DE, Pegasus...) v?m de .debs pr√≥prios.
+- Programas fechados (Model 2 Emulator, Fightcade 2) n?o entram na imagem: usam linhas `fetch:` em `config/fliperos-sessions.conf` ou s?o copiados pelo usu√°rio.
+- Download de BIOS e romsets: recusado. `~/bios` √© onde o usu√°rio coloca os dele.
 
-## Pastas do usu·rio (`config/fliperos-roms`, a cada login)
+## Pastas do usu√°rio (`config/fliperos-roms`, a cada login)
 - `~/roms/<sistema>` (inclui `naomi`, `naomi2`, `atomiswave`, `fightcade/{fbneo,flycast,snes9x,fc1}`).
 - `~/bios` (system_directory do RetroArch; subpastas `dc`, `ps2`, `mame`).
 - `~/media/{snap,preview,logo,box,marquee,texto}/<plataforma>` e `~/config` com links para as configs.
 
-## DocumentaÁ?o
-- `README.md` curto: menos de 4000 caracteres, sem detalhes de funcionalidade. O detalhe vai em `docs/wiki/*.md`. P·gina nova entra em `Home.md`, `_Sidebar.md` e nas linhas de links do README (`DocsTests` verifica).
-- `fliperos-doc.html` È gerado (`tools/render-docs.py --output fliperos-doc.html`, precisa de `python3-markdown`).
+## Documenta√ß?o
+- `README.md` curto: menos de 4000 caracteres, sem detalhes de funcionalidade. O detalhe vai em `docs/wiki/*.md`. P√°gina nova entra em `Home.md`, `_Sidebar.md` e nas linhas de links do README (`DocsTests` verifica).
+- `fliperos-doc.html` √© gerado (`tools/render-docs.py --output fliperos-doc.html`, precisa de `python3-markdown`).
 - Depois de mudar `docs/wiki`, republique com `bash tools/wiki-publish.sh`.
-- `docs/wikipedia/FliperOS.wiki` È um rascunho, n?o submetido.
+- `docs/wikipedia/FliperOS.wiki` √© um rascunho, n?o submetido.
 
 ## Refer?ncias externas
 - GroovyArcade: gitlab.com/groovyarcade/gasetup, tools/gatools, tools/galauncher, os. Clone com `GIT_TERMINAL_PROMPT=0`.
-- Lakka-LibreELEC (github.com/libretro/Lakka-LibreELEC): prior art de joypad, vÌdeo e empacotamento.
+- Lakka-LibreELEC (github.com/libretro/Lakka-LibreELEC): prior art de joypad, v√≠deo e empacotamento.

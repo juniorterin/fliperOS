@@ -1,38 +1,38 @@
 ---
-description: FliperOS ? como trabalhar neste repo (commit/push, aplicar no gabinete, correÁ?es gerais, testes)
+description: FliperOS ? como trabalhar neste repo (commit/push, aplicar no gabinete, corre√ß?es gerais, testes)
 alwaysApply: true
 ---
 
-# FliperOS ? fluxo de trabalho (memÛrias do Claude, 2026-09/10)
+# FliperOS ? fluxo de trabalho (mem√≥rias do Claude, 2026-09/10)
 
 FliperOS = ISO Ubuntu 24.04 (noble) para gabinetes arcade com CRT 15 kHz, no estilo GroovyArcade.
 Repo `git@github.com:juniorterin/fliperOS.git`, branch `main`. UI do Setup em ingl?s; docs,
-coment·rios e mensagens de commit em PT-BR.
+coment√°rios e mensagens de commit em PT-BR.
 
-## Regras que o usu·rio pediu
-- **Sempre commit + push**: todo trabalho concluÌdo È commitado e depois `git push origin main`, sem perguntar.
-  Nunca force-push; se o push for rejeitado, faÁa fetch e avise. Um commit por mudanÁa lÛgica.
-  Outras sess?es podem estar mexendo na mesma ·rvore: commite sÛ os seus hunks.
-- **Aplicar no gabinete tambÈm**: toda mudanÁa vai pro repo E pro gabinete via SSH. Uma ISO inteira leva cerca de 2 h, e o gabinete È a bancada de testes.
-- **CorreÁ?es gerais**: corrija a classe do problema para qualquer gabinete. Nunca commite mapeamentos,
-  GUIDs, nomes do painel (V-USB "Mame Panel 32") ou de jogos do usu·rio. Configs pessoais ficam sÛ no gabinete.
+## Regras que o usu√°rio pediu
+- **Sempre commit + push**: todo trabalho conclu√≠do √© commitado e depois `git push origin main`, sem perguntar.
+  Nunca force-push; se o push for rejeitado, fa√ßa fetch e avise. Um commit por mudan√ßa l√≥gica.
+  Outras sess?es podem estar mexendo na mesma √°rvore: commite s√≥ os seus hunks.
+- **Aplicar no gabinete tamb√©m**: toda mudan√ßa vai pro repo E pro gabinete via SSH. Uma ISO inteira leva cerca de 2 h, e o gabinete √© a bancada de testes.
+- **Corre√ß?es gerais**: corrija a classe do problema para qualquer gabinete. Nunca commite mapeamentos,
+  GUIDs, nomes do painel (V-USB "Mame Panel 32") ou de jogos do usu√°rio. Configs pessoais ficam s√≥ no gabinete.
 - Nunca rode `debootstrap`/`chroot` com bind de `/dev` no WSL2 (ver CLAUDE.md). Builds com chroot rodam no Docker.
 
 ## Gabinete
 - IP via DHCP, atualmente **192.168.1.155**. Se n?o responder: `Resolve-DnsName fliperos.local -Type A`. Se nem assim responder, deve estar desligado; n?o fique em loop tentando.
 - Login `fliperos`/`fliperos`. Use PuTTY: `plink -batch -ssh -pw fliperos fliperos@IP "bash -s" < script` e `pscp -batch -pw fliperos`.
-  O shell de login remoto È zsh, ent?o mande os comandos por `bash -s`.
+  O shell de login remoto √© zsh, ent?o mande os comandos por `bash -s`.
 - `sudo -S` l? a senha do stdin (`echo fliperos | sudo -S -p ''`). Nunca passe dados pelo pipe nem heredoc para um `sudo -S`: grave um script antes e rode esse script com sudo.
-- `pkill -f padrao` pode matar o prÛprio shell. Use `[p]adrao`.
+- `pkill -f padrao` pode matar o pr√≥prio shell. Use `[p]adrao`.
 - Push completo: `tools/cabinet-push.sh IP`, que precisa da imagem Docker `fliperos-ssh`. Mantenha a lista `packages=` de `tools/cabinet-update.sh` em sincronia com `fliperos-mkiso.sh`.
-- Nunca rode bin·rio de GUI/emulador por SSH sÛ para consult·-lo (`flycast -version` abriu o Flycast). Use `grep -a` no bin·rio.
-- Para testar sem atrapalhar o usu·rio, suba um X separado em `:1`. Depois devolva o tty1 ao menu (`fliperos-tty1` / `fliperos-setup --menu`).
+- Nunca rode bin√°rio de GUI/emulador por SSH s√≥ para consult√°-lo (`flycast -version` abriu o Flycast). Use `grep -a` no bin√°rio.
+- Para testar sem atrapalhar o usu√°rio, suba um X separado em `:1`. Depois devolva o tty1 ao menu (`fliperos-tty1` / `fliperos-setup --menu`).
 
 ## Testes e git neste PC Windows
 - O Python do Windows n?o serve. Rode no WSL como root:
   `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-22.04 -u root -e bash -c "cd /mnt/c/Users/dssds/Desktop/Trabalho/ubuntu-15khz && python3 tests/test_build.py [Classe]"`.
-  Falhas que s?o sÛ do ambiente: `tomllib` (Python 3.10) e 3 DiskTests (falta `jq`).
+  Falhas que s?o s√≥ do ambiente: `tomllib` (Python 3.10) e 3 DiskTests (falta `jq`).
   Alternativa: imagem Docker `fliperos-tests` (`docker run --rm -v "$(pwd -W):/w" -w /w fliperos-tests python3 tests/test_setup.py`).
 - O wrapper do git injeta `--trailer`, que este git n?o suporta. Commite com `"$(type -P git)" commit -F arquivo`.
-- `.gitattributes` forÁa LF. Ao vendorizar algo clonado do GitHub neste PC, confira se veio com CRLF.
-- `api.github.com` n?o È alcanÁ·vel daqui, e o `gh` n?o est· autenticado. Use p·ginas do github.com ou raw.githubusercontent.com.
+- `.gitattributes` for√ßa LF. Ao vendorizar algo clonado do GitHub neste PC, confira se veio com CRLF.
+- `api.github.com` n?o √© alcan√ß√°vel daqui, e o `gh` n?o est√° autenticado. Use p√°ginas do github.com ou raw.githubusercontent.com.
