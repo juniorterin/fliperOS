@@ -14,7 +14,7 @@
 
 set -euo pipefail
 if grep -qi microsoft /proc/sys/kernel/osrelease && [[ ! -f /.dockerenv ]]; then
-  echo "Build direto no WSL recusado. Use Dockerfile.fliperos (CLAUDE.md)." >&2; exit 1
+  echo "Building directly on WSL is refused. Use Dockerfile.fliperos (CLAUDE.md)." >&2; exit 1
 fi
 
 GRN='\033[0;32m'; YLW='\033[1;33m'; RED='\033[0;31m'
@@ -112,7 +112,7 @@ usage() {
 while [[ $# -gt 0 ]]; do
   case $1 in
     --output)
-      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --output requer caminho."; exit 1; }
+      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Error: --output needs a path."; exit 1; }
       OUTPUT_ISO="$2"; shift 2 ;;
     --skip-switchres)  SKIP_SWITCHRES=true; shift ;;
     --skip-groovymame) SKIP_GROOVYMAME=true; shift ;;
@@ -131,22 +131,22 @@ while [[ $# -gt 0 ]]; do
     # Compatibilidade: era opcional antes; agora e o padrao.
     --with-wheel-drivers) WITH_WHEEL_DRIVERS=true; shift ;;
     --kernel-cache)
-      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --kernel-cache requer diretorio."; exit 1; }
+      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Error: --kernel-cache needs a directory."; exit 1; }
       KERNEL_CACHE="$2"; shift 2 ;;
     --repo)
-      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --repo requer diretorio."; exit 1; }
+      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Error: --repo needs a directory."; exit 1; }
       FLIPEROS_REPO="$2"; shift 2 ;;
     --wifi-ssid)
-      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --wifi-ssid requer valor."; exit 1; }
+      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Error: --wifi-ssid needs a value."; exit 1; }
       WIFI_SSID="$2"; shift 2 ;;
     --wifi-psk)
-      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Erro: --wifi-psk requer valor."; exit 1; }
+      [[ $# -ge 2 && -n "${2:-}" ]] || { echo "Error: --wifi-psk needs a value."; exit 1; }
       WIFI_PSK="$2"; shift 2 ;;
     --splash)
-      [[ $# -ge 2 ]] || { echo "Erro: --splash requer valor."; exit 1; }
+      [[ $# -ge 2 ]] || { echo "Error: --splash needs a value."; exit 1; }
       case "$2" in
         fliperos|evangelion|none) SPLASH_THEME="$2" ;;
-        *) echo "Erro: --splash invalido: $2 (fliperos, evangelion ou none)"; exit 1 ;;
+        *) echo "Error: invalid --splash: $2 (fliperos, evangelion or none)"; exit 1 ;;
       esac
       shift 2 ;;
     /*.iso|*.iso)     OUTPUT_ISO="$1"; shift ;;
@@ -155,7 +155,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ $EUID -eq 0 ]] || { echo "Execute com sudo."; exit 1; }
+[[ $EUID -eq 0 ]] || { echo "Run with sudo."; exit 1; }
 
 log()  { echo -e "${DIM}[$(date +%H:%M:%S)]${RST} $*" | tee -a "$LOG_FILE"; }
 ok()   { echo -e "${GRN}✓${RST} $*" | tee -a "$LOG_FILE"; }
@@ -166,7 +166,7 @@ step() { echo -e "\n${BLD}${CYN}══ $* ══${RST}" | tee -a "$LOG_FILE"; }
 
 # ── Dependências do host ──────────────────────────────────────
 check_host_deps() {
-  step "Verificando dependências do host"
+  step "Checking host dependencies"
   # git/gcc/libc6-dev/make: o Limine vem do upstream e o utilitario "limine"
   # e compilado no build (ver fliperos-limine.sh).
   local DEPS=(debootstrap squashfs-tools xorriso git gcc libc6-dev make)
@@ -175,9 +175,9 @@ check_host_deps() {
     dpkg -s "$D" &>/dev/null && ok "$D" || MISSING+=("$D")
   done
   if [[ ${#MISSING[@]} -gt 0 ]]; then
-    info "Instalando: ${MISSING[*]}"
+    info "Installing: ${MISSING[*]}"
     apt-get install -y "${MISSING[@]}" >> "$LOG_FILE" 2>&1
-    ok "Dependências instaladas"
+    ok "Dependencies installed"
   fi
 }
 
@@ -206,32 +206,32 @@ mount_chroot() {
   mount -t proc  proc   "$CHROOT_DIR/proc"
   mount -t sysfs sysfs  "$CHROOT_DIR/sys"
   mount -t tmpfs tmpfs  "$CHROOT_DIR/tmp"
-  ok "Pseudo-filesystems montados (WSL2-safe)"
+  ok "Pseudo-filesystems mounted (WSL2-safe)"
 }
 
 # ── Desmontar chroot ──────────────────────────────────────────
 unmount_chroot() {
-  info "Desmontando pseudo-filesystems..."
+  info "Unmounting pseudo-filesystems..."
   for MP in dev/pts dev/shm proc sys tmp dev; do
     if mountpoint -q "$CHROOT_DIR/$MP"; then umount "$CHROOT_DIR/$MP" || return 1; fi
   done
   # dev montado com tmpfs — precisa desmontar por último
 
-  ok "Desmontado"
+  ok "Unmounted"
 }
 
 # ── Debootstrap ───────────────────────────────────────────────
 build_rootfs() {
   step "Debootstrap — Ubuntu $UBUNTU_CODENAME"
-  [[ "$CHROOT_DIR" == /tmp/fliperos-iso-build.*/chroot ]] || err "Rootfs fora do workspace"
+  [[ "$CHROOT_DIR" == /tmp/fliperos-iso-build.*/chroot ]] || err "Rootfs outside the workspace"
   mkdir -p "$CHROOT_DIR"
-  info "Download do sistema base (~300MB)..."
+  info "Downloading the base system (~300MB)..."
   debootstrap \
     --arch="$ARCH" \
     --variant=minbase \
     --components="main,restricted,universe" \
     "$UBUNTU_CODENAME" "$CHROOT_DIR" "$UBUNTU_MIRROR" >> "$LOG_FILE" 2>&1
-  ok "Debootstrap concluído"
+  ok "Debootstrap done"
   mount_chroot
 }
 
@@ -239,7 +239,7 @@ build_rootfs() {
 # Heredoc com 'CHROOT_SCRIPT' (aspas) = sem expansão pelo bash do host.
 # As variáveis do host são injetadas via sed depois de escrito o arquivo.
 configure_chroot() {
-  step "Configurando sistema dentro do chroot"
+  step "Configuring the system inside the chroot"
   cp /etc/resolv.conf "$CHROOT_DIR/etc/resolv.conf"
   printf '#!/bin/sh\nexit 101\n' > "$CHROOT_DIR/usr/sbin/policy-rc.d"
   chmod +x "$CHROOT_DIR/usr/sbin/policy-rc.d"
@@ -308,7 +308,7 @@ apt-get install -y --no-install-recommends \
 
 # Flathub como fonte de Flatpak da App Store, para o sistema todo.
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo \
-  || echo "AVISO: Flathub nao foi adicionado (sem rede no build?)"
+  || echo "WARNING: Flathub was not added (no network during the build?)"
 
 systemctl enable ssh
 # As host keys sao apagadas abaixo pra que cada instalacao gere as suas, e
@@ -423,28 +423,28 @@ CHROOT_SCRIPT
 
   chmod +x "$CHROOT_DIR/tmp/fliperos-chroot-setup.sh"
   chroot "$CHROOT_DIR" /tmp/fliperos-chroot-setup.sh 2>&1 | tee -a "$LOG_FILE" | grep -v "^$"
-  ok "Chroot configurado"
+  ok "Chroot configured"
 }
 
 # ── Arquivos do FliperOS ──────────────────────────────────────
 # fliperos-setup, sessao de boot, LXDE, paleta do console (fliperos-rootfs.sh).
 install_fliperos_files() {
-  step "Instalando o fliperos-setup e a configuracao do FliperOS"
+  step "Installing fliperos-setup and the FliperOS configuration"
   FLIPEROS_ROOTFS_CHROOT=1 bash "$(dirname "$(realpath "$0")")/fliperos-rootfs.sh" "$CHROOT_DIR" \
     >> "$LOG_FILE" 2>&1 || err "fliperos-rootfs.sh falhou (ver $LOG_FILE)"
-  ok "fliperos-setup em /usr/local/lib/fliperos-setup"
+  ok "fliperos-setup in /usr/local/lib/fliperos-setup"
   # Tema Dracula do LXDE (GTK fixado por commit + Openbox), baixado aqui no
   # container do build, que tem o git.
   bash "$(dirname "$(realpath "$0")")/fliperos-dracula.sh" "$CHROOT_DIR" \
     >> "$LOG_FILE" 2>&1 || err "Tema Dracula falhou (ver $LOG_FILE)"
-  ok "Tema Dracula no LXDE"
+  ok "Dracula theme on LXDE"
 }
 
 # ── Pacotes que nao existem no Ubuntu 24.04 ───────────────────
 # Baixados antes do debootstrap, como o Limine: rede ruim aparece em
 # segundos, nao depois de uma hora de build.
 fetch_debs() {
-  step "Gum e AntiMicroX"
+  step "Gum and AntiMicroX"
   DEBS_DIR="$WORK_DIR/debs"
   mkdir -p "$DEBS_DIR"
   fetch_deb "https://github.com/charmbracelet/gum/releases/download/v${GUM_VERSION}/gum_${GUM_VERSION}_amd64.deb" \
@@ -457,23 +457,23 @@ fetch_debs() {
 # estatico, sem nada do chroot); install_debs_chroot o poe no lugar do
 # /usr/bin/gum do .deb, que fica com as paginas de manual e o completion.
 build_gum() {
-  step "Gum ${GUM_VERSION} com as setas na paginacao e os sons do menu (patches/gum)"
+  step "Gum ${GUM_VERSION} with pagination arrows and menu sounds (patches/gum)"
   local here gsrc="$WORK_DIR/gum-src" go="$WORK_DIR/go"
   here=$(dirname "$(realpath "$0")")
   curl -sSfL --retry 3 --max-time 600 -o "$WORK_DIR/go.tgz" \
-    "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" >> "$LOG_FILE" 2>&1 || err "Download do Go falhou"
+    "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" >> "$LOG_FILE" 2>&1 || err "Go download failed"
   echo "$GO_SHA256  $WORK_DIR/go.tgz" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
-    || err "Go: hash diferente do fixado"
+    || err "Go: hash differs from the pinned one"
   rm -rf "$go" "$gsrc"
   mkdir -p "$go"
-  tar xzf "$WORK_DIR/go.tgz" -C "$go" --strip-components=1 || err "Go: o pacote nao extraiu"
+  tar xzf "$WORK_DIR/go.tgz" -C "$go" --strip-components=1 || err "Go: the package did not extract"
   git clone -q --depth 1 --branch "v${GUM_VERSION}" https://github.com/charmbracelet/gum "$gsrc" >> "$LOG_FILE" 2>&1 \
-    || err "Gum: o codigo nao baixou"
-  [[ $(git -C "$gsrc" rev-parse HEAD) == "$GUM_COMMIT" ]] || err "Gum: a tag v${GUM_VERSION} nao e mais o commit fixado"
-  git -C "$gsrc" apply "$here"/patches/gum/*.patch >> "$LOG_FILE" 2>&1 || err "Gum: o patch nao aplicou"
+    || err "Gum: the source did not download"
+  [[ $(git -C "$gsrc" rev-parse HEAD) == "$GUM_COMMIT" ]] || err "Gum: tag v${GUM_VERSION} is no longer the pinned commit"
+  git -C "$gsrc" apply "$here"/patches/gum/*.patch >> "$LOG_FILE" 2>&1 || err "Gum: the patch did not apply"
   (cd "$gsrc" && CGO_ENABLED=0 GOPATH="$WORK_DIR/gopath" GOCACHE="$WORK_DIR/gocache" \
     "$go/bin/go" build -trimpath -ldflags "-s -w -X main.Version=${GUM_VERSION}-fliperos" -o "$WORK_DIR/gum" .) \
-    >> "$LOG_FILE" 2>&1 || err "Gum: o build falhou"
+    >> "$LOG_FILE" 2>&1 || err "Gum: the build failed"
   chmod -R u+w "$WORK_DIR/gopath" 2> /dev/null || true
   rm -rf "$gsrc" "$go" "$WORK_DIR/go.tgz" "$WORK_DIR/gocache" "$WORK_DIR/gopath"
   ok "gum $("$WORK_DIR/gum" --version | awk '{print $3}')"
@@ -484,16 +484,16 @@ fetch_deb() {
   curl -sSfL --retry 3 --max-time 600 -o "$DEBS_DIR/$name" "$url" >> "$LOG_FILE" 2>&1 \
     || err "Download falhou: $url"
   echo "$sha  $DEBS_DIR/$name" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
-    || err "Hash diferente do fixado: $url"
+    || err "Hash differs from the pinned one: $url"
   ok "$name ($(du -h "$DEBS_DIR/$name" | cut -f1))"
 }
 
 install_debs_chroot() {
-  step "Instalando Gum e AntiMicroX no chroot"
+  step "Installing Gum and AntiMicroX in the chroot"
   cp "$DEBS_DIR"/*.deb "$CHROOT_DIR/tmp/"
   chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends /tmp/gum.deb /tmp/antimicrox.deb' >> "$LOG_FILE" 2>&1 \
-    || err "Instalacao do gum/antimicrox falhou (ver $LOG_FILE)"
+    || err "gum/antimicrox installation failed (see $LOG_FILE)"
   rm -f "$CHROOT_DIR"/tmp/*.deb
   # O gum com patches/gum (build_gum) no lugar do binario do .deb.
   chroot "$CHROOT_DIR" dpkg-divert --local --rename --add /usr/bin/gum >> "$LOG_FILE" 2>&1 \
@@ -509,21 +509,21 @@ install_debs_chroot() {
 # dependencias dele vem do Ubuntu, e o gabinete pode nao ter rede).
 install_local_repo_chroot() {
   if [[ -z $FLIPEROS_REPO ]] || ! compgen -G "$FLIPEROS_REPO/*.deb" > /dev/null; then
-    warn "Sem repositorio de frontends: gere com packaging/build-deb.sh e packaging/make-repo.sh"
+    warn "No frontends repository: build it with packaging/build-deb.sh and packaging/make-repo.sh"
     return
   fi
-  step "Repositorio local do FliperOS (frontends)"
+  step "FliperOS local repository (frontends)"
   local repo="$CHROOT_DIR/opt/fliperos/repo"
   rm -rf "$repo"
   mkdir -p "$repo"
   cp "$FLIPEROS_REPO"/*.deb "$FLIPEROS_REPO"/Packages "$FLIPEROS_REPO"/Packages.gz "$FLIPEROS_REPO"/Release "$repo/" \
-    || err "Repositorio incompleto em $FLIPEROS_REPO (falta o Packages ou o Release do make-repo.sh)"
+    || err "Incomplete repository in $FLIPEROS_REPO (missing make-repo.sh's Packages or Release)"
   chmod -R a+rX "$repo"
   echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > "$CHROOT_DIR/etc/apt/sources.list.d/fliperos.list"
   chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends fliperos-attractplus' >> "$LOG_FILE" 2>&1 \
-    || err "Instalacao do Attract-Mode Plus do repositorio local falhou (ver $LOG_FILE)"
-  ok "Repositorio local com $(ls "$repo"/*.deb | wc -l) pacote(s); Attract-Mode Plus instalado"
+    || err "Installing Attract-Mode Plus from the local repository failed (see $LOG_FILE)"
+  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus installed"
 }
 
 # ── Kernel 15 kHz ─────────────────────────────────────────────
@@ -541,18 +541,18 @@ install_15khz_kernel() {
     dir="$WORK_DIR/kernel"
   fi
   if compgen -G "$dir/linux-image-*.deb" > /dev/null && compgen -G "$dir/linux-headers-*.deb" > /dev/null; then
-    ok "Kernel $key do cache ($dir)"
+    ok "Kernel $key from the cache ($dir)"
   else
-    info "Compilando o kernel $key (demora; fica no cache para os proximos builds)"
+    info "Compiling kernel $key (slow; it stays in the cache for the next builds)"
     mkdir -p "$dir"
     bash "$src/fliperos-kernel.sh" build "$dir" >> "$LOG_FILE" 2>&1 \
-      || { rm -f "$dir"/*.deb; err "Compilacao do kernel falhou (ver $LOG_FILE)"; }
+      || { rm -f "$dir"/*.deb; err "Kernel compilation failed (see $LOG_FILE)"; }
     ok "Kernel $key compilado"
   fi
   cp "$dir"/linux-image-*.deb "$dir"/linux-headers-*.deb "$CHROOT_DIR/tmp/"
   # O postinst do linux-image gera o initrd e chama os hooks (Limine, DKMS).
   chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y /tmp/linux-image-*.deb /tmp/linux-headers-*.deb' \
-    >> "$LOG_FILE" 2>&1 || err "Instalacao do kernel falhou (ver $LOG_FILE)"
+    >> "$LOG_FILE" 2>&1 || err "Kernel installation failed (see $LOG_FILE)"
   rm -f "$CHROOT_DIR"/tmp/linux-*.deb
   KERNEL_RELEASE=$(ls "$CHROOT_DIR/lib/modules")
   ok "Kernel instalado: $KERNEL_RELEASE"
@@ -561,10 +561,10 @@ install_15khz_kernel() {
 # ── Compilar SwitchRes2 no chroot ─────────────────────────────
 build_switchres_chroot() {
   if $SKIP_SWITCHRES; then
-    warn "SwitchRes pulado — sem ele nao ha EDIDs por monitor, geometria nem as entradas EDID do boot"
+    warn "SwitchRes skipped — without it there are no per-monitor EDIDs, geometry or EDID boot entries"
     return
   fi
-  step "Compilando SwitchRes ($SWITCHRES_TAG) no chroot"
+  step "Compiling SwitchRes ($SWITCHRES_TAG) in the chroot"
   cat > "$CHROOT_DIR/tmp/build-switchres.sh" << 'SRSCRIPT'
 #!/bin/bash
 set -e
@@ -600,7 +600,7 @@ SRSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-switchres.sh"
   chroot "$CHROOT_DIR" /tmp/build-switchres.sh >> "$LOG_FILE" 2>&1 \
     && ok "SwitchRes, grid, geometry e $(ls "$CHROOT_DIR/lib/firmware/edid" | wc -l) EDIDs" \
-    || err "SwitchRes falhou; ISO nao sera publicada como completa"
+    || err "SwitchRes failed; the ISO will not be published as complete"
   for edid in generic_15_super_resp generic_15_super_resi generic_15 arcade_15; do
     [[ -s "$CHROOT_DIR/lib/firmware/edid/$edid.bin" ]] || err "EDID ausente: $edid.bin"
   done
@@ -613,10 +613,10 @@ SRSCRIPT
 # banco do dpkg: o readlink -f leva ao arquivo real em /usr/lib.
 build_skyscraper_chroot() {
   if $SKIP_SKYSCRAPER; then
-    warn "Skyscraper pulado — o Scraper do Setup nao vai funcionar"
+    warn "Skyscraper skipped — the Setup's Scraper will not work"
     return
   fi
-  step "Compilando Skyscraper ($SKYSCRAPER_TAG) no chroot"
+  step "Compiling Skyscraper ($SKYSCRAPER_TAG) in the chroot"
   cat > "$CHROOT_DIR/tmp/build-skyscraper.sh" << 'SKYSCRIPT'
 #!/bin/bash
 set -eo pipefail
@@ -647,7 +647,7 @@ SKYSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-skyscraper.sh"
   chroot "$CHROOT_DIR" /tmp/build-skyscraper.sh >> "$LOG_FILE" 2>&1 \
     && ok "Skyscraper compilado" \
-    || err "Skyscraper falhou; use --skip-skyscraper para uma ISO sem o Scraper"
+    || err "Skyscraper failed; use --skip-skyscraper for an ISO without the Scraper"
 }
 
 # ── Wi-Fi gravado na imagem (opcional) ────────────────────────
@@ -655,8 +655,8 @@ SKYSCRIPT
 # uma senha com | ou & quebraria a substituicao.
 install_wifi_profile() {
   [[ -n "$WIFI_SSID" ]] || return 0
-  step "Gravando perfil de Wi-Fi na imagem"
-  warn "A ISO passa a CONTER a senha do Wi-Fi em texto. Nao a distribua."
+  step "Saving the Wi-Fi profile in the image"
+  warn "The ISO now CONTAINS the Wi-Fi password as plain text. Do not distribute it."
   local dir="$CHROOT_DIR/etc/NetworkManager/system-connections"
   mkdir -p "$dir"
   local file="$dir/fliperos-wifi.nmconnection"
@@ -686,7 +686,7 @@ install_wifi_profile() {
   # O NetworkManager IGNORA o arquivo em silencio se ele nao for 0600 do root.
   chmod 600 "$file"
   chown 0:0 "$file"
-  ok "Wi-Fi \"$WIFI_SSID\" gravado; conecta sozinho no boot"
+  ok "Wi-Fi \"$WIFI_SSID\" saved; connects by itself at boot"
 }
 
 # ── Drivers de input out-of-tree ──────────────────────────────
@@ -701,17 +701,17 @@ install_wifi_profile() {
 # nao e troca que se faz calada.
 build_input_drivers_chroot() {
   if $SKIP_INPUT_DRIVERS; then
-    warn "Drivers de input pulados — GunCon 2 nao vai funcionar"
+    warn "Input drivers skipped — GunCon 2 will not work"
     return
   fi
-  step "Compilando drivers de input (DKMS)"
+  step "Compiling input drivers (DKMS)"
   cat > "$CHROOT_DIR/tmp/build-input.sh" << 'INPUTSCRIPT'
 #!/bin/bash
 set -e
 apt-get update -qq
 apt-get install -y --no-install-recommends dkms git build-essential
 KVER=$(ls /lib/modules | sort -V | tail -1)
-echo "Compilando para o kernel $KVER"
+echo "Compiling for kernel $KVER"
 
 # GunCon 2 (0b9a:016a). O repo nao traz dkms.conf, entao escrevemos um; o
 # Makefile dele aceita KVERSION, que e o nome que o dkms expande em $kernelver.
@@ -735,8 +735,8 @@ dkms add -m guncon2 -v 1.0
 # O dkms diz "consulte o make.log" e o make.log fica dentro do chroot, que
 # desaparece com o container: sem despejar aqui, o erro do compilador se perde.
 if ! dkms build -m guncon2 -v 1.0 -k "$KVER"; then
-  echo "--- make.log do guncon2 ---"
-  cat /var/lib/dkms/guncon2/1.0/build/make.log 2>/dev/null || echo "(sem make.log)"
+  echo "--- guncon2 make.log ---"
+  cat /var/lib/dkms/guncon2/1.0/build/make.log 2>/dev/null || echo "(no make.log)"
   exit 1
 fi
 dkms install -m guncon2 -v 1.0 -k "$KVER"
@@ -755,7 +755,7 @@ INPUTSCRIPT
 git clone --depth 1 --recurse-submodules \
   https://github.com/Kimplul/hid-tmff2 /tmp/hid-tmff2
 TM_VER=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"/\1/p' /tmp/hid-tmff2/dkms/dkms.conf)
-[ -n "$TM_VER" ] || { echo "nao deu pra ler a versao do hid-tmff2"; exit 1; }
+[ -n "$TM_VER" ] || { echo "could not read the hid-tmff2 version"; exit 1; }
 cp -r /tmp/hid-tmff2 "/usr/src/hid-tmff2-$TM_VER"
 cp /tmp/hid-tmff2/dkms/dkms.conf "/usr/src/hid-tmff2-$TM_VER/dkms.conf"
 dkms add -m hid-tmff2 -v "$TM_VER"
@@ -765,7 +765,7 @@ dkms install -m hid-tmff2 -v "$TM_VER" -k "$KVER"
 # new-lg4ff substitui o hid-logitech do kernel (DEST_MODULE_NAME=hid-logitech).
 git clone --depth 1 https://github.com/berarma/new-lg4ff /tmp/new-lg4ff
 LG_VER=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"/\1/p' /tmp/new-lg4ff/dkms.conf)
-[ -n "$LG_VER" ] || { echo "nao deu pra ler a versao do new-lg4ff"; exit 1; }
+[ -n "$LG_VER" ] || { echo "could not read the new-lg4ff version"; exit 1; }
 cp -r /tmp/new-lg4ff "/usr/src/new-lg4ff-$LG_VER"
 dkms add -m new-lg4ff -v "$LG_VER"
 dkms build -m new-lg4ff -v "$LG_VER" -k "$KVER"
@@ -777,14 +777,14 @@ WHEELSCRIPT
 
   chmod +x "$CHROOT_DIR/tmp/build-input.sh"
   if chroot "$CHROOT_DIR" /tmp/build-input.sh >> "$LOG_FILE" 2>&1; then
-    ok "GunCon 2 compilado via DKMS"
+    ok "GunCon 2 built via DKMS"
     if $WITH_WHEEL_DRIVERS; then
-      ok "hid-tmff2 e new-lg4ff compilados via DKMS"
+      ok "hid-tmff2 and new-lg4ff built via DKMS"
     fi
   else
-    echo -e "${DIM}--- fim do log do chroot ---${RST}" >&2
+    echo -e "${DIM}--- end of the chroot log ---${RST}" >&2
     tail -25 "$LOG_FILE" >&2 || true
-    err "Compilacao dos drivers de input falhou"
+    err "Input driver compilation failed"
   fi
   # O return 0 e necessario: o status do ultimo comando vira o status da
   # funcao, e a funcao e chamada nua no fluxo principal, onde o set -e aborta
@@ -807,41 +807,41 @@ set_default_plymouth_theme() {
   local theme="$1"
   local file="/usr/share/plymouth/themes/${theme}/${theme}.plymouth"
   chroot "$CHROOT_DIR" test -f "$file" \
-    || err "Tema de splash ausente no chroot: $file"
+    || err "Splash theme missing in the chroot: $file"
   chroot "$CHROOT_DIR" update-alternatives --install \
       /usr/share/plymouth/themes/default.plymouth default.plymouth "$file" 100 \
     && chroot "$CHROOT_DIR" update-alternatives --set default.plymouth "$file" \
-    || err "Nao foi possivel definir $theme como tema padrao do Plymouth"
+    || err "Could not set $theme as the default Plymouth theme"
 }
 
 install_splash_theme() {
   if [[ "$SPLASH_THEME" == none ]]; then
-    warn "Splash desabilitado (--splash none); boot em modo texto"
+    warn "Splash disabled (--splash none); text-mode boot"
     return
   fi
   if [[ "$SPLASH_THEME" == fliperos ]]; then
     set_default_plymouth_theme fliperos
-    ok "Splash: tema fliperos (texto renderizado, sem asset binario)"
+    ok "Splash: fliperos theme (rendered text, no binary asset)"
     return
   fi
 
-  step "Instalando o splash Evangelion UI (Pling ${EVANGELION_PLING_ID})"
-  warn "O autor do tema declara RISCO DE CONVULSAO (luzes piscando)."
-  warn "Tema fan-made, sem arquivo de licenca no pacote — revise antes de redistribuir a ISO."
+  step "Installing the Evangelion UI splash (Pling ${EVANGELION_PLING_ID})"
+  warn "The theme author declares a SEIZURE RISK (flashing lights)."
+  warn "Fan-made theme, no license file in the package — review before redistributing the ISO."
   local geom url tarball vendored
   geom=$(splash_mode_geometry)
   tarball="$CHROOT_DIR/tmp/evangelion-ui.tar.gz"
   vendored="$(dirname "$(realpath "$0")")/themes/evangelion-ui.tar.gz"
   if [[ -f "$vendored" ]]; then
     cp "$vendored" "$tarball"
-    ok "Tema obtido de themes/evangelion-ui.tar.gz (copia local)"
+    ok "Theme taken from themes/evangelion-ui.tar.gz (local copy)"
   else
     url=$(curl -sL --max-time 60 \
       "https://api.pling.com/ocs/v1/content/data/${EVANGELION_PLING_ID}?format=json" \
       | tr ',' '\n' | grep '"downloadlink1"' | cut -d'"' -f4)
-    [[ -n "$url" ]] || err "Nao foi possivel resolver o link do tema no Pling"
-    curl -sL --max-time 900 -o "$tarball" "$url" || err "Download do tema Evangelion falhou"
-    ok "Tema baixado ($(du -h "$tarball" | cut -f1))"
+    [[ -n "$url" ]] || err "Could not resolve the theme link on Pling"
+    curl -sL --max-time 900 -o "$tarball" "$url" || err "Evangelion theme download failed"
+    ok "Theme downloaded ($(du -h "$tarball" | cut -f1))"
   fi
 
   cat > "$CHROOT_DIR/tmp/install-splash.sh" << SPLASHSCRIPT
@@ -869,13 +869,13 @@ SPLASHSCRIPT
   chmod +x "$CHROOT_DIR/tmp/install-splash.sh"
   if chroot "$CHROOT_DIR" /tmp/install-splash.sh >> "$LOG_FILE" 2>&1; then
     set_default_plymouth_theme evangelion-ui
-    ok "Splash: Evangelion UI, 202 frames reescalados para $geom"
+    ok "Splash: Evangelion UI, 202 frames rescaled to $geom"
   else
     # O $LOG_FILE fica DENTRO do container e desaparece com --rm, entao o
     # motivo da falha tem de ir pra saida padrao ou nao ha como diagnosticar.
-    echo -e "${DIM}--- fim do log do chroot ---${RST}" >&2
+    echo -e "${DIM}--- end of the chroot log ---${RST}" >&2
     tail -25 "$LOG_FILE" >&2 || true
-    err "Instalacao do splash Evangelion falhou"
+    err "Evangelion splash installation failed"
   fi
 }
 
@@ -886,19 +886,19 @@ SPLASHSCRIPT
 # sistema (o padrao do release e ".;ini", relativo a pasta de onde se abre).
 install_groovymame_chroot() {
   if $SKIP_GROOVYMAME; then
-    warn "GroovyMAME pulado (--skip-groovymame)"
+    warn "GroovyMAME skipped (--skip-groovymame)"
     return
   fi
-  step "GroovyMAME ${GROOVYMAME_TAG} (release oficial)"
+  step "GroovyMAME ${GROOVYMAME_TAG} (official release)"
   local tarball="$WORK_DIR/$GROOVYMAME_FILE"
   curl -sSfL --retry 3 --max-time 900 -o "$tarball" \
     "https://github.com/antonioginer/GroovyMAME/releases/download/${GROOVYMAME_TAG}/${GROOVYMAME_FILE}" \
-    >> "$LOG_FILE" 2>&1 || err "Download do GroovyMAME falhou"
+    >> "$LOG_FILE" 2>&1 || err "GroovyMAME download failed"
   echo "$GROOVYMAME_SHA256  $tarball" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
-    || err "GroovyMAME: hash diferente do fixado"
+    || err "GroovyMAME: hash differs from the pinned one"
   # O container do build nao tem bzip2; o tarfile do Python le .tar.bz2.
   python3 -c 'import sys, tarfile; tarfile.open(sys.argv[1]).extract("groovymame", sys.argv[2])' \
-    "$tarball" "$WORK_DIR" || err "GroovyMAME: o pacote nao extraiu"
+    "$tarball" "$WORK_DIR" || err "GroovyMAME: the package did not extract"
   install -Dm755 "$WORK_DIR/groovymame" "$CHROOT_DIR/usr/local/libexec/groovymame"
   rm -f "$tarball" "$WORK_DIR/groovymame"
   # O release so traz o binario. Como o pacote do GroovyArcade, os arquivos
@@ -908,11 +908,11 @@ install_groovymame_chroot() {
   local gm_src="$WORK_DIR/groovymame-src" gm_share="$CHROOT_DIR/usr/local/share/groovymame"
   git clone -q --depth 1 --branch "$GROOVYMAME_TAG" --filter=blob:none --sparse \
     https://github.com/antonioginer/GroovyMAME "$gm_src" >> "$LOG_FILE" 2>&1 \
-    || err "GroovyMAME: o codigo da tag nao baixou"
+    || err "GroovyMAME: the tag's source did not download"
   [[ $(git -C "$gm_src" rev-parse HEAD) == "$GROOVYMAME_COMMIT" ]] \
-    || err "GroovyMAME: a tag ${GROOVYMAME_TAG} nao e mais o commit fixado"
+    || err "GroovyMAME: tag ${GROOVYMAME_TAG} is no longer the pinned commit"
   git -C "$gm_src" sparse-checkout set artwork bgfx plugins language ctrlr keymaps hash >> "$LOG_FILE" 2>&1 \
-    || err "GroovyMAME: os arquivos do codigo nao baixaram"
+    || err "GroovyMAME: the source files did not download"
   rm -rf "$gm_share"
   mkdir -p "$gm_share/fonts"
   cp -r "$gm_src"/{artwork,bgfx,plugins,language,ctrlr,keymaps,hash} "$gm_share/"
@@ -923,14 +923,14 @@ install_groovymame_chroot() {
   chroot "$CHROOT_DIR" apt-get install -y --no-install-recommends \
     libsdl2-2.0-0 libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 \
     libpulse0 libasound2t64 libfontconfig1 libxi6 libgl1 libdrm2 >> "$LOG_FILE" 2>&1 \
-    || err "GroovyMAME: as bibliotecas nao instalaram"
+    || err "GroovyMAME: the libraries did not install"
   chroot "$CHROOT_DIR" /usr/local/libexec/groovymame -version >> "$LOG_FILE" 2>&1 \
-    || err "GroovyMAME: o binario nao abre (biblioteca faltando?)"
+    || err "GroovyMAME: the binary does not start (missing library?)"
   # O mame.ini completo, como o GroovyArcade: o -createconfig desta versao
   # com as opcoes do config/mame.ini por cima (config/fliperos-mame-ini).
   chroot "$CHROOT_DIR" /opt/fliperos/bin/fliperos-mame-ini /etc/fliperos/mame/mame.ini /etc/fliperos/mame/mame.ini \
-    >> "$LOG_FILE" 2>&1 || err "GroovyMAME: o mame.ini nao foi gerado"
-  ok "GroovyMAME ${GROOVYMAME_TAG} em /usr/local/libexec/groovymame"
+    >> "$LOG_FILE" 2>&1 || err "GroovyMAME: mame.ini was not generated"
+  ok "GroovyMAME ${GROOVYMAME_TAG} in /usr/local/libexec/groovymame"
 }
 
 # ── XML do MAME 2010 (ROM cleaner) ────────────────────────────
@@ -938,11 +938,11 @@ install_groovymame_chroot() {
 # mame2010) pelo XML dessa versao, que o MAME instalado nao gera. Commit e
 # sha256 fixados no config/fliperos-romclean; vai comprimido (43 MB -> 3 MB).
 install_mame2010_xml() {
-  step "XML do MAME 2010 (ROM cleaner)"
+  step "MAME 2010 XML (ROM cleaner)"
   python3 "$(dirname "$(realpath "$0")")/config/fliperos-romclean" fetch-mame2010 \
     "$CHROOT_DIR/usr/local/share/fliperos/mame2010.xml.xz" >> "$LOG_FILE" 2>&1 \
-    || err "XML do MAME 2010 nao baixou"
-  ok "XML do MAME 2010 em /usr/local/share/fliperos/mame2010.xml.xz"
+    || err "MAME 2010 XML did not download"
+  ok "MAME 2010 XML in /usr/local/share/fliperos/mame2010.xml.xz"
 }
 
 # ── Compilar RetroArch em KMS/DRM, sem X11 ────────────────────
@@ -961,10 +961,10 @@ install_mame2010_xml() {
 # SDL 1.x fica fora.
 build_retroarch_chroot() {
   if $SKIP_RETROARCH; then
-    warn "RetroArch pulado (--skip-retroarch)"
+    warn "RetroArch skipped (--skip-retroarch)"
     return
   fi
-  step "Compilando RetroArch (KMS/DRM, sem X11) no chroot"
+  step "Compiling RetroArch (KMS/DRM, no X11) in the chroot"
   cat > "$CHROOT_DIR/tmp/build-retroarch.sh" << 'RASCRIPT'
 #!/bin/bash
 set -e
@@ -1063,8 +1063,8 @@ RASCRIPT
          -e "s|__RA_CORE_INFO_COMMIT__|${RA_CORE_INFO_COMMIT}|g" "$CHROOT_DIR/tmp/build-retroarch.sh"
   chmod +x "$CHROOT_DIR/tmp/build-retroarch.sh"
   chroot "$CHROOT_DIR" /tmp/build-retroarch.sh >> "$LOG_FILE" 2>&1 \
-    && ok "RetroArch compilado (KMS/DRM) com cores e autoconfig de joypad" \
-    || err "RetroArch falhou; use --skip-retroarch explicitamente para ISO sem ele"
+    && ok "RetroArch compiled (KMS/DRM) with cores and joypad autoconfig" \
+    || err "RetroArch failed; use --skip-retroarch explicitly for an ISO without it"
 }
 
 # ── Compilar Flycast (Dreamcast/Naomi), X11 ──────────────────
@@ -1076,10 +1076,10 @@ RASCRIPT
 # adiciona deps novas (glslang/SPIRV) sem necessidade pro caminho OpenGL.
 build_flycast_chroot() {
   if $SKIP_FLYCAST; then
-    warn "Flycast pulado (--skip-flycast)"
+    warn "Flycast skipped (--skip-flycast)"
     return
   fi
-  step "Compilando Flycast (Dreamcast/Naomi, X11) no chroot"
+  step "Compiling Flycast (Dreamcast/Naomi, X11) in the chroot"
   cat > "$CHROOT_DIR/tmp/build-flycast.sh" << 'FCSCRIPT'
 #!/bin/bash
 set -e
@@ -1100,7 +1100,7 @@ FCSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-flycast.sh"
   chroot "$CHROOT_DIR" /tmp/build-flycast.sh >> "$LOG_FILE" 2>&1 \
     && ok "Flycast compilado" \
-    || err "Flycast falhou; use --skip-flycast explicitamente para ISO sem ele"
+    || err "Flycast failed; use --skip-flycast explicitly for an ISO without it"
 }
 
 # ── PCSX2 (PS2), X11 ──────────────────────────────────────────
@@ -1111,19 +1111,19 @@ FCSCRIPT
 # fliperos-x11-run.
 build_pcsx2_chroot() {
   if $SKIP_PCSX2; then
-    warn "PCSX2 pulado (--skip-pcsx2)"
+    warn "PCSX2 skipped (--skip-pcsx2)"
     return
   fi
-  step "PCSX2 ${PCSX2_VERSION} (AppImage oficial, X11)"
+  step "PCSX2 ${PCSX2_VERSION} (official AppImage, X11)"
   local image="$WORK_DIR/pcsx2.AppImage"
   curl -sSfL --retry 3 --max-time 900 -o "$image" \
     "https://github.com/PCSX2/pcsx2/releases/download/v${PCSX2_VERSION}/pcsx2-v${PCSX2_VERSION}-linux-appimage-x64-Qt.AppImage" \
-    >> "$LOG_FILE" 2>&1 || err "Download do PCSX2 falhou"
+    >> "$LOG_FILE" 2>&1 || err "PCSX2 download failed"
   echo "$PCSX2_SHA256  $image" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
-    || err "PCSX2: hash diferente do fixado"
+    || err "PCSX2: hash differs from the pinned one"
   chmod +x "$image"
   (cd "$WORK_DIR" && rm -rf squashfs-root && "$image" --appimage-extract > /dev/null) \
-    || err "PCSX2: o AppImage nao extraiu"
+    || err "PCSX2: the AppImage did not extract"
   rm -rf "$CHROOT_DIR/opt/pcsx2"
   mv "$WORK_DIR/squashfs-root" "$CHROOT_DIR/opt/pcsx2"
   chmod -R a+rX "$CHROOT_DIR/opt/pcsx2"
@@ -1132,7 +1132,7 @@ build_pcsx2_chroot() {
   # Icone do menu do LXDE (config/applications/fliperos-pcsx2.desktop).
   install -Dm644 "$CHROOT_DIR/opt/pcsx2/PCSX2.png" "$CHROOT_DIR/usr/local/share/pixmaps/pcsx2.png"
   rm -f "$image"
-  ok "PCSX2 ${PCSX2_VERSION} em /opt/pcsx2"
+  ok "PCSX2 ${PCSX2_VERSION} in /opt/pcsx2"
 }
 
 # ── Compilar Supermodel (Sega Model 3), X11 ───────────────────
@@ -1140,10 +1140,10 @@ build_pcsx2_chroot() {
 # X11 via fliperos-x11-run.
 build_supermodel_chroot() {
   if $SKIP_SUPERMODEL; then
-    warn "Supermodel pulado (--skip-supermodel)"
+    warn "Supermodel skipped (--skip-supermodel)"
     return
   fi
-  step "Compilando Supermodel (Model 3, X11) no chroot"
+  step "Compiling Supermodel (Model 3, X11) in the chroot"
   cat > "$CHROOT_DIR/tmp/build-supermodel.sh" << 'SMSCRIPT'
 #!/bin/bash
 set -e
@@ -1163,7 +1163,7 @@ SMSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-supermodel.sh"
   chroot "$CHROOT_DIR" /tmp/build-supermodel.sh >> "$LOG_FILE" 2>&1 \
     && ok "Supermodel compilado" \
-    || err "Supermodel falhou; use --skip-supermodel explicitamente para ISO sem ele"
+    || err "Supermodel failed; use --skip-supermodel explicitly for an ISO without it"
 }
 
 # ── Hypseus Singe (laserdisc: Dragon's Lair, Space Ace...), X11 ──
@@ -1173,10 +1173,10 @@ SMSCRIPT
 # Samba): ROMs em roms/, videos de laserdisc em vldp/, jogos Singe em singe/.
 build_hypseus_chroot() {
   if $SKIP_HYPSEUS; then
-    warn "Hypseus Singe pulado (--skip-hypseus)"
+    warn "Hypseus Singe skipped (--skip-hypseus)"
     return
   fi
-  step "Compilando Hypseus Singe ($HYPSEUS_TAG) no chroot"
+  step "Compiling Hypseus Singe ($HYPSEUS_TAG) in the chroot"
   cat > "$CHROOT_DIR/tmp/build-hypseus.sh" << 'HSSCRIPT'
 #!/bin/bash
 set -e
@@ -1203,7 +1203,7 @@ HSSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-hypseus.sh"
   chroot "$CHROOT_DIR" /tmp/build-hypseus.sh >> "$LOG_FILE" 2>&1 \
     && ok "Hypseus Singe compilado" \
-    || err "Hypseus Singe falhou; use --skip-hypseus para ISO sem ele"
+    || err "Hypseus Singe failed; use --skip-hypseus for an ISO without it"
 }
 
 # ── OpenBOR (beat 'em ups), X11 ───────────────────────────────
@@ -1211,10 +1211,10 @@ HSSCRIPT
 # openbor entra em /opt/fliperos/roms/openbor (o acervo do Samba) antes.
 build_openbor_chroot() {
   if $SKIP_OPENBOR; then
-    warn "OpenBOR pulado (--skip-openbor)"
+    warn "OpenBOR skipped (--skip-openbor)"
     return
   fi
-  step "Compilando OpenBOR (${OPENBOR_COMMIT:0:7}) no chroot"
+  step "Compiling OpenBOR (${OPENBOR_COMMIT:0:7}) in the chroot"
   cat > "$CHROOT_DIR/tmp/build-openbor.sh" << 'OBSCRIPT'
 #!/bin/bash
 set -e
@@ -1253,7 +1253,7 @@ OBSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-openbor.sh"
   chroot "$CHROOT_DIR" /tmp/build-openbor.sh >> "$LOG_FILE" 2>&1 \
     && ok "OpenBOR compilado" \
-    || err "OpenBOR falhou; use --skip-openbor para ISO sem ele"
+    || err "OpenBOR failed; use --skip-openbor for an ISO without it"
 }
 
 # ── Dolphin (GameCube/Wii), X11 ───────────────────────────────
@@ -1263,10 +1263,10 @@ OBSCRIPT
 # dentro do X do desktop); o do FliperOS passa pelo fliperos-launch.
 build_dolphin_chroot() {
   if $SKIP_DOLPHIN; then
-    warn "Dolphin pulado (--skip-dolphin)"
+    warn "Dolphin skipped (--skip-dolphin)"
     return
   fi
-  step "Compilando Dolphin ($DOLPHIN_TAG) no chroot"
+  step "Compiling Dolphin ($DOLPHIN_TAG) in the chroot"
   cat > "$CHROOT_DIR/tmp/build-dolphin.sh" << 'DOLSCRIPT'
 #!/bin/bash
 set -e
@@ -1294,7 +1294,7 @@ DOLSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-dolphin.sh"
   chroot "$CHROOT_DIR" /tmp/build-dolphin.sh >> "$LOG_FILE" 2>&1 \
     && ok "Dolphin compilado" \
-    || err "Dolphin falhou; use --skip-dolphin para ISO sem ele"
+    || err "Dolphin failed; use --skip-dolphin for an ISO without it"
 }
 
 # ── Wine, Steam e Heroic: sob demanda (Setup > Extras) ────────
@@ -1304,12 +1304,12 @@ DOLSCRIPT
 # (Wine de 32 bits e Steam) e a pasta do Model 2 Emulator, que o usuario
 # copia (freeware de codigo fechado, sem permissao clara de redistribuicao).
 prepare_extras_chroot() {
-  step "Wine, Steam e Heroic: Setup > Extras"
+  step "Wine, Steam and Heroic: Setup > Extras"
   chroot "$CHROOT_DIR" dpkg --print-foreign-architectures | grep -qx i386 ||
     chroot "$CHROOT_DIR" dpkg --add-architecture i386 || err "dpkg --add-architecture i386 falhou"
   mkdir -p "$CHROOT_DIR/opt/fliperos/model2/roms"
   chroot "$CHROOT_DIR" chown -R fliperos:fliperos /opt/fliperos/model2
-  ok "i386 habilitado e /opt/fliperos/model2; Wine, Steam e Heroic pelo Setup > Extras"
+  ok "i386 enabled and /opt/fliperos/model2; Wine, Steam and Heroic through Setup > Extras"
 }
 
 # ── Imagem enxuta (o GitHub aceita ate 2 GiB por arquivo) ─────
@@ -1327,7 +1327,7 @@ prepare_extras_chroot() {
 # path-exclude do dpkg, para uma atualizacao do linux-firmware nao o trazer
 # de volta.
 slim_rootfs_chroot() {
-  step "Enxugando a imagem"
+  step "Slimming the image"
   cat > "$CHROOT_DIR/tmp/slim-rootfs.sh" << 'SLIMSCRIPT'
 #!/bin/bash
 set -eo pipefail
@@ -1368,15 +1368,15 @@ for _ in 1 2 3 4 5 6 7 8; do
   mv /tmp/purge.new /tmp/purge
 done
 if [ -s /tmp/extra ]; then
-  echo "O purge dos -dev levaria junto:"; cat /tmp/extra
+  echo "Purging the -dev packages would also take:"; cat /tmp/extra
   exit 1
 fi
-echo "Removendo $(wc -l < /tmp/purge) pacotes de compilacao"
+echo "Removing $(wc -l < /tmp/purge) build packages"
 apt-get purge -y $(cat /tmp/purge)
 
 scan_libs | grep '^MISSING' | comm -13 /tmp/missing-before - > /tmp/missing-new || true
 if [ -s /tmp/missing-new ]; then
-  echo "Bibliotecas que sumiram com o purge:"; cat /tmp/missing-new
+  echo "Libraries that disappeared with the purge:"; cat /tmp/missing-new
   exit 1
 fi
 
@@ -1407,19 +1407,19 @@ SLIMSCRIPT
   chmod +x "$CHROOT_DIR/tmp/slim-rootfs.sh"
   chroot "$CHROOT_DIR" /tmp/slim-rootfs.sh >> "$LOG_FILE" 2>&1 || {
     tail -25 "$LOG_FILE" >&2 || true
-    err "Nao deu para enxugar a imagem (ver $LOG_FILE)"
+    err "Could not slim the image (see $LOG_FILE)"
   }
   rm -f "$CHROOT_DIR/tmp/slim-rootfs.sh"
-  ok "Imagem enxuta: sem -dev, cache do apt e firmware fora do escopo ($(du -sh --one-file-system "$CHROOT_DIR" | cut -f1))"
+  ok "Slim image: no -dev, apt cache or out-of-scope firmware ($(du -sh --one-file-system "$CHROOT_DIR" | cut -f1))"
 }
 
 # ── squashfs ──────────────────────────────────────────────────
 create_squashfs() {
-  step "Criando squashfs"
+  step "Creating squashfs"
   # O resolv.conf do container do build (o DNS interno do Docker) servia so
   # ao apt do chroot; na imagem o NetworkManager o escreve com o DNS do DHCP
   # (fliperos-rootfs.sh).
-  printf '# Escrito pelo NetworkManager com o DNS da rede.\n' > "$CHROOT_DIR/etc/resolv.conf"
+  printf '# Written by NetworkManager with the network\'s DNS.\n' > "$CHROOT_DIR/etc/resolv.conf"
   mkdir -p "$ISO_DIR/live"
   rm -f "$ISO_DIR/live/filesystem.squashfs"
   # xz com o filtro x86 e blocos de 1 MiB: uns 15% menor que o zstd, para a
@@ -1434,13 +1434,13 @@ create_squashfs() {
 
 # ── Kernel e initrd ───────────────────────────────────────────
 copy_kernel() {
-  step "Copiando kernel e initrd"
+  step "Copying kernel and initrd"
   mkdir -p "$ISO_DIR/boot/limine"
   local VMLINUZ INITRD
   VMLINUZ=$(find "$CHROOT_DIR/boot" -name "vmlinuz-*" | sort -V | tail -1)
   INITRD=$(find  "$CHROOT_DIR/boot" -name "initrd.img-*" | sort -V | tail -1)
-  [[ -z "$VMLINUZ" ]] && err "vmlinuz nao encontrado"
-  [[ -z "$INITRD"  ]] && err "initrd nao encontrado"
+  [[ -z "$VMLINUZ" ]] && err "vmlinuz not found"
+  [[ -z "$INITRD"  ]] && err "initrd not found"
   cp "$VMLINUZ" "$ISO_DIR/boot/vmlinuz"
   cp "$INITRD"  "$ISO_DIR/boot/initrd.img"
   ok "Kernel: $(basename "$VMLINUZ")"
@@ -1454,13 +1454,13 @@ fetch_limine() {
   step "Limine"
   LIMINE_DIR="$WORK_DIR/limine"
   bash "$(dirname "$(realpath "$0")")/fliperos-limine.sh" fetch "$LIMINE_DIR" >> "$LOG_FILE" 2>&1 \
-    || err "Falha ao obter o Limine (ver $LOG_FILE)"
+    || err "Failed to get Limine (see $LOG_FILE)"
   ok "Limine $("$LIMINE_DIR/limine" version --version-only)"
 }
 
 install_limine_rootfs() {
   bash "$(dirname "$(realpath "$0")")/fliperos-limine.sh" rootfs "$CHROOT_DIR" "$LIMINE_DIR"
-  ok "Limine e fliperos-limine-update no rootfs"
+  ok "Limine and fliperos-limine-update in the rootfs"
 }
 
 # Parametros comuns a todas as entradas do menu de boot da midia: splash,
@@ -1478,46 +1478,46 @@ create_boot_config() {
 
 # ── Gerar ISO (BIOS + EFI via Limine) ─────────────────────────
 create_iso() {
-  step "Gerando ISO: $OUTPUT_ISO"
+  step "Building ISO: $OUTPUT_ISO"
   mkdir -p "$(dirname "$OUTPUT_ISO")"
   bash "$(dirname "$(realpath "$0")")/fliperos-limine.sh" iso "$LIMINE_DIR" "$ISO_DIR" \
     "$OUTPUT_ISO" "FLIPEROS_${FLIPEROS_VERSION//./_}" >> "$LOG_FILE" 2>&1 \
-    || err "ISO nao gerada (ver $LOG_FILE)"
-  [[ -f "$OUTPUT_ISO" ]] || err "ISO nao gerada"
+    || err "ISO not generated (see $LOG_FILE)"
+  [[ -f "$OUTPUT_ISO" ]] || err "ISO not generated"
   ok "ISO pronta: $OUTPUT_ISO ($(du -sh "$OUTPUT_ISO" | cut -f1))"
 }
 
 # ── Cleanup ───────────────────────────────────────────────────
 cleanup() {
-  info "Limpando..."
+  info "Cleaning up..."
   unmount_chroot
   # --one-file-system garante que nao sai dos limites do diretorio
-  [[ "$WORK_DIR" == /tmp/fliperos-iso-build.* ]] || err "Workspace invalido"
-  if findmnt -rn -o TARGET | grep -F "$WORK_DIR/"; then err "Mounts restantes; limpeza recusada"; fi
+  [[ "$WORK_DIR" == /tmp/fliperos-iso-build.* ]] || err "Invalid workspace"
+  if findmnt -rn -o TARGET | grep -F "$WORK_DIR/"; then err "Leftover mounts; cleanup refused"; fi
   rm -rf --one-file-system "$WORK_DIR"
-  ok "Limpeza concluida"
+  ok "Cleanup done"
 }
 
 # ── Resumo ────────────────────────────────────────────────────
 summary() {
-  echo -e "\n${GRN}${BLD}ISO gerada com sucesso!${RST}"
+  echo -e "\n${GRN}${BLD}ISO built successfully!${RST}"
   echo -e "  Arquivo : ${CYN}$OUTPUT_ISO${RST}"
   echo -e "  Tamanho : ${CYN}$(du -sh "$OUTPUT_ISO" | cut -f1)${RST}"
   echo -e "  Kernel  : ${CYN}${KERNEL_RELEASE:-?} (patches 15 kHz D0023R)${RST}"
-  echo -e "\n  Gravar em USB:"
+  echo -e "\n  Write to USB:"
   echo -e "  ${CYN}sudo dd if=$OUTPUT_ISO of=/dev/sdX bs=4M status=progress oflag=sync${RST}"
   echo -e "\n  Login: fliperos / fliperos"
-  echo -e "  ${YLW}Kernel proprio nao assinado — desabilite o Secure Boot na UEFI${RST}"
-  $SKIP_SWITCHRES  && echo -e "  ${YLW}Sem SwitchRes: sem EDIDs por monitor, geometria nem as entradas EDID do boot${RST}"
-  $SKIP_GROOVYMAME && echo -e "  ${YLW}GroovyMAME nao incluido${RST}"
-  $SKIP_RETROARCH  && echo -e "  ${YLW}RetroArch nao incluido${RST}"
-  $SKIP_FLYCAST    && echo -e "  ${YLW}Flycast nao incluido${RST}"
-  $SKIP_PCSX2      && echo -e "  ${YLW}PCSX2 nao incluido${RST}"
-  $SKIP_SUPERMODEL && echo -e "  ${YLW}Supermodel nao incluido${RST}"
-  $SKIP_DOLPHIN    && echo -e "  ${YLW}Dolphin nao incluido${RST}"
-  $SKIP_HYPSEUS    && echo -e "  ${YLW}Hypseus Singe nao incluido${RST}"
-  $SKIP_OPENBOR    && echo -e "  ${YLW}OpenBOR nao incluido${RST}"
-  $SKIP_SKYSCRAPER && echo -e "  ${YLW}Skyscraper nao incluido (Setup > Scraper indisponivel)${RST}"
+  echo -e "  ${YLW}Custom unsigned kernel — disable Secure Boot in the UEFI${RST}"
+  $SKIP_SWITCHRES  && echo -e "  ${YLW}No SwitchRes: no per-monitor EDIDs, geometry or EDID boot entries${RST}"
+  $SKIP_GROOVYMAME && echo -e "  ${YLW}GroovyMAME not included${RST}"
+  $SKIP_RETROARCH  && echo -e "  ${YLW}RetroArch not included${RST}"
+  $SKIP_FLYCAST    && echo -e "  ${YLW}Flycast not included${RST}"
+  $SKIP_PCSX2      && echo -e "  ${YLW}PCSX2 not included${RST}"
+  $SKIP_SUPERMODEL && echo -e "  ${YLW}Supermodel not included${RST}"
+  $SKIP_DOLPHIN    && echo -e "  ${YLW}Dolphin not included${RST}"
+  $SKIP_HYPSEUS    && echo -e "  ${YLW}Hypseus Singe not included${RST}"
+  $SKIP_OPENBOR    && echo -e "  ${YLW}OpenBOR not included${RST}"
+  $SKIP_SKYSCRAPER && echo -e "  ${YLW}Skyscraper not included (Setup > Scraper unavailable)${RST}"
   echo -e "  ${DIM}Log: $LOG_FILE${RST}\n"
 }
 
@@ -1539,7 +1539,7 @@ echo -e "${DIM}Ubuntu $UBUNTU_CODENAME — kernel 15 kHz — saida: $OUTPUT_ISO$
 
 mkdir -p "$ISO_DIR"
 
-[[ -c /dev/null ]] || err "/dev/null invalido; build recusado"
+[[ -c /dev/null ]] || err "/dev/null is invalid; build refused"
 check_host_deps
 fetch_limine
 fetch_debs

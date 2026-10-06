@@ -38,13 +38,13 @@ done
 
 command -v dpkg-scanpackages >/dev/null || err "dpkg-scanpackages ausente (pacote dpkg-dev)"
 command -v apt-ftparchive   >/dev/null || err "apt-ftparchive ausente (pacote apt-utils)"
-[[ -d "$PACKAGES" ]] || err "Diretorio de pacotes nao existe: $PACKAGES"
+[[ -d "$PACKAGES" ]] || err "Package folder does not exist: $PACKAGES"
 
 shopt -s nullglob
 debs=("$PACKAGES"/*.deb)
-[[ ${#debs[@]} -gt 0 ]] || err "Nenhum .deb em $PACKAGES — rode packaging/build-deb.sh primeiro"
+[[ ${#debs[@]} -gt 0 ]] || err "No .deb in $PACKAGES — run packaging/build-deb.sh first"
 
-step "Montando repositorio plano com ${#debs[@]} pacote(s)"
+step "Building a flat repository with ${#debs[@]} package(s)"
 rm -rf "$OUTPUT"
 mkdir -p "$OUTPUT"
 for deb in "${debs[@]}"; do
@@ -54,7 +54,7 @@ done
 cd "$OUTPUT"
 dpkg-scanpackages --multiversion . > Packages 2>/dev/null
 gzip -9c Packages > Packages.gz
-ok "Packages: $(grep -c '^Package:' Packages) entrada(s)"
+ok "Packages: $(grep -c '^Package:' Packages) entry(ies)"
 
 # apt-ftparchive calcula os hashes de Packages/Packages.gz no Release; sem
 # isso o apt recusa o repositorio.
@@ -62,17 +62,17 @@ apt-ftparchive -o APT::FTPArchive::Release::Origin=FliperOS \
                -o APT::FTPArchive::Release::Label=FliperOS \
                -o APT::FTPArchive::Release::Architectures=amd64 \
                release . > Release
-ok "Release gerado"
+ok "Release generated"
 
 if [[ -n "$SIGN_KEY" ]]; then
-  command -v gpg >/dev/null || err "gpg ausente, necessario para --sign"
+  command -v gpg >/dev/null || err "gpg is missing, needed for --sign"
   gpg --default-key "$SIGN_KEY" --clearsign -o InRelease Release
   gpg --default-key "$SIGN_KEY" -abs -o Release.gpg Release
-  ok "Assinado com $SIGN_KEY (InRelease e Release.gpg)"
+  ok "Signed with $SIGN_KEY (InRelease and Release.gpg)"
 else
-  warn "Repositorio NAO assinado — o cliente precisa de [trusted=yes]"
+  warn "Repository NOT signed — the client needs [trusted=yes]"
 fi
 
 echo
-ok "Repositorio em $OUTPUT"
-echo -e "${DIM}Publique o conteudo e aponte o cliente para a URL base, com './' no fim da linha deb.${RST}"
+ok "Repository in $OUTPUT"
+echo -e "${DIM}Publish the contents and point the client to the base URL, with './' at the end of the deb line.${RST}"

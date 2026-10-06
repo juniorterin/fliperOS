@@ -69,7 +69,7 @@ def download(url, dest, sha256):
                     break
                 out.write(chunk)
         if sha256_of(part) != sha256:
-            raise OSError('hash diferente do fixado')
+            raise OSError('hash differs from the pinned one')
         os.replace(part, dest)
     finally:
         if os.path.exists(part):

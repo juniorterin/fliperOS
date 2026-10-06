@@ -11,12 +11,12 @@ set -euo pipefail
 src=${1:?Uso: fliperos-mame-ini OPCOES.ini SAIDA.ini}
 out=${2:?Uso: fliperos-mame-ini OPCOES.ini SAIDA.ini}
 bin=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
-[[ -x $bin ]] || { echo "GroovyMAME nao instalado: $bin" >&2; exit 1; }
+[[ -x $bin ]] || { echo "GroovyMAME is not installed: $bin" >&2; exit 1; }
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 # Na pasta vazia, com -inipath dela: nenhum mame.ini de outro lugar entra.
 (cd "$tmp" && "$bin" -inipath . -createconfig > /dev/null 2>&1) || true
-[[ -s $tmp/mame.ini ]] || { echo "O GroovyMAME nao criou o mame.ini" >&2; exit 1; }
+[[ -s $tmp/mame.ini ]] || { echo "GroovyMAME did not create mame.ini" >&2; exit 1; }
 # As opcoes do FliperOS na linha de cada uma (as que a versao nao tem vao
 # no fim), e o inipath do sistema (o comando groovymame tambem o passa).
 awk -v inipath="$(dirname "$out")" '

@@ -49,9 +49,9 @@ class Crtc(C.Structure):
 
 def timing(clock, htotal, vtotal, flags=0, vscan=0):
     if clock <= 0 or htotal <= 0 or vtotal <= 0:
-        raise ValueError("Timing incompleto")
+        raise ValueError("Incomplete timing")
     if flags & ((1 << 12) | (1 << 13)):
-        raise ValueError("Clock multiplicado/dividido: requer leitura especifica do driver")
+        raise ValueError("Multiplied/divided clock: needs a driver-specific read")
     horizontal = clock / htotal  # DRM clock is kHz, including blanking in htotal.
     refresh = horizontal * 1000 / vtotal
     if flags & 16:  # INTERLACE: report field rate, not frame rate.
@@ -87,7 +87,7 @@ def read_active():
         try:
             res = lib.drmModeGetResources(fd)
             if not res:
-                raise OSError("DRM resources indisponiveis")
+                raise OSError("DRM resources unavailable")
             for i in range(res.contents.count_connectors):
                 con = lib.drmModeGetConnectorCurrent(fd, res.contents.connectors[i])
                 if not con:
@@ -105,12 +105,12 @@ def read_active():
                         continue
                     enc = lib.drmModeGetEncoder(fd, co.encoder_id)
                     if not enc:
-                        raise OSError("Encoder ilegivel")
+                        raise OSError("Unreadable encoder")
                     if not enc.contents.crtc_id:
                         continue
                     crtc = lib.drmModeGetCrtc(fd, enc.contents.crtc_id)
                     if not crtc:
-                        raise OSError("CRTC ilegivel")
+                        raise OSError("Unreadable CRTC")
                     if not crtc.contents.mode_valid:
                         continue
                     dpms = Path("/sys/class/drm") / (Path(card).name + "-" + name) / "dpms"
@@ -183,10 +183,10 @@ def main():
                       f'{row["horizontal_khz"]:.5f} kHz / {row["vertical_hz"]:.3f} Hz '
                       f'{"interlaced" if row["interlaced"] else "progressive"}')
             else:
-                print(f'{row["card"]} {row["connector"]}: inativo')
+                print(f'{row["card"]} {row["connector"]}: inactive')
         for error in errors:
             print(error)
-        print("Leitura do kernel; nao mede o sinal eletrico nem certifica BIOS/bootloader ou outros momentos.")
+        print("Read from the kernel; it does not measure the electrical signal or vouch for the BIOS/bootloader or other moments.")
     return code
 
 

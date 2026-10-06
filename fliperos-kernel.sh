@@ -18,7 +18,7 @@ src=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 patches="$src/patches/kernel-15khz/$KERNEL_SERIES"
 
 key() {
-  [[ -d $patches ]] || { echo "Sem patches para $KERNEL_SERIES em $patches" >&2; exit 1; }
+  [[ -d $patches ]] || { echo "No patches for $KERNEL_SERIES in $patches" >&2; exit 1; }
   printf '%s-%s\n' "$KERNEL_VERSION" \
     "$(cat "$patches"/*.patch "${BASH_SOURCE[0]}" | sha256sum | cut -c1-12)"
 }
@@ -43,14 +43,14 @@ build() {
   apt-get download "$pkg" > /dev/null
   dpkg-deb -x "$pkg"_*.deb seed
   seed=$(find seed -type f -name config | head -1)
-  [[ -n $seed ]] || { echo "Semente do .config nao encontrada em $pkg" >&2; exit 1; }
+  [[ -n $seed ]] || { echo ".config seed not found in $pkg" >&2; exit 1; }
 
   wget -q "https://cdn.kernel.org/pub/linux/kernel/v${KERNEL_VERSION%%.*}.x/linux-$KERNEL_VERSION.tar.xz"
   tar xf "linux-$KERNEL_VERSION.tar.xz"
   cp "$seed" "linux-$KERNEL_VERSION/.config"
   cd "linux-$KERNEL_VERSION"
   for p in "$patches"/*.patch; do
-    echo "Aplicando $(basename "$p")"
+    echo "Applying $(basename "$p")"
     patch -p1 --forward < "$p"
   done
 
@@ -78,7 +78,7 @@ build() {
   done
   make olddefconfig > /dev/null
   for opt in DRM_LOAD_EDID_FIRMWARE FRAMEBUFFER_CONSOLE_ROTATION; do
-    grep -q "^CONFIG_$opt=y" .config || { echo "CONFIG_$opt ficou desligado" >&2; exit 1; }
+    grep -q "^CONFIG_$opt=y" .config || { echo "CONFIG_$opt ended up disabled" >&2; exit 1; }
   done
 
   make -j"$(nproc)" bindeb-pkg KDEB_PKGVERSION="$KERNEL_VERSION-1fliperos" KDEB_CHANGELOG_DIST=noble \
@@ -94,6 +94,6 @@ build() {
 
 case ${1:-} in
   key) key ;;
-  build) [[ $# -eq 2 ]] || { echo "Uso: $0 build SAIDA" >&2; exit 2; }; build "$2" ;;
+  build) [[ $# -eq 2 ]] || { echo "Usage: $0 build OUTPUT" >&2; exit 2; }; build "$2" ;;
   *) sed -n '5,6p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2; exit 2 ;;
 esac

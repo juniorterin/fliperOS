@@ -689,7 +689,7 @@ def cmd_capture(args):
         os.environ.pop(var, None)
     lib = sdl()
     if lib.SDL_Init(0x200) != 0:  # JOYSTICK
-        sys.exit('SDL: sem joystick')
+        sys.exit('SDL: no joystick')
     try:
         sticks = [lib.SDL_JoystickOpen(i) for i in range(lib.SDL_NumJoysticks())]
         lib.SDL_JoystickUpdate()

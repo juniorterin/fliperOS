@@ -27,7 +27,7 @@ fetch() {
   git clone --quiet --depth=1 --branch "v${LIMINE_VERSION}-binary" "$LIMINE_REPO" "$dest"
   head=$(git -C "$dest" rev-parse HEAD)
   if [[ "$head" != "$LIMINE_COMMIT" ]]; then
-    echo "Limine v${LIMINE_VERSION}: commit $head, esperado $LIMINE_COMMIT" >&2
+    echo "Limine v${LIMINE_VERSION}: commit $head, expected $LIMINE_COMMIT" >&2
     exit 1
   fi
   # Estatico: o mesmo binario roda no container do build e no sistema
@@ -37,7 +37,7 @@ fetch() {
 
 rootfs() {
   local root=$1 limine=$2 file hook
-  [[ -d "$root/etc" ]] || { echo "Rootfs invalido: $root" >&2; exit 2; }
+  [[ -d "$root/etc" ]] || { echo "Invalid rootfs: $root" >&2; exit 2; }
   # O instalador grava o Limine no disco a partir destes arquivos, do PROPRIO
   # sistema instalado: o estagio 2 do bios-install e o limine-bios.sys da ESP
   # precisam ser da mesma versao.
@@ -57,7 +57,7 @@ rootfs() {
 iso() {
   local limine=$1 iso_dir=$2 output=$3 volid=$4 file
   [[ -f "$iso_dir/boot/limine/limine.conf" ]] \
-    || { echo "Sem $iso_dir/boot/limine/limine.conf" >&2; exit 1; }
+    || { echo "Missing $iso_dir/boot/limine/limine.conf" >&2; exit 1; }
   mkdir -p "$iso_dir/EFI/BOOT"
   for file in limine-bios.sys limine-bios-cd.bin limine-uefi-cd.bin LICENSE; do
     cp "$limine/$file" "$iso_dir/boot/limine/"

@@ -14,16 +14,16 @@ PKG_VERSION="3.2.3"
 PKG_REVISION="1fliperos1"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://github.com/oomek/attractplus"
-PKG_SUMMARY="Attract-Mode Plus (build KMS/DRM para CRT)"
-PKG_DESCRIPTION="Frontend grafico para lancar emuladores, compilado com
-USE_DRM=1: desenha direto no KMS/DRM, sem Xorg.
+PKG_SUMMARY="Attract-Mode Plus (KMS/DRM build for CRT)"
+PKG_DESCRIPTION="Graphical frontend for launching emulators, compiled with
+USE_DRM=1: draws straight to KMS/DRM, without Xorg.
 
-Este build nao roda dentro de uma sessao X — no attractplus o caminho DRM
-substitui o X11, nao convive com ele.
+This build does not run inside an X session — in attractplus the DRM path
+replaces X11, it does not coexist with it.
 
-Inclui o tema AdvanceMenu, que reproduz a aparencia do AdvanceMENU (lista de
-texto com snapshot) e se dimensiona pela resolucao, para ficar legivel em
-640x240."
+Includes the AdvanceMenu theme, which reproduces the look of AdvanceMENU
+(text list with a snapshot) and scales with the resolution, to stay readable
+at 640x240."
 
 # cmake entra porque o SFML embarcado e compilado por cmake, nao pelo make
 # do attractplus (regra sfmlbuild do Makefile).

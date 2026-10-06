@@ -56,13 +56,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ ${#TARGETS[@]} -gt 0 ]] || err "Nenhum pacote pedido. Veja: --list"
+[[ ${#TARGETS[@]} -gt 0 ]] || err "No package requested. See: --list"
 
 if ! grep -q "24.04" /etc/os-release 2>/dev/null; then
-  warn "Esta base nao parece ser Ubuntu 24.04."
-  warn "O Depends sai calculado contra libs diferentes das da ISO."
+  warn "This base does not look like Ubuntu 24.04."
+  warn "Depends will be computed against libraries different from the ISO's."
 fi
-[[ $EUID -eq 0 ]] || err "Precisa de root pra instalar as dependencias de build"
+[[ $EUID -eq 0 ]] || err "Needs root to install the build dependencies"
 
 mkdir -p "$OUTPUT"
 
@@ -79,10 +79,10 @@ build_one() {
   # shellcheck disable=SC1090
   source "$recipe"
 
-  [[ -n "$PKG_NAME" && -n "$PKG_VERSION" ]] || err "$name: receita sem PKG_NAME/PKG_VERSION"
-  declare -F pkg_build >/dev/null || err "$name: receita sem pkg_build()"
+  [[ -n "$PKG_NAME" && -n "$PKG_VERSION" ]] || err "$name: recipe without PKG_NAME/PKG_VERSION"
+  declare -F pkg_build >/dev/null || err "$name: recipe without pkg_build()"
 
-  step "Empacotando $PKG_NAME $PKG_VERSION-$PKG_REVISION"
+  step "Packaging $PKG_NAME $PKG_VERSION-$PKG_REVISION"
 
   WORK=$(mktemp -d /tmp/fliperos-deb.XXXXXX)
   SRC="$WORK/src"; STAGING="$WORK/staging"
@@ -90,21 +90,21 @@ build_one() {
   export SRC STAGING
 
   if [[ -n "$PKG_BUILD_DEPS" ]]; then
-    info "Instalando dependencias de build"
+    info "Installing build dependencies"
     apt-get update -qq
     # shellcheck disable=SC2086
     apt-get install -y --no-install-recommends $PKG_BUILD_DEPS >/dev/null \
-      || err "$PKG_NAME: dependencias de build falharam"
-    ok "Dependencias prontas"
+      || err "$PKG_NAME: build dependencies failed"
+    ok "Dependencies ready"
   fi
 
-  info "Compilando (pode demorar)"
+  info "Compiling (this can take a while)"
   # Atencao ao escrever receita: o errexit fica suspenso dentro de uma funcao
   # chamada em "|| err", e re-setar set -e num subshell nao reverte isso no
   # bash. Por isso pkg_build() encadeia os proprios passos com &&, e a
   # existencia do binario e conferida depois, em PKG_SHLIB_TARGETS.
   pkg_build || err "$PKG_NAME: build falhou"
-  ok "Build concluido"
+  ok "Build done"
 
   [[ -n "$(ls -A "$STAGING")" ]] || err "$PKG_NAME: staging vazio, nada instalado"
 
@@ -112,7 +112,7 @@ build_one() {
   # realmente linkadas. Precisa de um debian/control minimo pra funcionar.
   local shlib_deps=""
   if [[ -n "$PKG_SHLIB_TARGETS" ]]; then
-    info "Calculando Depends com dpkg-shlibdeps"
+    info "Computing Depends with dpkg-shlibdeps"
     mkdir -p "$STAGING/debian"
     printf 'Source: %s\n\nPackage: %s\nArchitecture: amd64\n' \
       "$PKG_NAME" "$PKG_NAME" > "$STAGING/debian/control"
@@ -155,7 +155,7 @@ build_one() {
   local deb="$OUTPUT/${PKG_NAME}_${PKG_VERSION}-${PKG_REVISION}_amd64.deb"
   dpkg-deb --root-owner-group --build "$STAGING" "$deb" >/dev/null \
     || err "$PKG_NAME: dpkg-deb falhou"
-  ok "Gerado: $deb ($(du -h "$deb" | cut -f1))"
+  ok "Built: $deb ($(du -h "$deb" | cut -f1))"
 
   rm -rf "$WORK"; WORK=""
 }
@@ -165,5 +165,5 @@ for target in "${TARGETS[@]}"; do
 done
 
 echo
-ok "Pacotes em $OUTPUT"
-echo -e "${DIM}Publique o repositorio com: bash packaging/make-repo.sh${RST}"
+ok "Packages in $OUTPUT"
+echo -e "${DIM}Publish the repository with: bash packaging/make-repo.sh${RST}"

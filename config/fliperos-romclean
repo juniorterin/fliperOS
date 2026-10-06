@@ -874,7 +874,7 @@ def cmd_fetch_mame2010(args):
                 out.write(chunk)
         tmp.close()
         if digest.hexdigest() != MAME2010_SHA256:
-            sys.exit('mame2010.xml: hash diferente do fixado')
+            sys.exit('mame2010.xml: hash differs from the pinned one')
         os.chmod(tmp.name, 0o644)
         os.replace(tmp.name, args.dest)
     finally:

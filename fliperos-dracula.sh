@@ -44,7 +44,7 @@ install -Dm644 "$src/config/openbox-3/themerc" "$theme/openbox-3/themerc"
 install -Dm644 "$work/gtk/LICENSE" "$theme/LICENSE"
 find "$theme" -type d -exec chmod 755 {} +
 find "$theme" -type f -exec chmod 644 {} +
-echo "Dracula GTK ${DRACULA_GTK_COMMIT:0:7} + Openbox em $theme"
+echo "Dracula GTK ${DRACULA_GTK_COMMIT:0:7} + Openbox in $theme"
 
 # Oh My Zsh para todos, com o tema no custom/themes dele. O tema procura o
 # lib/async.zsh ao lado do proprio arquivo.
@@ -59,4 +59,4 @@ install -Dm644 "$work/zsh/LICENSE" "$omz/custom/themes/dracula.LICENSE"
 # completions de pastas assim ("insecure directories").
 find "$omz" -type d -exec chmod 755 {} +
 find "$omz" -type f -exec chmod go-w {} +
-echo "Oh My Zsh ${OHMYZSH_COMMIT:0:7} + Dracula zsh ${DRACULA_ZSH_COMMIT:0:7} em $omz"
+echo "Oh My Zsh ${OHMYZSH_COMMIT:0:7} + Dracula zsh ${DRACULA_ZSH_COMMIT:0:7} in $omz"

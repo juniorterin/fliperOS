@@ -11,12 +11,12 @@ PKG_VERSION="3.5.0"
 PKG_REVISION="1fliperos1"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://es-de.org"
-PKG_SUMMARY="EmulationStation Desktop Edition (build KMS para CRT)"
-PKG_DESCRIPTION="Frontend grafico para lancar emuladores, com temas e listas de
-jogos raspados.
+PKG_SUMMARY="EmulationStation Desktop Edition (KMS build for CRT)"
+PKG_DESCRIPTION="Graphical frontend for launching emulators, with themes and
+scraped game lists.
 
-Este build solta a tela ao abrir um jogo (DEINIT_ON_LAUNCH), para rodar no
-console sem Xorg, como o pacote do GroovyArcade."
+This build releases the screen when a game opens (DEINIT_ON_LAUNCH), to run
+on the console without Xorg, like the GroovyArcade package."
 
 # As do guia de build do ES-DE para o Ubuntu (INSTALL-DEV.md), mais o BlueZ
 # (o 3.5 o procura no cmake: controles Bluetooth).

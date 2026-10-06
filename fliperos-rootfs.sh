@@ -10,7 +10,7 @@
 set -euo pipefail
 src=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 root=${1:?Uso: fliperos-rootfs.sh RAIZ}
-[[ -d "$root/etc" ]] || { echo "Rootfs invalido: $root" >&2; exit 2; }
+[[ -d "$root/etc" ]] || { echo "Invalid rootfs: $root" >&2; exit 2; }
 home="$root/home/fliperos"
 
 # ── fliperos-setup (o gasetup do FliperOS) ────────────────────────
@@ -400,7 +400,7 @@ EOF
       mkdir -p "$(dirname "$old")"
       ln -s "/home/fliperos/$dir" "$old"
     elif [[ ! -L $old ]]; then
-      echo "aviso: $old tem arquivos que tambem existem em ~/$dir; nada foi apagado" >&2
+      echo "warning: $old has files that also exist in ~/$dir; nothing was deleted" >&2
     fi
     chown 1000:1000 "$home/$dir" 2> /dev/null || true
   done

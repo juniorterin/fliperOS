@@ -12,11 +12,11 @@ PKG_VERSION="0.16+2024w38"
 PKG_REVISION="1fliperos1"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://pegasus-frontend.org"
-PKG_SUMMARY="Pegasus Frontend (build KMS/eglfs para CRT)"
-PKG_DESCRIPTION="Frontend grafico para lancar emuladores, com temas em QML.
+PKG_SUMMARY="Pegasus Frontend (KMS/eglfs build for CRT)"
+PKG_DESCRIPTION="Graphical frontend for launching emulators, with QML themes.
 
-Este build roda no console, sem Xorg (Qt eglfs, plataforma KMS), e solta a
-tela ao abrir um jogo, como o pacote do GroovyArcade."
+This build runs on the console, without Xorg (Qt eglfs, KMS platform), and
+releases the screen when a game opens, like the GroovyArcade package."
 
 PKG_BUILD_DEPS="build-essential pkg-config git ca-certificates \
 qtbase5-dev qtbase5-dev-tools qtbase5-private-dev qt5-qmake qtdeclarative5-dev \

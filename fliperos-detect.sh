@@ -8,24 +8,24 @@ if [[ "${1:-}" == --json ]]; then
     shift
     exec python3 "$checker" --json "$@"
 fi
-printf 'FliperOS: diagnostico de video (nenhum modo sera alterado)\n'
+printf 'FliperOS: video diagnostics (no mode will be changed)\n'
 uname -sr
-printf '\nParametros de boot:\n'
+printf '\nBoot parameters:\n'
 cat /proc/cmdline
-printf '\nGPU e driver por dispositivo:\n'
+printf '\nGPU and driver per device:\n'
 command -v lspci >/dev/null && lspci -nnk | grep -A3 -Ei 'VGA|3D controller|Display controller'
-printf '\nConectores (modos anunciados nao comprovam modo ativo):\n'
+printf '\nConnectors (advertised modes do not prove the active mode):\n'
 for status in /sys/class/drm/card*-*/status; do
     [[ -f "$status" ]] || continue
     printf '%s: ' "${status%/status}"
     cat "$status"
 done
-printf '\nComponentes instalados:\n'
+printf '\nInstalled components:\n'
 for executable in switchres grid geometry groovymame retroarch pcsx2 flycast supermodel Skyscraper; do
-    command -v "$executable" || printf '%s: ausente\n' "$executable"
+    command -v "$executable" || printf '%s: missing\n' "$executable"
 done
-printf '\nConfiguracao do fliperos-setup (/etc/fliperos/fliperos.conf):\n'
-cat /etc/fliperos/fliperos.conf 2>/dev/null || printf '(ainda sem teste de saidas)\n'
-printf '\nModo ativo:\n'
+printf '\nfliperos-setup configuration (/etc/fliperos/fliperos.conf):\n'
+cat /etc/fliperos/fliperos.conf 2>/dev/null || printf '(no output test yet)\n'
+printf '\nActive mode:\n'
 python3 "$checker" "$@"
 exit $?

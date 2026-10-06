@@ -12,8 +12,8 @@
 set -euo pipefail
 
 usage() {
-  echo "Uso: fliperos-launch retroarch|groovymame|flycast|pcsx2|supermodel|dolphin|openbor|model2|fightcade" >&2
-  echo "     fliperos-launch --mode LARGURAxALTURA@HZ programa [argumentos]" >&2
+  echo "Usage: fliperos-launch retroarch|groovymame|flycast|pcsx2|supermodel|dolphin|openbor|model2|fightcade" >&2
+  echo "       fliperos-launch --mode WIDTHxHEIGHT@HZ program [arguments]" >&2
   exit 2
 }
 

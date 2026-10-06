@@ -6,7 +6,7 @@
 #
 # Sem --mode, o modo vem de /etc/fliperos/emulator-modes.conf (um para
 # monitor de 15 kHz, outro para 25/31 kHz e LCD) ou, fora da tabela,
-# 320x240@60. docs/wiki/Emuladores.md, "Rodar um programa em 640x240".
+# 320x240@60. docs/wiki/Emulators.md, "Running a program at 640x240".
 set -euo pipefail
 MODES=${FLIPEROS_MODES:-/etc/fliperos/emulator-modes.conf}
 CONF=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
@@ -16,8 +16,8 @@ if [[ ${1:-} == --mode ]]; then
   mode=${2:-}
   shift 2 || true
 fi
-[[ $# -gt 0 ]] || { echo "Uso: fliperos-x11-run [--mode 640x240@60] programa [argumentos]" >&2; exit 2; }
-[[ -z "${DISPLAY:-}" ]] || { echo "Execute no console (TTY), fora de uma sessao X." >&2; exit 2; }
+[[ $# -gt 0 ]] || { echo "Usage: fliperos-x11-run [--mode 640x240@60] program [arguments]" >&2; exit 2; }
+[[ -z "${DISPLAY:-}" ]] || { echo "Run on the console (TTY), outside an X session." >&2; exit 2; }
 command -v "$1" > /dev/null || { echo "Nao instalado: $1" >&2; exit 127; }
 name=$(basename -- "$1")
 
@@ -30,7 +30,7 @@ if [[ -z $mode ]]; then
 fi
 [[ -n $mode ]] || mode=320x240@60
 if [[ ! $mode =~ ^([0-9]+)x([0-9]+)@([0-9.]+)$ ]]; then
-  echo "Modo invalido: $mode (use LARGURAxALTURA@HZ, ex. 640x240@60)" >&2
+  echo "Invalid mode: $mode (use WIDTHxHEIGHT@HZ, e.g. 640x240@60)" >&2
   exit 2
 fi
 export FLIPEROS_RES_W=${BASH_REMATCH[1]} FLIPEROS_RES_H=${BASH_REMATCH[2]} FLIPEROS_RES_HZ=${BASH_REMATCH[3]}

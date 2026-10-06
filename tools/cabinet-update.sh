@@ -13,27 +13,27 @@ set -euo pipefail
 src=$(cd "$(dirname "$0")/.." && pwd)
 lib=/usr/local/lib/fliperos-setup/lib
 [[ $EUID -eq 0 ]] || { echo "Rode como root (sudo)." >&2; exit 1; }
-[[ -f /etc/fliperos/installed ]] || { echo "Isto nao e um FliperOS instalado." >&2; exit 1; }
+[[ -f /etc/fliperos/installed ]] || { echo "This is not an installed FliperOS." >&2; exit 1; }
 
 backup=/root/fliperos-backup-$(date +%Y%m%d-%H%M%S).tgz
 tar czf "$backup" --ignore-failed-read \
   /usr/local/lib/fliperos-setup /opt/fliperos/bin /usr/local/sbin/fliperos-limine-update \
   /etc/default/fliperos-boot /etc/systemd/system/getty@tty1.service.d /etc/NetworkManager/conf.d \
   /etc/resolv.conf /home/fliperos/.config /home/fliperos/.zshrc /boot/efi/limine/limine.conf 2> /dev/null || true
-echo "== Copia de seguranca: $backup"
+echo "== Backup: $backup"
 
-echo "== Arquivos do FliperOS (fliperos-rootfs.sh)"
+echo "== FliperOS files (fliperos-rootfs.sh)"
 bash "$src/fliperos-rootfs.sh" /
 install -Dm755 "$src/fliperos-limine-update.py" /usr/local/sbin/fliperos-limine-update
 
-echo "== Login automatico sem texto"
+echo "== Automatic login without text"
 cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << 'UNIT'
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --autologin fliperos --skip-login --noissue %I $TERM
 UNIT
 
-echo "== DNS pelo NetworkManager"
+echo "== DNS through NetworkManager"
 nmcli general reload conf > /dev/null && nmcli general reload dns-full > /dev/null || true
 sleep 2
 grep nameserver /etc/resolv.conf || true
@@ -57,7 +57,7 @@ echo "== Relogio"
 # yet"). Acerta pela hora do servidor do Ubuntu antes do apt.
 if ! systemctl is-active --quiet systemd-timesyncd; then
   now=$(curl -sI -m 10 http://archive.ubuntu.com/ubuntu/ | sed -n 's/^[Dd]ate: //p' | tr -d '\r')
-  [[ -n $now ]] && date -s "$now" > /dev/null && echo "acertado pela rede"
+  [[ -n $now ]] && date -s "$now" > /dev/null && echo "set from the network"
 fi
 date
 
@@ -80,19 +80,19 @@ for p in "${packages[@]}"; do
   dpkg -s "$p" > /dev/null 2>&1 || missing+=("$p")
 done
 if ((${#missing[@]})) || [[ $repo_before != "$repo_after" ]]; then
-  apt-get update -qq || echo "aviso: apt-get update com erros (sem rede, ou outro programa com a trava?)"
+  apt-get update -qq || echo "warning: apt-get update had errors (no network, or another program holding the lock?)"
   DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -y -q --no-install-recommends \
-    "${packages[@]}" || echo "aviso: nao instalou ${packages[*]}"
+    "${packages[@]}" || echo "warning: did not install ${packages[*]}"
 else
-  echo "todos instalados e o repositorio local nao mudou: o apt nao foi usado"
+  echo "all installed and the local repository did not change: apt was not used"
 fi
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo ||
-  echo "aviso: Flathub nao foi adicionado"
+  echo "warning: Flathub was not added"
 # O override da App Store (fliperos-rootfs.sh) pode ter chegado depois do
 # pacote.
 glib-compile-schemas /usr/share/glib-2.0/schemas 2> /dev/null || true
 
-echo "== Terminais: so o Alacritty"
+echo "== Terminals: Alacritty only"
 # O metapacote lxde depende do lxterminal: os componentes dele (a mesma lista
 # do fliperos-mkiso.sh) passam a "instalados a mao" antes, senao um
 # autoremove levaria o desktop junto com o metapacote.
@@ -109,10 +109,10 @@ if command -v alacritty > /dev/null; then
   echo "x-terminal-emulator: $(readlink -f /usr/bin/x-terminal-emulator)"
   echo "autoremove levaria: $(apt-get autoremove -s 2> /dev/null | grep -c '^Remv') pacotes"
 else
-  echo "aviso: Alacritty nao instalou; os terminais antigos ficam"
+  echo "warning: Alacritty did not install; the old terminals stay"
 fi
 
-echo "== Linha do kernel (boot direto no Plymouth)"
+echo "== Kernel line (boot straight to Plymouth)"
 (
   set +eu
   for f in "$lib"/*.sh; do
@@ -139,33 +139,33 @@ echo "== Linha do kernel (boot direto no Plymouth)"
   grep -E '^crt_switch_resolution_super' "$RETROARCH_CFG"
 )
 
-echo "== Console calado (kernel.printk do fliperos-rootfs.sh) ja neste boot"
+echo "== Quiet console (kernel.printk from fliperos-rootfs.sh) already on this boot"
 sysctl -q -p /etc/sysctl.d/99-fliperos-console.conf && cat /proc/sys/kernel/printk
 
-echo "== Som HDA sempre ligado (power_save do fliperos-rootfs.sh) ja neste boot"
+echo "== HDA sound always on (power_save from fliperos-rootfs.sh) already on this boot"
 if [[ -d /sys/module/snd_hda_intel/parameters ]]; then
   echo 0 > /sys/module/snd_hda_intel/parameters/power_save
   echo N > /sys/module/snd_hda_intel/parameters/power_save_controller
   echo "power_save=$(cat /sys/module/snd_hda_intel/parameters/power_save)"
 fi
 
-echo "== Botoes do Setup > Joysticks > Button mapping em todos os emuladores"
+echo "== Setup > Joysticks > Button mapping buttons in every emulator"
 if [[ -f /etc/fliperos/buttons.map ]]; then
   /opt/fliperos/bin/fliperos-buttons save /etc/fliperos/buttons.map | sed 's/^/gravado: /'
 else
-  echo "sem mapa (Setup > Joysticks > Button mapping)"
+  echo "no map (Setup > Joysticks > Button mapping)"
 fi
 
-echo "== XML do MAME 2010 (ROM cleaner)"
-/opt/fliperos/bin/fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz || echo "falhou (sem rede?)"
+echo "== MAME 2010 XML (ROM cleaner)"
+/opt/fliperos/bin/fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz || echo "failed (no network?)"
 
-echo "== Pastas em ~ (roms, bios, media, config)"
+echo "== Folders in ~ (roms, bios, media, config)"
 runuser -u fliperos -- /opt/fliperos/bin/fliperos-roms
 ls -ld /opt/fliperos/roms /opt/fliperos/bios
-echo "pastas de core: $(find /home/fliperos/roms/retroarch -mindepth 1 -maxdepth 1 -type d | wc -l)"
+echo "core folders: $(find /home/fliperos/roms/retroarch -mindepth 1 -maxdepth 1 -type d | wc -l)"
 echo "config: $(find /home/fliperos/config -mindepth 1 -maxdepth 1 -type l -printf '%f ')"
 
-echo "== Arte do Scraper em ~/media"
+echo "== Scraper artwork in ~/media"
 (
   set +eu
   for f in "$lib"/*.sh; do
@@ -179,7 +179,7 @@ echo "== Arte do Scraper em ~/media"
   # A configuracao de 240p do ES-DE e do Pegasus instalados (lib/frontends.sh).
   frontends_240p
   for t in $MEDIA_TYPES; do
-    echo "$t: $(find "$MEDIA_DIR/$t" -mindepth 2 -type f | wc -l) arquivo(s)"
+    echo "$t: $(find "$MEDIA_DIR/$t" -mindepth 2 -type f | wc -l) file(s)"
   done
 )
 systemctl restart smbd 2> /dev/null || true
@@ -192,7 +192,7 @@ systemctl enable --now systemd-timesyncd.service > /dev/null 2>&1 || true
 # Mapeamentos de controle do SDL dos controles ligados agora (o servico tambem
 # roda no boot e a cada controle ligado).
 systemctl start fliperos-controllers.service 2> /dev/null || true
-echo "mapeamentos do SDL: $(grep -vc '^#' /var/lib/fliperos/gamecontrollerdb.txt 2> /dev/null || echo 0)"
+echo "SDL mappings: $(grep -vc '^#' /var/lib/fliperos/gamecontrollerdb.txt 2> /dev/null || echo 0)"
 systemctl enable fliperos-padkeys.service > /dev/null 2>&1 || true
 systemctl restart fliperos-padkeys.service
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
@@ -204,9 +204,9 @@ echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
 busy=$(pgrep -l -t tty1 | awk '{ print $2 }' | { grep -vxE 'login|zsh|bash|sudo|fliperos-tty1' || true; } |
   sort -u | tr '\n' ' ')
 if [[ -z $busy ]]; then
-  echo "== Reiniciando o tty1 no fluxo novo"
+  echo "== Restarting tty1 with the new flow"
   systemctl restart getty@tty1.service
-  echo "Pronto. Para ver o boot sem texto, reinicie o gabinete."
+  echo "Done. To see the boot without text, reboot the cabinet."
 else
-  echo "== tty1 em uso ($busy): nao reiniciado. O menu novo aparece quando ele voltar."
+  echo "== tty1 in use ($busy): not restarted. The new menu appears when it comes back."
 fi
