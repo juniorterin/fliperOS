@@ -2210,7 +2210,8 @@ class FightcadeTests(unittest.TestCase):
         (tmp / 'home').mkdir(exist_ok=True)
         env = dict(os.environ, HOME=str(tmp / 'home'), FIGHTCADE_DIR=str(tmp / 'fc'), FLIPEROS_USER='root',
                    FIGHTCADE_URL=(tmp / 'pkg.tar.gz').as_uri(), FLIPEROS_ROMS_SCRIPT=str(ROOT / 'config/fliperos-roms'),
-                   FLIPEROS_CORE_INFO=str(tmp / 'nada'))
+                   FLIPEROS_CORE_INFO=str(tmp / 'nada'), FLIPEROS_FLYCAST_CFG=str(tmp / 'flycast-emu.cfg'),
+                   FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'))
         env.pop('DISPLAY', None)
         env.update(extra)
         return env
@@ -2449,6 +2450,27 @@ class FightcadeTests(unittest.TestCase):
             self.assertIn('nVidHorWidth 640\r\nnVidHorHeight 480\r\n\r\nnVidScrnAspectX 16\r\n', fbneo)
             self.assertIn('bVidAutoSwitchFull 1\r\n', fbneo)
             self.assertIn('rend.ScreenStretching = 100\n', (tmp / 'fc/emulator/flycast/emu.cfg').read_text())
+
+    def test_dojo_gets_the_flycast_settings(self):
+        # O Flycast Dojo com as opcoes do Flycast do sistema: as do
+        # config/flycast-emu.cfg e o que a pessoa mudou nele depois.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            system = (ROOT / 'config/flycast-emu.cfg').read_text().replace('pvr.rend = 3', 'pvr.rend = 0')
+            (tmp / 'flycast-emu.cfg').write_text(system)
+            self.session(tmp, [self.CLIENT])
+            dojo = (tmp / 'fc/emulator/flycast/emu.cfg').read_text()
+            config, _, rest = dojo.partition('[window]')
+            self.assertIn('rend.LinearInterpolation = no\n', config)
+            self.assertIn('pvr.rend = 0\n', config)
+            self.assertIn('rend.ScreenStretching = 200\n', config)
+            self.assertNotIn('Dreamcast.ContentPath', dojo)
+            inputs = dojo.split('[input]')[1]
+            for line in ('device1 = 0', 'device2.1 = 1', 'maple_sdl_joystick_0 = 0', 'maple_sdl_joystick_1 = 1'):
+                self.assertIn(line + '\n', inputs)
+            self.assertIn('fullscreen = yes\n', rest)
 
     def test_window_shortcuts(self):
         rc = ElementTree.parse(ROOT / 'config/openbox-fightcade.xml').getroot()

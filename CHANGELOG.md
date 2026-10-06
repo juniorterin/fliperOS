@@ -42,6 +42,7 @@ Primeira ISO publicada. As mudanças são em relação à 0.6, que não saiu daq
 - Frontends: Attract-Mode Plus, EmulationStation (ES-DE) e Pegasus em `.deb`, num repositório APT dentro da imagem, com os jogos já configurados
 - Tema FliperOS 240p para o EmulationStation e o Pegasus
 - Fightcade 2 como opção de frontend, baixado do site dele; cada partida no modo do emulador dela
+- Flycast Dojo do Fightcade com as opções do Flycast do sistema (interpolação, transparência e os dois controles)
 - Attract-Mode: tela nova já nasce com a lista de jogos da pasta
 - Skyscraper 3.21.0, Gum 2.0.2 (setas na paginação e sons do menu), AntiMicroX 3.6.1, Switchres 2.2.1
 

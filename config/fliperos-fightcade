@@ -37,6 +37,8 @@ conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 switchres_ini=${SWITCHRES_INI:-/etc/switchres.ini}
 flycast_maps=${FLIPEROS_FLYCAST_MAPPINGS:-/home/fliperos/.config/flycast/mappings}
 extras=${FLIPEROS_EXTRAS:-/opt/fliperos/bin/fliperos-extras}
+flycast_cfg=${FLIPEROS_FLYCAST_CFG:-/home/fliperos/.config/flycast/emu.cfg}
+ini_set=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 # say PORCENTAGEM TEXTO: uma etapa para a tela de progresso do Setup
@@ -231,6 +233,31 @@ cfg_set() {
   sed -i -E "s/^($2) = .*\$/\1 = $3/" "$1"
 }
 
+# As opcoes do Flycast do sistema que valem tambem no Flycast Dojo: a imagem
+# sem interpolacao linear, a transparencia por pixel e os dois controles nas
+# portas A e B (config/flycast-emu.cfg, ou o que a pessoa mudou depois).
+FLYCAST_SHARED="config:rend.LinearInterpolation config:pvr.rend input:device1 input:device1.1 input:device1.2
+  input:device2 input:device2.1 input:device2.2 input:maple_sdl_joystick_0 input:maple_sdl_joystick_1"
+
+# flycast_sync ARQUIVO copia as FLYCAST_SHARED do emu.cfg do Flycast do
+# sistema para o do Dojo, a cada abertura: o do sistema e a referencia.
+flycast_sync() {
+  local dojo=$1 entry section key value
+  [[ -f $flycast_cfg && -f $ini_set ]] || return 0
+  for entry in $FLYCAST_SHARED; do
+    section=${entry%%:*} key=${entry#*:}
+    value=$(awk -v s="[$section]" -v k="$key" '
+      { l = $0; sub(/\r$/, "", l) }
+      l ~ /^\[.*\]$/ { in_s = (l == s); next }
+      in_s && index(l, "=") {
+        n = substr(l, 1, index(l, "=") - 1); gsub(/^[ \t]+|[ \t]+$/, "", n)
+        if (n == k) { v = substr(l, index(l, "=") + 1); gsub(/^[ \t]+|[ \t]+$/, "", v); print v; exit }
+      }' "$flycast_cfg")
+    [[ -n $value ]] && bash "$ini_set" "$dojo" "$section" "$key" "$value"
+  done
+  return 0
+}
+
 # emulators_setup: a tela cheia de cada emulador no modo da tabela. Cada um
 # le o proprio arquivo, criado do "default" que vem no pacote (como o
 # Fightcade faz na primeira partida).
@@ -265,6 +292,7 @@ emulators_setup() {
       cfg_set "$ini.cfg" rend.ScreenStretching "$stretch"
     fi
     once fightcade-flycast && cfg_set "$ini.cfg" fullscreen yes
+    flycast_sync "$ini.cfg"
   fi
   return 0
 }
