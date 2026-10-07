@@ -1,6 +1,5 @@
 import { ImageResponse } from 'next/og';
 import { LOCALES, LOCALE_SEGMENT, localeFromSegment, messages, DEFAULT_LOCALE } from '@/i18n';
-import { FLIPEROS_VERSION } from '@/lib/site';
 
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
@@ -15,7 +14,8 @@ export async function generateImageMetadata({ params }: { params: Promise<{ lang
   return [{ id: 'card', alt: messages[locale].meta.ogAlt, size, contentType }];
 }
 
-// Card do Open Graph/Twitter gerado no build: arte do site, sem screenshot.
+// Card do Open Graph/Twitter gerado no build: arte do site, sem screenshot e
+// sem a versao (redes sociais guardam o card antigo por muito tempo).
 export default async function OpengraphImage({ params }: { params: Promise<{ lang: string }> }) {
   const t = messages[localeFromSegment((await params).lang) ?? DEFAULT_LOCALE];
   return new ImageResponse(
@@ -35,7 +35,7 @@ export default async function OpengraphImage({ params }: { params: Promise<{ lan
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '18px', fontSize: 34, color: '#50fa7b' }}>
           <div style={{ display: 'flex', width: 18, height: 18, borderRadius: 9, background: '#50fa7b' }} />
-          fliperos {FLIPEROS_VERSION}
+          fliperos
         </div>
         <div style={{ display: 'flex', fontSize: 120, fontWeight: 800, marginTop: 24, letterSpacing: -3 }}>
           <span>Fliper</span>
