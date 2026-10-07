@@ -490,7 +490,9 @@ EOF
   chown -R 1000:1000 "$home/.mame" 2> /dev/null || true
   # Sem MOTD nem "Last login" entre o Plymouth e o setup/frontend.
   : > "$home/.hushlogin"
-  # LXDE como o do GroovyArcade (ver config/lxde).
+  # LXDE como o do GroovyArcade (ver config/lxde), com o papel de parede da
+  # imagem esticado na tela (o CRT e 4:3 em qualquer modo).
+  install -Dm644 "$src/config/wallpaper.jpg" "$root/usr/share/fliperos/wallpaper.jpg"
   mkdir -p "$home/.config"
   cp -r "$src/config/lxde/." "$home/.config/"
   # Janelas e menus do Openbox no tema Dracula (fliperos-dracula.sh): o

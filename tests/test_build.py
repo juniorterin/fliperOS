@@ -4182,6 +4182,16 @@ class SplashTests(unittest.TestCase):
         self.assertIn('640x480', geometry)
 
 
+class WallpaperTests(unittest.TestCase):
+    def test_lxde_uses_the_bundled_wallpaper(self):
+        conf = (ROOT / 'config/lxde/pcmanfm/LXDE/desktop-items-0.conf').read_text()
+        self.assertIn('wallpaper_mode=stretch\n', conf)
+        self.assertIn('wallpaper=/usr/share/fliperos/wallpaper.jpg\n', conf)
+        self.assertIn('install -Dm644 "$src/config/wallpaper.jpg" "$root/usr/share/fliperos/wallpaper.jpg"', ROOTFS)
+        self.assertEqual((ROOT / 'config/wallpaper.jpg').read_bytes()[:3], b'\xff\xd8\xff')
+        self.assertIn('*.jpg binary', (ROOT / '.gitattributes').read_text())
+
+
 class RetroArchConfigTests(unittest.TestCase):
     """config/retroarch.cfg e config de sistema: o fliperos-kms-run a passa
     com --appendconfig, por cima da do usuario."""

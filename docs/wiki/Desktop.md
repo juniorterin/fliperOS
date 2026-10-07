@@ -1,6 +1,6 @@
 ## LXDE desktop
 
-GroovyArcade's LXDE: full `lxde` with openbox-lxde, panel at the bottom (menu, file manager, terminal, tasks, CPU, volume, tray, network, clock), no compositor, no DPMS or screensaver, Sans 10 font and the Video Setup orientation. Everything in the Dracula theme (see below).
+GroovyArcade's LXDE: full `lxde` with openbox-lxde, panel at the bottom (menu, file manager, terminal, tasks, CPU, volume, tray, network, clock), no compositor, no DPMS or screensaver, Sans 10 font and the Video Setup orientation. The wallpaper is `/usr/share/fliperos/wallpaper.jpg` (`config/wallpaper.jpg`, a pixel-art city at night), stretched to the screen, which is 4:3 in every CRT mode. Everything in the Dracula theme (see below).
 
 **Terminal: Alacritty.** `lxterminal` and `xterm` (the system's default terminal, with bitmap fonts the image doesn't even have) didn't draw Gum's borders; they were removed, and the terminal in the panel, the menu and *FliperOS Setup* is **Alacritty**, which always works in UTF-8 and draws borders and blocks by itself, without depending on the font. Dracula theme with the console palette (`config/lxde/alacritty/alacritty.toml`), DejaVu Sans Mono, non-blinking cursor (blinking redraws the screen, which flickers in interlaced modes). The font size doesn't follow the DPI from the CRT's EDID (it would give 50 DPI or less): `fliperos-lxde` exports `WINIT_X11_SCALE_FACTOR=1`. Since the `lxde` metapackage depends on `lxterminal`, the image installs its components one by one.
 
