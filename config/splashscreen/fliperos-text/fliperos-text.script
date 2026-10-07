@@ -49,6 +49,17 @@ STOP_R[1] = 1.0;   STOP_G[1] = 0.475; STOP_B[1] = 0.776;
 STOP_R[2] = 0.545; STOP_G[2] = 0.914; STOP_B[2] = 0.992;
 STOP_R[3] = 0.741; STOP_G[3] = 0.576; STOP_B[3] = 0.976;
 
+// Math.Random do Plymouth 24.004 (Ubuntu 24.04) divide um numero de ate 2^31
+// por LONG_MAX (2^63) e devolve sempre ~0: o embaralhado so mostrava o "A" do
+// POOL e o glitch ficava preso na primeira letra ("AliperOS"). Rnd() e um
+// Park-Miller (o % do script e fmodl, exato aqui), semeado pelo Math.Random
+// escalado de volta; num Plymouth corrigido a semente so fica maior.
+rnd_seed = Math.Int((Math.Random() * 2147483648 * 4294967296) % 2147483646) + 1;
+fun Rnd() {
+  global.rnd_seed = (rnd_seed * 16807) % 2147483647;
+  return (rnd_seed - 1) / 2147483646;
+}
+
 fun Mix(a, b, t) {
   return a + (b - a) * t;
 }
@@ -263,14 +274,14 @@ for (k = 0; k < POOL_LEN; k++)
   rain_img[k] = Txt(POOL.CharAt(k), DIM_R, DIM_G, DIM_B, 13, "");
 rain_cw = rain_img[0].GetWidth();
 fun RainSpawn(k, anywhere) {
-  rain[k].SetImage(rain_img[Math.Int(Math.Random() * POOL_LEN)]);
-  rain_x[k] = Math.Int(Math.Random() * (W / rain_cw)) * rain_cw;
+  rain[k].SetImage(rain_img[Math.Int(Rnd() * POOL_LEN)]);
+  rain_x[k] = Math.Int(Rnd() * (W / rain_cw)) * rain_cw;
   if (anywhere)
-    rain_y[k] = Math.Random() * H;
+    rain_y[k] = Rnd() * H;
   else
     rain_y[k] = -rain_cw * 2;
-  rain_v[k] = (0.25 + Math.Random() * 0.6) * u * py;
-  rain[k].SetOpacity(0.06 + Math.Random() * 0.14);
+  rain_v[k] = (0.25 + Rnd() * 0.6) * u * py;
+  rain[k].SetOpacity(0.06 + Rnd() * 0.14);
   rain[k].SetPosition(rain_x[k], rain_y[k], -10);
 }
 for (k = 0; k < RAIN; k++) {
@@ -376,19 +387,19 @@ fun refresh() {
       letter[i].SetOpacity(0);
     } else if (frame < letter_lock[i]) {
       if (frame % 3 == 0)
-        letter[i].SetImage(scramble[Math.Int(Math.Random() * SCRAMBLE_N)]);
+        letter[i].SetImage(scramble[Math.Int(Rnd() * SCRAMBLE_N)]);
       letter[i].SetOpacity(1);
     } else if (frame < letter_lock[i] + 4) {
       letter[i].SetImage(letter_flash[i]);
     } else if (i == glitch_letter && frame < glitch_until) {
-      letter[i].SetImage(scramble[Math.Int(Math.Random() * SCRAMBLE_N)]);
+      letter[i].SetImage(scramble[Math.Int(Rnd() * SCRAMBLE_N)]);
     } else {
       letter[i].SetImage(letter_img[i * COLORS + (Math.Int(frame / 4) + i * 2) % COLORS]);
       letter[i].SetY(title_y + Math.Int(Math.Sin(frame * 0.07 + i * 0.75) * 3 * u * py));
     }
   }
-  if (frame > TITLE_DONE && frame >= glitch_until && Math.Random() < 0.006) {
-    global.glitch_letter = Math.Int(Math.Random() * TITLE_LEN);
+  if (frame > TITLE_DONE && frame >= glitch_until && Rnd() < 0.006) {
+    global.glitch_letter = Math.Int(Rnd() * TITLE_LEN);
     global.glitch_until = frame + 5;
   }
 
@@ -426,8 +437,8 @@ fun refresh() {
       RainSpawn(k, 0);
     else
       rain[k].SetY(rain_y[k]);
-    if (Math.Random() < 0.02)
-      rain[k].SetImage(rain_img[Math.Int(Math.Random() * POOL_LEN)]);
+    if (Rnd() < 0.02)
+      rain[k].SetImage(rain_img[Math.Int(Rnd() * POOL_LEN)]);
   }
 }
 Plymouth.SetRefreshFunction(refresh);

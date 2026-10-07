@@ -4272,6 +4272,18 @@ class SplashTests(unittest.TestCase):
         self.assertNotRegex(code, r'\bcontinue\b')
         self.assertNotIn('@U', code)
 
+    def test_themes_do_not_trust_plymouth_random(self):
+        # O Math.Random do Plymouth 24.004 devolve sempre ~0 ("AliperOS"): so
+        # serve de semente para um gerador do proprio tema.
+        for script in self.THEMES.glob('*/*.script'):
+            code = re.sub(r'//[^\n]*', '', script.read_text(encoding='utf-8', errors='replace'))
+            for line in code.splitlines():
+                if 'Math.Random' in line:
+                    self.assertRegex(line, r'^\w*seed\w* = ', '%s: %s' % (script.name, line.strip()))
+        text = (self.THEMES / 'fliperos-text/fliperos-text.script').read_text(encoding='utf-8')
+        self.assertIn('fun Rnd()', text)
+        self.assertIn('% 2147483647', text)
+
     def test_text_theme_font_goes_into_the_initramfs(self):
         fonts = ROOT / 'config/fonts/jetbrains-mono'
         for weight in ('Regular', 'Bold', 'ExtraBold'):
