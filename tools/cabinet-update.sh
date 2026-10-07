@@ -22,9 +22,22 @@ tar czf "$backup" --ignore-failed-read \
   /etc/resolv.conf /home/fliperos/.config /home/fliperos/.zshrc /boot/efi/limine/limine.conf 2> /dev/null || true
 echo "== Backup: $backup"
 
+# Os arquivos do tema do boot antes e depois: o Plymouth do boot le o tema
+# do initramfs, entao um tema mudado so aparece com o initramfs refeito.
+splash_sum() {
+  local theme
+  theme=$(readlink -f /usr/share/plymouth/themes/default.plymouth) || return 0
+  { find "$(dirname "$theme")" -type f -exec cksum {} + 2> /dev/null || true; } | sort | cksum
+}
+splash_before=$(splash_sum)
+
 echo "== FliperOS files (fliperos-rootfs.sh)"
 bash "$src/fliperos-rootfs.sh" /
 install -Dm755 "$src/fliperos-limine-update.py" /usr/local/sbin/fliperos-limine-update
+if [[ $(splash_sum) != "$splash_before" ]]; then
+  echo "== Boot splash changed: rebuilding the initramfs"
+  update-initramfs -u > /dev/null || echo "warning: update-initramfs failed; the old splash stays until it runs"
+fi
 
 echo "== Automatic login without text"
 cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << 'UNIT'

@@ -77,6 +77,8 @@ source "$SETUP_DIR/lib/frontends.sh"
 source "$SETUP_DIR/lib/update.sh"
 # shellcheck source=lib/patches.sh
 source "$SETUP_DIR/lib/patches.sh"
+# shellcheck source=lib/splash.sh
+source "$SETUP_DIR/lib/splash.sh"
 # shellcheck source=lib/extras.sh
 source "$SETUP_DIR/lib/extras.sh"
 # shellcheck source=lib/hardware.sh
@@ -125,6 +127,8 @@ source "$SETUP_DIR/screens/rom-cleaner.sh"
 source "$SETUP_DIR/screens/downloader.sh"
 # shellcheck source=screens/patches.sh
 source "$SETUP_DIR/screens/patches.sh"
+# shellcheck source=screens/splash.sh
+source "$SETUP_DIR/screens/splash.sh"
 
 # A versao do Setup em disco quando este processo abriu e os argumentos dele:
 # atualizado com a tela aberta (System Update, tools/cabinet-update.sh), ele

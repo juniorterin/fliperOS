@@ -10,6 +10,7 @@
 #   ~/media   a arte e os textos dos frontends (lib/scraper.sh do Setup).
 #   ~/config  links para as configuracoes de cada emulador e frontend
 #             instalado (os que ja criaram a sua).
+#   ~/splashscreen  os temas do splash (Plymouth), um por pasta.
 # So cria o que falta; roda a cada login (fliperos-tty1) e no build da imagem.
 set -u
 roms=${FLIPEROS_ROMS:-$HOME/roms}
@@ -109,6 +110,17 @@ folder "$media/logo" "Logos (wheel art, .png), one folder per system: logo/arcad
 folder "$media/box" "Box art and flyers (.png), one folder per system: box/arcade/sf2.png"
 folder "$media/marquee" "Marquees (.png), one folder per system: marquee/arcade/sf2.png"
 folder "$media/texto" "Game descriptions (.txt), one folder per system: texto/arcade/sf2.txt"
+
+# ── ~/splashscreen ──────────────────────────────────────────────────
+# Os temas do Plymouth, um por pasta. Os da imagem entram se faltam (um
+# apagado volta); um mudado aqui fica como a pessoa deixou.
+splash=${FLIPEROS_SPLASH:-$HOME/splashscreen}
+splash_bundled=${FLIPEROS_SPLASH_BUNDLED:-/usr/share/fliperos/splashscreen}
+folder "$splash" "Boot splash themes (Plymouth), one folder per theme with its .plymouth file. Setup > Splash screen shows a preview and sets the one used at boot. To change a bundled theme, copy its folder with a new name: the bundled ones come back as they were. More themes: https://www.gnome-look.org/browse?cat=108&ord=latest"
+for theme in "$splash_bundled"/*/; do
+  [[ -d $theme ]] || continue
+  [[ -e $splash/$(basename "$theme") ]] || cp -r "${theme%/}" "$splash/" 2> /dev/null
+done
 
 # ── ~/config ────────────────────────────────────────────────────────
 folder "$config" "Shortcuts to the settings of each installed emulator and frontend. They appear at login once the program has created its settings; a deleted one comes back."

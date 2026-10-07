@@ -12,6 +12,7 @@ screen_setup_menu() {
       "audio|Audio Setup" \
       "network|Network Setup" \
       "frontend|Frontend" \
+      "splash|Splash screen (boot theme)" \
       "extras|Extras (Wine, Steam, Heroic)" \
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
@@ -29,6 +30,7 @@ screen_setup_menu() {
       audio) screen_audio ;;
       network) screen_network ;;
       frontend) screen_frontend ;;
+      splash) screen_splash ;;
       extras) screen_extras ;;
       latency) screen_latency ;;
       scraper) screen_scraper ;;

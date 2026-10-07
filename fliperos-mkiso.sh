@@ -828,7 +828,7 @@ install_splash_theme() {
   fi
   if [[ "$SPLASH_THEME" == fliperos ]]; then
     set_default_plymouth_theme fliperos
-    ok "Splash: fliperos theme (rendered text, no binary asset)"
+    ok "Splash: fliperos theme (the others are in ~/splashscreen, Setup > Splash screen)"
     return
   fi
 

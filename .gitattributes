@@ -15,3 +15,6 @@ config/** text eol=lf
 fliperos-setup/fliperos-setup text eol=lf
 # O indice dos updates e lido no gabinete, linha a linha.
 updates/** text eol=lf
+# As imagens dos temas do splash (config/splashscreen) ficam como estao: a
+# regra do config/** acima as trataria como texto.
+*.png binary

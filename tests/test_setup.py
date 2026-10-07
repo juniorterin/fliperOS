@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "patches", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
+        "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "patches", "splash", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -1947,6 +1947,105 @@ class MenuSoundsTests(Base):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         self.assertIn('"sounds|Menu sounds ($(menu_sounds_label))"', menu)
         self.assertIn("ui_sounds", (SETUP / "lib" / "ui.sh").read_text().split("ui_init() {")[1].split("\n}\n")[0])
+
+
+class SplashTests(Base):
+    """Setup > Splash screen (lib/splash.sh): os temas de ~/splashscreen."""
+
+    def setUp(self):
+        super().setUp()
+        self.home = self.env.dir / "splashscreen"
+        self.bundled = self.env.dir / "bundled"
+        self.themes = self.env.dir / "themes"
+        self.calls = self.env.dir / "splash.calls"
+        for d in (self.home, self.bundled, self.themes):
+            d.mkdir()
+        for name in ("plymouth", "plymouthd", "update-alternatives", "update-initramfs"):
+            self.env.stub(name, 'echo "%s $*" >> %s' % (name, self.calls))
+        self.env.stub("plymouth", 'echo "plymouth $*" >> %s; [[ $1 != --ping ]]' % self.calls)
+        self.vars = {"SPLASH_DIR": str(self.home), "SPLASH_BUNDLED": str(self.bundled),
+                     "PLYMOUTH_THEMES": str(self.themes), "SPLASH_PREVIEW_SECONDS": "0"}
+
+    def theme(self, base, folder, file=None, name="Theme", script="theme.script"):
+        d = base / folder
+        d.mkdir()
+        (d / (file or folder + ".plymouth")).write_text(
+            "[Plymouth Theme]\r\nName=%s\r\nDescription=Nice\r\nModuleName=script\r\n\r\n[script]\r\n"
+            "ImageDir=/usr/share/plymouth/themes/Other\r\nScriptFile=/usr/share/plymouth/themes/Other/%s\r\n"
+            % (name, script))
+        (d / script).write_text("// script\n")
+        (d / "logo.png").write_bytes(b"\x89PNG")
+        return d
+
+    def test_list_puts_the_home_folder_first(self):
+        self.theme(self.bundled, "fliperos", name="FliperOS")
+        self.theme(self.home, "fliperos", name="FliperOS changed")
+        self.theme(self.home, "WindozeXP", file="Other.plymouth")
+        self.theme(self.home, "bad name")
+        (self.home / "empty").mkdir()
+        out = self.env.out("splash_list", self.vars).splitlines()
+        self.assertEqual(sorted(out), ["WindozeXP|Theme - Nice", "fliperos|FliperOS changed - Nice"])
+
+    def test_set_copies_the_theme_with_its_own_paths(self):
+        self.theme(self.home, "WindozeXP", file="Other.plymouth", script="WindozeXP.script")
+        self.env.out("splash_set WindozeXP", self.vars)
+        dest = self.themes / "WindozeXP"
+        plymouth = (dest / "WindozeXP.plymouth").read_text()
+        self.assertIn("ImageDir=%s\n" % dest, plymouth)
+        self.assertIn("ScriptFile=%s/WindozeXP.script\n" % dest, plymouth)
+        self.assertFalse((dest / "Other.plymouth").exists())
+        self.assertTrue((dest / "logo.png").is_file())
+        calls = self.calls.read_text()
+        self.assertIn("update-alternatives --install %s/default.plymouth default.plymouth %s/WindozeXP.plymouth 100"
+                      % (self.themes, dest), calls)
+        self.assertIn("update-alternatives --set default.plymouth %s/WindozeXP.plymouth" % dest, calls)
+        self.assertIn("update-initramfs -u", calls)
+        self.assertEqual(self.env.out("conf_get splash", self.vars).strip(), "WindozeXP")
+
+    def test_current_and_unknown_theme(self):
+        self.theme(self.bundled, "fliperos")
+        self.env.out("splash_stage fliperos", self.vars)
+        (self.themes / "default.plymouth").symlink_to(self.themes / "fliperos" / "fliperos.plymouth")
+        self.assertEqual(self.env.out("splash_current", self.vars).strip(), "fliperos")
+        r = self.env.run("splash_set nothere || echo refused; splash_set ../etc || echo refused", self.vars)
+        self.assertEqual(r.stdout.split(), ["refused", "refused"])
+        self.assertFalse(self.calls.exists())
+
+    def test_preview_shows_the_theme_over_the_default(self):
+        self.theme(self.home, "WindozeXP")
+        self.env.out("splash_preview WindozeXP", self.vars)
+        calls = self.calls.read_text()
+        self.assertIn("plymouthd --mode=boot --tty=/dev/tty1", calls)
+        self.assertIn('--kernel-command-line=quiet splash plymouth.splash=WindozeXP', calls)
+        self.assertLess(calls.index("plymouth show-splash"), calls.index("plymouth quit"))
+        self.assertNotIn("update-alternatives", calls)
+        # Com o plymouthd do boot ainda no ar, nada de previa.
+        self.env.stub("plymouth", 'echo "plymouth $*" >> %s' % self.calls)
+        r = self.env.run("splash_preview WindozeXP || echo busy", self.vars)
+        self.assertIn("busy", r.stdout)
+
+    def test_login_copies_the_bundled_themes_once(self):
+        self.theme(self.bundled, "fliperos")
+        mine = self.env.dir / "home-splash"
+        env = dict(os.environ, HOME=str(self.env.dir), FLIPEROS_ROMS=str(self.env.dir / "roms"),
+                   FLIPEROS_SPLASH=str(mine), FLIPEROS_SPLASH_BUNDLED=str(self.bundled),
+                   FLIPEROS_CORE_INFO=str(self.env.dir / "noinfo"))
+        subprocess.run(["bash", str(ROOT / "config/fliperos-roms")], env=env, check=True, timeout=60)
+        self.assertTrue((mine / "fliperos" / "fliperos.plymouth").is_file())
+        self.assertTrue((mine / "_info.txt").is_file())
+        (mine / "fliperos" / "logo.png").write_bytes(b"mine")
+        subprocess.run(["bash", str(ROOT / "config/fliperos-roms")], env=env, check=True, timeout=60)
+        self.assertEqual((mine / "fliperos" / "logo.png").read_bytes(), b"mine")
+
+    def test_in_the_setup_menu(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn('"splash|Splash screen (boot theme)"', menu)
+        self.assertIn("splash) screen_splash ;;", menu)
+        # Onde baixar mais temas, na tela e no _info.txt da pasta.
+        url = "https://www.gnome-look.org/browse?cat=108&ord=latest"
+        self.assertEqual(self.env.out('echo "$SPLASH_MORE_URL"', self.vars).strip(), url)
+        self.assertIn("More themes: $SPLASH_MORE_URL", (SETUP / "screens" / "splash.sh").read_text())
+        self.assertIn("More themes: %s" % url, (ROOT / "config/fliperos-roms").read_text())
 
 
 def load_engine():

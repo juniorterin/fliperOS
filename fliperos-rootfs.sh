@@ -37,7 +37,8 @@ for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-clie
   fliperos-tty1 fliperos-ini-set fliperos-resolution fliperos-logout; do
   install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done
-# Pastas do acervo em ~/roms (uma por emulador e por core do RetroArch).
+# Pastas do acervo em ~/roms (uma por emulador e por core do RetroArch) e os
+# temas do splash em ~/splashscreen.
 install -Dm755 "$src/config/fliperos-roms" "$root/opt/fliperos/bin/fliperos-roms"
 # Console calado depois do boot tambem: o 10-console-messages.conf do Ubuntu
 # volta o nivel do console para 4 (kernel.printk = 4 4 1 7) no meio do boot,
@@ -302,8 +303,19 @@ EOF
 : > "$root/etc/NetworkManager/conf.d/10-globally-managed-devices.conf"
 
 # ── Splash e console ──────────────────────────────────────────────
-install -Dm644 "$src/config/plymouth/fliperos.plymouth" "$root/usr/share/plymouth/themes/fliperos/fliperos.plymouth"
-install -Dm644 "$src/config/plymouth/fliperos.script" "$root/usr/share/plymouth/themes/fliperos/fliperos.script"
+# Os temas que vem na imagem (config/splashscreen): no Plymouth e em
+# /usr/share/fliperos/splashscreen, de onde o fliperos-roms os copia para
+# ~/splashscreen. Setup > Splash screen escolhe o do boot entre os de la.
+rm -rf "$root/usr/share/fliperos/splashscreen"
+mkdir -p "$root/usr/share/fliperos"
+cp -r "$src/config/splashscreen" "$root/usr/share/fliperos/splashscreen"
+for theme in "$src"/config/splashscreen/*/; do
+  theme=$(basename "$theme")
+  rm -rf "$root/usr/share/plymouth/themes/$theme"
+  mkdir -p "$root/usr/share/plymouth/themes"
+  cp -r "$src/config/splashscreen/$theme" "$root/usr/share/plymouth/themes/$theme"
+done
+chmod -R a+rX "$root/usr/share/fliperos/splashscreen" "$root/usr/share/plymouth/themes"
 # Paleta Dracula no console: o setvtrgb.service do Ubuntu aplica /etc/vtrgb
 # no boot, e /etc/vtrgb e uma alternativa (a de maior prioridade vence).
 install -Dm644 "$src/config/vtrgb-dracula" "$root/etc/fliperos/vtrgb-dracula"

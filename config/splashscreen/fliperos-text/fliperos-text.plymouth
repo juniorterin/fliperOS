@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=FliperOS (text)
+Description=Text only, no images
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/fliperos-text
+ScriptFile=/usr/share/plymouth/themes/fliperos-text/fliperos-text.script

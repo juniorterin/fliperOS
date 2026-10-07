@@ -1,6 +1,6 @@
 [Plymouth Theme]
 Name=FliperOS
-Description=Splash do FliperOS, dimensionado para CRT de baixa resolucao
+Description=Boot screen in the style of the 2000s (the default)
 ModuleName=script
 
 [script]

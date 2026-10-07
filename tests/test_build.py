@@ -940,7 +940,7 @@ class RomFoldersTests(unittest.TestCase):
         self.assertIn('Dreamcast.BiosPath = /home/fliperos/bios/dc', flycast)
         self.assertIn('FLYCAST_BIOS_PATH=', (ROOT / 'config/fliperos-x11-run').read_text())
         smb = (ROOT / 'config/smb.conf').read_text()
-        for share in ('roms', 'bios', 'media', 'config'):
+        for share in ('roms', 'bios', 'media', 'config', 'splashscreen'):
             self.assertIn('[%s]\n' % share, smb)
             self.assertIn('path = /home/fliperos/%s\n' % share, smb)
         self.assertIn('wide links = yes', smb)
@@ -4123,12 +4123,48 @@ class ReleaseTests(unittest.TestCase):
 
 
 class SplashTests(unittest.TestCase):
-    def test_theme_files_are_installed(self):
-        self.assertIn('fliperos.plymouth', ROOTFS)
-        self.assertIn('fliperos.script', ROOTFS)
+    THEMES = ROOT / 'config/splashscreen'
 
-    def test_theme_script_uses_only_verified_api(self):
-        text = (ROOT / 'config/plymouth/fliperos.script').read_text()
+    def test_bundled_themes_are_complete(self):
+        # Cada pasta e um tema: NOME/NOME.plymouth apontando para a pasta de
+        # mesmo nome no Plymouth, com o script e as imagens que ele abre.
+        names = sorted(p.name for p in self.THEMES.iterdir() if p.is_dir())
+        self.assertEqual(names, ['fliperos', 'fliperos-text'])
+        for name in names:
+            plymouth = (self.THEMES / name / ('%s.plymouth' % name)).read_text()
+            self.assertIn('ModuleName=script\n', plymouth)
+            self.assertIn('ImageDir=/usr/share/plymouth/themes/%s\n' % name, plymouth)
+            self.assertIn('ScriptFile=/usr/share/plymouth/themes/%s/%s.script\n' % (name, name), plymouth)
+            script = (self.THEMES / name / ('%s.script' % name)).read_text()
+            for image in re.findall(r'Image\("([^"]+)"\)', script):
+                self.assertTrue((self.THEMES / name / image).is_file(), image)
+        script = (self.THEMES / 'fliperos/fliperos.script').read_text()
+        for frame in range(33):
+            self.assertTrue((self.THEMES / ('fliperos/throbber-0%d.png' % frame)).is_file())
+        # A arte de 640x480 escala para a janela (640x240 e 320x240 no CRT).
+        self.assertIn('Image("logo.png").Scale(screen_width, screen_height)', script)
+        self.assertEqual((self.THEMES / 'fliperos/logo.png').read_bytes()[:8], b'\x89PNG\r\n\x1a\n')
+
+    def test_png_files_are_binary_in_git(self):
+        # A regra "config/** text eol=lf" corromperia as imagens dos temas.
+        attributes = (ROOT / '.gitattributes').read_text()
+        self.assertGreater(attributes.index('*.png binary'), attributes.index('config/** text eol=lf'))
+
+    def test_themes_are_installed(self):
+        self.assertIn('cp -r "$src/config/splashscreen" "$root/usr/share/fliperos/splashscreen"', ROOTFS)
+        self.assertIn('cp -r "$src/config/splashscreen/$theme" "$root/usr/share/plymouth/themes/$theme"', ROOTFS)
+        self.assertIn('set_default_plymouth_theme fliperos\n', MKISO)
+        roms = (ROOT / 'config/fliperos-roms').read_text()
+        self.assertIn('splash=${FLIPEROS_SPLASH:-$HOME/splashscreen}', roms)
+
+    def test_cabinet_update_rebuilds_initramfs_for_a_new_splash(self):
+        script = (ROOT / 'tools/cabinet-update.sh').read_text()
+        before = script.index('splash_before=$(splash_sum)')
+        self.assertLess(before, script.index('bash "$src/fliperos-rootfs.sh" /'))
+        self.assertIn('if [[ $(splash_sum) != "$splash_before" ]]; then', script)
+
+    def test_text_theme_uses_only_verified_api(self):
+        text = (self.THEMES / 'fliperos-text/fliperos-text.script').read_text()
         for call in ('Window.SetBackgroundTopColor', 'Window.GetWidth', 'Image.Text',
                      'Math.Int', 'Plymouth.SetBootProgressFunction'):
             self.assertIn(call, text)
