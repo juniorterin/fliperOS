@@ -45,6 +45,9 @@ alwaysApply: false
 - Baixado do site pelo Setup (`fetch:`), instalado em `/opt/fliperos/fightcade` (pertence ao usuário, se auto-atualiza).
 - O lobby abre em 640x480i. Os modos dos jogos s?o por emulador: FBNeo 320x240, Flycast 640x240. O launcher faz polling dos processos.
 - Wine 32-bit precisa de OpenGL 32-bit. O Flycast Dojo é AppImage, ent?o usa `APPIMAGE_EXTRACT_AND_RUN=1`.
+- O `fcade` (PyInstaller) chama `/usr/bin/wine` por caminho fixo: n?o dá para interceptar pelo PATH.
+- FBNeo no 15 kHz: uma vigia faz SIGSTOP no FBNeo ao abrir, pega o tamanho do jogo no `groovymame -listxml` (cache em `~/.cache/fliperos/fightcade-modes`), cria o modo e liga o `bVidArcaderesHor`. O Wine troca o modo sozinho se ele existir em ~1,2 s; sen?o o FBNeo dá erro.
+- Botões: preset `config/presets/fliperos.ini` (`fliperos-buttons fbneo`) com `nPlayerDefaultControls 15`; `bSaveInputs 0`. O "Map Controllers" do winebus fica desligado para o painel chegar cru (sen?o vira XInput, com o RT como eixo). Para ver o mapeamento aplicado, feche com `wine taskkill /im fcadefbneo.exe` (o `pkill` n?o grava o ini).
 - N?o testado online nem no CRT.
 
 ## ROM cleaner (estilo ROMLister)
