@@ -4,3 +4,4 @@
 1	404265faecc7a8490b1960ba99c4b924a64ff338	748d2548e394f3201b98f22e6505cd5efc033c5f62ced5be1cabe9fbd54535ca	yes	Updates system and all fixes since FliperOS 0.7
 2	e45b9218d554b54d49eb80c39e3b283fe8f8609b	fbe159507fce9ebef7c19f16f130df446f1414b1eac29688847a80f755d61292	no	The update check at boot waits for Wi-Fi
 3	ea011c014f6dae965232a2eaa60dae89079552c4	b80d76f5a89f4873123d197f2abbd0fba9db40280906db38542ddee983122156	no	New boot splash and Setup > Splash screen
+4	48226974dd25043a99c89191061e1fe84cb90dbb	518ca03f4f5c630dda92a665b4cc07c6613950ca1ac8157be48a15933db8926a	no	New wallpaper, more splash themes and the Basic layout with filters in Attract-Mode Plus
