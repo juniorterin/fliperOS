@@ -9,14 +9,15 @@ table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1p
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </style><main><h1 id="fliperos-07">FliperOS 0.7</h1>
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen.</p>
-<p>In development: 0.7 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT. The full documentation is in the <strong><a href="#Install">wiki</a></strong>. Website: <a href="website"><code>website/</code></a>.</p>
+<p>In development: 0.7 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT. The full documentation is in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
 <h2 id="whats-included">What's included</h2>
 <ul>
 <li><strong>Video</strong>: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.</li>
 <li><strong>Emulators</strong>: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Model 2, Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup &gt; Extras.</li>
 <li><strong>Frontends</strong>: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus and Fightcade 2.</li>
-<li><strong>Setup</strong>: video and geometry, audio, network, scraper, MAME romset cleaning, controls (buttons, light gun, wheel) and latency.</li>
+<li><strong>Setup</strong>: video, geometry, audio, network, scraper, ROM lists, MAME romset cleaning, controls and latency.</li>
 <li><strong>Folders</strong> <code>roms</code>, <code>bios</code>, <code>media</code> and <code>config</code> in <code>~</code> and over the network (Samba); LXDE desktop with an app store.</li>
+<li><strong>SSH</strong> on from the first boot (<code>ssh fliperos@fliperos.local</code>, password <code>fliperos</code>). Under the menus it's a regular Ubuntu: an AI assistant (Claude Code, Cursor, Codex) can configure it over SSH.</li>
 </ul>
 <h2 id="install">Install</h2>
 <p>Each version's ISO is published in <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, along with what changed (<a href="CHANGELOG.md">CHANGELOG.md</a>).</p>
@@ -40,9 +41,9 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_build.py
 </code></pre>
 <h2 id="documentation">Documentation</h2>
-<p><strong>Using it:</strong> <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a></p>
+<p><strong>Using it:</strong> <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Adding-games">Adding games</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a></p>
 <p><strong>Hacking on it:</strong> <a href="#Kernel-15-kHz">15 kHz kernel</a> · <a href="#Build-and-tests">Build and tests</a> · <a href="#Architecture">Architecture</a> · <a href="#Sources">Sources</a></p>
-<p>The pages live in <a href="docs/wiki"><code>docs/wiki</code></a> and go to the wiki with <code>bash tools/wiki-publish.sh</code>. <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> is everything in a single file, for offline reading (<code>tools/render-docs.py</code>), and <a href="docs/wikipedia"><code>docs/wikipedia</code></a> holds a draft Wikipedia article.</p>
+<p>The pages live in <a href="docs/wiki"><code>docs/wiki</code></a> and go to the wiki with <code>bash tools/wiki-publish.sh</code>. <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> is everything in one file, for offline reading (<code>tools/render-docs.py</code>).</p>
 <h1 id="Install">Install</h1>
 <p>From the written media to the system on disk: writing the ISO, the boot menu, the video output test and the installation through <strong>FliperOS Setup</strong>.</p>
 <h2 id="writing-the-media">Writing the media</h2>
@@ -169,6 +170,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li><strong>Extras</strong> — installs over the network Wine (Model 2 and the Fightcade 2 emulators), Steam and Heroic (GOG), which are left out of the ISO so it fits in a single GitHub file. See <a href="#Emulators">Emulators</a>;</li>
 <li><strong>Latency</strong> — <strong>Standard</strong> mode (any machine) or <strong>Low latency</strong> (modern CPUs), with a check of this machine against the recommendation and the list of ideal hardware (<a href="#Latency">Latency</a>);</li>
 <li><strong>Scraper</strong> — covers, screenshots, logos, videos and information for each ROM. See <a href="#Scraper">Scraper</a>;</li>
+<li><strong>AttractPlus ROM List</strong> — Attract-Mode Plus game lists of the arcade folders with each game's real name, from GroovyMAME's list, clones and bootlegs included. See <a href="#Adding-games">Adding games</a>;</li>
 <li><strong>MAME ROM Cleaner</strong>, <strong>MAME CHD Cleaner</strong> and <strong>Free games</strong> — filter a MAME romset into the emulator's folder, bring the CHDs of the games that stayed and download free homebrew. See <a href="#ROMs">ROMs, BIOS and artwork</a>;</li>
 <li><strong>Quirks</strong> and <strong>Joysticks</strong> — fixes for USB controllers, each player's buttons, light gun and wheel calibration, joysticks on the parallel port. See <a href="#Controls">Controls</a>;</li>
 <li><strong>Debug mode</strong> — off (the default), the boot goes straight to Plymouth and the output of frontends and emulators (X, Switchres, the program itself) goes to <code>/opt/fliperos/logs/&lt;program&gt;.log</code>, rewritten on each launch: only the picture is on screen. On, everything shows: the Limine menu (<code>FLIPEROS_QUIET="no"</code> in <code>/etc/default/fliperos-boot</code>), the kernel and systemd messages at boot (without <code>quiet splash</code> or the silencing parameters) and the programs' output on the console. Programs follow immediately; the boot, after a reboot;</li>
@@ -178,6 +180,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li><strong>Shutdown / Reboot</strong>.</li>
 </ul>
 <p><strong>Volume keys:</strong> the keyboard's volume keys (or those of a panel encoder programmed to send them) work on any screen — emulator in KMS, desktop, console. <code>triggerhappy</code> reads <code>/dev/input</code> and calls <code>fliperos-setup --volume up|down|mute</code> (5% steps on the Audio Setup card, saved on every press because cabinets are usually switched off at the wall); <code>config/fliperos-volume.triggers</code> says which keys. The LXDE panel only handles the mouse, so the volume doesn't change twice. No volume bar appears during a game (nothing draws on top of an emulator in KMS).</p>
+<p><strong>SSH and AI assistants:</strong> SSH is on from the first boot (<code>ssh fliperos@fliperos.local</code> or the cabinet's IP, login <code>fliperos</code>/<code>fliperos</code>, <code>sudo</code> with the same password; SFTP too). Under the menus it's a regular Ubuntu 24.04, so whatever the Setup doesn't cover can be done from a terminal, and an AI assistant with shell access (Claude Code, Cursor, Codex and the like) can do it for you: give it the cabinet's address and say what you want (button mapping, an emulator's settings, a frontend theme, a service) and it configures the system over SSH. The configuration is in plain text files (<code>/etc/fliperos/fliperos.conf</code>, <code>~/config</code>, <code>/opt/fliperos</code>), easy for a person or an assistant to read and change. On a network you don't control, change the default password with <code>passwd</code>.</p>
 <h1 id="Frontends">Frontends</h1>
 <h2 id="setup-frontend">Setup &gt; Frontend</h2>
 <p>The default launcher, the one that opens when the computer starts; one that isn't installed can be installed from the FliperOS repository, which ships inside the image (<code>/opt/fliperos/repo</code>, below). Whatever doesn't have a package yet shows as <em>not available yet</em>. <strong>Fightcade 2</strong> doesn't come from a package: it is downloaded on the spot from its website (<a href="#Fightcade-2">Fightcade 2</a>). <strong>At 240p</strong>: on a 15 kHz monitor the frontends run at 320x240, and each one's default is designed for 720 lines or more — the text ends up 4 to 8 pixels tall. That's why the Setup writes a configuration once (whatever is changed later in the frontend itself stays; with the frontend open, it applies next time): both get a <strong>FliperOS 240p</strong> theme, made for 240 lines and in Dracula colors: the system at the top, the game list in a 12-pixel font, the game image with year, publisher and description. In <strong>EmulationStation</strong> (ES-DE) it is <code>config/esde-theme-fliperos</code>, installed in <code>/usr/share/es-de/themes/fliperos-240p-es-de</code> (<code>Theme</code> in <code>es_settings.xml</code>), without the menu background blur and without the new-version notice: the systems as a list of names, the game video (if any) in place of the image, and in the footer only the buttons that fit in 320 pixels. In the themes that ES-DE ships, even with the large font, the list text is thin and low-contrast and the footer help ends up about 6 pixels tall. In <strong>Pegasus</strong> it is <code>config/pegasus-theme-fliperos</code>, installed in <code>/usr/share/pegasus-frontend/themes</code> — left/right switch systems, L2/R2 skip ten games. Grid, Pegasus's default theme, shows the covers at 320x240 but leaves the description 4 pixels tall.</p>
@@ -338,6 +341,283 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>Downloads open-source homebrew into the RetroArch core folders (<code>~/roms/retroarch/&lt;core&gt;</code>), so the frontends don't start empty and to test video, sound and controls without anyone's ROMs: the 240p Test Suites for NES, Game Boy and GBA, Thwaite, Nova the Squirrel, Libbet and the Magic Floor and µCity. Each file comes from the project's own releases page, with a pinned sha256 and the license in the list (GPL and zlib, checked in each one's repository); only those for installed cores, and what is already there stays. The image ships nobody's ROMs or BIOS (<code>config/fliperos-freeroms</code>, <code>lib/freeroms.sh</code>).</p>
 <h1 id="Scraper">Scraper</h1>
 <p><strong>Setup &gt; Scraper</strong> — covers, screenshots, logos, videos and information for each ROM, with <strong>Skyscraper</strong> (the same one GroovyArcade packages), from ScreenScraper, ArcadeDB or TheGamesDB. <strong>What to fetch</strong> is a checklist: screenshots (<code>snap</code>), logos, covers (<code>box</code>), marquees, descriptions (<code>texto</code>) and videos (<code>preview</code>, unchecked at first: they take much more space). Skyscraper only downloads the checked types (<code>--flags noscreenshots,nocovers,nowheels,nomarquees</code> and <code>videos</code>) and only exports those; the choice is remembered. An artwork type the folder didn't have yet makes it fetch again the games already in the cache (<code>--refresh</code>): without that Skyscraper doesn't go back to them. The folders with games (each one's <code>_info.txt</code> doesn't count) that FliperOS knows how to open are included: <code>~/roms/mame</code>, <code>dreamcast</code>, <code>ps2</code>, <code>dolphin</code> and the RetroArch core folders (<code>~/roms/retroarch/&lt;core&gt;</code>, by the platform of the <code>systemid</code> in the core's <code>.info</code>). Artwork and text go to <strong><code>~/media/&lt;type&gt;/&lt;system&gt;</code></strong> (<a href="#ROMs">ROMs, BIOS and artwork</a>): Skyscraper writes each type into a subfolder with a fixed name (<code>screenshots</code>, <code>covers</code>, <code>wheels</code>, <code>marquees</code>, <code>videos</code>), and for it <code>~/media/.skyscraper/&lt;system&gt;</code> has links with those names to <code>snap</code>, <code>box</code>, <code>logo</code>, <code>marquee</code> and <code>preview</code>; the descriptions come out of the generated list into <code>~/media/texto</code>. The list goes to the frontend. With <strong>GroovyMAME</strong> as the default launcher, the MAME folder only gets the artwork: <code>mame.ini</code> and <code>ui.ini</code> already look in <code>~/media/&lt;type&gt;/arcade</code> (the first <code>snapshot_directory</code> is still F12's). In <strong>ES-DE</strong> (FliperOS's EmulationStation) the list goes to <code>~/ES-DE/gamelists/&lt;system&gt;</code> (Skyscraper's <code>esde</code> format, relative paths) and <code>MediaDirectory</code> is <code>~/media/.es-de</code>, with one link per ES-DE type (<code>screenshots</code>, <code>covers</code>, <code>marquees</code> = logo, <code>videos</code>) into <code>~/media</code>. Earlier artwork (<code>~/.mame/scraped/mame</code>, <code>~/.attract/scraped/&lt;folder&gt;</code>, <code>&lt;ROM folder&gt;/media</code>) moves to <code>~/media</code> in <code>tools/cabinet-update.sh</code> and when the folder is scraped. The images come out each one as it came (screenshot, cover, logo, marquee; the Setup's <code>artwork.xml</code>), and not composited on top of each other as in Skyscraper's default. <strong>Clones</strong>: in the MAME folder the Setup asks whether to also fetch the clones of the existing games (<code>groovymame -listclones</code>: mvscu, mvscj...), which in a merged romset are inside the parent's zip and have no file — the scraped folder becomes one of references in <code>~/.cache/fliperos-scraper</code> (links to the ROMs and a small file per clone). <strong>Resuming</strong>: Skyscraper only writes its cache at the end of each run, so the games go in batches of 20 (<code>--includefrom</code>) and the work is recorded in <code>/var/lib/fliperos/scraper</code> (the folders still to do, the files of each one already saved, the source and the account, readable by root only); if the machine was switched off or the Setup closed midway, Setup &gt; Scraper offers to resume from the batch where it stopped. In <strong>Attract-Mode Plus</strong> (the default launcher's, or with no frontend chosen, if it is installed) the Setup creates, like GroovyArcade's <code>efc.sh</code>, any missing emulator in <code>~/.attract/emulators</code> — with the command that opens the game (<code>fliperos-x11-run groovymame [name]</code>, <code>fliperos-kms-run retroarch -L &lt;core&gt;</code>, <code>fliperos-x11-run flycast/pcsx2/dolphin-emu</code>) and the artwork in <code>~/media/&lt;type&gt;/&lt;system&gt;</code> — and its display in <code>attract.cfg</code> (AdvanceMenu theme); Skyscraper writes the romlist to <code>~/.attract/romlists</code> and the descriptions to <code>~/.attract/scraper/&lt;emulator&gt;/overview</code>, a link to <code>~/media/texto/&lt;system&gt;</code>. In Pegasus, <code>metadata.pegasus.txt</code> lives in the ROM folder itself, pointing to the artwork in <code>~/media</code>. What already exists (a display, an emulator changed in Attract-Mode) isn't rewritten — the emulator created by the Setup is redone, so the artwork moves to <code>~/media</code> —, and a system that fails doesn't stop the others.</p>
+<h1 id="Adding-games">Adding games</h1>
+<p>A step-by-step guide to putting games, names and artwork into <strong>Attract-Mode Plus</strong> and <strong>EmulationStation (ES-DE)</strong>, to the emulator command lines (KMS or X11) and to adding a new emulator that opens from any frontend. The folders themselves are described in <a href="#ROMs">ROMs, BIOS and artwork</a>; the automatic artwork download is in <a href="#Scraper">Scraper</a>.</p>
+<h2 id="copy-the-games">Copy the games</h2>
+<p>Each emulator has its folder in <code>~/roms</code> (<code>/home/fliperos/roms</code>; over the network, <code>\\fliperos\roms</code>). Copy the files as they come: MAME sets stay zipped and are never renamed (the frontends and MAME find a game by its set name, <code>sf2ce.zip</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Folder</th>
+<th>What goes in it</th>
+<th>Opens in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mame</code></td>
+<td>MAME sets (<code>.zip</code>, <code>.7z</code>) and their CHD folders</td>
+<td>GroovyMAME</td>
+</tr>
+<tr>
+<td><code>naomi</code>, <code>naomi2</code>, <code>atomiswave</code></td>
+<td>MAME sets of these systems</td>
+<td>Flycast</td>
+</tr>
+<tr>
+<td><code>model3</code></td>
+<td>MAME sets of Model 3</td>
+<td>Supermodel</td>
+</tr>
+<tr>
+<td><code>model2</code></td>
+<td>Model 2 Emulator sets (a link to its folder in Wine)</td>
+<td>Model 2 Emulator</td>
+</tr>
+<tr>
+<td><code>dreamcast</code></td>
+<td><code>.gdi</code>, <code>.cdi</code>, <code>.chd</code></td>
+<td>Flycast</td>
+</tr>
+<tr>
+<td><code>ps2</code></td>
+<td><code>.iso</code>, <code>.chd</code>, <code>.cso</code></td>
+<td>PCSX2</td>
+</tr>
+<tr>
+<td><code>dolphin</code></td>
+<td>GameCube and Wii (<code>.iso</code>, <code>.rvz</code>, <code>.wbfs</code>)</td>
+<td>Dolphin</td>
+</tr>
+<tr>
+<td><code>retroarch/&lt;core&gt;</code></td>
+<td>Whatever that core opens (the <code>_info.txt</code> in each folder lists the extensions)</td>
+<td>RetroArch</td>
+</tr>
+</tbody>
+</table>
+<p>BIOS files go in <code>~/bios</code> (<code>\\fliperos\bios</code>): <code>~/bios/mame</code> for MAME (<code>neogeo.zip</code>, <code>qsound.zip</code>), <code>~/bios/dc</code> for Flycast (<code>naomi.zip</code>, <code>awbios.zip</code>, <code>dc_boot.bin</code>), <code>~/bios/ps2</code> for PCSX2 and the folder itself for the RetroArch cores. A BIOS left in a games folder shows up as a game in the frontend.</p>
+<h2 id="make-the-frontend-see-the-folder">Make the frontend see the folder</h2>
+<p>A folder with games becomes a <strong>system</strong> in the frontend when you pick the frontend in <strong>Setup &gt; Frontend</strong>. Pick it again (even if it already is the default) every time a folder gets its first games: the Setup only creates what is missing, so nothing you changed is lost.</p>
+<ul>
+<li><strong>Attract-Mode Plus</strong>: for each folder the Setup creates an emulator (<code>~/.attract/emulators/&lt;name&gt;.cfg</code>, with the command that opens the game and where the artwork is), a display in <code>~/.attract/attract.cfg</code>, and a game list (romlist, <code>~/.attract/romlists/&lt;name&gt;.txt</code>) built from the files in the folder.</li>
+<li><strong>ES-DE</strong>: the Setup writes every system to <code>~/ES-DE/custom_systems/es_systems.xml</code> (folder, extensions, command and theme). ES-DE reads the folders itself each time it starts.</li>
+</ul>
+<p><strong>New games in a folder that is already a system.</strong> ES-DE finds them the next time it opens (or right away with <em>Main menu &gt; Utilities &gt; Rescan ROM directory</em>). Attract-Mode Plus doesn't look at the folder: its list is the romlist. Rebuild it with one of these:</p>
+<ul>
+<li><strong>Setup &gt; AttractPlus ROM List</strong> (arcade folders, below);</li>
+<li><strong>Setup &gt; Scraper</strong> (any folder; it also fetches the artwork);</li>
+<li>in Attract-Mode itself: Tab opens the configuration, <em>Emulators &gt; (the emulator) &gt; Generate Collection/Rom List</em>;</li>
+<li>or delete <code>~/.attract/romlists/&lt;name&gt;.txt</code> and pick the frontend again in Setup &gt; Frontend.</li>
+</ul>
+<h2 id="real-game-names">Real game names</h2>
+<p>A game list made only from the files shows the file name: <code>mvsc2u</code> instead of <em>Marvel Vs. Capcom 2 New Age of Heroes</em>.</p>
+<p><strong>Attract-Mode Plus.</strong> The name is the second field of each line in the romlist (<code>Name;Title;Emulator;CloneOf;Year;Manufacturer;...</code>). Two ways to fill it in:</p>
+<ul>
+<li><strong>Setup &gt; AttractPlus ROM List</strong> ? for the arcade folders (<code>mame</code>, <code>naomi</code>, <code>naomi2</code>, <code>atomiswave</code>, <code>model2</code>, <code>model3</code> and the RetroArch arcade cores: <code>mame2010</code>, <code>mame2003_plus</code>, <code>fbneo</code>, <code>hbmame</code>...). No internet needed: the name, year, manufacturer, players, controls and emulation status of each game come from GroovyMAME's game list (<code>groovymame -listxml</code>), and from the MAME 0.139 list for the <code>mame2010</code> folder. <strong>Clones and bootlegs</strong> come in with their own names and with their parent in the <code>CloneOf</code> field. In the MAME folder the list also gets the clones that only exist inside the parent's zip (a merged romset), because GroovyMAME opens a game by its name and finds the clone there. The other emulators open a file, so in their folders only the clones that have their own file are listed. A set that isn't in MAME's list keeps its file name, and BIOS sets are left out. With <code>catver.ini</code> in <code>~/roms/mame</code> (or in <code>/usr/local/share/fliperos/romclean</code>), the category comes in too. The Setup also creates an <strong>Arcade</strong> display with all those folders together. The first run reads GroovyMAME's list (about a minute); the next ones take a second.</li>
+<li><strong>Setup &gt; Scraper</strong> ? for every folder, with names and descriptions from ScreenScraper, ArcadeDB or TheGamesDB, plus the artwork.</li>
+</ul>
+<p>Each of the two rewrites the list of the folders it works on, so whichever ran last wins. The artwork is found by the set name, so it is kept either way.</p>
+<p><strong>ES-DE.</strong> In systems with the arcade platform (<code>mame</code>, <code>model2</code>, <code>model3</code> and the RetroArch MAME cores), ES-DE already shows the full name of each MAME set from its own list. Everything else shows the file name until it is scraped: <strong>Setup &gt; Scraper</strong> writes the names, descriptions and artwork to <code>~/ES-DE/gamelists/&lt;system&gt;/gamelist.xml</code>. ES-DE's own scraper (<em>Main menu &gt; Scraper</em>) also works and saves to the same places.</p>
+<h2 id="artwork">Artwork</h2>
+<p>All artwork lives in <code>~/media</code> (<code>\\fliperos\media</code>), one folder per type and, inside it, one per platform. The file name is the ROM name without the extension: the screenshot of <code>~/roms/mame/sf2.zip</code> is <code>~/media/snap/arcade/sf2.png</code>. Setup &gt; Scraper fills these folders, but you can also copy images and videos there yourself (from a MAME artwork pack, for example).</p>
+<table>
+<thead>
+<tr>
+<th><code>~/media</code> folder</th>
+<th>What it holds</th>
+<th>Attract-Mode Plus (<code>artwork</code> line)</th>
+<th>ES-DE</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>snap</code></td>
+<td>Screenshots (<code>.png</code>)</td>
+<td><code>snap</code></td>
+<td>screenshot</td>
+</tr>
+<tr>
+<td><code>preview</code></td>
+<td>Videos (<code>.mp4</code>)</td>
+<td><code>snap</code> (videos sit in the same line)</td>
+<td>video</td>
+</tr>
+<tr>
+<td><code>logo</code></td>
+<td>Logos, wheel art (<code>.png</code>)</td>
+<td><code>wheel</code></td>
+<td>marquee</td>
+</tr>
+<tr>
+<td><code>box</code></td>
+<td>Covers and flyers (<code>.png</code>)</td>
+<td><code>flyer</code></td>
+<td>cover</td>
+</tr>
+<tr>
+<td><code>marquee</code></td>
+<td>Cabinet marquees (<code>.png</code>)</td>
+<td><code>marquee</code></td>
+<td>?</td>
+</tr>
+<tr>
+<td><code>texto</code></td>
+<td>Descriptions (<code>.txt</code>)</td>
+<td>overview (<code>~/.attract/scraper/&lt;emulator&gt;/overview</code> is a link here)</td>
+<td>? (descriptions come from <code>gamelist.xml</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>The platform folder of each games folder: <code>arcade</code> for <code>mame</code>, <code>model2</code>, <code>model3</code> and the RetroArch MAME cores; <code>naomi</code>, <code>naomi2</code> and <code>atomiswave</code> for Flycast's arcades; <code>fba</code> for the FBNeo and FB Alpha cores; <code>dreamcast</code>, <code>ps2</code>, <code>gc</code> (Dolphin) and the console name for the other RetroArch cores (<code>snes</code>, <code>megadrive</code>, <code>psx</code>...).</p>
+<p><strong>Shared arcade artwork.</strong> In Attract-Mode Plus, the arcade emulators that have a platform of their own (Naomi, Naomi 2, Atomiswave, FBNeo...) look in their own folder first and then in the <code>arcade</code> folder: the artwork of a set scraped for MAME also shows for the same set in Flycast or FBNeo. You can see it in the emulator's <code>.cfg</code>:</p>
+<pre><code class="language-text">artwork    snap            /home/fliperos/media/snap/naomi;/home/fliperos/media/preview/naomi;/home/fliperos/media/snap/arcade;/home/fliperos/media/preview/arcade
+artwork    wheel           /home/fliperos/media/logo/naomi;/home/fliperos/media/logo/arcade
+</code></pre>
+<p>ES-DE reads the artwork from <code>~/media/.es-de/&lt;system&gt;/&lt;type&gt;</code>, where each type is a link to the right folder in <code>~/media</code>. It only looks in the system's own folder.</p>
+<h2 id="emulator-command-lines-kms-or-x11">Emulator command lines: KMS or X11</h2>
+<h3 id="what-kms-and-x11-are">What KMS and X11 are</h3>
+<p>Linux has two ways to put a program on the screen, and FliperOS uses both.</p>
+<ul>
+<li><strong>KMS</strong> (Kernel Mode Setting, through the kernel's DRM driver) means the program draws <strong>directly on the video card</strong>, without any window system. It is the lightest and fastest path, with the least input lag, and the program changes the video mode itself. RetroArch (with its CRT SwitchRes, one mode per game) and the frontends (Attract-Mode Plus, ES-DE, Pegasus) run like this. The FliperOS wrapper is <strong><code>fliperos-kms-run</code></strong>: it starts the program on the console and, for RetroArch, adds the FliperOS settings (video driver, button mapping) on top of the user's.</li>
+<li><strong>X11</strong> (Xorg, the classic Linux window system) is for programs that only know how to open a window: Flycast, PCSX2, Dolphin, Supermodel, Model 2 Emulator (in Wine), Hypseus, GroovyMAME. The FliperOS wrapper is <strong><code>fliperos-x11-run</code></strong>: it starts an Xorg just for that program, has <strong>Switchres</strong> create a video mode for the monitor chosen in Video Setup (640x240 at 15 kHz for the 480-line systems, so nothing flickers), opens the program full screen and closes Xorg when the program exits. Nothing else runs in that X: no desktop, no panel.</li>
+</ul>
+<p>Rule of thumb: <strong>RetroArch, in KMS; any other emulator, in X11.</strong> If a program says <em>"Cannot open display"</em> or doesn't start in KMS, it needs X11. Both wrappers must be started from the console, as the frontends do: inside the LXDE desktop (which already is an X session), run the emulator directly.</p>
+<p>The commands, as a frontend calls them:</p>
+<pre><code class="language-bash"># KMS: RetroArch with a core
+/opt/fliperos/bin/fliperos-kms-run retroarch -L /opt/fliperos/retroarch/cores/fbneo_libretro.so &quot;/home/fliperos/roms/retroarch/fbneo/sf2.zip&quot;
+
+# X11: the mode comes from /etc/fliperos/emulator-modes.conf
+/opt/fliperos/bin/fliperos-x11-run flycast &quot;/home/fliperos/roms/naomi/mvsc2.zip&quot;
+
+# X11 with a mode chosen on the spot (width x height @ Hz)
+/opt/fliperos/bin/fliperos-x11-run --mode 640x240@60 pcsx2 &quot;/home/fliperos/roms/ps2/game.iso&quot;
+
+# GroovyMAME opens a game by its set name
+/opt/fliperos/bin/fliperos-x11-run groovymame sf2
+</code></pre>
+<p>The X11 video mode of each program is in <code>/etc/fliperos/emulator-modes.conf</code> (one column for 15 kHz, another for 25/31 kHz and LCD; a program not in the table gets 320x240@60). Add a line there for a new program instead of repeating <code>--mode</code> everywhere. More on the modes in <a href="#Emulators">Emulators</a>.</p>
+<h3 id="attract-mode-plus">Attract-Mode Plus</h3>
+<p>Each emulator is a file in <code>~/.attract/emulators/&lt;name&gt;.cfg</code> (in the cabinet's <code>~/config/attractmode</code>). The lines that matter:</p>
+<pre><code class="language-text">executable           /opt/fliperos/bin/fliperos-x11-run
+args                 supermodel &quot;[romfilename]&quot;
+workdir              $HOME
+rompath              /home/fliperos/roms/model3/
+romext               .zip
+system               arcade
+</code></pre>
+<p><code>[romfilename]</code> is the full path of the game file (keep it in quotes: file names have spaces), and <code>[name]</code> is the name without the extension, for emulators that open a game by name (GroovyMAME, Model 2). For a KMS program, <code>executable</code> is <code>/opt/fliperos/bin/fliperos-kms-run</code> and <code>args</code> starts with the program (<code>retroarch -L &lt;core&gt; "[romfilename]"</code>).</p>
+<p>To add an emulator of your own: copy a <code>.cfg</code> from the folder with a new name, change those lines, give it a romlist (<em>Emulators &gt; (the emulator) &gt; Generate Collection/Rom List</em> in Attract-Mode's configuration, or Setup &gt; AttractPlus ROM List for an arcade folder) and a display (<em>Displays &gt; Add new display</em>, with that romlist). <strong>The Setup rewrites the <code>.cfg</code> files it created itself</strong> (the ones whose first line is <code># Criado pelo FliperOS Setup</code>), to keep the artwork paths up to date: to change the command of one of them and keep your change, delete that first line.</p>
+<h3 id="es-de">ES-DE</h3>
+<p>Each system is a <code>&lt;system&gt;</code> block in <code>~/ES-DE/custom_systems/es_systems.xml</code>:</p>
+<pre><code class="language-xml">&lt;system&gt;
+  &lt;name&gt;model3&lt;/name&gt;
+  &lt;fullname&gt;Supermodel&lt;/fullname&gt;
+  &lt;path&gt;/home/fliperos/roms/model3&lt;/path&gt;
+  &lt;extension&gt;.zip .ZIP&lt;/extension&gt;
+  &lt;command label=&quot;Supermodel&quot;&gt;/opt/fliperos/bin/fliperos-x11-run supermodel %ROM%&lt;/command&gt;
+  &lt;platform&gt;arcade&lt;/platform&gt;
+  &lt;theme&gt;arcade&lt;/theme&gt;
+&lt;/system&gt;
+</code></pre>
+<p><code>%ROM%</code> is the game's path (ES-DE adds the quotes) and <code>%BASENAME%</code> the name without the extension (<code>/opt/fliperos/bin/fliperos-x11-run groovymame %BASENAME%</code>). A system can have more than one <code>&lt;command&gt;</code> with different labels: ES-DE lets you pick one per game (<em>Edit this game's metadata &gt; Alternative emulator</em>). <code>&lt;platform&gt;</code> decides the scraper's platform and <code>&lt;theme&gt;</code> the system's look.</p>
+<p><strong>Setup &gt; Frontend rewrites the whole <code>es_systems.xml</code></strong> every time ES-DE is picked, so a system added by hand disappears. Keep a copy of your blocks and paste them back after using Setup &gt; Frontend.</p>
+<h2 id="adding-a-new-emulator">Adding a new emulator</h2>
+<p>FliperOS sets up the emulators it ships by itself. For any other emulator (an AppImage, a package, something you built), there are four steps. If you follow them, the same command works in Attract-Mode Plus, ES-DE, Pegasus or the console.</p>
+<h3 id="step-1-install-it-and-test-it-by-hand">Step 1: install it and test it by hand</h3>
+<p>Put the program where the system finds it: a package (<code>sudo apt install ...</code>), or the binary or AppImage in <code>/usr/local/bin</code> (<code>chmod +x</code>). Then, in the console (<em>Exit to shell</em> in the FliperOS menu), open a game through the wrapper:</p>
+<pre><code class="language-bash">/opt/fliperos/bin/fliperos-x11-run myemu &quot;/home/fliperos/roms/myemu/game.bin&quot;
+</code></pre>
+<p>If it opens full screen, plays and returns to the console when you quit it, it will work from any frontend. Use <code>fliperos-kms-run</code> instead only if the program runs without X (most don't; see <a href="#what-kms-and-x11-are">What KMS and X11 are</a>).</p>
+<h3 id="step-2-make-the-command-frontend-proof">Step 2: make the command frontend-proof</h3>
+<p>A frontend only knows how to run <strong>one command with the game's path</strong> and then wait for it to finish. The command must therefore follow a few rules:</p>
+<ul>
+<li><strong>Absolute paths</strong>: start with <code>/opt/fliperos/bin/fliperos-x11-run</code> (or <code>fliperos-kms-run</code>), never just the program name. The frontends don't run a shell with your <code>PATH</code>.</li>
+<li><strong>The program right after the wrapper</strong>: <code>fliperos-x11-run [--mode WxH@HZ] program [options] game</code>. The wrapper accepts a name in the <code>PATH</code> or the full path of an executable.</li>
+<li><strong>Full screen and no questions</strong>: pass the emulator's own options for full screen, for skipping its welcome or update dialogs and for loading the game directly. Nobody should need a mouse.</li>
+<li><strong>It has to quit and stay in the foreground</strong>: the emulator needs a way to exit with the panel or the keyboard (a hotkey or a menu), otherwise you are stuck in it. It also must not hand off to another process and exit: when the program the wrapper started ends, the wrapper closes its X and the frontend comes back.</li>
+<li><strong>The game path in quotes</strong>: file names have spaces. Each frontend writes the path with its own placeholder (table below).</li>
+</ul>
+<p>If the emulator needs more than that (environment variables, a config file chosen per game, a <code>cd</code> to its folder, Wine), <strong>write a small launcher script</strong> and point the frontends to it. The frontend then only passes the game, and every detail stays in one place:</p>
+<pre><code class="language-bash">#!/bin/bash
+# /usr/local/bin/myemu-run GAME
+export MYEMU_BIOS=&quot;$HOME/bios/myemu&quot;
+cd /opt/myemu || exit 1
+exec /opt/myemu/myemu --fullscreen --no-gui &quot;$1&quot;
+</code></pre>
+<pre><code class="language-bash">sudo chmod +x /usr/local/bin/myemu-run
+/opt/fliperos/bin/fliperos-x11-run myemu-run &quot;/home/fliperos/roms/myemu/game.bin&quot;
+</code></pre>
+<p>The <code>exec</code> keeps the emulator as the program the wrapper waits for. This is how FliperOS opens Model 2 Emulator through Wine (<code>fliperos-model2</code>).</p>
+<h3 id="step-3-the-video-mode-x11-only">Step 3: the video mode (X11 only)</h3>
+<p><code>fliperos-x11-run</code> takes the mode from <code>/etc/fliperos/emulator-modes.conf</code> by the <strong>program name</strong> (the first word after the wrapper, without its path). Add a line:</p>
+<pre><code class="language-text"># program           15 kHz          25/31 kHz and LCD
+myemu-run           320x240@60      640x480@60
+</code></pre>
+<p>Without a line, the program gets 320x240@60. Use 640x240 at 15 kHz for systems that draw 448 or 480 lines, and the system's own refresh rate when it isn't 60 Hz (Model 2 and 3: 57.524).</p>
+<h3 id="step-4-one-folder-and-the-command-in-each-frontend">Step 4: one folder and the command in each frontend</h3>
+<p>Create the game folder, for example <code>~/roms/myemu</code>. Setup &gt; Frontend only creates the systems FliperOS knows about, so a new emulator has to be added by hand in each frontend you use. The command is the same everywhere; only the placeholders change:</p>
+<table>
+<thead>
+<tr>
+<th>Frontend</th>
+<th>Where</th>
+<th>Game path</th>
+<th>Name without extension</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Attract-Mode Plus</td>
+<td><code>args</code> in <code>~/.attract/emulators/&lt;name&gt;.cfg</code></td>
+<td><code>"[romfilename]"</code></td>
+<td><code>[name]</code></td>
+</tr>
+<tr>
+<td>ES-DE</td>
+<td><code>&lt;command&gt;</code> in <code>~/ES-DE/custom_systems/es_systems.xml</code></td>
+<td><code>%ROM%</code> (ES-DE adds the quotes)</td>
+<td><code>%BASENAME%</code></td>
+</tr>
+<tr>
+<td>Pegasus</td>
+<td><code>launch:</code> in <code>metadata.pegasus.txt</code> in the game folder</td>
+<td><code>"{file.path}"</code></td>
+<td><code>{file.basename}</code></td>
+</tr>
+</tbody>
+</table>
+<p>The same emulator in the three of them:</p>
+<pre><code class="language-text"># Attract-Mode Plus: ~/.attract/emulators/My Emulator.cfg
+executable           /opt/fliperos/bin/fliperos-x11-run
+args                 myemu-run &quot;[romfilename]&quot;
+rompath              /home/fliperos/roms/myemu/
+romext               .bin;.zip
+</code></pre>
+<pre><code class="language-xml">&lt;!-- ES-DE: inside &lt;systemList&gt; in ~/ES-DE/custom_systems/es_systems.xml --&gt;
+&lt;system&gt;
+  &lt;name&gt;myemu&lt;/name&gt;
+  &lt;fullname&gt;My Emulator&lt;/fullname&gt;
+  &lt;path&gt;/home/fliperos/roms/myemu&lt;/path&gt;
+  &lt;extension&gt;.bin .zip&lt;/extension&gt;
+  &lt;command label=&quot;My Emulator&quot;&gt;/opt/fliperos/bin/fliperos-x11-run myemu-run %ROM%&lt;/command&gt;
+  &lt;platform&gt;arcade&lt;/platform&gt;
+  &lt;theme&gt;arcade&lt;/theme&gt;
+&lt;/system&gt;
+</code></pre>
+<pre><code class="language-text"># Pegasus: ~/roms/myemu/metadata.pegasus.txt
+collection: My Emulator
+extensions: bin, zip
+launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
+</code></pre>
+<p>Then, in Attract-Mode Plus, generate the romlist and add a display (as in <a href="#attract-mode-plus">Attract-Mode Plus</a> above). In Pegasus, add the folder to the list in <code>~/.config/pegasus-frontend/game_dirs.txt</code>. For the artwork, use a <code>~/media/&lt;type&gt;/&lt;platform&gt;</code> folder (<a href="#artwork">Artwork</a>) in the emulator's <code>artwork</code> lines; for ES-DE, use the <code>&lt;platform&gt;</code> that the scraper should use.</p>
+<p><strong>What the Setup keeps and what it rewrites.</strong> A <code>.cfg</code> you created yourself, without the <code># Criado pelo FliperOS Setup</code> line, is never touched, and neither is a <code>metadata.pegasus.txt</code> that already exists. Setup &gt; Frontend does rewrite ES-DE's <code>es_systems.xml</code> and Pegasus's <code>game_dirs.txt</code> with only the folders it knows, so add your system again after using it.</p>
+<h2 id="quick-checks">Quick checks</h2>
+<ul>
+<li><strong>The system doesn't show up</strong>: the folder must have at least one game file (the <code>_info.txt</code> doesn't count) and the frontend must be picked again in Setup &gt; Frontend.</li>
+<li><strong>The game doesn't open</strong>: with debug mode on (Setup &gt; Debug mode) the emulator's output shows on the screen; otherwise it is saved in <code>/opt/fliperos/logs</code>. Try the same command in the console (<em>Exit to shell</em> in the FliperOS menu).</li>
+<li><strong>No artwork</strong>: check the name (exactly the ROM name, without the extension, case included) and the platform folder, and in Attract-Mode the emulator's <code>artwork</code> lines.</li>
+</ul>
 <h1 id="Controls">Controls</h1>
 <p>Controllers on FliperOS: what the Setup offers in <strong>Joysticks</strong> and <strong>Quirks</strong> and how the emulators see each controller. Using the controller in the Setup menus is covered in <a href="#Installed-system">Installed system</a>.</p>
 <h2 id="setup-joysticks">Setup &gt; Joysticks</h2>

@@ -15,6 +15,7 @@ The media is **installation-only** and follows the GroovyArcade flow: a boot men
 | [Fightcade 2](Fightcade-2.md) | Online matches: download through the Setup, ROMs, the lobby and match modes, keys |
 | [ROMs, BIOS and artwork](ROMs.md) | The folders in `~` (`roms`, `bios`, `media`, `config`), the MAME ROM Cleaner, the CHD Cleaner, the free games |
 | [Scraper](Scraper.md) | Covers, screenshots, logos, videos and descriptions of the games, for every frontend |
+| [Adding games](Adding-games.md) | Step by step: games, real names and artwork in Attract-Mode Plus and ES-DE, emulator command lines in KMS or X11, adding a new emulator |
 | [Controls](Controls.md) | Each player's buttons, light gun and wheel, parallel port, USB quirks, how SDL sees each controller |
 | [Desktop and theme](Desktop.md) | LXDE, the programs in the menu, changing the resolution, the Dracula theme |
 | [Latency](Latency.md) | The Standard and Low latency modes, what each tweak does, recommended hardware, how to measure |

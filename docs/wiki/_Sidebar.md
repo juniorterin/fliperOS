@@ -9,6 +9,7 @@ Using it
 - [Fightcade 2](Fightcade-2.md)
 - [ROMs, BIOS and artwork](ROMs.md)
 - [Scraper](Scraper.md)
+- [Adding games](Adding-games.md)
 - [Controls](Controls.md)
 - [Desktop and theme](Desktop.md)
 - [Latency](Latency.md)
