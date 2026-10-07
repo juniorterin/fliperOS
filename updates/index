@@ -2,3 +2,4 @@
 # N<TAB>commit<TAB>treehash<TAB>reboot (yes/no)<TAB>titulo
 # Nao edite a mao: tools/make-update.sh acrescenta a linha do commit atual.
 1	404265faecc7a8490b1960ba99c4b924a64ff338	748d2548e394f3201b98f22e6505cd5efc033c5f62ced5be1cabe9fbd54535ca	yes	Updates system and all fixes since FliperOS 0.7
+2	e45b9218d554b54d49eb80c39e3b283fe8f8609b	fbe159507fce9ebef7c19f16f130df446f1414b1eac29688847a80f755d61292	no	The update check at boot waits for Wi-Fi
