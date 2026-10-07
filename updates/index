@@ -10,3 +10,4 @@
 7	62b4902c408550be823a295115d34e03ec7d3def	7159fbd66d252c55bb3f924ead44bc057c9fcaf361f7963442a1820cc7392a06	no	OpenBOR opens the old paks (made for 3.0) again
 8	44ca36b5bac418ad8dd662c6dab49a6f7d46e1c4	e5a78c921e0a01ef93dd3f146da62daec181845af6056ae558c503613fb8048b	no	Fightcade in each game's native resolution, Esc closes frontends, your own frontends and desktop scrolling
 9	de5613aa462f357ad78579ec4e50be458601ca30	7cf5f1b35150ca1534d57b76942a4698b0fe43f9b601211fbb8a8db080e59b17	no	The boot splash stays on screen until the menu or frontend opens
+10	5863790178a04de1929197523f58edf2c20fe5b0	2c8e7af93e3dab85999980fa26d1fe6dbffa7457a728b019043e8e4d918ebfc9	no	Every disk is mounted by itself, with an icon on the desktop
