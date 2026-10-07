@@ -1,11 +1,28 @@
 # shellcheck shell=bash
-# Setup > Downloader: o link magnetico do romset e o dos CHDs (separados), o
-# filtro (o mesmo do MAME ROM Cleaner) e a barra do download. Ao abrir, e
-# depois de mudar o filtro, avisa o que o filtro novo acrescenta ou apaga.
-# A logica e a lib/downloader.sh.
+# Setup > Downloader: tudo o que baixa jogos. ROM/CHD MAME torrent: o filtro
+# (o mesmo do MAME ROM Cleaner, salvo so para o torrent), o link magnetico
+# do romset (obrigatorio) e o dos CHDs, a pasta final e a barra do download.
+# Ao abrir, e depois de mudar o filtro, avisa o que o filtro novo acrescenta
+# ou apaga. A logica e a lib/downloader.sh.
+
+screen_downloads() {
+  local choice last=torrent
+  while true; do
+    choice=$(ui_menu "Downloader" "Games downloaded straight to the emulator folders." "$last" \
+      "torrent|ROM/CHD MAME torrent" \
+      "freeroms|Free games (open-source homebrew)" \
+      "return|Return") || return 0
+    last=$choice
+    case $choice in
+      torrent) screen_downloader ;;
+      freeroms) screen_free_roms ;;
+      *) return 0 ;;
+    esac
+  done
+}
 
 screen_downloader() {
-  local title="Downloader" choice status pct state line roms chds last=roms
+  local title="ROM/CHD MAME torrent" choice status pct state line roms chds last=filter
   local -a entries
   downloader_prepare
   screen_downloader_changes
@@ -16,14 +33,14 @@ screen_downloader() {
     line=$(romclean_value "$status" line)
     roms=$(romclean_value "$status" roms_name)
     chds=$(romclean_value "$status" chds_name)
-    entries=("roms|ROM set magnet link: ${roms:-not set}" "chds|CHD set magnet link: ${chds:-not set}"
-      "filter|Filter: $(downloader_filter_label)")
-    if [[ -n $roms$chds ]]; then
-      if [[ $state == downloading ]]; then
-        entries+=("watch|See the download ($pct%)")
-      else
-        entries+=("start|Download what the filter chooses")
-      fi
+    entries=("filter|Filter: $(downloader_filter_label)"
+      "roms|ROM set magnet link (required): ${roms:-not set}"
+      "chds|CHD set magnet link (optional): ${chds:-not set}"
+      "dest|Download folder: $(downloader_dest_label)")
+    if [[ $state == downloading ]]; then
+      entries+=("watch|See the download ($pct%)")
+    else
+      entries+=("start|Start the download")
     fi
     entries+=("return|Return")
     choice=$(ui_menu "$title" "$(ui_fields "Status|$line")" "$last" "${entries[@]}") || return 0
@@ -31,11 +48,38 @@ screen_downloader() {
     case $choice in
       roms | chds) screen_downloader_magnet "$choice" ;;
       filter) screen_downloader_filter ;;
-      start) screen_downloader_start ;;
+      dest) screen_downloader_dest ;;
+      start)
+        if [[ -z $roms ]]; then
+          ui_msg "$title" "$(ui_bad "The ROM set magnet link is required.")" \
+            "Paste it in ROM set magnet link, then Start the download."
+          last=roms
+        else
+          screen_downloader_start
+        fi
+        ;;
       watch) screen_downloader_watch ;;
       *) return 0 ;;
     esac
   done
+}
+
+# screen_downloader_dest: a pasta final dos downloads, no seletor de pastas.
+screen_downloader_dest() {
+  local title="Downloader" target start dest text="Open the folder the games go to, then Use this folder."
+  target=$(downloader_filter_get target) && [[ -n $target ]] || target=groovymame
+  [[ $target == flycast ]] &&
+    text="Open the folder that has (or will have) the naomi, naomi2 and atomiswave folders, then Use this folder."
+  start=$(downloader_dest)
+  [[ -d $start ]] || start=$ROMS_ROOT
+  [[ -d $start ]] || start=/
+  dest=$(ui_browse "$title" "$text" "$start" dir) || return 0
+  downloader_filter_set_dest "$dest"
+  if compgen -G "$DOWNLOADER_STATE/*.installed" > /dev/null; then
+    ui_msg "$title" "The next downloads go to $(downloader_dest_label)." \
+      "What was already downloaded stays where it is."
+  fi
+  return 0
 }
 
 # screen_downloader_magnet roms|chds: cola, troca ou tira o link.
@@ -93,8 +137,8 @@ screen_downloader_magnet() {
   [[ $folder == / ]] && folder="the top of the torrent" || folder="the folder $folder"
   found="$sets ROM sets found in $folder."
   [[ $kind == chds ]] && found="CHDs of $sets games found in $folder."
-  ui_yesno "$title" "$what: $name"$'\n'"$found The rest of the torrent is never downloaded."$'\n\n'"Download now what the filter chooses from it?" &&
-    screen_downloader_start
+  ui_msg "$title" "$what: $name" "$found The rest of the torrent is never downloaded." "" \
+    "Choose the Download folder, then Start the download."
   return 0
 }
 

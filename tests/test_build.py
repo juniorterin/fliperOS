@@ -1897,9 +1897,11 @@ class FreeRomsTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-freeroms"',
                       ROOTFS)
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
-        self.assertIn('"freeroms|Free games (open-source homebrew)"', menu)
-        self.assertIn('freeroms) screen_free_roms ;;', menu)
         self.assertIn('run_with_progress "Downloading the free games" "" freeroms_fetch "$result"', menu)
+        # Em Setup > Downloader.
+        screen = (ROOT / 'fliperos-setup/screens/downloader.sh').read_text()
+        self.assertIn('"freeroms|Free games (open-source homebrew)"', screen)
+        self.assertIn('freeroms) screen_free_roms ;;', screen)
 
 
 class SnapsTests(unittest.TestCase):
@@ -2093,6 +2095,8 @@ class DownloaderTests(unittest.TestCase):
                                ('MAME Pack/Software List ROMs/nes/mslug.zip', 7),
                                ('MAME Pack/Software List ROMs/nes/pong.zip', 7),
                                ('MAME Pack/MAME 0.289/CHDs/kinst/kinst.chd', 300)]),
+        # Maior que qualquer disco.
+        'e' * 40: ('Huge', [('Huge/pong.zip', 10 ** 18), ('Huge/mslug.zip', 50)]),
         # Os CHDs na raiz do torrent (sem a pasta de cima).
         LOOSE: ('kinst', [('kinst/kinst.chd', 300), ('outro/outro.chd', 900), ('info.nfo', 1)]),
     }
@@ -2228,6 +2232,12 @@ class DownloaderTests(unittest.TestCase):
         self.assertTrue(all(not a['paused'] for m, a in self.calls if m == 'torrent-add'))
         self.assertTrue(all(t['status'] == 0 for t in self.torrents.values()))
         self.assertFalse(any(f['wanted'] for t in self.torrents.values() for f in t['files']))
+        # Sem nada marcado o Transmission ja chama o fim: o torrent fica, esperando o Start.
+        self.dl(env=dict(self.env, TR_TORRENT_HASH=self.ROMS))
+        self.assertEqual(sorted(self.torrents), [self.ROMS, self.CHDS])
+        status = dict(line.split('=', 1) for line in self.dl('status').stdout.splitlines())
+        self.assertEqual((status['state'], status['line']), ('waiting', 'ROMs ready, not started; CHDs ready, not started'))
+        self.assertFalse((self.state / 'roms.installed').exists())
         # Um jogo que ja esta na pasta do emulador nao e baixado de novo.
         self.mame.mkdir(parents=True)
         (self.mame / 'pong.zip').write_bytes(b'p' * 10)
@@ -2280,9 +2290,13 @@ class DownloaderTests(unittest.TestCase):
         self.assertIn('is it the CHD link?', r.stdout)
         self.assertNotIn(self.CHDS, self.torrents)
         self.assertFalse((self.state / 'roms.json').exists())
+        # So o link dos CHDs nao comeca: o do romset e obrigatorio.
+        self.dl('add', 'chds', 'magnet:?xt=urn:btih:%s' % self.LOOSE)
+        r = self.dl('start', '--progress', check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('@fail Starting the download|the ROM set magnet link is required', r.stdout)
         out = self.dl('add', 'roms', 'magnet:?xt=urn:btih:%s' % self.NESTED, '--progress').stdout
         self.assertIn('@step 100 3 sets found in MAME Pack/MAME 0.289/ROMs (merged)', out)
-        self.dl('add', 'chds', 'magnet:?xt=urn:btih:%s' % self.LOOSE)
         status = dict(line.split('=', 1) for line in self.dl('status').stdout.splitlines())
         self.assertEqual((status['chds_folder'], status['chds_sets']), ('/', '2'))
         self.dl('start')
@@ -2298,6 +2312,14 @@ class DownloaderTests(unittest.TestCase):
         self.assertEqual((self.mame / 'mslug.zip').stat().st_size, 50)
         self.assertEqual((self.bios / 'neogeo.zip').stat().st_size, 30)
         self.assertFalse((self.staging / 'roms').exists())
+
+    def test_does_not_start_without_free_space(self):
+        self.dl('add', 'roms', 'magnet:?xt=urn:btih:%s' % ('e' * 40))
+        r = self.dl('start', '--progress', check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('@fail Starting the download|not enough free space: ', r.stdout)
+        self.assertFalse(any(f['wanted'] for f in self.torrents['e' * 40]['files']))
+        self.assertFalse((self.state / 'roms.plan').exists())
 
     def test_install_and_iso(self):
         self.assertIn('install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"',

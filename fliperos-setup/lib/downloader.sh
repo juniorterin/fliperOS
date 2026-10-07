@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Setup > Downloader: o romset do MAME e a colecao de CHDs por link
+# Setup > Downloader > ROM/CHD MAME torrent: o romset do MAME e a colecao de CHDs por link
 # magnetico (um link para cada), baixando so o que o filtro do MAME ROM
 # Cleaner escolhe. O download e do Transmission (servico
 # fliperos-transmission); a logica, o config/fliperos-downloader. Aqui ficam
@@ -89,6 +89,31 @@ downloader_filter_default() {
   romclean_data_load "$ROMCLEAN_DATA"
   mapfile -t kv < <(romclean_preset cabinet groovymame)
   downloader_filter_save groovymame "$(romclean_default_dest groovymame)" cabinet "${kv[@]}"
+}
+
+# downloader_dest imprime a pasta final dos downloads: a escolhida em
+# Download folder (gravada no filtro) ou a padrao do emulador.
+downloader_dest() {
+  local dest target
+  target=$(downloader_filter_get target) && [[ -n $target ]] || target=groovymame
+  dest=$(downloader_filter_get dest) && [[ -n $dest ]] || dest=$(romclean_default_dest "$target")
+  printf '%s\n' "$dest"
+}
+
+downloader_dest_label() {
+  local target
+  target=$(downloader_filter_get target) && [[ -n $target ]] || target=groovymame
+  romclean_dest_label "$target" "$(downloader_dest)"
+}
+
+# downloader_filter_set_dest PASTA: troca so a pasta final do filtro salvo
+# (sem filtro ainda, comeca pelo preset padrao).
+downloader_filter_set_dest() {
+  local -a kv
+  downloader_filter_get preset > /dev/null || downloader_filter_default
+  romclean_data_load "$ROMCLEAN_DATA"
+  mapfile -t kv < <(grep -vE '^(target|dest|preset)=' "$DOWNLOADER_STATE/filter.kv")
+  downloader_filter_save "$(downloader_filter_get target)" "$1" "$(downloader_filter_get preset)" "${kv[@]}"
 }
 
 # downloader_status imprime o andamento ("chave=valor": pct, state, line,

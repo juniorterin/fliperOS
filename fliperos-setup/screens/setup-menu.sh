@@ -16,10 +16,8 @@ screen_setup_menu() {
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
       "romlist|AttractPlus ROM List (real game names)" \
-      "romcleaner|MAME ROM Cleaner" \
-      "chdcleaner|MAME CHD Cleaner" \
-      "downloader|Downloader (romset and CHDs by magnet link)" \
-      "freeroms|Free games (open-source homebrew)" \
+      "cleaner|Cleaner (MAME/Flycast/etc ROM/CHD)" \
+      "downloader|Downloader (MAME ROM/CHD torrent, free games)" \
       "quirks|Quirks (USB controller fixes)" \
       "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))" \
@@ -35,10 +33,8 @@ screen_setup_menu() {
       latency) screen_latency ;;
       scraper) screen_scraper ;;
       romlist) screen_romlist ;;
-      romcleaner) screen_rom_cleaner ;;
-      chdcleaner) screen_chd_cleaner ;;
-      downloader) screen_downloader ;;
-      freeroms) screen_free_roms ;;
+      cleaner) screen_cleaner ;;
+      downloader) screen_downloads ;;
       quirks) screen_quirks ;;
       joysticks) screen_joysticks ;;
       debug) screen_debug ;;
@@ -50,8 +46,9 @@ screen_setup_menu() {
 
 # ── Jogos livres ─────────────────────────────────────────────────
 
-# screen_free_roms baixa os jogos livres do config/fliperos-freeroms para as
-# pastas dos cores do RetroArch (lib/freeroms.sh).
+# screen_free_roms (Setup > Downloader) baixa os jogos livres do
+# config/fliperos-freeroms para as pastas dos cores do RetroArch
+# (lib/freeroms.sh).
 screen_free_roms() {
   local title="Free games" names result out
   names=$(freeroms_list | paste -sd'|' - | sed 's/|/, /g')

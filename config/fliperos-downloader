@@ -300,6 +300,13 @@ def files_of(kind, entry, rels):
     return out
 
 
+def free_space(path):
+    """Bytes livres no disco de PATH (ou da pasta de cima que ja existe)."""
+    while not os.path.exists(path) and os.path.dirname(path) != path:
+        path = os.path.dirname(path)
+    return shutil.disk_usage(path).free
+
+
 def arrived(target, length):
     try:
         return os.path.getsize(target) == length
@@ -396,19 +403,32 @@ def cmd_start(args):
     rpc = Rpc()
     result = []
     try:
+        # Os CHDs sao os dos jogos que o romset traz: sem ele nao ha plano.
+        if not meta_of('roms'):
+            raise OSError('the ROM set magnet link is required')
         rpc.wait()
         with lock(), tempfile.TemporaryDirectory() as tmp:
             plans = make_plans(tmp)
-            for n, kind in enumerate(plans):
-                meta = meta_of(kind)
-                plan, entries = plans[kind]
-                rels = relative(meta)
+            chosen_of = {}
+            for kind, (_, entries) in plans.items():
+                rels = relative(meta_of(kind))
                 wanted, size = [], 0
                 for entry in entries:
                     for index, _, target, length in files_of(kind, entry, rels):
                         if not arrived(target, length):
                             wanted.append(index)
                             size += length
+                chosen_of[kind] = (wanted, size)
+            # Antes de marcar qualquer arquivo: o download inteiro cabe no disco?
+            need = sum(size for _, size in chosen_of.values())
+            free = free_space(STAGING)
+            if need > free:
+                raise OSError('not enough free space: %s to download, %s free. Change the filter to take fewer '
+                              'games (or no CHDs)' % (human(need), human(free)))
+            for n, kind in enumerate(plans):
+                meta = meta_of(kind)
+                plan = plans[kind][0]
+                wanted, size = chosen_of[kind]
                 say(args.progress, '@step %d %s: %d files to download (%s)'
                     % (40 + 50 * n // len(plans), LABEL[kind], len(wanted), human(size)))
                 t = rpc.torrent(meta['hash'], ['hashString'])
@@ -427,6 +447,8 @@ def cmd_start(args):
                         rpc.call('torrent-start', ids=[meta['hash']])
                     else:
                         rpc.remove(meta['hash'], delete=True)
+                if not wanted and read_state(kind + '.installed') is None:
+                    write_state(kind + '.installed', '')
                 shutil.copyfile(plan, state(kind + '.plan'))
                 give_to_owner(state(kind + '.plan'))
                 result.append('%s\twanted\t%d\t%d\n' % (kind, len(wanted), size))
@@ -545,13 +567,19 @@ def cmd_status(args):
         total = left = rate = 0
         eta = -1
         parts = []
-        active = False
+        active = pending = False
         for kind in kinds:
             t = rpc.torrent(meta_of(kind)['hash'], ['status', 'sizeWhenDone', 'leftUntilDone', 'rateDownload',
                                                     'eta', 'peersConnected', 'errorString'])
             if t is None:
                 done = read_state(kind + '.installed') is not None
                 parts.append('%s %s' % (LABEL[kind], 'done' if done else 'not started'))
+                pending = pending or not done
+                continue
+            if t['status'] == 0 and not t['sizeWhenDone']:
+                # O link entrou e espera o Start (nada marcado ainda).
+                parts.append('%s ready, not started' % LABEL[kind])
+                pending = True
                 continue
             active = True
             total += t['sizeWhenDone']
@@ -573,7 +601,8 @@ def cmd_status(args):
                 out['state'] = 'downloading'
                 parts.append('%s/s, %s left' % (human(rate), duration(eta)))
             else:
-                out['state'] = 'done' if any(read_state(k + '.installed') is not None for k in kinds) else 'waiting'
+                out['state'] = 'done' if not pending and any(
+                    read_state(k + '.installed') is not None for k in kinds) else 'waiting'
                 out['pct'] = 100 if out['state'] == 'done' else 0
             out['line'] = '; '.join(parts)
     for key, value in out.items():
@@ -594,8 +623,10 @@ def cmd_finish(args):
             meta = meta_of(kind)
             if not meta:
                 continue
-            t = rpc.torrent(meta['hash'], ['fileStats', 'leftUntilDone'])
-            if t is None:
+            t = rpc.torrent(meta['hash'], ['fileStats', 'leftUntilDone', 'sizeWhenDone'])
+            # Sem nada marcado (o link acabou de entrar, ver fetch_metadata) o
+            # Transmission tambem chama o fim: nao e o fim de um download.
+            if t is None or read_state(kind + '.plan') is None or not t['sizeWhenDone']:
                 continue
             stats = t['fileStats']
             rels = relative(meta)

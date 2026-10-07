@@ -2068,6 +2068,57 @@ class RomCleanerTests(Base):
         self.assertIn("target=groovymame\n", kv)
         self.assertIn("preset=cabinet\n", kv)
 
+    def test_torrent_menu_filter_first_and_the_rom_link_is_required(self):
+        # A ordem: filtro, link das ROMs, link dos CHDs, pasta, comecar. Sem o
+        # link das ROMs (so o dos CHDs) o Start nao comeca.
+        # O ui_menu roda num $(...): a contagem fica num arquivo.
+        out, calls, _ = self.downloader_screen("""
+            ui_menu() {
+              echo x >> "$DOWNLOADER_STATE/menus"
+              [[ $(wc -l < "$DOWNLOADER_STATE/menus") == 1 ]] || return 1
+              printf 'item:%s\\n' "${@:4}" >&2
+              echo start
+            }
+            screen_downloader_start() { echo "start:$*"; }
+            screen_downloader
+        """, status="pct=0\\nstate=none\\nline=x\\nchds_name=MAME CHDs\\n")
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", out)
+        items = [line.split("|")[0] for line in plain.splitlines() if line.startswith("item:")]
+        self.assertEqual(items, ["item:filter", "item:roms", "item:chds", "item:dest", "item:start", "item:return"])
+        self.assertIn("ROM set magnet link (required): not set", plain)
+        self.assertIn("CHD set magnet link (optional): MAME CHDs", plain)
+        self.assertIn("msg:ROM/CHD MAME torrent The ROM set magnet link is required.", plain)
+        self.assertNotIn("start:", out)
+        # Com ele, comeca.
+        out, _, _ = self.downloader_screen("""
+            rm -f "$DOWNLOADER_STATE/menus"
+            ui_menu() {
+              echo x >> "$DOWNLOADER_STATE/menus"
+              [[ $(wc -l < "$DOWNLOADER_STATE/menus") == 1 ]] || return 1
+              echo start
+            }
+            screen_downloader_start() { echo "start:$*"; }
+            screen_downloader
+        """, status="pct=0\\nstate=none\\nline=x\\nroms_name=MAME ROMs\\n")
+        self.assertIn("start:", out)
+
+    def test_download_folder_keeps_the_filter(self):
+        out, _, state = self.downloader_screen("""
+            ui_browse() { echo /mnt/disco/mame; }
+            screen_downloader_dest
+            downloader_dest
+            downloader_dest_label
+        """)
+        self.assertIn("/mnt/disco/mame\n/mnt/disco/mame\n", out)
+        kv = (state / "filter.kv").read_text()
+        self.assertIn("dest=/mnt/disco/mame\n", kv)
+        self.assertIn("preset=cabinet\n", kv)
+        scan = (state / "filter.scan").read_text().splitlines()
+        self.assertEqual(scan[scan.index("--dest") + 1], "/mnt/disco/mame")
+        self.assertEqual((state / "filter.chds").read_text().splitlines()[-2:], ["--roms", "/mnt/disco/mame"])
+        # Fora de ~/roms/mame as BIOS vao com os jogos.
+        self.assertNotIn("--bios-dest", scan)
+
     def test_downloader_warns_what_the_new_filter_adds_and_deletes(self):
         diff = "roms\tadd\t2\t2048\nroms\tremove\t1\t10\nchds\tadd\t0\t0\nchds\tremove\t1\t300\n"
         out, calls, state = self.downloader_screen("""
@@ -2186,10 +2237,12 @@ class RomCleanerTests(Base):
                                       "romclean_chd_label groovymame /home/fliperos/roms/mame", home).split(),
                          ["~/roms/{naomi,naomi2}", "~/roms/mame"])
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
-        self.assertIn('"chdcleaner|MAME CHD Cleaner"', menu)
-        self.assertIn("chdcleaner) screen_chd_cleaner ;;", menu)
-        self.assertIn('"downloader|Downloader (romset and CHDs by magnet link)"', menu)
-        self.assertIn("downloader) screen_downloader ;;", menu)
+        screen = (SETUP / "screens" / "rom-cleaner.sh").read_text()
+        self.assertIn('"chdcleaner|MAME CHD Cleaner"', screen)
+        self.assertIn("chdcleaner) screen_chd_cleaner ;;", screen)
+        self.assertIn('"downloader|Downloader (MAME ROM/CHD torrent, free games)"', menu)
+        self.assertIn("downloader) screen_downloads ;;", menu)
+        self.assertNotIn("freeroms|", menu)
         self.assertIn('source "$SETUP_DIR/screens/downloader.sh"', (SETUP / "fliperos-setup").read_text())
 
     def test_the_xml_is_read_once_per_mame_version(self):
@@ -2379,9 +2432,13 @@ class RomCleanerTests(Base):
 
     def test_the_screen(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
-        self.assertIn('"romcleaner|MAME ROM Cleaner"', menu)
-        self.assertIn("romcleaner) screen_rom_cleaner ;;", menu)
+        self.assertIn('"cleaner|Cleaner (MAME/Flycast/etc ROM/CHD)"', menu)
+        self.assertIn("cleaner) screen_cleaner ;;", menu)
+        self.assertNotIn("romcleaner|", menu)
         screen = (SETUP / "screens" / "rom-cleaner.sh").read_text()
+        # Em Setup > Cleaner.
+        self.assertIn('"romcleaner|MAME ROM Cleaner"', screen)
+        self.assertIn("romcleaner) screen_rom_cleaner ;;", screen)
         # Enter num parametro abre as opcoes dele (uma ou varias) e volta.
         pick = screen.split("screen_rom_cleaner_pick() {")[1].split("\n}\n")[0]
         self.assertIn('ui_checklist "$title" "${ROMCLEAN_HELP[$key]}" "$value" "${options[@]}"', pick)

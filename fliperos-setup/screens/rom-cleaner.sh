@@ -5,6 +5,24 @@
 # de marcar varias, e volta com a escolha), a previa e a copia para a pasta
 # do emulador. A logica e a lib/romclean.sh; a pasta da rede, lib/netshare.sh.
 
+# screen_cleaner: Setup > Cleaner, o ROM cleaner e o CHD cleaner juntos.
+screen_cleaner() {
+  local choice last=romcleaner
+  while true; do
+    choice=$(ui_menu "Cleaner" "Filter a romset (MAME, Flycast, MAME 2010) into the emulator folders, then bring the CHDs of the games that stayed." \
+      "$last" \
+      "romcleaner|MAME ROM Cleaner" \
+      "chdcleaner|MAME CHD Cleaner" \
+      "return|Return") || return 0
+    last=$choice
+    case $choice in
+      romcleaner) screen_rom_cleaner ;;
+      chdcleaner) screen_chd_cleaner ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
 screen_rom_cleaner() {
   local title="MAME ROM Cleaner" folder target xml="" had=0 options
   netshare_mounted && had=1
@@ -259,7 +277,9 @@ screen_rom_cleaner_filters() {
       romclean_visible "$key" "$target" && entries+=("$key|$(romclean_label "$key" "${opt[$key]}")")
     done
     ((writable)) && entries+=("transfer|$(romclean_label transfer "$transfer")")
-    entries+=("dest|To: $(romclean_dest_label "$target" "$dest")" "data|Data files: $ROMCLEAN_DATA_LABEL")
+    # No downloader a pasta e o item Download folder da tela dele.
+    [[ $mode == downloader ]] || entries+=("dest|To: $(romclean_dest_label "$target" "$dest")")
+    entries+=("data|Data files: $ROMCLEAN_DATA_LABEL")
     if [[ $mode == downloader ]]; then
       entries+=("save|Save the filter" "return|Return")
       line="Magnet links -> $(romclean_target_label "$target"). Enter opens a parameter."
