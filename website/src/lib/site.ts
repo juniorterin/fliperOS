@@ -13,9 +13,9 @@ export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorteri
 
 export const FLIPEROS_VERSION = '0.7';
 
-// Domínio oficial ainda não existe: canonical, Open Graph e sitemap usam
-// NEXT_PUBLIC_SITE_URL, lido no build (no Coolify, variável de build).
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/+$/, '');
+// Canonical, hreflang, Open Graph e sitemap usam o domínio oficial;
+// NEXT_PUBLIC_SITE_URL, lido no build, troca o domínio (outro ambiente).
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fliperos.juniorter.in').replace(/\/+$/, '');
 
 export const SECTION_IDS = ['features', 'screenshots', 'emulators', 'crt', 'setup', 'open-source'] as const;
 export type SectionId = (typeof SECTION_IDS)[number];

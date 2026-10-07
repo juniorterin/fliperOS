@@ -17,7 +17,7 @@ npm run i18n:check  # fails if a component has visible text outside src/i18n
 ## Deploying on Coolify
 
 - **Build pack:** Dockerfile. **Base directory:** `/website`. **Port:** 3000.
-- **Environment:** `NEXT_PUBLIC_SITE_URL=https://your-domain` (available at build time). It sets the canonical URL, Open Graph URLs, `sitemap.xml` and `robots.txt`; without it they point to `http://localhost:3000`.
+- **Domain:** [fliperos.juniorter.in](https://fliperos.juniorter.in). The canonical URL, `hreflang`, Open Graph URLs, `sitemap.xml` and `robots.txt` use it; `NEXT_PUBLIC_SITE_URL` (available at build time) overrides it for another environment.
 
 The image (`Dockerfile`) builds with `npm ci && npm run build` and runs `node server.js` from the standalone output as a non-root user.
 

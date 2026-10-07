@@ -2,7 +2,7 @@
 
 Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a **15 kHz kernel**, Switchres, emulators and frontends ready to play, and a setup menu (`fliperos-setup`) made for the tube's screen.
 
-In development: 0.7 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT. The full documentation is in the **[wiki](https://github.com/juniorterin/fliperOS/wiki)**. Website: [`website/`](website).
+In development: 0.7 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT. The full documentation is in the **[wiki](https://github.com/juniorterin/fliperOS/wiki)**. Website: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (source in [`website/`](website)).
 
 ## What's included
 
