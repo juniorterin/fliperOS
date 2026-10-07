@@ -192,8 +192,9 @@ scraper_platform() {
     dreamcast) echo dreamcast ;;
     # Os arcades do Flycast, uma pasta por sistema (MAME ROM Cleaner).
     naomi | naomi2 | atomiswave) echo "$1" ;;
-    # Supermodel: os .zip do MAME, que o Skyscraper procura como arcade.
-    model3) echo arcade ;;
+    # Supermodel e Model 2 Emulator: os .zip do MAME, que o Skyscraper
+    # procura como arcade.
+    model2 | model3) echo arcade ;;
     ps2) echo ps2 ;;
     dolphin) echo gc ;;
     *) return 1 ;;
@@ -270,7 +271,8 @@ scraper_core_info() {
 # scraper_count PASTA: arquivos de jogo, sem o _info.txt do fliperos-roms,
 # os ocultos e o que o proprio scraper gravou (lista e media/).
 scraper_count() {
-  find "$1" -maxdepth 2 -type f ! -name '.*' ! -name '_info.txt' ! -name 'gamelist.xml' \
+  # -H: ~/roms/model2 e um link para a pasta do Model 2 Emulator.
+  find -H "$1" -maxdepth 2 -type f ! -name '.*' ! -name '_info.txt' ! -name 'gamelist.xml' \
     ! -name 'metadata.pegasus.txt' ! -path "$1/media/*" 2> /dev/null | wc -l
 }
 
@@ -345,6 +347,8 @@ scraper_attract_emulator() {
       echo "Atomiswave|$FLIPEROS_BIN/fliperos-x11-run|flycast \"[romfilename]\"|.zip;.7z" ;;
     model3)
       echo "Supermodel|$FLIPEROS_BIN/fliperos-x11-run|supermodel \"[romfilename]\"|.zip" ;;
+    model2)
+      echo "Model 2|$FLIPEROS_BIN/fliperos-x11-run|fliperos-model2 [name]|.zip" ;;
     ps2)
       echo "PCSX2|$FLIPEROS_BIN/fliperos-x11-run|pcsx2 \"[romfilename]\"|.iso;.chd;.cso;.bin;.gz" ;;
     dolphin)
@@ -368,37 +372,79 @@ scraper_attract_emulator() {
 # tela) e imprime o nome do emulador. Um .cfg do Setup e refeito (a arte
 # passou para ~/media); um mudado pelo Attract-Mode ou a mao fica.
 scraper_attract_prepare() {
-  local key=$1 dir=$2 platform=$3 name exe args exts media cfg acfg
+  local key=$1 dir=$2 platform=$3 name exe args exts cfg t
+  local -A art=()
   IFS='|' read -r name exe args exts <<< "$(scraper_attract_emulator "$key")"
   [[ -n $name ]] || return 1
-  media=$MEDIA_DIR
   cfg="$ATTRACT_DIR/emulators/$name.cfg"
   mkdir -p "$ATTRACT_DIR/emulators" "$ATTRACT_DIR/romlists" || return 1
   media_system "$platform" || return 1
+  # Video junto da captura, como no efc.sh: o Skyscraper acha a pasta do
+  # video na linha do snap.
+  art=([flyer]="box" [marquee]="marquee" [wheel]="logo" [snap]="snap preview")
+  for t in "${!art[@]}"; do
+    # shellcheck disable=SC2086 # um tipo por palavra
+    art[$t]=$(scraper_attract_paths "$platform" ${art[$t]})
+  done
+  # Os arcades que nao sao a plataforma arcade (Naomi, Atomiswave, FBNeo...)
+  # tambem procuram na pasta de arcade, depois da deles: a arte do mesmo set,
+  # raspada pelo MAME, serve para eles.
+  if scraper_arcade "$key" && [[ $platform != arcade ]]; then
+    media_system arcade || return 1
+    art[flyer]+=";$(scraper_attract_paths arcade box)"
+    art[marquee]+=";$(scraper_attract_paths arcade marquee)"
+    art[wheel]+=";$(scraper_attract_paths arcade logo)"
+    art[snap]+=";$(scraper_attract_paths arcade snap preview)"
+  fi
   if [[ ! -f $cfg ]] || head -1 "$cfg" | grep -q '^# Criado pelo FliperOS Setup'; then
     {
       printf '# Criado pelo FliperOS Setup (Scraper).\n'
       printf '%-20s %s\n' executable "$exe" args "$args" workdir "\$HOME" rompath "$dir/" romext "$exts" \
         system "$platform"
-      printf 'artwork    %-15s %s\n' flyer "$media/box/$platform" marquee "$media/marquee/$platform" \
-        wheel "$media/logo/$platform"
-      # Video junto da captura, como no efc.sh: o Skyscraper acha a pasta
-      # do video na linha do snap.
-      printf 'artwork    %-15s %s\n' snap "$media/snap/$platform;$media/preview/$platform"
+      for t in flyer marquee wheel snap; do
+        printf 'artwork    %-15s %s\n' "$t" "${art[$t]}"
+      done
     } > "$cfg"
   fi
   # A descricao de cada jogo: o Skyscraper a grava (e o Attract-Mode a le) em
   # scraper/<emulador>/overview, um link para ~/media/texto.
   media_link_dir "$ATTRACT_DIR/scraper/$name/overview" "$MEDIA_DIR/texto/$platform"
-  # Uma tela por emulador, com o tema AdvanceMenu (legivel em 640x240).
-  acfg="$ATTRACT_DIR/attract.cfg"
-  if ! awk -v n="$name" '$1 == "romlist" { sub(/^[ \t]*romlist[ \t]+/, ""); if ($0 == n) f = 1 } END { exit !f }' \
-    "$acfg" 2> /dev/null; then
-    printf 'display\t%s\n\tlayout               AdvanceMenu\n\tromlist              %s\n\tin_cycle             yes\n\tin_menu              yes\n\n' \
-      "$name" "$name" >> "$acfg"
-  fi
+  scraper_attract_display "$name"
   chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
   printf '%s\n' "$name"
+}
+
+# scraper_attract_paths PLATAFORMA TIPO... imprime as pastas de ~/media dos
+# tipos, separadas por ";" (o formato das linhas artwork).
+scraper_attract_paths() {
+  local platform=$1 t out=""
+  shift
+  for t in "$@"; do
+    out+="${out:+;}$MEDIA_DIR/$t/$platform"
+  done
+  printf '%s\n' "$out"
+}
+
+# scraper_attract_display ROMLIST: uma tela da romlist no attract.cfg, com o
+# tema AdvanceMenu (legivel em 640x240), se ainda nao tiver.
+scraper_attract_display() {
+  local acfg="$ATTRACT_DIR/attract.cfg"
+  if ! awk -v n="$1" '$1 == "romlist" { sub(/^[ \t]*romlist[ \t]+/, ""); if ($0 == n) f = 1 } END { exit !f }' \
+    "$acfg" 2> /dev/null; then
+    printf 'display\t%s\n\tlayout               AdvanceMenu\n\tromlist              %s\n\tin_cycle             yes\n\tin_menu              yes\n\n' \
+      "$1" "$1" >> "$acfg"
+  fi
+}
+
+# scraper_arcade CHAVE: a pasta e de jogos de arcade (sets do MAME)? As do
+# MAME, do Flycast (Naomi, Naomi 2, Atomiswave), do Model 2 e do Model 3, e
+# as dos cores de arcade do RetroArch (MAME 20xx, HBMAME, FBNeo, FB Alpha).
+scraper_arcade() {
+  case $1 in
+    mame | naomi | naomi2 | atomiswave | model2 | model3) return 0 ;;
+    retroarch/*) [[ $(scraper_core_info "${1#retroarch/}" systemid) =~ ^(mame|hbmame|fb_alpha)$ ]] ;;
+    *) return 1 ;;
+  esac
 }
 
 # ── Retomada ──────────────────────────────────────────────────────

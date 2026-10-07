@@ -15,6 +15,7 @@ screen_setup_menu() {
       "extras|Extras (Wine, Steam, Heroic)" \
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
+      "romlist|AttractPlus ROM List (real game names)" \
       "romcleaner|MAME ROM Cleaner" \
       "chdcleaner|MAME CHD Cleaner" \
       "freeroms|Free games (open-source homebrew)" \
@@ -32,6 +33,7 @@ screen_setup_menu() {
       extras) screen_extras ;;
       latency) screen_latency ;;
       scraper) screen_scraper ;;
+      romlist) screen_romlist ;;
       romcleaner) screen_rom_cleaner ;;
       chdcleaner) screen_chd_cleaner ;;
       freeroms) screen_free_roms ;;
@@ -384,6 +386,53 @@ scraper_scrape_targets() {
     label=$(printf '%s, ' "${labels[@]}")
     ui_msg "Scraper" "Done. Game lists updated for: ${label%, }."
   fi
+}
+
+# ── AttractPlus ROM List ─────────────────────────────────────────
+# As romlists do Attract-Mode Plus das pastas de arcade, com o nome de cada
+# jogo do -listxml do GroovyMAME (lib/frontends.sh).
+
+screen_romlist() {
+  local title="AttractPlus ROM List" found=() entries=() targets=() line key dir platform count name
+  local picked="" result games clones unknown lines=()
+  if ! launcher_installed attractplus; then
+    ui_msg "$title" "Attract-Mode Plus is not installed." "" "Install it in Setup > Frontend."
+    return 0
+  fi
+  mapfile -t found < <(frontends_romlist_systems)
+  if ((${#found[@]} == 0)); then
+    ui_msg "$title" "No arcade games were found." "" \
+      "Copy the sets to $ROMS_DIR/mame, naomi, naomi2, atomiswave, model2, model3" \
+      "or to the folder of a RetroArch arcade core (mame2010, fbneo...)."
+    return 0
+  fi
+  for line in "${found[@]}"; do
+    IFS='|' read -r key dir platform count name <<< "$line"
+    entries+=("$key|$name - $count files")
+    picked+="${picked:+,}$key"
+  done
+  picked=$(ui_checklist "$title" "Game lists with the real name of each game, from the GroovyMAME list, clones and bootlegs included. Mark the folders." \
+    "$picked" "${entries[@]}") || return 0
+  [[ -n $picked ]] || return 0
+  for line in "${found[@]}"; do
+    [[ ",$picked," == *",${line%%|*},"* ]] && targets+=("$line")
+  done
+  ui_yesno "$title" "This replaces the game lists of these folders in Attract-Mode Plus, also a list made by the Scraper (the art stays). The \"$ATTRACT_ROMLIST_ALL\" list gets all of them together. Go on?" yes ||
+    return 0
+  result=$(mktemp)
+  if run_with_progress "Generating the ROM lists" "" frontends_romlist "$result" "${targets[@]}"; then
+    while IFS=$'\t' read -r name games clones unknown; do
+      [[ $name == total ]] && continue
+      line="$name: $games games"
+      ((clones > 0)) && line+=" ($clones clones inside the parent's zip)"
+      ((unknown > 0)) && line+=", $unknown not in the MAME list"
+      lines+=("$line")
+    done < "$result"
+    ui_msg "$title" "${lines[@]}" "" \
+      "\"$ATTRACT_ROMLIST_ALL\": $(awk -F'\t' '$1 == "total" { print $2 }' "$result") games." \
+      "A game not in the MAME list keeps its file name."
+  fi
+  rm -f "$result"
 }
 
 # ── Modo debug ───────────────────────────────────────────────────

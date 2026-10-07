@@ -1571,7 +1571,7 @@ class RomCleanTests(unittest.TestCase):
         cache.write_text('{"format": 0, "machines": {"x": {}}}')
         out = self.romclean('scan', '--cache', str(cache), '--xml-command', 'cat %s' % (self.tmp / 'mame.xml'), *args)
         self.assertIn('move=%s\n' % first['move'], out)
-        self.assertIn('"format":2', cache.read_text()[:40].replace(' ', ''))
+        self.assertIn('"format":3', cache.read_text()[:40].replace(' ', ''))
         # Sem XML nem cache, com um XML vazio e com uma pasta que nao existe:
         # erro em uma linha (a que o Setup mostra), nao um plano vazio.
         for extra, message in (((), 'no MAME XML'), (('--xml-command', 'true'), 'could not read the MAME XML'),

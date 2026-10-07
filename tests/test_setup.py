@@ -2249,6 +2249,68 @@ class RomCleanerTests(Base):
         self.assertIn('[[ -w $folder ]] && writable=1', screen)
         self.assertIn("source \"$SETUP_DIR/lib/netshare.sh\"", (SETUP / "fliperos-setup").read_text())
 
+    def test_attract_romlist_gets_the_real_names_and_the_clones(self):
+        # Setup > AttractPlus ROM List: o nome do -listxml no lugar do nome do
+        # arquivo, os clones de um romset merged (so no MAME, que abre pelo
+        # nome), sem as BIOS, e a tela Arcade com todas as pastas.
+        roms, info, attract = self.env.dir / "home-roms", self.env.dir / "info", self.env.dir / "attract"
+        files = {"mame": ("mslug.zip", "neogeo.zip", "meujogo.zip", "_info.txt"), "naomi": ("mvsc2.zip",),
+                 "retroarch/fbneo": ("mslug.zip",), "retroarch/snes9x": ("mario.sfc",)}
+        for folder, names in files.items():
+            (roms / folder).mkdir(parents=True)
+            for name in names:
+                (roms / folder / name).write_text("x")
+        info.mkdir()
+        (info / "fbneo_libretro.info").write_text('systemname = "Arcade (various)"\nsystemid = "fb_alpha"\n'
+                                                  'corename = "FinalBurn Neo"\nsupported_extensions = "zip|7z"\n')
+        (info / "snes9x_libretro.info").write_text('systemname = "Super Nintendo"\nsystemid = "super_nes"\n')
+        env = dict(self.vars, ROMS_DIR=str(roms), RA_INFO_DIR=str(info), ATTRACT_DIR=str(attract),
+                   MEDIA_DIR=str(self.env.dir / "media"), FLIPEROS_USER="ninguem")
+        lines = self.env.out("""
+            mapfile -t s < <(frontends_romlist_systems)
+            printf '%s\\n' "${s[@]}"
+            frontends_romlist "$ROMCLEAN_CACHE.result" "${s[@]}" | grep -c '^@step'
+            cat "$ROMCLEAN_CACHE.result"
+        """, env).splitlines()
+        fbneo = "Arcade (various) (FinalBurn Neo)"
+        self.assertEqual(lines[:3], ["mame|%s/mame|arcade|3|MAME" % roms, "naomi|%s/naomi|naomi|1|Naomi" % roms,
+                                     "retroarch/fbneo|%s/retroarch/fbneo|fba|1|%s" % (roms, fbneo)])
+        self.assertGreaterEqual(int(lines[3]), 3)
+        self.assertEqual(lines[4:], ["MAME\t3\t1\t1", "Naomi\t1\t0\t0", "%s\t1\t0\t0" % fbneo, "total\t5"])
+
+        def romlist(name):
+            text = (attract / "romlists" / (name + ".txt")).read_text().splitlines()
+            self.assertTrue(text[0].startswith("#Name;Title;Emulator;CloneOf;Year;"))
+            return {line.split(";")[0]: line.split(";") for line in text[1:]}
+        mame = romlist("MAME")
+        self.assertEqual(sorted(mame), ["meujogo", "mslug", "mslugb"])
+        self.assertEqual(mame["mslug"][:5], ["mslug", "Metal Slug", "MAME", "", "1996"])
+        self.assertEqual((mame["mslug"][9], mame["mslug"][10], mame["mslug"][16]), ("joystick (8-way)", "good", "4"))
+        self.assertEqual(len(mame["mslug"]), 21)
+        self.assertEqual(mame["mslugb"][1:4], ["Metal Slug (bootleg)", "MAME", "mslug"])
+        self.assertEqual(mame["meujogo"][1:3], ["meujogo", "MAME"])
+        self.assertEqual(romlist("Naomi")["mvsc2"][1], "Marvel Vs. Capcom 2")
+        self.assertEqual(sorted(romlist(fbneo)), ["mslug"])
+        self.assertEqual(len(romlist("Arcade")), 4)
+        self.assertEqual(sum(1 for line in (attract / "romlists" / "Arcade.txt").read_text().splitlines()), 6)
+        acfg = (attract / "attract.cfg").read_text()
+        self.assertIn("display\tArcade\n", acfg)
+        self.assertIn("display\tNaomi\n", acfg)
+        # Os arcades de outra plataforma tambem procuram a arte em arcade.
+        media = self.env.dir / "media"
+        naomi = (attract / "emulators" / "Naomi.cfg").read_text()
+        self.assertIn("artwork    snap            %s/snap/naomi;%s/preview/naomi;%s/snap/arcade;%s/preview/arcade\n"
+                      % (media, media, media, media), naomi)
+        self.assertIn("artwork    wheel           %s/logo/naomi;%s/logo/arcade\n" % (media, media), naomi)
+        self.assertIn("artwork    wheel           %s/logo/arcade\n" % media,
+                      (attract / "emulators" / "MAME.cfg").read_text())
+
+    def test_model2_folder_is_an_arcade_system(self):
+        self.assertEqual(self.env.out("scraper_platform model2; scraper_attract_emulator model2").splitlines(),
+                         ["arcade", "Model 2|/opt/fliperos/bin/fliperos-x11-run|fliperos-model2 [name]|.zip"])
+        self.assertEqual(self.env.run("scraper_arcade dreamcast").returncode, 1)
+        self.assertEqual(self.env.run("scraper_arcade model2").returncode, 0)
+
 
 class ReloadTests(Base):
     """O Setup atualizado com a tela aberta se reabre: as telas ja carregadas

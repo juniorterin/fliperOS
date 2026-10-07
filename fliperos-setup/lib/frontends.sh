@@ -209,6 +209,59 @@ frontends_attract() {
   log_info "Attract-Mode Plus: $n sistema(s)"
 }
 
+# ── ROM List do Attract-Mode Plus ────────────────────────────────
+# Setup > AttractPlus ROM List: a romlist de cada pasta de arcade com o nome
+# de verdade de cada jogo (o --build-romlist do Attract-Mode so poe o nome
+# do arquivo), do -listxml do GroovyMAME (fliperos-romclean romlist). A
+# pasta do core mame2010 le primeiro o XML do 0.139. Uma romlist a mais,
+# ATTRACT_ROMLIST_ALL, junta todas numa tela so.
+ATTRACT_ROMLIST_ALL=${ATTRACT_ROMLIST_ALL:-Arcade}
+
+# frontends_romlist_systems imprime "chave|pasta|plataforma|quantidade|emulador"
+# das pastas de arcade com jogos.
+frontends_romlist_systems() {
+  local key dir platform count name
+  while IFS='|' read -r key dir platform count; do
+    scraper_arcade "$key" || continue
+    IFS='|' read -r name _ <<< "$(scraper_attract_emulator "$key")"
+    [[ -n $name ]] && printf '%s|%s|%s|%s|%s\n' "$key" "$dir" "$platform" "$count" "$name"
+  done < <(scraper_detect)
+  return 0
+}
+
+# frontends_romlist RESULTADO SISTEMA... (linhas do frontends_romlist_systems)
+# cria o emulador e a tela que faltam e grava as romlists, falando com a tela
+# de progresso. RESULTADO ganha "emulador<TAB>jogos<TAB>clones<TAB>fora do XML"
+# por pasta e "total<TAB>jogos". Os clones sem arquivo proprio (romset
+# merged) so entram no MAME: o GroovyMAME abre o jogo pelo nome e acha o
+# clone no zip do pai; os outros emuladores abrem o arquivo.
+frontends_romlist() {
+  local result=$1 line key dir platform count name xml catver
+  local -a specs=() source=()
+  shift
+  ev_step 0 "Preparing Attract-Mode Plus"
+  for line in "$@"; do
+    IFS='|' read -r key dir platform count name <<< "$line"
+    name=$(scraper_attract_prepare "$key" "$dir" "$platform") || continue
+    xml=main
+    [[ $key == retroarch/mame2010 && -f $MAME2010_XML ]] && xml=alt
+    specs+=(--system "$name|$dir|$xml|$([[ $key == mame ]] && echo 1 || echo 0)")
+  done
+  ((${#specs[@]})) || ev_fail "No arcade folder with games" || return 1
+  scraper_attract_display "$ATTRACT_ROMLIST_ALL"
+  mapfile -t source < <(romclean_xml_args groovymame)
+  [[ -f $MAME2010_XML ]] && source+=(--alt-xml "$MAME2010_XML" --alt-cache "$ROMCLEAN_CACHE/romclean-mame2010.json")
+  catver=$(romclean_data_find catver.ini "$ROMS_DIR/mame") && source+=(--catver "$catver")
+  log_info "AttractPlus ROM List: $*"
+  if ! "$ROMCLEAN" romlist "${source[@]}" "${specs[@]}" --out "$ATTRACT_DIR/romlists" \
+    --combined "$ATTRACT_ROMLIST_ALL" --progress --result "$result" 2>> "$FLIPEROS_LOG"; then
+    ev_fail "Could not read the GroovyMAME game list (details in the log)"
+    return 1
+  fi
+  chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
+  return 0
+}
+
 # frontends_configure NOME grava os sistemas no frontend (os que precisam).
 frontends_configure() {
   case $1 in

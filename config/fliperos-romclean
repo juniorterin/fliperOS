@@ -20,6 +20,12 @@ deles, os filtros que dependem dele deixam passar tudo.
   fliperos-romclean apply PLANO copy|move|delete-rest [--progress]
                           [--result ARQUIVO]
   fliperos-romclean options [dados]
+  fliperos-romclean romlist (--xml ARQUIVO|- | --xml-command COMANDO)
+                            [--cache ARQUIVO] [--alt-xml ARQUIVO
+                            --alt-cache ARQUIVO] [--catver ARQUIVO]
+                            --system "EMULADOR|PASTA|XML|CLONES"...
+                            --out PASTA [--combined NOME] [--progress]
+                            [--result ARQUIVO]
   fliperos-romclean fetch-mame2010 DESTINO
 
 O XML: um arquivo (.xml ou .xml.xz), a entrada padrao (-) ou a saida de um
@@ -118,7 +124,7 @@ MAME2010_URL = ('https://raw.githubusercontent.com/libretro/mame2010-libretro/%s
                 % MAME2010_COMMIT)
 
 # Muda quando o que o read_machines guarda muda: um cache antigo e refeito.
-CACHE_FORMAT = 2
+CACHE_FORMAT = 3
 
 PSX_CPU = re.compile(r'^(PSX CPU|(Sony )?CXD8(530|606|661)[A-Z]*)$')
 SET_EXTENSIONS = ('.zip', '.7z')
@@ -228,6 +234,20 @@ def control_family(ctrl):
     return 'joy8' if count in (5, 8, 16) else 'joy4' if count in (3, 4) else 'joy2'
 
 
+def control_label(ctrl):
+    """O <control> do XML como o Attract-Mode o escreve na romlist
+    ("joystick (8-way)", "trackball"); None: so botoes."""
+    kind = ctrl.get('type', '').lower()
+    old = re.match(r'^v?(double|triple)?joy(\d+)way$', kind)
+    if old:
+        twin, ways = old.group(1), old.group(2)
+    elif kind in ('joy', 'doublejoy', 'triplejoy'):
+        twin, ways = kind[:-3], ctrl.get('ways', '8')
+    else:
+        return {'only_buttons': None, 'stick': 'analog stick'}.get(kind, kind) or None
+    return '%sjoystick (%s-way)' % (twin + ' ' if twin else '', ways)
+
+
 def regions_of(desc):
     found = set()
     for group in re.findall(r'\(([^)]*)\)', desc):
@@ -272,13 +292,16 @@ def read_machines(stream):
         driver = el.find('driver')
         inp = el.find('input')
         desc = (el.findtext('description') or '').strip()
-        buttons, controls = 0, set()
+        buttons, controls, labels = 0, set(), []
         if inp is not None:
             buttons = int(inp.get('buttons', '0') or 0)
             for ctrl in inp.iter('control'):
                 family = control_family(ctrl)
                 if family:
                     controls.add(family)
+                label = control_label(ctrl)
+                if label and label not in labels:
+                    labels.append(label)
                 buttons = max(buttons, int(ctrl.get('buttons', '0') or 0))
         year = (el.findtext('year') or '').strip()
         source = os.path.splitext(os.path.basename(a.get('sourcefile', '')))[0].lower()
@@ -303,6 +326,10 @@ def read_machines(stream):
             'players': int(inp.get('players', '0') or 0) if inp is not None else 0,
             'buttons': buttons,
             'controls': sorted(controls),
+            'control': ','.join(labels),
+            'year': year,
+            'manufacturer': (el.findtext('manufacturer') or '').strip(),
+            'displays': len(el.findall('display')),
             'decade': int(year[:3]) * 10 if year[:3].isdigit() else None,
             'regions': sorted(regions_of(desc)),
             'bootleg': bool(BOOTLEG.search(desc)),
@@ -857,6 +884,109 @@ def cmd_options(args):
         print('# controls\t%s' % file_version(args.controls_xml, r'<version\s+name="([^"]*)"'))
 
 
+ROMLIST_HEADER = ('#Name;Title;Emulator;CloneOf;Year;Manufacturer;Category;Players;Rotation;Control;Status;'
+                  'DisplayCount;DisplayType;AltRomname;AltTitle;Extra;Buttons;Series;Language;Region;Rating')
+ROMLIST_FIELDS = ROMLIST_HEADER.count(';') + 1
+
+
+def romlist_line(name, emulator, m, category):
+    """Uma linha da romlist do Attract-Mode (sem o jogo no XML: o nome do
+    arquivo e o titulo)."""
+    if m is None:
+        fields = [name, name, emulator]
+    else:
+        fields = [name, m['description'] or name, emulator, m['cloneof'], m['year'], m['manufacturer'], category,
+                  m['players'] or '', m['rotate'] if m['display'] else '', m['control'], m['status'],
+                  m['displays'] or '', m['display'] or '', '', '', '', m['buttons'] or '']
+    fields += [''] * (ROMLIST_FIELDS - len(fields))
+    return ';'.join(str(f).replace(';', ',').replace('\n', ' ').strip() for f in fields)
+
+
+def write_romlist(path, lines):
+    tmp = '%s.%d.tmp' % (path, os.getpid())
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(ROMLIST_HEADER + '\n')
+        for _, line in sorted(lines):
+            f.write(line + '\n')
+    os.replace(tmp, path)
+
+
+def cmd_romlist(args):
+    """As romlists do Attract-Mode das pastas de arcade, com o titulo, o ano,
+    o fabricante e os controles de cada jogo do XML. Cada --system e
+    "EMULADOR|PASTA|XML|CLONES": o XML que vale primeiro (main, o de
+    --xml/--xml-command; alt, o de --alt-xml) e, com CLONES 1, os clones
+    que nao tem arquivo proprio (num romset merged eles estao no zip do pai;
+    so o emulador que abre o jogo pelo nome os acha)."""
+    systems = []
+    for spec in args.system:
+        parts = spec.split('|')
+        if len(parts) != 4 or parts[2] not in ('main', 'alt') or not parts[0]:
+            sys.exit('use --system "EMULATOR|FOLDER|main or alt|0 or 1"')
+        systems.append(parts)
+    progress = args.progress
+    sources = {}
+    if any(s[2] == 'main' for s in systems) or not args.alt_xml:
+        if progress:
+            print('@step 5 Reading the GroovyMAME game list', flush=True)
+        sources['main'] = load_machines(args)
+    if args.alt_xml:
+        if progress:
+            print('@step 30 Reading the MAME 2010 game list', flush=True)
+        sources['alt'] = load_machines(argparse.Namespace(xml=args.alt_xml, xml_command=None, cache=args.alt_cache))
+    category = {}
+    if args.catver:
+        category = {n: MATURE.sub(' ', v).strip() for n, v in read_ini(args.catver, 'category').items()}
+    os.makedirs(args.out, exist_ok=True)
+    combined, results = [], []
+    for index, (emulator, folder, which, clones) in enumerate(systems):
+        if progress:
+            print('@step %d %s' % (40 + 55 * index // len(systems), emulator), flush=True)
+        order = []
+        for k in (which, 'main', 'alt'):
+            if k in sources and all(sources[k] is not o for o in order):
+                order.append(sources[k])
+        primary = order[0]
+        try:
+            files = sets_in(folder)
+        except OSError as e:
+            print('fliperos-romclean: %s: %s' % (folder, e), file=sys.stderr)
+            continue
+        lines, present, unknown, extra = [], set(), 0, 0
+        for key, entries in files.items():
+            real = [f for f, size in entries if size is not None]
+            if not real:
+                continue
+            name = os.path.splitext(sorted(real)[0])[0]
+            m = next((s[key] for s in order if key in s), None)
+            if m is not None and (m['isbios'] or m['isdevice']):
+                continue
+            unknown += m is None
+            present.add(key)
+            cat = category.get(key) or (category.get(m['cloneof'], '') if m else '')
+            lines.append(((m['description'] if m else name).lower(), romlist_line(name, emulator, m, cat)))
+        if clones == '1':
+            for key, m in primary.items():
+                if m['cloneof'] in present and key not in present and not (m['isbios'] or m['isdevice']):
+                    cat = category.get(key) or category.get(m['cloneof'], '')
+                    lines.append((m['description'].lower(), romlist_line(key, emulator, m, cat)))
+                    extra += 1
+        name = emulator.replace('/', '-')
+        write_romlist(os.path.join(args.out, name + '.txt'), lines)
+        combined.extend(lines)
+        results.append('%s\t%d\t%d\t%d' % (emulator, len(lines), extra, unknown))
+    if args.combined:
+        write_romlist(os.path.join(args.out, args.combined + '.txt'), combined)
+    results.append('total\t%d' % len(combined))
+    if args.result:
+        with open(args.result, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(results) + '\n')
+    else:
+        print('\n'.join(results))
+    if progress:
+        print('@step 100 Done', flush=True)
+
+
 def cmd_fetch_mame2010(args):
     if os.path.exists(args.dest):
         print('ok %s' % args.dest)
@@ -953,6 +1083,19 @@ def main():
     p = sub.add_parser('options')
     data_arguments(p)
     p.set_defaults(func=cmd_options)
+    p = sub.add_parser('romlist')
+    p.add_argument('--xml')
+    p.add_argument('--xml-command')
+    p.add_argument('--cache')
+    p.add_argument('--alt-xml')
+    p.add_argument('--alt-cache')
+    p.add_argument('--catver')
+    p.add_argument('--system', action='append', required=True)
+    p.add_argument('--out', required=True)
+    p.add_argument('--combined')
+    p.add_argument('--progress', action='store_true')
+    p.add_argument('--result')
+    p.set_defaults(func=cmd_romlist)
     p = sub.add_parser('fetch-mame2010')
     p.add_argument('dest')
     p.set_defaults(func=cmd_fetch_mame2010)
