@@ -24,7 +24,7 @@
 set -o pipefail
 shopt -s extglob
 
-FLIPEROS_SETUP_VERSION=0.7
+FLIPEROS_SETUP_VERSION=0.8
 SETUP_DIR=${FLIPEROS_SETUP_DIR:-$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")}
 
 # Lista explicita (e nao um laco): a ordem importa e o shellcheck -x segue

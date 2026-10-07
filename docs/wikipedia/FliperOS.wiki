@@ -4,7 +4,7 @@
 | family             = [[Linux]] ([[Unix-like]])
 | working_state      = In development
 | released           = 2026
-| latest_test_version = 0.7
+| latest_test_version = 0.8
 | marketing_target   = [[Arcade cabinet]]s with a [[Cathode-ray tube|CRT]] monitor
 | language           = English
 | package_manager    = [[APT (software)|APT]] ([[dpkg]])
@@ -16,7 +16,7 @@
 '''FliperOS''' is a [[Linux distribution]] based on [[Ubuntu]] 24.04 LTS, for the [[x86-64]] architecture, aimed at [[arcade cabinet]]s with a 15 kHz [[cathode-ray tube]] (CRT) monitor. It combines a [[Linux kernel]] modified to generate the video modes of those monitors, the Switchres utility, arcade and console [[emulator]]s, game selection programs (''front-ends'') and a text-mode installation and configuration menu.<ref name="readme">{{cite web |url=https://github.com/juniorterin/fliperOS |title=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref> The project follows the model of GroovyArcade, an [[Arch Linux]]-based distribution with the same purpose, from which it takes the kernel patches and the installation flow.<ref name="sources">{{cite web |url=https://github.com/juniorterin/fliperOS/blob/main/docs/wiki/Sources.md |title=Sources |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
 == History ==
-Development started in September 2026, with a build system for the [[ISO image]], an installer modeled on GroovyArcade's and installation tests in a [[virtual machine]]. In that same month the base became Ubuntu 24.04. On 29 September, [[GNU GRUB|GRUB]] was replaced by the Limine boot loader, the installer was rewritten as the <code>fliperos-setup</code> program and the kernel moved to the 6.18 series. The version in development in October 2026 is 0.7.<ref name="commits">{{cite web |url=https://github.com/juniorterin/fliperOS/commits/main |title=Commit history |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
+Development started in September 2026, with a build system for the [[ISO image]], an installer modeled on GroovyArcade's and installation tests in a [[virtual machine]]. In that same month the base became Ubuntu 24.04. On 29 September, [[GNU GRUB|GRUB]] was replaced by the Limine boot loader, the installer was rewritten as the <code>fliperos-setup</code> program and the kernel moved to the 6.18 series. The first ISO, version 0.7, was published in October 2026, and version 0.8 followed in the same month, with updates installed at boot without a new ISO.<ref name="commits">{{cite web |url=https://github.com/juniorterin/fliperOS/commits/main |title=Commit history |work=FliperOS |publisher=GitHub |language=en |access-date=6 October 2026}}</ref>
 
 == Features ==
 

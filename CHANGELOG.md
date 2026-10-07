@@ -2,6 +2,41 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.8
+
+Updates without a new ISO: from this version on, small fixes reach the installed cabinet at boot. The ISO comes with update 1, which brings everything below to an installed 0.7 (`updates/bootstrap.sh` installs the update system there).
+
+**System changes:**
+
+- FliperOS updates without a new ISO: at every boot with internet, before the launcher, the cabinet asks GitHub whether there are updates and asks before applying them
+- Updates are numbered and always applied in order: one only goes in after all the previous ones, and a failure stops the ones after it
+- Before asking, the update lists the files changed on this machine that it replaces, and keeps a copy of each in `/var/lib/fliperos/update/backup` (`fliperos-update restore N` puts them back)
+- Each update is checked against the sha256 in the update list before anything is written
+- Terminal: Ctrl+V pastes in Alacritty, as in the browser
+
+**Package changes:**
+
+- MAME 2010 as the "MAME 3D": the PlayStation-based arcade games, with their own preset in the filter
+- Attract-Mode Plus: a new system's display goes to `config/displays.cfg`, which Attract-Mode Plus 3.x reads (the system didn't show up in the frontend)
+- Scraper: progetto-SNAPS as the source of arcade screenshots
+- The links of the MAME 0.289 romset and of the 0.288 CHDs come in the image, already filled in the Downloader
+
+**fliperos-setup changes:**
+
+- New: FliperOS update screen at boot (`fliperos-setup --update-check`): *Apply now* or *Not now*, with the list of replaced files
+- New: Downloader — ROM/CHD MAME torrent from magnet links, downloading only what the filter chooses, through Transmission, with the final folder and Start/Pause; and Free games
+- New: AttractPlus ROM List — Attract-Mode Plus game lists of the arcade folders with each game's real name, clones and bootlegs included
+- Cleaner: the MAME ROM Cleaner and the MAME CHD Cleaner in one area
+- Cleaner and Downloader filter: Model 2 Emulator and Supermodel (Model 3) targets, besides GroovyMAME, Flycast and MAME 2010
+- Filter: Mahjong is a genre of its own, off by default
+- Scraper: a single system reached Skyscraper without its folder or platform
+
+**Tool changes:**
+
+- `tools/make-update.sh`: publishes the current commit as the next update (`updates/index`, with the sha256 of the files)
+- `updates/bootstrap.sh`: brings the update system to installs from 0.7
+- `tools/cabinet-update.sh` records the update manifest and level; `tools/verify-iso.sh` checks them in the ISO
+
 ## 0.7
 
 First published ISO. The changes are relative to 0.6, which never left the workbench.

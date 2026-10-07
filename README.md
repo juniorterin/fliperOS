@@ -1,8 +1,8 @@
-# FliperOS 0.7
+# FliperOS 0.8
 
 Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a **15 kHz kernel**, Switchres, emulators and frontends ready to play, and a setup menu (`fliperos-setup`) made for the tube's screen.
 
-In development: 0.7 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the **[wiki](https://github.com/juniorterin/fliperOS/wiki)**. Website: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (source in [`website/`](website)).
+In development: 0.8 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the **[wiki](https://github.com/juniorterin/fliperOS/wiki)**. Website: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (source in [`website/`](website)).
 
 ## What's included
 
@@ -21,7 +21,7 @@ ISOs in [Releases](https://github.com/juniorterin/fliperOS/releases); what chang
 1. Write the ISO **byte for byte** (balenaEtcher, Rufus in "DD Image mode" or `dd`; Rufus in its default mode and Ventoy don't work) and disable Secure Boot.
 
    ```bash
-   sudo dd if=fliperos-0.7.iso of=/dev/sdX bs=4M status=progress conv=fsync
+   sudo dd if=fliperos-0.8.iso of=/dev/sdX bs=4M status=progress conv=fsync
    ```
 
 2. Boot the cabinet from the media and wait 30 seconds: it comes up at **15 kHz** (the boot menu doesn't show on a 15 kHz tube).
@@ -34,7 +34,7 @@ Always in Docker ([`CLAUDE.md`](CLAUDE.md) explains why).
 
 ```powershell
 docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.7.iso
+docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.8.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_setup.py

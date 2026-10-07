@@ -4008,7 +4008,7 @@ class DocsTests(unittest.TestCase):
         # Leva a cada pagina da wiki, e so a paginas que existem.
         linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
         self.assertEqual(linked, self.pages())
-        for needed in ('dd if=fliperos-0.7.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py', 'tools/wiki-publish.sh'):
+        for needed in ('dd if=fliperos-0.8.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py', 'tools/wiki-publish.sh'):
             self.assertIn(needed, readme)
 
     def test_publish_writes_wiki_links(self):
