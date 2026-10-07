@@ -11,6 +11,7 @@ In development: 0.7 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT.
 - **Frontends**: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus and Fightcade 2.
 - **Setup**: video and geometry, audio, network, scraper, MAME romset cleaning, controls (buttons, light gun, wheel) and latency.
 - **Folders** `roms`, `bios`, `media` and `config` in `~` and over the network (Samba); LXDE desktop with an app store.
+- **SSH** on from the first boot (`ssh fliperos@fliperos.local`, password `fliperos`). Under the menus it's a regular Ubuntu, so you can point an AI assistant (Claude Code, Cursor, Codex) at the cabinet over SSH and have it configure the whole system however you like.
 
 ## Install
 
