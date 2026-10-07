@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  FliperOS mkiso v0.8.1
+#  FliperOS mkiso v0.8.2
 #  Gera a midia de instalacao do FliperOS (Ubuntu 24.04 + kernel 15 kHz)
 #  Uso: sudo bash fliperos-mkiso.sh [--output /caminho/saida.iso]
 #       [--skip-switchres] [--skip-groovymame] [--skip-retroarch]
@@ -21,7 +21,7 @@ GRN='\033[0;32m'; YLW='\033[1;33m'; RED='\033[0;31m'
 BLU='\033[0;34m'; CYN='\033[0;36m'; DIM='\033[2m'
 BLD='\033[1m'; RST='\033[0m'
 
-FLIPEROS_VERSION="0.8.1"
+FLIPEROS_VERSION="0.8.2"
 UBUNTU_CODENAME="noble"
 UBUNTU_MIRROR="http://archive.ubuntu.com/ubuntu"
 WORK_DIR=$(mktemp -d /tmp/fliperos-iso-build.XXXXXX)

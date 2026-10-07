@@ -2,6 +2,39 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.8.2
+
+Fightcade 2 on the tube as it should be: every online match in the game's native resolution, with the Setup's buttons and a pure picture. The ISO comes with updates 8 and 9 already applied; an installed 0.8 or 0.8.1 gets the same changes through the updates at boot.
+
+**System changes:**
+
+- The boot splash stays on screen until the menu or the frontend opens: before, it left halfway through the boot, and the login and the wait for the network (for the update check) were about 15 seconds of black screen
+- **Esc closes the frontend** and returns to the FliperOS menu, in Attract-Mode Plus, ES-DE, RetroFE, Pegasus and the Fightcade lobby (only when no game is open; inside a game, Esc stays with the game)
+- LXDE desktop: a window that doesn't fit the 640x480 screen, even maximized, makes the desktop scroll (move the mouse to the edge), so its buttons can be reached
+- Boot splash: the title of the default theme no longer gets stuck on "AliperOS"
+
+**Package changes:**
+
+- Fightcade 2: **each FBNeo and FBA game plays in its own native resolution** at 15 kHz, like GroovyMAME in GroovyArcade (384x224 for CPS, with a Switchres modeline from GroovyMAME's game data), with no scaling to 320x240; SNES9x plays at the console's 256x224
+- Fightcade 2: pure picture in the emulators (no scanlines, bilinear filtering, shaders or effects) with VSync on
+- Fightcade 2: FBNeo and FBA get the buttons mapped in Setup > Joysticks, for each player
+- Fightcade 2: the lobby opens at 512x448, with bigger text on the tube
+- Fightcade 2: an FBNeo left open with no game after an error (missing ROM) closes by itself, instead of leaving a black square over the lobby
+
+**fliperos-setup changes:**
+
+- New: Setup > Frontend > *Add a custom frontend*, to open any program you choose (label and command) as the frontend, including at boot; *Edit or delete a custom frontend* changes or removes it
+
+**Tool changes:**
+
+- `fliperos-buttons fbneo MAP VERSION`: writes FBNeo's input preset from the Setup's button mapping
+- New `fliperos-escquit` (Esc closes the frontend) and `fliperos-panning` (desktop scrolling)
+
+**Documentation:**
+
+- Fightcade 2 page: native resolution, pure picture and the lobby mode
+- Website: support section and the new desktop screenshot
+
 ## 0.8.1
 
 The first ISO with the update system: 0.8's build stopped at the audit before publishing, so 0.8.1 brings everything in 0.8 (in [CHANGELOG.md](https://github.com/juniorterin/fliperOS/blob/main/CHANGELOG.md)) and comes with updates 1 to 7 already applied. An installed 0.8 gets the same changes through the updates at boot.

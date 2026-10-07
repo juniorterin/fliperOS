@@ -17,7 +17,7 @@ export function readmeUrl(locale: string): string {
 export const AUTHOR_HANDLE = '@juniorter.in';
 export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorterin' } as const;
 
-export const FLIPEROS_VERSION = '0.8.1';
+export const FLIPEROS_VERSION = '0.8.2';
 
 // Contato da assessoria: mostrado como texto, sem mailto, para não virar alvo
 // fácil de spam.

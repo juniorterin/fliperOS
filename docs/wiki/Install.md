@@ -7,7 +7,7 @@ Write the ISO **byte for byte** to a USB stick and disable Secure Boot (the 15 k
 The ISO uses the **Limine** bootloader and is **hybrid** (`xorriso` + `limine bios-install`): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — **Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work**. Use **balenaEtcher**, or Rufus in "DD Image mode", or `dd`:
 
 ```bash
-sudo dd if=fliperos-0.8.1.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=fliperos-0.8.2.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
 Check `/dev/sdX` with `lsblk` first: the wrong device erases the wrong disk.
