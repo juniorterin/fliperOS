@@ -2068,6 +2068,20 @@ class RomCleanerTests(Base):
         self.assertIn("target=groovymame\n", kv)
         self.assertIn("preset=cabinet\n", kv)
 
+    def test_downloader_magnet_comes_filled_with_the_image_link(self):
+        # Os links da imagem vem preenchidos: Enter usa o de cada tipo.
+        out, calls, _ = self.downloader_screen("""
+            DOWNLOADER_MAGNETS=%s
+            ui_input() { echo "input:$2" >&2; echo "$3"; }
+            screen_downloader_magnet chds
+            DOWNLOADER_MAGNETS=/nada
+            ui_input() { echo "input:$2|$3" >&2; }
+            screen_downloader_magnet roms
+        """ % (ROOT / "config" / "fliperos-downloader-magnets"))
+        self.assertIn("input:The FliperOS link of the CHD set is filled in", out)
+        self.assertRegex(calls, r"add chds magnet:\?xt=urn:btih:c532c2cb[0-9a-f]+&dn=MAME%200\.288%20CHDs")
+        self.assertIn("input:Paste the magnet link of the ROM set (magnet:?xt=urn:btih:...).|\n", out)
+
     def test_torrent_menu_filter_first_and_the_rom_link_is_required(self):
         # A ordem: filtro, link das ROMs, link dos CHDs, pasta, comecar. Sem o
         # link das ROMs (so o dos CHDs) o Start nao comeca.

@@ -1,0 +1,5 @@
+# Setup > Downloader > ROM/CHD MAME torrent: os links que a tela de cada
+# set ja traz preenchidos ("tipo<TAB>link"; roms ou chds). Os CHDs sao da
+# 0.288: a colecao de CHDs muda pouco de uma versao para a outra.
+roms	magnet:?xt=urn:btih:9b345e3b057d50542c7ff418e1f258a28cb9372e&dn=MAME%200.289%20ROMs%20%28merged%29&xl=91960911379&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce&tr=udp%3A%2F%2Fexodus.desync.com%3A6969%2Fannounce
+chds	magnet:?xt=urn:btih:c532c2cbd2c1f6e8e59e2b26ff288a3e0ca4b6ba&dn=MAME%200.288%20CHDs%20%28merged%29&xl=1126649399834&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce&tr=udp%3A%2F%2Fexodus.desync.com%3A6969%2Fannounce

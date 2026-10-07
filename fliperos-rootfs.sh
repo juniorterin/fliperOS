@@ -125,6 +125,7 @@ install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-sna
 # do ROM cleaner escolhe. O servico so e ligado pelo Setup, com um link.
 install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"
 install -Dm644 "$src/config/fliperos-transmission.service" "$root/etc/systemd/system/fliperos-transmission.service"
+install -Dm644 "$src/config/fliperos-downloader-magnets" "$root/usr/local/share/fliperos/downloader-magnets"
 # catver.ini, nplayers.ini e controls.xml do ROM cleaner: junto do romset ou
 # nesta pasta (lib/romclean.sh); e onde ele guarda o que leu do XML do MAME.
 mkdir -p "$root/usr/local/share/fliperos/romclean" "$root/var/cache/fliperos"

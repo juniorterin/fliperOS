@@ -8,10 +8,19 @@
 DOWNLOADER=${DOWNLOADER:-/opt/fliperos/bin/fliperos-downloader}
 DOWNLOADER_STATE=${DOWNLOADER_STATE:-/var/lib/fliperos/downloader}
 DOWNLOADER_SERVICE=fliperos-transmission.service
+# Os links que vem na imagem (config/fliperos-downloader-magnets).
+DOWNLOADER_MAGNETS=${DOWNLOADER_MAGNETS:-/usr/local/share/fliperos/downloader-magnets}
 
 # downloader ARGS... roda o fliperos-downloader com o estado desta maquina.
 downloader() {
   FLIPEROS_DOWNLOADER_STATE=$DOWNLOADER_STATE "$DOWNLOADER" "$@"
+}
+
+# downloader_default_magnet roms|chds imprime o link que vem na imagem
+# (vazio sem ele).
+downloader_default_magnet() {
+  [[ -f $DOWNLOADER_MAGNETS ]] || return 0
+  awk -F'\t' -v k="$1" '$1 == k { print $2; exit }' "$DOWNLOADER_MAGNETS"
 }
 
 # downloader_prepare: a pasta do estado e do usuario, porque o servico (do

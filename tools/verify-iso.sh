@@ -282,7 +282,8 @@ echo "ROM cleaner: fliperos-romclean, the MAME 2010 XML (0.139) and the network 
 
 # ── Downloader: o programa, o servico e o transmission-daemon ─
 for name in fliperos-downloader:opt/fliperos/bin/fliperos-downloader \
-  fliperos-transmission.service:etc/systemd/system/fliperos-transmission.service; do
+  fliperos-transmission.service:etc/systemd/system/fliperos-transmission.service \
+  fliperos-downloader-magnets:usr/local/share/fliperos/downloader-magnets; do
   unsquashfs -cat "$work/filesystem.squashfs" "${name#*:}" > "$work/f" || fail "ausente: /${name#*:}"
   cmp -s "$src/config/${name%%:*}" "$work/f" || fail "${name%%:*} differs from the repository"
 done
@@ -292,7 +293,7 @@ for path in usr/bin/transmission-daemon usr/local/lib/fliperos-setup/lib/downloa
 done
 grep -E 'etc/systemd/system/transmission-daemon.service ->' "$work/links.txt" | grep -q '/dev/null' \
   || fail "the stock transmission-daemon.service is not masked"
-echo "Downloader: fliperos-downloader, fliperos-transmission.service and transmission-daemon (stock unit masked)"
+echo "Downloader: fliperos-downloader, the default magnet links, fliperos-transmission.service and transmission-daemon (stock unit masked)"
 
 # ── Terminal: zsh com Oh My Zsh e o tema Dracula ──────────────
 for path in usr/bin/zsh usr/local/share/oh-my-zsh/oh-my-zsh.sh \

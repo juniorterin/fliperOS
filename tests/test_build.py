@@ -2351,6 +2351,13 @@ class DownloaderTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"',
                       ROOTFS)
         self.assertIn('fliperos-transmission.service', ROOTFS)
+        # Os links que vem na imagem: um de cada tipo, aceitos pelo add.
+        self.assertIn('"$root/usr/local/share/fliperos/downloader-magnets"', ROOTFS)
+        links = dict(line.split('\t') for line in (ROOT / 'config/fliperos-downloader-magnets').read_text().splitlines()
+                     if line and not line.startswith('#'))
+        self.assertEqual(sorted(links), ['chds', 'roms'])
+        for link in links.values():
+            self.assertRegex(link, r'^magnet:\?xt=urn:btih:[0-9a-f]{40}&')
         mkiso = (ROOT / 'fliperos-mkiso.sh').read_text()
         self.assertIn('transmission-daemon', mkiso)
         self.assertIn('systemctl mask transmission-daemon.service', mkiso)

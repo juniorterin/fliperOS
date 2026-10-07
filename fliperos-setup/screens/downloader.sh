@@ -84,7 +84,7 @@ screen_downloader_dest() {
 
 # screen_downloader_magnet roms|chds: cola, troca ou tira o link.
 screen_downloader_magnet() {
-  local kind=$1 title="Downloader" what="ROM set" only magnet name choice result status folder sets found
+  local kind=$1 title="Downloader" what="ROM set" only magnet prompt name choice result status folder sets found
   [[ $kind == chds ]] && what="CHD set"
   only="only the ROMs of the games the filter chooses (with their parents, BIOS and devices) are downloaded"
   [[ $kind == chds ]] && only="only the CHDs of the games the filter chooses are downloaded"
@@ -110,7 +110,10 @@ screen_downloader_magnet() {
       *) return 0 ;;
     esac
   fi
-  magnet=$(ui_input "$title" "Paste the magnet link of the $what (magnet:?xt=urn:btih:...)." "" long) || return 0
+  magnet=$(downloader_default_magnet "$kind")
+  prompt="Paste the magnet link of the $what (magnet:?xt=urn:btih:...)."
+  [[ -n $magnet ]] && prompt="The FliperOS link of the $what is filled in: Enter uses it, or paste another."
+  magnet=$(ui_input "$title" "$prompt" "$magnet" long) || return 0
   magnet=${magnet//[[:space:]]/}
   [[ -n $magnet ]] || return 0
   if [[ ! $magnet =~ ^magnet:\?.*xt=urn:bt(ih|mh): ]]; then
