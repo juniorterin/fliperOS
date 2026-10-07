@@ -3061,7 +3061,7 @@ class PanningTests(unittest.TestCase):
     DESKTOP = ('DESKTOP', '', (640, 480), (640, 480))
     PANEL = ('DOCK', '_NET_WM_STATE_SKIP_TASKBAR', (640, 26), (640, 26))
 
-    def test_only_the_height_grows_with_the_panel_counted(self):
+    def test_height_with_the_panel_and_only_forced_width(self):
         # Um dialogo alto de qualquer programa: a altura dele, a moldura
         # (24 + 1) e a barra de tarefas (26); a largura fica a do modo.
         dialog = ('DIALOG', '', None, (420, 700))
@@ -3070,9 +3070,19 @@ class PanningTests(unittest.TestCase):
         almost = ('NORMAL', '', None, (600, 440))
         self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, almost]), ['--output VGA-1 --panning 640x491'])
         self.assertEqual(self.run_once([self.DESKTOP, almost]), [])
-        # Mais larga que a tela (o Transmission maximizado): nada.
+        # A largura minima que o programa forca (o Transmission maximizado:
+        # 846 + a moldura) cresce na horizontal.
         transmission = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (846, 195), (846, 431))
-        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, transmission]), [])
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, transmission]),
+                         ['--output VGA-1 --panning 848x480'])
+        # Larga, mas pode encolher (minimo pequeno): cabe maximizada, nada.
+        wide = ('NORMAL', '', (300, 75), (900, 300))
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, wide]), [])
+        # As duas direcoes juntas; fechada a alta, so a largura fica.
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, transmission, dialog]),
+                         ['--output VGA-1 --panning 848x751'])
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, transmission], panning='848x751+0+0'),
+                         ['--output VGA-1 --panning 848x480'])
 
     def test_back_to_the_mode_and_no_loop(self):
         # Com o desktop ja maior, as maximizadas cresceram junto: conta a

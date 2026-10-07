@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# Rolagem vertical no desktop para janelas mais altas que a tela. Num CRT de
-# 15 kHz o desktop tem 640x480, e muita janela nao cabe nem maximizada: o
-# programa forca uma altura minima (o GTK nao a deixa menor que isso) e nao
-# poe barra de rolagem, e os botoes da base ficam fora da tela ou atras da
-# barra de tarefas. Enquanto uma janela assim esta aberta, a area do desktop
-# fica mais alta ate caber nela mais a barra (o panning do XRandR), e a
-# imagem rola quando o mouse encosta na borda de baixo; fechada, volta ao
-# tamanho do modo. Vale para qualquer programa. So na vertical: a largura
-# fica a do modo.
+# Rolagem no desktop para janelas que nao cabem na tela. Num CRT de 15 kHz o
+# desktop tem 640x480, e muita janela nao cabe nem maximizada: o programa
+# forca um tamanho minimo (o GTK nao a deixa menor que o conteudo; a do
+# Transmission tem 846 de largura) e nao poe barra de rolagem, e os botoes
+# da base ficam fora da tela ou atras da barra de tarefas. Enquanto uma
+# janela assim esta aberta, a area do desktop cresce ate caber nela (o
+# panning do XRandR), e a imagem rola quando o mouse encosta na borda;
+# fechada, volta ao tamanho do modo. Vale para qualquer programa.
+#
+# Na vertical conta a altura da janela mais as barras (a de tarefas do
+# LXDE). Na horizontal, so a largura minima que o programa forca: uma janela
+# larga que pode encolher cabe maximizada.
 #
 # Roda junto com o LXDE (config/fliperos-lxde) e sai com o X.
 #
@@ -36,11 +39,11 @@ screen_state() {
       if (rot == "normal") { print out, w, h, (pw ? pw : 0), (ph ? ph : 0); exit } }'
 }
 
-# windows_need imprime a altura que as janelas abertas pedem, com a moldura
-# e as barras de cima e de baixo (o painel do LXDE reserva a faixa dele no
-# _NET_WM_STRUT: a janela fica entre as barras).
+# windows_need imprime "LARGURA ALTURA" que as janelas abertas pedem, com a
+# moldura; na altura, mais as barras de cima e de baixo (o painel do LXDE
+# reserva a faixa dele no _NET_WM_STRUT: a janela fica entre as barras).
 windows_need() {
-  local id props geo type state minh t b h strut needh=0 bars=0
+  local id props geo type state minw minh l r t b h strut needw=0 needh=0 bars=0
   local -a s
   for id in $(xprop -root _NET_CLIENT_LIST 2> /dev/null | sed -n 's/.*# //p' | tr -d ','); do
     props=$(xprop -id "$id" _NET_WM_WINDOW_TYPE _NET_WM_STATE WM_NORMAL_HINTS _NET_FRAME_EXTENTS \
@@ -57,36 +60,47 @@ windows_need() {
     fi
     state=$(sed -n 's/^_NET_WM_STATE(ATOM) = //p' <<< "$props")
     [[ $state == *_HIDDEN* ]] && continue
-    minh=$(sed -n 's/.*program specified minimum size: [0-9]* by \([0-9]*\).*/\1/p' <<< "$props")
-    IFS=', ' read -r _ _ t b < <(sed -n 's/^_NET_FRAME_EXTENTS(CARDINAL) = //p' <<< "$props")
+    read -r minw minh < <(sed -n 's/.*program specified minimum size: \([0-9]*\) by \([0-9]*\).*/\1 \2/p' <<< "$props")
+    IFS=', ' read -r l r t b < <(sed -n 's/^_NET_FRAME_EXTENTS(CARDINAL) = //p' <<< "$props")
     geo=$(xwininfo -id "$id" 2> /dev/null | awk '/^  Height:/ { h = $2 } END { print h + 0 }')
     h=$geo
     [[ $state == *_MAXIMIZED_VERT* ]] && h=0
     ((${minh:-0} > h)) && h=$minh
     h=$((h + ${t:-0} + ${b:-0}))
     ((h > needh)) && needh=$h
+    ((${minw:-0} + ${l:-0} + ${r:-0} > needw)) && needw=$((minw + ${l:-0} + ${r:-0}))
   done
   ((needh > 0)) && needh=$((needh + bars))
-  printf '%s\n' "$needh"
+  printf '%s %s\n' "$needw" "$needh"
+}
+
+# keep NECESSARIO ATUAL MODO: cada troca do panning volta a imagem ao canto
+# de cima, entao com a rolagem ligada numa direcao ela so cresce, e volta ao
+# modo quando nenhuma janela precisa mais (uma janela que muda 2 px ao
+# ganhar ou perder a moldura nao a mexe).
+keep() {
+  if (($2 > $3 && $1 > $3 && $1 < $2)); then
+    printf '%s\n' "$2"
+  else
+    printf '%s\n' "$1"
+  fi
 }
 
 update() {
-  local out mw mh pw ph needh want
+  local out mw mh pw ph needw needh want
   read -r out mw mh pw ph < <(screen_state) || return 0
   [[ -n ${out:-} && ${mw:-0} -gt 0 && ${mh:-0} -gt 0 ]] || return 0
-  needh=$(windows_need)
+  read -r needw needh < <(windows_need)
+  ((needw < mw)) && needw=$mw
   ((needh < mh)) && needh=$mh
+  ((needw > MAX)) && needw=$MAX
   ((needh > MAX)) && needh=$MAX
   ((pw == 0)) && pw=$mw
   ((ph == 0)) && ph=$mh
-  # Cada troca do panning volta a imagem ao topo: com ele ligado a area so
-  # cresce, e so volta ao modo quando nenhuma janela precisa mais (uma
-  # janela que muda 2 px ao ganhar ou perder a moldura nao a mexe).
-  if ((ph > mh && needh > mh && needh < ph)); then
-    needh=$ph
-  fi
-  ((pw == mw && needh == ph)) && return 0
-  want=${mw}x${needh}
+  needw=$(keep "$needw" "$pw" "$mw")
+  needh=$(keep "$needh" "$ph" "$mh")
+  ((needw == pw && needh == ph)) && return 0
+  want=${needw}x${needh}
   xrandr --output "$out" --panning "$want" 2> /dev/null &&
     echo "fliperos-panning: $out ${mw}x${mh}, desktop $want" >&2
 }
