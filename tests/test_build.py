@@ -3081,6 +3081,15 @@ class PanningTests(unittest.TestCase):
         hidden = ('NORMAL', '_NET_WM_STATE_HIDDEN', (900, 300), (900, 300))
         self.assertEqual(self.run_once([self.DESKTOP, hidden]), [])
 
+    def test_only_grows_while_on(self):
+        # Cada troca volta a imagem ao canto: ligado, uma janela que encolhe
+        # 2 px (perdeu a moldura) nao mexe; uma maior cresce so o que falta.
+        huge = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (1038, 760), (1038, 760))
+        self.assertEqual(self.run_once([self.DESKTOP, huge], panning='1040x785+0+0'), [])
+        wider = ('NORMAL', '', (1200, 300), (1200, 300))
+        self.assertEqual(self.run_once([self.DESKTOP, huge, wider], panning='1040x785+0+0'),
+                         ['--output VGA-1 --panning 1202x785'])
+
     def test_limits_and_rotated_screen(self):
         absurd = ('NORMAL', '', (9000, 300), (9000, 300))
         self.assertEqual(self.run_once([absurd]), ['--output VGA-1 --panning 2048x480'])

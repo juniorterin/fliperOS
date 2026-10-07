@@ -71,6 +71,13 @@ update() {
   ((needh > MAX)) && needh=$MAX
   ((pw == 0)) && pw=$mw
   ((ph == 0)) && ph=$mh
+  # Cada troca do panning volta a imagem ao canto de cima: com ele ligado a
+  # area so cresce, e so volta ao modo quando nenhuma janela precisa mais
+  # (uma janela que muda 2 px ao ganhar ou perder a moldura nao a mexe).
+  if ((pw > mw || ph > mh)) && ! ((needw == mw && needh == mh)); then
+    ((needw < pw)) && needw=$pw
+    ((needh < ph)) && needh=$ph
+  fi
   ((needw == pw && needh == ph)) && return 0
   want=${needw}x${needh}
   xrandr --output "$out" --panning "$want" 2> /dev/null &&
