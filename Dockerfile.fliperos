@@ -16,4 +16,5 @@ COPY fliperos-*.sh fliperos*.py ./
 COPY fliperos-setup/ ./fliperos-setup/
 COPY config/ ./config/
 COPY patches/ ./patches/
+COPY updates/ ./updates/
 RUN chmod +x ./*.sh ./fliperos-setup/fliperos-setup

@@ -476,8 +476,8 @@ def cmd_record(args):
             for line in f:
                 if line[:1].isdigit():
                     last = max(last, int(line.split('\t', 1)[0]))
-    except OSError:
-        pass
+    except OSError as e:
+        raise Fail('updates/index missing in %s: %s' % (args.src, e))
     write_level(max(last, read_level()))
     print('manifest=%d' % count)
     print('level=%d' % read_level())

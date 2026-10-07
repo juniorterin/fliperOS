@@ -2267,6 +2267,8 @@ class UpdateTests(unittest.TestCase):
         mkiso = (ROOT / 'fliperos-mkiso.sh').read_text()
         self.assertIn('config/fliperos-update" record', mkiso)
         self.assertIn('--root "$CHROOT_DIR"', mkiso)
+        # Sem o updates/index na imagem do build, a ISO sai com patch-level 0.
+        self.assertIn('COPY updates/ ./updates/', (ROOT / 'Dockerfile.fliperos').read_text())
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()
         self.assertIn('elif update_pending; then\n      sudo /usr/local/bin/fliperos-setup --update-check', tty1)
         self.assertIn('nm-online -q -t 5', tty1)
