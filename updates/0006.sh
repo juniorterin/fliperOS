@@ -21,6 +21,10 @@ for theme in "$bundled"/*/; do
     rm -rf "$dest"
     cp -r "${theme%/}" "$home_splash/"
   fi
+  if [[ $name == fliperos ]]; then
+    sed -i 's/^Description=Boot screen in the style of the 2000s (the default)$/Description=Boot screen in the style of the 2000s/' \
+      "$dest/fliperos.plymouth" 2> /dev/null || true
+  fi
   [[ $(splash_sum "$dest") == "$(splash_sum "$theme")" ]] || continue
   splash_sum "$dest" > "$dest/.bundled"
   chown -R fliperos:fliperos "$dest"
