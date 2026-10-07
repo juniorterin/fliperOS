@@ -1589,6 +1589,28 @@ class ScraperTests(Base):
             (self.env.bin / name).chmod(0o755)
         return log
 
+    def test_screen_passes_the_whole_line_of_one_system(self):
+        # O ui_menu devolve so o que vem antes do primeiro "|": escolher um
+        # sistema so (e nao "All systems") chegava ao Skyscraper sem pasta nem
+        # plataforma ("-p '' -i ''").
+        env, roms, _ = self.scraper_env()
+        env.update({"SKYSCRAPER": "true", "PICK": "retroarch/snes9x"})
+        out = self.env.out("""
+            source %s/screens/setup-menu.sh
+            ui_menu() {
+              [[ $2 == Where* ]] && { echo screenscraper; return; }
+              shift 3
+              printf 'opcao:%%s\\n' "$@" >&2
+              echo "$PICK"
+            }
+            ui_input() { :; }
+            ui_checklist() { echo snap; }
+            ui_yesno() { return 1; }
+            scraper_scrape_targets() { shift 4; printf 'alvo:%%s\\n' "$@"; }
+            screen_scraper
+        """ % SETUP, env)
+        self.assertEqual(out.splitlines(), ["alvo:retroarch/snes9x|%s/retroarch/snes9x|snes|1" % roms])
+
     def test_job_is_recorded_and_finished(self):
         env, roms, _ = self.scraper_env()
         env["SCRAPER_JOB_DIR"] = str(self.env.dir / "job")

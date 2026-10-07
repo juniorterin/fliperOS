@@ -325,13 +325,21 @@ screen_scraper() {
     return 0
   fi
   entries=("all|All systems (${#found[@]})")
+  # O valor de cada opcao do ui_menu vai ate o primeiro "|": so a chave; a
+  # linha inteira volta pelo found.
   for line in "${found[@]}"; do
     IFS='|' read -r key dir platform count <<< "$line"
-    entries+=("$line|$key - $count files ($platform)")
+    entries+=("$key|$key - $count files ($platform)")
   done
   choice=$(ui_menu "Scraper" "Covers, screenshots, logos, videos and game information for the ROMs found." \
     all "${entries[@]}") || return 0
-  if [[ $choice == all ]]; then targets=("${found[@]}"); else targets=("$choice"); fi
+  if [[ $choice == all ]]; then
+    targets=("${found[@]}")
+  else
+    for line in "${found[@]}"; do
+      [[ ${line%%|*} == "$choice" ]] && targets=("$line")
+    done
+  fi
   source=$(ui_menu "Scraper" "Where should the data come from?" screenscraper \
     "screenscraper|ScreenScraper (free account recommended)" \
     "arcadedb|ArcadeDB (arcade games only, no account)" \
