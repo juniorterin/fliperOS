@@ -216,6 +216,30 @@ mode_lobby() {
   [[ -n $output && -n $lobby_id ]] && xrandr --output "$output" --mode "$lobby_id"
 }
 
+# idle_close: o FBNeo (e o FBA, do mesmo codigo) que nao acha a ROM mostra o
+# erro e, no OK, fica aberto sem jogo ("[no game loaded]" no titulo): a tela
+# ficaria no modo da partida, sem como fechar pelo controle. Parado assim
+# por uns segundos seguidos (no erro o titulo ainda e outro), fecha.
+declare -A idle=()
+idle_close() {
+  local id pid
+  local -A seen=()
+  while read -r id _; do
+    pid=$(xprop -id "$id" _NET_WM_PID 2> /dev/null | awk '{ print $3 }')
+    [[ $pid =~ ^[0-9]+$ ]] || continue
+    seen[$pid]=1
+    idle[$pid]=$((${idle[$pid]:-0} + 1))
+    if ((idle[$pid] >= ${FIGHTCADE_IDLE_WAIT:-3})); then
+      echo "fliperos-fightcade: closing an emulator with no game loaded" >&2
+      kill "$pid" 2> /dev/null
+    fi
+  done < <(xwininfo -root -tree 2> /dev/null | grep -F '[no game loaded]' |
+    grep -E '\("(fcadefbneo|fcv39|ggpofba-ng)\.exe"')
+  for pid in "${!idle[@]}"; do
+    [[ -n ${seen[$pid]:-} ]] || unset "idle[$pid]"
+  done
+}
+
 # ── A configuracao dos emuladores ─────────────────────────────────
 # once NOME: verdadeiro so na primeira vez (o que e padrao do FliperOS e a
 # pessoa pode mudar depois no proprio emulador fica anotado em .fliperos).
@@ -322,6 +346,10 @@ while ((gone < ${FIGHTCADE_QUIT_WAIT:-5})); do
   case $running in
     *fc2-electron/fc2-electron* | *fcade-upd*) gone=0 ;;
     *) gone=$((gone + 1)) ;;
+  esac
+  case $running in
+    *fcadefbneo.exe* | *fcv39.exe* | *ggpofba-ng.exe*) idle_close ;;
+    *) idle=() ;;
   esac
   case $running in
     *flycast.elf*) want=$(table_mode fightcade-flycast) ;;

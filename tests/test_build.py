@@ -3033,6 +3033,9 @@ class FightcadeTests(unittest.TestCase):
                       '  --addmode) echo "$*" >> "$FAKE/xrandr.log"; echo "$3" >> "$FAKE/xrandr.modes" ;;\n'
                       '  --newmode | --output) echo "$*" >> "$FAKE/xrandr.log" ;;\n'
                       'esac\n',
+            # As janelas: tmp/windows, com o PID de cada uma em tmp/windows.pid.
+            'xwininfo': 'cat "$FAKE/windows" 2> /dev/null\n',
+            'xprop': 'echo "_NET_WM_PID(CARDINAL) = $(cat "$FAKE/windows.pid")"\n',
             'switchres': 'echo "Switchres: Modeline \\"$1x$2_$3 15.700000KHz 60.000000Hz\\" 6.700 $1 336 368 426 '
                          '$2 244 247 262 -hsync -vsync"\n' if switchres else
                          'echo "Switchres: could not find a video mode"; exit 1\n',
@@ -3119,6 +3122,42 @@ class FightcadeTests(unittest.TestCase):
             run = self.session(tmp, [fbneo, fbneo, fbneo, self.CLIENT], switchres=False)
             self.assertEqual(self.xrandr_log(tmp), ['--output VGA-1 --mode 0x4a'])
             self.assertEqual(run.stderr.count('could not switch to 320x240@60'), 1)
+
+    def test_emulator_left_with_no_game_is_closed(self):
+        # Sem a ROM o FBNeo mostra o erro e, no OK, fica aberto sem jogo: com
+        # o titulo assim por 3 conferidas seguidas, fecha (e a tela volta).
+        fbneo = self.CLIENT + '|20 /usr/lib/wine/wine /opt/fliperos/fightcade/emulator/fbneo/fcadefbneo.exe sf2'
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            for title, closed in (('Fightcade FBNeo v0.2.97.44-55 • [no game loaded]', True),
+                                  ('Fightcade FBNeo Error', False),
+                                  ('Fightcade FBNeo v0.2.97.44-55 • Street Fighter II', False)):
+                emulator = subprocess.Popen(['sleep', '60'])
+                try:
+                    (tmp / 'windows.pid').write_text('%d\n' % emulator.pid)
+                    (tmp / 'windows').write_text('     0x1c00001 "%s": ("fcadefbneo.exe" "fcadefbneo.exe")  '
+                                                 '294x240+0+0  +13+0\n' % title)
+                    run = self.session(tmp, [fbneo, fbneo, fbneo, self.CLIENT])
+                    self.assertEqual(run.returncode, 0, run.stderr)
+                    self.assertEqual(emulator.wait(timeout=5) if closed else emulator.poll(),
+                                     -15 if closed else None, title)
+                    self.assertEqual(self.xrandr_log(tmp)[-1], '--output VGA-1 --mode 0x4a')
+                finally:
+                    emulator.kill()
+                    emulator.wait()
+            # Menos de 3 conferidas seguidas (o jogo carregando): fica.
+            emulator = subprocess.Popen(['sleep', '60'])
+            try:
+                (tmp / 'windows.pid').write_text('%d\n' % emulator.pid)
+                (tmp / 'windows').write_text('     0x1c00001 "Fightcade FBNeo • [no game loaded]": '
+                                             '("fcadefbneo.exe" "fcadefbneo.exe")  294x240+0+0  +13+0\n')
+                self.session(tmp, [fbneo, fbneo, self.CLIENT, fbneo, self.CLIENT])
+                self.assertIsNone(emulator.poll())
+            finally:
+                emulator.kill()
+                emulator.wait()
 
     def test_emulators_fill_the_mode_of_the_table(self):
         with tempfile.TemporaryDirectory() as tmp:
