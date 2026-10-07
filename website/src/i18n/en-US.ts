@@ -2,7 +2,7 @@ const enUS = {
   meta: {
     title: 'FliperOS — Arcade Linux built for CRT',
     description:
-      'FliperOS is Ubuntu 24.04 Linux for arcade cabinets with CRT monitors: 15 kHz kernel, Switchres, GroovyMAME, RetroArch and frontends ready to play.',
+      'FliperOS is Ubuntu 24.04 Linux for arcade cabinets with CRT monitors: 15 kHz kernel, Switchres, GroovyMAME, RetroArch, GunCon 2 light gun and frontends ready to play.',
     keywords: [
       'FliperOS',
       'arcade Linux',
@@ -14,6 +14,8 @@ const enUS = {
       'RetroArch',
       'arcade cabinet',
       'GroovyArcade',
+      'light gun',
+      'GunCon 2',
       'Ubuntu 24.04',
       'emulation',
       'retro gaming',
@@ -59,7 +61,7 @@ const enUS = {
   },
   badges: {
     label: 'Technical highlights',
-    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'Open Source'],
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'GunCon 2', 'Open Source'],
   },
   features: {
     kicker: 'Features',
@@ -102,6 +104,12 @@ const enUS = {
         title: 'Open over the network',
         text: 'The roms, bios, media and config folders are shared with Samba: copy games from any PC to \\\\fliperos\\roms. SSH is on from the first boot, so you can hand the cabinet to an AI assistant (Claude Code, Cursor, Codex) and have it configure the whole system the way you want.',
         points: ['Samba', 'SSH', 'roms', 'bios', 'media', 'config'],
+      },
+      {
+        id: 'lightgun',
+        title: 'Light gun on the tube',
+        text: 'Plug in a GunCon 2 and shoot. Its driver isn’t in the mainline kernel, so FliperOS ships it built for its own kernel, plus a calibrator made for the CRT: a few shots at the corners of the screen and the gun hits where you aim. The calibration comes back every time the gun is plugged in, and the MAME ROM Cleaner keeps the light gun games of your romset.',
+        points: ['GunCon 2', 'DKMS driver', 'CRT calibration', 'Light gun games'],
       },
     ],
   },
@@ -193,7 +201,7 @@ const enUS = {
       { id: 'latency', label: 'Latency', text: 'Standard or Low latency, with a hardware check' },
       { id: 'scraper', label: 'Scraper', text: 'Covers, screenshots, videos and descriptions' },
       { id: 'roms', label: 'MAME ROM/CHD Cleaner', text: 'Filter a romset; download free games' },
-      { id: 'joysticks', label: 'Joysticks', text: 'Buttons, light gun, wheel, parallel port' },
+      { id: 'joysticks', label: 'Joysticks', text: 'Buttons, GunCon 2 light gun, wheel, parallel port' },
       { id: 'update', label: 'System Update', text: 'apt update and upgrade with real progress' },
     ],
     hint: 'arrows: move  ·  enter: select  ·  esc: back',

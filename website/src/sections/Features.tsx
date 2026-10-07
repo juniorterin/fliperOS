@@ -1,6 +1,6 @@
 'use client';
 
-import { Gauge, Joystick, Monitor, Network, ScanLine, SlidersHorizontal, type LucideIcon } from 'lucide-react';
+import { Crosshair, Gauge, Joystick, Monitor, Network, ScanLine, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -11,8 +11,12 @@ const STYLE: Record<string, { icon: LucideIcon; color: string; span: string }> =
   latency: { icon: Gauge, color: 'text-yellow bg-yellow/10 border-yellow/30', span: '' },
   arcade: { icon: Joystick, color: 'text-pink bg-pink/10 border-pink/30', span: '' },
   network: { icon: Network, color: 'text-green bg-green/10 border-green/30', span: '' },
+  lightgun: { icon: Crosshair, color: 'text-red bg-red/10 border-red/30', span: 'lg:col-span-3' },
   setup: { icon: SlidersHorizontal, color: 'text-orange bg-orange/10 border-orange/30', span: 'lg:col-span-3' },
 };
+
+// Cards de linha inteira: texto a esquerda e os pontos a direita no desktop.
+const WIDE = new Set(['lightgun', 'setup']);
 
 const ORDER = Object.keys(STYLE);
 
@@ -28,7 +32,7 @@ export function Features() {
           {items.map((item, i) => {
             const style = STYLE[item.id] ?? STYLE.crt;
             const Icon = style.icon;
-            const wide = item.id === 'setup';
+            const wide = WIDE.has(item.id);
             return (
               <Reveal as="li" key={item.id} delay={i * 60} className={`${style.span} ${wide ? 'sm:col-span-2' : ''}`}>
                 <article

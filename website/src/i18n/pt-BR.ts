@@ -4,7 +4,7 @@ const ptBR: Messages = {
   meta: {
     title: 'FliperOS — Arcade Linux feito para CRT',
     description:
-      'FliperOS é o Linux Ubuntu 24.04 para gabinetes arcade com monitor CRT: kernel 15 kHz, Switchres, GroovyMAME, RetroArch e frontends prontos para jogar.',
+      'FliperOS é o Linux Ubuntu 24.04 para gabinetes arcade com monitor CRT: kernel 15 kHz, Switchres, GroovyMAME, RetroArch, light gun GunCon 2 e frontends prontos para jogar.',
     keywords: [
       'FliperOS',
       'Linux arcade',
@@ -17,6 +17,9 @@ const ptBR: Messages = {
       'RetroArch',
       'gabinete arcade',
       'GroovyArcade',
+      'light gun',
+      'pistola de luz',
+      'GunCon 2',
       'Ubuntu 24.04',
       'emulação',
       'retrogame',
@@ -62,7 +65,7 @@ const ptBR: Messages = {
   },
   badges: {
     label: 'Destaques técnicos',
-    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'Open Source'],
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'GunCon 2', 'Open Source'],
   },
   features: {
     kicker: 'Recursos',
@@ -105,6 +108,12 @@ const ptBR: Messages = {
         title: 'Aberto pela rede',
         text: 'As pastas roms, bios, media e config são compartilhadas via Samba: copie jogos de qualquer PC para \\\\fliperos\\roms. O SSH vem ligado desde o primeiro boot, então você pode entregar o gabinete a um assistente de IA (Claude Code, Cursor, Codex) e deixar que ele configure o sistema inteiro do jeito que você quiser.',
         points: ['Samba', 'SSH', 'roms', 'bios', 'media', 'config'],
+      },
+      {
+        id: 'lightgun',
+        title: 'Light gun no tubo',
+        text: 'Conecte uma GunCon 2 e atire. O driver dela não existe no kernel mainline, então o FliperOS já traz ele compilado para o próprio kernel, junto com um calibrador feito para o CRT: alguns tiros nos cantos da tela e a pistola acerta onde você mira. A calibração volta toda vez que a pistola é conectada, e o MAME ROM Cleaner mantém os jogos de pistola do seu romset.',
+        points: ['GunCon 2', 'Driver DKMS', 'Calibração no CRT', 'Jogos de pistola'],
       },
     ],
   },
@@ -196,7 +205,7 @@ const ptBR: Messages = {
       { id: 'latency', label: 'Latency', text: 'Standard ou Low latency, com checagem do hardware' },
       { id: 'scraper', label: 'Scraper', text: 'Capas, screenshots, vídeos e descrições' },
       { id: 'roms', label: 'MAME ROM/CHD Cleaner', text: 'Filtra um romset; baixa jogos gratuitos' },
-      { id: 'joysticks', label: 'Joysticks', text: 'Botões, light gun, volante, porta paralela' },
+      { id: 'joysticks', label: 'Joysticks', text: 'Botões, light gun GunCon 2, volante, porta paralela' },
       { id: 'update', label: 'System Update', text: 'apt update e upgrade com progresso real' },
     ],
     hint: 'setas: mover  ·  enter: selecionar  ·  esc: voltar',
