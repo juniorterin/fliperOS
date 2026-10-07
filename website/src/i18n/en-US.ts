@@ -224,7 +224,7 @@ const enUS = {
     consultingText:
       'I offer consulting and technical support for anyone who wants to build a commercial or private system on top of FliperOS: custom images, cabinets for businesses, specific hardware and installation.',
     contactLabel: 'Get in touch by email:',
-    emailAria: 'Email: juniorter at gmail dot com',
+    emailAria: 'Email: juniorterin at gmail dot com',
     donateTitle: 'Donate',
     donateText: 'FliperOS is made in my spare time. If it helped you, consider a donation to keep the project going.',
     pixLabel: 'Pix key',

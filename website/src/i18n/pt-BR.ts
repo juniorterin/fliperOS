@@ -228,7 +228,7 @@ const ptBR: Messages = {
     consultingText:
       'Trabalho com assessoria e assistência técnica para quem quer montar um sistema comercial ou privado com base no FliperOS: imagens personalizadas, gabinetes para estabelecimentos, hardware específico e instalação.',
     contactLabel: 'Entre em contato pelo email:',
-    emailAria: 'Email: juniorter arroba gmail ponto com',
+    emailAria: 'Email: juniorterin arroba gmail ponto com',
     donateTitle: 'Doe',
     donateText: 'O FliperOS é feito nas minhas horas livres. Se ele te ajudou, considere uma doação para manter o projeto: pelo Pix (clique para copiar a chave) ou pelo Stripe.',
     pixLabel: 'Chave Pix',

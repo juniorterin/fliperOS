@@ -21,7 +21,7 @@ export const FLIPEROS_VERSION = '0.8.1';
 
 // Contato da assessoria: mostrado como texto, sem mailto, para não virar alvo
 // fácil de spam.
-export const CONTACT_EMAIL = { user: 'juniorter', domain: 'gmail', tld: 'com' } as const;
+export const CONTACT_EMAIL = { user: 'juniorterin', domain: 'gmail', tld: 'com' } as const;
 
 // Só o link público de doação: a chave secreta do Stripe nunca entra no site.
 export const DONATE_URL = 'https://donate.stripe.com/7sYbJ3cetcU17Cm5eM3VC00';
