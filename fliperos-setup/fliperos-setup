@@ -12,6 +12,7 @@
 #   sudo fliperos-setup --output-test   refaz o teste de saidas
 #   sudo fliperos-setup --video-setup   abre direto o Video Setup
 #   sudo fliperos-setup --latency       abre direto o Setup > Latency
+#   sudo fliperos-setup --update-check  pergunta pelo update do FliperOS
 #
 # Sem tela (servico de boot, sessao de jogo e teclas de volume, ver
 # lib/latency.sh e lib/audio.sh):
@@ -74,6 +75,8 @@ source "$SETUP_DIR/lib/freeroms.sh"
 source "$SETUP_DIR/lib/frontends.sh"
 # shellcheck source=lib/update.sh
 source "$SETUP_DIR/lib/update.sh"
+# shellcheck source=lib/patches.sh
+source "$SETUP_DIR/lib/patches.sh"
 # shellcheck source=lib/extras.sh
 source "$SETUP_DIR/lib/extras.sh"
 # shellcheck source=lib/hardware.sh
@@ -120,6 +123,8 @@ source "$SETUP_DIR/screens/joysticks.sh"
 source "$SETUP_DIR/screens/rom-cleaner.sh"
 # shellcheck source=screens/downloader.sh
 source "$SETUP_DIR/screens/downloader.sh"
+# shellcheck source=screens/patches.sh
+source "$SETUP_DIR/screens/patches.sh"
 
 # A versao do Setup em disco quando este processo abriu e os argumentos dele:
 # atualizado com a tela aberta (System Update, tools/cabinet-update.sh), ele
@@ -130,7 +135,7 @@ SETUP_STAMP=$(setup_stamp)
 SETUP_ARGS=("$@")
 
 usage() {
-  sed -n '8,18p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
+  sed -n '8,19p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
 }
 
 restore_terminal() {
@@ -214,6 +219,10 @@ main() {
       ;;
     --latency)
       screen_latency
+      return 0
+      ;;
+    --update-check)
+      screen_update_check
       return 0
       ;;
   esac

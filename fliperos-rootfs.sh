@@ -126,6 +126,9 @@ install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-sna
 install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"
 install -Dm644 "$src/config/fliperos-transmission.service" "$root/etc/systemd/system/fliperos-transmission.service"
 install -Dm644 "$src/config/fliperos-downloader-magnets" "$root/usr/local/share/fliperos/downloader-magnets"
+# Updates sem ISO nova (patches do updates/index, em ordem), perguntados no
+# boot pelo fliperos-tty1.
+install -Dm755 "$src/config/fliperos-update" "$root/opt/fliperos/bin/fliperos-update"
 # catver.ini, nplayers.ini e controls.xml do ROM cleaner: junto do romset ou
 # nesta pasta (lib/romclean.sh); e onde ele guarda o que leu do XML do MAME.
 mkdir -p "$root/usr/local/share/fliperos/romclean" "$root/var/cache/fliperos"

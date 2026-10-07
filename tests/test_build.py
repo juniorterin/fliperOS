@@ -2088,6 +2088,197 @@ class SnapsTests(unittest.TestCase):
         self.assertIn('"progettosnaps|progetto-SNAPS (arcade screenshots only, no account)"', menu)
 
 
+class UpdateTests(unittest.TestCase):
+    """config/fliperos-update: os patches do updates/index, em ordem, com o
+    aviso e a copia do que o usuario mudou. A arvore de cada patch e um tar
+    como o do GitHub, servido por file://; o ensaio e a instalacao sao
+    comandos que so copiam o config/app.conf da arvore para /etc/app."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.root, self.state = self.tmp / 'root', self.tmp / 'state'
+        (self.root / 'etc/app').mkdir(parents=True)
+        (self.tmp / 'tars').mkdir()
+        self.index = []
+        self.env = dict(
+            os.environ, FLIPEROS_UPDATE_INDEX_URL=(self.tmp / 'index').as_uri(),
+            FLIPEROS_UPDATE_TARBALL_URL=(self.tmp / 'tars').as_uri() + '/{commit}.tar.gz',
+            FLIPEROS_UPDATE_STATE=str(self.state), FLIPEROS_UPDATE_LEVEL=str(self.root / 'etc/fliperos/patch-level'),
+            FLIPEROS_UPDATE_ROOT=str(self.root), FLIPEROS_UPDATE_LOG=str(self.tmp / 'log'),
+            FLIPEROS_UPDATE_DRYRUN='mkdir -p "$UPPER/etc/app" && cp "$SRC/config/app.conf" "$UPPER/etc/app/"',
+            FLIPEROS_UPDATE_INSTALL='cp "$SRC/config/app.conf" "$FLIPEROS_UPDATE_ROOT/etc/app/" && '
+                                    'echo "$SRC" >> "$FLIPEROS_UPDATE_ROOT/installs"')
+        self.write_index()
+
+    def engine(self):
+        loader = SourceFileLoader('fliperos_update', str(ROOT / 'config/fliperos-update'))
+        spec = importlib.util.spec_from_loader('fliperos_update', loader)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+        return module
+
+    def write_index(self):
+        (self.tmp / 'index').write_text('# comentario\n' + ''.join('\t'.join(line) + '\n' for line in self.index))
+
+    def publish(self, conf, script=None, reboot='no', treehash=None):
+        """O proximo patch: uma arvore com o config/app.conf (e o
+        updates/NNNN.sh), em tar com a pasta de cima, como o do GitHub."""
+        n = len(self.index) + 1
+        commit = '%040x' % n
+        tree = self.tmp / ('tree%d' % n)
+        (tree / 'config').mkdir(parents=True)
+        (tree / 'config/app.conf').write_text(conf)
+        (tree / 'tools').mkdir()
+        (tree / 'tools/cabinet-update.sh').write_text('true\n')
+        if script:
+            (tree / 'updates').mkdir()
+            (tree / ('updates/%04d.sh' % n)).write_text(script)
+        with tarfile.open(self.tmp / 'tars' / (commit + '.tar.gz'), 'w:gz') as tar:
+            tar.add(tree, arcname='fliperOS-' + commit)
+        self.index.append((str(n), commit, treehash or self.engine().treehash(str(tree)), reboot, 'Fix %d' % n))
+        self.write_index()
+        return commit
+
+    def run_update(self, *args, check=True):
+        return subprocess.run(['python3', str(ROOT / 'config/fliperos-update'), *args], capture_output=True,
+                              text=True, env=self.env, check=check, timeout=60)
+
+    def level(self):
+        return self.run_update('level').stdout.strip()
+
+    def conf(self):
+        return (self.root / 'etc/app/app.conf').read_text()
+
+    def test_applies_every_patch_in_order_and_keeps_a_copy_of_local_changes(self):
+        # A instalacao: o arquivo como o FliperOS o deixou, no manifesto.
+        (self.root / 'etc/app/app.conf').write_text('v0')
+        self.state.mkdir()
+        (self.state / 'manifest').write_text('etc/app/app.conf\t%s\n'
+                                             % self.engine().digest(str(self.root / 'etc/app/app.conf')))
+        self.assertEqual(self.level(), '0')
+        self.assertEqual(self.run_update('check').stdout, '')
+        self.publish('v1')
+        self.publish('v2', script='echo 2 > "$FLIPEROS_UPDATE_ROOT/migrated"\n', reboot='yes')
+        self.assertEqual(self.run_update('check').stdout, '1\tno\tFix 1\n2\tyes\tFix 2\n')
+        # Sem mudanca local: nada no aviso.
+        plan = self.run_update('plan').stdout
+        self.assertIn('pending=2\nchanged=1\nexact=yes\n', plan)
+        self.assertNotIn('local', plan)
+        out = self.run_update('apply', '--progress', '--result', str(self.tmp / 'result')).stdout
+        self.assertIn('@step 100 FliperOS is up to date', out)
+        result = (self.tmp / 'result').read_text()
+        self.assertRegex(result, r'applied\t1\tno\t\S+/backup/0001-\d+-\d+\tFix 1\napplied\t2\tyes\t')
+        self.assertTrue(result.endswith('level=2\n'))
+        self.assertEqual((self.level(), self.conf()), ('2', 'v2'))
+        installs = (self.root / 'installs').read_text().split()
+        self.assertEqual([Path(p).name for p in installs], ['0001', '0002'])
+        self.assertEqual((self.root / 'migrated').read_text(), '2\n')
+        backups = sorted(p.name[:4] for p in (self.state / 'backup').iterdir())
+        self.assertEqual(backups, ['0001', '0002'])
+        first = next((self.state / 'backup').glob('0001-*'))
+        self.assertEqual((first / 'etc/app/app.conf').read_text(), 'v0')
+        self.assertEqual(self.run_update('check').stdout, '')
+        # O usuario muda o arquivo: o proximo patch avisa, copia e troca;
+        # o restore devolve o dele.
+        (self.root / 'etc/app/app.conf').write_text('meu')
+        self.publish('v3')
+        self.assertIn('local\t/etc/app/app.conf\n', self.run_update('plan').stdout)
+        self.run_update('apply')
+        self.assertEqual((self.level(), self.conf()), ('3', 'v3'))
+        third = next((self.state / 'backup').glob('0003-*'))
+        self.assertEqual((third / 'etc/app/app.conf').read_text(), 'meu')
+        self.assertIn('restored=1', self.run_update('restore', '3').stdout)
+        self.assertEqual(self.conf(), 'meu')
+
+    def test_never_skips_a_patch(self):
+        self.publish('v1')
+        self.publish('v2')
+        # Um buraco no indice: nada e aplicado.
+        self.index[1] = ('3',) + self.index[1][1:]
+        self.write_index()
+        r = self.run_update('check', check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('the update list skips from 1 to 3', r.stderr)
+        # Um patch que nao confere com o indice para tudo ali.
+        self.index[1] = ('2',) + self.index[1][1:]
+        self.write_index()
+        self.publish('v3', treehash='0' * 64)
+        r = self.run_update('apply', '--progress', check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('@fail FliperOS update|update 3 does not match the update list', r.stdout)
+        self.assertEqual((self.level(), self.conf()), ('2', 'v2'))
+
+    def test_a_failed_patch_stops_the_ones_after_it(self):
+        self.publish('v1')
+        self.publish('v2', script='exit 3\n')
+        self.publish('v3')
+        r = self.run_update('apply', '--result', str(self.tmp / 'result'), check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('update 2 stopped (exit 3', r.stderr)
+        self.assertEqual(self.level(), '1')
+        self.assertIn('failed\t2\tbackup\t', (self.tmp / 'result').read_text())
+        self.assertEqual(len((self.root / 'installs').read_text().split()), 2)
+        # O mesmo patch e oferecido de novo (e so ele e os seguintes).
+        self.assertEqual(self.run_update('check').stdout, '2\tno\tFix 2\n3\tno\tFix 3\n')
+
+    def test_a_file_the_manifest_does_not_know_is_reported(self):
+        (self.root / 'etc/app/app.conf').write_text('antigo')
+        self.publish('v1')
+        self.assertIn('unknown\t/etc/app/app.conf\n', self.run_update('plan').stdout)
+
+    def test_record_writes_the_manifest_and_the_level_of_the_tree(self):
+        tree = self.tmp / 'src'
+        (tree / 'config').mkdir(parents=True)
+        (tree / 'config/app.conf').write_text('v9')
+        (tree / 'updates').mkdir()
+        (tree / 'updates/index').write_text('# x\n1\ta\tb\tno\tUm\n2\tc\td\tno\tDois\n')
+        (self.root / 'etc/app/app.conf').write_text('v9')
+        out = self.run_update('record', str(tree)).stdout
+        self.assertIn('level=2', out)
+        manifest = (self.state / 'manifest').read_text()
+        self.assertTrue(manifest.startswith('etc/app/app.conf\t'))
+        # --root: o manifesto e o nivel dentro da outra raiz (o chroot do build).
+        other = self.tmp / 'chroot'
+        (other / 'etc/app').mkdir(parents=True)
+        (other / 'etc/app/app.conf').write_text('v9')
+        env = {k: v for k, v in self.env.items() if k not in ('FLIPEROS_UPDATE_STATE', 'FLIPEROS_UPDATE_LEVEL')}
+        subprocess.run(['python3', str(ROOT / 'config/fliperos-update'), 'record', str(tree), '--root', str(other)],
+                       check=True, capture_output=True, env=env, timeout=60)
+        self.assertEqual((other / 'etc/fliperos/patch-level').read_text(), '2\n')
+        self.assertIn('etc/app/app.conf\t', (other / 'var/lib/fliperos/update/manifest').read_text())
+
+    def test_treehash_is_the_one_of_the_published_tree(self):
+        # O make-update.sh calcula o treehash do git archive; o gabinete, do
+        # tar do GitHub: o mesmo conteudo da o mesmo valor, fora o __pycache__.
+        engine = self.engine()
+        tree = self.tmp / 'a'
+        (tree / 'config/__pycache__').mkdir(parents=True)
+        (tree / 'config/x').write_text('1')
+        first = engine.treehash(str(tree))
+        (tree / 'config/__pycache__/y.pyc').write_text('lixo')
+        (tree / 'outro.txt').write_text('fora da arvore do patch')
+        self.assertEqual(engine.treehash(str(tree)), first)
+        (tree / 'config/x').write_text('2')
+        self.assertNotEqual(engine.treehash(str(tree)), first)
+
+    def test_install_boot_and_iso(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-update" "$root/opt/fliperos/bin/fliperos-update"', ROOTFS)
+        mkiso = (ROOT / 'fliperos-mkiso.sh').read_text()
+        self.assertIn('config/fliperos-update" record', mkiso)
+        self.assertIn('--root "$CHROOT_DIR"', mkiso)
+        tty1 = (ROOT / 'config/fliperos-tty1').read_text()
+        self.assertIn('elif update_pending; then\n      sudo /usr/local/bin/fliperos-setup --update-check', tty1)
+        self.assertIn('nm-online -q -t 5', tty1)
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn('config/fliperos-update" record "$src"', update)
+        self.assertIn('if [[ -n ${FLIPEROS_UPDATE:-} ]]; then', update)
+        self.assertIn('updates', (ROOT / 'tools/cabinet-push.sh').read_text())
+        self.assertIn('fliperos-update', (ROOT / 'tools/verify-iso.sh').read_text())
+        lines = [line for line in (ROOT / 'updates/index').read_text().splitlines() if line and line[0] != '#']
+        self.assertEqual([line.split('\t')[0] for line in lines], [str(n) for n in range(1, len(lines) + 1)])
+
+
 class DownloaderTests(unittest.TestCase):
     """config/fliperos-downloader: o romset e os CHDs por link magnetico, so o
     que o filtro do ROM cleaner escolhe, contra um Transmission falso."""

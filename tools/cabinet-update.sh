@@ -203,6 +203,15 @@ systemctl mask transmission-daemon.service > /dev/null 2>&1 || true
 systemctl is-enabled -q fliperos-transmission.service 2> /dev/null && systemctl restart fliperos-transmission.service
 echo "fliperos-transmission: $(systemctl is-active fliperos-transmission.service 2> /dev/null)"
 
+# Pelo fliperos-update (FLIPEROS_UPDATE=1) ele mesmo grava o manifesto e o
+# nivel, e o tty1 e quem pediu o update: nao reinicia.
+if [[ -n ${FLIPEROS_UPDATE:-} ]]; then
+  echo "== Done (fliperos-update)"
+  exit 0
+fi
+echo "== Update manifest and level (fliperos-update)"
+python3 "$src/config/fliperos-update" record "$src" || echo "warning: the update manifest was not written"
+
 # So reinicia o tty1 se nele estiver o menu (login, shell, sudo): um jogo,
 # frontend ou o desktop aberto agora seria fechado no meio.
 # Sem nada alem do menu, o grep -v nao acha nada e sai com 1: com pipefail

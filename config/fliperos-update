@@ -1,0 +1,520 @@
+#!/usr/bin/env python3
+"""Updates do FliperOS sem ISO nova: patches numerados, publicados no repo
+(updates/index), aplicados um de cada vez e sempre em ordem.
+
+  fliperos-update level                 o ultimo patch aplicado (0: nenhum)
+  fliperos-update check                 os pendentes, "N<TAB>reboot<TAB>titulo"
+  fliperos-update plan [--progress] [--result ARQUIVO]
+  fliperos-update apply [--progress] [--result ARQUIVO]
+  fliperos-update restore N
+  fliperos-update record ORIGEM [--root RAIZ]   (o manifesto e o nivel em RAIZ)
+
+Um patch e um commit do repo: o apply baixa a arvore dele, confere o
+treehash do indice e roda o tools/cabinet-update.sh dela (o mesmo do
+tools/cabinet-push.sh) e o updates/NNNN.sh, se houver. O patch N so entra
+com o N-1 aplicado; um que falha para tudo ali, sem avancar o nivel.
+
+As configuracoes do usuario: o manifesto guarda o sha256 de cada arquivo
+que o FliperOS instalou, como ficou depois da ultima instalacao. Antes de
+aplicar, o fliperos-rootfs.sh do patch roda num overlay por cima da raiz
+(lowerdir=/, a escrita fica num tmpfs): o que ele escreve e o que o patch
+troca. Um arquivo que sera trocado e nao esta como o manifesto diz foi
+mudado aqui: entra no aviso. Tudo o que sera trocado vai antes para
+/var/lib/fliperos/update/backup/NNNN-DATA, com o caminho inteiro.
+"""
+import argparse
+import fcntl
+import hashlib
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.request
+
+INDEX_URL = os.environ.get('FLIPEROS_UPDATE_INDEX_URL',
+                           'https://raw.githubusercontent.com/juniorterin/fliperOS/main/updates/index')
+TARBALL_URL = os.environ.get('FLIPEROS_UPDATE_TARBALL_URL',
+                             'https://codeload.github.com/juniorterin/fliperOS/tar.gz/{commit}')
+STATE = os.environ.get('FLIPEROS_UPDATE_STATE', '/var/lib/fliperos/update')
+LEVEL = os.environ.get('FLIPEROS_UPDATE_LEVEL', '/etc/fliperos/patch-level')
+ROOT = os.environ.get('FLIPEROS_UPDATE_ROOT', '/')
+LOG = os.environ.get('FLIPEROS_UPDATE_LOG', '/var/log/fliperos-update.log')
+# O que aplica a arvore do patch (ORIGEM em $SRC). Os testes trocam.
+INSTALL = os.environ.get('FLIPEROS_UPDATE_INSTALL', 'bash "$SRC/tools/cabinet-update.sh"')
+# Sem overlay (os testes, ou um kernel sem ele): um comando que escreve em
+# $UPPER o que o patch escreveria na raiz.
+DRYRUN = os.environ.get('FLIPEROS_UPDATE_DRYRUN', '')
+TIMEOUT = int(os.environ.get('FLIPEROS_UPDATE_TIMEOUT', '20'))
+
+# As partes do repo que o patch usa: as do tools/cabinet-push.sh e os
+# updates/NNNN.sh. O treehash e o sha256 da lista "caminho<TAB>sha256".
+TREE = ('fliperos-setup', 'config', 'fliperos-rootfs.sh', 'fliperos-video-check.py', 'fliperos-limine-update.py',
+        'tools/cabinet-update.sh', 'updates')
+# Sem overlay: o manifesto cobre estas pastas inteiras.
+KNOWN = ('usr/local/lib/fliperos-setup', 'opt/fliperos/bin', 'etc/fliperos', 'usr/local/share/fliperos',
+         'etc/systemd/system', 'home/fliperos/.config', 'home/fliperos/.mame', 'home/fliperos/.zshrc',
+         'home/fliperos/.zprofile', 'home/fliperos/.bash_profile')
+# Grandes ou que o proprio sistema regrava a toda hora: fora do manifesto.
+SKIP = ('home/fliperos/.config/falkon', 'home/fliperos/.config/pulse', 'etc/fliperos/patch-level',
+        'usr/local/share/fliperos/romclean', 'usr/local/share/fliperos/mame2010.xml.xz')
+
+
+def say(progress, line):
+    if progress:
+        print(line, flush=True)
+
+
+def log(text):
+    try:
+        with open(LOG, 'a', encoding='utf-8') as f:
+            f.write('%s %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), text))
+    except OSError:
+        pass
+
+
+class Fail(Exception):
+    pass
+
+
+# ?? Estado ????????????????????????????????????????????????????????
+
+def read_level():
+    try:
+        with open(LEVEL, encoding='utf-8') as f:
+            return int(f.read().strip() or 0)
+    except (OSError, ValueError):
+        return 0
+
+
+def write_level(n):
+    os.makedirs(os.path.dirname(LEVEL), exist_ok=True)
+    with open(LEVEL + '.tmp', 'w', encoding='utf-8') as f:
+        f.write('%d\n' % n)
+    os.replace(LEVEL + '.tmp', LEVEL)
+
+
+def manifest_path():
+    return os.path.join(STATE, 'manifest')
+
+
+def read_manifest():
+    out = {}
+    try:
+        with open(manifest_path(), encoding='utf-8') as f:
+            for line in f:
+                path, _, value = line.rstrip('\n').partition('\t')
+                if path and value:
+                    out[path] = value
+    except OSError:
+        pass
+    return out
+
+
+def write_manifest(data):
+    os.makedirs(STATE, exist_ok=True)
+    with open(manifest_path() + '.tmp', 'w', encoding='utf-8') as f:
+        for path in sorted(data):
+            f.write('%s\t%s\n' % (path, data[path]))
+    os.replace(manifest_path() + '.tmp', manifest_path())
+
+
+class lock:
+    def __enter__(self):
+        os.makedirs(STATE, exist_ok=True)
+        self.f = open(os.path.join(STATE, '.lock'), 'w')
+        try:
+            fcntl.flock(self.f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise Fail('another update is running')
+        return self
+
+    def __exit__(self, *a):
+        self.f.close()
+
+
+# ?? Arquivos ??????????????????????????????????????????????????????
+
+def digest(path):
+    """O conteudo de um arquivo ("sha256") ou o destino de um link
+    ("->destino"); None se nao existe."""
+    try:
+        if os.path.islink(path):
+            return '->' + os.readlink(path)
+        if not os.path.isfile(path):
+            return None
+        h = hashlib.sha256()
+        with open(path, 'rb') as f:
+            for block in iter(lambda: f.read(1 << 20), b''):
+                h.update(block)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def skipped(rel):
+    return any(rel == s or rel.startswith(s + '/') for s in SKIP)
+
+
+def walk(base):
+    """Os caminhos relativos dos arquivos e links de BASE (sem as pastas)."""
+    out = []
+    for top, dirs, files in os.walk(base):
+        for name in files + [d for d in dirs if os.path.islink(os.path.join(top, d))]:
+            path = os.path.join(top, name)
+            rel = os.path.relpath(path, base)
+            if os.path.islink(path) or os.path.isfile(path):
+                out.append(rel)
+    return sorted(out)
+
+
+def treehash(src):
+    lines = []
+    for part in TREE:
+        path = os.path.join(src, part)
+        rels = [part] if os.path.isfile(path) else [os.path.join(part, r) for r in walk(path)]
+        for rel in rels:
+            if '__pycache__' in rel.split(os.sep):
+                continue
+            lines.append('%s\t%s\n' % (rel.replace(os.sep, '/'), digest(os.path.join(src, rel))))
+    return hashlib.sha256(''.join(sorted(lines)).encode()).hexdigest()
+
+
+# ?? Indice e download ?????????????????????????????????????????????
+
+def fetch(url):
+    with urllib.request.urlopen(url, timeout=TIMEOUT) as r:
+        return r.read()
+
+
+def read_index():
+    """[(n, commit, treehash, reboot, titulo)], conferido: 1, 2, 3... sem
+    buraco e sem repetir."""
+    try:
+        text = fetch(INDEX_URL).decode('utf-8')
+    except OSError as e:
+        raise Fail('could not read the update list (%s)' % e)
+    out = []
+    for line in text.splitlines():
+        if not line.strip() or line.startswith('#'):
+            continue
+        parts = line.split('\t')
+        if len(parts) < 5 or not parts[0].isdigit():
+            raise Fail('bad line in the update list: %s' % line[:60])
+        n = int(parts[0])
+        if n != len(out) + 1:
+            raise Fail('the update list skips from %d to %d' % (len(out), n))
+        out.append((n, parts[1], parts[2], parts[3] == 'yes', parts[4]))
+    return out
+
+
+def pending():
+    level = read_level()
+    return [p for p in read_index() if p[0] > level]
+
+
+def work_dir(n):
+    return os.path.join(STATE, 'work', '%04d' % n)
+
+
+def download(patch, progress, pct):
+    """A arvore do patch em STATE/work/NNNN, conferida pelo treehash."""
+    n, commit, expected = patch[0], patch[1], patch[2]
+    dest = work_dir(n)
+    if os.path.isdir(dest) and treehash(dest) == expected:
+        return dest
+    say(progress, '@step %d Downloading update %d' % (pct, n))
+    try:
+        data = fetch(TARBALL_URL.format(commit=commit))
+    except OSError as e:
+        raise Fail('could not download update %d (%s)' % (n, e))
+    shutil.rmtree(dest, ignore_errors=True)
+    tmp = dest + '.tmp'
+    shutil.rmtree(tmp, ignore_errors=True)
+    os.makedirs(tmp)
+    with tarfile.open(fileobj=io.BytesIO(data), mode='r:*') as tar:
+        members = []
+        for m in tar.getmembers():
+            # O tar do GitHub tem uma pasta de cima (fliperOS-COMMIT/).
+            parts = m.name.split('/', 1)
+            if len(parts) < 2 or not parts[1]:
+                continue
+            m.name = parts[1]
+            members.append(m)
+        try:
+            tar.extractall(tmp, members=members, filter='data')
+        except TypeError:
+            tar.extractall(tmp, members=members)
+    got = treehash(tmp)
+    if got != expected:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise Fail('update %d does not match the update list (treehash %s, expected %s)'
+                   % (n, got[:12], expected[:12]))
+    os.replace(tmp, dest)
+    return dest
+
+
+# ?? Ensaio: o que o patch escreveria ??????????????????????????????
+
+def dry_run(src, root):
+    """{caminho relativo: digest novo} do que o fliperos-rootfs.sh de SRC
+    escreveria em ROOT; None sem overlay (nem DRYRUN)."""
+    base = tempfile.mkdtemp(prefix='fliperos-update-', dir='/run' if os.path.isdir('/run') else None)
+    upper, work, merged = (os.path.join(base, d) for d in ('upper', 'work', 'merged'))
+    for d in (upper, work, merged):
+        os.makedirs(d)
+    mounted = False
+    try:
+        if DRYRUN:
+            r = subprocess.run(['bash', '-c', DRYRUN], env=dict(os.environ, SRC=src, UPPER=upper),
+                               capture_output=True, text=True)
+            if r.returncode:
+                log('dry run failed: %s' % r.stderr.strip()[-300:])
+                return None
+        else:
+            r = subprocess.run(['mount', '-t', 'overlay', 'overlay', '-o',
+                                'lowerdir=%s,upperdir=%s,workdir=%s' % (root, upper, work), merged],
+                               capture_output=True, text=True)
+            if r.returncode:
+                log('overlay failed: %s' % r.stderr.strip())
+                return None
+            mounted = True
+            r = subprocess.run(['bash', os.path.join(src, 'fliperos-rootfs.sh'), merged],
+                               capture_output=True, text=True)
+            if r.returncode:
+                log('dry run of fliperos-rootfs.sh failed: %s' % r.stderr.strip()[-300:])
+                return None
+        # O walk deixa de fora as marcas de apagado do overlay (dispositivo 0/0).
+        return {rel: digest(os.path.join(upper, rel)) for rel in walk(upper) if not skipped(rel)}
+    finally:
+        if mounted:
+            subprocess.run(['umount', '-l', merged], capture_output=True)
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def known_files(root):
+    out = {}
+    for part in KNOWN:
+        path = os.path.join(root, part)
+        rels = [part] if os.path.isfile(path) else [os.path.join(part, r) for r in walk(path)] \
+            if os.path.isdir(path) else []
+        for rel in rels:
+            if not skipped(rel):
+                out[rel] = digest(os.path.join(root, rel))
+    return out
+
+
+def classify(src, root):
+    """(trocados, mudados aqui, sem registro, ensaio_ok): os que o patch
+    troca; dos trocados, os que nao estao como o manifesto diz; e os que o
+    manifesto nao conhece (instalacao antiga)."""
+    manifest = read_manifest()
+    new = dry_run(src, root)
+    if new is None:
+        # Sem o ensaio: os do manifesto que mudaram aqui podem ser trocados.
+        local = [p for p, v in manifest.items() if digest(os.path.join(root, p)) not in (v, None)]
+        return sorted(local), sorted(local), [], False
+    changed, local, unknown = [], [], []
+    for rel, value in new.items():
+        live = digest(os.path.join(root, rel))
+        if live is None or live == value:
+            continue
+        changed.append(rel)
+        if rel not in manifest:
+            unknown.append(rel)
+        elif manifest[rel] != live:
+            local.append(rel)
+    return sorted(changed), sorted(local), sorted(unknown), True
+
+
+def record(src, root, extra=()):
+    """O manifesto depois de uma instalacao: o que o patch escreve (pelo
+    ensaio) mais o que ja estava nele, como esta agora."""
+    manifest = read_manifest()
+    new = dry_run(src, root)
+    paths = set(new) if new is not None else set(known_files(root))
+    paths |= set(manifest) | set(extra)
+    data = {}
+    for rel in paths:
+        value = digest(os.path.join(root, rel))
+        if value is not None and not skipped(rel):
+            data[rel] = value
+    write_manifest(data)
+    return len(data)
+
+
+def backup(n, root, paths):
+    dest = os.path.join(STATE, 'backup', '%04d-%s' % (n, time.strftime('%Y%m%d-%H%M%S')))
+    for rel in paths:
+        src = os.path.join(root, rel)
+        if not os.path.lexists(src):
+            continue
+        target = os.path.join(dest, rel)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        if os.path.islink(src):
+            os.symlink(os.readlink(src), target)
+        else:
+            shutil.copy2(src, target)
+    os.makedirs(dest, exist_ok=True)
+    return dest
+
+
+# ?? Comandos ??????????????????????????????????????????????????????
+
+def write_result(args, lines):
+    text = ''.join('%s\n' % line for line in lines)
+    if getattr(args, 'result', None):
+        with open(args.result, 'w', encoding='utf-8') as f:
+            f.write(text)
+    elif not getattr(args, 'progress', False):
+        sys.stdout.write(text)
+
+
+def cmd_level(args):
+    print(read_level())
+
+
+def cmd_check(args):
+    for n, _, _, reboot, title in pending():
+        print('%d\t%s\t%s' % (n, 'yes' if reboot else 'no', title))
+
+
+def cmd_plan(args):
+    """O aviso antes de aplicar: o ensaio da arvore do ultimo pendente (a
+    que fica no fim) contra a raiz de agora."""
+    say(args.progress, '@step 5 Reading the update list')
+    todo = pending()
+    lines = ['pending=%d' % len(todo)]
+    if todo:
+        src = download(todo[-1], args.progress, 20)
+        say(args.progress, '@step 60 Checking which files change')
+        changed, local, unknown, exact = classify(src, ROOT)
+        lines += ['changed=%d' % len(changed), 'exact=%s' % ('yes' if exact else 'no')]
+        lines += ['local\t/%s' % p for p in local] + ['unknown\t/%s' % p for p in unknown]
+    write_result(args, lines)
+    say(args.progress, '@step 100 Done')
+
+
+def cmd_apply(args):
+    todo = pending()
+    lines, done = [], []
+    with lock():
+        for i, patch in enumerate(todo):
+            n = patch[0]
+            span = 100 // max(len(todo), 1)
+            pct = i * span
+            if read_level() != n - 1:
+                raise Fail('update %d needs update %d first' % (n, n - 1))
+            src = download(patch, args.progress, pct + 2)
+            say(args.progress, '@step %d Update %d: saving the files it replaces' % (pct + span // 5, n))
+            changed, local, unknown, _ = classify(src, ROOT)
+            saved = backup(n, ROOT, changed)
+            log('update %d (%s): %d files replaced, %d with local changes, backup %s'
+                % (n, patch[4], len(changed), len(local) + len(unknown), saved))
+            say(args.progress, '@step %d Update %d: %s' % (pct + span // 3, n, patch[4]))
+            env = dict(os.environ, SRC=src, FLIPEROS_UPDATE='1', FLIPEROS_UPDATE_SRC=src)
+            steps = [INSTALL]
+            script = os.path.join(src, 'updates', '%04d.sh' % n)
+            if os.path.isfile(script):
+                steps.append('bash "%s"' % script)
+            for step in steps:
+                with open(LOG, 'a', encoding='utf-8') as out:
+                    proc = subprocess.Popen(['bash', '-c', step], env=env, stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT, text=True)
+                    for line in proc.stdout:
+                        out.write(line)
+                        if line.startswith('== '):
+                            say(args.progress, '@msg %s' % line[3:].strip()[:70])
+                    if proc.wait():
+                        lines.append('failed\t%d\tbackup\t%s' % (n, saved))
+                        write_result(args, lines)
+                        raise Fail('update %d stopped (exit %d, see %s); its backup is in %s'
+                                   % (n, proc.returncode, LOG, saved))
+            record(src, ROOT, changed)
+            write_level(n)
+            done.append(n)
+            lines.append('applied\t%d\t%s\t%s\t%s' % (n, 'yes' if patch[3] else 'no', saved, patch[4]))
+            log('update %d applied' % n)
+    lines.append('level=%d' % read_level())
+    write_result(args, lines)
+    say(args.progress, '@step 100 FliperOS is up to date')
+
+
+def cmd_restore(args):
+    base = os.path.join(STATE, 'backup')
+    found = sorted(d for d in os.listdir(base) if d.startswith('%04d-' % args.n)) if os.path.isdir(base) else []
+    if not found:
+        raise Fail('no backup of update %d' % args.n)
+    src = os.path.join(base, found[-1])
+    count = 0
+    for rel in walk(src):
+        target = os.path.join(ROOT, rel)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        if os.path.lexists(target):
+            os.remove(target)
+        if os.path.islink(os.path.join(src, rel)):
+            os.symlink(os.readlink(os.path.join(src, rel)), target)
+        else:
+            shutil.copy2(os.path.join(src, rel), target)
+        count += 1
+    print('restored=%d' % count)
+    print('from=%s' % src)
+
+
+def cmd_record(args):
+    """Depois do tools/cabinet-update.sh (o push de desenvolvimento) e no
+    build da ISO: o manifesto e o nivel do ultimo patch do updates/index
+    da ORIGEM (essa arvore ja tem todos)."""
+    count = record(os.path.abspath(args.src), ROOT)
+    last = 0
+    try:
+        with open(os.path.join(args.src, 'updates', 'index'), encoding='utf-8') as f:
+            for line in f:
+                if line[:1].isdigit():
+                    last = max(last, int(line.split('\t', 1)[0]))
+    except OSError:
+        pass
+    write_level(max(last, read_level()))
+    print('manifest=%d' % count)
+    print('level=%d' % read_level())
+
+
+def main():
+    global ROOT, STATE, LEVEL
+    p = argparse.ArgumentParser(prog='fliperos-update')
+    sub = p.add_subparsers(dest='cmd', required=True)
+    sub.add_parser('level').set_defaults(func=cmd_level)
+    sub.add_parser('check').set_defaults(func=cmd_check)
+    for name, func in (('plan', cmd_plan), ('apply', cmd_apply)):
+        s = sub.add_parser(name)
+        s.add_argument('--progress', action='store_true')
+        s.add_argument('--result')
+        s.set_defaults(func=func)
+    s = sub.add_parser('restore')
+    s.add_argument('n', type=int)
+    s.set_defaults(func=cmd_restore)
+    s = sub.add_parser('record')
+    s.add_argument('src')
+    s.add_argument('--root')
+    s.set_defaults(func=cmd_record)
+    args = p.parse_args()
+    if getattr(args, 'root', None):
+        # Outra raiz (o chroot do build): o manifesto e o nivel ficam nela.
+        ROOT = args.root
+        STATE = os.path.join(ROOT, STATE.lstrip('/'))
+        LEVEL = os.path.join(ROOT, LEVEL.lstrip('/'))
+    try:
+        args.func(args)
+    except Fail as e:
+        log('error: %s' % e)
+        if getattr(args, 'progress', False):
+            print('@fail FliperOS update|%s' % e, flush=True)
+        sys.exit('fliperos-update: %s' % e)
+
+
+if __name__ == '__main__':
+    main()

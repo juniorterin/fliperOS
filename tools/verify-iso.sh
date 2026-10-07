@@ -295,6 +295,20 @@ grep -E 'etc/systemd/system/transmission-daemon.service ->' "$work/links.txt" | 
   || fail "the stock transmission-daemon.service is not masked"
 echo "Downloader: fliperos-downloader, the default magnet links, fliperos-transmission.service and transmission-daemon (stock unit masked)"
 
+# ── Updates sem ISO nova: o programa, o manifesto e o nivel ───
+unsquashfs -cat "$work/filesystem.squashfs" opt/fliperos/bin/fliperos-update > "$work/f" \
+  || fail "ausente: /opt/fliperos/bin/fliperos-update"
+cmp -s "$src/config/fliperos-update" "$work/f" || fail "fliperos-update differs from the repository"
+unsquashfs -cat "$work/filesystem.squashfs" var/lib/fliperos/update/manifest > "$work/manifest" \
+  || fail "ausente: /var/lib/fliperos/update/manifest"
+grep -q $'^usr/local/lib/fliperos-setup/fliperos-setup\t' "$work/manifest" \
+  || fail "the update manifest does not have the setup"
+level=$(unsquashfs -cat "$work/filesystem.squashfs" etc/fliperos/patch-level) || fail "ausente: /etc/fliperos/patch-level"
+expected=$(awk -F'\t' '/^[0-9]/ { n = $1 } END { print n + 0 }' "$src/updates/index")
+[[ $level == "$expected" ]] || fail "patch-level $level (the updates/index has $expected)"
+grep -q 'update_pending' "$src/config/fliperos-tty1" || fail "fliperos-tty1 does not check for updates"
+echo "Updates: fliperos-update, manifest ($(wc -l < "$work/manifest") files) and level $level"
+
 # ── Terminal: zsh com Oh My Zsh e o tema Dracula ──────────────
 for path in usr/bin/zsh usr/local/share/oh-my-zsh/oh-my-zsh.sh \
   usr/local/share/oh-my-zsh/custom/themes/dracula.zsh-theme \

@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
+        "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "patches", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -2067,6 +2067,66 @@ class RomCleanerTests(Base):
         kv = (state / "filter.kv").read_text()
         self.assertIn("target=groovymame\n", kv)
         self.assertIn("preset=cabinet\n", kv)
+
+    def update_screen(self, check, plan, apply_rc=0, script=""):
+        calls = self.env.dir / "upd.calls"
+        self.env.stub("fliperos-update", """
+            echo "$*" >> %s
+            out=""
+            for a in "$@"; do [[ $prev == --result ]] && out=$a; prev=$a; done
+            case $1 in
+              check) printf "%%b" "%s" ;;
+              plan) printf "%%b" "%s" > "$out" ;;
+              apply) printf 'applied\\t1\\tno\\t/b/0001\\tFix\\nlevel=1\\n' > "$out"; exit %d ;;
+            esac
+        """ % (calls, check.replace("\t", "\\t").replace("\n", "\\n"),
+               plan.replace("\t", "\\t").replace("\n", "\\n"), apply_rc))
+        r = self.env.run("""
+            source %s/lib/ui.sh
+            source %s/screens/progress.sh
+            source %s/screens/patches.sh
+            ui_msg() { printf 'msg:%%s\\n' "$*"; }
+            ui_yesno() { return 1; }
+            ui_pager() { echo "pager:$(cat "$2")"; }
+            run_with_progress() { shift 2; "$@" > /dev/null; }
+        """ % (SETUP, SETUP, SETUP) + script, dict(self.vars, PATCH_BIN=str(self.env.bin / "fliperos-update")))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout + r.stderr, calls.read_text() if calls.exists() else ""
+
+    def test_boot_update_screen(self):
+        # Sem update pendente: nenhuma tela.
+        out, calls = self.update_screen("", "", script="ui_menu() { echo menu >&2; }; screen_update_check")
+        self.assertNotIn("menu", out)
+        self.assertEqual(calls, "check\n")
+        # Com um: os titulos, os arquivos mudados aqui e "Agora nao".
+        plan = "pending=2\nchanged=9\nexact=yes\n" + "".join("local\t/etc/f%d\n" % i for i in range(8))
+        out, calls = self.update_screen("1\tno\tFix menu\n2\tyes\tNew core\n", plan, script="""
+            ui_menu() {
+              printf 'text:%%s\\n' "$2" >&2
+              printf 'item:%%s\\n' "${@:4}" >&2
+              echo x >> "$PATCH_BACKUPS.menus"
+              [[ $(wc -l < "$PATCH_BACKUPS.menus") == 1 ]] && echo files || echo later
+            }
+            PATCH_BACKUPS=%s/backups
+            screen_update_check
+        """ % self.env.dir)
+        self.assertIn("2 part(s), applied in order", out)
+        self.assertIn("  1. Fix menu", out)
+        self.assertIn("  /etc/f5", out)
+        self.assertNotIn("  /etc/f6\n", out.split("pager:")[0])
+        self.assertIn("...and 2 more (View the files)", out)
+        self.assertIn("pager:/etc/f0", out)
+        self.assertIn("item:later|Not now (asks again at the next boot)", out)
+        self.assertNotIn("apply", calls)
+        # Aplicar: o update roda e diz como ficou.
+        out, calls = self.update_screen("1\tno\tFix menu\n", "pending=1\nchanged=0\nexact=yes\n",
+                                        script='ui_menu() { echo "$2" >&2; echo apply; }; screen_update_check')
+        self.assertIn("No file changed on this machine is replaced.", out)
+        self.assertIn("apply --progress --result", calls)
+        self.assertIn("msg:FliperOS update FliperOS is up to date (update 1).", out)
+        out, _ = self.update_screen("1\tno\tFix\n", "pending=1\n", apply_rc=1,
+                                    script="ui_menu() { echo apply; }; screen_update_check")
+        self.assertIn("The update did not finish.", out)
 
     def test_downloader_magnet_comes_filled_with_the_image_link(self):
         # Os links da imagem vem preenchidos: Enter usa o de cada tipo.

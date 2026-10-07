@@ -1,0 +1,3 @@
+# Updates do FliperOS (config/fliperos-update), um por linha, em ordem:
+# N<TAB>commit<TAB>treehash<TAB>reboot (yes/no)<TAB>titulo
+# Nao edite a mao: tools/make-update.sh acrescenta a linha do commit atual.

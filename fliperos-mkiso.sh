@@ -1427,6 +1427,12 @@ create_squashfs() {
   # ao apt do chroot; na imagem o NetworkManager o escreve com o DNS do DHCP
   # (fliperos-rootfs.sh).
   printf '# Written by NetworkManager with the DNS from the network.\n' > "$CHROOT_DIR/etc/resolv.conf"
+  # Os updates sem ISO nova (config/fliperos-update): o manifesto do que o
+  # FliperOS instalou e o nivel do ultimo update do updates/index, que esta
+  # imagem ja traz. Uma configuracao mudada depois e o que nao bate com ele.
+  python3 "$(dirname "$(realpath "$0")")/config/fliperos-update" record "$(dirname "$(realpath "$0")")" \
+    --root "$CHROOT_DIR" >> "$LOG_FILE" 2>&1 || err "fliperos-update record failed (see $LOG_FILE)"
+  ok "Update manifest and level $(cat "$CHROOT_DIR/etc/fliperos/patch-level")"
   mkdir -p "$ISO_DIR/live"
   rm -f "$ISO_DIR/live/filesystem.squashfs"
   # xz com o filtro x86 e blocos de 1 MiB: uns 15% menor que o zstd, para a
