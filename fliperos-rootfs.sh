@@ -546,9 +546,29 @@ fi
 # fliperos-setup sem senha tambem cobre o --session-start/--session-end que
 # o fliperos-session chama em volta do launcher (governador da CPU).
 cat > "$root/etc/sudoers.d/fliperos-setup" << 'EOF'
-fliperos ALL=(root) NOPASSWD: /usr/local/bin/fliperos-setup, /usr/bin/setterm
+fliperos ALL=(root) NOPASSWD: /usr/local/bin/fliperos-setup, /usr/bin/setterm, /usr/bin/plymouth quit
 EOF
 chmod 440 "$root/etc/sudoers.d/fliperos-setup"
+
+# Splash ate o FliperOS ter o que mostrar: quem tira o Plymouth e o
+# fliperos-tty1, logo antes do launcher, do menu ou do aviso de update. O
+# plymouth-quit do Ubuntu o tirava ao liberar os logins, e o login e a
+# espera da rede do update ficavam ~16 s com a tela preta. Ele passa a ser
+# a rede de seguranca (tira o splash 90 s depois, se nada o tirou), e o
+# plymouth-quit-wait nao espera mais: o getty do tty1 e ordenado depois dele.
+mkdir -p "$root/etc/systemd/system/plymouth-quit.service.d" \
+  "$root/etc/systemd/system/plymouth-quit-wait.service.d"
+cat > "$root/etc/systemd/system/plymouth-quit.service.d/fliperos.conf" << 'EOF'
+[Service]
+Type=exec
+ExecStart=
+ExecStart=-/bin/sh -c 'sleep 90; exec /usr/bin/plymouth quit'
+EOF
+cat > "$root/etc/systemd/system/plymouth-quit-wait.service.d/fliperos.conf" << 'EOF'
+[Service]
+ExecStart=
+ExecStart=/bin/true
+EOF
 rm -f "$root/etc/sudoers.d/fliperos-installer"
 
 # MOTD: ao entrar no shell, como abrir o menu (config/fliperos-motd, chamado

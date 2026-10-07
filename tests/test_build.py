@@ -415,17 +415,21 @@ class ImageTests(unittest.TestCase):
         self.assertIn('Exec=sudo /usr/local/bin/fliperos-setup', desktop)
         self.assertIn('Terminal=true', desktop)
 
-    def tty1(self, installed, setup_codes, requests, *args):
+    def tty1(self, installed, setup_codes, requests, *args, splash=False, firstboot=True):
         """Roda o config/fliperos-tty1 com sudo e fliperos-session falsos.
         setup_codes: status de cada "fliperos-setup --menu"; requests: o
-        pedido gravado antes de cada um. Devolve as chamadas, em ordem."""
+        pedido gravado antes de cada um; splash: o Plymouth do boot no ar.
+        Devolve as chamadas, em ordem."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             (tmp / 'bin').mkdir()
             (tmp / 'etc').mkdir()
             if installed:
                 (tmp / 'etc/installed').write_text('')
-                (tmp / 'etc/firstboot').write_text('')
+                if firstboot:
+                    (tmp / 'etc/firstboot').write_text('')
+            if splash:
+                (tmp / 'plymouth.pid').write_text('1\n')
             log = tmp / 'calls'
             codes = ' '.join(str(c) for c in setup_codes)
             reqs = ' '.join(requests)
@@ -440,7 +444,8 @@ class ImageTests(unittest.TestCase):
                 (tmp / 'bin' / f).chmod(0o755)
             env = dict(os.environ, PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']),
                        FLIPEROS_ETC=str(tmp / 'etc'), FLIPEROS_BIN=str(tmp / 'bin'),
-                       FLIPEROS_LAUNCH_REQUEST=str(tmp / 'request'))
+                       FLIPEROS_LAUNCH_REQUEST=str(tmp / 'request'),
+                       FLIPEROS_PLYMOUTH_PID=str(tmp / 'plymouth.pid'))
             subprocess.run(['bash', str(ROOT / 'config/fliperos-tty1')] + list(args),
                            env=env, check=True, timeout=30)
             return [line.strip() for line in log.read_text().splitlines()]
@@ -453,6 +458,26 @@ class ImageTests(unittest.TestCase):
                                  'session', 'sudo /usr/local/bin/fliperos-setup --menu'])
         calls = self.tty1(False, [0], ['-'])
         self.assertEqual(calls[1:], ['sudo /usr/local/bin/fliperos-setup --menu'])
+
+    def test_boot_splash_stays_until_something_is_on_screen(self):
+        # O plymouth-quit do Ubuntu tirava o splash ao liberar os logins, e o
+        # login e a espera da rede do update ficavam com a tela preta: quem o
+        # tira e o fliperos-tty1, logo antes do que aparece.
+        quit = 'sudo -n /usr/bin/plymouth quit'
+        calls = self.tty1(True, [0], ['-'], splash=True)
+        self.assertEqual(calls[1:3], [quit, 'sudo /usr/local/bin/fliperos-setup --first-boot'])
+        calls = self.tty1(True, [0], ['-'], splash=True, firstboot=False)
+        self.assertEqual(calls[1:3], [quit, 'session'])
+        calls = self.tty1(False, [0], ['-'], '--menu', splash=True)
+        self.assertEqual(calls, [quit, 'sudo /usr/local/bin/fliperos-setup --menu'])
+        self.assertNotIn(quit, self.tty1(True, [0], ['-']))
+        self.assertIn('NOPASSWD: /usr/local/bin/fliperos-setup, /usr/bin/setterm, /usr/bin/plymouth quit\n',
+                      ROOTFS)
+        quit_unit = ROOTFS.split('plymouth-quit.service.d/fliperos.conf" << \'EOF\'')[1].split('\nEOF')[0]
+        self.assertIn('Type=exec', quit_unit)
+        self.assertIn("ExecStart=\nExecStart=-/bin/sh -c 'sleep 90; exec /usr/bin/plymouth quit'", quit_unit)
+        wait_unit = ROOTFS.split('plymouth-quit-wait.service.d/fliperos.conf" << \'EOF\'')[1].split('\nEOF')[0]
+        self.assertIn('ExecStart=\nExecStart=/bin/true', wait_unit)
 
     def test_menu_opens_the_requested_launcher_outside_the_setup(self):
         # O X aberto de dentro do setup (pty do sudo) falhava no gabinete com
