@@ -3008,6 +3008,91 @@ class EscQuitTests(unittest.TestCase):
             self.assertFalse((tmp / 'kms').exists())
 
 
+class PanningTests(unittest.TestCase):
+    """config/fliperos-panning: o desktop cresce (panning do XRandR) para
+    caber a janela maior que a tela."""
+    VERBOSE = ('Screen 0: minimum 320 x 200, current 640 x 480, maximum 16384 x 16384\n'
+               'HDMI-1 disconnected primary (normal left inverted right x axis y axis)\n'
+               'VGA-1 connected %s (0x3c9) %s (normal left inverted right x axis y axis) 0mm x 0mm\n'
+               '\tPanning:    %s\n'
+               '  320x240 (0x44)  6.514MHz -HSync -VSync +preferred\n'
+               '        h: width   320 start  336 end  368 total  416 skew    0 clock  15.66KHz\n'
+               '        v: height  240 start  243 end  246 total  261           clock  59.99Hz\n'
+               '  fliperos-640x480@60 (0x3c9) 13.0MHz -HSync -VSync Interlace *current\n'
+               '        h: width   640 start  664 end  728 total  832 skew    0 clock  15.65KHz\n'
+               '        v: height  480 start  484 end  490 total  523           clock  59.92Hz\n')
+
+    def run_once(self, windows, panning='640x480+0+0', rotation='normal'):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'bin').mkdir()
+            (tmp / 'verbose').write_text(self.VERBOSE % (panning.split('+')[0] + '+0+0', rotation, panning))
+            ids = []
+            for i, (wtype, state, minsize, size) in enumerate(windows):
+                wid = '0x%x' % (i + 1)
+                ids.append(wid)
+                props = '_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_%s\n' % wtype
+                props += '_NET_WM_STATE(ATOM) = %s\n' % state
+                props += 'WM_NORMAL_HINTS(WM_SIZE_HINTS):\n'
+                if minsize:
+                    props += '\t\tprogram specified minimum size: %d by %d\n' % minsize
+                props += '_NET_FRAME_EXTENTS(CARDINAL) = 1, 1, 24, 1\n'
+                (tmp / ('%s.props' % wid)).write_text(props)
+                (tmp / ('%s.geo' % wid)).write_text('  Width: %d\n  Height: %d\n' % size)
+            (tmp / 'ids').write_text(', '.join(ids))
+            fakes = {
+                'xrandr': 'case $1 in --verbose) cat "$FAKE/verbose" ;; *) echo "$*" >> "$FAKE/log" ;; esac\n',
+                'xprop': 'if [[ $1 == -root ]]; then echo "_NET_CLIENT_LIST(WINDOW): window id # $(cat "$FAKE/ids")"\n'
+                         'else cat "$FAKE/$2.props"; fi\n',
+                'xwininfo': 'cat "$FAKE/$2.geo"\n',
+            }
+            for name, body in fakes.items():
+                (tmp / 'bin' / name).write_text('#!/bin/bash\n' + body)
+                (tmp / 'bin' / name).chmod(0o755)
+            env = dict(os.environ, FAKE=str(tmp), PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']))
+            run = subprocess.run(['bash', str(ROOT / 'config/fliperos-panning'), '--once'], env=env,
+                                 capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            log = tmp / 'log'
+            return log.read_text().splitlines() if log.exists() else []
+
+    DESKTOP = ('DESKTOP', '', (640, 480), (640, 480))
+    PANEL = ('DOCK', '_NET_WM_STATE_SKIP_TASKBAR', (640, 26), (640, 26))
+
+    def test_grows_only_in_the_direction_that_is_missing(self):
+        # O Transmission maximizado: o tamanho minimo (846), nao o atual.
+        transmission = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (846, 195), (846, 431))
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, transmission]),
+                         ['--output VGA-1 --panning 848x480'])
+        # Um dialogo alto, sem tamanho minimo: o tamanho dele mais a moldura.
+        dialog = ('DIALOG', '', None, (420, 700))
+        self.assertEqual(self.run_once([self.DESKTOP, dialog]), ['--output VGA-1 --panning 640x725'])
+
+    def test_back_to_the_mode_and_no_loop(self):
+        # Com o desktop ja maior, as maximizadas cresceram junto: sem uma
+        # janela que precise, a area volta ao modo.
+        falkon = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (300, 75), (846, 431))
+        big_desktop = ('DESKTOP', '', (846, 480), (846, 480))
+        self.assertEqual(self.run_once([big_desktop, falkon], panning='846x480+0+0'),
+                         ['--output VGA-1 --panning 640x480'])
+        # Ja do tamanho certo: nada.
+        self.assertEqual(self.run_once([self.DESKTOP, falkon]), [])
+        # Minimizada nao conta.
+        hidden = ('NORMAL', '_NET_WM_STATE_HIDDEN', (900, 300), (900, 300))
+        self.assertEqual(self.run_once([self.DESKTOP, hidden]), [])
+
+    def test_limits_and_rotated_screen(self):
+        absurd = ('NORMAL', '', (9000, 300), (9000, 300))
+        self.assertEqual(self.run_once([absurd]), ['--output VGA-1 --panning 2048x480'])
+        wide = ('NORMAL', '', (900, 300), (900, 300))
+        self.assertEqual(self.run_once([wide], rotation='left'), [])
+
+    def test_started_with_the_desktop(self):
+        self.assertIn('fliperos-panning; do', ROOTFS)
+        lxde = (ROOT / 'config/fliperos-lxde').read_text()
+        self.assertLess(lxde.index('fliperos-panning'), lxde.index('exec startlxde'))
+
+
 def fightcade_package(path, files=None):
     """Um pacote como o do Fightcade para Linux: tudo dentro de Fightcade/."""
     files = files if files is not None else {

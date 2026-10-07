@@ -21,4 +21,8 @@ esac
 # Resolucao guardada pelo Screen Resolution (fliperos-resolution).
 /opt/fliperos/bin/fliperos-resolution --apply-saved > /dev/null 2>&1
 
+# Janela maior que a tela: o desktop cresce e rola com o mouse na borda
+# (config/fliperos-panning). Sai junto com o X.
+/opt/fliperos/bin/fliperos-panning < /dev/null > /dev/null 2>&1 &
+
 exec startlxde
