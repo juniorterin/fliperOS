@@ -148,8 +148,8 @@ romclean_visible() {
 
 # romclean_preset NOME [ALVO] imprime os parametros do preset (chave=valor
 # por linha): cabinet (painel de joystick, 2 jogadores e 6 botoes, uma versao
-# por jogo), working (tudo o que funciona), psx (so a placa do PlayStation,
-# como o romset do MAME 2010 que roda o 3D bem) e all (sem filtro). No
+# por jogo), working (tudo o que funciona, menos o mahjong), psx (so a placa
+# do PlayStation, como o romset do MAME 2010 que roda o 3D bem) e all (sem filtro). No
 # Flycast a emulacao que conta e a dele: o status do MAME nao filtra.
 romclean_preset() {
   local key
@@ -164,7 +164,8 @@ romclean_preset() {
     cabinet) ;;
     working)
       v[status]=working v[players]=0 v[buttons]=0 v[controls]=$(romclean_all controls) v[clones]=keep
-      v[mature]=yes v[genres]=$(romclean_all genres) v[bootlegs]=yes v[prototypes]=yes
+      v[mature]=yes v[bootlegs]=yes v[prototypes]=yes
+      v[genres]=$(romclean_options genres | cut -d'|' -f1 | grep -vx Mahjong | paste -sd, -)
       ;;
     psx) v[players]=0 v[buttons]=0 v[controls]=$(romclean_all controls) v[hardware]=psx ;;
     all)

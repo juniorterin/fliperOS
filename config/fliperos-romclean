@@ -200,7 +200,7 @@ GENRES_OFF = {
     'Board Game', 'Utilities', 'Calculator', 'Musical Instrument', 'Musical Instrument Accessory', 'Music Player',
     'Telephone', 'Printer', 'Player', 'Tablet', 'Watch', 'Medical Equipment', 'Digital Camera', 'Robot',
     'Road Indicator', 'Radio', 'Luna Park', 'Digital Simulator', 'TV Bundle', 'Computer Graphic Workstation',
-    'Non Arcade', 'Touchscreen', 'Bartop',
+    'Non Arcade', 'Touchscreen', 'Bartop', 'Mahjong',
 }
 MATURE = re.compile(r'\s*\*\s*Mature\s*\*\s*', re.I)
 
@@ -414,10 +414,13 @@ def file_version(path, pattern):
 
 
 def read_catver(path):
-    """{set: (genero, adulto)}: "Fighter / Versus * Mature *" -> (Fighter, True)."""
+    """{set: (genero, adulto)}: "Fighter / Versus * Mature *" -> (Fighter, True).
+    O mahjong vira genero proprio ("Tabletop / Mahjong" -> Mahjong), para sair
+    desmarcado sem levar junto o resto do Tabletop."""
     out = {}
     for name, value in read_ini(path, 'category').items():
-        genre = MATURE.sub('', value.split(' / ')[0]).strip()
+        parts = MATURE.sub(' ', value).split(' / ')
+        genre = 'Mahjong' if parts[1:2] and parts[1].strip().startswith('Mahjong') else parts[0].strip()
         out[name] = (genre or 'Unknown', bool(MATURE.search(value)))
     return out
 

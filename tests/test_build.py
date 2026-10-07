@@ -1480,6 +1480,8 @@ class RomCleanTests(unittest.TestCase):
             self.assertIn(name, rest, name)
         self.assertIn('broken.zip', self.scan('--catver', catver, '--no-mature')[2])
         self.assertIn('broken.zip', self.scan('--catver', catver, '--only', 'mature')[1])
+        self.assertIn('broken.zip', self.scan('--catver', catver, '--categories', 'Mahjong')[1])
+        self.assertIn('broken.zip', self.scan('--catver', catver, '--categories', 'Tabletop')[2])
         # nplayers.ini: dois ao mesmo tempo, um de cada vez, um so, ou nao diz.
         _, move, rest = self.scan('--nplayers', nplayers, '--play-modes', 'sim')
         self.assertEqual([f for f in move if f in ('mslug.zip', 'sfa2.zip', 'xmen6p.zip', '1942.zip', 'cent.zip',
@@ -1503,9 +1505,9 @@ class RomCleanTests(unittest.TestCase):
         lines = out.splitlines()
         self.assertEqual(lines[0], '# catver\t0.289')
         # Os generos de jogo primeiro (do mais comum ao mais raro), marcados;
-        # BIOS, pinball e console depois, desmarcados.
+        # BIOS, pinball, console e o mahjong (fora do Tabletop) depois, desmarcados.
         self.assertEqual(lines[1:8], ['genre\tFighter\t2\t1', 'genre\tPlatform\t1\t1', 'genre\tShooter\t1\t1',
-                                      'genre\tTabletop\t1\t1', 'genre\tArcade\t1\t0', 'genre\tGame Console\t1\t0',
+                                      'genre\tArcade\t1\t0', 'genre\tGame Console\t1\t0', 'genre\tMahjong\t1\t0',
                                       'genre\tSystem\t1\t0'])
         self.assertEqual(lines[8:], ['# nplayers\t0.278', '# controls\t0.141.1'])
         self.assertEqual(self.romclean('options'), '')
