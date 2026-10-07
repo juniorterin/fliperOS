@@ -77,9 +77,9 @@ const enUS = {
       },
       {
         id: 'network',
-        title: 'Network ready',
-        text: 'The roms, bios, media and config folders live in your home folder and are shared over the network with Samba. Copy games from any PC to \\\\fliperos\\roms.',
-        points: ['roms', 'bios', 'media', 'config'],
+        title: 'Open over the network',
+        text: 'The roms, bios, media and config folders are shared with Samba: copy games from any PC to \\\\fliperos\\roms. SSH is on from the first boot, so you can hand the cabinet to an AI assistant (Claude Code, Cursor, Codex) and have it configure the whole system the way you want.',
+        points: ['Samba', 'SSH', 'roms', 'bios', 'media', 'config'],
       },
     ],
   },

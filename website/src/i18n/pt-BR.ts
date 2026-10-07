@@ -79,9 +79,9 @@ const ptBR: Messages = {
       },
       {
         id: 'network',
-        title: 'Pronto para rede',
-        text: 'As pastas roms, bios, media e config ficam na sua pasta pessoal e são compartilhadas na rede via Samba. Copie jogos de qualquer PC para \\\\fliperos\\roms.',
-        points: ['roms', 'bios', 'media', 'config'],
+        title: 'Aberto pela rede',
+        text: 'As pastas roms, bios, media e config são compartilhadas via Samba: copie jogos de qualquer PC para \\\\fliperos\\roms. O SSH vem ligado desde o primeiro boot, então você pode entregar o gabinete a um assistente de IA (Claude Code, Cursor, Codex) e deixar que ele configure o sistema inteiro do jeito que você quiser.',
+        points: ['Samba', 'SSH', 'roms', 'bios', 'media', 'config'],
       },
     ],
   },
