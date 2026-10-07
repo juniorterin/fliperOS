@@ -3009,8 +3009,8 @@ class EscQuitTests(unittest.TestCase):
 
 
 class PanningTests(unittest.TestCase):
-    """config/fliperos-panning: o desktop cresce (panning do XRandR) para
-    caber a janela maior que a tela."""
+    """config/fliperos-panning: o desktop fica mais alto (panning do XRandR)
+    para caber a janela mais alta que a tela, mais a barra de tarefas."""
     VERBOSE = ('Screen 0: minimum 320 x 200, current 640 x 480, maximum 16384 x 16384\n'
                'HDMI-1 disconnected primary (normal left inverted right x axis y axis)\n'
                'VGA-1 connected %s (0x3c9) %s (normal left inverted right x axis y axis) 0mm x 0mm\n'
@@ -3037,6 +3037,8 @@ class PanningTests(unittest.TestCase):
                 if minsize:
                     props += '\t\tprogram specified minimum size: %d by %d\n' % minsize
                 props += '_NET_FRAME_EXTENTS(CARDINAL) = 1, 1, 24, 1\n'
+                if wtype == 'DOCK':
+                    props += '_NET_WM_STRUT_PARTIAL(CARDINAL) = 0, 0, 0, %d, 0, 0, 0, 0, 0, 0, 0, 639\n' % size[1]
                 (tmp / ('%s.props' % wid)).write_text(props)
                 (tmp / ('%s.geo' % wid)).write_text('  Width: %d\n  Height: %d\n' % size)
             (tmp / 'ids').write_text(', '.join(ids))
@@ -3059,42 +3061,48 @@ class PanningTests(unittest.TestCase):
     DESKTOP = ('DESKTOP', '', (640, 480), (640, 480))
     PANEL = ('DOCK', '_NET_WM_STATE_SKIP_TASKBAR', (640, 26), (640, 26))
 
-    def test_grows_only_in_the_direction_that_is_missing(self):
-        # O Transmission maximizado: o tamanho minimo (846), nao o atual.
-        transmission = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (846, 195), (846, 431))
-        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, transmission]),
-                         ['--output VGA-1 --panning 848x480'])
-        # Um dialogo alto, sem tamanho minimo: o tamanho dele mais a moldura.
+    def test_only_the_height_grows_with_the_panel_counted(self):
+        # Um dialogo alto de qualquer programa: a altura dele, a moldura
+        # (24 + 1) e a barra de tarefas (26); a largura fica a do modo.
         dialog = ('DIALOG', '', None, (420, 700))
-        self.assertEqual(self.run_once([self.DESKTOP, dialog]), ['--output VGA-1 --panning 640x725'])
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, dialog]), ['--output VGA-1 --panning 640x751'])
+        # Cabe na tela, mas nao acima da barra: os botoes ficariam atras dela.
+        almost = ('NORMAL', '', None, (600, 440))
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, almost]), ['--output VGA-1 --panning 640x491'])
+        self.assertEqual(self.run_once([self.DESKTOP, almost]), [])
+        # Mais larga que a tela (o Transmission maximizado): nada.
+        transmission = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (846, 195), (846, 431))
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, transmission]), [])
 
     def test_back_to_the_mode_and_no_loop(self):
-        # Com o desktop ja maior, as maximizadas cresceram junto: sem uma
-        # janela que precise, a area volta ao modo.
-        falkon = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (300, 75), (846, 431))
-        big_desktop = ('DESKTOP', '', (846, 480), (846, 480))
-        self.assertEqual(self.run_once([big_desktop, falkon], panning='846x480+0+0'),
+        # Com o desktop ja maior, as maximizadas cresceram junto: conta a
+        # altura minima delas, e sem uma janela que precise a area volta.
+        falkon = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (300, 75), (640, 700))
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, falkon], panning='640x751+0+0'),
+                         ['--output VGA-1 --panning 640x480'])
+        # A largura de uma versao antiga (846) volta a do modo.
+        self.assertEqual(self.run_once([self.DESKTOP, falkon], panning='846x480+0+0'),
                          ['--output VGA-1 --panning 640x480'])
         # Ja do tamanho certo: nada.
-        self.assertEqual(self.run_once([self.DESKTOP, falkon]), [])
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, falkon]), [])
         # Minimizada nao conta.
-        hidden = ('NORMAL', '_NET_WM_STATE_HIDDEN', (900, 300), (900, 300))
+        hidden = ('NORMAL', '_NET_WM_STATE_HIDDEN', (300, 900), (300, 900))
         self.assertEqual(self.run_once([self.DESKTOP, hidden]), [])
 
     def test_only_grows_while_on(self):
-        # Cada troca volta a imagem ao canto: ligado, uma janela que encolhe
-        # 2 px (perdeu a moldura) nao mexe; uma maior cresce so o que falta.
-        huge = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (1038, 760), (1038, 760))
-        self.assertEqual(self.run_once([self.DESKTOP, huge], panning='1040x785+0+0'), [])
-        wider = ('NORMAL', '', (1200, 300), (1200, 300))
-        self.assertEqual(self.run_once([self.DESKTOP, huge, wider], panning='1040x785+0+0'),
-                         ['--output VGA-1 --panning 1202x785'])
+        # Cada troca volta a imagem ao topo: ligada, uma janela que encolhe
+        # 2 px (perdeu a moldura) nao mexe; uma mais alta cresce.
+        huge = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (600, 758), (600, 758))
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, huge], panning='640x811+0+0'), [])
+        taller = ('NORMAL', '', (300, 900), (300, 900))
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, huge, taller], panning='640x811+0+0'),
+                         ['--output VGA-1 --panning 640x951'])
 
     def test_limits_and_rotated_screen(self):
-        absurd = ('NORMAL', '', (9000, 300), (9000, 300))
-        self.assertEqual(self.run_once([absurd]), ['--output VGA-1 --panning 2048x480'])
-        wide = ('NORMAL', '', (900, 300), (900, 300))
-        self.assertEqual(self.run_once([wide], rotation='left'), [])
+        absurd = ('NORMAL', '', (300, 9000), (300, 9000))
+        self.assertEqual(self.run_once([absurd]), ['--output VGA-1 --panning 640x2048'])
+        tall = ('NORMAL', '', (300, 900), (300, 900))
+        self.assertEqual(self.run_once([tall], rotation='left'), [])
 
     def test_started_with_the_desktop(self):
         self.assertIn('fliperos-panning; do', ROOTFS)
