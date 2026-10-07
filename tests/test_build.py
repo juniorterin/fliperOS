@@ -62,6 +62,33 @@ def cmdline(body):
     return re.search(r'cmdline: (.*)', body).group(1).split()
 
 
+def shell_scripts():
+    skip = {'.git', 'node_modules', '.next', 'output', 'website', 'build', 'work'}
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = sorted(d for d in dirnames if d not in skip)
+        for name in sorted(filenames):
+            path = Path(dirpath) / name
+            if path.suffix == '.sh':
+                yield path
+            elif not path.suffix and path.is_file():
+                with path.open('rb') as f:
+                    first = f.readline(100)
+                if re.match(rb'#!.*\b(ba)?sh\b', first):
+                    yield path
+
+
+class ShellSyntaxTests(unittest.TestCase):
+    # Uma aspa a mais numa mensagem traduzida (network\'s dentro de aspas
+    # simples) só apareceu no Actions, depois de subir o container do build.
+    def test_bash_n(self):
+        scripts = list(shell_scripts())
+        self.assertIn(ROOT / 'fliperos-mkiso.sh', scripts)
+        for path in scripts:
+            with self.subTest(script=str(path.relative_to(ROOT))):
+                r = subprocess.run(['bash', '-n', str(path)], capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, r.stderr)
+
+
 class VideoCheckTests(unittest.TestCase):
     def test_progressive(self):
         result = video.timing(6510, 416, 261)
