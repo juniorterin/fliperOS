@@ -2125,7 +2125,9 @@ class DownloaderTests(unittest.TestCase):
                 if method == 'torrent-add':
                     h = re.search(r'btih:([0-9a-f]+)', a['filename']).group(1)
                     name, files = specs[h]
-                    torrents[h] = {'name': name, 'dir': a['download-dir'], 'status': 0,
+                    # Como o Transmission: pausado, nem procura a lista de arquivos.
+                    torrents[h] = {'name': name, 'dir': a['download-dir'], 'status': 0 if a['paused'] else 4,
+                                   'meta': not a['paused'],
                                    'files': [{'name': f, 'length': n, 'done': 0, 'wanted': True}
                                              for f, n in files]}
                     out = {'torrent-added': {'hashString': h, 'id': 1, 'name': name}}
@@ -2137,9 +2139,9 @@ class DownloaderTests(unittest.TestCase):
                             continue
                         wanted = [f for f in t['files'] if f['wanted']]
                         found.append({
-                            'hashString': h, 'name': t['name'], 'metadataPercentComplete': 1,
+                            'hashString': h, 'name': t['name'], 'metadataPercentComplete': int(t['meta']),
                             'files': [{'name': f['name'], 'length': f['length'], 'bytesCompleted': f['done']}
-                                      for f in t['files']],
+                                      for f in t['files']] if t['meta'] else [],
                             'fileStats': [{'bytesCompleted': f['done'], 'wanted': f['wanted']} for f in t['files']],
                             'peersConnected': 3, 'error': 0, 'errorString': '', 'status': t['status'],
                             'sizeWhenDone': sum(f['length'] for f in wanted),
@@ -2153,7 +2155,10 @@ class DownloaderTests(unittest.TestCase):
                                 torrents[h]['files'][i]['wanted'] = flag
                 elif method == 'torrent-start':
                     for h in a['ids']:
-                        torrents[h]['status'] = 4
+                        torrents[h].update(status=4, meta=True)
+                elif method == 'torrent-stop':
+                    for h in a['ids']:
+                        torrents[h]['status'] = 0
                 elif method == 'torrent-remove':
                     for h in a['ids']:
                         torrents.pop(h, None)
@@ -2218,9 +2223,11 @@ class DownloaderTests(unittest.TestCase):
         self.dl('add', 'chds', 'magnet:?xt=urn:btih:%s' % self.CHDS)
         meta = json.loads((self.state / 'roms.json').read_text())
         self.assertEqual((meta['root'], meta['sets'], len(meta['files'])), ('MAME 0.289 ROMs', 4, 5))
-        # Adicionado pausado: nada baixa antes do filtro.
+        # Entra rodando (pausado nao acha peers) e, com a lista, para sem
+        # nenhum arquivo marcado: nada baixa antes do filtro.
+        self.assertTrue(all(not a['paused'] for m, a in self.calls if m == 'torrent-add'))
         self.assertTrue(all(t['status'] == 0 for t in self.torrents.values()))
-        self.assertTrue(all(a['paused'] for m, a in self.calls if m == 'torrent-add'))
+        self.assertFalse(any(f['wanted'] for t in self.torrents.values() for f in t['files']))
         # Um jogo que ja esta na pasta do emulador nao e baixado de novo.
         self.mame.mkdir(parents=True)
         (self.mame / 'pong.zip').write_bytes(b'p' * 10)

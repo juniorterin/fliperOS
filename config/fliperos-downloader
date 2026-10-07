@@ -4,7 +4,8 @@
 Baixa de um romset do MAME e de uma colecao de CHDs, cada um pelo seu link
 magnetico, so o que o filtro do MAME ROM Cleaner escolhe. O Transmission
 (transmission-daemon, servico fliperos-transmission, do usuario fliperos)
-faz o download; daqui ele recebe o link pausado, a lista de arquivos do
+faz o download; daqui ele recebe o link (parado sem nada marcado assim que
+a lista de arquivos chega, ver fetch_metadata), a lista de arquivos do
 torrent passa pelo fliperos-romclean (scan --names para as ROMs, chds
 --names --with para os CHDs dos jogos escolhidos) e so os arquivos do plano
 (da pasta do torrent onde estao os sets, na raiz ou numa subpasta)
@@ -307,17 +308,24 @@ def arrived(target, length):
 
 
 def fetch_metadata(rpc, kind, magnet, progress, timeout):
-    """Poe o link no Transmission (pausado) e espera a lista de arquivos."""
-    got = rpc.call('torrent-add', filename=magnet, paused=True, **{'download-dir': os.path.join(STAGING, kind)})
+    """Poe o link no Transmission e espera a lista de arquivos. Pausado, o
+    Transmission nem procura peers; por isso o link entra rodando e, assim
+    que a lista chega, todos os arquivos saem da lista do download e o
+    torrent para: nada baixa antes do filtro (cmd_start)."""
+    got = rpc.call('torrent-add', filename=magnet, paused=False, **{'download-dir': os.path.join(STAGING, kind)})
     added = got.get('torrent-added') or got.get('torrent-duplicate')
     if not added:
         raise OSError('Transmission did not take the magnet link')
     hash_ = added['hashString']
+    if 'torrent-duplicate' in got:
+        rpc.call('torrent-start', ids=[hash_])
     end = time.monotonic() + timeout
     while True:
         t = rpc.torrent(hash_, ['name', 'files', 'metadataPercentComplete', 'peersConnected',
                                 'error', 'errorString'])
         if t and t.get('files'):
+            rpc.call('torrent-set', ids=[hash_], **{'files-unwanted': list(range(len(t['files'])))})
+            rpc.call('torrent-stop', ids=[hash_])
             return hash_, t
         if time.monotonic() > end:
             rpc.remove(hash_)
@@ -325,7 +333,7 @@ def fetch_metadata(rpc, kind, magnet, progress, timeout):
         pct = int(90 * float((t or {}).get('metadataPercentComplete') or 0))
         say(progress, '@step %d Asking the peers for the file list (%d connected)'
             % (pct, (t or {}).get('peersConnected') or 0))
-        time.sleep(2)
+        time.sleep(0.5)
 
 
 # ?? Comandos ??????????????????????????????????????????????????????
