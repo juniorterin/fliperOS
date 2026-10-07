@@ -53,7 +53,7 @@ export function detectLocale(language: string | undefined | null): Locale {
 }
 
 // Accept-Language em ordem de preferência ("pt-BR,pt;q=0.9,en;q=0.8"):
-// vence o primeiro idioma suportado, e sem nenhum, o padr?o.
+// vence o primeiro idioma suportado, e sem nenhum, o padrão.
 export function localeFromAcceptLanguage(header: string | null): Locale {
   const langs = (header ?? '')
     .split(',')
