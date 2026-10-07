@@ -1,4 +1,4 @@
-**FliperOS** is Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a **15 kHz kernel** (kernel.org 6.18 LTS + the D0023R patches, the same as GroovyArcade's `linux-15khz`), Switchres, emulators and frontends ready to play, and a setup menu made for the tube's screen.
+**FliperOS** is Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a **15 kHz kernel** (kernel.org 6.18 LTS + the D0023R patches, the same as GroovyArcade's `linux-15khz`), Switchres, emulators and frontends ready to play, the **GunCon 2 light gun** working out of the box (driver and calibration for the tube, see [Controls](Controls.md)), and a setup menu made for the tube's screen.
 
 The media is **installation-only** and follows the GroovyArcade flow: a boot menu with the frequency range, a spoken test of the video outputs, *Testing Results*, the **FliperOS Setup** menu and installation to the HD/SSD. On the installed system the same program becomes the setup menu that appears when the frontend closes. The screens belong to **`fliperos-setup`**, written in Bash with [Gum](https://github.com/charmbracelet/gum), with the **Dracula** theme and English text, designed for **640x480i**: 80x30 characters, nothing animated or blinking.
 
@@ -16,7 +16,7 @@ The media is **installation-only** and follows the GroovyArcade flow: a boot men
 | [ROMs, BIOS and artwork](ROMs.md) | The folders in `~` (`roms`, `bios`, `media`, `config`), the MAME ROM Cleaner, the CHD Cleaner, the free games |
 | [Scraper](Scraper.md) | Covers, screenshots, logos, videos and descriptions of the games, for every frontend |
 | [Adding games](Adding-games.md) | Step by step: games, real names and artwork in Attract-Mode Plus and ES-DE, emulator command lines in KMS or X11, adding a new emulator |
-| [Controls](Controls.md) | Each player's buttons, light gun and wheel, parallel port, USB quirks, how SDL sees each controller |
+| [Controls](Controls.md) | Each player's buttons, the GunCon 2 light gun (driver and calibration), wheel and pedals, parallel port, USB quirks, how SDL sees each controller |
 | [Desktop and theme](Desktop.md) | LXDE, the programs in the menu, changing the resolution, the Dracula theme |
 | [Latency](Latency.md) | The Standard and Low latency modes, what each tweak does, recommended hardware, how to measure |
 

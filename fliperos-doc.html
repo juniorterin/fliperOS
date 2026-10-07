@@ -9,18 +9,19 @@ table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1p
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </style><main><h1 id="fliperos-07">FliperOS 0.7</h1>
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen.</p>
-<p>In development: 0.7 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT. The full documentation is in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
+<p>In development: 0.7 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
 <h2 id="whats-included">What's included</h2>
 <ul>
 <li><strong>Video</strong>: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.</li>
 <li><strong>Emulators</strong>: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Model 2, Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup &gt; Extras.</li>
 <li><strong>Frontends</strong>: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus and Fightcade 2.</li>
+<li><strong>Light gun</strong>: GunCon 2 out of the box (driver via DKMS), calibrated for the tube in Setup &gt; Joysticks. Wheels too.</li>
 <li><strong>Setup</strong>: video, geometry, audio, network, scraper, ROM lists, MAME romset cleaning, controls and latency.</li>
 <li><strong>Folders</strong> <code>roms</code>, <code>bios</code>, <code>media</code> and <code>config</code> in <code>~</code> and over the network (Samba); LXDE desktop with an app store.</li>
-<li><strong>SSH</strong> on from the first boot (<code>ssh fliperos@fliperos.local</code>, password <code>fliperos</code>). Under the menus it's a regular Ubuntu: an AI assistant (Claude Code, Cursor, Codex) can configure it over SSH.</li>
+<li><strong>SSH</strong> on from the first boot (<code>ssh fliperos@fliperos.local</code>, password <code>fliperos</code>). Under the menus it's a regular Ubuntu, so an AI assistant can configure it over SSH.</li>
 </ul>
 <h2 id="install">Install</h2>
-<p>Each version's ISO is published in <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, along with what changed (<a href="CHANGELOG.md">CHANGELOG.md</a>).</p>
+<p>ISOs in <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>; what changed, in <a href="CHANGELOG.md">CHANGELOG.md</a>.</p>
 <ol>
 <li>Write the ISO <strong>byte for byte</strong> (balenaEtcher, Rufus in "DD Image mode" or <code>dd</code>; Rufus in its default mode and Ventoy don't work) and disable Secure Boot.</li>
 </ol>
@@ -43,7 +44,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <h2 id="documentation">Documentation</h2>
 <p><strong>Using it:</strong> <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Adding-games">Adding games</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a></p>
 <p><strong>Hacking on it:</strong> <a href="#Kernel-15-kHz">15 kHz kernel</a> · <a href="#Build-and-tests">Build and tests</a> · <a href="#Architecture">Architecture</a> · <a href="#Sources">Sources</a></p>
-<p>The pages live in <a href="docs/wiki"><code>docs/wiki</code></a> and go to the wiki with <code>bash tools/wiki-publish.sh</code>. <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> is everything in one file, for offline reading (<code>tools/render-docs.py</code>).</p>
+<p>The pages live in <a href="docs/wiki"><code>docs/wiki</code></a> and go to the wiki with <code>bash tools/wiki-publish.sh</code>. <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> is all of it in one file (<code>tools/render-docs.py</code>).</p>
 <h1 id="Install">Install</h1>
 <p>From the written media to the system on disk: writing the ISO, the boot menu, the video output test and the installation through <strong>FliperOS Setup</strong>.</p>
 <h2 id="writing-the-media">Writing the media</h2>
@@ -620,6 +621,14 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </ul>
 <h1 id="Controls">Controls</h1>
 <p>Controllers on FliperOS: what the Setup offers in <strong>Joysticks</strong> and <strong>Quirks</strong> and how the emulators see each controller. Using the controller in the Setup menus is covered in <a href="#Installed-system">Installed system</a>.</p>
+<h2 id="light-gun-guncon-2">Light gun (GunCon 2)</h2>
+<p>FliperOS plays light gun games on the tube with Namco's <strong>GunCon 2</strong> (the PlayStation 2 gun, USB <code>0b9a:016a</code>), with nothing to install. The gun reads the beam of the CRT, which is exactly the screen FliperOS is made for; on an LCD it doesn't aim. What ships with the system:</p>
+<ul>
+<li><strong>The driver.</strong> GunCon 2 has no driver in the mainline kernel. The build compiles <a href="https://github.com/beardypig/guncon2">beardypig/guncon2</a> through DKMS for the system's kernel and loads it at boot (<code>/etc/modules-load.d/fliperos-guncon2.conf</code>): plug the gun into USB and it shows up as an input device.</li>
+<li><strong>The calibration.</strong> The raw position the gun reports depends on the tube and on where the cabinet's gun sits, and evdev forgets the range on every reconnection. <strong>Setup &gt; Joysticks &gt; Calibrate GunCon 2</strong> measures it on your monitor once (below), and the udev rule <code>99-fliperos-input.rules</code> reapplies it (<code>fliperos-guncon2-calibrate</code>) every time the gun is plugged in.</li>
+<li><strong>The menus.</strong> The controller-as-keyboard of the Setup menus leaves light guns out, so aiming doesn't move through the menu.</li>
+<li><strong>The games.</strong> In the <a href="#ROMs">MAME ROM Cleaner</a>, tell it the cabinet has a <strong>Light gun</strong> among its controls, and the gun games of the romset are kept along with the others.</li>
+</ul>
 <h2 id="setup-joysticks">Setup &gt; Joysticks</h2>
 <p>Calibrators and the parallel port (<code>config/fliperos-calibrate</code>, <code>screens/joysticks.sh</code>):</p>
 <h3 id="button-mapping-all-emulators">Button mapping (all emulators)</h3>
