@@ -566,6 +566,13 @@ while ((gone < ${FIGHTCADE_QUIT_WAIT:-5})); do
     *fcadefbneo.exe* | *ggpofba-ng.exe*)
       want=$(cat "$native" 2> /dev/null)
       [[ $want == wait ]] && want=$current
+      # O modo do jogo quem poe e o Wine, na tela cheia: o emulador tira o
+      # formato do monitor da tela de agora, e com ela ja em 384x224 (quase
+      # 16:9) pediria 512x224.
+      if [[ -n $want ]]; then
+        current=$want
+        continue
+      fi
       if [[ -z $want ]]; then
         case $running in
           *fcadefbneo.exe*) want=$(table_mode fightcade-fbneo) ;;

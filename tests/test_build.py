@@ -3567,7 +3567,15 @@ class FightcadeTests(unittest.TestCase):
                     run = self.session(tmp, [self.CLIENT, self.CLIENT, match, match, self.CLIENT],
                                        FIGHTCADE_NATIVE='1', LC_ALL='pt_BR.UTF-8')
                     self.assertEqual(run.returncode, 0, run.stderr)
-                    self.assertIn('--output VGA-1 --mode %s' % mode, self.xrandr_log(tmp), game)
+                    log = self.xrandr_log(tmp)
+                    if mode == 'fliperos-320x240@60':
+                        self.assertIn('--output VGA-1 --mode %s' % mode, log, game)
+                    else:
+                        # O modo do jogo na lista; quem troca e o Wine, na tela
+                        # cheia (com a tela ja nele o emulador pediria 512x224).
+                        self.assertIn('--addmode VGA-1 %s' % mode, log, game)
+                        self.assertNotIn('--output VGA-1 --mode %s' % mode, log, game)
+                    self.assertEqual(log[-1], '--output VGA-1 --mode 0x4a', game)
                     self.assertIn('\r\n%s %s\r\n' % (key, arcaderes), ini.read_bytes().decode(), game)
                     # Solto de novo.
                     state = Path('/proc/%d/stat' % emulator.pid).read_text().split(') ')[1][0]
