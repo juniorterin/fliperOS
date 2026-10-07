@@ -12,7 +12,7 @@ The media is **installation-only** and follows the GroovyArcade flow: a boot men
 | [Installed system](Installed-system.md) | The boot, the default launcher, the Setup menu item by item (video, audio, network, debug, update) |
 | [Frontends](Frontends.md) | Choosing the boot frontend, the 240p themes for EmulationStation and Pegasus, the APT repository |
 | [Emulators](Emulators.md) | Each emulator and the video mode it opens in, GroovyMAME, RetroArch, running a program at 640x240, laserdisc, Model 2, Steam and GOG |
-| [Fightcade 2](Fightcade-2.md) | Online matches: download through the Setup, ROMs, the lobby and match modes, keys |
+| [Fightcade 2](Fightcade-2.md) | Online matches: download through the Setup, ROMs, the lobby, matches in each game's native resolution, keys |
 | [ROMs, BIOS and artwork](ROMs.md) | The folders in `~` (`roms`, `bios`, `media`, `config`), the MAME ROM Cleaner, the CHD Cleaner, the free games |
 | [Scraper](Scraper.md) | Covers, screenshots, logos, videos and descriptions of the games, for every frontend |
 | [Adding games](Adding-games.md) | Step by step: games, real names and artwork in Attract-Mode Plus and ES-DE, emulator command lines in KMS or X11, adding a new emulator |

@@ -9,7 +9,7 @@
 | OpenBOR | beat 'em ups | its own Xorg | 320x240 |
 | Supermodel | Sega Model 3 | its own Xorg | 640x240@57.524 at 15 kHz, 496x384 on the others |
 | Model 2 Emulator (Wine) | Sega Model 2 | its own Xorg | same |
-| Fightcade 2 (downloaded through the Setup) | online matches: FBNeo, SNES9x and FBA (Wine), Flycast | its own Xorg | the lobby at 640x480 (interlaced at 15 kHz); the matches at 320x240 (Wine) and 640x240 (Flycast) |
+| Fightcade 2 (downloaded through the Setup) | online matches: FBNeo, SNES9x and FBA (Wine), Flycast | its own Xorg | the lobby at 512x448 (interlaced at 15 kHz); the matches in the **game's native resolution**: each FBNeo/FBA game in its own mode (384x224 for CPS, via GroovyMAME and Switchres), SNES9x at 256x224, Flycast at 640x240 |
 | Steam, Heroic (GOG, Epic, Amazon), through Setup > Extras | PC games | inside the LXDE desktop | the desktop's |
 
 Dedicated pages: [Fightcade 2](Fightcade-2.md), [ROMs, BIOS and artwork](ROMs.md) (the folders in `~`) and [Controls](Controls.md) (buttons, SDL, calibration).

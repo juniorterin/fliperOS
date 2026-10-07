@@ -10,7 +10,7 @@ Em desenvolvimento: a 0.8.1 é testada no QEMU e num gabinete com CRT de 15 kHz.
 
 - **Vídeo**: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.
 - **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Model 2, Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Extras.
-- **Frontends**: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus e Fightcade 2.
+- **Frontends**: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus e Fightcade 2, cujas partidas online rodam na resolução nativa de cada jogo no tubo.
 - **Pistola de luz**: GunCon 2 pronta para usar (driver por DKMS), calibrada para o tubo no Setup > Joysticks. Volantes também.
 - **Setup**: vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência.
 - **Pastas** `roms`, `bios`, `media` e `config` em `~` e pela rede (Samba); desktop LXDE com loja de aplicativos.
