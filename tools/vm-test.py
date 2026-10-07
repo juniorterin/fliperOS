@@ -336,9 +336,10 @@ def dev(iso):
     try:
         guest.root_shell()
         push(guest, ['fliperos-setup', 'config', 'fliperos-rootfs.sh', 'fliperos-video-check.py',
-                     'tools/vm-fakepad.py'])
+                     'tools/vm-fakepad.py', 'updates'])
         assert guest.run('bash /tmp/repo/fliperos-rootfs.sh / > /tmp/rootfs.log 2>&1 || '
                          '{ tail /tmp/rootfs.log; false; }') == 0, 'fliperos-rootfs.sh falhou'
+        guest.run('python3 /tmp/repo/config/fliperos-update record /tmp/repo', 1800)
         guest.run('grep -o "<application title=.Screen Resolution.*" /home/fliperos/.config/openbox/lxde-rc.xml')
         guest.run('systemctl daemon-reload; systemctl restart fliperos-padkeys; sleep 2; '
                   'systemctl is-active fliperos-padkeys')
@@ -421,9 +422,12 @@ def site(iso):
     try:
         guest.root_shell()
         push(guest, ['fliperos-setup', 'config', 'fliperos-rootfs.sh', 'fliperos-video-check.py',
-                     'fliperos-limine-update.py'])
+                     'fliperos-limine-update.py', 'updates'])
         assert guest.run('bash /tmp/repo/fliperos-rootfs.sh / > /tmp/rootfs.log 2>&1 || '
                          '{ tail /tmp/rootfs.log; false; }', 1800) == 0, 'fliperos-rootfs.sh falhou'
+        # Com os arquivos de agora o disco ja esta no ultimo update: sem isso o
+        # aviso de update do boot tomaria o tty1 no lugar do menu.
+        guest.run('python3 /tmp/repo/config/fliperos-update record /tmp/repo', 1800)
         guest.run("sed -i -E 's/ video=[^ \"]*//g; s|^FLIPEROS_CMDLINE=\"(.*)\"$|FLIPEROS_CMDLINE=\"\\1 %s\"|' "
                   "/etc/default/fliperos-boot && grep FLIPEROS_CMDLINE /etc/default/fliperos-boot && "
                   "/usr/local/sbin/fliperos-limine-update" % SITE_VIDEO, 300)
