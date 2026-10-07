@@ -3927,6 +3927,63 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn("sed -i 's/^\\([[:space:]]*savedata\\.fullscreen = \\)0;/\\11;/' engine/openbor.c", body)
         self.assertLess(body.index("grep -q 'savedata.fullscreen = 1;'"), body.index('cmake -S . -B build'))
 
+    def test_openbor_3_for_the_old_paks(self):
+        # O 4 recusa os paks feitos para o 3.0 (sprites em GIF): o 3.0 build
+        # 6391 vem junto, no repo para os updates o levarem.
+        binary = (ROOT / 'config/openbor-legacy/OpenBOR-3.0').read_bytes()
+        self.assertEqual(binary[:4], b'\x7fELF')
+        self.assertIn(b'Build 6391', binary)
+        self.assertTrue((ROOT / 'config/openbor-legacy/LICENSE').is_file())
+        self.assertIn('config/openbor-legacy/OpenBOR-3.0 binary', (ROOT / '.gitattributes').read_text())
+        build = (ROOT / 'tools/build-openbor-legacy.sh').read_text()
+        self.assertIn('494708eb34e71d1afda237873907701c4ec3a569', build)   # tag v6391
+        self.assertIn('-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0', build)
+        self.assertIn("sed -i 's/^static int isFull = 0;/static int isFull = 1;/' sdl/menu.c", build)
+        body = MKISO.split('build_openbor_chroot() {')[1].split('\n}\n')[0]
+        self.assertIn('install -Dm755 "$src/config/fliperos-openbor" "$CHROOT_DIR/usr/local/bin/openbor"', body)
+        self.assertIn('"$CHROOT_DIR/usr/local/lib/openbor/OpenBOR-3.0"', body)
+        self.assertNotIn('cat > /usr/local/bin/openbor', body)
+        self.assertIn('libsdl2-gfx-1.0-0', body)
+        self.assertIn('install -Dm755 "$src/config/openbor-legacy/OpenBOR-3.0" "$root/usr/local/lib/openbor/OpenBOR-3.0"',
+                      ROOTFS)
+        self.assertIn('libsdl2-gfx-1.0-0', (ROOT / 'tools/cabinet-update.sh').read_text())
+
+    def test_openbor_falls_back_to_3_when_4_refuses_the_pak(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            games = tmp / 'openbor'
+            for d in ('Paks', 'Logs', 'ScreenShots'):
+                (games / d).mkdir(parents=True)
+            (games / 'Paks' / 'Old.PAK').write_bytes(b'')
+            calls = tmp / 'calls'
+            v4, v3 = tmp / 'v4', tmp / 'v3'
+            v4.write_text('#!/bin/sh\necho v4 >> %s\nprintf "%%s" "$V4_LOG" > Logs/OpenBorLog.txt\n' % calls)
+            v3.write_text('#!/bin/sh\necho "v3 $(pwd)" >> %s\n' % calls)
+            v4.chmod(0o755)
+            v3.chmod(0o755)
+            env = dict(os.environ, FLIPEROS_OPENBOR_DIR=str(games), FLIPEROS_OPENBOR4=str(v4),
+                       FLIPEROS_OPENBOR3=str(v3))
+            run = lambda log: subprocess.run(['bash', str(ROOT / 'config/fliperos-openbor')], timeout=30,
+                                             env=dict(env, V4_LOG=log), check=True)
+            # O 4 sai normalmente: o 3.0 nem roda.
+            run('Game Selected: ./Paks/Old.PAK\n\n************ Shutting Down ************\n')
+            self.assertEqual(calls.read_text(), 'v4\n')
+            # O 4 recusa o pak: o 3.0 roda em v3/, com o Paks de cima.
+            run('Game Selected: ./Paks/Old.PAK\n\n********** An Error Occurred **********\n')
+            self.assertEqual(calls.read_text(), 'v4\nv4\nv3 %s\n' % (games / 'v3'))
+            self.assertEqual((games / 'v3' / 'paks.txt').read_text(), 'Old.PAK\n')
+            self.assertEqual(os.readlink(games / 'v3' / 'Paks'), '../Paks')
+            self.assertTrue((games / 'v3' / 'Saves').is_dir())
+            # Da proxima vez, com so paks do 3.0, o 4 nem roda.
+            calls.write_text('')
+            run('')
+            self.assertEqual(calls.read_text(), 'v3 %s\n' % (games / 'v3'))
+            # Um pak novo: o 4 de novo.
+            (games / 'Paks' / 'New.pak').write_bytes(b'')
+            calls.write_text('')
+            run('Game Selected: ./Paks/New.pak\n')
+            self.assertEqual(calls.read_text(), 'v4\n')
+
     def test_steam_installs_without_questions(self):
         body = EXTRAS.split('apt_install() {')[1].split('\n}\n')[0]
         self.assertIn('export DEBIAN_FRONTEND=noninteractive', body)
@@ -4498,7 +4555,8 @@ class ButtonMappingTests(unittest.TestCase):
             env = dict(os.environ, FLIPEROS_RA_BUTTONS=str(tmp / 'ra' / 'buttons.cfg'),
                        FLIPEROS_MAME_CTRLR=str(tmp / 'ctrlr' / 'fliperos.cfg'),
                        FLIPEROS_FLYCAST_MAPPINGS=str(tmp / 'flycast'), FLIPEROS_SDL_USER_DB=str(tmp / 'sdl-user.txt'),
-                       FLIPEROS_OPENBOR_SAVES=str(tmp / 'Saves'), FLIPEROS_BUTTONS_MAP=str(tmp / 'buttons.map'),
+                       FLIPEROS_OPENBOR_SAVES=str(tmp / 'Saves'), FLIPEROS_OPENBOR3_SAVES=str(tmp / 'v3' / 'Saves'),
+                       FLIPEROS_BUTTONS_MAP=str(tmp / 'buttons.map'),
                        FLIPEROS_CONTROLLERS=str(tmp / 'nada'),
                        FLIPEROS_SUPERMODEL_INI=str(tmp / 'supermodel' / 'Config' / 'Supermodel.ini'),
                        FLIPEROS_HYPSEUS_INI=str(tmp / 'hypseus' / 'hypinput.ini'),
@@ -4581,6 +4639,30 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertEqual(keys[:13], (601 + 10, 601 + 11, 601 + 8, 601 + 9, 601, 604, 605, 606, 602, 603, 607, 69,
                                      608))
         self.assertEqual(keys[13], 601 + 64 * 99)   # jogador 2 sem nada
+        # O 3.0: o mesmo codigo, noutro struct (o default.cfg que ele grava).
+        data = self.rc.openbor3_default()
+        self.assertEqual(len(data), 352)
+        self.assertEqual(struct.unpack_from('<I', data)[0], 0x33748)
+        self.assertEqual(struct.unpack_from('<4i', data, 12), (1, 44100, 15, 1))
+        self.assertEqual(struct.unpack_from('<i', data, 81 * 4)[0], 1)   # fullscreen
+        self.assertEqual(struct.unpack_from('<fi', data, 86 * 4), (1.0, 1))
+        keys = struct.unpack_from('<52i', self.rc.openbor_with_keys(data, {1: self.PANEL}, devices, 52), 52)
+        self.assertEqual(keys[:13], (601 + 10, 601 + 11, 601 + 8, 601 + 9, 601, 604, 605, 606, 602, 603, 607, 69,
+                                     608))
+        self.assertEqual(keys[13], 0)
+
+    def test_openbor_save_writes_4_and_3(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            saves4, saves3 = tmp / 'Saves', tmp / 'v3' / 'Saves'
+            old4, old3 = self.rc.OPENBOR_SAVES, self.rc.OPENBOR3_SAVES
+            self.rc.OPENBOR_SAVES, self.rc.OPENBOR3_SAVES = str(saves4), str(saves3)
+            try:
+                self.rc.openbor_save({1: self.PANEL}, {0: ('g', 'P', 8, 2)})
+            finally:
+                self.rc.OPENBOR_SAVES, self.rc.OPENBOR3_SAVES = old4, old3
+            self.assertEqual(len((saves4 / 'default.cfg').read_bytes()), 320)
+            self.assertEqual(len((saves3 / 'default.cfg').read_bytes()), 352)
 
     def test_supermodel_start_and_coin_on_the_panel(self):
         # O padrao do Supermodel poe Start e ficha nos botoes 9 e 10; o painel

@@ -1225,7 +1225,8 @@ build_openbor_chroot() {
   cat > "$CHROOT_DIR/tmp/build-openbor.sh" << 'OBSCRIPT'
 #!/bin/bash
 set -e
-apt-get install -y --no-install-recommends ninja-build libsdl2-dev libvorbis-dev libpng-dev libvpx-dev
+apt-get install -y --no-install-recommends ninja-build libsdl2-dev libvorbis-dev libpng-dev libvpx-dev \
+  libsdl2-gfx-1.0-0
 git init -q /tmp/openbor
 git -C /tmp/openbor fetch -q --depth 1 https://github.com/DCurrent/openbor __OPENBOR_COMMIT__
 git -C /tmp/openbor -c advice.detachedHead=false checkout -q FETCH_HEAD
@@ -1246,12 +1247,6 @@ install -Dm644 engine/resources/OpenBOR_Icon_128x128.png /usr/local/share/pixmap
 games=/opt/fliperos/roms/openbor
 mkdir -p "$games/Paks" "$games/Saves" "$games/Logs" "$games/ScreenShots"
 chown -R fliperos:fliperos "$games"
-cat > /usr/local/bin/openbor << 'EOF'
-#!/bin/sh
-# Os jogos (.pak) vao em /opt/fliperos/roms/openbor/Paks.
-cd /opt/fliperos/roms/openbor && exec /usr/local/lib/openbor/OpenBOR "$@"
-EOF
-chmod 755 /usr/local/bin/openbor
 cd /
 rm -rf /tmp/openbor
 echo "OpenBOR OK"
@@ -1261,6 +1256,13 @@ OBSCRIPT
   chroot "$CHROOT_DIR" /tmp/build-openbor.sh >> "$LOG_FILE" 2>&1 \
     && ok "OpenBOR compilado" \
     || err "OpenBOR failed; use --skip-openbor for an ISO without it"
+  # O comando openbor (Paks em /opt/fliperos/roms/openbor/Paks) e o 3.0 dos
+  # paks antigos: os mesmos do fliperos-rootfs.sh, que os atualiza depois.
+  local src
+  src="$(dirname "$(realpath "$0")")"
+  install -Dm755 "$src/config/fliperos-openbor" "$CHROOT_DIR/usr/local/bin/openbor"
+  install -Dm755 "$src/config/openbor-legacy/OpenBOR-3.0" "$CHROOT_DIR/usr/local/lib/openbor/OpenBOR-3.0"
+  install -Dm644 "$src/config/openbor-legacy/LICENSE" "$CHROOT_DIR/usr/local/share/doc/openbor-3.0/LICENSE"
 }
 
 # ── Dolphin (GameCube/Wii), X11 ───────────────────────────────

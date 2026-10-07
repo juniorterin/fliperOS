@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# openbor: o OpenBOR 4 e, para os paks que ele recusa, o 3.0 build 6391. Os
+# mods feitos para o 3.0 (sprites em GIF, scripts antigos) param no 4 com
+# "An Error Occurred" no log logo ao carregar; o 3.0 abre o mesmo pak.
+#
+# Os dois procuram Paks/, Saves/ e Logs/ na pasta em que rodam, e os .cfg de
+# um nao servem no outro: o 3.0 roda em v3/, com o Paks e o ScreenShots
+# ligados aos de cima e Saves e Logs proprios (fliperos-buttons grava os
+# controles nos dois). O v3/paks.txt guarda os paks que so abrem no 3.0;
+# quando todos os paks estao la, o 4 nem roda.
+games=${FLIPEROS_OPENBOR_DIR:-/opt/fliperos/roms/openbor}
+v4=${FLIPEROS_OPENBOR4:-/usr/local/lib/openbor/OpenBOR}
+v3=${FLIPEROS_OPENBOR3:-/usr/local/lib/openbor/OpenBOR-3.0}
+legacy=$games/v3
+list=$legacy/paks.txt
+
+run_v3() {
+  mkdir -p "$legacy/Saves" "$legacy/Logs"
+  ln -sfn ../Paks "$legacy/Paks"
+  ln -sfn ../ScreenShots "$legacy/ScreenShots"
+  cd "$legacy" && exec "$v3"
+}
+
+cd "$games" || exit 1
+paks=()
+for pak in Paks/*; do
+  [[ -f $pak && ${pak,,} == *.pak ]] && paks+=("${pak#Paks/}")
+done
+if [[ -x $v3 && -s $list && $# -eq 0 ]] && ((${#paks[@]})); then
+  all=1
+  for pak in "${paks[@]}"; do
+    grep -qxF -- "$pak" "$list" || all=0
+  done
+  ((all)) && run_v3
+fi
+
+start=$(date +%s)
+"$v4" "$@"
+status=$?
+# So o log desta vez (um velho, de antes de um crash, nao conta).
+log=$games/Logs/OpenBorLog.txt
+[[ -x $v3 && -f $log ]] && (($(stat -c %Y "$log") >= start)) && grep -q 'An Error Occurred' "$log" ||
+  exit "$status"
+pak=$(sed -n 's|^Game Selected: \./Paks/||p' "$log" | tail -1)
+pak=${pak%$'\r'}
+[[ -n $pak ]] || exit "$status"
+mkdir -p "$legacy"
+grep -qxF -- "$pak" "$list" 2> /dev/null || printf '%s\n' "$pak" >> "$list"
+run_v3

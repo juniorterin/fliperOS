@@ -321,6 +321,15 @@ rm -rf "$root/usr/share/fonts/truetype/fliperos"
 install -Dm644 -t "$root/usr/share/fonts/truetype/fliperos" \
   "$src"/config/fonts/jetbrains-mono/*.ttf "$src/config/fonts/jetbrains-mono/OFL.txt"
 install -Dm755 "$src/config/fliperos-initramfs-fonts" "$root/etc/initramfs-tools/hooks/fliperos-fonts"
+
+# ── OpenBOR ───────────────────────────────────────────────────────
+# Onde ha o OpenBOR 4 (compilado no fliperos-mkiso.sh): o comando openbor e
+# o 3.0 build 6391 dos paks que o 4 recusa (config/fliperos-openbor).
+if [[ -x $root/usr/local/lib/openbor/OpenBOR ]]; then
+  install -Dm755 "$src/config/fliperos-openbor" "$root/usr/local/bin/openbor"
+  install -Dm755 "$src/config/openbor-legacy/OpenBOR-3.0" "$root/usr/local/lib/openbor/OpenBOR-3.0"
+  install -Dm644 "$src/config/openbor-legacy/LICENSE" "$root/usr/local/share/doc/openbor-3.0/LICENSE"
+fi
 # Paleta Dracula no console: o setvtrgb.service do Ubuntu aplica /etc/vtrgb
 # no boot, e /etc/vtrgb e uma alternativa (a de maior prioridade vence).
 install -Dm644 "$src/config/vtrgb-dracula" "$root/etc/fliperos/vtrgb-dracula"

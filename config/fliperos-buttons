@@ -37,7 +37,8 @@ nome de aparelho, em ~/.config/flycast/mappings.
 
 OpenBOR: as teclas de cada jogador (o codigo do joystick do OpenBOR:
 600 + 1 + aparelho * 64 + botao; os eixos e os hats depois dos botoes) no
-struct do Saves/default.cfg e no .cfg de cada pak.
+struct do Saves/default.cfg e no .cfg de cada pak, do 4 e do 3.0 (v3/Saves,
+os paks antigos, config/fliperos-openbor).
 
 Supermodel: Start, ficha, direcional e os botoes 1 a 4 (Punch, Kick, Guard,
 Escape, a ordem do padrao dele) dos jogadores 1 e 2 no Supermodel.ini, com
@@ -71,6 +72,7 @@ MAME_CTRLR = os.environ.get('FLIPEROS_MAME_CTRLR', '/home/fliperos/.mame/ctrlr/f
 SDL_USER_DB = os.environ.get('FLIPEROS_SDL_USER_DB', '/var/lib/fliperos/gamecontrollerdb-user.txt')
 FLYCAST_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_MAPPINGS', '/home/fliperos/.config/flycast/mappings')
 OPENBOR_SAVES = os.environ.get('FLIPEROS_OPENBOR_SAVES', '/opt/fliperos/roms/openbor/Saves')
+OPENBOR3_SAVES = os.environ.get('FLIPEROS_OPENBOR3_SAVES', '/opt/fliperos/roms/openbor/v3/Saves')
 SUPERMODEL_INI = os.environ.get('FLIPEROS_SUPERMODEL_INI', '/home/fliperos/.config/supermodel/Config/Supermodel.ini')
 DOLPHIN_DIR = os.environ.get('FLIPEROS_DOLPHIN_DIR', '/home/fliperos/.config/dolphin-emu')
 HYPSEUS_INI = os.environ.get('FLIPEROS_HYPSEUS_INI', '/home/fliperos/.hypseus/hypinput.ini')
@@ -302,8 +304,27 @@ def openbor_default():
     return data + struct.pack('<fi', 1.0, 1)
 
 
-def openbor_with_keys(data, players, devices):
-    keys = list(struct.unpack_from('<52i', data, OPENBOR_KEYS_AT))
+# O 3.0 build 6391: usesound, soundrate e soundbits entre os 10 ints do
+# comeco, 7 ints de debug no lugar do debuginfo e sem o fpslimit; sem o
+# CONTROL_NONE (o 0 e tecla nenhuma).
+OPENBOR3_VERSION = 0x00033748
+OPENBOR3_SIZE = 352
+OPENBOR3_KEYS_AT = 52
+
+
+def openbor3_default():
+    """O s_savedata do clearsettings() do 3.0, com a tela cheia do FliperOS."""
+    keys = OPENBOR_P1_KEYS + [0] * 13 * 3
+    data = struct.pack('<I12i', OPENBOR3_VERSION, 0, 0, 1, 44100, 15, 1, 100, 120, 16, 1, 0, 0)
+    data += struct.pack('<52i', *keys) + struct.pack('<4i', 0, 0, 0, 0)
+    # showtitles videoNTSC swfilter logo uselog debuginfo e os 6 debug_*
+    # fullscreen stretch screen[0][0] screen[0][1] usegl
+    data += struct.pack('<17i', 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1)
+    return data + struct.pack('<fi', 1.0, 1)
+
+
+def openbor_with_keys(data, players, devices, at=OPENBOR_KEYS_AT):
+    keys = list(struct.unpack_from('<52i', data, at))
     for player, binds in players.items():
         if not 1 <= player <= 4:
             continue
@@ -311,23 +332,32 @@ def openbor_with_keys(data, players, devices):
             if control in OPENBOR_ACTIONS and index in devices:
                 nbuttons, naxes = devices[index][2:4]
                 keys[(player - 1) * 13 + OPENBOR_ACTIONS[control]] = openbor_code(index, element, nbuttons, naxes)
-    return data[:OPENBOR_KEYS_AT] + struct.pack('<52i', *keys) + data[OPENBOR_KEYS_AT + 52 * 4:]
+    return data[:at] + struct.pack('<52i', *keys) + data[at + 52 * 4:]
 
 
 def openbor_save(players, devices):
-    """O default.cfg (criado, se nao existe) e o .cfg de cada pak."""
-    os.makedirs(OPENBOR_SAVES, exist_ok=True)
-    paths = {os.path.join(OPENBOR_SAVES, f) for f in os.listdir(OPENBOR_SAVES) if f.endswith('.cfg')}
-    paths.add(os.path.join(OPENBOR_SAVES, 'default.cfg'))
-    for path in sorted(paths):
-        try:
-            with open(path, 'rb') as f:
-                data = f.read()
-        except OSError:
-            data = openbor_default()
-        if len(data) != OPENBOR_SIZE or struct.unpack_from('<I', data)[0] != OPENBOR_VERSION:
-            continue
-        write_bytes(path, openbor_with_keys(data, players, devices), USER_ID)
+    """O default.cfg (criado, se nao existe) e o .cfg de cada pak, do 4 e do 3.0."""
+    for saves, version, size, at, default in (
+            (OPENBOR_SAVES, OPENBOR_VERSION, OPENBOR_SIZE, OPENBOR_KEYS_AT, openbor_default),
+            (OPENBOR3_SAVES, OPENBOR3_VERSION, OPENBOR3_SIZE, OPENBOR3_KEYS_AT, openbor3_default)):
+        os.makedirs(saves, exist_ok=True)
+        # O OpenBOR roda como o usuario e grava ali (e no Logs ao lado).
+        for folder in (os.path.dirname(saves), saves):
+            try:
+                os.chown(folder, USER_ID, USER_ID)
+            except OSError:
+                pass
+        paths = {os.path.join(saves, f) for f in os.listdir(saves) if f.endswith('.cfg')}
+        paths.add(os.path.join(saves, 'default.cfg'))
+        for path in sorted(paths):
+            try:
+                with open(path, 'rb') as f:
+                    data = f.read()
+            except OSError:
+                data = default()
+            if len(data) != size or struct.unpack_from('<I', data)[0] != version:
+                continue
+            write_bytes(path, openbor_with_keys(data, players, devices, at), USER_ID)
 
 
 # ── Supermodel ──────────────────────────────────────────────────
@@ -622,6 +652,7 @@ def cmd_save(args):
         print(SDL_USER_DB)
         openbor_save(players, devices)
         print(OPENBOR_SAVES)
+        print(OPENBOR3_SAVES)
         for path in dolphin_save(players, devices):
             print(path)
         # O gamecontrollerdb.txt de novo, com o mapeamento por ultimo.
