@@ -33,10 +33,12 @@ if [[ -f $script ]] && ! "$git" cat-file -e "$commit:$script" 2> /dev/null; then
 fi
 
 # O treehash da arvore que o gabinete baixa (o git archive do commit, como
-# o tar do GitHub), pela mesma funcao do fliperos-update.
+# o tar do GitHub), pela mesma funcao do fliperos-update. Sem o autocrlf:
+# no Windows ele poria CRLF onde o .gitattributes nao fixa LF, e o hash nao
+# bateria com o tar do GitHub.
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-"$git" archive --format=tar "$commit" | tar x -C "$tmp"
+"$git" -c core.autocrlf=false archive --format=tar "$commit" | tar x -C "$tmp"
 tree=$(python3 - "$tmp" << 'PY'
 import importlib.machinery
 import importlib.util
