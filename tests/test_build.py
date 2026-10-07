@@ -4063,14 +4063,31 @@ class DocsTests(unittest.TestCase):
             listed = set(re.findall(r'\]\((%s)\.md\)' % self.PAGE, (self.WIKI / index).read_text())) - {'Home'}
             self.assertEqual(listed, self.pages(), index)
 
-    def test_readme_is_the_short_version(self):
-        readme = (ROOT / 'README.md').read_text()
-        self.assertLess(len(readme), 4000)
-        # Leva a cada pagina da wiki, e so a paginas que existem.
-        linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
-        self.assertEqual(linked, self.pages())
-        for needed in ('dd if=fliperos-0.8.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py', 'tools/wiki-publish.sh'):
-            self.assertIn(needed, readme)
+    def test_readmes_guide_from_install_to_play_in_both_languages(self):
+        english = (ROOT / 'README.md').read_text(encoding='utf-8')
+        portuguese = (ROOT / 'README.pt-BR.md').read_text(encoding='utf-8')
+        # Um leva ao outro, logo no topo.
+        self.assertIn('(README.pt-BR.md)', english.split('\n## ')[0])
+        self.assertIn('(README.md)', portuguese.split('\n## ')[0])
+        for readme in (english, portuguese):
+            # Leva a cada pagina da wiki, e so a paginas que existem.
+            linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
+            self.assertEqual(linked, self.pages())
+            for needed in ('dd if=fliperos-0.8.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
+                           'tools/wiki-publish.sh', 'openbor/Paks', 'Video Setup'):
+                self.assertIn(needed, readme)
+        # O passo a passo tem os mesmos passos numerados nas duas linguas.
+        steps = [re.findall(r'^### (\d+)\.', r, re.M) for r in (english, portuguese)]
+        self.assertEqual(steps[0], steps[1])
+        self.assertGreaterEqual(len(steps[0]), 10)
+
+    def test_site_links_each_language_to_its_readme(self):
+        site = (ROOT / 'website/src/lib/site.ts').read_text()
+        self.assertIn('README.pt-BR.md', site)
+        for page in ('sections/Hero.tsx', 'sections/OpenSource.tsx', 'sections/Footer.tsx', 'components/Header.tsx'):
+            text = (ROOT / 'website/src' / page).read_text()
+            self.assertIn('readmeUrl(locale)', text, page)
+            self.assertNotIn('LINKS.github', text, page)
 
     def test_publish_writes_wiki_links(self):
         # Aqui os links levam o .md (funcionam no repositorio); na wiki, nao.

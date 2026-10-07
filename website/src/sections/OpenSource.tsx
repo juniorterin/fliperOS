@@ -5,7 +5,7 @@ import { GithubIcon } from '@/components/GithubIcon';
 import { Reveal } from '@/components/Reveal';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { RepoStats } from '@/lib/github';
-import { LINKS } from '@/lib/site';
+import { readmeUrl } from '@/lib/site';
 
 export function OpenSource({ stats }: { stats: RepoStats | null }) {
   const { t, locale } = useI18n();
@@ -34,7 +34,7 @@ export function OpenSource({ stats }: { stats: RepoStats | null }) {
               <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-pretty text-muted">{o.text}</p>
 
               <a
-                href={LINKS.github}
+                href={readmeUrl(locale)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-10 inline-flex items-center gap-3 rounded-2xl bg-purple px-7 py-4 text-lg font-semibold text-bg-deeper shadow-[0_14px_50px_-12px] shadow-purple transition hover:-translate-y-0.5 hover:bg-[#c9a6fb] sm:px-9 sm:py-5"

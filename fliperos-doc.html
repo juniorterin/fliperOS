@@ -8,6 +8,7 @@ pre{overflow:auto;background:#202b36;padding:20px;border-radius:6px}code{font-si
 table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1px solid #405060;text-align:left;padding:12px}
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </style><main><h1 id="fliperos-08">FliperOS 0.8</h1>
+<p><strong>English</strong> | <a href="README.pt-BR.md">Português</a></p>
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen.</p>
 <p>In development: 0.8 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
 <h2 id="whats-included">What's included</h2>
@@ -20,18 +21,174 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Folders</strong> <code>roms</code>, <code>bios</code>, <code>media</code> and <code>config</code> in <code>~</code> and over the network (Samba); LXDE desktop with an app store.</li>
 <li><strong>SSH</strong> on from the first boot (<code>ssh fliperos@fliperos.local</code>, password <code>fliperos</code>). Under the menus it's a regular Ubuntu, so an AI assistant can configure it over SSH.</li>
 </ul>
-<h2 id="install">Install</h2>
-<p>ISOs in <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>; what changed, in <a href="CHANGELOG.md">CHANGELOG.md</a>.</p>
+<h2 id="from-zero-to-playing-step-by-step">From zero to playing: step by step</h2>
+<p>This guide goes from an empty cabinet to a game on screen. Each step says what you will see and what to press. The details behind each screen are in the wiki pages linked along the way.</p>
+<h3 id="1-what-you-need">1. What you need</h3>
+<ul>
+<li><strong>A PC (amd64)</strong> for the cabinet. For arcade games up to the 90s and consoles up to the PlayStation, a 2-core CPU, 4 GB of RAM and a 16 GB disk are enough. For PS2, Model 3 and Dreamcast, a 4-core CPU with AVX2 (Core i7-7700, Ryzen 5 3600 or newer), 16 GB and an SSD. The disk you install to is <strong>erased completely</strong>.</li>
+<li><strong>A graphics card with analog output.</strong> The best fit is an <strong>AMD Radeon with VGA or DVI-I</strong> from the HD 2000 series to the R7/R9 (GCN 1.0), which generates 15 kHz natively. Intel and NVIDIA work at 15 kHz with "super resolution" modes. Cards without an analog output need a DisplayPort/HDMI to VGA converter.</li>
+<li><strong>The monitor</strong>: an arcade CRT (15 kHz), a TV through a VGA to SCART/component adapter, or a 25/31 kHz monitor. An LCD also works.</li>
+<li><strong>A USB stick of 4 GB or more</strong> (it will be erased).</li>
+<li><strong>A USB keyboard</strong> for the installation. After that, the panel or a gamepad moves through all the menus.</li>
+<li><strong>A network connection</strong> (cable or Wi-Fi), to copy games from another computer and to receive updates. Optional, but it makes everything easier.</li>
+<li><strong>Another computer</strong> (Windows, Linux or macOS) to write the USB stick and, later, to copy the games over the network.</li>
+</ul>
+<h3 id="2-download-the-iso">2. Download the ISO</h3>
 <ol>
-<li>Write the ISO <strong>byte for byte</strong> (balenaEtcher, Rufus in "DD Image mode" or <code>dd</code>; Rufus in its default mode and Ventoy don't work) and disable Secure Boot.</li>
+<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.8.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
+<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.8.iso</code> on Linux, <code>Get-FileHash fliperos-0.8.iso</code> in Windows PowerShell.</li>
 </ol>
+<h3 id="3-write-the-usb-stick">3. Write the USB stick</h3>
+<p>The ISO must be written <strong>byte for byte</strong>. Programs that rebuild the stick's boot structure break it: <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work.</strong></p>
+<ul>
+<li><strong>Windows, macOS or Linux, the easiest</strong>: <a href="https://etcher.balena.io">balenaEtcher</a>. <em>Flash from file</em> &gt; choose the ISO &gt; <em>Select target</em> &gt; the USB stick &gt; <em>Flash!</em>.</li>
+<li><strong>Windows with Rufus</strong>: choose the stick and the ISO, click <em>START</em> and, when it asks, choose <strong>"Write in DD Image mode"</strong>.</li>
+<li><strong>Linux</strong>: find the stick with <code>lsblk</code> (here <code>/dev/sdX</code>; the wrong device erases the wrong disk) and run:</li>
+</ul>
 <p><code>bash
-   sudo dd if=fliperos-0.8.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+  sudo dd if=fliperos-0.8.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+<h3 id="4-prepare-the-cabinets-bios">4. Prepare the cabinet's BIOS</h3>
+<p>Enter the BIOS/UEFI setup (usually <strong>Del</strong>, <strong>F2</strong> or <strong>F10</strong> right after power-on) and:</p>
 <ol>
-<li>Boot the cabinet from the media and wait 30 seconds: it comes up at <strong>15 kHz</strong> (the boot menu doesn't show on a 15 kHz tube).</li>
-<li>Press <strong>Enter</strong> when you see the screen, choose the monitor and <strong>Install to HD/SSD</strong>, which erases the chosen disk.</li>
-<li>Reboot, choose the default launcher and put your ROMs in <code>~/roms</code> (over the network, <code>\\fliperos\roms</code>).</li>
+<li><strong>Disable Secure Boot</strong>: the 15 kHz kernel is custom and unsigned, and with Secure Boot on it doesn't start.</li>
+<li><strong>SATA mode on AHCI</strong> (not RAID or Intel RST); otherwise the installer doesn't see the disk.</li>
+<li><strong>Boot from the USB stick</strong>: put it first in the boot order, or use the one-time boot menu (often <strong>F8</strong>, <strong>F11</strong> or <strong>F12</strong>). BIOS (legacy) and UEFI both work.</li>
 </ol>
+<p>Save and exit with the stick plugged in.</p>
+<h3 id="5-boot-from-the-usb-stick">5. Boot from the USB stick</h3>
+<ol>
+<li><strong>Wait about 30 seconds without pressing anything.</strong> The boot menu (15 kHz, 25 kHz, 31 kHz, LCD...) is drawn at 31 kHz, so <strong>it doesn't show on a 15 kHz tube</strong>. With no key pressed, the <strong>15 kHz</strong> entry boots by itself, which is the safe one for a cabinet. On a PC monitor or an LCD, you can pick <em>SVGA / LCD monitor</em> in the menu instead.</li>
+<li>The FliperOS splash appears, already at 15 kHz.</li>
+<li><strong>Output test.</strong> FliperOS turns on one video output at a time and a voice says <em>"Testing output VGA 1. If you can see this screen, press Enter."</em> When the text <em>"If you can see this screen clearly, press ENTER"</em> is readable on <strong>your</strong> monitor, press <strong>Enter</strong>. Without Enter it moves on to the next output and repeats the round up to three times.</li>
+<li><strong>Testing Results</strong> shows the card, the output, the mode and the frequency. Choose <strong>Validate settings</strong> (or <strong>Repeat test</strong>).</li>
+<li><strong>Monitor type</strong>: choose your monitor from the list (for example <em>generic_15</em> for a common arcade monitor or TV, <em>arcade_15</em>, <em>ntsc</em>, <em>pal</em>, or a specific model). The list opens on the suggestion for the boot entry. The full table of boot entries is in <a href="#Install">Install</a>.</li>
+</ol>
+<h3 id="6-install-to-the-disk">6. Install to the disk</h3>
+<p>The <strong>FliperOS Setup</strong> menu opens (Install to HD/SSD, Recovery Mode, Terminal, Shutdown). The arrows move, <strong>Enter</strong> confirms and <strong>Esc</strong> goes back.</p>
+<ol>
+<li>Choose <strong>Install to HD/SSD</strong>.</li>
+<li><strong>Do you want to configure video?</strong> Choose <em>Yes</em> to adjust it now (you can also do it later in Setup &gt; Video Setup):</li>
+<li><strong>Monitor Type</strong>: the same monitor as in the test;</li>
+<li><strong>Monitor Orientation</strong>: horizontal, or vertical for a rotated monitor (vertical games);</li>
+<li><strong>Resolution</strong>: the modes your monitor and card accept (the suggestion is fine);</li>
+<li><strong>Geometry</strong>: a grid to center the picture and fit its size on the tube. Use the arrows to adjust and Enter to save.</li>
+<li><strong>Automatically Partition</strong>: choose the disk by model, size and type (USB/NVMe/SATA). If yours isn't listed, <strong>My drive is not listed (details)</strong> explains why (usually the SATA mode, step 4).</li>
+<li><strong>WARNING</strong>: it shows the disk that will be <strong>completely erased</strong>. Check it and confirm (<em>No</em> goes back to the list).</li>
+<li><strong>Installing FliperOS</strong>: a progress bar with the current step. It takes a few minutes.</li>
+<li><strong>Installation completed successfully</strong>: remove the USB stick and choose <strong>Reboot now</strong>.</li>
+</ol>
+<h3 id="7-first-boot-of-the-installed-system">7. First boot of the installed system</h3>
+<ol>
+<li>The cabinet boots straight to the splash, without text.</li>
+<li><strong>Choose default launcher</strong>: what opens every time the cabinet is turned on. For a cabinet, choose <strong>Attract-Mode Plus</strong> (a game list with artwork, made for arcade). The others are EmulationStation (ES-DE), Pegasus, RetroArch, the LXDE desktop or the FliperOS Setup itself. You can change it later in Setup &gt; Frontend.</li>
+<li>When you leave the launcher (Esc), the <strong>FliperOS menu</strong> appears: <em>Start frontend</em>, <em>Setup (video, audio, network...)</em>, <em>Start desktop</em>, <em>Exit to shell</em>, <em>Shutdown / Reboot</em>. The title shows the cabinet's IP address.</li>
+<li><strong>Network</strong>: a network cable works by itself. For Wi-Fi: <em>Setup &gt; Network Setup</em>, choose the network and type the password. Once connected, the IP appears in the menu title.</li>
+<li><strong>Updates</strong>: at each boot with internet, if there is a FliperOS update, a screen describes it and asks <strong>Apply now</strong> or <strong>Not now</strong>.</li>
+</ol>
+<h3 id="8-set-up-the-controls">8. Set up the controls</h3>
+<p>In the menus, the panel or a gamepad already acts as the keyboard: directions = arrows, button 1 = Enter, button 2 = Esc.</p>
+<ol>
+<li><em>Setup &gt; Joysticks &gt; Button mapping</em>.</li>
+<li>For each player, press what it asks for, in order: up, down, left, right, <strong>buttons 1 to 6</strong> in panel order (1 2 3 in the top row, 4 5 6 in the bottom row), <strong>Start</strong> and <strong>Coin</strong>. The first input pressed tells which controller belongs to that player. With nothing pressed for 8 seconds, that input is skipped.</li>
+<li>The mapping goes to every emulator at once (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Hypseus and OpenBOR).</li>
+<li>Light gun (GunCon 2), wheel and pedals have their own calibrators in the same menu, and <em>Setup &gt; Quirks</em> fixes USB encoders that arrive wrong (for example a dual encoder showing up as a single player). See <a href="#Controls">Controls</a>.</li>
+</ol>
+<h3 id="9-copy-your-games">9. Copy your games</h3>
+<p>Use only games you have the right to use (your own dumps, or the free homebrew from <em>Setup &gt; Downloader &gt; Free games</em>).</p>
+<p><strong>Over the network (the easiest)</strong>, from another computer on the same network:</p>
+<ul>
+<li><strong>Windows</strong>: in File Explorer's address bar type <code>\\fliperos\roms</code> (or <code>\\IP-of-the-cabinet\roms</code>) and press Enter. If it asks for a login, use <code>fliperos</code> / <code>fliperos</code>.</li>
+<li><strong>macOS</strong>: Finder &gt; Go &gt; Connect to Server &gt; <code>smb://fliperos.local/roms</code>.</li>
+<li><strong>Linux</strong>: <code>smb://fliperos.local/roms</code> in the file manager.</li>
+<li>Also available: <code>\\fliperos\bios</code> (BIOS files), <code>\\fliperos\media</code> (artwork) and <code>\\fliperos\config</code> (emulator settings).</li>
+</ul>
+<p><strong>Without a network</strong>: copy the files to a USB stick, open <em>Start desktop</em> (LXDE) and drag them into the <code>roms</code> folder in the file manager. Or use SFTP (<code>fliperos@fliperos.local</code>, password <code>fliperos</code>).</p>
+<p><strong>Each emulator has its folder</strong> in <code>roms</code>. Copy the files as they come: MAME sets stay zipped and are <strong>never renamed</strong> (<code>sf2ce.zip</code>, not <code>Street Fighter II.zip</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Folder</th>
+<th>Games</th>
+<th>Emulator</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mame</code></td>
+<td>Arcade: MAME sets (<code>.zip</code>, <code>.7z</code>) and their CHD folders</td>
+<td>GroovyMAME</td>
+</tr>
+<tr>
+<td><code>naomi</code>, <code>naomi2</code>, <code>atomiswave</code></td>
+<td>Sega Naomi and Sammy Atomiswave sets</td>
+<td>Flycast</td>
+</tr>
+<tr>
+<td><code>model3</code></td>
+<td>Sega Model 3 sets</td>
+<td>Supermodel</td>
+</tr>
+<tr>
+<td><code>model2</code></td>
+<td>Sega Model 2 sets</td>
+<td>Model 2 Emulator (needs Setup &gt; Extras &gt; Wine)</td>
+</tr>
+<tr>
+<td><code>dreamcast</code></td>
+<td><code>.gdi</code>, <code>.cdi</code>, <code>.chd</code></td>
+<td>Flycast</td>
+</tr>
+<tr>
+<td><code>ps2</code></td>
+<td><code>.iso</code>, <code>.chd</code>, <code>.cso</code></td>
+<td>PCSX2</td>
+</tr>
+<tr>
+<td><code>dolphin</code></td>
+<td>GameCube and Wii (<code>.iso</code>, <code>.rvz</code>, <code>.wbfs</code>)</td>
+<td>Dolphin</td>
+</tr>
+<tr>
+<td><code>retroarch/&lt;core&gt;</code></td>
+<td>Consoles and computers; the <code>_info.txt</code> in each folder lists the extensions</td>
+<td>RetroArch</td>
+</tr>
+<tr>
+<td><code>openbor/Paks</code></td>
+<td>OpenBOR games (<code>.pak</code>)</td>
+<td>OpenBOR</td>
+</tr>
+</tbody>
+</table>
+<p><strong>BIOS</strong> go in <code>bios</code>, never in a games folder: <code>bios/mame</code> for MAME (<code>neogeo.zip</code>, <code>qsound.zip</code>...), <code>bios/dc</code> for Flycast (<code>naomi.zip</code>, <code>awbios.zip</code>, <code>dc_boot.bin</code>), <code>bios/ps2</code> for PCSX2, and the <code>bios</code> folder itself for the RetroArch cores.</p>
+<p>Has a full MAME romset? <em>Setup &gt; Cleaner &gt; MAME ROM Cleaner</em> keeps only the games that work and suit your cabinet (horizontal or vertical, the controls you have) and puts them in the right emulator's folder. More in <a href="#ROMs">ROMs, BIOS and artwork</a>.</p>
+<h3 id="10-make-the-frontend-show-the-games">10. Make the frontend show the games</h3>
+<ol>
+<li><em>Setup &gt; Frontend</em> &gt; choose <strong>Attract-Mode Plus</strong> again (even if it already is the default). The Setup creates a system for each folder that has games. Do this again every time a folder gets its first games.</li>
+<li><strong>Real game names</strong> (<em>Street Fighter II</em> instead of <code>sf2</code>): <em>Setup &gt; AttractPlus ROM List</em>, for the arcade folders. It works offline and also brings year, manufacturer and the clones.</li>
+<li><strong>Artwork</strong> (screenshots, logos, videos, descriptions): <em>Setup &gt; Scraper</em>, which needs internet. See <a href="#Scraper">Scraper</a>.</li>
+<li>New games added later to a folder that already shows in Attract-Mode: run <em>Setup &gt; AttractPlus ROM List</em> or <em>Setup &gt; Scraper</em> again. Details in <a href="#Adding-games">Adding games</a>.</li>
+</ol>
+<h3 id="11-play">11. Play</h3>
+<ol>
+<li>In the FliperOS menu choose <strong>Start frontend</strong> (or just turn the cabinet on: the default launcher opens by itself).</li>
+<li>In <strong>Attract-Mode Plus</strong>: <strong>left/right</strong> change the system (MAME, Naomi, PCSX2...) and <strong>up/down</strong> move through the games. Each system comes with filters (All Games, Most Played, genres, manufacturers, years); <strong>Tab</strong> opens Attract-Mode's configuration, where <em>Controls</em> binds buttons to change filters and anything else.</li>
+<li>Press <strong>button 1</strong> (or Enter) on a game. The screen goes black for a moment while Switchres sets the video mode for that game, and the game starts.</li>
+<li>Insert a credit with <strong>Coin</strong> and start with <strong>Start</strong>.</li>
+<li><strong>Leaving the game</strong>: in GroovyMAME, <strong>Esc</strong> on the keyboard. In RetroArch, <strong>Start + Coin</strong> together open its menu, then <em>Quick Menu &gt; Close Content</em>. The other emulators use their own exit key or menu (<a href="#Emulators">Emulators</a>). You go back to the game list.</li>
+<li><strong>Esc</strong> in Attract-Mode (and confirming) leaves the frontend and returns to the FliperOS menu, where <em>Shutdown / Reboot</em> turns the cabinet off safely.</li>
+</ol>
+<h3 id="12-if-something-goes-wrong">12. If something goes wrong</h3>
+<ul>
+<li><strong>No picture at boot</strong>: wait the 30 seconds (the menu doesn't show at 15 kHz). On a 15 kHz-only tube, connect an LCD temporarily to choose another boot entry.</li>
+<li><strong>The installer doesn't list the disk</strong>: SATA mode on AHCI in the BIOS. <em>My drive is not listed (details)</em> shows what Linux sees.</li>
+<li><strong>The picture is off-center or too big</strong>: <em>Setup &gt; Video Setup &gt; Geometry</em>.</li>
+<li><strong>A system doesn't appear in the frontend</strong>: the folder needs at least one game file (the <code>_info.txt</code> doesn't count); then choose the frontend again in <em>Setup &gt; Frontend</em>.</li>
+<li><strong>A game doesn't open</strong>: turn on <em>Setup &gt; Debug mode</em> to see the emulator's messages on screen; without it they are saved in <code>/opt/fliperos/logs</code>. Check the BIOS in <code>bios</code>.</li>
+<li><strong>No sound</strong>: <em>Setup &gt; Audio Setup</em> chooses the card and the volume and plays a test.</li>
+<li><strong>Something the menus don't cover</strong>: over SSH (<code>ssh fliperos@fliperos.local</code>, password <code>fliperos</code>) it's a regular Ubuntu 24.04, and an AI assistant with terminal access can configure it for you. On a network you don't control, change the password with <code>passwd</code>.</li>
+</ul>
+<p>More in <a href="#Installed-system">Installed system</a>, <a href="#Frontends">Frontends</a> and <a href="#Latency">Latency</a>.</p>
 <h2 id="build-and-tests">Build and tests</h2>
 <p>Always in Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> explains why).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .

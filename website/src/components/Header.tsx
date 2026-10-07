@@ -3,7 +3,7 @@
 import { Menu, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/i18n/I18nProvider';
-import { LINKS, SECTION_IDS, type SectionId } from '@/lib/site';
+import { readmeUrl, SECTION_IDS, type SectionId } from '@/lib/site';
 import { GithubIcon } from './GithubIcon';
 import { LanguageSwitch } from './LanguageSwitch';
 import { LogoMark, Wordmark } from './Logo';
@@ -18,7 +18,7 @@ const NAV: { id: SectionId; key: 'features' | 'screenshots' | 'emulators' | 'crt
 ];
 
 export function Header() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [active, setActive] = useState<SectionId | null>(null);
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -95,7 +95,7 @@ export function Header() {
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <LanguageSwitch />
           <a
-            href={LINKS.github}
+            href={readmeUrl(locale)}
             target="_blank"
             rel="noopener noreferrer"
             className="hidden items-center gap-2 rounded-lg border border-purple/60 bg-purple/10 px-3.5 py-2 text-sm font-medium text-fg transition hover:border-purple hover:bg-purple/20 hover:shadow-[0_0_20px_-6px] hover:shadow-purple sm:inline-flex"
@@ -143,7 +143,7 @@ export function Header() {
           ))}
         </ul>
         <a
-          href={LINKS.github}
+          href={readmeUrl(locale)}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-purple px-4 py-3 font-medium text-bg-deeper"

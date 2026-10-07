@@ -4,13 +4,13 @@ import { BookOpen, CircleDot, Package } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
 import { LogoMark, Wordmark } from '@/components/Logo';
 import { useI18n } from '@/i18n/I18nProvider';
-import { AUTHOR_HANDLE, LINKS } from '@/lib/site';
+import { AUTHOR_HANDLE, LINKS, readmeUrl } from '@/lib/site';
 
 export function Footer() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const f = t.footer;
   const links = [
-    { href: LINKS.github, label: f.github, icon: <GithubIcon className="size-4" /> },
+    { href: readmeUrl(locale), label: f.github, icon: <GithubIcon className="size-4" /> },
     { href: LINKS.docs, label: f.docs, icon: <BookOpen className="size-4" aria-hidden="true" /> },
     { href: LINKS.releases, label: f.releases, icon: <Package className="size-4" aria-hidden="true" /> },
     { href: LINKS.issues, label: f.issues, icon: <CircleDot className="size-4" aria-hidden="true" /> },

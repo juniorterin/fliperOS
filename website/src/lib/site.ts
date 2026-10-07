@@ -8,6 +8,12 @@ export const LINKS = {
   instagram: 'https://www.instagram.com/juniorter.in/',
 } as const;
 
+// O repositório abre no README em inglês (o original); o site em português
+// leva direto à tradução, README.pt-BR.md.
+export function readmeUrl(locale: string): string {
+  return locale.startsWith('pt') ? `${REPO_URL}/blob/main/README.pt-BR.md` : REPO_URL;
+}
+
 export const AUTHOR_HANDLE = '@juniorter.in';
 export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorterin' } as const;
 
