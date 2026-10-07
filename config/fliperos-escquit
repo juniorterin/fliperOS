@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Esc fecha o frontend e volta ao menu do FliperOS.
+
+    fliperos-escquit [--busy-file ARQUIVO] [--ignore-children] PID
+
+Le o Esc de todos os teclados (e dos encoders de fliperama que se dizem
+teclado) sem tomar a tecla para si: o frontend e os jogos continuam
+recebendo. Com o Esc apertado e nenhum jogo aberto, manda SIGTERM ao PID;
+sai sozinho quando o PID acaba.
+
+Jogo aberto e o PID com algum processo filho (os frontends abrem os
+emuladores como filhos) ou o ARQUIVO existindo (o Fightcade, cujos
+emuladores nao sao filhos dele, o cria). No Esc que fecha um jogo o jogo
+ainda esta aberto, e por uns instantes depois dele o Esc tambem nao fecha
+o frontend: uma tecla, uma acao.
+"""
+import argparse
+import fcntl
+import glob
+import os
+import select
+import signal
+import struct
+import time
+
+EV_KEY = 0x01
+KEY_ESC = 1
+# O teclado virtual do fliperos-padkeys so escreve com o Setup na tela.
+IGNORED = {b'FliperOS pad keys'}
+GRACE = float(os.environ.get('FLIPEROS_ESCQUIT_GRACE', '1.5'))
+INPUT = os.environ.get('FLIPEROS_ESCQUIT_INPUT', '/dev/input')
+EVENT = struct.Struct('llHHi')
+
+
+def _ioc(direction, kind, nr, size):
+    return (direction << 30) | (size << 16) | (ord(kind) << 8) | nr
+
+
+EVIOCGNAME = _ioc(2, 'E', 0x06, 256)
+
+
+def has_esc(fd):
+    buf = bytearray(0x300 // 8)
+    fcntl.ioctl(fd, _ioc(2, 'E', 0x20 + EV_KEY, len(buf)), buf)
+    return bool(buf[KEY_ESC // 8] >> (KEY_ESC % 8) & 1)
+
+
+def open_keyboard(path):
+    """O fd do dispositivo, se ele tem a tecla Esc; senao None."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        name = bytearray(256)
+        fcntl.ioctl(fd, EVIOCGNAME, name)
+        if bytes(name).split(b'\0')[0] not in IGNORED and has_esc(fd):
+            return fd
+    except OSError:
+        pass
+    os.close(fd)
+    return None
+
+
+def alive(pid):
+    try:
+        with open('/proc/%d/stat' % pid) as f:
+            return f.read().rsplit(')', 1)[1].split()[0] != 'Z'
+    except (OSError, IndexError):
+        return False
+
+
+def has_children(pid):
+    for path in glob.glob('/proc/%d/task/*/children' % pid):
+        try:
+            with open(path) as f:
+                if f.read().split():
+                    return True
+        except OSError:
+            pass
+    return False
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--busy-file')
+    parser.add_argument('--ignore-children', action='store_true')
+    parser.add_argument('pid', type=int)
+    args = parser.parse_args()
+
+    def busy():
+        if args.busy_file and os.path.exists(args.busy_file):
+            return True
+        return not args.ignore_children and has_children(args.pid)
+
+    keyboards = {}
+    scanned = 0.0
+    last_busy = 0.0
+    while alive(args.pid):
+        now = time.monotonic()
+        if busy():
+            last_busy = now
+        if now - scanned >= 2:
+            scanned = now
+            for path in sorted(glob.glob(os.path.join(INPUT, 'event*'))):
+                if path not in keyboards:
+                    fd = open_keyboard(path)
+                    if fd is not None:
+                        keyboards[path] = fd
+        ready, _, _ = select.select(list(keyboards.values()), [], [], 0.25)
+        for path, fd in list(keyboards.items()):
+            if fd not in ready:
+                continue
+            try:
+                data = os.read(fd, EVENT.size * 64)
+            except BlockingIOError:
+                continue
+            except OSError:
+                data = b''
+            if not data:
+                os.close(fd)
+                del keyboards[path]
+                continue
+            for i in range(0, len(data) - EVENT.size + 1, EVENT.size):
+                _, _, etype, code, value = EVENT.unpack_from(data, i)
+                if etype != EV_KEY or code != KEY_ESC or value != 1:
+                    continue
+                now = time.monotonic()
+                if busy():
+                    last_busy = now
+                elif now - last_busy >= GRACE:
+                    os.kill(args.pid, signal.SIGTERM)
+                    return
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (KeyboardInterrupt, ProcessLookupError):
+        pass

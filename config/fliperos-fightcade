@@ -16,9 +16,9 @@
 # o "binario" da tabela de sessoes, que so existe depois do download. Aberto
 # no console, sobe num Xorg so para ele (fliperos-x11-run) no modo da tabela
 # emulator-modes.conf: 640x480, que num monitor de 15 kHz sai entrelacado - a
-# sala de jogos e uma pagina de desktop e nao cabe em 240 linhas. Ctrl+W
-# (Window > Close) fecha; Alt+Tab troca entre a sala e o emulador
-# (config/openbox-fightcade.xml).
+# sala de jogos e uma pagina de desktop e nao cabe em 240 linhas. Esc na
+# sala, ou Ctrl+W (Window > Close), fecha; Alt+Tab troca entre a sala e o
+# emulador (config/openbox-fightcade.xml).
 #
 # Cada partida abre no modo do emulador dela, tambem da tabela (as linhas
 # fightcade-fbneo, fightcade-fc1, fightcade-snes9x e fightcade-flycast): no
@@ -39,6 +39,7 @@ flycast_maps=${FLIPEROS_FLYCAST_MAPPINGS:-/home/fliperos/.config/flycast/mapping
 extras=${FLIPEROS_EXTRAS:-/opt/fliperos/bin/fliperos-extras}
 flycast_cfg=${FLIPEROS_FLYCAST_CFG:-/home/fliperos/.config/flycast/emu.cfg}
 ini_set=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
+escquit=${FLIPEROS_ESCQUIT:-/opt/fliperos/bin/fliperos-escquit}
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 # say PORCENTAGEM TEXTO: uma etapa para a tela de progresso do Setup
@@ -335,6 +336,20 @@ done
 # onde o cliente abre os emuladores), deixa o cliente em segundo plano e sai.
 ./Fightcade2.sh "--force-device-scale-factor=$scale" "$@"
 
+# Esc na sala (nenhum emulador aberto) fecha o Fightcade
+# (config/fliperos-escquit): o SIGTERM dele para este script, que fecha o
+# cliente. Os emuladores nao sao filhos daqui; o arquivo busy diz quando ha
+# um aberto.
+busy="${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.busy"
+rm -f "$busy"
+quit=0
+trap 'quit=1' TERM
+esc_pid=""
+if [[ -x $escquit ]]; then
+  "$escquit" --busy-file "$busy" --ignore-children $$ < /dev/null > /dev/null 2>&1 &
+  esc_pid=$!
+fi
+
 # A sessao fica ate o cliente fechar. Numa atualizacao automatica ele fecha e
 # reabre sozinho (fcade-upd): so vale como fechado depois de uns segundos sem
 # nenhum dos dois. Enquanto isso, a cada segundo: com um emulador aberto a
@@ -342,10 +357,18 @@ done
 gone=0 current=""
 while ((gone < ${FIGHTCADE_QUIT_WAIT:-5})); do
   sleep 1
+  if ((quit)); then
+    pkill -u "$(id -u)" -f '[f]c2-electron/fc2-electron'
+    break
+  fi
   running=$(pgrep -u "$(id -u)" -af 'fc2-electron/fc2-electron|fcade-upd|flycast\.elf|fcadefbneo\.exe|fcv39\.exe|ggpofba-ng\.exe|fcadesnes9x\.exe')
   case $running in
     *fc2-electron/fc2-electron* | *fcade-upd*) gone=0 ;;
     *) gone=$((gone + 1)) ;;
+  esac
+  case $running in
+    *flycast.elf* | *.exe*) touch "$busy" ;;
+    *) rm -f "$busy" ;;
   esac
   case $running in
     *fcadefbneo.exe* | *fcv39.exe* | *ggpofba-ng.exe*) idle_close ;;
@@ -369,4 +392,6 @@ while ((gone < ${FIGHTCADE_QUIT_WAIT:-5})); do
   current=$want
 done
 [[ -n $current ]] && mode_lobby
+[[ -n $esc_pid ]] && kill "$esc_pid" 2> /dev/null
+rm -f "$busy"
 exit 0

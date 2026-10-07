@@ -61,8 +61,26 @@ printf '\e[H\e[2J\e[?25l'
 
 case $backend in
   kms)
-    /opt/fliperos/bin/fliperos-kms-run "$binary"
-    rc=$?
+    case $_name in
+      # Nos frontends o Esc fecha e volta ao menu (config/fliperos-escquit).
+      # O RetroArch e o GroovyMAME ja saem pelo Esc; o Fightcade liga o
+      # dele. <&0: em segundo plano o bash daria /dev/null como entrada.
+      attractplus | emulationstation | retrofe | pegasus)
+        /opt/fliperos/bin/fliperos-kms-run "$binary" <&0 &
+        pid=$!
+        /opt/fliperos/bin/fliperos-escquit "$pid" < /dev/null > /dev/null 2>&1 &
+        wait "$pid"
+        rc=$?
+        # SIGTERM do Esc: fechou como pedido.
+        ((rc == 143)) && rc=0
+        ;;
+      *)
+        /opt/fliperos/bin/fliperos-kms-run "$binary"
+        rc=$?
+        ;;
+    esac
+    # O que foi digitado no frontend e caiu no console nao vai para o menu.
+    python3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)' 2> /dev/null
     ;;
   x)
     # Sessao X no proprio terminal (tty1). A configuracao do monitor vem do

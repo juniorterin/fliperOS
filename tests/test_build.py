@@ -12,10 +12,13 @@ import os
 from pathlib import Path
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
+import time
 import unittest
 from xml.etree import ElementTree
 
@@ -2886,6 +2889,94 @@ class SessionTableTests(unittest.TestCase):
                           'Fightcade 2'])
 
 
+class EscQuitTests(unittest.TestCase):
+    """config/fliperos-escquit: o Esc fecha o frontend quando nenhum jogo
+    esta aberto. O teclado aqui e um FIFO com eventos do evdev."""
+    RUNNER = ('import importlib.util, os, sys\n'
+              'sys.dont_write_bytecode = True\n'
+              'from importlib.machinery import SourceFileLoader\n'
+              'loader = SourceFileLoader("escquit", sys.argv[1])\n'
+              'm = importlib.util.module_from_spec(importlib.util.spec_from_loader("escquit", loader))\n'
+              'loader.exec_module(m)\n'
+              'm.open_keyboard = lambda path: os.open(path, os.O_RDONLY | os.O_NONBLOCK)\n'
+              'sys.argv = sys.argv[1:]\n'
+              'm.main()\n')
+    EVENT = struct.Struct('llHHi')
+
+    def watch(self, tmp, target, *args, grace='0.5'):
+        fifo = tmp / 'event0'
+        os.mkfifo(fifo)
+        keyboard = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, keyboard)
+        env = dict(os.environ, FLIPEROS_ESCQUIT_INPUT=str(tmp), FLIPEROS_ESCQUIT_GRACE=grace)
+        watcher = subprocess.Popen([sys.executable, '-c', self.RUNNER, str(ROOT / 'config/fliperos-escquit')]
+                                   + list(args) + [str(target.pid)], env=env)
+        self.addCleanup(watcher.kill)
+        time.sleep(0.5)
+        return keyboard, watcher
+
+    def key(self, keyboard, code, value):
+        os.write(keyboard, self.EVENT.pack(0, 0, 1, code, value) + self.EVENT.pack(0, 0, 0, 0, 0))
+        time.sleep(0.6)
+
+    def frontend(self, script='sleep 60'):
+        proc = subprocess.Popen(['bash', '-c', script])
+        self.addCleanup(proc.wait)
+        self.addCleanup(proc.kill)
+        return proc
+
+    def test_esc_closes_the_frontend(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = self.frontend('exec sleep 60')
+            keyboard, watcher = self.watch(Path(tmp), target)
+            # Outra tecla, e o Esc que repete sozinho, nao contam.
+            self.key(keyboard, 28, 1)
+            self.key(keyboard, 1, 2)
+            self.assertIsNone(target.poll())
+            self.key(keyboard, 1, 1)
+            self.assertEqual(target.wait(timeout=5), -15)
+            self.assertEqual(watcher.wait(timeout=5), 0)
+
+    def test_not_while_a_game_is_open(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            # O frontend com um filho (o jogo) que sai sozinho.
+            target = self.frontend('sleep 2; sleep 60')
+            keyboard, _ = self.watch(tmp, target, grace='1.5')
+            self.key(keyboard, 1, 1)
+            self.assertIsNone(target.poll())
+            # Logo depois de o jogo fechar ainda nao (o Esc que o fechou).
+            time.sleep(1.1)
+            self.key(keyboard, 1, 1)
+            self.assertIsNone(target.poll())
+            # Passado o intervalo, fecha.
+            time.sleep(1.5)
+            self.key(keyboard, 1, 1)
+            self.assertEqual(target.wait(timeout=5), -15)
+            # O busy file, com --ignore-children (o Fightcade).
+            busy = tmp / 'busy'
+            busy.write_text('')
+            target2 = self.frontend('sleep 60; :')
+            keyboard2_dir = tmp / 'k2'
+            keyboard2_dir.mkdir()
+            keyboard2, _ = self.watch(keyboard2_dir, target2, '--busy-file', str(busy), '--ignore-children')
+            self.key(keyboard2, 1, 1)
+            self.assertIsNone(target2.poll())
+            busy.unlink()
+            time.sleep(0.6)
+            self.key(keyboard2, 1, 1)
+            self.assertEqual(target2.wait(timeout=5), -15)
+
+    def test_installed_and_wired_to_the_frontends(self):
+        self.assertIn('fliperos-escquit; do', ROOTFS)
+        session = (ROOT / 'config/fliperos-session').read_text()
+        self.assertIn('attractplus | emulationstation | retrofe | pegasus)', session)
+        self.assertIn('fliperos-escquit "$pid"', session)
+        # O LXDE (backend x) fica de fora.
+        x_branch = session.split('\n  x)\n')[1]
+        self.assertNotIn('escquit', x_branch)
+
+
 def fightcade_package(path, files=None):
     """Um pacote como o do Fightcade para Linux: tudo dentro de Fightcade/."""
     files = files if files is not None else {
@@ -2927,7 +3018,8 @@ class FightcadeTests(unittest.TestCase):
         env = dict(os.environ, HOME=str(tmp / 'home'), FIGHTCADE_DIR=str(tmp / 'fc'), FLIPEROS_USER='root',
                    FIGHTCADE_URL=(tmp / 'pkg.tar.gz').as_uri(), FLIPEROS_ROMS_SCRIPT=str(ROOT / 'config/fliperos-roms'),
                    FLIPEROS_CORE_INFO=str(tmp / 'nada'), FLIPEROS_FLYCAST_CFG=str(tmp / 'flycast-emu.cfg'),
-                   FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'))
+                   FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'), XDG_RUNTIME_DIR=str(tmp),
+                   FLIPEROS_ESCQUIT=str(tmp / 'nada'))
         env.pop('DISPLAY', None)
         env.update(extra)
         return env
@@ -3158,6 +3250,45 @@ class FightcadeTests(unittest.TestCase):
             finally:
                 emulator.kill()
                 emulator.wait()
+
+    def test_esc_in_the_lobby_closes_fightcade(self):
+        # O fliperos-escquit vigia este script; o arquivo busy existe so com
+        # um emulador aberto. O SIGTERM dele (o Esc) fecha a sessao na hora,
+        # sem esperar o cliente sumir.
+        fbneo = self.CLIENT + '|20 /usr/lib/wine/wine /opt/fliperos/fightcade/emulator/fbneo/fcadefbneo.exe sf2'
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            esc = tmp / 'escquit'
+            esc.write_text('#!/bin/bash\necho "$*" > "$FAKE/escquit.args"\n'
+                           'until [[ -f $FAKE/esc ]]; do sleep 0.1; done\n'
+                           'ls "$FAKE/fliperos-fightcade.busy" > "$FAKE/escquit.busy" 2>&1\n'
+                           'kill -TERM "${@: -1}"\n')
+            esc.chmod(0o755)
+            # Duas conferidas com a partida aberta e o Esc depois da terceira,
+            # ja na sala; sem ele o cliente seguiria aberto por mais 20.
+            checks = [fbneo, fbneo, self.CLIENT] + [self.CLIENT] * 20
+
+            def press_esc():
+                while True:
+                    try:
+                        if int((tmp / 'n').read_text()) >= 4:
+                            break
+                    except (OSError, ValueError):
+                        pass
+                    time.sleep(0.05)
+                (tmp / 'esc').write_text('')
+            threading.Thread(target=press_esc, daemon=True).start()
+            run = self.session(tmp, checks, FLIPEROS_ESCQUIT=str(esc))
+            self.assertEqual(run.returncode, 0, run.stderr)
+            args = (tmp / 'escquit.args').read_text().split()
+            self.assertEqual(args[:3], ['--busy-file', str(tmp / 'fliperos-fightcade.busy'), '--ignore-children'])
+            # Na sala o arquivo ja nao existe; e o script sai sem as 20 conferidas.
+            self.assertIn('No such file', (tmp / 'escquit.busy').read_text())
+            self.assertLess(int((tmp / 'n').read_text()), 8)
+            self.assertEqual(self.xrandr_log(tmp)[-1], '--output VGA-1 --mode 0x4a')
+            self.assertFalse((tmp / 'fliperos-fightcade.busy').exists())
 
     def test_emulators_fill_the_mode_of_the_table(self):
         with tempfile.TemporaryDirectory() as tmp:
