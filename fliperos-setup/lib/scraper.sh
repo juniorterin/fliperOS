@@ -436,9 +436,96 @@ scraper_attract_display() {
   fi
   if ! awk -v n="$1" '$1 == "romlist" { sub(/^[ \t]*romlist[ \t]+/, ""); if ($0 == n) f = 1 } END { exit !f }' \
     "$acfg" 2> /dev/null; then
-    printf 'display\t%s\n\tlayout               AdvanceMenu\n\tromlist              %s\n\tin_cycle             yes\n\tin_menu              yes\n\n' \
-      "$1" "$1" >> "$acfg"
+    {
+      printf 'display\t%s\n\tlayout               AdvanceMenu\n\tromlist              %s\n\tin_cycle             yes\n\tin_menu              yes\n' \
+        "$1" "$1"
+      scraper_attract_filters
+      printf '\n'
+    } >> "$acfg"
   fi
+  scraper_attract_default_filters "$acfg"
+}
+
+# scraper_attract_filters imprime os filtros de toda tela: todos os jogos,
+# os mais jogados, e por genero (Category, do catver.ini), fabricante e ano.
+scraper_attract_filters() {
+  local c=$'\xc2\xa9' name rule
+  printf '\tfilter               "All Games"\n\t\tsort_by              Title\n'
+  printf '\tfilter               "Most Played"\n\t\tsort_by              PlayedTime\n\t\treverse_order        true\n\t\tlist_limit           25\n'
+  while IFS='|' read -r name rule; do
+    printf '\tfilter               "%s"\n\t\tsort_by              Title\n\t\trule                 %s\n' "$name" "$rule"
+  done << EOF
+Breakout Games|Category contains Breakout
+Driving Games|Category equals Driving.+
+Fighting Games|Category equals Fight.+
+Maze Games|Category equals Maze.+
+Platform Games|Category equals Platform.+
+Puzzle Games|Category equals Puzzle.+
+Shooting Games|Category equals Shooter.+
+Sports Games|Category equals Sport.+
+$c Alpha Denshi|Manufacturer equals (Alpha.Densh.*)|(.*/.Alpha.Densh.*)
+$c Bally/Midway|Manufacturer equals (Ball.*)|(Midwa.*)|(.*/.Ball.*)|(.*/.Midwa.*)
+$c Capcom|Manufacturer equals (Capco.*)|(.*/.Capco.*)
+$c Cave|Manufacturer equals (Cav.*)|(.*/.Cav.*)
+$c Data East|Manufacturer equals (Data.Eas.*)|(.*/.Data.Eas.*)
+$c Irem|Manufacturer equals (Ire.*)|(.*/.Ire.*)
+$c Jaleco|Manufacturer equals (Jalec.*)|(.*/.Jalec.*)
+$c Kaneko|Manufacturer equals (Kanek.*)|(.*/.Kanek.*)
+$c Konami|Manufacturer equals (Konam.*)|(.*/.Konam.*)
+$c Namco|Manufacturer equals (Namc.*)|(.*/.Namc.*)
+$c Nintendo|Manufacturer equals (Nintend.*)|(.*/.Nintend.*)
+$c Psikyo|Manufacturer equals (Psiky.*)|(.*/.Psiky.*)
+$c Raizing / Eighting|Manufacturer equals (Raizin.*)|(Eightin.*)|(.*/.Raizin.*)|(.*/.Eightin.*)
+$c Seibu Kaihatsu|Manufacturer equals (Seibu.Kaihats.*)|(.*/.Seibu.Kaihats.*)
+$c Sega|Manufacturer equals (Seg.*)|(.*/.Seg.*)
+$c SNK|Manufacturer equals (SN.*)|(.*/.SN.*)
+$c Taito|Manufacturer equals (Tait.*)|(.*/.Tait.*)
+$c Technos|Manufacturer equals (Techno.*)|(.*/.Techno.*)
+$c Tecmo|Manufacturer equals (Tecm.*)|(.*/.Tecm.*)
+$c Toaplan|Manufacturer equals (Toapla.*)|(.*/.Toapla.*)
+$c Universal|Manufacturer equals (Universa.*)|(.*/.Universa.*)
+$c Video System Co.|Manufacturer equals (Visc.*)|(Video.System.Co.*)|(.*/.Visc.*)|(.*/.Video.System.C.*)
+$c Zaccaria|Manufacturer equals (Zaccari.*)|(.*/.Zaccari.*)
+Released 1970 - 1979|Year equals 197.
+Released 1980|Year equals 1980
+Released 1981|Year equals 1981
+Released 1982|Year equals 1982
+Released 1983|Year equals 1983
+Released 1984 - 1985|Year equals 1984|1985
+Released 1986 - 1987|Year equals 1986|1987
+Released 1988 - 1989|Year equals 1988|1989
+Released 1990 - 1994|Year equals 1990|1991|1992|1993|1994
+Released 1995 - 1999|Year equals 1995|1996|1997|1998|1999
+Released 2000 - 2020|Year equals 20..
+EOF
+}
+
+# scraper_attract_default_filters ARQUIVO poe os filtros nas telas sem
+# nenhum (as de antes e as que o Attract-Mode criou); as que ja tem filtro
+# ficam como estao. Reescreve o arquivo no lugar, com o mesmo dono.
+scraper_attract_default_filters() {
+  local acfg=$1 new old
+  [[ -f $acfg ]] || return 0
+  old=$(cat "$acfg"; printf x)
+  new=$(FILTERS=$(scraper_attract_filters) awk '
+    function flush(   i, last) {
+      if (!n) return
+      last = n
+      while (last > 0 && block[last] ~ /^[ \t\r]*$/) last--
+      for (i = 1; i <= last; i++) print block[i]
+      if (!filtered) print ENVIRON["FILTERS"]
+      for (i = last + 1; i <= n; i++) print block[i]
+      n = 0
+      filtered = 0
+    }
+    /^display[ \t]/ { flush(); inblock = 1 }
+    inblock && /^[^ \t]/ && !/^display[ \t]/ { flush(); inblock = 0 }
+    inblock { block[++n] = $0; if ($1 == "filter") filtered = 1; next }
+    { print }
+    END { flush() }' "$acfg"; printf x) || return 1
+  [[ $new == "$old" ]] && return 0
+  new=${new%x}
+  printf '%s' "$new" > "$acfg"
 }
 
 # scraper_arcade CHAVE: a pasta e de jogos de arcade (sets do MAME)? As do
