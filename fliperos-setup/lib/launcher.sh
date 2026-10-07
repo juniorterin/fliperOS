@@ -5,10 +5,15 @@
 #   nome|backend|binario|pacote|descricao
 # e /etc/fliperos/session guarda o escolhido. O fliperos-session abre o
 # escolhido no boot; "setup" nao abre nada e cai direto no menu.
+#
+# Os frontends que a pessoa cadastra ficam em sessions.custom.conf (uma
+# atualizacao reescreve a tabela, nao este arquivo), no mesmo formato:
+#   custom-N|kms|COMANDO|custom|ROTULO
+# O COMANDO roda num "bash -c", no console como os outros frontends.
 
 launcher_rows() {
   [[ -f $SESSIONS_TABLE ]] || return 1
-  grep -v '^[[:space:]]*#' "$SESSIONS_TABLE" | grep -v '^[[:space:]]*$'
+  cat "$SESSIONS_TABLE" "$CUSTOM_SESSIONS" 2> /dev/null | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$'
 }
 
 launcher_field() {
@@ -27,8 +32,82 @@ launcher_installed() {
   local bin
   [[ $1 == setup ]] && return 0
   bin=$(launcher_field "$1" 3)
+  launcher_custom "$1" && bin=$(launcher_custom_program "$bin")
   [[ -n $bin ]] || return 1
   [[ -x $bin ]] || have "$bin"
+}
+
+# ── Frontends da pessoa ──────────────────────────────────────────
+
+launcher_custom() {
+  [[ $(launcher_field "$1" 4) == custom ]]
+}
+
+# launcher_custom_program COMANDO imprime o programa que o comando abre: a
+# primeira palavra depois das variaveis (FOO=1 programa ...), com o ~ na
+# pasta da pessoa (o Setup roda como root).
+launcher_custom_program() {
+  local word words
+  read -ra words <<< "$1"
+  for word in "${words[@]}"; do
+    [[ $word =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] && continue
+    [[ $word == "~/"* ]] && word=/home/$FLIPEROS_USER/${word#\~/}
+    printf '%s\n' "$word"
+    return 0
+  done
+}
+
+# launcher_custom_list imprime "nome|rotulo" de cada frontend da pessoa.
+launcher_custom_list() {
+  local name pkg desc
+  [[ -f $CUSTOM_SESSIONS ]] || return 0
+  while IFS='|' read -r name _ _ pkg desc; do
+    [[ $pkg == custom ]] && printf '%s|%s\n' "$name" "$desc"
+  done < "$CUSTOM_SESSIONS"
+  return 0
+}
+
+# launcher_custom_valid TEXTO: o rotulo ou o comando cabe numa linha da
+# tabela (nao vazio, sem "|" e sem quebra de linha).
+launcher_custom_valid() {
+  [[ -n ${1//[[:space:]]/} && $1 != *'|'* && $1 != *$'\n'* ]]
+}
+
+# launcher_custom_save NOME ROTULO COMANDO grava (NOME vazio: um novo, e o
+# nome dele sai na saida).
+launcher_custom_save() {
+  local name=$1 label=$2 cmd=$3 n=1 line tmp
+  launcher_custom_valid "$label" && launcher_custom_valid "$cmd" || return 1
+  if [[ -z $name ]]; then
+    while launcher_field "custom-$n" 1 | grep -q .; do n=$((n + 1)); done
+    name=custom-$n
+  fi
+  tmp=$(mktemp "$CUSTOM_SESSIONS.XXXXXX") || return 1
+  if [[ -f $CUSTOM_SESSIONS ]]; then
+    while IFS= read -r line; do
+      [[ ${line%%|*} == "$name" ]] || printf '%s\n' "$line"
+    done < "$CUSTOM_SESSIONS" > "$tmp"
+  fi
+  printf '%s|kms|%s|custom|%s\n' "$name" "$cmd" "$label" >> "$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$CUSTOM_SESSIONS" || return 1
+  log_info "frontend da pessoa: $name = $label ($cmd)"
+  printf '%s\n' "$name"
+}
+
+# launcher_custom_delete NOME apaga; se era o que abre ao ligar, volta o menu.
+launcher_custom_delete() {
+  local name=$1 line tmp
+  launcher_custom "$name" || return 1
+  tmp=$(mktemp "$CUSTOM_SESSIONS.XXXXXX") || return 1
+  while IFS= read -r line; do
+    [[ ${line%%|*} == "$name" ]] || printf '%s\n' "$line"
+  done < "$CUSTOM_SESSIONS" > "$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$CUSTOM_SESSIONS" || return 1
+  log_info "frontend da pessoa apagado: $name"
+  [[ $(launcher_current) == "$name" ]] && launcher_set setup
+  return 0
 }
 
 # launcher_available imprime "nome|descricao" dos launchers instalados, na

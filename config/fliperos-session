@@ -4,8 +4,12 @@
 # fliperos-tty1 abre o menu do setup em seguida.
 set -uo pipefail
 
-TABLE=/etc/fliperos/sessions.conf
-CHOICE_FILE=/etc/fliperos/session
+TABLE=${FLIPEROS_SESSIONS:-/etc/fliperos/sessions.conf}
+# Os frontends que a pessoa cadastra no Setup > Frontend (o comando roda
+# num "bash -c"; ver fliperos-setup/lib/launcher.sh).
+CUSTOM=${FLIPEROS_CUSTOM_SESSIONS:-/etc/fliperos/sessions.custom.conf}
+CHOICE_FILE=${FLIPEROS_SESSION:-/etc/fliperos/session}
+BIN=${FLIPEROS_BIN:-/opt/fliperos/bin}
 
 choice=${1:-}
 if [[ -z $choice ]]; then
@@ -14,18 +18,30 @@ if [[ -z $choice ]]; then
   [[ -n $choice ]] || choice=setup
 fi
 
-row=""
-[[ -r $TABLE ]] && row=$(grep -v '^[[:space:]]*#' "$TABLE" | grep "^${choice}|" | head -1)
+row=$(cat "$TABLE" "$CUSTOM" 2> /dev/null | grep -v '^[[:space:]]*#' | grep "^${choice}|" | head -1)
 if [[ -z $row ]]; then
   echo "Unknown launcher '$choice'; opening the setup menu." >&2
   exit 0
 fi
 
-IFS='|' read -r _name backend binary _package _description <<< "$row"
+IFS='|' read -r _name backend binary package _description <<< "$row"
 [[ $backend == none ]] && exit 0
 
-if ! command -v "$binary" > /dev/null 2>&1 && [[ ! -x $binary ]]; then
-  echo "'$choice' is selected, but '$binary' is not installed." >&2
+program=("$binary")
+check=$binary
+if [[ $package == custom ]]; then
+  program=(bash -c "$binary")
+  check=""
+  read -ra words <<< "$binary"
+  for word in "${words[@]}"; do
+    [[ $word =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] && continue
+    check=${word/#\~/$HOME}
+    break
+  done
+fi
+
+if ! command -v "$check" > /dev/null 2>&1 && [[ ! -x $check ]]; then
+  echo "'$choice' is selected, but '$check' is not installed." >&2
   echo "Choose another one in the setup: Setup > Frontend." >&2
   sleep 3
   exit 0
@@ -62,20 +78,21 @@ printf '\e[H\e[2J\e[?25l'
 case $backend in
   kms)
     case $_name in
-      # Nos frontends o Esc fecha e volta ao menu (config/fliperos-escquit).
-      # O RetroArch e o GroovyMAME ja saem pelo Esc; o Fightcade liga o
-      # dele. <&0: em segundo plano o bash daria /dev/null como entrada.
-      attractplus | emulationstation | retrofe | pegasus)
-        /opt/fliperos/bin/fliperos-kms-run "$binary" <&0 &
+      # Nos frontends (e nos da pessoa) o Esc fecha e volta ao menu
+      # (config/fliperos-escquit). O RetroArch e o GroovyMAME ja saem pelo
+      # Esc; o Fightcade liga o dele. <&0: em segundo plano o bash daria
+      # /dev/null como entrada.
+      attractplus | emulationstation | retrofe | pegasus | custom-*)
+        "$BIN/fliperos-kms-run" "${program[@]}" <&0 &
         pid=$!
-        /opt/fliperos/bin/fliperos-escquit "$pid" < /dev/null > /dev/null 2>&1 &
+        "$BIN/fliperos-escquit" "$pid" < /dev/null > /dev/null 2>&1 &
         wait "$pid"
         rc=$?
         # SIGTERM do Esc: fechou como pedido.
         ((rc == 143)) && rc=0
         ;;
       *)
-        /opt/fliperos/bin/fliperos-kms-run "$binary"
+        "$BIN/fliperos-kms-run" "${program[@]}"
         rc=$?
         ;;
     esac

@@ -2970,11 +2970,42 @@ class EscQuitTests(unittest.TestCase):
     def test_installed_and_wired_to_the_frontends(self):
         self.assertIn('fliperos-escquit; do', ROOTFS)
         session = (ROOT / 'config/fliperos-session').read_text()
-        self.assertIn('attractplus | emulationstation | retrofe | pegasus)', session)
-        self.assertIn('fliperos-escquit "$pid"', session)
+        self.assertIn('attractplus | emulationstation | retrofe | pegasus | custom-*)', session)
+        self.assertIn('fliperos-escquit" "$pid"', session)
         # O LXDE (backend x) fica de fora.
         x_branch = session.split('\n  x)\n')[1]
         self.assertNotIn('escquit', x_branch)
+
+    def test_custom_frontend_runs_its_command_with_esc(self):
+        # Um frontend da pessoa (Setup > Frontend): o comando num bash -c,
+        # pelo fliperos-kms-run, com o Esc ligado.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'bin').mkdir()
+            for name, body in (('fliperos-kms-run', 'printf "%s\\n" "$@" > "$OUT/kms"\n"$@"\n'),
+                               ('fliperos-escquit', 'echo "$@" > "$OUT/esc"\n'),
+                               ('myfe', 'echo "myfe $*" >> "$OUT/ran"\n')):
+                (tmp / 'bin' / name).write_text('#!/bin/bash\n' + body)
+                (tmp / 'bin' / name).chmod(0o755)
+            (tmp / 'sessions.conf').write_text('setup|none|||FliperOS Setup menu\n')
+            (tmp / 'custom.conf').write_text('custom-1|kms|FOO=1 myfe --full "my games"|custom|My FE\n')
+            env = dict(os.environ, FLIPEROS_SESSIONS=str(tmp / 'sessions.conf'), OUT=str(tmp),
+                       FLIPEROS_CUSTOM_SESSIONS=str(tmp / 'custom.conf'), FLIPEROS_BIN=str(tmp / 'bin'),
+                       PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']))
+            run = subprocess.run(['bash', str(ROOT / 'config/fliperos-session'), 'custom-1'], env=env,
+                                 capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual((tmp / 'kms').read_text(), 'bash\n-c\nFOO=1 myfe --full "my games"\n')
+            self.assertEqual((tmp / 'ran').read_text(), 'myfe --full my games\n')
+            time.sleep(0.5)
+            self.assertTrue((tmp / 'esc').exists())
+            # O programa que nao existe: avisa e volta ao menu, sem abrir nada.
+            (tmp / 'custom.conf').write_text('custom-1|kms|nada-disso --x|custom|My FE\n')
+            (tmp / 'kms').unlink()
+            run = subprocess.run(['bash', str(ROOT / 'config/fliperos-session'), 'custom-1'], env=env,
+                                 capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+            self.assertIn("'nada-disso' is not installed", run.stderr)
+            self.assertFalse((tmp / 'kms').exists())
 
 
 def fightcade_package(path, files=None):
@@ -3519,7 +3550,7 @@ class LatencyBuildTests(unittest.TestCase):
         script = (ROOT / 'config/fliperos-session').read_text()
         start = script.index('--session-start')
         end = script.index('--session-end')
-        self.assertLess(start, script.index('fliperos-kms-run "$binary"'))
+        self.assertLess(start, script.index('fliperos-kms-run" "${program[@]}"'))
         self.assertLess(script.index('xinit "$binary"'), end)
         self.assertNotIn('exec /opt/fliperos/bin/fliperos-kms-run', script)
         self.assertNotIn('exec xinit', script)

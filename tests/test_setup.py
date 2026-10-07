@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -881,6 +882,39 @@ class LauncherTests(Base):
         self.assertLess(screen.index("launcher_fetch "), screen.index('launcher_set "$choice"'))
         self.assertIn("roms/fightcade", self.env.out("frontends_hint fightcade"))
         self.assertEqual(self.env.out("frontends_hint pegasus"), "")
+
+    def test_custom_frontends_are_added_edited_and_deleted(self):
+        custom = self.env.etc / "sessions.custom.conf"
+        self.env.stub("myfe", "true")
+        name = self.env.out('launcher_custom_save "" "My FE" "FOO=1 myfe --full"').strip()
+        self.assertEqual(name, "custom-1")
+        self.assertEqual(custom.read_text(), "custom-1|kms|FOO=1 myfe --full|custom|My FE\n")
+        # Entra na lista como os outros, instalado pelo programa do comando.
+        self.assertIn("custom-1|My FE", self.env.out("launcher_available").splitlines())
+        self.assertEqual(self.env.out("launcher_label custom-1").strip(), "My FE")
+        self.assertEqual(self.env.out("launcher_package custom-1").strip(), "custom")
+        self.assertEqual(self.env.out("launcher_fetcher custom-1"), "")
+        self.assertEqual(self.env.out('launcher_custom_program "A=1 B_2=x ~/fe -x"').strip(),
+                         "/home/fliperos/fe")
+        # Um segundo, e a edicao troca a linha sem mexer na ordem dos nomes.
+        self.assertEqual(self.env.out('launcher_custom_save "" "Other" "nothere"').strip(), "custom-2")
+        self.assertEqual(self.env.run("launcher_installed custom-2").returncode, 1)
+        self.assertNotIn("custom-2", self.env.out("launcher_available"))
+        self.env.out('launcher_custom_save custom-1 "My FE 2" "myfe"')
+        self.assertEqual(self.env.out("launcher_custom_list").splitlines(), ["custom-2|Other", "custom-1|My FE 2"])
+        # "|" e quebra de linha nao cabem na tabela.
+        for label, cmd in (("A|B", "myfe"), ("Ok", "a | b"), ("", "myfe"), ("Ok", "  ")):
+            run = self.env.run('launcher_custom_save "" %s %s' % (shlex.quote(label), shlex.quote(cmd)))
+            self.assertEqual(run.returncode, 1, (label, cmd))
+        self.assertEqual(len(custom.read_text().splitlines()), 2)
+        # Apagar o que abre ao ligar volta o menu do Setup.
+        self.env.out("launcher_set custom-1")
+        self.env.out("launcher_custom_delete custom-1")
+        self.assertEqual(self.env.out("launcher_current").strip(), "setup")
+        self.assertEqual(custom.read_text(), "custom-2|kms|nothere|custom|Other\n")
+        # Os da tabela do FliperOS nao se apagam por aqui.
+        self.assertEqual(self.env.run("launcher_custom_delete retroarch").returncode, 1)
+        self.assertEqual(self.env.out('launcher_custom_save "" "Third" "myfe"').strip(), "custom-1")
 
     def test_request_is_left_for_the_tty1_loop(self):
         request = self.env.dir / "run" / "launch"

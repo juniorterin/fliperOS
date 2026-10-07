@@ -22,6 +22,7 @@ BOOT_DEFAULTS=${BOOT_DEFAULTS:-/etc/default/fliperos-boot}
 LIMINE_UPDATE=${LIMINE_UPDATE:-/usr/local/sbin/fliperos-limine-update}
 VIDEO_CHECK=${VIDEO_CHECK:-/usr/local/bin/fliperos-video-check}
 SESSIONS_TABLE=${SESSIONS_TABLE:-$FLIPEROS_ETC/sessions.conf}
+CUSTOM_SESSIONS=${CUSTOM_SESSIONS:-$FLIPEROS_ETC/sessions.custom.conf}
 SESSION_FILE=${SESSION_FILE:-$FLIPEROS_ETC/session}
 EDID_DIR=${EDID_DIR:-/lib/firmware/edid}
 RETROARCH_CFG=${RETROARCH_CFG:-$FLIPEROS_ETC/retroarch/retroarch.cfg}

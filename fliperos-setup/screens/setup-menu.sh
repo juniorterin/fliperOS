@@ -226,10 +226,26 @@ screen_frontend() {
       entries+=("$name|$desc (not available yet)")
     fi
   done < <(launcher_all)
+  entries+=("+add|Add a custom frontend")
+  [[ -n $(launcher_custom_list) ]] && entries+=("+edit|Edit or delete a custom frontend")
   choice=$(ui_menu "Frontend" "Choose what starts when the computer turns on. Now: $(launcher_label "$current")." \
     "$current" "${entries[@]}") || return 0
+  case $choice in
+    +add)
+      screen_frontend_custom
+      return 0
+      ;;
+    +edit)
+      screen_frontend_custom_pick
+      return 0
+      ;;
+  esac
   label=$(launcher_label "$choice")
-  if ! launcher_installed "$choice" && [[ -n $(launcher_fetcher "$choice") ]]; then
+  if launcher_custom "$choice" && ! launcher_installed "$choice"; then
+    ui_msg "Frontend" "$label: the program $(launcher_custom_program "$(launcher_field "$choice" 3)") was not found." "" \
+      "Fix its command in Edit or delete a custom frontend."
+    return 0
+  elif ! launcher_installed "$choice" && [[ -n $(launcher_fetcher "$choice") ]]; then
     # De codigo fechado: nao vem na imagem nem no repositorio, o Setup baixa
     # do site do proprio programa.
     ui_yesno "Frontend" "$label is not installed, and it does not come with FliperOS. Download it now from its own website?" yes ||
@@ -260,6 +276,59 @@ screen_frontend() {
   lines=("$label will start when the computer turns on.")
   mapfile -t -O 1 lines < <(frontends_hint "$choice")
   ui_msg "Frontend" "${lines[@]}"
+}
+
+# screen_frontend_custom [NOME]: cadastra um frontend da pessoa (rotulo e
+# comando), ou edita o NOME.
+screen_frontend_custom() {
+  local name=${1:-} label="" cmd="" title="Custom frontend"
+  if [[ -n $name ]]; then
+    label=$(launcher_label "$name")
+    cmd=$(launcher_field "$name" 3)
+  fi
+  while true; do
+    label=$(ui_input "$title" "Name shown in the menu." "$label") || return 0
+    launcher_custom_valid "$label" && break
+    ui_msg "$title" "The name cannot be empty or have a | character."
+  done
+  while true; do
+    cmd=$(ui_input "$title" "Command that opens $label, on the console like the other frontends." \
+      "$cmd" long) || return 0
+    launcher_custom_valid "$cmd" && break
+    ui_msg "$title" "The command cannot be empty or have a | character." "" \
+      "For a pipe, put the command in a script and use the script."
+  done
+  if ! name=$(launcher_custom_save "$name" "$label" "$cmd"); then
+    ui_msg "$title" "Could not save $label (details in the log)."
+    return 0
+  fi
+  if ! launcher_installed "$name"; then
+    ui_msg "$title" "$label was saved, but the program $(launcher_custom_program "$cmd") was not found." "" \
+      "It can be fixed later in Edit or delete a custom frontend."
+    return 0
+  fi
+  [[ $(launcher_current) == "$name" ]] && return 0
+  ui_yesno "$title" "$label was saved. Start it when the computer turns on?" yes || return 0
+  launcher_set "$name"
+}
+
+# screen_frontend_custom_pick: escolhe um frontend da pessoa para editar ou
+# apagar.
+screen_frontend_custom_pick() {
+  local entries=() name label choice title="Custom frontend"
+  mapfile -t entries < <(launcher_custom_list)
+  ((${#entries[@]})) || return 0
+  name=$(ui_menu "$title" "Choose the custom frontend to edit or delete." "" "${entries[@]}") || return 0
+  label=$(launcher_label "$name")
+  choice=$(ui_menu "$title" "$label"$'\n'"$(ui_dim "$(launcher_field "$name" 3)")" "edit" \
+    "edit|Edit the name and the command" "delete|Delete") || return 0
+  case $choice in
+    edit) screen_frontend_custom "$name" ;;
+    delete)
+      ui_yesno "$title" "Delete $label?" no || return 0
+      launcher_custom_delete "$name"
+      ;;
+  esac
 }
 
 # ── Extras ───────────────────────────────────────────────────────
