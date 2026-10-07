@@ -3301,7 +3301,7 @@ class FightcadeTests(unittest.TestCase):
             self.assertEqual(self.fetch(tmp).returncode, 0)
             fc = tmp / 'fc'
             # O cliente aberto nas duas primeiras conferidas, depois fechado.
-            for height, scale, extra in (('480', '0.67', {}), ('768', '1.00', {}), ('240', '0.50', {}),
+            for height, scale, extra in (('448', '0.75', {}), ('768', '1.00', {}), ('240', '0.50', {}),
                                          ('480', '0.8', {'FIGHTCADE_SCALE': '0.8'})):
                 run = self.session(tmp, [self.CLIENT, self.CLIENT], FLIPEROS_RES_H=height, **extra)
                 self.assertEqual(run.returncode, 0, run.stderr)
@@ -3697,7 +3697,7 @@ class FightcadeTests(unittest.TestCase):
             self.assertEqual((root / 'etc/fliperos/emulator-modes.conf').read_text(),
                              'flycast             640x240@60      640x480@60\n'
                              'fightcade-fc1       640x240@60      640x480@60\n'
-                             'fightcade           640x480@60      640x480@60\n'
+                             'fightcade           512x448@60      640x480@60\n'
                              'fightcade-fbneo     320x240@60      640x480@60\n'
                              'fightcade-snes9x    256x224@60.0988 640x480@60\n'
                              'fightcade-flycast   640x240@60      640x480@60\n')
@@ -4156,12 +4156,13 @@ class EmulatorModeTests(unittest.TestCase):
             # Linha mudada pela pessoa fica como esta.
             self.assertIn('fliperos-model2     320x240@60      496x384@57.524\n', table)
 
-    def test_fightcade_lobby_gets_480_lines_and_a_mouse_cursor(self):
-        # A sala de jogos nao cabe em 240 linhas: 640x480 (entrelacado no
-        # 15 kHz), com o cursor, que os emuladores de jogo direto nao tem.
-        for freq in ('15k', '31k'):
+    def test_fightcade_lobby_gets_448_lines_and_a_mouse_cursor(self):
+        # A sala de jogos nao cabe em 240 linhas: 512x448 entrelacado no
+        # 15 kHz (letra maior que 640x480), com o cursor, que os emuladores
+        # de jogo direto nao tem.
+        for freq, mode in (('15k', '512 448 60'), ('31k', '640 480 60')):
             out = self.run_x11(['fightcade'], frequency=freq).stdout
-            self.assertIn('MODE=640 480 60', out, freq)
+            self.assertIn('MODE=' + mode, out, freq)
             self.assertNotIn('-nocursor', out)
         self.assertIn('-nocursor', self.run_x11(['myprog']).stdout)
 

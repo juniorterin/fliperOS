@@ -81,8 +81,10 @@ install -Dm644 "$src/config/openbox-black-themerc" "$root/usr/share/themes/Flipe
 # existe entrelacado. So muda a linha que ainda e a de fabrica.
 sed -i -E 's/^(supermodel|fliperos-model2)( +)496x384@57\.524  496x384@57\.524$/\1\2640x240@57.524  496x384@57.524/' \
   "$root/etc/fliperos/emulator-modes.conf"
-# O SNES9x do Fightcade era 320x240 no 15 kHz; agora o do console.
-sed -i -E 's/^fightcade-snes9x    320x240@60      640x480@60$/fightcade-snes9x    256x224@60.0988 640x480@60/' \
+# O SNES9x do Fightcade era 320x240 no 15 kHz; agora o do console. A sala
+# era 640x480; agora 512x448 (o texto maior).
+sed -i -E -e 's/^fightcade-snes9x    320x240@60      640x480@60$/fightcade-snes9x    256x224@60.0988 640x480@60/' \
+  -e 's/^fightcade           640x480@60      640x480@60$/fightcade           512x448@60      640x480@60/' \
   "$root/etc/fliperos/emulator-modes.conf"
 # Tabelas de antes do Fightcade ganham as linhas dele, as do config/: a da
 # sala de jogos (640x480: nao cabe em 240 linhas; sem ela o fliperos-x11-run

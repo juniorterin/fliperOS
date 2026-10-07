@@ -183,14 +183,14 @@ if command -v wine > /dev/null; then
 fi
 
 # A pagina e desenhada para um desktop (janela de 1280x800): numa tela
-# menor ela encolhe na proporcao da altura, ate a metade. FIGHTCADE_SCALE
-# fixa outro valor; na janela, Text > Zoom In/Out (Ctrl+= e Ctrl+-) ajusta
-# na hora.
+# menor ela encolhe na proporcao da altura (600 linhas = 100%, para o texto
+# ainda ser legivel num tubo), ate a metade. FIGHTCADE_SCALE fixa outro
+# valor; na janela, Text > Zoom In/Out (Ctrl+= e Ctrl+-) ajusta na hora.
 scale=${FIGHTCADE_SCALE:-}
 if [[ -z $scale ]]; then
   height=${FLIPEROS_RES_H:-$(xrandr --current 2> /dev/null | awk '/\*/ { split($1, a, "x"); print a[2] + 0; exit }')}
-  # LC_ALL=C: com o sistema em portugues o awk escreveria "0,67".
-  scale=$(LC_ALL=C awk -v h="${height:-720}" 'BEGIN { s = h / 720; if (s > 1) s = 1; if (s < 0.5) s = 0.5; printf "%.2f", s }')
+  # LC_ALL=C: com o sistema em portugues o awk escreveria "0,75".
+  scale=$(LC_ALL=C awk -v h="${height:-720}" 'BEGIN { s = h / 600; if (s > 1) s = 1; if (s < 0.5) s = 0.5; printf "%.2f", s }')
 fi
 
 # ── O modo de cada emulador ───────────────────────────────────────
