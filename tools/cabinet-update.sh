@@ -27,7 +27,8 @@ echo "== Backup: $backup"
 splash_sum() {
   local theme
   theme=$(readlink -f /usr/share/plymouth/themes/default.plymouth) || return 0
-  { find "$(dirname "$theme")" -type f -exec cksum {} + 2> /dev/null || true; } | sort | cksum
+  { find "$(dirname "$theme")" /usr/share/fonts/truetype/fliperos /etc/initramfs-tools/hooks/fliperos-fonts \
+      -type f -exec cksum {} + 2> /dev/null || true; } | sort | cksum
 }
 splash_before=$(splash_sum)
 

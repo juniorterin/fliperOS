@@ -14,7 +14,7 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 | `--skip-switchres` | Without Switchres: no per-monitor EDIDs, geometry or EDID boot entries |
 | `--skip-input-drivers`, `--skip-wheel-drivers` | Without the input drivers (GunCon 2 and wheels), or only without the wheel ones. By default `guncon2`, `hid-tmff2` (Thrustmaster T150/T300/TX/T248...) and `new-lg4ff` (Logitech with full force feedback, replacing `hid-logitech`) ship, through DKMS — validated on the cabinet's 6.18 |
 | `--kernel-cache DIR` | Where to store/reuse the kernel `.deb`s (default `/output/kernel-cache`) |
-| `--splash fliperos\|evangelion\|none` | Plymouth theme |
+| `--splash fliperos-text\|fliperos\|evangelion\|none` | Plymouth theme (default `fliperos-text`) |
 | `--wifi-ssid NAME --wifi-psk PASSWORD` | Saves a Wi-Fi network in the image (**the password is stored as plain text in the ISO**; don't distribute it) |
 | `--repo DIR` | APT repository of the frontends carried into the image (default `/output/repo`, if it exists) |
 

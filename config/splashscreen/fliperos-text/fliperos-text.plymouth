@@ -1,6 +1,6 @@
 [Plymouth Theme]
-Name=FliperOS (text)
-Description=Text only, no images
+Name=FliperOS (terminal)
+Description=Animated, in the style of modern terminals (the default)
 ModuleName=script
 
 [script]

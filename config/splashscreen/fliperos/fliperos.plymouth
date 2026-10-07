@@ -1,6 +1,6 @@
 [Plymouth Theme]
 Name=FliperOS
-Description=Boot screen in the style of the 2000s (the default)
+Description=Boot screen in the style of the 2000s
 ModuleName=script
 
 [script]

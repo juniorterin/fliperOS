@@ -316,6 +316,11 @@ for theme in "$src"/config/splashscreen/*/; do
   cp -r "$src/config/splashscreen/$theme" "$root/usr/share/plymouth/themes/$theme"
 done
 chmod -R a+rX "$root/usr/share/fliperos/splashscreen" "$root/usr/share/plymouth/themes"
+# JetBrains Mono, a fonte do tema de texto, tambem no initramfs (o hook).
+rm -rf "$root/usr/share/fonts/truetype/fliperos"
+install -Dm644 -t "$root/usr/share/fonts/truetype/fliperos" \
+  "$src"/config/fonts/jetbrains-mono/*.ttf "$src/config/fonts/jetbrains-mono/OFL.txt"
+install -Dm755 "$src/config/fliperos-initramfs-fonts" "$root/etc/initramfs-tools/hooks/fliperos-fonts"
 # Paleta Dracula no console: o setvtrgb.service do Ubuntu aplica /etc/vtrgb
 # no boot, e /etc/vtrgb e uma alternativa (a de maior prioridade vence).
 install -Dm644 "$src/config/vtrgb-dracula" "$root/etc/fliperos/vtrgb-dracula"

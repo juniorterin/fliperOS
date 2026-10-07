@@ -1,78 +1,433 @@
-// Splash do FliperOS.
+// Splash "FliperOS (terminal)": so texto, no estilo dos terminais modernos.
 //
-// Sem nenhum arquivo de imagem de proposito: o modo do CRT e 640x240 (ou
-// 320x240), e arte pensada para 1080p fica ilegivel ou cortada nessa
-// resolucao. Tudo aqui e texto renderizado pelo plugin label (pango) sobre um
-// fundo em gradiente, o que escala sem depender de asset binario no repo.
+// O titulo se monta de caracteres embaralhados que vao travando letra a
+// letra; parado, ele ondula nas cores do Dracula, com um glitch de vez em
+// quando. Embaixo, um prompt digita o subtitulo com o cursor piscando, a
+// barra de progresso tem gradiente, brilho e ponta acesa, e o log mostra as
+// unidades do systemd que vao subindo (o Plymouth as recebe do systemd). No
+// fundo caem caracteres apagados.
 //
-// Image.Text(texto, r, g, b, alpha, fonte, alinhamento) — assinatura conferida
-// no script.so do Ubuntu 24.04; alinhamento aceita left, center ou right.
-// Se este script falhar, o boot fica sem splash: a entrada "Diagnostico" do
-// Limine nao passa "splash" e continua sendo o caminho sem Plymouth.
+// Sem arquivo de imagem: tudo e texto do plugin label (pango) em JetBrains
+// Mono (/usr/share/fonts/truetype/fliperos, que o hook fliperos-fonts poe no
+// initramfs), e os blocos solidos sao um caractere de bloco recortado e
+// esticado. Escala para qualquer modo (320x240, 640x240, 640x480 ou um
+// monitor moderno) e, nos de largura dupla do CRT, o texto e achatado na
+// vertical porque o pixel e duas vezes mais alto que largo.
+//
+// Image.Text(texto, r, g, b, alpha, fonte, alinhamento), Image.Crop, os
+// metodos de string (CharAt, SubString, Length) e Math.* conferidos no
+// script.so do Ubuntu 24.04. SubString e CharAt contam bytes: so texto ASCII
+// passa por eles.
 
-Window.SetBackgroundTopColor(0.05, 0.07, 0.13);
-Window.SetBackgroundBottomColor(0.01, 0.01, 0.03);
+Window.SetBackgroundTopColor(0.157, 0.165, 0.212);
+Window.SetBackgroundBottomColor(0.071, 0.075, 0.098);
 
-screen_width = Window.GetWidth();
-screen_height = Window.GetHeight();
+W = Window.GetWidth();
+H = Window.GetHeight();
+py = 1;
+if (W > 2 * H)
+  py = 0.5;
+u = Math.Min(W / 640, H / py / 480);
+FONT = "JetBrains Mono";
+MODE = Plymouth.GetMode();
+BOOTING = 0;
+if (MODE == "boot" || MODE == "resume")
+  BOOTING = 1;
 
-BAR_SLOTS = 24;
+// ── Paleta (Dracula) ─────────────────────────────────────────────────
+FG_R = 0.973; FG_G = 0.973; FG_B = 0.949;
+DIM_R = 0.384; DIM_G = 0.447; DIM_B = 0.643;
+SOFT_R = 0.749; SOFT_G = 0.765; SOFT_B = 0.851;
+LINE_R = 0.267; LINE_G = 0.278; LINE_B = 0.353;
+GREEN_R = 0.314; GREEN_G = 0.980; GREEN_B = 0.482;
+CYAN_R = 0.545; CYAN_G = 0.914; CYAN_B = 0.992;
+PINK_R = 1.0; PINK_G = 0.475; PINK_B = 0.776;
+YELLOW_R = 0.945; YELLOW_G = 0.980; YELLOW_B = 0.549;
+// Gradiente roxo, rosa, ciano e de volta ao roxo.
+STOP_R[0] = 0.741; STOP_G[0] = 0.576; STOP_B[0] = 0.976;
+STOP_R[1] = 1.0;   STOP_G[1] = 0.475; STOP_B[1] = 0.776;
+STOP_R[2] = 0.545; STOP_G[2] = 0.914; STOP_B[2] = 0.992;
+STOP_R[3] = 0.741; STOP_G[3] = 0.576; STOP_B[3] = 0.976;
 
-fun centered_sprite(image, y_fraction) {
-        sprite = Sprite(image);
-        sprite.SetX((screen_width - image.GetWidth()) / 2);
-        sprite.SetY(screen_height * y_fraction);
-        return sprite;
+fun Mix(a, b, t) {
+  return a + (b - a) * t;
 }
 
-title_image = Image.Text("FliperOS", 0.85, 0.90, 1.0, 1, "DejaVu Sans Bold 26", "center");
-title = centered_sprite(title_image, 0.22);
-
-subtitle_image = Image.Text("15 kHz", 0.35, 0.55, 0.85, 1, "DejaVu Sans 10", "center");
-subtitle = centered_sprite(subtitle_image, 0.45);
-
-// A barra e um texto de largura fixa: as fatias preenchidas viram '#' e o
-// resto fica '.', entao a largura nao muda conforme o progresso avanca e a
-// barra nao "pula" no centro.
-fun bar_string(filled) {
-        text = "";
-        slot = 0;
-        while (slot < BAR_SLOTS) {
-                if (slot < filled) {
-                        text = text + "#";
-                } else {
-                        text = text + ".";
-                }
-                slot = slot + 1;
-        }
-        return text;
+fun GradR(t) {
+  local.seg = Math.Min(2, Math.Int(t * 3));
+  return Mix(STOP_R[seg], STOP_R[seg + 1], t * 3 - seg);
+}
+fun GradG(t) {
+  local.seg = Math.Min(2, Math.Int(t * 3));
+  return Mix(STOP_G[seg], STOP_G[seg + 1], t * 3 - seg);
+}
+fun GradB(t) {
+  local.seg = Math.Min(2, Math.Int(t * 3));
+  return Mix(STOP_B[seg], STOP_B[seg + 1], t * 3 - seg);
 }
 
-bar = NULL;
-fun draw_bar(filled) {
-        image = Image.Text(bar_string(filled), 0.30, 0.85, 0.45, 1,
-                           "DejaVu Sans Mono 11", "center");
-        bar = centered_sprite(image, 0.62);
+// Txt: texto em JetBrains Mono com o tamanho de um quadro de 640x480,
+// achatado na vertical nos modos de largura dupla. WEIGHT "" e o normal.
+fun Txt(text, r, g, b, px, weight) {
+  local.size = Math.Max(6, Math.Int(px * u));
+  local.img = Image.Text(text, r, g, b, 1, FONT + " " + weight + " " + local.size + "px", "left");
+  if (py < 1)
+    local.img = local.img.Scale(local.img.GetWidth(), Math.Max(1, Math.Int(local.img.GetHeight() * py)));
+  return local.img;
 }
 
-draw_bar(0);
+// Block: um retangulo solido de W x H pixels, do miolo do caractere de bloco.
+fun Block(r, g, b, w, h) {
+  local.img = Image.Text("█", r, g, b, 1, FONT + " 48px", "left");
+  local.core = local.img.Crop(Math.Int(local.img.GetWidth() * 0.3), Math.Int(local.img.GetHeight() * 0.45),
+                              Math.Max(1, Math.Int(local.img.GetWidth() * 0.4)),
+                              Math.Max(1, Math.Int(local.img.GetHeight() * 0.1)));
+  return local.core.Scale(Math.Max(1, Math.Int(w)), Math.Max(1, Math.Int(h)));
+}
 
-last_filled = -1;
+// ── Titulo ───────────────────────────────────────────────────────────
+TITLE = "FliperOS";
+TITLE_LEN = TITLE.Length();
+TITLE_PX = 46;
+COLORS = 18;
+POOL = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#$%&*+=?<>/[]{}";
+POOL_LEN = POOL.Length();
+
+cell = Txt("M", 1, 1, 1, TITLE_PX, "Ultra-Bold");
+cw = cell.GetWidth();
+ch = cell.GetHeight();
+title_x = Math.Int((W - cw * TITLE_LEN) / 2);
+title_y = Math.Int(H * 0.27 - ch / 2);
+
+for (k = 0; k < POOL_LEN; k++)
+  scramble[k] = Txt(POOL.CharAt(k), DIM_R, DIM_G, DIM_B, TITLE_PX, "Ultra-Bold");
+scramble[POOL_LEN] = Txt("░", DIM_R, DIM_G, DIM_B, TITLE_PX, "Ultra-Bold");
+scramble[POOL_LEN + 1] = Txt("▒", DIM_R, DIM_G, DIM_B, TITLE_PX, "Ultra-Bold");
+scramble[POOL_LEN + 2] = Txt("▓", PINK_R, PINK_G, PINK_B, TITLE_PX, "Ultra-Bold");
+SCRAMBLE_N = POOL_LEN + 3;
+
+for (i = 0; i < TITLE_LEN; i++) {
+  letter_char = TITLE.CharAt(i);
+  for (c = 0; c < COLORS; c++)
+    letter_img[i * COLORS + c] = Txt(letter_char, GradR(c / COLORS), GradG(c / COLORS), GradB(c / COLORS),
+                                     TITLE_PX, "Ultra-Bold");
+  letter_flash[i] = Txt(letter_char, FG_R, FG_G, FG_B, TITLE_PX, "Ultra-Bold");
+  letter[i] = Sprite();
+  letter[i].SetPosition(title_x + i * cw, title_y, 10);
+  letter[i].SetOpacity(0);
+  // Cada letra aparece embaralhada e trava na sua vez.
+  letter_start[i] = 4 + i * 3;
+  letter_lock[i] = 28 + i * 6;
+}
+TITLE_DONE = letter_lock[TITLE_LEN - 1] + 4;
+glitch_letter = -1;
+glitch_until = 0;
+
+// ── Prompt e subtitulo ───────────────────────────────────────────────
+if (BOOTING)
+  SUB = "arcade system for 15 kHz CRTs";
+else if (MODE == "reboot")
+  SUB = "restarting";
+else
+  SUB = "shutting down";
+SUB_LEN = SUB.Length();
+SUB_PX = 17;
+sub_cell = Txt("M", 1, 1, 1, SUB_PX, "");
+sub_cw = sub_cell.GetWidth();
+sub_x = Math.Int((W - sub_cw * (SUB_LEN + 3)) / 2) + sub_cw * 2;
+sub_y = Math.Int(title_y + ch + 6 * u * py);
+prompt = Sprite(Txt("❯", GREEN_R, GREEN_G, GREEN_B, SUB_PX, "Bold"));
+prompt.SetPosition(sub_x - sub_cw * 2, sub_y, 10);
+prompt.SetOpacity(0);
+sub_sprite = Sprite();
+sub_sprite.SetPosition(sub_x, sub_y, 10);
+cursor = Sprite(Txt("▌", PINK_R, PINK_G, PINK_B, SUB_PX, ""));
+cursor.SetPosition(sub_x, sub_y, 11);
+cursor.SetOpacity(0);
+SUB_START = TITLE_DONE;
+sub_typed = -1;
+
+// ── Barra de progresso ───────────────────────────────────────────────
+bar_w = Math.Int(W * 0.56);
+bar_h = Math.Max(2, Math.Int(6 * u * py));
+bar_x = Math.Int((W - bar_w) / 2);
+bar_y = Math.Int(H * 0.60);
+SLICES = 40;
+slice_w = bar_w / SLICES;
+track = Sprite(Block(LINE_R, LINE_G, LINE_B, bar_w, bar_h));
+track.SetPosition(bar_x, bar_y, 5);
+for (s = 0; s < SLICES; s++) {
+  slice_x0[s] = Math.Int(s * slice_w);
+  slice_x1[s] = Math.Int((s + 1) * slice_w);
+  slice_img[s] = Block(GradR(s / SLICES * 0.66), GradG(s / SLICES * 0.66), GradB(s / SLICES * 0.66),
+                       slice_x1[s] - slice_x0[s], bar_h);
+  slice[s] = Sprite(slice_img[s]);
+  slice[s].SetPosition(bar_x + slice_x0[s], bar_y, 6);
+  slice[s].SetOpacity(0);
+}
+head_w = Math.Max(2, Math.Int(3 * u));
+head_h = Math.Max(bar_h + 2, Math.Int(bar_h * 2.2));
+head = Sprite(Block(FG_R, FG_G, FG_B, head_w, head_h));
+head.SetPosition(bar_x, bar_y - Math.Int((head_h - bar_h) / 2), 8);
+head.SetOpacity(0);
+shine_w = Math.Max(4, Math.Int(bar_w * 0.09));
+shine = Sprite(Block(FG_R, FG_G, FG_B, shine_w, bar_h));
+shine.SetPosition(bar_x, bar_y, 7);
+shine.SetOpacity(0);
+pct_sprite = Sprite();
+pct_sprite.SetPosition(bar_x + bar_w + Math.Int(10 * u), bar_y + Math.Int(bar_h / 2), 6);
+progress_target = 0;
+progress_shown = 0;
+fill_px = -1;
+pct_shown = -1;
+if (!BOOTING) {
+  track.SetOpacity(0);
+}
+
+// ── Log das unidades ─────────────────────────────────────────────────
+LOG_PX = 14;
+LOG_LINES = 3;
+log_cell = Txt("M", 1, 1, 1, LOG_PX, "");
+log_cw = log_cell.GetWidth();
+log_lh = Math.Int(log_cell.GetHeight() * 1.15);
+log_x = bar_x;
+log_y = Math.Int(bar_y + bar_h + 14 * u * py);
+LOG_MAX = Math.Max(8, Math.Int((W - log_x - 4) / log_cw) - 3);
+SPIN[0] = "▘"; SPIN[1] = "▀"; SPIN[2] = "▝"; SPIN[3] = "▐";
+SPIN[4] = "▗"; SPIN[5] = "▄"; SPIN[6] = "▖"; SPIN[7] = "▌";
+for (k = 0; k < 8; k++)
+  spin_img[k] = Txt(SPIN[k], CYAN_R, CYAN_G, CYAN_B, LOG_PX, "Bold");
+check_img = Txt("✓", GREEN_R, GREEN_G, GREEN_B, LOG_PX, "Bold");
+for (l = 0; l < LOG_LINES; l++) {
+  log_icon[l] = Sprite();
+  log_icon[l].SetPosition(log_x, log_y + l * log_lh, 10);
+  log_line[l] = Sprite();
+  log_line[l].SetPosition(log_x + log_cw * 2, log_y + l * log_lh, 10);
+  log_text[l] = "";
+}
+if (BOOTING)
+  log_text[LOG_LINES - 1] = "starting fliperos";
+else
+  log_text[LOG_LINES - 1] = "stopping services";
+log_dirty = 1;
+log_drawn = -100;
+
+fun Fit(text) {
+  if (text.Length() <= LOG_MAX)
+    return text;
+  return text.SubString(0, LOG_MAX - 1) + "…";
+}
+
+fun DrawLog() {
+  for (l = 0; l < LOG_LINES; l++) {
+    // A linha de baixo e a atual (com o spinner); as de cima ja passaram e
+    // vao apagando.
+    if (log_text[l] == "") {
+      log_icon[l].SetOpacity(0);
+      log_line[l].SetOpacity(0);
+    } else if (l == LOG_LINES - 1) {
+      log_line[l].SetImage(Txt(Fit(log_text[l]), SOFT_R, SOFT_G, SOFT_B, LOG_PX, ""));
+      log_line[l].SetOpacity(1);
+      log_icon[l].SetOpacity(1);
+    } else {
+      log_line[l].SetImage(Txt(Fit(log_text[l]), DIM_R, DIM_G, DIM_B, LOG_PX, ""));
+      log_icon[l].SetImage(check_img);
+      log_line[l].SetOpacity(0.35 + 0.3 * l);
+      log_icon[l].SetOpacity(0.35 + 0.3 * l);
+    }
+  }
+}
+
+fun PushLog(text) {
+  if (text == "" || text == log_text[LOG_LINES - 1])
+    return;
+  for (l = 0; l < LOG_LINES - 1; l++)
+    log_text[l] = log_text[l + 1];
+  log_text[LOG_LINES - 1] = text;
+  global.log_dirty = 1;
+}
+
+message_sprite = Sprite();
+message_sprite.SetPosition(0, Math.Int(H * 0.88), 10);
+fun message_callback(text) {
+  local.img = Txt(Fit(text), YELLOW_R, YELLOW_G, YELLOW_B, LOG_PX, "");
+  message_sprite.SetImage(local.img);
+  message_sprite.SetX(Math.Int((W - local.img.GetWidth()) / 2));
+}
+Plymouth.SetMessageFunction(message_callback);
+Plymouth.SetUpdateStatusFunction(PushLog);
+
+// ── Chuva de caracteres no fundo ─────────────────────────────────────
+RAIN = 14;
+for (k = 0; k < POOL_LEN; k++)
+  rain_img[k] = Txt(POOL.CharAt(k), DIM_R, DIM_G, DIM_B, 13, "");
+rain_cw = rain_img[0].GetWidth();
+fun RainSpawn(k, anywhere) {
+  rain[k].SetImage(rain_img[Math.Int(Math.Random() * POOL_LEN)]);
+  rain_x[k] = Math.Int(Math.Random() * (W / rain_cw)) * rain_cw;
+  if (anywhere)
+    rain_y[k] = Math.Random() * H;
+  else
+    rain_y[k] = -rain_cw * 2;
+  rain_v[k] = (0.25 + Math.Random() * 0.6) * u * py;
+  rain[k].SetOpacity(0.06 + Math.Random() * 0.14);
+  rain[k].SetPosition(rain_x[k], rain_y[k], -10);
+}
+for (k = 0; k < RAIN; k++) {
+  rain[k] = Sprite();
+  RainSpawn(k, 1);
+}
+
+// ── Senha (disco criptografado) ──────────────────────────────────────
+status = "normal";
+pass_prompt = Sprite();
+pass_prompt.SetPosition(0, bar_y - Math.Int(log_lh * 1.6), 12);
+pass_bullets = Sprite();
+pass_bullets.SetPosition(0, bar_y - Math.Int(log_lh * 0.3), 12);
+
+fun SetBarOpacity(o) {
+  track.SetOpacity(o * BOOTING);
+  pct_sprite.SetOpacity(o * BOOTING);
+  if (o == 0) {
+    for (s = 0; s < SLICES; s++)
+      slice[s].SetOpacity(0);
+    head.SetOpacity(0);
+    shine.SetOpacity(0);
+  }
+  global.fill_px = -1;
+}
+
+fun display_normal_callback() {
+  global.status = "normal";
+  pass_prompt.SetOpacity(0);
+  pass_bullets.SetOpacity(0);
+  SetBarOpacity(1);
+}
+
+fun display_password_callback(text, bullets) {
+  global.status = "password";
+  SetBarOpacity(0);
+  if (text == "")
+    text = "Password";
+  local.img = Txt(text, FG_R, FG_G, FG_B, SUB_PX, "");
+  pass_prompt.SetImage(local.img);
+  pass_prompt.SetX(Math.Int((W - local.img.GetWidth()) / 2));
+  pass_prompt.SetOpacity(1);
+  local.dots = "";
+  for (k = 0; k < bullets; k++)
+    local.dots = local.dots + "•";
+  local.img = Txt(local.dots + "▌", PINK_R, PINK_G, PINK_B, SUB_PX, "Bold");
+  pass_bullets.SetImage(local.img);
+  pass_bullets.SetX(Math.Int((W - local.img.GetWidth()) / 2));
+  pass_bullets.SetOpacity(1);
+}
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
 fun progress_callback(duration, progress) {
-        filled = Math.Int(progress * BAR_SLOTS);
-        if (filled != last_filled) {
-                last_filled = filled;
-                draw_bar(filled);
-        }
+  if (progress > global.progress_target)
+    global.progress_target = progress;
 }
 Plymouth.SetBootProgressFunction(progress_callback);
 
-// Mensagens do sistema (fsck, espera de dispositivo). Sem isso, uma espera
-// longa fica sem explicacao na tela.
-message = NULL;
-fun message_callback(text) {
-        image = Image.Text(text, 0.55, 0.58, 0.65, 1, "DejaVu Sans 9", "center");
-        message = centered_sprite(image, 0.80);
+// ── Animacao (ate 50 quadros por segundo) ────────────────────────────
+frame = 0;
+
+fun DrawBar() {
+  global.progress_shown = progress_shown + (progress_target - progress_shown) * 0.06;
+  local.px = Math.Int(progress_shown * bar_w);
+  if (local.px != fill_px) {
+    global.fill_px = local.px;
+    for (s = 0; s < SLICES; s++) {
+      if (slice_x1[s] <= local.px) {
+        slice[s].SetImage(slice_img[s]);
+        slice[s].SetOpacity(1);
+      } else if (slice_x0[s] < local.px) {
+        slice[s].SetImage(slice_img[s].Scale(local.px - slice_x0[s], bar_h));
+        slice[s].SetOpacity(1);
+      } else {
+        slice[s].SetOpacity(0);
+      }
+    }
+    head.SetX(bar_x + Math.Max(0, local.px - Math.Int(head_w / 2)));
+  }
+  head.SetOpacity(0.55 + 0.45 * Math.Sin(frame * 0.15));
+  // O brilho corre pela parte cheia, de novo e de novo.
+  if (fill_px > shine_w * 2) {
+    shine.SetX(bar_x + (frame * Math.Max(1, Math.Int(3 * u))) % (fill_px - shine_w));
+    shine.SetOpacity(0.28);
+  } else {
+    shine.SetOpacity(0);
+  }
+  local.pct = Math.Int(progress_shown * 100 + 0.5);
+  if (local.pct != pct_shown) {
+    global.pct_shown = local.pct;
+    local.img = Txt(local.pct + "%", DIM_R, DIM_G, DIM_B, LOG_PX, "Bold");
+    pct_sprite.SetImage(local.img);
+    pct_sprite.SetY(bar_y + Math.Int((bar_h - local.img.GetHeight()) / 2));
+  }
 }
-Plymouth.SetMessageFunction(message_callback);
-Plymouth.SetUpdateStatusFunction(message_callback);
+
+fun refresh() {
+  global.frame = frame + 1;
+
+  for (i = 0; i < TITLE_LEN; i++) {
+    if (frame < letter_start[i]) {
+      letter[i].SetOpacity(0);
+    } else if (frame < letter_lock[i]) {
+      if (frame % 3 == 0)
+        letter[i].SetImage(scramble[Math.Int(Math.Random() * SCRAMBLE_N)]);
+      letter[i].SetOpacity(1);
+    } else if (frame < letter_lock[i] + 4) {
+      letter[i].SetImage(letter_flash[i]);
+    } else if (i == glitch_letter && frame < glitch_until) {
+      letter[i].SetImage(scramble[Math.Int(Math.Random() * SCRAMBLE_N)]);
+    } else {
+      letter[i].SetImage(letter_img[i * COLORS + (Math.Int(frame / 4) + i * 2) % COLORS]);
+      letter[i].SetY(title_y + Math.Int(Math.Sin(frame * 0.07 + i * 0.75) * 3 * u * py));
+    }
+  }
+  if (frame > TITLE_DONE && frame >= glitch_until && Math.Random() < 0.006) {
+    global.glitch_letter = Math.Int(Math.Random() * TITLE_LEN);
+    global.glitch_until = frame + 5;
+  }
+
+  if (frame >= SUB_START) {
+    prompt.SetOpacity(1);
+    local.typed = Math.Min(SUB_LEN, Math.Int((frame - SUB_START) / 2));
+    if (local.typed != sub_typed) {
+      global.sub_typed = local.typed;
+      if (local.typed > 0) {
+        sub_sprite.SetImage(Txt(SUB.SubString(0, local.typed), SOFT_R, SOFT_G, SOFT_B, SUB_PX, ""));
+        sub_sprite.SetOpacity(1);
+      }
+      cursor.SetX(sub_x + local.typed * sub_cw);
+    }
+    // O cursor fica aceso enquanto digita e depois pisca.
+    if (local.typed < SUB_LEN || Math.Int(frame / 20) % 2 == 0)
+      cursor.SetOpacity(1);
+    else
+      cursor.SetOpacity(0);
+  }
+
+  if (BOOTING && status == "normal")
+    DrawBar();
+
+  log_icon[LOG_LINES - 1].SetImage(spin_img[Math.Int(frame / 5) % 8]);
+  if (log_dirty && frame - log_drawn >= 3) {
+    global.log_dirty = 0;
+    global.log_drawn = frame;
+    DrawLog();
+  }
+
+  for (k = 0; k < RAIN; k++) {
+    rain_y[k] = rain_y[k] + rain_v[k];
+    if (rain_y[k] > H)
+      RainSpawn(k, 0);
+    else
+      rain[k].SetY(rain_y[k]);
+    if (Math.Random() < 0.02)
+      rain[k].SetImage(rain_img[Math.Int(Math.Random() * POOL_LEN)]);
+  }
+}
+Plymouth.SetRefreshFunction(refresh);

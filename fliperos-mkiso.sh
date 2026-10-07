@@ -7,7 +7,7 @@
 #       [--skip-flycast] [--skip-pcsx2] [--skip-supermodel]
 #       [--skip-dolphin] [--skip-hypseus] [--skip-openbor]
 #       [--skip-skyscraper] [--skip-input-drivers] [--skip-wheel-drivers]
-#       [--kernel-cache DIR] [--repo DIR] [--splash fliperos|evangelion|none]
+#       [--kernel-cache DIR] [--repo DIR] [--splash fliperos-text|fliperos|evangelion|none]
 #       [--wifi-ssid NOME --wifi-psk SENHA]
 #  No Windows, execute somente dentro do container Docker.
 # ============================================================
@@ -49,7 +49,7 @@ KERNEL_CACHE=""
 # para dentro da imagem como fonte local do apt.
 FLIPEROS_REPO=""
 [[ -d /output/repo ]] && FLIPEROS_REPO="/output/repo"
-SPLASH_THEME="fliperos"
+SPLASH_THEME="fliperos-text"
 SKIP_INPUT_DRIVERS=false
 # Volante: hid-tmff2 (Thrustmaster T150/T300/TX/T248...) e new-lg4ff
 # (Logitech, com force feedback completo; substitui o hid-logitech do
@@ -145,8 +145,8 @@ while [[ $# -gt 0 ]]; do
     --splash)
       [[ $# -ge 2 ]] || { echo "Error: --splash needs a value."; exit 1; }
       case "$2" in
-        fliperos|evangelion|none) SPLASH_THEME="$2" ;;
-        *) echo "Error: invalid --splash: $2 (fliperos, evangelion or none)"; exit 1 ;;
+        fliperos-text|fliperos|evangelion|none) SPLASH_THEME="$2" ;;
+        *) echo "Error: invalid --splash: $2 (fliperos-text, fliperos, evangelion or none)"; exit 1 ;;
       esac
       shift 2 ;;
     /*.iso|*.iso)     OUTPUT_ISO="$1"; shift ;;
@@ -826,9 +826,9 @@ install_splash_theme() {
     warn "Splash disabled (--splash none); text-mode boot"
     return
   fi
-  if [[ "$SPLASH_THEME" == fliperos ]]; then
-    set_default_plymouth_theme fliperos
-    ok "Splash: fliperos theme (the others are in ~/splashscreen, Setup > Splash screen)"
+  if [[ "$SPLASH_THEME" == fliperos-text || "$SPLASH_THEME" == fliperos ]]; then
+    set_default_plymouth_theme "$SPLASH_THEME"
+    ok "Splash: $SPLASH_THEME theme (the others are in ~/splashscreen, Setup > Splash screen)"
     return
   fi
 

@@ -4162,7 +4162,8 @@ class SplashTests(unittest.TestCase):
     def test_themes_are_installed(self):
         self.assertIn('cp -r "$src/config/splashscreen" "$root/usr/share/fliperos/splashscreen"', ROOTFS)
         self.assertIn('cp -r "$src/config/splashscreen/$theme" "$root/usr/share/plymouth/themes/$theme"', ROOTFS)
-        self.assertIn('set_default_plymouth_theme fliperos\n', MKISO)
+        self.assertIn('SPLASH_THEME="fliperos-text"\n', MKISO)
+        self.assertIn('set_default_plymouth_theme "$SPLASH_THEME"\n', MKISO)
         roms = (ROOT / 'config/fliperos-roms').read_text()
         self.assertIn('splash=${FLIPEROS_SPLASH:-$HOME/splashscreen}', roms)
 
@@ -4173,11 +4174,37 @@ class SplashTests(unittest.TestCase):
         self.assertIn('if [[ $(splash_sum) != "$splash_before" ]]; then', script)
 
     def test_text_theme_uses_only_verified_api(self):
-        text = (self.THEMES / 'fliperos-text/fliperos-text.script').read_text()
-        for call in ('Window.SetBackgroundTopColor', 'Window.GetWidth', 'Image.Text',
-                     'Math.Int', 'Plymouth.SetBootProgressFunction'):
-            self.assertIn(call, text)
-        self.assertNotIn('Image(', text)
+        text = (self.THEMES / 'fliperos-text/fliperos-text.script').read_text(encoding='utf-8')
+        code = re.sub(r'//[^\n]*', '', text)
+        for call in ('Window.SetBackgroundTopColor', 'Window.GetWidth', 'Image.Text', 'Math.Int',
+                     'Plymouth.SetBootProgressFunction', 'Plymouth.SetUpdateStatusFunction',
+                     'Plymouth.SetRefreshFunction'):
+            self.assertIn(call, code)
+        self.assertNotRegex(code, r'(?<![\w.])Image\(')
+        # O Plymouth nao tem continue; os textos nao-ASCII (blocos, spinner)
+        # sao fatiados por byte, entao so aparecem inteiros nas strings.
+        self.assertNotRegex(code, r'\bcontinue\b')
+        self.assertNotIn('@U', code)
+
+    def test_text_theme_font_goes_into_the_initramfs(self):
+        fonts = ROOT / 'config/fonts/jetbrains-mono'
+        for weight in ('Regular', 'Bold', 'ExtraBold'):
+            self.assertEqual((fonts / ('JetBrainsMono-%s.ttf' % weight)).read_bytes()[:4], b'\x00\x01\x00\x00')
+        self.assertTrue((fonts / 'OFL.txt').is_file())
+        self.assertIn('FONT = "JetBrains Mono";', (self.THEMES / 'fliperos-text/fliperos-text.script').read_text(encoding='utf-8'))
+        self.assertIn('"$root/usr/share/fonts/truetype/fliperos"', ROOTFS)
+        self.assertIn('install -Dm755 "$src/config/fliperos-initramfs-fonts" '
+                      '"$root/etc/initramfs-tools/hooks/fliperos-fonts"', ROOTFS)
+        hook = (ROOT / 'config/fliperos-initramfs-fonts').read_text()
+        self.assertIn('cp -a /usr/share/fonts/truetype/fliperos "${DESTDIR}/usr/share/fonts/truetype/"', hook)
+        self.assertIn('/usr/share/fonts/truetype/fliperos', (ROOT / 'tools/cabinet-update.sh').read_text())
+        self.assertIn('*.ttf binary', (ROOT / '.gitattributes').read_text())
+
+    def test_update_6_moves_the_old_default_to_the_text_theme(self):
+        script = (ROOT / 'updates/0006.sh').read_text()
+        self.assertIn('== "$themes/fliperos/fliperos.plymouth" ]] || exit 0', script)
+        self.assertIn("grep -q '^splash=' /etc/fliperos/fliperos.conf", script)
+        self.assertIn('update-alternatives --set default.plymouth "$file"', script)
 
     def test_splash_is_generated_for_the_boot_mode(self):
         geometry = MKISO.split('splash_mode_geometry()')[1].split('}')[0]

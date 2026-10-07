@@ -1,0 +1,14 @@
+#!/bin/sh
+# Hook do initramfs-tools: leva as fontes do FliperOS para o initramfs. O
+# hook do plymouth do Ubuntu so copia a fonte Ubuntu, e o splash do boot
+# roda do initramfs, antes do disco montar; sem isto o tema de texto cairia
+# numa fonte qualquer.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+  prereqs) prereqs; exit 0 ;;
+esac
+
+[ -d /usr/share/fonts/truetype/fliperos ] || exit 0
+mkdir -p "${DESTDIR}/usr/share/fonts/truetype"
+cp -a /usr/share/fonts/truetype/fliperos "${DESTDIR}/usr/share/fonts/truetype/"
