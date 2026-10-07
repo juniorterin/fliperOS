@@ -5,7 +5,10 @@ export const LINKS = {
   docs: `${REPO_URL}/wiki`,
   releases: `${REPO_URL}/releases`,
   issues: `${REPO_URL}/issues`,
+  instagram: 'https://www.instagram.com/juniorter.in/',
 } as const;
+
+export const AUTHOR_HANDLE = '@juniorter.in';
 
 // Domínio oficial ainda não existe: canonical, Open Graph e sitemap usam
 // NEXT_PUBLIC_SITE_URL, lido no build (no Coolify, variável de build).

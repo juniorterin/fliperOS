@@ -198,6 +198,8 @@ const ptBR: Messages = {
     docs: 'Documentação',
     releases: 'Releases',
     issues: 'Issues',
+    madeBy: 'Feito por',
+    instagramLabel: 'no Instagram',
     disclaimer: 'Sem vínculo com o Ubuntu, o MAME ou os projetos de emuladores. As marcas pertencem aos seus donos.',
   },
 };

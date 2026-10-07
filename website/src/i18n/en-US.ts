@@ -196,6 +196,8 @@ const enUS = {
     docs: 'Documentation',
     releases: 'Releases',
     issues: 'Issues',
+    madeBy: 'Made by',
+    instagramLabel: 'on Instagram',
     disclaimer: 'Not affiliated with Ubuntu, MAME or emulator projects. All trademarks belong to their owners.',
   },
 };

@@ -4,7 +4,7 @@ import { BookOpen, CircleDot, Package } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
 import { LogoMark, Wordmark } from '@/components/Logo';
 import { useI18n } from '@/i18n/I18nProvider';
-import { LINKS } from '@/lib/site';
+import { AUTHOR_HANDLE, LINKS } from '@/lib/site';
 
 export function Footer() {
   const { t } = useI18n();
@@ -45,9 +45,21 @@ export function Footer() {
         </nav>
       </div>
       <div className="border-t border-line/50">
-        <p className="mx-auto max-w-7xl px-4 py-6 text-center font-mono text-xs leading-relaxed text-comment sm:px-6 md:text-left lg:px-8">
-          {f.disclaimer}
-        </p>
+        <div className="mx-auto flex max-w-7xl flex-col items-center gap-3 px-4 py-6 font-mono text-xs leading-relaxed text-comment sm:px-6 md:flex-row md:justify-between lg:px-8">
+          <p className="text-center md:text-left">{f.disclaimer}</p>
+          <p className="shrink-0">
+            {f.madeBy}{' '}
+            <a
+              href={LINKS.instagram}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-pink underline-offset-4 transition-colors hover:text-purple hover:underline"
+            >
+              {AUTHOR_HANDLE}
+              <span className="sr-only"> {f.instagramLabel}</span>
+            </a>
+          </p>
+        </div>
       </div>
     </footer>
   );
