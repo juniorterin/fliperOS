@@ -20,6 +20,6 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fliperos.j
 export const SECTION_IDS = ['features', 'screenshots', 'emulators', 'crt', 'setup', 'open-source'] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
-export const SCREENSHOT_IDS = ['setup', 'install', 'video', 'attract-mode', 'es-de', 'desktop', 'crt'] as const;
+export const SCREENSHOT_IDS = ['setup', 'install', 'video', 'desktop'] as const;
 export const HERO_SCREENSHOT = 'hero';
 export const SCREENSHOT_EXTENSIONS = ['avif', 'webp', 'png', 'jpg'] as const;

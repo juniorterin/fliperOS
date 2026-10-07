@@ -117,10 +117,7 @@ const ptBR: Messages = {
       { id: 'setup', title: 'FliperOS Setup', caption: 'O menu de configuração, dimensionado para 640x480 entrelaçado.' },
       { id: 'install', title: 'Instalador', caption: 'Escolha do HD/SSD para instalar, a partir da ISO de instalação.' },
       { id: 'video', title: 'Video Setup', caption: 'Monitor, teste de saída e geometria na grade.' },
-      { id: 'attract-mode', title: 'Attract-Mode Plus', caption: 'Desenhado direto no KMS/DRM, sem Xorg.' },
-      { id: 'es-de', title: 'ES-DE', caption: 'O tema FliperOS 240p, feito para 240 linhas.' },
       { id: 'desktop', title: 'Desktop LXDE', caption: 'Tema Dracula, menu Games e loja de aplicativos.' },
-      { id: 'crt', title: 'Num CRT de verdade', caption: 'Um gabinete rodando o FliperOS em 15 kHz.' },
     ],
   },
   emulators: {

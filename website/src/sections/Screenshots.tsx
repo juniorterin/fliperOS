@@ -8,11 +8,6 @@ import { SectionHeading } from '@/components/SectionHeading';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { ScreenshotMap } from '@/lib/screenshots';
 
-const LAYOUT: Record<string, string> = {
-  setup: 'sm:col-span-2 lg:row-span-2',
-  crt: 'sm:col-span-2 lg:col-span-3',
-};
-
 export function Screenshots({ screenshots }: { screenshots: ScreenshotMap }) {
   const { t } = useI18n();
   const s = t.screenshots;
@@ -56,18 +51,14 @@ export function Screenshots({ screenshots }: { screenshots: ScreenshotMap }) {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading id="screenshots" kicker={s.kicker} title={s.title} intro={s.intro} />
 
-        <ul className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+        <ul className="mt-14 grid gap-4 sm:grid-cols-2 lg:gap-5">
           {s.items.map((item, i) => {
             const src = screenshots[item.id];
-            const big = item.id === 'setup';
-            const wide = item.id === 'crt';
             return (
-              <Reveal as="li" key={item.id} delay={i * 50} className={LAYOUT[item.id] ?? ''}>
+              <Reveal as="li" key={item.id} delay={i * 50}>
                 <figure className="card group flex h-full flex-col overflow-hidden rounded-2xl">
                   <div
-                    className={`relative w-full ${src ? 'overflow-hidden bg-bg' : 'crt-screen rounded-none'} ${
-                      wide ? 'aspect-[16/9] lg:aspect-[21/8]' : big ? 'aspect-[4/3] lg:flex-1' : 'aspect-[4/3]'
-                    }`}
+                    className={`relative w-full ${src ? 'overflow-hidden bg-bg' : 'crt-screen rounded-none'}  aspect-[4/3]`}
                   >
                     {src ? (
                       <button
@@ -81,7 +72,7 @@ export function Screenshots({ screenshots }: { screenshots: ScreenshotMap }) {
                           alt={item.caption}
                           fill
                           loading="lazy"
-                          sizes={big || wide ? '(min-width: 1024px) 66vw, 100vw' : '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw'}
+                          sizes="(min-width: 640px) 50vw, 100vw"
                           unoptimized
                           className="object-contain transition duration-500 group-hover:scale-[1.02]"
                         />
