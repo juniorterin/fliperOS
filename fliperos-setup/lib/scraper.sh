@@ -425,10 +425,15 @@ scraper_attract_paths() {
   printf '%s\n' "$out"
 }
 
-# scraper_attract_display ROMLIST: uma tela da romlist no attract.cfg, com o
-# tema AdvanceMenu (legivel em 640x240), se ainda nao tiver.
+# scraper_attract_display ROMLIST: uma tela da romlist, com o tema AdvanceMenu
+# (legivel em 640x240), se ainda nao tiver. O Attract-Mode Plus 3.x le as
+# telas de config/displays.cfg quando ha config/attract.cfg e ignora as do
+# attract.cfg de fora (este so vale antes da primeira execucao, que o migra).
 scraper_attract_display() {
   local acfg="$ATTRACT_DIR/attract.cfg"
+  if [[ -f $ATTRACT_DIR/config/attract.cfg ]]; then
+    acfg="$ATTRACT_DIR/config/displays.cfg"
+  fi
   if ! awk -v n="$1" '$1 == "romlist" { sub(/^[ \t]*romlist[ \t]+/, ""); if ($0 == n) f = 1 } END { exit !f }' \
     "$acfg" 2> /dev/null; then
     printf 'display\t%s\n\tlayout               AdvanceMenu\n\tromlist              %s\n\tin_cycle             yes\n\tin_menu              yes\n\n' \

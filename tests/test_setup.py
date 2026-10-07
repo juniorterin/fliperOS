@@ -2353,6 +2353,22 @@ class RomCleanerTests(Base):
         self.assertIn("artwork    wheel           %s/logo/arcade\n" % media,
                       (attract / "emulators" / "MAME.cfg").read_text())
 
+    def test_attract_display_goes_to_displays_cfg_after_the_migration(self):
+        # O Attract-Mode Plus 3.x, depois de migrar para config/, so le as
+        # telas de config/displays.cfg.
+        attract = self.env.dir / "attract-split"
+        (attract / "config").mkdir(parents=True)
+        (attract / "config" / "attract.cfg").write_text("general\n")
+        (attract / "config" / "displays.cfg").write_text(
+            "display Naomi\n    layout                  Attrac-Man\n    romlist                 Naomi\n\n")
+        env = dict(self.vars, ATTRACT_DIR=str(attract))
+        self.env.out("scraper_attract_display Naomi; scraper_attract_display Atomiswave", env)
+        displays = (attract / "config" / "displays.cfg").read_text()
+        self.assertEqual(displays.count("romlist"), 2)
+        self.assertIn("Attrac-Man", displays)
+        self.assertIn("display\tAtomiswave\n\tlayout               AdvanceMenu\n", displays)
+        self.assertFalse((attract / "attract.cfg").exists())
+
     def test_model2_folder_is_an_arcade_system(self):
         self.assertEqual(self.env.out("scraper_platform model2; scraper_attract_emulator model2").splitlines(),
                          ["arcade", "Model 2|/opt/fliperos/bin/fliperos-x11-run|fliperos-model2 [name]|.zip"])

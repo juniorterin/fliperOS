@@ -21,7 +21,7 @@ BIOS files go in `~/bios` (`\\fliperos\bios`): `~/bios/mame` for MAME (`neogeo.z
 
 A folder with games becomes a **system** in the frontend when you pick the frontend in **Setup > Frontend**. Pick it again (even if it already is the default) every time a folder gets its first games: the Setup only creates what is missing, so nothing you changed is lost.
 
-- **Attract-Mode Plus**: for each folder the Setup creates an emulator (`~/.attract/emulators/<name>.cfg`, with the command that opens the game and where the artwork is), a display in `~/.attract/attract.cfg`, and a game list (romlist, `~/.attract/romlists/<name>.txt`) built from the files in the folder.
+- **Attract-Mode Plus**: for each folder the Setup creates an emulator (`~/.attract/emulators/<name>.cfg`, with the command that opens the game and where the artwork is), a display in `~/.attract/config/displays.cfg` (`~/.attract/attract.cfg` before Attract-Mode Plus first runs), and a game list (romlist, `~/.attract/romlists/<name>.txt`) built from the files in the folder.
 - **ES-DE**: the Setup writes every system to `~/ES-DE/custom_systems/es_systems.xml` (folder, extensions, command and theme). ES-DE reads the folders itself each time it starts.
 
 **New games in a folder that is already a system.** ES-DE finds them the next time it opens (or right away with *Main menu > Utilities > Rescan ROM directory*). Attract-Mode Plus doesn't look at the folder: its list is the romlist. Rebuild it with one of these:
