@@ -2161,12 +2161,19 @@ class DownloaderTests(unittest.TestCase):
                         for key, flag in (('files-wanted', True), ('files-unwanted', False)):
                             for i in a.get(key, []):
                                 torrents[h]['files'][i]['wanted'] = flag
+                        if 'seedRatioMode' in a:
+                            torrents[h]['ratio'] = a['seedRatioMode']
                 elif method == 'torrent-start':
+                    # Como o Transmission com o ratio-limit 0 da sessao: o que
+                    # ja terminou uma vez para de novo ("Seed ratio reached").
                     for h in a['ids']:
-                        torrents[h].update(status=4, meta=True)
+                        t = torrents[h]
+                        t.update(status=0 if t.get('finished') and t.get('ratio') != 2 else 4, meta=True)
                 elif method == 'torrent-stop':
                     for h in a['ids']:
-                        torrents[h]['status'] = 0
+                        t = torrents[h]
+                        t['status'] = 0
+                        t['finished'] = all(f['done'] == f['length'] for f in t['files'] if f['wanted'])
                 elif method == 'torrent-remove':
                     for h in a['ids']:
                         torrents.pop(h, None)

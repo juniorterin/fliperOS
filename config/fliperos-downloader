@@ -71,6 +71,11 @@ SETTINGS = {
     'watch-dir-enabled': False,
     'umask': 18,
 }
+# seedRatioMode de cada torrent: sem limite. Com o limite 0 da sessao, um
+# torrent que ja "terminou" (tudo desmarcado) para com "Seed ratio reached"
+# logo no torrent-start, antes de baixar o que o Start marcou. Quem tira o
+# torrent ao fim e o cmd_finish.
+UNLIMITED = 2
 
 
 def say(progress, line):
@@ -331,7 +336,8 @@ def fetch_metadata(rpc, kind, magnet, progress, timeout):
         t = rpc.torrent(hash_, ['name', 'files', 'metadataPercentComplete', 'peersConnected',
                                 'error', 'errorString'])
         if t and t.get('files'):
-            rpc.call('torrent-set', ids=[hash_], **{'files-unwanted': list(range(len(t['files'])))})
+            rpc.call('torrent-set', ids=[hash_], seedRatioMode=UNLIMITED,
+                     **{'files-unwanted': list(range(len(t['files'])))})
             rpc.call('torrent-stop', ids=[hash_])
             return hash_, t
         if time.monotonic() > end:
@@ -439,7 +445,9 @@ def cmd_start(args):
                 if t is not None:
                     chosen = set(wanted)
                     unwanted = [i for i in range(len(meta['files'])) if i not in chosen]
-                    settings = {'files-unwanted': unwanted} if unwanted else {}
+                    settings = {'seedRatioMode': UNLIMITED}
+                    if unwanted:
+                        settings['files-unwanted'] = unwanted
                     if wanted:
                         settings['files-wanted'] = wanted
                     rpc.call('torrent-set', ids=[meta['hash']], **settings)
