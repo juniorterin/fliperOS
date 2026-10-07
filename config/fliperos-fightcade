@@ -262,14 +262,16 @@ idle_close() {
   done
 }
 
-# ── A resolucao de cada jogo no FBNeo (15 kHz) ────────────────────
-# Com o bVidArcaderesHor o FBNeo pede a tela cheia no tamanho do jogo, e o
-# Wine troca para esse modo se ele estiver na lista da saida a tempo (uns 2 s
-# depois de o emulador abrir); se nao, da erro. O tamanho vem do GroovyMAME
-# (-listxml, os nomes sao os mesmos), guardado num cache. O jogo que ele nao
-# conhece, ou vertical, ou de largura que o modeline nao faz exata, fica no
-# modo da tabela, sem o bVidArcaderesHor.
+# ── A resolucao de cada jogo no FBNeo e no FBA (15 kHz) ───────────
+# Com o bVidArcaderesHor (no FBA, bVidArcaderes) o emulador pede a tela
+# cheia no tamanho do jogo, e o Wine troca para esse modo se ele estiver na
+# lista da saida a tempo (uns 2 s depois de o emulador abrir); se nao, da
+# erro. O tamanho vem do GroovyMAME (-listxml, os nomes sao os mesmos), e o
+# modeline do Switchres, como no GroovyArcade; fica num cache. O jogo que ele
+# nao conhece, ou vertical, ou de largura que o modeline nao faz exata, fica
+# no modo da tabela, sem o ArcadeRes.
 fbneo_ini=emulator/fbneo/config/fcadefbneo.ini
+fba_ini=emulator/ggpofba/config/ggpofba-ng.ini
 native="${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.native"
 native_cache="${XDG_CACHE_HOME:-$HOME/.cache}/fliperos/fightcade-modes"
 
@@ -280,7 +282,8 @@ native_mode() {
   mode=$(awk -v g="$game" '$1 == g { print $2; exit }' "$native_cache" 2> /dev/null)
   if [[ -z $mode ]]; then
     command -v "$mame" > /dev/null || return 0
-    mode=$("$mame" "$game" -listxml 2> /dev/null | awk '
+    # LC_ALL=C: com o sistema em portugues o awk escreveria "59,637".
+    mode=$("$mame" "$game" -listxml 2> /dev/null | LC_ALL=C awk '
       /<display / && /type="raster"/ {
         if (!match($0, /rotate="[0-9]+"/)) exit
         r = substr($0, RSTART + 8, RLENGTH - 9)
@@ -298,12 +301,12 @@ native_mode() {
   [[ $mode == - ]] || printf '%s\n' "$mode"
 }
 
-# native_game LINHA: o jogo na linha de comando do FBNeo ("fcadefbneo.exe
+# native_game LINHA: o jogo na linha de comando do emulador ("fcadefbneo.exe
 # sf2ce", ou "quark:served,sf2ce,..." numa partida online).
 native_game() {
   local arg
   # shellcheck disable=SC2086 # os argumentos, um por palavra
-  set -- ${1#*fcadefbneo.exe}
+  set -- ${1#*.exe}
   for arg; do
     case $arg in
       quark:*)
@@ -321,28 +324,32 @@ native_game() {
   done
 }
 
-# native_watch: a cada FBNeo que abre, para o processo (SIGSTOP) antes de o
-# Wine ler o ini, poe o modo do jogo na lista, liga ou desliga o
-# bVidArcaderesHor e o solta. O modo fica em $native para o laco abaixo
-# ("wait" enquanto decide).
+# native_watch: a cada FBNeo ou FBA que abre, para o processo (SIGSTOP)
+# antes de o Wine ler o ini, poe o modo do jogo na lista, liga ou desliga o
+# ArcadeRes e o solta. O modo fica em $native para o laco abaixo ("wait"
+# enquanto decide).
 native_watch() {
-  local pid line mode seen=" "
+  local pid line mode ini key seen=" "
   while sleep "${FIGHTCADE_NATIVE_POLL:-0.1}"; do
     while read -r pid line; do
       [[ $seen == *" $pid "* ]] && continue
       seen+="$pid "
+      case $line in
+        *ggpofba-ng.exe*) ini=$fba_ini key=bVidArcaderes ;;
+        *) ini=$fbneo_ini key=bVidArcaderesHor ;;
+      esac
       kill -STOP "$pid" 2> /dev/null || continue
       echo wait > "$native"
       mode=$(native_mode "$(native_game "$line")")
       if [[ -n $mode ]] && mode_add "$mode" > /dev/null; then
-        keyval_set "$fbneo_ini" bVidArcaderesHor 1
+        keyval_set "$ini" "$key" 1
       else
         mode=""
-        keyval_set "$fbneo_ini" bVidArcaderesHor 0
+        keyval_set "$ini" "$key" 0
       fi
       printf '%s\n' "$mode" > "$native"
       kill -CONT "$pid" 2> /dev/null
-    done < <(pgrep -u "$(id -u)" -af '[f]cadefbneo\.exe ')
+    done < <(pgrep -u "$(id -u)" -af '[f]cadefbneo\.exe |[g]gpofba-ng\.exe ')
   done
 }
 
@@ -360,6 +367,11 @@ keyval_set() {
   value=${value//\//\\/}
   value=${value//&/\\&}
   sed -i -E "s/^($2)[[:blank:]]+[^\r]*(\r?)\$/\1 $value\2/" "$1"
+}
+# snes_set ARQUIVO CHAVE VALOR troca o valor de "  CHAVE   = valor  # nota"
+# (o fcadesnes9x.conf: alinhado, com a nota depois e fim de linha do Windows).
+snes_set() {
+  sed -i -E "s/^([[:blank:]]*$2[[:blank:]]*=[[:blank:]]*)[^[:blank:]#\r]*/\1$3/" "$1"
 }
 # cfg_set ARQUIVO CHAVE VALOR troca "CHAVE = valor" (o emu.cfg do Flycast).
 cfg_set() {
@@ -433,10 +445,11 @@ emulators_setup() {
       keyval_set "$ini.ini" bVidAutoSwitchFull 1
       ((crt)) && keyval_set "$ini.ini" nVidScrnAspectX 4 && keyval_set "$ini.ini" nVidScrnAspectY 3
     fi
-    # A imagem pura: sem scanlines, interpolacao nem efeitos, com o VSync.
-    if once "$name-video"; then
+    # A imagem pura: sem scanlines, interpolacao, efeitos nem gama, com o
+    # VSync.
+    if once "$name-pure"; then
       for key in bVidScanlines bVidDX9Scanlines bVidScanBilinear bVidBilinear bVidDX9Bilinear \
-        nVidDX9HardFX bVidMotionBlur; do
+        nVidDX9HardFX bVidMotionBlur bVidUseHardwareGamma; do
         keyval_set "$ini.ini" "$key" 0
       done
       keyval_set "$ini.ini" bVidVSync 1
@@ -446,6 +459,33 @@ emulators_setup() {
     fi
     fbneo_buttons "$ini.ini"
   done
+  # SNES9x: a tela cheia no modo da tabela (no 15 kHz o do console,
+  # 256x224 a 60,0988 Hz: a imagem 1:1). Ele nao troca o modo (a tela cheia e
+  # uma janela do tamanho da tela); a troca e a do laco abaixo.
+  ini=emulator/snes9x/fcadesnes9x
+  if [[ -f $ini.conf ]] || cp "$ini.default.conf" "$ini.conf" 2> /dev/null; then
+    mode=$(table_mode fightcade-snes9x)
+    if [[ $mode =~ ^([0-9]+)x([0-9]+)@([0-9]+) ]]; then
+      snes_set "$ini.conf" Fullscreen:Width "${BASH_REMATCH[1]}"
+      snes_set "$ini.conf" Fullscreen:Height "${BASH_REMATCH[2]}"
+      snes_set "$ini.conf" Fullscreen:RefreshRate "${BASH_REMATCH[3]}"
+    fi
+    if once fightcade-snes9x; then
+      snes_set "$ini.conf" Fullscreen:Enabled TRUE
+      snes_set "$ini.conf" Fullscreen:EmulateFullscreen TRUE
+    fi
+    if once fightcade-snes9x-pure; then
+      snes_set "$ini.conf" FilterType 0
+      snes_set "$ini.conf" FilterHiRes 0
+      snes_set "$ini.conf" BlendHiRes FALSE
+      snes_set "$ini.conf" ShaderEnabled FALSE
+      snes_set "$ini.conf" NTSCScanlines FALSE
+      snes_set "$ini.conf" Stretch:BilinearFilter FALSE
+      snes_set "$ini.conf" Stretch:MaintainAspectRatio TRUE
+      snes_set "$ini.conf" Stretch:AspectRatioBaseWidth 256
+      snes_set "$ini.conf" Vsync TRUE
+    fi
+  fi
   # Flycast: quanto esticar na horizontal para o 4:3 encher o modo (640x240
   # tem pixels 8:3: 200%), como o fliperos-x11-run faz no Flycast do sistema.
   ini=emulator/flycast/emu
@@ -492,7 +532,7 @@ if [[ -x $escquit ]]; then
 fi
 rm -f "$native"
 native_pid=""
-if [[ ${FIGHTCADE_NATIVE:-1} != 0 && -f $fbneo_ini && $(sed -n 's/^frequency=//p' "$conf" 2> /dev/null) == 15* ]]; then
+if [[ ${FIGHTCADE_NATIVE:-1} != 0 && (-f $fbneo_ini || -f $fba_ini) && $(sed -n 's/^frequency=//p' "$conf" 2> /dev/null) == 15* ]]; then
   native_watch < /dev/null > /dev/null 2>&1 &
   native_pid=$!
 fi
@@ -523,13 +563,17 @@ while ((gone < ${FIGHTCADE_QUIT_WAIT:-5})); do
   esac
   case $running in
     *flycast.elf*) want=$(table_mode fightcade-flycast) ;;
-    *fcadefbneo.exe*)
+    *fcadefbneo.exe* | *ggpofba-ng.exe*)
       want=$(cat "$native" 2> /dev/null)
       [[ $want == wait ]] && want=$current
-      [[ -n $want ]] || want=$(table_mode fightcade-fbneo)
+      if [[ -z $want ]]; then
+        case $running in
+          *fcadefbneo.exe*) want=$(table_mode fightcade-fbneo) ;;
+          *) want=$(table_mode fightcade-fc1) ;;
+        esac
+      fi
       ;;
     *fcv39.exe*) want=$(table_mode fightcade-fbneo) ;;
-    *ggpofba-ng.exe*) want=$(table_mode fightcade-fc1) ;;
     *fcadesnes9x.exe*) want=$(table_mode fightcade-snes9x) ;;
     *) want="" ;;
   esac
