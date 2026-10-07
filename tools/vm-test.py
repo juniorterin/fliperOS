@@ -14,6 +14,10 @@
                                            (sem ISO nova): menu por gamepad
                                            falso, Start desktop, resolucao do
                                            desktop e quirks
+    python3 tools/vm-test.py site ISO      fotos para o site: menu, Setup,
+                                           frontends e desktop no disco do
+                                           modo install (console 640x480) e
+                                           o instalador da midia live
 
 Tudo acontece em /audit (um volume do Docker, nunca uma pasta do Windows):
 disco qcow2, logs e as fotos em PNG.
@@ -393,8 +397,101 @@ def dev(iso):
         guest.close()
 
 
+SITE_VIDEO = 'video=Virtual-1:640x480'
+
+
+def site_session(guest, session, wait, shots):
+    """Troca o launcher do tty1 e fotografa; shots = [(espera, nome, tecla)]."""
+    guest.run("pkill -u fliperos -f '[a]ttractplus|[e]s-de|[e]mulationstation|[p]egasus-fe|[x]init'; sleep 3; "
+              "echo %s > /etc/fliperos/session; systemctl restart getty@tty1" % session)
+    time.sleep(wait)
+    for pause, name, key in shots:
+        if key:
+            guest.key(key)
+        time.sleep(pause)
+        guest.screenshot(name)
+
+
+def site(iso):
+    """Fotos para o site (website/public/screenshots): o disco do modo
+    install com os arquivos do repositorio de agora, console em 640x480 como
+    no tubo, e depois a midia live num disco descartavel a parte."""
+    print('SITE: disco instalado + arquivos do repositorio, console 640x480', flush=True)
+    guest = Guest('site-prep', disk(False) + ['-vga', 'std'])
+    try:
+        guest.root_shell()
+        push(guest, ['fliperos-setup', 'config', 'fliperos-rootfs.sh', 'fliperos-video-check.py',
+                     'fliperos-limine-update.py'])
+        assert guest.run('bash /tmp/repo/fliperos-rootfs.sh / > /tmp/rootfs.log 2>&1 || '
+                         '{ tail /tmp/rootfs.log; false; }', 1800) == 0, 'fliperos-rootfs.sh falhou'
+        guest.run("sed -i -E 's/ video=[^ \"]*//g; s|^FLIPEROS_CMDLINE=\"(.*)\"$|FLIPEROS_CMDLINE=\"\\1 %s\"|' "
+                  "/etc/default/fliperos-boot && grep FLIPEROS_CMDLINE /etc/default/fliperos-boot && "
+                  "/usr/local/sbin/fliperos-limine-update" % SITE_VIDEO, 300)
+        guest.run('rm -f /etc/fliperos/firstboot; echo setup > /etc/fliperos/session; '
+                  'for b in attractplus emulationstation pegasus-fe; do command -v $b || echo "sem $b"; done')
+        guest.send('poweroff')
+        guest.wait('Power down', timeout=300)
+    finally:
+        guest.close()
+
+    guest = Guest('site', disk(False) + ['-vga', 'std'], monitor=True)
+    try:
+        guest.root_shell()
+        guest.run('cat /proc/cmdline')
+        time.sleep(20)
+        guest.screenshot('site-menu')
+        for key, pause, name in (('down', 2, None), ('ret', 8, 'site-setup'), ('ret', 10, 'site-video')):
+            guest.key(key)
+            time.sleep(pause)
+            if name:
+                guest.screenshot(name)
+        for _ in range(4):
+            guest.key('esc')
+            time.sleep(2)
+
+        print('SITE: frontends e desktop', flush=True)
+        site_session(guest, 'attractplus', 120, [(0, 'site-attract-mode', None)])
+        site_session(guest, 'emulationstation', 180, [(0, 'site-es-de', None), (5, 'site-es-de-2', 'ret')])
+        site_session(guest, 'pegasus', 150, [(0, 'site-pegasus', None)])
+        site_session(guest, 'lxde', 150, [])
+        guest.run("runuser -u fliperos -- env DISPLAY=:0 xrandr --output Virtual-1 --mode 640x480; true")
+        time.sleep(15)
+        guest.screenshot('site-desktop')
+        guest.key('ctrl-esc')
+        time.sleep(5)
+        guest.screenshot('site-desktop-menu')
+        guest.run("pkill -u fliperos -x xinit; echo setup > /etc/fliperos/session")
+        guest.send('poweroff')
+        guest.wait('Power down', timeout=300)
+    finally:
+        guest.close()
+
+    print('SITE: midia live (disco descartavel), telas do instalador', flush=True)
+    boot = extract_boot(iso)
+    scratch = BASE / 'site-live.qcow2'
+    scratch.unlink(missing_ok=True)
+    subprocess.run(['qemu-img', 'create', '-f', 'qcow2', str(scratch), '20G'], check=True, capture_output=True)
+    guest = Guest('site-live', ['-drive', 'file=%s,format=qcow2,if=virtio' % scratch, '-vga', 'std',
+                                '-kernel', str(boot / 'vmlinuz'), '-initrd', str(boot / 'initrd.img'),
+                                '-append', 'boot=live fliperos.boot=svga consoleblank=0 ' + SITE_VIDEO,
+                                '-cdrom', str(iso)], monitor=True)
+    try:
+        time.sleep(240)
+        steps = [(0, 'site-live-1', None), (20, 'site-live-2', 'ret'), (15, 'site-live-3', 'ret'),
+                 (10, 'site-live-4', 'ret'), (10, 'site-live-5', 'ret'), (10, 'site-live-6', 'n'),
+                 (15, 'site-live-7', None)]
+        for pause, name, key in steps:
+            if key:
+                guest.key(key)
+            time.sleep(pause)
+            guest.screenshot(name)
+    finally:
+        guest.close()
+        scratch.unlink(missing_ok=True)
+
+
 if __name__ == '__main__':
-    modes = {'install': install, 'screens': screens, 'desktop': desktop, 'dev': dev}
+    modes = {'install': install, 'screens': screens, 'desktop': desktop, 'dev': dev, 'site': site}
     if len(sys.argv) != 3 or sys.argv[1] not in modes:
         print(__doc__)
         sys.exit(2)
