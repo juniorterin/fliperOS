@@ -587,6 +587,60 @@ def hypseus_save(players):
     write(HYPSEUS_INI, text, USER_ID)
 
 
+# ── FBNeo do Fightcade (Wine) ───────────────────────────────────
+
+# O preset de cada jogador (nPlayerDefaultControls 15 e szPlayerDefaultIni no
+# ini do emulador; o fliperos-fightcade os liga): linhas 'input "NOME" switch
+# CODIGO', so para as entradas ainda sem nada. NOME e o szInfo dos drivers
+# ("p1 fire 3"), igual em todos os jogos; os nomes de tela mais comuns vao
+# junto para as versoes que so conhecem eles. O botao N do painel e o fire N
+# do jogo, como no MAME.
+FBNEO_NAMES = {'up': ['Up'], 'down': ['Down'], 'left': ['Left'], 'right': ['Right'], 'start': ['Start'],
+               'coin': ['Coin'],
+               'b1': ['Fire 1', 'Button 1', 'Weak Punch', 'Button A'],
+               'b2': ['Fire 2', 'Button 2', 'Medium Punch', 'Button B'],
+               'b3': ['Fire 3', 'Button 3', 'Strong Punch', 'Button C'],
+               'b4': ['Fire 4', 'Button 4', 'Weak Kick', 'Button D'],
+               'b5': ['Fire 5', 'Button 5', 'Medium Kick'],
+               'b6': ['Fire 6', 'Button 6', 'Strong Kick']}
+FBNEO_HAT = {'1': 2, '2': 1, '4': 3, '8': 0}
+
+
+def fbneo_code(index, element):
+    """O codigo do FBNeo (DirectInput: 0x4000 | joystick << 8 | elemento) de
+    um elemento do SDL. Com o "Map Controllers" do Wine desligado o painel
+    chega cru: os botoes, os eixos (X Y Z rX rY rZ) e os hats na ordem do
+    SDL."""
+    base = 0x4000 | (index << 8)
+    if element.startswith('b'):
+        return base | (0x80 + int(element[1:]))
+    if element.startswith('h'):
+        hat, direction = element[1:].split('.')
+        return base | (0x10 + 4 * int(hat) + FBNEO_HAT[direction])
+    return base | (2 * int(element[2:]) + (1 if element[0] == '+' else 0))
+
+
+def fbneo_preset(players, version):
+    lines = ['// Gerado pelo Setup > Joysticks > Button mapping (fliperos-buttons).',
+             'version 0x%06X' % version, '']
+    for player in sorted(players):
+        for control in CONTROLS:
+            if control not in players[player]:
+                continue
+            code = fbneo_code(*players[player][control])
+            for name in FBNEO_NAMES[control]:
+                lines.append('input  "P%d %s"  switch 0x%04X' % (player, name, code))
+            lines.append('input  "p%d %s"  switch 0x%04X' % (player, FBNEO_NAMES[control][0].lower(), code))
+    return '\r\n'.join(lines) + '\r\n'
+
+
+def cmd_fbneo(args):
+    players, _ = read_map(args.map)
+    if not players:
+        sys.exit('mapa vazio: %s' % args.map)
+    sys.stdout.write(fbneo_preset(players, int(args.version, 0)))
+
+
 def sdl_devices():
     """{indice: (guid, nome, botoes, eixos)} dos controles ligados; vazio sem
     o SDL."""
@@ -757,6 +811,10 @@ def main():
     p = sub.add_parser('save')
     p.add_argument('map')
     p.set_defaults(func=cmd_save)
+    p = sub.add_parser('fbneo')
+    p.add_argument('map')
+    p.add_argument('version')
+    p.set_defaults(func=cmd_fbneo)
     args = parser.parse_args()
     sys.exit(args.func(args) or 0)
 

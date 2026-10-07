@@ -4886,6 +4886,38 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertEqual(code(2, 'h0.1'), 'JOYCODE_3_HAT1UP')
         self.assertEqual(code(0, 'h1.8'), 'JOYCODE_1_HAT2LEFT')
 
+    def test_fbneo_preset(self):
+        # DirectInput do FBNeo: 0x4000 | joystick << 8; botao 0x80 + n, eixo
+        # 2n (negativo) e 2n + 1, hat 0x10 + 4h + esquerda/direita/cima/baixo.
+        code = self.rc.fbneo_code
+        self.assertEqual(code(0, 'b0'), 0x4080)
+        self.assertEqual(code(1, 'b7'), 0x4187)
+        self.assertEqual(code(0, '-a0'), 0x4000)
+        self.assertEqual(code(0, '+a1'), 0x4003)
+        self.assertEqual(code(0, '-a1'), 0x4002)
+        self.assertEqual(code(2, 'h0.1'), 0x4212)
+        self.assertEqual(code(0, 'h0.8'), 0x4010)
+        self.assertEqual(code(0, 'h1.4'), 0x4017)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'map'
+            path.write_text('1 up 0 -a1 Pad\n1 b3 0 b2 Pad\n2 coin 1 b7 Pad\n')
+            run = subprocess.run(['python3', str(ROOT / 'config/fliperos-buttons'), 'fbneo', str(path), '0x029744'],
+                                 capture_output=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            text = run.stdout.decode()
+            lines = text.split('\r\n')
+            # Fim de linha do Windows, a versao do emulador (sem ela o FBNeo ignora o arquivo).
+            self.assertEqual(lines[1], 'version 0x029744')
+            for line in ('input  "P1 Up"  switch 0x4002', 'input  "p1 up"  switch 0x4002',
+                         'input  "p1 fire 3"  switch 0x4082', 'input  "P1 Strong Punch"  switch 0x4082',
+                         'input  "P1 Button C"  switch 0x4082', 'input  "P2 Coin"  switch 0x4187',
+                         'input  "p2 coin"  switch 0x4187'):
+                self.assertIn(line, lines)
+            self.assertNotIn('P1 Down', text)
+            path.write_text('')
+            self.assertEqual(subprocess.run(['python3', str(ROOT / 'config/fliperos-buttons'), 'fbneo', str(path), '0'],
+                                            capture_output=True, timeout=30).returncode, 1)
+
     def test_retroarch_binds(self):
         # Os botoes do painel no layout dos cores de arcade: 1 2 3 = Y X L,
         # 4 5 6 = B A R, ficha = Select. O outro tipo de bind fica vazio.
