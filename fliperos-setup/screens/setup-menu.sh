@@ -343,7 +343,12 @@ screen_scraper() {
   source=$(ui_menu "Scraper" "Where should the data come from?" screenscraper \
     "screenscraper|ScreenScraper (free account recommended)" \
     "arcadedb|ArcadeDB (arcade games only, no account)" \
+    "progettosnaps|progetto-SNAPS (arcade screenshots only, no account)" \
     "thegamesdb|TheGamesDB") || return 0
+  if [[ $source == progettosnaps ]]; then
+    screen_scraper_snaps "${targets[@]}"
+    return 0
+  fi
   if [[ $source == screenscraper ]]; then
     user=$(ui_input "ScreenScraper" "ScreenScraper user (leave empty to scrape without an account)" "$(conf_get screenscraper_user 2> /dev/null)") || return 0
     if [[ -n $user ]]; then
@@ -366,6 +371,31 @@ screen_scraper() {
     fi
   done
   scraper_scrape_targets "$source" "$media" "$creds" "$clones" "${targets[@]}"
+}
+
+# screen_scraper_snaps ALVO...: o progetto-SNAPS so tem capturas de jogos de
+# arcade (lib/scraper.sh). As outras pastas ficam de fora, e a escolha de
+# midia guardada nao muda.
+screen_scraper_snaps() {
+  local t arcade=() other=() clones=0
+  for t in "$@"; do
+    if scraper_arcade "${t%%|*}"; then arcade+=("$t"); else other+=("${t%%|*}"); fi
+  done
+  if ((${#arcade[@]} == 0)); then
+    ui_msg "Scraper" "progetto-SNAPS only has arcade games (MAME sets)." "" \
+      "Pick an arcade folder (mame, naomi, atomiswave, model2...) or another source."
+    return 0
+  fi
+  ((${#other[@]})) && ui_msg "Scraper" "Left out (not arcade): ${other[*]}"
+  ui_yesno "Scraper" "progetto-SNAPS has the in-game screenshots of the MAME sets, in a pack of about 520 MB (plus a monthly update) that stays in $SNAPS_CACHE for the next time (about 1 GB unpacked). Logos, covers and descriptions come from the other sources. Download?" yes ||
+    return 0
+  for t in "${arcade[@]}"; do
+    if [[ ${t%%|*} == mame ]]; then
+      ui_yesno "Scraper" "Also fetch the clones of the MAME games found (other versions of the same game)?" && clones=1
+      break
+    fi
+  done
+  scraper_scrape_targets progettosnaps snap "" "$clones" "${arcade[@]}"
 }
 
 # scraper_scrape_targets FONTE MIDIA CREDENCIAIS CLONES ALVO... anota o

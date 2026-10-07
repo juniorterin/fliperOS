@@ -1611,6 +1611,32 @@ class ScraperTests(Base):
         """ % SETUP, env)
         self.assertEqual(out.splitlines(), ["alvo:retroarch/snes9x|%s/retroarch/snes9x|snes|1" % roms])
 
+    def test_progettosnaps_saves_screenshots_and_the_attract_list(self):
+        # Sem Skyscraper: o fliperos-snaps grava as capturas em ~/media/snap e
+        # o Attract-Mode ganha o emulador e a tela da pasta. So pasta de arcade.
+        env, roms, attract = self.scraper_env()
+        (roms / "mame" / "kof98.zip").write_text("rom")
+        args = self.env.dir / "snaps.args"
+        self.env.stub("fliperos-snaps", 'echo "$*" > %s\n'
+                      'while (($#)); do case $1 in --dest) d=$2;; --names) n=$2;; --result) r=$2;; esac; shift; done\n'
+                      'cp "$n" %s.names; mkdir -p "$d"; touch "$d/sf2.png"\n'
+                      'printf "found=1\\nkept=0\\nmissing=1\\n" > "$r"; echo "@step 95 Screenshots saved"' % (args, args))
+        (self.env.etc / "sessions.conf").write_text("attractplus|kms|attractplus|fliperos-attractplus|Attract-Mode Plus\n")
+        (self.env.etc / "session").write_text("attractplus\n")
+        env.update({"SNAPS": str(self.env.bin / "fliperos-snaps"), "SNAPS_CACHE": str(self.env.dir / "cache"),
+                    "ATTRACTPLUS": "false", "SKYSCRAPER": "nao-existe"})
+        out = self.env.out("scraper_run mame %s/mame arcade progettosnaps snap '' 0" % roms, env)
+        self.assertIn("--cache %s/cache" % self.env.dir, args.read_text())
+        self.assertEqual(Path(str(args) + ".names").read_text().split(), ["kof98", "sf2"])
+        self.assertTrue((self.env.dir / "media/snap/arcade/sf2.png").exists())
+        self.assertIn("@msg 1 screenshots saved, 0 already there, 1 not in progetto-SNAPS", out)
+        self.assertIn("@step 100 arcade: done", out)
+        self.assertTrue((attract / "emulators" / "MAME.cfg").exists())
+        self.assertIn("romlist              MAME", (attract / "attract.cfg").read_text())
+        r = self.env.run("scraper_run retroarch/snes9x %s/retroarch/snes9x snes progettosnaps snap" % roms, env)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("@fail", r.stdout)
+
     def test_job_is_recorded_and_finished(self):
         env, roms, _ = self.scraper_env()
         env["SCRAPER_JOB_DIR"] = str(self.env.dir / "job")

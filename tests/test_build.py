@@ -10,6 +10,7 @@ import io
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -1871,6 +1872,171 @@ class FreeRomsTests(unittest.TestCase):
         self.assertIn('"freeroms|Free games (open-source homebrew)"', menu)
         self.assertIn('freeroms) screen_free_roms ;;', menu)
         self.assertIn('run_with_progress "Downloading the free games" "" freeroms_fetch "$result"', menu)
+
+
+class SnapsTests(unittest.TestCase):
+    """config/fliperos-snaps: as capturas do progetto-SNAPS, baixadas como o
+    site pede (pela pagina e pelo link de download, upd por cima do fullset)."""
+
+    PAGE = ('<a href="/download/?tipo=snapshots_snap&amp;file=https://x/snapshots/packs/full_sets/pS_snap_fullset_%d.zip">'
+            '<a href="/download/?tipo=snapshots_snap&amp;file=https://x/snapshots/packs/full_sets/pS_snap_fullset_270.zip">'
+            '<a href="/download/?tipo=snapshots_snap&file=https://x/snapshots/packs/pS_snap_upd_%d.zip">'
+            '<a href="/download/?tipo=snapshots_snap&file=https://x/snapshots/packs/pS_snap%%2BSL_upd_299.zip">'
+            '<a href="/download/?tipo=snapshots_snap&file=https://x/snapshots/packs/full_sets/pS_titles_fullset_287.zip">'
+            '<a href="/download/?tipo=snapshots_titles&file=https://x/snapshots/packs/pS_titles_upd_286.zip">'
+            '<a href="/download/?tipo=snapshots_logo&file=/snapshots/packs/pS_logo_upd_288.zip">')
+
+    def test_packs_come_from_the_page(self):
+        sn = load_script('snaps', 'config/fliperos-snaps')
+        packs = sn.find_packs(self.PAGE % (287, 288))
+        self.assertEqual({k: v[1] for k, v in packs.items()}, {
+            ('snap', 'fullset'): 'pS_snap_fullset_287.zip', ('snap', 'upd'): 'pS_snap_upd_288.zip',
+            ('titles', 'fullset'): 'pS_titles_fullset_287.zip', ('titles', 'upd'): 'pS_titles_upd_286.zip'})
+        # O link e o de download da pagina, sem o &amp; do HTML.
+        self.assertTrue(packs[('snap', 'fullset')][2].startswith('/download/?tipo=snapshots_snap&file='))
+        # O upd vai antes do fullset; um upd mais velho que o fullset nao entra.
+        self.assertEqual([(c, p[1]) for c, p in sn.wanted(packs, ['snap', 'titles'])],
+                         [('snap', 'pS_snap_upd_288.zip'), ('snap', 'pS_snap_fullset_287.zip'),
+                          ('titles', 'pS_titles_fullset_287.zip')])
+
+    def serve(self, files, requests):
+        import http.server
+        import threading
+        page = self.PAGE
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                requests.append((self.path, self.headers.get('Range'), self.headers.get('User-Agent')))
+                if self.path == '/snapshots/':
+                    body = (page % (287, 288)).replace('https://x', '').encode()
+                    self.send_response(200)
+                elif self.path.startswith('/download/?'):
+                    self.send_response(302)
+                    self.send_header('Location', self.path.split('file=', 1)[1])
+                    self.end_headers()
+                    return
+                elif self.path.rsplit('/', 1)[-1] in files:
+                    body = files[self.path.rsplit('/', 1)[-1]]
+                    start = int(re.match(r'bytes=(\d+)-', self.headers['Range']).group(1)) if self.headers.get('Range') else 0
+                    self.send_response(206 if start else 200)
+                    body = body[start:]
+                else:
+                    self.send_response(404)
+                    body = b''
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return 'http://127.0.0.1:%d' % server.server_port
+
+    @staticmethod
+    def pack(entries):
+        import io
+        import zipfile
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w') as z:
+            z.writestr('ReadMe_Snap.txt', 'readme')
+            for name, data in entries.items():
+                z.writestr(name, data)
+        return buf.getvalue()
+
+    def test_get_downloads_once_and_extracts_only_the_games(self):
+        files = {
+            'pS_snap_fullset_287.zip': self.pack({'snap/sf2.png': 'velha', 'snap/kof98.png': 'kof',
+                                                  'snap/outro.png': 'nao pedido'}),
+            'pS_snap_upd_288.zip': self.pack({'snap/sf2.png': 'nova', 'DATs/x.dat': 'dat'}),
+            'pS_titles_fullset_287.zip': self.pack({'titles/mslug6.png': 'titulo', 'titles/sf2.png': 't'}),
+        }
+        requests = []
+        site = self.serve(files, requests)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            cache, dest = tmp / 'cache', tmp / 'media/snap/arcade'
+            cache.mkdir()
+            (cache / 'pS_snap_fullset_270.zip').write_bytes(b'versao velha')
+            # Um download interrompido continua de onde parou.
+            (cache / 'pS_snap_fullset_287.zip.part').write_bytes(files['pS_snap_fullset_287.zip'][:100])
+            (tmp / 'names').write_text('sf2\nkof98\nmslug6\nsemfoto\n../fora\nkof98\n')
+            dest.mkdir(parents=True)
+            (dest / 'kof98.png').write_text('minha')
+            env = dict(os.environ, FLIPEROS_SNAPS_SITE=site)
+            cmd = ['python3', str(ROOT / 'config/fliperos-snaps'), 'get', '--dest', str(dest), '--cache', str(cache),
+                   '--names', str(tmp / 'names'), '--progress', '--result', str(tmp / 'result'),
+                   '--category', 'snap', '--category', 'titles']
+            out = subprocess.run(cmd, capture_output=True, text=True, env=env, check=True).stdout
+            self.assertEqual(sorted(p.name for p in dest.iterdir()), ['kof98.png', 'mslug6.png', 'sf2.png'])
+            self.assertEqual((dest / 'sf2.png').read_text(), 'nova')
+            self.assertEqual((dest / 'mslug6.png').read_text(), 'titulo')
+            self.assertEqual((dest / 'kof98.png').read_text(), 'minha')
+            self.assertIn('found=2\nkept=1\nmissing=1\n', (tmp / 'result').read_text())
+            self.assertEqual(sorted(p.name for p in cache.iterdir()),
+                             ['pS_snap_fullset_287.zip', 'pS_snap_upd_288.zip', 'pS_titles_fullset_287.zip'])
+            self.assertIn('@step 95 Screenshots saved', out)
+            self.assertNotIn('@step 100', out)
+            downloads = [r for r in requests if r[0].startswith('/download/?')]
+            self.assertEqual(len(downloads), 3)
+            self.assertIn(('/snapshots/packs/full_sets/pS_snap_fullset_287.zip', 'bytes=100-'),
+                          [r[:2] for r in requests])
+            self.assertTrue(all(r[2].startswith('fliperos-snaps') for r in requests))
+            # Na segunda vez so a pagina: os pacotes estao no cache.
+            requests.clear()
+            subprocess.run(cmd + ['--overwrite'], capture_output=True, text=True, env=env, check=True)
+            self.assertEqual([r[0] for r in requests], ['/snapshots/'])
+            self.assertEqual((dest / 'kof98.png').read_text(), 'kof')
+            # Com tudo achado nas capturas, o pacote de titulos nem e baixado.
+            (cache / 'pS_titles_fullset_287.zip').unlink()
+            (tmp / 'names').write_text('sf2\n')
+            requests.clear()
+            subprocess.run(cmd + ['--overwrite'], capture_output=True, text=True, env=env, check=True)
+            self.assertFalse(any('titles' in r[0] for r in requests))
+            self.assertIn('packs=pS_snap_upd_288.zip\n', (tmp / 'result').read_text())
+            # Sem --category, so as capturas: o jogo sem captura fica sem imagem.
+            (tmp / 'names').write_text('mslug6\n')
+            requests.clear()
+            subprocess.run(cmd[:-4] + ['--overwrite'], capture_output=True, text=True, env=env, check=True)
+            self.assertFalse(any('titles' in r[0] for r in requests))
+            self.assertIn('missing=1\n', (tmp / 'result').read_text())
+
+    @unittest.skipUnless(shutil.which('7z'), 'sem 7z (p7zip-full)')
+    def test_fullset_with_the_images_in_a_7z(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            src = tmp / 'src'
+            src.mkdir()
+            for name, data in {'sf2.png': 'velha', 'kof98.png': 'kof', 'outro.png': 'nao pedido'}.items():
+                (src / name).write_text(data)
+            subprocess.run(['7z', 'a', '-ms=on', str(tmp / 'snap.7z'), '.'], cwd=src, stdout=subprocess.DEVNULL, check=True)
+            cache, dest = tmp / 'cache', tmp / 'dest'
+            cache.mkdir()
+            with zipfile.ZipFile(cache / 'pS_snap_fullset_287.zip', 'w') as z:
+                z.write(tmp / 'snap.7z', 'snap/snap.7z')
+                z.writestr('snap/', '')
+            (cache / 'pS_snap_upd_288.zip').write_bytes(self.pack({'snap/sf2.png': 'nova'}))
+            (cache / 'pS_snap_fullset_286.7z').write_bytes(b'velho')
+            sn = load_script('snaps', 'config/fliperos-snaps')
+            packs = [('snap', (288, 'pS_snap_upd_288.zip', '')), ('snap', (287, 'pS_snap_fullset_287.zip', ''))]
+            stats = sn.get(packs, ['sf2', 'kof98', 'semfoto'], str(dest), str(cache))
+            self.assertEqual(stats['found'], 2)
+            self.assertEqual(stats['missing'], 1)
+            self.assertEqual(sorted(p.name for p in dest.iterdir()), ['kof98.png', 'sf2.png'])
+            self.assertEqual((dest / 'sf2.png').read_text(), 'nova')
+            self.assertEqual((dest / 'kof98.png').read_text(), 'kof')
+            sn.ensure((287, 'pS_snap_fullset_287.zip', ''), str(cache), None)
+            self.assertEqual(sorted(p.name for p in cache.iterdir()),
+                             ['pS_snap_fullset_287.7z', 'pS_snap_fullset_287.zip', 'pS_snap_upd_288.zip'])
+
+    def test_install_and_screen(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-snaps"', ROOTFS)
+        menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
+        self.assertIn('"progettosnaps|progetto-SNAPS (arcade screenshots only, no account)"', menu)
 
 
 class QuietLaunchTests(unittest.TestCase):

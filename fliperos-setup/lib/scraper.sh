@@ -643,6 +643,10 @@ scraper_files() {
 scraper_run() {
   local key=$1 dir=$2 platform=$3 source=$4 media creds=${6:-} clones=${7:-0} refresh=0
   local flags format name exe cmd args gen input done_file chunk farm list="" files=() todo=() i n from to
+  if [[ $source == progettosnaps ]]; then
+    scraper_snaps_run "$key" "$dir" "$platform" "$clones"
+    return
+  fi
   have "$SKYSCRAPER" || { ev_fail "Skyscraper is not installed"; return 1; }
   media=$(scraper_media_list "$5")
   flags=$(scraper_media_flags "$media")
@@ -730,6 +734,54 @@ scraper_run() {
   scraper_media_record "$key" "$media"
   # O sistema no ES-DE, com a arte de ~/media (lib/frontends.sh).
   [[ $format == esde ]] && frontends_esde
+  ev_step 100 "$platform: done"
+}
+
+# ── progetto-SNAPS ────────────────────────────────────────────────
+# As capturas dos jogos de arcade, dos pacotes do progetto-SNAPS
+# (config/fliperos-snaps, que baixa como o site pede e guarda os pacotes em
+# SNAPS_CACHE). So ha sets do MAME e so capturas: logos, capas e textos vem
+# das outras fontes.
+SNAPS=${SNAPS:-/opt/fliperos/bin/fliperos-snaps}
+SNAPS_CACHE=${SNAPS_CACHE:-/var/cache/fliperos/snaps}
+
+# scraper_snaps_run CHAVE PASTA PLATAFORMA [CLONES] grava as capturas em
+# ~/media/snap/PLATAFORMA (a que ja existe fica) e poe a pasta no frontend,
+# que acha a imagem pelo nome do jogo.
+scraper_snaps_run() {
+  local key=$1 dir=$2 platform=$3 clones=${4:-0} input=$2 names result dest format
+  scraper_arcade "$key" || { ev_fail "progetto-SNAPS only has arcade (MAME) games"; return 1; }
+  if [[ $key == mame && $clones == 1 ]]; then
+    ev_msg "Looking for the clones of the games found"
+    input=$(scraper_clones_input "$dir") || { ev_fail "Could not list the MAME clones"; return 1; }
+  fi
+  media_system "$platform" || { ev_fail "Could not create the folders in $MEDIA_DIR"; return 1; }
+  dest="$MEDIA_DIR/snap/$platform"
+  names=$(mktemp) && result=$(mktemp) || { ev_fail "No space for the scraper"; return 1; }
+  scraper_files "$key" "$input" | sed 's|.*/||; s|\.[^.]*$||' > "$names"
+  if [[ ! -s $names ]]; then
+    rm -f "$names" "$result"
+    ev_fail "No games in $dir"
+    return 1
+  fi
+  log_line cmd "\$ $SNAPS get --dest $dest --cache $SNAPS_CACHE"
+  if ! "$SNAPS" get --dest "$dest" --cache "$SNAPS_CACHE" --names "$names" --progress --result "$result" \
+    2>> "$FLIPEROS_LOG"; then
+    rm -f "$names" "$result"
+    return 1
+  fi
+  chown -R "$FLIPEROS_USER:" "$dest" 2> /dev/null
+  log_info "progetto-SNAPS ($key): $(tr '\n' ' ' < "$result")"
+  ev_msg "$(conf_get found "$result") screenshots saved, $(conf_get kept "$result") already there," \
+    "$(conf_get missing "$result") not in progetto-SNAPS"
+  rm -f "$names" "$result"
+  format=$(scraper_target "$key")
+  ev_step 97 "Updating the $(scraper_format_label "$format") game list"
+  case $format in
+    attractmode) frontends_attract_system "$key" "$dir" "$platform" > /dev/null ;;
+    esde) frontends_esde ;;
+    pegasus) frontends_pegasus ;;
+  esac
   ev_step 100 "$platform: done"
 }
 

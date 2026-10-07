@@ -281,6 +281,8 @@ apt-get update -qq
 # arquivo aos apps Flatpak. libnss3 a xdg-utils sao do cliente do Fightcade 2
 # (um Electron, que o Setup > Frontend baixa do site dele): as bibliotecas
 # que ele pede e o xdg-open, por onde ele abre os emuladores (fcade://).
+# p7zip-full: o fullset do progetto-SNAPS traz as capturas num 7z
+# (config/fliperos-snaps), mesmo numa imagem sem Skyscraper.
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -295,7 +297,7 @@ apt-get install -y --no-install-recommends \
   kbd console-setup \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 pciutils usbutils libdrm-tests edid-decode squashfs-tools \
-  systemd-timesyncd \
+  systemd-timesyncd p7zip-full \
   gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk falkon transmission-gtk \
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils \
   samba samba-common-bin cifs-utils smbclient avahi-daemon avahi-utils udisks2 wireless-regdb \

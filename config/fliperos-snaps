@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+"""Capturas dos jogos de arcade do progetto-SNAPS (Setup > Scraper).
+
+O progetto-SNAPS (www.progettosnaps.net, de AntoPISA) distribui as imagens
+do MAME em pacotes por categoria: um "fullset" a cada repack e um "upd" a
+cada versao do MAME, que vai por cima. Do jeito que o site pede:
+
+- os pacotes saem da pagina de Snapshots (os nomes mudam a cada versao) e
+  sao baixados pelo link de download dela (/download/?tipo=...), um de cada
+  vez;
+- o upd vale por cima do fullset (F.A.Q. 04 e 06);
+- cada categoria fica na pasta com o nome dela (snap/, titles/): no upd as
+  imagens estao soltas (snap/<set>.png); no fullset vem um 7z solido
+  (snap/snap.7z, guardado sem compressao no zip) com as imagens na raiz,
+  que sai uma vez para o cache e e lido pelo 7z (p7zip-full).
+
+Os pacotes ficam no cache (CACHE): uma pasta nova raspada depois nao baixa
+tudo de novo; uma versao mais nova substitui a anterior. Da pasta de ROMs
+so saem as imagens dos jogos que estao nela.
+
+  fliperos-snaps packs
+  fliperos-snaps get --dest PASTA --names ARQUIVO [--category snap ...]
+                     [--cache PASTA] [--overwrite] [--progress] [--result ARQUIVO]
+
+get grava DEST/<set>.png de cada nome (um set do MAME por linha) com a
+primeira categoria que tiver a imagem, na ordem dada (padrao: so snap; com
+"--category snap --category titles", a tela de titulo para o jogo sem
+captura, ao custo de mais um pacote de 390 MB). Uma imagem que ja existe fica,
+a menos que --overwrite. Com --progress fala com a tela de progresso do
+Setup (lib/progress.sh); --result recebe "chave=valor" do que foi feito.
+"""
+import argparse
+import html
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+import zipfile
+
+SITE = os.environ.get('FLIPEROS_SNAPS_SITE', 'https://www.progettosnaps.net')
+PAGE = '/snapshots/'
+CACHE = os.environ.get('FLIPEROS_SNAPS_CACHE', '/var/cache/fliperos/snaps')
+AGENT = 'fliperos-snaps (+https://github.com/juniorterin/fliperOS)'
+CATEGORIES = ('snap', 'titles')
+# pS_snap_fullset_287.zip, pS_titles_upd_288.zip; os "+SL" (Software List,
+# consoles do MAME) ficam de fora.
+PACK = re.compile(r'^pS_(%s)_(fullset|upd)_(\d+)\.zip$' % '|'.join(CATEGORIES))
+LINK = re.compile(r'href="(/download/\?[^"]*)"')
+
+
+def say(progress, line):
+    if progress:
+        print(line, flush=True)
+
+
+def fetch(url, timeout=60):
+    req = urllib.request.Request(url, headers={'User-Agent': AGENT})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read().decode('utf-8', 'replace')
+
+
+def find_packs(page):
+    """{(categoria, fullset|upd): (versao, arquivo, link)} da versao mais nova
+    de cada pacote, pelos links de download da pagina."""
+    packs = {}
+    for href in LINK.findall(page):
+        href = html.unescape(href)
+        target = re.search(r'[?&]file=([^&]+)', href)
+        if not target:
+            continue
+        name = urllib.request.unquote(target.group(1)).rsplit('/', 1)[-1]
+        m = PACK.match(name)
+        if not m:
+            continue
+        key, version = (m.group(1), m.group(2)), int(m.group(3))
+        if key not in packs or version > packs[key][0]:
+            packs[key] = (version, name, href)
+    return packs
+
+
+def wanted(packs, categories):
+    """Os pacotes a usar, na ordem de busca: de cada categoria o upd (se for
+    mais novo que o fullset) e depois o fullset."""
+    out = []
+    for cat in categories:
+        full = packs.get((cat, 'fullset'))
+        upd = packs.get((cat, 'upd'))
+        if upd and (not full or upd[0] > full[0]):
+            out.append((cat, upd))
+        if full:
+            out.append((cat, full))
+    return out
+
+
+class Bar:
+    """O progresso de um download (de START a END), por bytes, no maximo um
+    evento por segundo."""
+
+    def __init__(self, progress, start, end):
+        self.progress, self.start, self.end, self.last = progress, start, end, 0.0
+
+    def __call__(self, done, total):
+        now = time.monotonic()
+        if not self.progress or now - self.last < 1 or not total:
+            return
+        self.last = now
+        print('@pct %d' % (self.start + (self.end - self.start) * done // total), flush=True)
+
+
+def download(href, dest, bar):
+    """Baixa o pacote pelo link de download da pagina, continuando um .part
+    de antes (o servidor aceita Range)."""
+    part = dest + '.part'
+    have = os.path.getsize(part) if os.path.exists(part) else 0
+    headers = {'User-Agent': AGENT}
+    if have:
+        headers['Range'] = 'bytes=%d-' % have
+    req = urllib.request.Request(SITE + href, headers=headers)
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        if have and resp.status != 206:
+            have = 0
+        length = int(resp.headers.get('Content-Length') or 0)
+        total = have + length if length else 0
+        free = shutil.disk_usage(os.path.dirname(dest)).free
+        if length and length > free:
+            raise OSError('not enough space in %s (%d MB needed)' % (os.path.dirname(dest), length >> 20))
+        with open(part, 'ab' if have else 'wb') as out:
+            done = have
+            for chunk in iter(lambda: resp.read(1 << 20), b''):
+                out.write(chunk)
+                done += len(chunk)
+                bar(done, total)
+    os.replace(part, dest)
+
+
+def ensure(pack, cache, bar):
+    """O pacote no cache (baixa, se falta) e o caminho dele. Uma versao
+    antiga do mesmo pacote sai."""
+    version, name, href = pack
+    os.makedirs(cache, exist_ok=True)
+    path = os.path.join(cache, name)
+    if not os.path.exists(path):
+        download(href, path, bar)
+    prefix, stem = name.rsplit('_', 1)[0] + '_', name[:-len('.zip')]
+    for old in os.listdir(cache):
+        if old.startswith(prefix) and not old.startswith(stem + '.') and old.endswith(('.zip', '.part', '.7z')):
+            os.remove(os.path.join(cache, old))
+    return path
+
+
+def extract_7z(z, info, path, left, dest):
+    """Como extract, para o 7z de dentro do pacote: ele sai uma vez para o
+    lado do pacote no cache e so as imagens de LEFT saem dele."""
+    if not shutil.which('7z'):
+        raise OSError('7z not found (install p7zip-full)')
+    inner = path[:-len('.zip')] + '.7z'
+    if not os.path.exists(inner) or os.path.getsize(inner) != info.file_size:
+        with z.open(info) as src, open(inner + '.part', 'wb') as out:
+            shutil.copyfileobj(src, out, 1 << 20)
+        os.replace(inner + '.part', inner)
+    listing = subprocess.run(['7z', 'l', '-ba', '-slt', '-sccUTF-8', inner], capture_output=True,
+                             text=True, errors='replace', check=True).stdout
+    have = {line[7:-4] for line in listing.splitlines()
+            if line.startswith('Path = ') and line.endswith('.png') and '/' not in line}
+    names = sorted(left & have)
+    if not names:
+        return 0
+    with tempfile.TemporaryDirectory(dir=dest, prefix='.snaps-') as tmp:
+        with open(os.path.join(tmp, '.list'), 'w', encoding='utf-8') as f:
+            f.writelines(n + '.png\n' for n in names)
+        subprocess.run(['7z', 'e', '-y', '-scsUTF-8', '-o' + tmp, inner, '@' + os.path.join(tmp, '.list')],
+                       stdout=subprocess.DEVNULL, check=True)
+        found = 0
+        for name in names:
+            got = os.path.join(tmp, name + '.png')
+            if os.path.exists(got):
+                os.replace(got, os.path.join(dest, name + '.png'))
+                left.discard(name)
+                found += 1
+    return found
+
+
+def extract(path, cat, left, dest):
+    """Grava DEST/<nome>.png de cada nome de LEFT que o pacote tem (e o tira
+    de LEFT). Devolve quantos."""
+    found = 0
+    with zipfile.ZipFile(path) as z:
+        members = {}
+        for info in z.infolist():
+            folder, _, base = info.filename.partition('/')
+            if folder == cat and base.endswith('.png') and '/' not in base:
+                members[base[:-4].strip()] = info
+        for info in z.infolist():
+            if info.filename == '%s/%s.7z' % (cat, cat):
+                asked = left - members.keys()
+                rest = set(asked)
+                found += extract_7z(z, info, path, rest, dest)
+                left -= asked - rest
+        for name in sorted(left):
+            info = members.get(name)
+            if info is None:
+                continue
+            tmp = os.path.join(dest, '.%s.png.tmp' % name)
+            with z.open(info) as src, open(tmp, 'wb') as out:
+                shutil.copyfileobj(src, out)
+            os.replace(tmp, os.path.join(dest, name + '.png'))
+            left.discard(name)
+            found += 1
+    return found
+
+
+def get(packs, names, dest, cache, overwrite=False, progress=False):
+    """As imagens dos nomes, pacote por pacote (na ordem de packs); um pacote
+    so e baixado se ainda falta imagem para algum nome. Devolve {chave: valor}."""
+    os.makedirs(dest, exist_ok=True)
+    stats = {'found': 0, 'kept': 0, 'missing': 0}
+    left = set()
+    for name in dict.fromkeys(names):
+        if os.path.exists(os.path.join(dest, name + '.png')) and not overwrite:
+            stats['kept'] += 1
+        else:
+            left.add(name)
+    used = []
+    for index, (cat, pack) in enumerate(packs):
+        if not left:
+            break
+        start, end = 95 * index // len(packs), 95 * (index + 1) // len(packs)
+        if not os.path.exists(os.path.join(cache, pack[1])):
+            say(progress, '@step %d Downloading %s' % (start, pack[1]))
+        path = ensure(pack, cache, Bar(progress, start, start + (end - start) * 4 // 5))
+        say(progress, '@step %d Extracting %s' % (start + (end - start) * 4 // 5, pack[1]))
+        stats['found'] += extract(path, cat, left, dest)
+        used.append(pack[1])
+    stats['missing'] = len(left)
+    stats['packs'] = ' '.join(used)
+    return stats
+
+
+def read_names(path):
+    with open(path, encoding='utf-8', errors='replace') as f:
+        # So o nome do set: nunca um caminho.
+        return [n for n in (line.strip() for line in f) if n and '/' not in n and not n.startswith('.')]
+
+
+def cmd_packs(args):
+    for (cat, kind), (version, name, href) in sorted(find_packs(fetch(SITE + PAGE)).items()):
+        print('%s\t%s\t%d\t%s' % (cat, kind, version, name))
+
+
+def cmd_get(args):
+    categories = args.category or ['snap']
+    names = read_names(args.names)
+    say(args.progress, '@step 0 Reading the progetto-SNAPS download page')
+    try:
+        packs = wanted(find_packs(fetch(SITE + PAGE)), categories)
+    except OSError as e:
+        say(args.progress, '@fail Reading the progetto-SNAPS page|%s' % e)
+        sys.exit('fliperos-snaps: %s%s: %s' % (SITE, PAGE, e))
+    if not packs:
+        say(args.progress, '@fail Reading the progetto-SNAPS page|No packs found on the page')
+        sys.exit('fliperos-snaps: no packs found on %s%s' % (SITE, PAGE))
+    try:
+        stats = get(packs, names, args.dest, args.cache, args.overwrite, args.progress)
+    except (OSError, zipfile.BadZipFile) as e:
+        say(args.progress, '@fail Downloading from progetto-SNAPS|%s' % e)
+        sys.exit('fliperos-snaps: %s' % e)
+    if args.result:
+        with open(args.result, 'w') as f:
+            f.writelines('%s=%s\n' % kv for kv in stats.items())
+    # O 100 fica para quem chamou: depois vem a lista do frontend.
+    say(args.progress, '@step 95 Screenshots saved')
+
+
+def main():
+    parser = argparse.ArgumentParser(prog='fliperos-snaps')
+    sub = parser.add_subparsers(dest='cmd', required=True)
+    sub.add_parser('packs').set_defaults(func=cmd_packs)
+    p = sub.add_parser('get')
+    p.add_argument('--dest', required=True)
+    p.add_argument('--names', required=True)
+    p.add_argument('--category', action='append', choices=CATEGORIES)
+    p.add_argument('--cache', default=CACHE)
+    p.add_argument('--overwrite', action='store_true')
+    p.add_argument('--progress', action='store_true')
+    p.add_argument('--result')
+    p.set_defaults(func=cmd_get)
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()

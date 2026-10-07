@@ -63,7 +63,7 @@ date
 
 echo "== New packages"
 # Os que a imagem ganhou depois da instalacao (fliperos-mkiso.sh).
-packages=(usbutils systemd-timesyncd gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk
+packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk
   alacritty libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 cifs-utils smbclient
   falkon transmission-gtk
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils)

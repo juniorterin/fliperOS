@@ -198,15 +198,23 @@ ATTRACTPLUS=${ATTRACTPLUS:-attractplus}
 # de jogos ganha a que o proprio Attract-Mode monta dos arquivos da pasta
 # (--build-romlist); a do Scraper, com titulo, ano e arte, fica.
 frontends_attract() {
-  local key dir platform name n=0
+  local key dir platform n=0
   while IFS='|' read -r key dir platform _; do
-    name=$(scraper_attract_prepare "$key" "$dir" "$platform") || continue
+    frontends_attract_system "$key" "$dir" "$platform" > /dev/null || continue
     n=$((n + 1))
-    if [[ ! -s $ATTRACT_DIR/romlists/$name.txt ]] && have "$ATTRACTPLUS"; then
-      runuser -u "$FLIPEROS_USER" -- "$ATTRACTPLUS" --build-romlist "$name" -o "$name" >> "$FLIPEROS_LOG" 2>&1
-    fi
   done < <(frontends_systems)
   log_info "Attract-Mode Plus: $n sistema(s)"
+}
+
+# frontends_attract_system CHAVE PASTA PLATAFORMA: o emulador, a tela e (se
+# faltar) a lista de jogos de uma pasta; imprime o nome do emulador.
+frontends_attract_system() {
+  local name
+  name=$(scraper_attract_prepare "$1" "$2" "$3") || return 1
+  if [[ ! -s $ATTRACT_DIR/romlists/$name.txt ]] && have "$ATTRACTPLUS"; then
+    runuser -u "$FLIPEROS_USER" -- "$ATTRACTPLUS" --build-romlist "$name" -o "$name" >> "$FLIPEROS_LOG" 2>&1
+  fi
+  printf '%s\n' "$name"
 }
 
 # ── ROM List do Attract-Mode Plus ────────────────────────────────
