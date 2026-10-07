@@ -4073,7 +4073,7 @@ class DocsTests(unittest.TestCase):
             # Leva a cada pagina da wiki, e so a paginas que existem.
             linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
             self.assertEqual(linked, self.pages())
-            for needed in ('dd if=fliperos-0.8.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
+            for needed in ('dd if=fliperos-0.8.1.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
                            'tools/wiki-publish.sh', 'openbor/Paks', 'Video Setup'):
                 self.assertIn(needed, readme)
         # O passo a passo tem os mesmos passos numerados nas duas linguas.

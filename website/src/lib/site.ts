@@ -17,7 +17,7 @@ export function readmeUrl(locale: string): string {
 export const AUTHOR_HANDLE = '@juniorter.in';
 export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorterin' } as const;
 
-export const FLIPEROS_VERSION = '0.8';
+export const FLIPEROS_VERSION = '0.8.1';
 
 export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? 'G-FTG8120HF8';
 

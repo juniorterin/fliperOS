@@ -2,6 +2,37 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.8.1
+
+The first ISO with the update system: 0.8's build stopped at the audit before publishing, so 0.8.1 brings everything in 0.8 (in [CHANGELOG.md](https://github.com/juniorterin/fliperOS/blob/main/CHANGELOG.md)) and comes with updates 1 to 7 already applied. An installed 0.8 gets the same changes through the updates at boot.
+
+**System changes:**
+
+- New boot splash: an animated text theme in the style of modern terminals is the default
+- More splash themes come in the image (Cogwheel, Into It and Windoze 95), and `~/splashscreen` is the folder for your own themes
+- New default LXDE wallpaper
+- The update check at boot waits for Wi-Fi to connect (on Wi-Fi it gave up before the network was up)
+
+**Package changes:**
+
+- OpenBOR: paks made for OpenBOR 3.0, which OpenBOR 4 refuses, open again. OpenBOR 3.0 (build 6391) comes in the image, and when OpenBOR 4 fails on a pak the launcher remembers it and opens that pak with 3.0, with the same button mapping
+- Attract-Mode Plus: the Basic layout is the default, sharp on the CRT, and every display without filters gets GroovyArcade's: All Games, Most Played, and by genre, manufacturer and year
+
+**fliperos-setup changes:**
+
+- New: Setup > Splash screen, to choose the boot theme, with a preview
+- The menu no longer freezes after a splash preview
+
+**Tool changes:**
+
+- ISO build: `updates/` goes into the build's Docker image, so the ISO records the level of the last update (0.8's ISO came out with level 0 and failed the audit)
+- `tools/build-openbor-legacy.sh`: builds the OpenBOR 3.0 that comes in the image
+- `tools/vm-test.py`: the dev and site runs record the update level after the rootfs
+
+**Documentation:**
+
+- Step-by-step guide from writing the USB stick to playing a game, in the README in English and in Portuguese (`README.pt-BR.md`); the Portuguese website links to the Portuguese README
+
 ## 0.8
 
 Updates without a new ISO: from this version on, small fixes reach the installed cabinet at boot. The ISO comes with update 1, which brings everything below to an installed 0.7 (`updates/bootstrap.sh` installs the update system there).
