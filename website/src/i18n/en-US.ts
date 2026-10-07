@@ -128,7 +128,7 @@ const enUS = {
       { id: 'setup', title: 'FliperOS Setup', caption: 'The setup menu, sized for 640x480 interlaced.' },
       { id: 'install', title: 'Installer', caption: 'Choosing the HD/SSD to install to, from the installation ISO.' },
       { id: 'video', title: 'Video Setup', caption: 'Monitor, output test and geometry on the grid.' },
-      { id: 'desktop', title: 'LXDE desktop', caption: 'Dracula theme, Games menu and app store.' },
+      { id: 'desktop', title: 'LXDE desktop', caption: 'Dracula theme with the FliperOS wallpaper, Games menu and app store.' },
     ],
   },
   emulators: {

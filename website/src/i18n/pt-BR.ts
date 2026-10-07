@@ -132,7 +132,7 @@ const ptBR: Messages = {
       { id: 'setup', title: 'FliperOS Setup', caption: 'O menu de configuração, dimensionado para 640x480 entrelaçado.' },
       { id: 'install', title: 'Instalador', caption: 'Escolha do HD/SSD para instalar, a partir da ISO de instalação.' },
       { id: 'video', title: 'Video Setup', caption: 'Monitor, teste de saída e geometria na grade.' },
-      { id: 'desktop', title: 'Desktop LXDE', caption: 'Tema Dracula, menu Games e loja de aplicativos.' },
+      { id: 'desktop', title: 'Desktop LXDE', caption: 'Tema Dracula com o papel de parede do FliperOS, menu Games e loja de aplicativos.' },
     ],
   },
   emulators: {
