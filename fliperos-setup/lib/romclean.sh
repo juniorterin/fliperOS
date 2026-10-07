@@ -111,7 +111,8 @@ romclean_options() {
     chd) printf '%s\n' "yes|Keep" "no|Remove" "only|Only those" ;;
     hardware)
       printf '%s\n' "neogeo|Neo-Geo" "cps1|Capcom CPS-1" "cps2|Capcom CPS-2" "cps3|Capcom CPS-3" \
-        "psx|PlayStation-based (ZN, System 11 and 12...)" "midway|Midway T/W/X/Y-unit (Mortal Kombat)"
+        "psx|PlayStation-based (ZN, System 11 and 12...)" "midway|Midway T/W/X/Y-unit (Mortal Kombat)" \
+        "model2|Sega Model 2" "model3|Sega Model 3"
       ;;
     systems) printf '%s\n' "naomi|Naomi" "naomi2|Naomi 2" "atomiswave|Atomiswave" ;;
     flycast) printf '%s\n' "no|Leave them to Flycast" "yes|Take them for this emulator too" ;;
@@ -141,16 +142,23 @@ romclean_visible() {
     genres | mature) [[ -n $ROMCLEAN_CATVER ]] ;;
     modes) [[ -n $ROMCLEAN_NPLAYERS ]] ;;
     systems) [[ $2 == flycast ]] ;;
-    flycast | hardware) [[ $2 != flycast ]] ;;
+    flycast | hardware) ! romclean_own_emulator "$2" ;;
     *) return 0 ;;
   esac
+}
+
+# romclean_own_emulator ALVO: o alvo e um emulador que nao e o MAME (Flycast,
+# Model 2 Emulator, Supermodel), com o romset do MAME so de uma placa. A
+# emulacao que conta e a dele: o status do MAME nao filtra.
+romclean_own_emulator() {
+  [[ $1 =~ ^(flycast|model2|model3)$ ]]
 }
 
 # romclean_preset NOME [ALVO] imprime os parametros do preset (chave=valor
 # por linha): cabinet (painel de joystick, 2 jogadores e 6 botoes, uma versao
 # por jogo), working (tudo o que funciona, menos o mahjong), psx (so a placa
-# do PlayStation, como o romset do MAME 2010 que roda o 3D bem) e all (sem filtro). No
-# Flycast a emulacao que conta e a dele: o status do MAME nao filtra.
+# do PlayStation, como o romset do MAME 2010 que roda o 3D bem) e all (sem
+# filtro). No Flycast, Model 2 e Model 3 o status do MAME nao filtra.
 romclean_preset() {
   local key
   declare -A v=(
@@ -174,7 +182,7 @@ romclean_preset() {
       ;;
     *) return 1 ;;
   esac
-  if [[ ${2:-} == flycast ]]; then
+  if romclean_own_emulator "${2:-}"; then
     v[status]=all v[hardware]=""
   fi
   for key in "${ROMCLEAN_KEYS[@]}"; do
@@ -291,6 +299,8 @@ romclean_args() {
       flycast) [[ $value == no ]] && printf '%s\n' --exclude flycast ;;
     esac
   done
+  # No Model 2 Emulator e no Supermodel so entram os jogos da placa deles.
+  [[ $target == model[23] ]] && printf '%s\n' --hardware "$target"
   return 0
 }
 
@@ -373,13 +383,18 @@ romclean_data_args() {
 # ── Emuladores ────────────────────────────────────────────────────
 # O alvo diz de que versao do MAME e o romset (o XML) e para onde os jogos
 # vao: groovymame (o MAME deste sistema), flycast (o mesmo romset, so Naomi,
-# Naomi 2 e Atomiswave, uma pasta por sistema), mame2010 (o 0.139 do core do
-# RetroArch, o "MAME 3D": os jogos de arcade baseados no PlayStation, que ele
-# roda bem) ou file (outro XML).
+# Naomi 2 e Atomiswave, uma pasta por sistema), model2 e model3 (o mesmo
+# romset, so os jogos do Sega Model 2 para o Model 2 Emulator e do Model 3
+# para o Supermodel), mame2010 (o 0.139 do core do RetroArch, o "MAME 3D":
+# os jogos de arcade baseados no PlayStation, que ele roda bem) ou file
+# (outro XML).
 
 # romclean_targets imprime "alvo|rotulo" dos emuladores da tela.
 romclean_targets() {
-  printf '%s\n' "groovymame|$(romclean_target_label groovymame)" "flycast|$(romclean_target_label flycast)"
+  local target
+  for target in groovymame flycast model2 model3; do
+    printf '%s\n' "$target|$(romclean_target_label "$target")"
+  done
   [[ -f $MAME2010_XML ]] && printf '%s\n' "mame2010|$(romclean_target_label mame2010)"
   printf '%s\n' "file|Another MAME version (choose the XML from mame -listxml)"
 }
@@ -388,6 +403,8 @@ romclean_target_label() {
   case $1 in
     groovymame) echo "GroovyMAME $(groovymame_version)" ;;
     flycast) echo "Flycast (Naomi, Naomi 2, Atomiswave)" ;;
+    model2) echo "Model 2 Emulator (Sega Model 2)" ;;
+    model3) echo "Supermodel (Sega Model 3)" ;;
     mame2010) echo "MAME 2010 / MAME 3D (0.139, RetroArch core): PlayStation-based (PSX) arcade games" ;;
     *) echo "$1" ;;
   esac
@@ -395,13 +412,18 @@ romclean_target_label() {
 
 # romclean_default_target PASTA imprime o emulador provavel do romset: o
 # MAME 2010 numa pasta que tem "2010" ou "MAME 3D" no nome, o Flycast numa
-# de Naomi ou Atomiswave, senao o GroovyMAME instalado.
+# de Naomi ou Atomiswave, o Model 2 ou o Supermodel numa de Model 2 ou
+# Model 3, senao o GroovyMAME instalado.
 romclean_default_target() {
   local name=${1,,}
   if [[ ($name == *2010* || ${name##*/} =~ mame.?3d) && -f $MAME2010_XML ]]; then
     echo mame2010
   elif [[ ${name##*/} =~ naomi|atomiswave|flycast ]]; then
     echo flycast
+  elif [[ ${name##*/} =~ model.?2 ]]; then
+    echo model2
+  elif [[ ${name##*/} =~ model.?3|supermodel ]]; then
+    echo model3
   else
     echo groovymame
   fi
@@ -409,10 +431,12 @@ romclean_default_target() {
 
 # romclean_default_dest ALVO imprime a pasta dos jogos daquele emulador: a do
 # core mame2010 do RetroArch para o MAME 2010, ~/roms (com uma pasta por
-# sistema dentro) para o Flycast, senao ~/roms/mame.
+# sistema dentro) para o Flycast, ~/roms/model2 e ~/roms/model3, senao
+# ~/roms/mame.
 romclean_default_dest() {
   case $1 in
     flycast) printf '%s\n' "$ROMS_ROOT" ;;
+    model2 | model3) printf '%s\n' "$ROMS_ROOT/$1" ;;
     mame2010)
       if [[ -d $ROMS_ROOT/retroarch/mame2010 ]]; then
         printf '%s\n' "$ROMS_ROOT/retroarch/mame2010"
@@ -462,6 +486,8 @@ romclean_target_args() {
     done
   else
     printf '%s\n' --dest "$dest"
+    # Os dispositivos com ROM sao do MAME; o Model 2 e o Supermodel nao os usam.
+    [[ $target == model[23] ]] && printf '%s\n' --no-devices
   fi
   [[ -n $bios ]] && printf '%s\n' --bios-dest "$bios"
   return 0
@@ -491,7 +517,7 @@ romclean_scan() {
 romclean_xml_args() {
   local version
   case $1 in
-    groovymame | flycast)
+    groovymame | flycast | model2 | model3)
       printf '%s\n' --xml-command "$GROOVYMAME -listxml"
       version=$(groovymame_version)
       [[ -n $version ]] && printf '%s\n' --cache "$ROMCLEAN_CACHE/romclean-groovymame-$version.json"

@@ -1569,6 +1569,19 @@ class RomCleanTests(unittest.TestCase):
         _, move, _ = self.scan('--hardware', 'neogeo')
         self.assertEqual(move, ['mslug.zip', 'mslugb.zip', 'neogeo.zip'])
 
+    def test_model2_and_model3_boards(self):
+        # Os alvos Model 2 Emulator e Supermodel: pelo arquivo do driver.
+        roms = self.tmp / 'sega'
+        roms.mkdir()
+        xml = '<mame>'
+        for name, source in (('daytona', 'model2'), ('vf3', 'model3'), ('vf2', 'model2'), ('sf2', 'cps1')):
+            xml += ('<machine name="%s" sourcefile="sega/%s.cpp"><description>%s</description>'
+                    '<input players="2" coins="1"/></machine>' % (name, source, name))
+            (roms / (name + '.zip')).write_bytes(b'x')
+        (self.tmp / 'sega.xml').write_text(xml + '</mame>')
+        for board, expected in (('model2', ['daytona.zip', 'vf2.zip']), ('model3', ['vf3.zip'])):
+            self.assertEqual(self.scan('--hardware', board, xml=self.tmp / 'sega.xml', roms=roms)[1], expected)
+
     def test_cache_and_xml_from_a_command(self):
         cache = self.tmp / 'cache' / 'mame.json'
         first, move, _ = self.scan(*self.CABINET, '--cache', str(cache))

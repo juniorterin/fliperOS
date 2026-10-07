@@ -73,7 +73,8 @@ Filtros:
   --systems SISTEMA,...  so estes sistemas do Flycast (naomi, naomi2,
                          atomiswave)
   --hardware PLACA,...   so estas placas: neogeo, cps1, cps2, cps3, psx,
-                         midway (T/W/X/Y-unit, as do Mortal Kombat)
+                         midway (T/W/X/Y-unit, as do Mortal Kombat), model2,
+                         model3 (Sega Model 2 e Model 3)
   --only REGRA / --exclude REGRA  clone, bios, device, mechanical,
                          notworking, vertical, horizontal, vector, chd,
                          mature, flycast, naomi, naomi2, atomiswave e as
@@ -168,8 +169,11 @@ RULES = {
     'cps3': lambda m: m['source'] == 'cps3',
     'midway': lambda m: m['source'] in ('midtunit', 'midwunit', 'midxunit', 'midyunit'),
     'psx': lambda m: any(PSX_CPU.match(cpu) for cpu in m['cpus']),
+    # Os jogos do Model 2 Emulator e do Supermodel (Model 2/2A/2B/2C e Model 3).
+    'model2': lambda m: m['source'] == 'model2',
+    'model3': lambda m: m['source'] == 'model3',
 }
-HARDWARE = ('neogeo', 'cps1', 'cps2', 'cps3', 'psx', 'midway')
+HARDWARE = ('neogeo', 'cps1', 'cps2', 'cps3', 'psx', 'midway', 'model2', 'model3')
 
 # Os tipos de controle do XML em familias de painel. O joystick vem a parte
 # (control_family): o 0.139 escreve joy8way, vjoy2way, doublejoy8way; o
