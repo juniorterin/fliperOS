@@ -158,7 +158,7 @@ const ptBR: Messages = {
       { id: 'attract-mode', name: 'Attract-Mode Plus', text: 'Build KMS/DRM com o tema AdvanceMenu.' },
       { id: 'es-de', name: 'EmulationStation (ES-DE)', text: 'Tema FliperOS 240p nas cores Dracula.' },
       { id: 'pegasus', name: 'Pegasus', text: 'Tema FliperOS 240p; esquerda e direita trocam de sistema.' },
-      { id: 'fightcade', name: 'Fightcade 2', text: 'Partidas online; baixado pelo Setup.' },
+      { id: 'fightcade', name: 'Fightcade 2', text: 'Partidas online na resolução nativa de cada jogo; baixado pelo Setup.' },
     ],
     extrasTitle: 'Extras opcionais',
     extrasText:

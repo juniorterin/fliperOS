@@ -154,7 +154,7 @@ const enUS = {
       { id: 'attract-mode', name: 'Attract-Mode Plus', text: 'KMS/DRM build with the AdvanceMenu theme.' },
       { id: 'es-de', name: 'EmulationStation (ES-DE)', text: 'FliperOS 240p theme in Dracula colors.' },
       { id: 'pegasus', name: 'Pegasus', text: 'FliperOS 240p theme; left and right switch systems.' },
-      { id: 'fightcade', name: 'Fightcade 2', text: 'Online matches; downloaded from the Setup.' },
+      { id: 'fightcade', name: 'Fightcade 2', text: 'Online matches in each game’s native resolution; downloaded from the Setup.' },
     ],
     extrasTitle: 'Optional extras',
     extrasText:
