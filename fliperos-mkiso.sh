@@ -1419,7 +1419,7 @@ create_squashfs() {
   # O resolv.conf do container do build (o DNS interno do Docker) servia so
   # ao apt do chroot; na imagem o NetworkManager o escreve com o DNS do DHCP
   # (fliperos-rootfs.sh).
-  printf '# Written by NetworkManager with the network\'s DNS.\n' > "$CHROOT_DIR/etc/resolv.conf"
+  printf '# Written by NetworkManager with the DNS from the network.\n' > "$CHROOT_DIR/etc/resolv.conf"
   mkdir -p "$ISO_DIR/live"
   rm -f "$ISO_DIR/live/filesystem.squashfs"
   # xz com o filtro x86 e blocos de 1 MiB: uns 15% menor que o zstd, para a
