@@ -11,6 +11,7 @@ import { Hero } from '@/sections/Hero';
 import { OpenSource } from '@/sections/OpenSource';
 import { Screenshots } from '@/sections/Screenshots';
 import { Setup } from '@/sections/Setup';
+import { Support } from '@/sections/Support';
 
 // Estrelas, forks e release do GitHub revalidados a cada hora (ISR).
 export const revalidate = 3600;
@@ -29,6 +30,7 @@ export default async function Home() {
         <Crt />
         <Setup />
         <OpenSource stats={stats} />
+        <Support />
       </main>
       <Footer />
     </>

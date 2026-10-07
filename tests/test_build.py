@@ -4089,6 +4089,18 @@ class DocsTests(unittest.TestCase):
             self.assertIn('readmeUrl(locale)', text, page)
             self.assertNotIn('LINKS.github', text, page)
 
+    def test_site_support_section_has_no_secrets_and_no_mailto(self):
+        src = ROOT / 'website/src'
+        for path in src.rglob('*.ts*'):
+            text = path.read_text(encoding='utf-8')
+            # Chave secreta (sk_) ou restrita (rk_) do Stripe nunca vai para o site.
+            self.assertNotRegex(text, r'\b(sk|rk)_(live|test)_', path.name)
+            self.assertNotIn('mailto:', text, path.name)
+        support = (src / 'sections/Support.tsx').read_text(encoding='utf-8')
+        self.assertIn('https://donate.stripe.com/', (src / 'lib/site.ts').read_text(encoding='utf-8'))
+        self.assertIn("locale.startsWith('pt')", support)
+        self.assertIn('<Support />', (src / 'app/[lang]/page.tsx').read_text(encoding='utf-8'))
+
     def test_publish_writes_wiki_links(self):
         # Aqui os links levam o .md (funcionam no repositorio); na wiki, nao.
         with tempfile.TemporaryDirectory() as tmp:

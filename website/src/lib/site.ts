@@ -19,6 +19,14 @@ export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorteri
 
 export const FLIPEROS_VERSION = '0.8.1';
 
+// Contato da assessoria: mostrado como texto, sem mailto, para não virar alvo
+// fácil de spam.
+export const CONTACT_EMAIL = { user: 'juniorter', domain: 'gmail', tld: 'com' } as const;
+
+// Só o link público de doação: a chave secreta do Stripe nunca entra no site.
+export const DONATE_URL = 'https://donate.stripe.com/7sYbJ3cetcU17Cm5eM3VC00';
+export const PIX_KEY = 'd349cb59-3443-42cd-9aa8-3f2ccfe7601b';
+
 export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? 'G-FTG8120HF8';
 
 // Canonical, hreflang, Open Graph e sitemap usam o domínio oficial;
