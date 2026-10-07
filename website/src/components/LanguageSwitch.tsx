@@ -1,10 +1,15 @@
 'use client';
 
-import { LOCALES, LOCALE_NAME, LOCALE_SHORT } from '@/i18n';
+import { LOCALES, LOCALE_COOKIE, LOCALE_NAME, LOCALE_SHORT, localePath, type Locale } from '@/i18n';
 import { useI18n } from '@/i18n/I18nProvider';
 
+// Grava a escolha para a raiz (/) abrir neste idioma nas próximas visitas.
+function remember(locale: Locale) {
+  document.cookie = `${LOCALE_COOKIE}=${locale}; path=/; max-age=31536000; samesite=lax`;
+}
+
 export function LanguageSwitch({ className = '' }: { className?: string }) {
-  const { locale, setLocale, t } = useI18n();
+  const { locale, t } = useI18n();
   return (
     <div
       role="group"
@@ -20,18 +25,26 @@ export function LanguageSwitch({ className = '' }: { className?: string }) {
                 |
               </span>
             ) : null}
-            <button
-              type="button"
+            <a
+              href={localePath(code)}
+              hrefLang={code}
               lang={code}
-              aria-pressed={active}
+              aria-current={active ? 'page' : undefined}
               aria-label={`${t.a11y.switchTo} ${LOCALE_NAME[code]}`}
-              onClick={() => setLocale(code)}
+              onClick={(e) => {
+                remember(code);
+                if (active) e.preventDefault();
+                else if (window.location.hash) {
+                  e.preventDefault();
+                  window.location.assign(localePath(code) + window.location.hash);
+                }
+              }}
               className={`rounded-md px-2.5 py-1.5 font-semibold tracking-wider transition-colors ${
                 active ? 'bg-line text-fg shadow-[0_0_12px_-2px] shadow-purple/50' : 'text-muted hover:text-fg'
               }`}
             >
               {LOCALE_SHORT[code]}
-            </button>
+            </a>
           </span>
         );
       })}

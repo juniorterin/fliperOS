@@ -2,7 +2,23 @@ const enUS = {
   meta: {
     title: 'FliperOS — Arcade Linux built for CRT',
     description:
-      'FliperOS is an Ubuntu 24.04 Linux distribution for arcade cabinets with CRT monitors: a 15 kHz kernel, Switchres, GroovyMAME, RetroArch and frontends ready to play, configured from a setup menu made for the tube.',
+      'FliperOS is Ubuntu 24.04 Linux for arcade cabinets with CRT monitors: 15 kHz kernel, Switchres, GroovyMAME, RetroArch and frontends ready to play.',
+    keywords: [
+      'FliperOS',
+      'arcade Linux',
+      'CRT',
+      '15 kHz',
+      'Switchres',
+      'GroovyMAME',
+      'MAME',
+      'RetroArch',
+      'arcade cabinet',
+      'GroovyArcade',
+      'Ubuntu 24.04',
+      'emulation',
+      'retro gaming',
+    ],
+    ogAlt: 'FliperOS: Arcade Linux. Built for CRT. Ubuntu 24.04, 15 kHz kernel, Switchres, GroovyMAME, RetroArch.',
   },
   a11y: {
     skipToContent: 'Skip to content',

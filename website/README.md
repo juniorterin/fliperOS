@@ -34,7 +34,7 @@ The image (`Dockerfile`) builds with `npm ci && npm run build` and runs `node se
 
 ## Languages
 
-On the first visit the language comes from `navigator.language`: any `pt` variant opens in Portuguese, anything else in English. The `EN | PT` switch in the header overrides it and is saved in `localStorage` (`fliperos-lang`); switching doesn't reload the page. The server renders English, which is what crawlers index. Every visible string lives in `src/i18n`; TypeScript rejects a `pt-BR.ts` that is missing a key.
+Each language has its own URL, rendered on the server and prerendered at build time: `/en` and `/pt`, each with its own `<html lang>`, title, description, keywords, canonical, `hreflang` alternates (plus `x-default` pointing to `/`), Open Graph/Twitter card (`/en/opengraph-image/card`, `/pt/opengraph-image/card`) and JSON-LD. The root `/` is a 307 redirect chosen in `src/proxy.ts`: the `fliperos-lang` cookie written by the `EN | PT` switch wins, then `Accept-Language` (any `pt` variant opens in Portuguese, anything else in English; crawlers without the header get English). The switch is a plain link between the two pages, so crawlers follow it too. Any other path is the bilingual 404 in `src/app/global-not-found.tsx`. `sitemap.xml` lists both pages with their alternates. Every visible string lives in `src/i18n`; TypeScript rejects a `pt-BR.ts` that is missing a key.
 
 ## Screenshots
 

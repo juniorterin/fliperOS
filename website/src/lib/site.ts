@@ -9,6 +9,9 @@ export const LINKS = {
 } as const;
 
 export const AUTHOR_HANDLE = '@juniorter.in';
+export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorterin' } as const;
+
+export const FLIPEROS_VERSION = '0.7';
 
 // Domínio oficial ainda não existe: canonical, Open Graph e sitemap usam
 // NEXT_PUBLIC_SITE_URL, lido no build (no Coolify, variável de build).
