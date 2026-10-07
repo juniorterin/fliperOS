@@ -302,13 +302,15 @@ ui_info() {
   ui_screen "$1" "${@:2}"
 }
 
-# ui_input TITULO TEXTO [VALOR] [password] pede um texto e o imprime.
+# ui_input TITULO TEXTO [VALOR] [password|long] pede um texto e o imprime
+# (long: sem o limite de 400 caracteres do gum, para um link magnetico).
 ui_input() {
   local title=$1 text=$2 value=${3:-} mode=${4:-} w args
   ui_screen "$title" "$text"
   w=$(($(ui_box_width) - 6))
   args=(--padding "0 4" --width "$w" --value "$value" --placeholder "")
   [[ $mode == password ]] && args+=(--password)
+  [[ $mode == long ]] && args+=(--char-limit 0)
   gum input "${args[@]}" < /dev/tty 2> /dev/tty
 }
 

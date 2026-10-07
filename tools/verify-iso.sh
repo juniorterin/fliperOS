@@ -280,6 +280,20 @@ unsquashfs -cat "$work/filesystem.squashfs" usr/bin/gum > "$work/f" || fail "aus
 grep -qa -- '-fliperos' "$work/f" || fail "/usr/bin/gum is the .deb one, without the FliperOS patches"
 echo "ROM cleaner: fliperos-romclean, the MAME 2010 XML (0.139) and the network folder (mount.cifs, smbclient)"
 
+# ── Downloader: o programa, o servico e o transmission-daemon ─
+for name in fliperos-downloader:opt/fliperos/bin/fliperos-downloader \
+  fliperos-transmission.service:etc/systemd/system/fliperos-transmission.service; do
+  unsquashfs -cat "$work/filesystem.squashfs" "${name#*:}" > "$work/f" || fail "ausente: /${name#*:}"
+  cmp -s "$src/config/${name%%:*}" "$work/f" || fail "${name%%:*} differs from the repository"
+done
+for path in usr/bin/transmission-daemon usr/local/lib/fliperos-setup/lib/downloader.sh \
+  usr/local/lib/fliperos-setup/screens/downloader.sh; do
+  has "$path"
+done
+grep -E 'etc/systemd/system/transmission-daemon.service ->' "$work/links.txt" | grep -q '/dev/null' \
+  || fail "the stock transmission-daemon.service is not masked"
+echo "Downloader: fliperos-downloader, fliperos-transmission.service and transmission-daemon (stock unit masked)"
+
 # ── Terminal: zsh com Oh My Zsh e o tema Dracula ──────────────
 for path in usr/bin/zsh usr/local/share/oh-my-zsh/oh-my-zsh.sh \
   usr/local/share/oh-my-zsh/custom/themes/dracula.zsh-theme \

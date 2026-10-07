@@ -18,6 +18,7 @@ screen_setup_menu() {
       "romlist|AttractPlus ROM List (real game names)" \
       "romcleaner|MAME ROM Cleaner" \
       "chdcleaner|MAME CHD Cleaner" \
+      "downloader|Downloader (romset and CHDs by magnet link)" \
       "freeroms|Free games (open-source homebrew)" \
       "quirks|Quirks (USB controller fixes)" \
       "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
@@ -36,6 +37,7 @@ screen_setup_menu() {
       romlist) screen_romlist ;;
       romcleaner) screen_rom_cleaner ;;
       chdcleaner) screen_chd_cleaner ;;
+      downloader) screen_downloader ;;
       freeroms) screen_free_roms ;;
       quirks) screen_quirks ;;
       joysticks) screen_joysticks ;;

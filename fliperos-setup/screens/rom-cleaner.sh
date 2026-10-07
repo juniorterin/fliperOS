@@ -226,21 +226,31 @@ screen_rom_cleaner_pick() {
   fi
 }
 
-# screen_rom_cleaner_filters ORIGEM ALVO XML: a tela dos parametros (o preset,
-# cada filtro, copiar ou mover e o destino) e, no Continue, a previa.
+# screen_rom_cleaner_filters ORIGEM ALVO XML [downloader]: a tela dos
+# parametros (o preset, cada filtro, copiar ou mover e o destino) e, no
+# Continue, a previa. No modo downloader (Setup > Downloader > Filter) abre
+# com o filtro salvo e o Save o grava; status 3 = salvou.
 screen_rom_cleaner_filters() {
-  local folder=$1 target=$2 xml=$3 title="MAME ROM Cleaner" last=preset preset=cabinet transfer=copy
+  local folder=$1 target=$2 xml=$3 mode=${4:-} title="MAME ROM Cleaner" last=preset preset=cabinet transfer=copy
   local dest key line choice value writable=0
   local -A opt=()
   local -a entries args kv presets
+  [[ $mode == downloader ]] && title="Downloader filter"
   ui_info "$title" "Looking for catver.ini, nplayers.ini and controls.xml..."
   romclean_data_load "$folder"
   dest=$(romclean_default_dest "$target")
   # De uma pasta so de leitura (a da rede) so da para copiar.
-  [[ -w $folder ]] && writable=1
+  [[ -w $folder && $mode != downloader ]] && writable=1
   while IFS= read -r line; do
     opt[${line%%=*}]=${line#*=}
   done < <(romclean_preset "$preset" "$target")
+  if [[ $mode == downloader && $(downloader_filter_get target) == "$target" ]]; then
+    preset=$(downloader_filter_get preset)
+    dest=$(downloader_filter_get dest)
+    for key in "${ROMCLEAN_KEYS[@]}"; do
+      line=$(grep -m1 "^$key=" "$DOWNLOADER_STATE/filter.kv") && opt[$key]=${line#*=}
+    done
+  fi
   presets=("cabinet|$(romclean_preset_label cabinet)" "working|$(romclean_preset_label working)"
     "psx|$(romclean_preset_label psx)" "all|$(romclean_preset_label all)")
   while true; do
@@ -249,13 +259,26 @@ screen_rom_cleaner_filters() {
       romclean_visible "$key" "$target" && entries+=("$key|$(romclean_label "$key" "${opt[$key]}")")
     done
     ((writable)) && entries+=("transfer|$(romclean_label transfer "$transfer")")
-    entries+=("dest|To: $(romclean_dest_label "$target" "$dest")" "data|Data files: $ROMCLEAN_DATA_LABEL"
-      "scan|Continue" "return|Return")
-    choice=$(ui_menu "$title" "$folder -> $(romclean_target_label "$target"). Enter opens a parameter." \
-      "$last" "${entries[@]}") || return 0
+    entries+=("dest|To: $(romclean_dest_label "$target" "$dest")" "data|Data files: $ROMCLEAN_DATA_LABEL")
+    if [[ $mode == downloader ]]; then
+      entries+=("save|Save the filter" "return|Return")
+      line="Magnet links -> $(romclean_target_label "$target"). Enter opens a parameter."
+    else
+      entries+=("scan|Continue" "return|Return")
+      line="$folder -> $(romclean_target_label "$target"). Enter opens a parameter."
+    fi
+    choice=$(ui_menu "$title" "$line" "$last" "${entries[@]}") || return 0
     last=$choice
     case $choice in
       return) return 0 ;;
+      save)
+        kv=()
+        for key in "${ROMCLEAN_KEYS[@]}"; do
+          kv+=("$key=${opt[$key]}")
+        done
+        downloader_filter_save "$target" "$dest" "$preset" "${kv[@]}"
+        return 3
+        ;;
       preset)
         value=$(ui_radio "$title" "Start from a preset; each parameter can be changed after." "$preset" \
           "${presets[@]}") || continue

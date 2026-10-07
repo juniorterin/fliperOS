@@ -7,6 +7,7 @@ e as configuracoes que o fliperos-rootfs.sh instala.
 from importlib.machinery import SourceFileLoader
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import re
@@ -1679,6 +1680,28 @@ class RomCleanTests(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn('could not read the CHD folder', r.stderr)
 
+    def test_scan_and_chds_from_a_torrent_list(self):
+        # Setup > Downloader: o plano sai da lista de arquivos de um torrent
+        # que ainda nao foi baixado, como se a pasta ja os tivesse.
+        names = self.tmp / 'names'
+        names.write_text('mslug.zip\t500\nneogeo.zip\t300\n1942.zip\t70\nkinst/kinst.chd\t9\nreadme.txt\t1\n')
+        summary, move, _ = self.scan('--names', str(names), '--hardware', 'neogeo', roms=self.tmp / 'nao-baixado')
+        self.assertEqual(move, ['mslug.zip', 'neogeo.zip'])
+        self.assertEqual((summary['sets'], summary['move_bytes']), ('3', '800'))
+        (self.tmp / 'chd.xml').write_text(self.CHD_XML)
+        (self.tmp / 'chds.list').write_text('kinst/kinst.chd\t300\nkinstp/kinstp.chd\t200\n'
+                                            'gdrom/gdl-0010.chd\t500\noutro/outro.chd\t900\nsolto.chd\t1\n')
+        (self.tmp / 'coming').write_text('kinst13\t%s/m\ngdrom\t%s/n\n' % (self.tmp, self.tmp))
+        plan = self.tmp / 'chds.plan'
+        out = self.romclean('chds', '--xml', str(self.tmp / 'chd.xml'), '--chds', str(self.tmp / 'nao-baixado'),
+                            '--roms', str(self.tmp / 'm'), '--roms', str(self.tmp / 'n'),
+                            '--names', str(self.tmp / 'chds.list'), '--with', str(self.tmp / 'coming'),
+                            '--plan', str(plan))
+        summary = dict(line.split('=', 1) for line in out.splitlines())
+        self.assertEqual((summary['games'], summary['move'], summary['move_bytes']), ('2', '2', '800'))
+        rows = [line.split('\t') for line in plan.read_text().splitlines() if line.startswith('move')]
+        self.assertEqual(sorted((r[2], Path(r[5]).name) for r in rows), [('gdrom', 'n'), ('kinst', 'm')])
+
     def test_copy_reports_what_failed(self):
         # Um arquivo que nao da para ler (aqui, uma pasta com o nome do zip no
         # destino): os outros vao, a tela recebe o erro e o status e 1.
@@ -2037,6 +2060,244 @@ class SnapsTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-snaps"', ROOTFS)
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
         self.assertIn('"progettosnaps|progetto-SNAPS (arcade screenshots only, no account)"', menu)
+
+
+class DownloaderTests(unittest.TestCase):
+    """config/fliperos-downloader: o romset e os CHDs por link magnetico, so o
+    que o filtro do ROM cleaner escolhe, contra um Transmission falso."""
+
+    XML = ('<mame>'
+           '<machine name="neogeo" isbios="yes"><description>Neo-Geo</description></machine>'
+           '<machine name="mslug" romof="neogeo"><description>Metal Slug</description><input coins="1"/></machine>'
+           '<machine name="kinst"><description>Killer Instinct</description><disk name="kinst"/>'
+           '<input coins="1"/></machine>'
+           '<machine name="pong"><description>Pong</description><input coins="1"/></machine>'
+           '</mame>')
+    ROMS = 'a' * 40
+    CHDS = 'b' * 40
+    NESTED = 'c' * 40
+    LOOSE = 'd' * 40
+    TORRENTS = {
+        ROMS: ('MAME 0.289 ROMs', [('MAME 0.289 ROMs/' + f, n) for f, n in (
+            ('neogeo.zip', 30), ('mslug.zip', 50), ('kinst.zip', 20), ('pong.zip', 10), ('readme.txt', 1))]),
+        CHDS: ('MAME 0.289 CHDs', [('MAME 0.289 CHDs/kinst/kinst.chd', 300), ('MAME 0.289 CHDs/outro/outro.chd', 900)]),
+        # As ROMs numa subpasta, ao lado de Software Lists e de extras.
+        NESTED: ('MAME Pack', [('MAME Pack/readme.txt', 1), ('MAME Pack/MAME 0.289/ROMs (merged)/neogeo.zip', 30),
+                               ('MAME Pack/MAME 0.289/ROMs (merged)/mslug.zip', 50),
+                               ('MAME Pack/MAME 0.289/ROMs (merged)/pong.zip', 10),
+                               ('MAME Pack/Software List ROMs/nes/mslug.zip', 7),
+                               ('MAME Pack/Software List ROMs/nes/pong.zip', 7),
+                               ('MAME Pack/MAME 0.289/CHDs/kinst/kinst.chd', 300)]),
+        # Os CHDs na raiz do torrent (sem a pasta de cima).
+        LOOSE: ('kinst', [('kinst/kinst.chd', 300), ('outro/outro.chd', 900), ('info.nfo', 1)]),
+    }
+
+    def serve(self):
+        import http.server
+        import threading
+        torrents, calls, specs = {}, [], self.TORRENTS
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def reply(self, code, data=None, headers=()):
+                body = json.dumps(data).encode() if data is not None else b''
+                self.send_response(code)
+                for k, v in headers:
+                    self.send_header(k, v)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_POST(self):
+                req = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                if self.headers.get('X-Transmission-Session-Id') != 'sessao':
+                    return self.reply(409, headers=[('X-Transmission-Session-Id', 'sessao')])
+                method, a = req['method'], req['arguments']
+                calls.append((method, a))
+                out = {}
+                if method == 'torrent-add':
+                    h = re.search(r'btih:([0-9a-f]+)', a['filename']).group(1)
+                    name, files = specs[h]
+                    torrents[h] = {'name': name, 'dir': a['download-dir'], 'status': 0,
+                                   'files': [{'name': f, 'length': n, 'done': 0, 'wanted': True}
+                                             for f, n in files]}
+                    out = {'torrent-added': {'hashString': h, 'id': 1, 'name': name}}
+                elif method == 'torrent-get':
+                    found = []
+                    for h in a['ids']:
+                        t = torrents.get(h)
+                        if t is None:
+                            continue
+                        wanted = [f for f in t['files'] if f['wanted']]
+                        found.append({
+                            'hashString': h, 'name': t['name'], 'metadataPercentComplete': 1,
+                            'files': [{'name': f['name'], 'length': f['length'], 'bytesCompleted': f['done']}
+                                      for f in t['files']],
+                            'fileStats': [{'bytesCompleted': f['done'], 'wanted': f['wanted']} for f in t['files']],
+                            'peersConnected': 3, 'error': 0, 'errorString': '', 'status': t['status'],
+                            'sizeWhenDone': sum(f['length'] for f in wanted),
+                            'leftUntilDone': sum(f['length'] - f['done'] for f in wanted),
+                            'rateDownload': 2048, 'eta': 90})
+                    out = {'torrents': found}
+                elif method == 'torrent-set':
+                    for h in a['ids']:
+                        for key, flag in (('files-wanted', True), ('files-unwanted', False)):
+                            for i in a.get(key, []):
+                                torrents[h]['files'][i]['wanted'] = flag
+                elif method == 'torrent-start':
+                    for h in a['ids']:
+                        torrents[h]['status'] = 4
+                elif method == 'torrent-remove':
+                    for h in a['ids']:
+                        torrents.pop(h, None)
+                self.reply(200, {'result': 'success', 'arguments': out})
+
+        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return 'http://127.0.0.1:%d/transmission/rpc' % server.server_port, torrents, calls
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.url, self.torrents, self.calls = self.serve()
+        self.state = self.tmp / 'state'
+        self.state.mkdir()
+        self.mame, self.bios = self.tmp / 'roms/mame', self.tmp / 'bios/mame'
+        self.staging = self.tmp / 'staging'
+        (self.tmp / 'mame.xml').write_text(self.XML)
+        self.env = dict(os.environ, FLIPEROS_DOWNLOADER_STATE=str(self.state), FLIPEROS_DOWNLOADER_RPC=self.url,
+                        FLIPEROS_DOWNLOADER_DIR=str(self.staging), FLIPEROS_DOWNLOADER_CONFIG=str(self.tmp / 'cfg'),
+                        FLIPEROS_ROMCLEAN=str(ROOT / 'config/fliperos-romclean'))
+        self.filter()
+
+    def filter(self, *extra):
+        xml = ['--xml', str(self.tmp / 'mame.xml')]
+        (self.state / 'filter.scan').write_text('\n'.join(xml + ['--dest', str(self.mame), '--bios-dest',
+                                                                 str(self.bios), '--arcade-only', *extra]) + '\n')
+        (self.state / 'filter.chds').write_text('\n'.join(xml + ['--roms', str(self.mame)]) + '\n')
+
+    def dl(self, *args, check=True, env=None):
+        return subprocess.run(['python3', str(ROOT / 'config/fliperos-downloader'), *args], capture_output=True,
+                              text=True, env=env or self.env, check=check, timeout=60)
+
+    def complete(self):
+        """O Transmission terminou: os arquivos marcados estao na pasta dele."""
+        for t in self.torrents.values():
+            for f in t['files']:
+                if f['wanted']:
+                    path = Path(t['dir']) / f['name']
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b'x' * f['length'])
+                    f['done'] = f['length']
+
+    def test_config_keeps_the_user_settings(self):
+        (self.tmp / 'cfg').mkdir()
+        (self.tmp / 'cfg/settings.json').write_text('{"peer-port": 5000, "rpc-port": 1}')
+        self.dl('config')
+        cfg = json.loads((self.tmp / 'cfg/settings.json').read_text())
+        self.assertEqual((cfg['peer-port'], cfg['rpc-port'], cfg['rpc-bind-address']), (5000, 9092, '127.0.0.1'))
+        self.assertEqual(cfg['script-torrent-done-filename'], '/opt/fliperos/bin/fliperos-downloader')
+        self.assertTrue(cfg['script-torrent-done-enabled'])
+        self.assertEqual(cfg['download-dir'], str(self.staging))
+
+    def test_only_what_the_filter_chooses_and_the_filter_changes(self):
+        r = self.dl('add', 'roms', 'http://nao-e-magnet', check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('not a magnet link', r.stderr)
+        out = self.dl('add', 'roms', 'magnet:?xt=urn:btih:%s&dn=romset' % self.ROMS, '--progress').stdout
+        self.assertIn('@step 100 4 sets found in MAME 0.289 ROMs', out)
+        self.dl('add', 'chds', 'magnet:?xt=urn:btih:%s' % self.CHDS)
+        meta = json.loads((self.state / 'roms.json').read_text())
+        self.assertEqual((meta['root'], meta['sets'], len(meta['files'])), ('MAME 0.289 ROMs', 4, 5))
+        # Adicionado pausado: nada baixa antes do filtro.
+        self.assertTrue(all(t['status'] == 0 for t in self.torrents.values()))
+        self.assertTrue(all(a['paused'] for m, a in self.calls if m == 'torrent-add'))
+        # Um jogo que ja esta na pasta do emulador nao e baixado de novo.
+        self.mame.mkdir(parents=True)
+        (self.mame / 'pong.zip').write_bytes(b'p' * 10)
+        self.dl('start', '--result', str(self.tmp / 'result'))
+        self.assertEqual((self.tmp / 'result').read_text(), 'roms\twanted\t3\t100\nchds\twanted\t1\t300\n')
+        wanted = {h: [Path(f['name']).name for f in t['files'] if f['wanted']] for h, t in self.torrents.items()}
+        self.assertEqual(sorted(wanted[self.ROMS]), ['kinst.zip', 'mslug.zip', 'neogeo.zip'])
+        self.assertEqual(wanted[self.CHDS], ['kinst.chd'])
+        self.assertTrue(all(t['status'] == 4 for t in self.torrents.values()))
+        status = dict(line.split('=', 1) for line in self.dl('status').stdout.splitlines())
+        self.assertEqual((status['state'], status['pct'], status['roms_name']), ('downloading', '0', 'MAME 0.289 ROMs'))
+        self.assertEqual((status['roms_folder'], status['roms_sets']), ('MAME 0.289 ROMs', '4'))
+        self.assertIn('ROMs 0 B of 100 B, 3 peers', status['line'])
+        # O fim: o Transmission chama o script sem argumentos.
+        self.complete()
+        self.dl(env=dict(self.env, TR_TORRENT_HASH=self.ROMS))
+        self.assertEqual(sorted(p.name for p in self.mame.iterdir()), ['kinst', 'kinst.zip', 'mslug.zip', 'pong.zip'])
+        self.assertEqual((self.mame / 'pong.zip').read_bytes(), b'p' * 10)
+        self.assertEqual((self.bios / 'neogeo.zip').stat().st_size, 30)
+        self.assertEqual((self.mame / 'kinst/kinst.chd').stat().st_size, 300)
+        self.assertEqual(self.torrents, {})
+        self.assertFalse((self.staging / 'roms/MAME 0.289 ROMs').exists())
+        status = dict(line.split('=', 1) for line in self.dl('status').stdout.splitlines())
+        self.assertEqual((status['state'], status['pct']), ('done', '100'))
+        # O filtro muda: o aviso diz o que sairia, so do que o downloader trouxe.
+        self.filter('--exclude', 'chd')
+        out = self.dl('diff', '--list', str(self.tmp / 'list')).stdout
+        self.assertEqual(out, 'roms\tadd\t0\t0\nroms\tremove\t1\t20\nchds\tadd\t0\t0\nchds\tremove\t1\t300\n')
+        self.assertIn('- ROM  kinst', (self.tmp / 'list').read_text())
+        self.dl('start')
+        self.assertIn('roms\tdeleted\t1\nchds\tdeleted\t1\n', self.dl('prune').stdout)
+        self.assertEqual(sorted(p.name for p in self.mame.iterdir()), ['mslug.zip', 'pong.zip'])
+        # E volta: o link e posto de novo no Transmission so com o que falta.
+        self.filter()
+        self.assertIn('roms\tadd\t1\t20\n', self.dl('diff').stdout)
+        self.dl('start')
+        wanted = {h: [Path(f['name']).name for f in t['files'] if f['wanted']] for h, t in self.torrents.items()}
+        self.assertEqual(wanted, {self.ROMS: ['kinst.zip'], self.CHDS: ['kinst.chd']})
+        # Tirar o link apaga, se pedido, so o que ele trouxe.
+        self.assertIn('deleted=2', self.dl('remove', 'roms', '--delete-files').stdout)
+        self.assertEqual(sorted(p.name for p in self.mame.iterdir()), ['pong.zip'])
+        self.assertFalse((self.bios / 'neogeo.zip').exists())
+        self.assertFalse((self.state / 'roms.json').exists())
+        self.assertNotIn(self.ROMS, self.torrents)
+
+    def test_finds_the_sets_in_the_root_or_in_a_subfolder(self):
+        # O link dos CHDs colado no lugar do romset: nada de ROM, e avisa.
+        r = self.dl('add', 'roms', 'magnet:?xt=urn:btih:%s' % self.CHDS, '--progress', check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('is it the CHD link?', r.stdout)
+        self.assertNotIn(self.CHDS, self.torrents)
+        self.assertFalse((self.state / 'roms.json').exists())
+        out = self.dl('add', 'roms', 'magnet:?xt=urn:btih:%s' % self.NESTED, '--progress').stdout
+        self.assertIn('@step 100 3 sets found in MAME Pack/MAME 0.289/ROMs (merged)', out)
+        self.dl('add', 'chds', 'magnet:?xt=urn:btih:%s' % self.LOOSE)
+        status = dict(line.split('=', 1) for line in self.dl('status').stdout.splitlines())
+        self.assertEqual((status['chds_folder'], status['chds_sets']), ('/', '2'))
+        self.dl('start')
+        wanted = {h: [f['name'] for f in t['files'] if f['wanted']] for h, t in self.torrents.items()}
+        # Nem as Software Lists com o mesmo nome, nem o readme, nem o CHD do outro torrent.
+        self.assertEqual(sorted(wanted[self.NESTED]), ['MAME Pack/MAME 0.289/ROMs (merged)/mslug.zip',
+                                                       'MAME Pack/MAME 0.289/ROMs (merged)/neogeo.zip',
+                                                       'MAME Pack/MAME 0.289/ROMs (merged)/pong.zip'])
+        self.assertNotIn(self.LOOSE, wanted)
+        self.complete()
+        self.dl('finish')
+        self.assertEqual(sorted(p.name for p in self.mame.iterdir()), ['mslug.zip', 'pong.zip'])
+        self.assertEqual((self.mame / 'mslug.zip').stat().st_size, 50)
+        self.assertEqual((self.bios / 'neogeo.zip').stat().st_size, 30)
+        self.assertFalse((self.staging / 'roms').exists())
+
+    def test_install_and_iso(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"',
+                      ROOTFS)
+        self.assertIn('fliperos-transmission.service', ROOTFS)
+        mkiso = (ROOT / 'fliperos-mkiso.sh').read_text()
+        self.assertIn('transmission-daemon', mkiso)
+        self.assertIn('systemctl mask transmission-daemon.service', mkiso)
+        self.assertIn('transmission-daemon', (ROOT / 'tools/cabinet-update.sh').read_text())
+        unit = (ROOT / 'config/fliperos-transmission.service').read_text()
+        self.assertIn('User=fliperos', unit)
+        self.assertIn('--config-dir /home/fliperos/.config/fliperos-transmission', unit)
 
 
 class QuietLaunchTests(unittest.TestCase):

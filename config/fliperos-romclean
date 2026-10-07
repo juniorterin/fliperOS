@@ -13,10 +13,12 @@ deles, os filtros que dependem dele deixam passar tudo.
 
   fliperos-romclean scan (--xml ARQUIVO|- | --xml-command COMANDO)
                          [--cache ARQUIVO] --roms ORIGEM --dest PASTA
-                         --plan PLANO [destinos] [dados] [filtros]
+                         --plan PLANO [--names LISTA] [destinos] [dados]
+                         [filtros]
   fliperos-romclean chds (--xml ARQUIVO|- | --xml-command COMANDO)
                          [--cache ARQUIVO] --chds ORIGEM --roms PASTA...
-                         --plan PLANO [--clones]
+                         --plan PLANO [--clones] [--names LISTA]
+                         [--with SETS [--with-only]]
   fliperos-romclean apply PLANO copy|move|delete-rest [--progress]
                           [--result ARQUIVO]
   fliperos-romclean options [dados]
@@ -95,6 +97,13 @@ pasta de ROMs onde o jogo esta. O disco de um clone que e o mesmo do pai
 fica na pasta do pai: a cadeia de romof e seguida. Disco sem dump (nodump)
 nao conta. --clones inclui os clones dos jogos presentes (num romset merged
 eles estao dentro do zip do pai). O plano e o do apply.
+
+--names (Setup > Downloader) troca a pasta por uma lista "arquivo<TAB>bytes"
+dos arquivos de um torrent, que ainda nao existem: no scan, os sets da
+lista ("005.zip"); no chds, os CHDs ("jogo/disco.chd"). O plano sai como se
+a pasta (--roms, --chds) ja os tivesse. --with "set<TAB>pasta" soma aos
+jogos de cada pasta de ROMs os que ainda vao chegar la; com --with-only,
+so eles contam (os CHDs seguem o filtro, nao o que esta na pasta).
 
 Os sets do Flycast (Naomi, Naomi 2, Naomi GD-ROM, Atomiswave, System SP: os
 que chegam pelo romof as BIOS naomi, naomi2, naomigd, awbios, segasp e as
@@ -477,6 +486,20 @@ def sets_in(folder):
     return sets
 
 
+def sets_listed(path):
+    """O mesmo que sets_in, de uma lista "arquivo<TAB>bytes" (os arquivos de
+    um torrent que ainda nao foi baixado: Setup > Downloader)."""
+    sets = {}
+    with open(path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            filename, _, size = line.rstrip('\n').partition('\t')
+            name, ext = os.path.splitext(filename)
+            if '/' in filename or ext.lower() not in SET_EXTENSIONS:
+                continue
+            sets.setdefault(name.lower(), []).append((filename, int(size) if size.isdigit() else 0))
+    return sets
+
+
 def size_of(path):
     if os.path.isdir(path) and not os.path.islink(path):
         return sum(size_of(os.path.join(path, f)) for f in os.listdir(path))
@@ -620,7 +643,7 @@ def cmd_scan(args):
              read_ini(args.nplayers, 'nplayers') if args.nplayers else {},
              read_controls(args.controls_xml) if args.controls_xml else {})
     try:
-        present = sets_in(folder)
+        present = sets_listed(args.names) if args.names else sets_in(folder)
     except OSError as e:
         sys.exit('could not read the romset folder: %s' % e)
     kept = set()
@@ -662,18 +685,47 @@ def cmd_chds(args):
     source = os.path.abspath(args.chds)
     machines = load_machines(args)
     annotate(machines, {}, {}, {})
+    listed, sizes = set(), {}
     try:
-        with os.scandir(source) as entries:
-            available = {e.name.lower(): e.name for e in entries if e.is_dir()}
+        if args.names:
+            # A lista "jogo/disco.chd<TAB>bytes" de um torrent (Setup > Downloader).
+            available = {}
+            with open(args.names, encoding='utf-8', errors='replace') as f:
+                for line in f:
+                    path, _, size = line.rstrip('\n').partition('\t')
+                    owner, _, disk = path.partition('/')
+                    if owner and disk.lower().endswith('.chd') and '/' not in disk:
+                        available.setdefault(owner.lower(), owner)
+                        listed.add((owner, disk))
+                        sizes[owner] = sizes.get(owner, 0) + (int(size) if size.isdigit() else 0)
+        else:
+            with os.scandir(source) as entries:
+                available = {e.name.lower(): e.name for e in entries if e.is_dir()}
     except OSError as e:
         sys.exit('could not read the CHD folder: %s' % e)
+
+    def has_disk(folder_name, disk):
+        if args.names:
+            return (folder_name, disk + '.chd') in listed
+        return os.path.isfile(os.path.join(source, folder_name, disk + '.chd'))
     folders = [os.path.abspath(f) for f in args.roms]
+    # --with "set<TAB>pasta": os jogos que ainda vao chegar a uma pasta de ROMs.
+    coming = {}
+    if args.with_sets:
+        with open(args.with_sets, encoding='utf-8') as f:
+            for line in f:
+                name, _, folder = line.rstrip('\n').partition('\t')
+                if name and folder:
+                    coming.setdefault(os.path.abspath(folder), set()).add(name.lower())
     copies, missing, sets, games = {}, [], 0, 0
     for folder in folders:
-        try:
-            names = {n for n in sets_in(folder) if n in machines}
-        except OSError:
-            continue
+        names = set()
+        if not args.with_only:
+            try:
+                names = {n for n in sets_in(folder) if n in machines}
+            except OSError:
+                pass
+        names |= {n for n in coming.get(folder, ()) if n in machines}
         sets += len(names)
         if args.clones:
             names |= {n for n, m in machines.items() if m['cloneof'] in names}
@@ -688,7 +740,7 @@ def cmd_chds(args):
             for disk in m['disks']:
                 for owner in chain:
                     folder_name = available.get(owner)
-                    if folder_name and os.path.isfile(os.path.join(source, folder_name, disk + '.chd')):
+                    if folder_name and has_disk(folder_name, disk):
                         copies.setdefault((folder_name, folder), owner)
                         break
                 else:
@@ -699,7 +751,7 @@ def cmd_chds(args):
     with open(args.plan, 'w', encoding='utf-8') as out:
         out.write('# roms\t%s\n# dest\t%s\n' % (source, folders[0]))
         for (folder_name, folder), owner in sorted(copies.items()):
-            size = size_of(os.path.join(source, folder_name))
+            size = sizes.get(folder_name, 0) if args.names else size_of(os.path.join(source, folder_name))
             total += size
             desc = machines[owner]['description'].replace('\t', ' ').replace('\n', ' ')
             out.write('move\t%s\t%s\t%d\t%s\t%s\n' % (owner, folder_name, size, desc, folder))
@@ -1042,6 +1094,7 @@ def main():
     p.add_argument('--route', action='append', default=[])
     p.add_argument('--no-devices', action='store_true')
     p.add_argument('--plan', required=True)
+    p.add_argument('--names')
     data_arguments(p)
     p.add_argument('--arcade-only', action='store_true')
     p.add_argument('--status', choices=('working', 'imperfect', 'all'), default='all')
@@ -1073,6 +1126,9 @@ def main():
     p.add_argument('--roms', action='append', required=True)
     p.add_argument('--plan', required=True)
     p.add_argument('--clones', action='store_true')
+    p.add_argument('--names')
+    p.add_argument('--with', dest='with_sets')
+    p.add_argument('--with-only', action='store_true')
     p.set_defaults(func=cmd_chds)
     p = sub.add_parser('apply')
     p.add_argument('plan')

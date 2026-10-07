@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "freeroms", "frontends", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
+        "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -2001,6 +2001,97 @@ class RomCleanerTests(Base):
                      "ROMS_ROOT": str(self.roms), "BIOS_ROOT": str(self.env.dir / "bios"),
                      "ROMCLEAN_CACHE": str(self.env.dir / "cache"), "ROMCLEAN_DATA": str(self.env.dir / "data")}
 
+    def test_downloader_filter_is_a_romclean_command(self):
+        # Setup > Downloader > Filter: o filtro salvo vira as opcoes do
+        # fliperos-romclean, e o downloader as usa sobre a lista do torrent.
+        state = self.env.dir / "dl"
+        env = dict(self.vars, DOWNLOADER_STATE=str(state), FLIPEROS_USER="ninguem")
+        (self.env.dir / "torrent.list").write_text("".join("%s.zip\t1536\n" % n for n in self.SETS))
+        out = self.env.out("""
+            romclean_data_load "$ROMCLEAN_DATA"
+            mapfile -t kv < <(romclean_preset cabinet flycast)
+            downloader_filter_save flycast %s cabinet "${kv[@]}"
+            downloader_filter_label
+            downloader_filter_get target
+            mapfile -t args < "$DOWNLOADER_STATE/filter.scan"
+            "$ROMCLEAN" scan "${args[@]}" --roms /nao/baixado --names %s --plan %s > /dev/null
+        """ % (self.roms, self.env.dir / "torrent.list", self.env.dir / "dl.plan"), env).splitlines()
+        self.assertEqual(out, ["Joystick cabinet (2 players, 6 buttons), Flycast (Naomi, Naomi 2, Atomiswave)",
+                               "flycast"])
+        chds = (state / "filter.chds").read_text().splitlines()
+        self.assertEqual(chds[-4:], ["--roms", "%s/naomi" % self.roms, "--roms", "%s/naomi2" % self.roms])
+        self.assertIn("--xml-command", chds)
+        rows = [line.split("\t") for line in (self.env.dir / "dl.plan").read_text().splitlines()
+                if line.startswith("move")]
+        self.assertEqual(sorted((r[2], Path(r[5]).name) for r in rows),
+                         [("awbios.zip", "dc"), ("kofxi.zip", "atomiswave"), ("mvsc2.zip", "naomi"),
+                          ("naomi.zip", "dc")])
+
+    def downloader_screen(self, script, status="pct=0\nstate=none\nline=x\n", diff=""):
+        state = self.env.dir / "dl"
+        state.mkdir(exist_ok=True)
+        calls = self.env.dir / "dl.calls"
+        self.env.stub("fliperos-downloader", 'echo "$*" >> %s\ncase $1 in status) printf "%%b" "%s" ;; '
+                      'diff) printf "%%b" "%s" ;; esac'
+                      % (calls, status.replace("\n", "\\n"), diff.replace("\t", "\\t").replace("\n", "\\n")))
+        self.env.stub("systemctl", 'echo "systemctl $*" >> %s' % calls)
+        env = dict(self.vars, DOWNLOADER_STATE=str(state), DOWNLOADER=str(self.env.bin / "fliperos-downloader"),
+                   FLIPEROS_USER="ninguem")
+        r = self.env.run("""
+            source %s/lib/ui.sh
+            source %s/screens/progress.sh
+            source %s/screens/rom-cleaner.sh
+            source %s/screens/downloader.sh
+            ui_msg() { printf 'msg:%%s\\n' "$*"; }
+            ui_info() { :; }
+            ui_yesno() { return 1; }
+            ui_pager() { :; }
+            run_with_progress() { shift 2; "$@" > /dev/null; }
+        """ % (SETUP, SETUP, SETUP, SETUP) + script, env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout + r.stderr, calls.read_text() if calls.exists() else "", state
+
+    def test_downloader_magnet_warns_about_the_filter(self):
+        out, calls, state = self.downloader_screen("""
+            ui_input() { echo ' magnet:?xt=urn:btih:abc&dn=MAME '; }
+            screen_downloader_magnet roms
+            ui_input() { echo 'http://site/romset.torrent'; }
+            screen_downloader_magnet chds
+        """)
+        self.assertIn("The MAME ROM Cleaner filter will be used: only the ROMs of the games the filter chooses", out)
+        self.assertIn("starts with the Joystick cabinet (2 players, 6 buttons) preset", out)
+        self.assertIn("add roms magnet:?xt=urn:btih:abc&dn=MAME --progress", calls)
+        self.assertIn("systemctl enable --now fliperos-transmission.service", calls)
+        self.assertIn("msg:Downloader That is not a magnet link.", re.sub(r"\x1b\[[0-9;]*m", "", out))
+        self.assertNotIn("add chds", calls)
+        kv = (state / "filter.kv").read_text()
+        self.assertIn("target=groovymame\n", kv)
+        self.assertIn("preset=cabinet\n", kv)
+
+    def test_downloader_warns_what_the_new_filter_adds_and_deletes(self):
+        diff = "roms\tadd\t2\t2048\nroms\tremove\t1\t10\nchds\tadd\t0\t0\nchds\tremove\t1\t300\n"
+        out, calls, state = self.downloader_screen("""
+            touch "$DOWNLOADER_STATE/roms.plan"
+            ui_menu() { printf 'menu:%s\\n' "$2" >&2; echo apply; }
+            screen_downloader_start() { echo "start:$*"; }
+            screen_downloader_changes
+        """, diff=diff)
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", out)
+        self.assertIn("The filter changed", plain)
+        self.assertRegex(plain, r"ROMs to add:\s+2 \(2.0 KB to download\)")
+        self.assertRegex(plain, r"ROMs to delete:\s+1 \(10 B freed\)")
+        self.assertRegex(plain, r"CHDs to delete:\s+1 \(300 B freed\)")
+        self.assertNotIn("CHDs to add", plain)
+        self.assertIn("start:prune", out)
+        self.assertIn("diff --list", calls)
+        # Sem plano aplicado (nenhum download ainda), nada a avisar.
+        (state / "roms.plan").unlink()
+        out, _, _ = self.downloader_screen("""
+            ui_menu() { echo "menu"; }
+            screen_downloader_changes
+        """, diff=diff)
+        self.assertEqual(out, "")
+
     SCAN = """
         romclean_data_load %(full)s
         mapfile -t kv < <(romclean_preset cabinet %(target)s)
@@ -2097,6 +2188,9 @@ class RomCleanerTests(Base):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         self.assertIn('"chdcleaner|MAME CHD Cleaner"', menu)
         self.assertIn("chdcleaner) screen_chd_cleaner ;;", menu)
+        self.assertIn('"downloader|Downloader (romset and CHDs by magnet link)"', menu)
+        self.assertIn("downloader) screen_downloader ;;", menu)
+        self.assertIn('source "$SETUP_DIR/screens/downloader.sh"', (SETUP / "fliperos-setup").read_text())
 
     def test_the_xml_is_read_once_per_mame_version(self):
         self.scan()
@@ -2294,7 +2388,7 @@ class RomCleanerTests(Base):
         self.assertIn('ui_radio "$title" "${ROMCLEAN_HELP[$key]}" "$value" "${options[@]}"', pick)
         self.assertIn("run_with_progress", screen)
         # De uma pasta so de leitura (a da rede) nao se move.
-        self.assertIn('[[ -w $folder ]] && writable=1', screen)
+        self.assertIn('[[ -w $folder && $mode != downloader ]] && writable=1', screen)
         self.assertIn("source \"$SETUP_DIR/lib/netshare.sh\"", (SETUP / "fliperos-setup").read_text())
 
     def test_attract_romlist_gets_the_real_names_and_the_clones(self):

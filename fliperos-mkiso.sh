@@ -283,6 +283,7 @@ apt-get update -qq
 # que ele pede e o xdg-open, por onde ele abre os emuladores (fcade://).
 # p7zip-full: o fullset do progetto-SNAPS traz as capturas num 7z
 # (config/fliperos-snaps), mesmo numa imagem sem Skyscraper.
+# transmission-daemon: o Setup > Downloader (config/fliperos-downloader).
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -298,7 +299,7 @@ apt-get install -y --no-install-recommends \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 pciutils usbutils libdrm-tests edid-decode squashfs-tools \
   systemd-timesyncd p7zip-full \
-  gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk falkon transmission-gtk \
+  gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk falkon transmission-gtk transmission-daemon \
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils \
   samba samba-common-bin cifs-utils smbclient avahi-daemon avahi-utils udisks2 wireless-regdb \
   plymouth plymouth-label fonts-dejavu-core \
@@ -307,6 +308,10 @@ apt-get install -y --no-install-recommends \
   gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
   htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
   espeak-ng triggerhappy zsh
+
+# O transmission-daemon e o do Setup > Downloader (fliperos-transmission, do
+# usuario fliperos); o servico do pacote, do usuario debian-transmission, nao.
+systemctl mask transmission-daemon.service
 
 # Flathub como fonte de Flatpak da App Store, para o sistema todo.
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo \

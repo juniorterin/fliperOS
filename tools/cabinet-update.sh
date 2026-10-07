@@ -65,7 +65,7 @@ echo "== New packages"
 # Os que a imagem ganhou depois da instalacao (fliperos-mkiso.sh).
 packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk
   alacritty libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 cifs-utils smbclient
-  falkon transmission-gtk
+  falkon transmission-gtk transmission-daemon
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
@@ -196,6 +196,12 @@ echo "SDL mappings: $(grep -vc '^#' /var/lib/fliperos/gamecontrollerdb.txt 2> /d
 systemctl enable fliperos-padkeys.service > /dev/null 2>&1 || true
 systemctl restart fliperos-padkeys.service
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
+# O transmission-daemon do pacote nao: o do Setup > Downloader e o
+# fliperos-transmission, que o Setup liga quando ganha um link.
+systemctl disable --now transmission-daemon.service > /dev/null 2>&1 || true
+systemctl mask transmission-daemon.service > /dev/null 2>&1 || true
+systemctl is-enabled -q fliperos-transmission.service 2> /dev/null && systemctl restart fliperos-transmission.service
+echo "fliperos-transmission: $(systemctl is-active fliperos-transmission.service 2> /dev/null)"
 
 # So reinicia o tty1 se nele estiver o menu (login, shell, sudo): um jogo,
 # frontend ou o desktop aberto agora seria fechado no meio.

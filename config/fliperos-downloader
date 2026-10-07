@@ -1,0 +1,676 @@
+#!/usr/bin/env python3
+"""Downloader do FliperOS (Setup > Downloader).
+
+Baixa de um romset do MAME e de uma colecao de CHDs, cada um pelo seu link
+magnetico, so o que o filtro do MAME ROM Cleaner escolhe. O Transmission
+(transmission-daemon, servico fliperos-transmission, do usuario fliperos)
+faz o download; daqui ele recebe o link pausado, a lista de arquivos do
+torrent passa pelo fliperos-romclean (scan --names para as ROMs, chds
+--names --with para os CHDs dos jogos escolhidos) e so os arquivos do plano
+(da pasta do torrent onde estao os sets, na raiz ou numa subpasta)
+ficam marcados para baixar. Quando o Transmission termina, ele chama este
+programa (script-torrent-done), que move cada arquivo completo para a pasta
+do emulador que o plano diz e tira o torrent da lista.
+
+  fliperos-downloader config
+  fliperos-downloader add roms|chds MAGNET [--progress] [--timeout S]
+  fliperos-downloader start [--progress] [--result ARQUIVO]
+  fliperos-downloader diff [--list ARQUIVO]
+  fliperos-downloader prune
+  fliperos-downloader status
+  fliperos-downloader finish
+  fliperos-downloader remove roms|chds [--delete-files]
+
+O estado fica em STATE: o filtro que o Setup grava (filter.scan e
+filter.chds: as opcoes do fliperos-romclean, uma por linha) e, de cada tipo,
+o link (KIND.magnet), a lista de arquivos do torrent (KIND.json), o plano
+aplicado (KIND.plan, no formato do fliperos-romclean) e o que ja chegou as
+pastas dos emuladores (KIND.installed, "set<TAB>caminho"). So o que esta em
+KIND.installed e apagado quando o filtro deixa de escolher um jogo (prune):
+os arquivos postos a mao ficam.
+"""
+import argparse
+import fcntl
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
+
+STATE = os.environ.get('FLIPEROS_DOWNLOADER_STATE', '/var/lib/fliperos/downloader')
+RPC = os.environ.get('FLIPEROS_DOWNLOADER_RPC', 'http://127.0.0.1:9092/transmission/rpc')
+STAGING = os.environ.get('FLIPEROS_DOWNLOADER_DIR', '/home/fliperos/downloads/romsets')
+CONFIG_DIR = os.environ.get('FLIPEROS_DOWNLOADER_CONFIG', '/home/fliperos/.config/fliperos-transmission')
+ROMCLEAN = os.environ.get('FLIPEROS_ROMCLEAN', '/opt/fliperos/bin/fliperos-romclean')
+SELF = '/opt/fliperos/bin/fliperos-downloader'
+KINDS = ('roms', 'chds')
+LABEL = {'roms': 'ROMs', 'chds': 'CHDs'}
+MAGNET = re.compile(r'^magnet:\?(.*&)?xt=urn:bt(ih|mh):[0-9a-z]+', re.I)
+
+# O transmission-daemon do servico: so responde nesta maquina, sem senha;
+# para de semear quando termina (o arquivo sai da pasta dele) e chama este
+# programa no fim de cada torrent.
+SETTINGS = {
+    'rpc-enabled': True,
+    'rpc-bind-address': '127.0.0.1',
+    'rpc-port': 9092,
+    'rpc-authentication-required': False,
+    'rpc-whitelist-enabled': True,
+    'rpc-whitelist': '127.0.0.1,::1',
+    'incomplete-dir-enabled': False,
+    'start-added-torrents': False,
+    'ratio-limit-enabled': True,
+    'ratio-limit': 0,
+    'script-torrent-done-enabled': True,
+    'watch-dir-enabled': False,
+    'umask': 18,
+}
+
+
+def say(progress, line):
+    if progress:
+        print(line, flush=True)
+
+
+def human(n):
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if n < 1024 or unit == 'TB':
+            return ('%d %s' if unit == 'B' else '%.1f %s') % (n, unit)
+        n /= 1024
+
+
+def duration(seconds):
+    if seconds < 0:
+        return 'unknown time'
+    hours, minutes = seconds // 3600, seconds % 3600 // 60
+    return '%d h %02d min' % (hours, minutes) if hours else '%d min' % max(minutes, 1)
+
+
+class Rpc:
+    """A RPC do transmission-daemon (JSON por HTTP, com o X-Transmission-Session-Id)."""
+
+    def __init__(self, url=RPC):
+        self.url, self.session = url, ''
+
+    def call(self, method, **arguments):
+        body = json.dumps({'method': method, 'arguments': arguments}).encode()
+        for _ in range(3):
+            req = urllib.request.Request(self.url, data=body, headers={
+                'X-Transmission-Session-Id': self.session, 'Content-Type': 'application/json'})
+            try:
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    data = json.load(resp)
+            except urllib.error.HTTPError as e:
+                if e.code == 409:
+                    self.session = e.headers.get('X-Transmission-Session-Id', '')
+                    continue
+                raise OSError('Transmission answered HTTP %d' % e.code)
+            if data.get('result') != 'success':
+                raise OSError('Transmission: %s' % data.get('result'))
+            return data.get('arguments', {})
+        raise OSError('Transmission refused the session')
+
+    def wait(self, seconds=30):
+        end = time.monotonic() + seconds
+        while True:
+            try:
+                return self.call('session-get', fields=['version'])
+            except OSError as e:
+                if time.monotonic() > end:
+                    raise OSError('the download service (fliperos-transmission) does not answer: %s' % e)
+                time.sleep(1)
+
+    def torrent(self, hash_, fields):
+        found = self.call('torrent-get', ids=[hash_], fields=fields).get('torrents', [])
+        return found[0] if found else None
+
+    def remove(self, hash_, delete=False):
+        self.call('torrent-remove', ids=[hash_], **{'delete-local-data': delete})
+
+
+# ?? Estado ????????????????????????????????????????????????????????
+
+def state(name):
+    return os.path.join(STATE, name)
+
+
+def give_to_owner(path):
+    """O que o Setup (root) grava fica do dono da pasta do estado: o servico
+    roda como o usuario e escreve ali no fim do download."""
+    if os.geteuid() == 0:
+        st = os.stat(STATE)
+        try:
+            os.chown(path, st.st_uid, st.st_gid)
+        except OSError:
+            pass
+
+
+def write_state(name, text):
+    os.makedirs(STATE, exist_ok=True)
+    tmp = state('.%s.%d.tmp' % (name, os.getpid()))
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(text)
+    give_to_owner(tmp)
+    os.replace(tmp, state(name))
+
+
+def read_state(name):
+    try:
+        with open(state(name), encoding='utf-8') as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def meta_of(kind):
+    text = read_state(kind + '.json')
+    if not text:
+        return None
+    meta = json.loads(text)
+    if 'sets' not in meta:
+        meta['root'], meta['sets'] = find_base(kind, meta['files'])
+    return meta
+
+
+def registered():
+    return [k for k in KINDS if meta_of(k)]
+
+
+def lock():
+    os.makedirs(STATE, exist_ok=True)
+    f = open(state('.lock'), 'a')
+    give_to_owner(state('.lock'))
+    fcntl.flock(f, fcntl.LOCK_EX)
+    return f
+
+
+def folder_of(kind, meta):
+    """A pasta onde o Transmission poe os sets (a pasta dos sets no torrent)."""
+    base = os.path.join(STAGING, kind)
+    return os.path.join(base, meta['root']) if meta['root'] else base
+
+
+def clean_staging(kind):
+    """O que sobrou do torrent na pasta dele (cada tipo tem a sua, com um
+    torrent so): extras que nao baixaram inteiros e as pastas de cima."""
+    base = os.path.join(STAGING, kind)
+    if os.path.realpath(base).startswith(os.path.realpath(STAGING) + '/'):
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def find_base(kind, files):
+    """(pasta, quantos sets) da pasta do torrent onde estao os sets: na raiz
+    ou em qualquer subpasta. ROMs sao .zip/.7z soltos na pasta; CHDs ficam em
+    pasta/jogo/disco.chd. Com mais de uma (ROMs e Software Lists, readme,
+    extras), vale a que tem mais sets; empate, a mais rasa."""
+    count = {}
+    for name, _ in files:
+        parts = name.split('/')
+        if kind == 'roms' and parts[-1].lower().endswith(('.zip', '.7z')):
+            base, owner = '/'.join(parts[:-1]), parts[-1]
+        elif kind == 'chds' and len(parts) >= 2 and parts[-1].lower().endswith('.chd'):
+            base, owner = '/'.join(parts[:-2]), parts[-2]
+        else:
+            continue
+        count.setdefault(base, set()).add(owner.lower())
+    if not count:
+        return '', 0
+    best = min(count, key=lambda b: (-len(count[b]), b.count('/') if b else -1, b))
+    return best, len(count[best])
+
+
+def relative(meta):
+    """[(indice, caminho dentro da pasta dos sets, bytes)] dos arquivos do
+    torrent que estao nela; o resto do torrent nunca e baixado."""
+    prefix = meta['root'] + '/' if meta['root'] else ''
+    return [(i, name[len(prefix):], length) for i, (name, length) in enumerate(meta['files'])
+            if name.startswith(prefix)]
+
+
+def read_plan(path):
+    """[(set, arquivo, bytes, descricao, pasta de destino)] do que o plano move."""
+    out = []
+    try:
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                fields = line.rstrip('\n').split('\t')
+                if len(fields) >= 6 and fields[0] == 'move':
+                    out.append((fields[1], fields[2], int(fields[3] or 0), fields[4], fields[5]))
+    except OSError:
+        pass
+    return out
+
+
+def read_args(name):
+    text = read_state(name)
+    if text is None:
+        raise OSError('no filter yet: choose it in Setup > Downloader > Filter')
+    return [line for line in text.split('\n') if line]
+
+
+# ?? Planos ????????????????????????????????????????????????????????
+
+def make_plans(tmp):
+    """Os planos de agora (o filtro sobre a lista de cada torrent), em TMP.
+    {tipo: (arquivo do plano, [entradas])}. Os CHDs sao os dos jogos que as
+    ROMs vao trazer e dos que ja estao nas pastas."""
+    plans = {}
+    for kind in registered():
+        meta = meta_of(kind)
+        names = os.path.join(tmp, kind + '.list')
+        with open(names, 'w', encoding='utf-8') as f:
+            f.writelines('%s\t%d\n' % (rel, length) for _, rel, length in relative(meta))
+        out = os.path.join(tmp, kind + '.plan')
+        if kind == 'roms':
+            cmd = [ROMCLEAN, 'scan', *read_args('filter.scan'), '--roms', folder_of(kind, meta),
+                   '--names', names, '--plan', out]
+        else:
+            cmd = [ROMCLEAN, 'chds', *read_args('filter.chds'), '--chds', folder_of(kind, meta),
+                   '--names', names, '--plan', out]
+            if 'roms' in plans:
+                coming = os.path.join(tmp, 'coming')
+                with open(coming, 'w', encoding='utf-8') as f:
+                    f.writelines('%s\t%s\n' % (e[0], e[4]) for e in plans['roms'][1])
+                cmd += ['--with', coming, '--with-only']
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            last = [line for line in proc.stderr.splitlines() if line.strip()]
+            raise OSError('the ROM cleaner filter failed: %s' % (last[-1] if last else proc.returncode))
+        plans[kind] = (out, read_plan(out))
+    return plans
+
+
+def files_of(kind, entry, rels):
+    """Os arquivos do torrent de uma entrada do plano e onde cada um fica:
+    [(indice, caminho na pasta do torrent, destino, bytes)]. Uma ROM e um
+    arquivo; um CHD e a pasta do jogo, com os discos."""
+    name, filename, _, _, dest = entry
+    out = []
+    for index, rel, length in rels:
+        if kind == 'roms' and rel == filename:
+            out.append((index, rel, os.path.join(dest, filename), length))
+        elif kind == 'chds' and rel.startswith(filename + '/'):
+            out.append((index, rel, os.path.join(dest, rel), length))
+    return out
+
+
+def arrived(target, length):
+    try:
+        return os.path.getsize(target) == length
+    except OSError:
+        return False
+
+
+def fetch_metadata(rpc, kind, magnet, progress, timeout):
+    """Poe o link no Transmission (pausado) e espera a lista de arquivos."""
+    got = rpc.call('torrent-add', filename=magnet, paused=True, **{'download-dir': os.path.join(STAGING, kind)})
+    added = got.get('torrent-added') or got.get('torrent-duplicate')
+    if not added:
+        raise OSError('Transmission did not take the magnet link')
+    hash_ = added['hashString']
+    end = time.monotonic() + timeout
+    while True:
+        t = rpc.torrent(hash_, ['name', 'files', 'metadataPercentComplete', 'peersConnected',
+                                'error', 'errorString'])
+        if t and t.get('files'):
+            return hash_, t
+        if time.monotonic() > end:
+            rpc.remove(hash_)
+            raise OSError('no peer sent the file list in %d minutes (is the link alive?)' % (timeout // 60))
+        pct = int(90 * float((t or {}).get('metadataPercentComplete') or 0))
+        say(progress, '@step %d Asking the peers for the file list (%d connected)'
+            % (pct, (t or {}).get('peersConnected') or 0))
+        time.sleep(2)
+
+
+# ?? Comandos ??????????????????????????????????????????????????????
+
+def cmd_config(args):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    path = os.path.join(CONFIG_DIR, 'settings.json')
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        data = {}
+    data.update(SETTINGS)
+    data['download-dir'] = STAGING
+    data['script-torrent-done-filename'] = SELF
+    with open(path + '.tmp', 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=4, sort_keys=True)
+    os.replace(path + '.tmp', path)
+
+
+def cmd_add(args):
+    magnet = args.magnet.strip()
+    if not MAGNET.match(magnet):
+        sys.exit('fliperos-downloader: not a magnet link (magnet:?xt=urn:btih:...)')
+    say(args.progress, '@step 0 Connecting to the download service')
+    rpc = Rpc()
+    try:
+        rpc.wait()
+        with lock():
+            old = meta_of(args.kind)
+            if old:
+                try:
+                    rpc.remove(old['hash'], delete=True)
+                except OSError:
+                    pass
+            hash_, t = fetch_metadata(rpc, args.kind, magnet, args.progress, args.timeout)
+            files = [[f['name'], f['length']] for f in t['files']]
+            root, sets = find_base(args.kind, files)
+            if not sets:
+                rpc.remove(hash_, delete=True)
+                raise OSError({'roms': 'this torrent has no ROM sets (.zip or .7z files): is it the CHD link?',
+                               'chds': 'this torrent has no CHDs in game folders (game/disk.chd)'}[args.kind])
+            meta = {'hash': hash_, 'name': t.get('name') or hash_, 'root': root, 'sets': sets, 'files': files}
+            write_state(args.kind + '.json', json.dumps(meta))
+            write_state(args.kind + '.magnet', magnet + '\n')
+            for stale in (args.kind + '.plan',):
+                if os.path.exists(state(stale)):
+                    os.remove(state(stale))
+    except OSError as e:
+        say(args.progress, '@fail Reading the magnet link|%s' % e)
+        sys.exit('fliperos-downloader: %s' % e)
+    say(args.progress, '@step 100 %d %s found in %s' % (sets, 'sets' if args.kind == 'roms' else 'games',
+                                                       root or 'the top of the torrent'))
+
+
+def cmd_start(args):
+    """Aplica o filtro: marca para baixar os arquivos do plano que ainda nao
+    estao nas pastas dos emuladores e comeca."""
+    say(args.progress, '@step 5 Applying the ROM cleaner filter')
+    rpc = Rpc()
+    result = []
+    try:
+        rpc.wait()
+        with lock(), tempfile.TemporaryDirectory() as tmp:
+            plans = make_plans(tmp)
+            for n, kind in enumerate(plans):
+                meta = meta_of(kind)
+                plan, entries = plans[kind]
+                rels = relative(meta)
+                wanted, size = [], 0
+                for entry in entries:
+                    for index, _, target, length in files_of(kind, entry, rels):
+                        if not arrived(target, length):
+                            wanted.append(index)
+                            size += length
+                say(args.progress, '@step %d %s: %d files to download (%s)'
+                    % (40 + 50 * n // len(plans), LABEL[kind], len(wanted), human(size)))
+                t = rpc.torrent(meta['hash'], ['hashString'])
+                if wanted and t is None:
+                    magnet = (read_state(kind + '.magnet') or '').strip()
+                    fetch_metadata(rpc, kind, magnet, args.progress, args.timeout)
+                    t = True
+                if t is not None:
+                    chosen = set(wanted)
+                    unwanted = [i for i in range(len(meta['files'])) if i not in chosen]
+                    settings = {'files-unwanted': unwanted} if unwanted else {}
+                    if wanted:
+                        settings['files-wanted'] = wanted
+                    rpc.call('torrent-set', ids=[meta['hash']], **settings)
+                    if wanted:
+                        rpc.call('torrent-start', ids=[meta['hash']])
+                    else:
+                        rpc.remove(meta['hash'], delete=True)
+                shutil.copyfile(plan, state(kind + '.plan'))
+                give_to_owner(state(kind + '.plan'))
+                result.append('%s\twanted\t%d\t%d\n' % (kind, len(wanted), size))
+    except OSError as e:
+        say(args.progress, '@fail Starting the download|%s' % e)
+        sys.exit('fliperos-downloader: %s' % e)
+    if args.result:
+        with open(args.result, 'w', encoding='utf-8') as f:
+            f.writelines(result)
+    else:
+        sys.stdout.writelines(result)
+    say(args.progress, '@step 100 Downloading')
+
+
+def plan_sets(entries):
+    sizes = {}
+    for name, _, size, desc, _ in entries:
+        old = sizes.get(name, (0, desc))
+        sizes[name] = (old[0] + size, desc)
+    return sizes
+
+
+def installed(kind):
+    out = []
+    for line in (read_state(kind + '.installed') or '').splitlines():
+        name, _, path = line.partition('\t')
+        if name and path:
+            out.append((name, path))
+    return out
+
+
+def cmd_diff(args):
+    """O que o filtro de agora muda no que foi aplicado (KIND.plan): os sets
+    que entrariam e os baixados que sairiam. "tipo<TAB>add|remove<TAB>N<TAB>bytes"."""
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            plans = make_plans(tmp)
+    except OSError as e:
+        sys.exit('fliperos-downloader: %s' % e)
+    listing = []
+    for kind, (_, entries) in plans.items():
+        new = plan_sets(entries)
+        old = plan_sets(read_plan(state(kind + '.plan'))) if read_state(kind + '.plan') is not None else None
+        if old is None:
+            continue
+        add = sorted(n for n in new if n not in old)
+        have = {}
+        for name, path in installed(kind):
+            have.setdefault(name, []).append(path)
+        remove = sorted(n for n in have if n not in new)
+        removed_bytes = 0
+        for n in remove:
+            for path in have[n]:
+                try:
+                    removed_bytes += os.path.getsize(path)
+                except OSError:
+                    pass
+        print('%s\tadd\t%d\t%d' % (kind, len(add), sum(new[n][0] for n in add)))
+        print('%s\tremove\t%d\t%d' % (kind, len(remove), removed_bytes))
+        listing += ['+ %-4s %-16s %s' % (LABEL[kind][:-1], n, new[n][1][:52]) for n in add]
+        listing += ['- %-4s %-16s %s' % (LABEL[kind][:-1], n, old.get(n, (0, ''))[1][:52]) for n in remove]
+    if args.list:
+        with open(args.list, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(listing) + ('\n' if listing else ''))
+
+
+def delete_path(path):
+    if os.path.isdir(path) and not os.path.islink(path):
+        shutil.rmtree(path, ignore_errors=True)
+    elif os.path.lexists(path):
+        os.remove(path)
+    parent = os.path.dirname(path)
+    # A pasta do CHD que ficou vazia.
+    try:
+        if not os.listdir(parent):
+            os.rmdir(parent)
+    except OSError:
+        pass
+
+
+def cmd_prune(args):
+    """Apaga das pastas dos emuladores o que o downloader trouxe e o plano
+    aplicado nao escolhe mais."""
+    with lock():
+        for kind in KINDS:
+            keep = plan_sets(read_plan(state(kind + '.plan')))
+            left, deleted = [], 0
+            for name, path in installed(kind):
+                if name in keep:
+                    left.append('%s\t%s\n' % (name, path))
+                else:
+                    delete_path(path)
+                    deleted += 1
+            if read_state(kind + '.installed') is not None:
+                write_state(kind + '.installed', ''.join(left))
+            print('%s\tdeleted\t%d' % (kind, deleted))
+
+
+def cmd_status(args):
+    """O andamento, "chave=valor": pct, line (uma linha para a tela), state
+    (none, waiting, downloading, done) e o nome de cada torrent."""
+    kinds = registered()
+    out = {'pct': 0, 'state': 'none', 'line': 'No magnet link yet'}
+    for kind in kinds:
+        meta = meta_of(kind)
+        out['%s_name' % kind] = meta['name']
+        out['%s_folder' % kind] = meta['root'] or '/'
+        out['%s_sets' % kind] = meta['sets']
+    if kinds:
+        rpc = Rpc()
+        try:
+            rpc.wait(3)
+        except OSError:
+            out.update(state='waiting', line='The download service is not running')
+            kinds = []
+        total = left = rate = 0
+        eta = -1
+        parts = []
+        active = False
+        for kind in kinds:
+            t = rpc.torrent(meta_of(kind)['hash'], ['status', 'sizeWhenDone', 'leftUntilDone', 'rateDownload',
+                                                    'eta', 'peersConnected', 'errorString'])
+            if t is None:
+                done = read_state(kind + '.installed') is not None
+                parts.append('%s %s' % (LABEL[kind], 'done' if done else 'not started'))
+                continue
+            active = True
+            total += t['sizeWhenDone']
+            left += t['leftUntilDone']
+            rate += t['rateDownload']
+            eta = max(eta, t['eta'])
+            text = '%s %s of %s' % (LABEL[kind], human(t['sizeWhenDone'] - t['leftUntilDone']),
+                                    human(t['sizeWhenDone']))
+            if t.get('errorString'):
+                text += ' (%s)' % t['errorString'][:40]
+            elif t['status'] == 0:
+                text += ' (paused)'
+            else:
+                text += ', %d peers' % t['peersConnected']
+            parts.append(text)
+        if kinds:
+            out['pct'] = (total - left) * 100 // total if total else 100
+            if active:
+                out['state'] = 'downloading'
+                parts.append('%s/s, %s left' % (human(rate), duration(eta)))
+            else:
+                out['state'] = 'done' if any(read_state(k + '.installed') is not None for k in kinds) else 'waiting'
+                out['pct'] = 100 if out['state'] == 'done' else 0
+            out['line'] = '; '.join(parts)
+    for key, value in out.items():
+        print('%s=%s' % (key, value))
+
+
+def cmd_finish(args):
+    """O fim de um torrent (script-torrent-done do Transmission, ou o Setup):
+    cada arquivo completo do plano vai para a pasta do emulador, e o torrent
+    que terminou sai do Transmission com o que sobrou na pasta dele."""
+    rpc = Rpc()
+    try:
+        rpc.wait(10)
+    except OSError as e:
+        sys.exit('fliperos-downloader: %s' % e)
+    with lock():
+        for kind in KINDS:
+            meta = meta_of(kind)
+            if not meta:
+                continue
+            t = rpc.torrent(meta['hash'], ['fileStats', 'leftUntilDone'])
+            if t is None:
+                continue
+            stats = t['fileStats']
+            rels = relative(meta)
+            folder = folder_of(kind, meta)
+            moved = []
+            for entry in read_plan(state(kind + '.plan')):
+                for index, rel, target, length in files_of(kind, entry, rels):
+                    src = os.path.join(folder, rel)
+                    if stats[index]['bytesCompleted'] != length or not os.path.isfile(src):
+                        continue
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    if arrived(target, length):
+                        os.remove(src)
+                    else:
+                        shutil.move(src, target)
+                        top = os.stat(os.path.dirname(target))
+                        try:
+                            os.chown(target, top.st_uid, top.st_gid)
+                        except OSError:
+                            pass
+                    moved.append('%s\t%s\n' % (entry[0], target))
+            if moved or read_state(kind + '.installed') is None:
+                write_state(kind + '.installed', (read_state(kind + '.installed') or '') + ''.join(moved))
+            if t['leftUntilDone'] == 0:
+                rpc.remove(meta['hash'], delete=True)
+                clean_staging(kind)
+            with open(state('finish.log'), 'a', encoding='utf-8') as log:
+                log.write('%s %s: %d files moved\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), kind, len(moved)))
+
+
+def cmd_remove(args):
+    meta = meta_of(args.kind)
+    with lock():
+        if meta:
+            try:
+                rpc = Rpc()
+                rpc.wait(5)
+                rpc.remove(meta['hash'], delete=True)
+            except OSError:
+                pass
+            clean_staging(args.kind)
+        deleted = 0
+        if args.delete_files:
+            for _, path in installed(args.kind):
+                delete_path(path)
+                deleted += 1
+        for suffix in ('.json', '.magnet', '.plan', '.installed'):
+            if os.path.exists(state(args.kind + suffix)):
+                os.remove(state(args.kind + suffix))
+    print('deleted=%d' % deleted)
+
+
+def main():
+    # O Transmission chama o script do fim do torrent sem argumentos.
+    if len(sys.argv) == 1 and os.environ.get('TR_TORRENT_HASH'):
+        sys.argv.append('finish')
+    parser = argparse.ArgumentParser(prog='fliperos-downloader')
+    sub = parser.add_subparsers(dest='cmd', required=True)
+    sub.add_parser('config').set_defaults(func=cmd_config)
+    p = sub.add_parser('add')
+    p.add_argument('kind', choices=KINDS)
+    p.add_argument('magnet')
+    p.add_argument('--progress', action='store_true')
+    p.add_argument('--timeout', type=int, default=600)
+    p.set_defaults(func=cmd_add)
+    p = sub.add_parser('start')
+    p.add_argument('--progress', action='store_true')
+    p.add_argument('--result')
+    p.add_argument('--timeout', type=int, default=600)
+    p.set_defaults(func=cmd_start)
+    p = sub.add_parser('diff')
+    p.add_argument('--list')
+    p.set_defaults(func=cmd_diff)
+    sub.add_parser('prune').set_defaults(func=cmd_prune)
+    sub.add_parser('status').set_defaults(func=cmd_status)
+    sub.add_parser('finish').set_defaults(func=cmd_finish)
+    p = sub.add_parser('remove')
+    p.add_argument('kind', choices=KINDS)
+    p.add_argument('--delete-files', action='store_true')
+    p.set_defaults(func=cmd_remove)
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()

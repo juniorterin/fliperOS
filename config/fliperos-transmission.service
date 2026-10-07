@@ -1,0 +1,17 @@
+[Unit]
+Description=FliperOS: downloader (Transmission) of Setup > Downloader
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=fliperos
+# O download nao pode roubar a CPU nem o disco de quem esta jogando.
+Nice=15
+IOSchedulingClass=idle
+ExecStartPre=/usr/bin/python3 /opt/fliperos/bin/fliperos-downloader config
+ExecStart=/usr/bin/transmission-daemon --foreground --config-dir /home/fliperos/.config/fliperos-transmission
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

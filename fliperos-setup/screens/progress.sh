@@ -6,6 +6,8 @@
 PROGRESS_OK=0
 PROGRESS_FAIL_STEP=""
 PROGRESS_FAIL_MSG=""
+# A linha de baixo da tela (vazia: o "nao desligue" das operacoes longas).
+PROGRESS_FOOTER=""
 
 # _repeat CARACTERE N
 _repeat() {
@@ -55,7 +57,7 @@ _progress_draw() {
       fi
     done
     printf '  %s\n' "$(ui_c "$C_PURPLE" "╰$(_repeat ─ $((w - 2)))╯")"
-    printf '\n  %s\e[K\n' "$(ui_c "$C_COMMENT" "Please wait. Do not turn off the computer.")"
+    printf '\n  %s\e[K\n' "$(ui_c "$C_COMMENT" "${PROGRESS_FOOTER:-Please wait. Do not turn off the computer.}")"
   } > /dev/tty
 }
 

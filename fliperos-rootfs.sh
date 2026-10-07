@@ -121,6 +121,10 @@ install -Dm755 "$src/config/fliperos-romclean" "$root/opt/fliperos/bin/fliperos-
 install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-freeroms"
 # Setup > Scraper > progetto-SNAPS: as capturas dos jogos de arcade.
 install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-snaps"
+# Setup > Downloader: o romset e os CHDs por link magnetico, so o que o filtro
+# do ROM cleaner escolhe. O servico so e ligado pelo Setup, com um link.
+install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"
+install -Dm644 "$src/config/fliperos-transmission.service" "$root/etc/systemd/system/fliperos-transmission.service"
 # catver.ini, nplayers.ini e controls.xml do ROM cleaner: junto do romset ou
 # nesta pasta (lib/romclean.sh); e onde ele guarda o que leu do XML do MAME.
 mkdir -p "$root/usr/local/share/fliperos/romclean" "$root/var/cache/fliperos"
