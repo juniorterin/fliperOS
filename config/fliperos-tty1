@@ -28,14 +28,27 @@ menu() {
   done
 }
 
+# net_expected: a rede ainda pode subir? Cabo ligado (a placa sem cabo fica
+# "unavailable") ou Wi-Fi com uma rede salva.
+net_expected() {
+  local devs
+  devs=$(nmcli -t -f TYPE,STATE device 2> /dev/null)
+  grep -qE '^ethernet:(connecting|connected|disconnected)' <<< "$devs" && return 0
+  grep -q '^wifi:' <<< "$devs" && nmcli -t -f TYPE connection show 2> /dev/null | grep -q '802-11-wireless'
+}
+
 # update_pending: com rede, ha um update do FliperOS (config/fliperos-update)?
-# Espera o NetworkManager subir (ate 15 s) e a conexao (ate 5 s); sem rede,
-# ou com qualquer erro, o boot segue sem perguntar.
+# Espera o NetworkManager subir (ate 15 s) e, se ha cabo ou Wi-Fi salvo, a
+# conexao (ate 30 s: o "startup complete" do NetworkManager vem antes do
+# Wi-Fi conectar). Sem rede, ou com qualquer erro, o boot segue sem perguntar.
 update_pending() {
   [[ -x $BIN/fliperos-update ]] || return 1
   if command -v nm-online > /dev/null; then
-    nm-online -q -s -t "${FLIPEROS_UPDATE_NET_WAIT:-15}" > /dev/null 2>&1
-    nm-online -q -t 5 > /dev/null 2>&1 || return 1
+    nm-online -q -s -t 15 > /dev/null 2>&1
+    if ! nm-online -q -t 5 > /dev/null 2>&1; then
+      net_expected || return 1
+      nm-online -q -t "${FLIPEROS_UPDATE_NET_WAIT:-30}" > /dev/null 2>&1 || return 1
+    fi
   fi
   [[ -n $(FLIPEROS_UPDATE_LOG=/dev/null "$BIN/fliperos-update" check 2> /dev/null) ]]
 }

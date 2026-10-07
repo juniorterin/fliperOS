@@ -2270,6 +2270,8 @@ class UpdateTests(unittest.TestCase):
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()
         self.assertIn('elif update_pending; then\n      sudo /usr/local/bin/fliperos-setup --update-check', tty1)
         self.assertIn('nm-online -q -t 5', tty1)
+        # O Wi-Fi conecta depois do "startup complete" do NetworkManager.
+        self.assertIn('net_expected || return 1\n      nm-online -q -t "${FLIPEROS_UPDATE_NET_WAIT:-30}"', tty1)
         update = (ROOT / 'tools/cabinet-update.sh').read_text()
         self.assertIn('config/fliperos-update" record "$src"', update)
         self.assertIn('if [[ -n ${FLIPEROS_UPDATE:-} ]]; then', update)
