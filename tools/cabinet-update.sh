@@ -79,7 +79,7 @@ echo "== New packages"
 # Os que a imagem ganhou depois da instalacao (fliperos-mkiso.sh).
 packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk
   alacritty libsdl2-ttf-2.0-0 libsdl2-gfx-1.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 cifs-utils smbclient
-  falkon transmission-gtk transmission-daemon
+  falkon transmission-gtk transmission-daemon gvfs
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
@@ -210,6 +210,11 @@ echo "SDL mappings: $(grep -vc '^#' /var/lib/fliperos/gamecontrollerdb.txt 2> /d
 systemctl enable fliperos-padkeys.service > /dev/null 2>&1 || true
 systemctl restart fliperos-padkeys.service
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
+# Os discos que ja estavam ligados (os que aparecerem depois, pela udev).
+lsblk -rnpo NAME,FSTYPE | awk '$2 != "" { print $1 }' | while read -r dev; do
+  /opt/fliperos/bin/fliperos-automount "$dev" 2> /dev/null || true
+done
+echo "Disks: $(findmnt -rno TARGET | grep -c '^/media/fliperos/')"
 # O transmission-daemon do pacote nao: o do Setup > Downloader e o
 # fliperos-transmission, que o Setup liga quando ganha um link.
 systemctl disable --now transmission-daemon.service > /dev/null 2>&1 || true

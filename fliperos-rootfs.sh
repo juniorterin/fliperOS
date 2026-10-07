@@ -34,7 +34,8 @@ mkdir -p "$root/etc/fliperos" "$root/etc/fliperos/mame" "$root/etc/fliperos/retr
 install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions.conf"
 [[ -f "$root/etc/fliperos/session" ]] || printf 'setup\n' > "$root/etc/fliperos/session"
 for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-client fliperos-lxde fliperos-launch \
-  fliperos-tty1 fliperos-ini-set fliperos-resolution fliperos-logout fliperos-escquit fliperos-panning; do
+  fliperos-tty1 fliperos-ini-set fliperos-resolution fliperos-logout fliperos-escquit fliperos-panning \
+  fliperos-automount; do
   install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done
 # Pastas do acervo em ~/roms (uma por emulador e por core do RetroArch) e os
@@ -254,6 +255,11 @@ install -Dm755 "$src/config/fliperos-guncon2-calibrate" "$root/usr/local/bin/fli
 # Calibrador do Setup > Joysticks (GunCon 2, volante, pedais, analogico).
 install -Dm755 "$src/config/fliperos-calibrate" "$root/opt/fliperos/bin/fliperos-calibrate"
 install -Dm644 "$src/config/99-fliperos-input.rules" "$root/etc/udev/rules.d/99-fliperos-input.rules"
+# Discos montados sozinhos em /media/fliperos, com um icone no desktop para
+# cada um (config/fliperos-automount); sem senha pelo polkit.
+install -Dm644 "$src/config/99-fliperos-disks.rules" "$root/etc/udev/rules.d/99-fliperos-disks.rules"
+install -Dm644 "$src/config/fliperos-automount@.service" "$root/etc/systemd/system/fliperos-automount@.service"
+install -Dm644 "$src/config/50-fliperos-udisks.rules" "$root/etc/polkit-1/rules.d/50-fliperos-udisks.rules"
 if [[ ! -f "$root/etc/fliperos/guncon2.conf" ]]; then
   cat > "$root/etc/fliperos/guncon2.conf" << 'EOF'
 # Faixa util do GunCon 2 neste monitor. Os valores abaixo sao o exemplo do

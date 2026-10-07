@@ -1,0 +1,4 @@
+# Discos: cada sistema de arquivos que aparece, no boot e ao ligar um
+# pendrive, e montado em /media/fliperos (config/fliperos-automount).
+SUBSYSTEM=="block", ACTION=="add", ENV{ID_FS_USAGE}=="filesystem", \
+  TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-automount@%k.service"

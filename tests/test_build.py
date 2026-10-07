@@ -4493,6 +4493,76 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('WINEPREFIX=', helper)
 
 
+class AutomountTests(unittest.TestCase):
+    SCRIPT = ROOT / 'config/fliperos-automount'
+
+    def mount(self, fstype='exfat', parttype='0x7', mounted='', ignore=False, installed=True):
+        """Roda o fliperos-automount /dev/sdb1 com lsblk, findmnt, udevadm e
+        runuser falsos. Devolve a linha do runuser, ou '' se nao montou."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'bin').mkdir()
+            (tmp / 'etc').mkdir()
+            if installed:
+                (tmp / 'etc/installed').write_text('')
+            log = tmp / 'calls'
+            fakes = {
+                'lsblk': 'case "$*" in *FSTYPE*) echo "%s";; *PARTTYPE*) echo "%s";; esac' % (fstype, parttype),
+                'findmnt': 'echo "%s"' % mounted,
+                'udevadm': 'echo ID_FS_TYPE=%s; %s' % (fstype, 'echo UDISKS_IGNORE=1' if ignore else 'true'),
+                'runuser': 'echo "runuser $*" >> %s' % log,
+            }
+            for name, body in fakes.items():
+                (tmp / 'bin' / name).write_text('#!/bin/bash\n%s\n' % body)
+                (tmp / 'bin' / name).chmod(0o755)
+            # -b: um dispositivo de bloco de verdade nao ha no teste; /dev/loop0
+            # costuma existir, e o caminho so passa adiante.
+            dev = next((d for d in ('/dev/loop0', '/dev/sda', '/dev/vda') if Path(d).is_block_device()), None)
+            if dev is None:
+                self.skipTest('no block device')
+            env = dict(os.environ, PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']),
+                       FLIPEROS_ETC=str(tmp / 'etc'))
+            subprocess.run(['bash', str(self.SCRIPT), dev], env=env, check=True, timeout=10)
+            return log.read_text().strip().replace(dev, 'DEV') if log.exists() else ''
+
+    def test_mounts_each_disk_as_the_user(self):
+        self.assertEqual(self.mount(),
+                         'runuser -u fliperos -- udisksctl mount --no-user-interaction -b DEV')
+        for fstype in ('ntfs', 'vfat', 'ext4', 'btrfs'):
+            self.assertTrue(self.mount(fstype=fstype), fstype)
+
+    def test_skips_what_is_not_a_data_disk(self):
+        self.assertEqual(self.mount(installed=False), '')
+        self.assertEqual(self.mount(mounted='/boot/efi'), '')
+        self.assertEqual(self.mount(ignore=True), '')
+        for fstype in ('', 'swap', 'crypto_LUKS', 'LVM2_member', 'squashfs'):
+            self.assertEqual(self.mount(fstype=fstype), '', fstype)
+        for parttype in ('C12A7328-F81F-11D2-BA4B-00A0C93EC93B', 'de94bba4-06d1-4d40-a16a-bfd50179d6ac',
+                         'e3c9e316-0b5c-4db8-817d-f92df00215ae', '0xef', '0x27'):
+            self.assertEqual(self.mount(fstype='vfat', parttype=parttype), '', parttype)
+
+    def test_udev_systemd_polkit_and_desktop(self):
+        rules = (ROOT / 'config/99-fliperos-disks.rules').read_text()
+        self.assertIn('SUBSYSTEM=="block", ACTION=="add", ENV{ID_FS_USAGE}=="filesystem"', rules)
+        self.assertIn('ENV{SYSTEMD_WANTS}+="fliperos-automount@%k.service"', rules)
+        unit = (ROOT / 'config/fliperos-automount@.service').read_text()
+        self.assertIn('BindsTo=dev-%i.device', unit)
+        self.assertIn('After=dev-%i.device udisks2.service', unit)
+        self.assertIn('ExecStart=/opt/fliperos/bin/fliperos-automount /dev/%I', unit)
+        polkit = (ROOT / 'config/50-fliperos-udisks.rules').read_text()
+        self.assertIn('"org.freedesktop.udisks2.filesystem-mount-system"', polkit)
+        self.assertNotIn('modify-device', polkit)
+        self.assertNotIn('format', polkit.split('polkit.addRule')[1])
+        for path in ('etc/udev/rules.d/99-fliperos-disks.rules', 'etc/systemd/system/fliperos-automount@.service',
+                     'etc/polkit-1/rules.d/50-fliperos-udisks.rules'):
+            self.assertIn('"$root/%s"' % path, ROOTFS)
+        self.assertRegex(ROOTFS, r' fliperos-automount; do')
+        self.assertIn('show_mounts=1', (ROOT / 'config/lxde/pcmanfm/LXDE/desktop-items-0.conf').read_text())
+        self.assertIn(' gvfs ', MKISO)
+        self.assertIn(' gvfs\n', (ROOT / 'tools/cabinet-update.sh').read_text())
+        self.assertIn('/opt/fliperos/bin/fliperos-automount "$dev"', (ROOT / 'tools/cabinet-update.sh').read_text())
+
+
 class DockerfileTests(unittest.TestCase):
     DOCKERFILE = (ROOT / 'Dockerfile.fliperos').read_text()
 

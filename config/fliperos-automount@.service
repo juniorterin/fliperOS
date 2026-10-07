@@ -1,0 +1,9 @@
+[Unit]
+Description=FliperOS: mount the disk %I
+BindsTo=dev-%i.device
+After=dev-%i.device udisks2.service
+Wants=udisks2.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/fliperos/bin/fliperos-automount /dev/%I

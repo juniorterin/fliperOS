@@ -1,0 +1,21 @@
+// Discos montados sem senha pelo usuario do gabinete, tambem os internos
+// (o padrao do udisks2 pede a do administrador) e fora de uma sessao, como
+// no boot (config/fliperos-automount). Formatar e particionar continuam
+// pedindo a senha.
+polkit.addRule(function (action, subject) {
+  var allowed = [
+    "org.freedesktop.udisks2.filesystem-mount",
+    "org.freedesktop.udisks2.filesystem-mount-system",
+    "org.freedesktop.udisks2.filesystem-mount-other-seat",
+    "org.freedesktop.udisks2.filesystem-unmount-others",
+    "org.freedesktop.udisks2.eject-media",
+    "org.freedesktop.udisks2.eject-media-system",
+    "org.freedesktop.udisks2.eject-media-other-seat",
+    "org.freedesktop.udisks2.power-off-drive",
+    "org.freedesktop.udisks2.power-off-drive-system",
+    "org.freedesktop.udisks2.power-off-drive-other-seat"
+  ];
+  if (subject.user == "fliperos" && allowed.indexOf(action.id) >= 0) {
+    return polkit.Result.YES;
+  }
+});
