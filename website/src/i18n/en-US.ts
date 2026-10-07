@@ -30,7 +30,7 @@ const enUS = {
       'FliperOS is an Ubuntu-based Linux distribution built to turn PCs into arcade machines, with native CRT, 15 kHz and Switchres support, emulators and frontends ready to play.',
     ctaGithub: 'View on GitHub',
     ctaFeatures: 'Explore features',
-    screenAlt: 'FliperOS running on a CRT monitor',
+    screenAlt: 'The FliperOS main menu at 640x480: Start frontend, Setup, Start desktop, Exit to shell, Shutdown / Reboot',
     screenPlaceholderTitle: 'Real screenshot pending',
     screenPlaceholderHint: 'Place the image at',
     screenCaption: 'Boots straight to 15 kHz. No LCD needed to install.',
@@ -48,7 +48,7 @@ const enUS = {
       {
         id: 'crt',
         title: 'CRT and 15 kHz',
-        text: 'A 6.18 LTS kernel with 15 kHz patches. The live ISO already comes up at 15 kHz, and the boot can be set to 15, 25 or 31 kHz monitors, or an LCD.',
+        text: 'A 6.18 LTS kernel with 15 kHz patches. The installation ISO already comes up at 15 kHz, and the boot can be set to 15, 25 or 31 kHz monitors, or an LCD.',
         points: ['15 kHz', '25 kHz', '31 kHz', 'LCD'],
       },
       {
@@ -96,7 +96,7 @@ const enUS = {
     next: 'Next screenshot',
     items: [
       { id: 'setup', title: 'FliperOS Setup', caption: 'The setup menu, sized for 640x480 interlaced.' },
-      { id: 'install', title: 'Installer', caption: 'Monitor choice and Install to HD/SSD from the live ISO.' },
+      { id: 'install', title: 'Installer', caption: 'Choosing the HD/SSD to install to, from the installation ISO.' },
       { id: 'video', title: 'Video Setup', caption: 'Monitor, output test and geometry on the grid.' },
       { id: 'attract-mode', title: 'Attract-Mode Plus', caption: 'Drawn straight to KMS/DRM, without Xorg.' },
       { id: 'es-de', title: 'ES-DE', caption: 'The FliperOS 240p theme, made for 240 lines.' },

@@ -65,7 +65,7 @@ export function Screenshots({ screenshots }: { screenshots: ScreenshotMap }) {
               <Reveal as="li" key={item.id} delay={i * 50} className={LAYOUT[item.id] ?? ''}>
                 <figure className="card group flex h-full flex-col overflow-hidden rounded-2xl">
                   <div
-                    className={`crt-screen relative w-full rounded-none ${
+                    className={`relative w-full ${src ? 'overflow-hidden bg-bg' : 'crt-screen rounded-none'} ${
                       wide ? 'aspect-[16/9] lg:aspect-[21/8]' : big ? 'aspect-[4/3] lg:flex-1' : 'aspect-[4/3]'
                     }`}
                   >
@@ -82,7 +82,8 @@ export function Screenshots({ screenshots }: { screenshots: ScreenshotMap }) {
                           fill
                           loading="lazy"
                           sizes={big || wide ? '(min-width: 1024px) 66vw, 100vw' : '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw'}
-                          className="object-cover transition duration-500 group-hover:scale-[1.02]"
+                          unoptimized
+                          className="object-contain transition duration-500 group-hover:scale-[1.02]"
                         />
                         <span className="absolute top-3 right-3 rounded-lg bg-bg-deeper/80 p-2 text-fg opacity-80 transition group-hover:opacity-100">
                           <Maximize2 className="size-4" aria-hidden="true" />
@@ -122,7 +123,7 @@ export function Screenshots({ screenshots }: { screenshots: ScreenshotMap }) {
         {shown && shownSrc ? (
           <figure>
             <div className="relative aspect-[4/3] w-full bg-black sm:aspect-[16/10]">
-              <Image src={shownSrc} alt={shown.caption} fill sizes="94vw" className="object-contain" />
+              <Image src={shownSrc} alt={shown.caption} fill sizes="94vw" unoptimized className="object-contain" />
             </div>
             <figcaption className="flex items-center gap-3 border-t border-line px-4 py-3 sm:px-5">
               <div className="min-w-0 flex-1">

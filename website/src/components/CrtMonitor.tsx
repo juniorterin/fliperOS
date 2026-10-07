@@ -14,7 +14,7 @@ type Props = {
 export function CrtMonitor({ src, alt, placeholderTitle, placeholderHint, expectedPath, priority }: Props) {
   return (
     <div className="crt-bezel rounded-[28px] p-4 sm:p-5">
-      <div className="crt-screen aspect-[4/3] w-full">
+      <div className={`aspect-[4/3] w-full ${src ? 'relative overflow-hidden rounded-[14px] bg-bg' : 'crt-screen'}`}>
         {src ? (
           <Image
             src={src}
@@ -22,6 +22,7 @@ export function CrtMonitor({ src, alt, placeholderTitle, placeholderHint, expect
             fill
             priority={priority}
             sizes="(min-width: 1024px) 560px, 92vw"
+            unoptimized
             className="object-cover"
           />
         ) : (
