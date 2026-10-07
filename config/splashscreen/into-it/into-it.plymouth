@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Into It
+Description=Dark gray with an animated loading circle
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/into-it
+ScriptFile=/usr/share/plymouth/themes/into-it/into-it.script

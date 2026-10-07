@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Windoze 95
+Description=Boot screen in the style of the 90s
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/windoze95
+ScriptFile=/usr/share/plymouth/themes/windoze95/windoze95.script

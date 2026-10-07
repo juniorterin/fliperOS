@@ -1,0 +1,395 @@
+#cs ----------------------------------------------------------------------------
+#   Into It Ani-01 Dark Gray Shadowed theme
+#
+#   I was fair with you and didn't include any bits of malicious code (AFAIK),
+#   don't take my code nor use it as yours or I'll find you, put my big toes
+#   into your nostrils and open umbrella in your ass :)
+#
+#   Copyright (C) Markospoko (taomarku at gmail.com)
+#ce ----------------------------------------------------------------------------
+
+Window.GetMaxWidth = fun (){
+  i = 0;
+  width = 0;
+  while (Window.GetWidth(i)){
+    width = Math.Max(width, Window.GetWidth(i));
+    i++;
+    }
+  return width;
+};
+
+Window.GetMaxHeight = fun (){
+  i = 0;
+  height = 0;
+  while (Window.GetHeight(i)){
+    height = Math.Max(height, Window.GetHeight(i));
+    i++;
+    }
+  return height;
+};
+
+scaleFactor = Window.GetMaxWidth() / 3840;
+// FliperOS: nos modos de largura dupla do CRT (640x240) o pixel e duas
+// vezes mais alto que largo.
+fl_py = 1;
+if (Window.GetMaxWidth() > 2 * Window.GetMaxHeight())
+  fl_py = 0.5;
+
+
+fun RotatedImage (index){
+	index = Math.Int(index);
+	if (!RotatedImageCache[index])
+
+	return RotatedImageCache[index];
+	}
+
+
+if (Plymouth.GetMode() == "boot") {
+   if (Window.GetMaxWidth() == 3840) {
+      scaleFactor = 1;
+      dim = "3840x2160";
+   }
+   if (Window.GetMaxWidth() == 1920) {
+      scaleFactor = 1;
+      dim = "1920x1080";
+   }
+   else if (Window.GetMaxWidth() == 1600) {
+      scaleFactor = 1;
+      dim = "1600x900";
+   }
+   else if (Window.GetMaxWidth() == 1366) {
+      scaleFactor = 1;
+      dim = "1366x768";
+   }
+   else if (Window.GetMaxWidth() == 1280) {
+      scaleFactor = 1;
+      dim = "1280x720";
+   }
+   else if (Window.GetMaxWidth() == 1024) {
+      scaleFactor = 1;
+      dim = "1024x576";
+   }
+   else {
+      dim = "3840x2160";
+   }
+
+   logo.original_image = ImageNew("gfx/logo/" + dim + "/logo.png");
+   screenRatio = Window.GetMaxWidth() / Window.GetMaxHeight();
+   if (screenRatio == 16/9 || screenRatio == 1366/768)
+     screenType = "16-9";
+   else if (screenRatio == 16/10)
+     screenType = "16-10";
+   else
+   	 screenType = "16-9";
+   background.original_image = ImageNew("gfx/backg/" + screenType + "/background.png");
+   Window.SetBackgroundTopColor(0.234, 0.43, 0.705);
+   Window.SetBackgroundBottomColor(0.16, 0.25, 0.44);
+}
+else if (Plymouth.GetMode() == "suspend" || Plymouth.GetMode() == "resume") {
+  screenRatio = Window.GetMaxWidth() / Window.GetMaxHeight();
+  if (screenRatio == 16/9 || screenRatio == 1366/768)
+    screenType = "16-9";
+  else if (screenRatio == 16/10)
+    screenType = "16-10";
+  else
+    screenType = "16-9";
+  background.original_image = ImageNew("gfx/backg/" + screenType + "/background-toff.png");
+
+  background.image = background.original_image.Scale(Window.GetMaxWidth() , Window.GetMaxHeight());
+  background.sprite = SpriteNew();
+  background.sprite.SetImage(background.image);
+  background.sprite.SetPosition(0, 0, -10);
+
+  Window.SetBackgroundTopColor(1, 0, 0);
+  Window.SetBackgroundBottomColor(0, 1, 0);
+}
+else if (Plymouth.GetMode() == "shutdown") {
+   scaleFactor = Window.GetMaxWidth() / 3840;
+// FliperOS: nos modos de largura dupla do CRT (640x240) o pixel e duas
+// vezes mais alto que largo.
+fl_py = 1;
+if (Window.GetMaxWidth() > 2 * Window.GetMaxHeight())
+  fl_py = 0.5;
+
+   if (Window.GetMaxWidth() == 3840) {
+      scaleFactor = 1;
+      dim = "3840x2160";
+   }
+   if (Window.GetMaxWidth() == 1920) {
+      scaleFactor = 1;
+      dim = "1920x1080";
+   }
+   else if (Window.GetMaxWidth() == 1600) {
+      scaleFactor = 1;
+      dim = "1600x900";
+   }
+   else if (Window.GetMaxWidth() == 1366) {
+      scaleFactor = 1;
+      dim = "1366x768";
+   }
+   else if (Window.GetMaxWidth() == 1280) {
+      scaleFactor = 1;
+      dim = "1280x720";
+   }
+   else if (Window.GetMaxWidth() == 1024) {
+      scaleFactor = 1;
+      dim = "1024x576";
+   }
+   else {
+      dim = "3840x2160";
+   }
+
+   screenRatio = Window.GetMaxWidth() / Window.GetMaxHeight();
+   if (screenRatio == 16/9 || screenRatio == 1366/768)
+     screenType = "16-9";
+   else if (screenRatio == 16/10)
+     screenType = "16-10";
+   else
+     screenType = "16-9";
+   background.original_image = ImageNew("gfx/backg/" + screenType + "/background-toff.png");
+   background.image = background.original_image.Scale(Window.GetMaxWidth(), Window.GetMaxHeight());
+   background.sprite = SpriteNew();
+   background.sprite.SetImage(background.image);
+   background.sprite.SetPosition(0, 0, -10);
+
+//    switch_off_logo.original_image = ImageNew("gfx/switch-off-logo/" + dim + "/switch-off-button.png");
+//    //switch_off_logo.original_image = ImageNew("gfx/switch-off-logo/" + "switch-off-button.png");
+//    newLogoWidth = scaleFactor * 0.8 * switch_off_logo.original_image.GetWidth();
+//    newLogoHeight = scaleFactor * 0.8 * switch_off_logo.original_image.GetHeight();
+//    switch_off_logo.image = switch_off_logo.original_image.Scale(newLogoWidth, newLogoHeight);
+//    switch_off_logo.sprite = SpriteNew();
+//    switch_off_logo.sprite.SetImage(switch_off_logo.image);
+//    //switch_off_logo.sprite.SetOpacity(60);
+//    switch_off_logo.sprite.SetX((Window.GetMaxWidth() - newLogoWidth) / 2);
+//    if (Window.GetMaxWidth() / Window.GetMaxHeight() == 16/9 ||
+//        Window.GetMaxWidth() / Window.GetMaxHeight() == 1366/768) // 16:9
+//       switch_off_logo.sprite.SetY((11 * Window.GetMaxHeight() / 25) - (newLogoHeight / 2));
+//    else // usually 16:10
+//       switch_off_logo.sprite.SetY((Window.GetMaxHeight() - newLogoHeight) / 2);
+}
+
+# Logo centered & up
+newLogoWidth = scaleFactor * logo.original_image.GetWidth();
+newLogoHeight = scaleFactor * fl_py * logo.original_image.GetHeight();
+logo.image = logo.original_image.Scale(newLogoWidth, newLogoHeight);
+logo.sprite = SpriteNew();
+logo.sprite.SetImage(logo.image);
+logo.opacity_angle = 0;
+logo.sprite.SetX((Window.GetMaxWidth() - newLogoWidth) / 2);
+if (Window.GetMaxWidth() / Window.GetMaxHeight() == 16/9 ||
+    Window.GetMaxWidth() / Window.GetMaxHeight() == 1366/768) // 16:9
+   logo.sprite.SetY((11 * Window.GetMaxHeight() / 25) - (newLogoHeight / 2));
+else // usually 16:10
+   logo.sprite.SetY((11 * Window.GetMaxHeight() / 25) - (newLogoHeight / 2));
+#   logo.sprite.SetY((Window.GetMaxHeight() - newLogoHeight) / 2);
+
+background.image = background.original_image.Scale(Window.GetMaxWidth() , Window.GetMaxHeight());
+background.sprite = SpriteNew();
+background.sprite.SetImage(background.image);
+background.sprite.SetPosition(0, 0, -10);
+
+sprite_prompt = SpriteNew();
+
+frameNum = 1;
+fun refresh_callback ()
+  {
+//    if (status == "normal" && Plymouth.GetMode() != "shutdown")
+    if (status == "normal")
+    {
+		motif.sprite.SetOpacity(motif.opacity);
+
+        loading_circle.sprite.SetImage(loading_circle.image[Math.Int((frameNum++ - 1)/12) % 9]);
+        sprite_width = loading_circle.image[0].GetWidth();
+        sprite_height = loading_circle.image[0].GetHeight();
+        loading_circle.sprite.SetX((Window.GetMaxWidth() - sprite_width) / 2);
+        if (Window.GetMaxWidth() / Window.GetMaxHeight() == 16/9 ||
+            Window.GetMaxWidth() / Window.GetMaxHeight() == 1366/768) // 16:9
+           loading_circle.sprite.SetY((10 * Window.GetMaxHeight() / 16) - (sprite_height / 2));
+        else // usually 16:10
+           loading_circle.sprite.SetY((11 * Window.GetMaxHeight() / 16) - (sprite_height / 2));
+    }
+    else
+    {
+	   motif.sprite.SetOpacity(0);
+    }
+
+  }
+
+if (Plymouth.GetMode() != "suspend" && Plymouth.GetMode() != "resume") {
+  Plymouth.SetRefreshFunction (refresh_callback);
+}
+
+#----------------------------------------- Dialog --------------------------------
+
+status = "normal";
+
+fun dialog_setup()
+  {
+    local.box;
+    local.lock;
+    local.entry;
+    local.prompt_sprite;
+
+    box.image = ImageNew("box.png");
+    lock.image = ImageNew("lock.png");
+    entry.image = ImageNew("entry.png");
+
+    box.sprite = SpriteNew();
+    box.sprite.SetImage(box.image);
+    box.x = Window.GetX() + Window.GetWidth()  / 2 - box.image.GetWidth()/2;
+    box.y = Window.GetY() + Window.GetHeight() / 2 - box.image.GetHeight()/2;
+    box.z = 10000;
+    box.sprite.SetPosition(box.x, box.y, box.z);
+
+    lock.sprite = SpriteNew();
+    lock.sprite.SetImage(lock.image);
+    lock.x = box.x + box.image.GetWidth()/2 - (lock.image.GetWidth() + entry.image.GetWidth()) / 2;
+    lock.y = box.y + box.image.GetHeight()/2 - lock.image.GetHeight()/2;
+    lock.z = box.z + 1;
+    lock.sprite.SetPosition(lock.x, lock.y, lock.z);
+
+    entry.sprite = SpriteNew();
+    entry.sprite.SetImage(entry.image);
+    entry.x = lock.x + lock.image.GetWidth();
+    entry.y = box.y + box.image.GetHeight()/2 - entry.image.GetHeight()/2;
+    entry.z = box.z + 1;
+    entry.sprite.SetPosition(entry.x, entry.y, entry.z);
+
+    prompt_sprite = SpriteNew();
+    prompt_sprite.SetPosition(box.x, box.y - 20, box.z);
+
+    global.dialog.box = box;
+    global.dialog.lock = lock;
+    global.dialog.entry = entry;
+    global.dialog.bullet_image = ImageNew("bullet.png");
+    global.dialog.prompt_sprite = prompt_sprite;
+    dialog_opacity (1);
+  }
+
+fun dialog_opacity(opacity)
+  {
+    dialog.box.sprite.SetOpacity(opacity);
+    dialog.lock.sprite.SetOpacity(opacity);
+    dialog.entry.sprite.SetOpacity(opacity);
+    dialog.prompt_sprite.SetOpacity(opacity);
+    for (index = 0; dialog.bullet[index]; index++)
+      {
+        dialog.bullet[index].sprite.SetOpacity(opacity);
+      }
+  }
+
+fun display_normal_callback ()
+  {
+    global.status = "normal";
+    if (global.dialog)
+      dialog_opacity (0);
+  }
+
+fun display_password_callback (prompt, bullets)
+  {
+    global.status = "password";
+    if (!global.dialog)
+	dialog_setup();
+    else
+	dialog_opacity(1);
+    motif.sprite.SetOpacity(0);
+
+    dialog.prompt_sprite.SetImage(Image.Text(prompt, 1.0, 1.0, 1.0));
+    for (index = 0; dialog.bullet[index] || index < bullets; index++)
+      {
+
+        if (!dialog.bullet[index])
+          {
+            dialog.bullet[index].sprite = SpriteNew();
+            dialog.bullet[index].sprite.SetImage(dialog.bullet_image);
+            dialog.bullet[index].x = dialog.entry.x + index * dialog.bullet_image.GetWidth();
+            dialog.bullet[index].y = dialog.entry.y + dialog.entry.image.GetHeight() / 2 - dialog.bullet_image.GetHeight() / 2;
+            dialog.bullet[index].z = dialog.entry.z + 1;
+            dialog.bullet[index].sprite.SetPosition(dialog.bullet[index].x, dialog.bullet[index].y, dialog.bullet[index].z);
+          }
+        if (index < bullets)
+          dialog.bullet[index].sprite.SetOpacity(1);
+        else
+          dialog.bullet[index].sprite.SetOpacity(0);
+      }
+  }
+
+fun display_message_callback (prompt)
+  {
+
+prompt = Image.Text(prompt,1.0, 1.0, 1.0);
+sprite_prompt.SetImage(prompt);
+sprite_prompt.SetPosition(Window.GetX() + (Window.GetWidth() - prompt.GetWidth()) / 2, Window.GetY() + Window.GetHeight() * 0.93, 2);
+  }
+
+/* instantiate dialog at startup, to ensure all icons are loaded in memory before initrd is unmounted, in case /usr isn't mounted yet */
+dialog_setup(); dialog_opacity(0);
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+Plymouth.SetMessageFunction(display_message_callback);
+
+
+
+# --------------------------------------------------------------------------------------
+# Loading dots
+# --------------------------------------------------------------------------------------
+if (Window.GetMaxWidth() == 3840) {
+   scaleFactor = 1;
+   dim = "3840x2160";
+}
+if (Window.GetMaxWidth() == 1920) {
+   scaleFactor = 1;
+   dim = "1920x1080";
+}
+else if (Window.GetMaxWidth() == 1600) {
+   scaleFactor = 1;
+   dim = "1600x900";
+}
+else if (Window.GetMaxWidth() == 1366) {
+   scaleFactor = 1;
+   dim = "1366x768";
+}
+else if (Window.GetMaxWidth() == 1280) {
+   scaleFactor = 1;
+   dim = "1280x720";
+}
+else if (Window.GetMaxWidth() == 1024) {
+   scaleFactor = 1;
+   dim = "1024x576";
+}
+else {
+   dim = "3840x2160";
+}
+
+for (frame = 1; frame <= 9; frame++) {
+   if (frame < 10)
+      num = "0" + frame;
+   else
+      num = "" + frame;
+
+   loading_circle.image[frame - 1] = Image("gfx/loading_circle/" + dim + "/loading_circle 00" + num + ".png");
+   scaledWidth = scaleFactor * loading_circle.image[frame - 1].GetWidth();
+   scaledHeight = scaleFactor * fl_py * loading_circle.image[frame - 1].GetHeight();
+   loading_circle.image[frame - 1] = loading_circle.image[frame - 1].Scale(scaledWidth, scaledHeight);
+}
+loading_circle.sprite = SpriteNew();
+# --------------------------------------------------------------------------------------
+
+fun progress_callback (duration, progress)
+  {
+  }
+
+Plymouth.SetBootProgressFunction(progress_callback);
+
+#----------------------------------------- Quit --------------------------------
+
+fun quit_callback ()
+{
+   //anim.sprite.SetOpacity (0);
+   if (Plymouth.GetMode() == "shutdown") {
+      motif.sprite.SetOpacity(0);
+   }
+}
+
+Plymouth.SetQuitFunction(quit_callback);
+

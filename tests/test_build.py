@@ -4129,15 +4129,22 @@ class SplashTests(unittest.TestCase):
         # Cada pasta e um tema: NOME/NOME.plymouth apontando para a pasta de
         # mesmo nome no Plymouth, com o script e as imagens que ele abre.
         names = sorted(p.name for p in self.THEMES.iterdir() if p.is_dir())
-        self.assertEqual(names, ['fliperos', 'fliperos-text'])
+        self.assertEqual(names, ['cogwheel', 'fliperos', 'fliperos-text', 'into-it', 'windoze95'])
         for name in names:
             plymouth = (self.THEMES / name / ('%s.plymouth' % name)).read_text()
             self.assertIn('ModuleName=script\n', plymouth)
             self.assertIn('ImageDir=/usr/share/plymouth/themes/%s\n' % name, plymouth)
             self.assertIn('ScriptFile=/usr/share/plymouth/themes/%s/%s.script\n' % (name, name), plymouth)
-            script = (self.THEMES / name / ('%s.script' % name)).read_text()
-            for image in re.findall(r'Image\("([^"]+)"\)', script):
-                self.assertTrue((self.THEMES / name / image).is_file(), image)
+            self.assertRegex(plymouth, r'\nDescription=\w')
+            script = (self.THEMES / name / ('%s.script' % name)).read_text(encoding='utf-8')
+            code = re.sub(r'//[^\n]*', '', re.sub(r'/\*.*?\*/', '', script, flags=re.S))
+            for image in re.findall(r'Image\("([^"]+)"\)', code):
+                self.assertTrue((self.THEMES / name / image).is_file(), '%s: %s' % (name, image))
+        # Os de terceiros escalam para a janela: 320x240 e 640x240 no CRT.
+        self.assertIn('FlImage("SPINNER.PNG")', (self.THEMES / 'cogwheel/cogwheel.script').read_text(encoding='utf-8'))
+        self.assertIn('scaleFactor * fl_py', (self.THEMES / 'into-it/into-it.script').read_text())
+        self.assertIn('Image("w95_boot.png").Scale(Window.GetWidth(), Window.GetHeight())',
+                      (self.THEMES / 'windoze95/windoze95.script').read_text())
         script = (self.THEMES / 'fliperos/fliperos.script').read_text()
         for frame in range(33):
             self.assertTrue((self.THEMES / ('fliperos/throbber-0%d.png' % frame)).is_file())
