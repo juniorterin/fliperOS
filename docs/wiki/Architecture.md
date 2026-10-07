@@ -9,6 +9,7 @@ fliperos-setup/
 │   ├── disk.sh install.sh recovery.sh
 │   ├── launcher.sh audio.sh network.sh status.sh scraper.sh update.sh
 │   ├── romclean.sh netshare.sh  MAME ROM Cleaner; network shared folder (SMB)
+│   ├── downloader.sh     romset and CHDs by magnet link (Transmission)
 │   ├── hardware.sh latency.sh   CPU/memory/GPU and the latency modes
 │   ├── quirks.sh padkeys.sh     usbhid quirks; controller in the menus
 │   ├── lpt.sh            parallel port joysticks (db9, gamecon, turbografx)
@@ -16,7 +17,7 @@ fliperos-setup/
 └── screens/              screens — they only combine ui.sh with the logic
     ├── output-test.sh (test + Testing Results)  main-menu.sh  setup-menu.sh
     ├── video-setup.sh  disk-selection.sh  install-progress.sh  progress.sh
-    └── recovery.sh  first-boot.sh  latency.sh  lpt.sh  rom-cleaner.sh
+    └── recovery.sh  first-boot.sh  latency.sh  lpt.sh  rom-cleaner.sh  downloader.sh
 ```
 
 Long operations (install, repair, update, scraper) don't know about the screen: they write events (`@step`, `@pct`, `@msg`, `@fail`) that `screens/progress.sh` draws. Everything goes to `/var/log/fliperos-setup.log`.
