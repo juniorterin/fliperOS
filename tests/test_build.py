@@ -860,6 +860,7 @@ class RomFoldersTests(unittest.TestCase):
                 'display_name = "Nintendo - SNES / SFC (Snes9x - Current)"\n'
                 'supported_extensions = "smc|sfc|swc|fig|bs|st"\n')
             (info / 'mpv_libretro.info').write_text('display_name = "Video (MPV)"\n')
+            (info / 'mame2010_libretro.info').write_text('display_name = "Arcade (MAME 2010)"\n')
             env = dict(os.environ, FLIPEROS_ROMS=str(tmp / 'roms'), FLIPEROS_CORE_INFO=str(info))
             for _ in range(2):  # a segunda rodada nao muda nada
                 subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
@@ -872,6 +873,9 @@ class RomFoldersTests(unittest.TestCase):
                              'RetroArch, core snes9x: Nintendo - SNES / SFC (Snes9x - Current) '
                              '(.smc .sfc .swc .fig .bs .st)\n')
             self.assertEqual((roms / 'retroarch/mpv/_info.txt').read_text(), 'RetroArch, core mpv: Video (MPV)\n')
+            # O MAME 2010 e o "MAME 3D", dos jogos de arcade baseados no PlayStation.
+            self.assertIn('Arcade (MAME 2010). This is the MAME 3D: MAME 0.139 sets of the PlayStation-based (PSX)',
+                          (roms / 'retroarch/mame2010/_info.txt').read_text())
 
     def test_fightcade_reads_its_roms_from_the_roms_folder(self):
         # O Fightcade procura as ROMs dentro da pasta de cada emulador dele:

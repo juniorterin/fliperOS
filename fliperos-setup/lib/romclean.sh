@@ -185,7 +185,7 @@ romclean_preset_label() {
   case $1 in
     cabinet) echo "Joystick cabinet (2 players, 6 buttons)" ;;
     working) echo "Everything that works" ;;
-    psx) echo "PlayStation-based hardware (Tekken 3...)" ;;
+    psx) echo "PlayStation-based hardware, the MAME 3D (Tekken 3...)" ;;
     all) echo "Everything (no filter)" ;;
     *) echo "Custom" ;;
   esac
@@ -373,7 +373,8 @@ romclean_data_args() {
 # O alvo diz de que versao do MAME e o romset (o XML) e para onde os jogos
 # vao: groovymame (o MAME deste sistema), flycast (o mesmo romset, so Naomi,
 # Naomi 2 e Atomiswave, uma pasta por sistema), mame2010 (o 0.139 do core do
-# RetroArch) ou file (outro XML).
+# RetroArch, o "MAME 3D": os jogos de arcade baseados no PlayStation, que ele
+# roda bem) ou file (outro XML).
 
 # romclean_targets imprime "alvo|rotulo" dos emuladores da tela.
 romclean_targets() {
@@ -386,17 +387,17 @@ romclean_target_label() {
   case $1 in
     groovymame) echo "GroovyMAME $(groovymame_version)" ;;
     flycast) echo "Flycast (Naomi, Naomi 2, Atomiswave)" ;;
-    mame2010) echo "MAME 2010 (0.139), the RetroArch mame2010 core" ;;
+    mame2010) echo "MAME 2010 / MAME 3D (0.139, RetroArch core): PlayStation-based (PSX) arcade games" ;;
     *) echo "$1" ;;
   esac
 }
 
 # romclean_default_target PASTA imprime o emulador provavel do romset: o
-# MAME 2010 numa pasta que tem "2010" no nome, o Flycast numa de Naomi ou
-# Atomiswave, senao o GroovyMAME instalado.
+# MAME 2010 numa pasta que tem "2010" ou "MAME 3D" no nome, o Flycast numa
+# de Naomi ou Atomiswave, senao o GroovyMAME instalado.
 romclean_default_target() {
   local name=${1,,}
-  if [[ $name == *2010* && -f $MAME2010_XML ]]; then
+  if [[ ($name == *2010* || ${name##*/} =~ mame.?3d) && -f $MAME2010_XML ]]; then
     echo mame2010
   elif [[ ${name##*/} =~ naomi|atomiswave|flycast ]]; then
     echo flycast

@@ -143,7 +143,7 @@ const ptBR: Messages = {
     emulatorsTitle: 'Emuladores',
     items: [
       { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade', note: 'Release oficial, Switchres por jogo' },
-      { id: 'retroarch', name: 'RetroArch', systems: 'NES, SNES, Mega Drive, GBA, PS1, MAME 2010', note: 'KMS, CRT SwitchRes, 6 cores inclusos' },
+      { id: 'retroarch', name: 'RetroArch', systems: 'NES, SNES, Mega Drive, GBA, PS1, MAME 2010 (MAME 3D: arcade baseado no PlayStation)', note: 'KMS, CRT SwitchRes, 6 cores inclusos' },
       { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressivo em 15 kHz' },
       { id: 'pcsx2', name: 'PCSX2', systems: 'PlayStation 2', note: 'AppImage oficial' },
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', note: 'Compilado da versão estável' },

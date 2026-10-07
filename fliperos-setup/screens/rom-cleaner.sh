@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Setup > MAME ROM Cleaner: onde esta o romset (uma pasta daqui ou uma pasta
-# da rede), para que emulador ele e (GroovyMAME, Flycast, MAME 2010), a tela
+# da rede), para que emulador ele e (GroovyMAME, Flycast, MAME 2010 / MAME 3D), a tela
 # dos parametros (Enter num parametro abre as opcoes dele, de escolher uma ou
 # de marcar varias, e volta com a escolha), a previa e a copia para a pasta
 # do emulador. A logica e a lib/romclean.sh; a pasta da rede, lib/netshare.sh.
@@ -9,7 +9,7 @@
 screen_cleaner() {
   local choice last=romcleaner
   while true; do
-    choice=$(ui_menu "Cleaner" "Filter a romset (MAME, Flycast, MAME 2010) into the emulator folders, then bring the CHDs of the games that stayed." \
+    choice=$(ui_menu "Cleaner" "Filter a romset into the emulator folders (GroovyMAME, Flycast, or MAME 2010 / MAME 3D for the PlayStation-based arcade games), then bring the CHDs of the games that stayed." \
       "$last" \
       "romcleaner|MAME ROM Cleaner" \
       "chdcleaner|MAME CHD Cleaner" \
@@ -259,6 +259,8 @@ screen_rom_cleaner_filters() {
   dest=$(romclean_default_dest "$target")
   # De uma pasta so de leitura (a da rede) so da para copiar.
   [[ -w $folder && $mode != downloader ]] && writable=1
+  # O MAME 2010 e o "MAME 3D": comeca so com a placa do PlayStation.
+  [[ $target == mame2010 ]] && preset=psx
   while IFS= read -r line; do
     opt[${line%%=*}]=${line#*=}
   done < <(romclean_preset "$preset" "$target")

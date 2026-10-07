@@ -52,7 +52,11 @@ folder "$roms/fightcade/fc1" "Fightcade 1 games (FBA): .zip sets of FB Alpha 0.2
 # Um core por .info: "core|nome|.ext .ext".
 while IFS='|' read -r core name exts; do
   [[ -n $core ]] || continue
-  folder "$roms/retroarch/$core" "RetroArch, core ${core}: ${name:-$core}${exts:+ ($exts)}"
+  note=""
+  # O MAME 2010 e o "MAME 3D": os jogos de arcade baseados no PlayStation.
+  [[ $core == mame2010 ]] &&
+    note=". This is the MAME 3D: MAME 0.139 sets of the PlayStation-based (PSX) arcade games (ZN-1/ZN-2, Namco System 11/12: Tekken 3, Soul Calibur, Street Fighter EX...)."
+  folder "$roms/retroarch/$core" "RetroArch, core ${core}: ${name:-$core}${exts:+ ($exts)}$note"
 done < <(awk -F' = ' '
   FNR == 1 {
     if (core != "") print core "|" name "|" ext

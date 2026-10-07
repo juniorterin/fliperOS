@@ -2379,12 +2379,17 @@ class RomCleanerTests(Base):
         self.assertEqual([o.split("|")[0] for o in out], ["groovymame", "flycast", "file"])
         self.assertEqual(out[0], "groovymame|GroovyMAME 0.289")
         (self.env.dir / "mame2010.xml.xz").write_bytes(b"")
-        self.assertIn("mame2010|MAME 2010 (0.139), the RetroArch mame2010 core",
+        # O MAME 2010 e o "MAME 3D", dos jogos de arcade baseados no PlayStation.
+        self.assertIn("mame2010|MAME 2010 / MAME 3D (0.139, RetroArch core): PlayStation-based (PSX) arcade games",
                       self.env.out("romclean_targets", self.vars).splitlines())
         # O emulador provavel pelo nome da pasta.
         script = ("romclean_default_target /r/retroarch/mame2010; romclean_default_target /r/mame; "
-                  "romclean_default_target /pc/Naomi; romclean_default_target /pc/naomi-roms/full")
-        self.assertEqual(self.env.out(script, self.vars).split(), ["mame2010", "groovymame", "flycast", "groovymame"])
+                  "romclean_default_target /pc/Naomi; romclean_default_target /pc/naomi-roms/full; "
+                  "romclean_default_target '/pc/MAME 3D'")
+        self.assertEqual(self.env.out(script, self.vars).split(),
+                         ["mame2010", "groovymame", "flycast", "groovymame", "mame2010"])
+        self.assertIn('[[ $target == mame2010 ]] && preset=psx',
+                      (SETUP / "screens" / "rom-cleaner.sh").read_text())
         roms, bios = self.roms, self.env.dir / "bios"
         self.assertEqual(self.env.out("romclean_default_dest mame2010", self.vars).strip(), "%s/mame" % roms)
         (roms / "retroarch" / "mame2010").mkdir(parents=True)
