@@ -1,0 +1,253 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #282a36;
+  --color-bg-deep: #21222c;
+  --color-bg-deeper: #191a21;
+  --color-line: #44475a;
+  --color-comment: #8290c4;
+  --color-fg: #f8f8f2;
+  --color-muted: #bfc2d4;
+  --color-purple: #bd93f9;
+  --color-pink: #ff79c6;
+  --color-cyan: #8be9fd;
+  --color-green: #50fa7b;
+  --color-orange: #ffb86c;
+  --color-red: #ff5555;
+  --color-yellow: #f1fa8c;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'JetBrains Mono', 'Cascadia Code', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem;
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-bg-deep);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-purple) 45%, transparent);
+  color: var(--color-fg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Grade e brilho de fundo: discretos, atrás de tudo. */
+.bg-grid {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-line) 35%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-line) 35%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at 50% 0%, #000 0%, transparent 70%);
+}
+
+.glow-purple {
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--color-purple) 28%, transparent), transparent);
+}
+
+.glow-pink {
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--color-pink) 20%, transparent), transparent);
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, var(--color-purple), var(--color-pink) 55%, var(--color-orange));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Aberração RGB leve, só em títulos grandes. */
+.rgb-split {
+  text-shadow:
+    -1px 0 color-mix(in srgb, var(--color-cyan) 45%, transparent),
+    1px 0 color-mix(in srgb, var(--color-pink) 45%, transparent);
+}
+
+.card {
+  border: 1px solid color-mix(in srgb, var(--color-line) 80%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 92%, transparent), var(--color-bg-deep));
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.card:hover,
+.card:focus-within {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--color-purple) 70%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-purple) 25%, transparent),
+    0 12px 40px -12px color-mix(in srgb, var(--color-purple) 45%, transparent);
+}
+
+/* Tela de CRT: curvatura, vinheta, scanlines e brilho do fósforo. Nunca sobre texto corrido. */
+.crt-bezel {
+  background: linear-gradient(160deg, #34364a, #1c1d26 60%, #15161d);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 30px 80px -30px rgba(0, 0, 0, 0.8),
+    0 0 60px -20px color-mix(in srgb, var(--color-purple) 40%, transparent);
+}
+
+.crt-screen {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px / 22px;
+  background: radial-gradient(ellipse at center, #232533 0%, #15161d 80%);
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.85),
+    inset 0 0 6px rgba(0, 0, 0, 0.9);
+}
+
+.crt-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
+}
+
+.crt-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(189, 147, 249, 0.08), transparent 60%),
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+.phosphor {
+  text-shadow:
+    0 0 6px color-mix(in srgb, currentColor 55%, transparent),
+    0 0 18px color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.flicker {
+  animation: flicker 6s infinite steps(1);
+}
+
+@keyframes flicker {
+  0%,
+  96%,
+  100% {
+    opacity: 1;
+  }
+  97% {
+    opacity: 0.92;
+  }
+  98% {
+    opacity: 1;
+  }
+  99% {
+    opacity: 0.95;
+  }
+}
+
+.float {
+  animation: float 9s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.cursor-blink::after {
+  content: '\2588';
+  margin-left: 2px;
+  animation: blink 1.1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Sinal correndo pelo diagrama Jogo -> Switchres -> GPU -> CRT. */
+.signal {
+  background-size: 200% 100%;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--color-cyan) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  animation: signal 2.8s linear infinite;
+}
+
+@keyframes signal {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 700ms ease,
+    transform 700ms ease;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+dialog::backdrop {
+  background: rgba(15, 16, 22, 0.88);
+  backdrop-filter: blur(6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .card:hover,
+  .card:focus-within {
+    transform: none;
+  }
+}

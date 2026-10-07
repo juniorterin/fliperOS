@@ -1,0 +1,205 @@
+import type { Messages } from './en-US';
+
+const ptBR: Messages = {
+  meta: {
+    title: 'FliperOS — Arcade Linux feito para CRT',
+    description:
+      'FliperOS é uma distribuição Linux baseada no Ubuntu 24.04 para gabinetes arcade com monitor CRT: kernel 15 kHz, Switchres, GroovyMAME, RetroArch e frontends prontos para jogar, configurados por um menu feito para o tubo.',
+  },
+  a11y: {
+    skipToContent: 'Pular para o conteúdo',
+    openMenu: 'Abrir menu',
+    closeMenu: 'Fechar menu',
+    language: 'Idioma',
+    switchTo: 'Mudar idioma para',
+    mainNav: 'Navegação principal',
+    external: '(abre no GitHub)',
+  },
+  nav: {
+    features: 'Recursos',
+    screenshots: 'Screenshots',
+    emulators: 'Emuladores',
+    crt: 'CRT',
+    setup: 'Setup',
+    github: 'GitHub',
+    viewOnGithub: 'Ver no GitHub',
+  },
+  hero: {
+    eyebrow: 'fliperos 0.7 · em desenvolvimento',
+    titleLine1: 'Arcade Linux.',
+    titleLine2: 'Feito para CRT.',
+    description:
+      'FliperOS é uma distribuição Linux baseada em Ubuntu criada para transformar PCs em máquinas arcade, com suporte nativo a CRT, 15 kHz, Switchres, emuladores e frontends prontos para jogar.',
+    ctaGithub: 'Ver no GitHub',
+    ctaFeatures: 'Conheça os recursos',
+    screenAlt: 'FliperOS rodando em um monitor CRT',
+    screenPlaceholderTitle: 'Screenshot real pendente',
+    screenPlaceholderHint: 'Coloque a imagem em',
+    screenCaption: 'Sobe direto em 15 kHz. Não precisa de LCD para instalar.',
+  },
+  badges: {
+    label: 'Destaques técnicos',
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'Open Source'],
+  },
+  features: {
+    kicker: 'Recursos',
+    title: 'Tudo o que um gabinete precisa, nada que ele não use.',
+    intro:
+      'Um sistema Linux completo afinado para uma tarefa: rodar jogos de arcade e console num tubo de verdade, configurado no próprio gabinete.',
+    items: [
+      {
+        id: 'crt',
+        title: 'CRT e 15 kHz',
+        text: 'Kernel 6.18 LTS com os patches de 15 kHz. A ISO live já sobe em 15 kHz, e o boot pode ser configurado para monitores de 15, 25 ou 31 kHz, ou para LCD.',
+        points: ['15 kHz', '25 kHz', '31 kHz', 'LCD'],
+      },
+      {
+        id: 'switchres',
+        title: 'Switchres',
+        text: 'Cada jogo ganha o seu modo: resolução e taxa de atualização são geradas na hora para ficar o mais perto possível do hardware original.',
+        points: [],
+      },
+      {
+        id: 'latency',
+        title: 'Baixa latência',
+        text: 'Dois modos em Setup > Latency. O Standard lê o USB a 1000 Hz e ajusta GroovyMAME e RetroArch; o Low latency soma preempção total do kernel, frame delay automático e preemptive frames.',
+        points: [],
+      },
+      {
+        id: 'arcade',
+        title: 'Pronto para arcade',
+        text: 'Emuladores, frontends e perfis de controle já vêm configurados. O painel funciona nos menus, e o mapeamento de botões vale para todos os emuladores de uma vez.',
+        points: [],
+      },
+      {
+        id: 'setup',
+        title: 'FliperOS Setup',
+        text: 'Um menu próprio, legível em 640x480 entrelaçado e operado por teclado ou controle, para configurar o sistema no gabinete.',
+        points: ['Vídeo', 'Geometria', 'Áudio', 'Rede', 'Controles', 'Scraper', 'Latência', 'ROMs'],
+      },
+      {
+        id: 'network',
+        title: 'Pronto para rede',
+        text: 'As pastas roms, bios, media e config ficam na sua pasta pessoal e são compartilhadas na rede via Samba. Copie jogos de qualquer PC para \\\\fliperos\\roms.',
+        points: ['roms', 'bios', 'media', 'config'],
+      },
+    ],
+  },
+  screenshots: {
+    kicker: 'Screenshots',
+    title: 'O sistema real, em telas reais.',
+    intro:
+      'Aqui entram só capturas reais do FliperOS. Espaços sem imagem mostram onde o arquivo deve ficar no repositório.',
+    pending: 'Screenshot pendente',
+    expectedAt: 'Arquivo esperado',
+    open: 'Abrir screenshot',
+    close: 'Fechar',
+    previous: 'Screenshot anterior',
+    next: 'Próximo screenshot',
+    items: [
+      { id: 'setup', title: 'FliperOS Setup', caption: 'O menu de configuração, dimensionado para 640x480 entrelaçado.' },
+      { id: 'install', title: 'Instalador', caption: 'Escolha do monitor e Install to HD/SSD a partir da ISO live.' },
+      { id: 'video', title: 'Video Setup', caption: 'Monitor, teste de saída e geometria na grade.' },
+      { id: 'attract-mode', title: 'Attract-Mode Plus', caption: 'Desenhado direto no KMS/DRM, sem Xorg.' },
+      { id: 'es-de', title: 'ES-DE', caption: 'O tema FliperOS 240p, feito para 240 linhas.' },
+      { id: 'desktop', title: 'Desktop LXDE', caption: 'Tema Dracula, menu Games e loja de aplicativos.' },
+      { id: 'crt', title: 'Num CRT de verdade', caption: 'Um gabinete rodando o FliperOS em 15 kHz.' },
+    ],
+  },
+  emulators: {
+    kicker: 'Emuladores e frontends',
+    title: 'Pronto para jogar desde o primeiro boot.',
+    intro:
+      'Emuladores que abrem no modo de vídeo certo para o monitor escolhido, e frontends com temas pensados para 240 linhas.',
+    emulatorsTitle: 'Emuladores',
+    items: [
+      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade', note: 'Release oficial, Switchres por jogo' },
+      { id: 'retroarch', name: 'RetroArch', systems: 'NES, SNES, Mega Drive, GBA, PS1, MAME 2010', note: 'KMS, CRT SwitchRes, 6 cores inclusos' },
+      { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressivo em 15 kHz' },
+      { id: 'pcsx2', name: 'PCSX2', systems: 'PlayStation 2', note: 'AppImage oficial' },
+      { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', note: 'Compilado da versão estável' },
+      { id: 'supermodel', name: 'Supermodel', systems: 'Sega Model 3', note: '640x240 a 57,524 Hz em 15 kHz' },
+      { id: 'model2', name: 'Model 2 Emulator', systems: 'Sega Model 2', note: 'Roda pelo Wine' },
+      { id: 'hypseus', name: 'Hypseus Singe', systems: 'Laserdisc', note: 'Dragon’s Lair, Space Ace' },
+      { id: 'openbor', name: 'OpenBOR', systems: 'Beat ’em ups', note: '320x240' },
+    ],
+    frontendsTitle: 'Frontends',
+    frontendsIntro: 'Escolha o lançador padrão em Setup > Frontend.',
+    frontends: [
+      { id: 'attract-mode', name: 'Attract-Mode Plus', text: 'Build KMS/DRM com o tema AdvanceMenu.' },
+      { id: 'es-de', name: 'EmulationStation (ES-DE)', text: 'Tema FliperOS 240p nas cores Dracula.' },
+      { id: 'pegasus', name: 'Pegasus', text: 'Tema FliperOS 240p; esquerda e direita trocam de sistema.' },
+      { id: 'fightcade', name: 'Fightcade 2', text: 'Partidas online; baixado pelo Setup.' },
+    ],
+    extrasTitle: 'Extras opcionais',
+    extrasText:
+      'Ficam fora da ISO para ela caber num único download. Instalados pela rede em Setup > Extras.',
+    extrasBadge: 'Opcional',
+    extras: [
+      { id: 'wine', name: 'Wine', text: 'Para o Model 2 e os emuladores do Fightcade 2' },
+      { id: 'steam', name: 'Steam', text: 'Jogos de PC dentro do desktop' },
+      { id: 'heroic', name: 'Heroic', text: 'GOG, Epic e Amazon' },
+    ],
+  },
+  crt: {
+    kicker: 'CRT / 15 kHz',
+    title: 'Pixels reais. Hardware real.',
+    intro:
+      'O FliperOS não é só uma distro de emulação. Ele é feito para o próprio monitor arcade: um tubo de 15 kHz mostra a imagem exatamente como a placa original desenhava, sem escalonador no meio.',
+    pipelineLabel: 'Do jogo até o tubo',
+    steps: [
+      { id: 'game', label: 'Jogo', text: 'Pede a sua resolução e taxa de atualização originais.' },
+      { id: 'switchres', label: 'Switchres', text: 'Calcula uma modeline dentro da faixa do seu monitor.' },
+      { id: 'gpu', label: 'GPU', text: 'Drivers do kernel com patches geram dotclocks baixos em placas AMD.' },
+      { id: 'crt', label: 'CRT', text: 'O tubo desenha cada linha, no tempo original.' },
+    ],
+    points: [
+      { id: 'native', title: 'Resoluções nativas', text: 'Os jogos rodam na largura e altura deles, como 384x224 numa placa CPS2, em vez de serem escalonados.' },
+      { id: 'refresh', title: 'Taxas de atualização originais', text: 'Os modos são gerados perto do tempo de cada placa, então a rolagem fica suave e a velocidade, correta.' },
+      { id: 'progressive', title: 'Sem cintilar do entrelaçado', text: 'Em 15 kHz os sistemas de 480 linhas rodam em 640x240 progressivo, esticados para preencher o tubo 4:3.' },
+      { id: 'geometry', title: 'Geometria na grade', text: 'Centralize e dimensione a imagem pelo Setup; vale para o GroovyMAME e o RetroArch juntos.' },
+    ],
+  },
+  setup: {
+    kicker: 'FliperOS Setup',
+    title: 'Configure tudo no próprio gabinete.',
+    intro:
+      'Um menu com tema Dracula feito para a tela do tubo. Sem teclado: o joystick e os botões do painel controlam tudo.',
+    terminalTitle: 'fliperos-setup',
+    menuTitle: 'Setup (video, audio, network...)',
+    menu: [
+      { id: 'video', label: 'Video Setup', text: 'Monitor, teste de saída, geometria e modo de boot' },
+      { id: 'audio', label: 'Audio Setup', text: 'Placa, volume, latência de áudio do MAME, sons do menu' },
+      { id: 'network', label: 'Network Setup', text: 'Wi-Fi por lista, ou rede oculta' },
+      { id: 'frontend', label: 'Frontend', text: 'Lançador padrão, instalado sob demanda' },
+      { id: 'extras', label: 'Extras', text: 'Wine, Steam e Heroic pela rede' },
+      { id: 'latency', label: 'Latency', text: 'Standard ou Low latency, com checagem do hardware' },
+      { id: 'scraper', label: 'Scraper', text: 'Capas, screenshots, vídeos e descrições' },
+      { id: 'roms', label: 'MAME ROM/CHD Cleaner', text: 'Filtra um romset; baixa jogos gratuitos' },
+      { id: 'joysticks', label: 'Joysticks', text: 'Botões, light gun, volante, porta paralela' },
+      { id: 'update', label: 'System Update', text: 'apt update e upgrade com progresso real' },
+    ],
+    hint: 'setas: mover  ·  enter: selecionar  ·  esc: voltar',
+  },
+  openSource: {
+    kicker: 'Código aberto',
+    title: 'Construído de forma aberta.',
+    text: 'O FliperOS é um projeto de código aberto. O código, os scripts de build, a documentação e as issues ficam no GitHub, e cada ISO é gerada a partir desse repositório, em Docker.',
+    cta: 'Explore o FliperOS no GitHub',
+    stars: 'Stars',
+    forks: 'Forks',
+    release: 'Último release',
+    noRelease: 'Nenhum release ainda',
+  },
+  footer: {
+    tagline: 'Distribuição Linux arcade de código aberto.',
+    linksLabel: 'Links do projeto',
+    github: 'GitHub',
+    docs: 'Documentação',
+    releases: 'Releases',
+    issues: 'Issues',
+    disclaimer: 'Sem vínculo com o Ubuntu, o MAME ou os projetos de emuladores. As marcas pertencem aos seus donos.',
+  },
+};
+
+export default ptBR;
