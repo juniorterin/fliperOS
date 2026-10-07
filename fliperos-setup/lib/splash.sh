@@ -17,6 +17,7 @@ PLYMOUTH=${PLYMOUTH:-plymouth}
 PLYMOUTHD=${PLYMOUTHD:-plymouthd}
 UPDATE_ALTERNATIVES=${UPDATE_ALTERNATIVES:-update-alternatives}
 UPDATE_INITRAMFS=${UPDATE_INITRAMFS:-update-initramfs}
+STTY=${STTY:-stty}
 
 # splash_valid_name NOME: o nome da pasta vira o do tema no Plymouth.
 splash_valid_name() {
@@ -117,15 +118,27 @@ splash_set() {
 # splash_preview NOME mostra o tema por SPLASH_PREVIEW_SECONDS: o plymouthd
 # com plymouth.splash=NOME, que vale por cima do tema padrao.
 splash_preview() {
-  local name=$1
+  local name=$1 tty=${SPLASH_TTY:-/dev/tty1} saved i
   splash_stage "$name" || return 1
   # Um plymouthd ainda no ar (o do boot) seria o que apareceria.
   "$PLYMOUTH" --ping 2> /dev/null && return 1
+  # O plymouthd, ao sair, deixa o tty no modo canonico com eco; o sudo do
+  # menu le o tty1 cru e repassa as teclas ao Gum, que entao so as recebia
+  # depois do Enter (o menu travava). O modo de antes volta no fim.
+  saved=$("$STTY" -g < "$tty" 2> /dev/null)
   mkdir -p /run/fliperos
-  run_logged "$PLYMOUTHD" --mode=boot --tty="${SPLASH_TTY:-/dev/tty1}" --pid-file=/run/fliperos/plymouth-preview.pid \
-    --kernel-command-line="quiet splash plymouth.splash=$name" || return 1
-  run_logged "$PLYMOUTH" show-splash
-  sleep "$SPLASH_PREVIEW_SECONDS"
-  run_logged "$PLYMOUTH" quit
-  return 0
+  if run_logged "$PLYMOUTHD" --mode=boot --tty="$tty" --pid-file=/run/fliperos/plymouth-preview.pid \
+    --kernel-command-line="quiet splash plymouth.splash=$name"; then
+    run_logged "$PLYMOUTH" show-splash
+    sleep "$SPLASH_PREVIEW_SECONDS"
+    run_logged "$PLYMOUTH" quit
+    for ((i = 0; i < 50; i++)); do
+      "$PLYMOUTH" --ping 2> /dev/null || break
+      sleep 0.1
+    done
+  else
+    i=fail
+  fi
+  [[ -n $saved ]] && "$STTY" "$saved" < "$tty" 2> /dev/null
+  [[ $i != fail ]]
 }

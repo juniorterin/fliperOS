@@ -2019,6 +2019,26 @@ class SplashTests(Base):
         self.assertIn('--kernel-command-line=quiet splash plymouth.splash=WindozeXP', calls)
         self.assertLess(calls.index("plymouth show-splash"), calls.index("plymouth quit"))
         self.assertNotIn("update-alternatives", calls)
+
+    def test_preview_gives_the_tty_its_mode_back(self):
+        # O plymouthd sai deixando o tty1 canonico, e o menu (no pty do sudo)
+        # parava de receber as setas.
+        self.theme(self.home, "WindozeXP")
+        self.env.stub("stty", 'echo "stty $*" >> %s; [[ $1 == -g ]] && echo "raw:mode"; true' % self.calls)
+        self.env.out("splash_preview WindozeXP", dict(self.vars, SPLASH_TTY="/dev/null"))
+        calls = self.calls.read_text().splitlines()
+        self.assertEqual([c for c in calls if c.startswith("stty")], ["stty -g", "stty raw:mode"])
+        self.assertLess(calls.index("stty -g"), next(i for i, c in enumerate(calls) if c.startswith("plymouthd")))
+        self.assertGreater(calls.index("stty raw:mode"), calls.index("plymouth quit"))
+        # Mesmo se o plymouthd nao subir.
+        self.calls.unlink()
+        self.env.stub("plymouthd", 'echo "plymouthd $*" >> %s; false' % self.calls)
+        r = self.env.run("splash_preview WindozeXP || echo failed", dict(self.vars, SPLASH_TTY="/dev/null"))
+        self.assertIn("failed", r.stdout)
+        self.assertIn("stty raw:mode", self.calls.read_text())
+
+    def test_preview_refuses_with_the_boot_plymouthd_running(self):
+        self.theme(self.home, "WindozeXP")
         # Com o plymouthd do boot ainda no ar, nada de previa.
         self.env.stub("plymouth", 'echo "plymouth $*" >> %s' % self.calls)
         r = self.env.run("splash_preview WindozeXP || echo busy", self.vars)
