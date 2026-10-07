@@ -13,6 +13,8 @@ export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorteri
 
 export const FLIPEROS_VERSION = '0.7';
 
+export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? 'G-FTG8120HF8';
+
 // Canonical, hreflang, Open Graph e sitemap usam o domínio oficial;
 // NEXT_PUBLIC_SITE_URL, lido no build, troca o domínio (outro ambiente).
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fliperos.juniorter.in').replace(/\/+$/, '');
