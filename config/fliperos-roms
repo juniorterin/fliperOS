@@ -113,13 +113,23 @@ folder "$media/texto" "Game descriptions (.txt), one folder per system: texto/ar
 
 # ── ~/splashscreen ──────────────────────────────────────────────────
 # Os temas do Plymouth, um por pasta. Os da imagem entram se faltam (um
-# apagado volta); um mudado aqui fica como a pessoa deixou.
+# apagado volta) e acompanham as versoes novas da imagem enquanto ninguem
+# mexer neles: o .bundled guarda a soma da copia; um mudado aqui fica como a
+# pessoa deixou.
 splash=${FLIPEROS_SPLASH:-$HOME/splashscreen}
 splash_bundled=${FLIPEROS_SPLASH_BUNDLED:-/usr/share/fliperos/splashscreen}
 folder "$splash" "Boot splash themes (Plymouth), one folder per theme with its .plymouth file. Setup > Splash screen shows a preview and sets the one used at boot. To change a bundled theme, copy its folder with a new name: the bundled ones come back as they were. More themes: https://www.gnome-look.org/browse?cat=108&ord=latest"
+splash_sum() { (cd "$1" && find . -type f ! -name .bundled -exec cksum {} + | sort | cksum); }
 for theme in "$splash_bundled"/*/; do
   [[ -d $theme ]] || continue
-  [[ -e $splash/$(basename "$theme") ]] || cp -r "${theme%/}" "$splash/" 2> /dev/null
+  dest=$splash/$(basename "$theme")
+  if [[ -e $dest ]]; then
+    [[ -f $dest/.bundled ]] || continue
+    sum=$(splash_sum "$dest")
+    [[ $(< "$dest/.bundled") == "$sum" && $sum != "$(splash_sum "$theme")" ]] || continue
+    rm -rf "$dest"
+  fi
+  cp -r "${theme%/}" "$splash/" 2> /dev/null && splash_sum "$dest" > "$dest/.bundled"
 done
 
 # ── ~/config ────────────────────────────────────────────────────────

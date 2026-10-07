@@ -2053,9 +2053,16 @@ class SplashTests(Base):
         subprocess.run(["bash", str(ROOT / "config/fliperos-roms")], env=env, check=True, timeout=60)
         self.assertTrue((mine / "fliperos" / "fliperos.plymouth").is_file())
         self.assertTrue((mine / "_info.txt").is_file())
+        # Sem mexer, a copia acompanha a versao nova da imagem.
+        (self.bundled / "fliperos" / "theme.script").write_text("// new\n")
+        subprocess.run(["bash", str(ROOT / "config/fliperos-roms")], env=env, check=True, timeout=60)
+        self.assertEqual((mine / "fliperos" / "theme.script").read_text(), "// new\n")
+        # Mexida, fica como a pessoa deixou.
         (mine / "fliperos" / "logo.png").write_bytes(b"mine")
+        (self.bundled / "fliperos" / "theme.script").write_text("// newer\n")
         subprocess.run(["bash", str(ROOT / "config/fliperos-roms")], env=env, check=True, timeout=60)
         self.assertEqual((mine / "fliperos" / "logo.png").read_bytes(), b"mine")
+        self.assertEqual((mine / "fliperos" / "theme.script").read_text(), "// new\n")
 
     def test_in_the_setup_menu(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()

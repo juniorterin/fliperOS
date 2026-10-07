@@ -4205,6 +4205,11 @@ class SplashTests(unittest.TestCase):
         self.assertIn('== "$themes/fliperos/fliperos.plymouth" ]] || exit 0', script)
         self.assertIn("grep -q '^splash=' /etc/fliperos/fliperos.conf", script)
         self.assertIn('update-alternatives --set default.plymouth "$file"', script)
+        # A mesma soma do .bundled do fliperos-roms.
+        roms = (ROOT / 'config/fliperos-roms').read_text()
+        line = 'splash_sum() { (cd "$1" && find . -type f ! -name .bundled -exec cksum {} + | sort | cksum); }'
+        self.assertIn(line, script)
+        self.assertIn(line, roms)
 
     def test_splash_is_generated_for_the_boot_mode(self):
         geometry = MKISO.split('splash_mode_geometry()')[1].split('}')[0]
