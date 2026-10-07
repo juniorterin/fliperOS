@@ -2711,7 +2711,7 @@ class RomCleanerTests(Base):
         displays = (attract / "config" / "displays.cfg").read_text()
         self.assertEqual(displays.count("romlist"), 2)
         self.assertIn("Attrac-Man", displays)
-        self.assertIn("display\tAtomiswave\n\tlayout               AdvanceMenu\n", displays)
+        self.assertIn("display\tAtomiswave\n\tlayout               Basic\n", displays)
         self.assertFalse((attract / "attract.cfg").exists())
 
     def test_attract_displays_get_the_default_filters(self):

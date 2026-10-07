@@ -495,6 +495,16 @@ EOF
   install -Dm644 "$src/config/wallpaper.jpg" "$root/usr/share/fliperos/wallpaper.jpg"
   mkdir -p "$home/.config"
   cp -r "$src/config/lxde/." "$home/.config/"
+  # Layouts do Attract-Mode Plus (config/attractplus-layouts): os de
+  # ~/.attract/layouts valem antes dos de /usr/share/attractplus de mesmo nome.
+  mkdir -p "$home/.attract/layouts"
+  for layout in "$src"/config/attractplus-layouts/*/; do
+    layout=$(basename "$layout")
+    rm -rf "$home/.attract/layouts/$layout"
+    cp -r "$src/config/attractplus-layouts/$layout" "$home/.attract/layouts/$layout"
+    chown -R 1000:1000 "$home/.attract/layouts/$layout" 2> /dev/null || true
+  done
+  chown 1000:1000 "$home/.attract" "$home/.attract/layouts" 2> /dev/null || true
   # Janelas e menus do Openbox no tema Dracula (fliperos-dracula.sh): o
   # openbox-lxde le ~/.config/openbox/lxde-rc.xml, que nasce da copia do
   # padrao do sistema; so o nome do tema muda, e a janela do Screen

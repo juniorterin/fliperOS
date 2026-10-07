@@ -4192,6 +4192,23 @@ class WallpaperTests(unittest.TestCase):
         self.assertIn('*.jpg binary', (ROOT / '.gitattributes').read_text())
 
 
+class AttractLayoutTests(unittest.TestCase):
+    BASIC = ROOT / 'config/attractplus-layouts/Basic'
+
+    def test_basic_draws_at_the_screen_resolution(self):
+        # Em 640x480 fixos o Attract-Mode escalaria o texto para 320x240 e
+        # 640x240, e ele borraria.
+        nut = (self.BASIC / 'layout.nut').read_text()
+        self.assertNotIn('fe.layout.width=', nut.replace(' ', ''))
+        self.assertIn('local flw = fe.layout.width;', nut)
+        self.assertIn('lb.char_size = Y( 22 );', nut)
+        self.assertIn('fe.add_image( "bg.png", 0, 0, flw, flh );', nut)
+        self.assertEqual((self.BASIC / 'bg.png').read_bytes()[:8], b'\x89PNG\r\n\x1a\n')
+
+    def test_basic_is_installed_over_the_packaged_one(self):
+        self.assertIn('cp -r "$src/config/attractplus-layouts/$layout" "$home/.attract/layouts/$layout"', ROOTFS)
+
+
 class RetroArchConfigTests(unittest.TestCase):
     """config/retroarch.cfg e config de sistema: o fliperos-kms-run a passa
     com --appendconfig, por cima da do usuario."""
