@@ -23,6 +23,12 @@ const ptBR: Messages = {
     ],
     ogAlt: 'FliperOS: Arcade Linux. Feito para CRT. Ubuntu 24.04, kernel 15 kHz, Switchres, GroovyMAME, RetroArch.',
   },
+  cookies: {
+    label: 'Aviso de cookies',
+    text: 'Este site usa cookies do Google Analytics para contar as visitas.',
+    accept: 'Aceitar',
+    decline: 'Recusar',
+  },
   a11y: {
     skipToContent: 'Pular para o conteúdo',
     openMenu: 'Abrir menu',

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
 import { useI18n } from '@/i18n/I18nProvider';
+import { track } from '@/lib/analytics';
 import type { ScreenshotMap } from '@/lib/screenshots';
 
 export function Screenshots({ screenshots }: { screenshots: ScreenshotMap }) {
@@ -43,6 +44,10 @@ export function Screenshots({ screenshots }: { screenshots: ScreenshotMap }) {
   }, [step]);
 
   const shown = current !== null ? available[current] : null;
+
+  useEffect(() => {
+    if (shown) track('screenshot_view', { screenshot: shown.id });
+  }, [shown]);
   const shownSrc = shown ? screenshots[shown.id] : null;
 
   return (

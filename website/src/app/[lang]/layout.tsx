@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { notFound } from 'next/navigation';
 import { Analytics } from '@/components/Analytics';
+import { CookieNotice } from '@/components/CookieNotice';
 import { LOCALES, LOCALE_SEGMENT, OG_LOCALE, localeFromSegment, localePath, messages } from '@/i18n';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { AUTHOR, FLIPEROS_VERSION, LINKS, SITE_URL } from '@/lib/site';
@@ -126,8 +127,11 @@ export default async function LangLayout({ children, params }: LayoutProps<'/[la
         />
       </head>
       <body className="min-h-dvh overflow-x-hidden">
-        <I18nProvider locale={locale}>{children}</I18nProvider>
-        <Analytics />
+        <I18nProvider locale={locale}>
+          {children}
+          <CookieNotice />
+        </I18nProvider>
+        <Analytics locale={locale} />
       </body>
     </html>
   );

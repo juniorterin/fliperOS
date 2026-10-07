@@ -28,6 +28,7 @@ export function LanguageSwitch({ className = '' }: { className?: string }) {
             <a
               href={localePath(code)}
               hrefLang={code}
+              data-ga="language_switch"
               lang={code}
               aria-current={active ? 'page' : undefined}
               aria-label={`${t.a11y.switchTo} ${LOCALE_NAME[code]}`}

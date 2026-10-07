@@ -20,6 +20,12 @@ const enUS = {
     ],
     ogAlt: 'FliperOS: Arcade Linux. Built for CRT. Ubuntu 24.04, 15 kHz kernel, Switchres, GroovyMAME, RetroArch.',
   },
+  cookies: {
+    label: 'Cookie notice',
+    text: 'This site uses Google Analytics cookies to count visits.',
+    accept: 'Accept',
+    decline: 'Decline',
+  },
   a11y: {
     skipToContent: 'Skip to content',
     openMenu: 'Open menu',
