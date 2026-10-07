@@ -3162,7 +3162,8 @@ class FightcadeTests(unittest.TestCase):
                    FIGHTCADE_URL=(tmp / 'pkg.tar.gz').as_uri(), FLIPEROS_ROMS_SCRIPT=str(ROOT / 'config/fliperos-roms'),
                    FLIPEROS_CORE_INFO=str(tmp / 'nada'), FLIPEROS_FLYCAST_CFG=str(tmp / 'flycast-emu.cfg'),
                    FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'), XDG_RUNTIME_DIR=str(tmp),
-                   FLIPEROS_ESCQUIT=str(tmp / 'nada'))
+                   FLIPEROS_ESCQUIT=str(tmp / 'nada'), FLIPEROS_BUTTONS=str(ROOT / 'config/fliperos-buttons'),
+                   FLIPEROS_BUTTONS_MAP=str(tmp / 'nada'), FIGHTCADE_NATIVE='0', XDG_CACHE_HOME=str(tmp / 'cache'))
         env.pop('DISPLAY', None)
         env.update(extra)
         return env
@@ -3253,7 +3254,9 @@ class FightcadeTests(unittest.TestCase):
         for name in ('xrandr.log', 'xrandr.modes'):
             (tmp / name).unlink(missing_ok=True)
         fakes = {
-            'pgrep': 'n=$(cat "$FAKE/n")\necho $((n + 1)) > "$FAKE/n"\n'
+            # A vigia do FBNeo (a resolucao de cada jogo) ve tmp/native.procs.
+            'pgrep': 'if [[ $* == *"[f]cadefbneo"* ]]; then cat "$FAKE/native.procs" 2> /dev/null; exit; fi\n'
+                     'n=$(cat "$FAKE/n")\necho $((n + 1)) > "$FAKE/n"\n'
                      'sed -n "$((n + 1))p" "$FAKE/pgrep.checks" | tr "|" "\\n" | grep .\n',
             # Como o xrandr de verdade: a saida com imagem, o id do modo atual
             # e os modos acrescentados na lista.
@@ -3451,7 +3454,7 @@ class FightcadeTests(unittest.TestCase):
             # fim de linha do Windows fica.
             self.assertEqual(text(fbneo), '// The display mode to use for fullscreen\r\nnVidHorWidth 320\r\n'
                                           'nVidHorHeight 240\r\n\r\nnVidScrnAspectX 4\r\nnVidScrnAspectY 3\r\n'
-                                          'nVidVerWidth 1280\r\nbVidAutoSwitchFull 1\r\nnVidSelect 4\r\n')
+                                          'nVidVerWidth 320\r\nbVidAutoSwitchFull 1\r\nnVidSelect 4\r\n')
             self.assertEqual(text(fba), 'nVidWidth 320\r\nnVidHeight 240\r\nnVidScrnAspectX 4\r\nnVidScrnAspectY 3\r\n')
             # Flycast: tela cheia e 200% de estiramento em 640x240 (pixels 8:3).
             self.assertEqual(text(flycast), '[config]\nrend.Resolution = 480\nrend.ScreenStretching = 200\n\n'
@@ -3477,8 +3480,97 @@ class FightcadeTests(unittest.TestCase):
             self.session(tmp, [self.CLIENT], frequency='31k')
             fbneo = (tmp / 'fc/emulator/fbneo/config/fcadefbneo.ini').read_bytes().decode()
             self.assertIn('nVidHorWidth 640\r\nnVidHorHeight 480\r\n\r\nnVidScrnAspectX 16\r\n', fbneo)
+            self.assertIn('nVidVerWidth 640\r\n', fbneo)
             self.assertIn('bVidAutoSwitchFull 1\r\n', fbneo)
             self.assertIn('rend.ScreenStretching = 100\n', (tmp / 'fc/emulator/flycast/emu.cfg').read_text())
+
+    FBNEO_INI = ('nIniVersion 0x029744\r\nnVidHorWidth 1280\r\nnVidHorHeight 720\r\nnVidVerWidth 1280\r\n'
+                 'nVidVerHeight 720\r\nbVidArcaderesHor 0\r\nbVidVSync 0\r\nbVidScanlines 0\r\nbVidScanBilinear 1\r\n'
+                 'bVidDX9Scanlines 1\r\nbVidDX9Bilinear 1\r\nbVidBilinear 1\r\nnVidDX9HardFX 2\r\n'
+                 'bVidMotionBlur 1\r\nbSaveInputs 1\r\nnPlayerDefaultControls[0] 0\r\nszPlayerDefaultIni[0] \r\n'
+                 'nPlayerDefaultControls[1] 1\r\nszPlayerDefaultIni[1] \r\nnPlayerDefaultControls[2] 2\r\n'
+                 'szPlayerDefaultIni[2] \r\n')
+
+    def test_fbneo_pure_image_and_the_setup_buttons(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            config = tmp / 'fc/emulator/fbneo/config'
+            (config / 'fcadefbneo.default.ini').write_bytes(self.FBNEO_INI.encode())
+            (tmp / 'buttons.map').write_text('1 up 0 -a1 Pad\n1 b1 0 b0 Pad\n2 b1 1 b0 Pad\n')
+            self.session(tmp, [self.CLIENT], FLIPEROS_BUTTONS_MAP=str(tmp / 'buttons.map'))
+            ini = (config / 'fcadefbneo.ini').read_bytes().decode()
+            # Sem filtros nem efeitos, com o VSync; o tamanho dos verticais e o da tabela.
+            for line in ('bVidScanlines 0', 'bVidScanBilinear 0', 'bVidDX9Scanlines 0', 'bVidDX9Bilinear 0',
+                         'bVidBilinear 0', 'nVidDX9HardFX 0', 'bVidMotionBlur 0', 'bVidVSync 1',
+                         'nVidVerWidth 320', 'nVidVerHeight 240', 'bSaveInputs 0',
+                         # Os jogadores do mapa no preset; o 3 fica como estava.
+                         'nPlayerDefaultControls[0] 15', 'szPlayerDefaultIni[0] config/presets/fliperos.ini',
+                         'nPlayerDefaultControls[1] 15', 'szPlayerDefaultIni[1] config/presets/fliperos.ini',
+                         'nPlayerDefaultControls[2] 2', 'szPlayerDefaultIni[2] '):
+                self.assertIn('\r\n' + line + '\r\n', ini, line)
+            preset = (config / 'presets/fliperos.ini').read_bytes().decode()
+            self.assertIn('\r\nversion 0x029744\r\n', preset)
+            self.assertIn('input  "p2 fire 1"  switch 0x4180\r\n', preset)
+            # O que a pessoa muda depois fica; um mapa novo chega na abertura seguinte.
+            (config / 'fcadefbneo.ini').write_bytes(ini.replace('bVidScanlines 0', 'bVidScanlines 1').encode())
+            (tmp / 'buttons.map').write_text('1 up 0 -a1 Pad\n1 b1 0 b5 Pad\n')
+            self.session(tmp, [self.CLIENT], FLIPEROS_BUTTONS_MAP=str(tmp / 'buttons.map'))
+            self.assertIn('\r\nbVidScanlines 1\r\n', (config / 'fcadefbneo.ini').read_bytes().decode())
+            self.assertIn('input  "p1 fire 1"  switch 0x4085\r\n',
+                          (config / 'presets/fliperos.ini').read_bytes().decode())
+
+    def test_fbneo_runs_each_game_in_its_own_mode(self):
+        # No 15 kHz o FBNeo para logo que abre, ganha o modo do jogo (do
+        # GroovyMAME) e o bVidArcaderesHor, e segue; a tela vai para esse modo.
+        mame = ('case $1 in\n'
+                '  sf2ce) echo \'<display tag="screen" type="raster" rotate="0" width="384" height="224" '
+                'refresh="59.637405" />\' ;;\n'
+                '  1942) echo \'<display tag="screen" type="raster" rotate="270" width="256" height="224" '
+                'refresh="60.000000" />\' ;;\n'
+                'esac\necho "$1" >> "$FAKE/mame.log"\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            config = tmp / 'fc/emulator/fbneo/config'
+            (config / 'fcadefbneo.default.ini').write_bytes(self.FBNEO_INI.encode())
+            (tmp / 'bin').mkdir()
+            (tmp / 'bin/groovymame').write_text('#!/bin/bash\n' + mame)
+            (tmp / 'bin/groovymame').chmod(0o755)
+            for game, args, mode, arcaderes in (
+                    ('sf2ce', 'sf2ce', 'fliperos-384x224@59.637', '1'),
+                    # Online, de novo: o modo vem do cache.
+                    ('sf2ce', 'quark:served,sf2ce,abc,7000,0,1', 'fliperos-384x224@59.637', '1'),
+                    # Vertical, e um que o GroovyMAME nao conhece: o modo da tabela.
+                    ('1942', '1942', 'fliperos-320x240@60', '0'),
+                    ('md_sonic', 'quark:direct,md_sonic,7000', 'fliperos-320x240@60', '0')):
+                emulator = subprocess.Popen(['sleep', '60'])
+                try:
+                    line = '%d /usr/lib/wine/wine /opt/fc/emulator/fbneo/fcadefbneo.exe %s' % (emulator.pid, args)
+                    (tmp / 'native.procs').write_text(line + '\n')
+                    match = self.CLIENT + '|' + line
+                    run = self.session(tmp, [self.CLIENT, self.CLIENT, match, match, self.CLIENT],
+                                       FIGHTCADE_NATIVE='1')
+                    self.assertEqual(run.returncode, 0, run.stderr)
+                    self.assertIn('--output VGA-1 --mode %s' % mode, self.xrandr_log(tmp), game)
+                    self.assertIn('\r\nbVidArcaderesHor %s\r\n' % arcaderes,
+                                  (config / 'fcadefbneo.ini').read_bytes().decode(), game)
+                    # Solto de novo.
+                    state = Path('/proc/%d/stat' % emulator.pid).read_text().split(') ')[1][0]
+                    self.assertNotEqual(state, 'T', game)
+                finally:
+                    emulator.kill()
+                    emulator.wait()
+            self.assertEqual((tmp / 'mame.log').read_text().split(), ['sf2ce', '1942', 'md_sonic'])
+            self.assertEqual((tmp / 'cache/fliperos/fightcade-modes').read_text(),
+                             'sf2ce 384x224@59.637\n1942 -\nmd_sonic -\n')
+            self.assertFalse((tmp / 'fliperos-fightcade.native').exists())
+            # Noutro monitor, nada disso.
+            (tmp / 'native.procs').write_text('4194300 /usr/lib/wine/wine fcadefbneo.exe sf2ce\n')
+            self.session(tmp, [self.CLIENT, self.CLIENT], FIGHTCADE_NATIVE='1', frequency='31k')
+            self.assertEqual((tmp / 'mame.log').read_text().split(), ['sf2ce', '1942', 'md_sonic'])
 
     def test_dojo_gets_the_flycast_settings(self):
         # O Flycast Dojo com as opcoes do Flycast do sistema: as do
