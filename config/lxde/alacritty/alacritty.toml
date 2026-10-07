@@ -17,6 +17,13 @@ blinking = "Never"
 [window]
 padding = { x = 2, y = 2 }
 
+# Ctrl+V cola, como no navegador (Ctrl+Shift+V tambem). O Ctrl+C continua
+# interrompendo o programa; copiar e Ctrl+Shift+C.
+[keyboard]
+bindings = [
+  { key = "V", mods = "Control", action = "Paste" },
+]
+
 [colors.primary]
 background = "#282a36"
 foreground = "#f8f8f2"

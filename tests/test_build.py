@@ -770,6 +770,11 @@ class DesktopTerminalTests(unittest.TestCase):
         # ISO e virou o x-terminal-emulator. O Steam vem pelo Setup > Extras.
         self.assertIn('STEAM_PACKAGES="steam-installer xterm- xterm:i386-"', EXTRAS)
 
+    def test_ctrl_v_pastes_in_the_terminal(self):
+        conf = (ROOT / 'config/lxde/alacritty/alacritty.toml').read_text()
+        self.assertIn('[keyboard]', conf)
+        self.assertIn('{ key = "V", mods = "Control", action = "Paste" }', conf)
+
     def test_dracula_palette_of_the_setup(self):
         import tomllib
         conf = tomllib.loads((ROOT / 'config/lxde/alacritty/alacritty.toml').read_text())
