@@ -8,6 +8,7 @@ import { Emulators } from '@/sections/Emulators';
 import { Features } from '@/sections/Features';
 import { Footer } from '@/sections/Footer';
 import { Hero } from '@/sections/Hero';
+import { MultiMonitor } from '@/sections/MultiMonitor';
 import { OpenSource } from '@/sections/OpenSource';
 import { Screenshots } from '@/sections/Screenshots';
 import { Setup } from '@/sections/Setup';
@@ -28,6 +29,7 @@ export default async function Home() {
         <Screenshots screenshots={screenshots} />
         <Emulators />
         <Crt />
+        <MultiMonitor />
         <Setup />
         <OpenSource stats={stats} />
         <Support />

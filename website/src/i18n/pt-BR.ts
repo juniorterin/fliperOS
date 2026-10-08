@@ -4,13 +4,16 @@ const ptBR: Messages = {
   meta: {
     title: 'FliperOS — Arcade Linux feito para CRT',
     description:
-      'FliperOS é o Linux Ubuntu 24.04 para gabinetes arcade com monitor CRT: kernel 15 kHz, Switchres, GroovyMAME, RetroArch, light gun GunCon 2 e frontends prontos para jogar.',
+      'FliperOS é o Linux Ubuntu 24.04 para gabinetes arcade com monitor CRT: kernel 15 kHz, Switchres, GroovyMAME, RetroArch, dois ou mais CRTs para jogos de várias telas, light gun GunCon 2 e frontends prontos para jogar.',
     keywords: [
       'FliperOS',
       'Linux arcade',
       'fliperama',
       'CRT',
       '15 kHz',
+      'multimonitor',
+      'vários monitores',
+      'Darius',
       'Switchres',
       'GroovyMAME',
       'MAME',
@@ -46,6 +49,7 @@ const ptBR: Messages = {
     screenshots: 'Screenshots',
     emulators: 'Emuladores',
     crt: 'CRT',
+    multiMonitor: 'Multimonitor',
     setup: 'Setup',
     github: 'GitHub',
     viewOnGithub: 'Ver no GitHub',
@@ -65,7 +69,7 @@ const ptBR: Messages = {
   },
   badges: {
     label: 'Destaques técnicos',
-    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'GunCon 2', 'Open Source'],
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'Multimonitor', 'GunCon 2', 'Open Source'],
   },
   features: {
     kicker: 'Recursos',
@@ -101,13 +105,19 @@ const ptBR: Messages = {
         id: 'setup',
         title: 'FliperOS Setup',
         text: 'Um menu próprio, legível em 640x480 entrelaçado e operado por teclado ou controle, para configurar o sistema no gabinete.',
-        points: ['Vídeo', 'Geometria', 'Áudio', 'Rede', 'Controles', 'Scraper', 'Latência', 'ROMs'],
+        points: ['Vídeo', 'Geometria', 'Multimonitor', 'Áudio', 'Rede', 'Controles', 'Scraper', 'Latência', 'ROMs'],
       },
       {
         id: 'network',
         title: 'Aberto pela rede',
         text: 'As pastas roms, bios, media e config são compartilhadas via Samba: copie jogos de qualquer PC para \\\\fliperos\\roms. O SSH vem ligado desde o primeiro boot, então você pode entregar o gabinete a um assistente de IA (Claude Code, Cursor, Codex) e deixar que ele configure o sistema inteiro do jeito que você quiser.',
         points: ['Samba', 'SSH', 'roms', 'bios', 'media', 'config'],
+      },
+      {
+        id: 'multimonitor',
+        title: 'Dois ou três monitores',
+        text: 'Ligue dois CRTs de arcade nas saídas analógicas de uma placa de vídeo, ou mais com uma segunda placa de vídeo ou um conversor ativo (ainda em teste). Jogos feitos para várias telas, como Darius, Punch-Out!! e Ferrari F355 Challenge, abrem cada tela no seu próprio tubo, no seu próprio modo de 15 kHz. O resto fica no monitor 1.',
+        points: ['2+ CRTs', 'GroovyMAME', 'Flycast', 'Darius', 'Punch-Out!!', 'F355 Challenge'],
       },
       {
         id: 'lightgun',
@@ -142,9 +152,9 @@ const ptBR: Messages = {
       'Emuladores que abrem no modo de vídeo certo para o monitor escolhido, e frontends com temas pensados para 240 linhas.',
     emulatorsTitle: 'Emuladores',
     items: [
-      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade', note: 'Release oficial, Switchres por jogo' },
+      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade', note: 'Release oficial, Switchres por jogo, jogos de 2 e 3 telas' },
       { id: 'retroarch', name: 'RetroArch', systems: 'NES, SNES, Mega Drive, GBA, PS1, MAME 2010 (MAME 3D: arcade baseado no PlayStation)', note: 'KMS, CRT SwitchRes, 6 cores inclusos' },
-      { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressivo em 15 kHz' },
+      { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressivo em 15 kHz, F355 Challenge em 3 monitores' },
       { id: 'pcsx2', name: 'PCSX2', systems: 'PlayStation 2', note: 'AppImage oficial' },
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', note: 'Compilado da versão estável' },
       { id: 'supermodel', name: 'Supermodel', systems: 'Sega Model 3', note: '640x240 a 57,524 Hz em 15 kHz' },
@@ -189,6 +199,24 @@ const ptBR: Messages = {
       { id: 'geometry', title: 'Geometria na grade', text: 'Centralize e dimensione a imagem pelo Setup; vale para o GroovyMAME e o RetroArch juntos.' },
     ],
   },
+  multiMonitor: {
+    kicker: 'Multimonitor',
+    title: 'Um jogo, dois ou três tubos.',
+    intro:
+      'Alguns jogos de arcade foram feitos para mais de um monitor: Darius e The Ninja Warriors se espalham por três telas, Punch-Out!! empilha duas. O FliperOS controla dois CRTs de arcade nas saídas analógicas de uma placa de vídeo, mais um terceiro numa segunda placa de vídeo ou por um conversor ativo (ainda em teste), e quando um jogo tem mais de uma tela, cada tela vai para o seu próprio tubo.',
+    screen: 'Tela',
+    rowLabel: 'Darius: três telas lado a lado',
+    stackLabel: 'Punch-Out!!: duas telas empilhadas',
+    points: [
+      { id: 'setup', title: 'Configurado no gabinete', text: 'Setup > Video Setup > Multiple Monitors escolhe a saída de cada CRT extra, na mesma placa ou numa segunda, a ordem das telas (da esquerda para a direita ou de cima para baixo) e apaga cada tubo para você saber qual é qual.' },
+      { id: 'groovymame', title: 'GroovyMAME', text: 'Todo sistema do MAME com duas ou mais telas abre uma janela por monitor, e o Switchres põe o modo nativo do jogo em cada tubo.' },
+      { id: 'flycast', title: 'Flycast', text: 'Os jogos de várias placas NAOMI rodam uma placa por monitor em três CRTs: Ferrari F355 Challenge, Airline Pilots e Sega Strike Fighter.' },
+      { id: 'toggle', title: 'Automático, com uma chave', text: 'O lançador sabe quais jogos têm várias telas. Uma chave desliga o modo, e os jogos de uma tela e os frontends ficam sempre no monitor 1.' },
+    ],
+    gamesLabel: 'Jogos que usam',
+    games: ['Darius', 'Darius II', 'The Ninja Warriors', 'Punch-Out!!', 'Super Punch-Out!!', 'Ferrari F355 Challenge', 'Airline Pilots', 'Sega Strike Fighter'],
+    cta: 'Leia o guia de multimonitor',
+  },
   setup: {
     kicker: 'FliperOS Setup',
     title: 'Configure tudo no próprio gabinete.',
@@ -197,7 +225,7 @@ const ptBR: Messages = {
     terminalTitle: 'fliperos-setup',
     menuTitle: 'Setup (video, audio, network...)',
     menu: [
-      { id: 'video', label: 'Video Setup', text: 'Monitor, teste de saída, geometria e modo de boot' },
+      { id: 'video', label: 'Video Setup', text: 'Monitor, teste de saída, geometria, modo de boot e monitores extras' },
       { id: 'audio', label: 'Audio Setup', text: 'Placa, volume, latência de áudio do MAME, sons do menu' },
       { id: 'network', label: 'Network Setup', text: 'Wi-Fi por lista, ou rede oculta' },
       { id: 'frontend', label: 'Frontend', text: 'Lançador padrão, instalado sob demanda' },

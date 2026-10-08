@@ -12,5 +12,8 @@ shows a placeholder with the expected path. Rebuild the site after adding images
 | `video.webp` | Video Setup: monitor, output test, geometry |
 | `desktop.webp` | LXDE desktop with the Dracula theme |
 
+`multi/` holds the multi-monitor examples: MAME snaps of Darius and Punch-Out!!
+cut into one image per screen (4x nearest-neighbour, lossless WebP).
+
 4:3 captures work best (the tiles crop to fill). Prefer WebP or AVIF around
 1280 px wide; the site serves resized AVIF/WebP versions on its own.

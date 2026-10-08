@@ -2,12 +2,15 @@ const enUS = {
   meta: {
     title: 'FliperOS — Arcade Linux built for CRT',
     description:
-      'FliperOS is Ubuntu 24.04 Linux for arcade cabinets with CRT monitors: 15 kHz kernel, Switchres, GroovyMAME, RetroArch, GunCon 2 light gun and frontends ready to play.',
+      'FliperOS is Ubuntu 24.04 Linux for arcade cabinets with CRT monitors: 15 kHz kernel, Switchres, GroovyMAME, RetroArch, two or more CRTs for multi-screen games, GunCon 2 light gun and frontends ready to play.',
     keywords: [
       'FliperOS',
       'arcade Linux',
       'CRT',
       '15 kHz',
+      'multi-monitor',
+      'multiple monitors',
+      'Darius',
       'Switchres',
       'GroovyMAME',
       'MAME',
@@ -42,6 +45,7 @@ const enUS = {
     screenshots: 'Screenshots',
     emulators: 'Emulators',
     crt: 'CRT',
+    multiMonitor: 'Multi-monitor',
     setup: 'Setup',
     github: 'GitHub',
     viewOnGithub: 'View on GitHub',
@@ -61,7 +65,7 @@ const enUS = {
   },
   badges: {
     label: 'Technical highlights',
-    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'GunCon 2', 'Open Source'],
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'Multi-monitor', 'GunCon 2', 'Open Source'],
   },
   features: {
     kicker: 'Features',
@@ -97,13 +101,19 @@ const enUS = {
         id: 'setup',
         title: 'FliperOS Setup',
         text: 'A menu of its own, readable at 640x480 interlaced and driven by keyboard or controller, to configure the system on the cabinet.',
-        points: ['Video', 'Geometry', 'Audio', 'Network', 'Controls', 'Scraper', 'Latency', 'ROMs'],
+        points: ['Video', 'Geometry', 'Multi-monitor', 'Audio', 'Network', 'Controls', 'Scraper', 'Latency', 'ROMs'],
       },
       {
         id: 'network',
         title: 'Open over the network',
         text: 'The roms, bios, media and config folders are shared with Samba: copy games from any PC to \\\\fliperos\\roms. SSH is on from the first boot, so you can hand the cabinet to an AI assistant (Claude Code, Cursor, Codex) and have it configure the whole system the way you want.',
         points: ['Samba', 'SSH', 'roms', 'bios', 'media', 'config'],
+      },
+      {
+        id: 'multimonitor',
+        title: 'Two or three monitors',
+        text: 'Plug two arcade CRTs into the analog outputs of one video card, or more with a second video card or an active converter (still in testing). Games built for several screens, like Darius, Punch-Out!! and Ferrari F355 Challenge, open each screen on its own tube, in its own 15 kHz mode. Everything else stays on monitor 1.',
+        points: ['2+ CRTs', 'GroovyMAME', 'Flycast', 'Darius', 'Punch-Out!!', 'F355 Challenge'],
       },
       {
         id: 'lightgun',
@@ -138,9 +148,9 @@ const enUS = {
       'Emulators that open in the right video mode for the monitor you chose, and frontends with themes designed for 240 lines.',
     emulatorsTitle: 'Emulators',
     items: [
-      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade', note: 'Official release, Switchres per game' },
+      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade', note: 'Official release, Switchres per game, 2 and 3 screen games' },
       { id: 'retroarch', name: 'RetroArch', systems: 'NES, SNES, Mega Drive, GBA, PS1, MAME 2010 (MAME 3D: PlayStation-based arcade)', note: 'KMS, CRT SwitchRes, 6 cores built in' },
-      { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressive at 15 kHz' },
+      { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressive at 15 kHz, F355 Challenge on 3 monitors' },
       { id: 'pcsx2', name: 'PCSX2', systems: 'PlayStation 2', note: 'Official AppImage' },
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', note: 'Built from the stable version' },
       { id: 'supermodel', name: 'Supermodel', systems: 'Sega Model 3', note: '640x240 at 57.524 Hz on 15 kHz' },
@@ -185,6 +195,24 @@ const enUS = {
       { id: 'geometry', title: 'Geometry on the grid', text: 'Center and size the picture from the Setup, saved for GroovyMAME and RetroArch together.' },
     ],
   },
+  multiMonitor: {
+    kicker: 'Multi-monitor',
+    title: 'One game, two or three tubes.',
+    intro:
+      'Some arcade games were built for more than one monitor: Darius and The Ninja Warriors spread across three screens, Punch-Out!! stacks two. FliperOS drives two arcade CRTs from the analog outputs of one video card, plus a third on a second video card or through an active converter (still in testing), and when a game has more than one screen, each screen goes to its own tube.',
+    screen: 'Screen',
+    rowLabel: 'Darius: three screens side by side',
+    stackLabel: 'Punch-Out!!: two screens stacked',
+    points: [
+      { id: 'setup', title: 'Set up on the cabinet', text: 'Setup > Video Setup > Multiple Monitors picks the output of each extra CRT, on the same card or a second one, the screen order (left to right or top to bottom) and blinks each tube so you know which is which.' },
+      { id: 'groovymame', title: 'GroovyMAME', text: 'Every MAME system with two or more screens opens one window per monitor, and Switchres sets each game’s native mode on every tube.' },
+      { id: 'flycast', title: 'Flycast', text: 'NAOMI multi-board games run one board per monitor across three CRTs: Ferrari F355 Challenge, Airline Pilots and Sega Strike Fighter.' },
+      { id: 'toggle', title: 'Automatic, with a switch', text: 'The launcher knows which games have several screens. One switch turns the mode off, and single-screen games and the frontends always stay on monitor 1.' },
+    ],
+    gamesLabel: 'Games that use it',
+    games: ['Darius', 'Darius II', 'The Ninja Warriors', 'Punch-Out!!', 'Super Punch-Out!!', 'Ferrari F355 Challenge', 'Airline Pilots', 'Sega Strike Fighter'],
+    cta: 'Read the multi-monitor guide',
+  },
   setup: {
     kicker: 'FliperOS Setup',
     title: 'Configure everything from the cabinet.',
@@ -193,7 +221,7 @@ const enUS = {
     terminalTitle: 'fliperos-setup',
     menuTitle: 'Setup (video, audio, network...)',
     menu: [
-      { id: 'video', label: 'Video Setup', text: 'Monitor, output test, geometry and boot mode' },
+      { id: 'video', label: 'Video Setup', text: 'Monitor, output test, geometry, boot mode and extra monitors' },
       { id: 'audio', label: 'Audio Setup', text: 'Card, volume, MAME audio latency, menu sounds' },
       { id: 'network', label: 'Network Setup', text: 'Wi-Fi from a list, or a hidden network' },
       { id: 'frontend', label: 'Frontend', text: 'Default launcher, installed on demand' },
