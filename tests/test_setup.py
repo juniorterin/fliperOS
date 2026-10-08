@@ -1363,10 +1363,10 @@ class TopbarTests(Base):
 
     STATUS = "fliperos (192.168.1.111 10.0.0.5) - 42% used on /"
 
-    def topbar(self, cols, title="FliperOS", status=STATUS):
+    def topbar(self, cols, title="FliperOS", status=STATUS, version=""):
         # ui_topbar escreve em /dev/tty: um terminal falso (script).
-        cmd = ("UI_COLS=%d UI_TITLE='%s' UI_STATUS='%s'; ui_topbar; echo \"rows=$UI_TOPBAR_ROWS\""
-               % (cols, title, status))
+        cmd = ("UI_COLS=%d UI_TITLE='%s' UI_STATUS='%s' UI_VERSION='%s'; ui_topbar; echo \"rows=$UI_TOPBAR_ROWS\""
+               % (cols, title, status, version))
         script = self.env.dir / "topbar.sh"
         script.write_text(cmd)
         out = self.env.out('script -qec "bash -c \'%s\'" /dev/null' %
@@ -1394,6 +1394,18 @@ class TopbarTests(Base):
         self.assertEqual(lines[0], " Scraping retroarch/snes9x")
         self.assertRegex(lines[1], r"^ +192\.168\.1\.111 - 42%$")
         self.assertIn("rows=3", lines)
+
+    def test_version_beside_the_title(self):
+        lines = self.topbar(80, version="0.8.3")
+        self.assertTrue(lines[0].startswith(" FliperOS 0.8.3 "), lines)
+        self.assertTrue(lines[0].endswith(self.STATUS), lines)
+        self.assertRegex(self.topbar(40, version="0.8.3")[0], r"^ FliperOS 0\.8\.3 +192\.168\.1\.111 - 42%$")
+        # Titulo de outra tela (o scraper): sem a versao.
+        self.assertEqual(self.topbar(40, title="Scraping retroarch/snes9x", version="0.8.3")[0],
+                         " Scraping retroarch/snes9x")
+        # O fliperos-setup passa a versao dele para o topo.
+        entry = (SETUP / "fliperos-setup").read_text()
+        self.assertLess(entry.index("FLIPEROS_SETUP_VERSION="), entry.index('source "$SETUP_DIR/lib/ui.sh"'))
 
 
 class ScraperTests(Base):

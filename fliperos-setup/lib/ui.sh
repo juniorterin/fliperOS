@@ -11,6 +11,8 @@
 # 512x384). Nada anima nem pisca; a tela so e redesenhada quando muda.
 
 UI_TITLE=${UI_TITLE:-FliperOS}
+# A versao ao lado do titulo. Vem do fliperos-setup, que cada update troca.
+UI_VERSION=${UI_VERSION-${FLIPEROS_SETUP_VERSION:-}}
 UI_STATUS=""
 UI_ROWS=30
 UI_COLS=80
@@ -123,14 +125,16 @@ ui_status_short() {
   printf '%s%s\n' "${ips:-$UI_STATUS}" "${used:+ - $used}"
 }
 
-# ui_topbar desenha o topo: titulo a esquerda, status (IP e uso do disco) a
-# direita e a linha. Sem espaco para o status inteiro ao lado do titulo vai
-# o curto; sem espaco nem para ele (320x240: 40 colunas), o status ganha
-# uma linha propria embaixo do titulo. UI_TOPBAR_ROWS e quantas linhas o
-# topo ocupou.
+# ui_topbar desenha o topo: titulo (com a versao, so no "FliperOS") a
+# esquerda, status (IP e uso do disco) a direita e a linha. Sem espaco para
+# o status inteiro ao lado do titulo vai o curto; sem espaco nem para ele
+# (320x240: 40 colunas), o status ganha uma linha propria embaixo do
+# titulo. UI_TOPBAR_ROWS e quantas linhas o topo ocupou.
 UI_TOPBAR_ROWS=2
 ui_topbar() {
-  local left=" $UI_TITLE" right="" line2="" space
+  local title=" $UI_TITLE" version="" left right="" line2="" space
+  [[ $UI_TITLE == FliperOS && -n $UI_VERSION ]] && version=" $UI_VERSION"
+  left=$title$version
   UI_TOPBAR_ROWS=2
   if [[ -n $UI_STATUS ]]; then
     right="$UI_STATUS "
@@ -144,7 +148,8 @@ ui_topbar() {
   space=$((UI_COLS - ${#left} - ${#right}))
   ((space < 0)) && space=0
   {
-    ui_c "$C_PURPLE" "$left"
+    ui_c "$C_PURPLE" "$title"
+    [[ -n $version ]] && ui_c "$C_COMMENT" "$version"
     printf '%*s' "$space" ""
     ui_c "$C_CYAN" "$right"
     printf '\n'
