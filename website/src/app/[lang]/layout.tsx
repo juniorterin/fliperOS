@@ -4,7 +4,8 @@ import { Analytics } from '@/components/Analytics';
 import { CookieNotice } from '@/components/CookieNotice';
 import { LOCALES, LOCALE_SEGMENT, OG_LOCALE, localeFromSegment, localePath, messages } from '@/i18n';
 import { I18nProvider } from '@/i18n/I18nProvider';
-import { AUTHOR, FLIPEROS_VERSION, LINKS, SITE_URL } from '@/lib/site';
+import { getRepoStats } from '@/lib/github';
+import { AUTHOR, FLIPEROS_VERSION, LINKS, SITE_URL, latestIsoUrl } from '@/lib/site';
 import '../globals.css';
 
 // Só /en e /pt existem; qualquer outro segmento cai no 404 global.
@@ -62,7 +63,7 @@ export const viewport: Viewport = {
   colorScheme: 'dark',
 };
 
-function jsonLd(locale: (typeof LOCALES)[number]) {
+function jsonLd(locale: (typeof LOCALES)[number], downloadUrl: string) {
   const { meta } = messages[locale];
   const url = `${SITE_URL}${localePath(locale)}`;
   const author = { '@type': 'Person', name: AUTHOR.name, url: AUTHOR.url, sameAs: [AUTHOR.url, LINKS.instagram] };
@@ -100,7 +101,7 @@ function jsonLd(locale: (typeof LOCALES)[number]) {
         keywords: meta.keywords.join(', '),
         url,
         image: `${url}/opengraph-image/card`,
-        downloadUrl: LINKS.latestRelease,
+        downloadUrl,
         releaseNotes: LINKS.releases,
         codeRepository: LINKS.github,
         isAccessibleForFree: true,
@@ -115,6 +116,8 @@ function jsonLd(locale: (typeof LOCALES)[number]) {
 export default async function LangLayout({ children, params }: LayoutProps<'/[lang]'>) {
   const locale = localeFromSegment((await params).lang);
   if (!locale) notFound();
+  const stats = await getRepoStats();
+  const downloadUrl = stats?.release?.iso ?? latestIsoUrl();
   return (
     <html lang={locale}>
       <head>
@@ -123,7 +126,7 @@ export default async function LangLayout({ children, params }: LayoutProps<'/[la
         </noscript>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd(locale)).replace(/</g, '\\u003c') }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd(locale, downloadUrl)).replace(/</g, '\\u003c') }}
         />
       </head>
       <body className="min-h-dvh overflow-x-hidden">

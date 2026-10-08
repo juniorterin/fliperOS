@@ -21,6 +21,12 @@ export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorteri
 
 export const FLIPEROS_VERSION = '0.8.3';
 
+// A ISO se chama fliperos-VERSAO.iso. Este endereco baixa o arquivo direto
+// no release mais recente; se o nome mudar, a API (github.ts) manda o certo.
+export function latestIsoUrl(version: string = FLIPEROS_VERSION): string {
+  return `${REPO_URL}/releases/latest/download/fliperos-${version}.iso`;
+}
+
 // Contato da assessoria: mostrado como texto, sem mailto, para não virar alvo
 // fácil de spam.
 export const CONTACT_EMAIL = { user: 'juniorterin', domain: 'gmail', tld: 'com' } as const;

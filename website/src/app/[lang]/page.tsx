@@ -1,7 +1,7 @@
 import { Header } from '@/components/Header';
 import { getRepoStats } from '@/lib/github';
 import { getScreenshots } from '@/lib/screenshots';
-import { HERO_SCREENSHOT } from '@/lib/site';
+import { HERO_SCREENSHOT, latestIsoUrl } from '@/lib/site';
 import { BadgeBar } from '@/sections/BadgeBar';
 import { Crt } from '@/sections/Crt';
 import { Emulators } from '@/sections/Emulators';
@@ -22,7 +22,7 @@ export default async function Home() {
     <>
       <Header />
       <main id="main">
-        <Hero screenshot={screenshots[HERO_SCREENSHOT]} />
+        <Hero screenshot={screenshots[HERO_SCREENSHOT]} downloadUrl={stats?.release?.iso ?? latestIsoUrl()} />
         <BadgeBar />
         <Features />
         <Screenshots screenshots={screenshots} />

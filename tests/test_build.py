@@ -4835,10 +4835,14 @@ class DocsTests(unittest.TestCase):
             text = (ROOT / 'website/src' / page).read_text()
             self.assertIn('readmeUrl(locale)', text, page)
             self.assertNotIn('LINKS.github', text, page)
-        # O CTA do hero baixa sempre o release mais recente, nao o README.
+        # O CTA do hero baixa a ISO do release mais recente, nao a pagina do release.
         hero = (ROOT / 'website/src/sections/Hero.tsx').read_text()
-        self.assertIn('LINKS.latestRelease', hero)
-        self.assertIn("latestRelease: `${REPO_URL}/releases/latest`", site)
+        page = (ROOT / 'website/src/app/[lang]/page.tsx').read_text()
+        github = (ROOT / 'website/src/lib/github.ts').read_text()
+        self.assertIn('downloadUrl', hero)
+        self.assertIn('stats?.release?.iso ?? latestIsoUrl()', page)
+        self.assertIn("name.endsWith('.iso')", github)
+        self.assertIn('releases/latest/download/fliperos-', site)
 
     def test_site_support_section_has_no_secrets_and_no_mailto(self):
         src = ROOT / 'website/src'

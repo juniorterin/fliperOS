@@ -3,9 +3,9 @@
 import { ArrowDown, Download } from 'lucide-react';
 import { CrtMonitor } from '@/components/CrtMonitor';
 import { useI18n } from '@/i18n/I18nProvider';
-import { HERO_SCREENSHOT, LINKS } from '@/lib/site';
+import { HERO_SCREENSHOT } from '@/lib/site';
 
-export function Hero({ screenshot }: { screenshot: string | null }) {
+export function Hero({ screenshot, downloadUrl }: { screenshot: string | null; downloadUrl: string }) {
   const { t } = useI18n();
   const h = t.hero;
   return (
@@ -27,7 +27,7 @@ export function Hero({ screenshot }: { screenshot: string | null }) {
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-pretty text-muted sm:text-xl">{h.description}</p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <a
-              href={LINKS.latestRelease}
+              href={downloadUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2.5 rounded-xl bg-purple px-6 py-3.5 font-semibold text-bg-deeper shadow-[0_10px_40px_-10px] shadow-purple transition hover:-translate-y-0.5 hover:bg-[#c9a6fb]"
