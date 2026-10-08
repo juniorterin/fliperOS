@@ -2313,7 +2313,7 @@ class UpdateTests(unittest.TestCase):
         # Sem o updates/index na imagem do build, a ISO sai com patch-level 0.
         self.assertIn('COPY updates/ ./updates/', (ROOT / 'Dockerfile.fliperos').read_text())
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()
-        self.assertIn('elif update_pending; then\n      sudo /usr/local/bin/fliperos-setup --update-check', tty1)
+        self.assertIn('elif update_pending; then\n      splash_off\n      sudo /usr/local/bin/fliperos-setup --update-check', tty1)
         self.assertIn('nm-online -q -t 5', tty1)
         # O Wi-Fi conecta depois do "startup complete" do NetworkManager.
         self.assertIn('net_expected || return 1\n      nm-online -q -t "${FLIPEROS_UPDATE_NET_WAIT:-30}"', tty1)
