@@ -149,6 +149,7 @@ Tem um romset completo do MAME? *Setup > Cleaner > MAME ROM Cleaner* deixa só o
 - **Sem imagem no boot**: espere os 30 segundos (o menu não aparece em 15 kHz). Num tubo só de 15 kHz, ligue um LCD temporariamente para escolher outra opção de boot.
 - **O instalador não lista o disco**: modo SATA em AHCI na BIOS. *My drive is not listed (details)* mostra o que o Linux enxerga.
 - **A imagem está fora do centro ou grande demais**: *Setup > Video Setup > Geometry*.
+- **Dois ou três monitores** (Darius, Punch-Out!!, F355 Challenge): *Setup > Video Setup > Multiple Monitors*, veja [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors).
 - **Um sistema não aparece no frontend**: a pasta precisa de pelo menos um arquivo de jogo (o `_info.txt` não conta); depois escolha o frontend de novo em *Setup > Frontend*.
 - **Um jogo não abre**: ligue o *Setup > Debug mode* para ver as mensagens do emulador na tela; sem ele, elas ficam em `/opt/fliperos/logs`. Confira as BIOS em `bios`.
 - **Sem som**: *Setup > Audio Setup* escolhe a placa e o volume e toca um teste.
@@ -173,7 +174,7 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 
 As páginas da wiki estão em inglês.
 
-**Para usar:** [Install](https://github.com/juniorterin/fliperOS/wiki/Install) · [Installed system](https://github.com/juniorterin/fliperOS/wiki/Installed-system) · [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends) · [Emulators](https://github.com/juniorterin/fliperOS/wiki/Emulators) · [Fightcade 2](https://github.com/juniorterin/fliperOS/wiki/Fightcade-2) · [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs) · [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper) · [Adding games](https://github.com/juniorterin/fliperOS/wiki/Adding-games) · [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls) · [Desktop and theme](https://github.com/juniorterin/fliperOS/wiki/Desktop) · [Latency](https://github.com/juniorterin/fliperOS/wiki/Latency)
+**Para usar:** [Install](https://github.com/juniorterin/fliperOS/wiki/Install) · [Installed system](https://github.com/juniorterin/fliperOS/wiki/Installed-system) · [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends) · [Emulators](https://github.com/juniorterin/fliperOS/wiki/Emulators) · [Fightcade 2](https://github.com/juniorterin/fliperOS/wiki/Fightcade-2) · [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs) · [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper) · [Adding games](https://github.com/juniorterin/fliperOS/wiki/Adding-games) · [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls) · [Desktop and theme](https://github.com/juniorterin/fliperOS/wiki/Desktop) · [Latency](https://github.com/juniorterin/fliperOS/wiki/Latency) · [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors)
 
 **Para mexer nele:** [15 kHz kernel](https://github.com/juniorterin/fliperOS/wiki/Kernel-15-kHz) · [Build and tests](https://github.com/juniorterin/fliperOS/wiki/Build-and-tests) · [Architecture](https://github.com/juniorterin/fliperOS/wiki/Architecture) · [Sources](https://github.com/juniorterin/fliperOS/wiki/Sources)
 

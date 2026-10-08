@@ -61,6 +61,7 @@ Long operations (install, repair, update, scraper) don't know about the screen: 
 | `config/mame-ui.ini` | Dracula colors for GroovyMAME's UI |
 | `config/applications/`, `config/icons/`, `config/fliperos-launch` | Emulators in the LXDE menu and leaving the desktop to open them |
 | `config/fliperos-x11-run`, `config/fliperos-emulator-modes.conf` | Opens a program in an Xorg of its own in the requested mode (`--mode 640x240@60`) or in the per-emulator table's mode |
+| `fliperos-setup/lib/multimonitor.sh`, `config/fliperos-mame-screens`, `config/fliperos-multiscreen` | [Multiple monitors](Multiple-Monitors.md): the extra monitors in the Setup, the `numscreens` of GroovyMAME's multi-screen games, and Flycast's NAOMI multi-board games across 3 monitors |
 | `config/fliperos-model2`, `config/fliperos-sm2emu`, `config/sm2-emu-patches`, `config/fliperos-ini-set` | Model 2 is SM2-Emu (clone, apply the FliperOS patches, build with LTO, game list; the binary is not in the image); per-section ini tweaks (PCSX2) |
 | `config/fliperos-fightcade`, `config/openbox-fightcade.xml` | Fightcade 2: downloads it from its website (`fetch`) and opens it in an Xorg of its own; its window shortcuts |
 | `config/fliperos-groovymame` | The `groovymame` command: the release in `/usr/local/libexec` with the system `mame.ini` |

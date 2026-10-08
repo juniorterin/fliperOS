@@ -13,6 +13,7 @@ Using it
 - [Controls](Controls.md)
 - [Desktop and theme](Desktop.md)
 - [Latency](Latency.md)
+- [Multiple monitors](Multiple-Monitors.md)
 
 Hacking on it
 
