@@ -17,6 +17,10 @@ logs-noble/
 # Estado local do Claude Code (config/lock de sessao — nao compartilhar)
 .claude/
 
+# Rascunhos das sessoes do agente (scripts do gabinete, capturas, copias)
+.shots/
+.ps-text.py
+
 # Lixo comum de Windows
 Thumbs.db
 desktop.ini
