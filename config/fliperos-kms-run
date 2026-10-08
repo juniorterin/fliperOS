@@ -37,6 +37,12 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   [[ -f $buttons ]] && appendconfig+="|$buttons"
   set -- "$1" --appendconfig "$appendconfig" "${@:2}"
 fi
+# Monitores extras (Setup > Video Setup > Multiple Monitors): no KMS so o
+# principal fica ligado. RetroArch, SDL e Qt abrem na primeira saida
+# conectada, que pode ser um extra; o X os liga de novo.
+if grep -q '^screens=.*,' "${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}" 2> /dev/null; then
+  sudo -n /usr/local/bin/fliperos-setup --outputs main > /dev/null 2>&1 || true
+fi
 # SDL_VIDEODRIVER vale para quem usa SDL2 (Flycast); o RetroArch foi
 # compilado so com KMS. Audio SDL (GroovyMAME, Flycast) direto no ALSA: sem
 # servidor de som, tentar PipeWire e PulseAudio antes so atrasa a abertura.

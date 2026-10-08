@@ -1147,6 +1147,108 @@ class GroovyMameTests(unittest.TestCase):
         self.assertEqual(self.run_wrapper('-inipath', '/x', 'mvsc')[0], ['-inipath', '/x', 'mvsc'])
         self.assertIn('/usr/local/libexec/groovymame', (ROOT / 'config/fliperos-groovymame').read_text())
 
+    def run_multi(self, *args, xrandr, session=False):
+        # Dois monitores: o .ini de varias telas e cada janela na saida certa.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'ini').mkdir()
+            calls = tmp / 'calls'
+            for name, body in (('groovymame', 'printf "%s\\n" "$@"'),
+                               ('gen', 'echo "gen $*" >> %s; mkdir -p %s' % (calls, tmp / 'ini' / 'screens')),
+                               ('xrandr', '[ "$1" = --query ] && cat %s || echo "xrandr $*" >> %s'
+                                % (tmp / 'xrandr.txt', calls))):
+                (tmp / name).write_text('#!/bin/sh\n%s\n' % body)
+                (tmp / name).chmod(0o755)
+            (tmp / 'xrandr.txt').write_text(xrandr)
+            conf = tmp / 'fliperos.conf'
+            conf.write_text('connector=VGA-1\nscreens=DVI-I-1,VGA-1\n')
+            env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(tmp / 'groovymame'),
+                       FLIPEROS_MAME_INI_DIR=str(tmp / 'ini'), FLIPEROS_CONF=str(conf),
+                       FLIPEROS_MAME_SCREENS=str(tmp / 'gen'), DISPLAY=':0',
+                       PATH='%s:%s' % (tmp, os.environ['PATH']))
+            env.pop('FLIPEROS_X11_RUN_SESSION', None)
+            if session:
+                env['FLIPEROS_X11_RUN_SESSION'] = '1'
+            out = subprocess.run(['bash', str(ROOT / 'config/fliperos-groovymame'), *args], env=env,
+                                 capture_output=True, text=True, timeout=60, check=True).stdout
+            log = calls.read_text().splitlines() if calls.exists() else []
+            return out.split('\n')[:-1], log, str(tmp / 'ini')
+
+    def test_wrapper_multiple_monitors(self):
+        # O Switchres acha "screenN" na ordem do XRandR e o SDL conta a
+        # primaria primeiro: a primeira saida vira primaria, e no desktop a
+        # anterior volta ao fechar.
+        xrandr = ('Screen 0: minimum 320 x 200, current 1280 x 480, maximum 16384 x 16384\n'
+                  'DVI-I-1 connected 640x480+0+0 (normal left inverted right x axis y axis) 0mm x 0mm\n'
+                  '   640x480i      59.94*+\n'
+                  'HDMI-1 disconnected (normal left inverted right x axis y axis)\n'
+                  'VGA-1 connected primary 640x480+640+0 (normal left inverted right x axis y axis) 0mm x 0mm\n'
+                  '   640x480i      59.94*+\n')
+        args, log, ini = self.run_multi('darius', xrandr=xrandr)
+        self.assertEqual(args, ['-inipath', '%s;%s/screens' % (ini, ini), 'darius',
+                                '-screen0', 'screen0', '-screen1', 'screen1'])
+        self.assertEqual(log, ['gen 2', 'xrandr --output DVI-I-1 --primary', 'xrandr --output VGA-1 --primary'])
+        # No X do fliperos-x11-run (so dele) a primaria fica.
+        args, log, _ = self.run_multi('darius', xrandr=xrandr, session=True)
+        self.assertEqual(log, ['gen 2', 'xrandr --output DVI-I-1 --primary'])
+        # Principal ja e a primeira saida: nada muda.
+        args, log, _ = self.run_multi('darius', xrandr=xrandr.replace('primary ', '').replace(
+            'DVI-I-1 connected', 'DVI-I-1 connected primary'))
+        self.assertEqual(log, ['gen 2'])
+        self.assertEqual(args[-4:], ['-screen0', 'screen0', '-screen1', 'screen1'])
+        # Comando sem tela: nada de monitores.
+        args, log, ini = self.run_multi('-listxml', 'darius', xrandr=xrandr)
+        self.assertEqual(args, ['-inipath', ini, '-listxml', 'darius'])
+        self.assertEqual(log, [])
+
+    def test_mame_screens_generator(self):
+        xml = ('<mame>\n<machine name="darius" sourcefile="taito/darius.cpp">\n'
+               '<display tag="lscreen" type="raster"/>\n<display tag="mscreen" type="raster"/>\n'
+               '<display tag="rscreen" type="raster"/>\n</machine>\n'
+               '<machine name="punchout">\n<display tag="top"/>\n<display tag="bottom"/>\n</machine>\n'
+               '<machine name="mvsc">\n<display tag="screen"/>\n</machine>\n'
+               '<machine name="dev" isdevice="yes">\n<display/>\n<display/>\n</machine>\n</mame>\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fake = tmp / 'groovymame'
+            fake.write_text('#!/bin/sh\necho run >> %s\ncat %s\n' % (tmp / 'runs', tmp / 'xml'))
+            fake.chmod(0o755)
+            (tmp / 'xml').write_text(xml)
+            out = tmp / 'screens'
+            env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake))
+
+            def gen(n):
+                return subprocess.run(['bash', str(ROOT / 'config/fliperos-mame-screens'), str(n), str(out)],
+                                      env=env, capture_output=True, text=True, timeout=60, check=True).stdout
+
+            self.assertEqual(gen(2).strip(), '2')
+            self.assertEqual(sorted(p.name for p in out.glob('*.ini')), ['darius.ini', 'punchout.ini'])
+            self.assertRegex((out / 'darius.ini').read_text(), r'(?m)^numscreens +2$')
+            gen(3)
+            self.assertRegex((out / 'darius.ini').read_text(), r'(?m)^numscreens +3$')
+            self.assertRegex((out / 'punchout.ini').read_text(), r'(?m)^numscreens +2$')
+            # O XML so foi lido uma vez; o mesmo numero de monitores sai na hora.
+            self.assertEqual(gen(3), '')
+            self.assertEqual((tmp / 'runs').read_text(), 'run\n')
+            bad = subprocess.run(['bash', str(ROOT / 'config/fliperos-mame-screens'), '1', str(out)],
+                                 env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(bad.returncode, 2)
+        self.assertIn('fliperos-mame-screens" "$root/opt/fliperos/bin/fliperos-mame-screens', ROOTFS)
+
+    def test_extra_monitors_follow_the_session(self):
+        # KMS: so o principal (o RetroArch e os frontends abrem na primeira
+        # saida conectada); X: todos de novo.
+        kms = (ROOT / 'config/fliperos-kms-run').read_text()
+        self.assertIn('fliperos-setup --outputs main', kms)
+        self.assertLess(kms.index('--outputs main'), kms.index('exec "$@"'))
+        x11 = (ROOT / 'config/fliperos-x11-run').read_text()
+        self.assertIn('fliperos-setup --outputs all', x11)
+        self.assertLess(x11.index('--outputs all'), x11.index('exec xinit'))
+        self.assertIn('export FLIPEROS_X11_RUN_SESSION=1', x11)
+        session = (ROOT / 'config/fliperos-session').read_text()
+        loop = session.split('while true; do')[1]
+        self.assertLess(loop.index('--outputs all'), loop.index('xinit "$binary"'))
+
     def test_full_mame_ini_like_groovyarcade(self):
         # O -createconfig do proprio GroovyMAME (todas as opcoes da versao) com
         # as do config/mame.ini por cima, na linha de cada uma.

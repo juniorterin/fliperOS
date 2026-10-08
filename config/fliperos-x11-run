@@ -182,6 +182,13 @@ case $name in
     ;;
 esac
 
+# Monitores extras (Setup > Video Setup > Multiple Monitors): o
+# fliperos-kms-run deixa so o principal ligado; no X voltam todos, e o
+# comando groovymame sabe que este X e so dele.
+if grep -q '^screens=.*,' "$CONF" 2> /dev/null; then
+  sudo -n /usr/local/bin/fliperos-setup --outputs all > /dev/null 2>&1 || true
+fi
+export FLIPEROS_X11_RUN_SESSION=1
 # SDL no X: chamado de dentro do fliperos-kms-run (o GroovyMAME, que se abre
 # no X sozinho), herdaria o kmsdrm de la.
 export SDL_VIDEODRIVER=x11

@@ -12,9 +12,14 @@
 #  - -inipath /etc/fliperos/mame: o mame.ini do sistema, que o Setup grava.
 #    O padrao do release e ".;ini", relativo a pasta de onde se abre. Um
 #    -inipath na linha de comando vale mais.
+#  - Com mais de um monitor (Setup > Video Setup > Multiple Monitors), a
+#    pasta screens no inipath (o numscreens dos jogos de 2 ou 3 telas,
+#    config/fliperos-mame-screens) e cada janela na saida da sua tela.
 real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
 inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/mame}
 x11run=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
+conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+screens_gen=${FLIPEROS_MAME_SCREENS:-/opt/fliperos/bin/fliperos-mame-screens}
 
 # opens_video ARGUMENTOS: o comando abre a tela (um jogo ou a lista do MAME)?
 opens_video() {
@@ -52,8 +57,48 @@ fi
 # do throttle e o vsync e o do OpenGL (waitvsync). Aberto ja com o jogo
 # (frontends, linha de comando) o vblank funciona e fica tudo como esta.
 (($# == 0)) && set -- -noautosync -waitvsync -nointerlace
+
+# As saidas na ordem das telas dos jogos (screens= do fliperos.conf).
+inipath=$inidir
+restore_primary=""
+IFS=, read -r -a outputs <<< "$(sed -n 's/^screens=//p' "$conf" 2> /dev/null | tail -1)"
+if ((${#outputs[@]} > 1)) && opens_video "$@"; then
+  # Feitos pelo Setup; refeitos aqui se o GroovyMAME ou o numero de monitores
+  # mudou (sem nada a fazer, sai na hora).
+  "$screens_gen" "${#outputs[@]}" > /dev/null || true
+  [[ -d $inidir/screens ]] && inipath="$inidir;$inidir/screens"
+  if [[ -n ${DISPLAY:-} ]] && command -v xrandr > /dev/null; then
+    # As saidas ligadas do X, na ordem do XRandR. O Switchres acha a tela
+    # "screenN" do GroovyMAME por essa ordem; o SDL numera as telas com a
+    # primaria primeiro. Com a primeira saida como primaria as duas contas
+    # batem; no X do fliperos-x11-run ela fica assim, no desktop volta ao
+    # fechar.
+    names=()
+    primary=""
+    while read -r name is_primary; do
+      names+=("$name")
+      ((is_primary)) && primary=$name
+    done < <(xrandr --query 2> /dev/null | awk '$2 == "connected" {
+      for (i = 3; i <= NF; i++) if ($i ~ /^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$/) { print $1, ($3 == "primary"); break } }')
+    if [[ -n $primary && $primary != "${names[0]}" ]] && xrandr --output "${names[0]}" --primary 2> /dev/null; then
+      [[ -n ${FLIPEROS_X11_RUN_SESSION:-} ]] || restore_primary=$primary
+    fi
+    export SDL_VIDEO_X11_XRANDR=1
+    for i in "${!outputs[@]}"; do
+      for j in "${!names[@]}"; do
+        [[ ${names[j]} == "${outputs[i]}" ]] && set -- "$@" "-screen$i" "screen$j"
+      done
+    done
+  fi
+fi
 case " $* " in
   *" -inipath "* | *" --inipath "*) ;;
-  *) set -- -inipath "$inidir" "$@" ;;
+  *) set -- -inipath "$inipath" "$@" ;;
 esac
+if [[ -n $restore_primary ]]; then
+  "$real" "$@"
+  rc=$?
+  xrandr --output "$restore_primary" --primary 2> /dev/null
+  exit "$rc"
+fi
 exec "$real" "$@"

@@ -123,6 +123,9 @@ if [[ -f $gm ]] && [[ $(head -c 4 "$gm" | od -An -c | tr -d ' ') == '177ELF' ]];
   mv -f "$gm" "$root/usr/local/libexec/groovymame"
 fi
 install -Dm755 "$src/config/fliperos-groovymame" "$gm"
+# Jogos de 2 ou 3 telas com mais de um monitor: o numscreens de cada um, do
+# XML do GroovyMAME (Setup > Video Setup > Multiple Monitors).
+install -Dm755 "$src/config/fliperos-mame-screens" "$root/opt/fliperos/bin/fliperos-mame-screens"
 # A opcao GroovyMAME 4:3 saiu do Video Setup: o gerador, os .ini por jogo e
 # a chave de uma instalacao anterior vao embora.
 rm -rf "$root/opt/fliperos/bin/fliperos-mame-aspect" "$root/etc/fliperos/mame/aspect"

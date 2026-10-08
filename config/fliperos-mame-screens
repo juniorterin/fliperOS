@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Jogos de 2 ou 3 telas no GroovyMAME com mais de um monitor (Setup > Video
+# Setup > Multiple Monitors): um .ini por sistema de varias telas com o
+# numscreens, que o comando groovymame poe no inipath depois da pasta
+# principal (um .ini do usuario la vale mais).
+#
+#   fliperos-mame-screens MONITORES [PASTA]   (padrao: /etc/fliperos/mame/screens)
+#
+# numscreens e o menor entre as telas do jogo e os monitores: o Darius (3
+# telas) com 2 monitores abre nas 2 primeiras. Os sistemas de varias telas
+# saem do XML do proprio GroovyMAME (-listxml, cerca de um minuto) e ficam em
+# PASTA/.machines; o XML so e lido de novo quando o binario muda. Com a pasta
+# ja feita para este binario e este numero de monitores, sai na hora.
+set -euo pipefail
+monitors=${1:-}
+out=${2:-/etc/fliperos/mame/screens}
+bin=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
+[[ $monitors =~ ^[0-9]+$ ]] && ((monitors >= 2)) || {
+  echo "Usage: fliperos-mame-screens MONITORS [DIR] (MONITORS: 2 or more)" >&2
+  exit 2
+}
+[[ -x $bin ]] || { echo "GroovyMAME nao instalado: $bin" >&2; exit 1; }
+binary=$(stat -c '%s %Y' "$bin")
+[[ -f $out/.stamp && $(< "$out/.stamp") == "$binary $monitors" ]] && exit 0
+mkdir -p "$out"
+if [[ ! -f $out/.machines || ! -f $out/.binary || $(< "$out/.binary") != "$binary" ]]; then
+  echo "fliperos-mame-screens: lendo os sistemas do GroovyMAME (-listxml)..." >&2
+  # Cada <display> da maquina e uma tela; dispositivos (som, CPU...) nao
+  # abrem como jogo.
+  "$bin" -listxml 2> /dev/null | awk '
+    function flush() { if (name != "" && n > 1) print name, n }
+    /<machine / {
+      flush()
+      name = ""; n = 0
+      if ($0 !~ /isdevice="yes"/ && match($0, /name="[^"]*"/)) name = substr($0, RSTART + 6, RLENGTH - 7)
+      if (name !~ /^[a-z0-9_]+$/) name = ""
+    }
+    /<display / { n++ }
+    END { flush() }' > "$out/.machines.new"
+  [[ -s $out/.machines.new ]] || { rm -f "$out/.machines.new"; echo "Nenhum jogo de varias telas no XML do GroovyMAME" >&2; exit 1; }
+  mv -f "$out/.machines.new" "$out/.machines"
+  printf '%s\n' "$binary" > "$out/.binary"
+fi
+find "$out" -maxdepth 1 -name '*.ini' -delete
+awk -v dir="$out" -v m="$monitors" '{
+    k = ($2 < m) ? $2 : m
+    f = dir "/" $1 ".ini"
+    printf "# fliperos-mame-screens: %d telas, %d monitores.\nnumscreens                %d\n", $2, m, k > f
+    close(f)
+    n++
+  }
+  END { print n + 0 }' "$out/.machines"
+printf '%s %s\n' "$binary" "$monitors" > "$out/.stamp"
+chown -R 1000:1000 "$out" 2> /dev/null || true

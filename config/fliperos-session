@@ -116,6 +116,10 @@ case $backend in
       xlog=/opt/fliperos/logs/desktop.log
     fi
     while true; do
+      # Os monitores extras, que um programa em KMS pode ter desligado.
+      if grep -q '^screens=.*,' /etc/fliperos/fliperos.conf 2> /dev/null; then
+        sudo -n /usr/local/bin/fliperos-setup --outputs all > /dev/null 2>&1 || true
+      fi
       started=$SECONDS
       xinit "$binary" -- :0 -nolisten tcp "vt$vt" -keeptty >> "$xlog" 2>&1
       rc=$?
