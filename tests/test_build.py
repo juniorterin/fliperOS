@@ -762,7 +762,7 @@ class DesktopLogoutTests(unittest.TestCase):
         entry = (ROOT / 'config/applications/lxde-logout.desktop').read_text()
         self.assertIn('\nExec=%s\n' % logout, entry)
         self.assertIn('id=lxde-logout.desktop', (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text())
-        self.assertRegex(ROOTFS, r' fliperos-logout[ \w-]*; do')
+        self.assertRegex(ROOTFS, r' fliperos-logout[ \w\\\n-]*; do')
 
     def test_logout_menu(self):
         # Fora do terminal ele se reabre no Alacritty em tela cheia; dentro,
@@ -3025,7 +3025,7 @@ class EscQuitTests(unittest.TestCase):
             self.assertEqual(target2.wait(timeout=5), -15)
 
     def test_installed_and_wired_to_the_frontends(self):
-        self.assertRegex(ROOTFS, r' fliperos-escquit[ \w-]*; do')
+        self.assertRegex(ROOTFS, r' fliperos-escquit[ \w\\\n-]*; do')
         session = (ROOT / 'config/fliperos-session').read_text()
         self.assertIn('attractplus | emulationstation | retrofe | pegasus | custom-*)', session)
         self.assertIn('fliperos-escquit" "$pid"', session)
@@ -3172,7 +3172,7 @@ class PanningTests(unittest.TestCase):
         self.assertEqual(self.run_once([tall], rotation='left'), [])
 
     def test_started_with_the_desktop(self):
-        self.assertRegex(ROOTFS, r' fliperos-panning[ \w-]*; do')
+        self.assertRegex(ROOTFS, r' fliperos-panning[ \w\\\n-]*; do')
         lxde = (ROOT / 'config/fliperos-lxde').read_text()
         self.assertLess(lxde.index('fliperos-panning'), lxde.index('exec startlxde'))
 
@@ -3757,7 +3757,8 @@ class FightcadeTests(unittest.TestCase):
                              'fightcade           512x448@60      640x480@60\n'
                              'fightcade-fbneo     320x240@60      640x480@60\n'
                              'fightcade-snes9x    256x224@60.0988 640x480@60\n'
-                             'fightcade-flycast   640x240@60      640x480@60\n')
+                             'fightcade-flycast   640x240@60      640x480@60\n'
+                             'sm2-emu             640x240@57.524  496x384@57.524\n')
             # O SNES9x de fabrica antigo (320x240) passa ao modo do console; um mudado fica.
             for old, new in (('320x240@60      640x480@60', '256x224@60.0988 640x480@60'),
                              ('320x240@60      320x240@60', '320x240@60      320x240@60')):
