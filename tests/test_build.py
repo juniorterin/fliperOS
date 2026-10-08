@@ -2410,12 +2410,19 @@ class DownloaderTests(unittest.TestCase):
                             'rateDownload': 2048, 'eta': 90})
                     out = {'torrents': found}
                 elif method == 'torrent-set':
+                    # Na ordem do Transmission 4: files-unwanted, files-wanted e so
+                    # depois seedRatioMode. Rodando e "completo" sem o modo
+                    # ilimitado, para pelo limite 0 da sessao.
                     for h in a['ids']:
-                        for key, flag in (('files-wanted', True), ('files-unwanted', False)):
+                        t = torrents[h]
+                        for key, flag in (('files-unwanted', False), ('files-wanted', True)):
                             for i in a.get(key, []):
-                                torrents[h]['files'][i]['wanted'] = flag
+                                t['files'][i]['wanted'] = flag
+                            if (t['status'] == 4 and t.get('ratio') != 2
+                                    and all(f['done'] == f['length'] for f in t['files'] if f['wanted'])):
+                                t.update(status=0, finished=True)
                         if 'seedRatioMode' in a:
-                            torrents[h]['ratio'] = a['seedRatioMode']
+                            t['ratio'] = a['seedRatioMode']
                 elif method == 'torrent-start':
                     # Como o Transmission com o ratio-limit 0 da sessao: o que
                     # ja terminou uma vez para de novo ("Seed ratio reached").
@@ -2511,6 +2518,16 @@ class DownloaderTests(unittest.TestCase):
         self.assertEqual(sorted(wanted[self.ROMS]), ['kinst.zip', 'mslug.zip', 'neogeo.zip'])
         self.assertEqual(wanted[self.CHDS], ['kinst.chd'])
         self.assertTrue(all(t['status'] == 4 for t in self.torrents.values()))
+        # O modo ilimitado chega antes de qualquer arquivo sair da lista, numa
+        # chamada so dele: senao o Transmission para o torrent ("Seed ratio reached").
+        unlimited = set()
+        for method, a in self.calls:
+            if method == 'torrent-set':
+                if 'seedRatioMode' in a:
+                    self.assertNotIn('files-unwanted', a)
+                    unlimited.update(a['ids'])
+                if 'files-unwanted' in a:
+                    self.assertTrue(set(a['ids']) <= unlimited)
         status = dict(line.split('=', 1) for line in self.dl('status').stdout.splitlines())
         self.assertEqual((status['state'], status['pct'], status['roms_name']), ('downloading', '0', 'MAME 0.289 ROMs'))
         self.assertEqual((status['roms_folder'], status['roms_sets']), ('MAME 0.289 ROMs', '4'))

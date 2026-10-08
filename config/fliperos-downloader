@@ -329,6 +329,10 @@ def fetch_metadata(rpc, kind, magnet, progress, timeout):
     if not added:
         raise OSError('Transmission did not take the magnet link')
     hash_ = added['hashString']
+    # O modo vai sozinho e antes de tudo: num mesmo torrent-set o Transmission
+    # 4 aplica files-unwanted antes de seedRatioMode, e com tudo desmarcado o
+    # torrent rodando "termina" e para pelo limite 0 da sessao.
+    rpc.call('torrent-set', ids=[hash_], seedRatioMode=UNLIMITED)
     if 'torrent-duplicate' in got:
         rpc.call('torrent-start', ids=[hash_])
     end = time.monotonic() + timeout
@@ -336,8 +340,8 @@ def fetch_metadata(rpc, kind, magnet, progress, timeout):
         t = rpc.torrent(hash_, ['name', 'files', 'metadataPercentComplete', 'peersConnected',
                                 'error', 'errorString'])
         if t and t.get('files'):
-            rpc.call('torrent-set', ids=[hash_], seedRatioMode=UNLIMITED,
-                     **{'files-unwanted': list(range(len(t['files'])))})
+            rpc.call('torrent-set', ids=[hash_], seedRatioMode=UNLIMITED)
+            rpc.call('torrent-set', ids=[hash_], **{'files-unwanted': list(range(len(t['files'])))})
             rpc.call('torrent-stop', ids=[hash_])
             return hash_, t
         if time.monotonic() > end:
@@ -347,6 +351,18 @@ def fetch_metadata(rpc, kind, magnet, progress, timeout):
         say(progress, '@step %d Asking the peers for the file list (%d connected)'
             % (pct, (t or {}).get('peersConnected') or 0))
         time.sleep(0.5)
+
+
+def start_running(rpc, hash_, tries=3, settle=2.0):
+    """torrent-start e confere: o Transmission ainda pode parar o torrent logo
+    depois (limite da sessao, script de fim). Parado com o que falta, de novo."""
+    for _ in range(tries):
+        rpc.call('torrent-start', ids=[hash_])
+        time.sleep(settle)
+        t = rpc.torrent(hash_, ['status', 'leftUntilDone'])
+        if t is None or t['status'] != 0 or not t['leftUntilDone']:
+            return
+    raise OSError('Transmission keeps pausing the download')
 
 
 # ?? Comandos ??????????????????????????????????????????????????????
@@ -445,14 +461,16 @@ def cmd_start(args):
                 if t is not None:
                     chosen = set(wanted)
                     unwanted = [i for i in range(len(meta['files'])) if i not in chosen]
-                    settings = {'seedRatioMode': UNLIMITED}
+                    # Uma chamada por ajuste, nesta ordem: o modo, depois o que
+                    # baixa e so entao o que nao baixa, para o torrent nunca
+                    # ficar "completo" no meio (ver fetch_metadata).
+                    rpc.call('torrent-set', ids=[meta['hash']], seedRatioMode=UNLIMITED)
+                    if wanted:
+                        rpc.call('torrent-set', ids=[meta['hash']], **{'files-wanted': wanted})
                     if unwanted:
-                        settings['files-unwanted'] = unwanted
+                        rpc.call('torrent-set', ids=[meta['hash']], **{'files-unwanted': unwanted})
                     if wanted:
-                        settings['files-wanted'] = wanted
-                    rpc.call('torrent-set', ids=[meta['hash']], **settings)
-                    if wanted:
-                        rpc.call('torrent-start', ids=[meta['hash']])
+                        start_running(rpc, meta['hash'])
                     else:
                         rpc.remove(meta['hash'], delete=True)
                 if not wanted and read_state(kind + '.installed') is None:

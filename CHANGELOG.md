@@ -12,6 +12,7 @@ Fightcade 2 on the tube as it should be: every online match in the game's native
 - **Esc closes the frontend** and returns to the FliperOS menu, in Attract-Mode Plus, ES-DE, RetroFE, Pegasus and the Fightcade lobby (only when no game is open; inside a game, Esc stays with the game)
 - LXDE desktop: a window that doesn't fit the 640x480 screen, even maximized, makes the desktop scroll (move the mouse to the edge), so its buttons can be reached
 - Boot splash: the title of the default theme no longer gets stuck on "AliperOS"
+- Downloader: Start no longer leaves the download paused. Transmission saw the torrent with no files chosen yet as finished and paused it at the seed ratio limit
 
 **Package changes:**
 
