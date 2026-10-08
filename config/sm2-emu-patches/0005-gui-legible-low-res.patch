@@ -1,0 +1,44 @@
+diff --git a/src/osd/gui.cpp b/src/osd/gui.cpp
+index 473327e..70f68ad 100644
+--- a/src/osd/gui.cpp
++++ b/src/osd/gui.cpp
+@@ -144,11 +144,17 @@ void Gui::apply_scale()
+     // Scale content with the window. Measured against the base 992x768 on both
+     // axes with the smaller ratio winning, so a wide-but-short window does not
+     // get oversized text; clamped so it stays legible small and sane huge.
++    //
++    // The floor is the font's native size in output pixels: the default font
++    // is drawn for 13 px and turns to mush below that, and on short modes such
++    // as a 640x240 15 kHz CRT the height ratio alone would shrink it to 6.5 px.
++    // A short window gets a scrolling overlay instead of unreadable text.
+     const ImGuiIO& io = ImGui::GetIO();
+     const float    sx = io.DisplaySize.x > 0.0f ? io.DisplaySize.x / 992.0f : 1.0f;
+     const float    sy = io.DisplaySize.y > 0.0f ? io.DisplaySize.y / 768.0f : 1.0f;
++    const float    fb = io.DisplayFramebufferScale.y > 0.0f ? io.DisplayFramebufferScale.y : 1.0f;
+     float          scale = std::min(sx, sy);
+-    scale                = std::clamp(scale, 0.5f, 4.0f);
++    scale                = std::clamp(scale, std::clamp(1.0f / fb, 0.5f, 1.0f), 4.0f);
+ 
+     // Widget metrics are rescaled from a one-time base-style snapshot
+     // (ScaleAllSizes is cumulative), and FontScaleMain drives ImGui 1.92's
+@@ -292,12 +298,15 @@ void Gui::draw_menu_bar(Config& config)
+ void Gui::draw_settings(Config& config, const std::vector<std::string>& gpu_names,
+                         Input* input)
+ {
+-    // 88% of the window, centred, re-applied every frame so it tracks a resize.
+-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+-    const ImVec2         area     = viewport->Size;
+-    const ImVec2         win_size(area.x * 0.88f, area.y * 0.88f);
++    // 88% of the space between the menu bar and the status bar, centred,
++    // re-applied every frame so it tracks a resize. On a short display the
++    // bars are a large share of the height, so the window must not cover them.
++    const ImGuiViewport* viewport   = ImGui::GetMainViewport();
++    const float          status_bar = ImGui::GetFrameHeight() + 4.0f;
++    const ImVec2 area(viewport->WorkSize.x, std::max(viewport->WorkSize.y - status_bar, 0.0f));
++    const ImVec2 win_size(area.x * 0.88f, area.y * 0.88f);
+     ImGui::SetNextWindowPos(
+-        ImVec2(viewport->Pos.x + area.x * 0.5f, viewport->Pos.y + area.y * 0.5f),
++        ImVec2(viewport->WorkPos.x + area.x * 0.5f, viewport->WorkPos.y + area.y * 0.5f),
+         ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+     ImGui::SetNextWindowSize(win_size, ImGuiCond_Always);
+ 
