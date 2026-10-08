@@ -4830,10 +4830,14 @@ class DocsTests(unittest.TestCase):
     def test_site_links_each_language_to_its_readme(self):
         site = (ROOT / 'website/src/lib/site.ts').read_text()
         self.assertIn('README.pt-BR.md', site)
-        for page in ('sections/Hero.tsx', 'sections/OpenSource.tsx', 'sections/Footer.tsx', 'components/Header.tsx'):
+        for page in ('sections/OpenSource.tsx', 'sections/Footer.tsx', 'components/Header.tsx'):
             text = (ROOT / 'website/src' / page).read_text()
             self.assertIn('readmeUrl(locale)', text, page)
             self.assertNotIn('LINKS.github', text, page)
+        # O CTA do hero baixa sempre o release mais recente, nao o README.
+        hero = (ROOT / 'website/src/sections/Hero.tsx').read_text()
+        self.assertIn('LINKS.latestRelease', hero)
+        self.assertIn("latestRelease: `${REPO_URL}/releases/latest`", site)
 
     def test_site_support_section_has_no_secrets_and_no_mailto(self):
         src = ROOT / 'website/src'

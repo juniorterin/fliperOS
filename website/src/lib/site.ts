@@ -4,6 +4,8 @@ export const LINKS = {
   github: REPO_URL,
   docs: `${REPO_URL}/wiki`,
   releases: `${REPO_URL}/releases`,
+  // /releases/latest redireciona sempre para o release mais recente.
+  latestRelease: `${REPO_URL}/releases/latest`,
   issues: `${REPO_URL}/issues`,
   instagram: 'https://www.instagram.com/juniorter.in/',
 } as const;

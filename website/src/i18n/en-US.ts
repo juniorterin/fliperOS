@@ -52,7 +52,7 @@ const enUS = {
     titleLine2: 'Built for CRT.',
     description:
       'FliperOS is an Ubuntu-based Linux distribution built to turn PCs into arcade machines, with native CRT, 15 kHz and Switchres support, emulators and frontends ready to play.',
-    ctaGithub: 'View on GitHub',
+    ctaDownload: 'Download',
     ctaFeatures: 'Explore features',
     screenAlt: 'The FliperOS main menu at 640x480: Start frontend, Setup, Start desktop, Exit to shell, Shutdown / Reboot',
     screenPlaceholderTitle: 'Real screenshot pending',

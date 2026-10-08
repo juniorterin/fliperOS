@@ -1,13 +1,12 @@
 'use client';
 
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, Download } from 'lucide-react';
 import { CrtMonitor } from '@/components/CrtMonitor';
-import { GithubIcon } from '@/components/GithubIcon';
 import { useI18n } from '@/i18n/I18nProvider';
-import { HERO_SCREENSHOT, readmeUrl } from '@/lib/site';
+import { HERO_SCREENSHOT, LINKS } from '@/lib/site';
 
 export function Hero({ screenshot }: { screenshot: string | null }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const h = t.hero;
   return (
     <section id="top" aria-labelledby="hero-title" className="relative overflow-hidden pt-28 pb-16 sm:pt-36 lg:pb-24">
@@ -28,13 +27,13 @@ export function Hero({ screenshot }: { screenshot: string | null }) {
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-pretty text-muted sm:text-xl">{h.description}</p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <a
-              href={readmeUrl(locale)}
+              href={LINKS.latestRelease}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2.5 rounded-xl bg-purple px-6 py-3.5 font-semibold text-bg-deeper shadow-[0_10px_40px_-10px] shadow-purple transition hover:-translate-y-0.5 hover:bg-[#c9a6fb]"
             >
-              <GithubIcon className="size-5" />
-              {h.ctaGithub}
+              <Download className="size-5" aria-hidden="true" />
+              {h.ctaDownload}
               <span className="sr-only">{t.a11y.external}</span>
             </a>
             <a

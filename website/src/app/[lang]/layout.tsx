@@ -100,7 +100,7 @@ function jsonLd(locale: (typeof LOCALES)[number]) {
         keywords: meta.keywords.join(', '),
         url,
         image: `${url}/opengraph-image/card`,
-        downloadUrl: LINKS.releases,
+        downloadUrl: LINKS.latestRelease,
         releaseNotes: LINKS.releases,
         codeRepository: LINKS.github,
         isAccessibleForFree: true,
