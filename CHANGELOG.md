@@ -21,6 +21,7 @@ Fightcade 2 on the tube as it should be: every online match in the game's native
 - Fightcade 2: the lobby opens at 512x448, with bigger text on the tube
 - Fightcade 2: an FBNeo left open with no game after an error (missing ROM) closes by itself, instead of leaving a black square over the lobby
 - Model 2 is SM2-Emu, from the Games menu. It is not compiled into the image; the first launch clones and builds it, then lists the games in `~/roms/model2`. A set that cannot be loaded stays on that list and names the missing chip. The Wine Model 2 Emulator is no longer in the menu
+- Model 2 at 15 kHz stretches the frame to fill 640x240. The emulator's settings file starts at 4:3, which left the picture in the middle of the tube
 
 **fliperos-setup changes:**
 

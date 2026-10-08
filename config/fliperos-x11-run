@@ -142,11 +142,17 @@ case $name in
     ;;
   fliperos-model2 | sm2-emu)
     # 640x240 tem pixel mais largo que o 4:3: no tubo a imagem so preenche
-    # com stretch. So na primeira vez; o que a pessoa gravar no F10 fica.
-    cfg=${XDG_CONFIG_HOME:-$HOME/.config}/sm2-emu
-    mkdir -p "$cfg"
-    if [[ ! -f $cfg/sm2-emu.ini ]] && ((FLIPEROS_RES_H * 4 < FLIPEROS_RES_W * 3)); then
-      printf 'aspect_mode = stretch\n' > "$cfg/sm2-emu.ini"
+    # com stretch. O ini do emulador nasce em 4:3, entao cada abertura
+    # nesse modo grava stretch de novo; o resto da configuracao fica.
+    if ((FLIPEROS_RES_H * 4 < FLIPEROS_RES_W * 3)); then
+      cfg=${XDG_CONFIG_HOME:-$HOME/.config}/sm2-emu
+      mkdir -p "$cfg"
+      ini=$cfg/sm2-emu.ini
+      if [[ -f $ini ]] && grep -q '^aspect_mode[[:space:]=]' "$ini"; then
+        sed -i -E 's/^aspect_mode[[:space:]=].*/aspect_mode = stretch/' "$ini"
+      else
+        printf 'aspect_mode = stretch\n' >> "$ini"
+      fi
     fi
     set -- "$1" --fullscreen "${@:2}"
     ;;
