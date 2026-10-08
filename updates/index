@@ -12,3 +12,4 @@
 9	de5613aa462f357ad78579ec4e50be458601ca30	7cf5f1b35150ca1534d57b76942a4698b0fe43f9b601211fbb8a8db080e59b17	no	The boot splash stays on screen until the menu or frontend opens
 10	5863790178a04de1929197523f58edf2c20fe5b0	2c8e7af93e3dab85999980fa26d1fe6dbffa7457a728b019043e8e4d918ebfc9	no	Every disk is mounted by itself, with an icon on the desktop
 11	25316ca96625d16a6a95afe97e8af2cdc8c41aa3	85fbd9b9ad1f65c1a9659d59ddc1fb9326801f592a45935dc7e4a274a57c356a	no	Model 2 at full speed on older CPUs, stretched and with VSync
+12	19d6753ab176ee915bc5c71986ee0427a34aa282	d726d073056d52898c6d3474d3fdb51fd094bb16d90f6f0bda9ae7ed3dd44cfd	no	The version shows at the top of the Setup
