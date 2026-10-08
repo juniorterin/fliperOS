@@ -3,7 +3,7 @@
 # releases do GroovyArcade (github.com/substring/os/releases): o texto e a
 # secao da versao no CHANGELOG.md, e junto da ISO vai a lista de pacotes.
 #
-#   bash tools/release-publish.sh ISO                publica (a versao sai do nome: fliperos-0.8.2.iso)
+#   bash tools/release-publish.sh ISO                publica (a versao sai do nome: fliperos-0.8.3.iso)
 #   bash tools/release-publish.sh --prerelease ISO   idem, marcado como pre-release
 #   bash tools/release-publish.sh --replace ISO      troca um release que ja existe (apaga e publica de novo)
 #   bash tools/release-publish.sh --to DIR ISO       so prepara os arquivos e o texto em DIR (sem GitHub)
@@ -19,7 +19,7 @@
 # num volume:
 #
 #   docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login     (uma vez)
-#   docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.8.2.iso
+#   docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.8.3.iso
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 limit=2147483648 part=1900M

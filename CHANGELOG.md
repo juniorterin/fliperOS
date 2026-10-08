@@ -2,6 +2,37 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.8.3
+
+Sega Model 2 on the tube: SM2-Emu replaces the Wine Model 2 Emulator, and the 2B and 2C games run at full speed even on older CPUs, stretched to fill the screen and with VSync. Every disk is also mounted by itself, with an icon on the desktop. The ISO comes with updates 10 and 11 already applied; an installed 0.8, 0.8.1 or 0.8.2 gets the same changes through the updates at boot.
+
+**System changes:**
+
+- **Every disk is mounted by itself**, at boot and when plugged in (a USB stick, an external HD), in `/media/fliperos/<label>`, with an icon on the LXDE desktop. Mounting, unmounting and ejecting need no password; system partitions (EFI, recovery, Windows reserved), swap, LUKS, LVM and RAID are left alone
+- Downloader: Start no longer leaves the download paused. Transmission saw the torrent with no files chosen yet as finished and paused it at the seed ratio limit
+
+**Package changes:**
+
+- Model 2 is SM2-Emu, from the Games menu. It is not compiled into the image; the first launch clones and builds it, then lists the games in `~/roms/model2`. A set that cannot be loaded stays on that list and names the missing chip. The Wine Model 2 Emulator is no longer in the menu
+- Model 2: the 2B and 2C games run at full speed on older CPUs. FliperOS patches SM2-Emu so the geometry coprocessor no longer spins while it waits for data, and builds it with link-time optimization. The emulated machine is unchanged. On an i3-540, House of the Dead went from 0.93× to 2.34× and Last Bronx from 0.71× to 1.65×
+- Model 2 at 15 kHz stretches the frame to fill 640x240. The emulator's settings file starts at 4:3, which left the picture in the middle of the tube
+- Model 2: VSync is on by default, so the picture no longer tears on the tube. Turning it off in the F10 menu sticks
+- Model 2: the F10 settings menu can be read at 640x240. Its text was shrunk to about 6 pixels high and the window covered the menu and status bars; now the text stays at its normal size and the window scrolls
+- Model 2: opening a game no longer overwrites its saved NVRAM
+
+**fliperos-setup changes:**
+
+- ROM Cleaner for Model 2 (now SM2-Emu): the I/O board sets `model1io.zip` and `model1io2.zip` go along with Daytona USA, Desert Tank and Virtua Cop, which do not start without them. The Model 2 game list hides them
+
+**Tool changes:**
+
+- New `fliperos-automount` (mounts each disk that appears) and `fliperos-sm2emu` (builds SM2-Emu with FliperOS's patches and lists the Model 2 games)
+
+**Documentation:**
+
+- Emulators page: SM2-Emu, built from the menu instead of into the image, its speed patches and settings
+- Desktop page: disks mounted by themselves, with an icon on the desktop
+
 ## 0.8.2
 
 Fightcade 2 on the tube as it should be: every online match in the game's native resolution, with the Setup's buttons and a pure picture. The ISO comes with updates 8 and 9 already applied; an installed 0.8 or 0.8.1 gets the same changes through the updates at boot.
@@ -12,7 +43,6 @@ Fightcade 2 on the tube as it should be: every online match in the game's native
 - **Esc closes the frontend** and returns to the FliperOS menu, in Attract-Mode Plus, ES-DE, RetroFE, Pegasus and the Fightcade lobby (only when no game is open; inside a game, Esc stays with the game)
 - LXDE desktop: a window that doesn't fit the 640x480 screen, even maximized, makes the desktop scroll (move the mouse to the edge), so its buttons can be reached
 - Boot splash: the title of the default theme no longer gets stuck on "AliperOS"
-- Downloader: Start no longer leaves the download paused. Transmission saw the torrent with no files chosen yet as finished and paused it at the seed ratio limit
 
 **Package changes:**
 
@@ -21,13 +51,6 @@ Fightcade 2 on the tube as it should be: every online match in the game's native
 - Fightcade 2: FBNeo and FBA get the buttons mapped in Setup > Joysticks, for each player
 - Fightcade 2: the lobby opens at 512x448, with bigger text on the tube
 - Fightcade 2: an FBNeo left open with no game after an error (missing ROM) closes by itself, instead of leaving a black square over the lobby
-- Model 2 is SM2-Emu, from the Games menu. It is not compiled into the image; the first launch clones and builds it, then lists the games in `~/roms/model2`. A set that cannot be loaded stays on that list and names the missing chip. The Wine Model 2 Emulator is no longer in the menu
-- Model 2 at 15 kHz stretches the frame to fill 640x240. The emulator's settings file starts at 4:3, which left the picture in the middle of the tube
-- Model 2: the 2B and 2C games run at full speed on older CPUs. FliperOS patches SM2-Emu so the geometry coprocessor no longer spins while it waits for data, and builds it with link-time optimization. The emulated machine is unchanged. On an i3-540, House of the Dead went from 0.93× to 2.34× and Last Bronx from 0.71× to 1.65×
-- ROM Cleaner for Model 2 (now SM2-Emu): the I/O board sets `model1io.zip` and `model1io2.zip` go along with Daytona USA, Desert Tank and Virtua Cop, which do not start without them. The Model 2 game list hides them
-- Model 2: the F10 settings menu can be read at 640x240. Its text was shrunk to about 6 pixels high and the window covered the menu and status bars; now the text stays at its normal size and the window scrolls
-- Model 2: opening a game no longer overwrites its saved NVRAM
-- Model 2: VSync is on by default, so the picture no longer tears on the tube. Turning it off in the F10 menu sticks
 
 **fliperos-setup changes:**
 
@@ -41,7 +64,6 @@ Fightcade 2 on the tube as it should be: every online match in the game's native
 **Documentation:**
 
 - Fightcade 2 page: native resolution, pure picture and the lobby mode
-- Emulators page: SM2-Emu, built from the menu instead of into the image
 - Website: support section and the new desktop screenshot
 
 ## 0.8.1

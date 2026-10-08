@@ -2,7 +2,7 @@
 
 The media is **installation-only** and follows the GroovyArcade flow: a boot menu with the frequency range, a spoken test of the video outputs, *Testing Results*, the **FliperOS Setup** menu and installation to the HD/SSD. On the installed system the same program becomes the setup menu that appears when the frontend closes. The screens belong to **`fliperos-setup`**, written in Bash with [Gum](https://github.com/charmbracelet/gum), with the **Dracula** theme and English text, designed for **640x480i**: 80x30 characters, nothing animated or blinking.
 
-> In development: 0.8.2 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT.
+> In development: 0.8.3 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT.
 
 ## Using it
 

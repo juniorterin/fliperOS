@@ -1,15 +1,15 @@
-# FliperOS 0.8.2
+# FliperOS 0.8.3
 
 [English](README.md) | **Português**
 
 Ubuntu 24.04 (amd64) para gabinetes de fliperama com monitor CRT, no estilo do GroovyArcade: **kernel de 15 kHz**, Switchres, emuladores e frontends prontos para jogar e um menu de configuração (`fliperos-setup`) feito para a tela do tubo.
 
-Em desenvolvimento: a 0.8.2 é testada no QEMU e num gabinete com CRT de 15 kHz. Documentação completa na **[wiki](https://github.com/juniorterin/fliperOS/wiki)** (em inglês). Site: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (código em [`website/`](website)).
+Em desenvolvimento: a 0.8.3 é testada no QEMU e num gabinete com CRT de 15 kHz. Documentação completa na **[wiki](https://github.com/juniorterin/fliperOS/wiki)** (em inglês). Site: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (código em [`website/`](website)).
 
 ## O que vem nele
 
 - **Vídeo**: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.
-- **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Model 2, Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Extras.
+- **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, SM2-Emu (Model 2), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Extras.
 - **Frontends**: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus e Fightcade 2, cujas partidas online rodam na resolução nativa de cada jogo no tubo.
 - **Pistola de luz**: GunCon 2 pronta para usar (driver por DKMS), calibrada para o tubo no Setup > Joysticks. Volantes também.
 - **Setup**: vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência.
@@ -32,8 +32,8 @@ Este guia vai do gabinete vazio até um jogo na tela. Cada passo diz o que vai a
 
 ### 2. Baixe a ISO
 
-1. Abra os [Releases](https://github.com/juniorterin/fliperOS/releases) e baixe o `fliperos-0.8.2.iso` da versão mais recente (o que mudou está no [CHANGELOG.md](CHANGELOG.md), em inglês).
-2. Se o release trouxer um SHA-256, confira: `sha256sum fliperos-0.8.2.iso` no Linux, `Get-FileHash fliperos-0.8.2.iso` no PowerShell do Windows.
+1. Abra os [Releases](https://github.com/juniorterin/fliperOS/releases) e baixe o `fliperos-0.8.3.iso` da versão mais recente (o que mudou está no [CHANGELOG.md](CHANGELOG.md), em inglês).
+2. Se o release trouxer um SHA-256, confira: `sha256sum fliperos-0.8.3.iso` no Linux, `Get-FileHash fliperos-0.8.3.iso` no PowerShell do Windows.
 
 ### 3. Grave o pendrive
 
@@ -44,7 +44,7 @@ A ISO tem de ser gravada **byte a byte**. Programas que refazem a estrutura de b
 - **Linux**: descubra o pendrive com `lsblk` (aqui `/dev/sdX`; o dispositivo errado apaga o disco errado) e rode:
 
   ```bash
-  sudo dd if=fliperos-0.8.2.iso of=/dev/sdX bs=4M status=progress conv=fsync
+  sudo dd if=fliperos-0.8.3.iso of=/dev/sdX bs=4M status=progress conv=fsync
   ```
 
 ### 4. Prepare a BIOS do gabinete
@@ -162,7 +162,7 @@ Sempre no Docker (o [`CLAUDE.md`](CLAUDE.md) explica por quê).
 
 ```powershell
 docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.8.2.iso
+docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.8.3.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_setup.py

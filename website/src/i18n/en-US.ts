@@ -47,7 +47,7 @@ const enUS = {
     viewOnGithub: 'View on GitHub',
   },
   hero: {
-    eyebrow: 'fliperos 0.8.2 · in development',
+    eyebrow: 'fliperos 0.8.3 · in development',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Built for CRT.',
     description:
@@ -128,7 +128,7 @@ const enUS = {
       { id: 'setup', title: 'FliperOS Setup', caption: 'The setup menu, sized for 640x480 interlaced.' },
       { id: 'install', title: 'Installer', caption: 'Choosing the HD/SSD to install to, from the installation ISO.' },
       { id: 'video', title: 'Video Setup', caption: 'Monitor, output test and geometry on the grid.' },
-      { id: 'desktop', title: 'LXDE desktop', caption: 'Dracula theme with the FliperOS wallpaper, Games menu and app store.' },
+      { id: 'desktop', title: 'LXDE desktop', caption: 'Dracula theme with the FliperOS wallpaper, Games menu, app store and an icon for each disk.' },
     ],
   },
   emulators: {
@@ -144,7 +144,7 @@ const enUS = {
       { id: 'pcsx2', name: 'PCSX2', systems: 'PlayStation 2', note: 'Official AppImage' },
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', note: 'Built from the stable version' },
       { id: 'supermodel', name: 'Supermodel', systems: 'Sega Model 3', note: '640x240 at 57.524 Hz on 15 kHz' },
-      { id: 'model2', name: 'Model 2 Emulator', systems: 'Sega Model 2', note: 'Runs through Wine' },
+      { id: 'model2', name: 'SM2-Emu', systems: 'Sega Model 2', note: 'Built from the menu, full speed on older CPUs' },
       { id: 'hypseus', name: 'Hypseus Singe', systems: 'Laserdisc', note: 'Dragon’s Lair, Space Ace' },
       { id: 'openbor', name: 'OpenBOR', systems: 'Beat ’em ups', note: '320x240' },
     ],
@@ -161,7 +161,7 @@ const enUS = {
       'Left out of the ISO so it fits in a single download. Installed over the network from Setup > Extras.',
     extrasBadge: 'Optional',
     extras: [
-      { id: 'wine', name: 'Wine', text: 'For Model 2 and the Fightcade 2 emulators' },
+      { id: 'wine', name: 'Wine', text: 'For the Fightcade 2 emulators' },
       { id: 'steam', name: 'Steam', text: 'PC games inside the desktop' },
       { id: 'heroic', name: 'Heroic', text: 'GOG, Epic and Amazon' },
     ],

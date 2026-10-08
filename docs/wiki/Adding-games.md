@@ -9,7 +9,7 @@ Each emulator has its folder in `~/roms` (`/home/fliperos/roms`; over the networ
 | `mame` | MAME sets (`.zip`, `.7z`) and their CHD folders | GroovyMAME |
 | `naomi`, `naomi2`, `atomiswave` | MAME sets of these systems | Flycast |
 | `model3` | MAME sets of Model 3 | Supermodel |
-| `model2` | Model 2 Emulator sets (a link to its folder in Wine) | Model 2 Emulator |
+| `model2` | MAME sets of Model 2 | SM2-Emu |
 | `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
 | `dolphin` | GameCube and Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
@@ -77,7 +77,7 @@ ES-DE reads the artwork from `~/media/.es-de/<system>/<type>`, where each type i
 Linux has two ways to put a program on the screen, and FliperOS uses both.
 
 - **KMS** (Kernel Mode Setting, through the kernel's DRM driver) means the program draws **directly on the video card**, without any window system. It is the lightest and fastest path, with the least input lag, and the program changes the video mode itself. RetroArch (with its CRT SwitchRes, one mode per game) and the frontends (Attract-Mode Plus, ES-DE, Pegasus) run like this. The FliperOS wrapper is **`fliperos-kms-run`**: it starts the program on the console and, for RetroArch, adds the FliperOS settings (video driver, button mapping) on top of the user's.
-- **X11** (Xorg, the classic Linux window system) is for programs that only know how to open a window: Flycast, PCSX2, Dolphin, Supermodel, Model 2 Emulator (in Wine), Hypseus, GroovyMAME. The FliperOS wrapper is **`fliperos-x11-run`**: it starts an Xorg just for that program, has **Switchres** create a video mode for the monitor chosen in Video Setup (640x240 at 15 kHz for the 480-line systems, so nothing flickers), opens the program full screen and closes Xorg when the program exits. Nothing else runs in that X: no desktop, no panel.
+- **X11** (Xorg, the classic Linux window system) is for programs that only know how to open a window: Flycast, PCSX2, Dolphin, Supermodel, SM2-Emu (Model 2), Hypseus, GroovyMAME. The FliperOS wrapper is **`fliperos-x11-run`**: it starts an Xorg just for that program, has **Switchres** create a video mode for the monitor chosen in Video Setup (640x240 at 15 kHz for the 480-line systems, so nothing flickers), opens the program full screen and closes Xorg when the program exits. Nothing else runs in that X: no desktop, no panel.
 
 Rule of thumb: **RetroArch, in KMS; any other emulator, in X11.** If a program says *"Cannot open display"* or doesn't start in KMS, it needs X11. Both wrappers must be started from the console, as the frontends do: inside the LXDE desktop (which already is an X session), run the emulator directly.
 
@@ -175,7 +175,7 @@ sudo chmod +x /usr/local/bin/myemu-run
 /opt/fliperos/bin/fliperos-x11-run myemu-run "/home/fliperos/roms/myemu/game.bin"
 ```
 
-The `exec` keeps the emulator as the program the wrapper waits for. This is how FliperOS opens Model 2 Emulator through Wine (`fliperos-model2`).
+The `exec` keeps the emulator as the program the wrapper waits for. This is how FliperOS opens SM2-Emu for a frontend (`fliperos-model2`).
 
 ### Step 3: the video mode (X11 only)
 

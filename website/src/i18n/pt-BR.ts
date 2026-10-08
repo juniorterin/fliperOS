@@ -51,7 +51,7 @@ const ptBR: Messages = {
     viewOnGithub: 'Ver no GitHub',
   },
   hero: {
-    eyebrow: 'fliperos 0.8.2 · em desenvolvimento',
+    eyebrow: 'fliperos 0.8.3 · em desenvolvimento',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Feito para CRT.',
     description:
@@ -132,7 +132,7 @@ const ptBR: Messages = {
       { id: 'setup', title: 'FliperOS Setup', caption: 'O menu de configuração, dimensionado para 640x480 entrelaçado.' },
       { id: 'install', title: 'Instalador', caption: 'Escolha do HD/SSD para instalar, a partir da ISO de instalação.' },
       { id: 'video', title: 'Video Setup', caption: 'Monitor, teste de saída e geometria na grade.' },
-      { id: 'desktop', title: 'Desktop LXDE', caption: 'Tema Dracula com o papel de parede do FliperOS, menu Games e loja de aplicativos.' },
+      { id: 'desktop', title: 'Desktop LXDE', caption: 'Tema Dracula com o papel de parede do FliperOS, menu Games, loja de aplicativos e um ícone para cada disco.' },
     ],
   },
   emulators: {
@@ -148,7 +148,7 @@ const ptBR: Messages = {
       { id: 'pcsx2', name: 'PCSX2', systems: 'PlayStation 2', note: 'AppImage oficial' },
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', note: 'Compilado da versão estável' },
       { id: 'supermodel', name: 'Supermodel', systems: 'Sega Model 3', note: '640x240 a 57,524 Hz em 15 kHz' },
-      { id: 'model2', name: 'Model 2 Emulator', systems: 'Sega Model 2', note: 'Roda pelo Wine' },
+      { id: 'model2', name: 'SM2-Emu', systems: 'Sega Model 2', note: 'Compilado pelo menu, a toda velocidade em CPUs antigas' },
       { id: 'hypseus', name: 'Hypseus Singe', systems: 'Laserdisc', note: 'Dragon’s Lair, Space Ace' },
       { id: 'openbor', name: 'OpenBOR', systems: 'Beat ’em ups', note: '320x240' },
     ],
@@ -165,7 +165,7 @@ const ptBR: Messages = {
       'Ficam fora da ISO para ela caber num único download. Instalados pela rede em Setup > Extras.',
     extrasBadge: 'Opcional',
     extras: [
-      { id: 'wine', name: 'Wine', text: 'Para o Model 2 e os emuladores do Fightcade 2' },
+      { id: 'wine', name: 'Wine', text: 'Para os emuladores do Fightcade 2' },
       { id: 'steam', name: 'Steam', text: 'Jogos de PC dentro do desktop' },
       { id: 'heroic', name: 'Heroic', text: 'GOG, Epic e Amazon' },
     ],
