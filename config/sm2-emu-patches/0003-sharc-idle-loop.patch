@@ -1,0 +1,29 @@
+diff --git a/src/cpu/sharc/sharc.cpp b/src/cpu/sharc/sharc.cpp
+index a51354a..02ea539 100644
+--- a/src/cpu/sharc/sharc.cpp
++++ b/src/cpu/sharc/sharc.cpp
+@@ -442,6 +442,24 @@ s32 SHARC::run(s32 cycles)
+ 
+         --m_icount;
+         ++m_instruction_count;
++
++        // Espera num laco de uma NOP (DO addr UNTIL cond, com addr = o proprio
++        // PC): o microcodigo do Model 2B gira assim ate a FIFO de entrada ter
++        // dado (UNTIL NOT FLAG0_IN). A NOP nao muda ASTAT, as FLAG so mudam
++        // pelo host, que nao roda nesta fatia, e sem DMA nada levanta
++        // interrupcao aqui dentro. Com o historico de ASTAT ja estavel, cada
++        // volta deixa o estado igual: o resto da fatia vai de uma vez.
++        if (m_icount > 0 && m_opcode == 0 && m_pc == m_laddr.addr && m_laddr.loop_type == 0
++            && !(m_stky & LSEM) && TOP_PC() == m_pc && m_daddr == m_pc
++            && m_faddr == m_pc + 1 && m_nfaddr == m_pc + 2
++            && m_systemreg_latency_cycles <= 0 && m_irq_pending == 0
++            && (m_dma_status & ((1u << 6) | (1u << 7))) == 0 && !m_write_stalled
++            && m_astat == m_astat_old && m_astat_old == m_astat_old_old
++            && m_astat_old_old == m_astat_old_old_old
++            && !DO_CONDITION_CODE(m_laddr.code)) {
++            m_instruction_count += static_cast<u64>(m_icount);
++            m_icount = 0;
++        }
+     }
+ 
+     return cycles - m_icount;

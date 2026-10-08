@@ -5,6 +5,7 @@ build, o menu de boot, o Limine do disco instalado, o fliperos-video-check
 e as configuracoes que o fliperos-rootfs.sh instala.
 """
 from importlib.machinery import SourceFileLoader
+import hashlib
 import importlib.util
 import io
 import json
@@ -4361,8 +4362,12 @@ class EmulatorModeTests(unittest.TestCase):
             (src / 'build' / 'bin').mkdir(parents=True)
             roms.mkdir()
             bin_dir.mkdir()
-            (src / 'build' / 'bin' / 'sm2-emu').write_text('#!/bin/sh\n')
+            (src / 'build' / 'bin' / 'sm2-emu').write_text('#!/bin/sh\necho "$@" > "$HOME/args"\n')
             (src / 'build' / 'bin' / 'sm2-emu').chmod(0o755)
+            # Compilado com os patches desta versao: nao pede para recompilar.
+            patches = ROOT / 'config' / 'sm2-emu-patches'
+            digest = hashlib.sha256(b''.join(p.read_bytes() for p in sorted(patches.glob('*.patch'))))
+            (src / 'build' / 'fliperos-patches').write_text(digest.hexdigest() + '\n')
             (src / 'build' / 'bin' / 'games.xml').write_text(
                 '<games><game name="vf2"><title>Virtua Fighter 2</title><version>2.1</version></game>'
                 '<game name="hotd"><title>The House of the Dead</title></game></games>')
@@ -4373,15 +4378,68 @@ class EmulatorModeTests(unittest.TestCase):
             gum.chmod(0o755)
             env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']),
                        FLIPEROS_SM2_SRC=str(src), FLIPEROS_MODEL2_DIR=str(roms),
-                       GUM_IN=str(tmp / 'list'), HOME=str(tmp))
+                       FLIPEROS_SM2_PATCHES=str(patches), GUM_IN=str(tmp / 'list'), HOME=str(tmp))
             subprocess.run(['bash', str(ROOT / 'config/fliperos-sm2emu'), '--pick', str(tmp / 'out')],
-                           env=env, check=True, capture_output=True, timeout=30)
+                           env=env, check=True, capture_output=True, timeout=30, stdin=subprocess.DEVNULL)
             self.assertEqual((tmp / 'list').read_text().splitlines(),
                              ['outro\t%s/outro.zip' % roms,
                               'The House of the Dead\t%s/hotd.zip' % roms,
                               'Virtua Fighter 2 (2.1)\t%s/vf2.zip' % roms,
                               'Update Model 2\tUPDATE'])
             self.assertEqual((tmp / 'out').read_text().strip(), '%s/outro.zip' % roms)
+            # O teste rapido do zip roda com uma NVRAM descartavel, nao a do jogo.
+            args = (tmp / 'args').read_text().split()
+            self.assertIn('--nvram', args)
+            self.assertFalse(Path(args[args.index('--nvram') + 1]).exists())
+
+    def test_sm2emu_applies_speed_patches_and_rebuilds_when_they_change(self):
+        rootfs = ROOTFS
+        self.assertIn('config/sm2-emu-patches/*.patch', rootfs)
+        self.assertTrue(sorted((ROOT / 'config/sm2-emu-patches').glob('*.patch')))
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            src, roms, bin_dir, patches = tmp / 'src', tmp / 'roms', tmp / 'bin', tmp / 'patches'
+            for d in (roms, bin_dir, patches, src / 'build' / 'bin'):
+                d.mkdir(parents=True)
+            (roms / 'vf2.zip').write_text('x')
+            git = ['git', '-C', str(src), '-c', 'user.name=t', '-c', 'user.email=t@t']
+            (src / 'a.txt').write_text('one\n')
+            subprocess.run(['git', 'init', '-q', str(src)], check=True)
+            subprocess.run(git + ['add', 'a.txt'], check=True)
+            subprocess.run(git + ['commit', '-qm', 'x'], check=True)
+            (src / 'build' / 'bin' / 'sm2-emu').write_text('#!/bin/sh\n')
+            (src / 'build' / 'bin' / 'sm2-emu').chmod(0o755)
+            (patches / '0001-ok.patch').write_text(
+                'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+two\n')
+            (patches / '0002-old.patch').write_text(
+                'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-zzz\n+yyy\n')
+            (bin_dir / 'cmake').write_text('#!/bin/sh\necho "$@" >> "$HOME/cmake.log"\n')
+            (bin_dir / 'gum').write_text('#!/bin/sh\n[ "$1" = confirm ] && exit 0\n'
+                                         'tee "$GUM_IN" | head -1 | cut -f2\n')
+            for f in ('cmake', 'gum'):
+                (bin_dir / f).chmod(0o755)
+            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']),
+                       FLIPEROS_SM2_SRC=str(src), FLIPEROS_MODEL2_DIR=str(roms),
+                       FLIPEROS_SM2_PATCHES=str(patches), GUM_IN=str(tmp / 'list'), HOME=str(tmp))
+            run = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-sm2emu'), '--pick', str(tmp / 'out')],
+                                         env=env, check=True, capture_output=True, text=True, timeout=30,
+                                         stdin=subprocess.DEVNULL)
+            # Binario sem a marca dos patches: recompila sem a rede, com o que
+            # se aplica, e pula o patch que esta versao ja nao aceita.
+            out = run().stdout
+            self.assertEqual((src / 'a.txt').read_text(), 'two\n')
+            self.assertIn('Skipping 0002-old.patch', out)
+            log = (tmp / 'cmake.log').read_text()
+            self.assertIn('-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON', log)
+            self.assertIn('--build', log)
+            # Mesmos patches: abre a lista direto.
+            run()
+            self.assertEqual((tmp / 'cmake.log').read_text(), log)
+            # Outro conjunto: tira os antigos do fonte e aplica de novo.
+            (patches / '0001-ok.patch').write_text(
+                'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+three\n')
+            run()
+            self.assertEqual((src / 'a.txt').read_text(), 'three\n')
 
     def test_pcsx2_ini_is_adjusted_after_first_run(self):
         with tempfile.TemporaryDirectory() as tmp:

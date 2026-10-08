@@ -12,6 +12,9 @@ bin=$src/build/bin/sm2-emu
 roms=${FLIPEROS_MODEL2_DIR:-$HOME/roms/model2}
 games_xml=$src/build/bin/games.xml
 repo=${FLIPEROS_SM2_REPO:-https://github.com/dmanlfc/sm2-emu.git}
+# Patches do FliperOS (velocidade, menu em 15 kHz), aplicados por cima do upstream.
+patches=${FLIPEROS_SM2_PATCHES:-/usr/local/share/fliperos/sm2-emu-patches}
+stamp=$src/build/fliperos-patches
 
 # theme: os mesmos indices da paleta Dracula do Setup. O Alacritty do
 # desktop ja usa essa paleta, entao aqui so se pintam os papeis do Gum.
@@ -68,9 +71,30 @@ EOF
   return "$rc"
 }
 
-# build_tree clona (raso, com os submodulos) ou atualiza, e compila em
-# Release. Cada passo que falha volta na hora: chamado num "||", o set -e
-# de dentro nao valeria.
+# patches_id: muda quando o FliperOS traz outro conjunto de patches.
+patches_id() {
+  { cat "$patches"/*.patch 2> /dev/null || true; } | sha256sum | cut -d' ' -f1
+}
+
+# apply_patches: cada patch que ainda se aplica a esta versao do upstream.
+# O que nao se aplica fica de fora (o upstream mudou aquele trecho), e o
+# build segue sem ele.
+apply_patches() {
+  local patch
+  for patch in "$patches"/*.patch; do
+    [[ -f $patch ]] || continue
+    if git -C "$src" apply --check "$patch" 2> /dev/null; then
+      git -C "$src" apply "$patch"
+    else
+      printf 'Skipping %s: it does not apply to this version.\n' "${patch##*/}"
+    fi
+  done
+}
+
+# build_tree [update]: clona (raso, com os submodulos) ou, com "update",
+# atualiza; sem ele, so reaplica os patches no fonte que ja esta aqui.
+# Compila em Release com LTO. Cada passo que falha volta na hora: chamado
+# num "||", o set -e de dentro nao valeria.
 build_tree() {
   mkdir -p "${src%/*}" || return 1
   if [[ ! -d $src/.git ]]; then
@@ -78,12 +102,18 @@ build_tree() {
     GIT_TERMINAL_PROMPT=0 git clone --depth 1 --recurse-submodules --shallow-submodules \
       "$repo" "$src" || return 1
   else
-    GIT_TERMINAL_PROMPT=0 git -C "$src" pull --ff-only || return 1
-    git -C "$src" submodule update --init --recursive --depth 1 || return 1
+    # Os patches da vez anterior saem antes do pull.
+    git -C "$src" checkout -- . || return 1
+    if [[ ${1:-} == update ]]; then
+      GIT_TERMINAL_PROMPT=0 git -C "$src" pull --ff-only || return 1
+      git -C "$src" submodule update --init --recursive --depth 1 || return 1
+    fi
   fi
-  cmake -S "$src" -B "$src/build" -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release -DSM2_BUILD_TESTS=OFF || return 1
+  apply_patches || return 1
+  cmake -S "$src" -B "$src/build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DSM2_BUILD_TESTS=OFF -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON || return 1
   nice -n 5 cmake --build "$src/build" -j "$(nproc)" || return 1
+  patches_id > "$stamp"
 }
 
 # game_rows: "titulo<TAB>arquivo" dos .zip de ~/roms/model2, pelo nome no
@@ -139,6 +169,16 @@ if [[ ! -x $bin ]]; then
     pause
     exit 1
   fi
+elif [[ $(cat "$stamp" 2> /dev/null) != "$(patches_id)" ]]; then
+  # Um update do FliperOS trouxe outros patches: recompila sem a rede.
+  if gum confirm "Apply the new Model 2 fixes? Rebuilding takes a few minutes."; then
+    printf 'Rebuilding.\n'
+    if ! build_tree; then
+      printf 'Build failed.\n'
+      pause
+      exit 1
+    fi
+  fi
 fi
 
 header="Model 2 - choose a game (Esc cancels)"
@@ -163,7 +203,7 @@ while :; do
       fi
     fi
     printf 'Updating and building.\n'
-    if ! build_tree; then
+    if ! build_tree update; then
       printf 'Build failed.\n'
       pause
     fi
@@ -172,11 +212,16 @@ while :; do
   fi
   [[ -n $choice ]] || exit 0
   # Um zip incompleto faz o emulador sair na hora, e o desktop volta sem
-  # dizer o que faltou. Aqui a falha fica nesta lista.
-  err=$("$bin" --boot-test 1 --log-level error "$choice" 2>&1 >/dev/null) && {
+  # dizer o que faltou. Aqui a falha fica nesta lista. NVRAM descartavel:
+  # o teste grava a dele ao sair, por cima da do jogo.
+  nv=$(mktemp -d)
+  ok=0
+  err=$("$bin" --boot-test 1 --log-level error --nvram "$nv" "$choice" 2>&1 >/dev/null) && ok=1
+  rm -rf "$nv"
+  if ((ok)); then
     printf '%s\n' "$choice" > "$dest"
     exit 0
-  }
+  fi
   header=$(printf '%s\n' "$err" | sed -n 's/^\[ERROR\] //p')
   header=${header%%$'\n'*}
   [[ -n $header ]] || header="This set could not be loaded."

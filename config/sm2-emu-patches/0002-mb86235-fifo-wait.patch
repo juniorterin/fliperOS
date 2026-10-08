@@ -1,0 +1,23 @@
+diff --git a/src/cpu/mb86235/mb86235.cpp b/src/cpu/mb86235/mb86235.cpp
+index 89c3384..c21b4df 100644
+--- a/src/cpu/mb86235/mb86235.cpp
++++ b/src/cpu/mb86235/mb86235.cpp
+@@ -230,6 +230,18 @@ s32 MB86235::run(s32 cycles)
+ 
+         m_icount--;
+         ++m_instruction_count;
++
++        // Espera na FIFO de entrada: a instrucao parada roda de novo a cada
++        // ciclo ate um dado chegar. So o host enche essa FIFO, e o host nao
++        // roda durante esta fatia, entao as repeticoes daqui ate o fim dela
++        // sao identicas (a ALU e os enderecos nao mudam com has_stalled).
++        // Gasta o resto da fatia de uma vez; a proxima chamada refaz a
++        // instrucao, como faria a repeticao.
++        if (m_fifo_state.has_stalled && (m_st & RP) == 0 && !m_fifo_out_pending
++            && m_bus->fifo_in_empty()) {
++            m_icount = 0;
++            break;
++        }
+     }
+ 
+     // A control op charges itself extra cycles, so the budget can be overrun by

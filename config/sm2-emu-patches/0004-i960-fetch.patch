@@ -1,0 +1,156 @@
+diff --git a/src/cpu/i960/i960.cpp b/src/cpu/i960/i960.cpp
+index 37568cf..bff7fcc 100644
+--- a/src/cpu/i960/i960.cpp
++++ b/src/cpu/i960/i960.cpp
+@@ -193,7 +193,7 @@ u32 I960::get_ea(u32 opcode)
+ 
+ 		case 0x5:   // address of this instruction + the offset dword + 8
+ 			// which in reality is "address of next instruction + the offset dword"
+-			ret = m_bus->fetch32(m_IP);
++			ret = fetch_word(m_IP);
+ 			m_IP += 4;
+ 			ret += m_IP;
+ 			return ret;
+@@ -202,22 +202,22 @@ u32 I960::get_ea(u32 opcode)
+ 			return m_r[abase] + (m_r[index] << scale);
+ 
+ 		case 0xc:
+-			ret = m_bus->fetch32(m_IP);
++			ret = fetch_word(m_IP);
+ 			m_IP += 4;
+ 			return ret;
+ 
+ 		case 0xd:
+-			ret = m_bus->fetch32(m_IP) + m_r[abase];
++			ret = fetch_word(m_IP) + m_r[abase];
+ 			m_IP += 4;
+ 			return ret;
+ 
+ 		case 0xe:
+-			ret = m_bus->fetch32(m_IP) + (m_r[index] << scale);
++			ret = fetch_word(m_IP) + (m_r[index] << scale);
+ 			m_IP += 4;
+ 			return ret;
+ 
+ 		case 0xf:
+-			ret = m_bus->fetch32(m_IP) + m_r[abase] + (m_r[index] << scale);
++			ret = fetch_word(m_IP) + m_r[abase] + (m_r[index] << scale);
+ 			m_IP += 4;
+ 			return ret;
+ 
+@@ -2343,7 +2343,7 @@ s32 I960::run(s32 cycles)
+ 
+             m_PIP = m_IP;
+ 
+-            const u32 opcode = m_bus->fetch32(m_IP);
++            const u32 opcode = fetch_word(m_IP);
+             m_IP += 4;
+ 
+             if (m_trace_hook != nullptr) {
+diff --git a/src/cpu/i960/i960.h b/src/cpu/i960/i960.h
+index 74695ab..d27d677 100644
+--- a/src/cpu/i960/i960.h
++++ b/src/cpu/i960/i960.h
+@@ -116,6 +116,20 @@ public:
+ 
+     /// Stop and resume execution, for the HALT line the copro FIFO drives.
+     void set_halted(bool halted) { m_halted = halted; }
++
++    /// Busca de instrucao direto da memoria, sem a chamada virtual ao Bus.
++    /// A placa liga a ROM principal (0) e a RAM de trabalho (1) com o mesmo
++    /// limite do hot_read dela: uma leitura de 4 bytes que caiba na janela e
++    /// no buffer. Fora delas a busca continua indo pelo Bus.
++    void bind_fetch_window(unsigned index, u32 start, const u8* base, usize bytes, u32 window)
++    {
++        u32 limit = 0;
++        if (base != nullptr && bytes >= 4) {
++            const usize last = bytes - 3;
++            limit = last < window ? static_cast<u32>(last) : window;
++        }
++        m_fetch[index & 1] = FetchWindow{start, limit, base};
++    }
+     [[nodiscard]] bool halted() const { return m_halted; }
+ 
+     /// True once a Fault has been caught. The core will not execute further.
+@@ -177,6 +191,25 @@ private:
+ 
+     Bus* m_bus = nullptr;
+ 
++    struct FetchWindow {
++        u32       start = 0;
++        u32       limit = 0;
++        const u8* base  = nullptr;
++    };
++    FetchWindow m_fetch[2]{};
++
++    u32 fetch_word(u32 address)
++    {
++        for (const FetchWindow& w : m_fetch) {
++            if (const u32 offset = address - w.start; offset < w.limit) {
++                u32 v;
++                __builtin_memcpy(&v, w.base + offset, sizeof(v));
++                return v;
++            }
++        }
++        return m_bus->fetch32(address);
++    }
++
+     u32 m_r[0x20]{};
+     u32 m_rcache[I960_RCACHE_SIZE][0x10]{};
+     u32 m_rcache_frame_addr[I960_RCACHE_SIZE]{};
+diff --git a/src/hw/model2.cpp b/src/hw/model2.cpp
+index b1e02fa..27403ed 100644
+--- a/src/hw/model2.cpp
++++ b/src/hw/model2.cpp
+@@ -165,6 +165,9 @@ bool Model2::init(const rom::GameSpec& game, rom::RomSet roms)
+     }
+ 
+     m_work_ram.assign(0x100000, 0);
++    // Busca do i960 direto na ROM e na RAM de trabalho (as janelas do hot_read).
++    m_cpu.bind_fetch_window(0, kRomMainCpu, m_rom_maincpu.data(), m_rom_maincpu.size(), 0x200000);
++    m_cpu.bind_fetch_window(1, kWorkRam, m_work_ram.data(), m_work_ram.size(), 0x100000);
+     m_scratch_ram.assign(0x40000, 0);
+     m_buffer_ram.assign(0x20000 / 4, 0);
+     m_tile_ram.assign(0x10000, 0);
+diff --git a/src/hw/model2_original.cpp b/src/hw/model2_original.cpp
+index eeb9949..47e4ac5 100644
+--- a/src/hw/model2_original.cpp
++++ b/src/hw/model2_original.cpp
+@@ -153,6 +153,9 @@ bool Model2Original::init(const rom::GameSpec& game, rom::RomSet roms)
+     }
+ 
+     m_work_ram.assign(0x100000, 0);
++    // Busca do i960 direto na ROM e na RAM de trabalho (as janelas do hot_read).
++    m_cpu.bind_fetch_window(0, kRomMainCpu, m_rom_maincpu.data(), m_rom_maincpu.size(), 0x200000);
++    m_cpu.bind_fetch_window(1, kWorkRam, m_work_ram.data(), m_work_ram.size(), 0x100000);
+     m_scratch_ram.assign(0x20000, 0);
+     m_buffer_ram.assign(0x20000 / 4, 0);
+     m_tile_ram.assign(0x10000, 0);
+diff --git a/src/hw/model2b.cpp b/src/hw/model2b.cpp
+index 67b5231..6b1ac2f 100644
+--- a/src/hw/model2b.cpp
++++ b/src/hw/model2b.cpp
+@@ -347,6 +347,9 @@ bool Model2B::init(const rom::GameSpec& game, rom::RomSet roms)
+ 
+     // Allocate RAM.
+     m_work_ram.assign(0x100000, 0);
++    // Busca do i960 direto na ROM e na RAM de trabalho (as janelas do hot_read).
++    m_cpu.bind_fetch_window(0, kRomMainCpu, m_rom_maincpu.data(), m_rom_maincpu.size(), 0x200000);
++    m_cpu.bind_fetch_window(1, kWorkRam, m_work_ram.data(), m_work_ram.size(), 0x100000);
+     m_scratch_ram.assign(0x40000, 0);
+     m_buffer_ram.assign(0x20000 / 4, 0);
+     m_tile_ram.assign(0x10000, 0);
+diff --git a/src/hw/model2c.cpp b/src/hw/model2c.cpp
+index 763f180..52a9ef4 100644
+--- a/src/hw/model2c.cpp
++++ b/src/hw/model2c.cpp
+@@ -359,6 +359,9 @@ bool Model2C::init(const rom::GameSpec& game, rom::RomSet roms)
+ 
+     // Allocate RAM.
+     m_work_ram.assign(0x100000, 0);
++    // Busca do i960 direto na ROM e na RAM de trabalho (as janelas do hot_read).
++    m_cpu.bind_fetch_window(0, kRomMainCpu, m_rom_maincpu.data(), m_rom_maincpu.size(), 0x200000);
++    m_cpu.bind_fetch_window(1, kWorkRam, m_work_ram.data(), m_work_ram.size(), 0x100000);
+     m_scratch_ram.assign(0x40000, 0);
+     m_buffer_ram.assign(0x20000 / 4, 0);
+     m_tile_ram.assign(0x10000, 0);

@@ -1,0 +1,58 @@
+diff --git a/src/cpu/mb86235/mb86235.cpp b/src/cpu/mb86235/mb86235.cpp
+index 826925d..89c3384 100644
+--- a/src/cpu/mb86235/mb86235.cpp
++++ b/src/cpu/mb86235/mb86235.cpp
+@@ -204,7 +204,12 @@ s32 MB86235::run(s32 cycles)
+ 
+         // MAME's program space is 12 bits wide and truncates the address for it;
+         // PC itself is never masked, so the mask goes on the fetch.
+-        const u64 opcode = m_bus->program_read(curpc & 0xfff);
++        // Local pointer so the null check is out of the loop. bind_program
++        // installs it; this function never clears it.
++        u64* const program = m_program_fast;
++        const u32 pc_word = curpc & 0xfff;
++        const u64 opcode = program != nullptr ? program[pc_word]
++                                              : m_bus->program_read(pc_word);
+ 
+         m_ppc = curpc;
+ 
+diff --git a/src/cpu/mb86235/mb86235.h b/src/cpu/mb86235/mb86235.h
+index c9d9f71..6d8b4f3 100644
+--- a/src/cpu/mb86235/mb86235.h
++++ b/src/cpu/mb86235/mb86235.h
+@@ -101,6 +101,13 @@ public:
+ 
+     /// External halt — the host holds this while uploading microcode.
+     void set_halted(bool halted) { m_halted = halted; }
++
++    // Instruction fetch goes straight at the board program RAM. One load per
++    // instruction: a virtual Bus call for a plain array dominated Model 2C.
++    // The RAM is fixed-size and never reallocated. Uploads still write it
++    // through program_write, so the pointer stays valid. Null keeps the
++    // virtual fetch.
++    void bind_program(u64* words) { m_program_fast = words; }
+     [[nodiscard]] bool halted() const { return m_halted; }
+ 
+     /// Re-run the current instruction because a FIFO access could not complete
+@@ -172,6 +179,7 @@ private:
+     };
+ 
+     Bus* m_bus = nullptr;
++    u64* m_program_fast = nullptr;
+ 
+     // -- on-chip data RAM ---------------------------------------------------
+     // MAME's internal_abus/internal_bbus maps: 0x400 words each.
+diff --git a/src/hw/model2c.cpp b/src/hw/model2c.cpp
+index 29c33e6..763f180 100644
+--- a/src/hw/model2c.cpp
++++ b/src/hw/model2c.cpp
+@@ -173,6 +173,9 @@ CoproTgpx4::CoproTgpx4()
+ 
+     m_fifo_out.set_on_full([this] { m_cpu.set_halted(true); });
+     m_fifo_out.set_on_unfull([this] { m_cpu.set_halted(false); });
++
++    // Program RAM is sized once, above, and never reallocated.
++    m_cpu.bind_program(m_program.data());
+ }
+ 
+ void CoproTgpx4::attach(std::span<const u32> data_rom, std::span<u32> buffer_ram)
