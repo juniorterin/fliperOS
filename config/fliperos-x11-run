@@ -35,14 +35,28 @@ if [[ ! $mode =~ ^([0-9]+)x([0-9]+)@([0-9.]+)$ ]]; then
 fi
 export FLIPEROS_RES_W=${BASH_REMATCH[1]} FLIPEROS_RES_H=${BASH_REMATCH[2]} FLIPEROS_RES_HZ=${BASH_REMATCH[3]}
 
+# Placa sem dotclock baixo (Intel, NVIDIA: o Setup grava dotclock_min no
+# switchres.ini). O Switchres dobraria a largura ate passar do minimo, e o
+# modo sairia com uma largura que as contas abaixo nao conhecem (o Flycast
+# estreito no meio, o Supermodel num pedaco da tela). Pede direto a super
+# resolucao, como o RetroArch: so a largura muda, linhas e frequencias ficam.
+sr_ini=${FLIPEROS_SWITCHRES_INI:-/etc/switchres.ini}
+read -r dotclock_min super_width < <(awk '$1 == "dotclock_min" { d = $2 } $1 == "super_width" { s = $2 }
+  END { print d + 0, (s + 0 > 0 ? int(s) : 2560) }' "$sr_ini" 2> /dev/null) || dotclock_min=0
+if [[ ${dotclock_min:-0} != 0 ]] && ((FLIPEROS_RES_W < super_width)); then
+  FLIPEROS_RES_W=$super_width
+fi
+
 # Tela cheia e imagem esticada: num modo como 640x240 (tela 8:3 em pixels,
 # que o tubo mostra em 4:3) um emulador que "mantem 4:3" usaria so metade da
 # largura. stretch e quanto esticar na horizontal para o 4:3 preencher o modo.
 stretch=$((300 * FLIPEROS_RES_W / (4 * FLIPEROS_RES_H)))
 case $name in
   flycast)
+    # O limite de 250 e so o do controle na interface do Flycast: a super
+    # resolucao de 2560x240 pede 800.
     ((stretch < 100)) && stretch=100
-    ((stretch > 250)) && stretch=250
+    ((stretch > 1000)) && stretch=1000
     # A BIOS em ~/bios/dc (fliperos-roms): o emu.cfg tem o Dreamcast.BiosPath,
     # e a variavel vale tambem num emu.cfg recriado pelo Flycast.
     export FLYCAST_BIOS_PATH="${FLYCAST_BIOS_PATH:+$FLYCAST_BIOS_PATH:}$HOME/bios/dc"

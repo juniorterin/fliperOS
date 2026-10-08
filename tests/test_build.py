@@ -4172,6 +4172,34 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertIn('MODE=640 240 60', out)
         self.assertIn('-C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3', out)
 
+    def test_super_resolution_without_low_dotclock(self):
+        # Intel/NVIDIA: o Setup grava dotclock_min. O modo vai direto na
+        # largura da super resolucao, e as contas dos emuladores seguem ela.
+        with tempfile.TemporaryDirectory() as tmp:
+            ini = Path(tmp) / 'switchres.ini'
+            ini.write_text('\tdotclock_min              25.0\n\tsuper_width               2560\n')
+            extra = {'FLIPEROS_SWITCHRES_INI': str(ini)}
+            out = self.run_x11(['flycast', 'game.gdi'], extra=extra).stdout
+            self.assertIn('MODE=2560 240 60', out)
+            self.assertIn('rend.ScreenStretching=800', out)
+            out = self.run_x11(['supermodel', 'vf3.zip'], extra=extra).stdout
+            self.assertIn('MODE=2560 240 57.524', out)
+            self.assertIn('-res=2560,240 -stretch', out)
+            self.assertIn('-x 2560 -y 240', self.run_x11(['hypseus', 'lair', 'vldp'], extra=extra).stdout)
+            self.assertIn('MODE=2560 480 60', self.run_x11(['flycast'], frequency='31k', extra=extra).stdout)
+            self.assertIn('MODE=2560 240 60', self.run_x11(['--mode', '640x240@60', 'myprog'], extra=extra).stdout)
+            # super_width de outro valor no ini vale.
+            ini.write_text('dotclock_min 25.0\nsuper_width 1920\n')
+            self.assertIn('MODE=1920 240 60', self.run_x11(['flycast'], extra=extra).stdout)
+            # Placa com dotclock baixo (AMD): o ini padrao tem 0, nada muda.
+            ini.write_text('\tdotclock_min              0\n\tsuper_width               2560\n')
+            out = self.run_x11(['flycast', 'game.gdi'], extra=extra).stdout
+            self.assertIn('MODE=640 240 60', out)
+            self.assertIn('rend.ScreenStretching=200', out)
+            # Sem switchres.ini: como antes.
+            extra = {'FLIPEROS_SWITCHRES_INI': str(Path(tmp) / 'nao-existe.ini')}
+            self.assertIn('MODE=640 240 60', self.run_x11(['flycast'], extra=extra).stdout)
+
     def test_nothing_interlaced_on_15khz(self):
         # No gabinete o Flycast abria em 640x480 (480i): frequency=15k nao
         # batia com "15". Versoes antigas gravavam "15".
