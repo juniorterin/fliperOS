@@ -4,7 +4,7 @@ What changed in each ISO published in [Releases](https://github.com/juniorterin/
 
 ## 0.8.3
 
-Sega Model 2 on the tube: SM2-Emu replaces the Wine Model 2 Emulator, and the 2B and 2C games run at full speed even on older CPUs, stretched to fill the screen and with VSync. Every disk is also mounted by itself, with an icon on the desktop. The ISO comes with updates 10 and 11 already applied; an installed 0.8, 0.8.1 or 0.8.2 gets the same changes through the updates at boot.
+Sega Model 2 on the tube: SM2-Emu replaces the Wine Model 2 Emulator, and the 2B and 2C games run at full speed even on older CPUs, stretched to fill the screen and with VSync. Every disk is also mounted by itself, with an icon on the desktop. The ISO comes with updates 10 to 12 already applied; an installed 0.8, 0.8.1 or 0.8.2 gets the same changes through the updates at boot.
 
 **System changes:**
 
@@ -22,6 +22,7 @@ Sega Model 2 on the tube: SM2-Emu replaces the Wine Model 2 Emulator, and the 2B
 
 **fliperos-setup changes:**
 
+- The version shows at the top of the Setup and of the installer, beside the FliperOS title. An update changes it along with the Setup
 - ROM Cleaner for Model 2 (now SM2-Emu): the I/O board sets `model1io.zip` and `model1io2.zip` go along with Daytona USA, Desert Tank and Virtua Cop, which do not start without them. The Model 2 game list hides them
 
 **Tool changes:**
