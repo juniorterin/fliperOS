@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# As telas dos jogos no X, com os monitores extras (Setup > Video Setup >
+# Multiple Monitors):
+#
+#   fliperos-multiscreen xnames                 as saidas do XRandR, na ordem das telas
+#   fliperos-multiscreen flycast [argumentos]   Flycast com uma placa NAOMI por monitor
+#
+# xnames: o screens= do fliperos.conf usa os nomes do kernel, e uma saida de
+# outra placa leva o cardN: na frente (card1:VGA-1). No X essa placa entra
+# como GPU screen (AutoBindGPU), e o modesetting chama as saidas dela de
+# TIPO-K-N: o VGA-1 da primeira placa a mais vira VGA-1-1
+# (hw/xfree86/drivers/modesetting/drmmode_display.c). K e a ordem da placa
+# entre as que nao sao a principal. Se a saida nao aparece, liga a placa
+# como fonte de saidas da principal (xrandr --setprovideroutputsource).
+#
+# flycast: o fliperos-x11-run o poe na frente do Flycast, dentro do X dele,
+# so nos jogos de varias placas NAOMI. O Switchres troca o modo so do
+# monitor 1. Aqui as saidas das telas ganham esse mesmo modo e ficam lado a
+# lado, sem buraco, na ordem das telas. Com network:MultiboardSlaves=2 o
+# Flycast abre uma janela por placa: a principal onde window:left manda e
+# as outras uma window:width para cada lado (core/hw/naomi/multiboard.cpp).
+# Em tela cheia o SDL poe cada janela no monitor em que ela cai, entao a
+# principal vai para o meio. As outras placas sao processos novos do Flycast
+# que so leem o emu.cfg: a tela cheia e o esticado vao gravados nele.
+# Sem conseguir arrumar as saidas, abre so no monitor 1.
+set -uo pipefail
+conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+emucfg=${FLIPEROS_FLYCAST_CFG:-$HOME/.config/flycast/emu.cfg}
+iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
+sysfs=${DRM_SYSFS:-/sys/class/drm}
+
+IFS=, read -r -a screens <<< "$(sed -n 's/^screens=//p' "$conf" 2> /dev/null | tail -1)"
+main=$(sed -n 's/^connector=//p' "$conf" 2> /dev/null | tail -1)
+maincard=$(sed -n 's/^card=//p' "$conf" 2> /dev/null | tail -1)
+
+# gpu_index CARD: a ordem da placa entre as que nao sao a principal (1, 2...).
+gpu_index() {
+  local cards=() c i=0
+  for c in "$sysfs"/card[0-9]*; do
+    [[ -e $c && ${c##*/} != *-* ]] && cards+=("${c##*/}")
+  done
+  # Sem o sysfs (fora do gabinete): as placas que aparecem no screens=.
+  if ((${#cards[@]} == 0)); then
+    for c in "${screens[@]}"; do
+      [[ $c == *:* ]] && cards+=("${c%%:*}")
+    done
+  fi
+  while IFS= read -r c; do
+    [[ $c == "$maincard" ]] && continue
+    i=$((i + 1))
+    [[ $c == "$1" ]] && { echo "$i"; return 0; }
+  done < <(printf '%s\n' "${cards[@]}" | sort -uV)
+  echo 1
+}
+
+# xname ENTRADA: o nome da saida no XRandR.
+xname() {
+  local card name k
+  if [[ $1 != *:* || ${1%%:*} == "$maincard" ]]; then
+    printf '%s\n' "${1#*:}"
+    return 0
+  fi
+  card=${1%%:*} name=${1#*:}
+  k=$(gpu_index "$card")
+  printf '%s-%s-%s\n' "${name%-*}" "$k" "${name##*-}"
+}
+
+xnames() {
+  local s n listed bound=""
+  listed=$(xrandr --query 2> /dev/null | awk '/^[^ \t]/ { print $1 }')
+  for s in "${screens[@]}"; do
+    n=$(xname "$s")
+    if [[ $s == *:* && -n ${DISPLAY:-} && $'\n'$listed$'\n' != *$'\n'$n$'\n'* && " $bound " != *" ${s%%:*} "* ]]; then
+      xrandr --setprovideroutputsource "$(gpu_index "${s%%:*}")" 0 2> /dev/null
+      bound+=" ${s%%:*}"
+    fi
+    printf '%s\n' "$n"
+  done
+}
+
+case $(basename -- "${1:-}") in
+  xnames)
+    xnames
+    exit 0
+    ;;
+  flycast) ;;
+  *)
+    echo "Usage: fliperos-multiscreen xnames | flycast [arguments]" >&2
+    exit 2
+    ;;
+esac
+
+((${#screens[@]} >= 3)) && [[ -n $main ]] || exec "$@"
+# Uma saida digital (conversor ativo, experimental) nao aceita o modo de
+# dotclock baixo do monitor 1.
+for s in "${screens[@]}"; do
+  case ${s#*:} in
+    VGA-* | DVI-I-* | DVI-A-*) ;;
+    *) echo "fliperos-multiscreen: $s e digital, so no monitor 1" >&2; exec "$@" ;;
+  esac
+done
+mapfile -t outs < <(xnames)
+
+# O modo atual do monitor 1 (o do Switchres): nome e tamanho.
+read -r mode width height < <(xrandr --query 2> /dev/null | awk -v o="$main" '
+  $1 == o && $2 == "connected" {
+    on = 1
+    for (i = 3; i <= NF; i++) if ($i ~ /^[0-9]+x[0-9]+\+/) { split($i, g, /[x+]/); w = g[1]; h = g[2] }
+    next
+  }
+  /^[^ \t]/ { on = 0 }
+  on && /\*/ { name = $1 }
+  END { if (name != "" && w > 0) print name, w, h }')
+if [[ -z ${mode:-} ]]; then
+  echo "fliperos-multiscreen: sem o modo de $main, so no monitor 1" >&2
+  exec "$@"
+fi
+
+layout=()
+x=0
+for s in "${outs[@]}"; do
+  [[ $s == "$main" ]] || xrandr --addmode "$s" "$mode" 2> /dev/null
+  layout+=(--output "$s" --mode "$mode" --pos "${x}x0")
+  x=$((x + width))
+done
+if ! xrandr "${layout[@]}"; then
+  echo "fliperos-multiscreen: xrandr ${layout[*]} falhou, so no monitor 1" >&2
+  exec "$@"
+fi
+
+"$iniset" "$emucfg" window fullscreen yes
+[[ -n ${FLIPEROS_FLYCAST_STRETCH:-} ]] && "$iniset" "$emucfg" config rend.ScreenStretching "$FLIPEROS_FLYCAST_STRETCH"
+echo "fliperos-multiscreen: ${outs[*]} em $mode, placa principal em ${outs[1]}" >&2
+exec "$1" -config "network:MultiboardSlaves=2,window:left=$width,window:top=0,window:width=$width,window:height=$height" \
+  "${@:2}"

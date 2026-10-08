@@ -35,7 +35,7 @@ install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions
 [[ -f "$root/etc/fliperos/session" ]] || printf 'setup\n' > "$root/etc/fliperos/session"
 for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-client fliperos-lxde fliperos-launch \
   fliperos-tty1 fliperos-ini-set fliperos-resolution fliperos-logout fliperos-escquit fliperos-panning \
-  fliperos-automount; do
+  fliperos-automount fliperos-multiscreen; do
   install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done
 # Pastas do acervo em ~/roms (uma por emulador e por core do RetroArch) e os

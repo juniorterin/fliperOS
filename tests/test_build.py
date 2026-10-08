@@ -1147,7 +1147,7 @@ class GroovyMameTests(unittest.TestCase):
         self.assertEqual(self.run_wrapper('-inipath', '/x', 'mvsc')[0], ['-inipath', '/x', 'mvsc'])
         self.assertIn('/usr/local/libexec/groovymame', (ROOT / 'config/fliperos-groovymame').read_text())
 
-    def run_multi(self, *args, xrandr, session=False):
+    def run_multi(self, *args, xrandr, session=False, conf_extra=''):
         # Dois monitores: o .ini de varias telas e cada janela na saida certa.
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
@@ -1161,7 +1161,7 @@ class GroovyMameTests(unittest.TestCase):
                 (tmp / name).chmod(0o755)
             (tmp / 'xrandr.txt').write_text(xrandr)
             conf = tmp / 'fliperos.conf'
-            conf.write_text('connector=VGA-1\nscreens=DVI-I-1,VGA-1\n')
+            conf.write_text('connector=VGA-1\nscreens=DVI-I-1,VGA-1\n' + conf_extra)
             env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(tmp / 'groovymame'),
                        FLIPEROS_MAME_INI_DIR=str(tmp / 'ini'), FLIPEROS_CONF=str(conf),
                        FLIPEROS_MAME_SCREENS=str(tmp / 'gen'), DISPLAY=':0',
@@ -1199,6 +1199,10 @@ class GroovyMameTests(unittest.TestCase):
         # Comando sem tela: nada de monitores.
         args, log, ini = self.run_multi('-listxml', 'darius', xrandr=xrandr)
         self.assertEqual(args, ['-inipath', ini, '-listxml', 'darius'])
+        self.assertEqual(log, [])
+        # Multi-Screen Games: Off no Setup: o jogo todo no monitor 1.
+        args, log, ini = self.run_multi('darius', xrandr=xrandr, conf_extra='multiscreen=off\n')
+        self.assertEqual(args, ['-inipath', ini, 'darius'])
         self.assertEqual(log, [])
 
     def test_mame_screens_generator(self):
@@ -4244,7 +4248,7 @@ class EmulatorModeTests(unittest.TestCase):
 
     # "15k" e o que o setup grava (monitor_frequency); com "15" o teste nao
     # pegava que o script so aceitava "15" e mandava o gabinete para 480i.
-    def run_x11(self, args, frequency='15k', modes=None, home=None, extra=None):
+    def run_x11(self, args, frequency='15k', modes=None, home=None, extra=None, conf=''):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             bin_dir = tmp / 'bin'
@@ -4257,7 +4261,7 @@ class EmulatorModeTests(unittest.TestCase):
                 (bin_dir / prog).write_text('#!/bin/sh\n')
             for p in bin_dir.iterdir():
                 p.chmod(0o755)
-            (tmp / 'fliperos.conf').write_text('frequency=%s\n' % frequency)
+            (tmp / 'fliperos.conf').write_text('frequency=%s\n%s' % (frequency, conf))
             (tmp / 'modes.conf').write_text(modes or (ROOT / 'config/fliperos-emulator-modes.conf').read_text())
             env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), HOME=str(home or tmp),
                        FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_MODES=str(tmp / 'modes.conf'),
@@ -4274,6 +4278,77 @@ class EmulatorModeTests(unittest.TestCase):
         out = self.run_x11(['dolphin-emu']).stdout
         self.assertIn('MODE=640 240 60', out)
         self.assertIn('-C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3', out)
+
+    def test_flycast_multiboard_on_three_monitors(self):
+        # Jogos de varias placas NAOMI com 3 monitores: o fliperos-multiscreen
+        # na frente do Flycast. Os outros jogos, 2 monitores ou a chave
+        # desligada: o Flycast direto.
+        three = 'connector=VGA-1\nscreens=DVI-I-1,VGA-1,DVI-I-2\n'
+        wrapped = '/opt/fliperos/bin/fliperos-multiscreen flycast -config'
+        out = self.run_x11(['flycast', '/roms/naomi/f355.zip'], conf=three).stdout
+        self.assertIn('ARGS=/opt/fliperos/bin/fliperos-x11-client %s window:fullscreen=yes' % wrapped, out)
+        self.assertIn(wrapped, self.run_x11(['flycast', 'sstrkfgt.zip'], conf=three).stdout)
+        self.assertNotIn('fliperos-multiscreen', self.run_x11(['flycast', 'mvsc2.zip'], conf=three).stdout)
+        self.assertNotIn('fliperos-multiscreen', self.run_x11(
+            ['flycast', 'f355.zip'], conf='connector=VGA-1\nscreens=VGA-1,DVI-I-1\n').stdout)
+        self.assertNotIn('fliperos-multiscreen', self.run_x11(
+            ['flycast', 'f355.zip'], conf=three + 'multiscreen=off\n').stdout)
+
+    def test_multiscreen_lays_out_the_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            calls = tmp / 'calls'
+            (tmp / 'xrandr.txt').write_text(
+                'Screen 0: minimum 320 x 200, current 1920 x 480, maximum 16384 x 16384\n'
+                'DVI-I-1 connected 640x480+0+0 (normal left inverted right x axis y axis) 0mm x 0mm\n'
+                '   640x480i      59.94*+\n'
+                'VGA-1 connected primary 640x240+640+0 (normal left inverted right x axis y axis) 0mm x 0mm\n'
+                '   640x480i      59.94 +\n'
+                '   640x240_60.00  60.00*\n'
+                'DVI-I-2 connected 640x480+1280+0 (normal left inverted right x axis y axis) 0mm x 0mm\n'
+                '   640x480i      59.94*+\n')
+            for name, body in (('xrandr', '[ "$1" = --query ] && cat %s || echo "xrandr $*" >> %s'
+                                % (tmp / 'xrandr.txt', calls)),
+                               ('flycast', 'printf "%s\\n" "$@"')):
+                (tmp / name).write_text('#!/bin/sh\n%s\n' % body)
+                (tmp / name).chmod(0o755)
+            conf = tmp / 'fliperos.conf'
+            conf.write_text('connector=VGA-1\nscreens=DVI-I-1,VGA-1,DVI-I-2\n')
+            cfg = tmp / 'emu.cfg'
+            cfg.write_text('[config]\npvr.rend = 3\n')
+            env = dict(os.environ, PATH='%s:%s' % (tmp, os.environ['PATH']), FLIPEROS_CONF=str(conf),
+                       FLIPEROS_FLYCAST_CFG=str(cfg), FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'),
+                       FLIPEROS_FLYCAST_STRETCH='200')
+
+            def run():
+                return subprocess.run(['bash', str(ROOT / 'config/fliperos-multiscreen'), 'flycast', '-config',
+                                       'window:fullscreen=yes', 'f355.zip'], env=env, capture_output=True,
+                                      text=True, timeout=60, check=True).stdout.split('\n')[:-1]
+
+            args = run()
+            # A placa principal no meio; as outras uma largura para cada lado.
+            self.assertEqual(args, ['-config', 'network:MultiboardSlaves=2,window:left=640,window:top=0,'
+                                    'window:width=640,window:height=240', '-config', 'window:fullscreen=yes',
+                                    'f355.zip'])
+            self.assertEqual(calls.read_text().splitlines(), [
+                'xrandr --addmode DVI-I-1 640x240_60.00', 'xrandr --addmode DVI-I-2 640x240_60.00',
+                'xrandr --output DVI-I-1 --mode 640x240_60.00 --pos 0x0 --output VGA-1 --mode 640x240_60.00 '
+                '--pos 640x0 --output DVI-I-2 --mode 640x240_60.00 --pos 1280x0'])
+            # As outras placas so leem o emu.cfg.
+            text = cfg.read_text()
+            self.assertIn('[window]\nfullscreen = yes', text)
+            self.assertIn('rend.ScreenStretching = 200', text)
+            # Saida de outra placa: no X ela e uma GPU screen (VGA-1 -> VGA-1-1).
+            conf.write_text('connector=VGA-1\ncard=card0\nscreens=DVI-I-1,VGA-1,card1:VGA-1,card2:DVI-I-2\n')
+            names = subprocess.run(['bash', str(ROOT / 'config/fliperos-multiscreen'), 'xnames'], env=env,
+                                   capture_output=True, text=True, timeout=60, check=True).stdout.split()
+            self.assertEqual(names, ['DVI-I-1', 'VGA-1', 'VGA-1-1', 'DVI-I-2-2'])
+            # Sem o terceiro monitor: o Flycast direto, sem mexer em nada.
+            conf.write_text('connector=VGA-1\nscreens=VGA-1,DVI-I-1\n')
+            calls.unlink()
+            self.assertEqual(run(), ['-config', 'window:fullscreen=yes', 'f355.zip'])
+            self.assertFalse(calls.exists())
+        self.assertIn('fliperos-automount fliperos-multiscreen; do', ROOTFS)
 
     def test_super_resolution_without_low_dotclock(self):
         # Intel/NVIDIA: o Setup grava dotclock_min. O modo vai direto na
@@ -4839,7 +4914,7 @@ class AutomountTests(unittest.TestCase):
         for path in ('etc/udev/rules.d/99-fliperos-disks.rules', 'etc/systemd/system/fliperos-automount@.service',
                      'etc/polkit-1/rules.d/50-fliperos-udisks.rules'):
             self.assertIn('"$root/%s"' % path, ROOTFS)
-        self.assertRegex(ROOTFS, r' fliperos-automount; do')
+        self.assertRegex(ROOTFS, r' fliperos-automount[^\n]*; do')
         self.assertIn('show_mounts=1', (ROOT / 'config/lxde/pcmanfm/LXDE/desktop-items-0.conf').read_text())
         self.assertIn(' gvfs ', MKISO)
         self.assertIn(' gvfs\n', (ROOT / 'tools/cabinet-update.sh').read_text())

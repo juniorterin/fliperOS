@@ -61,6 +61,19 @@ case $name in
     # e a variavel vale tambem num emu.cfg recriado pelo Flycast.
     export FLYCAST_BIOS_PATH="${FLYCAST_BIOS_PATH:+$FLYCAST_BIOS_PATH:}$HOME/bios/dc"
     set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch" "${@:2}"
+    # Jogos de varias placas NAOMI (Games[].multiboard no naomi_roms.cpp do
+    # Flycast: esquerda, centro e direita) com 3 monitores e os jogos de
+    # varias telas ligados: uma placa em cada monitor (fliperos-multiscreen).
+    game=$(basename -- "${*: -1}")
+    game=${game%.*}
+    case $game in
+      alpilot | alpilotj | f355 | f355twin | f355twinp | f355twn2 | sstrkfgt | sstrkfgta)
+        if grep -qE '^screens=[^,]+,[^,]+,' "$CONF" 2> /dev/null && ! grep -q '^multiscreen=off' "$CONF"; then
+          export FLIPEROS_FLYCAST_STRETCH=$stretch
+          set -- "${FLIPEROS_MULTISCREEN:-/opt/fliperos/bin/fliperos-multiscreen}" "$@"
+        fi
+        ;;
+    esac
     ;;
   dolphin-emu)
     set -- "$1" -C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3 "${@:2}"

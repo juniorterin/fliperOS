@@ -12,7 +12,8 @@
 #  - -inipath /etc/fliperos/mame: o mame.ini do sistema, que o Setup grava.
 #    O padrao do release e ".;ini", relativo a pasta de onde se abre. Um
 #    -inipath na linha de comando vale mais.
-#  - Com mais de um monitor (Setup > Video Setup > Multiple Monitors), a
+#  - Com mais de um monitor (Setup > Video Setup > Multiple Monitors) e os
+#    jogos de varias telas ligados (multiscreen= do fliperos.conf), a
 #    pasta screens no inipath (o numscreens dos jogos de 2 ou 3 telas,
 #    config/fliperos-mame-screens) e cada janela na saida da sua tela.
 real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
@@ -20,6 +21,7 @@ inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/mame}
 x11run=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 screens_gen=${FLIPEROS_MAME_SCREENS:-/opt/fliperos/bin/fliperos-mame-screens}
+multiscreen=${FLIPEROS_MULTISCREEN:-/opt/fliperos/bin/fliperos-multiscreen}
 
 # opens_video ARGUMENTOS: o comando abre a tela (um jogo ou a lista do MAME)?
 opens_video() {
@@ -62,6 +64,8 @@ fi
 inipath=$inidir
 restore_primary=""
 IFS=, read -r -a outputs <<< "$(sed -n 's/^screens=//p' "$conf" 2> /dev/null | tail -1)"
+# Setup > Multiple Monitors > Multi-Screen Games: Off deixa tudo no monitor 1.
+grep -q '^multiscreen=off' "$conf" 2> /dev/null && outputs=()
 if ((${#outputs[@]} > 1)) && opens_video "$@"; then
   # Feitos pelo Setup; refeitos aqui se o GroovyMAME ou o numero de monitores
   # mudou (sem nada a fazer, sai na hora).
@@ -84,6 +88,10 @@ if ((${#outputs[@]} > 1)) && opens_video "$@"; then
       [[ -n ${FLIPEROS_X11_RUN_SESSION:-} ]] || restore_primary=$primary
     fi
     export SDL_VIDEO_X11_XRANDR=1
+    # Os nomes do XRandR: uma saida de outra placa (card1:VGA-1) tem outro
+    # nome no X (VGA-1-1).
+    mapfile -t xouts < <("$multiscreen" xnames 2> /dev/null)
+    ((${#xouts[@]} == ${#outputs[@]})) && outputs=("${xouts[@]}")
     for i in "${!outputs[@]}"; do
       for j in "${!names[@]}"; do
         [[ ${names[j]} == "${outputs[i]}" ]] && set -- "$@" "-screen$i" "screen$j"
