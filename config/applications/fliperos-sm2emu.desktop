@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=SM2-Emu
+GenericName=Sega Model 2 emulator
+Comment=Clone and build on first launch; opens on the CRT
+Exec=/opt/fliperos/bin/fliperos-launch sm2emu
+TryExec=/usr/local/bin/fliperos-sm2emu
+Icon=/usr/local/share/pixmaps/fliperos-sm2emu.svg
+Terminal=false
+Categories=Game;Emulator;

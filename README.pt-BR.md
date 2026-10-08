@@ -117,7 +117,7 @@ Use só jogos que você tem direito de usar (cópias dos seus originais, ou os j
 | `mame` | Fliperama: sets do MAME (`.zip`, `.7z`) e as pastas de CHD | GroovyMAME |
 | `naomi`, `naomi2`, `atomiswave` | Sets de Sega Naomi e Sammy Atomiswave | Flycast |
 | `model3` | Sets de Sega Model 3 | Supermodel |
-| `model2` | Sets de Sega Model 2 | Model 2 Emulator (precisa do Setup > Extras > Wine) |
+| `model2` | Sets de Sega Model 2 | Model 2 Emulator (Wine) ou SM2-Emu (menu Games; compilado na primeira abertura) |
 | `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
 | `dolphin` | GameCube e Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |

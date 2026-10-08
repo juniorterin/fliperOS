@@ -4063,6 +4063,7 @@ class EmulatorMenuTests(unittest.TestCase):
     # emulador (o usuario copia), e o Fightcade aparece depois de baixado
     # pelo Setup.
     TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/local/bin/fliperos-model2',
+               'sm2emu': '/usr/local/bin/fliperos-sm2emu',
                'fightcade': '/opt/fliperos/fightcade/fightcade'}
 
     def entry(self, path):
@@ -4071,7 +4072,7 @@ class EmulatorMenuTests(unittest.TestCase):
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
         self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'supermodel',
-                                 'dolphin', 'openbor', 'model2', 'fightcade'})
+                                 'dolphin', 'openbor', 'model2', 'sm2emu', 'fightcade'})
 
     def test_entries_go_through_the_launcher(self):
         launcher = (ROOT / 'config/fliperos-launch').read_text()
@@ -4116,7 +4117,8 @@ class EmulatorModeTests(unittest.TestCase):
             # xinit falso: mostra o modo pedido e o comando.
             (bin_dir / 'xinit').write_text('#!/bin/bash\necho "MODE=$FLIPEROS_RES_W $FLIPEROS_RES_H $FLIPEROS_RES_HZ"\n'
                                            'echo "ARGS=$*"\n')
-            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog', 'supermodel', 'hypseus', 'fightcade'):
+            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog', 'supermodel', 'hypseus',
+                         'fightcade', 'sm2-emu'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')
             for p in bin_dir.iterdir():
                 p.chmod(0o755)
@@ -4180,6 +4182,9 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertIn('supermodel          640x240@57.524  496x384@57.524\n', table)
             # Linha mudada pela pessoa fica como esta.
             self.assertIn('fliperos-model2     320x240@60      496x384@57.524\n', table)
+            sm2 = next(l for l in (ROOT / 'config/fliperos-emulator-modes.conf').read_text().splitlines()
+                       if l.startswith('sm2-emu'))
+            self.assertIn(sm2 + '\n', table)
 
     def test_fightcade_lobby_gets_448_lines_and_a_mouse_cursor(self):
         # A sala de jogos nao cabe em 240 linhas: 512x448 entrelacado no
@@ -4323,6 +4328,55 @@ class EmulatorModeTests(unittest.TestCase):
                               'zzz\t%s/zzz.zip' % roms])
             self.assertEqual((tmp / 'out').read_text().strip(), '%s/scud.zip' % roms)
         self.assertNotIn('zenity', MKISO)
+
+    def test_sm2emu_stretches_on_15khz_and_picks_a_game(self):
+        # O binario nao vem na imagem. No 15 kHz o pixel e largo: a primeira
+        # abertura grava stretch; o que ja estava no ini fica.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            out = self.run_x11(['sm2-emu', 'vf2.zip'], home=home).stdout
+            self.assertIn('MODE=640 240 57.524', out)
+            self.assertIn('--fullscreen vf2.zip', out)
+            ini = home / '.config' / 'sm2-emu' / 'sm2-emu.ini'
+            self.assertEqual(ini.read_text(), 'aspect_mode = stretch\n')
+            ini.write_text('aspect_mode = 4:3\n')
+            self.run_x11(['sm2-emu', 'vf2.zip'], home=home)
+            self.assertEqual(ini.read_text(), 'aspect_mode = 4:3\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            out = self.run_x11(['sm2-emu', 'vf2.zip'], frequency='31k', home=home).stdout
+            self.assertIn('MODE=496 384 57.524', out)
+            self.assertFalse((home / '.config' / 'sm2-emu' / 'sm2-emu.ini').exists())
+        launch = (ROOT / 'config/fliperos-launch').read_text()
+        self.assertIn('/usr/local/bin/fliperos-sm2emu --pick "$pick"', launch)
+        self.assertIn('usr/local/bin/fliperos-sm2emu', ROOTFS)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            src, roms, bin_dir = tmp / 'src', tmp / 'roms', tmp / 'bin'
+            (src / 'build' / 'bin').mkdir(parents=True)
+            roms.mkdir()
+            bin_dir.mkdir()
+            (src / 'build' / 'bin' / 'sm2-emu').write_text('#!/bin/sh\n')
+            (src / 'build' / 'bin' / 'sm2-emu').chmod(0o755)
+            (src / 'build' / 'bin' / 'games.xml').write_text(
+                '<games><game name="vf2"><title>Virtua Fighter 2</title><version>2.1</version></game>'
+                '<game name="hotd"><title>The House of the Dead</title></game></games>')
+            for name in ('vf2.zip', 'hotd.zip', 'outro.zip', 'notazip.txt'):
+                (roms / name).write_text('x')
+            gum = bin_dir / 'gum'
+            gum.write_text('#!/bin/sh\ntee "$GUM_IN" | head -1 | cut -f2\n')
+            gum.chmod(0o755)
+            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']),
+                       FLIPEROS_SM2_SRC=str(src), FLIPEROS_MODEL2_DIR=str(roms),
+                       GUM_IN=str(tmp / 'list'), HOME=str(tmp))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-sm2emu'), '--pick', str(tmp / 'out')],
+                           env=env, check=True, capture_output=True, timeout=30)
+            self.assertEqual((tmp / 'list').read_text().splitlines(),
+                             ['outro\t%s/outro.zip' % roms,
+                              'The House of the Dead\t%s/hotd.zip' % roms,
+                              'Virtua Fighter 2 (2.1)\t%s/vf2.zip' % roms,
+                              'Update sm2-emu\tUPDATE'])
+            self.assertEqual((tmp / 'out').read_text().strip(), '%s/outro.zip' % roms)
 
     def test_pcsx2_ini_is_adjusted_after_first_run(self):
         with tempfile.TemporaryDirectory() as tmp:

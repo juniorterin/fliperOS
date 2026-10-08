@@ -94,8 +94,15 @@ while IFS= read -r line; do
   grep -q "^${line%%[[:space:]]*}[[:space:]]" "$root/etc/fliperos/emulator-modes.conf" ||
     printf '%s\n' "$line" >> "$root/etc/fliperos/emulator-modes.conf"
 done < <(grep '^fightcade' "$src/config/fliperos-emulator-modes.conf")
+# SM2-Emu: o modo, numa tabela de antes dele. A linha mudada pela pessoa fica.
+line=$(grep '^sm2-emu[[:space:]]' "$src/config/fliperos-emulator-modes.conf" || true)
+[[ -z $line ]] || grep -q '^sm2-emu[[:space:]]' "$root/etc/fliperos/emulator-modes.conf" ||
+  printf '%s\n' "$line" >> "$root/etc/fliperos/emulator-modes.conf"
 # Model 2 no Wine: no PATH, para os frontends tambem chamarem.
 install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model2"
+# SM2-Emu: so o lancador. O fonte e o binario nascem em ~/.local/src na
+# primeira abertura (config/fliperos-sm2emu), fora da imagem.
+install -Dm755 "$src/config/fliperos-sm2emu" "$root/usr/local/bin/fliperos-sm2emu"
 # Fightcade 2 (Setup > Frontend): o que o baixa do site dele e o abre, e o
 # openbox dele (Alt+Tab entre a sala de jogos e o emulador). O programa em si
 # nao vem na imagem (codigo fechado).

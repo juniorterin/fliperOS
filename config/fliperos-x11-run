@@ -149,6 +149,16 @@ case $name in
       fi
     done
     ;;
+  sm2-emu)
+    # 640x240 tem pixel mais largo que o 4:3: no tubo a imagem so preenche
+    # com stretch. So na primeira vez; o que a pessoa gravar no F10 fica.
+    cfg=${XDG_CONFIG_HOME:-$HOME/.config}/sm2-emu
+    mkdir -p "$cfg"
+    if [[ ! -f $cfg/sm2-emu.ini ]] && ((FLIPEROS_RES_H * 4 < FLIPEROS_RES_W * 3)); then
+      printf 'aspect_mode = stretch\n' > "$cfg/sm2-emu.ini"
+    fi
+    set -- "$1" --fullscreen "${@:2}"
+    ;;
 esac
 
 # SDL no X: chamado de dentro do fliperos-kms-run (o GroovyMAME, que se abre

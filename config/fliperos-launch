@@ -7,12 +7,12 @@
 # o desktop fecha, o fliperos-session abre o emulador e, quando ele fecha,
 # volta para o desktop.
 #
-#   fliperos-launch retroarch|groovymame|flycast|pcsx2|supermodel|dolphin|openbor|model2|fightcade
+#   fliperos-launch retroarch|groovymame|flycast|pcsx2|supermodel|dolphin|openbor|model2|sm2emu|fightcade
 #   fliperos-launch --mode 640x240@60 programa [argumentos]   (qualquer programa)
 set -euo pipefail
 
 usage() {
-  echo "Usage: fliperos-launch retroarch|groovymame|flycast|pcsx2|supermodel|dolphin|openbor|model2|fightcade" >&2
+  echo "Usage: fliperos-launch retroarch|groovymame|flycast|pcsx2|supermodel|dolphin|openbor|model2|sm2emu|fightcade" >&2
   echo "       fliperos-launch --mode WIDTHxHEIGHT@HZ program [arguments]" >&2
   exit 2
 }
@@ -87,6 +87,21 @@ case ${1:-} in
   dolphin) label=Dolphin run=("$x11" dolphin-emu) ;;
   openbor) label=OpenBOR run=("$x11" openbor) ;;
   model2) label="Model 2" run=("$x11" fliperos-model2) ;;
+  # O SM2-Emu nao vem compilado: o --pick clona e compila na primeira vez,
+  # e a lista dos .zip de ~/roms/model2 sai antes de fechar o desktop.
+  sm2emu) label="SM2-Emu"
+    bin=${FLIPEROS_SM2_BIN:-$HOME/.local/src/sm2-emu/build/bin/sm2-emu}
+    if [[ $# -ge 2 ]]; then
+      run=("$x11" "$bin" "${@:2}")
+    else
+      pick=$(mktemp)
+      ${FLIPEROS_TERMINAL:-alacritty} -T "SM2-Emu" -e /usr/local/bin/fliperos-sm2emu --pick "$pick" || true
+      rom=$(< "$pick")
+      rm -f "$pick"
+      [[ -n $rom ]] || exit 0
+      run=("$x11" "$bin" "$rom")
+    fi
+    ;;
   # O Fightcade se abre no Xorg dele sozinho, como na sessao de boot
   # (config/fliperos-fightcade).
   fightcade) label=Fightcade run=(/opt/fliperos/bin/fliperos-kms-run /opt/fliperos/fightcade/fightcade) ;;
