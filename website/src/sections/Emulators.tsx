@@ -1,11 +1,27 @@
 'use client';
 
+import Image from 'next/image';
 import { Download, LayoutGrid } from 'lucide-react';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
 import { useI18n } from '@/i18n/I18nProvider';
 
-// Monogramas no estilo dos ícones do menu do FliperOS (config/icons): sem logos de terceiros.
+// Ícones oficiais de cada projeto (public/icons, origem no README de lá).
+const ICON: Record<string, string> = {
+  groovymame: '/icons/groovymame.png',
+  retroarch: '/icons/retroarch.svg',
+  flycast: '/icons/flycast.png',
+  pcsx2: '/icons/pcsx2.png',
+  dolphin: '/icons/dolphin.svg',
+  model2: '/icons/model2.png',
+  openbor: '/icons/openbor.png',
+  'attract-mode': '/icons/attract-mode.png',
+  'es-de': '/icons/es-de.svg',
+  pegasus: '/icons/pegasus.png',
+  fightcade: '/icons/fightcade.png',
+};
+
+// Monogramas no estilo dos ícones do menu do FliperOS, para quem não tem ícone próprio.
 const MONOGRAM: Record<string, string> = {
   groovymame: 'GM',
   retroarch: 'RA',
@@ -32,6 +48,21 @@ const ACCENTS = [
 
 function Monogram({ id, index, size = 'md' }: { id: string; index: number; size?: 'md' | 'lg' }) {
   const box = size === 'lg' ? 'size-14 text-lg' : 'size-12 text-base';
+  const icon = ICON[id];
+  if (icon) {
+    const px = size === 'lg' ? 56 : 48;
+    return (
+      <Image
+        src={icon}
+        alt=""
+        aria-hidden="true"
+        width={px}
+        height={px}
+        unoptimized
+        className={`shrink-0 object-contain ${box}`}
+      />
+    );
+  }
   return (
     <span
       aria-hidden="true"
