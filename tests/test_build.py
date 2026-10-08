@@ -4363,28 +4363,27 @@ class EmulatorModeTests(unittest.TestCase):
 
     def test_sm2emu_stretches_on_15khz_and_picks_a_game(self):
         # O binario nao vem na imagem. No 15 kHz o pixel e largo: cada
-        # abertura grava stretch, mesmo se o ini ja nasceu em 4:3.
+        # abertura grava stretch, mesmo se o ini ja nasceu em 4:3. O VSync
+        # liga na primeira abertura e depois fica como a pessoa deixar.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             out = self.run_x11(['sm2-emu', 'vf2.zip'], home=home).stdout
             self.assertIn('MODE=640 240 57.524', out)
             self.assertIn('--fullscreen vf2.zip', out)
             ini = home / '.config' / 'sm2-emu' / 'sm2-emu.ini'
-            self.assertEqual(ini.read_text(), 'aspect_mode = stretch\n')
+            self.assertEqual(ini.read_text(), 'aspect_mode = stretch\nvsync = true\n')
             ini.write_text('vsync = false\naspect_mode = 4:3\nscaling_method = nearest\n')
             self.run_x11(['sm2-emu', 'vf2.zip'], home=home)
             self.assertEqual(ini.read_text(),
                              'vsync = false\naspect_mode = stretch\nscaling_method = nearest\n')
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            out = self.run_x11(['sm2-emu', 'vf2.zip'], frequency='31k', home=home).stdout
-            self.assertIn('MODE=496 384 57.524', out)
-            self.assertFalse((home / '.config' / 'sm2-emu' / 'sm2-emu.ini').exists())
             ini = home / '.config' / 'sm2-emu' / 'sm2-emu.ini'
             ini.parent.mkdir(parents=True)
-            ini.write_text('aspect_mode = 4:3\n')
-            self.run_x11(['sm2-emu', 'vf2.zip'], frequency='31k', home=home)
-            self.assertEqual(ini.read_text(), 'aspect_mode = 4:3\n')
+            ini.write_text('vsync = false\naspect_mode = 4:3\n')
+            out = self.run_x11(['sm2-emu', 'vf2.zip'], frequency='31k', home=home).stdout
+            self.assertIn('MODE=496 384 57.524', out)
+            self.assertEqual(ini.read_text(), 'vsync = true\naspect_mode = 4:3\n')
         launch = (ROOT / 'config/fliperos-launch').read_text()
         self.assertIn('/usr/local/bin/fliperos-sm2emu --pick "$pick"', launch)
         self.assertIn('usr/local/bin/fliperos-sm2emu', ROOTFS)

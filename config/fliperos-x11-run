@@ -141,18 +141,28 @@ case $name in
     set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${ppc[@]}" "${@:2}"
     ;;
   fliperos-model2 | sm2-emu)
+    cfg=${XDG_CONFIG_HOME:-$HOME/.config}/sm2-emu
+    mkdir -p "$cfg"
+    ini=$cfg/sm2-emu.ini
+    # sm2_set CHAVE VALOR: troca a linha da chave no ini, ou a acrescenta.
+    sm2_set() {
+      if [[ -f $ini ]] && grep -q "^$1[[:space:]=]" "$ini"; then
+        sed -i -E "s/^$1[[:space:]=].*/$1 = $2/" "$ini"
+      else
+        printf '%s = %s\n' "$1" "$2" >> "$ini"
+      fi
+    }
     # 640x240 tem pixel mais largo que o 4:3: no tubo a imagem so preenche
     # com stretch. O ini do emulador nasce em 4:3, entao cada abertura
     # nesse modo grava stretch de novo; o resto da configuracao fica.
     if ((FLIPEROS_RES_H * 4 < FLIPEROS_RES_W * 3)); then
-      cfg=${XDG_CONFIG_HOME:-$HOME/.config}/sm2-emu
-      mkdir -p "$cfg"
-      ini=$cfg/sm2-emu.ini
-      if [[ -f $ini ]] && grep -q '^aspect_mode[[:space:]=]' "$ini"; then
-        sed -i -E 's/^aspect_mode[[:space:]=].*/aspect_mode = stretch/' "$ini"
-      else
-        printf 'aspect_mode = stretch\n' >> "$ini"
-      fi
+      sm2_set aspect_mode stretch
+    fi
+    # O emulador nasce sem VSync (rasga a imagem no tubo). Liga uma vez so:
+    # quem desligar no menu do F10 fica com a escolha.
+    if [[ ! -e $cfg/.fliperos-vsync ]]; then
+      sm2_set vsync true
+      : > "$cfg/.fliperos-vsync"
     fi
     set -- "$1" --fullscreen "${@:2}"
     ;;

@@ -27,6 +27,7 @@ Fightcade 2 on the tube as it should be: every online match in the game's native
 - ROM Cleaner for Model 2 (now SM2-Emu): the I/O board sets `model1io.zip` and `model1io2.zip` go along with Daytona USA, Desert Tank and Virtua Cop, which do not start without them. The Model 2 game list hides them
 - Model 2: the F10 settings menu can be read at 640x240. Its text was shrunk to about 6 pixels high and the window covered the menu and status bars; now the text stays at its normal size and the window scrolls
 - Model 2: opening a game no longer overwrites its saved NVRAM
+- Model 2: VSync is on by default, so the picture no longer tears on the tube. Turning it off in the F10 menu sticks
 
 **fliperos-setup changes:**
 
