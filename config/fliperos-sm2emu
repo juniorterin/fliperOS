@@ -117,7 +117,9 @@ build_tree() {
 }
 
 # game_rows: "titulo<TAB>arquivo" dos .zip de ~/roms/model2, pelo nome no
-# games.xml (o .zip que ele nao conhece fica pelo nome do arquivo).
+# games.xml (o .zip que ele nao conhece fica pelo nome do arquivo). Os zips
+# de dispositivo (model1io.zip: a placa de I/O, lida ao lado do jogo) nao
+# sao jogos e ficam de fora.
 game_rows() {
   python3 - "$roms" "$games_xml" << 'PY'
 import os
@@ -125,16 +127,18 @@ import sys
 import xml.etree.ElementTree as ET
 
 folder, games_xml = sys.argv[1:3]
-names = {}
+names, devices = {}, set()
 try:
-    for game in ET.parse(games_xml).getroot().iter('game'):
+    root = ET.parse(games_xml).getroot()
+    for game in root.iter('game'):
         title = game.findtext('title', '') or game.get('name') or ''
         version = (game.findtext('version', '') or '').strip()
         names[game.get('name')] = '%s (%s)' % (title, version) if version else title
+    devices = {d.get('name') for d in root.iter('device')} - set(names)
 except (OSError, ET.ParseError):
     pass
 try:
-    files = [f for f in os.listdir(folder) if f.lower().endswith('.zip')]
+    files = [f for f in os.listdir(folder) if f.lower().endswith('.zip') and f[:-4] not in devices]
 except OSError:
     files = []
 rows = sorted(

@@ -1599,7 +1599,7 @@ class RomCleanTests(unittest.TestCase):
         self.assertEqual(move, ['mslug.zip', 'mslugb.zip', 'neogeo.zip'])
 
     def test_model2_and_model3_boards(self):
-        # Os alvos Model 2 Emulator e Supermodel: pelo arquivo do driver.
+        # Os alvos SM2-Emu e Supermodel: pelo arquivo do driver.
         roms = self.tmp / 'sega'
         roms.mkdir()
         xml = '<mame>'
@@ -1610,6 +1610,20 @@ class RomCleanTests(unittest.TestCase):
         (self.tmp / 'sega.xml').write_text(xml + '</mame>')
         for board, expected in (('model2', ['daytona.zip', 'vf2.zip']), ('model3', ['vf3.zip'])):
             self.assertEqual(self.scan('--hardware', board, xml=self.tmp / 'sega.xml', roms=roms)[1], expected)
+        # Dos dispositivos do MAME, so os que o SM2-Emu le (a placa de I/O) vao
+        # com o jogo; o placar (segabill) nao.
+        xml = ('<mame><machine name="daytona" sourcefile="sega/model2.cpp"><description>Daytona</description>'
+               '<input players="2" coins="1"/><device_ref name="model1io"/><device_ref name="segabill"/></machine>')
+        for device in ('model1io', 'segabill'):
+            xml += ('<machine name="%s" isdevice="yes" runnable="no"><description>%s</description>'
+                    '<rom name="%s.bin" crc="00000001" size="1"/></machine>' % (device, device, device))
+            (roms / (device + '.zip')).write_bytes(b'x')
+        (self.tmp / 'sega.xml').write_text(xml + '</mame>')
+        move = self.scan('--hardware', 'model2', '--only-devices', 'model1io,model1io2',
+                         xml=self.tmp / 'sega.xml', roms=roms)[1]
+        self.assertEqual(move, ['daytona.zip', 'model1io.zip'])
+        self.assertEqual(self.scan('--hardware', 'model2', xml=self.tmp / 'sega.xml', roms=roms)[1],
+                         ['daytona.zip', 'model1io.zip', 'segabill.zip'])
 
     def test_cache_and_xml_from_a_command(self):
         cache = self.tmp / 'cache' / 'mame.json'
@@ -4370,8 +4384,11 @@ class EmulatorModeTests(unittest.TestCase):
             (src / 'build' / 'fliperos-patches').write_text(digest.hexdigest() + '\n')
             (src / 'build' / 'bin' / 'games.xml').write_text(
                 '<games><game name="vf2"><title>Virtua Fighter 2</title><version>2.1</version></game>'
-                '<game name="hotd"><title>The House of the Dead</title></game></games>')
-            for name in ('vf2.zip', 'hotd.zip', 'outro.zip', 'notazip.txt'):
+                '<game name="hotd"><title>The House of the Dead</title></game>'
+                '<game name="daytona"><title>Daytona USA</title><devices><device name="model1io"/></devices>'
+                '</game></games>')
+            # O zip da placa de I/O fica ao lado dos jogos, mas fora da lista.
+            for name in ('vf2.zip', 'hotd.zip', 'outro.zip', 'notazip.txt', 'model1io.zip'):
                 (roms / name).write_text('x')
             gum = bin_dir / 'gum'
             gum.write_text('#!/bin/sh\ntee "$GUM_IN" | head -1 | cut -f2\n')

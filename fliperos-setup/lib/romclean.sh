@@ -148,7 +148,7 @@ romclean_visible() {
 }
 
 # romclean_own_emulator ALVO: o alvo e um emulador que nao e o MAME (Flycast,
-# Model 2 Emulator, Supermodel), com o romset do MAME so de uma placa. A
+# SM2-Emu, Supermodel), com o romset do MAME so de uma placa. A
 # emulacao que conta e a dele: o status do MAME nao filtra.
 romclean_own_emulator() {
   [[ $1 =~ ^(flycast|model2|model3)$ ]]
@@ -299,7 +299,7 @@ romclean_args() {
       flycast) [[ $value == no ]] && printf '%s\n' --exclude flycast ;;
     esac
   done
-  # No Model 2 Emulator e no Supermodel so entram os jogos da placa deles.
+  # No SM2-Emu e no Supermodel so entram os jogos da placa deles.
   [[ $target == model[23] ]] && printf '%s\n' --hardware "$target"
   return 0
 }
@@ -384,7 +384,7 @@ romclean_data_args() {
 # O alvo diz de que versao do MAME e o romset (o XML) e para onde os jogos
 # vao: groovymame (o MAME deste sistema), flycast (o mesmo romset, so Naomi,
 # Naomi 2 e Atomiswave, uma pasta por sistema), model2 e model3 (o mesmo
-# romset, so os jogos do Sega Model 2 para o Model 2 Emulator e do Model 3
+# romset, so os jogos do Sega Model 2 para o SM2-Emu e do Model 3
 # para o Supermodel), mame2010 (o 0.139 do core do RetroArch, o "MAME 3D":
 # os jogos de arcade baseados no PlayStation, que ele roda bem) ou file
 # (outro XML).
@@ -403,7 +403,7 @@ romclean_target_label() {
   case $1 in
     groovymame) echo "GroovyMAME $(groovymame_version)" ;;
     flycast) echo "Flycast (Naomi, Naomi 2, Atomiswave)" ;;
-    model2) echo "Model 2 Emulator (Sega Model 2)" ;;
+    model2) echo "SM2-Emu (Sega Model 2)" ;;
     model3) echo "Supermodel (Sega Model 3)" ;;
     mame2010) echo "MAME 2010 / MAME 3D (0.139, RetroArch core): PlayStation-based (PSX) arcade games" ;;
     *) echo "$1" ;;
@@ -486,8 +486,11 @@ romclean_target_args() {
     done
   else
     printf '%s\n' --dest "$dest"
-    # Os dispositivos com ROM sao do MAME; o Model 2 e o Supermodel nao os usam.
-    [[ $target == model[23] ]] && printf '%s\n' --no-devices
+    # Os dispositivos com ROM sao do MAME. O SM2-Emu le so as placas de I/O
+    # (model1io, model1io2: Daytona, Desert Tank, Virtua Cop), num zip ao lado
+    # do jogo; o Supermodel nao usa nenhum.
+    [[ $target == model2 ]] && printf '%s\n' --only-devices model1io,model1io2
+    [[ $target == model3 ]] && printf '%s\n' --no-devices
   fi
   [[ -n $bios ]] && printf '%s\n' --bios-dest "$bios"
   return 0

@@ -2620,7 +2620,7 @@ class RomCleanerTests(Base):
         out = self.env.out("romclean_targets", self.vars).splitlines()
         self.assertEqual([o.split("|")[0] for o in out], ["groovymame", "flycast", "model2", "model3", "file"])
         self.assertEqual(out[0], "groovymame|GroovyMAME 0.289")
-        self.assertEqual(out[2:4], ["model2|Model 2 Emulator (Sega Model 2)", "model3|Supermodel (Sega Model 3)"])
+        self.assertEqual(out[2:4], ["model2|SM2-Emu (Sega Model 2)", "model3|Supermodel (Sega Model 3)"])
         (self.env.dir / "mame2010.xml.xz").write_bytes(b"")
         # O MAME 2010 e o "MAME 3D", dos jogos de arcade baseados no PlayStation.
         self.assertIn("mame2010|MAME 2010 / MAME 3D (0.139, RetroArch core): PlayStation-based (PSX) arcade games",
@@ -2652,10 +2652,12 @@ class RomCleanerTests(Base):
                          ["--dest", "%s/naomi" % roms, "--no-devices", "--route", "naomi=%s/naomi" % roms,
                           "--route", "naomi2=%s/naomi2" % roms, "--route", "atomiswave=%s/atomiswave" % roms,
                           "--bios-dest", "%s/dc" % bios])
-        # Model 2 e Model 3: ~/roms/model2 (o link para a pasta do emulador) e
-        # ~/roms/model3, sem BIOS nem os dispositivos do MAME.
+        # Model 2 e Model 3: ~/roms/model2 e ~/roms/model3, sem BIOS. Dos
+        # dispositivos do MAME, so as placas de I/O que o SM2-Emu le.
         self.assertEqual(self.env.out("romclean_default_dest model2; romclean_default_dest model3", self.vars).split(),
                          ["%s/model2" % roms, "%s/model3" % roms])
+        self.assertEqual(self.env.out("romclean_target_args model2 %s/model2" % roms, self.vars).splitlines(),
+                         ["--dest", "%s/model2" % roms, "--only-devices", "model1io,model1io2"])
         self.assertEqual(self.env.out("romclean_target_args model3 %s/model3" % roms, self.vars).splitlines(),
                          ["--dest", "%s/model3" % roms, "--no-devices"])
         home = {"FLIPEROS_USER": "fliperos", "ROMS_ROOT": "/home/fliperos/roms", "BIOS_ROOT": "/home/fliperos/bios"}

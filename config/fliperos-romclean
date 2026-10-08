@@ -41,6 +41,8 @@ Destinos:
   --route SISTEMA=PASTA  a dos jogos de um sistema do Flycast (naomi, naomi2,
                          atomiswave)
   --no-devices           sem os dispositivos (o Flycast nao os usa)
+  --only-devices SET,... so estes dispositivos (o SM2-Emu le o model1io e o
+                         model1io2, as placas de I/O; o resto do MAME nao)
 
 Dados:
   --catver ARQUIVO  --nplayers ARQUIVO  --controls-xml ARQUIVO
@@ -169,7 +171,7 @@ RULES = {
     'cps3': lambda m: m['source'] == 'cps3',
     'midway': lambda m: m['source'] in ('midtunit', 'midwunit', 'midxunit', 'midyunit'),
     'psx': lambda m: any(PSX_CPU.match(cpu) for cpu in m['cpus']),
-    # Os jogos do Model 2 Emulator e do Supermodel (Model 2/2A/2B/2C e Model 3).
+    # Os jogos do SM2-Emu e do Supermodel (Model 2/2A/2B/2C e Model 3).
     'model2': lambda m: m['source'] == 'model2',
     'model3': lambda m: m['source'] == 'model3',
 }
@@ -602,7 +604,8 @@ def plan(machines, present, f, kept=()):
         m = machines.get(todo.pop())
         if m is None:
             continue
-        for dep in [m['romof'], m['cloneof']] + ([] if f.no_devices else m['devices']):
+        devices = [] if f.no_devices else [d for d in m['devices'] if not f.only_devices or d in f.only_devices]
+        for dep in [m['romof'], m['cloneof']] + devices:
             if dep and dep not in needed and dep not in games:
                 needed.add(dep)
                 todo.append(dep)
@@ -1100,6 +1103,7 @@ def main():
     p.add_argument('--bios-dest')
     p.add_argument('--route', action='append', default=[])
     p.add_argument('--no-devices', action='store_true')
+    p.add_argument('--only-devices', type=lambda v: set(csv(v)))
     p.add_argument('--plan', required=True)
     p.add_argument('--names')
     data_arguments(p)
