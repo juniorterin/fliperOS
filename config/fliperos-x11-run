@@ -140,16 +140,7 @@ case $name in
     fi
     set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${ppc[@]}" "${@:2}"
     ;;
-  fliperos-model2)
-    # O Model 2 Emulator le a tela cheia do proprio EMULATOR.INI.
-    for m2ini in /opt/fliperos/model2/EMULATOR.INI /opt/fliperos/model2/emulator.ini; do
-      if [[ -f $m2ini ]]; then
-        /opt/fliperos/bin/fliperos-ini-set "$m2ini" Renderer FullScreenWidth "$FLIPEROS_RES_W"
-        /opt/fliperos/bin/fliperos-ini-set "$m2ini" Renderer FullScreenHeight "$FLIPEROS_RES_H"
-      fi
-    done
-    ;;
-  sm2-emu)
+  fliperos-model2 | sm2-emu)
     # 640x240 tem pixel mais largo que o 4:3: no tubo a imagem so preenche
     # com stretch. So na primeira vez; o que a pessoa gravar no F10 fica.
     cfg=${XDG_CONFIG_HOME:-$HOME/.config}/sm2-emu
@@ -172,13 +163,13 @@ export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/
 vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}
 [[ $vt =~ ^[0-9]+$ ]] || vt=1
-# Cursor so para quem tem interface de mouse: Dolphin, Flycast, o Model 2 no
-# Wine e o Fightcade (a sala de jogos). Eles mesmos o escondem durante o
+# Cursor so para quem tem interface de mouse: Dolphin, Flycast e o Fightcade
+# (a sala de jogos). Eles mesmos o escondem durante o
 # jogo em tela cheia. O PCSX2 abre no Big Picture, que se usa pelo controle;
 # os demais abrem direto no jogo.
 cursor=(-nocursor)
 case $name in
-  dolphin-emu | flycast | fliperos-model2 | fightcade) cursor=() ;;
+  dolphin-emu | flycast | fightcade) cursor=() ;;
 esac
 export FLIPEROS_X11_CURSOR=$((${#cursor[@]} == 0))
 # A saida do X, do Switchres e do emulador vai para

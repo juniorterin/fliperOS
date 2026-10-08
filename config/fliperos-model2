@@ -1,46 +1,24 @@
 #!/usr/bin/env bash
-# Sega Model 2 pelo Model 2 Emulator (ElSemi) no Wine.
+# Sega Model 2 pelo SM2-Emu. O Model 2 Emulator (Wine) saiu: este comando
+# so repassa para o binario compilado em ~/.local/src/sm2-emu. Aberto por um
+# frontend, via fliperos-x11-run. Pelo menu, o fliperos-launch escolhe o jogo
+# antes (config/fliperos-sm2emu).
 #
-# O emulador e freeware de codigo fechado, so para Windows, sem permissao
-# clara de redistribuicao: nao vem na imagem. Copie o conteudo do
-# m2emulator (1.1a) para /opt/fliperos/model2 (pela rede:
-# \\fliperos\FliperOS\model2) e as ROMs para /opt/fliperos/model2/roms.
-# Aberto pelo menu (fliperos-launch model2) ou por um frontend, via
-# fliperos-x11-run, no modo da tabela emulator-modes.conf.
-#
-#   fliperos-model2 [jogo]      (o nome da ROM sem .zip, ex. daytona)
+#   fliperos-model2 [jogo]      (nome sem .zip, ou o caminho do .zip)
 set -euo pipefail
-dir=/opt/fliperos/model2
-exe=""
-for candidate in emulator_multicpu.exe EMULATOR_MULTICPU.EXE emulator.exe EMULATOR.EXE; do
-  [[ -f $dir/$candidate ]] && { exe=$candidate; break; }
-done
-say() {
-  if [[ -n ${DISPLAY:-} ]] && command -v gxmessage > /dev/null; then
-    gxmessage -center -wrap -geometry 460x200 -title "Model 2" -buttons "OK:0" "$1"
+src=${FLIPEROS_SM2_SRC:-$HOME/.local/src/sm2-emu}
+bin=$src/build/bin/sm2-emu
+roms=${FLIPEROS_MODEL2_DIR:-$HOME/roms/model2}
+if [[ ! -x $bin ]]; then
+  echo "Model 2 is not built yet. Open it from the desktop menu once to clone and build it." >&2
+  exit 1
+fi
+args=()
+for arg in "$@"; do
+  if [[ $arg != -* && ! -e $arg && -f $roms/$arg.zip ]]; then
+    args+=("$roms/$arg.zip")
   else
-    echo "$1" >&2
+    args+=("$arg")
   fi
-}
-# O Wine nao vem na imagem (Setup > Extras).
-if ! command -v wine > /dev/null; then
-  say "Wine is not installed.
-
-The Model 2 Emulator runs in Wine: Setup > Extras > Wine installs it
-(it needs the network once)."
-  exit 1
-fi
-if [[ -z $exe ]]; then
-  say "Model 2 Emulator not found.
-
-Copy the m2emulator files (emulator_multicpu.exe and the rest) to
-/opt/fliperos/model2 - over the network: \\\\fliperos\\FliperOS\\model2 -
-and the ROMs to /opt/fliperos/model2/roms."
-  exit 1
-fi
-# Um prefixo do Wine so para ele, no home (o de outros programas nao muda).
-export WINEPREFIX="$HOME/.local/share/fliperos/wine-model2"
-export WINEDEBUG=-all
-mkdir -p "$WINEPREFIX"
-cd "$dir"
-exec wine "$exe" "$@"
+done
+exec "$bin" "${args[@]}"

@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=Model 2
-GenericName=Sega Model 2 emulator (Wine)
-Comment=Opens on the CRT; the desktop comes back when it closes
+GenericName=Sega Model 2 emulator
+Comment=Clone and build on first launch; opens on the CRT
 Exec=/opt/fliperos/bin/fliperos-launch model2
 TryExec=/usr/local/bin/fliperos-model2
 Icon=/usr/local/share/pixmaps/fliperos-model2.svg

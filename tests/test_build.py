@@ -4063,7 +4063,6 @@ class EmulatorMenuTests(unittest.TestCase):
     # emulador (o usuario copia), e o Fightcade aparece depois de baixado
     # pelo Setup.
     TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/local/bin/fliperos-model2',
-               'sm2emu': '/usr/local/bin/fliperos-sm2emu',
                'fightcade': '/opt/fliperos/fightcade/fightcade'}
 
     def entry(self, path):
@@ -4072,7 +4071,7 @@ class EmulatorMenuTests(unittest.TestCase):
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
         self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'supermodel',
-                                 'dolphin', 'openbor', 'model2', 'sm2emu', 'fightcade'})
+                                 'dolphin', 'openbor', 'model2', 'fightcade'})
 
     def test_entries_go_through_the_launcher(self):
         launcher = (ROOT / 'config/fliperos-launch').read_text()
@@ -4375,7 +4374,7 @@ class EmulatorModeTests(unittest.TestCase):
                              ['outro\t%s/outro.zip' % roms,
                               'The House of the Dead\t%s/hotd.zip' % roms,
                               'Virtua Fighter 2 (2.1)\t%s/vf2.zip' % roms,
-                              'Update sm2-emu\tUPDATE'])
+                              'Update Model 2\tUPDATE'])
             self.assertEqual((tmp / 'out').read_text().strip(), '%s/outro.zip' % roms)
 
     def test_pcsx2_ini_is_adjusted_after_first_run(self):
@@ -4540,11 +4539,12 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertLess(body.index('dpkg --add-architecture i386'), body.index('install "$@"'))
 
     def test_model2_emulator_is_not_redistributed(self):
-        # Freeware de codigo fechado, sem permissao clara: o usuario copia.
+        # O Model 2 do Wine saiu. O comando abre o SM2-Emu, compilado no home.
         self.assertNotRegex(MKISO, r'(?i)m2emulator.*(http|zip)')
         helper = (ROOT / 'config/fliperos-model2').read_text()
-        self.assertIn('/opt/fliperos/model2', helper)
-        self.assertIn('WINEPREFIX=', helper)
+        self.assertIn('sm2-emu', helper)
+        self.assertNotIn('wine', helper)
+        self.assertNotIn('WINEPREFIX=', helper)
 
 
 class AutomountTests(unittest.TestCase):

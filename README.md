@@ -117,7 +117,7 @@ Use only games you have the right to use (your own dumps, or the free homebrew f
 | `mame` | Arcade: MAME sets (`.zip`, `.7z`) and their CHD folders | GroovyMAME |
 | `naomi`, `naomi2`, `atomiswave` | Sega Naomi and Sammy Atomiswave sets | Flycast |
 | `model3` | Sega Model 3 sets | Supermodel |
-| `model2` | Sega Model 2 sets | Model 2 Emulator (Wine) or SM2-Emu (Games menu; built on first launch) |
+| `model2` | Sega Model 2 sets | Model 2 (SM2-Emu, Games menu; built on first launch) |
 | `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
 | `dolphin` | GameCube and Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |

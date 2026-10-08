@@ -124,7 +124,7 @@ dest=${2:?}
 theme
 
 if [[ ! -x $bin ]]; then
-  gum confirm "Clone and build SM2-Emu now? Needs the network and takes a few minutes." || exit 0
+  gum confirm "Clone and build Model 2 now? Needs the network and takes a few minutes." || exit 0
   if deps_missing; then
     printf 'Installing build tools. sudo may ask for the password.\n'
     if ! install_deps; then
@@ -141,6 +141,7 @@ if [[ ! -x $bin ]]; then
   fi
 fi
 
+header="Model 2 - choose a game (Esc cancels)"
 while :; do
   rows=$(game_rows)
   if [[ -z $rows ]]; then
@@ -148,8 +149,8 @@ while :; do
     pause
     exit 0
   fi
-  list=$(printf '%s\nUpdate sm2-emu\tUPDATE\n' "$rows")
-  choice=$(gum choose --header "SM2-Emu - choose a game (Esc cancels)" \
+  list=$(printf '%s\nUpdate Model 2\tUPDATE\n' "$rows")
+  choice=$(gum choose --header "$header" \
     --height "$(($(tput lines 2> /dev/null || echo 24) - 2))" \
     --label-delimiter $'\t' <<< "$list") || exit 0
   if [[ $choice == UPDATE ]]; then
@@ -166,9 +167,17 @@ while :; do
       printf 'Build failed.\n'
       pause
     fi
+    header="Model 2 - choose a game (Esc cancels)"
     continue
   fi
   [[ -n $choice ]] || exit 0
-  printf '%s\n' "$choice" > "$dest"
-  exit 0
+  # Um zip incompleto faz o emulador sair na hora, e o desktop volta sem
+  # dizer o que faltou. Aqui a falha fica nesta lista.
+  err=$("$bin" --boot-test 1 --log-level error "$choice" 2>&1 >/dev/null) && {
+    printf '%s\n' "$choice" > "$dest"
+    exit 0
+  }
+  header=$(printf '%s\n' "$err" | sed -n 's/^\[ERROR\] //p')
+  header=${header%%$'\n'*}
+  [[ -n $header ]] || header="This set could not be loaded."
 done

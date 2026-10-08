@@ -20,7 +20,7 @@ Fightcade 2 on the tube as it should be: every online match in the game's native
 - Fightcade 2: FBNeo and FBA get the buttons mapped in Setup > Joysticks, for each player
 - Fightcade 2: the lobby opens at 512x448, with bigger text on the tube
 - Fightcade 2: an FBNeo left open with no game after an error (missing ROM) closes by itself, instead of leaving a black square over the lobby
-- SM2-Emu, a native Sega Model 2 emulator: a Games menu entry. It is not compiled into the image; the first launch clones and builds it, then lists the games in `~/roms/model2`
+- Model 2 is SM2-Emu, from the Games menu. It is not compiled into the image; the first launch clones and builds it, then lists the games in `~/roms/model2`. A set that cannot be loaded stays on that list and names the missing chip. The Wine Model 2 Emulator is no longer in the menu
 
 **fliperos-setup changes:**
 
