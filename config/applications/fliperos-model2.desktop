@@ -5,6 +5,6 @@ GenericName=Sega Model 2 emulator
 Comment=Clone and build on first launch; opens on the CRT
 Exec=/opt/fliperos/bin/fliperos-launch model2
 TryExec=/usr/local/bin/fliperos-model2
-Icon=/usr/local/share/pixmaps/fliperos-model2.svg
+Icon=/usr/local/share/pixmaps/fliperos-model2.png
 Terminal=false
 Categories=Game;Emulator;

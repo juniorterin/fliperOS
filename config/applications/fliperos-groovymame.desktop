@@ -5,6 +5,6 @@ GenericName=Arcade emulator
 Comment=Opens on the CRT; the desktop comes back when it closes
 Exec=/opt/fliperos/bin/fliperos-launch groovymame
 TryExec=/usr/local/bin/groovymame
-Icon=/usr/local/share/pixmaps/fliperos-groovymame.svg
+Icon=/usr/local/share/pixmaps/fliperos-groovymame.png
 Terminal=false
 Categories=Game;Emulator;

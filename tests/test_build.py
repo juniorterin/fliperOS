@@ -4118,7 +4118,7 @@ class EmulatorMenuTests(unittest.TestCase):
             self.assertIn('  %s) label=' % name, launcher)
 
     def test_every_icon_is_installed(self):
-        own = {p.name for p in (ROOT / 'config/icons').glob('*.svg')}
+        own = {p.name for p in (ROOT / 'config/icons').iterdir() if p.suffix in ('.svg', '.png')}
         for path in self.APPS:
             icon = self.entry(path)['Icon']
             self.assertTrue(icon.startswith('/usr/local/share/pixmaps/'), icon)

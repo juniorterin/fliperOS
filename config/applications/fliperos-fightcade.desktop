@@ -5,6 +5,6 @@ GenericName=Online matches of arcade and console games
 Comment=Opens on the CRT; the desktop comes back when it closes
 Exec=/opt/fliperos/bin/fliperos-launch fightcade
 TryExec=/opt/fliperos/fightcade/fightcade
-Icon=/usr/local/share/pixmaps/fliperos-fightcade.svg
+Icon=/usr/local/share/pixmaps/fliperos-fightcade.png
 Terminal=false
 Categories=Game;Emulator;

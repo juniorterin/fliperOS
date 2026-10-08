@@ -206,14 +206,18 @@ install -Dm644 "$src/config/retroarch-gl.cfg" "$root/etc/fliperos/retroarch/retr
 install -Dm644 "$src/config/pcsx2.ini" "$root/etc/fliperos/pcsx2.ini"
 
 # Emuladores no menu do LXDE (Jogos). O TryExec esconde o que nao foi
-# compilado; os icones dos projetos vem do build de cada um, e os dois que
-# nao tem icone (GroovyMAME, Supermodel) vem de config/icons.
+# compilado; os icones dos projetos vem do build de cada um. Os que nao
+# entram na imagem com icone (o GroovyMAME do release, o SM2-Emu e o
+# Fightcade, baixados depois) levam o oficial de config/icons; o Supermodel,
+# sem icone proprio, o monograma do FliperOS.
 for file in "$src"/config/applications/*.desktop; do
   install -Dm644 "$file" "$root/usr/local/share/applications/${file##*/}"
 done
-for file in "$src"/config/icons/*.svg; do
+for file in "$src"/config/icons/*.svg "$src"/config/icons/*.png; do
   install -Dm644 "$file" "$root/usr/local/share/pixmaps/${file##*/}"
 done
+# Os monogramas que os oficiais substituiram.
+rm -f "$root"/usr/local/share/pixmaps/fliperos-{groovymame,model2,fightcade}.svg
 # Os temas do FliperOS para 240p (lib/frontends.sh os deixa escolhidos num
 # monitor de 15 kHz). O do Pegasus: na pasta de temas do sistema, onde o
 # Pegasus os procura.
