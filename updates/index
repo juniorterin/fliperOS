@@ -11,3 +11,4 @@
 8	44ca36b5bac418ad8dd662c6dab49a6f7d46e1c4	e5a78c921e0a01ef93dd3f146da62daec181845af6056ae558c503613fb8048b	no	Fightcade in each game's native resolution, Esc closes frontends, your own frontends and desktop scrolling
 9	de5613aa462f357ad78579ec4e50be458601ca30	7cf5f1b35150ca1534d57b76942a4698b0fe43f9b601211fbb8a8db080e59b17	no	The boot splash stays on screen until the menu or frontend opens
 10	5863790178a04de1929197523f58edf2c20fe5b0	2c8e7af93e3dab85999980fa26d1fe6dbffa7457a728b019043e8e4d918ebfc9	no	Every disk is mounted by itself, with an icon on the desktop
+11	25316ca96625d16a6a95afe97e8af2cdc8c41aa3	85fbd9b9ad1f65c1a9659d59ddc1fb9326801f592a45935dc7e4a274a57c356a	no	Model 2 at full speed on older CPUs, stretched and with VSync
