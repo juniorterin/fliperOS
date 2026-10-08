@@ -264,7 +264,7 @@ video_mame_monitor() {
 # Recovery Mode leva para o disco quando a placa foi trocada. A orientacao
 # e do gabinete, nao da placa, e so vai se foi escolhida nesta sessao.
 VIDEO_CONF_KEYS="gpu driver card connector detection forced kernel_video boot_resolution fb_map
-  monitor frequency geometry custom_width custom_height custom_refresh"
+  monitor frequency geometry custom_width custom_height custom_refresh screens"
 VIDEO_CONF_KEEP="orientation"
 
 # video_retroarch_super [ARQUIVO] grava a largura dos modos do CRT SwitchRes
@@ -293,6 +293,11 @@ video_save_result() {
   name=$(drm_name "$c")
   base=${flags%a}
   params=$(video_kernel_params "$name" "$flags" "$monitor") || return 1
+  # Outra placa ou outra saida principal: os monitores extras sao escolhidos
+  # de novo (Video Setup > Multiple Monitors).
+  if [[ $(conf_get card 2> /dev/null) != "$card" || $(conf_get connector 2> /dev/null) != "$name" ]]; then
+    conf_unset screens
+  fi
   conf_set gpu "$(drm_card_name "$card")"
   conf_set driver "$(drm_card_driver "$card" || echo unknown)"
   conf_set card "$card"

@@ -29,10 +29,10 @@ boot_driver_params() {
 
 # boot_compose LINHA aplica a uma linha do kernel o que o setup decidiu:
 # modo de latencia, quirks do usbhid, modo debug (boot calado ou nao),
-# parametros de video do teste de saidas (se houve teste), console na placa
-# certa (fbcon=map) e orientacao.
+# parametros de video do teste de saidas (se houve teste) e dos monitores
+# extras, console na placa certa (fbcon=map) e orientacao.
 boot_compose() {
-  local line=$1 conn video orientation fb word out=()
+  local line=$1 conn video orientation fb word out=() extra
   conn=$(conf_get connector 2> /dev/null) || conn=""
   video=$(conf_get kernel_video 2> /dev/null) || video=""
   orientation=$(conf_get orientation 2> /dev/null) || orientation=horizontal
@@ -46,8 +46,12 @@ boot_compose() {
   line=$(debug_cmdline "$line")
   if [[ -n $conn ]]; then
     line=$(words "$(cmdline_without_video "$line") $video")
+    line=$(mm_cmdline "$line")
   fi
   [[ -n $fb && $fb != 0 ]] && line="$line fbcon=map:$fb"
+  while IFS= read -r extra; do
+    line=$(orientation_cmdline "$line" "$extra" "$orientation")
+  done < <(mm_extras)
   orientation_cmdline "$line" "$conn" "$orientation"
 }
 

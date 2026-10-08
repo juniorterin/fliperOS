@@ -149,6 +149,106 @@ screen_geometry_reset() {
   ui_msg "Reset Geometry" "Geometry reset: games and RetroArch use the default of the monitor ($monitor)."
 }
 
+# screen_multi_monitor: os monitores 2 e 3 nas outras saidas analogicas da
+# placa (lib/multimonitor.sh). Os jogos de 2 ou 3 telas do GroovyMAME abrem
+# uma tela em cada; os outros programas ficam no monitor 1.
+screen_multi_monitor() {
+  local conn choice last=2 extras=() entries summary note=""
+  conn=$(conf_get connector 2> /dev/null) || {
+    ui_msg "Multiple Monitors" "No video output was selected by the output test." "" \
+      "The other monitors use the same video card as monitor 1: run the output test first."
+    return 0
+  }
+  while true; do
+    mapfile -t extras < <(mm_extras)
+    summary=$(ui_fields "Monitor 1|$conn (main)" "Monitor 2|${extras[0]:-off}" "Monitor 3|${extras[1]:-off}" \
+      "Game screens|$(mm_screens | paste -sd' ' | sed 's/ /, /g')")
+    note="Games with 2 or 3 screens (Darius, The Ninja Warriors, Punch-Out!!) use them in GroovyMAME."
+    mm_pending && note="$(ui_no "The new monitors turn on after a reboot.")"
+    entries=("2|Monitor 2: ${extras[0]:-off}")
+    if ((${#extras[@]} > 0)); then
+      ((MM_MAX > 2)) && entries+=("3|Monitor 3: ${extras[1]:-off}")
+      entries+=("order|Game Screen Order")
+      mm_pending || entries+=("identify|Identify Monitors")
+    fi
+    entries+=("return|Return")
+    choice=$(ui_menu "Multiple Monitors" "$summary"$'\n\n'"$note" "$last" "${entries[@]}") || choice=return
+    last=$choice
+    case $choice in
+      2 | 3) screen_mm_output "$choice" ;;
+      order) screen_mm_order ;;
+      identify) screen_mm_identify ;;
+      return) break ;;
+    esac
+  done
+}
+
+# screen_mm_output MONITOR escolhe a saida do monitor 2 ou 3.
+screen_mm_output() {
+  local slot=$1 extras=() current pick choices=() c gpu
+  mapfile -t extras < <(mm_extras)
+  current=${extras[slot - 2]:-off}
+  for c in $(mm_candidates "$current"); do
+    choices+=("$c|$c")
+  done
+  gpu=$(conf_get gpu 2> /dev/null) || gpu="the video card"
+  if ((${#choices[@]} == 0)) && [[ $current == off ]]; then
+    ui_msg "Monitor $slot" "No other analog output (VGA, DVI-I) is free on $gpu." "" \
+      "Each arcade monitor needs its own analog output on the same card as monitor 1."
+    return 0
+  fi
+  pick=$(ui_radio "Monitor $slot" "Output of monitor $slot: an analog output (VGA, DVI-I) of $gpu." \
+    "$current" "${choices[@]}" "off|Off") || return 0
+  [[ $pick == "$current" ]] && return 0
+  if [[ $pick != off ]] && ! ui_yesno "Monitor $slot" \
+    "Is an arcade monitor of the same type as monitor 1 ($(monitor_label "$(conf_get monitor 2> /dev/null || echo generic_15)")) connected to $pick? It gets the same video mode as monitor 1."; then
+    return 0
+  fi
+  mm_set_extra "$slot" "$pick"
+  screen_mm_changed
+}
+
+# screen_mm_order escolhe que monitor mostra cada tela dos jogos.
+screen_mm_order() {
+  local current pick orders=()
+  mapfile -t orders < <(mm_orders)
+  ((${#orders[@]} > 0)) || return 0
+  current=$(mm_screens | paste -sd,)
+  pick=$(ui_radio "Game Screen Order" \
+    "Outputs from the first screen of a game to the last: left to right, or top to bottom (Punch-Out!!)." \
+    "$current" "${orders[@]}") || return 0
+  [[ $pick == "$current" ]] && return 0
+  IFS=, read -r -a orders <<< "$pick"
+  mm_save "${orders[@]}"
+  VIDEO_CHANGED=1
+}
+
+# screen_mm_identify apaga um monitor de cada vez, na ordem das telas.
+screen_mm_identify() {
+  local screens=() i
+  mapfile -t screens < <(mm_screens)
+  for i in "${!screens[@]}"; do
+    ui_info "Identify Monitors" "Game screen $((i + 1)): ${screens[i]}" "" "This monitor turns off for 3 seconds."
+    speak "Screen $((i + 1)). Output $(speech_connector "${screens[i]}")."
+    mm_blink "${screens[i]}"
+    sleep 1
+  done
+  ui_flush_input
+}
+
+# screen_mm_changed: novo monitor ou monitor a menos. Os .ini do GroovyMAME
+# sao refeitos para o numero de monitores; a linha do kernel e o Xorg saem
+# ao fechar o Video Setup.
+screen_mm_changed() {
+  VIDEO_CHANGED=1
+  if (($(mm_count) > 1)); then
+    ui_info "Multiple Monitors" "Preparing the GroovyMAME games with 2 or 3 screens..." "" \
+      "The first time this reads the whole game list: about a minute."
+    mm_mame_prepare || ui_msg "Multiple Monitors" "Could not prepare the GroovyMAME games (see the log)." "" \
+      "GroovyMAME prepares them when it opens the next game."
+  fi
+}
+
 # screen_video_setup e o menu; ao sair, no sistema instalado, grava a linha
 # do kernel e oferece reiniciar.
 screen_video_setup() {
@@ -159,13 +259,15 @@ screen_video_setup() {
       "Monitor|$(monitor_label "$(conf_get monitor 2> /dev/null || echo "not set")")" \
       "Orientation|$(orientation_label "$(conf_get orientation 2> /dev/null || echo horizontal)")" \
       "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "from boot menu")")" \
-      "Geometry|$(conf_get geometry > /dev/null 2>&1 && echo "adjusted" || echo "monitor default")")
+      "Geometry|$(conf_get geometry > /dev/null 2>&1 && echo "adjusted" || echo "monitor default")" \
+      "Monitors|$(mm_count)")
     choice=$(ui_menu "Video Setup" "$summary" "$last" \
       "monitor|Monitor Type" \
       "orientation|Monitor Orientation" \
       "resolution|Resolution" \
       "geometry|Geometry" \
       "geometry_reset|Reset Geometry" \
+      "monitors|Multiple Monitors" \
       "return|Return") || choice="return"
     last=$choice
     case $choice in
@@ -174,6 +276,7 @@ screen_video_setup() {
       resolution) screen_resolution ;;
       geometry) screen_geometry ;;
       geometry_reset) screen_geometry_reset ;;
+      monitors) screen_multi_monitor ;;
       return) break ;;
     esac
   done

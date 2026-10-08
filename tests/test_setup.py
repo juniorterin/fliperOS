@@ -18,7 +18,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
-LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "xorg",
+LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
         "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "patches", "splash", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
@@ -571,7 +571,157 @@ class XorgTests(Base):
         self.env.out("xorg_generate")
         text = (self.env.etc / "xorg.conf").read_text()
         self.assertNotIn("Modeline", text)
+        self.assertNotIn('"Monitor-', text)
         self.assertIn('Option "BlankTime" "0"', text)
+
+    def test_single_monitor_has_no_layout(self):
+        (self.env.etc / "fliperos.conf").write_text(
+            "connector=VGA-1\nmonitor=generic_15\nboot_resolution=640x480iS\n")
+        self.env.out("xorg_generate")
+        text = (self.env.etc / "xorg.conf").read_text()
+        self.assertNotIn("Primary", text)
+        self.assertNotIn("RightOf", text)
+        self.assertEqual(text.count('Section "Monitor"'), 1)
+
+    def test_extra_monitors_side_by_side_in_game_order(self):
+        # A tela 1 dos jogos a esquerda; o principal e a tela primaria, onde
+        # os programas de uma tela so abrem.
+        (self.env.etc / "fliperos.conf").write_text(
+            "connector=VGA-1\nmonitor=generic_15\nboot_resolution=640x480iS\nscreens=DVI-I-1,VGA-1,DVI-I-2\n")
+        self.env.out("xorg_generate")
+        text = (self.env.etc / "xorg.conf").read_text()
+        for line in ('Option "Monitor-VGA-1" "CRT"', 'Option "Monitor-DVI-I-1" "CRT2"',
+                     'Option "Monitor-DVI-I-2" "CRT3"'):
+            self.assertIn(line, text)
+        sections = {}
+        for block in text.split('Section "Monitor"')[1:]:
+            block = block.split("EndSection")[0]
+            sections[re.search(r'Identifier "(\w+)"', block).group(1)] = block
+        self.assertNotIn("RightOf", sections["CRT2"])
+        self.assertIn('Option "RightOf" "CRT2"', sections["CRT"])
+        self.assertIn('Option "RightOf" "CRT"', sections["CRT3"])
+        self.assertIn('Option "Primary" "true"', sections["CRT"])
+        for block in sections.values():
+            self.assertIn('Modeline "640x480i" 13.038', block)
+        self.assertEqual(text.count('Section "Screen"'), 1)
+
+
+class MultiMonitorTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.env.card("card0", "radeon")
+        for name in ("card0-VGA-1", "card0-DVI-I-1", "card0-DVI-I-2", "card0-HDMI-A-1"):
+            self.env.connector(name, "connected" if name == "card0-VGA-1" else "disconnected")
+        self.env.card("card1", "radeon")
+        self.env.connector("card1-VGA-1")
+        (self.env.etc / "fliperos.conf").write_text(
+            "connector=VGA-1\ncard=card0\nmonitor=generic_15\nforced=1\ndetection=se\n"
+            "kernel_video=video=VGA-1:640x480iSe\nboot_resolution=640x480iS\n")
+
+    def conf(self):
+        return (self.env.etc / "fliperos.conf").read_text()
+
+    def test_candidates_are_free_analog_outputs_of_the_same_card(self):
+        self.assertEqual(self.env.out("mm_candidates").split(), ["DVI-I-1", "DVI-I-2"])
+        self.env.out("mm_set_extra 2 DVI-I-1")
+        self.assertEqual(self.env.out("mm_candidates").split(), ["DVI-I-2"])
+        # O monitor que ja tem a saida pode ficar com ela.
+        self.assertEqual(self.env.out("mm_candidates DVI-I-1").split(), ["DVI-I-1", "DVI-I-2"])
+
+    def test_single_monitor_by_default(self):
+        self.assertEqual(self.env.out("mm_screens").split(), ["VGA-1"])
+        self.assertEqual(self.env.out("mm_count").strip(), "1")
+        self.assertEqual(self.env.out("mm_extras"), "")
+
+    def test_set_extras_keeps_the_order(self):
+        self.env.out("mm_set_extra 2 DVI-I-1; mm_set_extra 3 DVI-I-2")
+        self.assertIn("screens=VGA-1,DVI-I-1,DVI-I-2\n", self.conf())
+        self.env.out("mm_save DVI-I-1 VGA-1 DVI-I-2")
+        self.assertEqual(self.env.out("mm_extras").split(), ["DVI-I-1", "DVI-I-2"])
+        # Trocar a saida de um monitor: a nova entra no fim.
+        self.env.out("mm_set_extra 3 off")
+        self.assertIn("screens=DVI-I-1,VGA-1\n", self.conf())
+        self.env.out("mm_set_extra 2 DVI-I-2")
+        self.assertIn("screens=VGA-1,DVI-I-2\n", self.conf())
+        # So o principal: a chave sai.
+        self.env.out("mm_set_extra 2 off")
+        self.assertNotIn("screens=", self.conf())
+        self.assertEqual(self.env.out("mm_count").strip(), "1")
+
+    def test_stale_list_without_the_main_output_is_ignored(self):
+        self.env.out("conf_set screens HDMI-A-1,DVI-I-1")
+        self.assertEqual(self.env.out("mm_screens").split(), ["VGA-1"])
+
+    def test_orders(self):
+        self.env.out("mm_save VGA-1 DVI-I-1")
+        self.assertEqual(self.env.out("mm_orders").splitlines(),
+                         ["VGA-1,DVI-I-1|VGA-1, DVI-I-1", "DVI-I-1,VGA-1|DVI-I-1, VGA-1"])
+        self.env.out("mm_save VGA-1 DVI-I-1 DVI-I-2")
+        orders = self.env.out("mm_orders").splitlines()
+        self.assertEqual(len(orders), 6)
+        self.assertEqual(len(set(orders)), 6)
+
+    def test_boot_line_forces_the_extras_in_the_main_mode(self):
+        self.env.out("mm_save DVI-I-1 VGA-1 DVI-I-2")
+        out = self.env.out("boot_compose 'quiet'").split()
+        self.assertIn("video=VGA-1:640x480iSe", out)
+        self.assertIn("video=DVI-I-1:640x480iSe", out)
+        self.assertIn("video=DVI-I-2:640x480iSe", out)
+        self.env.out("mm_set_extra 2 off; mm_set_extra 2 off")
+        out = self.env.out("boot_compose '%s'" % " ".join(out))
+        self.assertNotIn("DVI-I", out)
+
+    def test_boot_line_rotates_every_monitor(self):
+        self.env.out("mm_save VGA-1 DVI-I-1; conf_set orientation vertical-cw")
+        out = self.env.out("boot_compose 'quiet'").split()
+        self.assertIn("video=VGA-1:640x480iSe,panel_orientation=right_side_up", out)
+        self.assertIn("video=DVI-I-1:640x480iSe,panel_orientation=right_side_up", out)
+        self.assertEqual(out.count("fbcon=rotate:1"), 1)
+
+    def test_extras_of_an_edid_boot_use_the_preset_mode(self):
+        self.env.out("conf_set kernel_video 'video=VGA-1:e drm.edid_firmware=VGA-1:edid/custom_resolution.bin'")
+        self.assertEqual(self.env.out("mm_kernel_spec").strip(), "640x480iSe")
+        self.env.card("card2", "nouveau")
+        self.env.out("conf_set card card2")
+        self.assertEqual(self.env.out("mm_kernel_spec").strip(), "1280x480iSe")
+
+    def test_outputs_only_touch_extras_of_this_boot(self):
+        # Ligar uma saida sem o modo dela no boot daria 31 kHz ao CRT.
+        self.env.out("mm_save VGA-1 DVI-I-1 DVI-I-2")
+        self.env.cmdline.write_text("quiet video=VGA-1:640x480iSe video=DVI-I-1:640x480iSe\n")
+        self.assertEqual(self.env.run("mm_pending").returncode, 0)
+        (self.env.drm / "card0-DVI-I-1" / "status").write_text("connected\n")
+        self.env.out("mm_outputs main")
+        self.assertEqual(self.env.writes.read_text(), "card0-DVI-I-1=off\n")
+        self.env.writes.write_text("")
+        (self.env.drm / "card0-DVI-I-1" / "status").write_text("disconnected\n")
+        self.env.out("mm_outputs all")
+        self.assertEqual(self.env.writes.read_text(), "card0-DVI-I-1=on\n")
+        self.env.cmdline.write_text("quiet video=VGA-1:640x480iSe video=DVI-I-1:640x480iSe video=DVI-I-2:640x480iSe\n")
+        self.assertNotEqual(self.env.run("mm_pending").returncode, 0)
+
+    def test_blink_restores_each_output(self):
+        self.env.out("mm_save VGA-1 DVI-I-1")
+        self.env.out("mm_blink DVI-I-1; mm_blink VGA-1; conf_set forced 0; mm_blink VGA-1")
+        self.assertEqual(self.env.writes.read_text().split(),
+                         ["card0-DVI-I-1=off", "card0-DVI-I-1=on", "card0-VGA-1=off", "card0-VGA-1=on",
+                          "card0-VGA-1=off", "card0-VGA-1=detect"])
+
+    def test_new_main_output_forgets_the_extras(self):
+        self.env.out("mm_save VGA-1 DVI-I-1")
+        self.env.out("video_save_result card0-VGA-1 se generic_15")
+        self.assertIn("screens=VGA-1,DVI-I-1\n", self.conf())
+        self.env.out("video_save_result card0-DVI-I-1 se generic_15")
+        self.assertNotIn("screens=", self.conf())
+        self.assertIn("screens", self.env.out("echo $VIDEO_CONF_KEYS").split())
+
+    def test_cli_and_screen(self):
+        entry = (SETUP / "fliperos-setup").read_text()
+        self.assertIn('    --outputs)\n      mm_outputs "${2:-all}"', entry)
+        self.assertLess(entry.index("--outputs)"), entry.index("if ! have gum"))
+        video = (SETUP / "screens/video-setup.sh").read_text()
+        self.assertIn('"monitors|Multiple Monitors"', video)
+        self.assertIn("monitors) screen_multi_monitor ;;", video)
 
 
 class DiskTests(Base):

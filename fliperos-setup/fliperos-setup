@@ -14,9 +14,9 @@
 #   sudo fliperos-setup --latency       abre direto o Setup > Latency
 #   sudo fliperos-setup --update-check  pergunta pelo update do FliperOS
 #
-# Sem tela (servico de boot, sessao de jogo e teclas de volume, ver
-# lib/latency.sh e lib/audio.sh):
-#   --latency-boot, --session-start, --session-end, --volume up|down|mute
+# Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
+# extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
+#   --latency-boot, --session-start, --session-end, --volume up|down|mute, --outputs main|all
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
 # screens/ tem as telas.
@@ -43,6 +43,8 @@ source "$SETUP_DIR/lib/monitor.sh"
 source "$SETUP_DIR/lib/drm.sh"
 # shellcheck source=lib/video.sh
 source "$SETUP_DIR/lib/video.sh"
+# shellcheck source=lib/multimonitor.sh
+source "$SETUP_DIR/lib/multimonitor.sh"
 # shellcheck source=lib/xorg.sh
 source "$SETUP_DIR/lib/xorg.sh"
 # shellcheck source=lib/bootloader.sh
@@ -185,6 +187,10 @@ main() {
     --volume)
       audio_step "${2:-}"
       return
+      ;;
+    --outputs)
+      mm_outputs "${2:-all}"
+      return 0
       ;;
   esac
   if ! have gum; then
