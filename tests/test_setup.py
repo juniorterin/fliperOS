@@ -621,12 +621,58 @@ class MultiMonitorTests(Base):
     def conf(self):
         return (self.env.etc / "fliperos.conf").read_text()
 
-    def test_candidates_are_free_analog_outputs_of_the_same_card(self):
-        self.assertEqual(self.env.out("mm_candidates").split(), ["DVI-I-1", "DVI-I-2"])
+    def test_candidates_are_free_outputs_of_the_same_card(self):
+        # As analogicas primeiro; a digital (conversor ativo) e as de outra
+        # placa sao experimentais.
+        self.assertEqual(self.env.out("mm_candidates").split(), ["DVI-I-1", "DVI-I-2", "HDMI-A-1", "card1:VGA-1"])
         self.env.out("mm_set_extra 2 DVI-I-1")
-        self.assertEqual(self.env.out("mm_candidates").split(), ["DVI-I-2"])
+        self.assertEqual(self.env.out("mm_candidates").split(), ["DVI-I-2", "HDMI-A-1", "card1:VGA-1"])
         # O monitor que ja tem a saida pode ficar com ela.
-        self.assertEqual(self.env.out("mm_candidates DVI-I-1").split(), ["DVI-I-1", "DVI-I-2"])
+        self.assertEqual(self.env.out("mm_candidates DVI-I-1").split(),
+                         ["DVI-I-1", "DVI-I-2", "HDMI-A-1", "card1:VGA-1"])
+
+    def test_extra_on_a_second_card(self):
+        self.env.out("mm_save VGA-1 card1:VGA-1 DVI-I-1")
+        self.assertEqual(self.env.out("mm_extras").split(), ["card1:VGA-1", "DVI-I-1"])
+        # O video= vale pelo nome em todas as placas: o VGA-1 da segunda fica
+        # com o do principal, sem trocar o dele.
+        self.env.out("conf_set orientation vertical-cw")
+        out = self.env.out("boot_compose 'quiet'").split()
+        self.assertEqual([w for w in out if w.startswith("video=VGA-1:")],
+                         ["video=VGA-1:640x480iSe,panel_orientation=right_side_up"])
+        self.assertIn("video=DVI-I-1:640x480iSe,panel_orientation=right_side_up", out)
+        # Ligar e desligar mexe na saida da placa certa.
+        self.env.cmdline.write_text("quiet video=VGA-1:640x480iSe video=DVI-I-1:640x480iSe\n")
+        for name in ("card1-VGA-1", "card0-DVI-I-1"):
+            (self.env.drm / name / "status").write_text("connected\n")
+        self.env.out("mm_outputs main")
+        self.assertEqual(self.env.writes.read_text().split(), ["card1-VGA-1=off", "card0-DVI-I-1=off"])
+        # Xorg: a placa principal presa pelo BusID, a outra como GPU screen.
+        self.env.out("xorg_generate")
+        xorg = (self.env.etc / "xorg.conf").read_text()
+        self.assertIn('BusID "PCI:0:0:0"', xorg)
+        self.assertIn('Option "AutoBindGPU" "true"', xorg)
+        self.assertNotIn("Monitor-card1", xorg)
+        self.assertIn('Option "Monitor-DVI-I-1" "CRT2"', xorg)
+        self.assertEqual(xorg.count('Section "Monitor"'), 2)
+        # Uma so placa: nada de BusID.
+        self.env.out("mm_save VGA-1 DVI-I-1; xorg_generate")
+        self.assertNotIn("BusID", (self.env.etc / "xorg.conf").read_text())
+
+    def test_digital_extra_gets_the_super_resolution(self):
+        # O TMDS nao desce abaixo de 25 MHz: o conversor ativo recebe a super
+        # resolucao, e o Xorg nao lhe da o modeline de dotclock baixo.
+        self.env.out("mm_save VGA-1 HDMI-A-1 DVI-I-1")
+        out = self.env.out("boot_compose 'quiet'").split()
+        self.assertIn("video=HDMI-A-1:1280x480iSe", out)
+        self.assertIn("video=DVI-I-1:640x480iSe", out)
+        self.env.out("xorg_generate")
+        xorg = (self.env.etc / "xorg.conf").read_text()
+        sections = {s.split('"')[1]: s for s in xorg.split('Section "Monitor"')[1:]}
+        self.assertIn("Modeline", sections["CRT"])
+        self.assertIn("Modeline", sections["CRT3"])
+        self.assertNotIn("Modeline", sections["CRT2"])
+        self.assertIn('Option "RightOf" "CRT"', sections["CRT2"])
 
     def test_single_monitor_by_default(self):
         self.assertEqual(self.env.out("mm_screens").split(), ["VGA-1"])
@@ -715,6 +761,23 @@ class MultiMonitorTests(Base):
         self.assertNotIn("screens=", self.conf())
         self.assertIn("screens", self.env.out("echo $VIDEO_CONF_KEYS").split())
 
+    def test_multiscreen_games_toggle(self):
+        self.env.out("mm_save VGA-1 DVI-I-1")
+        self.assertEqual(self.env.run("mm_games_on").returncode, 0)
+        self.env.out("mm_set_games off")
+        self.assertIn("multiscreen=off\n", self.conf())
+        self.assertNotEqual(self.env.run("mm_games_on").returncode, 0)
+        # Desligado, nada de preparar os jogos de varias telas do GroovyMAME.
+        gen = self.env.dir / "gen"
+        gen.write_text("#!/bin/sh\necho gen >> %s\n" % (self.env.dir / "gen.log"))
+        gen.chmod(0o755)
+        self.env.out("MAME_SCREENS=%s; mm_mame_prepare" % gen)
+        self.assertFalse((self.env.dir / "gen.log").exists())
+        self.env.out("mm_set_games on")
+        self.assertNotIn("multiscreen", self.conf())
+        self.env.out("MAME_SCREENS=%s; mm_mame_prepare" % gen)
+        self.assertTrue((self.env.dir / "gen.log").exists())
+
     def test_cli_and_screen(self):
         entry = (SETUP / "fliperos-setup").read_text()
         self.assertIn('    --outputs)\n      mm_outputs "${2:-all}"', entry)
@@ -722,6 +785,8 @@ class MultiMonitorTests(Base):
         video = (SETUP / "screens/video-setup.sh").read_text()
         self.assertIn('"monitors|Multiple Monitors"', video)
         self.assertIn("monitors) screen_multi_monitor ;;", video)
+        self.assertIn('entries+=("games|Multi-Screen Games: $games")', video)
+        self.assertIn("games) screen_mm_games ;;", video)
 
 
 class DiskTests(Base):

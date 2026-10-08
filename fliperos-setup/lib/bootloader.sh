@@ -50,8 +50,10 @@ boot_compose() {
   fi
   [[ -n $fb && $fb != 0 ]] && line="$line fbcon=map:$fb"
   while IFS= read -r extra; do
+    extra=$(mm_entry_name "$extra")
+    [[ $extra == "$conn" ]] && continue
     line=$(orientation_cmdline "$line" "$extra" "$orientation")
-  done < <(mm_extras)
+  done < <(mm_extras | sed 's/^[^:]*://' | sort -u)
   orientation_cmdline "$line" "$conn" "$orientation"
 }
 

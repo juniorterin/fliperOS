@@ -150,10 +150,11 @@ screen_geometry_reset() {
 }
 
 # screen_multi_monitor: os monitores 2 e 3 nas outras saidas analogicas da
-# placa (lib/multimonitor.sh). Os jogos de 2 ou 3 telas do GroovyMAME abrem
-# uma tela em cada; os outros programas ficam no monitor 1.
+# placa (lib/multimonitor.sh). Os jogos de 2 ou 3 telas do GroovyMAME e os
+# de varias placas do Flycast abrem uma tela em cada; os outros programas
+# ficam no monitor 1.
 screen_multi_monitor() {
-  local conn choice last=2 extras=() entries summary note=""
+  local conn choice last=2 extras=() entries summary note="" games
   conn=$(conf_get connector 2> /dev/null) || {
     ui_msg "Multiple Monitors" "No video output was selected by the output test." "" \
       "The other monitors use the same video card as monitor 1: run the output test first."
@@ -161,13 +162,17 @@ screen_multi_monitor() {
   }
   while true; do
     mapfile -t extras < <(mm_extras)
+    games=On
+    mm_games_on || games=Off
     summary=$(ui_fields "Monitor 1|$conn (main)" "Monitor 2|${extras[0]:-off}" "Monitor 3|${extras[1]:-off}" \
-      "Game screens|$(mm_screens | paste -sd' ' | sed 's/ /, /g')")
-    note="Games with 2 or 3 screens (Darius, The Ninja Warriors, Punch-Out!!) use them in GroovyMAME."
+      "Game screens|$(mm_screens | paste -sd' ' | sed 's/ /, /g')" "Multi-screen games|$games")
+    note="Games with 2 or 3 screens open one screen on each monitor (GroovyMAME, Flycast)."
+    [[ $games == Off ]] && note="Multi-screen games are off: every game opens on monitor 1."
     mm_pending && note="$(ui_no "The new monitors turn on after a reboot.")"
     entries=("2|Monitor 2: ${extras[0]:-off}")
     if ((${#extras[@]} > 0)); then
       ((MM_MAX > 2)) && entries+=("3|Monitor 3: ${extras[1]:-off}")
+      entries+=("games|Multi-Screen Games: $games")
       entries+=("order|Game Screen Order")
       mm_pending || entries+=("identify|Identify Monitors")
     fi
@@ -176,6 +181,7 @@ screen_multi_monitor() {
     last=$choice
     case $choice in
       2 | 3) screen_mm_output "$choice" ;;
+      games) screen_mm_games ;;
       order) screen_mm_order ;;
       identify) screen_mm_identify ;;
       return) break ;;
@@ -189,23 +195,45 @@ screen_mm_output() {
   mapfile -t extras < <(mm_extras)
   current=${extras[slot - 2]:-off}
   for c in $(mm_candidates "$current"); do
-    choices+=("$c|$c")
+    choices+=("$c|$(mm_label "$c")")
   done
   gpu=$(conf_get gpu 2> /dev/null) || gpu="the video card"
   if ((${#choices[@]} == 0)) && [[ $current == off ]]; then
-    ui_msg "Monitor $slot" "No other analog output (VGA, DVI-I) is free on $gpu." "" \
-      "Each arcade monitor needs its own analog output on the same card as monitor 1."
+    ui_msg "Monitor $slot" "No other video output is free." "" \
+      "Each arcade monitor needs its own output: another one on $gpu, or on a second video card."
     return 0
   fi
-  pick=$(ui_radio "Monitor $slot" "Output of monitor $slot: an analog output (VGA, DVI-I) of $gpu." \
+  pick=$(ui_radio "Monitor $slot" \
+    "Output of monitor $slot. Analog outputs (VGA, DVI-I) of $gpu are the tested way; most cards drive two." \
     "$current" "${choices[@]}" "off|Off") || return 0
   [[ $pick == "$current" ]] && return 0
+  if [[ $pick != off ]] && mm_digital "$pick" && ! ui_yesno "Monitor $slot" \
+    "$(mm_entry_name "$pick") is digital: a CRT needs an active converter to VGA there, and it gets the super resolution ($(mm_kernel_spec "$pick" | sed 's/e$//')). This is experimental and not tested yet. Use it?"; then
+    return 0
+  fi
+  if [[ $pick != off ]] && mm_other_card "$pick" && ! ui_yesno "Monitor $slot" \
+    "$pick is on another video card ($(drm_card_name "${pick%%:*}")). X shows it as an output of $gpu, which draws the picture. This is experimental and not tested yet. Use it?"; then
+    return 0
+  fi
   if [[ $pick != off ]] && ! ui_yesno "Monitor $slot" \
-    "Is an arcade monitor of the same type as monitor 1 ($(monitor_label "$(conf_get monitor 2> /dev/null || echo generic_15)")) connected to $pick? It gets the same video mode as monitor 1."; then
+    "Is an arcade monitor of the same type as monitor 1 ($(monitor_label "$(conf_get monitor 2> /dev/null || echo generic_15)")) connected to $pick? It gets the video mode of monitor 1."; then
     return 0
   fi
   mm_set_extra "$slot" "$pick"
   screen_mm_changed
+}
+
+# screen_mm_games liga ou desliga os jogos de varias telas nos extras.
+screen_mm_games() {
+  local current=on pick
+  mm_games_on || current=off
+  pick=$(ui_radio "Multi-Screen Games" \
+    "Games with 2 or 3 screens: one screen on each monitor, or the whole game on monitor 1." "$current" \
+    "on|On: one screen on each monitor" "off|Off: everything on monitor 1") || return 0
+  [[ $pick == "$current" ]] && return 0
+  mm_set_games "$pick"
+  [[ $pick == on ]] && screen_mm_changed
+  return 0
 }
 
 # screen_mm_order escolhe que monitor mostra cada tela dos jogos.

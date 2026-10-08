@@ -13,16 +13,36 @@
 
 XORG_CONF=${XORG_CONF:-/etc/X11/xorg.conf.d/10-fliperos.conf}
 
+# xorg_busid CARD: o BusID do Xorg, em decimal (0000:01:00.0 -> PCI:1:0:0).
+xorg_busid() {
+  local pci bus dev fn
+  pci=$(drm_card_pci "$1") || return 1
+  [[ $pci =~ ^[0-9a-fA-F]+:([0-9a-fA-F]+):([0-9a-fA-F]+)\.([0-7])$ ]] || return 1
+  bus=$((16#${BASH_REMATCH[1]}))
+  dev=$((16#${BASH_REMATCH[2]}))
+  fn=${BASH_REMATCH[3]}
+  printf 'PCI:%d:%d:%d\n' "$bus" "$dev" "$fn"
+}
+
 # xorg_generate [ARQUIVO] grava a configuracao a partir do fliperos.conf.
 xorg_generate() {
   local file=${1:-$XORG_CONF} monitor freq mode modeline="" name="" hsync="" conn
-  local screens=() extras=() s id prev="" i
+  local screens=() extras=() others=0 s id prev="" i busid=""
   monitor=$(conf_get monitor 2> /dev/null) || monitor=""
   freq=$(monitor_frequency "$monitor" 2> /dev/null) || freq=""
   mode=$(conf_get boot_resolution 2> /dev/null) || mode=""
   conn=$(conf_get connector 2> /dev/null) || conn=""
-  mapfile -t screens < <(mm_screens 2> /dev/null)
-  mapfile -t extras < <(mm_extras)
+  # Saidas de outra placa: o X as junta como GPU screen (AutoBindGPU), e as
+  # secoes daqui so valem para a placa principal, presa pelo BusID.
+  while IFS= read -r s; do
+    if mm_other_card "$s"; then
+      others=1
+    else
+      screens+=("$s")
+      [[ $s == "$conn" ]] || extras+=("$s")
+    fi
+  done < <(mm_screens 2> /dev/null)
+  ((others)) && busid=$(xorg_busid "$(conf_get card 2> /dev/null)")
   if [[ -n $freq && -n $conn ]] && modeline=$(mode_modeline "$mode"); then
     name=${modeline#\"}
     name=${name%%\"*}
@@ -34,8 +54,9 @@ xorg_generate() {
   {
     echo "# Gerado pelo fliperos-setup a partir de /etc/fliperos/fliperos.conf."
     echo "# Refeito a cada mudanca de monitor ou resolucao; editar aqui nao adianta."
-    if [[ -n $modeline ]] || ((${#extras[@]} > 0)); then
+    if [[ -n $modeline ]] || ((${#extras[@]} > 0 || others)); then
       printf 'Section "Device"\n    Identifier "GPU"\n    Driver "modesetting"\n'
+      [[ -n $busid ]] && printf '    BusID "%s"\n' "$busid"
       printf '    Option "Monitor-%s" "CRT"\n' "$conn"
       for i in "${!extras[@]}"; do
         printf '    Option "Monitor-%s" "CRT%d"\n' "${extras[i]}" $((i + 2))
@@ -47,11 +68,13 @@ xorg_generate() {
           [[ ${extras[i]} == "$s" ]] && id=CRT$((i + 2))
         done
         printf 'Section "Monitor"\n    Identifier "%s"\n' "$id"
-        if [[ -n $modeline ]]; then
+        # Saida digital (conversor ativo): o modo de super resolucao do boot,
+        # nao o modeline do principal, abaixo do minimo do TMDS.
+        if [[ -n $modeline ]] && ! { [[ $s != "$conn" ]] && mm_digital "$s"; }; then
           printf '    HorizSync %s\n    VertRefresh 49.0 - 65.0\n    Modeline %s\n' "$hsync" "$modeline"
           printf '    Option "PreferredMode" "%s"\n' "$name"
         fi
-        if ((${#extras[@]} > 0)); then
+        if ((${#extras[@]} > 0 || others)); then
           [[ $id == CRT ]] && printf '    Option "Primary" "true"\n'
           [[ -n $prev ]] && printf '    Option "RightOf" "%s"\n' "$prev"
         fi
@@ -64,8 +87,11 @@ xorg_generate() {
       fi
       printf 'EndSection\n\n'
     fi
+    printf 'Section "ServerFlags"\n'
+    if ((others)); then
+      printf '    Option "AutoAddGPU" "true"\n    Option "AutoBindGPU" "true"\n'
+    fi
     cat << 'EOF'
-Section "ServerFlags"
     Option "BlankTime" "0"
     Option "StandbyTime" "0"
     Option "SuspendTime" "0"
