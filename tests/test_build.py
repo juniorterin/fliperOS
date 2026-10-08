@@ -71,7 +71,8 @@ def cmdline(body):
 def shell_scripts():
     skip = {'.git', 'node_modules', '.next', 'output', 'website', 'build', 'work'}
     for dirpath, dirnames, filenames in os.walk(ROOT):
-        dirnames[:] = sorted(d for d in dirnames if d not in skip)
+        # Pastas ocultas (.git, .shots dos rascunhos): nenhum script do repo.
+        dirnames[:] = sorted(d for d in dirnames if d not in skip and not d.startswith('.'))
         for name in sorted(filenames):
             path = Path(dirpath) / name
             if path.suffix == '.sh':
