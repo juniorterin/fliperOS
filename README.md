@@ -84,7 +84,7 @@ The **FliperOS Setup** menu opens (Install to HD/SSD, Recovery Mode, Terminal, S
 
 1. The cabinet boots straight to the splash, without text.
 2. **Choose default launcher**: what opens every time the cabinet is turned on. For a cabinet, choose **Attract-Mode Plus** (a game list with artwork, made for arcade). The others are EmulationStation (ES-DE), Pegasus, RetroArch, the LXDE desktop or the FliperOS Setup itself. You can change it later in Setup > Frontend.
-3. When you leave the launcher (Esc), the **FliperOS menu** appears: *Start frontend*, *Setup (video, audio, network...)*, *Start desktop*, *Exit to shell*, *Shutdown / Reboot*. The title shows the cabinet's IP address.
+3. When you leave the launcher (Esc), the **FliperOS menu** appears: *Start frontend*, *Setup (video, audio, network...)*, *Start desktop*, *Exit to shell*, *Shutdown / Reboot*. The title shows the cabinet's IP address. Every item is explained in [The menus, item by item](#the-menus-item-by-item).
 4. **Network**: a network cable works by itself. For Wi-Fi: *Setup > Network Setup*, choose the network and type the password. Once connected, the IP appears in the menu title.
 5. **Updates**: at each boot with internet, if there is a FliperOS update, a screen describes it and asks **Apply now** or **Not now**.
 
@@ -164,6 +164,82 @@ Has a full MAME romset? *Setup > Cleaner > MAME ROM Cleaner* keeps only the game
 - **Something the menus don't cover**: over SSH (`ssh fliperos@fliperos.local`, password `fliperos`) it's a regular Ubuntu 24.04, and an AI assistant with terminal access can configure it for you. On a network you don't control, change the password with `passwd`.
 
 More in [Installed system](https://github.com/juniorterin/fliperOS/wiki/Installed-system), [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends) and [Latency](https://github.com/juniorterin/fliperOS/wiki/Latency).
+
+## The menus, item by item
+
+Everything in the menus, in the order it appears on screen. In any menu: **arrows** move, **Enter** confirms, **Esc** goes back (or choose *Return*). The panel or a gamepad works too: directions = arrows, button 1 = Enter, button 2 = Esc, button 3 = Space (marks items in lists with checkboxes).
+
+### FliperOS Setup (on the USB stick)
+
+The menu that opens when you boot from the USB stick, before installing.
+
+- **Install to HD/SSD**: installs FliperOS on a disk, as in step 6. It asks for the video settings, the disk (which will be **completely erased**) and shows the progress.
+- **Recovery Mode**: repairs a FliperOS already installed on this computer, without installing again. It looks for the installation and offers:
+  - *Open a terminal in the installed system*: a command line inside the installed system, to fix something by hand;
+  - *Reinstall the bootloader*: puts Limine back on the disk when the computer no longer boots FliperOS (after installing Windows on another disk, for example);
+  - *Apply this session's video settings (new video card)*: changed the video card or the monitor? Boot from the USB stick, adjust the video and bring those settings into the installed system;
+  - *Restore system files (keeps ROMs and settings)*: puts the original FliperOS files back, keeping your games, saves and settings.
+- **Terminal**: a command line on the USB stick itself.
+- **Shutdown**: power off or reboot.
+
+### FliperOS menu (installed system)
+
+It appears when you leave the frontend (Esc). The title shows the cabinet's name, its IP address and how full the disk is.
+
+- **Start frontend**: opens the default launcher (Attract-Mode Plus, for example). When you leave it, you come back to this menu.
+- **Setup (video, audio, network...)**: all the settings, explained below.
+- **Start desktop**: opens LXDE, a regular desktop with a mouse, file manager, browser (*Falkon*), torrent client (*Transmission*) and app store. It is the easiest way to organize folders and copy games (step 9). To leave: *Logout* in the desktop menu, which opens a small menu: back to the FliperOS menu, reboot, power off or cancel.
+- **Exit to shell**: a full-screen command line. Type `fliperos-menu` to return to the menu.
+- **Shutdown / Reboot**: *Power off* or *Reboot*, always asking first. Use it instead of switching the cabinet off at the wall.
+
+### Setup
+
+- **Video Setup**: how the picture comes out on the monitor. The top of the screen shows what is set now.
+  - *Monitor Type*: the kind of monitor (arcade CRT 15 kHz, 25 kHz, 31 kHz, TV, LCD...). It decides which video modes are allowed;
+  - *Monitor Orientation*: horizontal, or vertical (rotated clockwise or counterclockwise) for vertical games;
+  - *Resolution*: the resolution of the menus and the frontend;
+  - *Geometry*: a grid to center the picture and fit its size on the tube; the arrows adjust and Enter saves;
+  - *Reset Geometry*: goes back to the monitor's default geometry;
+  - *Multiple Monitors*: a second and a third arcade monitor, for games with 2 or 3 screens (Darius, Punch-Out!!, F355 Challenge). Inside: *Monitor 2* and *Monitor 3* (which video output each one uses), *Multi-Screen Games* (one screen per monitor, or everything on monitor 1), *Game Screen Order* (which monitor shows each screen) and *Identify Monitors* (turns each monitor off for 3 seconds, in order). See [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors).
+
+  When you leave Video Setup with something changed, it saves the boot settings and offers to reboot.
+- **Audio Setup**: the sound.
+  - *Default card*: which sound card the system and every emulator use;
+  - *Volume*: from 0 to 100 (the keyboard's volume keys also work, anywhere);
+  - *AlsaMixer*: the full mixer, channel by channel;
+  - *MAME audio latency*: from 0.0 to 50.0 (0 = default). Lower responds faster; raise it if the sound crackles in GroovyMAME;
+  - *Test sound*: plays a sound to check the speakers;
+  - *Menu sounds*: turns on and off a sound when the cursor moves and when you press Enter, like a game's select screen. FliperOS doesn't come with game sounds: put your own `move.wav` and `select.wav` in the `sounds/menu` folder of the network share.
+- **Network Setup**: the network cable works by itself; this is for Wi-Fi.
+  - *Connect to a Wi-Fi network*: the list of networks with their signal; choose one and type the password;
+  - *Connect to a hidden network (type the SSID)*: for a network that doesn't appear in the list;
+  - *Network status*: the connection and the IP address.
+- **Frontend**: what opens every time the cabinet is turned on: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, the LXDE desktop or the FliperOS Setup itself. What isn't installed is installed (or downloaded) from here. Choosing a frontend also puts every game folder into it, so choose it again whenever a folder gets its first games. *Add a custom frontend* adds another program by its command, and *Edit or delete a custom frontend* changes or removes it. See [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends).
+- **Splash screen (boot theme)**: the picture shown while the cabinet boots. Choose a theme to see a 10-second *Preview* or to *Use at boot*. Themes are folders in `~/splashscreen` (the `splashscreen` share on the network); more on [Gnome-look](https://www.gnome-look.org/browse?cat=108&ord=latest).
+- **Extras (Wine, Steam, Heroic)**: programs left out of the ISO to keep the download small, installed over the internet: Wine (needed by some Fightcade 2 emulators), Steam and Heroic (GOG games).
+- **Latency (low latency mode)**: shows the CPU, memory, video card and analog output of this computer.
+  - *Standard (any hardware)*: the default, works on any machine;
+  - *Low latency (modern CPUs)*: less delay between the button and the picture, for recent CPUs. If the computer is below the recommendation, it says what is missing;
+  - *Check this computer*: compares this machine with the recommendation;
+  - *Recommended hardware*: the list of ideal parts. See [Latency](https://github.com/juniorterin/fliperOS/wiki/Latency).
+- **Scraper (covers, videos, logos)**: downloads screenshots, covers, logos, videos and descriptions for the games found in `roms`. You choose the systems (or all of them), the source (*ScreenScraper*, with a free account recommended; *ArcadeDB* and *progetto-SNAPS* for arcade, without an account; or *TheGamesDB*) and the kinds of media. An interrupted scrape can be resumed later. Needs internet. See [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper).
+- **AttractPlus ROM List (real game names)**: makes the Attract-Mode Plus game lists of the arcade folders with each game's real name, year and manufacturer (*Street Fighter II* instead of `sf2`), clones included. Works offline. Mark the folders and confirm.
+- **Cleaner (MAME/Flycast/etc ROM/CHD)**: for those who have a full romset.
+  - *MAME ROM Cleaner*: you say where the romset is (a folder, USB disk or network share) and which emulator it is for (GroovyMAME, Flycast, Supermodel, Model 2, MAME 2010...). It keeps only the games that work and suit your cabinet (horizontal or vertical, players, buttons and controls you have, categories, with or without clones, bootlegs, prototypes and adult games), shows how many and how much space, and copies or moves them to the right folder. *See the list* shows the games, *Change the parameters* changes the filter;
+  - *MAME CHD Cleaner*: brings the CHDs (the disk images some games need) of only the games that stayed.
+
+  See [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs).
+- **Downloader (MAME ROM/CHD torrent, free games)**:
+  - *ROM/CHD MAME torrent*: you paste the magnet link of a romset (and one of CHDs) and it downloads, through Transmission, only the games the ROM Cleaner filter chooses, straight into the emulator's folder. The MAME version of the romset must match the emulator;
+  - *Free games (open-source homebrew)*: downloads free homebrew games to the RetroArch folders, so the frontend has something to show.
+- **Quirks (USB controller fixes)**: fixes for USB encoders that arrive wrong (a dual encoder showing up as a single player, a controller that freezes). *Add a quirk* asks for a name and a code; *USB devices connected now* shows the codes of what is plugged in; choosing a quirk in the list deletes it. Applies after a reboot. See [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
+- **Joysticks (GunCon 2, wheel, LPT)**:
+  - *Button mapping (all emulators)*: maps each player's controls once for every emulator (step 8);
+  - *Calibrate GunCon 2 (light gun)*: shoot the top-left and bottom-right targets, then the center one to check;
+  - *Calibrate wheel, pedals or analog stick*: the limits and center of each axis;
+  - *LPT joysticks (parallel port)*: old controllers on the parallel port: gamepad adapter (NES, SNES, N64, PlayStation), DB9 adapter (Atari, Amiga, Sega) or TurboGraFX interface (up to 7 joysticks). *Joysticks found now* shows what was detected and *Turn off* disables it.
+- **Debug mode (on/off)**: off (the default), the boot shows only the splash and the messages of frontends and emulators are saved in `/opt/fliperos/logs`. On, every text appears on screen: the boot menu, the system messages and the emulator errors. Turn it on when a game doesn't open, to see why. Emulators follow it right away; the boot, after a reboot.
+- **System Update**: downloads and installs the updates of every Ubuntu package. The FliperOS updates themselves are offered at boot (step 7).
 
 ## Build and tests
 
