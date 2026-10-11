@@ -3,6 +3,11 @@ Description=FliperOS Pixelcade marquee (pixelweb)
 # So depois do Setup > Extras > Pixelcade (config/fliperos-pixelcade fetch).
 ConditionPathExists=/home/fliperos/pixelcade/pixelweb
 After=network.target
+# Sem o marquee conectado o pixelweb procura uns 30 s e sai com erro, mesmo
+# com -devicescan: tres tentativas (a USB ainda enumerando no boot) e para. A
+# udev (99-fliperos-pixelcade.rules) o abre quando o marquee e conectado.
+StartLimitIntervalSec=180
+StartLimitBurst=3
 
 [Service]
 User=fliperos

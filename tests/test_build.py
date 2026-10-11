@@ -5010,6 +5010,8 @@ class PixelcadeTests(unittest.TestCase):
         self.assertIn('99-fliperos-pixelcade.rules', ROOTFS)
         unit = (ROOT / 'config/fliperos-pixelcade.service').read_text()
         self.assertIn('ConditionPathExists=/home/fliperos/pixelcade/pixelweb', unit)
+        # Sem o marquee o pixelweb sai com erro: nada de reiniciar para sempre.
+        self.assertIn('StartLimitBurst=3', unit.split('[Service]')[0])
         rules = (ROOT / 'config/99-fliperos-pixelcade.rules').read_text()
         for ids in ('"1b4f", ATTRS{idProduct}=="0008"', '"2e8a", ATTRS{idProduct}=="1050"'):
             self.assertIn(ids, rules)
