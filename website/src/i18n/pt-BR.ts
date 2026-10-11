@@ -52,6 +52,7 @@ const ptBR: Messages = {
     multiMonitor: 'Multimonitor',
     setup: 'Setup',
     github: 'GitHub',
+    guide: 'Guia de instruções',
     viewOnGithub: 'Ver no GitHub',
   },
   hero: {

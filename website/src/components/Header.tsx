@@ -1,9 +1,9 @@
 'use client';
 
-import { Menu, X } from 'lucide-react';
+import { BookOpen, Menu, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/i18n/I18nProvider';
-import { readmeUrl, SECTION_IDS, type SectionId } from '@/lib/site';
+import { guideUrl, readmeUrl, SECTION_IDS, type SectionId } from '@/lib/site';
 import { GithubIcon } from './GithubIcon';
 import { LanguageSwitch } from './LanguageSwitch';
 import { LogoMark, Wordmark } from './Logo';
@@ -90,6 +90,18 @@ export function Header() {
                 </a>
               </li>
             ))}
+            <li>
+              <a
+                href={guideUrl(locale)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-cyan transition-colors hover:text-fg"
+              >
+                <BookOpen className="size-4" aria-hidden="true" />
+                {t.nav.guide}
+                <span className="sr-only">{t.a11y.external}</span>
+              </a>
+            </li>
           </ul>
         </nav>
 
@@ -142,6 +154,19 @@ export function Header() {
               </a>
             </li>
           ))}
+          <li>
+            <a
+              href={guideUrl(locale)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 rounded-lg px-3 py-3 text-base text-cyan"
+            >
+              <BookOpen className="size-4" aria-hidden="true" />
+              {t.nav.guide}
+              <span className="sr-only">{t.a11y.external}</span>
+            </a>
+          </li>
         </ul>
         <a
           href={readmeUrl(locale)}

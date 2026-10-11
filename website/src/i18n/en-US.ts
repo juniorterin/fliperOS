@@ -48,6 +48,7 @@ const enUS = {
     multiMonitor: 'Multi-monitor',
     setup: 'Setup',
     github: 'GitHub',
+    guide: 'Instruction guide',
     viewOnGithub: 'View on GitHub',
   },
   hero: {

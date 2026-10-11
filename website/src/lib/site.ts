@@ -16,6 +16,12 @@ export function readmeUrl(locale: string): string {
   return locale.startsWith('pt') ? `${REPO_URL}/blob/main/README.pt-BR.md` : REPO_URL;
 }
 
+// Âncora do passo a passo no README: muda se o título "## Do zero ao jogo" mudar.
+export function guideUrl(locale: string): string {
+  const anchor = locale.startsWith('pt') ? 'do-zero-ao-jogo-passo-a-passo' : 'from-zero-to-playing-step-by-step';
+  return `${readmeUrl(locale)}#${anchor}`;
+}
+
 export const AUTHOR_HANDLE = '@juniorter.in';
 export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorterin' } as const;
 
