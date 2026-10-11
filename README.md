@@ -101,14 +101,22 @@ In the menus, the panel or a gamepad already acts as the keyboard: directions = 
 
 Use only games you have the right to use (your own dumps, or the free homebrew from *Setup > Downloader > Free games*).
 
-**Over the network (the easiest)**, from another computer on the same network:
+**Use the LXDE desktop.** Plug a USB mouse and keyboard into the cabinet and choose **Start desktop** in the FliperOS menu. It is a regular desktop, and it makes all the work with games easier:
+
+- **Folders**: the file manager opens your home folder, with `roms`, `bios`, `media` and `config`. You see where each file goes and can create, rename and move files with the mouse.
+- **Browser**: *Falkon (browser)* in the desktop menu, to search for the torrents of your games and BIOS.
+- **Torrents**: *Transmission (torrent)* opens the `.torrent` files and magnet links from the browser. When the download finishes, move the files from `Downloads` to the right folder in `roms`.
+- **External storage**: plug in a USB stick or an external disk. It is mounted by itself and gets an icon on the desktop: open it, copy the files and paste them into the right folder in `roms` (or `bios`).
+- **To go back to the games**: *Logout* in the desktop menu > back to the FliperOS menu.
+
+**Over the network**, from another computer on the same network:
 
 - **Windows**: in File Explorer's address bar type `\\fliperos\roms` (or `\\IP-of-the-cabinet\roms`) and press Enter. If it asks for a login, use `fliperos` / `fliperos`.
 - **macOS**: Finder > Go > Connect to Server > `smb://fliperos.local/roms`.
 - **Linux**: `smb://fliperos.local/roms` in the file manager.
 - Also available: `\\fliperos\bios` (BIOS files), `\\fliperos\media` (artwork) and `\\fliperos\config` (emulator settings).
 
-**Without a network**: copy the files to a USB stick, open *Start desktop* (LXDE) and drag them into the `roms` folder in the file manager. Or use SFTP (`fliperos@fliperos.local`, password `fliperos`).
+**SFTP** also works: `fliperos@fliperos.local`, password `fliperos`.
 
 **Each emulator has its folder** in `roms`. Copy the files as they come: MAME sets stay zipped and are **never renamed** (`sf2ce.zip`, not `Street Fighter II.zip`).
 

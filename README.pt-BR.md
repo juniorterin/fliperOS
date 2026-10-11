@@ -101,14 +101,22 @@ Nos menus, o painel ou um controle já funciona como teclado: direcional = setas
 
 Use só jogos que você tem direito de usar (cópias dos seus originais, ou os jogos homebrew livres do *Setup > Downloader > Free games*).
 
-**Pela rede (o mais fácil)**, de outro computador na mesma rede:
+**Use o desktop LXDE.** Ligue um mouse e um teclado USB no gabinete e escolha **Start desktop** no menu do FliperOS. É um desktop comum, e ele facilita todo o trabalho com os jogos:
+
+- **Pastas**: o gerenciador de arquivos abre a sua pasta pessoal, com `roms`, `bios`, `media` e `config`. Você vê onde vai cada arquivo e cria, renomeia e move arquivos com o mouse.
+- **Navegador**: *Falkon (browser)* no menu do desktop, para procurar os torrents dos seus jogos e BIOS.
+- **Torrents**: o *Transmission (torrent)* abre os arquivos `.torrent` e os links magnet do navegador. Quando o download terminar, mova os arquivos de `Downloads` para a pasta certa em `roms`.
+- **Armazenamento externo**: ligue um pendrive ou um disco externo. Ele é montado sozinho e ganha um ícone no desktop: abra-o, copie os arquivos e cole-os na pasta certa em `roms` (ou `bios`).
+- **Para voltar aos jogos**: *Logout* no menu do desktop > voltar ao menu do FliperOS.
+
+**Pela rede**, de outro computador na mesma rede:
 
 - **Windows**: na barra de endereço do Explorador de Arquivos digite `\\fliperos\roms` (ou `\\IP-do-gabinete\roms`) e aperte Enter. Se pedir login, use `fliperos` / `fliperos`.
 - **macOS**: Finder > Ir > Conectar ao Servidor > `smb://fliperos.local/roms`.
 - **Linux**: `smb://fliperos.local/roms` no gerenciador de arquivos.
 - Também há: `\\fliperos\bios` (arquivos de BIOS), `\\fliperos\media` (imagens e vídeos) e `\\fliperos\config` (configurações dos emuladores).
 
-**Sem rede**: copie os arquivos para um pendrive, abra o *Start desktop* (LXDE) e arraste-os para a pasta `roms` no gerenciador de arquivos. Ou use SFTP (`fliperos@fliperos.local`, senha `fliperos`).
+**SFTP** também funciona: `fliperos@fliperos.local`, senha `fliperos`.
 
 **Cada emulador tem a sua pasta** em `roms`. Copie os arquivos como vieram: os sets do MAME ficam zipados e **nunca são renomeados** (`sf2ce.zip`, não `Street Fighter II.zip`).
 
