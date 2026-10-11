@@ -1,0 +1,15 @@
+[Unit]
+Description=FliperOS Pixelcade marquee (pixelweb)
+# So depois do Setup > Extras > Pixelcade (config/fliperos-pixelcade fetch).
+ConditionPathExists=/home/fliperos/pixelcade/pixelweb
+After=network.target
+
+[Service]
+User=fliperos
+WorkingDirectory=/home/fliperos/pixelcade
+ExecStart=/opt/fliperos/bin/fliperos-pixelcade daemon
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

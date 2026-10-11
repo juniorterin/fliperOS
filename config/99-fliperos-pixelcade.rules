@@ -1,0 +1,5 @@
+# Pixelcade (pixelcade.org): a porta serial do marquee para o usuario
+# (dialout) e o servico do pixelweb ligado quando ele e conectado
+# (config/fliperos-pixelcade). V1: SparkFun 1b4f:0008; V2: RP2040 2e8a:1050.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1b4f", ATTRS{idProduct}=="0008", SYMLINK+="pixelcade%n", GROUP="dialout", MODE="0660", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-pixelcade.service"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="1050", SYMLINK+="pixelcade2dev%n", GROUP="dialout", MODE="0660", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-pixelcade.service"

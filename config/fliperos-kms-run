@@ -18,6 +18,10 @@ gl_core_ok() {
   [[ $out =~ OpenGL\ core\ profile\ version:\ ([0-9]+)\.([0-9]+) ]] || return 1
   ((BASH_REMATCH[1] > 3 || (BASH_REMATCH[1] == 3 && BASH_REMATCH[2] >= 2)))
 }
+# O jogo da linha de comando no marquee do Pixelcade (config/fliperos-pixelcade;
+# sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.
+pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
+[[ -x $pixelcade ]] && { "$pixelcade" launch "$@" < /dev/null > /dev/null 2>&1 & }
 # A config do FliperOS entra por cima da do usuario (ver o cabecalho de
 # config/retroarch.cfg). Fica aqui, e nao em quem chama, porque a sessao de
 # boot so passa o nome do binario.

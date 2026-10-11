@@ -1,0 +1,361 @@
+#!/usr/bin/env bash
+# Pixelcade (pixelcade.org): o marquee de LED ou LCD do gabinete mostra o
+# jogo selecionado no frontend e o jogo aberto.
+#
+# Quem fala com o marquee pela USB e o pixelweb, programa de codigo fechado
+# do Pixelcade, com uma API REST em localhost:8080. Ele e a arte nao vem na
+# imagem: o Setup > Extras os baixa (fetch) para ~/pixelcade, a pasta que o
+# proprio Pixelcade documenta (o --install-artpack roda la). O servico
+# fliperos-pixelcade.service o mantem aberto, e a udev o liga quando o
+# marquee e conectado.
+#
+# Os eventos chegam por tres caminhos:
+#   - o fliperos-kms-run e o fliperos-x11-run (todo jogo de todo frontend e
+#     emulador passa por eles): "launch" com a linha de comando do jogo;
+#   - o ES-DE: os scripts de evento game-select e system-select (esde);
+#   - o Attract-Mode Plus: o plugin Pixelcade (attract).
+#
+#   fliperos-pixelcade fetch [--progress]          baixa o pixelweb e a arte (de novo: atualiza)
+#   fliperos-pixelcade installed                   status 0 se o pixelweb esta baixado
+#   fliperos-pixelcade daemon                      o servico: liga os frontends e abre o pixelweb
+#   fliperos-pixelcade frontends                   scripts do ES-DE e plugin do Attract-Mode Plus
+#   fliperos-pixelcade launch PROGRAMA [ARGS...]   o jogo da linha de comando, se houver
+#   fliperos-pixelcade esde EVENTO [ARGS...]       os argumentos de um evento do ES-DE
+#   fliperos-pixelcade attract EMULADOR ROM        o jogo selecionado no Attract-Mode Plus
+#   fliperos-pixelcade game|select SISTEMA ROM     o marquee do jogo (aberto | selecionado)
+#   fliperos-pixelcade system SISTEMA              o marquee do sistema
+set -uo pipefail
+dir=${PIXELCADE_DIR:-/home/fliperos/pixelcade}
+base_url=${PIXELCADE_URL:-https://github.com/alinke/pixelcade-linux-builds/raw/main/linux_amd64/pixelweb}
+api=${PIXELCADE_API:-http://127.0.0.1:8080}
+user=${FLIPEROS_USER:-fliperos}
+roms=${ROMS_DIR:-/home/fliperos/roms}
+ra_info=${RA_INFO_DIR:-/opt/fliperos/retroarch/info}
+esde_dir=${ESDE_DIR:-/home/fliperos/ES-DE}
+attract_dir=${ATTRACT_DIR:-/home/fliperos/.attract}
+plugin_src=${PIXELCADE_PLUGIN_SRC:-/usr/local/share/fliperos/attractplus-plugins/Pixelcade}
+last_file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-pixelcade.last
+self=$(readlink -f -- "${BASH_SOURCE[0]}")
+
+progress=0
+say() {
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+fail() {
+  if ((progress)); then printf '@fail Pixelcade|%s\n' "$1"; else printf 'fliperos-pixelcade: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+installed() {
+  [[ -x $dir/pixelweb ]]
+}
+
+# ?? Instalacao ???????????????????????????????????????????????????
+
+fetch() {
+  local part="$dir/.pixelweb.part" rc
+  [[ ${1:-} == --progress ]] && progress=1
+  # Pelo Setup (root): a pasta e do usuario e o download roda como ele; o
+  # servico so sobe depois, como root.
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    mkdir -p "$dir" && chown "$user:" "$dir" || fail "could not create $dir"
+    runuser -u "$user" -- env PIXELCADE_AS_ROOT=1 "$self" fetch "$@" || exit 1
+    systemctl daemon-reload 2> /dev/null
+    systemctl enable fliperos-pixelcade.service > /dev/null 2>&1
+    systemctl restart fliperos-pixelcade.service 2> /dev/null
+    say 100 "Pixelcade $(cd "$dir" && ./pixelweb -version 2> /dev/null | sed -n 's/^Pixelweb version: //p') installed"
+    return 0
+  fi
+  mkdir -p "$dir" 2> /dev/null && [[ -w $dir ]] || fail "$dir is not writable"
+  say 0 "Downloading pixelweb from GitHub (alinke/pixelcade-linux-builds)"
+  if ! curl -sSfL --retry 3 --max-time 900 -o "$part" "$base_url" >&2; then
+    rm -f "$part"
+    fail "the download failed (no network?)"
+  fi
+  if [[ $(head -c 4 "$part" | od -An -c | tr -d ' ') != '177ELF' ]]; then
+    rm -f "$part"
+    fail "the downloaded file is not the pixelweb program"
+  fi
+  chmod 755 "$part" && mv -f "$part" "$dir/pixelweb" || fail "could not write $dir/pixelweb"
+  # O pixelweb da porta 8080 segura a pasta: o servico para durante a arte.
+  curl -s -m 2 -o /dev/null "$api/quit" 2> /dev/null
+  say 10 "Downloading the Pixelcade artwork"
+  # A primeira vez instala; com a arte ja la ele sai com 2, e entao atualiza.
+  # O progresso sai como "N%" no stdout: de 10% a 95%.
+  (cd "$dir" && ./pixelweb -p "$dir" -install-artwork -progress-installer -progress-stdout) 2>&1 | artwork_progress
+  rc=${PIPESTATUS[0]}
+  if ((rc == 2)); then
+    say 10 "Updating the Pixelcade artwork"
+    (cd "$dir" && ./pixelweb -p "$dir" -update-artwork -progress-installer -progress-stdout) 2>&1 | artwork_progress
+    rc=${PIPESTATUS[0]}
+  fi
+  ((rc == 0)) || fail "the artwork download failed (details in the log)"
+  say 96 "Frontend events (ES-DE, Attract-Mode Plus)"
+  frontends
+  # Pelo Setup, quem fecha e o root, depois de abrir o servico.
+  [[ -n ${PIXELCADE_AS_ROOT:-} ]] && return 0
+  say 100 "Pixelcade installed (sudo systemctl restart fliperos-pixelcade starts it)"
+}
+
+artwork_progress() {
+  local line last=-1 p
+  while IFS= read -r line; do
+    line=${line%$'\r'}
+    if [[ $line =~ ^([0-9]+)%$ ]]; then
+      p=$((10 + BASH_REMATCH[1] * 85 / 100))
+      ((p != last)) && say "$p" "Downloading the Pixelcade artwork (${BASH_REMATCH[1]}%)"
+      last=$p
+    else
+      printf '%s\n' "$line" >&2
+    fi
+  done
+}
+
+# ?? Frontends ????????????????????????????????????????????????????
+
+# frontends: os scripts de evento do ES-DE e o plugin do Attract-Mode Plus.
+# Com o frontend aberto a configuracao dele nao muda (ele a regrava ao
+# fechar); fica para a proxima vez (o servico roda isto a cada boot).
+frontends() {
+  if [[ -d $esde_dir ]]; then
+    local event
+    for event in game-select system-select; do
+      mkdir -p "$esde_dir/scripts/$event"
+      printf '#!/bin/sh\n# FliperOS: o marquee do Pixelcade (config/fliperos-pixelcade).\nexec %s esde %s "$@"\n' \
+        "$self" "$event" > "$esde_dir/scripts/$event/fliperos-pixelcade"
+      chmod 755 "$esde_dir/scripts/$event/fliperos-pixelcade"
+    done
+    if ! pgrep -x es-de > /dev/null 2>&1; then
+      esde_setting CustomEventScripts true
+      esde_setting CustomEventScriptsBrowsing true
+      esde_setting CustomEventScriptsBrowsingNonBlocking true
+    fi
+  fi
+  if [[ -d $attract_dir && -f $plugin_src/plugin.nut ]]; then
+    mkdir -p "$attract_dir/plugins/Pixelcade"
+    cp -f "$plugin_src/plugin.nut" "$attract_dir/plugins/Pixelcade/plugin.nut"
+    pgrep -x attractplus > /dev/null 2>&1 || attract_enable
+  fi
+  return 0
+}
+
+# esde_setting NOME true|false: uma opcao bool do es_settings.xml.
+esde_setting() {
+  local settings="$esde_dir/settings/es_settings.xml" line="<bool name=\"$1\" value=\"$2\" />"
+  mkdir -p "$esde_dir/settings"
+  if [[ ! -f $settings ]]; then
+    printf '<?xml version="1.0"?>\n%s\n' "$line" > "$settings"
+  elif grep -q "name=\"$1\"" "$settings"; then
+    sed -i "s|<bool name=\"$1\" value=\"[^\"]*\" />|$line|" "$settings"
+  else
+    printf '%s\n' "$line" >> "$settings"
+  fi
+}
+
+# attract_enable: o plugin ligado. O Attract-Mode Plus 3.x le os plugins de
+# config/plugins.cfg quando ha config/attract.cfg; antes da primeira
+# execucao, do attract.cfg (que ele migra).
+attract_enable() {
+  local cfg="$attract_dir/attract.cfg"
+  [[ -f $attract_dir/config/attract.cfg ]] && cfg="$attract_dir/config/plugins.cfg"
+  if [[ -f $cfg ]] && grep -qE '^plugin[[:space:]]+Pixelcade[[:space:]]*$' "$cfg"; then
+    return 0
+  fi
+  printf 'plugin\tPixelcade\n\tenabled              yes\n\n' >> "$cfg"
+}
+
+# ?? Eventos ??????????????????????????????????????????????????????
+
+# system_of CAMINHO: o sistema do Pixelcade (a pasta da arte dele) de um
+# jogo ou pasta de ~/roms. Os arcades (sets do MAME) sao "mame".
+system_of() {
+  local rel=${1#"$roms"/} folder core id
+  [[ $rel != "$1" ]] || { basename -- "$(dirname -- "$1")"; return; }
+  folder=${rel%%/*}
+  case $folder in
+    mame | naomi | naomi2 | atomiswave | model2 | model3 | fightcade) echo mame ;;
+    dolphin) echo nintendo_gamecube ;;
+    retroarch)
+      core=${rel#retroarch/}
+      core=${core%%/*}
+      id=$(sed -n 's/^systemid *= *"\(.*\)"/\1/p' "$ra_info/${core}_libretro.info" 2> /dev/null | head -1)
+      libretro_system "${id:-$core}"
+      ;;
+    *) echo "$folder" ;;
+  esac
+}
+
+# libretro_system SYSTEMID: o systemid do .info de um core -> sistema do
+# Pixelcade; os que tem o mesmo nome passam direto.
+libretro_system() {
+  case $1 in
+    mame | hbmame | fb_alpha | fbneo | cps1 | cps2 | cps3) echo mame ;;
+    super_nes) echo snes ;;
+    playstation) echo psx ;;
+    playstation2) echo ps2 ;;
+    playstation_portable) echo psp ;;
+    game_boy) echo gb ;;
+    game_boy_color) echo gbc ;;
+    game_boy_advance) echo gba ;;
+    nintendo_64) echo n64 ;;
+    gamecube) echo nintendo_gamecube ;;
+    virtual_boy) echo nintendo_virtual_boy ;;
+    mega_drive) echo genesis ;;
+    master_system) echo mastersystem ;;
+    game_gear) echo gamegear ;;
+    mega_cd | sega_cd) echo segacd ;;
+    sega_32x) echo sega32x ;;
+    sega_saturn) echo sega_saturn ;;
+    pc_engine) echo pcengine ;;
+    atari_2600) echo atari2600 ;;
+    atari_5200) echo atari5200 ;;
+    atari_7800) echo atari7800 ;;
+    atari_lynx) echo atarilynx ;;
+    atari_jaguar) echo atarijaguar ;;
+    commodore_amiga) echo amiga ;;
+    commodore_c64) echo c64 ;;
+    colecovision) echo coleco ;;
+    cpc) echo amstradcpc ;;
+    wonderswan) echo bandai_wonderswan ;;
+    3do) echo panasonic_3do ;;
+    *) echo "$1" ;;
+  esac
+}
+
+# rom_of CAMINHO: o nome do jogo (o arquivo, sem pasta e extensao).
+rom_of() {
+  local name=${1##*/}
+  printf '%s\n' "${name%.*}"
+}
+
+urlencode() {
+  local LC_ALL=C s=$1 out="" c n i
+  for ((i = 0; i < ${#s}; i++)); do
+    c=${s:i:1}
+    case $c in
+      [a-zA-Z0-9._~-]) out+=$c ;;
+      *)
+        printf -v n '%d' "'$c"
+        ((n < 0)) && n=$((n + 256))
+        printf -v c '%%%02X' "$n"
+        out+=$c
+        ;;
+    esac
+  done
+  printf '%s\n' "$out"
+}
+
+call() {
+  curl -s -m 3 -o /dev/null "$api/$1"
+}
+
+# game SISTEMA ROM: o jogo aberto, ate o proximo evento. O mesmo jogo de
+# segundos antes e a mesma abertura (o groovymame do fliperos-kms-run ainda
+# passa pelo fliperos-x11-run).
+game() {
+  [[ -n $1 && -n $2 ]] || return 0
+  if [[ $(cat "$last_file" 2> /dev/null) == "game:$1/$2" ]] &&
+    (($(date +%s) - $(stat -c %Y "$last_file" 2> /dev/null || echo 0) < 10)); then
+    return 0
+  fi
+  printf 'game:%s/%s\n' "$1" "$2" > "$last_file" 2> /dev/null
+  call "attract/stop"
+  call "arcade/stream/$(urlencode "$1")/$(urlencode "$2")?l=99999&event=GameStart"
+}
+
+# select SISTEMA ROM: o jogo selecionado na lista. O mesmo de antes nao vai
+# de novo (o marquee piscaria a cada volta da lista).
+select_game() {
+  [[ -n $1 && -n $2 ]] || return 0
+  [[ $(cat "$last_file" 2> /dev/null) == "$1/$2" ]] && return 0
+  printf '%s/%s\n' "$1" "$2" > "$last_file" 2> /dev/null
+  call "arcade/stream/$(urlencode "$1")/$(urlencode "$2")?event=FEScroll"
+}
+
+system() {
+  [[ -n $1 ]] || return 0
+  printf 'system/%s\n' "$1" > "$last_file" 2> /dev/null
+  call "console/stream/$(urlencode "$1")"
+}
+
+# launch PROGRAMA [ARGS...]: a linha de comando que o fliperos-kms-run ou o
+# fliperos-x11-run recebeu. O jogo e o ultimo argumento: um arquivo de
+# ~/roms, ou o nome do set no GroovyMAME e no Model 2 (o [name] dos
+# frontends). Sem jogo (um frontend, o menu de um emulador), nada.
+launch() {
+  local prog last
+  (($# >= 2)) || return 0
+  prog=${1##*/}
+  last=${*: -1}
+  case $prog in
+    groovymame | fliperos-model2)
+      [[ $last == -* ]] && return 0
+      game mame "$(rom_of "$last")"
+      ;;
+    *)
+      [[ -f $last ]] || return 0
+      game "$(system_of "$last")" "$(rom_of "$last")"
+      ;;
+  esac
+}
+
+# esde EVENTO ARGS...: game-select "rom" "nome" "sistema" "nome do sistema";
+# system-select "sistema" "nome do sistema" "pasta". Com rolagem rapida o
+# game-select chega vazio. No Linux o ES-DE escapa os espacos do caminho.
+esde() {
+  local event=$1 path
+  shift
+  case $event in
+    game-select)
+      path=${1:-}
+      path=${path//\\/}
+      [[ -n $path ]] || return 0
+      select_game "$(system_of "$path")" "$(rom_of "$path")"
+      ;;
+    system-select)
+      path=${3:-}
+      path=${path//\\/}
+      [[ -n $path ]] || return 0
+      system "$(system_of "${path%/}/x")"
+      ;;
+  esac
+}
+
+# attract EMULADOR ROM: a pasta das ROMs vem do .cfg do emulador.
+attract() {
+  local rompath sys=mame
+  rompath=$(awk '$1 == "rompath" { sub(/^[ \t]*rompath[ \t]+/, ""); print; exit }' \
+    "$attract_dir/emulators/$1.cfg" 2> /dev/null)
+  rompath=${rompath%%;*}
+  [[ -n $rompath ]] && sys=$(system_of "${rompath%/}/x")
+  select_game "$sys" "${2:-}"
+}
+
+cmd=${1:-}
+shift
+case $cmd in
+  fetch) fetch "$@" ;;
+  installed)
+    installed
+    exit $?
+    ;;
+  frontends) frontends ;;
+  daemon)
+    installed || { echo "fliperos-pixelcade: pixelweb is not installed (Setup > Extras)" >&2; exit 1; }
+    frontends
+    cd "$dir" || exit 1
+    exec ./pixelweb -p "$dir" -startup
+    ;;
+  launch | esde | attract | game | select | system)
+    installed || exit 0
+    case $cmd in
+      select) select_game "$@" ;;
+      *) "$cmd" "$@" ;;
+    esac
+    ;;
+  *)
+    sed -n '18,26p' "$0" | sed 's/^# *//' >&2
+    exit 1
+    ;;
+esac
+exit 0

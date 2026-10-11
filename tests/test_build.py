@@ -4787,11 +4787,12 @@ class NewEmulatorBuildTests(unittest.TestCase):
             wine.write_text('#!/bin/sh\n')
             wine.chmod(0o755)
             env = dict(os.environ, FLIPEROS_WINE=str(wine), FLIPEROS_STEAM=tmp + '/none',
-                       FLIPEROS_HEROIC=tmp + '/none')
+                       FLIPEROS_HEROIC=tmp + '/none', FLIPEROS_PIXELCADE=tmp + '/none')
             run = lambda *a: subprocess.run(['bash', str(ROOT / 'config/fliperos-extras'), *a], env=env,
                                             capture_output=True, text=True)
             rows = [line.split('|') for line in run('list').stdout.splitlines()]
-            self.assertEqual([(r[0], r[1]) for r in rows], [('wine', '1'), ('steam', '0'), ('heroic', '0')])
+            self.assertEqual([(r[0], r[1]) for r in rows],
+                             [('wine', '1'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0')])
             self.assertEqual(run('installed', 'wine').returncode, 0)
             self.assertNotEqual(run('installed', 'steam').returncode, 0)
             if os.geteuid() != 0:
@@ -4899,6 +4900,125 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('sm2-emu', helper)
         self.assertNotIn('wine', helper)
         self.assertNotIn('WINEPREFIX=', helper)
+
+
+class PixelcadeTests(unittest.TestCase):
+    """config/fliperos-pixelcade: o marquee do Pixelcade pelo pixelweb (baixado
+    pelo Setup > Extras), com os eventos dos lancadores e dos frontends."""
+    SCRIPT = ROOT / 'config/fliperos-pixelcade'
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        t = self.tmp
+        (t / 'pixelcade').mkdir()
+        (t / 'bin').mkdir()
+        (t / 'run').mkdir()
+        self.calls = t / 'calls'
+        curl = t / 'bin/curl'
+        curl.write_text('#!/bin/sh\nfor a; do last=$a; done\necho "$last" >> %s\n' % self.calls)
+        curl.chmod(0o755)
+        info = t / 'info'
+        info.mkdir()
+        (info / 'snes9x_libretro.info').write_text('systemid = "super_nes"\n')
+        (info / 'fbneo_libretro.info').write_text('systemid = "fb_alpha"\n')
+        self.roms = t / 'roms'
+        for d in ('retroarch/snes9x', 'naomi', 'dreamcast'):
+            (self.roms / d).mkdir(parents=True)
+        self.env = dict(os.environ, PATH='%s:%s' % (t / 'bin', os.environ['PATH']),
+                        PIXELCADE_DIR=str(t / 'pixelcade'), PIXELCADE_API='http://pc', ROMS_DIR=str(self.roms),
+                        RA_INFO_DIR=str(info), XDG_RUNTIME_DIR=str(t / 'run'), ESDE_DIR=str(t / 'ES-DE'),
+                        ATTRACT_DIR=str(t / 'attract'),
+                        PIXELCADE_PLUGIN_SRC=str(ROOT / 'config/attractplus-plugins/Pixelcade'))
+
+    def install(self):
+        pw = self.tmp / 'pixelcade/pixelweb'
+        pw.write_text('#!/bin/sh\n')
+        pw.chmod(0o755)
+
+    def run_(self, *args):
+        subprocess.run(['bash', str(self.SCRIPT), *args], env=self.env, check=True, timeout=30)
+        calls = self.calls.read_text().splitlines() if self.calls.exists() else []
+        self.calls.unlink(missing_ok=True)
+        return [c.replace('http://pc/', '') for c in calls]
+
+    def test_nothing_without_pixelweb(self):
+        installed = lambda: subprocess.run(['bash', str(self.SCRIPT), 'installed'], env=self.env).returncode
+        self.assertNotEqual(installed(), 0)
+        rom = self.roms / 'naomi/mvsc2.zip'
+        rom.write_text('')
+        self.assertEqual(self.run_('launch', 'flycast', str(rom)), [])
+        self.assertEqual(self.run_('esde', 'game-select', str(rom), 'x', 'naomi', 'Naomi'), [])
+        self.install()
+        self.assertEqual(installed(), 0)
+
+    def test_game_started_by_the_launchers(self):
+        self.install()
+        rom = self.roms / 'retroarch/snes9x/Super Mario World (USA).sfc'
+        rom.write_text('')
+        self.assertEqual(self.run_('launch', 'retroarch', '-L', '/c/snes9x_libretro.so', str(rom)),
+                         ['attract/stop', 'arcade/stream/snes/Super%20Mario%20World%20%28USA%29?l=99999&event=GameStart'])
+        # O groovymame do fliperos-kms-run passa de novo pelo fliperos-x11-run.
+        self.assertEqual(self.run_('launch', 'retroarch', '-L', '/c/snes9x_libretro.so', str(rom)), [])
+        self.assertEqual(self.run_('launch', 'groovymame', 'digdug'),
+                         ['attract/stop', 'arcade/stream/mame/digdug?l=99999&event=GameStart'])
+        # Sem jogo (um frontend, o menu do emulador), nada.
+        self.assertEqual(self.run_('launch', 'groovymame'), [])
+        self.assertEqual(self.run_('launch', 'attractplus'), [])
+        self.assertEqual(self.run_('launch', 'groovymame', '-listxml'), [])
+
+    def test_frontend_selection(self):
+        self.install()
+        escaped = str(self.roms / 'naomi/Marvel\\ vs.\\ Capcom\\ 2.zip')
+        self.assertEqual(self.run_('esde', 'game-select', escaped, 'MvC2', 'naomi', 'Naomi'),
+                         ['arcade/stream/mame/Marvel%20vs.%20Capcom%202?event=FEScroll'])
+        # A mesma selecao de novo nao pisca o marquee; rolagem rapida chega vazia.
+        self.assertEqual(self.run_('esde', 'game-select', escaped, 'MvC2', 'naomi', 'Naomi'), [])
+        self.assertEqual(self.run_('esde', 'game-select', '', '', '', ''), [])
+        self.assertEqual(self.run_('esde', 'system-select', 'dreamcast', 'Dreamcast', str(self.roms / 'dreamcast')),
+                         ['console/stream/dreamcast'])
+        emus = self.tmp / 'attract/emulators'
+        emus.mkdir(parents=True)
+        (emus / 'FBNeo.cfg').write_text('executable  x\nrompath              %s/retroarch/fbneo/\n' % self.roms)
+        self.assertEqual(self.run_('attract', 'FBNeo', 'sf2'), ['arcade/stream/mame/sf2?event=FEScroll'])
+
+    def test_frontends_are_wired(self):
+        settings = self.tmp / 'ES-DE/settings/es_settings.xml'
+        settings.parent.mkdir(parents=True)
+        settings.write_text('<?xml version="1.0"?>\n<bool name="CustomEventScripts" value="false" />\n')
+        cfg = self.tmp / 'attract/config'
+        cfg.mkdir(parents=True)
+        (cfg / 'attract.cfg').write_text('')
+        for _ in range(2):
+            self.run_('frontends')
+        text = settings.read_text()
+        for name in ('CustomEventScripts', 'CustomEventScriptsBrowsing', 'CustomEventScriptsBrowsingNonBlocking'):
+            self.assertIn('<bool name="%s" value="true" />' % name, text)
+        for event in ('game-select', 'system-select'):
+            script = self.tmp / 'ES-DE/scripts' / event / 'fliperos-pixelcade'
+            self.assertTrue(os.access(script, os.X_OK))
+            self.assertIn('esde %s "$@"' % event, script.read_text())
+        self.assertTrue((self.tmp / 'attract/plugins/Pixelcade/plugin.nut').is_file())
+        plugins = (cfg / 'plugins.cfg').read_text()
+        self.assertEqual(plugins.count('plugin\tPixelcade'), 1)
+        self.assertIn('enabled              yes', plugins)
+
+    def test_installed_into_the_image(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-pixelcade" "$root/opt/fliperos/bin/fliperos-pixelcade"',
+                      ROOTFS)
+        self.assertIn('multi-user.target.wants/fliperos-pixelcade.service', ROOTFS)
+        self.assertIn('99-fliperos-pixelcade.rules', ROOTFS)
+        unit = (ROOT / 'config/fliperos-pixelcade.service').read_text()
+        self.assertIn('ConditionPathExists=/home/fliperos/pixelcade/pixelweb', unit)
+        rules = (ROOT / 'config/99-fliperos-pixelcade.rules').read_text()
+        for ids in ('"1b4f", ATTRS{idProduct}=="0008"', '"2e8a", ATTRS{idProduct}=="1050"'):
+            self.assertIn(ids, rules)
+        self.assertIn('pixelcade|Pixelcade (LED/LCD marquee)', EXTRAS)
+        # O pixelweb e codigo fechado: baixado, nunca na imagem.
+        self.assertNotIn('pixelweb', MKISO)
+        for wrapper in ('fliperos-kms-run', 'fliperos-x11-run'):
+            text = (ROOT / 'config' / wrapper).read_text()
+            self.assertIn('"$pixelcade" launch "$@" < /dev/null > /dev/null 2>&1 &', text, wrapper)
 
 
 class AutomountTests(unittest.TestCase):

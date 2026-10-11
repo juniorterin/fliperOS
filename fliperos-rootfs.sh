@@ -112,8 +112,21 @@ install -m644 "$src"/config/sm2-emu-patches/*.patch "$root/usr/local/share/flipe
 # nao vem na imagem (codigo fechado).
 install -Dm755 "$src/config/fliperos-fightcade" "$root/opt/fliperos/bin/fliperos-fightcade"
 install -Dm644 "$src/config/openbox-fightcade.xml" "$root/etc/fliperos/openbox-fightcade.xml"
-# Wine, Steam e Heroic nao vem na imagem: o Setup > Extras os instala.
+# Wine, Steam, Heroic e o Pixelcade nao vem na imagem: o Setup > Extras os
+# instala.
 install -Dm755 "$src/config/fliperos-extras" "$root/opt/fliperos/bin/fliperos-extras"
+# Pixelcade (marquee de LED/LCD): o pixelweb e a arte sao baixados pelo
+# Setup > Extras para ~/pixelcade (codigo fechado). Daqui vem o que liga os
+# frontends e os lancadores a ele, o servico (so sobe com o pixelweb
+# baixado) e a regra da udev que o abre quando o marquee e conectado.
+install -Dm755 "$src/config/fliperos-pixelcade" "$root/opt/fliperos/bin/fliperos-pixelcade"
+install -Dm644 "$src/config/attractplus-plugins/Pixelcade/plugin.nut" \
+  "$root/usr/local/share/fliperos/attractplus-plugins/Pixelcade/plugin.nut"
+install -Dm644 "$src/config/fliperos-pixelcade.service" "$root/etc/systemd/system/fliperos-pixelcade.service"
+install -Dm644 "$src/config/99-fliperos-pixelcade.rules" "$root/etc/udev/rules.d/99-fliperos-pixelcade.rules"
+mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
+ln -sfn /etc/systemd/system/fliperos-pixelcade.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-pixelcade.service"
 # groovymame: o atalho (config/fliperos-groovymame) na frente do binario do
 # release, em /usr/local/libexec. Num sistema de antes, o binario compilado
 # estava no lugar do atalho: muda de pasta.

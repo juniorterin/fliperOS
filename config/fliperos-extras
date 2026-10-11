@@ -4,7 +4,9 @@
 # (GOG). Juntos passavam de 1,5 GB na ISO, e o GitHub aceita ate 2 GiB por
 # arquivo. O Steam e o Heroic ja precisam de rede para servir; o Fightcade
 # tambem (o fliperos-fightcade fetch instala o Wine junto). A configuracao
-# deles (prefixos do Wine, lancadores, atalhos) ja vem na imagem.
+# deles (prefixos do Wine, lancadores, atalhos) ja vem na imagem. O
+# Pixelcade (marquee de LED/LCD) e codigo fechado: o config/fliperos-pixelcade
+# baixa o pixelweb e a arte do GitHub do Pixelcade.
 #
 #   fliperos-extras list                         nome|instalado (0 ou 1)|descricao
 #   fliperos-extras installed NOME               status 0 se instalado
@@ -29,6 +31,7 @@ STEAM_PACKAGES="steam-installer xterm- xterm:i386-"
 wine_bin=${FLIPEROS_WINE:-/usr/bin/wine}
 steam_bin=${FLIPEROS_STEAM:-/usr/games/steam}
 heroic_bin=${FLIPEROS_HEROIC:-/opt/Heroic/heroic}
+pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
 
 progress=0 label=""
 say() {
@@ -44,6 +47,7 @@ extras_label() {
     wine) echo "Wine" ;;
     steam) echo "Steam" ;;
     heroic) echo "Heroic" ;;
+    pixelcade) echo "Pixelcade" ;;
   esac
 }
 
@@ -52,6 +56,7 @@ extras_installed() {
     wine) [[ -x $wine_bin ]] ;;
     steam) [[ -x $steam_bin ]] ;;
     heroic) [[ -x $heroic_bin ]] ;;
+    pixelcade) [[ -x $pixelcade ]] && "$pixelcade" installed ;;
     *) return 2 ;;
   esac
 }
@@ -64,6 +69,7 @@ extras_list() {
 wine|Wine (Model 2, Fightcade 2 emulators)
 steam|Steam
 heroic|Heroic (GOG, Epic, Amazon)
+pixelcade|Pixelcade (LED/LCD marquee)
 LIST
 }
 
@@ -118,7 +124,7 @@ install_heroic() {
 extras_install() {
   local name=$1
   label=$(extras_label "$name")
-  [[ -n $label ]] || fail "unknown extra: $name (wine, steam or heroic)"
+  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic or pixelcade)"
   ((EUID == 0)) || fail "installing $label needs root (Setup > Extras)"
   case $name in
     # shellcheck disable=SC2086 # um pacote por palavra
@@ -126,6 +132,10 @@ extras_install() {
     # shellcheck disable=SC2086
     steam) apt_install $STEAM_PACKAGES ;;
     heroic) install_heroic ;;
+    pixelcade)
+      [[ -x $pixelcade ]] || fail "$pixelcade is missing"
+      if ((progress)); then "$pixelcade" fetch --progress || exit 1; else "$pixelcade" fetch || exit 1; fi
+      ;;
   esac
   extras_installed "$name" || fail "$label was installed, but it was not found afterwards"
   say 100 "$label installed"
@@ -142,7 +152,7 @@ case ${1:-} in
     extras_install "${2:-}"
     ;;
   *)
-    sed -n '9,11p' "$0" | sed 's/^# *//' >&2
+    sed -n '11,13p' "$0" | sed 's/^# *//' >&2
     exit 1
     ;;
 esac

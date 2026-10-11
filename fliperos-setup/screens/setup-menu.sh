@@ -13,7 +13,7 @@ screen_setup_menu() {
       "network|Network Setup" \
       "frontend|Frontend" \
       "splash|Splash screen (boot theme)" \
-      "extras|Extras (Wine, Steam, Heroic)" \
+      "extras|Extras (Wine, Steam, Heroic, Pixelcade)" \
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
       "romlist|AttractPlus ROM List (real game names)" \

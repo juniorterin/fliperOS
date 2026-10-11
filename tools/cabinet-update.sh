@@ -210,6 +210,9 @@ echo "SDL mappings: $(grep -vc '^#' /var/lib/fliperos/gamecontrollerdb.txt 2> /d
 systemctl enable fliperos-padkeys.service > /dev/null 2>&1 || true
 systemctl restart fliperos-padkeys.service
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
+# Pixelcade: so sobe com o pixelweb baixado (Setup > Extras).
+systemctl restart fliperos-pixelcade.service 2> /dev/null || true
+echo "fliperos-pixelcade: $(systemctl is-active fliperos-pixelcade.service 2> /dev/null)"
 # Os discos que ja estavam ligados (os que aparecerem depois, pela udev).
 lsblk -rnpo NAME,FSTYPE | awk '$2 != "" { print $1 }' | while read -r dev; do
   /opt/fliperos/bin/fliperos-automount "$dev" 2> /dev/null || true
