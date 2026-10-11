@@ -10,6 +10,7 @@ import { Footer } from '@/sections/Footer';
 import { Hero } from '@/sections/Hero';
 import { MultiMonitor } from '@/sections/MultiMonitor';
 import { OpenSource } from '@/sections/OpenSource';
+import { Pixelcade } from '@/sections/Pixelcade';
 import { Screenshots } from '@/sections/Screenshots';
 import { Setup } from '@/sections/Setup';
 import { Support } from '@/sections/Support';
@@ -30,6 +31,7 @@ export default async function Home() {
         <Emulators />
         <Crt />
         <MultiMonitor />
+        <Pixelcade />
         <Setup />
         <OpenSource stats={stats} />
         <Support />
