@@ -28,7 +28,9 @@ o link (KIND.magnet), a lista de arquivos do torrent (KIND.json), o plano
 aplicado (KIND.plan, no formato do fliperos-romclean) e o que ja chegou as
 pastas dos emuladores (KIND.installed, "set<TAB>caminho"). So o que esta em
 KIND.installed e apagado quando o filtro deixa de escolher um jogo (prune):
-os arquivos postos a mao ficam.
+os arquivos postos a mao ficam. O pai, a BIOS e o dispositivo de um jogo que
+fica nas pastas (o neogeo.zip dos jogos de MVS postos pelo ROM cleaner, por
+exemplo) tambem ficam (in_use).
 """
 import argparse
 import fcntl
@@ -48,6 +50,8 @@ RPC = os.environ.get('FLIPEROS_DOWNLOADER_RPC', 'http://127.0.0.1:9092/transmiss
 STAGING = os.environ.get('FLIPEROS_DOWNLOADER_DIR', '/home/fliperos/downloads/romsets')
 CONFIG_DIR = os.environ.get('FLIPEROS_DOWNLOADER_CONFIG', '/home/fliperos/.config/fliperos-transmission')
 ROMCLEAN = os.environ.get('FLIPEROS_ROMCLEAN', '/opt/fliperos/bin/fliperos-romclean')
+# O rompath do GroovyMAME: os jogos dali tambem seguram a BIOS (in_use).
+MAME_INI = os.environ.get('FLIPEROS_MAME_INI', '/etc/fliperos/mame/mame.ini')
 SELF = '/opt/fliperos/bin/fliperos-downloader'
 KINDS = ('roms', 'chds')
 LABEL = {'roms': 'ROMs', 'chds': 'CHDs'}
@@ -506,6 +510,52 @@ def installed(kind):
     return out
 
 
+def mame_rompath():
+    try:
+        with open(MAME_INI, encoding='utf-8', errors='replace') as f:
+            for line in f:
+                key, _, value = line.strip().partition(' ')
+                if key == 'rompath':
+                    return [p for p in value.strip().strip('"').split(';') if p]
+    except OSError:
+        pass
+    return []
+
+
+def in_use(doomed):
+    """Dos sets a apagar [(set, caminho)], os que um jogo que fica ainda usa (o
+    pai, a BIOS, um dispositivo), nas pastas do filtro, no rompath do MAME e
+    onde o downloader pos ROMs. Sem conseguir saber, nenhum sai."""
+    if not doomed:
+        return set()
+    try:
+        args = read_args('filter.scan')
+    except OSError:
+        return {n for n, _ in doomed}
+    xml, folders = [], set(mame_rompath())
+    for i, arg in enumerate(args[:-1]):
+        if arg in ('--xml', '--xml-command', '--cache'):
+            xml += [arg, args[i + 1]]
+        elif arg in ('--dest', '--bios-dest'):
+            folders.add(args[i + 1])
+        elif arg == '--route':
+            folders.add(args[i + 1].partition('=')[2])
+    folders.update(os.path.dirname(p) for _, p in installed('roms'))
+    with tempfile.NamedTemporaryFile('w', encoding='utf-8', suffix='.except') as skip:
+        skip.writelines(p + '\n' for _, p in doomed)
+        skip.flush()
+        cmd = [ROMCLEAN, 'uses', *xml, '--except', skip.name]
+        for folder in sorted(f for f in folders if f):
+            cmd += ['--folder', folder]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print('fliperos-downloader: could not check what the games still use: %s'
+              % (proc.stderr.strip().splitlines() or [proc.returncode])[-1], file=sys.stderr)
+        return {n for n, _ in doomed}
+    used = set(proc.stdout.split())
+    return {n for n, _ in doomed if n.lower() in used}
+
+
 def cmd_diff(args):
     """O que o filtro de agora muda no que foi aplicado (KIND.plan): os sets
     que entrariam e os baixados que sairiam. "tipo<TAB>add|remove<TAB>N<TAB>bytes"."""
@@ -524,7 +574,11 @@ def cmd_diff(args):
         have = {}
         for name, path in installed(kind):
             have.setdefault(name, []).append(path)
-        remove = sorted(n for n in have if n not in new)
+        remove = [n for n in have if n not in new]
+        if kind == 'roms':
+            used = in_use([(n, p) for n in remove for p in have[n]])
+            remove = [n for n in remove if n not in used]
+        remove.sort()
         removed_bytes = 0
         for n in remove:
             for path in have[n]:
@@ -560,7 +614,9 @@ def cmd_prune(args):
     aplicado nao escolhe mais."""
     with lock():
         for kind in KINDS:
-            keep = plan_sets(read_plan(state(kind + '.plan')))
+            keep = set(plan_sets(read_plan(state(kind + '.plan'))))
+            if kind == 'roms':
+                keep |= in_use([(n, p) for n, p in installed(kind) if n not in keep])
             left, deleted = [], 0
             for name, path in installed(kind):
                 if name in keep:
@@ -696,9 +752,12 @@ def cmd_remove(args):
             clean_staging(args.kind)
         deleted = 0
         if args.delete_files:
-            for _, path in installed(args.kind):
-                delete_path(path)
-                deleted += 1
+            doomed = installed(args.kind)
+            used = in_use(doomed) if args.kind == 'roms' else set()
+            for name, path in doomed:
+                if name not in used:
+                    delete_path(path)
+                    deleted += 1
         for suffix in ('.json', '.magnet', '.plan', '.installed'):
             if os.path.exists(state(args.kind + suffix)):
                 os.remove(state(args.kind + suffix))

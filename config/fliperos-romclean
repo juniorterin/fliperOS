@@ -28,6 +28,9 @@ deles, os filtros que dependem dele deixam passar tudo.
                             --system "EMULADOR|PASTA|XML|CLONES"...
                             --out PASTA [--combined NOME] [--progress]
                             [--result ARQUIVO]
+  fliperos-romclean uses (--xml ARQUIVO|- | --xml-command COMANDO)
+                         [--cache ARQUIVO] --folder PASTA...
+                         [--except LISTA]
   fliperos-romclean fetch-mame2010 DESTINO
 
 O XML: um arquivo (.xml ou .xml.xz), a entrada padrao (-) ou a saida de um
@@ -107,6 +110,12 @@ lista ("005.zip"); no chds, os CHDs ("jogo/disco.chd"). O plano sai como se
 a pasta (--roms, --chds) ja os tivesse. --with "set<TAB>pasta" soma aos
 jogos de cada pasta de ROMs os que ainda vao chegar la; com --with-only,
 so eles contam (os CHDs seguem o filtro, nao o que esta na pasta).
+
+uses imprime, um por linha, os sets de que os jogos das pastas (--folder)
+precisam: o pai, a BIOS e os dispositivos, em cadeia. Os arquivos da lista
+--except (um caminho por linha: os que vao ser apagados) nao contam. O
+Downloader nao apaga a BIOS (o neogeo.zip, o qsound.zip...) de um jogo que
+fica, mesmo que o filtro nao o escolha mais.
 
 Os sets do Flycast (Naomi, Naomi 2, Naomi GD-ROM, Atomiswave, System SP: os
 que chegam pelo romof as BIOS naomi, naomi2, naomigd, awbios, segasp e as
@@ -586,6 +595,21 @@ def best_of_each_game(machines, names, regions):
     return {min(members, key=score) for members in families.values()}
 
 
+def dependencies(machines, names, device_ok=lambda d: True):
+    """O que os sets usam, em cadeia: o pai, a BIOS e os dispositivos
+    (romof, cloneof, device_ref)."""
+    needed, todo = set(), list(names)
+    while todo:
+        m = machines.get(todo.pop())
+        if m is None:
+            continue
+        for dep in [m['romof'], m['cloneof']] + [d for d in m['devices'] if device_ok(d)]:
+            if dep and dep not in needed:
+                needed.add(dep)
+                todo.append(dep)
+    return needed
+
+
 def plan(machines, present, f, kept=()):
     """(vao, so como dependencia, sobram na origem, do Flycast que ficam)
     entre os sets da pasta. kept: os sets que ja estao no destino (outra
@@ -599,16 +623,8 @@ def plan(machines, present, f, kept=()):
     # O pai, a BIOS e os dispositivos dos jogos escolhidos e dos que ja estao
     # no destino (de uma limpeza anterior ou postos a mao): sem eles o jogo
     # nao abre.
-    needed, todo = set(), list(games | {n for n in kept if n in machines})
-    while todo:
-        m = machines.get(todo.pop())
-        if m is None:
-            continue
-        devices = [] if f.no_devices else [d for d in m['devices'] if not f.only_devices or d in f.only_devices]
-        for dep in [m['romof'], m['cloneof']] + devices:
-            if dep and dep not in needed and dep not in games:
-                needed.add(dep)
-                todo.append(dep)
+    needed = dependencies(machines, games | {n for n in kept if n in machines},
+                          lambda d: not f.no_devices and (not f.only_devices or d in f.only_devices)) - games
     known = {n for n in present if n in machines}
     move = known & (games | needed)
     # Os do Flycast nunca sobram para apagar.
@@ -775,6 +791,27 @@ def cmd_chds(args):
     print('move_bytes=%d' % total)
     print('missing=%d' % len(missing))
     print('free_bytes=%d' % free_bytes(folders[0]))
+
+
+def cmd_uses(args):
+    machines = load_machines(args)
+    skip = set()
+    if args.except_list:
+        with open(args.except_list, encoding='utf-8') as f:
+            skip = {os.path.realpath(line.rstrip('\n')) for line in f if line.strip()}
+    names = set()
+    for folder in args.folder:
+        try:
+            entries = sets_in(folder)
+        except OSError:
+            continue
+        for name, files in entries.items():
+            # So os arquivos de set (uma pasta com o nome do jogo e a dos CHDs).
+            if name in machines and any(size is not None and os.path.realpath(os.path.join(folder, f)) not in skip
+                                        for f, size in files):
+                names.add(name)
+    for name in sorted(dependencies(machines, names)):
+        print(name)
 
 
 def read_plan(path):
@@ -1163,6 +1200,13 @@ def main():
     p.add_argument('--progress', action='store_true')
     p.add_argument('--result')
     p.set_defaults(func=cmd_romlist)
+    p = sub.add_parser('uses')
+    p.add_argument('--xml')
+    p.add_argument('--xml-command')
+    p.add_argument('--cache')
+    p.add_argument('--folder', action='append', required=True)
+    p.add_argument('--except', dest='except_list')
+    p.set_defaults(func=cmd_uses)
     p = sub.add_parser('fetch-mame2010')
     p.add_argument('dest')
     p.set_defaults(func=cmd_fetch_mame2010)
