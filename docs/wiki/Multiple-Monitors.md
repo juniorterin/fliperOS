@@ -6,6 +6,7 @@ Some arcade games were built for two or three monitors side by side or stacked: 
 
 - A video card with one **analog output** (VGA, DVI-I) for each monitor, supported by the [15 kHz kernel](Kernel-15-kHz.md). The tested way is every monitor on the **same card** as monitor 1; a second card is experimental (below). Older Radeons with VGA + DVI-I (HD 5000, 6000 and 7000 series, like the HD 5450 or HD 6450) are the tested way to get 2 CRTs. These cards usually have **two DACs**, so even with VGA + 2 DVI-I outputs only two analog monitors work at the same time.
 - Check the DVI connector: only **DVI-I** (the 4 extra pins around the flat blade) carries analog VGA, and works with a passive DVI-to-VGA adapter. **DVI-D** is digital only. For example the Radeon R7 240 has VGA + DVI-D + HDMI: only one analog output.
+- **You are not limited to one video card.** The outputs can also come from more than one card: each card brings its own outputs (and its own DACs), so how many cards you can use only depends on how many free **PCI/PCIe slots** the computer has. Monitor 1's card draws the picture and the others only add outputs (see [A second video card](#a-second-video-card-experimental)).
 - Monitors of the **same type** as monitor 1 (Setup > Video Setup > Monitor Type): they get the same video mode.
 - Monitor 1 already chosen by the output test (boot menu or Setup > Video Setup).
 
@@ -18,7 +19,7 @@ An HDMI, DVI-D or DisplayPort output can drive a CRT through an **active** conve
 
 ### A second video card (experimental)
 
-With two or more PCI/PCIe slots, the extra monitors can be on **another video card**. The Setup lists its outputs as `card1:VGA-1 (AMD Radeon ...)`, and `fliperos.conf` saves them with the card in front (`screens=VGA-1,DVI-I-1,card1:VGA-1`). This is **not tested yet** on a cabinet:
+The extra monitors don't have to be on monitor 1's card: they can be on **another video card**, or on several. If one card doesn't have enough analog outputs, add another; the only limit is how many free PCI/PCIe slots the computer has. The Setup lists the outputs of every card it finds, as `card1:VGA-1 (AMD Radeon ...)`, and `fliperos.conf` saves them with the card in front (`screens=VGA-1,DVI-I-1,card1:VGA-1`). This is **not tested yet** on a cabinet:
 - **Monitor 1's card draws everything.** X opens on it (its `BusID` is in `/etc/X11/xorg.conf.d/10-fliperos.conf`) and adds the other card as a *GPU screen* (`AutoAddGPU`, `AutoBindGPU`): its outputs join the same desktop, and the picture is copied to them (reverse PRIME). In XRandR they get another name: `VGA-1` of the first extra card is `VGA-1-1`, of the second `VGA-1-2`. `fliperos-multiscreen xnames` makes that translation for GroovyMAME and Flycast, and binds the card (`xrandr --setprovideroutputsource`) if X didn't.
 - **The kernel's `video=` goes by connector name, on every card.** `video=VGA-1:640x480iSe` sets the VGA-1 of both cards, so an extra monitor on a second card's `VGA-1` gets monitor 1's mode, and an unused output with the same name on the other card is also forced on (with nothing plugged in, it does no harm).
 - Use a card the 15 kHz kernel supports with low dotclocks (AMD/ATI, `radeon` or `amdgpu`). On a card without them (Intel, NVIDIA) the monitor boots in the super resolution, and GroovyMAME's per-game modes may not reach it.

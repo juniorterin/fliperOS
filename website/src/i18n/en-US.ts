@@ -200,12 +200,12 @@ const enUS = {
     kicker: 'Multi-monitor',
     title: 'One game, two or three tubes.',
     intro:
-      'Some arcade games were built for more than one monitor: Darius and The Ninja Warriors spread across three screens, Punch-Out!! stacks two. FliperOS drives two arcade CRTs from the analog outputs of one video card, plus a third on a second video card or through an active converter (still in testing), and when a game has more than one screen, each screen goes to its own tube.',
+      'Some arcade games were built for more than one monitor: Darius and The Ninja Warriors spread across three screens, Punch-Out!! stacks two. FliperOS drives two arcade CRTs from the analog outputs of one video card, plus a third on a second video card or through an active converter (still in testing). You are not tied to one card: the outputs can come from more than one video card, limited only by how many free PCI/PCIe slots your computer has. When a game has more than one screen, each screen goes to its own tube.',
     screen: 'Screen',
     rowLabel: 'Darius: three screens side by side',
     stackLabel: 'Punch-Out!!: two screens stacked',
     points: [
-      { id: 'setup', title: 'Set up on the cabinet', text: 'Setup > Video Setup > Multiple Monitors picks the output of each extra CRT, on the same card or a second one, the screen order (left to right or top to bottom) and blinks each tube so you know which is which.' },
+      { id: 'setup', title: 'Set up on the cabinet', text: 'Setup > Video Setup > Multiple Monitors picks the output of each extra CRT, on the same card or another video card (any free PCI/PCIe slot will do), the screen order (left to right or top to bottom) and blinks each tube so you know which is which.' },
       { id: 'groovymame', title: 'GroovyMAME', text: 'Every MAME system with two or more screens opens one window per monitor, and Switchres sets each game’s native mode on every tube.' },
       { id: 'flycast', title: 'Flycast', text: 'NAOMI multi-board games run one board per monitor across three CRTs: Ferrari F355 Challenge, Airline Pilots and Sega Strike Fighter.' },
       { id: 'toggle', title: 'Automatic, with a switch', text: 'The launcher knows which games have several screens. One switch turns the mode off, and single-screen games and the frontends always stay on monitor 1.' },

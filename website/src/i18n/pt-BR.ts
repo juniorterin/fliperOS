@@ -204,12 +204,12 @@ const ptBR: Messages = {
     kicker: 'Multimonitor',
     title: 'Um jogo, dois ou três tubos.',
     intro:
-      'Alguns jogos de arcade foram feitos para mais de um monitor: Darius e The Ninja Warriors se espalham por três telas, Punch-Out!! empilha duas. O FliperOS controla dois CRTs de arcade nas saídas analógicas de uma placa de vídeo, mais um terceiro numa segunda placa de vídeo ou por um conversor ativo (ainda em teste), e quando um jogo tem mais de uma tela, cada tela vai para o seu próprio tubo.',
+      'Alguns jogos de arcade foram feitos para mais de um monitor: Darius e The Ninja Warriors se espalham por três telas, Punch-Out!! empilha duas. O FliperOS controla dois CRTs de arcade nas saídas analógicas de uma placa de vídeo, mais um terceiro numa segunda placa de vídeo ou por um conversor ativo (ainda em teste). Você não fica preso a uma placa só: as saídas podem vir de mais de uma placa de vídeo, e o limite é quantos slots PCI/PCIe livres o seu computador tem. Quando um jogo tem mais de uma tela, cada tela vai para o seu próprio tubo.',
     screen: 'Tela',
     rowLabel: 'Darius: três telas lado a lado',
     stackLabel: 'Punch-Out!!: duas telas empilhadas',
     points: [
-      { id: 'setup', title: 'Configurado no gabinete', text: 'Setup > Video Setup > Multiple Monitors escolhe a saída de cada CRT extra, na mesma placa ou numa segunda, a ordem das telas (da esquerda para a direita ou de cima para baixo) e apaga cada tubo para você saber qual é qual.' },
+      { id: 'setup', title: 'Configurado no gabinete', text: 'Setup > Video Setup > Multiple Monitors escolhe a saída de cada CRT extra, na mesma placa ou em outra placa de vídeo (basta ter slot PCI/PCIe livre), a ordem das telas (da esquerda para a direita ou de cima para baixo) e apaga cada tubo para você saber qual é qual.' },
       { id: 'groovymame', title: 'GroovyMAME', text: 'Todo sistema do MAME com duas ou mais telas abre uma janela por monitor, e o Switchres põe o modo nativo do jogo em cada tubo.' },
       { id: 'flycast', title: 'Flycast', text: 'Os jogos de várias placas NAOMI rodam uma placa por monitor em três CRTs: Ferrari F355 Challenge, Airline Pilots e Sega Strike Fighter.' },
       { id: 'toggle', title: 'Automático, com uma chave', text: 'O lançador sabe quais jogos têm várias telas. Uma chave desliga o modo, e os jogos de uma tela e os frontends ficam sempre no monitor 1.' },
