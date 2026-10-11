@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+# ZeDMD (DMD de LED open source, github.com/PPUC/ZeDMD): mostra no painel o
+# jogo aberto ou selecionado, ou o sistema.
+#
+# Quem fala com o painel pela USB e o dmdserver (libdmdutil, do Visual
+# Pinball), baixado pelo Setup > Extras > ZeDMD e aberto pelo servico
+# fliperos-zedmd.service. Daqui sai uma imagem RGB24 de 128x32 por TCP
+# (localhost:6789); o dmdserver a escala para um painel 256x64.
+#
+# A arte do Pixelcade so pode ser usada no hardware dele. A imagem vem de
+# ~/media, na ordem: dmd/ (arte feita para 128x32, PNG ou GIF animado),
+# marquee/ e logo/ (as do Setup > Scraper), uma pasta por sistema. Sem
+# imagem, o nome do jogo em texto (rolando se nao cabe).
+#
+#   fliperos-dmd show game|select|system SISTEMA ROM [TITULO]
+#   fliperos-dmd image ARQUIVO
+#   fliperos-dmd text TEXTO
+#
+# Um GIF ou um texto rolando fica aberto ate o proximo evento, que o
+# encerra (o pid fica em $XDG_RUNTIME_DIR/fliperos-dmd.pid).
+import glob
+import os
+import re
+import signal
+import socket
+import struct
+import sys
+import time
+
+try:
+    from PIL import Image, ImageDraw, ImageFont, ImageSequence
+except ImportError:
+    sys.exit(0)
+
+W, H = 128, 32
+SERVER = os.environ.get('DMD_SERVER', '127.0.0.1:6789')
+MEDIA = os.environ.get('MEDIA_DIR', '/home/fliperos/media')
+ATTRACT = os.environ.get('ATTRACT_DIR', '/home/fliperos/.attract')
+ESDE = os.environ.get('ESDE_DIR', '/home/fliperos/ES-DE')
+FONT = os.environ.get('DMD_FONT', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
+PIDFILE = os.path.join(os.environ.get('XDG_RUNTIME_DIR') or '/tmp', 'fliperos-dmd.pid')
+EXTS = ('gif', 'png', 'webp', 'jpg', 'jpeg')
+COLOR = {'game': (255, 184, 108), 'select': (255, 255, 255), 'system': (139, 233, 253)}
+# Sistema dos eventos (os nomes do Pixelcade) -> pastas de ~/media (as
+# plataformas do Skyscraper), alem da de mesmo nome.
+PLATFORMS = {
+    'mame': ['arcade', 'fbneo', 'naomi', 'atomiswave'],
+    'genesis': ['megadrive'],
+    'nintendo_gamecube': ['gamecube'],
+    'sega_saturn': ['saturn'],
+    'segacd': ['megacd'],
+    'pcengine': ['pcengine', 'tg16'],
+}
+
+
+def platforms(system):
+    return [system] + PLATFORMS.get(system, [])
+
+
+def find_art(system, rom):
+    for kind in ('dmd', 'marquee', 'logo'):
+        for plat in platforms(system):
+            for ext in EXTS:
+                path = os.path.join(MEDIA, kind, plat, '%s.%s' % (rom, ext))
+                if os.path.isfile(path):
+                    return path
+        for ext in EXTS:
+            hits = sorted(glob.glob(os.path.join(MEDIA, kind, '*', '%s.%s' % (glob.escape(rom), ext))))
+            if hits:
+                return hits[0]
+    return None
+
+
+def find_system_art(system):
+    for plat in platforms(system):
+        for ext in EXTS:
+            path = os.path.join(MEDIA, 'dmd', '%s.%s' % (plat, ext))
+            if os.path.isfile(path):
+                return path
+    return None
+
+
+# title_of ROM: o nome do jogo nas listas do Attract-Mode e do ES-DE.
+def title_of(rom):
+    prefix = rom + ';'
+    for path in glob.glob(os.path.join(ATTRACT, 'romlists', '*.txt')):
+        try:
+            with open(path, encoding='utf-8', errors='replace') as f:
+                for line in f:
+                    if line.startswith(prefix):
+                        title = line.split(';')[1].strip()
+                        if title:
+                            return title
+        except OSError:
+            pass
+    pattern = re.compile(r'<path>\./%s\.[^<]*</path>\s*<name>([^<]+)</name>' % re.escape(rom))
+    for path in glob.glob(os.path.join(ESDE, 'gamelists', '*', 'gamelist.xml')):
+        try:
+            with open(path, encoding='utf-8', errors='replace') as f:
+                m = pattern.search(f.read())
+        except OSError:
+            continue
+        if m:
+            return m.group(1).strip()
+    return rom
+
+
+def clean(title):
+    title = re.sub(r'\s*[\(\[].*$', '', title).strip() or title
+    return title.replace('&amp;', '&')
+
+
+# -- Imagens ------------------------------------------------------
+
+def fit(img):
+    img = img.convert('RGBA')
+    w, h = img.size
+    scale = min(W / w, H / h)
+    if scale != 1:
+        size = (max(1, round(w * scale)), max(1, round(h * scale)))
+        img = img.resize(size, Image.NEAREST if scale > 1 else Image.LANCZOS)
+    frame = Image.new('RGB', (W, H))
+    frame.paste(img, ((W - img.width) // 2, (H - img.height) // 2), img)
+    return frame.tobytes()
+
+
+def image_frames(path):
+    img = Image.open(path)
+    frames = []
+    for f in ImageSequence.Iterator(img):
+        frames.append((fit(f), max(20, f.info.get('duration', 100) or 100)))
+    return frames
+
+
+def font(size):
+    try:
+        return ImageFont.truetype(FONT, size)
+    except OSError:
+        return ImageFont.load_default()
+
+
+def canvas():
+    img = Image.new('RGB', (W, H))
+    draw = ImageDraw.Draw(img)
+    draw.fontmode = '1'
+    return img, draw
+
+
+def draw_line(draw, text, f, y, color, x=None):
+    left, top, right, _ = draw.textbbox((0, 0), text, font=f)
+    if x is None:
+        x = (W - (right - left)) // 2 - left
+    draw.text((x, y - top), text, font=f, fill=color)
+
+
+def text_frames(text, color):
+    text = ' '.join(text.split())
+    probe = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+
+    def size_of(s, f):
+        left, top, right, bottom = probe.textbbox((0, 0), s, font=f)
+        return right - left, bottom - top
+
+    for size in range(22, 11, -1):
+        f = font(size)
+        w, h = size_of(text, f)
+        if w <= W - 4 and h <= H:
+            img, draw = canvas()
+            draw_line(draw, text, f, (H - h) // 2, color)
+            return [(img.tobytes(), 1000)]
+    words = text.split()
+    if len(words) > 1:
+        for size in range(14, 8, -1):
+            f = font(size)
+            best = None
+            for i in range(1, len(words)):
+                a, b = ' '.join(words[:i]), ' '.join(words[i:])
+                wa, ha = size_of(a, f)
+                wb, hb = size_of(b, f)
+                if wa <= W - 2 and wb <= W - 2 and ha + hb + 2 <= H:
+                    widest = max(wa, wb)
+                    if best is None or widest < best[0]:
+                        best = (widest, a, b, ha, hb)
+            if best:
+                _, a, b, ha, hb = best
+                img, draw = canvas()
+                top = (H - ha - hb - 2) // 2
+                draw_line(draw, a, f, top, color)
+                draw_line(draw, b, f, top + ha + 2, color)
+                return [(img.tobytes(), 1000)]
+    f = font(18)
+    w, h = size_of(text, f)
+    frames = []
+    for x in range(W, -w - 1, -2):
+        img, draw = canvas()
+        draw_line(draw, text, f, (H - h) // 2, color, x=x)
+        frames.append((img.tobytes(), 30))
+    return frames
+
+
+# -- dmdserver ------------------------------------------------------
+
+# Cabecalho DMDStream versao 1, com os campos na ordem de rede (big-endian),
+# como o DMD::StreamHeader do libdmdutil (empacotado em 1 byte). Modo 2:
+# RGB24. "buffered" deixa o quadro no painel depois que a conexao fecha.
+def header(length, disconnect_others):
+    return struct.pack('!10sBiHHBBI', b'DMDStream', 1, 2, W, H, 1, int(disconnect_others), length)
+
+
+def read_pid():
+    try:
+        with open(PIDFILE) as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return 0
+
+
+# claim: o ultimo evento vence. O pid dele vai para o PIDFILE antes de
+# desenhar, e o anterior (um GIF ou texto rolando) e encerrado; um que ainda
+# estava desenhando ve o pid trocado e desiste (mine).
+def claim():
+    old = read_pid()
+    tmp = '%s.%d' % (PIDFILE, os.getpid())
+    with open(tmp, 'w') as f:
+        f.write('%d\n' % os.getpid())
+    os.replace(tmp, PIDFILE)
+    if old and old != os.getpid():
+        try:
+            with open('/proc/%d/cmdline' % old, 'rb') as f:
+                if b'fliperos-dmd' in f.read():
+                    os.kill(old, signal.SIGTERM)
+        except OSError:
+            pass
+
+
+def mine():
+    return read_pid() == os.getpid()
+
+
+def release():
+    if mine():
+        try:
+            os.unlink(PIDFILE)
+        except OSError:
+            pass
+
+
+def connect():
+    host, _, port = SERVER.rpartition(':')
+    try:
+        return socket.create_connection((host or '127.0.0.1', int(port)), timeout=3)
+    except (OSError, ValueError):
+        return None
+
+
+def play(frames):
+    if not frames or not mine():
+        return
+    sock = connect()
+    if sock is None:
+        return
+    with sock:
+        if len(frames) == 1:
+            sock.sendall(header(len(frames[0][0]), True) + frames[0][0])
+            return
+        first = True
+        while mine():
+            for data, ms in frames:
+                if not mine():
+                    break
+                sock.sendall(header(len(data), first) + data)
+                first = False
+                time.sleep(ms / 1000)
+
+
+def show(kind, system, rom, title):
+    color = COLOR.get(kind, COLOR['game'])
+    if kind == 'system':
+        art = find_system_art(system)
+        if art:
+            return image_frames(art)
+        return text_frames(title or system.replace('_', ' ').upper(), color)
+    art = find_art(system, rom)
+    if art:
+        return image_frames(art)
+    return text_frames(clean(title or title_of(rom)), color)
+
+
+def main(argv):
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    claim()
+    try:
+        return run(argv)
+    finally:
+        release()
+
+
+def run(argv):
+    if len(argv) >= 4 and argv[1] == 'show':
+        frames = show(argv[2], argv[3], argv[4] if len(argv) > 4 else '', argv[5] if len(argv) > 5 else '')
+    elif len(argv) == 3 and argv[1] == 'image':
+        frames = image_frames(argv[2])
+    elif len(argv) == 3 and argv[1] == 'text':
+        frames = text_frames(argv[2], COLOR['game'])
+    else:
+        sys.stderr.write('usage: fliperos-dmd show game|select|system SYSTEM ROM [TITLE]\n'
+                         '       fliperos-dmd image FILE\n'
+                         '       fliperos-dmd text TEXT\n')
+        return 1
+    try:
+        play(frames)
+    except OSError:
+        pass
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import socket
 import struct
 import subprocess
 import sys
@@ -4792,7 +4793,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
                                             capture_output=True, text=True)
             rows = [line.split('|') for line in run('list').stdout.splitlines()]
             self.assertEqual([(r[0], r[1]) for r in rows],
-                             [('wine', '1'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0')])
+                             [('wine', '1'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0'), ('zedmd', '0')])
             self.assertEqual(run('installed', 'wine').returncode, 0)
             self.assertNotEqual(run('installed', 'steam').returncode, 0)
             if os.geteuid() != 0:
@@ -4929,12 +4930,34 @@ class PixelcadeTests(unittest.TestCase):
                         PIXELCADE_DIR=str(t / 'pixelcade'), PIXELCADE_API='http://pc', ROMS_DIR=str(self.roms),
                         RA_INFO_DIR=str(info), XDG_RUNTIME_DIR=str(t / 'run'), ESDE_DIR=str(t / 'ES-DE'),
                         ATTRACT_DIR=str(t / 'attract'),
-                        PIXELCADE_PLUGIN_SRC=str(ROOT / 'config/attractplus-plugins/Pixelcade'))
+                        PIXELCADE_PLUGIN_SRC=str(ROOT / 'config/attractplus-plugins/Pixelcade'),
+                        ZEDMD_DIR=str(t / 'zedmd'), FLIPEROS_DMD=str(t / 'bin/fliperos-dmd'))
+        self.dmd_log = t / 'dmd'
+        dmd = t / 'bin/fliperos-dmd'
+        dmd.write_text('#!/bin/sh\necho "$*" >> %s\n' % self.dmd_log)
+        dmd.chmod(0o755)
 
     def install(self):
         pw = self.tmp / 'pixelcade/pixelweb'
         pw.write_text('#!/bin/sh\n')
         pw.chmod(0o755)
+
+    def install_zedmd(self):
+        (self.tmp / 'zedmd').mkdir(exist_ok=True)
+        server = self.tmp / 'zedmd/dmdserver'
+        server.write_text('#!/bin/sh\n')
+        server.chmod(0o755)
+
+    def dmd_calls(self, count):
+        """As chamadas do fliperos-dmd (em segundo plano) quando chegam a count."""
+        deadline = time.time() + 10
+        lines = []
+        while time.time() < deadline:
+            lines = self.dmd_log.read_text().splitlines() if self.dmd_log.exists() else []
+            if len(lines) >= count:
+                break
+            time.sleep(0.05)
+        return lines
 
     def run_(self, *args):
         subprocess.run(['bash', str(self.SCRIPT), *args], env=self.env, check=True, timeout=30)
@@ -4981,6 +5004,39 @@ class PixelcadeTests(unittest.TestCase):
         emus.mkdir(parents=True)
         (emus / 'FBNeo.cfg').write_text('executable  x\nrompath              %s/retroarch/fbneo/\n' % self.roms)
         self.assertEqual(self.run_('attract', 'FBNeo', 'sf2'), ['arcade/stream/mame/sf2?event=FEScroll'])
+        # Sem o ZeDMD instalado, o fliperos-dmd nem roda.
+        time.sleep(0.3)
+        self.assertFalse(self.dmd_log.exists())
+
+    def test_zedmd_gets_the_same_events(self):
+        self.install_zedmd()
+        rom = self.roms / 'naomi/mvsc2.zip'
+        rom.write_text('')
+        # So o ZeDMD: nada vai para a API do Pixelcade.
+        self.assertEqual(self.run_('launch', 'flycast', str(rom)), [])
+        smw = self.roms / 'retroarch/snes9x/smw.sfc'
+        self.assertEqual(self.run_('esde', 'game-select', str(smw), 'Super Mario World', 'snes', 'SNES'), [])
+        self.assertEqual(self.run_('esde', 'system-select', 'dreamcast', 'Sega Dreamcast', str(self.roms / 'dreamcast')),
+                         [])
+        self.assertCountEqual(self.dmd_calls(3), ['show game mame mvsc2', 'show select snes smw Super Mario World',
+                                                  'show system dreamcast  Sega Dreamcast'])
+        # Os dois juntos: o mesmo evento vai para os dois.
+        self.install()
+        self.assertEqual(self.run_('launch', 'groovymame', 'digdug'),
+                         ['attract/stop', 'arcade/stream/mame/digdug?l=99999&event=GameStart'])
+        self.assertIn('show game mame digdug', self.dmd_calls(4))
+
+    def test_zedmd_installed_needs_the_server(self):
+        installed = lambda: subprocess.run(['bash', str(self.SCRIPT), 'zedmd-installed'], env=self.env,
+                                           capture_output=True).returncode
+        self.assertNotEqual(installed(), 0)
+        self.install_zedmd()
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.assertNotEqual(installed(), 0)
+        else:
+            self.assertEqual(installed(), 0)
 
     def test_frontends_are_wired(self):
         settings = self.tmp / 'ES-DE/settings/es_settings.xml'
@@ -5021,6 +5077,163 @@ class PixelcadeTests(unittest.TestCase):
         for wrapper in ('fliperos-kms-run', 'fliperos-x11-run'):
             text = (ROOT / 'config' / wrapper).read_text()
             self.assertIn('"$pixelcade" launch "$@" < /dev/null > /dev/null 2>&1 &', text, wrapper)
+
+    def test_zedmd_installed_into_the_image(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-dmd" "$root/opt/fliperos/bin/fliperos-dmd"', ROOTFS)
+        self.assertIn('multi-user.target.wants/fliperos-zedmd.service', ROOTFS)
+        self.assertIn('99-fliperos-zedmd.rules', ROOTFS)
+        unit = (ROOT / 'config/fliperos-zedmd.service').read_text()
+        self.assertIn('ConditionPathExists=/home/fliperos/zedmd/dmdserver', unit)
+        self.assertIn('StartLimitBurst=3', unit.split('[Service]')[0])
+        self.assertIn('ExecStart=/opt/fliperos/bin/fliperos-pixelcade zedmd-daemon', unit)
+        rules = (ROOT / 'config/99-fliperos-zedmd.rules').read_text()
+        for ids in ('"10c4", ATTRS{idProduct}=="ea60"', '"1a86", ATTRS{idProduct}=="7523"',
+                    '"303a", ATTRS{idProduct}=="1001"'):
+            self.assertIn(ids, rules)
+        self.assertIn('SYMLINK+="zedmd"', rules)
+        self.assertIn('zedmd|ZeDMD (open-source LED DMD)', EXTRAS)
+        # O Pillow e o dmdserver vem pelo Extras: nada na imagem.
+        self.assertNotIn('python3-pil', MKISO)
+        self.assertNotIn('libdmdutil', MKISO)
+        helper = self.SCRIPT.read_text()
+        self.assertRegex(helper, r'DMDUTIL_SHA256="[0-9a-f]{64}"')
+        self.assertIn('sha256sum -c', helper.split('fetch_zedmd() {')[1].split('\n}\n')[0])
+
+    def test_zedmd_config(self):
+        self.install_zedmd()
+        server = self.tmp / 'zedmd/dmdserver'
+        server.write_text('#!/bin/sh\necho "$*" > %s\n' % (self.tmp / 'args'))
+        device = self.tmp / 'zedmd-dev'
+        env = dict(self.env, ZEDMD_DEVICE=str(device))
+        subprocess.run(['bash', str(self.SCRIPT), 'zedmd-daemon'], env=env, check=True, timeout=30)
+        ini = (self.tmp / 'zedmd/dmdserver.ini').read_text()
+        self.assertIn('[ZeDMD]\nEnabled = 1\nDevice = \n', ini)
+        # O Pixelcade e do pixelweb; sem colorizacao de pinball.
+        self.assertIn('[Pixelcade]\nEnabled = 0', ini)
+        self.assertIn('AltColor = 0', ini)
+        self.assertEqual((self.tmp / 'args').read_text().split(), ['-c', str(self.tmp / 'zedmd/dmdserver.ini'), '-l'])
+        device.write_text('')
+        subprocess.run(['bash', str(self.SCRIPT), 'zedmd-daemon'], env=env, check=True, timeout=30)
+        self.assertIn('Device = %s\n' % device, (self.tmp / 'zedmd/dmdserver.ini').read_text())
+
+
+class ZeDMDTests(unittest.TestCase):
+    """config/fliperos-dmd: a imagem do jogo, em RGB24 de 128x32, para o
+    dmdserver (libdmdutil) pelo protocolo DMDStream."""
+    SCRIPT = ROOT / 'config/fliperos-dmd'
+    HEADER = struct.Struct('!10sBiHHBBI')
+
+    def setUp(self):
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest('python3-pil')
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.server = socket.socket()
+        self.server.bind(('127.0.0.1', 0))
+        self.server.listen(5)
+        self.addCleanup(self.server.close)
+        self.received = []
+        threading.Thread(target=self.accept, daemon=True).start()
+        (self.tmp / 'run').mkdir()
+        self.env = dict(os.environ, DMD_SERVER='127.0.0.1:%d' % self.server.getsockname()[1],
+                        MEDIA_DIR=str(self.tmp / 'media'), ATTRACT_DIR=str(self.tmp / 'attract'),
+                        ESDE_DIR=str(self.tmp / 'ES-DE'), XDG_RUNTIME_DIR=str(self.tmp / 'run'))
+
+    def accept(self):
+        while True:
+            try:
+                conn, _ = self.server.accept()
+            except OSError:
+                return
+            box = bytearray()
+            self.received.append(box)
+            threading.Thread(target=self.read, args=(conn, box), daemon=True).start()
+
+    @staticmethod
+    def read(conn, box):
+        with conn:
+            while True:
+                data = conn.recv(65536)
+                if not data:
+                    return
+                box.extend(data)
+
+    def frames(self, data):
+        out, pos = [], 0
+        while pos + self.HEADER.size <= len(data):
+            fields = self.HEADER.unpack_from(data, pos)
+            pos += self.HEADER.size
+            out.append((fields, bytes(data[pos:pos + fields[-1]])))
+            pos += fields[-1]
+        return out
+
+    def run_(self, *args):
+        subprocess.run([sys.executable, str(self.SCRIPT), *args], env=self.env, check=True, timeout=30)
+        time.sleep(0.2)
+        return self.frames(self.received[-1]) if self.received else []
+
+    def test_one_frame_in_the_dmdstream_format(self):
+        frames = self.run_('text', 'SF2')
+        self.assertEqual(len(frames), 1)
+        fields, payload = frames[0]
+        # "DMDStream", versao 1, modo RGB24, 128x32, buffered, so este cliente.
+        self.assertEqual(fields, (b'DMDStream\0', 1, 2, 128, 32, 1, 1, 128 * 32 * 3))
+        self.assertEqual(len(payload), 128 * 32 * 3)
+        self.assertTrue(any(payload))
+
+    def test_art_from_media_fits_the_panel(self):
+        from PIL import Image
+        art = self.tmp / 'media/marquee/arcade'
+        art.mkdir(parents=True)
+        Image.new('RGB', (256, 64), (255, 0, 0)).save(art / 'sf2.png')
+        payload = self.run_('show', 'game', 'mame', 'sf2')[0][1]
+        middle = (16 * 128 + 64) * 3
+        self.assertEqual(payload[middle:middle + 3], b'\xff\x00\x00')
+        # Uma arte feita para o DMD vem antes do marquee.
+        dmd = self.tmp / 'media/dmd/arcade'
+        dmd.mkdir(parents=True)
+        Image.new('RGB', (128, 32), (0, 0, 255)).save(dmd / 'sf2.png')
+        payload = self.run_('show', 'game', 'mame', 'sf2')[0][1]
+        self.assertEqual(payload[middle:middle + 3], b'\x00\x00\xff')
+
+    def test_title_from_the_frontend_lists(self):
+        romlists = self.tmp / 'attract/romlists'
+        romlists.mkdir(parents=True)
+        (romlists / 'MAME.txt').write_text('#Name;Title;Emulator\nsf2;Street Fighter II (World 910522);MAME\n')
+        gamelist = self.tmp / 'ES-DE/gamelists/snes'
+        gamelist.mkdir(parents=True)
+        (gamelist / 'gamelist.xml').write_text(
+            '<gameList><game><path>./smw.sfc</path><name>Super Mario World</name></game></gameList>')
+        old = dict(os.environ)
+        os.environ.update(self.env)
+        try:
+            dmd = load_script('fliperos_dmd', 'config/fliperos-dmd')
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+        self.assertEqual(dmd.clean(dmd.title_of('sf2')), 'Street Fighter II')
+        self.assertEqual(dmd.title_of('smw'), 'Super Mario World')
+        self.assertEqual(dmd.title_of('nada'), 'nada')
+
+    def test_long_text_scrolls_until_the_next_event(self):
+        scroll = subprocess.Popen([sys.executable, str(self.SCRIPT), 'text', 'SUPERCALIFRAGILISTICEXPIALIDOCIOUS'],
+                                  env=self.env)
+        self.addCleanup(scroll.kill)
+        time.sleep(1)
+        self.assertIsNone(scroll.poll())
+        self.assertGreater(len(self.frames(self.received[0])), 3)
+        self.run_('text', 'SF2')
+        self.assertEqual(scroll.wait(timeout=5), 0)
+        self.assertFalse((self.tmp / 'run/fliperos-dmd.pid').exists())
+
+    def test_quiet_without_the_server(self):
+        env = dict(self.env, DMD_SERVER='127.0.0.1:1')
+        out = subprocess.run([sys.executable, str(self.SCRIPT), 'text', 'SF2'], env=env, capture_output=True,
+                             timeout=30)
+        self.assertEqual(out.returncode, 0)
+        self.assertEqual(out.stderr, b'')
 
 
 class AutomountTests(unittest.TestCase):

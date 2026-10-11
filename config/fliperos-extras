@@ -6,7 +6,8 @@
 # tambem (o fliperos-fightcade fetch instala o Wine junto). A configuracao
 # deles (prefixos do Wine, lancadores, atalhos) ja vem na imagem. O
 # Pixelcade (marquee de LED/LCD) e codigo fechado: o config/fliperos-pixelcade
-# baixa o pixelweb e a arte do GitHub do Pixelcade.
+# baixa o pixelweb e a arte do GitHub do Pixelcade. O ZeDMD (DMD de LED open
+# source) usa o dmdserver do libdmdutil, baixado pelo mesmo helper.
 #
 #   fliperos-extras list                         nome|instalado (0 ou 1)|descricao
 #   fliperos-extras installed NOME               status 0 se instalado
@@ -48,6 +49,7 @@ extras_label() {
     steam) echo "Steam" ;;
     heroic) echo "Heroic" ;;
     pixelcade) echo "Pixelcade" ;;
+    zedmd) echo "ZeDMD" ;;
   esac
 }
 
@@ -57,6 +59,7 @@ extras_installed() {
     steam) [[ -x $steam_bin ]] ;;
     heroic) [[ -x $heroic_bin ]] ;;
     pixelcade) [[ -x $pixelcade ]] && "$pixelcade" installed ;;
+    zedmd) [[ -x $pixelcade ]] && "$pixelcade" zedmd-installed ;;
     *) return 2 ;;
   esac
 }
@@ -70,16 +73,19 @@ wine|Wine (Model 2, Fightcade 2 emulators)
 steam|Steam
 heroic|Heroic (GOG, Epic, Amazon)
 pixelcade|Pixelcade (LED/LCD marquee)
+zedmd|ZeDMD (open-source LED DMD)
 LIST
 }
 
-# apt_progress: as linhas do APT::Status-Fd viram etapas, de 10% a 99%.
+# apt_progress: as linhas do APT::Status-Fd viram etapas, de 10% a
+# $apt_end (99%; menos quando o extra ainda baixa algo depois do apt).
+apt_end=99
 apt_progress() {
   local kind pkg pct text last=-1 p
   while IFS=: read -r kind pkg pct text; do
     case $kind in
-      dlstatus) p=$(awk -v x="$pct" 'BEGIN { printf "%d", 10 + x * 40 / 100 }') ;;
-      pmstatus) p=$(awk -v x="$pct" 'BEGIN { printf "%d", 50 + x * 49 / 100 }') ;;
+      dlstatus) p=$(awk -v x="$pct" -v e="$apt_end" 'BEGIN { printf "%d", 10 + x * (e - 10) * 0.45 / 100 }') ;;
+      pmstatus) p=$(awk -v x="$pct" -v e="$apt_end" 'BEGIN { printf "%d", 10 + (e - 10) * 0.45 + x * (e - 10) * 0.55 / 100 }') ;;
       *) continue ;;
     esac
     if ((p != last)); then
@@ -89,11 +95,12 @@ apt_progress() {
   done
 }
 
-# apt_install OPCAO_OU_PACOTE...: apt-get install com o progresso real.
+# apt_install OPCAO_OU_PACOTE...: apt-get install com o progresso real. A
+# arquitetura i386 so entra para quem a usa (o Wine de 32 bits e o Steam).
 apt_install() {
   local rc
   export DEBIAN_FRONTEND=noninteractive
-  if ! dpkg --print-foreign-architectures | grep -qx i386; then
+  if [[ $label == Steam || " $* " == *:i386* ]] && ! dpkg --print-foreign-architectures | grep -qx i386; then
     dpkg --add-architecture i386 >&2 || fail "could not enable the i386 architecture"
   fi
   say 2 "Updating the package lists"
@@ -124,7 +131,7 @@ install_heroic() {
 extras_install() {
   local name=$1
   label=$(extras_label "$name")
-  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic or pixelcade)"
+  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade or zedmd)"
   ((EUID == 0)) || fail "installing $label needs root (Setup > Extras)"
   case $name in
     # shellcheck disable=SC2086 # um pacote por palavra
@@ -135,6 +142,16 @@ extras_install() {
     pixelcade)
       [[ -x $pixelcade ]] || fail "$pixelcade is missing"
       if ((progress)); then "$pixelcade" fetch --progress || exit 1; else "$pixelcade" fetch || exit 1; fi
+      ;;
+    # O dmdserver vem do release do libdmdutil (fetch-zedmd, de 60% a 100%);
+    # o Pillow, que desenha a imagem do painel, do apt.
+    zedmd)
+      [[ -x $pixelcade ]] || fail "$pixelcade is missing"
+      if ! python3 -c 'import PIL' 2> /dev/null; then
+        apt_end=55
+        apt_install --no-install-recommends python3-pil
+      fi
+      if ((progress)); then "$pixelcade" fetch-zedmd --progress || exit 1; else "$pixelcade" fetch-zedmd || exit 1; fi
       ;;
   esac
   extras_installed "$name" || fail "$label was installed, but it was not found afterwards"
@@ -152,7 +169,7 @@ case ${1:-} in
     extras_install "${2:-}"
     ;;
   *)
-    sed -n '11,13p' "$0" | sed 's/^# *//' >&2
+    sed -n '12,14p' "$0" | sed 's/^# *//' >&2
     exit 1
     ;;
 esac

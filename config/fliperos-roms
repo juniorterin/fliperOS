@@ -109,6 +109,7 @@ folder "$media/preview" "Videos (.mp4), one folder per system: preview/arcade/sf
 folder "$media/logo" "Logos (wheel art, .png), one folder per system: logo/arcade/sf2.png"
 folder "$media/box" "Box art and flyers (.png), one folder per system: box/arcade/sf2.png"
 folder "$media/marquee" "Marquees (.png), one folder per system: marquee/arcade/sf2.png"
+folder "$media/dmd" "Art for 128x32 LED displays (ZeDMD), .png or animated .gif, one folder per system: dmd/arcade/sf2.gif. Without it the display shows the marquee, the logo or the game name."
 folder "$media/texto" "Game descriptions (.txt), one folder per system: texto/arcade/sf2.txt"
 
 # ── ~/splashscreen ──────────────────────────────────────────────────

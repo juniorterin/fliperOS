@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Setup > Extras: o Wine, o Steam e o Heroic, que nao vem na imagem para a
-# ISO caber num arquivo do GitHub, e o Pixelcade (codigo fechado). O
+# ISO caber num arquivo do GitHub, o Pixelcade (codigo fechado) e o ZeDMD. O
 # config/fliperos-extras os instala pela rede, escrevendo os eventos da tela
 # de progresso (lib/progress.sh).
 

@@ -127,6 +127,13 @@ install -Dm644 "$src/config/99-fliperos-pixelcade.rules" "$root/etc/udev/rules.d
 mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
 ln -sfn /etc/systemd/system/fliperos-pixelcade.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-pixelcade.service"
+# ZeDMD (DMD de LED open source): os mesmos eventos, desenhados pelo
+# fliperos-dmd. O dmdserver (libdmdutil) e o Pillow vem pelo Setup > Extras.
+install -Dm755 "$src/config/fliperos-dmd" "$root/opt/fliperos/bin/fliperos-dmd"
+install -Dm644 "$src/config/fliperos-zedmd.service" "$root/etc/systemd/system/fliperos-zedmd.service"
+install -Dm644 "$src/config/99-fliperos-zedmd.rules" "$root/etc/udev/rules.d/99-fliperos-zedmd.rules"
+ln -sfn /etc/systemd/system/fliperos-zedmd.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-zedmd.service"
 # groovymame: o atalho (config/fliperos-groovymame) na frente do binario do
 # release, em /usr/local/libexec. Num sistema de antes, o binario compilado
 # estava no lugar do atalho: muda de pasta.
