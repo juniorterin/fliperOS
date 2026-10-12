@@ -4793,7 +4793,8 @@ class NewEmulatorBuildTests(unittest.TestCase):
                                             capture_output=True, text=True)
             rows = [line.split('|') for line in run('list').stdout.splitlines()]
             self.assertEqual([(r[0], r[1]) for r in rows],
-                             [('wine', '1'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0'), ('zedmd', '0')])
+                             [('wine', '1'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0'), ('zedmd', '0'),
+                              ('doflinx', '0')])
             self.assertEqual(run('installed', 'wine').returncode, 0)
             self.assertNotEqual(run('installed', 'steam').returncode, 0)
             if os.geteuid() != 0:
@@ -4907,10 +4908,13 @@ class PixelcadeTests(unittest.TestCase):
     """config/fliperos-pixelcade: o marquee do Pixelcade pelo pixelweb (baixado
     pelo Setup > Extras), com os eventos dos lancadores e dos frontends."""
     SCRIPT = ROOT / 'config/fliperos-pixelcade'
+    GAME_DIGDUG = ['attract/stop', 'console/stream/black',
+                   'text?t=Now%20Playing%20digdug&ss=1&l=1&scroll=true&game=digdug&system=mame&event=GameStart',
+                   'arcade/stream/mame/digdug?l=99999&event=GameStart']
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.tmp)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
         t = self.tmp
         (t / 'pixelcade').mkdir()
         (t / 'bin').mkdir()
@@ -4931,11 +4935,21 @@ class PixelcadeTests(unittest.TestCase):
                         RA_INFO_DIR=str(info), XDG_RUNTIME_DIR=str(t / 'run'), ESDE_DIR=str(t / 'ES-DE'),
                         ATTRACT_DIR=str(t / 'attract'),
                         PIXELCADE_PLUGIN_SRC=str(ROOT / 'config/attractplus-plugins/Pixelcade'),
-                        ZEDMD_DIR=str(t / 'zedmd'), FLIPEROS_DMD=str(t / 'bin/fliperos-dmd'))
+                        ZEDMD_DIR=str(t / 'zedmd'), FLIPEROS_DMD=str(t / 'bin/fliperos-dmd'),
+                        # Sem jogo para esperar fechar (test_game_end_...).
+                        PIXELCADE_GAME_PID='0', PIXELCADE_HOLD=str(t / 'run/hold'),
+                        HISCORE_DIRS='%s:%s' % (t / 'mame/hiscore', t / 'saves'),
+                        RA_CFG=str(t / 'retroarch.cfg'), RA_LOG=str(t / 'retroarch.log'),
+                        PIXELCADE_LOGO=str(ROOT / 'config/pixelcade-fliperos.png'),
+                        DOFLINX_DIR=str(t / 'doflinx'), RA_DOFLINX_CFG=str(t / 'etc/doflinx.cfg'))
         self.dmd_log = t / 'dmd'
         dmd = t / 'bin/fliperos-dmd'
-        dmd.write_text('#!/bin/sh\necho "$*" >> %s\n' % self.dmd_log)
+        # "title ROM": o nome do jogo nas listas dos frontends (aqui, nenhum).
+        dmd.write_text('#!/bin/sh\n[ "$1" = title ] && exit 0\necho "$*" >> %s\n' % self.dmd_log)
         dmd.chmod(0o755)
+        sleep = t / 'bin/sleep'
+        sleep.write_text('#!/bin/sh\n')
+        sleep.chmod(0o755)
 
     def install(self):
         pw = self.tmp / 'pixelcade/pixelweb'
@@ -4979,12 +4993,16 @@ class PixelcadeTests(unittest.TestCase):
         self.install()
         rom = self.roms / 'retroarch/snes9x/Super Mario World (USA).sfc'
         rom.write_text('')
+        # As chamadas do script game-start do Pixelcade: a fila vazia, o nome
+        # do jogo rolando uma vez e o marquee dele.
         self.assertEqual(self.run_('launch', 'retroarch', '-L', '/c/snes9x_libretro.so', str(rom)),
-                         ['attract/stop', 'arcade/stream/snes/Super%20Mario%20World%20%28USA%29?l=99999&event=GameStart'])
+                         ['attract/stop', 'console/stream/black',
+                          'text?t=Now%20Playing%20Super%20Mario%20World&ss=1&l=1&scroll=true'
+                          '&game=Super%20Mario%20World%20%28USA%29&system=snes&event=GameStart',
+                          'arcade/stream/snes/Super%20Mario%20World%20%28USA%29?l=99999&event=GameStart'])
         # O groovymame do fliperos-kms-run passa de novo pelo fliperos-x11-run.
         self.assertEqual(self.run_('launch', 'retroarch', '-L', '/c/snes9x_libretro.so', str(rom)), [])
-        self.assertEqual(self.run_('launch', 'groovymame', 'digdug'),
-                         ['attract/stop', 'arcade/stream/mame/digdug?l=99999&event=GameStart'])
+        self.assertEqual(self.run_('launch', 'groovymame', 'digdug'), self.GAME_DIGDUG)
         # Sem jogo (um frontend, o menu do emulador), nada.
         self.assertEqual(self.run_('launch', 'groovymame'), [])
         self.assertEqual(self.run_('launch', 'attractplus'), [])
@@ -5018,13 +5036,245 @@ class PixelcadeTests(unittest.TestCase):
         self.assertEqual(self.run_('esde', 'game-select', str(smw), 'Super Mario World', 'snes', 'SNES'), [])
         self.assertEqual(self.run_('esde', 'system-select', 'dreamcast', 'Sega Dreamcast', str(self.roms / 'dreamcast')),
                          [])
-        self.assertCountEqual(self.dmd_calls(3), ['show game mame mvsc2', 'show select snes smw Super Mario World',
+        self.assertCountEqual(self.dmd_calls(3), ['show game mame mvsc2 mvsc2 Now Playing mvsc2',
+                                                  'show select snes smw Super Mario World',
                                                   'show system dreamcast  Sega Dreamcast'])
         # Os dois juntos: o mesmo evento vai para os dois.
         self.install()
-        self.assertEqual(self.run_('launch', 'groovymame', 'digdug'),
-                         ['attract/stop', 'arcade/stream/mame/digdug?l=99999&event=GameStart'])
-        self.assertIn('show game mame digdug', self.dmd_calls(4))
+        self.assertEqual(self.run_('launch', 'groovymame', 'digdug'), self.GAME_DIGDUG)
+        self.assertIn('show game mame digdug digdug Now Playing digdug', self.dmd_calls(4))
+
+    def test_high_scores_scroll_before_the_marquee(self):
+        self.install()
+        hi2txt = self.tmp / 'pixelcade/hi2txt'
+        hi2txt.mkdir()
+        (hi2txt / 'hi2txt.jar').write_text('')
+        (hi2txt / 'hi2txt.zip').write_text('')
+        java = self.tmp / 'bin/java'
+        # A saida do hi2txt (conferida com o hi2txt.jar e um galaga.hi).
+        java.write_text('#!/bin/sh\necho "$*" > %s\nprintf "RANK|SCORE|NAME\\n1|19130|DAA\\n2|8250|JR \\n3|500|ABC\\n\\n"\n'
+                        % (self.tmp / 'java-args'))
+        java.chmod(0o755)
+        # Sem o arquivo .hi do jogo, o nome dele.
+        self.assertEqual(self.run_('launch', 'groovymame', 'digdug'), self.GAME_DIGDUG)
+        # O .hi mais novo: o do GroovyMAME ou o de um core do RetroArch.
+        old = self.tmp / 'mame/hiscore/galaga.hi'
+        new = self.tmp / 'saves/mame2003-plus/hi/galaga.hi'
+        for path in (old, new):
+            path.parent.mkdir(parents=True)
+            path.write_text('x')
+        os.utime(old, (1, 1))
+        calls = self.run_('launch', 'groovymame', 'galaga')
+        self.assertEqual(calls[2], 'text?t=%231%2019%2C130%20DAA%20%232%208%2C250%20JR%20%233%20500%20ABC&ss=1&l=1'
+                                   '&scroll=true&game=galaga&system=mame&event=GameStart')
+        self.assertEqual(calls[3], 'arcade/stream/mame/galaga?l=99999&event=GameStart')
+        args = (self.tmp / 'java-args').read_text().split()
+        self.assertEqual(args[:4], ['-jar', 'hi2txt.jar', '-r', str(new)])
+        # So os arcades tem .hi.
+        rom = self.roms / 'retroarch/snes9x/galaga.sfc'
+        rom.write_text('')
+        self.assertIn('text?t=Now%20Playing%20galaga&', self.run_('launch', 'retroarch', str(rom))[2])
+
+    def test_game_end_goes_back_to_the_selection(self):
+        self.install()
+        self.install_zedmd()
+        game = subprocess.Popen(['/bin/sleep', '30'])
+        self.addCleanup(game.kill)
+        env = dict(self.env, PIXELCADE_GAME_PID=str(game.pid))
+        subprocess.run(['bash', str(self.SCRIPT), 'launch', 'groovymame', 'digdug'], env=env, check=True, timeout=30)
+        self.assertEqual(self.calls.read_text().splitlines()[-1], 'http://pc/arcade/stream/mame/digdug?l=99999&event=GameStart')
+        self.calls.unlink()
+        game.kill()
+        game.wait()
+        deadline = time.time() + 10
+        while time.time() < deadline and not self.calls.exists():
+            time.sleep(0.05)
+        time.sleep(0.2)
+        # O marquee do jogo como selecao do frontend (o Pegasus nao avisa).
+        self.assertEqual(self.calls.read_text().splitlines(), ['http://pc/arcade/stream/mame/digdug?event=FEScroll'])
+        self.assertIn('show select mame digdug ', self.dmd_calls(2))
+        # Outro evento chegou antes de o jogo fechar: o "end" nao mexe nele.
+        self.calls.unlink()
+        self.run_('system', 'dreamcast')
+        self.assertEqual(self.run_('end', 'mame', 'digdug'), [])
+
+    def test_screensaver_is_the_attract_mode(self):
+        self.install()
+        self.install_zedmd()
+        rom = str(self.roms / 'naomi/mvsc2.zip')
+        self.run_('esde', 'game-select', rom, 'MvC2', 'naomi', 'Naomi')
+        self.assertEqual(self.run_('esde', 'screensaver-start', 'timer'), ['attract?nointerrupt'])
+        self.assertEqual(self.run_('esde', 'screensaver-start', 'timer'), [])
+        # Ao sair, o jogo que estava selecionado; o plugin do Attract-Mode
+        # Plus manda "screensaver start|stop".
+        self.assertEqual(self.run_('esde', 'screensaver-end', 'cancel'),
+                         ['attract/stop', 'arcade/stream/mame/mvsc2?event=FEScroll'])
+        self.assertEqual(self.run_('screensaver', 'stop'), [])
+        self.run_('system', 'dreamcast')
+        self.assertEqual(self.run_('screensaver', 'start'), ['attract?nointerrupt'])
+        self.assertEqual(self.run_('screensaver', 'stop'), ['attract/stop', 'console/stream/dreamcast'])
+        calls = self.dmd_calls(6)
+        self.assertEqual(calls.count('attract'), 2)
+        self.assertEqual(calls.count('show select mame mvsc2 MvC2'), 1)
+        self.assertEqual(calls.count('show select mame mvsc2 '), 1)
+        plugin = (ROOT / 'config/attractplus-plugins/Pixelcade/plugin.nut').read_text()
+        for line in ('if (ScreenSaverActive)', '"screensaver start"', '"screensaver stop"',
+                     'var == FromTo.ScreenSaver'):
+            self.assertIn(line, plugin)
+
+    def test_retroachievements_from_the_retroarch_log(self):
+        cheevos = lambda: subprocess.run(['bash', str(self.SCRIPT), 'cheevos'], env=self.env).returncode
+        cfg = self.tmp / 'retroarch.cfg'
+        cfg.write_text('cheevos_enable = "true"\n')
+        # Sem painel, o RetroArch nao precisa do --verbose.
+        self.assertNotEqual(cheevos(), 0)
+        self.install()
+        self.install_zedmd()
+        self.assertEqual(cheevos(), 0)
+        cfg.write_text('cheevos_enable = "false"\n')
+        self.assertNotEqual(cheevos(), 0)
+        cfg.write_text('cheevos_enable = "true"\n')
+        log = self.tmp / 'retroarch.log'
+        log.write_text('[INFO] [RCHEEVOS] Awarding achievement 1: de outra vez\n')
+        rom = self.roms / 'retroarch/snes9x/smw.sfc'
+        rom.write_text('')
+        game = subprocess.Popen(['/bin/sleep', '30'])
+        self.addCleanup(game.kill)
+        env = dict(self.env, PIXELCADE_GAME_PID=str(game.pid))
+        subprocess.run(['bash', str(self.SCRIPT), 'launch', 'retroarch', '-L', 'x.so', str(rom)], env=env,
+                       check=True, timeout=30)
+        self.calls.unlink()
+        # So as conquistas de agora: a que ja estava no log nao volta.
+        time.sleep(1.5)
+        with log.open('a') as f:
+            f.write('[INFO] [RCHEEVOS] Awarding achievement 4567: Yoshi & Friends\n')
+        deadline = time.time() + 10
+        while time.time() < deadline and not self.calls.exists():
+            time.sleep(0.05)
+        time.sleep(0.2)
+        self.assertEqual(self.calls.read_text().splitlines(),
+                         ['http://pc/achievements/stream/snes/4567?t=Yoshi%20%26%20Friends&currentgame=smw'])
+        self.assertIn('show game snes smw  Yoshi & Friends', self.dmd_calls(2))
+        self.calls.unlink()
+        self.assertEqual(self.run_('achievement', '9', 'Title', 'What it took'),
+                         ['achievements/stream/snes/9?t=Title%20%3A%20What%20it%20took&currentgame=smw'])
+        kms = (ROOT / 'config/fliperos-kms-run').read_text()
+        self.assertIn('"$pixelcade" cheevos', kms)
+        self.assertIn('set -- "$1" --verbose "${@:2}"', kms)
+
+    def test_bye_only_when_the_computer_goes_down(self):
+        self.install()
+        self.install_zedmd()
+        self.assertEqual(self.run_('bye', 'pixelcade'), [])
+        self.env['PIXELCADE_STOPPING'] = 'stopping'
+        self.assertEqual(self.run_('bye', 'pixelcade'), ['text?t=Bye'])
+        self.assertEqual(self.run_('bye', 'zedmd'), [])
+        self.assertEqual(self.dmd_calls(1), ['text Bye'])
+        for unit in ('fliperos-pixelcade.service', 'fliperos-zedmd.service'):
+            text = (ROOT / 'config' / unit).read_text()
+            self.assertRegex(text, r'ExecStop=-/opt/fliperos/bin/fliperos-pixelcade bye (pixelcade|zedmd)\n', unit)
+
+    def test_startup_logo_and_the_panel_lent_to_a_pinball(self):
+        self.install()
+        self.install_zedmd()
+        pw = self.tmp / 'pixelcade/pixelweb'
+        runs = self.tmp / 'runs'
+        pw.write_text('#!/bin/sh\necho "$*" >> %s\nexit 3\n' % runs)
+        # O logo do FliperOS ao ligar; o status do pixelweb e o do servico.
+        proc = subprocess.run(['bash', str(self.SCRIPT), 'daemon'], env=self.env, timeout=30)
+        self.assertEqual(proc.returncode, 3)
+        self.assertEqual(runs.read_text().split(),
+                         ['-p', str(self.tmp / 'pixelcade'), '-startup', '-image', 'system/fliperos.png',
+                          '-text', 'FliperOS'])
+        self.assertEqual((self.tmp / 'pixelcade/system/fliperos.png').read_bytes()[:4], b'\x89PNG')
+        # O Visual Pinball desenha o DMD ele mesmo: o pixelweb solta a porta
+        # e o servico o reabre quando o jogo fecha.
+        game = subprocess.Popen(['/bin/sleep', '30'])
+        self.addCleanup(game.kill)
+        env = dict(self.env, PIXELCADE_GAME_PID=str(game.pid))
+        subprocess.run(['bash', str(self.SCRIPT), 'launch', 'VPinballX_GL', '-play', '/t/table.vpx'], env=env,
+                       check=True, timeout=30)
+        self.assertEqual(self.calls.read_text().splitlines(), ['http://pc/quit'])
+        hold = self.tmp / 'run/hold'
+        self.assertEqual(hold.read_text().strip(), str(game.pid))
+        runs.unlink()
+        pw.write_text('#!/bin/sh\necho run >> %s\n[ -e %s ] && exit 0\nexit 4\n' % (runs, hold))
+        daemon = subprocess.Popen(['bash', str(self.SCRIPT), 'daemon'],
+                                  env=dict(self.env, PATH=os.environ['PATH']))
+        self.addCleanup(daemon.kill)
+        time.sleep(1)
+        self.assertIsNone(daemon.poll())
+        self.assertEqual(runs.read_text().split(), ['run'])
+        game.kill()
+        game.wait()
+        self.assertEqual(daemon.wait(timeout=20), 4)
+        self.assertEqual(runs.read_text().split(), ['run', 'run'])
+        self.assertFalse(hold.exists())
+
+    def test_lcd_over_usb(self):
+        self.install()
+        ini = self.tmp / 'pixelcade/pixelcade.ini'
+        run = lambda: subprocess.run(['bash', str(self.SCRIPT), 'lcd-ini'], env=self.env, capture_output=True,
+                                     text=True, timeout=30)
+        self.assertNotEqual(run().returncode, 0)
+        # As linhas do pixelcade.ini que o pixelweb 7.8.5 cria.
+        ini.write_text('ledBrightness = 100\nlcdMarquee = false\nlcdUsbConnected = false\nlcdMarqueeHostName = \n'
+                       'lcdUsbIPAddress = 169.254.100.1\n')
+        curl = self.tmp / 'bin/curl'
+        curl.write_text('#!/bin/sh\nfor a; do last=$a; done\necho "$last" >> %s\n'
+                        'echo \'{"version":"6.3","hostname":"pixelcadelcd"}\'\n' % self.calls)
+        self.assertEqual(run().stdout.strip(), 'changed')
+        self.assertEqual(ini.read_text(), 'ledBrightness = 100\nlcdMarquee = true\nlcdUsbConnected = true\n'
+                         'lcdMarqueeHostName = pixelcadelcd\nlcdUsbIPAddress = 169.254.100.1\n')
+        self.assertEqual(self.calls.read_text().split(), ['http://169.254.100.1:8080/v2/info'])
+        self.assertEqual(run().stdout.strip(), '')
+        rules = (ROOT / 'config/99-fliperos-pixelcade.rules').read_text()
+        self.assertIn('SUBSYSTEM=="net", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="3232", ENV{NM_UNMANAGED}="1"',
+                      rules)
+        self.assertIn('fliperos-pixelcade-lcd@$name.service', rules)
+        unit = (ROOT / 'config/fliperos-pixelcade-lcd@.service').read_text()
+        self.assertIn('ExecStart=/opt/fliperos/bin/fliperos-pixelcade lcd-usb %I', unit)
+        helper = self.SCRIPT.read_text().split('lcd_usb() {')[1].split('\n}\n')[0]
+        self.assertIn('ip addr replace "$lcd_host_ip/16" dev "$iface"', helper)
+
+    def test_doflinx_config_and_install(self):
+        self.install()
+        d = self.tmp / 'doflinx/config'
+        d.mkdir(parents=True)
+        new = d / '.DOFLinx.ini.part'
+        new.write_text('PATH_MAME=/rcade/share/pixelcade/DOFLinx/DOFLinx_MAME\nPATH_JAVA=/rcade/share/pixelcade/jdk/bin/\n'
+                       'MAME_FOLDER=/rcade/share/roms/mame/\nMAME_HIGHSCORE_FOLDER=/rcade/share/saves/fbneo/\n')
+        java = self.tmp / 'bin/java'
+        java.write_text('#!/bin/sh\n')
+        java.chmod(0o755)
+        script = ('set --; source %s > /dev/null 2>&1; doflinx_paths "$NEW"; doflinx_keep "$NEW" "$DEST"' % self.SCRIPT)
+        env = dict(self.env, NEW=str(new), DEST=str(d / 'DOFLinx.ini'))
+        keep = lambda: subprocess.run(['bash', '-c', script.replace('doflinx_paths "$NEW"; ', '')], env=env)
+        subprocess.run(['bash', '-c', script], env=env)
+        self.assertEqual((d / 'DOFLinx.ini').read_text(),
+                         'PATH_MAME=%s/DOFLinx/DOFLinx_MAME\nPATH_JAVA=%s/\nMAME_FOLDER=%s/retroarch/fbneo/\n'
+                         'MAME_HIGHSCORE_FOLDER=%s/fbneo/\n'
+                         % (self.tmp / 'pixelcade', self.tmp / 'bin', self.roms, self.tmp / 'saves'))
+        # Uma versao nova entra no lugar da que o FliperOS gravou; a que a
+        # pessoa alterou fica, e a nova vai para .latest.
+        new.write_text('v2\n')
+        keep()
+        self.assertEqual((d / 'DOFLinx.ini').read_text(), 'v2\n')
+        (d / 'DOFLinx.ini').write_text('mine\n')
+        new.write_text('v3\n')
+        keep()
+        self.assertEqual((d / 'DOFLinx.ini').read_text(), 'mine\n')
+        self.assertEqual((d / 'DOFLinx.ini.latest').read_text(), 'v3\n')
+        installed = lambda: subprocess.run(['bash', str(self.SCRIPT), 'doflinx-installed'], env=self.env).returncode
+        self.assertNotEqual(installed(), 0)
+        self.assertIn('doflinx|DOFLinx (Pixelcade in-game effects)', EXTRAS)
+        self.assertIn('ConditionPathExists=/home/fliperos/doflinx/DOFLinx',
+                      (ROOT / 'config/fliperos-doflinx.service').read_text())
+        self.assertIn('multi-user.target.wants/fliperos-doflinx.service', ROOTFS)
+        # O Network Command Interface do RetroArch so com o DOFLinx instalado.
+        self.assertNotIn('network_cmd', (ROOT / 'config/retroarch.cfg').read_text())
+        self.assertIn('[[ -f $doflinx ]] && appendconfig+="|$doflinx"', (ROOT / 'config/fliperos-kms-run').read_text())
+        self.assertNotIn('DOFLinx', MKISO)
 
     def test_zedmd_installed_needs_the_server(self):
         installed = lambda: subprocess.run(['bash', str(self.SCRIPT), 'zedmd-installed'], env=self.env,
@@ -5050,7 +5300,7 @@ class PixelcadeTests(unittest.TestCase):
         text = settings.read_text()
         for name in ('CustomEventScripts', 'CustomEventScriptsBrowsing', 'CustomEventScriptsBrowsingNonBlocking'):
             self.assertIn('<bool name="%s" value="true" />' % name, text)
-        for event in ('game-select', 'system-select'):
+        for event in ('game-select', 'system-select', 'screensaver-start', 'screensaver-end'):
             script = self.tmp / 'ES-DE/scripts' / event / 'fliperos-pixelcade'
             self.assertTrue(os.access(script, os.X_OK))
             self.assertIn('esde %s "$@"' % event, script.read_text())
@@ -5197,6 +5447,47 @@ class ZeDMDTests(unittest.TestCase):
         Image.new('RGB', (128, 32), (0, 0, 255)).save(dmd / 'sf2.png')
         payload = self.run_('show', 'game', 'mame', 'sf2')[0][1]
         self.assertEqual(payload[middle:middle + 3], b'\x00\x00\xff')
+
+    def test_intro_scrolls_once_before_the_art(self):
+        from PIL import Image
+        art = self.tmp / 'media/dmd/arcade'
+        art.mkdir(parents=True)
+        Image.new('RGB', (128, 32), (0, 0, 255)).save(art / 'sf2.png')
+        frames = self.run_('show', 'game', 'mame', 'sf2', 'Street Fighter II', '#1 500 AAA')
+        # Os recordes rolando (so este cliente no primeiro quadro) e a arte, que fica.
+        self.assertGreater(len(frames), 20)
+        self.assertEqual([f[0][6] for f in frames[:2]], [1, 0])
+        self.assertTrue(any(frames[len(frames) // 2][1]))
+        self.assertEqual(frames[-1][1], b'\x00\x00\xff' * (128 * 32))
+
+    def test_attract_cycles_the_media_art(self):
+        from PIL import Image
+        colors = {'a': (255, 0, 0), 'b': (0, 255, 0), 'c': (0, 0, 255)}
+        for kind, name in (('marquee/arcade', 'a'), ('marquee/snes', 'b'), ('dmd/arcade', 'c')):
+            (self.tmp / 'media' / kind).mkdir(parents=True, exist_ok=True)
+            Image.new('RGB', (128, 32), colors[name]).save(self.tmp / 'media' / kind / (name + '.png'))
+        env = dict(self.env, DMD_ATTRACT_SECONDS='0.05')
+        proc = subprocess.Popen([sys.executable, str(self.SCRIPT), 'attract'], env=env)
+        self.addCleanup(proc.kill)
+        time.sleep(2)
+        self.assertIsNone(proc.poll())
+        # O proximo evento o encerra.
+        self.run_('text', 'SF2')
+        self.assertEqual(proc.wait(timeout=10), 0)
+        seen = {f[1][:3] for f in self.frames(self.received[0])}
+        self.assertEqual(seen, {bytes(c) for c in colors.values()})
+
+    def test_startup_waits_for_the_server_and_shows_the_logo(self):
+        logo = ROOT / 'config/pixelcade-fliperos.png'
+        from PIL import Image
+        with Image.open(logo) as img:
+            self.assertEqual(img.size, (128, 32))
+        self.env['DMD_STARTUP'] = str(logo)
+        frames = self.run_('startup')
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(frames[0][1], Image.open(logo).convert('RGB').tobytes())
+        self.assertIn('install -Dm644 "$src/config/pixelcade-fliperos.png" '
+                      '"$root/usr/local/share/fliperos/pixelcade/fliperos.png"', ROOTFS)
 
     def test_title_from_the_frontend_lists(self):
         romlists = self.tmp / 'attract/romlists'

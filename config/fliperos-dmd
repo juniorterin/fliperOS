@@ -12,14 +12,20 @@
 # marquee/ e logo/ (as do Setup > Scraper), uma pasta por sistema. Sem
 # imagem, o nome do jogo em texto (rolando se nao cabe).
 #
-#   fliperos-dmd show game|select|system SISTEMA ROM [TITULO]
+#   fliperos-dmd show game|select|system SISTEMA ROM [TITULO] [ABERTURA]
 #   fliperos-dmd image ARQUIVO
 #   fliperos-dmd text TEXTO
+#   fliperos-dmd attract              as artes de ~/media, uma depois da outra
+#   fliperos-dmd startup              o logo do FliperOS, quando o dmdserver abre
+#   fliperos-dmd title ROM            o nome do jogo nas listas dos frontends
 #
-# Um GIF ou um texto rolando fica aberto ate o proximo evento, que o
-# encerra (o pid fica em $XDG_RUNTIME_DIR/fliperos-dmd.pid).
+# ABERTURA e um texto que rola uma vez antes da imagem (os recordes, "Now
+# Playing ...", uma conquista). Um GIF, um texto rolando ou o attract fica
+# aberto ate o proximo evento, que o encerra (o pid fica em
+# $XDG_RUNTIME_DIR/fliperos-dmd.pid).
 import glob
 import os
+import random
 import re
 import signal
 import socket
@@ -27,10 +33,12 @@ import struct
 import sys
 import time
 
+# Sem o Pillow (Setup > Extras > ZeDMD) nada e desenhado; o "title" nao
+# precisa dele.
 try:
     from PIL import Image, ImageDraw, ImageFont, ImageSequence
 except ImportError:
-    sys.exit(0)
+    Image = None
 
 W, H = 128, 32
 SERVER = os.environ.get('DMD_SERVER', '127.0.0.1:6789')
@@ -39,6 +47,8 @@ ATTRACT = os.environ.get('ATTRACT_DIR', '/home/fliperos/.attract')
 ESDE = os.environ.get('ESDE_DIR', '/home/fliperos/ES-DE')
 FONT = os.environ.get('DMD_FONT', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
 PIDFILE = os.path.join(os.environ.get('XDG_RUNTIME_DIR') or '/tmp', 'fliperos-dmd.pid')
+STARTUP = os.environ.get('DMD_STARTUP', '/usr/local/share/fliperos/pixelcade/fliperos.png')
+ATTRACT_SECONDS = float(os.environ.get('DMD_ATTRACT_SECONDS', '8'))
 EXTS = ('gif', 'png', 'webp', 'jpg', 'jpeg')
 COLOR = {'game': (255, 184, 108), 'select': (255, 255, 255), 'system': (139, 233, 253)}
 # Sistema dos eventos (os nomes do Pixelcade) -> pastas de ~/media (as
@@ -188,8 +198,14 @@ def text_frames(text, color):
                 draw_line(draw, a, f, top, color)
                 draw_line(draw, b, f, top + ha + 2, color)
                 return [(img.tobytes(), 1000)]
+    return scroll_frames(text, color)
+
+
+def scroll_frames(text, color):
+    text = ' '.join(text.split())
     f = font(18)
-    w, h = size_of(text, f)
+    left, top, right, bottom = canvas()[1].textbbox((0, 0), text, font=f)
+    w, h = right - left, bottom - top
     frames = []
     for x in range(W, -w - 1, -2):
         img, draw = canvas()
@@ -253,24 +269,85 @@ def connect():
         return None
 
 
-def play(frames):
-    if not frames or not mine():
+# nap SEGUNDOS: dorme enquanto este evento for o ultimo; False se outro chegou.
+def nap(seconds):
+    end = time.monotonic() + seconds
+    while mine():
+        left = end - time.monotonic()
+        if left <= 0:
+            return True
+        time.sleep(min(left, 0.25))
+    return False
+
+
+# play: a abertura (intro) uma vez e depois os quadros; um so fica no painel,
+# varios (GIF, texto rolando) repetem ate o proximo evento. retry: segundos
+# esperando o dmdserver abrir.
+def play(frames, intro=(), retry=0):
+    if not (frames or intro) or not mine():
         return
+    sock = connect()
+    while sock is None and retry > 0 and nap(1):
+        retry -= 1
+        sock = connect()
+    if sock is None:
+        return
+    with sock:
+        first = True
+        for data, ms in intro:
+            sock.sendall(header(len(data), first) + data)
+            first = False
+            if not nap(ms / 1000):
+                return
+        if len(frames) == 1:
+            sock.sendall(header(len(frames[0][0]), first) + frames[0][0])
+            return
+        while frames and mine():
+            for data, ms in frames:
+                sock.sendall(header(len(data), first) + data)
+                first = False
+                if not nap(ms / 1000):
+                    return
+
+
+# attract: as artes de ~/media (dmd e marquee) em ordem aleatoria, cada uma
+# por ATTRACT_SECONDS; sem nenhuma, o logo.
+def attract():
+    files = []
+    for kind in ('dmd', 'marquee'):
+        for ext in EXTS:
+            files += glob.glob(os.path.join(MEDIA, kind, '**', '*.' + ext), recursive=True)
+    if not files:
+        return play(startup_frames())
     sock = connect()
     if sock is None:
         return
     with sock:
-        if len(frames) == 1:
-            sock.sendall(header(len(frames[0][0]), True) + frames[0][0])
-            return
         first = True
         while mine():
-            for data, ms in frames:
-                if not mine():
-                    break
-                sock.sendall(header(len(data), first) + data)
-                first = False
-                time.sleep(ms / 1000)
+            try:
+                frames = image_frames(random.choice(files))
+            except (OSError, ValueError, SyntaxError):
+                if not nap(0.25):
+                    return
+                continue
+            end = time.monotonic() + ATTRACT_SECONDS
+            while time.monotonic() < end:
+                for data, ms in frames:
+                    sock.sendall(header(len(data), first) + data)
+                    first = False
+                    left = max(0, end - time.monotonic())
+                    if not nap(min(ms / 1000, left) if len(frames) > 1 else left):
+                        return
+
+
+def startup_frames():
+    if os.path.isfile(STARTUP):
+        try:
+            return image_frames(STARTUP)
+        except (OSError, ValueError, SyntaxError):
+            pass
+    return text_frames('FliperOS', COLOR['system'])
 
 
 def show(kind, system, rom, title):
@@ -287,6 +364,11 @@ def show(kind, system, rom, title):
 
 
 def main(argv):
+    if len(argv) == 3 and argv[1] == 'title':
+        print(clean(title_of(argv[2])))
+        return 0
+    if Image is None:
+        return 0
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     claim()
     try:
@@ -296,19 +378,30 @@ def main(argv):
 
 
 def run(argv):
-    if len(argv) >= 4 and argv[1] == 'show':
-        frames = show(argv[2], argv[3], argv[4] if len(argv) > 4 else '', argv[5] if len(argv) > 5 else '')
-    elif len(argv) == 3 and argv[1] == 'image':
-        frames = image_frames(argv[2])
-    elif len(argv) == 3 and argv[1] == 'text':
-        frames = text_frames(argv[2], COLOR['game'])
-    else:
-        sys.stderr.write('usage: fliperos-dmd show game|select|system SYSTEM ROM [TITLE]\n'
-                         '       fliperos-dmd image FILE\n'
-                         '       fliperos-dmd text TEXT\n')
-        return 1
+    intro, retry = (), 0
     try:
-        play(frames)
+        if len(argv) >= 4 and argv[1] == 'show':
+            frames = show(argv[2], argv[3], argv[4] if len(argv) > 4 else '', argv[5] if len(argv) > 5 else '')
+            if len(argv) > 6 and argv[6]:
+                intro = scroll_frames(argv[6], COLOR['select'])
+        elif len(argv) == 3 and argv[1] == 'image':
+            frames = image_frames(argv[2])
+        elif len(argv) == 3 and argv[1] == 'text':
+            frames = text_frames(argv[2], COLOR['game'])
+        elif len(argv) == 2 and argv[1] == 'attract':
+            attract()
+            return 0
+        elif len(argv) == 2 and argv[1] == 'startup':
+            # O dmdserver ainda esta abrindo a porta do painel.
+            frames, retry = startup_frames(), 20
+        else:
+            sys.stderr.write('usage: fliperos-dmd show game|select|system SYSTEM ROM [TITLE] [INTRO]\n'
+                             '       fliperos-dmd image FILE\n'
+                             '       fliperos-dmd text TEXT\n'
+                             '       fliperos-dmd attract | startup\n'
+                             '       fliperos-dmd title ROM\n')
+            return 1
+        play(frames, intro, retry)
     except OSError:
         pass
     return 0

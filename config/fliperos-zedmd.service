@@ -12,6 +12,8 @@ StartLimitBurst=3
 User=fliperos
 WorkingDirectory=/home/fliperos/zedmd
 ExecStart=/opt/fliperos/bin/fliperos-pixelcade zedmd-daemon
+# "Bye" no painel quando o computador desliga.
+ExecStop=-/opt/fliperos/bin/fliperos-pixelcade bye zedmd
 Restart=on-failure
 RestartSec=10
 

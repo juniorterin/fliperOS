@@ -39,7 +39,16 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   # (config/fliperos-buttons), por cima do perfil automatico do controle.
   buttons=${FLIPEROS_RA_BUTTONS:-/etc/fliperos/retroarch/buttons.cfg}
   [[ -f $buttons ]] && appendconfig+="|$buttons"
+  # O DOFLinx (Setup > Extras) le o jogo aberto pelo Network Command
+  # Interface: o arquivo so existe com ele instalado.
+  doflinx=${FLIPEROS_RA_DOFLINX:-/etc/fliperos/retroarch/doflinx.cfg}
+  [[ -f $doflinx ]] && appendconfig+="|$doflinx"
   set -- "$1" --appendconfig "$appendconfig" "${@:2}"
+  # As conquistas (RetroAchievements) no marquee: o fliperos-pixelcade as le
+  # do log, onde o RetroArch so as escreve com --verbose.
+  if [[ -x $pixelcade ]] && "$pixelcade" cheevos; then
+    set -- "$1" --verbose "${@:2}"
+  fi
 fi
 # Monitores extras (Setup > Video Setup > Multiple Monitors): no KMS so o
 # principal fica ligado. RetroArch, SDL e Qt abrem na primeira saida

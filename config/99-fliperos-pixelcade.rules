@@ -3,3 +3,7 @@
 # (config/fliperos-pixelcade). V1: SparkFun 1b4f:0008; V2: RP2040 2e8a:1050.
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1b4f", ATTRS{idProduct}=="0008", SYMLINK+="pixelcade%n", GROUP="dialout", MODE="0660", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-pixelcade.service"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="1050", SYMLINK+="pixelcade2dev%n", GROUP="dialout", MODE="0660", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-pixelcade.service"
+# Pixelcade LCD pela USB (1d6b:3232, firmware 6.3 ou mais novo): e uma placa
+# de rede (gadget). Fica fora do NetworkManager, que lhe daria outro
+# endereco, e o fliperos-pixelcade lcd-usb a configura.
+ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="3232", ENV{NM_UNMANAGED}="1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-pixelcade-lcd@$name.service"

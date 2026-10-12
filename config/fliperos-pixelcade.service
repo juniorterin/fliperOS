@@ -13,6 +13,9 @@ StartLimitBurst=3
 User=fliperos
 WorkingDirectory=/home/fliperos/pixelcade
 ExecStart=/opt/fliperos/bin/fliperos-pixelcade daemon
+# "Bye" no marquee quando o computador desliga (numa reabertura do servico,
+# nada).
+ExecStop=-/opt/fliperos/bin/fliperos-pixelcade bye pixelcade
 Restart=on-failure
 RestartSec=10
 

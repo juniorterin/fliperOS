@@ -216,6 +216,9 @@ echo "fliperos-pixelcade: $(systemctl is-active fliperos-pixelcade.service 2> /d
 # ZeDMD: so sobe com o dmdserver baixado (Setup > Extras).
 systemctl restart fliperos-zedmd.service 2> /dev/null || true
 echo "fliperos-zedmd: $(systemctl is-active fliperos-zedmd.service 2> /dev/null)"
+# DOFLinx: so sobe com ele baixado (Setup > Extras).
+systemctl restart fliperos-doflinx.service 2> /dev/null || true
+echo "fliperos-doflinx: $(systemctl is-active fliperos-doflinx.service 2> /dev/null)"
 # Os discos que ja estavam ligados (os que aparecerem depois, pela udev).
 lsblk -rnpo NAME,FSTYPE | awk '$2 != "" { print $1 }' | while read -r dev; do
   /opt/fliperos/bin/fliperos-automount "$dev" 2> /dev/null || true

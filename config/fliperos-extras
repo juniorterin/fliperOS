@@ -7,7 +7,9 @@
 # deles (prefixos do Wine, lancadores, atalhos) ja vem na imagem. O
 # Pixelcade (marquee de LED/LCD) e codigo fechado: o config/fliperos-pixelcade
 # baixa o pixelweb e a arte do GitHub do Pixelcade. O ZeDMD (DMD de LED open
-# source) usa o dmdserver do libdmdutil, baixado pelo mesmo helper.
+# source) usa o dmdserver do libdmdutil, baixado pelo mesmo helper, e o
+# DOFLinx (efeitos no marquee durante o jogo) vem do GitHub dele. O Java do
+# apt entra com o Pixelcade: o hi2txt, que le os recordes, e feito nele.
 #
 #   fliperos-extras list                         nome|instalado (0 ou 1)|descricao
 #   fliperos-extras installed NOME               status 0 se instalado
@@ -50,6 +52,7 @@ extras_label() {
     heroic) echo "Heroic" ;;
     pixelcade) echo "Pixelcade" ;;
     zedmd) echo "ZeDMD" ;;
+    doflinx) echo "DOFLinx" ;;
   esac
 }
 
@@ -60,6 +63,7 @@ extras_installed() {
     heroic) [[ -x $heroic_bin ]] ;;
     pixelcade) [[ -x $pixelcade ]] && "$pixelcade" installed ;;
     zedmd) [[ -x $pixelcade ]] && "$pixelcade" zedmd-installed ;;
+    doflinx) [[ -x $pixelcade ]] && "$pixelcade" doflinx-installed ;;
     *) return 2 ;;
   esac
 }
@@ -74,6 +78,7 @@ steam|Steam
 heroic|Heroic (GOG, Epic, Amazon)
 pixelcade|Pixelcade (LED/LCD marquee)
 zedmd|ZeDMD (open-source LED DMD)
+doflinx|DOFLinx (Pixelcade in-game effects)
 LIST
 }
 
@@ -131,7 +136,7 @@ install_heroic() {
 extras_install() {
   local name=$1
   label=$(extras_label "$name")
-  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade or zedmd)"
+  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade, zedmd or doflinx)"
   ((EUID == 0)) || fail "installing $label needs root (Setup > Extras)"
   case $name in
     # shellcheck disable=SC2086 # um pacote por palavra
@@ -139,9 +144,20 @@ extras_install() {
     # shellcheck disable=SC2086
     steam) apt_install $STEAM_PACKAGES ;;
     heroic) install_heroic ;;
+    # O Java (o hi2txt le com ele os recordes que rolam no marquee) do apt,
+    # ate 15%; o pixelweb, a arte e o hi2txt pelo fetch, dali a 100%.
     pixelcade)
       [[ -x $pixelcade ]] || fail "$pixelcade is missing"
+      if ! command -v java > /dev/null; then
+        apt_end=15
+        apt_install --no-install-recommends default-jre-headless
+        export PIXELCADE_PROGRESS_FROM=15
+      fi
       if ((progress)); then "$pixelcade" fetch --progress || exit 1; else "$pixelcade" fetch || exit 1; fi
+      ;;
+    doflinx)
+      [[ -x $pixelcade ]] || fail "$pixelcade is missing"
+      if ((progress)); then "$pixelcade" fetch-doflinx --progress || exit 1; else "$pixelcade" fetch-doflinx || exit 1; fi
       ;;
     # O dmdserver vem do release do libdmdutil (fetch-zedmd, de 60% a 100%);
     # o Pillow, que desenha a imagem do painel, do apt.

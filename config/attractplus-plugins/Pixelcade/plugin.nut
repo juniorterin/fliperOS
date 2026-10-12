@@ -28,6 +28,21 @@ class FliperosPixelcade {
 	function on_transition(ttype, var, ttime) {
 		local offset = 0;
 		local rom = "";
+		// O protetor de tela e outro layout: o que saiu avisa que ele comecou
+		// (o marquee entra no modo attract), e o que volta, que acabou (o
+		// helper mostra de novo o jogo que estava selecionado). Dentro dele
+		// nada e selecionado.
+		if (ScreenSaverActive)
+			return false;
+		if (ttype == Transition.EndLayout) {
+			if (var == FromTo.ScreenSaver)
+				fe.plugin_command_bg(config["command"], "screensaver start");
+			return false;
+		}
+		if (ttype == Transition.StartLayout && var == FromTo.ScreenSaver) {
+			fe.plugin_command_bg(config["command"], "screensaver stop");
+			return false;
+		}
 		switch (ttype) {
 			case Transition.ToNewSelection:
 				offset = var;

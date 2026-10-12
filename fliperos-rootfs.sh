@@ -127,6 +127,15 @@ install -Dm644 "$src/config/99-fliperos-pixelcade.rules" "$root/etc/udev/rules.d
 mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
 ln -sfn /etc/systemd/system/fliperos-pixelcade.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-pixelcade.service"
+# O logo do FliperOS que o marquee (e o ZeDMD) mostra ao ligar, o servico do
+# Pixelcade LCD ligado pela USB (aberto pela udev) e o do DOFLinx, os efeitos
+# durante o jogo (so sobe com o Setup > Extras > DOFLinx instalado).
+install -Dm644 "$src/config/pixelcade-fliperos.png" "$root/usr/local/share/fliperos/pixelcade/fliperos.png"
+install -Dm644 "$src/config/fliperos-pixelcade-lcd@.service" \
+  "$root/etc/systemd/system/fliperos-pixelcade-lcd@.service"
+install -Dm644 "$src/config/fliperos-doflinx.service" "$root/etc/systemd/system/fliperos-doflinx.service"
+ln -sfn /etc/systemd/system/fliperos-doflinx.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-doflinx.service"
 # ZeDMD (DMD de LED open source): os mesmos eventos, desenhados pelo
 # fliperos-dmd. O dmdserver (libdmdutil) e o Pillow vem pelo Setup > Extras.
 install -Dm755 "$src/config/fliperos-dmd" "$root/opt/fliperos/bin/fliperos-dmd"

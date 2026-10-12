@@ -348,11 +348,13 @@ screen_extras() {
     last=$choice
     [[ $choice == return ]] && return 0
     label=$(extras_label "$choice")
+    # Instalado: instalar de novo atualiza (o Pixelcade baixa o pixelweb e a
+    # arte novos, o apt a versao nova do pacote).
     if extras_installed "$choice"; then
-      ui_msg "Extras" "$label is already installed."
-      continue
+      ui_yesno "Extras" "$label is already installed. Download it again to update it?" no || continue
+    else
+      ui_yesno "Extras" "Download and install $label now?" yes || continue
     fi
-    ui_yesno "Extras" "Download and install $label now?" yes || continue
     if run_with_progress "Installing $label" "" extras_install "$choice"; then
       ui_msg "Extras" "$label installed."
     fi

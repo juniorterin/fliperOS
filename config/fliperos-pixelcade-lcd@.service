@@ -1,0 +1,8 @@
+[Unit]
+Description=FliperOS Pixelcade LCD marquee over USB (%I)
+# A udev (99-fliperos-pixelcade.rules) abre isto quando o Pixelcade LCD e
+# ligado pela USB: ele aparece como uma placa de rede.
+
+[Service]
+Type=oneshot
+ExecStart=/opt/fliperos/bin/fliperos-pixelcade lcd-usb %I

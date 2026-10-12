@@ -11,36 +11,77 @@
 #
 # Os eventos chegam por tres caminhos:
 #   - o fliperos-kms-run e o fliperos-x11-run (todo jogo de todo frontend e
-#     emulador passa por eles): "launch" com a linha de comando do jogo;
-#   - o ES-DE: os scripts de evento game-select e system-select (esde);
-#   - o Attract-Mode Plus: o plugin Pixelcade (attract).
+#     emulador passa por eles): "launch" com a linha de comando do jogo. O
+#     launch fica esperando o jogo fechar (end) e, no RetroArch, le as
+#     conquistas (RetroAchievements) do log dele;
+#   - o ES-DE: os scripts de evento game-select, system-select,
+#     screensaver-start e screensaver-end (esde);
+#   - o Attract-Mode Plus: o plugin Pixelcade (attract, screensaver).
+# Sao os eventos dos scripts do proprio Pixelcade para o EmulationStation
+# (github.com/alinke/pixelcade-linux, batocera/scripts), com as mesmas
+# chamadas a API.
 #
 # Os mesmos eventos vao para um ZeDMD (DMD de LED open source), se o Setup >
 # Extras > ZeDMD baixou o dmdserver (libdmdutil) para ~/zedmd: o
 # fliperos-dmd desenha a imagem e o fliperos-zedmd.service abre o servidor.
 #
-#   fliperos-pixelcade fetch [--progress]          baixa o pixelweb e a arte (de novo: atualiza)
+#   fliperos-pixelcade fetch [--progress]          baixa o pixelweb, a arte e o hi2txt (de novo: atualiza)
 #   fliperos-pixelcade installed                   status 0 se o pixelweb esta baixado
 #   fliperos-pixelcade daemon                      o servico: liga os frontends e abre o pixelweb
 #   fliperos-pixelcade fetch-zedmd [--progress]    baixa o dmdserver do ZeDMD
 #   fliperos-pixelcade zedmd-installed             status 0 se o dmdserver e o Pillow estao la
 #   fliperos-pixelcade zedmd-daemon                o servico do ZeDMD: abre o dmdserver
+#   fliperos-pixelcade fetch-doflinx [--progress]  baixa o DOFLinx (efeitos durante o jogo)
+#   fliperos-pixelcade doflinx-installed           status 0 se o DOFLinx esta baixado
+#   fliperos-pixelcade doflinx-daemon              o servico do DOFLinx
 #   fliperos-pixelcade frontends                   scripts do ES-DE e plugin do Attract-Mode Plus
 #   fliperos-pixelcade launch PROGRAMA [ARGS...]   o jogo da linha de comando, se houver
 #   fliperos-pixelcade esde EVENTO [ARGS...]       os argumentos de um evento do ES-DE
 #   fliperos-pixelcade attract EMULADOR ROM        o jogo selecionado no Attract-Mode Plus
-#   fliperos-pixelcade game|select SISTEMA ROM     o marquee do jogo (aberto | selecionado)
+#   fliperos-pixelcade game|select SISTEMA ROM [TITULO]   o marquee do jogo (aberto | selecionado)
+#   fliperos-pixelcade end SISTEMA ROM             o jogo fechou: volta ao marquee da selecao
 #   fliperos-pixelcade system SISTEMA              o marquee do sistema
+#   fliperos-pixelcade screensaver start|stop      o modo attract, no protetor de tela do frontend
+#   fliperos-pixelcade achievement ID TITULO [DESCRICAO]   uma conquista do jogo aberto
+#   fliperos-pixelcade cheevos                     status 0 se o RetroArch deve registrar as conquistas no log
+#   fliperos-pixelcade bye pixelcade|zedmd         "Bye", quando o computador desliga
+#   fliperos-pixelcade lcd-usb INTERFACE           o Pixelcade LCD ligado pela USB (root, pela udev)
 set -uo pipefail
 dir=${PIXELCADE_DIR:-/home/fliperos/pixelcade}
 base_url=${PIXELCADE_URL:-https://github.com/alinke/pixelcade-linux-builds/raw/main/linux_amd64/pixelweb}
 api=${PIXELCADE_API:-http://127.0.0.1:8080}
+# hi2txt (le os recordes dos arquivos .hi do MAME; GPL, o mesmo que o
+# instalador do Pixelcade usa), fixado por hash. Precisa do Java, que o Setup
+# > Extras instala pelo apt.
+hi2txt_url=${HI2TXT_URL:-https://github.com/alinke/pixelcade-linux/raw/main/hi2txt}
+HI2TXT_JAR_SHA256="2ae74fd71e4fd0c8fa0cb52c6e9d18dfdb2c3aa0ca387f941138b3ef9f7c4e6f"
+HI2TXT_ZIP_SHA256="84c5a0667e224186ebe513d613675c98d0c70ff5323145b9943b34e852aed7df"
+# O logo do FliperOS que o marquee mostra ao ligar (fliperos-rootfs.sh).
+logo=${PIXELCADE_LOGO:-/usr/local/share/fliperos/pixelcade/fliperos.png}
+# Onde os emuladores gravam os recordes (.hi): o GroovyMAME (plugin hiscore)
+# e os cores de arcade do RetroArch.
+hi_dirs=${HISCORE_DIRS:-/home/fliperos/.mame/hiscore:/opt/fliperos/saves/retroarch}
+ra_cfg=${RA_CFG:-/home/fliperos/.config/retroarch/retroarch.cfg}
+ra_log=${RA_LOG:-${FLIPEROS_LOGS:-/opt/fliperos/logs}/retroarch.log}
+# Um jogo que fala direto com o painel (Visual Pinball) deixa aqui o pid
+# dele: o pixelweb e o dmdserver soltam a porta ate ele fechar.
+hold_file=${PIXELCADE_HOLD:-/tmp/fliperos-pixelcade.hold}
+# O Pixelcade LCD pela USB e uma placa de rede (gadget): ele e 169.254.100.1.
+lcd_ip=${PIXELCADE_LCD_IP:-169.254.100.1}
+lcd_host_ip=${PIXELCADE_LCD_HOST_IP:-169.254.100.2}
 # dmdserver do libdmdutil (github.com/vpinball/libdmdutil), fixado por hash.
 DMDUTIL_VERSION="0.11.0"
 DMDUTIL_SHA256="4c633689ef23237da6634f276a632773efd933c864eebead7c8d18d3f1bb394e"
 zedmd_dir=${ZEDMD_DIR:-/home/fliperos/zedmd}
 zedmd_url=${ZEDMD_URL:-https://github.com/vpinball/libdmdutil/releases/download/v${DMDUTIL_VERSION}/libdmdutil-${DMDUTIL_VERSION}-linux-x64.tar.gz}
 zedmd_device=${ZEDMD_DEVICE:-/dev/zedmd}
+# DOFLinx (doflinx.github.io, codigo fechado): efeitos no marquee durante o
+# jogo (placar, explosoes) nos arcades do FBNeo, pelo RetroArch. Vem do
+# GitHub dele, com a configuracao que o Pixelcade publica.
+doflinx_dir=${DOFLINX_DIR:-/home/fliperos/doflinx}
+doflinx_url=${DOFLINX_URL:-https://codeload.github.com/DOFLinx/CurrentExecutable/tar.gz/refs/heads/main}
+doflinx_cfg_url=${DOFLINX_CFG_URL:-https://github.com/alinke/pixelcade-linux-builds/raw/main/rcade}
+ra_doflinx=${RA_DOFLINX_CFG:-/etc/fliperos/retroarch/doflinx.cfg}
 dmd=${FLIPEROS_DMD:-/opt/fliperos/bin/fliperos-dmd}
 user=${FLIPEROS_USER:-fliperos}
 roms=${ROMS_DIR:-/home/fliperos/roms}
@@ -52,8 +93,11 @@ last_file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-pixelcade.last
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 progress=0 fail_label=Pixelcade
+# As etapas vao de PIXELCADE_PROGRESS_FROM a 100 (o Setup > Extras instala
+# pacotes pelo apt antes).
+from=${PIXELCADE_PROGRESS_FROM:-0}
 say() {
-  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+  if ((progress)); then printf '@step %s %s\n' "$((from + $1 * (100 - from) / 100))" "$2"; else printf '%s\n' "$2"; fi
 }
 fail() {
   if ((progress)); then printf '@fail %s|%s\n' "$fail_label" "$1"; else printf 'fliperos-pixelcade: %s\n' "$1" >&2; fi
@@ -66,6 +110,10 @@ installed() {
 
 zedmd_installed() {
   [[ -x $zedmd_dir/dmdserver ]]
+}
+
+doflinx_installed() {
+  [[ -x $doflinx_dir/DOFLinx ]]
 }
 
 # -- Instalacao ------------------------------------------------------
@@ -108,11 +156,35 @@ fetch() {
     rc=${PIPESTATUS[0]}
   fi
   ((rc == 0)) || fail "the artwork download failed (details in the log)"
+  say 95 "Downloading hi2txt (high scores)"
+  fetch_hi2txt || echo "fliperos-pixelcade: hi2txt was not installed; the marquee works without the high scores" >&2
   say 96 "Frontend events (ES-DE, Attract-Mode Plus)"
   frontends
   # Pelo Setup, quem fecha e o root, depois de abrir o servico.
   [[ -n ${PIXELCADE_AS_ROOT:-} ]] && return 0
   say 100 "Pixelcade installed (sudo systemctl restart fliperos-pixelcade starts it)"
+}
+
+# fetch_hi2txt: o hi2txt.jar e a base dele (hi2txt.zip) em ~/pixelcade/hi2txt,
+# onde o instalador do Pixelcade os poe. Sem eles o marquee so nao rola os
+# recordes.
+fetch_hi2txt() {
+  local name sum part
+  mkdir -p "$dir/hi2txt" || return 1
+  for name in jar zip; do
+    sum=$HI2TXT_JAR_SHA256
+    [[ $name == zip ]] && sum=$HI2TXT_ZIP_SHA256
+    part="$dir/hi2txt/.hi2txt.$name.part"
+    if [[ -f $dir/hi2txt/hi2txt.$name ]] && echo "$sum  $dir/hi2txt/hi2txt.$name" | sha256sum -c --quiet - 2> /dev/null; then
+      continue
+    fi
+    if ! curl -sSfL --retry 3 --max-time 300 -o "$part" "$hi2txt_url/hi2txt.$name" >&2 ||
+      ! echo "$sum  $part" | sha256sum -c --quiet - >&2; then
+      rm -f "$part"
+      return 1
+    fi
+    mv -f "$part" "$dir/hi2txt/hi2txt.$name" || return 1
+  done
 }
 
 artwork_progress() {
@@ -205,6 +277,172 @@ Enabled = 0
 EOF
 }
 
+# fetch_doflinx: o DOFLinx (so a pasta Linux_x64 do pacote) em ~/doflinx, a
+# configuracao que o Pixelcade publica com as pastas do FliperOS, e os
+# arquivos de jogo (.MAME) pelo pixelweb. O root liga o Network Command
+# Interface do RetroArch, por onde o DOFLinx sabe o jogo aberto e le a
+# memoria dele, e abre o servico.
+fetch_doflinx() {
+  local tgz rc name tmp
+  [[ ${1:-} == --progress ]] && progress=1
+  fail_label=DOFLinx
+  installed || fail "install Pixelcade first (Setup > Extras > Pixelcade)"
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    mkdir -p "$doflinx_dir" && chown "$user:" "$doflinx_dir" || fail "could not create $doflinx_dir"
+    runuser -u "$user" -- env PIXELCADE_AS_ROOT=1 "$self" fetch-doflinx "$@" || exit 1
+    mkdir -p "$(dirname "$ra_doflinx")" &&
+      printf '%s\n' '# FliperOS: o DOFLinx (Setup > Extras) le o jogo aberto por aqui.' \
+        'network_cmd_enable = "true"' 'network_cmd_port = "55355"' > "$ra_doflinx" ||
+      fail "could not write $ra_doflinx"
+    systemctl daemon-reload 2> /dev/null
+    systemctl restart fliperos-pixelcade.service 2> /dev/null
+    systemctl enable fliperos-doflinx.service > /dev/null 2>&1
+    systemctl restart fliperos-doflinx.service 2> /dev/null
+    say 100 "DOFLinx installed"
+    return 0
+  fi
+  mkdir -p "$doflinx_dir/config" 2> /dev/null && [[ -w $doflinx_dir ]] || fail "$doflinx_dir is not writable"
+  tgz="$doflinx_dir/.doflinx.tar.gz"
+  say 0 "Downloading DOFLinx from GitHub (DOFLinx/CurrentExecutable, about 230 MB)"
+  if ! curl -sSfL --retry 3 --max-time 1800 -o "$tgz" "$doflinx_url" >&2; then
+    rm -f "$tgz"
+    fail "the download failed (no network?)"
+  fi
+  say 60 "Unpacking DOFLinx"
+  "$doflinx_dir/DOFLinxMsg" QUIT > /dev/null 2>&1
+  tar -xzf "$tgz" -C "$doflinx_dir" --strip-components=2 --wildcards '*/Linux_x64/*' >&2
+  rc=$?
+  rm -f "$tgz"
+  ((rc == 0)) && [[ $(head -c 4 "$doflinx_dir/DOFLinx" 2> /dev/null | od -An -c | tr -d ' ') == '177ELF' ]] ||
+    fail "could not unpack DOFLinx into $doflinx_dir"
+  chmod 755 "$doflinx_dir/DOFLinx" "$doflinx_dir/DOFLinxMsg" "$doflinx_dir/keycodes" 2> /dev/null
+  say 70 "DOFLinx configuration"
+  for name in DOFLinx.ini colours.ini; do
+    tmp="$doflinx_dir/config/.$name.part"
+    if ! curl -sSfL --retry 3 --max-time 120 -o "$tmp" "$doflinx_cfg_url/$name" >&2; then
+      rm -f "$tmp"
+      fail "the download of $name failed (no network?)"
+    fi
+    [[ $name == DOFLinx.ini ]] && doflinx_paths "$tmp"
+    doflinx_keep "$tmp" "$doflinx_dir/config/$name"
+  done
+  say 80 "Downloading the DOFLinx game files"
+  curl -s -m 2 -o /dev/null "$api/quit" 2> /dev/null
+  (cd "$dir" && ./pixelweb -p "$dir" -update-doflinx) >&2 ||
+    echo "fliperos-pixelcade: the DOFLinx game files were not updated; the ones of the artwork stay" >&2
+  [[ -n ${PIXELCADE_AS_ROOT:-} ]] && return 0
+  say 100 "DOFLinx installed (as root: fliperos-extras install doflinx turns the service on)"
+}
+
+# doflinx_paths ARQUIVO: as pastas do gabinete RCade, para o qual o Pixelcade
+# publica o DOFLinx.ini, trocadas pelas do FliperOS. O Java e o do apt.
+doflinx_paths() {
+  local java
+  java=$(command -v java) || java=/usr/bin/java
+  sed -i -e "s|/rcade/share/pixelcade/jdk/bin/|${java%/*}/|g" \
+    -e "s|/rcade/share/pixelcade/|$dir/|g" \
+    -e "s|/rcade/share/roms/mame/|$roms/retroarch/fbneo/|g" \
+    -e "s|/rcade/share/saves/fbneo/|${hi_dirs##*:}/fbneo/|g" \
+    -e 's|Config file for DOFLinx Linux on RCade|Config file for DOFLinx Linux on FliperOS|' "$1"
+}
+
+# doflinx_keep NOVO DESTINO: a configuracao nova entra se a que esta la e a
+# que o FliperOS gravou (o hash fica ao lado); uma alterada pela pessoa fica,
+# e a nova vai para DESTINO.latest.
+doflinx_keep() {
+  local new=$1 dest=$2 hash="${2%/*}/.${2##*/}.sha256" sum
+  sum=$(sha256sum < "$new")
+  if [[ ! -f $dest || $(sha256sum < "$dest") == "$(cat "$hash" 2> /dev/null)" ]]; then
+    mv -f "$new" "$dest" && printf '%s\n' "$sum" > "$hash"
+    rm -f "$dest.latest"
+  elif [[ $(sha256sum < "$dest") == "$sum" ]]; then
+    rm -f "$new"
+  else
+    mv -f "$new" "$dest.latest"
+  fi
+}
+
+# -- Pixelcade LCD pela USB -----------------------------------------
+
+# lcd_ini: o pixelcade.ini com o LCD da USB ligado e o nome dele, como o
+# instalador do Pixelcade faz. Escreve "changed" se o arquivo mudou.
+lcd_ini() {
+  local ini="$dir/pixelcade.ini" before host
+  [[ -f $ini ]] || return 1
+  before=$(cksum < "$ini")
+  sed -i -e 's/^lcdMarquee[ ]*=.*/lcdMarquee = true/' -e 's/^lcdUsbConnected[ ]*=.*/lcdUsbConnected = true/' "$ini"
+  host=$(curl -s --connect-timeout 5 -m 10 "http://$lcd_ip:8080/v2/info" 2> /dev/null |
+    sed -n 's/.*"hostname":"\([^"]*\)".*/\1/p')
+  [[ $host =~ ^[A-Za-z0-9._-]+$ ]] && sed -i "s|^lcdMarqueeHostName[ ]*=.*|lcdMarqueeHostName = $host|" "$ini"
+  [[ $(cksum < "$ini") == "$before" ]] || echo changed
+}
+
+# lcd_usb INTERFACE: (root, pela udev) a placa de rede do LCD ganha o
+# endereco que o pixelweb espera e fica fora do NetworkManager (a regra da
+# udev); o pixelcade.ini passa a usar o LCD e o servico reabre.
+lcd_usb() {
+  local iface=${1:-} i changed
+  [[ -n $iface ]] || fail "lcd-usb needs the network interface"
+  ip link set "$iface" up && ip addr replace "$lcd_host_ip/16" dev "$iface" || fail "could not configure $iface"
+  echo 1 > "/proc/sys/net/ipv6/conf/$iface/disable_ipv6" 2> /dev/null
+  installed || return 0
+  # O pixelweb cria o pixelcade.ini na primeira vez que abre.
+  if [[ ! -f $dir/pixelcade.ini ]]; then
+    systemctl reset-failed fliperos-pixelcade.service 2> /dev/null
+    systemctl start --no-block fliperos-pixelcade.service 2> /dev/null
+    for i in {1..30}; do
+      [[ -f $dir/pixelcade.ini ]] && break
+      sleep 1
+    done
+  fi
+  changed=$(runuser -u "$user" -- "$self" lcd-ini)
+  if [[ -n $changed ]] || ! systemctl is-active -q fliperos-pixelcade.service; then
+    systemctl reset-failed fliperos-pixelcade.service 2> /dev/null
+    systemctl restart --no-block fliperos-pixelcade.service 2> /dev/null
+  fi
+  return 0
+}
+
+# -- Servicos ------------------------------------------------------
+
+# serve PROGRAMA [ARGS...]: o programa do servico (pixelweb, dmdserver). Se
+# ele fecha porque um jogo que fala direto com o painel abriu (dmd_hold),
+# espera o jogo fechar e o abre de novo; senao sai com o status dele.
+serve() {
+  local rc pid
+  while :; do
+    "$@"
+    rc=$?
+    pid=$(cat "$hold_file" 2> /dev/null) || return "$rc"
+    while [[ $pid =~ ^[0-9]+$ && -e $hold_file ]] && kill -0 "$pid" 2> /dev/null; do
+      sleep 2
+    done
+    rm -f "$hold_file"
+  done
+}
+
+# dmd_hold PID: o pixelweb e o dmdserver soltam a porta do painel para o jogo
+# PID (o Visual Pinball desenha o DMD ele mesmo, pela mesma porta serial).
+dmd_hold() {
+  printf '%s\n' "$1" > "$hold_file" 2> /dev/null || return 0
+  call quit
+  zedmd_installed && pkill -x -u "$(id -u)" dmdserver 2> /dev/null
+  return 0
+}
+
+# bye pixelcade|zedmd: o ExecStop dos servicos. So quando o computador esta
+# desligando ou reiniciando; numa reabertura do servico, nada.
+bye() {
+  [[ ${PIXELCADE_STOPPING:-$(systemctl is-system-running 2> /dev/null)} == stopping ]] || return 0
+  if [[ ${1:-} == zedmd ]]; then
+    [[ -x $dmd ]] && "$dmd" text Bye < /dev/null > /dev/null 2>&1
+  else
+    call "text?t=Bye"
+    sleep 2
+  fi
+  return 0
+}
+
 # -- Frontends ------------------------------------------------------
 
 # frontends: os scripts de evento do ES-DE e o plugin do Attract-Mode Plus.
@@ -213,7 +451,7 @@ EOF
 frontends() {
   if [[ -d $esde_dir ]]; then
     local event
-    for event in game-select system-select; do
+    for event in game-select system-select screensaver-start screensaver-end; do
       mkdir -p "$esde_dir/scripts/$event"
       printf '#!/bin/sh\n# FliperOS: o marquee do Pixelcade (config/fliperos-pixelcade).\nexec %s esde %s "$@"\n' \
         "$self" "$event" > "$esde_dir/scripts/$event/fliperos-pixelcade"
@@ -344,26 +582,178 @@ call() {
   curl -s -m 3 -o /dev/null "$api/$1"
 }
 
-# zedmd_show game|select|system SISTEMA ROM [TITULO]: em segundo plano (um
-# GIF ou um texto rolando fica aberto ate o proximo evento).
-zedmd_show() {
+# zedmd ARGS...: o fliperos-dmd em segundo plano (um GIF, um texto rolando ou
+# o attract fica aberto ate o proximo evento).
+zedmd() {
   zedmd_installed && [[ -x $dmd ]] || return 0
-  setsid "$dmd" show "$@" < /dev/null > /dev/null 2>&1 &
+  setsid "$dmd" "$@" < /dev/null > /dev/null 2>&1 &
 }
 
-# game SISTEMA ROM: o jogo aberto, ate o proximo evento. O mesmo jogo de
-# segundos antes e a mesma abertura (o groovymame do fliperos-kms-run ainda
-# passa pelo fliperos-x11-run).
+# title_of ROM [TITULO]: o nome do jogo, sem o que vem entre parenteses; sem
+# TITULO, o das listas dos frontends (fliperos-dmd title).
+title_of() {
+  local title=${2:-}
+  [[ -n $title ]] || title=$("$dmd" title "$1" 2> /dev/null)
+  [[ -n $title ]] || title=$1
+  title=${title%%[(\[]*}
+  title=${title%"${title##*[![:space:]]}"}
+  printf '%s\n' "${title:-$1}"
+}
+
+# highscores SISTEMA ROM: os tres primeiros recordes de um arcade ("#1
+# 19,130 DAA #2 ..."), do arquivo .hi mais novo do jogo, lido pelo hi2txt.
+# Status 1 sem recordes (ou sem o hi2txt ou o Java).
+highscores() {
+  local java hi line out="" i rank score name
+  local -a dirs head=() cols
+  [[ $1 == mame && -f $dir/hi2txt/hi2txt.jar && -f $dir/hi2txt/hi2txt.zip ]] || return 1
+  java=$(command -v java) || return 1
+  IFS=: read -r -a dirs <<< "$hi_dirs"
+  hi=$(find "${dirs[@]}" -type f -name "$2.hi" -printf '%T@ %p\n' 2> /dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+  [[ -n $hi ]] || return 1
+  # A primeira linha diz as colunas: RANK|SCORE|NAME (ha jogos sem NAME).
+  while IFS= read -r line; do
+    [[ $line == *'|'* ]] || continue
+    if ((${#head[@]} == 0)); then
+      IFS='|' read -r -a head <<< "$line"
+      continue
+    fi
+    IFS='|' read -r -a cols <<< "$line"
+    rank="" score="" name=""
+    for i in "${!head[@]}"; do
+      case ${head[i]} in
+        RANK) rank=${cols[i]:-} ;;
+        SCORE) score=${cols[i]:-} ;;
+        NAME) name=${cols[i]:-} ;;
+      esac
+    done
+    [[ $score =~ ^[0-9]+$ ]] || continue
+    score=$(sed ':a;s/\B[0-9]\{3\}\>/,&/;ta' <<< "$score")
+    out+="#${rank:-?} $score ${name% } "
+  done < <(cd "$dir/hi2txt" && timeout 20 "$java" -jar hi2txt.jar -r "$hi" -max-lines 3 -max-columns 3 \
+    -keep-field SCORE -keep-field NAME -keep-field RANK 2> /dev/null)
+  [[ -n $out ]] || return 1
+  printf '%s\n' "${out% }"
+}
+
+# game SISTEMA ROM [TITULO]: o jogo aberto. Primeiro rola uma vez os recordes
+# do jogo, ou "Now Playing" e o nome dele; depois fica o marquee do jogo, ate
+# o proximo evento. O mesmo jogo de segundos antes e a mesma abertura (o
+# groovymame do fliperos-kms-run ainda passa pelo fliperos-x11-run): status 1.
 game() {
-  [[ -n $1 && -n $2 ]] || return 0
+  local title intro
+  [[ -n ${1:-} && -n ${2:-} ]] || return 1
   if [[ $(cat "$last_file" 2> /dev/null) == "game:$1/$2" ]] &&
     (($(date +%s) - $(stat -c %Y "$last_file" 2> /dev/null || echo 0) < 10)); then
-    return 0
+    return 1
   fi
   printf 'game:%s/%s\n' "$1" "$2" > "$last_file" 2> /dev/null
-  call "attract/stop"
-  call "arcade/stream/$(urlencode "$1")/$(urlencode "$2")?l=99999&event=GameStart"
-  zedmd_show game "$1" "$2"
+  title=$(title_of "$2" "${3:-}")
+  intro=$(highscores "$1" "$2") || intro="Now Playing $title"
+  if installed; then
+    call "attract/stop"
+    # A fila do pixelweb vazia: sem isto o texto espera o que estava nela.
+    call "console/stream/black"
+    sleep 1
+    call "text?t=$(urlencode "$intro")&ss=1&l=1&scroll=true&game=$(urlencode "$2")&system=$(urlencode "$1")&event=GameStart"
+    call "arcade/stream/$(urlencode "$1")/$(urlencode "$2")?l=99999&event=GameStart"
+  fi
+  zedmd show game "$1" "$2" "$title" "$intro"
+  return 0
+}
+
+# end SISTEMA ROM: o jogo fechou. O painel volta para o pixelweb e o
+# dmdserver (dmd_hold), e o marquee para o do jogo como selecao do frontend:
+# o Pegasus e o RetroFE nao avisam o que esta selecionado.
+game_end() {
+  rm -f "$hold_file"
+  [[ $(cat "$last_file" 2> /dev/null) == "game:${1:-}/${2:-}" ]] || return 0
+  rm -f "$last_file"
+  select_game "$1" "$2"
+}
+
+# watch SISTEMA ROM: espera o jogo fechar e manda o "end". O jogo e o pai: o
+# fliperos-kms-run e o fliperos-x11-run chamam o launch em segundo plano e
+# viram o emulador (exec). No RetroArch com as conquistas ligadas, enquanto
+# isso le as conquistas do log dele.
+watch() {
+  local pid=${PIXELCADE_GAME_PID:-$PPID}
+  [[ $pid =~ ^[0-9]+$ ]] && ((pid > 1)) || return 0
+  (
+    if [[ ${3:-} == retroarch ]] && cheevos; then
+      cheevos_watch "$pid"
+    else
+      tail --pid="$pid" -f /dev/null
+    fi
+    "$self" end "$1" "$2"
+  ) < /dev/null > /dev/null 2>&1 &
+}
+
+# cheevos: status 0 se o RetroArch tem as conquistas (RetroAchievements)
+# ligadas e ha um painel para mostra-las. O fliperos-kms-run entao o abre com
+# --verbose: so assim a conquista aparece no log.
+cheevos() {
+  installed || zedmd_installed || return 1
+  grep -qE '^cheevos_enable[[:space:]]*=[[:space:]]*"true"' "$ra_cfg" 2> /dev/null
+}
+
+# cheevos_watch PID: as linhas "[RCHEEVOS] Awarding achievement ID: TITULO"
+# do log do RetroArch (rc_client.c do rcheevos), ate ele fechar. O
+# fliperos-kms-run esvazia o log ao abrir; o tail -F segue o arquivo novo.
+cheevos_watch() {
+  local line
+  # O log da vez anterior ja foi esvaziado quando o tail comeca: nenhuma
+  # conquista sai nos primeiros segundos do jogo.
+  sleep 2
+  tail --pid="$1" -n 0 -F "$ra_log" 2> /dev/null | while IFS= read -r line; do
+    if [[ $line =~ \[RCHEEVOS\]\ (Awarding|Unlocked\ unofficial)\ achievement\ ([0-9]+):\ (.*)$ ]]; then
+      achievement "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+    fi
+  done
+}
+
+# achievement ID TITULO [DESCRICAO]: uma conquista do jogo aberto: o
+# pixelweb mostra o emblema e o texto e volta ao marquee do jogo.
+achievement() {
+  local last sys="" rom="" text=${2:-}
+  [[ -n ${1:-} && -n $text ]] || return 0
+  [[ -n ${3:-} ]] && text+=" : $3"
+  last=$(cat "$last_file" 2> /dev/null)
+  if [[ $last == game:*/* ]]; then
+    last=${last#game:}
+    sys=${last%%/*} rom=${last#*/}
+  fi
+  call "achievements/stream/$(urlencode "${sys:-mame}")/$(urlencode "$1")?t=$(urlencode "$text")&currentgame=$(urlencode "$rom")"
+  zedmd show game "$sys" "$rom" "" "$text"
+}
+
+# screensaver start|stop: o protetor de tela do frontend. No Pixelcade, o
+# modo attract dele (a lista se monta em http://<ip>:8080); no ZeDMD, as
+# artes de ~/media. Ao sair volta o que estava selecionado.
+screensaver() {
+  local last
+  last=$(cat "$last_file" 2> /dev/null)
+  case ${1:-} in
+    start)
+      [[ $last == screensaver:* ]] && return 0
+      printf 'screensaver:%s\n' "$last" > "$last_file" 2> /dev/null
+      call "attract?nointerrupt"
+      zedmd attract
+      ;;
+    stop)
+      [[ $last == screensaver:* ]] || return 0
+      last=${last#screensaver:}
+      rm -f "$last_file"
+      call "attract/stop"
+      case $last in
+        system/*) system "${last#system/}" ;;
+        game:*) ;;
+        */*) select_game "${last%%/*}" "${last#*/}" ;;
+        *) zedmd startup ;;
+      esac
+      ;;
+  esac
+  return 0
 }
 
 # select SISTEMA ROM [TITULO]: o jogo selecionado na lista. O mesmo de antes
@@ -373,7 +763,7 @@ select_game() {
   [[ $(cat "$last_file" 2> /dev/null) == "$1/$2" ]] && return 0
   printf '%s/%s\n' "$1" "$2" > "$last_file" 2> /dev/null
   call "arcade/stream/$(urlencode "$1")/$(urlencode "$2")?event=FEScroll"
-  zedmd_show select "$1" "$2" "${3:-}"
+  zedmd show select "$1" "$2" "${3:-}"
 }
 
 # system SISTEMA [TITULO]
@@ -381,37 +771,49 @@ system() {
   [[ -n $1 ]] || return 0
   printf 'system/%s\n' "$1" > "$last_file" 2> /dev/null
   call "console/stream/$(urlencode "$1")"
-  zedmd_show system "$1" "" "${2:-}"
+  zedmd show system "$1" "" "${2:-}"
 }
 
 # launch PROGRAMA [ARGS...]: a linha de comando que o fliperos-kms-run ou o
 # fliperos-x11-run recebeu. O jogo e o ultimo argumento: um arquivo de
 # ~/roms, ou o nome do set no GroovyMAME e no Model 2 (o [name] dos
-# frontends). Sem jogo (um frontend, o menu de um emulador), nada.
+# frontends). Sem jogo (um frontend, o menu de um emulador), nada. O Visual
+# Pinball desenha o DMD ele mesmo: o painel fica com ele ate fechar.
 launch() {
-  local prog last
-  (($# >= 2)) || return 0
+  local prog last sys rom
+  (($# >= 1)) || return 0
   prog=${1##*/}
+  if [[ ${prog,,} == vpinball* ]]; then
+    dmd_hold "${PIXELCADE_GAME_PID:-$PPID}"
+    watch "" "" "$prog"
+    return 0
+  fi
+  (($# >= 2)) || return 0
   last=${*: -1}
   case $prog in
     groovymame | fliperos-model2)
       [[ $last == -* ]] && return 0
-      game mame "$(rom_of "$last")"
+      sys=mame
       ;;
     *)
       [[ -f $last ]] || return 0
-      game "$(system_of "$last")" "$(rom_of "$last")"
+      sys=$(system_of "$last")
       ;;
   esac
+  rom=$(rom_of "$last")
+  game "$sys" "$rom" && watch "$sys" "$rom" "$prog"
 }
 
 # esde EVENTO ARGS...: game-select "rom" "nome" "sistema" "nome do sistema";
-# system-select "sistema" "nome do sistema" "pasta". Com rolagem rapida o
-# game-select chega vazio. No Linux o ES-DE escapa os espacos do caminho.
+# system-select "sistema" "nome do sistema" "pasta"; screensaver-start e
+# screensaver-end. Com rolagem rapida o game-select chega vazio. No Linux o
+# ES-DE escapa os espacos do caminho.
 esde() {
   local event=$1 path
   shift
   case $event in
+    screensaver-start) screensaver start ;;
+    screensaver-end) screensaver stop ;;
     game-select)
       path=${1:-}
       path=${path//\\/}
@@ -437,6 +839,9 @@ attract() {
   select_game "$sys" "${2:-}"
 }
 
+# Lido com "source" (os testes), so as funcoes.
+[[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
+
 cmd=${1:-}
 shift
 case $cmd in
@@ -450,8 +855,39 @@ case $cmd in
     installed || { echo "fliperos-pixelcade: pixelweb is not installed (Setup > Extras)" >&2; exit 1; }
     frontends
     cd "$dir" || exit 1
-    exec ./pixelweb -p "$dir" -startup
+    # Ao ligar, o logo do FliperOS no lugar do do Pixelcade.
+    startup=()
+    if [[ -f $logo ]] && mkdir -p "$dir/system" && cp -f "$logo" "$dir/system/fliperos.png"; then
+      startup=(-image system/fliperos.png -text FliperOS)
+    fi
+    serve ./pixelweb -p "$dir" -startup "${startup[@]}"
+    exit $?
     ;;
+  lcd-usb) lcd_usb "$@" ;;
+  lcd-ini)
+    lcd_ini
+    exit $?
+    ;;
+  fetch-doflinx) fetch_doflinx "$@" ;;
+  doflinx-installed)
+    doflinx_installed
+    exit $?
+    ;;
+  doflinx-daemon)
+    doflinx_installed || { echo "fliperos-pixelcade: DOFLinx is not installed (Setup > Extras)" >&2; exit 1; }
+    # O DOFLinx fala com o pixelweb: espera a API dele (ate 60 s).
+    for _ in {1..30}; do
+      curl -s -m 2 -o /dev/null "$api/info" 2> /dev/null && break
+      sleep 2
+    done
+    cd "$doflinx_dir" || exit 1
+    exec ./DOFLinx
+    ;;
+  cheevos)
+    cheevos
+    exit $?
+    ;;
+  bye) bye "$@" ;;
   fetch-zedmd) fetch_zedmd "$@" ;;
   zedmd-installed)
     zedmd_installed && [[ -x $dmd ]] && python3 -c 'import PIL' 2> /dev/null
@@ -462,17 +898,21 @@ case $cmd in
     frontends
     zedmd_config
     cd "$zedmd_dir" || exit 1
-    exec ./dmdserver -c "$zedmd_dir/dmdserver.ini" -l
+    # O logo do FliperOS assim que o dmdserver abrir a porta do painel.
+    zedmd startup
+    serve ./dmdserver -c "$zedmd_dir/dmdserver.ini" -l
+    exit $?
     ;;
-  launch | esde | attract | game | select | system)
+  launch | esde | attract | game | select | system | end | screensaver | achievement)
     installed || zedmd_installed || exit 0
     case $cmd in
       select) select_game "$@" ;;
+      end) game_end "$@" ;;
       *) "$cmd" "$@" ;;
     esac
     ;;
   *)
-    sed -n '22,33p' "$0" | sed 's/^# *//' >&2
+    sed -n '/^#   fliperos-pixelcade /p' "$0" | sed 's/^# *//' >&2
     exit 1
     ;;
 esac

@@ -1,0 +1,22 @@
+[Unit]
+Description=FliperOS DOFLinx (Pixelcade in-game effects)
+# So depois do Setup > Extras > DOFLinx (config/fliperos-pixelcade
+# fetch-doflinx). Ele fala com o pixelweb: sem o marquee, tres tentativas e
+# para, como o servico do Pixelcade.
+ConditionPathExists=/home/fliperos/doflinx/DOFLinx
+After=fliperos-pixelcade.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+User=fliperos
+WorkingDirectory=/home/fliperos/doflinx
+# O DOFLinx e .NET; a imagem nao tem o ICU.
+Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+ExecStart=/opt/fliperos/bin/fliperos-pixelcade doflinx-daemon
+ExecStop=-/home/fliperos/doflinx/DOFLinxMsg QUIT
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
