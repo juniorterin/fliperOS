@@ -103,10 +103,13 @@ install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model
 # SM2-Emu: so o lancador. O fonte e o binario nascem em ~/.local/src na
 # primeira abertura (config/fliperos-sm2emu), fora da imagem.
 install -Dm755 "$src/config/fliperos-sm2emu" "$root/usr/local/bin/fliperos-sm2emu"
-# Os patches que ele aplica no fonte antes de compilar.
+# Os patches que ele aplica no fonte antes de compilar. O que o upstream
+# aceitou sai de config/sm2-emu-patches, e a pasta pode estar vazia.
 rm -rf "$root/usr/local/share/fliperos/sm2-emu-patches"
 install -d "$root/usr/local/share/fliperos/sm2-emu-patches"
-install -m644 "$src"/config/sm2-emu-patches/*.patch "$root/usr/local/share/fliperos/sm2-emu-patches/"
+for patch in "$src"/config/sm2-emu-patches/*.patch; do
+  [[ ! -f $patch ]] || install -m644 "$patch" "$root/usr/local/share/fliperos/sm2-emu-patches/"
+done
 # Fightcade 2 (Setup > Frontend): o que o baixa do site dele e o abre, e o
 # openbox dele (Alt+Tab entre a sala de jogos e o emulador). O programa em si
 # nao vem na imagem (codigo fechado).

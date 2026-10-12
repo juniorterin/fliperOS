@@ -4683,21 +4683,23 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertIn('--nvram', args)
             self.assertFalse(Path(args[args.index('--nvram') + 1]).exists())
 
-    def test_sm2emu_applies_speed_patches_and_rebuilds_when_they_change(self):
+    def test_sm2emu_applies_patches_and_updates_when_they_change(self):
         rootfs = ROOTFS
-        self.assertIn('config/sm2-emu-patches/*.patch', rootfs)
-        self.assertTrue(sorted((ROOT / 'config/sm2-emu-patches').glob('*.patch')))
+        # A pasta dos patches pode estar vazia (o upstream aceitou todos).
+        self.assertIn('for patch in "$src"/config/sm2-emu-patches/*.patch', rootfs)
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            src, roms, bin_dir, patches = tmp / 'src', tmp / 'roms', tmp / 'bin', tmp / 'patches'
-            for d in (roms, bin_dir, patches, src / 'build' / 'bin'):
+            up, src, roms, bin_dir, patches = (tmp / n for n in ('up', 'src', 'roms', 'bin', 'patches'))
+            for d in (up, roms, bin_dir, patches):
                 d.mkdir(parents=True)
             (roms / 'vf2.zip').write_text('x')
-            git = ['git', '-C', str(src), '-c', 'user.name=t', '-c', 'user.email=t@t']
-            (src / 'a.txt').write_text('one\n')
-            subprocess.run(['git', 'init', '-q', str(src)], check=True)
+            git = ['git', '-C', str(up), '-c', 'user.name=t', '-c', 'user.email=t@t']
+            (up / 'a.txt').write_text('one\n')
+            subprocess.run(['git', 'init', '-q', str(up)], check=True)
             subprocess.run(git + ['add', 'a.txt'], check=True)
             subprocess.run(git + ['commit', '-qm', 'x'], check=True)
+            subprocess.run(['git', 'clone', '-q', str(up), str(src)], check=True)
+            (src / 'build' / 'bin').mkdir(parents=True)
             (src / 'build' / 'bin' / 'sm2-emu').write_text('#!/bin/sh\n')
             (src / 'build' / 'bin' / 'sm2-emu').chmod(0o755)
             (patches / '0001-ok.patch').write_text(
@@ -4707,7 +4709,9 @@ class EmulatorModeTests(unittest.TestCase):
             (bin_dir / 'cmake').write_text('#!/bin/sh\necho "$@" >> "$HOME/cmake.log"\n')
             (bin_dir / 'gum').write_text('#!/bin/sh\n[ "$1" = confirm ] && exit 0\n'
                                          'tee "$GUM_IN" | head -1 | cut -f2\n')
-            for f in ('cmake', 'gum'):
+            # O que falta do compilador seria instalado com sudo.
+            (bin_dir / 'sudo').write_text('#!/bin/sh\nexit 0\n')
+            for f in ('cmake', 'gum', 'sudo'):
                 (bin_dir / f).chmod(0o755)
             env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']),
                        FLIPEROS_SM2_SRC=str(src), FLIPEROS_MODEL2_DIR=str(roms),
@@ -4715,7 +4719,7 @@ class EmulatorModeTests(unittest.TestCase):
             run = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-sm2emu'), '--pick', str(tmp / 'out')],
                                          env=env, check=True, capture_output=True, text=True, timeout=30,
                                          stdin=subprocess.DEVNULL)
-            # Binario sem a marca dos patches: recompila sem a rede, com o que
+            # Binario sem a marca dos patches: atualiza, recompila com o que
             # se aplica, e pula o patch que esta versao ja nao aceita.
             out = run().stdout
             self.assertEqual((src / 'a.txt').read_text(), 'two\n')
@@ -4731,6 +4735,21 @@ class EmulatorModeTests(unittest.TestCase):
                 'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+three\n')
             run()
             self.assertEqual((src / 'a.txt').read_text(), 'three\n')
+            # O upstream aceitou o patch e ele saiu do FliperOS: o fonte vem
+            # do pull, senao ficaria sem a correcao.
+            (up / 'a.txt').write_text('upstream\n')
+            subprocess.run(git + ['commit', '-qam', 'y'], check=True)
+            for patch in patches.glob('*.patch'):
+                patch.unlink()
+            log = (tmp / 'cmake.log').read_text()
+            out = run().stdout
+            self.assertEqual((src / 'a.txt').read_text(), 'upstream\n')
+            self.assertNotIn('Skipping', out)
+            self.assertGreater(len((tmp / 'cmake.log').read_text()), len(log))
+            # Sem patches e ja compilado assim: abre a lista direto.
+            log = (tmp / 'cmake.log').read_text()
+            run()
+            self.assertEqual((tmp / 'cmake.log').read_text(), log)
 
     def test_pcsx2_ini_is_adjusted_after_first_run(self):
         with tempfile.TemporaryDirectory() as tmp:

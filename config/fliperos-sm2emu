@@ -12,7 +12,9 @@ bin=$src/build/bin/sm2-emu
 roms=${FLIPEROS_MODEL2_DIR:-$HOME/roms/model2}
 games_xml=$src/build/bin/games.xml
 repo=${FLIPEROS_SM2_REPO:-https://github.com/dmanlfc/sm2-emu.git}
-# Patches do FliperOS (velocidade, menu em 15 kHz), aplicados por cima do upstream.
+# Patches do FliperOS, aplicados por cima do upstream. O que o upstream
+# aceita sai daqui (a velocidade e o menu em 15 kHz ja estao la), e a pasta
+# pode estar vazia.
 patches=${FLIPEROS_SM2_PATCHES:-/usr/local/share/fliperos/sm2-emu-patches}
 stamp=$src/build/fliperos-patches
 
@@ -38,13 +40,17 @@ pause() {
 }
 
 # deps_missing: o que o build pede e a imagem pode nao ter (o glslc, o
-# ninja, os cabecalhos do X e do ALSA para o SDL3 vendido).
+# ninja, os cabecalhos do X e do ALSA para o SDL3 vendido, e os do HarfBuzz
+# e do fontconfig, do menu traduzido: sem o HarfBuzz do sistema o build
+# compila o vendido, bem mais demorado).
 deps_missing() {
-  local tool
+  local tool header
   for tool in git cmake ninja g++ glslc pkg-config; do
     command -v "$tool" > /dev/null || return 0
   done
-  [[ -f /usr/include/X11/Xlib.h && -f /usr/include/alsa/asoundlib.h ]] || return 0
+  for header in X11/Xlib.h alsa/asoundlib.h harfbuzz/hb.h fontconfig/fontconfig.h; do
+    [[ -f /usr/include/$header ]] || return 0
+  done
   return 1
 }
 
@@ -59,6 +65,7 @@ apt-get update -qq
 apt-get install -y --no-install-recommends \
   cmake ninja-build build-essential glslc git ca-certificates pkg-config \
   libgl-dev libegl-dev libpugixml-dev libcurl4-openssl-dev \
+  libharfbuzz-dev libfontconfig-dev \
   libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
   libxi-dev libxfixes-dev libxss-dev libxrender-dev libxtst-dev \
   libasound2-dev libpulse-dev libudev-dev \
@@ -92,8 +99,7 @@ apply_patches() {
 }
 
 # build_tree [update]: clona (raso, com os submodulos) ou, com "update",
-# atualiza; sem ele, so reaplica os patches no fonte que ja esta aqui.
-# Compila em Release com LTO. Cada passo que falha volta na hora: chamado
+# atualiza e reaplica os patches. Compila em Release com LTO. Cada passo que falha volta na hora: chamado
 # num "||", o set -e de dentro nao valeria.
 build_tree() {
   mkdir -p "${src%/*}" || return 1
@@ -174,10 +180,19 @@ if [[ ! -x $bin ]]; then
     exit 1
   fi
 elif [[ $(cat "$stamp" 2> /dev/null) != "$(patches_id)" ]]; then
-  # Um update do FliperOS trouxe outros patches: recompila sem a rede.
-  if gum confirm "Apply the new Model 2 fixes? Rebuilding takes a few minutes."; then
-    printf 'Rebuilding.\n'
-    if ! build_tree; then
+  # Um update do FliperOS trouxe outros patches. O que saiu deles foi para
+  # o upstream: o fonte daqui, sem o pull, ficaria sem aquelas correcoes.
+  if gum confirm "Update Model 2 with the new fixes? Needs the network and takes a few minutes."; then
+    if deps_missing; then
+      printf 'Installing build tools. sudo may ask for the password.\n'
+      if ! install_deps; then
+        printf 'Could not install the build tools.\n'
+        pause
+        exit 1
+      fi
+    fi
+    printf 'Updating and building.\n'
+    if ! build_tree update; then
       printf 'Build failed.\n'
       pause
       exit 1
