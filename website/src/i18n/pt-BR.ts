@@ -71,7 +71,7 @@ const ptBR: Messages = {
   },
   badges: {
     label: 'Destaques técnicos',
-    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'Multimonitor', 'Pixelcade', 'GunCon 2', 'Open Source'],
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'Multimonitor', 'Pixelcade', 'ZeDMD', 'GunCon 2', 'Open Source'],
   },
   features: {
     kicker: 'Recursos',
@@ -265,6 +265,51 @@ const ptBR: Messages = {
     cta: 'Leia o guia do Pixelcade',
     shop: 'pixelcade.org',
   },
+  openHardware: {
+    kicker: 'Hardware aberto',
+    title: 'Monte você mesmo, com projetos abertos.',
+    intro:
+      'Marquee, painel de controle, pistola e luzes dos botões não precisam ser um produto comprado. O FliperOS também funciona com projetos open source que você monta com um Arduino, um Raspberry Pi Pico ou um ESP32. Esse suporte é novo e ainda está em teste com hardware real.',
+    items: [
+      {
+        id: 'display',
+        title: 'Display de LED',
+        boards: 'ESP32 ou Pico + painéis de LED',
+        text: 'Um ZeDMD mostra o jogo selecionado, o jogo aberto, os recordes e as conquistas, como o marquee da Pixelcade, com a arte da sua própria coleção. O Setup > Extras instala o suporte.',
+        projects: ['ZeDMD', 'libdmdutil'],
+      },
+      {
+        id: 'panel',
+        title: 'Painel de controle',
+        boards: 'Raspberry Pi Pico, Arduino Pro Micro',
+        text: 'Firmwares abertos transformam uma placa barata num encoder arcade de baixa latência, ou um encoder rotativo num spinner. Eles aparecem como joystick ou mouse USB comum: mapeie os botões uma vez no Setup.',
+        projects: ['GP2040-CE', 'DaemonBite Arcade Encoder', 'Arduino Joystick Library', 'Arcade Spinner'],
+      },
+      {
+        id: 'gun',
+        title: 'Pistola',
+        boards: 'Raspberry Pi Pico + câmera de infravermelho',
+        text: 'Uma pistola OpenFIRE mira com uma câmera de infravermelho e LEDs em volta da tela, então funciona em qualquer monitor, com recuo. A GunCon 2, que lê o próprio tubo, já vem com driver e calibração.',
+        projects: ['OpenFIRE'],
+      },
+      {
+        id: 'outputs',
+        title: 'Recuo, lâmpadas e motores',
+        boards: 'Placas seriais e USB HID',
+        text: 'O GroovyMAME, o Flycast e o Supermodel publicam o que cada jogo aciona fora da tela. O Hook Of The Reaper, sucessor do MAMEHooker, leva isso às pistolas e às suas próprias placas. É um programa de Windows, rodado pelo Wine.',
+        projects: ['Hook Of The Reaper'],
+      },
+      {
+        id: 'lights',
+        title: 'Luzes dos botões',
+        boards: 'Ultimarc, LED-Wiz, Howler, Adalight',
+        text: 'O LEDSpicer acende os botões que cada jogo usa e faz animações de luz no gabinete. O FliperOS o instala e avisa qual jogo abriu e quando fechou.',
+        projects: ['LEDSpicer'],
+      },
+    ],
+    disclaimer: 'Cada projeto é dos seus próprios autores. O FliperOS só os instala ou conversa com eles; os links levam à página de cada projeto.',
+    cta: 'Leia o guia de hardware DIY',
+  },
   setup: {
     kicker: 'FliperOS Setup',
     title: 'Configure tudo no próprio gabinete.',
@@ -277,7 +322,7 @@ const ptBR: Messages = {
       { id: 'audio', label: 'Audio Setup', text: 'Placa, volume, latência de áudio do MAME, sons do menu' },
       { id: 'network', label: 'Network Setup', text: 'Wi-Fi por lista, ou rede oculta' },
       { id: 'frontend', label: 'Frontend', text: 'Lançador padrão, instalado sob demanda' },
-      { id: 'extras', label: 'Extras', text: 'Wine, Steam, Heroic e Pixelcade pela rede' },
+      { id: 'extras', label: 'Extras', text: 'Wine, Steam, Heroic, Pixelcade, ZeDMD e outros pela rede' },
       { id: 'latency', label: 'Latency', text: 'Standard ou Low latency, com checagem do hardware' },
       { id: 'scraper', label: 'Scraper', text: 'Capas, screenshots, vídeos e descrições' },
       { id: 'roms', label: 'MAME ROM/CHD Cleaner', text: 'Filtra um romset; baixa jogos gratuitos' },

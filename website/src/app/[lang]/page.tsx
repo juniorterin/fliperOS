@@ -9,6 +9,7 @@ import { Features } from '@/sections/Features';
 import { Footer } from '@/sections/Footer';
 import { Hero } from '@/sections/Hero';
 import { MultiMonitor } from '@/sections/MultiMonitor';
+import { OpenHardware } from '@/sections/OpenHardware';
 import { OpenSource } from '@/sections/OpenSource';
 import { Pixelcade } from '@/sections/Pixelcade';
 import { Screenshots } from '@/sections/Screenshots';
@@ -32,6 +33,7 @@ export default async function Home() {
         <Crt />
         <MultiMonitor />
         <Pixelcade />
+        <OpenHardware />
         <Setup />
         <OpenSource stats={stats} />
         <Support />
