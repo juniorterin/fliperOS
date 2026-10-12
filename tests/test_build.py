@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import socket
 import struct
 import subprocess
@@ -3271,6 +3272,51 @@ class EscQuitTests(unittest.TestCase):
                                  capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
             self.assertIn("'nada-disso' is not installed", run.stderr)
             self.assertFalse((tmp / 'kms').exists())
+
+    def test_frontend_closes_with_the_session(self):
+        # O Ctrl+C do console (ou o terminal fechando) derruba a sessao; o
+        # frontend em segundo plano, que ignora o SIGINT e ate o SIGTERM, nao
+        # pode sobrar sem tela, com a placa de som aberta.
+        for sig in (signal.SIGINT, signal.SIGHUP, signal.SIGTERM):
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp = Path(tmp)
+                (tmp / 'bin').mkdir()
+                for name, body in (('fliperos-kms-run', 'exec "$@"\n'),
+                                   ('fliperos-escquit', 'echo $$ > "$OUT/esc.pid"\nexec sleep 300\n'),
+                                   ('myfe', 'trap "" TERM INT HUP\necho $$ > "$OUT/fe.pid"\n'
+                                            'while true; do sleep 0.1; done\n')):
+                    (tmp / 'bin' / name).write_text('#!/bin/bash\n' + body)
+                    (tmp / 'bin' / name).chmod(0o755)
+                (tmp / 'sessions.conf').write_text('setup|none|||FliperOS Setup menu\n')
+                (tmp / 'custom.conf').write_text('custom-1|kms|exec myfe|custom|My FE\n')
+                env = dict(os.environ, FLIPEROS_SESSIONS=str(tmp / 'sessions.conf'), OUT=str(tmp),
+                           FLIPEROS_CUSTOM_SESSIONS=str(tmp / 'custom.conf'), FLIPEROS_BIN=str(tmp / 'bin'),
+                           PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']))
+                session = subprocess.Popen(['bash', str(ROOT / 'config/fliperos-session'), 'custom-1'], env=env,
+                                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL)
+                try:
+                    for _ in range(100):
+                        if (tmp / 'fe.pid').exists() and (tmp / 'esc.pid').exists():
+                            break
+                        time.sleep(0.1)
+                    time.sleep(0.3)
+                    pids = [int((tmp / f).read_text()) for f in ('fe.pid', 'esc.pid')]
+                    session.send_signal(sig)
+                    session.wait(timeout=15)
+                    time.sleep(0.3)
+                    for pid in pids:
+                        stat = Path('/proc/%d/stat' % pid)
+                        self.assertFalse(stat.exists() and stat.read_text().rsplit(')', 1)[1].split()[0] != 'Z',
+                                         '%s: process %d survived the session' % (sig.name, pid))
+                finally:
+                    session.kill()
+                    for f in ('fe.pid', 'esc.pid'):
+                        if (tmp / f).exists():
+                            try:
+                                os.kill(int((tmp / f).read_text()), signal.SIGKILL)
+                            except OSError:
+                                pass
 
 
 class PanningTests(unittest.TestCase):

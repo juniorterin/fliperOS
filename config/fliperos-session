@@ -68,6 +68,30 @@ x_failed() {
   read -r -t 600 _ || true
 }
 
+# O frontend em segundo plano fecha junto com este script, saia ele como
+# sair. Em segundo plano o bash o deixa ignorando o SIGINT: um Ctrl+C no
+# console (o frontend em KMS nao tira o teclado do terminal) fechava so este
+# script e o fliperos-tty1, e o frontend seguia vivo e sem tela, com a placa
+# de som aberta (o GroovyMAME, que a abre sozinho, ficava mudo), a CPU em
+# 100% e o log crescendo. Quem nao sai com o SIGTERM leva o SIGKILL.
+frontend_pid=""
+esc_pid=""
+stop_frontend() {
+  local pid=$frontend_pid i
+  frontend_pid=""
+  [[ -n $esc_pid ]] && kill "$esc_pid" 2> /dev/null
+  [[ -n $pid ]] || return 0
+  kill "$pid" 2> /dev/null || return 0
+  for ((i = 0; i < 30; i++)); do
+    kill -0 "$pid" 2> /dev/null || return 0
+    sleep 0.1
+  done
+  kill -KILL "$pid" 2> /dev/null
+}
+trap stop_frontend EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+
 # CPU no governador "performance" enquanto o launcher roda, e de volta ao
 # anterior quando ele fecha (o cpu_governor.sh do galauncher). No modo de
 # baixa latencia a CPU ja fica em performance desde o boot.
@@ -85,9 +109,12 @@ case $backend in
       attractplus | emulationstation | retrofe | pegasus | custom-*)
         "$BIN/fliperos-kms-run" "${program[@]}" <&0 &
         pid=$!
+        frontend_pid=$pid
         "$BIN/fliperos-escquit" "$pid" < /dev/null > /dev/null 2>&1 &
+        esc_pid=$!
         wait "$pid"
         rc=$?
+        frontend_pid=""
         # SIGTERM do Esc: fechou como pedido.
         ((rc == 143)) && rc=0
         ;;
