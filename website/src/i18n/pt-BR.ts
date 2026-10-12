@@ -239,6 +239,10 @@ const ptBR: Messages = {
       { id: 'browse', title: 'Acompanha o menu', text: 'No ES-DE e no Attract-Mode Plus o marquee muda conforme você passa pelos sistemas e jogos.' },
       { id: 'launch', title: 'Em todo lançador', text: 'GroovyMAME, RetroArch, Flycast, Supermodel, Dolphin e os outros emuladores atualizam o marquee quando o jogo abre, seja qual for o frontend que o abriu.' },
       { id: 'usb', title: 'Ligou, funcionou', text: 'Ligue o marquee no USB e o serviço sobe sozinho. Sem marquee conectado, ele desiste depois de algumas tentativas e não atrapalha.' },
+      { id: 'scores', title: 'Recordes ao abrir', text: 'Nos arcades, os três primeiros recordes do jogo rolam no marquee quando ele abre. Nos outros jogos, o nome dele. Depois fica o marquee do jogo.' },
+      { id: 'attract', title: 'Protetor de tela', text: 'Quando o protetor de tela do ES-DE ou do Attract-Mode Plus começa, o marquee entra no modo attract da Pixelcade. Ao sair, volta o jogo que estava selecionado.' },
+      { id: 'achievements', title: 'Conquistas', text: 'Com o RetroAchievements ligado no RetroArch, cada conquista desbloqueada aparece no marquee na hora.' },
+      { id: 'effects', title: 'Efeitos durante o jogo', text: 'O extra DOFLinx mostra placar e efeitos no marquee enquanto você joga os arcades do FBNeo.' },
     ],
     sizesLabel: 'Tamanhos de painel',
     panels: [

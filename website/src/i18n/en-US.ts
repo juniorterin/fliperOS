@@ -235,6 +235,10 @@ const enUS = {
       { id: 'browse', title: 'Follows the menu', text: 'In ES-DE and Attract-Mode Plus the marquee changes as you move through systems and games.' },
       { id: 'launch', title: 'Every launcher', text: 'GroovyMAME, RetroArch, Flycast, Supermodel, Dolphin and the other emulators update the marquee when the game starts, whatever frontend opened it.' },
       { id: 'usb', title: 'Plug and play', text: 'Plug the marquee into USB and the service starts by itself. With no marquee connected it gives up after a few tries and stays out of the way.' },
+      { id: 'scores', title: 'High scores at launch', text: 'For arcade games, the top three high scores scroll across the marquee when the game starts. For other games, its name. Then the game’s marquee stays.' },
+      { id: 'attract', title: 'Screensaver', text: 'When the ES-DE or Attract-Mode Plus screensaver starts, the marquee goes into Pixelcade’s attract mode. When it ends, the selected game comes back.' },
+      { id: 'achievements', title: 'Achievements', text: 'With RetroAchievements turned on in RetroArch, each achievement you unlock shows on the marquee right away.' },
+      { id: 'effects', title: 'In-game effects', text: 'The DOFLinx extra shows the score and effects on the marquee while you play FBNeo arcade games.' },
     ],
     sizesLabel: 'Panel sizes',
     panels: [

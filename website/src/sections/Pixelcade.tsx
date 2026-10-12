@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpRight, Download, Gamepad2, ListVideo, Usb, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, Download, Gamepad2, ListVideo, Medal, MoonStar, Sparkles, Trophy, Usb, type LucideIcon } from 'lucide-react';
 import { LedMatrix } from '@/components/LedMatrix';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
@@ -12,6 +12,10 @@ const POINT_STYLE: Record<string, { icon: LucideIcon; color: string }> = {
   browse: { icon: ListVideo, color: 'text-cyan border-cyan/40 bg-cyan/10' },
   launch: { icon: Gamepad2, color: 'text-pink border-pink/40 bg-pink/10' },
   usb: { icon: Usb, color: 'text-green border-green/40 bg-green/10' },
+  scores: { icon: Trophy, color: 'text-yellow border-yellow/40 bg-yellow/10' },
+  attract: { icon: MoonStar, color: 'text-purple border-purple/40 bg-purple/10' },
+  achievements: { icon: Medal, color: 'text-orange border-orange/40 bg-orange/10' },
+  effects: { icon: Sparkles, color: 'text-cyan border-cyan/40 bg-cyan/10' },
 };
 
 const PIXELCADE_URL = 'https://pixelcade.org';
