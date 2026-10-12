@@ -14,6 +14,7 @@ Using it
 - [Desktop and theme](Desktop.md)
 - [Latency](Latency.md)
 - [Multiple monitors](Multiple-Monitors.md)
+- [DIY hardware](DIY-hardware.md)
 
 Hacking on it
 

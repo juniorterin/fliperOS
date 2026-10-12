@@ -278,7 +278,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_build.py
 </code></pre>
 <h2 id="documentation">Documentation</h2>
-<p><strong>Using it:</strong> <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Adding-games">Adding games</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a> · <a href="#Multiple-Monitors">Multiple monitors</a></p>
+<p><strong>Using it:</strong> <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Adding-games">Adding games</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a> · <a href="#Multiple-Monitors">Multiple monitors</a> · <a href="#DIY-hardware">DIY hardware</a></p>
 <p><strong>Hacking on it:</strong> <a href="#Kernel-15-kHz">15 kHz kernel</a> · <a href="#Build-and-tests">Build and tests</a> · <a href="#Architecture">Architecture</a> · <a href="#Sources">Sources</a></p>
 <p>The pages live in <a href="docs/wiki"><code>docs/wiki</code></a> and go to the wiki with <code>bash tools/wiki-publish.sh</code>. <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> is all of it in one file (<code>tools/render-docs.py</code>).</p>
 <h1 id="Install">Install</h1>
@@ -1201,6 +1201,130 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <li><strong>Logs</strong>: <code>/opt/fliperos/logs/groovymame.log</code> and <code>/opt/fliperos/logs/flycast.log</code> (the <code>fliperos-multiscreen</code> lines show the layout used).</li>
 </ul>
 <p>See also <a href="#Emulators">Emulators</a> and <a href="#Installed-system">Installed system</a>.</p>
+<h1 id="DIY-hardware">DIY hardware</h1>
+<p>Open-source projects you can build yourself, with an Arduino, a Raspberry Pi Pico or an ESP32, and use on a FliperOS cabinet. Most of them plug into USB and show up as a standard joystick, mouse or keyboard, so FliperOS needs no driver for them. This page says, for each one, what FliperOS does with it and whether it has been tried.</p>
+<p>Only two of these have been used with FliperOS so far: the V-USB MamePanel, which is the control panel of the test cabinet, and the ZeDMD support, which is written but has not been tried on a real display. The others are listed because of how they present themselves to the computer, not because they were tested.</p>
+<h2 id="control-panel-joysticks-and-buttons">Control panel (joysticks and buttons)</h2>
+<p>After plugging the panel in, map each player's buttons once in <strong>Setup &gt; Joysticks &gt; Button mapping</strong>; the mapping goes to every emulator (<a href="#Controls">Controls</a>).</p>
+<table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Board</th>
+<th>What the computer sees</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/OpenStickCommunity/GP2040-CE">GP2040-CE</a> (<a href="https://gp2040-ce.info">documentation</a>)</td>
+<td>Raspberry Pi Pico and other RP2040 boards</td>
+<td>A gamepad, in the mode you choose (XInput, DInput, keyboard and others); one board per player. MIT license</td>
+</tr>
+<tr>
+<td><a href="https://github.com/MickGyver/DaemonBite-Arcade-Encoder">DaemonBite Arcade Encoder</a></td>
+<td>Arduino Pro Micro (ATmega32U4)</td>
+<td>A USB joystick with up to 12 buttons, made for low latency. GPL-3.0</td>
+</tr>
+<tr>
+<td><a href="https://github.com/MHeironimus/ArduinoJoystickLibrary">Arduino Joystick Library</a></td>
+<td>Arduino Leonardo, Micro and other ATmega32U4 boards</td>
+<td>A joystick or gamepad you describe in your own sketch (32 buttons by default). LGPL-3.0</td>
+</tr>
+<tr>
+<td><a href="http://vusb.wikidot.com/project:mamepanel">V-USB MamePanel</a></td>
+<td>ATmega8 (18 inputs) or ATmega32 (30 inputs, two joysticks), with the <a href="https://github.com/obdev/v-usb">V-USB</a> software USB driver</td>
+<td>Joysticks with up to 8 buttons each. This is the panel of the FliperOS test cabinet</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Two players on one board</strong>: an encoder that carries both players may arrive as a single joystick. <strong>Setup &gt; Quirks</strong> has the kernel flag that splits it (<code>0x40</code>, one device per player); see <a href="#Controls">Controls</a>.</li>
+<li><strong>Latency</strong>: <strong>Setup &gt; Latency</strong> reads USB at 1000 Hz, which only helps if the board also answers at that rate (<a href="#Latency">Latency</a>).</li>
+</ul>
+<h2 id="spinner-and-trackball">Spinner and trackball</h2>
+<table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Board</th>
+<th>What the computer sees</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/jmtw000/Arcade-Spinner">Arcade Spinner</a></td>
+<td>Arduino Micro or another ATmega32U4 board, with a rotary encoder</td>
+<td>A mouse (the spinner is the X axis) and a joystick (the buttons). GPL-3.0</td>
+</tr>
+</tbody>
+</table>
+<p>GroovyMAME and the MAME cores of RetroArch read a mouse as the spinner or trackball of the game. FliperOS has no screen to set this up: it is done in the emulator's own input menu.</p>
+<h2 id="light-gun">Light gun</h2>
+<p>FliperOS ships the driver and the calibration for the <strong>GunCon 2</strong>, which reads the tube itself (<a href="#Controls">Controls</a>). The projects below work another way: an infrared camera in the gun looks at LEDs placed around the screen, so they don't depend on the kind of monitor.</p>
+<table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Board</th>
+<th>What the computer sees</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/TeamOpenFIRE/OpenFIRE-Firmware">OpenFIRE</a></td>
+<td>Raspberry Pi Pico and other RP2040 or RP2350 boards</td>
+<td>An absolute-position mouse, a keyboard and a gamepad</td>
+</tr>
+<tr>
+<td><a href="https://github.com/samuelballantyne/IR-Light-Gun">SAMCO IR Light Gun</a></td>
+<td>Arduino boards (ATmega32U4, M0, M4)</td>
+<td>The project OpenFIRE came from; its page now points to OpenFIRE. GPL-3.0</td>
+</tr>
+</tbody>
+</table>
+<p>The GunCon 2 calibration of the Setup is for the GunCon 2 only. These guns are calibrated in their own firmware and used as a mouse in the emulator.</p>
+<h2 id="led-display-marquee-dmd">LED display (marquee, DMD)</h2>
+<table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Board</th>
+<th>With FliperOS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/PPUC/ZeDMD">ZeDMD</a></td>
+<td>ESP32 (the ESP32-S3-N16R8 is the recommended one) or Raspberry Pi Pico, driving HUB75 LED panels of 128x32 or 256x64</td>
+<td><strong>Setup &gt; Extras &gt; ZeDMD</strong> installs the support: the display shows the selected game, the game that is open, its high scores and the achievements (<a href="#Frontends">Frontends</a>). GPL-2.0</td>
+</tr>
+<tr>
+<td><a href="https://github.com/vpinball/libdmdutil">libdmdutil</a></td>
+<td>(runs on the PC)</td>
+<td>The library, from the Visual Pinball project, whose <code>dmdserver</code> FliperOS uses to talk to the ZeDMD</td>
+</tr>
+</tbody>
+</table>
+<p>The Pixelcade marquee, which FliperOS also supports, is a commercial product with closed software; it is on the <a href="#Frontends">Frontends</a> page.</p>
+<h2 id="button-and-cabinet-lights">Button and cabinet lights</h2>
+<table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Board</th>
+<th>With FliperOS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/meduzapat/LEDSpicer">LEDSpicer</a></td>
+<td>(runs on the PC, driving LED controller boards)</td>
+<td>A Linux program that lights the buttons each game uses and plays light animations, with MAME integration. GPL-3.0. FliperOS doesn't install or configure it: it is here as the open-source option to start from</td>
+</tr>
+</tbody>
+</table>
+<h2 id="adding-a-project-to-this-page">Adding a project to this page</h2>
+<p>A project fits here if its firmware or software is open source and it works on Linux without a closed driver. If you use one of these on your cabinet, or another one, open an issue in the <a href="https://github.com/juniorterin/fliperOS/issues">repository</a> saying which board, what the Setup showed in <strong>Setup &gt; Quirks &gt; USB devices connected now</strong>, and whether it needed a quirk: that is what turns a line of this page from "should work" into "tested".</p>
 <h1 id="Kernel-15-kHz">15 kHz kernel</h1>
 <p><code>fliperos-kernel.sh</code> downloads kernel.org <strong>6.18.54</strong>, applies <code>patches/kernel-15khz/6.18/</code> (D0023R, 01 to 09) on top of the <code>.config</code> of Ubuntu 24.04's own kernel and builds the <code>.deb</code>s. No module signing and no debug info. Compiling takes hours, so the <code>.deb</code>s stay in a cache keyed by version and patch hash (<code>/output/kernel-cache/&lt;key&gt;/</code>): the next build reuses them.</p>
 <p>Switchres (<code>v2.2.1</code>, the same version as GroovyArcade's package) is compiled with <code>grid</code> and <code>geometry</code>, and at build time generates one EDID per monitor preset plus the two super resolution ones used by the boot's EDID entries (<code>fliperos-rebuild-edids</code>, GroovyArcade's <code>rebuild_edids</code>). The initramfs hook carries all of them into the initramfs.</p>

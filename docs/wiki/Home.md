@@ -20,6 +20,7 @@ The media is **installation-only** and follows the GroovyArcade flow: a boot men
 | [Desktop and theme](Desktop.md) | LXDE, the programs in the menu, changing the resolution, the Dracula theme |
 | [Multiple monitors](Multiple-Monitors.md) | Two or three arcade monitors on one card: the Setup, the multi-screen games in GroovyMAME (Darius, Punch-Out!!) and Flycast (F355 Challenge), how it works |
 | [Latency](Latency.md) | The Standard and Low latency modes, what each tweak does, recommended hardware, how to measure |
+| [DIY hardware](DIY-hardware.md) | Open-source projects to build with an Arduino, a Raspberry Pi Pico or an ESP32: control panel encoders, spinner, light gun, LED display, button lights |
 
 ## Hacking on it
 
