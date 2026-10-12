@@ -56,7 +56,7 @@ Arcade games drive things outside the screen: start lamps, gun recoil, motors, d
 
 The emulators only open port 8000 when one of them is installed, because the port is reachable from the network and accepts a pause command.
 
-None of them has been tried with a real gun or board on a FliperOS cabinet yet. QMamehook was built and run against a simulated game: it connects to the port, looks for the game's `.ini` and closes with the game. Hook Of The Reaper was run under Wine against a simulated game: it connects to the port, loads the game's file and closes with the game. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.
+None of them has been tried with a real gun or board on a FliperOS cabinet yet. QMamehook was built and run against a simulated game: it connects to the port, looks for the game's `.ini` and closes with the game. Hook Of The Reaper was run under Wine against a simulated game: it connects to the port, loads the game's file and closes with the game. On the test cabinet it was installed from the Extras and opened with a Model 2 game (The House of the Dead in SM2-Emu, on a virtual screen): it stayed connected to the game's port for the whole run and closed with it. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.
 
 ### Model 2 game outputs
 
