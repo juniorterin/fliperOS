@@ -57,7 +57,7 @@ const ptBR: Messages = {
     viewOnGithub: 'Ver no GitHub',
   },
   hero: {
-    eyebrow: 'fliperos 0.8.3 · em desenvolvimento',
+    eyebrow: 'fliperos 0.9 · em desenvolvimento',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Feito para CRT.',
     description:

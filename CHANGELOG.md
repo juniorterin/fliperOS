@@ -2,6 +2,44 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.9
+
+Two or three arcade monitors: games made for several screens, such as Darius, Punch-Out!! and F355 Challenge, open each screen on its own tube. Also new is support for LED marquees, the Pixelcade and the open-source ZeDMD, which show the game you select and the game you open. The marquee support has not been tried on a real marquee yet. The ISO comes with updates 12 to 15 already applied; an installed 0.8.x gets those through the updates at boot, and the changes made after update 15 (the marquees, SM2-Emu 0.9.44, the Downloader fix) in a later update.
+
+**System changes:**
+
+- **Two or three CRTs.** A second and a third arcade monitor on the other analog outputs of the video card get the boot mode of the main one. Games with 2 or 3 screens open one screen per monitor, each in its own 15 kHz mode; everything else stays on monitor 1. Monitors on digital outputs (with an active converter) or on a second video card are also offered, as experimental
+- **LED marquee (Pixelcade and ZeDMD).** The marquee shows the game selected in ES-DE or Attract-Mode Plus and the game opened from any frontend or emulator. When a game opens, its top three high scores (arcade games) or its name scroll once; when it closes, the marquee goes back to the selection. The frontend's screensaver puts the marquee in attract mode, RetroAchievements unlocked in RetroArch show on it, and it says "Bye" at shutdown
+- Emulators fill the screen on Intel and NVIDIA cards. On a card without a low dot clock, Flycast came out narrow in the middle of the screen and Supermodel and Hypseus in a corner of it
+- Downloader: changing the filter no longer deletes the BIOS (`neogeo.zip`, `qsound.zip` and the like) that games still in the folders need
+
+**Package changes:**
+
+- GroovyMAME: games with 2 or 3 screens (Darius, The Ninja Warriors, Punch-Out!!) get one window per monitor, also when the game is chosen in GroovyMAME's own list
+- Flycast: the NAOMI multiboard games (F355 Challenge, Airline Pilots, Sega Strike Fighter) on three monitors
+- SM2-Emu 0.9.44. Its project accepted FliperOS's five patches, so they are no longer applied here; Games > Model 2 updates the source before rebuilding
+- RetroArch opens with `--verbose` when RetroAchievements are on and a marquee is installed, which is how an achievement reaches the marquee
+- The Games menu shows the official icons of GroovyMAME, SM2-Emu and Fightcade
+
+**fliperos-setup changes:**
+
+- Video Setup > Multiple Monitors: *Monitor 2* and *Monitor 3* (which output each one uses), *Multi-Screen Games* (one screen per monitor, or everything on monitor 1), *Game Screen Order* and *Identify Monitors* (turns each monitor off for 3 seconds, in order)
+- Extras: **Pixelcade** (downloads Pixelcade's closed-source software and artwork, hi2txt for the high scores and Java from apt), **ZeDMD** (the open-source `dmdserver` from libdmdutil) and **DOFLinx** (effects on the Pixelcade marquee during FBNeo arcade games). None of them is in the image
+- Extras: choosing one that is already installed offers to download it again, which updates it
+- The version shows next to "FliperOS" at the top of the Setup
+
+**Tool changes:**
+
+- New `fliperos-pixelcade` (the marquee events, the installs and the services) and `fliperos-dmd` (draws the 128x32 picture for the ZeDMD)
+- New `fliperos-mame-screens` and `fliperos-multiscreen` (the multi-screen games in GroovyMAME and Flycast)
+- udev rules that start the marquee service when a Pixelcade (LED, or LCD over USB) or a ZeDMD is plugged in
+
+**Documentation:**
+
+- New pages: [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors) and [DIY hardware](https://github.com/juniorterin/fliperOS/wiki/DIY-hardware) (open-source projects to build with an Arduino, a Raspberry Pi Pico or an ESP32)
+- Frontends page: the Pixelcade marquee, the ZeDMD and DOFLinx
+- README: the menus explained item by item, and the LXDE desktop as the main way to copy games
+
 ## 0.8.3
 
 Sega Model 2 on the tube: SM2-Emu replaces the Wine Model 2 Emulator, and the 2B and 2C games run at full speed even on older CPUs, stretched to fill the screen and with VSync. Every disk is also mounted by itself, with an icon on the desktop. The ISO comes with updates 10 and 11 already applied; an installed 0.8, 0.8.1 or 0.8.2 gets the same changes through the updates at boot.
