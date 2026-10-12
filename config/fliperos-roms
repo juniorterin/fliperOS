@@ -66,6 +66,17 @@ done < <(awk -F' = ' '
   $1 == "display_name" { name = $2; gsub(/"/, "", name) }
   $1 == "supported_extensions" { ext = $2; gsub(/"/, "", ext); if (ext != "") { gsub(/\|/, " .", ext); ext = "." ext } }
   END { if (core != "") print core "|" name "|" ext }' "$info"/*_libretro.info 2> /dev/null)
+# O core FBNeo do RetroArch usa os mesmos romsets do FBNeo do Fightcade. Com
+# jogos em ~/roms/fightcade/fbneo e a pasta do core ainda sem nenhum, ela vira
+# um link para la, em vez de pedir uma segunda copia de tudo. Uma pasta com
+# jogos proprios fica como esta.
+fbneo="$roms/retroarch/fbneo"
+if [[ -d $fbneo && ! -L $fbneo ]] &&
+  [[ -n $(find "$roms/fightcade/fbneo" -maxdepth 1 \( -name '*.zip' -o -name '*.7z' \) -print -quit 2> /dev/null) ]] &&
+  [[ -z $(find "$fbneo" -mindepth 1 ! -name _info.txt -print -quit 2> /dev/null) ]]; then
+  rm -f "$fbneo/_info.txt"
+  rmdir "$fbneo" 2> /dev/null && ln -s ../fightcade/fbneo "$fbneo" 2> /dev/null
+fi
 
 # ── ~/bios ──────────────────────────────────────────────────────────
 # A propria ~/bios e o system_directory do RetroArch (config/retroarch.cfg):

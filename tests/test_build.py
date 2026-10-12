@@ -930,6 +930,35 @@ class RomFoldersTests(unittest.TestCase):
             subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             self.assertFalse((tmp / 'nenhum').exists())
 
+    def test_retroarch_fbneo_shares_the_fightcade_roms(self):
+        # O core FBNeo do RetroArch usa os mesmos romsets do FBNeo do
+        # Fightcade: a pasta do core, enquanto vazia, vira um link para la.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            info = tmp / 'info'
+            info.mkdir()
+            (info / 'fbneo_libretro.info').write_text('display_name = "Arcade (FinalBurn Neo)"\n')
+            (info / 'mame2010_libretro.info').write_text('display_name = "Arcade (MAME 2010)"\n')
+            env = dict(os.environ, HOME=str(tmp), FLIPEROS_CORE_INFO=str(info), FIGHTCADE_DIR=str(tmp / 'nenhum'))
+            run = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            core, fightcade = tmp / 'roms/retroarch/fbneo', tmp / 'roms/fightcade/fbneo'
+            run()
+            # Sem jogos no Fightcade, a pasta do core e uma pasta comum.
+            self.assertTrue(core.is_dir() and not core.is_symlink())
+            (fightcade / 'sf2ce.zip').write_text('rom')
+            for _ in range(2):
+                run()
+            self.assertEqual(os.readlink(core), '../fightcade/fbneo')
+            self.assertEqual((core / 'sf2ce.zip').read_text(), 'rom')
+            self.assertFalse((tmp / 'roms/retroarch/mame2010').is_symlink())
+            # Com jogos proprios na pasta do core, ela fica como esta.
+            core.unlink()
+            core.mkdir()
+            (core / 'kof98.zip').write_text('mine')
+            run()
+            self.assertFalse(core.is_symlink())
+            self.assertEqual((core / 'kof98.zip').read_text(), 'mine')
+
     def test_bios_media_and_config_folders(self):
         # Ao lado de ~/roms: ~/bios (com as subpastas dos emuladores), ~/media
         # (um tipo por pasta) e ~/config (links para o que ja existe).
