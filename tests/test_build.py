@@ -5182,6 +5182,59 @@ class PixelcadeTests(unittest.TestCase):
         self.assertIn('"$pixelcade" cheevos', kms)
         self.assertIn('set -- "$1" --verbose "${@:2}"', kms)
 
+    def test_versus_score_from_each_cabinets_side(self):
+        self.install()
+        self.install_zedmd()
+        conf = self.tmp / 'fliperos.conf'
+        self.env['FLIPEROS_CONF'] = str(conf)
+        self.run_('game', 'mame', 'sf2')
+        # Um gabinete so: P1 e P2. O ZeDMD fica com o placar; o Pixelcade so
+        # ganha um texto quando ha vitoria, e o marquee do jogo volta.
+        self.assertEqual(self.run_('versus', '0', '0', '500', '-'), [])
+        self.assertEqual(self.run_('versus', '1', '0', '500', '90'),
+                         ['text?t=P1%201%20x%200%20P2&l=1&event=GameStart',
+                          'arcade/stream/mame/sf2?l=99999&event=GameStart'])
+        # Os pontos mudam, as vitorias nao: nada de novo no Pixelcade.
+        self.assertEqual(self.run_('versus', '1', '0', '900', '90'), [])
+        calls = self.dmd_calls(4)
+        self.assertEqual(calls[1:], ['versus P1 0 0 P2 500 -', 'versus P1 1 0 P2 500 90', 'versus P1 1 0 P2 900 90'])
+        # Dois gabinetes ligados: cada um poe o proprio lado primeiro.
+        conf.write_text('versus=join\n')
+        self.assertEqual(self.run_('versus', '1', '2', '900', '90'),
+                         ['text?t=YOU%202%20x%201%20RIVAL&l=1&event=GameStart',
+                          'arcade/stream/mame/sf2?l=99999&event=GameStart'])
+        conf.write_text('versus=host\n')
+        self.run_('versus', '3', '2', '900', '90')
+        conf.write_text('versus_side=2\n')
+        self.run_('versus', '3', '2', '-', '-')
+        self.assertEqual(self.dmd_calls(7)[4:], ['versus YOU 2 1 RIVAL 90 900', 'versus YOU 3 2 RIVAL 900 90',
+                                                 'versus P2 2 3 P1 - -'])
+
+    def test_a_game_in_the_versus_table_starts_the_score_reader(self):
+        self.install()
+        log = self.tmp / 'versus'
+        tool = self.tmp / 'bin/fliperos-versus'
+        tool.write_text('#!/bin/sh\necho "$*" >> %s\n[ "$1" = has ] && [ "$3" != sf2 ] && exit 1\nexit 0\n' % log)
+        tool.chmod(0o755)
+        game = subprocess.Popen(['/bin/sleep', '30'])
+        self.addCleanup(game.wait)
+        self.addCleanup(game.kill)
+        env = dict(self.env, PIXELCADE_GAME_PID=str(game.pid), FLIPEROS_VERSUS=str(tool))
+        rom = self.roms / 'retroarch/snes9x/sf2.sfc'
+        rom.write_text('')
+        for args in (('groovymame', 'sf2'), ('groovymame', 'digdug'), ('retroarch', '-L', 'x.so', str(rom)),
+                     ('flycast', str(self.roms / 'naomi/sf2.zip'))):
+            (self.tmp / 'run/fliperos-pixelcade.last').unlink(missing_ok=True)
+            if args[0] == 'flycast':
+                Path(args[1]).write_text('')
+            subprocess.run(['bash', str(self.SCRIPT), 'launch', *args], env=env, check=True, timeout=30)
+        deadline = time.time() + 10
+        while time.time() < deadline and len(log.read_text().splitlines() if log.exists() else []) < 5:
+            time.sleep(0.05)
+        self.assertEqual(sorted(log.read_text().splitlines()),
+                         sorted(['has mame sf2', 'run mame sf2 %d' % game.pid, 'has mame digdug',
+                                 'has retroarch sf2', 'run retroarch sf2 %d' % game.pid]))
+
     def test_bye_only_when_the_computer_goes_down(self):
         self.install()
         self.install_zedmd()
@@ -5546,7 +5599,7 @@ class OutputsTests(unittest.TestCase):
 
     def test_emulators_open_the_port_only_with_a_reader(self):
         gm = (ROOT / 'config/fliperos-groovymame').read_text()
-        self.assertIn('"$outputs" installed; then\n  set -- -output network "$@"', gm)
+        self.assertIn('"$outputs_helper" installed; then\n  set -- -output network "$@"', gm)
         x11 = (ROOT / 'config/fliperos-x11-run').read_text()
         self.assertIn('netout=",network:NetworkOutput=yes"', x11)
         self.assertIn('netout=(-outputs=net)', x11)
@@ -5569,6 +5622,218 @@ class OutputsTests(unittest.TestCase):
         for name in ('reaper', 'hotr', 'ledspicer', 'xvfb'):
             self.assertNotIn(name, MKISO.lower())
         self.assertIn('cfglink hotr "$HOME/hotr"', (ROOT / 'config/fliperos-roms').read_text())
+
+
+class VersusTests(unittest.TestCase):
+    """config/fliperos-versus: o placar de uma partida versus, lido da memoria
+    do jogo (o plugin do GroovyMAME, o Network Command Interface do RetroArch),
+    com as vitorias da sessao, para o LED do gabinete."""
+    SCRIPT = ROOT / 'config/fliperos-versus'
+    TABLE = ('# comentario\n'
+             'mame sf2 score1 0xFF8ABC 4 bcd\n'
+             'mame sf2 score2 0xFF8DBC 4 bcd*10   # sem o ultimo digito\n'
+             'mame sf2 rounds1 0xFF8A00 1 bin :maincpu\n'
+             'mame sf2 rounds2 0xFF8D00 1 bin\n'
+             'clone sf2ce sf2\n'
+             'clone sf2hf sf2ce\n'
+             'retroarch sf2 wins1 0x10 2 binle\n'
+             'retroarch sf2 wins2 0x20 2 bin\n'
+             'retroarch sf2 score1 0x30 3 bcdle\n'
+             'mame broken score1 zz 4 bcd\n'
+             'mame broken score2 0x10 4 hex\n'
+             'mame broken lives1 0x10 4 bcd\n')
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.table = self.tmp / 'versus-games.conf'
+        self.table.write_text(self.TABLE)
+        self.events = self.tmp / 'events'
+        panel = self.tmp / 'pixelcade'
+        panel.write_text('#!/bin/sh\necho "$*" >> %s\n' % self.events)
+        panel.chmod(0o755)
+        self.env = dict(os.environ, VERSUS_TABLES='%s:%s' % (self.table, self.tmp / 'mine.conf'),
+                        FLIPEROS_PIXELCADE=str(panel), VERSUS_EVERY='0')
+        old = dict(os.environ)
+        os.environ.update(self.env)
+        try:
+            self.versus = load_script('fliperos_versus', 'config/fliperos-versus')
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+
+    def has(self, source, game):
+        return subprocess.run([sys.executable, str(self.SCRIPT), 'has', source, game], env=self.env).returncode
+
+    def test_table_lines_clones_and_the_users_file(self):
+        v = self.versus
+        tables = v.read_tables(self.env['VERSUS_TABLES'])
+        sf2 = v.lookup('mame', 'sf2', tables)
+        self.assertEqual(sf2['score1'], (0xFF8ABC, 4, 'bcd', 1))
+        self.assertEqual(sf2['score2'], (0xFF8DBC, 4, 'bcd', 10))
+        self.assertEqual(sorted(sf2), ['rounds1', 'rounds2', 'score1', 'score2'])
+        # Um clone usa as linhas do pai, e o RetroArch tem os enderecos dele.
+        self.assertEqual(v.lookup('mame', 'sf2hf', tables), sf2)
+        self.assertEqual(sorted(v.lookup('retroarch', 'sf2ce', tables)), ['score1', 'wins1', 'wins2'])
+        # Linhas erradas (endereco, formato, campo) nao entram.
+        self.assertIsNone(v.lookup('mame', 'broken', tables))
+        self.assertEqual(self.has('mame', 'sf2ce'), 0)
+        self.assertNotEqual(self.has('mame', 'kof98'), 0)
+        self.assertNotEqual(self.has('retroarch', 'broken'), 0)
+        # O arquivo da pessoa (~/config) troca o jogo inteiro e acrescenta outros.
+        (self.tmp / 'mine.conf').write_text('mame sf2 score1 0x100 2 bin\nmame kof98 wins1 0x1 1 bin\n')
+        tables = v.read_tables(self.env['VERSUS_TABLES'])
+        self.assertEqual(v.lookup('mame', 'sf2', tables), {'score1': (0x100, 2, 'bin', 1)})
+        self.assertEqual(self.has('mame', 'kof98'), 0)
+        # A tabela da imagem so tem jogos conferidos; o formato fica explicado nela.
+        shipped = (ROOT / 'config/versus-games.conf').read_text()
+        self.assertIn('SOURCE  GAME  FIELD  ADDRESS  BYTES  FORMAT  [CPU]', shipped)
+        real = v.read_tables(str(ROOT / 'config/versus-games.conf'))[0]
+        for source in real.values():
+            for fields in source.values():
+                for field, (addr, size, fmt, mult) in fields.items():
+                    self.assertIn(field, v.FIELDS)
+
+    def test_values_are_decoded_as_the_game_stores_them(self):
+        d = self.versus.decode
+        self.assertEqual(d(bytes([0x00, 0x12, 0x53, 0x00]), 'bcd'), 125300)
+        self.assertEqual(d(bytes([0x00, 0x53, 0x12]), 'bcdle'), 125300)
+        self.assertEqual(d(bytes([0x12, 0x53]), 'bcd', 100), 125300)
+        self.assertEqual(d(bytes([0x01, 0x02]), 'bin'), 258)
+        self.assertEqual(d(bytes([0x01, 0x02]), 'binle'), 513)
+        # A memoria ainda sem o placar (nao e decimal): nada.
+        self.assertIsNone(d(bytes([0xFF, 0x12]), 'bcd'))
+
+    def test_session_wins_come_from_the_rounds_going_back_to_zero(self):
+        t = self.versus.Tally({'rounds1': 0, 'rounds2': 0, 'score1': 0})
+        self.assertEqual(t.state(), ['0', '0', '-', '-'])
+        for field, value in (('rounds1', 0), ('rounds2', 0), ('score1', 500), ('rounds1', 1), ('rounds2', 1),
+                             ('rounds1', 2)):
+            t.update(field, value)
+        self.assertEqual(t.state(), ['0', '0', '500', '-'])
+        # A partida acabou em 2 a 1: os dois voltam a zero (um de cada vez).
+        t.update('rounds1', 0)
+        self.assertEqual(t.state()[:2], ['0', '0'])
+        t.update('rounds2', 0)
+        self.assertEqual(t.state()[:2], ['1', '0'])
+        for field, value in (('rounds2', 1), ('rounds2', 2), ('rounds2', 0)):
+            t.update(field, value)
+        self.assertEqual(t.state()[:2], ['1', '1'])
+        # Empate (tempo esgotado nos dois) nao conta; o mesmo valor de novo nao e mudanca.
+        for field, value in (('rounds1', 1), ('rounds2', 1), ('rounds1', 0), ('rounds2', 0)):
+            t.update(field, value)
+        self.assertEqual(t.state()[:2], ['1', '1'])
+        self.assertFalse(t.update('score1', 500))
+        # O jogo que conta as vitorias ele mesmo; e o que so tem pontos.
+        own = self.versus.Tally({'wins1': 0, 'wins2': 0, 'rounds1': 0, 'rounds2': 0})
+        own.update('wins1', 3)
+        own.update('wins2', 1)
+        self.assertEqual(own.state(), ['3', '1', '-', '-'])
+        points = self.versus.Tally({'score1': 0, 'score2': 0})
+        points.update('score2', 90)
+        self.assertEqual(points.state(), ['-', '-', '-', '90'])
+
+    def serve_mame(self, lines):
+        server = socket.socket()
+        server.bind(('127.0.0.1', 0))
+        server.listen(1)
+        self.addCleanup(server.close)
+
+        def serve():
+            conn, _ = server.accept()
+            with conn:
+                for line in lines:
+                    conn.sendall(line.encode() + b'\r')
+                    time.sleep(0.15)
+        threading.Thread(target=serve, daemon=True).start()
+        return server.getsockname()[1]
+
+    def test_mame_outputs_become_versus_events_until_the_game_stops(self):
+        port = self.serve_mame(['mame_start = sf2ce', 'led0 = 1', 'fliperos_score1 = 500', 'fliperos_rounds1 = 2',
+                                'fliperos_lives1 = 3', 'fliperos_rounds1 = 0', 'fliperos_score2 = 90',
+                                'mame_stop = 1', 'fliperos_score1 = 999'])
+        env = dict(self.env, MAME_OUTPUT='127.0.0.1:%d' % port)
+        proc = subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'mame', 'sf2ce'], env=env, timeout=30)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(self.events.read_text().splitlines(),
+                         ['versus 0 0 500 -', 'versus 1 0 500 -', 'versus 1 0 500 90'])
+        # Um jogo fora da tabela nem abre a porta.
+        self.events.unlink()
+        subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'mame', 'kof98'], env=env, timeout=30, check=True)
+        self.assertFalse(self.events.exists())
+
+    def test_retroarch_memory_is_read_through_the_command_interface(self):
+        memory = {0x10: [0, 0], 0x20: [0, 0], 0x30: [0x00, 0x05, 0x00]}
+        asked = []
+        server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        server.bind(('127.0.0.1', 0))
+        self.addCleanup(server.close)
+
+        def serve():
+            while True:
+                try:
+                    data, peer = server.recvfrom(4096)
+                except OSError:
+                    return
+                words = data.decode().split()
+                asked.append(data.decode())
+                addr = int(words[1], 16)
+                if addr in memory:
+                    reply = 'READ_CORE_MEMORY %x %s\n' % (addr, ' '.join('%02x' % b for b in memory[addr]))
+                else:
+                    reply = 'READ_CORE_MEMORY %x -1\n' % addr
+                server.sendto(reply.encode(), peer)
+        threading.Thread(target=serve, daemon=True).start()
+        game = subprocess.Popen(['/bin/sleep', '60'])
+        self.addCleanup(game.wait)
+        self.addCleanup(game.kill)
+        env = dict(self.env, RA_COMMAND='127.0.0.1:%d' % server.getsockname()[1])
+        proc = subprocess.Popen([sys.executable, str(self.SCRIPT), 'run', 'retroarch', 'sf2', str(game.pid)], env=env)
+        self.addCleanup(proc.kill)
+
+        def last_event(expected):
+            deadline = time.time() + 10
+            lines = []
+            while time.time() < deadline:
+                lines = self.events.read_text().splitlines() if self.events.exists() else []
+                if lines and lines[-1] == expected:
+                    break
+                time.sleep(0.05)
+            return lines[-1] if lines else None
+        self.assertEqual(last_event('versus 0 0 500 -'), 'versus 0 0 500 -')
+        memory[0x10] = [2, 0]
+        memory[0x20] = [0, 1]
+        self.assertEqual(last_event('versus 2 1 500 -'), 'versus 2 1 500 -')
+        self.assertIn('READ_CORE_MEMORY 30 3\n', asked)
+        # Fecha com o jogo.
+        game.kill()
+        game.wait()
+        self.assertEqual(proc.wait(timeout=10), 0)
+
+    def test_wired_into_the_launchers_and_the_image(self):
+        for path, dest in (('fliperos-versus', 'opt/fliperos/bin/fliperos-versus'),
+                           ('versus-games.conf', 'etc/fliperos/versus-games.conf'),
+                           ('retroarch-versus.cfg', 'etc/fliperos/retroarch/versus.cfg')):
+            self.assertIn('"$src/config/%s" "$root/%s"' % (path, dest), ROOTFS)
+        # O plugin fica fora da pasta que o build do GroovyMAME recria.
+        self.assertIn('"$root/usr/local/share/fliperos/mame-plugins/fliperos-versus/$file"', ROOTFS)
+        self.assertIn('rm -rf "$gm_share"', MKISO)
+        plugin = (ROOT / 'config/mame-plugins/fliperos-versus/init.lua').read_text()
+        for line in ("manager.machine.output:set_value('fliperos_' .. f.field, value)",
+                     "'/etc/fliperos/versus-games.conf'", 'emu.add_machine_frame_notifier(tick)',
+                     'if frame < WAIT or frame % EVERY ~= 0 then'):
+            self.assertIn(line, plugin)
+        self.assertEqual(json.loads((ROOT / 'config/mame-plugins/fliperos-versus/plugin.json').read_text())
+                         ['plugin']['name'], 'fliperos-versus')
+        gm = (ROOT / 'config/fliperos-groovymame').read_text()
+        self.assertIn('"$panel" panel && "$versus" has mame "${game##*/}"; then', gm)
+        self.assertIn('set -- -plugin hiscore,fliperos-versus \\\n'
+                      '    -pluginspath "/usr/local/share/groovymame/plugins;$plugins;$HOME/.mame/plugins" "$@"', gm)
+        kms = (ROOT / 'config/fliperos-kms-run').read_text()
+        self.assertIn('"$pixelcade" panel && "$versus" has retroarch "${game%.*}"; then', kms)
+        # O Network Command Interface so num jogo da tabela.
+        self.assertIn('network_cmd_enable = "true"', (ROOT / 'config/retroarch-versus.cfg').read_text())
+        self.assertNotIn('network_cmd', (ROOT / 'config/retroarch.cfg').read_text())
 
 
 class ZeDMDTests(unittest.TestCase):
@@ -5680,6 +5945,25 @@ class ZeDMDTests(unittest.TestCase):
         self.assertEqual(proc.wait(timeout=10), 0)
         seen = {f[1][:3] for f in self.frames(self.received[0])}
         self.assertEqual(seen, {bytes(c) for c in colors.values()})
+
+    def test_versus_scoreboard_frame(self):
+        frames = self.run_('versus', 'YOU', '3', '1', 'RIVAL', '125300', '98700')
+        self.assertEqual(len(frames), 1)
+        payload = frames[0][1]
+        pixel = lambda x, y: payload[(y * 128 + x) * 3:(y * 128 + x) * 3 + 3]
+        lit = lambda x0, x1, y0, y1: {pixel(x, y) for y in range(y0, y1) for x in range(x0, x1)} - {b'\x00\x00\x00'}
+        # Os nomes nos cantos de cima (ciano e laranja), as vitorias brancas
+        # no meio, os pontos nos cantos de baixo.
+        self.assertEqual(lit(0, 30, 0, 8), {bytes((139, 233, 253))})
+        self.assertEqual(lit(98, 128, 0, 8), {bytes((255, 184, 108))})
+        self.assertIn(b'\xff\xff\xff', lit(30, 98, 5, 22))
+        self.assertEqual(lit(0, 45, 24, 32), {bytes((139, 233, 253))})
+        self.assertEqual(lit(90, 128, 24, 32), {bytes((255, 184, 108))})
+        # So pontos (o jogo sem vitorias na tabela): os dois numeros cabem.
+        payload = self.run_('versus', 'P1', '-', '-', 'P2', '1234500', '987650')[0][1]
+        columns = [any(pixel(x, y) != b'\x00\x00\x00' for y in range(12, 32)) for x in range(128)]
+        self.assertIn(False, columns[40:90])
+        self.assertNotIn(b'\xff\xff\xff', lit(0, 128, 0, 32))
 
     def test_startup_waits_for_the_server_and_shows_the_logo(self):
         logo = ROOT / 'config/pixelcade-fliperos.png'

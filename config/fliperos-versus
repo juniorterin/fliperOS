@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+# O placar de uma partida versus no LED do gabinete (Pixelcade, ZeDMD): as
+# vitorias da sessao de cada lado e os pontos do jogo ao vivo.
+#
+# O jogo so desenha o placar na tela, entao ele e lido da memoria do jogo,
+# nos enderecos de /etc/fliperos/versus-games.conf (e de
+# ~/config/versus-games.conf, para experimentar):
+#
+#   - GroovyMAME: o plugin fliperos-versus (config/mame-plugins) le a memoria
+#     e publica os valores como saidas (fliperos_score1...), que saem pela
+#     porta 8000 com as outras saidas do jogo. Daqui se le essa porta.
+#   - RetroArch: o Network Command Interface (READ_CORE_MEMORY, UDP 55355),
+#     ligado pelo /etc/fliperos/retroarch/versus.cfg.
+#
+# As vitorias da sessao saem do proprio jogo (wins1, wins2) ou dos rounds: o
+# vencedor da partida e contado quando os rounds voltam a zero. A cada
+# mudanca vai um evento "versus" para o config/fliperos-pixelcade.
+#
+#   fliperos-versus has SOURCE GAME          status 0 se o jogo esta na tabela (SOURCE: mame | retroarch)
+#   fliperos-versus run SOURCE GAME [PID]    o placar no LED ate o jogo (o processo PID) fechar
+#   fliperos-versus watch SOURCE GAME        mostra cada valor quando muda (para conferir um jogo novo)
+import os
+import socket
+import subprocess
+import sys
+import time
+
+TABLES = os.environ.get('VERSUS_TABLES', '/etc/fliperos/versus-games.conf:/home/fliperos/config/versus-games.conf')
+PIXELCADE = os.environ.get('FLIPEROS_PIXELCADE', '/opt/fliperos/bin/fliperos-pixelcade')
+MAME_OUTPUT = os.environ.get('MAME_OUTPUT', '127.0.0.1:8000')
+RA_COMMAND = os.environ.get('RA_COMMAND', '127.0.0.1:55355')
+FIELDS = ('score1', 'score2', 'rounds1', 'rounds2', 'wins1', 'wins2')
+FORMATS = ('bcd', 'bcdle', 'bin', 'binle')
+# Segundos entre dois eventos (os pontos mudam muitas vezes por segundo).
+EVERY = float(os.environ.get('VERSUS_EVERY', '0.5'))
+
+
+# -- Tabela ----------------------------------------------------------
+
+# read_tables: {fonte: {jogo: {campo: (endereco, bytes, formato, multiplicador)}}}
+# e os clones. Um jogo num arquivo lido depois troca o mesmo jogo dos
+# anteriores.
+def read_tables(paths=None):
+    games, clones = {'mame': {}, 'retroarch': {}}, {}
+    for path in (paths or TABLES).split(':'):
+        try:
+            with open(path, encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+        except OSError:
+            continue
+        seen = set()
+        for line in lines:
+            words = line.split('#', 1)[0].split()
+            if len(words) >= 3 and words[0] == 'clone':
+                clones[words[1]] = words[2]
+            elif len(words) >= 6 and words[0] in games:
+                source, game, field = words[:3]
+                fmt, _, mult = words[5].partition('*')
+                try:
+                    entry = (int(words[3], 16), int(words[4]), fmt, int(mult or 1))
+                except ValueError:
+                    continue
+                if field not in FIELDS or fmt not in FORMATS or not 0 < entry[1] <= 8:
+                    continue
+                if (source, game) not in seen:
+                    seen.add((source, game))
+                    games[source][game] = {}
+                games[source][game][field] = entry
+    return games, clones
+
+
+def lookup(source, game, tables=None):
+    games, clones = tables or read_tables()
+    for _ in range(8):
+        if game in games.get(source, {}):
+            return games[source][game]
+        if game not in clones:
+            break
+        game = clones[game]
+    return None
+
+
+# decode: os bytes lidos (na ordem da memoria) como numero; None se nao e
+# um BCD valido (a memoria ainda nao tem o placar).
+def decode(data, fmt, mult=1):
+    if fmt.endswith('le'):
+        data = data[::-1]
+    value = 0
+    if fmt.startswith('bcd'):
+        for b in data:
+            if b >> 4 > 9 or b & 15 > 9:
+                return None
+            value = value * 100 + (b >> 4) * 10 + (b & 15)
+    else:
+        value = int.from_bytes(data, 'big')
+    return value * mult
+
+
+# -- Vitorias da sessao ----------------------------------------------
+
+class Tally:
+    """Os valores do jogo e as vitorias da sessao de cada lado."""
+
+    def __init__(self, fields):
+        self.own_wins = 'wins1' in fields and 'wins2' in fields
+        self.rounds = 'rounds1' in fields and 'rounds2' in fields
+        self.values = {}
+        self.wins = [0, 0]
+        self.best = [0, 0]
+
+    def update(self, field, value):
+        old = self.values.get(field)
+        self.values[field] = value
+        if old == value:
+            return False
+        if self.own_wins:
+            self.wins = [self.values.get('wins1', 0), self.values.get('wins2', 0)]
+        elif self.rounds and field in ('rounds1', 'rounds2'):
+            now = [self.values.get('rounds1', 0), self.values.get('rounds2', 0)]
+            # Os rounds voltaram a zero: a partida acabou, e ganhou quem
+            # tinha mais. (Um empate nao conta para ninguem.)
+            if now == [0, 0] and self.best != [0, 0]:
+                if self.best[0] != self.best[1]:
+                    self.wins[0 if self.best[0] > self.best[1] else 1] += 1
+                self.best = [0, 0]
+            else:
+                self.best = [max(self.best[0], now[0]), max(self.best[1], now[1])]
+        return True
+
+    def state(self):
+        counted = self.own_wins or self.rounds
+        wins = [str(w) for w in self.wins] if counted else ['-', '-']
+        return wins + [str(self.values[f]) if f in self.values else '-' for f in ('score1', 'score2')]
+
+
+# -- Fontes ----------------------------------------------------------
+
+def address(text):
+    host, _, port = text.rpartition(':')
+    return host or '127.0.0.1', int(port)
+
+
+def alive(pid):
+    if pid <= 1:
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
+
+
+# mame_source: as linhas "fliperos_CAMPO = VALOR" da saida de rede do MAME,
+# ate ele fechar. O MAME demora a abrir a porta (o X, o modo de video).
+def mame_source(fields, pid):
+    sock = None
+    deadline = time.monotonic() + 120
+    while sock is None and alive(pid) and time.monotonic() < deadline:
+        try:
+            sock = socket.create_connection(address(MAME_OUTPUT), timeout=2)
+        except OSError:
+            time.sleep(0.2)
+    if sock is None:
+        return
+    buf = b''
+    with sock:
+        sock.settimeout(1)
+        while alive(pid):
+            try:
+                data = sock.recv(4096)
+            except socket.timeout:
+                yield None
+                continue
+            except OSError:
+                return
+            if not data:
+                return
+            buf += data.replace(b'\n', b'\r')
+            *lines, buf = buf.split(b'\r')
+            for line in lines:
+                name, sep, value = line.decode('ascii', 'replace').partition('=')
+                name, value = name.strip(), value.strip()
+                if name == 'mame_stop':
+                    return
+                if sep and name.startswith('fliperos_') and name[9:] in fields:
+                    try:
+                        yield name[9:], int(value)
+                    except ValueError:
+                        pass
+            yield None
+
+
+# retroarch_source: READ_CORE_MEMORY de cada campo, 4 vezes por segundo, ate
+# o RetroArch (PID) fechar. A resposta e "READ_CORE_MEMORY endereco b0 b1..."
+# ou "... -1" quando o core nao tem aquele endereco.
+def retroarch_source(fields, pid):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(0.5)
+    target = address(RA_COMMAND)
+    silent = time.monotonic()
+    with sock:
+        while alive(pid):
+            for field, (addr, size, fmt, mult) in fields.items():
+                try:
+                    sock.sendto(b'READ_CORE_MEMORY %x %d\n' % (addr, size), target)
+                    words = sock.recv(4096).decode('ascii', 'replace').split()
+                except OSError:
+                    continue
+                silent = time.monotonic()
+                if len(words) != 2 + size or words[0] != 'READ_CORE_MEMORY':
+                    continue
+                try:
+                    value = decode(bytes(int(w, 16) for w in words[2:]), fmt, mult)
+                except ValueError:
+                    continue
+                if value is not None:
+                    yield field, value
+            yield None
+            # Sem PID para vigiar: 30 s sem resposta e o jogo fechou.
+            if pid <= 1 and time.monotonic() - silent > 30:
+                return
+            time.sleep(0.25)
+
+
+def source_of(name, fields, pid):
+    if name == 'mame':
+        return mame_source(fields, pid)
+    return retroarch_source(fields, pid)
+
+
+# -- Comandos --------------------------------------------------------
+
+def run(source, game, pid):
+    fields = lookup(source, game)
+    if not fields:
+        return 0
+    tally = Tally(fields)
+    sent, last, dirty = None, 0.0, False
+    for item in source_of(source, fields, pid):
+        if item is not None:
+            dirty = tally.update(*item) or dirty
+        now = time.monotonic()
+        if dirty and now - last >= EVERY:
+            state = tally.state()
+            if state != sent:
+                subprocess.call([PIXELCADE, 'versus'] + state, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                sent, last = state, now
+            dirty = False
+    return 0
+
+
+def watch(source, game):
+    fields = lookup(source, game)
+    if not fields:
+        sys.stderr.write('fliperos-versus: %s is not in the table (%s lines)\n' % (game, source))
+        return 1
+    tally = Tally(fields)
+    print('watching %s (%s): %s' % (game, source, ', '.join(sorted(fields))), flush=True)
+    for item in source_of(source, fields, 0):
+        if item is not None and tally.update(*item):
+            wins = tally.state()[:2]
+            print('%-8s = %-10d   session wins: %s x %s' % (item[0], item[1], wins[0], wins[1]), flush=True)
+    return 0
+
+
+def main(argv):
+    if len(argv) >= 4 and argv[2] in ('mame', 'retroarch'):
+        if argv[1] == 'has':
+            return 0 if lookup(argv[2], argv[3]) else 1
+        if argv[1] == 'run':
+            return run(argv[2], argv[3], int(argv[4]) if len(argv) > 4 and argv[4].isdigit() else 0)
+        if argv[1] == 'watch':
+            try:
+                return watch(argv[2], argv[3])
+            except KeyboardInterrupt:
+                return 0
+    sys.stderr.write('usage: fliperos-versus has mame|retroarch GAME\n'
+                     '       fliperos-versus run mame|retroarch GAME [PID]\n'
+                     '       fliperos-versus watch mame|retroarch GAME\n')
+    return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

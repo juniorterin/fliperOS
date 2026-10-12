@@ -1,0 +1,10 @@
+{
+  "plugin": {
+    "name": "fliperos-versus",
+    "description": "FliperOS: publishes the versus score read from the game's memory as outputs (fliperos_score1...)",
+    "version": "1",
+    "author": "FliperOS",
+    "type": "plugin",
+    "start": "false"
+  }
+}

@@ -36,6 +36,20 @@ A [Pixelcade](https://pixelcade.org) LED or LCD marquee shows the game you have 
 - **Screensaver and startup**: during the frontend's screensaver the display cycles through the pictures in `~/media/dmd` and `~/media/marquee`, in random order, 8 seconds each. When the service starts it shows the FliperOS logo.
 - **Artwork**: Pixelcade's artwork is licensed only for Pixelcade hardware, so FliperOS doesn't use it on the ZeDMD.
 
+## Versus score on the LED display
+
+During a two-player match the display can show the score: the matches each side has won since the game opened, and each player's points as they change. On a ZeDMD the score stays on the display (`P1 3 x 1 P2`, with the points below). On a Pixelcade a text scrolls each time someone wins a match, and then the game's marquee comes back.
+
+**No game is in the table yet.** The reading, the win count and the display were run on a real MAME with a scripted match, but each game's memory addresses have to be watched during a real match before they go in, and that hasn't been done for any game.
+
+- **Where the score comes from**: the game only draws it on the screen, so it is read from the game's memory. `/etc/fliperos/versus-games.conf` says, for each game, where the points and the rounds won are. A game that isn't in the table changes nothing on the display.
+- **GroovyMAME**: for a game in the table, the `groovymame` command turns on the `fliperos-versus` plugin and MAME's network output. The plugin reads the memory four times a second and publishes the values as outputs (`fliperos_score1`, `fliperos_rounds1`...), on port 8000 with the game's other outputs ([DIY hardware](DIY-hardware.md)), so a board or Hook Of The Reaper can use them too.
+- **RetroArch**: for a game in the table, `fliperos-kms-run` turns on the Network Command Interface (`/etc/fliperos/retroarch/versus.cfg`) and the values are read with `READ_CORE_MEMORY`. A core's addresses are not MAME's, so the table has separate `retroarch` lines.
+- **Matches won**: if the game counts them itself, that number is used. Otherwise they come from the rounds: when both players' rounds go back to zero, the match is over and the one who had more gets the win. A draw counts for nobody. The count starts again when the game closes.
+- **Sides**: `versus_side=2` in `/etc/fliperos/fliperos.conf` puts player 2 first, for the cabinet on that side.
+- **Adding a game**: put its lines in `~/config/versus-games.conf` (the format is explained at the top of `/etc/fliperos/versus-games.conf`), open the game and run `fliperos-versus watch mame <game>` over SSH: it prints each value as it changes, so you can check it against the screen during a match. A wrong address only shows a wrong score. Lines that work are welcome in an issue, to go into the table for everyone.
+- Only with a Pixelcade or a ZeDMD installed; without one, nothing is turned on.
+
 ## APT repository
 
 The frontends (Attract-Mode Plus, EmulationStation, RetroFE, Pegasus) come from a dedicated APT repository of prebuilt `.deb`s, like GroovyArcade's `groovy-ux-repo` (`packaging/build-deb.sh`, `packaging/make-repo.sh`, `Dockerfile.packages`, recipes in `packaging/packages/`). The `config/fliperos-sessions.conf` table says, for each launcher, whether it runs in KMS or X (from galauncher's `videodata.conf` table) and which package it comes from. The build carries the repository into the image (`/opt/fliperos/repo`, `deb [trusted=yes] file:/opt/fliperos/repo ./`, option `--repo`) and already installs Attract-Mode Plus; without it, the cabinet's apt said "Unable to locate package". Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus have recipes; RetroFE doesn't yet, and shows in Setup > Frontend as *not available yet*.

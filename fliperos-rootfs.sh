@@ -151,6 +151,17 @@ install -Dm644 "$src/config/fliperos-zedmd.service" "$root/etc/systemd/system/fl
 install -Dm644 "$src/config/99-fliperos-zedmd.rules" "$root/etc/udev/rules.d/99-fliperos-zedmd.rules"
 ln -sfn /etc/systemd/system/fliperos-zedmd.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-zedmd.service"
+# O placar de uma partida versus no LED do gabinete: o programa que o le e
+# conta as vitorias, a tabela de enderecos por jogo, o plugin do GroovyMAME
+# que publica o placar como saidas e o Network Command Interface do RetroArch
+# (junto so num jogo da tabela).
+install -Dm755 "$src/config/fliperos-versus" "$root/opt/fliperos/bin/fliperos-versus"
+install -Dm644 "$src/config/versus-games.conf" "$root/etc/fliperos/versus-games.conf"
+install -Dm644 "$src/config/retroarch-versus.cfg" "$root/etc/fliperos/retroarch/versus.cfg"
+for file in plugin.json init.lua; do
+  install -Dm644 "$src/config/mame-plugins/fliperos-versus/$file" \
+    "$root/usr/local/share/fliperos/mame-plugins/fliperos-versus/$file"
+done
 # groovymame: o atalho (config/fliperos-groovymame) na frente do binario do
 # release, em /usr/local/libexec. Num sistema de antes, o binario compilado
 # estava no lugar do atalho: muda de pasta.

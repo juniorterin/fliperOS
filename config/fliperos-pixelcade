@@ -44,6 +44,8 @@
 #   fliperos-pixelcade screensaver start|stop      o modo attract, no protetor de tela do frontend
 #   fliperos-pixelcade achievement ID TITULO [DESCRICAO]   uma conquista do jogo aberto
 #   fliperos-pixelcade cheevos                     status 0 se o RetroArch deve registrar as conquistas no log
+#   fliperos-pixelcade versus V1 V2 P1 P2          o placar de uma partida versus (vitorias e pontos de cada lado)
+#   fliperos-pixelcade panel                       status 0 se ha um painel instalado (Pixelcade ou ZeDMD)
 #   fliperos-pixelcade bye pixelcade|zedmd         "Bye", quando o computador desliga
 #   fliperos-pixelcade lcd-usb INTERFACE           o Pixelcade LCD ligado pela USB (root, pela udev)
 set -uo pipefail
@@ -66,6 +68,10 @@ ra_log=${RA_LOG:-${FLIPEROS_LOGS:-/opt/fliperos/logs}/retroarch.log}
 # Um jogo que fala direto com o painel (Visual Pinball) deixa aqui o pid
 # dele: o pixelweb e o dmdserver soltam a porta ate ele fechar.
 hold_file=${PIXELCADE_HOLD:-/tmp/fliperos-pixelcade.hold}
+# O placar de uma partida versus (config/fliperos-versus) e o lado deste
+# gabinete (versus= e versus_side= do fliperos.conf).
+versus=${FLIPEROS_VERSUS:-/opt/fliperos/bin/fliperos-versus}
+conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 # O Pixelcade LCD pela USB e uma placa de rede (gadget): ele e 169.254.100.1.
 lcd_ip=${PIXELCADE_LCD_IP:-169.254.100.1}
 lcd_host_ip=${PIXELCADE_LCD_HOST_IP:-169.254.100.2}
@@ -648,6 +654,7 @@ game() {
     return 1
   fi
   printf 'game:%s/%s\n' "$1" "$2" > "$last_file" 2> /dev/null
+  rm -f "$last_file.versus"
   title=$(title_of "$2" "${3:-}")
   intro=$(highscores "$1" "$2") || intro="Now Playing $title"
   if installed; then
@@ -680,6 +687,16 @@ watch() {
   local pid=${PIXELCADE_GAME_PID:-$PPID}
   [[ $pid =~ ^[0-9]+$ ]] && ((pid > 1)) || return 0
   (
+    # O placar de uma partida versus, se o jogo esta na tabela
+    # (config/fliperos-versus): ele mesmo sai quando o jogo fecha.
+    case ${3:-} in
+      groovymame) source=mame ;;
+      retroarch) source=retroarch ;;
+      *) source="" ;;
+    esac
+    if [[ -n $source && -n $2 && -x $versus ]] && "$versus" has "$source" "$2"; then
+      "$versus" run "$source" "$2" "$pid" &
+    fi
     if [[ ${3:-} == retroarch ]] && cheevos; then
       cheevos_watch "$pid"
     else
@@ -687,6 +704,36 @@ watch() {
     fi
     "$self" end "$1" "$2"
   ) < /dev/null > /dev/null 2>&1 &
+}
+
+# versus_score VITORIAS1 VITORIAS2 PONTOS1 PONTOS2: o placar de uma partida
+# versus (config/fliperos-versus; "-" = o jogo nao tem aquele valor). Cada
+# gabinete mostra o proprio lado primeiro: o lado e o versus_side do
+# fliperos.conf (1 ou 2), e com dois gabinetes ligados (versus=host ou join)
+# os lados se chamam YOU e RIVAL. No ZeDMD o placar fica na tela; no
+# Pixelcade, um texto a cada vitoria, e o marquee do jogo volta.
+versus_score() {
+  local mode side left=P1 right=P2 wl=${1:--} wr=${2:--} sl=${3:--} sr=${4:--} last
+  mode=$(sed -n 's/^versus=//p' "$conf" 2> /dev/null | tail -1)
+  side=$(sed -n 's/^versus_side=//p' "$conf" 2> /dev/null | tail -1)
+  [[ -z $side && $mode == join ]] && side=2
+  if [[ $side == 2 ]]; then
+    left=P2 right=P1
+    set -- "$wr" "$wl" "$sr" "$sl"
+    wl=$1 wr=$2 sl=$3 sr=$4
+  fi
+  [[ $mode == host || $mode == join ]] && left=YOU right=RIVAL
+  zedmd versus "$left" "$wl" "$wr" "$right" "$sl" "$sr"
+  [[ $wl$wr =~ ^[0-9]+$ ]] && ((wl + wr > 0)) || return 0
+  [[ $(cat "$last_file.versus" 2> /dev/null) == "$wl $wr" ]] && return 0
+  printf '%s %s\n' "$wl" "$wr" > "$last_file.versus" 2> /dev/null
+  installed || return 0
+  call "text?t=$(urlencode "$left $wl x $wr $right")&l=1&event=GameStart"
+  last=$(cat "$last_file" 2> /dev/null)
+  if [[ $last == game:*/* ]]; then
+    last=${last#game:}
+    call "arcade/stream/$(urlencode "${last%%/*}")/$(urlencode "${last#*/}")?l=99999&event=GameStart"
+  fi
 }
 
 # cheevos: status 0 se o RetroArch tem as conquistas (RetroAchievements)
@@ -903,11 +950,16 @@ case $cmd in
     serve ./dmdserver -c "$zedmd_dir/dmdserver.ini" -l
     exit $?
     ;;
-  launch | esde | attract | game | select | system | end | screensaver | achievement)
+  panel)
+    installed || zedmd_installed
+    exit $?
+    ;;
+  launch | esde | attract | game | select | system | end | screensaver | achievement | versus)
     installed || zedmd_installed || exit 0
     case $cmd in
       select) select_game "$@" ;;
       end) game_end "$@" ;;
+      versus) versus_score "$@" ;;
       *) "$cmd" "$@" ;;
     esac
     ;;

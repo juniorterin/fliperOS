@@ -17,6 +17,9 @@
 #   fliperos-dmd text TEXTO
 #   fliperos-dmd attract              as artes de ~/media, uma depois da outra
 #   fliperos-dmd startup              o logo do FliperOS, quando o dmdserver abre
+#   fliperos-dmd versus ESQ VIT_ESQ VIT_DIR DIR PONTOS_ESQ PONTOS_DIR
+#                                     o placar de uma partida versus: os nomes dos
+#                                     lados, as vitorias e os pontos ("-" = sem)
 #   fliperos-dmd title ROM            o nome do jogo nas listas dos frontends
 #
 # ABERTURA e um texto que rola uma vez antes da imagem (os recordes, "Now
@@ -341,6 +344,52 @@ def attract():
                         return
 
 
+# versus_frame: o placar de uma partida versus (config/fliperos-versus). Os
+# nomes dos lados em cima, as vitorias grandes no meio e os pontos embaixo;
+# num jogo sem vitorias na tabela, so os pontos, maiores.
+def versus_frame(left, wins_left, wins_right, right, score_left, score_right):
+    img, draw = canvas()
+    small = font(9)
+
+    def width(text, f):
+        box = draw.textbbox((0, 0), text, font=f)
+        return box[2] - box[0]
+
+    def group(text):
+        return '{:,}'.format(int(text)) if text.isdigit() else ''
+
+    def corner(text, y, color, on_right):
+        if text:
+            draw_line(draw, text, small, y, color, x=W - width(text, small) - 1 if on_right else 1)
+
+    corner(left, 0, COLOR['system'], False)
+    corner(right, 0, COLOR['game'], True)
+    if wins_left.isdigit() and wins_right.isdigit():
+        big = font(20)
+        x_mark = font(11)
+        gap = 6
+        total = width(wins_left, big) + width('x', x_mark) + width(wins_right, big) + 2 * gap
+        x = (W - total) // 2
+        draw_line(draw, wins_left, big, 5, COLOR['select'], x=x)
+        x += width(wins_left, big) + gap
+        draw_line(draw, 'x', x_mark, 11, (98, 114, 164), x=x)
+        x += width('x', x_mark) + gap
+        draw_line(draw, wins_right, big, 5, COLOR['select'], x=x)
+        corner(group(score_left), H - 8, COLOR['system'], False)
+        corner(group(score_right), H - 8, COLOR['game'], True)
+    else:
+        # O maior tamanho em que os dois numeros cabem lado a lado.
+        for size in range(13, 7, -1):
+            mid = font(size)
+            if width(group(score_left), mid) + width(group(score_right), mid) + 6 <= W:
+                break
+        for text, color, on_right in ((group(score_left), COLOR['system'], False),
+                                      (group(score_right), COLOR['game'], True)):
+            if text:
+                draw_line(draw, text, mid, 15, color, x=W - width(text, mid) - 1 if on_right else 1)
+    return [(img.tobytes(), 1000)]
+
+
 def startup_frames():
     if os.path.isfile(STARTUP):
         try:
@@ -388,6 +437,8 @@ def run(argv):
             frames = image_frames(argv[2])
         elif len(argv) == 3 and argv[1] == 'text':
             frames = text_frames(argv[2], COLOR['game'])
+        elif len(argv) == 8 and argv[1] == 'versus':
+            frames = versus_frame(*argv[2:8])
         elif len(argv) == 2 and argv[1] == 'attract':
             attract()
             return 0
@@ -399,6 +450,7 @@ def run(argv):
                              '       fliperos-dmd image FILE\n'
                              '       fliperos-dmd text TEXT\n'
                              '       fliperos-dmd attract | startup\n'
+                             '       fliperos-dmd versus LEFT WINS_LEFT WINS_RIGHT RIGHT SCORE_LEFT SCORE_RIGHT\n'
                              '       fliperos-dmd title ROM\n')
             return 1
         play(frames, intro, retry)

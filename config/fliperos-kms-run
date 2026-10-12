@@ -47,6 +47,16 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   # Interface: o arquivo so existe com ele instalado.
   doflinx=${FLIPEROS_RA_DOFLINX:-/etc/fliperos/retroarch/doflinx.cfg}
   [[ -f $doflinx ]] && appendconfig+="|$doflinx"
+  # O placar de uma partida versus no LED do gabinete (config/fliperos-versus)
+  # e lido da memoria do jogo pelo mesmo Network Command Interface: so num
+  # jogo da tabela, com um painel instalado.
+  versus=${FLIPEROS_VERSUS:-/opt/fliperos/bin/fliperos-versus}
+  versus_cfg=${FLIPEROS_RA_VERSUS:-/etc/fliperos/retroarch/versus.cfg}
+  game=${*: -1}
+  game=${game##*/}
+  if [[ -f $versus_cfg && -x $versus && -x $pixelcade ]] && "$pixelcade" panel && "$versus" has retroarch "${game%.*}"; then
+    appendconfig+="|$versus_cfg"
+  fi
   set -- "$1" --appendconfig "$appendconfig" "${@:2}"
   # As conquistas (RetroAchievements) no marquee: o fliperos-pixelcade as le
   # do log, onde o RetroArch so as escreve com --verbose.
