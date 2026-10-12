@@ -24,6 +24,11 @@ if command -v openbox > /dev/null; then
     sleep 0.1
   done
 fi
+# OSD de teste (FLIPEROS_OSD=1): a resolucao e a frequencia da tela num
+# canto, por cima do programa (config/fliperos-osd).
+if [[ ${FLIPEROS_OSD:-0} == 1 ]]; then
+  "${FLIPEROS_OSD_BIN:-/opt/fliperos/bin/fliperos-osd}" < /dev/null > /dev/null 2>&1 &
+fi
 args=()
 [[ -n $connector ]] && args+=(--display "$connector")
 # Opcoes a mais do Switchres (as do switchres.ini, como opcao longa), de
