@@ -3462,8 +3462,10 @@ class ArcadeflowTests(unittest.TestCase):
             self.assertEqual((theme / 'layout.nut').read_text(), '// Arcadeflow')
             self.assertTrue((theme / 'glsl/blur.glsl').exists())
             self.assertEqual(sorted(p.name for p in (tmp / 'attract/layouts').iterdir()), ['Arcadeflow'])
-            # As opcoes do FliperOS: sem o aviso de versao nova.
-            self.assertEqual((theme / 'pref_layoutoptions.txt').read_text(), '9.9\n\n|UPDATECHECK|1|\n')
+            # As opcoes do FliperOS: sem o aviso de versao nova, e o botao de
+            # escolher abre o jogo (no padrao do tema, o menu de contexto).
+            self.assertEqual((theme / 'pref_layoutoptions.txt').read_text(),
+                             '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|0|\n')
             # As telas do padrao de antes passam para o tema; as de outro layout ficam.
             self.assertEqual(displays.read_text(),
                              'display\tMAME\n\tlayout               Arcadeflow\n\tromlist              MAME\n\n'

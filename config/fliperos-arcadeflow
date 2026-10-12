@@ -37,9 +37,11 @@ fail() {
 # pref_layoutoptions.txt dele (a versao na primeira linha e "|OPCAO|indice|";
 # o que nao esta no arquivo fica no padrao do tema). Sem o aviso de versao
 # nova: a versao e a fixada aqui, e o aviso espera uma resposta do teclado.
+# Sem o menu de contexto no botao de escolher (o padrao do tema): com ele o
+# primeiro aperto abre o menu sobre o jogo e so o segundo abre o jogo.
 prefs() {
   printf '%s\n\n' "$version"
-  printf '|%s|%s|\n' UPDATECHECK 1
+  printf '|%s|%s|\n' UPDATECHECK 1 OVERMENUBUTTON 0
 }
 
 # displays_file: o arquivo das telas. O Attract-Mode Plus 3.x le as de
