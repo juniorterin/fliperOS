@@ -26,7 +26,8 @@
 # Flycast do sistema. Enquanto o emulador esta aberto a tela fica nesse modo
 # (o Switchres calcula o modeline e o xrandr troca); fechado, volta ao da
 # sala. No 15 kHz o FBNeo vai alem: cada jogo na resolucao dele (384x224 no
-# CPS), pixel a pixel, sem filtros.
+# CPS), pixel a pixel, sem filtros, e a tela na frequencia em que o emulador
+# roda o jogo (59,637 Hz no CPS).
 #
 # Os botoes do Setup > Joysticks > Button mapping valem no FBNeo e no FBA
 # (um preset gerado do /etc/fliperos/buttons.map a cada abertura) e no
@@ -214,17 +215,31 @@ lobby_mode=$(table_mode fightcade)
 # mode_add MODO cria o modo na saida (uma vez) e imprime o nome dele. O
 # Switchres calcula o modeline para o monitor do switchres.ini:
 #   Switchres: Modeline "320x240_60 15.660000KHz 60.000000Hz" 6.7 320 ... -hsync -vsync
+#
+# Na saida fica so ele nesse tamanho: os emuladores do Wine pedem a tela
+# cheia pelo tamanho, sem a frequencia (nVidRefresh 0), e com dois modos de
+# 384x224 na lista (CPS2 a 59,637 Hz, CPS3 a 59,599) quem escolheria e o
+# Wine. O modo tirado da saida segue criado: da proxima vez so volta a ela.
 mode_add() {
-  local line name
+  local line name listed other
   [[ -n $output && $1 =~ ^([0-9]+)x([0-9]+)@([0-9.]+)$ ]] || return 1
   name="fliperos-$1"
-  if ! xrandr --query 2> /dev/null | grep -q "^ *$name "; then
-    line=$(switchres "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" --ini "$switchres_ini" --calc 2>&1 |
-      grep -m1 'Modeline "') || return 1
-    # shellcheck disable=SC2086 # os campos do modeline, um por argumento
-    xrandr --newmode "$name" ${line##*\" } 2> /dev/null
+  listed=$(xrandr --query 2> /dev/null)
+  # Na lista de uma saida a linha e "nome frequencia"; o modo criado que nao
+  # esta em nenhuma aparece no fim, como "nome (0x...)".
+  if ! awk -v n="$name" '$1 == n && $2 !~ /^\(/ { found = 1 } END { exit !found }' <<< "$listed"; then
+    if ! awk -v n="$name" '$1 == n { found = 1 } END { exit !found }' <<< "$listed"; then
+      line=$(switchres "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" --ini "$switchres_ini" --calc 2>&1 |
+        grep -m1 'Modeline "') || return 1
+      # shellcheck disable=SC2086 # os campos do modeline, um por argumento
+      xrandr --newmode "$name" ${line##*\" } 2> /dev/null
+    fi
     xrandr --addmode "$output" "$name" 2> /dev/null || return 1
   fi
+  while read -r other; do
+    xrandr --delmode "$output" "$other" 2> /dev/null
+  done < <(awk -v n="$name" -v s="fliperos-${1%@*}@" '$1 != n && index($1, s) == 1 && $2 !~ /^\(/ { print $1 }' \
+    <<< "$listed")
   printf '%s\n' "$name"
 }
 
@@ -269,36 +284,44 @@ idle_close() {
 # erro. O tamanho vem do GroovyMAME (-listxml, os nomes sao os mesmos), e o
 # modeline do Switchres, como no GroovyArcade; fica num cache. O jogo que ele
 # nao conhece, ou vertical, ou de largura que o modeline nao faz exata, fica
-# no modo da tabela, sem o ArcadeRes.
+# no modo da tabela, sem o ArcadeRes - mas na frequencia do jogo, se o
+# GroovyMAME a conhece: o emulador roda nela (bForce60Hz 0), e a tela a 60 Hz
+# com um jogo de 59,19 perderia um quadro a cada segundo e pouco.
 fbneo_ini=emulator/fbneo/config/fcadefbneo.ini
 fba_ini=emulator/ggpofba/config/ggpofba-ng.ini
 native="${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.native"
 native_cache="${XDG_CACHE_HOME:-$HOME/.cache}/fliperos/fightcade-modes"
 
-# native_mode JOGO: o modo do jogo (LARGURAxALTURA@HZ), ou nada.
-native_mode() {
-  local game=$1 mode
-  [[ $game =~ ^[a-z0-9_]+$ ]] || return 0
-  mode=$(awk -v g="$game" '$1 == g { print $2; exit }' "$native_cache" 2> /dev/null)
-  if [[ -z $mode ]]; then
-    command -v "$mame" > /dev/null || return 0
+# game_video JOGO: "MODO HZ" - o modo do jogo (LARGURAxALTURA@HZ; "-" no que
+# fica no modo da tabela) e a frequencia dele ("-" no que o GroovyMAME nao
+# conhece).
+game_video() {
+  local game=$1 video
+  [[ $game =~ ^[a-z0-9_]+$ ]] || { echo "- -"; return 0; }
+  video=$(awk -v g="$game" '$1 == g && NF == 3 { print $2, $3; exit }' "$native_cache" 2> /dev/null)
+  if [[ -z $video ]]; then
+    command -v "$mame" > /dev/null || { echo "- -"; return 0; }
     # LC_ALL=C: com o sistema em portugues o awk escreveria "59,637".
-    mode=$("$mame" "$game" -listxml 2> /dev/null | LC_ALL=C awk '
+    video=$("$mame" "$game" -listxml 2> /dev/null | LC_ALL=C awk '
       /<display / && /type="raster"/ {
-        if (!match($0, /rotate="[0-9]+"/)) exit
-        r = substr($0, RSTART + 8, RLENGTH - 9)
+        if (!match($0, /refresh="[0-9.]+"/)) exit
+        f = substr($0, RSTART + 9, RLENGTH - 10)
+        if (f <= 0) exit
+        f = sprintf("%.3f", f); sub(/\.?0+$/, "", f)
+        r = -1
+        if (match($0, /rotate="[0-9]+"/)) r = substr($0, RSTART + 8, RLENGTH - 9)
         match($0, /width="[0-9]+"/); w = substr($0, RSTART + 7, RLENGTH - 8)
         match($0, /height="[0-9]+"/); h = substr($0, RSTART + 8, RLENGTH - 9)
-        match($0, /refresh="[0-9.]+"/); f = substr($0, RSTART + 9, RLENGTH - 10)
-        if ((r == 0 || r == 180) && w % 8 == 0 && w > 0 && h > 0 && f > 0) {
-          f = sprintf("%.3f", f); sub(/\.?0+$/, "", f); print w "x" h "@" f
-        }
+        mode = "-"
+        if ((r == 0 || r == 180) && w % 8 == 0 && w > 0 && h > 0) mode = w "x" h "@" f
+        print mode, f
         exit
       }')
+    [[ -n $video ]] || video="- -"
     mkdir -p "$(dirname "$native_cache")"
-    printf '%s %s\n' "$game" "${mode:--}" >> "$native_cache"
+    printf '%s %s\n' "$game" "$video" >> "$native_cache"
   fi
-  [[ $mode == - ]] || printf '%s\n' "$mode"
+  printf '%s\n' "$video"
 }
 
 # native_game LINHA: o jogo na linha de comando do emulador ("fcadefbneo.exe
@@ -326,28 +349,35 @@ native_game() {
 
 # native_watch: a cada FBNeo ou FBA que abre, para o processo (SIGSTOP)
 # antes de o Wine ler o ini, poe o modo do jogo na lista, liga ou desliga o
-# ArcadeRes e o solta. O modo fica em $native para o laco abaixo ("wait"
-# enquanto decide).
+# ArcadeRes e o solta. O modo fica em $native para o laco abaixo: "arcade
+# MODO" (o do jogo, que o Wine poe), "table MODO" (o da tabela, que o laco
+# poe) ou "wait" enquanto decide.
 native_watch() {
-  local pid line mode ini key seen=" "
+  local pid line mode refresh how ini key name seen=" "
   while sleep "${FIGHTCADE_NATIVE_POLL:-0.1}"; do
     while read -r pid line; do
       [[ $seen == *" $pid "* ]] && continue
       seen+="$pid "
       case $line in
-        *ggpofba-ng.exe*) ini=$fba_ini key=bVidArcaderes ;;
-        *) ini=$fbneo_ini key=bVidArcaderesHor ;;
+        *ggpofba-ng.exe*) ini=$fba_ini key=bVidArcaderes name=fightcade-fc1 ;;
+        *) ini=$fbneo_ini key=bVidArcaderesHor name=fightcade-fbneo ;;
       esac
       kill -STOP "$pid" 2> /dev/null || continue
       echo wait > "$native"
-      mode=$(native_mode "$(native_game "$line")")
-      if [[ -n $mode ]] && mode_add "$mode" > /dev/null; then
+      read -r mode refresh <<< "$(game_video "$(native_game "$line")")"
+      if [[ $mode != - ]] && mode_add "$mode" > /dev/null; then
+        how=arcade
         keyval_set "$ini" "$key" 1
       else
-        mode=""
+        how=table mode=$(table_mode "$name")
+        if [[ -n $mode && $refresh != - ]] && mode_add "${mode%@*}@$refresh" > /dev/null; then
+          mode="${mode%@*}@$refresh"
+        elif [[ -n $mode ]]; then
+          mode_add "$mode" > /dev/null
+        fi
         keyval_set "$ini" "$key" 0
       fi
-      printf '%s\n' "$mode" > "$native"
+      printf '%s %s\n' "$how" "$mode" > "$native"
       kill -CONT "$pid" 2> /dev/null
     done < <(pgrep -u "$(id -u)" -af '[f]cadefbneo\.exe |[g]gpofba-ng\.exe ')
   done
@@ -457,6 +487,9 @@ emulators_setup() {
       # mais que ele, e uma mudanca no Setup nao chegaria a esse jogo.
       keyval_set "$ini.ini" bSaveInputs 0
     fi
+    # No tubo a tela sai na frequencia do jogo: o emulador tambem (o FBA vem
+    # com o bForce60Hz ligado, que roda todo jogo a 60 Hz).
+    ((crt)) && once "$name-hz" && keyval_set "$ini.ini" bForce60Hz 0
     fbneo_buttons "$ini.ini"
   done
   # SNES9x: a tela cheia no modo da tabela (no 15 kHz o do console,
@@ -564,15 +597,18 @@ while ((gone < ${FIGHTCADE_QUIT_WAIT:-5})); do
   case $running in
     *flycast.elf*) want=$(table_mode fightcade-flycast) ;;
     *fcadefbneo.exe* | *ggpofba-ng.exe*)
-      want=$(cat "$native" 2> /dev/null)
-      [[ $want == wait ]] && want=$current
+      how="" want=""
+      read -r how want < "$native" 2> /dev/null
       # O modo do jogo quem poe e o Wine, na tela cheia: o emulador tira o
       # formato do monitor da tela de agora, e com ela ja em 384x224 (quase
       # 16:9) pediria 512x224.
-      if [[ -n $want ]]; then
-        current=$want
-        continue
-      fi
+      case $how in
+        wait) continue ;;
+        arcade)
+          current=$want
+          continue
+          ;;
+      esac
       if [[ -z $want ]]; then
         case $running in
           *fcadefbneo.exe*) want=$(table_mode fightcade-fbneo) ;;

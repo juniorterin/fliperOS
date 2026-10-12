@@ -3513,6 +3513,7 @@ class FightcadeTests(unittest.TestCase):
                       '    echo "VGA-1 connected primary 640x480+0+0 (0x4a) normal (normal left) 0mm x 0mm"\n'
                       '    echo "  SR-1_640x480@60i (0x4a) 13.0MHz -HSync -VSync Interlace *current +preferred" ;;\n'
                       '  --addmode) echo "$*" >> "$FAKE/xrandr.log"; echo "$3" >> "$FAKE/xrandr.modes" ;;\n'
+                      '  --delmode) echo "$*" >> "$FAKE/xrandr.log"; sed -i "/^$3\\$/d" "$FAKE/xrandr.modes" ;;\n'
                       '  --newmode | --output) echo "$*" >> "$FAKE/xrandr.log" ;;\n'
                       'esac\n',
             # As janelas: tmp/windows, com o PID de cada uma em tmp/windows.pid.
@@ -3776,6 +3777,10 @@ class FightcadeTests(unittest.TestCase):
                 'refresh="59.637405" />\' ;;\n'
                 '  1942) echo \'<display tag="screen" type="raster" rotate="270" width="256" height="224" '
                 'refresh="60.000000" />\' ;;\n'
+                '  robotron) echo \'<display tag="screen" type="raster" rotate="0" width="292" height="240" '
+                'refresh="60.096154" />\' ;;\n'
+                '  sfiii3) echo \'<display tag="screen" type="raster" rotate="0" width="384" height="224" '
+                'refresh="59.599491" />\' ;;\n'
                 'esac\necho "$1" >> "$FAKE/mame.log"\n')
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
@@ -3784,7 +3789,8 @@ class FightcadeTests(unittest.TestCase):
             config = tmp / 'fc/emulator/fbneo/config'
             (config / 'fcadefbneo.default.ini').write_bytes(self.FBNEO_INI.encode())
             fba = tmp / 'fc/emulator/ggpofba/config/ggpofba-ng.default.ini'
-            fba.write_bytes(b'nIniVersion 0x029674\r\nnVidWidth 320\r\nnVidHeight 240\r\nbVidArcaderes 0\r\n')
+            fba.write_bytes(b'nIniVersion 0x029674\r\nnVidWidth 320\r\nnVidHeight 240\r\nbVidArcaderes 0\r\n'
+                            b'bForce60Hz 1\r\n')
             (tmp / 'bin').mkdir()
             (tmp / 'bin/groovymame').write_text('#!/bin/bash\n' + mame)
             (tmp / 'bin/groovymame').chmod(0o755)
@@ -3797,6 +3803,11 @@ class FightcadeTests(unittest.TestCase):
                     # Vertical, e um que o GroovyMAME nao conhece: o modo da tabela.
                     (fbneo_exe, '1942', 'fliperos-320x240@60', '0'),
                     (fbneo_exe, 'quark:direct,md_sonic,7000', 'fliperos-320x240@60', '0'),
+                    # Largura que o modeline nao faz exata: o tamanho da
+                    # tabela, na frequencia do jogo.
+                    (fbneo_exe, 'robotron', 'fliperos-320x240@60.096', '0'),
+                    # Mesmo tamanho do sf2ce, outra frequencia (CPS3).
+                    (fbneo_exe, 'sfiii3', 'fliperos-384x224@59.599', '1'),
                     # O FBA (Fightcade 1) tambem, com o bVidArcaderes dele.
                     (fba_exe, 'quark:served,sf2ce,abc,7000,0,1', 'fliperos-384x224@59.637', '1'),
                     (fba_exe, '1942', 'fliperos-320x240@60', '0')):
@@ -3812,7 +3823,7 @@ class FightcadeTests(unittest.TestCase):
                                        FIGHTCADE_NATIVE='1', LC_ALL='pt_BR.UTF-8')
                     self.assertEqual(run.returncode, 0, run.stderr)
                     log = self.xrandr_log(tmp)
-                    if mode == 'fliperos-320x240@60':
+                    if arcaderes == '0':
                         self.assertIn('--output VGA-1 --mode %s' % mode, log, game)
                     else:
                         # O modo do jogo na lista; quem troca e o Wine, na tela
@@ -3821,20 +3832,34 @@ class FightcadeTests(unittest.TestCase):
                         self.assertNotIn('--output VGA-1 --mode %s' % mode, log, game)
                     self.assertEqual(log[-1], '--output VGA-1 --mode 0x4a', game)
                     self.assertIn('\r\n%s %s\r\n' % (key, arcaderes), ini.read_bytes().decode(), game)
+                    # Na saida, so esse modo no tamanho dele: o emulador pede
+                    # a tela cheia pelo tamanho, e o Wine nao tem o que escolher.
+                    size = mode.split('@')[0] + '@'
+                    listed = (tmp / 'xrandr.modes').read_text().split()
+                    self.assertEqual([m for m in listed if m.startswith(size)], [mode], game)
                     # Solto de novo.
                     state = Path('/proc/%d/stat' % emulator.pid).read_text().split(') ')[1][0]
                     self.assertNotEqual(state, 'T', game)
                 finally:
                     emulator.kill()
                     emulator.wait()
-            self.assertEqual((tmp / 'mame.log').read_text().split(), ['sf2ce', '1942', 'md_sonic'])
+            games = ['sf2ce', '1942', 'md_sonic', 'robotron', 'sfiii3']
+            self.assertEqual((tmp / 'mame.log').read_text().split(), games)
             self.assertEqual((tmp / 'cache/fliperos/fightcade-modes').read_text(),
-                             'sf2ce 384x224@59.637\n1942 -\nmd_sonic -\n')
+                             'sf2ce 384x224@59.637 59.637\n1942 - 60\nmd_sonic - -\nrobotron - 60.096\n'
+                             'sfiii3 384x224@59.599 59.599\n')
             self.assertFalse((tmp / 'fliperos-fightcade.native').exists())
+            # O emulador na frequencia do jogo, como a tela: sem o bForce60Hz
+            # com que o FBA vem. Uma vez so: o que a pessoa ligar depois fica.
+            fba_ini = fba.with_name('ggpofba-ng.ini')
+            self.assertIn('\r\nbForce60Hz 0\r\n', fba_ini.read_bytes().decode())
+            fba_ini.write_bytes(fba_ini.read_bytes().replace(b'bForce60Hz 0', b'bForce60Hz 1'))
+            self.session(tmp, [self.CLIENT])
+            self.assertIn('\r\nbForce60Hz 1\r\n', fba_ini.read_bytes().decode())
             # Noutro monitor, nada disso.
             (tmp / 'native.procs').write_text('4194300 /usr/lib/wine/wine fcadefbneo.exe sf2ce\n')
             self.session(tmp, [self.CLIENT, self.CLIENT], FIGHTCADE_NATIVE='1', frequency='31k')
-            self.assertEqual((tmp / 'mame.log').read_text().split(), ['sf2ce', '1942', 'md_sonic'])
+            self.assertEqual((tmp / 'mame.log').read_text().split(), games)
 
     def test_snes9x_in_the_console_mode(self):
         conf = ('# Config file output by snes9x\r\n'
