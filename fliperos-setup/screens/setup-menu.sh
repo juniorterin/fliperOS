@@ -518,6 +518,8 @@ screen_romlist() {
   fi
   mapfile -t found < <(frontends_romlist_systems)
   if ((${#found[@]} == 0)); then
+    # As pastas que nao sao de arcade ganham a tela e a lista que faltarem.
+    frontends_attract
     ui_msg "$title" "No arcade games were found." "" \
       "Copy the sets to $ROMS_DIR/mame, naomi, naomi2, atomiswave, model2, model3" \
       "or to the folder of a RetroArch arcade core (mame2010, fbneo...)."

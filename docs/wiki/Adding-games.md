@@ -46,6 +46,10 @@ A game list made only from the files shows the file name: `mvsc2u` instead of *M
 
 Each of the two rewrites the list of the folders it works on, so whichever ran last wins. The artwork is found by the set name, so it is kept either way.
 
+Setup > AttractPlus ROM List also goes through every other folder with games (consoles, the arcade folders you left unmarked) and gives it the emulator, the display and the game list it is missing, so a system whose display was removed comes back.
+
+**Arcadeflow keeps its own copy of the list.** The theme reads the title, year, manufacturer and genre of each game once, into `~/.attract/romlists/<name>.db1`, and after that only adds the games that are missing from it. So when a romlist is rebuilt (by the ROM List, the Scraper or Attract-Mode), FliperOS empties the `.db1` that is older than its romlist, before Attract-Mode Plus opens: the theme reads the whole list again the next time the display opens. Favourites, play counts and last played (`<name>.db2`) are kept; what Arcadeflow's own scraper had fetched for that list is not.
+
 **ES-DE.** In systems with the arcade platform (`mame`, `model2`, `model3` and the RetroArch MAME cores), ES-DE already shows the full name of each MAME set from its own list. Everything else shows the file name until it is scraped: **Setup > Scraper** writes the names, descriptions and artwork to `~/ES-DE/gamelists/<system>/gamelist.xml`. ES-DE's own scraper (*Main menu > Scraper*) also works and saves to the same places.
 
 ## Artwork

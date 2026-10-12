@@ -440,21 +440,46 @@ scraper_attract_layout() {
 # (scraper_attract_layout), se ainda nao tiver. O Attract-Mode Plus 3.x le as
 # telas de config/displays.cfg quando ha config/attract.cfg e ignora as do
 # attract.cfg de fora (este so vale antes da primeira execucao, que o migra).
+# A tela vai no formato em que o Attract-Mode Plus 3.x grava ("display NOME"
+# e as opcoes com 4 espacos e o valor na coluna 24): o Arcadeflow le o
+# displays.cfg contando as colunas (parseconfig) e, de uma tela gravada com
+# tab, tirava "adeflow" do layout e cortava o nome da romlist; ao regravar o
+# arquivo (as colecoes dele), a tela ficava sem layout e sem jogos.
 scraper_attract_display() {
   local acfg="$ATTRACT_DIR/attract.cfg"
   if [[ -f $ATTRACT_DIR/config/attract.cfg ]]; then
     acfg="$ATTRACT_DIR/config/displays.cfg"
   fi
+  scraper_attract_display_format "$acfg"
   if ! awk -v n="$1" '$1 == "romlist" { sub(/^[ \t]*romlist[ \t]+/, ""); if ($0 == n) f = 1 } END { exit !f }' \
     "$acfg" 2> /dev/null; then
     {
-      printf 'display\t%s\n\tlayout               %s\n\tromlist              %s\n\tin_cycle             yes\n\tin_menu              yes\n' \
-        "$1" "$(scraper_attract_layout)" "$1"
+      printf 'display %s\n' "$1"
+      printf '    %-24s%s\n' layout "$(scraper_attract_layout)" romlist "$1" in_cycle yes in_menu yes
       scraper_attract_filters
       printf '\n'
     } >> "$acfg"
   fi
   scraper_attract_default_filters "$acfg"
+}
+
+# scraper_attract_display_format ARQUIVO passa as telas gravadas com tab (as
+# do Setup de antes) para o formato do Attract-Mode Plus. Reescreve o arquivo
+# no lugar, com o mesmo dono, e so se houver o que mudar.
+scraper_attract_display_format() {
+  local acfg=$1 new
+  [[ -f $acfg ]] || return 0
+  grep -qE $'^(display\t|\t(layout|romlist|in_cycle|in_menu)[ \t])' "$acfg" || return 0
+  new=$(awk '
+    /^display\t/ { sub(/^display\t+/, "display "); print; next }
+    /^\t(layout|romlist|in_cycle|in_menu)[ \t]/ {
+      key = $1
+      sub(/^\t[a-z_]+[ \t]+/, "")
+      printf "    %-24s%s\n", key, $0
+      next
+    }
+    { print }' "$acfg"; printf x) || return 1
+  printf '%s' "${new%x}" > "$acfg"
 }
 
 # scraper_attract_filters imprime os filtros de toda tela: todos os jogos,

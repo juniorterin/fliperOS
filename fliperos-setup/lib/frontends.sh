@@ -213,7 +213,34 @@ frontends_attract() {
     frontends_attract_system "$key" "$dir" "$platform" > /dev/null || continue
     n=$((n + 1))
   done < <(frontends_systems)
+  frontends_arcadeflow_sync
   log_info "Attract-Mode Plus: $n sistema(s)"
+}
+
+# O Arcadeflow nao le o titulo, o ano e o genero da romlist a cada vez: guarda
+# o que leu em romlists/<emulador>.db1 e depois so acrescenta os jogos que
+# faltam nele. Uma romlist refeita (ROM List, Scraper) seguia na tela com o
+# nome do arquivo de antes, sem ano nem fabricante.
+# frontends_arcadeflow_sync esvazia o .db1 mais velho que a romlist: o tema le
+# de novo todos os jogos dela ao abrir a tela, e o .db2 (favoritos, vezes
+# jogadas, ultima vez) fica. Sem .db2 o .db1 sai, e o tema refaz os dois. Nao
+# com o Attract-Mode aberto (o tema regrava o banco); fica para a vez
+# seguinte, no fliperos-setup --session-start.
+frontends_arcadeflow_sync() {
+  local list db n=0
+  pgrep -x "${ATTRACTPLUS##*/}" > /dev/null 2>&1 && return 0
+  for list in "$ATTRACT_DIR"/romlists/*.txt; do
+    db=${list%.txt}.db1
+    [[ -f $db && $list -nt $db ]] || continue
+    if [[ -f ${list%.txt}.db2 ]]; then
+      printf 'return({\n})\n' > "$db"
+    else
+      rm -f "$db"
+    fi
+    n=$((n + 1))
+  done
+  ((n)) && log_info "Arcadeflow: $n romlist(s) para ler de novo"
+  return 0
 }
 
 # frontends_attract_system CHAVE PASTA PLATAFORMA: o emulador, a tela e (se
@@ -276,6 +303,9 @@ frontends_romlist() {
     ev_fail "Could not read the GroovyMAME game list (details in the log)"
     return 1
   fi
+  # As outras pastas com jogos (consoles, as de arcade nao marcadas): o
+  # emulador, a tela e a lista que faltarem, para todo sistema aparecer.
+  frontends_attract
   chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
   return 0
 }
