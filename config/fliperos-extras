@@ -41,6 +41,9 @@ pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
 # vem do PPA do autor, com a chave dele (fixada, em /usr/local/share/fliperos)
 # e um pacote por tipo de placa.
 HOTR_PACKAGES="wine wine64 xvfb xauth"
+# O QMamehook e compilado na instalacao (o autor so publica o binario de
+# Windows): o compilador e o Qt 6 com a porta serial.
+QMAMEHOOK_PACKAGES="cmake make g++ qt6-base-dev libqt6serialport6-dev"
 outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
 LEDSPICER_KEY=${FLIPEROS_LEDSPICER_KEY:-/usr/local/share/fliperos/ledspicer-ppa.asc}
 LEDSPICER_PPA="https://ppa.launchpadcontent.net/meduzapat/ledspicer/ubuntu"
@@ -64,6 +67,7 @@ extras_label() {
     zedmd) echo "ZeDMD" ;;
     doflinx) echo "DOFLinx" ;;
     hotr) echo "Hook Of The Reaper" ;;
+    qmamehook) echo "QMamehook" ;;
     ledspicer) echo "LEDSpicer" ;;
   esac
 }
@@ -76,7 +80,7 @@ extras_installed() {
     pixelcade) [[ -x $pixelcade ]] && "$pixelcade" installed ;;
     zedmd) [[ -x $pixelcade ]] && "$pixelcade" zedmd-installed ;;
     doflinx) [[ -x $pixelcade ]] && "$pixelcade" doflinx-installed ;;
-    hotr | ledspicer) [[ -x $outputs ]] && "$outputs" installed "$1" ;;
+    hotr | qmamehook | ledspicer) [[ -x $outputs ]] && "$outputs" installed "$1" ;;
     *) return 2 ;;
   esac
 }
@@ -93,6 +97,7 @@ pixelcade|Pixelcade (LED/LCD marquee)
 zedmd|ZeDMD (open-source LED DMD)
 doflinx|DOFLinx (Pixelcade in-game effects)
 hotr|Hook Of The Reaper (game outputs: light guns, boards)
+qmamehook|QMamehook (game outputs: serial light guns, native)
 ledspicer|LEDSpicer (button LEDs: Ultimarc, LED-Wiz...)
 LIST
 }
@@ -151,7 +156,7 @@ install_heroic() {
 extras_install() {
   local name=$1
   label=$(extras_label "$name")
-  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade, zedmd, doflinx, hotr or ledspicer)"
+  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade, zedmd, doflinx, hotr, qmamehook or ledspicer)"
   ((EUID == 0)) || fail "installing $label needs root (Setup > Extras)"
   case $name in
     # shellcheck disable=SC2086 # um pacote por palavra
@@ -199,6 +204,16 @@ extras_install() {
         > /etc/udev/rules.d/99-fliperos-hotr.rules || fail "could not write the udev rule"
       udevadm control --reload 2> /dev/null && udevadm trigger --subsystem-match=hidraw 2> /dev/null
       if ((progress)); then "$outputs" fetch-hotr --progress || exit 1; else "$outputs" fetch-hotr || exit 1; fi
+      ;;
+    # O compilador e o Qt do apt, ate 55%; o fonte baixado e compilado pelo
+    # fetch-qmamehook, dali a 100%. As pistolas sao portas seriais, do grupo
+    # dialout, em que o usuario ja esta.
+    qmamehook)
+      [[ -x $outputs ]] || fail "$outputs is missing"
+      apt_end=55
+      # shellcheck disable=SC2086
+      apt_install --no-install-recommends $QMAMEHOOK_PACKAGES
+      if ((progress)); then "$outputs" fetch-qmamehook --progress || exit 1; else "$outputs" fetch-qmamehook || exit 1; fi
       ;;
     # O servico (ledspicerd) nao e ligado aqui: sem o /etc/ledspicer.conf com
     # as placas e os LEDs do gabinete ele nao abre.

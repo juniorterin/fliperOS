@@ -304,8 +304,8 @@ const enUS = {
         id: 'outputs',
         title: 'Recoil, lamps and motors',
         boards: 'Serial and USB HID boards',
-        text: 'GroovyMAME, Flycast and Supermodel publish what each game drives outside the screen. Hook Of The Reaper, the successor of MAMEHooker, takes it to light guns and to your own boards. It is a Windows program, run through Wine.',
-        projects: ['Hook Of The Reaper'],
+        text: 'GroovyMAME, Flycast and Supermodel publish what each game drives outside the screen. Hook Of The Reaper, the successor of MAMEHooker, takes it to light guns and to your own boards. It is a Windows program, run through Wine. QMamehook does the same for serial light guns, natively on Linux.',
+        projects: ['Hook Of The Reaper', 'QMamehook'],
       },
       {
         id: 'lights',

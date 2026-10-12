@@ -408,7 +408,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li><strong>Network Setup</strong> — Wi-Fi from the list of networks (with signal) or a <strong>hidden network by typing the SSID</strong>; once connected, the IP shows in the title, next to the disk usage;</li>
 <li><strong>Frontend</strong> — the default boot launcher; what isn't in the image is installed (or downloaded) from here. See <a href="#Frontends">Frontends</a>;</li>
 <li><strong>Splash screen</strong> — the boot screen (Plymouth). The themes are the folders in <code>~/splashscreen</code> (<code>\\fliperos\splashscreen</code> over the network); picking one shows a <strong>preview</strong> on screen for 10 seconds (from the FliperOS menu, not from the desktop) or sets it for the boot: it is copied to <code>/usr/share/plymouth/themes</code>, becomes the default and the initramfs is rebuilt (about a minute). The default is <code>fliperos-text</code>, animated like a modern terminal (the name typing itself in, a gradient progress bar and the services starting); <code>fliperos</code> is in the style of the 2000s boot screens; <strong>Cogwheel</strong>, <strong>Into It</strong> and <strong>Windoze 95</strong> also come installed. <strong>More themes:</strong> <a href="https://www.gnome-look.org/browse?cat=108&amp;ord=latest">Plymouth Themes on Gnome-look</a> — unpack each one into its own folder in <code>~/splashscreen</code>;</li>
-<li><strong>Extras</strong> — installs over the network Wine (the Fightcade 2 emulators), Steam and Heroic (GOG), which are left out of the ISO so it fits in a single GitHub file. See <a href="#Emulators">Emulators</a>. Also the <strong>Pixelcade</strong> LED/LCD marquee software, which is closed source, the <strong>ZeDMD</strong> open-source LED display and <strong>DOFLinx</strong>, the effects on the Pixelcade marquee during a game (<a href="#Frontends">Frontends</a>). And the two programs that take the games' outputs (lamps, recoil, button lights) to hardware: <strong>Hook Of The Reaper</strong>, for light guns and controller boards (a Windows program, run through Wine), and <strong>LEDSpicer</strong>, for LED boards (<a href="#DIY-hardware">DIY hardware</a>). Choosing an extra that is already installed offers to download it again, which updates it;</li>
+<li><strong>Extras</strong> — installs over the network Wine (the Fightcade 2 emulators), Steam and Heroic (GOG), which are left out of the ISO so it fits in a single GitHub file. See <a href="#Emulators">Emulators</a>. Also the <strong>Pixelcade</strong> LED/LCD marquee software, which is closed source, the <strong>ZeDMD</strong> open-source LED display and <strong>DOFLinx</strong>, the effects on the Pixelcade marquee during a game (<a href="#Frontends">Frontends</a>). And the two programs that take the games' outputs (lamps, recoil, button lights) to hardware: <strong>Hook Of The Reaper</strong>, for light guns and controller boards (a Windows program, run through Wine), <strong>QMamehook</strong>, for serial light guns (native, built on the cabinet), and <strong>LEDSpicer</strong>, for LED boards (<a href="#DIY-hardware">DIY hardware</a>). Choosing an extra that is already installed offers to download it again, which updates it;</li>
 <li><strong>Latency</strong> — <strong>Standard</strong> mode (any machine) or <strong>Low latency</strong> (modern CPUs), with a check of this machine against the recommendation and the list of ideal hardware (<a href="#Latency">Latency</a>);</li>
 <li><strong>Scraper</strong> — covers, screenshots, logos, videos and information for each ROM. See <a href="#Scraper">Scraper</a>;</li>
 <li><strong>AttractPlus ROM List</strong> — Attract-Mode Plus game lists of the arcade folders with each game's real name, from GroovyMAME's list, clones and bootlegs included. See <a href="#Adding-games">Adding games</a>;</li>
@@ -2962,7 +2962,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </table>
 <p>The Pixelcade marquee, which FliperOS also supports, is a commercial product with closed software; it is on the <a href="#Frontends">Frontends</a> page.</p>
 <h2 id="game-outputs-lamps-recoil-motors-and-button-lights">Game outputs: lamps, recoil, motors and button lights</h2>
-<p>Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast and Supermodel can publish these <strong>outputs</strong> over the network (TCP port 8000, one <code>name = value</code> line per change). On Windows the program that reads them is MAMEHooker. FliperOS has two readers, each one an extra in <strong>Setup &gt; Extras</strong>. They can be installed together.</p>
+<p>Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast and Supermodel can publish these <strong>outputs</strong> over the network (TCP port 8000, one <code>name = value</code> line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in <strong>Setup &gt; Extras</strong>. They can be installed together.</p>
 <table>
 <thead>
 <tr>
@@ -2978,14 +2978,19 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td><strong>Setup &gt; Extras &gt; Hook Of The Reaper</strong>. A Windows program, run through Wine. Its source isn't public at the moment</td>
 </tr>
 <tr>
+<td><a href="https://github.com/SeongGino/QMamehook">QMamehook</a></td>
+<td>Light guns on a serial port only: OpenFIRE, GUN4IR, Blamcon, RS3 Reaper</td>
+<td><strong>Setup &gt; Extras &gt; QMamehook</strong>. Native, without Wine: its source is built on the cabinet. LGPL-2.1</td>
+</tr>
+<tr>
 <td><a href="https://github.com/meduzapat/LEDSpicer">LEDSpicer</a></td>
 <td>Ready-made LED boards: Ultimarc (PacLED64, PacDrive, Ultimate I/O, NanoLED), LED-Wiz 32, Howler, Adalight</td>
 <td><strong>Setup &gt; Extras &gt; LEDSpicer</strong>, from its author's Ubuntu repository. It lights the buttons each game uses. GPL-3.0</td>
 </tr>
 </tbody>
 </table>
-<p>The emulators only open port 8000 when one of the two is installed, because the port is reachable from the network and accepts a pause command.</p>
-<p>Neither has been tried with a real gun or board on a FliperOS cabinet yet. Hook Of The Reaper was run under Wine against a simulated game: it connects to the port, loads the game's file and closes with the game. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.</p>
+<p>The emulators only open port 8000 when one of them is installed, because the port is reachable from the network and accepts a pause command.</p>
+<p>None of them has been tried with a real gun or board on a FliperOS cabinet yet. QMamehook was built and run against a simulated game: it connects to the port, looks for the game's <code>.ini</code> and closes with the game. Hook Of The Reaper was run under Wine against a simulated game: it connects to the port, loads the game's file and closes with the game. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.</p>
 <h3 id="hook-of-the-reaper">Hook Of The Reaper</h3>
 <p><a href="https://hotr.6bolt.com/">Hook Of The Reaper</a> is the current successor of MAMEHooker. It has no Linux version yet (its author plans one after the program is complete), so FliperOS runs the Windows program through Wine.</p>
 <ul>
@@ -3000,8 +3005,15 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <li>The install adds the packages for every board it supports, but doesn't turn the service on: LEDSpicer needs <code>/etc/ledspicer.conf</code> describing your boards and which LED is which button, as its <a href="https://github.com/meduzapat/LEDSpicer/wiki">wiki</a> explains. Then <code>sudo systemctl enable --now ledspicerd</code>.</li>
 <li>With the service running, FliperOS tells it which game opened (<code>emitter LoadProfileByEmulator &lt;game&gt; arcade</code>, or the console's folder for the others) and when it closed, from any frontend or emulator.</li>
 </ul>
-<h3 id="other-programs">Other programs</h3>
-<p><a href="https://github.com/SeongGino/QMamehook">QMamehook</a> is an open-source (LGPL-2.1) reader that runs natively on Linux, without Wine, and uses MAMEHooker's <code>.ini</code> files unchanged. It only writes to serial ports and only accepts the USB IDs of a few gun boards. FliperOS doesn't install it; it is the option to look at if you want to avoid Wine.</p>
+<h3 id="qmamehook">QMamehook</h3>
+<p><a href="https://github.com/SeongGino/QMamehook">QMamehook</a> is an open-source (LGPL-2.1) reader that runs natively on Linux, without Wine, and uses MAMEHooker's <code>.ini</code> files unchanged. It is small on purpose: it only writes to serial ports and only accepts the USB IDs of a few gun boards (OpenFIRE, GUN4IR, Blamcon; the RS3 Reaper after <code>sudo modprobe usbserial vendor=0x0483 product=0x5750</code>). It has no window and nothing to set up.</p>
+<ul>
+<li><strong>What is installed</strong>: its author publishes only the Windows program, so the install builds version 2.2 from source (pinned by hash) into <code>~/qmamehook</code>. The compiler and Qt 6 come from apt; it takes about two minutes. Nothing of this is in the image.</li>
+<li><strong>Game files</strong>: MAMEHooker <code>.ini</code> files go in <code>~/qmamehook/ini</code>, one per ROM set (<code>sf2ce.ini</code>). The folder is also at <code>~/config/qmamehook</code>, shared on the network. For a game without a file, QMamehook writes one there listing the outputs the game sent, for you to fill in.</li>
+<li><strong>Players</strong>: the guns are numbered in the order of their USB product IDs, so the <code>.ini</code> writes to port 1 for the first gun, 2 for the second.</li>
+<li><strong>When it runs</strong>: it opens with each game of GroovyMAME, Flycast and Supermodel and closes with it. What it says (the guns it found, the file it loaded) is in <code>/opt/fliperos/logs/qmamehook.log</code>.</li>
+<li><strong>With Hook Of The Reaper also installed</strong>, only one of the two opens with the game, because a gun's serial port can't be shared: Hook Of The Reaper, unless <code>/etc/fliperos/fliperos.conf</code> has the line <code>outputs_reader=qmamehook</code>.</li>
+</ul>
 <h2 id="adding-a-project-to-this-page">Adding a project to this page</h2>
 <p>A project fits here if its firmware or software is open source and it works on Linux without a closed driver. If you use one of these on your cabinet, or another one, open an issue in the <a href="https://github.com/juniorterin/fliperOS/issues">repository</a> saying which board, what the Setup showed in <strong>Setup &gt; Quirks &gt; USB devices connected now</strong>, and whether it needed a quirk: that is what turns a line of this page from "should work" into "tested".</p>
 <h1 id="Kernel-15-kHz">15 kHz kernel</h1>

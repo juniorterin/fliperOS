@@ -24,6 +24,7 @@ const PROJECT_URL: Record<string, string> = {
   'Arcade Spinner': 'https://github.com/jmtw000/Arcade-Spinner',
   OpenFIRE: 'https://github.com/TeamOpenFIRE/OpenFIRE-Firmware',
   'Hook Of The Reaper': 'https://hotr.6bolt.com/',
+  QMamehook: 'https://github.com/SeongGino/QMamehook',
   LEDSpicer: 'https://github.com/meduzapat/LEDSpicer',
 };
 

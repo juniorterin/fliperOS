@@ -4,7 +4,7 @@
 # faz no Windows.
 #
 # O GroovyMAME, o Flycast e o Supermodel publicam as saidas pela rede (TCP
-# 8000, linhas "nome = valor", o protocolo que o MAMEHooker le). Dois
+# 8000, linhas "nome = valor", o protocolo que o MAMEHooker le). Tres
 # programas as leem, cada um um extra do Setup > Extras, e podem ficar juntos
 # (o MAME aceita varios clientes):
 #
@@ -15,15 +15,24 @@
 #     Wine. Abre com o jogo, numa tela virtual (Xvfb) para nenhuma janela
 #     dele cair em cima do jogo, e fecha com ele. As pistolas se configuram
 #     pelo desktop (menu Preferences > Hook Of The Reaper).
+#   - QMamehook (github.com/SeongGino/QMamehook, LGPL): o leitor nativo de
+#     Linux, pequeno, so para pistolas de porta serial (OpenFIRE, GUN4IR,
+#     Blamcon, RS3 Reaper), com os mesmos .ini do MAMEHooker. O autor so
+#     publica o binario de Windows: o fonte, fixado por hash, e compilado
+#     na instalacao para ~/qmamehook. Abre e fecha com o jogo. Com o Hook Of
+#     The Reaper tambem instalado so um dos dois abre (a porta serial da
+#     pistola e de um so): o do outputs_reader= do fliperos.conf, ou o Hook
+#     Of The Reaper.
 #   - LEDSpicer (github.com/meduzapat/LEDSpicer, do PPA dele): acende os LEDs
 #     dos botoes em placas prontas (Ultimarc, LED-Wiz, Howler, Adalight). E um
 #     servico (ledspicerd); aqui ele so e avisado do jogo que abriu e fechou.
 #
-# Sem nenhum dos dois os emuladores nem abrem a porta, que fica visivel na
+# Sem nenhum deles os emuladores nem abrem a porta, que fica visivel na
 # rede e aceita o comando de pausa.
 #
-#   fliperos-outputs installed [hotr|ledspicer]   status 0 se ha um leitor instalado (ou aquele)
+#   fliperos-outputs installed [hotr|qmamehook|ledspicer]   status 0 se ha um leitor instalado (ou aquele)
 #   fliperos-outputs fetch-hotr [--progress]      baixa o Hook Of The Reaper (de novo: atualiza, as configuracoes ficam)
+#   fliperos-outputs fetch-qmamehook [--progress] baixa e compila o QMamehook (de novo: atualiza, os .ini ficam)
 #   fliperos-outputs hotr                         abre o Hook Of The Reaper na tela (para configurar as pistolas)
 #   fliperos-outputs launch PROGRAMA [ARGS...]    o jogo da linha de comando abriu (pelos lancadores)
 set -uo pipefail
@@ -33,6 +42,12 @@ HOTR_VERSION="1.3.5C"
 HOTR_SHA256=${HOTR_SHA256:-78dfbaff8d00e92de2d052469bb382efa99fd60295dc921ccb668260edc52077}
 hotr_url=${HOTR_URL:-https://hotr.6bolt.com/pmwiki.php/Releases/HOTRv1p3p5C?action=downloadman&upname=HookOfTheReaper_v1p3p5C.zip}
 hotr_dir=${HOTR_DIR:-/home/fliperos/hotr}
+# QMamehook: o fonte da versao, fixado por hash.
+QMH_VERSION="2.2"
+QMH_SHA256=${QMH_SHA256:-7611c54a032cb1c32799b7488975021c4499f5ce4487d76179b4a4ac9207b674}
+qmh_url=${QMH_URL:-https://github.com/SeongGino/QMamehook/archive/refs/tags/v$QMH_VERSION.tar.gz}
+qmh_dir=${QMH_DIR:-/home/fliperos/qmamehook}
+conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 wine=${FLIPEROS_WINE:-/usr/bin/wine}
 emitter=${FLIPEROS_LEDSPICER_EMITTER:-/usr/bin/emitter}
 roms=${ROMS_DIR:-/home/fliperos/roms}
@@ -43,12 +58,12 @@ self=$(readlink -f -- "${BASH_SOURCE[0]}")
 export WINEPREFIX="${HOTR_WINEPREFIX:-/home/fliperos/.local/share/fliperos/wine-hotr}"
 export WINEARCH=win64 WINEDEBUG="${WINEDEBUG:--all}"
 
-progress=0
+progress=0 what="Hook Of The Reaper"
 say() {
   if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
 }
 fail() {
-  if ((progress)); then printf '@fail %s|%s\n' "Hook Of The Reaper" "$1"; else printf 'fliperos-outputs: %s\n' "$1" >&2; fi
+  if ((progress)); then printf '@fail %s|%s\n' "$what" "$1"; else printf 'fliperos-outputs: %s\n' "$1" >&2; fi
   exit 1
 }
 
@@ -56,12 +71,89 @@ hotr_installed() {
   [[ -f $hotr_dir/HookOfTheReaper.exe && -x $wine ]]
 }
 
+qmh_installed() {
+  [[ -x $qmh_dir/QMamehook ]]
+}
+
 installed() {
   case ${1:-} in
     hotr) hotr_installed ;;
+    qmamehook) qmh_installed ;;
     ledspicer) [[ -x $emitter ]] ;;
-    *) hotr_installed || [[ -x $emitter ]] ;;
+    *) hotr_installed || qmh_installed || [[ -x $emitter ]] ;;
   esac
+}
+
+# gun_reader: qual dos dois leitores de pistola abre com o jogo. Os dois
+# escreveriam na mesma porta serial: com os dois instalados vale o
+# outputs_reader= do fliperos.conf (hotr ou qmamehook), ou o Hook Of The
+# Reaper, que fala com mais aparelhos.
+gun_reader() {
+  local want
+  want=$(sed -n 's/^outputs_reader=//p' "$conf" 2> /dev/null | tail -1)
+  if hotr_installed && qmh_installed; then
+    [[ $want == qmamehook ]] && echo qmamehook || echo hotr
+  elif hotr_installed; then
+    echo hotr
+  elif qmh_installed; then
+    echo qmamehook
+  fi
+}
+
+# fetch_qmamehook: o fonte da versao compilado para ~/qmamehook/QMamehook
+# (um minuto; o cmake, o g++ e o Qt 6 vem pelo Setup > Extras). Os .ini dos
+# jogos ficam em ~/qmamehook/ini, e os que a pessoa pos nao sao tocados.
+fetch_qmamehook() {
+  local tmp
+  what="QMamehook"
+  [[ ${1:-} == --progress ]] && progress=1
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    mkdir -p "$qmh_dir" && chown "$user:" "$qmh_dir" || fail "could not create $qmh_dir"
+    runuser -u "$user" -- env FLIPEROS_AS_ROOT=1 "$self" fetch-qmamehook "$@" || exit 1
+    return 0
+  fi
+  mkdir -p "$qmh_dir/ini" 2> /dev/null && [[ -w $qmh_dir ]] || fail "$qmh_dir is not writable"
+  command -v cmake > /dev/null && command -v g++ > /dev/null || fail "cmake and g++ are missing (Setup > Extras installs them)"
+  tmp=$(mktemp -d) || fail "could not create a temporary folder"
+  # shellcheck disable=SC2064
+  trap "rm -rf '$tmp'" EXIT
+  say 60 "Downloading the QMamehook $QMH_VERSION source from GitHub"
+  curl -sSfL --retry 3 --max-time 300 -o "$tmp/src.tar.gz" "$qmh_url" >&2 || fail "the download failed (no network?)"
+  echo "$QMH_SHA256  $tmp/src.tar.gz" | sha256sum -c --quiet - >&2 ||
+    fail "the downloaded file is not the QMamehook $QMH_VERSION source"
+  say 75 "Building QMamehook"
+  mkdir "$tmp/src" && tar -xzf "$tmp/src.tar.gz" -C "$tmp/src" --strip-components=1 --no-same-owner >&2 ||
+    fail "could not unpack the QMamehook source"
+  cmake -S "$tmp/src" -B "$tmp/build" -DCMAKE_BUILD_TYPE=Release > "$tmp/build.log" 2>&1 &&
+    make -C "$tmp/build" -j"$(nproc)" >> "$tmp/build.log" 2>&1 || {
+    tail -20 "$tmp/build.log" >&2
+    fail "QMamehook did not build"
+  }
+  install -m755 "$tmp/build/QMamehook" "$qmh_dir/QMamehook" || fail "could not install QMamehook into $qmh_dir"
+  [[ -n ${FLIPEROS_AS_ROOT:-} ]] && return 0
+  say 100 "QMamehook $QMH_VERSION installed"
+}
+
+# qmh_game PID: o QMamehook ate o processo PID (o jogo) acabar. E um programa
+# de terminal: o que ele diz (pistolas achadas, o .ini do jogo) vai para o log.
+qmh_game() {
+  local pid=$1 qlog=${log%/*}/qmamehook.log
+  qmh_installed || return 0
+  pgrep -u "$(id -u)" -x QMamehook > /dev/null 2>&1 && return 0
+  { : > "$qlog"; } 2> /dev/null || qlog=/dev/null
+  (
+    # -c: sai sozinho quando o jogo fecha a conexao, e so numa saida limpa
+    # ele grava o .ini modelo de um jogo que ainda nao tinha um. O kill e
+    # para o que ficou esperando um jogo que nunca abriu a porta.
+    stdbuf -oL "$qmh_dir/QMamehook" -c -p "$qmh_dir/ini" &
+    hook=$!
+    if [[ $pid =~ ^[0-9]+$ ]] && ((pid > 1)); then
+      tail --pid="$pid" -f /dev/null
+      timeout 3 tail --pid="$hook" -f /dev/null
+      kill "$hook" 2> /dev/null
+    fi
+    wait "$hook"
+  ) < /dev/null > "$qlog" 2>&1 &
 }
 
 # fetch_hotr: o pacote do site dele em ~/hotr. As configuracoes (data/*.hor:
@@ -163,14 +255,19 @@ ledspicer() {
 
 # launch PROGRAMA [ARGS...]: a linha de comando que o fliperos-kms-run ou o
 # fliperos-x11-run recebeu. O jogo e o ultimo argumento (um arquivo de ~/roms,
-# ou o nome do set no GroovyMAME e no Model 2). O Hook Of The Reaper so para
-# os emuladores que publicam as saidas.
+# ou o nome do set no GroovyMAME e no Model 2). O Hook Of The Reaper ou o
+# QMamehook so para os emuladores que publicam as saidas.
 launch() {
   local prog last rom="" platform=arcade folder pid=${FLIPEROS_GAME_PID:-$PPID}
   (($# >= 1)) || return 0
   prog=${1##*/}
   case $prog in
-    groovymame | flycast | supermodel) hotr_game "$pid" ;;
+    groovymame | flycast | supermodel)
+      case $(gun_reader) in
+        hotr) hotr_game "$pid" ;;
+        qmamehook) qmh_game "$pid" ;;
+      esac
+      ;;
   esac
   (($# >= 2)) || return 0
   last=${*: -1}
@@ -209,6 +306,10 @@ case ${1:-} in
   fetch-hotr)
     shift
     fetch_hotr "$@"
+    ;;
+  fetch-qmamehook)
+    shift
+    fetch_qmamehook "$@"
     ;;
   hotr)
     hotr_installed || { echo "fliperos-outputs: Hook Of The Reaper is not installed (Setup > Extras)" >&2; exit 1; }

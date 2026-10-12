@@ -308,8 +308,8 @@ const ptBR: Messages = {
         id: 'outputs',
         title: 'Recuo, lâmpadas e motores',
         boards: 'Placas seriais e USB HID',
-        text: 'O GroovyMAME, o Flycast e o Supermodel publicam o que cada jogo aciona fora da tela. O Hook Of The Reaper, sucessor do MAMEHooker, leva isso às pistolas e às suas próprias placas. É um programa de Windows, rodado pelo Wine.',
-        projects: ['Hook Of The Reaper'],
+        text: 'O GroovyMAME, o Flycast e o Supermodel publicam o que cada jogo aciona fora da tela. O Hook Of The Reaper, sucessor do MAMEHooker, leva isso às pistolas e às suas próprias placas. É um programa de Windows, rodado pelo Wine. O QMamehook faz o mesmo para pistolas de porta serial, nativo no Linux.',
+        projects: ['Hook Of The Reaper', 'QMamehook'],
       },
       {
         id: 'lights',

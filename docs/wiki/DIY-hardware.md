@@ -46,16 +46,17 @@ The Pixelcade marquee, which FliperOS also supports, is a commercial product wit
 
 ## Game outputs: lamps, recoil, motors and button lights
 
-Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast and Supermodel can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has two readers, each one an extra in **Setup > Extras**. They can be installed together.
+Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast and Supermodel can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in **Setup > Extras**. They can be installed together.
 
 | Project | What it drives | With FliperOS |
 | --- | --- | --- |
 | [Hook Of The Reaper](https://hotr.6bolt.com/) | Light guns with recoil and lights (OpenFIRE, GUN4IR, Blamcon, Fusion, RS3 Reaper, Alien, AimTrak, Sinden and others), boards on a serial port or USB HID, Ultimarc light boards | **Setup > Extras > Hook Of The Reaper**. A Windows program, run through Wine. Its source isn't public at the moment |
+| [QMamehook](https://github.com/SeongGino/QMamehook) | Light guns on a serial port only: OpenFIRE, GUN4IR, Blamcon, RS3 Reaper | **Setup > Extras > QMamehook**. Native, without Wine: its source is built on the cabinet. LGPL-2.1 |
 | [LEDSpicer](https://github.com/meduzapat/LEDSpicer) | Ready-made LED boards: Ultimarc (PacLED64, PacDrive, Ultimate I/O, NanoLED), LED-Wiz 32, Howler, Adalight | **Setup > Extras > LEDSpicer**, from its author's Ubuntu repository. It lights the buttons each game uses. GPL-3.0 |
 
-The emulators only open port 8000 when one of the two is installed, because the port is reachable from the network and accepts a pause command.
+The emulators only open port 8000 when one of them is installed, because the port is reachable from the network and accepts a pause command.
 
-Neither has been tried with a real gun or board on a FliperOS cabinet yet. Hook Of The Reaper was run under Wine against a simulated game: it connects to the port, loads the game's file and closes with the game. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.
+None of them has been tried with a real gun or board on a FliperOS cabinet yet. QMamehook was built and run against a simulated game: it connects to the port, looks for the game's `.ini` and closes with the game. Hook Of The Reaper was run under Wine against a simulated game: it connects to the port, loads the game's file and closes with the game. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.
 
 ### Hook Of The Reaper
 
@@ -72,9 +73,15 @@ Neither has been tried with a real gun or board on a FliperOS cabinet yet. Hook 
 - The install adds the packages for every board it supports, but doesn't turn the service on: LEDSpicer needs `/etc/ledspicer.conf` describing your boards and which LED is which button, as its [wiki](https://github.com/meduzapat/LEDSpicer/wiki) explains. Then `sudo systemctl enable --now ledspicerd`.
 - With the service running, FliperOS tells it which game opened (`emitter LoadProfileByEmulator <game> arcade`, or the console's folder for the others) and when it closed, from any frontend or emulator.
 
-### Other programs
+### QMamehook
 
-[QMamehook](https://github.com/SeongGino/QMamehook) is an open-source (LGPL-2.1) reader that runs natively on Linux, without Wine, and uses MAMEHooker's `.ini` files unchanged. It only writes to serial ports and only accepts the USB IDs of a few gun boards. FliperOS doesn't install it; it is the option to look at if you want to avoid Wine.
+[QMamehook](https://github.com/SeongGino/QMamehook) is an open-source (LGPL-2.1) reader that runs natively on Linux, without Wine, and uses MAMEHooker's `.ini` files unchanged. It is small on purpose: it only writes to serial ports and only accepts the USB IDs of a few gun boards (OpenFIRE, GUN4IR, Blamcon; the RS3 Reaper after `sudo modprobe usbserial vendor=0x0483 product=0x5750`). It has no window and nothing to set up.
+
+- **What is installed**: its author publishes only the Windows program, so the install builds version 2.2 from source (pinned by hash) into `~/qmamehook`. The compiler and Qt 6 come from apt; it takes about two minutes. Nothing of this is in the image.
+- **Game files**: MAMEHooker `.ini` files go in `~/qmamehook/ini`, one per ROM set (`sf2ce.ini`). The folder is also at `~/config/qmamehook`, shared on the network. For a game without a file, QMamehook writes one there listing the outputs the game sent, for you to fill in.
+- **Players**: the guns are numbered in the order of their USB product IDs, so the `.ini` writes to port 1 for the first gun, 2 for the second.
+- **When it runs**: it opens with each game of GroovyMAME, Flycast and Supermodel and closes with it. What it says (the guns it found, the file it loaded) is in `/opt/fliperos/logs/qmamehook.log`.
+- **With Hook Of The Reaper also installed**, only one of the two opens with the game, because a gun's serial port can't be shared: Hook Of The Reaper, unless `/etc/fliperos/fliperos.conf` has the line `outputs_reader=qmamehook`.
 
 ## Adding a project to this page
 

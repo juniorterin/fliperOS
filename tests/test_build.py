@@ -4843,7 +4843,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
             rows = [line.split('|') for line in run('list').stdout.splitlines()]
             self.assertEqual([(r[0], r[1]) for r in rows],
                              [('wine', '1'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0'), ('zedmd', '0'),
-                              ('doflinx', '0'), ('hotr', '0'), ('ledspicer', '0')])
+                              ('doflinx', '0'), ('hotr', '0'), ('qmamehook', '0'), ('ledspicer', '0')])
             self.assertEqual(run('installed', 'wine').returncode, 0)
             self.assertNotEqual(run('installed', 'steam').returncode, 0)
             if os.geteuid() != 0:
@@ -5514,6 +5514,7 @@ class OutputsTests(unittest.TestCase):
         self.env = dict(os.environ, PATH='%s:%s' % (t / 'bin', os.environ['PATH']),
                         FLIPEROS_WINE=str(t / 'bin/wine'), FLIPEROS_LEDSPICER_EMITTER=str(t / 'bin/emitter'),
                         HOTR_DIR=str(t / 'hotr'), HOTR_WINEPREFIX=str(t / 'prefix/wine-hotr'),
+                        QMH_DIR=str(t / 'qmamehook'), FLIPEROS_CONF=str(t / 'fliperos.conf'),
                         ROMS_DIR=str(self.roms), FLIPEROS_LOGS=str(t / 'logs'), FLIPEROS_USER='root',
                         FLIPEROS_GAME_PID=str(self.game.pid))
 
@@ -5527,6 +5528,78 @@ class OutputsTests(unittest.TestCase):
         self.tool('wineserver', 'echo "wineserver $*" >> %s\npkill -f "%s HookOfTheReaper.exe"\n'
                                 % (log, self.tmp / 'bin/wine'))
         self.tool('xvfb-run', '[ "$1" = -a ] && shift\nexec "$@"\n')
+
+    def install_qmamehook(self):
+        """Um QMamehook de mentira, que anota como foi aberto e fica aberto."""
+        qmh = self.tmp / 'qmamehook'
+        (qmh / 'ini').mkdir(parents=True, exist_ok=True)
+        (qmh / 'QMamehook').write_text('#!/bin/bash\necho "qmamehook $*" >> %s\nwhile :; do /bin/sleep 0.1; done\n'
+                                       % (self.tmp / 'qmh.log'))
+        (qmh / 'QMamehook').chmod(0o755)
+
+    def test_qmamehook_runs_while_the_game_does(self):
+        self.assertNotEqual(self.run_('installed', 'qmamehook').returncode, 0)
+        self.install_qmamehook()
+        self.assertEqual(self.run_('installed', 'qmamehook').returncode, 0)
+        self.assertEqual(self.run_('installed').returncode, 0)
+        # Um emulador sem saidas nao o abre.
+        self.run_('launch', '/usr/bin/pcsx2', str(self.roms / 'naomi/x.zip'))
+        self.run_('launch', '/usr/local/bin/groovymame', 'sf2ce')
+        ini = self.tmp / 'qmamehook/ini'
+        self.assertEqual(self.lines('qmh.log', 1), ['qmamehook -c -p %s' % ini])
+        self.assertTrue((self.tmp / 'logs/qmamehook.log').exists())
+        running = lambda: subprocess.run(['pgrep', '-f', str(self.tmp / 'qmamehook/QMamehook')],
+                                         capture_output=True).returncode == 0
+        self.assertTrue(running())
+        # Fecha com o jogo.
+        self.game.kill()
+        self.game.wait()
+        deadline = time.time() + 10
+        while running() and time.time() < deadline:
+            time.sleep(0.1)
+        self.assertFalse(running())
+
+    def test_only_one_gun_reader_opens(self):
+        # A porta serial da pistola e de um so: com os dois instalados abre o
+        # Hook Of The Reaper, ou o do outputs_reader= do fliperos.conf.
+        self.install_hotr()
+        self.install_qmamehook()
+        self.run_('launch', '/usr/local/bin/groovymame', 'sf2ce')
+        self.assertEqual(len(self.lines('wine.log', 1)), 1)
+        self.assertFalse((self.tmp / 'qmh.log').exists())
+        subprocess.run(['pkill', '-f', '%s HookOfTheReaper.exe' % (self.tmp / 'bin/wine')])
+        (self.tmp / 'fliperos.conf').write_text('outputs_reader=qmamehook\n')
+        self.run_('launch', '/usr/local/bin/groovymame', 'sf2ce')
+        self.assertEqual(len(self.lines('qmh.log', 1)), 1)
+        self.assertEqual(len((self.tmp / 'wine.log').read_text().splitlines()), 1)
+        self.addCleanup(subprocess.run, ['pkill', '-f', str(self.tmp / 'qmamehook/QMamehook')])
+
+    def test_qmamehook_source_is_pinned_and_built(self):
+        # O fonte e conferido pelo hash e compilado (cmake e make de mentira);
+        # os .ini que a pessoa pos ficam.
+        src = self.tmp / 'pkg/QMamehook-2.2'
+        src.mkdir(parents=True)
+        (src / 'CMakeLists.txt').write_text('project(QMamehook)\n')
+        tarball = self.tmp / 'src.tar.gz'
+        subprocess.run(['tar', '-czf', str(tarball), '-C', str(self.tmp / 'pkg'), 'QMamehook-2.2'], check=True)
+        self.tool('cmake', 'while [ $# -gt 0 ]; do [ "$1" = -S ] && src=$2; [ "$1" = -B ] && build=$2; shift; done\n'
+                           '[ -f "$src/CMakeLists.txt" ] && mkdir -p "$build"\n')
+        self.tool('make', 'while [ $# -gt 0 ]; do [ "$1" = -C ] && build=$2; shift; done\n'
+                          'printf "#!/bin/sh\\n" > "$build/QMamehook"\n')
+        self.tool('g++', 'exit 0\n')
+        self.env['QMH_URL'] = 'file://%s' % tarball
+        proc = self.run_('fetch-qmamehook')
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('not the QMamehook', proc.stderr)
+        self.assertFalse((self.tmp / 'qmamehook/QMamehook').exists())
+        self.assertRegex(self.SCRIPT.read_text(), r'QMH_SHA256=\$\{QMH_SHA256:-[0-9a-f]{64}\}')
+        self.env['QMH_SHA256'] = hashlib.sha256(tarball.read_bytes()).hexdigest()
+        (self.tmp / 'qmamehook/ini/sf2ce.ini').write_text('mine')
+        proc = self.run_('fetch-qmamehook', '--progress')
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn('@step 100 QMamehook 2.2 installed', proc.stdout)
+        self.assertTrue(os.access(self.tmp / 'qmamehook/QMamehook', os.X_OK))
+        self.assertEqual((self.tmp / 'qmamehook/ini/sf2ce.ini').read_text(), 'mine')
 
     def tool(self, name, body):
         path = self.tmp / 'bin' / name

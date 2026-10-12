@@ -173,4 +173,6 @@ cfglink skyscraper "$HOME/.skyscraper"
 # Hook Of The Reaper: as configuracoes, os arquivos de jogo e os .ini do
 # MAMEHooker (config/fliperos-outputs).
 cfglink hotr "$HOME/hotr"
+# QMamehook: os .ini dos jogos.
+cfglink qmamehook "$HOME/qmamehook"
 exit 0
