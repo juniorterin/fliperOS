@@ -60,6 +60,20 @@ export function Pixelcade() {
           })}
         </ul>
 
+        <Reveal className="mt-6">
+          <a
+            href={`${LINKS.docs}/Scoreboard-games`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm font-medium text-pink transition hover:text-fg"
+          >
+            <Swords className="size-4" aria-hidden="true" />
+            {p.games}
+            <ArrowUpRight className="size-4" aria-hidden="true" />
+            <span className="sr-only">{t.a11y.external}</span>
+          </a>
+        </Reveal>
+
         <Reveal className="mt-14">
           <p className="font-mono text-xs tracking-widest text-comment uppercase">{p.sizesLabel}</p>
           <div className="mt-4 grid gap-4 lg:grid-cols-3">

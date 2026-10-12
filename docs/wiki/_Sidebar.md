@@ -5,6 +5,7 @@ Using it
 - [Install](Install.md)
 - [Installed system](Installed-system.md)
 - [Frontends](Frontends.md)
+- [Scoreboard games](Scoreboard-games.md)
 - [Emulators](Emulators.md)
 - [Fightcade 2](Fightcade-2.md)
 - [ROMs, BIOS and artwork](ROMs.md)

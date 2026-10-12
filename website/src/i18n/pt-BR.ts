@@ -237,7 +237,7 @@ const ptBR: Messages = {
     },
     points: [
       { id: 'zedmd', title: 'ZeDMD: monte o seu', text: 'Um ESP32 e painéis de LED HUB75, de 128×32 ou 256×64. O FliperOS desenha cada quadro ele mesmo, com a arte de marquee da sua própria coleção.' },
-      { id: 'versus', title: 'Modo placar', text: 'Nos jogos de luta o display vira placar: os dois personagens e as vitórias de cada lado na sessão, fixos no ZeDMD e em texto no Pixelcade. Cerca de 280 arcades no GroovyMAME e 120 no core FBNeo do RetroArch, pelos detectores do Fightcade.' },
+      { id: 'versus', title: 'Modo placar', text: 'Nos jogos de luta o display vira placar: os dois personagens e as vitórias de cada lado na sessão, fixos no ZeDMD e em texto no Pixelcade. Cerca de 200 arcades no GroovyMAME e 100 no core FBNeo do RetroArch, pelos detectores do Fightcade.' },
       { id: 'install', title: 'Instale pelo Setup', text: 'Setup > Extras > ZeDMD ou Pixelcade baixa o programa do display e liga o serviço, os scripts do ES-DE e o plugin do Attract-Mode Plus.' },
       { id: 'browse', title: 'Acompanha o menu', text: 'No ES-DE e no Attract-Mode Plus o display muda conforme você passa pelos sistemas e jogos.' },
       { id: 'launch', title: 'Em todo lançador', text: 'GroovyMAME, RetroArch, Flycast, Supermodel, Dolphin e os outros emuladores atualizam o display quando o jogo abre, seja qual for o frontend que o abriu.' },
@@ -274,6 +274,7 @@ const ptBR: Messages = {
     disclaimer: 'O ZeDMD é um projeto open source dos seus próprios autores. A Pixelcade é um produto dos seus próprios fabricantes, vendido à parte. O FliperOS não tem vínculo com nenhum dos dois e baixa o software de cada um do repositório oficial. Os nomes e logotipos dos jogos pertencem aos seus donos; o emblema da simulação é um desenho próprio.',
     cta: 'Leia o guia dos displays',
     zedmd: 'Projeto ZeDMD',
+    games: 'Veja a lista dos jogos com modo placar',
     shop: 'pixelcade.org',
   },
   openHardware: {

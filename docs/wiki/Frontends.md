@@ -40,7 +40,7 @@ A [Pixelcade](https://pixelcade.org) LED or LCD marquee shows the game you have 
 
 During a two-player match the display shows the score: the matches each side has won since the game opened. On a ZeDMD the score stays on the display (`GUILE 3 x 1 KEN`, with each side's character when the game tells it, or `P1` and `P2`). On a Pixelcade a text scrolls each time someone wins a match, and then the game's marquee comes back. The score appears with the first win: until then (the game's demo, the character select, the first match) the display keeps the game's picture.
 
-It works in **GroovyMAME**, for about 280 arcade games, and in **RetroArch with the FBNeo core**, for about 120: the ones [Fightcade](https://www.fightcade.com) has a detector for.
+It works in **GroovyMAME**, for about 200 arcade ROM sets, and in **RetroArch with the FBNeo core**, for about 100: the ones [Fightcade](https://www.fightcade.com) has a detector for. The full list is in [Scoreboard games](Scoreboard-games.md).
 
 What was checked on a FliperOS cabinet, with Fightcade's own detectors and no picture on the tube:
 

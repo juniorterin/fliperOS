@@ -233,7 +233,7 @@ const enUS = {
     },
     points: [
       { id: 'zedmd', title: 'ZeDMD: build your own', text: 'An ESP32 and HUB75 LED panels, 128×32 or 256×64. FliperOS draws every frame itself, with the marquee art of your own collection.' },
-      { id: 'versus', title: 'Scoreboard mode', text: 'In fighting games the display becomes a scoreboard: the two characters and each side’s wins in the session, fixed on the ZeDMD and as text on Pixelcade. About 280 arcade games in GroovyMAME and 120 in RetroArch’s FBNeo core, through Fightcade’s detectors.' },
+      { id: 'versus', title: 'Scoreboard mode', text: 'In fighting games the display becomes a scoreboard: the two characters and each side’s wins in the session, fixed on the ZeDMD and as text on Pixelcade. About 200 arcade games in GroovyMAME and 100 in RetroArch’s FBNeo core, through Fightcade’s detectors.' },
       { id: 'install', title: 'Install from the Setup', text: 'Setup > Extras > ZeDMD or Pixelcade downloads the display’s program and turns on the service, the ES-DE scripts and the Attract-Mode Plus plugin.' },
       { id: 'browse', title: 'Follows the menu', text: 'In ES-DE and Attract-Mode Plus the display changes as you move through systems and games.' },
       { id: 'launch', title: 'Every launcher', text: 'GroovyMAME, RetroArch, Flycast, Supermodel, Dolphin and the other emulators update the display when the game starts, whatever frontend opened it.' },
@@ -270,6 +270,7 @@ const enUS = {
     disclaimer: 'ZeDMD is an open-source project of its own authors. Pixelcade is a product of its own makers, sold separately. FliperOS is not affiliated with either and downloads each one’s software from its official repository. Game names and logos belong to their owners; the emblem in the simulation is an original drawing.',
     cta: 'Read the displays guide',
     zedmd: 'ZeDMD project',
+    games: 'See the list of games with scoreboard mode',
     shop: 'pixelcade.org',
   },
   openHardware: {
