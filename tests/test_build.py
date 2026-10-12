@@ -5209,6 +5209,17 @@ class PixelcadeTests(unittest.TestCase):
         self.run_('versus', '3', '2', '-', '-')
         self.assertEqual(self.dmd_calls(7)[4:], ['versus YOU 2 1 RIVAL 90 900', 'versus YOU 3 2 RIVAL 900 90',
                                                  'versus P2 2 3 P1 - -'])
+        # O personagem de cada lado no lugar de P1 e P2 (os detectores do
+        # Fightcade o dizem), sem o que vem entre parenteses e ate 10 letras.
+        conf.write_text('')
+        self.assertEqual(self.run_('versus', '4', '2', '-', '-', 'Guile', 'M.Bison (Dictator)'),
+                         ['text?t=GUILE%204%20x%202%20M.BISON&l=1&event=GameStart',
+                          'arcade/stream/mame/sf2?l=99999&event=GameStart'])
+        conf.write_text('versus_side=2\n')
+        self.run_('versus', '4', '2', '-', '-', 'Guile', '')
+        self.run_('versus', '4', '2', '-', '-', 'Chun Li Something Long', 'Ken')
+        self.assertEqual(self.dmd_calls(10)[7:], ['versus GUILE 4 2 M.BISON - -', 'versus P2 2 4 GUILE - -',
+                                                  'versus KEN 2 4 CHUN LI SO - -'])
 
     def test_a_game_in_the_versus_table_starts_the_score_reader(self):
         self.install()
@@ -5694,6 +5705,98 @@ class VersusTests(unittest.TestCase):
                 for field, (addr, size, fmt, mult) in fields.items():
                     self.assertIn(field, v.FIELDS)
 
+    DETECTOR = ('start=Start,CpsRamFF,eq,0x8abf,153,8\r\n'
+                'player1=P1 Win,CpsRamFF,eq,0x864f,2,8\r\n'
+                'player2=P2 Win,CpsRamFF,eq,0x894f,2,8\r\n'
+                'char1=P1 Char,CpsRamFF,char,0x864E,0,8\r\n'
+                'char2=P2 Char,CpsRamFF,char,0x894E,0,8\r\n'
+                'char=0,Ryu\r\nchar=3,Guile\r\nchar=8,M.Bison (Dictator)\r\n')
+
+    def detectors(self, **files):
+        folder = self.tmp / 'detectors'
+        folder.mkdir(exist_ok=True)
+        for name, text in files.items():
+            (folder / (name + '.inf')).write_text(text)
+        self.env['VERSUS_DETECTORS'] = str(folder)
+        self.versus.DETECTORS = str(folder)
+        return folder
+
+    def test_fightcade_detectors_give_the_wins_and_the_characters(self):
+        v = self.versus
+        self.detectors(sf2ce=self.DETECTOR,
+                       kof98='start=Start,68K RAM,eq,0xA83B,96,8\nplayer1=P1 Win,68K RAM,gts,0xDAF8,0,8\n'
+                             'player2=P2 Win,68K RAM,gts,0xDAFA,0,8\n',
+                       avengrgs='start=Start,raw,eq,0x1D5C86,805777415,32\nplayer1=P1 Win,raw,eq,0x1D401A,25,16\n'
+                                'player2=P2 Win,raw,eq,0x1D4016,25,16\n',
+                       # A "Main RAM" do CPS3 ainda nao tem endereco conhecido no MAME.
+                       sfiii3nr1='start=Start,Main RAM,eq,0x2867a,99,8\nplayer1=P1 Win,Main RAM,gts,0x16cd6,0,8\n'
+                                 'player2=P2 Win,Main RAM,gts,0x16cd4,0,8\n',
+                       half='start=Start,raw,eq,0x10,1,8\nplayer1=P1 Win,raw,eq,0x11,1,8\n')
+        self.table.write_text('')
+        fields, names = v.fields_of('mame', 'sf2ce', v.read_tables(self.env['VERSUS_TABLES']))
+        self.assertEqual(sorted(fields), ['char1', 'char2', 'wins1', 'wins2'])
+        self.assertEqual(names, {0: 'Ryu', 3: 'Guile', 8: 'M.Bison (Dictator)'})
+        for game, found in (('sf2ce', 0), ('kof98', 0), ('avengrgs', 0), ('sfiii3nr1', 1), ('half', 1),
+                            ('nothere', 1), ('../sf2ce', 1)):
+            self.assertEqual(self.has('mame', game) != 0, bool(found), game)
+        # Um clone pela linha "clone" da tabela; o RetroArch ainda nao usa os detectores.
+        self.table.write_text('clone sf2ceua sf2ce\n')
+        self.assertEqual(self.has('mame', 'sf2ceua'), 0)
+        self.assertNotEqual(self.has('retroarch', 'sf2ce'), 0)
+        # A tabela com as vitorias do jogo vale no lugar do detector; so com
+        # os pontos, as vitorias vem do detector.
+        self.table.write_text('mame sf2ce wins1 0x10 1 bin\nmame sf2ce wins2 0x11 1 bin\n')
+        self.assertEqual(sorted(v.fields_of('mame', 'sf2ce', v.read_tables(self.env['VERSUS_TABLES']))[0]),
+                         ['wins1', 'wins2'])
+        self.table.write_text('mame sf2ce score1 0x10 4 bcd\n')
+        self.assertEqual(sorted(v.fields_of('mame', 'sf2ce', v.read_tables(self.env['VERSUS_TABLES']))[0]),
+                         ['char1', 'char2', 'score1', 'wins1', 'wins2'])
+        # As saidas do plugin viram o placar, com o nome de cada personagem.
+        self.table.write_text('')
+        port = self.serve_mame(['mame_start = sf2ce', 'fliperos_wins1 = 0', 'fliperos_wins2 = 0',
+                                'fliperos_char1 = 3', 'fliperos_char2 = 8', 'fliperos_wins2 = 1',
+                                'fliperos_char2 = 31', 'mame_stop = 1'])
+        env = dict(self.env, MAME_OUTPUT='127.0.0.1:%d' % port)
+        subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'mame', 'sf2ce'], env=env, timeout=30, check=True)
+        events = self.events.read_text().splitlines()
+        self.assertIn('versus 0 0 - - Guile M.Bison (Dictator)', events)
+        self.assertEqual(events[-2:], ['versus 0 1 - - Guile M.Bison (Dictator)', 'versus 0 1 - - Guile '])
+
+    def test_detectors_are_downloaded_at_a_pinned_commit(self):
+        source = self.SCRIPT.read_text()
+        self.assertRegex(source, r"DETECTORS_COMMIT = '[0-9a-f]{40}'")
+        self.assertIn("'https://codeload.github.com/fightcadeorg/fightcade-detectors/tar.gz/' + DETECTORS_COMMIT",
+                      source)
+        # Sem licenca no repositorio deles: baixados, nunca na imagem nem neste repositorio.
+        self.assertFalse(list(ROOT.glob('config/**/*.inf')))
+        self.assertIn('"$versus" fetch >&2', (ROOT / 'config/fliperos-pixelcade').read_text())
+        folder = self.detectors(old='x')
+        package = self.tmp / 'detectors.tar.gz'
+        with tarfile.open(package, 'w:gz') as tar:
+            def add(name, text):
+                info = tarfile.TarInfo('fightcade-detectors-abc/' + name)
+                info.size = len(text)
+                tar.addfile(info, io.BytesIO(text.encode()))
+            for i in range(12):
+                add('game%d.inf' % i, self.DETECTOR)
+            add('README.md', 'readme')
+            add('../evil.inf', 'x')
+            add('sub/dir/deep.inf', self.DETECTOR)
+            add('big.inf', 'x' * 70000)
+        env = dict(self.env, VERSUS_DETECTORS_URL=package.as_uri())
+        proc = subprocess.run([sys.executable, str(self.SCRIPT), 'fetch'], env=env, capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        # So os <jogo>.inf pequenos, todos na pasta; o que saiu do pacote sai daqui.
+        self.assertEqual(sorted(p.name for p in folder.iterdir()),
+                         sorted(['game%d.inf' % i for i in range(12)] + ['deep.inf', 'evil.inf']))
+        self.assertFalse((self.tmp / 'evil.inf').exists())
+        self.assertEqual(self.has('mame', 'game3'), 0)
+        # Outro arquivo no lugar do pacote: a pasta fica como estava.
+        package.write_text('not a tarball')
+        proc = subprocess.run([sys.executable, str(self.SCRIPT), 'fetch'], env=env, capture_output=True, text=True)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(len(list(folder.iterdir())), 14)
+
     def test_values_are_decoded_as_the_game_stores_them(self):
         d = self.versus.decode
         self.assertEqual(d(bytes([0x00, 0x12, 0x53, 0x00]), 'bcd'), 125300)
@@ -5819,9 +5922,13 @@ class VersusTests(unittest.TestCase):
         self.assertIn('"$root/usr/local/share/fliperos/mame-plugins/fliperos-versus/$file"', ROOTFS)
         self.assertIn('rm -rf "$gm_share"', MKISO)
         plugin = (ROOT / 'config/mame-plugins/fliperos-versus/init.lua').read_text()
-        for line in ("manager.machine.output:set_value('fliperos_' .. f.field, value)",
+        for line in ("manager.machine.output:set_value('fliperos_' .. name, value)",
                      "'/etc/fliperos/versus-games.conf'", 'emu.add_machine_frame_notifier(tick)',
-                     'if frame < WAIT or frame % EVERY ~= 0 then'):
+                     'if frame < WAIT or frame % EVERY ~= 0 then',
+                     # Os detectores do Fightcade, com os tempos e as areas dele.
+                     "(HOME .. '/.local/share/fliperos/versus-detectors')", 'local DETECTOR_FRAMES = 30',
+                     'local START_FRAMES = 300', "found = (not start_detected) and d.current > d.start",
+                     'local a = base + (ptr ~ 1)', 'base = 0xFF0000', 'base = 0x100000'):
             self.assertIn(line, plugin)
         self.assertEqual(json.loads((ROOT / 'config/mame-plugins/fliperos-versus/plugin.json').read_text())
                          ['plugin']['name'], 'fliperos-versus')

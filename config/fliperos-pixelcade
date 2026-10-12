@@ -164,6 +164,9 @@ fetch() {
   ((rc == 0)) || fail "the artwork download failed (details in the log)"
   say 95 "Downloading hi2txt (high scores)"
   fetch_hi2txt || echo "fliperos-pixelcade: hi2txt was not installed; the marquee works without the high scores" >&2
+  # O placar das partidas versus: os detectores do Fightcade (sem eles, so
+  # nao ha placar).
+  [[ -x $versus ]] && { "$versus" fetch >&2 || echo "fliperos-pixelcade: the versus detectors were not downloaded" >&2; }
   say 96 "Frontend events (ES-DE, Attract-Mode Plus)"
   frontends
   # Pelo Setup, quem fecha e o root, depois de abrir o servico.
@@ -240,6 +243,9 @@ fetch_zedmd() {
   rc=$?
   rm -f "$tgz"
   ((rc == 0)) && [[ -x $zedmd_dir/dmdserver ]] || fail "could not unpack dmdserver into $zedmd_dir"
+  # O placar das partidas versus: os detectores do Fightcade (sem eles, so
+  # nao ha placar).
+  [[ -x $versus ]] && { "$versus" fetch >&2 || echo "fliperos-pixelcade: the versus detectors were not downloaded" >&2; }
   say 96 "Frontend events (ES-DE, Attract-Mode Plus)"
   frontends
   [[ -n ${PIXELCADE_AS_ROOT:-} ]] && return 0
@@ -706,21 +712,24 @@ watch() {
   ) < /dev/null > /dev/null 2>&1 &
 }
 
-# versus_score VITORIAS1 VITORIAS2 PONTOS1 PONTOS2: o placar de uma partida
-# versus (config/fliperos-versus; "-" = o jogo nao tem aquele valor). Cada
-# gabinete mostra o proprio lado primeiro: o lado e o versus_side do
-# fliperos.conf (1 ou 2), e com dois gabinetes ligados (versus=host ou join)
-# os lados se chamam YOU e RIVAL. No ZeDMD o placar fica na tela; no
-# Pixelcade, um texto a cada vitoria, e o marquee do jogo volta.
+# versus_score VITORIAS1 VITORIAS2 PONTOS1 PONTOS2 [NOME1 NOME2]: o placar de
+# uma partida versus (config/fliperos-versus; "-" = o jogo nao tem aquele
+# valor). Cada lado aparece com o personagem que escolheu, se o jogo o diz
+# (ate 10 letras), ou como P1 e P2. Cada gabinete mostra o proprio lado
+# primeiro: o lado e o versus_side do fliperos.conf (1 ou 2), e com dois
+# gabinetes ligados (versus=host ou join) os lados se chamam YOU e RIVAL. No
+# ZeDMD o placar fica na tela; no Pixelcade, um texto a cada vitoria, e o
+# marquee do jogo volta.
 versus_score() {
   local mode side left=P1 right=P2 wl=${1:--} wr=${2:--} sl=${3:--} sr=${4:--} last
+  [[ -n ${5:-} ]] && left=${5%% (*} && left=${left:0:10} && left=${left^^}
+  [[ -n ${6:-} ]] && right=${6%% (*} && right=${right:0:10} && right=${right^^}
   mode=$(sed -n 's/^versus=//p' "$conf" 2> /dev/null | tail -1)
   side=$(sed -n 's/^versus_side=//p' "$conf" 2> /dev/null | tail -1)
   [[ -z $side && $mode == join ]] && side=2
   if [[ $side == 2 ]]; then
-    left=P2 right=P1
-    set -- "$wr" "$wl" "$sr" "$sl"
-    wl=$1 wr=$2 sl=$3 sr=$4
+    set -- "$wr" "$wl" "$sr" "$sl" "$right" "$left"
+    wl=$1 wr=$2 sl=$3 sr=$4 left=$5 right=$6
   fi
   [[ $mode == host || $mode == join ]] && left=YOU right=RIVAL
   zedmd versus "$left" "$wl" "$wr" "$right" "$sl" "$sr"

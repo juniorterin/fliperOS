@@ -2,34 +2,61 @@
 # O placar de uma partida versus no LED do gabinete (Pixelcade, ZeDMD): as
 # vitorias da sessao de cada lado e os pontos do jogo ao vivo.
 #
-# O jogo so desenha o placar na tela, entao ele e lido da memoria do jogo,
-# nos enderecos de /etc/fliperos/versus-games.conf (e de
-# ~/config/versus-games.conf, para experimentar):
+# O jogo so desenha o placar na tela, entao ele e lido da memoria do jogo.
+# De onde vem os enderecos:
 #
-#   - GroovyMAME: o plugin fliperos-versus (config/mame-plugins) le a memoria
-#     e publica os valores como saidas (fliperos_score1...), que saem pela
+#   - os detectores do Fightcade (github.com/fightcadeorg/fightcade-detectors,
+#     um arquivo por jogo, mais de 300): onde a partida comeca, onde cada lado
+#     ganha e o personagem de cada um. E o mapa que o Fightcade usa para saber
+#     quem ganhou cada partida online. Sem licenca no repositorio, entao nao
+#     vem na imagem: o "fetch" os baixa (o Setup > Extras o chama junto do
+#     Pixelcade e do ZeDMD). Dao as vitorias; os pontos, nao.
+#   - /etc/fliperos/versus-games.conf (e ~/config/versus-games.conf, para
+#     experimentar): valores lidos direto, como os pontos de cada jogador.
+#
+# Quem le a memoria:
+#
+#   - GroovyMAME: o plugin fliperos-versus (config/mame-plugins) avalia os
+#     detectores e le a tabela, e publica o resultado como saidas
+#     (fliperos_wins1, fliperos_char1, fliperos_score1...), que saem pela
 #     porta 8000 com as outras saidas do jogo. Daqui se le essa porta.
 #   - RetroArch: o Network Command Interface (READ_CORE_MEMORY, UDP 55355),
-#     ligado pelo /etc/fliperos/retroarch/versus.cfg.
+#     ligado pelo /etc/fliperos/retroarch/versus.cfg. So as linhas
+#     "retroarch" da tabela: os detectores ainda nao (os enderecos de um core
+#     nao sao os do MAME).
 #
-# As vitorias da sessao saem do proprio jogo (wins1, wins2) ou dos rounds: o
-# vencedor da partida e contado quando os rounds voltam a zero. A cada
+# As vitorias da sessao vem do detector, do proprio jogo (wins1, wins2) ou
+# dos rounds: o vencedor e contado quando os rounds voltam a zero. A cada
 # mudanca vai um evento "versus" para o config/fliperos-pixelcade.
 #
-#   fliperos-versus has SOURCE GAME          status 0 se o jogo esta na tabela (SOURCE: mame | retroarch)
+#   fliperos-versus has SOURCE GAME          status 0 se ha placar para o jogo (SOURCE: mame | retroarch)
 #   fliperos-versus run SOURCE GAME [PID]    o placar no LED ate o jogo (o processo PID) fechar
-#   fliperos-versus watch SOURCE GAME        mostra cada valor quando muda (para conferir um jogo novo)
+#   fliperos-versus watch SOURCE GAME        mostra cada valor quando muda (para conferir um jogo)
+#   fliperos-versus fetch                    baixa os detectores do Fightcade (de novo: atualiza)
+import io
 import os
+import re
 import socket
 import subprocess
 import sys
+import tarfile
 import time
+import urllib.request
 
 TABLES = os.environ.get('VERSUS_TABLES', '/etc/fliperos/versus-games.conf:/home/fliperos/config/versus-games.conf')
 PIXELCADE = os.environ.get('FLIPEROS_PIXELCADE', '/opt/fliperos/bin/fliperos-pixelcade')
 MAME_OUTPUT = os.environ.get('MAME_OUTPUT', '127.0.0.1:8000')
 RA_COMMAND = os.environ.get('RA_COMMAND', '127.0.0.1:55355')
-FIELDS = ('score1', 'score2', 'rounds1', 'rounds2', 'wins1', 'wins2')
+# Os detectores do Fightcade, num commit fixo (a pasta que o plugin do MAME le).
+DETECTORS = os.environ.get('VERSUS_DETECTORS', '/home/fliperos/.local/share/fliperos/versus-detectors')
+DETECTORS_COMMIT = 'de9e7a99c494af488ed64155678e9d22d78f7ae6'
+DETECTORS_URL = os.environ.get(
+    'VERSUS_DETECTORS_URL',
+    'https://codeload.github.com/fightcadeorg/fightcade-detectors/tar.gz/' + DETECTORS_COMMIT)
+# "raw" e o endereco da CPU; as outras sao areas de memoria do FBNeo (a RAM
+# do CPS e a do Neo Geo). A "Main RAM" do CPS3 ainda nao.
+DETECTOR_AREAS = ('raw', 'CpsRamFF', '68K RAM')
+FIELDS = ('score1', 'score2', 'rounds1', 'rounds2', 'wins1', 'wins2', 'char1', 'char2')
 FORMATS = ('bcd', 'bcdle', 'bin', 'binle')
 # Segundos entre dois eventos (os pontos mudam muitas vezes por segundo).
 EVERY = float(os.environ.get('VERSUS_EVERY', '0.5'))
@@ -80,6 +107,92 @@ def lookup(source, game, tables=None):
     return None
 
 
+# -- Detectores do Fightcade -----------------------------------------
+
+# read_detector: do <jogo>.inf, os nomes dos personagens pelo numero
+# ("char=3,Guile") e se ha os campos char1/char2; None sem o arquivo ou sem
+# as tres linhas que fazem um detector (start, player1, player2). Quem
+# avalia os enderecos e o plugin do MAME.
+def read_detector(game):
+    if not re.fullmatch(r'[A-Za-z0-9_]+', game):
+        return None
+    try:
+        with open(os.path.join(DETECTORS, game + '.inf'), encoding='utf-8', errors='replace') as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return None
+    targets, names = set(), {}
+    for line in lines:
+        target, sep, rest = line.strip().partition('=')
+        if not sep:
+            continue
+        if target == 'char':
+            number, _, name = rest.partition(',')
+            if number.strip().isdigit() and name.strip():
+                names[int(number)] = name.strip()
+        elif rest.count(',') >= 5:
+            targets.add(target)
+            # As areas que o plugin sabe onde ficam na memoria do MAME.
+            if target in ('start', 'player1', 'player2') and rest.split(',')[1] not in DETECTOR_AREAS:
+                return None
+    if not {'start', 'player1', 'player2'} <= targets:
+        return None
+    return {'names': names, 'chars': {'char1', 'char2'} & targets}
+
+
+# fields_of: os campos que o jogo tem (os da tabela e, no MAME, as vitorias
+# e os personagens do detector, se a tabela nao conta as vitorias) e os
+# nomes dos personagens. (None, {}) se nao ha placar para o jogo.
+def fields_of(source, game, tables=None):
+    tables = tables or read_tables()
+    fields = dict(lookup(source, game, tables) or {})
+    names = {}
+    if source == 'mame' and not any(f[:-1] in ('wins', 'rounds') for f in fields):
+        detector = read_detector(game) or read_detector(tables[1].get(game, ''))
+        if detector:
+            names = detector['names']
+            for field in ['wins1', 'wins2'] + sorted(detector['chars']):
+                fields[field] = None
+    return (fields or None), names
+
+
+# fetch: os .inf do repositorio do Fightcade, no commit fixado, para a pasta
+# que o plugin le. So arquivos <jogo>.inf pequenos entram.
+def fetch():
+    try:
+        with urllib.request.urlopen(DETECTORS_URL, timeout=120) as response:
+            data = response.read(64 * 1024 * 1024)
+    except (OSError, ValueError) as error:
+        sys.stderr.write('fliperos-versus: the download of the detectors failed: %s\n' % error)
+        return 1
+    found = {}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as tar:
+            for member in tar:
+                name = member.name.rsplit('/', 1)[-1]
+                if member.isfile() and re.fullmatch(r'[A-Za-z0-9_]+\.inf', name) and member.size <= 65536:
+                    found[name] = tar.extractfile(member).read()
+    except (tarfile.TarError, OSError, EOFError) as error:
+        sys.stderr.write('fliperos-versus: the downloaded file is not the detectors package: %s\n' % error)
+        return 1
+    if len(found) < 10:
+        sys.stderr.write('fliperos-versus: the downloaded package has no detectors\n')
+        return 1
+    try:
+        os.makedirs(DETECTORS, exist_ok=True)
+        for old in os.listdir(DETECTORS):
+            if old.endswith('.inf') and old not in found:
+                os.unlink(os.path.join(DETECTORS, old))
+        for name, content in found.items():
+            with open(os.path.join(DETECTORS, name), 'wb') as f:
+                f.write(content)
+    except OSError as error:
+        sys.stderr.write('fliperos-versus: could not write %s: %s\n' % (DETECTORS, error))
+        return 1
+    print('%d Fightcade detectors in %s' % (len(found), DETECTORS))
+    return 0
+
+
 # decode: os bytes lidos (na ordem da memoria) como numero; None se nao e
 # um BCD valido (a memoria ainda nao tem o placar).
 def decode(data, fmt, mult=1):
@@ -127,10 +240,15 @@ class Tally:
                 self.best = [max(self.best[0], now[0]), max(self.best[1], now[1])]
         return True
 
-    def state(self):
+    # state: vitorias e pontos de cada lado ("-" = o jogo nao tem) e, se o
+    # jogo diz os personagens, o nome de cada um ("" enquanto nao se sabe).
+    def state(self, names=None):
         counted = self.own_wins or self.rounds
         wins = [str(w) for w in self.wins] if counted else ['-', '-']
-        return wins + [str(self.values[f]) if f in self.values else '-' for f in ('score1', 'score2')]
+        out = wins + [str(self.values[f]) if f in self.values else '-' for f in ('score1', 'score2')]
+        if names and ('char1' in self.values or 'char2' in self.values):
+            out += [names.get(self.values.get(f), '') for f in ('char1', 'char2')]
+        return out
 
 
 # -- Fontes ----------------------------------------------------------
@@ -233,7 +351,7 @@ def source_of(name, fields, pid):
 # -- Comandos --------------------------------------------------------
 
 def run(source, game, pid):
-    fields = lookup(source, game)
+    fields, names = fields_of(source, game)
     if not fields:
         return 0
     tally = Tally(fields)
@@ -243,7 +361,7 @@ def run(source, game, pid):
             dirty = tally.update(*item) or dirty
         now = time.monotonic()
         if dirty and now - last >= EVERY:
-            state = tally.state()
+            state = tally.state(names)
             if state != sent:
                 subprocess.call([PIXELCADE, 'versus'] + state, stdin=subprocess.DEVNULL,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -253,9 +371,10 @@ def run(source, game, pid):
 
 
 def watch(source, game):
-    fields = lookup(source, game)
+    fields, names = fields_of(source, game)
     if not fields:
-        sys.stderr.write('fliperos-versus: %s is not in the table (%s lines)\n' % (game, source))
+        sys.stderr.write('fliperos-versus: no score for %s (%s): no detector and no line in the table\n'
+                         % (game, source))
         return 1
     tally = Tally(fields)
     print('watching %s (%s): %s' % (game, source, ', '.join(sorted(fields))), flush=True)
@@ -267,9 +386,11 @@ def watch(source, game):
 
 
 def main(argv):
+    if len(argv) == 2 and argv[1] == 'fetch':
+        return fetch()
     if len(argv) >= 4 and argv[2] in ('mame', 'retroarch'):
         if argv[1] == 'has':
-            return 0 if lookup(argv[2], argv[3]) else 1
+            return 0 if fields_of(argv[2], argv[3])[0] else 1
         if argv[1] == 'run':
             return run(argv[2], argv[3], int(argv[4]) if len(argv) > 4 and argv[4].isdigit() else 0)
         if argv[1] == 'watch':
@@ -279,7 +400,8 @@ def main(argv):
                 return 0
     sys.stderr.write('usage: fliperos-versus has mame|retroarch GAME\n'
                      '       fliperos-versus run mame|retroarch GAME [PID]\n'
-                     '       fliperos-versus watch mame|retroarch GAME\n')
+                     '       fliperos-versus watch mame|retroarch GAME\n'
+                     '       fliperos-versus fetch\n')
     return 1
 
 
