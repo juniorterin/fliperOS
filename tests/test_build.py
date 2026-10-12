@@ -3416,6 +3416,96 @@ def fightcade_package(path, files=None):
             tar.addfile(info, io.BytesIO(data))
 
 
+class ArcadeflowTests(unittest.TestCase):
+    """config/fliperos-arcadeflow: o tema padrao do Attract-Mode Plus, baixado
+    do GitHub dele (nao vem na imagem)."""
+    SCRIPT = ROOT / 'config/fliperos-arcadeflow'
+
+    def package(self, path, files=None):
+        files = {'layout.nut': '// Arcadeflow', 'pref_debug.txt': '', 'glsl/blur.glsl': 'x'} if files is None else files
+        with tarfile.open(path, 'w:gz') as tar:
+            for name, text in files.items():
+                data = text.encode()
+                info = tarfile.TarInfo('Arcadeflow-9.9/' + name)
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+
+    def fetch(self, tmp, *args):
+        (tmp / 'bin').mkdir(exist_ok=True)
+        # O curl (a imagem dos testes nao o tem): copia o arquivo do endereco.
+        stubs = {'pgrep': 'exit 1',
+                 'curl': 'while [ $# -gt 1 ]; do [ "$1" = -o ] && out=$2; shift; done; cp "${1#file://}" "$out"'}
+        for name, body in stubs.items():
+            (tmp / 'bin' / name).write_text('#!/bin/sh\n%s\n' % body)
+            (tmp / 'bin' / name).chmod(0o755)
+        env = dict(os.environ, ATTRACT_DIR=str(tmp / 'attract'), FLIPEROS_USER='root', ARCADEFLOW_VERSION='9.9',
+                   ARCADEFLOW_URL=(tmp / 'af.tar.gz').as_uri(), PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']))
+        return subprocess.run(['bash', str(self.SCRIPT), 'fetch'] + list(args), capture_output=True, text=True,
+                              env=env, timeout=120)
+
+    def test_fetch_installs_the_theme_and_moves_the_basic_displays_to_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.package(tmp / 'af.tar.gz')
+            displays = tmp / 'attract/config/displays.cfg'
+            displays.parent.mkdir(parents=True)
+            (tmp / 'attract/config/attract.cfg').write_text('general\n')
+            displays.write_text('display\tMAME\n\tlayout               Basic\n\tromlist              MAME\n\n'
+                                'display\tNaomi\n\tlayout               BasicPlus\n\tromlist              Naomi\n\n')
+            run = self.fetch(tmp, '--progress')
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            steps = [line for line in run.stdout.splitlines() if line.startswith('@step')]
+            self.assertEqual(steps[0], '@step 0 Downloading Arcadeflow 9.9 from GitHub (55 MB)')
+            self.assertEqual(steps[-1], '@step 100 Arcadeflow 9.9 installed')
+            theme = tmp / 'attract/layouts/Arcadeflow'
+            # Sem a pasta Arcadeflow-9.9/ do pacote, e sem o arquivo baixado.
+            self.assertEqual((theme / 'layout.nut').read_text(), '// Arcadeflow')
+            self.assertTrue((theme / 'glsl/blur.glsl').exists())
+            self.assertEqual(sorted(p.name for p in (tmp / 'attract/layouts').iterdir()), ['Arcadeflow'])
+            # As opcoes do FliperOS: sem o aviso de versao nova.
+            self.assertEqual((theme / 'pref_layoutoptions.txt').read_text(), '9.9\n\n|UPDATECHECK|1|\n')
+            # As telas do padrao de antes passam para o tema; as de outro layout ficam.
+            self.assertEqual(displays.read_text(),
+                             'display\tMAME\n\tlayout               Arcadeflow\n\tromlist              MAME\n\n'
+                             'display\tNaomi\n\tlayout               BasicPlus\n\tromlist              Naomi\n\n')
+            # De novo (reparo): as opcoes da pessoa ficam, e uma tela que ela
+            # pos de volta no Basic tambem.
+            (theme / 'pref_layoutoptions.txt').write_text('9.9\n\n|SMALLSCREEN|0|\n')
+            (theme / 'ss_login.txt').write_text('|SS_USERNAME|eu|\n')
+            (theme / 'layout.nut').write_text('quebrado')
+            displays.write_text(displays.read_text().replace('BasicPlus', 'Basic'))
+            run = self.fetch(tmp)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertNotIn('@step', run.stdout)
+            self.assertEqual((theme / 'layout.nut').read_text(), '// Arcadeflow')
+            self.assertEqual((theme / 'pref_layoutoptions.txt').read_text(), '9.9\n\n|SMALLSCREEN|0|\n')
+            self.assertEqual((theme / 'ss_login.txt').read_text(), '|SS_USERNAME|eu|\n')
+            self.assertIn('layout               Basic\n\tromlist              Naomi', displays.read_text())
+
+    def test_fetch_refuses_what_is_not_the_theme(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            # Sem rede (o arquivo nao existe).
+            run = self.fetch(tmp, '--progress')
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail Arcadeflow|the download failed (no network?)', run.stdout)
+            # Outro arquivo no lugar do pacote (uma pagina de erro, um pacote sem o tema).
+            (tmp / 'af.tar.gz').write_text('<html>not found</html>')
+            run = self.fetch(tmp, '--progress')
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail Arcadeflow|the downloaded file is not the Arcadeflow theme', run.stdout)
+            self.package(tmp / 'af.tar.gz', {'README.md': 'x'})
+            self.assertEqual(self.fetch(tmp).returncode, 1)
+            self.assertEqual(list((tmp / 'attract/layouts').iterdir()), [])
+
+    def test_installed_by_the_image_and_fetched_by_the_setup(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-arcadeflow" "$root/opt/fliperos/bin/fliperos-arcadeflow"',
+                      ROOTFS)
+        menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
+        self.assertIn('run_with_progress "Downloading the Arcadeflow theme" "" frontends_attract_theme', menu)
+        self.assertIn('/opt/fliperos/bin/fliperos-arcadeflow fetch', (ROOT / 'tools/cabinet-update.sh').read_text())
+
+
 class FightcadeTests(unittest.TestCase):
     """config/fliperos-fightcade: o Fightcade 2 baixado do site dele (nao vem
     na imagem) e aberto num Xorg proprio."""

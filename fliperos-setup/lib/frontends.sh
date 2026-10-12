@@ -192,6 +192,16 @@ esde_setting() {
 }
 
 ATTRACTPLUS=${ATTRACTPLUS:-attractplus}
+ARCADEFLOW=${ARCADEFLOW:-/opt/fliperos/bin/fliperos-arcadeflow}
+
+# frontends_attract_theme baixa o Arcadeflow, o tema padrao das telas do
+# Attract-Mode Plus (nao vem com o FliperOS: config/fliperos-arcadeflow),
+# falando com a tela de progresso por eventos. Ja instalado, nao faz nada.
+frontends_attract_theme() {
+  [[ $(scraper_attract_layout) == Arcadeflow ]] && return 0
+  ev_step 0 "Starting"
+  "$ARCADEFLOW" fetch --progress 2>> "$FLIPEROS_LOG"
+}
 
 # frontends_attract: o emulador e a tela de cada pasta no Attract-Mode Plus
 # (os mesmos que o scraper cria; o que ja existe fica). Uma tela sem lista

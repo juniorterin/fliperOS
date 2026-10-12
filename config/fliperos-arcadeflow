@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Arcadeflow (github.com/zpaolo11x/Arcadeflow): o tema padrao das telas do
+# Attract-Mode Plus no FliperOS.
+#
+# O repositorio dele nao tem licenca, ou seja, nao da permissao de
+# redistribuir: nao vem na imagem nem no repositorio do FliperOS. O Setup >
+# Frontend baixa a versao fixada do GitHub (fetch) para
+# ~/.attract/layouts/Arcadeflow - pasta do usuario, porque o tema grava as
+# opcoes e o banco de jogos dele nela. Sem ele (sem rede, por exemplo) as
+# telas ficam no Basic do FliperOS (config/attractplus-layouts).
+#
+#   fliperos-arcadeflow fetch [--progress]   baixa e instala (de novo: repara)
+#
+# Pede o Attract-Mode Plus 3.2.0 ou mais novo (layout.nut, FeVersionNum).
+set -uo pipefail
+attract=${ATTRACT_DIR:-/home/fliperos/.attract}
+version=${ARCADEFLOW_VERSION:-17.7}
+url=${ARCADEFLOW_URL:-https://github.com/zpaolo11x/Arcadeflow/archive/refs/tags/$version.tar.gz}
+user=${FLIPEROS_USER:-fliperos}
+layouts=$attract/layouts
+dir=$layouts/Arcadeflow
+self=$(readlink -f -- "${BASH_SOURCE[0]}")
+
+# say PORCENTAGEM TEXTO: uma etapa para a tela de progresso do Setup
+# (lib/progress.sh), ou so o texto.
+progress=0
+say() {
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+# fail TEXTO: sai com erro, avisando a tela de progresso.
+fail() {
+  if ((progress)); then printf '@fail Arcadeflow|%s\n' "$1"; else printf 'fliperos-arcadeflow: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+# prefs: as opcoes do tema que o FliperOS muda, no formato do
+# pref_layoutoptions.txt dele (a versao na primeira linha e "|OPCAO|indice|";
+# o que nao esta no arquivo fica no padrao do tema). Sem o aviso de versao
+# nova: a versao e a fixada aqui, e o aviso espera uma resposta do teclado.
+prefs() {
+  printf '%s\n\n' "$version"
+  printf '|%s|%s|\n' UPDATECHECK 1
+}
+
+# displays_file: o arquivo das telas. O Attract-Mode Plus 3.x le as de
+# config/displays.cfg quando ha config/attract.cfg; antes da primeira
+# execucao, as do attract.cfg (que ele migra).
+displays_file() {
+  if [[ -f $attract/config/attract.cfg ]]; then
+    printf '%s\n' "$attract/config/displays.cfg"
+  else
+    printf '%s\n' "$attract/attract.cfg"
+  fi
+}
+
+# displays_switch: as telas que estao no Basic (o padrao de antes) passam
+# para o Arcadeflow; as de outro layout, escolhido pela pessoa, ficam. So na
+# primeira instalacao, e nao com o Attract-Mode aberto (ele regrava o arquivo
+# ao fechar).
+displays_switch() {
+  local file
+  file=$(displays_file)
+  [[ -f $file ]] || return 0
+  pgrep -x attractplus > /dev/null 2>&1 && return 0
+  sed -i -E 's/^([[:space:]]+layout[[:space:]]+)Basic[[:space:]]*$/\1Arcadeflow/' "$file"
+}
+
+fetch() {
+  local part="$layouts/.arcadeflow.part" new="$layouts/.arcadeflow.new" first=1 f
+  [[ ${1:-} == --progress ]] && progress=1
+  # Pelo Setup (root): a pasta e do usuario, e o download roda como ele.
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    if ! mkdir -p "$layouts" || ! chown "$user:" "$attract" "$layouts"; then
+      fail "could not create $layouts"
+    fi
+    exec runuser -u "$user" -- "$self" fetch "$@"
+  fi
+  mkdir -p "$layouts" 2> /dev/null && [[ -w $layouts ]] || fail "$layouts is not writable"
+  [[ -f $dir/layout.nut ]] && first=0
+  say 0 "Downloading Arcadeflow $version from GitHub (55 MB)"
+  if ! curl -sSfL --retry 3 --max-time 1800 -o "$part" "$url" >&2; then
+    rm -f "$part"
+    fail "the download failed (no network?)"
+  fi
+  say 80 "Unpacking"
+  rm -rf "$new"
+  if ! mkdir -p "$new" || ! tar -xzf "$part" -C "$new" --strip-components=1 --no-same-owner 2> /dev/null ||
+    [[ ! -f $new/layout.nut ]]; then
+    rm -rf "$part" "$new"
+    fail "the downloaded file is not the Arcadeflow theme"
+  fi
+  rm -f "$part"
+  # Num reparo, as opcoes e a conta do ScreenScraper da pessoa ficam.
+  for f in "$dir"/pref_*.txt "$dir"/ss_login.txt; do
+    [[ -f $f ]] && cp -f "$f" "$new/"
+  done
+  [[ -f $new/pref_layoutoptions.txt ]] || prefs > "$new/pref_layoutoptions.txt"
+  rm -rf "$dir"
+  mv "$new" "$dir" || fail "could not write $dir"
+  if ((first)); then
+    say 95 "Putting the Attract-Mode Plus displays on Arcadeflow"
+    displays_switch
+  fi
+  say 100 "Arcadeflow $version installed"
+}
+
+case ${1:-} in
+  fetch)
+    shift
+    fetch "$@"
+    ;;
+  *)
+    echo "usage: fliperos-arcadeflow fetch [--progress]" >&2
+    exit 2
+    ;;
+esac

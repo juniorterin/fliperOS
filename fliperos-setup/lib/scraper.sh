@@ -425,9 +425,19 @@ scraper_attract_paths() {
   printf '%s\n' "$out"
 }
 
-# scraper_attract_display ROMLIST: uma tela da romlist, com o layout Basic
-# (o do FliperOS, config/attractplus-layouts, desenhado na resolucao da tela),
-# se ainda nao tiver. O Attract-Mode Plus 3.x le as
+# scraper_attract_layout imprime o layout das telas novas: o Arcadeflow, que
+# o Setup > Frontend baixa (config/fliperos-arcadeflow), ou, sem ele, o Basic
+# do FliperOS (config/attractplus-layouts, desenhado na resolucao da tela).
+scraper_attract_layout() {
+  if [[ -f $ATTRACT_DIR/layouts/Arcadeflow/layout.nut ]]; then
+    echo Arcadeflow
+  else
+    echo Basic
+  fi
+}
+
+# scraper_attract_display ROMLIST: uma tela da romlist, com o layout padrao
+# (scraper_attract_layout), se ainda nao tiver. O Attract-Mode Plus 3.x le as
 # telas de config/displays.cfg quando ha config/attract.cfg e ignora as do
 # attract.cfg de fora (este so vale antes da primeira execucao, que o migra).
 scraper_attract_display() {
@@ -438,8 +448,8 @@ scraper_attract_display() {
   if ! awk -v n="$1" '$1 == "romlist" { sub(/^[ \t]*romlist[ \t]+/, ""); if ($0 == n) f = 1 } END { exit !f }' \
     "$acfg" 2> /dev/null; then
     {
-      printf 'display\t%s\n\tlayout               Basic\n\tromlist              %s\n\tin_cycle             yes\n\tin_menu              yes\n' \
-        "$1" "$1"
+      printf 'display\t%s\n\tlayout               %s\n\tromlist              %s\n\tin_cycle             yes\n\tin_menu              yes\n' \
+        "$1" "$(scraper_attract_layout)" "$1"
       scraper_attract_filters
       printf '\n'
     } >> "$acfg"

@@ -3004,6 +3004,28 @@ class RomCleanerTests(Base):
         self.assertIn("display\tAtomiswave\n\tlayout               Basic\n", displays)
         self.assertFalse((attract / "attract.cfg").exists())
 
+    def test_new_attract_displays_use_arcadeflow_when_it_is_installed(self):
+        # O tema padrao e o Arcadeflow, que o Setup > Frontend baixa; sem ele
+        # (sem rede) as telas novas ficam no Basic do FliperOS.
+        attract = self.env.dir / "attract-theme"
+        (attract / "layouts" / "Arcadeflow").mkdir(parents=True)
+        env = dict(self.vars, ATTRACT_DIR=str(attract))
+        self.env.out("scraper_attract_display Naomi", env)
+        (attract / "layouts" / "Arcadeflow" / "layout.nut").write_text("// Arcadeflow\n")
+        self.env.out("scraper_attract_display Atomiswave", env)
+        acfg = (attract / "attract.cfg").read_text()
+        self.assertIn("display\tNaomi\n\tlayout               Basic\n", acfg)
+        self.assertIn("display\tAtomiswave\n\tlayout               Arcadeflow\n", acfg)
+        # Ja instalado, o Setup nao baixa de novo.
+        calls = self.env.dir / "arcadeflow.calls"
+        self.env.stub("fliperos-arcadeflow", 'echo "$*" >> "%s"' % calls)
+        env["ARCADEFLOW"] = str(self.env.bin / "fliperos-arcadeflow")
+        self.env.out("frontends_attract_theme", env)
+        self.assertFalse(calls.exists())
+        (attract / "layouts" / "Arcadeflow" / "layout.nut").unlink()
+        self.assertIn("@step 0 Starting", self.env.out("frontends_attract_theme", env))
+        self.assertEqual(calls.read_text(), "fetch --progress\n")
+
     def test_attract_displays_get_the_default_filters(self):
         # Toda tela ganha os filtros padrao (genero, fabricante, ano); as que
         # o usuario ja filtrou ficam como estao.

@@ -215,7 +215,7 @@ screen_wifi() {
 # ── Frontend ─────────────────────────────────────────────────────
 
 screen_frontend() {
-  local entries=() name desc current choice pkg label lines=()
+  local entries=() name desc current choice pkg label lines=() theme=()
   current=$(launcher_current)
   while IFS='|' read -r name desc; do
     if launcher_installed "$name"; then
@@ -270,12 +270,19 @@ screen_frontend() {
     fi
   fi
   launcher_set "$choice"
+  # O tema padrao do Attract-Mode Plus nao vem com o FliperOS: baixado do
+  # GitHub dele, se faltar. Sem ele (sem rede) as telas ficam no Basic.
+  if [[ $choice == attractplus && $(scraper_attract_layout) != Arcadeflow ]]; then
+    run_with_progress "Downloading the Arcadeflow theme" "" frontends_attract_theme ||
+      theme=("" "The Arcadeflow theme was not downloaded: the displays use the Basic layout."
+        "Choose Attract-Mode Plus here again to try once more.")
+  fi
   # As pastas de ~/roms e o comando de cada uma no frontend (lib/frontends.sh).
   ui_info "Frontend" "Putting the game folders in $label..."
   frontends_configure "$choice"
   lines=("$label will start when the computer turns on.")
   mapfile -t -O 1 lines < <(frontends_hint "$choice")
-  ui_msg "Frontend" "${lines[@]}"
+  ui_msg "Frontend" "${lines[@]}" "${theme[@]}"
 }
 
 # screen_frontend_custom [NOME]: cadastra um frontend da pessoa (rotulo e
