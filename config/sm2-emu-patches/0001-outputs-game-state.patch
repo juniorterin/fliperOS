@@ -1,8 +1,8 @@
-From 6ae695a3493b18d16f15ac74d47969a5010a00ca Mon Sep 17 00:00:00 2001
+From d15874fc238520fca57b9a697c4f0fd5b249f7b0 Mon Sep 17 00:00:00 2001
 From: Ademir Terin Junior <juniorterin@gmail.com>
 Date: Mon, 12 Oct 2026 15:12:50 -0300
-Subject: [PATCH] outputs: publish gun-game state (recoil, ammo, life, credits)
- from work RAM
+Subject: [PATCH] outputs: publish game state (recoil, ammo, life, wins,
+ credits) from work RAM
 
 The cabinet outputs carry the lamp latch and the drive board, which is all a
 driving cabinet has to say. A Model 2 gun cabinet has no recoil, so nothing
@@ -19,29 +19,45 @@ work RAM once a frame:
   <flag>   1 while a value is above zero
   <pulse>  1 for a few frames each time a value falls or rises
 
-Virtua Cop, Virtua Cop 2, The House of the Dead, Gunblade NY and Behind
-Enemy Lines publish theirs under the names DemulShooter established for
-these games (P1_CtmRecoil, P1_Ammo, P1_Clip, P1_Life, P1_Damaged,
-P1_LmpStart, P1_GunMotor, Credits), so the stock game files of those tools
-work unchanged. The addresses are DemulShooter's where the revision is the
-same one; The House of the Dead's are 0x680 further on in this revision, and
-the credit counters were found by watching work RAM through a coin-up.
+Virtua Cop, Virtua Cop 2, The House of the Dead, Gunblade NY, Behind Enemy
+Lines and Rail Chase 2 publish theirs under the names DemulShooter
+established for these games (P1_CtmRecoil, P1_Ammo, P1_Clip, P1_Life,
+P1_Damaged, P1_LmpStart, P1_GunMotor, Credits), so the stock game files of
+those tools work unchanged. The addresses are DemulShooter's where the
+revision is the same one; The House of the Dead's are 0x680 further on in
+this revision.
 
-Each was checked with a reader on port 8000 through a scripted game: a
-credit, a start, shots until the magazine is empty, lives lost.
+The fighting games (Virtua Fighter 2, Fighting Vipers, Sonic the Fighters,
+Last Bronx, Dead or Alive revision A) publish P1_Wins and P2_Wins, the
+rounds each side has taken in the match being fought, for a scoreboard.
+Those were found with two scripted two-player matches, one where only
+player 1 attacks and one where only player 2 does: the bytes that step at
+each round of the first and stay at zero through the second, and the
+reverse.
+
+Twenty-one sets publish Credits. The counter was found by dropping coins
+and looking for the byte that counts them, then checked against both coin
+chutes and a start. Sets on two coins a credit that start by themselves
+when the credit completes (Daytona USA, Sega Rally, Sega Touring Car, Motor
+Raid and others) have none: the credit is spent the moment it exists.
+
+The addresses belong to the set that was run, so three of them sit on the
+revision a merged archive resolves to (doaa, pltkidsa, zeroguna).
+
+Each was checked with a reader on port 8000 through a scripted game.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
- data/games.xml      | 160 ++++++++++++++++++++++++++++++++++++++++++++
+ data/games.xml      | 271 ++++++++++++++++++++++++++++++++++++++++++++
  src/main.cpp        |   6 +-
- src/osd/outputs.cpp | 118 ++++++++++++++++++++++++++++++--
- src/osd/outputs.h   |  37 ++++++++--
- src/rom/game.h      |  54 +++++++++++++++
- src/rom/game_db.cpp | 136 +++++++++++++++++++++++++++++++++++++
- 6 files changed, 501 insertions(+), 10 deletions(-)
+ src/osd/outputs.cpp | 118 ++++++++++++++++++-
+ src/osd/outputs.h   |  37 +++++-
+ src/rom/game.h      |  54 +++++++++
+ src/rom/game_db.cpp | 136 ++++++++++++++++++++++
+ 6 files changed, 612 insertions(+), 10 deletions(-)
 
 diff --git a/data/games.xml b/data/games.xml
-index 492be8b..d2c9608 100644
+index 492be8b..4a04e88 100644
 --- a/data/games.xml
 +++ b/data/games.xml
 @@ -19,6 +19,12 @@
@@ -57,7 +73,7 @@ index 492be8b..d2c9608 100644
      <roms>
        <region name= size= stride= chunk= byte_swap= fill= required=>
          <file name= offset= crc=/>
-@@ -86,6 +92,33 @@
+@@ -86,6 +92,34 @@
    its axes are declared separately and each title carries its own calibration.
    Axis order is the board's own mux order, P1 Y, P1 X, P2 Y, P2 X.
  
@@ -85,13 +101,41 @@ index 492be8b..d2c9608 100644
 +  The names are the ones DemulShooter established for these games (P1_Ammo,
 +  P1_Clip, P1_CtmRecoil, P1_Life, P1_Damaged, P1_LmpStart, P1_GunMotor,
 +  Credits), which is what the game files of MAMEHooker and Hook Of The Reaper
-+  listen for. The addresses belong to one revision of a program, so a clone
-+  does not inherit its parent's `<outputs>`.
++  listen for. The fighting games add P1_Wins and P2_Wins, the rounds each side
++  has taken in the current match, for a scoreboard. The addresses belong to one
++  revision of a program, so a clone does not inherit its parent's `<outputs>`.
 +
    `gearbox="true"` marks a title whose IN1 bits 0x70 read a gear selector
    rather than buttons (MAME's daytona_gearbox_r). `drive_board="true"` marks
    one that latches force-feedback commands on port E. `drive_protocol` says how
-@@ -391,6 +424,37 @@
+@@ -124,6 +158,14 @@
+       <input type="buttons3"/>
+     </inputs>
+ 
++    <!-- Game state published as outputs. The addresses are this revision's. The wins are the
++         rounds each side has taken in the match being fought, back to zero when it ends. -->
++    <outputs>
++      <value name="P1_Wins" address="0x0050019b"/>
++      <value name="P2_Wins" address="0x0050019d"/>
++      <value name="Credits" address="0x00515b54"/>
++    </outputs>
++
+     <roms>
+       <!-- i960KB program. Four 128 KB EPROMs in two interleaved pairs. -->
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+@@ -286,6 +328,11 @@
+       <channel index="2" control="stickx" rest="0x80" reverse="true"/>
+     </analog>
+ 
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x00517c48"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-18406.12" offset="0x000000" crc="0xfde9c00a"/>
+@@ -391,6 +438,37 @@
        <axis name="p2x" min="0x086" max="0x273" rest="0x17c"/>
      </lightgun>
  
@@ -129,7 +173,34 @@ index 492be8b..d2c9608 100644
      <roms>
        <region name="maincpu" size="0x200000" stride="4" chunk="2">
          <file name="epr-18524.12" offset="0x000000" crc="0x1858988b"/>
-@@ -842,6 +906,23 @@
+@@ -475,6 +553,11 @@
+       <input type="buttons3"/>
+     </inputs>
+ 
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x00502210"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-20437.12" offset="0x000000" crc="0xfad30cc0"/>
+@@ -565,6 +648,14 @@
+       <input type="buttons3"/>
+     </inputs>
+ 
++    <!-- Game state published as outputs. The addresses are this revision's. The wins are the
++         rounds each side has taken in the match being fought, back to zero when it ends. -->
++    <outputs>
++      <value name="P1_Wins" address="0x0054fbe3"/>
++      <value name="P2_Wins" address="0x0054fc3b"/>
++      <value name="Credits" address="0x0054fcc4"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-19310a.12" offset="0x000000" crc="0x06486f7a"/>
+@@ -842,6 +933,23 @@
        </channel>
      </analog>
  
@@ -153,7 +224,46 @@ index 492be8b..d2c9608 100644
      <roms>
        <region name="maincpu" size="0x200000" stride="4" chunk="2">
          <file name="epr-20225.15" offset="0x000000" crc="0x4abc6b59"/>
-@@ -2262,6 +2343,33 @@
+@@ -1337,6 +1445,11 @@
+ 
+     <!-- Model 1 I/O board Z80 firmware: in the game's archive, or in
+          model1io.zip for a split set. -->
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x00520973"/>
++    </outputs>
++
+     <roms>
+       <region name="ioboard" size="0x10000">
+         <file name="epr-14869c.25" offset="0x000000" crc="0x24b68e64"/>
+@@ -1710,6 +1823,11 @@
+       <input type="buttons3"/>
+     </inputs>
+ 
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x00513ab0"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-20930.12" offset="0x000000" crc="0xb8fc8ff7"/>
+@@ -2030,6 +2148,14 @@
+       <input type="buttons3"/>
+     </inputs>
+ 
++    <!-- Game state published as outputs. The addresses are this revision's. The wins are the
++         rounds each side has taken in the match being fought, back to zero when it ends. -->
++    <outputs>
++      <value name="P1_Wins" address="0x0050004f"/>
++      <value name="P2_Wins" address="0x00500051"/>
++      <value name="Credits" address="0x00515cc0"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-18606d.15" offset="0x000000" crc="0x7334de7d"/>
+@@ -2262,6 +2388,33 @@
        <channel index="3" control="p2y" min="0x11" max="0xae" rest="0x5f"/>
      </analog>
  
@@ -187,7 +297,7 @@ index 492be8b..d2c9608 100644
      <roms>
        <region name="maincpu" size="0x200000" stride="4" chunk="2">
          <file name="epr-18988a.15" offset="0x000000" crc="0xf63f1ad2"/>
-@@ -2318,6 +2426,32 @@
+@@ -2318,6 +2471,32 @@
        <axis name="p2x" min="0x0a3" max="0x254" rest="0x17b"/>
      </lightgun>
  
@@ -220,7 +330,131 @@ index 492be8b..d2c9608 100644
      <roms>
        <region name="maincpu" size="0x200000" stride="4" chunk="2">
          <file name="epr-19696a.15" offset="0x000000" crc="0x42adc32e"/>
-@@ -5306,6 +5440,32 @@
+@@ -2612,6 +2791,11 @@
+       <channel index="2" control="brake" rest="0x00"/>
+     </analog>
+ 
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x0053c440"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-18598a.15" offset="0x000000" crc="0x3cdcac0f"/>
+@@ -2826,6 +3010,14 @@
+       <input type="buttons3"/>
+     </inputs>
+ 
++    <!-- Game state published as outputs. The addresses are this revision's. The wins are the
++         rounds each side has taken in the match being fought, back to zero when it ends. -->
++    <outputs>
++      <value name="P1_Wins" address="0x0056bc18"/>
++      <value name="P2_Wins" address="0x0056bc1c"/>
++      <value name="Credits" address="0x0056ced0"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-19061a.15" offset="0x000000" crc="0xc0aebab2"/>
+@@ -3399,6 +3591,11 @@
+       <channel index="2" control="brake" rest="0x00" reverse="true"/>
+     </analog>
+ 
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x00592704"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-20124a.15" offset="0x000000" crc="0x74beb8d7"/>
+@@ -3601,6 +3798,11 @@
+       <input type="buttons3"/>
+     </inputs>
+ 
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x005092a0"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-21281.pr0" offset="0x000000" crc="0x293ead5d"/>
+@@ -3873,6 +4075,21 @@
+       </channel>
+     </analog>
+ 
++    <!-- Game state published as outputs. The addresses are this revision's. Bits 0 and 1 of the state
++         byte are the players in the game. -->
++    <outputs>
++      <lamp name="P1_LmpStart" bit="2"/>
++      <lamp name="P2_LmpStart" bit="3"/>
++      <value name="P1_Life" address="0x00501e70">
++        <when address="0x00501d88" mask="0x01"/>
++      </value>
++      <pulse name="P1_Damaged" source="P1_Life" edge="fall"/>
++      <value name="P2_Life" address="0x00501e72">
++        <when address="0x00501d88" mask="0x02"/>
++      </value>
++      <pulse name="P2_Damaged" source="P2_Life" edge="fall"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-18045a.15" offset="0x000000" crc="0xbfca0314"/>
+@@ -4006,6 +4223,14 @@
+       <input type="buttons3"/>
+     </inputs>
+ 
++    <!-- Game state published as outputs. The addresses are this revision's. The wins are the
++         rounds each side has taken in the match being fought, back to zero when it ends. -->
++    <outputs>
++      <value name="P1_Wins" address="0x0050004f"/>
++      <value name="P2_Wins" address="0x00500051"/>
++      <value name="Credits" address="0x0051a5c0"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-19141.15" offset="0x000000" crc="0xb942ef21"/>
+@@ -4224,6 +4449,11 @@
+       <channel index="2" control="brake" rest="0x00" reverse="true"/>
+     </analog>
+ 
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x00510df0"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-19155.15" offset="0x000000" crc="0x593952fd"/>
+@@ -4274,6 +4504,11 @@
+       <channel index="1" control="swing" rest="0x80" reverse="true"/>
+     </analog>
+ 
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x00511080"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-19489.15" offset="0x000000" crc="0x1df948a7"/>
+@@ -5059,6 +5294,11 @@
+       <channel index="1" control="slide" rest="0x80"/>
+     </analog>
+ 
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x005dcf62"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-19755a.15" offset="0x000000" crc="0xb80633b9"/>
+@@ -5306,6 +5546,32 @@
  
      <!-- Model 1 I/O board (type 2) Z80 firmware: in the game's archive, or
           in model1io2.zip for a split set. -->
@@ -253,6 +487,18 @@ index 492be8b..d2c9608 100644
      <roms>
        <region name="ioboard" size="0x10000">
          <file name="epr-17181.6" offset="0x000000" crc="0x1add2b82"/>
+@@ -5651,6 +5917,11 @@
+       <input type="buttons3"/>
+     </inputs>
+ 
++    <!-- Game state published as outputs. The address is this revision's. -->
++    <outputs>
++      <value name="Credits" address="0x005d40a0"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-18068a.15" offset="0x000000" crc="0xafc69b54"/>
 diff --git a/src/main.cpp b/src/main.cpp
 index 334fe03..880f6a8 100644
 --- a/src/main.cpp

@@ -6,7 +6,7 @@
 # O GroovyMAME, o Flycast, o Supermodel e o SM2-Emu (Model 2) publicam as
 # saidas pela rede (TCP 8000, linhas "nome = valor", o protocolo que o
 # MAMEHooker le). O SM2-Emu so publica as lampadas; o recuo, a municao e a
-# vida dos jogos de pistola vem do patch em config/sm2-emu-patches. Tres
+# vida dos jogos de pistola (e as vitorias dos de luta) vem do patch em config/sm2-emu-patches. Tres
 # programas as leem, cada um um extra do Setup > Extras, e podem ficar juntos
 # (o MAME aceita varios clientes):
 #

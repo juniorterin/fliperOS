@@ -58,17 +58,24 @@ The emulators only open port 8000 when one of them is installed, because the por
 
 None of them has been tried with a real gun or board on a FliperOS cabinet yet. QMamehook was built and run against a simulated game: it connects to the port, looks for the game's `.ini` and closes with the game. Hook Of The Reaper was run under Wine against a simulated game: it connects to the port, loads the game's file and closes with the game. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.
 
-### Model 2 gun games
+### Model 2 game outputs
 
-A Model 2 gun cabinet has no recoil, so the board never says that a shot was fired, and SM2-Emu on its own only publishes the lamps. FliperOS adds a patch to it (`config/sm2-emu-patches`, to be offered to the SM2-Emu project) that reads the game's own memory and publishes, under the names Hook Of The Reaper's game files already use:
+A Model 2 gun cabinet has no recoil, so the board never says that a shot was fired, and SM2-Emu on its own only publishes the lamps. FliperOS adds a patch to it (`config/sm2-emu-patches`, to be offered to the SM2-Emu project) that reads the game's own memory and publishes it as outputs. The gun games use the names Hook Of The Reaper's game files already listen for:
 
 | Game | Outputs |
 | --- | --- |
 | Virtua Cop (`vcop`), Virtua Cop 2 (`vcop2`), The House of the Dead (`hotd`) | `P1_CtmRecoil` (a pulse per shot), `P1_Ammo`, `P1_Clip`, `P1_Life`, `P1_Damaged` (a pulse per life lost), `P1_LmpStart`, the same for `P2_`, and `Credits` |
 | Gunblade NY (`gunblade`) | `P1_CtmRecoil`, `P1_GunMotor` (the cabinet's own gun motor), `P1_Life`, `P1_Damaged`, `P1_LmpStart`, the same for `P2_`, and `Credits` |
 | Behind Enemy Lines (`bel`) | `P1_CtmRecoil`, `P1_Ammo`, `P1_Clip`, `P1_Life`, `P1_Damaged`, the same for `P2_`, and `Credits` |
+| Rail Chase 2 (`rchase2`) | `P1_Life`, `P1_Damaged`, `P1_LmpStart`, the same for `P2_` |
+| Virtua Fighter 2 (`vf2`), Fighting Vipers (`fvipers`), Sonic the Fighters (`schamp`), Last Bronx (`lastbrnx`), Dead or Alive (`doa`) | `P1_Wins` and `P2_Wins` (the rounds each side has taken in the match being fought, back to zero when it ends), and `Credits` |
+| Desert Tank, Dynamite Cop, Indianapolis 500, Over Rev, Pilot Kids, Sega GT 24h, Sega Ski Super G, Sky Target, Top Skater, Virtua Striker, Zero Gunner | `Credits` |
 
-Each was checked with a reader on port 8000 through a game played by a script: a credit, a start, shots until the magazine is empty and lives lost, for player 1. Player 2 and a real gun haven't been tried. Rail Chase 2 has no outputs yet. The patch reaches a cabinet that already built Model 2 the next time **Games > Model 2** opens, which offers to update and rebuild.
+Each was checked with a reader on port 8000 through a game played by a script: a credit, a start, shots until the magazine is empty and lives lost, for player 1; the fighting games with two scripted two-player matches, one won by each side. Player 2 in the gun games and a real gun haven't been tried, and nothing in FliperOS reads the wins yet. The addresses were found in the sets of the MAME 0.289 romset, and belong to the revision that set opens as.
+
+The games on two coins a credit that start by themselves when the credit completes (Daytona USA, Sega Rally, Sega Touring Car, Motor Raid, Manx TT, Wave Runner, Sega Water Ski, Virtual On) have no `Credits`: it is spent the moment it exists. The two baseball games and the credit counter of Rail Chase 2 weren't found.
+
+The patch reaches a cabinet that already built Model 2 the next time **Games > Model 2** opens, which offers to update and rebuild.
 
 ### Hook Of The Reaper
 
