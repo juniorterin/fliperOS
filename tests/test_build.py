@@ -3861,37 +3861,6 @@ class FightcadeTests(unittest.TestCase):
             self.session(tmp, [self.CLIENT, self.CLIENT], FIGHTCADE_NATIVE='1', frequency='31k')
             self.assertEqual((tmp / 'mame.log').read_text().split(), games)
 
-    def test_osd_shows_the_screen_mode_and_the_emulator_fps(self):
-        # FLIPEROS_OSD=1: o fliperos-x11-client abre o fliperos-osd (a tela) e
-        # o FBNeo mostra os quadros por segundo dele; sem ela, volta a
-        # desligar o que ligou - nao o que a pessoa ligou no emulador.
-        self.assertRegex(ROOTFS, r' fliperos-osd[ \w\\\n-]*; do')
-        client = (ROOT / 'config/fliperos-x11-client').read_text()
-        self.assertIn('if [[ ${FLIPEROS_OSD:-0} == 1 ]]; then\n  "${FLIPEROS_OSD_BIN:-/opt/fliperos/bin/fliperos-osd}"',
-                      client)
-        self.assertLess(client.index('fliperos-osd}'), client.index('--switch --launch'))
-        scope = {'__name__': 'osd'}
-        exec(compile((ROOT / 'config/fliperos-osd').read_text(), 'fliperos-osd', 'exec'), scope)
-        self.assertEqual(scope['text'](384, 224, 59637), '384x224 59.637 Hz')
-        self.assertEqual(scope['text'](320, 240, 60000), '320x240 60.000 Hz')
-        self.assertEqual(scope['text'](640, 480, 0), '640x480')
-        self.assertEqual([scope['font_px'](h) for h in (224, 240, 448, 480)], [8, 8, 16, 17])
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            fightcade_package(tmp / 'pkg.tar.gz')
-            self.assertEqual(self.fetch(tmp).returncode, 0)
-            config = tmp / 'fc/emulator/fbneo/config'
-            (config / 'fcadefbneo.default.ini').write_bytes(self.FBNEO_INI.encode() + b'bShowFPS 0\r\n')
-            ini = config / 'fcadefbneo.ini'
-            self.session(tmp, [self.CLIENT], FLIPEROS_OSD='1')
-            self.assertIn('\r\nbShowFPS 1\r\n', ini.read_bytes().decode())
-            self.session(tmp, [self.CLIENT])
-            self.assertIn('\r\nbShowFPS 0\r\n', ini.read_bytes().decode())
-            ini.write_bytes(ini.read_bytes().replace(b'bShowFPS 0', b'bShowFPS 2'))
-            self.session(tmp, [self.CLIENT, self.CLIENT], FLIPEROS_OSD='1')
-            self.session(tmp, [self.CLIENT])
-            self.assertIn('\r\nbShowFPS 2\r\n', ini.read_bytes().decode())
-
     def test_snes9x_in_the_console_mode(self):
         conf = ('# Config file output by snes9x\r\n'
                 '                FilterType           = 3      # output filter: 0=None\r\n'

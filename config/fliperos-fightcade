@@ -490,15 +490,6 @@ emulators_setup() {
     # No tubo a tela sai na frequencia do jogo: o emulador tambem (o FBA vem
     # com o bForce60Hz ligado, que roda todo jogo a 60 Hz).
     ((crt)) && once "$name-hz" && keyval_set "$ini.ini" bForce60Hz 0
-    # No teste com o OSD (FLIPEROS_OSD=1, config/fliperos-osd, que mostra a
-    # frequencia da tela), o emulador mostra a dele: os quadros por segundo.
-    # Sem o OSD volta a desligar, se foi daqui que ligou.
-    if [[ ${FLIPEROS_OSD:-0} == 1 ]]; then
-      grep -q '^bShowFPS[[:blank:]]\+0' "$ini.ini" && keyval_set "$ini.ini" bShowFPS 1 && : > "$ini.osd"
-    elif [[ -e $ini.osd ]]; then
-      keyval_set "$ini.ini" bShowFPS 0
-      rm -f "$ini.osd"
-    fi
     fbneo_buttons "$ini.ini"
   done
   # SNES9x: a tela cheia no modo da tabela (no 15 kHz o do console,
