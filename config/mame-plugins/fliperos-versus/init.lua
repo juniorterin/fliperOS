@@ -95,12 +95,26 @@ end
 
 -- Um detector do Fightcade: "alvo=nome,area,operacao,0xENDERECO,valor,bits".
 -- "raw" e o endereco da CPU. As outras areas sao a memoria como o FBNeo a
--- guarda no PC, em palavras de 16 bits invertidas: o byte N da area e o
--- byte N xor 1 do 68000. So as areas de endereco conhecido entram: a RAM do
--- CPS (0xFF0000) e a do Neo Geo (0x100000).
-local function detector_reader(space, area, ptr, bits, neogeo)
+-- guarda no PC. So as de endereco conhecido entram:
+--   - a RAM do CPS (0xFF0000) e a do Neo Geo (0x100000), do 68000: em
+--     palavras de 16 bits invertidas, o byte N da area e o byte N xor 1;
+--   - a "Main RAM" do CPS3 (0x02000000), do SH-2: em blocos de 32 bits
+--     invertidos (sh2.cpp do FBNeo: "A ^= 3" no byte, "A ^= 2" na palavra).
+local function detector_reader(space, area, ptr, bits, system)
 	local function word(a)
 		return (space:read_u8(a) << 8) | space:read_u8(a + 1)
+	end
+	if area == 'Main RAM' and system == 'cps3' then
+		local base = 0x02000000
+		if bits == 32 then
+			local a = base + (ptr & ~3)
+			return function() return (word(a) << 16) | word(a + 2) end
+		elseif bits == 16 then
+			local a = base + ((ptr & ~1) ~ 2)
+			return function() return word(a) end
+		end
+		local a = base + (ptr ~ 3)
+		return function() return space:read_u8(a) end
 	end
 	if area == 'raw' then
 		local bytes = (bits == 32 and 4) or (bits == 16 and 2) or 1
@@ -115,7 +129,7 @@ local function detector_reader(space, area, ptr, bits, neogeo)
 	local base = nil
 	if area == 'CpsRamFF' then
 		base = 0xFF0000
-	elseif area == '68K RAM' and neogeo then
+	elseif area == '68K RAM' and system == 'neogeo' then
 		base = 0x100000
 	end
 	if not base then
@@ -135,7 +149,7 @@ end
 -- Le o <jogo>.inf: { start = {...}, player1 = {...}, player2 = {...},
 -- char1 = detector, char2 = detector }, ou nil se falta o arquivo ou uma
 -- area dele nao e conhecida.
-local function read_detector(game, space, neogeo)
+local function read_detector(game, space, system)
 	local file = io.open(DETECTORS .. '/' .. game .. '.inf', 'r')
 	if not file then
 		return nil
@@ -147,7 +161,7 @@ local function read_detector(game, space, neogeo)
 		local target, area, op, ptr, value, bits =
 			line:match('^(%w+)=[^,]*,([^,]+),([^,]+),0[xX](%x+),(%-?%d+),(%d+)')
 		if target then
-			local reader = detector_reader(space, area, tonumber(ptr, 16), tonumber(bits), neogeo)
+			local reader = detector_reader(space, area, tonumber(ptr, 16), tonumber(bits), system)
 			local detector = { read = reader, op = op, value = tonumber(value), frames = 0, start = 0, current = 0 }
 			if target == 'char1' or target == 'char2' then
 				set[target] = reader and detector or nil
@@ -270,13 +284,15 @@ function versus.startplugin()
 			local cpu = manager.machine.devices[':maincpu']
 			local space = cpu and cpu.spaces['program']
 			if space then
-				local neogeo = (manager.machine.system.source_file or ''):find('neogeo', 1, true) ~= nil
-				detectors = read_detector(rom, space, neogeo)
+				-- O hardware, pelo arquivo do driver do MAME (snk/neogeo.cpp, capcom/cps3.cpp).
+				local source = manager.machine.system.source_file or ''
+				local system = (source:find('neogeo', 1, true) and 'neogeo') or (source:find('cps3', 1, true) and 'cps3') or ''
+				detectors = read_detector(rom, space, system)
 				if not detectors and clones[rom] then
-					detectors = read_detector(clones[rom], space, neogeo)
+					detectors = read_detector(clones[rom], space, system)
 				end
 				if not detectors and parent then
-					detectors = read_detector(parent, space, neogeo)
+					detectors = read_detector(parent, space, system)
 				end
 			end
 		end

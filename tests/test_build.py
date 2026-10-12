@@ -5256,8 +5256,8 @@ class PixelcadeTests(unittest.TestCase):
         while time.time() < deadline and len(log.read_text().splitlines() if log.exists() else []) < 5:
             time.sleep(0.05)
         self.assertEqual(sorted(log.read_text().splitlines()),
-                         sorted(['has mame sf2', 'run mame sf2 %d' % game.pid, 'has mame digdug',
-                                 'has retroarch sf2', 'run retroarch sf2 %d' % game.pid]))
+                         sorted(['has mame sf2 ', 'run mame sf2 %d ' % game.pid, 'has mame digdug ',
+                                 'has retroarch sf2 x.so', 'run retroarch sf2 %d x.so' % game.pid]))
 
     def test_bye_only_when_the_computer_goes_down(self):
         self.install()
@@ -5741,21 +5741,34 @@ class VersusTests(unittest.TestCase):
                              'player2=P2 Win,68K RAM,gts,0xDAFA,0,8\n',
                        avengrgs='start=Start,raw,eq,0x1D5C86,805777415,32\nplayer1=P1 Win,raw,eq,0x1D401A,25,16\n'
                                 'player2=P2 Win,raw,eq,0x1D4016,25,16\n',
-                       # A "Main RAM" do CPS3 ainda nao tem endereco conhecido no MAME.
+                       # A "Main RAM" do CPS3; uma area que ninguem sabe ler deixa o jogo sem placar.
                        sfiii3nr1='start=Start,Main RAM,eq,0x2867a,99,8\nplayer1=P1 Win,Main RAM,gts,0x16cd6,0,8\n'
                                  'player2=P2 Win,Main RAM,gts,0x16cd4,0,8\n',
+                       odd='start=Start,Sprite RAM,eq,0x10,1,8\nplayer1=P1 Win,raw,eq,0x11,1,8\n'
+                           'player2=P2 Win,raw,eq,0x12,1,8\n',
                        half='start=Start,raw,eq,0x10,1,8\nplayer1=P1 Win,raw,eq,0x11,1,8\n')
         self.table.write_text('')
         fields, names = v.fields_of('mame', 'sf2ce', v.read_tables(self.env['VERSUS_TABLES']))
         self.assertEqual(sorted(fields), ['char1', 'char2', 'wins1', 'wins2'])
         self.assertEqual(names, {0: 'Ryu', 3: 'Guile', 8: 'M.Bison (Dictator)'})
-        for game, found in (('sf2ce', 0), ('kof98', 0), ('avengrgs', 0), ('sfiii3nr1', 1), ('half', 1),
+        for game, found in (('sf2ce', 0), ('kof98', 0), ('avengrgs', 0), ('sfiii3nr1', 0), ('odd', 1), ('half', 1),
                             ('nothere', 1), ('../sf2ce', 1)):
             self.assertEqual(self.has('mame', game) != 0, bool(found), game)
-        # Um clone pela linha "clone" da tabela; o RetroArch ainda nao usa os detectores.
+        # Um clone pela linha "clone" da tabela.
         self.table.write_text('clone sf2ceua sf2ce\n')
         self.assertEqual(self.has('mame', 'sf2ceua'), 0)
-        self.assertNotEqual(self.has('retroarch', 'sf2ce'), 0)
+        # No RetroArch so com o core FBNeo (o emulador dos detectores), e so
+        # as areas de memoria dele: o endereco "raw" da CPU la nao da.
+        has = lambda game, *core: subprocess.run([sys.executable, str(self.SCRIPT), 'has', 'retroarch', game, *core],
+                                                 env=self.env).returncode
+        self.assertNotEqual(has('sf2ce'), 0)
+        self.assertNotEqual(has('sf2ce', 'mame2010'), 0)
+        for core in ('fbneo', '/opt/fliperos/retroarch/cores/fbneo_libretro.so'):
+            self.assertEqual(has('sf2ce', core), 0)
+            self.assertEqual(has('sf2ceua', core), 0)
+            self.assertEqual(has('kof98', core), 0)
+            self.assertEqual(has('sfiii3nr1', core), 0)
+            self.assertNotEqual(has('avengrgs', core), 0)
         # A tabela com as vitorias do jogo vale no lugar do detector; so com
         # os pontos, as vitorias vem do detector.
         self.table.write_text('mame sf2ce wins1 0x10 1 bin\nmame sf2ce wins2 0x11 1 bin\n')
@@ -5771,9 +5784,126 @@ class VersusTests(unittest.TestCase):
                                 'fliperos_char2 = 31', 'mame_stop = 1'])
         env = dict(self.env, VERSUS_FEED=feed)
         subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'mame', 'sf2ce'], env=env, timeout=30, check=True)
-        events = self.events.read_text().splitlines()
-        self.assertIn('versus 0 0 - - Guile M.Bison (Dictator)', events)
-        self.assertEqual(events[-2:], ['versus 0 1 - - Guile M.Bison (Dictator)', 'versus 0 1 - - Guile '])
+        # Sem vitoria ainda (a demonstracao, a escolha dos personagens) o
+        # painel fica com a arte do jogo: nada de "0 x 0" trocando de nomes.
+        self.assertEqual(self.events.read_text().splitlines(),
+                         ['versus 0 1 - - Guile M.Bison (Dictator)', 'versus 0 1 - - Guile '])
+
+    def test_detector_counts_a_win_like_fightcade_does(self):
+        v = self.versus
+        self.detectors(game='start=Start,CpsRamFF,eq,0x10,153,8\nplayer1=P1 Win,CpsRamFF,eq,0x20,2,8\n'
+                            'player2=P2 Win,CpsRamFF,gts,0x30,0,16\nchar1=P1 Char,CpsRamFF,char,0x40,0,8\n')
+        d = v.Detector(v.read_detector('game', 'retroarch'))
+        memory = {0x10: 0, 0x20: 0, 0x30: 7, 0x40: 3}
+        read = lambda entry: memory[entry['ptr']]
+        v.HOLD, v.START_WAIT = 0.5, 5
+        clock = [0.0]
+
+        def run(seconds):
+            out = {}
+            for _ in range(int(seconds * 10)):
+                clock[0] += 0.1
+                out = d.step(read, clock[0])
+            return out
+        self.assertEqual(run(1), {'wins1': 0, 'wins2': 0, 'char1': 3})
+        # A vitoria so vale depois do comeco da partida (0x10 em 153 por meio segundo).
+        memory[0x20] = 2
+        self.assertEqual(run(7)['wins1'], 0)
+        memory[0x20] = 0
+        memory[0x10] = 153
+        run(1)
+        memory[0x10] = 0
+        # Um valor que dura menos de meio segundo nao conta.
+        memory[0x20] = 2
+        run(0.3)
+        memory[0x20] = 0
+        self.assertEqual(run(1)['wins1'], 0)
+        memory[0x20] = 2
+        self.assertEqual(run(1), {'wins1': 1, 'wins2': 0, 'char1': 3})
+        # Continua em 2 ate a proxima partida: nao conta de novo sem outro comeco.
+        self.assertEqual(run(8)['wins1'], 1)
+        # "gts": maior que o valor que estava la quando a partida comecou (7).
+        memory[0x20] = 0
+        memory[0x10] = 153
+        run(1)
+        memory[0x10] = 0
+        memory[0x30] = 8
+        self.assertEqual(run(1), {'wins1': 1, 'wins2': 1, 'char1': 3})
+        # Logo depois de uma vitoria, outra so e procurada 5 s mais tarde.
+        memory[0x10] = 153
+        run(1)
+        memory[0x10] = 0
+        memory[0x20] = 2
+        self.assertEqual(run(2)['wins1'], 1)
+        self.assertEqual(run(4)['wins1'], 2)
+        # Sem conseguir ler a memoria, nada muda.
+        self.assertEqual(d.step(lambda entry: None, clock[0] + 1), {})
+
+    def test_retroarch_fbneo_detectors_through_read_core_ram(self):
+        self.detectors(sf2ce=self.DETECTOR + 'player2=P2 Win16,CpsRamFF,eq,0x9000,513,16\n')
+        self.table.write_text('')
+        memory = bytearray(0x10000)
+        memory[0x864E] = 3
+        memory[0x894E] = 8
+        asked = set()
+        server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        server.bind(('127.0.0.1', 0))
+        self.addCleanup(server.close)
+
+        def serve():
+            while True:
+                try:
+                    data, peer = server.recvfrom(4096)
+                except OSError:
+                    return
+                command, addr, size = data.decode().split()
+                asked.add((command, addr, size))
+                addr, size = int(addr, 16), int(size)
+                server.sendto(('%s %x %s\n' % (command, addr, ' '.join('%02x' % b for b in memory[addr:addr + size])))
+                              .encode(), peer)
+        threading.Thread(target=serve, daemon=True).start()
+        game = subprocess.Popen(['/bin/sleep', '60'])
+        self.addCleanup(game.wait)
+        self.addCleanup(game.kill)
+        env = dict(self.env, RA_COMMAND='127.0.0.1:%d' % server.getsockname()[1], VERSUS_HOLD='0.2',
+                   VERSUS_START_WAIT='0.5', VERSUS_POLL='0.05')
+        proc = subprocess.Popen([sys.executable, str(self.SCRIPT), 'run', 'retroarch', 'sf2ce', str(game.pid),
+                                 'fbneo_libretro.so'], env=env)
+        self.addCleanup(proc.kill)
+
+        def last_event(expected):
+            deadline = time.time() + 10
+            lines = []
+            while time.time() < deadline:
+                lines = self.events.read_text().splitlines() if self.events.exists() else []
+                if lines and lines[-1] == expected:
+                    break
+                time.sleep(0.05)
+            return lines[-1] if lines else None
+        time.sleep(0.5)
+        self.assertFalse(self.events.exists())
+        memory[0x8ABF] = 153
+        time.sleep(0.6)
+        memory[0x8ABF] = 0
+        time.sleep(0.8)
+        memory[0x864F] = 2
+        self.assertEqual(last_event('versus 1 0 - - Guile M.Bison (Dictator)'),
+                         'versus 1 0 - - Guile M.Bison (Dictator)')
+        # O valor de 16 bits como o FBNeo o guarda: o byte menos significativo primeiro.
+        memory[0x864F] = 0
+        memory[0x8ABF] = 153
+        time.sleep(0.6)
+        memory[0x8ABF] = 0
+        time.sleep(0.8)
+        memory[0x9000:0x9002] = bytes([0x01, 0x02])
+        self.assertEqual(last_event('versus 1 1 - - Guile M.Bison (Dictator)'),
+                         'versus 1 1 - - Guile M.Bison (Dictator)')
+        self.assertIn(('READ_CORE_RAM', '864f', '1'), asked)
+        self.assertIn(('READ_CORE_RAM', '9000', '2'), asked)
+        self.assertFalse([a for a in asked if a[0] != 'READ_CORE_RAM'])
+        game.kill()
+        game.wait()
+        self.assertEqual(proc.wait(timeout=10), 0)
 
     def test_detectors_are_downloaded_at_a_pinned_commit(self):
         source = self.SCRIPT.read_text()
@@ -5958,7 +6088,10 @@ class VersusTests(unittest.TestCase):
                      # Os detectores do Fightcade, com os tempos e as areas dele.
                      "(HOME .. '/.local/share/fliperos/versus-detectors')", 'local DETECTOR_FRAMES = 30',
                      'local START_FRAMES = 300', "found = (not start_detected) and d.current > d.start",
-                     'local a = base + (ptr ~ 1)', 'base = 0xFF0000', 'base = 0x100000'):
+                     'local a = base + (ptr ~ 1)', 'base = 0xFF0000', 'base = 0x100000',
+                     # O CPS3 (SH-2): blocos de 32 bits invertidos.
+                     "if area == 'Main RAM' and system == 'cps3' then", 'local base = 0x02000000',
+                     'local a = base + (ptr ~ 3)', 'local a = base + ((ptr & ~1) ~ 2)'):
             self.assertIn(line, plugin)
         self.assertEqual(json.loads((ROOT / 'config/mame-plugins/fliperos-versus/plugin.json').read_text())
                          ['plugin']['name'], 'fliperos-versus')
@@ -5967,7 +6100,7 @@ class VersusTests(unittest.TestCase):
         self.assertIn('set -- -plugin hiscore,fliperos-versus \\\n'
                       '    -pluginspath "/usr/local/share/groovymame/plugins;$plugins;$HOME/.mame/plugins" "$@"', gm)
         kms = (ROOT / 'config/fliperos-kms-run').read_text()
-        self.assertIn('"$pixelcade" panel && "$versus" has retroarch "${game%.*}"; then', kms)
+        self.assertIn('"$versus" has retroarch "${game%.*}" "$core"; then', kms)
         # O Network Command Interface so num jogo da tabela.
         self.assertIn('network_cmd_enable = "true"', (ROOT / 'config/retroarch-versus.cfg').read_text())
         self.assertNotIn('network_cmd', (ROOT / 'config/retroarch.cfg').read_text())
@@ -6660,6 +6793,10 @@ class RetroArchConfigTests(unittest.TestCase):
         body = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
         self.assertIn('make -C "$dir" -f "$mk" -j"$(nproc)" "$@"', body)
         self.assertIn('\nbuild_core libretro/mame2010-libretro ARCHOPTS=-U_FORTIFY_SOURCE\n', body)
+        # O FBNeo (o placar versus pelo RetroArch): o makefile do core fica
+        # numa subpasta, e o .so vai sem os simbolos.
+        self.assertIn('elif [[ -f "$dir/src/burner/libretro/Makefile" ]]; then', body)
+        self.assertIn('\nbuild_core libretro/FBNeo\nstrip --strip-unneeded "$RA_DIR/cores/fbneo_libretro.so"\n', body)
         self.assertIn('[[ $symbols != *__strcat_chk* ]]', (ROOT / 'tools/verify-iso.sh').read_text())
 
     def test_retroarch_gets_the_system_config(self):

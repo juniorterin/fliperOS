@@ -686,7 +686,7 @@ game_end() {
   select_game "$1" "$2"
 }
 
-# watch SISTEMA ROM: espera o jogo fechar e manda o "end". O jogo e o pai: o
+# watch SISTEMA ROM PROGRAMA [CORE]: espera o jogo fechar e manda o "end". O jogo e o pai: o
 # fliperos-kms-run e o fliperos-x11-run chamam o launch em segundo plano e
 # viram o emulador (exec). No RetroArch com as conquistas ligadas, enquanto
 # isso le as conquistas do log dele.
@@ -701,8 +701,8 @@ watch() {
       retroarch) source=retroarch ;;
       *) source="" ;;
     esac
-    if [[ -n $source && -n $2 && -x $versus ]] && "$versus" has "$source" "$2"; then
-      "$versus" run "$source" "$2" "$pid" &
+    if [[ -n $source && -n $2 && -x $versus ]] && "$versus" has "$source" "$2" "${4:-}"; then
+      "$versus" run "$source" "$2" "$pid" "${4:-}" &
     fi
     if [[ ${3:-} == retroarch ]] && cheevos; then
       cheevos_watch "$pid"
@@ -837,7 +837,7 @@ system() {
 # frontends). Sem jogo (um frontend, o menu de um emulador), nada. O Visual
 # Pinball desenha o DMD ele mesmo: o painel fica com ele ate fechar.
 launch() {
-  local prog last sys rom
+  local prog last sys rom core="" i next
   (($# >= 1)) || return 0
   prog=${1##*/}
   if [[ ${prog,,} == vpinball* ]]; then
@@ -858,7 +858,11 @@ launch() {
       ;;
   esac
   rom=$(rom_of "$last")
-  game "$sys" "$rom" && watch "$sys" "$rom" "$prog"
+  # O core do RetroArch (-L): o placar versus depende dele.
+  for ((i = 2; i < $#; i++)); do
+    if [[ ${!i} == -L || ${!i} == --libretro ]]; then next=$((i + 1)) core=${!next}; fi
+  done
+  game "$sys" "$rom" && watch "$sys" "$rom" "$prog" "${core:-}"
 }
 
 # esde EVENTO ARGS...: game-select "rom" "nome" "sistema" "nome do sistema";

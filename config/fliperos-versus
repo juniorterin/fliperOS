@@ -21,10 +21,12 @@
 #     fliperos_char1, fliperos_score1...) num arquivo em $XDG_RUNTIME_DIR,
 #     que daqui se acompanha. Nao sao saidas do MAME: no MAME de agora um
 #     script nao cria saidas novas.
-#   - RetroArch: o Network Command Interface (READ_CORE_MEMORY, UDP 55355),
-#     ligado pelo /etc/fliperos/retroarch/versus.cfg. So as linhas
-#     "retroarch" da tabela: os detectores ainda nao (os enderecos de um core
-#     nao sao os do MAME).
+#   - RetroArch: o Network Command Interface (UDP 55355), ligado pelo
+#     /etc/fliperos/retroarch/versus.cfg. Os detectores valem no core FBNeo,
+#     o emulador para o qual foram escritos: a memoria principal do jogo vem
+#     por READ_CORE_RAM, e o detector e avaliado aqui. As linhas "retroarch"
+#     da tabela vao por READ_CORE_MEMORY. Os cores do MAME (mame2010, mame)
+#     nao deixam ler a memoria.
 #
 # As vitorias da sessao vem do detector, do proprio jogo (wins1, wins2) ou
 # dos rounds: o vencedor e contado quando os rounds voltam a zero. A cada
@@ -55,9 +57,21 @@ DETECTORS_COMMIT = 'de9e7a99c494af488ed64155678e9d22d78f7ae6'
 DETECTORS_URL = os.environ.get(
     'VERSUS_DETECTORS_URL',
     'https://codeload.github.com/fightcadeorg/fightcade-detectors/tar.gz/' + DETECTORS_COMMIT)
-# "raw" e o endereco da CPU; as outras sao areas de memoria do FBNeo (a RAM
-# do CPS e a do Neo Geo). A "Main RAM" do CPS3 ainda nao.
-DETECTOR_AREAS = ('raw', 'CpsRamFF', '68K RAM')
+# As areas de um detector que cada fonte sabe ler. "raw" e o endereco da
+# CPU; as outras sao areas de memoria do FBNeo: a RAM do CPS, a do Neo Geo e
+# a do CPS3. No MAME o plugin as converte em enderecos da CPU. No core FBNeo
+# do RetroArch cada uma e a memoria principal do jogo (READ_CORE_RAM), no
+# mesmo arranjo que o detector descreve; o "raw" la nao da, porque o core nao
+# diz em que endereco cada area fica.
+DETECTOR_AREAS = {'mame': ('raw', 'CpsRamFF', '68K RAM', 'Main RAM'),
+                  'retroarch': ('CpsRamFF', '68K RAM', 'Main RAM')}
+# Os tempos do Fightcade (vid_overlay.cpp), em segundos de 60 quadros: uma
+# condicao vale depois de 30 quadros seguidos, e a vitoria so e procurada 300
+# quadros depois de a espera pelo comeco ter iniciado. No RetroArch a
+# memoria e lida 10 vezes por segundo.
+HOLD = float(os.environ.get('VERSUS_HOLD', '0.5'))
+START_WAIT = float(os.environ.get('VERSUS_START_WAIT', '5'))
+POLL = float(os.environ.get('VERSUS_POLL', '0.1'))
 FIELDS = ('score1', 'score2', 'rounds1', 'rounds2', 'wins1', 'wins2', 'char1', 'char2')
 FORMATS = ('bcd', 'bcdle', 'bin', 'binle')
 # Segundos entre dois eventos (os pontos mudam muitas vezes por segundo).
@@ -115,7 +129,7 @@ def lookup(source, game, tables=None):
 # ("char=3,Guile") e se ha os campos char1/char2; None sem o arquivo ou sem
 # as tres linhas que fazem um detector (start, player1, player2). Quem
 # avalia os enderecos e o plugin do MAME.
-def read_detector(game):
+def read_detector(game, source='mame'):
     if not re.fullmatch(r'[A-Za-z0-9_]+', game):
         return None
     try:
@@ -123,7 +137,8 @@ def read_detector(game):
             lines = f.read().splitlines()
     except OSError:
         return None
-    targets, names = set(), {}
+    names = {}
+    found = {'start': [], 'player1': [], 'player2': [], 'char1': [], 'char2': []}
     for line in lines:
         target, sep, rest = line.strip().partition('=')
         if not sep:
@@ -132,25 +147,50 @@ def read_detector(game):
             number, _, name = rest.partition(',')
             if number.strip().isdigit() and name.strip():
                 names[int(number)] = name.strip()
-        elif rest.count(',') >= 5:
-            targets.add(target)
-            # As areas que o plugin sabe onde ficam na memoria do MAME.
-            if target in ('start', 'player1', 'player2') and rest.split(',')[1] not in DETECTOR_AREAS:
-                return None
-    if not {'start', 'player1', 'player2'} <= targets:
+            continue
+        # "alvo=nome,area,operacao,0xENDERECO,valor,bits"
+        parts = rest.split(',')
+        if target not in found or len(parts) < 6:
+            continue
+        try:
+            entry = {'area': parts[1], 'op': parts[2], 'ptr': int(parts[3], 16), 'value': int(parts[4]),
+                     'bits': int(parts[5])}
+        except ValueError:
+            continue
+        known = entry['area'] in DETECTOR_AREAS[source]
+        if target in ('char1', 'char2'):
+            if known:
+                found[target] = [entry]
+        elif not known:
+            # Uma area que esta fonte nao sabe ler: o jogo fica sem placar.
+            return None
+        else:
+            found[target].append(entry)
+    if not (found['start'] and found['player1'] and found['player2']):
         return None
-    return {'names': names, 'chars': {'char1', 'char2'} & targets}
+    found['names'] = names
+    found['chars'] = {t for t in ('char1', 'char2') if found[t]}
+    return found
 
 
-# fields_of: os campos que o jogo tem (os da tabela e, no MAME, as vitorias
-# e os personagens do detector, se a tabela nao conta as vitorias) e os
-# nomes dos personagens. (None, {}) se nao ha placar para o jogo.
-def fields_of(source, game, tables=None):
+# detector_of: o detector do jogo (ou do pai, pela linha "clone") para a
+# fonte. No RetroArch so com o core FBNeo, o emulador para o qual os
+# detectores foram escritos.
+def detector_of(source, game, tables, core=''):
+    if source == 'retroarch' and not core.startswith('fbneo'):
+        return None
+    return read_detector(game, source) or read_detector(tables[1].get(game, ''), source)
+
+
+# fields_of: os campos que o jogo tem (os da tabela e as vitorias e os
+# personagens do detector, se a tabela nao conta as vitorias) e os nomes dos
+# personagens. (None, {}) se nao ha placar para o jogo.
+def fields_of(source, game, tables=None, core=''):
     tables = tables or read_tables()
     fields = dict(lookup(source, game, tables) or {})
     names = {}
-    if source == 'mame' and not any(f[:-1] in ('wins', 'rounds') for f in fields):
-        detector = read_detector(game) or read_detector(tables[1].get(game, ''))
+    if not any(f[:-1] in ('wins', 'rounds') for f in fields):
+        detector = detector_of(source, game, tables, core)
         if detector:
             names = detector['names']
             for field in ['wins1', 'wins2'] + sorted(detector['chars']):
@@ -328,58 +368,152 @@ def mame_source(fields, pid):
             yield None
 
 
-# retroarch_source: READ_CORE_MEMORY de cada campo, 4 vezes por segundo, ate
-# o RetroArch (PID) fechar. A resposta e "READ_CORE_MEMORY endereco b0 b1..."
-# ou "... -1" quando o core nao tem aquele endereco.
-def retroarch_source(fields, pid):
+class Detector:
+    """O detector de um jogo, avaliado como o GameDetector do Fightcade
+    (vid_overlay.cpp), com o tempo no lugar da contagem de quadros."""
+
+    def __init__(self, detector):
+        self.lists = {t: [dict(d, since=None, start=0, current=0) for d in detector[t]]
+                      for t in ('start', 'player1', 'player2', 'char1', 'char2')}
+        self.wins = [0, 0]
+        self.waiting_start = True
+        self.began = None
+
+    # Detector::Update: "eq" e o valor igual ao do arquivo; "gts" e o valor
+    # maior que o guardado quando a partida comecou.
+    @staticmethod
+    def update(d, value, start_detected, now):
+        d['current'] = value
+        if start_detected:
+            d['start'] = value
+        found = False
+        if d['op'] == 'eq':
+            found = value == d['value']
+        elif d['op'] == 'gts':
+            found = not start_detected and value > d['start']
+        d['since'] = (d['since'] if d['since'] is not None else now) if found else None
+
+    @staticmethod
+    def detected(entries, now):
+        return any(d['since'] is not None and now - d['since'] >= HOLD for d in entries)
+
+    # step: read(d) da o valor de um detector (None se nao deu para ler);
+    # devolve os campos como estao agora.
+    def step(self, read, now):
+        if self.began is None:
+            self.began = now
+        values = {}
+        for target in ('start', 'player1', 'player2', 'char1', 'char2'):
+            for d in self.lists[target]:
+                values[id(d)] = read(d)
+        if any(v is None for v in values.values()):
+            return {}
+        for d in self.lists['start']:
+            self.update(d, values[id(d)], False, now)
+        start_detected = self.detected(self.lists['start'], now)
+        for target in ('player1', 'player2', 'char1', 'char2'):
+            for d in self.lists[target]:
+                self.update(d, values[id(d)], start_detected, now)
+        if self.waiting_start:
+            if start_detected:
+                self.waiting_start = False
+        elif now - self.began > START_WAIT:
+            won = False
+            for side, target in enumerate(('player1', 'player2')):
+                if self.detected(self.lists[target], now):
+                    self.wins[side] += 1
+                    won = True
+            if won:
+                self.waiting_start = True
+                self.began = now
+        out = {'wins1': self.wins[0], 'wins2': self.wins[1]}
+        for target in ('char1', 'char2'):
+            if self.lists[target]:
+                out[target] = self.lists[target][0]['current']
+        return out
+
+
+# retroarch_source: a memoria do jogo pelo Network Command Interface, ate o
+# RetroArch (PID) fechar. Os campos da tabela por READ_CORE_MEMORY (o
+# endereco do mapa de memoria do core); os de um detector por READ_CORE_RAM
+# (a memoria principal do core FBNeo, no arranjo que o detector descreve: o
+# valor de 16 ou 32 bits com o byte menos significativo primeiro). A
+# resposta e "COMANDO endereco b0 b1..." ou "... -1" sem aquele endereco.
+def retroarch_source(fields, pid, detector=None):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(0.5)
     target = address(RA_COMMAND)
     silent = time.monotonic()
+    game = Detector(detector) if detector else None
+
+    def ask(command, addr, size):
+        nonlocal silent
+        try:
+            sock.sendto(b'%s %x %d\n' % (command, addr, size), target)
+            words = sock.recv(4096).decode('ascii', 'replace').split()
+        except OSError:
+            return None
+        silent = time.monotonic()
+        if len(words) != 2 + size or words[0] != command.decode():
+            return None
+        try:
+            return bytes(int(w, 16) for w in words[2:])
+        except ValueError:
+            return None
+
+    def read_detector_value(d):
+        size = 4 if d['bits'] == 32 else 2 if d['bits'] == 16 else 1
+        data = ask(b'READ_CORE_RAM', d['ptr'] & ~(size - 1), size)
+        return None if data is None else int.from_bytes(data, 'little')
+
     with sock:
         while alive(pid):
-            for field, (addr, size, fmt, mult) in fields.items():
-                try:
-                    sock.sendto(b'READ_CORE_MEMORY %x %d\n' % (addr, size), target)
-                    words = sock.recv(4096).decode('ascii', 'replace').split()
-                except OSError:
+            for field, entry in fields.items():
+                if entry is None:
                     continue
-                silent = time.monotonic()
-                if len(words) != 2 + size or words[0] != 'READ_CORE_MEMORY':
-                    continue
-                try:
-                    value = decode(bytes(int(w, 16) for w in words[2:]), fmt, mult)
-                except ValueError:
-                    continue
+                addr, size, fmt, mult = entry
+                data = ask(b'READ_CORE_MEMORY', addr, size)
+                value = None if data is None else decode(data, fmt, mult)
                 if value is not None:
+                    yield field, value
+            if game:
+                for field, value in game.step(read_detector_value, time.monotonic()).items():
                     yield field, value
             yield None
             # Sem PID para vigiar: 30 s sem resposta e o jogo fechou.
             if pid <= 1 and time.monotonic() - silent > 30:
                 return
-            time.sleep(0.25)
+            time.sleep(POLL if game else 0.25)
 
 
-def source_of(name, fields, pid):
+def source_of(name, fields, pid, detector=None):
     if name == 'mame':
         return mame_source(fields, pid)
-    return retroarch_source(fields, pid)
+    return retroarch_source(fields, pid, detector)
 
 
 # -- Comandos --------------------------------------------------------
 
-def run(source, game, pid):
-    fields, names = fields_of(source, game)
+def run(source, game, pid, core=''):
+    tables = read_tables()
+    fields, names = fields_of(source, game, tables, core)
     if not fields:
         return 0
     tally = Tally(fields)
     sent, last, dirty = None, 0.0, False
-    for item in source_of(source, fields, pid):
+    detector = detector_of(source, game, tables, core) if fields.get('wins1', 0) is None else None
+    for item in source_of(source, fields, pid, detector):
         if item is not None:
             dirty = tally.update(*item) or dirty
         now = time.monotonic()
         if dirty and now - last >= EVERY:
             state = tally.state(names)
+            # Enquanto ninguem ganhou e nao ha pontos, o painel fica com a
+            # arte do jogo: na demonstracao e na escolha dos personagens o
+            # placar seria um "0 x 0" trocando de nomes.
+            if state[:4] in (['0', '0', '-', '-'], ['-', '-', '-', '-']):
+                dirty = False
+                continue
             if state != sent:
                 subprocess.call([PIXELCADE, 'versus'] + state, stdin=subprocess.DEVNULL,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -388,15 +522,17 @@ def run(source, game, pid):
     return 0
 
 
-def watch(source, game):
-    fields, names = fields_of(source, game)
+def watch(source, game, core=''):
+    tables = read_tables()
+    fields, names = fields_of(source, game, tables, core)
     if not fields:
         sys.stderr.write('fliperos-versus: no score for %s (%s): no detector and no line in the table\n'
                          % (game, source))
         return 1
     tally = Tally(fields)
     print('watching %s (%s): %s' % (game, source, ', '.join(sorted(fields))), flush=True)
-    for item in source_of(source, fields, 0):
+    detector = detector_of(source, game, tables, core) if fields.get('wins1', 0) is None else None
+    for item in source_of(source, fields, 0, detector):
         if item is not None and tally.update(*item):
             wins = tally.state()[:2]
             print('%-8s = %-10d   session wins: %s x %s' % (item[0], item[1], wins[0], wins[1]), flush=True)
@@ -407,18 +543,21 @@ def main(argv):
     if len(argv) == 2 and argv[1] == 'fetch':
         return fetch()
     if len(argv) >= 4 and argv[2] in ('mame', 'retroarch'):
+        # O core do RetroArch: o nome do arquivo, com ou sem pasta e "_libretro.so".
+        rest = [a for a in argv[4:] if not a.isdigit()]
+        core = os.path.basename(rest[0]).replace('_libretro.so', '') if rest else ''
         if argv[1] == 'has':
-            return 0 if fields_of(argv[2], argv[3])[0] else 1
+            return 0 if fields_of(argv[2], argv[3], None, core)[0] else 1
         if argv[1] == 'run':
-            return run(argv[2], argv[3], int(argv[4]) if len(argv) > 4 and argv[4].isdigit() else 0)
+            return run(argv[2], argv[3], int(argv[4]) if len(argv) > 4 and argv[4].isdigit() else 0, core)
         if argv[1] == 'watch':
             try:
-                return watch(argv[2], argv[3])
+                return watch(argv[2], argv[3], core)
             except KeyboardInterrupt:
                 return 0
-    sys.stderr.write('usage: fliperos-versus has mame|retroarch GAME\n'
-                     '       fliperos-versus run mame|retroarch GAME [PID]\n'
-                     '       fliperos-versus watch mame|retroarch GAME\n'
+    sys.stderr.write('usage: fliperos-versus has mame|retroarch GAME [CORE]\n'
+                     '       fliperos-versus run mame|retroarch GAME [PID] [CORE]\n'
+                     '       fliperos-versus watch mame|retroarch GAME [CORE]\n'
                      '       fliperos-versus fetch\n')
     return 1
 

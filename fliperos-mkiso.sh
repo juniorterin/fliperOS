@@ -1033,6 +1033,9 @@ build_core() {
     mk="Makefile.libretro"
   elif [[ -f "$dir/Makefile" ]]; then
     mk="Makefile"
+  elif [[ -f "$dir/src/burner/libretro/Makefile" ]]; then
+    # O FBNeo: o makefile da raiz e o do programa dele, o do core fica aqui.
+    dir="$dir/src/burner/libretro"; mk="Makefile"
   else
     # So CMake (o mGBA desde 2025): o core sai com BUILD_LIBRETRO, sem o
     # frontend proprio (Qt/SDL) nem as bibliotecas opcionais.
@@ -1062,6 +1065,12 @@ build_core libretro/pcsx_rearmed
 # ND-1). ARCHOPTS e a variavel que o Makefile dele deixa para as flags de
 # quem compila.
 build_core libretro/mame2010-libretro ARCHOPTS=-U_FORTIFY_SOURCE
+# FBNeo: os arcades em que o placar de uma partida versus aparece no LED do
+# gabinete pelo RetroArch (config/fliperos-versus: os detectores do Fightcade
+# descrevem a memoria deste emulador), e o core de arcade com netplay. Sai
+# com 90 MB; sem os simbolos, 82 (14 no squashfs).
+build_core libretro/FBNeo
+strip --strip-unneeded "$RA_DIR/cores/fbneo_libretro.so"
 chown -R fliperos:fliperos "$RA_DIR"
 
 echo "RetroArch OK"
