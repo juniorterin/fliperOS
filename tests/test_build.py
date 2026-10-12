@@ -4737,6 +4737,39 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertIn('--nvram', args)
             self.assertFalse(Path(args[args.index('--nvram') + 1]).exists())
 
+    def test_sm2emu_opens_the_outputs_port_only_with_a_reader(self):
+        # A porta 8000 (as saidas do jogo) so com um leitor instalado. Sem
+        # ele, so desliga o que o FliperOS ligou: quem ligou no menu do F10
+        # fica com a escolha.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            ini = home / '.config' / 'sm2-emu' / 'sm2-emu.ini'
+            helper = home / 'outputs'
+            helper.write_text('#!/bin/sh\nexit 0\n')
+            helper.chmod(0o755)
+            extra = {'FLIPEROS_OUTPUTS': str(helper)}
+            self.run_x11(['sm2-emu', 'hotd.zip'], home=home, extra=extra)
+            self.assertIn('outputs_network = true\n', ini.read_text())
+            # O ini que o emulador regrava ao sair.
+            ini.write_text('outputs_network = true\noutputs_network_port = 8000\n')
+            helper.write_text('#!/bin/sh\n[ "$1" != installed ]\n')
+            self.run_x11(['sm2-emu', 'hotd.zip'], home=home, extra=extra)
+            self.assertIn('outputs_network = false\noutputs_network_port = 8000\n', ini.read_text())
+            ini.write_text('outputs_network = true\n')
+            self.run_x11(['sm2-emu', 'hotd.zip'], home=home, extra=extra)
+            self.assertIn('outputs_network = true\n', ini.read_text())
+
+    def test_sm2emu_patches_apply_on_linux_and_only_touch_the_emulator(self):
+        # git apply, no gabinete: um patch em CRLF nao se aplica. E so o
+        # fonte e a tabela de jogos do emulador.
+        for patch in sorted((ROOT / 'config/sm2-emu-patches').glob('*.patch')):
+            data = patch.read_bytes()
+            self.assertNotIn(b'\r', data, patch.name)
+            files = re.findall(r'(?m)^diff --git a/(\S+) b/', data.decode())
+            self.assertTrue(files, patch.name)
+            for name in files:
+                self.assertRegex(name, r'^(src|data)/', patch.name)
+
     def test_sm2emu_applies_patches_and_updates_when_they_change(self):
         rootfs = ROOTFS
         # A pasta dos patches pode estar vazia (o upstream aceitou todos).
@@ -5599,6 +5632,18 @@ class OutputsTests(unittest.TestCase):
         self.assertEqual(len((self.tmp / 'wine.log').read_text().splitlines()), 1)
         self.addCleanup(subprocess.run, ['pkill', '-f', str(self.tmp / 'qmamehook/QMamehook')])
 
+    def test_model2_opens_the_gun_reader(self):
+        # O SM2-Emu publica as saidas: pelo comando do FliperOS (o jogo pelo
+        # nome) e pelo binario (o caminho do .zip).
+        self.install_qmamehook()
+        self.addCleanup(subprocess.run, ['pkill', '-f', str(self.tmp / 'qmamehook/QMamehook')])
+        self.run_('launch', '/usr/local/bin/fliperos-model2', 'hotd')
+        self.assertEqual(len(self.lines('qmh.log', 1)), 1)
+        subprocess.run(['pkill', '-f', str(self.tmp / 'qmamehook/QMamehook')])
+        (self.tmp / 'qmh.log').unlink()
+        self.run_('launch', '/home/fliperos/.local/src/sm2-emu/build/bin/sm2-emu', '--fullscreen', '/x/hotd.zip')
+        self.assertEqual(len(self.lines('qmh.log', 1)), 1)
+
     def test_qmamehook_source_is_pinned_and_built(self):
         # O fonte e conferido pelo hash e compilado (cmake e make de mentira);
         # os .ini que a pessoa pos ficam.
@@ -5754,6 +5799,7 @@ class OutputsTests(unittest.TestCase):
         x11 = (ROOT / 'config/fliperos-x11-run').read_text()
         self.assertIn('netout=",network:NetworkOutput=yes"', x11)
         self.assertIn('netout=(-outputs=net)', x11)
+        self.assertIn('sm2_set outputs_network true', x11)
         # A porta 8000 fica visivel na rede: nunca ligada no mame.ini da imagem.
         self.assertNotRegex((ROOT / 'config/mame.ini').read_text(), r'(?m)^output\s')
         for wrapper in ('fliperos-kms-run', 'fliperos-x11-run'):

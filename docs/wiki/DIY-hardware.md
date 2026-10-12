@@ -46,7 +46,7 @@ The Pixelcade marquee, which FliperOS also supports, is a commercial product wit
 
 ## Game outputs: lamps, recoil, motors and button lights
 
-Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast and Supermodel can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in **Setup > Extras**. They can be installed together.
+Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast, Supermodel and SM2-Emu (Model 2) can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in **Setup > Extras**. They can be installed together.
 
 | Project | What it drives | With FliperOS |
 | --- | --- | --- |
@@ -58,6 +58,18 @@ The emulators only open port 8000 when one of them is installed, because the por
 
 None of them has been tried with a real gun or board on a FliperOS cabinet yet. QMamehook was built and run against a simulated game: it connects to the port, looks for the game's `.ini` and closes with the game. Hook Of The Reaper was run under Wine against a simulated game: it connects to the port, loads the game's file and closes with the game. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.
 
+### Model 2 gun games
+
+A Model 2 gun cabinet has no recoil, so the board never says that a shot was fired, and SM2-Emu on its own only publishes the lamps. FliperOS adds a patch to it (`config/sm2-emu-patches`, to be offered to the SM2-Emu project) that reads the game's own memory and publishes, under the names Hook Of The Reaper's game files already use:
+
+| Game | Outputs |
+| --- | --- |
+| Virtua Cop (`vcop`), Virtua Cop 2 (`vcop2`), The House of the Dead (`hotd`) | `P1_CtmRecoil` (a pulse per shot), `P1_Ammo`, `P1_Clip`, `P1_Life`, `P1_Damaged` (a pulse per life lost), `P1_LmpStart`, the same for `P2_`, and `Credits` |
+| Gunblade NY (`gunblade`) | `P1_CtmRecoil`, `P1_GunMotor` (the cabinet's own gun motor), `P1_Life`, `P1_Damaged`, `P1_LmpStart`, the same for `P2_`, and `Credits` |
+| Behind Enemy Lines (`bel`) | `P1_CtmRecoil`, `P1_Ammo`, `P1_Clip`, `P1_Life`, `P1_Damaged`, the same for `P2_`, and `Credits` |
+
+Each was checked with a reader on port 8000 through a game played by a script: a credit, a start, shots until the magazine is empty and lives lost, for player 1. Player 2 and a real gun haven't been tried. Rail Chase 2 has no outputs yet. The patch reaches a cabinet that already built Model 2 the next time **Games > Model 2** opens, which offers to update and rebuild.
+
 ### Hook Of The Reaper
 
 [Hook Of The Reaper](https://hotr.6bolt.com/) is the current successor of MAMEHooker. It has no Linux version yet (its author plans one after the program is complete), so FliperOS runs the Windows program through Wine.
@@ -65,7 +77,7 @@ None of them has been tried with a real gun or board on a FliperOS cabinet yet. 
 - **What is installed**: 64-bit Wine and a virtual screen (`xvfb`) from apt, and the program from its own website (pinned version and hash) into `~/hotr`. It gets its own Wine folder, separate from Fightcade's. Nothing of this is in the image.
 - **Setting it up**: on the desktop, **Preferences > Hook Of The Reaper** opens its window. Add your light guns and assign each one to a player, as its [tutorial](https://hotr.6bolt.com/pmwiki.php/Tutorial/Setup) shows. The settings stay in `~/hotr/data`.
 - **Game files**: it comes with its own files for over 200 gun games (`~/hotr/defaultLG`), which work with any gun it supports. MAMEHooker `.ini` files go in `~/hotr/ini/MAME`. The folder is also at `~/config/hotr`, shared on the network.
-- **When it runs**: it opens with each game of GroovyMAME, Flycast and Supermodel and closes with it. It runs on the virtual screen, so none of its windows or warnings appear over the game. Installing it again from the Extras updates the program and keeps your guns, players and `.ini` files.
+- **When it runs**: it opens with each game of GroovyMAME, Flycast, Supermodel and SM2-Emu and closes with it. It runs on the virtual screen, so none of its windows or warnings appear over the game. Installing it again from the Extras updates the program and keeps your guns, players and `.ini` files.
 - **USB HID guns and boards**: the install lets the `fliperos` user open the USB HID devices (`/dev/hidraw*`, group `input`), which is how Wine reaches them. Serial boards already belong to the user's `dialout` group.
 
 ### LEDSpicer
@@ -80,7 +92,7 @@ None of them has been tried with a real gun or board on a FliperOS cabinet yet. 
 - **What is installed**: its author publishes only the Windows program, so the install builds version 2.2 from source (pinned by hash) into `~/qmamehook`. The compiler and Qt 6 come from apt; it takes about two minutes. Nothing of this is in the image.
 - **Game files**: MAMEHooker `.ini` files go in `~/qmamehook/ini`, one per ROM set (`sf2ce.ini`). The folder is also at `~/config/qmamehook`, shared on the network. For a game without a file, QMamehook writes one there listing the outputs the game sent, for you to fill in.
 - **Players**: the guns are numbered in the order of their USB product IDs, so the `.ini` writes to port 1 for the first gun, 2 for the second.
-- **When it runs**: it opens with each game of GroovyMAME, Flycast and Supermodel and closes with it. What it says (the guns it found, the file it loaded) is in `/opt/fliperos/logs/qmamehook.log`.
+- **When it runs**: it opens with each game of GroovyMAME, Flycast, Supermodel and SM2-Emu and closes with it. What it says (the guns it found, the file it loaded) is in `/opt/fliperos/logs/qmamehook.log`.
 - **With Hook Of The Reaper also installed**, only one of the two opens with the game, because a gun's serial port can't be shared: Hook Of The Reaper, unless `/etc/fliperos/fliperos.conf` has the line `outputs_reader=qmamehook`.
 
 ## Adding a project to this page

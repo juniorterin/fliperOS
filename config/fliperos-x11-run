@@ -205,6 +205,19 @@ case $name in
       sm2_set vsync true
       : > "$cfg/.fliperos-vsync"
     fi
+    # As saidas do jogo pela rede (as lampadas; nos jogos de pistola, com o
+    # patch do FliperOS, o recuo, a municao e a vida), se ha quem as leia
+    # (config/fliperos-outputs). Sem leitor, so desliga o que ligou aqui:
+    # quem ligou no menu do F10 fica com a escolha.
+    if [[ -x $outputs ]] && "$outputs" installed; then
+      if ! grep -qE '^outputs_network[[:space:]]*=[[:space:]]*true' "$ini" 2> /dev/null; then
+        sm2_set outputs_network true
+        : > "$cfg/.fliperos-outputs"
+      fi
+    elif [[ -e $cfg/.fliperos-outputs ]]; then
+      sm2_set outputs_network false
+      rm -f "$cfg/.fliperos-outputs"
+    fi
     set -- "$1" --fullscreen "${@:2}"
     ;;
 esac

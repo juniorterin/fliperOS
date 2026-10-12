@@ -3,8 +3,10 @@
 # mostradores) para pistolas, placas controladoras e LEDs, como o MAMEHooker
 # faz no Windows.
 #
-# O GroovyMAME, o Flycast e o Supermodel publicam as saidas pela rede (TCP
-# 8000, linhas "nome = valor", o protocolo que o MAMEHooker le). Tres
+# O GroovyMAME, o Flycast, o Supermodel e o SM2-Emu (Model 2) publicam as
+# saidas pela rede (TCP 8000, linhas "nome = valor", o protocolo que o
+# MAMEHooker le). O SM2-Emu so publica as lampadas; o recuo, a municao e a
+# vida dos jogos de pistola vem do patch em config/sm2-emu-patches. Tres
 # programas as leem, cada um um extra do Setup > Extras, e podem ficar juntos
 # (o MAME aceita varios clientes):
 #
@@ -262,7 +264,7 @@ launch() {
   (($# >= 1)) || return 0
   prog=${1##*/}
   case $prog in
-    groovymame | flycast | supermodel)
+    groovymame | flycast | supermodel | fliperos-model2 | sm2-emu)
       case $(gun_reader) in
         hotr) hotr_game "$pid" ;;
         qmamehook) qmh_game "$pid" ;;

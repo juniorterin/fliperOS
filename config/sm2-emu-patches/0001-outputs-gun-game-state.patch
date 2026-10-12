@@ -1,0 +1,766 @@
+From 6ae695a3493b18d16f15ac74d47969a5010a00ca Mon Sep 17 00:00:00 2001
+From: Ademir Terin Junior <juniorterin@gmail.com>
+Date: Mon, 12 Oct 2026 15:12:50 -0300
+Subject: [PATCH] outputs: publish gun-game state (recoil, ammo, life, credits)
+ from work RAM
+
+The cabinet outputs carry the lamp latch and the drive board, which is all a
+driving cabinet has to say. A Model 2 gun cabinet has no recoil, so nothing
+on the board says that a shot was fired or a life lost, and a recoil gun
+driven by MAMEHooker or Hook Of The Reaper stays still.
+
+games.xml can now list outputs of a title's own, read from the program's
+work RAM once a frame:
+
+  <lamp>   one bit of the lamp latch under another name
+  <value>  a number at an address (u8/u16/s16/u32/float), with optional
+           <when> conditions for variables that only mean something while a
+           player is in the game
+  <flag>   1 while a value is above zero
+  <pulse>  1 for a few frames each time a value falls or rises
+
+Virtua Cop, Virtua Cop 2, The House of the Dead, Gunblade NY and Behind
+Enemy Lines publish theirs under the names DemulShooter established for
+these games (P1_CtmRecoil, P1_Ammo, P1_Clip, P1_Life, P1_Damaged,
+P1_LmpStart, P1_GunMotor, Credits), so the stock game files of those tools
+work unchanged. The addresses are DemulShooter's where the revision is the
+same one; The House of the Dead's are 0x680 further on in this revision, and
+the credit counters were found by watching work RAM through a coin-up.
+
+Each was checked with a reader on port 8000 through a scripted game: a
+credit, a start, shots until the magazine is empty, lives lost.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ data/games.xml      | 160 ++++++++++++++++++++++++++++++++++++++++++++
+ src/main.cpp        |   6 +-
+ src/osd/outputs.cpp | 118 ++++++++++++++++++++++++++++++--
+ src/osd/outputs.h   |  37 ++++++++--
+ src/rom/game.h      |  54 +++++++++++++++
+ src/rom/game_db.cpp | 136 +++++++++++++++++++++++++++++++++++++
+ 6 files changed, 501 insertions(+), 10 deletions(-)
+
+diff --git a/data/games.xml b/data/games.xml
+index 492be8b..d2c9608 100644
+--- a/data/games.xml
++++ b/data/games.xml
+@@ -19,6 +19,12 @@
+       </channel>
+     </analog>
+     <lightgun> <axis name= min= max= rest=/> ... </lightgun>
++    <outputs>
++      <lamp name= bit=/>
++      <value name= address= type=> <when address= mask= equals=/> ... </value>
++      <flag name= source=/>
++      <pulse name= source= edge= frames=/>
++    </outputs>
+     <roms>
+       <region name= size= stride= chunk= byte_swap= fill= required=>
+         <file name= offset= crc=/>
+@@ -86,6 +92,33 @@
+   its axes are declared separately and each title carries its own calibration.
+   Axis order is the board's own mux order, P1 Y, P1 X, P2 Y, P2 X.
+ 
++  Game outputs
++  ============
++  Every title publishes its lamp latch as cabinet outputs (see osd/outputs.h).
++  `<outputs>` adds state the cabinet never latched but a peripheral wants: a
++  Model 2 gun cabinet has no recoil, so nothing on the board says that a shot
++  was fired. The program knows, and these read it from its work RAM
++  (0x00500000-0x005fffff), once a frame.
++
++  `<lamp>` names one bit of the lamp latch. `<value>` is a number at `address`;
++  `type` is "u8" (the default), "u16", "s16", "u32" or "float", little-endian,
++  and anything below zero is published as zero. Its `<when>` children are
++  conditions that must all hold -- the byte at `address`, masked with `mask`
++  (default 0xff), equal to `equals`, or with no `equals` anything but zero --
++  for variables that only mean something while a player is in the game. While
++  one fails the value is zero.
++
++  `<flag>` is 1 while the `<value>` named by `source` is above zero. `<pulse>`
++  is 1 for `frames` frames (default 3) each time that value falls, or with
++  edge="rise" rises, from one frame to the next while its conditions hold. A
++  source has to be declared before what follows it.
++
++  The names are the ones DemulShooter established for these games (P1_Ammo,
++  P1_Clip, P1_CtmRecoil, P1_Life, P1_Damaged, P1_LmpStart, P1_GunMotor,
++  Credits), which is what the game files of MAMEHooker and Hook Of The Reaper
++  listen for. The addresses belong to one revision of a program, so a clone
++  does not inherit its parent's `<outputs>`.
++
+   `gearbox="true"` marks a title whose IN1 bits 0x70 read a gear selector
+   rather than buttons (MAME's daytona_gearbox_r). `drive_board="true"` marks
+   one that latches force-feedback commands on port E. `drive_protocol` says how
+@@ -391,6 +424,37 @@
+       <axis name="p2x" min="0x086" max="0x273" rest="0x17c"/>
+     </lightgun>
+ 
++    <!-- Game state published as outputs. The addresses are this revision's. The players' state bytes
++         stay set through the attract mode, so the game's own state (1 while a game is in progress)
++         is asked as well. -->
++    <outputs>
++      <lamp name="P1_LmpStart" bit="2"/>
++      <lamp name="P2_LmpStart" bit="3"/>
++      <value name="P1_Life" address="0x00502090">
++        <when address="0x0050003d" equals="1"/>
++        <when address="0x00502088" equals="1"/>
++      </value>
++      <value name="P1_Ammo" address="0x00507260">
++        <when address="0x0050003d" equals="1"/>
++        <when address="0x00502088" equals="1"/>
++      </value>
++      <flag name="P1_Clip" source="P1_Ammo"/>
++      <pulse name="P1_CtmRecoil" source="P1_Ammo" edge="fall"/>
++      <pulse name="P1_Damaged" source="P1_Life" edge="fall"/>
++      <value name="P2_Life" address="0x00502094">
++        <when address="0x0050003d" equals="1"/>
++        <when address="0x0050208c" equals="1"/>
++      </value>
++      <value name="P2_Ammo" address="0x00507264">
++        <when address="0x0050003d" equals="1"/>
++        <when address="0x0050208c" equals="1"/>
++      </value>
++      <flag name="P2_Clip" source="P2_Ammo"/>
++      <pulse name="P2_CtmRecoil" source="P2_Ammo" edge="fall"/>
++      <pulse name="P2_Damaged" source="P2_Life" edge="fall"/>
++      <value name="Credits" address="0x005d05c0"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-18524.12" offset="0x000000" crc="0x1858988b"/>
+@@ -842,6 +906,23 @@
+       </channel>
+     </analog>
+ 
++    <!-- Game state published as outputs. The addresses are this revision's. No lamps: this cabinet's
++         latch is wired differently and its bits are not identified. The game keeps these variables
++         for both players throughout, so there is no condition. -->
++    <outputs>
++      <value name="P1_Life" address="0x005b4996" type="u16"/>
++      <value name="P1_Ammo" address="0x005b4954" type="s16"/>
++      <flag name="P1_Clip" source="P1_Ammo"/>
++      <pulse name="P1_CtmRecoil" source="P1_Ammo" edge="fall"/>
++      <pulse name="P1_Damaged" source="P1_Life" edge="fall"/>
++      <value name="P2_Life" address="0x005b4a1e" type="u16"/>
++      <value name="P2_Ammo" address="0x005b49d8" type="s16"/>
++      <flag name="P2_Clip" source="P2_Ammo"/>
++      <pulse name="P2_CtmRecoil" source="P2_Ammo" edge="fall"/>
++      <pulse name="P2_Damaged" source="P2_Life" edge="fall"/>
++      <value name="Credits" address="0x005a87f0"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-20225.15" offset="0x000000" crc="0x4abc6b59"/>
+@@ -2262,6 +2343,33 @@
+       <channel index="3" control="p2y" min="0x11" max="0xae" rest="0x5f"/>
+     </analog>
+ 
++    <!-- Game state published as outputs. The addresses are this revision's. There is no magazine: the
++         gun is a machine gun with a motor of its own on the lamp latch, and the game counts the
++         shots fired instead. Bits 0 and 1 of the state byte are the players in the game. -->
++    <outputs>
++      <lamp name="P1_LmpStart" bit="2"/>
++      <lamp name="P2_LmpStart" bit="3"/>
++      <lamp name="P1_GunMotor" bit="4"/>
++      <lamp name="P2_GunMotor" bit="5"/>
++      <value name="P1_Life" address="0x00540114">
++        <when address="0x0053ffc0" mask="0x01"/>
++      </value>
++      <value name="P1_Shots" address="0x00540104" type="float">
++        <when address="0x0053ffc0" mask="0x01"/>
++      </value>
++      <pulse name="P1_CtmRecoil" source="P1_Shots" edge="rise"/>
++      <pulse name="P1_Damaged" source="P1_Life" edge="fall"/>
++      <value name="P2_Life" address="0x00540154">
++        <when address="0x0053ffc0" mask="0x02"/>
++      </value>
++      <value name="P2_Shots" address="0x00540144" type="float">
++        <when address="0x0053ffc0" mask="0x02"/>
++      </value>
++      <pulse name="P2_CtmRecoil" source="P2_Shots" edge="rise"/>
++      <pulse name="P2_Damaged" source="P2_Life" edge="fall"/>
++      <value name="Credits" address="0x0053ffb2"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-18988a.15" offset="0x000000" crc="0xf63f1ad2"/>
+@@ -2318,6 +2426,32 @@
+       <axis name="p2x" min="0x0a3" max="0x254" rest="0x17b"/>
+     </lightgun>
+ 
++    <!-- Game state published as outputs. The addresses are this revision's. A player's state byte is
++         5 while that player is in the game. -->
++    <outputs>
++      <lamp name="P1_LmpStart" bit="2"/>
++      <lamp name="P2_LmpStart" bit="3"/>
++      <value name="P1_Life" address="0x0051f290">
++        <when address="0x0051f284" equals="5"/>
++      </value>
++      <value name="P1_Ammo" address="0x0051f2c1">
++        <when address="0x0051f284" equals="5"/>
++      </value>
++      <flag name="P1_Clip" source="P1_Ammo"/>
++      <pulse name="P1_CtmRecoil" source="P1_Ammo" edge="fall"/>
++      <pulse name="P1_Damaged" source="P1_Life" edge="fall"/>
++      <value name="P2_Life" address="0x0051f35c">
++        <when address="0x0051f350" equals="5"/>
++      </value>
++      <value name="P2_Ammo" address="0x0051f38d">
++        <when address="0x0051f350" equals="5"/>
++      </value>
++      <flag name="P2_Clip" source="P2_Ammo"/>
++      <pulse name="P2_CtmRecoil" source="P2_Ammo" edge="fall"/>
++      <pulse name="P2_Damaged" source="P2_Life" edge="fall"/>
++      <value name="Credits" address="0x0051f4b8"/>
++    </outputs>
++
+     <roms>
+       <region name="maincpu" size="0x200000" stride="4" chunk="2">
+         <file name="epr-19696a.15" offset="0x000000" crc="0x42adc32e"/>
+@@ -5306,6 +5440,32 @@
+ 
+     <!-- Model 1 I/O board (type 2) Z80 firmware: in the game's archive, or
+          in model1io2.zip for a split set. -->
++    <!-- Game state published as outputs. The addresses are this revision's. A player's state byte is
++         1 while that player is in the game. -->
++    <outputs>
++      <lamp name="P1_LmpStart" bit="2"/>
++      <lamp name="P2_LmpStart" bit="3"/>
++      <value name="P1_Life" address="0x0050ee70">
++        <when address="0x0050ee30" equals="1"/>
++      </value>
++      <value name="P1_Ammo" address="0x0050ee38">
++        <when address="0x0050ee30" equals="1"/>
++      </value>
++      <flag name="P1_Clip" source="P1_Ammo"/>
++      <pulse name="P1_CtmRecoil" source="P1_Ammo" edge="fall"/>
++      <pulse name="P1_Damaged" source="P1_Life" edge="fall"/>
++      <value name="P2_Life" address="0x0050ee74">
++        <when address="0x0050ee34" equals="1"/>
++      </value>
++      <value name="P2_Ammo" address="0x0050ee3c">
++        <when address="0x0050ee34" equals="1"/>
++      </value>
++      <flag name="P2_Clip" source="P2_Ammo"/>
++      <pulse name="P2_CtmRecoil" source="P2_Ammo" edge="fall"/>
++      <pulse name="P2_Damaged" source="P2_Life" edge="fall"/>
++      <value name="Credits" address="0x00559270"/>
++    </outputs>
++
+     <roms>
+       <region name="ioboard" size="0x10000">
+         <file name="epr-17181.6" offset="0x000000" crc="0x1add2b82"/>
+diff --git a/src/main.cpp b/src/main.cpp
+index 334fe03..880f6a8 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -2262,7 +2262,8 @@ int main(int argc, char** argv)
+                               static_cast<u16>(options.config.outputs_network_port),
+                               options.config.outputs_windows);
+             if (machine_iface != nullptr && loaded.has_value()) {
+-                outputs.set_game(loaded->game.name, loaded->game.parent);
++                outputs.set_game(loaded->game.name, loaded->game.parent,
++                                 loaded->game.outputs);
+             } else {
+                 outputs.set_game({}, {});
+             }
+@@ -2331,7 +2332,8 @@ int main(int argc, char** argv)
+                 input.set_sinden_border(options.config.sinden_border);
+                 const auto drive_writes = machine_iface->take_drive_board_writes();
+                 input.update_drive_board(loaded->game, drive_writes.view());
+-                outputs.update(machine_iface->lamp_latch(), drive_writes.view());
++                outputs.update(machine_iface->lamp_latch(), drive_writes.view(),
++                               machine_iface->work_ram());
+                 input.update_force_feedback(loaded->game);
+                 input.update_pad_rumble(loaded->game);
+                 if (options.coin_at != 0) {
+diff --git a/src/osd/outputs.cpp b/src/osd/outputs.cpp
+index e891c0d..c36e53d 100644
+--- a/src/osd/outputs.cpp
++++ b/src/osd/outputs.cpp
+@@ -20,6 +20,7 @@
+ #include "core/log.h"
+ #include "core/net.h"
+ 
++#include <algorithm>
+ #include <cstring>
+ #include <string_view>
+ #include <utility>
+@@ -48,8 +49,44 @@ namespace {
+ // Lamp names
+ // ---------------------------------------------------------------------------
+ 
+-constexpr int kRawDrive = -1;
+-constexpr int kRawLamps = -2;
++constexpr int kRawDrive   = -1;
++constexpr int kRawLamps   = -2;
++constexpr int kGameOutput = -3;  ///< One of the set's own, from games.xml.
++
++constexpr u32 kWorkRamBase = 0x00500000;
++
++/// The byte at a work RAM address, or zero when there is no such byte.
++u8 ram_byte(std::span<const u8> ram, u32 address)
++{
++    const u32 offset = address - kWorkRamBase;
++    return offset < ram.size() ? ram[offset] : 0;
++}
++
++/// The value of one of a set's own outputs. The i960 is little-endian.
++s32 ram_value(std::span<const u8> ram, const rom::OutputSpec& spec)
++{
++    u32 raw = 0;
++    for (u32 i = 0; i < 4; ++i) {
++        raw |= static_cast<u32>(ram_byte(ram, spec.address + i)) << (8 * i);
++    }
++    switch (spec.type) {
++    case rom::OutputSpec::Type::U8:
++        return static_cast<s32>(raw & 0xff);
++    case rom::OutputSpec::Type::U16:
++        return static_cast<s32>(raw & 0xffff);
++    case rom::OutputSpec::Type::S16:
++        return std::max<s32>(static_cast<s16>(raw & 0xffff), 0);
++    case rom::OutputSpec::Type::U32:
++        return static_cast<s32>(std::min<u32>(raw, 0x7fffffff));
++    case rom::OutputSpec::Type::Float: {
++        float value = 0.0f;
++        std::memcpy(&value, &raw, sizeof value);
++        // The comparison also turns a NaN into zero.
++        return value > 0.0f ? static_cast<s32>(std::min(value, 2147483520.0f)) : 0;
++    }
++    }
++    return 0;
++}
+ 
+ struct NamedBit {
+     const char* name;
+@@ -383,7 +420,8 @@ void Outputs::configure(bool network, u16 port, bool windows)
+ #endif
+ }
+ 
+-void Outputs::set_game(const std::string& name, const std::string& parent)
++void Outputs::set_game(const std::string& name, const std::string& parent,
++                       std::span<const rom::OutputSpec> game_outputs)
+ {
+     if (name == m_game) {
+         return;
+@@ -396,11 +434,18 @@ void Outputs::set_game(const std::string& name, const std::string& parent)
+     m_game = name;
+     m_items.clear();
+     m_bits.clear();
++    m_game_outputs.clear();
+     if (m_game.empty()) {
+         poll();
+         return;
+     }
+     build_items(parent.empty() ? name : parent);
++    m_first_game_item = m_items.size();
++    for (const rom::OutputSpec& spec : game_outputs) {
++        m_items.push_back({spec.name, 0, true});
++        m_bits.push_back(kGameOutput);
++        m_game_outputs.push_back({spec});
++    }
+     for (Backend* backend : {m_network.get(), m_windows.get()}) {
+         if (backend != nullptr) {
+             backend->start(m_game, m_items);
+@@ -441,16 +486,20 @@ void Outputs::set_paused(bool paused)
+     }
+ }
+ 
+-void Outputs::update(u8 lamp_latch, std::span<const u8> drive_writes)
++void Outputs::update(u8 lamp_latch, std::span<const u8> drive_writes,
++                     std::span<const u8> work_ram)
+ {
+     if (m_game.empty() || (m_network == nullptr && m_windows == nullptr)) {
+         return;
+     }
++    update_game_outputs(lamp_latch, work_ram);
+     for (usize i = 0; i < m_items.size(); ++i) {
+         if (m_bits[i] >= 0) {
+             set(i, (lamp_latch >> m_bits[i]) & 1);
+         } else if (m_bits[i] == kRawLamps) {
+             set(i, lamp_latch);
++        } else if (m_bits[i] == kGameOutput) {
++            set(i, m_game_outputs[i - m_first_game_item].value);
+         } else {
+             // Every byte in order: a force command can be followed by its
+             // parameters within one frame.
+@@ -461,6 +510,67 @@ void Outputs::update(u8 lamp_latch, std::span<const u8> drive_writes)
+     }
+ }
+ 
++void Outputs::update_game_outputs(u8 lamp_latch, std::span<const u8> work_ram)
++{
++    using Kind = rom::OutputSpec::Kind;
++
++    for (GameOutput& output : m_game_outputs) {
++        const rom::OutputSpec& spec = output.spec;
++        output.previous = output.value;
++        output.was_live = output.live;
++
++        switch (spec.kind) {
++        case Kind::Lamp:
++            output.live  = true;
++            output.value = (lamp_latch >> spec.bit) & 1;
++            break;
++
++        case Kind::Value: {
++            output.live = !work_ram.empty();
++            for (const rom::OutputSpec::When& when : spec.when) {
++                const u32 byte = ram_byte(work_ram, when.address) & when.mask;
++                output.live    = output.live && (when.any ? byte != 0 : byte == when.value);
++            }
++            output.value = output.live ? ram_value(work_ram, spec) : 0;
++            break;
++        }
++
++        case Kind::Flag:
++            output.live  = true;
++            output.value = m_game_outputs[spec.source].value > 0 ? 1 : 0;
++            break;
++
++        case Kind::Pulse: {
++            // The source comes earlier in the list, so it already holds this
++            // frame's value. A value that appears or vanishes with its
++            // condition (a player joining, a game ending) is not an edge.
++            const GameOutput& source = m_game_outputs[spec.source];
++            if (source.live && source.was_live
++                && (spec.rising ? source.value > source.previous
++                                : source.value < source.previous)) {
++                output.pending = true;
++            }
++            // One frame at zero between two pulses, or a reader that only sees
++            // changes would take a burst for a single shot.
++            if (output.pending && output.on_frames == 0 && output.off_frames == 0) {
++                output.pending   = false;
++                output.on_frames = spec.frames;
++            }
++            output.live  = true;
++            output.value = output.on_frames > 0 ? 1 : 0;
++            if (output.on_frames > 0) {
++                if (--output.on_frames == 0) {
++                    output.off_frames = 1;
++                }
++            } else if (output.off_frames > 0) {
++                --output.off_frames;
++            }
++            break;
++        }
++        }
++    }
++}
++
+ void Outputs::set(usize index, s32 value)
+ {
+     Item& item = m_items[index];
+diff --git a/src/osd/outputs.h b/src/osd/outputs.h
+index be0e9aa..7b200a5 100644
+--- a/src/osd/outputs.h
++++ b/src/osd/outputs.h
+@@ -25,10 +25,17 @@
+ // Every game publishes lamp0..lamp5 (MAME's names for the lamp latch's bits
+ // 2-7), RawLamps and RawDrive, plus LampStart/LampView1-4/LampLeader where the
+ // bit meanings are known. Values are sent only when they change.
++//
++// A title can add outputs of its own in games.xml (rom::OutputSpec): state the
++// cabinet never latched but a peripheral wants, read from the program's work
++// RAM. The gun games publish theirs under DemulShooter's names -- P1_CtmRecoil,
++// P1_Ammo, P1_Clip, P1_Life, P1_Damaged, Credits -- so a recoil gun driven by
++// MAMEHooker or Hook Of The Reaper works with those tools' stock game files.
+ 
+ #pragma once
+ 
+ #include "core/types.h"
++#include "rom/game.h"
+ 
+ #include <memory>
+ #include <span>
+@@ -49,13 +56,17 @@ public:
+     void configure(bool network, u16 port, bool windows);
+ 
+     /// The set being run, or an empty string for none. A change sends
+-    /// mame_stop for the old set and mame_start for the new one.
+-    void set_game(const std::string& name, const std::string& parent);
++    /// mame_stop for the old set and mame_start for the new one. `game_outputs`
++    /// is the set's own list from games.xml.
++    void set_game(const std::string& name, const std::string& parent,
++                  std::span<const rom::OutputSpec> game_outputs = {});
+ 
+     void set_paused(bool paused);
+ 
+-    /// This frame's lamp latch and drive-board bytes.
+-    void update(u8 lamp_latch, std::span<const u8> drive_writes);
++    /// This frame's lamp latch and drive-board bytes, and the work RAM the
++    /// set's own outputs are read from.
++    void update(u8 lamp_latch, std::span<const u8> drive_writes,
++                std::span<const u8> work_ram = {});
+ 
+     /// Accept clients and flush queued messages. Call once per frame.
+     void poll();
+@@ -72,6 +83,7 @@ public:
+ private:
+     void set(usize index, s32 value);
+     void build_items(const std::string& parent);
++    void update_game_outputs(u8 lamp_latch, std::span<const u8> work_ram);
+ 
+     std::string m_game;
+     bool        m_paused = false;
+@@ -81,6 +93,23 @@ private:
+     /// Which lamp-latch bit feeds each item, or -1 for RawDrive.
+     std::vector<int> m_bits;
+ 
++    /// One of the set's own outputs as it stood this frame and the one before.
++    struct GameOutput {
++        rom::OutputSpec spec;
++        s32             value      = 0;
++        s32             previous   = 0;
++        bool            live       = false;  ///< Its condition held this frame.
++        bool            was_live   = false;
++        bool            pending    = false;  ///< Pulse: an edge waiting its turn.
++        u32             on_frames  = 0;      ///< Pulse: frames left at 1.
++        u32             off_frames = 0;      ///< Pulse: frames left at 0 after it.
++    };
++
++    /// The set's own outputs. Their items follow the lamp ones in m_items,
++    /// starting at m_first_game_item.
++    std::vector<GameOutput> m_game_outputs;
++    usize                   m_first_game_item = 0;
++
+     std::unique_ptr<Backend> m_network;
+     std::unique_ptr<Backend> m_windows;
+     u16                      m_port = 0;
+diff --git a/src/rom/game.h b/src/rom/game.h
+index d68c45c..9077008 100644
+--- a/src/rom/game.h
++++ b/src/rom/game.h
+@@ -147,6 +147,57 @@ struct LightgunSpec {
+     LightgunAxis p2x;
+ };
+ 
++/// One piece of game state published as a cabinet output (see osd/outputs.h).
++///
++/// The lamp latch says what the cabinet lit. It does not say that a shot was
++/// fired or a life lost, which is what a recoil solenoid or a rumble motor
++/// wants: a Model 2 gun cabinet has no recoil of its own to latch. Those live
++/// in the program's own variables, so a title lists where they are and the
++/// names to publish them under -- the ones DemulShooter established for these
++/// games, which the game files of MAMEHooker and Hook Of The Reaper expect.
++///
++/// The addresses are the program's, inside work RAM, and belong to one
++/// revision: a clone does not inherit its parent's outputs.
++struct OutputSpec {
++    enum class Kind : u8 {
++        Lamp,   ///< One bit of the lamp latch, under another name.
++        Value,  ///< A number read from work RAM.
++        Flag,   ///< 1 while `source` is above zero.
++        Pulse,  ///< 1 for `frames` frames each time `source` falls (or rises).
++    };
++
++    enum class Type : u8 { U8, U16, S16, U32, Float };
++
++    std::string name;
++    Kind        kind = Kind::Value;
++
++    u8 bit = 0;  ///< Lamp: the latch bit.
++
++    /// Value: where it is and how wide. Little-endian, as the i960 stores it.
++    /// A signed or floating-point value below zero is published as zero.
++    u32  address = 0;
++    Type type    = Type::U8;
++
++    /// A condition on a Value, for a variable that only means something while
++    /// its player is in the game. The byte at `address`, masked, must equal
++    /// `value` -- or, with `any`, be anything but zero.
++    struct When {
++        u32  address = 0;
++        u32  mask    = 0xff;
++        u32  value   = 0;
++        bool any     = false;
++    };
++
++    /// Value: every one of these must hold. While one does not, the value is
++    /// published as zero and no pulse fires from it.
++    std::vector<When> when;
++
++    /// Flag and Pulse: index of the Value they follow, earlier in the list.
++    u32  source = 0;
++    bool rising = false;  ///< Pulse: fire when the source goes up, not down.
++    u32  frames = 3;      ///< Pulse: how long it stays at 1.
++};
++
+ /// A protection chip a title's main board needs. One value per chip/mode
+ /// combination rather than a child element, since so far every title needing
+ /// one needs exactly one fixed configuration of it apart from the 315-5881's
+@@ -306,6 +357,9 @@ struct GameSpec {
+     /// The serial lightgun interface board, when the cabinet has one.
+     LightgunSpec lightgun;
+ 
++    /// Game state published as outputs next to the lamps; empty for most titles.
++    std::vector<OutputSpec> outputs;
++
+     /// True when IN1 bits 0x70 read a gear selector rather than buttons, as
+     /// Sega Rally's and Daytona's do through MAME's daytona_gearbox_r.
+     bool gearbox = false;
+diff --git a/src/rom/game_db.cpp b/src/rom/game_db.cpp
+index 7734e37..348978b 100644
+--- a/src/rom/game_db.cpp
++++ b/src/rom/game_db.cpp
+@@ -24,6 +24,7 @@
+ #include <filesystem>
+ #include <string>
+ #include <unordered_map>
++#include <utility>
+ 
+ #if defined(__APPLE__)
+ #include <mach-o/dyld.h>
+@@ -84,6 +85,132 @@ namespace {
+     return true;
+ }
+ 
++/// Work RAM, where every output a title publishes from its own state lives.
++constexpr u32 kWorkRamBase = 0x00500000;
++constexpr u32 kWorkRamSize = 0x00100000;
++
++[[nodiscard]] bool in_work_ram(u32 address, u32 width)
++{
++    return address >= kWorkRamBase && address - kWorkRamBase <= kWorkRamSize - width;
++}
++
++/// One child of <outputs>: <lamp>, <value>, <flag> or <pulse>. See OutputSpec.
++[[nodiscard]] bool parse_output(const pugi::xml_node&    node,
++                                std::vector<OutputSpec>* outputs,
++                                const char*              context)
++{
++    OutputSpec output;
++    output.name = node.attribute("name").value();
++    if (output.name.empty()) {
++        SM2_ERROR("%s: an output has no name attribute", context);
++        return false;
++    }
++    for (const OutputSpec& other : *outputs) {
++        if (other.name == output.name) {
++            SM2_ERROR("%s: output '%s' is defined twice", context, output.name.c_str());
++            return false;
++        }
++    }
++
++    const std::string_view kind = node.name();
++    if (kind == "lamp") {
++        u32 bit = 0;
++        if (!attribute_integer(node, "bit", 8, &bit, context)) {
++            return false;
++        }
++        if (bit > 7) {
++            SM2_ERROR("%s: output '%s' needs a bit from 0 to 7", context, output.name.c_str());
++            return false;
++        }
++        output.kind = OutputSpec::Kind::Lamp;
++        output.bit  = static_cast<u8>(bit);
++    } else if (kind == "value") {
++        output.kind = OutputSpec::Kind::Value;
++
++        const std::string_view type  = node.attribute("type").as_string("u8");
++        u32                    width = 1;
++        if (type == "u8")         { output.type = OutputSpec::Type::U8; }
++        else if (type == "u16")   { output.type = OutputSpec::Type::U16;   width = 2; }
++        else if (type == "s16")   { output.type = OutputSpec::Type::S16;   width = 2; }
++        else if (type == "u32")   { output.type = OutputSpec::Type::U32;   width = 4; }
++        else if (type == "float") { output.type = OutputSpec::Type::Float; width = 4; }
++        else {
++            SM2_ERROR("%s: output '%s' has an unrecognised type '%s' (expected u8, u16, "
++                      "s16, u32 or float)", context, output.name.c_str(),
++                      node.attribute("type").value());
++            return false;
++        }
++
++        if (!attribute_integer(node, "address", 0, &output.address, context)) {
++            return false;
++        }
++        if (!in_work_ram(output.address, width)) {
++            SM2_ERROR("%s: output '%s' is not inside work RAM (0x%08x-0x%08x)", context,
++                      output.name.c_str(), kWorkRamBase, kWorkRamBase + kWorkRamSize - 1);
++            return false;
++        }
++
++        for (const pugi::xml_node when_node : node.children("when")) {
++            OutputSpec::When when;
++            when.any = !when_node.attribute("equals");
++            if (!attribute_integer(when_node, "address", 0, &when.address, context)
++                || !attribute_integer(when_node, "mask", 0xff, &when.mask, context)
++                || !attribute_integer(when_node, "equals", 0, &when.value, context)) {
++                return false;
++            }
++            if (!in_work_ram(when.address, 1)) {
++                SM2_ERROR("%s: output '%s' has a condition outside work RAM", context,
++                          output.name.c_str());
++                return false;
++            }
++            output.when.push_back(when);
++        }
++    } else if (kind == "flag" || kind == "pulse") {
++        output.kind = kind == "flag" ? OutputSpec::Kind::Flag : OutputSpec::Kind::Pulse;
++
++        const std::string_view source = node.attribute("source").value();
++        bool                   found  = false;
++        for (usize i = 0; i < outputs->size(); ++i) {
++            if ((*outputs)[i].kind == OutputSpec::Kind::Value && (*outputs)[i].name == source) {
++                output.source = static_cast<u32>(i);
++                found         = true;
++            }
++        }
++        if (!found) {
++            SM2_ERROR("%s: output '%s' follows '%s', which is not a <value> defined "
++                      "before it", context, output.name.c_str(),
++                      node.attribute("source").value());
++            return false;
++        }
++
++        if (output.kind == OutputSpec::Kind::Pulse) {
++            const std::string_view edge = node.attribute("edge").as_string("fall");
++            if (edge != "fall" && edge != "rise") {
++                SM2_ERROR("%s: output '%s' has an unrecognised edge '%s' (expected fall "
++                          "or rise)", context, output.name.c_str(),
++                          node.attribute("edge").value());
++                return false;
++            }
++            output.rising = edge == "rise";
++            if (!attribute_integer(node, "frames", 3, &output.frames, context)) {
++                return false;
++            }
++            if (output.frames == 0 || output.frames > 600) {
++                SM2_ERROR("%s: output '%s' needs a length of 1 to 600 frames", context,
++                          output.name.c_str());
++                return false;
++            }
++        }
++    } else {
++        SM2_ERROR("%s: unrecognised output element <%s> (expected lamp, value, flag or "
++                  "pulse)", context, node.name());
++        return false;
++    }
++
++    outputs->push_back(std::move(output));
++    return true;
++}
++
+ [[nodiscard]] bool attribute_bool(const pugi::xml_node& node,
+                                   const char*           name,
+                                   bool                  fallback,
+@@ -543,6 +670,15 @@ bool GameDatabase::load(const std::string& path)
+             game.lightgun.present = true;
+         }
+ 
++        for (const pugi::xml_node output_node : game_node.child("outputs").children()) {
++            if (output_node.type() != pugi::node_element) {
++                continue;
++            }
++            if (!parse_output(output_node, &game.outputs, context.c_str())) {
++                return false;
++            }
++        }
++
+         for (const pugi::xml_node region_node : game_node.child("roms").children("region")) {
+             RegionSpec region;
+             region.name = region_node.attribute("name").value();
