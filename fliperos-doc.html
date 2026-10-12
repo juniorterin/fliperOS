@@ -2461,9 +2461,10 @@ system               arcade
   &lt;extension&gt;.zip .ZIP&lt;/extension&gt;
   &lt;command label=&quot;Supermodel&quot;&gt;/opt/fliperos/bin/fliperos-x11-run supermodel %ROM%&lt;/command&gt;
   &lt;platform&gt;arcade&lt;/platform&gt;
-  &lt;theme&gt;arcade&lt;/theme&gt;
+  &lt;theme&gt;model3&lt;/theme&gt;
 &lt;/system&gt;
 </code></pre>
+<p><code>&lt;platform&gt;</code> is what the scraper searches as (Model 2, Model 3 and the MAME cores are MAME sets, so <code>arcade</code>); <code>&lt;theme&gt;</code> is the system's folder in the ES-DE themes, which gives it its logo and background. The Setup gives Model 2 and Model 3 their own (<code>model2</code>, <code>model3</code>), the RetroArch MAME cores (<code>mame2010</code>, <code>mame2003_plus</code>...) the MAME one (<code>mame</code>), FBNeo <code>fbneo</code>, and the GroovyMAME folder <code>arcade</code>.</p>
 <p><code>%ROM%</code> is the game's path (ES-DE adds the quotes) and <code>%BASENAME%</code> the name without the extension (<code>/opt/fliperos/bin/fliperos-x11-run groovymame %BASENAME%</code>). A system can have more than one <code>&lt;command&gt;</code> with different labels: ES-DE lets you pick one per game (<em>Edit this game's metadata &gt; Alternative emulator</em>). <code>&lt;platform&gt;</code> decides the scraper's platform and <code>&lt;theme&gt;</code> the system's look.</p>
 <p><strong>Setup &gt; Frontend rewrites the whole <code>es_systems.xml</code></strong> every time ES-DE is picked, so a system added by hand disappears. Keep a copy of your blocks and paste them back after using Setup &gt; Frontend.</p>
 <h2 id="adding-a-new-emulator">Adding a new emulator</h2>

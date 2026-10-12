@@ -160,7 +160,8 @@ frontends_esde() {
       printf '    <extension>%s %s</extension>\n' "$exts" "${exts^^}"
       printf '    <command label="%s">%s</command>\n' "$(xml_escape "$name")" \
         "$(xml_escape "$(frontends_esde_command "$exe $args")")"
-      printf '    <platform>%s</platform>\n    <theme>%s</theme>\n  </system>\n' "$platform" "$platform"
+      printf '    <platform>%s</platform>\n    <theme>%s</theme>\n  </system>\n' "$platform" \
+        "$(frontends_esde_theme "$key" "$platform")"
       systems+=("${key//\//-}|$platform")
       n=$((n + 1))
     done < <(frontends_systems)
@@ -175,6 +176,27 @@ frontends_esde() {
   frontends_esde_240p
   chown -R "$FLIPEROS_USER:" "$ESDE_DIR" 2> /dev/null
   log_info "ES-DE: $n sistema(s)"
+}
+
+# frontends_esde_theme CHAVE PLATAFORMA imprime a pasta do sistema nos temas
+# do ES-DE (o logo e o fundo dele). A plataforma e a do Skyscraper, e para
+# ele o Model 2, o Model 3 e os cores de MAME sao "arcade": com ela no
+# <theme>, todos saiam com o logo de arcade. Os temas tem model2, model3,
+# mame, fbneo e fba; os cores de MAME ficam com o do MAME (a pasta do
+# GroovyMAME segue com o de arcade), o FBNeo com o dele.
+frontends_esde_theme() {
+  case $1 in
+    model2 | model3) echo "$1" ;;
+    retroarch/fbneo*) echo fbneo ;;
+    retroarch/*)
+      if [[ $(scraper_core_info "${1#retroarch/}" systemid) =~ ^(mame|hbmame)$ ]]; then
+        echo mame
+      else
+        echo "$2"
+      fi
+      ;;
+    *) echo "$2" ;;
+  esac
 }
 
 # esde_setting NOME VALOR [string|bool] grava uma opcao no es_settings.xml.

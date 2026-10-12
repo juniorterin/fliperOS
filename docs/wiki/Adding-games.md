@@ -134,9 +134,11 @@ Each system is a `<system>` block in `~/ES-DE/custom_systems/es_systems.xml`:
   <extension>.zip .ZIP</extension>
   <command label="Supermodel">/opt/fliperos/bin/fliperos-x11-run supermodel %ROM%</command>
   <platform>arcade</platform>
-  <theme>arcade</theme>
+  <theme>model3</theme>
 </system>
 ```
+
+`<platform>` is what the scraper searches as (Model 2, Model 3 and the MAME cores are MAME sets, so `arcade`); `<theme>` is the system's folder in the ES-DE themes, which gives it its logo and background. The Setup gives Model 2 and Model 3 their own (`model2`, `model3`), the RetroArch MAME cores (`mame2010`, `mame2003_plus`...) the MAME one (`mame`), FBNeo `fbneo`, and the GroovyMAME folder `arcade`.
 
 `%ROM%` is the game's path (ES-DE adds the quotes) and `%BASENAME%` the name without the extension (`/opt/fliperos/bin/fliperos-x11-run groovymame %BASENAME%`). A system can have more than one `<command>` with different labels: ES-DE lets you pick one per game (*Edit this game's metadata > Alternative emulator*). `<platform>` decides the scraper's platform and `<theme>` the system's look.
 

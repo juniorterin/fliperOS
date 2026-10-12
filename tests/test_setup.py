@@ -2053,6 +2053,19 @@ class FrontendsTests(Base):
         self.assertEqual(mame.findtext("command"), "/opt/fliperos/bin/fliperos-x11-run groovymame %BASENAME%")
         self.assertEqual(mame.findtext("extension"), ".zip .7z .ZIP .7Z")
         self.assertEqual(mame.findtext("theme"), "arcade")
+        self.assertEqual(by_name["retroarch-snes9x"].findtext("theme"), "snes")
+        # O logo de cada sistema: a plataforma do Skyscraper e "arcade" para
+        # o Model 2, o Model 3 e os cores de MAME, mas os temas tem o deles.
+        info = Path(env["RA_INFO_DIR"])
+        (info / "mame2010_libretro.info").write_text('systemname = "Arcade (various)"\nsystemid = "mame"\n')
+        (info / "fbneo_libretro.info").write_text('systemname = "Arcade (various)"\nsystemid = "fb_alpha"\n')
+        (info / "fbalpha2012_libretro.info").write_text('systemname = "Arcade (various)"\nsystemid = "fb_alpha"\n')
+        self.assertEqual(self.env.out("""
+            for k in mame model2 model3 naomi retroarch/mame2010 retroarch/fbneo retroarch/fbalpha2012 \\
+              retroarch/snes9x; do
+              frontends_esde_theme "$k" "$(scraper_platform "$k" ||
+                scraper_libretro_platform "$(scraper_core_info "${k#retroarch/}" systemid)")"
+            done""", env).split(), ["arcade", "model2", "model3", "naomi", "mame", "fbneo", "fba", "snes"])
         self.assertEqual(by_name["retroarch-snes9x"].findtext("command"),
                          "/opt/fliperos/bin/fliperos-kms-run retroarch -L "
                          "/opt/fliperos/retroarch/cores/snes9x_libretro.so %ROM%")
