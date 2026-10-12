@@ -2864,6 +2864,36 @@ class QuietLaunchTests(unittest.TestCase):
             text = (ROOT / script).read_text()
             self.assertLess(text.index('exec 9>&1'), text.index('>> "$log" 2>&1'), script)
 
+    def test_program_opened_in_the_background_reads_the_terminal(self):
+        # O "comando &" do ES-DE da /dev/null como entrada; o RetroArch le o
+        # teclado do console pela entrada e fechava sem terminal nela. Com um
+        # terminal na sessao, ele volta a ser a entrada; sem nenhum (um
+        # servico), o programa abre assim mesmo.
+        import pty
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'logs').mkdir()
+            prog = tmp / 'emu'
+            prog.write_text('#!/bin/sh\nif [ -t 0 ]; then echo terminal; else echo sem; fi > "%s"\n' % (tmp / 'entrada'))
+            prog.chmod(0o755)
+            env = dict(os.environ, FLIPEROS_LOGS=str(tmp / 'logs'), FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'))
+            env.pop('DISPLAY', None)
+            command = 'bash "%s" "%s" 2>&1 & wait' % (ROOT / 'config/fliperos-kms-run', prog)
+            pid, fd = pty.fork()
+            if pid == 0:
+                os.execvpe('sh', ['sh', '-c', command], env)
+            try:
+                while os.read(fd, 1024):
+                    pass
+            except OSError:
+                pass
+            os.waitpid(pid, 0)
+            os.close(fd)
+            self.assertEqual((tmp / 'entrada').read_text(), 'terminal\n')
+            subprocess.run(['setsid', 'sh', '-c', command], env=env, stdin=subprocess.DEVNULL,
+                           stdout=subprocess.DEVNULL, check=True)
+            self.assertEqual((tmp / 'entrada').read_text(), 'sem\n')
+
 
 class ControllerMappingTests(unittest.TestCase):
     """fliperos-controllers: completa o mapeamento automatico do SDL2 (botoes

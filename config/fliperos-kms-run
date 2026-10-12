@@ -98,6 +98,14 @@ log="${FLIPEROS_LOGS:-/opt/fliperos/logs}/$(basename -- "$1").log"
 # o fim do arquivo) veria o pipe fechar ja na troca para o log e retomaria a
 # tela com o jogo aberto. Uma copia do pipe fica com o programa ate ele sair.
 [[ ! -p /dev/stdout ]] || exec 9>&1
+# O mesmo "comando &" do ES-DE da /dev/null como entrada ao programa (o sh
+# faz isso com o que roda em segundo plano). O RetroArch le o teclado do
+# console pela entrada (linuxraw): sem terminal nela ele fecha em "Cannot
+# initialize input driver", e o frontend volta sem abrir o jogo. A entrada
+# passa a ser o terminal da sessao, se houver um.
+if [[ ! -t 0 ]] && { : < /dev/tty; } 2> /dev/null; then
+  exec < /dev/tty
+fi
 if [[ ! -f ${FLIPEROS_DEBUG_FLAG:-/etc/fliperos/debug} ]] && { : > "$log"; } 2> /dev/null; then
   exec "$@" >> "$log" 2>&1
 fi
