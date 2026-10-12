@@ -94,6 +94,10 @@ export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/
 # tela; no modo debug (Setup > Debug mode) ela aparece. Sem como gravar o
 # log, o programa abre assim mesmo.
 log="${FLIPEROS_LOGS:-/opt/fliperos/logs}/$(basename -- "$1").log"
+# Um frontend que espera o jogo lendo a saida do comando (o ES-DE: popen ate
+# o fim do arquivo) veria o pipe fechar ja na troca para o log e retomaria a
+# tela com o jogo aberto. Uma copia do pipe fica com o programa ate ele sair.
+[[ ! -p /dev/stdout ]] || exec 9>&1
 if [[ ! -f ${FLIPEROS_DEBUG_FLAG:-/etc/fliperos/debug} ]] && { : > "$log"; } 2> /dev/null; then
   exec "$@" >> "$log" 2>&1
 fi

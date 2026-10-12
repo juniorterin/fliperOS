@@ -2842,6 +2842,27 @@ class QuietLaunchTests(unittest.TestCase):
         for script in ('config/fliperos-x11-run', 'config/fliperos-session'):
             self.assertIn('/etc/fliperos/debug', (ROOT / script).read_text(), script)
 
+    def test_frontend_reading_the_output_waits_for_the_game(self):
+        # O ES-DE abre o jogo com popen("comando 2>&1 &") e o da por fechado
+        # no fim do arquivo: com a saida no log, o pipe tem de seguir aberto
+        # ate o programa sair.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'logs').mkdir()
+            prog = tmp / 'emu'
+            prog.write_text('#!/bin/sh\nsleep 1\n: > "%s"\n' % (tmp / 'fim'))
+            prog.chmod(0o755)
+            env = dict(os.environ, FLIPEROS_LOGS=str(tmp / 'logs'), FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'))
+            env.pop('DISPLAY', None)
+            pipe = subprocess.Popen('bash "%s" "%s" 2>&1 &' % (ROOT / 'config/fliperos-kms-run', prog),
+                                    shell=True, stdout=subprocess.PIPE, env=env)
+            self.assertEqual(pipe.stdout.read(), b'')
+            self.assertTrue((tmp / 'fim').exists())
+            pipe.wait()
+        for script in ('config/fliperos-kms-run', 'config/fliperos-x11-run'):
+            text = (ROOT / script).read_text()
+            self.assertLess(text.index('exec 9>&1'), text.index('>> "$log" 2>&1'), script)
+
 
 class ControllerMappingTests(unittest.TestCase):
     """fliperos-controllers: completa o mapeamento automatico do SDL2 (botoes

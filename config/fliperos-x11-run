@@ -253,6 +253,10 @@ export FLIPEROS_X11_CURSOR=$((${#cursor[@]} == 0))
 # /opt/fliperos/logs/<programa>.log, nao para a tela; no modo debug (Setup >
 # Debug mode) ela aparece. Sem como gravar o log, abre assim mesmo.
 log="${FLIPEROS_LOGS:-/opt/fliperos/logs}/$name.log"
+# Um frontend que espera o jogo lendo a saida do comando (o ES-DE: popen ate
+# o fim do arquivo) veria o pipe fechar ja na troca para o log e retomaria a
+# tela com o jogo aberto. Uma copia do pipe fica com o programa ate ele sair.
+[[ ! -p /dev/stdout ]] || exec 9>&1
 if [[ ! -f ${FLIPEROS_DEBUG_FLAG:-/etc/fliperos/debug} ]] && { : > "$log"; } 2> /dev/null; then
   exec xinit /opt/fliperos/bin/fliperos-x11-client "$@" -- :0 -nolisten tcp "${cursor[@]}" "vt$vt" -keeptty \
     >> "$log" 2>&1
