@@ -7,6 +7,7 @@ export type LedScript = {
   wave: string;
   nowPlaying: string;
   games: readonly string[];
+  fight: { title: readonly string[]; left: string; right: string };
   coin: string;
   start: string;
 };
@@ -130,6 +131,45 @@ function drawText(
   }
 }
 
+// Emblema de jogo de luta em pixel art (um dragao num circulo), 22x22.
+const DRAGON = [
+  '......................',
+  '...........#..#.......',
+  '.........#.##.##......',
+  '........##########....',
+  '.......####.#######...',
+  '......#####..########.',
+  '.....######.....#####.',
+  '....######...########.',
+  '....#####....###......',
+  '...######.....#####...',
+  '...#####........##....',
+  '...#####..............',
+  '...######.............',
+  '....#######...........',
+  '.....##########.......',
+  '......#############...',
+  '........############..',
+  '............########..',
+  '.............#######..',
+  '...........########...',
+  '........#########.....',
+  '......................',
+];
+
+// Emblema de 32x32 a partir da coluna x0; `shown` (0 a 1) acende de cima para baixo.
+function drawEmblem(frame: Frame, x0: number, shown: number) {
+  const rows = Math.round(ROWS * shown);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < 32; x++) {
+      const dist = Math.hypot(x - 15.5, y - 15.5);
+      let c: Rgb | null = dist >= 13.2 && dist < 15.2 ? [255, 85, 85] : null;
+      if (DRAGON[y - 5]?.[x - 5] === '#') c = [255, 200 - y * 3, 60];
+      if (c) frame[y * COLS + x0 + x] = c;
+    }
+  }
+}
+
 type Scene = { duration: number; draw: (frame: Frame, t: number) => void };
 
 function buildScenes(script: LedScript): Scene[] {
@@ -157,6 +197,49 @@ function buildScenes(script: LedScript): Scene[] {
       },
     });
   }
+
+  // O logotipo do jogo aberto e, depois da primeira vitoria, o placar versus:
+  // os personagens em cima, as vitorias de cada lado na sessao embaixo.
+  const { title, left, right } = script.fight;
+  const titleW = Math.max(textWidth(title[0], 2), textWidth(title[1], 2));
+  const logoX = Math.round((COLS - (32 + 8 + titleW)) / 2);
+  const gold = (_x: number, y: number): Rgb => [255, 225 - (y % 16) * 9, 70];
+  scenes.push({
+    duration: 3.6,
+    draw: (f, t) => {
+      drawEmblem(f, logoX, Math.min(1, t / 0.5));
+      if (t > 0.5) drawText(f, title[0], logoX + 40, 1, 2, gold);
+      if (t > 0.8) drawText(f, title[1], logoX + 40, 17, 2, gold);
+    },
+  });
+
+  const rounds: readonly [number, number, number][] = [
+    [1, 0, 0],
+    [1, 1, 1],
+    [2, 1, 0],
+  ];
+  const roundTime = 2.2;
+  const sideColor: Rgb[] = [
+    [241, 250, 140],
+    [139, 233, 253],
+  ];
+  scenes.push({
+    duration: rounds.length * roundTime,
+    draw: (f, t) => {
+      const step = Math.min(rounds.length - 1, Math.floor(t / roundTime));
+      const since = t - step * roundTime;
+      const wins = rounds[step];
+      drawText(f, left, 2, 1, 1, () => sideColor[0]);
+      drawText(f, right, COLS - 2 - textWidth(right, 1), 1, 1, () => sideColor[1]);
+      for (let side = 0; side < 2; side++) {
+        // A vitoria que acabou de entrar pisca.
+        if (side === wins[2] && since < 0.9 && Math.floor(since * 6) % 2 === 1) continue;
+        const digits = String(wins[side]);
+        drawText(f, digits, (side ? 96 : 32) - textWidth(digits, 3) / 2, 10, 3, () => [248, 248, 242]);
+      }
+      drawText(f, 'X', (COLS - 5) / 2, 17, 1, () => [98, 114, 164]);
+    },
+  });
 
   const waveW = textWidth(script.wave, 2);
   scenes.push({
@@ -245,7 +328,7 @@ function makeBase() {
   return base;
 }
 
-// Simula um marquee Pixelcade de 128x32 LEDs (dois pain?is 64x32).
+// Simula um display de 128x32 LEDs, Pixelcade ou ZeDMD (dois pain?is 64x32).
 export function LedMatrix({ script, label, className = '' }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 

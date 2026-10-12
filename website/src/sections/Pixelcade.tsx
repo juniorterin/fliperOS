@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpRight, Download, Gamepad2, ListVideo, Medal, MoonStar, Sparkles, Trophy, Usb, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, Cpu, Download, Gamepad2, ListVideo, Medal, MoonStar, Sparkles, Swords, Trophy, Usb, type LucideIcon } from 'lucide-react';
 import { LedMatrix } from '@/components/LedMatrix';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
@@ -16,9 +16,12 @@ const POINT_STYLE: Record<string, { icon: LucideIcon; color: string }> = {
   attract: { icon: MoonStar, color: 'text-purple border-purple/40 bg-purple/10' },
   achievements: { icon: Medal, color: 'text-orange border-orange/40 bg-orange/10' },
   effects: { icon: Sparkles, color: 'text-cyan border-cyan/40 bg-cyan/10' },
+  versus: { icon: Swords, color: 'text-pink border-pink/40 bg-pink/10' },
+  zedmd: { icon: Cpu, color: 'text-green border-green/40 bg-green/10' },
 };
 
 const PIXELCADE_URL = 'https://pixelcade.org';
+const ZEDMD_URL = 'https://github.com/PPUC/ZeDMD';
 
 export function Pixelcade() {
   const { t } = useI18n();
@@ -39,7 +42,7 @@ export function Pixelcade() {
           <figcaption className="mt-4 font-mono text-xs tracking-widest text-comment uppercase">{p.caption}</figcaption>
         </Reveal>
 
-        <ul className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {p.points.map((pt, i) => {
             const style = POINT_STYLE[pt.id] ?? POINT_STYLE.install;
             const Icon = style.icon;
@@ -59,7 +62,7 @@ export function Pixelcade() {
 
         <Reveal className="mt-14">
           <p className="font-mono text-xs tracking-widest text-comment uppercase">{p.sizesLabel}</p>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
             {p.panels.map((panel) => (
               <article key={panel.id} className="card rounded-2xl p-5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -89,6 +92,16 @@ export function Pixelcade() {
               className="inline-flex items-center gap-2 rounded-lg border border-cyan/60 bg-cyan/10 px-4 py-2.5 text-sm font-medium text-fg transition hover:border-cyan hover:bg-cyan/20 hover:shadow-[0_0_20px_-6px] hover:shadow-cyan"
             >
               {p.cta}
+              <ArrowUpRight className="size-4" aria-hidden="true" />
+              <span className="sr-only">{t.a11y.external}</span>
+            </a>
+            <a
+              href={ZEDMD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-muted transition hover:border-comment hover:text-fg"
+            >
+              {p.zedmd}
               <ArrowUpRight className="size-4" aria-hidden="true" />
               <span className="sr-only">{t.a11y.external}</span>
             </a>
