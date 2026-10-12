@@ -5138,9 +5138,22 @@ class PixelcadeTests(unittest.TestCase):
         self.assertEqual(calls.count('show select mame mvsc2 MvC2'), 1)
         self.assertEqual(calls.count('show select mame mvsc2 '), 1)
         plugin = (ROOT / 'config/attractplus-plugins/Pixelcade/plugin.nut').read_text()
-        for line in ('if (ScreenSaverActive)', '"screensaver start"', '"screensaver stop"',
+        for line in ('if (ScreenSaverActive)', '"bg screensaver start"', '"bg screensaver stop"',
                      'var == FromTo.ScreenSaver'):
             self.assertIn(line, plugin)
+        # O Attract-Mode Plus nao espera o filho de um plugin_command_bg, que
+        # ficava como zumbi dele: o helper e chamado esperando, com "bg", e
+        # ele mesmo se solta.
+        self.assertNotIn('plugin_command_bg(', plugin)
+        self.assertIn('"bg attract " + quote(', plugin)
+        started = time.time()
+        subprocess.run(['bash', str(self.SCRIPT), 'bg', 'esde', 'screensaver-start', 'timer'], env=self.env,
+                       check=True, timeout=10)
+        self.assertLess(time.time() - started, 2)
+        deadline = time.time() + 10
+        while time.time() < deadline and not self.calls.exists():
+            time.sleep(0.05)
+        self.assertEqual(self.calls.read_text().splitlines(), ['http://pc/attract?nointerrupt'])
 
     def test_retroachievements_from_the_retroarch_log(self):
         cheevos = lambda: subprocess.run(['bash', str(self.SCRIPT), 'cheevos'], env=self.env).returncode
@@ -5753,10 +5766,10 @@ class VersusTests(unittest.TestCase):
                          ['char1', 'char2', 'score1', 'wins1', 'wins2'])
         # As saidas do plugin viram o placar, com o nome de cada personagem.
         self.table.write_text('')
-        port = self.serve_mame(['mame_start = sf2ce', 'fliperos_wins1 = 0', 'fliperos_wins2 = 0',
+        feed = self.serve_mame(['mame_start = sf2ce', 'fliperos_wins1 = 0', 'fliperos_wins2 = 0',
                                 'fliperos_char1 = 3', 'fliperos_char2 = 8', 'fliperos_wins2 = 1',
                                 'fliperos_char2 = 31', 'mame_stop = 1'])
-        env = dict(self.env, MAME_OUTPUT='127.0.0.1:%d' % port)
+        env = dict(self.env, VERSUS_FEED=feed)
         subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'mame', 'sf2ce'], env=env, timeout=30, check=True)
         events = self.events.read_text().splitlines()
         self.assertIn('versus 0 0 - - Guile M.Bison (Dictator)', events)
@@ -5836,34 +5849,50 @@ class VersusTests(unittest.TestCase):
         points.update('score2', 90)
         self.assertEqual(points.state(), ['-', '-', '-', '90'])
 
-    def serve_mame(self, lines):
-        server = socket.socket()
-        server.bind(('127.0.0.1', 0))
-        server.listen(1)
-        self.addCleanup(server.close)
+    def serve_mame(self, lines, delay=0.5):
+        """O plugin do MAME: recomeca o arquivo e escreve uma linha por vez."""
+        feed = self.tmp / 'feed'
 
         def serve():
-            conn, _ = server.accept()
-            with conn:
+            time.sleep(delay)
+            with feed.open('w') as f:
                 for line in lines:
-                    conn.sendall(line.encode() + b'\r')
-                    time.sleep(0.15)
+                    f.write(line + '\n')
+                    f.flush()
+                    time.sleep(0.25)
         threading.Thread(target=serve, daemon=True).start()
-        return server.getsockname()[1]
+        return str(feed)
 
-    def test_mame_outputs_become_versus_events_until_the_game_stops(self):
-        port = self.serve_mame(['mame_start = sf2ce', 'led0 = 1', 'fliperos_score1 = 500', 'fliperos_rounds1 = 2',
+    def test_mame_feed_becomes_versus_events_until_the_game_stops(self):
+        # O arquivo do jogo anterior (ja fechado) ainda esta la: nao serve.
+        (self.tmp / 'feed').write_text('mame_start = kof98\nfliperos_score1 = 111\nmame_stop = 1\n')
+        feed = self.serve_mame(['mame_start = sf2ce', 'led0 = 1', 'fliperos_score1 = 500', 'fliperos_rounds1 = 2',
                                 'fliperos_lives1 = 3', 'fliperos_rounds1 = 0', 'fliperos_score2 = 90',
                                 'mame_stop = 1', 'fliperos_score1 = 999'])
-        env = dict(self.env, MAME_OUTPUT='127.0.0.1:%d' % port)
-        proc = subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'mame', 'sf2ce'], env=env, timeout=30)
+        game = subprocess.Popen(['/bin/sleep', '60'])
+        self.addCleanup(game.wait)
+        self.addCleanup(game.kill)
+        env = dict(self.env, VERSUS_FEED=feed)
+        proc = subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'mame', 'sf2ce', str(game.pid)], env=env,
+                              timeout=30)
         self.assertEqual(proc.returncode, 0)
         self.assertEqual(self.events.read_text().splitlines(),
                          ['versus 0 0 500 -', 'versus 1 0 500 -', 'versus 1 0 500 90'])
-        # Um jogo fora da tabela nem abre a porta.
+        # Um jogo sem placar nem espera o arquivo.
         self.events.unlink()
         subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'mame', 'kof98'], env=env, timeout=30, check=True)
         self.assertFalse(self.events.exists())
+        # O jogo fechou sem o plugin avisar (o MAME caiu): o leitor sai com ele.
+        feed = self.serve_mame(['mame_start = sf2ce', 'fliperos_score1 = 7'], delay=0)
+        proc = subprocess.Popen([sys.executable, str(self.SCRIPT), 'run', 'mame', 'sf2ce', str(game.pid)], env=env)
+        self.addCleanup(proc.kill)
+        time.sleep(1.5)
+        self.assertIsNone(proc.poll())
+        game.kill()
+        game.wait()
+        self.assertEqual(proc.wait(timeout=10), 0)
+        # Um script do MAME de agora nao cria saidas: o placar nao passa pela porta 8000.
+        self.assertNotIn('8000', self.SCRIPT.read_text())
 
     def test_retroarch_memory_is_read_through_the_command_interface(self):
         memory = {0x10: [0, 0], 0x20: [0, 0], 0x30: [0x00, 0x05, 0x00]}
@@ -5922,9 +5951,10 @@ class VersusTests(unittest.TestCase):
         self.assertIn('"$root/usr/local/share/fliperos/mame-plugins/fliperos-versus/$file"', ROOTFS)
         self.assertIn('rm -rf "$gm_share"', MKISO)
         plugin = (ROOT / 'config/mame-plugins/fliperos-versus/init.lua').read_text()
-        for line in ("manager.machine.output:set_value('fliperos_' .. name, value)",
+        for line in ("line(string.format('fliperos_%s = %d', name, value))", "feed = io.open(FEED, 'w')",
+                     'versus.on_stop = emu.add_machine_stop_notifier(stop)',
                      "'/etc/fliperos/versus-games.conf'", 'emu.add_machine_frame_notifier(tick)',
-                     'if frame < WAIT or frame % EVERY ~= 0 then',
+                     'if frame % EVERY ~= 0 then',
                      # Os detectores do Fightcade, com os tempos e as areas dele.
                      "(HOME .. '/.local/share/fliperos/versus-detectors')", 'local DETECTOR_FRAMES = 30',
                      'local START_FRAMES = 300', "found = (not start_detected) and d.current > d.start",

@@ -111,18 +111,17 @@ if [[ " $* " != *" -output "* ]] && opens_video "$@" && [[ -x $outputs_helper ]]
   set -- -output network "$@"
 fi
 # O placar de uma partida versus no LED do gabinete (config/fliperos-versus):
-# num jogo da tabela, com um painel instalado, o plugin fliperos-versus le o
-# placar da memoria e o publica como saidas, pela mesma porta. O -plugin e o
-# -pluginspath da linha de comando trocam os do mame.ini, entao o hiscore e
-# as pastas de la vao junto (o plugin e do FliperOS, fora da pasta que o
-# build do GroovyMAME recria).
+# num jogo que tem detector ou linha na tabela, com um painel instalado, o
+# plugin fliperos-versus le o placar da memoria e o escreve num arquivo que o
+# fliperos-versus acompanha. O -plugin e o -pluginspath da linha de comando
+# trocam os do mame.ini, entao o hiscore e as pastas de la vao junto (o
+# plugin e do FliperOS, fora da pasta que o build do GroovyMAME recria).
 versus=${FLIPEROS_VERSUS:-/opt/fliperos/bin/fliperos-versus}
 panel=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
 plugins=${FLIPEROS_MAME_PLUGINS:-/usr/local/share/fliperos/mame-plugins}
 game=${*: -1}
 if opens_video "$@" && [[ $game != -* && " $* " != *" -plugin "* && -x $versus && -x $panel ]] &&
   "$panel" panel && "$versus" has mame "${game##*/}"; then
-  [[ " $* " == *" -output "* ]] || set -- -output network "$@"
   set -- -plugin hiscore,fliperos-versus \
     -pluginspath "/usr/local/share/groovymame/plugins;$plugins;$HOME/.mame/plugins" "$@"
 fi

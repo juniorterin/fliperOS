@@ -45,6 +45,7 @@
 #   fliperos-pixelcade achievement ID TITULO [DESCRICAO]   uma conquista do jogo aberto
 #   fliperos-pixelcade cheevos                     status 0 se o RetroArch deve registrar as conquistas no log
 #   fliperos-pixelcade versus V1 V2 P1 P2          o placar de uma partida versus (vitorias e pontos de cada lado)
+#   fliperos-pixelcade bg COMANDO [ARGS...]        o mesmo comando em segundo plano (volta na hora)
 #   fliperos-pixelcade panel                       status 0 se ha um painel instalado (Pixelcade ou ZeDMD)
 #   fliperos-pixelcade bye pixelcade|zedmd         "Bye", quando o computador desliga
 #   fliperos-pixelcade lcd-usb INTERFACE           o Pixelcade LCD ligado pela USB (root, pela udev)
@@ -962,6 +963,13 @@ case $cmd in
   panel)
     installed || zedmd_installed
     exit $?
+    ;;
+  # bg COMANDO [ARGS...]: o mesmo comando, solto, e volta na hora. Para quem
+  # espera o filho acabar (o plugin do Attract-Mode Plus): a espera e so a
+  # deste bash abrir.
+  bg)
+    setsid "$self" "$@" < /dev/null > /dev/null 2>&1 &
+    exit 0
     ;;
   launch | esde | attract | game | select | system | end | screensaver | achievement | versus)
     installed || zedmd_installed || exit 0

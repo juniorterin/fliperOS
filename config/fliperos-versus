@@ -17,9 +17,10 @@
 # Quem le a memoria:
 #
 #   - GroovyMAME: o plugin fliperos-versus (config/mame-plugins) avalia os
-#     detectores e le a tabela, e publica o resultado como saidas
-#     (fliperos_wins1, fliperos_char1, fliperos_score1...), que saem pela
-#     porta 8000 com as outras saidas do jogo. Daqui se le essa porta.
+#     detectores e le a tabela, e escreve o resultado (fliperos_wins1,
+#     fliperos_char1, fliperos_score1...) num arquivo em $XDG_RUNTIME_DIR,
+#     que daqui se acompanha. Nao sao saidas do MAME: no MAME de agora um
+#     script nao cria saidas novas.
 #   - RetroArch: o Network Command Interface (READ_CORE_MEMORY, UDP 55355),
 #     ligado pelo /etc/fliperos/retroarch/versus.cfg. So as linhas
 #     "retroarch" da tabela: os detectores ainda nao (os enderecos de um core
@@ -45,7 +46,8 @@ import urllib.request
 
 TABLES = os.environ.get('VERSUS_TABLES', '/etc/fliperos/versus-games.conf:/home/fliperos/config/versus-games.conf')
 PIXELCADE = os.environ.get('FLIPEROS_PIXELCADE', '/opt/fliperos/bin/fliperos-pixelcade')
-MAME_OUTPUT = os.environ.get('MAME_OUTPUT', '127.0.0.1:8000')
+# O arquivo em que o plugin do MAME escreve o placar (o mesmo caminho de la).
+FEED = os.environ.get('VERSUS_FEED') or os.path.join(os.environ.get('XDG_RUNTIME_DIR') or '/tmp', 'fliperos-versus.feed')
 RA_COMMAND = os.environ.get('RA_COMMAND', '127.0.0.1:55355')
 # Os detectores do Fightcade, num commit fixo (a pasta que o plugin do MAME le).
 DETECTORS = os.environ.get('VERSUS_DETECTORS', '/home/fliperos/.local/share/fliperos/versus-detectors')
@@ -270,35 +272,51 @@ def alive(pid):
     return True
 
 
-# mame_source: as linhas "fliperos_CAMPO = VALOR" da saida de rede do MAME,
-# ate ele fechar. O MAME demora a abrir a porta (o X, o modo de video).
+# mame_source: as linhas "fliperos_CAMPO = VALOR" que o plugin do MAME
+# escreve no FEED, ate o "mame_stop" ou o jogo (PID) fechar. O arquivo
+# recomeca a cada jogo: o de um jogo que ja fechou (tem o mame_stop, ou e
+# de antes de este programa abrir) nao serve. O MAME demora a abrir (o X, o
+# modo de video).
 def mame_source(fields, pid):
-    sock = None
+    began = time.time()
     deadline = time.monotonic() + 120
-    while sock is None and alive(pid) and time.monotonic() < deadline:
+    feed = None
+    while feed is None and alive(pid) and time.monotonic() < deadline:
         try:
-            sock = socket.create_connection(address(MAME_OUTPUT), timeout=2)
+            # Sem PID (o "watch", com o jogo ja aberto) vale o arquivo que houver.
+            if pid <= 1 or os.path.getmtime(FEED) >= began - 30:
+                feed = open(FEED, encoding='ascii', errors='replace')
+                text = feed.read()
+                if not text.startswith('mame_start') or 'mame_stop' in text:
+                    feed.close()
+                    feed = None
+                else:
+                    feed.seek(0)
         except OSError:
+            feed = None
+        if feed is None:
             time.sleep(0.2)
-    if sock is None:
+    if feed is None:
         return
-    buf = b''
-    with sock:
-        sock.settimeout(1)
+    buf = ''
+    with feed:
         while alive(pid):
-            try:
-                data = sock.recv(4096)
-            except socket.timeout:
-                yield None
-                continue
-            except OSError:
-                return
+            data = feed.read()
             if not data:
-                return
-            buf += data.replace(b'\n', b'\r')
-            *lines, buf = buf.split(b'\r')
+                # Um reset da maquina recomeca o arquivo.
+                try:
+                    if os.path.getsize(FEED) < feed.tell():
+                        feed.seek(0)
+                        buf = ''
+                        continue
+                except OSError:
+                    return
+                yield None
+                time.sleep(0.2)
+                continue
+            *lines, buf = (buf + data).split('\n')
             for line in lines:
-                name, sep, value = line.decode('ascii', 'replace').partition('=')
+                name, sep, value = line.partition('=')
                 name, value = name.strip(), value.strip()
                 if name == 'mame_stop':
                     return

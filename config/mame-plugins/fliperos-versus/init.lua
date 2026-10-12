@@ -1,12 +1,14 @@
--- FliperOS: o placar de uma partida versus como saidas do MAME.
+-- FliperOS: o placar de uma partida versus, lido da memoria do jogo.
 --
 -- O jogo so desenha o placar na tela. Este plugin le a memoria do jogo e
--- publica o que achou como saidas: fliperos_wins1, fliperos_wins2 (partidas
--- ganhas desde que o jogo abriu), fliperos_char1, fliperos_char2 (o
--- personagem de cada lado), fliperos_score1... Com "-output network" elas
--- saem pela porta 8000 junto das outras saidas do jogo, e o
--- config/fliperos-versus (o LED do gabinete), o Hook Of The Reaper ou uma
--- placa as leem dali.
+-- escreve o que achou, uma linha "nome = valor" por mudanca, num arquivo que
+-- o config/fliperos-versus (o LED do gabinete) acompanha:
+-- fliperos_wins1, fliperos_wins2 (partidas ganhas desde que o jogo abriu),
+-- fliperos_char1, fliperos_char2 (o personagem de cada lado),
+-- fliperos_score1... O formato e o da saida de rede do MAME (mame_start,
+-- mame_stop), mas nao passa por ela: no MAME de agora um script nao cria
+-- saidas novas, so usa as que o jogo declara (visto no gabinete, com o
+-- GroovyMAME 0.289; ate o 0.264 dava).
 --
 -- De onde vem os enderecos:
 --
@@ -24,7 +26,7 @@
 local exports = {
 	name = 'fliperos-versus',
 	version = '2',
-	description = 'FliperOS versus score as outputs',
+	description = 'FliperOS versus score read from the game memory',
 	license = 'GPL-3.0-or-later',
 	author = { name = 'FliperOS' } }
 
@@ -33,12 +35,10 @@ local versus = exports
 local HOME = os.getenv('HOME') or ''
 local TABLES = { '/etc/fliperos/versus-games.conf', HOME .. '/config/versus-games.conf' }
 local DETECTORS = os.getenv('VERSUS_DETECTORS') or (HOME .. '/.local/share/fliperos/versus-detectors')
--- A cada quantos quadros os valores da tabela sao lidos (4 vezes por segundo).
+-- O arquivo que o fliperos-versus acompanha (recomeca a cada jogo).
+local FEED = os.getenv('VERSUS_FEED') or ((os.getenv('XDG_RUNTIME_DIR') or '/tmp') .. '/fliperos-versus.feed')
+-- A cada quantos quadros os valores sao escritos (4 vezes por segundo).
 local EVERY = 15
--- Os primeiros quadros sem publicar nada: o MAME so manda uma saida quando
--- ela muda, e quem le a porta 8000 ainda esta conectando. O que saisse antes
--- se perderia ate o valor mudar de novo.
-local WAIT = 180
 -- Os tempos do Fightcade (vid_overlay.cpp).
 local DETECTOR_FRAMES = 30
 local START_FRAMES = 300
@@ -200,10 +200,27 @@ function versus.startplugin()
 	local waiting_start = true
 	local frame_start = 0
 
+	-- Uma linha no arquivo, ja gravada (o leitor a ve na hora).
+	local feed = nil
+	local function line(text)
+		if feed then
+			feed:write(text, '\n')
+			feed:flush()
+		end
+	end
+
 	local function publish(name, value)
 		if last[name] ~= value then
 			last[name] = value
-			manager.machine.output:set_value('fliperos_' .. name, value)
+			line(string.format('fliperos_%s = %d', name, value))
+		end
+	end
+
+	local function stop()
+		line('mame_stop = 1')
+		if feed then
+			feed:close()
+			feed = nil
 		end
 	end
 
@@ -263,6 +280,15 @@ function versus.startplugin()
 				end
 			end
 		end
+		-- O arquivo recomeca a cada jogo (e a cada reset da maquina).
+		if feed then
+			feed:close()
+			feed = nil
+		end
+		if fields or detectors then
+			feed = io.open(FEED, 'w')
+			line('mame_start = ' .. rom)
+		end
 	end
 
 	-- GameDetector::Update e UpdateDetectors do Fightcade, a cada quadro.
@@ -312,7 +338,7 @@ function versus.startplugin()
 		if detectors then
 			detect()
 		end
-		if frame < WAIT or frame % EVERY ~= 0 then
+		if frame % EVERY ~= 0 then
 			return
 		end
 		if detectors then
@@ -349,6 +375,7 @@ function versus.startplugin()
 	-- As referencias ficam guardadas: sem elas o MAME solta os avisos.
 	versus.on_start = emu.add_machine_reset_notifier(start)
 	versus.on_frame = emu.add_machine_frame_notifier(tick)
+	versus.on_stop = emu.add_machine_stop_notifier(stop)
 end
 
 return exports

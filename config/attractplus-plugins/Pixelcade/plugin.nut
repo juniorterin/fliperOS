@@ -25,6 +25,9 @@ class FliperosPixelcade {
 		return "\"" + out + "\"";
 	}
 
+	// O helper e chamado com "bg": ele mesmo se solta e volta na hora. O
+	// fe.plugin_command_bg nao espera o filho, que ficava como zumbi do
+	// Attract-Mode Plus, um por jogo selecionado (87 em 25 minutos no gabinete).
 	function on_transition(ttype, var, ttime) {
 		local offset = 0;
 		local rom = "";
@@ -36,11 +39,11 @@ class FliperosPixelcade {
 			return false;
 		if (ttype == Transition.EndLayout) {
 			if (var == FromTo.ScreenSaver)
-				fe.plugin_command_bg(config["command"], "screensaver start");
+				fe.plugin_command(config["command"], "bg screensaver start");
 			return false;
 		}
 		if (ttype == Transition.StartLayout && var == FromTo.ScreenSaver) {
-			fe.plugin_command_bg(config["command"], "screensaver stop");
+			fe.plugin_command(config["command"], "bg screensaver stop");
 			return false;
 		}
 		switch (ttype) {
@@ -51,8 +54,8 @@ class FliperosPixelcade {
 			case Transition.FromGame:
 				rom = fe.game_info(Info.Name, offset);
 				if (rom != "")
-					fe.plugin_command_bg(config["command"],
-						"attract " + quote(fe.game_info(Info.Emulator, offset)) + " " + quote(rom));
+					fe.plugin_command(config["command"],
+						"bg attract " + quote(fe.game_info(Info.Emulator, offset)) + " " + quote(rom));
 				break;
 		}
 		return false;
