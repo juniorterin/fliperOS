@@ -209,7 +209,13 @@ case $name in
     # patch do FliperOS, o recuo, a municao e a vida), se ha quem as leia
     # (config/fliperos-outputs). Sem leitor, so desliga o que ligou aqui:
     # quem ligou no menu do F10 fica com a escolha.
-    if [[ -x $outputs ]] && "$outputs" installed; then
+    # O placar versus no LED do gabinete (config/fliperos-versus) tambem as
+    # le: num jogo que publica os rounds, com um painel instalado.
+    versus=${FLIPEROS_VERSUS:-/opt/fliperos/bin/fliperos-versus}
+    game=$(basename -- "${*: -1}")
+    if { [[ -x $outputs ]] && "$outputs" installed; } ||
+      { [[ $# -ge 2 && -x $versus && -x $pixelcade ]] && "$pixelcade" panel &&
+        "$versus" has model2 "${game%.zip}"; }; then
       if ! grep -qE '^outputs_network[[:space:]]*=[[:space:]]*true' "$ini" 2> /dev/null; then
         sm2_set outputs_network true
         : > "$cfg/.fliperos-outputs"

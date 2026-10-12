@@ -4917,6 +4917,23 @@ class EmulatorModeTests(unittest.TestCase):
             ini.write_text('outputs_network = true\n')
             self.run_x11(['sm2-emu', 'hotd.zip'], home=home, extra=extra)
             self.assertIn('outputs_network = true\n', ini.read_text())
+        # O placar versus no LED tambem le a porta: com um painel instalado,
+        # num jogo que publica os rounds.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            ini = home / '.config' / 'sm2-emu' / 'sm2-emu.ini'
+            for name, body in (('outputs', '[ "$1" != installed ]\n'), ('panel', '[ "$1" = panel ]\n'),
+                               ('versus', '[ "$1 $2 $3" = "has model2 vf2" ]\n')):
+                (home / name).write_text('#!/bin/sh\n' + body)
+                (home / name).chmod(0o755)
+            extra = {'FLIPEROS_OUTPUTS': str(home / 'outputs'), 'FLIPEROS_PIXELCADE': str(home / 'panel'),
+                     'FLIPEROS_VERSUS': str(home / 'versus')}
+            self.run_x11(['sm2-emu', '/roms/model2/hotd.zip'], home=home, extra=extra)
+            self.assertNotIn('outputs_network', ini.read_text())
+            self.run_x11(['sm2-emu', '/roms/model2/vf2.zip'], home=home, extra=extra)
+            self.assertIn('outputs_network = true\n', ini.read_text())
+            self.run_x11(['sm2-emu', '/roms/model2/hotd.zip'], home=home, extra=extra)
+            self.assertIn('outputs_network = false\n', ini.read_text())
 
     def test_sm2emu_patches_apply_on_linux_and_only_touch_the_emulator(self):
         # git apply, no gabinete: um patch em CRLF nao se aplica. E so o
@@ -6353,8 +6370,56 @@ class VersusTests(unittest.TestCase):
         game.kill()
         game.wait()
         self.assertEqual(proc.wait(timeout=10), 0)
-        # Um script do MAME de agora nao cria saidas: o placar nao passa pela porta 8000.
-        self.assertNotIn('8000', self.SCRIPT.read_text())
+        # Um script do MAME de agora nao cria saidas: o placar do MAME nao
+        # passa pela porta 8000 (a do SM2-Emu, que publica os rounds ele mesmo).
+        text = self.SCRIPT.read_text()
+        self.assertNotIn('socket', text[text.index('def mame_source'):text.index('class Detector')])
+
+    def test_model2_rounds_come_from_the_emulators_outputs(self):
+        # Os jogos sao os do games.xml do SM2-Emu com P1_Wins e P2_Wins; o
+        # doa.zip abre como a revisao "doaa", um clone dele.
+        games = self.tmp / 'games.xml'
+        wins = '<outputs><value name="P1_Wins" address="0x50019b"/><value name="P2_Wins" address="0x50019d"/></outputs>'
+        games.write_text('<games>\n<game name="vf2" board="model2a">%s</game>\n'
+                         '<game name="doa" board="model2b"></game>\n<game name="doaa" parent="doa">%s</game>\n'
+                         '<game name="hotd" board="model2c"><outputs><value name="Credits" address="0x51f4b8"/>'
+                         '</outputs></game>\n</games>\n' % (wins, wins))
+        server = socket.socket()
+        server.bind(('127.0.0.1', 0))
+        server.listen(1)
+        self.addCleanup(server.close)
+        self.env.update(SM2_GAMES=str(games), SM2_OUTPUTS='127.0.0.1:%d' % server.getsockname()[1])
+        self.assertEqual([self.has('model2', g) for g in ('vf2', 'doa', 'doaa', 'hotd', 'daytona')], [0, 0, 0, 1, 1])
+        self.env['SM2_GAMES'] = str(self.tmp / 'missing.xml')
+        self.assertEqual(self.has('model2', 'vf2'), 1)
+        self.env['SM2_GAMES'] = str(games)
+
+        def serve():
+            conn, _ = server.accept()
+            with conn:
+                # P1 leva dois rounds e a luta acaba; na seguinte o P2 leva dois.
+                for line in ('mame_start = vf2', 'lamp0 = 1', 'P1_Wins = 0', 'P2_Wins = 0', 'Credits = 2',
+                             'P1_Wins = 1', 'P1_Wins = 2', 'P1_Wins = 0', 'P2_Wins = 1', 'P2_Wins = 2',
+                             'P2_Wins = 0', 'mame_stop = 1', 'P1_Wins = 9'):
+                    conn.sendall(line.encode() + b'\r')
+                    time.sleep(0.25)
+        threading.Thread(target=serve, daemon=True).start()
+        game = subprocess.Popen(['/bin/sleep', '60'])
+        self.addCleanup(game.wait)
+        self.addCleanup(game.kill)
+        proc = subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'model2', 'vf2', str(game.pid)],
+                              env=self.env, timeout=30)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(self.events.read_text().splitlines(), ['versus 1 0 - -', 'versus 1 1 - -'])
+        # Sem a porta (o emulador nao abriu), o leitor sai com o jogo.
+        self.env['SM2_OUTPUTS'] = '127.0.0.1:1'
+        proc = subprocess.Popen([sys.executable, str(self.SCRIPT), 'run', 'model2', 'vf2', str(game.pid)], env=self.env)
+        self.addCleanup(proc.kill)
+        time.sleep(1.5)
+        self.assertIsNone(proc.poll())
+        game.kill()
+        game.wait()
+        self.assertEqual(proc.wait(timeout=10), 0)
 
     def test_retroarch_memory_is_read_through_the_command_interface(self):
         memory = {0x10: [0, 0], 0x20: [0, 0], 0x30: [0x00, 0x05, 0x00]}
@@ -6433,6 +6498,10 @@ class VersusTests(unittest.TestCase):
                       '    -pluginspath "/usr/local/share/groovymame/plugins;$plugins;$HOME/.mame/plugins" "$@"', gm)
         kms = (ROOT / 'config/fliperos-kms-run').read_text()
         self.assertIn('"$versus" has retroarch "${game%.*}" "$core"; then', kms)
+        # O SM2-Emu publica os rounds: a porta abre para o placar, e o leitor e a fonte "model2".
+        self.assertIn('"$versus" has model2 "${game%.zip}"; }; then',
+                      (ROOT / 'config/fliperos-x11-run').read_text())
+        self.assertIn('fliperos-model2 | sm2-emu) source=model2 ;;', (ROOT / 'config/fliperos-pixelcade').read_text())
         # O Network Command Interface so num jogo da tabela.
         self.assertIn('network_cmd_enable = "true"', (ROOT / 'config/retroarch-versus.cfg').read_text())
         self.assertNotIn('network_cmd', (ROOT / 'config/retroarch.cfg').read_text())

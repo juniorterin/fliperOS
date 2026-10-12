@@ -27,12 +27,16 @@
 #     por READ_CORE_RAM, e o detector e avaliado aqui. As linhas "retroarch"
 #     da tabela vao por READ_CORE_MEMORY. Os cores do MAME (mame2010, mame)
 #     nao deixam ler a memoria.
+#   - SM2-Emu (Model 2): o proprio emulador le a memoria e publica os rounds
+#     de cada lado (P1_Wins, P2_Wins) entre as saidas do jogo, na porta 8000
+#     (o protocolo do MAMEHooker; ver config/fliperos-outputs). Os jogos que
+#     os tem sao os do games.xml dele (o patch em config/sm2-emu-patches).
 #
 # As vitorias da sessao vem do detector, do proprio jogo (wins1, wins2) ou
 # dos rounds: o vencedor e contado quando os rounds voltam a zero. A cada
 # mudanca vai um evento "versus" para o config/fliperos-pixelcade.
 #
-#   fliperos-versus has SOURCE GAME          status 0 se ha placar para o jogo (SOURCE: mame | retroarch)
+#   fliperos-versus has SOURCE GAME          status 0 se ha placar para o jogo (SOURCE: mame | retroarch | model2)
 #   fliperos-versus run SOURCE GAME [PID]    o placar no LED ate o jogo (o processo PID) fechar
 #   fliperos-versus watch SOURCE GAME        mostra cada valor quando muda (para conferir um jogo)
 #   fliperos-versus fetch                    baixa os detectores do Fightcade (de novo: atualiza)
@@ -51,6 +55,9 @@ PIXELCADE = os.environ.get('FLIPEROS_PIXELCADE', '/opt/fliperos/bin/fliperos-pix
 # O arquivo em que o plugin do MAME escreve o placar (o mesmo caminho de la).
 FEED = os.environ.get('VERSUS_FEED') or os.path.join(os.environ.get('XDG_RUNTIME_DIR') or '/tmp', 'fliperos-versus.feed')
 RA_COMMAND = os.environ.get('RA_COMMAND', '127.0.0.1:55355')
+# As saidas do SM2-Emu e a tabela de jogos dele, ao lado do binario.
+SM2_OUTPUTS = os.environ.get('SM2_OUTPUTS', '127.0.0.1:8000')
+SM2_GAMES = os.environ.get('SM2_GAMES', '/home/fliperos/.local/src/sm2-emu/build/bin/games.xml')
 # Os detectores do Fightcade, num commit fixo (a pasta que o plugin do MAME le).
 DETECTORS = os.environ.get('VERSUS_DETECTORS', '/home/fliperos/.local/share/fliperos/versus-detectors')
 DETECTORS_COMMIT = 'de9e7a99c494af488ed64155678e9d22d78f7ae6'
@@ -186,6 +193,8 @@ def detector_of(source, game, tables, core=''):
 # personagens do detector, se a tabela nao conta as vitorias) e os nomes dos
 # personagens. (None, {}) se nao ha placar para o jogo.
 def fields_of(source, game, tables=None, core=''):
+    if source == 'model2':
+        return ({'rounds1': None, 'rounds2': None} if model2_has(game) else None), {}
     tables = tables or read_tables()
     fields = dict(lookup(source, game, tables) or {})
     names = {}
@@ -196,6 +205,25 @@ def fields_of(source, game, tables=None, core=''):
             for field in ['wins1', 'wins2'] + sorted(detector['chars']):
                 fields[field] = None
     return (fields or None), names
+
+
+# model2_has: o games.xml do SM2-Emu da ao jogo as saidas P1_Wins e P2_Wins.
+# O .zip de um jogo pode abrir como uma revisao dele (doa.zip como "doaa"):
+# vale o jogo com esse nome ou um clone dele.
+def model2_has(game):
+    try:
+        with open(SM2_GAMES, encoding='utf-8', errors='replace') as f:
+            text = f.read()
+    except OSError:
+        return False
+    for block in re.findall(r'<game\b.*?</game>', text, re.S):
+        head = block[:block.index('>')]
+        named = re.search(r'\bname="([^"]*)"', head)
+        parent = re.search(r'\bparent="([^"]*)"', head)
+        if game in (named and named.group(1), parent and parent.group(1)) and \
+                all(re.search(r'<value\b[^>]*\bname="%s"' % name, block) for name in ('P1_Wins', 'P2_Wins')):
+            return True
+    return False
 
 
 # fetch: os .inf do repositorio do Fightcade, no commit fixado, para a pasta
@@ -486,9 +514,53 @@ def retroarch_source(fields, pid, detector=None):
             time.sleep(POLL if game else 0.25)
 
 
+# model2_source: as linhas "P1_Wins = N" e "P2_Wins = N" das saidas do
+# SM2-Emu (TCP, uma linha por mudanca, terminada em \r), como os rounds de
+# cada lado, ate o "mame_stop", a conexao cair ou o jogo (PID) fechar. O
+# emulador demora a abrir a porta (o X, o modo de video).
+def model2_source(fields, pid):
+    names = {'P1_Wins': 'rounds1', 'P2_Wins': 'rounds2'}
+    deadline = time.monotonic() + 120
+    sock = None
+    while sock is None and alive(pid) and time.monotonic() < deadline:
+        try:
+            sock = socket.create_connection(address(SM2_OUTPUTS), timeout=2)
+        except OSError:
+            time.sleep(0.5)
+    if sock is None:
+        return
+    buf = b''
+    with sock:
+        sock.settimeout(0.5)
+        while alive(pid):
+            try:
+                data = sock.recv(4096)
+            except socket.timeout:
+                yield None
+                continue
+            except OSError:
+                return
+            if not data:
+                return
+            *lines, buf = (buf + data).replace(b'\n', b'\r').split(b'\r')
+            for line in lines:
+                name, sep, value = line.decode('ascii', 'replace').partition('=')
+                name, value = name.strip(), value.strip()
+                if name == 'mame_stop':
+                    return
+                if sep and names.get(name) in fields:
+                    try:
+                        yield names[name], int(value)
+                    except ValueError:
+                        pass
+            yield None
+
+
 def source_of(name, fields, pid, detector=None):
     if name == 'mame':
         return mame_source(fields, pid)
+    if name == 'model2':
+        return model2_source(fields, pid)
     return retroarch_source(fields, pid, detector)
 
 
@@ -542,7 +614,7 @@ def watch(source, game, core=''):
 def main(argv):
     if len(argv) == 2 and argv[1] == 'fetch':
         return fetch()
-    if len(argv) >= 4 and argv[2] in ('mame', 'retroarch'):
+    if len(argv) >= 4 and argv[2] in ('mame', 'retroarch', 'model2'):
         # O core do RetroArch: o nome do arquivo, com ou sem pasta e "_libretro.so".
         rest = [a for a in argv[4:] if not a.isdigit()]
         core = os.path.basename(rest[0]).replace('_libretro.so', '') if rest else ''
@@ -555,9 +627,9 @@ def main(argv):
                 return watch(argv[2], argv[3], core)
             except KeyboardInterrupt:
                 return 0
-    sys.stderr.write('usage: fliperos-versus has mame|retroarch GAME [CORE]\n'
-                     '       fliperos-versus run mame|retroarch GAME [PID] [CORE]\n'
-                     '       fliperos-versus watch mame|retroarch GAME [CORE]\n'
+    sys.stderr.write('usage: fliperos-versus has mame|retroarch|model2 GAME [CORE]\n'
+                     '       fliperos-versus run mame|retroarch|model2 GAME [PID] [CORE]\n'
+                     '       fliperos-versus watch mame|retroarch|model2 GAME [CORE]\n'
                      '       fliperos-versus fetch\n')
     return 1
 

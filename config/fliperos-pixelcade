@@ -699,6 +699,7 @@ watch() {
     case ${3:-} in
       groovymame) source=mame ;;
       retroarch) source=retroarch ;;
+      fliperos-model2 | sm2-emu) source=model2 ;;
       *) source="" ;;
     esac
     if [[ -n $source && -n $2 && -x $versus ]] && "$versus" has "$source" "$2" "${4:-}"; then
