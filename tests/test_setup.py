@@ -3170,6 +3170,38 @@ class ReloadTests(Base):
         self.assertIn("tail -n 1", screen.split("if ((rc != 0)); then")[1].split("fi\n")[0])
 
 
+class ExtrasScreenTests(Base):
+    def test_installed_pixelcade_offers_the_paid_art_pack(self):
+        calls = self.env.dir / "extras.calls"
+        self.env.stub("fliperos-extras", 'case $1 in list) echo "pixelcade|1|Pixelcade (LED/LCD marquee)" ;; '
+                      'installed) exit 0 ;; *) echo "extras $*" >> %s ;; esac' % calls)
+        self.env.stub("fliperos-pixelcade", 'echo "pixelcade $*" >> %s' % calls)
+        env = dict(EXTRAS_CMD=str(self.env.bin / "fliperos-extras"),
+                   PIXELCADE_CMD=str(self.env.bin / "fliperos-pixelcade"), MENU_COUNT=str(self.env.dir / "menu.count"))
+        r = self.env.run("""
+            source %s/lib/ui.sh
+            source %s/lib/extras.sh
+            source %s/screens/progress.sh
+            source %s/screens/setup-menu.sh
+            # Extras > Pixelcade > art pack > Return > Return.
+            ui_menu() {
+              echo x >> "$MENU_COUNT"
+              case $(wc -l < "$MENU_COUNT") in 1) echo pixelcade ;; 2) echo artpack ;; *) echo return ;; esac
+            }
+            ui_input() { echo ' ABC-123 '; }
+            ui_msg() { echo "msg:$*"; }
+            ui_yesno() { echo "yesno:$*"; return 1; }
+            run_with_progress() { shift 2; "$@" > /dev/null; }
+            screen_extras
+        """ % (SETUP, SETUP, SETUP, SETUP), env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(calls.read_text().splitlines() if calls.exists() else r.stdout + r.stderr,
+                         ["pixelcade artpack ABC-123 --progress"])
+        self.assertIn("msg:Pixelcade art pack The art pack is installed.", r.stdout)
+        # O Pixelcade instalado tem o menu dele, nao a pergunta de atualizar.
+        self.assertNotIn("yesno:", r.stdout)
+
+
 class FreeRomsTests(Base):
     """lib/freeroms.sh: Setup > Free games (config/fliperos-freeroms)."""
 

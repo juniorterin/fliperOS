@@ -26,6 +26,7 @@
 # fliperos-dmd desenha a imagem e o fliperos-zedmd.service abre o servidor.
 #
 #   fliperos-pixelcade fetch [--progress]          baixa o pixelweb, a arte e o hi2txt (de novo: atualiza)
+#   fliperos-pixelcade artpack CODIGO [--progress] instala o pacote de arte pago do Pixelcade (o codigo da compra)
 #   fliperos-pixelcade installed                   status 0 se o pixelweb esta baixado
 #   fliperos-pixelcade daemon                      o servico: liga os frontends e abre o pixelweb
 #   fliperos-pixelcade fetch-zedmd [--progress]    baixa o dmdserver do ZeDMD
@@ -173,6 +174,46 @@ fetch() {
   # Pelo Setup, quem fecha e o root, depois de abrir o servico.
   [[ -n ${PIXELCADE_AS_ROOT:-} ]] && return 0
   say 100 "Pixelcade installed (sudo systemctl restart fliperos-pixelcade starts it)"
+}
+
+# artpack CODIGO [--progress]: o pacote de arte pago do Pixelcade LED, com o
+# codigo de licenca que a pessoa recebeu na compra. E o
+# "pixelweb -install-artpack CODIGO" do guia do Pixelcade, com o servico
+# parado enquanto baixa (o pixelweb da porta 8080 segura a pasta). Quem
+# confere o codigo e o servidor do Pixelcade.
+artpack() {
+  local code=${1:-} out rc
+  fail_label="Pixelcade art pack"
+  [[ ${2:-} == --progress ]] && progress=1
+  installed || fail "Pixelcade is not installed (Setup > Extras > Pixelcade)"
+  code=${code//[[:space:]]/}
+  [[ -n $code ]] || fail "the license code is empty"
+  [[ $code != -* ]] || fail "that is not a license code"
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    runuser -u "$user" -- env PIXELCADE_AS_ROOT=1 "$self" artpack "$code" "${@:2}"
+    rc=$?
+    systemctl restart fliperos-pixelcade.service 2> /dev/null
+    ((rc == 0)) || exit 1
+    say 100 "Pixelcade art pack installed"
+    return 0
+  fi
+  out=$(mktemp) || fail "could not create a temporary file"
+  curl -s -m 2 -o /dev/null "$api/quit" 2> /dev/null
+  say 5 "Checking the license code with Pixelcade"
+  (cd "$dir" && ./pixelweb -p "$dir" -install-artpack "$code" -progress-installer -progress-stdout) 2>&1 |
+    tee "$out" | artwork_progress
+  rc=${PIPESTATUS[0]}
+  if ((rc != 0)); then
+    if grep -qi 'license is invalid' "$out"; then
+      rm -f "$out"
+      fail "Pixelcade did not accept this license code"
+    fi
+    rm -f "$out"
+    fail "the art pack was not installed (no network? details in the log)"
+  fi
+  rm -f "$out"
+  [[ -n ${PIXELCADE_AS_ROOT:-} ]] && return 0
+  say 100 "Pixelcade art pack installed (sudo systemctl restart fliperos-pixelcade shows it)"
 }
 
 # fetch_hi2txt: o hi2txt.jar e a base dele (hi2txt.zip) em ~/pixelcade/hi2txt,
@@ -908,6 +949,7 @@ cmd=${1:-}
 shift
 case $cmd in
   fetch) fetch "$@" ;;
+  artpack) artpack "$@" ;;
   installed)
     installed
     exit $?

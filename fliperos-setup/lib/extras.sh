@@ -21,6 +21,20 @@ extras_label() {
   extras_list | awk -F'|' -v n="$1" '$1 == n { print $3; exit }'
 }
 
+# extras_artpack CODIGO: o pacote de arte pago do Pixelcade, com o codigo de
+# licenca da compra (config/fliperos-pixelcade artpack).
+PIXELCADE_CMD=${PIXELCADE_CMD:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-pixelcade}
+extras_artpack() {
+  ev_step 0 "Starting"
+  if [[ ! -x $PIXELCADE_CMD ]]; then
+    ev_fail "the Pixelcade helper ($PIXELCADE_CMD) is missing"
+    return 1
+  fi
+  # O codigo nao vai para o log.
+  log_line cmd "\$ $PIXELCADE_CMD artpack <code> --progress"
+  "$PIXELCADE_CMD" artpack "$1" --progress 2>> "$FLIPEROS_LOG"
+}
+
 extras_install() {
   ev_step 0 "Starting"
   if [[ ! -x $EXTRAS_CMD ]]; then

@@ -5292,6 +5292,30 @@ class PixelcadeTests(unittest.TestCase):
         self.calls.unlink(missing_ok=True)
         return [c.replace('http://pc/', '') for c in calls]
 
+    def test_paid_art_pack_installs_with_the_license_code(self):
+        # O "pixelweb -install-artpack CODIGO" do guia do Pixelcade, pelo Setup.
+        env = dict(self.env, FLIPEROS_USER='root')
+        run = lambda *a: subprocess.run(['bash', str(self.SCRIPT), 'artpack', *a], env=env, capture_output=True,
+                                        text=True, timeout=30)
+        self.assertNotEqual(run('ABC-123').returncode, 0)
+        pw = self.tmp / 'pixelcade/pixelweb'
+        pw.write_text('#!/bin/sh\necho "$*" >> %s\ncase "$*" in *BAD*) echo \'level=error msg="license is invalid"\'; '
+                      'exit 1 ;; esac\necho 50%%\necho 100%%\n' % (self.tmp / 'pw.log'))
+        pw.chmod(0o755)
+        proc = run(' abc-123 ', '--progress')
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual((self.tmp / 'pw.log').read_text().splitlines(),
+                         ['-p %s -install-artpack abc-123 -progress-installer -progress-stdout' % (self.tmp / 'pixelcade')])
+        self.assertIn('@step 100 Pixelcade art pack installed', proc.stdout)
+        # O pixelweb aberto solta a pasta antes.
+        self.assertEqual(self.calls.read_text().splitlines(), ['http://pc/quit'])
+        proc = run('BAD', '--progress')
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('@fail Pixelcade art pack|Pixelcade did not accept this license code', proc.stdout)
+        for bad in ('', '   ', '-version'):
+            self.assertNotEqual(run(bad).returncode, 0, bad)
+        self.assertEqual(len((self.tmp / 'pw.log').read_text().splitlines()), 2)
+
     def test_nothing_without_pixelweb(self):
         installed = lambda: subprocess.run(['bash', str(self.SCRIPT), 'installed'], env=self.env).returncode
         self.assertNotEqual(installed(), 0)

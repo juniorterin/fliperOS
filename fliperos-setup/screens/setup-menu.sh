@@ -342,6 +342,30 @@ screen_frontend_custom_pick() {
 # Wine, Steam e Heroic: nao vem na imagem, o Setup instala pela rede
 # (lib/extras.sh).
 
+# screen_extras_pixelcade: o Pixelcade ja instalado: atualizar, ou instalar o
+# pacote de arte pago com o codigo da compra. Status 0 = atualizar.
+screen_extras_pixelcade() {
+  local choice code
+  while true; do
+    choice=$(ui_menu "Pixelcade" "Pixelcade is installed." update \
+      "update|Download it again to update it" \
+      "artpack|Install the paid art pack (license code)" \
+      "return|Return") || return 1
+    case $choice in
+      update) return 0 ;;
+      artpack)
+        code=$(ui_input "Pixelcade art pack" "The license code you got when you bought the art pack from Pixelcade. It needs the network.") || continue
+        code=${code//[[:space:]]/}
+        [[ -n $code ]] || continue
+        if run_with_progress "Installing the Pixelcade art pack" "" extras_artpack "$code"; then
+          ui_msg "Pixelcade art pack" "The art pack is installed."
+        fi
+        ;;
+      *) return 1 ;;
+    esac
+  done
+}
+
 screen_extras() {
   local entries=() name inst desc choice label last=wine
   while true; do
@@ -357,7 +381,9 @@ screen_extras() {
     label=$(extras_label "$choice")
     # Instalado: instalar de novo atualiza (o Pixelcade baixa o pixelweb e a
     # arte novos, o apt a versao nova do pacote).
-    if extras_installed "$choice"; then
+    if [[ $choice == pixelcade ]] && extras_installed "$choice"; then
+      screen_extras_pixelcade || continue
+    elif extras_installed "$choice"; then
       ui_yesno "Extras" "$label is already installed. Download it again to update it?" no || continue
     else
       ui_yesno "Extras" "Download and install $label now?" yes || continue
