@@ -115,6 +115,11 @@ done
 # nao vem na imagem (codigo fechado).
 install -Dm755 "$src/config/fliperos-fightcade" "$root/opt/fliperos/bin/fliperos-fightcade"
 install -Dm644 "$src/config/openbox-fightcade.xml" "$root/etc/fliperos/openbox-fightcade.xml"
+# As saidas dos jogos (porta 8000, o protocolo do MAMEHooker) para placas e
+# LEDs: o helper que os lancadores chamam e a chave do PPA do LEDSpicer. O
+# Hook Of The Reaper e o LEDSpicer em si vem pelo Setup > Extras.
+install -Dm755 "$src/config/fliperos-outputs" "$root/opt/fliperos/bin/fliperos-outputs"
+install -Dm644 "$src/config/ledspicer-ppa.asc" "$root/usr/local/share/fliperos/ledspicer-ppa.asc"
 # Wine, Steam, Heroic e o Pixelcade nao vem na imagem: o Setup > Extras os
 # instala.
 install -Dm755 "$src/config/fliperos-extras" "$root/opt/fliperos/bin/fliperos-extras"

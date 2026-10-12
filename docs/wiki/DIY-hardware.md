@@ -44,11 +44,37 @@ The GunCon 2 calibration of the Setup is for the GunCon 2 only. These guns are c
 
 The Pixelcade marquee, which FliperOS also supports, is a commercial product with closed software; it is on the [Frontends](Frontends.md) page.
 
-## Button and cabinet lights
+## Game outputs: lamps, recoil, motors and button lights
 
-| Project | Board | With FliperOS |
+Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast and Supermodel can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has two readers, each one an extra in **Setup > Extras**. They can be installed together.
+
+| Project | What it drives | With FliperOS |
 | --- | --- | --- |
-| [LEDSpicer](https://github.com/meduzapat/LEDSpicer) | (runs on the PC, driving LED controller boards) | A Linux program that lights the buttons each game uses and plays light animations, with MAME integration. GPL-3.0. FliperOS doesn't install or configure it: it is here as the open-source option to start from |
+| [Hook Of The Reaper](https://hotr.6bolt.com/) | Light guns with recoil and lights (OpenFIRE, GUN4IR, Blamcon, Fusion, RS3 Reaper, Alien, AimTrak, Sinden and others), boards on a serial port or USB HID, Ultimarc light boards | **Setup > Extras > Hook Of The Reaper**. A Windows program, run through Wine. Its source isn't public at the moment |
+| [LEDSpicer](https://github.com/meduzapat/LEDSpicer) | Ready-made LED boards: Ultimarc (PacLED64, PacDrive, Ultimate I/O, NanoLED), LED-Wiz 32, Howler, Adalight | **Setup > Extras > LEDSpicer**, from its author's Ubuntu repository. It lights the buttons each game uses. GPL-3.0 |
+
+The emulators only open port 8000 when one of the two is installed, because the port is reachable from the network and accepts a pause command.
+
+Neither has been tried with a real gun or board on a FliperOS cabinet yet. Hook Of The Reaper was run under Wine against a simulated game: it connects to the port, loads the game's file and closes with the game. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.
+
+### Hook Of The Reaper
+
+[Hook Of The Reaper](https://hotr.6bolt.com/) is the current successor of MAMEHooker. It has no Linux version yet (its author plans one after the program is complete), so FliperOS runs the Windows program through Wine.
+
+- **What is installed**: 64-bit Wine and a virtual screen (`xvfb`) from apt, and the program from its own website (pinned version and hash) into `~/hotr`. It gets its own Wine folder, separate from Fightcade's. Nothing of this is in the image.
+- **Setting it up**: on the desktop, **Preferences > Hook Of The Reaper** opens its window. Add your light guns and assign each one to a player, as its [tutorial](https://hotr.6bolt.com/pmwiki.php/Tutorial/Setup) shows. The settings stay in `~/hotr/data`.
+- **Game files**: it comes with its own files for over 200 gun games (`~/hotr/defaultLG`), which work with any gun it supports. MAMEHooker `.ini` files go in `~/hotr/ini/MAME`. The folder is also at `~/config/hotr`, shared on the network.
+- **When it runs**: it opens with each game of GroovyMAME, Flycast and Supermodel and closes with it. It runs on the virtual screen, so none of its windows or warnings appear over the game. Installing it again from the Extras updates the program and keeps your guns, players and `.ini` files.
+- **USB HID guns and boards**: the install lets the `fliperos` user open the USB HID devices (`/dev/hidraw*`, group `input`), which is how Wine reaches them. Serial boards already belong to the user's `dialout` group.
+
+### LEDSpicer
+
+- The install adds the packages for every board it supports, but doesn't turn the service on: LEDSpicer needs `/etc/ledspicer.conf` describing your boards and which LED is which button, as its [wiki](https://github.com/meduzapat/LEDSpicer/wiki) explains. Then `sudo systemctl enable --now ledspicerd`.
+- With the service running, FliperOS tells it which game opened (`emitter LoadProfileByEmulator <game> arcade`, or the console's folder for the others) and when it closed, from any frontend or emulator.
+
+### Other programs
+
+[QMamehook](https://github.com/SeongGino/QMamehook) is an open-source (LGPL-2.1) reader that runs natively on Linux, without Wine, and uses MAMEHooker's `.ini` files unchanged. It only writes to serial ports and only accepts the USB IDs of a few gun boards. FliperOS doesn't install it; it is the option to look at if you want to avoid Wine.
 
 ## Adding a project to this page
 

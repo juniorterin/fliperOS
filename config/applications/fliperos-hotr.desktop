@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Hook Of The Reaper
+GenericName=Game outputs to light guns and controller boards
+Comment=Add the light guns and assign them to the players; it then runs by itself with each game
+Exec=/opt/fliperos/bin/fliperos-outputs hotr
+TryExec=/home/fliperos/hotr/HookOfTheReaper.exe
+Icon=input-gaming
+Terminal=false
+Categories=Settings;HardwareSettings;

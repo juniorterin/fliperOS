@@ -22,6 +22,10 @@ gl_core_ok() {
 # sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.
 pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
 [[ -x $pixelcade ]] && { "$pixelcade" launch "$@" < /dev/null > /dev/null 2>&1 & }
+# As saidas do jogo para placas e LEDs (config/fliperos-outputs; sem o
+# Hook Of The Reaper e o LEDSpicer instalados, nada).
+outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
+[[ -x $outputs ]] && { "$outputs" launch "$@" < /dev/null > /dev/null 2>&1 & }
 # A config do FliperOS entra por cima da do usuario (ver o cabecalho de
 # config/retroarch.cfg). Fica aqui, e nao em quem chama, porque a sessao de
 # boot so passa o nome do binario.

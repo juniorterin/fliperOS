@@ -35,6 +35,16 @@ wine_bin=${FLIPEROS_WINE:-/usr/bin/wine}
 steam_bin=${FLIPEROS_STEAM:-/usr/games/steam}
 heroic_bin=${FLIPEROS_HEROIC:-/opt/Heroic/heroic}
 pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
+# As saidas dos jogos para pistolas, placas e LEDs (config/fliperos-outputs):
+# o Hook Of The Reaper e um programa de Windows, baixado do site dele pelo
+# helper e aberto pelo Wine de 64 bits numa tela virtual (xvfb); o LEDSpicer
+# vem do PPA do autor, com a chave dele (fixada, em /usr/local/share/fliperos)
+# e um pacote por tipo de placa.
+HOTR_PACKAGES="wine wine64 xvfb xauth"
+outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
+LEDSPICER_KEY=${FLIPEROS_LEDSPICER_KEY:-/usr/local/share/fliperos/ledspicer-ppa.asc}
+LEDSPICER_PPA="https://ppa.launchpadcontent.net/meduzapat/ledspicer/ubuntu"
+LEDSPICER_PACKAGES="ledspicer ledspicer-pacled64 ledspicer-pacdrive ledspicer-ultimateio ledspicer-nanoled ledspicer-ledwiz32 ledspicer-howler ledspicer-adalight"
 
 progress=0 label=""
 say() {
@@ -53,6 +63,8 @@ extras_label() {
     pixelcade) echo "Pixelcade" ;;
     zedmd) echo "ZeDMD" ;;
     doflinx) echo "DOFLinx" ;;
+    hotr) echo "Hook Of The Reaper" ;;
+    ledspicer) echo "LEDSpicer" ;;
   esac
 }
 
@@ -64,6 +76,7 @@ extras_installed() {
     pixelcade) [[ -x $pixelcade ]] && "$pixelcade" installed ;;
     zedmd) [[ -x $pixelcade ]] && "$pixelcade" zedmd-installed ;;
     doflinx) [[ -x $pixelcade ]] && "$pixelcade" doflinx-installed ;;
+    hotr | ledspicer) [[ -x $outputs ]] && "$outputs" installed "$1" ;;
     *) return 2 ;;
   esac
 }
@@ -79,6 +92,8 @@ heroic|Heroic (GOG, Epic, Amazon)
 pixelcade|Pixelcade (LED/LCD marquee)
 zedmd|ZeDMD (open-source LED DMD)
 doflinx|DOFLinx (Pixelcade in-game effects)
+hotr|Hook Of The Reaper (game outputs: light guns, boards)
+ledspicer|LEDSpicer (button LEDs: Ultimarc, LED-Wiz...)
 LIST
 }
 
@@ -136,7 +151,7 @@ install_heroic() {
 extras_install() {
   local name=$1
   label=$(extras_label "$name")
-  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade, zedmd or doflinx)"
+  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade, zedmd, doflinx, hotr or ledspicer)"
   ((EUID == 0)) || fail "installing $label needs root (Setup > Extras)"
   case $name in
     # shellcheck disable=SC2086 # um pacote por palavra
@@ -168,6 +183,33 @@ extras_install() {
         apt_install --no-install-recommends python3-pil
       fi
       if ((progress)); then "$pixelcade" fetch-zedmd --progress || exit 1; else "$pixelcade" fetch-zedmd || exit 1; fi
+      ;;
+    # O Wine e a tela virtual do apt, ate 55%; o programa pelo fetch-hotr,
+    # dali a 100%. As pistolas e placas USB HID (/dev/hidraw*) passam ao grupo
+    # input, o do usuario, que ja le os controles: o Wine as abre por ali.
+    hotr)
+      [[ -x $outputs ]] || fail "$outputs is missing"
+      if [[ ! -x $wine_bin ]] || ! command -v xvfb-run > /dev/null; then
+        apt_end=55
+        # shellcheck disable=SC2086
+        apt_install --no-install-recommends $HOTR_PACKAGES
+      fi
+      printf '%s\n' '# FliperOS: Hook Of The Reaper (Setup > Extras) fala com as pistolas e placas' \
+        '# USB HID por aqui.' 'KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="input", MODE="0660"' \
+        > /etc/udev/rules.d/99-fliperos-hotr.rules || fail "could not write the udev rule"
+      udevadm control --reload 2> /dev/null && udevadm trigger --subsystem-match=hidraw 2> /dev/null
+      if ((progress)); then "$outputs" fetch-hotr --progress || exit 1; else "$outputs" fetch-hotr || exit 1; fi
+      ;;
+    # O servico (ledspicerd) nao e ligado aqui: sem o /etc/ledspicer.conf com
+    # as placas e os LEDs do gabinete ele nao abre.
+    ledspicer)
+      [[ -f $LEDSPICER_KEY ]] || fail "$LEDSPICER_KEY is missing"
+      install -Dm644 "$LEDSPICER_KEY" /etc/apt/keyrings/ledspicer.asc &&
+        printf 'deb [signed-by=/etc/apt/keyrings/ledspicer.asc] %s %s main\n' "$LEDSPICER_PPA" \
+          "$(. /etc/os-release && echo "$VERSION_CODENAME")" > /etc/apt/sources.list.d/ledspicer.list ||
+        fail "could not add the LEDSpicer repository"
+      # shellcheck disable=SC2086
+      apt_install --no-install-recommends $LEDSPICER_PACKAGES
       ;;
   esac
   extras_installed "$name" || fail "$label was installed, but it was not found afterwards"

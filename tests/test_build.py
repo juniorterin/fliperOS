@@ -4807,13 +4807,14 @@ class NewEmulatorBuildTests(unittest.TestCase):
             wine.write_text('#!/bin/sh\n')
             wine.chmod(0o755)
             env = dict(os.environ, FLIPEROS_WINE=str(wine), FLIPEROS_STEAM=tmp + '/none',
-                       FLIPEROS_HEROIC=tmp + '/none', FLIPEROS_PIXELCADE=tmp + '/none')
+                       FLIPEROS_HEROIC=tmp + '/none', FLIPEROS_PIXELCADE=tmp + '/none',
+                       FLIPEROS_OUTPUTS=tmp + '/none')
             run = lambda *a: subprocess.run(['bash', str(ROOT / 'config/fliperos-extras'), *a], env=env,
                                             capture_output=True, text=True)
             rows = [line.split('|') for line in run('list').stdout.splitlines()]
             self.assertEqual([(r[0], r[1]) for r in rows],
                              [('wine', '1'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0'), ('zedmd', '0'),
-                              ('doflinx', '0')])
+                              ('doflinx', '0'), ('hotr', '0'), ('ledspicer', '0')])
             self.assertEqual(run('installed', 'wine').returncode, 0)
             self.assertNotEqual(run('installed', 'steam').returncode, 0)
             if os.geteuid() != 0:
@@ -5384,6 +5385,190 @@ class PixelcadeTests(unittest.TestCase):
         device.write_text('')
         subprocess.run(['bash', str(self.SCRIPT), 'zedmd-daemon'], env=env, check=True, timeout=30)
         self.assertIn('Device = %s\n' % device, (self.tmp / 'zedmd/dmdserver.ini').read_text())
+
+
+class OutputsTests(unittest.TestCase):
+    """config/fliperos-outputs: as saidas dos jogos (porta 8000, o protocolo do
+    MAMEHooker) para o Hook Of The Reaper (pelo Wine) e o LEDSpicer, instalados
+    pelo Setup > Extras."""
+    SCRIPT = ROOT / 'config/fliperos-outputs'
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        t = self.tmp
+        (t / 'bin').mkdir()
+        (t / 'logs').mkdir()
+        self.roms = t / 'roms'
+        for d in ('retroarch/snes9x', 'retroarch/fbneo', 'naomi'):
+            (self.roms / d).mkdir(parents=True)
+        self.game = subprocess.Popen(['/bin/sleep', '60'])
+        self.addCleanup(self.game.wait)
+        self.addCleanup(self.game.kill)
+        self.env = dict(os.environ, PATH='%s:%s' % (t / 'bin', os.environ['PATH']),
+                        FLIPEROS_WINE=str(t / 'bin/wine'), FLIPEROS_LEDSPICER_EMITTER=str(t / 'bin/emitter'),
+                        HOTR_DIR=str(t / 'hotr'), HOTR_WINEPREFIX=str(t / 'prefix/wine-hotr'),
+                        ROMS_DIR=str(self.roms), FLIPEROS_LOGS=str(t / 'logs'), FLIPEROS_USER='root',
+                        FLIPEROS_GAME_PID=str(self.game.pid))
+
+    def install_hotr(self):
+        """O programa "baixado" e um Wine e um xvfb-run de mentira."""
+        (self.tmp / 'hotr').mkdir(exist_ok=True)
+        (self.tmp / 'hotr/HookOfTheReaper.exe').write_text('MZ')
+        log = self.tmp / 'wine.log'
+        self.tool('wine', 'echo "$PWD|$WINEPREFIX|$*" >> %s\n[ "$1" = wineboot ] && { mkdir -p "$WINEPREFIX"; exit 0; }\n'
+                          'while :; do /bin/sleep 0.1; done\n' % log)
+        self.tool('wineserver', 'echo "wineserver $*" >> %s\npkill -f "%s HookOfTheReaper.exe"\n'
+                                % (log, self.tmp / 'bin/wine'))
+        self.tool('xvfb-run', '[ "$1" = -a ] && shift\nexec "$@"\n')
+
+    def tool(self, name, body):
+        path = self.tmp / 'bin' / name
+        path.write_text('#!/bin/bash\n' + body)
+        path.chmod(0o755)
+
+    def run_(self, *args):
+        return subprocess.run(['bash', str(self.SCRIPT), *args], env=self.env, capture_output=True, text=True,
+                              timeout=30)
+
+    def lines(self, name, count):
+        path, deadline, out = self.tmp / name, time.time() + 10, []
+        while time.time() < deadline:
+            out = path.read_text().splitlines() if path.exists() else []
+            if len(out) >= count:
+                break
+            time.sleep(0.05)
+        return out
+
+    def test_nothing_without_a_reader(self):
+        self.assertNotEqual(self.run_('installed').returncode, 0)
+        self.assertEqual(self.run_('launch', 'groovymame', 'sf2').returncode, 0)
+        self.assertFalse((self.tmp / 'logs/hotr.log').exists())
+        self.tool('emitter', '')
+        self.assertEqual(self.run_('installed').returncode, 0)
+        self.assertEqual(self.run_('installed', 'ledspicer').returncode, 0)
+        self.assertNotEqual(self.run_('installed', 'hotr').returncode, 0)
+        # O programa sem o Wine nao conta.
+        (self.tmp / 'hotr').mkdir()
+        (self.tmp / 'hotr/HookOfTheReaper.exe').write_text('MZ')
+        self.assertNotEqual(self.run_('installed', 'hotr').returncode, 0)
+        self.install_hotr()
+        self.assertEqual(self.run_('installed', 'hotr').returncode, 0)
+
+    def test_hotr_runs_on_a_virtual_screen_while_the_game_does(self):
+        self.install_hotr()
+        # So os emuladores que publicam as saidas.
+        rom = self.roms / 'retroarch/snes9x/smw.sfc'
+        rom.write_text('')
+        self.run_('launch', 'retroarch', '-L', 'x.so', str(rom))
+        time.sleep(0.3)
+        self.assertFalse((self.tmp / 'wine.log').exists())
+        self.run_('launch', 'groovymame', 'sf2')
+        # Na pasta dele (as configuracoes ficam ao lado do .exe), no prefixo dele.
+        started = '%s|%s|HookOfTheReaper.exe' % (self.tmp / 'hotr', self.tmp / 'prefix/wine-hotr')
+        self.assertEqual(self.lines('wine.log', 1), [started])
+        # O groovymame do fliperos-kms-run ainda passa pelo fliperos-x11-run.
+        self.run_('launch', 'groovymame', 'sf2')
+        time.sleep(0.3)
+        self.assertEqual(self.lines('wine.log', 1), [started])
+        self.game.kill()
+        self.game.wait()
+        self.assertEqual(self.lines('wine.log', 2)[1], 'wineserver -k')
+        helper = self.SCRIPT.read_text().split('hotr_game() {')[1].split('\n}\n')[0]
+        self.assertIn('setsid xvfb-run -a "$wine" HookOfTheReaper.exe &', helper)
+        # No desktop, para configurar as pistolas, na tela de verdade.
+        self.assertNotEqual(self.run_('hotr').returncode, 0)
+        desktop = (ROOT / 'config/applications/fliperos-hotr.desktop').read_text()
+        self.assertIn('Exec=/opt/fliperos/bin/fliperos-outputs hotr\n', desktop)
+        self.assertIn('TryExec=/home/fliperos/hotr/HookOfTheReaper.exe\n', desktop)
+
+    def test_hotr_download_is_pinned_and_keeps_the_settings(self):
+        import hashlib
+        import zipfile
+        self.install_hotr()
+        shutil.rmtree(self.tmp / 'hotr')
+        pkg = self.tmp / 'pkg.zip'
+        with zipfile.ZipFile(pkg, 'w') as z:
+            for name, text in (('HookOfTheReaper.exe', 'MZ new'), ('data/playersAss.hor', 'default'),
+                               ('data/settings.hor', 'default'), ('ini/MAME/sf2.ini', 'default'),
+                               ('defaultLG/hotd4.txt', 'v2')):
+                z.writestr(name, text)
+        self.env['HOTR_URL'] = 'file://%s' % pkg
+        # Outro arquivo no lugar do pacote: nada e instalado.
+        proc = self.run_('fetch-hotr')
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('is not the Hook Of The Reaper', proc.stderr)
+        self.assertFalse((self.tmp / 'hotr/HookOfTheReaper.exe').exists())
+        self.assertRegex(self.SCRIPT.read_text(), r'HOTR_SHA256=\$\{HOTR_SHA256:-[0-9a-f]{64}\}')
+        self.env['HOTR_SHA256'] = hashlib.sha256(pkg.read_bytes()).hexdigest()
+        proc = self.run_('fetch-hotr', '--progress')
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        hotr = self.tmp / 'hotr'
+        self.assertTrue(os.access(hotr / 'HookOfTheReaper.exe', os.X_OK))
+        self.assertTrue((self.tmp / 'prefix/wine-hotr').is_dir())
+        self.assertIn('wineboot -i', (self.tmp / 'wine.log').read_text())
+        # De novo (atualizar): as pistolas, os jogadores e os .ini da pessoa
+        # ficam; o programa e os arquivos de jogo sao trocados.
+        (hotr / 'data/playersAss.hor').write_text('mine')
+        (hotr / 'ini/MAME/sf2.ini').write_text('mine')
+        (hotr / 'defaultLG/hotd4.txt').write_text('v1')
+        (hotr / 'data/settings.hor').unlink()
+        self.assertEqual(self.run_('fetch-hotr').returncode, 0)
+        self.assertEqual((hotr / 'data/playersAss.hor').read_text(), 'mine')
+        self.assertEqual((hotr / 'ini/MAME/sf2.ini').read_text(), 'mine')
+        self.assertEqual((hotr / 'data/settings.hor').read_text(), 'default')
+        self.assertEqual((hotr / 'defaultLG/hotd4.txt').read_text(), 'v2')
+
+    def test_ledspicer_gets_the_game_and_its_end(self):
+        self.tool('emitter', 'echo "$*" >> %s\n' % (self.tmp / 'led'))
+        rom = self.roms / 'retroarch/fbneo/sf2.zip'
+        rom.write_text('')
+        # Sem o servico dele aberto, nada.
+        self.tool('pgrep', 'exit 1\n')
+        self.run_('launch', 'retroarch', '-L', 'x.so', str(rom))
+        time.sleep(0.3)
+        self.assertFalse((self.tmp / 'led').exists())
+        self.tool('pgrep', '[ "$2" = ledspicerd ] || [ "$*" = "-x ledspicerd" ]\n')
+        self.run_('launch', 'retroarch', '-L', 'x.so', str(rom))
+        self.assertEqual(self.lines('led', 1), ['LoadProfileByEmulator sf2 arcade'])
+        self.game.kill()
+        self.game.wait()
+        self.assertEqual(self.lines('led', 2)[1], 'FinishLastProfile')
+        # Um console vai com a pasta dele; sem jogo (o menu do emulador), nada.
+        (self.tmp / 'led').unlink()
+        self.env['FLIPEROS_GAME_PID'] = '0'
+        smw = self.roms / 'retroarch/snes9x/Super Mario World (USA).sfc'
+        smw.write_text('')
+        self.run_('launch', 'retroarch', '-L', 'x.so', str(smw))
+        self.run_('launch', 'groovymame')
+        self.run_('launch', 'groovymame', '-listxml')
+        self.assertEqual(self.lines('led', 1), ['LoadProfileByEmulator Super Mario World (USA) snes9x'])
+
+    def test_emulators_open_the_port_only_with_a_reader(self):
+        gm = (ROOT / 'config/fliperos-groovymame').read_text()
+        self.assertIn('"$outputs" installed; then\n  set -- -output network "$@"', gm)
+        x11 = (ROOT / 'config/fliperos-x11-run').read_text()
+        self.assertIn('netout=",network:NetworkOutput=yes"', x11)
+        self.assertIn('netout=(-outputs=net)', x11)
+        # A porta 8000 fica visivel na rede: nunca ligada no mame.ini da imagem.
+        self.assertNotRegex((ROOT / 'config/mame.ini').read_text(), r'(?m)^output\s')
+        for wrapper in ('fliperos-kms-run', 'fliperos-x11-run'):
+            text = (ROOT / 'config' / wrapper).read_text()
+            self.assertIn('"$outputs" launch "$@" < /dev/null > /dev/null 2>&1 &', text, wrapper)
+
+    def test_installed_into_the_image_and_the_extras(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-outputs" "$root/opt/fliperos/bin/fliperos-outputs"', ROOTFS)
+        self.assertIn('ledspicer-ppa.asc', ROOTFS)
+        self.assertIn(b'BEGIN PGP PUBLIC KEY BLOCK', (ROOT / 'config/ledspicer-ppa.asc').read_bytes())
+        self.assertIn('hotr|Hook Of The Reaper', EXTRAS)
+        self.assertIn('ledspicer|LEDSpicer', EXTRAS)
+        self.assertIn('HOTR_PACKAGES="wine wine64 xvfb xauth"', EXTRAS)
+        self.assertIn('KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="input", MODE="0660"', EXTRAS)
+        self.assertIn('signed-by=/etc/apt/keyrings/ledspicer.asc', EXTRAS)
+        # Nenhum dos dois vem na imagem.
+        for name in ('reaper', 'hotr', 'ledspicer', 'xvfb'):
+            self.assertNotIn(name, MKISO.lower())
+        self.assertIn('cfglink hotr "$HOME/hotr"', (ROOT / 'config/fliperos-roms').read_text())
 
 
 class ZeDMDTests(unittest.TestCase):

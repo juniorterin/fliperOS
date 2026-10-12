@@ -159,4 +159,7 @@ cfglink attractmode "$HOME/.attract"
 cfglink es-de "$HOME/ES-DE"
 cfglink pegasus "$HOME/.config/pegasus-frontend"
 cfglink skyscraper "$HOME/.skyscraper"
+# Hook Of The Reaper: as configuracoes, os arquivos de jogo e os .ini do
+# MAMEHooker (config/fliperos-outputs).
+cfglink hotr "$HOME/hotr"
 exit 0

@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+# As saidas dos jogos (lampadas de start, recuo de pistola, motores,
+# mostradores) para pistolas, placas controladoras e LEDs, como o MAMEHooker
+# faz no Windows.
+#
+# O GroovyMAME, o Flycast e o Supermodel publicam as saidas pela rede (TCP
+# 8000, linhas "nome = valor", o protocolo que o MAMEHooker le). Dois
+# programas as leem, cada um um extra do Setup > Extras, e podem ficar juntos
+# (o MAME aceita varios clientes):
+#
+#   - Hook Of The Reaper (hotr.6bolt.com), o sucessor do MAMEHooker: recuo e
+#     luzes de pistolas (serial e USB HID), placas Ultimarc, e os .ini do
+#     MAMEHooker. E um programa de Windows, sem versao de Linux e com o
+#     codigo ainda fechado: baixado do site dele para ~/hotr e aberto pelo
+#     Wine. Abre com o jogo, numa tela virtual (Xvfb) para nenhuma janela
+#     dele cair em cima do jogo, e fecha com ele. As pistolas se configuram
+#     pelo desktop (menu Preferences > Hook Of The Reaper).
+#   - LEDSpicer (github.com/meduzapat/LEDSpicer, do PPA dele): acende os LEDs
+#     dos botoes em placas prontas (Ultimarc, LED-Wiz, Howler, Adalight). E um
+#     servico (ledspicerd); aqui ele so e avisado do jogo que abriu e fechou.
+#
+# Sem nenhum dos dois os emuladores nem abrem a porta, que fica visivel na
+# rede e aceita o comando de pausa.
+#
+#   fliperos-outputs installed [hotr|ledspicer]   status 0 se ha um leitor instalado (ou aquele)
+#   fliperos-outputs fetch-hotr [--progress]      baixa o Hook Of The Reaper (de novo: atualiza, as configuracoes ficam)
+#   fliperos-outputs hotr                         abre o Hook Of The Reaper na tela (para configurar as pistolas)
+#   fliperos-outputs launch PROGRAMA [ARGS...]    o jogo da linha de comando abriu (pelos lancadores)
+set -uo pipefail
+# Hook Of The Reaper, fixado por hash (o site so tem a versao mais nova de
+# cada serie: versao nova, hash novo).
+HOTR_VERSION="1.3.5C"
+HOTR_SHA256=${HOTR_SHA256:-78dfbaff8d00e92de2d052469bb382efa99fd60295dc921ccb668260edc52077}
+hotr_url=${HOTR_URL:-https://hotr.6bolt.com/pmwiki.php/Releases/HOTRv1p3p5C?action=downloadman&upname=HookOfTheReaper_v1p3p5C.zip}
+hotr_dir=${HOTR_DIR:-/home/fliperos/hotr}
+wine=${FLIPEROS_WINE:-/usr/bin/wine}
+emitter=${FLIPEROS_LEDSPICER_EMITTER:-/usr/bin/emitter}
+roms=${ROMS_DIR:-/home/fliperos/roms}
+user=${FLIPEROS_USER:-fliperos}
+log=${FLIPEROS_LOGS:-/opt/fliperos/logs}/hotr.log
+self=$(readlink -f -- "${BASH_SOURCE[0]}")
+# Um prefixo so dele, de 64 bits (o programa e Qt6).
+export WINEPREFIX="${HOTR_WINEPREFIX:-/home/fliperos/.local/share/fliperos/wine-hotr}"
+export WINEARCH=win64 WINEDEBUG="${WINEDEBUG:--all}"
+
+progress=0
+say() {
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+fail() {
+  if ((progress)); then printf '@fail %s|%s\n' "Hook Of The Reaper" "$1"; else printf 'fliperos-outputs: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+hotr_installed() {
+  [[ -f $hotr_dir/HookOfTheReaper.exe && -x $wine ]]
+}
+
+installed() {
+  case ${1:-} in
+    hotr) hotr_installed ;;
+    ledspicer) [[ -x $emitter ]] ;;
+    *) hotr_installed || [[ -x $emitter ]] ;;
+  esac
+}
+
+# fetch_hotr: o pacote do site dele em ~/hotr. As configuracoes (data/*.hor:
+# as pistolas, os jogadores) e os .ini que a pessoa pos ficam: so entram os
+# arquivos que ainda nao existem nessas pastas.
+fetch_hotr() {
+  local zip rc
+  [[ ${1:-} == --progress ]] && progress=1
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    mkdir -p "$hotr_dir" && chown "$user:" "$hotr_dir" || fail "could not create $hotr_dir"
+    runuser -u "$user" -- env FLIPEROS_AS_ROOT=1 "$self" fetch-hotr "$@" || exit 1
+    return 0
+  fi
+  mkdir -p "$hotr_dir" 2> /dev/null && [[ -w $hotr_dir ]] || fail "$hotr_dir is not writable"
+  zip="$hotr_dir/.hotr.zip"
+  say 60 "Downloading Hook Of The Reaper $HOTR_VERSION from hotr.6bolt.com"
+  if ! curl -sSfL --retry 3 --max-time 900 -o "$zip" "$hotr_url" >&2; then
+    rm -f "$zip"
+    fail "the download failed (no network?)"
+  fi
+  if ! echo "$HOTR_SHA256  $zip" | sha256sum -c --quiet - >&2; then
+    rm -f "$zip"
+    fail "the downloaded file is not the Hook Of The Reaper $HOTR_VERSION package"
+  fi
+  say 85 "Unpacking Hook Of The Reaper"
+  python3 - "$zip" "$hotr_dir" >&2 << 'PY'
+import os
+import sys
+import zipfile
+
+src, dest = sys.argv[1:3]
+with zipfile.ZipFile(src) as z:
+    for info in z.infolist():
+        name = info.filename
+        target = os.path.realpath(os.path.join(dest, name))
+        if not target.startswith(os.path.realpath(dest) + os.sep):
+            sys.exit('unsafe path in the package: ' + name)
+        # As configuracoes e os .ini da pessoa ficam.
+        keep = name.startswith('ini/') or (name.startswith('data/') and name.endswith('.hor'))
+        if keep and os.path.exists(target):
+            continue
+        z.extract(info, dest)
+PY
+  rc=$?
+  rm -f "$zip"
+  ((rc == 0)) && [[ -f $hotr_dir/HookOfTheReaper.exe ]] || fail "could not unpack Hook Of The Reaper into $hotr_dir"
+  # O TryExec do atalho do desktop (fliperos-hotr.desktop).
+  chmod 755 "$hotr_dir/HookOfTheReaper.exe"
+  say 92 "Preparing Wine for Hook Of The Reaper"
+  mkdir -p "$(dirname "$WINEPREFIX")"
+  [[ -d $WINEPREFIX ]] || xvfb-run -a "$wine" wineboot -i > /dev/null 2>&1 ||
+    fail "Wine could not create its folder ($WINEPREFIX)"
+  [[ -n ${FLIPEROS_AS_ROOT:-} ]] && return 0
+  say 100 "Hook Of The Reaper $HOTR_VERSION installed"
+}
+
+# hotr_running: ja ha um aberto (o groovymame do fliperos-kms-run ainda passa
+# pelo fliperos-x11-run; ou a pessoa o deixou aberto no desktop).
+hotr_running() {
+  pgrep -u "$(id -u)" -f 'HookOfTheReaper\.exe' > /dev/null 2>&1
+}
+
+# hotr_game PID: o Hook Of The Reaper ate o processo PID (o jogo) acabar.
+# Numa tela virtual: ele e um programa de janela, e um aviso dele (pistola
+# sem jogador) cairia em cima do jogo.
+hotr_game() {
+  local pid=$1
+  hotr_installed && command -v xvfb-run > /dev/null || return 0
+  hotr_running && return 0
+  { : > "$log"; } 2> /dev/null || log=/dev/null
+  (
+    cd "$hotr_dir" || exit 0
+    setsid xvfb-run -a "$wine" HookOfTheReaper.exe &
+    hook=$!
+    if [[ $pid =~ ^[0-9]+$ ]] && ((pid > 1)); then
+      tail --pid="$pid" -f /dev/null
+      "${wine%/*}/wineserver" -k 2> /dev/null
+      kill -- "-$hook" 2> /dev/null
+    fi
+    wait "$hook"
+  ) < /dev/null > "$log" 2>&1 &
+}
+
+# ledspicer PID ROM PLATAFORMA: o perfil do jogo no LEDSpicer (os arcades sao
+# a plataforma "arcade", de onde ele tira os botoes e as cores do jogo), ate
+# o processo PID acabar. So com o servico dele aberto.
+ledspicer() {
+  local pid=$1
+  [[ -x $emitter && -n $2 ]] || return 0
+  pgrep -x ledspicerd > /dev/null 2>&1 || return 0
+  (
+    "$emitter" LoadProfileByEmulator "$2" "$3"
+    if [[ $pid =~ ^[0-9]+$ ]] && ((pid > 1)); then
+      tail --pid="$pid" -f /dev/null
+      "$emitter" FinishLastProfile
+    fi
+  ) < /dev/null > /dev/null 2>&1 &
+}
+
+# launch PROGRAMA [ARGS...]: a linha de comando que o fliperos-kms-run ou o
+# fliperos-x11-run recebeu. O jogo e o ultimo argumento (um arquivo de ~/roms,
+# ou o nome do set no GroovyMAME e no Model 2). O Hook Of The Reaper so para
+# os emuladores que publicam as saidas.
+launch() {
+  local prog last rom="" platform=arcade folder pid=${FLIPEROS_GAME_PID:-$PPID}
+  (($# >= 1)) || return 0
+  prog=${1##*/}
+  case $prog in
+    groovymame | flycast | supermodel) hotr_game "$pid" ;;
+  esac
+  (($# >= 2)) || return 0
+  last=${*: -1}
+  case $prog in
+    groovymame | fliperos-model2)
+      [[ $last == -* ]] && return 0
+      ;;
+    *)
+      [[ -f $last ]] || return 0
+      folder=${last#"$roms"/}
+      folder=${folder%%/*}
+      case $folder in
+        mame | naomi | naomi2 | atomiswave | model2 | model3 | fightcade) ;;
+        retroarch)
+          # ~/roms/retroarch/<core>: os cores de arcade; os outros, o core.
+          folder=${last#"$roms"/retroarch/}
+          folder=${folder%%/*}
+          case $folder in
+            fbneo | fbalpha* | mame*) ;;
+            *) platform=$folder ;;
+          esac
+          ;;
+        *) platform=$folder ;;
+      esac
+      ;;
+  esac
+  rom=${last##*/}
+  ledspicer "$pid" "${rom%.*}" "$platform"
+}
+
+case ${1:-} in
+  installed)
+    installed "${2:-}"
+    exit $?
+    ;;
+  fetch-hotr)
+    shift
+    fetch_hotr "$@"
+    ;;
+  hotr)
+    hotr_installed || { echo "fliperos-outputs: Hook Of The Reaper is not installed (Setup > Extras)" >&2; exit 1; }
+    [[ -n ${DISPLAY:-} ]] || { echo "fliperos-outputs: open it from the desktop (Preferences > Hook Of The Reaper)" >&2; exit 1; }
+    cd "$hotr_dir" || exit 1
+    exec "$wine" HookOfTheReaper.exe
+    ;;
+  launch)
+    shift
+    installed || exit 0
+    launch "$@"
+    ;;
+  *)
+    sed -n '/^#   fliperos-outputs /p' "$0" | sed 's/^# *//' >&2
+    exit 1
+    ;;
+esac
+exit 0

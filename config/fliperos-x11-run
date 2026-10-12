@@ -24,6 +24,10 @@ name=$(basename -- "$1")
 # sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.
 pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
 [[ -x $pixelcade ]] && { "$pixelcade" launch "$@" < /dev/null > /dev/null 2>&1 & }
+# As saidas do jogo para placas e LEDs (config/fliperos-outputs; sem o
+# Hook Of The Reaper e o LEDSpicer instalados, nada).
+outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
+[[ -x $outputs ]] && { "$outputs" launch "$@" < /dev/null > /dev/null 2>&1 & }
 
 if [[ -z $mode ]]; then
   column=3
@@ -64,7 +68,10 @@ case $name in
     # A BIOS em ~/bios/dc (fliperos-roms): o emu.cfg tem o Dreamcast.BiosPath,
     # e a variavel vale tambem num emu.cfg recriado pelo Flycast.
     export FLYCAST_BIOS_PATH="${FLYCAST_BIOS_PATH:+$FLYCAST_BIOS_PATH:}$HOME/bios/dc"
-    set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch" "${@:2}"
+    # As saidas do jogo pela rede, se ha quem as leia (config/fliperos-outputs).
+    netout=""
+    [[ -x $outputs ]] && "$outputs" installed && netout=",network:NetworkOutput=yes"
+    set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch$netout" "${@:2}"
     # Jogos de varias placas NAOMI (Games[].multiboard no naomi_roms.cpp do
     # Flycast: esquerda, centro e direita) com 3 monitores e os jogos de
     # varias telas ligados: uma placa em cada monitor (fliperos-multiscreen).
@@ -169,7 +176,10 @@ case $name in
     if [[ $step == 1.5 || $step == 2.* ]] && [[ ${FLIPEROS_SUPERMODEL_PPC:-75} != 0 ]]; then
       ppc=(-ppc-frequency="${FLIPEROS_SUPERMODEL_PPC:-75}")
     fi
-    set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${ppc[@]}" "${@:2}"
+    # As saidas do jogo pela rede, se ha quem as leia (config/fliperos-outputs).
+    netout=()
+    [[ -x $outputs ]] && "$outputs" installed && netout=(-outputs=net)
+    set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${ppc[@]}" "${netout[@]}" "${@:2}"
     ;;
   fliperos-model2 | sm2-emu)
     cfg=${XDG_CONFIG_HOME:-$HOME/.config}/sm2-emu
