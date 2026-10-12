@@ -359,22 +359,31 @@ def versus_frame(left, wins_left, wins_right, right, score_left, score_right):
         return '{:,}'.format(int(text)) if text.isdigit() else ''
 
     def corner(text, y, color, on_right):
+        # Cada lado tem a sua metade: um nome comprido perde letras do fim.
+        while text and width(text, small) > W // 2 - 3:
+            text = text[:-1].rstrip()
         if text:
             draw_line(draw, text, small, y, color, x=W - width(text, small) - 1 if on_right else 1)
 
     corner(left, 0, COLOR['system'], False)
     corner(right, 0, COLOR['game'], True)
     if wins_left.isdigit() and wins_right.isdigit():
-        big = font(20)
-        x_mark = font(11)
+        # As vitorias embaixo dos nomes: maiores quando nao ha pontos, que
+        # ficam com a ultima linha.
+        points = group(score_left) or group(score_right)
+        big = font(15 if points else 20)
+        x_mark = font(9 if points else 11)
+        top = 10 if points else 12
         gap = 6
+        height = draw.textbbox((0, 0), '0', font=big)
+        height = height[3] - height[1]
         total = width(wins_left, big) + width('x', x_mark) + width(wins_right, big) + 2 * gap
         x = (W - total) // 2
-        draw_line(draw, wins_left, big, 5, COLOR['select'], x=x)
+        draw_line(draw, wins_left, big, top, COLOR['select'], x=x)
         x += width(wins_left, big) + gap
-        draw_line(draw, 'x', x_mark, 11, (98, 114, 164), x=x)
+        draw_line(draw, 'x', x_mark, top + height // 2 - 3, (98, 114, 164), x=x)
         x += width('x', x_mark) + gap
-        draw_line(draw, wins_right, big, 5, COLOR['select'], x=x)
+        draw_line(draw, wins_right, big, top, COLOR['select'], x=x)
         corner(group(score_left), H - 8, COLOR['system'], False)
         corner(group(score_right), H - 8, COLOR['game'], True)
     else:
