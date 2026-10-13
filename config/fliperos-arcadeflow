@@ -49,7 +49,10 @@ fail() {
 # jogo sem arquivo proprio na pasta, e num romset merged o clone esta dentro
 # do zip do pai (o GroovyMAME o abre pelo nome). A romlist do FliperOS so tem
 # o que esta na pasta, dessa forma ou com arquivo proprio.
-fliperos_prefs=(UPDATECHECK 1 OVERMENUBUTTON 1 REDCROSS 1)
+# O video do jogo sob o seletor no menor tempo do tema ("Video delay
+# multiplier" em 0.25x): ele espera 60 quadros (1 s) parado no jogo antes de
+# carregar o video, e mais uns 35 ate comecar a mostra-lo.
+fliperos_prefs=(UPDATECHECK 1 OVERMENUBUTTON 1 REDCROSS 1 THUMBVIDELAY 0)
 prefs() {
   printf '%s\n\n' "$version"
   printf '|%s|%s|\n' "${fliperos_prefs[@]}"

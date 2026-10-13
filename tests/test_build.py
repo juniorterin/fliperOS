@@ -3682,8 +3682,8 @@ class ArcadeflowTests(unittest.TestCase):
             # As opcoes do FliperOS: sem o aviso de versao nova, e o menu de
             # contexto no botao de escolher (o padrao do tema).
             self.assertEqual((theme / 'pref_layoutoptions.txt').read_text(),
-                             '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|1|\n|REDCROSS|1|\n')
-            self.assertEqual((theme / 'pref_fliperos.txt').read_text(), 'UPDATECHECK=1\nOVERMENUBUTTON=1\nREDCROSS=1\n')
+                             '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|1|\n|REDCROSS|1|\n|THUMBVIDELAY|0|\n')
+            self.assertEqual((theme / 'pref_fliperos.txt').read_text(), 'UPDATECHECK=1\nOVERMENUBUTTON=1\nREDCROSS=1\nTHUMBVIDELAY=0\n')
             # As telas do padrao de antes e as que o Attract-Mode Plus cria
             # (BasicPlus) passam para o tema; as de outro layout ficam.
             self.assertEqual(displays.read_text(),
@@ -3741,8 +3741,8 @@ class ArcadeflowTests(unittest.TestCase):
             for _ in range(2):
                 apply()
                 self.assertEqual(prefs.read_text(), '9.9\n\n|SMALLSCREEN|0| Small screen : Yes\n'
-                                 '|UPDATECHECK|1|\n|OVERMENUBUTTON|1|\n|REDCROSS|1|\n')
-                self.assertEqual(mark.read_text(), 'UPDATECHECK\nOVERMENUBUTTON\nUPDATECHECK=1\nOVERMENUBUTTON=1\nREDCROSS=1\n')
+                                 '|UPDATECHECK|1|\n|OVERMENUBUTTON|1|\n|REDCROSS|1|\n|THUMBVIDELAY|0|\n')
+                self.assertEqual(mark.read_text(), 'UPDATECHECK\nOVERMENUBUTTON\nUPDATECHECK=1\nOVERMENUBUTTON=1\nREDCROSS=1\nTHUMBVIDELAY=0\n')
                 self.assertEqual(layout.read_text(), head + '\tif (ttype == Transition.ToNewList && fe.list.clones_list) '
                                  'startfade(flowT.groupbg, 0.06, 3.0) // FliperOS\n' + body)
             prefs.write_text(before)
@@ -3822,7 +3822,7 @@ class ArcadeflowTests(unittest.TestCase):
             # Sem o arquivo das opcoes (apagado pelo "reset" do tema): refeito.
             prefs.unlink()
             screen('640', '240')
-            self.assertEqual(prefs.read_text(), '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|1|\n|REDCROSS|1|\n'
+            self.assertEqual(prefs.read_text(), '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|1|\n|REDCROSS|1|\n|THUMBVIDELAY|0|\n'
                              '|CUSTOMSIZE|320x240| Resolution W x H : Res\n')
             screen()
             self.assertFalse(mark.exists())

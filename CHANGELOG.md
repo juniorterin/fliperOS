@@ -28,6 +28,7 @@ The MAME ROM Cleaner works out of the box: `catver.ini`, `nplayers.ini` and `con
 - ES-DE: returning from a game no longer leaves the screen black, and the preview video no longer plays under the game
 - ES-DE: Model 2, Model 3 and the MAME cores show their own logo in place of the arcade one
 - Attract-Mode Plus: **Arcadeflow** is the default theme. Setup > Frontend downloads it (it has no license, so it is not in the image); without network the displays stay on Basic. The select button opens the game on the first press
+- Attract-Mode Plus: Arcadeflow starts the video of the game under the selector sooner (the theme's "Video delay multiplier" at 0.25x: a quarter of a second in place of one before it loads the video)
 - Attract-Mode Plus: selecting games no longer leaves a zombie process behind each one
 - SM2-Emu: FliperOS's patch adds recoil, ammo, life and credits to the outputs of the gun games (Virtua Cop, Virtua Cop 2, House of the Dead, Gunblade NY, Behind Enemy Lines, Rail Chase 2), credits to 21 games and each side's rounds to the fighters
 
