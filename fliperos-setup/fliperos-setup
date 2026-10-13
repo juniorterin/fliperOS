@@ -184,13 +184,20 @@ main() {
       # A configuracao de 240p dos frontends que ainda nao a tem (nenhum
       # esta aberto agora).
       frontends_240p
-      # Os padroes do Attract-Mode Plus: as telas no Arcadeflow, com as
-      # opcoes do FliperOS.
-      frontends_attract_defaults
+      if launcher_installed attractplus && [[ -d $ATTRACT_DIR/emulators ]]; then
+        # Os jogos copiados desde a ultima vez (pela rede, num disco): a
+        # pasta nova ganha a tela dela e a lista de cada pasta segue os
+        # arquivos. Com os padroes e as romlists refeitas, como abaixo.
+        frontends_attract
+      else
+        # Os padroes do Attract-Mode Plus: as telas no Arcadeflow, com as
+        # opcoes do FliperOS.
+        frontends_attract_defaults
+        # Uma romlist refeita desde a ultima vez: o Arcadeflow a le de novo.
+        frontends_arcadeflow_sync
+      fi
       # O Arcadeflow em 4:3 num modo de pixel largo (640x240).
       frontends_arcadeflow_screen
-      # Uma romlist refeita desde a ultima vez: o Arcadeflow a le de novo.
-      frontends_arcadeflow_sync
       return 0
       ;;
     --session-end)

@@ -2162,6 +2162,43 @@ class FrontendsTests(Base):
                          ["runuser -u ninguem", "--build-romlist %s -o %s" % (snes, snes)])
         self.assertTrue((attract / "emulators" / "MAME.cfg").exists())
 
+    def test_attract_game_list_follows_the_folder(self):
+        # A lista feita com a copia dos jogos pela metade ficava com os
+        # primeiros para sempre: agora o jogo novo entra (com o nome do
+        # arquivo), o que saiu da pasta sai e as outras linhas ficam.
+        env, roms = self.frontends_env()
+        attract = self.env.dir / "attract"
+        self.env.stub("runuser", "exit 0")
+        snes = "Super Nintendo Entertainment System (Snes9x)"
+        folder = roms / "retroarch" / "snes9x"
+        for name in ("Zelda (USA).SMC", "Copiando (USA).sfc.part", "capa.png"):
+            (folder / name).write_text("rom")
+        (attract / "romlists").mkdir(parents=True)
+        head = "#Name;Title;Emulator;CloneOf;Year\n"
+        mario = "Super Mario World (USA);Super Mario World;%s;;1990\n" % snes
+        snes_list = attract / "romlists" / (snes + ".txt")
+        snes_list.write_text(head + mario + "Apagado (USA);Apagado;%s;;1991\n" % snes)
+        # A de arcade com os nomes de verdade e do ROM List (sem os BIOS, com
+        # os clones sem arquivo): fica como esta.
+        mame = "#Name;Title;Emulator\nsf2;Street Fighter II;MAME\nsf2ce;Street Fighter II' CE;MAME\n"
+        (roms / "mame" / "neogeo.zip").write_text("bios")
+        (attract / "romlists" / "MAME.txt").write_text(mame)
+        self.env.out("frontends_configure attractplus", env)
+        self.assertEqual(snes_list.read_text(), head + mario + "Zelda (USA);Zelda (USA);%s;;\n" % snes)
+        self.assertEqual((attract / "romlists" / "MAME.txt").read_text(), mame)
+        # A de arcade so com nomes de arquivo (--build-romlist) segue a pasta.
+        (attract / "romlists" / "MAME.txt").write_text("#Name;Title;Emulator\nsf2;sf2;MAME\n")
+        # Nada mudou na pasta: a lista nao e regravada.
+        before = snes_list.stat().st_mtime_ns
+        self.env.out("frontends_configure attractplus", env)
+        self.assertEqual(snes_list.stat().st_mtime_ns, before)
+        self.assertEqual((attract / "romlists" / "MAME.txt").read_text(),
+                         "#Name;Title;Emulator\nsf2;sf2;MAME\nneogeo;neogeo;MAME\n")
+        # Um disco fora (a pasta nao existe): a lista fica.
+        snes_list.write_text(head + mario)
+        self.env.out('frontends_attract_refresh retroarch/snes9x "%s/fora" "%s"' % (roms, snes), env)
+        self.assertEqual(snes_list.read_text(), head + mario)
+
     def test_240p_settings_are_saved_once_on_a_15khz_monitor(self):
         # Num tubo de 15 kHz os frontends rodam em 320x240: o tema FliperOS
         # 240p de cada um ja fica escolhido, uma vez so; o que a pessoa mudar
@@ -2243,7 +2280,11 @@ class FrontendsTests(Base):
         main = (SETUP / "fliperos-setup").read_text()
         self.assertIn("latency_session_start\n      # A configuracao de 240p", main)
         self.assertIn("      frontends_240p\n", main)
-        self.assertIn("      frontends_arcadeflow_sync\n      return 0", main)
+        # Com o Attract-Mode Plus configurado, as listas seguem as pastas
+        # (frontends_attract, que tambem faz o que o else faz).
+        start = main.split("--session-start)")[1].split(";;")[0]
+        self.assertIn("        frontends_attract\n      else\n", start)
+        self.assertIn("        frontends_arcadeflow_sync\n      fi\n", start)
         self.assertIn("  frontends_240p\n", (ROOT / "tools/cabinet-update.sh").read_text())
 
     def test_chosen_frontend_is_configured(self):

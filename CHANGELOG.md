@@ -30,6 +30,7 @@ The MAME ROM Cleaner works out of the box: `catver.ini`, `nplayers.ini` and `con
 - Attract-Mode Plus: **Arcadeflow** is the default theme. Setup > Frontend downloads it (it has no license, so it is not in the image); without network the displays stay on Basic. The select button opens the game on the first press
 - Attract-Mode Plus: Arcadeflow starts the video of the game under the selector sooner (the theme's "Video delay multiplier" at 0.25x: a quarter of a second in place of one before it loads the video)
 - Attract-Mode Plus: selecting games no longer leaves a zombie process behind each one
+- Attract-Mode Plus: a game copied to a folder that already had its list shows up the next time the frontend opens, and a deleted one leaves. The list was made once and never looked at the folder again. An arcade list made by AttractPlus ROM List is still redone there
 - SM2-Emu: FliperOS's patch adds recoil, ammo, life and credits to the outputs of the gun games (Virtua Cop, Virtua Cop 2, House of the Dead, Gunblade NY, Behind Enemy Lines, Rail Chase 2), credits to 21 games and each side's rounds to the fighters
 
 **fliperos-setup changes:**

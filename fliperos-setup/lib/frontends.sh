@@ -437,8 +437,70 @@ frontends_attract_system() {
   name=$(scraper_attract_prepare "$1" "$2" "$3") || return 1
   if [[ ! -s $ATTRACT_DIR/romlists/$name.txt ]] && have "$ATTRACTPLUS"; then
     runuser -u "$FLIPEROS_USER" -- "$ATTRACTPLUS" --build-romlist "$name" -o "$name" >> "$FLIPEROS_LOG" 2>&1
+  else
+    frontends_attract_refresh "$1" "$2" "$name"
   fi
   printf '%s\n' "$name"
+}
+
+# frontends_attract_refresh CHAVE PASTA EMULADOR: a lista que ja existe segue
+# a pasta. O jogo copiado depois de a lista ser feita entra nela, com o nome
+# do arquivo (como no --build-romlist), e o que saiu da pasta sai da lista; as
+# outras linhas ficam como estao (o titulo e o ano do Scraper). Vale o romext
+# do emulador, na pasta e nao nas de dentro dela, como o Attract-Mode le.
+# A lista de arcade com os nomes de verdade (ROM List, Scraper) nao: ela nao
+# tem os BIOS da pasta e tem os clones sem arquivo de um romset merged; quem
+# a refaz e o Setup > AttractPlus ROM List. Uma pasta que nao existe agora
+# (um disco fora) ou sem nenhum jogo nao mexe na lista.
+frontends_attract_refresh() {
+  local key=$1 dir=$2 name=$3 list cfg exts tmp
+  list="$ATTRACT_DIR/romlists/$name.txt"
+  cfg="$ATTRACT_DIR/emulators/$name.cfg"
+  [[ -s $list && -f $cfg && -d $dir ]] || return 0
+  if scraper_arcade "$key" && awk -F';' '!/^#/ && NF > 1 && $2 != $1 { f = 1; exit } END { exit !f }' "$list"; then
+    return 0
+  fi
+  exts=$(awk '$1 == "romext" { sub(/^romext[ \t]+/, ""); sub(/[ \t\r]+$/, ""); print; exit }' "$cfg")
+  [[ -n $exts ]] || return 0
+  tmp=$(mktemp) || return 0
+  if find -H "$dir" -maxdepth 1 -type f ! -name '.*' ! -name '*;*' -printf '%f\n' 2> /dev/null | LC_ALL=C sort |
+    awk -v exts="$exts" -v list="$list" -v emulator="$name" '
+      BEGIN { n = split(tolower(exts), ext, ";"); fields = 21 }
+      {
+        for (i = 1; i <= n; i++) {
+          l = length(ext[i])
+          if (l && length($0) > l && tolower(substr($0, length($0) - l + 1)) == ext[i]) {
+            rom = substr($0, 1, length($0) - l)
+            if (!(rom in have)) { have[rom] = 1; order[++roms] = rom }
+            break
+          }
+        }
+      }
+      END {
+        if (!roms) exit 1
+        while ((getline line < list) > 0) {
+          if (line ~ /^#/) {
+            if (!lines) fields = split(line, f, ";")
+          } else if (line !~ /^[ \t\r]*$/) {
+            split(line, f, ";")
+            if (!(f[1] in have)) continue
+            seen[f[1]] = 1
+          }
+          out[++lines] = line
+        }
+        for (i = 1; i <= lines; i++) print out[i]
+        for (i = 1; i <= roms; i++) {
+          if (order[i] in seen) continue
+          line = order[i] ";" order[i] ";" emulator
+          for (j = 3; j < fields; j++) line = line ";"
+          print line
+        }
+      }' > "$tmp" && ! cmp -s "$tmp" "$list"; then
+    cat "$tmp" > "$list"
+    log_info "Attract-Mode Plus: lista $name acertada com a pasta ($(grep -cv '^#' "$list") jogos)"
+  fi
+  rm -f "$tmp"
+  return 0
 }
 
 # ── ROM List do Attract-Mode Plus ────────────────────────────────
