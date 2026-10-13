@@ -207,6 +207,13 @@ screen_wifi() {
     UI_STATUS=$(status_line)
     speak "Connected to the network."
     ui_msg "Wi-Fi" "Connected to $ssid." "" "IP: $(net_ips)"
+    # A rede acabou de chegar: o update do FliperOS, que o boot so procura
+    # com ela no ar, e oferecido ja (sem nenhum pendente, nenhuma tela). Na
+    # midia de instalacao nao: o update e para o disco instalado.
+    if ! is_live; then
+      ui_info "FliperOS update" "Checking for FliperOS updates..."
+      screen_update_check
+    fi
   else
     ui_msg "Wi-Fi" "Could not connect to $ssid." "" "Check the password and the signal (details in the log)."
   fi

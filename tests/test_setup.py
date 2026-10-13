@@ -2529,6 +2529,37 @@ class RomCleanerTests(Base):
                                     script="ui_menu() { echo apply; }; screen_update_check")
         self.assertIn("The update did not finish.", out)
 
+    def test_wifi_connected_checks_for_the_update_right_away(self):
+        # O boot so procura o update com a rede no ar: quem liga o Wi-Fi pelo
+        # Setup e perguntado na hora, sem esperar o proximo boot.
+        script = """
+            source %s/screens/setup-menu.sh
+            net_wifi_devices() { echo wlan0; }
+            net_scan() { echo 'Casa|80|WPA2'; }
+            net_connect() { return ${CONNECT_RC:-0}; }
+            net_ips() { echo 192.168.1.2; }
+            status_line() { :; }
+            speak() { :; }
+            sleep() { :; }
+            ui_info() { printf 'info:%%s\\n' "$*"; }
+            ui_input() { echo senha; }
+            ui_menu() { [[ $1 == Wi-Fi ]] && echo Casa || { echo "menu:$1" >&2; echo later; }; }
+            is_live() { return ${LIVE:-1}; }
+            screen_wifi 0
+        """ % SETUP
+        plan = "pending=1\nchanged=0\nexact=yes\n"
+        out, calls = self.update_screen("1\tno\tFix menu\n", plan, script=script)
+        self.assertIn("msg:Wi-Fi Connected to Casa.", out)
+        self.assertLess(out.index("Connected to Casa"), out.index("info:FliperOS update Checking for FliperOS updates..."))
+        self.assertIn("menu:FliperOS update", out)
+        self.assertEqual(calls.split("\n")[0], "check")
+        # Sem conectar, ou na midia de instalacao: nao procura.
+        for change in ("CONNECT_RC=1", "LIVE=0"):
+            (self.env.dir / "upd.calls").unlink(missing_ok=True)
+            out, calls = self.update_screen("1\tno\tFix menu\n", plan, script=change + "\n" + script)
+            self.assertEqual(calls, "")
+            self.assertNotIn("menu:FliperOS update", out)
+
     def test_downloader_magnet_comes_filled_with_the_image_link(self):
         # Os links da imagem vem preenchidos: Enter usa o de cada tipo.
         out, calls, _ = self.downloader_screen("""
