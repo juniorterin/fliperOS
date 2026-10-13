@@ -3858,5 +3858,45 @@ class FoldersTests(Base):
             self.assertIn("path = /home/fliperos/%s\n" % name, smb)
 
 
+class ProgressScreenTests(Base):
+    """screens/progress.sh: a tela da barra cabe no console, sem rolar."""
+
+    def layout(self, rows, target, topbar=2):
+        out = self.env.out("""
+            source %s/lib/ui.sh
+            source %s/screens/progress.sh
+            UI_TOPBAR_ROWS=%d
+            _progress_layout %d %d
+            echo "$PL_TOP $PL_FOOT $PL_GAP_MSGS $PL_GAP_TITLE $PL_GAP_TARGET $PL_GAP_BAR $PL_MSGS"
+        """ % (SETUP, SETUP, topbar, rows, target))
+        top, foot, gmsgs, gtitle, gtarget, gbar, msgs = (int(n) for n in out.split())
+        used = topbar + top + 6 + gtitle + target + gtarget + gbar + gmsgs + msgs + foot
+        return used, (top, foot, gmsgs, gtitle, gtarget, gbar, msgs)
+
+    def test_full_layout_on_a_tall_console(self):
+        # 640x480i e 512x384: tudo.
+        for rows in (30, 24):
+            self.assertEqual(self.layout(rows, 1)[1], (1, 1, 1, 1, 1, 1, 3), rows)
+        self.assertEqual(self.layout(30, 0)[1], (1, 1, 1, 1, 0, 1, 3))
+
+    def test_never_taller_than_the_console(self):
+        # 640x240 com a fonte 8x16: 15 linhas. O Downloader (sem alvo) so perde
+        # a linha em branco de cima; a instalacao (com alvo), tres delas.
+        self.assertEqual(self.layout(15, 0), (15, (0, 1, 1, 1, 0, 1, 3)))
+        self.assertEqual(self.layout(15, 1), (15, (0, 0, 0, 1, 1, 1, 3)))
+        for rows in range(9, 31):
+            for target in (0, 1):
+                for topbar in (2, 3):
+                    used, parts = self.layout(rows, target, topbar)
+                    if rows >= topbar + 6 + target:
+                        self.assertLessEqual(used, rows, (rows, target, topbar, parts))
+        # As mensagens so saem depois de todas as linhas em branco.
+        self.assertEqual(self.layout(10, 0)[1], (0, 0, 0, 0, 0, 0, 2))
+
+    def test_the_last_line_has_no_line_break(self):
+        screen = (SETUP / "screens" / "progress.sh").read_text()
+        self.assertIn("""printf '  %s\\e[K' "$(ui_c "$C_COMMENT" "${footer:0:UI_COLS-3}")\"""", screen)
+
+
 if __name__ == "__main__":
     unittest.main()

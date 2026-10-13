@@ -28,36 +28,66 @@ _progress_line() {
   printf '  %s %s%*s %s\n' "$(ui_c "$C_PURPLE" "│")" "$text" $((inner - ${#plain})) "" "$(ui_c "$C_PURPLE" "│")"
 }
 
+# _progress_layout LINHAS TEM_ALVO decide o que cabe abaixo do topo num
+# console de LINHAS linhas (640x240 com a fonte 8x16 sao so 15): a tela nunca
+# passa da ultima linha, senao o terminal rola a cada redesenho. Sem espaco,
+# saem primeiro as linhas em branco (a de cima da caixa, a do rodape, as de
+# dentro) e depois as mensagens. Deixa em PL_* (0 ou 1) cada linha em branco
+# e em PL_MSGS quantas mensagens.
+PL_TOP=1 PL_FOOT=1 PL_GAP_MSGS=1 PL_GAP_TITLE=1 PL_GAP_TARGET=1 PL_GAP_BAR=1 PL_MSGS=3
+_progress_layout() {
+  local rows=$1 target=$2 name need
+  PL_TOP=1 PL_FOOT=1 PL_GAP_MSGS=1 PL_GAP_TITLE=1 PL_GAP_TARGET=$target PL_GAP_BAR=1 PL_MSGS=3
+  for name in PL_TOP PL_FOOT PL_GAP_MSGS PL_GAP_TITLE PL_GAP_TARGET PL_GAP_BAR PL_MSGS PL_MSGS PL_MSGS ""; do
+    # As bordas, o titulo, a barra, a etapa e o rodape ficam sempre.
+    need=$((UI_TOPBAR_ROWS + PL_TOP + 6 + PL_GAP_TITLE + target + PL_GAP_TARGET + PL_GAP_BAR + PL_GAP_MSGS + PL_MSGS + PL_FOOT))
+    ((need <= rows)) && break
+    case $name in
+      PL_MSGS) PL_MSGS=$((PL_MSGS - 1)) ;;
+      ?*) printf -v "$name" 0 ;;
+    esac
+  done
+}
+
 _progress_draw() {
-  local title=$1 target=$2 pct=$3 step=$4 w inner barw full i
+  local title=$1 target=$2 pct=$3 step=$4 w inner barw full i skip
+  local footer=${PROGRESS_FOOTER:-Please wait. Do not turn off the computer.}
   shift 4
   w=$(ui_box_width)
   inner=$((w - 4))
   barw=$((inner - 6))
+  [[ $pct =~ ^[0-9]+$ ]] || pct=0
+  ((pct > 100)) && pct=100
   full=$((barw * pct / 100))
+  _progress_layout "$UI_ROWS" "$((${#target} > 0))"
+  # Com menos mensagens do que vieram, ficam as ultimas.
+  skip=$(($# > PL_MSGS ? $# - PL_MSGS : 0))
   {
     # Logo abaixo do topo (2 linhas, ou 3 com o status numa linha propria).
-    printf '\e[%d;1H' $((UI_TOPBAR_ROWS + 2))
+    printf '\e[%d;1H' $((UI_TOPBAR_ROWS + 1 + PL_TOP))
     printf '  %s\n' "$(ui_c "$C_PURPLE" "╭$(_repeat ─ $((w - 2)))╮")"
     _progress_line "$(ui_c "$C_PINK" "$title")" "$inner"
-    _progress_line "" "$inner"
+    ((PL_GAP_TITLE)) && _progress_line "" "$inner"
     if [[ -n $target ]]; then
       _progress_line "$(ui_c "$C_CYAN" "Target:") $target" "$inner"
-      _progress_line "" "$inner"
+      ((PL_GAP_TARGET)) && _progress_line "" "$inner"
     fi
     _progress_line "$(ui_c "$C_PURPLE" "$(_repeat █ "$full")")$(ui_c "$C_COMMENT" "$(_repeat ░ $((barw - full)))") $(ui_c "$C_ORANGE" "$(printf '%4s' "$pct%")")" "$inner"
-    _progress_line "" "$inner"
+    ((PL_GAP_BAR)) && _progress_line "" "$inner"
     _progress_line "$step" "$inner"
-    _progress_line "" "$inner"
-    for i in 0 1 2; do
-      if ((i < $#)); then
-        _progress_line "$(ui_c "$C_COMMENT" "${*:i+1:1}")" "$inner"
+    ((PL_GAP_MSGS)) && _progress_line "" "$inner"
+    for ((i = 0; i < PL_MSGS; i++)); do
+      if ((skip + i < $#)); then
+        _progress_line "$(ui_c "$C_COMMENT" "${*:skip+i+1:1}")" "$inner"
       else
         _progress_line "" "$inner"
       fi
     done
     printf '  %s\n' "$(ui_c "$C_PURPLE" "╰$(_repeat ─ $((w - 2)))╯")"
-    printf '\n  %s\e[K\n' "$(ui_c "$C_COMMENT" "${PROGRESS_FOOTER:-Please wait. Do not turn off the computer.}")"
+    ((PL_FOOT)) && printf '\e[K\n'
+    # Sem quebra de linha no fim, e cortado na largura do console: na ultima
+    # linha, uma quebra (ou o texto dobrando) rolaria a tela.
+    printf '  %s\e[K' "$(ui_c "$C_COMMENT" "${footer:0:UI_COLS-3}")"
   } > /dev/tty
 }
 
