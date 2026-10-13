@@ -11,6 +11,7 @@ screen_setup_menu() {
       "video|Video Setup" \
       "audio|Audio Setup" \
       "network|Network Setup" \
+      "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
       "frontend|Frontend" \
       "splash|Splash screen (boot theme)" \
       "extras|Extras (Wine, Steam, Heroic, Pixelcade, ZeDMD)" \
@@ -21,7 +22,6 @@ screen_setup_menu() {
       "downloader|Downloader (MAME ROM/CHD torrent, free games)" \
       "folders|Folders (custom folders, external disks)" \
       "quirks|Quirks (USB controller fixes)" \
-      "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))" \
       "update|System Update" \
       "return|Return") || return 0
@@ -30,6 +30,7 @@ screen_setup_menu() {
       video) screen_video_setup ;;
       audio) screen_audio ;;
       network) screen_network ;;
+      joysticks) screen_joysticks ;;
       frontend) screen_frontend ;;
       splash) screen_splash ;;
       extras) screen_extras ;;
@@ -40,7 +41,6 @@ screen_setup_menu() {
       downloader) screen_downloads ;;
       folders) screen_folders ;;
       quirks) screen_quirks ;;
-      joysticks) screen_joysticks ;;
       debug) screen_debug ;;
       update) screen_update ;;
       return) return 0 ;;

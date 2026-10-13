@@ -59,6 +59,18 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   for ((i = 2; i < $#; i++)); do
     if [[ ${!i} == -L || ${!i} == --libretro ]]; then next=$((i + 1)) core=${!next}; fi
   done
+  # Setup > Joysticks > Buttons layout: nos cores MAME (o botao N do painel e
+  # o botao N do jogo, config/retroarch-remaps), os binds do numero de botoes
+  # deste jogo, por cima do buttons.cfg.
+  game_buttons=${FLIPEROS_GAME_BUTTONS:-/var/lib/fliperos/game-buttons.txt}
+  case ${core##*/} in
+    mame_libretro.so | mame2010_libretro.so)
+      if [[ -f $buttons && -f $game_buttons ]]; then
+        count=$(awk -v g="${game%.*}" '$1 == g { print $2; exit }' "$game_buttons")
+        [[ -n $count && -f ${buttons%.cfg}-$count.cfg ]] && appendconfig+="|${buttons%.cfg}-$count.cfg"
+      fi
+      ;;
+  esac
   # O core do FBNeo so abre um set de console (Mega Drive, Master System...)
   # numa pasta com o nome do sistema; solto na pasta dos arcades, como na do
   # Fightcade, fechava em "romset is unknown". O config/fliperos-fbneo acha

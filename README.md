@@ -215,6 +215,12 @@ It appears when you leave the frontend (Esc). The title shows the cabinet's name
   - *Connect to a Wi-Fi network*: the list of networks with their signal; choose one and type the password;
   - *Connect to a hidden network (type the SSID)*: for a network that doesn't appear in the list;
   - *Network status*: the connection and the IP address.
+- **Joysticks (GunCon 2, wheel, LPT)**:
+  - *Button mapping (all emulators)*: maps each player's controls once for every emulator (step 8);
+  - *Buttons layout (games of 1 to 5 buttons)*: where the buttons of a game go on the panel, by how many buttons the game uses: a 4-button game as 1 2 on top and 3 4 below, or 1 3 on top and 2 4 below. For GroovyMAME and the MAME cores of RetroArch;
+  - *Calibrate GunCon 2 (light gun)*: shoot the top-left and bottom-right targets, then the center one to check;
+  - *Calibrate wheel, pedals or analog stick*: the limits and center of each axis;
+  - *LPT joysticks (parallel port)*: old controllers on the parallel port: gamepad adapter (NES, SNES, N64, PlayStation), DB9 adapter (Atari, Amiga, Sega) or TurboGraFX interface (up to 7 joysticks). *Joysticks found now* shows what was detected and *Turn off* disables it.
 - **Frontend**: what opens every time the cabinet is turned on: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, the LXDE desktop or the FliperOS Setup itself. What isn't installed is installed (or downloaded) from here. Choosing a frontend also puts every game folder into it, so choose it again whenever a folder gets its first games. *Add a custom frontend* adds another program by its command, and *Edit or delete a custom frontend* changes or removes it. See [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends).
 - **Splash screen (boot theme)**: the picture shown while the cabinet boots. Choose a theme to see a 10-second *Preview* or to *Use at boot*. Themes are folders in `~/splashscreen` (the `splashscreen` share on the network); more on [Gnome-look](https://www.gnome-look.org/browse?cat=108&ord=latest).
 - **Extras (Wine, Steam, Heroic)**: programs left out of the ISO to keep the download small, installed over the internet: Wine (needed by some Fightcade 2 emulators), Steam and Heroic (GOG games).
@@ -235,11 +241,6 @@ It appears when you leave the frontend (Esc). The title shows the cabinet's name
   - *Free games (open-source homebrew)*: downloads free homebrew games to the RetroArch folders, so the frontend has something to show.
 - **Folders (custom folders, external disks)**: the folders FliperOS uses (`roms`, `bios`, `media`, `splashscreen`) and the ones inside them: each emulator, each RetroArch core, each type of art. Choose one and *Add a custom folder* to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): `~/roms/mame` becomes a link to it and the folder used until then is kept as `~/roms/old-mame`. Each folder can point to a different place. *Unlink the custom folder* brings the previous one back.
 - **Quirks (USB controller fixes)**: fixes for USB encoders that arrive wrong (a dual encoder showing up as a single player, a controller that freezes). *Add a quirk* asks for a name and a code; *USB devices connected now* shows the codes of what is plugged in; choosing a quirk in the list deletes it. Applies after a reboot. See [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
-- **Joysticks (GunCon 2, wheel, LPT)**:
-  - *Button mapping (all emulators)*: maps each player's controls once for every emulator (step 8);
-  - *Calibrate GunCon 2 (light gun)*: shoot the top-left and bottom-right targets, then the center one to check;
-  - *Calibrate wheel, pedals or analog stick*: the limits and center of each axis;
-  - *LPT joysticks (parallel port)*: old controllers on the parallel port: gamepad adapter (NES, SNES, N64, PlayStation), DB9 adapter (Atari, Amiga, Sega) or TurboGraFX interface (up to 7 joysticks). *Joysticks found now* shows what was detected and *Turn off* disables it.
 - **Debug mode (on/off)**: off (the default), the boot shows only the splash and the messages of frontends and emulators are saved in `/opt/fliperos/logs`. On, every text appears on screen: the boot menu, the system messages and the emulator errors. Turn it on when a game doesn't open, to see why. Emulators follow it right away; the boot, after a reboot.
 - **System Update**: downloads and installs the updates of every Ubuntu package. The FliperOS updates themselves are offered at boot (step 7).
 

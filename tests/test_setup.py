@@ -1236,6 +1236,48 @@ class RetroArchSuperTests(Base):
         self.assertIn('crt_switch_resolution_super = "0"\n', cfg.read_text())
 
 
+class ButtonsLayoutTests(Base):
+    """Setup > Joysticks > Buttons layout: onde ficam no painel os botoes dos jogos de 1 a 5 botoes."""
+
+    def test_grid_and_saved_layout(self):
+        out = self.env.out
+        layout = self.env.etc / "buttons.layout"
+        # Sem nada gravado, o botao N na posicao N (1 2 3 em cima, 4 5 6 embaixo).
+        self.assertEqual(out("buttons_layout_get 3").strip(), "1 2 3")
+        self.assertEqual(out("buttons_layout_grid 1 2 3"), "[1]  [2]  [3]\n[ ]  [ ]  [ ]\n")
+        self.assertEqual(out("buttons_layout_grid 1 4 2 5"), "[1]  [3]  [ ]\n[2]  [4]  [ ]\n")
+        self.assertEqual(out("buttons_layout_grid"), "[ ]  [ ]  [ ]\n[ ]  [ ]  [ ]\n")
+        self.assertEqual(out("buttons_layout_row 1 2 4 5").strip(), "[1][2][ ] / [3][4][ ]")
+        out("buttons_layout_set 4 1 4 2 5; buttons_layout_set 2 4 5")
+        self.assertEqual(layout.read_text(), "2 4 5\n4 1 4 2 5\n")
+        self.assertEqual(out("buttons_layout_get 4").strip(), "1 4 2 5")
+        self.assertEqual(out("buttons_layout_get 5").strip(), "1 2 3 4 5")
+        # O padrao tira a linha; posicao repetida ou fora do painel nao grava.
+        out("buttons_layout_set 4 1 2 3 4")
+        self.assertEqual(layout.read_text(), "2 4 5\n")
+        for bad in ("3 1 1 2", "3 1 2", "2 1 7", "2 0 1"):
+            self.assertNotEqual(self.env.run("buttons_layout_set " + bad).returncode, 0, bad)
+        self.assertEqual(layout.read_text(), "2 4 5\n")
+
+    def test_apply_makes_the_game_table_and_saves_the_buttons_again(self):
+        d = self.env.dir
+        (d / "romclean").write_text('#!/bin/sh\necho "romclean $*" >> "%s/calls"\n' % d)
+        (d / "buttons").write_text('#!/bin/sh\necho "buttons $* $FLIPEROS_BUTTONS_LAYOUT $FLIPEROS_GAME_BUTTONS" '
+                                   '>> "%s/calls"\n' % d)
+        for name in ("romclean", "buttons"):
+            (d / name).chmod(0o755)
+        (d / "data").mkdir()
+        (d / "data" / "controls.xml").write_text("<dat/>")
+        self.env.out("buttons_layout_apply", {
+            "ROMCLEAN": str(d / "romclean"), "BUTTONS": str(d / "buttons"), "ROMCLEAN_DATA": str(d / "data"),
+            "GAME_BUTTONS": str(d / "games.txt"), "GROOVYMAME": "false", "ROMCLEAN_CACHE": str(d / "cache")})
+        calls = (d / "calls").read_text().splitlines()
+        self.assertEqual(calls[0], "romclean buttons --xml-command false -listxml --controls-xml %s --out %s"
+                         % (d / "data" / "controls.xml", d / "games.txt"))
+        self.assertEqual(calls[1], "buttons save %s %s %s" % (self.env.etc / "buttons.map",
+                                                              self.env.etc / "buttons.layout", d / "games.txt"))
+
+
 class LptTests(Base):
     """Joysticks na porta paralela: db9, gamecon e turbografx do kernel."""
 

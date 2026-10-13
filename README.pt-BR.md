@@ -215,6 +215,12 @@ Aparece quando você sai do frontend (Esc). O título mostra o nome do gabinete,
   - *Connect to a Wi-Fi network*: a lista de redes com o sinal; escolha uma e digite a senha;
   - *Connect to a hidden network (type the SSID)*: para uma rede que não aparece na lista;
   - *Network status*: a conexão e o IP.
+- **Joysticks (GunCon 2, wheel, LPT)**:
+  - *Button mapping (all emulators)*: mapeia os comandos de cada jogador uma vez para todos os emuladores (passo 8);
+  - *Buttons layout (games of 1 to 5 buttons)*: onde ficam no painel os botões de um jogo, pelo número de botões que ele usa: um jogo de 4 botões com 1 2 em cima e 3 4 embaixo, ou 1 3 em cima e 2 4 embaixo. Para o GroovyMAME e os cores MAME do RetroArch;
+  - *Calibrate GunCon 2 (light gun)*: atire no alvo de cima à esquerda e no de baixo à direita, depois no do centro para conferir;
+  - *Calibrate wheel, pedals or analog stick*: os limites e o centro de cada eixo;
+  - *LPT joysticks (parallel port)*: controles antigos na porta paralela: adaptador de gamepad (NES, SNES, N64, PlayStation), adaptador DB9 (Atari, Amiga, Sega) ou interface TurboGraFX (até 7 joysticks). *Joysticks found now* mostra o que foi detectado e *Turn off* desliga.
 - **Frontend**: o que abre toda vez que o gabinete liga: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, o desktop LXDE ou o próprio FliperOS Setup. O que não está instalado é instalado (ou baixado) daqui. Escolher um frontend também coloca nele todas as pastas de jogos, então escolha de novo sempre que uma pasta ganhar os primeiros jogos. *Add a custom frontend* cadastra outro programa pelo comando, e *Edit or delete a custom frontend* muda ou apaga. Veja [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends).
 - **Splash screen (boot theme)**: a imagem mostrada enquanto o gabinete liga. Escolha um tema para ver uma *Preview* de 10 segundos ou para *Use at boot* (usar no boot). Os temas são pastas em `~/splashscreen` (o compartilhamento `splashscreen` na rede); mais no [Gnome-look](https://www.gnome-look.org/browse?cat=108&ord=latest).
 - **Extras (Wine, Steam, Heroic)**: programas que ficaram fora da ISO para o download ser menor, instalados pela internet: Wine (precisa para alguns emuladores do Fightcade 2), Steam e Heroic (jogos da GOG).
@@ -234,11 +240,6 @@ Aparece quando você sai do frontend (Esc). O título mostra o nome do gabinete,
   - *ROM/CHD MAME torrent*: você cola o link magnet de um romset (e um de CHDs) e ele baixa, pelo Transmission, só os jogos que o filtro do ROM Cleaner escolhe, direto na pasta do emulador. A versão do MAME do romset precisa ser a do emulador;
   - *Free games (open-source homebrew)*: baixa jogos homebrew livres para as pastas do RetroArch, para o frontend ter o que mostrar.
 - **Quirks (USB controller fixes)**: correções para encoders USB que chegam errados (um encoder duplo aparecendo como um jogador só, um controle que trava). *Add a quirk* pede um nome e um código; *USB devices connected now* mostra os códigos do que está ligado; escolher um quirk da lista o apaga. Vale depois de reiniciar. Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
-- **Joysticks (GunCon 2, wheel, LPT)**:
-  - *Button mapping (all emulators)*: mapeia os comandos de cada jogador uma vez para todos os emuladores (passo 8);
-  - *Calibrate GunCon 2 (light gun)*: atire no alvo de cima à esquerda e no de baixo à direita, depois no do centro para conferir;
-  - *Calibrate wheel, pedals or analog stick*: os limites e o centro de cada eixo;
-  - *LPT joysticks (parallel port)*: controles antigos na porta paralela: adaptador de gamepad (NES, SNES, N64, PlayStation), adaptador DB9 (Atari, Amiga, Sega) ou interface TurboGraFX (até 7 joysticks). *Joysticks found now* mostra o que foi detectado e *Turn off* desliga.
 - **Debug mode (on/off)**: desligado (o padrão), o boot mostra só o splash e as mensagens dos frontends e emuladores ficam gravadas em `/opt/fliperos/logs`. Ligado, todo texto aparece na tela: o menu do boot, as mensagens do sistema e os erros dos emuladores. Ligue quando um jogo não abrir, para ver por quê. Os emuladores seguem na hora; o boot, depois de reiniciar.
 - **System Update**: baixa e instala as atualizações de todos os pacotes do Ubuntu. As atualizações do próprio FliperOS são oferecidas no boot (passo 7).
 

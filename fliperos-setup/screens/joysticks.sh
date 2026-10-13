@@ -1,5 +1,6 @@
 # shellcheck shell=bash
-# Setup > Joysticks: calibracao do GunCon 2 e de volante/pedais/analogico
+# Setup > Joysticks: os botoes do painel (lib/buttons.sh), o layout deles por
+# numero de botoes do jogo, a calibracao do GunCon 2 e de volante/pedais/analogico
 # (config/fliperos-calibrate) e os joysticks da porta paralela (lpt.sh).
 
 CALIBRATE=${CALIBRATE:-/opt/fliperos/bin/fliperos-calibrate}
@@ -9,6 +10,7 @@ screen_joysticks() {
   while true; do
     choice=$(ui_menu "Joysticks" "" "$last" \
       "buttons|Button mapping (all emulators)" \
+      "layout|Buttons layout (games of 1 to 5 buttons)" \
       "guncon|Calibrate GunCon 2 (light gun)" \
       "axes|Calibrate wheel, pedals or analog stick" \
       "lpt|LPT joysticks (parallel port)" \
@@ -16,6 +18,7 @@ screen_joysticks() {
     last=$choice
     case $choice in
       buttons) screen_buttons ;;
+      layout) screen_buttons_layout ;;
       guncon) screen_calibrate guncon ;;
       axes) screen_calibrate axes ;;
       lpt) screen_lpt ;;
@@ -73,6 +76,70 @@ screen_buttons() {
     fi
   fi
   rm -f "$map"
+}
+
+# screen_buttons_layout: de cada numero de botoes (1 a 5), onde ficam no
+# painel os botoes do jogo (lib/buttons.sh). O painel e o do Button mapping:
+# sem ele nao ha o que arrumar.
+screen_buttons_layout() {
+  local title="Buttons layout" count choice last=1 entries=()
+  local -a order
+  if [[ ! -s $BUTTONS_MAP ]]; then
+    ui_msg "$title" "The panel is not mapped yet." "" \
+      "Do Button mapping first: the layout moves the buttons mapped there."
+    return 0
+  fi
+  while true; do
+    entries=()
+    for count in "${BUTTONS_LAYOUT_COUNTS[@]}"; do
+      read -r -a order <<< "$(buttons_layout_get "$count")"
+      entries+=("$count|$count-button games   $(buttons_layout_row "${order[@]}")")
+    done
+    choice=$(ui_menu "$title" \
+      "Where the buttons of a game go on the panel, by how many buttons the game uses. For GroovyMAME and the MAME cores of RetroArch." \
+      "$last" "${entries[@]}" "return|Return") || return 0
+    [[ $choice == return ]] && return 0
+    last=$choice
+    screen_buttons_layout_edit "$choice"
+  done
+}
+
+# screen_buttons_layout_edit BOTOES: a posicao de cada botao do jogo, um a
+# um, com o painel desenhado ate ali; no fim confirma e aplica.
+screen_buttons_layout_edit() {
+  local count=$1 title n position choice plural=s
+  local -a order=() entries grid
+  ((count == 1)) && plural=""
+  title="Buttons layout: $count-button games"
+  for ((n = 1; n <= count; n++)); do
+    entries=()
+    for position in 1 2 3 4 5 6; do
+      [[ " ${order[*]} " == *" $position "* ]] || entries+=("$position|${BUTTONS_POSITIONS[position - 1]}")
+    done
+    ((n > 1)) || entries+=("default|Default layout (button 1 at the top left, in order)")
+    mapfile -t grid < <(buttons_layout_grid "${order[@]}")
+    choice=$(ui_menu "$title" "${grid[0]}"$'\n'"${grid[1]}"$'\n\n'"Where is BUTTON $n of the game?" \
+      "${entries[0]%%|*}" "${entries[@]}") || return 0
+    if [[ $choice == default ]]; then
+      read -r -a order <<< "$(seq -s ' ' 1 "$count")"
+      break
+    fi
+    order+=("$choice")
+  done
+  mapfile -t grid < <(buttons_layout_grid "${order[@]}")
+  ui_yesno "$title" "${grid[0]}"$'\n'"${grid[1]}"$'\n\n'"Use this layout in the games of $count button$plural?" ||
+    return 0
+  if ! buttons_layout_set "$count" "${order[@]}"; then
+    ui_msg "$title" "$(ui_bad "Could not save the layout.")" "Details in $FLIPEROS_LOG."
+    return 0
+  fi
+  ui_info "$title" "Applying the layout to the games..." "" \
+    "The first time it reads the GroovyMAME game list: about a minute."
+  if buttons_layout_apply; then
+    ui_msg "$title" "Saved. The games use it from the next one opened."
+  else
+    ui_msg "$title" "$(ui_bad "Could not apply the layout.")" "Details in $FLIPEROS_LOG."
+  fi
 }
 
 # screen_calibrate guncon|axes escolhe o controle e roda o calibrador, que

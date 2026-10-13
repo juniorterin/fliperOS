@@ -56,6 +56,18 @@ Flycast Dojo (Fightcade): os mesmos mapeamentos do Flycast, na pasta dele.
 
 O mapa fica em /etc/fliperos/buttons.map: a atualizacao do sistema o grava
 de novo (fliperos-buttons save /etc/fliperos/buttons.map).
+
+Buttons layout (Setup > Joysticks > Buttons layout): onde ficam no painel os
+botoes dos jogos de 1 a 5 botoes. /etc/fliperos/buttons.layout tem uma linha
+"BOTOES POSICAO..." por numero de botoes: a posicao no painel (1 2 3 em
+cima, 4 5 6 embaixo) do botao 1, do 2... do jogo ("4 1 4 2 5": os jogos de 4
+botoes com 1 3 em cima e 2 4 embaixo). Sem linha, o botao N fica na posicao
+N. Quantos botoes cada jogo tem vem da tabela "SET BOTOES [PAI]" do
+fliperos-romclean buttons (/var/lib/fliperos/game-buttons.txt). O save
+aplica o layout onde o botao N do painel e o botao N do jogo: no GroovyMAME,
+um <system> por jogo no ctrlr (o clone segue o do pai); nos cores MAME do
+RetroArch, um buttons-BOTOES.cfg ao lado do buttons.cfg, que o
+fliperos-kms-run soma a config do jogo que tem esse numero de botoes.
 """
 import argparse
 import ctypes
@@ -79,7 +91,11 @@ HYPSEUS_INI = os.environ.get('FLIPEROS_HYPSEUS_INI', '/home/fliperos/.hypseus/hy
 FLYCAST_DOJO_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_DOJO_MAPPINGS',
                                        '/opt/fliperos/fightcade/emulator/flycast/mappings')
 CONTROLLERS = os.environ.get('FLIPEROS_CONTROLLERS', '/opt/fliperos/bin/fliperos-controllers')
+BUTTONS_LAYOUT = os.environ.get('FLIPEROS_BUTTONS_LAYOUT', '/etc/fliperos/buttons.layout')
+GAME_BUTTONS = os.environ.get('FLIPEROS_GAME_BUTTONS', '/var/lib/fliperos/game-buttons.txt')
 USER_ID = 1000
+PANEL_BUTTONS = 6
+LAYOUT_COUNTS = range(1, 6)
 
 CONTROLS = ['up', 'down', 'left', 'right', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'start', 'coin']
 # Os botoes do painel no RetroPad (layout dos cores de arcade).
@@ -162,23 +178,116 @@ def retroarch_cfg(players, names):
     return '\n'.join(lines) + '\n'
 
 
-def mame_cfg(players, names):
+def read_layouts(path):
+    """{botoes: [posicao no painel do botao 1, do 2...]} do buttons.layout,
+    sem as linhas invalidas e sem as que deixam cada botao na sua posicao."""
+    layouts = {}
+    try:
+        with open(path, encoding='utf-8') as f:
+            rows = [line.split() for line in f]
+    except OSError:
+        return layouts
+    for row in rows:
+        if not row or not all(v.isdigit() for v in row):
+            continue
+        count, order = int(row[0]), [int(v) for v in row[1:]]
+        if (count in LAYOUT_COUNTS and len(order) == count and len(set(order)) == count
+                and all(1 <= v <= PANEL_BUTTONS for v in order) and order != list(range(1, count + 1))):
+            layouts[count] = order
+    return layouts
+
+
+def layout_order(layouts, count):
+    """A posicao no painel de cada um dos 6 botoes de um jogo de `count`
+    botoes: os do layout, e os que o jogo nao tem nas posicoes que sobram."""
+    order = list(layouts.get(count, []))
+    return order + [p for p in range(1, PANEL_BUTTONS + 1) if p not in order]
+
+
+def read_games(path):
+    """{set: (botoes, pai)} da tabela do fliperos-romclean buttons."""
+    games = {}
+    try:
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    games[parts[0]] = (int(parts[1]), parts[2] if len(parts) > 2 else '')
+    except OSError:
+        pass
+    return games
+
+
+def layout_games(layouts, games):
+    """[(set, [posicao do botao 1, do 2...])] dos jogos que saem do padrao,
+    os pais antes dos clones. O MAME aplica ao clone o <system> do pai: o
+    clone so entra se o dele for outro (outro numero de botoes)."""
+    def wanted(count, upto):
+        return layout_order(layouts, count)[:upto]
+
+    parents, clones = [], []
+    for name in sorted(games):
+        count, parent = games[name]
+        if parent in games:
+            upto = min(max(count, games[parent][0]), PANEL_BUTTONS)
+            # O <system> do pai so tem os botoes do pai: os outros ficam no padrao.
+            inherited = layouts.get(games[parent][0], [])
+            inherited = inherited + list(range(len(inherited) + 1, upto + 1))
+            if wanted(count, upto) != inherited:
+                clones.append((name, wanted(count, upto)))
+        elif count in layouts:
+            parents.append((name, wanted(count, count)))
+    return parents + clones
+
+
+def mame_port(player, control, bind):
+    seq = mame_code(*bind)
+    key = MAME_KEYS.get(player, {}).get(control)
+    if key:
+        seq += ' OR KEYCODE_%s' % key
+    return ('            <port type="%s">\n                <newseq type="standard">%s</newseq>\n'
+            '            </port>\n' % (MAME_PORTS[control] % player, seq))
+
+
+def mame_cfg(players, names, layouts=None, games=None):
     ports = []
     for player in sorted(players):
         for control in CONTROLS:
-            if control not in players[player]:
-                continue
-            index, element = players[player][control]
-            seq = mame_code(index, element)
-            key = MAME_KEYS.get(player, {}).get(control)
-            if key:
-                seq += ' OR KEYCODE_%s' % key
-            ports.append('            <port type="%s">\n                <newseq type="standard">%s</newseq>\n'
-                         '            </port>\n' % (MAME_PORTS[control] % player, seq))
+            if control in players[player]:
+                ports.append(mame_port(player, control, players[player][control]))
+    systems = []
+    # Buttons layout: o botao N do jogo na posicao do painel escolhida.
+    for name, order in layout_games(layouts or {}, games or {}):
+        entry = []
+        for player in sorted(players):
+            for n, position in enumerate(order, 1):
+                if 'b%d' % position in players[player]:
+                    entry.append(mame_port(player, 'b%d' % n, players[player]['b%d' % position]))
+        if entry:
+            systems.append('    <system name="%s">\n        <input>\n%s        </input>\n    </system>\n'
+                           % (escape(name), ''.join(entry)))
     devices = ''.join('<!-- JOYCODE_%d: %s -->\n' % (i + 1, escape(n)) for i, n in sorted(names.items()))
     return ('<?xml version="1.0"?>\n<!-- Gerado pelo Setup > Joysticks > Button mapping (fliperos-buttons). -->\n'
             + devices + '<mameconfig version="10">\n    <system name="default">\n        <input>\n'
-            + ''.join(ports) + '        </input>\n    </system>\n</mameconfig>\n')
+            + ''.join(ports) + '        </input>\n    </system>\n' + ''.join(systems) + '</mameconfig>\n')
+
+
+def retroarch_layout_cfg(players, count, order):
+    """O buttons-BOTOES.cfg: os binds dos 6 botoes de cada jogador com o
+    botao N do jogo na posicao do painel escolhida, por cima do buttons.cfg."""
+    lines = ['# Gerado pelo Setup > Joysticks > Buttons layout (fliperos-buttons): os jogos de',
+             '# %d botoes nos cores MAME. O fliperos-kms-run soma este arquivo depois do' % count,
+             '# buttons.cfg.']
+    for player in sorted(players):
+        binds = players[player]
+        lines.append('')
+        for n, position in enumerate(order, 1):
+            if 'b%d' % position in binds:
+                lines += retroarch_lines(player, 'b%d' % n, binds['b%d' % position][1])
+            else:
+                key = 'input_player%d_%s' % (player, RA_KEYS['b%d' % n])
+                lines += ['%s_btn = "nul"' % key, '%s_axis = "nul"' % key]
+    return '\n'.join(lines) + '\n'
 
 
 def write(path, text, owner=None):
@@ -675,8 +784,16 @@ def cmd_save(args):
     players, names = read_map(args.map)
     if not players:
         sys.exit('mapa vazio: %s' % args.map)
+    layouts = read_layouts(BUTTONS_LAYOUT)
     write(RA_BUTTONS, retroarch_cfg(players, names))
-    write(MAME_CTRLR, mame_cfg(players, names), USER_ID)
+    for count in LAYOUT_COUNTS:
+        path = '%s-%d.cfg' % (os.path.splitext(RA_BUTTONS)[0], count)
+        if count in layouts:
+            write(path, retroarch_layout_cfg(players, count, layout_order(layouts, count)))
+            print(path)
+        elif os.path.isfile(path):
+            os.remove(path)
+    write(MAME_CTRLR, mame_cfg(players, names, layouts, read_games(GAME_BUTTONS) if layouts else {}), USER_ID)
     supermodel_save(players)
     hypseus_save(players)
     print(RA_BUTTONS)

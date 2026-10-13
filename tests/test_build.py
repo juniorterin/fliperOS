@@ -1515,6 +1515,27 @@ class RomCleanTests(unittest.TestCase):
         return subprocess.run(['python3', str(ROOT / 'config/fliperos-romclean'), *args], input=stdin,
                               capture_output=True, text=True, timeout=60, check=True).stdout
 
+    def test_buttons_table(self):
+        # "SET BOTOES [PAI]" dos jogos com botoes (Setup > Joysticks > Buttons
+        # layout): sem BIOS, dispositivos e jogos sem botao; os do
+        # controls.xml valem mais que os do XML, e o clone fica com o do pai.
+        table = self.tmp / 'games.txt'
+        self.romclean('buttons', '--xml', str(self.tmp / 'mame.xml'), '--out', str(table))
+        lines = table.read_text().splitlines()
+        for line in ('mslug 4', 'mslugb 6 mslug', 'mvscu 6 mvsc', '1942 2', 'nes 6'):
+            self.assertIn(line, lines)
+        names = [line.split()[0] for line in lines]
+        self.assertEqual(names, sorted(names))
+        for name in ('neogeo', 'qsound_hle', 'asteroid'):
+            self.assertNotIn(name, names)
+        controls = self.tmp / 'controls.xml'
+        controls.write_text('<dat><game romname="mvsc"><player number="1" numButtons="5"/></game></dat>')
+        self.romclean('buttons', '--xml', str(self.tmp / 'mame.xml'), '--controls-xml', str(controls),
+                      '--out', str(table))
+        lines = table.read_text().splitlines()
+        self.assertIn('mvsc 5', lines)
+        self.assertIn('mvscu 5 mvsc', lines)
+
     def scan(self, *flags, xml=None, roms=None):
         plan = self.tmp / 'plan.tsv'
         out = self.romclean('scan', '--xml', str(xml or self.tmp / 'mame.xml'), '--roms', str(roms or self.roms),
@@ -8091,6 +8112,116 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertEqual(self.rc.pressed(settled, ([0, 0], [0, 32767, 0], [0])), '+a1')
         self.assertEqual(self.rc.pressed(settled, ([0, 0], [-32767, -32768, 0], [0])), '-a0')
         self.assertEqual(self.rc.pressed(settled, ([0, 0], [0, -32768, 0], [2])), 'h0.2')
+
+    def test_buttons_layout(self):
+        # buttons.layout: "BOTOES POSICAO...", a posicao no painel do botao 1,
+        # do 2... As linhas invalidas e as do padrao ficam de fora.
+        rc = self.rc
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'layout'
+            path.write_text('4 1 4 2 5\n3 1 2 3\n2 4 4\n6 6 5 4 3 2 1\nx\n5 1 2 3 4\n')
+            layouts = rc.read_layouts(str(path))
+            self.assertEqual(rc.read_layouts(str(path) + '.nada'), {})
+        self.assertEqual(layouts, {4: [1, 4, 2, 5]})
+        self.assertEqual(rc.layout_order(layouts, 4), [1, 4, 2, 5, 3, 6])
+        self.assertEqual(rc.layout_order(layouts, 6), [1, 2, 3, 4, 5, 6])
+        # O clone segue o <system> do pai: so entra com outro numero de botoes.
+        games = {'sf2': (6, ''), 'mslug': (4, ''), 'mslugb': (4, 'mslug'), 'mslug6': (6, 'mslug'),
+                 'pang': (2, ''), 'pang4': (4, 'pang'), 'sf2four': (4, 'sf2')}
+        self.assertEqual(rc.layout_games(layouts, games),
+                         [('mslug', [1, 4, 2, 5]), ('mslug6', [1, 2, 3, 4, 5, 6]), ('pang4', [1, 4, 2, 5]),
+                          ('sf2four', [1, 4, 2, 5, 3, 6])])
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(rc.mame_cfg({1: self.PANEL}, {0: 'P'}, layouts, games))
+        systems = [s.get('name') for s in root.iter('system')]
+        self.assertEqual(systems, ['default', 'mslug', 'mslug6', 'pang4', 'sf2four'])
+        ports = {p.get('type'): p.find('newseq').text for p in root.find("system[@name='mslug']").iter('port')}
+        self.assertEqual(ports, {'P1_BUTTON1': 'JOYCODE_1_BUTTON1 OR KEYCODE_LCONTROL',
+                                 'P1_BUTTON2': 'JOYCODE_1_BUTTON4 OR KEYCODE_LALT',
+                                 'P1_BUTTON3': 'JOYCODE_1_BUTTON2 OR KEYCODE_SPACE',
+                                 'P1_BUTTON4': 'JOYCODE_1_BUTTON5 OR KEYCODE_LSHIFT'})
+        # Sem layout, o ctrlr de sempre.
+        self.assertEqual(rc.mame_cfg({1: self.PANEL}, {0: 'P'}, {}, games), rc.mame_cfg({1: self.PANEL}, {0: 'P'}))
+        # RetroArch (cores MAME): o bind do botao N do jogo com o botao do
+        # painel da posicao escolhida; a posicao sem botao mapeado, sem bind.
+        cfg = rc.retroarch_layout_cfg({1: self.PANEL}, 4, rc.layout_order(layouts, 4)).split('\n')
+        for line in ('input_player1_y_btn = "0"', 'input_player1_x_btn = "3"', 'input_player1_l_btn = "1"',
+                     'input_player1_b_btn = "4"', 'input_player1_a_btn = "2"', 'input_player1_r_btn = "5"'):
+            self.assertIn(line, cfg)
+        short = {c: b for c, b in self.PANEL.items() if c != 'b4'}
+        self.assertIn('input_player1_x_btn = "nul"', rc.retroarch_layout_cfg({1: short}, 4, [1, 4, 2, 5, 3, 6]))
+
+    def test_save_with_a_buttons_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'map').write_text(''.join('1 %s 0 %s Pad\n' % (c, e) for c, (_, e) in self.PANEL.items()))
+            (tmp / 'layout').write_text('4 1 4 2 5\n')
+            (tmp / 'games').write_text('mslug 4\nmslugb 4 mslug\nsf2 6\n')
+            (tmp / 'ra').mkdir()
+            (tmp / 'ra' / 'buttons-2.cfg').write_text('antigo\n')
+            env = dict(os.environ, FLIPEROS_RA_BUTTONS=str(tmp / 'ra' / 'buttons.cfg'),
+                       FLIPEROS_MAME_CTRLR=str(tmp / 'ctrlr' / 'fliperos.cfg'),
+                       FLIPEROS_FLYCAST_MAPPINGS=str(tmp / 'flycast'), FLIPEROS_SDL_USER_DB=str(tmp / 'sdl-user.txt'),
+                       FLIPEROS_OPENBOR_SAVES=str(tmp / 'Saves'), FLIPEROS_OPENBOR3_SAVES=str(tmp / 'v3' / 'Saves'),
+                       FLIPEROS_BUTTONS_MAP=str(tmp / 'buttons.map'), FLIPEROS_CONTROLLERS=str(tmp / 'nada'),
+                       FLIPEROS_SUPERMODEL_INI=str(tmp / 'supermodel' / 'Config' / 'Supermodel.ini'),
+                       FLIPEROS_HYPSEUS_INI=str(tmp / 'hypseus' / 'hypinput.ini'),
+                       FLIPEROS_DOLPHIN_DIR=str(tmp / 'dolphin'),
+                       FLIPEROS_FLYCAST_DOJO_MAPPINGS=str(tmp / 'dojo' / 'mappings'),
+                       FLIPEROS_BUTTONS_LAYOUT=str(tmp / 'layout'), FLIPEROS_GAME_BUTTONS=str(tmp / 'games'))
+            save = lambda: subprocess.run(['python3', str(ROOT / 'config/fliperos-buttons'), 'save', str(tmp / 'map')],
+                                          env=env, check=True, capture_output=True, timeout=30)
+            save()
+            self.assertIn('input_player1_x_btn = "3"\n', (tmp / 'ra' / 'buttons-4.cfg').read_text())
+            # O buttons.cfg segue no padrao; o de um layout que saiu e apagado.
+            self.assertIn('input_player1_x_btn = "1"\n', (tmp / 'ra' / 'buttons.cfg').read_text())
+            self.assertFalse((tmp / 'ra' / 'buttons-2.cfg').exists())
+            ctrlr = (tmp / 'ctrlr' / 'fliperos.cfg').read_text()
+            self.assertEqual(re.findall(r'<system name="([^"]+)"', ctrlr), ['default', 'mslug'])
+            (tmp / 'layout').write_text('')
+            save()
+            self.assertFalse((tmp / 'ra' / 'buttons-4.cfg').exists())
+            self.assertNotIn('mslug', (tmp / 'ctrlr' / 'fliperos.cfg').read_text())
+
+    def test_kms_run_adds_the_layout_of_the_game(self):
+        # So nos cores MAME (o botao N do painel e o botao N do jogo), e so
+        # com um layout gravado para o numero de botoes do jogo.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            prog = tmp / 'retroarch'
+            prog.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            prog.chmod(0o755)
+            (tmp / 'debug').write_text('')
+            (tmp / 'buttons.cfg').write_text('')
+            (tmp / 'buttons-4.cfg').write_text('')
+            (tmp / 'games').write_text('sf2 6\nmslug 4\nmslugb 4 mslug\npang 2\n')
+            env = dict(os.environ, FLIPEROS_RA_BUTTONS=str(tmp / 'buttons.cfg'), FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'),
+                       FLIPEROS_GAME_BUTTONS=str(tmp / 'games'), FLIPEROS_PIXELCADE=str(tmp / 'nada'),
+                       FLIPEROS_OUTPUTS=str(tmp / 'nada'), FLIPEROS_FBNEO=str(tmp / 'nada'),
+                       PATH='%s:%s' % (tmp, os.environ['PATH']))
+            env.pop('DISPLAY', None)
+
+            def config(core, rom):
+                out = subprocess.run(['bash', str(ROOT / 'config/fliperos-kms-run'), 'retroarch', '-L',
+                                      '/cores/%s_libretro.so' % core, rom],
+                                     capture_output=True, text=True, env=env).stdout.split('\n')
+                return out[1].split('|')[1:]
+            base, layout = str(tmp / 'buttons.cfg'), str(tmp / 'buttons-4.cfg')
+            self.assertEqual(config('mame2010', '/roms/mame2010/mslug.zip'), [base, layout])
+            self.assertEqual(config('mame', '/roms/mame/mslugb.7z'), [base, layout])
+            self.assertEqual(config('mame2010', '/roms/mame2010/sf2.zip'), [base])
+            self.assertEqual(config('mame2010', '/roms/mame2010/pang.zip'), [base])
+            self.assertEqual(config('mame2010', '/roms/mame2010/outro.zip'), [base])
+            self.assertEqual(config('fbneo', '/roms/fbneo/mslug.zip'), [base])
+
+    def test_setup_has_the_buttons_layout(self):
+        # Joysticks logo depois de Network Setup; Buttons layout abaixo do Button mapping.
+        menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
+        self.assertIn('"network|Network Setup" \\\n      "joysticks|Joysticks (GunCon 2, wheel, LPT)" \\\n', menu)
+        screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
+        self.assertIn('"buttons|Button mapping (all emulators)" \\\n'
+                      '      "layout|Buttons layout (games of 1 to 5 buttons)" \\\n', screen)
+        self.assertIn('layout) screen_buttons_layout ;;', screen)
 
     def test_setup_saves_the_mame_options(self):
         lib = (ROOT / 'fliperos-setup/lib/buttons.sh').read_text()

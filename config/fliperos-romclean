@@ -31,6 +31,9 @@ deles, os filtros que dependem dele deixam passar tudo.
   fliperos-romclean uses (--xml ARQUIVO|- | --xml-command COMANDO)
                          [--cache ARQUIVO] --folder PASTA...
                          [--except LISTA]
+  fliperos-romclean buttons (--xml ARQUIVO|- | --xml-command COMANDO)
+                            [--cache ARQUIVO] [--controls-xml ARQUIVO]
+                            --out ARQUIVO
   fliperos-romclean fetch-mame2010 DESTINO
 
 O XML: um arquivo (.xml ou .xml.xz), a entrada padrao (-) ou a saida de um
@@ -821,6 +824,26 @@ def cmd_uses(args):
         print(name)
 
 
+def cmd_buttons(args):
+    """A tabela "SET BOTOES [PAI]" dos jogos com botoes, para o Setup >
+    Joysticks > Buttons layout (config/fliperos-buttons, fliperos-kms-run)."""
+    machines = load_machines(args)
+    annotate(machines, {}, {}, read_controls(args.controls_xml) if args.controls_xml else {})
+    lines = []
+    for name in sorted(machines):
+        m = machines[name]
+        if m['isdevice'] or m['isbios'] or not m['buttons']:
+            continue
+        lines.append('%s %d %s' % (name, m['buttons'], m['cloneof']))
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+    tmp = '%s.%d.tmp' % (args.out, os.getpid())
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(''.join(line.rstrip() + '\n' for line in lines))
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, args.out)
+    print('games=%d' % len(lines))
+
+
 def read_plan(path):
     """(origem, destino, {move|rest: [(arquivo, pasta de destino, bytes, discos)]}).
     discos: de uma pasta de CHDs, os arquivos dela que vao (None = todos)."""
@@ -1229,6 +1252,13 @@ def main():
     p.add_argument('--folder', action='append', required=True)
     p.add_argument('--except', dest='except_list')
     p.set_defaults(func=cmd_uses)
+    p = sub.add_parser('buttons')
+    p.add_argument('--xml')
+    p.add_argument('--xml-command')
+    p.add_argument('--cache')
+    p.add_argument('--controls-xml')
+    p.add_argument('--out', required=True)
+    p.set_defaults(func=cmd_buttons)
     p = sub.add_parser('fetch-mame2010')
     p.add_argument('dest')
     p.set_defaults(func=cmd_fetch_mame2010)
