@@ -308,6 +308,15 @@ systems() {
             for (c = 2; c <= fields; c++) row = row "," (c == 12 ? title[name] : f[c])
             blocks[++nb] = row
             print "@" row > mark
+            # O titulo tambem e um nome do sistema: o tema troca o nome da
+            # tela pelo titulo e procura o grupo dela (Arcade, Console...)
+            # por ele; sem isso a tela caia em "Others".
+            also = tolower(title[name])
+            if (also != name && !(also in key)) {
+              blocks[nb] = row "\n" also
+              key[also] = 1
+              print also > mark
+            }
             print title[name] "\t" f[12] > art
           }
           else {

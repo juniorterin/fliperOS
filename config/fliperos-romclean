@@ -632,8 +632,11 @@ def plan(machines, present, f, kept=()):
                           lambda d: not f.no_devices and (not f.only_devices or d in f.only_devices)) - games
     known = {n for n in present if n in machines}
     move = known & (games | needed)
-    # Os do Flycast nunca sobram para apagar.
-    flycast = {n for n in known if machines[n]['system']}
+    # Os do Flycast nunca sobram para apagar: o mesmo romset serve depois ao
+    # alvo Flycast. Menos com --flycast-rest (o romset do MAME 2010, que o
+    # Flycast nao le): ali Naomi e Atomiswave sobram como os outros, e nao
+    # ficam na pasta do core, onde o frontend os lista sem que abram.
+    flycast = set() if getattr(f, 'flycast_rest', False) else {n for n in known if machines[n]['system']}
     return move, move & needed - games, known - move - flycast, flycast - move
 
 
@@ -1206,6 +1209,7 @@ def main():
     p.add_argument('--dest', required=True)
     p.add_argument('--bios-dest')
     p.add_argument('--route', action='append', default=[])
+    p.add_argument('--flycast-rest', action='store_true')
     p.add_argument('--no-devices', action='store_true')
     p.add_argument('--only-devices', type=lambda v: set(csv(v)))
     p.add_argument('--plan', required=True)

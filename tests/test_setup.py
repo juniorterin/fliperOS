@@ -3103,7 +3103,7 @@ class RomCleanerTests(Base):
         self.assertEqual(self.env.out("romclean_target_args groovymame /mnt/usb; "
                                       "romclean_target_args mame2010 %s/retroarch/mame2010" % roms,
                                       self.vars).splitlines(),
-                         ["--dest", "/mnt/usb", "--dest", "%s/retroarch/mame2010" % roms])
+                         ["--dest", "/mnt/usb", "--dest", "%s/retroarch/mame2010" % roms, "--flycast-rest"])
         self.assertEqual(self.env.out("romclean_target_args flycast %s" % roms, self.vars).splitlines(),
                          ["--dest", "%s/naomi" % roms, "--no-devices", "--route", "naomi=%s/naomi" % roms,
                           "--route", "naomi2=%s/naomi2" % roms, "--route", "atomiswave=%s/atomiswave" % roms,

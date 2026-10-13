@@ -497,6 +497,10 @@ romclean_target_args() {
     # do jogo; o Supermodel nao usa nenhum.
     [[ $target == model2 ]] && printf '%s\n' --only-devices model1io,model1io2
     [[ $target == model3 ]] && printf '%s\n' --no-devices
+    # O romset do MAME 2010 (0.139) nao serve ao Flycast: os jogos de Naomi
+    # e Atomiswave que o filtro deixa de fora sobram como os outros, em vez
+    # de ficar na pasta do core (o MAME 0.139 nao os roda).
+    [[ $target == mame2010 ]] && printf '%s\n' --flycast-rest
   fi
   [[ -n $bios ]] && printf '%s\n' --bios-dest "$bios"
   return 0

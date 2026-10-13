@@ -1682,6 +1682,12 @@ class RomCleanTests(unittest.TestCase):
         summary, move, rest = self.scan(*self.CABINET)
         self.assertEqual(summary['flycast'], '4')
         self.assertFalse(set(flycast) & set(move + rest))
+        # No romset do MAME 2010 (--flycast-rest), que o Flycast nao le,
+        # sobram como os outros: nao ficam na pasta do core.
+        summary, move, rest = self.scan(*self.CABINET, '--flycast-rest')
+        self.assertEqual(summary['flycast'], '0')
+        self.assertFalse(set(flycast) & set(move))
+        self.assertLessEqual(set(flycast), set(rest))
         # Marcados como placa (--hardware) vao para o MAME, com a BIOS.
         _, move, _ = self.scan('--hardware', 'naomi,atomiswave')
         self.assertEqual(move, flycast)
@@ -3993,13 +3999,16 @@ class ArcadeflowTests(unittest.TestCase):
                 return (theme / 'data_systems.txt').read_text()
             own = mame.replace('mame,', 'arcade (various) (mame 2010 (0.139)),', 1).replace(',MAME,', ',MAME 2010,')
             # O titulo igual ao nome do sistema e so mais um nome dele.
-            expected = data.replace('\nm.a.m.e.\n', '\noutro mame\nm.a.m.e.\n') + '\n' + own + '\n'
+            # O titulo, em minusculas, e outro nome do sistema novo: e por ele
+            # que o tema acha o grupo da tela (Arcade, e nao "Others").
+            expected = data.replace('\nm.a.m.e.\n', '\noutro mame\nm.a.m.e.\n') + '\n' + own + '\nmame 2010\n'
             self.assertEqual(systems(screens), expected)
             # Sem o Pillow: links para a arte do MAME.
             for name, target in (('system_images/MAME 2010.png', 'MAME.png'), ('system_bgs/MAME 2010.jpg', 'MAME.jpg')):
                 self.assertEqual(os.readlink(theme / name), target)
             self.assertEqual((theme / 'fliperos_systems.txt').read_text().splitlines(),
-                             ['@' + own, 'outro mame', 'art:system_images/MAME 2010.png', 'art:system_bgs/MAME 2010.jpg'])
+                             ['@' + own, 'mame 2010', 'outro mame', 'art:system_images/MAME 2010.png',
+                              'art:system_bgs/MAME 2010.jpg'])
             # Com ele, a arte desenhada (o que sobra do titulo depois do nome
             # do sistema), que fica na vez seguinte.
             (tmp / 'pillow').write_text('')

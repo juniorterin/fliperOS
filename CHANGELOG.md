@@ -40,6 +40,7 @@ The MAME ROM Cleaner works out of the box: `catver.ini`, `nplayers.ini` and `con
 
 - **The Setup is grouped, in the order of setting up a cabinet**: Video Setup, Audio Setup, Network Setup, Joysticks, **Games** (Frontend, Emulators & Games, Folders, Downloader, Cleaner, Scraper, AttractPlus ROM List) and **System** (Extras, Latency, System Update, Debug mode, Splash screen). Quirks is inside Joysticks. It was one list of 17 items
 - **Info balloons**: under the list, a balloon says what the item under the cursor is for, in the FliperOS menu, the Setup and its groups, Video, Audio and Network Setup, Joysticks and the Downloader. It needs the gum of this ISO: a system that came from an older ISO shows the same menus without the balloons
+- MAME ROM Cleaner on a MAME 2010 romset: the Naomi and Atomiswave games the filter leaves out go with the rest. They were always kept (for Flycast, which can't read that romset) and showed up in the MAME 2010 list
 - MAME ROM Cleaner and Downloader filter: *Data files* shows the three files that ship with FliperOS and their version
 - AttractPlus ROM List: every folder with games gets its display, also one removed before; a folder left without games loses its display, and Arcadeflow reads a rebuilt list
 - Extras: **Hook Of The Reaper** (through Wine), **QMamehook** (native, for serial-port guns) and **LEDSpicer** (button lights), the readers of the game outputs. None of them is in the image
