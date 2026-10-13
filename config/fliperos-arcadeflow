@@ -12,6 +12,8 @@
 #   fliperos-arcadeflow fetch [--progress]   baixa e instala (de novo: repara)
 #   fliperos-arcadeflow screen [LARGURA ALTURA]   o desenho em 4:3 num modo
 #                                            de pixel largo (640x240)
+#   fliperos-arcadeflow prefs                as opcoes do FliperOS que este
+#                                            tema ainda nao recebeu
 #
 # Pede o Attract-Mode Plus 3.2.0 ou mais novo (layout.nut, FeVersionNum).
 set -uo pipefail
@@ -41,9 +43,40 @@ fail() {
 # nova: a versao e a fixada aqui, e o aviso espera uma resposta do teclado.
 # Sem o menu de contexto no botao de escolher (o padrao do tema): com ele o
 # primeiro aperto abre o menu sobre o jogo e so o segundo abre o jogo.
+fliperos_prefs=(UPDATECHECK 1 OVERMENUBUTTON 0)
 prefs() {
   printf '%s\n\n' "$version"
-  printf '|%s|%s|\n' UPDATECHECK 1 OVERMENUBUTTON 0
+  printf '|%s|%s|\n' "${fliperos_prefs[@]}"
+}
+
+# prefs_names: as opcoes acima, uma por linha: o que vai em pref_fliperos.txt,
+# a lista das que o FliperOS ja gravou neste tema.
+prefs_names() {
+  local i
+  for ((i = 0; i < ${#fliperos_prefs[@]}; i += 2)); do
+    printf '%s\n' "${fliperos_prefs[i]}"
+  done
+}
+
+# prefs_apply: num tema instalado antes de uma opcao entrar na lista acima, a
+# opcao seguia no padrao do tema (no gabinete, o menu de contexto no botao de
+# escolher). Cada opcao e gravada uma vez so, e anotada em pref_fliperos.txt:
+# o que a pessoa escolher depois, nas opcoes do tema, fica. Nao com o
+# Attract-Mode aberto (o tema regrava as opcoes).
+prefs_apply() {
+  local file=$dir/pref_layoutoptions.txt mark=$dir/pref_fliperos.txt i name
+  [[ -f $dir/layout.nut && -f $file ]] || return 0
+  pgrep -x attractplus > /dev/null 2>&1 && return 0
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    exec runuser -u "$user" -- "$self" prefs
+  fi
+  for ((i = 0; i < ${#fliperos_prefs[@]}; i += 2)); do
+    name=${fliperos_prefs[i]}
+    grep -qxF "$name" "$mark" 2> /dev/null && continue
+    sed -i "/^|$name|/d" "$file"
+    printf '|%s|%s|\n' "$name" "${fliperos_prefs[i + 1]}" >> "$file"
+    printf '%s\n' "$name" >> "$mark"
+  done
 }
 
 # displays_file: o arquivo das telas. O Attract-Mode Plus 3.x le as de
@@ -57,16 +90,17 @@ displays_file() {
   fi
 }
 
-# displays_switch: as telas que estao no Basic (o padrao de antes) passam
-# para o Arcadeflow; as de outro layout, escolhido pela pessoa, ficam. So na
-# primeira instalacao, e nao com o Attract-Mode aberto (ele regrava o arquivo
-# ao fechar).
+# displays_switch: as telas que estao no Basic ou no BasicPlus (o padrao de
+# antes e o das telas que o Attract-Mode Plus cria) passam para o Arcadeflow;
+# as de outro layout, escolhido pela pessoa, ficam. Na primeira instalacao (o
+# fliperos-setup --session-start faz o mesmo a cada abertura do launcher), e
+# nao com o Attract-Mode aberto (ele regrava o arquivo ao fechar).
 displays_switch() {
   local file
   file=$(displays_file)
   [[ -f $file ]] || return 0
   pgrep -x attractplus > /dev/null 2>&1 && return 0
-  sed -i -E 's/^([[:space:]]+layout[[:space:]]+)Basic[[:space:]]*$/\1Arcadeflow/' "$file"
+  sed -i -E 's/^([[:space:]]+layout[[:space:]]+)Basic(Plus)?[[:space:]]*$/\1Arcadeflow/' "$file"
 }
 
 # screen [LARGURA ALTURA]: o tamanho em que o tema desenha, para o modo de
@@ -138,7 +172,10 @@ fetch() {
   for f in "$dir"/pref_*.txt "$dir"/ss_login.txt; do
     [[ -f $f ]] && cp -f "$f" "$new/"
   done
-  [[ -f $new/pref_layoutoptions.txt ]] || prefs > "$new/pref_layoutoptions.txt"
+  if [[ ! -f $new/pref_layoutoptions.txt ]]; then
+    prefs > "$new/pref_layoutoptions.txt"
+    prefs_names > "$new/pref_fliperos.txt"
+  fi
   rm -rf "$dir"
   mv "$new" "$dir" || fail "could not write $dir"
   if ((first)); then
@@ -157,8 +194,11 @@ case ${1:-} in
     shift
     screen "$@"
     ;;
+  prefs)
+    prefs_apply
+    ;;
   *)
-    echo "usage: fliperos-arcadeflow fetch [--progress] | screen [WIDTH HEIGHT]" >&2
+    echo "usage: fliperos-arcadeflow fetch [--progress] | screen [WIDTH HEIGHT] | prefs" >&2
     exit 2
     ;;
 esac

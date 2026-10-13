@@ -3646,7 +3646,8 @@ class ArcadeflowTests(unittest.TestCase):
             displays.parent.mkdir(parents=True)
             (tmp / 'attract/config/attract.cfg').write_text('general\n')
             displays.write_text('display\tMAME\n\tlayout               Basic\n\tromlist              MAME\n\n'
-                                'display\tNaomi\n\tlayout               BasicPlus\n\tromlist              Naomi\n\n')
+                                'display\tmame\n\tlayout               BasicPlus\n\tromlist              mame\n\n'
+                                'display\tNaomi\n\tlayout               Grid\n\tromlist              Naomi\n\n')
             run = self.fetch(tmp, '--progress')
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
             steps = [line for line in run.stdout.splitlines() if line.startswith('@step')]
@@ -3661,16 +3662,19 @@ class ArcadeflowTests(unittest.TestCase):
             # escolher abre o jogo (no padrao do tema, o menu de contexto).
             self.assertEqual((theme / 'pref_layoutoptions.txt').read_text(),
                              '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|0|\n')
-            # As telas do padrao de antes passam para o tema; as de outro layout ficam.
+            self.assertEqual((theme / 'pref_fliperos.txt').read_text(), 'UPDATECHECK\nOVERMENUBUTTON\n')
+            # As telas do padrao de antes e as que o Attract-Mode Plus cria
+            # (BasicPlus) passam para o tema; as de outro layout ficam.
             self.assertEqual(displays.read_text(),
                              'display\tMAME\n\tlayout               Arcadeflow\n\tromlist              MAME\n\n'
-                             'display\tNaomi\n\tlayout               BasicPlus\n\tromlist              Naomi\n\n')
+                             'display\tmame\n\tlayout               Arcadeflow\n\tromlist              mame\n\n'
+                             'display\tNaomi\n\tlayout               Grid\n\tromlist              Naomi\n\n')
             # De novo (reparo): as opcoes da pessoa ficam, e uma tela que ela
             # pos de volta no Basic tambem.
             (theme / 'pref_layoutoptions.txt').write_text('9.9\n\n|SMALLSCREEN|0|\n')
             (theme / 'ss_login.txt').write_text('|SS_USERNAME|eu|\n')
             (theme / 'layout.nut').write_text('quebrado')
-            displays.write_text(displays.read_text().replace('BasicPlus', 'Basic'))
+            displays.write_text(displays.read_text().replace('Grid', 'Basic'))
             run = self.fetch(tmp)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
             self.assertNotIn('@step', run.stdout)
@@ -3678,6 +3682,45 @@ class ArcadeflowTests(unittest.TestCase):
             self.assertEqual((theme / 'pref_layoutoptions.txt').read_text(), '9.9\n\n|SMALLSCREEN|0|\n')
             self.assertEqual((theme / 'ss_login.txt').read_text(), '|SS_USERNAME|eu|\n')
             self.assertIn('layout               Basic\n\tromlist              Naomi', displays.read_text())
+
+    def test_prefs_reach_a_theme_installed_before_them_once(self):
+        # Um tema instalado antes de uma opcao do FliperOS existir segue no
+        # padrao dele (o menu de contexto no botao de escolher): cada opcao e
+        # gravada uma vez so, e a que a pessoa mudar depois fica.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            theme = tmp / 'attract/layouts/Arcadeflow'
+            (tmp / 'bin').mkdir()
+            (tmp / 'bin/pgrep').write_text('#!/bin/sh\n[ -f "%s" ]\n' % (tmp / 'open'))
+            (tmp / 'bin/pgrep').chmod(0o755)
+            env = dict(os.environ, ATTRACT_DIR=str(tmp / 'attract'), FLIPEROS_USER='root', ARCADEFLOW_VERSION='9.9',
+                       PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']))
+
+            def apply():
+                run = subprocess.run(['bash', str(self.SCRIPT), 'prefs'], capture_output=True, text=True, env=env,
+                                     timeout=60)
+                self.assertEqual(run.returncode, 0, run.stderr)
+            apply()
+            self.assertFalse(theme.exists())
+            theme.mkdir(parents=True)
+            (theme / 'layout.nut').write_text('// Arcadeflow\n')
+            prefs, mark = theme / 'pref_layoutoptions.txt', theme / 'pref_fliperos.txt'
+            before = ('9.9\n\n|OVERMENUBUTTON|1| Context menu button : Select\n|SMALLSCREEN|0| Small screen : Yes\n'
+                      '|UPDATECHECK|1| Automatically check for updates : No\n')
+            prefs.write_text(before)
+            mark.write_text('UPDATECHECK\n')
+            (tmp / 'open').write_text('')
+            apply()
+            self.assertEqual(prefs.read_text(), before)
+            (tmp / 'open').unlink()
+            apply()
+            after = ('9.9\n\n|SMALLSCREEN|0| Small screen : Yes\n|UPDATECHECK|1| Automatically check for updates : No\n'
+                     '|OVERMENUBUTTON|0|\n')
+            self.assertEqual(prefs.read_text(), after)
+            self.assertEqual(mark.read_text(), 'UPDATECHECK\nOVERMENUBUTTON\n')
+            prefs.write_text(before)
+            apply()
+            self.assertEqual(prefs.read_text(), before)
 
     def test_fetch_refuses_what_is_not_the_theme(self):
         with tempfile.TemporaryDirectory() as tmp:

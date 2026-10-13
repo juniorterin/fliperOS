@@ -3143,6 +3143,57 @@ class RomCleanerTests(Base):
         self.env.out("frontends_arcadeflow_sync", env)
         self.assertEqual((db.read_text(), db.stat().st_mtime_ns), (filled, stamp))
 
+    def test_attract_defaults_put_displays_on_arcadeflow_and_clones_in_the_list(self):
+        # Toda tela no Basic/BasicPlus (as que o Attract-Mode Plus cria) passa
+        # para o Arcadeflow, sempre; a de outro layout fica. "Group Clones" e
+        # desligado uma vez so: o que a pessoa escolher depois fica.
+        attract = self.env.dir / "attract-defaults"
+        (attract / "config").mkdir(parents=True)
+        display = "display %s\n    layout                  %s\n    romlist                 %s\n\n"
+        displays = attract / "config" / "displays.cfg"
+        cfg = attract / "config" / "attract.cfg"
+
+        def write(layouts):
+            displays.write_text("".join(display % (n, l, n) for n, l in layouts))
+
+        write((("mame", "BasicPlus"), ("MAME", "Basic"), ("Meu", "Grid")))
+        cfg.write_text("general\n    language                en\n    group_clones            yes\n    startup_mode            default\n")
+        conf = self.env.dir / "defaults.conf"
+        env = dict(self.vars, ATTRACT_DIR=str(attract), FLIPEROS_CONF=str(conf))
+        self.env.stub("pgrep", "exit 1")
+        # Sem o tema, as telas ficam; os clones entram na lista.
+        self.env.out("frontends_attract_defaults", env)
+        self.assertIn("layout                  BasicPlus\n", displays.read_text())
+        self.assertIn("    group_clones            no\n    startup_mode", cfg.read_text())
+        (attract / "layouts" / "Arcadeflow").mkdir(parents=True)
+        (attract / "layouts" / "Arcadeflow" / "layout.nut").write_text("// Arcadeflow\n")
+        self.env.stub("pgrep", "exit 0")
+        self.env.out("frontends_attract_defaults", env)
+        self.assertIn("layout                  BasicPlus\n", displays.read_text())
+        self.env.stub("pgrep", "exit 1")
+        calls = self.env.dir / "arcadeflow-defaults.calls"
+        self.env.stub("fliperos-arcadeflow", 'echo "$*" >> "%s"' % calls)
+        env["ARCADEFLOW"] = str(self.env.bin / "fliperos-arcadeflow")
+        self.env.out("frontends_attract_defaults", env)
+        self.assertEqual(calls.read_text(), "prefs\n")
+        self.assertEqual(displays.read_text(), "".join(
+            display % (n, l, n) for n, l in (("mame", "Arcadeflow"), ("MAME", "Arcadeflow"), ("Meu", "Grid"))))
+        # A pessoa volta a agrupar os clones e poe uma tela no Basic: os
+        # clones ficam como ela deixou, a tela volta ao Arcadeflow.
+        cfg.write_text(cfg.read_text().replace("group_clones            no", "group_clones            yes"))
+        write((("MAME", "Basic"),))
+        self.env.out("frontends_attract_defaults", env)
+        self.assertIn("group_clones            yes\n", cfg.read_text())
+        self.assertEqual(displays.read_text(), display % ("MAME", "Arcadeflow", "MAME"))
+        # Antes da primeira execucao: no attract.cfg de fora, que ele migra.
+        first = self.env.dir / "attract-defaults-first"
+        first.mkdir()
+        (first / "attract.cfg").write_text(display % ("MAME", "Basic", "MAME"))
+        env = dict(self.vars, ATTRACT_DIR=str(first), FLIPEROS_CONF=str(self.env.dir / "defaults-first.conf"))
+        self.env.out("frontends_attract_defaults; frontends_attract_defaults", env)
+        self.assertEqual((first / "attract.cfg").read_text(),
+                         display % ("MAME", "Basic", "MAME") + "general\n    group_clones            no\n")
+
     def test_attract_empty_romlists_and_unused_emulators_are_removed(self):
         # A romlist sem jogos sai, com o banco do Arcadeflow e as telas dela
         # (as que o Attract-Mode Plus cria sozinho na primeira execucao), e

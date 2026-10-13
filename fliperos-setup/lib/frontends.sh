@@ -237,8 +237,48 @@ frontends_attract() {
     n=$((n + 1))
   done < <(frontends_systems)
   frontends_attract_empty
+  frontends_attract_defaults
   frontends_arcadeflow_sync
   log_info "Attract-Mode Plus: $n sistema(s)"
+}
+
+# frontends_attract_defaults: os padroes do FliperOS no Attract-Mode Plus, a
+# cada abertura do launcher (fliperos-setup --session-start) e ao gravar as
+# telas. Nao com ele aberto.
+# - Toda tela no Arcadeflow (com o tema instalado): as que estao no Basic ou
+#   no BasicPlus, o layout que o Attract-Mode Plus da as telas que ele mesmo
+#   cria. A de outro layout, escolhido pela pessoa, fica.
+# - Os clones na lista: com "Group Clones" (o padrao do Attract-Mode Plus) a
+#   lista so tem um jogo por familia, e num tema que desenha a propria lista,
+#   como o Arcadeflow, nao ha como abrir um clone. Desligado uma vez so
+#   (anotado no fliperos.conf): o que a pessoa escolher depois fica. Antes da
+#   primeira execucao vai no attract.cfg de fora, que ele migra.
+frontends_attract_defaults() {
+  local acfg cfg="$ATTRACT_DIR/config/attract.cfg"
+  pgrep -x "${ATTRACTPLUS##*/}" > /dev/null 2>&1 && return 0
+  if [[ $(scraper_attract_layout) == Arcadeflow ]]; then
+    # As opcoes do FliperOS que um tema instalado antes ainda nao recebeu.
+    "$ARCADEFLOW" prefs 2>> "$FLIPEROS_LOG"
+    for acfg in "$ATTRACT_DIR/attract.cfg" "$ATTRACT_DIR/config/displays.cfg"; do
+      [[ -f $acfg ]] && grep -qE '^[[:space:]]+layout[[:space:]]+Basic(Plus)?[[:space:]]*$' "$acfg" || continue
+      sed -i -E 's/^([[:space:]]+layout[[:space:]]+)Basic(Plus)?[[:space:]]*$/\1Arcadeflow/' "$acfg"
+      chown "$FLIPEROS_USER:" "$acfg" 2> /dev/null
+      log_info "Attract-Mode Plus: telas de ${acfg##*/} no Arcadeflow"
+    done
+  fi
+  [[ $(conf_get attract_clones 2> /dev/null) == 1 ]] && return 0
+  if [[ -f $cfg ]]; then
+    grep -qE '^[[:space:]]+group_clones[[:space:]]' "$cfg" || return 0
+    sed -i -E 's/^([[:space:]]+group_clones[[:space:]]+)yes[[:space:]]*$/\1no/' "$cfg"
+    chown "$FLIPEROS_USER:" "$cfg" 2> /dev/null
+  else
+    acfg="$ATTRACT_DIR/attract.cfg"
+    [[ -f $acfg ]] && ! grep -q '^general' "$acfg" || return 0
+    printf 'general\n    %-24s%s\n' group_clones no >> "$acfg"
+  fi
+  conf_set attract_clones 1
+  log_info "Attract-Mode Plus: clones na lista (Group Clones desligado)"
+  return 0
 }
 
 # frontends_attract_empty: a romlist sem nenhum jogo sai (com o banco do

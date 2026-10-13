@@ -227,6 +227,7 @@ echo "== Scraper artwork in ~/media"
   frontends_configure "$(launcher_current)"
   # A configuracao de 240p do ES-DE e do Pegasus instalados (lib/frontends.sh).
   frontends_240p
+  frontends_attract_defaults
   frontends_arcadeflow_screen
   for t in $MEDIA_TYPES; do
     echo "$t: $(find "$MEDIA_DIR/$t" -mindepth 2 -type f | wc -l) file(s)"
