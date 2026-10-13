@@ -4,6 +4,7 @@
 # patches pra CRLF e corrompeu os arquivos).
 *.sh text eol=lf
 patches/** -text
+packaging/patches/** -text
 # Tudo em config/ vai para a imagem como esta: scripts sem extensao
 # (fliperos-session, fliperos-rebuild-edids...), o limine.conf, a paleta do
 # console (o setvtrgb nao le "255\r") e a configuracao do LXDE.

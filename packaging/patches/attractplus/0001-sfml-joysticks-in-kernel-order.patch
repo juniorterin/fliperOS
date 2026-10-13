@@ -1,0 +1,68 @@
+SFML: joysticks in the kernel's order (js0, js1...)
+
+The first scan maps the joysticks in the order udev lists them, which is the
+order of the system paths compared as text: .../input10/js1 comes before
+.../input9/js0. With two joysticks whose input numbers have a different
+number of digits, Joy0 is the second one, and the frontend is driven by
+player 2. A dual encoder split by the kernel (HID_QUIRK_MULTI_INPUT) gets
+consecutive input numbers, so it hits this whenever they cross 9/10 or 99/100.
+
+The new joysticks of a scan are now mapped by the number of their jsN node.
+The ones already mapped keep their place, as before.
+
+diff --git a/extlibs/SFML/src/SFML/Window/Unix/JoystickImpl.cpp b/extlibs/SFML/src/SFML/Window/Unix/JoystickImpl.cpp
+--- a/extlibs/SFML/src/SFML/Window/Unix/JoystickImpl.cpp
++++ b/extlibs/SFML/src/SFML/Window/Unix/JoystickImpl.cpp
+@@ -39,7 +39,9 @@
+ #include <unistd.h>
+ #include <vector>
+ 
++#include <algorithm>
+ #include <cerrno>
++#include <cstdlib>
+ #include <cstring>
+ 
+ namespace
+@@ -83,6 +85,13 @@ struct JoystickRecord
+ using JoystickList = std::vector<JoystickRecord>;
+ JoystickList joystickList;
+ 
++// The N of a /dev/input/jsN device node
++int joystickNumber(const std::string& deviceNode)
++{
++    const std::size_t pos = deviceNode.rfind("/js");
++    return pos == std::string::npos ? 0 : std::atoi(deviceNode.c_str() + pos + 3);
++}
++
+ bool isJoystick(udev_device* udevDevice)
+ {
+     // If anything goes wrong, we go safe and return true
+@@ -226,6 +235,7 @@ void updatePluggedList(udev_device* udevDevice = nullptr)
+ 
+     udev_list_entry* devices = udev_enumerate_get_list_entry(udevEnumerator.get());
+     udev_list_entry* device  = nullptr;
++    JoystickList     newRecords;
+ 
+     udev_list_entry_foreach(device, devices)
+     {
+@@ -257,10 +267,19 @@ void updatePluggedList(udev_device* udevDevice = nullptr)
+                 newRecord.systemPath = syspath;
+                 newRecord.plugged    = true;
+ 
+-                joystickList.push_back(newRecord);
++                newRecords.push_back(newRecord);
+             }
+         }
+     }
++
++    // udev lists the devices by system path, where input10 comes before
++    // input9: map the new ones in the kernel's order (js0, js1...) instead,
++    // which is the order the joysticks were found in
++    std::stable_sort(newRecords.begin(),
++                     newRecords.end(),
++                     [](const JoystickRecord& left, const JoystickRecord& right)
++                     { return joystickNumber(left.deviceNode) < joystickNumber(right.deviceNode); });
++    joystickList.insert(joystickList.end(), newRecords.begin(), newRecords.end());
+ }
+ 
+ bool hasMonitorEvent()

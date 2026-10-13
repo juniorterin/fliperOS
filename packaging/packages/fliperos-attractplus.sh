@@ -11,7 +11,7 @@
 
 PKG_NAME="fliperos-attractplus"
 PKG_VERSION="3.2.3"
-PKG_REVISION="1fliperos1"
+PKG_REVISION="1fliperos2"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://github.com/oomek/attractplus"
 PKG_SUMMARY="Attract-Mode Plus (KMS/DRM build for CRT)"
@@ -45,12 +45,19 @@ PKG_SHLIB_TARGETS="usr/bin/attractplus"
 # suspenso dentro de uma funcao chamada em "|| err", entao sem o && um make
 # que falhasse deixaria o "make install" rodar em cima de um build quebrado.
 pkg_build() {
+  local here patch
+  here=$(dirname "${BASH_SOURCE[0]}")
   # extlibs/SFML vem no proprio repositorio, nao como submodulo, entao o
   # clone raso basta.
   git clone --depth 1 --branch "$PKG_VERSION" \
-      https://github.com/oomek/attractplus.git "$SRC/attractplus" \
-    && make -C "$SRC/attractplus" USE_DRM=1 prefix=/usr -j"$(nproc)" \
+      https://github.com/oomek/attractplus.git "$SRC/attractplus" || return 1
+  # Os nossos patches (packaging/patches/attractplus), cada um com o motivo
+  # no proprio cabecalho.
+  for patch in "$here"/../patches/attractplus/*.patch; do
+    patch -d "$SRC/attractplus" -p1 < "$patch" || return 1
+  done
+  make -C "$SRC/attractplus" USE_DRM=1 prefix=/usr -j"$(nproc)" \
     && make -C "$SRC/attractplus" install USE_DRM=1 prefix=/usr DESTDIR="$STAGING" \
-    && cp -r "$(dirname "${BASH_SOURCE[0]}")/../assets/attractplus-layouts/AdvanceMenu" \
+    && cp -r "$here/../assets/attractplus-layouts/AdvanceMenu" \
              "$STAGING/usr/share/attractplus/layouts/AdvanceMenu"
 }

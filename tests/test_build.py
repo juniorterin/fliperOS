@@ -7220,6 +7220,21 @@ class PackagingTests(unittest.TestCase):
         for recipe in self.recipe_files():
             self.assertIn(recipe.stem, table)
 
+    def test_attractplus_patches_apply_on_linux_and_keep_the_kernel_joystick_order(self):
+        # patch -p1 no container: um patch em CRLF nao se aplica.
+        patches = sorted((ROOT / 'packaging/patches/attractplus').glob('*.patch'))
+        for patch in patches:
+            self.assertNotIn(b'\r', patch.read_bytes(), patch.name)
+        self.assertIn('packaging/patches/** -text', (ROOT / '.gitattributes').read_text())
+        recipe = (self.RECIPES / 'fliperos-attractplus.sh').read_text()
+        self.assertIn('for patch in "$here"/../patches/attractplus/*.patch', recipe)
+        self.assertIn('patch -d "$SRC/attractplus" -p1 < "$patch" || return 1', recipe)
+        # O SFML listava os joysticks pelo caminho do sysfs como texto
+        # (input10 antes de input9): o Joy0 era o jogador 2.
+        order = (ROOT / 'packaging/patches/attractplus/0001-sfml-joysticks-in-kernel-order.patch').read_text()
+        self.assertIn('+++ b/extlibs/SFML/src/SFML/Window/Unix/JoystickImpl.cpp', order)
+        self.assertIn('joystickNumber(left.deviceNode) < joystickNumber(right.deviceNode)', order)
+
 
 class DocsTests(unittest.TestCase):
     """O README e o resumo; o detalhe fica nas paginas de docs/wiki, que o
