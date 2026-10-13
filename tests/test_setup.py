@@ -3785,6 +3785,16 @@ class FoldersTests(Base):
         self.assertEqual([line.split("|")[0] for line in out.splitlines()], ["mame", "retroarch/mame2010"])
         self.assertEqual(out.splitlines()[0].split("|")[3], "1")
 
+    def test_browser_opens_where_the_disks_are_mounted(self):
+        mounts = self.env.dir / "media" / "fliperos"
+        env = dict(self.vars, FOLDERS_MOUNTS=str(mounts))
+        # Nenhum disco montado ainda: a pasta acima.
+        (self.env.dir / "media").mkdir()
+        self.assertEqual(self.env.out("folders_browse_start", env).strip(), str(self.env.dir / "media"))
+        mounts.mkdir()
+        self.assertEqual(self.env.out("folders_browse_start", env).strip(), str(mounts))
+        self.assertIn('"$(folders_browse_start)" dir', (SETUP / "screens" / "folders.sh").read_text())
+
     def test_shares_follow_the_links(self):
         smb = (ROOT / "config/smb.conf").read_text()
         for name in ("roms", "bios", "media", "splashscreen"):

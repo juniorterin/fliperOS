@@ -168,6 +168,17 @@ folders_customs() {
   return 0
 }
 
+# folders_browse_start imprime onde o navegador de pastas abre ao escolher
+# uma custom folder: sempre a pasta dos discos montados (HD, SSD, pendrive),
+# tambem quando a pasta ja tem uma custom folder. Sem nenhum disco montado
+# ainda, a pasta acima dela.
+folders_browse_start() {
+  local dir=$FOLDERS_MOUNTS
+  while [[ ! -d $dir && -n ${dir%/*} ]]; do dir=${dir%/*}; done
+  [[ -d $dir ]] || dir=/
+  printf '%s\n' "$dir"
+}
+
 # folders_skeleton PASTA: so tem o que o fliperos-roms cria sozinho (pastas,
 # os _info.txt e os temas do splash copiados da imagem)? Uma assim pode sair
 # sem levar nada de ninguem.

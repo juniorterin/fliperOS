@@ -112,14 +112,12 @@ screen_folders_refresh() {
 }
 
 screen_folder_add() {
-  local rel=$1 title="Folders: ~/$1" start=/ target state kept=() path
+  local rel=$1 title="Folders: ~/$1" target state kept=()
   state=$(folders_state "$rel")
-  [[ -d /media ]] && start=/media
-  path=$(find "$FOLDERS_MOUNTS" -mindepth 1 -maxdepth 1 -type d -print -quit 2> /dev/null)
-  [[ -n $path ]] && start=$FOLDERS_MOUNTS
+  # Sempre a partir de onde os discos estao montados.
   target=$(ui_browse "$title" \
-    "Open the folder to use in place of ~/$rel, then Use this folder. The disks are in $FOLDERS_MOUNTS." \
-    "$start" dir) || return 0
+    "The disks connected now (hard disk, SSD, USB stick). Open the folder to use in place of ~/$rel, then Use this folder." \
+    "$(folders_browse_start)" dir) || return 0
   if ! folders_validate "$rel" "$target"; then
     ui_msg "$title" "$FOLDERS_ERROR"
     return 0
