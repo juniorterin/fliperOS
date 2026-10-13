@@ -67,7 +67,12 @@ fliperos-romclean buttons (/var/lib/fliperos/game-buttons.txt). O save
 aplica o layout onde o botao N do painel e o botao N do jogo: no GroovyMAME,
 um <system> por jogo no ctrlr (o clone segue o do pai); nos cores MAME do
 RetroArch, um buttons-BOTOES.cfg ao lado do buttons.cfg, que o
-fliperos-kms-run soma a config do jogo que tem esse numero de botoes.
+fliperos-kms-run soma a config do jogo que tem esse numero de botoes; no
+Supermodel (Model 3), os botoes do jogo (luta, futebol, Spikeout) na secao
+dele do Supermodel.ini; no SM2-Emu (Model 2), um mapeamento de game
+controller so dele (gamecontrollerdb-model2.txt, com o botao N do painel no
+botao N do jogo, e um gamecontrollerdb-model2-BOTOES.txt por layout), que o
+fliperos-x11-run poe por cima do gamecontrollerdb.txt ao abrir o jogo.
 """
 import argparse
 import ctypes
@@ -93,6 +98,8 @@ FLYCAST_DOJO_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_DOJO_MAPPINGS',
 CONTROLLERS = os.environ.get('FLIPEROS_CONTROLLERS', '/opt/fliperos/bin/fliperos-controllers')
 BUTTONS_LAYOUT = os.environ.get('FLIPEROS_BUTTONS_LAYOUT', '/etc/fliperos/buttons.layout')
 GAME_BUTTONS = os.environ.get('FLIPEROS_GAME_BUTTONS', '/var/lib/fliperos/game-buttons.txt')
+SUPERMODEL_GAMES = os.environ.get('FLIPEROS_SUPERMODEL_GAMES', '/usr/local/share/supermodel/Config/Games.xml')
+MODEL2_DB = os.environ.get('FLIPEROS_SDL_MODEL2_DB', '/var/lib/fliperos/gamecontrollerdb-model2.txt')
 USER_ID = 1000
 PANEL_BUTTONS = 6
 LAYOUT_COUNTS = range(1, 6)
@@ -325,8 +332,9 @@ SDL_SLOTS = {'up': 'dpup', 'down': 'dpdown', 'left': 'dpleft', 'right': 'dpright
              'b3': 'rightshoulder', 'b4': 'a', 'b5': 'b', 'b6': 'righttrigger', 'start': 'start', 'coin': 'back'}
 
 
-def sdl_mapping_line(guid, name, binds):
-    fields = ['%s:%s' % (SDL_SLOTS[c], e) for c, (_, e) in sorted(binds.items())]
+def sdl_mapping_line(guid, name, binds, slots=None):
+    slots = slots or SDL_SLOTS
+    fields = ['%s:%s' % (slots[c], e) for c, (_, e) in sorted(binds.items()) if c in slots]
     return ','.join([guid, name.replace(',', ' ')] + sorted(fields) + ['platform:Linux']) + ','
 
 
@@ -341,6 +349,51 @@ def sdl_user_db(players, devices):
             guid, name = devices[index][:2]
             lines[guid] = sdl_mapping_line(guid, name, binds)
     return lines
+
+
+# ── SM2-Emu (Model 2) ───────────────────────────────────────────
+
+# O SM2-Emu le o game controller do SDL: os botoes 1 a 4 do jogo em A B X Y
+# (os pad*_button_* padrao do sm2-emu.ini), Start e a ficha no Back. No
+# layout de fight stick dos outros emuladores o botao 1 do jogo caia na
+# linha de baixo, e o RB (o 3 do painel) e sempre o botao 4 dele: o Model 2
+# ganha um mapeamento proprio, com o botao N do jogo na posicao do painel
+# do layout (sem layout, na posicao N).
+MODEL2_SLOTS = {'up': 'dpup', 'down': 'dpdown', 'left': 'dpleft', 'right': 'dpright', 'b1': 'a', 'b2': 'b',
+                'b3': 'x', 'b4': 'y', 'start': 'start', 'coin': 'back'}
+MODEL2_BUTTONS = 4
+
+
+def model2_db(players, devices, order):
+    """As linhas do mapeamento do Model 2, um aparelho (GUID) por linha."""
+    lines = {}
+    for player in sorted(players):
+        binds = players[player]
+        index = next(iter(binds.values()))[0]
+        if index not in devices or devices[index][0] in lines:
+            continue
+        guid, name = devices[index][:2]
+        game = {c: b for c, b in binds.items() if not c.startswith('b')}
+        for n, position in enumerate(order[:MODEL2_BUTTONS], 1):
+            if 'b%d' % position in binds:
+                game['b%d' % n] = binds['b%d' % position]
+        lines[guid] = sdl_mapping_line(guid, name, game, MODEL2_SLOTS)
+    return lines
+
+
+def model2_save(players, devices, layouts):
+    """O gamecontrollerdb-model2.txt e o de cada numero de botoes com layout."""
+    paths = []
+    for count in [0] + list(range(1, MODEL2_BUTTONS + 1)):
+        path = MODEL2_DB if not count else '%s-%d.txt' % (os.path.splitext(MODEL2_DB)[0], count)
+        if count and count not in layouts:
+            if os.path.isfile(path):
+                os.remove(path)
+            continue
+        lines = model2_db(players, devices, layout_order(layouts, count))
+        write(path, ''.join(line + '\n' for line in lines.values()))
+        paths.append(path)
+    return paths
 
 
 # ── Flycast ─────────────────────────────────────────────────────
@@ -484,6 +537,19 @@ SUPERMODEL_AXES = ['XAXIS', 'YAXIS', 'ZAXIS', 'RXAXIS', 'RYAXIS', 'RZAXIS']
 SUPERMODEL_HAT = {'1': 'UP', '2': 'RIGHT', '4': 'DOWN', '8': 'LEFT'}
 
 
+# Os botoes de cada tipo de jogo do Games.xml (<input type>), na ordem do
+# padrao do Supermodel (JOYn_BUTTON1, 2...): (jogador 1, jogador 2). O
+# Spikeout tem um jogador por gabinete.
+SUPERMODEL_FAMILIES = {
+    'fighting': [('InputPunch', 'InputPunch2'), ('InputKick', 'InputKick2'), ('InputGuard', 'InputGuard2'),
+                 ('InputEscape', 'InputEscape2')],
+    'spikeout': [('InputShift', None), ('InputBeat', None), ('InputCharge', None), ('InputJump', None)],
+    'soccer': [('InputShortPass', 'InputShortPass2'), ('InputLongPass', 'InputLongPass2'),
+               ('InputShoot', 'InputShoot2')],
+}
+SUPERMODEL_BUTTON_KEYS = ['KEY_A', 'KEY_S', 'KEY_D', 'KEY_F']
+
+
 def supermodel_code(index, element):
     """O nome de entrada do Supermodel (SDL: JOY1 e o controle 0) de um elemento."""
     joy = 'JOY%d_' % (index + 1)
@@ -508,7 +574,82 @@ def supermodel_values(players):
             default = SUPERMODEL_KEYS[control][2] if player == 1 else SUPERMODEL_P2_KEYS.get(control)
             code = supermodel_code(index, element)
             out[key] = '"%s,%s"' % (default, code) if default else '"%s"' % code
+    for family in ('spikeout', 'soccer'):
+        out.update(supermodel_buttons(players, SUPERMODEL_FAMILIES[family], range(1, PANEL_BUTTONS + 1)))
     return out
+
+
+def supermodel_buttons(players, inputs, order):
+    """{chave: valor} dos botoes de um tipo de jogo, o botao N na posicao
+    order[N - 1] do painel; a tecla padrao junto no jogador 1."""
+    out = {}
+    for n, keys in enumerate(inputs):
+        for player, key in zip((1, 2), keys):
+            bind = players.get(player, {}).get('b%d' % order[n])
+            if not key or not bind:
+                continue
+            code = supermodel_code(*bind)
+            out[key] = '"%s,%s"' % (SUPERMODEL_BUTTON_KEYS[n], code) if player == 1 else '"%s"' % code
+    return out
+
+
+def supermodel_games(path):
+    """{jogo: tipo} dos jogos do Games.xml com botoes de SUPERMODEL_FAMILIES."""
+    import xml.etree.ElementTree as ET
+    games = {}
+    try:
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError):
+        return games
+    for game in root.iter('game'):
+        for inp in game.iter('input'):
+            if inp.get('type') in SUPERMODEL_FAMILIES and game.get('name'):
+                games[game.get('name')] = inp.get('type')
+    return games
+
+
+def supermodel_game_section(text, game, values):
+    """O Supermodel.ini com `values` na secao [ game ] (o Supermodel a soma
+    a [ Global ] ao abrir o jogo), sem os botoes de um layout anterior; o
+    resto da secao fica, e a que fica vazia sai."""
+    owned = {k for inputs in SUPERMODEL_FAMILIES.values() for keys in inputs for k in keys if k}
+    lines = text.splitlines()
+    start = next((i for i, l in enumerate(lines) if re.match(r'\s*\[\s*%s\s*\]\s*$' % re.escape(game), l)), None)
+    new = ['%s = %s' % kv for kv in sorted(values.items())]
+    if start is None:
+        if not new:
+            return text
+        while lines and not lines[-1].strip():
+            lines.pop()
+        return '\n'.join(lines + ([''] if lines else []) + ['[ %s ]' % game] + new) + '\n'
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith('[')), len(lines))
+    body = []
+    for line in lines[start + 1:end]:
+        m = re.match(r'\s*(\w+)\s*=', line)
+        if not (m and m.group(1) in owned):
+            body.append(line)
+    while body and not body[-1].strip():
+        body.pop()
+    body += new
+    head, tail = lines[:start], lines[end:]
+    if not any(l.strip() for l in body):
+        while head and not head[-1].strip():
+            head.pop()
+        return '\n'.join(head + ([''] if head and tail else []) + tail) + '\n'
+    return '\n'.join(head + [lines[start]] + body + ([''] if tail else []) + tail) + '\n'
+
+
+def supermodel_layouts(text, players, layouts, table, games):
+    """As secoes dos jogos do Games.xml: os botoes no layout do numero de
+    botoes do jogo (o da tabela; sem ele, os do tipo do jogo)."""
+    for game in sorted(games):
+        inputs = SUPERMODEL_FAMILIES[games[game]]
+        count = min(table[game][0], len(inputs)) if game in table else len(inputs)
+        values = {}
+        if count in layouts:
+            values = supermodel_buttons(players, inputs[:count], layout_order(layouts, count))
+        text = supermodel_game_section(text, game, values)
+    return text
 
 
 def supermodel_ini(text, values):
@@ -530,13 +671,15 @@ def supermodel_ini(text, values):
     return '\n'.join(lines) + '\n'
 
 
-def supermodel_save(players):
+def supermodel_save(players, layouts=None, table=None):
     try:
         with open(SUPERMODEL_INI, encoding='utf-8', errors='replace') as f:
             text = f.read()
     except OSError:
         text = ''
-    write(SUPERMODEL_INI, supermodel_ini(text, supermodel_values(players)), USER_ID)
+    text = supermodel_ini(text, supermodel_values(players))
+    text = supermodel_layouts(text, players, layouts or {}, table or {}, supermodel_games(SUPERMODEL_GAMES))
+    write(SUPERMODEL_INI, text, USER_ID)
     try:
         os.chown(os.path.dirname(os.path.dirname(SUPERMODEL_INI)), USER_ID, USER_ID)
     except OSError:
@@ -793,8 +936,9 @@ def cmd_save(args):
             print(path)
         elif os.path.isfile(path):
             os.remove(path)
-    write(MAME_CTRLR, mame_cfg(players, names, layouts, read_games(GAME_BUTTONS) if layouts else {}), USER_ID)
-    supermodel_save(players)
+    table = read_games(GAME_BUTTONS) if layouts else {}
+    write(MAME_CTRLR, mame_cfg(players, names, layouts, table), USER_ID)
+    supermodel_save(players, layouts, table)
     hypseus_save(players)
     print(RA_BUTTONS)
     print(MAME_CTRLR)
@@ -824,7 +968,7 @@ def cmd_save(args):
         openbor_save(players, devices)
         print(OPENBOR_SAVES)
         print(OPENBOR3_SAVES)
-        for path in dolphin_save(players, devices):
+        for path in dolphin_save(players, devices) + model2_save(players, devices, layouts):
             print(path)
         # O gamecontrollerdb.txt de novo, com o mapeamento por ultimo.
         if os.access(CONTROLLERS, os.X_OK):

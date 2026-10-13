@@ -217,7 +217,7 @@ It appears when you leave the frontend (Esc). The title shows the cabinet's name
   - *Network status*: the connection and the IP address.
 - **Joysticks (GunCon 2, wheel, LPT)**:
   - *Button mapping (all emulators)*: maps each player's controls once for every emulator (step 8);
-  - *Buttons layout (games of 1 to 5 buttons)*: where the buttons of a game go on the panel, by how many buttons the game uses: a 4-button game as 1 2 on top and 3 4 below, or 1 3 on top and 2 4 below. For GroovyMAME and the MAME cores of RetroArch;
+  - *Buttons layout (games of 1 to 5 buttons)*: where the buttons of a game go on the panel, by how many buttons the game uses: a 4-button game as 1 2 on top and 3 4 below, or 1 3 on top and 2 4 below. For GroovyMAME, the MAME cores of RetroArch, Model 2 and Model 3;
   - *Calibrate GunCon 2 (light gun)*: shoot the top-left and bottom-right targets, then the center one to check;
   - *Calibrate wheel, pedals or analog stick*: the limits and center of each axis;
   - *LPT joysticks (parallel port)*: old controllers on the parallel port: gamepad adapter (NES, SNES, N64, PlayStation), DB9 adapter (Atari, Amiga, Sega) or TurboGraFX interface (up to 7 joysticks). *Joysticks found now* shows what was detected and *Turn off* disables it.

@@ -96,7 +96,7 @@ screen_buttons_layout() {
       entries+=("$count|$count-button games   $(buttons_layout_row "${order[@]}")")
     done
     choice=$(ui_menu "$title" \
-      "Where the buttons of a game go on the panel, by how many buttons the game uses. For GroovyMAME and the MAME cores of RetroArch." \
+      "Where the buttons of a game go on the panel, by how many buttons the game uses. For GroovyMAME, the MAME cores of RetroArch, Model 2 and Model 3." \
       "$last" "${entries[@]}" "return|Return") || return 0
     [[ $choice == return ]] && return 0
     last=$choice

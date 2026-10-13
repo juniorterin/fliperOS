@@ -32,8 +32,9 @@ buttons_save() {
 # Setup > Joysticks > Buttons layout: onde ficam no painel (1 2 3 em cima,
 # 4 5 6 embaixo) os botoes dos jogos de 1 a 5 botoes. Uma linha "BOTOES
 # POSICAO..." por numero de botoes no buttons.layout; sem linha, o botao N
-# do jogo fica na posicao N. O fliperos-buttons aplica (GroovyMAME e os cores
-# MAME do RetroArch) pela tabela de quantos botoes cada jogo tem.
+# do jogo fica na posicao N. O fliperos-buttons aplica (GroovyMAME, os cores
+# MAME do RetroArch, Supermodel e SM2-Emu) pela tabela de quantos botoes cada
+# jogo tem.
 
 BUTTONS_MAP=${BUTTONS_MAP:-$FLIPEROS_ETC/buttons.map}
 BUTTONS_LAYOUT=${BUTTONS_LAYOUT:-$FLIPEROS_ETC/buttons.layout}

@@ -5250,6 +5250,29 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertEqual((tmp / 'out').read_text().strip(), '%s/scud.zip' % roms)
         self.assertNotIn('zenity', MKISO)
 
+    def test_sm2emu_gets_the_panel_mapping_of_the_game(self):
+        # O mapeamento de game controller do Model 2 (fliperos-buttons) por
+        # cima do do sistema; o do numero de botoes do jogo, se ha um layout.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            db = home / 'gamecontrollerdb-model2.txt'
+            merged = home / '.config' / 'sm2-emu' / 'gamecontrollerdb.txt'
+            (home / 'sys.txt').write_text('sistema\n')
+            (home / 'games').write_text('vf2 3\nvcop 1\n')
+            extra = {'FLIPEROS_SDL_MODEL2_DB': str(db), 'FLIPEROS_GAME_BUTTONS': str(home / 'games'),
+                     'SDL_GAMECONTROLLERCONFIG_FILE': str(home / 'sys.txt')}
+            # Sem o Button mapping feito, nada muda.
+            self.run_x11(['sm2-emu', '/r/vf2.zip'], home=home, extra=extra)
+            self.assertFalse(merged.exists())
+            db.write_text('painel\n')
+            (home / 'gamecontrollerdb-model2-3.txt').write_text('layout de 3\n')
+            self.run_x11(['sm2-emu', '/r/vf2.zip'], home=home, extra=extra)
+            self.assertEqual(merged.read_text(), 'sistema\nlayout de 3\n')
+            self.run_x11(['sm2-emu', '/r/vcop.zip'], home=home, extra=extra)
+            self.assertEqual(merged.read_text(), 'sistema\npainel\n')
+        x11 = (ROOT / 'config/fliperos-x11-run').read_text()
+        self.assertIn('export SDL_GAMECONTROLLERCONFIG_FILE=$cfg/gamecontrollerdb.txt', x11)
+
     def test_sm2emu_stretches_on_15khz_and_picks_a_game(self):
         # O binario nao vem na imagem. No 15 kHz o pixel e largo: cada
         # abertura grava stretch, mesmo se o ini ja nasceu em 4:3. O VSync
@@ -8150,6 +8173,65 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertIn(line, cfg)
         short = {c: b for c, b in self.PANEL.items() if c != 'b4'}
         self.assertIn('input_player1_x_btn = "nul"', rc.retroarch_layout_cfg({1: short}, 4, [1, 4, 2, 5, 3, 6]))
+
+    def test_supermodel_layout_goes_to_the_section_of_the_game(self):
+        # O Supermodel soma a secao [ jogo ] a [ Global ]: os botoes do tipo
+        # do jogo (Games.xml) no layout do numero de botoes dele.
+        rc = self.rc
+        p2 = {c: (1, e) for c, (_, e) in self.PANEL.items()}
+        players = {1: self.PANEL, 2: p2}
+        with tempfile.TemporaryDirectory() as tmp:
+            xml = Path(tmp) / 'Games.xml'
+            xml.write_text('<games>' + ''.join(
+                '<game name="%s"><hardware><inputs><input type="common"/><input type="%s"/></inputs></hardware></game>'
+                % g for g in (('vf3', 'fighting'), ('fvipers2', 'fighting'), ('vs2', 'soccer'),
+                              ('spikeout', 'spikeout'), ('scud', 'vehicle'))) + '</games>')
+            games = rc.supermodel_games(str(xml))
+            self.assertEqual(rc.supermodel_games(str(xml) + '.nada'), {})
+        self.assertEqual(games, {'vf3': 'fighting', 'fvipers2': 'fighting', 'vs2': 'soccer', 'spikeout': 'spikeout'})
+        # No [ Global ], futebol e Spikeout tambem na ordem do painel.
+        values = rc.supermodel_values(players)
+        self.assertEqual(values['InputShortPass'], '"KEY_A,JOY1_BUTTON1"')
+        self.assertEqual(values['InputShoot2'], '"JOY2_BUTTON3"')
+        self.assertEqual(values['InputJump'], '"KEY_F,JOY1_BUTTON4"')
+        self.assertNotIn('InputJump2', values)
+        # Os jogos de 3 botoes na linha de baixo; o vf3 tem 4 (tabela), o
+        # futebol 3 (do tipo), o fvipers2 3 (tabela).
+        layouts, table = {3: [4, 5, 6]}, {'vf3': (4, ''), 'fvipers2': (3, '')}
+        old = ('[ Global ]\nXResolution = 496\n\n[ vf3 ]\nInputPunch = "JOY1_BUTTON9"\n\n'
+               '[ fvipers2 ]\nPowerPCFrequency = 75\nInputKick = "JOY1_BUTTON9"\n\n[ scud ]\nInputVR1 = "KEY_Q"\n')
+        text = rc.supermodel_layouts(old, players, layouts, table, games)
+        self.assertEqual(text, '[ Global ]\nXResolution = 496\n\n'
+                               '[ fvipers2 ]\nPowerPCFrequency = 75\nInputGuard = "KEY_D,JOY1_BUTTON6"\n'
+                               'InputGuard2 = "JOY2_BUTTON6"\nInputKick = "KEY_S,JOY1_BUTTON5"\n'
+                               'InputKick2 = "JOY2_BUTTON5"\nInputPunch = "KEY_A,JOY1_BUTTON4"\n'
+                               'InputPunch2 = "JOY2_BUTTON4"\n\n[ scud ]\nInputVR1 = "KEY_Q"\n\n'
+                               '[ vs2 ]\nInputLongPass = "KEY_S,JOY1_BUTTON5"\nInputLongPass2 = "JOY2_BUTTON5"\n'
+                               'InputShoot = "KEY_D,JOY1_BUTTON6"\nInputShoot2 = "JOY2_BUTTON6"\n'
+                               'InputShortPass = "KEY_A,JOY1_BUTTON4"\nInputShortPass2 = "JOY2_BUTTON4"\n')
+        # Gravar de novo nao muda nada; sem layout, so fica o que e da pessoa.
+        self.assertEqual(rc.supermodel_layouts(text, players, layouts, table, games), text)
+        self.assertEqual(rc.supermodel_layouts(text, players, {}, table, games),
+                         '[ Global ]\nXResolution = 496\n\n[ fvipers2 ]\nPowerPCFrequency = 75\n\n'
+                         '[ scud ]\nInputVR1 = "KEY_Q"\n')
+
+    def test_model2_mapping(self):
+        # SM2-Emu: os botoes 1 a 4 do jogo em A B X Y, na posicao do painel
+        # do layout (sem layout, o botao N na posicao N); a ficha no Back.
+        rc = self.rc
+        devices = {0: ('g', 'P', 8, 2), 1: ('g', 'P', 8, 2)}
+        p2 = {c: (1, e) for c, (_, e) in self.PANEL.items()}
+
+        def fields(order):
+            lines = rc.model2_db({1: self.PANEL, 2: p2}, devices, order)
+            self.assertEqual(list(lines), ['g'])
+            return dict(f.split(':', 1) for f in lines['g'].split(',')[2:] if ':' in f)
+        base = fields(rc.layout_order({}, 0))
+        self.assertEqual([base[k] for k in 'abxy'], ['b0', 'b1', 'b2', 'b3'])
+        self.assertEqual((base['dpup'], base['start'], base['back'], base['platform']), ('-a1', 'b6', 'b7', 'Linux'))
+        self.assertNotIn('rightshoulder', base)
+        low = fields(rc.layout_order({3: [4, 5, 6]}, 3))
+        self.assertEqual([low[k] for k in 'abxy'], ['b3', 'b4', 'b5', 'b0'])
 
     def test_save_with_a_buttons_layout(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -224,6 +224,22 @@ case $name in
       sm2_set outputs_network false
       rm -f "$cfg/.fliperos-outputs"
     fi
+    # Setup > Joysticks > Button mapping e Buttons layout: o mapeamento de
+    # game controller do Model 2 (config/fliperos-buttons), o do numero de
+    # botoes deste jogo se ha um layout para ele, por cima do do sistema.
+    m2db=${FLIPEROS_SDL_MODEL2_DB:-/var/lib/fliperos/gamecontrollerdb-model2.txt}
+    if [[ -f $m2db ]]; then
+      game_buttons=${FLIPEROS_GAME_BUTTONS:-/var/lib/fliperos/game-buttons.txt}
+      count=""
+      [[ ! -f $game_buttons ]] ||
+        count=$(awk -v g="${game%.zip}" '$1 == g { print $2; exit }' "$game_buttons")
+      [[ -z $count || ! -f ${m2db%.txt}-$count.txt ]] || m2db=${m2db%.txt}-$count.txt
+      sysdb=${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}
+      if cat "$sysdb" "$m2db" > "$cfg/gamecontrollerdb.txt" 2> /dev/null ||
+        cat "$m2db" > "$cfg/gamecontrollerdb.txt" 2> /dev/null; then
+        export SDL_GAMECONTROLLERCONFIG_FILE=$cfg/gamecontrollerdb.txt
+      fi
+    fi
     set -- "$1" --fullscreen "${@:2}"
     ;;
 esac
