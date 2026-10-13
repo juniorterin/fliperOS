@@ -7,7 +7,8 @@
 #             novo do Online Updater ganha pasta no login seguinte.
 #   ~/bios    a pasta "system" do RetroArch e uma subpasta por emulador que
 #             procura em outro lugar.
-#   ~/media   a arte e os textos dos frontends (lib/scraper.sh do Setup).
+#   ~/media   a arte e os textos dos frontends (lib/scraper.sh do Setup): uma
+#             pasta por tipo e, dentro, as mesmas pastas de ~/roms.
 #   ~/config  links para as configuracoes de cada emulador e frontend
 #             instalado (os que ja criaram a sua).
 #   ~/splashscreen  os temas do splash (Plymouth), um por pasta.
@@ -138,14 +139,29 @@ if [[ -d $fightcade/emulator ]]; then
 fi
 
 # ── ~/media ─────────────────────────────────────────────────────────
-folder "$media" "Art and texts of the frontends, one folder per type and, inside it, one per system (arcade, snes, dreamcast...). Setup > Scraper saves here; Attract-Mode, ES-DE, Pegasus and the GroovyMAME game list read from here."
-folder "$media/snap" "Screenshots (.png), one folder per system: snap/arcade/sf2.png"
-folder "$media/preview" "Videos (.mp4), one folder per system: preview/arcade/sf2.mp4"
-folder "$media/logo" "Logos (wheel art, .png), one folder per system: logo/arcade/sf2.png"
-folder "$media/box" "Box art and flyers (.png), one folder per system: box/arcade/sf2.png"
-folder "$media/marquee" "Marquees (.png), one folder per system: marquee/arcade/sf2.png"
-folder "$media/dmd" "Art for 128x32 LED displays (ZeDMD), .png or animated .gif, one folder per system: dmd/arcade/sf2.gif. Without it the display shows the marquee, the logo or the game name."
-folder "$media/texto" "Game descriptions (.txt), one folder per system: texto/arcade/sf2.txt"
+folder "$media" "Art and texts of the frontends, one folder per type and, inside it, the same folders as ~/roms (mame, model2, retroarch/snes9x...): the art of ~/roms/mame/sf2.zip is in <type>/mame. Setup > Scraper saves here; Attract-Mode, ES-DE, Pegasus and the GroovyMAME game list read from here."
+folder "$media/snap" "Screenshots (.png), the same folders as ~/roms: snap/mame/sf2.png"
+folder "$media/preview" "Videos (.mp4), the same folders as ~/roms: preview/mame/sf2.mp4"
+folder "$media/logo" "Logos (wheel art, .png), the same folders as ~/roms: logo/mame/sf2.png"
+folder "$media/box" "Box art and flyers (.png), the same folders as ~/roms: box/mame/sf2.png"
+folder "$media/marquee" "Marquees (.png), the same folders as ~/roms: marquee/mame/sf2.png"
+folder "$media/dmd" "Art for 128x32 LED displays (ZeDMD), .png or animated .gif, the same folders as ~/roms: dmd/mame/sf2.gif. Without it the display shows the marquee, the logo or the game name."
+folder "$media/texto" "Game descriptions (.txt), the same folders as ~/roms: texto/mame/sf2.txt"
+# Dentro de cada tipo, as pastas de ~/roms que os frontends mostram (a de
+# cada emulador e a de cada core): a arte de uma pasta de jogos fica na de
+# mesmo nome, e cada uma aceita a custom folder dela (Setup > Folders).
+for type in snap preview logo box marquee dmd texto; do
+  [[ -d $media/$type ]] || continue
+  for dir in "$roms"/*/ "$roms"/retroarch/*/; do
+    [[ -d $dir ]] || continue
+    dir=${dir%/}
+    name=${dir#"$roms"/}
+    case ${name##*/} in old-* | old[0-9]*-*) continue ;; esac
+    case $name in retroarch | fightcade | openbor | hypseus) continue ;; esac
+    restore "$media/$type/$name"
+    [[ -e $media/$type/$name || -L $media/$type/$name ]] || mkdir -p "$media/$type/$name" 2> /dev/null
+  done
+done
 
 # ── ~/splashscreen ──────────────────────────────────────────────────
 # Os temas do Plymouth, um por pasta. Os da imagem entram se faltam (um

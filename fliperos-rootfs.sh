@@ -230,9 +230,10 @@ for ini in mame.ini:mame.ini ui.ini:mame-ui.ini; do
   # As pastas: uma relativa (o "cfg", "snap", "." do -createconfig puro)
   # depende da pasta de onde o GroovyMAME e aberto, e ele enchia a home de
   # cfg/nvram; sai, e sem nenhuma absoluta vale a do config/. As de procura
-  # do config/ (a BIOS em ~/bios/mame, a arte em ~/media/<tipo>/arcade)
+  # do config/ (a BIOS em ~/bios/mame, a arte em ~/media/<tipo>/mame)
   # entram tambem na lista que ja existe, sem tirar as que estao la; as de
-  # ~/.mame/scraped (o Scraper de antes do ~/media) saem.
+  # ~/.mame/scraped (o Scraper de antes do ~/media) e as de
+  # ~/media/<tipo>/arcade (de quando a arte ficava por plataforma) saem.
   while read -r key value; do
     case $key in *path | *_directory) ;; *) continue ;; esac
     add=0
@@ -246,7 +247,7 @@ for ini in mame.ini:mame.ini ui.ini:mame-ui.ini; do
         n = split(cur, have, ";")
         out = ""
         for (i = 1; i <= n; i++) {
-          if (have[i] !~ /^[\/$~]/ || have[i] ~ /\/\.mame\/scraped\//) continue
+          if (have[i] !~ /^[\/$~]/ || have[i] ~ /\/\.mame\/scraped\// || have[i] ~ /\/media\/[a-z]+\/arcade\/?$/) continue
           out = out (out == "" ? "" : ";") have[i]
           seen[have[i]] = 1
         }

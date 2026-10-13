@@ -931,6 +931,33 @@ class RomFoldersTests(unittest.TestCase):
             subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             self.assertFalse((tmp / 'nenhum').exists())
 
+    def test_media_has_the_folders_of_roms(self):
+        # Cada tipo de ~/media com as mesmas pastas de ~/roms que os
+        # frontends mostram: a de cada emulador e a de cada core.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            info = tmp / 'info'
+            info.mkdir()
+            (info / 'mame2010_libretro.info').write_text('display_name = "Arcade (MAME 2010)"\n')
+            env = dict(os.environ, HOME=str(tmp), FLIPEROS_CORE_INFO=str(info), FIGHTCADE_DIR=str(tmp / 'nenhum'))
+            run = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            run()
+            (tmp / 'roms/old-mame').mkdir()
+            (tmp / 'roms/retroarch/old-mame2010').mkdir()
+            # A custom folder de uma pasta de arte (Setup > Folders) fica.
+            (tmp / 'disk').mkdir()
+            (tmp / 'media/preview/model2').rmdir()
+            (tmp / 'media/preview/model2').symlink_to(tmp / 'disk')
+            run()
+            for kind in ('snap', 'preview', 'logo', 'box', 'marquee', 'dmd', 'texto'):
+                names = sorted(p.name for p in (tmp / 'media' / kind).iterdir())
+                self.assertEqual(names, ['_info.txt', 'atomiswave', 'dolphin', 'dreamcast', 'mame', 'model2', 'model3',
+                                         'naomi', 'naomi2', 'ps2', 'retroarch'], kind)
+                self.assertEqual([p.name for p in (tmp / 'media' / kind / 'retroarch').iterdir()], ['mame2010'], kind)
+            self.assertTrue((tmp / 'media/preview/model2').is_symlink())
+            self.assertEqual(list((tmp / 'disk').iterdir()), [])
+            self.assertIn('snap/mame/sf2.png', (tmp / 'media/snap/_info.txt').read_text())
+
     def test_retroarch_fbneo_does_not_show_the_fightcade_roms(self):
         # As ROMs do Fightcade sao so dele: a pasta do core FBNeo do RetroArch
         # nao vira um link para la (os frontends listariam o acervo todo), e
@@ -1070,12 +1097,16 @@ class RomFoldersTests(unittest.TestCase):
             (mame / 'mame.ini').write_text(
                 'homepath                  .\n'
                 'rompath                   roms;/home/fliperos/roms/mame;/mnt/pendrive\n'
-                'snapshot_directory        snap;$HOME/.mame/snap;/home/fliperos/.mame/scraped/mame/screenshots\n'
+                'snapshot_directory        snap;$HOME/.mame/snap;/home/fliperos/.mame/scraped/mame/screenshots;'
+                '/home/fliperos/media/snap/arcade\n'
                 'samplepath                /home/fliperos/roms/mame/samples\n'
                 'cfg_directory             cfg\n'
                 'nvram_directory           /mnt/nvram\n'
                 'plugin                    \n')
-            (mame / 'ui.ini').write_text('covers_directory          /home/fliperos/.mame/scraped/mame/covers;covers\n'
+            # A arte por plataforma (~/media/<tipo>/arcade) passou para as
+            # pastas de ~/roms: a do MAME no lugar dela.
+            (mame / 'ui.ini').write_text('covers_directory          /home/fliperos/.mame/scraped/mame/covers;covers;'
+                                         '/home/fliperos/media/box/arcade\n'
                                          'logos_directory           logo\nui_path                   ui\n')
             # O cfg/nvram que esse mame.ini gravou na home: vale o mais novo.
             home = root / 'home/fliperos'
@@ -1102,16 +1133,16 @@ class RomFoldersTests(unittest.TestCase):
             self.assertIn('homepath                  $HOME/.mame\n', ini)
             self.assertIn('rompath                   /home/fliperos/roms/mame;/mnt/pendrive;/home/fliperos/bios/mame\n',
                           ini)
-            self.assertIn('snapshot_directory        $HOME/.mame/snap;/home/fliperos/media/snap/arcade\n', ini)
+            self.assertIn('snapshot_directory        $HOME/.mame/snap;/home/fliperos/media/snap/mame\n', ini)
             self.assertIn('samplepath                /home/fliperos/roms/mame/samples\n', ini)
             self.assertIn('cfg_directory             $HOME/.mame/cfg\n', ini)
             # Uma absoluta escolhida fica; o que nao e pasta tambem.
             self.assertIn('nvram_directory           /mnt/nvram\n', ini)
             self.assertIn('plugin                    \n', ini)
             ui = (mame / 'ui.ini').read_text()
-            self.assertIn('covers_directory          /home/fliperos/media/box/arcade\n', ui)
-            self.assertIn('logos_directory           /home/fliperos/media/logo/arcade\n', ui)
-            self.assertIn('marquees_directory        /home/fliperos/media/marquee/arcade\n', ui)
+            self.assertIn('covers_directory          /home/fliperos/media/box/mame\n', ui)
+            self.assertIn('logos_directory           /home/fliperos/media/logo/mame\n', ui)
+            self.assertIn('marquees_directory        /home/fliperos/media/marquee/mame\n', ui)
             self.assertIn('ui_path                   $HOME/.mame/ui\n', ui)
             self.assertEqual(ui.count('covers_directory'), 1)
             self.assertFalse((home / 'cfg').exists())
@@ -1378,11 +1409,11 @@ class GroovyMameTests(unittest.TestCase):
         self.assertEqual(ini['homepath'], '$HOME/.mame')
         self.assertEqual(ini['cfg_directory'], '$HOME/.mame/cfg')
         self.assertEqual(ini['rompath'], '/home/fliperos/roms/mame;/home/fliperos/bios/mame')
-        self.assertEqual(ini['snapshot_directory'], '$HOME/.mame/snap;/home/fliperos/media/snap/arcade')
+        self.assertEqual(ini['snapshot_directory'], '$HOME/.mame/snap;/home/fliperos/media/snap/mame')
         ui = self.ini('mame-ui.ini')
         for key, kind in (('covers_directory', 'box'), ('flyers_directory', 'box'),
                           ('marquees_directory', 'marquee'), ('logos_directory', 'logo')):
-            self.assertEqual(ui[key], '/home/fliperos/media/%s/arcade' % kind, key)
+            self.assertEqual(ui[key], '/home/fliperos/media/%s/mame' % kind, key)
         # 20 e o minimo do MAME (20-40): o 19 do GroovyArcade e descartado.
         self.assertEqual((ui['font_rows'], ui['infos_text_size']), ('20', '1.00'))
 
@@ -2247,7 +2278,7 @@ class SnapsTests(unittest.TestCase):
         site = self.serve(files, requests)
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            cache, dest = tmp / 'cache', tmp / 'media/snap/arcade'
+            cache, dest = tmp / 'cache', tmp / 'media/snap/mame'
             cache.mkdir()
             (cache / 'pS_snap_fullset_270.zip').write_bytes(b'versao velha')
             # Um download interrompido continua de onde parou.
@@ -7101,14 +7132,14 @@ class ZeDMDTests(unittest.TestCase):
 
     def test_art_from_media_fits_the_panel(self):
         from PIL import Image
-        art = self.tmp / 'media/marquee/arcade'
+        art = self.tmp / 'media/marquee/mame'
         art.mkdir(parents=True)
         Image.new('RGB', (256, 64), (255, 0, 0)).save(art / 'sf2.png')
         payload = self.run_('show', 'game', 'mame', 'sf2')[0][1]
         middle = (16 * 128 + 64) * 3
         self.assertEqual(payload[middle:middle + 3], b'\xff\x00\x00')
         # Uma arte feita para o DMD vem antes do marquee.
-        dmd = self.tmp / 'media/dmd/arcade'
+        dmd = self.tmp / 'media/dmd/model2'
         dmd.mkdir(parents=True)
         Image.new('RGB', (128, 32), (0, 0, 255)).save(dmd / 'sf2.png')
         payload = self.run_('show', 'game', 'mame', 'sf2')[0][1]
@@ -7129,7 +7160,7 @@ class ZeDMDTests(unittest.TestCase):
     def test_attract_cycles_the_media_art(self):
         from PIL import Image
         colors = {'a': (255, 0, 0), 'b': (0, 255, 0), 'c': (0, 0, 255)}
-        for kind, name in (('marquee/arcade', 'a'), ('marquee/snes', 'b'), ('dmd/arcade', 'c')):
+        for kind, name in (('marquee/arcade', 'a'), ('marquee/retroarch/snes9x', 'b'), ('dmd/arcade', 'c')):
             (self.tmp / 'media' / kind).mkdir(parents=True, exist_ok=True)
             Image.new('RGB', (128, 32), colors[name]).save(self.tmp / 'media' / kind / (name + '.png'))
         env = dict(self.env, DMD_ATTRACT_SECONDS='0.05')

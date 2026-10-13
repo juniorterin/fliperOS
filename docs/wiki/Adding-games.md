@@ -56,7 +56,7 @@ Setup > AttractPlus ROM List also goes through every other folder with games (co
 
 ## Artwork
 
-All artwork lives in `~/media` (`\\fliperos\media`), one folder per type and, inside it, one per platform. The file name is the ROM name without the extension: the screenshot of `~/roms/mame/sf2.zip` is `~/media/snap/arcade/sf2.png`. Setup > Scraper fills these folders, but you can also copy images and videos there yourself (from a MAME artwork pack, for example).
+All artwork lives in `~/media` (`\\fliperos\media`), one folder per type and, inside it, the same folders as `~/roms`. The file name is the ROM name without the extension: the screenshot of `~/roms/mame/sf2.zip` is `~/media/snap/mame/sf2.png`, and the video of `~/roms/retroarch/mame2010/tekken3.zip` is `~/media/preview/retroarch/mame2010/tekken3.mp4`. Setup > Scraper fills these folders, but you can also copy images and videos there yourself (from a MAME artwork pack, for example).
 
 | `~/media` folder | What it holds | Attract-Mode Plus (`artwork` line) | ES-DE |
 | --- | --- | --- | --- |
@@ -67,14 +67,16 @@ All artwork lives in `~/media` (`\\fliperos\media`), one folder per type and, in
 | `marquee` | Cabinet marquees (`.png`) | `marquee` | ? |
 | `texto` | Descriptions (`.txt`) | overview (`~/.attract/scraper/<emulator>/overview` is a link here) | ? (descriptions come from `gamelist.xml`) |
 
-The platform folder of each games folder: `arcade` for `mame`, `model2`, `model3` and the RetroArch MAME cores; `naomi`, `naomi2` and `atomiswave` for Flycast's arcades; `fba` for the FBNeo and FB Alpha cores; `dreamcast`, `ps2`, `gc` (Dolphin) and the console name for the other RetroArch cores (`snes`, `megadrive`, `psx`...).
+Each games folder has its own art folder in every type, with the same name: `mame`, `model2`, `model3`, `naomi`, `naomi2`, `atomiswave`, `dreamcast`, `ps2`, `dolphin` and `retroarch/<core>`. So two folders with the same game (Daytona USA in `mame` and in `model2`) can each have their own video, and each art folder can be on another disk (Setup > Folders).
 
-**Shared arcade artwork.** In Attract-Mode Plus, the arcade emulators that have a platform of their own (Naomi, Naomi 2, Atomiswave, FBNeo...) look in their own folder first and then in the `arcade` folder: the artwork of a set scraped for MAME also shows for the same set in Flycast or FBNeo. You can see it in the emulator's `.cfg`:
+**Shared arcade artwork.** In Attract-Mode Plus, the other arcade folders (Model 2, Model 3, Naomi, Atomiswave, the MAME and FBNeo cores...) look in their own folder first and then in the `mame` one: the artwork of a set you have for MAME also shows for the same set in the other emulators. You can see it in the emulator's `.cfg`:
 
 ```text
-artwork    snap            /home/fliperos/media/snap/naomi;/home/fliperos/media/preview/naomi;/home/fliperos/media/snap/arcade;/home/fliperos/media/preview/arcade
-artwork    wheel           /home/fliperos/media/logo/naomi;/home/fliperos/media/logo/arcade
+artwork    snap            /home/fliperos/media/snap/naomi;/home/fliperos/media/preview/naomi;/home/fliperos/media/snap/mame;/home/fliperos/media/preview/mame
+artwork    wheel           /home/fliperos/media/logo/naomi;/home/fliperos/media/logo/mame
 ```
+
+**Coming from the layout by platform.** Before, `~/media/<type>` had one folder per scraper platform (`arcade`, `snes`, `psx`...), shared by every games folder of that platform. FliperOS moves them the next time the launcher opens: `arcade` goes to `mame`, and the folder of another platform to the first games folder of that platform (`snes` to `retroarch/snes9x`). The other games folders of the platform get the art of the games they have (a hard link, no extra disk space). A platform folder that was a custom folder becomes the same custom folder in each of its games folders, and nothing is written inside a custom folder. A platform folder whose games folder is not there at that moment (a disk that is off) waits for the next time.
 
 ES-DE reads the artwork from `~/media/.es-de/<system>/<type>`, where each type is a link to the right folder in `~/media`. It only looks in the system's own folder.
 

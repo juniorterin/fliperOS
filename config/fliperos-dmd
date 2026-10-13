@@ -9,7 +9,7 @@
 #
 # A arte do Pixelcade so pode ser usada no hardware dele. A imagem vem de
 # ~/media, na ordem: dmd/ (arte feita para 128x32, PNG ou GIF animado),
-# marquee/ e logo/ (as do Setup > Scraper), uma pasta por sistema. Sem
+# marquee/ e logo/ (as do Setup > Scraper), com as pastas de ~/roms. Sem
 # imagem, o nome do jogo em texto (rolando se nao cabe).
 #
 #   fliperos-dmd show game|select|system SISTEMA ROM [TITULO] [ABERTURA]
@@ -54,10 +54,12 @@ STARTUP = os.environ.get('DMD_STARTUP', '/usr/local/share/fliperos/pixelcade/fli
 ATTRACT_SECONDS = float(os.environ.get('DMD_ATTRACT_SECONDS', '8'))
 EXTS = ('gif', 'png', 'webp', 'jpg', 'jpeg')
 COLOR = {'game': (255, 184, 108), 'select': (255, 255, 255), 'system': (139, 233, 253)}
-# Sistema dos eventos (os nomes do Pixelcade) -> pastas de ~/media (as
-# plataformas do Skyscraper), alem da de mesmo nome.
+# Sistema dos eventos (os nomes do Pixelcade) -> pastas de ~/media, alem da
+# de mesmo nome: as de ~/roms (mame, model2...) e as de plataforma de antes
+# (arcade...). A de um core do RetroArch (retroarch/<core>) e achada pelo
+# nome do jogo, em qualquer pasta do tipo.
 PLATFORMS = {
-    'mame': ['arcade', 'fbneo', 'naomi', 'atomiswave'],
+    'mame': ['model2', 'model3', 'naomi', 'naomi2', 'atomiswave', 'arcade', 'fbneo'],
     'genesis': ['megadrive'],
     'nintendo_gamecube': ['gamecube'],
     'sega_saturn': ['saturn'],
@@ -78,7 +80,8 @@ def find_art(system, rom):
                 if os.path.isfile(path):
                     return path
         for ext in EXTS:
-            hits = sorted(glob.glob(os.path.join(MEDIA, kind, '*', '%s.%s' % (glob.escape(rom), ext))))
+            hits = sorted(glob.glob(os.path.join(MEDIA, kind, '**', '%s.%s' % (glob.escape(rom), ext)),
+                                    recursive=True))
             if hits:
                 return hits[0]
     return None

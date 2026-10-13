@@ -6,7 +6,7 @@
 # A arte e os textos vao para ~/media (media_farm, abaixo), de onde todos os
 # frontends leem; a lista vai para onde o frontend a procura. Com o
 # GroovyMAME de launcher, a pasta do MAME so ganha a arte: o mame.ini e o
-# ui.ini ja procuram em ~/media/<tipo>/arcade. No Attract-Mode Plus (o
+# ui.ini ja procuram em ~/media/<tipo>/mame. No Attract-Mode Plus (o
 # frontend do repositorio do FliperOS) o Skyscraper precisa do .cfg do
 # emulador em ~/.attract/emulators e escreve a romlist em ~/.attract/romlists
 # e a arte nas pastas das linhas "artwork" desse .cfg; o Setup cria o
@@ -25,64 +25,76 @@ FLIPEROS_BIN=${FLIPEROS_BIN:-/opt/fliperos/bin}
 MAME_SCRAPED=${MAME_SCRAPED:-/home/fliperos/.mame/scraped/mame}
 
 # ── Midia ─────────────────────────────────────────────────────────
-# ~/media tem uma pasta por tipo e, dentro, uma por sistema (a plataforma do
-# Skyscraper: arcade, snes, dreamcast...):
+# ~/media tem uma pasta por tipo e, dentro, as mesmas pastas de ~/roms (a
+# "chave" da pasta: mame, model2, naomi, retroarch/snes9x...), cada uma com a
+# arte dos jogos da pasta de ROMs de mesmo nome:
 #   snap     capturas da tela       logo     logos (wheel)
 #   preview  videos                 box      capas e flyers
 #   marquee  marquees               texto    descricoes (.txt)
+# Assim cada pasta de jogos tem a arte dela (o video do Model 2 nao e o do
+# MAME) e aceita a "custom folder" dela (Setup > Folders). Antes era uma
+# pasta por plataforma do Skyscraper (arcade, snes...), a mesma para todas
+# as pastas de jogos da plataforma: media_refolder as passa para ca.
 # O Skyscraper e o ES-DE usam subpastas de nome fixo por sistema
-# (screenshots, covers...): para eles, ~/media/.skyscraper/<sistema> e
-# ~/media/.es-de/<sistema do ES-DE> sao links com esses nomes para as
-# pastas daqui. O Attract-Mode le pelas linhas "artwork" do emulador e o
+# (screenshots, covers...): para eles, ~/media/.skyscraper/<pasta> e
+# ~/media/.es-de/<sistema do ES-DE> ("retroarch-snes9x") sao links com esses
+# nomes para as pastas daqui. O Attract-Mode le pelas linhas "artwork" do emulador e o
 # GroovyMAME pelo mame.ini e o ui.ini (config/).
 MEDIA_DIR=${MEDIA_DIR:-/home/fliperos/media}
 MEDIA_TYPES="snap preview logo box marquee texto"
 # subpasta do Skyscraper:tipo
 SCRAPER_MEDIA_LINKS="screenshots:snap videos:preview wheels:logo covers:box marquees:marquee"
 
-# media_system PLATAFORMA cria a pasta do sistema em cada tipo de ~/media.
+# media_system CHAVE cria a pasta da CHAVE (a pasta de ~/roms: mame,
+# retroarch/snes9x) em cada tipo de ~/media. A que e um link (a custom folder
+# da pessoa, tambem com o disco fora) fica como esta.
 media_system() {
-  local t
+  local t path
   for t in $MEDIA_TYPES; do
-    mkdir -p "$MEDIA_DIR/$t/$1" || return 1
-    chown "$FLIPEROS_USER:" "$MEDIA_DIR" "$MEDIA_DIR/$t" "$MEDIA_DIR/$t/$1" 2> /dev/null
+    path="$MEDIA_DIR/$t/$1"
+    [[ -L $path ]] && continue
+    mkdir -p "$path" || return 1
+    chown "$FLIPEROS_USER:" "$MEDIA_DIR" "$MEDIA_DIR/$t" "${path%/*}" "$path" 2> /dev/null
   done
   return 0
 }
 
-# media_farm PASTA PLATAFORMA SUBPASTA:TIPO... cria as pastas do sistema
+# media_farm PASTA CHAVE SUBPASTA:TIPO... cria as pastas da CHAVE
 # (media_system) e, em PASTA (dois niveis abaixo de ~/media), um link
 # relativo por SUBPASTA para a do tipo. Uma SUBPASTA que ja e pasta de
 # verdade fica.
 media_farm() {
-  local farm=$1 platform=$2 pair link
+  local farm=$1 key=$2 pair link
   shift 2
-  media_system "$platform" || return 1
+  media_system "$key" || return 1
   mkdir -p "$farm" || return 1
   for pair in "$@"; do
     link="$farm/${pair%%:*}"
     [[ -d $link && ! -L $link ]] && continue
-    ln -sfn "../../${pair#*:}/$platform" "$link" || return 1
+    ln -sfn "../../${pair#*:}/$key" "$link" || return 1
   done
   chown -h "$FLIPEROS_USER:" "$MEDIA_DIR" "$(dirname "$farm")" "$farm" "$farm"/* 2> /dev/null
   return 0
 }
 
-# scraper_media PLATAFORMA imprime a pasta de midia do Skyscraper (-o) para
-# o sistema.
+# scraper_media CHAVE imprime a pasta de midia do Skyscraper (-o) para a
+# pasta de jogos.
 scraper_media() {
-  local farm="$MEDIA_DIR/.skyscraper/$1"
+  local farm="$MEDIA_DIR/.skyscraper/${1//\//-}"
   # shellcheck disable=SC2086 # um par por palavra
   media_farm "$farm" "$1" $SCRAPER_MEDIA_LINKS || return 1
   printf '%s\n' "$farm"
 }
 
-# media_link_dir LINK PASTA faz de LINK um link para PASTA. Se LINK era uma
-# pasta, o que tem nela vai para PASTA (sem sobrescrever) antes; se sobrar
-# algo, ela fica.
+# media_link_dir LINK PASTA faz de LINK um link para PASTA (o que apontava
+# para outra passa a apontar para ela). Se LINK era uma pasta, o que tem nela
+# vai para PASTA (sem sobrescrever) antes; se sobrar algo, ela fica.
 media_link_dir() {
   local link=$1 real=$2
-  [[ -L $link ]] && return 0
+  if [[ -L $link ]]; then
+    [[ $(readlink -- "$link") == "$real" ]] || ln -sfn "$real" "$link"
+    return 0
+  fi
   mkdir -p "$real" "$(dirname "$link")" || return 1
   if [[ -d $link ]]; then
     find "$link" -mindepth 1 -maxdepth 1 -exec mv -n -t "$real" {} + 2> /dev/null
@@ -91,8 +103,8 @@ media_link_dir() {
   ln -s "$real" "$link"
 }
 
-# media_move PASTA PLATAFORMA SUBPASTA:TIPO... passa o que tem em
-# PASTA/SUBPASTA para ~/media/TIPO/PLATAFORMA, sem sobrescrever; as pastas
+# media_move PASTA CHAVE SUBPASTA:TIPO... passa o que tem em
+# PASTA/SUBPASTA para ~/media/TIPO/CHAVE, sem sobrescrever; as pastas
 # que ficarem vazias saem.
 media_move() {
   local old=$1 platform=$2 pair sub
@@ -115,25 +127,152 @@ media_move() {
 # do GroovyMAME (~/.mame/scraped/mame), a do Attract-Mode
 # (~/.attract/scraped/<pasta>) e a do EmulationStation e do Pegasus
 # (<pasta das ROMs>/media). As listas antigas apontam para la: o Scraper as
-# refaz do cache. Roda no tools/cabinet-update.sh.
+# refaz do cache. E a arte que estava em ~/media por plataforma passa para as
+# pastas de ~/roms (media_refolder). Roda no tools/cabinet-update.sh.
 scraper_media_migrate() {
   local key dir platform
   # shellcheck disable=SC2086 # um par por palavra
-  media_move "$MAME_SCRAPED" arcade $SCRAPER_MEDIA_LINKS
+  media_move "$MAME_SCRAPED" mame $SCRAPER_MEDIA_LINKS
   rm -f "$MAME_SCRAPED/gamelist.xml"
   rmdir "$MAME_SCRAPED" "$(dirname "$MAME_SCRAPED")" 2> /dev/null
   while IFS='|' read -r key dir platform _; do
     # shellcheck disable=SC2086
-    media_move "$dir/media" "$platform" $SCRAPER_MEDIA_LINKS
-    media_move "$ATTRACT_DIR/scraped/${key//\//-}" "$platform" snap:snap video:preview wheel:logo flyer:box \
+    media_move "$dir/media" "$key" $SCRAPER_MEDIA_LINKS
+    media_move "$ATTRACT_DIR/scraped/${key//\//-}" "$key" snap:snap video:preview wheel:logo flyer:box \
       marquee:marquee
   done < <(scraper_detect)
   rmdir "$ATTRACT_DIR/scraped" 2> /dev/null
+  media_refolder
   return 0
 }
 
+# ── Das plataformas para as pastas de ~/roms ──────────────────────
+# media_empty PASTA: so tem o que o FliperOS cria sozinho (pastas e os
+# _info.txt)?
+media_empty() {
+  [[ -z $(find "$1" -type f ! -name _info.txt -print -quit 2> /dev/null) ]]
+}
+
+# media_refolder passa a arte de ~/media/<tipo>/<plataforma> (como era:
+# arcade, snes, psx...) para as pastas com o nome das de ~/roms. Uma pasta de
+# ~/media/<tipo> que nao tem o nome de uma de ~/roms e de plataforma; as
+# pastas de jogos dela sao as do scraper_detect (as que tem jogos agora).
+# - A "principal" fica com tudo: a do MAME para arcade (as outras pastas de
+#   arcade tambem procuram nela, scraper_attract_prepare), senao a primeira
+#   pasta de jogos da plataforma. As outras ganham a arte dos jogos que tem,
+#   pelo nome do arquivo (um hard link: nao ocupa espaco de novo).
+# - A que era um link (custom folder, Setup > Folders) vira o mesmo link em
+#   cada pasta de jogos da plataforma, e a "old-" ao lado segue a principal.
+# - Na pasta que ja e uma custom folder nada e gravado: e da pessoa.
+# - Sem pasta de jogos agora (um disco fora), a de plataforma fica para a vez
+#   seguinte. Roda no tools/cabinet-update.sh e a cada abertura do launcher.
+media_refolder() {
+  local t src platform line key dir p main dest target list link sys detected=0
+  local -a lines=() keys=()
+  [[ -d $MEDIA_DIR && -d $ROMS_DIR ]] || return 0
+  for t in $MEDIA_TYPES dmd; do
+    for src in "$MEDIA_DIR/$t"/*; do
+      [[ -d $src || -L $src ]] || continue
+      platform=${src##*/}
+      [[ $platform =~ ^old[0-9]*- ]] && continue
+      [[ -e $ROMS_DIR/$platform || -L $ROMS_DIR/$platform ]] && continue
+      if ((!detected)); then
+        mapfile -t lines < <(scraper_detect)
+        detected=1
+      fi
+      keys=()
+      for line in "${lines[@]}"; do
+        IFS='|' read -r key dir p _ <<< "$line"
+        [[ $p == "$platform" ]] && keys+=("$key|$dir")
+      done
+      if [[ $platform == arcade ]]; then
+        main=mame
+      elif ((${#keys[@]})); then
+        main=${keys[0]%%|*}
+      else
+        continue
+      fi
+      if [[ -L $src ]]; then
+        target=$(readlink -- "$src")
+        [[ $target == /* ]] || target=$(realpath -m -- "${src%/*}/$target")
+        for key in "$main" "${keys[@]%%|*}"; do
+          dest="$MEDIA_DIR/$t/$key"
+          [[ -L $dest ]] && continue
+          if [[ -d $dest ]]; then
+            media_empty "$dest" || continue
+            rm -rf -- "$dest"
+          fi
+          mkdir -p "${dest%/*}" && ln -s -- "$target" "$dest" || continue
+          chown -h "$FLIPEROS_USER:" "${dest%/*}" "$dest" 2> /dev/null
+          log_info "Midia: $dest -> $target (como era $src)"
+        done
+        rm -f -- "$src"
+      elif media_empty "$src"; then
+        rm -rf -- "$src"
+      else
+        dest="$MEDIA_DIR/$t/$main"
+        if [[ -L $dest ]]; then
+          # A principal e uma custom folder: a de plataforma fica guardada
+          # ao lado dela, como a pasta de antes.
+          [[ -e ${dest%/*}/old-${dest##*/} ]] || mv -- "$src" "${dest%/*}/old-${dest##*/}"
+          continue
+        fi
+        list=$(mktemp) || continue
+        for line in "${keys[@]}"; do
+          key=${line%%|*} dir=${line#*|}
+          [[ $key == "$main" || -L $MEDIA_DIR/$t/$key ]] && continue
+          media_refolder_names "$src" "$dir" > "$list"
+          [[ -s $list ]] || continue
+          mkdir -p "$MEDIA_DIR/$t/$key" || continue
+          (cd "$src" && { xargs -d '\n' -r cp -ln -t "$MEDIA_DIR/$t/$key" -- < "$list" 2> /dev/null ||
+            xargs -d '\n' -r cp -n --preserve=all -t "$MEDIA_DIR/$t/$key" -- < "$list" 2> /dev/null; })
+          chown "$FLIPEROS_USER:" "$MEDIA_DIR/$t/${key%/*}" "$MEDIA_DIR/$t/$key" 2> /dev/null
+          log_info "Midia: $(wc -l < "$list") de $src tambem em $MEDIA_DIR/$t/$key"
+        done
+        rm -f "$list"
+        mkdir -p "$dest" || continue
+        chown "$FLIPEROS_USER:" "${dest%/*}" "$dest" 2> /dev/null
+        find "$src" -mindepth 1 -maxdepth 1 ! -name _info.txt -exec mv -n -t "$dest" {} + 2> /dev/null
+        rm -f "$src/_info.txt"
+        rmdir "$src" 2> /dev/null
+        log_info "Midia: $src -> $dest"
+      fi
+      # A pasta guardada de uma custom folder (Setup > Folders) segue a
+      # principal.
+      dest="$MEDIA_DIR/$t/$main"
+      if [[ ! -e $src && -d ${src%/*}/old-$platform && ! -e ${dest%/*}/old-${dest##*/} ]]; then
+        mv -- "${src%/*}/old-$platform" "${dest%/*}/old-${dest##*/}" 2> /dev/null
+      fi
+      # Os links do Skyscraper e do ES-DE que apontavam para a de plataforma.
+      for link in "$MEDIA_DIR"/.skyscraper/*/* "$MEDIA_DIR"/.es-de/*/*; do
+        [[ -L $link && $(readlink -- "$link") == "../../$t/$platform" ]] || continue
+        sys=${link%/*}
+        sys=${sys##*/}
+        key=$main
+        [[ $link == "$MEDIA_DIR"/.es-de/* && -e $MEDIA_DIR/$t/${sys/#retroarch-/retroarch/} ]] &&
+          key=${sys/#retroarch-/retroarch/}
+        ln -sfn "../../$t/$key" "$link"
+      done
+    done
+  done
+  return 0
+}
+
+# media_refolder_names PASTA_DE_ARTE PASTA_DE_JOGOS imprime os arquivos de
+# arte (so o nome) dos jogos que estao na pasta de jogos: mesmo nome, sem a
+# extensao.
+media_refolder_names() {
+  find -H "$2" -maxdepth 1 -type f ! -name '.*' ! -name _info.txt -printf '%f\n' 2> /dev/null |
+    awk -v art="$1" '
+      { sub(/\.[^.]*$/, ""); rom[$0] = 1 }
+      END {
+        cmd = "find \"" art "\" -maxdepth 1 -type f -printf \"%f\\n\""
+        while ((cmd | getline f) > 0) { n = f; sub(/\.[^.]*$/, "", n); if (n in rom) print f }
+      }'
+}
+
 # scraper_texts LISTA PLATAFORMA grava a descricao de cada jogo da lista
-# (gamelist.xml ou metadata.pegasus.txt) em ~/media/texto/PLATAFORMA/<rom>.txt.
+# (gamelist.xml ou metadata.pegasus.txt) em ~/media/texto/CHAVE/<rom>.txt.
 # No Attract-Mode o proprio Skyscraper as grava la (o overview do emulador e
 # um link).
 scraper_texts() {
@@ -378,23 +517,23 @@ scraper_attract_prepare() {
   [[ -n $name ]] || return 1
   cfg="$ATTRACT_DIR/emulators/$name.cfg"
   mkdir -p "$ATTRACT_DIR/emulators" "$ATTRACT_DIR/romlists" || return 1
-  media_system "$platform" || return 1
+  media_system "$key" || return 1
   # Video junto da captura, como no efc.sh: o Skyscraper acha a pasta do
   # video na linha do snap.
   art=([flyer]="box" [marquee]="marquee" [wheel]="logo" [snap]="snap preview")
   for t in "${!art[@]}"; do
     # shellcheck disable=SC2086 # um tipo por palavra
-    art[$t]=$(scraper_attract_paths "$platform" ${art[$t]})
+    art[$t]=$(scraper_attract_paths "$key" ${art[$t]})
   done
-  # Os arcades que nao sao a plataforma arcade (Naomi, Atomiswave, FBNeo...)
-  # tambem procuram na pasta de arcade, depois da deles: a arte do mesmo set,
-  # raspada pelo MAME, serve para eles.
-  if scraper_arcade "$key" && [[ $platform != arcade ]]; then
-    media_system arcade || return 1
-    art[flyer]+=";$(scraper_attract_paths arcade box)"
-    art[marquee]+=";$(scraper_attract_paths arcade marquee)"
-    art[wheel]+=";$(scraper_attract_paths arcade logo)"
-    art[snap]+=";$(scraper_attract_paths arcade snap preview)"
+  # As outras pastas de arcade (Model 2, Naomi, os cores de MAME e FBNeo...)
+  # tambem procuram na do MAME, depois da deles: a arte do mesmo set serve
+  # para elas.
+  if scraper_arcade "$key" && [[ $key != mame ]]; then
+    media_system mame || return 1
+    art[flyer]+=";$(scraper_attract_paths mame box)"
+    art[marquee]+=";$(scraper_attract_paths mame marquee)"
+    art[wheel]+=";$(scraper_attract_paths mame logo)"
+    art[snap]+=";$(scraper_attract_paths mame snap preview)"
   fi
   if [[ ! -f $cfg ]] || head -1 "$cfg" | grep -q '^# Criado pelo FliperOS Setup'; then
     {
@@ -408,19 +547,19 @@ scraper_attract_prepare() {
   fi
   # A descricao de cada jogo: o Skyscraper a grava (e o Attract-Mode a le) em
   # scraper/<emulador>/overview, um link para ~/media/texto.
-  media_link_dir "$ATTRACT_DIR/scraper/$name/overview" "$MEDIA_DIR/texto/$platform"
+  media_link_dir "$ATTRACT_DIR/scraper/$name/overview" "$MEDIA_DIR/texto/$key"
   scraper_attract_display "$name"
   chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
   printf '%s\n' "$name"
 }
 
-# scraper_attract_paths PLATAFORMA TIPO... imprime as pastas de ~/media dos
+# scraper_attract_paths CHAVE TIPO... imprime as pastas de ~/media dos
 # tipos, separadas por ";" (o formato das linhas artwork).
 scraper_attract_paths() {
-  local platform=$1 t out=""
+  local key=$1 t out=""
   shift
   for t in "$@"; do
-    out+="${out:+;}$MEDIA_DIR/$t/$platform"
+    out+="${out:+;}$MEDIA_DIR/$t/$key"
   done
   printf '%s\n' "$out"
 }
@@ -812,8 +951,8 @@ scraper_run() {
   fi
   # A arte da pasta que ficou de antes do ~/media vai para la primeiro.
   # shellcheck disable=SC2086 # um par por palavra
-  media_move "$dir/media" "$platform" $SCRAPER_MEDIA_LINKS
-  farm=$(scraper_media "$platform") || { ev_fail "Could not create the folders in $MEDIA_DIR"; return 1; }
+  media_move "$dir/media" "$key" $SCRAPER_MEDIA_LINKS
+  farm=$(scraper_media "$key") || { ev_fail "Could not create the folders in $MEDIA_DIR"; return 1; }
   args=(-p "$platform" -i "$input" --flags "$flags")
   case $format in
     attractmode)
@@ -881,7 +1020,7 @@ scraper_run() {
   fi
   # As descricoes em ~/media/texto, se marcadas (no Attract-Mode quem as
   # grava e o proprio Skyscraper, junto da lista).
-  [[ -n $list ]] && scraper_media_has "$media" texto && scraper_texts "$list" "$platform"
+  [[ -n $list ]] && scraper_media_has "$media" texto && scraper_texts "$list" "$key"
   scraper_media_record "$key" "$media"
   # O sistema no ES-DE, com a arte de ~/media (lib/frontends.sh).
   [[ $format == esde ]] && frontends_esde
@@ -897,7 +1036,7 @@ SNAPS=${SNAPS:-/opt/fliperos/bin/fliperos-snaps}
 SNAPS_CACHE=${SNAPS_CACHE:-/var/cache/fliperos/snaps}
 
 # scraper_snaps_run CHAVE PASTA PLATAFORMA [CLONES] grava as capturas em
-# ~/media/snap/PLATAFORMA (a que ja existe fica) e poe a pasta no frontend,
+# ~/media/snap/CHAVE (a que ja existe fica) e poe a pasta no frontend,
 # que acha a imagem pelo nome do jogo.
 scraper_snaps_run() {
   local key=$1 dir=$2 platform=$3 clones=${4:-0} input=$2 names result dest format
@@ -906,8 +1045,8 @@ scraper_snaps_run() {
     ev_msg "Looking for the clones of the games found"
     input=$(scraper_clones_input "$dir") || { ev_fail "Could not list the MAME clones"; return 1; }
   fi
-  media_system "$platform" || { ev_fail "Could not create the folders in $MEDIA_DIR"; return 1; }
-  dest="$MEDIA_DIR/snap/$platform"
+  media_system "$key" || { ev_fail "Could not create the folders in $MEDIA_DIR"; return 1; }
+  dest="$MEDIA_DIR/snap/$key"
   names=$(mktemp) && result=$(mktemp) || { ev_fail "No space for the scraper"; return 1; }
   scraper_files "$key" "$input" | sed 's|.*/||; s|\.[^.]*$||' > "$names"
   if [[ ! -s $names ]]; then

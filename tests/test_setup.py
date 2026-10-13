@@ -1759,15 +1759,15 @@ class ScraperTests(Base):
         # A arte em ~/media/<tipo>/<sistema>, e as descricoes (overview) num
         # link para ~/media/texto.
         media = self.env.dir / "media"
-        self.assertIn("artwork    snap            %s/snap/snes;%s/preview/snes\n" % (media, media), cfg)
-        self.assertIn("artwork    flyer           %s/box/snes\n" % media, cfg)
-        self.assertIn("artwork    wheel           %s/logo/snes\n" % media, cfg)
-        self.assertIn("artwork    marquee         %s/marquee/snes\n" % media, cfg)
+        self.assertIn("artwork    snap            %s/snap/retroarch/snes9x;%s/preview/retroarch/snes9x\n" % (media, media), cfg)
+        self.assertIn("artwork    flyer           %s/box/retroarch/snes9x\n" % media, cfg)
+        self.assertIn("artwork    wheel           %s/logo/retroarch/snes9x\n" % media, cfg)
+        self.assertIn("artwork    marquee         %s/marquee/retroarch/snes9x\n" % media, cfg)
         overview = attract / "scraper" / name / "overview"
         self.assertTrue(overview.is_symlink())
-        self.assertEqual(overview.resolve(), (media / "texto" / "snes").resolve())
+        self.assertEqual(overview.resolve(), (media / "texto" / "retroarch" / "snes9x").resolve())
         for t in ("snap", "preview", "logo", "box", "marquee", "texto"):
-            self.assertTrue((media / t / "snes").is_dir(), t)
+            self.assertTrue((media / t / "retroarch" / "snes9x").is_dir(), t)
         self.assertTrue((attract / "romlists").is_dir())
         acfg = (attract / "attract.cfg").read_text()
         self.assertEqual(acfg.count("display "), 1)
@@ -1794,11 +1794,11 @@ class ScraperTests(Base):
         self.env.out("scraper_attract_prepare mame %s/mame arcade" % roms, env)
         self.env.out("scraper_attract_prepare retroarch/snes9x %s/retroarch/snes9x snes" % roms, env)
         media = self.env.dir / "media"
-        self.assertIn("%s/snap/arcade;%s/preview/arcade" % (media, media),
+        self.assertIn("%s/snap/mame;%s/preview/mame" % (media, media),
                       (attract / "emulators" / "MAME.cfg").read_text())
         self.assertEqual((attract / "emulators" / (snes + ".cfg")).read_text(), mine)
         self.assertTrue((attract / "scraper" / "MAME" / "overview").is_symlink())
-        self.assertEqual((media / "texto" / "arcade" / "sf2.txt").read_text(), "Street Fighter II\n")
+        self.assertEqual((media / "texto" / "mame" / "sf2.txt").read_text(), "Street Fighter II\n")
 
     def test_list_goes_where_the_frontend_reads(self):
         env, _, _ = self.scraper_env()
@@ -1826,7 +1826,7 @@ class ScraperTests(Base):
                                                     "emulationstation|kms|es-de|fliperos-emulationstation|ES-DE\n")
         log = self.fake_tools()
         media, esde = self.env.dir / "media", self.env.dir / "es-de"
-        farm = media / ".skyscraper" / "snes"
+        farm = media / ".skyscraper" / "retroarch-snes9x"
         for session, gen in (
                 ("pegasus", "-f pegasus -g %s/retroarch/snes9x -o %s -e " % (roms, farm)),
                 ("emulationstation", "-f esde -g %s/gamelists/retroarch-snes9x -o %s" % (esde, farm))):
@@ -1840,7 +1840,7 @@ class ScraperTests(Base):
         self.assertIn("--flags unattend,relative", line)
         for sub, kind in (("screenshots", "snap"), ("videos", "preview"), ("wheels", "logo"), ("covers", "box"),
                           ("marquees", "marquee")):
-            self.assertEqual(os.readlink(farm / sub), "../../%s/snes" % kind)
+            self.assertEqual(os.readlink(farm / sub), "../../%s/retroarch/snes9x" % kind)
             self.assertTrue((farm / sub).is_dir(), sub)
         # O ES-DE ganhou o sistema e le a arte de ~/media.
         settings = (esde / "settings" / "es_settings.xml").read_text()
@@ -1858,12 +1858,12 @@ class ScraperTests(Base):
             "collection: SNES\n\ngame: Super Mario World\nfile: /r/Super Mario World (USA).sfc\n"
             "description: Mario and Luigi\n  go to Dinosaur Land.\n  .\n  Second paragraph.\n"
             "developer: Nintendo\n")
-        self.env.out("scraper_texts %s/gamelist.xml arcade" % lists, env)
-        self.env.out("scraper_texts %s/metadata.pegasus.txt snes" % lists, env)
+        self.env.out("scraper_texts %s/gamelist.xml mame" % lists, env)
+        self.env.out("scraper_texts %s/metadata.pegasus.txt retroarch/snes9x" % lists, env)
         texto = self.env.dir / "media" / "texto"
-        self.assertEqual((texto / "arcade" / "sf2.txt").read_text(), "Street Fighter II & friends\n")
-        self.assertFalse((texto / "arcade" / "semdesc.txt").exists())
-        self.assertEqual((texto / "snes" / "Super Mario World (USA).txt").read_text(),
+        self.assertEqual((texto / "mame" / "sf2.txt").read_text(), "Street Fighter II & friends\n")
+        self.assertFalse((texto / "mame" / "semdesc.txt").exists())
+        self.assertEqual((texto / "retroarch" / "snes9x" / "Super Mario World (USA).txt").read_text(),
                          "Mario and Luigi\ngo to Dinosaur Land.\n\nSecond paragraph.\n")
 
     def test_old_art_moves_to_media(self):
@@ -1882,18 +1882,79 @@ class ScraperTests(Base):
         (attract / "scraped" / "mame" / "marquee").mkdir(parents=True)
         (attract / "scraped" / "mame" / "marquee" / "sf2.png").write_text("marquee")
         media = self.env.dir / "media"
-        (media / "logo" / "arcade").mkdir(parents=True)
-        (media / "logo" / "arcade" / "sf2.png").write_text("novo")
+        (media / "logo" / "mame").mkdir(parents=True)
+        (media / "logo" / "mame" / "sf2.png").write_text("novo")
         self.env.out("scraper_media_migrate", env)
-        self.assertEqual((media / "snap" / "arcade" / "sf2.png").read_text(), "velho screenshots")
-        self.assertEqual((media / "box" / "arcade" / "sf2.png").read_text(), "velho covers")
-        self.assertEqual((media / "logo" / "arcade" / "sf2.png").read_text(), "novo")
-        self.assertEqual((media / "preview" / "snes" / "smw.mp4").read_text(), "video")
-        self.assertEqual((media / "marquee" / "arcade" / "sf2.png").read_text(), "marquee")
+        self.assertEqual((media / "snap" / "mame" / "sf2.png").read_text(), "velho screenshots")
+        self.assertEqual((media / "box" / "mame" / "sf2.png").read_text(), "velho covers")
+        self.assertEqual((media / "logo" / "mame" / "sf2.png").read_text(), "novo")
+        self.assertEqual((media / "preview" / "retroarch" / "snes9x" / "smw.mp4").read_text(), "video")
+        self.assertEqual((media / "marquee" / "mame" / "sf2.png").read_text(), "marquee")
         self.assertFalse((old / "screenshots").exists())
         self.assertTrue((old / "wheels" / "sf2.png").exists())
         self.assertFalse((roms / "retroarch" / "snes9x" / "media").exists())
         self.assertFalse((attract / "scraped").exists())
+
+    def test_media_moves_from_the_platform_to_the_folders_of_roms(self):
+        # ~/media/<tipo> tinha uma pasta por plataforma (arcade, snes); agora
+        # tem as de ~/roms. A do MAME fica com tudo o que era de arcade, as
+        # outras pastas de arcade com a arte dos jogos delas; a custom folder
+        # (um link) vira o mesmo link em cada uma.
+        env, roms, _ = self.scraper_env()
+        (roms / "model2").mkdir()
+        (roms / "model2" / "daytona.zip").write_text("rom")
+        media, disk = self.env.dir / "media", self.env.dir / "disk"
+        for d in ("snap/arcade", "snap/snes", "snap/model2", "preview/old-arcade", "preview/mame", "logo/naomi",
+                  ".es-de/model2", ".es-de/retroarch-snes9x", ".skyscraper/arcade"):
+            (media / d).mkdir(parents=True)
+        disk.mkdir()
+        for name in ("sf2", "daytona", "mvscj"):
+            (media / "snap" / "arcade" / (name + ".png")).write_text(name)
+        (media / "snap" / "snes" / "Super Mario World (USA).png").write_text("smw")
+        (media / "preview" / "arcade").symlink_to(disk)
+        (media / "preview" / "old-arcade" / "sf2.mp4").write_text("de antes")
+        (media / "preview" / "mame" / "_info.txt").write_text("vazia")
+        (media / "logo" / "naomi" / "mvsc2.png").write_text("sem pasta de jogos agora")
+        os.symlink("../../snap/arcade", media / ".es-de" / "model2" / "screenshots")
+        os.symlink("../../snap/arcade", media / ".skyscraper" / "arcade" / "screenshots")
+        os.symlink("../../snap/snes", media / ".es-de" / "retroarch-snes9x" / "screenshots")
+        for _ in range(2):
+            self.env.out("media_refolder", env)
+            snap = media / "snap"
+            self.assertEqual(sorted(p.name for p in snap.iterdir()), ["mame", "model2", "retroarch"])
+            self.assertEqual(sorted(p.name for p in (snap / "mame").iterdir()), ["daytona.png", "mvscj.png", "sf2.png"])
+            self.assertEqual([p.name for p in (snap / "model2").iterdir()], ["daytona.png"])
+            self.assertTrue(os.path.samefile(snap / "model2" / "daytona.png", snap / "mame" / "daytona.png"))
+            self.assertEqual((snap / "retroarch" / "snes9x" / "Super Mario World (USA).png").read_text(), "smw")
+            preview = media / "preview"
+            self.assertEqual(sorted(p.name for p in preview.iterdir()), ["mame", "model2", "old-mame"])
+            for key in ("mame", "model2"):
+                self.assertEqual(os.readlink(preview / key), str(disk))
+            self.assertEqual((preview / "old-mame" / "sf2.mp4").read_text(), "de antes")
+            self.assertEqual(list(disk.iterdir()), [])
+            self.assertEqual((media / "logo" / "naomi" / "mvsc2.png").read_text(), "sem pasta de jogos agora")
+            self.assertEqual(os.readlink(media / ".es-de" / "model2" / "screenshots"), "../../snap/model2")
+            self.assertEqual(os.readlink(media / ".skyscraper" / "arcade" / "screenshots"), "../../snap/mame")
+            self.assertEqual(os.readlink(media / ".es-de" / "retroarch-snes9x" / "screenshots"),
+                             "../../snap/retroarch/snes9x")
+        # A do MAME ja e uma custom folder: nada e gravado nela, e a de
+        # plataforma fica guardada ao lado.
+        (media / "box" / "arcade").mkdir(parents=True)
+        (media / "box" / "arcade" / "sf2.png").write_text("capa")
+        (media / "box" / "mame").symlink_to(disk)
+        self.env.out("media_refolder", env)
+        self.assertEqual((media / "box" / "old-mame" / "sf2.png").read_text(), "capa")
+        self.assertEqual(list(disk.iterdir()), [])
+
+    def test_attract_overview_follows_the_folder(self):
+        # O overview de um emulador que apontava para a pasta de plataforma
+        # (~/media/texto/arcade) passa a apontar para a da pasta de jogos.
+        env, roms, attract = self.scraper_env()
+        (attract / "scraper" / "MAME").mkdir(parents=True)
+        (attract / "scraper" / "MAME" / "overview").symlink_to(self.env.dir / "media" / "texto" / "arcade")
+        self.env.out("scraper_attract_prepare mame %s/mame arcade" % roms, env)
+        self.assertEqual(os.readlink(attract / "scraper" / "MAME" / "overview"),
+                         str(self.env.dir / "media" / "texto" / "mame"))
 
     def fake_tools(self, fail_on=None):
         # runuser, groovymame -listclones e um Skyscraper que anota cada lote
@@ -1953,7 +2014,7 @@ class ScraperTests(Base):
         out = self.env.out("scraper_run mame %s/mame arcade progettosnaps snap '' 0" % roms, env)
         self.assertIn("--cache %s/cache" % self.env.dir, args.read_text())
         self.assertEqual(Path(str(args) + ".names").read_text().split(), ["kof98", "sf2"])
-        self.assertTrue((self.env.dir / "media/snap/arcade/sf2.png").exists())
+        self.assertTrue((self.env.dir / "media/snap/mame/sf2.png").exists())
         self.assertIn("@msg 1 screenshots saved, 0 already there, 1 not in progetto-SNAPS", out)
         self.assertIn("@step 100 arcade: done", out)
         self.assertTrue((attract / "emulators" / "MAME.cfg").exists())
@@ -2062,7 +2123,7 @@ class ScraperTests(Base):
         lots = log.read_text().splitlines()
         self.assertEqual(lots[0], "lote:mvscu.zip pacman.zip sf2.zip ")
         self.assertEqual(lots[1], "lote:sf2ce.zip ")
-        farm = self.env.dir / "media" / ".skyscraper" / "arcade"
+        farm = self.env.dir / "media" / ".skyscraper" / "mame"
         self.assertIn("-f emulationstation -g %s -o %s" % (farm, farm), lots[2])
 
 
@@ -2138,8 +2199,8 @@ class FrontendsTests(Base):
         # A arte: <MediaDirectory>/<sistema>/<tipo do ES-DE> -> ~/media/<tipo>/<plataforma>.
         media = self.env.dir / "media"
         self.assertIn('<string name="MediaDirectory" value="%s/.es-de" />' % media, settings)
-        self.assertEqual(os.readlink(media / ".es-de" / "mame" / "marquees"), "../../logo/arcade")
-        self.assertEqual(os.readlink(media / ".es-de" / "retroarch-snes9x" / "screenshots"), "../../snap/snes")
+        self.assertEqual(os.readlink(media / ".es-de" / "mame" / "marquees"), "../../logo/mame")
+        self.assertEqual(os.readlink(media / ".es-de" / "retroarch-snes9x" / "screenshots"), "../../snap/retroarch/snes9x")
         self.assertTrue((media / ".es-de" / "retroarch-snes9x" / "videos").is_dir())
         # Rodar de novo troca o valor, sem repetir a opcao.
         self.env.out("frontends_configure emulationstation", env)
@@ -3134,10 +3195,10 @@ class RomCleanerTests(Base):
         # Os arcades de outra plataforma tambem procuram a arte em arcade.
         media = self.env.dir / "media"
         naomi = (attract / "emulators" / "Naomi.cfg").read_text()
-        self.assertIn("artwork    snap            %s/snap/naomi;%s/preview/naomi;%s/snap/arcade;%s/preview/arcade\n"
+        self.assertIn("artwork    snap            %s/snap/naomi;%s/preview/naomi;%s/snap/mame;%s/preview/mame\n"
                       % (media, media, media, media), naomi)
-        self.assertIn("artwork    wheel           %s/logo/naomi;%s/logo/arcade\n" % (media, media), naomi)
-        self.assertIn("artwork    wheel           %s/logo/arcade\n" % media,
+        self.assertIn("artwork    wheel           %s/logo/naomi;%s/logo/mame\n" % (media, media), naomi)
+        self.assertIn("artwork    wheel           %s/logo/mame\n" % media,
                       (attract / "emulators" / "MAME.cfg").read_text())
 
     def test_attract_display_goes_to_displays_cfg_after_the_migration(self):
@@ -3751,11 +3812,11 @@ class FoldersTests(Base):
 
     def inner(self):
         """~/roms/retroarch/mame2010 e ~/media/snap com arquivos, e um disco com uma pasta para cada uma."""
-        for d in (self.home / "roms" / "retroarch" / "mame2010", self.home / "media" / "snap" / "arcade",
+        for d in (self.home / "roms" / "retroarch" / "mame2010", self.home / "media" / "snap" / "mame",
                   self.disk / "mame2010", self.disk / "snaps", self.disk / "model2"):
             d.mkdir(parents=True)
         (self.home / "roms" / "retroarch" / "mame2010" / "tekken3.zip").write_text("mine")
-        (self.home / "media" / "snap" / "arcade" / "sf2.png").write_text("mine")
+        (self.home / "media" / "snap" / "mame" / "sf2.png").write_text("mine")
 
     def test_inner_folder_gets_its_own_custom_folder(self):
         self.inner()
@@ -3769,7 +3830,7 @@ class FoldersTests(Base):
         self.assertEqual(self.state("roms"), "default")
         self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
         self.env.out('folders_link media/snap "%s"' % (self.disk / "snaps"), self.vars)
-        self.assertEqual((self.home / "media" / "old-snap" / "arcade" / "sf2.png").read_text(), "mine")
+        self.assertEqual((self.home / "media" / "old-snap" / "mame" / "sf2.png").read_text(), "mine")
         self.assertEqual(self.env.out("folders_customs", self.vars).split(),
                          ["roms/retroarch/mame2010", "media/snap"])
         self.assertEqual(self.env.out("folders_customs roms", self.vars).split(), ["roms/retroarch/mame2010"])
@@ -3790,14 +3851,22 @@ class FoldersTests(Base):
         self.assertEqual(self.state("roms/gone"), "offline")
         self.assertEqual(self.env.out("folders_children roms/retroarch", self.vars).split(), ["roms/retroarch/mame2010"])
         self.assertEqual(self.env.out("folders_children media", self.vars).split(), ["media/snap"])
-        self.assertEqual(self.env.out("folders_children media/snap", self.vars).split(), ["media/snap/arcade"])
+        # A arte tem as pastas de ~/roms, com a dos cores do RetroArch.
+        (self.home / "media" / "snap" / "retroarch" / "mame2010").mkdir(parents=True)
+        (self.home / "media" / "snap" / "retroarch" / "old-mame2010").mkdir()
+        self.assertEqual(self.env.out("folders_children media/snap", self.vars).split(),
+                         ["media/snap/mame", "media/snap/retroarch"])
+        self.assertEqual(self.env.out("folders_children media/snap/retroarch", self.vars).split(),
+                         ["media/snap/retroarch/mame2010"])
         # A pasta de um emulador e a dos temas nao tem pastas de dentro para a lista.
-        for rel in ("roms/mame", "media/snap/arcade", "splashscreen"):
+        for rel in ("roms/mame", "media/snap/mame", "media/snap/retroarch/mame2010", "splashscreen"):
             self.assertEqual(self.env.out("folders_children %s" % rel, self.vars).split(), [], rel)
         for rel in ("roms/old-mame", "roms/old2-mame", "roms/.hidden", "roms/../bios", "roms/a/b/c", "/roms", "roms/",
-                    "games/mame", ""):
+                    "games/mame", "", "media/snap/mame/a/b", "media/snap/retroarch/old-mame2010",
+                    "media/snap/retroarch/mame2010/a"):
             self.assertEqual(self.env.run('folders_known "%s"' % rel, self.vars).returncode, 1, rel)
-        for rel in ("roms", "roms/mame", "roms/retroarch/mame2010", "media/snap/arcade"):
+        for rel in ("roms", "roms/mame", "roms/retroarch/mame2010", "media/snap/mame", "media/snap/retroarch",
+                    "media/snap/retroarch/mame2010"):
             self.assertEqual(self.env.run('folders_known "%s"' % rel, self.vars).returncode, 0, rel)
 
     def test_model2_link_of_fliperos_is_the_default(self):
@@ -3825,7 +3894,7 @@ class FoldersTests(Base):
         self.assertEqual(sorted(self.env.out("folders_check", self.vars).split()),
                          ["media/snap", "roms/retroarch/mame2010"])
         self.assertEqual((self.home / "roms" / "retroarch" / "mame2010" / "tekken3.zip").read_text(), "mine")
-        self.assertEqual((self.home / "media" / "snap" / "arcade" / "sf2.png").read_text(), "mine")
+        self.assertEqual((self.home / "media" / "snap" / "mame" / "sf2.png").read_text(), "mine")
 
     def test_inner_folder_of_an_unplugged_root_is_refused(self):
         self.inner()

@@ -38,14 +38,15 @@ folders_kept_name() {
   [[ $1 == old-* || $1 == old+([0-9])-* ]]
 }
 
-# folders_known PASTA: uma raiz ou uma pasta ate dois niveis abaixo dela,
-# sem pastas ocultas nem as guardadas.
+# folders_known PASTA: uma raiz ou uma pasta ate dois niveis abaixo dela
+# (tres na arte dos cores do RetroArch: media/snap/retroarch/mame2010), sem
+# pastas ocultas nem as guardadas.
 folders_known() {
   local rel=$1 part
   local -a parts
   [[ -n $rel && $rel != /* && $rel != */ && $rel != *//* ]] || return 1
   IFS=/ read -r -a parts <<< "$rel"
-  ((${#parts[@]} <= 3)) || return 1
+  ((${#parts[@]} <= 3)) || [[ ${#parts[@]} -eq 4 && $rel == media/*/retroarch/* ]] || return 1
   [[ " $FOLDERS_NAMES " == *" ${parts[0]} "* ]] || return 1
   for part in "${parts[@]}"; do
     [[ -n $part && $part != .* ]] || return 1
@@ -83,6 +84,7 @@ folders_description() {
     media) echo "The art and texts the frontends show, one folder per type." ;;
     splashscreen) echo "The boot splash themes." ;;
     roms/retroarch) echo "The games of RetroArch: one folder per core." ;;
+    media/*/retroarch) echo "The art of the RetroArch games: one folder per core, as in ~/roms/retroarch." ;;
     *)
       info=$FOLDERS_HOME/$1/_info.txt
       [[ -f $info ]] && head -n 1 "$info" | cut -c1-300
@@ -126,10 +128,12 @@ folders_target() {
 
 # folders_container PASTA: tem pastas dentro que tambem aceitam uma custom
 # folder? As raizes (menos a dos temas do splash), as dos cores do RetroArch
-# e dos emuladores do Fightcade, e cada tipo de arte (um sistema por pasta).
+# e dos emuladores do Fightcade, e cada tipo de arte (as mesmas pastas de
+# ~/roms, com a dos cores do RetroArch).
 folders_container() {
   case $1 in
     roms | bios | media | roms/retroarch | roms/fightcade) return 0 ;;
+    media/*/retroarch) return 0 ;;
     media/*/*) return 1 ;;
     media/*) return 0 ;;
   esac
@@ -222,6 +226,7 @@ folders_check() {
     [[ -d $path ]] || continue
     path=${path%/}
     parents+=("media/${path##*/}")
+    [[ -d $path/retroarch ]] && parents+=("media/${path##*/}/retroarch")
   done
   for parent in "${parents[@]}"; do
     [[ -z $parent ]] || folders_known "$parent" || continue
