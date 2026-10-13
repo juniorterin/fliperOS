@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators"]
+        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -1997,7 +1997,6 @@ class ScraperTests(Base):
         out = self.env.out("""
             source %s/screens/setup-menu.sh
             ui_menu() {
-              [[ $2 == Where* ]] && { echo screenscraper; return; }
               shift 3
               printf 'opcao:%%s\\n' "$@" >&2
               echo "$PICK"
@@ -2006,9 +2005,170 @@ class ScraperTests(Base):
             ui_checklist() { echo snap; }
             ui_yesno() { return 1; }
             scraper_scrape_targets() { shift 4; printf 'alvo:%%s\\n' "$@"; }
-            screen_scraper
+            screen_scraper_scrape
         """ % SETUP, env)
         self.assertEqual(out.splitlines(), ["alvo:retroarch/snes9x|%s/retroarch/snes9x|snes|1" % roms])
+
+    def test_scraper_site_and_its_account(self):
+        # Scraper site: a escolha fica no fliperos.conf e a conta (o -u do
+        # Skyscraper) num arquivo so do root, sem ir para o log. Um site que
+        # so funciona com conta nao raspa sem ela.
+        env, roms, _ = self.scraper_env()
+        accounts = self.env.dir / "accounts"
+        env.update({"SCRAPER_ACCOUNTS": str(accounts), "SKYSCRAPER": "true"})
+        self.assertEqual(self.env.out("scraper_source_saved", env).strip(), "screenscraper")
+        self.assertEqual(self.env.out("scraper_account_label screenscraper; scraper_account_label arcadedb; "
+                                      "scraper_account_label mobygames", env).splitlines(),
+                         ["no account", "no account needed", "key missing"])
+        self.assertEqual(self.env.run("scraper_account_missing mobygames", env).returncode, 0)
+        self.assertNotEqual(self.env.run("scraper_account_missing screenscraper", env).returncode, 0)
+        screens = """
+            source %s/lib/ui.sh
+            source %s/screens/setup-menu.sh
+            ui_radio() { echo "$PICK"; }
+            ui_menu() { echo all; }
+            ui_checklist() { echo snap; }
+            ui_yesno() { return 1; }
+            ui_msg() { printf 'msg:%%s\\n' "$*"; }
+            scraper_scrape_targets() { echo "raspa:$1 $3"; }
+        """ % (SETUP, SETUP)
+        out = self.env.out(screens + """
+            ui_input() { [[ $4 == password ]] && echo segredo || echo eu; }
+            PICK=screenscraper screen_scraper_source > /dev/null
+            scraper_account_label screenscraper
+            screen_scraper_scrape
+            ui_input() { echo chave123; }
+            PICK=mobygames screen_scraper_source > /dev/null
+            scraper_source_saved
+            screen_scraper_scrape
+        """, env)
+        self.assertEqual(out.splitlines(), ["account eu", "raspa:screenscraper eu:segredo", "mobygames",
+                                            "raspa:mobygames chave123"])
+        self.assertEqual(accounts.read_text(), "screenscraper=eu:segredo\nmobygames=chave123\n")
+        self.assertEqual(accounts.stat().st_mode & 0o777, 0o600)
+        log = (self.env.dir / "setup.log").read_text()
+        self.assertNotIn("segredo", log)
+        self.assertNotIn("chave123", log)
+        out = self.env.out(screens + "scraper_account_set mobygames; screen_scraper_scrape", env)
+        self.assertIn("MobyGames only works with an account, and none is saved.", re.sub(r"\x1b\[[0-9;]*m", "", out))
+        self.assertNotIn("raspa:", out)
+        # Cada site do menu e um modulo do Skyscraper (ou o progetto-SNAPS).
+        sites = [line.split("|") for line in self.env.out("scraper_sources", env).splitlines()]
+        self.assertEqual([s[0] for s in sites], ["screenscraper", "thegamesdb", "arcadedb", "progettosnaps",
+                                                 "mobygames", "igdb", "openretro"])
+        self.assertEqual({s[2] for s in sites}, {"login", "none", "key", "idsecret"})
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_scraper() {")[1].split("\n}\n")[0]
+        for value in ("scrape) screen_scraper_scrape ;;", "source) screen_scraper_source ;;",
+                      "torrent) screen_mediapacks ;;"):
+            self.assertIn(value, menu)
+
+    def packs_env(self):
+        env, roms, _ = self.scraper_env()
+        for d, rom in (("naomi", "mvsc2.zip"), ("retroarch/fbneo", "kof98.zip")):
+            (roms / d).mkdir(parents=True)
+            (roms / d / rom).write_text("rom")
+        (self.env.dir / "info" / "fbneo_libretro.info").write_text(
+            'supported_extensions = "zip|7z"\ncorename = "FinalBurn Neo"\nsystemid = "fb_alpha"\n')
+        calls = self.env.dir / "packs.calls"
+        self.env.stub("fliperos-mediapacks", 'echo "$*" >> %s\n'
+                      'while (($#)); do case $1 in\n'
+                      '  --target) cp "$3" "%s.${2//\\//-}"; shift 3; continue ;;\n'
+                      '  --result) printf "games=2\\nkept=1\\nfiles=2\\nbytes=2048\\n" > "$2" ;;\n'
+                      '  status) printf "pct=0\\nstate=none\\nline=x\\n" ;;\n'
+                      'esac; shift; done' % (calls, calls))
+        self.env.stub("systemctl", 'echo "systemctl $*" >> %s' % calls)
+        env.update({"MEDIAPACKS": str(self.env.bin / "fliperos-mediapacks"),
+                    "MEDIAPACKS_LIST": str(ROOT / "config" / "fliperos-media-torrents"),
+                    "MEDIAPACKS_USER": str(self.env.dir / "packs.user"),
+                    "MEDIAPACKS_STATE": str(self.env.dir / "packs"),
+                    "DOWNLOADER_STATE": str(self.env.dir / "dl")})
+        return env, roms, calls
+
+    def test_art_packs_come_filled_and_know_their_folders(self):
+        # Os pacotes da imagem, cada um com as pastas de jogos dele; o link
+        # trocado e o pacote da pessoa ficam na lista dela.
+        env, roms, calls = self.packs_env()
+        rows = [line.split("\t") for line in self.env.out("mediapacks_list", env).splitlines()]
+        self.assertEqual(len(rows), 10)
+        self.assertEqual(len({r[0] for r in rows}), 10)
+        self.assertEqual({r[1] for r in rows}, {"logo", "preview"})
+        for row in rows:
+            self.assertRegex(row[3], r"^https://archive\.org/download/%s/%s_archive\.torrent$" % (row[0], row[0]))
+            self.assertEqual(row[5], "image")
+
+        def keys(spec):
+            return [line.split("|")[0] for line in self.env.out("mediapacks_keys '%s'" % spec, env).splitlines()]
+
+        self.assertEqual(keys("mame,@arcade-cores"), ["mame", "retroarch/fbneo"])
+        self.assertEqual(keys("naomi,naomi2"), ["naomi"])
+        self.assertEqual(keys("@arcade"), ["mame", "naomi", "retroarch/fbneo"])
+        self.assertEqual(self.env.out("mediapacks_games model2; mediapacks_games mame,@arcade-cores", env).split(),
+                         ["0", "3"])
+        out = self.env.out("mediapacks_save arcade-wheels logo mame 'magnet:?xt=urn:btih:abc' 'Arcade logos'\n"
+                           "mediapacks_add preview @arcade http://site/meu.torrent 'Meus videos' > /dev/null\n"
+                           "mediapacks_list", env).splitlines()
+        self.assertEqual(out[0], "arcade-wheels\tlogo\tmame\tmagnet:?xt=urn:btih:abc\tArcade logos\tchanged")
+        self.assertRegex(out[-1], r"^user-[0-9a-f]{10}\tpreview\t@arcade\thttp://site/meu\.torrent\tMeus videos\tuser$")
+        self.assertEqual(len(out), 11)
+        self.assertIn("\timage", self.env.out("mediapacks_forget arcade-wheels; mediapacks_get arcade-wheels", env))
+        self.assertIn("cancel arcade-wheels", calls.read_text())
+        self.assertEqual(self.env.run("mediapacks_link_ok 'magnet:?xt=urn:btih:abc' && mediapacks_link_ok "
+                                      "https://a/b.torrent && ! mediapacks_link_ok 'so um texto'", env).returncode, 0)
+
+    def test_art_pack_only_downloads_with_roms_in_its_folders(self):
+        # So baixa com ROMs nas pastas do pacote, e so os nomes dos jogos que
+        # estao nelas vao para o fliperos-mediapacks.
+        env, roms, calls = self.packs_env()
+        result = self.env.dir / "result"
+        r = self.env.run("mediapacks_start sega-model-2-wheels %s" % result, env)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("|No ROMs in the folders of this pack (model2)", r.stdout)
+        self.assertFalse(calls.exists())
+        self.env.out("mediapacks_start mame-videos-snaps %s" % result, env)
+        line = calls.read_text().splitlines()[0]
+        media = self.env.dir / "media"
+        self.assertRegex(line, r"^start mame-videos-snaps --link https://archive\.org/download/mame-videos-snaps/"
+                               r"mame-videos-snaps_archive\.torrent --type preview "
+                               r"--target mame \S+/mame %s/preview/mame "
+                               r"--target retroarch/fbneo \S+/retroarch-fbneo %s/preview/retroarch/fbneo "
+                               r"--progress --result %s$" % (media, media, result))
+        # Os jogos da pasta (o CHD da subpasta nao e um deles), sem a extensao.
+        self.assertEqual(Path(str(calls) + ".mame").read_text().split(), ["sf2"])
+        self.assertEqual(Path(str(calls) + ".retroarch-fbneo").read_text().split(), ["kof98"])
+        self.assertTrue((media / "preview" / "retroarch" / "fbneo").is_dir())
+        screens = """
+            source %s/lib/ui.sh
+            source %s/screens/progress.sh
+            source %s/screens/mediapacks.sh
+            ui_msg() { printf 'msg:%%s\\n' "$*"; }
+            ui_info() { :; }
+            run_with_progress() { shift 2; "$@" > /dev/null; }
+            screen_mediapacks_watch() { echo barra; }
+        """ % (SETUP, SETUP, SETUP)
+        out = self.env.out(screens + """
+            ui_menu() { shift 3; printf 'opcao:%s\\n' "$@" >&2; echo return; }
+            screen_mediapacks 2>&1
+            MEDIAPACKS_FOUND=$(scraper_detect)
+            screen_mediapacks_pack sega-model-2-wheels 2>&1
+            echo ---
+            screen_mediapacks_pack arcade-wheels 2>&1
+            screen_mediapacks_start arcade-wheels
+        """, env)
+        out = re.sub(r"\x1b\[[0-9;]*m", "", out)
+        self.assertIn("opcao:arcade-wheels|Arcade logos (MAME): 3 ROMs", out)
+        self.assertIn("opcao:sega-naomi-wheels|Sega Naomi logos: 1 ROMs", out)
+        self.assertIn("opcao:sega-model-2-wheels|Sega Model 2 logos: no ROMs in model2", out)
+        self.assertIn("opcao:all|Download every pack that has ROMs", out)
+        model2, arcade = out.split("---")
+        self.assertNotIn("opcao:start|", model2.split("opcao:add|Add a torrent")[1])
+        self.assertIn("opcao:start|Download the logos of the ROMs found", arcade)
+        self.assertIn("msg:Art pack Arcade logos (MAME): 2 files to download (2.0 KB).", arcade)
+        self.assertIn("barra", arcade)
+        self.assertIn("systemctl enable --now fliperos-transmission.service", calls.read_text())
+        # Sem ROM nenhuma a tela nem abre a lista.
+        shutil.rmtree(roms)
+        out = self.env.out(screens + "ui_menu() { echo return; }; screen_mediapacks", env)
+        self.assertIn("msg:Art packs by torrent No ROMs were found", out)
 
     def test_progettosnaps_saves_screenshots_and_the_attract_list(self):
         # Sem Skyscraper: o fliperos-snaps grava as capturas em ~/media/snap e
@@ -2074,7 +2234,7 @@ class ScraperTests(Base):
         self.assertEqual(re.findall(r'<output type="(\w+)"/>', art), ["screenshot", "wheel"])
         art = Path(self.env.out("scraper_artwork", env).strip()).read_text()
         self.assertEqual(re.findall(r'<output type="(\w+)"/>', art), ["screenshot", "cover", "wheel", "marquee"])
-        screen = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_scraper() {")[1].split("\n}\n")[0]
+        screen = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_scraper_scrape() {")[1].split("\n}\n")[0]
         self.assertIn('media=$(ui_checklist "Scraper: Media"', screen)
         self.assertIn('conf_set scraper_media "$media"', screen)
         self.assertNotIn("Download videos too", screen)

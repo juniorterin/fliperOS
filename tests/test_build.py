@@ -5,6 +5,7 @@ build, o menu de boot, o Limine do disco instalado, o fliperos-video-check
 e as configuracoes que o fliperos-rootfs.sh instala.
 """
 from importlib.machinery import SourceFileLoader
+import base64
 import hashlib
 import importlib.util
 import io
@@ -2412,8 +2413,9 @@ class SnapsTests(unittest.TestCase):
 
     def test_install_and_screen(self):
         self.assertIn('install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-snaps"', ROOTFS)
-        menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
-        self.assertIn('"progettosnaps|progetto-SNAPS (arcade screenshots only, no account)"', menu)
+        # Um dos sites do Setup > Games > Scraper > Scraper site.
+        sites = (ROOT / 'fliperos-setup/lib/scraper.sh').read_text()
+        self.assertIn('"progettosnaps|progetto-SNAPS|none|arcade screenshots only; no account"', sites)
 
 
 class UpdateTests(unittest.TestCase):
@@ -2674,11 +2676,14 @@ class DownloaderTests(unittest.TestCase):
                 calls.append((method, a))
                 out = {}
                 if method == 'torrent-add':
-                    h = re.search(r'btih:([0-9a-f]+)', a['filename']).group(1)
+                    # Um link magnetico, ou o conteudo de um .torrent (os
+                    # pacotes de arte), que ja traz a lista de arquivos.
+                    link = a.get('filename') or base64.b64decode(a['metainfo']).decode()
+                    h = re.search(r'btih:([0-9a-f]+)', link).group(1)
                     name, files = specs[h]
                     # Como o Transmission: pausado, nem procura a lista de arquivos.
                     torrents[h] = {'name': name, 'dir': a['download-dir'], 'status': 0 if a['paused'] else 4,
-                                   'meta': not a['paused'],
+                                   'meta': not a['paused'] or 'metainfo' in a,
                                    'files': [{'name': f, 'length': n, 'done': 0, 'wanted': True}
                                              for f, n in files]}
                     out = {'torrent-added': {'hashString': h, 'id': 1, 'name': name}}
@@ -2958,6 +2963,210 @@ class DownloaderTests(unittest.TestCase):
         unit = (ROOT / 'config/fliperos-transmission.service').read_text()
         self.assertIn('User=fliperos', unit)
         self.assertIn('--config-dir /home/fliperos/.config/fliperos-transmission', unit)
+
+
+class MediaPacksTests(unittest.TestCase):
+    """config/fliperos-mediapacks: logos e videos de um torrent, so os dos
+    jogos das pastas, contra o Transmission falso do DownloaderTests."""
+
+    LOGOS = '1' * 40
+    VIDEOS = '2' * 40
+    HUGE = '3' * 40
+    TORRENTS = {
+        # Um arquivo solto por jogo, com o que o archive.org poe junto.
+        LOGOS: ('arcade-wheels', [('arcade-wheels/sf2.png', 30), ('arcade-wheels/mslug.png', 40),
+                                  ('arcade-wheels/pong.png', 10), ('arcade-wheels/arcade-wheels_meta.xml', 5),
+                                  ('arcade-wheels/SF2.jpg', 9)]),
+        # Um .zip por letra, e um video solto.
+        VIDEOS: ('videos', [('videos/M.zip', 500), ('videos/S.zip', 600), ('videos/Q.zip', 700),
+                            ('videos/#.zip', 800), ('videos/mslug.mp4', 70)]),
+        HUGE: ('huge', [('huge/sf2.png', 10 ** 18)]),
+    }
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.url, self.torrents, self.calls = DownloaderTests.serve(self)
+        self.state, self.staging = self.tmp / 'state', self.tmp / 'staging'
+        self.state.mkdir()
+        self.media = self.tmp / 'media'
+        self.env = dict(os.environ, FLIPEROS_MEDIAPACKS_STATE=str(self.state), FLIPEROS_DOWNLOADER_RPC=self.url,
+                        FLIPEROS_MEDIAPACKS_DIR=str(self.staging),
+                        FLIPEROS_DOWNLOADER_STATE=str(self.tmp / 'dl'),
+                        FLIPEROS_MEDIAPACKS=str(ROOT / 'config/fliperos-mediapacks'))
+
+    def mp(self, *args, check=True):
+        r = subprocess.run(['python3', str(ROOT / 'config/fliperos-mediapacks'), *args], capture_output=True,
+                           text=True, env=self.env, timeout=60)
+        if check:
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return r
+
+    def target(self, key, kind, names):
+        """--target da pasta KEY: o arquivo com os nomes e a pasta de arte."""
+        path = self.tmp / ('names.' + key.replace('/', '-'))
+        path.write_text(''.join(n + '\n' for n in names))
+        return ['--target', key, str(path), str(self.media / kind / key)]
+
+    def torrent_file(self, hash_):
+        """Um ".torrent" que o Transmission falso reconhece pelo hash."""
+        path = self.tmp / (hash_[:4] + '.torrent')
+        path.write_bytes(b'd7:comment46:btih:' + hash_.encode() + b' e')
+        return path.as_uri()
+
+    def complete(self, contents=None):
+        """O Transmission terminou: os arquivos marcados estao na pasta dele."""
+        for t in self.torrents.values():
+            for f in t['files']:
+                if f['wanted']:
+                    path = Path(t['dir']) / f['name']
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes((contents or {}).get(f['name'], b'x' * f['length']))
+                    f['done'] = f['length']
+
+    def status(self):
+        return dict(line.split('=', 1) for line in self.mp('status').stdout.splitlines())
+
+    def test_only_the_art_of_the_games_in_the_folders(self):
+        (self.media / 'logo/mame').mkdir(parents=True)
+        (self.media / 'logo/mame/mslug.png').write_bytes(b'ja tinha')
+        result = self.tmp / 'result'
+        out = self.mp('start', 'arcade-wheels', '--link', self.torrent_file(self.LOGOS), '--type', 'logo',
+                      *self.target('mame', 'logo', ['SF2', 'mslug', '1942', '../fora']),
+                      *self.target('retroarch/fbneo', 'logo', ['sf2', 'kof98']),
+                      '--progress', '--result', str(result)).stdout
+        self.assertIn('@step 100 Downloading 1 files (30 B)', out)
+        # O .torrent entra pelo conteudo, pausado: a lista ja vem com ele.
+        add = [a for m, a in self.calls if m == 'torrent-add'][0]
+        self.assertTrue(add['paused'])
+        self.assertIn('metainfo', add)
+        self.assertEqual(add['download-dir'], str(self.staging / 'arcade-wheels'))
+        # So o logo do jogo que esta nas pastas e ainda nao o tem.
+        files = self.torrents[self.LOGOS]['files']
+        self.assertEqual([f['name'] for f in files if f['wanted']], ['arcade-wheels/sf2.png'])
+        self.assertEqual(self.torrents[self.LOGOS]['status'], 4)
+        stats = dict(line.split('=') for line in result.read_text().split())
+        self.assertEqual((stats['games'], stats['kept'], stats['files'], stats['bytes']), ('3', '1', '1', '30'))
+        status = self.status()
+        self.assertEqual(status['state'], 'downloading')
+        self.assertTrue(status['pack.arcade-wheels'].startswith('downloading|0|0 B of 30 B'))
+        # Antes do fim nada e instalado.
+        self.mp('finish')
+        self.assertFalse((self.media / 'logo/mame/SF2.png').exists())
+        self.assertIn(self.LOGOS, self.torrents)
+        # O Transmission avisa o fliperos-downloader, que avisa os pacotes.
+        self.complete()
+        self.assertEqual(self.status()['state'], 'ready')
+        subprocess.run(['python3', str(ROOT / 'config/fliperos-downloader')], check=True, timeout=60,
+                       env=dict(self.env, TR_TORRENT_HASH=self.LOGOS), capture_output=True)
+        # Com o nome da ROM de cada pasta; o que ja estava la fica.
+        self.assertEqual((self.media / 'logo/mame/SF2.png').read_bytes(), b'x' * 30)
+        self.assertEqual((self.media / 'logo/retroarch/fbneo/sf2.png').read_bytes(), b'x' * 30)
+        self.assertEqual((self.media / 'logo/mame/mslug.png').read_bytes(), b'ja tinha')
+        self.assertEqual(sorted(p.name for p in (self.media / 'logo/mame').iterdir()), ['SF2.png', 'mslug.png'])
+        self.assertFalse((self.media / 'fora.png').exists())
+        self.assertNotIn(self.LOGOS, self.torrents)
+        self.assertFalse((self.staging / 'arcade-wheels').exists())
+        self.assertFalse((self.state / 'arcade-wheels.json').exists())
+        status = self.status()
+        self.assertEqual((status['state'], status['pack.arcade-wheels']),
+                         ('done', 'done|100|1 games got it, 2 are not in the pack'))
+
+    def test_letter_archives_only_for_the_letters_of_the_games(self):
+        import zipfile
+        out = self.mp('start', 'videos', '--link', 'magnet:?xt=urn:btih:%s&dn=videos' % self.VIDEOS,
+                      '--type', 'preview', *self.target('mame', 'preview', ['mslug', 'SF2', '1942', 'pong']),
+                      '--progress').stdout
+        self.assertIn('@step 100 Downloading 3 files', out)
+        # Um link magnetico entra rodando, para os peers mandarem a lista.
+        self.assertFalse([a for m, a in self.calls if m == 'torrent-add'][0]['paused'])
+        # O video solto cobre o unico jogo com M; nenhum jogo comeca com Q; o
+        # P.zip do pong nao existe.
+        wanted = [f['name'] for f in self.torrents[self.VIDEOS]['files'] if f['wanted']]
+        self.assertEqual(wanted, ['videos/S.zip', 'videos/#.zip', 'videos/mslug.mp4'])
+
+        def pack(members):
+            data = io.BytesIO()
+            with zipfile.ZipFile(data, 'w') as z:
+                for name, body in members:
+                    z.writestr(name, body)
+            return data.getvalue()
+
+        self.complete({'videos/S.zip': pack([('S/sf2.mp4', b'video do sf2'), ('S/sonic.mp4', b'outro'),
+                                             ('S/sf2.txt', b'texto'), ('../../sf2.mp4', b'fora')]),
+                       'videos/#.zip': pack([('#/1942.mp4', b'video do 1942')]),
+                       'videos/mslug.mp4': b'video do mslug'})
+        self.mp('finish')
+        dest = self.media / 'preview/mame'
+        self.assertEqual(sorted(p.name for p in dest.iterdir()), ['1942.mp4', 'SF2.mp4', 'mslug.mp4'])
+        self.assertEqual((dest / 'SF2.mp4').read_bytes(), b'video do sf2')
+        self.assertEqual((dest / '1942.mp4').read_bytes(), b'video do 1942')
+        self.assertFalse((self.tmp / 'sf2.mp4').exists())
+        self.assertEqual((self.state / 'videos.done').read_text().splitlines()[:2], ['found=3', 'missing=1'])
+        self.assertFalse((self.staging / 'videos').exists())
+
+    def test_nothing_to_download_and_no_space(self):
+        # Todos os jogos ja tem o logo: nem fala com o Transmission.
+        (self.media / 'logo/mame').mkdir(parents=True)
+        (self.media / 'logo/mame/sf2.jpg').write_bytes(b'x')
+        out = self.mp('start', 'p', '--link', self.torrent_file(self.LOGOS), '--type', 'logo',
+                      *self.target('mame', 'logo', ['sf2']), '--progress').stdout
+        self.assertIn('@step 100 Nothing to download', out)
+        self.assertEqual(self.calls, [])
+        # Nenhum dos jogos esta no pacote: o torrent sai.
+        out = self.mp('start', 'p', '--link', self.torrent_file(self.LOGOS), '--type', 'logo',
+                      *self.target('mame', 'logo', ['kof98']), '--progress').stdout
+        self.assertIn('@step 100 None of the 1 games is in this pack', out)
+        self.assertEqual(self.torrents, {})
+        self.assertFalse((self.state / 'p.json').exists())
+        # Maior que o disco: nao comeca.
+        r = self.mp('start', 'p', '--link', self.torrent_file(self.HUGE), '--type', 'logo',
+                    *self.target('mame', 'logo', ['kof98', 'SF2']), '--progress', check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('@fail Starting the download|not enough free space: ', r.stdout)
+        self.assertEqual(self.torrents, {})
+        r = self.mp('start', '../x', '--link', 'x', '--type', 'logo', check=False)
+        self.assertIn('bad pack id', r.stderr)
+
+    def test_cancel_and_start_again(self):
+        args = ['--link', self.torrent_file(self.LOGOS), '--type', 'logo', *self.target('mame', 'logo', ['sf2'])]
+        self.mp('start', 'arcade-wheels', *args)
+        self.complete()
+        self.assertTrue((self.staging / 'arcade-wheels/arcade-wheels/sf2.png').exists())
+        # De novo: o torrent de antes sai com o que tinha baixado.
+        self.mp('start', 'arcade-wheels', *args)
+        self.assertEqual([m for m, _ in self.calls].count('torrent-remove'), 1)
+        self.assertEqual(self.status()['state'], 'downloading')
+        self.mp('cancel', 'arcade-wheels')
+        self.assertEqual(self.torrents, {})
+        self.assertEqual(self.status()['state'], 'none')
+        self.assertFalse((self.staging / 'arcade-wheels').exists())
+        self.assertFalse((self.media / 'logo/mame/sf2.png').exists())
+
+    def test_install_and_the_packs_of_the_image(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-mediapacks" "$root/opt/fliperos/bin/fliperos-mediapacks"',
+                      ROOTFS)
+        self.assertIn('install -Dm644 "$src/config/fliperos-media-torrents" '
+                      '"$root/usr/local/share/fliperos/media-torrents"', ROOTFS)
+        mp = load_script('mediapacks', 'config/fliperos-mediapacks')
+        rows = [line.split('\t') for line in (ROOT / 'config/fliperos-media-torrents').read_text().splitlines()
+                if line and not line.startswith('#')]
+        self.assertEqual(len(rows), 10)
+        for pack, kind, folders, link, label in rows:
+            self.assertRegex(pack, mp.ID)
+            self.assertIn(kind, mp.EXTS)
+            self.assertRegex(link, r'^https://archive\.org/download/[^/]+/[^/]+_archive\.torrent$')
+            self.assertTrue(folders and label)
+        # Os de uma letra so os dela; os outros, sempre que falta algo.
+        self.assertTrue(mp.may_have('S', {'sf2'}))
+        self.assertFalse(mp.may_have('Q', {'sf2'}))
+        self.assertTrue(mp.may_have('#', {'1942'}))
+        self.assertFalse(mp.may_have('#', {'sf2'}))
+        self.assertTrue(mp.may_have('MAME 0.196 Multimedia', {'sf2'}))
+        self.assertFalse(mp.may_have('MAME 0.196 Multimedia', set()))
+        # O fim de um torrent chega aos pacotes pelo fliperos-downloader.
+        self.assertIn("subprocess.run([sys.executable, MEDIAPACKS, 'finish'])",
+                      (ROOT / 'config/fliperos-downloader').read_text())
 
 
 class QuietLaunchTests(unittest.TestCase):

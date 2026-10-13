@@ -37,9 +37,11 @@ downloader_service_on() {
 }
 
 # downloader_service_sync: o servico ligado enquanto houver um link
-# cadastrado, desligado sem nenhum.
+# cadastrado ou um pacote de arte baixando (lib/mediapacks.sh), desligado
+# sem nenhum.
 downloader_service_sync() {
-  if compgen -G "$DOWNLOADER_STATE/*.json" > /dev/null; then
+  if compgen -G "$DOWNLOADER_STATE/*.json" > /dev/null ||
+    compgen -G "${MEDIAPACKS_STATE:-/var/lib/fliperos/mediapacks}/*.json" > /dev/null; then
     downloader_service_on
   else
     systemctl disable --now "$DOWNLOADER_SERVICE" >> "$FLIPEROS_LOG" 2>&1 || true

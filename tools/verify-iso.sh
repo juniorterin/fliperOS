@@ -308,17 +308,20 @@ echo "ROM cleaner: fliperos-romclean, the MAME 2010 XML (0.139), catver.ini, npl
 # ── Downloader: o programa, o servico e o transmission-daemon ─
 for name in fliperos-downloader:opt/fliperos/bin/fliperos-downloader \
   fliperos-transmission.service:etc/systemd/system/fliperos-transmission.service \
-  fliperos-downloader-magnets:usr/local/share/fliperos/downloader-magnets; do
+  fliperos-downloader-magnets:usr/local/share/fliperos/downloader-magnets \
+  fliperos-mediapacks:opt/fliperos/bin/fliperos-mediapacks \
+  fliperos-media-torrents:usr/local/share/fliperos/media-torrents; do
   unsquashfs -cat "$work/filesystem.squashfs" "${name#*:}" > "$work/f" || fail "ausente: /${name#*:}"
   cmp -s "$src/config/${name%%:*}" "$work/f" || fail "${name%%:*} differs from the repository"
 done
 for path in usr/bin/transmission-daemon usr/local/lib/fliperos-setup/lib/downloader.sh \
-  usr/local/lib/fliperos-setup/screens/downloader.sh; do
+  usr/local/lib/fliperos-setup/screens/downloader.sh usr/local/lib/fliperos-setup/lib/mediapacks.sh \
+  usr/local/lib/fliperos-setup/screens/mediapacks.sh; do
   has "$path"
 done
 grep -E 'etc/systemd/system/transmission-daemon.service ->' "$work/links.txt" | grep -q '/dev/null' \
   || fail "the stock transmission-daemon.service is not masked"
-echo "Downloader: fliperos-downloader, the default magnet links, fliperos-transmission.service and transmission-daemon (stock unit masked)"
+echo "Downloader: fliperos-downloader, the default magnet links, fliperos-transmission.service and transmission-daemon (stock unit masked); the art packs (fliperos-mediapacks and its torrents)"
 
 # ── Updates sem ISO nova: o programa, o manifesto e o nivel ───
 unsquashfs -cat "$work/filesystem.squashfs" opt/fliperos/bin/fliperos-update > "$work/f" \

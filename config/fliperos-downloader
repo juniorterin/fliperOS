@@ -53,6 +53,9 @@ ROMCLEAN = os.environ.get('FLIPEROS_ROMCLEAN', '/opt/fliperos/bin/fliperos-romcl
 # O rompath do GroovyMAME: os jogos dali tambem seguram a BIOS (in_use).
 MAME_INI = os.environ.get('FLIPEROS_MAME_INI', '/etc/fliperos/mame/mame.ini')
 SELF = '/opt/fliperos/bin/fliperos-downloader'
+# Os pacotes de arte (Setup > Games > Scraper) baixam pelo mesmo Transmission:
+# o fim de um torrent tambem e avisado a eles (main).
+MEDIAPACKS = os.environ.get('FLIPEROS_MEDIAPACKS', '/opt/fliperos/bin/fliperos-mediapacks')
 KINDS = ('roms', 'chds')
 LABEL = {'roms': 'ROMs', 'chds': 'CHDs'}
 MAGNET = re.compile(r'^magnet:\?(.*&)?xt=urn:bt(ih|mh):[0-9a-z]+', re.I)
@@ -773,7 +776,8 @@ def cmd_remove(args):
 
 def main():
     # O Transmission chama o script do fim do torrent sem argumentos.
-    if len(sys.argv) == 1 and os.environ.get('TR_TORRENT_HASH'):
+    by_transmission = len(sys.argv) == 1 and bool(os.environ.get('TR_TORRENT_HASH'))
+    if by_transmission:
         sys.argv.append('finish')
     parser = argparse.ArgumentParser(prog='fliperos-downloader')
     sub = parser.add_subparsers(dest='cmd', required=True)
@@ -800,7 +804,11 @@ def main():
     p.add_argument('--delete-files', action='store_true')
     p.set_defaults(func=cmd_remove)
     args = parser.parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    finally:
+        if by_transmission and os.path.exists(MEDIAPACKS):
+            subprocess.run([sys.executable, MEDIAPACKS, 'finish'])
 
 
 if __name__ == '__main__':

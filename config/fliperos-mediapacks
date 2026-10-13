@@ -1,0 +1,532 @@
+#!/usr/bin/env python3
+"""Pacotes de arte por torrent (Setup > Games > Scraper > Art packs by torrent).
+
+Um pacote e um torrent com a arte de um sistema (logos, videos...), com um
+arquivo por jogo, de mesmo nome da ROM (sf2.png, sf2.mp4), solto ou dentro
+de .zip/.7z. So chega ao disco o que e de um jogo que a pessoa tem:
+
+- o arquivo solto de nome igual ao de uma ROM das pastas do pacote;
+- o .zip/.7z que pode ter o que ainda falta: o de uma letra (A.zip, #.zip),
+  so com um jogo comecando por ela; outro, sempre. Dele so saem os arquivos
+  dos jogos.
+
+O jogo que ja tem a arte na pasta nao entra na conta. O download e do
+Transmission do Downloader (servico fliperos-transmission, de quem este
+programa usa a RPC, config/fliperos-downloader); quando o torrent termina o
+Transmission chama o fliperos-downloader, que chama o "finish" daqui: cada
+arquivo vai para a pasta de arte de cada pasta de jogos que tem a ROM, com o
+nome da ROM, e o torrent sai com o que sobrou.
+
+  fliperos-mediapacks start ID --link LINK --type TIPO
+                      --target CHAVE NOMES DESTINO [--target ...]
+                      [--progress] [--result ARQUIVO] [--timeout S]
+  fliperos-mediapacks status
+  fliperos-mediapacks finish
+  fliperos-mediapacks cancel ID
+
+LINK: um link magnetico ou o endereco de um .torrent. NOMES: um arquivo com
+o nome de cada jogo da pasta (sem a extensao), um por linha; DESTINO: a
+pasta de arte dela (~/media/TIPO/CHAVE). O estado fica em STATE: ID.json
+enquanto o torrent baixa e ID.done ("chave=valor") depois de instalado.
+"""
+import argparse
+import base64
+import fcntl
+import importlib.util
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+import zipfile
+from importlib.machinery import SourceFileLoader
+
+STATE = os.environ.get('FLIPEROS_MEDIAPACKS_STATE', '/var/lib/fliperos/mediapacks')
+STAGING = os.environ.get('FLIPEROS_MEDIAPACKS_DIR', '/home/fliperos/downloads/media')
+AGENT = 'fliperos-mediapacks (+https://github.com/juniorterin/fliperOS)'
+IMAGES = ('.png', '.jpg', '.jpeg')
+EXTS = {'snap': IMAGES, 'logo': IMAGES, 'box': IMAGES, 'marquee': IMAGES,
+        'preview': ('.mp4', '.mkv', '.avi', '.webm', '.mov', '.flv')}
+ARCHIVES = ('.zip', '.7z')
+ID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
+# Um .torrent nao passa disto (o do MAME inteiro tem 2 MB).
+TORRENT_MAX = 32 << 20
+
+
+def load_downloader():
+    """O fliperos-downloader, que mora ao lado: a RPC do Transmission e o
+    jeito de por um torrent para rodar."""
+    sys.dont_write_bytecode = True
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'fliperos-downloader')
+    loader = SourceFileLoader('fliperos_downloader', path)
+    spec = importlib.util.spec_from_loader('fliperos_downloader', loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+dl = load_downloader()
+say, human = dl.say, dl.human
+
+
+# ── Estado ────────────────────────────────────────────────────────
+
+def state(name):
+    return os.path.join(STATE, name)
+
+
+def own(path, like):
+    """O que o Setup (root) grava fica do dono de LIKE: o servico roda como
+    o usuario."""
+    if os.geteuid() == 0:
+        st = os.stat(like)
+        try:
+            os.chown(path, st.st_uid, st.st_gid)
+        except OSError:
+            pass
+
+
+def write_state(name, text):
+    os.makedirs(STATE, exist_ok=True)
+    tmp = state('.%s.%d.tmp' % (name, os.getpid()))
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(text)
+    own(tmp, STATE)
+    os.replace(tmp, state(name))
+
+
+def forget(name):
+    try:
+        os.remove(state(name))
+    except OSError:
+        pass
+
+
+def meta_of(pack):
+    try:
+        with open(state(pack + '.json'), encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def packs(suffix):
+    try:
+        names = os.listdir(STATE)
+    except OSError:
+        return []
+    return sorted(n[:-len(suffix)] for n in names if n.endswith(suffix) and not n.startswith('.'))
+
+
+def lock():
+    os.makedirs(STATE, exist_ok=True)
+    f = open(state('.lock'), 'a')
+    own(state('.lock'), STATE)
+    fcntl.flock(f, fcntl.LOCK_EX)
+    return f
+
+
+def folder_of(pack):
+    return os.path.join(STAGING, pack)
+
+
+def clean_staging(pack):
+    if os.path.realpath(folder_of(pack)).startswith(os.path.realpath(STAGING) + '/'):
+        shutil.rmtree(folder_of(pack), ignore_errors=True)
+
+
+# ── O que baixar ──────────────────────────────────────────────────
+
+def split(name):
+    """(nome sem pasta nem extensao, extensao em minusculas)."""
+    stem, ext = os.path.splitext(name.replace('\\', '/').rsplit('/', 1)[-1])
+    return stem, ext.lower()
+
+
+def read_names(path):
+    with open(path, encoding='utf-8', errors='replace') as f:
+        # So o nome do jogo: nunca um caminho.
+        return [n for n in (line.strip() for line in f) if n and '/' not in n and not n.startswith('.')]
+
+
+def has_media(dest, name, exts):
+    return any(os.path.exists(os.path.join(dest, name + ext)) for ext in exts)
+
+
+def needed(targets, exts):
+    """({nome em minusculas: [(nome da ROM, pasta de arte)]} dos jogos sem a
+    arte, quantos ja a tem)."""
+    need, kept = {}, 0
+    for _, dest, names in targets:
+        for name in dict.fromkeys(names):
+            if has_media(dest, name, exts):
+                kept += 1
+            else:
+                need.setdefault(name.lower(), []).append((name, dest))
+    return need, kept
+
+
+def may_have(stem, names):
+    """O pacote compactado pode ter algum dos nomes? O de uma letra so
+    (A.zip; #.zip e 0.zip para o que nao comeca por letra) so os dela."""
+    if not names:
+        return False
+    if len(stem) == 1:
+        letter = stem.lower()
+        if letter.isalpha():
+            return any(n.startswith(letter) for n in names)
+        return any(not n[:1].isalpha() for n in names)
+    return True
+
+
+def select(files, need, exts):
+    """({indice: nome} dos arquivos soltos que sao de um jogo, [indices] dos
+    compactados que podem ter o que os soltos nao cobrem)."""
+    loose, found = {}, set()
+    for index, (name, _) in enumerate(files):
+        stem, ext = split(name)
+        key = stem.lower()
+        if ext in exts and key in need and key not in found:
+            loose[index] = key
+            found.add(key)
+    rest = set(need) - found
+    archives = [i for i, (name, _) in enumerate(files)
+                if split(name)[1] in ARCHIVES and may_have(split(name)[0], rest)]
+    return loose, archives
+
+
+def fetch(link):
+    req = urllib.request.Request(link, headers={'User-Agent': AGENT})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = resp.read(TORRENT_MAX + 1)
+    if len(data) > TORRENT_MAX or not data.startswith(b'd'):
+        raise OSError('the link did not answer with a .torrent file')
+    return data
+
+
+def add_torrent(rpc, link, folder, progress, timeout):
+    """Poe o torrent no Transmission e devolve (hash, lista de arquivos), com
+    tudo desmarcado e parado. De um .torrent a lista ja vem; de um link
+    magnetico ela vem dos peers, com o torrent rodando (pausado ele nem os
+    procura), como no fliperos-downloader."""
+    args = {'download-dir': folder}
+    if dl.MAGNET.match(link):
+        args.update(filename=link, paused=False)
+    else:
+        say(progress, '@step 5 Downloading the .torrent file')
+        args.update(metainfo=base64.b64encode(fetch(link)).decode(), paused=True)
+    got = rpc.call('torrent-add', **args)
+    added = got.get('torrent-added') or got.get('torrent-duplicate')
+    if not added:
+        raise OSError('Transmission did not take the torrent')
+    hash_ = added['hashString']
+    rpc.call('torrent-set', ids=[hash_], seedRatioMode=dl.UNLIMITED)
+    if 'torrent-duplicate' in got and not args['paused']:
+        rpc.call('torrent-start', ids=[hash_])
+    end = time.monotonic() + timeout
+    while True:
+        t = rpc.torrent(hash_, ['name', 'files', 'metadataPercentComplete', 'peersConnected'])
+        if t and t.get('files'):
+            rpc.call('torrent-set', ids=[hash_], seedRatioMode=dl.UNLIMITED)
+            rpc.call('torrent-set', ids=[hash_], **{'files-unwanted': list(range(len(t['files'])))})
+            rpc.call('torrent-stop', ids=[hash_])
+            return hash_, t
+        if time.monotonic() > end:
+            rpc.remove(hash_, delete=True)
+            raise OSError('no peer sent the file list in %d minutes (is the link alive?)' % (timeout // 60))
+        say(progress, '@step %d Asking the peers for the file list (%d connected)'
+            % (10 + int(60 * float((t or {}).get('metadataPercentComplete') or 0)),
+               (t or {}).get('peersConnected') or 0))
+        time.sleep(0.5)
+
+
+# ── Instalar ──────────────────────────────────────────────────────
+
+def put(src, places, ext):
+    """Grava o arquivo aberto SRC em cada (nome da ROM, pasta de arte)."""
+    first = None
+    for name, dest in places:
+        os.makedirs(dest, exist_ok=True)
+        target = os.path.join(dest, name + ext)
+        tmp = os.path.join(dest, '.%s%s.tmp' % (name, ext))
+        if first:
+            shutil.copyfile(first, tmp)
+        else:
+            with open(tmp, 'wb') as out:
+                shutil.copyfileobj(src, out, 1 << 20)
+        own(tmp, dest)
+        os.replace(tmp, target)
+        first = first or target
+
+
+def from_zip(path, need, found, exts):
+    with zipfile.ZipFile(path) as z:
+        for info in z.infolist():
+            stem, ext = split(info.filename)
+            key = stem.lower()
+            if info.is_dir() or ext not in exts or key not in need or key in found:
+                continue
+            with z.open(info) as src:
+                put(src, need[key], ext)
+            found.add(key)
+
+
+def from_7z(path, need, found, exts):
+    if not shutil.which('7z'):
+        raise OSError('7z not found (install p7zip-full)')
+    listing = subprocess.run(['7z', 'l', '-ba', '-slt', '-sccUTF-8', path], capture_output=True,
+                             text=True, errors='replace', check=True).stdout
+    chosen = {}
+    for line in listing.splitlines():
+        if not line.startswith('Path = '):
+            continue
+        stem, ext = split(line[7:])
+        key = stem.lower()
+        if ext in exts and key in need and key not in found and key not in chosen:
+            chosen[key] = line[7:]
+    if not chosen:
+        return
+    with tempfile.TemporaryDirectory(dir=os.path.dirname(path), prefix='.7z-') as tmp:
+        with open(os.path.join(tmp, '.list'), 'w', encoding='utf-8') as f:
+            f.writelines(member + '\n' for member in chosen.values())
+        subprocess.run(['7z', 'x', '-y', '-scsUTF-8', '-o' + tmp, path, '@' + os.path.join(tmp, '.list')],
+                       stdout=subprocess.DEVNULL, check=True)
+        for key, member in chosen.items():
+            got = os.path.join(tmp, member)
+            if os.path.isfile(got):
+                with open(got, 'rb') as src:
+                    put(src, need[key], split(member)[1])
+                found.add(key)
+
+
+def install(pack, meta):
+    """Os arquivos baixados para as pastas de arte. (gravados, sem arte no
+    pacote), em jogos."""
+    exts = EXTS[meta['type']]
+    need, _ = needed(meta['targets'], exts)
+    found = set()
+    for index in meta['wanted']:
+        name = meta['files'][index][0]
+        src = os.path.join(folder_of(pack), name)
+        if not os.path.isfile(src):
+            continue
+        stem, ext = split(name)
+        key = stem.lower()
+        try:
+            if ext in exts:
+                if key in need and key not in found:
+                    with open(src, 'rb') as f:
+                        put(f, need[key], ext)
+                    found.add(key)
+            elif ext == '.zip':
+                from_zip(src, need, found, exts)
+            elif ext == '.7z':
+                from_7z(src, need, found, exts)
+        except (OSError, zipfile.BadZipFile, subprocess.CalledProcessError) as e:
+            print('fliperos-mediapacks: %s: %s' % (name, e), file=sys.stderr)
+    return len(found), len(need) - len(found)
+
+
+# ── Comandos ──────────────────────────────────────────────────────
+
+def write_result(path, stats):
+    if path:
+        with open(path, 'w', encoding='utf-8') as f:
+            f.writelines('%s=%s\n' % kv for kv in stats.items())
+
+
+def cmd_start(args):
+    if not ID.match(args.id):
+        sys.exit('fliperos-mediapacks: bad pack id')
+    exts = EXTS[args.type]
+    targets = [[key, dest, read_names(names)] for key, names, dest in args.target or []]
+    need, kept = needed(targets, exts)
+    stats = {'games': len(need), 'kept': kept, 'files': 0, 'bytes': 0, 'loose': 0, 'archives': 0}
+    if not need:
+        write_result(args.result, stats)
+        say(args.progress, '@step 100 Nothing to download: the games already have it')
+        return
+    say(args.progress, '@step 0 Connecting to the download service')
+    rpc = dl.Rpc()
+    try:
+        rpc.wait()
+        with lock():
+            old = meta_of(args.id)
+            if old:
+                try:
+                    rpc.remove(old['hash'], delete=True)
+                except OSError:
+                    pass
+            clean_staging(args.id)
+            forget(args.id + '.json')
+            hash_, t = add_torrent(rpc, args.link.strip(), folder_of(args.id), args.progress, args.timeout)
+            files = [[f['name'], f['length']] for f in t['files']]
+            say(args.progress, '@step 75 Looking for the %d games in %d files' % (len(need), len(files)))
+            loose, archives = select(files, need, exts)
+            wanted = sorted(set(loose) | set(archives))
+            size = sum(files[i][1] for i in wanted)
+            stats.update(files=len(wanted), bytes=size, loose=len(loose), archives=len(archives))
+            if not wanted:
+                rpc.remove(hash_, delete=True)
+                clean_staging(args.id)
+                write_result(args.result, stats)
+                say(args.progress, '@step 100 None of the %d games is in this pack' % len(need))
+                return
+            free = dl.free_space(STAGING)
+            if size > free:
+                rpc.remove(hash_, delete=True)
+                raise OSError('not enough free space: %s to download, %s free' % (human(size), human(free)))
+            chosen = set(wanted)
+            # Uma chamada por ajuste, nesta ordem (ver o fliperos-downloader):
+            # o torrent nunca fica "completo" no meio.
+            rpc.call('torrent-set', ids=[hash_], seedRatioMode=dl.UNLIMITED)
+            rpc.call('torrent-set', ids=[hash_], **{'files-wanted': wanted})
+            unwanted = [i for i in range(len(files)) if i not in chosen]
+            if unwanted:
+                rpc.call('torrent-set', ids=[hash_], **{'files-unwanted': unwanted})
+            write_state(args.id + '.json', json.dumps({
+                'hash': hash_, 'name': t.get('name') or args.id, 'type': args.type, 'link': args.link.strip(),
+                'files': files, 'wanted': wanted, 'targets': targets}))
+            forget(args.id + '.done')
+            dl.start_running(rpc, hash_)
+    except OSError as e:
+        say(args.progress, '@fail Starting the download|%s' % e)
+        sys.exit('fliperos-mediapacks: %s' % e)
+    write_result(args.result, stats)
+    say(args.progress, '@step 100 Downloading %d files (%s)' % (len(wanted), human(size)))
+
+
+def cmd_status(args):
+    """O andamento, "chave=valor": de cada pacote "pack.ID=estado|pct|texto"
+    (downloading, ready = baixado e por instalar, stopped, done) e o
+    conjunto (pct, state, line), para a barra do Setup."""
+    out = {'pct': 0, 'state': 'none', 'line': 'No download yet'}
+    rows = {}
+    for pack in packs('.done'):
+        done = dict(line.split('=', 1) for line in open(state(pack + '.done'), encoding='utf-8')
+                    if '=' in line)
+        rows[pack] = ('done', 100, '%s games got it, %s are not in the pack'
+                      % (done.get('found', '0').strip(), done.get('missing', '0').strip()))
+    active = packs('.json')
+    rpc = dl.Rpc()
+    if active:
+        try:
+            rpc.wait(3)
+        except OSError:
+            out.update(state='waiting', line='The download service is not running')
+            rpc = None
+    total = left = rate = 0
+    eta = -1
+    for pack in active:
+        meta = meta_of(pack)
+        t = rpc.torrent(meta['hash'], ['status', 'sizeWhenDone', 'leftUntilDone', 'rateDownload', 'eta',
+                                       'peersConnected', 'errorString']) if rpc and meta else None
+        if t is None or not t['sizeWhenDone']:
+            rows[pack] = ('stopped', 0, 'stopped: start it again')
+            continue
+        size, rest = t['sizeWhenDone'], t['leftUntilDone']
+        if not rest:
+            rows[pack] = ('ready', 100, 'downloaded, saving the files')
+            continue
+        total += size
+        left += rest
+        rate += t['rateDownload']
+        eta = max(eta, t['eta'])
+        text = '%s of %s' % (human(size - rest), human(size))
+        if t.get('errorString'):
+            text += ' (%s)' % t['errorString'][:40]
+        elif t['status'] == 0:
+            text += ' (paused)'
+        else:
+            text += ', %d peers' % t['peersConnected']
+        rows[pack] = ('downloading', (size - rest) * 100 // size, text)
+    states = [row[0] for row in rows.values()]
+    if 'downloading' in states:
+        names = [p for p, row in rows.items() if row[0] == 'downloading']
+        out.update(state='downloading', pct=(total - left) * 100 // total if total else 0,
+                   line='%d packs: %s of %s; %s/s, %s left; %s'
+                   % (len(names), human(total - left), human(total), human(rate), dl.duration(eta),
+                      ', '.join(names)[:60]))
+    elif 'ready' in states:
+        out.update(state='ready', pct=100, line='Downloaded, saving the files')
+    elif 'done' in states and out['state'] == 'none':
+        out.update(state='done', pct=100, line='Done')
+    for key, value in out.items():
+        print('%s=%s' % (key, value))
+    for pack, row in sorted(rows.items()):
+        print('pack.%s=%s|%d|%s' % ((pack,) + row))
+
+
+def cmd_finish(args):
+    """O fim de um torrent (o fliperos-downloader, chamado pelo Transmission,
+    ou o Setup): o que baixou vai para as pastas de arte e o torrent sai."""
+    active = packs('.json')
+    if not active:
+        return
+    rpc = dl.Rpc()
+    try:
+        rpc.wait(10)
+    except OSError as e:
+        sys.exit('fliperos-mediapacks: %s' % e)
+    with lock():
+        for pack in active:
+            meta = meta_of(pack)
+            if not meta:
+                continue
+            t = rpc.torrent(meta['hash'], ['leftUntilDone', 'sizeWhenDone'])
+            if t is None or not t['sizeWhenDone'] or t['leftUntilDone']:
+                continue
+            found, missing = install(pack, meta)
+            rpc.remove(meta['hash'], delete=True)
+            clean_staging(pack)
+            write_state(pack + '.done', 'found=%d\nmissing=%d\nwhen=%s\n'
+                        % (found, missing, time.strftime('%Y-%m-%d %H:%M:%S')))
+            forget(pack + '.json')
+            with open(state('finish.log'), 'a', encoding='utf-8') as log:
+                log.write('%s %s: %d games, %d not in the pack\n'
+                          % (time.strftime('%Y-%m-%d %H:%M:%S'), pack, found, missing))
+            own(state('finish.log'), STATE)
+
+
+def cmd_cancel(args):
+    with lock():
+        meta = meta_of(args.id)
+        if meta:
+            try:
+                rpc = dl.Rpc()
+                rpc.wait(5)
+                rpc.remove(meta['hash'], delete=True)
+            except OSError:
+                pass
+            clean_staging(args.id)
+        forget(args.id + '.json')
+        forget(args.id + '.done')
+
+
+def main():
+    parser = argparse.ArgumentParser(prog='fliperos-mediapacks')
+    sub = parser.add_subparsers(dest='cmd', required=True)
+    p = sub.add_parser('start')
+    p.add_argument('id')
+    p.add_argument('--link', required=True)
+    p.add_argument('--type', required=True, choices=sorted(EXTS))
+    p.add_argument('--target', nargs=3, action='append', metavar=('KEY', 'NAMES', 'DEST'))
+    p.add_argument('--progress', action='store_true')
+    p.add_argument('--result')
+    p.add_argument('--timeout', type=int, default=600)
+    p.set_defaults(func=cmd_start)
+    sub.add_parser('status').set_defaults(func=cmd_status)
+    sub.add_parser('finish').set_defaults(func=cmd_finish)
+    p = sub.add_parser('cancel')
+    p.add_argument('id')
+    p.set_defaults(func=cmd_cancel)
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()

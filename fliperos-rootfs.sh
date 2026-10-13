@@ -208,6 +208,10 @@ install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-sna
 install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"
 install -Dm644 "$src/config/fliperos-transmission.service" "$root/etc/systemd/system/fliperos-transmission.service"
 install -Dm644 "$src/config/fliperos-downloader-magnets" "$root/usr/local/share/fliperos/downloader-magnets"
+# Setup > Games > Scraper > Art packs by torrent: logos e videos de pacotes em
+# torrent, so os dos jogos das pastas, pelo mesmo Transmission.
+install -Dm755 "$src/config/fliperos-mediapacks" "$root/opt/fliperos/bin/fliperos-mediapacks"
+install -Dm644 "$src/config/fliperos-media-torrents" "$root/usr/local/share/fliperos/media-torrents"
 # Updates sem ISO nova (patches do updates/index, em ordem), perguntados no
 # boot pelo fliperos-tty1.
 install -Dm755 "$src/config/fliperos-update" "$root/opt/fliperos/bin/fliperos-update"

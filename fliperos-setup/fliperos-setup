@@ -71,6 +71,8 @@ source "$SETUP_DIR/lib/romclean.sh"
 source "$SETUP_DIR/lib/netshare.sh"
 # shellcheck source=lib/downloader.sh
 source "$SETUP_DIR/lib/downloader.sh"
+# shellcheck source=lib/mediapacks.sh
+source "$SETUP_DIR/lib/mediapacks.sh"
 # shellcheck source=lib/freeroms.sh
 source "$SETUP_DIR/lib/freeroms.sh"
 # shellcheck source=lib/frontends.sh
@@ -131,6 +133,8 @@ source "$SETUP_DIR/screens/joysticks.sh"
 source "$SETUP_DIR/screens/rom-cleaner.sh"
 # shellcheck source=screens/downloader.sh
 source "$SETUP_DIR/screens/downloader.sh"
+# shellcheck source=screens/mediapacks.sh
+source "$SETUP_DIR/screens/mediapacks.sh"
 # shellcheck source=screens/patches.sh
 source "$SETUP_DIR/screens/patches.sh"
 # shellcheck source=screens/splash.sh

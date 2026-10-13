@@ -737,6 +737,80 @@ scraper_arcade() {
   esac
 }
 
+# ── Fontes e contas ───────────────────────────────────────────────
+# De onde o Scraper busca (Setup > Games > Scraper > Scraper site): os
+# modulos do Skyscraper e o progetto-SNAPS. A escolha fica no fliperos.conf
+# (scraper_source). Os que pedem conta guardam o que vai no -u do Skyscraper
+# em SCRAPER_ACCOUNTS ("fonte=credenciais", so o root le), como o ES-DE e o
+# Arcadeflow guardam o login do ScreenScraper nas opcoes deles.
+SCRAPER_ACCOUNTS=${SCRAPER_ACCOUNTS:-$FLIPEROS_ETC/scraper-accounts}
+
+# scraper_sources imprime "fonte|nome|conta|o que tem" de cada uma. conta:
+# login (usuario e senha, opcional), key (uma chave de API, obrigatoria),
+# idsecret (client ID e secret, obrigatorios) ou none.
+scraper_sources() {
+  printf '%s\n' \
+    "screenscraper|ScreenScraper|login|every system; a free account raises the limits" \
+    "thegamesdb|TheGamesDB|none|consoles and computers; no account" \
+    "arcadedb|ArcadeDB|none|arcade games only; no account" \
+    "progettosnaps|progetto-SNAPS|none|arcade screenshots only; no account" \
+    "mobygames|MobyGames|key|every system; needs your API key" \
+    "igdb|IGDB|idsecret|consoles and computers; needs a Twitch client ID" \
+    "openretro|OpenRetro|none|Amiga and old computers; no account"
+}
+
+# scraper_source_field FONTE N imprime o campo N da fonte (2 = nome, 3 =
+# conta). Status 1 = fonte desconhecida.
+scraper_source_field() {
+  scraper_sources | awk -F'|' -v s="$1" -v n="$2" '$1 == s { print $n; f = 1 } END { exit !f }'
+}
+
+# scraper_source_saved imprime a fonte escolhida (ou o ScreenScraper).
+scraper_source_saved() {
+  local source
+  source=$(conf_get scraper_source 2> /dev/null)
+  scraper_source_field "$source" 1 2> /dev/null || echo screenscraper
+}
+
+# scraper_account FONTE imprime as credenciais guardadas (status 1 sem elas).
+scraper_account() {
+  local line
+  [[ -f $SCRAPER_ACCOUNTS ]] || return 1
+  line=$(grep -m1 "^$1=" "$SCRAPER_ACCOUNTS") || return 1
+  [[ -n ${line#*=} ]] || return 1
+  printf '%s\n' "${line#*=}"
+}
+
+# scraper_account_set FONTE [CREDENCIAIS] guarda as credenciais da fonte
+# (sem elas, tira). O arquivo e so do root e o valor nao vai para o log.
+scraper_account_set() {
+  local tmp
+  mkdir -p "$(dirname "$SCRAPER_ACCOUNTS")"
+  tmp=$(umask 077 && mktemp "$SCRAPER_ACCOUNTS.XXXXXX") || return 1
+  [[ -f $SCRAPER_ACCOUNTS ]] && grep -v "^$1=" "$SCRAPER_ACCOUNTS" > "$tmp"
+  [[ -n ${2:-} ]] && printf '%s=%s\n' "$1" "$2" >> "$tmp"
+  chmod 600 "$tmp"
+  mv -f "$tmp" "$SCRAPER_ACCOUNTS"
+  log_info "Scraper: conta de $1 $([[ -n ${2:-} ]] && echo guardada || echo removida)"
+}
+
+# scraper_account_label FONTE: uma linha para a tela, sem a senha.
+scraper_account_label() {
+  local kind creds
+  kind=$(scraper_source_field "$1" 3)
+  creds=$(scraper_account "$1") || creds=""
+  case $kind in
+    none) echo "no account needed" ;;
+    login) [[ -n $creds ]] && echo "account ${creds%%:*}" || echo "no account" ;;
+    *) [[ -n $creds ]] && echo "key saved" || echo "key missing" ;;
+  esac
+}
+
+# scraper_account_missing FONTE: a fonte so funciona com conta e nao tem?
+scraper_account_missing() {
+  [[ $(scraper_source_field "$1" 3) =~ ^(key|idsecret)$ ]] && ! scraper_account "$1" > /dev/null
+}
+
 # ── Retomada ──────────────────────────────────────────────────────
 # O Skyscraper so grava o cache no fim de cada execucao: um desligamento no
 # meio perdia tudo. Os jogos vao em lotes (SCRAPER_CHUNK por execucao, com

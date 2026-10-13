@@ -516,11 +516,106 @@ screen_emulators_kof() {
 
 # ── Scraper ──────────────────────────────────────────────────────
 
+# screen_scraper (Setup > Games > Scraper): raspar com o site escolhido, a
+# escolha do site (com a conta dos que pedem login) e os pacotes de arte por
+# torrent (screens/mediapacks.sh).
 screen_scraper() {
-  local found=() entries=() line key dir platform count choice targets=() source creds="" user pass media t
-  local clones=0 pending=() rc
+  local choice last=scrape source name account
+  while true; do
+    source=$(scraper_source_saved)
+    name=$(scraper_source_field "$source" 2)
+    account=$(scraper_account_label "$source")
+    choice=$(ui_menu_hints "Scraper" "" "$last" \
+      "scrape|Scrape the games ($name)|Covers, screenshots, logos, videos and descriptions of your ROMs." \
+      "source|Scraper site: $name, $account|Pick the scraper site and log in to the ones that ask." \
+      "torrent|Art packs by torrent|Logos and videos from torrents, only for the ROMs you have." \
+      "return|Return|Back to Games.") || return 0
+    last=$choice
+    case $choice in
+      scrape) screen_scraper_scrape ;;
+      source) screen_scraper_source ;;
+      torrent) screen_mediapacks ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_scraper_source: o site de onde o Scraper busca e, nos que pedem, a
+# conta: usuario e senha (ScreenScraper), a chave de API (MobyGames) ou o
+# client ID e o secret (IGDB). Fica guardado para as proximas vezes
+# (lib/scraper.sh).
+screen_scraper_source() {
+  local title="Scraper site" line key name kind note source creds user pass old
+  local -a entries=()
+  while IFS='|' read -r key name kind note; do
+    entries+=("$key|$name: $note")
+  done < <(scraper_sources)
+  source=$(ui_radio "$title" "Where the art and the game information come from. A site that asks for an account keeps it for the next times." \
+    "$(scraper_source_saved)" "${entries[@]}") || return 0
+  conf_set scraper_source "$source"
+  name=$(scraper_source_field "$source" 2)
+  kind=$(scraper_source_field "$source" 3)
+  old=$(scraper_account "$source") || old=""
+  case $kind in
+    login)
+      user=${old%%:*}
+      [[ -n $user ]] || user=$(conf_get screenscraper_user 2> /dev/null)
+      user=$(ui_input "$name" "$name user (leave empty to scrape without an account)." "$user") || return 0
+      user=${user//[[:space:]]/}
+      if [[ -z $user ]]; then
+        scraper_account_set "$source"
+        ui_msg "$title" "$name will be used without an account." "" \
+          "It works, with lower limits: a free account at the site scrapes more games per day."
+        return 0
+      fi
+      pass=$(ui_input "$name" "$name password${old:+ (leave empty to keep the saved one)}." "" password) || return 0
+      [[ -z $pass && $user == "${old%%:*}" ]] && pass=${old#*:}
+      if [[ -z $pass ]]; then
+        ui_msg "$title" "$(ui_bad "No password: the account was not saved.")"
+        return 0
+      fi
+      creds="$user:$pass"
+      ;;
+    key)
+      creds=$(ui_input "$name" "$name API key (from your profile at the site)${old:+; leave empty to keep the saved one}." "" long) || return 0
+      creds=${creds//[[:space:]]/}
+      [[ -n $creds ]] || creds=$old
+      ;;
+    idsecret)
+      user=$(ui_input "$name" "$name client ID (a Twitch developer application)${old:+; leave empty to keep the saved one}." "") || return 0
+      user=${user//[[:space:]]/}
+      if [[ -n $user ]]; then
+        pass=$(ui_input "$name" "$name client secret." "" password) || return 0
+        pass=${pass//[[:space:]]/}
+        [[ -n $pass ]] && creds="$user:$pass"
+      else
+        creds=$old
+      fi
+      ;;
+    *)
+      ui_msg "$title" "$name is the scraper site now. It needs no account."
+      return 0
+      ;;
+  esac
+  if [[ -z $creds ]]; then
+    ui_msg "$title" "$(ui_bad "$name only works with its key, and none was saved.")" \
+      "Open Scraper site again to type it, or pick another site."
+    return 0
+  fi
+  scraper_account_set "$source" "$creds"
+  ui_msg "$title" "$name is the scraper site now, with your account." "" \
+    "The login is saved on this computer for the next times."
+}
+
+# screen_scraper_scrape: as pastas com jogos, o que buscar e a raspagem, com
+# o site escolhido em Scraper site.
+screen_scraper_scrape() {
+  local found=() entries=() line key dir platform count choice targets=() source creds="" media t
+  local clones=0 pending=() rc name
   local -a options
-  if ! have "$SKYSCRAPER"; then
+  source=$(scraper_source_saved)
+  name=$(scraper_source_field "$source" 2)
+  if [[ $source != progettosnaps ]] && ! have "$SKYSCRAPER"; then
     ui_msg "Scraper" "Skyscraper is not installed."
     return 0
   fi
@@ -542,6 +637,11 @@ screen_scraper() {
     ((rc == 1)) || return 0
     scraper_job_clear
   fi
+  if scraper_account_missing "$source"; then
+    ui_msg "Scraper" "$(ui_bad "$name only works with an account, and none is saved.")" \
+      "Type it in Scraper site, or pick another site there."
+    return 0
+  fi
   mapfile -t found < <(scraper_detect)
   if ((${#found[@]} == 0)); then
     ui_msg "Scraper" "No ROMs were found in $ROMS_DIR." "" \
@@ -556,7 +656,7 @@ screen_scraper() {
     IFS='|' read -r key dir platform count <<< "$line"
     entries+=("$key|$key - $count files ($platform)")
   done
-  choice=$(ui_menu "Scraper" "Covers, screenshots, logos, videos and game information for the ROMs found." \
+  choice=$(ui_menu "Scraper" "Covers, screenshots, logos, videos and game information for the ROMs found, from $name." \
     all "${entries[@]}") || return 0
   if [[ $choice == all ]]; then
     targets=("${found[@]}")
@@ -565,23 +665,11 @@ screen_scraper() {
       [[ ${line%%|*} == "$choice" ]] && targets=("$line")
     done
   fi
-  source=$(ui_menu "Scraper" "Where should the data come from?" screenscraper \
-    "screenscraper|ScreenScraper (free account recommended)" \
-    "arcadedb|ArcadeDB (arcade games only, no account)" \
-    "progettosnaps|progetto-SNAPS (arcade screenshots only, no account)" \
-    "thegamesdb|TheGamesDB") || return 0
   if [[ $source == progettosnaps ]]; then
     screen_scraper_snaps "${targets[@]}"
     return 0
   fi
-  if [[ $source == screenscraper ]]; then
-    user=$(ui_input "ScreenScraper" "ScreenScraper user (leave empty to scrape without an account)" "$(conf_get screenscraper_user 2> /dev/null)") || return 0
-    if [[ -n $user ]]; then
-      pass=$(ui_input "ScreenScraper" "ScreenScraper password" "" password) || return 0
-      creds="$user:$pass"
-      conf_set screenscraper_user "$user"
-    fi
-  fi
+  creds=$(scraper_account "$source") || creds=""
   # Os tipos de midia a buscar, de marcar; a escolha fica para a proxima vez.
   mapfile -t options < <(scraper_media_options)
   media=$(ui_checklist "Scraper: Media" "Mark what to fetch. Each type goes to its folder in ~/media." \

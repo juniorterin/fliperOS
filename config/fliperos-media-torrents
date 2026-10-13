@@ -1,0 +1,17 @@
+# Setup > Games > Scraper > Art packs by torrent: os pacotes que a tela ja traz
+# ("id<TAB>tipo<TAB>pastas<TAB>link<TAB>nome"). tipo: a pasta de ~/media
+# (logo, preview, snap, box, marquee). pastas: as de ~/roms, separadas por
+# virgula; @arcade-cores = os cores de arcade do RetroArch (MAME, FBNeo),
+# @arcade = toda pasta de arcade. link: o .torrent ou um link magnetico. Os
+# arquivos tem o nome do set do MAME (sf2.png, sf2.mp4); so os dos jogos que
+# estao nas pastas sao baixados (config/fliperos-mediapacks).
+arcade-wheels	logo	mame,@arcade-cores	https://archive.org/download/arcade-wheels/arcade-wheels_archive.torrent	Arcade logos (MAME)
+sega-naomi-wheels	logo	naomi,naomi2	https://archive.org/download/sega-naomi-wheels/sega-naomi-wheels_archive.torrent	Sega Naomi logos
+sammy-atomiswave-wheels	logo	atomiswave	https://archive.org/download/sammy-atomiswave-wheels/sammy-atomiswave-wheels_archive.torrent	Sammy Atomiswave logos
+sega-model-2-wheels	logo	model2	https://archive.org/download/sega-model-2-wheels/sega-model-2-wheels_archive.torrent	Sega Model 2 logos
+sega-model-3-wheels	logo	model3	https://archive.org/download/sega-model-3-wheels/sega-model-3-wheels_archive.torrent	Sega Model 3 logos
+mame-videos-snaps	preview	mame,@arcade-cores	https://archive.org/download/mame-videos-snaps/mame-videos-snaps_archive.torrent	Arcade videos (MAME)
+seganaominaomi2videosnaps	preview	naomi,naomi2	https://archive.org/download/seganaominaomi2videosnaps/seganaominaomi2videosnaps_archive.torrent	Sega Naomi videos
+atomiswave_202210	preview	atomiswave	https://archive.org/download/atomiswave_202210/atomiswave_202210_archive.torrent	Sammy Atomiswave videos
+SegaModel2VideoSnaps	preview	model2	https://archive.org/download/SegaModel2VideoSnaps/SegaModel2VideoSnaps_archive.torrent	Sega Model 2 videos
+sega-model-3-snaps	preview	model3	https://archive.org/download/sega-model-3-snaps/sega-model-3-snaps_archive.torrent	Sega Model 3 videos
