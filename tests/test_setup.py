@@ -3111,6 +3111,38 @@ class RomCleanerTests(Base):
                          "".join(display % (n, n) for n in ("Cheio", "Meu", "Fora")))
         self.assertEqual((attract / "romlists" / "Arcade.txt").read_text(), "#Name;Title;Emulator\nb;B;Cheio\n")
 
+    def test_arcadeflow_scraped_game_gets_the_romlist_fields_back(self):
+        # O scraper do Arcadeflow grava vazio o que o ArcadeDB nao respondeu
+        # (titulo, jogadores, controle, botoes): o campo vazio volta a ter o
+        # valor da romlist, e o que o scraper preencheu fica.
+        attract = self.env.dir / "attract-fill"
+        (attract / "romlists").mkdir(parents=True)
+        head = ("#Name;Title;Emulator;CloneOf;Year;Manufacturer;Category;Players;Rotation;Control;Status;"
+                "DisplayCount;DisplayType;AltRomname;AltTitle;Extra;Buttons;Series;Language;Region;Rating\n")
+        romlist = attract / "romlists" / "MAME.txt"
+        romlist.write_text(head +
+                           "samsho;Samurai \"Shodown\";MAME;;1993;SNK;Fighter / Versus;2;0;joystick (8-way);good;1;raster;;;;4;;;;\n"
+                           "sf2;Street Fighter II;MAME;;1991;Capcom;Fighter / Versus;2;0;joystick (8-way);good;1;raster;;;;6;;;;\r\n")
+        entry = ('   "%s" : {\n      z_manufacturer = "%s"\n      z_title = "%s"\n      z_filename = ""\n'
+                 '      z_control = "%s"\n      z_players = "%s"\n      z_buttons = "%s"\n      z_rating = "7.5"\n'
+                 '      z_series = ""\n      z_category = "%s"\n   }\n')
+        db = attract / "romlists" / "MAME.db1"
+        db.write_text("return({\n" + entry % ("samsho", "SNK", "", "", "", "", "") +
+                      entry % ("sf2", "Capcom", "Street Fighter 2", "", "2", "6", "Fighting") +
+                      entry % ("fora", "", "", "", "", "", "") + "})\n")
+        os.utime(romlist, (1000, 1000))
+        env = dict(self.vars, ATTRACT_DIR=str(attract))
+        self.env.stub("pgrep", "exit 1")
+        self.env.out("frontends_arcadeflow_sync", env)
+        filled = ("return({\n" +
+                  entry % ("samsho", "SNK", "Samurai 'Shodown'", "joystick (8-way)", "2", "4", "Fighter / Versus") +
+                  entry % ("sf2", "Capcom", "Street Fighter 2", "joystick (8-way)", "2", "6", "Fighting") +
+                  entry % ("fora", "", "", "", "", "", "") + "})\n")
+        self.assertEqual(db.read_text(), filled)
+        stamp = db.stat().st_mtime_ns
+        self.env.out("frontends_arcadeflow_sync", env)
+        self.assertEqual((db.read_text(), db.stat().st_mtime_ns), (filled, stamp))
+
     def test_attract_empty_romlists_and_unused_emulators_are_removed(self):
         # A romlist sem jogos sai, com o banco do Arcadeflow e as telas dela
         # (as que o Attract-Mode Plus cria sozinho na primeira execucao), e

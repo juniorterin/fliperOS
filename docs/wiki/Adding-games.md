@@ -50,6 +50,8 @@ Setup > AttractPlus ROM List also goes through every other folder with games (co
 
 **Arcadeflow keeps its own copy of the list.** The theme reads the title, year, manufacturer and genre of each game once, into `~/.attract/romlists/<name>.db1`, and after that only adds the games that are missing from it. So when a romlist is rebuilt (by the ROM List, the Scraper or Attract-Mode), FliperOS empties the `.db1` that is older than its romlist, before Attract-Mode Plus opens: the theme reads the whole list again the next time the display opens. Favourites, play counts and last played (`<name>.db2`) are kept; what Arcadeflow's own scraper had fetched for that list is not.
 
+**A game scraped inside Arcadeflow keeps its romlist data.** The theme's scraper replaces the title, year, manufacturer, genre, players, rotation, control and button count with what ArcadeDB answers, and writes them empty when it gets no answer — the game then shows no name and no players/control/buttons indicators at the top. Before Attract-Mode Plus opens, FliperOS puts the romlist's value back into every one of those fields that is empty in the `.db1`; what the scraper did fill is kept.
+
 **ES-DE.** In systems with the arcade platform (`mame`, `model2`, `model3` and the RetroArch MAME cores), ES-DE already shows the full name of each MAME set from its own list. Everything else shows the file name until it is scraped: **Setup > Scraper** writes the names, descriptions and artwork to `~/ES-DE/gamelists/<system>/gamelist.xml`. ES-DE's own scraper (*Main menu > Scraper*) also works and saves to the same places.
 
 ## Artwork

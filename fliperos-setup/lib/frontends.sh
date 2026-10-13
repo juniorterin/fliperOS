@@ -334,7 +334,11 @@ frontends_arcadeflow_sync() {
   pgrep -x "${ATTRACTPLUS##*/}" > /dev/null 2>&1 && return 0
   for list in "$ATTRACT_DIR"/romlists/*.txt; do
     db=${list%.txt}.db1
-    [[ -f $db && $list -nt $db ]] || continue
+    [[ -f $db ]] || continue
+    if [[ ! $list -nt $db ]]; then
+      frontends_arcadeflow_fill "$list" "$db"
+      continue
+    fi
     if [[ -f ${list%.txt}.db2 ]]; then
       printf 'return({\n})\n' > "$db"
     else
@@ -343,6 +347,40 @@ frontends_arcadeflow_sync() {
     n=$((n + 1))
   done
   ((n)) && log_info "Arcadeflow: $n romlist(s) para ler de novo"
+  return 0
+}
+
+# frontends_arcadeflow_fill ROMLIST DB1: o scraper do Arcadeflow troca o
+# titulo, o ano, o fabricante, o genero, os jogadores, a rotacao, o controle e
+# os botoes do jogo pelo que o ArcadeDB responde, e sem resposta grava vazio:
+# o jogo raspado ficava sem nome e sem os indicadores do topo (jogadores,
+# controle, botoes). O campo vazio no .db1 volta a ter o valor da romlist; o
+# que o scraper preencheu fica. Reescreve no lugar, so se houver o que mudar.
+frontends_arcadeflow_fill() {
+  local list=$1 db=$2 tmp
+  grep -q '^      z_[a-z]* = ""$' "$db" || return 0
+  tmp=$(mktemp) || return 0
+  if awk -v list="$list" '
+    BEGIN {
+      col["z_title"] = 2; col["z_year"] = 5; col["z_manufacturer"] = 6; col["z_category"] = 7
+      col["z_players"] = 8; col["z_rotation"] = 9; col["z_control"] = 10; col["z_buttons"] = 17
+      while ((getline line < list) > 0) {
+        sub(/\r$/, "", line)
+        if (line ~ /^#/ || split(line, f, ";") < 2) continue
+        for (key in col) {
+          v = f[col[key]]
+          gsub(/"/, "\047", v)
+          if (v != "" && v !~ /\\/) val[f[1], key] = v
+        }
+      }
+    }
+    /^   "[^"]+" : [{]$/ { name = $0; sub(/^   "/, "", name); sub(/" : [{]$/, "", name) }
+    /^      z_[a-z]+ = ""$/ && ((name, $1) in val) { printf "      %s = \"%s\"\n", $1, val[name, $1]; next }
+    { print }' "$db" > "$tmp" && ! cmp -s "$tmp" "$db"; then
+    cat "$tmp" > "$db"
+    log_info "Arcadeflow: ${db##*/} com os campos da romlist de volta"
+  fi
+  rm -f "$tmp"
   return 0
 }
 
