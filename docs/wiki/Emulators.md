@@ -78,6 +78,21 @@ In a frontend (Attract-Mode and others), the emulator command becomes `/opt/flip
 
 **GroovyMAME and RetroArch** don't go through here: they switch modes by themselves on every game. In GroovyMAME, `interlace 0` in `/etc/fliperos/mame/mame.ini` makes Switchres never choose an interlaced mode (480-line games come out at 240p). In RetroArch, the **MAME 2010** core already ships that way: CRT SwitchRes reads a `switchres.ini` of the core only, on top of `/etc/switchres.ini`, in `~/.config/retroarch/config/MAME 2010/MAME 2010.switchres.ini` (from `config/retroarch-switchres`), with `interlace 0` — a 640x480 game (Namco System 12) opens at 640x240 progressive, with the image shrunk vertically, instead of 480i. The same file named after another core (`config/<Core>/<Core>.switchres.ini`) does the same for it; to go back to 480i, `interlace 1` and without the `# FliperOS` line at the top (updates only rewrite the file that has it).
 
+## Emulators & Games
+
+**Setup > Emulators & Games** lists the emulators of the desktop menu (RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, Supermodel, OpenBOR, Model 2, Fightcade 2) and KOF Final Attack, each marked **installed** or **not installed** — the same file the desktop menu looks at (`TryExec`) to show the shortcut. Choosing one that is not installed installs it (`config/fliperos-emulators`):
+
+- **Model 2**: installs what is missing from the compiler and clones and builds SM2-Emu as the user, the same build the desktop menu does on the first click (`fliperos-sm2emu --deps` and `--build`). Chosen again when installed, it updates and rebuilds.
+- **Fightcade 2**: downloaded from its site, with Wine ([Fightcade 2](Fightcade-2.md)).
+- **KOF Final Attack (Ikemen GO, 4:3)**: below.
+- The others come compiled in the image; one that is missing (an image built without it) can't be installed from here.
+
+### KOF Final Attack
+
+*The King of Fighters: Final Attack* is a MUGEN game in 16:9. The [4:3 patch](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) converts it to [Ikemen GO](https://github.com/ikemen-engine/Ikemen-GO) in 4:3 at 320x240 with one sprite pixel per screen pixel, for the CRT. **The game itself is not downloaded**: bring the folder of the original game (the one with `Final Attack.exe`) on a USB disk, over the network share or in the home folder, and point to it in the installer (the folder above it also works). The installer (`config/fliperos-kof`) downloads the patch, which downloads Ikemen GO and a portable PowerShell (the conversion scripts are PowerShell), and makes the converted copy in `~/roms/ikemen/kof-final-attack` (about 2 GB; 3 GB free are asked for). The original folder is not changed: the patch works from a `Patch 4x3` folder inside it, removed at the end, and a folder that can't be written to (a read-only disk) is copied to the disk first. Installing again replaces the copy only after the new one is ready.
+
+It opens from the desktop menu (**Games > KOF Final Attack**) or with `fliperos-kof` on a terminal, in its own Xorg at 320x240@60 (`fliperos-kof` in `emulator-modes.conf`). It is not in the frontends' game lists.
+
 ## Laserdisc (Hypseus Singe)
 
 Laserdisc games live in `/opt/fliperos/roms/hypseus`, which is `~/.hypseus` (over the network: `\\fliperos\FliperOS\roms\hypseus`): the ROM in `roms/<game>.zip`, the laserdisc video in `vldp/<game>/` with the framefile `<game>.txt`, and Singe games in `singe/<game>/`. To open on the CRT (640x240 at 15 kHz, full screen):

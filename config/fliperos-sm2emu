@@ -5,6 +5,11 @@
 #
 #   fliperos-sm2emu --pick ARQUIVO
 #     a lista no Gum; o .zip escolhido vai para ARQUIVO (vazio = cancelou).
+#   fliperos-sm2emu --deps
+#     instala o que falta do compilador (como root, ou pelo sudo).
+#   fliperos-sm2emu --build
+#     clona e compila, ou atualiza e compila de novo, sem perguntar nada
+#     (Setup > Emulators & Games, config/fliperos-emulators).
 set -euo pipefail
 
 src=${FLIPEROS_SM2_SRC:-$HOME/.local/src/sm2-emu}
@@ -155,8 +160,19 @@ for label, path in rows:
 PY
 }
 
+case ${1:-} in
+  --deps)
+    deps_missing || exit 0
+    install_deps
+    exit
+    ;;
+  --build)
+    if [[ -d $src/.git ]]; then build_tree update; else build_tree; fi
+    exit
+    ;;
+esac
 if [[ ${1:-} != --pick ]]; then
-  echo "Usage: fliperos-sm2emu --pick FILE" >&2
+  echo "Usage: fliperos-sm2emu --pick FILE | --deps | --build" >&2
   exit 2
 fi
 dest=${2:?}

@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# The King of Fighters: Final Attack (MUGEN) no Ikemen GO, em 4:3 e 320x240
+# com pixel 1:1, para o CRT. O jogo nao vem com o FliperOS nem e baixado
+# daqui: a pessoa traz a pasta do jogo original (a que tem o "Final
+# Attack.exe"), num pendrive, pela rede ou na pasta pessoal. O instalador
+# baixa o patch 4:3 (github.com/juniorterin/KOF-Final-Attack-4-3-patch), que
+# por sua vez baixa o Ikemen GO e um PowerShell portatil, e monta uma copia
+# do jogo ja convertida em ~/roms/ikemen/kof-final-attack. A pasta original
+# nao e alterada.
+#
+#   fliperos-kof                           abre o jogo (num Xorg proprio)
+#   fliperos-kof installed                 status 0 se instalado
+#   fliperos-kof find PASTA                imprime a pasta do jogo original
+#                                          achada em PASTA (ou dentro dela)
+#   fliperos-kof install PASTA [--progress]   instala (como o usuario)
+#
+# Com --progress, as etapas saem no formato da tela de progresso do Setup
+# (lib/progress.sh); a saida do git e do conversor vai para o stderr.
+set -uo pipefail
+
+repo=${FLIPEROS_KOF_REPO:-https://github.com/juniorterin/KOF-Final-Attack-4-3-patch.git}
+dest=${FLIPEROS_KOF_DIR:-$HOME/roms/ikemen/kof-final-attack}
+cache=${FLIPEROS_KOF_CACHE:-$HOME/.local/share/fliperos/kof-patch}
+x11=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
+exe=Ikemen_GO_Linux
+marker="Final Attack.exe"
+# A copia convertida tem cerca de 2,1 GB, mais o Ikemen GO e o PowerShell.
+need_kb=$((3 * 1024 * 1024))
+
+progress=0
+say() {
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+fail() {
+  if ((progress)); then printf '@fail KOF Final Attack|%s\n' "$1"; else printf 'fliperos-kof: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+# find_game PASTA: a pasta com o jogo original, a propria ou uma dentro dela.
+find_game() {
+  [[ -d $1 ]] || return 1
+  local hit
+  hit=$(find "$1" -maxdepth 3 -type f -name "$marker" -printf '%h\n' -quit 2> /dev/null)
+  [[ -n $hit ]] || return 1
+  printf '%s\n' "$hit"
+}
+
+# copy_patch PASTA: os arquivos do patch (sem o .git) em PASTA.
+copy_patch() {
+  git -C "$cache" archive HEAD | tar -x -C "$1"
+}
+
+install_game() {
+  local src=$1 patch stage="" made="" old="" free rc
+  src=$(find_game "$src") || fail "no \"$marker\" in that folder: choose the folder of the original game"
+  command -v git > /dev/null || fail "git is not installed"
+  mkdir -p "${dest%/*}" || fail "could not create ${dest%/*}"
+  free=$(df -Pk "${dest%/*}" | awk 'NR == 2 { print $4 }')
+  ((${free:-0} >= need_kb)) || fail "not enough free space in ${dest%/*} (3 GB needed)"
+
+  say 5 "Downloading the 4:3 patch"
+  if [[ -d $cache/.git ]]; then
+    GIT_TERMINAL_PROMPT=0 git -C "$cache" pull --ff-only >&2 || true
+  else
+    rm -rf "$cache"
+    mkdir -p "${cache%/*}"
+    GIT_TERMINAL_PROMPT=0 git clone --depth 1 "$repo" "$cache" >&2 || fail "could not download the patch (no network?)"
+  fi
+  [[ -f $cache/converter-ikemen.sh ]] || fail "the patch has no converter-ikemen.sh"
+
+  # O conversor trabalha de dentro da pasta "Patch 4x3" do jogo. Numa pasta
+  # que nao aceita escrita (rede, disco so de leitura), o jogo vem antes
+  # para o disco.
+  say 10 "Preparing the game folder"
+  patch="$src/Patch 4x3"
+  if [[ -d $patch ]]; then
+    copy_patch "$patch" 2> /dev/null || stage=$dest.source
+  elif mkdir "$patch" 2> /dev/null; then
+    made=$patch
+    copy_patch "$patch" >&2 || stage=$dest.source
+  else
+    stage=$dest.source
+  fi
+  if [[ -n $stage ]]; then
+    [[ -z $made ]] || rm -rf "$made"
+    made=""
+    say 12 "Copying the original game to the disk (about 2 GB)"
+    rm -rf "$stage"
+    { mkdir -p "$stage" && cp -r "$src"/. "$stage"/ >&2; } || {
+      rm -rf "$stage"
+      fail "could not copy the game from $src"
+    }
+    patch="$stage/Patch 4x3"
+    { mkdir -p "$patch" && copy_patch "$patch" >&2; } || fail "could not copy the patch"
+  fi
+
+  # Uma instalacao anterior sai so depois de a nova ficar pronta.
+  if [[ -e $dest ]]; then
+    old=$dest.old
+    rm -rf "$old"
+    mv "$dest" "$old" || fail "could not replace $dest"
+  fi
+  say 25 "Converting to Ikemen GO in 4:3 (downloads Ikemen GO; copies about 2 GB)"
+  bash "$patch/converter-ikemen.sh" -Platform linux -Out "$dest" >&2
+  rc=$?
+  [[ -z $made ]] || rm -rf "$made"
+  [[ -z $stage ]] || rm -rf "$stage"
+  if ((rc != 0)) || [[ ! -f $dest/$exe ]]; then
+    rm -rf "$dest"
+    [[ -z $old ]] || mv "$old" "$dest"
+    fail "the conversion failed (details in the log)"
+  fi
+  [[ -z $old ]] || rm -rf "$old"
+  chmod +x "$dest/$exe"
+  say 100 "KOF Final Attack installed"
+}
+
+case ${1:-} in
+  installed) [[ -x $dest/$exe ]] ;;
+  find) find_game "${2:?folder}" ;;
+  install)
+    [[ ${3:-} == --progress ]] && progress=1
+    install_game "${2:?folder of the original game}"
+    ;;
+  run)
+    cd "$dest" 2> /dev/null && [[ -x ./$exe ]] || {
+      echo "KOF Final Attack is not installed: Setup > Emulators & Games." >&2
+      exit 1
+    }
+    exec "./$exe" "${@:2}"
+    ;;
+  "")
+    [[ -x $dest/$exe ]] || {
+      echo "KOF Final Attack is not installed: Setup > Emulators & Games." >&2
+      exit 1
+    }
+    # No console, num Xorg proprio no modo da tabela (320x240).
+    if [[ -z ${DISPLAY:-} ]]; then
+      exec "$x11" "$(readlink -f -- "${BASH_SOURCE[0]}")" run
+    fi
+    exec "$0" run
+    ;;
+  *)
+    echo "Usage: fliperos-kof [installed | find FOLDER | install FOLDER [--progress]]" >&2
+    exit 2
+    ;;
+esac

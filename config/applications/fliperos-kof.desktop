@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=KOF Final Attack
+GenericName=Fighting game (Ikemen GO)
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch kof
+TryExec=/home/fliperos/roms/ikemen/kof-final-attack/Ikemen_GO_Linux
+Icon=/usr/local/share/pixmaps/fliperos-kof.svg
+Terminal=false
+Categories=Game;

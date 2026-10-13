@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
+        "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -1234,6 +1234,28 @@ class RetroArchSuperTests(Base):
         self.env.connector("card0-VGA-1", "disconnected")
         self.env.out("video_save_result card0-VGA-1 se generic_15")
         self.assertIn('crt_switch_resolution_super = "0"\n', cfg.read_text())
+
+
+class EmulatorsTests(Base):
+    """Setup > Emulators & Games (lib/emulators.sh sobre o config/fliperos-emulators)."""
+
+    def test_list_field_and_install(self):
+        d = self.env.dir
+        (d / "emus").write_text('#!/bin/sh\nif [ "$1" = list ]; then\n'
+                                '  echo "flycast|1|image|Flycast (Dreamcast)"\n  echo "kof|0|source|KOF Final Attack"\n'
+                                'else echo "$*" >> "%s/calls"; echo "@step 100 Done"; fi\n' % d)
+        (d / "emus").chmod(0o755)
+        env = {"EMULATORS_CMD": str(d / "emus")}
+        self.assertEqual(self.env.out("emulators_field kof 3; emulators_field flycast 4; emulators_field flycast 2",
+                                      env).splitlines(), ["source", "Flycast (Dreamcast)", "1"])
+        out = self.env.out('emulators_install model2; emulators_install kof "/media/usb/KOF Final"', env)
+        self.assertIn("@step 0 Starting", out)
+        self.assertIn("@step 100 Done", out)
+        self.assertEqual((d / "calls").read_text().splitlines(),
+                         ["install model2 --progress", "install kof --progress --source /media/usb/KOF Final"])
+        r = self.env.run("emulators_install model2", {"EMULATORS_CMD": str(d / "nada")})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("@fail", r.stdout)
 
 
 class ButtonsLayoutTests(Base):

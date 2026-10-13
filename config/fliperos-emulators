@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Setup > Emulators & Games: os emuladores do menu do desktop, quais estao
+# instalados e a instalacao dos que nao vem na imagem, um por um.
+#
+#   fliperos-emulators list                    nome|instalado (0 ou 1)|tipo|descricao
+#   fliperos-emulators installed NOME          status 0 se instalado
+#   fliperos-emulators install NOME [--progress] [--source PASTA]   (como root)
+#
+# tipo: image (compilado na imagem: nao se instala depois), build (o SM2-Emu,
+# clonado e compilado na maquina: config/fliperos-sm2emu), fetch (o Fightcade,
+# baixado do site dele: config/fliperos-fightcade) e source (um jogo que a
+# pessoa traz, --source PASTA: config/fliperos-kof).
+#
+# Com --progress, as etapas saem no formato da tela de progresso do Setup
+# (lib/progress.sh); a saida dos comandos vai para o stderr (o log do Setup).
+set -uo pipefail
+
+user=${FLIPEROS_USER:-fliperos}
+home=${FLIPEROS_HOME:-$(getent passwd "$user" 2> /dev/null | cut -d: -f6)}
+home=${home:-/home/$user}
+root=${FLIPEROS_EMULATORS_ROOT:-}
+sm2emu=${FLIPEROS_SM2EMU:-/usr/local/bin/fliperos-sm2emu}
+fightcade=${FLIPEROS_FIGHTCADE:-/opt/fliperos/bin/fliperos-fightcade}
+kof=${FLIPEROS_KOF:-/usr/local/bin/fliperos-kof}
+
+# nome|tipo|o arquivo que diz que esta instalado|descricao. Os caminhos sao
+# os do TryExec de config/applications: o que o menu do desktop mostra.
+table() {
+  cat << EOF
+retroarch|image|$root/usr/local/bin/retroarch|RetroArch (consoles and arcade cores)
+groovymame|image|$root/usr/local/bin/groovymame|GroovyMAME (arcade)
+flycast|image|$root/usr/local/bin/flycast|Flycast (Dreamcast, Naomi, Atomiswave)
+pcsx2|image|$root/usr/local/bin/pcsx2|PCSX2 (PlayStation 2)
+dolphin|image|$root/usr/local/bin/dolphin-emu|Dolphin (GameCube, Wii, Triforce)
+supermodel|image|$root/usr/local/bin/supermodel|Supermodel (Sega Model 3)
+openbor|image|$root/usr/local/bin/openbor|OpenBOR (beat 'em ups)
+model2|build|$home/.local/src/sm2-emu/build/bin/sm2-emu|Model 2 (SM2-Emu, Sega Model 2)
+fightcade|fetch|$root/opt/fliperos/fightcade/fightcade|Fightcade 2 (online arcade)
+kof|source|$home/roms/ikemen/kof-final-attack/Ikemen_GO_Linux|KOF Final Attack (Ikemen GO, 4:3)
+EOF
+}
+
+field() {
+  table | awk -F'|' -v n="$1" -v f="$2" '$1 == n { print $f; exit }'
+}
+
+emulator_installed() {
+  local file
+  file=$(field "$1" 3)
+  [[ -n $file && -x $file ]]
+}
+
+progress=0 label=""
+say() {
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+fail() {
+  if ((progress)); then printf '@fail %s|%s\n' "$label" "$1"; else printf 'fliperos-emulators: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+# as_user COMANDO...: o que fica na pasta pessoal roda como o usuario.
+as_user() {
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    runuser -u "$user" -- env HOME="$home" "$@"
+  else
+    HOME=$home "$@"
+  fi
+}
+
+emulator_install() {
+  local name=$1 source=$2 kind args=()
+  kind=$(field "$name" 2)
+  label=$(field "$name" 4)
+  ((progress)) && args=(--progress)
+  case $kind in
+    image) fail "it comes compiled in the FliperOS image, and this image was built without it" ;;
+    build)
+      [[ -x $sm2emu ]] || fail "the Model 2 builder ($sm2emu) is missing"
+      say 5 "Installing the build tools"
+      "$sm2emu" --deps >&2 || fail "could not install the build tools (no network?)"
+      say 20 "Downloading and building Model 2 (a few minutes)"
+      as_user "$sm2emu" --build >&2 || fail "the build failed (details in the log)"
+      say 100 "Model 2 installed"
+      ;;
+    fetch)
+      [[ -x $fightcade ]] || fail "the Fightcade installer ($fightcade) is missing"
+      "$fightcade" fetch "${args[@]}"
+      ;;
+    source)
+      [[ -x $kof ]] || fail "the installer ($kof) is missing"
+      [[ -n $source ]] || fail "the folder of the original game was not given"
+      as_user "$kof" install "$source" "${args[@]}"
+      ;;
+    *) fail "unknown emulator: $name" ;;
+  esac
+}
+
+case ${1:-} in
+  list)
+    while IFS='|' read -r name kind file desc; do
+      if [[ -x $file ]]; then inst=1; else inst=0; fi
+      printf '%s|%s|%s|%s\n' "$name" "$inst" "$kind" "$desc"
+    done < <(table)
+    ;;
+  installed) emulator_installed "${2:?name}" ;;
+  install)
+    name=${2:?name} source=""
+    shift 2
+    while (($#)); do
+      case $1 in
+        --progress) progress=1 ;;
+        --source) source=${2:-}; shift ;;
+      esac
+      shift
+    done
+    emulator_install "$name" "$source"
+    ;;
+  *)
+    echo "Usage: fliperos-emulators list | installed NAME | install NAME [--progress] [--source FOLDER]" >&2
+    exit 2
+    ;;
+esac

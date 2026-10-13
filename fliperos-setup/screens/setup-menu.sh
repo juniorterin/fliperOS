@@ -13,7 +13,7 @@ screen_setup_menu() {
       "network|Network Setup" \
       "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
       "frontend|Frontend" \
-      "splash|Splash screen (boot theme)" \
+      "emulators|Emulators & Games (install the ones not in the image)" \
       "extras|Extras (Wine, Steam, Heroic, Pixelcade, ZeDMD)" \
       "latency|Latency (low latency mode)" \
       "scraper|Scraper (covers, videos, logos)" \
@@ -24,6 +24,7 @@ screen_setup_menu() {
       "quirks|Quirks (USB controller fixes)" \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))" \
       "update|System Update" \
+      "splash|Splash screen (boot theme)" \
       "return|Return") || return 0
     last=$choice
     case $choice in
@@ -32,7 +33,7 @@ screen_setup_menu() {
       network) screen_network ;;
       joysticks) screen_joysticks ;;
       frontend) screen_frontend ;;
-      splash) screen_splash ;;
+      emulators) screen_emulators ;;
       extras) screen_extras ;;
       latency) screen_latency ;;
       scraper) screen_scraper ;;
@@ -43,6 +44,7 @@ screen_setup_menu() {
       quirks) screen_quirks ;;
       debug) screen_debug ;;
       update) screen_update ;;
+      splash) screen_splash ;;
       return) return 0 ;;
     esac
   done
@@ -401,6 +403,81 @@ screen_extras() {
       ui_msg "Extras" "$label installed."
     fi
   done
+}
+
+# ── Emulators & Games ────────────────────────────────────────────
+# Os emuladores do menu do desktop, com o que falta instalar, e a instalacao
+# um por um dos que nao vem na imagem (lib/emulators.sh).
+
+screen_emulators() {
+  local title="Emulators & Games" entries=() name inst kind desc choice last="" label
+  while true; do
+    entries=()
+    while IFS='|' read -r name inst kind desc; do
+      if ((inst)); then
+        entries+=("$name|$desc (installed)")
+      else
+        entries+=("$name|$desc (not installed)")
+        [[ -n $last ]] || last=$name
+      fi
+    done < <(emulators_list)
+    entries+=("return|Return")
+    choice=$(ui_menu "$title" \
+      "What is installed and what is not. Choose one that is not installed to install it; Model 2, Fightcade 2 and KOF Final Attack don't come in the image and need the network." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
+    [[ $choice == return ]] && return 0
+    label=$(emulators_field "$choice" 4)
+    kind=$(emulators_field "$choice" 3)
+    inst=$(emulators_field "$choice" 2)
+    case $kind in
+      image)
+        if ((inst)); then
+          ui_msg "$title" "$label comes with FliperOS and is installed."
+        else
+          ui_msg "$title" "$label comes compiled in the FliperOS image, and this image was built without it." "" \
+            "It can't be installed from here: use an image that has it."
+        fi
+        ;;
+      source) screen_emulators_kof "$choice" "$label" "$inst" ;;
+      *)
+        if ((inst)); then
+          ui_yesno "$title" "$label is already installed. Download it again to update it?" no || continue
+        elif [[ $kind == build ]]; then
+          ui_yesno "$title" "Download and build $label now? It needs the network and takes several minutes." yes ||
+            continue
+        else
+          ui_yesno "$title" "Download and install $label now?" yes || continue
+        fi
+        if run_with_progress "Installing $label" "" emulators_install "$choice"; then
+          ui_msg "$title" "$label installed." "" "It is in the desktop menu, in Games."
+        fi
+        ;;
+    esac
+  done
+}
+
+# screen_emulators_kof NOME ROTULO INSTALADO: o KOF Final Attack nao e
+# baixado: a pessoa aponta a pasta do jogo original, e a instalacao baixa o
+# patch 4:3 e o Ikemen GO e monta a copia convertida (config/fliperos-kof).
+screen_emulators_kof() {
+  local name=$1 label=$2 inst=$3 title="KOF Final Attack" dir game
+  if ((inst)); then
+    ui_yesno "$title" "$label is already installed. Install it again from the original game? The installed copy is replaced." no ||
+      return 0
+  fi
+  ui_msg "$title" "The King of Fighters: Final Attack on Ikemen GO, in 4:3 at 320x240 for the CRT." "" \
+    "The game itself is not downloaded: bring the folder of the original game (the one with Final Attack.exe) on a USB disk, over the network share or in the home folder." \
+    "" "The installer downloads the 4:3 patch and Ikemen GO and makes a converted copy in ~/roms/ikemen (about 2 GB; needs the network). The original folder is not changed."
+  dir=$(ui_browse "$title" "Open the folder of the original game, then Use this folder." \
+    "$(folders_browse_start)" dir) || return 0
+  if ! game=$(emulators_kof_find "$dir"); then
+    ui_msg "$title" "No Final Attack.exe in $dir." "" "Choose the folder of the original game (MUGEN)."
+    return 0
+  fi
+  if run_with_progress "Installing $title" "$game" emulators_install "$name" "$game"; then
+    ui_msg "$title" "$title installed." "" "It is in the desktop menu, in Games; on a terminal, fliperos-kof."
+  fi
 }
 
 # ── Scraper ──────────────────────────────────────────────────────

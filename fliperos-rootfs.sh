@@ -126,6 +126,10 @@ install -Dm644 "$src/config/ledspicer-ppa.asc" "$root/usr/local/share/fliperos/l
 # Wine, Steam, Heroic e o Pixelcade nao vem na imagem: o Setup > Extras os
 # instala.
 install -Dm755 "$src/config/fliperos-extras" "$root/opt/fliperos/bin/fliperos-extras"
+# Setup > Emulators & Games: o estado de cada emulador e a instalacao dos que
+# nao vem na imagem; o KOF Final Attack no Ikemen GO (config/fliperos-kof).
+install -Dm755 "$src/config/fliperos-emulators" "$root/opt/fliperos/bin/fliperos-emulators"
+install -Dm755 "$src/config/fliperos-kof" "$root/usr/local/bin/fliperos-kof"
 # Pixelcade (marquee de LED/LCD): o pixelweb e a arte sao baixados pelo
 # Setup > Extras para ~/pixelcade (codigo fechado). Daqui vem o que liga os
 # frontends e os lancadores a ele, o servico (so sobe com o pixelweb

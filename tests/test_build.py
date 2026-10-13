@@ -4886,7 +4886,8 @@ class EmulatorMenuTests(unittest.TestCase):
     # emulador (o usuario copia), e o Fightcade aparece depois de baixado
     # pelo Setup.
     TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/local/bin/fliperos-model2',
-               'fightcade': '/opt/fliperos/fightcade/fightcade'}
+               'fightcade': '/opt/fliperos/fightcade/fightcade',
+               'kof': '/home/fliperos/roms/ikemen/kof-final-attack/Ikemen_GO_Linux'}
 
     def entry(self, path):
         return dict(line.split('=', 1) for line in path.read_text().splitlines() if '=' in line)
@@ -4894,7 +4895,7 @@ class EmulatorMenuTests(unittest.TestCase):
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
         self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'supermodel',
-                                 'dolphin', 'openbor', 'model2', 'fightcade'})
+                                 'dolphin', 'openbor', 'model2', 'fightcade', 'kof'})
 
     def test_entries_go_through_the_launcher(self):
         launcher = (ROOT / 'config/fliperos-launch').read_text()
@@ -7871,6 +7872,160 @@ class RetroArchCoreSwitchresTests(unittest.TestCase):
             target.write_text('interlace 1\n')
             run()
             self.assertEqual(target.read_text(), 'interlace 1\n')
+
+
+class EmulatorsMenuTests(unittest.TestCase):
+    """Setup > Emulators & Games: o estado de cada emulador e a instalacao dos que nao vem na imagem."""
+
+    def run_cmd(self, script, *args, env=None):
+        return subprocess.run(['bash', str(ROOT / 'config' / script), *args], capture_output=True, text=True,
+                              env=dict(os.environ, **(env or {})), timeout=120)
+
+    def test_list_marks_what_is_installed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            env = {'FLIPEROS_EMULATORS_ROOT': str(tmp / 'root'), 'FLIPEROS_HOME': str(tmp / 'home')}
+            for path in ('root/usr/local/bin/retroarch', 'home/.local/src/sm2-emu/build/bin/sm2-emu'):
+                (tmp / path).parent.mkdir(parents=True)
+                (tmp / path).write_text('')
+                (tmp / path).chmod(0o755)
+            rows = [r.split('|') for r in self.run_cmd('fliperos-emulators', 'list', env=env).stdout.splitlines()]
+            # Os do menu do desktop (config/applications), na ordem dele, e o KOF.
+            self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'flycast', 'pcsx2', 'dolphin',
+                                                    'supermodel', 'openbor', 'model2', 'fightcade', 'kof'])
+            state = {r[0]: (r[1], r[2]) for r in rows}
+            self.assertEqual(state['retroarch'], ('1', 'image'))
+            self.assertEqual(state['flycast'], ('0', 'image'))
+            self.assertEqual(state['model2'], ('1', 'build'))
+            self.assertEqual(state['fightcade'], ('0', 'fetch'))
+            self.assertEqual(state['kof'], ('0', 'source'))
+            self.assertEqual(self.run_cmd('fliperos-emulators', 'installed', 'model2', env=env).returncode, 0)
+            self.assertEqual(self.run_cmd('fliperos-emulators', 'installed', 'kof', env=env).returncode, 1)
+        # O arquivo que diz "instalado" e o TryExec do atalho do desktop.
+        script = (ROOT / 'config/fliperos-emulators').read_text()
+        for name in ('retroarch', 'groovymame', 'flycast', 'pcsx2', 'dolphin', 'supermodel', 'openbor', 'fightcade'):
+            tryexec = re.search(r'(?m)^TryExec=(.+)$',
+                                (ROOT / 'config/applications' / ('fliperos-%s.desktop' % name)).read_text()).group(1)
+            self.assertIn('|$root%s|' % tryexec, script, name)
+
+    def test_install_calls_the_installer_of_each_kind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            calls = tmp / 'calls'
+            for name in ('sm2emu', 'fightcade', 'kof'):
+                (tmp / name).write_text('#!/bin/sh\necho "%s $* HOME=$HOME" >> "%s"\n' % (name, calls))
+                (tmp / name).chmod(0o755)
+            env = {'FLIPEROS_SM2EMU': str(tmp / 'sm2emu'), 'FLIPEROS_FIGHTCADE': str(tmp / 'fightcade'),
+                   'FLIPEROS_KOF': str(tmp / 'kof'), 'FLIPEROS_HOME': str(tmp / 'home'),
+                   'FLIPEROS_USER': 'root', 'FLIPEROS_EMULATORS_ROOT': str(tmp / 'root')}
+            run = self.run_cmd('fliperos-emulators', 'install', 'model2', '--progress', env=env)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertIn('@step 100 Model 2 installed', run.stdout)
+            self.run_cmd('fliperos-emulators', 'install', 'fightcade', '--progress', env=env)
+            self.run_cmd('fliperos-emulators', 'install', 'kof', '--progress', '--source', '/media/usb/KOF', env=env)
+            self.assertEqual(calls.read_text().splitlines(),
+                             ['sm2emu --deps HOME=%s' % os.environ.get('HOME', ''),
+                              'sm2emu --build HOME=%s' % (tmp / 'home'),
+                              'fightcade fetch --progress HOME=%s' % os.environ.get('HOME', ''),
+                              'kof install /media/usb/KOF --progress HOME=%s' % (tmp / 'home')])
+            # O que vem compilado na imagem nao se instala daqui; o KOF pede a pasta do jogo.
+            run = self.run_cmd('fliperos-emulators', 'install', 'flycast', '--progress', env=env)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail Flycast (Dreamcast, Naomi, Atomiswave)|it comes compiled in the FliperOS image',
+                          run.stdout)
+            run = self.run_cmd('fliperos-emulators', 'install', 'kof', '--progress', env=env)
+            self.assertIn('@fail KOF Final Attack (Ikemen GO, 4:3)|the folder of the original game', run.stdout)
+        sm2 = (ROOT / 'config/fliperos-sm2emu').read_text()
+        self.assertIn('  --deps)\n    deps_missing || exit 0\n    install_deps\n', sm2)
+        self.assertIn('if [[ -d $src/.git ]]; then build_tree update; else build_tree; fi', sm2)
+
+    def kof_repo(self, tmp, converter):
+        repo = tmp / 'patch-repo'
+        repo.mkdir()
+        (repo / 'converter-ikemen.sh').write_text(converter)
+        git = ['git', '-C', str(repo), '-c', 'user.name=t', '-c', 'user.email=t@t']
+        subprocess.run(['git', 'init', '-q', str(repo)], check=True, capture_output=True)
+        subprocess.run(git + ['add', '.'], check=True, capture_output=True)
+        subprocess.run(git + ['commit', '-qm', 'x'], check=True, capture_output=True)
+        return repo
+
+    @unittest.skipUnless(shutil.which('git'), 'sem git')
+    def test_kof_install_converts_a_copy_and_leaves_the_game_alone(self):
+        # O conversor do patch (aqui um de mentira) roda de dentro de "Patch
+        # 4x3" na pasta do jogo e escreve a copia em -Out.
+        converter = ('#!/bin/bash\n[ -f "$(dirname "$0")/../Final Attack.exe" ] || exit 3\n'
+                     'while [ $# -gt 0 ]; do [ "$1" = -Out ] && out=$2; shift; done\n'
+                     '[ -n "$FAIL" ] && exit 1\nmkdir -p "$out" && echo "$KIND" > "$out/Ikemen_GO_Linux"\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            game = tmp / 'usb' / 'KOF' / 'Final Attack'
+            game.mkdir(parents=True)
+            (game / 'Final Attack.exe').write_text('x')
+            dest = tmp / 'home' / 'roms' / 'ikemen' / 'kof-final-attack'
+            env = {'HOME': str(tmp / 'home'), 'FLIPEROS_KOF_REPO': str(self.kof_repo(tmp, converter)),
+                   'FLIPEROS_KOF_DIR': str(dest), 'FLIPEROS_KOF_CACHE': str(tmp / 'cache'), 'KIND': 'first',
+                   'GIT_CONFIG_GLOBAL': '/dev/null'}
+            self.assertEqual(self.run_cmd('fliperos-kof', 'installed', env=env).returncode, 1)
+            # A pasta escolhida pode ser a de cima.
+            self.assertEqual(self.run_cmd('fliperos-kof', 'find', str(tmp / 'usb'), env=env).stdout.strip(), str(game))
+            self.assertEqual(self.run_cmd('fliperos-kof', 'find', str(tmp / 'home'), env=env).returncode, 1)
+            run = self.run_cmd('fliperos-kof', 'install', str(tmp / 'usb'), '--progress', env=env)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertIn('@step 100 KOF Final Attack installed', run.stdout)
+            self.assertEqual((dest / 'Ikemen_GO_Linux').read_text(), 'first\n')
+            self.assertTrue(os.access(dest / 'Ikemen_GO_Linux', os.X_OK))
+            self.assertEqual(self.run_cmd('fliperos-kof', 'installed', env=env).returncode, 0)
+            # A pasta original fica como estava.
+            self.assertEqual(sorted(p.name for p in game.iterdir()), ['Final Attack.exe'])
+            # De novo com falha: a instalacao anterior volta.
+            run = self.run_cmd('fliperos-kof', 'install', str(game), '--progress', env=dict(env, FAIL='1'))
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail KOF Final Attack|the conversion failed', run.stdout)
+            self.assertEqual((dest / 'Ikemen_GO_Linux').read_text(), 'first\n')
+            run = self.run_cmd('fliperos-kof', 'install', str(game), env=dict(env, KIND='second'))
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual((dest / 'Ikemen_GO_Linux').read_text(), 'second\n')
+            self.assertFalse(Path(str(dest) + '.old').exists())
+            # Sem o jogo na pasta: nada a fazer.
+            run = self.run_cmd('fliperos-kof', 'install', str(tmp / 'home'), '--progress', env=env)
+            self.assertIn('@fail KOF Final Attack|no "Final Attack.exe"', run.stdout)
+
+    def test_kof_opens_at_320x240_from_the_desktop_and_the_console(self):
+        modes = (ROOT / 'config/fliperos-emulator-modes.conf').read_text()
+        self.assertRegex(modes, r'(?m)^fliperos-kof +320x240@60 +320x240@60$')
+        launch = (ROOT / 'config/fliperos-launch').read_text()
+        self.assertIn('kof) label="KOF Final Attack" run=("$x11" /usr/local/bin/fliperos-kof run) ;;', launch)
+        desktop = (ROOT / 'config/applications/fliperos-kof.desktop').read_text()
+        self.assertIn('Exec=/opt/fliperos/bin/fliperos-launch kof\n', desktop)
+        self.assertIn('TryExec=/home/fliperos/roms/ikemen/kof-final-attack/Ikemen_GO_Linux\n', desktop)
+        self.assertIn('install -Dm755 "$src/config/fliperos-kof" "$root/usr/local/bin/fliperos-kof"', ROOTFS)
+        self.assertIn('install -Dm755 "$src/config/fliperos-emulators" "$root/opt/fliperos/bin/fliperos-emulators"',
+                      ROOTFS)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            dest = tmp / 'kof'
+            dest.mkdir()
+            (dest / 'Ikemen_GO_Linux').write_text('#!/bin/sh\necho "game in $(pwd)"\n')
+            (dest / 'Ikemen_GO_Linux').chmod(0o755)
+            (tmp / 'x11').write_text('#!/bin/sh\necho "x11 $(basename "$1") $2"\n')
+            (tmp / 'x11').chmod(0o755)
+            env = {'FLIPEROS_KOF_DIR': str(dest), 'FLIPEROS_X11_RUN': str(tmp / 'x11')}
+            base = dict(os.environ, **env)
+            base.pop('DISPLAY', None)
+            out = subprocess.run(['bash', str(ROOT / 'config/fliperos-kof')], capture_output=True, text=True, env=base)
+            self.assertEqual(out.stdout.strip(), 'x11 fliperos-kof run')
+            out = subprocess.run(['bash', str(ROOT / 'config/fliperos-kof'), 'run'], capture_output=True, text=True,
+                                 env=base)
+            self.assertEqual(out.stdout.strip(), 'game in %s' % dest)
+
+    def test_setup_menu(self):
+        # Emulators & Games depois de Frontend; Splash screen por ultimo.
+        menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
+        self.assertIn('"frontend|Frontend" \\\n      "emulators|Emulators & Games (install the ones not in the image)" \\\n',
+                      menu)
+        self.assertIn('"update|System Update" \\\n      "splash|Splash screen (boot theme)" \\\n      "return|Return")', menu)
+        self.assertIn('emulators) screen_emulators ;;', menu)
+        self.assertIn('source "$SETUP_DIR/lib/emulators.sh"', (ROOT / 'fliperos-setup/fliperos-setup').read_text())
 
 
 class ButtonMappingTests(unittest.TestCase):
