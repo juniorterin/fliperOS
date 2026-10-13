@@ -2,6 +2,51 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.9.1
+
+The MAME ROM Cleaner works out of the box: `catver.ini`, `nplayers.ini` and `controls.xml` now ship in the image, so the categories, adult games, play mode and real button count filters show without copying anything. The 0.9 ISO left their folder empty. Also new are the versus scoreboard on the LED display for fighting games, the game outputs for light guns and button lights, and Arcadeflow as the Attract-Mode Plus theme. None of the scoreboard and outputs work has been tried with a real gun, LED board or two-player match on the tube. An installed 0.9 gets these changes in a later update at boot.
+
+**System changes:**
+
+- **The ROM Cleaner's data files are in the image**, in `/usr/local/share/fliperos/romclean`: `catver.ini` 0.289 (progetto-SNAPS), `nplayers.ini` 0.278 (NPlayers, CC BY-SA 3.0) and `controls.xml` 0.141.1 (Controls.dat). Files of your own in the romset folder, or in the one above it, are used instead. The AttractPlus ROM List gets its categories from the same `catver.ini`
+- Downloader and MAME CHD Cleaner: from a game's CHD folder only the disks of the chosen versions are taken. In a merged CHD collection the parent's folder holds the disks of every version, and all of them were downloaded or copied
+- **Versus scoreboard on the LED display.** In a fighting game, the Pixelcade or ZeDMD shows each side's character and the wins of the session. It works in about 200 games in GroovyMAME and 100 in RetroArch's FBNeo core, through Fightcade's detectors (downloaded by Extras > Pixelcade or ZeDMD, not in the image), and in the Sega Model 2 fighters. The list is in [Scoreboard games](https://github.com/juniorterin/fliperOS/wiki/Scoreboard-games)
+- **Game outputs** (recoil, lamps, motors). GroovyMAME, Flycast, Supermodel and SM2-Emu publish them on port 8000, the MAMEHooker protocol, only while an outputs reader from Extras is installed
+- **The cabinet's power button** closes the open game and returns to the frontend. In the frontend, the menu or the desktop it shuts down, as before
+- When the session drops, the frontend closes with it. A frontend left running with no screen kept the sound card open, and GroovyMAME was silent in every game
+- Fightcade at 15 kHz: the screen runs at the game's own refresh rate also for the games that stay in a table mode (vertical games, widths the modeline cannot make exact)
+
+**Package changes:**
+
+- RetroArch: the **FinalBurn Neo** core comes in the image
+- RetroArch: one press of Esc closes the game. It asked for a second press with a notice that FliperOS keeps hidden
+- RetroArch's FBNeo core opens the console sets (Mega Drive, Master System, ZX Spectrum and the like) that sit loose in the arcade folder
+- ES-DE: RetroArch games open again; they closed in the same second with no error
+- ES-DE: returning from a game no longer leaves the screen black, and the preview video no longer plays under the game
+- ES-DE: Model 2, Model 3 and the MAME cores show their own logo in place of the arcade one
+- Attract-Mode Plus: **Arcadeflow** is the default theme. Setup > Frontend downloads it (it has no license, so it is not in the image); without network the displays stay on Basic. The select button opens the game on the first press
+- Attract-Mode Plus: selecting games no longer leaves a zombie process behind each one
+- SM2-Emu: FliperOS's patch adds recoil, ammo, life and credits to the outputs of the gun games (Virtua Cop, Virtua Cop 2, House of the Dead, Gunblade NY, Behind Enemy Lines, Rail Chase 2), credits to 21 games and each side's rounds to the fighters
+
+**fliperos-setup changes:**
+
+- MAME ROM Cleaner and Downloader filter: *Data files* shows the three files that ship with FliperOS and their version
+- AttractPlus ROM List: every folder with games gets its display, also one removed before; a folder left without games loses its display, and Arcadeflow reads a rebuilt list
+- Extras: **Hook Of The Reaper** (through Wine), **QMamehook** (native, for serial-port guns) and **LEDSpicer** (button lights), the readers of the game outputs. None of them is in the image
+- Extras > Pixelcade, with Pixelcade installed: update it, or install the paid art pack with the license code of the purchase
+- The frontends no longer list Fightcade's whole ROM collection as FBNeo games
+
+**Tool changes:**
+
+- New `fliperos-versus` (the scoreboard), `fliperos-outputs` (the outputs readers), `fliperos-arcadeflow`, `fliperos-fbneo` (the system of each FBNeo set) and `fliperos-powerkey`
+- `tools/verify-iso.sh` checks that the three ROM Cleaner data files in the image are the repository's
+
+**Documentation:**
+
+- New page: [Scoreboard games](https://github.com/juniorterin/fliperOS/wiki/Scoreboard-games)
+- ROMs page: where the ROM Cleaner's data files come from and how to use newer ones
+- Website: the displays section (ZeDMD and the scoreboard) and a section on open hardware
+
 ## 0.9
 
 Two or three arcade monitors: games made for several screens, such as Darius, Punch-Out!! and F355 Challenge, open each screen on its own tube. Also new is support for LED marquees, the Pixelcade and the open-source ZeDMD, which show the game you select and the game you open. The marquee support has not been tried on a real marquee yet. The ISO comes with updates 12 to 15 already applied; an installed 0.8.x gets those through the updates at boot, and the changes made after update 15 (the marquees, SM2-Emu 0.9.44, the Downloader fix) in a later update.

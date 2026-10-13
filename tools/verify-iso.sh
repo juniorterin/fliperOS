@@ -2,7 +2,7 @@
 # Auditoria so de leitura de uma ISO gerada: confere que o que foi para a
 # imagem e o que esta no repositorio, sem montar nada nem tocar em hardware.
 #
-#   docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.9.iso
+#   docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.9.1.iso
 #
 # No container fliperos-vmtest (tools/Dockerfile.vmtest): o do build nao tem
 # o lsinitramfs.
@@ -278,16 +278,22 @@ got=$(python3 -c 'import hashlib, lzma, sys; print(hashlib.sha256(lzma.open(sys.
   "$work/f")
 [[ $got == "$(sed -n "s/^MAME2010_SHA256 = '\(.*\)'$/\1/p" "$src/config/fliperos-romclean")" ]] \
   || fail "the image's mame2010.xml.xz is not the pinned XML"
-# A pasta da rede (cifs-utils, smbclient) e as pastas de dados e de cache.
+# catver.ini, nplayers.ini e controls.xml: os do config/romclean.
+for file in catver.ini nplayers.ini controls.xml; do
+  unsquashfs -cat "$work/filesystem.squashfs" "usr/local/share/fliperos/romclean/$file" > "$work/f" \
+    || fail "ausente: /usr/local/share/fliperos/romclean/$file"
+  cmp -s "$src/config/romclean/$file" "$work/f" || fail "$file differs from config/romclean/$file"
+done
+# A pasta da rede (cifs-utils, smbclient) e a pasta de cache.
 for path in usr/sbin/mount.cifs usr/bin/smbclient usr/local/lib/fliperos-setup/lib/netshare.sh \
-  usr/local/share/fliperos/romclean var/cache/fliperos opt/fliperos/bin/fliperos-freeroms; do
+  var/cache/fliperos opt/fliperos/bin/fliperos-freeroms; do
   has "$path"
 done
 # O gum e o compilado com patches/gum (o Espaco marcando nas listas de
 # marcar e o 0003; o build falha se um patch nao aplica), nao o do .deb.
 unsquashfs -cat "$work/filesystem.squashfs" usr/bin/gum > "$work/f" || fail "ausente: /usr/bin/gum"
 grep -qa -- '-fliperos' "$work/f" || fail "/usr/bin/gum is the .deb one, without the FliperOS patches"
-echo "ROM cleaner: fliperos-romclean, the MAME 2010 XML (0.139) and the network folder (mount.cifs, smbclient)"
+echo "ROM cleaner: fliperos-romclean, the MAME 2010 XML (0.139), catver.ini, nplayers.ini, controls.xml and the network folder (mount.cifs, smbclient)"
 
 # ── Downloader: o programa, o servico e o transmission-daemon ─
 for name in fliperos-downloader:opt/fliperos/bin/fliperos-downloader \

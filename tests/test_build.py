@@ -1846,6 +1846,8 @@ class RomCleanTests(unittest.TestCase):
                 (base / 'chds' / folder).mkdir(parents=True)
                 (base / 'chds' / folder / chd).write_bytes(b'c' * size)
             (base / 'chds' / 'solto.chd').write_bytes(b'x')
+            # O disco de uma versao que nao esta na pasta de ROMs, na pasta do pai.
+            (base / 'chds' / 'kinst' / 'kinstold.chd').write_bytes(b'c' * 70)
             for folder, sets in (('mame', ('kinst13', 'area51', 'nodump', 'mslug', 'unknown')), ('naomi', ('gdrom',))):
                 (base / folder).mkdir()
                 for name in sets:
@@ -1885,6 +1887,8 @@ class RomCleanTests(unittest.TestCase):
         self.assertEqual((base / 'naomi' / 'gdrom' / 'gdl-0010.chd').stat().st_size, 500)
         self.assertTrue((base / 'chds' / 'kinst' / 'kinst.chd').exists())
         self.assertFalse((base / 'mame' / 'outro').exists())
+        # Da pasta do pai vai so o disco que um jogo da pasta usa.
+        self.assertEqual(sorted(p.name for p in (base / 'mame' / 'kinst').iterdir()), ['kinst.chd'])
         self.assertIn('copied=0\nskipped=2\n', self.romclean('apply', str(base / 'plan.tsv'), 'copy'))
         r = subprocess.run(['python3', str(ROOT / 'config/fliperos-romclean'), 'chds', '--xml',
                             str(base / 'mame.xml'), '--chds', '/nao/existe', '--roms', str(base / 'mame'),
@@ -1901,7 +1905,7 @@ class RomCleanTests(unittest.TestCase):
         self.assertEqual(move, ['mslug.zip', 'neogeo.zip'])
         self.assertEqual((summary['sets'], summary['move_bytes']), ('3', '800'))
         (self.tmp / 'chd.xml').write_text(self.CHD_XML)
-        (self.tmp / 'chds.list').write_text('kinst/kinst.chd\t300\nkinstp/kinstp.chd\t200\n'
+        (self.tmp / 'chds.list').write_text('kinst/kinst.chd\t300\nkinst/kinstold.chd\t70\nkinstp/kinstp.chd\t200\n'
                                             'gdrom/gdl-0010.chd\t500\noutro/outro.chd\t900\nsolto.chd\t1\n')
         (self.tmp / 'coming').write_text('kinst13\t%s/m\ngdrom\t%s/n\n' % (self.tmp, self.tmp))
         plan = self.tmp / 'chds.plan'
@@ -1913,6 +1917,9 @@ class RomCleanTests(unittest.TestCase):
         self.assertEqual((summary['games'], summary['move'], summary['move_bytes']), ('2', '2', '800'))
         rows = [line.split('\t') for line in plan.read_text().splitlines() if line.startswith('move')]
         self.assertEqual(sorted((r[2], Path(r[5]).name) for r in rows), [('gdrom', 'n'), ('kinst', 'm')])
+        # O setimo campo: da pasta do pai, so os discos que os jogos usam (o
+        # kinstold.chd e de uma versao que nao vem).
+        self.assertEqual(sorted(r[6] for r in rows), ['gdl-0010.chd', 'kinst.chd'])
 
     def test_copy_reports_what_failed(self):
         # Um arquivo que nao da para ler (aqui, uma pasta com o nome do zip no
@@ -2050,6 +2057,30 @@ class RomCleanTests(unittest.TestCase):
                       (ROOT / 'fliperos-rootfs.sh').read_text())
         self.assertIn('fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz',
                       (ROOT / 'tools/cabinet-update.sh').read_text())
+
+    def test_data_files_ship_in_the_image(self):
+        # catver.ini, nplayers.ini e controls.xml vao na imagem (config/romclean):
+        # sem eles a tela nao mostra categorias, jogos adultos nem modo de jogo.
+        data = ROOT / 'config/romclean'
+        self.assertIn('for file in catver.ini nplayers.ini controls.xml; do\n'
+                      '  install -Dm644 "$src/config/romclean/$file" "$root/usr/local/share/fliperos/romclean/$file"',
+                      ROOTFS)
+        for name in ('catver.ini', 'nplayers.ini', 'controls.xml'):
+            self.assertNotIn(b'\r', (data / name).read_bytes(), name)
+            self.assertIn('romclean/$file', (ROOT / 'tools/verify-iso.sh').read_text())
+        lines = self.romclean('options', '--catver', str(data / 'catver.ini'), '--nplayers',
+                              str(data / 'nplayers.ini'), '--controls-xml', str(data / 'controls.xml')).splitlines()
+        self.assertRegex(lines[0], r'^# catver\t0\.\d+$')
+        self.assertRegex(lines[-2], r'^# nplayers\t0\.\d+$')
+        self.assertRegex(lines[-1], r'^# controls\t[\d.]+$')
+        genres = {line.split('\t')[1]: line.split('\t')[3] for line in lines if line.startswith('genre\t')}
+        self.assertEqual((genres['Fighter'], genres['Shooter'], genres['Mahjong']), ('1', '1', '0'))
+        rc = load_script('romclean', 'config/fliperos-romclean')
+        self.assertEqual(rc.read_catver(str(data / 'catver.ini'))['sf2'], ('Fighter', False))
+        self.assertEqual(rc.play_modes(rc.read_ini(str(data / 'nplayers.ini'), 'nplayers')['mslug']), {'sim'})
+        self.assertEqual(rc.read_controls(str(data / 'controls.xml'))['sf2'], 6)
+        # Os arquivos sao do FliperOS: o update guarda o que troca nessa pasta.
+        self.assertNotIn("'usr/local/share/fliperos/romclean'", (ROOT / 'config/fliperos-update').read_text())
 
 
 class FreeRomsTests(unittest.TestCase):
@@ -2491,7 +2522,10 @@ class DownloaderTests(unittest.TestCase):
     TORRENTS = {
         ROMS: ('MAME 0.289 ROMs', [('MAME 0.289 ROMs/' + f, n) for f, n in (
             ('neogeo.zip', 30), ('mslug.zip', 50), ('kinst.zip', 20), ('pong.zip', 10), ('readme.txt', 1))]),
-        CHDS: ('MAME 0.289 CHDs', [('MAME 0.289 CHDs/kinst/kinst.chd', 300), ('MAME 0.289 CHDs/outro/outro.chd', 900)]),
+        # kinstold.chd: na pasta do jogo, o disco de uma versao que o XML nao
+        # tem (num romset merged, o de um clone que o filtro nao escolheu).
+        CHDS: ('MAME 0.289 CHDs', [('MAME 0.289 CHDs/kinst/kinst.chd', 300), ('MAME 0.289 CHDs/kinst/kinstold.chd', 700),
+                                   ('MAME 0.289 CHDs/outro/outro.chd', 900)]),
         # As ROMs numa subpasta, ao lado de Software Lists e de extras.
         NESTED: ('MAME Pack', [('MAME Pack/readme.txt', 1), ('MAME Pack/MAME 0.289/ROMs (merged)/neogeo.zip', 30),
                                ('MAME Pack/MAME 0.289/ROMs (merged)/mslug.zip', 50),
@@ -7098,7 +7132,7 @@ class DocsTests(unittest.TestCase):
             # Leva a cada pagina da wiki, e so a paginas que existem.
             linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
             self.assertEqual(linked, self.pages())
-            for needed in ('dd if=fliperos-0.9.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
+            for needed in ('dd if=fliperos-0.9.1.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
                            'tools/wiki-publish.sh', 'openbor/Paks', 'Video Setup'):
                 self.assertIn(needed, readme)
         # O passo a passo tem os mesmos passos numerados nas duas linguas.
