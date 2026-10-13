@@ -248,12 +248,14 @@ frontends_attract() {
 # "Model 2" ele conhece; "Supermodel" e "Arcade (various) (MAME 2010
 # (0.139))", nao. Diz ao tema (config/fliperos-arcadeflow systems) de que
 # sistema e cada tela do FliperOS, com os nomes dele: a placa do emulador
-# (Model 3, GameCube), o MAME nos cores de MAME, o FBNeo no core dele e, nos
-# outros, a plataforma da pasta ou o nome do sistema do core.
+# (Model 3, GameCube), o FBNeo no core dele e, nos outros, a plataforma da
+# pasta ou o nome do sistema do core. Um core de MAME ganha um sistema so
+# dele ("TELA<tab>TITULO|..."), com a arte do MAME e o resto do nome por cima.
 frontends_arcadeflow_systems() {
-  local key platform name core corename systems
+  local key platform name core corename systems title
   [[ -f $ATTRACT_DIR/layouts/Arcadeflow/data_systems.txt ]] || return 0
   while IFS='|' read -r key _ platform name _; do
+    title=""
     case $key in
       mame) systems=mame ;;
       model2) systems="sega model 2" ;;
@@ -266,7 +268,13 @@ frontends_arcadeflow_systems() {
         systems="$platform|$(scraper_core_info "$core" systemname)"
         if [[ $platform == arcade || $platform == fba ]]; then
           case ${corename,,} in
-            mame*) systems="mame|arcade" ;;
+            mame*)
+              # Um core de MAME e um MAME a parte, com o nome dele sem a
+              # versao ("MAME 2010 (0.139)": MAME 2010): nao outro "MAME" ao
+              # lado do do GroovyMAME.
+              systems="mame|arcade"
+              title=${corename%% (*}
+              ;;
             *finalburn*neo* | fbneo*) systems="fbneo|arcade" ;;
             *) systems="arcade" ;;
           esac
@@ -274,7 +282,7 @@ frontends_arcadeflow_systems() {
         ;;
       *) systems=$platform ;;
     esac
-    printf '%s|%s\n' "$name" "$systems"
+    printf '%s%s|%s\n' "$name" "${title:+$'\t'$title}" "$systems"
   done < <(frontends_systems) | "$ARCADEFLOW" systems 2>> "$FLIPEROS_LOG"
   return 0
 }

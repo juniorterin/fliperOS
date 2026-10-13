@@ -239,6 +239,8 @@ echo "== Scraper artwork in ~/media"
   if launcher_installed attractplus && [[ $(scraper_attract_layout) != Arcadeflow ]]; then
     /opt/fliperos/bin/fliperos-arcadeflow fetch || echo "Arcadeflow: not downloaded (no network?); the displays stay on Basic"
   fi
+  # O Pillow da arte das telas do Arcadeflow, onde o tema ja esta instalado.
+  [[ $(scraper_attract_layout) != Arcadeflow ]] || /opt/fliperos/bin/fliperos-arcadeflow pillow
   frontends_configure "$(launcher_current)"
   # A configuracao de 240p do ES-DE e do Pegasus instalados (lib/frontends.sh).
   frontends_240p

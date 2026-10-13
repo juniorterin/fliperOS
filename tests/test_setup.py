@@ -3330,8 +3330,9 @@ class RomCleanerTests(Base):
     def test_arcadeflow_gets_the_system_of_each_display(self):
         # O logotipo de cada tela no menu de telas do Arcadeflow: o tema
         # recebe "TELA|SISTEMA..." com os nomes de sistema dele. Model 3 e o
-        # da pasta do Supermodel; um core de MAME e MAME, o do FBNeo e FBNeo;
-        # os outros, a plataforma da pasta e o nome do sistema do core.
+        # da pasta do Supermodel; o do FBNeo e FBNeo; os outros, a plataforma
+        # da pasta e o nome do sistema do core. Um core de MAME e um sistema a
+        # parte, com o nome dele sem a versao (depois do tab): "MAME 2010".
         roms, info, attract = self.env.dir / "af-roms", self.env.dir / "af-info", self.env.dir / "af-attract"
         for folder in ("mame", "model2", "model3", "naomi2", "dolphin", "retroarch/mame2010", "retroarch/fbneo",
                        "retroarch/snes9x"):
@@ -3356,7 +3357,7 @@ class RomCleanerTests(Base):
         self.env.out("frontends_arcadeflow_systems", env)
         self.assertEqual(sorted(got.read_text().splitlines()), sorted([
             "MAME|mame", "Model 2|sega model 2", "Supermodel|sega model 3", "Naomi 2|naomi 2", "Dolphin|gamecube",
-            "Arcade (various) (MAME 2010 (0.139))|mame|arcade", "Arcade (various) (FinalBurn Neo)|fbneo|arcade",
+            "Arcade (various) (MAME 2010 (0.139))\tMAME 2010|mame|arcade", "Arcade (various) (FinalBurn Neo)|fbneo|arcade",
             "Super Nintendo (Snes9x)|snes|Super Nintendo"]))
         body = (SETUP / "lib" / "frontends.sh").read_text().split("frontends_attract() {")[1].split("\n}\n")[0]
         self.assertIn("  frontends_arcadeflow_sync\n  frontends_arcadeflow_systems\n", body)

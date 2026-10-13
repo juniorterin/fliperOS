@@ -171,6 +171,17 @@ screen() {
   : > "$mark"
 }
 
+# pillow: o Pillow do apt, que desenha a arte das telas com sistema proprio
+# (systems). Como o tema, nao vem na imagem: chega junto com ele, pela rede.
+# Sem ele essas telas ficam com a arte do sistema delas como esta.
+pillow() {
+  ((EUID == 0)) || return 0
+  python3 -c 'import PIL' 2> /dev/null && return 0
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pil > /dev/null 2>&1 ||
+    echo "fliperos-arcadeflow: python3-pil did not install; the displays use the plain system art" >&2
+  return 0
+}
+
 fetch() {
   local part="$layouts/.arcadeflow.part" new="$layouts/.arcadeflow.new" first=1 f
   [[ ${1:-} == --progress ]] && progress=1
@@ -179,6 +190,7 @@ fetch() {
     if ! mkdir -p "$layouts" || ! chown "$user:" "$attract" "$layouts"; then
       fail "could not create $layouts"
     fi
+    pillow
     exec runuser -u "$user" -- "$self" fetch "$@"
   fi
   mkdir -p "$layouts" 2> /dev/null && [[ -w $layouts ]] || fail "$layouts is not writable"
@@ -215,55 +227,94 @@ fetch() {
 }
 
 # systems: o logotipo de cada tela do FliperOS no menu de telas do tema. O
-# Arcadeflow acha o sistema de uma tela (logotipo, arte, fabricante, ano)
-# pelo nome dela no data_systems.txt dele, onde cada sistema e uma linha de
-# dados seguida dos outros nomes que ele tem, um por linha. "Model 2" esta
-# la; "Supermodel" e "Arcade (various) (MAME 2010 (0.139))", os nomes das
-# telas do FliperOS, nao, e ficavam sem logotipo. Le da entrada
-# "TELA|SISTEMA[|SISTEMA...]" por linha e poe o nome de cada tela, em
-# minusculas, entre os nomes do primeiro SISTEMA que o tema conhece (uma tela
-# que ele ja conhece, ou sem sistema conhecido, fica como esta). Os nomes
-# postos ficam anotados em fliperos_systems.txt e saem na vez seguinte: uma
-# tela que mudou de sistema, ou sumiu, nao deixa nome para tras. Nome com
-# virgula nao entra (seria lido como a linha de dados de um sistema).
+# Arcadeflow acha o sistema de uma tela (o nome mostrado, a arte, o
+# fabricante, o ano) pelo nome dela no data_systems.txt dele, onde cada
+# sistema e uma linha de dados seguida dos outros nomes que ele tem, um por
+# linha, e uma linha em branco separa os sistemas (a conta delas da o glifo
+# do logotipo de cada um: nenhuma entra nem sai do meio do arquivo). "Model
+# 2" esta la; "Supermodel" e "Arcade (various) (MAME 2010 (0.139))", os
+# nomes das telas do FliperOS, nao, e ficavam sem logotipo.
+#
+# Le da entrada, uma tela por linha:
+#   TELA|SISTEMA[|SISTEMA...]
+#       o nome da tela, em minusculas, entra entre os nomes do primeiro
+#       SISTEMA que o tema conhece: ela aparece como ele, com a arte dele
+#   TELA<tab>TITULO|SISTEMA[|SISTEMA...]
+#       a tela ganha um sistema so dela, no fim do arquivo, com os dados do
+#       SISTEMA e o nome TITULO: a do core mame2010 e "MAME 2010", e nao
+#       outro "MAME" ao lado do do GroovyMAME. A arte e a do SISTEMA com o
+#       resto do titulo escrito por cima ("2010": config/fliperos-arcadeflow-art,
+#       que pede o Pillow); sem isso, a do SISTEMA como esta.
+# Uma tela que o tema ja conhece, ou sem sistema conhecido, fica como esta;
+# nome ou titulo com virgula nao entra (seria outra coluna da linha de dados).
+# O que foi posto fica anotado em fliperos_systems.txt (o nome, "@" e a linha
+# do sistema proprio, "art:" e o arquivo de arte) e sai na vez seguinte: uma
+# tela que mudou de sistema, ou sumiu, nao deixa nada para tras.
+art=${FLIPEROS_ARCADEFLOW_ART:-/opt/fliperos/bin/fliperos-arcadeflow-art}
 systems() {
-  local data=$dir/data_systems.txt mark=$dir/fliperos_systems.txt new
+  local data=$dir/data_systems.txt mark=$dir/fliperos_systems.txt new title base kind folder ext src dst rel text
   [[ -f $data ]] || return 0
   if ((EUID == 0)) && [[ $user != root ]]; then
     exec runuser -u "$user" -- "$self" systems
   fi
   [[ -f $mark ]] || : > "$mark"
   new=$(mktemp "$dir/.systems.XXXXXX") || return 0
-  if awk -v old_file="$mark" -v mark="$mark.new" '
+  if ! awk -v old_file="$mark" -v mark="$mark.new" -v art="$new.art" '
     function known(line) { return index(line, ",") ? substr(line, 1, index(line, ",") - 1) : line }
     BEGIN {
-      while ((getline line < old_file) > 0) old[line] = 1
+      while ((getline line < old_file) > 0) {
+        if (substr(line, 1, 1) == "@") oldblock[substr(line, 2)] = 1
+        else if (substr(line, 1, 4) != "art:") old[line] = 1
+      }
       while ((getline line < "/dev/stdin") > 0) {
         cut = index(line, "|")
-        name = tolower(substr(line, 1, cut - 1))
-        if (cut > 1 && !index(name, ",") && !(name in want)) {
+        name = substr(line, 1, cut - 1)
+        tab = index(name, "\t")
+        label = tab ? substr(name, tab + 1) : ""
+        name = tolower(tab ? substr(name, 1, tab - 1) : name)
+        if (cut > 1 && name != "" && !index(name, ",") && !(name in want)) {
           order[++screens] = name
           want[name] = tolower(substr(line, cut + 1))
+          title[name] = index(label, ",") ? "" : label
         }
       }
     }
     {
+      if ($0 in oldblock) {
+        if (n > 0 && lines[n] == "") n--
+        next
+      }
       if (!index($0, ",") && ($0 in old)) next
       lines[++n] = $0
-      if ($0 != "") key[known($0)] = 1
+      if (index($0, ",")) current = $0
+      if ($0 == "") current = ""
+      else {
+        key[known($0)] = 1
+        head[known($0)] = current
+      }
     }
     END {
       printf "" > mark
+      printf "" > art
       for (i = 1; i <= screens; i++) {
         name = order[i]
         if (name in key) continue
         count = split(want[name], targets, "|")
         for (t = 1; t <= count; t++) {
-          if (targets[t] != "" && (targets[t] in key)) {
+          if (targets[t] == "" || !(targets[t] in key)) continue
+          fields = split(head[targets[t]], f, ",")
+          if (title[name] != "" && fields >= 12 && tolower(title[name]) != tolower(f[12])) {
+            row = name
+            for (c = 2; c <= fields; c++) row = row "," (c == 12 ? title[name] : f[c])
+            blocks[++nb] = row
+            print "@" row > mark
+            print title[name] "\t" f[12] > art
+          }
+          else {
             add[targets[t]] = add[targets[t]] name "\n"
             print name > mark
-            break
           }
+          break
         }
       }
       for (i = 1; i <= n; i++) {
@@ -273,16 +324,51 @@ systems() {
           delete add[known(lines[i])]
         }
       }
-    }' "$data" > "$new" && [[ -s $new ]]; then
-    cat "$new" > "$data"
-    mv -f "$mark.new" "$mark"
+      for (i = 1; i <= nb; i++) {
+        if (i > 1 || lines[n] != "") print ""
+        print blocks[i]
+      }
+    }' "$data" > "$new" || [[ ! -s $new ]]; then
+    rm -f "$new" "$new.art" "$mark.new"
+    return 0
   fi
-  rm -f "$new" "$mark.new"
+  cat "$new" > "$data"
+  # A arte de cada sistema proprio. So mexe no arquivo que nao existe ou que
+  # foi feito aqui (anotado): um do tema, ou da pessoa, com esse nome fica.
+  while IFS=$'\t' read -r title base; do
+    text=${title#"$base"}
+    [[ $text != "$title" ]] || text=""
+    text=${text# }
+    for kind in system_images:png system_bgs:jpg; do
+      folder=${kind%%:*} ext=${kind##*:}
+      src=$dir/$folder/$base.$ext dst=$dir/$folder/$title.$ext rel=$folder/$title.$ext
+      [[ -f $src ]] || continue
+      if [[ -e $dst || -L $dst ]] && ! grep -qxF "art:$rel" "$mark"; then
+        continue
+      fi
+      printf 'art:%s\n' "$rel" >> "$mark.new"
+      # Feita e mais nova que a do tema e que o desenho: fica.
+      [[ -f $dst && ! -L $dst && $dst -nt $src && $dst -nt $art ]] && continue
+      rm -f "$dst"
+      [[ -n $text ]] && "$art" stamp "$base" "$folder" "$text" "$src" "$dst" 2> /dev/null && continue
+      rm -f "$dst"
+      ln -s "$base.$ext" "$dst"
+    done
+  done < "$new.art"
+  while IFS= read -r rel; do
+    [[ $rel == art:* ]] || continue
+    grep -qxF "$rel" "$mark.new" || rm -f "$dir/${rel#art:}"
+  done < "$mark"
+  mv -f "$mark.new" "$mark"
+  rm -f "$new" "$new.art"
 }
 
 case ${1:-} in
   systems)
     systems
+    ;;
+  pillow)
+    pillow
     ;;
   fetch)
     shift
@@ -296,7 +382,7 @@ case ${1:-} in
     prefs_apply
     ;;
   *)
-    echo "usage: fliperos-arcadeflow fetch [--progress] | screen [WIDTH HEIGHT] | prefs | systems" >&2
+    echo "usage: fliperos-arcadeflow fetch [--progress] | screen [WIDTH HEIGHT] | prefs | systems | pillow" >&2
     exit 2
     ;;
 esac

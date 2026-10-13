@@ -118,6 +118,9 @@ install -Dm644 "$src/config/openbox-fightcade.xml" "$root/etc/fliperos/openbox-f
 # Arcadeflow, o tema padrao do Attract-Mode Plus (Setup > Games > Frontend): o que o
 # baixa do GitHub dele. O tema em si nao vem na imagem (sem licenca).
 install -Dm755 "$src/config/fliperos-arcadeflow" "$root/opt/fliperos/bin/fliperos-arcadeflow"
+# A arte das telas com nome proprio no menu dele (MAME 2010: a do MAME do tema
+# com "2010" por cima), feita na maquina a partir da arte do tema.
+install -Dm755 "$src/config/fliperos-arcadeflow-art" "$root/opt/fliperos/bin/fliperos-arcadeflow-art"
 # As saidas dos jogos (porta 8000, o protocolo do MAMEHooker) para placas e
 # LEDs: o helper que os lancadores chamam e a chave do PPA do LEDSpicer. O
 # Hook Of The Reaper e o LEDSpicer em si vem pelo Setup > System > Extras.

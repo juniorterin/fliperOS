@@ -3963,6 +3963,103 @@ class ArcadeflowTests(unittest.TestCase):
             self.assertEqual(systems_run.returncode, 0)
             self.assertFalse((theme / 'data_systems.txt').exists())
 
+    def test_systems_gives_a_display_a_system_of_its_own(self):
+        # "TELA<tab>TITULO|SISTEMA": a tela do core mame2010 e "MAME 2010", um
+        # sistema no fim do arquivo com os dados do MAME, e nao outro "MAME".
+        # A arte e a do MAME com "2010" por cima (fliperos-arcadeflow-art);
+        # sem o Pillow, um link para a do MAME.
+        mame = 'mame,0,0,ARC,CRT,NONE,-4,3,ARCADE,Various,null,MAME,75,rom,null,null'
+        data = 'null,0,0,NULL\n\n%s\nm.a.m.e.\n\nplaystation,0,0,PSX\npsx\n' % mame
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            theme = tmp / 'attract/layouts/Arcadeflow'
+            for folder in ('system_images', 'system_bgs'):
+                (theme / folder).mkdir(parents=True)
+            (theme / 'data_systems.txt').write_text(data)
+            (theme / 'system_images/MAME.png').write_text('png')
+            (theme / 'system_bgs/MAME.jpg').write_text('jpg')
+            art = tmp / 'art'
+            art.write_text('#!/bin/sh\n[ -f "%s/pillow" ] || exit 3\necho "$*" >> "%s/calls"\necho "$4" > "$6"\n'
+                           % (tmp, tmp))
+            art.chmod(0o755)
+            env = dict(os.environ, ATTRACT_DIR=str(tmp / 'attract'), FLIPEROS_USER='root',
+                       FLIPEROS_ARCADEFLOW_ART=str(art))
+            screens = 'Arcade (various) (MAME 2010 (0.139))\tMAME 2010|mame|arcade\nMAME|mame\nOutro MAME\tMAME|mame\n'
+
+            def systems(text):
+                run = subprocess.run(['bash', str(self.SCRIPT), 'systems'], input=text, capture_output=True,
+                                     text=True, env=env, timeout=60)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                return (theme / 'data_systems.txt').read_text()
+            own = mame.replace('mame,', 'arcade (various) (mame 2010 (0.139)),', 1).replace(',MAME,', ',MAME 2010,')
+            # O titulo igual ao nome do sistema e so mais um nome dele.
+            expected = data.replace('\nm.a.m.e.\n', '\noutro mame\nm.a.m.e.\n') + '\n' + own + '\n'
+            self.assertEqual(systems(screens), expected)
+            # Sem o Pillow: links para a arte do MAME.
+            for name, target in (('system_images/MAME 2010.png', 'MAME.png'), ('system_bgs/MAME 2010.jpg', 'MAME.jpg')):
+                self.assertEqual(os.readlink(theme / name), target)
+            self.assertEqual((theme / 'fliperos_systems.txt').read_text().splitlines(),
+                             ['@' + own, 'outro mame', 'art:system_images/MAME 2010.png', 'art:system_bgs/MAME 2010.jpg'])
+            # Com ele, a arte desenhada (o que sobra do titulo depois do nome
+            # do sistema), que fica na vez seguinte.
+            (tmp / 'pillow').write_text('')
+            self.assertEqual(systems(screens), expected)
+            self.assertEqual((theme / 'system_bgs/MAME 2010.jpg').read_text(), '2010\n')
+            self.assertFalse((theme / 'system_bgs/MAME 2010.jpg').is_symlink())
+            self.assertEqual((tmp / 'calls').read_text().splitlines(), [
+                'stamp MAME system_images 2010 %s %s' % (theme / 'system_images/MAME.png',
+                                                         theme / 'system_images/MAME 2010.png'),
+                'stamp MAME system_bgs 2010 %s %s' % (theme / 'system_bgs/MAME.jpg', theme / 'system_bgs/MAME 2010.jpg')])
+            os.utime(art, (1, 1))
+            self.assertEqual(systems(screens), expected)
+            self.assertEqual(len((tmp / 'calls').read_text().splitlines()), 2)
+            # Uma arte da pessoa com o nome de um titulo fica, e nao e apagada depois.
+            (theme / 'system_bgs/Meu MAME.jpg').write_text('meu')
+            systems('Tela\tMeu MAME|mame\n')
+            self.assertEqual((theme / 'system_bgs/Meu MAME.jpg').read_text(), 'meu')
+            self.assertFalse((theme / 'system_bgs/MAME 2010.jpg').exists())
+            # Sem telas, o arquivo do tema volta ao que era, sem a arte feita.
+            self.assertEqual(systems(''), data)
+            self.assertEqual(sorted(p.name for p in (theme / 'system_bgs').iterdir()), ['MAME.jpg', 'Meu MAME.jpg'])
+            self.assertEqual(sorted(p.name for p in (theme / 'system_images').iterdir()), ['MAME.png'])
+            self.assertEqual((theme / 'fliperos_systems.txt').read_text(), '')
+
+    def test_art_draws_the_rest_of_the_title_on_the_system_art(self):
+        script = ROOT / 'config/fliperos-arcadeflow-art'
+        self.assertIn('install -Dm755 "$src/config/fliperos-arcadeflow-art" "$root/opt/fliperos/bin/fliperos-arcadeflow-art"',
+                      ROOTFS)
+        # O Pillow nao vem na imagem: chega com o tema (fetch) e no update.
+        text = self.SCRIPT.read_text()
+        self.assertIn('apt-get install -y --no-install-recommends python3-pil', text)
+        self.assertIn('    pillow\n    exec runuser -u "$user" -- "$self" fetch "$@"', text)
+        self.assertIn('/opt/fliperos/bin/fliperos-arcadeflow pillow', (ROOT / 'tools/cabinet-update.sh').read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+
+            def stamp(system, kind, src, dst):
+                return subprocess.run(['python3', str(script), 'stamp', system, kind, '2010', str(src), str(dst)],
+                                      capture_output=True, text=True, timeout=60).returncode
+            try:
+                from PIL import Image
+            except ImportError:
+                # Sem o Pillow: status 3, e quem chama usa a arte como esta.
+                self.assertEqual(stamp('MAME', 'system_bgs', tmp / 'a.jpg', tmp / 'b.jpg'), 3)
+                return
+            Image.new('RGB', (640, 360), (240, 240, 240)).save(tmp / 'wall.jpg')
+            Image.new('RGBA', (400, 400), (0, 0, 0, 0)).save(tmp / 'cab.png')
+            self.assertEqual(stamp('MAME', 'system_bgs', tmp / 'wall.jpg', tmp / 'out.jpg'), 0)
+            self.assertEqual(stamp('MAME', 'system_images', tmp / 'cab.png', tmp / 'out.png'), 0)
+            wall, cab = Image.open(tmp / 'out.jpg'), Image.open(tmp / 'out.png')
+            # Do tamanho da origem, com o texto escuro por cima; o PNG segue transparente fora dele.
+            self.assertEqual((wall.size, wall.mode, cab.size, cab.mode), ((640, 360), 'RGB', (400, 400), 'RGBA'))
+            self.assertLess(min(p[0] for p in wall.getdata()), 60)
+            alpha = cab.getchannel('A')
+            self.assertEqual(alpha.getpixel((5, 5)), 0)
+            self.assertGreater(alpha.getextrema()[1], 200)
+            # Um sistema sem lugar marcado: status 4.
+            self.assertEqual(stamp('Outro', 'system_bgs', tmp / 'wall.jpg', tmp / 'x.jpg'), 4)
+            self.assertFalse((tmp / 'x.jpg').exists())
+
     def test_installed_by_the_image_and_fetched_by_the_setup(self):
         self.assertIn('  frontends_arcadeflow_screen\n', (ROOT / 'tools/cabinet-update.sh').read_text())
         self.assertIn('install -Dm755 "$src/config/fliperos-arcadeflow" "$root/opt/fliperos/bin/fliperos-arcadeflow"',

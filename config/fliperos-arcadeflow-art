@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""A arte de uma tela do FliperOS no menu de telas do Arcadeflow, feita da
+arte que o tema tem para o sistema dela (config/fliperos-arcadeflow systems).
+
+  fliperos-arcadeflow-art stamp SISTEMA TIPO TEXTO ORIGEM DESTINO
+
+A tela do core mame2010 chama "MAME 2010" e usa a arte do MAME do tema com
+"2010" escrito por cima, inclinado, no estilo do logotipo: assim ela nao se
+confunde com a do GroovyMAME, que e "MAME". SISTEMA e o nome do sistema no
+tema (MAME), TIPO a pasta da arte (system_images: o gabinete, 800x800 com
+transparencia; system_bgs: a foto de fundo, 1280x720) e TEXTO o que se
+escreve. Onde, de que tamanho e de que cor fica em STAMPS, por sistema e
+tipo, em fracoes da imagem: uma arte de outro tamanho recebe o texto no
+mesmo lugar.
+
+Status 3: sem o Pillow (python3-pil); 4: nao ha lugar marcado para este
+sistema e tipo. Nos dois casos quem chama usa a arte do sistema como esta.
+"""
+import os
+import sys
+
+# (centro x, centro y, altura do texto, angulo em graus, inclinacao das
+# letras, cor, cor do contorno): as fracoes sao da largura (x), da altura (y
+# e altura do texto) da imagem.
+STAMPS = {
+    ('MAME', 'system_bgs'): [
+        (0.622, 0.300, 0.078, 22.0, 0.45, (16, 16, 16), None),
+    ],
+    ('MAME', 'system_images'): [
+        (0.470, 0.840, 0.058, 12.0, 0.40, (22, 60, 110), (150, 205, 240)),
+    ],
+}
+FONTS = ('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+         '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+         '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf')
+
+
+def text_layer(text, height, slant, color, outline):
+    """O texto em letras inclinadas (como as do logotipo), com transparencia."""
+    from PIL import Image, ImageDraw, ImageFont
+    font = next((f for f in FONTS if os.path.isfile(f)), None)
+    if font is None:
+        sys.exit(4)
+    # A fonte no tamanho em que as maiusculas tem a altura pedida.
+    size = max(8, int(height / 0.73))
+    font = ImageFont.truetype(font, size)
+    stroke = max(1, size // 14) if outline else 0
+    left, top, right, bottom = font.getbbox(text, stroke_width=stroke)
+    w, h = right - left, bottom - top
+    pad = int(h * slant) + 4
+    layer = Image.new('RGBA', (w + 2 * pad, h + 8), (0, 0, 0, 0))
+    ImageDraw.Draw(layer).text((pad - left, 4 - top), text, font=font, fill=color + (255,),
+                               stroke_width=stroke, stroke_fill=(outline or color) + (255,))
+    # Inclinacao: cada linha desliza para a direita quanto mais alta.
+    return layer.transform(layer.size, Image.AFFINE, (1, slant, -slant * layer.size[1] / 2, 0, 1, 0),
+                           resample=Image.BICUBIC)
+
+
+def stamp(system, kind, text, src, dst):
+    try:
+        from PIL import Image
+    except ImportError:
+        return 3
+    places = STAMPS.get((system, kind))
+    if not places:
+        return 4
+    image = Image.open(src)
+    mode = 'RGBA' if dst.lower().endswith('.png') else 'RGB'
+    base = image.convert('RGBA')
+    for cx, cy, height, angle, slant, color, outline in places:
+        layer = text_layer(text, height * base.height, slant, color, outline)
+        layer = layer.rotate(angle, resample=Image.BICUBIC, expand=True)
+        base.alpha_composite(layer, (int(cx * base.width - layer.width / 2),
+                                     int(cy * base.height - layer.height / 2)))
+    tmp = '%s.%d.tmp' % (dst, os.getpid())
+    if mode == 'RGB':
+        base.convert('RGB').save(tmp, 'JPEG', quality=90)
+    else:
+        base.save(tmp, 'PNG', optimize=True)
+    os.replace(tmp, dst)
+    return 0
+
+
+def main():
+    if len(sys.argv) != 7 or sys.argv[1] != 'stamp':
+        sys.stderr.write('usage: fliperos-arcadeflow-art stamp SYSTEM KIND TEXT SOURCE DESTINATION\n')
+        return 2
+    return stamp(*sys.argv[2:])
+
+
+if __name__ == '__main__':
+    sys.exit(main())
