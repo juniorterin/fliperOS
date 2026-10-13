@@ -45,7 +45,11 @@ fail() {
 # aperto abre o menu sobre o jogo, com as informacoes, o favorito e as tags,
 # e o segundo abre o jogo): o FliperOS o tirou por um tempo, e o valor esta
 # aqui para voltar nos temas instalados nesse tempo.
-fliperos_prefs=(UPDATECHECK 1 OVERMENUBUTTON 1)
+# Sem o indicador de jogo indisponivel: o tema marca com um X, e nao abre, o
+# jogo sem arquivo proprio na pasta, e num romset merged o clone esta dentro
+# do zip do pai (o GroovyMAME o abre pelo nome). A romlist do FliperOS so tem
+# o que esta na pasta, dessa forma ou com arquivo proprio.
+fliperos_prefs=(UPDATECHECK 1 OVERMENUBUTTON 1 REDCROSS 1)
 prefs() {
   printf '%s\n\n' "$version"
   printf '|%s|%s|\n' "${fliperos_prefs[@]}"
