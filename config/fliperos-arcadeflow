@@ -171,14 +171,16 @@ screen() {
   : > "$mark"
 }
 
-# pillow: o Pillow do apt, que desenha a arte das telas com sistema proprio
-# (systems). Como o tema, nao vem na imagem: chega junto com ele, pela rede.
-# Sem ele essas telas ficam com a arte do sistema delas como esta.
+# pillow: o Pillow e o fontTools do apt, que desenham a arte e o logotipo das
+# telas com sistema proprio (systems). Como o tema, nao vem na imagem: chegam
+# junto com ele, pela rede. Sem o fontTools essas telas ficam com o nome e o
+# logotipo do sistema delas; sem o Pillow, com a arte dele como esta.
 pillow() {
   ((EUID == 0)) || return 0
-  python3 -c 'import PIL' 2> /dev/null && return 0
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pil > /dev/null 2>&1 ||
-    echo "fliperos-arcadeflow: python3-pil did not install; the displays use the plain system art" >&2
+  python3 -c 'import PIL, fontTools' 2> /dev/null && return 0
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-pil python3-fonttools \
+    > /dev/null 2>&1 ||
+    echo "fliperos-arcadeflow: python3-pil and python3-fonttools did not install; the displays use the system art" >&2
   return 0
 }
 
@@ -227,13 +229,14 @@ fetch() {
 }
 
 # systems: o logotipo de cada tela do FliperOS no menu de telas do tema. O
-# Arcadeflow acha o sistema de uma tela (o nome mostrado, a arte, o
-# fabricante, o ano) pelo nome dela no data_systems.txt dele, onde cada
-# sistema e uma linha de dados seguida dos outros nomes que ele tem, um por
-# linha, e uma linha em branco separa os sistemas (a conta delas da o glifo
-# do logotipo de cada um: nenhuma entra nem sai do meio do arquivo). "Model
-# 2" esta la; "Supermodel" e "Arcade (various) (MAME 2010 (0.139))", os
-# nomes das telas do FliperOS, nao, e ficavam sem logotipo.
+# Arcadeflow acha o sistema de uma tela (o nome, a arte, o fabricante, o ano)
+# pelo nome dela no data_systems.txt dele, onde cada sistema e uma linha de
+# dados seguida dos outros nomes que ele tem, um por linha, e uma linha em
+# branco separa os sistemas. O logotipo de um sistema no menu e um glifo da
+# fonte do tema, o de numero 0xe900 + quantas linhas em branco ha antes dele
+# - 1: nenhuma entra nem sai do meio do arquivo. "Model 2" esta la;
+# "Supermodel" e "Arcade (various) (MAME 2010 (0.139))", os nomes das telas
+# do FliperOS, nao, e ficavam sem logotipo.
 #
 # Le da entrada, uma tela por linha:
 #   TELA|SISTEMA[|SISTEMA...]
@@ -242,31 +245,33 @@ fetch() {
 #   TELA<tab>TITULO|SISTEMA[|SISTEMA...]
 #       a tela ganha um sistema so dela, no fim do arquivo, com os dados do
 #       SISTEMA e o nome TITULO: a do core mame2010 e "MAME 2010", e nao
-#       outro "MAME" ao lado do do GroovyMAME. A arte e a do SISTEMA com o
-#       resto do titulo escrito por cima ("2010": config/fliperos-arcadeflow-art,
-#       que pede o Pillow); sem isso, a do SISTEMA como esta.
+#       outro "MAME" ao lado do do GroovyMAME. O logotipo dele e um glifo
+#       novo na fonte do tema, o do SISTEMA com o resto do titulo ao lado,
+#       inclinado, e a arte a do SISTEMA com esse texto por cima
+#       (config/fliperos-arcadeflow-art: o fontTools e o Pillow). Sem o
+#       glifo (um ponto no lugar do logotipo) a tela fica so como mais um
+#       nome do SISTEMA; sem o Pillow, com a arte dele como esta.
 # Uma tela que o tema ja conhece, ou sem sistema conhecido, fica como esta;
 # nome ou titulo com virgula nao entra (seria outra coluna da linha de dados).
 # O que foi posto fica anotado em fliperos_systems.txt (o nome, "@" e a linha
-# do sistema proprio, "art:" e o arquivo de arte) e sai na vez seguinte: uma
-# tela que mudou de sistema, ou sumiu, nao deixa nada para tras.
+# do sistema proprio, "art:" e o arquivo de arte, "font:" e a fonte com os
+# glifos, cuja original fica ao lado, .fliperos-orig) e sai na vez seguinte:
+# uma tela que mudou de sistema, ou sumiu, nao deixa nada para tras.
 art=${FLIPEROS_ARCADEFLOW_ART:-/opt/fliperos/bin/fliperos-arcadeflow-art}
-systems() {
-  local data=$dir/data_systems.txt mark=$dir/fliperos_systems.txt new title base kind folder ext src dst rel text
-  [[ -f $data ]] || return 0
-  if ((EUID == 0)) && [[ $user != root ]]; then
-    exec runuser -u "$user" -- "$self" systems
-  fi
-  [[ -f $mark ]] || : > "$mark"
-  new=$(mktemp "$dir/.systems.XXXXXX") || return 0
-  if ! awk -v old_file="$mark" -v mark="$mark.new" -v art="$new.art" '
+
+# systems_data ENTRADA SIMPLES: o data_systems.txt novo em $new, o que foi
+# posto em $mark.new e os sistemas proprios em $new.art ("TITULO, nome do
+# SISTEMA, glifo, glifo do SISTEMA", com tab). SIMPLES=1: sem sistemas
+# proprios, toda tela e so um nome do sistema dela.
+systems_data() {
+  awk -v old_file="$mark" -v mark="$mark.new" -v art="$new.art" -v screens_file="$1" -v plain="$2" '
     function known(line) { return index(line, ",") ? substr(line, 1, index(line, ",") - 1) : line }
     BEGIN {
       while ((getline line < old_file) > 0) {
         if (substr(line, 1, 1) == "@") oldblock[substr(line, 2)] = 1
-        else if (substr(line, 1, 4) != "art:") old[line] = 1
+        else if (substr(line, 1, 4) != "art:" && substr(line, 1, 5) != "font:") old[line] = 1
       }
-      while ((getline line < "/dev/stdin") > 0) {
+      while ((getline line < screens_file) > 0) {
         cut = index(line, "|")
         name = substr(line, 1, cut - 1)
         tab = index(name, "\t")
@@ -275,7 +280,7 @@ systems() {
         if (cut > 1 && name != "" && !index(name, ",") && !(name in want)) {
           order[++screens] = name
           want[name] = tolower(substr(line, cut + 1))
-          title[name] = index(label, ",") ? "" : label
+          title[name] = (plain || index(label, ",")) ? "" : label
         }
       }
     }
@@ -307,6 +312,9 @@ systems() {
             row = name
             for (c = 2; c <= fields; c++) row = row "," (c == 12 ? title[name] : f[c])
             blocks[++nb] = row
+            btitle[nb] = title[name]
+            bbase[nb] = f[12]
+            bhead[nb] = f[1]
             print "@" row > mark
             # O titulo tambem e um nome do sistema: o tema troca o nome da
             # tela pelo titulo e procura o grupo dela (Arcade, Console...)
@@ -317,7 +325,6 @@ systems() {
               key[also] = 1
               print also > mark
             }
-            print title[name] "\t" f[12] > art
           }
           else {
             add[targets[t]] = add[targets[t]] name "\n"
@@ -326,25 +333,80 @@ systems() {
           break
         }
       }
+      blanks = 0
       for (i = 1; i <= n; i++) {
         print lines[i]
+        if (lines[i] == "") blanks++
+        else if (index(lines[i], ",")) glyph[known(lines[i])] = 59648 + blanks - 1
         if (lines[i] != "" && (known(lines[i]) in add)) {
           printf "%s", add[known(lines[i])]
           delete add[known(lines[i])]
         }
       }
       for (i = 1; i <= nb; i++) {
-        if (i > 1 || lines[n] != "") print ""
+        if (i > 1 || lines[n] != "") {
+          print ""
+          blanks++
+        }
         print blocks[i]
+        printf "%s\t%s\t%x\t%x\n", btitle[i], bbase[i], 59648 + blanks - 1, glyph[bhead[i]] > art
       }
-    }' "$data" > "$new" || [[ ! -s $new ]]; then
-    rm -f "$new" "$new.art" "$mark.new"
+    }' "$data" > "$new" && [[ -s $new ]]
+}
+
+systems() {
+  local data=$dir/data_systems.txt mark=$dir/fliperos_systems.txt new title base code basecode kind folder ext
+  local src dst rel text font="" fontline="" old
+  local -a specs=()
+  [[ -f $data ]] || return 0
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    exec runuser -u "$user" -- "$self" systems
+  fi
+  [[ -f $mark ]] || : > "$mark"
+  new=$(mktemp "$dir/.systems.XXXXXX") || return 0
+  cat > "$new.in"
+  if ! systems_data "$new.in" 0; then
+    rm -f "$new" "$new.in" "$new.art" "$mark.new"
     return 0
   fi
+  # O logotipo de cada sistema proprio: um glifo novo na fonte do menu do
+  # tema, sempre a partir da original. Sem ele, de novo sem sistemas proprios.
+  if [[ -s $new.art ]]; then
+    font=$(sed -n 's/^[[:space:]]*gui = "\(.*\)"[[:space:]]*$/\1/p' "$dir/layout.nut" 2> /dev/null | head -n 1)
+    while IFS=$'\t' read -r title base code basecode; do
+      text=${title#"$base"}
+      [[ $text != "$title" ]] || text=$title
+      specs+=("$code" "$basecode" "${text# }")
+    done < "$new.art"
+    fontline="font:$font|${specs[*]}"
+    if [[ -z $font || ! -f $dir/$font ]]; then
+      fontline=""
+    elif ! grep -qxF "$fontline" "$mark" || [[ ! -f $dir/$font.fliperos-orig || ! $dir/$font -nt $art ]]; then
+      [[ -f $dir/$font.fliperos-orig ]] || cp -p "$dir/$font" "$dir/$font.fliperos-orig"
+      if "$art" glyphs "$dir/$font.fliperos-orig" "$dir/$font.new" "${specs[@]}" 2> /dev/null; then
+        mv -f "$dir/$font.new" "$dir/$font"
+      else
+        rm -f "$dir/$font.new"
+        fontline=""
+      fi
+    fi
+    if [[ -z $fontline ]] && ! systems_data "$new.in" 1; then
+      rm -f "$new" "$new.in" "$new.art" "$mark.new"
+      return 0
+    fi
+  fi
+  [[ -z $fontline ]] || printf '%s\n' "$fontline" >> "$mark.new"
+  # A fonte de antes, sem glifos agora: volta a original do tema.
+  while IFS= read -r old; do
+    [[ $old == font:* && -z $fontline ]] || continue
+    old=${old#font:}
+    old=$dir/${old%%|*}
+    [[ -f $old.fliperos-orig ]] && mv -f "$old.fliperos-orig" "$old"
+  done < "$mark"
   cat "$new" > "$data"
   # A arte de cada sistema proprio. So mexe no arquivo que nao existe ou que
   # foi feito aqui (anotado): um do tema, ou da pessoa, com esse nome fica.
-  while IFS=$'\t' read -r title base; do
+  while IFS=$'\t' read -r title base _; do
     text=${title#"$base"}
     [[ $text != "$title" ]] || text=""
     text=${text# }
@@ -369,7 +431,7 @@ systems() {
     grep -qxF "$rel" "$mark.new" || rm -f "$dir/${rel#art:}"
   done < "$mark"
   mv -f "$mark.new" "$mark"
-  rm -f "$new" "$new.art"
+  rm -f "$new" "$new.in" "$new.art"
 }
 
 case ${1:-} in

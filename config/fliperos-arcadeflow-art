@@ -81,11 +81,90 @@ def stamp(system, kind, text, src, dst):
     return 0
 
 
+# O texto ao lado do logotipo, no glifo: tamanho em relacao as letras da
+# fonte, angulo (graus, subindo para a direita), inclinacao das letras, e
+# onde comeca: quanto do avanco do logotipo ele invade e quanto sobe.
+GLYPH_SCALE, GLYPH_ANGLE, GLYPH_SLANT, GLYPH_OVERLAP, GLYPH_RISE = 0.88, 14.0, 0.22, 0.02, -0.12
+
+
+def glyphs(src, dst, specs):
+    """Os logotipos das telas com sistema proprio, na fonte do tema. No menu
+    de telas o logotipo de um sistema e um glifo dessa fonte, o de numero
+    0xe900 + a posicao do sistema no data_systems.txt: um sistema posto no
+    fim do arquivo cai num numero sem glifo (um ponto na tela). Para cada
+    (codigo, codigo do sistema de origem, texto) faz o glifo novo: o
+    logotipo de origem com o texto ao lado, inclinado ("MAME" + "2010")."""
+    try:
+        from fontTools.misc.transform import Transform
+        from fontTools.pens.transformPen import TransformPen
+        from fontTools.pens.ttGlyphPen import TTGlyphPen
+        from fontTools.ttLib import TTFont
+    except ImportError:
+        return 3
+    import math
+    font = TTFont(src)
+    if 'glyf' not in font:
+        return 4
+    cmap = font.getBestCmap()
+    glyph_set = font.getGlyphSet()
+    order = font.getGlyphOrder()
+    for code, base_code, text in specs:
+        base = cmap.get(base_code)
+        letters = [cmap.get(ord(ch)) for ch in text.upper()]
+        if base is None or any(g is None for g in letters if g is not None) or code in cmap:
+            return 4
+        pen = TTGlyphPen(glyph_set)
+        glyph_set[base].draw(pen)
+        advance = font['hmtx'][base][0]
+        bounds = font['glyf'][base]
+        height = bounds.yMax - bounds.yMin
+        # Inclina as letras, gira e leva para depois do logotipo.
+        place = (Transform().translate(advance * (1 - GLYPH_OVERLAP), bounds.yMin + height * (0.5 + GLYPH_RISE))
+                 .rotate(math.radians(GLYPH_ANGLE)).skew(math.radians(math.degrees(math.atan(GLYPH_SLANT))), 0)
+                 .scale(GLYPH_SCALE))
+        x = 0
+        for ch, name in zip(text.upper(), letters):
+            if name is None:
+                # Um espaco (ou o que a fonte nao tem): so o vao.
+                x += font['hmtx'][cmap[ord('0')]][0] // 2
+                continue
+            glyph_set[name].draw(TransformPen(pen, place.translate(x, -font['glyf'][name].yMax / 2
+                                                                    if hasattr(font['glyf'][name], 'yMax') else 0)))
+            x += font['hmtx'][name][0]
+        end = place.transformPoint((x, 0))[0]
+        name = 'uni%04X' % code
+        if name in order:
+            return 4
+        glyph = pen.glyph()
+        # O glyf acrescenta o nome a ordem dos glifos, que pode ser a mesma lista.
+        font['glyf'][name] = glyph
+        if name not in order:
+            order.append(name)
+        glyph.recalcBounds(font['glyf'])
+        font['hmtx'][name] = (int(max(advance, end) + font['hmtx'][base][1]), font['hmtx'][base][1])
+        for table in font['cmap'].tables:
+            if table.isUnicode():
+                table.cmap[code] = name
+    font.setGlyphOrder(order)
+    tmp = '%s.%d.tmp' % (dst, os.getpid())
+    font.save(tmp)
+    os.replace(tmp, dst)
+    return 0
+
+
 def main():
-    if len(sys.argv) != 7 or sys.argv[1] != 'stamp':
-        sys.stderr.write('usage: fliperos-arcadeflow-art stamp SYSTEM KIND TEXT SOURCE DESTINATION\n')
-        return 2
-    return stamp(*sys.argv[2:])
+    args = sys.argv[1:]
+    if len(args) == 6 and args[0] == 'stamp':
+        return stamp(*args[1:])
+    if len(args) >= 6 and args[0] == 'glyphs' and (len(args) - 3) % 3 == 0:
+        try:
+            specs = [(int(args[i], 16), int(args[i + 1], 16), args[i + 2]) for i in range(3, len(args), 3)]
+        except ValueError:
+            return 2
+        return glyphs(args[1], args[2], specs)
+    sys.stderr.write('usage: fliperos-arcadeflow-art stamp SYSTEM KIND TEXT SOURCE DESTINATION\n'
+                     '       fliperos-arcadeflow-art glyphs FONT NEWFONT CODE BASECODE TEXT [CODE BASECODE TEXT...]\n')
+    return 2
 
 
 if __name__ == '__main__':

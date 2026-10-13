@@ -3972,21 +3972,26 @@ class ArcadeflowTests(unittest.TestCase):
     def test_systems_gives_a_display_a_system_of_its_own(self):
         # "TELA<tab>TITULO|SISTEMA": a tela do core mame2010 e "MAME 2010", um
         # sistema no fim do arquivo com os dados do MAME, e nao outro "MAME".
-        # A arte e a do MAME com "2010" por cima (fliperos-arcadeflow-art);
-        # sem o Pillow, um link para a do MAME.
+        # O logotipo e um glifo novo na fonte do menu (o do MAME com "2010"
+        # ao lado) e a arte a do MAME com "2010" por cima
+        # (fliperos-arcadeflow-art). Sem o glifo a tela e so mais um nome do
+        # MAME; sem o Pillow, a arte e um link para a do MAME.
         mame = 'mame,0,0,ARC,CRT,NONE,-4,3,ARCADE,Various,null,MAME,75,rom,null,null'
         data = 'null,0,0,NULL\n\n%s\nm.a.m.e.\n\nplaystation,0,0,PSX\npsx\n' % mame
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             theme = tmp / 'attract/layouts/Arcadeflow'
-            for folder in ('system_images', 'system_bgs'):
+            for folder in ('system_images', 'system_bgs', 'fonts'):
                 (theme / folder).mkdir(parents=True)
             (theme / 'data_systems.txt').write_text(data)
+            (theme / 'layout.nut').write_text('local uifonts = {\n\tgui = "fonts/gui.ttf"\n\tgeneral = "fonts/b.ttf"\n}\n')
+            (theme / 'fonts/gui.ttf').write_text('font')
             (theme / 'system_images/MAME.png').write_text('png')
             (theme / 'system_bgs/MAME.jpg').write_text('jpg')
             art = tmp / 'art'
-            art.write_text('#!/bin/sh\n[ -f "%s/pillow" ] || exit 3\necho "$*" >> "%s/calls"\necho "$4" > "$6"\n'
-                           % (tmp, tmp))
+            art.write_text('#!/bin/sh\necho "$*" >> "%s/calls"\nif [ "$1" = glyphs ]; then\n'
+                           '  [ -f "%s/fonttools" ] || exit 3\n  shift 3\n  echo "glyphs $*" > "%s/fonts/gui.ttf.new"\n'
+                           '  exit 0\nfi\n[ -f "%s/pillow" ] || exit 3\necho "$4" > "$6"\n' % (tmp, tmp, theme, tmp))
             art.chmod(0o755)
             env = dict(os.environ, ATTRACT_DIR=str(tmp / 'attract'), FLIPEROS_USER='root',
                        FLIPEROS_ARCADEFLOW_ART=str(art))
@@ -3997,41 +4002,121 @@ class ArcadeflowTests(unittest.TestCase):
                                      text=True, env=env, timeout=60)
                 self.assertEqual(run.returncode, 0, run.stderr)
                 return (theme / 'data_systems.txt').read_text()
+
+            def calls():
+                lines = (tmp / 'calls').read_text().splitlines()
+                (tmp / 'calls').unlink()
+                return lines
+            # Sem o fontTools nao ha glifo: a tela entra como nome do MAME, sem
+            # sistema proprio nem arte, e a fonte do tema fica como e.
+            plain = data.replace('\nm.a.m.e.\n', '\narcade (various) (mame 2010 (0.139))\noutro mame\nm.a.m.e.\n')
+            self.assertEqual(systems(screens), plain)
+            self.assertEqual((theme / 'fonts/gui.ttf').read_text(), 'font')
+            self.assertEqual((theme / 'fliperos_systems.txt').read_text().splitlines(),
+                             ['arcade (various) (mame 2010 (0.139))', 'outro mame'])
+            self.assertEqual(sorted(p.name for p in (theme / 'system_bgs').iterdir()), ['MAME.jpg'])
+            self.assertEqual(len(calls()), 1)
+            # Com ele: o sistema proprio no fim (o terceiro bloco depois do
+            # "null": glifo e902; o do MAME e o e900), com o titulo em
+            # minusculas como outro nome (e por ele que o tema acha o grupo da
+            # tela: Arcade, e nao "Others"). O titulo igual ao nome do sistema
+            # e so mais um nome dele.
+            (tmp / 'fonttools').write_text('')
             own = mame.replace('mame,', 'arcade (various) (mame 2010 (0.139)),', 1).replace(',MAME,', ',MAME 2010,')
-            # O titulo igual ao nome do sistema e so mais um nome dele.
-            # O titulo, em minusculas, e outro nome do sistema novo: e por ele
-            # que o tema acha o grupo da tela (Arcade, e nao "Others").
             expected = data.replace('\nm.a.m.e.\n', '\noutro mame\nm.a.m.e.\n') + '\n' + own + '\nmame 2010\n'
             self.assertEqual(systems(screens), expected)
+            font = 'fonts/gui.ttf'
+            self.assertEqual((theme / font).read_text(), 'glyphs e902 e900 2010\n')
+            self.assertEqual((theme / (font + '.fliperos-orig')).read_text(), 'font')
             # Sem o Pillow: links para a arte do MAME.
             for name, target in (('system_images/MAME 2010.png', 'MAME.png'), ('system_bgs/MAME 2010.jpg', 'MAME.jpg')):
                 self.assertEqual(os.readlink(theme / name), target)
             self.assertEqual((theme / 'fliperos_systems.txt').read_text().splitlines(),
-                             ['@' + own, 'mame 2010', 'outro mame', 'art:system_images/MAME 2010.png',
-                              'art:system_bgs/MAME 2010.jpg'])
+                             ['@' + own, 'mame 2010', 'outro mame', 'font:%s|e902 e900 2010' % font,
+                              'art:system_images/MAME 2010.png', 'art:system_bgs/MAME 2010.jpg'])
+            self.assertEqual(calls()[0], 'glyphs %s %s e902 e900 2010' % (theme / (font + '.fliperos-orig'),
+                                                                          theme / (font + '.new')))
             # Com ele, a arte desenhada (o que sobra do titulo depois do nome
-            # do sistema), que fica na vez seguinte.
+            # do sistema). Feitos, o glifo e a arte ficam na vez seguinte.
             (tmp / 'pillow').write_text('')
+            os.utime(art, (1, 1))
             self.assertEqual(systems(screens), expected)
             self.assertEqual((theme / 'system_bgs/MAME 2010.jpg').read_text(), '2010\n')
             self.assertFalse((theme / 'system_bgs/MAME 2010.jpg').is_symlink())
-            self.assertEqual((tmp / 'calls').read_text().splitlines(), [
+            self.assertEqual(calls(), [
                 'stamp MAME system_images 2010 %s %s' % (theme / 'system_images/MAME.png',
                                                          theme / 'system_images/MAME 2010.png'),
                 'stamp MAME system_bgs 2010 %s %s' % (theme / 'system_bgs/MAME.jpg', theme / 'system_bgs/MAME 2010.jpg')])
-            os.utime(art, (1, 1))
             self.assertEqual(systems(screens), expected)
-            self.assertEqual(len((tmp / 'calls').read_text().splitlines()), 2)
+            self.assertFalse((tmp / 'calls').exists())
             # Uma arte da pessoa com o nome de um titulo fica, e nao e apagada depois.
             (theme / 'system_bgs/Meu MAME.jpg').write_text('meu')
             systems('Tela\tMeu MAME|mame\n')
             self.assertEqual((theme / 'system_bgs/Meu MAME.jpg').read_text(), 'meu')
             self.assertFalse((theme / 'system_bgs/MAME 2010.jpg').exists())
-            # Sem telas, o arquivo do tema volta ao que era, sem a arte feita.
+            self.assertEqual((theme / font).read_text(), 'glyphs e902 e900 Meu MAME\n')
+            # Sem telas, o arquivo e a fonte do tema voltam ao que eram, sem a arte feita.
             self.assertEqual(systems(''), data)
             self.assertEqual(sorted(p.name for p in (theme / 'system_bgs').iterdir()), ['MAME.jpg', 'Meu MAME.jpg'])
             self.assertEqual(sorted(p.name for p in (theme / 'system_images').iterdir()), ['MAME.png'])
+            self.assertEqual(sorted(p.name for p in (theme / 'fonts').iterdir()), ['gui.ttf'])
+            self.assertEqual((theme / font).read_text(), 'font')
             self.assertEqual((theme / 'fliperos_systems.txt').read_text(), '')
+
+    def test_art_makes_the_logo_glyph_of_a_system_of_its_own(self):
+        # O logotipo no menu de telas e um glifo da fonte do tema: o glifo
+        # novo e o do sistema de origem com o texto ao lado.
+        script = ROOT / 'config/fliperos-arcadeflow-art'
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+
+            def glyphs(src, *specs):
+                return subprocess.run(['python3', str(script), 'glyphs', str(src), str(tmp / 'new.ttf'), *specs],
+                                      capture_output=True, text=True, timeout=60).returncode
+            try:
+                from fontTools.fontBuilder import FontBuilder
+                from fontTools.pens.ttGlyphPen import TTGlyphPen
+                from fontTools.ttLib import TTFont
+            except ImportError:
+                # Sem o fontTools: status 3, e a tela fica sem sistema proprio.
+                self.assertEqual(glyphs(tmp / 'a.ttf', 'ea42', 'e96f', '2010'), 3)
+                return
+
+            def box(width):
+                pen = TTGlyphPen(None)
+                pen.moveTo((0, 0))
+                pen.lineTo((0, 700))
+                pen.lineTo((width, 700))
+                pen.lineTo((width, 0))
+                pen.closePath()
+                return pen.glyph()
+            names = ['.notdef', 'logo', 'two', 'zero', 'one']
+            builder = FontBuilder(1000, isTTF=True)
+            builder.setupGlyphOrder(names)
+            builder.setupCharacterMap({0xe900: 'logo', ord('2'): 'two', ord('0'): 'zero', ord('1'): 'one'})
+            builder.setupGlyf({'.notdef': box(10), 'logo': box(4000), 'two': box(500), 'zero': box(500),
+                               'one': box(300)})
+            builder.setupHorizontalMetrics({'.notdef': (500, 0), 'logo': (4100, 0), 'two': (600, 0),
+                                            'zero': (600, 0), 'one': (400, 0)})
+            builder.setupHorizontalHeader(ascent=800, descent=-200)
+            builder.setupNameTable({'familyName': 'T', 'styleName': 'R'})
+            builder.setupOS2()
+            builder.setupPost()
+            builder.save(str(tmp / 'src.ttf'))
+            self.assertEqual(glyphs(tmp / 'src.ttf', 'e901', 'e900', '2010'), 0)
+            font = TTFont(str(tmp / 'new.ttf'))
+            name = font.getBestCmap()[0xe901]
+            glyph = font['glyf'][name]
+            # O logotipo (1 contorno) e os quatro algarismos, depois dele e
+            # subindo para a direita; o glifo e mais largo que o de origem.
+            self.assertEqual(glyph.numberOfContours, 5)
+            self.assertGreater(glyph.xMax, 4000 + 3 * 400)
+            self.assertGreater(font['hmtx'][name][0], 4100)
+            self.assertEqual(font.getBestCmap()[0xe900], 'logo')
+            self.assertEqual(len(font.getGlyphOrder()), len(names) + 1)
+            # Um codigo que a fonte ja usa, ou um sistema de origem sem glifo: status 4.
+            self.assertEqual(glyphs(tmp / 'src.ttf', 'e900', 'e900', '2010'), 4)
+            self.assertEqual(glyphs(tmp / 'src.ttf', 'e901', 'e955', '2010'), 4)
 
     def test_art_draws_the_rest_of_the_title_on_the_system_art(self):
         script = ROOT / 'config/fliperos-arcadeflow-art'
@@ -4039,7 +4124,7 @@ class ArcadeflowTests(unittest.TestCase):
                       ROOTFS)
         # O Pillow nao vem na imagem: chega com o tema (fetch) e no update.
         text = self.SCRIPT.read_text()
-        self.assertIn('apt-get install -y --no-install-recommends python3-pil', text)
+        self.assertIn('apt-get install -y --no-install-recommends python3-pil python3-fonttools', text)
         self.assertIn('    pillow\n    exec runuser -u "$user" -- "$self" fetch "$@"', text)
         self.assertIn('/opt/fliperos/bin/fliperos-arcadeflow pillow', (ROOT / 'tools/cabinet-update.sh').read_text())
         with tempfile.TemporaryDirectory() as tmp:
