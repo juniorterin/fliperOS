@@ -723,7 +723,7 @@ def cmd_chds(args):
                     if owner and disk.lower().endswith('.chd') and '/' not in disk:
                         available.setdefault(owner.lower(), owner)
                         listed.add((owner, disk))
-                        sizes[owner] = sizes.get(owner, 0) + (int(size) if size.isdigit() else 0)
+                        sizes[owner, disk] = int(size) if size.isdigit() else 0
         else:
             with os.scandir(source) as entries:
                 available = {e.name.lower(): e.name for e in entries if e.is_dir()}
@@ -767,7 +767,9 @@ def cmd_chds(args):
                 for owner in chain:
                     folder_name = available.get(owner)
                     if folder_name and has_disk(folder_name, disk):
-                        copies.setdefault((folder_name, folder), owner)
+                        # So os discos que um jogo da lista usa: a pasta do pai
+                        # traz tambem os das versoes que nao estao nela.
+                        copies.setdefault((folder_name, folder), (owner, set()))[1].add(disk + '.chd')
                         break
                 else:
                     lost.append(disk)
@@ -776,11 +778,16 @@ def cmd_chds(args):
     total = 0
     with open(args.plan, 'w', encoding='utf-8') as out:
         out.write('# roms\t%s\n# dest\t%s\n' % (source, folders[0]))
-        for (folder_name, folder), owner in sorted(copies.items()):
-            size = sizes.get(folder_name, 0) if args.names else size_of(os.path.join(source, folder_name))
+        for (folder_name, folder), (owner, disks) in sorted(copies.items()):
+            if args.names:
+                size = sum(sizes.get((folder_name, d), 0) for d in disks)
+            else:
+                size = sum(size_of(os.path.join(source, folder_name, d)) for d in disks)
             total += size
             desc = machines[owner]['description'].replace('\t', ' ').replace('\n', ' ')
-            out.write('move\t%s\t%s\t%d\t%s\t%s\n' % (owner, folder_name, size, desc, folder))
+            # O setimo campo: os discos da pasta que vao, separados por "/".
+            out.write('move\t%s\t%s\t%d\t%s\t%s\t%s\n' % (owner, folder_name, size, desc, folder,
+                                                        '/'.join(sorted(disks))))
         for name, lost in missing:
             desc = machines[name]['description'].replace('\t', ' ').replace('\n', ' ')
             out.write('missing\t%s\t%s\t0\t%s\t\n' % (name, ','.join(d + '.chd' for d in lost), desc))
@@ -815,7 +822,8 @@ def cmd_uses(args):
 
 
 def read_plan(path):
-    """(origem, destino, {move|rest: [(arquivo, pasta de destino, bytes)]})."""
+    """(origem, destino, {move|rest: [(arquivo, pasta de destino, bytes, discos)]}).
+    discos: de uma pasta de CHDs, os arquivos dela que vao (None = todos)."""
     header, files = {}, {'move': [], 'rest': []}
     with open(path, encoding='utf-8') as f:
         for line in f:
@@ -827,7 +835,8 @@ def read_plan(path):
                 fields = line.split('\t')
                 target = fields[5] if len(fields) > 5 and fields[5] else header.get('dest', '')
                 size = int(fields[3]) if len(fields) > 3 and fields[3].isdigit() else 0
-                files.setdefault(fields[0], []).append((fields[2], target, size))
+                disks = set(fields[6].split('/')) if len(fields) > 6 and fields[6] else None
+                files.setdefault(fields[0], []).append((fields[2], target, size, disks))
     if not header.get('roms') or not header.get('dest'):
         sys.exit('plan without the ROM folder or the destination: %s' % path)
     return header['roms'], header['dest'], files
@@ -874,16 +883,18 @@ class Progress:
                                          self.name), flush=True)
 
 
-def copy_path(src, dst, st, progress):
-    """Copia um arquivo ou uma pasta (CHD) para dst. O que ja esta la com o
-    mesmo tamanho fica; cada arquivo chega como .part e so entao ganha o
-    nome, para uma copia cortada no meio nao passar por inteira. Devolve
-    (copiados, ja estavam)."""
+def copy_path(src, dst, st, progress, only=None):
+    """Copia um arquivo ou uma pasta (CHD; only: so esses arquivos dela) para
+    dst. O que ja esta la com o mesmo tamanho fica; cada arquivo chega como
+    .part e so entao ganha o nome, para uma copia cortada no meio nao passar
+    por inteira. Devolve (copiados, ja estavam)."""
     if os.path.isdir(src):
         os.makedirs(dst, exist_ok=True)
         chown_like(dst, st)
         copied = skipped = 0
         for name in sorted(os.listdir(src)):
+            if only is not None and name not in only:
+                continue
             c, s = copy_path(os.path.join(src, name), os.path.join(dst, name), st, progress)
             copied, skipped = copied + c, skipped + s
         return copied, skipped
@@ -913,10 +924,10 @@ def cmd_apply(args):
     folder, _, files = read_plan(args.plan)
     transfer = args.action in ('copy', 'move')
     todo = files['move' if transfer else 'rest']
-    progress = Progress(args.progress and transfer, sum(size for _, _, size in todo), len(todo))
+    progress = Progress(args.progress and transfer, sum(entry[2] for entry in todo), len(todo))
     done = skipped = errors = 0
     stats = {}
-    for filename, target_dir, _ in todo:
+    for filename, target_dir, _, disks in todo:
         # So um arquivo da propria pasta, nunca um caminho.
         path = os.path.join(folder, filename)
         if '/' in filename or filename in ('.', '..') or not os.path.lexists(path):
@@ -936,8 +947,19 @@ def cmd_apply(args):
             target = os.path.join(target_dir, filename)
             progress.start(filename)
             if args.action == 'copy':
-                copied, _ = copy_path(path, target, stats[target_dir], progress)
+                copied, _ = copy_path(path, target, stats[target_dir], progress, disks)
                 done, skipped = done + bool(copied), skipped + (not copied)
+            elif disks is not None and os.path.isdir(path):
+                # Da pasta de CHDs saem so os discos do plano; os outros ficam.
+                os.makedirs(target, exist_ok=True)
+                chown_like(target, stats[target_dir])
+                moved = 0
+                for disk in sorted(disks):
+                    if os.path.isfile(os.path.join(path, disk)) and not os.path.lexists(os.path.join(target, disk)):
+                        shutil.move(os.path.join(path, disk), os.path.join(target, disk))
+                        chown_like(os.path.join(target, disk), stats[target_dir])
+                        moved += 1
+                done, skipped = done + bool(moved), skipped + (not moved)
             elif os.path.lexists(target):
                 # Ja esta la (ou a origem e a propria pasta do emulador): fica.
                 skipped += 1

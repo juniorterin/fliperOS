@@ -243,14 +243,17 @@ def relative(meta):
 
 
 def read_plan(path):
-    """[(set, arquivo, bytes, descricao, pasta de destino)] do que o plano move."""
+    """[(set, arquivo, bytes, descricao, pasta de destino, discos)] do que o
+    plano move. discos: de uma pasta de CHDs, os arquivos dela que os jogos
+    escolhidos usam (None num plano de antes: a pasta inteira)."""
     out = []
     try:
         with open(path, encoding='utf-8') as f:
             for line in f:
                 fields = line.rstrip('\n').split('\t')
                 if len(fields) >= 6 and fields[0] == 'move':
-                    out.append((fields[1], fields[2], int(fields[3] or 0), fields[4], fields[5]))
+                    disks = set(fields[6].split('/')) if len(fields) > 6 and fields[6] else None
+                    out.append((fields[1], fields[2], int(fields[3] or 0), fields[4], fields[5], disks))
     except OSError:
         pass
     return out
@@ -298,13 +301,14 @@ def make_plans(tmp):
 def files_of(kind, entry, rels):
     """Os arquivos do torrent de uma entrada do plano e onde cada um fica:
     [(indice, caminho na pasta do torrent, destino, bytes)]. Uma ROM e um
-    arquivo; um CHD e a pasta do jogo, com os discos."""
-    name, filename, _, _, dest = entry
+    arquivo; um CHD e a pasta do jogo, com os discos do plano (a pasta do pai
+    tem tambem os das versoes que o filtro nao escolheu)."""
+    name, filename, _, _, dest, disks = entry
     out = []
     for index, rel, length in rels:
         if kind == 'roms' and rel == filename:
             out.append((index, rel, os.path.join(dest, filename), length))
-        elif kind == 'chds' and rel.startswith(filename + '/'):
+        elif kind == 'chds' and rel.startswith(filename + '/') and (disks is None or rel[len(filename) + 1:] in disks):
             out.append((index, rel, os.path.join(dest, rel), length))
     return out
 
@@ -495,7 +499,7 @@ def cmd_start(args):
 
 def plan_sets(entries):
     sizes = {}
-    for name, _, size, desc, _ in entries:
+    for name, _, size, desc, _, _ in entries:
         old = sizes.get(name, (0, desc))
         sizes[name] = (old[0] + size, desc)
     return sizes
@@ -614,12 +618,15 @@ def cmd_prune(args):
     aplicado nao escolhe mais."""
     with lock():
         for kind in KINDS:
-            keep = set(plan_sets(read_plan(state(kind + '.plan'))))
+            entries = read_plan(state(kind + '.plan'))
+            keep = set(plan_sets(entries))
             if kind == 'roms':
                 keep |= in_use([(n, p) for n, p in installed(kind) if n not in keep])
+            # De uma pasta de CHDs que fica, os discos que o plano nao lista mais.
+            disks = {e[0]: e[5] for e in entries if e[5] is not None}
             left, deleted = [], 0
             for name, path in installed(kind):
-                if name in keep:
+                if name in keep and (name not in disks or os.path.basename(path) in disks[name]):
                     left.append('%s\t%s\n' % (name, path))
                 else:
                     delete_path(path)
