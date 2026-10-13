@@ -189,6 +189,9 @@ install -Dm755 "$src/config/fliperos-mame-ini" "$root/opt/fliperos/bin/fliperos-
 install -Dm755 "$src/config/fliperos-buttons" "$root/opt/fliperos/bin/fliperos-buttons"
 # Setup > MAME ROM Cleaner: o que sai de uma pasta de ROMs, pelo XML do MAME.
 install -Dm755 "$src/config/fliperos-romclean" "$root/opt/fliperos/bin/fliperos-romclean"
+# O sistema de cada set do FBNeo: o fliperos-kms-run abre os de console que
+# estao soltos na pasta dos arcades.
+install -Dm755 "$src/config/fliperos-fbneo" "$root/opt/fliperos/bin/fliperos-fbneo"
 # Setup > Free games: homebrew de codigo aberto para as pastas de ~/roms.
 install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-freeroms"
 # Setup > Scraper > progetto-SNAPS: as capturas dos jogos de arcade.

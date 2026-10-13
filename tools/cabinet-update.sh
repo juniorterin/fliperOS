@@ -173,6 +173,9 @@ fi
 echo "== MAME 2010 XML (ROM cleaner)"
 /opt/fliperos/bin/fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz || echo "failed (no network?)"
 
+echo "== FBNeo sets (the system of each one, for the RetroArch core)"
+/opt/fliperos/bin/fliperos-fbneo fetch /usr/local/share/fliperos/fbneo-sets.tsv.xz || echo "failed (no network?)"
+
 echo "== Folders in ~ (roms, bios, media, config)"
 runuser -u fliperos -- /opt/fliperos/bin/fliperos-roms
 ls -ld /opt/fliperos/roms /opt/fliperos/bios

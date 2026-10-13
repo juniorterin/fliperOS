@@ -59,6 +59,15 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   for ((i = 2; i < $#; i++)); do
     if [[ ${!i} == -L || ${!i} == --libretro ]]; then next=$((i + 1)) core=${!next}; fi
   done
+  # O core do FBNeo so abre um set de console (Mega Drive, Master System...)
+  # numa pasta com o nome do sistema; solto na pasta dos arcades, como na do
+  # Fightcade, fechava em "romset is unknown". O config/fliperos-fbneo acha
+  # o sistema do set e devolve um link para ele numa pasta com esse nome.
+  fbneo=${FLIPEROS_FBNEO:-/opt/fliperos/bin/fliperos-fbneo}
+  if [[ ${core##*/} == fbneo*_libretro.so && -x $fbneo && $# -gt 1 && -f ${*: -1} ]]; then
+    rom=$("$fbneo" path "${*: -1}" 2> /dev/null) || rom=""
+    [[ -n $rom && -f $rom ]] && set -- "${@:1:$#-1}" "$rom"
+  fi
   if [[ -f $versus_cfg && -x $versus && -x $pixelcade ]] && "$pixelcade" panel &&
     "$versus" has retroarch "${game%.*}" "$core"; then
     appendconfig+="|$versus_cfg"

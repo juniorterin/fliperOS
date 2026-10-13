@@ -998,6 +998,18 @@ rm -rf /tmp/retroarch
 RA_DIR=/opt/fliperos/retroarch
 mkdir -p "$RA_DIR/cores" "$RA_DIR/info" "$RA_DIR/autoconfig"
 
+# ── Sets do FBNeo (o sistema de cada um) ──────────────────────
+# O core do FBNeo so abre um set de console numa pasta com o nome do sistema;
+# o config/fliperos-fbneo acha o sistema pelos .dat do proprio FBNeo, do mesmo
+# ramo de que o core e compilado, e o fliperos-kms-run abre o set por ele.
+install_fbneo_sets() {
+  step "FBNeo sets (system of each one)"
+  python3 "$(dirname "$(realpath "$0")")/config/fliperos-fbneo" fetch \
+    "$CHROOT_DIR/usr/local/share/fliperos/fbneo-sets.tsv.xz" >> "$LOG_FILE" 2>&1 \
+    || err "FBNeo .dat files did not download"
+  ok "FBNeo sets in /usr/local/share/fliperos/fbneo-sets.tsv.xz"
+}
+
 # fetch_pinned REPO COMMIT DESTINO: so os arquivos daquele commit.
 fetch_pinned() {
   rm -rf /tmp/pinned && git init -q /tmp/pinned
@@ -1588,6 +1600,7 @@ chroot "$CHROOT_DIR" update-initramfs -u -k all >> "$LOG_FILE" 2>&1 || err "upda
 build_skyscraper_chroot
 install_groovymame_chroot
 install_mame2010_xml
+install_fbneo_sets
 build_retroarch_chroot
 build_flycast_chroot
 build_pcsx2_chroot

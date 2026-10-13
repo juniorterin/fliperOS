@@ -2894,6 +2894,84 @@ class QuietLaunchTests(unittest.TestCase):
                            stdout=subprocess.DEVNULL, check=True)
             self.assertEqual((tmp / 'entrada').read_text(), 'sem\n')
 
+    def test_fbneo_console_set_opens_from_a_system_folder(self):
+        # O core do FBNeo so abre um set de console numa pasta com o nome do
+        # sistema; solto entre os arcades (a pasta do Fightcade) dava "romset
+        # is unknown". O fliperos-fbneo acha o sistema pelos .dat do FBNeo; um
+        # nome que existe em dois sistemas e decidido pelos CRCs do .zip.
+        import zipfile
+        import zlib
+        tool = str(ROOT / 'config/fliperos-fbneo')
+        dat = '<datafile>\n%s</datafile>\n'
+        game = '\t<game name="%s"%s>\n\t\t<rom name="a.bin" size="1" crc="%08x"/>\n\t</game>\n'
+        crc = lambda data: zlib.crc32(data) & 0xffffffff
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            dats, roms, cache = tmp / 'dats', tmp / 'roms', tmp / 'cache'
+            dats.mkdir()
+            (roms / 'megadrive').mkdir(parents=True)
+            name = 'FinalBurn Neo (ClrMame Pro XML, %s).dat'
+            (dats / (name % 'Arcade only')).write_text(
+                dat % (game % ('mslug', '', crc(b'arcade')) + game % ('sonic', '', crc(b'sonic arcade'))))
+            (dats / (name % 'Megadrive only')).write_text(
+                dat % (game % ('sonic', ' romof="mdbios"', crc(b'sonic md')) +
+                       game % ('sonicp', ' cloneof="sonic" romof="sonic"', crc(b'proto'))))
+            (dats / (name % 'SNES Games only')).write_text(dat % (game % ('mario', '', crc(b'snes'))))
+            (dats / (name % 'NES Games only')).write_text(dat % (game % ('mario', '', crc(b'nes'))))
+            (dats / 'FinalBurn Neo (ClrMame Pro XML).dat').write_text(dat % (game % ('tudo', '', 1)))
+            for path, data in (('mslug', b'arcade'), ('sonic', b'sonic md'), ('sonicp', b'proto'),
+                               ('mario', b'nes'), ('outro', b'x'), ('megadrive/sonic', b'sonic md'),
+                               ('mdbios', b'bios')):
+                with zipfile.ZipFile(roms / (path + '.zip'), 'w') as z:
+                    z.writestr('a.bin', data)
+            index = tmp / 'share' / 'fbneo-sets.tsv.xz'
+            out = subprocess.run(['python3', tool, 'index', str(dats), str(index)], capture_output=True, text=True,
+                                 check=True).stdout
+            self.assertEqual(out, 'ok %s (6 sets)\n' % index)
+            env = dict(os.environ, FLIPEROS_FBNEO_INDEX=str(index), FLIPEROS_FBNEO_CACHE=str(cache))
+            path = lambda rom, e=env: subprocess.run(['python3', tool, 'path', str(roms / rom)], env=e, text=True,
+                                                     capture_output=True, check=True).stdout.strip()
+            # Arcade, ja numa pasta de sistema ou fora das listas: a propria ROM.
+            for rom in ('mslug.zip', 'megadrive/sonic.zip', 'outro.zip', 'nada.zip'):
+                self.assertEqual(path(rom), str(roms / rom), rom)
+            self.assertEqual(path('sonic.zip'), str(cache / 'megadrive' / 'sonic.zip'))
+            self.assertEqual(os.path.realpath(cache / 'megadrive' / 'sonic.zip'), os.path.realpath(roms / 'sonic.zip'))
+            self.assertEqual(path('mario.zip'), str(cache / 'nes' / 'mario.zip'))
+            self.assertTrue((cache / 'megadrive' / 'mdbios.zip').exists())
+            # O clone leva o link do set pai junto, e o da BIOS do pai.
+            for link in (cache / 'megadrive').iterdir():
+                link.unlink()
+            self.assertEqual(path('sonicp.zip'), str(cache / 'megadrive' / 'sonicp.zip'))
+            self.assertEqual(sorted(p.name for p in (cache / 'megadrive').iterdir()),
+                             ['mdbios.zip', 'sonic.zip', 'sonicp.zip'])
+            # Sem o indice, nada muda.
+            self.assertEqual(path('sonic.zip', dict(env, FLIPEROS_FBNEO_INDEX=str(tmp / 'falta'))),
+                             str(roms / 'sonic.zip'))
+            # O fliperos-kms-run troca a ROM so no core do FBNeo.
+            (tmp / 'logs').mkdir()
+            (tmp / 'bin').mkdir()
+            ra = tmp / 'bin' / 'retroarch'
+            ra.write_text('#!/bin/sh\nfor a; do last=$a; done\nprintf "%%s\\n" "$last" > "%s"\n' % (tmp / 'rom'))
+            ra.chmod(0o755)
+            env = dict(env, FLIPEROS_LOGS=str(tmp / 'logs'), FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'),
+                       FLIPEROS_FBNEO=tool, FLIPEROS_RA_CFG=str(tmp / 'ra.cfg'), FLIPEROS_RA_GL=str(tmp / 'gl.cfg'),
+                       FLIPEROS_RA_BUTTONS=str(tmp / 'b.cfg'), FLIPEROS_RA_DOFLINX=str(tmp / 'd.cfg'),
+                       FLIPEROS_RA_VERSUS=str(tmp / 'v.cfg'), FLIPEROS_PIXELCADE=str(tmp / 'no-pixelcade'),
+                       FLIPEROS_OUTPUTS=str(tmp / 'no-outputs'), FLIPEROS_CONF=str(tmp / 'fliperos.conf'),
+                       PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']))
+            env.pop('DISPLAY', None)
+            for core, expected in (('fbneo_libretro.so', cache / 'megadrive' / 'sonic.zip'),
+                                   ('mame2010_libretro.so', roms / 'sonic.zip')):
+                subprocess.run(['bash', str(ROOT / 'config/fliperos-kms-run'), 'retroarch', '-L', '/cores/' + core,
+                                str(roms / 'sonic.zip')], env=env, check=True, stdin=subprocess.DEVNULL)
+                self.assertEqual((tmp / 'rom').read_text().strip(), str(expected), core)
+        rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
+        self.assertIn('install -Dm755 "$src/config/fliperos-fbneo" "$root/opt/fliperos/bin/fliperos-fbneo"', rootfs)
+        for script in ('fliperos-mkiso.sh', 'tools/cabinet-update.sh'):
+            self.assertIn('fliperos-fbneo" fetch' if script.endswith('mkiso.sh') else 'fliperos-fbneo fetch',
+                          (ROOT / script).read_text(), script)
+            self.assertIn('/usr/local/share/fliperos/fbneo-sets.tsv.xz', (ROOT / script).read_text(), script)
+
 
 class ControllerMappingTests(unittest.TestCase):
     """fliperos-controllers: completa o mapeamento automatico do SDL2 (botoes

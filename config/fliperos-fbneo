@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""O sistema de cada set do FBNeo, para o core do RetroArch abrir os de console.
+
+O core do FBNeo so procura um .zip entre os arcades, a menos que a pasta em
+que ele esta tenha o nome de um sistema (megadrive, sms, spectrum...): um
+jogo de Mega Drive solto na pasta dos arcades fecha em "romset is unknown".
+A pasta do Fightcade (~/roms/fightcade/fbneo, que a do core aponta) costuma
+vir assim, com os sets de todos os sistemas juntos.
+
+    fliperos-fbneo index PASTA_DOS_DATS DESTINO   monta o indice dos .dat do FBNeo
+    fliperos-fbneo fetch DESTINO                  baixa os .dat do GitHub e monta o indice
+    fliperos-fbneo path ROM                       o caminho a dar ao core
+
+O "path" devolve a propria ROM quando ela e um arcade, ja esta numa pasta de
+sistema ou nao esta em lista nenhuma. Senao devolve um link para ela numa
+pasta com o nome do sistema (~/.cache/fliperos-fbneo/<sistema>/), com o link
+do set pai ao lado. Um nome que existe em mais de um sistema e decidido pelos
+CRCs dos arquivos do .zip.
+
+O indice (INDEX) e um texto comprimido, uma linha por set:
+"pasta<TAB>set<TAB>pai<TAB>crc,crc..."; pasta vazia = arcade, e os CRCs so
+vao nos sets cujo nome se repete entre sistemas.
+"""
+import argparse
+import lzma
+import os
+import re
+import sys
+import tempfile
+import urllib.parse
+import urllib.request
+import zipfile
+
+INDEX = os.environ.get('FLIPEROS_FBNEO_INDEX', '/usr/local/share/fliperos/fbneo-sets.tsv.xz')
+CACHE = os.environ.get('FLIPEROS_FBNEO_CACHE') or os.path.join(
+    os.environ.get('XDG_CACHE_HOME') or os.path.expanduser('~/.cache'), 'fliperos-fbneo')
+DATS_URL = os.environ.get('FLIPEROS_FBNEO_DATS', 'https://raw.githubusercontent.com/libretro/FBNeo/master/dats/')
+DAT_NAME = 'FinalBurn Neo (ClrMame Pro XML, %s).dat'
+
+# Um pedaco do nome do .dat -> a pasta que o core reconhece ('' = arcade), na
+# ordem em que sao testados ("SNES Games" tem "NES Games" dentro, e "NeoGeo
+# Pocket" nao e o Neo Geo do arcade).
+SYSTEMS = (
+    ('Arcade only', ''), ('NeoGeo Pocket Games only', 'ngp'), ('Neogeo only', ''),
+    ('ColecoVision only', 'coleco'), ('Fairchild Channel F Games only', 'channelf'), ('FDS Games only', 'fds'),
+    ('Game Gear only', 'gamegear'), ('Master System only', 'sms'), ('Megadrive only', 'megadrive'),
+    ('MSX 1 Games only', 'msx'), ('SNES Games only', 'snes'), ('NES Games only', 'nes'),
+    ('PC-Engine only', 'pce'), ('Sega SG-1000 only', 'sg1000'), ('SuprGrafx only', 'sgx'),
+    ('TurboGrafx16 only', 'tg16'), ('ZX Spectrum Games only', 'spectrum'),
+    ('Bally Astrocade Games only', 'astrocade'), ('GBA Games only', 'gba'),
+)
+# As pastas em que o core ja identifica o sistema sozinho (libretro.cpp).
+FOLDERS = frozenset((
+    'coleco', 'colecovision', 'gamegear', 'sms', 'mastersystem', 'megadriv', 'megadrive', 'genesis', 'msx',
+    'msx1', 'pce', 'pcengine', 'tg16', 'sgx', 'supergrafx', 'sg1000', 'spectrum', 'zxspectrum', 'nes', 'fds',
+    'snes', 'gba', 'ngp', 'chf', 'channelf', 'astro', 'astrohome', 'astrocade', 'neocd', 'pcecd'))
+
+ROMOF = re.compile(r' romof="([^"]+)"')
+CRC = re.compile(r'<rom [^>]*crc="([0-9a-fA-F]+)"')
+
+
+def dat_folder(filename):
+    for part, folder in SYSTEMS:
+        if part in filename:
+            return folder
+    return None
+
+
+def read_dat(text):
+    """[(set, pai, [crc...])] de um .dat do FBNeo."""
+    games = []
+    for block in text.split('</game>'):
+        m = re.search(r'<game name="([^"]+)"([^>]*)>', block)
+        if not m:
+            continue
+        parent = ROMOF.search(m.group(2))
+        games.append((m.group(1), parent.group(1) if parent else '',
+                      sorted({c.lower().zfill(8) for c in CRC.findall(block)})))
+    return games
+
+
+def write_index(dats, dest):
+    """dats: [(pasta, texto do .dat)]."""
+    rows = []
+    for folder, text in dats:
+        rows += [(folder,) + game for game in read_dat(text)]
+    if not rows:
+        sys.exit('fliperos-fbneo: no set found in the FBNeo .dat files')
+    systems = {}
+    for folder, name, _, _ in rows:
+        systems.setdefault(name, set()).add(folder)
+    os.makedirs(os.path.dirname(os.path.abspath(dest)), exist_ok=True)
+    tmp = tempfile.NamedTemporaryFile(dir=os.path.dirname(os.path.abspath(dest)), delete=False)
+    try:
+        with lzma.open(tmp, 'wt', encoding='utf-8', preset=9) as out:
+            for folder, name, parent, crcs in sorted(rows):
+                out.write('%s\t%s\t%s\t%s\n' % (folder, name, parent,
+                                                ','.join(crcs) if len(systems[name]) > 1 else ''))
+        tmp.close()
+        os.chmod(tmp.name, 0o644)
+        os.replace(tmp.name, dest)
+    finally:
+        if os.path.exists(tmp.name):
+            os.remove(tmp.name)
+    print('ok %s (%d sets)' % (dest, len(rows)))
+
+
+def cmd_index(args):
+    dats = []
+    for filename in sorted(os.listdir(args.dats)):
+        folder = dat_folder(filename) if filename.endswith('.dat') else None
+        if folder is None:
+            continue
+        with open(os.path.join(args.dats, filename), encoding='utf-8', errors='replace') as f:
+            dats.append((folder, f.read()))
+    write_index(dats, args.dest)
+
+
+def cmd_fetch(args):
+    if os.path.exists(args.dest) and not args.force:
+        print('ok %s' % args.dest)
+        return
+    dats = []
+    for part, folder in SYSTEMS:
+        url = DATS_URL + urllib.parse.quote(DAT_NAME % part)
+        try:
+            with urllib.request.urlopen(url, timeout=120) as resp:
+                dats.append((folder, resp.read().decode('utf-8', 'replace')))
+        except OSError as e:
+            # Sem os arcades nao da para saber o que deixar como esta.
+            if part == 'Arcade only':
+                sys.exit('fliperos-fbneo: %s: %s' % (url, e))
+            print('fliperos-fbneo: %s: %s' % (part, e), file=sys.stderr)
+    write_index(dats, args.dest)
+
+
+def load_index():
+    """{set: [(pasta, pai, {crc})]} do indice; vazio se ele falta."""
+    sets = {}
+    try:
+        with lzma.open(INDEX, 'rt', encoding='utf-8') as f:
+            for line in f:
+                folder, name, parent, crcs = line.rstrip('\n').split('\t')
+                sets.setdefault(name, []).append((folder, parent, set(filter(None, crcs.split(',')))))
+    except (OSError, lzma.LZMAError, ValueError, EOFError):
+        return {}
+    return sets
+
+
+def choose(rom, found):
+    """O set que e aquele arquivo: o de mais CRCs em comum; no empate, o
+    arcade e depois o primeiro."""
+    if len(found) > 1:
+        try:
+            with zipfile.ZipFile(rom) as z:
+                crcs = {'%08x' % info.CRC for info in z.infolist()}
+        except (OSError, zipfile.BadZipFile):
+            crcs = set()
+        best = max(len(crcs & c[2]) for c in found)
+        found = [c for c in found if len(crcs & c[2]) == best]
+    for c in found:
+        if c[0] == '':
+            return c
+    return found[0]
+
+
+def link(target, path):
+    try:
+        if os.path.islink(path) and os.readlink(path) == target:
+            return
+        if os.path.lexists(path):
+            os.remove(path)
+        os.symlink(target, path)
+    except OSError:
+        pass
+
+
+def rom_path(rom):
+    base, ext = os.path.splitext(os.path.basename(rom))
+    folder = os.path.dirname(os.path.abspath(rom))
+    if ext.lower() not in ('.zip', '.7z') or os.path.basename(folder) in FOLDERS:
+        return rom
+    sets = load_index()
+    found = sets.get(base)
+    if not found:
+        return rom
+    system, parent, _ = choose(rom, found)
+    if system == '':
+        return rom
+    dest = os.path.join(CACHE, system)
+    try:
+        os.makedirs(dest, exist_ok=True)
+    except OSError:
+        return rom
+    target = os.path.join(dest, os.path.basename(rom))
+    link(os.path.realpath(rom), target)
+    if not os.path.exists(target):
+        return rom
+    # Um clone le o que falta do set pai, e o pai a BIOS do sistema
+    # (spectrum.zip, msx.zip...): o core os procura na mesma pasta.
+    seen = {base}
+    while parent and parent not in seen:
+        seen.add(parent)
+        for other in (parent + '.zip', parent + '.7z'):
+            if os.path.exists(os.path.join(folder, other)):
+                link(os.path.realpath(os.path.join(folder, other)), os.path.join(dest, other))
+        parent = next((p for f, p, _ in sets.get(parent, ()) if f == system), '')
+    return target
+
+
+def main():
+    parser = argparse.ArgumentParser(description='FBNeo sets and the system of each one')
+    sub = parser.add_subparsers(dest='cmd', required=True)
+    p = sub.add_parser('index')
+    p.add_argument('dats')
+    p.add_argument('dest')
+    p = sub.add_parser('fetch')
+    p.add_argument('--force', action='store_true')
+    p.add_argument('dest')
+    p = sub.add_parser('path')
+    p.add_argument('rom')
+    args = parser.parse_args()
+    if args.cmd == 'index':
+        cmd_index(args)
+    elif args.cmd == 'fetch':
+        cmd_fetch(args)
+    else:
+        print(rom_path(args.rom))
+
+
+if __name__ == '__main__':
+    main()
