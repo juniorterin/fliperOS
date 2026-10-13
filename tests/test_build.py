@@ -931,9 +931,10 @@ class RomFoldersTests(unittest.TestCase):
             subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             self.assertFalse((tmp / 'nenhum').exists())
 
-    def test_retroarch_fbneo_shares_the_fightcade_roms(self):
-        # O core FBNeo do RetroArch usa os mesmos romsets do FBNeo do
-        # Fightcade: a pasta do core, enquanto vazia, vira um link para la.
+    def test_retroarch_fbneo_does_not_show_the_fightcade_roms(self):
+        # As ROMs do Fightcade sao so dele: a pasta do core FBNeo do RetroArch
+        # nao vira um link para la (os frontends listariam o acervo todo), e
+        # o link que o FliperOS criava antes sai. Um link da pessoa fica.
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             info = tmp / 'info'
@@ -944,20 +945,26 @@ class RomFoldersTests(unittest.TestCase):
             run = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             core, fightcade = tmp / 'roms/retroarch/fbneo', tmp / 'roms/fightcade/fbneo'
             run()
-            # Sem jogos no Fightcade, a pasta do core e uma pasta comum.
-            self.assertTrue(core.is_dir() and not core.is_symlink())
             (fightcade / 'sf2ce.zip').write_text('rom')
-            for _ in range(2):
-                run()
-            self.assertEqual(os.readlink(core), '../fightcade/fbneo')
-            self.assertEqual((core / 'sf2ce.zip').read_text(), 'rom')
-            self.assertFalse((tmp / 'roms/retroarch/mame2010').is_symlink())
-            # Com jogos proprios na pasta do core, ela fica como esta.
-            core.unlink()
-            core.mkdir()
-            (core / 'kof98.zip').write_text('mine')
             run()
-            self.assertFalse(core.is_symlink())
+            self.assertTrue(core.is_dir() and not core.is_symlink())
+            self.assertEqual(sorted(p.name for p in core.iterdir()), ['_info.txt'])
+            # O link de antes sai, e a pasta volta vazia; as ROMs ficam no Fightcade.
+            (core / '_info.txt').unlink()
+            core.rmdir()
+            os.symlink('../fightcade/fbneo', core)
+            run()
+            self.assertTrue(core.is_dir() and not core.is_symlink())
+            self.assertEqual(sorted(p.name for p in core.iterdir()), ['_info.txt'])
+            self.assertEqual((fightcade / 'sf2ce.zip').read_text(), 'rom')
+            # Um link que a pessoa fez para outra pasta fica.
+            (core / '_info.txt').unlink()
+            core.rmdir()
+            (tmp / 'meus').mkdir()
+            (tmp / 'meus' / 'kof98.zip').write_text('mine')
+            os.symlink(str(tmp / 'meus'), core)
+            run()
+            self.assertEqual(os.readlink(core), str(tmp / 'meus'))
             self.assertEqual((core / 'kof98.zip').read_text(), 'mine')
 
     def test_bios_media_and_config_folders(self):
@@ -3660,6 +3667,133 @@ class ArcadeflowTests(unittest.TestCase):
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
         self.assertIn('run_with_progress "Downloading the Arcadeflow theme" "" frontends_attract_theme', menu)
         self.assertIn('/opt/fliperos/bin/fliperos-arcadeflow fetch', (ROOT / 'tools/cabinet-update.sh').read_text())
+
+
+class PowerKeyTests(unittest.TestCase):
+    """config/fliperos-powerkey: o botao de desligar fecha o jogo aberto e,
+    sem jogo, desliga. A sessao aqui e um script chamado fliperos-session."""
+
+    def start(self, tmp, body):
+        (tmp / 'fliperos-session').write_text('#!/bin/bash\ncd %s\n%s' % (tmp, body))
+        session = subprocess.Popen(['bash', str(tmp / 'fliperos-session')], start_new_session=True)
+        self.addCleanup(session.wait)
+        self.addCleanup(lambda: os.killpg(session.pid, signal.SIGKILL))
+        return session
+
+    def pid(self, tmp, name):
+        for _ in range(50):
+            try:
+                return int((tmp / name).read_text())
+            except (OSError, ValueError):
+                time.sleep(0.1)
+        self.fail('%s was not written' % name)
+
+    def gone(self, pid):
+        for _ in range(50):
+            stat = Path('/proc/%d/stat' % pid)
+            try:
+                if stat.read_text().rsplit(')', 1)[1].split()[0] == 'Z':
+                    return True
+            except OSError:
+                return True
+            time.sleep(0.1)
+        return False
+
+    def press(self, tmp, grace='1'):
+        env = dict(os.environ, FLIPEROS_POWERKEY_STATE=str(tmp / 'state'), FLIPEROS_POWERKEY_GRACE=grace,
+                   FLIPEROS_POWERKEY_OFF='touch %s' % (tmp / 'off'))
+        run = subprocess.run([sys.executable, str(ROOT / 'config/fliperos-powerkey')], env=env,
+                             capture_output=True, text=True, timeout=30)
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_closes_the_game_and_then_powers_off(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            # O frontend abre um jogo; fechado o jogo, fica sem filhos.
+            self.start(tmp, 'FLIPEROS_POWERKEY=frontend bash -c \'echo $$ > fe.pid; sleep 300 & echo $! > game.pid\n'
+                            'wait; exec sleep 300\' &\nwait\n')
+            frontend, game = self.pid(tmp, 'fe.pid'), self.pid(tmp, 'game.pid')
+            self.press(tmp)
+            self.assertTrue(self.gone(game))
+            self.assertFalse((tmp / 'off').exists())
+            # O aperto seguido (ou o mesmo, por outro dispositivo) nao conta.
+            self.press(tmp)
+            self.assertFalse((tmp / 'off').exists())
+            self.assertTrue(Path('/proc/%d' % frontend).exists())
+            time.sleep(1.1)
+            self.press(tmp)
+            self.assertTrue((tmp / 'off').exists())
+            self.assertTrue(Path('/proc/%d' % frontend).exists())
+
+    def test_emulator_opened_from_the_desktop_closes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.start(tmp, 'FLIPEROS_POWERKEY=game sleep 300 &\necho $! > game.pid\nwait\nsleep 300 &\nwait\n')
+            game = self.pid(tmp, 'game.pid')
+            self.press(tmp, grace='0')
+            self.assertTrue(self.gone(game))
+            self.assertFalse((tmp / 'off').exists())
+            # De volta ao desktop (um filho sem a variavel): desliga.
+            self.press(tmp, grace='0')
+            self.assertTrue((tmp / 'off').exists())
+
+    def test_games_listed_in_a_file(self):
+        # O Fightcade: os emuladores nao sao filhos dele.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            emulator = subprocess.Popen(['sleep', '300'])
+            self.addCleanup(emulator.wait)
+            self.addCleanup(emulator.kill)
+            (tmp / 'busy').write_text('%d\n' % emulator.pid)
+            self.start(tmp, 'FLIPEROS_POWERKEY=games:%s bash -c \'sleep 300 & echo $! > lobby.pid; wait\' &\nwait\n'
+                            % (tmp / 'busy'))
+            lobby = self.pid(tmp, 'lobby.pid')
+            self.press(tmp, grace='0')
+            self.assertEqual(emulator.wait(timeout=5), -15)
+            self.assertFalse((tmp / 'off').exists())
+            self.assertTrue(Path('/proc/%d' % lobby).exists())
+            (tmp / 'busy').unlink()
+            self.press(tmp, grace='0')
+            self.assertTrue((tmp / 'off').exists())
+
+    def test_a_stuck_game_is_killed_on_the_next_press(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.start(tmp, 'FLIPEROS_POWERKEY=game bash -c \'trap "" TERM; echo $$ > game.pid\n'
+                            'while true; do sleep 0.1; done\' &\nwait\n')
+            game = self.pid(tmp, 'game.pid')
+            time.sleep(0.3)
+            self.press(tmp, grace='0')
+            time.sleep(0.5)
+            self.assertTrue(Path('/proc/%d' % game).exists())
+            self.press(tmp, grace='0')
+            self.assertTrue(self.gone(game))
+            self.assertFalse((tmp / 'off').exists())
+
+    def test_powers_off_without_a_session(self):
+        # O menu do Setup, o shell, a midia de instalacao.
+        with tempfile.TemporaryDirectory() as tmp:
+            self.press(Path(tmp))
+            self.assertTrue((Path(tmp) / 'off').exists())
+
+    def test_installed_and_wired(self):
+        self.assertRegex(ROOTFS, r' fliperos-powerkey; do')
+        self.assertIn('etc/triggerhappy/triggers.d/fliperos-power.conf', ROOTFS)
+        # O logind nao desliga mais sozinho.
+        self.assertIn("printf '[Login]\\nHandlePowerKey=ignore\\n' > \"$root/etc/systemd/logind.conf.d/fliperos.conf\"",
+                      ROOTFS)
+        rows = [line.split(None, 2) for line in (ROOT / 'config/fliperos-power.triggers').read_text().splitlines()
+                if line.strip() and not line.startswith('#')]
+        self.assertEqual(rows, [['KEY_POWER', '1', '/opt/fliperos/bin/fliperos-powerkey']])
+        session = (ROOT / 'config/fliperos-session').read_text()
+        self.assertIn('FLIPEROS_POWERKEY=frontend "$BIN/fliperos-kms-run"', session)
+        self.assertIn('FLIPEROS_POWERKEY=game "${next[@]}"', session)
+        fightcade = (ROOT / 'config/fliperos-fightcade').read_text()
+        self.assertIn('export FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.busy"', fightcade)
+        self.assertIn("awk '/flycast\\.elf|\\.exe/ { print $1 }' <<< \"$running\" > \"$busy\"", fightcade)
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn('systemctl restart triggerhappy.service', update)
+        self.assertIn('systemctl kill -s HUP systemd-logind.service', update)
 
 
 class FightcadeTests(unittest.TestCase):
@@ -7278,6 +7412,12 @@ class RetroArchConfigTests(unittest.TestCase):
         self.assertEqual(self.values()['audio_driver'], 'sdl2')
         self.assertIn('export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"',
                       (ROOT / 'config/fliperos-kms-run').read_text())
+
+    def test_one_esc_quits(self):
+        # Sem as notificacoes na tela, o "press again to quit" nao aparece.
+        values = self.values()
+        self.assertEqual(values['confirm_quit'], 'false')
+        self.assertEqual(values['video_font_enable'], 'false')
 
     def test_standard_latency_values(self):
         values = self.values()
