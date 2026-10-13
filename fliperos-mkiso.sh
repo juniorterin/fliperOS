@@ -1352,10 +1352,11 @@ prepare_extras_chroot() {
 # aparecem no ldd. As que aparecem ficam marcadas como instaladas a mao, e um
 # ldd antes e depois derruba o build se faltar alguma.
 #
-# Firmware de hardware fora do escopo (GPU NVIDIA, redes de datacenter que o
-# kernel nem compila, switches Marvell, SoCs Qualcomm de celular) sai por
-# path-exclude do dpkg, para uma atualizacao do linux-firmware nao o trazer
-# de volta.
+# Firmware de hardware fora do escopo (redes de datacenter que o kernel nem
+# compila, switches Marvell, SoCs Qualcomm de celular) sai por path-exclude
+# do dpkg, para uma atualizacao do linux-firmware nao o trazer de volta. O da
+# NVIDIA fica: o Setup atende essas placas (dotclock_min), e sem ele o
+# nouveau nao acelera as mais novas.
 slim_rootfs_chroot() {
   step "Slimming the image"
   cat > "$CHROOT_DIR/tmp/slim-rootfs.sh" << 'SLIMSCRIPT'
@@ -1420,21 +1421,19 @@ if [ -s /tmp/missing-new ]; then
 fi
 
 cat > /etc/dpkg/dpkg.cfg.d/fliperos-firmware << 'DPKGCFG'
-# Firmware fora do escopo do FliperOS (GPU AMD/Intel, PC de gabinete):
-# NVIDIA, redes de datacenter, switches Marvell e SoCs Qualcomm.
-path-exclude=/lib/firmware/nvidia/*
+# Firmware fora do escopo do FliperOS (PC de gabinete): redes de
+# datacenter, switches Marvell e SoCs Qualcomm.
 path-exclude=/lib/firmware/mellanox/*
 path-exclude=/lib/firmware/mrvl/prestera/*
 path-exclude=/lib/firmware/qcom/*
 path-exclude=/lib/firmware/qed/*
-path-exclude=/usr/lib/firmware/nvidia/*
 path-exclude=/usr/lib/firmware/mellanox/*
 path-exclude=/usr/lib/firmware/mrvl/prestera/*
 path-exclude=/usr/lib/firmware/qcom/*
 path-exclude=/usr/lib/firmware/qed/*
 DPKGCFG
-rm -rf /usr/lib/firmware/nvidia /usr/lib/firmware/mellanox /usr/lib/firmware/mrvl/prestera \
-  /usr/lib/firmware/qcom /usr/lib/firmware/qed
+rm -rf /usr/lib/firmware/mellanox /usr/lib/firmware/mrvl/prestera /usr/lib/firmware/qcom \
+  /usr/lib/firmware/qed
 find /usr/lib/firmware -xtype l -delete
 update-initramfs -u -k all
 

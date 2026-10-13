@@ -213,7 +213,9 @@ echo "Wine, Steam and Heroic: out of the image, with fliperos-extras and the i38
 # Imagem enxuta (slim_rootfs_chroot): sem cache do apt, sem -dev e sem o
 # firmware fora do escopo.
 grep -qE 'squashfs-root/var/cache/apt/archives/[^/]+\.deb$' "$work/files.txt" && fail "the image carries .deb files in the apt cache"
-grep -qE 'squashfs-root/usr/lib/firmware/(nvidia|mellanox|qcom)/' "$work/files.txt" && fail "the image carries out-of-scope firmware"
+grep -qE 'squashfs-root/usr/lib/firmware/(mellanox|qcom)/' "$work/files.txt" && fail "the image carries out-of-scope firmware"
+# O das GPUs fica: sem o da NVIDIA o nouveau nao acelera as placas mais novas.
+grep -q 'squashfs-root/usr/lib/firmware/nvidia/' "$work/files.txt" || fail "the image lost the NVIDIA firmware"
 grep -q 'squashfs-root/usr/lib/firmware/amdgpu/' "$work/files.txt" || fail "the image lost the amdgpu firmware"
 unsquashfs -cat "$work/filesystem.squashfs" var/lib/dpkg/status > "$work/f"
 awk '/^Package: / { p = $2 } /^Status: install ok installed/ { print p }' "$work/f" \

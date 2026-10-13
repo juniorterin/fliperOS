@@ -5381,8 +5381,17 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn("'linux-headers-*'", slim)
         self.assertLess(slim.index('apt-mark manual'), slim.index('apt-get purge -y'))
         self.assertIn('Libraries that disappeared with the purge', slim)
-        self.assertIn('path-exclude=/usr/lib/firmware/nvidia/*', slim)
+        self.assertIn('path-exclude=/usr/lib/firmware/mellanox/*', slim)
+        # O firmware das GPUs fica: o Setup atende AMD, Intel e NVIDIA. Uma
+        # instalacao da 0.9/0.9.1 perde a exclusao e, com placa NVIDIA, ja
+        # reinstala o linux-firmware.
         self.assertNotIn('amdgpu', slim.split('DPKGCFG')[1])
+        self.assertNotIn('firmware/nvidia', slim)
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn("grep -q 'firmware/nvidia/' \"$fwcfg\"", update)
+        self.assertIn('grep -qsx 0x10de /sys/bus/pci/devices/*/vendor', update)
+        self.assertIn('install -y -q --reinstall linux-firmware', update)
+        self.assertIn('the image lost the NVIDIA firmware', (ROOT / 'tools/verify-iso.sh').read_text())
         self.assertIn('update-initramfs -u -k all', slim)
         self.assertIn('apt-get clean', slim)
         self.assertIn('rm -rf /var/lib/apt/lists/*', slim)

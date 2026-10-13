@@ -45,6 +45,22 @@ if [[ $(splash_sum) != "$splash_before" ]]; then
   update-initramfs -u > /dev/null || echo "warning: update-initramfs failed; the old splash stays until it runs"
 fi
 
+# O firmware da NVIDIA: as imagens 0.9 e 0.9.1 vinham sem ele (path-exclude
+# do dpkg), e o nouveau nao acelera as placas mais novas. A exclusao sai, e
+# numa maquina com placa NVIDIA o linux-firmware e reinstalado ja (um
+# download grande); nas outras ele volta na proxima atualizacao do pacote.
+fwcfg=/etc/dpkg/dpkg.cfg.d/fliperos-firmware
+if grep -q 'firmware/nvidia/' "$fwcfg" 2> /dev/null; then
+  echo "== NVIDIA firmware back (dpkg path-exclude removed)"
+  sed -i -e '/firmware\/nvidia\//d' -e 's/^# NVIDIA, redes de datacenter/# Redes de datacenter/' "$fwcfg"
+fi
+if [[ ! -d /usr/lib/firmware/nvidia ]] && grep -qsx 0x10de /sys/bus/pci/devices/*/vendor; then
+  echo "== NVIDIA card here: reinstalling linux-firmware"
+  apt-get update -qq || true
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -y -q --reinstall linux-firmware ||
+    echo "warning: linux-firmware was not reinstalled (no network?); the next update tries again"
+fi
+
 echo "== Automatic login without text"
 cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << 'UNIT'
 [Service]
