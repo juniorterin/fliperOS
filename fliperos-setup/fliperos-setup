@@ -178,8 +178,8 @@ main() {
       # A configuracao de 240p dos frontends que ainda nao a tem (nenhum
       # esta aberto agora).
       frontends_240p
-      # Os padroes do Attract-Mode Plus: as telas no Arcadeflow, os clones
-      # na lista.
+      # Os padroes do Attract-Mode Plus: as telas no Arcadeflow, com as
+      # opcoes do FliperOS.
       frontends_attract_defaults
       # O Arcadeflow em 4:3 num modo de pixel largo (640x240).
       frontends_arcadeflow_screen

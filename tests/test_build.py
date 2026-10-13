@@ -3658,11 +3658,11 @@ class ArcadeflowTests(unittest.TestCase):
             self.assertEqual((theme / 'layout.nut').read_text(), '// Arcadeflow')
             self.assertTrue((theme / 'glsl/blur.glsl').exists())
             self.assertEqual(sorted(p.name for p in (tmp / 'attract/layouts').iterdir()), ['Arcadeflow'])
-            # As opcoes do FliperOS: sem o aviso de versao nova, e o botao de
-            # escolher abre o jogo (no padrao do tema, o menu de contexto).
+            # As opcoes do FliperOS: sem o aviso de versao nova, e o menu de
+            # contexto no botao de escolher (o padrao do tema).
             self.assertEqual((theme / 'pref_layoutoptions.txt').read_text(),
-                             '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|0|\n')
-            self.assertEqual((theme / 'pref_fliperos.txt').read_text(), 'UPDATECHECK\nOVERMENUBUTTON\n')
+                             '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|1|\n')
+            self.assertEqual((theme / 'pref_fliperos.txt').read_text(), 'UPDATECHECK=1\nOVERMENUBUTTON=1\n')
             # As telas do padrao de antes e as que o Attract-Mode Plus cria
             # (BasicPlus) passam para o tema; as de outro layout ficam.
             self.assertEqual(displays.read_text(),
@@ -3683,10 +3683,11 @@ class ArcadeflowTests(unittest.TestCase):
             self.assertEqual((theme / 'ss_login.txt').read_text(), '|SS_USERNAME|eu|\n')
             self.assertIn('layout               Basic\n\tromlist              Naomi', displays.read_text())
 
-    def test_prefs_reach_a_theme_installed_before_them_once(self):
-        # Um tema instalado antes de uma opcao do FliperOS existir segue no
-        # padrao dele (o menu de contexto no botao de escolher): cada opcao e
-        # gravada uma vez so, e a que a pessoa mudar depois fica.
+    def test_prefs_reach_an_installed_theme_once(self):
+        # Um tema ja instalado recebe o que mudou no FliperOS: o menu de
+        # contexto de volta no botao de escolher (o FliperOS o tirou por um
+        # tempo) e a linha que mostra a lista de clones de um jogo. Cada opcao
+        # e gravada uma vez so, e a que a pessoa mudar depois fica.
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             theme = tmp / 'attract/layouts/Arcadeflow'
@@ -3703,24 +3704,33 @@ class ArcadeflowTests(unittest.TestCase):
             apply()
             self.assertFalse(theme.exists())
             theme.mkdir(parents=True)
-            (theme / 'layout.nut').write_text('// Arcadeflow\n')
+            layout = theme / 'layout.nut'
+            head = '/// On Transition ///\n\nfunction on_transition(ttype, var0, ttime) {\n'
+            body = '\n\tif (ttype == Transition.FromGame) {\n\t}\n}\n'
+            layout.write_text(head + body)
             prefs, mark = theme / 'pref_layoutoptions.txt', theme / 'pref_fliperos.txt'
-            before = ('9.9\n\n|OVERMENUBUTTON|1| Context menu button : Select\n|SMALLSCREEN|0| Small screen : Yes\n'
+            before = ('9.9\n\n|OVERMENUBUTTON|0| Context menu button : None\n|SMALLSCREEN|0| Small screen : Yes\n'
                       '|UPDATECHECK|1| Automatically check for updates : No\n')
             prefs.write_text(before)
-            mark.write_text('UPDATECHECK\n')
+            mark.write_text('UPDATECHECK\nOVERMENUBUTTON\n')
             (tmp / 'open').write_text('')
             apply()
-            self.assertEqual(prefs.read_text(), before)
+            self.assertEqual((prefs.read_text(), layout.read_text()), (before, head + body))
             (tmp / 'open').unlink()
-            apply()
-            after = ('9.9\n\n|SMALLSCREEN|0| Small screen : Yes\n|UPDATECHECK|1| Automatically check for updates : No\n'
-                     '|OVERMENUBUTTON|0|\n')
-            self.assertEqual(prefs.read_text(), after)
-            self.assertEqual(mark.read_text(), 'UPDATECHECK\nOVERMENUBUTTON\n')
+            for _ in range(2):
+                apply()
+                self.assertEqual(prefs.read_text(), '9.9\n\n|SMALLSCREEN|0| Small screen : Yes\n'
+                                 '|UPDATECHECK|1|\n|OVERMENUBUTTON|1|\n')
+                self.assertEqual(mark.read_text(), 'UPDATECHECK\nOVERMENUBUTTON\nUPDATECHECK=1\nOVERMENUBUTTON=1\n')
+                self.assertEqual(layout.read_text(), head + '\tif (ttype == Transition.ToNewList && fe.list.clones_list) '
+                                 'startfade(flowT.groupbg, 0.06, 3.0) // FliperOS\n' + body)
             prefs.write_text(before)
             apply()
             self.assertEqual(prefs.read_text(), before)
+            # Um tema sem essa funcao (outra versao) fica como esta.
+            layout.write_text('// outro\n')
+            apply()
+            self.assertEqual(layout.read_text(), '// outro\n')
 
     def test_fetch_refuses_what_is_not_the_theme(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -3791,7 +3801,7 @@ class ArcadeflowTests(unittest.TestCase):
             # Sem o arquivo das opcoes (apagado pelo "reset" do tema): refeito.
             prefs.unlink()
             screen('640', '240')
-            self.assertEqual(prefs.read_text(), '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|0|\n'
+            self.assertEqual(prefs.read_text(), '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|1|\n'
                              '|CUSTOMSIZE|320x240| Resolution W x H : Res\n')
             screen()
             self.assertFalse(mark.exists())
