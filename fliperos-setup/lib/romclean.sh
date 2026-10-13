@@ -16,7 +16,9 @@ ROMS_ROOT=${ROMS_ROOT:-/home/fliperos/roms}
 BIOS_ROOT=${BIOS_ROOT:-/home/fliperos/bios}
 GROOVYMAME=${GROOVYMAME:-groovymame}
 # catver.ini, nplayers.ini e controls.xml: junto do romset (a pasta dele, a
-# de cima ou a subpasta folders) ou nesta pasta do sistema.
+# de cima ou a subpasta folders) ou nesta pasta do sistema. Nela fica tambem
+# o flycast-controls.tsv: os controles e os botoes dos jogos de Naomi, Naomi
+# 2 e Atomiswave, que o XML do MAME da quase todos como de joystick.
 ROMCLEAN_DATA=${ROMCLEAN_DATA:-/usr/local/share/fliperos/romclean}
 # O que o fliperos-romclean leu do XML (um minuto com o do GroovyMAME).
 ROMCLEAN_CACHE=${ROMCLEAN_CACHE:-/var/cache/fliperos}
@@ -383,6 +385,8 @@ romclean_data_args() {
   [[ -n $ROMCLEAN_CATVER ]] && printf '%s\n' --catver "$ROMCLEAN_CATVER"
   [[ -n $ROMCLEAN_NPLAYERS ]] && printf '%s\n' --nplayers "$ROMCLEAN_NPLAYERS"
   [[ -n $ROMCLEAN_CONTROLS ]] && printf '%s\n' --controls-xml "$ROMCLEAN_CONTROLS"
+  [[ -f $ROMCLEAN_DATA/flycast-controls.tsv ]] &&
+    printf '%s\n' --flycast-controls "$ROMCLEAN_DATA/flycast-controls.tsv"
   return 0
 }
 

@@ -289,7 +289,7 @@ got=$(python3 -c 'import hashlib, lzma, sys; print(hashlib.sha256(lzma.open(sys.
 [[ $got == "$(sed -n "s/^MAME2010_SHA256 = '\(.*\)'$/\1/p" "$src/config/fliperos-romclean")" ]] \
   || fail "the image's mame2010.xml.xz is not the pinned XML"
 # catver.ini, nplayers.ini e controls.xml: os do config/romclean.
-for file in catver.ini nplayers.ini controls.xml; do
+for file in catver.ini nplayers.ini controls.xml flycast-controls.tsv; do
   unsquashfs -cat "$work/filesystem.squashfs" "usr/local/share/fliperos/romclean/$file" > "$work/f" \
     || fail "ausente: /usr/local/share/fliperos/romclean/$file"
   cmp -s "$src/config/romclean/$file" "$work/f" || fail "$file differs from config/romclean/$file"

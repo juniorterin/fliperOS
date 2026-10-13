@@ -2886,6 +2886,82 @@ class RomCleanerTests(Base):
                          ["awbios.zip", "naomi.zip"])
         self.assertFalse((self.roms / "naomi" / "mslug.zip").exists())
 
+    def test_flycast_games_take_their_controls_from_the_flycast_table(self):
+        # O XML do MAME da ao jogo de volante da Naomi o painel generico da
+        # placa (joystick e 6 botoes): quem diz o que ele usa e a tabela do
+        # Flycast, e o clone fica com o do pai.
+        wheel = ('<machine name="%s" romof="%s"%s><description>F355 Challenge%s</description><year>1999</year>'
+                 '<input players="2" coins="1"><control type="joy" buttons="6"/></input>'
+                 '<driver status="good"/></machine>')
+        self.xml.write_text(self.XML.replace("</mame>", wheel % ("f355", "naomi", "", "")
+                                             + wheel % ("f355j", "f355", ' cloneof="f355"', " (Japan)") + "</mame>"))
+        for name in ("f355", "f355j"):
+            (self.full / (name + ".zip")).write_bytes(b"x" * 1536)
+        scan = """
+            romclean_data_load %(full)s
+            mapfile -t kv < <(romclean_preset cabinet flycast)
+            mapfile -t args < <(romclean_args flycast "${kv[@]}" clones=keep %(extra)s)
+            romclean_scan %(full)s flycast "" "$(romclean_default_dest flycast)" %(plan)s "${args[@]}" > /dev/null
+            romclean_list %(plan)s move | cut -d' ' -f1 | paste -sd' ' -
+        """
+        values = {"full": self.full, "plan": self.env.dir / "plan", "extra": ""}
+        # Sem a tabela, passa por jogo de joystick.
+        self.assertEqual(self.env.out(scan % values, self.vars).strip(), "awbios f355 f355j kofxi mvsc2 naomi")
+        data = self.env.dir / "data"
+        data.mkdir()
+        (data / "flycast-controls.tsv").write_text("# flycast\tabc\nf355\tpaddle,pedal\t8\nmvsc2\t-\t6\nkofxi\t-\t5\n")
+        self.assertEqual(self.env.out(scan % values, self.vars).strip(), "awbios kofxi mvsc2 naomi")
+        # Com o volante e os pedais no painel, e sem o limite de 6 botoes.
+        values["extra"] = "controls=joy8,paddle,pedal buttons=0"
+        self.assertEqual(self.env.out(scan % values, self.vars).strip(), "awbios f355 f355j kofxi mvsc2 naomi")
+        values["extra"] = "controls=joy8,paddle,pedal"
+        self.assertEqual(self.env.out(scan % values, self.vars).strip(), "awbios kofxi mvsc2 naomi")
+
+    def test_flycast_table_comes_from_the_flycast_source(self):
+        # tools/flycast-controls.py: os eixos do descritor de cada jogo viram
+        # familias de controle; a tabela guardada cobre os tres sistemas.
+        import importlib.machinery
+        import importlib.util
+        loader = importlib.machinery.SourceFileLoader("flycast_controls", str(ROOT / "tools/flycast-controls.py"))
+        tool = importlib.util.module_from_spec(importlib.util.spec_from_loader("flycast_controls", loader))
+        loader.exec_module(tool)
+        descriptors = tool.read_descriptors("""
+            static InputDescriptors vf4_inputs = INPUT_3_BUTTONS("PUNCH", "KICK", "GUARD");
+            static InputDescriptors f355_inputs = {
+                { { NAOMI_BTN0_KEY, "ASSIST SC" }, { NAOMI_BTN1_KEY, "ASSIST TC" }, NAO_START_DESC },
+                { { "ACCEL", Half, 4 }, { "BRAKE", Half, 5 }, { "HANDLE", Full, 0 }, // comment { "X", Full, 1 }
+                  { "", Full, 2 } },
+            };
+            static InputDescriptors lightgun_inputs = {
+                { { NAOMI_BTN0_KEY, "TRIGGER" }, { NAOMI_RELOAD_KEY, "" }, },
+            };
+            static InputDescriptors monkeyba_inputs = {
+                { NAO_START_DESC },
+                { { "STICK V", Full, 1 }, { "STICK H", Full, 0 }, },
+            };
+        """)
+        self.assertEqual(descriptors, {"vf4_inputs": (set(), 3), "f355_inputs": ({"paddle", "pedal"}, 2),
+                                       "lightgun_inputs": ({"lightgun"}, 1), "monkeyba_inputs": ({"analog"}, 0)})
+        games = tool.read_games("""
+            const BIOS_t BIOS[] = { { "naomi", { { 0, "epr.ic27", 0, 1, 2 } } } };
+            const Game Games[] =
+            {
+                { "f355", nullptr, "Ferrari F355 {deluxe}", 0, 0, "f355bios", M2, ROT0,
+                  { { "mpr.ic1", 0, 1 }, }, nullptr, &f355_inputs, f355_eeprom },
+                // { "old", nullptr, "", 0, 0, NULL, M2, ROT0, {}, nullptr, &vf4_inputs },
+                { "nopanel", "f355", "No descriptor", 0, 0, NULL, M2, ROT0, { { "a", 0, 1 } } },
+                { "vf4", NULL, "Virtua Fighter 4", 0, 0, NULL, GD, ROT0, { { "b", 0, 1 } }, "gds-0012", &vf4_inputs },
+            };
+        """)
+        self.assertEqual(games, [("f355", "f355_inputs"), ("vf4", "vf4_inputs")])
+        engine = load_engine()
+        table = engine.read_flycast(str(ROOT / "config/romclean/flycast-controls.tsv"))
+        self.assertGreater(len(table), 200)
+        self.assertEqual(table["f355"][0], {"paddle", "pedal"})
+        self.assertEqual(table["hotd2"][0], {"lightgun"})
+        self.assertEqual(table["mvsc2"], (set(), 6))
+        self.assertEqual(table["maxspeed"][0], {"paddle", "pedal"})
+
     def test_chd_cleaner_copies_the_chds_of_the_games_in_the_rom_folder(self):
         self.xml.write_text(self.XML.replace(
             '</mame>', '<machine name="kinst"><description>Killer Instinct</description><disk name="kinst"/>'

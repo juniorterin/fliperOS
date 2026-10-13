@@ -2171,10 +2171,10 @@ class RomCleanTests(unittest.TestCase):
         # catver.ini, nplayers.ini e controls.xml vao na imagem (config/romclean):
         # sem eles a tela nao mostra categorias, jogos adultos nem modo de jogo.
         data = ROOT / 'config/romclean'
-        self.assertIn('for file in catver.ini nplayers.ini controls.xml; do\n'
+        self.assertIn('for file in catver.ini nplayers.ini controls.xml flycast-controls.tsv; do\n'
                       '  install -Dm644 "$src/config/romclean/$file" "$root/usr/local/share/fliperos/romclean/$file"',
                       ROOTFS)
-        for name in ('catver.ini', 'nplayers.ini', 'controls.xml'):
+        for name in ('catver.ini', 'nplayers.ini', 'controls.xml', 'flycast-controls.tsv'):
             self.assertNotIn(b'\r', (data / name).read_bytes(), name)
             self.assertIn('romclean/$file', (ROOT / 'tools/verify-iso.sh').read_text())
         lines = self.romclean('options', '--catver', str(data / 'catver.ini'), '--nplayers',

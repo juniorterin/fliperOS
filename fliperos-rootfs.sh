@@ -215,7 +215,7 @@ install -Dm755 "$src/config/fliperos-update" "$root/opt/fliperos/bin/fliperos-up
 # os desta pasta valem quando o romset nao traz os dele (lib/romclean.sh); e
 # onde ele guarda o que leu do XML do MAME.
 mkdir -p "$root/var/cache/fliperos"
-for file in catver.ini nplayers.ini controls.xml; do
+for file in catver.ini nplayers.ini controls.xml flycast-controls.tsv; do
   install -Dm644 "$src/config/romclean/$file" "$root/usr/local/share/fliperos/romclean/$file"
 done
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"

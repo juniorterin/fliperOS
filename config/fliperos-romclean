@@ -9,7 +9,10 @@ versao do MAME do romset (-listxml) com o catver.ini (categorias e jogos
 adultos), o nplayers.ini (como se joga a dois: alternado ou ao mesmo tempo)
 e o controls.xml do Controls.dat (os botoes que o jogo usa de verdade), e
 filtra pelo que o gabinete tem. Os tres arquivos sao opcionais: sem um
-deles, os filtros que dependem dele deixam passar tudo.
+deles, os filtros que dependem dele deixam passar tudo. Dos jogos de Naomi,
+Naomi 2 e Atomiswave, os controles e os botoes sao os da tabela do Flycast
+(flycast-controls.tsv): o XML do MAME da a quase todos o painel generico da
+placa, de joystick e 6 botoes, ate aos de volante.
 
   fliperos-romclean scan (--xml ARQUIVO|- | --xml-command COMANDO)
                          [--cache ARQUIVO] --roms ORIGEM --dest PASTA
@@ -53,6 +56,7 @@ Destinos:
 
 Dados:
   --catver ARQUIVO  --nplayers ARQUIVO  --controls-xml ARQUIVO
+  --flycast-controls ARQUIVO   (o tools/flycast-controls.py o gera)
 
 Filtros:
   --arcade-only          so maquinas de ficha (input coins): sem consoles,
@@ -469,10 +473,25 @@ def read_controls(path):
     return out
 
 
-def annotate(machines, catver, nplayers, buttons):
+def read_flycast(path):
+    """{set: (familias de controle, botoes)} do flycast-controls.tsv
+    ("set<TAB>paddle,pedal<TAB>3"; "-": joystick e botoes)."""
+    out = {}
+    with open(path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            fields = line.rstrip('\r\n').split('\t')
+            if line.startswith('#') or len(fields) < 3 or not fields[2].isdigit():
+                continue
+            out[fields[0].lower()] = ({c for c in csv(fields[1]) if c in FAMILIES}, int(fields[2]))
+    return out
+
+
+def annotate(machines, catver, nplayers, buttons, flycast=None):
     """O que depende da cadeia de romof e dos arquivos de dados: a placa, o
-    sistema do Flycast, o genero, o modo de jogo e os botoes do Controls.dat
-    (o clone sem dado proprio fica com o do pai)."""
+    sistema do Flycast, o genero, o modo de jogo, os botoes do Controls.dat
+    e, nos jogos do Flycast, os controles e os botoes da tabela dele (o clone
+    sem dado proprio fica com o do pai)."""
+    flycast = flycast or {}
     for name, m in machines.items():
         m['controls'] = set(m['controls'])
         m['regions'] = set(m['regions'])
@@ -486,6 +505,13 @@ def annotate(machines, catver, nplayers, buttons):
         m['modes'] = play_modes(nplayers.get(name) or nplayers.get(m['cloneof']))
         if name in buttons or m['cloneof'] in buttons:
             m['buttons'] = buttons.get(name, buttons.get(m['cloneof']))
+        known = flycast.get(name) or flycast.get(m['cloneof'])
+        if known and m['system']:
+            families, m['buttons'] = known
+            # Sem familia na tabela (joystick e botoes, ou o teclado e o
+            # trackball, que ela nao diz), fica o que o XML diz.
+            if families:
+                m['controls'] = set(families)
 
 
 def sets_in(folder):
@@ -675,7 +701,8 @@ def cmd_scan(args):
     annotate(machines,
              read_catver(args.catver) if args.catver else {},
              read_ini(args.nplayers, 'nplayers') if args.nplayers else {},
-             read_controls(args.controls_xml) if args.controls_xml else {})
+             read_controls(args.controls_xml) if args.controls_xml else {},
+             read_flycast(args.flycast_controls) if args.flycast_controls else {})
     try:
         present = sets_listed(args.names) if args.names else sets_in(folder)
     except OSError as e:
@@ -1186,6 +1213,7 @@ def data_arguments(p):
     p.add_argument('--catver')
     p.add_argument('--nplayers')
     p.add_argument('--controls-xml', '--controls-file', dest='controls_xml')
+    p.add_argument('--flycast-controls')
 
 
 def main():
