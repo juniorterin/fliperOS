@@ -22,6 +22,87 @@ fliperos-setup/
 
 Long operations (install, repair, update, scraper) don't know about the screen: they write events (`@step`, `@pct`, `@msg`, `@fail`) that `screens/progress.sh` draws. Everything goes to `/var/log/fliperos-setup.log`.
 
+## Launch commands and wrappers
+
+Nothing on FliperOS opens a frontend or an emulator by calling its binary directly. Between the boot and the game there is a short chain of scripts, each one with a single job. All of them are in `/opt/fliperos/bin`, except `fliperos-menu` and `groovymame`, which are in `/usr/local/bin` so they can be typed in the shell.
+
+| Command | Called by | What it does |
+| --- | --- | --- |
+| `fliperos-tty1` | `~/.zprofile`, at the tty1 login | The boot flow: first boot or update notice, then the default launcher, then the menu loop |
+| `fliperos-menu` | You, in the shell | Back to the menu: runs `fliperos-tty1 --menu` and, on leaving, shows the MOTD again |
+| `fliperos-session [name]` | `fliperos-tty1` | Opens one launcher from the sessions table and returns when it closes |
+| `fliperos-kms-run program [arguments]` | `fliperos-session`, frontends, you | Runs a program straight on KMS/DRM, without Xorg |
+| `fliperos-x11-run [--mode WxH@HZ] program [arguments]` | Frontends, `fliperos-launch`, you | Runs a program in an Xorg of its own, in a video mode made by Switchres |
+| `fliperos-x11-client` | `fliperos-x11-run`, through `xinit` | Inside that Xorg: window manager, then Switchres switches the mode and launches the program |
+| `fliperos-launch name` | The **Games** menu of the desktop | Closes the desktop, opens the emulator, brings the desktop back |
+| `fliperos-escquit PID` | `fliperos-session`, `fliperos-fightcade` | Esc closes the frontend when no game is open |
+| `fliperos-powerkey` | triggerhappy, on the power button | Closes the open game; with no game open, powers off |
+
+### From the boot to the launcher
+
+`fliperos-tty1` is the only entry point. At boot it runs `fliperos-session` with no argument, which opens the launcher chosen in **Setup > Frontend** (`/etc/fliperos/session`); when that closes, it enters the menu loop. In the loop the Setup never opens anything itself: **Start frontend** and **Start desktop** write the launcher's name to `/run/fliperos/launch` and exit with code 20, and `fliperos-tty1` then calls `fliperos-session <name>` from the login shell, where tty1 is the controlling terminal ([Installed system](Installed-system.md) explains why). `fliperos-menu` is the same loop without the boot part.
+
+`fliperos-session` looks the name up in `/etc/fliperos/sessions.conf` (and in `sessions.custom.conf`, the frontends you registered), one launcher per line as `name|backend|binary|package|description`. The backend decides how it opens:
+
+- `kms`: `fliperos-kms-run <binary>`. For the frontends (Attract-Mode Plus, ES-DE, RetroFE, Pegasus and your own) it also starts `fliperos-escquit` and marks the process with `FLIPEROS_POWERKEY=frontend`.
+- `x`: `xinit <binary>` on the same VT. Only the LXDE desktop uses it.
+- `none`: opens nothing; the boot goes straight to the menu.
+
+Around the launcher it sets the CPU governor to performance and restores it afterwards (`fliperos-setup --session-start` and `--session-end`).
+
+### The two wrappers: KMS and X11
+
+Every emulator is opened through one of them, and both refuse to run inside an X session (`DISPLAY` set): they need the console. Which one to use for each emulator is in [Adding games](Adding-games.md#emulator-command-lines-kms-or-x11).
+
+**`fliperos-kms-run`** is for what draws on KMS by itself: RetroArch and the KMS frontends. The video mode is the one from the boot, and RetroArch switches it per game on its own. Before the program starts, the wrapper:
+
+- tells the Pixelcade marquee and the game outputs (`fliperos-pixelcade launch`, `fliperos-outputs launch`) which game is opening;
+- for RetroArch, stacks the system configuration on top of the user's with `--appendconfig` (the FliperOS `retroarch.cfg`, the `gl` fallback for cards without OpenGL 3.2, the Button mapping, DOFLinx and the versus score);
+- turns off the extra monitors, leaving only the main one;
+- exports the console drivers: `SDL_VIDEODRIVER=kmsdrm`, `SDL_AUDIODRIVER=alsa` and Qt's `eglfs`;
+- gives the program the session's terminal as its input when a frontend handed it `/dev/null`;
+- sends the program's output to `/opt/fliperos/logs/<program>.log` (to the screen in Debug mode).
+
+**`fliperos-x11-run`** is for what needs X: Flycast, PCSX2, Dolphin, Supermodel, Model 2, OpenBOR, Hypseus. It starts an Xorg just for that program and closes it when the program exits. The mode comes from `--mode`, or from the program's line in `/etc/fliperos/emulator-modes.conf` (one column for a 15 kHz monitor, another for 25/31 kHz and LCD), or is 320x240@60. It also adds each emulator's own full-screen and stretch options, turns the extra monitors back on, exports `SDL_VIDEODRIVER=x11`, and writes the same log. The Xorg's client is `fliperos-x11-client`: it starts Openbox (which fits the window to the screen at every mode switch) and hands over to `switchres WIDTH HEIGHT HZ --switch --launch "<program>"`, which creates the modeline for the monitor in `/etc/switchres.ini`, switches to it and runs the program. More in [Emulators](Emulators.md#running-a-program-at-640x240).
+
+### Commands that wrap themselves
+
+Two launchers are `kms` in the sessions table but need X. Their own command notices it is on the console and opens itself again through `fliperos-x11-run`:
+
+- **`groovymame`** (`config/fliperos-groovymame`): the real binary is `/usr/local/libexec/groovymame`. Commands with no screen (`-listxml`, `-verifyroms`...) run directly.
+- **`/opt/fliperos/fightcade/fightcade`** (a link to `fliperos-fightcade`, see [Fightcade 2](Fightcade-2.md)).
+
+So choosing Fightcade in the menu runs this chain, each line starting the next:
+
+```
+fliperos-tty1                                    the menu loop
+└─ fliperos-session fightcade                    the row in sessions.conf, CPU governor
+   └─ fliperos-kms-run /opt/fliperos/fightcade/fightcade      log, Pixelcade, outputs
+      └─ fliperos-fightcade                      no DISPLAY: opens itself in X
+         └─ fliperos-x11-run /opt/fliperos/fightcade/fightcade    mode from the table, xinit
+            └─ fliperos-x11-client               Openbox, Switchres switches the mode
+               └─ fliperos-fightcade             DISPLAY set: Wine prefix, emulator settings
+                  └─ Fightcade2.sh               the Fightcade client
+```
+
+### From the desktop
+
+The desktop is itself an X session, and the wrappers don't run inside one. `fliperos-launch <name>` (the items in **Games**, see [Desktop and theme](Desktop.md)) writes the full command, already with its wrapper, to `$XDG_RUNTIME_DIR/fliperos-next` and closes LXDE. `fliperos-session`, which was waiting for the desktop's X to end, runs that command with `FLIPEROS_POWERKEY=game` and then opens the desktop again. It only accepts a request that starts with `fliperos-kms-run` or `fliperos-x11-run`. `fliperos-launch --mode 640x240@60 program` does the same for any program.
+
+### Which one to type
+
+On a console (tty1 after leaving the menu to the shell, or another VT), not over SSH: an SSH session has no VT for the screen.
+
+| To | Type |
+| --- | --- |
+| Return to the FliperOS menu | `fliperos-menu` |
+| Open a launcher exactly as the menu does | `/opt/fliperos/bin/fliperos-session fightcade` (or `retroarch`, `attractplus`, `lxde`...) |
+| Open the default launcher | `/opt/fliperos/bin/fliperos-session` |
+| Run RetroArch with a core | `/opt/fliperos/bin/fliperos-kms-run retroarch -L <core>.so <game>` |
+| Run an X emulator in its table mode | `/opt/fliperos/bin/fliperos-x11-run flycast <game>` |
+| Run any program in a chosen mode | `/opt/fliperos/bin/fliperos-x11-run --mode 640x240@60 <program>` |
+| Open GroovyMAME or Fightcade | `groovymame [game]`, `/opt/fliperos/fightcade/fightcade` |
+
 ## Other components
 
 **Splash.** Plymouth. The default `fliperos-text` theme is text only, in the style of a modern terminal: the name scrambles into place and then waves through a gradient, a prompt types the subtitle, a gradient progress bar with a moving shine, the last systemd units with a spinner (`SetUpdateStatusFunction`) and faint falling characters. It draws everything with JetBrains Mono (OFL, `config/fonts`), which goes to `/usr/share/fonts/truetype/fliperos` and, through the `fliperos-fonts` initramfs hook, into the initramfs: the Ubuntu plymouth hook only copies the Ubuntu font. `fliperos` is a full 640x480 image scaled to the boot mode (640x480, 640x240, 320x240...) with an animated bar. Three themes from Gnome-look come too: `cogwheel` (by DUKE93, GPL 3), `into-it` and `windoze95`, adapted to scale to the window, with the pixel twice as tall in the double-width modes (640x240), and Windoze 95's art reduced to 640x480. All of them live in `config/splashscreen` and go to `/usr/share/plymouth/themes` and to `~/splashscreen`, where Setup > Splash screen also lists the user's themes (more on [Gnome-look](https://www.gnome-look.org/browse?cat=108&ord=latest)). Setting one (`lib/splash.sh`) copies its folder with `ImageDir` and `ScriptFile` rewritten, points the `default.plymouth` alternative at it and runs `update-initramfs` (the initramfs hook takes the new initrd to the ESP); the preview runs `plymouthd` with `plymouth.splash=NAME`. `tools/cabinet-update.sh` rebuilds the initramfs when the boot theme's files change. The build can also use `evangelion` (202 frames, with a **seizure risk** declared by the author and no license in the package) or none.
