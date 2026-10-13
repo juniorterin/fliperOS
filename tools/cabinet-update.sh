@@ -35,6 +35,11 @@ splash_before=$(splash_sum)
 echo "== FliperOS files (fliperos-rootfs.sh)"
 bash "$src/fliperos-rootfs.sh" /
 install -Dm755 "$src/fliperos-limine-update.py" /usr/local/sbin/fliperos-limine-update
+# As bibliotecas que o Switchres abre por dlopen (libX11.so, libXrandr.so,
+# libdrm.so): a imagem sem os -dev vinha sem esses links, e o GroovyMAME
+# fechava na interface.
+echo "== Libraries opened by name (fliperos-dlopen-links)"
+/opt/fliperos/bin/fliperos-dlopen-links || echo "warning: fliperos-dlopen-links failed"
 if [[ $(splash_sum) != "$splash_before" ]]; then
   echo "== Boot splash changed: rebuilding the initramfs"
   update-initramfs -u > /dev/null || echo "warning: update-initramfs failed; the old splash stays until it runs"
@@ -121,6 +126,12 @@ if command -v alacritty > /dev/null; then
   DEBIAN_FRONTEND=noninteractive apt-get purge -y -q lxterminal xterm > /dev/null 2>&1 || true
   echo "lxterminal/xterm: $(dpkg -l lxterminal xterm 2> /dev/null | grep -c '^ii') installed"
   echo "x-terminal-emulator: $(readlink -f /usr/bin/x-terminal-emulator)"
+  # O que a imagem sem os -dev deixou sem pacote que dependa dele (bibliotecas
+  # que os emuladores abrem por dlopen: o SVG do Qt, sndio, hidapi, OpenAL)
+  # passa a instalado a mao, senao um "apt autoremove" as levaria.
+  orphans=$(apt-get autoremove -s 2> /dev/null | awk '/^Remv / { print $2 }')
+  # shellcheck disable=SC2086 # um pacote por palavra
+  [[ -z $orphans ]] || apt-mark manual $orphans > /dev/null
   echo "autoremove would take: $(apt-get autoremove -s 2> /dev/null | grep -c '^Remv') packages"
 else
   echo "warning: Alacritty did not install; the old terminals stay"

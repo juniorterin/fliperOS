@@ -1403,6 +1403,15 @@ if [ -s /tmp/extra ]; then
 fi
 echo "Removing $(wc -l < /tmp/purge) build packages"
 apt-get purge -y $(cat /tmp/purge)
+# Os links sem versao (libX11.so, libXrandr.so, libdrm.so) que o Switchres
+# abre por dlopen eram dos -dev: voltam em /usr/local/lib.
+/opt/fliperos/bin/fliperos-dlopen-links
+# O que ficou sem pacote que dependa dele (so os -dev dependiam) passa a
+# instalado a mao: sao bibliotecas que os emuladores abrem por dlopen (o SVG
+# do Qt nos icones do PCSX2, sndio, hidapi, OpenAL), e um "apt autoremove" na
+# instalacao, que o proprio apt sugere a cada uso, as levaria.
+orphans=$(apt-get -s autoremove | awk '/^Remv / { print $2 }')
+[ -z "$orphans" ] || apt-mark manual $orphans > /dev/null
 
 scan_libs | grep '^MISSING' | comm -13 /tmp/missing-before - > /tmp/missing-new || true
 if [ -s /tmp/missing-new ]; then

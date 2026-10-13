@@ -4888,7 +4888,7 @@ class EmulatorModeTests(unittest.TestCase):
             calls.unlink()
             self.assertEqual(run(), ['-config', 'window:fullscreen=yes', 'f355.zip'])
             self.assertFalse(calls.exists())
-        self.assertIn('fliperos-automount fliperos-multiscreen; do', ROOTFS)
+        self.assertIn('fliperos-automount fliperos-multiscreen fliperos-dlopen-links; do', ROOTFS)
 
     def test_super_resolution_without_low_dotclock(self):
         # Intel/NVIDIA: o Setup grava dotclock_min. O modo vai direto na
@@ -5370,7 +5370,12 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertLess(main.index('slim_rootfs_chroot'), main.index('unmount_chroot\ncreate_squashfs'))
         slim = MKISO.split('slim_rootfs_chroot() {')[1].split('# ── squashfs')[0]
         # Sem autoremove: os plugins do Qt e o Vulkan (dlopen) nao aparecem no ldd.
-        self.assertNotIn('autoremove', slim)
+        self.assertNotIn('apt-get autoremove', slim)
+        # O que so os -dev seguravam fica marcado como instalado a mao, na imagem
+        # e numa instalacao ja feita: um autoremove depois nao o leva.
+        self.assertLess(slim.index('apt-get purge -y'), slim.index("orphans=$(apt-get -s autoremove | awk '/^Remv / { print $2 }')"))
+        self.assertIn('apt-mark manual $orphans', slim)
+        self.assertIn('apt-mark manual $orphans', (ROOT / 'tools/cabinet-update.sh').read_text())
         # Os drivers DKMS recompilam com o build-essential e os headers do kernel.
         self.assertIn('keep="build-essential dkms', slim)
         self.assertIn("'linux-headers-*'", slim)
@@ -5383,6 +5388,51 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('rm -rf /var/lib/apt/lists/*', slim)
         squash = MKISO.split('create_squashfs() {')[1].split('\n}\n')[0]
         self.assertIn('-comp xz -Xbcj x86', squash)
+        # Os links sem versao que o Switchres abre por dlopen saem com os -dev.
+        self.assertLess(slim.index('apt-get purge -y'), slim.index('/opt/fliperos/bin/fliperos-dlopen-links'))
+        self.assertIn('/opt/fliperos/bin/fliperos-dlopen-links', (ROOT / 'tools/cabinet-update.sh').read_text())
+        self.assertIn('usr/local/lib/$lib ->', (ROOT / 'tools/verify-iso.sh').read_text())
+
+    def test_dlopen_links_restore_the_unversioned_names(self):
+        # A imagem sem os -dev vinha sem libX11.so, libXrandr.so e libdrm.so, que
+        # o Switchres abre por dlopen: o GroovyMAME fechava na interface.
+        elf = lambda bits, body=b'': b'\x7fELF' + bytes([bits]) + b'\0' * 13 + b'\x3e\0' + b'\0' * 12 + body
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lib = root / 'usr/lib/x86_64-linux-gnu'
+            lib32 = root / 'usr/lib/i386-linux-gnu'
+            local = root / 'usr/local/lib'
+            for d in (lib, lib32, local, root / 'usr/local/libexec', root / 'opt/fliperos/roms/mame', root / 'etc'):
+                d.mkdir(parents=True)
+            (lib / 'libX11.so.6.4.0').write_bytes(elf(2))
+            (lib / 'libX11.so.6').symlink_to('libX11.so.6.4.0')
+            (lib / 'libXrandr.so.2').write_bytes(elf(2))
+            (lib / 'libdrm.so.2').write_bytes(elf(2))
+            (lib / 'libdrm.so.10').write_bytes(elf(2))
+            # Ja existe (um -dev instalado): fica como esta.
+            (lib / 'libudev.so.1').write_bytes(elf(2))
+            (lib / 'libudev.so').symlink_to('libudev.so.1')
+            # So a de 32 bits instalada: um binario de 64 nao ganha link para ela.
+            (lib32 / 'libGL.so.1').write_bytes(elf(1))
+            (local / 'libswitchres.so.2').write_bytes(elf(2))
+            (local / 'libswitchres.so').symlink_to('libswitchres.so.2')
+            (local / 'libold.so').symlink_to('/usr/lib/x86_64-linux-gnu/libold.so.1')
+            names = b'\0libX11.so\0libXrandr.so\0libdrm.so\0libudev.so\0libGL.so\0libnone.so\0libX11.so.6\0'
+            (root / 'usr/local/libexec/groovymame').write_bytes(elf(2, names))
+            (root / 'usr/local/libexec/notes.txt').write_bytes(b'\0libXrandr.so\0')
+            (root / 'opt/fliperos/roms/mame/game.bin').write_bytes(elf(2, b'\0libudev.so.1\0libGL.so\0'))
+            run = lambda: subprocess.run(['python3', str(ROOT / 'config/fliperos-dlopen-links'), tmp],
+                                         capture_output=True, text=True, timeout=60)
+            out = run()
+            self.assertEqual(out.returncode, 0, out.stderr)
+            links = {p.name: os.readlink(p) for p in local.iterdir() if p.is_symlink()}
+            self.assertEqual(links, {'libX11.so': '/usr/lib/x86_64-linux-gnu/libX11.so.6',
+                                     'libXrandr.so': '/usr/lib/x86_64-linux-gnu/libXrandr.so.2',
+                                     'libdrm.so': '/usr/lib/x86_64-linux-gnu/libdrm.so.10',
+                                     'libswitchres.so': 'libswitchres.so.2'})
+            self.assertIn('removed libold.so', out.stdout)
+            # De novo, nada a fazer.
+            self.assertEqual(run().stdout, '')
 
     def test_openbor_starts_fullscreen(self):
         # Em janela ele abria em 2x de tamanho fixo (640x480 num modo de

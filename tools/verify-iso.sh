@@ -221,6 +221,14 @@ awk '/^Package: / { p = $2 } /^Status: install ok installed/ { print p }' "$work
   > "$work/dev.txt" || true
 [[ -s $work/dev.txt ]] && fail "build packages in the image: $(paste -sd' ' "$work/dev.txt")"
 echo "slim image: no cached .deb, no build -dev packages and no out-of-scope firmware"
+# As bibliotecas que o Switchres abre por dlopen, pelo nome sem versao que
+# era dos -dev (config/fliperos-dlopen-links): sem elas o GroovyMAME fecha
+# na interface e nenhum emulador do X ganha o seu modo.
+for lib in libX11.so libXrandr.so libdrm.so; do
+  grep -E "usr/local/lib/$lib ->" "$work/links.txt" | grep -q "/usr/lib/x86_64-linux-gnu/$lib\.[0-9]" \
+    || fail "$lib (opened by Switchres through dlopen) is not in the image"
+done
+echo "Switchres: libX11.so, libXrandr.so and libdrm.so present without the -dev packages"
 # Fightcade 2: o que o baixa e abre vem na imagem; o programa, nao.
 for path in opt/fliperos/bin/fliperos-fightcade etc/fliperos/openbox-fightcade.xml; do
   has "$path"

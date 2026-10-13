@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Os links sem versao das bibliotecas que os programas de fora do apt abrem
+por dlopen:
+
+  fliperos-dlopen-links [RAIZ]
+
+O Switchres (o do GroovyMAME, a libswitchres, o comando switchres) abre
+"libX11.so", "libXrandr.so" e "libdrm.so"; esses nomes sem versao sao links
+dos pacotes -dev, que saem da imagem (slim_rootfs_chroot do
+fliperos-mkiso.sh). Sem eles o Switchres nao cria modo nenhum ("missing
+X11_LIBRARY library") e o GroovyMAME fecha na interface. O ldd nao mostra o
+que entra por dlopen, entao a conferencia do build nao via.
+
+Para cada "libNOME.so" escrito num binario de /usr/local ou /opt que nao
+existe no sistema e tem a versao instalada (libNOME.so.N, da mesma
+arquitetura), cria /usr/local/lib/libNOME.so -> a libNOME.so.N. Em
+/usr/local/lib o dpkg nao mexe: um -dev instalado e removido depois nao leva
+o link. Um link daqui cujo destino sumiu e refeito ou apagado.
+"""
+import mmap
+import os
+import re
+import subprocess
+import sys
+
+NAME = re.compile(rb'(?<=\x00)lib[A-Za-z0-9_+-]+\.so(?=\x00)')
+SCAN = ('usr/local', 'opt')
+# O acervo e o repositorio de pacotes: nada ali e programa do sistema.
+PRUNE = ('opt/fliperos/roms', 'opt/fliperos/bios', 'opt/fliperos/repo', 'opt/fliperos/logs')
+LINKS = 'usr/local/lib'
+
+
+def elf_arch(path):
+    """(classe, maquina) de um ELF; None se nao e um."""
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(20)
+    except OSError:
+        return None
+    if len(head) < 20 or head[:4] != b'\x7fELF':
+        return None
+    return head[4], head[18:20]
+
+
+def lib_dirs(root):
+    usr_lib = os.path.join(root, 'usr/lib')
+    dirs = [os.path.join(root, LINKS)]
+    try:
+        dirs += sorted(os.path.join(usr_lib, d) for d in os.listdir(usr_lib) if d.endswith('-linux-gnu'))
+    except OSError:
+        pass
+    return dirs + [usr_lib]
+
+
+def wanted(root):
+    """{nome sem versao: {arquiteturas dos binarios que o citam}}."""
+    out = {}
+    prune = {os.path.join(root, p) for p in PRUNE}
+    for part in SCAN:
+        for base, dirs, files in os.walk(os.path.join(root, part)):
+            dirs[:] = [d for d in dirs if os.path.join(base, d) not in prune]
+            for name in files:
+                path = os.path.join(base, name)
+                if os.path.islink(path) or not os.path.isfile(path):
+                    continue
+                arch = elf_arch(path)
+                if arch is None:
+                    continue
+                try:
+                    with open(path, 'rb') as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as data:
+                        for lib in set(NAME.findall(data)):
+                            out.setdefault(lib.decode(), set()).add(arch)
+                except (OSError, ValueError):
+                    continue
+    return out
+
+
+def version_key(name):
+    return [int(n) for n in re.findall(r'\d+', name.split('.so.', 1)[1])]
+
+
+def versioned(root, lib, archs):
+    """O caminho (dentro de RAIZ) da libNOME.so.N de maior versao, de uma
+    das arquiteturas pedidas; '' sem nenhuma."""
+    found = []
+    for d in lib_dirs(root):
+        try:
+            names = os.listdir(d)
+        except OSError:
+            continue
+        for name in names:
+            # O soname (libX11.so.6), nao o arquivo (libX11.so.6.4.0).
+            if re.fullmatch(re.escape(lib) + r'\.\d+', name) and elf_arch(os.path.join(d, name)) in archs:
+                found.append((version_key(name), '/' + os.path.relpath(os.path.join(d, name), root)))
+    return max(found)[1] if found else ''
+
+
+def main():
+    root = sys.argv[1] if len(sys.argv) > 1 else '/'
+    links = os.path.join(root, LINKS)
+    changed = False
+    names = wanted(root)
+    # Os links daqui (para uma libNOME.so.N) de destino sumido.
+    if os.path.isdir(links):
+        for name in os.listdir(links):
+            path = os.path.join(links, name)
+            if not re.fullmatch(r'lib[A-Za-z0-9_+-]+\.so', name) or not os.path.islink(path):
+                continue
+            # Os daqui tem o caminho inteiro; um relativo (libswitchres.so ->
+            # libswitchres.so.2) e de quem instalou a biblioteca.
+            target = os.readlink(path)
+            if target.startswith('/') and not os.path.exists(os.path.join(root, target.lstrip('/'))):
+                os.unlink(path)
+                changed = True
+                print('removed %s (target gone)' % name)
+    for lib, archs in sorted(names.items()):
+        if any(os.path.lexists(os.path.join(d, lib)) for d in lib_dirs(root)):
+            continue
+        target = versioned(root, lib, archs)
+        if not target:
+            continue
+        os.makedirs(links, exist_ok=True)
+        os.symlink(target, os.path.join(links, lib))
+        changed = True
+        print('%s -> %s' % (lib, target))
+    if changed and os.path.isfile(os.path.join(root, 'etc/ld.so.conf')):
+        subprocess.run(['ldconfig'] + (['-r', root] if root != '/' else []), check=False)
+
+
+if __name__ == '__main__':
+    main()
