@@ -477,6 +477,15 @@ scraper_attract_display_remove() {
   printf '%s' "${new%x}" > "$acfg"
 }
 
+# scraper_attract_romlist_displays ARQUIVO ROMLIST imprime o nome das telas
+# que mostram a romlist.
+scraper_attract_romlist_displays() {
+  awk -v n="$2" '
+    /^display[ \t]/ { d = $0; sub(/^display[ \t]+/, "", d) }
+    /^[^ \t#]/ && !/^display[ \t]/ { d = "" }
+    $1 == "romlist" && d != "" { r = $0; sub(/^[ \t]*romlist[ \t]+/, "", r); if (r == n) print d }' "$1"
+}
+
 # scraper_attract_display_format ARQUIVO passa as telas gravadas com tab (as
 # do Setup de antes) para o formato do Attract-Mode Plus. Reescreve o arquivo
 # no lugar, com o mesmo dono, e so se houver o que mudar.

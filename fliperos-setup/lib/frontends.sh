@@ -236,8 +236,57 @@ frontends_attract() {
     frontends_attract_system "$key" "$dir" "$platform" > /dev/null || continue
     n=$((n + 1))
   done < <(frontends_systems)
+  frontends_attract_empty
   frontends_arcadeflow_sync
   log_info "Attract-Mode Plus: $n sistema(s)"
+}
+
+# frontends_attract_empty: a romlist sem nenhum jogo sai (com o banco do
+# Arcadeflow e as telas dela), e depois o emulador sem romlist.
+# Na primeira execucao o Attract-Mode Plus cria um emulador, uma romlist e
+# uma tela para cada programa que acha no sistema (mame, flycast, pcsx2...),
+# com a pasta de ROMs dele e nao a do FliperOS: telas vazias ao lado das do
+# Setup. As colecoes do Arcadeflow ("AF ...") sao dele. Sem o Attract-Mode
+# Plus instalado nao ha quem monte a lista, e nada sai; nao com ele aberto.
+frontends_attract_empty() {
+  local list name cfg acfg display
+  local -A used=()
+  have "$ATTRACTPLUS" || return 0
+  pgrep -x "${ATTRACTPLUS##*/}" > /dev/null 2>&1 && return 0
+  for list in "$ATTRACT_DIR"/romlists/*.txt; do
+    [[ -f $list ]] || continue
+    name=${list##*/}
+    name=${name%.txt}
+    [[ $name == "AF "* ]] && continue
+    grep -qv -e '^#' -e '^[[:space:]]*$' "$list" && continue
+    rm -f "${list%.txt}".{txt,db1,db2,tag}
+    for acfg in "$ATTRACT_DIR/attract.cfg" "$ATTRACT_DIR/config/displays.cfg"; do
+      [[ -f $acfg ]] || continue
+      while IFS= read -r display; do
+        scraper_attract_display_remove "$acfg" "$display"
+      done < <(scraper_attract_romlist_displays "$acfg" "$name")
+    done
+    log_info "Attract-Mode Plus: romlist $name vazia, apagada"
+  done
+  # Fica o emulador com romlist do nome dele e o que aparece na coluna
+  # Emulator de outra (a lista ATTRACT_ROMLIST_ALL, as colecoes).
+  for list in "$ATTRACT_DIR"/romlists/*.txt; do
+    [[ -f $list ]] || continue
+    name=${list##*/}
+    used[${name%.txt}]=1
+  done
+  while IFS= read -r name; do
+    used[$name]=1
+  done < <(cat "$ATTRACT_DIR"/romlists/*.txt 2> /dev/null | awk -F';' '!/^#/ && $3 != "" { sub(/\r$/, "", $3); print $3 }' | sort -u)
+  for cfg in "$ATTRACT_DIR"/emulators/*.cfg; do
+    [[ -f $cfg ]] || continue
+    name=${cfg##*/}
+    name=${name%.cfg}
+    [[ -n ${used[$name]:-} ]] && continue
+    rm -f "$cfg"
+    log_info "Attract-Mode Plus: emulador $name sem romlist, removido"
+  done
+  return 0
 }
 
 # frontends_attract_prune: uma pasta que ficou sem jogos sai do Attract-Mode
