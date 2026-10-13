@@ -3327,6 +3327,40 @@ class RomCleanerTests(Base):
         self.env.out("frontends_arcadeflow_sync", env)
         self.assertEqual((db.read_text(), db.stat().st_mtime_ns), (filled, stamp))
 
+    def test_arcadeflow_gets_the_system_of_each_display(self):
+        # O logotipo de cada tela no menu de telas do Arcadeflow: o tema
+        # recebe "TELA|SISTEMA..." com os nomes de sistema dele. Model 3 e o
+        # da pasta do Supermodel; um core de MAME e MAME, o do FBNeo e FBNeo;
+        # os outros, a plataforma da pasta e o nome do sistema do core.
+        roms, info, attract = self.env.dir / "af-roms", self.env.dir / "af-info", self.env.dir / "af-attract"
+        for folder in ("mame", "model2", "model3", "naomi2", "dolphin", "retroarch/mame2010", "retroarch/fbneo",
+                       "retroarch/snes9x"):
+            (roms / folder).mkdir(parents=True)
+            (roms / folder / "jogo.zip").write_text("x")
+        info.mkdir()
+        (info / "mame2010_libretro.info").write_text('systemname = "Arcade (various)"\nsystemid = "mame"\n'
+                                                     'corename = "MAME 2010 (0.139)"\n')
+        (info / "fbneo_libretro.info").write_text('systemname = "Arcade (various)"\nsystemid = "fb_alpha"\n'
+                                                  'corename = "FinalBurn Neo"\n')
+        (info / "snes9x_libretro.info").write_text('systemname = "Super Nintendo"\nsystemid = "super_nes"\n'
+                                                   'corename = "Snes9x"\n')
+        got = self.env.dir / "af-systems"
+        self.env.stub("fliperos-arcadeflow", '[ "$1" = systems ] && cat > "%s"' % got)
+        env = dict(self.vars, ROMS_DIR=str(roms), RA_INFO_DIR=str(info), ATTRACT_DIR=str(attract),
+                   ARCADEFLOW=str(self.env.bin / "fliperos-arcadeflow"))
+        # Sem o tema instalado, nada.
+        self.env.out("frontends_arcadeflow_systems", env)
+        self.assertFalse(got.exists())
+        (attract / "layouts" / "Arcadeflow").mkdir(parents=True)
+        (attract / "layouts" / "Arcadeflow" / "data_systems.txt").write_text("mame,0\n")
+        self.env.out("frontends_arcadeflow_systems", env)
+        self.assertEqual(sorted(got.read_text().splitlines()), sorted([
+            "MAME|mame", "Model 2|sega model 2", "Supermodel|sega model 3", "Naomi 2|naomi 2", "Dolphin|gamecube",
+            "Arcade (various) (MAME 2010 (0.139))|mame|arcade", "Arcade (various) (FinalBurn Neo)|fbneo|arcade",
+            "Super Nintendo (Snes9x)|snes|Super Nintendo"]))
+        body = (SETUP / "lib" / "frontends.sh").read_text().split("frontends_attract() {")[1].split("\n}\n")[0]
+        self.assertIn("  frontends_arcadeflow_sync\n  frontends_arcadeflow_systems\n", body)
+
     def test_attract_defaults_put_displays_on_arcadeflow(self):
         # Toda tela no Basic/BasicPlus (as que o Attract-Mode Plus cria) passa
         # para o Arcadeflow, sempre; a de outro layout fica. O tema recebe o

@@ -14,6 +14,8 @@
 #                                            de pixel largo (640x240)
 #   fliperos-arcadeflow prefs                as opcoes do FliperOS que este
 #                                            tema ainda nao recebeu
+#   fliperos-arcadeflow systems              o logotipo das telas do FliperOS
+#                                            ("TELA|SISTEMA..." na entrada)
 #
 # Pede o Attract-Mode Plus 3.2.0 ou mais novo (layout.nut, FeVersionNum).
 set -uo pipefail
@@ -212,7 +214,76 @@ fetch() {
   say 100 "Arcadeflow $version installed"
 }
 
+# systems: o logotipo de cada tela do FliperOS no menu de telas do tema. O
+# Arcadeflow acha o sistema de uma tela (logotipo, arte, fabricante, ano)
+# pelo nome dela no data_systems.txt dele, onde cada sistema e uma linha de
+# dados seguida dos outros nomes que ele tem, um por linha. "Model 2" esta
+# la; "Supermodel" e "Arcade (various) (MAME 2010 (0.139))", os nomes das
+# telas do FliperOS, nao, e ficavam sem logotipo. Le da entrada
+# "TELA|SISTEMA[|SISTEMA...]" por linha e poe o nome de cada tela, em
+# minusculas, entre os nomes do primeiro SISTEMA que o tema conhece (uma tela
+# que ele ja conhece, ou sem sistema conhecido, fica como esta). Os nomes
+# postos ficam anotados em fliperos_systems.txt e saem na vez seguinte: uma
+# tela que mudou de sistema, ou sumiu, nao deixa nome para tras. Nome com
+# virgula nao entra (seria lido como a linha de dados de um sistema).
+systems() {
+  local data=$dir/data_systems.txt mark=$dir/fliperos_systems.txt new
+  [[ -f $data ]] || return 0
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    exec runuser -u "$user" -- "$self" systems
+  fi
+  [[ -f $mark ]] || : > "$mark"
+  new=$(mktemp "$dir/.systems.XXXXXX") || return 0
+  if awk -v old_file="$mark" -v mark="$mark.new" '
+    function known(line) { return index(line, ",") ? substr(line, 1, index(line, ",") - 1) : line }
+    BEGIN {
+      while ((getline line < old_file) > 0) old[line] = 1
+      while ((getline line < "/dev/stdin") > 0) {
+        cut = index(line, "|")
+        name = tolower(substr(line, 1, cut - 1))
+        if (cut > 1 && !index(name, ",") && !(name in want)) {
+          order[++screens] = name
+          want[name] = tolower(substr(line, cut + 1))
+        }
+      }
+    }
+    {
+      if (!index($0, ",") && ($0 in old)) next
+      lines[++n] = $0
+      if ($0 != "") key[known($0)] = 1
+    }
+    END {
+      printf "" > mark
+      for (i = 1; i <= screens; i++) {
+        name = order[i]
+        if (name in key) continue
+        count = split(want[name], targets, "|")
+        for (t = 1; t <= count; t++) {
+          if (targets[t] != "" && (targets[t] in key)) {
+            add[targets[t]] = add[targets[t]] name "\n"
+            print name > mark
+            break
+          }
+        }
+      }
+      for (i = 1; i <= n; i++) {
+        print lines[i]
+        if (lines[i] != "" && (known(lines[i]) in add)) {
+          printf "%s", add[known(lines[i])]
+          delete add[known(lines[i])]
+        }
+      }
+    }' "$data" > "$new" && [[ -s $new ]]; then
+    cat "$new" > "$data"
+    mv -f "$mark.new" "$mark"
+  fi
+  rm -f "$new" "$mark.new"
+}
+
 case ${1:-} in
+  systems)
+    systems
+    ;;
   fetch)
     shift
     fetch "$@"
@@ -225,7 +296,7 @@ case ${1:-} in
     prefs_apply
     ;;
   *)
-    echo "usage: fliperos-arcadeflow fetch [--progress] | screen [WIDTH HEIGHT] | prefs" >&2
+    echo "usage: fliperos-arcadeflow fetch [--progress] | screen [WIDTH HEIGHT] | prefs | systems" >&2
     exit 2
     ;;
 esac

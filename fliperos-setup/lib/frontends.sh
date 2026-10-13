@@ -239,7 +239,44 @@ frontends_attract() {
   frontends_attract_empty
   frontends_attract_defaults
   frontends_arcadeflow_sync
+  frontends_arcadeflow_systems
   log_info "Attract-Mode Plus: $n sistema(s)"
+}
+
+# frontends_arcadeflow_systems: o logotipo de cada tela no menu de telas do
+# Arcadeflow, que o acha pelo nome da tela entre os sistemas que ele conhece:
+# "Model 2" ele conhece; "Supermodel" e "Arcade (various) (MAME 2010
+# (0.139))", nao. Diz ao tema (config/fliperos-arcadeflow systems) de que
+# sistema e cada tela do FliperOS, com os nomes dele: a placa do emulador
+# (Model 3, GameCube), o MAME nos cores de MAME, o FBNeo no core dele e, nos
+# outros, a plataforma da pasta ou o nome do sistema do core.
+frontends_arcadeflow_systems() {
+  local key platform name core corename systems
+  [[ -f $ATTRACT_DIR/layouts/Arcadeflow/data_systems.txt ]] || return 0
+  while IFS='|' read -r key _ platform name _; do
+    case $key in
+      mame) systems=mame ;;
+      model2) systems="sega model 2" ;;
+      model3) systems="sega model 3" ;;
+      naomi2) systems="naomi 2" ;;
+      dolphin) systems=gamecube ;;
+      retroarch/*)
+        core=${key#retroarch/}
+        corename=$(scraper_core_info "$core" corename)
+        systems="$platform|$(scraper_core_info "$core" systemname)"
+        if [[ $platform == arcade || $platform == fba ]]; then
+          case ${corename,,} in
+            mame*) systems="mame|arcade" ;;
+            *finalburn*neo* | fbneo*) systems="fbneo|arcade" ;;
+            *) systems="arcade" ;;
+          esac
+        fi
+        ;;
+      *) systems=$platform ;;
+    esac
+    printf '%s|%s\n' "$name" "$systems"
+  done < <(frontends_systems) | "$ARCADEFLOW" systems 2>> "$FLIPEROS_LOG"
+  return 0
 }
 
 # frontends_attract_defaults: os padroes do FliperOS no Attract-Mode Plus, a

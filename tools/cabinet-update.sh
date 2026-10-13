@@ -244,6 +244,7 @@ echo "== Scraper artwork in ~/media"
   frontends_240p
   frontends_attract_defaults
   frontends_arcadeflow_screen
+  frontends_arcadeflow_systems
   for t in $MEDIA_TYPES; do
     echo "$t: $(find "$MEDIA_DIR/$t" -mindepth 2 -type f | wc -l) file(s)"
   done

@@ -3919,6 +3919,50 @@ class ArcadeflowTests(unittest.TestCase):
             self.assertFalse(mark.exists())
             self.assertEqual(screen('640', 'x').returncode, 1)
 
+    def test_systems_names_the_fliperos_displays(self):
+        # O logotipo das telas: o nome de cada tela do FliperOS entra, em
+        # minusculas, entre os nomes do sistema dela no data_systems.txt do
+        # tema (uma linha de dados por sistema, os outros nomes embaixo, uma
+        # linha em branco entre os sistemas, cuja conta da o glifo do logo).
+        data = ('null,0,0,NULL\n\nmame,0,0,ARC,CRT,NONE,-4,3,ARCADE,Various,null,MAME,75\nm.a.m.e.\n\n'
+                'sega model 3,0,0,SM3,CRT,NONE,-4,3,ARCADE,Sega,1996,Sega Model 3,55\nmodel 3\nmodel3\n\n'
+                'playstation,0,0,PSX\npsx\nps1\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            theme = tmp / 'attract/layouts/Arcadeflow'
+            theme.mkdir(parents=True)
+            (theme / 'data_systems.txt').write_text(data)
+            env = dict(os.environ, ATTRACT_DIR=str(tmp / 'attract'), FLIPEROS_USER='root')
+
+            def systems(text):
+                run = subprocess.run(['bash', str(self.SCRIPT), 'systems'], input=text, capture_output=True,
+                                     text=True, env=env, timeout=60)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                return (theme / 'data_systems.txt').read_text()
+            new = systems('Supermodel|sega model 3\nArcade (various) (MAME 2010 (0.139))|mame|arcade\n'
+                          'Model 3|sega model 3\nPlayStation (PCSX-ReARMed)|ps1x|psx\nOutro|nada\nCom, virgula|mame\n')
+            # Depois do nome que o tema conhece; a tela que ele ja conhece, a
+            # de sistema desconhecido e o nome com virgula ficam de fora.
+            self.assertEqual(new, data.replace('\nm.a.m.e.\n', '\narcade (various) (mame 2010 (0.139))\nm.a.m.e.\n')
+                             .replace('Sega Model 3,55\n', 'Sega Model 3,55\nsupermodel\n')
+                             .replace('\npsx\n', '\npsx\nplaystation (pcsx-rearmed)\n'))
+            self.assertEqual(new.count('\n\n'), data.count('\n\n'))
+            self.assertEqual((theme / 'fliperos_systems.txt').read_text().splitlines(),
+                             ['supermodel', 'arcade (various) (mame 2010 (0.139))', 'playstation (pcsx-rearmed)'])
+            # De novo, nada muda; a tela que trocou de sistema muda de lugar e
+            # a que sumiu sai. Os nomes do proprio tema ficam sempre.
+            self.assertEqual(systems('Supermodel|sega model 3\nArcade (various) (MAME 2010 (0.139))|mame|arcade\n'
+                                     'PlayStation (PCSX-ReARMed)|psx\n'), new)
+            self.assertEqual(systems('Supermodel|mame\n'), data.replace('\nm.a.m.e.\n', '\nsupermodel\nm.a.m.e.\n'))
+            self.assertEqual(systems(''), data)
+            self.assertEqual(sorted(p.name for p in theme.iterdir()), ['data_systems.txt', 'fliperos_systems.txt'])
+            # Sem o tema instalado, nada.
+            (theme / 'data_systems.txt').unlink()
+            systems_run = subprocess.run(['bash', str(self.SCRIPT), 'systems'], input='A|mame\n', capture_output=True,
+                                         text=True, env=env, timeout=60)
+            self.assertEqual(systems_run.returncode, 0)
+            self.assertFalse((theme / 'data_systems.txt').exists())
+
     def test_installed_by_the_image_and_fetched_by_the_setup(self):
         self.assertIn('  frontends_arcadeflow_screen\n', (ROOT / 'tools/cabinet-update.sh').read_text())
         self.assertIn('install -Dm755 "$src/config/fliperos-arcadeflow" "$root/opt/fliperos/bin/fliperos-arcadeflow"',
