@@ -105,9 +105,11 @@ case $backend in
       # Nos frontends (e nos da pessoa) o Esc fecha e volta ao menu
       # (config/fliperos-escquit). O RetroArch e o GroovyMAME ja saem pelo
       # Esc; o Fightcade liga o dele. <&0: em segundo plano o bash daria
-      # /dev/null como entrada.
+      # /dev/null como entrada. O FLIPEROS_POWERKEY diz ao botao de desligar
+      # (config/fliperos-powerkey) que este e um frontend: com um jogo aberto
+      # por ele o botao fecha o jogo; sem jogo, desliga.
       attractplus | emulationstation | retrofe | pegasus | custom-*)
-        "$BIN/fliperos-kms-run" "${program[@]}" <&0 &
+        FLIPEROS_POWERKEY=frontend "$BIN/fliperos-kms-run" "${program[@]}" <&0 &
         pid=$!
         frontend_pid=$pid
         "$BIN/fliperos-escquit" "$pid" < /dev/null > /dev/null 2>&1 &
@@ -160,7 +162,11 @@ case $backend in
       # Entre o desktop e o emulador, so a tela limpa.
       printf '\e[H\e[2J\e[?25l'
       case ${next[0]:-} in
-        /opt/fliperos/bin/fliperos-kms-run | /opt/fliperos/bin/fliperos-x11-run) "${next[@]}" ;;
+        # FLIPEROS_POWERKEY=game: o botao de desligar fecha o emulador e o
+        # desktop volta (config/fliperos-powerkey).
+        /opt/fliperos/bin/fliperos-kms-run | /opt/fliperos/bin/fliperos-x11-run)
+          FLIPEROS_POWERKEY=game "${next[@]}"
+          ;;
         *) echo "Ignoring an unknown request: ${next[*]}" >&2 ;;
       esac
     done

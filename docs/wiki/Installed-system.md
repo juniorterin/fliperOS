@@ -34,6 +34,20 @@ Updates are numbered and **always applied in order**: update N only goes in on a
 - **Exit to shell** — `fliperos-menu` returns to the menu;
 - **Shutdown / Reboot**.
 
+**The power button.** A short press of the cabinet's power button (the motherboard's, or a panel key programmed to send `KEY_POWER`) depends on what is on screen:
+
+| On screen | The button |
+| --- | --- |
+| A game opened from a frontend (Attract-Mode Plus, ES-DE, RetroFE, Pegasus, your own frontends) | closes the game; the frontend comes back |
+| A Fightcade match | closes the match's emulator; the lobby comes back |
+| An emulator opened from the desktop's Games menu | closes the emulator; the desktop comes back |
+| A frontend's game list, the Fightcade lobby, the desktop, the FliperOS menu, the shell, the install media | powers the machine off |
+| RetroArch or GroovyMAME as the default launcher | powers the machine off (they are the launcher, there is no frontend to go back to) |
+
+From inside a game it therefore takes two presses to power off. For 3 seconds after a press the next ones don't count, so a second press given too early (or a board that reports one press through two devices) can't close the game and power off at once. The game gets a `SIGTERM`, the same as closing it normally, so RetroArch still writes its saves; a game that stays open is killed (`SIGKILL`) by the next press. Holding the button for 4 seconds still cuts the power: that is the motherboard, not FliperOS.
+
+How it works: `systemd-logind` ignores the button (`HandlePowerKey=ignore` in `/etc/systemd/logind.conf.d/fliperos.conf`; by default it would power off at every press), and triggerhappy, which already reads the volume keys, runs `config/fliperos-powerkey` on `KEY_POWER` (`config/fliperos-power.triggers`). The script finds the open game through the `FLIPEROS_POWERKEY` variable that `fliperos-session` gives what it opens: `frontend` (the game is whatever runs below it), `game` (an emulator opened from the desktop) or `games:FILE` (Fightcade, whose emulators are not its children, lists their PIDs in `FILE`).
+
 **Volume keys:** the keyboard's volume keys (or those of a panel encoder programmed to send them) work on any screen — emulator in KMS, desktop, console. `triggerhappy` reads `/dev/input` and calls `fliperos-setup --volume up|down|mute` (5% steps on the Audio Setup card, saved on every press because cabinets are usually switched off at the wall); `config/fliperos-volume.triggers` says which keys. The LXDE panel only handles the mouse, so the volume doesn't change twice. No volume bar appears during a game (nothing draws on top of an emulator in KMS).
 
 **SSH and AI assistants:** SSH is on from the first boot (`ssh fliperos@fliperos.local` or the cabinet's IP, login `fliperos`/`fliperos`, `sudo` with the same password; SFTP too). Under the menus it's a regular Ubuntu 24.04, so whatever the Setup doesn't cover can be done from a terminal, and an AI assistant with shell access (Claude Code, Cursor, Codex and the like) can do it for you: give it the cabinet's address and say what you want (button mapping, an emulator's settings, a frontend theme, a service) and it configures the system over SSH. The configuration is in plain text files (`/etc/fliperos/fliperos.conf`, `~/config`, `/opt/fliperos`), easy for a person or an assistant to read and change. On a network you don't control, change the default password with `passwd`.

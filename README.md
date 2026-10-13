@@ -151,6 +151,7 @@ Has a full MAME romset? *Setup > Cleaner > MAME ROM Cleaner* keeps only the game
 4. Insert a credit with **Coin** and start with **Start**.
 5. **Leaving the game**: in GroovyMAME, **Esc** on the keyboard. In RetroArch, **Start + Coin** together open its menu, then *Quick Menu > Close Content*. The other emulators use their own exit key or menu ([Emulators](https://github.com/juniorterin/fliperOS/wiki/Emulators)). You go back to the game list.
 6. **Esc** in Attract-Mode (and confirming) leaves the frontend and returns to the FliperOS menu, where *Shutdown / Reboot* turns the cabinet off safely.
+7. **The cabinet's power button** (a short press): with a game open, it closes the game and returns to the game list; in the game list, it turns the cabinet off safely. So from inside a game it takes two presses to power off: wait for the list to show before the second one.
 
 ### 12. If something goes wrong
 
@@ -190,7 +191,7 @@ It appears when you leave the frontend (Esc). The title shows the cabinet's name
 - **Setup (video, audio, network...)**: all the settings, explained below.
 - **Start desktop**: opens LXDE, a regular desktop with a mouse, file manager, browser (*Falkon*), torrent client (*Transmission*) and app store. It is the easiest way to organize folders and copy games (step 9). To leave: *Logout* in the desktop menu, which opens a small menu: back to the FliperOS menu, reboot, power off or cancel.
 - **Exit to shell**: a full-screen command line. Type `fliperos-menu` to return to the menu.
-- **Shutdown / Reboot**: *Power off* or *Reboot*, always asking first. Use it instead of switching the cabinet off at the wall.
+- **Shutdown / Reboot**: *Power off* or *Reboot*, always asking first. Use it instead of switching the cabinet off at the wall. The cabinet's power button does the same without asking, and with a game open it only closes the game.
 
 ### Setup
 

@@ -153,6 +153,9 @@ command -v wine > /dev/null || echo "Wine is not installed: Setup > Extras insta
 # nome do comando (fightcade) e a linha da tabela de modos.
 if [[ -z ${DISPLAY:-} ]]; then
   export FLIPEROS_OPENBOX_RC="${FLIPEROS_OPENBOX_RC:-/etc/fliperos/openbox-fightcade.xml}"
+  # O botao de desligar (config/fliperos-powerkey) fecha a partida aberta,
+  # pelos PIDs do arquivo busy (abaixo); na sala, desliga.
+  export FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.busy"
   exec "$x11run" "$dir/fightcade" "$@"
 fi
 
@@ -553,7 +556,7 @@ done
 # Esc na sala (nenhum emulador aberto) fecha o Fightcade
 # (config/fliperos-escquit): o SIGTERM dele para este script, que fecha o
 # cliente. Os emuladores nao sao filhos daqui; o arquivo busy diz quando ha
-# um aberto.
+# um aberto, e tem os PIDs dele (para o botao de desligar fecha-lo).
 busy="${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.busy"
 rm -f "$busy"
 quit=0
@@ -587,7 +590,7 @@ while ((gone < ${FIGHTCADE_QUIT_WAIT:-5})); do
     *) gone=$((gone + 1)) ;;
   esac
   case $running in
-    *flycast.elf* | *.exe*) touch "$busy" ;;
+    *flycast.elf* | *.exe*) awk '/flycast\.elf|\.exe/ { print $1 }' <<< "$running" > "$busy" ;;
     *) rm -f "$busy" ;;
   esac
   case $running in

@@ -49,6 +49,7 @@ Long operations (install, repair, update, scraper) don't know about the screen: 
 | `config/vtrgb-dracula` | Dracula console palette |
 | `config/fliperos-latency.service` | Applies the latency mode at boot |
 | `config/fliperos-volume.triggers` | Volume keys (triggerhappy) |
+| `config/fliperos-powerkey`, `config/fliperos-power.triggers` | The power button: closes the open game, or powers off from the frontend (triggerhappy) |
 | `fliperos-dracula.sh`, `config/openbox-3/themerc` | Dracula theme for LXDE (GTK pinned by commit + Openbox) and the terminal (Oh My Zsh + dracula/zsh) |
 | `config/zshrc`, `config/fliperos-tty1`, `config/fliperos-menu` | The user's zsh; tty1 flow (first boot, launcher, the menu loop); from the shell back to the menu |
 | `config/fliperos-padkeys`, `config/fliperos-padkeys.service` | Controller as keyboard in the setup menus |

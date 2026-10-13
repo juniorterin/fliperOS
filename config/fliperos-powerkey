@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""O botao de desligar do gabinete.
+
+    fliperos-powerkey
+
+Com um jogo aberto, fecha o jogo e a tela volta ao frontend (ou ao desktop,
+se o emulador foi aberto pelo menu dele); sem jogo aberto, desliga a
+maquina. Roda como root a cada KEY_POWER, pelo triggerhappy
+(config/fliperos-power.triggers); o logind deixa o botao em paz
+(fliperos-rootfs.sh).
+
+O que e jogo quem diz e a variavel FLIPEROS_POWERKEY dos filhos do
+fliperos-session:
+
+    frontend     o filho e um frontend: o jogo sao os processos abaixo dele
+    game         o filho e o proprio jogo (emulador aberto pelo desktop)
+    games:ARQ    os PIDs dos jogos estao em ARQ (o Fightcade, cujos
+                 emuladores nao sao filhos dele)
+
+Sem a variavel (o menu do Setup, o desktop, o RetroArch e o GroovyMAME como
+launcher) nao ha jogo a fechar: desliga.
+
+O jogo recebe o SIGTERM, para sair gravando o que tem a gravar. Se ele
+seguir aberto, o proximo aperto manda o SIGKILL. Por uns segundos depois de
+um aperto os outros nao contam: um aperto, uma acao (e ha placa que manda o
+mesmo aperto por dois dispositivos).
+"""
+import fcntl
+import glob
+import os
+import shlex
+import signal
+import subprocess
+import time
+
+GRACE = float(os.environ.get('FLIPEROS_POWERKEY_GRACE', '3'))
+STATE = os.environ.get('FLIPEROS_POWERKEY_STATE', '/run/fliperos-powerkey')
+OFF = shlex.split(os.environ.get('FLIPEROS_POWERKEY_OFF', 'systemctl poweroff'))
+
+
+def alive(pid):
+    try:
+        with open('/proc/%d/stat' % pid) as f:
+            return f.read().rsplit(')', 1)[1].split()[0] != 'Z'
+    except (OSError, IndexError):
+        return False
+
+
+def children(pid):
+    found = []
+    for path in glob.glob('/proc/%d/task/*/children' % pid):
+        try:
+            with open(path) as f:
+                found += [int(child) for child in f.read().split()]
+        except (OSError, ValueError):
+            pass
+    return [child for child in found if alive(child)]
+
+
+def descendants(pid):
+    found = []
+    for child in children(pid):
+        found += [child] + descendants(child)
+    return found
+
+
+def sessions():
+    """Os PIDs dos fliperos-session abertos."""
+    found = []
+    for path in glob.glob('/proc/[0-9]*/cmdline'):
+        try:
+            with open(path, 'rb') as f:
+                argv = f.read().split(b'\0')
+        except OSError:
+            continue
+        if any(os.path.basename(arg) == b'fliperos-session' for arg in argv[:2]):
+            found.append(int(path.split('/')[2]))
+    return found
+
+
+def role(pid):
+    try:
+        with open('/proc/%d/environ' % pid, 'rb') as f:
+            for entry in f.read().split(b'\0'):
+                if entry.startswith(b'FLIPEROS_POWERKEY='):
+                    return entry.split(b'=', 1)[1].decode(errors='replace')
+    except OSError:
+        pass
+    return ''
+
+
+def listed(path):
+    try:
+        with open(path) as f:
+            pids = [int(word) for word in f.read().split() if word.isdigit()]
+    except OSError:
+        return []
+    return [pid for pid in pids if alive(pid)]
+
+
+def games():
+    """Os PIDs do jogo aberto; nenhum, se a tela e a de um frontend."""
+    found = []
+    for session in sessions():
+        for child in children(session):
+            what = role(child)
+            if what == 'game':
+                found.append(child)
+            elif what == 'frontend':
+                found += descendants(child)
+            elif what.startswith('games:'):
+                found += listed(what[len('games:'):])
+    return found
+
+
+def main():
+    with open(STATE, 'a+') as state:
+        fcntl.flock(state, fcntl.LOCK_EX)
+        state.seek(0)
+        last = state.read().split()
+        now = time.monotonic()
+        try:
+            if now - float(last[0]) < GRACE:
+                return
+        except (IndexError, ValueError):
+            pass
+        pids = games()
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL if str(pid) in last[1:] else signal.SIGTERM)
+            except OSError:
+                pass
+        state.seek(0)
+        state.truncate()
+        state.write(' '.join([repr(now)] + [str(pid) for pid in pids]) + '\n')
+        state.flush()
+        if not pids:
+            subprocess.call(OFF)
+
+
+if __name__ == '__main__':
+    main()

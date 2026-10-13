@@ -1,0 +1,8 @@
+# O botao de desligar do gabinete (o da placa-mae, ou uma tecla do painel
+# programada para manda-lo) em qualquer tela: com um jogo aberto fecha o jogo
+# e volta ao frontend; sem jogo, desliga (config/fliperos-powerkey). O
+# triggerhappy le o /dev/input direto. Instalado em
+# /etc/triggerhappy/triggers.d/.
+#
+# EVENTO           VALOR  COMANDO  (1 = apertou)
+KEY_POWER          1      /opt/fliperos/bin/fliperos-powerkey

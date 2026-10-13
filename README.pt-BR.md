@@ -151,6 +151,7 @@ Tem um romset completo do MAME? *Setup > Cleaner > MAME ROM Cleaner* deixa só o
 4. Ponha crédito com a **Ficha** e comece com o **Start**.
 5. **Sair do jogo**: no GroovyMAME, **Esc** no teclado. No RetroArch, **Start + Ficha** juntos abrem o menu dele, e então *Quick Menu > Close Content*. Os outros emuladores usam a tecla ou o menu de saída de cada um ([Emulators](https://github.com/juniorterin/fliperOS/wiki/Emulators)). Você volta para a lista de jogos.
 6. **Esc** no Attract-Mode (e confirmar) sai do frontend e volta para o menu do FliperOS, onde *Shutdown / Reboot* desliga o gabinete com segurança.
+7. **Botão de desligar do gabinete** (um aperto curto): com um jogo aberto, fecha o jogo e volta para a lista de jogos; na lista de jogos, desliga o gabinete com segurança. Então, de dentro de um jogo, são dois apertos para desligar: espere a lista aparecer antes do segundo.
 
 ### 12. Se algo der errado
 
@@ -190,7 +191,7 @@ Aparece quando você sai do frontend (Esc). O título mostra o nome do gabinete,
 - **Setup (video, audio, network...)**: todas as configurações, explicadas abaixo.
 - **Start desktop**: abre o LXDE, um desktop comum com mouse, gerenciador de arquivos, navegador (*Falkon*), cliente de torrent (*Transmission*) e loja de aplicativos. É o jeito mais fácil de organizar pastas e copiar jogos (passo 9). Para sair: *Logout* no menu do desktop, que abre um menuzinho: voltar ao menu do FliperOS, reiniciar, desligar ou cancelar.
 - **Exit to shell**: uma linha de comando em tela cheia. Digite `fliperos-menu` para voltar ao menu.
-- **Shutdown / Reboot**: *Power off* (desligar) ou *Reboot* (reiniciar), sempre perguntando antes. Use em vez de desligar o gabinete da tomada.
+- **Shutdown / Reboot**: *Power off* (desligar) ou *Reboot* (reiniciar), sempre perguntando antes. Use em vez de desligar o gabinete da tomada. O botão de desligar do gabinete faz o mesmo sem perguntar, e com um jogo aberto só fecha o jogo.
 
 ### Setup
 

@@ -35,7 +35,7 @@ install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions
 [[ -f "$root/etc/fliperos/session" ]] || printf 'setup\n' > "$root/etc/fliperos/session"
 for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-client fliperos-lxde fliperos-launch \
   fliperos-tty1 fliperos-ini-set fliperos-resolution fliperos-logout fliperos-escquit fliperos-panning \
-  fliperos-automount fliperos-multiscreen; do
+  fliperos-automount fliperos-multiscreen fliperos-powerkey; do
   install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done
 # Pastas do acervo em ~/roms (uma por emulador e por core do RetroArch) e os
@@ -369,6 +369,15 @@ cat > "$root/etc/systemd/system/triggerhappy.service.d/fliperos.conf" << 'EOF'
 ExecStart=
 ExecStart=/usr/sbin/thd --triggers /etc/triggerhappy/triggers.d/ --socket /run/thd.socket --deviceglob /dev/input/event*
 EOF
+
+# ── Botao de desligar ─────────────────────────────────────────────
+# Com um jogo aberto o botao fecha o jogo e volta ao frontend; sem jogo,
+# desliga (config/fliperos-powerkey, pelo triggerhappy). O logind desligaria
+# a maquina a cada aperto, com jogo aberto e tudo: aqui ele ignora o botao.
+# Segurar o botao por 4 s segue cortando a energia (quem faz e a placa-mae).
+install -Dm644 "$src/config/fliperos-power.triggers" "$root/etc/triggerhappy/triggers.d/fliperos-power.conf"
+mkdir -p "$root/etc/systemd/logind.conf.d"
+printf '[Login]\nHandlePowerKey=ignore\n' > "$root/etc/systemd/logind.conf.d/fliperos.conf"
 
 # ── Rede ──────────────────────────────────────────────────────────
 # O Ubuntu manda o NetworkManager entregar o DNS ao systemd-resolved, que nao

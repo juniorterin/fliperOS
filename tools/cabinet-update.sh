@@ -217,6 +217,11 @@ systemctl start fliperos-controllers.service 2> /dev/null || true
 echo "SDL mappings: $(grep -vc '^#' /var/lib/fliperos/gamecontrollerdb.txt 2> /dev/null || echo 0)"
 systemctl enable fliperos-padkeys.service > /dev/null 2>&1 || true
 systemctl restart fliperos-padkeys.service
+# O botao de desligar (config/fliperos-powerkey): o triggerhappy rele as
+# teclas dele, e o logind a configuracao (pelo HUP, sem reiniciar: o X e as
+# sessoes abertas dependem dele).
+systemctl restart triggerhappy.service 2> /dev/null || true
+systemctl kill -s HUP systemd-logind.service 2> /dev/null || true
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
 # Pixelcade: so sobe com o pixelweb baixado (Setup > Extras).
 systemctl restart fliperos-pixelcade.service 2> /dev/null || true

@@ -143,6 +143,15 @@ grep -q -- '--user' "$work/f" && fail "triggerhappy still runs as another user (
 grep -q 'multi-user.target.wants/triggerhappy.service' "$work/files.txt" || fail "triggerhappy not enabled"
 echo "volume keys: triggerhappy enabled, as root, with the FliperOS keys"
 
+# ── Botao de desligar ─────────────────────────────────────────
+unsquashfs -cat "$work/filesystem.squashfs" etc/triggerhappy/triggers.d/fliperos-power.conf > "$work/f" \
+  || fail "missing: triggerhappy power button"
+cmp -s "$src/config/fliperos-power.triggers" "$work/f" || fail "power button trigger differs from the repository"
+unsquashfs -cat "$work/filesystem.squashfs" etc/systemd/logind.conf.d/fliperos.conf > "$work/f" \
+  || fail "missing: logind drop-in"
+grep -qx 'HandlePowerKey=ignore' "$work/f" || fail "logind still powers off on the power button"
+echo "power button: closes the game or powers off (triggerhappy), logind ignores it"
+
 # ── Tema Dracula e emuladores no menu do LXDE ─────────────────
 for path in usr/share/themes/Dracula/gtk-2.0/gtkrc usr/share/themes/Dracula/gtk-3.20/gtk.css \
   usr/share/themes/Dracula/openbox-3/themerc home/fliperos/.config/openbox/lxde-rc.xml \
