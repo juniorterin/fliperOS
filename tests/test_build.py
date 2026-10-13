@@ -3695,7 +3695,76 @@ class ArcadeflowTests(unittest.TestCase):
             self.assertEqual(self.fetch(tmp).returncode, 1)
             self.assertEqual(list((tmp / 'attract/layouts').iterdir()), [])
 
+    def test_screen_draws_in_4_3_on_a_wide_pixel_mode(self):
+        # Em 640x240 (8:3 em pixels, 4:3 no tubo) o tema desenha em 320x240 e
+        # o Attract-Mode estica: a opcao de tamanho dele e, no layout.nut, a
+        # proporcao do desenho solta so com o arquivo fliperos_stretch.
+        keep = 'fe.layout.preserve_aspect_ratio = true\n'
+        stretch = 'fe.layout.preserve_aspect_ratio = !file_exist(AF.folder + "fliperos_stretch")\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            theme = tmp / 'attract/layouts/Arcadeflow'
+            (tmp / 'bin').mkdir()
+            (tmp / 'bin/pgrep').write_text('#!/bin/sh\n[ -f "%s" ]\n' % (tmp / 'open'))
+            (tmp / 'bin/pgrep').chmod(0o755)
+            env = dict(os.environ, ATTRACT_DIR=str(tmp / 'attract'), FLIPEROS_USER='root', ARCADEFLOW_VERSION='9.9',
+                       PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']))
+
+            def screen(*args):
+                return subprocess.run(['bash', str(self.SCRIPT), 'screen'] + list(args), capture_output=True,
+                                      text=True, env=env, timeout=60)
+            # Sem o tema instalado, nada.
+            self.assertEqual(screen('640', '240').returncode, 0)
+            self.assertFalse(theme.exists())
+            theme.mkdir(parents=True)
+            layout, prefs, mark = theme / 'layout.nut', theme / 'pref_layoutoptions.txt', theme / 'fliperos_stretch'
+            layout.write_text('a\n' + keep + 'b\n')
+            prefs.write_text('9.9\n\n|UPDATECHECK|1|\n|CUSTOMSIZE|| Resolution W x H : Res\n|SMALLSCREEN|0| x\n')
+            # Com o Attract-Mode aberto (o tema regrava as opcoes), nada.
+            (tmp / 'open').write_text('')
+            self.assertEqual(screen('640', '240').returncode, 0)
+            self.assertEqual(layout.read_text(), 'a\n' + keep + 'b\n')
+            (tmp / 'open').unlink()
+            for _ in range(2):
+                run = screen('640', '240')
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertEqual(layout.read_text(), 'a\n' + stretch + 'b\n')
+                self.assertEqual(prefs.read_text(), '9.9\n\n|UPDATECHECK|1|\n|SMALLSCREEN|0| x\n'
+                                 '|CUSTOMSIZE|320x240| Resolution W x H : Res\n')
+                self.assertTrue(mark.exists())
+            # Qualquer modo mais largo que 4:3, na altura dele.
+            screen('2560', '224')
+            self.assertIn('|CUSTOMSIZE|298x224| Resolution W x H : Res\n', prefs.read_text())
+            # Num modo 4:3 (ou monitor de pixel quadrado, sem argumentos) volta
+            # ao tamanho da tela.
+            self.assertEqual(screen('320', '240').returncode, 0)
+            self.assertEqual(prefs.read_text(), '9.9\n\n|UPDATECHECK|1|\n|SMALLSCREEN|0| x\n')
+            self.assertFalse(mark.exists())
+            # O tamanho que a pessoa pos no tema fica.
+            prefs.write_text('9.9\n\n|CUSTOMSIZE|1280x960| Resolution W x H : Res\n')
+            for args in (('640', '480'), ()):
+                screen(*args)
+                self.assertIn('|CUSTOMSIZE|1280x960|', prefs.read_text())
+            # Sem o arquivo das opcoes (apagado pelo "reset" do tema): refeito.
+            prefs.unlink()
+            screen('640', '240')
+            self.assertEqual(prefs.read_text(), '9.9\n\n|UPDATECHECK|1|\n|OVERMENUBUTTON|0|\n'
+                             '|CUSTOMSIZE|320x240| Resolution W x H : Res\n')
+            screen()
+            self.assertFalse(mark.exists())
+            # Um tema sem a linha da proporcao (outra versao): as opcoes ficam
+            # como estao, para nao sair com faixas pretas.
+            layout.write_text('a\nb\n')
+            before = prefs.read_text()
+            run = screen('640', '240')
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('no aspect ratio line', run.stderr)
+            self.assertEqual(prefs.read_text(), before)
+            self.assertFalse(mark.exists())
+            self.assertEqual(screen('640', 'x').returncode, 1)
+
     def test_installed_by_the_image_and_fetched_by_the_setup(self):
+        self.assertIn('  frontends_arcadeflow_screen\n', (ROOT / 'tools/cabinet-update.sh').read_text())
         self.assertIn('install -Dm755 "$src/config/fliperos-arcadeflow" "$root/opt/fliperos/bin/fliperos-arcadeflow"',
                       ROOTFS)
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()

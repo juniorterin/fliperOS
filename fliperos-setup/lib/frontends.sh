@@ -297,6 +297,29 @@ frontends_arcadeflow_sync() {
   return 0
 }
 
+# O modo de video do console, "LARGURA,ALTURA": o do boot, em que os
+# frontends em KMS abrem (config/fliperos-kms-run).
+FB_SIZE=${FLIPEROS_FB_SIZE:-/sys/class/graphics/fb0/virtual_size}
+
+# frontends_arcadeflow_screen: num tubo de 15 kHz em modo de pixel largo
+# (640x240) o Arcadeflow desenha em 4:3 e a imagem e esticada ate a largura
+# do modo (config/fliperos-arcadeflow screen); em outro modo ou monitor,
+# volta ao tamanho da tela. O modo e o do console agora ou, sem ele, o
+# escolhido no Video Setup. A cada abertura do launcher (fliperos-setup
+# --session-start): o modo de boot pode ter mudado.
+frontends_arcadeflow_screen() {
+  local w="" h=""
+  [[ -f $ATTRACT_DIR/layouts/Arcadeflow/layout.nut ]] || return 0
+  if ! frontends_crt; then
+    "$ARCADEFLOW" screen 2>> "$FLIPEROS_LOG"
+    return 0
+  fi
+  [[ -r $FB_SIZE ]] && IFS=', ' read -r w h _ < "$FB_SIZE"
+  [[ $w =~ ^[1-9][0-9]*$ && $h =~ ^[1-9][0-9]*$ ]] || read -r w h _ <<< "$(geometry_mode)"
+  "$ARCADEFLOW" screen "$w" "$h" 2>> "$FLIPEROS_LOG"
+  return 0
+}
+
 # frontends_attract_system CHAVE PASTA PLATAFORMA: o emulador, a tela e (se
 # faltar) a lista de jogos de uma pasta; imprime o nome do emulador.
 frontends_attract_system() {

@@ -10,6 +10,8 @@
 # telas ficam no Basic do FliperOS (config/attractplus-layouts).
 #
 #   fliperos-arcadeflow fetch [--progress]   baixa e instala (de novo: repara)
+#   fliperos-arcadeflow screen [LARGURA ALTURA]   o desenho em 4:3 num modo
+#                                            de pixel largo (640x240)
 #
 # Pede o Attract-Mode Plus 3.2.0 ou mais novo (layout.nut, FeVersionNum).
 set -uo pipefail
@@ -67,6 +69,46 @@ displays_switch() {
   sed -i -E 's/^([[:space:]]+layout[[:space:]]+)Basic[[:space:]]*$/\1Arcadeflow/' "$file"
 }
 
+# screen [LARGURA ALTURA]: o tamanho em que o tema desenha, para o modo de
+# video de um tubo 4:3. Num modo de pixel largo (640x240: 8:3 em pixels, que
+# o tubo mostra em 4:3) o tema se arrumava para uma tela 8:3 e tudo saia com
+# o dobro da largura. Nele o tema desenha em 4:3 na mesma altura (320x240, a
+# opcao "Resolution W x H" dele) e o Attract-Mode estica ate a largura do
+# modo (200%), como os emuladores do fliperos-x11-run. O tema mantem a
+# proporcao do desenho (sairia com faixas pretas dos lados): a linha do
+# layout.nut que pede isso passa a olhar o arquivo fliperos_stretch, que so
+# existe com o esticado ligado. Num modo 4:3, ou sem argumentos (monitor de
+# pixel quadrado), o que foi gravado aqui e desfeito; um tamanho posto pela
+# pessoa fica. Nao com o Attract-Mode aberto (o tema regrava as opcoes).
+screen() {
+  local w=${1:-4} h=${2:-3} size="" file=$dir/pref_layoutoptions.txt mark=$dir/fliperos_stretch
+  local keep='fe.layout.preserve_aspect_ratio = true'
+  local stretch='fe.layout.preserve_aspect_ratio = !file_exist(AF.folder + "fliperos_stretch")'
+  [[ -f $dir/layout.nut ]] || return 0
+  [[ $w =~ ^[1-9][0-9]*$ && $h =~ ^[1-9][0-9]*$ ]] || fail "invalid mode: $w x $h"
+  pgrep -x attractplus > /dev/null 2>&1 && return 0
+  if ((EUID == 0)) && [[ $user != root ]]; then
+    exec runuser -u "$user" -- "$self" screen "$@"
+  fi
+  ((w * 3 > h * 4)) && size=$((h * 4 / 3))x$h
+  if [[ -z $size ]]; then
+    [[ -f $mark ]] || return 0
+    [[ -f $file ]] && sed -i '/^|CUSTOMSIZE|/d' "$file"
+    rm -f "$mark"
+    return 0
+  fi
+  if ! grep -qxF "$stretch" "$dir/layout.nut"; then
+    grep -qxF "$keep" "$dir/layout.nut" || fail "this Arcadeflow has no aspect ratio line to change"
+    sed -i "s|^$keep\$|$stretch|" "$dir/layout.nut" || fail "could not write $dir/layout.nut"
+  fi
+  [[ -f $file ]] || prefs > "$file"
+  # O texto depois do valor faz parte do formato: sem ele o tema le a opcao
+  # como vazia.
+  sed -i '/^|CUSTOMSIZE|/d' "$file"
+  printf '|CUSTOMSIZE|%s| Resolution W x H : Res\n' "$size" >> "$file"
+  : > "$mark"
+}
+
 fetch() {
   local part="$layouts/.arcadeflow.part" new="$layouts/.arcadeflow.new" first=1 f
   [[ ${1:-} == --progress ]] && progress=1
@@ -111,8 +153,12 @@ case ${1:-} in
     shift
     fetch "$@"
     ;;
+  screen)
+    shift
+    screen "$@"
+    ;;
   *)
-    echo "usage: fliperos-arcadeflow fetch [--progress]" >&2
+    echo "usage: fliperos-arcadeflow fetch [--progress] | screen [WIDTH HEIGHT]" >&2
     exit 2
     ;;
 esac

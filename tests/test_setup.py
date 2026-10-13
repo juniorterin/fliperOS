@@ -3144,6 +3144,30 @@ class RomCleanerTests(Base):
         self.env.out("frontends_arcadeflow_sync", env)
         self.assertEqual((lists / "MAME.db1").read_text(), "return({\n})\n")
 
+    def test_arcadeflow_screen_follows_the_console_mode(self):
+        # Num tubo de 15 kHz o Arcadeflow recebe o modo do console (o do
+        # boot) a cada abertura do launcher, para desenhar em 4:3 num 640x240;
+        # sem o modo, o do Video Setup; em outro monitor, desfaz.
+        attract = self.env.dir / "attract-screen"
+        (attract / "layouts" / "Arcadeflow").mkdir(parents=True)
+        calls = self.env.dir / "arcadeflow-screen.calls"
+        self.env.stub("fliperos-arcadeflow", 'echo "$*" >> "%s"' % calls)
+        fb = self.env.dir / "virtual_size"
+        fb.write_text("640,240\n")
+        env = dict(self.vars, ATTRACT_DIR=str(attract), ARCADEFLOW=str(self.env.bin / "fliperos-arcadeflow"),
+                   FLIPEROS_FB_SIZE=str(fb))
+        # Sem o tema instalado, nada.
+        self.env.out("conf_set frequency 15k; frontends_arcadeflow_screen", env)
+        self.assertFalse(calls.exists())
+        (attract / "layouts" / "Arcadeflow" / "layout.nut").write_text("// Arcadeflow\n")
+        self.env.out("conf_set frequency 15k; frontends_arcadeflow_screen", env)
+        fb.unlink()
+        self.env.out("conf_set frequency 15k; conf_set boot_resolution 320x240; frontends_arcadeflow_screen", env)
+        self.env.out("conf_set frequency 31k; frontends_arcadeflow_screen", env)
+        self.assertEqual(calls.read_text(), "screen 640 240\nscreen 320 240\nscreen\n")
+        main = (SETUP / "fliperos-setup").read_text()
+        self.assertIn("      frontends_arcadeflow_screen\n", main.split("--session-start)")[1].split(";;")[0])
+
     def test_new_attract_displays_use_arcadeflow_when_it_is_installed(self):
         # O tema padrao e o Arcadeflow, que o Setup > Frontend baixa; sem ele
         # (sem rede) as telas novas ficam no Basic do FliperOS.
