@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "patches", "splash", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
+        "status", "scraper", "romclean", "netshare", "downloader", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -3506,6 +3506,176 @@ class NetShareTests(Base):
     def test_in_the_image(self):
         self.assertIn("cifs-utils smbclient", (ROOT / "fliperos-mkiso.sh").read_text())
         self.assertIn("cifs-utils smbclient", (ROOT / "tools/cabinet-update.sh").read_text())
+
+
+class FoldersTests(Base):
+    """Setup > Folders (lib/folders.sh): a custom folder de cada pasta de ~."""
+
+    def setUp(self):
+        super().setUp()
+        self.home = self.env.dir / "home"
+        self.disk = self.env.dir / "disk"
+        for d in (self.home / "roms" / "mame", self.home / "bios", self.disk / "roms"):
+            d.mkdir(parents=True)
+        (self.home / "roms" / "mame" / "sf2.zip").write_text("mine")
+        (self.disk / "roms" / "pacman.zip").write_text("theirs")
+        self.vars = {"FOLDERS_HOME": str(self.home), "FOLDERS_SCRIPT": str(self.env.dir / "nothing")}
+
+    def state(self, name="roms"):
+        return self.env.out("folders_state %s" % name, self.vars).strip()
+
+    def skeleton(self, path):
+        (path / "mame").mkdir(parents=True)
+        (path / "_info.txt").write_text("info\n")
+        (path / "mame" / "_info.txt").write_text("info\n")
+
+    def test_link_keeps_the_previous_folder(self):
+        self.assertEqual(self.state(), "default")
+        out = self.env.out('folders_link roms "%s"; echo "$FOLDERS_KEPT"' % (self.disk / "roms"), self.vars)
+        self.assertEqual(out.strip(), str(self.home / "old-roms"))
+        self.assertTrue((self.home / "roms").is_symlink())
+        self.assertEqual(os.readlink(self.home / "roms"), str(self.disk / "roms"))
+        self.assertEqual((self.home / "old-roms" / "mame" / "sf2.zip").read_text(), "mine")
+        self.assertEqual(self.state(), "custom")
+        self.assertEqual(self.env.out("folders_target roms", self.vars).strip(), str(self.disk / "roms"))
+
+    def test_unlink_brings_the_previous_folder_back(self):
+        self.env.out('folders_link roms "%s"' % (self.disk / "roms"), self.vars)
+        self.env.out("folders_unlink roms", self.vars)
+        self.assertFalse((self.home / "roms").is_symlink())
+        self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
+        self.assertFalse((self.home / "old-roms").exists())
+        # Nada sai da custom folder.
+        self.assertEqual((self.disk / "roms" / "pacman.zip").read_text(), "theirs")
+
+    def test_unlink_creates_the_folder_when_the_previous_one_is_gone(self):
+        self.env.out('folders_link roms "%s"' % (self.disk / "roms"), self.vars)
+        shutil.rmtree(self.home / "old-roms")
+        r = self.env.run("folders_unlink roms", self.vars)
+        self.assertEqual(r.returncode, 2)
+        self.assertTrue((self.home / "roms").is_dir())
+        self.assertFalse((self.home / "roms").is_symlink())
+        self.assertEqual(list((self.home / "roms").iterdir()), [])
+
+    def test_changing_the_custom_folder_only_swaps_the_link(self):
+        other = self.env.dir / "other"
+        other.mkdir()
+        self.env.out('folders_link roms "%s"' % (self.disk / "roms"), self.vars)
+        out = self.env.out('folders_link roms "%s"; echo "kept=$FOLDERS_KEPT"' % other, self.vars)
+        self.assertEqual(out.strip(), "kept=")
+        self.assertEqual(os.readlink(self.home / "roms"), str(other))
+        self.assertEqual((self.home / "old-roms" / "mame" / "sf2.zip").read_text(), "mine")
+        self.assertFalse((self.home / "old-roms-2").exists())
+
+    def test_a_link_made_by_hand_is_a_custom_folder(self):
+        shutil.move(str(self.home / "roms"), str(self.home / "old-roms"))
+        (self.home / "roms").symlink_to(self.disk / "roms")
+        self.assertEqual(self.state(), "custom")
+        # O disco desligado: o link fica, sem a pasta.
+        shutil.rmtree(self.disk)
+        self.assertEqual(self.state(), "offline")
+        self.env.out("folders_unlink roms", self.vars)
+        self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
+
+    def test_check_restores_after_a_link_deleted_by_hand(self):
+        self.env.out('folders_link roms "%s"' % (self.disk / "roms"), self.vars)
+        # Apagado a mao, sem nada no lugar.
+        (self.home / "roms").unlink()
+        self.assertEqual(self.state(), "missing")
+        self.assertEqual(self.env.out("folders_check", self.vars).split(), ["roms"])
+        self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
+        # Apagado a mao, e o login criou a pasta nova e vazia no lugar.
+        self.env.out('folders_link roms "%s"' % (self.disk / "roms"), self.vars)
+        (self.home / "roms").unlink()
+        self.skeleton(self.home / "roms")
+        self.assertEqual(self.env.out("folders_check", self.vars).split(), ["roms"])
+        self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
+        self.assertFalse((self.home / "old-roms").exists())
+        self.assertEqual(self.env.out("folders_check", self.vars).split(), [])
+
+    def test_check_never_drops_a_folder_with_files(self):
+        (self.home / "old-roms" / "mame").mkdir(parents=True)
+        (self.home / "old-roms" / "mame" / "old.zip").write_text("old")
+        self.assertEqual(self.env.out("folders_check", self.vars).split(), [])
+        self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
+        # Ao ganhar uma custom folder, a de agora fica com outro nome.
+        out = self.env.out('folders_link roms "%s"; echo "$FOLDERS_KEPT"' % (self.disk / "roms"), self.vars)
+        self.assertEqual(out.strip(), str(self.home / "old-roms-2"))
+        self.assertEqual((self.home / "old-roms" / "mame" / "old.zip").read_text(), "old")
+        self.assertEqual((self.home / "old-roms-2" / "mame" / "sf2.zip").read_text(), "mine")
+
+    def test_link_drops_an_empty_folder_when_the_previous_one_is_kept(self):
+        shutil.move(str(self.home / "roms"), str(self.home / "old-roms"))
+        self.skeleton(self.home / "roms")
+        # Um tema do splash copiado da imagem tambem e do FliperOS.
+        theme = self.home / "roms" / "fliperos"
+        theme.mkdir()
+        (theme / ".bundled").write_text("1 2\n")
+        (theme / "logo.png").write_text("png")
+        out = self.env.out('folders_link roms "%s"; echo "kept=$FOLDERS_KEPT"' % (self.disk / "roms"), self.vars)
+        self.assertEqual(out.strip(), "kept=")
+        self.assertEqual((self.home / "old-roms" / "mame" / "sf2.zip").read_text(), "mine")
+        self.assertFalse((self.home / "old-roms-2").exists())
+
+    def test_refused_folders(self):
+        (self.home / "roms" / "inside").mkdir()
+        for target, text in ((self.home / "roms", "itself"), (self.home / "roms" / "inside", "itself"),
+                             (self.home, "inside that folder"), (self.env.dir / "nothere", "not a folder"),
+                             (self.home / "roms" / "mame" / "sf2.zip", "not a folder")):
+            r = self.env.run('folders_link roms "%s" || echo "$FOLDERS_ERROR"' % target, self.vars)
+            self.assertIn(text, r.stdout, target)
+        self.assertEqual(self.state(), "default")
+        self.assertFalse((self.home / "old-roms").exists())
+        self.assertEqual(self.env.run('folders_link config "%s"' % self.disk, self.vars).returncode, 1)
+        self.assertIn("no custom folder", self.env.run('folders_unlink bios || echo "$FOLDERS_ERROR"', self.vars).stdout)
+
+    def test_the_folders_are_created_in_the_custom_folder(self):
+        script = self.env.dir / "populate"
+        script.write_text('#!/bin/bash\necho "$HOME" >> "%s"\n' % (self.env.dir / "populate.calls"))
+        script.chmod(0o755)
+        env = dict(self.vars, FOLDERS_SCRIPT=str(script), FLIPEROS_USER="nobody-here")
+        self.env.out('folders_link roms "%s"; folders_unlink roms' % (self.disk / "roms"), env)
+        self.assertEqual((self.env.dir / "populate.calls").read_text().split(), [str(self.home)] * 2)
+
+    def login(self):
+        env = dict(os.environ, HOME=str(self.home), FLIPEROS_SPLASH_BUNDLED=str(self.env.dir / "nobundle"),
+                   FLIPEROS_CORE_INFO=str(self.env.dir / "noinfo"))
+        subprocess.run(["bash", str(ROOT / "config/fliperos-roms")], env=env, check=True, timeout=60)
+
+    def test_login_fills_the_custom_folder(self):
+        self.env.out('folders_link roms "%s"' % (self.disk / "roms"), self.vars)
+        self.login()
+        self.assertTrue((self.disk / "roms" / "mame" / "_info.txt").is_file())
+        self.assertTrue((self.home / "roms").is_symlink())
+
+    def test_login_with_the_disk_off_keeps_the_link_and_makes_the_rest(self):
+        self.env.out('folders_link roms "%s"' % (self.disk / "roms"), self.vars)
+        shutil.rmtree(self.disk)
+        self.login()
+        self.assertTrue((self.home / "roms").is_symlink())
+        self.assertTrue((self.home / "media" / "snap" / "_info.txt").is_file())
+        self.assertTrue((self.home / "bios" / "dc").is_dir())
+
+    def test_login_restores_after_a_link_deleted_by_hand(self):
+        self.env.out('folders_link roms "%s"' % (self.disk / "roms"), self.vars)
+        (self.home / "roms").unlink()
+        self.login()
+        self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
+        self.assertFalse((self.home / "old-roms").exists())
+
+    def test_in_the_setup_menu(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn('"folders|Folders (custom folders, external disks)"', menu)
+        self.assertIn("folders) screen_folders ;;", menu)
+        main = (SETUP / "fliperos-setup").read_text()
+        for part in ("lib", "screens"):
+            self.assertIn('source "$SETUP_DIR/%s/folders.sh"' % part, main)
+        # As pastas da lista sao as que o fliperos-roms cria e a rede mostra.
+        names = self.env.out("folders_list", self.vars).split()
+        self.assertEqual(names, ["roms", "bios", "media", "splashscreen"])
+        smb = (ROOT / "config/smb.conf").read_text()
+        for name in names:
+            self.assertIn("path = /home/fliperos/%s\n" % name, smb)
 
 
 if __name__ == "__main__":

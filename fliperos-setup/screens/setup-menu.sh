@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Setup do sistema instalado (worker_setup_menu do gasetup): video, audio,
-# rede, frontend, latencia, scraper, ROM cleaner, quirks e atualizacao.
+# rede, frontend, latencia, scraper, ROM cleaner, pastas, quirks e atualizacao.
 
 screen_setup_menu() {
   local choice last=video
@@ -19,6 +19,7 @@ screen_setup_menu() {
       "romlist|AttractPlus ROM List (real game names)" \
       "cleaner|Cleaner (MAME/Flycast/etc ROM/CHD)" \
       "downloader|Downloader (MAME ROM/CHD torrent, free games)" \
+      "folders|Folders (custom folders, external disks)" \
       "quirks|Quirks (USB controller fixes)" \
       "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))" \
@@ -37,6 +38,7 @@ screen_setup_menu() {
       romlist) screen_romlist ;;
       cleaner) screen_cleaner ;;
       downloader) screen_downloads ;;
+      folders) screen_folders ;;
       quirks) screen_quirks ;;
       joysticks) screen_joysticks ;;
       debug) screen_debug ;;

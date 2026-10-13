@@ -10,6 +10,7 @@ fliperos-setup/
 │   ├── launcher.sh audio.sh network.sh status.sh scraper.sh update.sh
 │   ├── romclean.sh netshare.sh  MAME ROM Cleaner; network shared folder (SMB)
 │   ├── downloader.sh     romset and CHDs by magnet link (Transmission)
+│   ├── folders.sh        custom folder (external disk) for ~/roms, ~/bios, ~/media
 │   ├── hardware.sh latency.sh   CPU/memory/GPU and the latency modes
 │   ├── quirks.sh padkeys.sh     usbhid quirks; controller in the menus
 │   ├── lpt.sh            parallel port joysticks (db9, gamecon, turbografx)
