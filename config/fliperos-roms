@@ -50,6 +50,16 @@ folder "$roms/fightcade/flycast" "Fightcade 2, Flycast: Naomi and Atomiswave .zi
 folder "$roms/fightcade/snes9x" "Fightcade 2, SNES9x: Super Nintendo games in .zip."
 folder "$roms/fightcade/fc1" "Fightcade 1 games (FBA): .zip sets of FB Alpha 0.2.96.74. They do not work in FBNeo, and FBNeo sets do not work here."
 
+# As ROMs do Fightcade sao so do Fightcade: os frontends nao as listam. A
+# pasta do core FBNeo do RetroArch ja foi um link para ~/roms/fightcade/fbneo
+# (o FliperOS o criava sozinho), e por ele o ES-DE e o Attract-Mode mostravam
+# o acervo inteiro do Fightcade. Esse link sai e a pasta volta a ser uma pasta
+# comum, vazia; um link que a pessoa fez para outro lugar fica.
+fbneo="$roms/retroarch/fbneo"
+if [[ -L $fbneo && $(readlink "$fbneo") == ../fightcade/fbneo ]]; then
+  rm -f "$fbneo"
+fi
+
 # Um core por .info: "core|nome|.ext .ext".
 while IFS='|' read -r core name exts; do
   [[ -n $core ]] || continue
@@ -66,18 +76,6 @@ done < <(awk -F' = ' '
   $1 == "display_name" { name = $2; gsub(/"/, "", name) }
   $1 == "supported_extensions" { ext = $2; gsub(/"/, "", ext); if (ext != "") { gsub(/\|/, " .", ext); ext = "." ext } }
   END { if (core != "") print core "|" name "|" ext }' "$info"/*_libretro.info 2> /dev/null)
-# O core FBNeo do RetroArch usa os mesmos romsets do FBNeo do Fightcade. Com
-# jogos em ~/roms/fightcade/fbneo e a pasta do core ainda sem nenhum, ela vira
-# um link para la, em vez de pedir uma segunda copia de tudo. Uma pasta com
-# jogos proprios fica como esta.
-fbneo="$roms/retroarch/fbneo"
-if [[ -d $fbneo && ! -L $fbneo ]] &&
-  [[ -n $(find "$roms/fightcade/fbneo" -maxdepth 1 \( -name '*.zip' -o -name '*.7z' \) -print -quit 2> /dev/null) ]] &&
-  [[ -z $(find "$fbneo" -mindepth 1 ! -name _info.txt -print -quit 2> /dev/null) ]]; then
-  rm -f "$fbneo/_info.txt"
-  rmdir "$fbneo" 2> /dev/null && ln -s ../fightcade/fbneo "$fbneo" 2> /dev/null
-fi
-
 # ── ~/bios ──────────────────────────────────────────────────────────
 # A propria ~/bios e o system_directory do RetroArch (config/retroarch.cfg):
 # os arquivos soltos nela, e as subpastas que os cores procuram (dc/ do

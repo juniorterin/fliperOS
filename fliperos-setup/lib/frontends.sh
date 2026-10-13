@@ -231,12 +231,44 @@ frontends_attract_theme() {
 # (--build-romlist); a do Scraper, com titulo, ano e arte, fica.
 frontends_attract() {
   local key dir platform n=0
+  frontends_attract_prune
   while IFS='|' read -r key dir platform _; do
     frontends_attract_system "$key" "$dir" "$platform" > /dev/null || continue
     n=$((n + 1))
   done < <(frontends_systems)
   frontends_arcadeflow_sync
   log_info "Attract-Mode Plus: $n sistema(s)"
+}
+
+# frontends_attract_prune: uma pasta que ficou sem jogos sai do Attract-Mode
+# Plus. O emulador que o Setup criou para ela, a tela, a romlist (com o banco
+# do Arcadeflow) e os jogos dela na lista ATTRACT_ROMLIST_ALL sao apagados; a
+# tela seguia la, com jogos que nao abrem. Um emulador da pessoa (sem o
+# cabecalho do Setup) e uma pasta que nao existe agora (um disco fora) ficam.
+# Nao com o Attract-Mode aberto.
+frontends_attract_prune() {
+  local cfg name dir acfg all rest
+  pgrep -x "${ATTRACTPLUS##*/}" > /dev/null 2>&1 && return 0
+  for cfg in "$ATTRACT_DIR"/emulators/*.cfg; do
+    [[ -f $cfg ]] && head -1 "$cfg" | grep -q '^# Criado pelo FliperOS Setup' || continue
+    dir=$(awk '$1 == "rompath" { sub(/^rompath[ \t]+/, ""); print; exit }' "$cfg")
+    dir=${dir%/}
+    [[ -n $dir && -d $dir ]] || continue
+    (($(scraper_count "$dir") > 0)) && continue
+    name=${cfg##*/}
+    name=${name%.cfg}
+    rm -f "$cfg" "$ATTRACT_DIR/romlists/$name".{txt,db1,db2,tag}
+    for acfg in "$ATTRACT_DIR/attract.cfg" "$ATTRACT_DIR/config/displays.cfg"; do
+      scraper_attract_display_remove "$acfg" "$name"
+    done
+    all="$ATTRACT_DIR/romlists/$ATTRACT_ROMLIST_ALL.txt"
+    if [[ -f $all ]]; then
+      rest=$(awk -F';' -v e="$name" 'NR == 1 || $3 != e' "$all"; printf x)
+      printf '%s' "${rest%x}" > "$all"
+    fi
+    log_info "Attract-Mode Plus: $name sem jogos, saiu das telas"
+  done
+  return 0
 }
 
 # O Arcadeflow nao le o titulo, o ano e o genero da romlist a cada vez: guarda

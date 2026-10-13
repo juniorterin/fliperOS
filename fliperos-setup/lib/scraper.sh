@@ -463,6 +463,20 @@ scraper_attract_display() {
   scraper_attract_default_filters "$acfg"
 }
 
+# scraper_attract_display_remove ARQUIVO NOME tira a tela NOME (com os
+# filtros dela) do arquivo das telas. Reescreve no lugar, com o mesmo dono, e
+# so se a tela estiver la.
+scraper_attract_display_remove() {
+  local acfg=$1 new
+  [[ -f $acfg ]] || return 0
+  new=$(awk -v n="$2" '
+    /^display[ \t]/ { d = $0; sub(/^display[ \t]+/, "", d); skip = (d == n) }
+    /^[^ \t#]/ && !/^display[ \t]/ { skip = 0 }
+    !skip { print }' "$acfg"; printf x) || return 1
+  [[ $new == "$(cat "$acfg"; printf x)" ]] && return 0
+  printf '%s' "${new%x}" > "$acfg"
+}
+
 # scraper_attract_display_format ARQUIVO passa as telas gravadas com tab (as
 # do Setup de antes) para o formato do Attract-Mode Plus. Reescreve o arquivo
 # no lugar, com o mesmo dono, e so se houver o que mudar.
