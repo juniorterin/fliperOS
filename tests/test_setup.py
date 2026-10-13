@@ -1298,6 +1298,19 @@ class ButtonsLayoutTests(Base):
                          % (d / "data" / "controls.xml", d / "games.txt"))
         self.assertEqual(calls[1], "buttons save %s %s %s" % (self.env.etc / "buttons.map",
                                                               self.env.etc / "buttons.layout", d / "games.txt"))
+        # Com o XML do MAME 2010, a tabela do core mame2010, com o XML do
+        # GroovyMAME como o MAME mais novo.
+        (d / "calls").unlink()
+        (d / "mame2010.xml.xz").write_text("")
+        self.env.out("buttons_layout_apply", {
+            "ROMCLEAN": str(d / "romclean"), "BUTTONS": str(d / "buttons"), "ROMCLEAN_DATA": str(d / "data"),
+            "GAME_BUTTONS": str(d / "games.txt"), "GROOVYMAME": "false", "ROMCLEAN_CACHE": str(d / "cache"),
+            "MAME2010_XML": str(d / "mame2010.xml.xz")})
+        calls = (d / "calls").read_text().splitlines()
+        self.assertEqual(calls[1], "romclean buttons --xml %s --cache %s --newer-xml-command false -listxml "
+                         "--controls-xml %s --out %s" % (d / "mame2010.xml.xz", d / "cache" / "romclean-mame2010.json",
+                                                         d / "data" / "controls.xml", d / "games-mame2010.txt"))
+        self.assertTrue(calls[2].startswith("buttons save "))
 
 
 class LptTests(Base):

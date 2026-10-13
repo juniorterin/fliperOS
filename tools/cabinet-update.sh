@@ -200,6 +200,21 @@ fi
 echo "== MAME 2010 XML (ROM cleaner)"
 /opt/fliperos/bin/fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz || echo "failed (no network?)"
 
+echo "== Setup > Joysticks > Buttons layout: the buttons table of each MAME"
+if [[ -s /etc/fliperos/buttons.layout ]]; then
+  (
+    set +eu
+    for f in "$lib"/*.sh; do
+      # shellcheck source=/dev/null
+      . "$f"
+    done
+    buttons_layout_apply
+    wc -l "$GAME_BUTTONS" "$GAME_BUTTONS_MAME2010" 2> /dev/null | sed '$d'
+  )
+else
+  echo "no layout (Setup > Joysticks > Buttons layout)"
+fi
+
 echo "== FBNeo sets (the system of each one, for the RetroArch core)"
 /opt/fliperos/bin/fliperos-fbneo fetch /usr/local/share/fliperos/fbneo-sets.tsv.xz || echo "failed (no network?)"
 

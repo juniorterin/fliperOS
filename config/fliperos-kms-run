@@ -61,8 +61,11 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   done
   # Setup > Joysticks > Buttons layout: nos cores MAME (o botao N do painel e
   # o botao N do jogo, config/retroarch-remaps), os binds do numero de botoes
-  # deste jogo, por cima do buttons.cfg.
+  # deste jogo, por cima do buttons.cfg. O mame2010 (MAME 0.139) numera os
+  # botoes de alguns jogos de outro jeito e tem a tabela dele.
   game_buttons=${FLIPEROS_GAME_BUTTONS:-/var/lib/fliperos/game-buttons.txt}
+  [[ ${core##*/} != mame2010_libretro.so || ! -f ${game_buttons%.txt}-mame2010.txt ]] ||
+    game_buttons=${game_buttons%.txt}-mame2010.txt
   case ${core##*/} in
     mame_libretro.so | mame2010_libretro.so)
       if [[ -f $buttons && -f $game_buttons ]]; then

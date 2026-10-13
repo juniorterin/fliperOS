@@ -1583,6 +1583,36 @@ class RomCleanTests(unittest.TestCase):
         self.assertIn('mvsc 5', lines)
         self.assertIn('mvscu 5 mvsc', lines)
 
+    def test_buttons_table_of_an_older_mame(self):
+        # A tabela do core mame2010 (MAME 0.139), com o XML do MAME novo ao
+        # lado. tekken3: o antigo declara os 6 botoes do bloco generico da
+        # placa (o jogo usa 1 2 4 5) e o novo so os 4 do jogo: fica 6, e o
+        # layout dos jogos de 4 botoes nao mexe nele. mk: os dois declaram 6
+        # (botao a mais do driver) e o jogo tem 5: fica 5. sf2 nao muda, e o
+        # jogo que o MAME novo nao tem fica com o do controls.xml.
+        def xml(games):
+            return '<mame>%s</mame>' % ''.join(
+                '<game name="%s"%s><description>%s</description><input players="2" buttons="%d"/></game>'
+                % (name, ' cloneof="%s" romof="%s"' % (parent, parent) if parent else '', name, buttons)
+                for name, parent, buttons in games)
+        old, new, table = self.tmp / 'old.xml', self.tmp / 'new.xml', self.tmp / 'old.txt'
+        old.write_text(xml([('tekken3', '', 6), ('tekken3a', 'tekken3', 6), ('mk', '', 6), ('sf2', '', 6),
+                            ('gone', '', 6), ('tekken', '', 4)]))
+        new.write_text(xml([('tekken3', '', 4), ('tekken3a', 'tekken3', 4), ('mk', '', 6), ('sf2', '', 6),
+                            ('tekken', '', 4)]))
+        controls = self.tmp / 'controls.xml'
+        controls.write_text('<dat>%s</dat>' % ''.join(
+            '<game romname="%s"><player number="1" numButtons="%d"/></game>' % pair
+            for pair in (('tekken3', 4), ('mk', 5), ('sf2', 6), ('gone', 3), ('tekken', 4))))
+        self.romclean('buttons', '--xml', str(old), '--controls-xml', str(controls), '--newer-xml', str(new),
+                      '--out', str(table))
+        self.assertEqual(table.read_text().splitlines(),
+                         ['gone 3', 'mk 5', 'sf2 6', 'tekken 4', 'tekken3 6', 'tekken3a 6 tekken3'])
+        # Sem o MAME novo (ou sem ele instalado), como antes.
+        for extra in ([], ['--newer-xml-command', 'false']):
+            self.romclean('buttons', '--xml', str(old), '--controls-xml', str(controls), *extra, '--out', str(table))
+            self.assertIn('tekken3 4', table.read_text().splitlines())
+
     def scan(self, *flags, xml=None, roms=None):
         plan = self.tmp / 'plan.tsv'
         out = self.romclean('scan', '--xml', str(xml or self.tmp / 'mame.xml'), '--roms', str(roms or self.roms),
@@ -8498,6 +8528,15 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertEqual(config('mame2010', '/roms/mame2010/sf2.zip'), [base])
             self.assertEqual(config('mame2010', '/roms/mame2010/pang.zip'), [base])
             self.assertEqual(config('mame2010', '/roms/mame2010/outro.zip'), [base])
+            # O mame2010 tem a tabela dele (o MAME 0.139 numera o mslug de
+            # outro jeito neste teste); o core do MAME atual segue na outra.
+            (tmp / 'games-mame2010').write_text('mslug 6\npang 4\n')
+            (tmp / 'games').rename(tmp / 'games.txt')
+            (tmp / 'games-mame2010').rename(tmp / 'games-mame2010.txt')
+            env['FLIPEROS_GAME_BUTTONS'] = str(tmp / 'games.txt')
+            self.assertEqual(config('mame2010', '/roms/mame2010/mslug.zip'), [base])
+            self.assertEqual(config('mame2010', '/roms/mame2010/pang.zip'), [base, layout])
+            self.assertEqual(config('mame', '/roms/mame/mslug.zip'), [base, layout])
             self.assertEqual(config('fbneo', '/roms/fbneo/mslug.zip'), [base])
 
     def test_setup_has_the_buttons_layout(self):

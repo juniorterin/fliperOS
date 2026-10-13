@@ -39,6 +39,8 @@ buttons_save() {
 BUTTONS_MAP=${BUTTONS_MAP:-$FLIPEROS_ETC/buttons.map}
 BUTTONS_LAYOUT=${BUTTONS_LAYOUT:-$FLIPEROS_ETC/buttons.layout}
 GAME_BUTTONS=${GAME_BUTTONS:-/var/lib/fliperos/game-buttons.txt}
+# A do core mame2010 do RetroArch (o fliperos-kms-run a acha por este nome).
+GAME_BUTTONS_MAME2010=${GAME_BUTTONS%.txt}-mame2010.txt
 BUTTONS_LAYOUT_COUNTS=(1 2 3 4 5)
 BUTTONS_POSITIONS=("Top row, left" "Top row, middle" "Top row, right"
   "Bottom row, left" "Bottom row, middle" "Bottom row, right")
@@ -93,14 +95,27 @@ buttons_layout_set() {
 
 # buttons_layout_apply refaz a tabela de quantos botoes cada jogo tem (do
 # -listxml do GroovyMAME, com os do controls.xml) e grava os botoes de novo,
-# com os layouts.
+# com os layouts. O core mame2010 do RetroArch tem a tabela dele, do XML do
+# MAME 0.139, que numera os botoes de alguns jogos de outro jeito (Tekken 3:
+# 1 2 4 5); o XML do GroovyMAME vai junto como o MAME mais novo.
 buttons_layout_apply() {
-  local controls
-  local -a source data=()
+  local controls word
+  local -a source old newer=() data=()
   mapfile -t source < <(romclean_xml_args groovymame "")
   controls=$(romclean_data_find controls.xml "$ROMCLEAN_DATA") && data=(--controls-xml "$controls")
   "$ROMCLEAN" buttons "${source[@]}" "${data[@]}" --out "$GAME_BUTTONS" >> "$FLIPEROS_LOG" 2>&1 ||
     log_info "sem a tabela de botoes dos jogos (o GroovyMAME esta instalado?)"
+  if [[ -f $MAME2010_XML ]]; then
+    mapfile -t old < <(romclean_xml_args mame2010 "")
+    for word in "${source[@]}"; do
+      case $word in
+        --xml | --xml-command | --cache) newer+=("--newer-${word#--}") ;;
+        *) newer+=("$word") ;;
+      esac
+    done
+    "$ROMCLEAN" buttons "${old[@]}" "${newer[@]}" "${data[@]}" --out "$GAME_BUTTONS_MAME2010" >> "$FLIPEROS_LOG" 2>&1 ||
+      log_info "sem a tabela de botoes dos jogos do MAME 2010"
+  fi
   FLIPEROS_BUTTONS_LAYOUT=$BUTTONS_LAYOUT FLIPEROS_GAME_BUTTONS=$GAME_BUTTONS \
     "$BUTTONS" save "$BUTTONS_MAP" >> "$FLIPEROS_LOG" 2>&1
 }
