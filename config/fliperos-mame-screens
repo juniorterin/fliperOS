@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Jogos de 2 ou 3 telas no GroovyMAME com mais de um monitor (Setup > Video
-# Setup > Multiple Monitors): um .ini por sistema de varias telas com o
+# Setup > Video Setup > Multiple Monitors): um .ini por sistema de varias telas com o
 # numscreens, que o comando groovymame poe no inipath depois da pasta
 # principal (um .ini do usuario la vale mais).
 #

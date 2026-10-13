@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Jogos livres (Setup > Free games): homebrew de codigo aberto para as pastas
+# Jogos livres (Setup > Games > Downloader > Free games): homebrew de codigo aberto para as pastas
 # de ~/roms, para os frontends nao comecarem vazios. A lista (endereco,
 # sha256 e licenca de cada um) e o config/fliperos-freeroms.
 

@@ -43,7 +43,7 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   # (config/fliperos-buttons), por cima do perfil automatico do controle.
   buttons=${FLIPEROS_RA_BUTTONS:-/etc/fliperos/retroarch/buttons.cfg}
   [[ -f $buttons ]] && appendconfig+="|$buttons"
-  # O DOFLinx (Setup > Extras) le o jogo aberto pelo Network Command
+  # O DOFLinx (Setup > System > Extras) le o jogo aberto pelo Network Command
   # Interface: o arquivo so existe com ele instalado.
   doflinx=${FLIPEROS_RA_DOFLINX:-/etc/fliperos/retroarch/doflinx.cfg}
   [[ -f $doflinx ]] && appendconfig+="|$doflinx"
@@ -112,7 +112,7 @@ export QT_QPA_EGLFS_HIDECURSOR=1
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).
 export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}"
 # A saida do programa vai para /opt/fliperos/logs/<programa>.log, nao para a
-# tela; no modo debug (Setup > Debug mode) ela aparece. Sem como gravar o
+# tela; no modo debug (Setup > System > Debug mode) ela aparece. Sem como gravar o
 # log, o programa abre assim mesmo.
 log="${FLIPEROS_LOGS:-/opt/fliperos/logs}/$(basename -- "$1").log"
 # Um frontend que espera o jogo lendo a saida do comando (o ES-DE: popen ate

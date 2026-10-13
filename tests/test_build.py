@@ -379,6 +379,21 @@ class ImageTests(unittest.TestCase):
         self.assertRegex(MKISO, r'(?m)^fetch_debs\nbuild_gum$')
         self.assertIn('patches/', (ROOT / 'Dockerfile.fliperos').read_text())
 
+    def test_gum_menu_balloon(self):
+        # O balao de informacao: o texto do item sob o cursor, embaixo da
+        # lista, das variaveis GUM_CHOOSE_HINT*. Sem elas o gum fica igual.
+        patch = (ROOT / 'patches/gum/0004-choose-balao.patch').read_bytes()
+        self.assertNotIn(b'\r', patch)
+        text = patch.decode()
+        self.assertIn('+\t\tparts = append(parts, hint.Render(m.index))\n', text)
+        self.assertIn('+func Enabled() bool { return os.Getenv("GUM_CHOOSE_HINTS") != "" }', text)
+        for name in ('GUM_CHOOSE_HINT_WIDTH', 'GUM_CHOOSE_HINT_LINES', 'GUM_CHOOSE_HINT_BORDER',
+                     'GUM_CHOOSE_HINT_FOREGROUND', 'GUM_CHOOSE_HINT_BORDER_FOREGROUND'):
+            self.assertIn('"%s"' % name, text)
+        # O Setup e quem as preenche (lib/ui.sh).
+        ui = (ROOT / 'fliperos-setup/lib/ui.sh').read_text()
+        self.assertIn('GUM_CHOOSE_HINTS=$(printf \'%s\\n\' "${UI_HINTS[@]}")', ui)
+
     def test_gum_menu_sounds(self):
         # O cursor que anda e o Enter tocam os WAV de GUM_SOUND_MOVE e
         # GUM_SOUND_SELECT (aplay), no choose e no confirm. Sem CR: o git
@@ -799,7 +814,7 @@ class DesktopTerminalTests(unittest.TestCase):
     def test_steam_does_not_bring_xterm_back(self):
         # O steam-libs:i386 recomenda "xterm | x-terminal-emulator", e o
         # Alacritty (amd64) nao vale para um pacote i386: o xterm voltou na
-        # ISO e virou o x-terminal-emulator. O Steam vem pelo Setup > Extras.
+        # ISO e virou o x-terminal-emulator. O Steam vem pelo Setup > System > Extras.
         self.assertIn('STEAM_PACKAGES="steam-installer xterm- xterm:i386-"', EXTRAS)
 
     def test_ctrl_v_pastes_in_the_terminal(self):
@@ -874,9 +889,10 @@ class CalibrateTests(unittest.TestCase):
         self.assertIn('ENV{ID_INPUT_JOYSTICK}=="1"', rules)
         self.assertIn('/opt/fliperos/bin/fliperos-calibrate apply $env{DEVNAME}', rules)
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
-        self.assertIn('joysticks|Joysticks (GunCon 2, wheel, LPT)', menu)
+        self.assertIn('"joysticks|Joysticks|', menu)
         screens = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
-        for item in ('guncon|Calibrate GunCon 2', 'axes|Calibrate wheel', 'lpt|LPT joysticks'):
+        for item in ('guncon|Calibrate GunCon 2', 'axes|Calibrate wheel', 'lpt|LPT joysticks',
+                     'quirks|Quirks (USB controller fixes)', 'quirks) screen_quirks ;;'):
             self.assertIn(item, screens)
 
 
@@ -944,7 +960,7 @@ class RomFoldersTests(unittest.TestCase):
             run()
             (tmp / 'roms/old-mame').mkdir()
             (tmp / 'roms/retroarch/old-mame2010').mkdir()
-            # A custom folder de uma pasta de arte (Setup > Folders) fica.
+            # A custom folder de uma pasta de arte (Setup > Games > Folders) fica.
             (tmp / 'disk').mkdir()
             (tmp / 'media/preview/model2').rmdir()
             (tmp / 'media/preview/model2').symlink_to(tmp / 'disk')
@@ -1949,7 +1965,7 @@ class RomCleanTests(unittest.TestCase):
         self.assertIn('could not read the CHD folder', r.stderr)
 
     def test_scan_and_chds_from_a_torrent_list(self):
-        # Setup > Downloader: o plano sai da lista de arquivos de um torrent
+        # Setup > Games > Downloader: o plano sai da lista de arquivos de um torrent
         # que ainda nao foi baixado, como se a pasta ja os tivesse.
         names = self.tmp / 'names'
         names.write_text('mslug.zip\t500\nneogeo.zip\t300\n1942.zip\t70\nkinst/kinst.chd\t9\nreadme.txt\t1\n')
@@ -2188,9 +2204,9 @@ class FreeRomsTests(unittest.TestCase):
                       ROOTFS)
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
         self.assertIn('run_with_progress "Downloading the free games" "" freeroms_fetch "$result"', menu)
-        # Em Setup > Downloader.
+        # Em Setup > Games > Downloader.
         screen = (ROOT / 'fliperos-setup/screens/downloader.sh').read_text()
-        self.assertIn('"freeroms|Free games (open-source homebrew)"', screen)
+        self.assertIn('"freeroms|Free games (open-source homebrew)|', screen)
         self.assertIn('freeroms) screen_free_roms ;;', screen)
 
 
@@ -3444,7 +3460,7 @@ class EscQuitTests(unittest.TestCase):
         self.assertNotIn('escquit', x_branch)
 
     def test_custom_frontend_runs_its_command_with_esc(self):
-        # Um frontend da pessoa (Setup > Frontend): o comando num bash -c,
+        # Um frontend da pessoa (Setup > Games > Frontend): o comando num bash -c,
         # pelo fliperos-kms-run, com o Esc ligado.
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
@@ -4085,7 +4101,7 @@ class FightcadeTests(unittest.TestCase):
             # Sem o download: diz onde instalar, e nao abre nada.
             run = subprocess.run(['bash', str(self.SCRIPT)], capture_output=True, text=True, env=env)
             self.assertEqual(run.returncode, 1)
-            self.assertIn('Setup > Frontend', run.stderr)
+            self.assertIn('Setup > Games > Frontend', run.stderr)
             fightcade_package(tmp / 'pkg.tar.gz')
             self.assertEqual(self.fetch(tmp).returncode, 0)
             # No console: o fliperos-x11-run com o nome da linha da tabela de
@@ -4913,7 +4929,7 @@ class EmulatorMenuTests(unittest.TestCase):
     APPS = sorted(p for p in (ROOT / 'config/applications').glob('fliperos-*.desktop')
                   if 'Categories=Game;' in p.read_text())
     # O que mostra o atalho (TryExec): o binario do emulador; o do Model 2 e
-    # o lancador, que avisa quando falta o Wine (Setup > Extras) ou o
+    # o lancador, que avisa quando falta o Wine (Setup > System > Extras) ou o
     # emulador (o usuario copia), e o Fightcade aparece depois de baixado
     # pelo Setup.
     TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/local/bin/fliperos-model2',
@@ -5530,7 +5546,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('--skip-wine|--skip-steam|--skip-heroic) shift ;;', MKISO)
 
     def test_extras_are_not_in_the_image(self):
-        # Wine, Steam e Heroic passavam de 1,5 GB: o Setup > Extras instala.
+        # Wine, Steam e Heroic passavam de 1,5 GB: o Setup > System > Extras instala.
         for gone in ('apt-get install -y steam-installer', 'wine32:i386', 'heroic.deb'):
             self.assertNotIn(gone, MKISO)
         prep = MKISO.split('prepare_extras_chroot() {')[1].split('\n}\n')[0]
@@ -5722,7 +5738,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
 
 class PixelcadeTests(unittest.TestCase):
     """config/fliperos-pixelcade: o marquee do Pixelcade pelo pixelweb (baixado
-    pelo Setup > Extras), com os eventos dos lancadores e dos frontends."""
+    pelo Setup > System > Extras), com os eventos dos lancadores e dos frontends."""
     SCRIPT = ROOT / 'config/fliperos-pixelcade'
     GAME_DIGDUG = ['attract/stop', 'console/stream/black',
                    'text?t=Now%20Playing%20digdug&ss=1&l=1&scroll=true&game=digdug&system=mame&event=GameStart',
@@ -6287,7 +6303,7 @@ class PixelcadeTests(unittest.TestCase):
 class OutputsTests(unittest.TestCase):
     """config/fliperos-outputs: as saidas dos jogos (porta 8000, o protocolo do
     MAMEHooker) para o Hook Of The Reaper (pelo Wine) e o LEDSpicer, instalados
-    pelo Setup > Extras."""
+    pelo Setup > System > Extras."""
     SCRIPT = ROOT / 'config/fliperos-outputs'
 
     def setUp(self):
@@ -7906,7 +7922,7 @@ class RetroArchCoreSwitchresTests(unittest.TestCase):
 
 
 class EmulatorsMenuTests(unittest.TestCase):
-    """Setup > Emulators & Games: o estado de cada emulador e a instalacao dos que nao vem na imagem."""
+    """Setup > Games > Emulators & Games: o estado de cada emulador e a instalacao dos que nao vem na imagem."""
 
     def run_cmd(self, script, *args, env=None):
         return subprocess.run(['bash', str(ROOT / 'config' / script), *args], capture_output=True, text=True,
@@ -8050,11 +8066,13 @@ class EmulatorsMenuTests(unittest.TestCase):
             self.assertEqual(out.stdout.strip(), 'game in %s' % dest)
 
     def test_setup_menu(self):
-        # Emulators & Games depois de Frontend; Splash screen por ultimo.
+        # Emulators & Games depois de Frontend (Setup > Games); Splash screen
+        # por ultimo (Setup > System).
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
-        self.assertIn('"frontend|Frontend" \\\n      "emulators|Emulators & Games (install the ones not in the image)" \\\n',
-                      menu)
-        self.assertIn('"update|System Update" \\\n      "splash|Splash screen (boot theme)" \\\n      "return|Return")', menu)
+        games = menu.split('screen_setup_games() {')[1].split('\n}\n')[0]
+        self.assertRegex(games, r'"frontend\|Frontend\|[^"]+" \\\n      "emulators\|Emulators & Games\|[^"]+" \\\n')
+        system = menu.split('screen_setup_system() {')[1].split('\n}\n')[0]
+        self.assertRegex(system, r'"splash\|Splash screen\|[^"]+" \\\n      "return\|Return\|[^"]+"\)')
         self.assertIn('emulators) screen_emulators ;;', menu)
         self.assertIn('source "$SETUP_DIR/lib/emulators.sh"', (ROOT / 'fliperos-setup/fliperos-setup').read_text())
 
@@ -8485,10 +8503,10 @@ class ButtonMappingTests(unittest.TestCase):
     def test_setup_has_the_buttons_layout(self):
         # Joysticks logo depois de Network Setup; Buttons layout abaixo do Button mapping.
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
-        self.assertIn('"network|Network Setup" \\\n      "joysticks|Joysticks (GunCon 2, wheel, LPT)" \\\n', menu)
+        self.assertRegex(menu, r'"network\|Network Setup\|[^"]+" \\\n      "joysticks\|Joysticks\|')
         screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
-        self.assertIn('"buttons|Button mapping (all emulators)" \\\n'
-                      '      "layout|Buttons layout (games of 1 to 5 buttons)" \\\n', screen)
+        self.assertRegex(screen, r'"buttons\|Button mapping \(all emulators\)\|[^"]+" \\\n'
+                                 r'      "layout\|Buttons layout \(games of 1 to 5 buttons\)\|')
         self.assertIn('layout) screen_buttons_layout ;;', screen)
 
     def test_setup_saves_the_mame_options(self):
@@ -8498,7 +8516,7 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-buttons" "$root/opt/fliperos/bin/fliperos-buttons"',
                       ROOTFS)
         screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
-        self.assertIn('"buttons|Button mapping (all emulators)"', screen)
+        self.assertIn('"buttons|Button mapping (all emulators)|', screen)
         body = screen.split('screen_buttons() {')[1].split('\n}\n')[0]
         self.assertLess(body.index('padkeys_off'), body.index('buttons_capture'))
         self.assertLess(body.rindex('buttons_capture'), body.index('padkeys_on'))

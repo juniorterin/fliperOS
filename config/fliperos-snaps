@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capturas dos jogos de arcade do progetto-SNAPS (Setup > Scraper).
+"""Capturas dos jogos de arcade do progetto-SNAPS (Setup > Games > Scraper).
 
 O progetto-SNAPS (www.progettosnaps.net, de AntoPISA) distribui as imagens
 do MAME em pacotes por categoria: um "fullset" a cada repack e um "upd" a

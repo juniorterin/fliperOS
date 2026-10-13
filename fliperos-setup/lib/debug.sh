@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Modo debug (Setup > Debug mode): mostra todo texto que o FliperOS esconde.
+# Modo debug (Setup > System > Debug mode): mostra todo texto que o FliperOS esconde.
 # Desligado (o padrao), o boot vai direto ao Plymouth (Limine quiet, kernel e
 # udev calados, sem cursor) e a saida dos launchers e emuladores vai para
 # /opt/fliperos/logs/<programa>.log. Ligado, o menu do Limine aparece, o boot

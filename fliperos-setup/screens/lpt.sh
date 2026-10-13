@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Setup > LPT joysticks: joysticks e pads ligados na porta paralela por um
+# Setup > Joysticks > LPT joysticks: joysticks e pads ligados na porta paralela por um
 # adaptador (lib/lpt.sh). A pessoa diz qual adaptador e o que esta ligado;
 # o driver carrega na hora e em todo boot.
 

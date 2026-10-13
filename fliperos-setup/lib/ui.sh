@@ -168,18 +168,20 @@ ui_topbar() {
 UI_USED_ROWS=0
 
 # ui_screen TITULO [TEXTO...] limpa a tela e desenha barra, titulo e caixa.
-# Cada argumento de texto vira uma linha (vazio = linha em branco).
+# Cada argumento de texto vira uma linha (vazio = linha em branco). O
+# CLICOLOR_FORCE e porque a caixa passa por uma variavel: sem ele o gum, que
+# nao ve um terminal na saida, tira as cores (moldura e titulo brancos).
 ui_screen() {
   local title=$1 w box
   shift
   ui_size
   w=$(ui_box_width)
   if (($#)); then
-    box=$(gum style --border rounded --border-foreground "$C_PURPLE" --padding "0 1" \
+    box=$(CLICOLOR_FORCE=1 gum style --border rounded --border-foreground "$C_PURPLE" --padding "0 1" \
       --margin "0 2" --width "$w" --foreground "$C_FG" \
       "$(ui_c "$C_PINK" "$title")" "" "$@")
   else
-    box=$(gum style --border rounded --border-foreground "$C_PURPLE" --padding "0 1" \
+    box=$(CLICOLOR_FORCE=1 gum style --border rounded --border-foreground "$C_PURPLE" --padding "0 1" \
       --margin "0 2" --width "$w" --foreground "$C_PINK" "$title")
   fi
   ui_clear
@@ -200,10 +202,85 @@ ui_list_height() {
   printf '%s\n' "$free"
 }
 
+# Os baloes de informacao: UI_HINTS tem o texto de cada item do proximo
+# ui_menu, na ordem (ui_menu_hints o preenche). O gum do FliperOS
+# (patches/gum/0004-choose-balao.patch) mostra embaixo da lista o do item
+# sob o cursor; o gum sem o patch ignora as variaveis e nao mostra nada.
+UI_HINTS=()
+# Linhas de texto do balao numa tela baixa (320x240: 15 linhas), onde ele
+# fica sem moldura, no lugar da ajuda do gum.
+UI_HINT_SMALL_LINES=2
+
+# ui_hint_small: a tela e baixa demais para o balao com moldura?
+ui_hint_small() {
+  ((UI_ROWS < 20))
+}
+
+# ui_hint_lines LARGURA imprime quantas linhas o maior texto de UI_HINTS
+# ocupa quebrado em LARGURA colunas, sem cortar palavras.
+ui_hint_lines() {
+  printf '%s\n' "${UI_HINTS[@]}" | awk -v w="$1" '
+    { n = 1; col = 0
+      for (i = 1; i <= NF; i++) {
+        l = length($i)
+        if (col == 0) col = l
+        else if (col + 1 + l <= w) col += 1 + l
+        else { n++; col = l }
+      }
+      if (n > max) max = n }
+    END { print max + 0 }'
+}
+
+# ui_hint_env prepara o balao do gum (as GUM_CHOOSE_HINT* de quem chama) e
+# soma a UI_USED_ROWS as linhas que ele ocupa. Na tela baixa a ajuda do gum
+# sai (UI_HINT_ARGS) e o balao fica com as duas linhas dela.
+UI_HINT_ARGS=()
+ui_hint_env() {
+  local w lines
+  UI_HINT_ARGS=()
+  GUM_CHOOSE_HINTS=$(printf '%s\n' "${UI_HINTS[@]}")
+  GUM_CHOOSE_HINT_FOREGROUND=$C_CYAN
+  GUM_CHOOSE_HINT_BORDER_FOREGROUND=$C_COMMENT
+  if ui_hint_small; then
+    GUM_CHOOSE_HINT_BORDER=0
+    GUM_CHOOSE_HINT_WIDTH=$((UI_COLS - 6))
+    GUM_CHOOSE_HINT_LINES=$UI_HINT_SMALL_LINES
+    UI_HINT_ARGS=(--show-help=false)
+    return 0
+  fi
+  w=$(($(ui_box_width) - 2))
+  lines=$(ui_hint_lines $((w - 4)))
+  ((lines < 1)) && lines=1
+  ((lines > 3)) && lines=3
+  GUM_CHOOSE_HINT_BORDER=1
+  GUM_CHOOSE_HINT_WIDTH=$w
+  GUM_CHOOSE_HINT_LINES=$lines
+  UI_USED_ROWS=$((UI_USED_ROWS + lines + 2))
+}
+
+# ui_menu_hints TITULO TEXTO PADRAO "valor|rotulo|balao"... e o ui_menu com
+# um balao de informacao por item (o rotulo nao pode ter "|").
+ui_menu_hints() {
+  local title=$1 text=$2 default=$3 entry rest rc entries=()
+  shift 3
+  UI_HINTS=()
+  for entry in "$@"; do
+    rest=${entry#*|}
+    entries+=("${entry%%|*}|${rest%%|*}")
+    if [[ $rest == *"|"* ]]; then UI_HINTS+=("${rest#*|}"); else UI_HINTS+=(""); fi
+  done
+  ui_menu "$title" "$text" "$default" "${entries[@]}"
+  rc=$?
+  UI_HINTS=()
+  return "$rc"
+}
+
 # ui_menu TITULO TEXTO PADRAO "valor|rotulo"... mostra o menu e imprime o
 # valor escolhido. Status 1 quando a pessoa volta com Esc.
 ui_menu() {
   local title=$1 text=$2 default=$3 entry labels=() values=() choice rc height i selected=""
+  local -x GUM_CHOOSE_HINTS="" GUM_CHOOSE_HINT_WIDTH="" GUM_CHOOSE_HINT_LINES="" GUM_CHOOSE_HINT_BORDER=""
+  local -x GUM_CHOOSE_HINT_FOREGROUND="" GUM_CHOOSE_HINT_BORDER_FOREGROUND=""
   shift 3
   for entry in "$@"; do
     values+=("${entry%%|*}")
@@ -217,8 +294,11 @@ ui_menu() {
   else
     ui_screen "$title"
   fi
+  UI_HINT_ARGS=()
+  ((${#UI_HINTS[@]})) && ui_hint_env
   height=$(ui_list_height "${#labels[@]}")
   local args=(--height "$height" --padding "0 4" --header "")
+  args+=("${UI_HINT_ARGS[@]}")
   # O --selected e uma lista separada por virgulas: a virgula do rotulo vai
   # escapada, senao o cursor voltava ao primeiro item.
   [[ -n $selected ]] && args+=(--selected "${selected//,/\\,}")

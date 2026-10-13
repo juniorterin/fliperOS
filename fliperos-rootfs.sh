@@ -110,28 +110,28 @@ install -d "$root/usr/local/share/fliperos/sm2-emu-patches"
 for patch in "$src"/config/sm2-emu-patches/*.patch; do
   [[ ! -f $patch ]] || install -m644 "$patch" "$root/usr/local/share/fliperos/sm2-emu-patches/"
 done
-# Fightcade 2 (Setup > Frontend): o que o baixa do site dele e o abre, e o
+# Fightcade 2 (Setup > Games > Frontend): o que o baixa do site dele e o abre, e o
 # openbox dele (Alt+Tab entre a sala de jogos e o emulador). O programa em si
 # nao vem na imagem (codigo fechado).
 install -Dm755 "$src/config/fliperos-fightcade" "$root/opt/fliperos/bin/fliperos-fightcade"
 install -Dm644 "$src/config/openbox-fightcade.xml" "$root/etc/fliperos/openbox-fightcade.xml"
-# Arcadeflow, o tema padrao do Attract-Mode Plus (Setup > Frontend): o que o
+# Arcadeflow, o tema padrao do Attract-Mode Plus (Setup > Games > Frontend): o que o
 # baixa do GitHub dele. O tema em si nao vem na imagem (sem licenca).
 install -Dm755 "$src/config/fliperos-arcadeflow" "$root/opt/fliperos/bin/fliperos-arcadeflow"
 # As saidas dos jogos (porta 8000, o protocolo do MAMEHooker) para placas e
 # LEDs: o helper que os lancadores chamam e a chave do PPA do LEDSpicer. O
-# Hook Of The Reaper e o LEDSpicer em si vem pelo Setup > Extras.
+# Hook Of The Reaper e o LEDSpicer em si vem pelo Setup > System > Extras.
 install -Dm755 "$src/config/fliperos-outputs" "$root/opt/fliperos/bin/fliperos-outputs"
 install -Dm644 "$src/config/ledspicer-ppa.asc" "$root/usr/local/share/fliperos/ledspicer-ppa.asc"
-# Wine, Steam, Heroic e o Pixelcade nao vem na imagem: o Setup > Extras os
+# Wine, Steam, Heroic e o Pixelcade nao vem na imagem: o Setup > System > Extras os
 # instala.
 install -Dm755 "$src/config/fliperos-extras" "$root/opt/fliperos/bin/fliperos-extras"
-# Setup > Emulators & Games: o estado de cada emulador e a instalacao dos que
+# Setup > Games > Emulators & Games: o estado de cada emulador e a instalacao dos que
 # nao vem na imagem; o KOF Final Attack no Ikemen GO (config/fliperos-kof).
 install -Dm755 "$src/config/fliperos-emulators" "$root/opt/fliperos/bin/fliperos-emulators"
 install -Dm755 "$src/config/fliperos-kof" "$root/usr/local/bin/fliperos-kof"
 # Pixelcade (marquee de LED/LCD): o pixelweb e a arte sao baixados pelo
-# Setup > Extras para ~/pixelcade (codigo fechado). Daqui vem o que liga os
+# Setup > System > Extras para ~/pixelcade (codigo fechado). Daqui vem o que liga os
 # frontends e os lancadores a ele, o servico (so sobe com o pixelweb
 # baixado) e a regra da udev que o abre quando o marquee e conectado.
 install -Dm755 "$src/config/fliperos-pixelcade" "$root/opt/fliperos/bin/fliperos-pixelcade"
@@ -144,7 +144,7 @@ ln -sfn /etc/systemd/system/fliperos-pixelcade.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-pixelcade.service"
 # O logo do FliperOS que o marquee (e o ZeDMD) mostra ao ligar, o servico do
 # Pixelcade LCD ligado pela USB (aberto pela udev) e o do DOFLinx, os efeitos
-# durante o jogo (so sobe com o Setup > Extras > DOFLinx instalado).
+# durante o jogo (so sobe com o Setup > System > Extras > DOFLinx instalado).
 install -Dm644 "$src/config/pixelcade-fliperos.png" "$root/usr/local/share/fliperos/pixelcade/fliperos.png"
 install -Dm644 "$src/config/fliperos-pixelcade-lcd@.service" \
   "$root/etc/systemd/system/fliperos-pixelcade-lcd@.service"
@@ -152,7 +152,7 @@ install -Dm644 "$src/config/fliperos-doflinx.service" "$root/etc/systemd/system/
 ln -sfn /etc/systemd/system/fliperos-doflinx.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-doflinx.service"
 # ZeDMD (DMD de LED open source): os mesmos eventos, desenhados pelo
-# fliperos-dmd. O dmdserver (libdmdutil) e o Pillow vem pelo Setup > Extras.
+# fliperos-dmd. O dmdserver (libdmdutil) e o Pillow vem pelo Setup > System > Extras.
 install -Dm755 "$src/config/fliperos-dmd" "$root/opt/fliperos/bin/fliperos-dmd"
 install -Dm644 "$src/config/fliperos-zedmd.service" "$root/etc/systemd/system/fliperos-zedmd.service"
 install -Dm644 "$src/config/99-fliperos-zedmd.rules" "$root/etc/udev/rules.d/99-fliperos-zedmd.rules"
@@ -191,16 +191,16 @@ install -Dm755 "$src/config/fliperos-mame-ini" "$root/opt/fliperos/bin/fliperos-
 # Setup > Joysticks > Button mapping: os botoes de cada jogador no RetroArch
 # e no GroovyMAME.
 install -Dm755 "$src/config/fliperos-buttons" "$root/opt/fliperos/bin/fliperos-buttons"
-# Setup > MAME ROM Cleaner: o que sai de uma pasta de ROMs, pelo XML do MAME.
+# Setup > Games > Cleaner > MAME ROM Cleaner: o que sai de uma pasta de ROMs, pelo XML do MAME.
 install -Dm755 "$src/config/fliperos-romclean" "$root/opt/fliperos/bin/fliperos-romclean"
 # O sistema de cada set do FBNeo: o fliperos-kms-run abre os de console que
 # estao soltos na pasta dos arcades.
 install -Dm755 "$src/config/fliperos-fbneo" "$root/opt/fliperos/bin/fliperos-fbneo"
-# Setup > Free games: homebrew de codigo aberto para as pastas de ~/roms.
+# Setup > Games > Downloader > Free games: homebrew de codigo aberto para as pastas de ~/roms.
 install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-freeroms"
-# Setup > Scraper > progetto-SNAPS: as capturas dos jogos de arcade.
+# Setup > Games > Scraper > progetto-SNAPS: as capturas dos jogos de arcade.
 install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-snaps"
-# Setup > Downloader: o romset e os CHDs por link magnetico, so o que o filtro
+# Setup > Games > Downloader: o romset e os CHDs por link magnetico, so o que o filtro
 # do ROM cleaner escolhe. O servico so e ligado pelo Setup, com um link.
 install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"
 install -Dm644 "$src/config/fliperos-transmission.service" "$root/etc/systemd/system/fliperos-transmission.service"
@@ -406,7 +406,7 @@ EOF
 # ── Splash e console ──────────────────────────────────────────────
 # Os temas que vem na imagem (config/splashscreen): no Plymouth e em
 # /usr/share/fliperos/splashscreen, de onde o fliperos-roms os copia para
-# ~/splashscreen. Setup > Splash screen escolhe o do boot entre os de la.
+# ~/splashscreen. Setup > System > Splash screen escolhe o do boot entre os de la.
 rm -rf "$root/usr/share/fliperos/splashscreen"
 mkdir -p "$root/usr/share/fliperos"
 cp -r "$src/config/splashscreen" "$root/usr/share/fliperos/splashscreen"
@@ -455,13 +455,13 @@ EOF
 ln -sf /dev/null "$root/etc/systemd/system/live-config.service"
 
 # ── Latencia (docs/wiki/Latency.md) ───────────────────────────────
-# O modo escolhido em Setup > Latency vale desde o boot.
+# O modo escolhido em Setup > System > Latency vale desde o boot.
 install -Dm644 "$src/config/fliperos-latency.service" "$root/etc/systemd/system/fliperos-latency.service"
 mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
 ln -sfn /etc/systemd/system/fliperos-latency.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-latency.service"
 # Nada de apt nem man-db rodando sozinho no meio de uma partida (picos de
-# CPU e disco). Atualizar fica no Setup > System Update, como no GA.
+# CPU e disco). Atualizar fica no Setup > System > System Update, como no GA.
 for timer in apt-daily.timer apt-daily-upgrade.timer man-db.timer; do
   ln -sfn /dev/null "$root/etc/systemd/system/$timer"
 done

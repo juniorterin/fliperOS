@@ -90,7 +90,7 @@ const enUS = {
       {
         id: 'latency',
         title: 'Low latency',
-        text: 'Two modes in Setup > Latency. Standard polls USB at 1000 Hz and tunes GroovyMAME and RetroArch; Low latency adds full kernel preemption, automatic frame delay and preemptive frames.',
+        text: 'Two modes in Setup > System > Latency. Standard polls USB at 1000 Hz and tunes GroovyMAME and RetroArch; Low latency adds full kernel preemption, automatic frame delay and preemptive frames.',
         points: [],
       },
       {
@@ -161,7 +161,7 @@ const enUS = {
       { id: 'openbor', name: 'OpenBOR', systems: 'Beat ’em ups', note: '320x240' },
     ],
     frontendsTitle: 'Frontends',
-    frontendsIntro: 'Pick the default launcher in Setup > Frontend.',
+    frontendsIntro: 'Pick the default launcher in Setup > Games > Frontend.',
     frontends: [
       { id: 'attract-mode', name: 'Attract-Mode Plus', text: 'KMS/DRM build with the AdvanceMenu theme.' },
       { id: 'es-de', name: 'EmulationStation (ES-DE)', text: 'FliperOS 240p theme in Dracula colors.' },
@@ -170,7 +170,7 @@ const enUS = {
     ],
     extrasTitle: 'Optional extras',
     extrasText:
-      'Left out of the ISO so it fits in a single download. Installed over the network from Setup > Extras.',
+      'Left out of the ISO so it fits in a single download. Installed over the network from Setup > System > Extras.',
     extrasBadge: 'Optional',
     extras: [
       { id: 'wine', name: 'Wine', text: 'For the Fightcade 2 emulators' },
@@ -234,7 +234,7 @@ const enUS = {
     points: [
       { id: 'zedmd', title: 'ZeDMD: build your own', text: 'An ESP32 and HUB75 LED panels, 128×32 or 256×64. FliperOS draws every frame itself, with the marquee art of your own collection.' },
       { id: 'versus', title: 'Scoreboard mode', text: 'In fighting games the display becomes a scoreboard: the two characters and each side’s wins in the session, fixed on the ZeDMD and as text on Pixelcade. About 200 arcade games in GroovyMAME and 100 in RetroArch’s FBNeo core, through Fightcade’s detectors.' },
-      { id: 'install', title: 'Install from the Setup', text: 'Setup > Extras > ZeDMD or Pixelcade downloads the display’s program and turns on the service, the ES-DE scripts and the Attract-Mode Plus plugin.' },
+      { id: 'install', title: 'Install from the Setup', text: 'Setup > System > Extras > ZeDMD or Pixelcade downloads the display’s program and turns on the service, the ES-DE scripts and the Attract-Mode Plus plugin.' },
       { id: 'browse', title: 'Follows the menu', text: 'In ES-DE and Attract-Mode Plus the display changes as you move through systems and games.' },
       { id: 'launch', title: 'Every launcher', text: 'GroovyMAME, RetroArch, Flycast, Supermodel, Dolphin and the other emulators update the display when the game starts, whatever frontend opened it.' },
       { id: 'usb', title: 'Plug and play', text: 'Plug the display into USB and the service starts by itself. With no display connected it gives up after a few tries and stays out of the way.' },
@@ -283,7 +283,7 @@ const enUS = {
         id: 'display',
         title: 'LED display',
         boards: 'ESP32 or Pico + LED panels',
-        text: 'A ZeDMD shows the selected game, the game that is open, its high scores and achievements, like the Pixelcade marquee, with artwork from your own collection. Setup > Extras installs the support.',
+        text: 'A ZeDMD shows the selected game, the game that is open, its high scores and achievements, like the Pixelcade marquee, with artwork from your own collection. Setup > System > Extras installs the support.',
         projects: ['ZeDMD', 'libdmdutil'],
       },
       {
@@ -324,7 +324,7 @@ const enUS = {
     intro:
       'A Dracula-themed menu made for the tube’s screen. No keyboard needed: the panel’s joystick and buttons drive it.',
     terminalTitle: 'fliperos-setup',
-    menuTitle: 'Setup (video, audio, network...)',
+    menuTitle: 'Setup',
     menu: [
       { id: 'video', label: 'Video Setup', text: 'Monitor, output test, geometry, boot mode and extra monitors' },
       { id: 'audio', label: 'Audio Setup', text: 'Card, volume, MAME audio latency, menu sounds' },

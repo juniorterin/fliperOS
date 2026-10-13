@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Jogos livres para as pastas de ~/roms (Setup > Free games).
+"""Jogos livres para as pastas de ~/roms (Setup > Games > Downloader > Free games).
 
 Homebrew de codigo aberto, para os frontends nao comecarem vazios e para
 testar video, som e controle sem depender de ROM de ninguem: cada arquivo

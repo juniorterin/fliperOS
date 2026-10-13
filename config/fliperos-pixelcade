@@ -4,7 +4,7 @@
 #
 # Quem fala com o marquee pela USB e o pixelweb, programa de codigo fechado
 # do Pixelcade, com uma API REST em localhost:8080. Ele e a arte nao vem na
-# imagem: o Setup > Extras os baixa (fetch) para ~/pixelcade, a pasta que o
+# imagem: o Setup > System > Extras os baixa (fetch) para ~/pixelcade, a pasta que o
 # proprio Pixelcade documenta (o --install-artpack roda la). O servico
 # fliperos-pixelcade.service o mantem aberto, e a udev o liga quando o
 # marquee e conectado.
@@ -21,7 +21,7 @@
 # (github.com/alinke/pixelcade-linux, batocera/scripts), com as mesmas
 # chamadas a API.
 #
-# Os mesmos eventos vao para um ZeDMD (DMD de LED open source), se o Setup >
+# Os mesmos eventos vao para um ZeDMD (DMD de LED open source), se o Setup > System >
 # Extras > ZeDMD baixou o dmdserver (libdmdutil) para ~/zedmd: o
 # fliperos-dmd desenha a imagem e o fliperos-zedmd.service abre o servidor.
 #
@@ -101,7 +101,7 @@ last_file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-pixelcade.last
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 progress=0 fail_label=Pixelcade
-# As etapas vao de PIXELCADE_PROGRESS_FROM a 100 (o Setup > Extras instala
+# As etapas vao de PIXELCADE_PROGRESS_FROM a 100 (o Setup > System > Extras instala
 # pacotes pelo apt antes).
 from=${PIXELCADE_PROGRESS_FROM:-0}
 say() {
@@ -185,7 +185,7 @@ artpack() {
   local code=${1:-} out rc
   fail_label="Pixelcade art pack"
   [[ ${2:-} == --progress ]] && progress=1
-  installed || fail "Pixelcade is not installed (Setup > Extras > Pixelcade)"
+  installed || fail "Pixelcade is not installed (Setup > System > Extras > Pixelcade)"
   code=${code//[[:space:]]/}
   [[ -n $code ]] || fail "the license code is empty"
   [[ $code != -* ]] || fail "that is not a license code"
@@ -253,7 +253,7 @@ artwork_progress() {
 }
 
 # fetch_zedmd: o dmdserver e as bibliotecas dele (o pacote do release, sem os
-# testes) em ~/zedmd. O Pillow do fliperos-dmd vem do apt, pelo Setup >
+# testes) em ~/zedmd. O Pillow do fliperos-dmd vem do apt, pelo Setup > System >
 # Extras (config/fliperos-extras).
 fetch_zedmd() {
   local tgz rc
@@ -340,12 +340,12 @@ fetch_doflinx() {
   local tgz rc name tmp
   [[ ${1:-} == --progress ]] && progress=1
   fail_label=DOFLinx
-  installed || fail "install Pixelcade first (Setup > Extras > Pixelcade)"
+  installed || fail "install Pixelcade first (Setup > System > Extras > Pixelcade)"
   if ((EUID == 0)) && [[ $user != root ]]; then
     mkdir -p "$doflinx_dir" && chown "$user:" "$doflinx_dir" || fail "could not create $doflinx_dir"
     runuser -u "$user" -- env PIXELCADE_AS_ROOT=1 "$self" fetch-doflinx "$@" || exit 1
     mkdir -p "$(dirname "$ra_doflinx")" &&
-      printf '%s\n' '# FliperOS: o DOFLinx (Setup > Extras) le o jogo aberto por aqui.' \
+      printf '%s\n' '# FliperOS: o DOFLinx (Setup > System > Extras) le o jogo aberto por aqui.' \
         'network_cmd_enable = "true"' 'network_cmd_port = "55355"' > "$ra_doflinx" ||
       fail "could not write $ra_doflinx"
     systemctl daemon-reload 2> /dev/null
@@ -956,7 +956,7 @@ case $cmd in
     ;;
   frontends) frontends ;;
   daemon)
-    installed || { echo "fliperos-pixelcade: pixelweb is not installed (Setup > Extras)" >&2; exit 1; }
+    installed || { echo "fliperos-pixelcade: pixelweb is not installed (Setup > System > Extras)" >&2; exit 1; }
     frontends
     cd "$dir" || exit 1
     # Ao ligar, o logo do FliperOS no lugar do do Pixelcade.
@@ -978,7 +978,7 @@ case $cmd in
     exit $?
     ;;
   doflinx-daemon)
-    doflinx_installed || { echo "fliperos-pixelcade: DOFLinx is not installed (Setup > Extras)" >&2; exit 1; }
+    doflinx_installed || { echo "fliperos-pixelcade: DOFLinx is not installed (Setup > System > Extras)" >&2; exit 1; }
     # O DOFLinx fala com o pixelweb: espera a API dele (ate 60 s).
     for _ in {1..30}; do
       curl -s -m 2 -o /dev/null "$api/info" 2> /dev/null && break
@@ -998,7 +998,7 @@ case $cmd in
     exit $?
     ;;
   zedmd-daemon)
-    zedmd_installed || { echo "fliperos-pixelcade: dmdserver is not installed (Setup > Extras)" >&2; exit 1; }
+    zedmd_installed || { echo "fliperos-pixelcade: dmdserver is not installed (Setup > System > Extras)" >&2; exit 1; }
     frontends
     zedmd_config
     cd "$zedmd_dir" || exit 1

@@ -80,7 +80,7 @@ ANTIMICROX_VERSION="3.6.1"
 ANTIMICROX_SHA256="033cfdf7651d59fcc372c0fab38df0257508c9722dbebd8931aec3df45983948"
 # Switchres: a mesma versao do pacote switchres do GroovyArcade.
 SWITCHRES_TAG="v2.2.1"
-# Skyscraper (Setup > Scraper): o fork mantido, o mesmo do pacote do
+# Skyscraper (Setup > Games > Scraper): o fork mantido, o mesmo do pacote do
 # GroovyArcade. O commit confere que a tag nao foi movida.
 SKYSCRAPER_TAG="3.21.0"
 SKYSCRAPER_COMMIT="8a95bb924f094e0f111fc188e66022903ea9f7d4"
@@ -123,7 +123,7 @@ while [[ $# -gt 0 ]]; do
     --skip-dolphin)    SKIP_DOLPHIN=true; shift ;;
     --skip-hypseus)    SKIP_HYPSEUS=true; shift ;;
     --skip-openbor)    SKIP_OPENBOR=true; shift ;;
-    # Compatibilidade: Wine, Steam e Heroic nao vem mais na imagem (Setup > Extras).
+    # Compatibilidade: Wine, Steam e Heroic nao vem mais na imagem (Setup > System > Extras).
     --skip-wine|--skip-steam|--skip-heroic) shift ;;
     --skip-skyscraper) SKIP_SKYSCRAPER=true; shift ;;
     --skip-input-drivers) SKIP_INPUT_DRIVERS=true; shift ;;
@@ -273,17 +273,17 @@ apt-get update -qq
 # as engines murrine e pixbuf sao do GTK 2 do tema Dracula, o librsvg2
 # desenha os icones SVG do menu e o gxmessage (GTK 3) e a confirmacao do
 # fliperos-launch antes de fechar o desktop. usbutils (lsusb) mostra o
-# vendor:produto dos controles em Setup > Quirks. systemd-timesyncd acerta o
+# vendor:produto dos controles em Setup > Joysticks > Quirks. systemd-timesyncd acerta o
 # relogio pela rede: no gabinete o relogio da BIOS estava 2 meses atrasado e
 # o apt recusava todo repositorio ("not valid yet"). A App Store do LXDE e o
 # GNOME Software (o App Center do Ubuntu 24.04 depende do snap, que nao vai
 # na imagem), com o plugin de Flatpak; o portal GTK da as janelas de abrir
 # arquivo aos apps Flatpak. libnss3 a xdg-utils sao do cliente do Fightcade 2
-# (um Electron, que o Setup > Frontend baixa do site dele): as bibliotecas
+# (um Electron, que o Setup > Games > Frontend baixa do site dele): as bibliotecas
 # que ele pede e o xdg-open, por onde ele abre os emuladores (fcade://).
 # p7zip-full: o fullset do progetto-SNAPS traz as capturas num 7z
 # (config/fliperos-snaps), mesmo numa imagem sem Skyscraper.
-# transmission-daemon: o Setup > Downloader (config/fliperos-downloader).
+# transmission-daemon: o Setup > Games > Downloader (config/fliperos-downloader).
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -309,7 +309,7 @@ apt-get install -y --no-install-recommends \
   htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
   espeak-ng triggerhappy zsh
 
-# O transmission-daemon e o do Setup > Downloader (fliperos-transmission, do
+# O transmission-daemon e o do Setup > Games > Downloader (fliperos-transmission, do
 # usuario fliperos); o servico do pacote, do usuario debian-transmission, nao.
 systemctl mask transmission-daemon.service
 
@@ -511,7 +511,7 @@ install_debs_chroot() {
 
 # ── Repositorio local do FliperOS (frontends) ─────────────────
 # Os .deb do packaging/ (build-deb.sh + make-repo.sh) vao para
-# /opt/fliperos/repo, uma fonte do apt dentro da propria imagem: o Setup >
+# /opt/fliperos/repo, uma fonte do apt dentro da propria imagem: o Setup > Games >
 # Frontend instala dali sem rede. O Attract-Mode Plus ja vem instalado (as
 # dependencias dele vem do Ubuntu, e o gabinete pode nao ter rede).
 install_local_repo_chroot() {
@@ -613,7 +613,7 @@ SRSCRIPT
   done
 }
 
-# ── Skyscraper (Setup > Scraper) ──────────────────────────────
+# ── Skyscraper (Setup > Games > Scraper) ──────────────────────────────
 # Qt6, a mesma do AntiMicroX. As bibliotecas que o binario usa ficam marcadas
 # como instaladas a mao, senao o autoremove as levaria junto com os -dev. O
 # ldd mostra os caminhos por /lib, que com o /usr unificado nao estao no
@@ -828,7 +828,7 @@ install_splash_theme() {
   fi
   if [[ "$SPLASH_THEME" == fliperos-text || "$SPLASH_THEME" == fliperos ]]; then
     set_default_plymouth_theme "$SPLASH_THEME"
-    ok "Splash: $SPLASH_THEME theme (the others are in ~/splashscreen, Setup > Splash screen)"
+    ok "Splash: $SPLASH_THEME theme (the others are in ~/splashscreen, Setup > System > Splash screen)"
     return
   fi
 
@@ -941,7 +941,7 @@ install_groovymame_chroot() {
 }
 
 # ── XML do MAME 2010 (ROM cleaner) ────────────────────────────
-# O Setup > MAME ROM Cleaner filtra um romset do MAME 2010 (0.139, o do core
+# O Setup > Games > Cleaner > MAME ROM Cleaner filtra um romset do MAME 2010 (0.139, o do core
 # mame2010) pelo XML dessa versao, que o MAME instalado nao gera. Commit e
 # sha256 fixados no config/fliperos-romclean; vai comprimido (43 MB -> 3 MB).
 install_mame2010_xml() {
@@ -1327,19 +1327,19 @@ DOLSCRIPT
     || err "Dolphin failed; use --skip-dolphin for an ISO without it"
 }
 
-# ── Wine, Steam e Heroic: sob demanda (Setup > Extras) ────────
+# ── Wine, Steam e Heroic: sob demanda (Setup > System > Extras) ────────
 # Nao vem na imagem (passavam de 1,5 GB, e a ISO tem de caber num arquivo
 # do GitHub): o config/fliperos-extras os instala pela rede, com os mesmos
 # pacotes. Aqui fica o que eles pedem e nao baixa nada: a arquitetura i386
 # (Wine de 32 bits e Steam) e a pasta do Model 2 Emulator, que o usuario
 # copia (freeware de codigo fechado, sem permissao clara de redistribuicao).
 prepare_extras_chroot() {
-  step "Wine, Steam and Heroic: Setup > Extras"
+  step "Wine, Steam and Heroic: Setup > System > Extras"
   chroot "$CHROOT_DIR" dpkg --print-foreign-architectures | grep -qx i386 ||
     chroot "$CHROOT_DIR" dpkg --add-architecture i386 || err "dpkg --add-architecture i386 falhou"
   mkdir -p "$CHROOT_DIR/opt/fliperos/model2/roms"
   chroot "$CHROOT_DIR" chown -R fliperos:fliperos /opt/fliperos/model2
-  ok "i386 enabled and /opt/fliperos/model2; Wine, Steam and Heroic through Setup > Extras"
+  ok "i386 enabled and /opt/fliperos/model2; Wine, Steam and Heroic through Setup > System > Extras"
 }
 
 # ── Imagem enxuta (o GitHub aceita ate 2 GiB por arquivo) ─────
@@ -1561,7 +1561,7 @@ summary() {
   $SKIP_DOLPHIN    && echo -e "  ${YLW}Dolphin not included${RST}"
   $SKIP_HYPSEUS    && echo -e "  ${YLW}Hypseus Singe not included${RST}"
   $SKIP_OPENBOR    && echo -e "  ${YLW}OpenBOR not included${RST}"
-  $SKIP_SKYSCRAPER && echo -e "  ${YLW}Skyscraper not included (Setup > Scraper unavailable)${RST}"
+  $SKIP_SKYSCRAPER && echo -e "  ${YLW}Skyscraper not included (Setup > Games > Scraper unavailable)${RST}"
   echo -e "  ${DIM}Log: $LOG_FILE${RST}\n"
 }
 

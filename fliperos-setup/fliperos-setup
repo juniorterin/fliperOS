@@ -11,7 +11,7 @@
 #   sudo fliperos-setup --first-boot    escolhe o launcher padrao
 #   sudo fliperos-setup --output-test   refaz o teste de saidas
 #   sudo fliperos-setup --video-setup   abre direto o Video Setup
-#   sudo fliperos-setup --latency       abre direto o Setup > Latency
+#   sudo fliperos-setup --latency       abre direto o Setup > System > Latency
 #   sudo fliperos-setup --update-check  pergunta pelo update do FliperOS
 #
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores

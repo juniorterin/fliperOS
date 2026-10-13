@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MAME ROM Cleaner do FliperOS (Setup > MAME ROM Cleaner).
+"""MAME ROM Cleaner do FliperOS (Setup > Games > Cleaner > MAME ROM Cleaner).
 
 De uma pasta com um romset do MAME (no disco, num pendrive ou numa pasta da
 rede), escolhe os jogos que interessam e os copia (ou move) para a pasta do
@@ -98,7 +98,7 @@ device_ref, em cadeia). O mesmo vale para os jogos que ja estao no destino:
 a BIOS de um jogo escolhido nunca sobra para apagar. O que nao esta no XML
 fica como esta.
 
-chds (Setup > MAME CHD Cleaner) faz o caminho inverso com os CHDs, que
+chds (Setup > Games > Cleaner > MAME CHD Cleaner) faz o caminho inverso com os CHDs, que
 costumam vir numa colecao a parte e enorme: olha os jogos que ja estao em
 cada pasta de ROMs (--roms), ve no XML quais usam disco e planeja copiar, da
 pasta dos CHDs (--chds, uma subpasta por jogo), so as deles, para dentro da
@@ -107,7 +107,7 @@ fica na pasta do pai: a cadeia de romof e seguida. Disco sem dump (nodump)
 nao conta. --clones inclui os clones dos jogos presentes (num romset merged
 eles estao dentro do zip do pai). O plano e o do apply.
 
---names (Setup > Downloader) troca a pasta por uma lista "arquivo<TAB>bytes"
+--names (Setup > Games > Downloader) troca a pasta por uma lista "arquivo<TAB>bytes"
 dos arquivos de um torrent, que ainda nao existem: no scan, os sets da
 lista ("005.zip"); no chds, os CHDs ("jogo/disco.chd"). O plano sai como se
 a pasta (--roms, --chds) ja os tivesse. --with "set<TAB>pasta" soma aos
@@ -509,7 +509,7 @@ def sets_in(folder):
 
 def sets_listed(path):
     """O mesmo que sets_in, de uma lista "arquivo<TAB>bytes" (os arquivos de
-    um torrent que ainda nao foi baixado: Setup > Downloader)."""
+    um torrent que ainda nao foi baixado: Setup > Games > Downloader)."""
     sets = {}
     with open(path, encoding='utf-8', errors='replace') as f:
         for line in f:
@@ -717,7 +717,7 @@ def cmd_chds(args):
     listed, sizes = set(), {}
     try:
         if args.names:
-            # A lista "jogo/disco.chd<TAB>bytes" de um torrent (Setup > Downloader).
+            # A lista "jogo/disco.chd<TAB>bytes" de um torrent (Setup > Games > Downloader).
             available = {}
             with open(args.names, encoding='utf-8', errors='replace') as f:
                 for line in f:

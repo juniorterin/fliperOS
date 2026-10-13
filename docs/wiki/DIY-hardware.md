@@ -13,8 +13,8 @@ After plugging the panel in, map each player's buttons once in **Setup > Joystic
 | [Arduino Joystick Library](https://github.com/MHeironimus/ArduinoJoystickLibrary) | Arduino Leonardo, Micro and other ATmega32U4 boards | A joystick or gamepad you describe in your own sketch (32 buttons by default). LGPL-3.0 |
 | [V-USB MamePanel](http://vusb.wikidot.com/project:mamepanel) | ATmega8 (18 inputs) or ATmega32 (30 inputs, two joysticks), with the [V-USB](https://github.com/obdev/v-usb) software USB driver | Joysticks with up to 8 buttons each. This is the panel of the FliperOS test cabinet |
 
-- **Two players on one board**: an encoder that carries both players may arrive as a single joystick. **Setup > Quirks** has the kernel flag that splits it (`0x40`, one device per player); see [Controls](Controls.md).
-- **Latency**: **Setup > Latency** reads USB at 1000 Hz, which only helps if the board also answers at that rate ([Latency](Latency.md)).
+- **Two players on one board**: an encoder that carries both players may arrive as a single joystick. **Setup > Joysticks > Quirks** has the kernel flag that splits it (`0x40`, one device per player); see [Controls](Controls.md).
+- **Latency**: **Setup > System > Latency** reads USB at 1000 Hz, which only helps if the board also answers at that rate ([Latency](Latency.md)).
 
 ## Spinner and trackball
 
@@ -39,20 +39,20 @@ The GunCon 2 calibration of the Setup is for the GunCon 2 only. These guns are c
 
 | Project | Board | With FliperOS |
 | --- | --- | --- |
-| [ZeDMD](https://github.com/PPUC/ZeDMD) | ESP32 (the ESP32-S3-N16R8 is the recommended one) or Raspberry Pi Pico, driving HUB75 LED panels of 128x32 or 256x64 | **Setup > Extras > ZeDMD** installs the support: the display shows the selected game, the game that is open, its high scores and the achievements ([Frontends](Frontends.md)). GPL-2.0 |
+| [ZeDMD](https://github.com/PPUC/ZeDMD) | ESP32 (the ESP32-S3-N16R8 is the recommended one) or Raspberry Pi Pico, driving HUB75 LED panels of 128x32 or 256x64 | **Setup > System > Extras > ZeDMD** installs the support: the display shows the selected game, the game that is open, its high scores and the achievements ([Frontends](Frontends.md)). GPL-2.0 |
 | [libdmdutil](https://github.com/vpinball/libdmdutil) | (runs on the PC) | The library, from the Visual Pinball project, whose `dmdserver` FliperOS uses to talk to the ZeDMD |
 
 The Pixelcade marquee, which FliperOS also supports, is a commercial product with closed software; it is on the [Frontends](Frontends.md) page.
 
 ## Game outputs: lamps, recoil, motors and button lights
 
-Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast, Supermodel and SM2-Emu (Model 2) can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in **Setup > Extras**. They can be installed together.
+Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast, Supermodel and SM2-Emu (Model 2) can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in **Setup > System > Extras**. They can be installed together.
 
 | Project | What it drives | With FliperOS |
 | --- | --- | --- |
-| [Hook Of The Reaper](https://hotr.6bolt.com/) | Light guns with recoil and lights (OpenFIRE, GUN4IR, Blamcon, Fusion, RS3 Reaper, Alien, AimTrak, Sinden and others), boards on a serial port or USB HID, Ultimarc light boards | **Setup > Extras > Hook Of The Reaper**. A Windows program, run through Wine. Its source isn't public at the moment |
-| [QMamehook](https://github.com/SeongGino/QMamehook) | Light guns on a serial port only: OpenFIRE, GUN4IR, Blamcon, RS3 Reaper | **Setup > Extras > QMamehook**. Native, without Wine: its source is built on the cabinet. LGPL-2.1 |
-| [LEDSpicer](https://github.com/meduzapat/LEDSpicer) | Ready-made LED boards: Ultimarc (PacLED64, PacDrive, Ultimate I/O, NanoLED), LED-Wiz 32, Howler, Adalight | **Setup > Extras > LEDSpicer**, from its author's Ubuntu repository. It lights the buttons each game uses. GPL-3.0 |
+| [Hook Of The Reaper](https://hotr.6bolt.com/) | Light guns with recoil and lights (OpenFIRE, GUN4IR, Blamcon, Fusion, RS3 Reaper, Alien, AimTrak, Sinden and others), boards on a serial port or USB HID, Ultimarc light boards | **Setup > System > Extras > Hook Of The Reaper**. A Windows program, run through Wine. Its source isn't public at the moment |
+| [QMamehook](https://github.com/SeongGino/QMamehook) | Light guns on a serial port only: OpenFIRE, GUN4IR, Blamcon, RS3 Reaper | **Setup > System > Extras > QMamehook**. Native, without Wine: its source is built on the cabinet. LGPL-2.1 |
+| [LEDSpicer](https://github.com/meduzapat/LEDSpicer) | Ready-made LED boards: Ultimarc (PacLED64, PacDrive, Ultimate I/O, NanoLED), LED-Wiz 32, Howler, Adalight | **Setup > System > Extras > LEDSpicer**, from its author's Ubuntu repository. It lights the buttons each game uses. GPL-3.0 |
 
 The emulators only open port 8000 when one of them is installed, because the port is reachable from the network and accepts a pause command.
 
@@ -104,4 +104,4 @@ The patch reaches a cabinet that already built Model 2 the next time **Games > M
 
 ## Adding a project to this page
 
-A project fits here if its firmware or software is open source and it works on Linux without a closed driver. If you use one of these on your cabinet, or another one, open an issue in the [repository](https://github.com/juniorterin/fliperOS/issues) saying which board, what the Setup showed in **Setup > Quirks > USB devices connected now**, and whether it needed a quirk: that is what turns a line of this page from "should work" into "tested".
+A project fits here if its firmware or software is open source and it works on Linux without a closed driver. If you use one of these on your cabinet, or another one, open an issue in the [repository](https://github.com/juniorterin/fliperOS/issues) saying which board, what the Setup showed in **Setup > Joysticks > Quirks > USB devices connected now**, and whether it needed a quirk: that is what turns a line of this page from "should work" into "tested".

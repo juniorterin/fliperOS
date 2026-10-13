@@ -1,5 +1,5 @@
 [Unit]
-Description=FliperOS: downloader (Transmission) of Setup > Downloader
+Description=FliperOS: downloader (Transmission) of Setup > Games > Downloader
 Wants=network-online.target
 After=network-online.target
 

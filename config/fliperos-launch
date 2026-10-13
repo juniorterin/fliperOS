@@ -106,7 +106,7 @@ case ${1:-} in
   # O Fightcade se abre no Xorg dele sozinho, como na sessao de boot
   # (config/fliperos-fightcade).
   fightcade) label=Fightcade run=(/opt/fliperos/bin/fliperos-kms-run /opt/fliperos/fightcade/fightcade) ;;
-  # O KOF Final Attack no Ikemen GO (Setup > Emulators & Games,
+  # O KOF Final Attack no Ikemen GO (Setup > Games > Emulators & Games,
   # config/fliperos-kof), em 320x240.
   kof) label="KOF Final Attack" run=("$x11" /usr/local/bin/fliperos-kof run) ;;
   --mode)

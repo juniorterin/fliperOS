@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Setup > Latency: o modo de latencia e a conferencia da maquina contra a
+# Setup > System > Latency: o modo de latencia e a conferencia da maquina contra a
 # recomendacao do modo de baixa latencia.
 
 screen_latency() {

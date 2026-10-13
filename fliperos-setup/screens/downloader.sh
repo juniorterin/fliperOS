@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Setup > Downloader: tudo o que baixa jogos. ROM/CHD MAME torrent: o filtro
+# Setup > Games > Downloader: tudo o que baixa jogos. ROM/CHD MAME torrent: o filtro
 # (o mesmo do MAME ROM Cleaner, salvo so para o torrent), o link magnetico
 # do romset (obrigatorio) e o dos CHDs, a pasta final e a barra do download.
 # Ao abrir, e depois de mudar o filtro, avisa o que o filtro novo acrescenta
@@ -8,10 +8,10 @@
 screen_downloads() {
   local choice last=torrent
   while true; do
-    choice=$(ui_menu "Downloader" "Games downloaded straight to the emulator folders." "$last" \
-      "torrent|ROM/CHD MAME torrent" \
-      "freeroms|Free games (open-source homebrew)" \
-      "return|Return") || return 0
+    choice=$(ui_menu_hints "Downloader" "Games downloaded straight to the emulator folders." "$last" \
+      "torrent|ROM/CHD MAME torrent|Only the games your filter picks, from a romset magnet link." \
+      "freeroms|Free games (open-source homebrew)|So the frontends have something to show." \
+      "return|Return|Back to Games.") || return 0
     last=$choice
     case $choice in
       torrent) screen_downloader ;;

@@ -1,11 +1,11 @@
 # shellcheck shell=bash
-# Setup > MAME ROM Cleaner: onde esta o romset (uma pasta daqui ou uma pasta
+# Setup > Games > Cleaner > MAME ROM Cleaner: onde esta o romset (uma pasta daqui ou uma pasta
 # da rede), para que emulador ele e (GroovyMAME, Flycast, MAME 2010 / MAME 3D), a tela
 # dos parametros (Enter num parametro abre as opcoes dele, de escolher uma ou
 # de marcar varias, e volta com a escolha), a previa e a copia para a pasta
 # do emulador. A logica e a lib/romclean.sh; a pasta da rede, lib/netshare.sh.
 
-# screen_cleaner: Setup > Cleaner, o ROM cleaner e o CHD cleaner juntos.
+# screen_cleaner: Setup > Games > Cleaner, o ROM cleaner e o CHD cleaner juntos.
 screen_cleaner() {
   local choice last=romcleaner
   while true; do
@@ -246,7 +246,7 @@ screen_rom_cleaner_pick() {
 
 # screen_rom_cleaner_filters ORIGEM ALVO XML [downloader]: a tela dos
 # parametros (o preset, cada filtro, copiar ou mover e o destino) e, no
-# Continue, a previa. No modo downloader (Setup > Downloader > Filter) abre
+# Continue, a previa. No modo downloader (Setup > Games > Downloader > Filter) abre
 # com o filtro salvo e o Save o grava; status 3 = salvou.
 screen_rom_cleaner_filters() {
   local folder=$1 target=$2 xml=$3 mode=${4:-} title="MAME ROM Cleaner" last=preset preset=cabinet transfer=copy

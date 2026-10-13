@@ -14,11 +14,11 @@ screen_live_menu() {
   local choice last=install
   while true; do
     UI_STATUS=$(status_line)
-    choice=$(ui_menu "FliperOS Setup" "" "$last" \
-      "install|Install to HD/SSD" \
-      "recovery|Recovery Mode" \
-      "terminal|Terminal" \
-      "shutdown|Shutdown") || continue
+    choice=$(ui_menu_hints "FliperOS Setup" "" "$last" \
+      "install|Install to HD/SSD|Copy FliperOS to a disk of this computer." \
+      "recovery|Recovery Mode|Repair a FliperOS that is already installed." \
+      "terminal|Terminal|The command line of the install media." \
+      "shutdown|Shutdown|Power off or restart the computer.") || continue
     last=$choice
     case $choice in
       install) screen_install ;;
@@ -46,12 +46,12 @@ screen_main_menu() {
   while true; do
     screen_reload_if_updated
     UI_STATUS=$(status_line)
-    choice=$(ui_menu "FliperOS" "" "$last" \
-      "frontend|Start frontend" \
-      "setup|Setup (video, audio, network...)" \
-      "desktop|Start desktop" \
-      "shell|Exit to shell" \
-      "power|Shutdown / Reboot") || continue
+    choice=$(ui_menu_hints "FliperOS" "" "$last" \
+      "frontend|Start frontend|Open the game list (the frontend chosen in Setup)." \
+      "setup|Setup|Video, audio, network, controls, games and system." \
+      "desktop|Start desktop|The LXDE desktop, for a mouse and a keyboard." \
+      "shell|Exit to shell|The command line. Type fliperos-menu to come back." \
+      "power|Shutdown / Reboot|Power off or restart the computer.") || continue
     last=$choice
     case $choice in
       frontend) screen_start_frontend && return "$SETUP_EXIT_LAUNCH" ;;
@@ -101,12 +101,12 @@ screen_start_frontend() {
   current=$(launcher_current)
   if [[ $current == setup ]]; then
     ui_msg "Start frontend" "No frontend is set: FliperOS starts in this menu." "" \
-      "Choose one in Setup > Frontend."
+      "Choose one in Setup > Games > Frontend."
     return 1
   fi
   if ! launcher_installed "$current"; then
     ui_msg "Start frontend" "$(launcher_label "$current") is not installed." "" \
-      "Choose another one in Setup > Frontend."
+      "Choose another one in Setup > Games > Frontend."
     return 1
   fi
   screen_launch "Start frontend" default

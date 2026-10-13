@@ -783,7 +783,7 @@ class MultiMonitorTests(Base):
         self.assertIn('    --outputs)\n      mm_outputs "${2:-all}"', entry)
         self.assertLess(entry.index("--outputs)"), entry.index("if ! have gum"))
         video = (SETUP / "screens/video-setup.sh").read_text()
-        self.assertIn('"monitors|Multiple Monitors"', video)
+        self.assertIn('"monitors|Multiple Monitors|', video)
         self.assertIn("monitors) screen_multi_monitor ;;", video)
         self.assertIn('entries+=("games|Multi-Screen Games: $games")', video)
         self.assertIn("games) screen_mm_games ;;", video)
@@ -1190,7 +1190,7 @@ class QuirksTests(Base):
 
 
 class DebugModeTests(Base):
-    """Setup > Debug mode: boot e programas com ou sem texto na tela."""
+    """Setup > System > Debug mode: boot e programas com ou sem texto na tela."""
 
     def test_boot_line_with_and_without_debug(self):
         line = "quiet splash %s consoleblank=0 video=VGA-1:640x240Se" % BOOT_SILENT
@@ -1237,7 +1237,7 @@ class RetroArchSuperTests(Base):
 
 
 class EmulatorsTests(Base):
-    """Setup > Emulators & Games (lib/emulators.sh sobre o config/fliperos-emulators)."""
+    """Setup > Games > Emulators & Games (lib/emulators.sh sobre o config/fliperos-emulators)."""
 
     def test_list_field_and_install(self):
         d = self.env.dir
@@ -1688,7 +1688,7 @@ class TopbarTests(Base):
 
 
 class ScraperTests(Base):
-    """Setup > Scraper: o que o Skyscraper raspa e onde a lista vai parar."""
+    """Setup > Games > Scraper: o que o Skyscraper raspa e onde a lista vai parar."""
 
     def scraper_env(self):
         roms, info, attract = self.env.dir / "roms", self.env.dir / "info", self.env.dir / "attract"
@@ -2386,12 +2386,12 @@ class MenuSoundsTests(Base):
 
     def test_in_the_audio_setup(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
-        self.assertIn('"sounds|Menu sounds ($(menu_sounds_label))"', menu)
+        self.assertIn('"sounds|Menu sounds ($(menu_sounds_label))|', menu)
         self.assertIn("ui_sounds", (SETUP / "lib" / "ui.sh").read_text().split("ui_init() {")[1].split("\n}\n")[0])
 
 
 class SplashTests(Base):
-    """Setup > Splash screen (lib/splash.sh): os temas de ~/splashscreen."""
+    """Setup > System > Splash screen (lib/splash.sh): os temas de ~/splashscreen."""
 
     def setUp(self):
         super().setUp()
@@ -2507,7 +2507,7 @@ class SplashTests(Base):
 
     def test_in_the_setup_menu(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
-        self.assertIn('"splash|Splash screen (boot theme)"', menu)
+        self.assertIn('"splash|Splash screen|', menu)
         self.assertIn("splash) screen_splash ;;", menu)
         # Onde baixar mais temas, na tela e no _info.txt da pasta.
         url = "https://www.gnome-look.org/browse?cat=108&ord=latest"
@@ -2527,7 +2527,7 @@ def load_engine():
 
 
 class RomCleanerTests(Base):
-    """lib/romclean.sh: o Setup > MAME ROM Cleaner (config/fliperos-romclean)."""
+    """lib/romclean.sh: o Setup > Games > Cleaner > MAME ROM Cleaner (config/fliperos-romclean)."""
 
     XML = ('<mame build="0.289">'
            '<machine name="neogeo" isbios="yes"><description>Neo-Geo</description></machine>'
@@ -2569,7 +2569,7 @@ class RomCleanerTests(Base):
                      "ROMCLEAN_CACHE": str(self.env.dir / "cache"), "ROMCLEAN_DATA": str(self.env.dir / "data")}
 
     def test_downloader_filter_is_a_romclean_command(self):
-        # Setup > Downloader > Filter: o filtro salvo vira as opcoes do
+        # Setup > Games > Downloader > Filter: o filtro salvo vira as opcoes do
         # fliperos-romclean, e o downloader as usa sobre a lista do torrent.
         state = self.env.dir / "dl"
         env = dict(self.vars, DOWNLOADER_STATE=str(state), FLIPEROS_USER="ninguem")
@@ -2912,7 +2912,7 @@ class RomCleanerTests(Base):
         screen = (SETUP / "screens" / "rom-cleaner.sh").read_text()
         self.assertIn('"chdcleaner|MAME CHD Cleaner"', screen)
         self.assertIn("chdcleaner) screen_chd_cleaner ;;", screen)
-        self.assertIn('"downloader|Downloader (MAME ROM/CHD torrent, free games)"', menu)
+        self.assertIn('"downloader|Downloader|', menu)
         self.assertIn("downloader) screen_downloads ;;", menu)
         self.assertNotIn("freeroms|", menu)
         self.assertIn('source "$SETUP_DIR/screens/downloader.sh"', (SETUP / "fliperos-setup").read_text())
@@ -3127,11 +3127,11 @@ class RomCleanerTests(Base):
 
     def test_the_screen(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
-        self.assertIn('"cleaner|Cleaner (MAME/Flycast/etc ROM/CHD)"', menu)
+        self.assertIn('"cleaner|Cleaner|', menu)
         self.assertIn("cleaner) screen_cleaner ;;", menu)
         self.assertNotIn("romcleaner|", menu)
         screen = (SETUP / "screens" / "rom-cleaner.sh").read_text()
-        # Em Setup > Cleaner.
+        # Em Setup > Games > Cleaner.
         self.assertIn('"romcleaner|MAME ROM Cleaner"', screen)
         self.assertIn("romcleaner) screen_rom_cleaner ;;", screen)
         # Enter num parametro abre as opcoes dele (uma ou varias) e volta.
@@ -3144,7 +3144,7 @@ class RomCleanerTests(Base):
         self.assertIn("source \"$SETUP_DIR/lib/netshare.sh\"", (SETUP / "fliperos-setup").read_text())
 
     def test_attract_romlist_gets_the_real_names_and_the_clones(self):
-        # Setup > AttractPlus ROM List: o nome do -listxml no lugar do nome do
+        # Setup > Games > AttractPlus ROM List: o nome do -listxml no lugar do nome do
         # arquivo, os clones de um romset merged (so no MAME, que abre pelo
         # nome), sem as BIOS, e a tela Arcade com todas as pastas.
         roms, info, attract = self.env.dir / "home-roms", self.env.dir / "info", self.env.dir / "attract"
@@ -3439,7 +3439,7 @@ class RomCleanerTests(Base):
         self.assertIn("      frontends_arcadeflow_screen\n", main.split("--session-start)")[1].split(";;")[0])
 
     def test_new_attract_displays_use_arcadeflow_when_it_is_installed(self):
-        # O tema padrao e o Arcadeflow, que o Setup > Frontend baixa; sem ele
+        # O tema padrao e o Arcadeflow, que o Setup > Games > Frontend baixa; sem ele
         # (sem rede) as telas novas ficam no Basic do FliperOS.
         attract = self.env.dir / "attract-theme"
         (attract / "layouts" / "Arcadeflow").mkdir(parents=True)
@@ -3524,7 +3524,8 @@ class ReloadTests(Base):
         self.assertIn('$(setup_stamp) != "$SETUP_STAMP"', reload)
         self.assertIn('exec "$SETUP_DIR/fliperos-setup" "${SETUP_ARGS[@]}"', reload)
         # No comeco dos dois menus do sistema instalado.
-        for path, name in (("main-menu.sh", "screen_main_menu"), ("setup-menu.sh", "screen_setup_menu")):
+        for path, name in (("main-menu.sh", "screen_main_menu"), ("setup-menu.sh", "screen_setup_menu"),
+                           ("setup-menu.sh", "screen_setup_games"), ("setup-menu.sh", "screen_setup_system")):
             body = (SETUP / "screens" / path).read_text().split(name + "() {")[1].split("\n}\n")[0]
             self.assertIn("  while true; do\n    screen_reload_if_updated\n", body, name)
 
@@ -3532,6 +3533,112 @@ class ReloadTests(Base):
         screen = (SETUP / "screens" / "rom-cleaner.sh").read_text()
         self.assertIn('2> "$list")\n  rc=$?\n  cat "$list" >> "$FLIPEROS_LOG"', screen)
         self.assertIn("tail -n 1", screen.split("if ((rc != 0)); then")[1].split("fi\n")[0])
+
+
+class SetupGroupsTests(Base):
+    """O Setup em grupos e os baloes de informacao de cada item (ui_menu_hints)."""
+
+    SCREENS = ("main-menu.sh", "setup-menu.sh", "joysticks.sh", "video-setup.sh", "downloader.sh")
+
+    def entries(self):
+        """(arquivo, titulo, valor, rotulo, balao) de cada item dos menus com balao."""
+        found = []
+        for name in self.SCREENS:
+            text = (SETUP / "screens" / name).read_text()
+            for call in text.split("ui_menu_hints ")[1:]:
+                title = call.split('"')[1]
+                body = call.split(") ||")[0]
+                for value, label, hint in re.findall(r'"([a-z_]+)\|([^|"]+)\|([^"|]+)"', body):
+                    found.append((name, title, value, label, hint))
+        return found
+
+    def test_setup_is_grouped_in_order(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        order = {}
+        for name in ("screen_setup_menu", "screen_setup_games", "screen_setup_system"):
+            body = menu.split(name + "() {")[1].split("\n}\n")[0]
+            order[name] = re.findall(r'^      "([a-z]+)\|', body, re.M)
+            # Cada item do menu tem o seu caso.
+            for value in order[name]:
+                self.assertIn("      %s) " % value, body, name)
+        # Imagem, som, rede, controles, jogos e o resto do sistema.
+        self.assertEqual(order["screen_setup_menu"],
+                         ["video", "audio", "network", "joysticks", "games", "system", "return"])
+        # Na ordem de por jogos no gabinete.
+        self.assertEqual(order["screen_setup_games"], ["frontend", "emulators", "folders", "downloader", "cleaner",
+                                                       "scraper", "romlist", "return"])
+        self.assertEqual(order["screen_setup_system"], ["extras", "latency", "update", "debug", "splash", "return"])
+        self.assertIn("games) screen_setup_games ;;", menu)
+        self.assertIn("system) screen_setup_system ;;", menu)
+
+    def test_every_item_has_a_balloon_that_fits(self):
+        entries = self.entries()
+        self.assertGreater(len(entries), 50)
+        titles = {title for _, title, _, _, _ in entries}
+        for title in ("FliperOS Setup", "FliperOS", "Setup", "Games", "System", "Joysticks", "Video Setup",
+                      "Audio Setup", "Network Setup", "Downloader"):
+            self.assertIn(title, titles)
+        hints = [hint for _, _, _, _, hint in entries]
+        # Em 320x240 (40 colunas) o balao tem duas linhas de 34 colunas; em
+        # 640x480 (80 colunas), uma linha dentro da moldura.
+        script = "source %s/lib/ui.sh\nUI_HINTS=(%s)\n" % (SETUP, " ".join("'%s'" % h for h in hints))
+        for hint in hints:
+            self.assertNotIn("'", hint)
+            self.assertTrue(hint.endswith(".") or hint.endswith(")."), hint)
+        self.assertEqual(self.env.out(script + 'ui_hint_lines 34; ui_hint_lines 66; echo "$UI_HINT_SMALL_LINES"').split(),
+                         ["2", "1", "2"])
+
+    def test_menu_hints_split_the_balloons(self):
+        # O ui_menu recebe os rotulos sem o balao, e os baloes na ordem dos
+        # itens em UI_HINTS (vazio no item sem balao); depois nada sobra.
+        out = self.env.dir / "menu.out"
+        r = self.env.out("""
+            source %s/lib/ui.sh
+            ui_menu() { printf '%%s\\n' "$@" "--" "${UI_HINTS[@]}" > "$MENU_OUT"; echo two; }
+            ui_menu_hints "Title" "" one "one|One|First balloon." "two|Two|Second (longer) balloon." "three|Three"
+            echo "hints=${#UI_HINTS[@]}"
+        """ % SETUP, dict(MENU_OUT=str(out)))
+        self.assertEqual(r.split(), ["two", "hints=0"])
+        self.assertEqual(out.read_text().split("\n"),
+                         ["Title", "", "one", "one|One", "two|Two", "three|Three", "--",
+                          "First balloon.", "Second (longer) balloon.", "", ""])
+
+    def test_balloon_for_each_screen_size(self):
+        # 80x30: moldura da largura da caixa do titulo, tantas linhas quantas
+        # o maior texto pede. 40x15: so o texto, duas linhas, no lugar da
+        # ajuda do gum.
+        r = self.env.out("""
+            source %s/lib/ui.sh
+            show() {
+              echo "$GUM_CHOOSE_HINT_BORDER $GUM_CHOOSE_HINT_WIDTH $GUM_CHOOSE_HINT_LINES ${UI_HINT_ARGS[*]}|"
+            }
+            UI_HINTS=("First balloon." "Second balloon.")
+            UI_ROWS=30 UI_COLS=80
+            ui_hint_env; show
+            echo "$GUM_CHOOSE_HINTS"
+            UI_ROWS=15 UI_COLS=40
+            ui_hint_env; show
+        """ % SETUP)
+        self.assertEqual(r.split("\n"), ["1 70 1 |", "First balloon.", "Second balloon.",
+                                         "0 34 2 --show-help=false|", ""])
+        # O ui_menu passa o balao ao gum so no menu que o tem.
+        menu = (SETUP / "lib" / "ui.sh").read_text().split("\nui_menu() {")[1].split("\n}\n")[0]
+        self.assertIn('local -x GUM_CHOOSE_HINTS=""', menu)
+        self.assertIn('  ((${#UI_HINTS[@]})) && ui_hint_env\n  height=$(ui_list_height "${#labels[@]}")\n', menu)
+        self.assertIn('args+=("${UI_HINT_ARGS[@]}")', menu)
+
+    def test_the_balloon_takes_rows_from_the_list(self):
+        # Em 80x30 o balao (moldura + texto) sai das linhas da lista.
+        script = """
+            source %s/lib/ui.sh
+            UI_ROWS=30 UI_COLS=80 UI_USED_ROWS=6
+            ui_list_height 40
+            UI_HINTS=("One line." "$(printf 'word %%.0s' {1..20})")
+            ui_hint_env
+            ui_list_height 40
+            echo "$GUM_CHOOSE_HINT_LINES"
+        """ % SETUP
+        self.assertEqual(self.env.out(script).split(), ["19", "15", "2"])
 
 
 class ExtrasScreenTests(Base):
@@ -3567,7 +3674,7 @@ class ExtrasScreenTests(Base):
 
 
 class FreeRomsTests(Base):
-    """lib/freeroms.sh: Setup > Free games (config/fliperos-freeroms)."""
+    """lib/freeroms.sh: Setup > Games > Downloader > Free games (config/fliperos-freeroms)."""
 
     def test_list_and_fetch_events(self):
         self.env.stub("fliperos-freeroms", """
@@ -3675,7 +3782,7 @@ class NetShareTests(Base):
 
 
 class FoldersTests(Base):
-    """Setup > Folders (lib/folders.sh): a custom folder de cada pasta de ~."""
+    """Setup > Games > Folders (lib/folders.sh): a custom folder de cada pasta de ~."""
 
     def setUp(self):
         super().setUp()
@@ -3977,7 +4084,7 @@ class FoldersTests(Base):
 
     def test_in_the_setup_menu(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
-        self.assertIn('"folders|Folders (custom folders, external disks)"', menu)
+        self.assertIn('"folders|Folders|', menu)
         self.assertIn("folders) screen_folders ;;", menu)
         main = (SETUP / "fliperos-setup").read_text()
         for part in ("lib", "screens"):

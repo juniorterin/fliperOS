@@ -5,7 +5,7 @@
 set -uo pipefail
 
 TABLE=${FLIPEROS_SESSIONS:-/etc/fliperos/sessions.conf}
-# Os frontends que a pessoa cadastra no Setup > Frontend (o comando roda
+# Os frontends que a pessoa cadastra no Setup > Games > Frontend (o comando roda
 # num "bash -c"; ver fliperos-setup/lib/launcher.sh).
 CUSTOM=${FLIPEROS_CUSTOM_SESSIONS:-/etc/fliperos/sessions.custom.conf}
 CHOICE_FILE=${FLIPEROS_SESSION:-/etc/fliperos/session}
@@ -42,7 +42,7 @@ fi
 
 if ! command -v "$check" > /dev/null 2>&1 && [[ ! -x $check ]]; then
   echo "'$choice' is selected, but '$check' is not installed." >&2
-  echo "Choose another one in the setup: Setup > Frontend." >&2
+  echo "Choose another one in the setup: Setup > Games > Frontend." >&2
   sleep 3
   exit 0
 fi

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Setup > Downloader > ROM/CHD MAME torrent: o romset do MAME e a colecao de CHDs por link
+# Setup > Games > Downloader > ROM/CHD MAME torrent: o romset do MAME e a colecao de CHDs por link
 # magnetico (um link para cada), baixando so o que o filtro do MAME ROM
 # Cleaner escolhe. O download e do Transmission (servico
 # fliperos-transmission); a logica, o config/fliperos-downloader. Aqui ficam

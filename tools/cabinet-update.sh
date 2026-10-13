@@ -104,7 +104,7 @@ packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-pl
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
-# Wine em si nao vem mais na imagem (Setup > Extras, config/fliperos-extras).
+# Wine em si nao vem mais na imagem (Setup > System > Extras, config/fliperos-extras).
 dpkg -s wine32:i386 > /dev/null 2>&1 && packages+=(libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386)
 # So mexe no apt se falta algum pacote ou se o repositorio local mudou: o
 # apt-get segura a trava dos pacotes, e quem estivesse instalando um
@@ -252,13 +252,13 @@ systemctl restart fliperos-padkeys.service
 systemctl restart triggerhappy.service 2> /dev/null || true
 systemctl kill -s HUP systemd-logind.service 2> /dev/null || true
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
-# Pixelcade: so sobe com o pixelweb baixado (Setup > Extras).
+# Pixelcade: so sobe com o pixelweb baixado (Setup > System > Extras).
 systemctl restart fliperos-pixelcade.service 2> /dev/null || true
 echo "fliperos-pixelcade: $(systemctl is-active fliperos-pixelcade.service 2> /dev/null)"
-# ZeDMD: so sobe com o dmdserver baixado (Setup > Extras).
+# ZeDMD: so sobe com o dmdserver baixado (Setup > System > Extras).
 systemctl restart fliperos-zedmd.service 2> /dev/null || true
 echo "fliperos-zedmd: $(systemctl is-active fliperos-zedmd.service 2> /dev/null)"
-# DOFLinx: so sobe com ele baixado (Setup > Extras).
+# DOFLinx: so sobe com ele baixado (Setup > System > Extras).
 systemctl restart fliperos-doflinx.service 2> /dev/null || true
 echo "fliperos-doflinx: $(systemctl is-active fliperos-doflinx.service 2> /dev/null)"
 # Os discos que ja estavam ligados (os que aparecerem depois, pela udev).
@@ -266,7 +266,7 @@ lsblk -rnpo NAME,FSTYPE | awk '$2 != "" { print $1 }' | while read -r dev; do
   /opt/fliperos/bin/fliperos-automount "$dev" 2> /dev/null || true
 done
 echo "Disks: $(findmnt -rno TARGET | grep -c '^/media/fliperos/')"
-# O transmission-daemon do pacote nao: o do Setup > Downloader e o
+# O transmission-daemon do pacote nao: o do Setup > Games > Downloader e o
 # fliperos-transmission, que o Setup liga quando ganha um link.
 systemctl disable --now transmission-daemon.service > /dev/null 2>&1 || true
 systemctl mask transmission-daemon.service > /dev/null 2>&1 || true

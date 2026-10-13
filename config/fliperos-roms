@@ -22,7 +22,7 @@ info=${FLIPEROS_CORE_INFO:-/opt/fliperos/retroarch/info}
 etc=${FLIPEROS_ETC:-/etc/fliperos}
 splash=${FLIPEROS_SPLASH:-$HOME/splashscreen}
 
-# Setup > Folders (lib/folders.sh) faz de qualquer uma destas pastas um link
+# Setup > Games > Folders (lib/folders.sh) faz de qualquer uma destas pastas um link
 # para a "custom folder" da pessoa (um disco externo) e guarda a de antes ao
 # lado, com "old-" no nome (~/old-roms, ~/roms/old-mame). Com o link apagado a
 # mao, a de antes volta para o lugar em vez de nascer uma pasta nova e vazia.
@@ -69,9 +69,9 @@ elif [[ -d /opt/fliperos/model2/roms ]]; then
 else
   folder "$roms/model2" "SM2-Emu (Sega Model 2): MAME .zip sets."
 fi
-# Fightcade 2 (Setup > Frontend): uma pasta por emulador dele. Os romsets
+# Fightcade 2 (Setup > Games > Frontend): uma pasta por emulador dele. Os romsets
 # sao os que cada um pede, nao os do MAME atual.
-folder "$roms/fightcade" "Fightcade 2: one folder per emulator it uses. They work once Fightcade is installed (Setup > Frontend)."
+folder "$roms/fightcade" "Fightcade 2: one folder per emulator it uses. They work once Fightcade is installed (Setup > Games > Frontend)."
 folder "$roms/fightcade/fbneo" "Fightcade 2, FBNeo: arcade .zip sets of FBNeo (romset 0.2.97.44), neogeo.zip included. Console games go in subfolders: megadrive, nes, sms, pce, tg16, msx, coleco, gamegear, sg1000, spectrum..."
 folder "$roms/fightcade/flycast" "Fightcade 2, Flycast: Naomi and Atomiswave .zip sets, Dreamcast games (.chd .gdi .cdi)."
 folder "$roms/fightcade/snes9x" "Fightcade 2, SNES9x: Super Nintendo games in .zip."
@@ -139,7 +139,7 @@ if [[ -d $fightcade/emulator ]]; then
 fi
 
 # ── ~/media ─────────────────────────────────────────────────────────
-folder "$media" "Art and texts of the frontends, one folder per type and, inside it, the same folders as ~/roms (mame, model2, retroarch/snes9x...): the art of ~/roms/mame/sf2.zip is in <type>/mame. Setup > Scraper saves here; Attract-Mode, ES-DE, Pegasus and the GroovyMAME game list read from here."
+folder "$media" "Art and texts of the frontends, one folder per type and, inside it, the same folders as ~/roms (mame, model2, retroarch/snes9x...): the art of ~/roms/mame/sf2.zip is in <type>/mame. Setup > Games > Scraper saves here; Attract-Mode, ES-DE, Pegasus and the GroovyMAME game list read from here."
 folder "$media/snap" "Screenshots (.png), the same folders as ~/roms: snap/mame/sf2.png"
 folder "$media/preview" "Videos (.mp4), the same folders as ~/roms: preview/mame/sf2.mp4"
 folder "$media/logo" "Logos (wheel art, .png), the same folders as ~/roms: logo/mame/sf2.png"
@@ -149,7 +149,7 @@ folder "$media/dmd" "Art for 128x32 LED displays (ZeDMD), .png or animated .gif,
 folder "$media/texto" "Game descriptions (.txt), the same folders as ~/roms: texto/mame/sf2.txt"
 # Dentro de cada tipo, as pastas de ~/roms que os frontends mostram (a de
 # cada emulador e a de cada core): a arte de uma pasta de jogos fica na de
-# mesmo nome, e cada uma aceita a custom folder dela (Setup > Folders).
+# mesmo nome, e cada uma aceita a custom folder dela (Setup > Games > Folders).
 for type in snap preview logo box marquee dmd texto; do
   [[ -d $media/$type ]] || continue
   for dir in "$roms"/*/ "$roms"/retroarch/*/; do
@@ -169,7 +169,7 @@ done
 # mexer neles: o .bundled guarda a soma da copia; um mudado aqui fica como a
 # pessoa deixou.
 splash_bundled=${FLIPEROS_SPLASH_BUNDLED:-/usr/share/fliperos/splashscreen}
-folder "$splash" "Boot splash themes (Plymouth), one folder per theme with its .plymouth file. Setup > Splash screen shows a preview and sets the one used at boot. To change a bundled theme, copy its folder with a new name: the bundled ones come back as they were. More themes: https://www.gnome-look.org/browse?cat=108&ord=latest"
+folder "$splash" "Boot splash themes (Plymouth), one folder per theme with its .plymouth file. Setup > System > Splash screen shows a preview and sets the one used at boot. To change a bundled theme, copy its folder with a new name: the bundled ones come back as they were. More themes: https://www.gnome-look.org/browse?cat=108&ord=latest"
 splash_sum() { (cd "$1" && find . -type f ! -name .bundled -exec cksum {} + | sort | cksum); }
 for theme in "$splash_bundled"/*/; do
   [[ -d $theme ]] || continue

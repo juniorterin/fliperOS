@@ -3,13 +3,13 @@
 # jogo aberto ou selecionado, ou o sistema.
 #
 # Quem fala com o painel pela USB e o dmdserver (libdmdutil, do Visual
-# Pinball), baixado pelo Setup > Extras > ZeDMD e aberto pelo servico
+# Pinball), baixado pelo Setup > System > Extras > ZeDMD e aberto pelo servico
 # fliperos-zedmd.service. Daqui sai uma imagem RGB24 de 128x32 por TCP
 # (localhost:6789); o dmdserver a escala para um painel 256x64.
 #
 # A arte do Pixelcade so pode ser usada no hardware dele. A imagem vem de
 # ~/media, na ordem: dmd/ (arte feita para 128x32, PNG ou GIF animado),
-# marquee/ e logo/ (as do Setup > Scraper), com as pastas de ~/roms. Sem
+# marquee/ e logo/ (as do Setup > Games > Scraper), com as pastas de ~/roms. Sem
 # imagem, o nome do jogo em texto (rolando se nao cabe).
 #
 #   fliperos-dmd show game|select|system SISTEMA ROM [TITULO] [ABERTURA]
@@ -36,7 +36,7 @@ import struct
 import sys
 import time
 
-# Sem o Pillow (Setup > Extras > ZeDMD) nada e desenhado; o "title" nao
+# Sem o Pillow (Setup > System > Extras > ZeDMD) nada e desenhado; o "title" nao
 # precisa dele.
 try:
     from PIL import Image, ImageDraw, ImageFont, ImageSequence

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Downloader do FliperOS (Setup > Downloader).
+"""Downloader do FliperOS (Setup > Games > Downloader).
 
 Baixa de um romset do MAME e de uma colecao de CHDs, cada um pelo seu link
 magnetico, so o que o filtro do MAME ROM Cleaner escolhe. O Transmission
@@ -262,7 +262,7 @@ def read_plan(path):
 def read_args(name):
     text = read_state(name)
     if text is None:
-        raise OSError('no filter yet: choose it in Setup > Downloader > Filter')
+        raise OSError('no filter yet: choose it in Setup > Games > Downloader > Filter')
     return [line for line in text.split('\n') if line]
 
 

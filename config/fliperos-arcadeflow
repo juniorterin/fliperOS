@@ -3,7 +3,7 @@
 # Attract-Mode Plus no FliperOS.
 #
 # O repositorio dele nao tem licenca, ou seja, nao da permissao de
-# redistribuir: nao vem na imagem nem no repositorio do FliperOS. O Setup >
+# redistribuir: nao vem na imagem nem no repositorio do FliperOS. O Setup > Games >
 # Frontend baixa a versao fixada do GitHub (fetch) para
 # ~/.attract/layouts/Arcadeflow - pasta do usuario, porque o tema grava as
 # opcoes e o banco de jogos dele nela. Sem ele (sem rede, por exemplo) as

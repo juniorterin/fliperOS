@@ -124,14 +124,14 @@ case ${1:-} in
     ;;
   run)
     cd "$dest" 2> /dev/null && [[ -x ./$exe ]] || {
-      echo "KOF Final Attack is not installed: Setup > Emulators & Games." >&2
+      echo "KOF Final Attack is not installed: Setup > Games > Emulators & Games." >&2
       exit 1
     }
     exec "./$exe" "${@:2}"
     ;;
   "")
     [[ -x $dest/$exe ]] || {
-      echo "KOF Final Attack is not installed: Setup > Emulators & Games." >&2
+      echo "KOF Final Attack is not installed: Setup > Games > Emulators & Games." >&2
       exit 1
     }
     # No console, num Xorg proprio no modo da tabela (320x240).

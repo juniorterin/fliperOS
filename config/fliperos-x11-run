@@ -272,7 +272,7 @@ case $name in
 esac
 export FLIPEROS_X11_CURSOR=$((${#cursor[@]} == 0))
 # A saida do X, do Switchres e do emulador vai para
-# /opt/fliperos/logs/<programa>.log, nao para a tela; no modo debug (Setup >
+# /opt/fliperos/logs/<programa>.log, nao para a tela; no modo debug (Setup > System >
 # Debug mode) ela aparece. Sem como gravar o log, abre assim mesmo.
 log="${FLIPEROS_LOGS:-/opt/fliperos/logs}/$name.log"
 # Um frontend que espera o jogo lendo a saida do comando (o ES-DE: popen ate

@@ -32,7 +32,7 @@ MAME_SCRAPED=${MAME_SCRAPED:-/home/fliperos/.mame/scraped/mame}
 #   preview  videos                 box      capas e flyers
 #   marquee  marquees               texto    descricoes (.txt)
 # Assim cada pasta de jogos tem a arte dela (o video do Model 2 nao e o do
-# MAME) e aceita a "custom folder" dela (Setup > Folders). Antes era uma
+# MAME) e aceita a "custom folder" dela (Setup > Games > Folders). Antes era uma
 # pasta por plataforma do Skyscraper (arcade, snes...), a mesma para todas
 # as pastas de jogos da plataforma: media_refolder as passa para ca.
 # O Skyscraper e o ES-DE usam subpastas de nome fixo por sistema
@@ -161,7 +161,7 @@ media_empty() {
 #   arcade tambem procuram nela, scraper_attract_prepare), senao a primeira
 #   pasta de jogos da plataforma. As outras ganham a arte dos jogos que tem,
 #   pelo nome do arquivo (um hard link: nao ocupa espaco de novo).
-# - A que era um link (custom folder, Setup > Folders) vira o mesmo link em
+# - A que era um link (custom folder, Setup > Games > Folders) vira o mesmo link em
 #   cada pasta de jogos da plataforma, e a "old-" ao lado segue a principal.
 # - Na pasta que ja e uma custom folder nada e gravado: e da pessoa.
 # - Sem pasta de jogos agora (um disco fora), a de plataforma fica para a vez
@@ -237,7 +237,7 @@ media_refolder() {
         rmdir "$src" 2> /dev/null
         log_info "Midia: $src -> $dest"
       fi
-      # A pasta guardada de uma custom folder (Setup > Folders) segue a
+      # A pasta guardada de uma custom folder (Setup > Games > Folders) segue a
       # principal.
       dest="$MEDIA_DIR/$t/$main"
       if [[ ! -e $src && -d ${src%/*}/old-$platform && ! -e ${dest%/*}/old-${dest##*/} ]]; then
@@ -565,7 +565,7 @@ scraper_attract_paths() {
 }
 
 # scraper_attract_layout imprime o layout das telas novas: o Arcadeflow, que
-# o Setup > Frontend baixa (config/fliperos-arcadeflow), ou, sem ele, o Basic
+# o Setup > Games > Frontend baixa (config/fliperos-arcadeflow), ou, sem ele, o Basic
 # do FliperOS (config/attractplus-layouts, desenhado na resolucao da tela).
 scraper_attract_layout() {
   if [[ -f $ATTRACT_DIR/layouts/Arcadeflow/layout.nut ]]; then
@@ -745,7 +745,7 @@ scraper_arcade() {
 #                  a lista de tipos, ou 0/1 = videos num trabalho antigo)
 #   pending        as pastas que faltam, uma linha do scraper_detect cada
 #   done.<pasta>   os arquivos da pasta atual que ja estao no cache
-# O Setup > Scraper oferece retomar enquanto houver pasta pendente.
+# O Setup > Games > Scraper oferece retomar enquanto houver pasta pendente.
 SCRAPER_JOB_DIR=${SCRAPER_JOB_DIR:-/var/lib/fliperos/scraper}
 SCRAPER_CHUNK=${SCRAPER_CHUNK:-20}
 # Onde ficam os clones (arquivos de referencia) da pasta do MAME. Fora do
@@ -817,7 +817,7 @@ scraper_clones_input() {
 
 # ── Tipos de midia ────────────────────────────────────────────────
 # O que o Scraper busca, pelos nomes das pastas de ~/media. A pessoa marca na
-# tela (Setup > Scraper) e a escolha fica no fliperos.conf (scraper_media);
+# tela (Setup > Games > Scraper) e a escolha fica no fliperos.conf (scraper_media);
 # sem escolha, tudo menos os videos, que ocupam muito mais.
 SCRAPER_MEDIA_DEFAULT="snap,logo,box,marquee,texto"
 

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Setup > Folders: as pastas de ~, das raizes as de cada emulador, core e
+# Setup > Games > Folders: as pastas de ~, das raizes as de cada emulador, core e
 # tipo de arte, e a custom folder de cada uma (lib/folders.sh).
 
 # screen_folders_label PASTA [LARGURA]: a linha da pasta numa lista. Uma

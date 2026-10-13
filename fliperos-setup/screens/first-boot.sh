@@ -9,7 +9,7 @@ screen_first_boot() {
   done < <(launcher_available)
   speak "Welcome to FliperOS. Choose what starts when the computer turns on."
   choice=$(ui_menu "Choose default launcher" \
-    "Welcome to FliperOS! Choose what starts automatically when the computer turns on. You can change it later in Setup > Frontend." \
+    "Welcome to FliperOS! Choose what starts automatically when the computer turns on. You can change it later in Setup > Games > Frontend." \
     "$(launcher_current)" "${entries[@]}") || choice=setup
   launcher_set "$choice"
   rm -f "$FLIPEROS_ETC/firstboot"

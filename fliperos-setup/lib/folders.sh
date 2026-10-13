@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Setup > Folders: as pastas da pessoa em ~ (config/fliperos-roms) e a
+# Setup > Games > Folders: as pastas da pessoa em ~ (config/fliperos-roms) e a
 # "custom folder" de cada uma, da raiz (~/roms) a de um emulador, de um core
 # ou de um tipo de arte (~/roms/retroarch/mame2010, ~/media/snap). Com uma, a
 # pasta vira um link para outra (um disco externo que ja tem as ROMs) e a de

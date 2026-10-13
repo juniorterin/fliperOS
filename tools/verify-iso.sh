@@ -199,13 +199,13 @@ if present usr/local/bin/dolphin-emu; then
   present usr/local/share/applications/dolphin-emu.desktop && fail "Dolphin's own shortcut was not removed"
   echo "Dolphin: without its own shortcut (opens through fliperos-launch)"
 fi
-# Wine, Steam e Heroic: pelo Setup > Extras (config/fliperos-extras), fora
+# Wine, Steam e Heroic: pelo Setup > System > Extras (config/fliperos-extras), fora
 # da imagem para a ISO caber num arquivo do GitHub.
 for path in usr/local/bin/fliperos-model2 opt/fliperos/model2/roms opt/fliperos/bin/fliperos-extras; do
   has "$path"
 done
 for path in usr/bin/wine usr/games/steam opt/Heroic/heroic; do
-  present "$path" && fail "/$path came in the image (it should come through Setup > Extras)"
+  present "$path" && fail "/$path came in the image (it should come through Setup > System > Extras)"
 done
 unsquashfs -cat "$work/filesystem.squashfs" var/lib/dpkg/arch > "$work/f" 2> /dev/null
 grep -qx i386 "$work/f" || fail "the i386 architecture is not enabled (32-bit Wine would not install)"
@@ -238,7 +238,7 @@ done
 grep -q '^fightcade|kms|/opt/fliperos/fightcade/fightcade|fetch:fliperos-fightcade|' "$src/config/fliperos-sessions.conf" ||
   fail "the sessions table does not have Fightcade"
 present opt/fliperos/fightcade/Fightcade2.sh && fail "Fightcade came inside the image (it is closed source: download only)"
-echo "Fightcade 2: launcher in the image, program by download (Setup > Frontend)"
+echo "Fightcade 2: launcher in the image, program by download (Setup > Games > Frontend)"
 # ── RetroArch: cores de fabrica e pasta do Online Updater ─────
 if grep -q 'squashfs-root/usr/local/bin/retroarch$' "$work/files.txt"; then
   for core in fceumm snes9x genesis_plus_gx mgba pcsx_rearmed mame2010; do

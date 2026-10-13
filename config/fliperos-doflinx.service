@@ -1,6 +1,6 @@
 [Unit]
 Description=FliperOS DOFLinx (Pixelcade in-game effects)
-# So depois do Setup > Extras > DOFLinx (config/fliperos-pixelcade
+# So depois do Setup > System > Extras > DOFLinx (config/fliperos-pixelcade
 # fetch-doflinx). Ele fala com o pixelweb: sem o marquee, tres tentativas e
 # para, como o servico do Pixelcade.
 ConditionPathExists=/home/fliperos/doflinx/DOFLinx

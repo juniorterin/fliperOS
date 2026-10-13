@@ -289,14 +289,14 @@ screen_video_setup() {
       "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "from boot menu")")" \
       "Geometry|$(conf_get geometry > /dev/null 2>&1 && echo "adjusted" || echo "monitor default")" \
       "Monitors|$(mm_count)")
-    choice=$(ui_menu "Video Setup" "$summary" "$last" \
-      "monitor|Monitor Type" \
-      "orientation|Monitor Orientation" \
-      "resolution|Resolution" \
-      "geometry|Geometry" \
-      "geometry_reset|Reset Geometry" \
-      "monitors|Multiple Monitors" \
-      "return|Return") || choice="return"
+    choice=$(ui_menu_hints "Video Setup" "$summary" "$last" \
+      "monitor|Monitor Type|The monitor model or its frequencies (15, 25 or 31 kHz)." \
+      "orientation|Monitor Orientation|Horizontal, or vertical for a rotated monitor." \
+      "resolution|Resolution|The resolution of the menus and the frontend." \
+      "geometry|Geometry|Center and size the picture on the tube, with a test grid." \
+      "geometry_reset|Reset Geometry|Undo the geometry: back to the monitor preset." \
+      "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
+      "return|Return|Save and leave. New video settings need a reboot.") || choice="return"
     last=$choice
     case $choice in
       monitor) screen_monitor_type ;;

@@ -75,7 +75,7 @@ The other emulators (RetroArch, PCSX2, Dolphin, Supermodel, Model 2...) and the 
 ## Problems
 
 - **The Setup offers no output for monitor 2**: no other output is free on any card. A DVI-D connector is not analog (see above).
-- **An extra monitor stays black**: check that you rebooted after choosing it, and use **Identify Monitors**. On a digital output, try another active converter. On a second card, `xrandr --listproviders` (in a terminal on the desktop) must show both cards, and `xrandr` must list its outputs (`VGA-1-1`...). The kernel line must have its `video=` (Setup > Debug mode shows `/proc/cmdline`).
+- **An extra monitor stays black**: check that you rebooted after choosing it, and use **Identify Monitors**. On a digital output, try another active converter. On a second card, `xrandr --listproviders` (in a terminal on the desktop) must show both cards, and `xrandr` must list its outputs (`VGA-1-1`...). The kernel line must have its `video=` (Setup > System > Debug mode shows `/proc/cmdline`).
 - **The screens are swapped**: change **Game Screen Order**.
 - **A game opens on one monitor only**: check that **Multi-Screen Games** is *On*. For GroovyMAME, `/etc/fliperos/mame/screens/<game>.ini` must exist (the Setup makes them when you add a monitor; `groovymame` remakes them otherwise). For Flycast, it needs 3 monitors.
 - **Logs**: `/opt/fliperos/logs/groovymame.log` and `/opt/fliperos/logs/flycast.log` (the `fliperos-multiscreen` lines show the layout used).

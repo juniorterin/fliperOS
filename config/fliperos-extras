@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Programas que nao vem na imagem e o Setup > Extras instala pela rede: o
+# Programas que nao vem na imagem e o Setup > System > Extras instala pela rede: o
 # Wine (Model 2 Emulator e os emuladores do Fightcade 2), o Steam e o Heroic
 # (GOG). Juntos passavam de 1,5 GB na ISO, e o GitHub aceita ate 2 GiB por
 # arquivo. O Steam e o Heroic ja precisam de rede para servir; o Fightcade
@@ -157,7 +157,7 @@ extras_install() {
   local name=$1
   label=$(extras_label "$name")
   [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade, zedmd, doflinx, hotr, qmamehook or ledspicer)"
-  ((EUID == 0)) || fail "installing $label needs root (Setup > Extras)"
+  ((EUID == 0)) || fail "installing $label needs root (Setup > System > Extras)"
   case $name in
     # shellcheck disable=SC2086 # um pacote por palavra
     wine) apt_install --no-install-recommends $WINE_PACKAGES ;;
@@ -199,7 +199,7 @@ extras_install() {
         # shellcheck disable=SC2086
         apt_install --no-install-recommends $HOTR_PACKAGES
       fi
-      printf '%s\n' '# FliperOS: Hook Of The Reaper (Setup > Extras) fala com as pistolas e placas' \
+      printf '%s\n' '# FliperOS: Hook Of The Reaper (Setup > System > Extras) fala com as pistolas e placas' \
         '# USB HID por aqui.' 'KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="input", MODE="0660"' \
         > /etc/udev/rules.d/99-fliperos-hotr.rules || fail "could not write the udev rule"
       udevadm control --reload 2> /dev/null && udevadm trigger --subsystem-match=hidraw 2> /dev/null

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Setup > Splash screen: a lista dos temas de ~/splashscreen, a previa de
+# Setup > System > Splash screen: a lista dos temas de ~/splashscreen, a previa de
 # cada um na tela e o do boot (lib/splash.sh).
 
 screen_splash() {

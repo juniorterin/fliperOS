@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Splash do boot (Setup > Splash screen): os temas do Plymouth em
+# Splash do boot (Setup > System > Splash screen): os temas do Plymouth em
 # ~/splashscreen, um por pasta (o fliperos-roms poe la os da imagem). Usar
 # um copia a pasta para o Plymouth com os caminhos de la, o marca como
 # padrao (o alternative default.plymouth) e refaz o initramfs, o unico lugar

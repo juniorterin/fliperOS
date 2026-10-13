@@ -9,7 +9,7 @@ Em desenvolvimento: a 0.9.1 é testada no QEMU e num gabinete com CRT de 15 kHz.
 ## O que vem nele
 
 - **Vídeo**: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.
-- **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, SM2-Emu (Model 2), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Extras.
+- **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, SM2-Emu (Model 2), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > System > Extras.
 - **Frontends**: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus e Fightcade 2, cujas partidas online rodam na resolução nativa de cada jogo no tubo.
 - **Pistola de luz**: GunCon 2 pronta para usar (driver por DKMS), calibrada para o tubo no Setup > Joysticks. Volantes também.
 - **Setup**: vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência.
@@ -83,8 +83,8 @@ Abre o menu **FliperOS Setup** (Install to HD/SSD, Recovery Mode, Terminal, Shut
 ### 7. Primeiro boot do sistema instalado
 
 1. O gabinete vai direto para o splash, sem texto.
-2. **Choose default launcher**: o que abre toda vez que o gabinete liga. Para um gabinete, escolha o **Attract-Mode Plus** (lista de jogos com imagens, feita para fliperama). As outras opções são EmulationStation (ES-DE), Pegasus, RetroArch, o desktop LXDE ou o próprio FliperOS Setup. Dá para trocar depois em Setup > Frontend.
-3. Quando você sai do launcher (Esc), aparece o **menu do FliperOS**: *Start frontend*, *Setup (video, audio, network...)*, *Start desktop*, *Exit to shell*, *Shutdown / Reboot*. O título mostra o IP do gabinete. Cada item é explicado em [Os menus, item por item](#os-menus-item-por-item).
+2. **Choose default launcher**: o que abre toda vez que o gabinete liga. Para um gabinete, escolha o **Attract-Mode Plus** (lista de jogos com imagens, feita para fliperama). As outras opções são EmulationStation (ES-DE), Pegasus, RetroArch, o desktop LXDE ou o próprio FliperOS Setup. Dá para trocar depois em Setup > Games > Frontend.
+3. Quando você sai do launcher (Esc), aparece o **menu do FliperOS**: *Start frontend*, *Setup*, *Start desktop*, *Exit to shell*, *Shutdown / Reboot*. O título mostra o IP do gabinete. Cada item é explicado em [Os menus, item por item](#os-menus-item-por-item).
 4. **Rede**: o cabo de rede funciona sozinho. Para Wi-Fi: *Setup > Network Setup*, escolha a rede e digite a senha. Conectado, o IP aparece no título do menu.
 5. **Atualizações**: a cada boot com internet, se houver uma atualização do FliperOS, uma tela diz o que ela traz e pergunta **Apply now** (aplicar agora) ou **Not now** (agora não).
 
@@ -95,11 +95,11 @@ Nos menus, o painel ou um controle já funciona como teclado: direcional = setas
 1. *Setup > Joysticks > Button mapping*.
 2. Para cada jogador, aperte o que ele pede, nesta ordem: cima, baixo, esquerda, direita, **botões 1 a 6** na ordem do painel (1 2 3 na fileira de cima, 4 5 6 na de baixo), **Start** e **Ficha** (Coin). O primeiro comando apertado diz qual controle é daquele jogador. Sem nada apertado por 8 segundos, aquele comando fica de fora.
 3. O mapeamento vai para todos os emuladores de uma vez (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Hypseus e OpenBOR).
-4. Pistola de luz (GunCon 2), volante e pedais têm calibradores no mesmo menu, e o *Setup > Quirks* corrige encoders USB que chegam errados (por exemplo, um encoder duplo que aparece como um jogador só). Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
+4. Pistola de luz (GunCon 2), volante e pedais têm calibradores no mesmo menu, e o *Setup > Joysticks > Quirks* corrige encoders USB que chegam errados (por exemplo, um encoder duplo que aparece como um jogador só). Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
 
 ### 9. Copie os seus jogos
 
-Use só jogos que você tem direito de usar (cópias dos seus originais, ou os jogos homebrew livres do *Setup > Downloader > Free games*).
+Use só jogos que você tem direito de usar (cópias dos seus originais, ou os jogos homebrew livres do *Setup > Games > Downloader > Free games*).
 
 **Use o desktop LXDE.** Ligue um mouse e um teclado USB no gabinete e escolha **Start desktop** no menu do FliperOS. É um desktop comum, e ele facilita todo o trabalho com os jogos:
 
@@ -134,14 +134,14 @@ Use só jogos que você tem direito de usar (cópias dos seus originais, ou os j
 
 **BIOS** vão em `bios`, nunca numa pasta de jogos: `bios/mame` para o MAME (`neogeo.zip`, `qsound.zip`...), `bios/dc` para o Flycast (`naomi.zip`, `awbios.zip`, `dc_boot.bin`), `bios/ps2` para o PCSX2 e a própria pasta `bios` para os cores do RetroArch.
 
-Tem um romset completo do MAME? *Setup > Cleaner > MAME ROM Cleaner* deixa só os jogos que funcionam e combinam com o seu gabinete (horizontal ou vertical, os controles que você tem) e os põe na pasta do emulador certo. Mais em [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs).
+Tem um romset completo do MAME? *Setup > Games > Cleaner > MAME ROM Cleaner* deixa só os jogos que funcionam e combinam com o seu gabinete (horizontal ou vertical, os controles que você tem) e os põe na pasta do emulador certo. Mais em [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs).
 
 ### 10. Faça o frontend mostrar os jogos
 
-1. *Setup > Frontend* > escolha o **Attract-Mode Plus** de novo (mesmo que ele já seja o padrão). O Setup cria um sistema para cada pasta que tem jogos. Faça isso de novo sempre que uma pasta receber os primeiros jogos.
-2. **Nomes de verdade** (*Street Fighter II* em vez de `sf2`): *Setup > AttractPlus ROM List*, para as pastas de fliperama. Funciona sem internet e também traz ano, fabricante e os clones.
-3. **Imagens** (telas, logos, vídeos, descrições): *Setup > Scraper*, que precisa de internet. Veja [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper).
-4. Jogos novos colocados depois numa pasta que já aparece no Attract-Mode: rode de novo o *Setup > AttractPlus ROM List* ou o *Setup > Scraper*. Detalhes em [Adding games](https://github.com/juniorterin/fliperOS/wiki/Adding-games).
+1. *Setup > Games > Frontend* > escolha o **Attract-Mode Plus** de novo (mesmo que ele já seja o padrão). O Setup cria um sistema para cada pasta que tem jogos. Faça isso de novo sempre que uma pasta receber os primeiros jogos.
+2. **Nomes de verdade** (*Street Fighter II* em vez de `sf2`): *Setup > Games > AttractPlus ROM List*, para as pastas de fliperama. Funciona sem internet e também traz ano, fabricante e os clones.
+3. **Imagens** (telas, logos, vídeos, descrições): *Setup > Games > Scraper*, que precisa de internet. Veja [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper).
+4. Jogos novos colocados depois numa pasta que já aparece no Attract-Mode: rode de novo o *Setup > Games > AttractPlus ROM List* ou o *Setup > Games > Scraper*. Detalhes em [Adding games](https://github.com/juniorterin/fliperOS/wiki/Adding-games).
 
 ### 11. Jogue
 
@@ -159,8 +159,8 @@ Tem um romset completo do MAME? *Setup > Cleaner > MAME ROM Cleaner* deixa só o
 - **O instalador não lista o disco**: modo SATA em AHCI na BIOS. *My drive is not listed (details)* mostra o que o Linux enxerga.
 - **A imagem está fora do centro ou grande demais**: *Setup > Video Setup > Geometry*.
 - **Dois ou três monitores** (Darius, Punch-Out!!, F355 Challenge): *Setup > Video Setup > Multiple Monitors*, veja [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors).
-- **Um sistema não aparece no frontend**: a pasta precisa de pelo menos um arquivo de jogo (o `_info.txt` não conta); depois escolha o frontend de novo em *Setup > Frontend*.
-- **Um jogo não abre**: ligue o *Setup > Debug mode* para ver as mensagens do emulador na tela; sem ele, elas ficam em `/opt/fliperos/logs`. Confira as BIOS em `bios`.
+- **Um sistema não aparece no frontend**: a pasta precisa de pelo menos um arquivo de jogo (o `_info.txt` não conta); depois escolha o frontend de novo em *Setup > Games > Frontend*.
+- **Um jogo não abre**: ligue o *Setup > System > Debug mode* para ver as mensagens do emulador na tela; sem ele, elas ficam em `/opt/fliperos/logs`. Confira as BIOS em `bios`.
 - **Sem som**: *Setup > Audio Setup* escolhe a placa e o volume e toca um teste.
 - **Algo que os menus não cobrem**: pelo SSH (`ssh fliperos@fliperos.local`, senha `fliperos`) é um Ubuntu 24.04 comum, e um assistente de IA com acesso ao terminal consegue configurar para você. Numa rede que você não controla, troque a senha com `passwd`.
 
@@ -188,12 +188,14 @@ O menu que abre quando você dá boot pelo pendrive, antes de instalar.
 Aparece quando você sai do frontend (Esc). O título mostra o nome do gabinete, o IP e quanto do disco está ocupado.
 
 - **Start frontend**: abre o launcher padrão (o Attract-Mode Plus, por exemplo). Quando você sai dele, volta a este menu.
-- **Setup (video, audio, network...)**: todas as configurações, explicadas abaixo.
+- **Setup**: todas as configurações, explicadas abaixo.
 - **Start desktop**: abre o LXDE, um desktop comum com mouse, gerenciador de arquivos, navegador (*Falkon*), cliente de torrent (*Transmission*) e loja de aplicativos. É o jeito mais fácil de organizar pastas e copiar jogos (passo 9). Para sair: *Logout* no menu do desktop, que abre um menuzinho: voltar ao menu do FliperOS, reiniciar, desligar ou cancelar.
 - **Exit to shell**: uma linha de comando em tela cheia. Digite `fliperos-menu` para voltar ao menu.
 - **Shutdown / Reboot**: *Power off* (desligar) ou *Reboot* (reiniciar), sempre perguntando antes. Use em vez de desligar o gabinete da tomada. O botão de desligar do gabinete faz o mesmo sem perguntar, e com um jogo aberto só fecha o jogo.
 
 ### Setup
+
+Os itens vêm na ordem de quem arruma um gabinete: imagem, som, rede, controles, jogos e o resto do sistema. Embaixo da lista, um balão diz para que serve o item sob o cursor.
 
 - **Video Setup**: como a imagem sai no monitor. O topo da tela mostra o que está configurado agora.
   - *Monitor Type*: o tipo de monitor (CRT arcade 15 kHz, 25 kHz, 31 kHz, TV, LCD...). Ele decide quais modos de vídeo são permitidos;
@@ -213,36 +215,38 @@ Aparece quando você sai do frontend (Esc). O título mostra o nome do gabinete,
   - *Menu sounds*: liga e desliga um som quando o cursor anda e quando você aperta Enter, como na tela de seleção de um jogo. O FliperOS não traz sons de jogos: coloque os seus `move.wav` e `select.wav` na pasta `sounds/menu` do compartilhamento de rede.
 - **Network Setup**: o cabo de rede funciona sozinho; isto é para o Wi-Fi.
   - *Connect to a Wi-Fi network*: a lista de redes com o sinal; escolha uma e digite a senha;
-  - *Connect to a hidden network (type the SSID)*: para uma rede que não aparece na lista;
+  - *Connect to a hidden network*: para uma rede que não aparece na lista;
   - *Network status*: a conexão e o IP.
-- **Joysticks (GunCon 2, wheel, LPT)**:
+- **Joysticks**:
   - *Button mapping (all emulators)*: mapeia os comandos de cada jogador uma vez para todos os emuladores (passo 8);
   - *Buttons layout (games of 1 to 5 buttons)*: onde ficam no painel os botões de um jogo, pelo número de botões que ele usa: um jogo de 4 botões com 1 2 em cima e 3 4 embaixo, ou 1 3 em cima e 2 4 embaixo. Para o GroovyMAME, os cores MAME do RetroArch, o Model 2 e o Model 3;
   - *Calibrate GunCon 2 (light gun)*: atire no alvo de cima à esquerda e no de baixo à direita, depois no do centro para conferir;
   - *Calibrate wheel, pedals or analog stick*: os limites e o centro de cada eixo;
   - *LPT joysticks (parallel port)*: controles antigos na porta paralela: adaptador de gamepad (NES, SNES, N64, PlayStation), adaptador DB9 (Atari, Amiga, Sega) ou interface TurboGraFX (até 7 joysticks). *Joysticks found now* mostra o que foi detectado e *Turn off* desliga.
-- **Frontend**: o que abre toda vez que o gabinete liga: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, o desktop LXDE ou o próprio FliperOS Setup. O que não está instalado é instalado (ou baixado) daqui. Escolher um frontend também coloca nele todas as pastas de jogos, então escolha de novo sempre que uma pasta ganhar os primeiros jogos. *Add a custom frontend* cadastra outro programa pelo comando, e *Edit or delete a custom frontend* muda ou apaga. Veja [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends).
-- **Emulators & Games**: os emuladores do menu do desktop, cada um marcado *installed* ou *not installed*. Escolha um que não está instalado para instalar: o **Model 2** (SM2-Emu, baixado e compilado na máquina, vários minutos), o **Fightcade 2** (baixado do site dele) e o **KOF Final Attack** no Ikemen GO em 4:3 a 320x240: você aponta a pasta do jogo original (a que tem o `Final Attack.exe`, num pendrive ou na rede) e ele baixa o [patch 4:3](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) e o Ikemen GO e monta uma cópia convertida. Os outros vêm na imagem.
-- **Extras (Wine, Steam, Heroic)**: programas que ficaram fora da ISO para o download ser menor, instalados pela internet: Wine (precisa para alguns emuladores do Fightcade 2), Steam e Heroic (jogos da GOG).
-- **Latency (low latency mode)**: mostra o processador, a memória, a placa de vídeo e a saída analógica deste computador.
-  - *Standard (any hardware)*: o padrão, funciona em qualquer máquina;
-  - *Low latency (modern CPUs)*: menos atraso entre o botão e a imagem, para processadores recentes. Se o computador está abaixo da recomendação, ele diz o que falta;
-  - *Check this computer*: compara esta máquina com a recomendação;
-  - *Recommended hardware*: a lista de peças ideais. Veja [Latency](https://github.com/juniorterin/fliperOS/wiki/Latency).
-- **Scraper (covers, videos, logos)**: baixa screenshots, capas, logos, vídeos e descrições dos jogos encontrados em `roms`. Você escolhe os sistemas (ou todos), a fonte (*ScreenScraper*, com conta gratuita recomendada; *ArcadeDB* e *progetto-SNAPS* para arcade, sem conta; ou *TheGamesDB*) e os tipos de mídia. Uma busca interrompida pode ser retomada depois. Precisa de internet. Veja [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper).
-- **AttractPlus ROM List (real game names)**: faz as listas de jogos do Attract-Mode Plus das pastas de arcade com o nome real, o ano e o fabricante de cada jogo (*Street Fighter II* em vez de `sf2`), clones incluídos. Funciona sem internet. Marque as pastas e confirme.
-- **Cleaner (MAME/Flycast/etc ROM/CHD)**: para quem tem um romset completo.
-  - *MAME ROM Cleaner*: você diz onde está o romset (uma pasta, um disco USB ou um compartilhamento de rede) e para qual emulador ele é (GroovyMAME, Flycast, Supermodel, Model 2, MAME 2010...). Ele fica só com os jogos que funcionam e combinam com o seu gabinete (horizontal ou vertical, jogadores, botões e controles que você tem, categorias, com ou sem clones, bootlegs, protótipos e jogos adultos), mostra quantos são e o espaço, e copia ou move para a pasta certa. *See the list* mostra os jogos, *Change the parameters* muda o filtro;
-  - *MAME CHD Cleaner*: traz os CHDs (as imagens de disco que alguns jogos precisam) só dos jogos que ficaram.
+  - *Quirks (USB controller fixes)*: correções para encoders USB que chegam errados (um encoder duplo aparecendo como um jogador só, um controle que trava). *Add a quirk* pede um nome e um código; *USB devices connected now* mostra os códigos do que está ligado; escolher um quirk da lista o apaga. Vale depois de reiniciar. Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
+- **Games**: o que põe jogos no gabinete, na ordem de uso.
+  - *Frontend*: o que abre toda vez que o gabinete liga: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, o desktop LXDE ou o próprio FliperOS Setup. O que não está instalado é instalado (ou baixado) daqui. Escolher um frontend também coloca nele todas as pastas de jogos, então escolha de novo sempre que uma pasta ganhar os primeiros jogos. *Add a custom frontend* cadastra outro programa pelo comando, e *Edit or delete a custom frontend* muda ou apaga. Veja [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends).
+  - *Emulators & Games*: os emuladores do menu do desktop, cada um marcado *installed* ou *not installed*. Escolha um que não está instalado para instalar: o **Model 2** (SM2-Emu, baixado e compilado na máquina, vários minutos), o **Fightcade 2** (baixado do site dele) e o **KOF Final Attack** no Ikemen GO em 4:3 a 320x240: você aponta a pasta do jogo original (a que tem o `Final Attack.exe`, num pendrive ou na rede) e ele baixa o [patch 4:3](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) e o Ikemen GO e monta uma cópia convertida. Os outros vêm na imagem.
+  - *Downloader*:
+    - *ROM/CHD MAME torrent*: você cola o link magnet de um romset (e um de CHDs) e ele baixa, pelo Transmission, só os jogos que o filtro do ROM Cleaner escolhe, direto na pasta do emulador. A versão do MAME do romset precisa ser a do emulador;
+    - *Free games (open-source homebrew)*: baixa jogos homebrew livres para as pastas do RetroArch, para o frontend ter o que mostrar.
+  - *Cleaner*: para quem tem um romset completo.
+    - *MAME ROM Cleaner*: você diz onde está o romset (uma pasta, um disco USB ou um compartilhamento de rede) e para qual emulador ele é (GroovyMAME, Flycast, Supermodel, Model 2, MAME 2010...). Ele fica só com os jogos que funcionam e combinam com o seu gabinete (horizontal ou vertical, jogadores, botões e controles que você tem, categorias, com ou sem clones, bootlegs, protótipos e jogos adultos), mostra quantos são e o espaço, e copia ou move para a pasta certa. *See the list* mostra os jogos, *Change the parameters* muda o filtro;
+    - *MAME CHD Cleaner*: traz os CHDs (as imagens de disco que alguns jogos precisam) só dos jogos que ficaram.
 
-  Veja [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs).
-- **Downloader (MAME ROM/CHD torrent, free games)**:
-  - *ROM/CHD MAME torrent*: você cola o link magnet de um romset (e um de CHDs) e ele baixa, pelo Transmission, só os jogos que o filtro do ROM Cleaner escolhe, direto na pasta do emulador. A versão do MAME do romset precisa ser a do emulador;
-  - *Free games (open-source homebrew)*: baixa jogos homebrew livres para as pastas do RetroArch, para o frontend ter o que mostrar.
-- **Quirks (USB controller fixes)**: correções para encoders USB que chegam errados (um encoder duplo aparecendo como um jogador só, um controle que trava). *Add a quirk* pede um nome e um código; *USB devices connected now* mostra os códigos do que está ligado; escolher um quirk da lista o apaga. Vale depois de reiniciar. Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
-- **Debug mode (on/off)**: desligado (o padrão), o boot mostra só o splash e as mensagens dos frontends e emuladores ficam gravadas em `/opt/fliperos/logs`. Ligado, todo texto aparece na tela: o menu do boot, as mensagens do sistema e os erros dos emuladores. Ligue quando um jogo não abrir, para ver por quê. Os emuladores seguem na hora; o boot, depois de reiniciar.
-- **System Update**: baixa e instala as atualizações de todos os pacotes do Ubuntu. As atualizações do próprio FliperOS são oferecidas no boot (passo 7).
-- **Splash screen (boot theme)**: a imagem mostrada enquanto o gabinete liga. Escolha um tema para ver uma *Preview* de 10 segundos ou para *Use at boot* (usar no boot). Os temas são pastas em `~/splashscreen` (o compartilhamento `splashscreen` na rede); mais no [Gnome-look](https://www.gnome-look.org/browse?cat=108&ord=latest).
+    Veja [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs).
+  - *Scraper*: baixa screenshots, capas, logos, vídeos e descrições dos jogos encontrados em `roms`. Você escolhe os sistemas (ou todos), a fonte (*ScreenScraper*, com conta gratuita recomendada; *ArcadeDB* e *progetto-SNAPS* para arcade, sem conta; ou *TheGamesDB*) e os tipos de mídia. Uma busca interrompida pode ser retomada depois. Precisa de internet. Veja [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper).
+  - *AttractPlus ROM List*: faz as listas de jogos do Attract-Mode Plus das pastas de arcade com o nome real, o ano e o fabricante de cada jogo (*Street Fighter II* em vez de `sf2`), clones incluídos. Funciona sem internet. Marque as pastas e confirme.
+- **System**: o resto.
+  - *Extras*: programas que ficaram fora da ISO para o download ser menor, instalados pela internet: Wine (precisa para alguns emuladores do Fightcade 2), Steam e Heroic (jogos da GOG).
+  - *Latency*: mostra o processador, a memória, a placa de vídeo e a saída analógica deste computador.
+    - *Standard (any hardware)*: o padrão, funciona em qualquer máquina;
+    - *Low latency (modern CPUs)*: menos atraso entre o botão e a imagem, para processadores recentes. Se o computador está abaixo da recomendação, ele diz o que falta;
+    - *Check this computer*: compara esta máquina com a recomendação;
+    - *Recommended hardware*: a lista de peças ideais. Veja [Latency](https://github.com/juniorterin/fliperOS/wiki/Latency).
+  - *System Update*: baixa e instala as atualizações de todos os pacotes do Ubuntu. As atualizações do próprio FliperOS são oferecidas no boot (passo 7).
+  - *Debug mode (on/off)*: desligado (o padrão), o boot mostra só o splash e as mensagens dos frontends e emuladores ficam gravadas em `/opt/fliperos/logs`. Ligado, todo texto aparece na tela: o menu do boot, as mensagens do sistema e os erros dos emuladores. Ligue quando um jogo não abrir, para ver por quê. Os emuladores seguem na hora; o boot, depois de reiniciar.
+  - *Splash screen*: a imagem mostrada enquanto o gabinete liga. Escolha um tema para ver uma *Preview* de 10 segundos ou para *Use at boot* (usar no boot). Os temas são pastas em `~/splashscreen` (o compartilhamento `splashscreen` na rede); mais no [Gnome-look](https://www.gnome-look.org/browse?cat=108&ord=latest).
 
 ## Build e testes
 

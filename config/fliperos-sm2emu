@@ -9,7 +9,7 @@
 #     instala o que falta do compilador (como root, ou pelo sudo).
 #   fliperos-sm2emu --build
 #     clona e compila, ou atualiza e compila de novo, sem perguntar nada
-#     (Setup > Emulators & Games, config/fliperos-emulators).
+#     (Setup > Games > Emulators & Games, config/fliperos-emulators).
 set -euo pipefail
 
 src=${FLIPEROS_SM2_SRC:-$HOME/.local/src/sm2-emu}

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Modos de latencia (Setup > Latency). Documentado em
+# Modos de latencia (Setup > System > Latency). Documentado em
 # docs/wiki/Latency.md.
 #
 # standard (padrao, qualquer maquina) e o que o GroovyArcade ja faz, mais o

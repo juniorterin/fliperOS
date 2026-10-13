@@ -1,6 +1,6 @@
 [Unit]
 Description=FliperOS ZeDMD LED display (dmdserver)
-# So depois do Setup > Extras > ZeDMD (config/fliperos-pixelcade fetch-zedmd).
+# So depois do Setup > System > Extras > ZeDMD (config/fliperos-pixelcade fetch-zedmd).
 ConditionPathExists=/home/fliperos/zedmd/dmdserver
 # Sem o ZeDMD conectado o dmdserver sai com erro: tres tentativas (a USB
 # ainda enumerando no boot) e para. A udev (99-fliperos-zedmd.rules) o abre

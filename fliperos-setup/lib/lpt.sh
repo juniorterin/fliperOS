@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Joysticks na porta paralela (Setup > LPT joysticks): os drivers db9,
+# Joysticks na porta paralela (Setup > Joysticks > LPT joysticks): os drivers db9,
 # gamecon e turbografx do kernel (Documentation/input/devices/
 # joystick-parport.rst). A porta em si o kernel acha sozinho quando ela
 # existe (parport_pc, pela ACPI da placa-mae ou por uma placa PCI/PCIe); o
@@ -96,7 +96,7 @@ lpt_write() {
   options=$(lpt_options $current) || return 1
   mkdir -p "$(dirname "$root$LPT_MODPROBE_CONF")" "$(dirname "$root$LPT_MODULES_CONF")"
   {
-    echo "# Gerado pelo fliperos-setup (Setup > LPT joysticks); refeito a cada mudanca."
+    echo "# Gerado pelo fliperos-setup (Setup > Joysticks > LPT joysticks); refeito a cada mudanca."
     echo "# O driver de impressora registraria a porta, e os de joystick a querem so"
     echo "# para eles (\"cannot grant exclusive access\")."
     echo "blacklist lp"

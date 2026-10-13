@@ -1,6 +1,6 @@
 # zsh do usuario fliperos: Oh My Zsh com o tema Dracula, os dois fixados por
 # commit e instalados pelo fliperos-dracula.sh em /usr/local/share/oh-my-zsh.
-# Sem atualizacao automatica: a versao e a da imagem (Setup > System Update
+# Sem atualizacao automatica: a versao e a da imagem (Setup > System > System Update
 # nao mexe nele).
 export ZSH=/usr/local/share/oh-my-zsh
 ZSH_THEME=dracula

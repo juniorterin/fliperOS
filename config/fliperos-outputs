@@ -7,7 +7,7 @@
 # saidas pela rede (TCP 8000, linhas "nome = valor", o protocolo que o
 # MAMEHooker le). O SM2-Emu so publica as lampadas; o recuo, a municao e a
 # vida dos jogos de pistola (e as vitorias dos de luta) vem do patch em config/sm2-emu-patches. Tres
-# programas as leem, cada um um extra do Setup > Extras, e podem ficar juntos
+# programas as leem, cada um um extra do Setup > System > Extras, e podem ficar juntos
 # (o MAME aceita varios clientes):
 #
 #   - Hook Of The Reaper (hotr.6bolt.com), o sucessor do MAMEHooker: recuo e
@@ -103,7 +103,7 @@ gun_reader() {
 }
 
 # fetch_qmamehook: o fonte da versao compilado para ~/qmamehook/QMamehook
-# (um minuto; o cmake, o g++ e o Qt 6 vem pelo Setup > Extras). Os .ini dos
+# (um minuto; o cmake, o g++ e o Qt 6 vem pelo Setup > System > Extras). Os .ini dos
 # jogos ficam em ~/qmamehook/ini, e os que a pessoa pos nao sao tocados.
 fetch_qmamehook() {
   local tmp
@@ -115,7 +115,7 @@ fetch_qmamehook() {
     return 0
   fi
   mkdir -p "$qmh_dir/ini" 2> /dev/null && [[ -w $qmh_dir ]] || fail "$qmh_dir is not writable"
-  command -v cmake > /dev/null && command -v g++ > /dev/null || fail "cmake and g++ are missing (Setup > Extras installs them)"
+  command -v cmake > /dev/null && command -v g++ > /dev/null || fail "cmake and g++ are missing (Setup > System > Extras installs them)"
   tmp=$(mktemp -d) || fail "could not create a temporary folder"
   # shellcheck disable=SC2064
   trap "rm -rf '$tmp'" EXIT
@@ -314,7 +314,7 @@ case ${1:-} in
     fetch_qmamehook "$@"
     ;;
   hotr)
-    hotr_installed || { echo "fliperos-outputs: Hook Of The Reaper is not installed (Setup > Extras)" >&2; exit 1; }
+    hotr_installed || { echo "fliperos-outputs: Hook Of The Reaper is not installed (Setup > System > Extras)" >&2; exit 1; }
     [[ -n ${DISPLAY:-} ]] || { echo "fliperos-outputs: open it from the desktop (Preferences > Hook Of The Reaper)" >&2; exit 1; }
     cd "$hotr_dir" || exit 1
     exec "$wine" HookOfTheReaper.exe

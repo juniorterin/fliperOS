@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Quirks do usbhid (Setup > Quirks): correcoes do kernel para controles USB
+# Quirks do usbhid (Setup > Joysticks > Quirks): correcoes do kernel para controles USB
 # que chegam errados, como o encoder duplo que aparece como um jogador so.
 #
 # Cada quirk tem um nome dado pela pessoa e o codigo do parametro

@@ -10,7 +10,7 @@
 | Supermodel | Sega Model 3 | its own Xorg | 640x240@57.524 at 15 kHz, 496x384 on the others |
 | Model 2 (SM2-Emu) | Sega Model 2 | its own Xorg | same |
 | Fightcade 2 (downloaded through the Setup) | online matches: FBNeo, SNES9x and FBA (Wine), Flycast | its own Xorg | the lobby at 512x448 (interlaced at 15 kHz); the matches in the **game's native resolution**: each FBNeo/FBA game in its own mode (384x224 for CPS, via GroovyMAME and Switchres), SNES9x at 256x224, Flycast at 640x240 |
-| Steam, Heroic (GOG, Epic, Amazon), through Setup > Extras | PC games | inside the LXDE desktop | the desktop's |
+| Steam, Heroic (GOG, Epic, Amazon), through Setup > System > Extras | PC games | inside the LXDE desktop | the desktop's |
 
 Dedicated pages: [Fightcade 2](Fightcade-2.md), [ROMs, BIOS and artwork](ROMs.md) (the folders in `~`) and [Controls](Controls.md) (buttons, SDL, calibration).
 
@@ -80,7 +80,7 @@ In a frontend (Attract-Mode and others), the emulator command becomes `/opt/flip
 
 ## Emulators & Games
 
-**Setup > Emulators & Games** lists the emulators of the desktop menu (RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, Supermodel, OpenBOR, Model 2, Fightcade 2) and KOF Final Attack, each marked **installed** or **not installed** — the same file the desktop menu looks at (`TryExec`) to show the shortcut. Choosing one that is not installed installs it (`config/fliperos-emulators`):
+**Setup > Games > Emulators & Games** lists the emulators of the desktop menu (RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, Supermodel, OpenBOR, Model 2, Fightcade 2) and KOF Final Attack, each marked **installed** or **not installed** — the same file the desktop menu looks at (`TryExec`) to show the shortcut. Choosing one that is not installed installs it (`config/fliperos-emulators`):
 
 - **Model 2**: installs what is missing from the compiler and clones and builds SM2-Emu as the user, the same build the desktop menu does on the first click (`fliperos-sm2emu --deps` and `--build`). Chosen again when installed, it updates and rebuilds.
 - **Fightcade 2**: downloaded from its site, with Wine ([Fightcade 2](Fightcade-2.md)).
@@ -120,4 +120,4 @@ It is CPU-bound on one core. FliperOS builds it with link-time optimization. The
 
 ## Steam and GOG
 
-Neither ships in the image (they would take over 500 MB, and are useless without network): **Setup > Extras** installs them. **Steam**: Ubuntu's `steam-installer`; on first launch Valve downloads the client (hundreds of MB, needs network). **GOG**: there is no official Linux client; the Setup installs **Heroic Games Launcher** (official `.deb`, with a pinned hash) (GOG, Epic and Amazon; the same as on the Steam Deck), which runs Windows games with the Wine/Proton it downloads itself. Both open **inside the LXDE desktop** (they are X programs), from the **Games** menu. Their UIs were made for larger screens: on a 15 kHz CRT at 640x480 they are cramped — on a 31 kHz monitor or an LCD they are much better.
+Neither ships in the image (they would take over 500 MB, and are useless without network): **Setup > System > Extras** installs them. **Steam**: Ubuntu's `steam-installer`; on first launch Valve downloads the client (hundreds of MB, needs network). **GOG**: there is no official Linux client; the Setup installs **Heroic Games Launcher** (official `.deb`, with a pinned hash) (GOG, Epic and Amazon; the same as on the Steam Deck), which runs Windows games with the Wine/Proton it downloads itself. Both open **inside the LXDE desktop** (they are X programs), from the **Games** menu. Their UIs were made for larger screens: on a 15 kHz CRT at 640x480 they are cramped — on a 31 kHz monitor or an LCD they are much better.

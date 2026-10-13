@@ -1,49 +1,83 @@
 # shellcheck shell=bash
-# Setup do sistema instalado (worker_setup_menu do gasetup): video, audio,
-# rede, frontend, latencia, scraper, ROM cleaner, pastas, quirks e atualizacao.
+# Setup do sistema instalado (worker_setup_menu do gasetup), na ordem de
+# quem arruma um gabinete: a imagem, o som, a rede, os controles, os jogos
+# (Games) e o resto do sistema (System). Cada item tem o seu balao de
+# informacao (ui_menu_hints).
 
 screen_setup_menu() {
   local choice last=video
   while true; do
     screen_reload_if_updated
     UI_STATUS=$(status_line)
-    choice=$(ui_menu "Setup" "" "$last" \
-      "video|Video Setup" \
-      "audio|Audio Setup" \
-      "network|Network Setup" \
-      "joysticks|Joysticks (GunCon 2, wheel, LPT)" \
-      "frontend|Frontend" \
-      "emulators|Emulators & Games (install the ones not in the image)" \
-      "extras|Extras (Wine, Steam, Heroic, Pixelcade, ZeDMD)" \
-      "latency|Latency (low latency mode)" \
-      "scraper|Scraper (covers, videos, logos)" \
-      "romlist|AttractPlus ROM List (real game names)" \
-      "cleaner|Cleaner (MAME/Flycast/etc ROM/CHD)" \
-      "downloader|Downloader (MAME ROM/CHD torrent, free games)" \
-      "folders|Folders (custom folders, external disks)" \
-      "quirks|Quirks (USB controller fixes)" \
-      "debug|Debug mode ($(debug_enabled && echo on || echo off))" \
-      "update|System Update" \
-      "splash|Splash screen (boot theme)" \
-      "return|Return") || return 0
+    choice=$(ui_menu_hints "Setup" "" "$last" \
+      "video|Video Setup|Monitor, orientation, resolution, geometry, extra monitors." \
+      "audio|Audio Setup|Sound card, volume, MAME audio latency and menu sounds." \
+      "network|Network Setup|Wi-Fi and the network status. Downloads and updates need it." \
+      "joysticks|Joysticks|Button mapping, light gun, wheel, LPT and USB controller fixes." \
+      "games|Games|Frontend, emulators, game folders, downloads, cleaner and art." \
+      "system|System|Extras, low latency, updates, debug mode and the boot splash." \
+      "return|Return|Back to the FliperOS menu.") || return 0
     last=$choice
     case $choice in
       video) screen_video_setup ;;
       audio) screen_audio ;;
       network) screen_network ;;
       joysticks) screen_joysticks ;;
+      games) screen_setup_games ;;
+      system) screen_setup_system ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_setup_games (Setup > Games), na ordem de por jogos no gabinete: o
+# frontend, os emuladores, as pastas, baixar, limpar o romset e a arte.
+screen_setup_games() {
+  local choice last=frontend
+  while true; do
+    screen_reload_if_updated
+    choice=$(ui_menu_hints "Games" "" "$last" \
+      "frontend|Frontend|The game list that starts when the computer turns on." \
+      "emulators|Emulators & Games|What is installed, and install what is not in the image." \
+      "folders|Folders|Where ROMs, BIOS and art are; use an external disk instead." \
+      "downloader|Downloader|MAME ROM/CHD sets by torrent and free homebrew games." \
+      "cleaner|Cleaner|Filter a MAME romset: only the games you want, per emulator." \
+      "scraper|Scraper|Download covers, screenshots, logos and videos of the games." \
+      "romlist|AttractPlus ROM List|Attract-Mode Plus lists with the real name of each game." \
+      "return|Return|Back to Setup.") || return 0
+    last=$choice
+    case $choice in
       frontend) screen_frontend ;;
       emulators) screen_emulators ;;
-      extras) screen_extras ;;
-      latency) screen_latency ;;
+      folders) screen_folders ;;
+      downloader) screen_downloads ;;
+      cleaner) screen_cleaner ;;
       scraper) screen_scraper ;;
       romlist) screen_romlist ;;
-      cleaner) screen_cleaner ;;
-      downloader) screen_downloads ;;
-      folders) screen_folders ;;
-      quirks) screen_quirks ;;
-      debug) screen_debug ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_setup_system (Setup > System): o que nao e imagem, som, rede,
+# controle nem jogo. O Splash screen por ultimo.
+screen_setup_system() {
+  local choice last=extras
+  while true; do
+    screen_reload_if_updated
+    choice=$(ui_menu_hints "System" "" "$last" \
+      "extras|Extras|Wine, Steam, Heroic, Pixelcade, ZeDMD and game output tools." \
+      "latency|Latency|Standard or low latency mode, and a check of this computer." \
+      "update|System Update|Download and install the updates of all packages." \
+      "debug|Debug mode ($(debug_enabled && echo on || echo off))|Show boot and emulator messages on screen to find a problem." \
+      "splash|Splash screen|The boot screen theme, with a preview." \
+      "return|Return|Back to Setup.") || return 0
+    last=$choice
+    case $choice in
+      extras) screen_extras ;;
+      latency) screen_latency ;;
       update) screen_update ;;
+      debug) screen_debug ;;
       splash) screen_splash ;;
       return) return 0 ;;
     esac
@@ -52,7 +86,7 @@ screen_setup_menu() {
 
 # ── Jogos livres ─────────────────────────────────────────────────
 
-# screen_free_roms (Setup > Downloader) baixa os jogos livres do
+# screen_free_roms (Setup > Games > Downloader) baixa os jogos livres do
 # config/fliperos-freeroms para as pastas dos cores do RetroArch
 # (lib/freeroms.sh).
 screen_free_roms() {
@@ -67,7 +101,7 @@ screen_free_roms() {
     frontends_configure "$(launcher_current)"
     ui_msg "$title" "$(romclean_value "$out" downloaded) games downloaded." \
       "$(romclean_value "$out" present) were already there; $(romclean_value "$out" skipped) are for cores that are not installed." \
-      "" "Setup > Scraper gets their art and descriptions."
+      "" "Setup > Games > Scraper gets their art and descriptions."
   fi
   rm -f "$result"
 }
@@ -83,16 +117,16 @@ screen_audio() {
     for entry in "${devices[@]}"; do
       [[ ${entry%%|*} == "$current" ]] && card_label=${entry#*|}
     done
-    choice=$(ui_menu "Audio Setup" \
+    choice=$(ui_menu_hints "Audio Setup" \
       "$(ui_fields "Default card|$card_label" "Volume|$(audio_volume)% (keyboard volume keys work too)" \
         "MAME latency|$(audio_mame_latency)")" "$last" \
-      "card|Default card" \
-      "volume|Volume" \
-      "mixer|AlsaMixer" \
-      "latency|MAME audio latency" \
-      "test|Test sound" \
-      "sounds|Menu sounds ($(menu_sounds_label))" \
-      "return|Return") || return 0
+      "card|Default card|The sound card used by the system and the emulators." \
+      "volume|Volume|From 0 to 100. The keyboard volume keys work too." \
+      "mixer|AlsaMixer|Every control of the sound card, one by one." \
+      "latency|MAME audio latency|Lower responds faster; raise it if the sound crackles." \
+      "test|Test sound|Play a sound to check the speakers." \
+      "sounds|Menu sounds ($(menu_sounds_label))|A sound when the cursor moves and on Enter (your own WAVs)." \
+      "return|Return|Back to Setup.") || return 0
     last=$choice
     case $choice in
       card)
@@ -151,11 +185,11 @@ screen_network() {
   local choice last=wifi
   while true; do
     UI_STATUS=$(status_line)
-    choice=$(ui_menu "Network Setup" "$(net_summary | head -6)" "$last" \
-      "wifi|Connect to a Wi-Fi network" \
-      "hidden|Connect to a hidden network (type the SSID)" \
-      "status|Network status" \
-      "return|Return") || return 0
+    choice=$(ui_menu_hints "Network Setup" "$(net_summary | head -6)" "$last" \
+      "wifi|Connect to a Wi-Fi network|Pick a network from the list and type its password." \
+      "hidden|Connect to a hidden network|For a network that hides its name: type the SSID." \
+      "status|Network status|The connections and the IP address of this computer." \
+      "return|Return|Back to Setup.") || return 0
     last=$choice
     case $choice in
       wifi) screen_wifi 0 ;;
@@ -609,7 +643,7 @@ scraper_scrape_targets() {
   done
   if ((${#failed[@]})); then
     ui_msg "Scraper" "Not finished: ${failed[*]}" "" \
-      "Open Setup > Scraper again to resume (the games already fetched are kept)." \
+      "Open Setup > Games > Scraper again to resume (the games already fetched are kept)." \
       "Details in $FLIPEROS_LOG."
   else
     label=$(printf '%s, ' "${labels[@]}")
@@ -625,7 +659,7 @@ screen_romlist() {
   local title="AttractPlus ROM List" found=() entries=() targets=() line key dir platform count name
   local picked="" result games clones unknown lines=()
   if ! launcher_installed attractplus; then
-    ui_msg "$title" "Attract-Mode Plus is not installed." "" "Install it in Setup > Frontend."
+    ui_msg "$title" "Attract-Mode Plus is not installed." "" "Install it in Setup > Games > Frontend."
     return 0
   fi
   mapfile -t found < <(frontends_romlist_systems)

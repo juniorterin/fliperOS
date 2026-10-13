@@ -1,0 +1,79 @@
+diff --git a/choose/choose.go b/choose/choose.go
+index 68edf11..50739f1 100644
+--- a/choose/choose.go
++++ b/choose/choose.go
+@@ -17,6 +17,7 @@ import (
+ 	"charm.land/bubbles/v2/key"
+ 	"charm.land/bubbles/v2/paginator"
+ 	tea "charm.land/bubbletea/v2"
++	"charm.land/gum/v2/internal/hint"
+ 	"charm.land/gum/v2/internal/sfx"
+ 	"charm.land/lipgloss/v2"
+ 	"github.com/charmbracelet/x/exp/ordered"
+@@ -303,6 +304,10 @@ func (m model) View() tea.View {
+ 		parts = append(parts, m.headerStyle.Render(m.header))
+ 	}
+ 	parts = append(parts, top+s.String())
++	// FliperOS: o balao de informacao do item sob o cursor (internal/hint).
++	if hint.Enabled() {
++		parts = append(parts, hint.Render(m.index))
++	}
+ 	if m.showHelp {
+ 		parts = append(parts, "", m.help.View(m.keymap))
+ 	}
+diff --git a/internal/hint/hint.go b/internal/hint/hint.go
+new file mode 100644
+index 0000000..6b9b3a2
+--- /dev/null
++++ b/internal/hint/hint.go
+@@ -0,0 +1,50 @@
++// Package hint draws the FliperOS info balloon of gum choose: a box under
++// the list with the text of the item under the cursor. GUM_CHOOSE_HINTS has
++// one text per item, one per line, in the order of the items; unset, there
++// is no balloon. GUM_CHOOSE_HINT_WIDTH is the width of the box,
++// GUM_CHOOSE_HINT_LINES its lines of text (the box keeps this height, so the
++// screen does not move with the cursor), GUM_CHOOSE_HINT_BORDER=0 leaves
++// only the text (small screens), GUM_CHOOSE_HINT_FOREGROUND and
++// GUM_CHOOSE_HINT_BORDER_FOREGROUND the colors.
++package hint
++
++import (
++	"os"
++	"strconv"
++	"strings"
++
++	"charm.land/lipgloss/v2"
++)
++
++func number(env string, def int) int {
++	if n, err := strconv.Atoi(os.Getenv(env)); err == nil && n > 0 {
++		return n
++	}
++	return def
++}
++
++// Enabled reports whether the list has a balloon.
++func Enabled() bool { return os.Getenv("GUM_CHOOSE_HINTS") != "" }
++
++// Render returns the balloon of the item at index.
++func Render(index int) string {
++	hints := strings.Split(os.Getenv("GUM_CHOOSE_HINTS"), "\n")
++	text := ""
++	if index >= 0 && index < len(hints) {
++		text = hints[index]
++	}
++	width := number("GUM_CHOOSE_HINT_WIDTH", 60)
++	lines := number("GUM_CHOOSE_HINT_LINES", 2)
++	style := lipgloss.NewStyle().Width(width).Height(lines).MaxHeight(lines)
++	if c := os.Getenv("GUM_CHOOSE_HINT_FOREGROUND"); c != "" {
++		style = style.Foreground(lipgloss.Color(c))
++	}
++	if os.Getenv("GUM_CHOOSE_HINT_BORDER") == "0" {
++		return style.Render(text)
++	}
++	style = style.Height(lines+2).MaxHeight(lines+2).Padding(0, 1).Border(lipgloss.RoundedBorder())
++	if c := os.Getenv("GUM_CHOOSE_HINT_BORDER_FOREGROUND"); c != "" {
++		style = style.BorderForeground(lipgloss.Color(c))
++	}
++	return style.Render(text)
++}

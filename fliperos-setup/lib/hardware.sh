@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # O que a maquina tem (CPU, memoria, GPU) e se ela esta dentro da
-# recomendacao do modo de baixa latencia (Setup > Latency).
+# recomendacao do modo de baixa latencia (Setup > System > Latency).
 #
 # A recomendacao e a mesma do docs/wiki/Latency.md: o modo de baixa latencia
 # liga o frame delay automatico e os preemptive frames do RetroArch, que

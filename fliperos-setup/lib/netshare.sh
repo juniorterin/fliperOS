@@ -70,7 +70,7 @@ netshare_mount() {
   local host=$1 share=$2 user=$3 pass=$4 cred="" opts out uid gid
   NETSHARE_ERROR=""
   if ! netshare_available; then
-    NETSHARE_ERROR="cifs-utils is not installed (Setup > System Update)."
+    NETSHARE_ERROR="cifs-utils is not installed (Setup > System > System Update)."
     return 1
   fi
   netshare_umount

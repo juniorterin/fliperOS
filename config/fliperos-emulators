@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Setup > Emulators & Games: os emuladores do menu do desktop, quais estao
+# Setup > Games > Emulators & Games: os emuladores do menu do desktop, quais estao
 # instalados e a instalacao dos que nao vem na imagem, um por um.
 #
 #   fliperos-emulators list                    nome|instalado (0 ou 1)|tipo|descricao

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Setup > Emulators & Games: os emuladores do menu do desktop, quais estao
+# Setup > Games > Emulators & Games: os emuladores do menu do desktop, quais estao
 # instalados, e a instalacao dos que nao vem na imagem (o Model 2, compilado
 # na maquina; o Fightcade 2, baixado do site dele; o KOF Final Attack no
 # Ikemen GO, da pasta do jogo que a pessoa traz). O config/fliperos-emulators

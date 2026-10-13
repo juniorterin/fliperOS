@@ -1,20 +1,22 @@
 # shellcheck shell=bash
 # Setup > Joysticks: os botoes do painel (lib/buttons.sh), o layout deles por
 # numero de botoes do jogo, a calibracao do GunCon 2 e de volante/pedais/analogico
-# (config/fliperos-calibrate) e os joysticks da porta paralela (lpt.sh).
+# (config/fliperos-calibrate), os joysticks da porta paralela (lpt.sh) e os
+# quirks dos controles USB (screen_quirks).
 
 CALIBRATE=${CALIBRATE:-/opt/fliperos/bin/fliperos-calibrate}
 
 screen_joysticks() {
   local choice last=guncon
   while true; do
-    choice=$(ui_menu "Joysticks" "" "$last" \
-      "buttons|Button mapping (all emulators)" \
-      "layout|Buttons layout (games of 1 to 5 buttons)" \
-      "guncon|Calibrate GunCon 2 (light gun)" \
-      "axes|Calibrate wheel, pedals or analog stick" \
-      "lpt|LPT joysticks (parallel port)" \
-      "return|Return") || return 0
+    choice=$(ui_menu_hints "Joysticks" "" "$last" \
+      "buttons|Button mapping (all emulators)|Teach FliperOS the panel: press each control when asked." \
+      "layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel." \
+      "guncon|Calibrate GunCon 2 (light gun)|Shoot the targets so the gun hits where it points." \
+      "axes|Calibrate wheel, pedals or analog stick|Set the range and the center of each axis." \
+      "lpt|LPT joysticks (parallel port)|Arcade sticks and console pads wired to the parallel port." \
+      "quirks|Quirks (USB controller fixes)|Kernel fixes for a USB encoder read wrong, as one player." \
+      "return|Return|Back to Setup.") || return 0
     last=$choice
     case $choice in
       buttons) screen_buttons ;;
@@ -22,6 +24,7 @@ screen_joysticks() {
       guncon) screen_calibrate guncon ;;
       axes) screen_calibrate axes ;;
       lpt) screen_lpt ;;
+      quirks) screen_quirks ;;
       return) return 0 ;;
     esac
   done

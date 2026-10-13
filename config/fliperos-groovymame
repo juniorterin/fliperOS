@@ -64,7 +64,7 @@ fi
 inipath=$inidir
 restore_primary=""
 IFS=, read -r -a outputs <<< "$(sed -n 's/^screens=//p' "$conf" 2> /dev/null | tail -1)"
-# Setup > Multiple Monitors > Multi-Screen Games: Off deixa tudo no monitor 1.
+# Setup > Video Setup > Multiple Monitors > Multi-Screen Games: Off deixa tudo no monitor 1.
 grep -q '^multiscreen=off' "$conf" 2> /dev/null && outputs=()
 if ((${#outputs[@]} > 1)) && opens_video "$@"; then
   # Feitos pelo Setup; refeitos aqui se o GroovyMAME ou o numero de monitores

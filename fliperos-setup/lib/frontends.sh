@@ -85,7 +85,7 @@ frontends_crt() {
 # ainda nao a tem. Chamado logo antes de abrir um launcher (fliperos-setup
 # --session-start, quando nenhum frontend esta aberto) e no
 # tools/cabinet-update.sh: assim ela nao depende de a pessoa passar de novo
-# pelo Setup > Frontend.
+# pelo Setup > Games > Frontend.
 frontends_240p() {
   frontends_crt || return 0
   if launcher_installed emulationstation && [[ $(conf_get esde_240p 2> /dev/null) != 1 ]]; then
@@ -450,7 +450,7 @@ frontends_attract_system() {
 # do emulador, na pasta e nao nas de dentro dela, como o Attract-Mode le.
 # A lista de arcade com os nomes de verdade (ROM List, Scraper) nao: ela nao
 # tem os BIOS da pasta e tem os clones sem arquivo de um romset merged; quem
-# a refaz e o Setup > AttractPlus ROM List. Uma pasta que nao existe agora
+# a refaz e o Setup > Games > AttractPlus ROM List. Uma pasta que nao existe agora
 # (um disco fora) ou sem nenhum jogo nao mexe na lista.
 frontends_attract_refresh() {
   local key=$1 dir=$2 name=$3 list cfg exts tmp
@@ -504,7 +504,7 @@ frontends_attract_refresh() {
 }
 
 # ── ROM List do Attract-Mode Plus ────────────────────────────────
-# Setup > AttractPlus ROM List: a romlist de cada pasta de arcade com o nome
+# Setup > Games > AttractPlus ROM List: a romlist de cada pasta de arcade com o nome
 # de verdade de cada jogo (o --build-romlist do Attract-Mode so poe o nome
 # do arquivo), do -listxml do GroovyMAME (fliperos-romclean romlist). A
 # pasta do core mame2010 le primeiro o XML do 0.139. Uma romlist a mais,
@@ -569,7 +569,7 @@ frontends_configure() {
   return 0
 }
 
-# frontends_hint NOME imprime as linhas a mais da mensagem final do Setup >
+# frontends_hint NOME imprime as linhas a mais da mensagem final do Setup > Games >
 # Frontend, para quem nao usa as pastas dos emuladores do FliperOS: o
 # Fightcade tem as ROMs dele (config/fliperos-roms) e nao sai com Esc.
 frontends_hint() {
