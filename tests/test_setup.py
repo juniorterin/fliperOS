@@ -3565,7 +3565,7 @@ class FoldersTests(Base):
         self.assertEqual(out.strip(), "kept=")
         self.assertEqual(os.readlink(self.home / "roms"), str(other))
         self.assertEqual((self.home / "old-roms" / "mame" / "sf2.zip").read_text(), "mine")
-        self.assertFalse((self.home / "old-roms-2").exists())
+        self.assertFalse((self.home / "old2-roms").exists())
 
     def test_a_link_made_by_hand_is_a_custom_folder(self):
         shutil.move(str(self.home / "roms"), str(self.home / "old-roms"))
@@ -3600,9 +3600,14 @@ class FoldersTests(Base):
         self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
         # Ao ganhar uma custom folder, a de agora fica com outro nome.
         out = self.env.out('folders_link roms "%s"; echo "$FOLDERS_KEPT"' % (self.disk / "roms"), self.vars)
-        self.assertEqual(out.strip(), str(self.home / "old-roms-2"))
+        self.assertEqual(out.strip(), str(self.home / "old2-roms"))
         self.assertEqual((self.home / "old-roms" / "mame" / "old.zip").read_text(), "old")
-        self.assertEqual((self.home / "old-roms-2" / "mame" / "sf2.zip").read_text(), "mine")
+        self.assertEqual((self.home / "old2-roms" / "mame" / "sf2.zip").read_text(), "mine")
+        # A guardada com outro nome nunca volta sozinha como uma pasta nova.
+        (self.home / "roms").unlink()
+        shutil.rmtree(self.home / "old-roms")
+        self.assertEqual(self.env.out("folders_check", self.vars).split(), [])
+        self.assertFalse((self.home / "roms-2").exists())
 
     def test_link_drops_an_empty_folder_when_the_previous_one_is_kept(self):
         shutil.move(str(self.home / "roms"), str(self.home / "old-roms"))
@@ -3615,7 +3620,7 @@ class FoldersTests(Base):
         out = self.env.out('folders_link roms "%s"; echo "kept=$FOLDERS_KEPT"' % (self.disk / "roms"), self.vars)
         self.assertEqual(out.strip(), "kept=")
         self.assertEqual((self.home / "old-roms" / "mame" / "sf2.zip").read_text(), "mine")
-        self.assertFalse((self.home / "old-roms-2").exists())
+        self.assertFalse((self.home / "old2-roms").exists())
 
     def test_refused_folders(self):
         (self.home / "roms" / "inside").mkdir()
@@ -3636,6 +3641,113 @@ class FoldersTests(Base):
         env = dict(self.vars, FOLDERS_SCRIPT=str(script), FLIPEROS_USER="nobody-here")
         self.env.out('folders_link roms "%s"; folders_unlink roms' % (self.disk / "roms"), env)
         self.assertEqual((self.env.dir / "populate.calls").read_text().split(), [str(self.home)] * 2)
+
+    # -- As pastas de dentro: um emulador, um core, um tipo de arte.
+
+    def inner(self):
+        """~/roms/retroarch/mame2010 e ~/media/snap com arquivos, e um disco com uma pasta para cada uma."""
+        for d in (self.home / "roms" / "retroarch" / "mame2010", self.home / "media" / "snap" / "arcade",
+                  self.disk / "mame2010", self.disk / "snaps", self.disk / "model2"):
+            d.mkdir(parents=True)
+        (self.home / "roms" / "retroarch" / "mame2010" / "tekken3.zip").write_text("mine")
+        (self.home / "media" / "snap" / "arcade" / "sf2.png").write_text("mine")
+
+    def test_inner_folder_gets_its_own_custom_folder(self):
+        self.inner()
+        out = self.env.out('folders_link roms/retroarch/mame2010 "%s"; echo "$FOLDERS_KEPT"' % (self.disk / "mame2010"),
+                           self.vars)
+        core = self.home / "roms" / "retroarch" / "mame2010"
+        self.assertEqual(out.strip(), str(self.home / "roms" / "retroarch" / "old-mame2010"))
+        self.assertEqual(os.readlink(core), str(self.disk / "mame2010"))
+        self.assertEqual(self.state("roms/retroarch/mame2010"), "custom")
+        # As outras pastas e a raiz ficam como estavam.
+        self.assertEqual(self.state("roms"), "default")
+        self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
+        self.env.out('folders_link media/snap "%s"' % (self.disk / "snaps"), self.vars)
+        self.assertEqual((self.home / "media" / "old-snap" / "arcade" / "sf2.png").read_text(), "mine")
+        self.assertEqual(self.env.out("folders_customs", self.vars).split(),
+                         ["roms/retroarch/mame2010", "media/snap"])
+        self.assertEqual(self.env.out("folders_customs roms", self.vars).split(), ["roms/retroarch/mame2010"])
+        self.env.out("folders_unlink roms/retroarch/mame2010", self.vars)
+        self.assertEqual((core / "tekken3.zip").read_text(), "mine")
+        self.assertFalse(core.is_symlink())
+        self.assertFalse((self.home / "roms" / "retroarch" / "old-mame2010").exists())
+
+    def test_children_are_the_folders_of_the_structure(self):
+        self.inner()
+        (self.home / "roms" / "old-mame").mkdir()
+        (self.home / "roms" / "old2-mame").mkdir()
+        (self.home / "roms" / ".hidden").mkdir()
+        (self.home / "roms" / "mame" / "kinst").mkdir()
+        (self.home / "roms" / "gone").symlink_to(self.env.dir / "unplugged")
+        self.assertEqual(self.env.out("folders_children roms", self.vars).split(),
+                         ["roms/gone", "roms/mame", "roms/retroarch"])
+        self.assertEqual(self.state("roms/gone"), "offline")
+        self.assertEqual(self.env.out("folders_children roms/retroarch", self.vars).split(), ["roms/retroarch/mame2010"])
+        self.assertEqual(self.env.out("folders_children media", self.vars).split(), ["media/snap"])
+        self.assertEqual(self.env.out("folders_children media/snap", self.vars).split(), ["media/snap/arcade"])
+        # A pasta de um emulador e a dos temas nao tem pastas de dentro para a lista.
+        for rel in ("roms/mame", "media/snap/arcade", "splashscreen"):
+            self.assertEqual(self.env.out("folders_children %s" % rel, self.vars).split(), [], rel)
+        for rel in ("roms/old-mame", "roms/old2-mame", "roms/.hidden", "roms/../bios", "roms/a/b/c", "/roms", "roms/",
+                    "games/mame", ""):
+            self.assertEqual(self.env.run('folders_known "%s"' % rel, self.vars).returncode, 1, rel)
+        for rel in ("roms", "roms/mame", "roms/retroarch/mame2010", "media/snap/arcade"):
+            self.assertEqual(self.env.run('folders_known "%s"' % rel, self.vars).returncode, 0, rel)
+
+    def test_model2_link_of_fliperos_is_the_default(self):
+        self.inner()
+        emu = self.env.dir / "model2emu"
+        emu.mkdir()
+        (self.home / "roms" / "model2").symlink_to(emu)
+        env = dict(self.vars, FOLDERS_MODEL2=str(emu))
+        self.assertEqual(self.env.out("folders_state roms/model2", env).strip(), "default")
+        self.assertEqual(self.env.out("folders_customs", env).split(), [])
+        self.assertEqual(self.env.run("folders_unlink roms/model2", env).returncode, 1)
+        out = self.env.out('folders_link roms/model2 "%s"; echo "kept=$FOLDERS_KEPT"' % (self.disk / "model2"), env)
+        self.assertEqual(out.strip(), "kept=")
+        self.assertEqual(self.env.out("folders_state roms/model2", env).strip(), "custom")
+        self.env.out("folders_unlink roms/model2", env)
+        self.assertEqual(os.readlink(self.home / "roms" / "model2"), str(emu))
+
+    def test_check_restores_an_inner_folder(self):
+        self.inner()
+        self.env.out('folders_link roms/retroarch/mame2010 "%s"; folders_link media/snap "%s"'
+                     % (self.disk / "mame2010", self.disk / "snaps"), self.vars)
+        (self.home / "roms" / "retroarch" / "mame2010").unlink()
+        (self.home / "media" / "snap").unlink()
+        self.skeleton(self.home / "media" / "snap")
+        self.assertEqual(sorted(self.env.out("folders_check", self.vars).split()),
+                         ["media/snap", "roms/retroarch/mame2010"])
+        self.assertEqual((self.home / "roms" / "retroarch" / "mame2010" / "tekken3.zip").read_text(), "mine")
+        self.assertEqual((self.home / "media" / "snap" / "arcade" / "sf2.png").read_text(), "mine")
+
+    def test_inner_folder_of_an_unplugged_root_is_refused(self):
+        self.inner()
+        shutil.move(str(self.home / "roms"), str(self.home / "old-roms"))
+        (self.home / "roms").symlink_to(self.env.dir / "unplugged")
+        r = self.env.run('folders_link roms/mame "%s" || echo "$FOLDERS_ERROR"' % (self.disk / "roms"), self.vars)
+        self.assertIn("~/roms is not there", r.stdout)
+
+    def test_kept_folders_are_not_systems(self):
+        self.inner()
+        (self.disk / "mame").mkdir()
+        self.env.out('folders_link roms/mame "%s"; folders_link roms/retroarch/mame2010 "%s"'
+                     % (self.disk / "mame", self.disk / "mame2010"), self.vars)
+        (self.disk / "mame" / "pacman.zip").write_text("theirs")
+        info = self.env.dir / "info"
+        info.mkdir()
+        (info / "mame2010_libretro.info").write_text('systemid = "mame"\n')
+        (self.disk / "mame2010" / "sfex.zip").write_text("theirs")
+        out = self.env.out("scraper_detect", dict(self.vars, ROMS_DIR=str(self.home / "roms"), RA_INFO_DIR=str(info)))
+        self.assertEqual([line.split("|")[0] for line in out.splitlines()], ["mame", "retroarch/mame2010"])
+        self.assertEqual(out.splitlines()[0].split("|")[3], "1")
+
+    def test_shares_follow_the_links(self):
+        smb = (ROOT / "config/smb.conf").read_text()
+        for name in ("roms", "bios", "media", "splashscreen"):
+            share = smb.split("[%s]\n" % name)[1].split("\n[")[0]
+            self.assertIn("wide links = yes", share, name)
 
     def login(self):
         env = dict(os.environ, HOME=str(self.home), FLIPEROS_SPLASH_BUNDLED=str(self.env.dir / "nobundle"),
@@ -3662,6 +3774,22 @@ class FoldersTests(Base):
         self.login()
         self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
         self.assertFalse((self.home / "old-roms").exists())
+
+    def test_login_with_inner_custom_folders(self):
+        self.inner()
+        self.env.out('folders_link roms/retroarch "%s"; folders_link roms/mame "%s"; folders_link media/snap "%s"'
+                     % (self.disk / "mame2010", self.disk / "roms", self.disk / "snaps"), self.vars)
+        # O disco de um deles desligado, o link de outro apagado a mao.
+        shutil.rmtree(self.disk / "mame2010")
+        (self.home / "roms" / "mame").unlink()
+        self.login()
+        self.assertTrue((self.home / "roms" / "retroarch").is_symlink())
+        self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
+        self.assertFalse((self.home / "roms" / "old-mame").exists())
+        self.assertTrue((self.disk / "snaps" / "_info.txt").is_file())
+        self.assertTrue((self.home / "roms" / "ps2" / "_info.txt").is_file())
+        self.assertTrue((self.home / "bios" / "dc").is_dir())
+        self.assertTrue((self.home / "roms" / "model2" / "_info.txt").is_file())
 
     def test_in_the_setup_menu(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()

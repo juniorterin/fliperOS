@@ -21,27 +21,29 @@ info=${FLIPEROS_CORE_INFO:-/opt/fliperos/retroarch/info}
 etc=${FLIPEROS_ETC:-/etc/fliperos}
 splash=${FLIPEROS_SPLASH:-$HOME/splashscreen}
 
-# Setup > Folders (lib/folders.sh) faz de uma destas pastas um link para a
-# "custom folder" da pessoa (um disco externo) e guarda a de antes ao lado,
-# em old-<nome>. Com o link apagado a mao, a de antes volta para o lugar em
-# vez de nascer uma pasta nova e vazia.
+# Setup > Folders (lib/folders.sh) faz de qualquer uma destas pastas um link
+# para a "custom folder" da pessoa (um disco externo) e guarda a de antes ao
+# lado, com "old-" no nome (~/old-roms, ~/roms/old-mame). Com o link apagado a
+# mao, a de antes volta para o lugar em vez de nascer uma pasta nova e vazia.
 restore() {
-  local old
-  old=$(dirname "$1")/old-$(basename "$1")
+  local old=${1%/*}/old-${1##*/}
   [[ -e $1 || -L $1 ]] && return 0
   [[ -d $old && ! -L $old ]] && mv "$old" "$1" 2> /dev/null
   return 0
 }
-for dir in "$roms" "$bios" "$media" "$splash"; do restore "$dir"; done
+restore "$roms"
+restore "$roms/retroarch"
 
 # Um link para um disco que nao esta ligado: essa pasta fica como esta (nada
 # e criado nela) e as outras seguem.
-mkdir -p "$roms/retroarch" 2> /dev/null || [[ -L $roms ]] || exit 0
+mkdir -p "$roms/retroarch" 2> /dev/null || [[ -L $roms || -L $roms/retroarch ]] || exit 0
 
 # folder PASTA TEXTO
 folder() {
+  restore "$1"
   [[ -d $1 ]] || mkdir -p "$1" 2> /dev/null || return 0
-  [[ -e $1/_info.txt ]] || printf '%s\n' "$2" > "$1/_info.txt" 2> /dev/null
+  [[ -e $1/_info.txt ]] || printf '%s
+' "$2" > "$1/_info.txt" 2> /dev/null
   return 0
 }
 
@@ -55,9 +57,16 @@ folder "$roms/model3" "Supermodel (Sega Model 3): MAME .zip sets."
 folder "$roms/dolphin" "Dolphin: GameCube and Wii (.iso .gcm .rvz .wbfs .ciso)."
 folder "$roms/openbor/Paks" "OpenBOR: .pak games."
 folder "$roms/hypseus" "Hypseus Singe (laserdisc): roms/, vldp/<game>/ and singe/<game>/."
-# O Model 2 roda no Wine com as ROMs dentro da pasta dele.
-if [[ -d /opt/fliperos/model2/roms && ! -e $roms/model2 ]]; then
+# O Model 2 Emulator (Wine) de uma instalacao antiga tem as ROMs dentro da
+# pasta dele: ~/roms/model2 e um link para la. Sem ele (SM2-Emu), uma pasta
+# como as outras.
+restore "$roms/model2"
+if [[ -e $roms/model2 || -L $roms/model2 ]]; then
+  :
+elif [[ -d /opt/fliperos/model2/roms ]]; then
   ln -s /opt/fliperos/model2/roms "$roms/model2" 2> /dev/null
+else
+  folder "$roms/model2" "SM2-Emu (Sega Model 2): MAME .zip sets."
 fi
 # Fightcade 2 (Setup > Frontend): uma pasta por emulador dele. Os romsets
 # sao os que cada um pede, nao os do MAME atual.
