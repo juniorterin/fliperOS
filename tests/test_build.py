@@ -1682,6 +1682,11 @@ class RomCleanTests(unittest.TestCase):
         summary, move, rest = self.scan(*self.CABINET)
         self.assertEqual(summary['flycast'], '4')
         self.assertFalse(set(flycast) & set(move + rest))
+        # Marcados como placa (--hardware) vao para o MAME, com a BIOS.
+        _, move, _ = self.scan('--hardware', 'naomi,atomiswave')
+        self.assertEqual(move, flycast)
+        self.assertEqual(set(self.dests.values()), {str(self.dest)})
+        self.assertEqual(self.scan('--hardware', 'atomiswave')[1], ['awbios.zip', 'kofxi.zip'])
         # No alvo Flycast: so os sistemas dele, cada um na sua pasta, a BIOS na
         # dela e sem os dispositivos do MAME.
         naomi, aw, bios = (str(self.tmp / d) for d in ('naomi', 'atomiswave', 'bios-dc'))

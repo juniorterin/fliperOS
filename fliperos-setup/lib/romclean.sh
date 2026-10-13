@@ -24,19 +24,19 @@ ROMCLEAN_CACHE=${ROMCLEAN_CACHE:-/var/cache/fliperos}
 # Os filtros, na ordem da tela. "transfer" (copiar ou mover) tambem e um
 # parametro da tela, mas nao e filtro.
 ROMCLEAN_KEYS=(arcade status genres mature players modes buttons controls orientation lines clones region
-  bootlegs prototypes decades vector chd hardware systems flycast)
+  bootlegs prototypes decades vector chd hardware systems)
 declare -A ROMCLEAN_TYPE=(
   [arcade]=radio [status]=radio [genres]=check [mature]=radio [players]=radio [modes]=check [buttons]=radio
   [controls]=check [orientation]=check [lines]=check [clones]=radio [region]=radio [bootlegs]=radio
   [prototypes]=radio [decades]=check [vector]=radio [chd]=radio [hardware]=check [systems]=check
-  [flycast]=radio [transfer]=radio
+  [transfer]=radio
 )
 declare -A ROMCLEAN_TITLE=(
   [arcade]="Games" [status]="Emulation" [genres]="Categories" [mature]="Adult games" [players]="Players"
   [modes]="Play mode" [buttons]="Buttons" [controls]="Controls" [orientation]="Screen" [lines]="Resolution"
   [clones]="Clones" [region]="Region" [bootlegs]="Bootlegs and hacks" [prototypes]="Prototypes"
   [decades]="Years" [vector]="Vector games" [chd]="Games with CHD" [hardware]="Hardware" [systems]="Systems"
-  [flycast]="Naomi and Atomiswave" [transfer]="Transfer"
+  [transfer]="Transfer"
 )
 # O que cada parametro pergunta (o texto da tela de escolha).
 # Uma linha cada: numa tela de 240 linhas sobra pouco para a lista.
@@ -58,9 +58,8 @@ declare -A ROMCLEAN_HELP=(
   [decades]="Mark the decades to take."
   [vector]="Vector games (Asteroids, Tempest...)."
   [chd]="Games that need a CHD (a disk image)."
-  [hardware]="Mark to take only these boards. None marked: any board."
+  [hardware]="Only the marked boards. None: any but Naomi and Atomiswave."
   [systems]="Mark the Flycast systems to take."
-  [flycast]="They run better in Flycast (choose it as the emulator)."
   [transfer]="Move takes the files out of the romset."
 )
 
@@ -112,10 +111,10 @@ romclean_options() {
     hardware)
       printf '%s\n' "neogeo|Neo-Geo" "cps1|Capcom CPS-1" "cps2|Capcom CPS-2" "cps3|Capcom CPS-3" \
         "psx|PlayStation-based (ZN, System 11 and 12...)" "midway|Midway T/W/X/Y-unit (Mortal Kombat)" \
-        "model2|Sega Model 2" "model3|Sega Model 3"
+        "model2|Sega Model 2" "model3|Sega Model 3" "naomi|Sega Naomi" "naomi2|Sega Naomi 2" \
+        "atomiswave|Sammy Atomiswave"
       ;;
     systems) printf '%s\n' "naomi|Naomi" "naomi2|Naomi 2" "atomiswave|Atomiswave" ;;
-    flycast) printf '%s\n' "no|Leave them to Flycast" "yes|Take them for this emulator too" ;;
     transfer) printf '%s\n' "copy|Copy (the romset stays as it is)" "move|Move (out of the romset)" ;;
     *) return 1 ;;
   esac
@@ -142,7 +141,7 @@ romclean_visible() {
     genres | mature) [[ -n $ROMCLEAN_CATVER ]] ;;
     modes) [[ -n $ROMCLEAN_NPLAYERS ]] ;;
     systems) [[ $2 == flycast ]] ;;
-    flycast | hardware) ! romclean_own_emulator "$2" ;;
+    hardware) ! romclean_own_emulator "$2" ;;
     *) return 0 ;;
   esac
 }
@@ -166,7 +165,7 @@ romclean_preset() {
     [modes]="$(romclean_all modes)" [buttons]=6 [controls]=joy8,joy4,joy2,twin
     [orientation]="$(romclean_all orientation)" [lines]="$(romclean_all lines)" [clones]=1g1r [region]=world
     [bootlegs]=no [prototypes]=no [decades]="$(romclean_all decades)" [vector]=yes [chd]=yes [hardware]=""
-    [systems]="$(romclean_all systems)" [flycast]=no
+    [systems]="$(romclean_all systems)"
   )
   case $1 in
     cabinet) ;;
@@ -293,10 +292,17 @@ romclean_args() {
         [[ $value == no ]] && printf '%s\n' --exclude chd
         [[ $value == only ]] && printf '%s\n' --only chd
         ;;
-      hardware) [[ -n $value ]] && printf '%s\n' --hardware "$value" ;;
+      # Nenhuma placa marcada: qualquer uma, menos as do Flycast (Naomi,
+      # Naomi 2, Atomiswave), que rodam melhor nele e so vem marcadas.
+      hardware)
+        if [[ -n $value ]]; then
+          printf '%s\n' --hardware "$value"
+        else
+          printf '%s\n' --exclude flycast
+        fi
+        ;;
       # No Flycast so entram os sistemas dele: nenhum marcado vale todos.
       systems) printf '%s\n' --systems "${value:-$(romclean_all systems)}" ;;
-      flycast) [[ $value == no ]] && printf '%s\n' --exclude flycast ;;
     esac
   done
   # No SM2-Emu e no Supermodel so entram os jogos da placa deles.

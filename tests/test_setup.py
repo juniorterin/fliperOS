@@ -2940,7 +2940,7 @@ class RomCleanerTests(Base):
         # Cada parametro: de escolher uma (radio) ou de marcar varias (check),
         # com titulo, a pergunta e as opcoes "valor|rotulo".
         keys = self.env.out('echo "${ROMCLEAN_KEYS[@]}"').split()
-        self.assertEqual(len(keys), 20)
+        self.assertEqual(len(keys), 19)
         for key in keys + ["transfer"]:
             kind, title, text = self.env.out(
                 'echo "${ROMCLEAN_TYPE[%s]}"; echo "${ROMCLEAN_TITLE[%s]}"; echo "${ROMCLEAN_HELP[%s]}"'
@@ -3010,7 +3010,11 @@ class RomCleanerTests(Base):
                 ("lines=15,25,31", []), ("lines=", []), ("orientation=vertical", ["--orientation", "vertical"]),
                 ("orientation=horizontal,vertical", []), ("decades=1980,1990", ["--decades", "1980,1990"]),
                 ("controls=", ["--controls", ""]), ("controls=joy8,trackball", ["--controls", "joy8,trackball"]),
-                ("hardware=neogeo,cps2", ["--hardware", "neogeo,cps2"]), ("hardware=", []),
+                ("hardware=neogeo,cps2", ["--hardware", "neogeo,cps2"]),
+                # Naomi, Naomi 2 e Atomiswave sao placas da lista: sem nenhuma
+                # marcada ficam para o Flycast, marcadas vem como as outras.
+                ("hardware=", ["--exclude", "flycast"]),
+                ("hardware=naomi,naomi2,atomiswave", ["--hardware", "naomi,naomi2,atomiswave"]),
                 ("region=japan", ["--regions", "Japan,World,USA,Europe,Asia,Brazil,Hispanic,Oceania,Unknown"]),
                 ("flycast=yes", []), ("mature=no", []), ("genres=Fighter", []), ("modes=sim", [])):
             self.assertEqual(self.args("groovymame", kv), expected, kv)
@@ -3024,6 +3028,7 @@ class RomCleanerTests(Base):
                 ("controls", "joy8,joy4", "Controls: 8-way joystick, 4-way joystick"),
                 ("controls", "", "Controls: buttons only"), ("hardware", "", "Hardware: any"),
                 ("hardware", "neogeo,cps2", "Hardware: Neo-Geo, Capcom CPS-2"),
+                ("hardware", "naomi,naomi2,atomiswave", "Hardware: Sega Naomi, Sega Naomi 2, Sammy Atomiswave"),
                 ("lines", "15", "Resolution: Low"), ("lines", "15,25,31", "Resolution: all"),
                 ("decades", "1980,1990", "Years: 1980s, 1990s"), ("systems", "naomi,naomi2", "Systems: Naomi, Naomi 2"),
                 ("controls", "joy8,joy4,joy2,twin", "Controls: 8-way joystick, 4-way joystick, 2-way joystick, Twin sticks"),
