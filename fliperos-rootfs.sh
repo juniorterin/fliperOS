@@ -204,9 +204,13 @@ install -Dm644 "$src/config/fliperos-downloader-magnets" "$root/usr/local/share/
 # Updates sem ISO nova (patches do updates/index, em ordem), perguntados no
 # boot pelo fliperos-tty1.
 install -Dm755 "$src/config/fliperos-update" "$root/opt/fliperos/bin/fliperos-update"
-# catver.ini, nplayers.ini e controls.xml do ROM cleaner: junto do romset ou
-# nesta pasta (lib/romclean.sh); e onde ele guarda o que leu do XML do MAME.
-mkdir -p "$root/usr/local/share/fliperos/romclean" "$root/var/cache/fliperos"
+# catver.ini, nplayers.ini e controls.xml do ROM cleaner (config/romclean):
+# os desta pasta valem quando o romset nao traz os dele (lib/romclean.sh); e
+# onde ele guarda o que leu do XML do MAME.
+mkdir -p "$root/var/cache/fliperos"
+for file in catver.ini nplayers.ini controls.xml; do
+  install -Dm644 "$src/config/romclean/$file" "$root/usr/local/share/fliperos/romclean/$file"
+done
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"
 # Cores Dracula da interface do GroovyMAME; o ui.ini e do usuario porque o
 # MAME o regrava quando a interface e personalizada pelo proprio menu.

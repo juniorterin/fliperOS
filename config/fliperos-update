@@ -61,7 +61,7 @@ KNOWN = ('usr/local/lib/fliperos-setup', 'opt/fliperos/bin', 'etc/fliperos', 'us
          'home/fliperos/.zprofile', 'home/fliperos/.bash_profile')
 # Grandes ou que o proprio sistema regrava a toda hora: fora do manifesto.
 SKIP = ('home/fliperos/.config/falkon', 'home/fliperos/.config/pulse', 'etc/fliperos/patch-level',
-        'usr/local/share/fliperos/romclean', 'usr/local/share/fliperos/mame2010.xml.xz')
+        'usr/local/share/fliperos/mame2010.xml.xz')
 
 
 def say(progress, line):

@@ -317,7 +317,7 @@ screen_rom_cleaner_filters() {
         ui_msg "$title" "$(ui_fields "catver.ini|${ROMCLEAN_CATVER:-not found (no category filters)}" \
           "nplayers.ini|${ROMCLEAN_NPLAYERS:-not found (no play mode filter)}" \
           "controls.xml|${ROMCLEAN_CONTROLS:-not found (buttons as MAME says)}")" "" \
-          "Put them in the romset folder, the one above it, or $ROMCLEAN_DATA."
+          "They come with FliperOS; yours in the romset folder are used instead."
         ;;
       scan)
         kv=()
