@@ -3777,7 +3777,7 @@ class PowerKeyTests(unittest.TestCase):
             self.assertTrue((Path(tmp) / 'off').exists())
 
     def test_installed_and_wired(self):
-        self.assertRegex(ROOTFS, r' fliperos-powerkey; do')
+        self.assertRegex(ROOTFS, r' fliperos-powerkey[ \w\\\n-]*; do')
         self.assertIn('etc/triggerhappy/triggers.d/fliperos-power.conf', ROOTFS)
         # O logind nao desliga mais sozinho.
         self.assertIn("printf '[Login]\\nHandlePowerKey=ignore\\n' > \"$root/etc/systemd/logind.conf.d/fliperos.conf\"",
