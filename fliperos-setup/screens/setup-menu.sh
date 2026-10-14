@@ -30,15 +30,15 @@ screen_setup_menu() {
   done
 }
 
-# screen_setup_games (Setup > Games), na ordem de por jogos no gabinete: o
-# frontend, os emuladores, as pastas, baixar, limpar o romset e a arte.
+# screen_setup_games (Setup > Games), na ordem de por jogos no gabinete: os
+# emuladores, o frontend, as pastas, baixar, limpar o romset e a arte.
 screen_setup_games() {
-  local choice last=frontend
+  local choice last=emulators
   while true; do
     screen_reload_if_updated
     choice=$(ui_menu_hints "Games" "" "$last" \
-      "frontend|Frontend|The game list that starts when the computer turns on." \
       "emulators|Emulators & Games|What is installed, and install what is not in the image." \
+      "frontend|Frontend|The game list that starts when the computer turns on." \
       "folders|Folders|Where ROMs, BIOS and art are; use an external disk instead." \
       "downloader|Downloader|MAME ROM/CHD sets by torrent and free homebrew games." \
       "cleaner|Cleaner|Filter a MAME romset: only the games you want, per emulator." \
