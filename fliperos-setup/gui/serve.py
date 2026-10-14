@@ -45,7 +45,7 @@ class Server:
         self.buf = b""
         self.ctx = {"status": "", "version": ""}
         self.screen = None      # a tela que esta no video
-        self.last_title = None  # o titulo do ultimo menu (scenery)
+        self.parent = os.getppid()  # o Setup: sem ele, o servidor sai
         self.shots = os.environ.get("FLIPEROS_GUI_SHOTS", "")
         self.count = 0
         # As cores do ui_c (lib/ui.sh): 30 + indice ate 7, 82 + indice depois.
@@ -134,21 +134,9 @@ class Server:
             self.app.fixed_time = 3.0
             self.app.save(self.screen, self.ctx, os.path.join(self.shots, "%03d-%s" % (self.count, name)))
 
-    def scenery(self, screen):
-        """Um menu novo (outro titulo) ganha outro fundo sorteado."""
-        import background
-
-        if not isinstance(screen, (self.W.Menu, self.W.FilterBoard)):
-            return
-        if screen.title != self.last_title:
-            if self.last_title is not None:
-                self.app.bg = background.pick(exclude=getattr(self.app.bg, "name", None))
-            self.last_title = screen.title
-
     def ask(self, screen, name):
         """Mostra a tela e espera a resposta dela."""
         app = self.app
-        self.scenery(screen)
         self.screen = screen
         app.flush()
         self.shot(name)
@@ -174,7 +162,6 @@ class Server:
 
     def put(self, screen, name):
         """Mostra a tela e volta na hora (um aviso, o progresso)."""
-        self.scenery(screen)
         self.screen = screen
         self.shot(name)
         self.app.show(screen, self.ctx)
@@ -183,7 +170,7 @@ class Server:
         """O proximo pedido; enquanto ele nao chega, o fundo segue animado."""
         redraw = True
         while RS.encode() not in self.buf:
-            if os.getppid() == 1:
+            if os.getppid() != self.parent:
                 raise SystemExit(0)     # o Setup morreu
             ready, _, _ = select.select([self.req], [], [], 0)
             if ready:
@@ -363,6 +350,23 @@ def main(App, args):
     signal.signal(signal.SIGHUP, stop)
     headless = os.environ.get("FLIPEROS_GUI_HEADLESS") == "1"
     app = App(False, headless, args.bg, os.environ.get("FLIPEROS_GUI_KEYS", "").split())
+    # Um fundo por abertura do menu, nunca o mesmo da vez anterior: o ultimo
+    # fica ao lado da pasta do servidor (que o Setup refaz a cada abertura).
+    import background
+
+    last = os.path.join(os.path.dirname(os.path.abspath(args.serve)), "gui-background")
+    try:
+        with open(last) as f:
+            previous = f.read().strip()
+    except OSError:
+        previous = None
+    if not args.bg:
+        app.bg = background.pick(exclude=previous)
+    try:
+        with open(last, "w") as f:
+            f.write(getattr(app.bg, "name", ""))
+    except OSError:
+        pass
     try:
         if not headless:
             app.load_sounds()

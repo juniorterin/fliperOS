@@ -1,6 +1,6 @@
 # Os fundos animados, como os da interface do ZSNES: neve, agua, fogo e
-# fumaca, mais o ceu de estrelas. Um e sorteado cada vez que a interface
-# abre (FLIPEROS_GUI_BG=nome fixa um).
+# fumaca, mais o ceu de estrelas. Um e sorteado cada vez que o menu abre,
+# nunca o da vez anterior (serve.py); FLIPEROS_GUI_BG=nome fixa um.
 #
 # Cada fundo tem draw(surf, t), com t em segundos, e e escuro o bastante
 # para o texto claro ficar legivel por cima. Tirando o fogo, a imagem
