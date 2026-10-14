@@ -366,8 +366,19 @@ def main(App, args):
             previous = f.read().strip()
     except OSError:
         previous = None
+    # gui-background-next: um fundo pedido para a proxima abertura (stars,
+    # snow, water, fire ou smoke), usado uma vez.
+    try:
+        with open(last + "-next") as f:
+            wanted = f.read().strip()
+        os.remove(last + "-next")
+    except OSError:
+        wanted = ""
     if not args.bg:
-        app.bg = background.pick(exclude=previous)
+        if wanted in background.BACKGROUNDS:
+            app.bg = background.pick(wanted, seed=os.getpid())
+        else:
+            app.bg = background.pick(exclude=previous)
     try:
         with open(last, "w") as f:
             f.write(getattr(app.bg, "name", ""))

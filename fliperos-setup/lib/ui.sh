@@ -129,11 +129,28 @@ ui_gui_start() {
 # status e o da tela (1 = Esc) e o texto fica em UI_GUI_REPLY. O protocolo
 # esta em gui/serve.py.
 ui_gui_call() {
-  local IFS=$'\x1f' cmd=$1 reply
+  local IFS=$'\x1f' cmd=$1 reply="" part fd
   shift
   set -- "$cmd" "$(ui_status_short)" "$UI_VERSION" "$@"
-  printf '%s\x1e' "$*" > "$UI_GUI_DIR/req" || return 1
-  IFS= read -r -d $'\x1e' reply < "$UI_GUI_DIR/resp" || return 1
+  # Os FIFOs abertos para ler e escrever nao travam a abertura, e a espera
+  # olha o servidor a cada segundo: se ele morrer no meio de uma tela, o
+  # Setup nao fica parado para sempre (a tela volta como Esc).
+  exec {fd}<> "$UI_GUI_DIR/req" || return 1
+  printf '%s\x1e' "$*" >&"$fd"
+  exec {fd}>&-
+  exec {fd}<> "$UI_GUI_DIR/resp" || return 1
+  while true; do
+    if IFS= read -r -d $'\x1e' -t 1 -u "$fd" part; then
+      reply+=$part
+      break
+    fi
+    reply+=$part
+    if ! kill -0 "$UI_GUI_PID" 2> /dev/null; then
+      exec {fd}<&-
+      return 1
+    fi
+  done
+  exec {fd}<&-
   UI_GUI_REPLY=${reply#*$'\x1f'}
   return "${reply%%$'\x1f'*}"
 }
