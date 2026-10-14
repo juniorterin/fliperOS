@@ -14,6 +14,7 @@ config/** text eol=lf
 *.py text eol=lf
 # O ponto de entrada do fliperos-setup nao tem extensao.
 fliperos-setup/fliperos-setup text eol=lf
+fliperos-setup/gui/fliperos-gui text eol=lf
 # O indice dos updates e lido no gabinete, linha a linha.
 updates/** text eol=lf
 # As imagens (temas do splash, layouts, papel de parede), as fontes e o
