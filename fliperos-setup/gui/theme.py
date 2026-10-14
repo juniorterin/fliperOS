@@ -742,6 +742,24 @@ ICONS.update({
 ........FFDFFFFF
 ........FFFFFFFF
 """,
+    "addfolder": """
+................
+................
+.YYYYYY.........
+.YYYYYYY........
+.YYYYYYYYYYYYYY.
+.YOOOOOOOOOOOOY.
+.YOOOOOOOOOOOOY.
+.YOOOOOOOOOOOOY.
+.YOOOOOOFFFFFFFF
+.YOOOOOOFFFGGFFF
+.YOOOOOOFFFGGFFF
+.YYYYYYYFGGGGGGF
+........FGGGGGGF
+........FFFGGFFF
+........FFFGGFFF
+........FFFFFFFF
+""",
     "unlink": """
 ................
 ................
@@ -966,7 +984,7 @@ for _alias, _name in {
     "poweroff": "power", "reboot": "reset", "card": "system", "volume": "audio", "test": "audio",
     "sounds": "audio", "wifi": "network", "hidden": "network", "status": "network",
     # As acoes e os estados.
-    "-return": "return", "apply": "ok", "use": "ok", "found": "ok", "on": "ok", "off": "power",
+    "-return": "return", "apply": "ok", "use": "ok", "newfolder": "addfolder", "found": "ok", "on": "ok", "off": "power",
     "delete": "remove", "replace": "edit", "custom": "edit", "rescan": "reset", "retry": "reset",
     "restore": "reset", "default": "reset", "check": "scan", "identify": "scan", "preview": "video",
     "list": "romlist", "log": "romlist", "details": "romlist", "files": "romlist", "data": "romlist",

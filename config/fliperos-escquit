@@ -27,6 +27,10 @@ EV_KEY = 0x01
 KEY_ESC = 1
 # O teclado virtual do fliperos-padkeys so escreve com o Setup na tela.
 IGNORED = {b'FliperOS pad keys'}
+# O navegador do Downloader liga o controle como teclado: la o botao 2 (Esc
+# do fliperos-padkeys) tambem fecha.
+if os.environ.get('FLIPEROS_ESCQUIT_PADKEYS') == '1':
+    IGNORED = set()
 GRACE = float(os.environ.get('FLIPEROS_ESCQUIT_GRACE', '1.5'))
 INPUT = os.environ.get('FLIPEROS_ESCQUIT_INPUT', '/dev/input')
 EVENT = struct.Struct('llHHi')

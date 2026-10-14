@@ -672,7 +672,7 @@ ui_browse() {
   dir=$(cd -- "$dir" 2> /dev/null && pwd) || dir=/
   while true; do
     paths=() entries=() default=""
-    [[ $mode == dir ]] && entries+=("use|Use this folder")
+    [[ $mode == dir ]] && entries+=("use|Use this folder" "newfolder|[+ Folder]")
     [[ $dir != / ]] && entries+=("up|..")
     for path in "$dir"/*/; do
       [[ -d $path ]] || continue
@@ -704,6 +704,21 @@ ui_browse() {
         from=${dir##*/}
         dir=${dir%/*}
         [[ -n $dir ]] || dir=/
+        ;;
+      newfolder)
+        # Uma pasta nova aqui dentro, e o seletor ja entra nela.
+        name=$(ui_input "$title" "Name of the new folder in $dir:") || continue
+        name=${name//\//}
+        [[ -n $name && $name != . && $name != .. ]] || continue
+        if [[ -e $dir/$name ]] && [[ ! -d $dir/$name ]]; then
+          ui_msg "$title" "$(ui_bad "There is already a file named $name here.")"
+        elif mkdir -p -- "$dir/$name" 2>> "${FLIPEROS_LOG:-/dev/null}"; then
+          # Do dono da pasta de cima: no ~ do gabinete, o usuario, nao o root.
+          chown --reference="$dir" -- "$dir/$name" 2> /dev/null
+          from="" dir=${dir%/}/$name
+        else
+          ui_msg "$title" "$(ui_bad "Could not create the folder $name.")" "Is the disk read-only, or full?"
+        fi
         ;;
       *)
         i=$choice

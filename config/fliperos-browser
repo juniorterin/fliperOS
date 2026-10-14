@@ -3,22 +3,46 @@
 # na tela do magnet link): o Falkon num Xorg so para ele, em 640x480 e com o
 # cursor do mouse, aberto pelo fliperos-tty1 depois que o Setup sai.
 #
-# Clicar num link magnet: o fliperos-magnet o guarda em
-# $XDG_RUNTIME_DIR/fliperos-magnet e fecha o navegador; o Setup, ao reabrir,
-# volta a tela do link com ele preenchido. Fechar o navegador sem clicar em
-# nenhum tambem volta, com o campo vazio.
+# O link volta para o Setup de dois jeitos: clicando num link magnet (o
+# fliperos-magnet o recebe) ou copiando um (Ctrl+C, "Copy link": o vigia da
+# area de transferencia abaixo). Nos dois o navegador fecha e o Setup reabre
+# na tela do link com ele preenchido. Esc no teclado ou o botao 2 do controle
+# fecham o navegador sem link.
 #
 # O Falkon roda com um perfil novo, numa pasta temporaria: o programa dos
 # links magnet so vale aqui (no desktop continua o Transmission), e nada da
 # navegacao fica guardado.
 set -u
 BIN=${FLIPEROS_BIN:-/opt/fliperos/bin}
+
+# Dentro do Xorg (o fliperos-x11-run abre este mesmo script): o Falkon, o
+# vigia da area de transferencia e o Esc que fecha.
+if [[ ${1:-} == --inside ]]; then
+  falkon "$2" &
+  pid=$!
+  # O botao 2 vira Esc pelo fliperos-padkeys, que escreve num teclado virtual.
+  FLIPEROS_ESCQUIT_PADKEYS=1 "$BIN/fliperos-escquit" --ignore-children "$pid" < /dev/null > /dev/null 2>&1 &
+  last=$(xclip -o -selection clipboard 2> /dev/null)
+  while kill -0 "$pid" 2> /dev/null; do
+    now=$(xclip -o -selection clipboard 2> /dev/null)
+    if [[ $now != "$last" && $now == magnet:\?* ]]; then
+      printf '%s\n' "${now%%[[:space:]]*}" > "$FLIPEROS_MAGNET_CAPTURE"
+      kill "$pid" 2> /dev/null
+      break
+    fi
+    last=$now
+    sleep 0.5
+  done
+  wait "$pid" 2> /dev/null
+  exit 0
+fi
+
 capture=${XDG_RUNTIME_DIR:-/tmp}/fliperos-magnet
 url=${FLIPEROS_BROWSER_URL:-https://duckduckgo.com/}
 rm -f "$capture"
 
 home=$(mktemp -d "${TMPDIR:-/tmp}/fliperos-browser.XXXXXX") || exit 1
-trap 'rm -rf "$home"' EXIT
+trap 'rm -rf "$home"; sudo -n /usr/local/bin/fliperos-setup --padkeys off > /dev/null 2>&1' EXIT
 mkdir -p "$home/config" "$home/data/applications"
 cat > "$home/data/applications/fliperos-magnet.desktop" << EOF
 [Desktop Entry]
@@ -33,9 +57,12 @@ cat > "$home/config/mimeapps.list" << 'EOF'
 x-scheme-handler/magnet=fliperos-magnet.desktop
 EOF
 
+# O controle como teclado (setas, Enter, Esc) enquanto o navegador esta
+# aberto, como no menu.
+sudo -n /usr/local/bin/fliperos-setup --padkeys on > /dev/null 2>&1
 # Sem o desktop: so o tubo e o navegador, saindo direto no menu.
 printf '\e[H\e[2J'
 FLIPEROS_MAGNET_CAPTURE=$capture XDG_CONFIG_HOME=$home/config XDG_DATA_HOME=$home/data \
-  FLIPEROS_X11_CURSOR=1 "$BIN/fliperos-x11-run" --mode "${FLIPEROS_BROWSER_MODE:-640x480@60}" \
-  falkon "$url" >> /opt/fliperos/logs/browser.log 2>&1
+  "$BIN/fliperos-x11-run" --mode "${FLIPEROS_BROWSER_MODE:-640x480@60}" \
+  "$BIN/fliperos-browser" --inside "$url" >> /opt/fliperos/logs/browser.log 2>&1
 exit 0

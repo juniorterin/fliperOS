@@ -16,7 +16,8 @@
 #
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
-#   --latency-boot, --session-start, --session-end, --volume up|down|mute, --outputs main|all
+#   --latency-boot, --session-start, --session-end, --volume up|down|mute, --outputs main|all,
+#   --padkeys on|off
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
 # screens/ tem as telas.
@@ -218,6 +219,12 @@ main() {
       ;;
     --outputs)
       mm_outputs "${2:-all}"
+      return 0
+      ;;
+    --padkeys)
+      # O controle como teclado fora do Setup: o navegador do Downloader
+      # (config/fliperos-browser) o liga enquanto esta aberto.
+      if [[ ${2:-} == on ]]; then padkeys_on; else padkeys_off; fi
       return 0
       ;;
   esac

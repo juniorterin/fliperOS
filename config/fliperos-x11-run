@@ -262,13 +262,13 @@ export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/
 vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}
 [[ $vt =~ ^[0-9]+$ ]] || vt=1
-# Cursor so para quem tem interface de mouse: Dolphin, Flycast e o Fightcade
-# (a sala de jogos). Eles mesmos o escondem durante o
-# jogo em tela cheia. O PCSX2 abre no Big Picture, que se usa pelo controle;
+# Cursor so para quem tem interface de mouse: Dolphin, Flycast, o Fightcade
+# (a sala de jogos) e o navegador do Downloader (fliperos-browser). Eles
+# mesmos o escondem durante o jogo em tela cheia. O PCSX2 abre no Big Picture, que se usa pelo controle;
 # os demais abrem direto no jogo.
 cursor=(-nocursor)
 case $name in
-  dolphin-emu | flycast | fightcade) cursor=() ;;
+  dolphin-emu | flycast | fightcade | fliperos-browser) cursor=() ;;
 esac
 export FLIPEROS_X11_CURSOR=$((${#cursor[@]} == 0))
 # A saida do X, do Switchres e do emulador vai para
