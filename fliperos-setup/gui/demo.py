@@ -2,7 +2,7 @@
 # interface sem um FliperOS instalado (--demo NOME). Os rotulos e as dicas
 # sao os de fliperos-setup/screens/.
 
-from widgets import (Capture, GunResult, GunTarget, Input, LayoutEdit, Menu, Message, Progress, YesNo,
+from widgets import (Capture, Download, GunResult, GunTarget, Input, LayoutEdit, Menu, Message, Progress, YesNo,
                      layout_tile)
 
 CONTEXT = {"version": "0.9.1", "status": "192.168.1.155 - 42%"}
@@ -175,14 +175,47 @@ def gunresult():
     return GunResult("GunCon 2", (49, 52))
 
 
+def downloads():
+    return Menu("Downloader", [
+        ("torrent", "MAME torrent", "Only the games your filter picks, from a romset magnet link."),
+        ("freeroms", "Free games", "Open-source homebrew, so the frontends have something to show."),
+        ("return", "Return", "Back to Games."),
+    ], "torrent", "Games straight to the emulator folders")
+
+
+def torrent():
+    return Menu("MAME torrent", [
+        ("filter", "Filter", "Arcade classics, for GroovyMAME 0.289."),
+        ("roms", "ROM set link", "Required. Now: MAME 0.289 ROMs (merged)."),
+        ("chds", "CHD set link", "Optional. Now: not set."),
+        ("dest", "Download folder", "The games go to ~/roms/mame."),
+        ("start", "Start", "Download the games the filter picks: 1,284 games, 9.6 GB."),
+        ("return", "Return", "Back to the Downloader."),
+    ], "start", "STATUS: READY, NOT STARTED")
+
+
+def magnet():
+    return Input("ROM set link", ["Paste or type the magnet link of the", "MAME ROM set:"],
+                 "magnet:?xt=urn:btih:9f3c0a71e5b84d2c6a17d0e2b45f8a3391c7de60")
+
+
+def download():
+    return Download("Downloader", [
+        ("ROMS", "3.5 GB", "9.6 GB", 18, 0.37),
+        ("CHDS", "1.1 GB", "24 GB", 6, 0.05),
+    ], 14, "2.4 MB/s", "3 h 12 min")
+
+
 SCREENS = {
     "main": main, "live": live, "setup": setup, "video": video, "monitor": monitor,
     "emulators": emulators, "power": power, "poweroff": poweroff, "install": install,
     "error": error, "wifi": wifi, "joysticks": joysticks, "players": players,
     "capture": capture, "layout": layout, "layoutedit": layoutedit, "guncon": guncon,
     "guntarget1": guntarget1, "guntarget2": guntarget2, "guntarget3": guntarget3,
-    "gunresult": gunresult,
+    "gunresult": gunresult, "downloads": downloads, "torrent": torrent, "magnet": magnet,
+    "download": download,
 }
 # A escolha de um menu que abre outra tela de demonstracao.
 LINKS = {"games": "emulators", "frontend": "error", "network": "wifi", "shutdown": "power",
-         "buttons": "players", "2": "capture", "3": "layoutedit"}
+         "buttons": "players", "2": "capture", "3": "layoutedit", "roms": "magnet",
+         "start": "download"}

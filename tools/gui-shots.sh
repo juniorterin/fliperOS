@@ -45,6 +45,11 @@ shot guncon-target1 guntarget1
 shot guncon-target2 guntarget2
 shot guncon-target3 guntarget3
 shot guncon-result gunresult
+shot downloader downloads
+shot downloader-torrent torrent
+shot downloader-filter torrent "left left left left"
+shot downloader-magnet magnet
+shot downloader-progress download
 shot power power
 shot radio monitor "down down"
 shot checklist emulators

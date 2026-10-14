@@ -233,6 +233,9 @@ class Menu:
         surf.blit(big(label, scale, (0x80, 0x30, 0x60)), (x + 2, 134))
         surf.blit(name, (x, 132))
         hint = self.entries[self.cursor][2] or self.text
+        if hint != self.text:
+            # O texto do menu (um status, por exemplo) fica embaixo do letreiro.
+            centered(surf, self.text, T.PINK, 34)
         for i, line in enumerate(wrap(hint, T.SAFE_W)[:3]):
             centered(surf, line, T.CYAN, 158 + i * 11)
 
@@ -367,6 +370,11 @@ class Input:
         block(surf, (x, y, T.SAFE_W - 2, 22), T.BG_DEEP, T.PURPLE)
         pygame.draw.rect(surf, T.PINK, (x, y, T.SAFE_W - 2, 22), 2)
         shown = "*" * len(self.value) if self.password else self.value
+        # Um texto longo (um magnet link) mostra so o fim, onde se digita.
+        if width(shown) > T.SAFE_W - 32:
+            while width(".." + shown) > T.SAFE_W - 32:
+                shown = shown[1:]
+            shown = ".." + shown
         w = text(surf, shown, T.FG, x + 8, y + 7)
         pygame.draw.rect(surf, T.PINK, (x + 9 + w, y + 6, 7, 10))
 
@@ -660,3 +668,47 @@ class GunResult:
         centered(surf, "(target %d%% x %d%%)" % self.want, T.COMMENT, 171)
         button(surf, "SAVE", 104, 188, self.choice == 0)
         button(surf, "RETRY", 216, 188, self.choice == 1)
+
+
+class Download:
+    """O download do romset em andamento (screen_downloader_watch): uma
+    linha por torrent (rotulo, feito, total, peers e fracao de 0 a 1), a
+    barra do total, a velocidade e o tempo que falta."""
+
+    def __init__(self, title, parts, pct, speed, left):
+        self.title = title
+        self.parts = parts
+        self.pct = pct
+        self.speed, self.left = speed, left
+
+    def key(self, k):
+        return ("back", None)
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("ANY KEY", "BACK TO THE MENU")])
+        x, right = T.SAFE_X, T.SAFE_X + T.SAFE_W
+        y = 38
+        for label, done, total, peers, frac in self.parts:
+            w = text(surf, label, T.PINK, x, y)
+            text(surf, "%d PEERS" % peers, T.COMMENT, x + w + 8, y)
+            w = text(surf, total, T.FG, right, y, right=True)
+            w += text(surf, "OF", T.COMMENT, right - w - 8, y, right=True) + 8
+            text(surf, done, T.GREEN, right - w - 8, y, right=True)
+            pygame.draw.rect(surf, T.LINE, (x, y + 11, T.SAFE_W, 5))
+            pygame.draw.rect(surf, T.GREEN, (x, y + 11, round(T.SAFE_W * frac), 5))
+            y += 26
+
+        # A barra do total, em blocos, e a porcentagem grande.
+        full = round(self.pct * 24 / 100)
+        for i in range(24):
+            pygame.draw.rect(surf, RAINBOW[i // 4] if i < full else T.LINE, (x + i * 12, 96, 10, 12))
+        name = big("%d%%" % self.pct, 3, T.YELLOW)
+        surf.blit(name, ((T.WIDTH - name.get_width()) // 2, 118))
+
+        for bx, label, value in ((x, "SPEED", self.speed), (168, "TIME LEFT", self.left)):
+            block(surf, (bx, 152, 134, 30), T.BG_DEEP, T.PURPLE)
+            pygame.draw.rect(surf, T.LINE, (bx, 152, 134, 30), 1)
+            text(surf, label, T.RED, bx + 8, 157)
+            text(surf, value, T.FG, bx + 8, 169)
+        centered(surf, "The download goes on in the", T.CYAN, 192)
+        centered(surf, "background, even with a game open.", T.CYAN, 203)
