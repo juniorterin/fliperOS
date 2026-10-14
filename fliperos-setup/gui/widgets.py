@@ -712,3 +712,255 @@ class Download:
             text(surf, value, T.FG, bx + 8, 169)
         centered(surf, "The download goes on in the", T.CYAN, 192)
         centered(surf, "background, even with a game open.", T.CYAN, 203)
+
+
+def person(surf, x, y, s, color):
+    """Um jogador: a cabeca e o corpo, em 8*s por 12*s pixels."""
+    pygame.draw.rect(surf, color, (x + 2 * s, y, 4 * s, 4 * s))
+    pygame.draw.rect(surf, color, (x + s, y + 5 * s, 6 * s, 7 * s))
+
+
+def count_color(kind, n, i):
+    """A cor da figura i de um "ate n": apagada depois de n, e todas em
+    amarelo quando n e 0 (qualquer quantidade)."""
+    if not n:
+        return T.YELLOW
+    if i >= n:
+        return T.LINE
+    return T.CYAN if kind == "people" else T.PINK
+
+
+def mini(surf, kind, data, x, y):
+    """O valor de um parametro desenhado dentro do azulejo (84x20 pixels a
+    partir de x, y)."""
+    if kind in ("people", "dots"):
+        n, top = data
+        for i in range(top):
+            color = count_color(kind, n, i)
+            if kind == "people":
+                person(surf, x + i * 10, y + 2, 1, color)
+            else:
+                pygame.draw.circle(surf, color, (x + 4 + i * 10, y + 8), 4)
+    elif kind == "blocks":
+        flags, label = data
+        w = 84 // len(flags)
+        for i, flag in enumerate(flags):
+            pygame.draw.rect(surf, RAINBOW[i % 6] if flag else T.LINE, (x + i * w, y, w - 2, 8))
+        text(surf, label, T.FG, x, y + 11)
+    elif kind == "lamps":
+        for i, color in enumerate((T.GREEN, T.YELLOW, T.RED)):
+            pygame.draw.circle(surf, color if i < data else T.LINE, (x + 8 + i * 22, y + 9), 7)
+    elif kind == "switch":
+        flag, label = data
+        pygame.draw.rect(surf, T.GREEN if flag else T.LINE, (x, y + 4, 24, 10))
+        pygame.draw.rect(surf, T.FG, (x + (14 if flag else 0), y + 2, 10, 14))
+        text(surf, label, T.FG if flag else T.COMMENT, x + 30, y + 5)
+    elif kind == "screens":
+        wide, tall = data
+        pygame.draw.rect(surf, T.CYAN if wide else T.LINE, (x + 8, y + 3, 24, 16), 0 if wide else 1)
+        pygame.draw.rect(surf, T.CYAN if tall else T.LINE, (x + 50, y, 16, 20), 0 if tall else 1)
+    else:
+        text(surf, data, T.GREEN if kind == "action" else T.FG, x, y + 5)
+
+
+class FilterBoard:
+    """Os parametros do filtro de ROMs num painel de azulejos: cada um
+    mostra o proprio valor desenhado. items: (chave, titulo, tipo, dado,
+    ajuda); os tipos sao os de mini()."""
+
+    COLS, ROWS = 3, 3
+
+    def __init__(self, title, items, cursor=0, games="", size=""):
+        self.title = title
+        self.items = items
+        self.cursor = cursor
+        self.games, self.size = games, size
+        self.top = 0
+
+    def key(self, k):
+        n = len(self.items)
+        step = {"left": -1, "right": 1, "up": -self.COLS, "down": self.COLS}.get(k)
+        if step and 0 <= self.cursor + step < n:
+            self.cursor += step
+        elif k == "esc":
+            return ("back", None)
+        elif k == "enter":
+            return ("select", self.items[self.cursor][0])
+        return None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("ARROWS", "MOVE"), ("ENTER", "CHANGE"), ("ESC", "BACK")])
+        # O placar: quantos jogos passam no filtro e quanto ocupam.
+        x, right = T.SAFE_X, T.SAFE_X + T.SAFE_W
+        w = text(surf, "GAMES", T.RED, x, 34)
+        text(surf, self.games, T.FG, x + w + 8, 34)
+        w = text(surf, self.size, T.FG, right, 34, right=True)
+        text(surf, "SIZE", T.RED, right - w - 8, 34, right=True)
+
+        row = self.cursor // self.COLS
+        self.top = min(max(self.top, row - self.ROWS + 1), row)
+        rows = (len(self.items) + self.COLS - 1) // self.COLS
+        for r in range(rows):
+            color = T.PINK if r == row else T.COMMENT if self.top <= r < self.top + self.ROWS else T.LINE
+            pygame.draw.rect(surf, color, (T.WIDTH // 2 - rows * 3 + r * 6, 36, 4, 4))
+
+        for i in range(self.top * self.COLS, min(len(self.items), (self.top + self.ROWS) * self.COLS)):
+            _, title, kind, data, _ = self.items[i]
+            tx = x + (i % self.COLS) * 98
+            ty = 48 + (i // self.COLS - self.top) * 44
+            on = i == self.cursor
+            block(surf, (tx, ty, 92, 40), T.BG_DEEP, T.PURPLE if on else None)
+            pygame.draw.rect(surf, T.PINK if on else T.LINE, (tx, ty, 92, 40), 2 if on else 1)
+            text(surf, title.upper(), T.PINK if on else T.COMMENT, tx + 4, ty + 4)
+            mini(surf, kind, data, tx + 4, ty + 16)
+
+        for i, line in enumerate(wrap(self.items[self.cursor][4], T.SAFE_W)[:2]):
+            centered(surf, line, T.CYAN, 186 + i * 11)
+
+
+class Stepper:
+    """Um parametro de quantidade maxima (jogadores, botoes): as figuras
+    acesas ate o valor. options: (valor, rotulo); o valor 0 e qualquer
+    quantidade."""
+
+    def __init__(self, title, help, options, current, kind="people"):
+        self.title = title
+        self.help = help
+        self.options = options
+        self.kind = kind
+        self.cursor = [o[0] for o in options].index(current)
+
+    def key(self, k):
+        if k in ("left", "down"):
+            self.cursor = max(0, self.cursor - 1)
+        elif k in ("right", "up"):
+            self.cursor = min(len(self.options) - 1, self.cursor + 1)
+        elif k == "esc":
+            return ("back", None)
+        elif k == "enter":
+            return ("select", self.options[self.cursor][0])
+        return None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("< >", "CHANGE"), ("ENTER", "OK"), ("ESC", "BACK")])
+        top = max(int(o[0]) for o in self.options)
+        n = int(self.options[self.cursor][0])
+        x0 = (T.WIDTH - (top * 32 - 8)) // 2
+        for i in range(top):
+            color = count_color(self.kind, n, i)
+            if self.kind == "people":
+                person(surf, x0 + i * 32, 56, 3, color)
+            else:
+                pygame.draw.circle(surf, color, (x0 + 12 + i * 32, 74), 12)
+        label = self.options[self.cursor][1].upper()
+        name = big(label, 2, LABEL)
+        nx = (T.WIDTH - name.get_width()) // 2
+        surf.blit(big(label, 2, (0x80, 0x30, 0x60)), (nx + 2, 112))
+        surf.blit(name, (nx, 110))
+        count = len(self.options)
+        for i in range(count):
+            pygame.draw.rect(surf, T.PINK if i == self.cursor else T.LINE,
+                             (T.WIDTH // 2 - count * 5 + 2 + i * 10, 138, 6, 6))
+        for i, line in enumerate(wrap(self.help, T.SAFE_W)[:3]):
+            centered(surf, line, T.CYAN, 160 + i * 11)
+
+
+def control_art(surf, cx, cy, value, color):
+    """O desenho de cada tipo de controle do painel (o filtro Controls)."""
+    c, d = pygame.draw.circle, pygame.draw.rect
+    if value in ("joy8", "joy4", "joy2"):
+        c(surf, color, (cx, cy), 5)
+        ways = {"joy8": [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)],
+                "joy4": [(0, -1), (-1, 0), (1, 0), (0, 1)], "joy2": [(-1, 0), (1, 0)]}[value]
+        for dx, dy in ways:
+            d(surf, color, (cx + dx * 11 - 1, cy + dy * 11 - 1, 3, 3))
+    elif value == "twin":
+        for dx in (-8, 8):
+            c(surf, color, (cx + dx, cy - 4), 5)
+            d(surf, color, (cx + dx - 1, cy, 3, 9))
+    elif value == "trackball":
+        c(surf, color, (cx, cy), 11)
+        c(surf, T.BG_DEEP, (cx - 4, cy - 4), 3)
+    elif value == "spinner":
+        c(surf, color, (cx, cy), 11, 3)
+        d(surf, color, (cx - 1, cy - 11, 3, 8))
+    elif value == "paddle":
+        c(surf, color, (cx, cy), 11, 3)
+        d(surf, color, (cx - 11, cy - 1, 23, 3))
+        d(surf, T.BG_DEEP, (cx - 12, cy + 6, 25, 7))
+    elif value == "positional":
+        c(surf, color, (cx, cy), 12, 1)
+        c(surf, color, (cx, cy), 6)
+        d(surf, color, (cx + 9, cy - 9, 4, 4))
+    elif value == "analog":
+        pygame.draw.line(surf, color, (cx - 4, cy + 10), (cx + 5, cy - 6), 3)
+        c(surf, color, (cx + 6, cy - 8), 5)
+        d(surf, color, (cx - 11, cy + 9, 22, 3))
+    elif value == "pedal":
+        pygame.draw.polygon(surf, color, [(cx - 5, cy - 11), (cx + 5, cy - 11), (cx + 9, cy + 9), (cx - 9, cy + 9)])
+        d(surf, color, (cx - 12, cy + 10, 24, 3))
+    elif value == "lightgun":
+        d(surf, color, (cx - 12, cy - 8, 22, 6))
+        d(surf, color, (cx - 6, cy - 2, 7, 12))
+        d(surf, color, (cx + 9, cy - 10, 2, 2))
+    elif value == "keyboard":
+        for i in range(12):
+            d(surf, color, (cx - 11 + (i % 4) * 6, cy - 9 + (i // 4) * 6, 5, 5))
+    else:
+        d(surf, color, (cx - 8, cy - 11, 16, 22), 2)
+        for dx, dy in ((-3, -5), (3, -5), (0, 0), (-3, 5), (3, 5)):
+            d(surf, color, (cx + dx - 1, cy + dy - 1, 3, 3))
+
+
+class ToggleGrid:
+    """Um parametro de marcar varios (controles, anos) como uma grade de
+    azulejos: o cursor anda pela grade e Espaco marca. art desenha cada
+    opcao (surf, cx, cy, valor, cor); sem ela, o azulejo mostra o rotulo."""
+
+    def __init__(self, title, help, options, marked, cols, art=None, cursor=0):
+        self.title = title
+        self.help = help
+        self.options = options
+        self.marked = set(marked)
+        self.cols = cols
+        self.art = art
+        self.cursor = cursor
+
+    def key(self, k):
+        step = {"left": -1, "right": 1, "up": -self.cols, "down": self.cols}.get(k)
+        if step and 0 <= self.cursor + step < len(self.options):
+            self.cursor += step
+        elif k == "space":
+            self.marked ^= {self.options[self.cursor][0]}
+        elif k == "esc":
+            return ("back", None)
+        elif k == "enter":
+            return ("select", sorted(self.marked))
+        return None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("ARROWS", "MOVE"), ("SPACE", "MARK"), ("ENTER", "OK")])
+        w = (T.SAFE_W - (self.cols - 1) * 6) // self.cols
+        y0 = 38 if len(self.options) > self.cols else 76
+        for i, (value, label, short) in enumerate(self.options):
+            x = T.SAFE_X + (i % self.cols) * (w + 6)
+            y = y0 + (i // self.cols) * 43
+            marked = value in self.marked
+            on = i == self.cursor
+            block(surf, (x, y, w, 38), T.BG_DEEP, T.PURPLE if on else None)
+            pygame.draw.rect(surf, T.PINK if on else T.GREEN if marked else T.LINE, (x, y, w, 38), 2 if on else 1)
+            color = T.FG if marked else T.LINE
+            if self.art:
+                self.art(surf, x + w // 2, y + 19, value, color)
+            else:
+                text(surf, short, color, x + (w - width(short)) // 2 + 1, y + 15)
+            if marked:
+                pygame.draw.rect(surf, T.GREEN, (x + w - 9, y + 3, 6, 6))
+
+        value, label, _ = self.options[self.cursor]
+        label = label.upper()
+        scale = 2 if width(label) * 2 <= T.SAFE_W else 1
+        name = big(label, scale, LABEL if value in self.marked else [T.COMMENT])
+        surf.blit(name, ((T.WIDTH - name.get_width()) // 2, 172 if scale == 2 else 176))
+        for i, line in enumerate(wrap(self.help, T.SAFE_W)[:2]):
+            centered(surf, line, T.CYAN, 194 + i * 11)

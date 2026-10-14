@@ -2,7 +2,8 @@
 # interface sem um FliperOS instalado (--demo NOME). Os rotulos e as dicas
 # sao os de fliperos-setup/screens/.
 
-from widgets import (Capture, Download, GunResult, GunTarget, Input, LayoutEdit, Menu, Message, Progress, YesNo,
+from widgets import (Capture, Download, FilterBoard, GunResult, GunTarget, Input, LayoutEdit, Menu, Message,
+                     Progress, Stepper, ToggleGrid, YesNo, control_art,
                      layout_tile)
 
 CONTEXT = {"version": "0.9.1", "status": "192.168.1.155 - 42%"}
@@ -206,6 +207,70 @@ def download():
     ], 14, "2.4 MB/s", "3 h 12 min")
 
 
+KEEP, REMOVE = (True, "KEEP"), (False, "REMOVE")
+
+
+def romfilter(cursor=6):
+    return FilterBoard("ROM filter", [
+        ("preset", "Preset", "text", "CABINET", "Start from a preset; each parameter can be changed after."),
+        ("arcade", "Games", "switch", (True, "ARCADE"), "Which machines of the romset?"),
+        ("status", "Emulation", "lamps", 2, "How well MAME must emulate the game."),
+        ("genres", "Categories", "text", "31 OF 48", "Mark the categories to take (catver.ini)."),
+        ("mature", "Adult", "switch", REMOVE, "Games marked Mature in catver.ini."),
+        ("modes", "Play mode", "text", "ALL", "Mark how two or more play (nplayers.ini)."),
+        ("players", "Players", "people", (2, 8), "The most players a game may have."),
+        ("buttons", "Buttons", "dots", (4, 8), "The most buttons a game may use per player."),
+        ("controls", "Controls", "text", "5 OF 13", "Mark what the panel has. Button-only games always pass."),
+        ("orientation", "Screen", "screens", (True, False), "Mark the screen orientations to take."),
+        ("lines", "Resolution", "blocks", ([1, 0, 0], "15 KHZ"),
+         "Mark the resolutions. Only Low is progressive on a 15 kHz CRT."),
+        ("decades", "Years", "blocks", ([0, 1, 1, 1, 0, 0], "80S-00S"), "Mark the decades to take."),
+        ("clones", "Clones", "text", "BEST ONE", "Which versions of each game?"),
+        ("region", "Region", "text", "WORLD", "With one version per game, the region that wins."),
+        ("bootlegs", "Bootlegs", "switch", REMOVE, "Bootlegs and hacks."),
+        ("prototypes", "Prototypes", "switch", REMOVE, "Prototypes, betas and location tests."),
+        ("vector", "Vector", "switch", KEEP, "Vector games (Asteroids, Tempest...)."),
+        ("chd", "With CHD", "switch", KEEP, "Games that need a CHD (a disk image)."),
+        ("hardware", "Hardware", "text", "ANY", "Only the marked boards. None: any but Naomi and Atomiswave."),
+        ("save", "Done", "action", "SAVE", "Save the filter and go back to the Downloader."),
+    ], cursor, "1,284", "9.6 GB")
+
+
+def romfilter2():
+    return romfilter(11)
+
+
+def filterplayers():
+    return Stepper("Players", "The most players a game may have.", [
+        ("0", "Any"), ("1", "Up to 1"), ("2", "Up to 2"), ("3", "Up to 3"), ("4", "Up to 4"),
+        ("6", "Up to 6"), ("8", "Up to 8"),
+    ], "2")
+
+
+def filterbuttons():
+    return Stepper("Buttons", "The most buttons a game may use per player.", [
+        ("0", "Any"), ("1", "Up to 1"), ("2", "Up to 2"), ("3", "Up to 3"), ("4", "Up to 4"),
+        ("5", "Up to 5"), ("6", "Up to 6"), ("8", "Up to 8"),
+    ], "4", "dots")
+
+
+def filtercontrols():
+    return ToggleGrid("Controls", "Mark what the panel has. Button-only games always pass.", [
+        ("joy8", "8-way joystick", ""), ("joy4", "4-way joystick", ""), ("joy2", "2-way joystick", ""),
+        ("twin", "Twin sticks", ""), ("trackball", "Trackball", ""), ("spinner", "Spinner", ""),
+        ("paddle", "Paddle", ""), ("positional", "Rotary joystick", ""), ("analog", "Analog stick", ""),
+        ("pedal", "Pedals", ""), ("lightgun", "Light gun", ""), ("keyboard", "Keyboard", ""),
+        ("mahjong", "Mahjong", ""),
+    ], ["joy8", "joy4", "joy2", "trackball", "lightgun"], 5, control_art, 4)
+
+
+def filteryears():
+    return ToggleGrid("Years", "Mark the decades to take.", [
+        ("1970", "1970s", "70s"), ("1980", "1980s", "80s"), ("1990", "1990s", "90s"),
+        ("2000", "2000s", "00s"), ("2010", "2010s", "10s"), ("2020", "2020s", "20s"),
+    ], ["1980", "1990", "2000"], 6, None, 2)
+
+
 SCREENS = {
     "main": main, "live": live, "setup": setup, "video": video, "monitor": monitor,
     "emulators": emulators, "power": power, "poweroff": poweroff, "install": install,
@@ -213,9 +278,12 @@ SCREENS = {
     "capture": capture, "layout": layout, "layoutedit": layoutedit, "guncon": guncon,
     "guntarget1": guntarget1, "guntarget2": guntarget2, "guntarget3": guntarget3,
     "gunresult": gunresult, "downloads": downloads, "torrent": torrent, "magnet": magnet,
-    "download": download,
+    "download": download, "romfilter": romfilter, "romfilter2": romfilter2,
+    "filterplayers": filterplayers, "filterbuttons": filterbuttons,
+    "filtercontrols": filtercontrols, "filteryears": filteryears,
 }
 # A escolha de um menu que abre outra tela de demonstracao.
 LINKS = {"games": "emulators", "frontend": "error", "network": "wifi", "shutdown": "power",
          "buttons": "players", "2": "capture", "3": "layoutedit", "roms": "magnet",
-         "start": "download"}
+         "start": "download", "filter": "romfilter", "players": "filterplayers",
+         "controls": "filtercontrols", "decades": "filteryears"}

@@ -48,6 +48,12 @@ shot guncon-result gunresult
 shot downloader downloads
 shot downloader-torrent torrent
 shot downloader-filter torrent "left left left left"
+shot filter romfilter
+shot filter-scrolled romfilter2
+shot filter-players filterplayers
+shot filter-buttons filterbuttons
+shot filter-controls filtercontrols
+shot filter-years filteryears
 shot downloader-magnet magnet
 shot downloader-progress download
 shot power power
