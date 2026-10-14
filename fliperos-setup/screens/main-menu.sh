@@ -9,6 +9,8 @@ SETUP_EXIT_SHELL=10
 SETUP_EXIT_LAUNCH=20
 # 1 com --menu, que so o laco do fliperos-tty1 (fliperos-menu) passa.
 SETUP_MENU_LOOP=${SETUP_MENU_LOOP:-0}
+# 1 com --desktop: aberto pelo atalho do LXDE (a interface grafica numa janela).
+SETUP_DESKTOP=${SETUP_DESKTOP:-0}
 
 screen_live_menu() {
   local choice last=install

@@ -84,12 +84,16 @@ UI_STYLE=""
 UI_GUI_DIR=${UI_GUI_DIR:-/run/fliperos/gui}
 UI_GUI_BIN=${UI_GUI_BIN:-${SETUP_DIR:-/usr/local/lib/fliperos-setup}/gui/fliperos-gui}
 UI_DRI=${UI_DRI:-/dev/dri/card0}
+# O VT que esta na tela: o teclado dele fica calado com a interface no ar.
+UI_GUI_CONSOLE=${UI_GUI_CONSOLE:-/dev/tty0}
 
 ui_gui_wanted() {
   case ${FLIPEROS_UI:-$(conf_get ui 2> /dev/null)} in
     text) return 1 ;;
     gui) return 0 ;;
   esac
+  # Pelo desktop (o atalho FliperOS Setup do LXDE, --desktop): numa janela.
+  ((${SETUP_DESKTOP:-0} == 1)) && [[ -n ${DISPLAY:-} ]] && return 0
   ((${SETUP_MENU_LOOP:-0} == 1)) && [[ -z ${DISPLAY:-} && -e $UI_DRI ]] && ! is_live
 }
 
@@ -106,9 +110,18 @@ ui_gui_start() {
   [[ -x $UI_GUI_BIN ]] && have python3 || return 1
   rm -rf "$UI_GUI_DIR"
   mkdir -p "$UI_GUI_DIR" && mkfifo "$UI_GUI_DIR/req" "$UI_GUI_DIR/resp" || return 1
-  # A orientacao do monitor: com ele em pe, a imagem gira (gui/fliperos-gui).
+  # No console o video e o KMS e o teclado do VT da tela fica calado
+  # enquanto a interface esta nele (UI_GUI_CONSOLE); no desktop, uma janela
+  # no X. A orientacao do monitor: com ele em pe, a imagem gira.
+  local driver=kmsdrm console=""
+  if [[ -n ${DISPLAY:-} ]]; then
+    driver=x11
+  elif [[ -c $UI_GUI_CONSOLE ]]; then
+    console=$UI_GUI_CONSOLE
+  fi
   FLIPEROS_GUI_ORIENTATION=$(conf_get orientation 2> /dev/null || echo horizontal) \
-    SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-kmsdrm} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} \
+    FLIPEROS_GUI_CONSOLE=$console \
+    SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-$driver} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} \
     "$UI_GUI_BIN" --serve "$UI_GUI_DIR" < /dev/null >> "$FLIPEROS_LOG" 2>&1 &
   UI_GUI_PID=$!
   for ((i = 0; i < 150; i++)); do
@@ -200,13 +213,17 @@ ui_board() {
 # depois (um frontend, o proprio Setup reaberto) precisa dele livre.
 ui_done() {
   local i
-  ui_gui_alive || return 0
-  ui_gui_call quit
-  for ((i = 0; i < 50; i++)); do
-    kill -0 "$UI_GUI_PID" 2> /dev/null || break
-    read -r -t 0.1 _ <> "$UI_GUI_DIR/resp"
-  done
-  kill "$UI_GUI_PID" 2> /dev/null
+  ((UI_GUI)) || return 0
+  if ui_gui_alive; then
+    ui_gui_call quit
+    for ((i = 0; i < 50; i++)); do
+      kill -0 "$UI_GUI_PID" 2> /dev/null || break
+      read -r -t 0.1 _ <> "$UI_GUI_DIR/resp"
+    done
+    kill "$UI_GUI_PID" 2> /dev/null
+  fi
+  # O teclado do console de volta mesmo se a interface caiu sem devolve-lo.
+  [[ -z ${DISPLAY:-} && -c $UI_GUI_CONSOLE ]] && kbd_mode -u -C "$UI_GUI_CONSOLE" 2> /dev/null
   UI_GUI=0
   rm -rf "$UI_GUI_DIR"
   return 0

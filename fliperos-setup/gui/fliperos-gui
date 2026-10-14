@@ -67,27 +67,67 @@ class App:
         }
 
     def open(self):
-        """Abre o video: 640x240 se a saida tem o modo, senao o modo atual."""
+        """Abre o video: 640x240 se a saida tem o modo, senao o modo atual.
+        No desktop (SDL_VIDEODRIVER=x11, o atalho FliperOS Setup do LXDE),
+        uma janela sem borda do tamanho da tela."""
         pygame = self.pygame
         pygame.display.init()
         flags = 0
         size = PREVIEW if self.preview else self.theme.MODE
-        if os.environ.get("SDL_VIDEODRIVER") == "kmsdrm":
+        driver = os.environ.get("SDL_VIDEODRIVER")
+        if driver == "kmsdrm":
             flags = pygame.FULLSCREEN
             modes = pygame.display.list_modes()
             if not isinstance(modes, list) or size not in modes:
                 info = pygame.display.Info()
                 size = (info.current_w, info.current_h)
+        elif driver == "x11" and not self.preview:
+            info = pygame.display.Info()
+            size, flags = (info.current_w, info.current_h), pygame.NOFRAME
         self.window = pygame.display.set_mode(size, flags)
         self.size = self.window.get_size()
-        pygame.display.set_caption("FliperOS")
+        pygame.display.set_caption("FliperOS Setup")
         pygame.mouse.set_visible(False)
+        self.mute_console(True)
 
     def close(self):
         """Solta o video (um programa de texto ou outro modo vai usa-lo)."""
         if self.window is not None:
+            self.mute_console(False)
             self.pygame.display.quit()
             self.window = None
+
+    def mute_console(self, mute):
+        """O teclado do console (FLIPEROS_GUI_CONSOLE, o VT da tela) calado
+        enquanto a interface esta no video. O SDL so cala o terminal de
+        controle do processo, que aqui e o pty do sudo: sem isto o que se
+        aperta no menu se acumula no tty1 e aparece de uma vez quando ele
+        fecha. Ao soltar, volta o modo de antes e o acumulado e descartado."""
+        import fcntl
+        import struct
+        import termios
+
+        path = os.environ.get("FLIPEROS_GUI_CONSOLE", "")
+        if not path:
+            return
+        kdgkbmode, kdskbmode, k_off, k_unicode = 0x4B44, 0x4B45, 0x04, 0x03
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_NOCTTY)
+        except OSError:
+            return
+        try:
+            if mute:
+                buf = fcntl.ioctl(fd, kdgkbmode, struct.pack("i", 0))
+                self.kbmode = struct.unpack("i", buf)[0]
+                if self.kbmode != k_off:
+                    fcntl.ioctl(fd, kdskbmode, k_off)
+            else:
+                fcntl.ioctl(fd, kdskbmode, getattr(self, "kbmode", k_unicode) or k_unicode)
+                termios.tcflush(fd, termios.TCIFLUSH)
+        except OSError:
+            pass
+        finally:
+            os.close(fd)
 
     def load_sounds(self):
         """Os sons do menu, os mesmos do gum (GUM_SOUND_MOVE/SELECT). Sem
@@ -161,10 +201,16 @@ class App:
         canvas.blit(pygame.transform.smoothscale(frame, (240, 180)), (0, 70))
         return pygame.transform.rotate(canvas, -90 if self.orientation == "vertical-cw" else 90)
 
-    def show(self, screen, ctx, redraw=True):
+    def show(self, screen, ctx, redraw=True, busy=False):
+        """Um quadro no video. busy: o Setup esta trabalhando, e a ampulheta
+        gira no canto."""
         if self.window is None:
             return
-        self.pygame.transform.scale(self.final(self.compose(screen, ctx, redraw)), self.size, self.window)
+        frame = self.compose(screen, ctx, redraw)
+        if busy:
+            import widgets
+            widgets.hourglass(frame, self.now)
+        self.pygame.transform.scale(self.final(frame), self.size, self.window)
         self.pygame.display.flip()
 
     def tick(self):

@@ -18,7 +18,7 @@ if [[ ${1:-} == --mode ]]; then
 fi
 [[ $# -gt 0 ]] || { echo "Usage: fliperos-x11-run [--mode 640x240@60] program [arguments]" >&2; exit 2; }
 [[ -z "${DISPLAY:-}" ]] || { echo "Run on the console (TTY), outside an X session." >&2; exit 2; }
-command -v "$1" > /dev/null || { echo "Nao instalado: $1" >&2; exit 127; }
+command -v "$1" > /dev/null || { echo "Not installed: $1" >&2; exit 127; }
 name=$(basename -- "$1")
 # O jogo da linha de comando no marquee do Pixelcade (config/fliperos-pixelcade;
 # sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.

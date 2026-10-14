@@ -432,7 +432,8 @@ class ImageTests(unittest.TestCase):
         self.assertIn('fliperos-setup.desktop', ROOTFS)
         desktop = (ROOT / 'config/fliperos-setup.desktop').read_text()
         self.assertIn('Categories=System;', desktop)
-        self.assertIn('Exec=sudo /usr/local/bin/fliperos-setup', desktop)
+        # Pelo desktop o Setup abre na interface grafica, numa janela do X.
+        self.assertIn("sudo /usr/local/bin/fliperos-setup --desktop \"$DISPLAY\"", desktop)
         self.assertIn('Terminal=true', desktop)
 
     def tty1(self, installed, setup_codes, requests, *args, splash=False, firstboot=True):
@@ -768,8 +769,8 @@ def apt_list():
 
 
 class DesktopLogoutTests(unittest.TestCase):
-    """O Desconectar do LXDE abre o menu do FliperOS no gum: a janela do
-    lxsession-logout era ilegivel numa tela de baixa resolucao."""
+    """O "Back to the menu" do LXDE volta direto ao menu do FliperOS: a
+    janela do lxsession-logout era ilegivel numa tela de baixa resolucao."""
 
     def test_every_logout_path_opens_the_gum_menu(self):
         logout = '/opt/fliperos/bin/fliperos-logout'
@@ -783,15 +784,15 @@ class DesktopLogoutTests(unittest.TestCase):
         self.assertIn('id=lxde-logout.desktop', (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text())
         self.assertRegex(ROOTFS, r' fliperos-logout[ \w\\\n-]*; do')
 
-    def test_logout_menu(self):
-        # Fora do terminal ele se reabre no Alacritty em tela cheia; dentro,
-        # o gum: voltar ao menu fecha o lxsession, os outros pelo sudo.
+    def test_logout_goes_back_to_the_menu(self):
+        # Sem perguntar: fecha o lxsession e o fliperos-session volta ao menu
+        # (desligar e reiniciar ficam no menu). O botao diz o que faz.
         script = (ROOT / 'config/fliperos-logout').read_text()
-        self.assertIn('exec alacritty --class fliperos-logout -o \'window.startup_mode="Fullscreen"\'', script)
-        for line in ('"Back to the FliperOS menu" "Reboot" "Power off" "Cancel"',
-                     'kill -TERM "${_LXSESSION_PID:-0}"', 'Reboot) sudo -n /sbin/reboot ;;',
-                     '"Power off") sudo -n /sbin/poweroff ;;', 'export GUM_SOUND_MOVE=$sounds/move.wav'):
-            self.assertIn(line, script, line)
+        self.assertIn('kill -TERM "${_LXSESSION_PID:-0}"', script)
+        self.assertNotIn('gum', script)
+        entry = (ROOT / 'config/applications/lxde-logout.desktop').read_text()
+        self.assertIn('\nName=Back to the menu\n', entry)
+        self.assertNotIn('[pt_BR]', entry)
 
 
 class DesktopTerminalTests(unittest.TestCase):
@@ -8545,11 +8546,11 @@ class EmulatorsMenuTests(unittest.TestCase):
             self.assertEqual(out.stdout.strip(), 'game in %s' % dest)
 
     def test_setup_menu(self):
-        # Emulators & Games depois de Frontend (Setup > Games); Splash screen
-        # por ultimo (Setup > System).
+        # Emulators & Games primeiro e Frontend em segundo (Setup > Games, a
+        # pedido do usuario); Splash screen por ultimo (Setup > System).
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
         games = menu.split('screen_setup_games() {')[1].split('\n}\n')[0]
-        self.assertRegex(games, r'"frontend\|Frontend\|[^"]+" \\\n      "emulators\|Emulators & Games\|[^"]+" \\\n')
+        self.assertRegex(games, r'"emulators\|Emulators & Games\|[^"]+" \\\n      "frontend\|Frontend\|[^"]+" \\\n')
         system = menu.split('screen_setup_system() {')[1].split('\n}\n')[0]
         self.assertRegex(system, r'"splash\|Splash screen\|[^"]+" \\\n      "return\|Return\|[^"]+"\)')
         self.assertIn('emulators) screen_emulators ;;', menu)

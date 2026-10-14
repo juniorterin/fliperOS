@@ -7,7 +7,7 @@
 set -euo pipefail
 [[ $# -gt 0 ]] || { echo "Usage: fliperos-kms-run program [arguments]" >&2; exit 2; }
 [[ -z "${DISPLAY:-}" ]] || { echo "Run on the console (TTY), outside an X session." >&2; exit 2; }
-command -v "$1" > /dev/null || [[ -x $1 ]] || { echo "Nao instalado: $1" >&2; exit 127; }
+command -v "$1" > /dev/null || [[ -x $1 ]] || { echo "Not installed: $1" >&2; exit 127; }
 # 0 se a placa cria um contexto OpenGL 3.2 core no KMS (GBM), o que o driver
 # de video "glcore" do RetroArch pede. Quem responde e o Mesa, pelo eglinfo;
 # sem o eglinfo, ou sem o EGL abrir, nao da para saber e vale o glcore.

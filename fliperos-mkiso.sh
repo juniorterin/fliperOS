@@ -366,8 +366,11 @@ mkdir -p /etc/systemd/system/plymouth-quit-wait.service.d
 printf '[Unit]\nJobTimeoutSec=20\n[Service]\nTimeoutStartSec=20\n' \
   > /etc/systemd/system/plymouth-quit-wait.service.d/timeout.conf
 
-locale-gen pt_BR.UTF-8
-update-locale LANG=pt_BR.UTF-8
+# A interface toda em ingles, como o Setup: o desktop (LXDE), o Falkon e os
+# programas do sistema. O pt_BR fica gerado para quem quiser trocar; o
+# teclado ABNT2 e a parte (/etc/default/keyboard, abaixo).
+locale-gen en_US.UTF-8 pt_BR.UTF-8
+update-locale LANG=en_US.UTF-8
 
 # O locale sozinho NAO define o layout do teclado: sem isto o console fica em
 # "us", e num ABNT2 acento, c-cedilha, / e ? saem errados — justamente ao

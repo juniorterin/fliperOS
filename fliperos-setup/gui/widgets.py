@@ -1255,3 +1255,37 @@ class Live:
         parts = wrap(self.footer, T.SAFE_W)[:2]
         for i, part in enumerate(parts):
             centered(surf, part, T.COMMENT, FOOTER_Y - 11 * (len(parts) - 1) + i * 11)
+
+
+HOURGLASS = """
+FFFFFFFFF
+.FYYYYYF.
+.FYYYYYF.
+..FYYYF..
+...FYF...
+....F....
+...F.F...
+..F...F..
+.F..Y..F.
+.FYYYYYF.
+FFFFFFFFF
+"""
+_hourglass = None
+
+
+def hourglass(surf, t, cx=T.SAFE_X + T.SAFE_W - 8, cy=T.HEIGHT - 20):
+    """A ampulheta do canto: o Setup esta trabalhando. A areia escorre
+    parada e, a cada segundo, ela vira (gira 180 graus em 0,4 s)."""
+    global _hourglass
+    if _hourglass is None:
+        rows = HOURGLASS.split()
+        _hourglass = pygame.Surface((len(rows[0]), len(rows)), pygame.SRCALPHA)
+        for y, row in enumerate(rows):
+            for x, ch in enumerate(row):
+                if ch != ".":
+                    _hourglass.set_at((x, y), T.ICON_COLORS[ch])
+        _hourglass = pygame.transform.scale(_hourglass, (_hourglass.get_width() * 2, _hourglass.get_height() * 2))
+    phase = t % 1.0
+    angle = 0 if phase < 0.6 else (phase - 0.6) / 0.4 * 180
+    img = pygame.transform.rotate(_hourglass, -angle)
+    surf.blit(img, (cx - img.get_width() // 2, cy - img.get_height() // 2))

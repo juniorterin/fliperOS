@@ -8,6 +8,9 @@
 #   sudo fliperos-setup                 fluxo normal
 #   sudo fliperos-setup --menu          o mesmo, pelo laco do fliperos-tty1
 #                                       (sai com 20 para abrir um launcher)
+#   sudo fliperos-setup --desktop DISPLAY [XAUTHORITY]
+#                                       pelo atalho do LXDE: a interface
+#                                       grafica numa janela do X
 #   sudo fliperos-setup --first-boot    escolhe o launcher padrao
 #   sudo fliperos-setup --output-test   refaz o teste de saidas
 #   sudo fliperos-setup --video-setup   abre direto o Video Setup
@@ -239,6 +242,14 @@ main() {
   if [[ ${1:-} == --menu ]]; then
     SETUP_MENU_LOOP=1
     shift
+  fi
+  # Pelo atalho do desktop: o display do X (e o Xauthority) que o sudo
+  # tirou do ambiente, para a interface grafica abrir numa janela.
+  if [[ ${1:-} == --desktop ]]; then
+    SETUP_DESKTOP=1
+    [[ -n ${2:-} ]] && export DISPLAY=$2
+    [[ -n ${3:-} && -r ${3:-} ]] && export XAUTHORITY=$3
+    shift $(($# < 3 ? $# : 3))
   fi
   # E um menu de gabinete: sai-se dele pelo menu. Ctrl+C no meio de uma
   # instalacao deixaria o disco pela metade.

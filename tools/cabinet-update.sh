@@ -68,6 +68,14 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin fliperos --skip-login --noissue %I $TERM
 UNIT
 
+echo "== Language: English (the keyboard stays as it is)"
+# Como a ISO (fliperos-mkiso.sh): o desktop, o Falkon e o sistema em ingles,
+# como o Setup. Vale a partir do proximo login (o tty1 reiniciado abaixo).
+if [[ $(sed -n 's/^LANG=//p' /etc/default/locale 2> /dev/null) != en_US.UTF-8 ]]; then
+  locale -a 2> /dev/null | grep -qix 'en_US.utf8' || locale-gen en_US.UTF-8 > /dev/null
+  update-locale LANG=en_US.UTF-8
+fi
+
 echo "== DNS through NetworkManager"
 nmcli general reload conf > /dev/null && nmcli general reload dns-full > /dev/null || true
 sleep 2

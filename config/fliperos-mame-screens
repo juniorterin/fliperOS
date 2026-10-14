@@ -19,7 +19,7 @@ bin=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
   echo "Usage: fliperos-mame-screens MONITORS [DIR] (MONITORS: 2 or more)" >&2
   exit 2
 }
-[[ -x $bin ]] || { echo "GroovyMAME nao instalado: $bin" >&2; exit 1; }
+[[ -x $bin ]] || { echo "GroovyMAME is not installed: $bin" >&2; exit 1; }
 binary=$(stat -c '%s %Y' "$bin")
 [[ -f $out/.stamp && $(< "$out/.stamp") == "$binary $monitors" ]] && exit 0
 mkdir -p "$out"

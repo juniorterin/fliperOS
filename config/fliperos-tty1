@@ -31,6 +31,11 @@ menu() {
   while true; do
     sudo /usr/local/bin/fliperos-setup --menu
     rc=$?
+    # O que foi apertado no menu e caiu no console (setas, Enter do
+    # controle) nao aparece nem vai para o que abre agora: a entrada
+    # descartada e a tela limpa.
+    python3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)' 2> /dev/null
+    printf '\e[H\e[2J\e[?25l'
     ((rc == 20)) || return 0
     name=$(cat "$REQUEST" 2> /dev/null)
     # O navegador do Downloader (Setup > Games > Downloader): o Setup volta

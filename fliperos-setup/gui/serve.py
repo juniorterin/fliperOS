@@ -27,7 +27,7 @@ import time
 FS, RS, GS = "\x1f", "\x1e", "\x1d"
 SGR = re.compile(r"\x1b\[([0-9;]*)m")
 # Um rotulo com a explicacao entre parenteses no fim.
-NOTE = re.compile(r"^(.{2,}?) \((.+)\)$")
+NOTE = re.compile(r"^(.*\S) \(([^()]+)\)$")
 
 
 def plain(s):
@@ -46,6 +46,7 @@ class Server:
         self.ctx = {"status": "", "version": ""}
         self.screen = None      # a tela que esta no video
         self.parent = os.getppid()  # o Setup: sem ele, o servidor sai
+        self.replied = time.monotonic()  # a ultima resposta (a ampulheta)
         self.shots = os.environ.get("FLIPEROS_GUI_SHOTS", "")
         self.count = 0
         # As cores do ui_c (lib/ui.sh): 30 + indice ate 7, 82 + indice depois.
@@ -70,11 +71,16 @@ class Server:
         out = []
         for arg in args:
             value, label, hint = (plain(arg).split(GS) + ["", ""])[:3]
+            # Cada parentese do fim vira uma frase da dica, na ordem:
+            # "Hypseus Singe (Laserdisc) (installed)" -> "Laserdisc. Installed".
+            notes = []
             found = NOTE.match(label)
-            if found:
-                # Com dica, o parentese vem antes dela ("All emulators. Teach...").
-                note = found.group(2)[:1].upper() + found.group(2)[1:]
-                label, hint = found.group(1), note + ". " + hint if hint else note
+            while found:
+                notes.insert(0, found.group(2)[:1].upper() + found.group(2)[1:])
+                label = found.group(1)
+                found = NOTE.match(label)
+            if notes:
+                hint = ". ".join(notes + ([hint] if hint else []))
             out.append((value, label, hint))
         return out
 
@@ -160,6 +166,15 @@ class Server:
             redraw = False
             app.tick()
 
+    def busy(self):
+        """A ampulheta: num aviso de "aguarde" ou no progresso, e quando a
+        tela respondida fica parada mais de 0,3 s (o Setup esta trabalhando
+        antes da proxima)."""
+        if isinstance(self.screen, self.W.Live) or (isinstance(self.screen, self.W.Message)
+                                                   and not self.screen.wait):
+            return True
+        return self.screen is not None and time.monotonic() - self.replied > 0.3
+
     def put(self, screen, name):
         """Mostra a tela e volta na hora (um aviso, o progresso)."""
         self.screen = screen
@@ -185,13 +200,14 @@ class Server:
                 tick = getattr(self.screen, "tick", None)
                 if tick and tick() == "redraw":
                     redraw = True
-                self.app.show(self.screen, self.ctx, redraw)
+                self.app.show(self.screen, self.ctx, redraw, self.busy())
                 redraw = False
             self.app.tick()
         record, self.buf = self.buf.split(RS.encode(), 1)
         return record.decode("utf-8", "replace").lstrip("\n").split(FS)
 
     def reply(self, rc, value=""):
+        self.replied = time.monotonic()
         data = ("%d%s%s%s" % (rc, FS, value, RS)).encode()
         path = os.path.join(self.dir, "resp")
         deadline = time.monotonic() + 10
@@ -392,5 +408,6 @@ def main(App, args):
         open(os.path.join(args.serve, "ready"), "w").close()
         server.run()
     finally:
+        app.close()
         app.pygame.quit()
     return 0
