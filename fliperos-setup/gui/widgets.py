@@ -9,7 +9,6 @@
 # as faixas do gabinete, a linha de placar (NET e DISK), o fundo de estrelas
 # e, nos menus com icones, um carrossel. Tudo na Press Start 2P.
 
-import random
 
 import pygame
 
@@ -90,25 +89,11 @@ def button(surf, label, cx, y, selected, w=80):
     text(surf, label, color, cx - width(label) // 2, y + 6)
 
 
-_stars = None
-
-
-def stars():
-    global _stars
-    if _stars is None:
-        _stars = pygame.Surface((T.WIDTH, T.HEIGHT))
-        _stars.fill(T.SPACE)
-        rnd = random.Random(7)
-        for _ in range(70):
-            _stars.set_at((rnd.randrange(T.WIDTH), rnd.randrange(T.HEIGHT)),
-                          rnd.choice([T.COMMENT, T.COMMENT, T.PURPLE, T.FG]))
-    return _stars
-
-
 def frame(surf, ctx, title, keys, error=False, score=False):
-    """O fundo, o letreiro com o titulo, a linha de placar e a legenda das
-    teclas. O placar (score) so aparece nos menus principais."""
-    surf.blit(stars(), (0, 0))
+    """O letreiro com o titulo, a linha de placar e a legenda das teclas,
+    numa tela transparente (o fundo animado fica por baixo). O placar
+    (score) so aparece nos menus principais."""
+    surf.fill((0, 0, 0, 0))
     title = title.upper()
     scale = 2 if width(title) * 2 <= 240 else 1
     logo = big(title, scale, MARQUEE_ERROR if error else MARQUEE)
@@ -139,14 +124,39 @@ def frame(surf, ctx, title, keys, error=False, score=False):
         x += text(surf, action, T.COMMENT, x, FOOTER_Y) + 16
 
 
-def paragraph(surf, lines, y, color=T.FG):
-    """Desenha as linhas centradas (quebrando as longas) e devolve o y
-    seguinte."""
+def flow(lines, color=T.FG):
+    """As linhas prontas para desenhar: (texto, cor), com as longas
+    quebradas. Uma linha pode ser um texto (com quebras de linha dentro) ou
+    um par (texto, cor)."""
+    out = []
     for line in lines:
-        for part in wrap(line, T.SAFE_W) if line else [""]:
-            centered(surf, part, color, y)
-            y += 12
+        line, c = line if isinstance(line, tuple) else (line, color)
+        for piece in line.split("\n"):
+            out += [(part, c) for part in wrap(piece, T.SAFE_W)] if piece.strip() else [("", c)]
+    return out
+
+
+def paragraph(surf, lines, y, color=T.FG, bottom=None):
+    """Desenha as linhas centradas (quebrando as longas) e devolve o y
+    seguinte. Com bottom, o texto que nao cabe ate ali aperta as linhas e,
+    se ainda assim nao couber, e cortado."""
+    parts = flow(lines, color)
+    pitch = 12
+    if bottom is not None and len(parts) * pitch > bottom - y:
+        pitch = 10
+        parts = parts[:max(1, (bottom - y) // pitch)]
+    for part, c in parts:
+        centered(surf, part, c, y)
+        y += pitch
     return y
+
+
+def body(surf, lines, button_h=20):
+    """O texto de uma pergunta ou de um aviso: comeca mais embaixo quando e
+    curto. Devolve o y do botao."""
+    count = len(flow(lines))
+    y = paragraph(surf, lines, 80 if count <= 5 else 40, bottom=FOOTER_Y - 12 - button_h - 8)
+    return min(y + 12, FOOTER_Y - 12 - button_h)
 
 
 class Menu:
@@ -170,9 +180,13 @@ class Menu:
 
     def key(self, k):
         n = len(self.entries)
-        if self.mode == "menu":
+        if self.carousel():
             k = {"left": "up", "right": "down"}.get(k, k)
-        if k == "up":
+        if k in ("a", "A") and self.mode == "check":
+            # Marca todas ou, com todas marcadas, nenhuma.
+            values = {e[0] for e in self.entries}
+            self.marked = set() if self.marked >= values else values
+        elif k == "up":
             self.cursor = (self.cursor - 1) % n
         elif k == "down":
             self.cursor = (self.cursor + 1) % n
@@ -190,8 +204,16 @@ class Menu:
             return ("select", self.entries[self.cursor][0])
         return None
 
+    def carousel(self):
+        """O menu cabe no carrossel? Uma lista longa (pastas, redes) ou um
+        texto de varias linhas (uma tabela) ficam melhor na lista."""
+        if self.mode != "menu" or len(self.entries) > 12:
+            return False
+        lines = len(flow([self.text])) if self.text else 0
+        return lines <= (1 if any(e[2] for e in self.entries) else 3)
+
     def draw(self, surf, ctx):
-        if self.mode == "menu":
+        if self.carousel():
             self.draw_carousel(surf, ctx)
         else:
             self.draw_list(surf, ctx)
@@ -227,11 +249,16 @@ class Menu:
         self.tile(surf, self.entries[self.cursor], 128, 52, 4)
 
         label = self.entries[self.cursor][1].upper()
-        scale = 2 if width(label) * 2 <= T.SAFE_W else 1
-        name = big(label, scale, LABEL)
-        x = (T.WIDTH - name.get_width()) // 2
-        surf.blit(big(label, scale, (0x80, 0x30, 0x60)), (x + 2, 134))
-        surf.blit(name, (x, 132))
+        if width(label) * 2 <= T.SAFE_W:
+            name = big(label, 2, LABEL)
+            x = (T.WIDTH - name.get_width()) // 2
+            surf.blit(big(label, 2, (0x80, 0x30, 0x60)), (x + 2, 134))
+            surf.blit(name, (x, 132))
+        else:
+            # Um rotulo longo: letra pequena, em ate duas linhas.
+            parts = wrap(label, T.SAFE_W)[:2]
+            for i, part in enumerate(parts):
+                centered(surf, part, T.YELLOW, 136 - 5 * (len(parts) - 1) + i * 10)
         hint = self.entries[self.cursor][2] or self.text
         if hint != self.text:
             # O texto do menu (um status, por exemplo) fica embaixo do letreiro.
@@ -251,10 +278,11 @@ class Menu:
             keys.insert(0, ("SPACE", "MARK"))
         frame(surf, ctx, self.title, keys)
         y0 = CONTENT_Y
-        if self.text:
-            y0 = paragraph(surf, [self.text], y0) + 4
         hints = any(e[2] for e in self.entries)
         bottom = HINT_Y - 6 if hints else FOOTER_Y - 8
+        if self.text:
+            # O texto deixa pelo menos tres linhas para a lista.
+            y0 = paragraph(surf, [self.text], y0, bottom=bottom - 3 * ROW - 4) + 4
         rows = max(1, (bottom - y0) // ROW)
         if self.cursor < self.top:
             self.top = self.cursor
@@ -319,7 +347,7 @@ class YesNo:
         img = T.icon(self.icon, 2) if self.icon else None
         if img:
             surf.blit(img, ((T.WIDTH - 32) // 2, 38))
-        y = paragraph(surf, self.lines, 80) + 12
+        y = body(surf, self.lines)
         button(surf, self.labels[0], 104, y, self.choice == 0)
         button(surf, self.labels[1], 216, y, self.choice == 1)
 
@@ -339,7 +367,7 @@ class Message:
 
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [("ENTER", "OK")], self.kind == "error")
-        y = paragraph(surf, self.lines, 72) + 20
+        y = body(surf, self.lines)
         button(surf, "OK", T.WIDTH // 2, y, True)
 
 

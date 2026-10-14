@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-# A interface grafica do FliperOS Setup (em teste: por enquanto so as telas
-# de demonstracao, sem ligacao com o fliperos-setup).
+# A interface grafica do FliperOS Setup.
 #
 # Roda em 640x240. A interface e desenhada numa tela logica de 320x240 e
 # esticada 200% na horizontal: no modo 640x240 o pixel e duas vezes mais
-# largo que alto, entao o resultado no tubo 4:3 sao pixels quadrados.
+# largo que alto, entao o resultado no tubo 4:3 sao pixels quadrados. Sem
+# esse modo na saida, usa o modo atual e estica a tela logica ate ele.
 #
-#   fliperos-gui --demo main                      abre a tela (Esc sai)
+#   fliperos-gui --serve PASTA
+#       O servidor do fliperos-setup (lib/ui.sh): le os pedidos de tela de
+#       PASTA/req e responde em PASTA/resp (serve.py).
+#   fliperos-gui --demo main                      uma tela de demonstracao
 #   fliperos-gui --demo main --preview            numa janela 4:3 de 960x720
-#   fliperos-gui --demo main --keys "down enter" --shot /tmp/main
+#   fliperos-gui --demo main --keys "right enter" --shot /tmp/main
 #       grava /tmp/main-640x240.png (o quadro que vai para a placa) e
 #       /tmp/main-crt.png (como aparece no tubo) e sai, sem abrir video.
+#
+# O fundo e animado e sorteado a cada abertura (background.py); --bg NOME
+# ou FLIPEROS_GUI_BG fixam um.
 #
 # O joystick nao e lido aqui: o fliperos-padkeys ja o transforma nas teclas
 # do menu (setas, Enter, Esc, Espaco, PageUp, PageDown).
@@ -18,43 +24,140 @@
 import argparse
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 PREVIEW = (960, 720)
+FPS = 20
 
 
-def main():
-    parser = argparse.ArgumentParser(description="FliperOS graphical setup (demo screens)")
-    parser.add_argument("--demo", default="main", help="demo screen to open")
-    parser.add_argument("--keys", default="", help="keys to press first, e.g. 'down down enter'")
-    parser.add_argument("--shot", metavar="PREFIX", help="write PREFIX-640x240.png and PREFIX-crt.png and exit")
-    parser.add_argument("--preview", action="store_true", help="open a 960x720 window, as seen on the 4:3 tube")
-    parser.add_argument("--list", action="store_true", help="list the demo screens")
-    args = parser.parse_args()
+class App:
+    """A janela, o fundo animado e o laco de teclas."""
 
-    if args.shot:
-        os.environ["SDL_VIDEODRIVER"] = "dummy"
-    os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-    import pygame
+    def __init__(self, preview=False, headless=False, bg=None, keys=()):
+        if headless:
+            os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+        import pygame
 
+        import background
+        import theme
+
+        self.pygame, self.theme = pygame, theme
+        self.preview = preview
+        self.queue = list(keys)   # teclas de teste, apertadas antes das de verdade
+        self.window = None
+        self.open()
+        pygame.font.init()
+        self.clock = pygame.time.Clock()
+        self.back = pygame.Surface((theme.WIDTH, theme.HEIGHT))
+        self.ui = pygame.Surface((theme.WIDTH, theme.HEIGHT), pygame.SRCALPHA)
+        self.bg = background.pick(bg)
+        self.start = time.monotonic()
+        self.fixed_time = None    # os prints: um instante fixo do fundo
+        self.sounds = {}
+        self.names = {
+            pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
+            pygame.K_RETURN: "enter", pygame.K_KP_ENTER: "enter", pygame.K_ESCAPE: "esc",
+            pygame.K_SPACE: "space", pygame.K_PAGEUP: "pgup", pygame.K_PAGEDOWN: "pgdn",
+            pygame.K_BACKSPACE: "backspace",
+        }
+
+    def open(self):
+        """Abre o video: 640x240 se a saida tem o modo, senao o modo atual."""
+        pygame = self.pygame
+        pygame.display.init()
+        flags = 0
+        size = PREVIEW if self.preview else self.theme.MODE
+        if os.environ.get("SDL_VIDEODRIVER") == "kmsdrm":
+            flags = pygame.FULLSCREEN
+            modes = pygame.display.list_modes()
+            if not isinstance(modes, list) or size not in modes:
+                info = pygame.display.Info()
+                size = (info.current_w, info.current_h)
+        self.window = pygame.display.set_mode(size, flags)
+        self.size = self.window.get_size()
+        pygame.display.set_caption("FliperOS")
+        pygame.mouse.set_visible(False)
+
+    def close(self):
+        """Solta o video (um programa de texto ou outro modo vai usa-lo)."""
+        if self.window is not None:
+            self.pygame.display.quit()
+            self.window = None
+
+    def load_sounds(self):
+        """Os sons do menu, os mesmos do gum (GUM_SOUND_MOVE/SELECT). Sem
+        audio livre, fica sem som."""
+        try:
+            self.pygame.mixer.init()
+            for name in ("move", "select"):
+                path = os.environ.get("GUM_SOUND_" + name.upper(), "")
+                if path and os.path.isfile(path):
+                    self.sounds[name] = self.pygame.mixer.Sound(path)
+        except Exception:
+            self.sounds = {}
+
+    def beep(self, key):
+        name = "select" if key == "enter" else "move" if key in ("up", "down", "left", "right") else ""
+        if name in self.sounds:
+            self.sounds[name].play()
+
+    def keys(self):
+        """As teclas apertadas desde a ultima chamada, pelo nome."""
+        pygame = self.pygame
+        out = []
+        if self.queue:
+            out.append(self.queue.pop(0))
+        if self.window is None:
+            return out
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                out.append("quit")
+            elif event.type == pygame.KEYDOWN:
+                key = self.names.get(event.key)
+                if key is None and event.unicode and event.unicode.isprintable():
+                    key = event.unicode
+                if key:
+                    out.append(key)
+        return out
+
+    def flush(self):
+        """Descarta as teclas apertadas enquanto nada era perguntado."""
+        if self.window is not None:
+            self.pygame.event.clear()
+
+    def compose(self, screen, ctx, redraw=True):
+        """Um quadro na tela logica: o fundo e, por cima, a interface."""
+        if redraw:
+            self.ui.fill((0, 0, 0, 0))
+            if screen is not None:
+                screen.draw(self.ui, ctx)
+        now = self.fixed_time if self.fixed_time is not None else time.monotonic() - self.start
+        self.bg.draw(self.back, now)
+        self.back.blit(self.ui, (0, 0))
+        return self.back
+
+    def show(self, screen, ctx, redraw=True):
+        if self.window is None:
+            return
+        self.pygame.transform.scale(self.compose(screen, ctx, redraw), self.size, self.window)
+        self.pygame.display.flip()
+
+    def tick(self):
+        self.clock.tick(FPS)
+
+    def save(self, screen, ctx, prefix):
+        frame = self.compose(screen, ctx)
+        scale = self.pygame.transform.scale
+        self.pygame.image.save(scale(frame, self.theme.MODE), prefix + "-640x240.png")
+        self.pygame.image.save(scale(frame, PREVIEW), prefix + "-crt.png")
+
+
+def run_demo(app, args):
     import demo
-    import theme
 
-    if args.list:
-        print("\n".join(demo.SCREENS))
-        return 0
-    if args.demo not in demo.SCREENS:
-        print("fliperos-gui: unknown demo screen: " + args.demo, file=sys.stderr)
-        return 2
-
-    pygame.display.init()
-    pygame.font.init()
-    size = PREVIEW if args.preview else theme.MODE
-    window = pygame.display.set_mode(size)
-    pygame.display.set_caption("FliperOS")
-    pygame.mouse.set_visible(False)
-    logical = pygame.Surface((theme.WIDTH, theme.HEIGHT))
     stack = [demo.SCREENS[args.demo]()]
 
     def press(key):
@@ -70,42 +173,50 @@ def main():
             stack.pop()
         return bool(stack)
 
-    def draw():
-        stack[-1].draw(logical, demo.CONTEXT)
-        pygame.transform.scale(logical, size, window)
-        pygame.display.flip()
-
     for key in args.keys.split():
         if not press(key):
             return 0
-
     if args.shot:
-        stack[-1].draw(logical, demo.CONTEXT)
-        pygame.image.save(pygame.transform.scale(logical, theme.MODE), args.shot + "-640x240.png")
-        pygame.image.save(pygame.transform.scale(logical, PREVIEW), args.shot + "-crt.png")
+        app.fixed_time = args.time
+        app.save(stack[-1], demo.CONTEXT, args.shot)
         return 0
-
-    names = {
-        pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
-        pygame.K_RETURN: "enter", pygame.K_KP_ENTER: "enter", pygame.K_ESCAPE: "esc",
-        pygame.K_SPACE: "space", pygame.K_PAGEUP: "pgup", pygame.K_PAGEDOWN: "pgdn",
-        pygame.K_BACKSPACE: "backspace",
-    }
-    draw()
+    redraw = True
     while True:
-        event = pygame.event.wait()
-        if event.type == pygame.QUIT:
-            return 0
-        if event.type != pygame.KEYDOWN:
-            continue
-        key = names.get(event.key)
-        if key is None and event.unicode and event.unicode.isprintable():
-            key = event.unicode
-        if key is None:
-            continue
-        if not press(key):
-            return 0
-        draw()
+        for key in app.keys():
+            if key == "quit" or not press(key):
+                return 0
+            redraw = True
+        app.show(stack[-1], demo.CONTEXT, redraw)
+        redraw = False
+        app.tick()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="FliperOS graphical setup")
+    parser.add_argument("--serve", metavar="DIR", help="serve the screens of fliperos-setup (DIR/req, DIR/resp)")
+    parser.add_argument("--demo", default="main", help="demo screen to open")
+    parser.add_argument("--keys", default="", help="keys to press first, e.g. 'right right enter'")
+    parser.add_argument("--shot", metavar="PREFIX", help="write PREFIX-640x240.png and PREFIX-crt.png and exit")
+    parser.add_argument("--bg", help="background: stars, snow, water, fire or smoke (default: random)")
+    parser.add_argument("--time", type=float, default=3.0, help="with --shot, the moment of the background")
+    parser.add_argument("--preview", action="store_true", help="open a 960x720 window, as seen on the 4:3 tube")
+    parser.add_argument("--list", action="store_true", help="list the demo screens")
+    args = parser.parse_args()
+
+    if args.serve:
+        import serve
+        return serve.main(App, args)
+
+    app = App(args.preview, bool(args.shot) or args.list, args.bg or ("stars" if args.shot else None))
+    import demo
+
+    if args.list:
+        print("\n".join(demo.SCREENS))
+        return 0
+    if args.demo not in demo.SCREENS:
+        print("fliperos-gui: unknown demo screen: " + args.demo, file=sys.stderr)
+        return 2
+    return run_demo(app, args)
 
 
 if __name__ == "__main__":
