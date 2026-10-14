@@ -2,7 +2,7 @@
 # interface sem um FliperOS instalado (--demo NOME). Os rotulos e as dicas
 # sao os de fliperos-setup/screens/.
 
-from widgets import Input, Menu, Message, Progress, YesNo
+from widgets import Capture, Input, LayoutEdit, Menu, Message, Progress, YesNo, layout_tile
 
 CONTEXT = {"version": "0.9.1", "status": "192.168.1.155 - 42%"}
 
@@ -14,7 +14,7 @@ def main():
         ("desktop", "Start desktop", "The LXDE desktop, for a mouse and a keyboard."),
         ("shell", "Exit to shell", "The command line. Type fliperos-menu to come back."),
         ("power", "Shutdown / Reboot", "Power off or restart the computer."),
-    ], "frontend", icons=True)
+    ], "frontend")
 
 
 def live():
@@ -23,7 +23,7 @@ def live():
         ("recovery", "Recovery Mode", "Repair a FliperOS that is already installed."),
         ("terminal", "Terminal", "The command line of the install media."),
         ("shutdown", "Shutdown", "Power off or restart the computer."),
-    ], "install", icons=True)
+    ], "install")
 
 
 def setup():
@@ -35,7 +35,7 @@ def setup():
         ("games", "Games", "Frontend, emulators, folders, downloader and scraper."),
         ("system", "System", "Extras, latency, updates and the splash screen."),
         ("return", "Return", "Back to the FliperOS menu."),
-    ], "video", icons=True)
+    ], "video")
 
 
 def video():
@@ -112,10 +112,51 @@ def wifi():
     return Input("Wi-Fi password", ["Password of the network FliperNet:"], "arcade1994", password=True)
 
 
+def joysticks():
+    return Menu("Joysticks", [
+        ("buttons", "Button mapping", "Teach FliperOS the panel: press each control when asked."),
+        ("layout", "Buttons layout", "Where the buttons of 1 to 5-button games go on the panel."),
+        ("guncon", "GunCon 2", "Shoot the targets so the gun hits where it points."),
+        ("axes", "Wheel / analog", "Set the range and the center of each axis."),
+        ("lpt", "LPT joysticks", "Arcade sticks and console pads wired to the parallel port."),
+        ("quirks", "Quirks", "Kernel fixes for a USB encoder read wrong, as one player."),
+        ("return", "Return", "Back to Setup."),
+    ], "buttons")
+
+
+def players():
+    return Menu("Button mapping", [
+        ("1", "1 player"), ("2", "2 players"), ("3", "3 players"), ("4", "4 players"),
+        ("return", "Return"),
+    ], "2", "Map the panel for all emulators, one player at a time. How many players?")
+
+
+def capture():
+    return Capture("Button mapping", 1, "b3", ["up", "down", "left", "right", "b1", "b2"], 7, 12, 5)
+
+
+# O layout de cada numero de botoes: a posicao (1 a 6) de cada botao do jogo.
+LAYOUTS = {"1": [1], "2": [1, 2], "3": [4, 5, 6], "4": [1, 2, 4, 5], "5": [1, 2, 3, 4, 5]}
+
+
+def layout():
+    return Menu("Buttons layout", [
+        (count, "%s-button games" % count) for count in LAYOUTS
+    ] + [("return", "Return")], "3",
+        "Where the buttons of a game go on the panel, by how many buttons the game uses.",
+        tiles={count: layout_tile(order) for count, order in LAYOUTS.items()})
+
+
+def layoutedit():
+    return LayoutEdit("Buttons layout", 3, [4])
+
+
 SCREENS = {
     "main": main, "live": live, "setup": setup, "video": video, "monitor": monitor,
     "emulators": emulators, "power": power, "poweroff": poweroff, "install": install,
-    "error": error, "wifi": wifi,
+    "error": error, "wifi": wifi, "joysticks": joysticks, "players": players,
+    "capture": capture, "layout": layout, "layoutedit": layoutedit,
 }
 # A escolha de um menu que abre outra tela de demonstracao.
-LINKS = {"games": "emulators", "frontend": "error", "network": "wifi", "shutdown": "power"}
+LINKS = {"games": "emulators", "frontend": "error", "network": "wifi", "shutdown": "power",
+         "buttons": "players", "2": "capture", "3": "layoutedit"}

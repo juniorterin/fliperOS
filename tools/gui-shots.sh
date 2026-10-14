@@ -30,11 +30,17 @@ shot() {
 }
 
 shot main main
-shot main-setup main "down"
+shot main-setup main "right"
 shot live live
 shot setup setup
 shot setup-games setup "right right right right"
-shot video video "down down"
+shot video video "right right"
+shot joysticks joysticks
+shot buttons-players players
+shot buttons-capture capture
+shot layout layout
+shot layout-edit layoutedit "right"
+shot power power
 shot radio monitor "down down"
 shot checklist emulators
 shot yesno poweroff

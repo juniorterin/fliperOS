@@ -151,14 +151,15 @@ def paragraph(surf, lines, y, color=T.FG):
 
 class Menu:
     """ui_menu / ui_menu_hints, ui_radio (mode="radio") e ui_checklist
-    (mode="check"). entries: (valor, rotulo[, dica]). Com icons=True o menu
-    e um carrossel de icones (theme.ICONS, pelo valor)."""
+    (mode="check"). entries: (valor, rotulo[, dica]). O menu simples e um
+    carrossel: o icone de cada item vem de tiles (valor -> funcao que o
+    desenha), de theme.ICONS (pelo valor) ou, sem nenhum, e a inicial."""
 
-    def __init__(self, title, entries, default=None, text="", mode="menu", marked=(), icons=False):
+    def __init__(self, title, entries, default=None, text="", mode="menu", marked=(), tiles=None):
         self.title = title
         self.text = text
         self.mode = mode
-        self.icons = icons
+        self.tiles = tiles or {}
         self.entries = [(e[0], e[1], e[2] if len(e) > 2 else "") for e in entries]
         self.marked = set(marked)
         self.cursor = 0
@@ -169,7 +170,7 @@ class Menu:
 
     def key(self, k):
         n = len(self.entries)
-        if self.icons:
+        if self.mode == "menu":
             k = {"left": "up", "right": "down"}.get(k, k)
         if k == "up":
             self.cursor = (self.cursor - 1) % n
@@ -190,10 +191,22 @@ class Menu:
         return None
 
     def draw(self, surf, ctx):
-        if self.icons:
+        if self.mode == "menu":
             self.draw_carousel(surf, ctx)
         else:
             self.draw_list(surf, ctx)
+
+    def tile(self, surf, entry, x, y, scale):
+        """O icone do item, de 16*scale pixels, com o canto em (x, y)."""
+        value, label, _ = entry
+        size = 16 * scale
+        if value in self.tiles:
+            self.tiles[value](surf, x, y, scale)
+            return
+        img = T.icon(value, scale)
+        if not img:
+            img = big((value if len(value) <= 2 else label[:1]).upper(), scale, MARQUEE)
+        surf.blit(img, (x + (size - img.get_width()) // 2, y + (size - img.get_height()) // 2))
 
     def draw_carousel(self, surf, ctx):
         frame(surf, ctx, self.title, [("< >", "SELECT"), ("ENTER", "OK"), ("ESC", "BACK")],
@@ -204,18 +217,14 @@ class Menu:
         for off, cx in ((-2, 36), (2, 284), (-1, 92), (1, 228)):
             if n < abs(off) * 2 + 1:
                 continue
-            value = self.entries[(self.cursor + off) % n][0]
+            entry = self.entries[(self.cursor + off) % n]
             pygame.draw.rect(surf, T.BG_DEEP, (cx - 20, 68, 40, 40))
-            img = T.icon(value, 2)
-            if img:
-                surf.blit(img, (cx - 16, 72))
+            self.tile(surf, entry, cx - 16, 72, 2)
             surf.blit(shade, (cx - 20, 68))
             pygame.draw.rect(surf, T.LINE, (cx - 20, 68, 40, 40), 1)
         block(surf, (124, 48, 72, 72), T.BG_DEEP, T.PURPLE)
         pygame.draw.rect(surf, T.PINK, (124, 48, 72, 72), 2)
-        img = T.icon(self.entries[self.cursor][0], 4)
-        if img:
-            surf.blit(img, (128, 52))
+        self.tile(surf, self.entries[self.cursor], 128, 52, 4)
 
         label = self.entries[self.cursor][1].upper()
         scale = 2 if width(label) * 2 <= T.SAFE_W else 1
@@ -223,7 +232,8 @@ class Menu:
         x = (T.WIDTH - name.get_width()) // 2
         surf.blit(big(label, scale, (0x80, 0x30, 0x60)), (x + 2, 134))
         surf.blit(name, (x, 132))
-        for i, line in enumerate(wrap(self.entries[self.cursor][2], T.SAFE_W)[:3]):
+        hint = self.entries[self.cursor][2] or self.text
+        for i, line in enumerate(wrap(hint, T.SAFE_W)[:3]):
             centered(surf, line, T.CYAN, 158 + i * 11)
 
         for i in range(n):
@@ -393,3 +403,157 @@ class Progress:
         name = big(pct, 2, T.YELLOW)
         surf.blit(name, ((T.WIDTH - name.get_width()) // 2, y + 22))
         centered(surf, wrap(self.msg, T.SAFE_W)[0], T.CYAN, y + 48)
+
+
+def round_button(surf, cx, cy, r, state, label=""):
+    """Um botao do painel: "done" (ja tem), "ask" (o da vez) ou "todo"."""
+    if state == "ask":
+        pygame.draw.circle(surf, T.PINK, (cx, cy), r + 3)
+    if state == "todo":
+        pygame.draw.circle(surf, T.SPACE, (cx, cy), r)
+        pygame.draw.circle(surf, T.LINE, (cx, cy), r, 1)
+    else:
+        pygame.draw.circle(surf, T.YELLOW if state == "ask" else T.GREEN, (cx, cy), r)
+    if label:
+        text(surf, label, T.COMMENT if state == "todo" else T.SPACE, cx - width(label) // 2 + 1, cy - 4)
+
+
+def layout_tile(order):
+    """O icone de um layout no carrossel: o painel de 3x2 com o numero do
+    botao do jogo em cada posicao usada (order: a posicao de cada botao)."""
+    def draw(surf, x, y, scale):
+        size = 16 * scale
+        for pos in range(6):
+            cx = x + size * (1 + 2 * (pos % 3)) // 6
+            cy = y + size * (1 + pos // 3) // 3
+            if pos + 1 in order:
+                round_button(surf, cx, cy, scale * 2, "done", str(order.index(pos + 1) + 1) if scale > 2 else "")
+            else:
+                round_button(surf, cx, cy, scale * 2, "todo")
+    return draw
+
+
+class Capture:
+    """O Button mapping pedindo um comando: o painel desenhado, com o
+    comando da vez aceso e os ja apertados em verde. controls sao up, down,
+    left, right, b1 a b6, start e coin."""
+
+    LABELS = {"up": "UP", "down": "DOWN", "left": "LEFT", "right": "RIGHT", "start": "START", "coin": "COIN"}
+
+    def __init__(self, title, player, asking, done=(), number=1, total=12, left=8, seconds=8):
+        self.title = title
+        self.player = player
+        self.asking = asking
+        self.done = set(done)
+        self.number, self.total = number, total
+        self.left, self.seconds = left, seconds
+
+    def key(self, k):
+        return ("back", None) if k == "esc" else None
+
+    def state(self, control):
+        if control == self.asking:
+            return "ask"
+        return "done" if control in self.done else "todo"
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("WAIT", "TO SKIP IT")])
+        block(surf, (24, 44, 272, 104), T.BG_DEEP, T.PURPLE)
+        pygame.draw.rect(surf, T.LINE, (24, 44, 272, 104), 1)
+        text(surf, "PLAYER %d" % self.player, T.PINK, 34, 53)
+
+        for control, x in (("start", 168), ("coin", 232)):
+            state = self.state(control)
+            if state == "ask":
+                pygame.draw.rect(surf, T.PINK, (x - 3, 48, 54, 18))
+            if state == "todo":
+                pygame.draw.rect(surf, T.LINE, (x, 51, 48, 12), 1)
+            else:
+                pygame.draw.rect(surf, T.YELLOW if state == "ask" else T.GREEN, (x, 51, 48, 12))
+            label = self.LABELS[control]
+            text(surf, label, T.COMMENT if state == "todo" else T.SPACE, x + 24 - width(label) // 2 + 1, 53)
+
+        # O direcional: a alavanca no meio e uma seta para cada lado.
+        cx, cy = 84, 106
+        pygame.draw.circle(surf, T.LINE, (cx, cy), 15)
+        pygame.draw.circle(surf, T.RED, (cx, cy), 8)
+        pygame.draw.rect(surf, T.FG, (cx - 3, cy - 4, 2, 2))
+        for control, dx, dy in (("up", 0, -1), ("down", 0, 1), ("left", -1, 0), ("right", 1, 0)):
+            state = self.state(control)
+            for grow, color in ((3, T.PINK if state == "ask" else None),
+                                (0, {"ask": T.YELLOW, "done": T.GREEN}.get(state, T.LINE))):
+                if color:
+                    tip, base, half = 32 + grow, 21 - grow, 7 + grow
+                    pygame.draw.polygon(surf, color, [
+                        (cx + dx * tip, cy + dy * tip),
+                        (cx + dx * base - dy * half, cy + dy * base - dx * half),
+                        (cx + dx * base + dy * half, cy + dy * base + dx * half)])
+
+        for i in range(6):
+            control = "b%d" % (i + 1)
+            round_button(surf, 176 + (i % 3) * 36, 92 + (i // 3) * 32, 11, self.state(control), str(i + 1))
+
+        label = "PRESS " + self.LABELS.get(self.asking, "BUTTON " + self.asking[1:])
+        name = big(label, 2, LABEL)
+        x = (T.WIDTH - name.get_width()) // 2
+        surf.blit(big(label, 2, (0x80, 0x30, 0x60)), (x + 2, 160))
+        surf.blit(name, (x, 158))
+        centered(surf, "%d OF %d" % (self.number, self.total), T.CYAN, 182)
+        # O tempo que falta para pular o comando, um quadrado por segundo.
+        for i in range(self.seconds):
+            color = T.PINK if i < self.left else T.LINE
+            pygame.draw.rect(surf, color, (T.WIDTH // 2 - self.seconds * 5 + 2 + i * 10, 198, 6, 6))
+
+
+class LayoutEdit:
+    """O Buttons layout: escolher no proprio painel de 3x2 onde fica o
+    proximo botao do jogo. order e a posicao (1 a 6) dos botoes ja postos."""
+
+    POSITIONS = ["Top row, left", "Top row, middle", "Top row, right",
+                 "Bottom row, left", "Bottom row, middle", "Bottom row, right"]
+
+    def __init__(self, title, count, order=()):
+        self.title = title
+        self.count = count
+        self.order = list(order)
+        self.cursor = next(p for p in range(6) if p + 1 not in self.order)
+
+    def key(self, k):
+        col, row = self.cursor % 3, self.cursor // 3
+        if k == "left":
+            col = (col - 1) % 3
+        elif k == "right":
+            col = (col + 1) % 3
+        elif k in ("up", "down"):
+            row ^= 1
+        elif k == "esc":
+            return ("back", None)
+        elif k == "enter" and self.cursor + 1 not in self.order:
+            return ("select", self.cursor + 1)
+        self.cursor = row * 3 + col
+        return None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("ARROWS", "MOVE"), ("ENTER", "OK"), ("ESC", "BACK")])
+        n = len(self.order) + 1
+        centered(surf, "%d-BUTTON GAMES" % self.count, T.PINK, 36)
+        block(surf, (64, 50, 192, 96), T.BG_DEEP, T.PURPLE)
+        pygame.draw.rect(surf, T.LINE, (64, 50, 192, 96), 1)
+        for pos in range(6):
+            cx, cy = 112 + (pos % 3) * 48, 78 + (pos // 3) * 40
+            if pos + 1 in self.order:
+                if pos == self.cursor:
+                    pygame.draw.circle(surf, T.PINK, (cx, cy), 18)
+                round_button(surf, cx, cy, 15, "done", str(self.order.index(pos + 1) + 1))
+            elif pos == self.cursor:
+                round_button(surf, cx, cy, 15, "ask", str(n))
+            else:
+                round_button(surf, cx, cy, 15, "todo")
+
+        label = "WHERE IS BUTTON %d?" % n
+        name = big(label, 2, LABEL)
+        x = (T.WIDTH - name.get_width()) // 2
+        surf.blit(big(label, 2, (0x80, 0x30, 0x60)), (x + 2, 160))
+        surf.blit(name, (x, 158))
+        centered(surf, self.POSITIONS[self.cursor], T.CYAN, 184)
+        centered(surf, "Green: buttons already placed.", T.COMMENT, 198)
