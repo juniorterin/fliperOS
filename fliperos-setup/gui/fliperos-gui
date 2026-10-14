@@ -56,6 +56,8 @@ class App:
         self.bg = background.pick(bg)
         self.start = time.monotonic()
         self.fixed_time = None    # os prints: um instante fixo do fundo
+        # A orientacao do monitor (lib/ui.sh a passa; o pedido "orient" a troca).
+        self.orientation = os.environ.get("FLIPEROS_GUI_ORIENTATION", "horizontal")
         self.sounds = {}
         self.names = {
             pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
@@ -138,21 +140,38 @@ class App:
             if screen is not None:
                 screen.draw(self.ui, ctx)
         now = self.fixed_time if self.fixed_time is not None else time.monotonic() - self.start
+        self.now = now
         self.bg.draw(self.back, now)
         self.back.blit(self.ui, (0, 0))
         return self.back
 
+    def final(self, frame):
+        """O quadro como vai ao tubo. Com o monitor em pe (Video Setup >
+        Monitor Orientation) a imagem gira para ficar de pe: a tela de
+        320x240 encolhe para a largura do tubo em pe (240) e fica no meio de
+        um quadro de 240x320, com o fundo animado em volta, e o todo gira
+        como o console (fbcon rotate 1 = horario)."""
+        pygame = self.pygame
+        if self.orientation not in ("vertical-cw", "vertical-ccw"):
+            return frame
+        if getattr(self, "portrait_bg", None) is None:
+            self.portrait_bg = pygame.Surface((self.theme.WIDTH, self.theme.HEIGHT))
+        self.bg.draw(self.portrait_bg, getattr(self, "now", 0))
+        canvas = pygame.transform.smoothscale(self.portrait_bg, (240, 320))
+        canvas.blit(pygame.transform.smoothscale(frame, (240, 180)), (0, 70))
+        return pygame.transform.rotate(canvas, -90 if self.orientation == "vertical-cw" else 90)
+
     def show(self, screen, ctx, redraw=True):
         if self.window is None:
             return
-        self.pygame.transform.scale(self.compose(screen, ctx, redraw), self.size, self.window)
+        self.pygame.transform.scale(self.final(self.compose(screen, ctx, redraw)), self.size, self.window)
         self.pygame.display.flip()
 
     def tick(self):
         self.clock.tick(FPS)
 
     def save(self, screen, ctx, prefix):
-        frame = self.compose(screen, ctx)
+        frame = self.final(self.compose(screen, ctx))
         scale = self.pygame.transform.scale
         self.pygame.image.save(scale(frame, self.theme.MODE), prefix + "-640x240.png")
         self.pygame.image.save(scale(frame, PREVIEW), prefix + "-crt.png")

@@ -106,7 +106,9 @@ ui_gui_start() {
   [[ -x $UI_GUI_BIN ]] && have python3 || return 1
   rm -rf "$UI_GUI_DIR"
   mkdir -p "$UI_GUI_DIR" && mkfifo "$UI_GUI_DIR/req" "$UI_GUI_DIR/resp" || return 1
-  SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-kmsdrm} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} \
+  # A orientacao do monitor: com ele em pe, a imagem gira (gui/fliperos-gui).
+  FLIPEROS_GUI_ORIENTATION=$(conf_get orientation 2> /dev/null || echo horizontal) \
+    SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-kmsdrm} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} \
     "$UI_GUI_BIN" --serve "$UI_GUI_DIR" < /dev/null >> "$FLIPEROS_LOG" 2>&1 &
   UI_GUI_PID=$!
   for ((i = 0; i < 150; i++)); do
@@ -201,6 +203,13 @@ ui_text() {
   rc=$?
   ui_gui_alive && ui_gui_call resume
   return "$rc"
+}
+
+# ui_orientation ORIENTACAO: o monitor mudou de orientacao (Video Setup), e
+# a interface grafica gira a imagem na hora. No texto o fbcon ja girou.
+ui_orientation() {
+  ui_gui_alive && ui_gui_call orient "$1"
+  return 0
 }
 
 # ui_wait_key SEGUNDOS espera uma tecla por esse tempo. Status 0 = apertou.
