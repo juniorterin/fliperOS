@@ -80,6 +80,7 @@ ui_init() {
 UI_GUI=0
 UI_GUI_PID=""
 UI_GUI_REPLY=""
+UI_STYLE=""
 UI_GUI_DIR=${UI_GUI_DIR:-/run/fliperos/gui}
 UI_GUI_BIN=${UI_GUI_BIN:-${SETUP_DIR:-/usr/local/lib/fliperos-setup}/gui/fliperos-gui}
 UI_DRI=${UI_DRI:-/dev/dri/card0}
@@ -136,7 +137,9 @@ ui_gui_call() {
 }
 
 # ui_gui_menu menu|radio|check TITULO TEXTO ATUAL "valor|rotulo"... e o menu
-# na interface grafica, com as dicas de UI_HINTS. Imprime a escolha.
+# na interface grafica, com as dicas de UI_HINTS e o estilo de UI_STYLE (um
+# seletor desenhado para o ui_radio ou o ui_checklist: people, dots, controls
+# ou years; o texto ignora). Imprime a escolha.
 ui_gui_menu() {
   local mode=$1 title=$2 text=$3 current=$4 entry i=0
   local -a entries=()
@@ -145,9 +148,32 @@ ui_gui_menu() {
     entries+=("${entry%%|*}"$'\x1d'"${entry#*|}"$'\x1d'"${UI_HINTS[i]:-}")
     i=$((i + 1))
   done
-  ui_gui_call "$mode" "$title" "$text" "$current" "${entries[@]}" || return 1
+  ui_gui_call "$mode" "$title" "$text" "$current" "${UI_STYLE:-}" "${entries[@]}" || return 1
   printf '%s\n' "$UI_GUI_REPLY"
 }
+
+# ui_board TITULO TEXTO PADRAO "valor|rotulo|titulo|tipo|dado|ajuda"... e um
+# menu de parametros. Na interface grafica e um painel de azulejos: cada um
+# tem o titulo e o valor desenhado (o tipo e o dado sao os do mini() de
+# gui/widgets.py), e a ajuda do que esta sob o cursor aparece embaixo. No
+# texto e o ui_menu com os rotulos. Imprime o valor escolhido; 1 = Esc.
+ui_board() {
+  local title=$1 text=$2 default=$3 entry key label name kind data help
+  local -a plain=() items=()
+  shift 3
+  for entry in "$@"; do
+    IFS='|' read -r key label name kind data help <<< "$entry"
+    plain+=("$key|$label")
+    items+=("$key"$'\x1d'"$name"$'\x1d'"$kind"$'\x1d'"$data"$'\x1d'"$help")
+  done
+  if ui_gui_alive; then
+    ui_gui_call board "$title" "$text" "$default" "${items[@]}" || return 1
+    printf '%s\n' "$UI_GUI_REPLY"
+    return 0
+  fi
+  ui_menu "$title" "$text" "$default" "${plain[@]}"
+}
+
 
 # ui_done fecha a interface grafica e espera ela soltar o video: quem vem
 # depois (um frontend, o proprio Setup reaberto) precisa dele livre.

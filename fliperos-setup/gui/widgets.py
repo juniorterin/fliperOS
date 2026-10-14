@@ -237,6 +237,9 @@ class Menu:
             self.tiles[value](surf, x, y, scale)
             return
         img = T.icon(value, scale)
+        if not img and not (value.isdigit() and value in label):
+            # Sem icone com o nome: o do tipo do item, ou o do assunto do menu.
+            img = T.icon(T.guess(self.title, value, label), scale)
         if not img:
             img = big((value if len(value) <= 2 else label[:1]).upper(), scale, MARQUEE)
         surf.blit(img, (x + (size - img.get_width()) // 2, y + (size - img.get_height()) // 2))
@@ -258,7 +261,9 @@ class Menu:
         shade = pygame.Surface((40, 40), pygame.SRCALPHA)
         shade.fill(T.SPACE + (130,))
         for off, cx in ((-2, 36), (2, 284), (-1, 92), (1, 228)):
-            if n < abs(off) * 2 + 1:
+            # Com poucos itens, cada um aparece uma vez so (os da direita
+            # primeiro).
+            if n < abs(off) * 2 + (1 if off < 0 else 0):
                 continue
             entry = self.entries[(self.cursor + off) % n]
             pygame.draw.rect(surf, T.BG_DEEP, (cx - 20, mid - 20, 40, 40))
@@ -865,11 +870,12 @@ class FilterBoard:
 
     COLS, ROWS = 3, 3
 
-    def __init__(self, title, items, cursor=0, games="", size=""):
+    def __init__(self, title, items, cursor=0, games="", size="", note=""):
         self.title = title
         self.items = items
         self.cursor = cursor
         self.games, self.size = games, size
+        self.note = note
         self.top = 0
 
     def key(self, k):
@@ -885,19 +891,27 @@ class FilterBoard:
 
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [("ARROWS", "MOVE"), ("ENTER", "CHANGE"), ("ESC", "BACK")])
-        # O placar: quantos jogos passam no filtro e quanto ocupam.
         x, right = T.SAFE_X, T.SAFE_X + T.SAFE_W
-        w = text(surf, "GAMES", T.RED, x, 34)
-        text(surf, self.games, T.FG, x + w + 8, 34)
-        w = text(surf, self.size, T.FG, right, 34, right=True)
-        text(surf, "SIZE", T.RED, right - w - 8, 34, right=True)
-
         row = self.cursor // self.COLS
         self.top = min(max(self.top, row - self.ROWS + 1), row)
         rows = (len(self.items) + self.COLS - 1) // self.COLS
+        if self.games:
+            # O placar: quantos jogos passam no filtro e quanto ocupam.
+            w = text(surf, "GAMES", T.RED, x, 34)
+            text(surf, self.games, T.FG, x + w + 8, 34)
+            w = text(surf, self.size, T.FG, right, 34, right=True)
+            text(surf, "SIZE", T.RED, right - w - 8, 34, right=True)
+        elif self.note:
+            # Sem o placar, a linha do que esta sendo filtrado (so o comeco).
+            note = self.note.split(". ")[0]
+            while width(note) > T.SAFE_W - 8 * (rows + 1):
+                note = note[:-1]
+            text(surf, note, T.COMMENT, x, 34)
+        # Uma marca por linha de azulejos: onde o cursor esta no painel.
         for r in range(rows):
             color = T.PINK if r == row else T.COMMENT if self.top <= r < self.top + self.ROWS else T.LINE
-            pygame.draw.rect(surf, color, (T.WIDTH // 2 - rows * 3 + r * 6, 36, 4, 4))
+            px = T.WIDTH // 2 - rows * 3 + r * 6 if self.games else right - (rows - r) * 6
+            pygame.draw.rect(surf, color, (px, 36, 4, 4))
 
         for i in range(self.top * self.COLS, min(len(self.items), (self.top + self.ROWS) * self.COLS)):
             _, title, kind, data, _ = self.items[i]

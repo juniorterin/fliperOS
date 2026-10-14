@@ -26,5 +26,7 @@ rm -f "/out/$name"/*.png
 export FLIPEROS_UI=gui FLIPEROS_GUI_HEADLESS=1 FLIPEROS_GUI_BG=stars
 export FLIPEROS_GUI_KEYS="$keys" FLIPEROS_GUI_SHOTS="/out/$name"
 export UI_GUI_DIR=/tmp/fliperos-gui UI_GUI_BIN=/w/fliperos-setup/gui/fliperos-gui
-timeout "${GUI_SHOTS_TIMEOUT:-8}" bash tools/ui-demo.sh "$screen" < /dev/null > /dev/null 2>&1 || true
+# Sem aspas: TELA pode trazer os argumentos da funcao.
+# shellcheck disable=SC2086
+timeout "${GUI_SHOTS_TIMEOUT:-8}" bash tools/ui-demo.sh $screen < /dev/null > "/out/$name/log.txt" 2>&1 || true
 ls "/out/$name" | grep -c 640x240 | sed "s|^|$name: |"

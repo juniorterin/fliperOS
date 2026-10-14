@@ -46,7 +46,7 @@ screen_folders() {
       entries+=("$name|$(screen_folders_label "$name")")
     done
     choice=$(ui_menu "$title" \
-      "The folders FliperOS uses, in $FOLDERS_HOME. Any of them, or any folder inside (an emulator, a RetroArch core, a type of art), can have a custom folder: another folder used in its place, for when the ROMs, the art or the BIOS are on external storage (a USB disk, a second drive)." \
+      "Folders in $FOLDERS_HOME. Each one can use a custom folder on another disk (USB, second drive)." \
       "$last" "${entries[@]}" "-return|Return") || return 0
     [[ $choice == -return ]] && return 0
     last=$choice
@@ -67,15 +67,15 @@ screen_folder() {
     case $state in
       custom)
         fields+=("Now|custom folder" "Linked to|$(folders_target "$rel")")
-        entries+=("add|Change the custom folder")
+        entries+=("link|Change the custom folder")
         ;;
       offline)
         fields+=("Now|$(ui_no "custom folder not found (disk off?)")" "Linked to|$(folders_target "$rel")")
-        entries+=("add|Change the custom folder")
+        entries+=("link|Change the custom folder")
         ;;
       *)
         fields+=("Now|default folder")
-        entries+=("add|Add a custom folder")
+        entries+=("link|Link this to another folder")
         ;;
     esac
     [[ -d $old ]] && fields+=("Previous|${old/#$FOLDERS_HOME/\~}")
@@ -95,7 +95,7 @@ screen_folder() {
       "${entries[@]}" "return|Return") || return 0
     last=$choice
     case $choice in
-      add) screen_folder_add "$rel" ;;
+      link) screen_folder_add "$rel" ;;
       unlink) screen_folder_unlink "$rel" ;;
       return) return 0 ;;
       *) screen_folder "$choice" ;;

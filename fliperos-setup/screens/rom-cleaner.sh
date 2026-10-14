@@ -235,6 +235,8 @@ screen_netshare_connect() {
 # escolher uma ou de marcar varias) e imprime a escolha nova. Status 1 = Esc.
 screen_rom_cleaner_pick() {
   local key=$1 value=$2 title="ROM Cleaner: ${ROMCLEAN_TITLE[$1]}"
+  # O seletor desenhado da interface grafica (lib/ui.sh).
+  local UI_STYLE=${ROMCLEAN_STYLE[$1]:-}
   local -a options
   mapfile -t options < <(romclean_options "$key")
   if [[ ${ROMCLEAN_TYPE[$key]} == check ]]; then
@@ -274,22 +276,28 @@ screen_rom_cleaner_filters() {
   presets=("cabinet|$(romclean_preset_label cabinet)" "working|$(romclean_preset_label working)"
     "psx|$(romclean_preset_label psx)" "all|$(romclean_preset_label all)")
   while true; do
-    entries=("preset|Preset: $(romclean_preset_label "$preset")")
+    # Cada parametro: valor|rotulo|titulo|tipo|dado|ajuda (ui_board).
+    entries=("preset|Preset: $(romclean_preset_label "$preset")|Preset|text|${preset^^}|Start from a preset; each parameter can be changed after.")
     for key in "${ROMCLEAN_KEYS[@]}"; do
-      romclean_visible "$key" "$target" && entries+=("$key|$(romclean_label "$key" "${opt[$key]}")")
+      romclean_visible "$key" "$target" &&
+        entries+=("$key|$(romclean_label "$key" "${opt[$key]}")|$(romclean_tile "$key" "${opt[$key]}")|${ROMCLEAN_HELP[$key]}")
     done
-    ((writable)) && entries+=("transfer|$(romclean_label transfer "$transfer")")
+    ((writable)) &&
+      entries+=("transfer|$(romclean_label transfer "$transfer")|$(romclean_tile transfer "$transfer")|${ROMCLEAN_HELP[transfer]}")
     # No downloader a pasta e o item Download folder da tela dele.
-    [[ $mode == downloader ]] || entries+=("dest|To: $(romclean_dest_label "$target" "$dest")")
-    entries+=("data|Data files: $ROMCLEAN_DATA_LABEL")
+    [[ $mode == downloader ]] ||
+      entries+=("dest|To: $(romclean_dest_label "$target" "$dest")|To|text|${dest##*/}|The folder the games go to: $(romclean_dest_label "$target" "$dest")")
+    entries+=("data|Data files: $ROMCLEAN_DATA_LABEL|Data files|text|SEE|catver.ini, nplayers.ini and controls.xml: $ROMCLEAN_DATA_LABEL")
     if [[ $mode == downloader ]]; then
-      entries+=("save|Save the filter" "return|Return")
+      entries+=("save|Save the filter|Done|action|SAVE|Save the filter and go back to the Downloader."
+        "return|Return|Leave|text|RETURN|Back without saving.")
       line="Magnet links -> $(romclean_target_label "$target"). Enter opens a parameter."
     else
-      entries+=("scan|Continue" "return|Return")
+      entries+=("scan|Continue|Done|action|CONTINUE|Read the romset and show what goes."
+        "return|Return|Leave|text|RETURN|Back to the Cleaner.")
       line="$folder -> $(romclean_target_label "$target"). Enter opens a parameter."
     fi
-    choice=$(ui_menu "$title" "$line" "$last" "${entries[@]}") || return 0
+    choice=$(ui_board "$title" "$line" "$last" "${entries[@]}") || return 0
     last=$choice
     case $choice in
       return) return 0 ;;

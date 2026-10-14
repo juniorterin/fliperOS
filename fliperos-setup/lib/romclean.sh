@@ -242,6 +242,94 @@ romclean_label() {
   printf '%s: %s\n' "${ROMCLEAN_TITLE[$1]}" "$(romclean_summary "$1" "$2")"
 }
 
+# O estilo do seletor de cada parametro na interface grafica (UI_STYLE do
+# lib/ui.sh): as figuras acesas ate o valor, ou a grade de marcar.
+declare -A ROMCLEAN_STYLE=([players]=people [buttons]=dots [controls]=controls [decades]=years)
+
+# romclean_has LISTA VALOR: o valor esta na lista separada por virgulas?
+romclean_has() {
+  [[ ",$1," == *",$2,"* ]]
+}
+
+# romclean_tile CHAVE VALOR imprime "TITULO|TIPO|DADO": como o parametro
+# aparece no painel de azulejos da interface grafica (ui_board). Os tipos sao
+# os do mini() de gui/widgets.py: switch (ligado,texto), lamps (quantas),
+# people e dots (quantos,maximo), screens (deitada,em pe), blocks
+# (marcas;texto) e text. O titulo cabe no azulejo: ate 10 letras.
+romclean_tile() {
+  local key=$1 value=$2 n=0 total=0 flags="" first="" last="" v
+  case $key in
+    arcade) if [[ $value == yes ]]; then echo "Games|switch|1,ARCADE"; else echo "Games|switch|0,ALL"; fi ;;
+    status)
+      case $value in working) n=1 ;; imperfect) n=2 ;; *) n=3 ;; esac
+      echo "Emulation|lamps|$n"
+      ;;
+    mature | bootlegs | prototypes | vector | chd)
+      case $key in
+        mature) first="Adult" ;; bootlegs) first="Bootlegs" ;; prototypes) first="Prototypes" ;;
+        vector) first="Vector" ;; *) first="With CHD" ;;
+      esac
+      case $value in
+        yes) echo "$first|switch|1,KEEP" ;;
+        only) echo "$first|text|ONLY THOSE" ;;
+        *) echo "$first|switch|0,REMOVE" ;;
+      esac
+      ;;
+    players) echo "Players|people|${value:-0},8" ;;
+    buttons) echo "Buttons|dots|${value:-0},8" ;;
+    orientation)
+      # Nenhuma marcada e nao filtrar: as duas.
+      [[ -n $value ]] || value=horizontal,vertical
+      echo "Screen|screens|$(romclean_has "$value" horizontal && echo 1 || echo 0),$(romclean_has "$value" vertical && echo 1 || echo 0)"
+      ;;
+    lines | decades)
+      while IFS='|' read -r v _; do
+        if [[ -z $value ]] || romclean_has "$value" "$v"; then
+          flags+="${flags:+,}1"
+          [[ -n $first ]] || first=$v
+          last=$v
+          n=$((n + 1))
+        else
+          flags+="${flags:+,}0"
+        fi
+        total=$((total + 1))
+      done < <(romclean_options "$key")
+      if [[ $key == lines ]]; then
+        if ((n == total)); then first="ALL"; elif ((n == 1)); then first="$first KHZ"; else first="$first-$last KHZ"; fi
+        echo "Resolution|blocks|$flags;$first"
+      else
+        if ((n == total)); then first="ALL"; elif ((n == 1)); then first="${first:2}S"; else first="${first:2}S-${last:2}S"; fi
+        echo "Years|blocks|$flags;$first"
+      fi
+      ;;
+    clones)
+      case $value in 1g1r) v="BEST ONE" ;; none) v="PARENTS" ;; *) v="ALL" ;; esac
+      echo "Clones|text|$v"
+      ;;
+    region) echo "Region|text|${value^^}" ;;
+    genres | modes | controls | hardware | systems)
+      total=$(romclean_options "$key" | wc -l)
+      [[ -n $value ]] && n=$(tr ',' '\n' <<< "$value" | grep -c .)
+      case $key in
+        genres) first="Categories" ;; modes) first="Play mode" ;; controls) first="Controls" ;;
+        hardware) first="Hardware" ;; *) first="Systems" ;;
+      esac
+      if ((n == 0)) && [[ $key == controls ]]; then
+        echo "$first|text|BUTTONS"
+      elif ((n == 0)) && [[ $key == hardware ]]; then
+        echo "$first|text|ANY"
+      elif ((n == 0 || n >= total)); then
+        echo "$first|text|ALL"
+      else
+        echo "$first|text|$n OF $total"
+      fi
+      ;;
+    transfer) echo "Transfer|text|${value^^}" ;;
+    *) echo "${ROMCLEAN_TITLE[$key]:-$key}|text|$value" ;;
+  esac
+}
+
+
 # romclean_regions ESCOLHA imprime a ordem das regioes do 1g1r.
 romclean_regions() {
   case $1 in

@@ -278,6 +278,22 @@ def filteryears():
     ], ["1980", "1990", "2000"], 6, None, 2)
 
 
+def extras():
+    return Menu("Extras", [
+        ("wine", "Wine (Model 2, Fightcade 2 emulators)"),
+        ("steam", "Steam (installed)"),
+        ("heroic", "Heroic (GOG, Epic, Amazon)"),
+        ("pixelcade", "Pixelcade (LED/LCD marquee)"),
+        ("zedmd", "ZeDMD (open-source LED DMD)"),
+        ("doflinx", "DOFLinx (Pixelcade in-game effects)"),
+        ("hotr", "Hook Of The Reaper (game outputs: light guns, boards)"),
+        ("qmamehook", "QMamehook (game outputs: serial light guns, native)"),
+        ("ledspicer", "LEDSpicer (button LEDs: Ultimarc, LED-Wiz...)"),
+        ("return", "Return"),
+    ], "steam", "Programs that don't come with FliperOS, to keep the download small. "
+       "Installing one needs the network.")
+
+
 SCREENS = {
     "main": main, "live": live, "setup": setup, "video": video, "monitor": monitor,
     "emulators": emulators, "power": power, "poweroff": poweroff, "install": install,
@@ -286,7 +302,7 @@ SCREENS = {
     "guntarget1": guntarget1, "guntarget2": guntarget2, "guntarget3": guntarget3,
     "gunresult": gunresult, "downloads": downloads, "torrent": torrent, "magnet": magnet,
     "magnetbrowser": magnetbrowser,
-    "download": download, "romfilter": romfilter, "romfilter2": romfilter2,
+    "download": download, "extras": extras, "romfilter": romfilter, "romfilter2": romfilter2,
     "filterplayers": filterplayers, "filterbuttons": filterbuttons,
     "filtercontrols": filtercontrols, "filteryears": filteryears,
 }

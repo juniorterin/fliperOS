@@ -26,6 +26,8 @@ import time
 
 FS, RS, GS = "\x1f", "\x1e", "\x1d"
 SGR = re.compile(r"\x1b\[([0-9;]*)m")
+# Um rotulo com a explicacao entre parenteses no fim.
+NOTE = re.compile(r"^(.{2,}?) \((.+)\)$")
 
 
 def plain(s):
@@ -61,11 +63,39 @@ class Server:
         return out
 
     def entries(self, args):
+        """Os itens de um menu: (valor, rotulo, dica). Um rotulo sem dica que
+        termina com um parentese ("Pixelcade (LED/LCD marquee)") vira o nome
+        e a dica: o nome cabe grande no carrossel."""
         out = []
         for arg in args:
-            parts = (plain(arg).split(GS) + ["", ""])[:3]
-            out.append((parts[0], parts[1], parts[2]))
+            value, label, hint = (plain(arg).split(GS) + ["", ""])[:3]
+            found = None if hint else NOTE.match(label)
+            if found:
+                label, hint = found.group(1), found.group(2)[:1].upper() + found.group(2)[1:]
+            out.append((value, label, hint))
         return out
+
+    @staticmethod
+    def tile(kind, data):
+        """O dado de um azulejo do ui_board, do texto do pedido para o que o
+        mini() de widgets.py desenha."""
+        def flags(s):
+            return [x == "1" for x in s.split(",")]
+
+        if kind in ("people", "dots"):
+            n, _, top = data.partition(",")
+            return (int(n) if n.isdigit() else 0, int(top) if top.isdigit() else 8)
+        if kind == "switch":
+            on, _, label = data.partition(",")
+            return (on == "1", label)
+        if kind == "blocks":
+            marks, _, label = data.partition(";")
+            return (flags(marks), label)
+        if kind == "lamps":
+            return int(data) if data.isdigit() else 0
+        if kind == "screens":
+            return tuple((flags(data) + [False, False])[:2])
+        return data.upper()
 
     # O laco -----------------------------------------------------------
 
@@ -154,18 +184,37 @@ class Server:
     def handle(self, cmd, a):
         W = self.W
         if cmd in ("menu", "radio", "check"):
-            title, text, current = plain(a[0]), plain(a[1]), a[2]
-            entries = self.entries(a[3:])
+            title, text, current, style = plain(a[0]), plain(a[1]), a[2], a[3]
+            entries = self.entries(a[4:])
             if not entries:
                 return 1, ""
             marked = current.split(",") if cmd == "check" else [current] if cmd == "radio" else []
-            screen = W.Menu(title, entries, current, text, cmd, marked)
+            options = [(e[0], e[1]) for e in entries]
+            if cmd == "radio" and style in ("people", "dots") and all(e[0].isdigit() for e in entries):
+                # Ate quantos: as figuras acesas ate o valor.
+                screen = W.Stepper(title, text, options, current if current in dict(options) else options[0][0], style)
+            elif cmd == "check" and style == "controls":
+                screen = W.ToggleGrid(title, text, [(v, label, "") for v, label in options], marked, 5, W.control_art)
+            elif cmd == "check" and style == "years":
+                screen = W.ToggleGrid(title, text, [(v, label, label[2:]) for v, label in options], marked, 6)
+            else:
+                screen = W.Menu(title, entries, current, text, cmd, marked)
             action, value = self.ask(screen, cmd)
             if action != "select":
                 return 1, ""
             if cmd == "check":
                 return 0, ",".join(e[0] for e in entries if e[0] in value)
             return 0, value
+        if cmd == "board":
+            items = []
+            for arg in a[3:]:
+                key, name, kind, data, about = (plain(arg).split(GS) + [""] * 4)[:5]
+                items.append((key, name, kind, self.tile(kind, data), about))
+            if not items:
+                return 1, ""
+            cursor = max(0, [i[0] for i in items].index(a[2]) if a[2] in [i[0] for i in items] else 0)
+            action, value = self.ask(W.FilterBoard(plain(a[0]), items, cursor, note=plain(a[1])), cmd)
+            return (0, value) if action == "select" else (1, "")
         if cmd == "yesno":
             screen = W.YesNo(plain(a[0]), self.lines(a[4:]), a[1], plain(a[2]).upper(), plain(a[3]).upper())
             action, value = self.ask(screen, cmd)
