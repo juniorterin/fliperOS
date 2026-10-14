@@ -571,14 +571,26 @@ ui_info() {
   ui_screen "$1" "${@:2}"
 }
 
-# ui_input TITULO TEXTO [VALOR] [password|long] pede um texto e o imprime
-# (long: sem o limite de 400 caracteres do gum, para um link magnetico).
+# ui_input TITULO TEXTO [VALOR] [password|long] [BOTAO EXPLICACAO] pede um
+# texto e o imprime (long: sem o limite de 400 caracteres do gum, para um
+# link magnetico). Com BOTAO, a tela oferece tambem essa acao (abrir o
+# navegador): na interface grafica um botao embaixo do campo, no texto um
+# menu antes dele. Status 3 = a pessoa escolheu o botao.
 ui_input() {
-  local title=$1 text=$2 value=${3:-} mode=${4:-} w args
+  local title=$1 text=$2 value=${3:-} mode=${4:-} action=${5:-} about=${6:-} w args choice
   if ui_gui_alive; then
-    ui_gui_call input "$title" "$text" "$value" "$mode" || return 1
-    printf '%s\n' "$UI_GUI_REPLY"
+    ui_gui_call input "$title" "$text" "$value" "$mode" "$action" "$about"
+    case $? in
+      0) printf '%s\n' "$UI_GUI_REPLY" ;;
+      3) return 3 ;;
+      *) return 1 ;;
+    esac
     return 0
+  fi
+  if [[ -n $action ]]; then
+    choice=$(ui_menu "$title" "$text${about:+$'\n\n'$about}" type "type|Type or paste it" "action|$action") ||
+      return 1
+    [[ $choice == action ]] && return 3
   fi
   ui_screen "$title" "$text"
   w=$(($(ui_box_width) - 6))

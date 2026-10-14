@@ -82,14 +82,16 @@ screen_downloader_dest() {
   return 0
 }
 
-# screen_downloader_magnet roms|chds: cola, troca ou tira o link.
+# screen_downloader_magnet roms|chds [LINK from-browser]: cola, troca ou tira
+# o link. Vindo do navegador, ja abre o campo com o link clicado nele.
 screen_downloader_magnet() {
-  local kind=$1 title="Downloader" what="ROM set" only magnet prompt name choice result status folder sets found
+  local kind=$1 title="Downloader" what="ROM set" only magnet prompt name choice result status folder sets found rc
+  local -a button=()
   [[ $kind == chds ]] && what="CHD set"
   only="only the ROMs of the games the filter chooses (with their parents, BIOS and devices) are downloaded"
   [[ $kind == chds ]] && only="only the CHDs of the games the filter chooses are downloaded"
   name=$(romclean_value "$(downloader_status)" "${kind}_name")
-  if [[ -n $name ]]; then
+  if [[ -n $name && ${3:-} != from-browser ]]; then
     choice=$(ui_menu "$title" "$what: $name" replace "replace|Replace the magnet link" \
       "remove|Remove the magnet link" "cancel|Cancel") || return 0
     case $choice in
@@ -113,7 +115,20 @@ screen_downloader_magnet() {
   magnet=$(downloader_default_magnet "$kind")
   prompt="Paste the magnet link of the $what (magnet:?xt=urn:btih:...)."
   [[ -n $magnet ]] && prompt="The FliperOS link of the $what is filled in: Enter uses it, or paste another."
-  magnet=$(ui_input "$title" "$prompt" "$magnet" long) || return 0
+  if [[ ${3:-} == from-browser ]]; then
+    magnet=${2:-}
+    prompt="The link clicked in the browser is filled in: Enter uses it."
+    [[ -n $magnet ]] || prompt="No magnet link came from the browser. Paste the link of the $what, or open the browser again."
+  fi
+  downloader_browser_ok &&
+    button=("Open the browser" "Search the web for the $what and click its magnet link: it comes back here.")
+  magnet=$(ui_input "$title" "$prompt" "$magnet" long "${button[@]}")
+  rc=$?
+  if ((rc == 3)); then
+    screen_downloader_browser "$kind"
+    return 0
+  fi
+  ((rc == 0)) || return 0
   magnet=${magnet//[[:space:]]/}
   [[ -n $magnet ]] || return 0
   if [[ ! $magnet =~ ^magnet:\?.*xt=urn:bt(ih|mh): ]]; then
@@ -262,4 +277,33 @@ screen_downloader_changes() {
   done
   rm -f "$list"
   return 0
+}
+
+# screen_downloader_browser roms|chds pede o navegador ao fliperos-tty1 e
+# sai do Setup; ele volta na tela do link (screen_downloader_resume).
+screen_downloader_browser() {
+  mkdir -p "$DOWNLOADER_STATE" 2> /dev/null
+  if ! printf '%s\n' "$1" > "$DOWNLOADER_BROWSER_PENDING" || ! launcher_request browser; then
+    ui_msg "Downloader" "$(ui_bad "Could not open the browser.")" "Details in $FLIPEROS_LOG."
+    return 1
+  fi
+  rm -f "$(downloader_capture_file)"
+  ui_clear
+  exit "$SETUP_EXIT_LAUNCH"
+}
+
+# screen_downloader_resume: o Setup reabriu depois do navegador? Volta a
+# tela do link, com o que foi clicado, e depois a do torrent.
+screen_downloader_resume() {
+  local kind capture magnet=""
+  [[ -s $DOWNLOADER_BROWSER_PENDING ]] || return 0
+  kind=$(head -n 1 "$DOWNLOADER_BROWSER_PENDING")
+  rm -f "$DOWNLOADER_BROWSER_PENDING"
+  [[ $kind == roms || $kind == chds ]] || return 0
+  capture=$(downloader_capture_file)
+  [[ -s $capture ]] && magnet=$(head -n 1 "$capture")
+  rm -f "$capture"
+  downloader_prepare
+  screen_downloader_magnet "$kind" "$magnet" from-browser
+  screen_downloader
 }

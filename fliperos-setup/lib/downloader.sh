@@ -146,3 +146,21 @@ downloader_add() {
   log_info "Downloader: link novo ($1)"
   downloader add "$1" "$2" --progress 2>> "$FLIPEROS_LOG"
 }
+
+# O navegador do Downloader (config/fliperos-browser): o Setup sai, o
+# fliperos-tty1 abre o Falkon e, com ele fechado, o Setup reabre na tela do
+# magnet link (screen_downloader_resume) com o link que foi clicado.
+DOWNLOADER_BROWSER_PENDING=${DOWNLOADER_BROWSER_PENDING:-$DOWNLOADER_STATE/browser}
+DOWNLOADER_BROWSER=${DOWNLOADER_BROWSER:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-browser}
+
+# downloader_capture_file: onde o fliperos-magnet, como o usuario do
+# gabinete, guarda o link clicado.
+downloader_capture_file() {
+  printf '%s/fliperos-magnet\n' "${DOWNLOADER_CAPTURE_DIR:-/run/user/$(id -u "$FLIPEROS_USER" 2> /dev/null || echo 1000)}"
+}
+
+# downloader_browser_ok: da para abrir o navegador daqui? So no menu do
+# gabinete (quem abre e o fliperos-tty1) e com o Falkon instalado.
+downloader_browser_ok() {
+  ((${SETUP_MENU_LOOP:-0} == 1)) && have falkon && [[ -x $DOWNLOADER_BROWSER ]]
+}

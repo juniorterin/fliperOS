@@ -279,6 +279,8 @@ main() {
     rc=$?
   else
     [[ -f $FLIPEROS_ETC/firstboot ]] && screen_first_boot
+    # De volta do navegador do Downloader: a tela do magnet link.
+    ((SETUP_MENU_LOOP == 1)) && screen_downloader_resume
     screen_main_menu
     rc=$?
   fi

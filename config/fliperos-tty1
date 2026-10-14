@@ -33,6 +33,12 @@ menu() {
     rc=$?
     ((rc == 20)) || return 0
     name=$(cat "$REQUEST" 2> /dev/null)
+    # O navegador do Downloader (Setup > Games > Downloader): o Setup volta
+    # depois, na tela do magnet link.
+    if [[ $name == browser ]]; then
+      "$BIN/fliperos-browser"
+      continue
+    fi
     [[ $name == default ]] && name=""
     "$BIN/fliperos-session" ${name:+"$name"}
   done

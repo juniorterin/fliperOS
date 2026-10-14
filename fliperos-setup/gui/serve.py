@@ -229,8 +229,12 @@ class Server:
                 self.put(screen, cmd)
             return 0, ""
         if cmd == "input":
-            screen = W.Input(plain(a[0]), self.lines([a[1]]), a[2], a[3] == "password")
+            # Com um botao (a[4], explicado em a[5]): status 3 quando e ele.
+            button = (" button", plain(a[4]).upper(), plain(a[5])) if len(a) > 5 and a[4] else None
+            screen = W.Input(plain(a[0]), self.lines([a[1]]), a[2], a[3] == "password", action=button)
             action, value = self.ask(screen, cmd)
+            if action == "select" and button and value == button[0]:
+                return 3, ""
             return (0, value) if action == "select" else (1, "")
         if cmd == "timed":
             screen = W.Timed(plain(a[0]), self.lines(a[3:]), plain(a[2]), int(a[1]))

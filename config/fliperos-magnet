@@ -1,0 +1,14 @@
+#!/bin/sh
+# O programa dos links magnet no navegador do Downloader (fliperos-browser):
+# guarda o link clicado para o Setup e fecha o navegador.
+#
+#   fliperos-magnet "magnet:?xt=urn:btih:..."
+capture=${FLIPEROS_MAGNET_CAPTURE:-}
+[ -n "$capture" ] || exit 1
+case $1 in
+  magnet:*) ;;
+  *) exit 1 ;;
+esac
+printf '%s\n' "$1" > "$capture"
+pkill -u "$(id -u)" -x falkon
+exit 0
