@@ -164,3 +164,26 @@ downloader_capture_file() {
 downloader_browser_ok() {
   ((${SETUP_MENU_LOOP:-0} == 1)) && have falkon && [[ -x $DOWNLOADER_BROWSER ]]
 }
+
+# downloader_filter_orientation: a orientacao do monitor mudou (Setup > Video
+# Setup > Monitor Orientation). O filtro Screen do Downloader passa a ser o do
+# monitor novo (romclean_screen_orientation); o preset "all", que e nao
+# filtrar, fica como esta. Sem filtro salvo, nada.
+downloader_filter_orientation() {
+  local target dest preset line
+  local -a kv=()
+  [[ -f $DOWNLOADER_STATE/filter.kv ]] || return 0
+  preset=$(downloader_filter_get preset)
+  [[ $preset == all ]] && return 0
+  target=$(downloader_filter_get target)
+  dest=$(downloader_filter_get dest)
+  while IFS= read -r line; do
+    case $line in
+      target=* | dest=* | preset=*) continue ;;
+      orientation=*) line="orientation=$(romclean_screen_orientation)" ;;
+    esac
+    kv+=("$line")
+  done < "$DOWNLOADER_STATE/filter.kv"
+  romclean_data_load "$ROMCLEAN_DATA"
+  downloader_filter_save "$target" "$dest" "$preset" "${kv[@]}"
+}

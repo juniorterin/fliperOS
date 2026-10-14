@@ -37,6 +37,10 @@ screen_orientation() {
     "vertical-ccw|Vertical counter-clockwise (rotated left)") || return 0
   [[ $o == "$current" ]] && return 0
   orientation_apply "$o"
+  # Os filtros de ROMs seguem o monitor: so os jogos desta orientacao.
+  downloader_filter_orientation
+  ui_msg "Monitor Orientation" "$(orientation_label "$o") saved." "" \
+    "The ROM filters (Cleaner and Downloader) now take only the $(romclean_screen_orientation) games."
   VIDEO_CHANGED=1
 }
 

@@ -155,6 +155,18 @@ romclean_own_emulator() {
   [[ $1 =~ ^(flycast|model2|model3)$ ]]
 }
 
+# romclean_screen_orientation imprime o filtro Screen que combina com o
+# monitor (Setup > Video Setup > Monitor Orientation): so os jogos deitados
+# num monitor deitado, so os em pe num monitor em pe. Sem orientacao
+# escolhida, as duas.
+romclean_screen_orientation() {
+  case $(conf_get orientation 2> /dev/null) in
+    horizontal) echo horizontal ;;
+    vertical-cw | vertical-ccw) echo vertical ;;
+    *) romclean_all orientation ;;
+  esac
+}
+
 # romclean_preset NOME [ALVO] imprime os parametros do preset (chave=valor
 # por linha): cabinet (painel de joystick, 2 jogadores e 6 botoes, uma versao
 # por jogo), working (tudo o que funciona, menos o mahjong), psx (so a placa
@@ -165,7 +177,7 @@ romclean_preset() {
   declare -A v=(
     [arcade]=yes [status]=imperfect [genres]="$ROMCLEAN_GENRES_DEFAULT" [mature]=no [players]=2
     [modes]="$(romclean_all modes)" [buttons]=6 [controls]=joy8,joy4,joy2,twin
-    [orientation]="$(romclean_all orientation)" [lines]="$(romclean_all lines)" [clones]=1g1r [region]=world
+    [orientation]="$(romclean_screen_orientation)" [lines]="$(romclean_all lines)" [clones]=1g1r [region]=world
     [bootlegs]=no [prototypes]=no [decades]="$(romclean_all decades)" [vector]=yes [chd]=yes [hardware]=""
     [systems]="$(romclean_all systems)"
   )
@@ -180,6 +192,7 @@ romclean_preset() {
     all)
       v[arcade]=no v[status]=all v[players]=0 v[buttons]=0 v[controls]=$(romclean_all controls) v[clones]=keep
       v[mature]=yes v[genres]=$(romclean_all genres) v[bootlegs]=yes v[prototypes]=yes
+      v[orientation]=$(romclean_all orientation)
       ;;
     *) return 1 ;;
   esac
