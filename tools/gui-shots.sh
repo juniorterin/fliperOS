@@ -40,6 +40,11 @@ shot buttons-players players
 shot buttons-capture capture
 shot layout layout
 shot layout-edit layoutedit "right"
+shot guncon guncon
+shot guncon-target1 guntarget1
+shot guncon-target2 guntarget2
+shot guncon-target3 guntarget3
+shot guncon-result gunresult
 shot power power
 shot radio monitor "down down"
 shot checklist emulators

@@ -2,7 +2,8 @@
 # interface sem um FliperOS instalado (--demo NOME). Os rotulos e as dicas
 # sao os de fliperos-setup/screens/.
 
-from widgets import Capture, Input, LayoutEdit, Menu, Message, Progress, YesNo, layout_tile
+from widgets import (Capture, GunResult, GunTarget, Input, LayoutEdit, Menu, Message, Progress, YesNo,
+                     layout_tile)
 
 CONTEXT = {"version": "0.9.1", "status": "192.168.1.155 - 42%"}
 
@@ -151,11 +152,36 @@ def layoutedit():
     return LayoutEdit("Buttons layout", 3, [4])
 
 
+def guncon():
+    return YesNo("GunCon 2", [
+        "The screen turns white with a target in each corner. Aim at the + of each "
+        "target and pull the trigger 3 times; then one shot in the center checks the result.",
+    ], "yes", "START", "CANCEL", icon="guncon")
+
+
+def guntarget1():
+    return GunTarget(1, 3, "top-left", 3, 1, "Shot 1 of 3: x=182 y=47")
+
+
+def guntarget2():
+    return GunTarget(2, 3, "bottom-right", 3, 2, "Shot 2 of 3: x=655 y=221")
+
+
+def guntarget3():
+    return GunTarget(3, 3, "center", 1, 0)
+
+
+def gunresult():
+    return GunResult("GunCon 2", (49, 52))
+
+
 SCREENS = {
     "main": main, "live": live, "setup": setup, "video": video, "monitor": monitor,
     "emulators": emulators, "power": power, "poweroff": poweroff, "install": install,
     "error": error, "wifi": wifi, "joysticks": joysticks, "players": players,
-    "capture": capture, "layout": layout, "layoutedit": layoutedit,
+    "capture": capture, "layout": layout, "layoutedit": layoutedit, "guncon": guncon,
+    "guntarget1": guntarget1, "guntarget2": guntarget2, "guntarget3": guntarget3,
+    "gunresult": gunresult,
 }
 # A escolha de um menu que abre outra tela de demonstracao.
 LINKS = {"games": "emulators", "frontend": "error", "network": "wifi", "shutdown": "power",

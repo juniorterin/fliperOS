@@ -295,10 +295,11 @@ class Menu:
 class YesNo:
     """ui_yesno e ui_choice2: a pergunta e dois botoes."""
 
-    def __init__(self, title, lines, default="yes", yes="YES", no="NO"):
+    def __init__(self, title, lines, default="yes", yes="YES", no="NO", icon=None):
         self.title = title
         self.lines = lines
         self.labels = (yes, no)
+        self.icon = icon
         self.choice = 0 if default == "yes" else 1
 
     def key(self, k):
@@ -312,7 +313,10 @@ class YesNo:
 
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [("< >", "SELECT"), ("ENTER", "OK"), ("ESC", "BACK")])
-        y = paragraph(surf, self.lines, 80) + 20
+        img = T.icon(self.icon, 2) if self.icon else None
+        if img:
+            surf.blit(img, ((T.WIDTH - 32) // 2, 38))
+        y = paragraph(surf, self.lines, 80) + 12
         button(surf, self.labels[0], 104, y, self.choice == 0)
         button(surf, self.labels[1], 216, y, self.choice == 1)
 
@@ -557,3 +561,102 @@ class LayoutEdit:
         surf.blit(name, (x, 158))
         centered(surf, self.POSITIONS[self.cursor], T.CYAN, 184)
         centered(surf, "Green: buttons already placed.", T.COMMENT, 198)
+
+
+WHITE = (255, 255, 255)
+
+
+def bullseye(surf, cx, cy):
+    """O alvo: os aneis e o + do meio, onde se mira."""
+    for r, color in ((18, T.RED), (13, WHITE), (8, T.RED), (3, WHITE)):
+        pygame.draw.circle(surf, color, (cx, cy), r)
+    pygame.draw.line(surf, T.SPACE, (cx - 24, cy), (cx + 24, cy))
+    pygame.draw.line(surf, T.SPACE, (cx, cy - 24), (cx, cy + 24))
+
+
+class GunTarget:
+    """A calibracao do GunCon 2 pedindo os tiros num alvo. A tela e branca:
+    a pistola so enxerga a tela onde ha luz, entao aqui nao ha fundo escuro
+    nem letreiro. where e "top-left", "bottom-right" ou "center"."""
+
+    SPOTS = {"top-left": (44, 40), "bottom-right": (276, 200), "center": (160, 120)}
+
+    def __init__(self, step, steps, where, need=3, shots=0, last=""):
+        self.step, self.steps = step, steps
+        self.where = where
+        self.need, self.shots = need, shots
+        self.last = last
+
+    def key(self, k):
+        return ("back", None) if k == "esc" else None
+
+    def draw(self, surf, ctx):
+        surf.fill(WHITE)
+        bullseye(surf, *self.SPOTS[self.where])
+        # No alvo do centro o texto sobe, para nao ficar em cima dele.
+        y = 40 if self.where == "center" else 84
+        centered(surf, "GUNCON 2 CALIBRATION", T.COMMENT, y)
+        label = "TARGET %d OF %d" % (self.step, self.steps)
+        name = big(label, 2, [T.SPACE, T.SPACE, (0x40, 0x20, 0x70), (0x40, 0x20, 0x70)])
+        surf.blit(name, ((T.WIDTH - name.get_width()) // 2, y + 14))
+        if self.where == "center":
+            y = 140
+        centered(surf, "Aim at the + and pull the trigger", T.SPACE, y + 38)
+        # Um cartucho por tiro: cheio o que falta, vazio o ja dado.
+        x = T.WIDTH // 2 - self.need * 8
+        for i in range(self.need):
+            rect = (x + i * 16 + 3, y + 54, 9, 16)
+            if i < self.shots:
+                pygame.draw.rect(surf, T.LINE, rect, 1)
+            else:
+                pygame.draw.rect(surf, T.ORANGE, rect)
+                pygame.draw.rect(surf, T.RED, (rect[0], rect[1], 9, 5))
+                pygame.draw.rect(surf, T.SPACE, rect, 1)
+        centered(surf, self.last, T.COMMENT, y + 76)
+        if self.where != "bottom-right":
+            text(surf, "ESC CANCEL", T.COMMENT, T.SAFE_X + T.SAFE_W, FOOTER_Y, right=True)
+        else:
+            text(surf, "ESC CANCEL", T.COMMENT, T.SAFE_X, FOOTER_Y)
+
+
+class GunResult:
+    """O fim da calibracao: onde o tiro de conferencia caiu em relacao ao
+    centro (hit e want em % da tela), e salvar ou repetir."""
+
+    def __init__(self, title, hit, want=(50, 50)):
+        self.title = title
+        self.hit, self.want = hit, want
+        self.choice = 0
+
+    def key(self, k):
+        if k in ("left", "right", "up", "down"):
+            self.choice ^= 1
+        elif k == "esc":
+            return ("back", None)
+        elif k == "enter":
+            return ("select", "yes" if self.choice == 0 else "no")
+        return None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("< >", "SELECT"), ("ENTER", "OK"), ("ESC", "BACK")])
+        # A tela em miniatura, com o alvo no centro e o tiro onde caiu.
+        x, y, w, h = 104, 42, 112, 84
+        block(surf, (x, y, w, h), T.FG, T.PURPLE)
+        pygame.draw.rect(surf, T.PINK, (x, y, w, h), 2)
+        cx, cy = x + w * self.want[0] // 100, y + h * self.want[1] // 100
+        for r, color in ((14, T.RED), (10, T.FG), (6, T.RED), (2, T.FG)):
+            pygame.draw.circle(surf, color, (cx, cy), r)
+        hx, hy = x + round(w * self.hit[0] / 100), y + round(h * self.hit[1] / 100)
+        pygame.draw.circle(surf, T.SPACE, (hx, hy), 4)
+        pygame.draw.circle(surf, T.GREEN, (hx, hy), 3)
+
+        off = max(abs(self.hit[0] - self.want[0]), abs(self.hit[1] - self.want[1]))
+        label = "ON TARGET!" if off <= 3 else "A BIT OFF"
+        name = big(label, 2, LABEL)
+        nx = (T.WIDTH - name.get_width()) // 2
+        surf.blit(big(label, 2, (0x80, 0x30, 0x60)), (nx + 2, 138))
+        surf.blit(name, (nx, 136))
+        centered(surf, "Center shot at %d%% x %d%%" % self.hit, T.CYAN, 160)
+        centered(surf, "(target %d%% x %d%%)" % self.want, T.COMMENT, 171)
+        button(surf, "SAVE", 104, 188, self.choice == 0)
+        button(surf, "RETRY", 216, 188, self.choice == 1)
