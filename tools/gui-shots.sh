@@ -33,6 +33,7 @@ shot main main
 shot main-setup main "down"
 shot live live
 shot setup setup
+shot setup-games setup "right right right right"
 shot video video "down down"
 shot radio monitor "down down"
 shot checklist emulators

@@ -5,42 +5,48 @@
 # Cada tela tem draw(surf, ctx), que desenha na tela logica de 320x240, e
 # key(nome), que devolve None, ("back", None) ou ("select", valor).
 #
-# Como no Setup de texto, nada anima nem pisca: a tela so e redesenhada
-# quando uma tecla muda alguma coisa (redesenho continuo tremula num modo
-# entrelacado).
+# O visual e o de um fliperama: o titulo da tela num letreiro em degrade com
+# as faixas do gabinete, a linha de placar (NET e DISK), o fundo de estrelas
+# e, nos menus com icones, um carrossel. Tudo na Press Start 2P.
+
+import random
 
 import pygame
 
 import theme as T
 
-ROW = 17
-CONTENT_Y = 54
-HINT_Y = 178
-HINT_H = 34
-FOOTER_Y = 214
+ROW = 14
+CONTENT_Y = 40
+HINT_Y = 180
+FOOTER_Y = 220
+RAINBOW = [T.RED, T.ORANGE, T.YELLOW, T.GREEN, T.CYAN, T.PURPLE]
+MARQUEE = [T.YELLOW, T.ORANGE, T.PINK, T.PINK, T.PURPLE, T.CYAN, T.CYAN, T.CYAN]
+MARQUEE_ERROR = [T.FG, T.ORANGE, T.RED, T.RED]
+LABEL = [T.FG, T.YELLOW, T.YELLOW, T.ORANGE]
 
 
-def text(surf, font, s, color, x, y, right=False):
-    img = T.font(font).render(s, False, color)
-    if font == "text":
-        # A Jersey 10 tem 6 linhas vazias em cima da maiuscula.
-        y -= 3
+def text(surf, s, color, x, y, right=False):
+    img = T.font().render(s, False, color)
     if right:
         x -= img.get_width()
     surf.blit(img, (x, y))
     return img.get_width()
 
 
-def width(font, s):
-    return T.font(font).size(s)[0]
+def width(s):
+    return T.font().size(s)[0]
 
 
-def wrap(font, s, w):
+def centered(surf, s, color, y):
+    text(surf, s, color, (T.WIDTH - width(s)) // 2, y)
+
+
+def wrap(s, w):
     """Quebra o texto em linhas de ate w pixels, sem cortar palavras."""
     lines, line = [], ""
     for word in s.split():
         trial = word if not line else line + " " + word
-        if line and width(font, trial) > w:
+        if line and width(trial) > w:
             lines.append(line)
             line = word
         else:
@@ -48,6 +54,20 @@ def wrap(font, s, w):
     if line or not lines:
         lines.append(line)
     return lines
+
+
+def big(s, scale, colors):
+    """O texto ampliado, com uma cor por linha de pixels (colors e uma cor
+    ou uma lista, de cima para baixo)."""
+    mask = pygame.mask.from_surface(T.font().render(s, False, (255, 255, 255)))
+    img = mask.to_surface(setcolor=(255, 255, 255, 255), unsetcolor=(0, 0, 0, 0))
+    if isinstance(colors, tuple):
+        colors = [colors]
+    h = img.get_height()
+    for y in range(h):
+        color = colors[min(len(colors) - 1, y * len(colors) // h)]
+        img.fill(color, (0, y, img.get_width(), 1), pygame.BLEND_RGBA_MULT)
+    return pygame.transform.scale(img, (img.get_width() * scale, h * scale))
 
 
 def block(surf, rect, color, shadow=T.LINE):
@@ -62,49 +82,77 @@ def button(surf, label, cx, y, selected, w=80):
     x = cx - w // 2
     if selected:
         block(surf, (x, y, w, 20), T.PINK, T.PURPLE)
-        color = T.BG
+        color = T.SPACE
     else:
         block(surf, (x, y, w, 20), T.BG_DEEP, None)
         pygame.draw.rect(surf, T.LINE, (x, y, w, 20), 1)
         color = T.FG
-    text(surf, "title", label, color, cx - width("title", label) // 2, y + 6)
+    text(surf, label, color, cx - width(label) // 2, y + 6)
 
 
-def frame(surf, ctx, title, keys, accent=T.PURPLE):
-    """O fundo, a barra do topo, a etiqueta do titulo e a legenda das teclas."""
-    surf.fill(T.BG)
-    x = T.SAFE_X
-    right = T.SAFE_X + T.SAFE_W
-    w = text(surf, "title", "FLIPEROS", T.PURPLE, x, T.SAFE_Y + 4)
-    text(surf, "text", ctx.get("version", ""), T.COMMENT, x + w + 6, T.SAFE_Y - 1)
-    text(surf, "text", ctx.get("status", ""), T.CYAN, right, T.SAFE_Y - 1, right=True)
-    pygame.draw.line(surf, T.COMMENT, (x, 27), (right - 1, 27))
-    # Uma faixa pontilhada embaixo da linha, no lugar de um degrade.
-    for px in range(x, right):
-        surf.set_at((px, 28 + px % 2), T.LINE)
+_stars = None
 
-    tw = width("title", title.upper())
-    block(surf, (x, 34, tw + 12, 14), accent)
-    text(surf, "title", title.upper(), T.BG, x + 6, 37)
 
-    kx = x
-    for key, label in keys:
-        kx += text(surf, "text", key, T.CYAN, kx, FOOTER_Y) + 4
-        kx += text(surf, "text", label, T.COMMENT, kx, FOOTER_Y) + 12
+def stars():
+    global _stars
+    if _stars is None:
+        _stars = pygame.Surface((T.WIDTH, T.HEIGHT))
+        _stars.fill(T.SPACE)
+        rnd = random.Random(7)
+        for _ in range(70):
+            _stars.set_at((rnd.randrange(T.WIDTH), rnd.randrange(T.HEIGHT)),
+                          rnd.choice([T.COMMENT, T.COMMENT, T.PURPLE, T.FG]))
+    return _stars
+
+
+def frame(surf, ctx, title, keys, error=False, score=False):
+    """O fundo, o letreiro com o titulo, a linha de placar e a legenda das
+    teclas. O placar (score) so aparece nos menus principais."""
+    surf.blit(stars(), (0, 0))
+    title = title.upper()
+    scale = 2 if width(title) * 2 <= 240 else 1
+    logo = big(title, scale, MARQUEE_ERROR if error else MARQUEE)
+    lx = (T.WIDTH - logo.get_width()) // 2
+    ly = 10 + (16 - logo.get_height()) // 2
+    surf.blit(big(title, scale, (0x40, 0x20, 0x70)), (lx + scale, ly + scale))
+    surf.blit(logo, (lx, ly))
+    # As faixas do gabinete, dos dois lados do titulo.
+    bar = lx - T.SAFE_X - 8
+    if bar >= 8:
+        for i, color in enumerate(RAINBOW):
+            pygame.draw.rect(surf, color, (T.SAFE_X, 12 + i * 2, bar, 2))
+            pygame.draw.rect(surf, color, (T.WIDTH - T.SAFE_X - bar, 12 + i * 2, bar, 2))
+
+    if score:
+        # A linha de placar: o IP e o uso do disco ("192.168.1.155 - 42%").
+        ip, _, used = ctx.get("status", "").partition(" - ")
+        right = T.SAFE_X + T.SAFE_W
+        w = text(surf, "NET", T.RED, T.SAFE_X, 32)
+        text(surf, ip, T.FG, T.SAFE_X + w + 8, 32)
+        w = text(surf, used, T.FG, right, 32, right=True)
+        text(surf, "DISK", T.RED, right - w - 8, 32, right=True)
+
+    total = sum(width(k) + 8 + width(a) for k, a in keys) + 16 * (len(keys) - 1)
+    x = (T.WIDTH - total) // 2
+    for key, action in keys:
+        x += text(surf, key, T.CYAN, x, FOOTER_Y) + 8
+        x += text(surf, action, T.COMMENT, x, FOOTER_Y) + 16
 
 
 def paragraph(surf, lines, y, color=T.FG):
-    """Desenha as linhas (quebrando as longas) e devolve o y seguinte."""
+    """Desenha as linhas centradas (quebrando as longas) e devolve o y
+    seguinte."""
     for line in lines:
-        for part in wrap("text", line, T.SAFE_W) if line else [""]:
-            text(surf, "text", part, color, T.SAFE_X, y)
-            y += ROW
+        for part in wrap(line, T.SAFE_W) if line else [""]:
+            centered(surf, part, color, y)
+            y += 12
     return y
 
 
 class Menu:
     """ui_menu / ui_menu_hints, ui_radio (mode="radio") e ui_checklist
-    (mode="check"). entries: (valor, rotulo[, dica])."""
+    (mode="check"). entries: (valor, rotulo[, dica]). Com icons=True o menu
+    e um carrossel de icones (theme.ICONS, pelo valor)."""
 
     def __init__(self, title, entries, default=None, text="", mode="menu", marked=(), icons=False):
         self.title = title
@@ -121,6 +169,8 @@ class Menu:
 
     def key(self, k):
         n = len(self.entries)
+        if self.icons:
+            k = {"left": "up", "right": "down"}.get(k, k)
         if k == "up":
             self.cursor = (self.cursor - 1) % n
         elif k == "down":
@@ -140,65 +190,96 @@ class Menu:
         return None
 
     def draw(self, surf, ctx):
-        keys = [("ENTER", "ok"), ("ESC", "back")]
+        if self.icons:
+            self.draw_carousel(surf, ctx)
+        else:
+            self.draw_list(surf, ctx)
+
+    def draw_carousel(self, surf, ctx):
+        frame(surf, ctx, self.title, [("< >", "SELECT"), ("ENTER", "OK"), ("ESC", "BACK")],
+              score=self.title.startswith("FliperOS"))
+        n = len(self.entries)
+        shade = pygame.Surface((40, 40), pygame.SRCALPHA)
+        shade.fill(T.SPACE + (130,))
+        for off, cx in ((-2, 36), (2, 284), (-1, 92), (1, 228)):
+            if n < abs(off) * 2 + 1:
+                continue
+            value = self.entries[(self.cursor + off) % n][0]
+            pygame.draw.rect(surf, T.BG_DEEP, (cx - 20, 68, 40, 40))
+            img = T.icon(value, 2)
+            if img:
+                surf.blit(img, (cx - 16, 72))
+            surf.blit(shade, (cx - 20, 68))
+            pygame.draw.rect(surf, T.LINE, (cx - 20, 68, 40, 40), 1)
+        block(surf, (124, 48, 72, 72), T.BG_DEEP, T.PURPLE)
+        pygame.draw.rect(surf, T.PINK, (124, 48, 72, 72), 2)
+        img = T.icon(self.entries[self.cursor][0], 4)
+        if img:
+            surf.blit(img, (128, 52))
+
+        label = self.entries[self.cursor][1].upper()
+        scale = 2 if width(label) * 2 <= T.SAFE_W else 1
+        name = big(label, scale, LABEL)
+        x = (T.WIDTH - name.get_width()) // 2
+        surf.blit(big(label, scale, (0x80, 0x30, 0x60)), (x + 2, 134))
+        surf.blit(name, (x, 132))
+        for i, line in enumerate(wrap(self.entries[self.cursor][2], T.SAFE_W)[:3]):
+            centered(surf, line, T.CYAN, 158 + i * 11)
+
+        for i in range(n):
+            color = T.PINK if i == self.cursor else T.LINE
+            pygame.draw.rect(surf, color, (T.WIDTH // 2 - n * 5 + 2 + i * 10, 200, 6, 6))
+        if self.title == "FliperOS":
+            text(surf, "V" + ctx.get("version", ""), T.LINE, T.SAFE_X + T.SAFE_W, 199, right=True)
+
+    def draw_list(self, surf, ctx):
+        keys = [("ENTER", "OK"), ("ESC", "BACK")]
         if self.mode == "check":
-            keys.insert(0, ("SPACE", "mark"))
+            keys.insert(0, ("SPACE", "MARK"))
         frame(surf, ctx, self.title, keys)
         y0 = CONTENT_Y
         if self.text:
             y0 = paragraph(surf, [self.text], y0) + 4
         hints = any(e[2] for e in self.entries)
-        bottom = HINT_Y - 2 if hints else FOOTER_Y - 4
+        bottom = HINT_Y - 6 if hints else FOOTER_Y - 8
         rows = max(1, (bottom - y0) // ROW)
         if self.cursor < self.top:
             self.top = self.cursor
         if self.cursor >= self.top + rows:
             self.top = self.cursor - rows + 1
-        x = T.SAFE_X
-        w = 176 if self.icons else T.SAFE_W - 10
+        x = T.SAFE_X + 24
+        w = T.SAFE_W - 48
 
         for i in range(self.top, min(len(self.entries), self.top + rows)):
             value, label, _ = self.entries[i]
             y = y0 + (i - self.top) * ROW
             selected = i == self.cursor
             if selected:
-                block(surf, (x, y, w, ROW - 1), T.PINK, T.PURPLE)
-            color = T.BG if selected else T.FG
+                block(surf, (x, y, w, ROW - 2), T.PINK, T.PURPLE)
+            color = T.SPACE if selected else T.FG
             if self.mode == "menu":
                 if selected:
-                    pygame.draw.polygon(surf, T.BG, [(x + 5, y + 4), (x + 5, y + 12), (x + 9, y + 8)])
+                    pygame.draw.polygon(surf, T.SPACE, [(x + 5, y + 2), (x + 5, y + 9), (x + 9, y + 5)])
             else:
                 on = value in self.marked
-                box = (x + 4, y + 4, 8, 8)
-                pygame.draw.rect(surf, color if selected else T.COMMENT, box, 1)
+                pygame.draw.rect(surf, color if selected else T.COMMENT, (x + 4, y + 2, 8, 8), 1)
                 if on:
-                    pygame.draw.rect(surf, color if selected else T.GREEN, (x + 6, y + 6, 4, 4))
+                    pygame.draw.rect(surf, color if selected else T.GREEN, (x + 6, y + 4, 4, 4))
                     if not selected:
                         color = T.GREEN
-            text(surf, "text", label, color, x + 16, y - 1)
+            text(surf, label, color, x + 18, y + 2)
 
         # As setas de quando a lista rola.
-        ax = x + w + 4
+        ax = x + w + 8
         if self.top > 0:
-            pygame.draw.polygon(surf, T.COMMENT, [(ax, y0 + 6), (ax + 6, y0 + 6), (ax + 3, y0 + 2)])
+            pygame.draw.polygon(surf, T.CYAN, [(ax, y0 + 6), (ax + 6, y0 + 6), (ax + 3, y0 + 2)])
         if self.top + rows < len(self.entries):
             by = y0 + rows * ROW - 4
-            pygame.draw.polygon(surf, T.COMMENT, [(ax, by - 4), (ax + 6, by - 4), (ax + 3, by)])
-
-        if self.icons:
-            px, size = 208, 96
-            block(surf, (px, y0, size, size), T.BG_DEEP, T.LINE)
-            pygame.draw.rect(surf, T.PURPLE, (px, y0, size, size), 2)
-            img = T.icon(self.entries[self.cursor][0], 4)
-            if img:
-                surf.blit(img, (px + 16, y0 + 16))
+            pygame.draw.polygon(surf, T.CYAN, [(ax, by - 4), (ax + 6, by - 4), (ax + 3, by)])
 
         if hints:
-            pygame.draw.rect(surf, T.BG_DEEP, (x, HINT_Y, T.SAFE_W, HINT_H))
-            pygame.draw.rect(surf, T.LINE, (x, HINT_Y, T.SAFE_W, HINT_H), 1)
-            lines = wrap("text", self.entries[self.cursor][2], T.SAFE_W - 12)[:2]
-            for i, line in enumerate(lines):
-                text(surf, "text", line, T.CYAN, x + 6, HINT_Y + 2 + i * 15)
+            for i, line in enumerate(wrap(self.entries[self.cursor][2], T.SAFE_W)[:3]):
+                centered(surf, line, T.CYAN, HINT_Y + i * 11)
 
 
 class YesNo:
@@ -220,8 +301,8 @@ class YesNo:
         return None
 
     def draw(self, surf, ctx):
-        frame(surf, ctx, self.title, [("ENTER", "ok"), ("ESC", "back")])
-        y = paragraph(surf, self.lines, CONTENT_Y) + 16
+        frame(surf, ctx, self.title, [("< >", "SELECT"), ("ENTER", "OK"), ("ESC", "BACK")])
+        y = paragraph(surf, self.lines, 80) + 20
         button(surf, self.labels[0], 104, y, self.choice == 0)
         button(surf, self.labels[1], 216, y, self.choice == 1)
 
@@ -240,9 +321,8 @@ class Message:
         return None
 
     def draw(self, surf, ctx):
-        accent = T.RED if self.kind == "error" else T.PURPLE
-        frame(surf, ctx, self.title, [("ENTER", "ok")], accent)
-        y = paragraph(surf, self.lines, CONTENT_Y) + 16
+        frame(surf, ctx, self.title, [("ENTER", "OK")], self.kind == "error")
+        y = paragraph(surf, self.lines, 72) + 20
         button(surf, "OK", T.WIDTH // 2, y, True)
 
 
@@ -267,19 +347,14 @@ class Input:
         return None
 
     def draw(self, surf, ctx):
-        frame(surf, ctx, self.title, [("ENTER", "ok"), ("ESC", "back")])
-        y = paragraph(surf, self.lines, CONTENT_Y) + 8
+        frame(surf, ctx, self.title, [("ENTER", "OK"), ("ESC", "BACK")])
+        y = paragraph(surf, self.lines, 80) + 12
         x = T.SAFE_X
-        block(surf, (x, y, T.SAFE_W - 2, 22), T.BG_DEEP, T.LINE)
+        block(surf, (x, y, T.SAFE_W - 2, 22), T.BG_DEEP, T.PURPLE)
         pygame.draw.rect(surf, T.PINK, (x, y, T.SAFE_W - 2, 22), 2)
-        if self.password:
-            # Um quadrado por letra: o "*" da fonte e pequeno demais.
-            w = len(self.value) * 9
-            for i in range(len(self.value)):
-                pygame.draw.rect(surf, T.FG, (x + 8 + i * 9, y + 8, 6, 6))
-        else:
-            w = text(surf, "text", self.value, T.FG, x + 8, y + 3)
-        pygame.draw.rect(surf, T.PINK, (x + 9 + w, y + 5, 6, 12))
+        shown = "*" * len(self.value) if self.password else self.value
+        w = text(surf, shown, T.FG, x + 8, y + 7)
+        pygame.draw.rect(surf, T.PINK, (x + 9 + w, y + 6, 7, 10))
 
 
 class Progress:
@@ -297,21 +372,24 @@ class Progress:
 
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [])
-        x, y = T.SAFE_X, CONTENT_Y
+        x, y = T.SAFE_X + 24, 56
         for label, state in self.steps:
-            color = {"done": T.GREEN, "run": T.PINK, "fail": T.RED}.get(state, T.COMMENT)
+            color = {"done": T.GREEN, "run": T.YELLOW, "fail": T.RED}.get(state, T.COMMENT)
             if state == "run":
-                pygame.draw.polygon(surf, color, [(x + 4, y + 4), (x + 4, y + 12), (x + 8, y + 8)])
+                pygame.draw.polygon(surf, T.PINK, [(x + 2, y), (x + 2, y + 7), (x + 6, y + 3)])
             elif state == "todo":
-                pygame.draw.rect(surf, color, (x + 3, y + 4, 6, 6), 1)
+                pygame.draw.rect(surf, color, (x + 1, y + 1, 6, 6), 1)
             else:
-                pygame.draw.rect(surf, color, (x + 3, y + 4, 6, 6))
-            text(surf, "text", label, T.FG if state == "run" else color, x + 16, y - 1)
+                pygame.draw.rect(surf, color, (x + 1, y + 1, 6, 6))
+            text(surf, label, color, x + 16, y)
             y += ROW
-        # A barra em blocos: 24 de 10 pixels, com 2 de espaco.
-        y = 164
+        # A barra em blocos: 24 de 10 pixels, com 2 de espaco, uma cor do
+        # arco-iris a cada 4.
+        x, y = T.SAFE_X, 150
         full = round(self.pct * 24 / 100)
         for i in range(24):
-            pygame.draw.rect(surf, T.PINK if i < full else T.LINE, (x + i * 12, y, 10, 12))
-        text(surf, "title", "%d%%" % self.pct, T.PINK, x, y + 20)
-        text(surf, "text", self.msg, T.CYAN, x + 44, y + 16)
+            pygame.draw.rect(surf, RAINBOW[i // 4] if i < full else T.LINE, (x + i * 12, y, 10, 12))
+        pct = "%d%%" % self.pct
+        name = big(pct, 2, T.YELLOW)
+        surf.blit(name, ((T.WIDTH - name.get_width()) // 2, y + 22))
+        centered(surf, wrap(self.msg, T.SAFE_W)[0], T.CYAN, y + 48)

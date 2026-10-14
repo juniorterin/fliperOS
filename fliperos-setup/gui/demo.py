@@ -34,8 +34,8 @@ def setup():
         ("joysticks", "Joysticks", "Button mapping, layouts, light guns and wheels."),
         ("games", "Games", "Frontend, emulators, folders, downloader and scraper."),
         ("system", "System", "Extras, latency, updates and the splash screen."),
-        ("return", "Return"),
-    ], "video")
+        ("return", "Return", "Back to the FliperOS menu."),
+    ], "video", icons=True)
 
 
 def video():
