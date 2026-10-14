@@ -20,6 +20,8 @@ cp -r "$src/fliperos-setup" "$root/usr/local/lib/fliperos-setup"
 find "$root/usr/local/lib/fliperos-setup" -type d -exec chmod 755 {} +
 find "$root/usr/local/lib/fliperos-setup" -type f -exec chmod 644 {} +
 chmod 755 "$root/usr/local/lib/fliperos-setup/fliperos-setup"
+# A interface grafica do Setup (lib/ui.sh a abre no menu do gabinete).
+chmod 755 "$root/usr/local/lib/fliperos-setup/gui/fliperos-gui"
 mkdir -p "$root/usr/local/bin" "$root/usr/local/sbin"
 ln -sfn /usr/local/lib/fliperos-setup/fliperos-setup "$root/usr/local/bin/fliperos-setup"
 install -Dm644 "$src/config/fliperos-setup.desktop" "$root/usr/share/applications/fliperos-setup.desktop"

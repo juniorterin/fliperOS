@@ -148,7 +148,7 @@ screen_audio() {
         ;;
       mixer)
         ui_clear
-        alsamixer -c "${current%,*}" < /dev/tty > /dev/tty 2>&1
+        ui_text alsamixer -c "${current%,*}" < /dev/tty > /dev/tty 2>&1
         run_logged alsactl store "${current%,*}"
         ui_flush_input
         ;;

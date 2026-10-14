@@ -61,7 +61,7 @@ screen_recovery_shell() {
   fi
   ui_clear
   printf '%s\n\n' "Root shell inside the FliperOS installed on $disk. Type 'exit' to return." > /dev/tty
-  chroot "$RECOVERY_TARGET" /bin/bash --login < /dev/tty > /dev/tty 2>&1
+  ui_text chroot "$RECOVERY_TARGET" /bin/bash --login < /dev/tty > /dev/tty 2>&1
   recovery_umount
   ui_flush_input
 }

@@ -51,6 +51,9 @@ _progress_layout() {
 
 _progress_draw() {
   local title=$1 target=$2 pct=$3 step=$4 w inner barw full i skip
+  # Na interface grafica a tela de progresso e dela (lib/ui.sh).
+  ui_progress "$title" "$target" "$pct" "$step" "${PROGRESS_FOOTER:-Please wait. Do not turn off the computer.}" \
+    "${@:5}" && return 0
   local footer=${PROGRESS_FOOTER:-Please wait. Do not turn off the computer.}
   shift 4
   w=$(ui_box_width)

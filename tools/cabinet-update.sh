@@ -102,6 +102,8 @@ packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-pl
   alacritty libsdl2-ttf-2.0-0 libsdl2-gfx-1.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 cifs-utils smbclient
   falkon transmission-gtk transmission-daemon gvfs
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils)
+# A interface grafica do Setup (fliperos-setup/gui).
+packages+=(python3-pygame)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
 # Wine em si nao vem mais na imagem (Setup > System > Extras, config/fliperos-extras).

@@ -155,6 +155,7 @@ usage() {
 }
 
 restore_terminal() {
+  ui_done
   padkeys_off
   speak_stop
   printf '\e[?25h' > /dev/tty 2> /dev/null

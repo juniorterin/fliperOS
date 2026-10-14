@@ -86,7 +86,7 @@ screen_custom_resolution() {
   ui_msg "Custom resolution" "The new mode will now be tested with a grid." "" \
     "Press ESC if you can't see the grid, ENTER or Q to leave it."
   ui_clear
-  GRID_TEXT="Testing ${w}x${h} ${r} Hz" switchres "$w" "$h" "$r" -s -l grid >> "$FLIPEROS_LOG" 2>&1
+  GRID_TEXT="Testing ${w}x${h} ${r} Hz" ui_text switchres "$w" "$h" "$r" -s -l grid >> "$FLIPEROS_LOG" 2>&1
   ui_flush_input
   ui_yesno "Custom resolution" "Did you see the grid correctly?" no || return 0
   tmp=$(mktemp -d /tmp/fliperos-edid.XXXXXX)
@@ -123,7 +123,7 @@ screen_geometry() {
     "The picture only moves down while there are blank lines below it." \
     "If it stops, use the monitor's V-POS (vertical position) adjustment."
   ui_clear
-  out=$(geometry "$w" "$h" "$r" 2>&1)
+  out=$(ui_text geometry "$w" "$h" "$r" 2>&1)
   printf '%s\n' "$out" >> "$FLIPEROS_LOG"
   ui_flush_input
   range=$(geometry_parse "$out")

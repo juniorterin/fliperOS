@@ -190,7 +190,7 @@ screen_mediapacks_watch() {
     rest=("${rest[@]# }")
     _progress_draw "Art packs" "" "${pct:-0}" "$step" "${rest[@]}"
     [[ $state == downloading ]] || break
-    read -rsn1 -t 2 _ < /dev/tty && break
+    ui_wait_key 2 && break
   done
   # shellcheck disable=SC2034
   PROGRESS_FOOTER=""

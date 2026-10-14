@@ -66,7 +66,135 @@ ui_init() {
   export GUM_PAGER_HELP_FOREGROUND=$C_COMMENT
   export GUM_PAGER_LINE_NUMBER_FOREGROUND=$C_COMMENT
   ui_sounds
+  ui_gui_start
+  return 0
 }
+
+# A interface grafica (gui/fliperos-gui, em pygame) e a outra saida desta
+# camada: com ela no ar, cada funcao daqui manda a tela ao servidor em vez de
+# chamar o gum, e as telas do Setup nao mudam. So abre no menu do gabinete
+# (fliperos-menu, o --menu), nunca num "sudo fliperos-setup" digitado por SSH,
+# e na midia de instalacao fica o texto. FLIPEROS_UI=text|gui (ou "ui" no
+# fliperos.conf) forca um dos dois. Sem video, sem pygame ou com o servidor
+# morto, tudo volta ao gum.
+UI_GUI=0
+UI_GUI_PID=""
+UI_GUI_REPLY=""
+UI_GUI_DIR=${UI_GUI_DIR:-/run/fliperos/gui}
+UI_GUI_BIN=${UI_GUI_BIN:-${SETUP_DIR:-/usr/local/lib/fliperos-setup}/gui/fliperos-gui}
+UI_DRI=${UI_DRI:-/dev/dri/card0}
+
+ui_gui_wanted() {
+  case ${FLIPEROS_UI:-$(conf_get ui 2> /dev/null)} in
+    text) return 1 ;;
+    gui) return 0 ;;
+  esac
+  ((${SETUP_MENU_LOOP:-0} == 1)) && [[ -z ${DISPLAY:-} && -e $UI_DRI ]] && ! is_live
+}
+
+# ui_gui_alive: a interface grafica esta no ar?
+ui_gui_alive() {
+  ((UI_GUI)) && kill -0 "$UI_GUI_PID" 2> /dev/null
+}
+
+# ui_gui_start abre o servidor e espera ele avisar que o video abriu (o
+# arquivo ready). A espera e um read com tempo num FIFO, nao um sleep.
+ui_gui_start() {
+  local i
+  ui_gui_wanted || return 1
+  [[ -x $UI_GUI_BIN ]] && have python3 || return 1
+  rm -rf "$UI_GUI_DIR"
+  mkdir -p "$UI_GUI_DIR" && mkfifo "$UI_GUI_DIR/req" "$UI_GUI_DIR/resp" || return 1
+  SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-kmsdrm} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} \
+    "$UI_GUI_BIN" --serve "$UI_GUI_DIR" < /dev/null >> "$FLIPEROS_LOG" 2>&1 &
+  UI_GUI_PID=$!
+  for ((i = 0; i < 150; i++)); do
+    if [[ -e $UI_GUI_DIR/ready ]]; then
+      UI_GUI=1
+      return 0
+    fi
+    kill -0 "$UI_GUI_PID" 2> /dev/null || break
+    read -r -t 0.1 _ <> "$UI_GUI_DIR/resp"
+  done
+  log_info "a interface grafica nao abriu: o Setup segue em texto"
+  kill "$UI_GUI_PID" 2> /dev/null
+  UI_GUI_PID=""
+  return 1
+}
+
+# ui_gui_call COMANDO ARGUMENTO... manda o pedido e espera a resposta: o
+# status e o da tela (1 = Esc) e o texto fica em UI_GUI_REPLY. O protocolo
+# esta em gui/serve.py.
+ui_gui_call() {
+  local IFS=$'\x1f' cmd=$1 reply
+  shift
+  set -- "$cmd" "$(ui_status_short)" "$UI_VERSION" "$@"
+  printf '%s\x1e' "$*" > "$UI_GUI_DIR/req" || return 1
+  IFS= read -r -d $'\x1e' reply < "$UI_GUI_DIR/resp" || return 1
+  UI_GUI_REPLY=${reply#*$'\x1f'}
+  return "${reply%%$'\x1f'*}"
+}
+
+# ui_gui_menu menu|radio|check TITULO TEXTO ATUAL "valor|rotulo"... e o menu
+# na interface grafica, com as dicas de UI_HINTS. Imprime a escolha.
+ui_gui_menu() {
+  local mode=$1 title=$2 text=$3 current=$4 entry i=0
+  local -a entries=()
+  shift 4
+  for entry in "$@"; do
+    entries+=("${entry%%|*}"$'\x1d'"${entry#*|}"$'\x1d'"${UI_HINTS[i]:-}")
+    i=$((i + 1))
+  done
+  ui_gui_call "$mode" "$title" "$text" "$current" "${entries[@]}" || return 1
+  printf '%s\n' "$UI_GUI_REPLY"
+}
+
+# ui_done fecha a interface grafica e espera ela soltar o video: quem vem
+# depois (um frontend, o proprio Setup reaberto) precisa dele livre.
+ui_done() {
+  local i
+  ui_gui_alive || return 0
+  ui_gui_call quit
+  for ((i = 0; i < 50; i++)); do
+    kill -0 "$UI_GUI_PID" 2> /dev/null || break
+    read -r -t 0.1 _ <> "$UI_GUI_DIR/resp"
+  done
+  kill "$UI_GUI_PID" 2> /dev/null
+  UI_GUI=0
+  rm -rf "$UI_GUI_DIR"
+  return 0
+}
+
+# ui_text COMANDO... roda um programa que desenha no terminal (alsamixer, o
+# calibrador, o grid do Switchres) ou troca o modo de video: a interface
+# grafica solta o video antes e o retoma depois.
+ui_text() {
+  local rc
+  ui_gui_alive && ui_gui_call suspend
+  "$@"
+  rc=$?
+  ui_gui_alive && ui_gui_call resume
+  return "$rc"
+}
+
+# ui_wait_key SEGUNDOS espera uma tecla por esse tempo. Status 0 = apertou.
+ui_wait_key() {
+  if ui_gui_alive; then
+    ui_gui_call keywait "$1"
+    return
+  fi
+  read -rsn1 -t "$1" _ < /dev/tty
+}
+
+# ui_progress TITULO ALVO PORCENTO ETAPA RODAPE MENSAGEM... desenha a tela
+# de progresso na interface grafica. Status 1: nao ha interface grafica, e
+# quem chamou (screens/progress.sh) desenha no terminal.
+ui_progress() {
+  ui_gui_alive || return 1
+  ui_gui_call progress "$@"
+  return 0
+}
+
 
 # ui_sounds liga ou desliga os sons do menu no gum (menu_sounds_env, em
 # lib/audio.sh).
@@ -112,6 +240,7 @@ ui_c() {
 }
 
 ui_clear() {
+  ui_gui_alive && return 0
   printf '\e[H\e[2J\e[3J' > /dev/tty
 }
 
@@ -132,6 +261,7 @@ ui_status_short() {
 # titulo. UI_TOPBAR_ROWS e quantas linhas o topo ocupou.
 UI_TOPBAR_ROWS=2
 ui_topbar() {
+  ui_gui_alive && return 0
   local title=" $UI_TITLE" version="" left right="" line2="" space
   [[ $UI_TITLE == FliperOS && -n $UI_VERSION ]] && version=" $UI_VERSION"
   left=$title$version
@@ -282,6 +412,10 @@ ui_menu() {
   local -x GUM_CHOOSE_HINTS="" GUM_CHOOSE_HINT_WIDTH="" GUM_CHOOSE_HINT_LINES="" GUM_CHOOSE_HINT_BORDER=""
   local -x GUM_CHOOSE_HINT_FOREGROUND="" GUM_CHOOSE_HINT_BORDER_FOREGROUND=""
   shift 3
+  if ui_gui_alive; then
+    ui_gui_menu menu "$title" "$text" "$default" "$@"
+    return
+  fi
   for entry in "$@"; do
     values+=("${entry%%|*}")
     labels+=("${entry#*|}")
@@ -320,6 +454,10 @@ ui_menu() {
 ui_radio() {
   local title=$1 text=$2 current=$3 entry entries=()
   shift 3
+  if ui_gui_alive; then
+    ui_gui_menu radio "$title" "$text" "$current" "$@"
+    return
+  fi
   for entry in "$@"; do
     if [[ ${entry%%|*} == "$current" ]]; then
       entries+=("${entry%%|*}|(*) ${entry#*|}")
@@ -339,6 +477,10 @@ ui_checklist() {
   local title=$1 text=$2 current=",$3," entry choice height i out="" selected=""
   local -a labels=() values=() args
   shift 3
+  if ui_gui_alive; then
+    ui_gui_menu check "$title" "$text" "${current:1:-1}" "$@"
+    return
+  fi
   for entry in "$@"; do
     values+=("${entry%%|*}")
     labels+=("${entry#*|}")
@@ -361,6 +503,10 @@ ui_checklist() {
 # ui_yesno TITULO TEXTO [padrao-nao] pergunta sim ou nao. Status 0 = Yes.
 ui_yesno() {
   local title=$1 text=$2 def=${3:-yes} args=()
+  if ui_gui_alive; then
+    ui_gui_call yesno "$title" "$def" Yes No "$text"
+    return
+  fi
   ui_screen "$title" "$text"
   [[ $def == no ]] && args+=(--default=false)
   gum confirm --padding "0 4" --affirmative "Yes" --negative "No" "${args[@]}" "" < /dev/tty 2> /dev/tty
@@ -371,12 +517,20 @@ ui_yesno() {
 ui_choice2() {
   local title=$1 yes=$2 no=$3
   shift 3
+  if ui_gui_alive; then
+    ui_gui_call yesno "$title" yes "$yes" "$no" "$@"
+    return
+  fi
   ui_screen "$title" "$@"
   gum confirm --padding "0 4" --affirmative "$yes" --negative "$no" "" < /dev/tty 2> /dev/tty
 }
 
 # ui_msg TITULO TEXTO mostra o aviso e espera o Enter.
 ui_msg() {
+  if ui_gui_alive; then
+    ui_gui_call msg "$@"
+    return 0
+  fi
   ui_screen "$1" "${@:2}"
   gum choose --padding "0 4" --header "" "OK" < /dev/tty > /dev/null 2> /dev/tty
   return 0
@@ -384,6 +538,10 @@ ui_msg() {
 
 # ui_info TITULO TEXTO mostra o aviso sem esperar ("aguarde...").
 ui_info() {
+  if ui_gui_alive; then
+    ui_gui_call info "$@"
+    return 0
+  fi
   ui_screen "$1" "${@:2}"
 }
 
@@ -391,6 +549,11 @@ ui_info() {
 # (long: sem o limite de 400 caracteres do gum, para um link magnetico).
 ui_input() {
   local title=$1 text=$2 value=${3:-} mode=${4:-} w args
+  if ui_gui_alive; then
+    ui_gui_call input "$title" "$text" "$value" "$mode" || return 1
+    printf '%s\n' "$UI_GUI_REPLY"
+    return 0
+  fi
   ui_screen "$title" "$text"
   w=$(($(ui_box_width) - 6))
   args=(--padding "0 4" --width "$w" --value "$value" --placeholder "")
@@ -404,6 +567,10 @@ ui_input() {
 ui_timed_confirm() {
   local title=$1 seconds=$2 label=$3 rc
   shift 3
+  if ui_gui_alive; then
+    ui_gui_call timed "$title" "$seconds" "$label" "$@"
+    return
+  fi
   ui_screen "$title" "$@"
   gum choose --padding "0 4" --header "" --timeout "${seconds}s" "$label" < /dev/tty > /dev/null 2> /dev/tty
   rc=$?
@@ -423,6 +590,10 @@ ui_pager() {
     content=$(head -n 1200 "$2" 2> /dev/null)
   else
     content=$(tail -n 400 "$2" 2> /dev/null)
+  fi
+  if ui_gui_alive; then
+    ui_gui_call pager "$1" "$content" "${3:-}"
+    return 0
   fi
   ui_size
   ui_clear

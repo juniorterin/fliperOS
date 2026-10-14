@@ -10,6 +10,8 @@
 # e, nos menus com icones, um carrossel. Tudo na Press Start 2P.
 
 
+import time
+
 import pygame
 
 import theme as T
@@ -114,8 +116,9 @@ def frame(surf, ctx, title, keys, error=False, score=False):
         right = T.SAFE_X + T.SAFE_W
         w = text(surf, "NET", T.RED, T.SAFE_X, 32)
         text(surf, ip, T.FG, T.SAFE_X + w + 8, 32)
-        w = text(surf, used, T.FG, right, 32, right=True)
-        text(surf, "DISK", T.RED, right - w - 8, 32, right=True)
+        if used:
+            w = text(surf, used, T.FG, right, 32, right=True)
+            text(surf, "DISK", T.RED, right - w - 8, 32, right=True)
 
     total = sum(width(k) + 8 + width(a) for k, a in keys) + 16 * (len(keys) - 1)
     x = (T.WIDTH - total) // 2
@@ -204,13 +207,21 @@ class Menu:
             return ("select", self.entries[self.cursor][0])
         return None
 
+    def notes(self):
+        """As linhas do texto do menu que ficam em cima do carrossel: um
+        status de varias linhas ou, quando os itens tem dica, qualquer texto.
+        Sem dicas, um texto curto vai no lugar da dica."""
+        if not self.text:
+            return []
+        lines = flow([self.text])
+        if any(e[2] for e in self.entries) or len(lines) > 3:
+            return lines
+        return []
+
     def carousel(self):
         """O menu cabe no carrossel? Uma lista longa (pastas, redes) ou um
-        texto de varias linhas (uma tabela) ficam melhor na lista."""
-        if self.mode != "menu" or len(self.entries) > 12:
-            return False
-        lines = len(flow([self.text])) if self.text else 0
-        return lines <= (1 if any(e[2] for e in self.entries) else 3)
+        texto grande (uma tabela) ficam melhor na lista."""
+        return self.mode == "menu" and len(self.entries) <= 12 and len(self.notes()) <= 5
 
     def draw(self, surf, ctx):
         if self.carousel():
@@ -234,43 +245,55 @@ class Menu:
         frame(surf, ctx, self.title, [("< >", "SELECT"), ("ENTER", "OK"), ("ESC", "BACK")],
               score=self.title.startswith("FliperOS"))
         n = len(self.entries)
+        notes = self.notes()
+        # Com mais de uma linha de texto em cima, o carrossel encolhe: o
+        # icone do meio passa de 64 para 48 pixels.
+        scale = 4 if len(notes) <= 1 else 3
+        size = 16 * scale + 8
+        top = 48 if len(notes) <= 1 else 36 + len(notes) * 10
+        for i, (line, _) in enumerate(notes):
+            centered(surf, line, T.PINK, 34 + i * 10)
+
+        mid = top + size // 2
         shade = pygame.Surface((40, 40), pygame.SRCALPHA)
         shade.fill(T.SPACE + (130,))
         for off, cx in ((-2, 36), (2, 284), (-1, 92), (1, 228)):
             if n < abs(off) * 2 + 1:
                 continue
             entry = self.entries[(self.cursor + off) % n]
-            pygame.draw.rect(surf, T.BG_DEEP, (cx - 20, 68, 40, 40))
-            self.tile(surf, entry, cx - 16, 72, 2)
-            surf.blit(shade, (cx - 20, 68))
-            pygame.draw.rect(surf, T.LINE, (cx - 20, 68, 40, 40), 1)
-        block(surf, (124, 48, 72, 72), T.BG_DEEP, T.PURPLE)
-        pygame.draw.rect(surf, T.PINK, (124, 48, 72, 72), 2)
-        self.tile(surf, self.entries[self.cursor], 128, 52, 4)
+            pygame.draw.rect(surf, T.BG_DEEP, (cx - 20, mid - 20, 40, 40))
+            self.tile(surf, entry, cx - 16, mid - 16, 2)
+            surf.blit(shade, (cx - 20, mid - 20))
+            pygame.draw.rect(surf, T.LINE, (cx - 20, mid - 20, 40, 40), 1)
+        left = (T.WIDTH - size) // 2
+        block(surf, (left, top, size, size), T.BG_DEEP, T.PURPLE)
+        pygame.draw.rect(surf, T.PINK, (left, top, size, size), 2)
+        self.tile(surf, self.entries[self.cursor], left + 4, top + 4, scale)
 
+        y = top + size + 12
         label = self.entries[self.cursor][1].upper()
         if width(label) * 2 <= T.SAFE_W:
             name = big(label, 2, LABEL)
             x = (T.WIDTH - name.get_width()) // 2
-            surf.blit(big(label, 2, (0x80, 0x30, 0x60)), (x + 2, 134))
-            surf.blit(name, (x, 132))
+            surf.blit(big(label, 2, (0x80, 0x30, 0x60)), (x + 2, y + 2))
+            surf.blit(name, (x, y))
         else:
             # Um rotulo longo: letra pequena, em ate duas linhas.
             parts = wrap(label, T.SAFE_W)[:2]
             for i, part in enumerate(parts):
-                centered(surf, part, T.YELLOW, 136 - 5 * (len(parts) - 1) + i * 10)
-        hint = self.entries[self.cursor][2] or self.text
-        if hint != self.text:
-            # O texto do menu (um status, por exemplo) fica embaixo do letreiro.
-            centered(surf, self.text, T.PINK, 34)
+                centered(surf, part, T.YELLOW, y + 4 - 5 * (len(parts) - 1) + i * 10)
+        hint = self.entries[self.cursor][2] or ("" if notes else self.text)
+        y += 26 if scale == 4 else 22
         for i, line in enumerate(wrap(hint, T.SAFE_W)[:3]):
-            centered(surf, line, T.CYAN, 158 + i * 11)
+            if y + i * 11 <= FOOTER_Y - 12:
+                centered(surf, line, T.CYAN, y + i * 11)
 
-        for i in range(n):
-            color = T.PINK if i == self.cursor else T.LINE
-            pygame.draw.rect(surf, color, (T.WIDTH // 2 - n * 5 + 2 + i * 10, 200, 6, 6))
-        if self.title == "FliperOS":
-            text(surf, "V" + ctx.get("version", ""), T.LINE, T.SAFE_X + T.SAFE_W, 199, right=True)
+        if scale == 4:
+            for i in range(n):
+                color = T.PINK if i == self.cursor else T.LINE
+                pygame.draw.rect(surf, color, (T.WIDTH // 2 - n * 5 + 2 + i * 10, 200, 6, 6))
+        if self.title == "FliperOS" and ctx.get("version"):
+            text(surf, "V" + ctx["version"], T.LINE, T.SAFE_X + T.SAFE_W, 199, right=True)
 
     def draw_list(self, surf, ctx):
         keys = [("ENTER", "OK"), ("ESC", "BACK")]
@@ -280,6 +303,9 @@ class Menu:
         y0 = CONTENT_Y
         hints = any(e[2] for e in self.entries)
         bottom = HINT_Y - 6 if hints else FOOTER_Y - 8
+        if not hints and any(width(e[1]) > T.SAFE_W - 46 for e in self.entries):
+            # Ha rotulos cortados: sobra espaco para o do cursor, inteiro.
+            bottom -= 24
         if self.text:
             # O texto deixa pelo menos tres linhas para a lista.
             y0 = paragraph(surf, [self.text], y0, bottom=bottom - 3 * ROW - 4) + 4
@@ -288,8 +314,9 @@ class Menu:
             self.top = self.cursor
         if self.cursor >= self.top + rows:
             self.top = self.cursor - rows + 1
-        x = T.SAFE_X + 24
-        w = T.SAFE_W - 48
+        x = T.SAFE_X + 8
+        w = T.SAFE_W - 24
+        full = ""
 
         for i in range(self.top, min(len(self.entries), self.top + rows)):
             value, label, _ = self.entries[i]
@@ -308,6 +335,14 @@ class Menu:
                     pygame.draw.rect(surf, color if selected else T.GREEN, (x + 6, y + 4, 4, 4))
                     if not selected:
                         color = T.GREEN
+            # O rotulo que nao cabe e cortado; o do cursor aparece inteiro
+            # embaixo, no lugar da dica.
+            if width(label) > w - 22:
+                if selected:
+                    full = label
+                while width(label + "..") > w - 22:
+                    label = label[:-1]
+                label += ".."
             text(surf, label, color, x + 18, y + 2)
 
         # As setas de quando a lista rola.
@@ -321,6 +356,9 @@ class Menu:
         if hints:
             for i, line in enumerate(wrap(self.entries[self.cursor][2], T.SAFE_W)[:3]):
                 centered(surf, line, T.CYAN, HINT_Y + i * 11)
+        elif full:
+            for i, line in enumerate(wrap(full, T.SAFE_W)[:2]):
+                centered(surf, line, T.CYAN, bottom + 6 + i * 10)
 
 
 class YesNo:
@@ -347,18 +385,28 @@ class YesNo:
         img = T.icon(self.icon, 2) if self.icon else None
         if img:
             surf.blit(img, ((T.WIDTH - 32) // 2, 38))
-        y = body(surf, self.lines)
-        button(surf, self.labels[0], 104, y, self.choice == 0)
-        button(surf, self.labels[1], 216, y, self.choice == 1)
+        w = max(80, max(width(label) for label in self.labels) + 16)
+        if 2 * w + 16 <= T.SAFE_W:
+            y = body(surf, self.lines)
+            button(surf, self.labels[0], T.WIDTH // 2 - w // 2 - 8, y, self.choice == 0, w)
+            button(surf, self.labels[1], T.WIDTH // 2 + w // 2 + 8, y, self.choice == 1, w)
+        else:
+            # Rotulos longos: um botao embaixo do outro.
+            y = body(surf, self.lines, 46)
+            w = min(w, T.SAFE_W)
+            button(surf, self.labels[0], T.WIDTH // 2, y, self.choice == 0, w)
+            button(surf, self.labels[1], T.WIDTH // 2, y + 26, self.choice == 1, w)
 
 
 class Message:
-    """ui_msg (espera o Enter) e, com kind="error", o aviso de falha."""
+    """ui_msg (espera o Enter) e, com kind="error", o aviso de falha. Com
+    wait=False e o ui_info: so o texto, sem botao (um "aguarde...")."""
 
-    def __init__(self, title, lines, kind="info"):
+    def __init__(self, title, lines, kind="info", wait=True):
         self.title = title
         self.lines = lines
         self.kind = kind
+        self.wait = wait
 
     def key(self, k):
         if k in ("enter", "esc"):
@@ -366,9 +414,10 @@ class Message:
         return None
 
     def draw(self, surf, ctx):
-        frame(surf, ctx, self.title, [("ENTER", "OK")], self.kind == "error")
+        frame(surf, ctx, self.title, [("ENTER", "OK")] if self.wait else [], self.kind == "error")
         y = body(surf, self.lines)
-        button(surf, "OK", T.WIDTH // 2, y, True)
+        if self.wait:
+            button(surf, "OK", T.WIDTH // 2, y, True)
 
 
 class Input:
@@ -1010,3 +1059,105 @@ class ToggleGrid:
         surf.blit(name, ((T.WIDTH - name.get_width()) // 2, 172 if scale == 2 else 176))
         for i, line in enumerate(wrap(self.help, T.SAFE_W)[:2]):
             centered(surf, line, T.CYAN, 194 + i * 11)
+
+
+class Timed(Message):
+    """ui_timed_confirm: o aviso que espera o Enter por um tempo. tick()
+    devolve ("timeout", None) quando o tempo acaba."""
+
+    def __init__(self, title, lines, label, seconds):
+        super().__init__(title, lines)
+        self.label = label.upper()
+        self.deadline = time.monotonic() + seconds
+        self.left = seconds
+
+    def key(self, k):
+        if k == "enter":
+            return ("select", None)
+        return ("back", None) if k == "esc" else None
+
+    def tick(self):
+        left = max(0, int(self.deadline - time.monotonic() + 0.999))
+        if left <= 0:
+            return ("timeout", None)
+        if left != self.left:
+            self.left = left
+            return "redraw"
+        return None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("ENTER", "OK"), ("ESC", "BACK")])
+        y = body(surf, self.lines, 34)
+        button(surf, self.label, T.WIDTH // 2, y, True, w=min(T.SAFE_W, width(self.label) + 32))
+        centered(surf, "%d s" % self.left, T.COMMENT, y + 26)
+
+
+class Pager:
+    """ui_pager: um texto longo (um log, uma lista) com rolagem. As linhas
+    largas demais quebram no meio."""
+
+    ROWS, COLS = 17, 36
+
+    def __init__(self, title, content, start=False):
+        self.title = title
+        self.lines = []
+        for line in content.split("\n"):
+            line = line.expandtabs(4)
+            self.lines += [line[i:i + self.COLS] for i in range(0, len(line), self.COLS)] or [""]
+        self.top = 0 if start else max(0, len(self.lines) - self.ROWS)
+
+    def key(self, k):
+        last = max(0, len(self.lines) - self.ROWS)
+        step = {"up": -1, "down": 1, "pgup": -self.ROWS, "pgdn": self.ROWS, "left": -self.ROWS,
+                "right": self.ROWS}.get(k)
+        if step:
+            self.top = min(last, max(0, self.top + step))
+        elif k in ("enter", "esc"):
+            return ("back", None)
+        return None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("UP DOWN", "SCROLL"), ("ENTER", "BACK")])
+        pygame.draw.rect(surf, T.BG_DEEP, (T.SAFE_X - 4, 34, T.SAFE_W + 8, self.ROWS * 10 + 6))
+        for i, line in enumerate(self.lines[self.top:self.top + self.ROWS]):
+            text(surf, line, T.FG, T.SAFE_X, 38 + i * 10)
+        if len(self.lines) > self.ROWS:
+            # A barra do lado: onde a janela esta no texto.
+            h = self.ROWS * 10
+            size = max(8, h * self.ROWS // len(self.lines))
+            pos = (h - size) * self.top // (len(self.lines) - self.ROWS)
+            pygame.draw.rect(surf, T.PINK, (T.SAFE_X + T.SAFE_W + 1, 37 + pos, 2, size))
+
+
+class Live:
+    """A tela de progresso do Setup (screens/progress.sh), redesenhada a
+    cada evento: o alvo, a barra, a etapa e as ultimas mensagens."""
+
+    def __init__(self, title, target, pct, step, footer, msgs):
+        self.title = title
+        self.target = target
+        self.pct = pct
+        self.step = step
+        self.footer = footer
+        self.msgs = msgs
+
+    def key(self, k):
+        return None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [])
+        x = T.SAFE_X
+        for i, part in enumerate(wrap(self.target, T.SAFE_W)[:2] if self.target else []):
+            centered(surf, part, T.CYAN, 34 + i * 10)
+        full = round(self.pct * 24 / 100)
+        for i in range(24):
+            pygame.draw.rect(surf, RAINBOW[i // 4] if i < full else T.LINE, (x + i * 12, 56, 10, 12))
+        name = big("%d%%" % self.pct, 3, T.YELLOW)
+        surf.blit(name, ((T.WIDTH - name.get_width()) // 2, 76))
+        y = paragraph(surf, [self.step], 110, T.FG, bottom=134) + 6
+        for msg in self.msgs[-3:]:
+            centered(surf, wrap(msg, T.SAFE_W)[0], T.COMMENT, y)
+            y += 12
+        parts = wrap(self.footer, T.SAFE_W)[:2]
+        for i, part in enumerate(parts):
+            centered(surf, part, T.COMMENT, FOOTER_Y - 11 * (len(parts) - 1) + i * 11)

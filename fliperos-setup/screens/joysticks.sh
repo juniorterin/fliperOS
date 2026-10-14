@@ -176,7 +176,7 @@ screen_calibrate() {
       || return 0
   fi
   ui_clear
-  if "$CALIBRATE" "${kind/guncon/guncon2}" "$dev" < /dev/tty > /dev/tty 2>&1; then
+  if ui_text "$CALIBRATE" "${kind/guncon/guncon2}" "$dev" < /dev/tty > /dev/tty 2>&1; then
     ui_palette > /dev/tty
     log_info "calibracao $kind salva: $dev"
     ui_msg "$title" "Calibration saved. It is applied again every time the controller is connected."
