@@ -738,7 +738,7 @@ scraper_arcade() {
 }
 
 # ── Fontes e contas ───────────────────────────────────────────────
-# De onde o Scraper busca (Setup > Games > Scraper > Scraper site): os
+# De onde o Scraper busca (Setup > Games > Scraper > Scraper provider): os
 # modulos do Skyscraper e o progetto-SNAPS. A escolha fica no fliperos.conf
 # (scraper_source). Os que pedem conta guardam o que vai no -u do Skyscraper
 # em SCRAPER_ACCOUNTS ("fonte=credenciais", so o root le), como o ES-DE e o

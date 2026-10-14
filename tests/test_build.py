@@ -2413,7 +2413,7 @@ class SnapsTests(unittest.TestCase):
 
     def test_install_and_screen(self):
         self.assertIn('install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-snaps"', ROOTFS)
-        # Um dos sites do Setup > Games > Scraper > Scraper site.
+        # Um dos sites do Setup > Games > Scraper > Scraper provider.
         sites = (ROOT / 'fliperos-setup/lib/scraper.sh').read_text()
         self.assertIn('"progettosnaps|progetto-SNAPS|none|arcade screenshots only; no account"', sites)
 

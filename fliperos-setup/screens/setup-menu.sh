@@ -527,7 +527,7 @@ screen_scraper() {
     account=$(scraper_account_label "$source")
     choice=$(ui_menu_hints "Scraper" "" "$last" \
       "scrape|Scrape the games ($name)|Covers, screenshots, logos, videos and descriptions of your ROMs." \
-      "source|Scraper site: $name, $account|Pick the scraper site and log in to the ones that ask." \
+      "source|Scraper provider: $name, $account|Pick the scraper provider and log in to the ones that ask." \
       "torrent|Art packs by torrent|Logos and videos from torrents, only for the ROMs you have." \
       "return|Return|Back to Games.") || return 0
     last=$choice
@@ -545,12 +545,12 @@ screen_scraper() {
 # client ID e o secret (IGDB). Fica guardado para as proximas vezes
 # (lib/scraper.sh).
 screen_scraper_source() {
-  local title="Scraper site" line key name kind note source creds user pass old
+  local title="Scraper provider" line key name kind note source creds user pass old
   local -a entries=()
   while IFS='|' read -r key name kind note; do
     entries+=("$key|$name: $note")
   done < <(scraper_sources)
-  source=$(ui_radio "$title" "Where the art and the game information come from. A site that asks for an account keeps it for the next times." \
+  source=$(ui_radio "$title" "Where the art and the game information come from. A provider that asks for an account keeps it for the next times." \
     "$(scraper_source_saved)" "${entries[@]}") || return 0
   conf_set scraper_source "$source"
   name=$(scraper_source_field "$source" 2)
@@ -593,22 +593,22 @@ screen_scraper_source() {
       fi
       ;;
     *)
-      ui_msg "$title" "$name is the scraper site now. It needs no account."
+      ui_msg "$title" "$name is the scraper provider now. It needs no account."
       return 0
       ;;
   esac
   if [[ -z $creds ]]; then
     ui_msg "$title" "$(ui_bad "$name only works with its key, and none was saved.")" \
-      "Open Scraper site again to type it, or pick another site."
+      "Open Scraper provider again to type it, or pick another provider."
     return 0
   fi
   scraper_account_set "$source" "$creds"
-  ui_msg "$title" "$name is the scraper site now, with your account." "" \
+  ui_msg "$title" "$name is the scraper provider now, with your account." "" \
     "The login is saved on this computer for the next times."
 }
 
 # screen_scraper_scrape: as pastas com jogos, o que buscar e a raspagem, com
-# o site escolhido em Scraper site.
+# o site escolhido em Scraper provider.
 screen_scraper_scrape() {
   local found=() entries=() line key dir platform count choice targets=() source creds="" media t
   local clones=0 pending=() rc name
@@ -639,7 +639,7 @@ screen_scraper_scrape() {
   fi
   if scraper_account_missing "$source"; then
     ui_msg "Scraper" "$(ui_bad "$name only works with an account, and none is saved.")" \
-      "Type it in Scraper site, or pick another site there."
+      "Type it in Scraper provider, or pick another provider there."
     return 0
   fi
   mapfile -t found < <(scraper_detect)

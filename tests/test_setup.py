@@ -2010,7 +2010,7 @@ class ScraperTests(Base):
         self.assertEqual(out.splitlines(), ["alvo:retroarch/snes9x|%s/retroarch/snes9x|snes|1" % roms])
 
     def test_scraper_site_and_its_account(self):
-        # Scraper site: a escolha fica no fliperos.conf e a conta (o -u do
+        # Scraper provider: a escolha fica no fliperos.conf e a conta (o -u do
         # Skyscraper) num arquivo so do root, sem ir para o log. Um site que
         # so funciona com conta nao raspa sem ela.
         env, roms, _ = self.scraper_env()
