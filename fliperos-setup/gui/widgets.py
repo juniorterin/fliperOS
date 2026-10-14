@@ -114,11 +114,14 @@ def frame(surf, ctx, title, keys, error=False, score=False):
         # A linha de placar: o IP e o uso do disco ("192.168.1.155 - 42%").
         ip, _, used = ctx.get("status", "").partition(" - ")
         right = T.SAFE_X + T.SAFE_W
-        w = text(surf, "NET", T.RED, T.SAFE_X, 32)
+        # Cada um com o icone na frente: a rede e o disco.
+        surf.blit(T.small_icon("net"), (T.SAFE_X, 32))
+        w = text(surf, "NET", T.RED, T.SAFE_X + 12, 32) + 12
         text(surf, ip, T.FG, T.SAFE_X + w + 8, 32)
         if used:
             w = text(surf, used, T.FG, right, 32, right=True)
-            text(surf, "DISK", T.RED, right - w - 8, 32, right=True)
+            w += text(surf, "DISK", T.RED, right - w - 8, 32, right=True) + 8
+            surf.blit(T.small_icon("disk"), (right - w - 12, 32))
 
     total = sum(width(k) + 8 + width(a) for k, a in keys) + 16 * (len(keys) - 1)
     x = (T.WIDTH - total) // 2
@@ -177,6 +180,8 @@ class Menu:
         self.marked = set(marked)
         self.cursor = 0
         self.top = 0
+        # A transicao do carrossel: (inicio, lado) enquanto os icones deslizam.
+        self.slide = None
         for i, e in enumerate(self.entries):
             if e[0] == default:
                 self.cursor = i
@@ -191,8 +196,10 @@ class Menu:
             self.marked = set() if self.marked >= values else values
         elif k == "up":
             self.cursor = (self.cursor - 1) % n
+            self.slide = (time.monotonic(), -1)
         elif k == "down":
             self.cursor = (self.cursor + 1) % n
+            self.slide = (time.monotonic(), 1)
         elif k == "pgup":
             self.cursor = max(0, self.cursor - 5)
         elif k == "pgdn":
@@ -217,6 +224,10 @@ class Menu:
         if any(e[2] for e in self.entries) or len(lines) > 3:
             return lines
         return []
+
+    def tick(self):
+        """Redesenhar enquanto o carrossel desliza."""
+        return "redraw" if self.slide else None
 
     def carousel(self):
         """O menu cabe no carrossel? Uma lista longa (pastas, redes) ou um
@@ -257,23 +268,39 @@ class Menu:
         for i, (line, _) in enumerate(notes):
             centered(surf, line, T.PINK, 34 + i * 10)
 
+        # A transicao: a fila de icones desliza ate o novo item parar sob a
+        # moldura, em 0,16 s, freando no fim.
+        dx = 0
+        if self.slide:
+            p = (time.monotonic() - self.slide[0]) / 0.16
+            if p < 1:
+                dx = round(self.slide[1] * 64 * (1 - p) ** 2)
+            else:
+                self.slide = None
         mid = top + size // 2
         shade = pygame.Surface((40, 40), pygame.SRCALPHA)
         shade.fill(T.SPACE + (130,))
+        # Os vizinhos deslizam so dentro da margem de overscan.
+        surf.set_clip((T.SAFE_X, 0, T.SAFE_W, T.HEIGHT))
         for off, cx in ((-2, 36), (2, 284), (-1, 92), (1, 228)):
             # Com poucos itens, cada um aparece uma vez so (os da direita
             # primeiro).
             if n < abs(off) * 2 + (1 if off < 0 else 0):
                 continue
             entry = self.entries[(self.cursor + off) % n]
+            cx += dx
             pygame.draw.rect(surf, T.BG_DEEP, (cx - 20, mid - 20, 40, 40))
             self.tile(surf, entry, cx - 16, mid - 16, 2)
             surf.blit(shade, (cx - 20, mid - 20))
             pygame.draw.rect(surf, T.LINE, (cx - 20, mid - 20, 40, 40), 1)
+        surf.set_clip(None)
         left = (T.WIDTH - size) // 2
         block(surf, (left, top, size, size), T.BG_DEEP, T.PURPLE)
+        # O icone que chega aparece so dentro da moldura.
+        surf.set_clip((left + 2, top + 2, size - 4, size - 4))
+        self.tile(surf, self.entries[self.cursor], left + 4 + dx, top + 4, scale)
+        surf.set_clip(None)
         pygame.draw.rect(surf, T.PINK, (left, top, size, size), 2)
-        self.tile(surf, self.entries[self.cursor], left + 4, top + 4, scale)
 
         y = top + size + 12
         label, hint = self.entries[self.cursor][1], self.entries[self.cursor][2]

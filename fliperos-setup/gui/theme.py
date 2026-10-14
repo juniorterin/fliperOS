@@ -1064,3 +1064,40 @@ def icon(name, scale):
             img = None
     _icons[(name, scale)] = img
     return img
+
+
+# Os icones de 8x8 do placar do menu principal, do tamanho da letra.
+SMALL = {
+    "net": """
+.CCCCCC.
+C......C
+..CCCC..
+.C....C.
+...CC...
+..C..C..
+........
+...CC...
+""",
+    "disk": """
+MMMMMMMM
+MFFFFFFM
+MFFFFFFM
+MMMMMMMM
+MDDDDGYM
+MDDDDDDM
+MMMMMMMM
+........
+""",
+}
+_small = {}
+
+
+def small_icon(name):
+    if name not in _small:
+        surf = pygame.Surface((8, 8), pygame.SRCALPHA)
+        for y, row in enumerate(SMALL[name].split()):
+            for x, ch in enumerate(row):
+                if ch != ".":
+                    surf.set_at((x, y), ICON_COLORS[ch])
+        _small[name] = surf
+    return _small[name]

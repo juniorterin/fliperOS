@@ -139,9 +139,17 @@ class Smoke:
 BACKGROUNDS = {"stars": Stars, "snow": Snow, "water": Water, "fire": Fire, "smoke": Smoke}
 
 
-def pick(name=None, seed=None):
-    """O fundo pedido ou, sem nome (nem FLIPEROS_GUI_BG), um sorteado."""
-    name = name or os.environ.get("FLIPEROS_GUI_BG") or random.choice(list(BACKGROUNDS))
-    if name not in BACKGROUNDS:
-        name = "stars"
-    return BACKGROUNDS[name](random.Random(7 if seed is None else seed))
+def pick(name=None, seed=None, exclude=None):
+    """O fundo pedido ou, sem nome (nem FLIPEROS_GUI_BG), um sorteado, que
+    nao e o exclude (o que estava na tela). O sorteado tambem tem estrelas,
+    flocos e nuvens em lugares novos; o pedido (os prints) e sempre igual."""
+    fixed = name or os.environ.get("FLIPEROS_GUI_BG")
+    if fixed:
+        name = fixed if fixed in BACKGROUNDS else "stars"
+    else:
+        name = random.choice([n for n in BACKGROUNDS if n != exclude] or list(BACKGROUNDS))
+    if seed is None:
+        seed = 7 if fixed else random.randrange(1 << 30)
+    bg = BACKGROUNDS[name](random.Random(seed))
+    bg.name = name
+    return bg

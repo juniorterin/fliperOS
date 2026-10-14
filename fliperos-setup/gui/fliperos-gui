@@ -130,6 +130,9 @@ class App:
 
     def compose(self, screen, ctx, redraw=True):
         """Um quadro na tela logica: o fundo e, por cima, a interface."""
+        if self.fixed_time is not None and getattr(screen, "slide", None):
+            # Os prints: o carrossel ja parado, sem a transicao.
+            screen.slide = None
         if redraw:
             self.ui.fill((0, 0, 0, 0))
             if screen is not None:
@@ -185,6 +188,9 @@ def run_demo(app, args):
         for key in app.keys():
             if key == "quit" or not press(key):
                 return 0
+            redraw = True
+        tick = getattr(stack[-1], "tick", None)
+        if tick and tick() == "redraw":
             redraw = True
         app.show(stack[-1], demo.CONTEXT, redraw)
         redraw = False
