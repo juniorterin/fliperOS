@@ -344,31 +344,44 @@ class Message:
 
 
 class Input:
-    """ui_input: um campo de texto. O cursor e fixo, nao pisca."""
+    """ui_input: um campo de texto. O cursor e fixo, nao pisca. Com action
+    (valor, rotulo, explicacao) ha um botao embaixo do campo: as setas para
+    cima e para baixo trocam entre os dois, e o Enter no botao devolve o
+    valor dele."""
 
-    def __init__(self, title, lines, value="", password=False):
+    def __init__(self, title, lines, value="", password=False, action=None, focus=0):
         self.title = title
         self.lines = lines
         self.value = value
         self.password = password
+        self.action = action
+        self.focus = focus if action else 0
 
     def key(self, k):
         if k == "esc":
             return ("back", None)
-        if k == "enter":
-            return ("select", self.value)
-        if k == "backspace":
+        if k in ("up", "down") and self.action:
+            self.focus ^= 1
+        elif k == "enter":
+            return ("select", self.action[0] if self.focus else self.value)
+        elif self.focus:
+            return None
+        elif k == "backspace":
             self.value = self.value[:-1]
         elif len(k) == 1:
             self.value += k
         return None
 
     def draw(self, surf, ctx):
-        frame(surf, ctx, self.title, [("ENTER", "OK"), ("ESC", "BACK")])
-        y = paragraph(surf, self.lines, 80) + 12
+        keys = [("ENTER", "OK"), ("ESC", "BACK")]
+        if self.action:
+            keys.insert(0, ("UP DOWN", "SELECT"))
+        frame(surf, ctx, self.title, keys)
+        y = paragraph(surf, self.lines, 56 if self.action else 80) + 12
         x = T.SAFE_X
-        block(surf, (x, y, T.SAFE_W - 2, 22), T.BG_DEEP, T.PURPLE)
-        pygame.draw.rect(surf, T.PINK, (x, y, T.SAFE_W - 2, 22), 2)
+        on = not self.focus
+        block(surf, (x, y, T.SAFE_W - 2, 22), T.BG_DEEP, T.PURPLE if on else None)
+        pygame.draw.rect(surf, T.PINK if on else T.LINE, (x, y, T.SAFE_W - 2, 22), 2 if on else 1)
         shown = "*" * len(self.value) if self.password else self.value
         # Um texto longo (um magnet link) mostra so o fim, onde se digita.
         if width(shown) > T.SAFE_W - 32:
@@ -376,7 +389,12 @@ class Input:
                 shown = shown[1:]
             shown = ".." + shown
         w = text(surf, shown, T.FG, x + 8, y + 7)
-        pygame.draw.rect(surf, T.PINK, (x + 9 + w, y + 6, 7, 10))
+        if on:
+            pygame.draw.rect(surf, T.PINK, (x + 9 + w, y + 6, 7, 10))
+        if self.action:
+            _, label, about = self.action
+            button(surf, label, T.WIDTH // 2, y + 40, bool(self.focus), w=width(label) + 32)
+            paragraph(surf, [about], y + 72, T.CYAN)
 
 
 class Progress:

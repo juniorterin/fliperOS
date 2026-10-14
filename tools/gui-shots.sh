@@ -55,6 +55,7 @@ shot filter-buttons filterbuttons
 shot filter-controls filtercontrols
 shot filter-years filteryears
 shot downloader-magnet magnet
+shot downloader-magnet-browser magnetbrowser
 shot downloader-progress download
 shot power power
 shot radio monitor "down down"
