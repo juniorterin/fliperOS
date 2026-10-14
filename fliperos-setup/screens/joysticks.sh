@@ -37,6 +37,7 @@ screen_joysticks() {
 # apertados nao podem responder o menu.
 screen_buttons() {
   local title="Button mapping" players p control dev name got index element tries summary map n
+  local -a pressed
   players=$(ui_menu "$title" \
     "Map the panel for all emulators, one player at a time: press each control when asked. How many players?" \
     2 "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
@@ -44,17 +45,20 @@ screen_buttons() {
   map=$(mktemp)
   padkeys_off
   for ((p = 1; p <= players; p++)); do
-    dev="" n=0
+    dev="" n=0 pressed=()
     for control in "${BUTTON_CONTROLS[@]}"; do
       n=$((n + 1))
       for ((tries = 0; tries < 3; tries++)); do
-        ui_info "$title" "$(ui_c "$C_PINK" "Player $p: press ${BUTTON_LABELS[$control]}")" "" \
-          "$n of ${#BUTTON_CONTROLS[@]}. Wait 8 seconds to skip it."
+        # Na interface grafica, o painel desenhado com o comando da vez aceso.
+        ui_capture "$title" "$p" "$control" "$n" "${#BUTTON_CONTROLS[@]}" 8 "${pressed[@]}" ||
+          ui_info "$title" "$(ui_c "$C_PINK" "Player $p: press ${BUTTON_LABELS[$control]}")" "" \
+            "$n of ${#BUTTON_CONTROLS[@]}. Wait 8 seconds to skip it."
         got=$(buttons_capture 8) || break
         read -r index element name <<< "$got"
         if [[ -z $dev || $index == "$dev" ]]; then
           dev=$index
           printf '%s %s %s %s %s\n' "$p" "$control" "$index" "$element" "$name" >> "$map"
+          pressed+=("$control")
           sleep 0.3
           break
         fi
@@ -98,7 +102,8 @@ screen_buttons_layout() {
       read -r -a order <<< "$(buttons_layout_get "$count")"
       entries+=("$count|$count-button games   $(buttons_layout_row "${order[@]}")")
     done
-    choice=$(ui_menu "$title" \
+    # UI_STYLE=layout: na interface grafica, o painel de cada um como icone.
+    choice=$(UI_STYLE=layout ui_menu "$title" \
       "Where the buttons of a game go on the panel, by how many buttons the game uses. For GroovyMAME, the MAME cores of RetroArch, Model 2 and Model 3." \
       "$last" "${entries[@]}" "return|Return") || return 0
     [[ $choice == return ]] && return 0
@@ -120,9 +125,16 @@ screen_buttons_layout_edit() {
       [[ " ${order[*]} " == *" $position "* ]] || entries+=("$position|${BUTTONS_POSITIONS[position - 1]}")
     done
     ((n > 1)) || entries+=("default|Default layout (button 1 at the top left, in order)")
-    mapfile -t grid < <(buttons_layout_grid "${order[@]}")
-    choice=$(ui_menu "$title" "${grid[0]}"$'\n'"${grid[1]}"$'\n\n'"Where is BUTTON $n of the game?" \
-      "${entries[0]%%|*}" "${entries[@]}") || return 0
+    # Na interface grafica a posicao e escolhida no proprio painel.
+    if choice=$(ui_layout_pick "$title" "$count" "$((n == 1))" "${order[@]}"); then
+      :
+    elif (($? == 1)); then
+      return 0
+    else
+      mapfile -t grid < <(buttons_layout_grid "${order[@]}")
+      choice=$(ui_menu "$title" "${grid[0]}"$'\n'"${grid[1]}"$'\n\n'"Where is BUTTON $n of the game?" \
+        "${entries[0]%%|*}" "${entries[@]}") || return 0
+    fi
     if [[ $choice == default ]]; then
       read -r -a order <<< "$(seq -s ' ' 1 "$count")"
       break

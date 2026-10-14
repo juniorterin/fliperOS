@@ -69,9 +69,11 @@ class Server:
         out = []
         for arg in args:
             value, label, hint = (plain(arg).split(GS) + ["", ""])[:3]
-            found = None if hint else NOTE.match(label)
+            found = NOTE.match(label)
             if found:
-                label, hint = found.group(1), found.group(2)[:1].upper() + found.group(2)[1:]
+                # Com dica, o parentese vem antes dela ("All emulators. Teach...").
+                note = found.group(2)[:1].upper() + found.group(2)[1:]
+                label, hint = found.group(1), note + ". " + hint if hint else note
             out.append((value, label, hint))
         return out
 
@@ -96,6 +98,32 @@ class Server:
         if kind == "screens":
             return tuple((flags(data) + [False, False])[:2])
         return data.upper()
+
+    def download(self, title, pct, step, msgs):
+        """A tela do download do Downloader a partir da linha de status do
+        fliperos-downloader ("ROMs 3.5 GB of 9.6 GB, 18 peers; CHDs ...;
+        2.4 MB/s, 3 h left"): uma barra por torrent, a velocidade e o tempo."""
+        units = {"B": 1, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12}
+
+        def size(s):
+            found = re.match(r"([\d.]+)\s*([KMGT]?)", s.replace(",", "."))
+            return float(found.group(1)) * units[found.group(2) or "B"] if found else 0
+
+        parts, speed, left = [], "-", "-"
+        for line in [step] + msgs:
+            found = re.match(r"^(\S+) (.+?) of (.+?)(?:, (\d+) peers)?(?: \((.+)\))?$", line)
+            rate = re.match(r"^(.+)/s, (.+) left$", line)
+            if rate:
+                speed, left = rate.group(1) + "/s", rate.group(2)
+            elif found:
+                total = size(found.group(3))
+                frac = size(found.group(2)) / total if total else 0
+                parts.append((found.group(1).upper(), found.group(2), found.group(3), int(found.group(4) or 0),
+                              min(1, frac)))
+            elif line.strip():
+                name, _, state = line.partition(" ")
+                parts.append((name.upper(), state.upper(), "", 0, 1 if state == "done" else 0))
+        return self.W.Download(title, parts[:2], pct, speed, left)
 
     # O laco -----------------------------------------------------------
 
@@ -152,6 +180,10 @@ class Server:
                 continue
             if self.app.window is not None:
                 self.app.pygame.event.pump()
+                # Uma tela que muda sozinha (o tempo do Button mapping).
+                tick = getattr(self.screen, "tick", None)
+                if tick and tick() == "redraw":
+                    redraw = True
                 self.app.show(self.screen, self.ctx, redraw)
                 redraw = False
             self.app.tick()
@@ -189,6 +221,18 @@ class Server:
             if not entries:
                 return 1, ""
             marked = current.split(",") if cmd == "check" else [current] if cmd == "radio" else []
+            tiles = {}
+            if style == "layout":
+                # Buttons layout: "3-button games   [ ][ ][ ] / [1][2][3]" vira
+                # o nome e o icone do painel com os botoes nas posicoes.
+                fixed = []
+                for value, label, hint in entries:
+                    cells = re.findall(r"\[(.)\]", label)
+                    if len(cells) == 6:
+                        tiles[value] = W.layout_tile([cells.index(str(n)) + 1 for n in range(1, 7) if str(n) in cells])
+                        label = label.split("  ")[0].strip()
+                    fixed.append((value, label, hint))
+                entries = fixed
             options = [(e[0], e[1]) for e in entries]
             if cmd == "radio" and style in ("people", "dots") and all(e[0].isdigit() for e in entries):
                 # Ate quantos: as figuras acesas ate o valor.
@@ -198,7 +242,7 @@ class Server:
             elif cmd == "check" and style == "years":
                 screen = W.ToggleGrid(title, text, [(v, label, label[2:]) for v, label in options], marked, 6)
             else:
-                screen = W.Menu(title, entries, current, text, cmd, marked)
+                screen = W.Menu(title, entries, current, text, cmd, marked, tiles)
             action, value = self.ask(screen, cmd)
             if action != "select":
                 return 1, ""
@@ -244,9 +288,23 @@ class Server:
             self.ask(W.Pager(plain(a[0]), plain(a[1]), a[2] == "inicio"), cmd)
             return 0, ""
         if cmd == "progress":
+            # titulo, alvo, porcento, etapa, rodape, estilo, mensagens...
             pct = int(a[2]) if a[2].isdigit() else 0
-            self.put(W.Live(plain(a[0]), plain(a[1]), pct, plain(a[3]), plain(a[4]), [plain(m) for m in a[5:]]), cmd)
+            msgs = [plain(m) for m in a[6:]]
+            if a[5] == "download":
+                self.put(self.download(plain(a[0]), pct, plain(a[3]), msgs), cmd)
+            else:
+                self.put(W.Live(plain(a[0]), plain(a[1]), pct, plain(a[3]), plain(a[4]), msgs), cmd)
             return 0, ""
+        if cmd == "capture":
+            # titulo, jogador, comando, numero, total, segundos, ja apertados...
+            self.put(W.Capture(plain(a[0]), int(a[1]), a[2], a[6:], int(a[3]), int(a[4]), int(a[5]), int(a[5])), cmd)
+            return 0, ""
+        if cmd == "layout":
+            # titulo, botoes do jogo, padrao (1 = oferecer), posicoes ja postas...
+            order = [int(p) for p in a[3:] if p.isdigit()]
+            action, value = self.ask(W.LayoutEdit(plain(a[0]), int(a[1]), order, a[2] == "1"), cmd)
+            return (0, str(value)) if action == "select" else (1, "")
         if cmd == "keywait":
             deadline = time.monotonic() + float(a[0])
             while time.monotonic() < deadline:

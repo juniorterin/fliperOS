@@ -205,6 +205,8 @@ screen_downloader_start() {
 screen_downloader_watch() {
   local status pct state line step
   local -a rest
+  # Na interface grafica, a tela do download: uma barra por torrent.
+  local UI_STYLE=download
   ui_size
   ui_clear
   ui_topbar

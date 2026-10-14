@@ -213,12 +213,33 @@ ui_wait_key() {
 }
 
 # ui_progress TITULO ALVO PORCENTO ETAPA RODAPE MENSAGEM... desenha a tela
-# de progresso na interface grafica. Status 1: nao ha interface grafica, e
+# de progresso na interface grafica (com UI_STYLE=download, a do download do
+# Downloader, uma barra por torrent). Status 1: nao ha interface grafica, e
 # quem chamou (screens/progress.sh) desenha no terminal.
 ui_progress() {
   ui_gui_alive || return 1
-  ui_gui_call progress "$@"
+  ui_gui_call progress "$1" "$2" "$3" "$4" "$5" "${UI_STYLE:-}" "${@:6}"
   return 0
+}
+
+# ui_capture TITULO JOGADOR COMANDO NUMERO TOTAL SEGUNDOS JA_APERTADOS...
+# mostra o Button mapping pedindo um comando (up, b3, start...) no painel
+# desenhado e volta na hora. Status 1: nao ha interface grafica (quem chamou
+# mostra o texto).
+ui_capture() {
+  ui_gui_alive || return 1
+  ui_gui_call capture "$@"
+  return 0
+}
+
+# ui_layout_pick TITULO BOTOES PADRAO POSICAO... pergunta, no painel de 3x2,
+# onde fica o proximo botao do jogo (as POSICOES, de 1 a 6, sao as dos ja
+# postos; PADRAO=1 deixa escolher o layout padrao). Imprime a posicao ou
+# "default"; status 1 = Esc, 2 = nao ha interface grafica.
+ui_layout_pick() {
+  ui_gui_alive || return 2
+  ui_gui_call layout "$@" || return 1
+  printf '%s\n' "$UI_GUI_REPLY"
 }
 
 

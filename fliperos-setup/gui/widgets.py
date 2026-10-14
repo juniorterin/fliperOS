@@ -276,7 +276,11 @@ class Menu:
         self.tile(surf, self.entries[self.cursor], left + 4, top + 4, scale)
 
         y = top + size + 12
-        label = self.entries[self.cursor][1].upper()
+        label, hint = self.entries[self.cursor][1], self.entries[self.cursor][2]
+        if not hint and ": " in label:
+            # "Filter: Arcade classics": o nome grande e o valor na dica.
+            label, hint = label.split(": ", 1)
+        label = label.upper()
         if width(label) * 2 <= T.SAFE_W:
             name = big(label, 2, LABEL)
             x = (T.WIDTH - name.get_width()) // 2
@@ -287,7 +291,7 @@ class Menu:
             parts = wrap(label, T.SAFE_W)[:2]
             for i, part in enumerate(parts):
                 centered(surf, part, T.YELLOW, y + 4 - 5 * (len(parts) - 1) + i * 10)
-        hint = self.entries[self.cursor][2] or ("" if notes else self.text)
+        hint = hint or ("" if notes else self.text)
         y += 26 if scale == 4 else 22
         for i, line in enumerate(wrap(hint, T.SAFE_W)[:3]):
             if y + i * 11 <= FOOTER_Y - 12:
@@ -559,9 +563,18 @@ class Capture:
         self.done = set(done)
         self.number, self.total = number, total
         self.left, self.seconds = left, seconds
+        # O tempo anda sozinho: um quadrado a menos por segundo (tick).
+        self.start = time.monotonic()
 
     def key(self, k):
         return ("back", None) if k == "esc" else None
+
+    def tick(self):
+        left = max(0, self.seconds - int(time.monotonic() - self.start))
+        if left != self.left:
+            self.left = left
+            return "redraw"
+        return None
 
     def state(self, control):
         if control == self.asking:
@@ -624,11 +637,13 @@ class LayoutEdit:
     POSITIONS = ["Top row, left", "Top row, middle", "Top row, right",
                  "Bottom row, left", "Bottom row, middle", "Bottom row, right"]
 
-    def __init__(self, title, count, order=()):
+    def __init__(self, title, count, order=(), default=False):
         self.title = title
         self.count = count
         self.order = list(order)
         self.cursor = next(p for p in range(6) if p + 1 not in self.order)
+        # default: Espaco, no primeiro botao, escolhe o layout padrao.
+        self.default = default
 
     def key(self, k):
         col, row = self.cursor % 3, self.cursor // 3
@@ -640,13 +655,18 @@ class LayoutEdit:
             row ^= 1
         elif k == "esc":
             return ("back", None)
+        elif k == "space" and not self.order and self.default:
+            return ("select", "default")
         elif k == "enter" and self.cursor + 1 not in self.order:
             return ("select", self.cursor + 1)
         self.cursor = row * 3 + col
         return None
 
     def draw(self, surf, ctx):
-        frame(surf, ctx, self.title, [("ARROWS", "MOVE"), ("ENTER", "OK"), ("ESC", "BACK")])
+        keys = [("ARROWS", "MOVE"), ("ENTER", "OK"), ("ESC", "BACK")]
+        if self.default and not self.order:
+            keys = [("ARROWS", "MOVE"), ("ENTER", "OK"), ("SPACE", "DEFAULT")]
+        frame(surf, ctx, self.title, keys)
         n = len(self.order) + 1
         centered(surf, "%d-BUTTON GAMES" % self.count, T.PINK, 36)
         block(surf, (64, 50, 192, 96), T.BG_DEEP, T.PURPLE)
@@ -790,10 +810,14 @@ class Download:
         y = 38
         for label, done, total, peers, frac in self.parts:
             w = text(surf, label, T.PINK, x, y)
-            text(surf, "%d PEERS" % peers, T.COMMENT, x + w + 8, y)
-            w = text(surf, total, T.FG, right, y, right=True)
-            w += text(surf, "OF", T.COMMENT, right - w - 8, y, right=True) + 8
-            text(surf, done, T.GREEN, right - w - 8, y, right=True)
+            if total:
+                text(surf, "%d PEERS" % peers, T.COMMENT, x + w + 8, y)
+                w = text(surf, total, T.FG, right, y, right=True)
+                w += text(surf, "OF", T.COMMENT, right - w - 8, y, right=True) + 8
+                text(surf, done, T.GREEN, right - w - 8, y, right=True)
+            else:
+                # Sem tamanho: o estado ("DONE", "NOT STARTED").
+                text(surf, done, T.GREEN if frac else T.COMMENT, right, y, right=True)
             pygame.draw.rect(surf, T.LINE, (x, y + 11, T.SAFE_W, 5))
             pygame.draw.rect(surf, T.GREEN, (x, y + 11, round(T.SAFE_W * frac), 5))
             y += 26
