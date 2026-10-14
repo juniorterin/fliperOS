@@ -188,7 +188,12 @@ screen_calibrate() {
       || return 0
   fi
   ui_clear
-  if ui_text "$CALIBRATE" "${kind/guncon/guncon2}" "$dev" < /dev/tty > /dev/tty 2>&1; then
+  # Na interface grafica, a calibracao da pistola tambem e desenhada nela
+  # (gui/gunscreen.py); a interface solta o video para o calibrador (ui_text).
+  local gui=0
+  ui_gui_alive && gui=1
+  if FLIPEROS_CALIBRATE_GUI=$gui FLIPEROS_GUI_DIR=$SETUP_DIR/gui \
+    ui_text "$CALIBRATE" "${kind/guncon/guncon2}" "$dev" < /dev/tty > /dev/tty 2>&1; then
     ui_palette > /dev/tty
     log_info "calibracao $kind salva: $dev"
     ui_msg "$title" "Calibration saved. It is applied again every time the controller is connected."

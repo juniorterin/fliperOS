@@ -239,18 +239,36 @@ class Screen:
             termios.tcsetattr(self.fd, termios.TCSADRAIN, self.saved)
 
 
+def make_screen():
+    """A tela da calibracao da pistola: a da interface grafica do Setup
+    (fliperos-setup/gui/gunscreen.py) quando o Setup esta nela
+    (FLIPEROS_CALIBRATE_GUI=1), senao o terminal."""
+    if os.environ.get('FLIPEROS_CALIBRATE_GUI') == '1':
+        sys.path.insert(0, os.environ.get('FLIPEROS_GUI_DIR', '/usr/local/lib/fliperos-setup/gui'))
+        try:
+            import gunscreen
+            return gunscreen.GunScreen()
+        except Exception as error:  # sem pygame ou sem video: o terminal
+            print('fliperos-calibrate: graphical screen unavailable (%s)' % error, file=sys.stderr)
+    return Screen()
+
+
 class Cancelled(Exception):
     pass
 
 
 def white(screen, *lines):
     """Tela toda branca (o fundo 7 da paleta) com o texto em cima."""
+    if hasattr(screen, 'white'):
+        return screen.white(*lines)
     screen.write('\033[?25l\033[30;47m\033[2J')
     for i, line in enumerate(lines):
         screen.at(2 + i, max(1, (screen.cols - len(line)) // 2 + 1), line)
 
 
 def draw_target(screen, row, col):
+    if hasattr(screen, 'draw_target'):
+        return screen.draw_target(row, col)
     # A mira e a celula branca do meio: o sensor precisa de luz onde aponta.
     screen.write('\033[1;31;47m')
     screen.at(row, col, '+')
@@ -288,7 +306,7 @@ def shoot(screen, gun, need):
 
 def calibrate_guncon(path):
     gun = Device(path)
-    screen = Screen()
+    screen = make_screen()
     try:
         # Alvos a 15% e 85% da tela, longe da borda, onde o tubo distorce.
         t1 = (max(3, round(screen.rows * 0.15)), max(5, round(screen.cols * 0.15)))
@@ -320,6 +338,8 @@ def calibrate_guncon(path):
         white(screen, 'Center shot at %.0f%% x %.0f%% (target %.0f%% x %.0f%%).' % (hit + want),
               'Range: X %d to %d, Y %d to %d.' % (xr + yr), '',
               'Trigger or Enter saves. B or Esc discards.')
+        if hasattr(screen, 'show_result'):
+            screen.show_result(hit, want)
         if not confirm(screen, gun):
             return 1
         write_guncon_conf(GUNCON_CONF, xr, yr)
