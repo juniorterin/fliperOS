@@ -310,6 +310,11 @@ busy=$(pgrep -l -t tty1 | awk '{ print $2 }' | { grep -vxE 'login|zsh|bash|sudo|
   sort -u | tr '\n' ' ')
 if [[ -z $busy ]]; then
   echo "== Restarting tty1 with the new flow"
+  # O menu aberto (o Setup roda no pty do sudo, fora do tty1) e a interface
+  # grafica dele: sem isto o Setup antigo ficava orfao e a interface podia
+  # segurar o video, e o menu novo abria em texto.
+  pkill -TERM -f '^bash /usr/local/(bin|lib/fliperos-setup)/fliperos-setup --menu' 2> /dev/null || true
+  pkill -TERM -f 'fliperos-setup/gui/fliperos-gui --serve' 2> /dev/null || true
   systemctl restart getty@tty1.service
   echo "Done. To see the boot without text, reboot the cabinet."
 else
