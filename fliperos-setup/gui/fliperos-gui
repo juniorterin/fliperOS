@@ -29,7 +29,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 PREVIEW = (960, 720)
-FPS = 20
+FPS = 60
 
 
 class App:
