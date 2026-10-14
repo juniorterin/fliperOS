@@ -252,13 +252,14 @@ class Server:
             return 0, value
         if cmd == "board":
             items = []
-            for arg in a[3:]:
+            for arg in a[4:]:
                 key, name, kind, data, about = (plain(arg).split(GS) + [""] * 4)[:5]
                 items.append((key, name, kind, self.tile(kind, data), about))
             if not items:
                 return 1, ""
             cursor = max(0, [i[0] for i in items].index(a[2]) if a[2] in [i[0] for i in items] else 0)
-            action, value = self.ask(W.FilterBoard(plain(a[0]), items, cursor, note=plain(a[1])), cmd)
+            # a[3]: o arquivo do placar, que a contagem do Setup escreve depois.
+            action, value = self.ask(W.FilterBoard(plain(a[0]), items, cursor, note=plain(a[1]), score=a[3]), cmd)
             return (0, value) if action == "select" else (1, "")
         if cmd == "yesno":
             screen = W.YesNo(plain(a[0]), self.lines(a[4:]), a[1], plain(a[2]).upper(), plain(a[3]).upper())

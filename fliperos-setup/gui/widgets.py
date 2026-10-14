@@ -921,13 +921,42 @@ class FilterBoard:
 
     COLS, ROWS = 3, 3
 
-    def __init__(self, title, items, cursor=0, games="", size="", note=""):
+    def __init__(self, title, items, cursor=0, games="", size="", note="", score=""):
         self.title = title
         self.items = items
         self.cursor = cursor
         self.games, self.size = games, size
         self.note = note
         self.top = 0
+        # score: o arquivo que a contagem do Setup escreve (games=, bytes=);
+        # ate ele aparecer, o placar diz que esta contando.
+        self.score = score
+        self.checked = 0
+        if score and not games:
+            self.games, self.size = "...", "..."
+
+    def tick(self):
+        if not self.score or time.monotonic() - self.checked < 0.5:
+            return None
+        self.checked = time.monotonic()
+        try:
+            with open(self.score, encoding="utf-8") as f:
+                values = dict(line.strip().split("=", 1) for line in f if "=" in line)
+        except OSError:
+            return None
+        self.score = ""
+        games, size = values.get("games", ""), values.get("bytes", "")
+        if not games.isdigit():
+            self.games = self.size = ""
+            return "redraw"
+        self.games = "{:,}".format(int(games))
+        n = int(size) if size.isdigit() else 0
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if n < 1000 or unit == "TB":
+                break
+            n /= 1000
+        self.size = ("%d %s" % (n, unit)) if unit == "B" else ("%.1f %s" % (n, unit))
+        return "redraw"
 
     def key(self, k):
         n = len(self.items)

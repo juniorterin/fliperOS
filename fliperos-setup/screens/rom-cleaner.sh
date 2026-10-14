@@ -252,7 +252,7 @@ screen_rom_cleaner_pick() {
 # com o filtro salvo e o Save o grava; status 3 = salvou.
 screen_rom_cleaner_filters() {
   local folder=$1 target=$2 xml=$3 mode=${4:-} title="MAME ROM Cleaner" last=preset preset=cabinet transfer=copy
-  local dest key line choice value writable=0
+  local dest key line choice value writable=0 score job rc line_folder
   local -A opt=()
   local -a entries args kv presets
   [[ $mode == downloader ]] && title="Downloader filter"
@@ -297,7 +297,30 @@ screen_rom_cleaner_filters() {
         "return|Return|Leave|text|RETURN|Back to the Cleaner.")
       line="$folder -> $(romclean_target_label "$target"). Enter opens a parameter."
     fi
-    choice=$(ui_board "$title" "$line" "$last" "${entries[@]}") || return 0
+    # O placar do painel (quantos jogos passam e quanto ocupam): a contagem
+    # roda em segundo plano e aparece quando fica pronta. So na interface
+    # grafica; no texto a conta sai no Continue, como antes.
+    score="" job=""
+    if ui_gui_alive; then
+      kv=()
+      for key in "${ROMCLEAN_KEYS[@]}"; do
+        kv+=("$key=${opt[$key]}")
+      done
+      score=$(mktemp -u)
+      [[ $mode == downloader ]] && line_folder="" || line_folder=$folder
+      {
+        romclean_count_job "$target" "$dest" "$line_folder" "$xml" "${kv[@]}" > "$score.tmp" &&
+          mv "$score.tmp" "$score"
+      } &
+      job=$!
+    fi
+    choice=$(UI_BOARD_SCORE=$score ui_board "$title" "$line" "$last" "${entries[@]}")
+    rc=$?
+    if [[ -n $job ]]; then
+      romclean_count_stop "$job"
+      rm -f "$score" "$score.tmp"
+    fi
+    ((rc == 0)) || return 0
     last=$choice
     case $choice in
       return) return 0 ;;

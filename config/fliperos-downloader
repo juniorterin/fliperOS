@@ -16,6 +16,7 @@ do emulador que o plano diz e tira o torrent da lista.
   fliperos-downloader config
   fliperos-downloader add roms|chds MAGNET [--progress] [--timeout S]
   fliperos-downloader start [--progress] [--result ARQUIVO]
+  fliperos-downloader count --scan ARQUIVO
   fliperos-downloader diff [--list ARQUIVO]
   fliperos-downloader prune
   fliperos-downloader status
@@ -563,6 +564,29 @@ def in_use(doomed):
     return {n for n, _ in doomed if n.lower() in used}
 
 
+def cmd_count(args):
+    """Quantos jogos do torrent de ROMs um filtro ainda nao salvo escolhe, e
+    quanto eles ocupam: o placar do filtro no Setup. ARQUIVO tem as opcoes
+    do fliperos-romclean, uma por linha (como o filter.scan). Imprime
+    games=N e bytes=N; sem link de ROMs, nada."""
+    if 'roms' not in registered():
+        return 0
+    with open(args.scan, encoding='utf-8') as f:
+        scan = [line for line in f.read().split('\n') if line]
+    meta = meta_of('roms')
+    with tempfile.TemporaryDirectory() as tmp:
+        names = os.path.join(tmp, 'roms.list')
+        with open(names, 'w', encoding='utf-8') as f:
+            f.writelines('%s\t%d\n' % (rel, length) for _, rel, length in relative(meta))
+        proc = subprocess.run([ROMCLEAN, 'scan', *scan, '--roms', folder_of('roms', meta), '--names', names,
+                               '--plan', os.path.join(tmp, 'roms.plan')], capture_output=True, text=True)
+    if proc.returncode != 0:
+        sys.exit('fliperos-downloader: the filter could not be counted')
+    values = dict(line.split('=', 1) for line in proc.stdout.splitlines() if '=' in line)
+    print('games=%s' % values.get('move', '0'))
+    print('bytes=%s' % values.get('move_bytes', '0'))
+
+
 def cmd_diff(args):
     """O que o filtro de agora muda no que foi aplicado (KIND.plan): os sets
     que entrariam e os baixados que sairiam. "tipo<TAB>add|remove<TAB>N<TAB>bytes"."""
@@ -793,6 +817,9 @@ def main():
     p.add_argument('--result')
     p.add_argument('--timeout', type=int, default=600)
     p.set_defaults(func=cmd_start)
+    p = sub.add_parser('count')
+    p.add_argument('--scan', required=True)
+    p.set_defaults(func=cmd_count)
     p = sub.add_parser('diff')
     p.add_argument('--list')
     p.set_defaults(func=cmd_diff)

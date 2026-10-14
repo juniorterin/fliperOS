@@ -187,3 +187,40 @@ downloader_filter_orientation() {
   romclean_data_load "$ROMCLEAN_DATA"
   downloader_filter_save "$target" "$dest" "$preset" "${kv[@]}"
 }
+
+# romclean_count_job ALVO DESTINO ORIGEM XML CHAVE=VALOR... conta quantos jogos
+# o filtro em edicao escolhe e quanto ocupam (games=N, bytes=N), para o
+# placar do painel do filtro. Sem ORIGEM e o Downloader: o filtro sobre a
+# lista do torrent de ROMs (downloader count); com ela, o Cleaner: a previa
+# do romset da pasta (romclean_scan). Pode demorar: roda em segundo plano.
+romclean_count_job() {
+  local target=$1 dest=$2 folder=$3 xml=$4 summary scan
+  local -a args
+  shift 4
+  mapfile -t args < <(romclean_args "$target" "$@")
+  if [[ -z $folder ]]; then
+    scan=$(mktemp) || return 1
+    {
+      romclean_xml_args "$target" ""
+      romclean_data_args
+      romclean_target_args "$target" "$dest"
+      printf '%s\n' "${args[@]}"
+    } > "$scan"
+    downloader count --scan "$scan" 2>> "$FLIPEROS_LOG"
+    rm -f "$scan"
+    return
+  fi
+  summary=$(romclean_scan "$folder" "$target" "$xml" "$dest" /dev/null "${args[@]}" 2>> "$FLIPEROS_LOG") || return 1
+  printf 'games=%s\nbytes=%s\n' "$(romclean_value "$summary" move)" "$(romclean_value "$summary" move_bytes)"
+}
+
+# romclean_count_stop PID para a contagem (e o que ela abriu: o
+# fliperos-downloader e o fliperos-romclean) quando o painel fecha antes.
+romclean_count_stop() {
+  local child
+  for child in $(pgrep -P "$1" 2> /dev/null); do
+    romclean_count_stop "$child"
+  done
+  kill "$1" 2> /dev/null
+  return 0
+}
