@@ -51,5 +51,5 @@ export const SECTION_IDS = ['features', 'emulators', 'crt', 'multi-monitor', 'se
 export type SectionId = (typeof SECTION_IDS)[number];
 
 // Na ordem do carrossel do hero; os textos de cada um ficam em hero.slides.
-export const SCREENSHOT_IDS = ['hero', 'setup', 'install', 'video', 'desktop'] as const;
+export const SCREENSHOT_IDS = ['hero', 'install', 'setup', 'video', 'buttons', 'guncon', 'filter', 'downloader', 'desktop'] as const;
 export const SCREENSHOT_EXTENSIONS = ['avif', 'webp', 'png', 'jpg'] as const;

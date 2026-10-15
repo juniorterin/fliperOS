@@ -80,13 +80,7 @@ const ptBR: Messages = {
         id: 'hero',
         title: 'Menu principal',
         caption: 'Sobe direto em 15 kHz. Não precisa de LCD para instalar.',
-        alt: 'O menu principal do FliperOS em 640x480: Start frontend, Setup, Start desktop, Exit to shell, Shutdown / Reboot',
-      },
-      {
-        id: 'setup',
-        title: 'FliperOS Setup',
-        caption: 'O menu de configuração, dimensionado para 640x480 entrelaçado.',
-        alt: 'O menu FliperOS Setup em 640x480 entrelaçado',
+        alt: 'O menu principal do FliperOS, um carrossel de ícones grandes em pixel art com Start frontend selecionado e o estado da rede e do disco no topo',
       },
       {
         id: 'install',
@@ -95,10 +89,40 @@ const ptBR: Messages = {
         alt: 'O instalador do FliperOS escolhendo o HD/SSD de destino',
       },
       {
+        id: 'setup',
+        title: 'FliperOS Setup',
+        caption: 'Todo menu é um carrossel arcade, desenhado em 320x240 para o CRT.',
+        alt: 'O carrossel do FliperOS Setup com Games selecionado',
+      },
+      {
         id: 'video',
         title: 'Video Setup',
-        caption: 'Monitor, teste de saída e geometria na grade.',
-        alt: 'Video Setup: monitor, teste de saída e geometria na grade',
+        caption: 'Tipo de monitor, orientação, resolução e geometria.',
+        alt: 'O carrossel do Video Setup com Resolution selecionado',
+      },
+      {
+        id: 'buttons',
+        title: 'Mapeamento de botões',
+        caption: 'Aperte cada botão do painel, jogador por jogador.',
+        alt: 'Mapeamento de botões do jogador 1: um joystick e seis botões na tela, esperando o botão 3',
+      },
+      {
+        id: 'guncon',
+        title: 'Calibração da GunCon 2',
+        caption: 'Alguns tiros nos alvos e a pistola acerta onde você mira.',
+        alt: 'Calibração da GunCon 2: alvo 1 de 3 no canto de uma tela branca',
+      },
+      {
+        id: 'filter',
+        title: 'Filtro de ROMs',
+        caption: 'Fica só o que o seu painel joga: jogadores, botões, controles.',
+        alt: 'O painel do filtro de ROMs: preset, categorias, jogadores, botões e controles, com 1.284 jogos e 9,6 GB escolhidos',
+      },
+      {
+        id: 'downloader',
+        title: 'Downloader',
+        caption: 'Baixa por torrent só os jogos que o filtro escolheu.',
+        alt: 'A tela do torrent do MAME pronta para baixar 1.284 jogos, 9,6 GB',
       },
       {
         id: 'desktop',

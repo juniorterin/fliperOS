@@ -76,13 +76,7 @@ const enUS = {
         id: 'hero',
         title: 'Main menu',
         caption: 'Boots straight to 15 kHz. No LCD needed to install.',
-        alt: 'The FliperOS main menu at 640x480: Start frontend, Setup, Start desktop, Exit to shell, Shutdown / Reboot',
-      },
-      {
-        id: 'setup',
-        title: 'FliperOS Setup',
-        caption: 'The setup menu, sized for 640x480 interlaced.',
-        alt: 'The FliperOS Setup menu at 640x480 interlaced',
+        alt: 'The FliperOS main menu, a carousel of big pixel icons with Start frontend selected and the network and disk status at the top',
       },
       {
         id: 'install',
@@ -91,10 +85,40 @@ const enUS = {
         alt: 'The FliperOS installer choosing the HD/SSD to install to',
       },
       {
+        id: 'setup',
+        title: 'FliperOS Setup',
+        caption: 'Every menu is an arcade carousel, drawn at 320x240 for the CRT.',
+        alt: 'The FliperOS Setup carousel with Games selected',
+      },
+      {
         id: 'video',
         title: 'Video Setup',
-        caption: 'Monitor, output test and geometry on the grid.',
-        alt: 'Video Setup: monitor, output test and geometry on the grid',
+        caption: 'Monitor type, orientation, resolution and geometry.',
+        alt: 'The Video Setup carousel with Resolution selected',
+      },
+      {
+        id: 'buttons',
+        title: 'Button mapping',
+        caption: 'Press each button of the panel, player by player.',
+        alt: 'Button mapping for player 1: a joystick and six buttons on screen, waiting for button 3',
+      },
+      {
+        id: 'guncon',
+        title: 'GunCon 2 calibration',
+        caption: 'A few shots at the targets and the gun hits where you aim.',
+        alt: 'GunCon 2 calibration: target 1 of 3 in the corner of a white screen',
+      },
+      {
+        id: 'filter',
+        title: 'ROM filter',
+        caption: 'Keep only the games your panel can play: players, buttons, controls.',
+        alt: 'The ROM filter board: preset, categories, players, buttons and controls, with 1,284 games and 9.6 GB picked',
+      },
+      {
+        id: 'downloader',
+        title: 'Downloader',
+        caption: 'Downloads by torrent only the games the filter picked.',
+        alt: 'The MAME torrent screen ready to download 1,284 games, 9.6 GB',
       },
       {
         id: 'desktop',
