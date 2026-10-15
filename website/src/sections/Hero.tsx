@@ -2,12 +2,18 @@
 
 import { ArrowDown, Download } from 'lucide-react';
 import { CrtMonitor } from '@/components/CrtMonitor';
+import { ScreenCarousel } from '@/components/ScreenCarousel';
 import { useI18n } from '@/i18n/I18nProvider';
-import { HERO_SCREENSHOT } from '@/lib/site';
+import type { ScreenshotMap } from '@/lib/screenshots';
 
-export function Hero({ screenshot, downloadUrl }: { screenshot: string | null; downloadUrl: string }) {
+export function Hero({ screenshots, downloadUrl }: { screenshots: ScreenshotMap; downloadUrl: string }) {
   const { t } = useI18n();
   const h = t.hero;
+  // Só entram no carrossel as telas com arquivo em public/screenshots.
+  const slides = h.slides.flatMap((slide) => {
+    const src = screenshots[slide.id];
+    return src ? [{ ...slide, src }] : [];
+  });
   return (
     <section id="top" aria-labelledby="hero-title" className="relative overflow-hidden pt-28 pb-16 sm:pt-36 lg:pb-24">
       <div aria-hidden="true" className="bg-grid pointer-events-none absolute inset-0" />
@@ -46,17 +52,19 @@ export function Hero({ screenshot, downloadUrl }: { screenshot: string | null; d
           </div>
         </div>
 
-        <figure className="float relative mx-auto w-full max-w-xl">
-          <CrtMonitor
-            src={screenshot}
-            alt={h.screenAlt}
-            placeholderTitle={h.screenPlaceholderTitle}
-            placeholderHint={h.screenPlaceholderHint}
-            expectedPath={`/public/screenshots/${HERO_SCREENSHOT}.webp`}
-            priority
-          />
-          <figcaption className="mt-4 text-center font-mono text-xs text-comment">{h.screenCaption}</figcaption>
-        </figure>
+        {slides.length ? (
+          <ScreenCarousel slides={slides} labels={h.carousel} />
+        ) : (
+          <figure className="float relative mx-auto w-full max-w-xl">
+            <CrtMonitor
+              src={null}
+              alt={h.slides[0].alt}
+              placeholderTitle={h.screenPlaceholderTitle}
+              placeholderHint={h.screenPlaceholderHint}
+              expectedPath={`/public/screenshots/${h.slides[0].id}.webp`}
+            />
+          </figure>
+        )}
       </div>
     </section>
   );

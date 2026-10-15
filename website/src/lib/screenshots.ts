@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { HERO_SCREENSHOT, SCREENSHOT_EXTENSIONS, SCREENSHOT_IDS } from './site';
+import { SCREENSHOT_EXTENSIONS, SCREENSHOT_IDS } from './site';
 
 export type ScreenshotMap = Record<string, string | null>;
 
@@ -15,7 +15,7 @@ function find(id: string): string | null {
 }
 
 export function getScreenshots(): ScreenshotMap {
-  const map: ScreenshotMap = { [HERO_SCREENSHOT]: find(HERO_SCREENSHOT) };
+  const map: ScreenshotMap = {};
   for (const id of SCREENSHOT_IDS) map[id] = find(id);
   return map;
 }

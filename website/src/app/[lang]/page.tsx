@@ -1,7 +1,7 @@
 import { Header } from '@/components/Header';
 import { getRepoStats } from '@/lib/github';
 import { getScreenshots } from '@/lib/screenshots';
-import { HERO_SCREENSHOT, latestIsoUrl } from '@/lib/site';
+import { latestIsoUrl } from '@/lib/site';
 import { BadgeBar } from '@/sections/BadgeBar';
 import { Crt } from '@/sections/Crt';
 import { Emulators } from '@/sections/Emulators';
@@ -12,7 +12,6 @@ import { MultiMonitor } from '@/sections/MultiMonitor';
 import { OpenHardware } from '@/sections/OpenHardware';
 import { OpenSource } from '@/sections/OpenSource';
 import { Pixelcade } from '@/sections/Pixelcade';
-import { Screenshots } from '@/sections/Screenshots';
 import { Setup } from '@/sections/Setup';
 import { Support } from '@/sections/Support';
 
@@ -25,10 +24,9 @@ export default async function Home() {
     <>
       <Header />
       <main id="main">
-        <Hero screenshot={screenshots[HERO_SCREENSHOT]} downloadUrl={stats?.release?.iso ?? latestIsoUrl()} />
+        <Hero screenshots={screenshots} downloadUrl={stats?.release?.iso ?? latestIsoUrl()} />
         <BadgeBar />
         <Features />
-        <Screenshots screenshots={screenshots} />
         <Emulators />
         <Crt />
         <MultiMonitor />

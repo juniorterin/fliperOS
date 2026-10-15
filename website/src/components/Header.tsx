@@ -8,9 +8,8 @@ import { GithubIcon } from './GithubIcon';
 import { LanguageSwitch } from './LanguageSwitch';
 import { LogoMark, Wordmark } from './Logo';
 
-const NAV: { id: SectionId; key: 'features' | 'screenshots' | 'emulators' | 'crt' | 'multiMonitor' | 'setup' | 'github' }[] = [
+const NAV: { id: SectionId; key: 'features' | 'emulators' | 'crt' | 'multiMonitor' | 'setup' | 'github' }[] = [
   { id: 'features', key: 'features' },
-  { id: 'screenshots', key: 'screenshots' },
   { id: 'emulators', key: 'emulators' },
   { id: 'crt', key: 'crt' },
   { id: 'multi-monitor', key: 'multiMonitor' },
