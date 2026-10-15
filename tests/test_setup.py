@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators"]
+        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators", "services", "system"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -118,6 +118,7 @@ class Env:
             "PROC_MEMINFO": str(self.dir / "meminfo"),
             "CPU_SYSFS": str(self.dir / "cpu"),
             "LATENCY_STATE": str(self.dir / "run" / "governor"),
+            "NM_STATE": str(self.dir / "nm" / "NetworkManager.state"),
             "FLIPEROS_NO_SPEECH": "1",
             "LC_ALL": "C.UTF-8",
         })
@@ -1187,6 +1188,259 @@ class QuirksTests(Base):
                                "echo 'Bus 001 Device 004: ID 16C0:05e1 Van Ooijen Technische Informatica Xin-Mo'")
         self.assertEqual(self.env.out("quirks_usb_devices").splitlines(),
                          ["0x16c0:0x05e1  Van Ooijen Technische Informatica Xin-Mo"])
+
+
+class QuirkTypesTests(Base):
+    """Quirks de qualquer USB: o usbhid (controles, pistolas, teclados) e o
+    usb-storage (discos), cada um com o seu parametro do kernel."""
+
+    def test_disk_quirk_has_its_own_parameter_and_no_limit_of_four(self):
+        self.env.out("quirk_add 'JMicron SATA' ' 152D:0578:U '")
+        for i in range(1, 5):
+            self.env.out("quirk_add q%d 0x000%d:0x0001:0x40" % (i, i))
+        # O limite de 4 e so do usbhid: o disco nao conta nem e barrado.
+        self.assertEqual(self.env.run("quirk_add q5 0x0005:0x0001:0x40").returncode, 2)
+        self.env.out("quirk_add other 0bda:9210:u")
+        self.assertEqual(self.env.out("quirks_count usb-storage").strip(), "2")
+        self.assertEqual(self.env.out("quirks_count").strip(), "6")
+        # O mesmo aparelho pode ter um de cada tipo, mas nao dois do mesmo.
+        self.assertEqual(self.env.run("quirk_add again 152d:0578:ut").returncode, 3)
+        line = self.env.out("quirks_cmdline 'quiet usb-storage.quirks=1:1:u splash'").split()
+        self.assertEqual(line[:2], ["quiet", "splash"])
+        self.assertIn("usbhid.quirks=0x0001:0x0001:0x40,0x0002:0x0001:0x40,0x0003:0x0001:0x40,0x0004:0x0001:0x40",
+                      line)
+        self.assertIn("usb-storage.quirks=152d:0578:u,0bda:9210:u", line)
+
+    def test_disk_codes_the_kernel_would_not_parse_are_refused(self):
+        for bad in ("152d:578:u", "0x152d:0x0578:u", "152d:0578:", "152d:0578:1"):
+            self.assertEqual(self.env.run("quirk_add n '%s'" % bad).returncode, 1, bad)
+
+    def test_quirks_are_in_system_not_joysticks(self):
+        joy = (SETUP / "screens" / "joysticks.sh").read_text()
+        system = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_setup_system() {")[1].split("\n}\n")[0]
+        self.assertNotIn("quirks) screen_quirks", joy)
+        self.assertNotIn('"quirks|', joy)
+        self.assertIn("quirks) screen_quirks ;;", system)
+
+
+class ServicesTests(Base):
+    """Setup > System > Services: cada servico no boot, depois do boot ou desligado."""
+
+    def setUp(self):
+        super().setUp()
+        self.log = self.env.dir / "calls"
+        self.enabled = self.env.dir / "enabled"
+        self.wifi = self.env.dir / "wifi"
+        self.log.write_text("")
+        self.enabled.write_text("ssh.service\n")
+        self.wifi.write_text("enabled\n")
+        self.env.stub("systemctl", textwrap.dedent("""\
+            case $1 in
+              list-unit-files)
+                for u in ssh.service ssh.socket smbd.service nmbd.service; do
+                  [ "$u" = "$3" ] && echo "$u enabled enabled"
+                done ;;
+              is-enabled) grep -qx "$2" %s && echo enabled || echo disabled ;;
+              *) echo "systemctl $*" >> %s ;;
+            esac""" % (self.enabled, self.log)))
+        self.env.stub("nmcli", textwrap.dedent("""\
+            if [ "$1 $2" = "radio wifi" ] && [ -z "$3" ]; then cat %s; else echo "nmcli $*" >> %s; fi"""
+                                               % (self.wifi, self.log)))
+
+    def calls(self):
+        return self.log.read_text().splitlines()
+
+    def test_rows_only_for_what_exists_with_the_state_of_now(self):
+        rows = [r.split("|")[:3] for r in self.env.out("services_rows").splitlines()]
+        # Sem avahi nem o Downloader neste sistema.
+        self.assertEqual(rows, [["ssh", "SSH", "boot"], ["samba", "Network share", "off"],
+                                ["wifi", "Wi-Fi", "boot"]])
+
+    def test_save_applies_only_what_changed(self):
+        failed = self.env.out("services_save 'ssh=after,samba=boot,wifi=off'")
+        self.assertEqual(failed, "")
+        self.assertEqual(self.calls(), ["systemctl disable ssh.service ssh.socket",
+                                        "systemctl enable --now smbd.service nmbd.service",
+                                        "nmcli radio wifi off"])
+        conf = (self.env.etc / "services.conf").read_text().splitlines()
+        self.assertEqual(sorted(conf), ["samba=boot", "ssh=after", "wifi=off"])
+        # Salvo, o estado e o do arquivo; nada muda de novo.
+        self.log.write_text("")
+        self.env.out("services_save 'ssh=after,samba=boot,wifi=off'")
+        self.assertEqual(self.calls(), [])
+        self.env.out("services_save 'ssh=off'")
+        self.assertEqual(self.calls(), ["systemctl disable --now ssh.service ssh.socket"])
+
+    def test_after_boot_wifi_starts_off_and_comes_up_later(self):
+        state = self.env.dir / "nm" / "NetworkManager.state"
+        state.parent.mkdir()
+        state.write_text("[main]\nNetworkingEnabled=true\nWirelessEnabled=true\n")
+        (self.env.etc / "services.conf").write_text("wifi=after\nssh=after\nsamba=boot\n")
+        self.env.out("services_boot")
+        self.assertIn("WirelessEnabled=false\n", state.read_text())
+        self.assertIn("NetworkingEnabled=true\n", state.read_text())
+        self.env.out("services_late")
+        self.assertEqual(self.calls(), ["systemctl start --no-block ssh.service", "nmcli radio wifi on"])
+        # Sem o arquivo do NetworkManager ainda: criado.
+        state.unlink()
+        self.env.out("services_boot")
+        self.assertEqual(state.read_text(), "[main]\nWirelessEnabled=false\n")
+
+    def test_minimal_moves_boot_services_to_after(self):
+        moved = self.env.out("services_minimal").splitlines()
+        self.assertEqual(moved, ["SSH", "Wi-Fi"])
+        self.assertEqual(self.env.out("services_state ssh; services_state samba; services_state wifi").split(),
+                         ["after", "off", "after"])
+
+    def test_states_and_keys_are_checked(self):
+        self.assertEqual(self.env.run("services_set ssh sometimes").returncode, 1)
+        self.assertEqual(self.env.run("services_set telnet boot").returncode, 1)
+        self.assertFalse((self.env.etc / "services.conf").exists())
+
+    def test_units_and_menu(self):
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        for unit in ("fliperos-services.service", "fliperos-services-late.service", "fliperos-services-late.timer"):
+            self.assertIn(unit, rootfs)
+            self.assertTrue((ROOT / "config" / unit).is_file(), unit)
+        self.assertIn("ExecStart=/usr/local/bin/fliperos-setup --services-boot",
+                      (ROOT / "config" / "fliperos-services.service").read_text())
+        self.assertIn("Before=NetworkManager.service", (ROOT / "config" / "fliperos-services.service").read_text())
+        self.assertIn("OnBootSec=40s", (ROOT / "config" / "fliperos-services-late.timer").read_text())
+        entry = (SETUP / "fliperos-setup").read_text()
+        self.assertIn("--services-late)\n      services_late", entry)
+
+
+class PasswordTests(Base):
+    def test_system_and_samba_change_together_and_the_log_never_sees_it(self):
+        got = self.env.dir / "got"
+        self.env.stub("chpasswd", 'cat >> %s' % got)
+        self.env.stub("smbpasswd", 'echo "smb $*" >> %s; cat >> %s' % (got, got))
+        self.assertEqual(self.env.run("password_set abc").returncode, 1)
+        self.assertFalse(got.exists())
+        self.env.out("password_set 's3cret pass'")
+        self.assertEqual(got.read_text(), "fliperos:s3cret pass\nsmb -s -a fliperos\ns3cret pass\ns3cret pass\n")
+        self.assertNotIn("s3cret", (self.env.dir / "setup.log").read_text())
+
+    def test_samba_failure_is_reported_apart(self):
+        self.env.stub("chpasswd", "cat > /dev/null")
+        self.env.stub("smbpasswd", "cat > /dev/null; exit 1")
+        self.assertEqual(self.env.run("password_set longenough").returncode, 2)
+        self.env.stub("chpasswd", "exit 1")
+        self.assertEqual(self.env.run("password_set longenough").returncode, 1)
+
+
+class BootGameTests(Base):
+    """Setup > Games > Frontend: um jogo direto no boot."""
+
+    def test_command_is_the_frontends_one_word_by_word(self):
+        roms = self.env.dir / "roms"
+        (roms / "dreamcast").mkdir(parents=True)
+        game = roms / "dreamcast" / "Crazy Taxi $ (USA) | v1.gdi"
+        game.write_text("")
+        env = {"FLIPEROS_BIN": "/opt/fliperos/bin"}
+        out = self.env.out("bootgame_command mame '%s'" % (roms / "mame" / "sf2.zip"), env).splitlines()
+        self.assertEqual(out, ["/opt/fliperos/bin/fliperos-x11-run", "groovymame", "sf2"])
+        self.env.out("bootgame_set dreamcast \"$GAME\"", dict(env, GAME=str(game)))
+        lines = (self.env.etc / "bootgame").read_text().splitlines()
+        self.assertEqual(lines, ["Crazy Taxi $ (USA)   v1", str(game), "/opt/fliperos/bin/fliperos-x11-run",
+                                 "flycast", str(game)])
+        self.assertEqual(self.env.out("launcher_current").strip(), "game")
+        self.assertEqual(self.env.out("bootgame_label").strip(), "Crazy Taxi $ (USA)   v1")
+        # Um arquivo que nao existe nao vira o jogo do boot.
+        self.assertEqual(self.env.run("bootgame_set mame /nada/sf2.zip").returncode, 1)
+
+    def test_runner_runs_the_saved_words_without_a_shell(self):
+        save = self.env.dir / "bootgame"
+        rom = self.env.dir / "a b$c.zip"
+        rom.write_text("")
+        save.write_text("A game\n%s\nprintf\n[%%s]\n%s\n" % (rom, rom))
+        run = subprocess.run(["bash", str(ROOT / "config" / "fliperos-bootgame")], capture_output=True, text=True,
+                             env=dict(os.environ, FLIPEROS_BOOTGAME=str(save)))
+        self.assertEqual(run.stdout, "[%s]" % rom)
+        # A ROM sumiu (disco desligado): sai sem abrir nada, com o motivo.
+        rom.unlink()
+        run = subprocess.run(["bash", str(ROOT / "config" / "fliperos-bootgame")], capture_output=True, text=True,
+                             env=dict(os.environ, FLIPEROS_BOOTGAME=str(save)), timeout=30)
+        self.assertEqual((run.returncode, run.stdout), (0, ""))
+        self.assertIn("not there", run.stderr)
+
+    def test_session_row_and_first_boot(self):
+        table = (ROOT / "config" / "fliperos-sessions.conf").read_text()
+        self.assertIn("\ngame|kms|/opt/fliperos/bin/fliperos-bootgame||", table)
+        (self.env.etc / "sessions.conf").write_text("setup|none|||Menu\ngame|kms|/bin/true||A game\n")
+        # No primeiro boot ainda nao ha jogos: fica de fora.
+        self.assertEqual(self.env.out("launcher_available").splitlines(), ["setup|Menu"])
+        session = (ROOT / "config" / "fliperos-session").read_text()
+        self.assertIn('game)\n        FLIPEROS_POWERKEY=game "${program[@]}"', session)
+        self.assertIn("fliperos-bootgame", (ROOT / "fliperos-rootfs.sh").read_text())
+
+
+class RemoteMenuTests(Base):
+    """fliperos-menu digitado no SSH: o menu em texto ali, nunca a interface
+    grafica no monitor do gabinete."""
+
+    def test_tty1_passes_remote_outside_a_vt_and_setup_forces_text(self):
+        tty1 = (ROOT / "config" / "fliperos-tty1").read_text()
+        self.assertIn("[[ $(tty 2> /dev/null) == /dev/tty[0-9]* ]] || remote=(--remote)", tty1)
+        self.assertIn('fliperos-setup --menu "${remote[@]}"', tty1)
+        entry = (SETUP / "fliperos-setup").read_text()
+        self.assertIn('if [[ ${1:-} == --remote ]]; then\n    SETUP_REMOTE=1\n    export FLIPEROS_UI=text', entry)
+        self.assertIn("((SETUP_REMOTE == 1))", (SETUP / "screens" / "main-menu.sh").read_text())
+
+    def test_text_wins_over_the_menu_loop(self):
+        dri = self.env.dir / "card0"
+        dri.write_text("")
+        self.env.cmdline.write_text("quiet splash\n")   # o disco instalado, nao a midia
+        env = {"UI_DRI": str(dri), "SETUP_MENU_LOOP": "1"}
+        self.assertEqual(self.env.run("source %s/lib/ui.sh; ui_gui_wanted" % SETUP, env).returncode, 0)
+        env["FLIPEROS_UI"] = "text"
+        self.assertEqual(self.env.run("source %s/lib/ui.sh; ui_gui_wanted" % SETUP, env).returncode, 1)
+
+
+class UiParityTests(unittest.TestCase):
+    """O menu grafico e o de texto tem as mesmas telas: cada primitiva que as
+    telas chamam tem o ramo da interface grafica (ou passa por uma que tem),
+    e cada pedido do lib/ui.sh tem a sua tela no gui/serve.py."""
+
+    # O que desenha no terminal de proposito (alsamixer, o grid do Switchres:
+    # ui_text solta o video) e os ajudantes que nao sao tela.
+    NOT_SCREENS = {"ui_c", "ui_dim", "ui_bad", "ui_yes", "ui_no", "ui_clear", "ui_fields", "ui_flush_input",
+                   "ui_text", "ui_done", "ui_init", "ui_status_short", "ui_size", "ui_box_width", "ui_palette",
+                   "ui_screen", "ui_topbar", "ui_list_height", "ui_hint_small", "ui_hint_lines", "ui_hint_env",
+                   "ui_sounds", "ui_orientation", "ui_gui_alive", "ui_gui_wanted", "ui_gui_start", "ui_gui_call",
+                   "ui_gui_menu"}
+
+    def functions(self):
+        text = (SETUP / "lib" / "ui.sh").read_text()
+        return dict(re.findall(r"(?ms)^(ui_\w+)\(\) \{\n(.*?)^\}\n", text))
+
+    def test_every_screen_primitive_reaches_the_gui(self):
+        bodies = self.functions()
+        direct = {name for name, body in bodies.items() if re.search(r"\bui_gui_(alive|call|menu)\b", body)}
+        used = set()
+        for path in list((SETUP / "screens").glob("*.sh")) + list((SETUP / "lib").glob("*.sh")):
+            if path.name != "ui.sh":
+                used |= set(re.findall(r"\b(ui_\w+)\b", path.read_text()))
+        used &= set(bodies)
+        missing = []
+        for name in sorted(used - self.NOT_SCREENS):
+            calls = set(re.findall(r"\b(ui_\w+)\b", bodies[name])) - {name}
+            if name not in direct and not (calls & direct):
+                missing.append(name)
+        self.assertEqual(missing, [], "sem a tela da interface grafica")
+
+    def test_every_request_has_a_screen_and_back(self):
+        ui = (SETUP / "lib" / "ui.sh").read_text()
+        sent = set(re.findall(r"ui_gui_call ([a-z]\w*)", ui)) | set(re.findall(r"ui_gui_menu ([a-z]\w*)", ui))
+        serve = (SETUP / "gui" / "serve.py").read_text()
+        handled = set(re.findall(r'cmd == "(\w+)"', serve))
+        for group in re.findall(r"cmd in \(([^)]*)\)", serve):
+            handled |= set(re.findall(r'"(\w+)"', group))
+        self.assertEqual(sent - handled, set())
+        # O ping e o teste do servidor (tools/gui-*.sh).
+        self.assertEqual(handled - sent - {"ping"}, set())
+        self.assertIn("grid", sent)
+        self.assertIn("class Grid:", (SETUP / "gui" / "widgets.py").read_text())
 
 
 class DebugModeTests(Base):
@@ -3854,9 +4108,10 @@ class SetupGroupsTests(Base):
         self.assertEqual(order["screen_setup_menu"],
                          ["video", "audio", "network", "joysticks", "games", "system", "return"])
         # Na ordem de por jogos no gabinete.
-        self.assertEqual(order["screen_setup_games"], ["frontend", "emulators", "folders", "downloader", "cleaner",
+        self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])
-        self.assertEqual(order["screen_setup_system"], ["extras", "latency", "update", "debug", "splash", "return"])
+        self.assertEqual(order["screen_setup_system"], ["extras", "latency", "services", "quirks", "password", "update",
+                                                        "debug", "splash", "return"])
         self.assertIn("games) screen_setup_games ;;", menu)
         self.assertIn("system) screen_setup_system ;;", menu)
 

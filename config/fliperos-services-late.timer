@@ -1,0 +1,11 @@
+# Os servicos em "After boot" (Setup > System > Services) sobem uns 40 s
+# depois do boot, com o jogo ou o frontend ja na tela.
+[Unit]
+Description=FliperOS services after boot
+
+[Timer]
+OnBootSec=40s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

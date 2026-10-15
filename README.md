@@ -95,7 +95,7 @@ In the menus, the panel or a gamepad already acts as the keyboard: directions = 
 1. *Setup > Joysticks > Button mapping*.
 2. For each player, press what it asks for, in order: up, down, left, right, **buttons 1 to 6** in panel order (1 2 3 in the top row, 4 5 6 in the bottom row), **Start** and **Coin**. The first input pressed tells which controller belongs to that player. With nothing pressed for 8 seconds, that input is skipped.
 3. The mapping goes to every emulator at once (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Hypseus and OpenBOR).
-4. Light gun (GunCon 2), wheel and pedals have their own calibrators in the same menu, and *Setup > Joysticks > Quirks* fixes USB encoders that arrive wrong (for example a dual encoder showing up as a single player). See [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
+4. Light gun (GunCon 2), wheel and pedals have their own calibrators in the same menu, and *Setup > System > Quirks* fixes USB devices that arrive wrong (for example a dual encoder showing up as a single player). See [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
 
 ### 9. Copy your games
 

@@ -1155,6 +1155,76 @@ class ToggleGrid:
             centered(surf, line, T.CYAN, 194 + i * 11)
 
 
+class Grid:
+    """ui_grid: uma tabela de marcar, uma marca por linha (os servicos em
+    Boot, After boot ou Off). rows: (chave, rotulo, coluna marcada, ajuda);
+    columns: (valor, rotulo). As setas de cima e de baixo andam pelas
+    linhas, as dos lados (ou Espaco) mudam a marca; Enter grava tudo."""
+
+    def __init__(self, title, text, columns, rows):
+        self.title = title
+        self.text = text
+        self.columns = columns
+        values = [c[0] for c in columns]
+        self.rows = [(key, label, help) for key, label, _, help in rows]
+        self.state = [values.index(state) if state in values else 0 for _, _, state, _ in rows]
+        self.cursor = 0
+
+    def key(self, k):
+        n = len(self.columns)
+        if k == "up":
+            self.cursor = max(0, self.cursor - 1)
+        elif k == "down":
+            self.cursor = min(len(self.rows) - 1, self.cursor + 1)
+        elif k == "left":
+            self.state[self.cursor] = (self.state[self.cursor] - 1) % n
+        elif k in ("right", "space"):
+            self.state[self.cursor] = (self.state[self.cursor] + 1) % n
+        elif k == "esc":
+            return ("back", None)
+        elif k == "enter":
+            return ("select", ",".join("%s=%s" % (row[0], self.columns[s][0])
+                                       for row, s in zip(self.rows, self.state)))
+        return None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("< >", "MARK"), ("ENTER", "SAVE"), ("ESC", "BACK")])
+        # A coluna dos nomes e, a direita, uma coluna por estado.
+        col_w = 52
+        x0 = T.SAFE_X + T.SAFE_W - col_w * len(self.columns)
+        y = CONTENT_Y
+        if self.text:
+            for line in wrap(self.text, T.SAFE_W)[:2]:
+                centered(surf, line, T.COMMENT, y)
+                y += 11
+            y += 4
+        for i, (_, label) in enumerate(self.columns):
+            for j, part in enumerate(wrap(label.upper(), col_w - 4)[:2]):
+                cx = x0 + i * col_w + col_w // 2
+                text(surf, part, T.CYAN, cx - width(part) // 2, y + j * 9)
+        y += 22
+        pitch = min(18, (HINT_Y - 6 - y) // max(1, len(self.rows)))
+        for r, (_, label, _) in enumerate(self.rows):
+            on = r == self.cursor
+            if on:
+                block(surf, (T.SAFE_X - 4, y - 3, T.SAFE_W + 8, pitch - 2), T.BG_DEEP, T.PURPLE)
+                pygame.draw.rect(surf, T.PINK, (T.SAFE_X - 4, y - 3, T.SAFE_W + 8, pitch - 2), 1)
+            name = label.upper()
+            while name and width(name) > x0 - T.SAFE_X - 6:
+                name = name[:-1]
+            text(surf, name, T.FG if on else T.COMMENT, T.SAFE_X, y + 1)
+            for c in range(len(self.columns)):
+                cx = x0 + c * col_w + col_w // 2
+                box = (cx - 5, y, 10, 10)
+                if self.state[r] == c:
+                    pygame.draw.rect(surf, T.GREEN, box)
+                else:
+                    pygame.draw.rect(surf, T.PINK if on else T.LINE, box, 1)
+            y += pitch
+        for i, line in enumerate(wrap(self.rows[self.cursor][2], T.SAFE_W)[:3]):
+            centered(surf, line, T.CYAN, HINT_Y + i * 11)
+
+
 class Timed(Message):
     """ui_timed_confirm: o aviso que espera o Enter por um tempo. tick()
     devolve ("timeout", None) quando o tempo acaba."""

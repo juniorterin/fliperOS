@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# O jogo que abre direto no boot (Setup > Games > Frontend > A game,
+# straight from the boot), pelo launcher "game" do fliperos-session.
+#
+# /etc/fliperos/bootgame (fliperos-setup/lib/launcher.sh, bootgame_set): o
+# nome do jogo, o arquivo da ROM e, uma palavra por linha, a linha de comando
+# ja resolvida (fliperos-kms-run ou fliperos-x11-run, o emulador e a ROM), a
+# mesma que os frontends usam para a pasta. Roda sem shell no meio: o nome do
+# arquivo pode ter espaco, aspas ou cifrao. O jogo fecha (Esc) e o
+# fliperos-tty1 abre o menu do FliperOS.
+set -uo pipefail
+
+file=${FLIPEROS_BOOTGAME:-/etc/fliperos/bootgame}
+lines=()
+[[ -r $file ]] && mapfile -t lines < "$file"
+if ((${#lines[@]} < 3)); then
+  echo "No game is set to open at boot: choose one in Setup > Games > Frontend." >&2
+  sleep 3
+  exit 0
+fi
+rom=${lines[1]}
+# Num disco externo desligado, ou apagado depois: o menu, com o motivo.
+if [[ ! -e $rom ]]; then
+  echo "The game set to open at boot is not there: $rom" >&2
+  echo "Is its disk connected? Choose another in Setup > Games > Frontend." >&2
+  sleep 5
+  exit 0
+fi
+exec "${lines[@]:2}"

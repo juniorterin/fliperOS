@@ -1,0 +1,14 @@
+# Setup > System > Services (fliperos-setup/lib/services.sh): o Wi-Fi em
+# "After boot" ou "Off" comeca desligado. Antes do NetworkManager, que le o
+# estado do radio ao subir.
+[Unit]
+Description=FliperOS services at boot
+After=local-fs.target
+Before=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fliperos-setup --services-boot
+
+[Install]
+WantedBy=multi-user.target

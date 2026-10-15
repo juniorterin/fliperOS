@@ -37,7 +37,8 @@ install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions
 [[ -f "$root/etc/fliperos/session" ]] || printf 'setup\n' > "$root/etc/fliperos/session"
 for name in fliperos-session fliperos-kms-run fliperos-x11-run fliperos-x11-client fliperos-lxde fliperos-launch \
   fliperos-tty1 fliperos-ini-set fliperos-resolution fliperos-logout fliperos-escquit fliperos-powerkey \
-  fliperos-panning fliperos-automount fliperos-multiscreen fliperos-dlopen-links fliperos-browser fliperos-magnet; do
+  fliperos-panning fliperos-automount fliperos-multiscreen fliperos-dlopen-links fliperos-browser fliperos-magnet \
+  fliperos-bootgame; do
   install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done
 # Pastas do acervo em ~/roms (uma por emulador e por core do RetroArch) e os
@@ -469,6 +470,18 @@ install -Dm644 "$src/config/fliperos-latency.service" "$root/etc/systemd/system/
 mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
 ln -sfn /etc/systemd/system/fliperos-latency.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-latency.service"
+
+# ── Servicos (Setup > System > Services, lib/services.sh) ─────────
+# O Wi-Fi em "After boot"/"Off" desligado antes do NetworkManager, e o timer
+# que sobe os "After boot" uns 40 s depois do boot.
+for unit in fliperos-services.service fliperos-services-late.service fliperos-services-late.timer; do
+  install -Dm644 "$src/config/$unit" "$root/etc/systemd/system/$unit"
+done
+ln -sfn /etc/systemd/system/fliperos-services.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-services.service"
+mkdir -p "$root/etc/systemd/system/timers.target.wants"
+ln -sfn /etc/systemd/system/fliperos-services-late.timer \
+  "$root/etc/systemd/system/timers.target.wants/fliperos-services-late.timer"
 # Nada de apt nem man-db rodando sozinho no meio de uma partida (picos de
 # CPU e disco). Atualizar fica no Setup > System > System Update, como no GA.
 for timer in apt-daily.timer apt-daily-upgrade.timer man-db.timer; do

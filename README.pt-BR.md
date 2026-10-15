@@ -95,7 +95,7 @@ Nos menus, o painel ou um controle já funciona como teclado: direcional = setas
 1. *Setup > Joysticks > Button mapping*.
 2. Para cada jogador, aperte o que ele pede, nesta ordem: cima, baixo, esquerda, direita, **botões 1 a 6** na ordem do painel (1 2 3 na fileira de cima, 4 5 6 na de baixo), **Start** e **Ficha** (Coin). O primeiro comando apertado diz qual controle é daquele jogador. Sem nada apertado por 8 segundos, aquele comando fica de fora.
 3. O mapeamento vai para todos os emuladores de uma vez (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Hypseus e OpenBOR).
-4. Pistola de luz (GunCon 2), volante e pedais têm calibradores no mesmo menu, e o *Setup > Joysticks > Quirks* corrige encoders USB que chegam errados (por exemplo, um encoder duplo que aparece como um jogador só). Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
+4. Pistola de luz (GunCon 2), volante e pedais têm calibradores no mesmo menu, e o *Setup > System > Quirks* corrige aparelhos USB que chegam errados (por exemplo, um encoder duplo que aparece como um jogador só). Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
 
 ### 9. Copie os seus jogos
 

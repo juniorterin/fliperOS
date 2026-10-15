@@ -26,10 +26,14 @@ splash_off() {
 }
 
 menu() {
-  local rc name
+  local rc name remote=()
   splash_off
+  # Num terminal que nao e um VT do gabinete (o fliperos-menu digitado no
+  # SSH), o menu e o de texto ali mesmo: a interface grafica abriria no
+  # monitor do gabinete. O teste e aqui, antes do sudo, que sempre da um pty.
+  [[ $(tty 2> /dev/null) == /dev/tty[0-9]* ]] || remote=(--remote)
   while true; do
-    sudo /usr/local/bin/fliperos-setup --menu
+    sudo /usr/local/bin/fliperos-setup --menu "${remote[@]}"
     rc=$?
     # O que foi apertado no menu e caiu no console (setas, Enter do
     # controle) nao aparece nem vai para o que abre agora: a entrada

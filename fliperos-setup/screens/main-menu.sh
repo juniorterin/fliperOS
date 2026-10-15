@@ -11,6 +11,8 @@ SETUP_EXIT_LAUNCH=20
 SETUP_MENU_LOOP=${SETUP_MENU_LOOP:-0}
 # 1 com --desktop: aberto pelo atalho do LXDE (a interface grafica numa janela).
 SETUP_DESKTOP=${SETUP_DESKTOP:-0}
+# 1 com --remote: o menu aberto pelo SSH (em texto, no terminal de la).
+SETUP_REMOTE=${SETUP_REMOTE:-0}
 
 screen_live_menu() {
   local choice last=install
@@ -44,12 +46,17 @@ screen_reload_if_updated() {
 }
 
 screen_main_menu() {
-  local choice last=frontend
+  local choice last=frontend start
   while true; do
     screen_reload_if_updated
     UI_STATUS=$(status_line)
+    # Com um jogo no boot (Setup > Games > Frontend), o item abre o jogo.
+    start="frontend|Start frontend|Open the game list (the frontend chosen in Setup)."
+    if [[ $(launcher_current) == game && -n $(bootgame_label) ]]; then
+      start="frontend|Start $(bootgame_label)|The game that opens at boot (Setup > Games > Frontend)."
+    fi
     choice=$(ui_menu_hints "FliperOS" "" "$last" \
-      "frontend|Start frontend|Open the game list (the frontend chosen in Setup)." \
+      "$start" \
       "setup|Setup|Video, audio, network, controls, games and system." \
       "desktop|Start desktop|The LXDE desktop, for a mouse and a keyboard." \
       "shell|Exit to shell|The command line. Type fliperos-menu to come back." \
@@ -106,6 +113,11 @@ screen_start_frontend() {
       "Choose one in Setup > Games > Frontend."
     return 1
   fi
+  if [[ $current == game && -z $(bootgame_label) ]]; then
+    ui_msg "Start frontend" "No game is set to open at boot." "" \
+      "Choose one in Setup > Games > Frontend."
+    return 1
+  fi
   if ! launcher_installed "$current"; then
     ui_msg "Start frontend" "$(launcher_label "$current") is not installed." "" \
       "Choose another one in Setup > Games > Frontend."
@@ -126,6 +138,12 @@ screen_start_desktop() {
 # So o laco do fliperos-tty1 (--menu) abre o pedido; num "sudo
 # fliperos-setup" digitado no shell ninguem o abriria.
 screen_launch() {
+  # Pelo SSH o launcher abriria no terminal da rede, sem o monitor.
+  if ((SETUP_REMOTE == 1)); then
+    ui_msg "$1" "This menu is open over the network (SSH)." "" \
+      "Frontends, games and the desktop open on the cabinet screen: start them there."
+    return 1
+  fi
   if ((SETUP_MENU_LOOP != 1)); then
     ui_msg "$1" "This setup was opened from the shell." "" \
       "Leave it and type  fliperos-menu  to start from the FliperOS menu."

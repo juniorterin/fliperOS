@@ -28,6 +28,16 @@ buttons_save() {
   log_info "botoes gravados: $(awk '{ print $1 }' "$1" | sort -u | wc -l) jogador(es)"
 }
 
+# buttons_keyboard JOGADORES grava, no lugar do controle, as teclas padrao do
+# MAME de cada jogador em todos os emuladores: o encoder que se diz teclado
+# (I-PAC e afins) ja vem nesse layout, e nada precisa ser apertado.
+buttons_keyboard() {
+  "$BUTTONS" keyboard --players "$1" >> "$FLIPEROS_LOG" 2>&1 || return 1
+  ini_set "$MAME_INI" ctrlr fliperos
+  ini_set "$MAME_INI" joystickprovider sdljoy
+  log_info "botoes gravados: teclado no layout do MAME, $1 jogador(es)"
+}
+
 # ── Buttons layout ───────────────────────────────────────────────
 # Setup > Joysticks > Buttons layout: onde ficam no painel (1 2 3 em cima,
 # 4 5 6 embaixo) os botoes dos jogos de 1 a 5 botoes. Uma linha "BOTOES

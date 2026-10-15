@@ -1,8 +1,8 @@
 # shellcheck shell=bash
 # Setup > Joysticks: os botoes do painel (lib/buttons.sh), o layout deles por
 # numero de botoes do jogo, a calibracao do GunCon 2 e de volante/pedais/analogico
-# (config/fliperos-calibrate), os joysticks da porta paralela (lpt.sh) e os
-# quirks dos controles USB (screen_quirks).
+# (config/fliperos-calibrate) e os joysticks da porta paralela (lpt.sh). Os
+# quirks USB ficam em System (screen_quirks): valem para qualquer aparelho.
 
 CALIBRATE=${CALIBRATE:-/opt/fliperos/bin/fliperos-calibrate}
 
@@ -15,7 +15,6 @@ screen_joysticks() {
       "guncon|Calibrate GunCon 2 (light gun)|Shoot the targets so the gun hits where it points." \
       "axes|Calibrate wheel, pedals or analog stick|Set the range and the center of each axis." \
       "lpt|LPT joysticks (parallel port)|Arcade sticks and console pads wired to the parallel port." \
-      "quirks|Quirks (USB controller fixes)|Kernel fixes for a USB encoder read wrong, as one player." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
     case $choice in
@@ -24,7 +23,6 @@ screen_joysticks() {
       guncon) screen_calibrate guncon ;;
       axes) screen_calibrate axes ;;
       lpt) screen_lpt ;;
-      quirks) screen_quirks ;;
       return) return 0 ;;
     esac
   done
@@ -36,8 +34,19 @@ screen_joysticks() {
 # controle como teclado do menu fica desligado enquanto isso: os botoes
 # apertados nao podem responder o menu.
 screen_buttons() {
-  local title="Button mapping" players p control dev name got index element tries summary map n
+  local title="Button mapping" kind players p control dev name got index element tries summary map n
   local -a pressed
+  kind=$(ui_menu_hints "$title" "What is wired to the panel?" panel \
+    "panel|Controllers (press each control)|Joystick encoders and pads: press each control when asked." \
+    "keyboard|Keyboard encoder (MAME default keys)|An encoder that types keys (I-PAC and others) in the MAME layout." \
+    "return|Return|Back to Joysticks.") || return 0
+  case $kind in
+    keyboard)
+      screen_buttons_keyboard
+      return 0
+      ;;
+    return) return 0 ;;
+  esac
   players=$(ui_menu "$title" \
     "Map the panel for all emulators, one player at a time: press each control when asked. How many players?" \
     2 "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
@@ -83,6 +92,23 @@ screen_buttons() {
     fi
   fi
   rm -f "$map"
+}
+
+# screen_buttons_keyboard: o encoder que se diz teclado, no layout do MAME
+# (lib/buttons.sh): so o numero de jogadores, nada a apertar.
+screen_buttons_keyboard() {
+  local title="Button mapping" players
+  players=$(ui_menu "$title" \
+    "The MAME default keys for each player in all emulators (player 1: arrows, Ctrl, Alt, Space, Shift, Z, X, 1 start, 5 coin). How many players?" \
+    2 "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
+  [[ $players == return ]] && return 0
+  ui_info "$title" "Saving the keys for all emulators..."
+  if buttons_keyboard "$players"; then
+    ui_msg "$title" "Saved. The emulators use the MAME keys from the next game." "" \
+      "Players 3 and 4 have keys for the stick and buttons 1 to 3 only, as in MAME."
+  else
+    ui_msg "$title" "$(ui_bad "Could not save the keys.")" "Details in $FLIPEROS_LOG."
+  fi
 }
 
 # screen_buttons_layout: de cada numero de botoes (1 a 5), onde ficam no

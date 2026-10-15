@@ -277,6 +277,15 @@ class Server:
             # a[3]: o arquivo do placar, que a contagem do Setup escreve depois.
             action, value = self.ask(W.FilterBoard(plain(a[0]), items, cursor, note=plain(a[1]), score=a[3]), cmd)
             return (0, value) if action == "select" else (1, "")
+        if cmd == "grid":
+            # titulo, texto, colunas ("valor|rotulo" separados por GS), linhas
+            # ("chave GS rotulo GS coluna marcada GS ajuda")...
+            columns = [tuple(c.split("|", 1)) for c in plain(a[2]).split(GS) if "|" in c]
+            rows = [tuple((plain(r).split(GS) + [""] * 3)[:4]) for r in a[3:]]
+            if not columns or not rows:
+                return 1, ""
+            action, value = self.ask(W.Grid(plain(a[0]), plain(a[1]), columns, rows), cmd)
+            return (0, value) if action == "select" else (1, "")
         if cmd == "yesno":
             screen = W.YesNo(plain(a[0]), self.lines(a[4:]), a[1], plain(a[2]).upper(), plain(a[3]).upper())
             action, value = self.ask(screen, cmd)

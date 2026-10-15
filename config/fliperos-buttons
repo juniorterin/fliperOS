@@ -6,6 +6,10 @@
       "INDICE ELEMENTO NOME" (status 1 se o tempo acabou)
   fliperos-buttons save MAPA
       grava os botoes em todos os emuladores (abaixo)
+  fliperos-buttons keyboard [--players N]
+      o mesmo para um encoder que se diz teclado (I-PAC e afins), com as
+      teclas padrao do MAME de cada jogador (MAME_KEYS) no lugar do controle:
+      o mapa ganha linhas "JOGADOR CONTROLE -1 k:TECLA Keyboard"
 
 ELEMENTO na numeracao do SDL (joystick, nao game controller): b3 (botao),
 -a1 / +a1 (meio eixo), h0.1 / h0.2 / h0.4 / h0.8 (hat: cima, direita,
@@ -112,22 +116,58 @@ RA_HAT = {'1': 'up', '2': 'right', '4': 'down', '8': 'left'}
 MAME_PORTS = {'up': 'P%d_JOYSTICK_UP', 'down': 'P%d_JOYSTICK_DOWN', 'left': 'P%d_JOYSTICK_LEFT',
               'right': 'P%d_JOYSTICK_RIGHT', 'start': 'START%d', 'coin': 'COIN%d'}
 MAME_PORTS.update({'b%d' % n: 'P%%d_BUTTON%d' % n for n in range(1, 7)})
-# As teclas padrao do MAME continuam valendo junto (jogadores 1 e 2).
+# As teclas padrao do MAME (src/emu/inpttype.ipp): continuam valendo junto
+# do controle, e sao o mapa do "keyboard" (encoder que se diz teclado, como
+# o I-PAC, no layout do MAME).
 MAME_KEYS = {
     1: {'up': 'UP', 'down': 'DOWN', 'left': 'LEFT', 'right': 'RIGHT', 'b1': 'LCONTROL', 'b2': 'LALT',
         'b3': 'SPACE', 'b4': 'LSHIFT', 'b5': 'Z', 'b6': 'X', 'start': '1', 'coin': '5'},
     2: {'up': 'R', 'down': 'F', 'left': 'D', 'right': 'G', 'b1': 'A', 'b2': 'S', 'b3': 'Q', 'b4': 'W',
-        'start': '2', 'coin': '6'},
-    3: {'start': '3', 'coin': '7'},
-    4: {'start': '4', 'coin': '8'},
+        'b5': 'E', 'start': '2', 'coin': '6'},
+    3: {'up': 'I', 'down': 'K', 'left': 'J', 'right': 'L', 'b1': 'RCONTROL', 'b2': 'RSHIFT', 'b3': 'ENTER',
+        'start': '3', 'coin': '7'},
+    4: {'up': '8_PAD', 'down': '2_PAD', 'left': '4_PAD', 'right': '6_PAD', 'b1': '0_PAD', 'b2': 'DEL_PAD',
+        'b3': 'ENTER_PAD', 'start': '4', 'coin': '8'},
 }
+# Cada tecla do MAME nos outros: (RetroArch, scancode do SDL (OpenBOR,
+# Flycast), Supermodel, SDL_Keycode (Hypseus)).
+KEYS = {
+    'UP': ('up', 82, 'UP', 'SDLK_UP'), 'DOWN': ('down', 81, 'DOWN', 'SDLK_DOWN'),
+    'LEFT': ('left', 80, 'LEFT', 'SDLK_LEFT'), 'RIGHT': ('right', 79, 'RIGHT', 'SDLK_RIGHT'),
+    'LCONTROL': ('ctrl', 224, 'LEFTCTRL', 'SDLK_LCTRL'), 'LALT': ('alt', 226, 'LEFTALT', 'SDLK_LALT'),
+    'LSHIFT': ('shift', 225, 'LEFTSHIFT', 'SDLK_LSHIFT'), 'SPACE': ('space', 44, 'SPACE', 'SDLK_SPACE'),
+    'RCONTROL': ('rctrl', 228, 'RIGHTCTRL', 'SDLK_RCTRL'), 'RSHIFT': ('rshift', 229, 'RIGHTSHIFT', 'SDLK_RSHIFT'),
+    'ENTER': ('enter', 40, 'RETURN', 'SDLK_RETURN'),
+    '8_PAD': ('keypad8', 96, 'KEYPAD8', 'SDLK_KP_8'), '2_PAD': ('keypad2', 90, 'KEYPAD2', 'SDLK_KP_2'),
+    '4_PAD': ('keypad4', 92, 'KEYPAD4', 'SDLK_KP_4'), '6_PAD': ('keypad6', 94, 'KEYPAD6', 'SDLK_KP_6'),
+    '0_PAD': ('keypad0', 98, 'KEYPAD0', 'SDLK_KP_0'), 'DEL_PAD': ('kp_period', 99, 'KEYPADPERIOD', 'SDLK_KP_PERIOD'),
+    'ENTER_PAD': ('kp_enter', 88, 'KEYPADENTER', 'SDLK_KP_ENTER'),
+}
+KEYS.update({c: (c.lower(), 4 + i, c, 'SDLK_' + c.lower()) for i, c in enumerate('ABCDEFGHIJKLMNOPQRSTUVWXYZ')})
+KEYS.update({str(n): ('num%d' % n, 29 + n, str(n), 'SDLK_%d' % n) for n in range(1, 10)})
+# As teclas de atalho padrao do RetroArch nas letras do layout do MAME (o
+# Espaco e o botao 3, o F o baixo do jogador 2): sem elas, com o teclado.
+RA_HOTKEYS = {'space': 'input_toggle_fast_forward', 'l': 'input_hold_fast_forward', 'f': 'input_toggle_fullscreen',
+              'r': 'input_rewind', 'e': 'input_hold_slowmotion', 'k': 'input_frame_advance',
+              'i': 'input_netplay_game_watch', 'p': 'input_pause_toggle', 'h': 'input_reset',
+              'o': 'input_movie_record_toggle', 'm': 'input_shader_next', 'n': 'input_shader_prev',
+              't': 'input_cheat_index_minus', 'y': 'input_cheat_index_plus', 'u': 'input_cheat_toggle'}
+# O "controle" do mapa de teclado: indice -1, elemento k:TECLA.
+KEYBOARD_INDEX = -1
 MAME_AXES = ['XAXIS', 'YAXIS', 'ZAXIS', 'RXAXIS', 'RYAXIS', 'RZAXIS', 'SLIDER1', 'SLIDER2']
 MAME_HAT = {'1': 'UP', '2': 'RIGHT', '4': 'DOWN', '8': 'LEFT'}
 AXIS_PRESS = 20000
 
 
+def is_key(element):
+    """O elemento e uma tecla (k:TECLA, nome do MAME), nao um do SDL?"""
+    return element.startswith('k:')
+
+
 def mame_code(index, element):
     """O codigo do MAME (joystickprovider sdljoy) de um elemento do SDL."""
+    if is_key(element):
+        return 'KEYCODE_' + element[2:]
     joy = 'JOYCODE_%d_' % (index + 1)
     if element.startswith('b'):
         return joy + 'BUTTON%d' % (int(element[1:]) + 1)
@@ -148,6 +188,8 @@ def mame_code(index, element):
 def retroarch_lines(player, control, element):
     """Os binds do RetroArch (driver udev) de um controle de um jogador."""
     key = 'input_player%d_%s' % (player, RA_KEYS[control])
+    if is_key(element):
+        return ['%s = "%s"' % (key, KEYS[element[2:]][0]), '%s_btn = "nul"' % key, '%s_axis = "nul"' % key]
     if element.startswith('b'):
         return ['%s_btn = "%s"' % (key, element[1:]), '%s_axis = "nul"' % key]
     if element.startswith('h'):
@@ -177,11 +219,18 @@ def retroarch_cfg(players, names):
     for player in sorted(players):
         binds = players[player]
         index = next(iter(binds.values()))[0]
-        lines += ['', '# Jogador %d: %s' % (player, names.get(index, '')),
-                  'input_player%d_joypad_index = "%d"' % (player, index)]
+        lines += ['', '# Jogador %d: %s' % (player, names.get(index, ''))]
+        if index >= 0:
+            lines.append('input_player%d_joypad_index = "%d"' % (player, index))
         for control in CONTROLS:
             if control in binds:
                 lines += retroarch_lines(player, control, binds[control][1])
+    # As teclas de atalho do RetroArch que caem nas teclas do mapa.
+    used = {KEYS[e[2:]][0] for binds in players.values() for _, e in binds.values() if is_key(e)}
+    hotkeys = sorted(RA_HOTKEYS[k] for k in used if k in RA_HOTKEYS)
+    if hotkeys:
+        lines += ['', '# Atalhos do RetroArch nas teclas do painel: desligados.']
+        lines += ['%s = "nul"' % h for h in hotkeys]
     return '\n'.join(lines) + '\n'
 
 
@@ -250,7 +299,7 @@ def layout_games(layouts, games):
 def mame_port(player, control, bind):
     seq = mame_code(*bind)
     key = MAME_KEYS.get(player, {}).get(control)
-    if key:
+    if key and seq != 'KEYCODE_' + key:
         seq += ' OR KEYCODE_%s' % key
     return ('            <port type="%s">\n                <newseq type="standard">%s</newseq>\n'
             '            </port>\n' % (MAME_PORTS[control] % player, seq))
@@ -411,7 +460,9 @@ def flycast_cfg(name, binds, keys):
     digital, analog = [], []
     for control, (_, element) in sorted(binds.items()):
         key = keys.get(control)
-        if element.startswith('b'):
+        if is_key(element):
+            digital.append('%d:%s' % (KEYS[element[2:]][1], key))
+        elif element.startswith('b'):
             digital.append('%s:%s' % (element[1:], key))
         elif element[0] in '+-':
             analog.append('%s%s:%s' % (element[2:], element[0], key))
@@ -491,7 +542,9 @@ def openbor_with_keys(data, players, devices, at=OPENBOR_KEYS_AT):
         if not 1 <= player <= 4:
             continue
         for control, (index, element) in binds.items():
-            if control in OPENBOR_ACTIONS and index in devices:
+            if control in OPENBOR_ACTIONS and is_key(element):
+                keys[(player - 1) * 13 + OPENBOR_ACTIONS[control]] = KEYS[element[2:]][1]
+            elif control in OPENBOR_ACTIONS and index in devices:
                 nbuttons, naxes = devices[index][2:4]
                 keys[(player - 1) * 13 + OPENBOR_ACTIONS[control]] = openbor_code(index, element, nbuttons, naxes)
     return data[:at] + struct.pack('<52i', *keys) + data[at + 52 * 4:]
@@ -552,6 +605,8 @@ SUPERMODEL_BUTTON_KEYS = ['KEY_A', 'KEY_S', 'KEY_D', 'KEY_F']
 
 def supermodel_code(index, element):
     """O nome de entrada do Supermodel (SDL: JOY1 e o controle 0) de um elemento."""
+    if is_key(element):
+        return 'KEY_' + KEYS[element[2:]][2]
     joy = 'JOY%d_' % (index + 1)
     if element.startswith('b'):
         return joy + 'BUTTON%d' % (int(element[1:]) + 1)
@@ -573,6 +628,10 @@ def supermodel_values(players):
             key = SUPERMODEL_KEYS[control][player - 1]
             default = SUPERMODEL_KEYS[control][2] if player == 1 else SUPERMODEL_P2_KEYS.get(control)
             code = supermodel_code(index, element)
+            # Com o teclado no layout do MAME, a tecla padrao do Supermodel
+            # (o A do soco) seria a de outro comando: so a do mapa.
+            if is_key(element):
+                default = None
             out[key] = '"%s,%s"' % (default, code) if default else '"%s"' % code
     for family in ('spikeout', 'soccer'):
         out.update(supermodel_buttons(players, SUPERMODEL_FAMILIES[family], range(1, PANEL_BUTTONS + 1)))
@@ -589,7 +648,10 @@ def supermodel_buttons(players, inputs, order):
             if not key or not bind:
                 continue
             code = supermodel_code(*bind)
-            out[key] = '"%s,%s"' % (SUPERMODEL_BUTTON_KEYS[n], code) if player == 1 else '"%s"' % code
+            if player == 1 and not is_key(bind[1]):
+                out[key] = '"%s,%s"' % (SUPERMODEL_BUTTON_KEYS[n], code)
+            else:
+                out[key] = '"%s"' % code
     return out
 
 
@@ -806,13 +868,15 @@ HYPSEUS_MOUSE = '[MOUSE]\nMOUSE_BUTTON1   = KEY_BUTTON3\nMOUSE_BUTTON2   = KEY_B
 
 
 def hypseus_keyboard(players):
-    joy = {}
+    joy, typed = {}, {}
     for player, keys in ((1, HYPSEUS_KEYS), (2, HYPSEUS_P2_KEYS)):
         for control, (index, element) in players.get(player, {}).items():
             if control not in keys:
                 continue
             name = keys[control]
-            if element.startswith('b'):
+            if is_key(element):
+                typed[name] = KEYS[element[2:]][3]
+            elif element.startswith('b'):
                 joy[name] = ('%03d' % (index * 100 + int(element[1:]) + 1), None)
             elif element.startswith('h'):
                 if name == 'KEY_UP':
@@ -821,6 +885,7 @@ def hypseus_keyboard(players):
                 joy[name] = (None, '%s%03d' % (element[0], index * 100 + int(element[2:]) + 1))
     lines = ['[KEYBOARD]']
     for name, key1, key2 in HYPSEUS_DEFAULT:
+        key1 = typed.get(name, key1)
         button, axis = joy.get(name, (None, None))
         line = '%-15s = %-15s %-12s %-10s %s' % (name, key1, key2, button or '0', axis or '')
         lines.append(line.rstrip())
@@ -877,7 +942,7 @@ def fbneo_preset(players, version):
              'version 0x%06X' % version, '']
     for player in sorted(players):
         for control in CONTROLS:
-            if control not in players[player]:
+            if control not in players[player] or is_key(players[player][control][1]):
                 continue
             code = fbneo_code(*players[player][control])
             for name in FBNEO_NAMES[control]:
@@ -961,13 +1026,16 @@ def cmd_save(args):
                     write(path, flycast_cfg(name, binds, keys), USER_ID)
                     print(path)
     devices = sdl_devices()
+    # O OpenBOR le as teclas pelo scancode: com o teclado, mesmo sem controle.
+    keyboard = any(is_key(e) for binds in players.values() for _, e in binds.values())
+    if devices or keyboard:
+        openbor_save(players, devices)
+        print(OPENBOR_SAVES)
+        print(OPENBOR3_SAVES)
     if devices:
         lines = sdl_user_db(players, devices)
         write(SDL_USER_DB, ''.join(line + '\n' for line in lines.values()))
         print(SDL_USER_DB)
-        openbor_save(players, devices)
-        print(OPENBOR_SAVES)
-        print(OPENBOR3_SAVES)
         for path in dolphin_save(players, devices) + model2_save(players, devices, layouts):
             print(path)
         # O gamecontrollerdb.txt de novo, com o mapeamento por ultimo.
@@ -978,6 +1046,26 @@ def cmd_save(args):
     if os.path.abspath(args.map) != os.path.abspath(keep):
         with open(args.map, encoding='utf-8') as f:
             write(keep, f.read())
+
+
+def keyboard_map(players):
+    """As linhas do mapa de um encoder que se diz teclado, no layout do MAME
+    (o "controle" KEYBOARD_INDEX). Os comandos sem tecla padrao no MAME (o
+    botao 6 do jogador 2, os botoes 4 a 6 dos jogadores 3 e 4) ficam de fora."""
+    lines = []
+    for player in range(1, players + 1):
+        for control in CONTROLS:
+            key = MAME_KEYS.get(player, {}).get(control)
+            if key:
+                lines.append('%d %s %d k:%s Keyboard' % (player, control, KEYBOARD_INDEX, key))
+    return lines
+
+
+def cmd_keyboard(args):
+    keep = os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map')
+    write(keep, ''.join(line + '\n' for line in keyboard_map(args.players)))
+    args.map = keep
+    return cmd_save(args)
 
 
 # ── SDL: o proximo comando ──────────────────────────────────────
@@ -1072,6 +1160,9 @@ def main():
     p = sub.add_parser('save')
     p.add_argument('map')
     p.set_defaults(func=cmd_save)
+    p = sub.add_parser('keyboard')
+    p.add_argument('--players', type=int, choices=range(1, 5), default=2)
+    p.set_defaults(func=cmd_keyboard)
     p = sub.add_parser('fbneo')
     p.add_argument('map')
     p.add_argument('version')

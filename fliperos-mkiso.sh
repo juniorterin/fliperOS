@@ -273,7 +273,7 @@ apt-get update -qq
 # as engines murrine e pixbuf sao do GTK 2 do tema Dracula, o librsvg2
 # desenha os icones SVG do menu e o gxmessage (GTK 3) e a confirmacao do
 # fliperos-launch antes de fechar o desktop. usbutils (lsusb) mostra o
-# vendor:produto dos controles em Setup > Joysticks > Quirks. systemd-timesyncd acerta o
+# vendor:produto dos aparelhos em Setup > System > Quirks. systemd-timesyncd acerta o
 # relogio pela rede: no gabinete o relogio da BIOS estava 2 meses atrasado e
 # o apt recusava todo repositorio ("not valid yet"). A App Store do LXDE e o
 # GNOME Software (o App Center do Ubuntu 24.04 depende do snap, que nao vai

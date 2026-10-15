@@ -120,6 +120,13 @@ case $backend in
         # SIGTERM do Esc: fechou como pedido.
         ((rc == 143)) && rc=0
         ;;
+      # Um jogo direto no boot (config/fliperos-bootgame): o comando ja traz o
+      # fliperos-kms-run ou o fliperos-x11-run. FLIPEROS_POWERKEY=game: o
+      # botao de desligar fecha o jogo e o menu volta.
+      game)
+        FLIPEROS_POWERKEY=game "${program[@]}"
+        rc=$?
+        ;;
       *)
         "$BIN/fliperos-kms-run" "${program[@]}"
         rc=$?

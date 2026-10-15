@@ -1,0 +1,8 @@
+# Setup > System > Services (fliperos-setup/lib/services.sh): sobe os
+# servicos em "After boot". Quem o chama e o fliperos-services-late.timer.
+[Unit]
+Description=FliperOS services after boot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fliperos-setup --services-late

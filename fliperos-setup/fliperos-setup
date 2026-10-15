@@ -6,8 +6,10 @@
 # que aparece quando o frontend fecha.
 #
 #   sudo fliperos-setup                 fluxo normal
-#   sudo fliperos-setup --menu          o mesmo, pelo laco do fliperos-tty1
-#                                       (sai com 20 para abrir um launcher)
+#   sudo fliperos-setup --menu [--remote]
+#                                       o mesmo, pelo laco do fliperos-tty1
+#                                       (sai com 20 para abrir um launcher);
+#                                       --remote: num terminal do SSH, em texto
 #   sudo fliperos-setup --desktop DISPLAY [XAUTHORITY]
 #                                       pelo atalho do LXDE: a interface
 #                                       grafica numa janela do X
@@ -20,7 +22,7 @@
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
 #   --latency-boot, --session-start, --session-end, --volume up|down|mute, --outputs main|all,
-#   --padkeys on|off
+#   --padkeys on|off, --services-boot, --services-late (lib/services.sh)
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
 # screens/ tem as telas.
@@ -99,6 +101,10 @@ source "$SETUP_DIR/lib/hardware.sh"
 source "$SETUP_DIR/lib/latency.sh"
 # shellcheck source=lib/quirks.sh
 source "$SETUP_DIR/lib/quirks.sh"
+# shellcheck source=lib/services.sh
+source "$SETUP_DIR/lib/services.sh"
+# shellcheck source=lib/system.sh
+source "$SETUP_DIR/lib/system.sh"
 # shellcheck source=lib/padkeys.sh
 source "$SETUP_DIR/lib/padkeys.sh"
 # shellcheck source=lib/lpt.sh
@@ -155,7 +161,7 @@ SETUP_STAMP=$(setup_stamp)
 SETUP_ARGS=("$@")
 
 usage() {
-  sed -n '8,19p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
+  sed -n '8,20p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
 }
 
 restore_terminal() {
@@ -216,6 +222,14 @@ main() {
       latency_session_end
       return 0
       ;;
+    --services-boot)
+      services_boot
+      return 0
+      ;;
+    --services-late)
+      services_late
+      return 0
+      ;;
     --volume)
       audio_step "${2:-}"
       return
@@ -241,6 +255,13 @@ main() {
   fi
   if [[ ${1:-} == --menu ]]; then
     SETUP_MENU_LOOP=1
+    shift
+  fi
+  # Pelo SSH (o fliperos-tty1 ve que o terminal nao e um VT): o menu em
+  # texto, e o que abre no monitor (frontend, jogo, desktop) fica de fora.
+  if [[ ${1:-} == --remote ]]; then
+    SETUP_REMOTE=1
+    export FLIPEROS_UI=text
     shift
   fi
   # Pelo atalho do desktop: o display do X (e o Xauthority) que o sudo

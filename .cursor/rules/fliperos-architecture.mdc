@@ -12,7 +12,7 @@ alwaysApply: false
 - O Setup se recarrega quando os arquivos dele mudam (`screen_reload_if_updated`).
 - Gum 2.0.2 com patches próprios (`patches/gum/`, por exemplo Space no `choose --no-limit`).
 - Latency: Standard = paridade com GA (`mitigations=off`, governor performance...). Low = + `preempt=full`, frame delay automático e preemptive frames no RetroArch.
-- `fliperos-padkeys`: o joystick controla o Setup via uinput, ativo só com o Setup na tela (`/run/fliperos/padkeys`). Setup > Joysticks > Quirks = `usbhid.quirks`.
+- `fliperos-padkeys`: o joystick controla o Setup via uinput, ativo só com o Setup na tela (`/run/fliperos/padkeys`). Setup > System > Quirks = `usbhid.quirks` (controles) e `usb-storage.quirks` (discos).
 - Zsh + Oh My Zsh + Dracula como shell do usuário. Os emuladores ficam no menu Games do LXDE via `fliperos-launch`.
 
 ## Kernel, boot, vídeo

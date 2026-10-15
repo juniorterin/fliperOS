@@ -436,10 +436,11 @@ class ImageTests(unittest.TestCase):
         self.assertIn("sudo /usr/local/bin/fliperos-setup --desktop \"$DISPLAY\"", desktop)
         self.assertIn('Terminal=true', desktop)
 
-    def tty1(self, installed, setup_codes, requests, *args, splash=False, firstboot=True):
+    def tty1(self, installed, setup_codes, requests, *args, splash=False, firstboot=True, terminal='/dev/tty1'):
         """Roda o config/fliperos-tty1 com sudo e fliperos-session falsos.
         setup_codes: status de cada "fliperos-setup --menu"; requests: o
-        pedido gravado antes de cada um; splash: o Plymouth do boot no ar.
+        pedido gravado antes de cada um; splash: o Plymouth do boot no ar;
+        terminal: o que o tty responde (o VT do gabinete, ou o pty do SSH).
         Devolve as chamadas, em ordem."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
@@ -461,7 +462,8 @@ class ImageTests(unittest.TestCase):
                 '  echo "${reqs[n-1]}" > %s/request\n'
                 '  exit "${codes[n-1]}"\nfi\n' % (log, log, codes, reqs, tmp))
             (tmp / 'bin/fliperos-session').write_text('#!/bin/bash\necho "session $*" >> %s\n' % log)
-            for f in ('sudo', 'fliperos-session'):
+            (tmp / 'bin/tty').write_text('#!/bin/bash\necho %s\n' % terminal)
+            for f in ('sudo', 'fliperos-session', 'tty'):
                 (tmp / 'bin' / f).chmod(0o755)
             env = dict(os.environ, PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']),
                        FLIPEROS_ETC=str(tmp / 'etc'), FLIPEROS_BIN=str(tmp / 'bin'),
@@ -479,6 +481,12 @@ class ImageTests(unittest.TestCase):
                                  'session', 'sudo /usr/local/bin/fliperos-setup --menu'])
         calls = self.tty1(False, [0], ['-'])
         self.assertEqual(calls[1:], ['sudo /usr/local/bin/fliperos-setup --menu'])
+
+    def test_menu_typed_over_ssh_is_the_text_one(self):
+        # fliperos-menu num terminal do SSH: o Setup em texto ali, nao a
+        # interface grafica no monitor do gabinete.
+        calls = self.tty1(True, [0], ['-'], '--menu', terminal='/dev/pts/0')
+        self.assertEqual(calls, ['sudo /usr/local/bin/fliperos-setup --menu --remote'])
 
     def test_boot_splash_stays_until_something_is_on_screen(self):
         # O plymouth-quit do Ubuntu tirava o splash ao liberar os logins, e o
@@ -893,9 +901,11 @@ class CalibrateTests(unittest.TestCase):
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
         self.assertIn('"joysticks|Joysticks|', menu)
         screens = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
-        for item in ('guncon|Calibrate GunCon 2', 'axes|Calibrate wheel', 'lpt|LPT joysticks',
-                     'quirks|Quirks (USB controller fixes)', 'quirks) screen_quirks ;;'):
+        for item in ('guncon|Calibrate GunCon 2', 'axes|Calibrate wheel', 'lpt|LPT joysticks'):
             self.assertIn(item, screens)
+        # Os quirks valem para qualquer USB (discos tambem): em System.
+        self.assertIn('"quirks|Quirks (USB device fixes)|', menu)
+        self.assertIn('quirks) screen_quirks ;;', menu)
 
 
 class RomFoldersTests(unittest.TestCase):
@@ -8670,6 +8680,66 @@ class ButtonMappingTests(unittest.TestCase):
             # Flycast por nome de aparelho, e o mapa guardado para a atualizacao.
             self.assertIn('0:btn_a', (tmp / 'flycast' / ('SDL_' + name.replace('/', '-').replace(':', '-') + '_arcade.cfg')).read_text())
             self.assertEqual((tmp / 'buttons.map').read_text(), (tmp / 'map').read_text())
+
+    def test_keyboard_preset_is_the_mame_layout(self):
+        # Encoder que se diz teclado (I-PAC): as teclas padrao do MAME em
+        # todos os emuladores, sem apertar nada.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            env = dict(os.environ, FLIPEROS_RA_BUTTONS=str(tmp / 'ra' / 'buttons.cfg'),
+                       FLIPEROS_MAME_CTRLR=str(tmp / 'ctrlr' / 'fliperos.cfg'),
+                       FLIPEROS_FLYCAST_MAPPINGS=str(tmp / 'flycast'), FLIPEROS_SDL_USER_DB=str(tmp / 'sdl-user.txt'),
+                       FLIPEROS_OPENBOR_SAVES=str(tmp / 'Saves'), FLIPEROS_OPENBOR3_SAVES=str(tmp / 'v3' / 'Saves'),
+                       FLIPEROS_BUTTONS_MAP=str(tmp / 'buttons.map'), FLIPEROS_CONTROLLERS=str(tmp / 'nada'),
+                       FLIPEROS_SUPERMODEL_INI=str(tmp / 'supermodel' / 'Config' / 'Supermodel.ini'),
+                       FLIPEROS_HYPSEUS_INI=str(tmp / 'hypseus' / 'hypinput.ini'),
+                       FLIPEROS_DOLPHIN_DIR=str(tmp / 'dolphin'),
+                       FLIPEROS_FLYCAST_DOJO_MAPPINGS=str(tmp / 'dojo' / 'mappings'))
+            run = subprocess.run(['python3', str(ROOT / 'config/fliperos-buttons'), 'keyboard', '--players', '4'],
+                                 env=env, capture_output=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            # O mapa fica para a atualizacao do sistema gravar de novo.
+            mapped = (tmp / 'buttons.map').read_text().splitlines()
+            self.assertIn('1 b1 -1 k:LCONTROL Keyboard', mapped)
+            self.assertIn('2 b5 -1 k:E Keyboard', mapped)
+            self.assertIn('4 b2 -1 k:DEL_PAD Keyboard', mapped)
+            # Sem tecla padrao no MAME: fora (P2 botao 6, P3/P4 botoes 4 a 6).
+            self.assertFalse([l for l in mapped if l.startswith(('2 b6 ', '3 b4 ', '4 b6 '))])
+            ra = (tmp / 'ra' / 'buttons.cfg').read_text()
+            for line in ('input_player1_y = "ctrl"', 'input_player1_x = "alt"', 'input_player1_l = "space"',
+                         'input_player1_start = "num1"', 'input_player1_select = "num5"',
+                         'input_player2_down = "f"', 'input_player2_a = "e"', 'input_player3_l = "enter"',
+                         'input_player4_up = "keypad8"', 'input_player4_x = "kp_period"',
+                         'input_player1_y_btn = "nul"',
+                         # Os atalhos padrao do RetroArch nessas teclas, desligados.
+                         'input_toggle_fast_forward = "nul"', 'input_toggle_fullscreen = "nul"',
+                         'input_frame_advance = "nul"', 'input_hold_fast_forward = "nul"'):
+                self.assertIn(line + '\n', ra, line)
+            self.assertNotIn('joypad_index', ra)
+            self.assertNotIn('input_pause_toggle', ra)
+            import xml.etree.ElementTree as ET
+            ports = {p.get('type'): p.find('newseq').text
+                     for p in ET.fromstring((tmp / 'ctrlr' / 'fliperos.cfg').read_text()).iter('port')}
+            self.assertEqual(ports['P1_BUTTON1'], 'KEYCODE_LCONTROL')
+            self.assertEqual(ports['P2_BUTTON5'], 'KEYCODE_E')
+            self.assertEqual(ports['P4_JOYSTICK_LEFT'], 'KEYCODE_4_PAD')
+            self.assertEqual(ports['COIN3'], 'KEYCODE_7')
+            sm = (tmp / 'supermodel' / 'Config' / 'Supermodel.ini').read_text()
+            # So a tecla do mapa: o A padrao do Supermodel e o botao 1 do jogador 2.
+            for line in ('InputPunch = "KEY_LEFTCTRL"', 'InputPunch2 = "KEY_A"', 'InputCoin1 = "KEY_5"',
+                         'InputJoyUp2 = "KEY_R"'):
+                self.assertIn(line + '\n', sm, line)
+            hyp = (tmp / 'hypseus' / 'hypinput.ini').read_text()
+            self.assertRegex(hyp, r'(?m)^KEY_BUTTON1 +\= SDLK_LCTRL +0 +0$')
+            self.assertRegex(hyp, r'(?m)^KEY_START2 +\= SDLK_2 +0 +0$')
+            arcade = (tmp / 'flycast' / 'SDL_Keyboard_arcade.cfg').read_text()
+            self.assertIn('224:btn_a', arcade)
+            import struct
+            keys = struct.unpack_from('<52i', (tmp / 'Saves' / 'default.cfg').read_bytes(), 40)
+            self.assertEqual(keys[:5], (82, 81, 80, 79, 224))
+            self.assertEqual(keys[13 + 4], 4)   # jogador 2, ataque: A
+            # Nenhum controle do SDL: nada no mapeamento de game controller.
+            self.assertFalse((tmp / 'sdl-user.txt').exists() and (tmp / 'sdl-user.txt').read_text().strip())
 
     PANEL = {'up': (0, '-a1'), 'down': (0, '+a1'), 'left': (0, '-a0'), 'right': (0, '+a0'), 'b1': (0, 'b0'),
              'b2': (0, 'b1'), 'b3': (0, 'b2'), 'b4': (0, 'b3'), 'b5': (0, 'b4'), 'b6': (0, 'b5'),

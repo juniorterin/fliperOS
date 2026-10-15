@@ -13,7 +13,7 @@ After plugging the panel in, map each player's buttons once in **Setup > Joystic
 | [Arduino Joystick Library](https://github.com/MHeironimus/ArduinoJoystickLibrary) | Arduino Leonardo, Micro and other ATmega32U4 boards | A joystick or gamepad you describe in your own sketch (32 buttons by default). LGPL-3.0 |
 | [V-USB MamePanel](http://vusb.wikidot.com/project:mamepanel) | ATmega8 (18 inputs) or ATmega32 (30 inputs, two joysticks), with the [V-USB](https://github.com/obdev/v-usb) software USB driver | Joysticks with up to 8 buttons each. This is the panel of the FliperOS test cabinet |
 
-- **Two players on one board**: an encoder that carries both players may arrive as a single joystick. **Setup > Joysticks > Quirks** has the kernel flag that splits it (`0x40`, one device per player); see [Controls](Controls.md).
+- **Two players on one board**: an encoder that carries both players may arrive as a single joystick. **Setup > System > Quirks** has the kernel flag that splits it (`0x40`, one device per player); see [Controls](Controls.md).
 - **Latency**: **Setup > System > Latency** reads USB at 1000 Hz, which only helps if the board also answers at that rate ([Latency](Latency.md)).
 
 ## Spinner and trackball
@@ -104,4 +104,4 @@ The patch reaches a cabinet that already built Model 2 the next time **Games > M
 
 ## Adding a project to this page
 
-A project fits here if its firmware or software is open source and it works on Linux without a closed driver. If you use one of these on your cabinet, or another one, open an issue in the [repository](https://github.com/juniorterin/fliperOS/issues) saying which board, what the Setup showed in **Setup > Joysticks > Quirks > USB devices connected now**, and whether it needed a quirk: that is what turns a line of this page from "should work" into "tested".
+A project fits here if its firmware or software is open source and it works on Linux without a closed driver. If you use one of these on your cabinet, or another one, open an issue in the [repository](https://github.com/juniorterin/fliperOS/issues) saying which board, what the Setup showed in **Setup > System > Quirks > USB devices connected now**, and whether it needed a quirk: that is what turns a line of this page from "should work" into "tested".

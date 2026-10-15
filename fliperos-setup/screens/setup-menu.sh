@@ -68,6 +68,9 @@ screen_setup_system() {
     choice=$(ui_menu_hints "System" "" "$last" \
       "extras|Extras|Wine, Steam, Heroic, Pixelcade, ZeDMD and game output tools." \
       "latency|Latency|Standard or low latency mode, and a check of this computer." \
+      "services|Services|SSH, network share, Wi-Fi: at boot, after boot or off." \
+      "quirks|Quirks (USB device fixes)|Kernel fixes for a USB device read wrong: encoders, guns, disks." \
+      "password|Password|The password of the fliperos user: login, SSH and network share." \
       "update|System Update|Download and install the updates of all packages." \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))|Show boot and emulator messages on screen to find a problem." \
       "splash|Splash screen|The boot screen theme, with a preview." \
@@ -76,6 +79,9 @@ screen_setup_system() {
     case $choice in
       extras) screen_extras ;;
       latency) screen_latency ;;
+      services) screen_services ;;
+      quirks) screen_quirks ;;
+      password) screen_password ;;
       update) screen_update ;;
       debug) screen_debug ;;
       splash) screen_splash ;;
@@ -204,6 +210,16 @@ screen_network() {
 # senha e a tentativa de conexao.
 screen_wifi() {
   local hidden=$1 devs=() dev ssid pass nets=() entries=() line sig sec
+  # O radio desligado (Setup > System > Services, ou ainda nao ligado no
+  # "After boot"): sem ele a lista de redes vem vazia.
+  if have nmcli && [[ $(nmcli radio wifi 2> /dev/null) == disabled ]]; then
+    ui_yesno "Wi-Fi" "The Wi-Fi radio is off (Setup > System > Services). Turn it on, also at boot?" yes ||
+      return 0
+    services_set wifi boot || {
+      ui_msg "Wi-Fi" "$(ui_bad "Could not turn the Wi-Fi on.")" "" "Details in /var/log/fliperos-setup.log."
+      return 0
+    }
+  fi
   mapfile -t devs < <(net_wifi_devices)
   if ((${#devs[@]} == 0)); then
     local hw=()
@@ -263,7 +279,14 @@ screen_frontend() {
   local entries=() name desc current choice pkg label lines=() theme=()
   current=$(launcher_current)
   while IFS='|' read -r name desc; do
-    if launcher_installed "$name"; then
+    if [[ $name == game ]]; then
+      # O jogo no boot: escolhido na tela seguinte (screen_bootgame).
+      if [[ $current == game && -n $(bootgame_label) ]]; then
+        entries+=("game|$desc: $(bootgame_label)")
+      else
+        entries+=("game|$desc (choose the game)")
+      fi
+    elif launcher_installed "$name"; then
       entries+=("$name|$desc")
     elif launcher_package_available "$name" || [[ -n $(launcher_fetcher "$name") ]]; then
       entries+=("$name|$desc (not installed)")
@@ -282,6 +305,10 @@ screen_frontend() {
       ;;
     +edit)
       screen_frontend_custom_pick
+      return 0
+      ;;
+    game)
+      screen_bootgame
       return 0
       ;;
   esac
@@ -328,6 +355,43 @@ screen_frontend() {
   lines=("$label will start when the computer turns on.")
   mapfile -t -O 1 lines < <(frontends_hint "$choice")
   ui_msg "Frontend" "${lines[@]}" "${theme[@]}"
+}
+
+# screen_bootgame: um jogo direto no boot (lib/launcher.sh). O sistema entre
+# as pastas com jogos e o arquivo nela; o Esc no jogo abre o menu do
+# FliperOS. Os servicos que sobem no boot passam para depois dele
+# (lib/services.sh): o jogo chega antes a tela.
+screen_bootgame() {
+  local title="A game at boot" key dir name exts choice file moved
+  local -a entries=() lines ext_list
+  local -A dirs=() ext_of=()
+  while IFS='|' read -r key dir _ name _ _ exts; do
+    entries+=("$key|$name")
+    dirs[$key]=$dir
+    ext_of[$key]=$exts
+  done < <(frontends_systems)
+  if ((${#entries[@]} == 0)); then
+    ui_msg "$title" "There are no games in ~/roms yet." "" \
+      "Copy some (network share, Setup > Games > Downloader) and come back."
+    return 0
+  fi
+  choice=$(ui_menu "$title" "The game opens straight when the computer turns on; leaving it (Esc) opens the FliperOS menu. Which system?" \
+    "" "${entries[@]}" "return|Return") || return 0
+  [[ $choice == return ]] && return 0
+  IFS=';' read -ra ext_list <<< "${ext_of[$choice]}"
+  file=$(ui_browse "$title" "Choose the game." "${dirs[$choice]}" file "${ext_list[@]}") || return 0
+  if ! bootgame_set "$choice" "$file"; then
+    ui_msg "$title" "$(ui_bad "Could not set the game.")" "" "Details in /var/log/fliperos-setup.log."
+    return 0
+  fi
+  ui_info "$title" "Moving the services to after the boot..."
+  moved=$(services_minimal)
+  lines=("$(bootgame_label) will open when the computer turns on.")
+  if [[ -n $moved ]]; then
+    lines+=("" "To reach the game sooner, these now start after the boot: ${moved//$'\n'/, }."
+      "Change it in Setup > System > Services.")
+  fi
+  ui_msg "$title" "${lines[@]}"
 }
 
 # screen_frontend_custom [NOME]: cadastra um frontend da pessoa (rotulo e
@@ -813,7 +877,8 @@ screen_debug() {
 }
 
 # ── Quirks ───────────────────────────────────────────────────────
-# Quirks do usbhid com nome (lib/quirks.sh): a lista, adicionar e apagar.
+# Quirks dos dispositivos USB com nome (lib/quirks.sh): a lista, adicionar
+# e apagar. Fica em System: vale para qualquer USB (controle, pistola, disco).
 
 screen_quirks() {
   local entries code name choice last=add
@@ -823,14 +888,16 @@ screen_quirks() {
       [[ -n $code ]] && entries+=("$code|$name ($code)")
     done < <(quirks_list)
     entries+=("add|Add a quirk" "usb|USB devices connected now" "return|Return")
-    choice=$(ui_menu "Quirks" "Kernel fixes for USB controllers (usbhid.quirks). Choose a quirk to delete it. Changes apply after a restart." \
+    choice=$(ui_menu "Quirks" "Kernel fixes for USB devices read wrong (controllers, guns, keyboards, disks). Choose a quirk to delete it. Changes apply after a restart." \
       "$last" "${entries[@]}") || return 0
     last=$choice
     case $choice in
       add) screen_quirk_add ;;
       usb)
         {
-          echo "Vendor:product in the quirk format, then the device name."
+          echo "Vendor:product of each device, then its name. Controllers, guns,"
+          echo "keyboards: 0xVENDOR:0xPRODUCT:0xFLAGS. Disks: VENDOR:PRODUCT:LETTERS,"
+          echo "without the 0x."
           echo
           quirks_usb_devices
         } > /tmp/fliperos-usb.txt
@@ -844,20 +911,17 @@ screen_quirks() {
 
 screen_quirk_add() {
   local name code rc
-  if (($(quirks_count) >= QUIRKS_MAX)); then
-    ui_msg "Add a quirk" "The kernel reads at most $QUIRKS_MAX quirks." "" "Delete one before adding another."
-    return 0
-  fi
   name=$(ui_input "Add a quirk" "Name, to recognize it in the list (e.g. Xin-Mo dual encoder)") || return 0
-  code=$(ui_input "Add a quirk" "Code: 0xVENDOR:0xPRODUCT:0xFLAGS (e.g. 0x16c0:0x05e1:0x40). IDs are in Quirks > USB devices. Flags: 0x40 one device per player (dual encoders), 0x8 no GET requests, 0x400 always poll.") || return 0
+  code=$(ui_input "Add a quirk" "Code (IDs in Quirks > USB devices). Controller, gun, keyboard: 0xVENDOR:0xPRODUCT:0xFLAGS, e.g. 0x16c0:0x05e1:0x40 (0x40 one device per player, 0x8 no GET requests, 0x400 always poll). Disk: VENDOR:PRODUCT:LETTERS, e.g. 152d:0578:u (u turns UAS off).") || return 0
   quirk_add "$name" "$code"
   rc=$?
   case $rc in
     0) screen_quirks_save "Quirk saved." ;;
     1) ui_msg "Add a quirk" "Invalid code: $code" "" \
-      "Use three hexadecimal numbers starting with 0x, separated by colons:" \
-      "0xVENDOR:0xPRODUCT:0xFLAGS (e.g. 0x16c0:0x05e1:0x40)." ;;
-    2) ui_msg "Add a quirk" "The kernel reads at most $QUIRKS_MAX quirks." ;;
+      "Controller, gun, keyboard: 0xVENDOR:0xPRODUCT:0xFLAGS (e.g. 0x16c0:0x05e1:0x40)." \
+      "Disk: VENDOR:PRODUCT:LETTERS, without 0x (e.g. 152d:0578:u)." ;;
+    2) ui_msg "Add a quirk" "The kernel reads at most $QUIRKS_MAX quirks of controllers, guns and keyboards." "" \
+      "Delete one before adding another." ;;
     3) ui_msg "Add a quirk" "This device (${code%:*}) already has a quirk." "" \
       "Delete it first to change its code." ;;
   esac
@@ -885,6 +949,59 @@ screen_quirks_save() {
     fi
   fi
   ui_msg "Quirks" "$1" "" "Restart the computer to apply it."
+}
+
+# ── Servicos ─────────────────────────────────────────────────────
+# lib/services.sh: cada servico no boot, depois do boot ou desligado.
+
+screen_services() {
+  local title="Services" result failed
+  local -a rows
+  mapfile -t rows < <(services_rows)
+  if ((${#rows[@]} == 0)); then
+    ui_msg "$title" "No services to choose on this computer."
+    return 0
+  fi
+  result=$(ui_grid "$title" "Boot: with the computer. After boot: 40 s later. Off: never." \
+    "boot|Boot;after|After boot;off|Off" "${rows[@]}") || return 0
+  # Pelo SSH: a conexao aberta fica, mas nenhuma outra entra.
+  if ((SETUP_REMOTE == 1)) && [[ ,$result, == *,ssh=off,* && $(services_state ssh) != off ]]; then
+    ui_yesno "$title" "You are connected by SSH. With SSH off this connection stays open, but no new one can be made. Turn it off?" no ||
+      return 0
+  fi
+  ui_info "$title" "Saving..."
+  failed=$(services_save "$result")
+  if [[ -n $failed ]]; then
+    ui_msg "$title" "$(ui_bad "Could not change: ${failed//$'\n'/, }.")" "" "Details in /var/log/fliperos-setup.log."
+    return 0
+  fi
+  ui_msg "$title" "Saved." "" "After boot: the service starts about 40 s after the computer turns on."
+}
+
+# ── Senha ────────────────────────────────────────────────────────
+# lib/system.sh: a do sistema e a do Samba juntas.
+
+screen_password() {
+  local title="Password" first second rc
+  while true; do
+    first=$(ui_input "$title" "New password of the $FLIPEROS_USER user (login, SSH and the network share). At least $PASSWORD_MIN characters." \
+      "" password) || return 0
+    if ! password_valid "$first"; then
+      ui_msg "$title" "The password needs at least $PASSWORD_MIN characters."
+      continue
+    fi
+    second=$(ui_input "$title" "Type the new password again." "" password) || return 0
+    [[ $first == "$second" ]] && break
+    ui_msg "$title" "The two passwords are different. Type them again."
+  done
+  password_set "$first"
+  rc=$?
+  case $rc in
+    0) ui_msg "$title" "Password changed." "" "Use it from now on for SSH and the network share." ;;
+    2) ui_msg "$title" "The login and SSH password changed," "$(ui_bad "but the network share one did not.")" "" \
+      "Details in /var/log/fliperos-setup.log." ;;
+    *) ui_msg "$title" "$(ui_bad "The password was not changed.")" "" "Details in /var/log/fliperos-setup.log." ;;
+  esac
 }
 
 # ── Atualizacao ──────────────────────────────────────────────────

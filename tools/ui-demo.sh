@@ -116,6 +116,17 @@ demo_main() {
   screen_main_menu
 }
 
+# Setup > System > Services sem systemd: a tabela de um gabinete.
+demo_services() {
+  services_rows() {
+    printf '%s\n' "ssh|SSH|boot|$(services_field ssh 4)" "samba|Network share|after|$(services_field samba 4)" \
+      "avahi|fliperos.local|boot|$(services_field avahi 4)" "wifi|Wi-Fi|off|$(services_field wifi 4)" \
+      "downloader|Downloader|after|$(services_field downloader 4)"
+  }
+  services_save() { :; }
+  screen_services
+}
+
 case ${1:-} in
   progress) demo_progress ;;
   failed) demo_failed ;;
@@ -123,5 +134,6 @@ case ${1:-} in
   testing) demo_testing ;;
   confirm) demo_confirm ;;
   main) demo_main ;;
+  services) demo_services ;;
   *) "$@" ;;
 esac

@@ -592,6 +592,65 @@ ui_checklist() {
   printf '%s\n' "$out"
 }
 
+# ui_grid TITULO TEXTO "valor|rotulo;valor|rotulo..." "chave|rotulo|marcada|ajuda"...
+# e uma tabela de marcar com uma marca por linha, numa das colunas (Setup >
+# System > Services: Boot, After boot ou Off). Na interface grafica, a grade
+# desenhada; no texto, um menu em que Enter numa linha passa a marca para a
+# coluna seguinte, e Save grava. Imprime "chave=valor" de cada linha,
+# separados por virgula; status 1 = Esc (nada muda).
+ui_grid() {
+  local title=$1 text=$2 cols=$3 row key label state help choice i c line last="" out=""
+  local -a values=() names=() keys=() labels=() states=() helps=() rows=() entries=()
+  shift 3
+  IFS=';' read -ra entries <<< "$cols"
+  for c in "${entries[@]}"; do
+    values+=("${c%%|*}")
+    names+=("${c#*|}")
+  done
+  for row in "$@"; do
+    IFS='|' read -r key label state help <<< "$row"
+    keys+=("$key") labels+=("$label") states+=("${state:-${values[0]}}") helps+=("$help")
+    rows+=("$key"$'\x1d'"$label"$'\x1d'"${state:-${values[0]}}"$'\x1d'"$help")
+  done
+  if ui_gui_alive; then
+    ui_gui_call grid "$title" "$text" "${cols//;/$'\x1d'}" "${rows[@]}" || return 1
+    printf '%s\n' "$UI_GUI_REPLY"
+    return 0
+  fi
+  while true; do
+    entries=()
+    for i in "${!keys[@]}"; do
+      printf -v line '%-16s' "${labels[i]}"
+      for c in "${!values[@]}"; do
+        if [[ ${states[i]} == "${values[c]}" ]]; then line+="  [x] ${names[c]}"; else line+="  [ ] ${names[c]}"; fi
+      done
+      entries+=("$i|$line|${helps[i]}")
+    done
+    entries+=("save|Save|Apply the marks now." "return|Return|Leave without changing anything.")
+    choice=$(ui_menu_hints "$title" "$text"$'\n'"$(ui_dim "Enter on a line moves its mark to the next column.")" \
+      "$last" "${entries[@]}") || return 1
+    case $choice in
+      save)
+        for i in "${!keys[@]}"; do
+          out+="${out:+,}${keys[i]}=${states[i]}"
+        done
+        printf '%s\n' "$out"
+        return 0
+        ;;
+      return) return 1 ;;
+      *)
+        last=$choice
+        for c in "${!values[@]}"; do
+          if [[ ${states[choice]} == "${values[c]}" ]]; then
+            states[choice]=${values[(c + 1) % ${#values[@]}]}
+            break
+          fi
+        done
+        ;;
+    esac
+  done
+}
+
 # ui_yesno TITULO TEXTO [padrao-nao] pergunta sim ou nao. Status 0 = Yes.
 ui_yesno() {
   local title=$1 text=$2 def=${3:-yes} args=()

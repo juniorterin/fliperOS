@@ -110,11 +110,62 @@ launcher_custom_delete() {
   return 0
 }
 
+# ── Um jogo direto no boot ───────────────────────────────────────
+# O launcher "game" (config/fliperos-bootgame) abre um jogo so, escolhido em
+# Setup > Games > Frontend. BOOTGAME_FILE tem o nome do jogo, o arquivo da
+# ROM e, uma por linha, a linha de comando ja resolvida: a mesma que os
+# frontends usam para a pasta (scraper_attract_emulator), sem shell no meio.
+BOOTGAME_FILE=${BOOTGAME_FILE:-$FLIPEROS_ETC/bootgame}
+
+# bootgame_command CHAVE ARQUIVO imprime a linha de comando do jogo, uma
+# palavra por linha, com os marcadores do Attract-Mode trocados.
+bootgame_command() {
+  local key=$1 file=$2 exe args word base
+  local -a words
+  IFS='|' read -r _ exe args _ <<< "$(scraper_attract_emulator "$key")"
+  [[ -n $exe ]] || return 1
+  base=${file##*/}
+  base=${base%.*}
+  printf '%s\n' "$exe"
+  read -ra words <<< "$args"
+  for word in "${words[@]}"; do
+    case $word in
+      '"[romfilename]"' | '[romfilename]') printf '%s\n' "$file" ;;
+      '[name]') printf '%s\n' "$base" ;;
+      *) printf '%s\n' "$word" ;;
+    esac
+  done
+}
+
+# bootgame_set CHAVE ARQUIVO grava o jogo e o poe como o launcher padrao.
+bootgame_set() {
+  local key=$1 file=$2 cmd label tmp
+  [[ -f $file ]] || return 1
+  cmd=$(bootgame_command "$key" "$file") || return 1
+  # O nome vai para os menus: sem o separador deles.
+  label=${file##*/}
+  label=${label%.*}
+  label=${label//|/ }
+  tmp=$(mktemp "$BOOTGAME_FILE.XXXXXX") || return 1
+  printf '%s\n%s\n%s\n' "$label" "$file" "$cmd" > "$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$BOOTGAME_FILE" || return 1
+  log_info "jogo no boot: $file ($key)"
+  launcher_set game
+}
+
+# bootgame_label imprime o nome do jogo do boot (vazio se nao ha).
+bootgame_label() {
+  head -n 1 "$BOOTGAME_FILE" 2> /dev/null
+}
+
 # launcher_available imprime "nome|descricao" dos launchers instalados, na
 # ordem da tabela: a lista do primeiro boot e gerada do que existe de fato.
+# O jogo no boot fica de fora: no primeiro boot ainda nao ha jogos.
 launcher_available() {
   local name desc
   while IFS='|' read -r name _ _ _ desc; do
+    [[ $name == game ]] && continue
     launcher_installed "$name" && printf '%s|%s\n' "$name" "$desc"
   done < <(launcher_rows)
   # Sem isto, o status era o da ultima linha da tabela (1, se nao instalado).
