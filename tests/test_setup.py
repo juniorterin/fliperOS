@@ -1492,6 +1492,63 @@ class CustomGamesTests(Base):
                          .splitlines(), ["/bin/sh", str(script)])
 
 
+class ArcadeResyncTests(Base):
+    """As romlists de arcade do Attract-Mode com as informacoes do MAME (os
+    filtros das telas) tambem para os jogos postos depois da AttractPlus ROM
+    List."""
+
+    def setUp(self):
+        super().setUp()
+        self.attract = self.env.dir / "attract"
+        (self.attract / "romlists").mkdir(parents=True)
+        (self.attract / "emulators").mkdir()
+        (self.attract / "emulators" / "MAME.cfg").write_text("executable x\nromext               .zip;.7z\n")
+        self.roms = self.env.dir / "mame"
+        self.roms.mkdir()
+        for game in ("sf2.zip", "pacman.7z"):
+            (self.roms / game).write_text("")
+        self.list = self.attract / "romlists" / "MAME.txt"
+        self.e = {"ATTRACT_DIR": str(self.attract)}
+
+    def stale(self):
+        return self.env.run('frontends_arcade_stale "%s" MAME' % self.roms, self.e).returncode == 0
+
+    def test_stale_without_list_info_or_with_a_new_game(self):
+        head = "#Name;Title;Emulator;CloneOf;Year;Manufacturer;Category\n"
+        self.assertTrue(self.stale())                       # sem romlist
+        self.list.write_text(head + "sf2;sf2;MAME;;;;\npacman;pacman;MAME;;;;\n")
+        self.assertTrue(self.stale())                       # so o nome do arquivo
+        self.list.write_text(head + "sf2;Street Fighter II;MAME;;1991;Capcom;Fighter\n"
+                             "pacman;Pac-Man;MAME;;1980;Namco;Maze\nsf2ce;SF2 CE;MAME;sf2;1992;Capcom;Fighter\n")
+        self.assertFalse(self.stale())                      # em dia (o clone sem arquivo pode)
+        (self.roms / "dkong.zip").write_text("")
+        self.assertTrue(self.stale())                       # jogo novo na pasta
+        (self.roms / "dkong.zip").unlink()
+        (self.roms / "readme.txt").write_text("")
+        self.assertFalse(self.stale())                      # o que nao e jogo nao conta
+
+    def test_resync_only_with_the_cache_and_without_recursion(self):
+        calls = self.env.dir / "calls"
+        script = """
+            frontends_romlist_systems() { echo "mame|%s|arcade|2|MAME"; }
+            groovymame_version() { echo 0.289; }
+            frontends_romlist() { echo "romlist $* resync=$FRONTENDS_RESYNCING" >> %s; frontends_arcade_resync; }
+            frontends_arcade_resync
+        """ % (self.roms, calls)
+        cache = self.env.dir / "cache"
+        cache.mkdir()
+        self.env.out(script, dict(self.e, ROMCLEAN_CACHE=str(cache)))
+        self.assertFalse(calls.exists())                    # sem o cache: nada
+        (cache / "romclean-groovymame-0.289.json").write_text("{}")
+        self.env.out(script, dict(self.e, ROMCLEAN_CACHE=str(cache)))
+        self.assertEqual(calls.read_text().splitlines(),
+                         ["romlist /dev/null mame|%s|arcade|2|MAME resync=1" % self.roms])
+        frontends = (SETUP / "lib" / "frontends.sh").read_text()
+        self.assertIn("frontends_attract() {\n  local key dir platform n=0\n", frontends)
+        self.assertLess(frontends.index("  frontends_arcade_resync\n  frontends_attract_prune"),
+                        frontends.index("frontends_attract_empty\n"))
+
+
 class RemoteMenuTests(Base):
     """fliperos-menu digitado no SSH: o menu em texto ali, nunca a interface
     grafica no monitor do gabinete."""

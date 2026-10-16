@@ -231,6 +231,9 @@ frontends_attract_theme() {
 # (--build-romlist); a do Scraper, com titulo, ano e arte, fica.
 frontends_attract() {
   local key dir platform n=0
+  # As romlists das pastas de arcade com o nome e as informacoes de cada
+  # jogo (os filtros das telas leem a categoria, o fabricante e o ano).
+  frontends_arcade_resync
   frontends_attract_prune
   while IFS='|' read -r key dir platform _; do
     frontends_attract_system "$key" "$dir" "$platform" > /dev/null || continue
@@ -566,6 +569,63 @@ frontends_romlist_systems() {
     [[ -n $name ]] && printf '%s|%s|%s|%s|%s\n' "$key" "$dir" "$platform" "$count" "$name"
   done < <(scraper_detect)
   return 0
+}
+
+# frontends_arcade_stale PASTA EMULADOR: a romlist da pasta de arcade esta
+# atrasada - nao existe, tem so o nome do arquivo de cada jogo (sem as
+# informacoes do MAME: os filtros de categoria, fabricante e ano das telas
+# ficam vazios) ou nao tem um jogo que esta na pasta (posto depois da
+# AttractPlus ROM List, pelo Downloader ou pela rede).
+frontends_arcade_stale() {
+  local dir=$1 list="$ATTRACT_DIR/romlists/$2.txt" cfg="$ATTRACT_DIR/emulators/$2.cfg" exts
+  [[ -s $list ]] || return 0
+  awk -F';' '!/^#/ && NF > 1 && $2 != $1 { f = 1; exit } END { exit !f }' "$list" || return 0
+  exts=$(awk '$1 == "romext" { sub(/^romext[ \t]+/, ""); sub(/[ \t\r]+$/, ""); print; exit }' "$cfg" 2> /dev/null)
+  [[ -n $exts ]] || return 1
+  find -H "$dir" -maxdepth 1 -type f ! -name '.*' -printf '%f\n' 2> /dev/null |
+    awk -v exts="$exts" -v list="$list" '
+      BEGIN {
+        n = split(tolower(exts), ext, ";")
+        while ((getline line < list) > 0) {
+          if (line ~ /^#/) continue
+          split(line, f, ";")
+          have[f[1]] = 1
+        }
+      }
+      {
+        for (i = 1; i <= n; i++) {
+          l = length(ext[i])
+          if (l && length($0) > l && tolower(substr($0, length($0) - l + 1)) == ext[i]) {
+            if (!(substr($0, 1, length($0) - l) in have)) missing = 1
+            break
+          }
+        }
+      }
+      END { exit !missing }'
+}
+
+# frontends_arcade_resync refaz as romlists de arcade (como a AttractPlus ROM
+# List) quando alguma esta atrasada, so com a lista do GroovyMAME ja no
+# cache: le-la de novo (o -listxml) leva um minuto, e isto roda ao abrir o
+# frontend. Sem o cache, a romlist simples fica ate a AttractPlus ROM List.
+frontends_arcade_resync() {
+  local line key dir name stale=0 version
+  local -a systems
+  ((${FRONTENDS_RESYNCING:-0})) && return 0
+  mapfile -t systems < <(frontends_romlist_systems)
+  ((${#systems[@]})) || return 0
+  for line in "${systems[@]}"; do
+    IFS='|' read -r key dir _ _ name <<< "$line"
+    frontends_arcade_stale "$dir" "$name" && stale=1
+  done
+  ((stale)) || return 0
+  version=$(groovymame_version)
+  if [[ -z $version || ! -f $ROMCLEAN_CACHE/romclean-groovymame-$version.json ]]; then
+    log_info "Attract-Mode Plus: romlist de arcade atrasada, sem a lista do GroovyMAME no cache (AttractPlus ROM List)"
+    return 0
+  fi
+  log_info "Attract-Mode Plus: romlists de arcade refeitas (jogos novos ou sem as informacoes)"
+  FRONTENDS_RESYNCING=1 frontends_romlist /dev/null "${systems[@]}" > /dev/null
 }
 
 # frontends_romlist RESULTADO SISTEMA... (linhas do frontends_romlist_systems)
