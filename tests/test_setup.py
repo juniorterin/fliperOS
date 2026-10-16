@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators", "services", "system"]
+        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators", "services", "system", "customgames"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -986,6 +986,37 @@ class AudioTests(Base):
         self.assertIn("defaults.pcm.card 1\n", conf.read_text())
         self.assertIn("defaults.pcm.device 3\n", conf.read_text())
 
+    def test_volume_leveler_is_optional_and_off_by_default(self):
+        conf = self.env.dir / "asound.conf"
+        plugin = self.env.dir / "ladspa" / "sc4_1882.so"
+        env = {"ASOUND_CONF": str(conf), "AUDIO_LEVELER_PLUGIN": str(plugin)}
+        self.env.out("audio_set_default 1,3", env)
+        self.assertNotIn("pcm.!default", conf.read_text())
+        self.assertEqual(self.env.run("audio_leveler_enabled", env).returncode, 1)
+        # Sem o swh-plugins: nao liga e o som fica como esta.
+        self.assertEqual(self.env.run("audio_leveler_set on", env).returncode, 1)
+        self.assertNotIn("pcm.!default", conf.read_text())
+        plugin.parent.mkdir()
+        plugin.write_text("")
+        self.env.out("audio_leveler_set on", env)
+        text = conf.read_text()
+        self.assertIn("defaults.pcm.card 1\n", text)
+        self.assertIn('pcm.!default {\n    type plug\n    slave.pcm "fliperos_leveler"\n}', text)
+        self.assertIn('slave.pcm "plug:dmix:1,3"', text)
+        self.assertIn('path "%s"' % plugin.parent, text)
+        self.assertIn("label sc4\n        input { controls [ 0 20 400 -20 4 6 6 ] }", text)
+        # Trocar a placa mantem o nivelador, na placa nova.
+        self.env.out("audio_set_default 0,0", env)
+        self.assertIn('slave.pcm "plug:dmix:0,0"', conf.read_text())
+        # Sem o plugin (apagado depois), o asound.conf volta ao simples.
+        plugin.unlink()
+        self.env.out("audio_write_conf", env)
+        self.assertNotIn("ladspa", conf.read_text())
+        plugin.write_text("")
+        self.env.out("audio_leveler_set off", env)
+        self.assertNotIn("ladspa", conf.read_text())
+        self.assertIn("audio_leveler=off\n", (self.env.etc / "fliperos.conf").read_text())
+
     def mixer(self, controls, level=60):
         """amixer falso: lista os controles da placa, responde o nivel e
         registra cada sset."""
@@ -1394,6 +1425,71 @@ class BootGameTests(Base):
         session = (ROOT / "config" / "fliperos-session").read_text()
         self.assertIn('game)\n        FLIPEROS_POWERKEY=game "${program[@]}"', session)
         self.assertIn("fliperos-bootgame", (ROOT / "fliperos-rootfs.sh").read_text())
+
+
+class CustomGamesTests(Base):
+    """Setup > Games > Custom games: programas que nao sao ROM, em grupos que
+    os frontends mostram como sistemas."""
+
+    def setUp(self):
+        super().setUp()
+        self.roms = self.env.dir / "roms"
+        self.roms.mkdir()
+        self.e = {"ROMS_DIR": str(self.roms), "CUSTOM_GAMES_DIR": str(self.roms / "custom"),
+                  "FLIPEROS_BIN": "/opt/fliperos/bin"}
+
+    def test_entry_is_a_script_that_runs_in_its_own_mode(self):
+        cmd = "wine ~/games/Pang \\$ Deluxe/pang.exe --full 'x y'"
+        self.env.out('customgames_save "PC games" "Pang" 240p "%s"' % cmd, self.e)
+        script = self.roms / "custom" / "PC games" / "Pang.sh"
+        self.assertTrue(os.access(script, os.X_OK))
+        text = script.read_text()
+        self.assertIn("# mode: 640x240@60\n", text)
+        self.assertIn("# command: wine ~/games/Pang $ Deluxe/pang.exe --full 'x y'\n", text)
+        # O script roda o comando como ele foi digitado, pelo fliperos-x11-run.
+        fake = self.env.dir / "x11"
+        fake.write_text('#!/bin/bash\nprintf "%s\\n" "$@"\n')
+        fake.chmod(0o755)
+        text = text.replace("/opt/fliperos/bin/fliperos-x11-run", str(fake))
+        script.write_text(text)
+        out = subprocess.run(["sh", str(script)], capture_output=True, text=True).stdout.splitlines()
+        self.assertEqual(out[:4], ["--mode", "640x240@60", "bash", "-c"])
+        self.assertEqual(out[4], "wine ~/games/Pang $ Deluxe/pang.exe --full 'x y'")
+
+    def test_modes_names_and_listing(self):
+        self.assertEqual(self.env.out("customgames_mode 480i", self.e).strip(), "640x480@60")
+        self.assertEqual(self.env.out("customgames_mode 384x224@59.6", self.e).strip(), "384x224@59.6")
+        for bad in ("640x480", "x240@60", "640x240@", "big"):
+            self.assertEqual(self.env.run("customgames_mode '%s'" % bad, self.e).returncode, 1, bad)
+        for bad in ("", "a/b", "a|b", ".hidden", ".."):
+            self.assertEqual(self.env.run("customgames_valid_name '%s'" % bad, self.e).returncode, 1, bad)
+        self.assertEqual(self.env.run("customgames_save G '' 240p ls", self.e).returncode, 1)
+        self.env.out("customgames_save G A 384x224@59.6 'echo a'; customgames_save G B 480i 'echo b'", self.e)
+        self.assertEqual(self.env.out("customgames_list", self.e).splitlines(),
+                         ["G|A|384x224@59.6|echo a", "G|B|640x480@60|echo b"])
+        self.assertEqual(self.env.out("customgames_mode_label 640x480@60; customgames_mode_label 384x224@59.6",
+                                      self.e).split(), ["480i", "384x224@59.6"])
+
+    def test_edit_moves_and_delete_removes_the_empty_group(self):
+        self.env.out("customgames_save Old A 240p 'echo a'", self.e)
+        self.env.out("customgames_save New B 480i 'echo b' Old A", self.e)
+        self.assertEqual(self.env.out("customgames_list", self.e).splitlines(), ["New|B|640x480@60|echo b"])
+        self.assertFalse((self.roms / "custom" / "Old").exists())
+        self.env.out("customgames_delete New B", self.e)
+        self.assertEqual(self.env.out("customgames_groups", self.e), "")
+
+    def test_groups_are_systems_in_the_frontends_but_not_scraped(self):
+        self.env.out("customgames_save 'PC games' Pang 240p 'echo pang'", self.e)
+        rows = self.env.out("scraper_detect", self.e).splitlines()
+        self.assertIn("custom/PC games|%s|ports|1" % (self.roms / "custom" / "PC games"), rows)
+        self.assertEqual(self.env.out("scraper_attract_emulator 'custom/PC games'", self.e).strip(),
+                         'PC games|/bin/sh|"[romfilename]"|.sh')
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn("mapfile -t found < <(scraper_detect | grep -v '^custom/')", menu)
+        # E pode ser o jogo do boot: o comando e o sh com o script.
+        script = self.roms / "custom" / "PC games" / "Pang.sh"
+        self.assertEqual(self.env.out("bootgame_command 'custom/PC games' \"$F\"", dict(self.e, F=str(script)))
+                         .splitlines(), ["/bin/sh", str(script)])
 
 
 class RemoteMenuTests(Base):
@@ -4129,7 +4225,7 @@ class SetupGroupsTests(Base):
         self.assertEqual(order["screen_setup_menu"],
                          ["video", "audio", "network", "joysticks", "games", "system", "return"])
         # Na ordem de por jogos no gabinete.
-        self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "folders", "downloader", "cleaner",
+        self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "custom", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])
         self.assertEqual(order["screen_setup_system"], ["extras", "latency", "services", "quirks", "password", "update",
                                                         "debug", "splash", "return"])

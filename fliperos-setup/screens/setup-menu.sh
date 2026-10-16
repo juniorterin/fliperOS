@@ -39,6 +39,7 @@ screen_setup_games() {
     choice=$(ui_menu_hints "Games" "" "$last" \
       "emulators|Emulators & Games|What is installed, and install what is not in the image." \
       "frontend|Frontend|The game list that starts when the computer turns on." \
+      "custom|Custom games|PC games, scripts and your own emulators, as frontend systems." \
       "folders|Folders|Where ROMs, BIOS and art are; use an external disk instead." \
       "downloader|Downloader|MAME ROM/CHD sets by torrent and free homebrew games." \
       "cleaner|Cleaner|Filter a MAME romset: only the games you want, per emulator." \
@@ -49,6 +50,7 @@ screen_setup_games() {
     case $choice in
       frontend) screen_frontend ;;
       emulators) screen_emulators ;;
+      custom) screen_custom_games ;;
       folders) screen_folders ;;
       downloader) screen_downloads ;;
       cleaner) screen_cleaner ;;
@@ -132,6 +134,7 @@ screen_audio() {
       "latency|MAME audio latency|Lower responds faster; raise it if the sound crackles." \
       "test|Test sound|Play a sound to check the speakers." \
       "sounds|Menu sounds ($(menu_sounds_label))|A sound when the cursor moves and on Enter (your own WAVs)." \
+      "leveler|Volume leveler ($(audio_leveler_enabled && echo on || echo off))|Brings loud and quiet systems closer to the same volume." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
     case $choice in
@@ -179,6 +182,25 @@ screen_audio() {
           off) menu_sounds_set on ;;
         esac
         ui_sounds
+        ;;
+      leveler)
+        if audio_leveler_enabled; then
+          audio_leveler_set off
+          continue
+        fi
+        # Uma imagem anterior a ele nao tem o compressor: vem do apt.
+        if ! audio_leveler_available; then
+          ui_yesno "Volume leveler" "The leveler needs the swh-plugins package (a few MB). Install it now? It needs the network." yes ||
+            continue
+          run_with_progress "Installing swh-plugins" "" update_install_package swh-plugins || continue
+        fi
+        if ! audio_leveler_set on; then
+          ui_msg "Volume leveler" "$(ui_bad "The compressor was not found after installing swh-plugins.")" "" \
+            "Details in /var/log/fliperos-setup.log."
+        else
+          ui_msg "Volume leveler" "On. Every system goes through a compressor: loud games get softer," \
+            "quiet ones louder. Games already open hear it from the next one."
+        fi
         ;;
       return) return 0 ;;
     esac
@@ -392,6 +414,114 @@ screen_bootgame() {
       "Change it in Setup > System > Services.")
   fi
   ui_msg "$title" "${lines[@]}"
+}
+
+# ── Custom games ─────────────────────────────────────────────────
+# lib/customgames.sh: programas que nao sao ROM, em grupos que os frontends
+# mostram como sistemas.
+
+screen_custom_games() {
+  local title="Custom games" choice last=+add group name mode
+  local -a entries
+  while true; do
+    entries=()
+    while IFS='|' read -r group name mode _; do
+      entries+=("$group/$name|$group: $name ($(customgames_mode_label "${mode:-?}"))")
+    done < <(customgames_list)
+    entries+=("+add|Add a game or program" "return|Return")
+    choice=$(ui_menu "$title" \
+      "Games and programs that are not a ROM (a PC game, your own emulator, a script), in groups the frontends show as systems." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
+    case $choice in
+      +add) screen_custom_game_edit ;;
+      return) return 0 ;;
+      *)
+        choice=$(ui_menu "$title" "${choice//\// / }" edit "edit|Edit" "delete|Delete" "return|Return") || continue
+        group=${last%%/*} name=${last#*/}
+        case $choice in
+          edit) screen_custom_game_edit "$group" "$name" ;;
+          delete)
+            ui_yesno "$title" "Delete \"$name\" from $group?" no || continue
+            customgames_delete "$group" "$name"
+            screen_custom_games_refresh
+            last=+add
+            ;;
+        esac
+        ;;
+    esac
+  done
+}
+
+# screen_custom_game_edit [GRUPO NOME]: uma entrada nova, ou a NOME do GRUPO.
+screen_custom_game_edit() {
+  local old_group=${1:-} old_name=${2:-} title="Custom games" group="" name="" mode="" cmd="" choice file g
+  local -a groups entries=()
+  if [[ -n $old_name ]]; then
+    file=$(customgames_file "$old_group" "$old_name")
+    mode=$(customgames_field "$file" mode)
+    cmd=$(customgames_field "$file" command)
+    name=$old_name
+  fi
+  # O grupo: um sistema nos frontends.
+  mapfile -t groups < <(customgames_groups)
+  choice=+new
+  if ((${#groups[@]})); then
+    for g in "${groups[@]}"; do entries+=("$g|$g"); done
+    entries+=("+new|New group")
+    choice=$(ui_menu "$title" "Which group? Each group is a system in the frontends." "${old_group:-${groups[0]}}" \
+      "${entries[@]}") || return 0
+  fi
+  if [[ $choice == +new ]]; then
+    while true; do
+      group=$(ui_input "$title" "Name of the new group (e.g. PC games). It is a system in the frontends.") || return 0
+      customgames_valid_name "$group" && break
+      ui_msg "$title" "The name cannot be empty, start with a dot or have / or |."
+    done
+  else
+    group=$choice
+  fi
+  while true; do
+    name=$(ui_input "$title" "Name of the game or program, as the frontend shows it." "$name") || return 0
+    customgames_valid_name "$name" && break
+    ui_msg "$title" "The name cannot be empty, start with a dot or have / or |."
+  done
+  while true; do
+    cmd=$(ui_input "$title" "Command that opens $name, as you would type it in a terminal (e.g. wine ~/games/pang/pang.exe)." \
+      "$cmd" long) || return 0
+    customgames_valid_command "$cmd" && break
+    ui_msg "$title" "The command cannot be empty."
+  done
+  # A resolucao: 240p, 480i ou uma escolhida.
+  case $(customgames_mode_label "${mode:-640x240@60}") in
+    240p) choice=240p ;;
+    480i) choice=480i ;;
+    *) choice=custom ;;
+  esac
+  choice=$(ui_radio "$title" "Video mode of $name." "$choice" \
+    "240p|240p (640x240)" "480i|480i (640x480, interlaced on a 15 kHz monitor)" \
+    "custom|Other (width x height @ Hz)") || return 0
+  if [[ $choice == custom ]]; then
+    while true; do
+      choice=$(ui_input "$title" "Video mode as WIDTHxHEIGHT@HZ (e.g. 320x240@60, 384x224@59.6)." \
+        "$([[ $(customgames_mode_label "${mode:-}") == "$mode" ]] && printf '%s' "$mode")") || return 0
+      customgames_mode "$choice" > /dev/null && break
+      ui_msg "$title" "Invalid mode: $choice" "" "Use WIDTHxHEIGHT@HZ, e.g. 320x240@60."
+    done
+  fi
+  if ! customgames_save "$group" "$name" "$choice" "$cmd" "$old_group" "$old_name"; then
+    ui_msg "$title" "$(ui_bad "Could not save $name.")" "" "Details in /var/log/fliperos-setup.log."
+    return 0
+  fi
+  screen_custom_games_refresh
+  ui_msg "$title" "$name is in the group $group." "" "The frontend shows it in the system $group."
+}
+
+# screen_custom_games_refresh: os grupos nos frontends (como a pasta nova de
+# jogos do Free games).
+screen_custom_games_refresh() {
+  ui_info "Custom games" "Putting the games in the frontend..."
+  frontends_configure "$(launcher_current)"
 }
 
 # screen_frontend_custom [NOME]: cadastra um frontend da pessoa (rotulo e
@@ -706,7 +836,8 @@ screen_scraper_scrape() {
       "Type it in Scraper provider, or pick another provider there."
     return 0
   fi
-  mapfile -t found < <(scraper_detect)
+  # Os Custom games sao programas, nao ROMs: nada para o Skyscraper achar.
+  mapfile -t found < <(scraper_detect | grep -v '^custom/')
   if ((${#found[@]} == 0)); then
     ui_msg "Scraper" "No ROMs were found in $ROMS_DIR." "" \
       "Copy your ROMs to the folder of the emulator (e.g. $ROMS_DIR/mame," \

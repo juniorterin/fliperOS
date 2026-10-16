@@ -150,6 +150,12 @@ Each system is a `<system>` block in `~/ES-DE/custom_systems/es_systems.xml`:
 
 **Setup > Games > Frontend rewrites the whole `es_systems.xml`** every time ES-DE is picked, so a system added by hand disappears. Keep a copy of your blocks and paste them back after using Setup > Games > Frontend.
 
+## Custom games
+
+The quick way for a game or program that is not a ROM (a PC game through Wine, a native Linux game, your own emulator with one game, a script): **Setup > Games > Custom games**. Each entry has a **group**, a **name**, the **command** (as you would type it in a terminal) and the **video mode**: 240p (640x240), 480i (640x480, interlaced on a 15 kHz monitor) or any `WIDTHxHEIGHT@HZ`. The frontends show each group as a system and each entry as a game in it, and the entry can also be the game that opens at boot (Setup > Games > Frontend).
+
+Behind it, a group is the folder `~/roms/custom/<group>` and each entry a script `<name>.sh` in it, which opens the command in its own Xorg in that mode (`fliperos-x11-run --mode`). The mode and the command are also in the script's first lines, which is what the Setup reads to edit it. A `.sh` you put in one of those folders by hand shows up in the frontends too (with the mode and the command empty in the Setup). The Scraper skips these folders: there is no art to look up for a script.
+
 ## Adding a new emulator
 
 FliperOS sets up the emulators it ships by itself. For any other emulator (an AppImage, a package, something you built), there are four steps. If you follow them, the same command works in Attract-Mode Plus, ES-DE, Pegasus or the console.

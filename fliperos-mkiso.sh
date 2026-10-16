@@ -307,7 +307,7 @@ apt-get install -y --no-install-recommends \
   lxhotkey-gtk lxinput lxrandr lxsession-edit galculator gpicview mousepad xarchiver alacritty \
   gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
   htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
-  espeak-ng triggerhappy zsh
+  espeak-ng triggerhappy zsh swh-plugins
 
 # O transmission-daemon e o do Setup > Games > Downloader (fliperos-transmission, do
 # usuario fliperos); o servico do pacote, do usuario debian-transmission, nao.
@@ -1119,16 +1119,28 @@ apt-get install -y --no-install-recommends \
 git clone --depth=1 https://github.com/flyinghead/flycast /tmp/flycast
 cd /tmp/flycast
 git submodule update --init --recursive
+# Os patches do FliperOS (config/flycast-patches): o que nao encaixa mais
+# no master do Flycast fica de fora com um aviso, e o Flycast segue na ISO.
+for patch in /tmp/flycast-patches/*.patch; do
+  [[ -f $patch ]] || continue
+  if git apply --check "$patch" 2> /dev/null; then
+    git apply "$patch" && echo "Flycast patch: ${patch##*/}"
+  else
+    echo "WARNING: Flycast patch ${patch##*/} does not apply to this Flycast; left out"
+  fi
+done
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_VULKAN=OFF
 cmake --build build -j"$(nproc)"
 install -m755 build/flycast /usr/local/bin/flycast
 # Icone do menu do LXDE (config/applications/fliperos-flycast.desktop).
 install -Dm644 shell/linux/flycast.png /usr/local/share/pixmaps/flycast.png
 cd /
-rm -rf /tmp/flycast
+rm -rf /tmp/flycast /tmp/flycast-patches
 echo "Flycast OK"
 FCSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-flycast.sh"
+  mkdir -p "$CHROOT_DIR/tmp/flycast-patches"
+  cp "$(dirname "$(realpath "$0")")"/config/flycast-patches/*.patch "$CHROOT_DIR/tmp/flycast-patches/" 2> /dev/null || true
   chroot "$CHROOT_DIR" /tmp/build-flycast.sh >> "$LOG_FILE" 2>&1 \
     && ok "Flycast compilado" \
     || err "Flycast failed; use --skip-flycast explicitly for an ISO without it"

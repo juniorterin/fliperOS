@@ -1,0 +1,29 @@
+From 0a3ef6a3da14ccf9575752f3295dec801f75afc2 Mon Sep 17 00:00:00 2001
+From: FliperOS <fliperos@localhost>
+Date: Fri, 16 Oct 2026 04:38:04 +0000
+Subject: [PATCH] ui: the game loads behind a black screen (FliperOS)
+
+---
+ core/ui/gui.cpp | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/core/ui/gui.cpp b/core/ui/gui.cpp
+index 614739a..78f51a1 100644
+--- a/core/ui/gui.cpp
++++ b/core/ui/gui.cpp
+@@ -1235,7 +1235,11 @@ static bool checkUWPProtocolActivation()
+ 
+ static void gui_display_loadscreen()
+ {
+-	drawBoxartBackground();
++	// FliperOS: the game loads behind a black screen, as on the arcade
++	// board, without the box art and the "Loading..." window. The window is
++	// still built (transparent): it is what starts the game when the load
++	// ends and what reports a load error.
++	ImguiStyleVar hidden(ImGuiStyleVar_Alpha, 0.f);
+ 	centerNextWindow();
+ 	ImGui::SetNextWindowSize(ScaledVec2(330, 0));
+ 	ImGui::SetNextWindowBgAlpha(0.8f);
+-- 
+2.43.0
+

@@ -436,6 +436,15 @@ scraper_detect() {
     count=$(scraper_count "$dir")
     ((count > 0)) && printf 'retroarch/%s|%s|%s|%s\n' "$core" "$dir" "$platform" "$count"
   done
+  # Os grupos de Setup > Games > Custom games (lib/customgames.sh), um .sh
+  # por entrada: nos frontends, um sistema cada. Plataforma "ports", a dos
+  # jogos que sao scripts no ES-DE; o Scraper os deixa de fora.
+  for dir in "$ROMS_DIR"/custom/*/; do
+    [[ -d $dir ]] || continue
+    dir=${dir%/}
+    count=$(find -H "$dir" -maxdepth 1 -type f -name '*.sh' 2> /dev/null | wc -l)
+    ((count > 0)) && printf 'custom/%s|%s|ports|%s\n' "${dir##*/}" "$dir" "$count"
+  done
   return 0
 }
 
@@ -501,6 +510,10 @@ scraper_attract_emulator() {
       name="${name:-$core} (${corename:-$core})"
       # O nome vira arquivo (.cfg, romlist): sem barra.
       echo "${name//\//-}|$FLIPEROS_BIN/fliperos-kms-run|retroarch -L $RA_CORES_DIR/${core}_libretro.so \"[romfilename]\"|$exts"
+      ;;
+    custom/*)
+      # Custom games (lib/customgames.sh): cada .sh abre o seu programa.
+      echo "${key#custom/}|/bin/sh|\"[romfilename]\"|.sh"
       ;;
     *) return 1 ;;
   esac

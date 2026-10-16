@@ -113,6 +113,8 @@ packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-pl
 # A interface grafica do Setup (fliperos-setup/gui) e a area de transferencia
 # do navegador do Downloader (config/fliperos-browser).
 packages+=(python3-pygame xclip)
+# O compressor do Volume leveler (Setup > Audio Setup, lib/audio.sh).
+packages+=(swh-plugins)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
 # Wine em si nao vem mais na imagem (Setup > System > Extras, config/fliperos-extras).

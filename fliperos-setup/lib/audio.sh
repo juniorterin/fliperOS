@@ -19,15 +19,74 @@ audio_current() {
 
 # audio_set_default "PLACA,DISPOSITIVO"
 audio_set_default() {
-  local card=${1%,*} dev=${1#*,}
-  cat > "$ASOUND_CONF" << EOF
-# Gerado pelo fliperos-setup (Setup > Audio Setup > Default card).
-defaults.pcm.card $card
-defaults.ctl.card $card
-defaults.pcm.device $dev
+  conf_set alsa "$1"
+  audio_write_conf
+  log_info "audio: placa padrao $1"
+}
+
+# ── Nivelador de volume ──────────────────────────────────────────
+# Setup > Audio Setup > Volume leveler, desligado de fabrica: um compressor
+# (o SC4 do swh-plugins, LADSPA) no "default" do ALSA, por onde passam todos
+# os emuladores. Aproxima o volume de um sistema do de outro: o que bate em
+# 0 dB sai em -9, o que fica em -30 sai em -24. Sem lookahead: nao atrasa o
+# som. Controles do SC4, na ordem: RMS/pico, ataque (ms), release (ms),
+# limiar (dB), razao, joelho (dB), ganho de compensacao (dB).
+AUDIO_LEVELER_PLUGIN=${AUDIO_LEVELER_PLUGIN:-/usr/lib/ladspa/sc4_1882.so}
+AUDIO_LEVELER_CONTROLS="0 20 400 -20 4 6 6"
+
+# audio_leveler_enabled: o nivelador esta ligado (e o plugin existe).
+audio_leveler_enabled() {
+  [[ $(conf_get audio_leveler 2> /dev/null) == on && -f $AUDIO_LEVELER_PLUGIN ]]
+}
+
+# audio_leveler_available: o swh-plugins esta instalado.
+audio_leveler_available() {
+  [[ -f $AUDIO_LEVELER_PLUGIN ]]
+}
+
+# audio_leveler_set on|off liga ou desliga e regrava o asound.conf. Status 1:
+# o plugin nao esta instalado (nada muda).
+audio_leveler_set() {
+  if [[ $1 == on ]] && ! audio_leveler_available; then
+    return 1
+  fi
+  conf_set audio_leveler "$1"
+  audio_write_conf
+  log_info "audio: nivelador de volume $1"
+}
+
+# audio_write_conf grava o /etc/asound.conf: a placa padrao e, com o
+# nivelador ligado, o "default" passando pelo compressor antes do dmix da
+# placa (o plug converte o formato dos dois lados).
+audio_write_conf() {
+  local current card dev
+  current=$(audio_current)
+  card=${current%,*} dev=${current#*,}
+  {
+    echo "# Gerado pelo fliperos-setup (Setup > Audio Setup)."
+    echo "defaults.pcm.card $card"
+    echo "defaults.ctl.card $card"
+    echo "defaults.pcm.device $dev"
+    if audio_leveler_enabled; then
+      cat << EOF
+
+# Volume leveler: o compressor SC4 (swh-plugins) no som de tudo.
+pcm.!default {
+    type plug
+    slave.pcm "fliperos_leveler"
+}
+pcm.fliperos_leveler {
+    type ladspa
+    slave.pcm "plug:dmix:$card,$dev"
+    path "${AUDIO_LEVELER_PLUGIN%/*}"
+    plugins [ {
+        label sc4
+        input { controls [ ${AUDIO_LEVELER_CONTROLS} ] }
+    } ]
+}
 EOF
-  conf_set alsa "$card,$dev"
-  log_info "audio: placa padrao $card,$dev"
+    fi
+  } > "$ASOUND_CONF"
 }
 
 # Controles que fazem o papel de volume. O PCM fica no maximo, como no

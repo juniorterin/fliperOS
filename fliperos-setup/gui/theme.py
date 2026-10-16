@@ -1054,6 +1054,9 @@ for _alias, _name in {
     "retrofe": "frontend", "lxde": "desktop", "supermodel": "emulators", "model3": "emulators", "kof": "games",
     # Button mapping (controle ou teclado) e o jogo direto no boot.
     "panel": "joysticks", "game": "games",
+    # Os itens que acrescentam ou editam (Custom games, Frontend) e o
+    # leveler do Audio Setup.
+    "+add": "add", "+new": "addfolder", "+edit": "edit", "custom": "games", "leveler": "audio",
 }.items():
     ICONS[_alias] = ICONS[_name]
 ICONS["torrent"] = ICONS["install"]

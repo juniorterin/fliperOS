@@ -83,6 +83,8 @@ source "$SETUP_DIR/lib/mediapacks.sh"
 source "$SETUP_DIR/lib/freeroms.sh"
 # shellcheck source=lib/frontends.sh
 source "$SETUP_DIR/lib/frontends.sh"
+# shellcheck source=lib/customgames.sh
+source "$SETUP_DIR/lib/customgames.sh"
 # shellcheck source=lib/update.sh
 source "$SETUP_DIR/lib/update.sh"
 # shellcheck source=lib/patches.sh
