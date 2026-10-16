@@ -51,5 +51,42 @@ export const SECTION_IDS = ['features', 'emulators', 'crt', 'multi-monitor', 'se
 export type SectionId = (typeof SECTION_IDS)[number];
 
 // Na ordem do carrossel do hero; os textos de cada um ficam em hero.slides.
-export const SCREENSHOT_IDS = ['hero', 'install', 'setup', 'video', 'buttons', 'guncon', 'filter', 'downloader', 'desktop'] as const;
+export const SCREENSHOT_IDS = [
+  'gui/main',
+  'gui/main-setup',
+  'gui/live',
+  'gui/setup',
+  'gui/setup-games',
+  'gui/video',
+  'gui/joysticks',
+  'gui/buttons-players',
+  'gui/buttons-capture',
+  'gui/layout',
+  'gui/layout-edit',
+  'gui/guncon',
+  'gui/guncon-target1',
+  'gui/guncon-target2',
+  'gui/guncon-target3',
+  'gui/guncon-result',
+  'gui/downloader',
+  'gui/downloader-torrent',
+  'gui/downloader-filter',
+  'gui/filter',
+  'gui/filter-scrolled',
+  'gui/filter-players',
+  'gui/filter-buttons',
+  'gui/filter-controls',
+  'gui/filter-years',
+  'gui/downloader-magnet',
+  'gui/downloader-magnet-browser',
+  'gui/downloader-progress',
+  'gui/power',
+  'gui/radio',
+  'gui/checklist',
+  'gui/yesno',
+  'gui/progress',
+  'gui/error',
+  'gui/input',
+  'desktop',
+] as const;
 export const SCREENSHOT_EXTENSIONS = ['avif', 'webp', 'png', 'jpg'] as const;

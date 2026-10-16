@@ -9,10 +9,11 @@ import type { ScreenshotMap } from '@/lib/screenshots';
 export function Hero({ screenshots, downloadUrl }: { screenshots: ScreenshotMap; downloadUrl: string }) {
   const { t } = useI18n();
   const h = t.hero;
-  // Só entram no carrossel as telas com arquivo em public/screenshots.
+  // Só entram no carrossel as telas com arquivo em public/screenshots; o texto
+  // alternativo é o título com a legenda.
   const slides = h.slides.flatMap((slide) => {
     const src = screenshots[slide.id];
-    return src ? [{ ...slide, src }] : [];
+    return src ? [{ ...slide, src, alt: `${slide.title}. ${slide.caption}` }] : [];
   });
   return (
     <section id="top" aria-labelledby="hero-title" className="relative overflow-hidden pt-28 pb-16 sm:pt-36 lg:pb-24">
@@ -58,7 +59,7 @@ export function Hero({ screenshots, downloadUrl }: { screenshots: ScreenshotMap;
           <figure className="float relative mx-auto w-full max-w-xl">
             <CrtMonitor
               src={null}
-              alt={h.slides[0].alt}
+              alt={h.slides[0].title}
               placeholderTitle={h.screenPlaceholderTitle}
               placeholderHint={h.screenPlaceholderHint}
               expectedPath={`/public/screenshots/${h.slides[0].id}.webp`}

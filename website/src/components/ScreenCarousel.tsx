@@ -11,7 +11,6 @@ type Labels = {
   label: string;
   previous: string;
   next: string;
-  show: string;
   pause: string;
   play: string;
   open: string;
@@ -47,12 +46,20 @@ function Caption({ title, caption, caret }: { title: string; caption: string; ca
   );
 }
 
-// Os screenshots num prisma atrás do vidro do monitor: uma tela por vez,
+// Um cubo atrás do vidro: as faces são reaproveitadas, então o giro é de 90 graus
+// com qualquer número de telas. A face da frente tem a tela atual; a de onde o
+// cubo veio guarda a anterior até o giro terminar.
+const FACES = 4;
+const mod = (n: number, m: number) => ((n % m) + m) % m;
+
+type View = { turn: number; index: number; from: number; dir: 1 | -1 };
+
+// Os screenshots num cubo atrás do vidro do monitor: uma tela por vez,
 // girando em 3D, com a legenda digitada e apagada a cada troca.
 export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: Labels }) {
   const count = slides.length;
-  // Contador sem módulo: do último para o primeiro o prisma segue girando para a frente.
-  const [turn, setTurn] = useState(0);
+  // turn sem módulo: o cubo segue girando para o mesmo lado, do último para o primeiro também.
+  const [{ turn, index, from, dir }, setView] = useState<View>({ turn: 0, index: 0, from: 0, dir: 1 });
   const [phase, setPhase] = useState<Phase>('typing');
   const [typed, setTyped] = useState(0);
   const [hovered, setHovered] = useState(false);
@@ -63,7 +70,6 @@ export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: La
   const dialogRef = useRef<HTMLDialogElement>(null);
   const tiltRef = useRef<HTMLDivElement>(null);
 
-  const index = ((turn % count) + count) % count;
   const slide = slides[index];
   const total = slide.title.length + slide.caption.length;
   const stopped = paused || hovered || zoomed;
@@ -92,29 +98,33 @@ export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: La
     } else {
       delay = 150;
       next = () => {
-        setTurn(turn + 1);
+        setView({ turn: turn + 1, index: mod(index + 1, count), from: index, dir: 1 });
         setPhase('turning');
         setAnnounce(false);
       };
     }
     const id = window.setTimeout(next, delay);
     return () => window.clearTimeout(id);
-  }, [phase, typed, total, stopped, count, turn, reduced]);
+  }, [phase, typed, total, stopped, count, turn, index, reduced]);
 
-  const go = (target: number) => {
-    setTurn(target);
+  // A próxima tela já fica no cache: no giro a face nova não aparece vazia.
+  useEffect(() => {
+    new window.Image().src = slides[mod(index + 1, count)].src;
+  }, [index, count, slides]);
+
+  const go = (step: 1 | -1) => {
+    const target = mod(index + step, count);
+    setView({ turn: turn + step, index: target, from: index, dir: step });
     setTyped(0);
     setPhase('turning');
     setAnnounce(true);
-    track('screenshot_view', { screenshot: slides[((target % count) + count) % count].id });
+    track('screenshot_view', { screenshot: slides[target].id });
   };
 
-  // Pelo caminho mais curto: do 1 para o 5 o prisma gira um passo para trás.
-  const show = (i: number) => {
-    let delta = i - index;
-    if (delta > count / 2) delta -= count;
-    if (delta < -count / 2) delta += count;
-    if (delta) go(turn + delta);
+  const faceSlide = (face: number) => {
+    if (face === mod(turn, FACES)) return slides[index];
+    if (face === mod(turn - dir, FACES)) return slides[from];
+    return null;
   };
 
   const open = () => {
@@ -135,9 +145,9 @@ export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: La
     if (tiltRef.current) tiltRef.current.style.transform = '';
   };
 
-  // Raio do prisma em frações da largura da tela: a face da frente cobre a tela inteira.
-  const angle = 360 / count;
-  const radius = count > 2 ? 0.5 / Math.tan(Math.PI / count) : 0;
+  // Raio do cubo em frações da largura da tela: a face da frente cobre a tela inteira.
+  const angle = 360 / FACES;
+  const radius = 0.5 / Math.tan(Math.PI / FACES);
   const shown = reduced ? total : typed;
   const titleTyped = slide.title.slice(0, shown);
   const captionTyped = slide.caption.slice(0, Math.max(0, shown - slide.title.length));
@@ -161,28 +171,30 @@ export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: La
                 className="prism"
                 style={{ transform: `translateZ(calc(${-radius} * 100cqw)) rotateY(${-turn * angle}deg)` }}
               >
-                {slides.map((s, i) => {
-                  const active = i === index;
+                {Array.from({ length: FACES }, (_, face) => {
+                  const s = faceSlide(face);
+                  const active = face === mod(turn, FACES);
                   return (
                     <div
-                      key={s.id}
+                      key={face}
                       aria-hidden={!active}
                       className="prism-face"
                       style={{
-                        transform: `rotateY(${i * angle}deg) translateZ(calc(${radius} * 100cqw))`,
+                        transform: `rotateY(${face * angle}deg) translateZ(calc(${radius} * 100cqw))`,
                         opacity: active || (phase === 'turning' && !reduced) ? 1 : 0,
                       }}
                     >
-                      <Image
-                        src={s.src}
-                        alt={s.alt}
-                        fill
-                        priority={i === 0}
-                        loading={i === 0 ? undefined : 'eager'}
-                        sizes="(min-width: 1024px) 560px, 92vw"
-                        unoptimized
-                        className="object-cover"
-                      />
+                      {s ? (
+                        <Image
+                          src={s.src}
+                          alt={s.alt}
+                          fill
+                          priority={turn === 0 && face === 0}
+                          sizes="(min-width: 1024px) 560px, 92vw"
+                          unoptimized
+                          className="object-contain"
+                        />
+                      ) : null}
                       <span
                         aria-hidden="true"
                         className="absolute inset-0 bg-bg-deeper transition-opacity duration-1000"
@@ -209,28 +221,18 @@ export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: La
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => go(turn - 1)}
+                  onClick={() => go(-1)}
                   aria-label={labels.previous}
                   className="grid size-6 place-items-center rounded-md text-comment transition hover:text-fg"
                 >
                   <ChevronLeft className="size-4" aria-hidden="true" />
                 </button>
-                {slides.map((s, i) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => show(i)}
-                    aria-label={`${labels.show} ${i + 1}: ${s.title}`}
-                    aria-current={i === index}
-                    className="grid size-6 place-items-center"
-                  >
-                    <span
-                      className={`size-2 rounded-full transition duration-300 ${
-                        i === index ? 'bg-green shadow-[0_0_8px] shadow-green' : 'bg-comment/60 hover:bg-cyan/80'
-                      }`}
-                    />
-                  </button>
-                ))}
+                <span aria-hidden="true" className="flex items-center gap-1.5 px-1 font-mono text-[11px] tabular-nums text-comment">
+                  <span className="size-1.5 rounded-full bg-green shadow-[0_0_8px] shadow-green" />
+                  <span>
+                    <span className="text-green">{String(index + 1).padStart(2, '0')}</span>/{count}
+                  </span>
+                </span>
                 <button
                   type="button"
                   onClick={() => setPaused(!paused)}
@@ -242,7 +244,7 @@ export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: La
                 </button>
                 <button
                   type="button"
-                  onClick={() => go(turn + 1)}
+                  onClick={() => go(1)}
                   aria-label={labels.next}
                   className="grid size-6 place-items-center rounded-md text-comment transition hover:text-fg"
                 >
@@ -280,8 +282,8 @@ export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: La
         onClick={(e) => e.target === e.currentTarget && dialogRef.current?.close()}
         onClose={() => setZoomed(false)}
         onKeyDown={(e) => {
-          if (e.key === 'ArrowRight') go(turn + 1);
-          if (e.key === 'ArrowLeft') go(turn - 1);
+          if (e.key === 'ArrowRight') go(1);
+          if (e.key === 'ArrowLeft') go(-1);
         }}
       >
         {zoomed ? (
@@ -296,10 +298,10 @@ export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: La
               </div>
               {count > 1 ? (
                 <>
-                  <button type="button" onClick={() => go(turn - 1)} aria-label={labels.previous} className="rounded-lg border border-line p-2 hover:border-purple">
+                  <button type="button" onClick={() => go(-1)} aria-label={labels.previous} className="rounded-lg border border-line p-2 hover:border-purple">
                     <ChevronLeft className="size-5" aria-hidden="true" />
                   </button>
-                  <button type="button" onClick={() => go(turn + 1)} aria-label={labels.next} className="rounded-lg border border-line p-2 hover:border-purple">
+                  <button type="button" onClick={() => go(1)} aria-label={labels.next} className="rounded-lg border border-line p-2 hover:border-purple">
                     <ChevronRight className="size-5" aria-hidden="true" />
                   </button>
                 </>
