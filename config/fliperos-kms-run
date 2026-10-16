@@ -112,6 +112,18 @@ export QT_QPA_EGLFS_INTEGRATION="${QT_QPA_EGLFS_INTEGRATION:-eglfs_kms}"
 export QT_QPA_EGLFS_HIDECURSOR=1
 # O GroovyMAME nao roda aqui: o comando groovymame se abre num Xorg proprio
 # (config/fliperos-groovymame), onde o Switchres troca o modo pelo XRandR.
+# O ES-DE num modo de pixel largo (640x240 num tubo 4:3): desenha em 4:3
+# (320x240) e estica na horizontal (packaging/patches/emulationstation), como
+# o Arcadeflow (fliperos-arcadeflow screen). O fator e quantas vezes a tela e
+# mais larga que 4:3, arredondado.
+case $(basename -- "$1") in
+  es-de | emulationstation)
+    if [[ -z ${ESDE_STRETCH_X:-} ]] && IFS=', ' read -r fb_w fb_h _ < "${FLIPEROS_FB_SIZE:-/sys/class/graphics/fb0/virtual_size}" 2> /dev/null &&
+      [[ $fb_w =~ ^[1-9][0-9]*$ && $fb_h =~ ^[1-9][0-9]*$ ]] && (((3 * fb_w + 2 * fb_h) / (4 * fb_h) >= 2)); then
+      export ESDE_STRETCH_X=$(((3 * fb_w + 2 * fb_h) / (4 * fb_h)))
+    fi
+    ;;
+esac
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).
 export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}"
 # O filtro de flicker do 480i (config/fliperos-deflicker.c, Setup > Video

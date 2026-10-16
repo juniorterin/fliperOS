@@ -3290,6 +3290,30 @@ class QuietLaunchTests(unittest.TestCase):
             log = tmp / 'logs' / 'emu.log'
             return out, log.read_text() if log.exists() else None
 
+    def test_esde_stretches_a_wide_pixel_mode(self):
+        # 640x240 num tubo 4:3: o ES-DE desenha em 320x240 e estica 2x
+        # (packaging/patches/emulationstation); 320x240 e 640x480, nao.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'logs').mkdir()
+            (tmp / 'debug').write_text('')
+            prog = tmp / 'es-de'
+            prog.write_text('#!/bin/sh\necho "stretch=$ESDE_STRETCH_X"\n')
+            prog.chmod(0o755)
+            for size, want in (('640,240', '2'), ('320,240', ''), ('640,480', ''), ('1280,240', '4')):
+                (tmp / 'fb').write_text(size + '\n')
+                env = dict(os.environ, FLIPEROS_LOGS=str(tmp / 'logs'), FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'),
+                           FLIPEROS_FB_SIZE=str(tmp / 'fb'))
+                env.pop('DISPLAY', None)
+                env.pop('ESDE_STRETCH_X', None)
+                out = subprocess.run(['bash', str(ROOT / 'config/fliperos-kms-run'), str(prog)],
+                                     capture_output=True, text=True, env=env).stdout
+                self.assertIn('stretch=%s\n' % want, out, size)
+        recipe = (ROOT / 'packaging/packages/fliperos-emulationstation.sh').read_text()
+        self.assertIn('patches/emulationstation/*.patch', recipe)
+        patch = (ROOT / 'packaging/patches/emulationstation/0001-horizontal-stretch.patch').read_text()
+        self.assertIn('getenv("ESDE_STRETCH_X")', patch)
+
     def test_emulator_output_goes_to_the_log(self):
         out, log = self.run_kms(debug=False)
         self.assertEqual(out, '')

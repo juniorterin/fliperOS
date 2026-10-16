@@ -8,7 +8,7 @@
 
 PKG_NAME="fliperos-emulationstation"
 PKG_VERSION="3.5.0"
-PKG_REVISION="1fliperos1"
+PKG_REVISION="1fliperos2"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://es-de.org"
 PKG_SUMMARY="EmulationStation Desktop Edition (KMS build for CRT)"
@@ -28,8 +28,16 @@ libgl1-mesa-dev libpoppler-cpp-dev libbluetooth-dev"
 PKG_SHLIB_TARGETS="usr/bin/es-de"
 
 pkg_build() {
-  git clone --depth 1 --branch "v$PKG_VERSION" https://gitlab.com/es-de/emulationstation-de.git "$SRC/es-de" \
-    && cmake -S "$SRC/es-de" -B "$SRC/es-de/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+  local here patch
+  here=$(dirname "${BASH_SOURCE[0]}")
+  git clone --depth 1 --branch "v$PKG_VERSION" https://gitlab.com/es-de/emulationstation-de.git "$SRC/es-de" ||
+    return 1
+  # Os nossos patches (packaging/patches/emulationstation), cada um com o
+  # motivo no proprio cabecalho: o esticado horizontal do 640x240.
+  for patch in "$here"/../patches/emulationstation/*.patch; do
+    patch -d "$SRC/es-de" -p1 < "$patch" || return 1
+  done
+  cmake -S "$SRC/es-de" -B "$SRC/es-de/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
       -DDEINIT_ON_LAUNCH=on \
     && cmake --build "$SRC/es-de/build" -j"$(nproc)" \
     && DESTDIR="$STAGING" cmake --install "$SRC/es-de/build" \

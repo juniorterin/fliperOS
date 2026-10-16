@@ -1,0 +1,115 @@
+FliperOS: estica a interface na horizontal num modo de pixel largo.
+
+Num tubo 4:3 em 640x240 cada pixel e duas vezes mais largo que alto, e o
+ES-DE desenhava com pixels quadrados: texto e imagens saiam com metade da
+largura. Com ESDE_STRETCH_X=N (o fliperos-kms-run passa 2 em 640x240) o
+ES-DE desenha em 1/N da largura da tela (320x240, tema em 4:3) e o viewport,
+o recorte (scissor) e a copia da tela para o pos-processamento esticam N
+vezes na horizontal. Sem a variavel, nada muda. So na rotacao 0.
+
+diff --git a/es-core/src/renderers/Renderer.cpp b/es-core/src/renderers/Renderer.cpp
+index b2ee9de..b9b61b8 100644
+--- a/es-core/src/renderers/Renderer.cpp
++++ b/es-core/src/renderers/Renderer.cpp
+@@ -15,6 +15,8 @@
+ #include "renderers/ShaderOpenGL.h"
+ #include "resources/ResourceManager.h"
+ 
++#include <cstdlib>
++
+ #if defined(__ANDROID__)
+ #include "utils/PlatformUtilAndroid.h"
+ #endif
+@@ -127,6 +129,20 @@ bool Renderer::createWindow()
+     sScreenHeight = Settings::getInstance()->getInt("ScreenHeight") ?
+                         Settings::getInstance()->getInt("ScreenHeight") :
+                         displayMode.h;
++
++    // FliperOS: on a CRT mode with wide pixels (640x240 on a 4:3 tube) ESDE_STRETCH_X=N renders
++    // the interface at 1/N of the display width and stretches it N times horizontally, so
++    // text and images keep their proportions on the tube.
++    const char* stretchX {getenv("ESDE_STRETCH_X")};
++    if (stretchX != nullptr && !Settings::getInstance()->getInt("ScreenWidth") &&
++        Settings::getInstance()->getInt("ScreenRotate") == 0) {
++        const int factor {atoi(stretchX)};
++        if (factor >= 2 && factor <= 4 && displayMode.w % factor == 0) {
++            mStretchX = factor;
++            sScreenWidth = displayMode.w / factor;
++            LOG(LogInfo) << "Horizontal stretch: " << factor << "x (ESDE_STRETCH_X)";
++        }
++    }
+ #endif
+ 
+     mScreenOffsetX = glm::clamp((Settings::getInstance()->getInt("ScreenOffsetX") ?
+@@ -151,8 +167,8 @@ bool Renderer::createWindow()
+     mPaddingHeight = 0;
+     bool fullscreenPadding {false};
+ 
+-    if (Settings::getInstance()->getBool("FullscreenPadding") && sScreenWidth <= displayMode.w &&
+-        sScreenHeight <= displayMode.h) {
++    if (mStretchX == 1 && Settings::getInstance()->getBool("FullscreenPadding") &&
++        sScreenWidth <= displayMode.w && sScreenHeight <= displayMode.h) {
+         mWindowWidth = displayMode.w;
+         mWindowHeight = displayMode.h;
+         mPaddingWidth = displayMode.w - sScreenWidth;
+@@ -163,7 +179,7 @@ bool Renderer::createWindow()
+     }
+ 
+     if (!fullscreenPadding) {
+-        mWindowWidth = sScreenWidth;
++        mWindowWidth = sScreenWidth * mStretchX;
+         mWindowHeight = sScreenHeight;
+     }
+ 
+@@ -365,9 +381,9 @@ bool Renderer::init()
+     glm::mat4 projection {getIdentity()};
+ 
+     if (mScreenRotation == 0) {
+-        mViewport.x = mWindowWidth + mScreenOffsetX - sScreenWidth;
++        mViewport.x = mWindowWidth + mScreenOffsetX - sScreenWidth * mStretchX;
+         mViewport.y = mWindowHeight + mScreenOffsetY - sScreenHeight;
+-        mViewport.w = sScreenWidth;
++        mViewport.w = sScreenWidth * mStretchX;
+         mViewport.h = sScreenHeight;
+         mProjectionMatrix = glm::ortho(0.0f, static_cast<float>(sScreenWidth),
+                                        static_cast<float>(sScreenHeight), 0.0f, -1.0f, 1.0f);
+@@ -432,8 +448,8 @@ void Renderer::pushClipRect(const glm::ivec2& pos, const glm::ivec2& size)
+         box.h = sScreenHeight - box.y;
+ 
+     if (mScreenRotation == 0) {
+-        box = {mScreenOffsetX + box.x + mPaddingWidth, mScreenOffsetY + box.y + mPaddingHeight,
+-               box.w, box.h};
++        box = {mScreenOffsetX + box.x * mStretchX + mPaddingWidth,
++               mScreenOffsetY + box.y + mPaddingHeight, box.w * mStretchX, box.h};
+     }
+     else if (mScreenRotation == 90) {
+         box = {mScreenOffsetX + mWindowWidth - (box.y + box.h), mScreenOffsetY + box.x, box.h,
+diff --git a/es-core/src/renderers/Renderer.h b/es-core/src/renderers/Renderer.h
+index f898a7c..40b8035 100644
+--- a/es-core/src/renderers/Renderer.h
++++ b/es-core/src/renderers/Renderer.h
+@@ -241,6 +241,8 @@ protected:
+     int mPaddingHeight {0};
+     int mScreenOffsetX {0};
+     int mScreenOffsetY {0};
++    // FliperOS: horizontal stretch factor (ESDE_STRETCH_X), 1 when disabled.
++    int mStretchX {1};
+ 
+ private:
+     std::stack<Rect> mClipStack;
+diff --git a/es-core/src/renderers/RendererOpenGL.cpp b/es-core/src/renderers/RendererOpenGL.cpp
+index 6e78440..fade42c 100644
+--- a/es-core/src/renderers/RendererOpenGL.cpp
++++ b/es-core/src/renderers/RendererOpenGL.cpp
+@@ -743,8 +743,10 @@ void RendererOpenGL::shaderPostprocessing(unsigned int shaders,
+ 
+     // Blit the screen contents to mPostProcTexture.
+     if (screenRotation == 0) {
++        // FliperOS: with ESDE_STRETCH_X the window is mStretchX times wider than the texture.
+         GL_CHECK_ERROR(glBlitFramebuffer(
+-            0, 0, width + mPaddingWidth, height - mScreenOffsetY, -mScreenOffsetX - mPaddingWidth,
++            0, 0, width * mStretchX + mPaddingWidth, height - mScreenOffsetY,
++            -mScreenOffsetX - mPaddingWidth,
+             mScreenOffsetY, width - mScreenOffsetX, height, GL_COLOR_BUFFER_BIT, GL_NEAREST));
+     }
+     else if (screenRotation == 90 || screenRotation == 270) {
