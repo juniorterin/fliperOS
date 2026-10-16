@@ -299,7 +299,10 @@ def layout_games(layouts, games):
 def mame_port(player, control, bind):
     seq = mame_code(*bind)
     key = MAME_KEYS.get(player, {}).get(control)
-    if key and seq != 'KEYCODE_' + key:
+    # A tecla padrao junto so com controle. Com o teclado ela e a de outro
+    # comando quando o Buttons layout troca os botoes de lugar (o botao 1
+    # do jogo no X: o Ctrl esquerdo apertaria dois).
+    if key and not is_key(bind[1]):
         seq += ' OR KEYCODE_%s' % key
     return ('            <port type="%s">\n                <newseq type="standard">%s</newseq>\n'
             '            </port>\n' % (MAME_PORTS[control] % player, seq))
@@ -319,6 +322,13 @@ def mame_cfg(players, names, layouts=None, games=None):
             for n, position in enumerate(order, 1):
                 if 'b%d' % position in players[player]:
                     entry.append(mame_port(player, 'b%d' % n, players[player]['b%d' % position]))
+                else:
+                    # A posicao que o jogador nao tem (um painel de menos
+                    # botoes, o 6 do teclado do jogador 2): o botao fica sem
+                    # nada. Sem a linha valeria o padrao, que pode ser o
+                    # comando posto noutro botao deste jogo.
+                    entry.append('            <port type="%s">\n                <newseq type="standard">NONE'
+                                 '</newseq>\n            </port>\n' % (MAME_PORTS['b%d' % n] % player))
         if entry:
             systems.append('    <system name="%s">\n        <input>\n%s        </input>\n    </system>\n'
                            % (escape(name), ''.join(entry)))

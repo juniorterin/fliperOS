@@ -8731,7 +8731,12 @@ class ButtonMappingTests(unittest.TestCase):
                        FLIPEROS_SUPERMODEL_INI=str(tmp / 'supermodel' / 'Config' / 'Supermodel.ini'),
                        FLIPEROS_HYPSEUS_INI=str(tmp / 'hypseus' / 'hypinput.ini'),
                        FLIPEROS_DOLPHIN_DIR=str(tmp / 'dolphin'),
-                       FLIPEROS_FLYCAST_DOJO_MAPPINGS=str(tmp / 'dojo' / 'mappings'))
+                       FLIPEROS_FLYCAST_DOJO_MAPPINGS=str(tmp / 'dojo' / 'mappings'),
+                       # Buttons layout: nos jogos de 2 botoes, o 1 na posicao 6 e o 2 na 1.
+                       FLIPEROS_BUTTONS_LAYOUT=str(tmp / 'buttons.layout'), FLIPEROS_GAME_BUTTONS=str(tmp / 'games'),
+                       FLIPEROS_SDL_MODEL2_DB=str(tmp / 'model2.txt'))
+            (tmp / 'buttons.layout').write_text('2 6 1\n')
+            (tmp / 'games').write_text('sf2 2\n')
             run = subprocess.run(['python3', str(ROOT / 'config/fliperos-buttons'), 'keyboard', '--players', '4'],
                                  env=env, capture_output=True, timeout=30)
             self.assertEqual(run.returncode, 0, run.stderr)
@@ -8755,12 +8760,26 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertNotIn('joypad_index', ra)
             self.assertNotIn('input_pause_toggle', ra)
             import xml.etree.ElementTree as ET
-            ports = {p.get('type'): p.find('newseq').text
-                     for p in ET.fromstring((tmp / 'ctrlr' / 'fliperos.cfg').read_text()).iter('port')}
+            ctrlr = ET.fromstring((tmp / 'ctrlr' / 'fliperos.cfg').read_text())
+
+            def system(name):
+                return {p.get('type'): p.find('newseq').text
+                        for s in ctrlr.iter('system') if s.get('name') == name for p in s.iter('port')}
+            ports = system('default')
             self.assertEqual(ports['P1_BUTTON1'], 'KEYCODE_LCONTROL')
             self.assertEqual(ports['P2_BUTTON5'], 'KEYCODE_E')
             self.assertEqual(ports['P4_JOYSTICK_LEFT'], 'KEYCODE_4_PAD')
             self.assertEqual(ports['COIN3'], 'KEYCODE_7')
+            # No jogo com layout, so a tecla da posicao: sem a padrao do botao
+            # junto (com ela o Ctrl esquerdo apertava dois botoes).
+            sf2 = system('sf2')
+            self.assertEqual(sf2['P1_BUTTON1'], 'KEYCODE_X')
+            self.assertEqual(sf2['P1_BUTTON2'], 'KEYCODE_LCONTROL')
+            # O jogador 2 nao tem tecla na posicao 6: o botao 1 fica sem nada,
+            # e nao no A padrao, que no jogo e o botao 2 dele.
+            self.assertEqual(sf2['P2_BUTTON1'], 'NONE')
+            self.assertEqual(sf2['P2_BUTTON2'], 'KEYCODE_A')
+            self.assertNotIn(' OR ', (tmp / 'ctrlr' / 'fliperos.cfg').read_text())
             sm = (tmp / 'supermodel' / 'Config' / 'Supermodel.ini').read_text()
             # So a tecla do mapa: o A padrao do Supermodel e o botao 1 do jogador 2.
             for line in ('InputPunch = "KEY_LEFTCTRL"', 'InputPunch2 = "KEY_A"', 'InputCoin1 = "KEY_5"',
