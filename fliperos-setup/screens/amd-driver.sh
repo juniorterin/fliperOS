@@ -45,6 +45,23 @@ screen_amd_driver() {
   screen_amd_driver_apply "$choice"
 }
 
+# screen_amd_driver_check: uma vez so (amd_driver_checked no fliperos.conf),
+# no menu principal do sistema instalado. Se a placa roda com o driver que
+# nao e o recomendado, sugere a troca. Quem ja escolheu o driver no Setup ou
+# na instalacao (amd_driver=) nao e perguntado.
+screen_amd_driver_check() {
+  local card running recommended
+  is_installed && ! is_live || return 0
+  conf_get amd_driver_checked > /dev/null 2>&1 && return 0
+  conf_set amd_driver_checked 1
+  conf_get amd_driver > /dev/null 2>&1 && return 0
+  IFS='|' read -r card running recommended <<< "$(amd_driver_mismatch)" || return 0
+  [[ -n $card ]] || return 0
+  log_info "driver AMD: $card em $running, recomendado $recommended"
+  ui_yesno "Video driver" "Your $(drm_card_name "$card") is running on the $running driver. $recommended is recommended: it is the one tested at 15 kHz on the CRT. Switch to $recommended? (You can change it later in Setup > System > Video driver.)" yes || return 0
+  screen_amd_driver_apply "$recommended"
+}
+
 # screen_amd_driver_apply DRIVER grava a escolha, a linha do kernel e o
 # initramfs, e oferece reiniciar (o driver so troca no proximo boot).
 screen_amd_driver_apply() {

@@ -47,6 +47,8 @@ screen_reload_if_updated() {
 
 screen_main_menu() {
   local choice last=frontend start
+  # Placa AMD no driver que nao e o recomendado: sugere a troca, uma vez so.
+  screen_amd_driver_check
   while true; do
     screen_reload_if_updated
     UI_STATUS=$(status_line)

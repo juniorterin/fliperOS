@@ -44,6 +44,25 @@ amd_driver() {
   printf '%s\n' "$driver"
 }
 
+# amd_driver_recommended: o radeon, com que o 15 kHz foi validado no CRT.
+amd_driver_recommended() {
+  echo radeon
+}
+
+# amd_driver_mismatch imprime "PLACA|DRIVER EM USO|RECOMENDADO" quando uma
+# placa que aceita os dois drivers roda com o que nao e o recomendado.
+amd_driver_mismatch() {
+  local card running recommended
+  recommended=$(amd_driver_recommended)
+  for card in $(drm_dual_amd_cards); do
+    running=$(drm_card_driver "$card") || continue
+    [[ $running == "$recommended" ]] && continue
+    printf '%s|%s|%s\n' "$card" "$running" "$recommended"
+    return 0
+  done
+  return 1
+}
+
 # amd_driver_params DRIVER. No amdgpu vai o amdgpu.dc=0: o kernel 6.18 nao
 # tem saida analogica (VGA, DVI-I) no codigo de video novo (DC) das GCN 1.0
 # e 1.1, que so chegou no 6.19; o antigo tem, e e nele que o patch de PLL

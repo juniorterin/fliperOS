@@ -5187,7 +5187,53 @@ class AmdDriverTests(Base):
         plain = mod.render(["6.18.54-15khz"], "UUID=abc", "quiet splash " + self.RADEON, "3")
         self.assertNotIn("radeon driver", plain)
 
+    def test_mismatch_only_on_a_card_with_the_choice(self):
+        self.gpu("card0", "amdgpu", "67DF")
+        self.assertEqual(self.env.run("amd_driver_mismatch").returncode, 1)
+        self.gpu("card1", "radeon", "6798")
+        self.assertEqual(self.env.run("amd_driver_mismatch").returncode, 1)
+        self.gpu("card2", "amdgpu", "6798")
+        self.assertEqual(self.env.out("amd_driver_mismatch").strip(), "card2|amdgpu|radeon")
+
+    CHECK = """
+        source %s/screens/amd-driver.sh
+        ui_yesno() { echo "ASKED: $2"; return 1; }
+        screen_amd_driver_check
+        screen_amd_driver_check
+    """ % SETUP
+
+    def check(self):
+        (self.env.etc / "installed").write_text("")
+        self.env.cmdline.write_text("quiet splash\n")
+        return self.env.out(self.CHECK)
+
+    def test_popup_once_when_the_driver_is_not_the_recommended(self):
+        self.gpu("card0", "amdgpu", "6798")
+        out = self.check()
+        self.assertEqual(out.count("ASKED:"), 1)
+        self.assertIn("running on the amdgpu driver. radeon is recommended", out)
+        self.assertIn("amd_driver_checked=1", (self.env.etc / "fliperos.conf").read_text())
+        self.assertEqual(self.env.out(self.CHECK).count("ASKED:"), 0)
+
+    def test_no_popup_on_the_recommended_driver(self):
+        self.gpu("card0", "radeon", "6798")
+        self.assertNotIn("ASKED:", self.check())
+        self.assertIn("amd_driver_checked=1", (self.env.etc / "fliperos.conf").read_text())
+
+    def test_no_popup_when_amdgpu_was_chosen(self):
+        # A pessoa escolheu o amdgpu no Setup ou na instalacao.
+        (self.env.etc / "fliperos.conf").write_text("amd_driver=amdgpu\n")
+        self.gpu("card0", "amdgpu", "6798")
+        self.assertNotIn("ASKED:", self.check())
+
+    def test_no_popup_on_the_install_media(self):
+        self.gpu("card0", "amdgpu", "6798")
+        self.env.cmdline.write_text("boot=live quiet\n")
+        self.assertNotIn("ASKED:", self.env.out(self.CHECK))
+
     def test_screens_are_wired(self):
+        menu = (SETUP / "screens/main-menu.sh").read_text()
+        self.assertIn("screen_amd_driver_check", menu.split("screen_main_menu() {")[1].split("while true")[0])
         install = (SETUP / "screens/install-progress.sh").read_text()
         self.assertIn("screen_amd_driver install", install)
         menu = (SETUP / "screens/setup-menu.sh").read_text()
