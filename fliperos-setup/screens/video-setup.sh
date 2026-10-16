@@ -5,27 +5,94 @@
 
 VIDEO_CHANGED=0
 
-# screen_pick_monitor [PADRAO] [required] imprime o preset escolhido.
+# screen_pick_monitor [PADRAO] [required] [custom] imprime o preset
+# escolhido; com "custom", tambem a entrada do monitor custom.
 screen_pick_monitor() {
-  local def=${1:-} required=${2:-} entries=() entry text
+  local def=${1:-} required=${2:-} custom=${3:-} entries=() entry text
   for entry in "${MONITOR_PRESETS[@]}"; do
     entries+=("$entry")
   done
+  [[ $custom == custom ]] && entries+=("custom|Custom - your own crt_range")
   text="Select the monitor connected to this output."
   [[ $required == required ]] && text+=" This is needed to set the correct video mode."
   ui_menu "Monitor Type" "$text" "$def" "${entries[@]}"
 }
 
 screen_monitor_type() {
-  local monitor current
+  local monitor current def
   current=$(conf_get monitor 2> /dev/null) || current=$(video_suggested_monitor)
-  monitor=$(screen_pick_monitor "$current") || return 0
+  def=$current
+  video_custom_active && def=custom
+  monitor=$(screen_pick_monitor "$def" "" custom) || return 0
+  if [[ $monitor == custom ]]; then
+    screen_custom_monitor
+    return 0
+  fi
+  if video_custom_active; then
+    ui_yesno "Monitor Type" "Use the $(monitor_label "$monitor") preset and discard your custom crt_range?" no ||
+      return 0
+    # O mesmo preset de base: so volta a ele (o Reset Geometry).
+    if [[ $monitor == "$current" ]]; then
+      geometry_reset
+      return 0
+    fi
+  fi
   [[ $monitor == "$current" ]] && return 0
   video_reconfigure_monitor "$monitor" || {
     ui_msg "Monitor Type" "Could not configure $(monitor_label "$monitor")."
     return 0
   }
   VIDEO_CHANGED=1
+}
+
+# screen_custom_monitor: o monitor custom do Switchres, um crt_range0 no
+# lugar das faixas do preset de agora (que segue dando o modo de boot). O
+# crt_range sai do Geometry (o grid parte do monitor em uso) ou e digitado,
+# como os publicados para cada modelo de monitor.
+screen_custom_monitor() {
+  local base how
+  base=$(conf_get monitor 2> /dev/null) || base=""
+  if [[ -z $base ]]; then
+    ui_msg "Custom monitor" "Choose the monitor model (or the closest one) first." "" \
+      "The custom crt_range is built on top of it: the boot resolution still comes from that preset."
+    return 0
+  fi
+  if [[ $base == lcd ]]; then
+    ui_msg "Custom monitor" "A crt_range is for CRT monitors; the LCD preset uses the monitor's own EDID."
+    return 0
+  fi
+  how=$(ui_menu "Custom monitor" "Your own crt_range0 (the monitor's timings) on top of $(monitor_label "$base"). The boot resolution still comes from that preset." grid \
+    "grid|Make it with the test grid (Geometry)" \
+    "type|Type a crt_range") || return 0
+  case $how in
+    grid) screen_geometry ;;
+    type) screen_crt_range_input "$base" ;;
+  esac
+}
+
+# screen_crt_range_input BASE: um crt_range digitado, da mesma faixa (15, 25
+# ou 31 kHz) do preset de base, senao o modo de boot nao casaria com ele.
+screen_crt_range_input() {
+  local base=$1 range rfreq bfreq
+  range=$(conf_get geometry 2> /dev/null) || range=$(video_preset_range "$base") || range=""
+  range=$(ui_input "Custom monitor" "crt_range0: 16 values separated by commas, as in switchres.ini (HfreqMin-HfreqMax,VfreqMin-VfreqMax, 6 porch/sync values, 2 polarities, 4 line limits)" "$range") ||
+    return 0
+  range=${range//[[:space:]]/}
+  [[ -n $range ]] || return 0
+  if ! crt_range_valid "$range"; then
+    ui_msg "Custom monitor" "That is not a crt_range; nothing was changed." "" \
+      "Example: 15625-16200,49.5-65,2.0,4.7,8.0,0.064,0.192,1.024,0,0,192,288,448,576"
+    return 0
+  fi
+  rfreq=$(crt_range_frequency "$range") || rfreq=""
+  bfreq=$(monitor_frequency "$base") || bfreq=""
+  if [[ -z $rfreq || $rfreq != "$bfreq" ]]; then
+    ui_msg "Custom monitor" "This crt_range is for ${rfreq:-an unknown} frequency, but $(monitor_label "$base") boots at ${bfreq:-?}." "" \
+      "Choose a preset of the same frequency first, then Custom."
+    return 0
+  fi
+  geometry_apply "$range"
+  ui_msg "Custom monitor" "Saved: the monitor is now $(video_monitor_label)." "" "$range"
 }
 
 screen_orientation() {
@@ -121,7 +188,7 @@ screen_custom_resolution() {
 screen_geometry() {
   local out range w h r
   have geometry || { ui_msg "Geometry" "The geometry tool (Switchres) is not installed."; return 0; }
-  read -r w h r <<< "$(geometry_mode)"
+  read -r w h r <<< "$(geometry_grid_mode)"
   ui_msg "Geometry" "A test grid will be shown at ${w}x${h} (${r} Hz) to adjust the picture." "" \
     "Arrows: move the picture   Page Up/Down: width" \
     "ENTER: save   ESC: cancel   DEL: reset   CTRL + key: bigger steps" "" \
@@ -133,11 +200,16 @@ screen_geometry() {
   ui_flush_input
   range=$(geometry_parse "$out")
   if [[ -z $range ]]; then
-    ui_msg "Geometry" "The adjustment was cancelled; nothing was changed."
+    if geometry_aborted "$out"; then
+      ui_msg "Geometry" "The adjustment was cancelled; nothing was changed."
+    else
+      ui_msg "Geometry" "The geometry tool stopped with an error; nothing was changed." "" \
+        "$(grep . <<< "$out" | tail -1)" "" "Details in $FLIPEROS_LOG."
+    fi
     return 0
   fi
   geometry_apply "$range"
-  ui_msg "Geometry" "Geometry saved (monitor set to custom):" "" "$range"
+  ui_msg "Geometry" "Saved: the monitor is now $(video_monitor_label)." "" "$range"
 }
 
 # screen_geometry_reset volta a geometria ao padrao do monitor escolhido.
@@ -490,7 +562,7 @@ screen_video_setup() {
   VIDEO_CHANGED=0
   while true; do
     summary=$(ui_fields \
-      "Monitor|$(monitor_label "$(conf_get monitor 2> /dev/null || echo "not set")")" \
+      "Monitor|$(video_monitor_label)" \
       "Orientation|$(orientation_label "$(conf_get orientation 2> /dev/null || echo horizontal)")" \
       "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "from boot menu")")" \
       "Geometry|$(conf_get geometry > /dev/null 2>&1 && echo "adjusted" || echo "monitor default")" \

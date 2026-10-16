@@ -2060,6 +2060,74 @@ class GeometryTests(Base):
 
     def test_cancelled(self):
         self.assertEqual(self.env.out("geometry_parse 'Aborted!'").strip(), "")
+        self.assertEqual(self.env.run("geometry_aborted 'Aborted!'").returncode, 0)
+        # Sem "Aborted!" o geometry.py caiu (traceback): nao e um cancelamento.
+        crash = "Traceback (most recent call last):\nAttributeError: 'NoneType' object has no attribute 'split'"
+        self.assertNotEqual(self.env.run("geometry_aborted \"%s\"" % crash).returncode, 0)
+
+    def test_grid_is_wider_than_the_boot_mode(self):
+        # Como o 648x480 do gasetup: no modo exato do boot o Switchres teria
+        # de trocar o modo em uso quando o grid reabre depois de uma seta.
+        conf = self.env.etc / "fliperos.conf"
+        for res, mode in (("640x240S", "648 240 60"), ("320x240S", "328 240 60"),
+                          ("640x480iS", "648 480 60"), ("384x288S", "392 288 50")):
+            conf.write_text("boot_resolution=%s\n" % res)
+            self.assertEqual(self.env.out("geometry_grid_mode").strip(), mode, res)
+
+
+class CustomMonitorTests(Base):
+    RANGE = "15625.0-15750.0,49.5-65.0,2.075,4.687,7.915,0.128,0.192,1.022,0,0,192,288,448,576"
+
+    def setUp(self):
+        super().setUp()
+        (self.env.etc / "switchres.ini").write_text("\tmonitor                   generic_15\n"
+                                                    "\tcrt_range0                auto\n")
+        (self.env.etc / "mame.ini").write_text("monitor generic_15\nswitchres_ini 0\n")
+        self.env.out("conf_set monitor generic_15")
+
+    def ini(self):
+        return (self.env.etc / "switchres.ini").read_text()
+
+    def test_label(self):
+        self.assertEqual(self.env.out("video_monitor_label").strip(), "Generic 15.7 kHz")
+        self.env.out("geometry_apply '%s'" % self.RANGE)
+        self.assertEqual(self.env.out("video_monitor_label").strip(), "Custom (on Generic 15.7 kHz)")
+
+    def test_same_preset_keeps_custom(self):
+        # O Recovery/teste de saidas reaplica o mesmo monitor: o custom fica.
+        self.env.out("geometry_apply '%s'; video_apply_monitor generic_15" % self.RANGE)
+        self.assertRegex(self.ini(), r"(?m)^\s*monitor\s+custom$")
+        self.assertIn(self.RANGE, self.ini())
+        self.assertEqual(self.env.out("conf_get geometry").strip(), self.RANGE)
+        # O mame.ini fica no preset: com switchres_ini 1 o switchres.ini manda.
+        self.assertRegex((self.env.etc / "mame.ini").read_text(), r"(?m)^monitor\s+generic_15$")
+
+    def test_other_preset_drops_custom(self):
+        self.env.out("geometry_apply '%s'; video_apply_monitor arcade_15" % self.RANGE)
+        self.assertRegex(self.ini(), r"(?m)^\s*monitor\s+arcade_15$")
+        self.assertRegex(self.ini(), r"(?m)^\s*crt_range0\s+auto$")
+        self.assertEqual(self.env.out("conf_get geometry || echo none").strip(), "none")
+        self.assertEqual(self.env.out("video_monitor_label").strip(), "Arcade 15.7 kHz - standard resolution")
+
+    def test_typed_range(self):
+        good = ("15625-16200,49.5-65,2.0,4.7,8.0,0.064,0.192,1.024,0,0,192,288,448,576", self.RANGE,
+                "31400-31600,49.5-65,0.94,3.77,1.89,0.349,0.064,1.017,0,0,192,288,448,576")
+        for r in good:
+            self.assertEqual(self.env.run("crt_range_valid '%s'" % r).returncode, 0, r)
+        bad = ("auto", "15625-16200,49.5-65,2.0,4.7,8.0,0.064,0.192,1.024,0,0,192,288,448",
+               "15625-16200,49.5-65,2.0,4.7,8.0,0.064,0.192,1.024,2,0,192,288,448,576",
+               "15625-16200;49.5-65,2.0,4.7,8.0,0.064,0.192,1.024,0,0,192,288,448,576")
+        for r in bad:
+            self.assertNotEqual(self.env.run("crt_range_valid '%s'" % r).returncode, 0, r)
+        self.assertEqual(self.env.out("crt_range_frequency '%s'" % good[0]).strip(), "15k")
+        self.assertEqual(self.env.out("crt_range_frequency '%s'" % good[2]).strip(), "31k")
+        self.assertEqual(self.env.out("crt_range_frequency 24960-24960,49.5-65").strip(), "25k")
+
+    def test_preset_range_from_switchres(self):
+        self.env.stub("switchres", 'echo "Switchres: display[0] options: monitor[$7]"\n'
+                                   'echo "Switchres: Monitor range %s"\n'
+                                   'echo "Switchres: Monitor range 1-2"' % self.RANGE)
+        self.assertEqual(self.env.out("video_preset_range arcade_15").strip(), self.RANGE)
 
     def test_grid_uses_the_chosen_resolution(self):
         # No gabinete o grid saia sempre em 648x480, qualquer que fosse a

@@ -225,10 +225,17 @@ video_boot_resolution() {
 }
 
 # video_apply_monitor MONITOR grava o monitor no Switchres, no MAME e no
-# fliperos.conf (set_monitor do gatools).
+# fliperos.conf (set_monitor do gatools). Com o monitor custom ativo (o
+# crt_range0 do Geometry) e o mesmo preset, o Switchres continua no custom;
+# outro preset o desfaz, porque o crt_range foi feito em cima do anterior.
 video_apply_monitor() {
-  local monitor=$1
-  ini_set "$SWITCHRES_INI" monitor "$monitor"
+  local monitor=$1 sr=$1
+  if [[ $(conf_get monitor 2> /dev/null) != "$monitor" ]]; then
+    video_custom_drop
+  elif video_custom_active; then
+    sr=custom
+  fi
+  ini_set "$SWITCHRES_INI" monitor "$sr"
   [[ -f $MAME_INI ]] && ini_set "$MAME_INI" monitor "$monitor"
   conf_set monitor "$monitor"
   conf_set frequency "$(monitor_frequency "$monitor" || echo lcd)"
@@ -481,8 +488,26 @@ geometry_mode() {
   printf '%s %s %s\n' "$w" "$h" "$r"
 }
 
+# geometry_grid_mode imprime o modo em que o grid abre: o de geometry_mode
+# com 8 pixels a mais na largura, como o "geometry 648 480 60" do gasetup.
+# No modo exato do boot o Switchres reaproveita o modo que esta na tela: o
+# primeiro grid abre, mas a cada seta o geometry.py fecha o grid e o abre de
+# novo com outra geometria, o Switchres tem de trocar o modo em uso e o
+# geometry.py caia na primeira seta. As linhas e o refresh ficam os do boot.
+geometry_grid_mode() {
+  local w h r
+  read -r w h r <<< "$(geometry_mode)"
+  printf '%s %s %s\n' "$((w + 8))" "$h" "$r"
+}
+
 geometry_parse() {
   sed -n 's/^.*Final crt_range: //p' <<< "$1" | tail -1
+}
+
+# geometry_aborted SAIDA: a pessoa saiu com ESC (o geometry.py escreve
+# "Aborted!"). Sem isso e sem crt_range, o geometry.py caiu com um erro.
+geometry_aborted() {
+  grep -q '^Aborted!' <<< "$1"
 }
 
 geometry_apply() {
@@ -508,6 +533,70 @@ geometry_reset() {
   conf_unset geometry
   video_apply_monitor "$monitor"
   log_info "geometria: padrao do monitor $monitor"
+}
+
+# ── Monitor custom ───────────────────────────────────────────────
+# "Custom" no Monitor Type e o monitor custom do Switchres: um crt_range0
+# proprio (feito no Geometry ou digitado) no lugar das faixas do preset. O
+# preset continua no fliperos.conf (monitor=) como base: dele saem o modo de
+# boot, o EDID e a faixa do Xorg. O crt_range fica em geometry=.
+
+video_custom_active() {
+  conf_get geometry > /dev/null 2>&1
+}
+
+# video_custom_drop desfaz o custom sem mexer no monitor do Switchres.
+video_custom_drop() {
+  video_custom_active || return 0
+  ini_set "$SWITCHRES_INI" crt_range0 auto
+  conf_unset geometry
+  log_info "monitor custom desfeito"
+}
+
+# video_monitor_label imprime o monitor do Video Setup, com o custom.
+video_monitor_label() {
+  local monitor
+  monitor=$(conf_get monitor 2> /dev/null) || { echo "not set"; return 0; }
+  if video_custom_active; then
+    printf 'Custom (on %s)\n' "$(monitor_label "$monitor")"
+  else
+    monitor_label "$monitor"
+  fi
+}
+
+# crt_range_valid RANGE: os 16 valores de um crt_range do Switchres,
+# HfreqMin-HfreqMax,VfreqMin-VfreqMax, os seis porches/sync, as duas
+# polaridades e as quatro contagens de linhas.
+crt_range_valid() {
+  local n='[0-9]+(\.[0-9]+)?'
+  [[ $1 =~ ^$n-$n,$n-$n(,$n){6},[01],[01](,[0-9]+){4}$ ]]
+}
+
+# crt_range_frequency RANGE imprime 15k, 25k ou 31k pela frequencia
+# horizontal minima (em Hz, como no switchres.ini).
+crt_range_frequency() {
+  local hmin=${1%%-*}
+  hmin=${hmin%%.*}
+  [[ $hmin =~ ^[0-9]+$ ]] || return 1
+  if ((hmin >= 14000 && hmin < 20000)); then
+    echo 15k
+  elif ((hmin >= 20000 && hmin < 28000)); then
+    echo 25k
+  elif ((hmin >= 28000 && hmin < 40000)); then
+    echo 31k
+  else
+    return 1
+  fi
+}
+
+# video_preset_range MONITOR imprime o primeiro crt_range do preset (o que o
+# Switchres mostra em "Monitor range"), para comecar a digitar dele.
+video_preset_range() {
+  local w h r
+  have switchres || return 1
+  read -r w h r <<< "$(geometry_mode)"
+  switchres "$w" "$h" "$r" -c -v -m "$1" 2>&1 |
+    sed -n 's/^Switchres: Monitor range //p' | head -1 | grep .
 }
 
 # ── Jogos de 480 linhas num tubo de 15 kHz ───────────────────────
