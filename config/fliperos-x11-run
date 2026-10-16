@@ -288,6 +288,10 @@ export SDL_VIDEODRIVER=x11
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).
 export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}"
+# A calibracao de cor na placa antes do Xorg (a matriz e a faixa RGB ficam;
+# a tabela de gama o fliperos-x11-client poe no X).
+color=${FLIPEROS_COLOR:-/usr/local/bin/fliperos-color}
+[[ -x $color ]] && "$color" apply > /dev/null 2>&1
 # Sem terminal (chamado por um frontend), o tty falha: vale o vt1.
 vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}

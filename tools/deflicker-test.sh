@@ -11,7 +11,7 @@ set -eu
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev \
-  libx11-dev xvfb libgl1-mesa-dri picom imagemagick python3-pygame xdotool > /dev/null
+  libx11-dev libxrandr-dev xvfb libgl1-mesa-dri picom imagemagick python3-pygame xdotool > /dev/null
 b=/tmp/deflicker
 mkdir -p $b
 bash config/fliperos-deflicker-build config/fliperos-deflicker.c $b/libfliperos-deflicker.so
@@ -50,6 +50,34 @@ run $pre $b/deflicker_test link
 run $pre FLIPEROS_DEFLICKER_APP=flycast $b/deflicker_test link
 run $pre DEFLICKER_TEST_DLOPEN=$b/mame2010_libretro.so $b/deflicker_test link
 run $pre FLIPEROS_DEFLICKER_APP=flycast FLIPEROS_DEFLICKER_FILE=$b/level $b/deflicker_test link
+
+# A calibracao de cor (config/fliperos-color.c): a tabela de gama de 5
+# pontos de cada canal e a matriz, com os padroes e com cada parametro.
+bash config/fliperos-deflicker-build config/fliperos-color.c $b/fliperos-color
+lut() {
+  printf '%s\n' "$@" > $b/color.conf
+  echo "== lut $*"
+  $b/fliperos-color lut 5 --conf $b/color.conf
+}
+lut
+lut color_brightness=10 color_contrast=150
+lut color_gamma=200 color_red_gain=50 color_blue_offset=10
+lut color_temperature=9300
+lut color_saturation=0 color_hue=0
+lut color_hue=180 color_saturation=999
+# No X (o Xvfb): a tabela de gama de cada CRTC, se ele tiver.
+printf 'color_gamma=150\n' > $b/color.conf
+$b/fliperos-color x11 --conf $b/color.conf; echo "== x11 exit $?"
+# Sem CTM, a saturacao e o matiz pela camada (color_ctm=sw), mesmo sem modo
+# entrelacado; listras vermelhas: sem saturacao, o vermelho vira o cinza da
+# luminancia dele (0.213 = 54).
+printf 'color_ctm=sw\ncolor_saturation=0\ndeflicker=off\n' > $b/conf
+run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=$b/conf DEFLICKER_TEST_RED=1 $b/deflicker_test link
+printf 'color_ctm=hw\ncolor_saturation=0\ndeflicker=off\n' > $b/conf
+run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=$b/conf DEFLICKER_TEST_RED=1 $b/deflicker_test link
+printf 'color_saturation=0\n' > $b/color-live
+run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=/dev/null FLIPEROS_COLOR_FILE=$b/color-live \
+  DEFLICKER_TEST_RED=1 $b/deflicker_test link
 # O desktop: o picom com o shader do config/fliperos-desktop-deflicker (sem a
 # camada no programa), e a tela que o compositor pintou (import). Com o
 # shader, as listras saem misturadas; sem o picom, puras.
@@ -101,3 +129,32 @@ xdotool key Return
 sleep 2
 echo "== preview level file: $(cat $b/preview-level), chosen: $(cat $b/preview-out 2> /dev/null)"
 grep -m1 filtering $b/preview.log || { echo "the preview frame did not go through the layer"; cat $b/preview.log; }
+
+# O calibrador de cor (fliperos-setup/gui/color-calibrate.py) em 640x480:
+# cada padrao de teste (em /out), as setas mudam o arquivo que a camada
+# rele (a saturacao por software) e o Enter grava os valores.
+cat > $b/table << 'EOF'
+brightness|Brightness|-50|50|0|1|Moves the whole picture up or down.
+saturation|Saturation|0|200|100|2|How strong the colours are.
+EOF
+printf 'color_brightness=0\ncolor_saturation=100\n' > $b/cal.conf
+LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_COLOR_FILE=$b/cal.conf FLIPEROS_CONF=/dev/null \
+  python3 fliperos-setup/gui/color-calibrate.py --table $b/table --conf $b/cal.conf --out $b/cal.out \
+  --range output_csc --bin $b/fliperos-color 2> $b/cal.log &
+sleep 4
+for i in 1 2 3 4 5 6; do
+  [ -d /out ] && import -window root /out/calibrate-$i.png 2> /dev/null
+  xdotool key Right
+  sleep 1
+done
+# Brilho +3, saturacao 0 (50 toques de 2): o arquivo muda na hora.
+xdotool key Down Right Right Right Down
+for i in $(seq 1 50); do xdotool key Left; done
+sleep 2
+echo "== calibrator file: $(tr '\n' ' ' < $b/cal.conf)"
+xdotool key space
+sleep 2
+[ -d /out ] && import -window root /out/calibrate-saturation0.png 2> /dev/null
+xdotool key Return
+sleep 2
+echo "== calibrator saved: $(tr '\n' ' ' < $b/cal.out 2> /dev/null)"

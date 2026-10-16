@@ -289,7 +289,7 @@ class Server:
             if not columns or not rows:
                 return 1, ""
             grid = W.Grid(plain(a[0]), plain(a[1]), columns, rows, ask=opts.get("ask", ""),
-                          cursor=opts.get("cursor", ""))
+                          cursor=opts.get("cursor", ""), live=opts.get("live", "0") == "1")
             action, value = self.ask(grid, cmd)
             if action == "ask":
                 return 2, value

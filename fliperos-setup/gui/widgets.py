@@ -1165,11 +1165,14 @@ class Grid:
     (valor, rotulo). As setas de cima e de baixo andam pelas linhas (a lista
     rola quando nao cabe), as dos lados (ou Espaco) mudam a marca entre as
     colunas que a linha aceita; Enter grava tudo. ask: marcar essa coluna
-    numa linha devolve ("ask", "chave\nmarcas") na hora."""
+    numa linha devolve ("ask", chave e marcas, uma linha cada) na hora.
+    live: toda mudanca devolve assim (quem chamou grava na hora), e Enter so
+    sai."""
 
     PITCH = 12
 
-    def __init__(self, title, text, columns, rows, ask="", cursor=""):
+    def __init__(self, title, text, columns, rows, ask="", cursor="", live=False):
+        self.live = live
         self.title = title
         self.text = text
         self.columns = columns
@@ -1195,8 +1198,9 @@ class Grid:
     def move(self, step):
         allowed = self.allowed[self.cursor]
         i = allowed.index(self.state[self.cursor])
+        before = self.state[self.cursor]
         self.state[self.cursor] = allowed[(i + step) % len(allowed)]
-        if self.state[self.cursor] == self.ask:
+        if self.live and self.state[self.cursor] != before or self.state[self.cursor] == self.ask:
             return ("ask", self.rows[self.cursor][0] + "\n" + self.marks())
         return None
 
@@ -1212,11 +1216,14 @@ class Grid:
         elif k == "esc":
             return ("back", None)
         elif k == "enter":
-            return ("select", self.marks())
+            return ("back", None) if self.live else ("select", self.marks())
         return None
 
     def draw(self, surf, ctx):
-        frame(surf, ctx, self.title, [("< >", "MARK"), ("ENTER", "SAVE"), ("ESC", "BACK")])
+        if self.live:
+            frame(surf, ctx, self.title, [("< >", "MARK, SAVED"), ("ESC", "BACK")])
+        else:
+            frame(surf, ctx, self.title, [("< >", "MARK"), ("ENTER", "SAVE"), ("ESC", "BACK")])
         # A coluna dos nomes e, a direita, uma coluna por estado.
         col_w = 52
         x0 = T.SAFE_X + T.SAFE_W - col_w * len(self.columns)

@@ -286,62 +286,149 @@ screen_mm_changed() {
 # do kernel e oferece reiniciar.
 # screen_mode480: o metodo de cada aplicacao para os jogos de 480 linhas
 # (lib/video.sh, mode480_*), na tabela com uma marca por linha, como a dos
-# servicos. Marcar "480i + filter" abre o nivel do filtro daquela aplicacao
-# (screen_deflicker_level), com o preview; a tabela volta com as marcas.
+# servicos. Cada mudanca e gravada na hora (UI_GRID_LIVE), sem Enter: marcar
+# "480i filter" abre antes o nivel do filtro daquela aplicacao
+# (screen_deflicker_level), com o preview, e cancelar deixa a linha como
+# estava. A tabela volta na mesma linha; Esc sai.
 screen_mode480() {
-  local title="480i games" text result key marks level row k label state help allowed
+  local title="480i games" text result key state level
   local -a rows
-  local -A levels=() states=()
-  text="How each program shows 480-line games on the tube."
+  text="How each program shows 480-line games on the tube. Each change is saved."
   [[ $(conf_get frequency 2> /dev/null) == 15* ]] ||
     text="Not a 15 kHz monitor: these only count on one."
   key=""
   while true; do
-    # As linhas com as marcas desta tela (states) e os niveis escolhidos
-    # nela (levels) por cima do que esta gravado.
-    rows=()
-    while IFS='|' read -r k label state help allowed; do
-      state=${states[$k]:-$state}
-      level=${levels[$k]:-$(mode480_level "$k")}
-      case $state in
-        240p) help="${help% Now:*} Now: 640x240." ;;
-        filter) help="${help% Now:*} Now: 480i, filter $level." ;;
-        pure) help="${help% Now:*} Now: 480i, no filter." ;;
-      esac
-      rows+=("$k|$label|$state|$help|$allowed")
-    done < <(mode480_rows)
-    result=$(UI_GRID_ASK=filter UI_GRID_CURSOR=$key ui_grid "$title" "$text" \
+    mapfile -t rows < <(mode480_rows)
+    result=$(UI_GRID_LIVE=1 UI_GRID_CURSOR=$key ui_grid "$title" "$text" \
       "240p|640x240;filter|480i filter;pure|480i pure" "${rows[@]}")
-    case $? in
-      0) break ;;
-      2) ;;
-      *) return 0 ;;
-    esac
+    (($? == 2)) || return 0
     key=${result%%$'\n'*}
-    marks=${result#*$'\n'}
-    # O estado de antes de marcar o filtro: o de quando o dialogo e cancelado.
-    state=${states[$key]:-$(mode480_state "$key")}
-    for row in ${marks//,/ }; do
-      states[${row%%=*}]=${row#*=}
-    done
-    if level=$(screen_deflicker_level "$key" "${levels[$key]:-$(mode480_level "$key")}"); then
+    state=$(tr ',' '\n' <<< "${result#*$'\n'}" | sed -n "s/^$key=//p")
+    level=""
+    if [[ $state == filter ]]; then
+      level=$(screen_deflicker_level "$key" "$(mode480_level "$key")") || continue
       if [[ $level == off ]]; then
-        states[$key]=pure
-      else
-        levels[$key]=$level
+        state=pure level=""
       fi
-    else
-      states[$key]=$state
     fi
+    mode480_set "$key" "$state" "$level" ||
+      ui_msg "$title" "$(ui_bad "Could not save (see /var/log/fliperos-setup.log).")"
   done
-  for key in "${!levels[@]}"; do
-    printf -v "MODE480_LEVEL_$key" '%s' "${levels[$key]}"
-  done
-  if ! mode480_save "$result"; then
-    ui_msg "$title" "$(ui_bad "Could not save (see /var/log/fliperos-setup.log).")"
+}
+
+# screen_colour: a calibracao de cor (lib/video.sh, color_*): na tela com
+# os padroes de teste, ou parametro por parametro em numeros (o caminho pelo
+# SSH), e o voltar ao padrao.
+screen_colour() {
+  local title="Colour calibration" caps choice last=calibrate lut ctm range summary
+  caps=$(color_caps)
+  lut=$(sed -n 's/^lut //p' <<< "$caps")
+  ctm=$(sed -n 's/^ctm //p' <<< "$caps")
+  range=$(sed -n 's/^range //p' <<< "$caps")
+  if [[ ! -x $COLOR_BIN ]]; then
+    ui_msg "$title" "The colour calibration is not installed on this system (a FliperOS update builds it)."
     return 0
   fi
-  ui_msg "$title" "Saved." "" "It counts from the next game opened."
+  while true; do
+    summary="Gamma table: $([[ ${lut:-0} -gt 0 ]] && echo "$lut points" || echo "none")."
+    summary+=" Saturation and hue: $([[ $ctm == yes ]] && echo "by the card" || echo "by software (games, menus, desktop; not the text console)")."
+    [[ ${range:-none} != none ]] && summary+=" RGB range: $range."
+    choice=$(ui_menu_hints "$title" "$summary" "$last" \
+      "calibrate|Calibrate on the screen|Test patterns; the arrows change each setting while you look at the tube." \
+      "values|Settings in numbers|Each setting by its number (also over SSH)." \
+      "reset|Back to the defaults|The picture exactly as the card sends it." \
+      "return|Return|Back to Video Setup.") || return 0
+    last=$choice
+    case $choice in
+      calibrate) screen_colour_calibrate "$range" ;;
+      values) screen_colour_values "$range" ;;
+      reset)
+        ui_yesno "$title" "Every colour setting back to the default?" no || continue
+        color_reset
+        ui_text color_apply "$caps"
+        ui_msg "$title" "Back to the defaults."
+        ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_colour_calibrate FAIXA: o calibrador (gui/color-calibrate.py) no
+# modo do Video Setup, pelo fliperos-x11-run com a camada da matriz de cor.
+screen_colour_calibrate() {
+  local range=${1:-none} dir w h r key value rc
+  if ((SETUP_REMOTE == 1)) || [[ -n ${DISPLAY:-} ]]; then
+    ui_msg "Colour calibration" "The test patterns open on the cabinet screen, from the FliperOS menu (not over SSH or inside the desktop)." \
+      "" "Over SSH, use Settings in numbers."
+    return 0
+  fi
+  dir=$(mktemp -d) || return 0
+  color_table > "$dir/table"
+  {
+    while IFS='|' read -r key _; do
+      printf 'color_%s=%s\n' "$key" "$(color_get "$key")"
+    done < <(color_table)
+    [[ -n $(color_range) ]] && printf 'color_range=%s\n' "$(color_range)"
+  } > "$dir/color.conf"
+  read -r w h r <<< "$(geometry_mode)"
+  ui_text env FLIPEROS_COLOR_FILE="$dir/color.conf" \
+    "$DEFLICKER_X11_RUN" --mode "${w}x${h}@${r}" python3 "$SETUP_DIR/gui/color-calibrate.py" \
+    --table "$dir/table" --conf "$dir/color.conf" --out "$dir/out" --range "$range" --bin "$COLOR_BIN" \
+    >> "$FLIPEROS_LOG" 2>&1
+  rc=$?
+  ui_flush_input
+  if ((rc == 0)) && [[ -s $dir/out ]]; then
+    color_reset
+    while IFS='=' read -r key value; do
+      key=${key#color_}
+      if [[ $key == range ]]; then
+        color_range_set "$value"
+      else
+        color_set "$key" "$value"
+      fi
+    done < "$dir/out"
+    ui_text color_apply
+    ui_msg "Colour calibration" "Saved: it counts everywhere from now on."
+  else
+    # O X que fechou devolve a tabela de antes; a matriz e a faixa tambem.
+    ui_text color_apply
+  fi
+  rm -rf "$dir"
+}
+
+# screen_colour_values FAIXA: cada parametro pelo numero.
+screen_colour_values() {
+  local range=${1:-none} key label min max help choice value last=brightness
+  local -a entries
+  while true; do
+    entries=()
+    while IFS='|' read -r key label min max _ _ help; do
+      entries+=("$key|$label: $(color_pretty "$key" "$(color_get "$key")")|$help ($min to $max)")
+    done < <(color_table)
+    value=$(color_range)
+    [[ $range != none ]] &&
+      entries+=("range|RGB range: ${value:-card default}|Full for a PC monitor or CRT, limited for a TV that expects 16-235.")
+    entries+=("return|Return|Back.")
+    choice=$(ui_menu_hints "Colour settings" "Changes count right away." "$last" "${entries[@]}") || return 0
+    last=$choice
+    case $choice in
+      return) return 0 ;;
+      range)
+        value=$(ui_radio "RGB range" "Full for a PC monitor or CRT; limited only for a TV that expects 16-235." \
+          "$(r=$(color_range); echo "${r:-default}")" "default|Card default" "full|Full (0-255)" \
+          "limited|Limited (16-235)") || continue
+        [[ $value == default ]] && value=""
+        color_range_set "$value"
+        ;;
+      *)
+        value=$(ui_input "$(color_field "$choice" 2)" \
+          "$(color_field "$choice" 7) From $(color_field "$choice" 3) to $(color_field "$choice" 4)." \
+          "$(color_get "$choice")") || continue
+        color_set "$choice" "$value" || { ui_msg "Colour settings" "Not a number: $value"; continue; }
+        ;;
+    esac
+    ui_text color_apply
+  done
 }
 
 # screen_deflicker_level CHAVE NIVEL: o nivel do filtro de uma aplicacao.
@@ -416,6 +503,7 @@ screen_video_setup() {
       "geometry_reset|Reset Geometry|Undo the geometry: back to the monitor preset." \
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
       "mode480|480i games|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
+      "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour temperature, saturation and hue." \
       "return|Return|Save and leave. New video settings need a reboot.") || choice="return"
     last=$choice
     case $choice in
@@ -426,6 +514,7 @@ screen_video_setup() {
       geometry_reset) screen_geometry_reset ;;
       monitors) screen_multi_monitor ;;
       mode480) screen_mode480 ;;
+      colour) screen_colour ;;
       return) break ;;
     esac
   done

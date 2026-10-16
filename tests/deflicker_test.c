@@ -35,7 +35,11 @@ static void stripes(void)
     glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT);
     glEnable(GL_SCISSOR_TEST);
-    glClearColor(1, 1, 1, 1);
+    /* DEFLICKER_TEST_RED=1: listras vermelhas (a saturacao e o matiz). */
+    if (getenv("DEFLICKER_TEST_RED"))
+        glClearColor(1, 0, 0, 1);
+    else
+        glClearColor(1, 1, 1, 1);
     for (int y = 0; y < H; y += 2) {
         glScissor(0, y, W, 1);
         glClear(GL_COLOR_BUFFER_BIT);

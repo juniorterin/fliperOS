@@ -115,8 +115,9 @@ packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-pl
 packages+=(python3-pygame xclip)
 # O compressor do Volume leveler (Setup > Audio Setup, lib/audio.sh).
 packages+=(swh-plugins)
-# Para compilar o filtro de flicker do 480i (config/fliperos-deflicker-build).
-packages+=(gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev)
+# Para compilar o filtro de flicker do 480i e a calibracao de cor
+# (config/fliperos-deflicker-build).
+packages+=(gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev libx11-dev libxrandr-dev)
 # E o compositor que leva o filtro ao desktop LXDE (config/fliperos-desktop-deflicker).
 packages+=(picom)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
@@ -147,6 +148,12 @@ if [[ ! -f $deflicker_lib || $src/config/fliperos-deflicker.c -nt $deflicker_lib
   echo "== 480i flicker filter (fliperos-deflicker)"
   bash "$src/config/fliperos-deflicker-build" "$src/config/fliperos-deflicker.c" "$deflicker_lib" ||
     echo "warning: the 480i flicker filter did not compile"
+fi
+color_bin=/usr/local/bin/fliperos-color
+if [[ ! -f $color_bin || $src/config/fliperos-color.c -nt $color_bin ]]; then
+  echo "== Colour calibration (fliperos-color)"
+  bash "$src/config/fliperos-deflicker-build" "$src/config/fliperos-color.c" "$color_bin" ||
+    echo "warning: the colour calibration did not compile"
 fi
 # O override da App Store (fliperos-rootfs.sh) pode ter chegado depois do
 # pacote.

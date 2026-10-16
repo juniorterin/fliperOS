@@ -22,6 +22,10 @@ PLYMOUTH_PID=${FLIPEROS_PLYMOUTH_PID:-/run/plymouth/pid}
 # para o login e a espera da rede do update nao ficarem com a tela preta.
 splash_off() {
   [[ -e $PLYMOUTH_PID ]] && sudo -n /usr/bin/plymouth quit 2> /dev/null
+  # A calibracao de cor (Setup > Video Setup > Colour calibration) na placa,
+  # agora que o splash soltou o video.
+  [[ -x ${FLIPEROS_COLOR:-/usr/local/bin/fliperos-color} ]] &&
+    "${FLIPEROS_COLOR:-/usr/local/bin/fliperos-color}" apply > /dev/null 2>&1
   return 0
 }
 

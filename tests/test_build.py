@@ -3977,6 +3977,33 @@ class DeflickerTests(unittest.TestCase):
 
     LIB = '/usr/local/lib/fliperos/libfliperos-deflicker.so'
 
+    def test_colour_calibration_applied_everywhere(self):
+        # Compilada com o filtro (a imagem e a atualizacao) e posta na placa
+        # no boot, antes de cada programa e no X de cada um e do desktop.
+        self.assertIn('bash /tmp/fliperos-deflicker-build /tmp/fliperos-color.c /usr/local/bin/fliperos-color', MKISO)
+        self.assertIn('pkg-config --cflags --libs libdrm x11 xrandr', (ROOT / 'config/fliperos-deflicker-build').read_text())
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn('$src/config/fliperos-color.c -nt $color_bin', update)
+        self.assertRegex(update, r'packages\+=\([^)]*\blibxrandr-dev\b')
+        for script, call in (('fliperos-tty1', '/usr/local/bin/fliperos-color}" apply'),
+                             ('fliperos-kms-run', '"$color" apply'), ('fliperos-x11-run', '"$color" apply'),
+                             ('fliperos-x11-client', '"$color" x11'), ('fliperos-lxde', 'fliperos-color x11')):
+            self.assertIn(call, (ROOT / 'config' / script).read_text(), script)
+        # No x11-client, antes do Switchres abrir o programa.
+        client = (ROOT / 'config/fliperos-x11-client').read_text()
+        self.assertLess(client.index('"$color" x11'), client.index('exec /usr/local/bin/switchres'))
+
+    def test_desktop_software_colour_matrix(self):
+        # Placa sem CTM: o picom leva a saturacao/matiz mesmo sem 480i.
+        conf = 'color_ctm=sw\ncolor_saturation=0\n'
+        out, shader = self.desktop(conf, env={'XRANDR_CURRENT': '+preferred'})
+        self.assertIn('--window-shader-fg', out)
+        self.assertIn('const vec3 w = vec3(0.00, 1.00, 0.00);', shader)
+        self.assertIn('const mat3 m = mat3(0.21300, 0.21300, 0.21300, 0.71500,', shader)
+        # Com CTM a placa faz: nada de picom sem 480i.
+        self.assertEqual(self.desktop('color_ctm=hw\ncolor_saturation=0\n', env={'XRANDR_CURRENT': '+preferred'}),
+                         ('', ''))
+
     def test_built_into_the_image_and_on_update(self):
         build = (ROOT / 'config/fliperos-deflicker-build').read_text()
         self.assertIn('pkg-config --cflags --libs libdrm', build)

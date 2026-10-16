@@ -113,13 +113,19 @@ ui_gui_start() {
   # No console o video e o KMS e o teclado do VT da tela fica calado
   # enquanto a interface esta nele (UI_GUI_CONSOLE); no desktop, uma janela
   # no X. A orientacao do monitor: com ele em pe, a imagem gira.
-  local driver=kmsdrm console=""
+  local driver=kmsdrm console="" preload=${LD_PRELOAD:-}
   if [[ -n ${DISPLAY:-} ]]; then
     driver=x11
   elif [[ -c $UI_GUI_CONSOLE ]]; then
     console=$UI_GUI_CONSOLE
   fi
-  FLIPEROS_GUI_ORIENTATION=$(conf_get orientation 2> /dev/null || echo horizontal) \
+  # A saturacao e o matiz da calibracao de cor por software (placa sem CTM):
+  # o menu tambem passa pela camada (config/fliperos-deflicker.c). No X o
+  # picom do desktop ja faz.
+  if [[ $driver == kmsdrm && $(conf_get color_ctm 2> /dev/null) == sw && -f ${DEFLICKER_LIB:-} ]]; then
+    preload="$DEFLICKER_LIB${preload:+:$preload}"
+  fi
+  LD_PRELOAD=$preload FLIPEROS_GUI_ORIENTATION=$(conf_get orientation 2> /dev/null || echo horizontal) \
     FLIPEROS_GUI_CONSOLE=$console \
     SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-$driver} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} \
     "$UI_GUI_BIN" --serve "$UI_GUI_DIR" < /dev/null >> "$FLIPEROS_LOG" 2>&1 &
@@ -602,7 +608,9 @@ ui_checklist() {
 # nada, todos). Com UI_GRID_ASK=VALOR, marcar essa coluna numa linha volta
 # na hora com status 2 e imprime a chave da linha e, na linha seguinte, as
 # marcas (quem chamou pergunta mais alguma coisa e abre a tabela de novo,
-# com UI_GRID_CURSOR=chave para voltar a mesma linha).
+# com UI_GRID_CURSOR=chave para voltar a mesma linha). Com UI_GRID_LIVE=1,
+# toda mudanca volta assim (quem chamou grava na hora): sem Save, e Enter
+# ou Esc saem.
 ui_grid() {
   local title=$1 text=$2 cols=$3 row key label state help allowed choice i c n line last="" out=""
   local -a values=() names=() keys=() labels=() states=() helps=() allows=() rows=() entries=()
@@ -621,7 +629,8 @@ ui_grid() {
     [[ $key == "${UI_GRID_CURSOR:-}" ]] && last=$((${#keys[@]} - 1))
   done
   if ui_gui_alive; then
-    ui_gui_call grid "$title" "$text" "${cols//;/$'\x1d'}" "ask=${UI_GRID_ASK:-};cursor=${UI_GRID_CURSOR:-}" "${rows[@]}"
+    ui_gui_call grid "$title" "$text" "${cols//;/$'\x1d'}" \
+      "ask=${UI_GRID_ASK:-};cursor=${UI_GRID_CURSOR:-};live=${UI_GRID_LIVE:-0}" "${rows[@]}"
     case $? in
       0) printf '%s\n' "$UI_GUI_REPLY" ;;
       2) printf '%s\n' "$UI_GUI_REPLY"; return 2 ;;
@@ -644,7 +653,11 @@ ui_grid() {
       done
       entries+=("$i|$line|${helps[i]}")
     done
-    entries+=("save|Save|Apply the marks now." "return|Return|Leave without changing anything.")
+    if [[ ${UI_GRID_LIVE:-0} == 1 ]]; then
+      entries+=("return|Return|Back. Each change is already saved.")
+    else
+      entries+=("save|Save|Apply the marks now." "return|Return|Leave without changing anything.")
+    fi
     choice=$(ui_menu_hints "$title" "$text"$'\n'"$(ui_dim "Enter on a line moves its mark to the next column.")" \
       "$last" "${entries[@]}") || return 1
     case $choice in
@@ -670,7 +683,7 @@ ui_grid() {
           done
           break
         done
-        if [[ -n ${UI_GRID_ASK:-} && ${states[choice]} == "$UI_GRID_ASK" ]]; then
+        if [[ ${UI_GRID_LIVE:-0} == 1 || (-n ${UI_GRID_ASK:-} && ${states[choice]} == "$UI_GRID_ASK") ]]; then
           out=""
           for i in "${!keys[@]}"; do
             out+="${out:+,}${keys[i]}=${states[i]}"

@@ -411,11 +411,92 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p><strong>First boot:</strong> <em>Choose default launcher</em>, with the generated list of the launchers actually installed (Attract-Mode Plus, RetroArch, EmulationStation..., LXDE) and <em>FliperOS Setup</em> itself. Change it later in Setup &gt; Games &gt; Frontend.</p>
 <p><strong>FliperOS updates (without a new ISO):</strong> at every boot with internet, before the launcher, tty1 asks the repository whether there are FliperOS updates (<code>fliperos-update check</code>, waiting for NetworkManager and, with a cable plugged in or a saved Wi-Fi network, up to 30 s for the connection, since Wi-Fi connects after NetworkManager starts; offline or with GitHub out of reach, the boot goes on as always). Connecting to a Wi-Fi network in <em>Setup &gt; Network Setup</em> runs the same check right after the connection, without waiting for the next boot. With one pending, a screen says what it brings and asks: <strong>Apply now</strong> or <strong>Not now</strong> (asked again at the next boot). Before asking it lists the <strong>files changed on this machine that the update replaces</strong> (up to six on screen, the rest in <em>View the files</em>): it rehearses the update in an overlay over <code>/</code> and compares each file it would write with what FliperOS itself installed (<code>/var/lib/fliperos/update/manifest</code>, the sha256 of each file, recorded by the ISO and by each update). Each of those files is copied to <code>/var/lib/fliperos/update/backup/NNNN-date/</code> before being replaced (<code>fliperos-update restore N</code> puts them back), and the Setup choices (video, latency, buttons) are applied again afterwards. Personal files (<code>fliperos.conf</code>, button maps, ROMs, saves, frontend lists) aren't touched.</p>
 <p>Updates are numbered and <strong>always applied in order</strong>: update N only goes in on a machine at N−1 (<code>/etc/fliperos/patch-level</code>), a list with a gap is refused, and if one fails nothing after it is applied (it is offered again at the next boot; log in <code>/var/log/fliperos-update.log</code>). Each one is a repository commit listed in <code>updates/index</code> with the sha256 of its files (downloaded over HTTPS from GitHub and checked before anything is written), plus an optional <code>updates/NNNN.sh</code> for what isn't a file copy. They are published with <code>tools/make-update.sh "title" [--reboot]</code>. An install older than this system gets it with <code>curl -fsSL https://raw.githubusercontent.com/juniorterin/fliperOS/main/updates/bootstrap.sh | sudo bash</code>.</p>
+<p><strong>Colour calibration</strong> (Setup &gt; Video Setup) sets the picture's colour: everything the card can do, plus saturation and hue by software when it can't. The fifteen settings are saved in <code>fliperos.conf</code> as <code>color_NAME=</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Range</th>
+<th>How it is done</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Brightness</td>
+<td>−50 to +50</td>
+<td>the card's gamma table (LUT)</td>
+</tr>
+<tr>
+<td>Contrast</td>
+<td>50 to 150 %</td>
+<td>LUT</td>
+</tr>
+<tr>
+<td>Gamma</td>
+<td>0.50 to 2.00</td>
+<td>LUT</td>
+</tr>
+<tr>
+<td>Colour temperature</td>
+<td>4000 to 10000 K (6500 neutral, 9300 the bluish white of many arcade monitors)</td>
+<td>LUT: red, green and blue gains from the black-body white</td>
+</tr>
+<tr>
+<td>Red / green / blue gain (drive)</td>
+<td>0 to 150 %</td>
+<td>LUT</td>
+</tr>
+<tr>
+<td>Red / green / blue black level (cutoff)</td>
+<td>−50 to +50</td>
+<td>LUT</td>
+</tr>
+<tr>
+<td>Red / green / blue gamma</td>
+<td>0.50 to 2.00</td>
+<td>LUT</td>
+</tr>
+<tr>
+<td>Saturation</td>
+<td>0 to 200 %</td>
+<td>the card's colour matrix (CTM); on cards without one, by software</td>
+</tr>
+<tr>
+<td>Hue</td>
+<td>−180 to +180°</td>
+<td>CTM, or by software</td>
+</tr>
+<tr>
+<td>RGB range</td>
+<td>card default, full, limited</td>
+<td>the connector's <code>output_csc</code> (radeon) or <code>Broadcast RGB</code> (Intel), only on cards that have it</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Calibrate on the screen</strong> opens test patterns in the Video Setup mode, through the same path as the emulators:
+- colour bars (75 % SMPTE with near-black bars);
+- 16 grey steps over a continuous ramp;
+- black level: 1, 2, 4 and 8 % bars, for brightness;
+- white level: 90, 95 and 98 % boxes on white, for contrast;
+- red, green, blue and grey ramps;
+- the 24 ColorChecker patches.</p>
+<p>Up and down pick a setting and left and right change it while you look at the tube. Space hides the bar, Enter keeps the settings and Esc goes back to the previous ones. <strong>Settings in numbers</strong> changes each setting by its number (it also works over SSH), and <strong>Back to the defaults</strong> clears them all.</p>
+<p><code>config/fliperos-color.c</code> (built with the image and by each update as <code>/usr/local/bin/fliperos-color</code>) applies the settings. Its commands:
+- <code>fliperos-color caps</code> tells what the card has: the size of the gamma table, whether there is a CTM, which range property;
+- <code>apply</code> writes the LUT, the CTM and the range through DRM;
+- <code>x11</code> writes the LUT to every CRTC in X;
+- <code>lut N</code> prints the table and the matrix.</p>
+<p>Where FliperOS applies them:
+- at boot, as soon as the splash leaves the screen (<code>fliperos-tty1</code>);
+- before each program in <code>fliperos-kms-run</code> and <code>fliperos-x11-run</code> (an X server that closes puts back the table it found);
+- in X, in <code>fliperos-x11-client</code> and <code>fliperos-lxde</code>, because Xorg starts with a linear table;
+- when the settings are saved.</p>
+<p>Without a CTM (the cabinet's Radeon R7 240 on the <code>radeon</code> driver has only the 256-point LUT and <code>output_csc</code>), the Setup writes <code>color_ctm=sw</code>. Then saturation and hue go through the same OpenGL layer as the flicker filter (<code>libfliperos-deflicker.so</code>, in every emulator and frontend, and in the Setup's menu), and through picom on the desktop. Only the text console stays without them.</p>
 <p><strong>Main menu</strong> (gasetup's <code>mainmenu</code>; the title shows <code>host (IP) - N% used on /</code>):</p>
 <ul>
 <li><strong>Start frontend</strong></li>
 <li><strong>Setup</strong> — the items come in the order of setting up a cabinet, and a balloon under the list says what the item under the cursor is for (FliperOS's gum, <code>patches/gum/0004-choose-balao.patch</code>: framed at 80 columns, two lines of text in place of the key help at 40):</li>
-<li><strong>Video Setup</strong> — the same as in the installation, including <a href="#Multiple-Monitors">Multiple monitors</a>; saves the kernel line and offers to reboot. Also <strong>480i games</strong>: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, 480i with the flicker filter at its own level (with a preview on the tube), or pure 480i (<a href="#Emulators">Emulators</a>);</li>
+<li><strong>Video Setup</strong> — the same as in the installation, including <a href="#Multiple-Monitors">Multiple monitors</a>; saves the kernel line and offers to reboot. Also <strong>480i games</strong>: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, 480i with the flicker filter at its own level (with a preview on the tube), or pure 480i (<a href="#Emulators">Emulators</a>). Changes in that table are saved as they are made; there is no Save step. Also <strong>Colour calibration</strong> (below);</li>
 <li><strong>Audio Setup</strong> — default card (<code>/etc/asound.conf</code>), volume, AlsaMixer, <strong>MAME audio latency</strong> (<code>audio_latency</code> in <code>mame.ini</code>, 0.0 to 50.0, 0 = default; GA's "Audio Latency MAME") and a sound test, and the <strong>Volume leveler</strong>, off by default: on, every system goes through a compressor (SC4 from <code>swh-plugins</code>, a LADSPA plugin in the ALSA <code>default</code>, <code>/etc/asound.conf</code>) that brings loud and quiet systems closer to the same volume, with no lookahead and so no added delay; on an image without <code>swh-plugins</code> the Setup offers to install it. As in GA, the volume moves <code>Master</code>/<code>Front</code>/<code>Speaker</code>/<code>Headphone</code> and leaves <code>PCM</code> at maximum (a card with only <code>PCM</code> uses <code>PCM</code>). The HDA codec stays always on (<code>options snd_hda_intel power_save=0 power_save_controller=N</code>): with the Ubuntu kernel's 1 s <code>power_save</code> it went silent and turned back on at the next sound, and each on-off popped in the speakers ("puffs" with the menu idle). There is no sound server: RetroArch (<code>audio_driver = alsa</code>), GroovyMAME (<code>sound sdl</code>) and the SDL emulators (<code>SDL_AUDIODRIVER=alsa</code>) play straight into ALSA, so this volume applies to all of them, in KMS or X. <strong>Menu sounds</strong>: FliperOS's gum (<code>patches/gum/0002-sons-do-menu.patch</code>) plays a WAV when the cursor moves and another on Enter, like a game's select screen (Street Fighter Alpha 2, for example), in the menus and in the Setup's yes/no questions (<code>aplay</code>; a new sound cuts the one still playing, and the Enter one keeps going after the menu closes). The sounds are your own — FliperOS ships no game sounds: <code>move.wav</code> and <code>select.wav</code> in <code>/opt/fliperos/sounds/menu</code> (over the network, the FliperOS share, folder <code>sounds/menu</code>). With one of them there, it turns on by itself; the Audio Setup item turns it off and on (<code>menu_sounds</code> in <code>fliperos.conf</code>);</li>
 <li><strong>Network Setup</strong> — Wi-Fi from the list of networks (with signal) or a <strong>hidden network by typing the SSID</strong>; once connected, the IP shows in the title, next to the disk usage;</li>
 <li><strong>Joysticks</strong> — each player's buttons and where the buttons of 1 to 5-button games go on the panel, light gun and wheel calibration, joysticks on the parallel port. For a keyboard encoder (I-PAC and the like), Button mapping writes MAME's default keys instead. See <a href="#Controls">Controls</a>;</li>

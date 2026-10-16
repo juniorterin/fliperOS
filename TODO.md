@@ -2,22 +2,11 @@
 
 O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai daqui e o que mudou vai para o [CHANGELOG](CHANGELOG.md).
 
-## Vídeo
+## Vídeo: conferir no tubo
 
-### Calibração de cor do monitor
-
-Um calibrador no Setup para a cor da imagem: "algo com as cores, contraste". Posição e tamanho ficam de fora, porque o Video Setup > Geometry já faz isso.
-- **Parâmetros:** a lista ainda não foi definida; perguntar antes de começar. Sugestão (não confirmada): brilho, contraste, gama, saturação e ganho de R/G/B, com padrões de teste (barras de cor, rampa de cinza, nível de preto e de branco).
-- **Hardware:** só mostrar o que a placa suporta. Conferir no DRM o `GAMMA_LUT` e o `CTM` de cada CRTC.
-- **O que os outros têm:**
-  - **RePlayOS** (`replay.cfg`): `video_gamma` de 0.5 a 1.5, `video_red/green/blue_scale` de 0.0 a 1.0, `video_crt_rgb_range` (auto/full/limited) e uma tela de teste (SCREEN_TEST).
-  - **MiSTer** (`MiSTer.ini`):
-    - brilho, contraste e saturação de 0 a 100;
-    - matiz de 0 a 360;
-    - `video_gain_offset` (ganho e offset por canal, de -2 a 2);
-    - `hdmi_limited`;
-    - gama por core no OSD.
-  - **Batocera:** só posição/tamanho e a grade do Switchres.
+Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
+- **Video Setup > 480i games:** um emulador marcado em "480i filter" ou "480i pure", e o preview do filtro (o Setup abre um Xorg só dele: se a tela ficar preta ou não voltar ao menu, é aí).
+- **Video Setup > Colour calibration:** os padrões de teste e as mudanças ao vivo; se a cor fica depois de sair do calibrador, ao abrir um jogo e ao voltar ao menu.
 
 ## Modo Tour/Welcome (fase 4)
 

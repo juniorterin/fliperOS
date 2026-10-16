@@ -1108,19 +1108,23 @@ RASCRIPT
 # adiciona deps novas (glslang/SPIRV) sem necessidade pro caminho OpenGL.
 # ── Filtro de flicker do 480i (config/fliperos-deflicker.c) ─────
 # A camada que o fliperos-kms-run e o fliperos-x11-client carregam nos
-# emuladores (Setup > Video Setup > Interlace flicker filter). Sem ela a ISO
-# sai igual, so sem o filtro.
+# emuladores (Setup > Video Setup > 480i games), e a calibracao de cor
+# (config/fliperos-color.c, Setup > Video Setup > Colour calibration). Sem
+# elas a ISO sai igual, so sem o filtro e sem a calibracao.
 build_deflicker_chroot() {
   local here
   here=$(dirname "$(realpath "$0")")
-  step "Compiling the 480i flicker filter (fliperos-deflicker)"
-  cp "$here/config/fliperos-deflicker.c" "$here/config/fliperos-deflicker-build" "$CHROOT_DIR/tmp/"
+  step "Compiling the 480i flicker filter and the colour calibration"
+  cp "$here/config/fliperos-deflicker.c" "$here/config/fliperos-color.c" "$here/config/fliperos-deflicker-build" \
+    "$CHROOT_DIR/tmp/"
   cat > "$CHROOT_DIR/tmp/build-deflicker.sh" << 'DFSCRIPT'
 #!/bin/bash
 set -e
-apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev
+apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev \
+  libx11-dev libxrandr-dev
 bash /tmp/fliperos-deflicker-build /tmp/fliperos-deflicker.c /usr/local/lib/fliperos/libfliperos-deflicker.so
-rm -f /tmp/fliperos-deflicker.c /tmp/fliperos-deflicker-build
+bash /tmp/fliperos-deflicker-build /tmp/fliperos-color.c /usr/local/bin/fliperos-color
+rm -f /tmp/fliperos-deflicker.c /tmp/fliperos-color.c /tmp/fliperos-deflicker-build
 DFSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-deflicker.sh"
   chroot "$CHROOT_DIR" /tmp/build-deflicker.sh >> "$LOG_FILE" 2>&1 \

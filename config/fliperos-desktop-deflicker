@@ -1,24 +1,54 @@
 #!/usr/bin/env bash
-# O filtro de flicker do 480i no desktop (LXDE): o mesmo filtro vertical da
-# camada dos emuladores (config/fliperos-deflicker.c), como shader de janela
-# do picom. O desktop desenha pelo X, sem OpenGL: a camada nao o alcanca,
-# o compositor sim. So com o modo da tela entrelacado e o filtro ligado
-# para o desktop (Setup > Video Setup > 480i games, a linha Desktop:
-# deflicker_desktop= no fliperos.conf); senao nao sobe nada. Roda no comeco
-# da sessao (config/fliperos-lxde) e sai junto com o X.
+# O filtro de flicker do 480i e a saturacao/matiz por software no desktop
+# (LXDE): as mesmas contas da camada dos emuladores
+# (config/fliperos-deflicker.c), como shader de janela do picom. O desktop
+# desenha pelo X, sem OpenGL: a camada nao o alcanca, o compositor sim.
+#   - o filtro: so com o modo da tela entrelacado e o filtro ligado para o
+#     desktop (Setup > Video Setup > 480i games, a linha Desktop:
+#     deflicker_desktop= no fliperos.conf);
+#   - a matriz de cor: so numa placa sem CTM (color_ctm=sw, de Setup > Video
+#     Setup > Colour calibration), com color_saturation= ou color_hue=.
+# Sem nenhum dos dois, nao sobe nada. Roda no comeco da sessao
+# (config/fliperos-lxde) e sai junto com o X.
 #
 #   fliperos-desktop-deflicker [--shader ARQUIVO]   so grava o shader (testes)
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
-level=$(sed -n 's/^deflicker_desktop=//p' "$conf" 2> /dev/null | tail -n 1)
-case ${level:-medium} in
-  off) exit 0 ;;
+get() { sed -n "s/^$1=//p" "$conf" 2> /dev/null | tail -n 1; }
+
+deflick=1
+case $(get deflicker_desktop) in
+  off) deflick=0 w="0.00, 1.00, 0.00" ;;
   light) w="0.15, 0.70, 0.15" ;;
   strong) w="0.33, 0.34, 0.33" ;;
   *) w="0.50, 0.50, 0.00" ;;
 esac
 
+# A matriz da saturacao e do matiz, a do config/fliperos-color.c (por
+# coluna, como o mat3 do GLSL).
+sat=$(get color_saturation) hue=$(get color_hue)
+[[ $sat =~ ^[0-9]+$ ]] || sat=100
+[[ $hue =~ ^-?[0-9]+$ ]] || hue=0
+color=0
+[[ $(get color_ctm) == sw ]] && ((sat != 100 || hue != 0)) && color=1
+m=$(LC_ALL=C awk -v s="$sat" -v h="$hue" 'BEGIN {
+  if (s > 200) s = 200; if (h > 180) h = 180; if (h < -180) h = -180
+  lr = 0.213; lg = 0.715; lb = 0.072; s /= 100; a = h * atan2(0, -1) / 180; c = cos(a); n = sin(a)
+  split(lr + (1 - lr) * s " " lg - lg * s " " lb - lb * s " " lr - lr * s " " lg + (1 - lg) * s " " \
+        lb - lb * s " " lr - lr * s " " lg - lg * s " " lb + (1 - lb) * s, S, " ")
+  split(lr + c * (1 - lr) - n * lr " " lg - c * lg - n * lg " " lb - c * lb + n * (1 - lb) " " \
+        lr - c * lr + n * 0.143 " " lg + c * (1 - lg) + n * 0.140 " " lb - c * lb - n * 0.283 " " \
+        lr - c * lr - n * (1 - lr) " " lg - c * lg + n * lg " " lb + c * (1 - lb) + n * lb, H, " ")
+  out = ""
+  for (j = 0; j < 3; j++) for (i = 0; i < 3; i++) {
+    v = 0; for (k = 0; k < 3; k++) v += H[i * 3 + k + 1] * S[k * 3 + j + 1]
+    out = out (out == "" ? "" : ", ") sprintf("%.5f", v)
+  }
+  print out }')
+((color)) || m="1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0"
+
 # shader ARQUIVO: as tres linhas (a de cima, a propria, a de baixo) pelos
-# pesos, na interface de shader de janela do picom (texcoord em pixels).
+# pesos e a matriz de cor, na interface de shader de janela do picom
+# (texcoord em pixels).
 shader() {
   cat > "$1" << EOF
 #version 330
@@ -27,12 +57,14 @@ uniform sampler2D tex;
 vec4 default_post_processing(vec4 c);
 vec4 window_shader() {
     const vec3 w = vec3($w);
+    const mat3 m = mat3($m);
     ivec2 p = ivec2(texcoord);
     int bottom = textureSize(tex, 0).y - 1;
     vec4 up = texelFetch(tex, ivec2(p.x, max(p.y - 1, 0)), 0);
     vec4 mid = texelFetch(tex, p, 0);
     vec4 down = texelFetch(tex, ivec2(p.x, min(p.y + 1, bottom)), 0);
-    return default_post_processing(up * w.x + mid * w.y + down * w.z);
+    vec4 c = up * w.x + mid * w.y + down * w.z;
+    return default_post_processing(vec4(clamp(m * c.rgb, 0.0, 1.0), c.a));
 }
 EOF
 }
@@ -44,8 +76,9 @@ fi
 command -v picom > /dev/null || exit 0
 if [[ ${FLIPEROS_DEFLICKER_FORCE:-0} != 1 ]] &&
   ! xrandr --verbose 2> /dev/null | grep -q 'Interlace.*\*current'; then
-  exit 0
+  deflick=0 w="0.00, 1.00, 0.00"
 fi
+((deflick || color)) || exit 0
 file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-deflicker.glsl
 shader "$file"
 exec picom --backend glx --vsync --window-shader-fg "$file"

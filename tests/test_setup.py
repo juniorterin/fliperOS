@@ -599,12 +599,58 @@ class DeflickerTests(Base):
         self.assertIn("deflicker=strong\n", conf)
         self.assertEqual(self.env.out("deflicker_level").strip(), "strong")
 
+    def colour_bin(self, ctm="no"):
+        """fliperos-color falso: responde o caps e registra cada chamada."""
+        log = self.env.dir / "color.log"
+        self.env.stub("fliperos-color", 'echo "$*" >> %s\n[ "$1" = caps ] && printf "lut 256\\nctm %s\\nrange output_csc\\n"\n'
+                      'exit 0\n' % (log, ctm))
+        return {"COLOR_BIN": str(self.env.bin / "fliperos-color")}, log
+
+    def test_colour_parameters(self):
+        table = [r.split("|") for r in self.env.out("color_table").splitlines()]
+        keys = [r[0] for r in table]
+        self.assertEqual(keys, ["brightness", "contrast", "gamma", "temperature", "red_gain", "green_gain",
+                                "blue_gain", "red_offset", "green_offset", "blue_offset", "red_gamma",
+                                "green_gamma", "blue_gamma", "saturation", "hue"])
+        self.assertEqual(self.env.out("color_get gamma").strip(), "100")
+        # Fora da faixa: o limite; nao numero ou chave que nao existe: nada.
+        self.env.out("color_set brightness 99; color_set hue -500")
+        self.assertIn("color_brightness=50\n", self.conf())
+        self.assertIn("color_hue=-180\n", self.conf())
+        self.assertNotEqual(self.env.run("color_set gamma alto").returncode, 0)
+        self.assertNotEqual(self.env.run("color_set sharpness 3").returncode, 0)
+        self.assertEqual(self.env.out("color_pretty gamma 125").strip(), "1.25")
+        self.assertEqual(self.env.out("color_pretty temperature 9300").strip(), "9300 K")
+        self.assertEqual(self.env.out("color_pretty brightness 5").strip(), "+5")
+        self.env.out("color_range_set limited")
+        self.assertEqual(self.env.out("color_range").strip(), "limited")
+        self.assertEqual(self.env.run("color_changed").returncode, 0)
+        self.env.out("color_reset")
+        self.assertNotIn("color_", self.conf())
+        self.assertNotEqual(self.env.run("color_changed").returncode, 0)
+
+    def test_colour_apply_picks_hardware_or_software_matrix(self):
+        env, log = self.colour_bin("no")
+        self.env.out("color_apply", env)
+        # Sem CTM na placa: a saturacao e o matiz pela camada.
+        self.assertIn("color_ctm=sw\n", self.conf())
+        self.assertEqual(log.read_text().splitlines(), ["caps", "apply"])
+        env, log = self.colour_bin("yes")
+        self.env.out("color_apply", env)
+        self.assertIn("color_ctm=hw\n", self.conf())
+
     def test_in_video_setup(self):
         screen = (ROOT / "fliperos-setup/screens/video-setup.sh").read_text()
+        self.assertIn('"colour|Colour calibration|', screen)
+        self.assertIn("colour) screen_colour ;;", screen)
+        calibrate = screen.split("screen_colour_calibrate()")[1]
+        self.assertIn('python3 "$SETUP_DIR/gui/color-calibrate.py"', calibrate)
+        self.assertIn("FLIPEROS_COLOR_FILE=", calibrate)
+        self.assertTrue((ROOT / "fliperos-setup/gui/color-calibrate.py").is_file())
         self.assertIn('"mode480|480i games|', screen)
         self.assertIn("mode480) screen_mode480 ;;", screen)
         body = screen.split("screen_mode480()")[1]
-        self.assertIn('UI_GRID_ASK=filter', body)
+        self.assertIn("UI_GRID_LIVE=1", body)
         self.assertIn('"240p|640x240;filter|480i filter;pure|480i pure"', body)
         dialog = screen.split("screen_deflicker_level()")[1]
         for level in ("preview", "light", "medium", "strong"):

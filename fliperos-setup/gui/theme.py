@@ -406,6 +406,47 @@ ICONS.update({
 ................
 ................
 """,
+    # 480i games: um tubo com as linhas do entrelacado, metade piscando
+    # (linhas acesas e apagadas, um campo de cada vez) e metade ja filtrada
+    # (as linhas misturadas, uma cor so).
+    "mode480": """
+................
+.PPPPPPPPPPPPPP.
+.PFFFFFFKCCCCCP.
+.PDDDDDDKCCCCCP.
+.PFFFFFFKCCCCCP.
+.PDDDDDDKCCCCCP.
+.PFFFFFFKCCCCCP.
+.PDDDDDDKCCCCCP.
+.PFFFFFFKCCCCCP.
+.PDDDDDDKCCCCCP.
+.PPPPPPPPPPPPPP.
+.......PP.......
+.....PPPPPP.....
+................
+................
+................
+""",
+    # Colour calibration: as barras de cor num tubo, com a rampa de cinza
+    # embaixo (os padroes de teste do calibrador).
+    "colour": """
+................
+.PPPPPPPPPPPPPP.
+.PFFYYCCGGKKRRP.
+.PFFYYCCGGKKRRP.
+.PFFYYCCGGKKRRP.
+.PFFYYCCGGKKRRP.
+.PFFYYCCGGKKRRP.
+.PDDDLLLMMMFFFP.
+.PDDDLLLMMMFFFP.
+.PPPPPPPPPPPPPP.
+.......PP.......
+.....PPPPPP.....
+................
+................
+................
+................
+""",
 })
 # Setup > Joysticks.
 ICONS.update({
@@ -1057,6 +1098,8 @@ for _alias, _name in {
     # Os itens que acrescentam ou editam (Custom games, Frontend) e o
     # leveler do Audio Setup.
     "+add": "add", "+new": "addfolder", "+edit": "edit", "custom": "games", "leveler": "audio",
+    # Colour calibration: na tela (as barras de cor) ou pelos numeros.
+    "calibrate": "colour", "values": "romlist",
 }.items():
     ICONS[_alias] = ICONS[_name]
 ICONS["torrent"] = ICONS["install"]

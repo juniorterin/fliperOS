@@ -20,6 +20,9 @@ esac
 
 # Resolucao guardada pelo Screen Resolution (fliperos-resolution).
 /opt/fliperos/bin/fliperos-resolution --apply-saved > /dev/null 2>&1
+# A tabela de gama da calibracao de cor (Setup > Video Setup > Colour
+# calibration): o Xorg abre com a dele, linear.
+[[ -x /usr/local/bin/fliperos-color ]] && /usr/local/bin/fliperos-color x11 > /dev/null 2>&1
 
 # Janela maior que a tela: o desktop cresce e rola com o mouse na borda
 # (config/fliperos-panning). Sai junto com o X.

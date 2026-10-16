@@ -31,6 +31,13 @@
  * entrelacado (os testes, sem DRM). O 240p nao muda: sem modo entrelacado,
  * a troca de quadro passa direto.
  *
+ * A saturacao e o matiz da calibracao de cor (Setup > Video Setup > Colour
+ * calibration, config/fliperos-color.c) tambem passam por aqui quando a
+ * placa nao tem a matriz de cor (CTM) no hardware: color_ctm=sw no
+ * fliperos.conf, com color_saturation= e color_hue=. A mesma conta do
+ * fliperos-color, em qualquer modo de video. FLIPEROS_COLOR_FILE: um
+ * arquivo com essas linhas, relido a cada 30 quadros (o calibrador).
+ *
  * O SDL e outros abrem a libGL por dlopen e pegam o glXSwapBuffers por
  * dlsym: o dlsym tambem passa por aqui. O estado do OpenGL do programa e
  * guardado e devolvido em volta do filtro.
@@ -42,6 +49,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <link.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -107,7 +115,7 @@ static void load_conf(void)
     size_t used = 0;
     while (f && fgets(line, sizeof(line), f)) {
         size_t n = strlen(line);
-        if (strncmp(line, "deflicker", 9) || used + n + 1 >= sizeof(conf_lines))
+        if ((strncmp(line, "deflicker", 9) && strncmp(line, "color_", 6)) || used + n + 1 >= sizeof(conf_lines))
             continue;
         memcpy(conf_lines + used, line, n);
         used += n;
@@ -196,6 +204,55 @@ static void read_level(void)
                 core[0] ? core : "-");
 }
 
+/* A matriz da saturacao e do matiz (por coluna, como o glUniformMatrix3fv
+ * quer), a mesma do config/fliperos-color.c: as do filtro do CSS
+ * (saturate, hue-rotate), que mantem a luminancia. */
+static float matrix[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+static int matrix_on;
+
+static void read_matrix(void)
+{
+    char value[32];
+    int sat = 100, hue = 0, sw = 0;
+    const char *file = getenv("FLIPEROS_COLOR_FILE");
+    if (file) {
+        FILE *f = fopen(file, "r");
+        char line[128];
+        while (f && fgets(line, sizeof(line), f)) {
+            sscanf(line, "color_saturation=%d", &sat);
+            sscanf(line, "color_hue=%d", &hue);
+        }
+        if (f)
+            fclose(f);
+        sw = 1;
+    } else {
+        if (conf_value("color_ctm", value, sizeof(value)))
+            sw = !strcmp(value, "sw");
+        if (conf_value("color_saturation", value, sizeof(value)))
+            sat = atoi(value);
+        if (conf_value("color_hue", value, sizeof(value)))
+            hue = atoi(value);
+    }
+    sat = sat < 0 ? 0 : sat > 200 ? 200 : sat;
+    hue = hue < -180 ? -180 : hue > 180 ? 180 : hue;
+    matrix_on = sw && (sat != 100 || hue != 0);
+    const double lr = 0.213, lg = 0.715, lb = 0.072;
+    double s = sat / 100.0, a = hue * M_PI / 180.0, cs = cos(a), sn = sin(a);
+    double st[9] = {lr + (1 - lr) * s, lg - lg * s, lb - lb * s,
+                    lr - lr * s, lg + (1 - lg) * s, lb - lb * s,
+                    lr - lr * s, lg - lg * s, lb + (1 - lb) * s};
+    double hu[9] = {lr + cs * (1 - lr) - sn * lr, lg - cs * lg - sn * lg, lb - cs * lb + sn * (1 - lb),
+                    lr - cs * lr + sn * 0.143, lg + cs * (1 - lg) + sn * 0.140, lb - cs * lb - sn * 0.283,
+                    lr - cs * lr - sn * (1 - lr), lg - cs * lg + sn * lg, lb + cs * (1 - lb) + sn * lb};
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++) {
+            double v = 0;
+            for (int k = 0; k < 3; k++)
+                v += hu[i * 3 + k] * st[k * 3 + j];
+            matrix[j * 3 + i] = (float)v;
+        }
+}
+
 /* interlaced: o modo ativo de alguma saida e entrelacado? Pergunta ao DRM
  * a cada 30 quadros (o RetroArch troca de modo no meio do jogo). Ler os
  * modos nao precisa ser o dono da tela. */
@@ -238,7 +295,7 @@ static struct {
     F(BindFramebuffer) F(ReadBuffer) F(DrawBuffer) F(UseProgram) F(CreateShader) F(ShaderSource)
     F(CompileShader) F(GetShaderiv) F(CreateProgram) F(AttachShader) F(LinkProgram) F(GetProgramiv)
     F(GetUniformLocation) F(Uniform1i) F(Uniform3f) F(GenVertexArrays) F(BindVertexArray) F(BindSampler)
-    F(DrawArrays)
+    F(DrawArrays) F(UniformMatrix3fv)
 } gl;
 #undef F
 
@@ -248,7 +305,7 @@ static struct ctx {
     void *id;
     int broken;
     GLuint prog, tex, vao;
-    GLint u_tex, u_w;
+    GLint u_tex, u_w, u_m;
     int tw, th;
     int gles, core;
     int tw_logged;
@@ -262,10 +319,10 @@ static int load_gl(getproc_fn get)
     L(CopyTexSubImage2D); L(BindFramebuffer); L(ReadBuffer); L(DrawBuffer); L(UseProgram);
     L(CreateShader); L(ShaderSource); L(CompileShader); L(GetShaderiv); L(CreateProgram);
     L(AttachShader); L(LinkProgram); L(GetProgramiv); L(GetUniformLocation); L(Uniform1i);
-    L(Uniform3f); L(GenVertexArrays); L(BindVertexArray); L(BindSampler); L(DrawArrays);
+    L(Uniform3f); L(GenVertexArrays); L(BindVertexArray); L(BindSampler); L(DrawArrays); L(UniformMatrix3fv);
 #undef L
     return gl.GetIntegerv && gl.GetString && gl.CopyTexSubImage2D && gl.CreateShader && gl.DrawArrays &&
-           gl.BindFramebuffer && gl.UseProgram && gl.Uniform3f;
+           gl.BindFramebuffer && gl.UseProgram && gl.Uniform3f && gl.UniformMatrix3fv;
 }
 
 /* As tres linhas: a de cima (y+1 no OpenGL, que conta de baixo), a propria
@@ -277,7 +334,8 @@ static const char *frag_body =
     "    vec4 up = texelFetch(tex, ivec2(p.x, min(p.y + 1, top)), 0);\n"
     "    vec4 mid = texelFetch(tex, p, 0);\n"
     "    vec4 down = texelFetch(tex, ivec2(p.x, max(p.y - 1, 0)), 0);\n"
-    "    OUT = up * w.x + mid * w.y + down * w.z;\n"
+    "    vec4 c = up * w.x + mid * w.y + down * w.z;\n"
+    "    OUT = vec4(clamp(m * c.rgb, 0.0, 1.0), c.a);\n"
     "}\n";
 
 static GLuint shader(GLenum type, const char *head, const char *body)
@@ -309,13 +367,14 @@ static int setup(struct ctx *c)
     if (c->gles) {
         vhead = "#version 300 es\n";
         fhead = "#version 300 es\nprecision highp float;\nuniform highp sampler2D tex;\nuniform vec3 w;\n"
-                "out vec4 color;\n#define OUT color\n";
+                "uniform mat3 m;\nout vec4 color;\n#define OUT color\n";
     } else if (c->core) {
         vhead = "#version 150\n";
-        fhead = "#version 150\nuniform sampler2D tex;\nuniform vec3 w;\nout vec4 color;\n#define OUT color\n";
+        fhead = "#version 150\nuniform sampler2D tex;\nuniform vec3 w;\nuniform mat3 m;\nout vec4 color;\n"
+                "#define OUT color\n";
     } else {
         vhead = "#version 130\n";
-        fhead = "#version 130\nuniform sampler2D tex;\nuniform vec3 w;\n#define OUT gl_FragColor\n";
+        fhead = "#version 130\nuniform sampler2D tex;\nuniform vec3 w;\nuniform mat3 m;\n#define OUT gl_FragColor\n";
     }
     GLuint vs = shader(GL_VERTEX_SHADER, vhead,
                        "void main() {\n"
@@ -339,6 +398,7 @@ static int setup(struct ctx *c)
     }
     c->u_tex = gl.GetUniformLocation(c->prog, "tex");
     c->u_w = gl.GetUniformLocation(c->prog, "w");
+    c->u_m = gl.GetUniformLocation(c->prog, "m");
     gl.GenTextures(1, &c->tex);
     if (gl.GenVertexArrays)
         gl.GenVertexArrays(1, &c->vao);
@@ -362,8 +422,9 @@ static struct ctx *context(void *id)
 }
 
 /* filter: a imagem do quadro (o back buffer, LARGURA x ALTURA) passa pelo
- * filtro, no proprio back buffer. */
-static void filter(void *ctx_id, getproc_fn get, int w, int h)
+ * filtro, no proprio back buffer: as tres linhas com o modo entrelacado
+ * (deflick), so a propria linha sem ele (a matriz de cor sozinha). */
+static void filter(void *ctx_id, getproc_fn get, int w, int h, int deflick)
 {
     static int loaded = -1;
     struct ctx *c;
@@ -431,7 +492,11 @@ static void filter(void *ctx_id, getproc_fn get, int w, int h)
     gl.Viewport(0, 0, w, h);
     gl.UseProgram(c->prog);
     gl.Uniform1i(c->u_tex, 0);
-    gl.Uniform3f(c->u_w, weights[0], weights[1], weights[2]);
+    if (deflick)
+        gl.Uniform3f(c->u_w, weights[0], weights[1], weights[2]);
+    else
+        gl.Uniform3f(c->u_w, 0.0f, 1.0f, 0.0f);
+    gl.UniformMatrix3fv(c->u_m, 1, GL_FALSE, matrix);
     if (c->vao)
         gl.BindVertexArray(c->vao);
     gl.DrawArrays(GL_TRIANGLES, 0, 3);
@@ -462,8 +527,9 @@ static void filter(void *ctx_id, getproc_fn get, int w, int h)
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)draw_fb);
 }
 
-/* active: filtrar este quadro? A cada 30 quadros confere se o core do
- * RetroArch mudou (o nivel pode ser outro) ou, no preview, o arquivo. */
+/* active: o que fazer neste quadro: 1 = o filtro de flicker, 2 = a matriz
+ * de cor (0 = nada). A cada 30 quadros confere se o core do RetroArch mudou
+ * (o nivel pode ser outro) e rele os arquivos do preview e do calibrador. */
 static int active(void)
 {
     static int init, frames;
@@ -475,6 +541,7 @@ static int active(void)
         forced = env && *env == '1';
         dl_iterate_phdr(find_core, core);
         read_level();
+        read_matrix();
         init = 1;
     } else if (!(++frames % 30)) {
         char now[sizeof(core)] = "";
@@ -483,8 +550,10 @@ static int active(void)
             memcpy(core, now, sizeof(core));
             read_level();
         }
+        if (getenv("FLIPEROS_COLOR_FILE"))
+            read_matrix();
     }
-    return !level_off && interlaced();
+    return (!level_off && interlaced() ? 1 : 0) | (matrix_on ? 2 : 0);
 }
 
 /* ── As trocas de quadro ────────────────────────────────────────── */
@@ -511,7 +580,8 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable)
     static void (*real)(Display *, GLXDrawable);
     if (!real)
         real = sym("glXSwapBuffers");
-    if (active()) {
+    int what = active();
+    if (what) {
         static GLXContext (*current)(void);
         static void (*query)(Display *, GLXDrawable, int, unsigned int *);
         unsigned int w = 0, h = 0;
@@ -522,7 +592,7 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable)
         if (current && query) {
             query(dpy, drawable, GLX_WIDTH, &w);
             query(dpy, drawable, GLX_HEIGHT, &h);
-            filter((void *)current(), glx_getproc, (int)w, (int)h);
+            filter((void *)current(), glx_getproc, (int)w, (int)h, what & 1);
         }
     }
     if (real)
@@ -534,7 +604,8 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     static EGLBoolean (*real)(EGLDisplay, EGLSurface);
     if (!real)
         real = sym("eglSwapBuffers");
-    if (active()) {
+    int what = active();
+    if (what) {
         static EGLContext (*current)(void);
         static EGLBoolean (*query)(EGLDisplay, EGLSurface, EGLint, EGLint *);
         EGLint w = 0, h = 0;
@@ -543,7 +614,7 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         if (!query)
             query = sym("eglQuerySurface");
         if (current && query && query(dpy, surface, EGL_WIDTH, &w) && query(dpy, surface, EGL_HEIGHT, &h))
-            filter((void *)current(), egl_getproc, (int)w, (int)h);
+            filter((void *)current(), egl_getproc, (int)w, (int)h, what & 1);
     }
     return real ? real(dpy, surface) : EGL_FALSE;
 }

@@ -699,3 +699,126 @@ deflicker_set() {
     mode480_set other filter "$1"
   fi
 }
+
+# ── Calibracao de cor ────────────────────────────────────────────
+# Setup > Video Setup > Colour calibration: os parametros no fliperos.conf
+# (color_CHAVE=), que o config/fliperos-color.c poe na placa: a tabela de
+# gama (LUT) de cada CRTC, a matriz de cor (CTM) quando a placa tem e a
+# faixa RGB do conector. Sem CTM, a saturacao e o matiz vao por software
+# (color_ctm=sw): a camada config/fliperos-deflicker.c nos programas OpenGL,
+# o picom no desktop. Aplicado no boot (fliperos-tty1), em cada programa
+# aberto (fliperos-kms-run, fliperos-x11-run/-client) e ao gravar.
+COLOR_BIN=${COLOR_BIN:-/usr/local/bin/fliperos-color}
+
+# color_table: chave|rotulo|minimo|maximo|padrao|passo|ajuda.
+color_table() {
+  cat << 'TABLE'
+brightness|Brightness|-50|50|0|1|Moves the whole picture up or down: raise it if dark greys are lost in black.
+contrast|Contrast|50|150|100|1|Spreads or squeezes the picture around the middle grey.
+gamma|Gamma|50|200|100|5|The middle greys: above 1.00 they get brighter, below darker. Black and white stay.
+temperature|Colour temperature|4000|10000|6500|100|The colour of white: 6500 K is neutral, 9300 K bluish (many arcade monitors), 5000 K warm.
+red_gain|Red gain|0|150|100|1|How strong red is in bright colours (the drive of the red gun).
+green_gain|Green gain|0|150|100|1|How strong green is in bright colours (the drive of the green gun).
+blue_gain|Blue gain|0|150|100|1|How strong blue is in bright colours (the drive of the blue gun).
+red_offset|Red black level|-50|50|0|1|Red in the dark parts (the cutoff of the red gun): fixes a tinted black.
+green_offset|Green black level|-50|50|0|1|Green in the dark parts (the cutoff of the green gun): fixes a tinted black.
+blue_offset|Blue black level|-50|50|0|1|Blue in the dark parts (the cutoff of the blue gun): fixes a tinted black.
+red_gamma|Red gamma|50|200|100|5|The middle tones of red only.
+green_gamma|Green gamma|50|200|100|5|The middle tones of green only.
+blue_gamma|Blue gamma|50|200|100|5|The middle tones of blue only.
+saturation|Saturation|0|200|100|2|How strong the colours are: 0 is black and white.
+hue|Hue|-180|180|0|2|Turns every colour around the colour wheel.
+TABLE
+}
+
+# color_field CHAVE N: o campo N da linha da chave.
+color_field() {
+  color_table | awk -F'|' -v k="$1" -v n="$2" '$1 == k { print $n; exit }'
+}
+
+# color_get CHAVE: o valor gravado, ou o padrao.
+color_get() {
+  local value
+  value=$(conf_get "color_$1" 2> /dev/null) || value=""
+  [[ $value =~ ^-?[0-9]+$ ]] || value=$(color_field "$1" 5)
+  printf '%s\n' "$value"
+}
+
+# color_set CHAVE VALOR: grava (dentro da faixa do parametro). Status 1 =
+# chave ou valor invalido.
+color_set() {
+  local key=$1 value=$2 min max
+  min=$(color_field "$key" 3)
+  max=$(color_field "$key" 4)
+  [[ -n $min && $value =~ ^-?[0-9]+$ ]] || return 1
+  ((value < min)) && value=$min
+  ((value > max)) && value=$max
+  conf_set "color_$key" "$value"
+}
+
+# color_pretty CHAVE VALOR: o valor como a tela mostra (1.00, 6500 K, +5).
+color_pretty() {
+  case $1 in
+    gamma | *_gamma) printf '%d.%02d\n' "$(($2 / 100))" "$(($2 % 100))" ;;
+    temperature) printf '%s K\n' "$2" ;;
+    contrast | *_gain | saturation) printf '%s%%\n' "$2" ;;
+    hue) printf '%s°\n' "$2" ;;
+    *) (($2 > 0)) && printf '+%s\n' "$2" || printf '%s\n' "$2" ;;
+  esac
+}
+
+# color_caps: o que a placa tem, como o "fliperos-color caps" ("lut 256",
+# "ctm no", "range output_csc"); sem o programa, nada.
+color_caps() {
+  [[ -x $COLOR_BIN ]] || { printf 'lut 0\nctm no\nrange none\n'; return 0; }
+  "$COLOR_BIN" caps 2> /dev/null || true
+}
+
+# color_range: full, limited ou "" (o da placa, sem mexer).
+color_range() {
+  local value
+  value=$(conf_get color_range 2> /dev/null) || value=""
+  [[ $value == full || $value == limited ]] || value=""
+  printf '%s\n' "$value"
+}
+
+color_range_set() {
+  case $1 in
+    full | limited) conf_set color_range "$1" ;;
+    "") conf_unset color_range ;;
+    *) return 1 ;;
+  esac
+}
+
+# color_apply grava se a matriz vai pelo hardware ou por software e poe tudo
+# na placa (o dono do video tem de estar livre: a interface grafica solta,
+# ui_text). CAPS: a saida do color_caps (sem ela, pergunta).
+color_apply() {
+  local caps=${1:-}
+  [[ -n $caps ]] || caps=$(color_caps)
+  if grep -qx 'ctm yes' <<< "$caps"; then
+    conf_set color_ctm hw
+  else
+    conf_set color_ctm sw
+  fi
+  [[ -x $COLOR_BIN ]] || return 0
+  "$COLOR_BIN" apply >> "$FLIPEROS_LOG" 2>&1
+}
+
+# color_reset volta tudo ao padrao (a imagem como a placa manda).
+color_reset() {
+  local key
+  while IFS='|' read -r key _; do
+    conf_unset "color_$key"
+  done < <(color_table)
+  conf_unset color_range
+}
+
+# color_changed: algum parametro fora do padrao?
+color_changed() {
+  local key
+  while IFS='|' read -r key _ _ _ default _; do
+    [[ $(color_get "$key") == "$default" ]] || return 0
+  done < <(color_table)
+  [[ -n $(color_range) ]]
+}
