@@ -592,15 +592,20 @@ ui_checklist() {
   printf '%s\n' "$out"
 }
 
-# ui_grid TITULO TEXTO "valor|rotulo;valor|rotulo..." "chave|rotulo|marcada|ajuda"...
+# ui_grid TITULO TEXTO "valor|rotulo;valor|rotulo..." "chave|rotulo|marcada|ajuda[|permitidas]"...
 # e uma tabela de marcar com uma marca por linha, numa das colunas (Setup >
 # System > Services: Boot, After boot ou Off). Na interface grafica, a grade
 # desenhada; no texto, um menu em que Enter numa linha passa a marca para a
 # coluna seguinte, e Save grava. Imprime "chave=valor" de cada linha,
 # separados por virgula; status 1 = Esc (nada muda).
+# permitidas: os valores que a linha aceita, separados por virgula (sem
+# nada, todos). Com UI_GRID_ASK=VALOR, marcar essa coluna numa linha volta
+# na hora com status 2 e imprime a chave da linha e, na linha seguinte, as
+# marcas (quem chamou pergunta mais alguma coisa e abre a tabela de novo,
+# com UI_GRID_CURSOR=chave para voltar a mesma linha).
 ui_grid() {
-  local title=$1 text=$2 cols=$3 row key label state help choice i c line last="" out=""
-  local -a values=() names=() keys=() labels=() states=() helps=() rows=() entries=()
+  local title=$1 text=$2 cols=$3 row key label state help allowed choice i c n line last="" out=""
+  local -a values=() names=() keys=() labels=() states=() helps=() allows=() rows=() entries=()
   shift 3
   IFS=';' read -ra entries <<< "$cols"
   for c in "${entries[@]}"; do
@@ -608,13 +613,20 @@ ui_grid() {
     names+=("${c#*|}")
   done
   for row in "$@"; do
-    IFS='|' read -r key label state help <<< "$row"
-    keys+=("$key") labels+=("$label") states+=("${state:-${values[0]}}") helps+=("$help")
-    rows+=("$key"$'\x1d'"$label"$'\x1d'"${state:-${values[0]}}"$'\x1d'"$help")
+    IFS='|' read -r key label state help allowed <<< "$row"
+    [[ -n $allowed ]] || allowed=$(IFS=,; echo "${values[*]}")
+    [[ ,$allowed, == *,"$state",* ]] || state=${allowed%%,*}
+    keys+=("$key") labels+=("$label") states+=("$state") helps+=("$help") allows+=("$allowed")
+    rows+=("$key"$'\x1d'"$label"$'\x1d'"$state"$'\x1d'"$help"$'\x1d'"$allowed")
+    [[ $key == "${UI_GRID_CURSOR:-}" ]] && last=$((${#keys[@]} - 1))
   done
   if ui_gui_alive; then
-    ui_gui_call grid "$title" "$text" "${cols//;/$'\x1d'}" "${rows[@]}" || return 1
-    printf '%s\n' "$UI_GUI_REPLY"
+    ui_gui_call grid "$title" "$text" "${cols//;/$'\x1d'}" "ask=${UI_GRID_ASK:-};cursor=${UI_GRID_CURSOR:-}" "${rows[@]}"
+    case $? in
+      0) printf '%s\n' "$UI_GUI_REPLY" ;;
+      2) printf '%s\n' "$UI_GUI_REPLY"; return 2 ;;
+      *) return 1 ;;
+    esac
     return 0
   fi
   while true; do
@@ -622,7 +634,13 @@ ui_grid() {
     for i in "${!keys[@]}"; do
       printf -v line '%-16s' "${labels[i]}"
       for c in "${!values[@]}"; do
-        if [[ ${states[i]} == "${values[c]}" ]]; then line+="  [x] ${names[c]}"; else line+="  [ ] ${names[c]}"; fi
+        if [[ ,${allows[i]}, != *,"${values[c]}",* ]]; then
+          line+="   -  ${names[c]//?/ }"
+        elif [[ ${states[i]} == "${values[c]}" ]]; then
+          line+="  [x] ${names[c]}"
+        else
+          line+="  [ ] ${names[c]}"
+        fi
       done
       entries+=("$i|$line|${helps[i]}")
     done
@@ -640,12 +658,26 @@ ui_grid() {
       return) return 1 ;;
       *)
         last=$choice
+        # A proxima coluna que a linha aceita.
+        n=${#values[@]}
         for c in "${!values[@]}"; do
-          if [[ ${states[choice]} == "${values[c]}" ]]; then
-            states[choice]=${values[(c + 1) % ${#values[@]}]}
-            break
-          fi
+          [[ ${states[choice]} == "${values[c]}" ]] || continue
+          for ((i = 1; i <= n; i++)); do
+            if [[ ,${allows[choice]}, == *,"${values[(c + i) % n]}",* ]]; then
+              states[choice]=${values[(c + i) % n]}
+              break
+            fi
+          done
+          break
         done
+        if [[ -n ${UI_GRID_ASK:-} && ${states[choice]} == "$UI_GRID_ASK" ]]; then
+          out=""
+          for i in "${!keys[@]}"; do
+            out+="${out:+,}${keys[i]}=${states[i]}"
+          done
+          printf '%s\n%s\n' "${keys[choice]}" "$out"
+          return 2
+        fi
         ;;
     esac
   done

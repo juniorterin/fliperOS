@@ -199,10 +199,16 @@ fi
 
 # ── O modo de cada emulador ───────────────────────────────────────
 # table_mode NOME: o modo de NOME na tabela (LARGURAxALTURA@HZ), na coluna
-# do monitor escolhido no Setup, como o fliperos-x11-run.
+# do monitor escolhido no Setup, como o fliperos-x11-run (com o 480i de
+# Setup > Video Setup > 480i games, a coluna dos outros monitores).
 table_mode() {
   local column=3
   [[ $(sed -n 's/^frequency=//p' "$conf" 2> /dev/null) == 15* ]] && column=2
+  if ((column == 2)); then
+    case $(awk -F= -v k="mode480_$1" '$1 == k { v = $2 } END { print v }' "$conf" 2> /dev/null) in
+      filter | pure) column=3 ;;
+    esac
+  fi
   awk -v p="$1" -v c="$column" '!/^[[:space:]]*#/ && $1 == p { print $c; exit }' "$modes" 2> /dev/null
 }
 

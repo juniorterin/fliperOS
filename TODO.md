@@ -4,25 +4,6 @@ O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai
 
 ## Vídeo
 
-### 480i puro por sistema (fase 3c)
-
-Hoje, num monitor de 15 kHz, nada que tenha 480 linhas abre em 480i por padrão. A ideia é poder escolher, sistema por sistema, entre o hack de 640x240 e o 480i de verdade com o filtro de flicker. A escolha ficaria numa tela do Video Setup e seria aplicada pelo `fliperos-x11-run` e pelo `fliperos-kms-run`.
-
-**Decisão em aberto:** todo sistema continua em 640x240 por padrão e o 480i só entra quando a pessoa escolhe? Ou algum sistema já vem em 480i, por exemplo Dreamcast/Naomi com texto pequeno?
-
-Como está hoje, em 15 kHz:
-
-| Modo | Quem usa |
-| --- | --- |
-| 640x240 esticado a 200% (`config/fliperos-emulator-modes.conf`) | Flycast (também o do Fightcade), PCSX2, Dolphin, Hypseus e Singe; Supermodel, Model 2 e SM2-Emu em 640x240@57.524 |
-| Modo de boot do Video Setup (640x240), sem troca | console e Setup (texto e gráfico), Attract-Mode Plus, ES-DE, RetroFE, Pegasus, menu do RetroArch, interface do GroovyMAME |
-| Modo nativo de cada jogo | RetroArch e GroovyMAME. Jogos de 480 linhas: o GroovyMAME (`interlace 0`) e o core MAME 2010 descem para 240p, com a imagem achatada; os outros cores do RetroArch ainda podem abrir em 480i |
-| 320x240 | OpenBOR, KOF Final Attack |
-| Fightcade | lobby em 512x448 entrelaçado; FBNeo/FBA no modo de cada jogo; SNES9x em 256x224 |
-| Resolução do Screen Resolution | desktop LXDE (640x480 em 15 kHz já é 480i) |
-
-O filtro de flicker do 480i (Setup > Video Setup > Interlace flicker filter) está pronto, mas ainda não foi visto no tubo. Hoje ele só age onde já existe 480i: no desktop em 640x480, no lobby do Fightcade e nos cores do RetroArch que abrem em 480i.
-
 ### Calibração de cor do monitor
 
 Um calibrador no Setup para a cor da imagem: "algo com as cores, contraste". Posição e tamanho ficam de fora, porque o Video Setup > Geometry já faz isso.
@@ -40,7 +21,7 @@ Um calibrador no Setup para a cor da imagem: "algo com as cores, contraste". Pos
 
 ## Modo Tour/Welcome (fase 4)
 
-Uma tela animada na interface gráfica que apresenta o menu, os botões e as seções. Oferecida no primeiro boot e no Setup. No modo texto, vira páginas.
+**Adiado em 2026-10-16; talvez nem seja feito.** Seria uma tela animada na interface gráfica que apresentaria o menu, os botões e as seções, oferecida no primeiro boot e no Setup.
 
 ## Painel web e API REST (fase 5)
 

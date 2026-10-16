@@ -1160,34 +1160,59 @@ class ToggleGrid:
 
 class Grid:
     """ui_grid: uma tabela de marcar, uma marca por linha (os servicos em
-    Boot, After boot ou Off). rows: (chave, rotulo, coluna marcada, ajuda);
-    columns: (valor, rotulo). As setas de cima e de baixo andam pelas
-    linhas, as dos lados (ou Espaco) mudam a marca; Enter grava tudo."""
+    Boot, After boot ou Off). rows: (chave, rotulo, coluna marcada, ajuda,
+    valores permitidos separados por virgula, ou nada para todos); columns:
+    (valor, rotulo). As setas de cima e de baixo andam pelas linhas (a lista
+    rola quando nao cabe), as dos lados (ou Espaco) mudam a marca entre as
+    colunas que a linha aceita; Enter grava tudo. ask: marcar essa coluna
+    numa linha devolve ("ask", "chave\nmarcas") na hora."""
 
-    def __init__(self, title, text, columns, rows):
+    PITCH = 12
+
+    def __init__(self, title, text, columns, rows, ask="", cursor=""):
         self.title = title
         self.text = text
         self.columns = columns
         values = [c[0] for c in columns]
-        self.rows = [(key, label, help) for key, label, _, help in rows]
-        self.state = [values.index(state) if state in values else 0 for _, _, state, _ in rows]
-        self.cursor = 0
+        everything = list(range(len(values)))
+        self.rows = [(row[0], row[1], row[3]) for row in rows]
+        self.allowed = []
+        self.state = []
+        for row in rows:
+            allowed = [values.index(v) for v in (row[4] if len(row) > 4 else "").split(",") if v in values]
+            allowed = allowed or everything
+            self.allowed.append(allowed)
+            state = values.index(row[2]) if row[2] in values else allowed[0]
+            self.state.append(state if state in allowed else allowed[0])
+        keys = [row[0] for row in rows]
+        self.cursor = keys.index(cursor) if cursor in keys else 0
+        self.ask = values.index(ask) if ask in values else -1
+        self.top = 0
+
+    def marks(self):
+        return ",".join("%s=%s" % (row[0], self.columns[s][0]) for row, s in zip(self.rows, self.state))
+
+    def move(self, step):
+        allowed = self.allowed[self.cursor]
+        i = allowed.index(self.state[self.cursor])
+        self.state[self.cursor] = allowed[(i + step) % len(allowed)]
+        if self.state[self.cursor] == self.ask:
+            return ("ask", self.rows[self.cursor][0] + "\n" + self.marks())
+        return None
 
     def key(self, k):
-        n = len(self.columns)
         if k == "up":
             self.cursor = max(0, self.cursor - 1)
         elif k == "down":
             self.cursor = min(len(self.rows) - 1, self.cursor + 1)
         elif k == "left":
-            self.state[self.cursor] = (self.state[self.cursor] - 1) % n
+            return self.move(-1)
         elif k in ("right", "space"):
-            self.state[self.cursor] = (self.state[self.cursor] + 1) % n
+            return self.move(1)
         elif k == "esc":
             return ("back", None)
         elif k == "enter":
-            return ("select", ",".join("%s=%s" % (row[0], self.columns[s][0])
-                                       for row, s in zip(self.rows, self.state)))
+            return ("select", self.marks())
         return None
 
     def draw(self, surf, ctx):
@@ -1206,8 +1231,22 @@ class Grid:
                 cx = x0 + i * col_w + col_w // 2
                 text(surf, part, T.CYAN, cx - width(part) // 2, y + j * 9)
         y += 22
-        pitch = min(18, (HINT_Y - 6 - y) // max(1, len(self.rows)))
-        for r, (_, label, _) in enumerate(self.rows):
+        room = HINT_Y - 6 - y
+        pitch = min(18, room // max(1, len(self.rows)))
+        shown = len(self.rows)
+        if pitch < self.PITCH:
+            # Nao cabe: a lista rola, com a linha escolhida sempre a vista.
+            pitch = self.PITCH
+            shown = max(1, room // pitch)
+            self.top = min(max(self.top, self.cursor - shown + 1), self.cursor)
+            if self.top > 0:
+                text(surf, "^", T.COMMENT, T.SAFE_X - 12, y + 1)
+            if self.top + shown < len(self.rows):
+                text(surf, "v", T.COMMENT, T.SAFE_X - 12, y + (shown - 1) * pitch + 1)
+        else:
+            self.top = 0
+        for r in range(self.top, min(len(self.rows), self.top + shown)):
+            label = self.rows[r][1]
             on = r == self.cursor
             if on:
                 block(surf, (T.SAFE_X - 4, y - 3, T.SAFE_W + 8, pitch - 2), T.BG_DEEP, T.PURPLE)
@@ -1219,7 +1258,10 @@ class Grid:
             for c in range(len(self.columns)):
                 cx = x0 + c * col_w + col_w // 2
                 box = (cx - 5, y, 10, 10)
-                if self.state[r] == c:
+                if c not in self.allowed[r]:
+                    # A coluna que a linha nao tem.
+                    pygame.draw.line(surf, T.LINE, (cx - 3, y + 5), (cx + 2, y + 5))
+                elif self.state[r] == c:
                     pygame.draw.rect(surf, T.GREEN, box)
                 else:
                     pygame.draw.rect(surf, T.PINK if on else T.LINE, box, 1)

@@ -528,12 +528,91 @@ class DeflickerTests(Base):
         self.env.out("deflicker_set off")
         self.assertEqual(self.env.out("deflicker_level").strip(), "off")
 
+    def conf(self):
+        return (self.env.etc / "fliperos.conf").read_text()
+
+    def test_every_program_in_the_table_with_its_old_behaviour(self):
+        rows = [r.split("|") for r in self.env.out("mode480_rows").splitlines()]
+        states = {r[0]: r[2] for r in rows}
+        # O que cada um ja fazia: os do fliperos-x11-run em 640x240, o
+        # GroovyMAME (interlace 1) e os cores (sem switchres.ini) em 480i, o
+        # MAME 2010 (interlace 0) em 240p.
+        self.assertEqual(states, {
+            "flycast": "240p", "pcsx2": "240p", "dolphin": "240p", "laserdisc": "240p", "model3": "240p",
+            "model2": "240p", "groovymame": "filter", "psx": "filter", "mame2010": "240p", "snes": "filter",
+            "megadrive": "filter", "fbneo": "filter", "fightcade": "240p", "desktop": "filter",
+            "other": "filter"})
+        allowed = {r[0]: r[4] for r in rows}
+        self.assertEqual(allowed["desktop"], "filter,pure")
+        self.assertEqual(allowed["fightcade"], "240p,pure")
+        self.assertEqual(allowed["other"], "filter,pure")
+        self.assertTrue(all(r[3].endswith(("Now: 640x240. Not installed.", "Now: 480i, filter medium.",
+                                           "Now: 640x240.", "Now: 480i, filter medium. Not installed."))
+                            for r in rows), rows)
+
+    def test_method_and_level_per_program(self):
+        self.env.out("mode480_set flycast filter strong")
+        conf = self.conf()
+        for line in ("mode480_flycast=filter", "deflicker_flycast=strong", "deflicker_level_flycast=strong"):
+            self.assertIn(line + "\n", conf)
+        # Puro: a camada desligada para ele, o nivel guardado para a proxima.
+        self.env.out("mode480_set flycast pure")
+        self.assertIn("deflicker_flycast=off\n", self.conf())
+        self.assertEqual(self.env.out("mode480_level flycast").strip(), "strong")
+        self.assertEqual(self.env.out("mode480_state flycast").strip(), "pure")
+        # Uma linha com dois programas grava os dois.
+        self.env.out("mode480_set laserdisc filter light")
+        self.assertIn("deflicker_hypseus=light\n", self.conf())
+        self.assertIn("mode480_singe=filter\n", self.conf())
+        # O que a linha nao tem, um estado ou nivel que nao existe: nada.
+        for bad in ("desktop 240p", "fightcade filter", "flycast 480i", "flycast filter blur"):
+            self.assertNotEqual(self.env.run("mode480_set " + bad).returncode, 0, bad)
+        self.assertNotIn("mode480_desktop", self.conf())
+
+    def test_groovymame_and_retroarch_cores(self):
+        mame = self.env.etc / "mame.ini"
+        mame.write_text("interlace                 1\n")
+        ra = self.env.dir / "retroarch"
+        env = {"RA_HOME": str(ra)}
+        self.env.out("mode480_set groovymame 240p", env)
+        self.assertRegex(mame.read_text(), r"(?m)^interlace +0$")
+        self.env.out("mode480_set groovymame pure", env)
+        self.assertRegex(mame.read_text(), r"(?m)^interlace +1$")
+        self.assertIn("deflicker_groovymame=off\n", self.conf())
+        self.env.out("mode480_set psx 240p; mode480_set mame2010 filter", env)
+        psx = (ra / "config/PCSX-ReARMed/PCSX-ReARMed.switchres.ini").read_text()
+        self.assertTrue(psx.endswith("interlace 0\n"))
+        # Sem o cabecalho "# FliperOS": as atualizacoes nao o regravam.
+        self.assertFalse(psx.startswith("# FliperOS"))
+        self.assertTrue((ra / "config/MAME 2010/MAME 2010.switchres.ini").read_text().endswith("interlace 1\n"))
+        self.assertIn("deflicker_pcsx_rearmed=medium\n", self.conf())
+
+    def test_save_applies_only_what_changed_with_the_chosen_level(self):
+        self.env.out("mode480_save 'flycast=240p,pcsx2=filter,desktop=pure,other=filter'",
+                     {"MODE480_LEVEL_pcsx2": "light", "MODE480_LEVEL_other": "strong"})
+        conf = self.conf()
+        self.assertNotIn("mode480_flycast", conf)
+        self.assertIn("mode480_pcsx2=filter\n", conf)
+        self.assertIn("deflicker_pcsx2=light\n", conf)
+        self.assertIn("deflicker_desktop=off\n", conf)
+        # A linha "other" e o nivel de todo o resto.
+        self.assertIn("deflicker=strong\n", conf)
+        self.assertEqual(self.env.out("deflicker_level").strip(), "strong")
+
     def test_in_video_setup(self):
         screen = (ROOT / "fliperos-setup/screens/video-setup.sh").read_text()
-        self.assertIn('"deflicker|Interlace flicker filter ($(deflicker_level))|', screen)
-        self.assertIn("deflicker) screen_deflicker ;;", screen)
-        for level in ("off", "light", "medium", "strong"):
-            self.assertIn('"%s|' % level, screen.split("screen_deflicker()")[1])
+        self.assertIn('"mode480|480i games|', screen)
+        self.assertIn("mode480) screen_mode480 ;;", screen)
+        body = screen.split("screen_mode480()")[1]
+        self.assertIn('UI_GRID_ASK=filter', body)
+        self.assertIn('"240p|640x240;filter|480i filter;pure|480i pure"', body)
+        dialog = screen.split("screen_deflicker_level()")[1]
+        for level in ("preview", "light", "medium", "strong"):
+            self.assertIn('"%s|' % level, dialog)
+        preview = screen.split("screen_deflicker_preview()")[1]
+        self.assertIn('--mode 640x480@60 python3 "$SETUP_DIR/gui/flicker-preview.py"', preview)
+        self.assertIn("FLIPEROS_DEFLICKER_FILE=", preview)
+        self.assertTrue((ROOT / "fliperos-setup/gui/flicker-preview.py").is_file())
 
 
 class BootTests(Base):

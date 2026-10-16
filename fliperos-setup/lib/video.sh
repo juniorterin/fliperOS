@@ -510,12 +510,174 @@ geometry_reset() {
   log_info "geometria: padrao do monitor $monitor"
 }
 
-# ── Filtro de flicker do 480i ────────────────────────────────────
-# Setup > Video Setup > Interlace flicker filter: o nivel que a camada
-# config/fliperos-deflicker.c le do "deflicker=" do fliperos.conf, em todo
-# emulador que o fliperos-kms-run e o fliperos-x11-client abrem. Sem nada
-# gravado, medium (a media de duas linhas, como o RePlayOS).
+# ── Jogos de 480 linhas num tubo de 15 kHz ───────────────────────
+# Setup > Video Setup > 480i games: o metodo de cada aplicacao para o que tem
+# 480 linhas, numa tabela de tres colunas:
+#   240p    o hack de 640x240 progressivo (sem flicker, metade das linhas)
+#   filter  480i com o filtro de flicker (config/fliperos-deflicker.c), no
+#           nivel da aplicacao (light, medium, strong)
+#   pure    480i sem o filtro (nitido, com o flicker)
+# Gravado no fliperos.conf: mode480_PROGRAMA=240p|filter|pure, que o
+# fliperos-x11-run (o modo), o fliperos-fightcade e o
+# fliperos-desktop-deflicker leem, e deflicker_PROGRAMA=nivel|off, que a
+# camada le (PROGRAMA e o nome do comando na tabela do fliperos-x11-run, ou
+# o core do RetroArch sem o _libretro.so). deflicker_level_PROGRAMA guarda o
+# ultimo nivel escolhido. A linha "other" e o deflicker= de todo o resto
+# (jogos personalizados, programas fora da tabela).
 DEFLICKER_LEVELS="off light medium strong"
+MODE480_VALUES="240p filter pure"
+RA_CORES=${RA_CORES:-/opt/fliperos/retroarch/cores}
+RA_HOME=${RA_HOME:-/home/$FLIPEROS_USER/.config/retroarch}
+FIGHTCADE_DIR=${FIGHTCADE_DIR:-/opt/fliperos/fightcade}
+DEFLICKER_LIB=${DEFLICKER_LIB:-/usr/local/lib/fliperos/libfliperos-deflicker.so}
+DEFLICKER_X11_RUN=${DEFLICKER_X11_RUN:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-x11-run}
+
+# mode480_table: chave|rotulo|programas|permitidas|padrao|tipo|ajuda.
+# tipo: x11 (fliperos-x11-run), mame (o interlace do mame.ini), core:NOME
+# (o switchres.ini do core no RetroArch, NOME = o do core nas pastas de
+# config), fightcade, desktop, other. O padrao e o que cada um ja fazia.
+mode480_table() {
+  cat << 'TABLE'
+flycast|Flycast|flycast|240p,filter,pure|240p|x11|Dreamcast, Naomi, Atomiswave.
+pcsx2|PCSX2|pcsx2|240p,filter,pure|240p|x11|PlayStation 2.
+dolphin|Dolphin|dolphin-emu|240p,filter,pure|240p|x11|GameCube and Wii.
+laserdisc|Hypseus Singe|hypseus singe|240p,filter,pure|240p|x11|Laserdisc games.
+model3|Supermodel|supermodel|240p,filter,pure|240p|x11|Sega Model 3 (384 lines).
+model2|SM2-Emu|sm2-emu fliperos-model2|240p,filter,pure|240p|x11|Sega Model 2 (384 lines).
+groovymame|GroovyMAME|groovymame|240p,filter,pure|filter|mame|Arcade games with more than 240 lines. 240p: Switchres never picks an interlaced mode.
+psx|RetroArch PS1|pcsx_rearmed|240p,filter,pure|filter|core:PCSX-ReARMed|PlayStation games in high resolution (PCSX ReARMed core).
+mame2010|RA MAME 2010|mame2010|240p,filter,pure|240p|core:MAME 2010|Arcade games with more than 240 lines in the MAME 2010 core.
+snes|RetroArch SNES|snes9x|240p,filter,pure|filter|core:Snes9x|The few interlaced SNES games (Snes9x core).
+megadrive|RA Mega Drive|genesis_plus_gx|240p,filter,pure|filter|core:Genesis Plus GX|Interlaced Mega Drive games, like Sonic 2 split screen (Genesis Plus GX core).
+fbneo|RetroArch FBNeo|fbneo|240p,filter,pure|filter|core:FinalBurn Neo|Arcade games with more than 240 lines in the FBNeo core.
+fightcade|Fightcade Flycast|fightcade-flycast|240p,pure|240p|fightcade|Flycast matches in Fightcade 2, which runs without the filter.
+desktop|Desktop|desktop|filter,pure|filter|desktop|The LXDE desktop, when Screen Resolution puts it in a 480-line mode.
+other|Other programs|other|filter,pure|filter|other|Custom games and any other program in a 480i mode.
+TABLE
+}
+
+# mode480_field CHAVE N: o campo N da linha da chave.
+mode480_field() {
+  mode480_table | awk -F'|' -v k="$1" -v n="$2" '$1 == k { print $n; exit }'
+}
+
+# mode480_installed CHAVE: a aplicacao esta neste computador?
+mode480_installed() {
+  local kind prog
+  kind=$(mode480_field "$1" 6)
+  case $kind in
+    core:*) [[ -f $RA_CORES/$(mode480_field "$1" 3)_libretro.so ]] ;;
+    fightcade) [[ -x $FIGHTCADE_DIR/fightcade ]] ;;
+    desktop) [[ -x ${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-lxde ]] ;;
+    other) return 0 ;;
+    *)
+      for prog in $(mode480_field "$1" 3); do
+        if have "$prog" || [[ -x ${FLIPEROS_BIN:-/opt/fliperos/bin}/$prog ]]; then
+          return 0
+        fi
+      done
+      return 1
+      ;;
+  esac
+}
+
+# mode480_state CHAVE: 240p, filter ou pure.
+mode480_state() {
+  local prog state
+  read -r prog _ <<< "$(mode480_field "$1" 3)"
+  if [[ $prog == other ]]; then
+    [[ $(deflicker_level) == off ]] && echo pure || echo filter
+    return 0
+  fi
+  state=$(conf_get "mode480_$prog" 2> /dev/null) || state=""
+  [[ -n $state && " $MODE480_VALUES " == *" $state "* ]] || state=$(mode480_field "$1" 5)
+  printf '%s\n' "$state"
+}
+
+# mode480_level CHAVE: o nivel do filtro da aplicacao (light, medium ou
+# strong): o ultimo escolhido, mesmo com ela em 240p ou pure.
+mode480_level() {
+  local prog level
+  read -r prog _ <<< "$(mode480_field "$1" 3)"
+  if [[ $prog == other ]]; then
+    level=$(conf_get deflicker_level 2> /dev/null) || level=$(conf_get deflicker 2> /dev/null) || level=""
+  else
+    level=$(conf_get "deflicker_level_$prog" 2> /dev/null) || level=""
+  fi
+  [[ -n $level && " light medium strong " == *" $level "* ]] || level=medium
+  printf '%s\n' "$level"
+}
+
+# mode480_rows: as linhas da tabela no formato do ui_grid.
+mode480_rows() {
+  local key label allowed help state now
+  while IFS='|' read -r key label _ allowed _ _ help; do
+    state=$(mode480_state "$key")
+    case $state in
+      240p) now="Now: 640x240." ;;
+      filter) now="Now: 480i, filter $(mode480_level "$key")." ;;
+      *) now="Now: 480i, no filter." ;;
+    esac
+    mode480_installed "$key" || now+=" Not installed."
+    printf '%s|%s|%s|%s|%s\n' "$key" "$label" "$state" "$help $now" "$allowed"
+  done < <(mode480_table)
+}
+
+# mode480_set CHAVE ESTADO [NIVEL] grava e aplica. NIVEL so vale no filter
+# (sem ele, o ultimo escolhido).
+mode480_set() {
+  local key=$1 state=$2 level=${3:-} kind prog value
+  kind=$(mode480_field "$key" 6)
+  [[ -n $kind && " $MODE480_VALUES " == *" $state "* && ,$(mode480_field "$key" 4), == *,"$state",* ]] || return 1
+  [[ -n $level ]] || level=$(mode480_level "$key")
+  [[ " light medium strong " == *" $level "* ]] || return 1
+  value=$level
+  [[ $state == pure ]] && value=off
+  for prog in $(mode480_field "$key" 3); do
+    if [[ $kind == other ]]; then
+      conf_set deflicker "$value"
+      conf_set deflicker_level "$level"
+    else
+      conf_set "mode480_$prog" "$state"
+      conf_set "deflicker_$prog" "$value"
+      conf_set "deflicker_level_$prog" "$level"
+    fi
+  done
+  case $kind in
+    mame)
+      [[ -f $MAME_INI ]] && ini_set "$MAME_INI" interlace "$([[ $state == 240p ]] && echo 0 || echo 1)"
+      ;;
+    core:*) mode480_core_ini "${kind#core:}" "$([[ $state == 240p ]] && echo 0 || echo 1)" ;;
+  esac
+  log_info "480i: $key = $state ($level)"
+}
+
+# mode480_core_ini NOME 0|1 grava o switchres.ini do core: o CRT SwitchRes
+# do RetroArch o le por cima do /etc/switchres.ini. Sem o cabecalho
+# "# FliperOS", as atualizacoes nao o regravam (fliperos-rootfs.sh).
+mode480_core_ini() {
+  local name=$1 dir file
+  dir="$RA_HOME/config/$name"
+  file="$dir/$name.switchres.ini"
+  mkdir -p "$dir" || return 1
+  printf '# Setup > Video Setup > 480i games: interlace 0 = 240p, 1 = 480i.\ninterlace %s\n' "$2" > "$file" || return 1
+  chown "$FLIPEROS_USER:" "$RA_HOME/config" "$dir" "$file" 2> /dev/null || true
+}
+
+# mode480_save "chave=estado,..." (a resposta do ui_grid) grava as linhas
+# que mudaram. O nivel de uma linha vem de MODE480_LEVEL_chave (escolhido
+# no dialogo do filtro), ou fica o que ja estava.
+mode480_save() {
+  local pair key state var
+  local -a pairs
+  IFS=',' read -ra pairs <<< "$1"
+  for pair in "${pairs[@]}"; do
+    key=${pair%%=*} state=${pair#*=}
+    var=MODE480_LEVEL_$key
+    [[ $(mode480_state "$key") == "$state" && -z ${!var:-} ]] && continue
+    mode480_set "$key" "$state" "${!var:-}" || return 1
+  done
+}
 
 deflicker_level() {
   local level
@@ -527,9 +689,13 @@ deflicker_level() {
   fi
 }
 
-# deflicker_set off|light|medium|strong: vale no proximo jogo aberto.
+# deflicker_set off|light|medium|strong: o nivel de todo o resto (a linha
+# "other" da tabela); vale no proximo jogo aberto.
 deflicker_set() {
   [[ " $DEFLICKER_LEVELS " == *" $1 "* ]] || return 1
-  conf_set deflicker "$1"
-  log_info "filtro de flicker do 480i: $1"
+  if [[ $1 == off ]]; then
+    mode480_set other pure
+  else
+    mode480_set other filter "$1"
+  fi
 }

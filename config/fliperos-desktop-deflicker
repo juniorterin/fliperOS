@@ -3,12 +3,13 @@
 # camada dos emuladores (config/fliperos-deflicker.c), como shader de janela
 # do picom. O desktop desenha pelo X, sem OpenGL: a camada nao o alcanca,
 # o compositor sim. So com o modo da tela entrelacado e o filtro ligado
-# (Setup > Video Setup > Interlace flicker filter); senao nao sobe nada.
-# Roda no comeco da sessao (config/fliperos-lxde) e sai junto com o X.
+# para o desktop (Setup > Video Setup > 480i games, a linha Desktop:
+# deflicker_desktop= no fliperos.conf); senao nao sobe nada. Roda no comeco
+# da sessao (config/fliperos-lxde) e sai junto com o X.
 #
 #   fliperos-desktop-deflicker [--shader ARQUIVO]   so grava o shader (testes)
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
-level=$(sed -n 's/^deflicker=//p' "$conf" 2> /dev/null | tail -n 1)
+level=$(sed -n 's/^deflicker_desktop=//p' "$conf" 2> /dev/null | tail -n 1)
 case ${level:-medium} in
   off) exit 0 ;;
   light) w="0.15, 0.70, 0.15" ;;

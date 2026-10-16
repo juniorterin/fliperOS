@@ -284,18 +284,118 @@ screen_mm_changed() {
 
 # screen_video_setup e o menu; ao sair, no sistema instalado, grava a linha
 # do kernel e oferece reiniciar.
-# screen_deflicker: o filtro de flicker do 480i (config/fliperos-deflicker.c),
-# carregado em todos os emuladores; so age com o modo da tela entrelacado.
-screen_deflicker() {
-  local choice
-  choice=$(ui_radio "Interlace flicker filter" \
-    "In 480i a thin line exists in one field only and flickers. The filter blends each line with its neighbour: no flicker, a little softer. Only in interlaced modes; 240p is untouched." \
-    "$(deflicker_level)" \
-    "off|Off (sharpest, flickers)" \
-    "light|Light" \
-    "medium|Medium (two lines averaged, like RePlayOS)" \
-    "strong|Strong") || return 0
-  deflicker_set "$choice"
+# screen_mode480: o metodo de cada aplicacao para os jogos de 480 linhas
+# (lib/video.sh, mode480_*), na tabela com uma marca por linha, como a dos
+# servicos. Marcar "480i + filter" abre o nivel do filtro daquela aplicacao
+# (screen_deflicker_level), com o preview; a tabela volta com as marcas.
+screen_mode480() {
+  local title="480i games" text result key marks level row k label state help allowed
+  local -a rows
+  local -A levels=() states=()
+  text="How each program shows 480-line games on the tube."
+  [[ $(conf_get frequency 2> /dev/null) == 15* ]] ||
+    text="Not a 15 kHz monitor: these only count on one."
+  key=""
+  while true; do
+    # As linhas com as marcas desta tela (states) e os niveis escolhidos
+    # nela (levels) por cima do que esta gravado.
+    rows=()
+    while IFS='|' read -r k label state help allowed; do
+      state=${states[$k]:-$state}
+      level=${levels[$k]:-$(mode480_level "$k")}
+      case $state in
+        240p) help="${help% Now:*} Now: 640x240." ;;
+        filter) help="${help% Now:*} Now: 480i, filter $level." ;;
+        pure) help="${help% Now:*} Now: 480i, no filter." ;;
+      esac
+      rows+=("$k|$label|$state|$help|$allowed")
+    done < <(mode480_rows)
+    result=$(UI_GRID_ASK=filter UI_GRID_CURSOR=$key ui_grid "$title" "$text" \
+      "240p|640x240;filter|480i filter;pure|480i pure" "${rows[@]}")
+    case $? in
+      0) break ;;
+      2) ;;
+      *) return 0 ;;
+    esac
+    key=${result%%$'\n'*}
+    marks=${result#*$'\n'}
+    # O estado de antes de marcar o filtro: o de quando o dialogo e cancelado.
+    state=${states[$key]:-$(mode480_state "$key")}
+    for row in ${marks//,/ }; do
+      states[${row%%=*}]=${row#*=}
+    done
+    if level=$(screen_deflicker_level "$key" "${levels[$key]:-$(mode480_level "$key")}"); then
+      if [[ $level == off ]]; then
+        states[$key]=pure
+      else
+        levels[$key]=$level
+      fi
+    else
+      states[$key]=$state
+    fi
+  done
+  for key in "${!levels[@]}"; do
+    printf -v "MODE480_LEVEL_$key" '%s' "${levels[$key]}"
+  done
+  if ! mode480_save "$result"; then
+    ui_msg "$title" "$(ui_bad "Could not save (see /var/log/fliperos-setup.log).")"
+    return 0
+  fi
+  ui_msg "$title" "Saved." "" "It counts from the next game opened."
+}
+
+# screen_deflicker_level CHAVE NIVEL: o nivel do filtro de uma aplicacao.
+# Imprime light, medium, strong ou off (o preview com o filtro desligado);
+# status 1 = cancelado.
+screen_deflicker_level() {
+  local key=$1 level=$2 label choice
+  label=$(mode480_field "$key" 2)
+  while true; do
+    choice=$(ui_radio "Flicker filter: $label" \
+      "In 480i a thin line exists in one field only and flickers. The filter blends each line with its neighbour: no flicker, a little softer." \
+      "$level" \
+      "preview|Preview on the screen (arrows change the level)" \
+      "light|Light (sharpest)" \
+      "medium|Medium (two lines averaged, like RePlayOS)" \
+      "strong|Strong (no flicker at all)") || return 1
+    if [[ $choice != preview ]]; then
+      printf '%s\n' "$choice"
+      return 0
+    fi
+    if choice=$(screen_deflicker_preview "$label" "$level"); then
+      printf '%s\n' "$choice"
+      return 0
+    fi
+  done
+}
+
+# screen_deflicker_preview ROTULO NIVEL abre o preview (gui/flicker-preview.py)
+# em 640x480 no monitor, pelo fliperos-x11-run com a camada do filtro: as
+# setas trocam o nivel na hora, Enter fica com ele. Imprime o escolhido.
+screen_deflicker_preview() {
+  local label=$1 level=$2 dir out rc
+  if ((SETUP_REMOTE == 1)) || [[ -n ${DISPLAY:-} ]]; then
+    ui_msg "Flicker filter" "The preview opens on the cabinet screen, from the FliperOS menu (not over SSH or inside the desktop)."
+    return 1
+  fi
+  if [[ ! -f $DEFLICKER_LIB ]]; then
+    ui_msg "Flicker filter" "The filter is not installed on this system (a FliperOS update builds it)."
+    return 1
+  fi
+  dir=$(mktemp -d) || return 1
+  out=$dir/chosen
+  ui_text env FLIPEROS_DEFLICKER_FILE="$dir/level" FLIPEROS_DEFLICKER_FORCE="$([[ $(conf_get frequency 2> /dev/null) == 15* ]] && echo 0 || echo 1)" \
+    "$DEFLICKER_X11_RUN" --mode 640x480@60 python3 "$SETUP_DIR/gui/flicker-preview.py" \
+    --level "$level" --out "$out" --title "$label" >> "$FLIPEROS_LOG" 2>&1
+  rc=$?
+  ui_flush_input
+  if ((rc == 0)) && [[ -s $out ]]; then
+    cat "$out"
+  else
+    rc=1
+  fi
+  rm -rf "$dir"
+  return "$rc"
 }
 
 screen_video_setup() {
@@ -315,7 +415,7 @@ screen_video_setup() {
       "geometry|Geometry|Center and size the picture on the tube, with a test grid." \
       "geometry_reset|Reset Geometry|Undo the geometry: back to the monitor preset." \
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
-      "deflicker|Interlace flicker filter ($(deflicker_level))|Softens the 480i flicker of thin lines, in every emulator." \
+      "mode480|480i games|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
       "return|Return|Save and leave. New video settings need a reboot.") || choice="return"
     last=$choice
     case $choice in
@@ -325,7 +425,7 @@ screen_video_setup() {
       geometry) screen_geometry ;;
       geometry_reset) screen_geometry_reset ;;
       monitors) screen_multi_monitor ;;
-      deflicker) screen_deflicker ;;
+      mode480) screen_mode480 ;;
       return) break ;;
     esac
   done

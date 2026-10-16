@@ -4020,6 +4020,27 @@ class DeflickerTests(unittest.TestCase):
                                 (['--mode', '640x480@59.94', 'dolphin-emu'], '', False)):
             self.assertNotIn('GFXBackend', self.run_x11(args, conf, lib)[0], (args, conf, lib))
         self.assertNotIn('Renderer = 12', self.run_x11(['pcsx2'], '')[1])
+        # O nivel do proprio programa passa o de todos.
+        hd = ['--mode', '640x480@59.94', 'dolphin-emu']
+        self.assertNotIn('GFXBackend', self.run_x11(hd, 'deflicker=medium\ndeflicker_dolphin-emu=off\n')[0])
+        self.assertIn('GFXBackend=OGL', self.run_x11(hd, 'deflicker=off\ndeflicker_dolphin-emu=strong\n')[0])
+
+    def test_480i_per_program_on_15khz(self):
+        # Setup > Video Setup > 480i games: com filtro ou puro, o modo da
+        # coluna dos outros monitores (640x480, entrelacado no tubo); sem
+        # nada ou em 240p, o 640x240 de sempre. Supermodel no seu 496x384.
+        for conf, mode in (('', 'MODE=640 240 60'), ('mode480_flycast=240p\n', 'MODE=640 240 60'),
+                           ('mode480_flycast=filter\n', 'MODE=640 480 60'),
+                           ('mode480_flycast=pure\n', 'MODE=640 480 60')):
+            out = self.run_x11(['flycast'], conf)[0]
+            self.assertIn(mode, out, conf)
+            # O nome da tabela vai para a camada (o nivel do programa).
+            self.assertIn('APP=flycast', out)
+        self.assertIn('MODE=496 384 57.524', self.run_x11(['supermodel'], 'mode480_supermodel=pure\n')[0])
+        self.assertIn('MODE=640 240 60', self.run_x11(['pcsx2'], 'mode480_flycast=filter\n')[0])
+        # O mesmo nas partidas de Flycast do Fightcade.
+        fightcade = (ROOT / 'config/fliperos-fightcade').read_text()
+        self.assertIn('k="mode480_$1"', fightcade.split('table_mode() {')[1].split('\n}')[0])
 
     def desktop(self, conf, *args, env=None):
         with tempfile.TemporaryDirectory() as tmp:
@@ -4047,8 +4068,10 @@ class DeflickerTests(unittest.TestCase):
         # Medio por padrao: a media de duas linhas, como no RePlayOS.
         self.assertIn('const vec3 w = vec3(0.50, 0.50, 0.00);', shader)
         self.assertIn('default_post_processing(', shader)
-        self.assertIn('vec3(0.15, 0.70, 0.15)', self.desktop('deflicker=light\n')[1])
-        self.assertEqual(self.desktop('deflicker=off\n'), ('', ''))
+        # O nivel da linha Desktop da tabela 480i games; o deflicker= e o dos
+        # outros programas.
+        self.assertIn('vec3(0.15, 0.70, 0.15)', self.desktop('deflicker=off\ndeflicker_desktop=light\n')[1])
+        self.assertEqual(self.desktop('deflicker_desktop=off\n'), ('', ''))
         # Modo progressivo na tela: nada.
         self.assertEqual(self.desktop('', env={'XRANDR_CURRENT': '+preferred'}), ('', ''))
         lxde = (ROOT / 'config/fliperos-lxde').read_text()
@@ -5634,7 +5657,7 @@ class EmulatorModeTests(unittest.TestCase):
             bin_dir.mkdir()
             # xinit falso: mostra o modo pedido e o comando.
             (bin_dir / 'xinit').write_text('#!/bin/bash\necho "MODE=$FLIPEROS_RES_W $FLIPEROS_RES_H $FLIPEROS_RES_HZ"\n'
-                                           'echo "ARGS=$*"\n')
+                                           'echo "ARGS=$*"\necho "APP=$FLIPEROS_DEFLICKER_APP"\n')
             for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog', 'supermodel', 'hypseus',
                          'fightcade', 'sm2-emu'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')

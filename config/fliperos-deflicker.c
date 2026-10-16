@@ -17,10 +17,19 @@
  *   medium  0.50 0.50 0.00   a media de duas linhas, como o RePlayOS
  *   strong  0.33 0.34 0.33
  *   off     nada
- * O nivel vem de FLIPEROS_DEFLICKER ou do "deflicker=" do fliperos.conf
- * (FLIPEROS_CONF); sem nenhum, medium. FLIPEROS_DEFLICKER_FORCE=1 filtra
- * mesmo sem modo entrelacado (os testes, sem DRM). O 240p nao muda: sem
- * modo entrelacado, a troca de quadro passa direto.
+ * O nivel de cada programa (Setup > Video Setup > 480i games), do primeiro
+ * que existir:
+ *   FLIPEROS_DEFLICKER_FILE  um arquivo com o nivel, relido a cada 30
+ *                            quadros (o preview, que troca o nivel na hora)
+ *   FLIPEROS_DEFLICKER       o nivel
+ *   deflicker_CORE=          no fliperos.conf (FLIPEROS_CONF), o core do
+ *                            RetroArch aberto (pcsx_rearmed_libretro.so: pcsx_rearmed)
+ *   deflicker_PROGRAMA=      o programa: FLIPEROS_DEFLICKER_APP (o nome na
+ *                            tabela do fliperos-x11-run) ou o do processo
+ *   deflicker=               o de todos os outros
+ * Sem nenhum, medium. FLIPEROS_DEFLICKER_FORCE=1 filtra mesmo sem modo
+ * entrelacado (os testes, sem DRM). O 240p nao muda: sem modo entrelacado,
+ * a troca de quadro passa direto.
  *
  * O SDL e outros abrem a libGL por dlopen e pegam o glXSwapBuffers por
  * dlsym: o dlsym tambem passa por aqui. O estado do OpenGL do programa e
@@ -30,7 +39,9 @@
 #define GL_GLEXT_PROTOTYPES
 #include <ctype.h>
 #include <dlfcn.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <link.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -85,24 +96,94 @@ static void log_once(const char *msg)
     fprintf(stderr, "fliperos-deflicker: %s\n", msg);
 }
 
+/* As linhas "deflicker...=" do fliperos.conf, lidas uma vez. */
+static char conf_lines[4096];
+
+static void load_conf(void)
+{
+    const char *conf = getenv("FLIPEROS_CONF");
+    FILE *f = fopen(conf ? conf : "/etc/fliperos/fliperos.conf", "r");
+    char line[256];
+    size_t used = 0;
+    while (f && fgets(line, sizeof(line), f)) {
+        size_t n = strlen(line);
+        if (strncmp(line, "deflicker", 9) || used + n + 1 >= sizeof(conf_lines))
+            continue;
+        memcpy(conf_lines + used, line, n);
+        used += n;
+        if (line[n - 1] != '\n')
+            conf_lines[used++] = '\n';
+    }
+    conf_lines[used] = 0;
+    if (f)
+        fclose(f);
+}
+
+/* conf_value CHAVE: o valor da ultima linha "CHAVE=valor" em out; 0 se nao
+ * houver a chave. */
+static int conf_value(const char *key, char *out, size_t size)
+{
+    size_t k = strlen(key);
+    int found = 0;
+    for (const char *p = conf_lines; *p;) {
+        const char *end = strchr(p, '\n');
+        if (!strncmp(p, key, k) && p[k] == '=') {
+            sscanf(p + k + 1, "%31s", out);
+            out[size - 1] = 0;
+            found = 1;
+        }
+        p = end ? end + 1 : p + strlen(p);
+    }
+    return found;
+}
+
+static char app[64], core[64];
+
+/* O core do RetroArch carregado agora (o ultimo *_libretro.so). */
+static int find_core(struct dl_phdr_info *info, size_t size, void *data)
+{
+    (void)size;
+    const char *name = info->dlpi_name, *base, *end;
+    if (!name || !(end = strstr(name, "_libretro.so")))
+        return 0;
+    base = strrchr(name, '/');
+    base = base ? base + 1 : name;
+    if (end > base && (size_t)(end - base) < sizeof(core)) {
+        memcpy(data, base, (size_t)(end - base));
+        ((char *)data)[end - base] = 0;
+    }
+    return 0;
+}
+
 static void read_level(void)
 {
-    char value[32] = "";
+    char value[32] = "medium", key[96];
+    const char *file = getenv("FLIPEROS_DEFLICKER_FILE");
     const char *env = getenv("FLIPEROS_DEFLICKER");
-    if (env) {
+    FILE *f = file ? fopen(file, "r") : NULL;
+    if (f && fscanf(f, "%31s", value) == 1) {
+        /* o preview */
+    } else if (env) {
         snprintf(value, sizeof(value), "%s", env);
     } else {
-        const char *conf = getenv("FLIPEROS_CONF");
-        FILE *f = fopen(conf ? conf : "/etc/fliperos/fliperos.conf", "r");
-        char line[256];
-        while (f && fgets(line, sizeof(line), f))
-            if (!strncmp(line, "deflicker=", 10))
-                sscanf(line + 10, "%31s", value);
-        if (f)
-            fclose(f);
+        int found = 0;
+        if (core[0]) {
+            snprintf(key, sizeof(key), "deflicker_%s", core);
+            found = conf_value(key, value, sizeof(value));
+        }
+        if (!found && app[0]) {
+            snprintf(key, sizeof(key), "deflicker_%s", app);
+            found = conf_value(key, value, sizeof(value));
+        }
+        if (!found)
+            conf_value("deflicker", value, sizeof(value));
     }
+    if (f)
+        fclose(f);
     for (char *c = value; *c; c++)
         *c = (char)tolower((unsigned char)*c);
+    level_off = 0;
+    weights[0] = 0.5f, weights[1] = 0.5f, weights[2] = 0.0f;
     if (!strcmp(value, "off") || !strcmp(value, "0")) {
         level_off = 1;
     } else if (!strcmp(value, "light")) {
@@ -110,8 +191,9 @@ static void read_level(void)
     } else if (!strcmp(value, "strong")) {
         weights[0] = 0.33f, weights[1] = 0.34f, weights[2] = 0.33f;
     }
-    env = getenv("FLIPEROS_DEFLICKER_FORCE");
-    forced = env && *env == '1';
+    if (getenv("FLIPEROS_DEFLICKER_DEBUG"))
+        fprintf(stderr, "fliperos-deflicker: level %s (program %s, core %s)\n", value, app[0] ? app : "-",
+                core[0] ? core : "-");
 }
 
 /* interlaced: o modo ativo de alguma saida e entrelacado? Pergunta ao DRM
@@ -380,12 +462,27 @@ static void filter(void *ctx_id, getproc_fn get, int w, int h)
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)draw_fb);
 }
 
+/* active: filtrar este quadro? A cada 30 quadros confere se o core do
+ * RetroArch mudou (o nivel pode ser outro) ou, no preview, o arquivo. */
 static int active(void)
 {
-    static int init;
+    static int init, frames;
     if (!init) {
+        const char *env = getenv("FLIPEROS_DEFLICKER_APP");
+        snprintf(app, sizeof(app), "%s", env && *env ? env : program_invocation_short_name);
+        load_conf();
+        env = getenv("FLIPEROS_DEFLICKER_FORCE");
+        forced = env && *env == '1';
+        dl_iterate_phdr(find_core, core);
         read_level();
         init = 1;
+    } else if (!(++frames % 30)) {
+        char now[sizeof(core)] = "";
+        dl_iterate_phdr(find_core, now);
+        if (strcmp(now, core) || getenv("FLIPEROS_DEFLICKER_FILE")) {
+            memcpy(core, now, sizeof(core));
+            read_level();
+        }
     }
     return !level_off && interlaced();
 }

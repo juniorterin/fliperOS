@@ -34,6 +34,14 @@ if [[ -z $mode ]]; then
   # O setup grava "15k" (e versoes antigas "15"). Comparar so com "15" fazia
   # todo emulador cair na coluna de 31 kHz: 640x480, entrelacado no tubo.
   [[ $(sed -n 's/^frequency=//p' "$CONF" 2> /dev/null) == 15* ]] && column=2
+  # Setup > Video Setup > 480i games: com o 480i (filtro ou puro) escolhido
+  # para o programa, o modo da coluna dos outros monitores (640x480, que no
+  # tubo de 15 kHz sai entrelacado) em vez do 640x240.
+  if ((column == 2)); then
+    case $(awk -F= -v k="mode480_$name" '$1 == k { v = $2 } END { print v }' "$CONF" 2> /dev/null) in
+      filter | pure) column=3 ;;
+    esac
+  fi
   mode=$(awk -v p="$name" -v c="$column" '!/^[[:space:]]*#/ && $1 == p { print $c; exit }' "$MODES" 2> /dev/null)
 fi
 [[ -n $mode ]] || mode=320x240@60
@@ -61,12 +69,17 @@ fi
 stretch=$((300 * FLIPEROS_RES_W / (4 * FLIPEROS_RES_H)))
 
 # O filtro de flicker do 480i (config/fliperos-deflicker.c, que o
-# fliperos-x11-client poe no LD_PRELOAD) vale para este jogo: a biblioteca
-# instalada, o filtro nao desligado no Video Setup e um modo entrelacado
-# (mais de 300 linhas num monitor de 15 kHz).
+# fliperos-x11-client poe no LD_PRELOAD) acha o nivel do programa pelo nome
+# da tabela (deflicker_NOME= no fliperos.conf), mesmo quando o comando e um
+# script que abre outro binario.
+export FLIPEROS_DEFLICKER_APP=$name
+# deflicker_on: o filtro vale para este jogo? A biblioteca instalada, o
+# filtro nao desligado para ele no Video Setup e um modo entrelacado (mais
+# de 300 linhas num monitor de 15 kHz).
 deflicker_on() {
   [[ -f ${FLIPEROS_DEFLICKER_LIB:-/usr/local/lib/fliperos/libfliperos-deflicker.so} ]] || return 1
-  [[ $(sed -n 's/^deflicker=//p' "$CONF" 2> /dev/null) != off ]] || return 1
+  [[ $(awk -F= -v k="deflicker_$name" '$1 == "deflicker" && !own { v = $2 } $1 == k { v = $2; own = 1 }
+    END { print v }' "$CONF" 2> /dev/null) != off ]] || return 1
   [[ $(sed -n 's/^frequency=//p' "$CONF" 2> /dev/null) == 15* ]] && ((FLIPEROS_RES_H > 300))
 }
 

@@ -278,13 +278,21 @@ class Server:
             action, value = self.ask(W.FilterBoard(plain(a[0]), items, cursor, note=plain(a[1]), score=a[3]), cmd)
             return (0, value) if action == "select" else (1, "")
         if cmd == "grid":
-            # titulo, texto, colunas ("valor|rotulo" separados por GS), linhas
-            # ("chave GS rotulo GS coluna marcada GS ajuda")...
+            # titulo, texto, colunas ("valor|rotulo" separados por GS), opcoes
+            # ("ask=valor;cursor=chave"), linhas ("chave GS rotulo GS coluna
+            # marcada GS ajuda GS valores permitidos")... Status 2: a linha
+            # foi marcada na coluna do ask (a chave e as marcas, numa linha
+            # cada).
             columns = [tuple(c.split("|", 1)) for c in plain(a[2]).split(GS) if "|" in c]
-            rows = [tuple((plain(r).split(GS) + [""] * 3)[:4]) for r in a[3:]]
+            opts = dict(o.split("=", 1) for o in plain(a[3]).split(";") if "=" in o)
+            rows = [tuple((plain(r).split(GS) + [""] * 4)[:5]) for r in a[4:]]
             if not columns or not rows:
                 return 1, ""
-            action, value = self.ask(W.Grid(plain(a[0]), plain(a[1]), columns, rows), cmd)
+            grid = W.Grid(plain(a[0]), plain(a[1]), columns, rows, ask=opts.get("ask", ""),
+                          cursor=opts.get("cursor", ""))
+            action, value = self.ask(grid, cmd)
+            if action == "ask":
+                return 2, value
             return (0, value) if action == "select" else (1, "")
         if cmd == "yesno":
             screen = W.YesNo(plain(a[0]), self.lines(a[4:]), a[1], plain(a[2]).upper(), plain(a[3]).upper())

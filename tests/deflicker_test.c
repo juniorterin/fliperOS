@@ -98,6 +98,10 @@ static int egl_test(void)
 
 int main(int argc, char **argv)
 {
+    /* DEFLICKER_TEST_DLOPEN=ARQUIVO: abre uma biblioteca antes, como o
+     * RetroArch abre o core (o nivel do core, deflicker_CORE=). */
+    if (getenv("DEFLICKER_TEST_DLOPEN") && !dlopen(getenv("DEFLICKER_TEST_DLOPEN"), RTLD_NOW))
+        return 8;
     if (argc > 1 && !strcmp(argv[1], "egl"))
         return egl_test();
     int use_dlsym = argc > 1 && !strcmp(argv[1], "dlsym");
