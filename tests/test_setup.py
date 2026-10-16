@@ -1508,24 +1508,31 @@ class ArcadeResyncTests(Base):
         for game in ("sf2.zip", "pacman.7z"):
             (self.roms / game).write_text("")
         self.list = self.attract / "romlists" / "MAME.txt"
-        self.e = {"ATTRACT_DIR": str(self.attract)}
+        self.e = {"ATTRACT_DIR": str(self.attract), "FRONTENDS_ROMLIST_STATE": str(self.env.dir / "state")}
 
     def stale(self):
         return self.env.run('frontends_arcade_stale "%s" MAME' % self.roms, self.e).returncode == 0
 
-    def test_stale_without_list_info_or_with_a_new_game(self):
+    def test_stale_without_list_info_or_when_the_folder_changed(self):
         head = "#Name;Title;Emulator;CloneOf;Year;Manufacturer;Category\n"
         self.assertTrue(self.stale())                       # sem romlist
         self.list.write_text(head + "sf2;sf2;MAME;;;;\npacman;pacman;MAME;;;;\n")
         self.assertTrue(self.stale())                       # so o nome do arquivo
         self.list.write_text(head + "sf2;Street Fighter II;MAME;;1991;Capcom;Fighter\n"
-                             "pacman;Pac-Man;MAME;;1980;Namco;Maze\nsf2ce;SF2 CE;MAME;sf2;1992;Capcom;Fighter\n")
-        self.assertFalse(self.stale())                      # em dia (o clone sem arquivo pode)
+                             "pacman;Pac-Man;MAME;;1980;Namco;Maze\n")
+        self.assertTrue(self.stale())                       # feita antes de guardar a pasta
+        # Uma BIOS que a AttractPlus ROM List deixa de fora nao a atrasa.
+        (self.roms / "neogeo.zip").write_text("")
+        self.env.out('frontends_romlist_state_save MAME "%s"' % self.roms, self.e)
+        self.assertFalse(self.stale())
         (self.roms / "dkong.zip").write_text("")
         self.assertTrue(self.stale())                       # jogo novo na pasta
         (self.roms / "dkong.zip").unlink()
-        (self.roms / "readme.txt").write_text("")
-        self.assertFalse(self.stale())                      # o que nao e jogo nao conta
+        self.assertFalse(self.stale())
+        (self.roms / "pacman.7z").unlink()
+        self.assertTrue(self.stale())                       # jogo que saiu
+        frontends = (SETUP / "lib" / "frontends.sh").read_text()
+        self.assertIn('    frontends_romlist_state_save "$name" "$dir"\n', frontends)
 
     def test_resync_only_with_the_cache_and_without_recursion(self):
         calls = self.env.dir / "calls"

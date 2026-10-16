@@ -571,37 +571,39 @@ frontends_romlist_systems() {
   return 0
 }
 
+# A pasta de cada romlist de arcade quando ela foi feita: "EMULADOR<TAB>md5
+# dos nomes dos arquivos". Comparar os arquivos com a romlist nao serve: a
+# AttractPlus ROM List deixa as BIOS de fora de proposito.
+FRONTENDS_ROMLIST_STATE=${FRONTENDS_ROMLIST_STATE:-/var/lib/fliperos/attract-romlists.state}
+
+# frontends_folder_signature PASTA: o md5 dos nomes dos arquivos dela.
+frontends_folder_signature() {
+  find -H "$1" -maxdepth 1 -type f ! -name '.*' -printf '%f\n' 2> /dev/null | LC_ALL=C sort | md5sum | cut -c1-32
+}
+
+# frontends_romlist_state_save EMULADOR PASTA guarda a pasta da romlist feita.
+frontends_romlist_state_save() {
+  local tmp sig
+  sig=$(frontends_folder_signature "$2")
+  mkdir -p "$(dirname "$FRONTENDS_ROMLIST_STATE")" 2> /dev/null
+  tmp=$(mktemp "$FRONTENDS_ROMLIST_STATE.XXXXXX") || return 1
+  awk -F'\t' -v n="$1" '$1 != n' "$FRONTENDS_ROMLIST_STATE" 2> /dev/null > "$tmp"
+  printf '%s\t%s\n' "$1" "$sig" >> "$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$FRONTENDS_ROMLIST_STATE"
+}
+
 # frontends_arcade_stale PASTA EMULADOR: a romlist da pasta de arcade esta
 # atrasada - nao existe, tem so o nome do arquivo de cada jogo (sem as
 # informacoes do MAME: os filtros de categoria, fabricante e ano das telas
-# ficam vazios) ou nao tem um jogo que esta na pasta (posto depois da
-# AttractPlus ROM List, pelo Downloader ou pela rede).
+# ficam vazios) ou a pasta mudou desde que ela foi feita (jogos postos
+# depois da AttractPlus ROM List, pelo Downloader ou pela rede).
 frontends_arcade_stale() {
-  local dir=$1 list="$ATTRACT_DIR/romlists/$2.txt" cfg="$ATTRACT_DIR/emulators/$2.cfg" exts
+  local dir=$1 name=$2 list="$ATTRACT_DIR/romlists/$2.txt" saved
   [[ -s $list ]] || return 0
   awk -F';' '!/^#/ && NF > 1 && $2 != $1 { f = 1; exit } END { exit !f }' "$list" || return 0
-  exts=$(awk '$1 == "romext" { sub(/^romext[ \t]+/, ""); sub(/[ \t\r]+$/, ""); print; exit }' "$cfg" 2> /dev/null)
-  [[ -n $exts ]] || return 1
-  find -H "$dir" -maxdepth 1 -type f ! -name '.*' -printf '%f\n' 2> /dev/null |
-    awk -v exts="$exts" -v list="$list" '
-      BEGIN {
-        n = split(tolower(exts), ext, ";")
-        while ((getline line < list) > 0) {
-          if (line ~ /^#/) continue
-          split(line, f, ";")
-          have[f[1]] = 1
-        }
-      }
-      {
-        for (i = 1; i <= n; i++) {
-          l = length(ext[i])
-          if (l && length($0) > l && tolower(substr($0, length($0) - l + 1)) == ext[i]) {
-            if (!(substr($0, 1, length($0) - l) in have)) missing = 1
-            break
-          }
-        }
-      }
-      END { exit !missing }'
+  saved=$(awk -F'\t' -v n="$name" '$1 == n { s = $2 } END { print s }' "$FRONTENDS_ROMLIST_STATE" 2> /dev/null)
+  [[ $saved != "$(frontends_folder_signature "$dir")" ]]
 }
 
 # frontends_arcade_resync refaz as romlists de arcade (como a AttractPlus ROM
@@ -657,6 +659,11 @@ frontends_romlist() {
     ev_fail "Could not read the GroovyMAME game list (details in the log)"
     return 1
   fi
+  # A pasta de cada romlist feita: muda, e ela e refeita ao abrir o frontend.
+  for line in "$@"; do
+    IFS='|' read -r _ dir _ _ name <<< "$line"
+    frontends_romlist_state_save "$name" "$dir"
+  done
   # As outras pastas com jogos (consoles, as de arcade nao marcadas): o
   # emulador, a tela e a lista que faltarem, para todo sistema aparecer.
   frontends_attract
