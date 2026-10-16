@@ -4513,6 +4513,20 @@ class SetupGroupsTests(Base):
                     found.append((name, title, value, label, hint))
         return found
 
+    def test_every_menu_opens_on_the_first_item(self):
+        # O cursor de um menu comeca no primeiro item (o "last" vazio); depois
+        # de um submenu ele volta ao item escolhido.
+        for path in sorted((SETUP / "screens").glob("*.sh")):
+            text = path.read_text()
+            for value in re.findall(r'^\s+local [^\n]*\blast=(\S+)', text, re.M):
+                self.assertEqual(value, '""', path.name)
+            joined = text.replace("\\\n", " ")
+            for default in re.findall(r'\bui_menu(?:_hints)? +"[^"]*" +(?:"[^"]*"|\$\(.*?\)") +(\S+)', joined):
+                self.assertFalse(re.fullmatch(r'[0-9]+', default), (path.name, default))
+            self.assertNotIn("${last:-", text, path.name)
+        emulators = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertNotIn("|| last=$name", emulators)
+
     def test_setup_is_grouped_in_order(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         order = {}

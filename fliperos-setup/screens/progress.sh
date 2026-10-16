@@ -153,7 +153,7 @@ screen_progress_failed() {
   local title=$1 choice text
   text=$(printf 'Step:\n  %s\n\nError:\n  %s' "$PROGRESS_FAIL_STEP" "$PROGRESS_FAIL_MSG")
   while true; do
-    choice=$(ui_menu "$title" "$text" retry "log|View log" "retry|Retry" "return|Return") || choice="return"
+    choice=$(ui_menu "$title" "$text" retry "retry|Retry" "log|View log" "return|Return") || choice="return"
     case $choice in
       log) ui_pager "Log" "$FLIPEROS_LOG" ;;
       *)

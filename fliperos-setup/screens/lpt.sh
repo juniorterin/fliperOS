@@ -4,7 +4,7 @@
 # o driver carrega na hora e em todo boot.
 
 screen_lpt() {
-  local choice last=gamecon ports=() text
+  local choice last="" ports=() text
   while true; do
     mapfile -t ports < <(lpt_ports)
     text="Now: $(lpt_describe)."
@@ -68,9 +68,9 @@ screen_lpt_setup() {
       ;;
     turbografx)
       local count buttons
-      count=$(ui_menu "TurboGraFX interface" "How many joysticks are connected?" 2 \
+      count=$(ui_menu "TurboGraFX interface" "How many joysticks are connected?" "" \
         "1|1" "2|2" "3|3" "4|4" "5|5" "6|6" "7|7") || return 0
-      buttons=$(ui_menu "TurboGraFX interface" "How many buttons on each joystick?" 1 "${types[@]}") || return 0
+      buttons=$(ui_menu "TurboGraFX interface" "How many buttons on each joystick?" "" "${types[@]}") || return 0
       for ((i = 0; i < count; i++)); do values+=("$buttons"); done
       ;;
   esac

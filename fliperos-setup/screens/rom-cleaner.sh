@@ -7,7 +7,7 @@
 
 # screen_cleaner: Setup > Games > Cleaner, o ROM cleaner e o CHD cleaner juntos.
 screen_cleaner() {
-  local choice last=romcleaner
+  local choice last=""
   while true; do
     choice=$(ui_menu "Cleaner" "Filter a romset into the emulator folders (GroovyMAME, Flycast, or MAME 2010 / MAME 3D for the PlayStation-based arcade games), then bring the CHDs of the games that stayed." \
       "$last" \
@@ -252,7 +252,7 @@ screen_rom_cleaner_pick() {
 # Continue, a previa. No modo downloader (Setup > Games > Downloader > Filter) abre
 # com o filtro salvo e o Save o grava; status 3 = salvou.
 screen_rom_cleaner_filters() {
-  local folder=$1 target=$2 xml=$3 mode=${4:-} title="MAME ROM Cleaner" last=preset preset=cabinet transfer=copy
+  local folder=$1 target=$2 xml=$3 mode=${4:-} title="MAME ROM Cleaner" last="" preset=cabinet transfer=copy
   local dest key line choice value writable=0 score job rc line_folder
   local -A opt=()
   local -a entries args kv presets

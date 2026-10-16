@@ -49,7 +49,7 @@ screen_mediapacks() {
     [[ $state == downloading ]] && entries+=("watch|See the download ($(romclean_value "$status" pct)%)")
     entries+=("add|Add a torrent" "return|Return")
     choice=$(ui_menu "$title" "Logos and videos from torrents, only for the ROMs you have. What is already in ~/media stays." \
-      "${last:-${entries[0]%%|*}}" "${entries[@]}") || return 0
+      "$last" "${entries[@]}") || return 0
     last=$choice
     case $choice in
       return) return 0 ;;

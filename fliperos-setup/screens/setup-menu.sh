@@ -5,7 +5,7 @@
 # informacao (ui_menu_hints).
 
 screen_setup_menu() {
-  local choice last=video
+  local choice last=""
   while true; do
     screen_reload_if_updated
     UI_STATUS=$(status_line)
@@ -33,7 +33,7 @@ screen_setup_menu() {
 # screen_setup_games (Setup > Games), na ordem de por jogos no gabinete: os
 # emuladores, o frontend, as pastas, baixar, limpar o romset e a arte.
 screen_setup_games() {
-  local choice last=emulators
+  local choice last=""
   while true; do
     screen_reload_if_updated
     choice=$(ui_menu_hints "Games" "" "$last" \
@@ -64,7 +64,7 @@ screen_setup_games() {
 # screen_setup_system (Setup > System): o que nao e imagem, som, rede,
 # controle nem jogo. O Splash screen por ultimo.
 screen_setup_system() {
-  local choice last=extras driver=()
+  local choice last="" driver=()
   # Video driver so aparece com uma placa AMD que aceita os dois drivers.
   [[ -n $(drm_dual_amd_cards) ]] &&
     driver=("driver|Video driver|radeon (tested on the CRT) or amdgpu (with Vulkan).")
@@ -122,7 +122,7 @@ screen_free_roms() {
 # ── Audio ────────────────────────────────────────────────────────
 
 screen_audio() {
-  local choice last=card devices=() current card_label
+  local choice last="" devices=() current card_label
   while true; do
     mapfile -t devices < <(audio_devices)
     current=$(audio_current)
@@ -215,7 +215,7 @@ screen_audio() {
 # ── Rede ─────────────────────────────────────────────────────────
 
 screen_network() {
-  local choice last=wifi
+  local choice last=""
   while true; do
     UI_STATUS=$(status_line)
     choice=$(ui_menu_hints "Network Setup" "$(net_summary | head -6)" "$last" \
@@ -426,7 +426,7 @@ screen_bootgame() {
 # mostram como sistemas.
 
 screen_custom_games() {
-  local title="Custom games" choice last=+add group name mode
+  local title="Custom games" choice last="" group name mode
   local -a entries
   while true; do
     entries=()
@@ -611,7 +611,7 @@ screen_extras_pixelcade() {
 }
 
 screen_extras() {
-  local entries=() name inst desc choice label last=wine
+  local entries=() name inst desc choice label last=""
   while true; do
     entries=()
     while IFS='|' read -r name inst desc; do
@@ -651,7 +651,6 @@ screen_emulators() {
         entries+=("$name|$desc (installed)")
       else
         entries+=("$name|$desc (not installed)")
-        [[ -n $last ]] || last=$name
       fi
     done < <(emulators_list)
     entries+=("return|Return")
@@ -719,7 +718,7 @@ screen_emulators_kof() {
 # escolha do site (com a conta dos que pedem login) e os pacotes de arte por
 # torrent (screens/mediapacks.sh).
 screen_scraper() {
-  local choice last=scrape source name account
+  local choice last="" source name account
   while true; do
     source=$(scraper_source_saved)
     name=$(scraper_source_field "$source" 2)
@@ -1017,7 +1016,7 @@ screen_debug() {
 # e apagar. Fica em System: vale para qualquer USB (controle, pistola, disco).
 
 screen_quirks() {
-  local entries code name choice last=add
+  local entries code name choice last=""
   while true; do
     entries=()
     while IFS='|' read -r code name; do

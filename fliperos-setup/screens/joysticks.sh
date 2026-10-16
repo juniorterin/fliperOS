@@ -7,7 +7,7 @@
 CALIBRATE=${CALIBRATE:-/opt/fliperos/bin/fliperos-calibrate}
 
 screen_joysticks() {
-  local choice last=guncon
+  local choice last=""
   while true; do
     choice=$(ui_menu_hints "Joysticks" "" "$last" \
       "buttons|Button mapping (all emulators)|Teach FliperOS the panel: press each control when asked." \
@@ -49,7 +49,7 @@ screen_buttons() {
   esac
   players=$(ui_menu "$title" \
     "Map the panel for all emulators, one player at a time: press each control when asked. How many players?" \
-    2 "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
+    "" "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
   [[ $players == return ]] && return 0
   map=$(mktemp)
   padkeys_off
@@ -100,7 +100,7 @@ screen_buttons_keyboard() {
   local title="Button mapping" players
   players=$(ui_menu "$title" \
     "The MAME default keys for each player in all emulators (player 1: arrows, Ctrl, Alt, Space, Shift, Z, X, 1 start, 5 coin). How many players?" \
-    2 "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
+    "" "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
   [[ $players == return ]] && return 0
   ui_info "$title" "Saving the keys for all emulators..."
   if buttons_keyboard "$players"; then
@@ -115,7 +115,7 @@ screen_buttons_keyboard() {
 # painel os botoes do jogo (lib/buttons.sh). O painel e o do Button mapping:
 # sem ele nao ha o que arrumar.
 screen_buttons_layout() {
-  local title="Buttons layout" count choice last=1 entries=()
+  local title="Buttons layout" count choice last="" entries=()
   local -a order
   if [[ ! -s $BUTTONS_MAP ]]; then
     ui_msg "$title" "The panel is not mapped yet." "" \

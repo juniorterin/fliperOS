@@ -231,7 +231,7 @@ screen_geometry_reset() {
 # de varias placas do Flycast abrem uma tela em cada; os outros programas
 # ficam no monitor 1.
 screen_multi_monitor() {
-  local conn choice last=2 extras=() entries summary note="" games
+  local conn choice last="" extras=() entries summary note="" games
   conn=$(conf_get connector 2> /dev/null) || {
     ui_msg "Multiple Monitors" "No video output was selected by the output test." "" \
       "The other monitors use the same video card as monitor 1: run the output test first."
@@ -392,7 +392,7 @@ screen_mode480() {
 # os padroes de teste, ou parametro por parametro em numeros (o caminho pelo
 # SSH), e o voltar ao padrao.
 screen_colour() {
-  local title="Colour calibration" caps choice last=calibrate lut ctm range summary
+  local title="Colour calibration" caps choice last="" lut ctm range summary
   caps=$(color_caps)
   lut=$(sed -n 's/^lut //p' <<< "$caps")
   ctm=$(sed -n 's/^ctm //p' <<< "$caps")
@@ -470,7 +470,7 @@ screen_colour_calibrate() {
 
 # screen_colour_values FAIXA: cada parametro pelo numero.
 screen_colour_values() {
-  local range=${1:-none} key label min max help choice value last=brightness
+  local range=${1:-none} key label min max help choice value last=""
   local -a entries
   while true; do
     entries=()
@@ -558,7 +558,7 @@ screen_deflicker_preview() {
 }
 
 screen_video_setup() {
-  local choice last=monitor summary
+  local choice last="" summary
   VIDEO_CHANGED=0
   while true; do
     summary=$(ui_fields \

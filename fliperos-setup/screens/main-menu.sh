@@ -15,7 +15,7 @@ SETUP_DESKTOP=${SETUP_DESKTOP:-0}
 SETUP_REMOTE=${SETUP_REMOTE:-0}
 
 screen_live_menu() {
-  local choice last=install
+  local choice last=""
   while true; do
     UI_STATUS=$(status_line)
     choice=$(ui_menu_hints "FliperOS Setup" "" "$last" \
@@ -46,7 +46,7 @@ screen_reload_if_updated() {
 }
 
 screen_main_menu() {
-  local choice last=frontend start
+  local choice last="" start
   # Placa AMD no driver que nao e o recomendado: sugere a troca, uma vez so.
   screen_amd_driver_check
   while true; do

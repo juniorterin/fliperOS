@@ -58,7 +58,7 @@ screen_folders() {
 # screen_folder PASTA: a pasta, a custom folder dela, as duas acoes e as
 # pastas de dentro.
 screen_folder() {
-  local rel=$1 title="Folders: ~/$1" state choice last=add old fields entries child width text
+  local rel=$1 title="Folders: ~/$1" state choice last="" old fields entries child width text
   local -a children
   while true; do
     state=$(folders_state "$rel")

@@ -6,7 +6,7 @@
 # ou apaga. A logica e a lib/downloader.sh.
 
 screen_downloads() {
-  local choice last=torrent
+  local choice last=""
   while true; do
     choice=$(ui_menu_hints "Downloader" "Games downloaded straight to the emulator folders." "$last" \
       "torrent|ROM/CHD MAME torrent|Only the games your filter picks, from a romset magnet link." \
@@ -22,7 +22,7 @@ screen_downloads() {
 }
 
 screen_downloader() {
-  local title="ROM/CHD MAME torrent" choice status pct state line roms chds last=filter
+  local title="ROM/CHD MAME torrent" choice status pct state line roms chds last=""
   local -a entries
   downloader_prepare
   screen_downloader_changes

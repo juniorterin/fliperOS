@@ -24,7 +24,7 @@ screen_splash() {
     choice=$(ui_menu "$title" \
       "$(printf '%s\n' "The boot screen. The themes are the folders in ~/splashscreen (on the network, the splashscreen share): pick one to see a preview or to use it at boot." \
         "More themes: $SPLASH_MORE_URL")" \
-      "${last:-$current}" "${items[@]}" "-return|Return") || return 0
+      "$last" "${items[@]}" "-return|Return") || return 0
     [[ $choice == -return ]] && return 0
     last=$choice
     screen_splash_theme "$choice"
