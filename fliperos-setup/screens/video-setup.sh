@@ -6,13 +6,14 @@
 VIDEO_CHANGED=0
 
 # screen_pick_monitor [PADRAO] [required] [custom] imprime o preset
-# escolhido; com "custom", tambem a entrada do monitor custom.
+# escolhido; com "custom", tambem a entrada do monitor custom, logo depois
+# do Generic 15.7 kHz.
 screen_pick_monitor() {
   local def=${1:-} required=${2:-} custom=${3:-} entries=() entry text
   for entry in "${MONITOR_PRESETS[@]}"; do
     entries+=("$entry")
+    [[ $custom == custom && ${entry%%|*} == generic_15 ]] && entries+=("custom|Custom - your own crt_range")
   done
-  [[ $custom == custom ]] && entries+=("custom|Custom - your own crt_range")
   text="Select the monitor connected to this output."
   [[ $required == required ]] && text+=" This is needed to set the correct video mode."
   ui_menu "Monitor Type" "$text" "$def" "${entries[@]}"
