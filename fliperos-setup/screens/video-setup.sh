@@ -293,7 +293,7 @@ screen_mm_changed() {
 screen_mode480() {
   local title="480i games" text result key state level
   local -a rows
-  text="How each program shows 480-line games on the tube. Each change is saved."
+  text="How each program shows 480-line games. Changes save at once."
   [[ $(conf_get frequency 2> /dev/null) == 15* ]] ||
     text="Not a 15 kHz monitor: these only count on one."
   key=""

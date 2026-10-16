@@ -127,7 +127,32 @@ demo_services() {
   screen_services
 }
 
+# Video Setup > 480i games num gabinete de 15 kHz, com tudo instalado e
+# alguns programas ja em 480i.
+demo_mode480() {
+  export RA_HOME=$FAKE/retroarch
+  mode480_installed() { return 0; }
+  conf_set frequency 15k
+  mode480_set flycast filter medium
+  mode480_set pcsx2 filter strong
+  mode480_set psx pure
+  screen_mode480
+}
+
+# Video Setup > Colour calibration com uma placa como a do gabinete (tabela
+# de gama, sem CTM, output_csc).
+demo_colour() {
+  COLOR_BIN=$FAKE/bin/fliperos-color
+  printf '#!/bin/sh\n[ "$1" = caps ] && printf "lut 256\\nctm no\\nrange output_csc\\n"\nexit 0\n' > "$COLOR_BIN"
+  chmod +x "$COLOR_BIN"
+  conf_set color_brightness 3
+  conf_set color_temperature 9300
+  screen_colour
+}
+
 case ${1:-} in
+  mode480) demo_mode480 ;;
+  colour) demo_colour ;;
   progress) demo_progress ;;
   failed) demo_failed ;;
   results) demo_results ;;
