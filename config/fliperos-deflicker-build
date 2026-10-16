@@ -1,0 +1,18 @@
+#!/bin/bash
+# Compila o filtro de flicker do 480i (config/fliperos-deflicker.c) na
+# biblioteca que o fliperos-kms-run e o fliperos-x11-client carregam nos
+# emuladores. Usado pelo fliperos-mkiso.sh (no chroot da imagem), pelo
+# tools/cabinet-update.sh e pelo tools/deflicker-test.sh.
+#
+#   fliperos-deflicker-build FONTE SAIDA
+#
+# Precisa de gcc e dos cabecalhos (libdrm-dev, libgl-dev, libegl-dev); nao
+# liga na libGL nem na libEGL (as funcoes vem do programa que a carrega).
+set -euo pipefail
+src=${1:?fonte}
+out=${2:?saida}
+mkdir -p "$(dirname "$out")"
+# shellcheck disable=SC2046 # as opcoes do pkg-config, uma por palavra
+gcc -O2 -Wall -shared -fPIC -o "$out.new" "$src" $(pkg-config --cflags --libs libdrm) -ldl
+chmod 755 "$out.new"
+mv -f "$out.new" "$out"

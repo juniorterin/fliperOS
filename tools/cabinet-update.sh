@@ -115,6 +115,10 @@ packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-pl
 packages+=(python3-pygame xclip)
 # O compressor do Volume leveler (Setup > Audio Setup, lib/audio.sh).
 packages+=(swh-plugins)
+# Para compilar o filtro de flicker do 480i (config/fliperos-deflicker-build).
+packages+=(gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev)
+# E o compositor que leva o filtro ao desktop LXDE (config/fliperos-desktop-deflicker).
+packages+=(picom)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
 # Wine em si nao vem mais na imagem (Setup > System > Extras, config/fliperos-extras).
@@ -136,6 +140,14 @@ else
 fi
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo ||
   echo "warning: Flathub was not added"
+# O filtro de flicker do 480i: compilado aqui, como no build da imagem,
+# quando o fonte e mais novo que a biblioteca.
+deflicker_lib=/usr/local/lib/fliperos/libfliperos-deflicker.so
+if [[ ! -f $deflicker_lib || $src/config/fliperos-deflicker.c -nt $deflicker_lib ]]; then
+  echo "== 480i flicker filter (fliperos-deflicker)"
+  bash "$src/config/fliperos-deflicker-build" "$src/config/fliperos-deflicker.c" "$deflicker_lib" ||
+    echo "warning: the 480i flicker filter did not compile"
+fi
 # O override da App Store (fliperos-rootfs.sh) pode ter chegado depois do
 # pacote.
 glib-compile-schemas /usr/share/glib-2.0/schemas 2> /dev/null || true

@@ -509,3 +509,27 @@ geometry_reset() {
   video_apply_monitor "$monitor"
   log_info "geometria: padrao do monitor $monitor"
 }
+
+# ── Filtro de flicker do 480i ────────────────────────────────────
+# Setup > Video Setup > Interlace flicker filter: o nivel que a camada
+# config/fliperos-deflicker.c le do "deflicker=" do fliperos.conf, em todo
+# emulador que o fliperos-kms-run e o fliperos-x11-client abrem. Sem nada
+# gravado, medium (a media de duas linhas, como o RePlayOS).
+DEFLICKER_LEVELS="off light medium strong"
+
+deflicker_level() {
+  local level
+  level=$(conf_get deflicker 2> /dev/null)
+  if [[ -n $level && " $DEFLICKER_LEVELS " == *" $level "* ]]; then
+    printf '%s\n' "$level"
+  else
+    echo medium
+  fi
+}
+
+# deflicker_set off|light|medium|strong: vale no proximo jogo aberto.
+deflicker_set() {
+  [[ " $DEFLICKER_LEVELS " == *" $1 "* ]] || return 1
+  conf_set deflicker "$1"
+  log_info "filtro de flicker do 480i: $1"
+}

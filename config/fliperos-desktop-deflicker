@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# O filtro de flicker do 480i no desktop (LXDE): o mesmo filtro vertical da
+# camada dos emuladores (config/fliperos-deflicker.c), como shader de janela
+# do picom. O desktop desenha pelo X, sem OpenGL: a camada nao o alcanca,
+# o compositor sim. So com o modo da tela entrelacado e o filtro ligado
+# (Setup > Video Setup > Interlace flicker filter); senao nao sobe nada.
+# Roda no comeco da sessao (config/fliperos-lxde) e sai junto com o X.
+#
+#   fliperos-desktop-deflicker [--shader ARQUIVO]   so grava o shader (testes)
+conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+level=$(sed -n 's/^deflicker=//p' "$conf" 2> /dev/null | tail -n 1)
+case ${level:-medium} in
+  off) exit 0 ;;
+  light) w="0.15, 0.70, 0.15" ;;
+  strong) w="0.33, 0.34, 0.33" ;;
+  *) w="0.50, 0.50, 0.00" ;;
+esac
+
+# shader ARQUIVO: as tres linhas (a de cima, a propria, a de baixo) pelos
+# pesos, na interface de shader de janela do picom (texcoord em pixels).
+shader() {
+  cat > "$1" << EOF
+#version 330
+in vec2 texcoord;
+uniform sampler2D tex;
+vec4 default_post_processing(vec4 c);
+vec4 window_shader() {
+    const vec3 w = vec3($w);
+    ivec2 p = ivec2(texcoord);
+    int bottom = textureSize(tex, 0).y - 1;
+    vec4 up = texelFetch(tex, ivec2(p.x, max(p.y - 1, 0)), 0);
+    vec4 mid = texelFetch(tex, p, 0);
+    vec4 down = texelFetch(tex, ivec2(p.x, min(p.y + 1, bottom)), 0);
+    return default_post_processing(up * w.x + mid * w.y + down * w.z);
+}
+EOF
+}
+
+if [[ ${1:-} == --shader ]]; then
+  shader "${2:?arquivo}"
+  exit 0
+fi
+command -v picom > /dev/null || exit 0
+if [[ ${FLIPEROS_DEFLICKER_FORCE:-0} != 1 ]] &&
+  ! xrandr --verbose 2> /dev/null | grep -q 'Interlace.*\*current'; then
+  exit 0
+fi
+file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-deflicker.glsl
+shader "$file"
+exec picom --backend glx --vsync --window-shader-fg "$file"

@@ -59,6 +59,17 @@ fi
 # que o tubo mostra em 4:3) um emulador que "mantem 4:3" usaria so metade da
 # largura. stretch e quanto esticar na horizontal para o 4:3 preencher o modo.
 stretch=$((300 * FLIPEROS_RES_W / (4 * FLIPEROS_RES_H)))
+
+# O filtro de flicker do 480i (config/fliperos-deflicker.c, que o
+# fliperos-x11-client poe no LD_PRELOAD) vale para este jogo: a biblioteca
+# instalada, o filtro nao desligado no Video Setup e um modo entrelacado
+# (mais de 300 linhas num monitor de 15 kHz).
+deflicker_on() {
+  [[ -f ${FLIPEROS_DEFLICKER_LIB:-/usr/local/lib/fliperos/libfliperos-deflicker.so} ]] || return 1
+  [[ $(sed -n 's/^deflicker=//p' "$CONF" 2> /dev/null) != off ]] || return 1
+  [[ $(sed -n 's/^frequency=//p' "$CONF" 2> /dev/null) == 15* ]] && ((FLIPEROS_RES_H > 300))
+}
+
 case $name in
   flycast)
     # O limite de 250 e so o do controle na interface do Flycast: a super
@@ -88,6 +99,9 @@ case $name in
     ;;
   dolphin-emu)
     set -- "$1" -C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3 "${@:2}"
+    # Com o filtro de flicker do 480i ligado, o OpenGL: a camada
+    # (config/fliperos-deflicker.c) nao alcanca o Vulkan.
+    deflicker_on && set -- "$1" -C Dolphin.Core.GFXBackend=OGL "${@:2}"
     ;;
   pcsx2)
     # Sem PCSX2.ini, o de partida do FliperOS (/etc/fliperos/pcsx2.ini): com
@@ -99,6 +113,9 @@ case $name in
     [[ -f $ini ]] || install -Dm600 "${FLIPEROS_PCSX2_INI:-/etc/fliperos/pcsx2.ini}" "$ini" 2> /dev/null || true
     if [[ -f $ini ]]; then
       "$iniset" "$ini" EmuCore/GS AspectRatio Stretch
+      # O OpenGL (12) com o filtro de flicker do 480i ligado: a camada nao
+      # alcanca o Vulkan, que o automatico escolhe nas placas novas.
+      deflicker_on && "$iniset" "$ini" EmuCore/GS Renderer 12
       "$iniset" "$ini" UI SetupWizardIncomplete false
       "$iniset" "$ini" UI StartFullscreen true
       "$iniset" "$ini" UI StartBigPictureMode true

@@ -114,6 +114,11 @@ export QT_QPA_EGLFS_HIDECURSOR=1
 # (config/fliperos-groovymame), onde o Switchres troca o modo pelo XRandR.
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).
 export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}"
+# O filtro de flicker do 480i (config/fliperos-deflicker.c, Setup > Video
+# Setup > Interlace flicker filter): o programa carrega a camada, que so mexe
+# na imagem com o modo da tela entrelacado.
+deflicker=${FLIPEROS_DEFLICKER_LIB:-/usr/local/lib/fliperos/libfliperos-deflicker.so}
+[[ -f $deflicker ]] && export LD_PRELOAD="$deflicker${LD_PRELOAD:+:$LD_PRELOAD}"
 # A saida do programa vai para /opt/fliperos/logs/<programa>.log, nao para a
 # tela; no modo debug (Setup > System > Debug mode) ela aparece. Sem como gravar o
 # log, o programa abre assim mesmo.

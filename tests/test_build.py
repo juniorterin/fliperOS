@@ -3969,6 +3969,104 @@ class PanningTests(unittest.TestCase):
         self.assertLess(lxde.index('fliperos-panning'), lxde.index('exec startlxde'))
 
 
+class DeflickerTests(unittest.TestCase):
+    """O filtro de flicker do 480i: a camada de OpenGL (config/fliperos-deflicker.c)
+    no LD_PRELOAD dos emuladores, o picom com o mesmo filtro no desktop e o
+    OpenGL fixo no PCSX2 e no Dolphin. O filtro em si (as listras na tela) e
+    o tools/deflicker-test.sh, num Xvfb."""
+
+    LIB = '/usr/local/lib/fliperos/libfliperos-deflicker.so'
+
+    def test_built_into_the_image_and_on_update(self):
+        build = (ROOT / 'config/fliperos-deflicker-build').read_text()
+        self.assertIn('pkg-config --cflags --libs libdrm', build)
+        self.assertIn('bash /tmp/fliperos-deflicker-build /tmp/fliperos-deflicker.c ' + self.LIB, MKISO)
+        self.assertLess(MKISO.index('\nbuild_flycast_chroot\n'), MKISO.index('\nbuild_deflicker_chroot\n'))
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn('$src/config/fliperos-deflicker.c -nt $deflicker_lib', update)
+        for pkg in ('libdrm-dev', 'libgl-dev', 'libegl-dev', 'picom'):
+            self.assertRegex(update, r'packages\+=\([^)]*\b%s\b' % pkg)
+        self.assertRegex(MKISO, r'swh-plugins picom\n')
+        self.assertRegex(ROOTFS, r' fliperos-desktop-deflicker[ \w\\\n-]*; do')
+
+    def test_preloaded_in_the_emulators_only(self):
+        kms = (ROOT / 'config/fliperos-kms-run').read_text()
+        self.assertIn('export LD_PRELOAD="$deflicker${LD_PRELOAD:+:$LD_PRELOAD}"', kms)
+        # No Xorg, so no comando do emulador (nao no Xorg nem no Switchres), e
+        # nunca no Wine (o OpenGL de 32 bits nao carrega a biblioteca de 64).
+        client = (ROOT / 'config/fliperos-x11-client').read_text()
+        self.assertIn('emulator_command="env LD_PRELOAD=', client)
+        self.assertRegex(client, r'fightcade\*[^)]*wine\*[^)]*\*\.exe\)')
+
+    def run_x11(self, args, conf, lib=True):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'lib.so').write_text('')
+            extra = {'FLIPEROS_DEFLICKER_LIB': str(tmp / ('lib.so' if lib else 'missing.so')),
+                     'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini'),
+                     'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set')}
+            out = EmulatorModeTests.run_x11(EmulatorModeTests(), args, home=tmp, extra=extra, conf=conf).stdout
+            ini = tmp / '.config/PCSX2/inis/PCSX2.ini'
+            return out, ini.read_text() if ini.exists() else ''
+
+    def test_opengl_pinned_in_480i_with_the_filter_on(self):
+        out, _ = self.run_x11(['--mode', '640x480@59.94', 'dolphin-emu'], '')
+        self.assertIn('-C Dolphin.Core.GFXBackend=OGL', out)
+        _, ini = self.run_x11(['--mode', '640x480@59.94', 'pcsx2'], 'deflicker=strong\n')
+        self.assertRegex(ini, r'\[EmuCore/GS\][^\[]*Renderer = 12\n')
+        # 240p, filtro desligado ou sem a biblioteca: o renderizador fica.
+        for args, conf, lib in ((['dolphin-emu'], '', True),
+                                (['--mode', '640x480@59.94', 'dolphin-emu'], 'deflicker=off\n', True),
+                                (['--mode', '640x480@59.94', 'dolphin-emu'], '', False)):
+            self.assertNotIn('GFXBackend', self.run_x11(args, conf, lib)[0], (args, conf, lib))
+        self.assertNotIn('Renderer = 12', self.run_x11(['pcsx2'], '')[1])
+
+    def desktop(self, conf, *args, env=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'fliperos.conf').write_text(conf)
+            bin_dir = tmp / 'bin'
+            bin_dir.mkdir()
+            # picom e xrandr falsos: o picom mostra os argumentos.
+            (bin_dir / 'picom').write_text('#!/bin/sh\necho "picom $*"\n')
+            (bin_dir / 'xrandr').write_text('#!/bin/sh\necho "  640x480i (0x4a) 12.3MHz -HSync -VSync Interlace %s"\n'
+                                            % (env or {}).pop('XRANDR_CURRENT', '*current +preferred'))
+            for p in bin_dir.iterdir():
+                p.chmod(0o755)
+            run = subprocess.run(['bash', str(ROOT / 'config/fliperos-desktop-deflicker'), *args],
+                                 capture_output=True, text=True, cwd=tmp,
+                                 env=dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']),
+                                          FLIPEROS_CONF=str(tmp / 'fliperos.conf'), XDG_RUNTIME_DIR=str(tmp),
+                                          **(env or {})))
+            shader = tmp / 'fliperos-deflicker.glsl'
+            return run.stdout, shader.read_text() if shader.exists() else ''
+
+    def test_desktop_picom_only_in_interlaced_modes(self):
+        out, shader = self.desktop('')
+        self.assertIn('--backend glx --vsync --window-shader-fg', out)
+        # Medio por padrao: a media de duas linhas, como no RePlayOS.
+        self.assertIn('const vec3 w = vec3(0.50, 0.50, 0.00);', shader)
+        self.assertIn('default_post_processing(', shader)
+        self.assertIn('vec3(0.15, 0.70, 0.15)', self.desktop('deflicker=light\n')[1])
+        self.assertEqual(self.desktop('deflicker=off\n'), ('', ''))
+        # Modo progressivo na tela: nada.
+        self.assertEqual(self.desktop('', env={'XRANDR_CURRENT': '+preferred'}), ('', ''))
+        lxde = (ROOT / 'config/fliperos-lxde').read_text()
+        self.assertLess(lxde.index('fliperos-desktop-deflicker'), lxde.index('exec startlxde'))
+
+    @unittest.skipUnless(shutil.which('gcc') and subprocess.run(['pkg-config', '--exists', 'libdrm', 'gl', 'egl'],
+                                                                capture_output=True).returncode == 0
+                         if shutil.which('pkg-config') else False, 'no gcc/libdrm/libGL headers')
+    def test_layer_compiles_and_exports_the_swap_hooks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lib = Path(tmp) / 'lib.so'
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-deflicker-build'),
+                            str(ROOT / 'config/fliperos-deflicker.c'), str(lib)], check=True)
+            syms = subprocess.run(['nm', '-D', '--defined-only', str(lib)], capture_output=True, text=True).stdout
+            for name in ('glXSwapBuffers', 'eglSwapBuffers', 'glXGetProcAddressARB', 'eglGetProcAddress', 'dlsym'):
+                self.assertRegex(syms, r' T %s\n' % name)
+
+
 def fightcade_package(path, files=None):
     """Um pacote como o do Fightcade para Linux: tudo dentro de Fightcade/."""
     files = files if files is not None else {

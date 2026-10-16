@@ -36,7 +36,7 @@ mkdir -p "$root/etc/fliperos" "$root/etc/fliperos/mame" "$root/etc/fliperos/retr
 install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions.conf"
 [[ -f "$root/etc/fliperos/session" ]] || printf 'setup\n' > "$root/etc/fliperos/session"
 for name in fliperos-session fliperos-bootgame fliperos-kms-run fliperos-x11-run fliperos-x11-client fliperos-lxde fliperos-launch \
-  fliperos-tty1 fliperos-ini-set fliperos-resolution fliperos-logout fliperos-escquit fliperos-powerkey \
+  fliperos-tty1 fliperos-ini-set fliperos-resolution fliperos-logout fliperos-escquit fliperos-powerkey fliperos-desktop-deflicker \
   fliperos-panning fliperos-automount fliperos-multiscreen fliperos-dlopen-links fliperos-browser fliperos-magnet; do
   install -Dm755 "$src/config/$name" "$root/opt/fliperos/bin/$name"
 done

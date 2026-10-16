@@ -284,6 +284,7 @@ apt-get update -qq
 # p7zip-full: o fullset do progetto-SNAPS traz as capturas num 7z
 # (config/fliperos-snaps), mesmo numa imagem sem Skyscraper.
 # transmission-daemon: o Setup > Games > Downloader (config/fliperos-downloader).
+# picom: o filtro de flicker do 480i no desktop (config/fliperos-desktop-deflicker).
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -307,7 +308,7 @@ apt-get install -y --no-install-recommends \
   lxhotkey-gtk lxinput lxrandr lxsession-edit galculator gpicview mousepad xarchiver alacritty \
   gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
   htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
-  espeak-ng triggerhappy zsh swh-plugins
+  espeak-ng triggerhappy zsh swh-plugins picom
 
 # O transmission-daemon e o do Setup > Games > Downloader (fliperos-transmission, do
 # usuario fliperos); o servico do pacote, do usuario debian-transmission, nao.
@@ -1105,6 +1106,28 @@ RASCRIPT
 # modo da tabela emulator-modes.conf (640x240 no 15 kHz). O SDL2 do Ubuntu
 # tambem tem o kmsdrm, se um dia voltar para o KMS. USE_VULKAN=OFF porque
 # adiciona deps novas (glslang/SPIRV) sem necessidade pro caminho OpenGL.
+# ── Filtro de flicker do 480i (config/fliperos-deflicker.c) ─────
+# A camada que o fliperos-kms-run e o fliperos-x11-client carregam nos
+# emuladores (Setup > Video Setup > Interlace flicker filter). Sem ela a ISO
+# sai igual, so sem o filtro.
+build_deflicker_chroot() {
+  local here
+  here=$(dirname "$(realpath "$0")")
+  step "Compiling the 480i flicker filter (fliperos-deflicker)"
+  cp "$here/config/fliperos-deflicker.c" "$here/config/fliperos-deflicker-build" "$CHROOT_DIR/tmp/"
+  cat > "$CHROOT_DIR/tmp/build-deflicker.sh" << 'DFSCRIPT'
+#!/bin/bash
+set -e
+apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev
+bash /tmp/fliperos-deflicker-build /tmp/fliperos-deflicker.c /usr/local/lib/fliperos/libfliperos-deflicker.so
+rm -f /tmp/fliperos-deflicker.c /tmp/fliperos-deflicker-build
+DFSCRIPT
+  chmod +x "$CHROOT_DIR/tmp/build-deflicker.sh"
+  chroot "$CHROOT_DIR" /tmp/build-deflicker.sh >> "$LOG_FILE" 2>&1 \
+    && ok "480i flicker filter compiled" \
+    || warn "The 480i flicker filter did not compile: the image goes without it"
+}
+
 build_flycast_chroot() {
   if $SKIP_FLYCAST; then
     warn "Flycast skipped (--skip-flycast)"
@@ -1626,6 +1649,7 @@ install_mame2010_xml
 install_fbneo_sets
 build_retroarch_chroot
 build_flycast_chroot
+build_deflicker_chroot
 build_pcsx2_chroot
 build_supermodel_chroot
 build_hypseus_chroot

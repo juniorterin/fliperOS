@@ -284,6 +284,20 @@ screen_mm_changed() {
 
 # screen_video_setup e o menu; ao sair, no sistema instalado, grava a linha
 # do kernel e oferece reiniciar.
+# screen_deflicker: o filtro de flicker do 480i (config/fliperos-deflicker.c),
+# carregado em todos os emuladores; so age com o modo da tela entrelacado.
+screen_deflicker() {
+  local choice
+  choice=$(ui_radio "Interlace flicker filter" \
+    "In 480i a thin line exists in one field only and flickers. The filter blends each line with its neighbour: no flicker, a little softer. Only in interlaced modes; 240p is untouched." \
+    "$(deflicker_level)" \
+    "off|Off (sharpest, flickers)" \
+    "light|Light" \
+    "medium|Medium (two lines averaged, like RePlayOS)" \
+    "strong|Strong") || return 0
+  deflicker_set "$choice"
+}
+
 screen_video_setup() {
   local choice last=monitor summary
   VIDEO_CHANGED=0
@@ -301,6 +315,7 @@ screen_video_setup() {
       "geometry|Geometry|Center and size the picture on the tube, with a test grid." \
       "geometry_reset|Reset Geometry|Undo the geometry: back to the monitor preset." \
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
+      "deflicker|Interlace flicker filter ($(deflicker_level))|Softens the 480i flicker of thin lines, in every emulator." \
       "return|Return|Save and leave. New video settings need a reboot.") || choice="return"
     last=$choice
     case $choice in
@@ -310,6 +325,7 @@ screen_video_setup() {
       geometry) screen_geometry ;;
       geometry_reset) screen_geometry_reset ;;
       monitors) screen_multi_monitor ;;
+      deflicker) screen_deflicker ;;
       return) break ;;
     esac
   done

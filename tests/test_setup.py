@@ -516,6 +516,26 @@ class OrientationTests(Base):
         self.assertEqual((self.env.dir / "fbcon" / "rotate_all").read_text(), "3")
 
 
+class DeflickerTests(Base):
+    def test_level_defaults_to_medium_and_is_saved(self):
+        # Medio (a media de duas linhas do RePlayOS) sem nada gravado.
+        self.assertEqual(self.env.out("deflicker_level").strip(), "medium")
+        self.env.out("deflicker_set strong")
+        self.assertEqual(self.env.out("deflicker_level").strip(), "strong")
+        self.assertIn("deflicker=strong\n", (self.env.etc / "fliperos.conf").read_text())
+        self.assertNotEqual(self.env.run("deflicker_set blur").returncode, 0)
+        self.assertEqual(self.env.out("deflicker_level").strip(), "strong")
+        self.env.out("deflicker_set off")
+        self.assertEqual(self.env.out("deflicker_level").strip(), "off")
+
+    def test_in_video_setup(self):
+        screen = (ROOT / "fliperos-setup/screens/video-setup.sh").read_text()
+        self.assertIn('"deflicker|Interlace flicker filter ($(deflicker_level))|', screen)
+        self.assertIn("deflicker) screen_deflicker ;;", screen)
+        for level in ("off", "light", "medium", "strong"):
+            self.assertIn('"%s|' % level, screen.split("screen_deflicker()")[1])
+
+
 class BootTests(Base):
     def test_install_cmdline_from_the_output_test(self):
         (self.env.etc / "fliperos.conf").write_text(
