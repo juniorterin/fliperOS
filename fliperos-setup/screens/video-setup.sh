@@ -561,6 +561,10 @@ screen_deflicker_preview() {
 screen_video_setup() {
   local choice last="" summary
   VIDEO_CHANGED=0
+  # Video driver so aparece com uma placa AMD que aceita os dois drivers.
+  local driver=()
+  [[ -n $(drm_dual_amd_cards) ]] &&
+    driver=("driver|Video driver|radeon (tested on the CRT) or amdgpu (with Vulkan).")
   while true; do
     summary=$(ui_fields \
       "Monitor|$(video_monitor_label)" \
@@ -577,6 +581,7 @@ screen_video_setup() {
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
       "mode480|480i games|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
       "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour temperature, saturation and hue." \
+      "${driver[@]}" \
       "return|Return|Save and leave. New video settings need a reboot.") || choice="return"
     last=$choice
     case $choice in
@@ -588,6 +593,7 @@ screen_video_setup() {
       monitors) screen_multi_monitor ;;
       mode480) screen_mode480 ;;
       colour) screen_colour ;;
+      driver) screen_amd_driver ;;
       return) break ;;
     esac
   done

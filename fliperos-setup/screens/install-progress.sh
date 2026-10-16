@@ -9,8 +9,8 @@ screen_install() {
     screen_video_setup
   fi
   # Placa AMD que aceita radeon e amdgpu: a pessoa escolhe (sem escolha,
-  # a tela nao aparece).
-  screen_amd_driver install
+  # a tela nao aparece), se ainda nao escolheu no Video Setup.
+  conf_get amd_driver > /dev/null 2>&1 || screen_amd_driver install
   while true; do
     screen_disk_selection || return 0
     screen_disk_confirm || continue

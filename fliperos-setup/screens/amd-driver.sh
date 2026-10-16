@@ -1,14 +1,16 @@
 # shellcheck shell=bash
-# Setup > System > Video driver, e a mesma pergunta na instalacao: radeon ou
+# Setup > Video Setup > Video driver, e a mesma pergunta na instalacao: radeon ou
 # amdgpu nas placas AMD que aceitam os dois (drm_card_dual_amd em lib/drm.sh,
 # amd_driver_* em lib/bootloader.sh). O radeon e o recomendado: foi com ele
 # que o 15 kHz foi validado no gabinete.
 
-# screen_amd_driver [install]. Com "install" so grava a escolha no
+# screen_amd_driver [install]. Com "install" (e sempre na midia de
+# instalacao, onde o Video Setup tambem abre) so grava a escolha no
 # fliperos.conf (install_configure_video a leva ao disco novo) e nao diz
 # nada quando a placa nao tem escolha.
 screen_amd_driver() {
   local mode=${1:-} cards card names="" saved running choice text
+  is_live && mode=install
   cards=$(drm_dual_amd_cards)
   if [[ -z $cards ]]; then
     [[ $mode == install ]] && return 0
@@ -27,7 +29,7 @@ screen_amd_driver() {
     "In use now|$running" \
     "Saved|$saved")
   text+=$'\n\n'"$(ui_yes "Recommended: radeon, the driver tested on the CRT.")"
-  [[ $mode == install ]] && text+=$'\n'"You can change it later in Setup > System > Video driver."
+  [[ $mode == install ]] && text+=$'\n'"You can change it later in Setup > Video Setup > Video driver."
   choice=$(ui_menu_hints "Video driver" "$text" "$saved" \
     "radeon|radeon (recommended)$([[ $saved == radeon ]] && echo " - current")|Tested at 15 kHz on the CRT. OpenGL only, no Vulkan." \
     "amdgpu|amdgpu$([[ $saved == amdgpu ]] && echo " - current")|Adds Vulkan (PCSX2, Dolphin). Not tested on the CRT." \
@@ -58,7 +60,7 @@ screen_amd_driver_check() {
   IFS='|' read -r card running recommended <<< "$(amd_driver_mismatch)" || return 0
   [[ -n $card ]] || return 0
   log_info "driver AMD: $card em $running, recomendado $recommended"
-  ui_yesno "Video driver" "Your $(drm_card_name "$card") is running on the $running driver. $recommended is recommended: it is the one tested at 15 kHz on the CRT. Switch to $recommended? (You can change it later in Setup > System > Video driver.)" yes || return 0
+  ui_yesno "Video driver" "Your $(drm_card_name "$card") is running on the $running driver. $recommended is recommended: it is the one tested at 15 kHz on the CRT. Switch to $recommended? (You can change it later in Setup > Video Setup > Video driver.)" yes || return 0
   screen_amd_driver_apply "$recommended"
 }
 

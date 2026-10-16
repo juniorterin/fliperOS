@@ -5114,7 +5114,7 @@ class ProgressScreenTests(Base):
 
 
 class AmdDriverTests(Base):
-    """radeon ou amdgpu nas placas que aceitam os dois (System > Video driver)."""
+    """radeon ou amdgpu nas placas que aceitam os dois (Video Setup > Video driver)."""
     RADEON = "radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0"
     AMDGPU = "radeon.si_support=0 radeon.cik_support=0 amdgpu.si_support=1 amdgpu.cik_support=1 amdgpu.dc=0"
 
@@ -5250,8 +5250,15 @@ class AmdDriverTests(Base):
         self.assertIn("screen_amd_driver_check", menu.split("screen_main_menu() {")[1].split("while true")[0])
         install = (SETUP / "screens/install-progress.sh").read_text()
         self.assertIn("screen_amd_driver install", install)
-        menu = (SETUP / "screens/setup-menu.sh").read_text()
-        self.assertIn("driver) screen_amd_driver ;;", menu)
+        # Em Video Setup, nao mais em System.
+        video = (SETUP / "screens/video-setup.sh").read_text().split("screen_video_setup() {")[1]
+        self.assertIn("driver) screen_amd_driver ;;", video)
+        self.assertIn('"${driver[@]}" \\\n      "return|', video)
+        self.assertNotIn("screen_amd_driver", (SETUP / "screens/setup-menu.sh").read_text())
+        # Na midia so grava a escolha, e a instalacao nao pergunta de novo.
+        self.assertIn("is_live && mode=install", (SETUP / "screens/amd-driver.sh").read_text())
+        self.assertIn("conf_get amd_driver > /dev/null 2>&1 || screen_amd_driver install",
+                      (SETUP / "screens/install-progress.sh").read_text())
         self.assertIn('source "$SETUP_DIR/screens/amd-driver.sh"', (SETUP / "fliperos-setup").read_text())
         screen = (SETUP / "screens/amd-driver.sh").read_text()
         self.assertIn('"radeon|radeon (recommended)', screen)

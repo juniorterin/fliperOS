@@ -1100,7 +1100,7 @@ for _alias, _name in {
     "+add": "add", "+new": "addfolder", "+edit": "edit", "custom": "games", "leveler": "audio",
     # Colour calibration: na tela (as barras de cor) ou pelos numeros.
     "calibrate": "colour", "values": "romlist",
-    # System > Video driver (radeon ou amdgpu).
+    # Video Setup > Video driver (radeon ou amdgpu).
     "driver": "system", "radeon": "video", "amdgpu": "video",
 }.items():
     ICONS[_alias] = ICONS[_name]
