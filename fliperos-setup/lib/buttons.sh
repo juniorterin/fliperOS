@@ -28,6 +28,16 @@ buttons_save() {
   log_info "botoes gravados: $(awk '{ print $1 }' "$1" | sort -u | wc -l) jogador(es)"
 }
 
+# buttons_attract poe o controle do mapa no input_map do Attract-Mode Plus.
+# O save ja grava, mas so num attract.cfg que exista: o Attract-Mode
+# instalado (ou aberto pela primeira vez) depois do Button mapping o recebe
+# aqui, a cada abertura (fliperos-setup --session-start).
+buttons_attract() {
+  [[ -r $BUTTONS_MAP && -x $BUTTONS ]] || return 0
+  "$BUTTONS" attract "$BUTTONS_MAP" >> "$FLIPEROS_LOG" 2>&1
+  return 0
+}
+
 # buttons_keyboard JOGADORES grava, no lugar do controle, as teclas padrao do
 # MAME de cada jogador em todos os emuladores: o encoder que se diz teclado
 # (I-PAC e afins) ja vem nesse layout, e nada precisa ser apertado.

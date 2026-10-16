@@ -9122,6 +9122,106 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertEqual(self.rc.pressed(settled, ([0, 0], [-32767, -32768, 0], [0])), '-a0')
         self.assertEqual(self.rc.pressed(settled, ([0, 0], [0, -32768, 0], [2])), 'h0.2')
 
+    def test_capture_skips_a_held_trigger_release(self):
+        # O gatilho ainda apertado quando a captura comeca: soltar (ir a
+        # -32768) nao e "-a5"; depois, apertar e "+a5".
+        rest = ([0], [0, 0, -32768, 0, 0, 32767], [0])
+        released = ([0], [0, 0, -32768, 0, 0, -32768], [0])
+        self.assertIsNone(self.rc.pressed(rest, released))
+        settled = self.rc.settle(rest, released)
+        self.assertEqual(settled[1][5], -32768)
+        self.assertEqual(self.rc.pressed(settled, ([0], [0, 0, -32768, 0, 0, 32767], [0])), '+a5')
+        # Um analogico de centro (0) para a esquerda continua "-a0".
+        self.assertEqual(self.rc.pressed(settled, ([0], [-32768, 0, -32768, 0, 0, -32768], [0])), '-a0')
+
+    def test_save_fixes_inverted_triggers(self):
+        # Dois controles Xbox 360 (gatilhos 2 e 5 em -32768): o "-a5" do
+        # jogador 2 vira "+a5"; o "-a0" de um analogico fica.
+        xbox = ('030081b85e0400008e02000014010000', 'Xbox 360 Controller', 11, 6, [0, 0, -32768, 0, 0, -32768],
+                [0, 1, 2, 3, 4, 5])
+        players = {1: {'b5': (0, '+a5'), 'b6': (0, '+a2')},
+                   2: {'left': (1, '-a0'), 'b5': (1, '-a5'), 'b6': (1, '-a2')}}
+        self.assertEqual(self.rc.fix_triggers(players, {0: xbox, 1: xbox}), 2)
+        self.assertEqual(players[2], {'left': (1, '-a0'), 'b5': (1, '+a5'), 'b6': (1, '+a2')})
+        self.assertEqual(self.rc.map_text(players, {0: 'Xbox 360 Controller', 1: 'Xbox 360 Controller'}),
+                         '1 b5 0 +a5 Xbox 360 Controller\n1 b6 0 +a2 Xbox 360 Controller\n'
+                         '2 left 1 -a0 Xbox 360 Controller\n2 b5 1 +a5 Xbox 360 Controller\n'
+                         '2 b6 1 +a2 Xbox 360 Controller\n')
+        # Sem o SDL (sem o repouso) nada muda.
+        self.assertEqual(self.rc.fix_triggers(players, {}), 0)
+
+    def test_flycast_hat_and_triggers(self):
+        # O hat e o botao (hat + 1) << 8 do Flycast; o gatilho vai em
+        # "triggers", sempre "+", com ~ quando repousa em cima.
+        binds = {'up': (0, 'h0.1'), 'down': (0, 'h0.4'), 'left': (0, 'h0.8'), 'right': (0, 'h0.2'),
+                 'b1': (0, 'b0'), 'b5': (0, '+a5'), 'b6': (0, '-a2'), 'coin': (0, '-a0')}
+        text = self.rc.flycast_cfg('X', binds, self.rc.FLYCAST_ARCADE, [0, 0, 32767, 0, 0, -32768])
+        for bind in ('256:btn_dpad1_up', '257:btn_dpad1_down', '258:btn_dpad1_left', '259:btn_dpad1_right',
+                     '0:btn_a', '5+:btn_y', '2+:btn_z', '0-:btn_d'):
+            self.assertIn(' = %s\n' % bind, text)
+        self.assertIn('\ntriggers = 5,2~\n', text)
+        # Sem o repouso, como antes.
+        self.assertIn('\ntriggers = \n', self.rc.flycast_cfg('X', binds, self.rc.FLYCAST_ARCADE))
+
+    def test_attract_input_map(self):
+        rc = self.rc
+        xbox = ('g', 'Xbox 360 Controller', 11, 6, [0, 0, -32768, 0, 0, -32768], [0, 1, 2, 3, 4, 5])
+        players = {1: {'up': (0, 'h0.1'), 'down': (0, 'h0.4'), 'left': (0, 'h0.8'), 'right': (0, 'h0.2'),
+                       'b1': (0, 'b0'), 'b2': (0, 'b1'), 'b6': (0, '+a2')},
+                   2: {'up': (1, '-a1'), 'right': (1, '+a0'), 'b1': (1, 'b2'), 'b2': (1, '+a5')}}
+        inputs = rc.attract_inputs(players, {0: xbox, 1: xbox})
+        self.assertEqual(inputs[:6], [('up', 'Joy0 PovYneg'), ('down', 'Joy0 PovYpos'), ('left', 'Joy0 PovXneg'),
+                                      ('right', 'Joy0 PovXpos'), ('select', 'Joy0 Button0'), ('back', 'Joy0 Button1')])
+        # Com o direcional no hat, o analogico tambem anda.
+        self.assertEqual(inputs[6:10], [('up', 'Joy0 Up'), ('down', 'Joy0 Down'), ('left', 'Joy0 Left'),
+                                        ('right', 'Joy0 Right')])
+        self.assertIn(('filters_menu', 'Joy0 PovXneg+Joy0 Button0'), inputs)
+        self.assertIn(('add_favourite', 'Joy0 Button0+Joy0 Button1'), inputs)
+        # Jogador 2: so o direcional, Select e Back; o eixo 5 do SDL e o RZ (R).
+        self.assertEqual(inputs[-4:], [('up', 'Joy1 Up'), ('right', 'Joy1 Right'), ('select', 'Joy1 Button2'),
+                                       ('back', 'Joy1 Rpos')])
+        self.assertEqual(len(inputs), 6 + 4 + 7 + 4)
+        # Sem os codigos ABS (SDL antigo), a ordem X Y Z RX RY RZ.
+        self.assertEqual(rc.attract_code(0, '+a3', None), 'Joy0 Upos')
+        self.assertIsNone(rc.attract_code(-1, 'k:UP', None))
+        self.assertIsNone(rc.attract_code(0, 'h1.1', None))
+        # No attract.cfg: o joystick dos comandos sai, e o de outro comando no
+        # mesmo botao; teclado, os outros e os "default" ficam.
+        cfg = ('general\n    language                en\n\ninput_map\n'
+               '    configure               Tab\n'
+               '    edit_game               Joy0 Zpos\n'
+               '    next_page               Joy1 Zpos\n'
+               '    prev_display            Joy1 Up\n'
+               '    back                    Escape\n'
+               '    select                  Joy0 Button0\n'
+               '    default back            exit\n\nsaver_config\n')
+        new = rc.attract_cfg(cfg, [('select', 'Joy0 Button3'), ('up', 'Joy1 Up')])
+        self.assertEqual(new, 'general\n    language                en\n\ninput_map\n'
+                              '    configure               Tab\n'
+                              '    edit_game               Joy0 Zpos\n'
+                              '    next_page               Joy1 Zpos\n'
+                              '    back                    Escape\n'
+                              '    select                  Joy0 Button3\n'
+                              '    up                      Joy1 Up\n'
+                              '    default back            exit\n\nsaver_config\n')
+        self.assertEqual(rc.attract_cfg(new, [('select', 'Joy0 Button3'), ('up', 'Joy1 Up')]), new)
+        # O save grava o attract.cfg que existe, com o dono certo.
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ['FLIPEROS_ATTRACT_DIR'] = tmp
+            try:
+                self.assertIsNone(rc.attract_save(players, {}))
+                (Path(tmp) / 'config').mkdir()
+                (Path(tmp) / 'config' / 'attract.cfg').write_text(cfg)
+                rc.USER_ID = os.getuid()
+                self.assertEqual(rc.attract_save(players, {0: xbox, 1: xbox}), str(Path(tmp) / 'config' / 'attract.cfg'))
+                text = (Path(tmp) / 'config' / 'attract.cfg').read_text()
+            finally:
+                del os.environ['FLIPEROS_ATTRACT_DIR']
+        self.assertIn('    select                  Joy0 Button0\n', text)
+        self.assertIn('    back                    Escape\n', text)
+        self.assertNotIn('Joy0 Zpos', text)
+        self.assertIn('buttons_attract', (ROOT / 'fliperos-setup/lib/frontends.sh').read_text())
+
     def test_buttons_layout(self):
         # buttons.layout: "BOTOES POSICAO...", a posicao no painel do botao 1,
         # do 2... As linhas invalidas e as do padrao ficam de fora.

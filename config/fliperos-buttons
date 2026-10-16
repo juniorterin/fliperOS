@@ -10,6 +10,8 @@
       o mesmo para um encoder que se diz teclado (I-PAC e afins), com as
       teclas padrao do MAME de cada jogador (MAME_KEYS) no lugar do controle:
       o mapa ganha linhas "JOGADOR CONTROLE -1 k:TECLA Keyboard"
+  fliperos-buttons attract MAPA
+      so o Attract-Mode Plus (abaixo), que o Setup chama ao abri-lo
 
 ELEMENTO na numeracao do SDL (joystick, nao game controller): b3 (botao),
 -a1 / +a1 (meio eixo), h0.1 / h0.2 / h0.4 / h0.8 (hat: cima, direita,
@@ -37,7 +39,19 @@ mais que o automatico.
 
 Flycast: o mapeamento do Dreamcast (o do SDL) e o do arcade (Naomi,
 Atomiswave: o botao N do painel e o botao N do jogo, a ficha no D), por
-nome de aparelho, em ~/.config/flycast/mappings.
+nome de aparelho, em ~/.config/flycast/mappings. O hat vira o botao
+(hat + 1) << 8 do Flycast, e um meio eixo que repousa numa ponta (gatilho)
+vai em "triggers": sem isso o Flycast nao tinha direcional num controle de
+hat (Xbox 360 e os encoders que se passam por ele).
+
+Gatilhos: num eixo que repousa em -32768 so existe "+". O save acerta pelo
+repouso de agora um "-aN" gravado por uma captura que comecou com o gatilho
+apertado (ela pegava a soltura, e o botao ficava apertado no repouso).
+
+Attract-Mode Plus: no input_map do attract.cfg, o direcional, Select (botao
+1) e Back (botao 2) de cada jogador, e os atalhos padrao dele (Up+botao 1
+etc.) no jogador 1. Saem as entradas de joystick desses comandos e as de
+outro comando no mesmo botao; as de teclado e as outras ficam.
 
 OpenBOR: as teclas de cada jogador (o codigo do joystick do OpenBOR:
 600 + 1 + aparelho * 64 + botao; os eixos e os hats depois dos botoes) no
@@ -157,6 +171,9 @@ KEYBOARD_INDEX = -1
 MAME_AXES = ['XAXIS', 'YAXIS', 'ZAXIS', 'RXAXIS', 'RYAXIS', 'RZAXIS', 'SLIDER1', 'SLIDER2']
 MAME_HAT = {'1': 'UP', '2': 'RIGHT', '4': 'DOWN', '8': 'LEFT'}
 AXIS_PRESS = 20000
+# Um eixo parado perto de uma ponta e um gatilho (xpad: -32768 solto, 32767
+# apertado): apertar o leva para a outra ponta, nunca para alem desta.
+TRIGGER_REST = 30000
 
 
 def is_key(element):
@@ -210,6 +227,37 @@ def read_map(path):
             players.setdefault(player, {})[control] = (index, element)
             names[index] = parts[4].strip() if len(parts) > 4 else ''
     return players, names
+
+
+def map_text(players, names):
+    """O mapa de volta no formato do arquivo."""
+    lines = []
+    for player in sorted(players):
+        binds = players[player]
+        for control in CONTROLS:
+            if control in binds:
+                index, element = binds[control]
+                lines.append('%d %s %d %s %s\n' % (player, control, index, element, names.get(index, '')))
+    return ''.join(lines)
+
+
+def fix_triggers(players, devices):
+    """O sentido de cada meio eixo pelo repouso do controle agora: num eixo
+    que repousa em -32768 (gatilho) so existe "+". Um "-a5" ali vinha de uma
+    captura que comecou com o gatilho apertado e pegou a soltura, e o botao
+    ficava apertado no repouso em todo emulador. Devolve quantos mudaram."""
+    fixed = 0
+    for binds in players.values():
+        for control, (index, element) in list(binds.items()):
+            if element[0] not in '+-' or index not in devices:
+                continue
+            rests, axis = devices[index][4], int(element[2:])
+            rest = rests[axis] if axis < len(rests) else 0
+            sign = '+' if rest <= -TRIGGER_REST else '-' if rest >= TRIGGER_REST else element[0]
+            if sign != element[0]:
+                binds[control] = (index, sign + element[1:])
+                fixed += 1
+    return fixed
 
 
 def retroarch_cfg(players, names):
@@ -466,21 +514,192 @@ FLYCAST_ARCADE = dict(FLYCAST_DC, b1='btn_a', b2='btn_b', b3='btn_c', b4='btn_x'
                       coin='btn_d')
 
 
-def flycast_cfg(name, binds, keys):
-    digital, analog = [], []
+# O hat no Flycast e um botao: (hat + 1) << 8, mais 0 cima, 1 baixo, 2
+# esquerda, 3 direita (core/sdl/sdl.cpp, SDL_JOYHATMOTION).
+FLYCAST_HAT = {'1': 0, '4': 1, '8': 2, '2': 3}
+
+
+def flycast_cfg(name, binds, keys, rests=()):
+    """O mapeamento do Flycast; rests e o repouso dos eixos do aparelho: um
+    gatilho vai em "triggers" (o Flycast o le de ponta a ponta, sempre "+";
+    com ~ quando repousa em cima), senao ele o trata como eixo de centro."""
+    digital, analog, triggers = [], [], []
     for control, (_, element) in sorted(binds.items()):
         key = keys.get(control)
         if is_key(element):
             digital.append('%d:%s' % (KEYS[element[2:]][1], key))
         elif element.startswith('b'):
             digital.append('%s:%s' % (element[1:], key))
+        elif element.startswith('h'):
+            hat, bit = element[1:].split('.')
+            digital.append('%d:%s' % (((int(hat) + 1) << 8) | FLYCAST_HAT[bit], key))
         elif element[0] in '+-':
-            analog.append('%s%s:%s' % (element[2:], element[0], key))
+            axis = int(element[2:])
+            rest = rests[axis] if axis < len(rests) else 0
+            if abs(rest) >= TRIGGER_REST:
+                analog.append('%d+:%s' % (axis, key))
+                trigger = '%d%s' % (axis, '~' if rest > 0 else '')
+                if trigger not in triggers:
+                    triggers.append(trigger)
+            else:
+                analog.append('%s%s:%s' % (element[2:], element[0], key))
     text = '[analog]\n' + ''.join('bind%d = %s\n' % (i, b) for i, b in enumerate(analog))
     text += '\n[digital]\n' + ''.join('bind%d = %s\n' % (i, b) for i, b in enumerate(digital))
     text += ('\n[emulator]\ndead_zone = 10\nmapping_name = %s\nrumble_power = 100\nsaturation = 100\n'
-             'triggers = \nversion = 4\n' % name)
+             'triggers = %s\nversion = 4\n' % (name, ','.join(triggers)))
     return text
+
+
+# ── Attract-Mode Plus ───────────────────────────────────────────
+
+# O Attract-Mode le o controle pelo SFML (/dev/input/js*), na mesma ordem
+# do SDL (os dois enumeram pelo udev): JoyN e o controle N do mapa, os
+# botoes na ordem do joydev, que e a do SDL. Os eixos tem nome (SFML): o do
+# eixo N do SDL vem do codigo ABS_* do evdev (o SDL numera todos menos os
+# hats).
+AM_AXES = {0: ('Left', 'Right'), 1: ('Up', 'Down'), 2: ('Zneg', 'Zpos'), 6: ('Zneg', 'Zpos'),
+           5: ('Rneg', 'Rpos'), 7: ('Rneg', 'Rpos'), 3: ('Uneg', 'Upos'), 4: ('Vneg', 'Vpos')}
+# O SFML so tem um hat (PovX/PovY); cima e o PovY negativo, como no evdev.
+AM_HAT = {'1': 'PovYneg', '2': 'PovXpos', '4': 'PovYpos', '8': 'PovXneg'}
+# Os comandos do frontend: direcional, botao 1 seleciona, 2 volta (todo
+# jogador); os atalhos padrao do Attract-Mode (FeInputMap) no jogador 1.
+AM_MOVES = {'up': 'up', 'down': 'down', 'left': 'left', 'right': 'right', 'b1': 'select', 'b2': 'back'}
+AM_COMBOS = [('prev_letter', ('up', 'b1')), ('next_letter', ('down', 'b1')), ('filters_menu', ('left', 'b1')),
+             ('next_filter', ('right', 'b1')), ('configure', ('up', 'b2')), ('edit_game', ('down', 'b2')),
+             ('add_favourite', ('b1', 'b2'))]
+AM_SECTION = 'input_map'
+
+
+def abs_codes(lib, index):
+    """Os codigos ABS_* dos eixos do controle INDICE, na ordem do SDL; None
+    sem o caminho dele (SDL antes do 2.24)."""
+    try:
+        path_for = lib.SDL_JoystickPathForIndex
+    except AttributeError:
+        return None
+    path_for.restype = ctypes.c_char_p
+    path_for.argtypes = [ctypes.c_int]
+    node = os.path.basename((path_for(index) or b'').decode())
+    try:
+        with open('/sys/class/input/%s/device/capabilities/abs' % node) as f:
+            words = f.read().split()
+    except OSError:
+        return None
+    bits = 0
+    for word in words:
+        bits = (bits << 64) | int(word, 16)
+    return [c for c in range(0x3f) if bits >> c & 1 and not 0x10 <= c <= 0x17]
+
+
+def attract_code(index, element, codes):
+    """O nome do Attract-Mode ("Joy0 Button3", "Joy1 PovYneg") de um elemento
+    do SDL; None se ele nao tem (teclado, segundo hat, eixo sem nome)."""
+    if is_key(element) or index < 0:
+        return None
+    if element.startswith('b'):
+        return 'Joy%d Button%s' % (index, element[1:])
+    if element.startswith('h'):
+        hat, bit = element[1:].split('.')
+        return 'Joy%d %s' % (index, AM_HAT[bit]) if hat == '0' and bit in AM_HAT else None
+    axis = int(element[2:])
+    codes = codes if codes is not None else list(range(8))
+    if axis >= len(codes) or codes[axis] not in AM_AXES:
+        return None
+    return 'Joy%d %s' % (index, AM_AXES[codes[axis]][element[0] == '+'])
+
+
+def attract_inputs(players, devices):
+    """As linhas (comando, entrada) de joystick do input_map."""
+    lines = []
+    first = True
+    for player in sorted(players):
+        binds = players[player]
+        index = next(iter(binds.values()))[0]
+        codes = devices[index][5] if index in devices else None
+        names = {c: attract_code(i, e, codes) for c, (i, e) in binds.items()}
+        lines += [(AM_MOVES[c], names[c]) for c in CONTROLS if c in AM_MOVES and names.get(c)]
+        # Direcional num hat: o analogico do controle (o padrao do
+        # Attract-Mode) continua andando pelo menu.
+        if codes is None or {0, 1} <= set(codes):
+            lines += [(c, 'Joy%d %s' % (index, c.capitalize())) for c in ('up', 'down', 'left', 'right')
+                      if names.get(c) and binds[c][1].startswith('h')]
+        if first and any(names.values()):
+            first = False
+            lines += [(cmd, '+'.join(names[c] for c in combo)) for cmd, combo in AM_COMBOS
+                      if all(names.get(c) for c in combo)]
+    return lines
+
+
+def attract_cfg(text, inputs):
+    """O attract.cfg com o joystick do input_map trocado: saem as entradas de
+    joystick dos comandos acima (o controle novo no lugar do antigo) e as de
+    outro comando que usam um botao deles; as de teclado e as outras ficam."""
+    managed = {cmd for cmd, _ in inputs}
+    used = {part for _, value in inputs for part in value.split('+')}
+    entries = ['    %-24s%s\n' % (cmd, value) for cmd, value in inputs]
+    out, inside = [], False
+
+    def flush():
+        # As entradas novas no fim da secao, antes dos "default".
+        out.extend(entries)
+        entries.clear()
+
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped and not line[:1].isspace():
+            if inside:
+                flush()
+            inside = stripped == AM_SECTION
+        elif inside and not stripped:
+            flush()
+        elif inside:
+            command, _, value = stripped.partition(' ')
+            if command == 'default':
+                flush()
+            else:
+                parts = [p.strip() for p in value.split('+')]
+                if any(p.startswith('Joy') for p in parts) and (command in managed or used.intersection(parts)):
+                    continue
+        out.append(line)
+    if inside:
+        flush()
+    return ''.join(out)
+
+
+def attract_path():
+    base = os.environ.get('FLIPEROS_ATTRACT_DIR', '/home/fliperos/.attract')
+    for path in (os.path.join(base, 'config', 'attract.cfg'), os.path.join(base, 'attract.cfg')):
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def attract_save(players, devices):
+    """Grava o joystick no attract.cfg (so se ele existe: antes da primeira
+    execucao o Attract-Mode ainda nao o criou, e o --session-start do Setup
+    chama de novo). Devolve o caminho, ou None."""
+    path = attract_path()
+    inputs = attract_inputs(players, devices)
+    if not path or not inputs:
+        return None
+    with open(path, encoding='utf-8', errors='replace') as f:
+        text = f.read()
+    if AM_SECTION not in text.split():
+        return None
+    new = attract_cfg(text, inputs)
+    if new != text:
+        write(path, new, USER_ID)
+    return path
+
+
+def cmd_attract(args):
+    players, _ = read_map(args.map)
+    if not players:
+        return 0
+    path = attract_save(players, sdl_devices())
+    if path:
+        print(path)
+    return 0
 
 
 def flycast_filename(name, arcade):
@@ -969,8 +1188,8 @@ def cmd_fbneo(args):
 
 
 def sdl_devices():
-    """{indice: (guid, nome, botoes, eixos)} dos controles ligados; vazio sem
-    o SDL."""
+    """{indice: (guid, nome, botoes, eixos, repouso dos eixos, codigos ABS
+    dos eixos ou None)} dos controles ligados; vazio sem o SDL."""
     try:
         lib = sdl()
     except OSError:
@@ -985,14 +1204,19 @@ def sdl_devices():
         return {}
     out = {}
     try:
-        for i in range(lib.SDL_NumJoysticks()):
-            buf = ctypes.create_string_buffer(33)
-            lib.SDL_JoystickGetGUIDString(lib.SDL_JoystickGetDeviceGUID(i), buf, 33)
-            js = lib.SDL_JoystickOpen(i)
+        sticks = {i: lib.SDL_JoystickOpen(i) for i in range(lib.SDL_NumJoysticks())}
+        # Os eixos so tem o valor de verdade depois da primeira leitura.
+        lib.SDL_JoystickUpdate()
+        time.sleep(0.05)
+        lib.SDL_JoystickUpdate()
+        for i, js in sticks.items():
             if not js:
                 continue
+            buf = ctypes.create_string_buffer(33)
+            lib.SDL_JoystickGetGUIDString(lib.SDL_JoystickGetDeviceGUID(i), buf, 33)
             out[i] = (buf.value.decode(), (lib.SDL_JoystickNameForIndex(i) or b'').decode(errors='replace'),
-                      lib.SDL_JoystickNumButtons(js), lib.SDL_JoystickNumAxes(js))
+                      lib.SDL_JoystickNumButtons(js), lib.SDL_JoystickNumAxes(js), state(lib, js)[1],
+                      abs_codes(lib, i))
     finally:
         lib.SDL_Quit()
     return out
@@ -1002,6 +1226,8 @@ def cmd_save(args):
     players, names = read_map(args.map)
     if not players:
         sys.exit('mapa vazio: %s' % args.map)
+    devices = sdl_devices()
+    fixed = fix_triggers(players, devices)
     layouts = read_layouts(BUTTONS_LAYOUT)
     write(RA_BUTTONS, retroarch_cfg(players, names))
     for count in LAYOUT_COUNTS:
@@ -1015,6 +1241,9 @@ def cmd_save(args):
     write(MAME_CTRLR, mame_cfg(players, names, layouts, table), USER_ID)
     supermodel_save(players, layouts, table)
     hypseus_save(players)
+    attract = attract_save(players, devices)
+    if attract:
+        print(attract)
     print(RA_BUTTONS)
     print(MAME_CTRLR)
     print(SUPERMODEL_INI)
@@ -1027,15 +1256,16 @@ def cmd_save(args):
     done = set()
     for player in sorted(players):
         binds = players[player]
-        name = names.get(next(iter(binds.values()))[0], '')
+        index = next(iter(binds.values()))[0]
+        name = names.get(index, '')
+        rests = devices[index][4] if index in devices else ()
         if name and name not in done:
             done.add(name)
             for folder in dirs:
                 for arcade, keys in ((False, FLYCAST_DC), (True, FLYCAST_ARCADE)):
                     path = os.path.join(folder, flycast_filename(name, arcade))
-                    write(path, flycast_cfg(name, binds, keys), USER_ID)
+                    write(path, flycast_cfg(name, binds, keys, rests), USER_ID)
                     print(path)
-    devices = sdl_devices()
     # O OpenBOR le as teclas pelo scancode: com o teclado, mesmo sem controle.
     keyboard = any(is_key(e) for binds in players.values() for _, e in binds.values())
     if devices or keyboard:
@@ -1053,7 +1283,10 @@ def cmd_save(args):
             os.system('"%s" > /dev/null 2>&1' % CONTROLLERS)
     # O mapa, para a atualizacao do sistema gravar tudo de novo.
     keep = os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map')
-    if os.path.abspath(args.map) != os.path.abspath(keep):
+    if fixed:
+        # Com o sentido dos gatilhos acertado.
+        write(keep, map_text(players, names))
+    elif os.path.abspath(args.map) != os.path.abspath(keep):
         with open(args.map, encoding='utf-8') as f:
             write(keep, f.read())
 
@@ -1108,7 +1341,7 @@ def pressed(rest, now):
     for i, (r, n) in enumerate(zip(rest[1], now[1])):
         if n - r > AXIS_PRESS:
             return '+a%d' % i
-        if r - n > AXIS_PRESS:
+        if r - n > AXIS_PRESS and not released_trigger(r, n):
             return '-a%d' % i
     for i, (r, n) in enumerate(zip(rest[2], now[2])):
         if n and n != r:
@@ -1118,12 +1351,19 @@ def pressed(rest, now):
     return None
 
 
+def released_trigger(rest, now):
+    """Um gatilho que estava apertado quando a captura comecou e foi solto
+    agora (de cima para -32768, onde ele repousa): nao e um comando."""
+    return rest > AXIS_PRESS and now <= -TRIGGER_REST
+
+
 def settle(rest, now):
     """O repouso depois que o que estava apertado no comeco foi solto: o botao
     solto, o eixo que voltou ao centro (um gatilho em -32768 nao volta e
-    continua repouso) e o hat solto passam a valer de novo."""
+    continua repouso), o gatilho solto e o hat solto passam a valer de novo."""
     buttons = [min(r, n) for r, n in zip(rest[0], now[0])]
-    axes = [n if abs(r) > AXIS_PRESS and abs(n) < 8000 else r for r, n in zip(rest[1], now[1])]
+    axes = [n if (abs(r) > AXIS_PRESS and abs(n) < 8000) or released_trigger(r, n) else r
+            for r, n in zip(rest[1], now[1])]
     hats = [0 if r and not n else r for r, n in zip(rest[2], now[2])]
     return buttons, axes, hats
 
@@ -1173,6 +1413,9 @@ def main():
     p = sub.add_parser('keyboard')
     p.add_argument('--players', type=int, choices=range(1, 5), default=2)
     p.set_defaults(func=cmd_keyboard)
+    p = sub.add_parser('attract')
+    p.add_argument('map')
+    p.set_defaults(func=cmd_attract)
     p = sub.add_parser('fbneo')
     p.add_argument('map')
     p.add_argument('version')

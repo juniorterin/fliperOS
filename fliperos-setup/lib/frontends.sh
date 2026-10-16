@@ -293,6 +293,7 @@ frontends_arcadeflow_systems() {
 # frontends_attract_defaults: os padroes do FliperOS no Attract-Mode Plus, a
 # cada abertura do launcher (fliperos-setup --session-start) e ao gravar as
 # telas. Nao com ele aberto.
+# - O controle do Button mapping no input_map (buttons_attract).
 # - Toda tela no Arcadeflow (com o tema instalado): as que estao no Basic ou
 #   no BasicPlus, o layout que o Attract-Mode Plus da as telas que ele mesmo
 #   cria. A de outro layout, escolhido pela pessoa, fica.
@@ -301,6 +302,8 @@ frontends_arcadeflow_systems() {
 frontends_attract_defaults() {
   local acfg
   pgrep -x "${ATTRACTPLUS##*/}" > /dev/null 2>&1 && return 0
+  # O controle do Setup > Joysticks > Button mapping.
+  buttons_attract
   [[ $(scraper_attract_layout) == Arcadeflow ]] || return 0
   "$ARCADEFLOW" prefs 2>> "$FLIPEROS_LOG"
   for acfg in "$ATTRACT_DIR/attract.cfg" "$ATTRACT_DIR/config/displays.cfg"; do
