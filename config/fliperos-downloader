@@ -29,7 +29,8 @@ o link (KIND.magnet), a lista de arquivos do torrent (KIND.json), o plano
 aplicado (KIND.plan, no formato do fliperos-romclean) e o que ja chegou as
 pastas dos emuladores (KIND.installed, "set<TAB>caminho"). So o que esta em
 KIND.installed e apagado quando o filtro deixa de escolher um jogo (prune):
-os arquivos postos a mao ficam. O pai, a BIOS e o dispositivo de um jogo que
+os arquivos postos a mao ficam, e os que estao fora das pastas do filtro de
+agora (os do filtro de outro emulador) tambem. O pai, a BIOS e o dispositivo de um jogo que
 fica nas pastas (o neogeo.zip dos jogos de MVS postos pelo ROM cleaner, por
 exemplo) tambem ficam (in_use).
 """
@@ -518,6 +519,41 @@ def installed(kind):
     return out
 
 
+def filter_folders():
+    """As pastas onde o filtro de agora poe o que baixa: --dest, --bios-dest
+    e os --route do filter.scan, e os --roms (as pastas dos CHDs) do
+    filter.chds. None sem filtro."""
+    try:
+        args = read_args('filter.scan') + (read_args('filter.chds') if read_state('filter.chds') is not None else [])
+    except OSError:
+        return None
+    folders = set()
+    for i, arg in enumerate(args[:-1]):
+        if arg in ('--dest', '--bios-dest', '--roms'):
+            folders.add(os.path.normpath(args[i + 1]))
+        elif arg == '--route':
+            folders.add(os.path.normpath(args[i + 1].partition('=')[2]))
+    return folders
+
+
+def owned(kind, installed_list):
+    """Do que o downloader trouxe, o que esta nas pastas do filtro de agora.
+    O filtro de outro emulador (GroovyMAME depois do Flycast) nao escolhe os
+    jogos do outro, e eles nao saem por isso: so o filtro que os pos nas
+    pastas deles os apaga. Um CHD fica em pasta/jogo/disco.chd."""
+    folders = filter_folders()
+    if folders is None:
+        return list(installed_list)
+    out = []
+    for name, path in installed_list:
+        home = os.path.dirname(path)
+        if kind == 'chds':
+            home = os.path.dirname(home)
+        if os.path.normpath(home) in folders:
+            out.append((name, path))
+    return out
+
+
 def mame_rompath():
     try:
         with open(MAME_INI, encoding='utf-8', errors='replace') as f:
@@ -603,7 +639,7 @@ def cmd_diff(args):
             continue
         add = sorted(n for n in new if n not in old)
         have = {}
-        for name, path in installed(kind):
+        for name, path in owned(kind, installed(kind)):
             have.setdefault(name, []).append(path)
         remove = [n for n in have if n not in new]
         if kind == 'roms':
@@ -642,18 +678,20 @@ def delete_path(path):
 
 def cmd_prune(args):
     """Apaga das pastas dos emuladores o que o downloader trouxe e o plano
-    aplicado nao escolhe mais."""
+    aplicado nao escolhe mais, so nas pastas do filtro de agora (owned)."""
     with lock():
         for kind in KINDS:
             entries = read_plan(state(kind + '.plan'))
             keep = set(plan_sets(entries))
+            mine = set(owned(kind, installed(kind)))
             if kind == 'roms':
-                keep |= in_use([(n, p) for n, p in installed(kind) if n not in keep])
+                keep |= in_use([(n, p) for n, p in mine if n not in keep])
             # De uma pasta de CHDs que fica, os discos que o plano nao lista mais.
             disks = {e[0]: e[5] for e in entries if e[5] is not None}
             left, deleted = [], 0
             for name, path in installed(kind):
-                if name in keep and (name not in disks or os.path.basename(path) in disks[name]):
+                if (name, path) not in mine or (
+                        name in keep and (name not in disks or os.path.basename(path) in disks[name])):
                     left.append('%s\t%s\n' % (name, path))
                 else:
                     delete_path(path)

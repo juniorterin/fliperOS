@@ -2802,11 +2802,12 @@ class DownloaderTests(unittest.TestCase):
         (self.tmp / 'mame.ini').write_text('rompath                   %s;%s\n' % (self.arcade, self.bios))
         self.filter()
 
-    def filter(self, *extra):
+    def filter(self, *extra, dest=None, bios=None):
         xml = ['--xml', str(self.tmp / 'mame.xml')]
-        (self.state / 'filter.scan').write_text('\n'.join(xml + ['--dest', str(self.mame), '--bios-dest',
-                                                                 str(self.bios), '--arcade-only', *extra]) + '\n')
-        (self.state / 'filter.chds').write_text('\n'.join(xml + ['--roms', str(self.mame)]) + '\n')
+        dest, bios = str(dest or self.mame), str(bios or self.bios)
+        (self.state / 'filter.scan').write_text('\n'.join(xml + ['--dest', dest, '--bios-dest',
+                                                                 bios, '--arcade-only', *extra]) + '\n')
+        (self.state / 'filter.chds').write_text('\n'.join(xml + ['--roms', dest]) + '\n')
 
     def dl(self, *args, check=True, env=None):
         return subprocess.run(['python3', str(ROOT / 'config/fliperos-downloader'), *args], capture_output=True,
@@ -2951,6 +2952,31 @@ class DownloaderTests(unittest.TestCase):
         self.dl('start')
         self.assertIn('roms\tdeleted\t1\n', self.dl('prune').stdout)
         self.assertFalse((self.bios / 'neogeo.zip').exists())
+
+    def test_the_filter_of_another_emulator_does_not_delete(self):
+        # O filtro do GroovyMAME baixa; depois o de outro emulador (Flycast:
+        # outras pastas) nao escolhe aqueles jogos, mas eles nao sao dele.
+        self.dl('add', 'roms', 'magnet:?xt=urn:btih:%s' % self.ROMS)
+        self.dl('add', 'chds', 'magnet:?xt=urn:btih:%s' % self.CHDS)
+        self.dl('start')
+        self.complete()
+        self.dl('finish')
+        before = sorted(p.name for p in self.mame.iterdir())
+        self.assertEqual(before, ['kinst', 'kinst.zip', 'mslug.zip', 'pong.zip'])
+        other = self.tmp / 'roms/naomi'
+        self.filter('--exclude', 'neogeo', '--exclude', 'chd', dest=other, bios=self.tmp / 'bios/dc')
+        self.assertIn('roms\tremove\t0\t0\n', self.dl('diff').stdout)
+        self.assertIn('chds\tremove\t0\t0\n', self.dl('diff').stdout)
+        self.dl('start')
+        self.assertIn('roms\tdeleted\t0\nchds\tdeleted\t0\n', self.dl('prune').stdout)
+        self.assertEqual(sorted(p.name for p in self.mame.iterdir()), before)
+        self.assertTrue((self.bios / 'neogeo.zip').exists())
+        self.assertIn(str(self.mame / 'mslug.zip'), (self.state / 'roms.installed').read_text())
+        # De volta ao filtro do GroovyMAME, o que ele deixa de fora sai.
+        self.filter('--exclude', 'chd')
+        self.dl('start')
+        self.assertIn('roms\tdeleted\t1\nchds\tdeleted\t1\n', self.dl('prune').stdout)
+        self.assertEqual(sorted(p.name for p in self.mame.iterdir()), ['mslug.zip', 'pong.zip'])
 
     def test_finds_the_sets_in_the_root_or_in_a_subfolder(self):
         # O link dos CHDs colado no lugar do romset: nada de ROM, e avisa.
