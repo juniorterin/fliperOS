@@ -1365,6 +1365,10 @@ class BootGameTests(Base):
         self.assertEqual(self.env.out("bootgame_label").strip(), "Crazy Taxi $ (USA)   v1")
         # Um arquivo que nao existe nao vira o jogo do boot.
         self.assertEqual(self.env.run("bootgame_set mame /nada/sf2.zip").returncode, 1)
+        # Um caminho relativo vira o inteiro: o jogo abre de outra pasta.
+        self.env.out('cd "$ROMS" && bootgame_set dreamcast "dreamcast/$NAME"',
+                     dict(env, ROMS=str(roms), NAME=game.name))
+        self.assertEqual((self.env.etc / "bootgame").read_text().splitlines()[1], str(game))
 
     def test_runner_runs_the_saved_words_without_a_shell(self):
         save = self.env.dir / "bootgame"

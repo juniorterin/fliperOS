@@ -139,8 +139,9 @@ bootgame_command() {
 
 # bootgame_set CHAVE ARQUIVO grava o jogo e o poe como o launcher padrao.
 bootgame_set() {
-  local key=$1 file=$2 cmd label tmp
-  [[ -f $file ]] || return 1
+  local key=$1 file cmd label tmp
+  # O caminho inteiro: o jogo abre no boot, na pasta do usuario.
+  file=$(readlink -f -- "$2") && [[ -f $file ]] || return 1
   cmd=$(bootgame_command "$key" "$file") || return 1
   # O nome vai para os menus: sem o separador deles.
   label=${file##*/}

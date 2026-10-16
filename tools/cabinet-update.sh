@@ -324,6 +324,13 @@ if [[ -z $busy ]]; then
   # segurar o video, e o menu novo abria em texto.
   pkill -TERM -f '^bash /usr/local/(bin|lib/fliperos-setup)/fliperos-setup --menu' 2> /dev/null || true
   pkill -TERM -f 'fliperos-setup/gui/fliperos-gui --serve' 2> /dev/null || true
+  # A interface ainda com o video na mao: o X do jogo do boot (modo jogo)
+  # nao pegava a placa ("drmSetMaster failed") e o jogo nao abria.
+  for ((i = 0; i < 50; i++)); do
+    pgrep -f 'fliperos-setup/gui/fliperos-gui --serve' > /dev/null || break
+    sleep 0.1
+  done
+  pkill -KILL -f 'fliperos-setup/gui/fliperos-gui --serve' 2> /dev/null || true
   systemctl restart getty@tty1.service
   echo "Done. To see the boot without text, reboot the cabinet."
 else
