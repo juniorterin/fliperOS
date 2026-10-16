@@ -356,6 +356,16 @@ orientation_label() {
   esac
 }
 
+# orientation_short ORIENTACAO: o nome curto, para o resumo do Video Setup.
+orientation_short() {
+  case $1 in
+    horizontal) echo "horizontal" ;;
+    vertical-cw) echo "vertical CW" ;;
+    vertical-ccw) echo "vertical CCW" ;;
+    *) echo "$1" ;;
+  esac
+}
+
 # orientation_fbcon ORIENTACAO imprime o valor do fbcon rotate.
 orientation_fbcon() {
   case $1 in

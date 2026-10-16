@@ -2075,6 +2075,25 @@ class GeometryTests(Base):
             self.assertEqual(self.env.out("geometry_grid_mode").strip(), mode, res)
 
 
+class ToggleBadgeTests(Base):
+    def test_setup_toggles_match_the_badge(self):
+        # O selo ON/OFF da interface grafica vem do "(on)"/"(off)" no fim do
+        # rotulo: os itens de liga/desliga do Setup tem de seguir esse formato.
+        widgets = (SETUP / "gui" / "widgets.py").read_text()
+        pattern = re.search(r'TOGGLE = re\.compile\(r"(.+)"\)', widgets).group(1)
+        toggle = re.compile(pattern)
+        for label in ("Volume leveler (on)", "Debug mode (off)", "Menu sounds (on)"):
+            self.assertTrue(toggle.match(label), label)
+        for label in ("Menu sounds (no sound files)", "Monitor 3: off", "Turn on (Wi-Fi)"):
+            self.assertIsNone(toggle.match(label), label)
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        for item in ('"debug|Debug mode ($(debug_enabled && echo on || echo off))|',
+                     '"leveler|Volume leveler ($(audio_leveler_enabled && echo on || echo off))|',
+                     '"sounds|Menu sounds ($(menu_sounds_label))|'):
+            self.assertIn(item, menu)
+        self.assertIn("badge(surf, left, top, size, state)", widgets)
+
+
 class CustomMonitorTests(Base):
     RANGE = "15625.0-15750.0,49.5-65.0,2.075,4.687,7.915,0.128,0.192,1.022,0,0,192,288,448,576"
 
@@ -2122,6 +2141,15 @@ class CustomMonitorTests(Base):
         self.assertEqual(self.env.out("crt_range_frequency '%s'" % good[0]).strip(), "15k")
         self.assertEqual(self.env.out("crt_range_frequency '%s'" % good[2]).strip(), "31k")
         self.assertEqual(self.env.out("crt_range_frequency 24960-24960,49.5-65").strip(), "25k")
+
+    def test_video_setup_summary_fits_the_carousel(self):
+        # A interface grafica so faz o carrossel de icones com ate 5 linhas
+        # de texto em cima: orientacao junto da resolucao, nome curto.
+        self.assertEqual(self.env.out("orientation_short vertical-ccw").strip(), "vertical CCW")
+        body = (SETUP / "screens" / "video-setup.sh").read_text().split("screen_video_setup() {")[1]
+        summary = body.split("choice=$(ui_menu_hints")[0]
+        self.assertNotIn('"Orientation|', summary)
+        self.assertIn('(($(mm_count) > 1)) && monitors=', summary)
 
     def test_preset_range_from_switchres(self):
         self.env.stub("switchres", 'echo "Switchres: display[0] options: monitor[$7]"\n'

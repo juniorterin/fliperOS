@@ -10,6 +10,7 @@
 # e, nos menus com icones, um carrossel. Tudo na Press Start 2P.
 
 
+import re
 import time
 
 import pygame
@@ -77,6 +78,36 @@ def block(surf, rect, color, shadow=T.LINE):
     if shadow:
         pygame.draw.rect(surf, shadow, (x + 2, y + 2, w, h))
     pygame.draw.rect(surf, color, rect)
+
+
+# Um item de liga/desliga: o Setup poe o estado no fim do rotulo,
+# "Volume leveler (on)" ou "Debug mode (off)".
+TOGGLE = re.compile(r"^(.*\S) \((on|off)\)$")
+
+
+def toggle(label):
+    """("Volume leveler", True) de "Volume leveler (on)"; (rotulo, None) sem
+    estado."""
+    found = TOGGLE.match(label)
+    return (found.group(1), found.group(2) == "on") if found else (label, None)
+
+
+def badge(surf, x, y, size, on):
+    """O selo do estado no canto de baixo a direita do icone de size pixels
+    com o canto em (x, y): ON verde ou OFF apagado. Em baixo, porque em cima
+    fica o texto do menu. Nos icones pequenos do carrossel (os vizinhos), so
+    a luz."""
+    if size < 48:
+        rect = (x + size - 7, y + size - 6, 9, 9)
+        block(surf, rect, T.GREEN if on else T.BG_DEEP, T.SPACE)
+        pygame.draw.rect(surf, T.SPACE if on else T.COMMENT, rect, 1)
+        return
+    label = "ON" if on else "OFF"
+    w = width(label) + 7
+    rect = (x + size - w + 5, y + size - 7, w, 12)
+    block(surf, rect, T.GREEN if on else T.BG_DEEP, T.SPACE)
+    pygame.draw.rect(surf, T.SPACE if on else T.COMMENT, rect, 1)
+    text(surf, label, T.SPACE if on else T.COMMENT, rect[0] + 4, rect[1] + 2)
 
 
 def button(surf, label, cx, y, selected, w=80):
@@ -296,6 +327,9 @@ class Menu:
             self.tile(surf, entry, cx - 16, mid - 16, 2)
             surf.blit(shade, (cx - 20, mid - 20))
             pygame.draw.rect(surf, T.LINE, (cx - 20, mid - 20, 40, 40), 1)
+            state = toggle(entry[1])[1]
+            if state is not None:
+                badge(surf, cx - 20, mid - 20, 40, state)
         surf.set_clip(None)
         left = (T.WIDTH - size) // 2
         block(surf, (left, top, size, size), T.BG_DEEP, T.PURPLE)
@@ -304,9 +338,13 @@ class Menu:
         self.tile(surf, self.entries[self.cursor], left + 4 + dx, top + 4, scale)
         surf.set_clip(None)
         pygame.draw.rect(surf, T.PINK, (left, top, size, size), 2)
+        # Liga/desliga: o estado vai no selo do icone, e o nome fica sem ele.
+        label, state = toggle(self.entries[self.cursor][1])
+        if state is not None:
+            badge(surf, left, top, size, state)
 
         y = top + size + 12
-        label, hint = self.entries[self.cursor][1], self.entries[self.cursor][2]
+        hint = self.entries[self.cursor][2]
         if not hint and ": " in label:
             # "Filter: Arcade classics": o nome grande e o valor na dica.
             label, hint = label.split(": ", 1)

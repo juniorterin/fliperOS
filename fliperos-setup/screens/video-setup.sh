@@ -559,19 +559,22 @@ screen_deflicker_preview() {
 }
 
 screen_video_setup() {
-  local choice last="" summary
+  local choice last="" summary monitors=()
   VIDEO_CHANGED=0
   # Video driver so aparece com uma placa AMD que aceita os dois drivers.
   local driver=()
   [[ -n $(drm_dual_amd_cards) ]] &&
     driver=("driver|Video driver|radeon (tested on the CRT) or amdgpu (with Vulkan).")
   while true; do
+    # Ate 5 linhas na interface grafica, ou o carrossel de icones vira lista:
+    # a orientacao vai junto da resolucao, e Monitors so com mais de um.
+    monitors=()
+    (($(mm_count) > 1)) && monitors=("Monitors|$(mm_count)")
     summary=$(ui_fields \
       "Monitor|$(video_monitor_label)" \
-      "Orientation|$(orientation_label "$(conf_get orientation 2> /dev/null || echo horizontal)")" \
-      "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "from boot menu")")" \
+      "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "boot menu")"), $(orientation_short "$(conf_get orientation 2> /dev/null || echo horizontal)")" \
       "Geometry|$(conf_get geometry > /dev/null 2>&1 && echo "adjusted" || echo "monitor default")" \
-      "Monitors|$(mm_count)")
+      "${monitors[@]}")
     choice=$(ui_menu_hints "Video Setup" "$summary" "$last" \
       "monitor|Monitor Type|The monitor model or its frequencies (15, 25 or 31 kHz)." \
       "orientation|Monitor Orientation|Horizontal, or vertical for a rotated monitor." \
