@@ -195,6 +195,13 @@ main() {
       return 0
       ;;
     --session-start)
+      # O jogo direto no boot (fliperos-session --session-start game): so a
+      # latencia. As listas, a arte e a config dos frontends nao servem a
+      # ele e atrasavam a abertura do jogo.
+      if [[ ${2:-} == game ]]; then
+        latency_session_start
+        return 0
+      fi
       # A arte que ainda esta em ~/media por plataforma (arcade, snes) vai
       # para as pastas com o nome das de ~/roms.
       media_refolder

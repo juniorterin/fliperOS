@@ -95,7 +95,9 @@ trap 'exit 143' TERM HUP
 # CPU no governador "performance" enquanto o launcher roda, e de volta ao
 # anterior quando ele fecha (o cpu_governor.sh do galauncher). No modo de
 # baixa latencia a CPU ja fica em performance desde o boot.
-sudo -n /usr/local/bin/fliperos-setup --session-start > /dev/null 2>&1 || true
+# O nome do launcher vai junto: o jogo direto no boot pula o preparo dos
+# frontends (listas e arte), que so atrasaria o jogo.
+sudo -n /usr/local/bin/fliperos-setup --session-start "$choice" > /dev/null 2>&1 || true
 # Tela limpa e sem cursor ate o launcher assumir o monitor.
 printf '\e[H\e[2J\e[?25l'
 

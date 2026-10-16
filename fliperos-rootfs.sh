@@ -486,6 +486,14 @@ ln -sfn /etc/systemd/system/fliperos-services-late.timer \
 for timer in apt-daily.timer apt-daily-upgrade.timer man-db.timer; do
   ln -sfn /dev/null "$root/etc/systemd/system/$timer"
 done
+# O que o Ubuntu sobe no boot e um fliperama nao usa: o Samba como
+# controlador de dominio (o compartilhamento e o smbd), o gpu-manager (placas
+# hibridas de notebook; mexeria no Xorg que o Setup grava), o Ubuntu Pro e as
+# noticias do MOTD pela rede.
+for unit in samba-ad-dc.service gpu-manager.service ubuntu-advantage.service ua-reboot-cmds.service \
+  ua-timer.timer motd-news.timer motd-news.service; do
+  ln -sfn /dev/null "$root/etc/systemd/system/$unit"
+done
 # Servicos de versoes anteriores (conferencia fixa de VGA-1 a 15 kHz).
 rm -f "$root/etc/systemd/system/multi-user.target.wants/fliperos-video-check.service" \
   "$root/etc/systemd/system/fliperos-video-check.service"

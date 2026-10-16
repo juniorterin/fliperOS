@@ -1292,6 +1292,23 @@ class ServicesTests(Base):
         self.assertEqual(self.env.out("services_state ssh; services_state samba; services_state wifi").split(),
                          ["after", "off", "after"])
 
+    def test_game_mode_turns_the_network_wait_off(self):
+        # Com o NetworkManager-wait-online no sistema: no modo jogo ele vai
+        # para Off (esperar a rede depois do boot nao serve), o resto para After.
+        self.env.stub("systemctl", textwrap.dedent("""\
+            case $1 in
+              list-unit-files)
+                for u in ssh.service NetworkManager-wait-online.service; do
+                  [ "$u" = "$3" ] && echo "$u enabled enabled"
+                done ;;
+              is-enabled) echo enabled ;;
+              *) echo "systemctl $*" >> %s ;;
+            esac""" % self.log))
+        self.assertIn("netwait|Wait for network|boot|", self.env.out("services_rows"))
+        self.assertEqual(self.env.out("services_minimal").splitlines(), ["SSH", "Wi-Fi", "Wait for network"])
+        self.assertIn("systemctl disable --now NetworkManager-wait-online.service", self.calls())
+        self.assertIn("netwait=off\n", (self.env.etc / "services.conf").read_text())
+
     def test_states_and_keys_are_checked(self):
         self.assertEqual(self.env.run("services_set ssh sometimes").returncode, 1)
         self.assertEqual(self.env.run("services_set telnet boot").returncode, 1)

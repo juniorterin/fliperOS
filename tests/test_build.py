@@ -436,7 +436,8 @@ class ImageTests(unittest.TestCase):
         self.assertIn("sudo /usr/local/bin/fliperos-setup --desktop \"$DISPLAY\"", desktop)
         self.assertIn('Terminal=true', desktop)
 
-    def tty1(self, installed, setup_codes, requests, *args, splash=False, firstboot=True, terminal='/dev/tty1'):
+    def tty1(self, installed, setup_codes, requests, *args, splash=False, firstboot=True, terminal='/dev/tty1',
+             game=False):
         """Roda o config/fliperos-tty1 com sudo e fliperos-session falsos.
         setup_codes: status de cada "fliperos-setup --menu"; requests: o
         pedido gravado antes de cada um; splash: o Plymouth do boot no ar;
@@ -465,6 +466,14 @@ class ImageTests(unittest.TestCase):
             (tmp / 'bin/tty').write_text('#!/bin/bash\necho %s\n' % terminal)
             for f in ('sudo', 'fliperos-session', 'tty'):
                 (tmp / 'bin' / f).chmod(0o755)
+            if game:
+                # O jogo direto no boot, as pastas e um update esperando.
+                (tmp / 'etc/session').write_text('game\n')
+                (tmp / 'bin/fliperos-roms').write_text('#!/bin/bash\necho roms >> %s\n' % log)
+                (tmp / 'bin/fliperos-update').write_text('#!/bin/bash\necho "update $*" >> %s\necho 18\n' % log)
+                (tmp / 'bin/nm-online').write_text('#!/bin/bash\nexit 0\n')
+                for f in ('fliperos-roms', 'fliperos-update', 'nm-online'):
+                    (tmp / 'bin' / f).chmod(0o755)
             env = dict(os.environ, PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']),
                        FLIPEROS_ETC=str(tmp / 'etc'), FLIPEROS_BIN=str(tmp / 'bin'),
                        FLIPEROS_LAUNCH_REQUEST=str(tmp / 'request'),
@@ -481,6 +490,29 @@ class ImageTests(unittest.TestCase):
                                  'session', 'sudo /usr/local/bin/fliperos-setup --menu'])
         calls = self.tty1(False, [0], ['-'])
         self.assertEqual(calls[1:], ['sudo /usr/local/bin/fliperos-setup --menu'])
+
+    def test_game_at_boot_opens_before_anything_else(self):
+        # Modo jogo: nada de esperar a rede pelo update nem varrer pastas
+        # antes do jogo; os dois vem depois dele, a caminho do menu.
+        calls = self.tty1(True, [0], ['-'], firstboot=False, game=True)
+        self.assertEqual(calls, ['sudo setterm --blank 0 --powerdown 0', 'session', 'roms', 'update check',
+                                 'sudo /usr/local/bin/fliperos-setup --update-check',
+                                 'sudo /usr/local/bin/fliperos-setup --menu'])
+        tty1 = (ROOT / 'config/fliperos-tty1').read_text()
+        self.assertIn('FLIPEROS_UPDATE_NET_WAIT=0 update_pending', tty1)
+        # O preparo dos frontends (listas, arte) fica de fora no jogo.
+        session = (ROOT / 'config/fliperos-session').read_text()
+        self.assertIn('fliperos-setup --session-start "$choice"', session)
+        entry = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        start = entry.split('--session-start)')[1].split(';;')[0]
+        self.assertLess(start.index('if [[ ${2:-} == game ]]; then\n        latency_session_start\n        return 0'),
+                        start.index('media_refolder'))
+
+    def test_ubuntu_boot_services_a_cabinet_does_not_use_are_masked(self):
+        for unit in ('samba-ad-dc.service', 'gpu-manager.service', 'ubuntu-advantage.service',
+                     'ua-reboot-cmds.service', 'ua-timer.timer', 'motd-news.timer'):
+            self.assertIn(unit, ROOTFS.split('# noticias do MOTD pela rede.\nfor unit in')[1].split('done')[0])
+        self.assertIn('  ln -sfn /dev/null "$root/etc/systemd/system/$unit"\ndone', ROOTFS)
 
     def test_menu_typed_over_ssh_is_the_text_one(self):
         # fliperos-menu num terminal do SSH: o Setup em texto ali, nao a

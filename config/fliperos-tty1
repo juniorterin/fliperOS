@@ -78,20 +78,33 @@ update_pending() {
   [[ -n $(FLIPEROS_UPDATE_LOG=/dev/null "$BIN/fliperos-update" check 2> /dev/null) ]]
 }
 
+# game_mode: o boot abre um jogo direto (Setup > Games > Frontend). Nada
+# que espere a rede ou varra pastas fica antes dele.
+game_mode() {
+  [[ $(tr -d '[:space:]' < "$ETC/session" 2> /dev/null) == game ]]
+}
+
 if [[ ${1:-} != --menu ]]; then
   sudo setterm --blank 0 --powerdown 0 2> /dev/null
   # Pastas de ~/roms que faltarem (um core novo do RetroArch, por exemplo).
-  "$BIN/fliperos-roms" > /dev/null 2>&1
+  # No modo jogo, so quando o menu abrir.
+  game_mode || "$BIN/fliperos-roms" > /dev/null 2>&1
   if [[ -f $ETC/installed ]]; then
     if [[ -f $ETC/firstboot ]]; then
       splash_off
       sudo /usr/local/bin/fliperos-setup --first-boot
-    elif update_pending; then
+    elif ! game_mode && update_pending; then
       splash_off
       sudo /usr/local/bin/fliperos-setup --update-check
     fi
     splash_off
     "$BIN/fliperos-session"
+    # No modo jogo o update e perguntado depois do jogo, a caminho do menu:
+    # a rede ja teve tempo de subir, e sem ela nao se espera mais.
+    if game_mode; then
+      "$BIN/fliperos-roms" > /dev/null 2>&1
+      FLIPEROS_UPDATE_NET_WAIT=0 update_pending && sudo /usr/local/bin/fliperos-setup --update-check
+    fi
   fi
 fi
 menu

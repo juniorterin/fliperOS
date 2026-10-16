@@ -25,8 +25,15 @@ ssh|SSH|ssh.service ssh.socket|The terminal of this computer from another one (P
 samba|Network share|smbd.service nmbd.service|The FliperOS folder on the network, for Windows and other computers.
 avahi|fliperos.local|avahi-daemon.service avahi-daemon.socket|Find this computer on the network by the name fliperos.local.
 wifi|Wi-Fi|radio:wifi|The Wi-Fi radio. The network cable works either way.
+netwait|Wait for network|NetworkManager-wait-online.service|The boot waits for the network to come up. Off: it goes on without it.
 downloader|Downloader|fliperos-transmission.service|The torrents of Setup > Games > Downloader, in the background.
 EOF
+}
+
+# services_minimal_state CHAVE: o estado do servico no modo jogo. Esperar a
+# rede depois do boot nao serve a nada: desligado.
+services_minimal_state() {
+  [[ $1 == netwait ]] && echo off || echo after
 }
 
 # services_field CHAVE CAMPO (2 rotulo, 3 units, 4 ajuda).
@@ -136,14 +143,15 @@ services_save() {
   return 0
 }
 
-# services_minimal passa para "after" todo servico que sobe no boot (o jogo
-# direto no boot: Setup > Games > Frontend). Imprime os rotulos dos que mudaram.
+# services_minimal tira do boot todo servico que sobe nele (o jogo direto no
+# boot: Setup > Games > Frontend): "after", ou "off" na espera pela rede.
+# Imprime os rotulos dos que mudaram.
 services_minimal() {
   local key label
   while IFS='|' read -r key label _; do
     services_present "$key" || continue
     [[ $(services_state "$key") == boot ]] || continue
-    services_set "$key" after && printf '%s\n' "$label"
+    services_set "$key" "$(services_minimal_state "$key")" && printf '%s\n' "$label"
   done < <(services_table)
   return 0
 }
