@@ -798,7 +798,9 @@ ui_browse() {
         paths+=("$path")
       done
     fi
-    choice=$(ui_menu "$title" "$text"$'\n'"$(ui_c "$C_CYAN" "$dir")" "$default" "${entries[@]}") || return 1
+    # Pastas: na interface grafica, a lista vertical em texto (UI_STYLE=list).
+    choice=$(UI_STYLE=list ui_menu "$title" "$text"$'\n'"$(ui_c "$C_CYAN" "$dir")" "$default" "${entries[@]}") ||
+      return 1
     case $choice in
       use)
         printf '%s\n' "$dir"

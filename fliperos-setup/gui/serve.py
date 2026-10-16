@@ -259,7 +259,7 @@ class Server:
             elif cmd == "check" and style == "years":
                 screen = W.ToggleGrid(title, text, [(v, label, label[2:]) for v, label in options], marked, 6)
             else:
-                screen = W.Menu(title, entries, current, text, cmd, marked, tiles)
+                screen = W.Menu(title, entries, current, text, cmd, marked, tiles, vertical=style == "list")
             action, value = self.ask(screen, cmd)
             if action != "select":
                 return 1, ""

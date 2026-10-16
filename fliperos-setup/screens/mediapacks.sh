@@ -216,7 +216,7 @@ screen_mediapacks_add() {
   while IFS='|' read -r key _ _ count; do
     [[ -n $key ]] && entries+=("$key|$key - $count files")
   done <<< "$MEDIAPACKS_FOUND"
-  folders=$(ui_menu "$title" "Which games is it for?" "@arcade" "${entries[@]}") || return 0
+  folders=$(UI_STYLE=list ui_menu "$title" "Which games is it for?" "@arcade" "${entries[@]}") || return 0
   link=$(ui_input "$title" "Paste the magnet link or the address of the .torrent file." "" long) || return 0
   link=${link//[[:space:]]/}
   [[ -n $link ]] || return 0

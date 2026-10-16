@@ -45,7 +45,8 @@ screen_folders() {
     for name in $FOLDERS_NAMES; do
       entries+=("$name|$(screen_folders_label "$name")")
     done
-    choice=$(ui_menu "$title" \
+    # Pastas: na interface grafica, a lista vertical em texto.
+    choice=$(UI_STYLE=list ui_menu "$title" \
       "Folders in $FOLDERS_HOME. Each one can use a custom folder on another disk (USB, second drive)." \
       "$last" "${entries[@]}" "-return|Return") || return 0
     [[ $choice == -return ]] && return 0
@@ -91,7 +92,7 @@ screen_folder() {
     done
     text=$(folders_description "$rel")
     ((${#children[@]})) && text+=$'\n'"The folders inside it can each have their own custom folder."
-    choice=$(ui_menu "$title" "${text:+$text$'\n\n'}$(ui_fields "${fields[@]}")" "$last" \
+    choice=$(UI_STYLE=list ui_menu "$title" "${text:+$text$'\n\n'}$(ui_fields "${fields[@]}")" "$last" \
       "${entries[@]}" "return|Return") || return 0
     last=$choice
     case $choice in

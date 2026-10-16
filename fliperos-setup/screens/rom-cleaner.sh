@@ -211,7 +211,8 @@ screen_netshare_connect() {
     for s in "${shares[@]}"; do
       entries+=("$s|$s")
     done
-    share=$(ui_menu "$title" "Which shared folder of $host?" "$(netshare_saved share)" "${entries[@]}") || return 1
+    share=$(UI_STYLE=list ui_menu "$title" "Which shared folder of $host?" "$(netshare_saved share)" "${entries[@]}") ||
+      return 1
   else
     share=$(ui_input "$title" "The name of the shared folder on $host (what comes after \\\\$host\\)." \
       "$(netshare_saved share)") || return 1

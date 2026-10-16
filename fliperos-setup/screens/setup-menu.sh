@@ -397,7 +397,7 @@ screen_bootgame() {
       "Copy some (network share, Setup > Games > Downloader) and come back."
     return 0
   fi
-  choice=$(ui_menu "$title" "The game opens straight when the computer turns on; leaving it (Esc) opens the FliperOS menu. Which system?" \
+  choice=$(UI_STYLE=list ui_menu "$title" "The game opens straight when the computer turns on; leaving it (Esc) opens the FliperOS menu. Which system?" \
     "" "${entries[@]}" "return|Return") || return 0
   [[ $choice == return ]] && return 0
   IFS=';' read -ra ext_list <<< "${ext_of[$choice]}"
@@ -429,7 +429,7 @@ screen_custom_games() {
       entries+=("$group/$name|$group: $name ($(customgames_mode_label "${mode:-?}"))")
     done < <(customgames_list)
     entries+=("+add|Add a game or program" "return|Return")
-    choice=$(ui_menu "$title" \
+    choice=$(UI_STYLE=list ui_menu "$title" \
       "Games and programs that are not a ROM (a PC game, your own emulator, a script), in groups the frontends show as systems." \
       "$last" "${entries[@]}") || return 0
     last=$choice
@@ -469,7 +469,7 @@ screen_custom_game_edit() {
   if ((${#groups[@]})); then
     for g in "${groups[@]}"; do entries+=("$g|$g"); done
     entries+=("+new|New group")
-    choice=$(ui_menu "$title" "Which group? Each group is a system in the frontends." "${old_group:-${groups[0]}}" \
+    choice=$(UI_STYLE=list ui_menu "$title" "Which group? Each group is a system in the frontends." "${old_group:-${groups[0]}}" \
       "${entries[@]}") || return 0
   fi
   if [[ $choice == +new ]]; then

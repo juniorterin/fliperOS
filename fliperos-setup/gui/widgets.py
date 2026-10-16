@@ -171,10 +171,12 @@ class Menu:
     carrossel: o icone de cada item vem de tiles (valor -> funcao que o
     desenha), de theme.ICONS (pelo valor) ou, sem nenhum, e a inicial."""
 
-    def __init__(self, title, entries, default=None, text="", mode="menu", marked=(), tiles=None):
+    def __init__(self, title, entries, default=None, text="", mode="menu", marked=(), tiles=None, vertical=False):
         self.title = title
         self.text = text
         self.mode = mode
+        # UI_STYLE=list: a lista vertical em texto, mesmo curta (as pastas).
+        self.vertical = vertical
         self.tiles = tiles or {}
         self.entries = [(e[0], e[1], e[2] if len(e) > 2 else "") for e in entries]
         self.marked = set(marked)
@@ -231,8 +233,9 @@ class Menu:
 
     def carousel(self):
         """O menu cabe no carrossel? Uma lista longa (pastas, redes) ou um
-        texto grande (uma tabela) ficam melhor na lista."""
-        return self.mode == "menu" and len(self.entries) <= 12 and len(self.notes()) <= 5
+        texto grande (uma tabela) ficam melhor na lista, e as pastas sempre."""
+        return (not self.vertical and self.mode == "menu" and len(self.entries) <= 12
+                and len(self.notes()) <= 5)
 
     def draw(self, surf, ctx):
         if self.carousel():

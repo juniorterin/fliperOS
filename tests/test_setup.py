@@ -1556,6 +1556,30 @@ class ArcadeResyncTests(Base):
                         frontends.index("frontends_attract_empty\n"))
 
 
+class FolderListsTests(unittest.TestCase):
+    """Toda listagem de pastas e a lista vertical em texto na interface
+    grafica (UI_STYLE=list), nunca o carrossel de icones."""
+
+    def test_every_folder_listing_is_a_vertical_list(self):
+        ui = (SETUP / "lib" / "ui.sh").read_text().split("ui_browse() {")[1].split("\n}\n")[0]
+        self.assertIn("choice=$(UI_STYLE=list ui_menu", ui)
+        screens = {
+            "folders.sh": ['choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Folders in $FOLDERS_HOME',
+                           'choice=$(UI_STYLE=list ui_menu "$title" "${text:+$text'],
+            "rom-cleaner.sh": ['share=$(UI_STYLE=list ui_menu "$title" "Which shared folder'],
+            "mediapacks.sh": ['folders=$(UI_STYLE=list ui_menu "$title" "Which games is it for?"'],
+            "setup-menu.sh": ['choice=$(UI_STYLE=list ui_menu "$title" "The game opens straight',
+                              'choice=$(UI_STYLE=list ui_menu "$title" "Which group?'],
+        }
+        for name, calls in screens.items():
+            text = (SETUP / "screens" / name).read_text()
+            for call in calls:
+                self.assertIn(call, text, name)
+        serve = (SETUP / "gui" / "serve.py").read_text()
+        self.assertIn('vertical=style == "list"', serve)
+        self.assertIn("return (not self.vertical and", (SETUP / "gui" / "widgets.py").read_text())
+
+
 class RemoteMenuTests(Base):
     """fliperos-menu digitado no SSH: o menu em texto ali, nunca a interface
     grafica no monitor do gabinete."""
