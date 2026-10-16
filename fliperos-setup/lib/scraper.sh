@@ -415,6 +415,17 @@ scraper_count() {
     ! -name 'metadata.pegasus.txt' ! -path "$1/media/*" 2> /dev/null | wc -l
 }
 
+# scraper_has_files PASTA: ha algo alem do _info.txt? Sem abrir processo:
+# das ~330 pastas de core do RetroArch quase todas estao vazias, e o .info
+# e o find de cada uma levavam ~2 s por scraper_detect.
+scraper_has_files() {
+  local f
+  for f in "$1"/*; do
+    [[ -e $f && ${f##*/} != _info.txt ]] && return 0
+  done
+  return 1
+}
+
 # scraper_detect imprime "chave|pasta|plataforma|quantidade" das pastas com
 # jogos que o Skyscraper conhece: as de ~/roms e as dos cores do RetroArch
 # (~/roms/retroarch/<core>, pela plataforma do systemid do core).
@@ -424,6 +435,7 @@ scraper_detect() {
     [[ -d $dir ]] || continue
     dir=${dir%/}
     name=${dir##*/}
+    scraper_has_files "$dir" || continue
     platform=$(scraper_platform "$name") || continue
     count=$(scraper_count "$dir")
     ((count > 0)) && printf '%s|%s|%s|%s\n' "$name" "$dir" "$platform" "$count"
@@ -432,6 +444,7 @@ scraper_detect() {
     [[ -d $dir ]] || continue
     dir=${dir%/}
     core=${dir##*/}
+    scraper_has_files "$dir" || continue
     platform=$(scraper_libretro_platform "$(scraper_core_info "$core" systemid)") || continue
     count=$(scraper_count "$dir")
     ((count > 0)) && printf 'retroarch/%s|%s|%s|%s\n' "$core" "$dir" "$platform" "$count"
