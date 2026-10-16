@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowDown, Download } from 'lucide-react';
+import Image from 'next/image';
 import { CrtMonitor } from '@/components/CrtMonitor';
 import { ScreenCarousel } from '@/components/ScreenCarousel';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -27,10 +28,22 @@ export function Hero({ screenshots, downloadUrl }: { screenshots: ScreenshotMap;
             <span className="size-1.5 rounded-full bg-green shadow-[0_0_8px] shadow-green" aria-hidden="true" />
             {h.eyebrow}
           </p>
-          <h1 id="hero-title" className="mt-6 text-5xl font-bold tracking-tight text-balance sm:text-6xl xl:text-7xl">
-            <span className="rgb-split block text-fg">{h.titleLine1}</span>
-            <span className="text-gradient block pb-2">{h.titleLine2}</span>
-          </h1>
+          <div className="mt-6 flex items-center gap-4 sm:gap-6">
+            {/* Logo em pixel art 240p: no tamanho nativo (xl) os pixels ficam nítidos. */}
+            <Image
+              src="/fliperos-logo.png"
+              alt=""
+              width={202}
+              height={220}
+              unoptimized
+              priority
+              className="h-auto w-24 shrink-0 sm:w-36 xl:w-[202px] xl:[image-rendering:pixelated]"
+            />
+            <h1 id="hero-title" className="text-4xl font-bold tracking-tight text-balance sm:text-5xl xl:text-6xl">
+              <span className="rgb-split block text-fg">{h.titleLine1}</span>
+              <span className="text-gradient block pb-2">{h.titleLine2}</span>
+            </h1>
+          </div>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-pretty text-muted sm:text-xl">{h.description}</p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <a
