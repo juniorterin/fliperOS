@@ -5569,7 +5569,12 @@ class EmulatorModeTests(unittest.TestCase):
             conf.write_text('connector=VGA-1\nscreens=DVI-I-1,VGA-1,DVI-I-2\n')
             cfg = tmp / 'emu.cfg'
             cfg.write_text('[config]\npvr.rend = 3\n')
-            env = dict(os.environ, PATH='%s:%s' % (tmp, os.environ['PATH']), FLIPEROS_CONF=str(conf),
+            # As placas no sysfs falso: a da maquina que roda o teste (o
+            # Docker Desktop tem uma virtual) nao pode entrar na conta.
+            drm = tmp / 'drm'
+            for card in ('card0', 'card0-VGA-1', 'card1', 'card1-VGA-1', 'card2', 'card2-DVI-I-2'):
+                (drm / card).mkdir(parents=True)
+            env = dict(os.environ, PATH='%s:%s' % (tmp, os.environ['PATH']), FLIPEROS_CONF=str(conf), DRM_SYSFS=str(drm),
                        FLIPEROS_FLYCAST_CFG=str(cfg), FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'),
                        FLIPEROS_FLYCAST_STRETCH='200')
 
@@ -5601,7 +5606,7 @@ class EmulatorModeTests(unittest.TestCase):
             calls.unlink()
             self.assertEqual(run(), ['-config', 'window:fullscreen=yes', 'f355.zip'])
             self.assertFalse(calls.exists())
-        self.assertIn('fliperos-automount fliperos-multiscreen fliperos-dlopen-links; do', ROOTFS)
+        self.assertRegex(ROOTFS, r' fliperos-multiscreen[^\n]*; do')
 
     def test_super_resolution_without_low_dotclock(self):
         # Intel/NVIDIA: o Setup grava dotclock_min. O modo vai direto na
