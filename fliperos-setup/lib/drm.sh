@@ -152,6 +152,36 @@ drm_card_fb() {
   return 1
 }
 
+# drm_cards lista as placas (card0, card1...), sem os conectores.
+drm_cards() {
+  local path
+  for path in "$DRM_SYSFS"/card[0-9]*; do
+    [[ ${path##*/} == *-* || ! -e $path/device ]] && continue
+    printf '%s\n' "${path##*/}"
+  done | sort -V
+}
+
+# drm_card_dual_amd CARD: a placa funciona com o radeon e com o amdgpu. Sao
+# as GCN 1.0 e 1.1 (SI e CIK: HD 7000, HD 8000, R7/R9 200 e 300, APUs
+# Kaveri e Kabini); as mais antigas so tem o radeon e as mais novas so o
+# amdgpu. Quem responde e a tabela de PCI IDs dos proprios modulos: o
+# modprobe -R resolve o modalias da placa e lista quem a aceita.
+drm_card_dual_amd() {
+  local alias mods
+  alias=$(cat "$DRM_SYSFS/$1/device/modalias" 2> /dev/null) || return 1
+  [[ $alias == pci:v00001002* ]] || return 1
+  mods=$'\n'$(modprobe -R "$alias" 2> /dev/null)$'\n'
+  [[ $mods == *$'\nradeon\n'* && $mods == *$'\namdgpu\n'* ]]
+}
+
+drm_dual_amd_cards() {
+  local card
+  for card in $(drm_cards); do
+    drm_card_dual_amd "$card" && printf '%s\n' "$card"
+  done
+  return 0
+}
+
 # ── EDID ─────────────────────────────────────────────────────────
 # Os descritores de 18 bytes ficam em 54, 72, 90 e 108. Descritor de texto:
 # tres zeros, o tipo no quarto byte (0xFF numero de serie, 0xFC nome) e o

@@ -111,7 +111,9 @@ install_configure_video() {
   # da placa testada nesta sessao.
   [[ -f $target$RETROARCH_CFG ]] && video_retroarch_super "$target$RETROARCH_CFG"
   # A linha sai do fliperos.conf e dos quirks do disco: nele esta o modo de
-  # latencia, e o Recovery Mode nao apaga os quirks que ja estavam la.
+  # latencia e o driver AMD, e o Recovery Mode nao apaga os quirks que ja
+  # estavam la. O driver AMD so a linha escolhe (amd_driver_modprobe_clean).
+  amd_driver_modprobe_clean "$target" || return 1
   boot_write_cmdline "$(FLIPEROS_CONF=$target$FLIPEROS_CONF QUIRKS_FILE=$target$QUIRKS_FILE \
     boot_install_cmdline)" "$target$BOOT_DEFAULTS"
 }

@@ -5099,5 +5099,103 @@ class ProgressScreenTests(Base):
         self.assertIn("""printf '  %s\\e[K' "$(ui_c "$C_COMMENT" "${footer:0:UI_COLS-3}")\"""", screen)
 
 
+class AmdDriverTests(Base):
+    """radeon ou amdgpu nas placas que aceitam os dois (System > Video driver)."""
+    RADEON = "radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0"
+    AMDGPU = "radeon.si_support=0 radeon.cik_support=0 amdgpu.si_support=1 amdgpu.cik_support=1 amdgpu.dc=0"
+
+    def setUp(self):
+        super().setUp()
+        # O modprobe -R de verdade: a tabela de PCI IDs dos modulos. 6798 (HD
+        # 7970, SI) esta nos dois; 68f9 (HD 5450) so no radeon; 67df (RX 480)
+        # so no amdgpu.
+        self.env.stub("modprobe", '[ "$1" = -R ] || exit 1\n'
+                                  'case $2 in\n'
+                                  '  *d00006798*) printf "radeon\\namdgpu\\n" ;;\n'
+                                  '  *d000068F9*) echo radeon ;;\n'
+                                  '  *d000067DF*) echo amdgpu ;;\n'
+                                  '  *) exit 1 ;;\n'
+                                  'esac')
+
+    def gpu(self, card, driver, device):
+        self.env.card(card, driver)
+        (self.env.drm / card / "device" / "modalias").write_text(
+            "pci:v00001002d0000%ssv00001002sd00003001bc03sc00i00\n" % device)
+
+    def test_only_cards_both_drivers_take(self):
+        self.gpu("card0", "radeon", "68F9")
+        self.gpu("card1", "radeon", "6798")
+        self.gpu("card2", "amdgpu", "67DF")
+        self.env.connector("card1-VGA-1")
+        self.assertEqual(self.env.out("drm_cards").split(), ["card0", "card1", "card2"])
+        self.assertEqual(self.env.out("drm_dual_amd_cards").split(), ["card1"])
+
+    def test_no_amd_card_no_choice(self):
+        self.env.card("card0", "i915")
+        (self.env.drm / "card0" / "device" / "modalias").write_text("pci:v00008086d00005912\n")
+        self.assertEqual(self.env.out("drm_dual_amd_cards").strip(), "")
+
+    def test_line_unchanged_without_a_choice(self):
+        line = "quiet splash consoleblank=0 " + self.RADEON
+        self.assertEqual(self.env.out("amd_driver_cmdline '%s'" % line).strip(), line)
+        self.assertEqual(self.env.out("amd_driver").strip(), "radeon")
+
+    def test_amdgpu_and_back(self):
+        line = "quiet splash consoleblank=0 " + self.RADEON
+        out = self.env.out("conf_set amd_driver amdgpu; amd_driver_cmdline '%s'" % line).strip()
+        self.assertEqual(out, "quiet splash consoleblank=0 " + self.AMDGPU)
+        out = self.env.out("conf_set amd_driver radeon; amd_driver_cmdline '%s'" % out).strip()
+        self.assertEqual(out, "quiet splash consoleblank=0 " + self.RADEON)
+
+    def test_install_line_takes_the_choice(self):
+        (self.env.etc / "fliperos.conf").write_text("amd_driver=amdgpu\n")
+        out = self.env.out("boot_install_cmdline").strip().split()
+        for word in self.AMDGPU.split():
+            self.assertIn(word, out)
+        self.assertNotIn("radeon.si_support=1", out)
+        self.assertEqual(len([w for w in out if w.startswith("amdgpu.si_support")]), 1)
+
+    def test_modprobe_keeps_only_the_other_options(self):
+        conf = self.env.dir / "modprobe" / "fliperos.conf"
+        conf.parent.mkdir()
+        conf.write_text("options radeon si_support=1 cik_support=1 dpm=1\n"
+                        "options amdgpu si_support=0 cik_support=0\n"
+                        "options snd_hda_intel power_save=0 power_save_controller=N\n")
+        self.env.out("amd_driver_apply amdgpu", {"AMD_MODPROBE_CONF": str(conf)})
+        self.assertEqual(conf.read_text(), "options radeon dpm=1\n"
+                                           "options snd_hda_intel power_save=0 power_save_controller=N\n")
+        self.assertIn("amd_driver=amdgpu", (self.env.etc / "fliperos.conf").read_text())
+
+    def test_new_images_leave_the_choice_to_the_line(self):
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        block = rootfs.split('cat > "$root/etc/modprobe.d/fliperos.conf"')[1].split("EOF")[1]
+        self.assertNotIn("si_support", block)
+        self.assertIn("options radeon dpm=1", block)
+
+    def test_boot_menu_offers_radeon_back(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("limine_update", ROOT / "fliperos-limine-update.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        text = mod.render(["6.18.54-15khz"], "UUID=abc", "quiet splash " + self.AMDGPU, "3")
+        entry = text.split("/FliperOS - radeon driver\n")[1]
+        cmdline = re.search(r"cmdline: (.*)", entry).group(1).split()
+        for word in self.RADEON.split():
+            self.assertIn(word, cmdline)
+        self.assertNotIn("amdgpu.dc=0", cmdline)
+        self.assertNotIn("amdgpu.si_support=1", cmdline)
+        plain = mod.render(["6.18.54-15khz"], "UUID=abc", "quiet splash " + self.RADEON, "3")
+        self.assertNotIn("radeon driver", plain)
+
+    def test_screens_are_wired(self):
+        install = (SETUP / "screens/install-progress.sh").read_text()
+        self.assertIn("screen_amd_driver install", install)
+        menu = (SETUP / "screens/setup-menu.sh").read_text()
+        self.assertIn("driver) screen_amd_driver ;;", menu)
+        self.assertIn('source "$SETUP_DIR/screens/amd-driver.sh"', (SETUP / "fliperos-setup").read_text())
+        screen = (SETUP / "screens/amd-driver.sh").read_text()
+        self.assertIn('"radeon|radeon (recommended)', screen)
+
+
 if __name__ == "__main__":
     unittest.main()

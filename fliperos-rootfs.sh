@@ -450,14 +450,13 @@ else
 fi
 
 # ── Drivers ───────────────────────────────────────────────────────
-# radeon nas placas SI/CIK (onde o 15 kHz foi validado no gabinete) sem
-# desligar o amdgpu das demais.
+# radeon ou amdgpu nas placas SI/CIK: so a linha do kernel escolhe
+# (AMD_DRIVER_KEYS em fliperos-setup/lib/bootloader.sh); aqui so o dpm.
 # Som HDA sempre ligado: com o power_save do kernel do Ubuntu (1 s) o codec
 # desliga em silencio e religa no proximo som, e cada liga-desliga estala
 # nas caixas (no gabinete, "puffs" com o menu parado).
 cat > "$root/etc/modprobe.d/fliperos.conf" << 'EOF'
-options radeon si_support=1 cik_support=1 dpm=1
-options amdgpu si_support=0 cik_support=0
+options radeon dpm=1
 options snd_hda_intel power_save=0 power_save_controller=N
 EOF
 # O live-config do Debian criaria um usuario padrao no mesmo UID 1000.

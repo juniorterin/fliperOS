@@ -92,7 +92,28 @@ def render(versions, root, cmdline, timeout, quiet="yes"):
     text += "\n" + entry("FliperOS - Diagnostics (no splash)",
                          "Kernel messages on screen; same CRT video",
                          versions[0], verbose)
+    radeon = radeon_cmdline(normal)
+    if radeon != normal:
+        text += "\n" + entry("FliperOS - radeon driver",
+                             "Back to the radeon driver if amdgpu shows no picture",
+                             versions[0], radeon)
     return text
+
+
+# Parametros do driver AMD das placas SI/CIK (AMD_DRIVER_KEYS em
+# fliperos-setup/lib/bootloader.sh).
+AMD_RADEON = ["radeon.si_support=1", "radeon.cik_support=1",
+              "amdgpu.si_support=0", "amdgpu.cik_support=0"]
+
+
+def radeon_cmdline(cmdline):
+    """A linha com o radeon no lugar do amdgpu escolhido no Setup (System >
+    Video driver); a mesma linha se o driver ja e o radeon."""
+    words = cmdline.split()
+    if not any(w in ("amdgpu.si_support=1", "amdgpu.cik_support=1") for w in words):
+        return cmdline
+    keys = {w.split("=")[0] for w in AMD_RADEON} | {"amdgpu.dc"}
+    return " ".join([w for w in words if w.split("=")[0] not in keys] + AMD_RADEON)
 
 
 def replace(dest, write):

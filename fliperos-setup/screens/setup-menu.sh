@@ -64,12 +64,16 @@ screen_setup_games() {
 # screen_setup_system (Setup > System): o que nao e imagem, som, rede,
 # controle nem jogo. O Splash screen por ultimo.
 screen_setup_system() {
-  local choice last=extras
+  local choice last=extras driver=()
+  # Video driver so aparece com uma placa AMD que aceita os dois drivers.
+  [[ -n $(drm_dual_amd_cards) ]] &&
+    driver=("driver|Video driver|radeon (tested on the CRT) or amdgpu (with Vulkan).")
   while true; do
     screen_reload_if_updated
     choice=$(ui_menu_hints "System" "" "$last" \
       "extras|Extras|Wine, Steam, Heroic, Pixelcade, ZeDMD and game output tools." \
       "latency|Latency|Standard or low latency mode, and a check of this computer." \
+      "${driver[@]}" \
       "services|Services|SSH, network share, Wi-Fi: at boot, after boot or off." \
       "quirks|Quirks (USB device fixes)|Kernel fixes for a USB device read wrong: encoders, guns, disks." \
       "password|Password|The password of the fliperos user: login, SSH and network share." \
@@ -81,6 +85,7 @@ screen_setup_system() {
     case $choice in
       extras) screen_extras ;;
       latency) screen_latency ;;
+      driver) screen_amd_driver ;;
       services) screen_services ;;
       quirks) screen_quirks ;;
       password) screen_password ;;

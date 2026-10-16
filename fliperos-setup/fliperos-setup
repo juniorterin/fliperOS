@@ -137,6 +137,8 @@ source "$SETUP_DIR/screens/setup-menu.sh"
 source "$SETUP_DIR/screens/first-boot.sh"
 # shellcheck source=screens/latency.sh
 source "$SETUP_DIR/screens/latency.sh"
+# shellcheck source=screens/amd-driver.sh
+source "$SETUP_DIR/screens/amd-driver.sh"
 # shellcheck source=screens/lpt.sh
 source "$SETUP_DIR/screens/lpt.sh"
 # shellcheck source=screens/joysticks.sh
