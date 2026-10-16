@@ -33,8 +33,8 @@ def setup():
         ("video", "Video Setup", "Monitor type, orientation, resolution and geometry."),
         ("audio", "Audio Setup", "Sound card, volume and the menu sounds."),
         ("network", "Network Setup", "Wi-Fi networks and the network status."),
-        ("joysticks", "Joysticks", "Button mapping, layouts, light guns and wheels."),
         ("games", "Games", "Frontend, emulators, folders, downloader and scraper."),
+        ("joysticks", "Joysticks", "Button mapping, layouts, light guns and wheels."),
         ("system", "System", "Extras, latency, updates and the splash screen."),
         ("return", "Return", "Back to the FliperOS menu."),
     ], "video")

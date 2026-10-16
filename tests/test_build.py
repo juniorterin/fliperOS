@@ -9292,9 +9292,9 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertEqual(config('fbneo', '/roms/fbneo/mslug.zip'), [base])
 
     def test_setup_has_the_buttons_layout(self):
-        # Joysticks logo depois de Network Setup; Buttons layout abaixo do Button mapping.
+        # Games antes de Joysticks; Buttons layout abaixo do Button mapping.
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
-        self.assertRegex(menu, r'"network\|Network Setup\|[^"]+" \\\n      "joysticks\|Joysticks\|')
+        self.assertRegex(menu, r'"games\|Games\|[^"]+" \\\n      "joysticks\|Joysticks\|')
         screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
         self.assertRegex(screen, r'"buttons\|Button mapping \(all emulators\)\|[^"]+" \\\n'
                                  r'      "layout\|Buttons layout \(games of 1 to 5 buttons\)\|')

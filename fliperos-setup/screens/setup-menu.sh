@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Setup do sistema instalado (worker_setup_menu do gasetup), na ordem de
-# quem arruma um gabinete: a imagem, o som, a rede, os controles, os jogos
-# (Games) e o resto do sistema (System). Cada item tem o seu balao de
+# quem arruma um gabinete: a imagem, o som, a rede, os jogos (Games), os
+# controles e o resto do sistema (System). Cada item tem o seu balao de
 # informacao (ui_menu_hints).
 
 screen_setup_menu() {
@@ -13,8 +13,8 @@ screen_setup_menu() {
       "video|Video Setup|Monitor, orientation, resolution, geometry, extra monitors." \
       "audio|Audio Setup|Sound card, volume, MAME audio latency and menu sounds." \
       "network|Network Setup|Wi-Fi and the network status. Downloads and updates need it." \
-      "joysticks|Joysticks|Button mapping, light gun, wheel, LPT and USB controller fixes." \
       "games|Games|Frontend, emulators, game folders, downloads, cleaner and art." \
+      "joysticks|Joysticks|Button mapping, light gun, wheel, LPT and USB controller fixes." \
       "system|System|Extras, low latency, updates, debug mode and the boot splash." \
       "return|Return|Back to the FliperOS menu.") || return 0
     last=$choice
@@ -22,8 +22,8 @@ screen_setup_menu() {
       video) screen_video_setup ;;
       audio) screen_audio ;;
       network) screen_network ;;
-      joysticks) screen_joysticks ;;
       games) screen_setup_games ;;
+      joysticks) screen_joysticks ;;
       system) screen_setup_system ;;
       return) return 0 ;;
     esac

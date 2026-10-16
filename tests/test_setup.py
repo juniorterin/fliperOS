@@ -4454,9 +4454,9 @@ class SetupGroupsTests(Base):
             # Cada item do menu tem o seu caso.
             for value in order[name]:
                 self.assertIn("      %s) " % value, body, name)
-        # Imagem, som, rede, controles, jogos e o resto do sistema.
+        # Imagem, som, rede, jogos, controles e o resto do sistema.
         self.assertEqual(order["screen_setup_menu"],
-                         ["video", "audio", "network", "joysticks", "games", "system", "return"])
+                         ["video", "audio", "network", "games", "joysticks", "system", "return"])
         # Na ordem de por jogos no gabinete.
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "custom", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])
