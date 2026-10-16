@@ -586,6 +586,16 @@ EOF
   if ! grep -q '^pvr\.rend' "$home/.config/flycast/emu.cfg"; then
     bash "$src/config/fliperos-ini-set" "$home/.config/flycast/emu.cfg" config pvr.rend 3
   fi
+  # Texture Filtering em Force Nearest (1): o padrao (0) deixa o jogo filtrar
+  # as texturas, que no tubo saem borradas. O Flycast grava o 0 ao fechar,
+  # entao num emu.cfg de antes vale uma vez so (a marca em /var/lib); depois
+  # a escolha e dele.
+  if [[ ! -e $root/var/lib/fliperos/flycast-texture-nearest ]]; then
+    if ! grep -qE '^rend\.TextureFiltering = [12]' "$home/.config/flycast/emu.cfg"; then
+      bash "$src/config/fliperos-ini-set" "$home/.config/flycast/emu.cfg" config rend.TextureFiltering 1
+    fi
+    mkdir -p "$root/var/lib/fliperos" && : > "$root/var/lib/fliperos/flycast-texture-nearest"
+  fi
   # A BIOS em ~/bios/dc (fliperos-roms), tambem num emu.cfg de antes dela.
   if ! grep -q '^Dreamcast.BiosPath' "$home/.config/flycast/emu.cfg"; then
     bash "$src/config/fliperos-ini-set" "$home/.config/flycast/emu.cfg" config Dreamcast.BiosPath /home/fliperos/bios/dc

@@ -1136,6 +1136,32 @@ class RomFoldersTests(unittest.TestCase):
                 config = text.split('[config]\n')[1].split('[input]')[0]
                 self.assertIn('rend.LinearInterpolation = %s\n' % value, config, text)
 
+    def test_flycast_textures_are_nearest(self):
+        # Texture Filtering em Force Nearest (1): de fabrica e, num emu.cfg de
+        # antes (o Flycast grava o 0 padrao ao fechar), uma vez so.
+        cfg = (ROOT / 'config/flycast-emu.cfg').read_text()
+        self.assertIn('rend.TextureFiltering = 1\n', cfg.split('[input]')[0])
+        for before, first in ((None, '1'), ('[config]\nrend.TextureFiltering = 0\n', '1'),
+                              ('[config]\nrend.TextureFiltering = 2\n', '2')):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                for d in ('home/fliperos/.config/flycast', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                          'etc/systemd/system'):
+                    (root / d).mkdir(parents=True)
+                (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+                emu = root / 'home/fliperos/.config/flycast/emu.cfg'
+                if before is not None:
+                    emu.write_text(before)
+                rootfs = lambda: subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                                                capture_output=True, timeout=120)
+                rootfs()
+                self.assertIn('rend.TextureFiltering = %s\n' % first, emu.read_text())
+                # A pessoa escolheu Default (0) depois: a atualizacao seguinte nao volta.
+                emu.write_text(emu.read_text().replace('rend.TextureFiltering = %s' % first,
+                                                       'rend.TextureFiltering = 0'))
+                rootfs()
+                self.assertIn('rend.TextureFiltering = 0\n', emu.read_text())
+
     def test_old_roms_move_to_home(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -4730,7 +4756,8 @@ class FightcadeTests(unittest.TestCase):
                    FLIPEROS_CORE_INFO=str(tmp / 'nada'), FLIPEROS_FLYCAST_CFG=str(tmp / 'flycast-emu.cfg'),
                    FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'), XDG_RUNTIME_DIR=str(tmp),
                    FLIPEROS_ESCQUIT=str(tmp / 'nada'), FLIPEROS_BUTTONS=str(ROOT / 'config/fliperos-buttons'),
-                   FLIPEROS_BUTTONS_MAP=str(tmp / 'nada'), FIGHTCADE_NATIVE='0', XDG_CACHE_HOME=str(tmp / 'cache'))
+                   FLIPEROS_BUTTONS_MAP=str(tmp / 'nada'), FIGHTCADE_NATIVE='0', XDG_CACHE_HOME=str(tmp / 'cache'),
+                   FLIPEROS_FLYCAST_MAPPINGS=str(tmp / 'flycast'))
         env.pop('DISPLAY', None)
         env.update(extra)
         return env
@@ -5234,6 +5261,7 @@ class FightcadeTests(unittest.TestCase):
             dojo = (tmp / 'fc/emulator/flycast/emu.cfg').read_text()
             config, _, rest = dojo.partition('[window]')
             self.assertIn('rend.LinearInterpolation = no\n', config)
+            self.assertIn('rend.TextureFiltering = 1\n', config)
             self.assertIn('pvr.rend = 0\n', config)
             self.assertIn('rend.ScreenStretching = 200\n', config)
             self.assertNotIn('Dreamcast.ContentPath', dojo)
@@ -5241,6 +5269,22 @@ class FightcadeTests(unittest.TestCase):
             for line in ('device1 = 0', 'device2.1 = 1', 'maple_sdl_joystick_0 = 0', 'maple_sdl_joystick_1 = 1'):
                 self.assertIn(line + '\n', inputs)
             self.assertIn('fullscreen = yes\n', rest)
+            # Toda opcao de video e de controle, uma vez so, na secao dela; o
+            # esticado do Flycast do sistema nao; os mapeamentos dele tambem.
+            (tmp / 'flycast-emu.cfg').write_text(system.replace('[input]', 'rend.Resolution = 960\n'
+                                                                'rend.ScreenStretching = 133\nDynarec.Enabled = no\n'
+                                                                '\n[input]\nMouseSensitivity = 50'))
+            (tmp / 'flycast').mkdir(exist_ok=True)
+            (tmp / 'flycast' / 'SDL_Pad_arcade.cfg').write_text('[digital]\nbind0 = 0:btn_a\n')
+            self.session(tmp, [self.CLIENT])
+            dojo = (tmp / 'fc/emulator/flycast/emu.cfg').read_text()
+            config = dojo.split('[config]')[1].split('\n[')[0]
+            self.assertEqual(dojo.count('rend.TextureFiltering'), 1, dojo)
+            self.assertIn('rend.Resolution = 960\n', config)
+            self.assertIn('rend.ScreenStretching = 200\n', config)
+            self.assertNotIn('Dynarec', dojo)
+            self.assertIn('MouseSensitivity = 50\n', dojo.split('[input]')[1])
+            self.assertTrue((tmp / 'fc/emulator/flycast/mappings/SDL_Pad_arcade.cfg').is_file())
 
     def test_window_shortcuts(self):
         rc = ElementTree.parse(ROOT / 'config/openbox-fightcade.xml').getroot()

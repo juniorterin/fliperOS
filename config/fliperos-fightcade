@@ -417,27 +417,53 @@ cfg_set() {
   sed -i -E "s/^($2) = .*\$/\1 = $3/" "$1"
 }
 
-# As opcoes do Flycast do sistema que valem tambem no Flycast Dojo: a imagem
-# sem interpolacao linear, a transparencia por pixel e os dois controles nas
-# portas A e B (config/flycast-emu.cfg, ou o que a pessoa mudou depois).
-FLYCAST_SHARED="config:rend.LinearInterpolation config:pvr.rend input:device1 input:device1.1 input:device1.2
-  input:device2 input:device2.1 input:device2.2 input:maple_sdl_joystick_0 input:maple_sdl_joystick_1"
-
-# flycast_sync ARQUIVO copia as FLYCAST_SHARED do emu.cfg do Flycast do
-# sistema para o do Dojo, a cada abertura: o do sistema e a referencia.
+# flycast_sync ARQUIVO copia do emu.cfg do Flycast do sistema para o do Dojo,
+# a cada abertura (o do sistema e a referencia), as opcoes de video ([config]
+# rend.* e pvr.*: a interpolacao linear, o Texture Filtering, a transparencia
+# por pixel, a resolucao...) e as de controle (o [input] inteiro: os
+# controles nas portas A e B), trocando as que o Dojo tem e acrescentando as
+# que faltam; e os mapeamentos dos controles (os do Button mapping e os feitos
+# no proprio Flycast). O esticado nao: o Dojo tem o modo dele.
 flycast_sync() {
-  local dojo=$1 entry section key value
-  [[ -f $flycast_cfg && -f $ini_set ]] || return 0
-  for entry in $FLYCAST_SHARED; do
-    section=${entry%%:*} key=${entry#*:}
-    value=$(awk -v s="[$section]" -v k="$key" '
-      { l = $0; sub(/\r$/, "", l) }
-      l ~ /^\[.*\]$/ { in_s = (l == s); next }
-      in_s && index(l, "=") {
-        n = substr(l, 1, index(l, "=") - 1); gsub(/^[ \t]+|[ \t]+$/, "", n)
-        if (n == k) { v = substr(l, index(l, "=") + 1); gsub(/^[ \t]+|[ \t]+$/, "", v); print v; exit }
-      }' "$flycast_cfg")
-    [[ -n $value ]] && bash "$ini_set" "$dojo" "$section" "$key" "$value"
+  local dojo=$1 tmp map
+  [[ -f $flycast_cfg && -f $dojo ]] || return 0
+  tmp=$(mktemp "$dojo.XXXXXX") || return 0
+  awk -v sys="$flycast_cfg" '
+    function clean(x) { gsub(/^[ \t]+|[ \t]+$/, "", x); return x }
+    # As chaves da secao que o Dojo ainda nao tinha, no fim dela.
+    function rest(sec,  i) {
+      for (i = 1; i <= nkeys; i++)
+        if (ksec[i] == sec && !(i in done)) { print kname[i] " = " kval[i]; done[i] = 1 }
+    }
+    { l = $0; sub(/\r$/, "", l) }
+    FILENAME == sys {
+      if (l ~ /^\[.*\]$/) { s = substr(l, 2, length(l) - 2); next }
+      if (!index(l, "=")) next
+      n = clean(substr(l, 1, index(l, "=") - 1)); v = clean(substr(l, index(l, "=") + 1))
+      if (n == "rend.ScreenStretching" || v == "") next
+      if ((s == "config" && n ~ /^(rend|pvr)\./) || s == "input") {
+        nkeys++; ksec[nkeys] = s; kname[nkeys] = n; kval[nkeys] = v; idx[s SUBSEP n] = nkeys
+      }
+      next
+    }
+    l ~ /^\[.*\]$/ { rest(d); d = substr(l, 2, length(l) - 2); print; next }
+    index(l, "=") && ((d SUBSEP clean(substr(l, 1, index(l, "=") - 1))) in idx) {
+      i = idx[d SUBSEP clean(substr(l, 1, index(l, "=") - 1))]
+      if (!(i in done)) print kname[i] " = " kval[i]
+      done[i] = 1
+      next
+    }
+    { print }
+    END {
+      rest(d)
+      for (i = 1; i <= nkeys; i++)
+        if (!(i in done)) {
+          if (!(ksec[i] in head)) { print ""; print "[" ksec[i] "]"; head[ksec[i]] = 1 }
+          print kname[i] " = " kval[i]
+        }
+    }' "$flycast_cfg" "$dojo" > "$tmp" && chmod --reference="$dojo" "$tmp" && mv -f "$tmp" "$dojo" || rm -f "$tmp"
+  for map in "$flycast_maps"/*.cfg; do
+    [[ -f $map ]] && mkdir -p "$(dirname "$dojo")/mappings" && cp -f "$map" "$(dirname "$dojo")/mappings/"
   done
   return 0
 }
