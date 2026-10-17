@@ -3530,6 +3530,49 @@ class RomCleanerTests(Base):
                          [("awbios.zip", "dc"), ("kofxi.zip", "atomiswave"), ("mvsc2.zip", "naomi"),
                           ("naomi.zip", "dc")])
 
+    def test_romfilter_cli_for_the_web_panel(self):
+        # fliperos-setup --romfilter (a pagina ROM filter do painel web): os
+        # parametros e os presets, os valores conferidos, o filtro do
+        # Downloader gravado e a previa e a copia de uma pasta com um romset.
+        state = self.env.dir / "dl"
+        env = dict(self.vars, DOWNLOADER_STATE=str(state), FLIPEROS_USER="ninguem")
+        lines = self.env.out('romfilter_cli describe groovymame "%s"' % self.full, env).splitlines()
+        self.assertIn("target|groovymame|GroovyMAME 0.289", lines)
+        self.assertNotIn("file", [line.split("|")[1] for line in lines if line.startswith("target|")])
+        self.assertIn("preset|cabinet|Joystick cabinet (2 players, 6 buttons)", lines)
+        self.assertIn("value|cabinet|players=2", lines)
+        self.assertIn("param|players|radio|Players|The most players a game may have.|1", lines)
+        self.assertIn("param|systems|check|Systems|Mark the Flycast systems to take.|0", lines)
+        self.assertIn("option|controls|trackball|Trackball", lines)
+        self.assertIn("dest|%s/mame|%s/mame (BIOS: %s/mame)" % (self.roms, self.roms, self.vars["BIOS_ROOT"]), lines)
+        self.assertIn("default_target|groovymame", lines)
+        self.assertIn("writable|1", lines)
+        # So valores das opcoes; um alvo, preset ou pasta que nao existe: 2.
+        for bad in ('describe file', 'describe nope', 'count groovymame "" players=99',
+                    'count groovymame "" status=working,all', 'count groovymame "" "players=2;reboot"',
+                    'count groovymame "" nokey=1', 'save groovymame nope players=2',
+                    'scan /nao/existe groovymame players=2', 'run "%s" groovymame delete' % self.full):
+            self.assertEqual(self.env.run("romfilter_cli " + bad, env).returncode, 2, bad)
+        # Gravar: o filtro do Downloader, com a pasta que ele ja tinha.
+        out = self.env.out("romfilter_cli save flycast custom systems=naomi players=2", env)
+        self.assertEqual(out.strip(), "saved=Custom, Flycast (Naomi, Naomi 2, Atomiswave)")
+        kv = (state / "filter.kv").read_text().splitlines()
+        self.assertEqual(kv[:3], ["target=flycast", "dest=%s" % self.roms, "preset=custom"])
+        self.assertIn("--systems\nnaomi\n", (state / "filter.scan").read_text())
+        # A previa e a copia (cent: trackball; o filtro so com joystick o tira).
+        scan = self.env.out('romfilter_cli scan "%s" groovymame controls=joy8,joy4,joy2 clones=none hardware=' % self.full, env)
+        items = sorted(line.split("\t")[1] for line in scan.splitlines() if line.startswith("item\t"))
+        self.assertEqual(items, ["mslug", "neogeo"])
+        self.assertIn("dest_label=%s/mame (BIOS: %s/mame)" % (self.roms, self.vars["BIOS_ROOT"]), scan.splitlines())
+        run = self.env.out('romfilter_cli run "%s" groovymame copy controls=joy8,joy4,joy2 clones=none hardware=' % self.full, env)
+        self.assertIn("@step 2 Reading the MAME XML and %s" % self.full, run)
+        self.assertIn("copied=2", run)
+        self.assertTrue((self.roms / "mame" / "mslug.zip").exists())
+        self.assertTrue((self.full / "mslug.zip").exists())
+        cli = (SETUP / "fliperos-setup").read_text()
+        self.assertIn('    --romfilter)\n      # O filtro', cli)
+        self.assertIn('      romfilter_cli "${@:2}"\n', cli)
+
     def downloader_screen(self, script, status="pct=0\nstate=none\nline=x\n", diff=""):
         state = self.env.dir / "dl"
         state.mkdir(exist_ok=True)

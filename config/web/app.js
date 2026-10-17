@@ -32,11 +32,29 @@ const TEXT = {
     g_offline: "Could not reach the game database (is the cabinet online?).", g_not_found: "Not in the Arcade Database.",
     pic_snap: "In game", pic_title: "Title", pic_marquee: "Marquee", pic_flyer: "Flyer", pic_cabinet: "Cabinet",
     pic_boxart: "Box",
+    page_romfilter: "ROM filter",
+    rf_intro: "The MAME ROM Cleaner filter, the same as in the Setup: what the Downloader takes from the torrents, or what goes from a romset folder to the emulator's folder.",
+    rf_mode_dl: "Downloader filter", rf_mode_clean: "Clean a romset folder", rf_folder: "Romset folder",
+    rf_no_folder: "No folder chosen", rf_choose: "Choose", rf_emulator: "Emulator (the MAME version of the romset)",
+    rf_preset: "Preset", rf_games: "Games", rf_size: "Size", rf_data: "Data files:", rf_dest: "The games go to:",
+    rf_dest_dl: "the Downloader's folder (Setup > Games > Downloader > Download folder)",
+    rf_save: "Save the Downloader filter", rf_scan: "Preview", rf_custom: "Custom",
+    rf_saved_now: "Downloader filter: %s", rf_not_saved: "The Downloader has no filter yet.",
+    rf_all: "Mark all", rf_none: "Clear", rf_none_controls: "None marked: only games played with buttons.",
+    rf_none_hardware: "None marked: any board except Naomi and Atomiswave.", rf_none_all: "None marked: no filter (all pass).",
+    rf_pick_folder: "Choose the romset folder.", rf_counting: "Counting…", rf_from_torrent: "Counted on the ROM torrent's list.",
+    rf_use: "Use %s", rf_saving: "Saving…",
+    rf_reading: "Reading the MAME XML and the folder… The first time with each MAME version takes about a minute.",
+    rf_from: "From", rf_to: "To", rf_going: "Going", rf_going_n: "%n sets, %s (%m as parent, BIOS or device)",
+    rf_free: "Free space", rf_no_space: "not enough", rf_unknown: "Not in the XML (left alone)",
+    rf_copy: "Copy them", rf_move: "Move them (out of the romset)", rf_nothing: "No game passed the filters.",
+    rf_confirm_copy: "Copy the games that passed from %s?",
+    rf_confirm_move: "Move the games that passed out of %s? They leave the romset.",
     page_frontend: "Frontend", page_files: "Files", page_settings: "Settings", page_status: "Status", page_terminal: "Terminal",
     settings: "Settings", settings_note: "Each change is saved and applied right away, through the Setup. Monitor, resolution and video driver stay in the Setup, on the cabinet screen.",
     saved: "Saved: %s", group_System: "System", group_Services: "Services", "group_480i games": "480i games", group_Colour: "Colour",
     downloads: "Downloads", dl_filter: "Filter (Setup > Games > Downloader):", dl_start: "Apply the filter and start",
-    dl_note: "The filter itself is chosen in the Setup.", dl_roms: "ROM torrent", dl_chds: "CHD torrent", dl_none: "No link yet.",
+    dl_note: "The filter is chosen on the ROM filter page (or in the Setup).", dl_roms: "ROM torrent", dl_chds: "CHD torrent", dl_none: "No link yet.",
     dl_add: "Add link", dl_default: "Use the link that comes with FliperOS", dl_paste: "magnet:?… (paste a link)", dl_remove: "Remove",
     dl_remove_ask: "Remove this torrent from the downloader?", dl_delete_ask: "Also delete what it already downloaded (not what reached the game folders)?",
     tasks: "Tasks", no_tasks: "Nothing running.", show_log: "Log", cancel: "Cancel", task_ok: "done", task_fail: "failed",
@@ -80,11 +98,29 @@ const TEXT = {
     g_offline: "Não deu para falar com a base de jogos (o gabinete está na internet?).", g_not_found: "Não está no Arcade Database.",
     pic_snap: "Jogando", pic_title: "Título", pic_marquee: "Letreiro", pic_flyer: "Flyer", pic_cabinet: "Gabinete",
     pic_boxart: "Capa",
+    page_romfilter: "Filtro de ROMs",
+    rf_intro: "O filtro do MAME ROM Cleaner, o mesmo do Setup: o que o Downloader baixa dos torrents, ou o que vai de uma pasta com um romset para a pasta do emulador.",
+    rf_mode_dl: "Filtro do Downloader", rf_mode_clean: "Limpar uma pasta de romset", rf_folder: "Pasta do romset",
+    rf_no_folder: "Nenhuma pasta escolhida", rf_choose: "Escolher", rf_emulator: "Emulador (a versão do MAME do romset)",
+    rf_preset: "Preset", rf_games: "Jogos", rf_size: "Tamanho", rf_data: "Arquivos de dados:", rf_dest: "Os jogos vão para:",
+    rf_dest_dl: "a pasta do Downloader (Setup > Games > Downloader > Download folder)",
+    rf_save: "Gravar o filtro do Downloader", rf_scan: "Prévia", rf_custom: "Personalizado",
+    rf_saved_now: "Filtro do Downloader: %s", rf_not_saved: "O Downloader ainda não tem filtro.",
+    rf_all: "Marcar todas", rf_none: "Desmarcar", rf_none_controls: "Nenhuma marcada: só jogos de botão.",
+    rf_none_hardware: "Nenhuma marcada: qualquer placa, menos Naomi e Atomiswave.", rf_none_all: "Nenhuma marcada: não filtra (passam todas).",
+    rf_pick_folder: "Escolha a pasta do romset.", rf_counting: "Contando…", rf_from_torrent: "Contado na lista do torrent de ROMs.",
+    rf_use: "Usar %s", rf_saving: "Gravando…",
+    rf_reading: "Lendo o XML do MAME e a pasta… A primeira vez com cada versão do MAME leva cerca de um minuto.",
+    rf_from: "De", rf_to: "Para", rf_going: "Vão", rf_going_n: "%n sets, %s (%m como pai, BIOS ou dispositivo)",
+    rf_free: "Espaço livre", rf_no_space: "não cabe", rf_unknown: "Fora do XML (ficam)",
+    rf_copy: "Copiar", rf_move: "Mover (sai do romset)", rf_nothing: "Nenhum jogo passou nos filtros.",
+    rf_confirm_copy: "Copiar de %s os jogos que passaram?",
+    rf_confirm_move: "Mover para fora de %s os jogos que passaram? Eles saem do romset.",
     page_frontend: "Frontend", page_files: "Arquivos", page_settings: "Configurações", page_status: "Status", page_terminal: "Terminal",
     settings: "Configurações", settings_note: "Cada mudança é gravada e aplicada na hora, pelo Setup. Monitor, resolução e driver de vídeo ficam no Setup, na tela do gabinete.",
     saved: "Gravado: %s", group_System: "Sistema", group_Services: "Serviços", "group_480i games": "Jogos 480i", group_Colour: "Cor",
     downloads: "Downloads", dl_filter: "Filtro (Setup > Games > Downloader):", dl_start: "Aplicar o filtro e começar",
-    dl_note: "O filtro em si é escolhido no Setup.", dl_roms: "Torrent das ROMs", dl_chds: "Torrent dos CHDs", dl_none: "Sem link ainda.",
+    dl_note: "O filtro é escolhido na página Filtro de ROMs (ou no Setup).", dl_roms: "Torrent das ROMs", dl_chds: "Torrent dos CHDs", dl_none: "Sem link ainda.",
     dl_add: "Cadastrar link", dl_default: "Usar o link que vem no FliperOS", dl_paste: "magnet:?… (cole um link)", dl_remove: "Remover",
     dl_remove_ask: "Tirar este torrent do downloader?", dl_delete_ask: "Apagar também o que ele já baixou (não o que já chegou às pastas dos jogos)?",
     tasks: "Tarefas", no_tasks: "Nada rodando.", show_log: "Log", cancel: "Cancelar", task_ok: "pronto", task_fail: "falhou",
@@ -198,6 +234,7 @@ $("lang").addEventListener("click", () => {
   if (last) render(last);
   renderFilters();
   renderGames();
+  renderRomFilter();
   loadSettings().catch(() => {});
 });
 
@@ -1312,6 +1349,286 @@ drop.addEventListener("drop", (ev) => {
   if (files.length) uploadFiles(files);
 });
 
+// ── ROM filter ───────────────────────────────────────────────────
+// O filtro do MAME ROM Cleaner (os parametros, os presets e as opcoes vem do
+// Setup: /api/romfilter, fliperos-setup --romfilter). Dois usos: o filtro
+// do Downloader (o que ele baixa dos torrents; Save o grava) ou limpar uma
+// pasta com um romset (a previa e copiar ou mover para a pasta do emulador,
+// como tarefa). O placar conta os jogos e o tamanho do que passa, a cada
+// mudanca; so vale a ultima contagem.
+
+const rf = { mode: "downloader", target: "", folder: "", info: null, values: {}, preset: "cabinet", seq: 0,
+  timer: null, loaded: false, task: null };
+
+function rfParams() {
+  return rf.info ? rf.info.params.filter((p) => p.visible) : [];
+}
+
+function rfPresetValues(name) {
+  const preset = rf.info && rf.info.presets.find((p) => p.value === name);
+  return preset ? Object.assign({}, preset.values) : {};
+}
+
+async function loadRomFilter(target, keep) {
+  const query = "target=" + encodeURIComponent(target || rf.target || "groovymame") +
+    (rf.mode === "cleaner" && rf.folder ? "&folder=" + encodeURIComponent(rf.folder) : "");
+  const res = await api("/api/romfilter?" + query);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { $("rf-note").textContent = data.error || res.statusText; return; }
+  const saved = data.saved;
+  // A primeira vez no Downloader: o emulador do filtro salvo.
+  if (!rf.loaded && rf.mode === "downloader" && saved && saved.target && saved.target !== (target || "groovymame") &&
+      data.targets.some((x) => x.value === saved.target)) {
+    rf.loaded = true;
+    return loadRomFilter(saved.target);
+  }
+  rf.info = data;
+  rf.target = target || rf.target || "groovymame";
+  if (keep) {
+    // So os valores que o alvo novo tambem mostra.
+  } else if (rf.mode === "downloader" && saved && saved.target === rf.target) {
+    rf.preset = saved.preset || "custom";
+    rf.values = {};
+    for (const p of data.params) rf.values[p.key] = saved[p.key] != null ? saved[p.key] : "";
+  } else {
+    // O MAME 2010 comeca so com a placa do PlayStation, como no Setup.
+    rf.preset = rf.target === "mame2010" ? "psx" : "cabinet";
+    rf.values = rfPresetValues(rf.preset);
+  }
+  rf.loaded = true;
+  renderRomFilter();
+  rfCount();
+}
+
+function renderRomFilter() {
+  const info = rf.info;
+  if (!info) return;
+  document.querySelectorAll(".rf-modes button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === rf.mode)));
+  $("rf-source").hidden = rf.mode !== "cleaner";
+  $("rf-folder").value = rf.folder;
+  $("rf-target").replaceChildren(...info.targets.map((x) => el("option", { value: x.value }, x.label)));
+  $("rf-target").value = rf.target;
+  const presets = info.presets.map((p) => el("option", { value: p.value }, p.label));
+  presets.push(el("option", { value: "custom" }, t("rf_custom")));
+  $("rf-preset").replaceChildren(...presets);
+  $("rf-preset").value = rf.preset;
+  $("rf-data").textContent = info.data || "-";
+  $("rf-dest").textContent = rf.mode === "downloader" ? t("rf_dest_dl") : (info.dest ? info.dest.label : "-");
+  $("rf-save").hidden = rf.mode !== "downloader";
+  $("rf-scan").hidden = rf.mode !== "cleaner";
+  $("rf-scan").disabled = !rf.folder;
+  $("rf-note").textContent = rf.mode === "downloader"
+    ? (info.saved_label ? t("rf_saved_now").replace("%s", info.saved_label) : t("rf_not_saved")) : "";
+  $("rf-params").replaceChildren(...rfParams().map(rfParam));
+}
+
+function rfChanged() {
+  rf.preset = "custom";
+  $("rf-preset").value = "custom";
+  $("rf-preview").hidden = true;
+  rfCount();
+}
+
+function rfParam(p) {
+  const box = el("div", { class: "rf-param" }, el("h3", {}, p.title), el("p", {}, p.help));
+  const value = rf.values[p.key] || "";
+  if (p.type === "radio") {
+    const select = el("select", { "aria-label": p.title }, ...p.options.map((o) => el("option", { value: o.value }, o.label)));
+    select.value = value;
+    select.addEventListener("change", () => { rf.values[p.key] = select.value; rfChanged(); });
+    box.append(select);
+    return box;
+  }
+  // De marcar: as fichas. Nenhuma marcada e "todas", menos nos controles
+  // (so jogos de botao) e no hardware (qualquer placa, menos as do Flycast).
+  const picked = new Set(value ? value.split(",") : []);
+  const chips = el("div", { class: "chips" });
+  const save = () => {
+    rf.values[p.key] = p.options.map((o) => o.value).filter((v) => picked.has(v)).join(",");
+    rfChanged();
+  };
+  for (const o of p.options) {
+    const chip = el("button", { type: "button", "aria-pressed": String(picked.has(o.value)) }, o.label);
+    chip.addEventListener("click", () => {
+      if (picked.has(o.value)) picked.delete(o.value); else picked.add(o.value);
+      chip.setAttribute("aria-pressed", String(picked.has(o.value)));
+      save();
+    });
+    chips.append(chip);
+  }
+  const all = el("button", { type: "button" }, t("rf_all")), none = el("button", { type: "button" }, t("rf_none"));
+  all.addEventListener("click", () => { p.options.forEach((o) => picked.add(o.value)); save(); renderRomFilter(); });
+  none.addEventListener("click", () => { picked.clear(); save(); renderRomFilter(); });
+  box.append(chips, el("div", { class: "chip-tools" }, all, none));
+  if (!picked.size) box.append(el("p", {}, t(p.key === "controls" ? "rf_none_controls" : p.key === "hardware" ? "rf_none_hardware" : "rf_none_all")));
+  return box;
+}
+
+function rfBody(extra) {
+  return JSON.stringify(Object.assign({ target: rf.target, folder: rf.mode === "cleaner" ? rf.folder : "",
+    values: rf.values }, extra || {}));
+}
+
+function rfCount() {
+  clearTimeout(rf.timer);
+  if (rf.mode === "cleaner" && !rf.folder) {
+    $("rf-games").textContent = "-"; $("rf-size").textContent = "-";
+    $("rf-count-note").textContent = t("rf_pick_folder");
+    return;
+  }
+  rf.timer = setTimeout(async () => {
+    const seq = ++rf.seq;
+    document.querySelector(".rf-score").classList.add("busy");
+    $("rf-count-note").textContent = t("rf_counting");
+    const res = await api("/api/romfilter/count", { method: "POST", body: rfBody() }).catch(() => null);
+    if (seq !== rf.seq || !res || res.status === 409) return;
+    const data = await res.json().catch(() => ({}));
+    document.querySelector(".rf-score").classList.remove("busy");
+    if (res.ok) {
+      $("rf-games").textContent = data.games != null ? Number(data.games).toLocaleString() : "-";
+      $("rf-size").textContent = data.bytes != null ? bytes(Number(data.bytes)) : "-";
+      $("rf-count-note").textContent = rf.mode === "downloader" ? t("rf_from_torrent") : "";
+    } else {
+      $("rf-games").textContent = "-"; $("rf-size").textContent = "-";
+      $("rf-count-note").textContent = data.error || res.statusText;
+    }
+  }, 500);
+}
+
+async function rfDirs(path) {
+  const box = $("rf-dirs");
+  box.hidden = false;
+  const res = await api("/api/dirs?path=" + encodeURIComponent(path || ""));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { box.replaceChildren(el("p", { class: "dim" }, data.error || res.statusText)); return; }
+  const rows = [];
+  if (!data.path) {
+    // Onde costuma estar um romset: os discos e pendrives, a pasta da rede.
+    for (const place of data.places) {
+      const b = el("button", { type: "button", title: place }, "📁 " + place);
+      b.addEventListener("click", () => rfDirs(place));
+      rows.push(b);
+    }
+    const root = el("button", { type: "button" }, "📁 /");
+    root.addEventListener("click", () => rfDirs("/"));
+    rows.push(root);
+  } else {
+    const use = el("button", { type: "button", class: "use", title: data.path }, "✔ " + t("rf_use").replace("%s", data.path));
+    use.addEventListener("click", () => {
+      rf.folder = data.path;
+      box.hidden = true;
+      $("rf-preview").hidden = true;
+      rfPickFolder().catch(() => {});
+    });
+    rows.push(use);
+    const up = el("button", { type: "button", title: t("up_folder") }, "📁 ..");
+    up.addEventListener("click", () => rfDirs(data.parent));
+    rows.push(up);
+    for (const name of data.dirs) {
+      const path2 = (data.path === "/" ? "" : data.path) + "/" + name;
+      const b = el("button", { type: "button", title: name }, "📁 " + name);
+      b.addEventListener("click", () => rfDirs(path2));
+      rows.push(b);
+    }
+  }
+  box.replaceChildren(...rows);
+}
+
+async function rfPickFolder() {
+  // O emulador provavel pelo nome da pasta (como no Setup), e o filtro dele.
+  await loadRomFilter(rf.target, true);
+  const guess = rf.info && rf.info.default_target;
+  if (guess && guess !== rf.target) await loadRomFilter(guess);
+}
+
+async function rfSave() {
+  $("rf-note").textContent = t("rf_saving");
+  const res = await api("/api/romfilter/save", { method: "POST", body: rfBody({ preset: rf.preset }) });
+  const data = await res.json().catch(() => ({}));
+  $("rf-note").textContent = res.ok ? t("rf_saved_now").replace("%s", data.saved || "") : data.error || res.statusText;
+  if (res.ok && rf.info) rf.info.saved_label = data.saved || "";
+}
+
+async function rfScan() {
+  const box = $("rf-preview");
+  box.hidden = false;
+  box.replaceChildren(el("p", { class: "dim" }, t("rf_reading")));
+  const res = await api("/api/romfilter/scan", { method: "POST", body: rfBody() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { box.replaceChildren(el("p", { class: "error" }, data.error || res.statusText)); return; }
+  const s = data.summary || {};
+  const facts = factList();
+  const add = (label, value) => facts.append(el("div", {}, el("dt", {}, label), el("dd", {}, value)));
+  add(t("rf_from"), rf.folder + " (" + (s.sets || 0) + " sets)");
+  add(t("rf_to"), s.dest_label || "-");
+  add(t("rf_going"), t("rf_going_n").replace("%n", s.move || 0).replace("%s", bytes(s.move_bytes || 0))
+    .replace("%m", s.needed || 0));
+  add(t("rf_free"), bytes(s.free_bytes || 0) + ((s.move_bytes || 0) > (s.free_bytes || 0) ? " — " + t("rf_no_space") : ""));
+  if (s.unknown) add(t("rf_unknown"), String(s.unknown));
+  const items = data.items || [];
+  const list = el("pre", { class: "log" }, items.slice(0, 2000).map((i) => i.name.padEnd(16) + " " + i.title).join("\n") +
+    (items.length > 2000 ? "\n… " + (items.length - 2000) : ""));
+  const actions = el("div", { class: "row rf-actions" });
+  if (s.move > 0) {
+    const copy = el("button", { type: "button", "data-icon": "📋" }, t("rf_copy"));
+    copy.addEventListener("click", () => rfRun("copy"));
+    actions.append(copy);
+    if (rf.info && rf.info.writable) {
+      const move = el("button", { type: "button", class: "ghost", "data-icon": "✂" }, t("rf_move"));
+      move.addEventListener("click", () => rfRun("move"));
+      actions.append(move);
+    }
+  }
+  const status = el("span", { id: "rf-run", class: "dim", role: "status" }, s.move > 0 ? "" : t("rf_nothing"));
+  actions.append(status);
+  box.replaceChildren(facts, list, actions);
+}
+
+async function rfRun(transfer) {
+  const what = transfer === "move" ? t("rf_confirm_move") : t("rf_confirm_copy");
+  if (!confirm(what.replace("%s", rf.folder))) return;
+  const res = await api("/api/romfilter/run", { method: "POST", body: rfBody({ transfer }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { toast(data.error || res.statusText); return; }
+  rf.task = data.id;
+  rfFollow();
+}
+
+async function rfFollow() {
+  // O andamento da tarefa aqui mesmo (ela tambem aparece em Arquivos > Tarefas).
+  const status = $("rf-run");
+  if (!rf.task || !status) return;
+  const res = await api("/api/task?id=" + rf.task).catch(() => null);
+  if (!res || !res.ok) return;
+  const task = await res.json();
+  status.textContent = task.running ? (task.step || "…") + (task.pct != null ? " " + task.pct + "%" : "")
+    : task.rc === 0 ? "✓ " + (task.last || t("task_ok")) : "✗ " + (task.error || t("task_fail"));
+  if (task.running) setTimeout(rfFollow, 1500); else rf.task = null;
+}
+
+document.querySelectorAll(".rf-modes button").forEach((b) => b.addEventListener("click", () => {
+  if (rf.mode === b.dataset.mode) return;
+  rf.mode = b.dataset.mode;
+  $("rf-preview").hidden = true;
+  loadRomFilter(rf.target).catch(() => {});
+}));
+$("rf-target").addEventListener("change", () => { $("rf-preview").hidden = true; loadRomFilter($("rf-target").value).catch(() => {}); });
+$("rf-preset").addEventListener("change", () => {
+  const name = $("rf-preset").value;
+  if (name === "custom") return;
+  rf.preset = name;
+  rf.values = rfPresetValues(name);
+  $("rf-preview").hidden = true;
+  renderRomFilter();
+  rfCount();
+});
+$("rf-browse").addEventListener("click", () => {
+  if (!$("rf-dirs").hidden) { $("rf-dirs").hidden = true; return; }
+  rfDirs(rf.folder ? rf.folder.split("/").slice(0, -1).join("/") || "/" : "").catch(() => {});
+});
+$("rf-save").addEventListener("click", () => rfSave().catch(() => {}));
+$("rf-scan").addEventListener("click", () => rfScan().catch(() => {}));
+
 // ── O laco ───────────────────────────────────────────────────────
 
 let timer = null;
@@ -1319,7 +1636,7 @@ let timer = null;
 // Frontend, Arquivos, Configuracoes, Status e Terminal: o endereco (#files)
 // escolhe; sem ele, a ultima aberta (lembrada no navegador, quando da).
 
-const PAGES = ["frontend", "files", "settings", "status", "terminal"];
+const PAGES = ["frontend", "files", "romfilter", "settings", "status", "terminal"];
 let page = "frontend";
 
 function showPage(name) {
@@ -1342,6 +1659,8 @@ function showPage(name) {
     loadTasks().catch(() => {});
   } else if (name === "settings") {
     loadSettings().catch(() => {});
+  } else if (name === "romfilter") {
+    if (!rf.loaded) loadRomFilter("").catch(() => {});
   } else if (name === "status") {
     loadLogs().catch(() => {});
   } else if (name === "terminal" && termFit) {

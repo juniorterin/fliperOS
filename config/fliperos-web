@@ -43,6 +43,13 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/downloader  {"action": "add", "kind": "roms"|"chds", "magnet"}
                       (sem magnet, o da imagem), {"action": "start"} (as duas
                       como tarefa) ou {"action": "remove", "kind", "delete"}
+    GET  /api/romfilter?target=&folder=  o filtro do MAME ROM Cleaner: os
+                      parametros, os presets e o filtro salvo do Downloader
+    POST /api/romfilter/count {"target", "folder", "values"}  games=, bytes=
+    POST /api/romfilter/save  {"target", "preset", "values"}  (o do Downloader)
+    POST /api/romfilter/scan  {"folder", "target", "values"}  a previa
+    POST /api/romfilter/run   {"folder", "target", "transfer", "values"} (tarefa)
+    GET  /api/dirs?path=  as pastas (sem path: onde costuma estar um romset)
     GET  /api/trackball   (desligado por enquanto; FLIPEROS_WEB_TRACKBALL=1 o liga)
                       WebSocket: um mouse virtual (uinput); texto JSON
                       {"m": [dx, dy], "w": roda} e {"b": ["left", 1|0]}
@@ -1212,6 +1219,152 @@ def settings():
     return rows
 
 
+# ── ROM filter: o filtro do MAME ROM Cleaner e do Downloader ───────
+# Pelas funcoes do Setup (fliperos-setup --romfilter, lib/romclean.sh): os
+# parametros, os presets, a contagem do que passa, gravar o filtro do
+# Downloader, a previa de um romset e copiar ou mover (uma tarefa).
+
+def romfilter_values(values):
+    """Os filtros {chave: valor} como CHAVE=VALOR para o Setup, ou None."""
+    if not isinstance(values, dict):
+        return None
+    out = []
+    for key, value in values.items():
+        value = str(value)
+        if not re.fullmatch(r"[a-z]{1,20}", str(key)) or len(value) > 4000 or any(c in value for c in "\n\r\0"):
+            return None
+        out.append("%s=%s" % (key, value))
+    return out
+
+
+def romfilter_folder(folder):
+    """A pasta do romset: absoluta e que existe (vazia: o Downloader)."""
+    folder = str(folder or "")
+    if not folder:
+        return ""
+    folder = os.path.normpath(folder)
+    return folder if folder.startswith("/") and os.path.isdir(folder) else None
+
+
+def romfilter_describe(target, folder):
+    out = subprocess.run([SETUP, "--romfilter", "describe", target] + ([folder] if folder else []),
+                         capture_output=True, text=True, timeout=120)
+    if out.returncode == 2:
+        return None
+    info = {"targets": [], "presets": [], "params": [], "saved": None, "saved_label": "", "data": "",
+            "dest": None, "default_target": None, "writable": False}
+    presets, params = {}, {}
+    for line in out.stdout.splitlines():
+        kind, _, rest = line.partition("|")
+        if kind == "target":
+            value, _, label = rest.partition("|")
+            info["targets"].append({"value": value, "label": label})
+        elif kind == "preset":
+            value, _, label = rest.partition("|")
+            presets[value] = {"value": value, "label": label, "values": {}}
+            info["presets"].append(presets[value])
+        elif kind == "value":
+            preset, _, kv = rest.partition("|")
+            key, _, value = kv.partition("=")
+            if preset in presets:
+                presets[preset]["values"][key] = value
+        elif kind == "param":
+            parts = rest.split("|", 4)
+            if len(parts) == 5:
+                key, ptype, title, about, visible = parts
+                params[key] = {"key": key, "type": ptype, "title": title, "help": about, "visible": visible == "1",
+                               "options": []}
+                info["params"].append(params[key])
+        elif kind == "option":
+            key, _, option = rest.partition("|")
+            value, _, label = option.partition("|")
+            if key in params:
+                params[key]["options"].append({"value": value, "label": label})
+        elif kind == "saved":
+            key, _, value = rest.partition("=")
+            info["saved"] = info["saved"] or {}
+            info["saved"][key] = value
+        elif kind == "saved_label":
+            info["saved_label"] = rest
+        elif kind == "data":
+            info["data"] = rest
+        elif kind == "dest":
+            path, _, label = rest.partition("|")
+            info["dest"] = {"path": path, "label": label}
+        elif kind == "default_target":
+            info["default_target"] = rest
+        elif kind == "writable":
+            info["writable"] = rest == "1"
+    return info
+
+
+def summary_values(text):
+    values = {}
+    for line in text.splitlines():
+        if "=" in line and "\t" not in line:
+            key, value = line.split("=", 1)
+            values[key] = int(value) if value.isdigit() else value
+    return values
+
+
+class RomCount:
+    """A contagem do filtro em edicao: uma por vez; a nova para a de antes
+    (quem mexe no filtro so quer o numero do ultimo)."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.proc = None
+
+    def run(self, argv, timeout=900):
+        with self.lock:
+            if self.proc and self.proc.poll() is None:
+                try:
+                    os.killpg(self.proc.pid, signal.SIGTERM)
+                except OSError:
+                    pass
+            proc = self.proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                                stdin=subprocess.DEVNULL, text=True, start_new_session=True)
+        try:
+            out, _ = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.communicate()
+            return None, "timeout"
+        if proc.returncode < 0:
+            return None, "replaced"
+        return out, proc.returncode
+
+
+def list_dirs(path):
+    """As pastas de PATH (para escolher a do romset), sem as ocultas."""
+    rows = []
+    with os.scandir(path) as entries:
+        for e in entries:
+            try:
+                if not e.name.startswith(".") and e.is_dir():
+                    rows.append(e.name)
+            except OSError:
+                continue
+    return sorted(rows, key=str.lower)
+
+
+def romset_places():
+    """Onde costuma estar um romset: os discos e pendrives montados, a pasta
+    da rede do Setup, ~/roms."""
+    places = [os.path.join(player_home(), "roms")]
+    bases = ENV("FLIPEROS_ROMSET_PLACES", "/media/%s:/media:/mnt" % PLAYER).split(":")
+    for base in bases:
+        try:
+            names = list_dirs(base)
+        except OSError:
+            continue
+        for name in names:
+            path = os.path.join(base, name)
+            if path not in places and path not in bases:
+                places.append(path)
+    return places
+
+
 def downloader_status():
     """O andamento do Downloader (fliperos-setup --downloader status)."""
     out = subprocess.run([SETUP, "--downloader", "status"], capture_output=True, text=True, timeout=30).stdout
@@ -1481,6 +1634,7 @@ class Panel:
         self.systems = Cached(60, systems)
         self.gameinfo = GameInfo()
         self.filters = Cached(600, setup_filters)
+        self.romcount, self.romscan = RomCount(), RomCount()
         self.mouse = VirtualMouse()
         self.tasks = Tasks()
         self.downloader = Cached(3, downloader_status)
@@ -1670,6 +1824,26 @@ class Handler(BaseHTTPRequestHandler):
             favs = favourite_set(self.panel.systems.get())
             return self.send(200, {"system": system["key"], "arcade": system["arcade"], "games": games(system, favs),
                                    "filters": filters if isinstance(filters, list) else []})
+        if url.path == "/api/romfilter":
+            query = parse_qs(url.query)
+            folder = romfilter_folder((query.get("folder") or [""])[0])
+            target = (query.get("target") or ["groovymame"])[0]
+            info = romfilter_describe(target, folder) if folder is not None else None
+            if not info:
+                return self.send(400, {"error": "no such emulator or folder"})
+            return self.send(200, info)
+        if url.path == "/api/dirs":
+            path = (parse_qs(url.query).get("path") or [""])[0]
+            if not path:
+                return self.send(200, {"path": "", "places": romset_places()})
+            path = os.path.normpath(path)
+            try:
+                dirs = list_dirs(path) if path.startswith("/") else None
+            except OSError:
+                dirs = None
+            if dirs is None:
+                return self.send(404, {"error": "no such folder"})
+            return self.send(200, {"path": path, "parent": os.path.dirname(path) if path != "/" else "", "dirs": dirs})
         if url.path == "/api/gameinfo":
             query = parse_qs(url.query)
             system = self.panel.system((query.get("system") or [""])[0])
@@ -1755,6 +1929,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, task.info())
         if url.path == "/api/downloader":
             return self.downloader_action(self.body())
+        if url.path.startswith("/api/romfilter/"):
+            return self.romfilter_action(url.path.rsplit("/", 1)[1], self.body())
         if url.path == "/api/settings":
             data = self.body()
             key, value = str(data.get("key", "")), str(data.get("value", ""))
@@ -1874,6 +2050,56 @@ class Handler(BaseHTTPRequestHandler):
         if not task:
             return self.send(409, {"error": "the downloader is already busy with another task"})
         self.panel.downloader.when = None
+        return self.send(200, task.info())
+
+    def romfilter_action(self, action, data):
+        """ROM filter: count (o que passa), save (o filtro do Downloader),
+        scan (a previa do romset) e run (copiar ou mover, como tarefa)."""
+        values = romfilter_values(data.get("values"))
+        folder = romfilter_folder(data.get("folder"))
+        target = str(data.get("target", ""))
+        if values is None or folder is None or action not in ("count", "save", "scan", "run"):
+            return self.send(400, {"error": "bad filter, folder or action"})
+        if action == "count":
+            out, rc = self.panel.romcount.run([SETUP, "--romfilter", "count", target, folder] + values)
+            if rc == "replaced":
+                return self.send(409, {"error": "replaced by a newer count"})
+            if rc != 0:
+                return self.send(400 if rc == 2 else 502, {"error": "could not count (%s)" % (
+                    "bad filter" if rc == 2 else "timeout" if rc == "timeout"
+                    else "no ROM list: add the ROM torrent in Downloads first" if not folder else "see the Setup log")})
+            return self.send(200, summary_values(out))
+        if action == "save":
+            argv = [SETUP, "--romfilter", "save", target, str(data.get("preset", "custom"))] + values
+            try:
+                done = subprocess.run(argv, capture_output=True, text=True, timeout=300)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            if done.returncode != 0:
+                return self.send(400 if done.returncode == 2 else 500, {"error": "the filter was not saved"})
+            self.panel.downloader.when = None
+            return self.send(200, summary_values(done.stdout))
+        if not folder:
+            return self.send(400, {"error": "choose the romset folder"})
+        if action == "scan":
+            out, rc = self.panel.romscan.run([SETUP, "--romfilter", "scan", folder, target] + values)
+            if rc == "replaced":
+                return self.send(409, {"error": "replaced by a newer count"})
+            if rc != 0:
+                return self.send(400 if rc == 2 else 502, {"error": "the romset could not be read (Setup log)"})
+            items = []
+            for line in out.splitlines():
+                if line.startswith("item\t"):
+                    _, name, title = (line.split("\t", 2) + [""])[:3]
+                    items.append({"name": name, "title": title})
+            return self.send(200, {"summary": summary_values(out), "items": items})
+        transfer = str(data.get("transfer", ""))
+        if transfer not in ("copy", "move"):
+            return self.send(400, {"error": "transfer copy or move"})
+        task = self.panel.tasks.start("ROM filter: %s %s" % ("copy from" if transfer == "copy" else "move from", folder),
+                                      [SETUP, "--romfilter", "run", folder, target, transfer] + values, "romclean")
+        if not task:
+            return self.send(409, {"error": "the ROM filter is already copying"})
         return self.send(200, task.info())
 
     def upload(self, query):

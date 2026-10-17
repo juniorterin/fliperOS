@@ -33,6 +33,7 @@
   <nav class="pages" aria-label="Pages">
     <a href="#frontend" data-page="frontend" data-t="page_frontend"></a>
     <a href="#files" data-page="files" data-t="page_files"></a>
+    <a href="#romfilter" data-page="romfilter" data-t="page_romfilter"></a>
     <a href="#settings" data-page="settings" data-t="page_settings"></a>
     <a href="#status" data-page="status" data-t="page_status"></a>
     <a href="#terminal" data-page="terminal" data-t="page_terminal"></a>
@@ -145,6 +146,43 @@
     <section class="card wide" data-page="files" aria-labelledby="h-tasks">
       <h2 id="h-tasks" data-t="tasks"></h2>
       <ul id="tasks" class="tasks"></ul>
+    </section>
+
+    <!-- ROM filter: o filtro do MAME ROM Cleaner, para o Downloader ou para
+         limpar uma pasta com um romset (app.js, ROM filter). -->
+    <section class="card wide" data-page="romfilter" aria-labelledby="h-rf">
+      <h2 id="h-rf" data-t="page_romfilter"></h2>
+      <p class="dim" data-t="rf_intro"></p>
+      <div class="rf-modes" role="radiogroup" aria-label="Mode">
+        <button type="button" class="ghost" role="radio" data-mode="downloader" data-icon="🧲" data-t="rf_mode_dl"></button>
+        <button type="button" class="ghost" role="radio" data-mode="cleaner" data-icon="🧹" data-t="rf_mode_clean"></button>
+      </div>
+      <div id="rf-source" class="rf-source" hidden>
+        <label class="dim" for="rf-folder" data-t="rf_folder"></label>
+        <div class="rf-folder-row">
+          <input id="rf-folder" type="text" readonly data-tp="rf_no_folder">
+          <button id="rf-browse" type="button" class="ghost" data-icon="📁" data-t="rf_choose"></button>
+        </div>
+        <div id="rf-dirs" class="rf-dirs" hidden></div>
+      </div>
+      <div class="rf-bar">
+        <label><span class="dim" data-t="rf_emulator"></span><select id="rf-target"></select></label>
+        <label><span class="dim" data-t="rf_preset"></span><select id="rf-preset"></select></label>
+      </div>
+      <div class="rf-score" role="status" aria-live="polite">
+        <div><small data-t="rf_games"></small><span id="rf-games" class="big">-</span></div>
+        <div><small data-t="rf_size"></small><span id="rf-size" class="big">-</span></div>
+        <span id="rf-count-note" class="dim"></span>
+      </div>
+      <div id="rf-params" class="rf-params"></div>
+      <p class="dim"><span data-t="rf_data"></span> <span id="rf-data"></span></p>
+      <p class="dim"><span data-t="rf_dest"></span> <span id="rf-dest"></span></p>
+      <div class="row rf-actions">
+        <button id="rf-save" type="button" data-icon="💾" data-t="rf_save"></button>
+        <button id="rf-scan" type="button" data-icon="🔍" data-t="rf_scan" hidden></button>
+        <span id="rf-note" class="dim" role="status"></span>
+      </div>
+      <div id="rf-preview" class="rf-preview" hidden></div>
     </section>
 
     <!-- Configuracoes. -->

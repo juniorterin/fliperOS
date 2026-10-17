@@ -710,6 +710,152 @@ romclean_transfer() {
   "$ROMCLEAN" apply "$1" "$2" --progress --result "$1.result" 2>> "$FLIPEROS_LOG"
 }
 
+# ── O filtro sem tela (o painel web) ─────────────────────────────
+# fliperos-setup --romfilter: a pagina ROM filter do painel web
+# (config/fliperos-web) edita o mesmo filtro, pelas mesmas funcoes da tela
+# do MAME ROM Cleaner e do Downloader filter. Os alvos sao os do menu, menos
+# "outro XML".
+ROMFILTER_PRESETS=(cabinet working psx all)
+
+# romfilter_target ALVO: um dos emuladores do MAME ROM Cleaner.
+romfilter_target() {
+  [[ -n $1 && $1 != file ]] && romclean_targets | cut -d'|' -f1 | grep -qxF -- "$1"
+}
+
+# romfilter_valid CHAVE=VALOR...: cada chave e um filtro e cada valor (ou
+# cada um da lista de marcar) uma das opcoes dele. Um filtro que nao aparece
+# para o alvo (os generos sem catver.ini) so precisa ser uma palavra.
+romfilter_valid() {
+  local kv key value part target=$ROMFILTER_TARGET
+  local -a parts
+  for kv in "$@"; do
+    key=${kv%%=*} value=${kv#*=}
+    [[ $kv == *=* && " ${ROMCLEAN_KEYS[*]} " == *" $key "* ]] || return 1
+    if ! romclean_visible "$key" "$target"; then
+      [[ $value =~ ^[A-Za-z0-9_,]*$ ]] || return 1
+      continue
+    fi
+    IFS=, read -r -a parts <<< "$value"
+    [[ ${ROMCLEAN_TYPE[$key]} == radio && ${#parts[@]} -gt 1 ]] && return 1
+    for part in "${parts[@]}"; do
+      romclean_options "$key" | cut -d'|' -f1 | grep -qxF -- "$part" || return 1
+    done
+  done
+  return 0
+}
+
+# romfilter_describe ALVO [ORIGEM] imprime, uma coisa por linha ("tipo|..."),
+# o que a pagina mostra: os alvos, os presets e os valores de cada um, cada
+# filtro (tipo, titulo, ajuda, se aparece) com as opcoes, os arquivos de
+# dados, a pasta de destino e o filtro salvo do Downloader. Com ORIGEM (a
+# pasta do romset): o emulador provavel e se da para mover de la.
+romfilter_describe() {
+  local target=$1 folder=${2:-} key line preset dest
+  romclean_data_load "${folder:-$ROMCLEAN_DATA}"
+  romclean_targets | grep -v '^file|' | sed 's/^/target|/'
+  for preset in "${ROMFILTER_PRESETS[@]}"; do
+    printf 'preset|%s|%s\n' "$preset" "$(romclean_preset_label "$preset")"
+    romclean_preset "$preset" "$target" | sed "s/^/value|$preset|/"
+  done
+  printf 'data|%s\n' "$ROMCLEAN_DATA_LABEL"
+  dest=$(romclean_default_dest "$target")
+  printf 'dest|%s|%s\n' "$dest" "$(romclean_dest_label "$target" "$dest")"
+  for key in "${ROMCLEAN_KEYS[@]}"; do
+    printf 'param|%s|%s|%s|%s|%d\n' "$key" "${ROMCLEAN_TYPE[$key]}" "${ROMCLEAN_TITLE[$key]}" \
+      "${ROMCLEAN_HELP[$key]}" "$(romclean_visible "$key" "$target" && echo 1 || echo 0)"
+    romclean_options "$key" | sed "s/^/option|$key|/"
+  done
+  if [[ -f $DOWNLOADER_STATE/filter.kv ]]; then
+    sed 's/^/saved|/' "$DOWNLOADER_STATE/filter.kv"
+    printf 'saved_label|%s\n' "$(downloader_filter_label)"
+  fi
+  if [[ -n $folder ]]; then
+    printf 'default_target|%s\n' "$(romclean_default_target "$folder")"
+    printf 'writable|%d\n' "$([[ -w $folder ]] && echo 1 || echo 0)"
+  fi
+  return 0
+}
+
+# romfilter_cli describe ALVO [ORIGEM] | count ALVO ORIGEM CHAVE=VALOR... |
+# save ALVO PRESET CHAVE=VALOR... | scan ORIGEM ALVO CHAVE=VALOR... |
+# run ORIGEM ALVO copy|move CHAVE=VALOR...
+#   count: games= e bytes= do filtro (ORIGEM vazia: sobre a lista do torrent
+#          de ROMs do Downloader; com ela, o romset da pasta).
+#   save:  grava o filtro do Downloader (a pasta final que ele ja tinha fica,
+#          se o emulador e o mesmo).
+#   scan:  a previa do romset: o resumo e "item<TAB>set<TAB>titulo" do que vai.
+#   run:   le, copia ou move (eventos de progresso, para a tarefa do painel).
+# Status 2: um argumento que nao vale.
+romfilter_cli() {
+  local action=${1:-} folder="" target preset="" transfer="" dest plan summary
+  shift || true
+  case $action in
+    describe)
+      romfilter_target "${1:-}" || return 2
+      [[ -z ${2:-} || -d $2 ]] || return 2
+      romfilter_describe "$1" "${2:-}"
+      return 0
+      ;;
+    count) target=${1:-} folder=${2:-} && shift 2 ;;
+    save) target=${1:-} preset=${2:-} && shift 2 ;;
+    scan) folder=${1:-} target=${2:-} && shift 2 ;;
+    run) folder=${1:-} target=${2:-} transfer=${3:-} && shift 3 ;;
+    *) return 2 ;;
+  esac
+  romfilter_target "$target" || return 2
+  [[ -z $folder || -d $folder ]] || return 2
+  [[ $action != run || $transfer == copy || $transfer == move ]] || return 2
+  [[ $action != save || " ${ROMFILTER_PRESETS[*]} custom " == *" $preset "* ]] || return 2
+  romclean_data_load "${folder:-$ROMCLEAN_DATA}"
+  ROMFILTER_TARGET=$target romfilter_valid "$@" || return 2
+  dest=$(romclean_default_dest "$target")
+  case $action in
+    count) romclean_count_job "$target" "$dest" "$folder" "" "$@" ;;
+    save)
+      [[ $(downloader_filter_get target) == "$target" && -n $(downloader_filter_get dest) ]] &&
+        dest=$(downloader_filter_get dest)
+      downloader_filter_save "$target" "$dest" "$preset" "$@"
+      printf 'saved=%s\n' "$(downloader_filter_label)"
+      ;;
+    scan | run)
+      [[ -n $folder ]] || return 2
+      local -a args
+      mapfile -t args < <(romclean_args "$target" "$@")
+      plan=$(mktemp) || return 1
+      [[ $action == run ]] && ev_step 2 "Reading the MAME XML and $folder"
+      if ! summary=$(romclean_scan "$folder" "$target" "" "$dest" "$plan" "${args[@]}" 2>> "$FLIPEROS_LOG"); then
+        rm -f "$plan"
+        [[ $action == run ]] && ev_fail "Could not read the romset (details in $FLIPEROS_LOG)"
+        return 1
+      fi
+      if [[ $action == scan ]]; then
+        printf '%s\n' "$summary"
+        printf 'dest_label=%s\n' "$(romclean_dest_label "$target" "$dest")"
+        awk -F'\t' '$1 == "move" && !seen[$2]++ { print "item\t" $2 "\t" $5 }' "$plan"
+        rm -f "$plan"
+        return 0
+      fi
+      if [[ $(romclean_value "$summary" move) == 0 ]]; then
+        rm -f "$plan"
+        ev_fail "No game passed the filters"
+        return 1
+      fi
+      if [[ $transfer == copy ]] &&
+        (($(romclean_value "$summary" move_bytes) > $(romclean_value "$summary" free_bytes))); then
+        rm -f "$plan"
+        ev_fail "Not enough free space in $(romclean_dest_label "$target" "$dest")"
+        return 1
+      fi
+      romclean_transfer "$plan" "$transfer" || {
+        rm -f "$plan" "$plan.result"
+        return 1
+      }
+      cat "$plan.result" 2> /dev/null
+      rm -f "$plan" "$plan.result"
+      ;;
+  esac
+}
+
 # human_bytes N imprime o tamanho legivel (1.2 GB).
 human_bytes() {
   awk -v b="$1" 'BEGIN { split("B KB MB GB TB", u); i = 1

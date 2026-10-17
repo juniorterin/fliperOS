@@ -4437,6 +4437,25 @@ class WebPanelTests(unittest.TestCase):
                          '  echo "debug|System|Debug mode|choice|off|off=Off;on=On (show all text)|Shows all text."\n'
                          '  echo "color.gamma|Colour|Gamma|number|100|50..200:5|The middle greys."\nfi\n'
                          'if [ "$1" = --setting ]; then [ "$2" = nope ] && exit 2; [ "$2" = broken ] && { echo boom >&2; exit 1; }; fi\n'
+                         'if [ "$1" = --romfilter ]; then\n'
+                         '  echo "$*" >> %s/romfilter.log\n'
+                         '  case "$2 $3" in\n'
+                         '    "describe groovymame")\n'
+                         '      printf "target|groovymame|GroovyMAME 0.289\\ntarget|flycast|Flycast\\n'
+                         'preset|cabinet|Joystick cabinet\\nvalue|cabinet|players=2\\nvalue|cabinet|controls=joy8\\n'
+                         'param|players|radio|Players|The most players.|1\\noption|players|0|Any\\noption|players|2|Up to 2\\n'
+                         'param|controls|check|Controls|Mark what the panel has.|1\\noption|controls|joy8|8-way joystick\\n'
+                         'param|systems|check|Systems|Flycast systems.|0\\ndata|catver.ini 0.289\\n'
+                         'dest|/r/mame|~/roms/mame\\nsaved|target=groovymame\\nsaved|preset=custom\\nsaved|players=0\\n'
+                         'saved_label|Custom, GroovyMAME\\n"\n'
+                         '      [ -n "$4" ] && printf "default_target|groovymame\\nwritable|1\\n"; exit 0 ;;\n'
+                         '    describe*) exit 2 ;;\n'
+                         '    count*) case "$*" in *players=8*) sleep 3 ;; esac; echo games=12; echo bytes=3456 ;;\n'
+                         '    save*) echo "saved=Custom, GroovyMAME" ;;\n'
+                         '    scan*) printf "sets=8\\nmove=2\\nmove_bytes=3072\\nfree_bytes=99999\\n'
+                         'dest_label=~/roms/mame\\nitem\\tmslug\\tMetal Slug\\nitem\\tneogeo\\tNeo-Geo\\n" ;;\n'
+                         '    run*) echo "@step 2 Reading"; echo "copied=2" ;;\n'
+                         '  esac\n  exit 0\nfi\n'
                          'if [ "$1" = --filters ]; then\n'
                          '  printf \'\\tfilter               "All Games"\\n\\t\\tsort_by              Title\\n'
                          '\\tfilter               "Fighting Games"\\n\\t\\trule                 Category equals Fight.+\\n'
@@ -4446,7 +4465,7 @@ class WebPanelTests(unittest.TestCase):
                          'if [ "$1" = --systems ]; then\n'
                          '  echo \'naomi|%s|naomi|Naomi|/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z|1\'\n'
                          '  echo \'shell|%s|snes|Shell|/bin/sh|-c "[name]"|.zip|0\'\n'
-                         'fi\nexit 0\n' % (tmp, roms, roms))
+                         'fi\nexit 0\n' % (tmp, tmp, roms, roms))
         setup.chmod(0o755)
         run = tmp / 'run/1000'
         run.mkdir(parents=True)
@@ -4464,7 +4483,10 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_SETUP=str(setup), FLIPEROS_RUN_USER=str(tmp / 'run'),
                    FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_VIDEO_CHECK=str(tmp / 'none'),
                    FLIPEROS_USER=cls.user, FLIPEROS_SESSION_FILE=str(tmp / 'session'), FLIPEROS_HOME=str(tmp),
-                   FLIPEROS_ADB_URL='http://127.0.0.1:%d/service_scraper.php' % cls.adb.server_address[1])
+                   FLIPEROS_ADB_URL='http://127.0.0.1:%d/service_scraper.php' % cls.adb.server_address[1],
+                   FLIPEROS_ROMSET_PLACES=str(tmp / 'media'))
+        (tmp / 'media/USB/romset').mkdir(parents=True)
+        (tmp / 'media/USB/.hidden').mkdir()
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
                                        '--port', str(cls.port)], env=env)
         for _ in range(100):
@@ -4596,6 +4618,79 @@ class WebPanelTests(unittest.TestCase):
         setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
         self.assertIn('    --filters)\n', setup)
         self.assertIn('      scraper_attract_filters\n', setup.split('    --filters)\n')[1].split(';;')[0])
+
+    def test_rom_filter_goes_through_the_setup(self):
+        cookie = self.login()
+        log = Path(self.tmp.name) / 'romfilter.log'
+        status, _, data = self.request('GET', '/api/romfilter?target=groovymame', cookie=cookie)
+        self.assertEqual(status, 200, data)
+        info = json.loads(data)
+        self.assertEqual([t['value'] for t in info['targets']], ['groovymame', 'flycast'])
+        self.assertEqual(info['presets'], [{'value': 'cabinet', 'label': 'Joystick cabinet',
+                                            'values': {'players': '2', 'controls': 'joy8'}}])
+        self.assertEqual(info['params'][0], {'key': 'players', 'type': 'radio', 'title': 'Players',
+                                             'help': 'The most players.', 'visible': True,
+                                             'options': [{'value': '0', 'label': 'Any'},
+                                                         {'value': '2', 'label': 'Up to 2'}]})
+        self.assertFalse(info['params'][2]['visible'])
+        self.assertEqual(info['saved'], {'target': 'groovymame', 'preset': 'custom', 'players': '0'})
+        self.assertEqual((info['saved_label'], info['dest']), ('Custom, GroovyMAME', {'path': '/r/mame', 'label': '~/roms/mame'}))
+        folder = Path(self.tmp.name) / 'media/USB/romset'
+        info = json.loads(self.request('GET', '/api/romfilter?target=groovymame&folder=%s' % folder, cookie=cookie)[2])
+        self.assertEqual((info['default_target'], info['writable']), ('groovymame', True))
+        for query in ('target=nope', 'target=groovymame&folder=/nao/existe', 'target=groovymame&folder=relative'):
+            self.assertEqual(self.request('GET', '/api/romfilter?' + query, cookie=cookie)[0], 400, query)
+        # A contagem: as opcoes vao como argumentos (sem shell); uma contagem
+        # nova para a de antes, que responde 409.
+        import threading
+        slow = {}
+        thread = threading.Thread(target=lambda: slow.update(r=self.request(
+            'POST', '/api/romfilter/count', {'target': 'groovymame', 'folder': '', 'values': {'players': '8'}},
+            cookie=cookie)))
+        thread.start()
+        time.sleep(1)
+        status, _, data = self.request('POST', '/api/romfilter/count',
+                                       {'target': 'groovymame', 'folder': '', 'values': {'players': '2; reboot'}},
+                                       cookie=cookie)
+        self.assertEqual((status, json.loads(data)), (200, {'games': 12, 'bytes': 3456}))
+        thread.join(10)
+        self.assertEqual(slow['r'][0], 409)
+        self.assertIn('--romfilter count groovymame  players=2; reboot\n', log.read_text())
+        for bad in ({'target': 'groovymame', 'values': {'Players': '2'}}, {'target': 'groovymame', 'values': 'x'},
+                    {'target': 'groovymame', 'folder': '/nao', 'values': {}},
+                    {'target': 'groovymame', 'values': {'players': 'a\nb'}}):
+            self.assertEqual(self.request('POST', '/api/romfilter/count', bad, cookie=cookie)[0], 400, bad)
+        status, _, data = self.request('POST', '/api/romfilter/save',
+                                       {'target': 'groovymame', 'preset': 'custom', 'values': {'players': '2'}},
+                                       cookie=cookie)
+        self.assertEqual((status, json.loads(data)), (200, {'saved': 'Custom, GroovyMAME'}))
+        # A previa e a copia (como tarefa) pedem a pasta.
+        body = {'target': 'groovymame', 'folder': str(folder), 'values': {'players': '2'}}
+        self.assertEqual(self.request('POST', '/api/romfilter/scan', dict(body, folder=''), cookie=cookie)[0], 400)
+        scan = json.loads(self.request('POST', '/api/romfilter/scan', body, cookie=cookie)[2])
+        self.assertEqual(scan['summary']['move'], 2)
+        self.assertEqual(scan['items'], [{'name': 'mslug', 'title': 'Metal Slug'}, {'name': 'neogeo', 'title': 'Neo-Geo'}])
+        self.assertEqual(self.request('POST', '/api/romfilter/run', dict(body, transfer='delete'), cookie=cookie)[0], 400)
+        status, _, data = self.request('POST', '/api/romfilter/run', dict(body, transfer='copy'), cookie=cookie)
+        self.assertEqual(status, 200, data)
+        task = json.loads(data)
+        for _ in range(50):
+            info = json.loads(self.request('GET', '/api/task?id=%d' % task['id'], cookie=cookie)[2])
+            if not info['running']:
+                break
+            time.sleep(0.1)
+        self.assertEqual((info['rc'], info['last']), (0, 'copied=2'))
+        self.assertIn('--romfilter run %s groovymame copy players=2\n' % folder, log.read_text())
+
+    def test_folders_to_pick_a_romset(self):
+        cookie = self.login()
+        tmp = Path(self.tmp.name)
+        places = json.loads(self.request('GET', '/api/dirs', cookie=cookie)[2])
+        self.assertEqual(places, {'path': '', 'places': [str(tmp / 'roms'), str(tmp / 'media/USB')]})
+        listing = json.loads(self.request('GET', '/api/dirs?path=%s' % (tmp / 'media/USB'), cookie=cookie)[2])
+        self.assertEqual(listing, {'path': str(tmp / 'media/USB'), 'parent': str(tmp / 'media'), 'dirs': ['romset']})
+        for path in ('relative', '/nao/existe'):
+            self.assertEqual(self.request('GET', '/api/dirs?path=' + path, cookie=cookie)[0], 404, path)
 
     def test_favourites_are_fliperos_own_copied_from_the_frontend(self):
         cookie = self.login()

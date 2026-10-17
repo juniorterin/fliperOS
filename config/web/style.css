@@ -259,6 +259,42 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .drop.over { outline: 2px dashed var(--pink); outline-offset: 4px; border-radius: 8px; }
 @media (max-width: 520px) { #files .c-date, #files td.fdate, #files th.fdate { display: none; } }
 
+/* ROM filter: o modo, a pasta, o placar (jogos e tamanho) e um bloco por
+   parametro; as opcoes de marcar sao fichas. */
+.rf-modes { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.rf-modes button[aria-checked="true"] { background: var(--purple); color: #191a21; border-color: var(--purple); font-weight: 650; }
+.rf-source { display: grid; gap: 6px; margin-bottom: 10px; }
+.rf-folder-row { display: flex; gap: 8px; }
+.rf-folder-row input { flex: 1; min-width: 0; }
+.rf-dirs { border: 1px solid var(--line); border-radius: 10px; max-height: 300px; overflow: auto; }
+.rf-dirs button { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 0;
+  border-bottom: 1px solid var(--line); color: var(--fg); font-weight: 500; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.rf-dirs button:hover { background: var(--bg-deep); }
+.rf-dirs .use { color: var(--green); font-weight: 650; }
+.rf-bar { display: flex; flex-wrap: wrap; gap: 10px; }
+.rf-bar label { display: grid; gap: 4px; flex: 1 1 260px; min-width: 0; }
+.rf-score { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 28px; margin: 14px 0; padding: 12px 16px;
+  background: var(--bg-deep); border-radius: 10px; border: 1px solid var(--line); }
+.rf-score > div { display: grid; }
+.rf-score small { color: var(--dim); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.rf-score .big { color: var(--green); }
+.rf-score.busy .big { color: var(--dim); }
+.rf-params { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.rf-param { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 6px; align-content: start; }
+.rf-param h3 { margin: 0; }
+.rf-param p { margin: 0; font-size: 13px; color: var(--dim); }
+.rf-param select { width: 100%; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { padding: 4px 10px; font-size: 13px; font-weight: 500; background: transparent; color: var(--dim);
+  border-color: var(--line); border-radius: 14px; }
+.chips button[aria-pressed="true"] { color: var(--fg); border-color: var(--pink); background: color-mix(in srgb, var(--pink) 18%, transparent); }
+.chip-tools { display: flex; gap: 10px; font-size: 12px; }
+.chip-tools button { background: transparent; border: 0; padding: 0; color: var(--cyan); font-weight: 500; font-size: 12px; }
+.rf-actions { margin-top: 12px; justify-content: flex-start; }
+.rf-preview { margin-top: 12px; display: grid; gap: 10px; }
+.rf-preview .log { max-height: 320px; }
+
 .volume { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .volume input { flex: 1; padding: 0; accent-color: var(--pink); }
 .volume button { width: 40px; padding: 6px 0; }
