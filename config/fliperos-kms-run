@@ -135,7 +135,9 @@ deflicker=${FLIPEROS_DEFLICKER_LIB:-/usr/local/lib/fliperos/libfliperos-deflicke
 # A calibracao de cor na placa antes do programa virar o dono do video (um
 # X que fechou devolve a tabela de gama que achou).
 color=${FLIPEROS_COLOR:-/usr/local/bin/fliperos-color}
-[[ -x $color ]] && "$color" apply > /dev/null 2>&1
+# Sem a calibracao (outro programa dono da tela) o programa abre assim mesmo:
+# no fim do "&&", a falha encerrava o script pelo set -e.
+[[ -x $color ]] && { "$color" apply > /dev/null 2>&1 || true; }
 # A saida do programa vai para /opt/fliperos/logs/<programa>.log, nao para a
 # tela; no modo debug (Setup > System > Debug mode) ela aparece. Sem como gravar o
 # log, o programa abre assim mesmo.

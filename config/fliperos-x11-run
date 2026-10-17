@@ -301,7 +301,9 @@ export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/
 # A calibracao de cor na placa antes do Xorg (a matriz e a faixa RGB ficam;
 # a tabela de gama o fliperos-x11-client poe no X).
 color=${FLIPEROS_COLOR:-/usr/local/bin/fliperos-color}
-[[ -x $color ]] && "$color" apply > /dev/null 2>&1
+# Sem a calibracao (outro programa dono da tela) o jogo abre assim mesmo: no
+# fim do "&&", a falha encerrava o script pelo set -e, sem abrir nada.
+[[ -x $color ]] && { "$color" apply > /dev/null 2>&1 || true; }
 # Sem terminal (chamado por um frontend), o tty falha: vale o vt1.
 vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}

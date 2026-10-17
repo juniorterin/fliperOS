@@ -5937,6 +5937,21 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertIn('MODE=640 240 60', out)
         self.assertIn('-C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3', out)
 
+    def test_launch_survives_a_failed_colour_calibration(self):
+        # Outro programa dono da tela recusa a tabela de gama: o fliperos-color
+        # sai com 1 e, no fim de um "&&" com set -e, o jogo nao abria.
+        with tempfile.TemporaryDirectory() as tmp:
+            color = Path(tmp) / 'fliperos-color'
+            color.write_text('#!/bin/sh\nexit 1\n')
+            color.chmod(0o755)
+            result = self.run_x11(['pcsx2', 'game.iso'], extra={'FLIPEROS_COLOR': str(color)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('MODE=640 240 60', result.stdout)
+        for script, call in (('fliperos-x11-run', 'apply'), ('fliperos-kms-run', 'apply'),
+                             ('fliperos-x11-client', 'x11')):
+            self.assertIn('[[ -x $color ]] && { "$color" %s > /dev/null 2>&1 || true; }' % call,
+                          (ROOT / 'config' / script).read_text(), script)
+
     def test_flycast_multiboard_on_three_monitors(self):
         # Jogos de varias placas NAOMI com 3 monitores: o fliperos-multiscreen
         # na frente do Flycast. Os outros jogos, 2 monitores ou a chave
