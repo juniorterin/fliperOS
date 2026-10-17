@@ -266,13 +266,55 @@ function render(s) {
 // some. O nome que nao cabe termina em "…" e, de tempos em tempos, rola
 // como um letreiro ate o fim e volta (banner()).
 
-const PROC_ROWS = 12;
+const PROC_ROWS = 15;
 let procCells = null;
+let lastProcesses = [];
+// A ordem: a coluna e o sentido (o clique no cabecalho troca; no mesmo
+// cabecalho, inverte). Lembrada no navegador, quando da.
+const PROC_COLUMNS = [
+  { key: "pid", label: () => "PID", num: false, first: "asc" },
+  { key: "name", label: () => t("name"), num: false, first: "asc" },
+  { key: "cpu", label: () => t("cpu"), num: true, first: "desc" },
+  { key: "mem_mb", label: () => t("mem"), num: true, first: "desc" },
+];
+let procSort = { key: "cpu", dir: "desc" };
+try {
+  const saved = JSON.parse(localStorage.getItem("fliperos-proc-sort") || "null");
+  if (saved && PROC_COLUMNS.some((c) => c.key === saved.key) && (saved.dir === "asc" || saved.dir === "desc")) {
+    procSort = saved;
+  }
+} catch (e) { /* sem armazenamento */ }
+
+function sortProcesses(list) {
+  const { key, dir } = procSort, sign = dir === "asc" ? 1 : -1;
+  return list.slice().sort((a, b) => {
+    const x = a[key], y = b[key];
+    const order = typeof x === "string" ? x.localeCompare(y, undefined, { sensitivity: "base" }) : x - y;
+    // Empate: o que mais usa CPU, depois o PID (a ordem nao fica pulando).
+    return sign * order || b.cpu - a.cpu || a.pid - b.pid;
+  });
+}
+
+function procHeader() {
+  return el("tr", {}, ...PROC_COLUMNS.map((c) => {
+    const active = procSort.key === c.key;
+    const arrow = active ? (procSort.dir === "asc" ? " ▲" : " ▼") : "";
+    const button = el("button", { type: "button", class: "sort" }, c.label() + arrow);
+    button.addEventListener("click", () => {
+      procSort = active ? { key: c.key, dir: procSort.dir === "asc" ? "desc" : "asc" } : { key: c.key, dir: c.first };
+      try { localStorage.setItem("fliperos-proc-sort", JSON.stringify(procSort)); } catch (e) { /* sem armazenamento */ }
+      $("procs").tHead.replaceChildren(procHeader());
+      renderProcesses(lastProcesses);
+    });
+    const th = el("th", { class: c.num ? "num" : "", scope: "col" }, button);
+    th.setAttribute("aria-sort", active ? (procSort.dir === "asc" ? "ascending" : "descending") : "none");
+    return th;
+  }));
+}
 
 function procTable() {
   const table = $("procs");
-  const head = el("tr", {}, el("th", {}, "PID"), el("th", {}, t("name")),
-    el("th", { class: "num" }, t("cpu")), el("th", { class: "num" }, t("mem")));
+  const head = procHeader();
   const body = el("tbody");
   procCells = [];
   for (let i = 0; i < PROC_ROWS; i++) {
@@ -291,7 +333,9 @@ function setText(node, value) {
   if (node.textContent !== value) node.textContent = value;
 }
 
-function renderProcesses(list) {
+function renderProcesses(all) {
+  lastProcesses = all;
+  const list = sortProcesses(all);
   if (!procCells || procCells.lang !== lang) {
     procTable();
     procCells.lang = lang;

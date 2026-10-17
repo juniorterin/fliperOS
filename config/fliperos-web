@@ -508,7 +508,8 @@ class Panel:
             "uptime": float(uptime[0]) if uptime else None, "load": [float(x) for x in load[:3]],
             "cpu": cpu, "memory": memory(), "temperatures": temperatures(), "gpus": self.gpus.get(),
             "video": self.video.get(), "disks": self.disks.get(), "network": net, "wifi": self.wifi.get(),
-            "processes": procs[:12], "fps": fps(), "running": running(), "volume": self.volume.get(),
+            # Todos: o painel ordena pela coluna escolhida e mostra os primeiros.
+            "processes": procs, "fps": fps(), "running": running(), "volume": self.volume.get(),
         }
 
 

@@ -173,6 +173,9 @@ build_native() {
 build_native "480i flicker filter (fliperos-deflicker)" "$src/config/fliperos-deflicker.c" \
   /usr/local/lib/fliperos/libfliperos-deflicker.so
 build_native "Colour calibration (fliperos-color)" "$src/config/fliperos-color.c" /usr/local/bin/fliperos-color
+# O painel web roda o codigo que leu ao subir: o novo vale ja (so se ele
+# estava no ar).
+systemctl try-restart fliperos-web.service 2> /dev/null || true
 # O override da App Store (fliperos-rootfs.sh) pode ter chegado depois do
 # pacote.
 glib-compile-schemas /usr/share/glib-2.0/schemas 2> /dev/null || true

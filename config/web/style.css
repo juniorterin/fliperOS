@@ -111,6 +111,14 @@ td.num, th.num { text-align: right; }
 #procs .c-cpu { width: 5em; }
 #procs .c-mem { width: 6.5em; }
 #procs td.name { overflow: hidden; }
+/* Os cabecalhos ordenam a tabela (app.js, procHeader()). */
+#procs th { padding: 0; }
+#procs .sort {
+  width: 100%; padding: 6px 8px; border: 0; border-radius: 0; background: transparent;
+  color: var(--dim); font: inherit; font-size: 13px; font-weight: 500; text-align: inherit; cursor: pointer;
+}
+#procs .sort:hover { color: var(--fg); }
+#procs th[aria-sort="ascending"] .sort, #procs th[aria-sort="descending"] .sort { color: var(--pink); }
 #procs .clip { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #procs .rolling .clip { text-overflow: clip; }
 #procs .rolling .clip span { display: inline-block; animation: banner var(--time, 6s) ease-in-out 1; }
