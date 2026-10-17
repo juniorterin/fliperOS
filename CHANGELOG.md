@@ -2,12 +2,25 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
-## 0.9.1
+## 0.10
+
+The Setup has a graphical interface: on the cabinet every menu is a carousel of big icons over an animated background (snow, water, fire, smoke, stars), and over SSH the same menus stay in text. Also new are a flicker filter for 480i, the choice of 640x240 or 480i for each program, colour calibration, a custom monitor range made on the geometry grid, and the choice between the radeon and amdgpu drivers on the AMD cards that work with both. The 0.9.1 ISO never got out (its build stopped on GitHub), so everything written for it below comes in this one. The amdgpu driver was seen working at 15 kHz on the cabinet's R7 240; the 480i filter and the colour calibration have not been seen on a CRT yet. An installed 0.9 already has updates 16 and 17; the rest of this list comes with this ISO.
 
 The MAME ROM Cleaner works out of the box: `catver.ini`, `nplayers.ini` and `controls.xml` now ship in the image, so the categories, adult games, play mode and real button count filters show without copying anything. The 0.9 ISO left their folder empty. Also new are the versus scoreboard on the LED display for fighting games, the game outputs for light guns and button lights, and Arcadeflow as the Attract-Mode Plus theme. None of the scoreboard and outputs work has been tried with a real gun, LED board or two-player match on the tube. The ISO comes with updates 16 and 17 already applied; an installed 0.8.x or 0.9 gets the same changes through the updates at boot.
 
 **System changes:**
 
+- **Graphical Setup.** On the cabinet the FliperOS menu and the whole Setup open in a graphical interface (pygame, 320x240 stretched to the tube): menus as carousels of icons, the official icon of each program, the ROM filter as a board of tiles with the GAMES / SIZE count of what passes, the Button mapping panel and the Buttons layout drawn, the GunCon 2 calibration drawn with a target and the shots, and a new animated background each time the menu opens. On a vertical monitor the menu stands up with the tube. Over SSH, on the installation media or without KMS video the Setup is the text one, as before; `ui=text` in `fliperos.conf` keeps it in text
+- **480i flicker filter**, like RePlayOS's: an OpenGL layer over every emulator and frontend (picom on the desktop) that softens the line flicker of 480i, in light, medium or strong
+- **Video driver: radeon or amdgpu** on the AMD cards that work with both (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240), in Video Setup and in the installation. The Setup finds out from the kernel modules themselves whether the card has the choice. radeon is the recommended one and the default: 15 kHz was validated on it. amdgpu brings Vulkan, was seen working at 15 kHz on an R7 240, and goes in with `amdgpu.dc=0`, because the 6.18 kernel has no VGA/DVI-I output in amdgpu's new display code for these cards. Every switch is on trial: the next boot asks to confirm the picture with Enter within 15 s, and with no answer (no picture) it goes back to the previous driver and restarts by itself; a trial boot that hangs goes back at the next boot. With amdgpu set, the boot menu (a key during boot) also has a **FliperOS - radeon driver** entry. The first time the menu opens, a card running on the driver that is not the recommended one gets a popup offering the switch, once
+- **Game mode**: with a game set to open at boot, it opens before everything else. The update check, the `~/roms` folders and the frontends' lists wait until the game closes, and the network is not waited for (on the cabinet the game took 56 s to open, 36 of them waiting for the network)
+- **Volume leveler** (Audio Setup), off by default: a compressor in ALSA's `default`, where every emulator goes through, so loud and quiet systems come closer to the same volume, with no added delay
+- **Flycast**: no loading screen (the screen stays black while the game loads; a loading error still shows), and Texture Filtering in Force Nearest, sharp pixels as on the board
+- The NVIDIA firmware is back in the image: without it nouveau does not accelerate the newer cards
+- Attract-Mode Plus: the joysticks come in the kernel's order. With two joysticks whose input numbers cross 9/10 (a split double encoder does), the frontend's Joy0 was the second player
+- Attract-Mode Plus opens about 5 s sooner after the menu, and an arcade list is rebuilt only when its folder changes (it was redone at every opening)
+- Arcadeflow in 640x240 is drawn for a 4:3 screen and stretched to the width: everything came out twice as wide. The context menu and the grouped clones work, opening a clone, and the clones of a merged romset are no longer marked unavailable
+- A Wi-Fi network connected in the Setup looks for FliperOS updates right away; on a new install the update only showed at the next boot
 - **GroovyMAME no longer closes at its game list.** The slimmed image came without `libX11.so`, `libXrandr.so` and `libdrm.so`, which Switchres opens by name, so no video mode was created. The build and the update put those names back
 - **Scraper: art packs by torrent.** Setup > Games > Scraper > Art packs by torrent brings logos and videos from torrents, already filled with Internet Archive packs for MAME, Naomi, Atomiswave, Model 2 and Model 3. A pack only downloads when its folders have ROMs, and only the files of the games you have. Your own torrents can be added. On the cabinet only a test download was tried, not the screens on the tube
 - **Scraper: choose the provider and log in.** Scraper provider picks ScreenScraper, TheGamesDB, ArcadeDB, progetto-SNAPS, MobyGames, IGDB or OpenRetro, and saves the account of the ones that ask (user and password, or API key). The ScreenScraper password used to be asked on every scrape
@@ -25,6 +38,8 @@ The MAME ROM Cleaner works out of the box: `catver.ini`, `nplayers.ini` and `con
 
 **Package changes:**
 
+- RetroArch, Flycast and Dolphin are built with **Vulkan**, for the amdgpu driver. RetroArch's default stays glcore, and Flycast goes back to OpenGL while the 480i flicker filter is on. PCSX2 was seen running in Vulkan on the CRT with amdgpu (R7 240)
+- An emulator no longer fails to open, with no message, when the colour calibration cannot be applied (another program holds the screen): the launchers go on without it
 - RetroArch: the **FinalBurn Neo** core comes in the image
 - RetroArch: one press of Esc closes the game. It asked for a second press with a notice that FliperOS keeps hidden
 - RetroArch's FBNeo core opens the console sets (Mega Drive, Master System, ZX Spectrum and the like) that sit loose in the arcade folder
@@ -41,6 +56,20 @@ The MAME ROM Cleaner works out of the box: `catver.ini`, `nplayers.ini` and `con
 
 **fliperos-setup changes:**
 
+- **Video Setup > 480i games**: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, 480i with the flicker filter at its own level, with a preview on the tube, or pure 480i. Saved as it changes
+- **Video Setup > Colour calibration**: brightness, contrast, gamma, colour temperature, gain, black level and gamma for each gun, saturation and hue (by software on cards without a colour matrix, like the R7 240 on radeon) and the RGB range. Test patterns on the tube (colour bars, grey steps, black and white level, ColorChecker) or the numbers over SSH
+- **Video Setup > Monitor Type > Custom**, right after Generic 15.7 kHz: the monitor's own range (`crt_range0`), made on the Geometry grid or typed, on top of the preset in use; choosing a preset undoes it. The Geometry grid no longer closes at the first arrow (it opens 8 pixels wider than the boot mode, like GroovyArcade's 648), and an error of the tool shows as an error, not as cancelled
+- **Setup > System > Services**: SSH, the network share, `fliperos.local`, the Wi-Fi radio, the Downloader and *Wait for network*, each at boot, after boot (about 40 s later) or off. **Setup > System > Password** changes the `fliperos` password for login, SSH and the share
+- **Setup > Games > Downloader > Download BIOS**: only the BIOS the games in each `~/roms` folder lack (from each RetroArch core's `.info`, MAME's XML for the arcade sets, and PCSX2's and Flycast's), file by file, from the Batocera 36 BIOS pack on the Internet Archive. It also checks by itself, in the background, each time the menu opens. Tried on the cabinet (the four PS1 BIOS, the PS2 one, Naomi and Neo-Geo); the screens were not seen on the CRT
+- **Setup > Games > Custom games**: games and programs that are not a ROM (a PC game, your own emulator, a script), in groups the frontends show as systems, each with its video mode (240p, 480i or WIDTHxHEIGHT@HZ)
+- **Setup > Games > Folders**: a custom folder for `~/roms`, `~/bios`, `~/media`, `~/splashscreen` or any folder inside them (an emulator, a RetroArch core, a type of art). It becomes a link to the folder chosen on a disk, and the one before stays beside it as `old-<name>`; nothing is copied or deleted
+- **Button mapping**: *Keyboard encoder (MAME default keys)* writes MAME's keys of each player to RetroArch, GroovyMAME, Supermodel, Hypseus, Flycast and OpenBOR. The mapping also reaches Attract-Mode Plus, Flycast gets the hat D-pad (an Xbox 360 style controller had none) and the triggers, and a trigger saved inverted, which held a button down at rest in every emulator, is fixed, also in an old `buttons.map`. Fightcade's Dojo gets Flycast's video and control options
+- Buttons layout in MAME with a keyboard: one key no longer presses two buttons when the layout moves them
+- Downloader: switching the filter to another emulator no longer deletes the games the previous one brought (the Naomi and Atomiswave games left when the filter went to GroovyMAME)
+- The ROM filter starts from the monitor's orientation: only horizontal games on a horizontal monitor, only vertical ones on a vertical monitor
+- `fliperos-menu` typed over SSH opens the Setup in text there; frontends, games and the desktop open only from the cabinet
+- Every Setup menu opens on its first item, and Games comes before Joysticks
+- The progress screen fits the 15-line console of 640x240 (the Downloader scrolled the screen)
 - **The Setup is grouped, in the order of setting up a cabinet**: Video Setup, Audio Setup, Network Setup, Joysticks, **Games** (Frontend, Emulators & Games, Folders, Downloader, Cleaner, Scraper, AttractPlus ROM List) and **System** (Extras, Latency, System Update, Debug mode, Splash screen). Quirks is inside Joysticks. It was one list of 17 items
 - **Info balloons**: under the list, a balloon says what the item under the cursor is for, in the FliperOS menu, the Setup and its groups, Video, Audio and Network Setup, Joysticks and the Downloader. It needs the gum of this ISO: a system that came from an older ISO shows the same menus without the balloons
 - MAME ROM Cleaner on a MAME 2010 romset: the Naomi and Atomiswave games the filter leaves out go with the rest. They were always kept (for Flycast, which can't read that romset) and showed up in the MAME 2010 list
@@ -52,11 +81,13 @@ The MAME ROM Cleaner works out of the box: `catver.ini`, `nplayers.ini` and `con
 
 **Tool changes:**
 
+- New `fliperos-color` (applies the colour calibration through DRM and in X) and `fliperos-gui` (the graphical Setup)
 - New `fliperos-versus` (the scoreboard), `fliperos-outputs` (the outputs readers), `fliperos-arcadeflow`, `fliperos-fbneo` (the system of each FBNeo set) and `fliperos-powerkey`
 - `tools/verify-iso.sh` checks that the three ROM Cleaner data files in the image are the repository's
 
 **Documentation:**
 
+- The wiki spells out the address, user and password for SSH, SFTP and the network share
 - New page: [Scoreboard games](https://github.com/juniorterin/fliperOS/wiki/Scoreboard-games)
 - ROMs page: where the ROM Cleaner's data files come from and how to use newer ones
 - Website: the displays section (ZeDMD and the scoreboard) and a section on open hardware

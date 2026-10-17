@@ -4,7 +4,7 @@ Always in Docker (`CLAUDE.md` forbids chroot with the host's `/dev` on WSL).
 
 ```powershell
 docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.9.1.iso
+docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.10.iso
 ```
 
 | Option | Effect |
@@ -24,7 +24,7 @@ Audit of the generated ISO (read-only): checks the boot menu, kernel, setup file
 
 ```powershell
 docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.9.1.iso
+docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.10.iso
 ```
 
 ## Release
@@ -36,18 +36,18 @@ Every new ISO goes to GitHub [Releases](https://github.com/juniorterin/fliperOS/
 3. Tag the version and push the tag (the name is the version, without "v"):
 
    ```powershell
-   git tag 0.9.1
-   git push origin 0.9.1
+   git tag 0.10
+   git push origin 0.10
    ```
 
-Pushing the tag triggers the GitHub Actions **Release** workflow (`.github/workflows/release.yml`). It checks that the tag is `FLIPEROS_VERSION` and that `CHANGELOG.md` has its section, builds the frontends repository (`Dockerfile.packages`) and generates the ISO with the same `Dockerfile.fliperos` as the local build. Then it publishes through `tools/release-publish.sh`, with the workflow's own token. The kernel and frontend `.deb`s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h). If it fails, `fliperos-mkiso.log` is kept as a workflow artifact. Run by hand (*Actions > Release > Run workflow*), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing. To redo a version that was just tagged, move the tag and push it again (`git tag -f 0.9.1`, `git push -f origin 0.9.1`): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.
+Pushing the tag triggers the GitHub Actions **Release** workflow (`.github/workflows/release.yml`). It checks that the tag is `FLIPEROS_VERSION` and that `CHANGELOG.md` has its section, builds the frontends repository (`Dockerfile.packages`) and generates the ISO with the same `Dockerfile.fliperos` as the local build. Then it publishes through `tools/release-publish.sh`, with the workflow's own token. The kernel and frontend `.deb`s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h). If it fails, `fliperos-mkiso.log` is kept as a workflow artifact. Run by hand (*Actions > Release > Run workflow*), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing. To redo a version that was just tagged, move the tag and push it again (`git tag -f 0.10`, `git push -f origin 0.10`): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.
 
 To publish an ISO generated here, in the audit container:
 
 ```powershell
 docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.9.1.iso
+docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.10.iso
 ```
 
 `gh auth login` is a one-time step: the login stays in the `fliperos-gh` volume.
@@ -59,7 +59,7 @@ docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos
 - without the version's section in `CHANGELOG.md`, nothing is published;
 - an existing release isn't replaced without `--replace` (deletes and publishes again); the workflow passes it, because there a release only exists again when the tag was moved on purpose.
 
-GitHub accepts up to 2 GiB per file, and the ISO stays below that. The build's `slim_rootfs_chroot` removes the `-dev` packages and the build tools, but keeps `build-essential`, `dkms` and the kernel headers, which the DKMS drivers use. No `autoremove`, because the Qt plugins and Vulkan come in through `dlopen` and don't show in `ldd`; the libraries `ldd` shows are marked as manually installed, and an `ldd` before and after fails the build if any is missing. Switchres opens `libX11.so`, `libXrandr.so` and `libdrm.so` by those unversioned names, which belong to the `-dev` packages: `config/fliperos-dlopen-links` scans the binaries in `/usr/local` and `/opt` for such names and links them in `/usr/local/lib` to the installed version, and `tools/verify-iso.sh` checks the three. The packages left with nothing depending on them once the `-dev` are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an `apt autoremove` on the installed system doesn't take them. The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg `path-exclude` so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz. Wine, Steam and Heroic aren't in the image: Setup > System > Extras installs them (`config/fliperos-extras`). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (`fliperos-0.9.1.iso.001`, `.002`...), and the release text gets the instructions to join them (`copy /b` on Windows, `cat` on Linux). Also published: `fliperos-0.9.1.sha256` (the whole ISO and each part) and `fliperos-0.9.1-pkglist.txt` (package, version and architecture of what's in the image). `--prerelease` marks it as a pre-release; `--to FOLDER` only prepares the files and the text (`notes.md`), without touching GitHub; `--notes VERSION` shows the version's text.
+GitHub accepts up to 2 GiB per file, and the ISO stays below that. The build's `slim_rootfs_chroot` removes the `-dev` packages and the build tools, but keeps `build-essential`, `dkms` and the kernel headers, which the DKMS drivers use. No `autoremove`, because the Qt plugins and Vulkan come in through `dlopen` and don't show in `ldd`; the libraries `ldd` shows are marked as manually installed, and an `ldd` before and after fails the build if any is missing. Switchres opens `libX11.so`, `libXrandr.so` and `libdrm.so` by those unversioned names, which belong to the `-dev` packages: `config/fliperos-dlopen-links` scans the binaries in `/usr/local` and `/opt` for such names and links them in `/usr/local/lib` to the installed version, and `tools/verify-iso.sh` checks the three. The packages left with nothing depending on them once the `-dev` are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an `apt autoremove` on the installed system doesn't take them. The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg `path-exclude` so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz. Wine, Steam and Heroic aren't in the image: Setup > System > Extras installs them (`config/fliperos-extras`). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (`fliperos-0.10.iso.001`, `.002`...), and the release text gets the instructions to join them (`copy /b` on Windows, `cat` on Linux). Also published: `fliperos-0.10.sha256` (the whole ISO and each part) and `fliperos-0.10-pkglist.txt` (package, version and architecture of what's in the image). `--prerelease` marks it as a pre-release; `--to FOLDER` only prepares the files and the text (`notes.md`), without touching GitHub; `--notes VERSION` shows the version's text.
 
 ## Tests
 

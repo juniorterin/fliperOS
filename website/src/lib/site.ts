@@ -25,7 +25,7 @@ export function guideUrl(locale: string): string {
 export const AUTHOR_HANDLE = '@juniorter.in';
 export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorterin' } as const;
 
-export const FLIPEROS_VERSION = '0.9.1';
+export const FLIPEROS_VERSION = '0.10';
 
 // A ISO se chama fliperos-VERSAO.iso. Este endereco baixa o arquivo direto
 // no release mais recente; se o nome mudar, a API (github.ts) manda o certo.
