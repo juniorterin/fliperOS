@@ -54,6 +54,9 @@ web_launch() {
   esac
   python3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)' 2> /dev/null
   printf '\e[H\e[2J\e[?25l'
+  # O painel fechou este jogo para abrir outro: o novo pedido vem antes (o
+  # laco do menu o abre), e ele traz o que volta depois.
+  [[ -s $WEB_LAUNCH ]] && return 0
   back=${lines[0]#return=}
   [[ -n $back && $back != menu ]] && "$BIN/fliperos-session" "$back"
   return 0

@@ -4547,7 +4547,11 @@ class WebPanelTests(unittest.TestCase):
         # Antes do menu, e com o menu fechado pelo painel o laco segue.
         self.assertLess(loop.index('web_launch; then'), loop.index('sudo /usr/local/bin/fliperos-setup --menu'))
         self.assertIn('[[ ${#remote[@]} -eq 0 && -s $WEB_LAUNCH ]] && continue', loop)
-        self.assertIn('"$BIN/fliperos-kms-run" | "$BIN/fliperos-x11-run")', tty1.split('web_launch() {')[1])
+        body = tty1.split('web_launch() {')[1].split('\n}')[0]
+        self.assertIn('"$BIN/fliperos-kms-run" | "$BIN/fliperos-x11-run")', body)
+        # Um jogo trocado por outro pelo painel: o pedido novo antes do que
+        # volta (no gabinete o EmulationStation voltava e o novo ficava na fila).
+        self.assertLess(body.index('[[ -s $WEB_LAUNCH ]] && return 0'), body.index('"$BIN/fliperos-session" "$back"'))
         session = (ROOT / 'config/fliperos-session').read_text()
         self.assertIn('fliperos-web-launch} ]] && break', session)
         self.assertIn('--systems)', (ROOT / 'fliperos-setup/fliperos-setup').read_text())
@@ -9250,6 +9254,34 @@ class EmulatorsMenuTests(unittest.TestCase):
         self.assertIn('  --deps)\n    deps_missing || exit 0\n    install_deps\n', sm2)
         self.assertIn('if [[ -d $src/.git ]]; then build_tree update; else build_tree; fi', sm2)
 
+    def test_sm2emu_rebuilt_by_the_update_when_the_patches_change(self):
+        # Os patches novos do SM2-Emu so entravam numa abertura pelo menu do
+        # desktop; pelos frontends nunca. O update do sistema o recompila.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            src, patches = tmp / 'sm2-emu', tmp / 'patches'
+            (src / 'build/bin').mkdir(parents=True)
+            patches.mkdir()
+            (patches / '0001.patch').write_text('one\n')
+            env = {'FLIPEROS_SM2_SRC': str(src), 'FLIPEROS_SM2_PATCHES': str(patches)}
+            outdated = lambda: self.run_cmd('fliperos-sm2emu', '--outdated', env=env).returncode
+            self.assertEqual(outdated(), 1)  # nao compilado
+            (src / 'build/bin/sm2-emu').write_text('')
+            (src / 'build/bin/sm2-emu').chmod(0o755)
+            self.assertEqual(outdated(), 0)  # compilado antes do stamp
+            stamp = subprocess.run('cat %s/*.patch | sha256sum | cut -d" " -f1' % patches, shell=True,
+                                   capture_output=True, text=True).stdout
+            (src / 'build/fliperos-patches').write_text(stamp)
+            self.assertEqual(outdated(), 1)  # em dia
+            (patches / '0002.patch').write_text('two\n')
+            self.assertEqual(outdated(), 0)  # o update trouxe outro patch
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        step = update.split('echo "== Model 2 (SM2-Emu) with the patches of this version"')[1].split('\nfi\n')[0]
+        self.assertIn('runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --outdated', step)
+        self.assertIn('runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --build', step)
+        self.assertLess(update.index('fliperos-buttons save /etc/fliperos/buttons.map'),
+                        update.index('"$sm2" --outdated'))
+
     def test_duckstation_fetch_extracts_the_appimage(self):
         # A licenca do DuckStation nao deixa redistribuir: o AppImage oficial
         # vem do GitHub dele na instalacao e e extraido (sem FUSE).
@@ -9367,6 +9399,35 @@ class EmulatorsMenuTests(unittest.TestCase):
             out = subprocess.run(['bash', str(ROOT / 'config/fliperos-kof'), 'run'], capture_output=True, text=True,
                                  env=base)
             self.assertEqual(out.stdout.strip(), 'game in %s' % dest)
+
+    def test_kof_reads_the_button_mapping_last(self):
+        # O Ikemen GO (SDL2) soma o banco dele (GamepadMappings) depois do
+        # SDL_GAMECONTROLLERCONFIG_FILE: o do FliperOS (Setup > Joysticks >
+        # Button mapping) vai por ultimo num banco so, o que o config.ini aponta.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            dest = tmp / 'kof'
+            (dest / 'save').mkdir(parents=True)
+            (dest / 'external').mkdir()
+            (dest / 'external/gamecontrollerdb.txt').write_text('030000ab,Pad,a:b0,platform:Linux,\n')
+            (dest / 'save/config.ini').write_text('[Config]\r\nMotif             = data/system.def\r\n'
+                                                  '\r\n[Video]\r\nFullscreen        = 1\r\n')
+            (dest / 'Ikemen_GO_Linux').write_text('#!/bin/sh\n')
+            (dest / 'Ikemen_GO_Linux').chmod(0o755)
+            db = tmp / 'gamecontrollerdb.txt'
+            db.write_text('030000ab,Pad,a:b3,platform:Linux,\n')
+            env = dict(os.environ, FLIPEROS_KOF_DIR=str(dest), SDL_GAMECONTROLLERCONFIG_FILE=str(db),
+                       FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'))
+            for _ in range(2):
+                run = subprocess.run(['bash', str(ROOT / 'config/fliperos-kof'), 'run'], capture_output=True,
+                                     text=True, env=env)
+                self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual((dest / 'save/gamecontrollerdb-fliperos.txt').read_text(),
+                             '030000ab,Pad,a:b0,platform:Linux,\n030000ab,Pad,a:b3,platform:Linux,\n')
+            ini = (dest / 'save/config.ini').read_text()
+            self.assertRegex(ini, r'\[Config\]\r?\n[^\[]*GamepadMappings = save/gamecontrollerdb-fliperos.txt\n')
+            self.assertEqual(ini.count('GamepadMappings'), 1)
+            self.assertIn('Fullscreen        = 1', ini)
 
     def test_setup_menu(self):
         # Emulators & Games primeiro e Frontend em segundo (Setup > Games, a
