@@ -4386,6 +4386,10 @@ class WebPanelTests(unittest.TestCase):
                          'if [ "$1 $2" = "--downloader start" ]; then\n'
                          '  echo "@step 10 Reading the list"; echo "@pct 55"; echo "plain line"; sleep 1; echo "@msg almost"\nfi\n'
                          'if [ "$1 $2" = "--downloader add" ]; then sleep 30; fi\n'
+                         'if [ "$1" = --settings ]; then\n'
+                         '  echo "debug|System|Debug mode|choice|off|off=Off;on=On (show all text)|Shows all text."\n'
+                         '  echo "color.gamma|Colour|Gamma|number|100|50..200|The middle greys."\nfi\n'
+                         'if [ "$1" = --setting ]; then [ "$2" = nope ] && exit 2; [ "$2" = broken ] && { echo boom >&2; exit 1; }; fi\n'
                          'if [ "$1" = --systems ]; then\n'
                          '  echo \'naomi|%s|arcade|Naomi|/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z\'\n'
                          '  echo \'shell|%s|arcade|Shell|/bin/sh|-c "[name]"|.zip\'\n'
@@ -4700,6 +4704,24 @@ class WebPanelTests(unittest.TestCase):
         # A abertura do dispositivo de verdade: o nome e os eixos do uinput.
         source = (ROOT / 'config/fliperos-web').read_text()
         self.assertIn('b"FliperOS web trackball"', source)
+
+    def test_settings(self):
+        cookie = self.login()
+        rows = json.loads(self.request('GET', '/api/settings', cookie=cookie)[2])['settings']
+        self.assertEqual(rows[0], {'key': 'debug', 'group': 'System', 'label': 'Debug mode', 'type': 'choice', 'value': 'off',
+                                   'help': 'Shows all text.', 'options': [{'value': 'off', 'label': 'Off'},
+                                                                          {'value': 'on', 'label': 'On (show all text)'}]})
+        self.assertEqual((rows[1]['type'], rows[1]['min'], rows[1]['max']), ('number', 50, 200))
+        status, _, data = self.request('POST', '/api/settings', {'key': 'color.gamma', 'value': '-5'}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        self.assertIn('--setting color.gamma -5\n', self.volume_log.read_text())
+        self.assertEqual(json.loads(data)['setting']['key'], 'color.gamma')
+        # Nada que nao seja chave e valor simples chega ao Setup.
+        for body in ({'key': 'debug', 'value': 'on; reboot'}, {'key': '../x', 'value': 'on'}, {'key': '', 'value': 'on'}):
+            self.assertEqual(self.request('POST', '/api/settings', body, cookie=cookie)[0], 400, body)
+        self.assertEqual(self.request('POST', '/api/settings', {'key': 'nope', 'value': 'x'}, cookie=cookie)[0], 400)
+        status, _, data = self.request('POST', '/api/settings', {'key': 'broken', 'value': 'x'}, cookie=cookie)
+        self.assertEqual((status, json.loads(data)['error']), (500, 'boom'))
 
     def test_downloader_and_tasks(self):
         cookie = self.login()

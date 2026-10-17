@@ -26,3 +26,114 @@ password_set() {
   fi
   return 0
 }
+
+# ── As configuracoes sem tela (o painel web) ─────────────────────
+# fliperos-setup --settings imprime os ajustes que o painel web
+# (config/fliperos-web) mostra, um por linha:
+#   chave|grupo|rotulo|tipo|valor|opcoes|ajuda
+# tipo choice (opcoes "valor=Rotulo;...") ou number (opcoes "min..max").
+# fliperos-setup --setting CHAVE VALOR muda um deles pelas mesmas funcoes das
+# telas do Setup. Ficam de fora o que pode deixar o gabinete sem imagem
+# (monitor, resolucao, driver de video): esses so pelo Setup, na tela.
+
+settings_list() {
+  local name desc key label state allowed help opts min max
+  opts=""
+  while IFS='|' read -r name desc; do
+    opts+="${opts:+;}$name=${desc//[;=|]/ }"
+  done < <(launcher_available)
+  printf 'launcher|System|What starts when the cabinet turns on|choice|%s|%s|The default launcher (Setup > Games > Frontend). Counts from the next boot.\n' \
+    "$(launcher_current)" "$opts"
+  printf 'latency|System|Latency mode|choice|%s|standard=Standard;low=Low latency|The emulator settings apply now; the kernel settings after a restart.\n' \
+    "$(latency_mode)"
+  printf 'debug|System|Debug mode|choice|%s|off=Off;on=On (show all text)|Frontends and emulators follow it now; the boot, after a restart.\n' \
+    "$(debug_enabled && echo on || echo off)"
+  if audio_leveler_available; then
+    printf 'leveler|System|Volume leveler|choice|%s|off=Off;on=On|Brings loud and quiet systems closer to the same volume.\n' \
+      "$(audio_leveler_enabled && echo on || echo off)"
+  fi
+  printf 'menu_sounds|System|Menu sounds|choice|%s|on=On;off=Off|The WAV files in sounds/menu, when there are any.\n' \
+    "$(menu_sounds_state | sed 's/missing/off/')"
+  while IFS='|' read -r key label state help; do
+    printf 'service.%s|Services|%s|choice|%s|boot=Boot;after=After boot;off=Off|%s\n' "$key" "$label" "$state" "$help"
+  done < <(services_rows)
+  while IFS='|' read -r key label state help allowed; do
+    opts=""
+    [[ ,$allowed, == *,240p,* ]] && opts+="240p=640x240;"
+    [[ ,$allowed, == *,filter,* ]] && opts+="filter=480i filter;"
+    [[ ,$allowed, == *,pure,* ]] && opts+="pure=480i pure;"
+    printf 'mode480.%s|480i games|%s|choice|%s|%s|%s\n' "$key" "$label" "$state" "${opts%;}" "$help"
+    printf 'deflicker.%s|480i games|%s: filter level|choice|%s|light=Light;medium=Medium;strong=Strong|The flicker filter level when 480i filter is marked.\n' \
+      "$key" "$label" "$(mode480_level "$key")"
+  done < <(mode480_rows)
+  while IFS='|' read -r key label min max _ _ help; do
+    printf 'color.%s|Colour|%s|number|%s|%s..%s|%s\n' "$key" "$label" "$(color_get "$key")" "$min" "$max" "$help"
+  done < <(color_table)
+  if [[ $(color_caps | sed -n 's/^range //p') != none ]]; then
+    printf 'color.range|Colour|RGB range|choice|%s|default=Card default;full=Full (0-255);limited=Limited (16-235)|Full for a PC monitor or CRT, limited for a TV that expects 16-235.\n' \
+      "$(r=$(color_range); echo "${r:-default}")"
+  fi
+}
+
+# settings_boot: a linha do kernel de novo (o debug, a latencia), como as
+# telas: so no sistema instalado.
+settings_boot() {
+  is_installed && ! is_live || return 0
+  boot_apply
+}
+
+# settings_set CHAVE VALOR. Status 2: chave ou valor que nao existe.
+settings_set() {
+  local key=$1 value=$2 name
+  case $key in
+    launcher)
+      while IFS='|' read -r name _; do
+        if [[ $name == "$value" ]]; then
+          launcher_set "$value"
+          return 0
+        fi
+      done < <(launcher_available)
+      return 2
+      ;;
+    latency)
+      [[ $value == standard || $value == low ]] || return 2
+      latency_apply "$value" && settings_boot
+      ;;
+    debug)
+      [[ $value == on || $value == off ]] || return 2
+      debug_set "$value"
+      settings_boot
+      ;;
+    leveler)
+      [[ $value == on || $value == off ]] || return 2
+      audio_leveler_set "$value"
+      ;;
+    menu_sounds)
+      [[ $value == on || $value == off ]] || return 2
+      menu_sounds_set "$value"
+      ;;
+    service.*)
+      [[ -n $(services_field "${key#service.}" 1) && " ${SERVICE_STATES[*]} " == *" $value "* ]] || return 2
+      services_set "${key#service.}" "$value"
+      ;;
+    mode480.*)
+      [[ -n $(mode480_field "${key#mode480.}" 1) ]] || return 2
+      mode480_set "${key#mode480.}" "$value" || return 2
+      ;;
+    deflicker.*)
+      [[ -n $(mode480_field "${key#deflicker.}" 1) && " light medium strong " == *" $value "* ]] || return 2
+      mode480_set "${key#deflicker.}" "$(mode480_state "${key#deflicker.}")" "$value"
+      ;;
+    color.range)
+      [[ $value == default ]] && value=""
+      color_range_set "$value" || return 2
+      color_apply > /dev/null 2>&1 || true
+      ;;
+    color.*)
+      color_set "${key#color.}" "$value" || return 2
+      # Na placa agora; com um jogo aberto (dono do video), no proximo.
+      color_apply > /dev/null 2>&1 || true
+      ;;
+    *) return 2 ;;
+  esac
+}

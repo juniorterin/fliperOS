@@ -24,6 +24,8 @@ const TEXT = {
     confirm_launch: "Close what is on the cabinet screen and open %s?", launching: "Opening %s on the cabinet…",
     confirm_close: "Close the game on the cabinet?", first: "Showing the first %n. Type to filter.",
     no_games: "No games in this folder.", count: "%n games",
+    settings: "Settings", settings_note: "Each change is saved and applied right away, through the Setup. Monitor, resolution and video driver stay in the Setup, on the cabinet screen.",
+    saved: "Saved: %s", group_System: "System", group_Services: "Services", "group_480i games": "480i games", group_Colour: "Colour",
     downloads: "Downloads", dl_filter: "Filter (Setup > Games > Downloader):", dl_start: "Apply the filter and start",
     dl_note: "The filter itself is chosen in the Setup.", dl_roms: "ROM torrent", dl_chds: "CHD torrent", dl_none: "No link yet.",
     dl_add: "Add link", dl_default: "Use the link that comes with FliperOS", dl_paste: "magnet:?… (paste a link)", dl_remove: "Remove",
@@ -60,6 +62,8 @@ const TEXT = {
     confirm_launch: "Fechar o que está na tela do gabinete e abrir %s?", launching: "Abrindo %s no gabinete…",
     confirm_close: "Fechar o jogo no gabinete?", first: "Mostrando os primeiros %n. Digite para filtrar.",
     no_games: "Nenhum jogo nesta pasta.", count: "%n jogos",
+    settings: "Configurações", settings_note: "Cada mudança é gravada e aplicada na hora, pelo Setup. Monitor, resolução e driver de vídeo ficam no Setup, na tela do gabinete.",
+    saved: "Gravado: %s", group_System: "Sistema", group_Services: "Serviços", "group_480i games": "Jogos 480i", group_Colour: "Cor",
     downloads: "Downloads", dl_filter: "Filtro (Setup > Games > Downloader):", dl_start: "Aplicar o filtro e começar",
     dl_note: "O filtro em si é escolhido no Setup.", dl_roms: "Torrent das ROMs", dl_chds: "Torrent dos CHDs", dl_none: "Sem link ainda.",
     dl_add: "Cadastrar link", dl_default: "Usar o link que vem no FliperOS", dl_paste: "magnet:?… (cole um link)", dl_remove: "Remover",
@@ -173,6 +177,7 @@ $("lang").addEventListener("click", () => {
   translate();
   if (last) render(last);
   renderGames();
+  loadSettings().catch(() => {});
 });
 
 // ── O FPS do ultimo minuto ───────────────────────────────────────
@@ -515,6 +520,64 @@ $("close-game").addEventListener("click", async () => {
   if (!confirm(t("confirm_close"))) return;
   await api("/api/close", { method: "POST", body: "{}" }).catch(() => {});
 });
+
+// ── Configuracoes ────────────────────────────────────────────────
+// Os ajustes do Setup que podem mudar daqui (fliperos-setup --settings):
+// cada mudanca grava na hora. Os grupos abertos ficam abertos.
+
+const openGroups = new Set(["System"]);
+
+async function loadSettings() {
+  const res = await api("/api/settings");
+  const rows = (await res.json()).settings || [];
+  const groups = new Map();
+  for (const row of rows) {
+    if (!groups.has(row.group)) groups.set(row.group, []);
+    groups.get(row.group).push(row);
+  }
+  const boxes = [];
+  for (const [group, items] of groups) {
+    const details = el("details", {}, el("summary", {}, t("group_" + group)));
+    if (openGroups.has(group)) details.open = true;
+    details.addEventListener("toggle", () => {
+      details.open ? openGroups.add(group) : openGroups.delete(group);
+    });
+    for (const row of items) details.append(settingRow(row));
+    boxes.push(details);
+  }
+  $("settings").replaceChildren(...boxes);
+}
+
+function settingRow(row) {
+  const id = "set-" + row.key.replace(/[^a-z0-9]/gi, "-");
+  let control;
+  if (row.type === "choice") {
+    control = el("select", { id }, ...row.options.map((o) => el("option", { value: o.value }, o.label)));
+    control.value = row.value;
+  } else {
+    control = el("input", { id, type: "number", min: String(row.min), max: String(row.max), step: "1", value: row.value });
+  }
+  const about = el("div", { class: "dim" }, row.help);
+  control.addEventListener("change", async () => {
+    control.disabled = true;
+    try {
+      const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: row.key, value: control.value }) });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.setting) {
+        control.value = data.setting.value;
+        about.textContent = data.setting.help;
+        row.value = data.setting.value;
+        toast(t("saved").replace("%s", row.label));
+      } else {
+        control.value = row.value;
+        toast(data.error || res.statusText);
+      }
+    } finally {
+      control.disabled = false;
+    }
+  });
+  return el("div", { class: "setting" }, el("label", { for: id }, row.label), control, about);
+}
 
 // ── Downloads e tarefas ──────────────────────────────────────────
 // O Downloader do Setup (o filtro do MAME ROM Cleaner escolhe o que baixar
@@ -975,6 +1038,7 @@ function start() {
   loadLogs().catch(() => {});
   loadSystems().catch(() => {});
   loadFiles("").catch(() => {});
+  loadSettings().catch(() => {});
   timer = setInterval(tick, 1000);
 }
 function stop() {

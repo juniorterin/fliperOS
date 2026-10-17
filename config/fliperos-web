@@ -30,6 +30,8 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
                       o menu grafico pela camada OpenGL; o desktop pelo X)
     GET  /api/terminal    WebSocket: o shell do usuario num pty (binario =
                       teclas e tela, texto = {"resize": [colunas, linhas]})
+    GET  /api/settings    os ajustes do Setup que daqui mudam (lib/system.sh)
+    POST /api/settings    {"key", "value"}: grava na hora, pelas funcoes do Setup
     GET  /api/tasks       as tarefas em segundo plano   GET /api/task?id=N (o log)
     POST /api/task/cancel {"id": N}
     GET  /api/downloader  o andamento do Downloader do Setup e o filtro
@@ -888,6 +890,26 @@ class Tasks:
             return [t.info() for t in reversed(self.items.values())]
 
 
+def settings():
+    """Os ajustes do Setup que o painel muda (fliperos-setup --settings,
+    lib/system.sh): "chave|grupo|rotulo|tipo|valor|opcoes|ajuda"."""
+    out = subprocess.run([SETUP, "--settings"], capture_output=True, text=True, timeout=60).stdout
+    rows = []
+    for line in out.splitlines():
+        parts = line.split("|", 6)
+        if len(parts) < 7:
+            continue
+        key, group, label, kind, value, options, about = parts
+        row = {"key": key, "group": group, "label": label, "type": kind, "value": value, "help": about}
+        if kind == "choice":
+            row["options"] = [dict(zip(("value", "label"), o.split("=", 1))) for o in options.split(";") if "=" in o]
+        elif kind == "number" and ".." in options:
+            low, high = options.split("..", 1)
+            row["min"], row["max"] = int(low), int(high)
+        rows.append(row)
+    return rows
+
+
 def downloader_status():
     """O andamento do Downloader (fliperos-setup --downloader status)."""
     out = subprocess.run([SETUP, "--downloader", "status"], capture_output=True, text=True, timeout=30).stdout
@@ -1320,6 +1342,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, task.info(log=True))
         if url.path == "/api/downloader":
             return self.send(200, self.panel.downloader.get())
+        if url.path == "/api/settings":
+            try:
+                return self.send(200, {"settings": settings()})
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
         if url.path == "/api/terminal":
             return self.open_terminal()
         if url.path == "/api/trackball":
@@ -1394,6 +1421,23 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, task.info())
         if url.path == "/api/downloader":
             return self.downloader_action(self.body())
+        if url.path == "/api/settings":
+            data = self.body()
+            key, value = str(data.get("key", "")), str(data.get("value", ""))
+            if not re.fullmatch(r"[a-z0-9_.-]{1,64}", key) or not re.fullmatch(r"[A-Za-z0-9_.-]{0,64}", value):
+                return self.send(400, {"error": "bad key or value"})
+            try:
+                done = subprocess.run([SETUP, "--setting", key, value], capture_output=True, text=True, timeout=120)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            if done.returncode == 2:
+                return self.send(400, {"error": "no such setting or value"})
+            if done.returncode != 0:
+                return self.send(500, {"error": (done.stderr or done.stdout).strip()[-300:] or "failed"})
+            # O que depende disso (o volume do nivelador, o estado do que esta na tela).
+            self.panel.volume.when = None
+            row = next((s for s in settings() if s["key"] == key), None)
+            return self.send(200, {"setting": row})
         if url.path in ("/api/mkdir", "/api/delete"):
             data = self.body()
             path = file_path(str(data.get("root", "")), str(data.get("path", "")))

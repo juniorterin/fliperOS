@@ -661,6 +661,36 @@ class DeflickerTests(Base):
         self.assertTrue((ROOT / "fliperos-setup/gui/flicker-preview.py").is_file())
 
 
+class SettingsCliTests(Base):
+    """fliperos-setup --settings / --setting (lib/system.sh): os ajustes que
+    o painel web muda."""
+
+    def test_list_and_set(self):
+        env = {"COLOR_BIN": str(self.env.dir / "none")}
+        rows = [line.split("|") for line in self.env.out("settings_list", env).splitlines()]
+        self.assertTrue(all(len(r) == 7 for r in rows), rows)
+        keys = [r[0] for r in rows]
+        for key in ("launcher", "latency", "debug", "menu_sounds", "mode480.flycast", "deflicker.flycast",
+                    "color.gamma", "color.hue"):
+            self.assertIn(key, keys)
+        # Nada que possa deixar o gabinete sem imagem.
+        self.assertFalse([k for k in keys if k in ("monitor", "resolution", "amd_driver", "orientation")])
+        gamma = rows[keys.index("color.gamma")]
+        self.assertEqual((gamma[1], gamma[3], gamma[5]), ("Colour", "number", "50..200"))
+        self.assertIn("240p=640x240;filter=480i filter;pure=480i pure", rows[keys.index("mode480.flycast")][5])
+        self.assertIn("filter=480i filter;pure=480i pure", rows[keys.index("mode480.desktop")][5])
+        # Mudar: pelas funcoes do Setup; chave ou valor que nao existe, 2.
+        self.env.out("settings_set color.gamma 130; settings_set mode480.flycast pure; settings_set deflicker.pcsx2 strong",
+                     env)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        for line in ("color_gamma=130", "mode480_flycast=pure", "deflicker_level_pcsx2=strong", "color_ctm=sw"):
+            self.assertIn(line + "\n", conf)
+        for bad in ("monitor arcade_15", "latency fast", "mode480.desktop 240p", "deflicker.flycast blur",
+                    "service.nope boot", "color.gamma abc", "launcher nothere"):
+            self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
+        self.assertIn('settings_set "${2:-}" "${3:-}"', (SETUP / "fliperos-setup").read_text())
+
+
 class DownloaderCliTests(Base):
     """fliperos-setup --downloader (lib/downloader.sh, downloader_cli): o
     Downloader sem tela, para o painel web."""
