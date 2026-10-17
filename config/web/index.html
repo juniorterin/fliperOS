@@ -86,6 +86,25 @@
       <p class="dim" data-t="drop_hint"></p>
     </section>
 
+    <section class="card wide" aria-labelledby="h-ball">
+      <h2 id="h-ball" data-t="trackball"></h2>
+      <div class="row">
+        <button id="ball-open" type="button" data-t="ball_open"></button>
+        <label class="dim"><span data-t="sensitivity"></span>
+          <input id="ball-sens" type="range" min="0.5" max="6" step="0.25" value="2"></label>
+        <label class="dim"><input id="ball-spin" type="checkbox" checked> <span data-t="inertia"></span></label>
+        <span id="ball-note" class="dim" role="status"></span>
+      </div>
+      <div id="ball" class="ball" hidden>
+        <div id="ball-pad" class="ball-pad" data-t="ball_hint"></div>
+        <div class="ball-buttons">
+          <button type="button" data-button="left" data-t="btn_left"></button>
+          <button type="button" data-button="middle" data-t="btn_middle"></button>
+          <button type="button" data-button="right" data-t="btn_right"></button>
+        </div>
+      </div>
+    </section>
+
     <section class="card wide" aria-labelledby="h-term">
       <h2 id="h-term" data-t="terminal"></h2>
       <div class="row">

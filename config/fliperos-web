@@ -30,6 +30,8 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
                       o menu grafico pela camada OpenGL; o desktop pelo X)
     GET  /api/terminal    WebSocket: o shell do usuario num pty (binario =
                       teclas e tela, texto = {"resize": [colunas, linhas]})
+    GET  /api/trackball   WebSocket: um mouse virtual (uinput); texto JSON
+                      {"m": [dx, dy], "w": roda} e {"b": ["left", 1|0]}
 Os POST pedem o cabecalho X-FliperOS: 1 (um formulario de outro site nao
 consegue mandar).
 """
@@ -924,6 +926,112 @@ def terminal(ws):
         os.close(fd)
 
 
+# ── O trackball de toque (fase 5b): um mouse virtual no uinput ─────
+
+class VirtualMouse:
+    """Um mouse comum (X, Y, roda, tres botoes) no /dev/uinput, criado na
+    primeira vez e mantido enquanto o painel roda: os emuladores (o
+    trackball e o spinner do MAME), os frontends e o desktop o leem como um
+    mouse USB."""
+
+    UI_SET_EVBIT, UI_SET_KEYBIT, UI_SET_RELBIT, UI_DEV_CREATE = 0x40045564, 0x40045565, 0x40045566, 0x5501
+    EV_SYN, EV_KEY, EV_REL = 0, 1, 2
+    REL_X, REL_Y, REL_WHEEL = 0, 1, 8
+    BUTTONS = {"left": 0x110, "right": 0x111, "middle": 0x112}
+
+    def __init__(self, path=None):
+        self.path = path or ENV("FLIPEROS_UINPUT", "/dev/uinput")
+        self.fd = None
+        self.lock = threading.Lock()
+
+    def open(self):
+        if self.fd is not None:
+            return
+        fd = os.open(self.path, os.O_WRONLY | os.O_NONBLOCK)
+        try:
+            for bit in (self.EV_KEY, self.EV_REL, self.EV_SYN):
+                fcntl.ioctl(fd, self.UI_SET_EVBIT, bit)
+            for code in (self.REL_X, self.REL_Y, self.REL_WHEEL):
+                fcntl.ioctl(fd, self.UI_SET_RELBIT, code)
+            for code in self.BUTTONS.values():
+                fcntl.ioctl(fd, self.UI_SET_KEYBIT, code)
+            # struct uinput_user_dev: o nome, o id (USB) e as faixas dos eixos
+            # absolutos (nenhum).
+            dev = struct.pack("80sHHHHi", b"FliperOS web trackball", 0x03, 0x1209, 0xF110, 1, 0) + b"\0" * (4 * 64 * 4)
+            os.write(fd, dev)
+            fcntl.ioctl(fd, self.UI_DEV_CREATE)
+        except OSError:
+            os.close(fd)
+            raise
+        self.fd = fd
+
+    def emit(self, events):
+        """Os eventos (tipo, codigo, valor) e o SYN no fim."""
+        now = time.time()
+        sec, usec = int(now), int((now % 1) * 1e6)
+        data = b"".join(struct.pack("llHHi", sec, usec, t, c, v) for t, c, v in events)
+        data += struct.pack("llHHi", sec, usec, self.EV_SYN, 0, 0)
+        with self.lock:
+            self.open()
+            os.write(self.fd, data)
+
+    def move(self, dx, dy, wheel=0):
+        events = [(self.EV_REL, self.REL_X, dx)] if dx else []
+        if dy:
+            events.append((self.EV_REL, self.REL_Y, dy))
+        if wheel:
+            events.append((self.EV_REL, self.REL_WHEEL, wheel))
+        if events:
+            self.emit(events)
+
+    def button(self, name, down):
+        if name in self.BUTTONS:
+            self.emit([(self.EV_KEY, self.BUTTONS[name], 1 if down else 0)])
+
+
+def trackball(ws, mouse):
+    """Do navegador, texto JSON: {"m": [dx, dy]} (com "w": roda) e
+    {"b": ["left"|"right"|"middle", 1|0]}. Os botoes apertados soltam quando
+    a conexao cai (nao fica um clique preso)."""
+    held = set()
+    try:
+        while True:
+            opcode, data = ws.receive()
+            if opcode == 8:
+                break
+            if opcode != 1:
+                continue
+            try:
+                msg = json.loads(data.decode())
+            except ValueError:
+                continue
+            if not isinstance(msg, dict):
+                continue
+            if "m" in msg:
+                try:
+                    dx, dy = (max(-2000, min(2000, int(v))) for v in msg["m"])
+                    wheel = max(-50, min(50, int(msg.get("w", 0))))
+                except (TypeError, ValueError):
+                    continue
+                mouse.move(dx, dy, wheel)
+            if "b" in msg:
+                try:
+                    name, down = msg["b"][0], bool(msg["b"][1])
+                except (TypeError, IndexError, KeyError):
+                    continue
+                if name in mouse.BUTTONS:
+                    mouse.button(name, down)
+                    (held.add if down else held.discard)(name)
+    except (EOFError, OSError):
+        pass
+    finally:
+        for name in held:
+            try:
+                mouse.button(name, False)
+            except OSError:
+                pass
+
+
 # ── O servidor ─────────────────────────────────────────────────────
 
 class Panel:
@@ -938,6 +1046,7 @@ class Panel:
         self.volume = Cached(2, volume)
         self.disks = Cached(10, disks)
         self.systems = Cached(60, systems)
+        self.mouse = VirtualMouse()
         self.launch_lock = threading.Lock()
         # O que volta depois de um jogo aberto daqui, para o proximo pedido
         # feito com ele ainda na tela (sem fliperos-session no meio).
@@ -1090,6 +1199,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_file(path)
         if url.path == "/api/terminal":
             return self.open_terminal()
+        if url.path == "/api/trackball":
+            return self.open_trackball()
         if url.path == "/api/screenshot":
             with self.panel.launch_lock:
                 image, source = screenshot()
@@ -1181,15 +1292,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {})
         return self.send(404, {"error": "not found"})
 
-    def open_terminal(self):
-        """O WebSocket do terminal. So da propria pagina: o Origin tem de ser
-        este endereco (outro site com o cookie no navegador nao abre)."""
+    def websocket(self):
+        """Aceita o WebSocket (o terminal, o trackball) ou responde o erro e
+        devolve None. So da propria pagina: o Origin tem de ser este
+        endereco (outro site com o cookie no navegador nao abre)."""
         origin = urlparse(self.headers.get("Origin", "")).netloc
         key = self.headers.get("Sec-WebSocket-Key", "")
         if self.headers.get("Upgrade", "").lower() != "websocket" or not key:
-            return self.send(400, {"error": "websocket only"})
+            self.send(400, {"error": "websocket only"})
+            return None
         if origin != self.headers.get("Host", ""):
-            return self.send(403, {"error": "wrong origin"})
+            self.send(403, {"error": "wrong origin"})
+            return None
         accept = base64.b64encode(hashlib.sha1((key + WS_GUID).encode()).digest()).decode()
         # O 101 tem de ser HTTP/1.1 (o Chrome recusa um HTTP/1.0 101).
         self.protocol_version = "HTTP/1.1"
@@ -1200,7 +1314,22 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.flush()
         self.close_connection = True
-        terminal(WebSocket(self.rfile, self.wfile))
+        return WebSocket(self.rfile, self.wfile)
+
+    def open_terminal(self):
+        ws = self.websocket()
+        if ws:
+            terminal(ws)
+
+    def open_trackball(self):
+        # O mouse antes do 101: sem /dev/uinput, um erro que a pagina mostra.
+        try:
+            self.panel.mouse.open()
+        except OSError as exc:
+            return self.send(503, {"error": "no virtual mouse: %s" % exc})
+        ws = self.websocket()
+        if ws:
+            trackball(ws, self.panel.mouse)
 
     def upload(self, query):
         """O corpo do pedido e o arquivo: gravado aos pedacos num .part na

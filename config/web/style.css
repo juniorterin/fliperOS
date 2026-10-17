@@ -142,6 +142,16 @@ td.num, th.num { text-align: right; }
 .shot.tube { width: min(100%, 960px); aspect-ratio: 4 / 3; height: auto; object-fit: fill; }
 .ghost-link { color: var(--cyan); }
 
+/* Trackball: a area de toque e os botoes grandes (para o dedo). */
+.ball { margin-top: 10px; display: grid; gap: 10px; }
+.ball-pad { height: 280px; border-radius: 16px; background: radial-gradient(circle at 40% 35%, #44475a, #191a21 70%);
+  border: 1px solid var(--line); touch-action: none; user-select: none; -webkit-user-select: none;
+  display: grid; place-items: center; color: var(--dim); text-align: center; padding: 16px; cursor: grab; }
+.ball-pad.active { border-color: var(--pink); cursor: grabbing; }
+.ball-buttons { display: grid; grid-template-columns: 1fr 0.7fr 1fr; gap: 10px; }
+.ball-buttons button { padding: 18px 8px; font-size: 16px; touch-action: none; user-select: none; }
+.ball-buttons button.down { background: var(--pink); border-color: var(--pink); }
+
 /* Terminal: o xterm.js (config/web/xterm.js). */
 .term { margin-top: 10px; height: 420px; background: #191a21; border-radius: 8px; padding: 6px; overflow: hidden; }
 

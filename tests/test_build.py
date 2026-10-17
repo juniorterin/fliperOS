@@ -4663,6 +4663,38 @@ class WebPanelTests(unittest.TestCase):
         finally:
             sock.close()
 
+    def test_trackball_events(self):
+        # O mouse virtual num arquivo comum no lugar do /dev/uinput (sem os
+        # ioctl): os eventos que ele grava.
+        web = SourceFileLoader('fliperos_web', str(ROOT / 'config/fliperos-web')).load_module()
+        import struct
+        with tempfile.TemporaryDirectory() as tmp:
+            dev = Path(tmp) / 'uinput'
+            dev.write_bytes(b'')
+            mouse = web.VirtualMouse(str(dev))
+            mouse.fd = os.open(str(dev), os.O_WRONLY)
+
+            class FakeWs:
+                def __init__(self, msgs):
+                    self.msgs = list(msgs)
+
+                def receive(self):
+                    if not self.msgs:
+                        raise EOFError
+                    return 1, json.dumps(self.msgs.pop(0)).encode()
+            # Um movimento, a roda, o botao 1 apertado e a conexao que cai:
+            # o botao solta sozinho. Lixo e ignorado.
+            web.trackball(FakeWs([{'m': [5, -3]}, {'m': [0, 0], 'w': 1}, {'b': ['left', 1]}, {'b': ['reboot', 1]},
+                                  {'m': ['x', 1]}, 'nonsense']), mouse)
+            os.close(mouse.fd)
+            data = dev.read_bytes()
+        events = [struct.unpack('llHHi', data[i:i + 24])[2:] for i in range(0, len(data), 24)]
+        self.assertEqual(events, [(2, 0, 5), (2, 1, -3), (0, 0, 0), (2, 8, 1), (0, 0, 0),
+                                  (1, 0x110, 1), (0, 0, 0), (1, 0x110, 0), (0, 0, 0)])
+        # A abertura do dispositivo de verdade: o nome e os eixos do uinput.
+        source = (ROOT / 'config/fliperos-web').read_text()
+        self.assertIn('b"FliperOS web trackball"', source)
+
     def test_tty1_and_session_take_the_panel_request(self):
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()
         self.assertIn('WEB_LAUNCH=${FLIPEROS_WEB_LAUNCH:-${XDG_RUNTIME_DIR:-/tmp}/fliperos-web-launch}', tty1)

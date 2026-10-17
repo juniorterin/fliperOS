@@ -24,6 +24,9 @@ const TEXT = {
     confirm_launch: "Close what is on the cabinet screen and open %s?", launching: "Opening %s on the cabinet…",
     confirm_close: "Close the game on the cabinet?", first: "Showing the first %n. Type to filter.",
     no_games: "No games in this folder.", count: "%n games",
+    trackball: "Trackball", ball_open: "Use the phone as a trackball", sensitivity: "Sensitivity", inertia: "Keeps rolling",
+    ball_hint: "Roll with your finger (a quick flick keeps rolling; touch to stop it).", ball_on: "Connected: the cabinet sees a USB mouse.",
+    btn_left: "Button 1", btn_middle: "3", btn_right: "Button 2",
     terminal: "Terminal", term_open: "Open the terminal", term_close: "Close", term_connecting: "Connecting…",
     term_on: "The cabinet's shell (zsh, user fliperos).", term_off: "Disconnected.",
     screen: "Screen", take_shot: "Take a screenshot", as_on_tube: "4:3, as on the tube", save_png: "Save PNG",
@@ -52,6 +55,9 @@ const TEXT = {
     confirm_launch: "Fechar o que está na tela do gabinete e abrir %s?", launching: "Abrindo %s no gabinete…",
     confirm_close: "Fechar o jogo no gabinete?", first: "Mostrando os primeiros %n. Digite para filtrar.",
     no_games: "Nenhum jogo nesta pasta.", count: "%n jogos",
+    trackball: "Trackball", ball_open: "Usar o celular como trackball", sensitivity: "Sensibilidade", inertia: "Continua rolando",
+    ball_hint: "Role com o dedo (um giro rápido continua rolando; toque para parar).", ball_on: "Conectado: o gabinete vê um mouse USB.",
+    btn_left: "Botão 1", btn_middle: "3", btn_right: "Botão 2",
     terminal: "Terminal", term_open: "Abrir o terminal", term_close: "Fechar", term_connecting: "Conectando…",
     term_on: "O shell do gabinete (zsh, usuário fliperos).", term_off: "Desconectado.",
     screen: "Tela", take_shot: "Tirar screenshot", as_on_tube: "4:3, como no tubo", save_png: "Salvar PNG",
@@ -498,6 +504,112 @@ $("game-search").addEventListener("input", renderGames);
 $("close-game").addEventListener("click", async () => {
   if (!confirm(t("confirm_close"))) return;
   await api("/api/close", { method: "POST", body: "{}" }).catch(() => {});
+});
+
+// ── Trackball: o celular como mouse do gabinete ──────────────────
+// O dedo na area rola a bola: os movimentos vao pelo WebSocket
+// /api/trackball, juntados a cada quadro da tela. Soltando depois de um
+// giro rapido, a bola continua rolando e freia aos poucos, como um trackball
+// de fliperama; um toque a segura.
+
+let ball = null, ballSend = { x: 0, y: 0 }, ballVel = { x: 0, y: 0 }, ballLast = null, ballSpin = 0;
+
+function ballWs(msg) {
+  if (ball && ball.readyState === 1) ball.send(JSON.stringify(msg));
+}
+
+function ballFlush() {
+  const dx = Math.trunc(ballSend.x), dy = Math.trunc(ballSend.y);
+  if (dx || dy) {
+    ballWs({ m: [dx, dy] });
+    ballSend.x -= dx;
+    ballSend.y -= dy;
+  }
+}
+
+function ballFrame(time) {
+  // A inercia: anda com a velocidade e freia (a cada 16 ms, 6%).
+  if (ballSpin && !ballLast) {
+    const dt = Math.min(50, time - ballSpin);
+    ballSpin = time;
+    ballSend.x += ballVel.x * dt;
+    ballSend.y += ballVel.y * dt;
+    const friction = Math.pow(0.94, dt / 16);
+    ballVel.x *= friction;
+    ballVel.y *= friction;
+    if (Math.abs(ballVel.x) + Math.abs(ballVel.y) < 0.01) ballSpin = 0;
+  }
+  ballFlush();
+  if (ball) requestAnimationFrame(ballFrame);
+}
+
+function openBall() {
+  const scheme = location.protocol === "https:" ? "wss://" : "ws://";
+  ball = new WebSocket(scheme + location.host + "/api/trackball");
+  ball.onopen = () => {
+    $("ball").hidden = false;
+    $("ball-open").hidden = true;
+    $("ball-note").textContent = t("ball_on");
+    requestAnimationFrame(ballFrame);
+  };
+  ball.onclose = () => {
+    $("ball").hidden = true;
+    $("ball-open").hidden = false;
+    $("ball-note").textContent = t("term_off");
+    ball = null;
+  };
+}
+
+$("ball-open").addEventListener("click", openBall);
+const pad = $("ball-pad");
+pad.addEventListener("pointerdown", (ev) => {
+  pad.setPointerCapture(ev.pointerId);
+  pad.classList.add("active");
+  ballSpin = 0;
+  ballVel = { x: 0, y: 0 };
+  ballLast = { x: ev.clientX, y: ev.clientY, t: ev.timeStamp };
+});
+pad.addEventListener("pointermove", (ev) => {
+  if (!ballLast) return;
+  const sens = Number($("ball-sens").value);
+  const dx = (ev.clientX - ballLast.x) * sens, dy = (ev.clientY - ballLast.y) * sens;
+  const dt = Math.max(1, ev.timeStamp - ballLast.t);
+  ballSend.x += dx;
+  ballSend.y += dy;
+  // A velocidade (por ms), suavizada: e a que a bola leva ao soltar.
+  ballVel.x = 0.6 * (dx / dt) + 0.4 * ballVel.x;
+  ballVel.y = 0.6 * (dy / dt) + 0.4 * ballVel.y;
+  ballLast = { x: ev.clientX, y: ev.clientY, t: ev.timeStamp };
+});
+function padUp(ev) {
+  if (!ballLast) return;
+  // Parado antes de soltar (mais de 60 ms): sem inercia.
+  const still = ev.timeStamp - ballLast.t > 60;
+  ballLast = null;
+  pad.classList.remove("active");
+  if ($("ball-spin").checked && !still) ballSpin = performance.now();
+}
+pad.addEventListener("pointerup", padUp);
+pad.addEventListener("pointercancel", padUp);
+pad.addEventListener("wheel", (ev) => {
+  ev.preventDefault();
+  ballWs({ m: [0, 0], w: ev.deltaY > 0 ? -1 : 1 });
+}, { passive: false });
+document.querySelectorAll(".ball-buttons button").forEach((button) => {
+  const name = button.dataset.button;
+  const up = () => {
+    if (!button.classList.contains("down")) return;
+    button.classList.remove("down");
+    ballWs({ b: [name, 0] });
+  };
+  button.addEventListener("pointerdown", (ev) => {
+    button.setPointerCapture(ev.pointerId);
+    button.classList.add("down");
+    ballWs({ b: [name, 1] });
+  });
+  button.addEventListener("pointerup", up);
+  button.addEventListener("pointercancel", up);
+  button.addEventListener("contextmenu", (ev) => ev.preventDefault());
 });
 
 // ── Terminal ─────────────────────────────────────────────────────
