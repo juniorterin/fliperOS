@@ -20,3 +20,23 @@ Regras pra trabalhar nesse build:
    tentar uma terceira variação — não fique ciclando sozinho.
 4. Não invoque skills de design ou qualquer coisa não relacionada a
    build/sistema pra essa tarefa.
+
+# Docker Desktop neste Windows
+
+O Docker cai quando o Windows fica sem memória comprometida (commit): erro
+1455 ("arquivo de paginação muito pequeno") e "engine stopped unexpectedly"
+no log. Em 2026-10-16 o commit chegou a 127,8 de 127,9 GB com só ~21 GB de
+RAM em uso — memória reservada de VMs do WSL derrubadas à força, que só volta
+reiniciando o Windows. Várias sessões do Claude dividem este Docker.
+
+5. Antes de um job pesado (ISO, kernel, pacotes, as duas suítes de teste) e
+   antes de reiniciar o Docker, rode
+   `powershell -NoProfile -File tools\docker-health.ps1`. Saída 1 (commit
+   acima de 85%): não comece nada pesado nem reinicie o Docker; avise o
+   usuário que o Windows precisa reiniciar.
+6. Um job pesado de Docker por vez, entre todas as sessões: confira
+   `docker ps` antes. Dois builds pesados em paralelo derrubaram o Docker.
+7. Nunca mate `com.docker.backend` nem rode `wsl --shutdown` para
+   "destravar" o Docker: isso deixa outra VM com memória presa. Se ele não
+   responde com memória sobrando, uma sessão só faz Quit pela bandeja e
+   abre de novo, uma vez; se não voltar, pergunte ao usuário.
