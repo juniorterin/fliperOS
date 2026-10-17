@@ -24,6 +24,8 @@ const TEXT = {
     confirm_launch: "Close what is on the cabinet screen and open %s?", launching: "Opening %s on the cabinet…",
     confirm_close: "Close the game on the cabinet?", first: "Showing the first %n. Type to filter.",
     no_games: "No games in this folder.", count: "%n games",
+    terminal: "Terminal", term_open: "Open the terminal", term_close: "Close", term_connecting: "Connecting…",
+    term_on: "The cabinet's shell (zsh, user fliperos).", term_off: "Disconnected.",
     screen: "Screen", take_shot: "Take a screenshot", as_on_tube: "4:3, as on the tube", save_png: "Save PNG",
     shot_wait: "Taking the picture…", shot_from: "%w×%h, %s · %t", shot_x11: "desktop (X)", shot_gl: "OpenGL frame",
     files: "Files", up_folder: "Up", upload: "Upload files", new_folder: "New folder", folder_name: "Name of the new folder:",
@@ -50,6 +52,8 @@ const TEXT = {
     confirm_launch: "Fechar o que está na tela do gabinete e abrir %s?", launching: "Abrindo %s no gabinete…",
     confirm_close: "Fechar o jogo no gabinete?", first: "Mostrando os primeiros %n. Digite para filtrar.",
     no_games: "Nenhum jogo nesta pasta.", count: "%n jogos",
+    terminal: "Terminal", term_open: "Abrir o terminal", term_close: "Fechar", term_connecting: "Conectando…",
+    term_on: "O shell do gabinete (zsh, usuário fliperos).", term_off: "Desconectado.",
     screen: "Tela", take_shot: "Tirar screenshot", as_on_tube: "4:3, como no tubo", save_png: "Salvar PNG",
     shot_wait: "Tirando a foto…", shot_from: "%w×%h, %s · %t", shot_x11: "desktop (X)", shot_gl: "quadro OpenGL",
     files: "Arquivos", up_folder: "Subir", upload: "Enviar arquivos", new_folder: "Nova pasta", folder_name: "Nome da pasta nova:",
@@ -495,6 +499,76 @@ $("close-game").addEventListener("click", async () => {
   if (!confirm(t("confirm_close"))) return;
   await api("/api/close", { method: "POST", body: "{}" }).catch(() => {});
 });
+
+// ── Terminal ─────────────────────────────────────────────────────
+// O shell do gabinete pelo WebSocket /api/terminal, desenhado pelo xterm.js
+// (carregado so quando o terminal abre). Teclas vao como binario; o tamanho,
+// como texto {"resize": [colunas, linhas]}.
+
+let term = null, termSocket = null, termFit = null;
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector('script[src="' + src + '"]')) return resolve();
+    const s = el("script", { src });
+    s.onload = resolve;
+    s.onerror = () => reject(new Error(src));
+    document.head.append(s);
+  });
+}
+
+async function openTerminal() {
+  $("term-note").textContent = t("term_connecting");
+  if (!document.querySelector('link[href="xterm.css"]')) {
+    document.head.append(el("link", { rel: "stylesheet", href: "xterm.css" }));
+  }
+  await loadScript("xterm.js");
+  await loadScript("xterm-addon-fit.js");
+  const box = $("term");
+  box.hidden = false;
+  if (!term) {
+    term = new window.Terminal({
+      cursorBlink: true, fontSize: 14, scrollback: 5000,
+      fontFamily: '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace',
+      theme: { background: "#191a21", foreground: "#f8f8f2", cursor: "#f8f8f2", selectionBackground: "#44475a",
+        black: "#21222c", red: "#ff5555", green: "#50fa7b", yellow: "#f1fa8c", blue: "#bd93f9", magenta: "#ff79c6",
+        cyan: "#8be9fd", white: "#f8f8f2", brightBlack: "#6272a4", brightRed: "#ff6e6e", brightGreen: "#69ff94",
+        brightYellow: "#ffffa5", brightBlue: "#d6acff", brightMagenta: "#ff92df", brightCyan: "#a4ffff",
+        brightWhite: "#ffffff" },
+    });
+    termFit = new window.FitAddon.FitAddon();
+    term.loadAddon(termFit);
+    term.open(box);
+    term.onData((data) => {
+      if (termSocket && termSocket.readyState === 1) termSocket.send(new TextEncoder().encode(data));
+    });
+    term.onResize(({ cols, rows }) => {
+      if (termSocket && termSocket.readyState === 1) termSocket.send(JSON.stringify({ resize: [cols, rows] }));
+    });
+    new ResizeObserver(() => { if (!box.hidden) termFit.fit(); }).observe(box);
+  }
+  termFit.fit();
+  const scheme = location.protocol === "https:" ? "wss://" : "ws://";
+  termSocket = new WebSocket(scheme + location.host + "/api/terminal");
+  termSocket.binaryType = "arraybuffer";
+  termSocket.onopen = () => {
+    $("term-note").textContent = t("term_on");
+    $("term-open").hidden = true;
+    $("term-close").hidden = false;
+    termSocket.send(JSON.stringify({ resize: [term.cols, term.rows] }));
+    term.focus();
+  };
+  termSocket.onmessage = (ev) => term.write(new Uint8Array(ev.data));
+  termSocket.onclose = () => {
+    $("term-note").textContent = t("term_off");
+    $("term-open").hidden = false;
+    $("term-close").hidden = true;
+    termSocket = null;
+  };
+}
+
+$("term-open").addEventListener("click", () => openTerminal().catch((e) => { $("term-note").textContent = String(e); }));
+$("term-close").addEventListener("click", () => { if (termSocket) termSocket.close(); });
 
 // ── Tela: o screenshot ───────────────────────────────────────────
 // O PNG do que esta na tela do gabinete (/api/screenshot): o quadro do jogo

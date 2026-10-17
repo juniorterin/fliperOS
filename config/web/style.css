@@ -142,6 +142,9 @@ td.num, th.num { text-align: right; }
 .shot.tube { width: min(100%, 960px); aspect-ratio: 4 / 3; height: auto; object-fit: fill; }
 .ghost-link { color: var(--cyan); }
 
+/* Terminal: o xterm.js (config/web/xterm.js). */
+.term { margin-top: 10px; height: 420px; background: #191a21; border-radius: 8px; padding: 6px; overflow: hidden; }
+
 /* Jogos: o sistema, a busca e a lista com o botao de abrir. */
 .games-bar { display: flex; flex-wrap: wrap; gap: 8px; }
 .games-bar select { flex: 1 1 200px; min-width: 0; }

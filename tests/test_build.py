@@ -4614,6 +4614,54 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(status, 503, data)
         self.assertFalse(request.exists())
 
+    def test_terminal_over_websocket(self):
+        import base64
+        import socket
+        import struct
+        cookie = self.login()
+
+        def handshake(origin):
+            sock = socket.create_connection(('127.0.0.1', self.port), timeout=10)
+            key = base64.b64encode(os.urandom(16)).decode()
+            sock.sendall(('GET /api/terminal HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nUpgrade: websocket\r\n'
+                          'Connection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n'
+                          'Origin: %s\r\nCookie: %s\r\n\r\n' % (self.port, key, origin, cookie)).encode())
+            head = b''
+            while b'\r\n\r\n' not in head:
+                head += sock.recv(1)
+            return sock, head.decode()
+
+        def frame(opcode, data):
+            mask = os.urandom(4)
+            return (bytes([0x80 | opcode, 0x80 | len(data)]) + mask
+                    + bytes(c ^ mask[i % 4] for i, c in enumerate(data)))
+
+        # Outro site (o cookie iria junto no navegador): recusado.
+        sock, head = handshake('http://evil.example')
+        sock.close()
+        self.assertIn(' 403 ', head.splitlines()[0])
+        sock, head = handshake('http://127.0.0.1:%d' % self.port)
+        try:
+            self.assertIn(' 101 ', head.splitlines()[0])
+            sock.sendall(frame(1, json.dumps({'resize': [100, 30]}).encode()))
+            sock.sendall(frame(2, b'stty size; echo hello-$((40+2))\n'))
+            out, end = b'', time.time() + 10
+            while b'hello-42' not in out and time.time() < end:
+                b0, b1 = sock.recv(1)[0], sock.recv(1)[0]
+                size = b1 & 0x7F
+                if size == 126:
+                    size = struct.unpack('>H', sock.recv(2))[0]
+                data = b''
+                while len(data) < size:
+                    data += sock.recv(size - len(data))
+                out += data
+            self.assertIn(b'hello-42', out)
+            # O tamanho pedido chegou ao pty.
+            self.assertIn(b'30 100', out)
+            sock.sendall(frame(8, struct.pack('>H', 1000)))
+        finally:
+            sock.close()
+
     def test_tty1_and_session_take_the_panel_request(self):
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()
         self.assertIn('WEB_LAUNCH=${FLIPEROS_WEB_LAUNCH:-${XDG_RUNTIME_DIR:-/tmp}/fliperos-web-launch}', tty1)

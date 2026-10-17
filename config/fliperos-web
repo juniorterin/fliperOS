@@ -28,14 +28,19 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     (root: roms, bios, media ou splashscreen, as pastas de ~)
     GET  /api/screenshot  um PNG do que esta na tela (o jogo, o frontend,
                       o menu grafico pela camada OpenGL; o desktop pelo X)
+    GET  /api/terminal    WebSocket: o shell do usuario num pty (binario =
+                      teclas e tela, texto = {"resize": [colunas, linhas]})
 Os POST pedem o cabecalho X-FliperOS: 1 (um formulario de outro site nao
 consegue mandar).
 """
 import argparse
 import collections
+import base64
 import ctypes
 import ctypes.util
+import fcntl
 import glob
+import hashlib
 import hmac
 import importlib.util
 import json
@@ -48,6 +53,7 @@ import signal
 import socket
 import struct
 import subprocess
+import termios
 import threading
 import time
 import zlib
@@ -79,9 +85,12 @@ LAUNCHERS = (BIN + "/fliperos-kms-run", BIN + "/fliperos-x11-run")
 FILE_ROOTS = ENV("FLIPEROS_WEB_FILE_ROOTS", "roms bios media splashscreen").split()
 SESSION_HOURS = 12
 STATIC_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js",
-                "/style.css": "style.css", "/icon.svg": "icon.svg"}
+                "/style.css": "style.css", "/icon.svg": "icon.svg",
+                # O terminal: o xterm.js (MIT, xterm-LICENSE.txt) vai junto.
+                "/xterm.js": "xterm.js", "/xterm.css": "xterm.css", "/xterm-addon-fit.js": "xterm-addon-fit.js",
+                "/xterm-LICENSE.txt": "xterm-LICENSE.txt"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-         ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml"}
+         ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8"}
 # Os programas que contam como "o jogo aberto", na ordem de preferencia.
 EMULATORS = ("retroarch", "groovymame", "mame", "flycast", "pcsx2", "pcsx2-qt", "duckstation", "duckstation-qt",
              "dolphin-emu", "supermodel", "sm2-emu", "hypseus", "singe", "openbor", "fcadefbneo.exe")
@@ -779,6 +788,142 @@ def tail(path, lines):
     return "\n".join(text.splitlines()[-lines:])
 
 
+# ── O terminal (fase 5b): um WebSocket com um pty ──────────────────
+
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+
+class WebSocket:
+    """O minimo do RFC 6455 para o terminal: quadros de texto, binarios,
+    ping/pong e fechamento, sem extensoes."""
+
+    def __init__(self, rfile, wfile):
+        self.rfile, self.wfile = rfile, wfile
+        self.lock = threading.Lock()
+
+    def send(self, opcode, data=b""):
+        size = len(data)
+        head = bytes([0x80 | opcode])
+        if size < 126:
+            head += bytes([size])
+        elif size < 1 << 16:
+            head += bytes([126]) + struct.pack(">H", size)
+        else:
+            head += bytes([127]) + struct.pack(">Q", size)
+        with self.lock:
+            self.wfile.write(head + data)
+            self.wfile.flush()
+
+    def _read(self, n):
+        data = self.rfile.read(n)
+        if len(data) < n:
+            raise EOFError
+        return data
+
+    def receive(self):
+        """(opcode, dados) de uma mensagem inteira (junta os pedacos)."""
+        message, first = b"", None
+        while True:
+            b0, b1 = self._read(2)
+            opcode, size = b0 & 0x0F, b1 & 0x7F
+            if size == 126:
+                size = struct.unpack(">H", self._read(2))[0]
+            elif size == 127:
+                size = struct.unpack(">Q", self._read(8))[0]
+            if size > 1 << 20:
+                raise EOFError
+            mask = self._read(4) if b1 & 0x80 else b"\0\0\0\0"
+            data = bytes(c ^ mask[i % 4] for i, c in enumerate(self._read(size)))
+            if opcode >= 8:
+                # Controle no meio de uma mensagem: responde e segue.
+                if opcode == 9:
+                    self.send(10, data)
+                if opcode == 8:
+                    return 8, data
+                continue
+            if first is None:
+                first = opcode
+            message += data
+            if b0 & 0x80:
+                return first, message
+
+
+def terminal(ws):
+    """Um shell de login do usuario do FliperOS num pty (o zsh dele; o
+    .zprofile so abre o fluxo do tty1 no /dev/tty1). Do navegador: binario =
+    teclas, texto = {"resize": [colunas, linhas]}."""
+    user = pwd.getpwnam(PLAYER)
+    shell = user.pw_shell if os.path.exists(user.pw_shell or "") else "/bin/bash"
+    env = {"HOME": user.pw_dir, "USER": user.pw_name, "LOGNAME": user.pw_name, "SHELL": shell,
+           "TERM": "xterm-256color", "LANG": ENV("LANG", "C.UTF-8"), "COLORTERM": "truecolor",
+           "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+           "XDG_RUNTIME_DIR": os.path.join(RUN_USER, str(user.pw_uid))}
+    # O subprocess troca de usuario no proprio C (um fork num servidor com
+    # threads nao pode chamar o NSS do initgroups); o setsid -c faz do pty o
+    # terminal do shell (Ctrl+C, job control); o shell de login le o
+    # .zprofile, que so abre o fluxo do tty1 no /dev/tty1.
+    fd, slave = os.openpty()
+    try:
+        child = subprocess.Popen(["setsid", "-c", shell, "-l"], stdin=slave, stdout=slave, stderr=slave,
+                                 cwd=user.pw_dir, env=env, user=user.pw_uid, group=user.pw_gid,
+                                 extra_groups=os.getgrouplist(user.pw_name, user.pw_gid))
+    finally:
+        os.close(slave)
+    pid = child.pid
+    # Sem o Nice=15 do servico: o shell e de quem esta mexendo (os filhos
+    # dele herdam).
+    try:
+        os.setpriority(os.PRIO_PROCESS, pid, 0)
+    except OSError:
+        pass
+
+    def pump():
+        try:
+            while True:
+                data = os.read(fd, 65536)
+                if not data:
+                    break
+                ws.send(2, data)
+        except OSError:
+            pass
+        try:
+            ws.send(8, struct.pack(">H", 1000))
+        except OSError:
+            pass
+
+    reader = threading.Thread(target=pump, daemon=True)
+    reader.start()
+    try:
+        while True:
+            opcode, data = ws.receive()
+            if opcode == 8:
+                break
+            if opcode == 2:
+                os.write(fd, data)
+            elif opcode == 1:
+                try:
+                    msg = json.loads(data.decode())
+                    cols, rows = (int(v) for v in msg.get("resize", [0, 0]))
+                except (ValueError, TypeError, AttributeError):
+                    continue
+                if 0 < cols < 1000 and 0 < rows < 1000:
+                    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+    except (EOFError, OSError):
+        pass
+    finally:
+        # O SIGHUP vai ao grupo do shell (o setsid o fez lider de sessao).
+        try:
+            os.killpg(pid, signal.SIGHUP)
+        except OSError:
+            pass
+        try:
+            child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait()
+        os.close(fd)
+
+
 # ── O servidor ─────────────────────────────────────────────────────
 
 class Panel:
@@ -870,7 +1015,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:")
+        # O WebSocket do terminal (ws: deste endereco; o servidor confere o
+        # Origin) e os estilos que o xterm.js cria na pagina.
+        self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; "
+                         "connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'")
         for key, value in (headers or {}).items():
             self.send_header(key, value)
         self.end_headers()
@@ -940,6 +1088,8 @@ class Handler(BaseHTTPRequestHandler):
             if not path or not os.path.isfile(path):
                 return self.send(404, {"error": "no such file"})
             return self.send_file(path)
+        if url.path == "/api/terminal":
+            return self.open_terminal()
         if url.path == "/api/screenshot":
             with self.panel.launch_lock:
                 image, source = screenshot()
@@ -1030,6 +1180,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(409, {"error": "folder not empty" if os.path.isdir(path) else str(exc)})
             return self.send(200, {})
         return self.send(404, {"error": "not found"})
+
+    def open_terminal(self):
+        """O WebSocket do terminal. So da propria pagina: o Origin tem de ser
+        este endereco (outro site com o cookie no navegador nao abre)."""
+        origin = urlparse(self.headers.get("Origin", "")).netloc
+        key = self.headers.get("Sec-WebSocket-Key", "")
+        if self.headers.get("Upgrade", "").lower() != "websocket" or not key:
+            return self.send(400, {"error": "websocket only"})
+        if origin != self.headers.get("Host", ""):
+            return self.send(403, {"error": "wrong origin"})
+        accept = base64.b64encode(hashlib.sha1((key + WS_GUID).encode()).digest()).decode()
+        self.send_response(101)
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", accept)
+        self.end_headers()
+        self.wfile.flush()
+        self.close_connection = True
+        terminal(WebSocket(self.rfile, self.wfile))
 
     def upload(self, query):
         """O corpo do pedido e o arquivo: gravado aos pedacos num .part na
