@@ -40,6 +40,7 @@ The MAME ROM Cleaner works out of the box: `catver.ini`, `nplayers.ini` and `con
 
 - RetroArch, Flycast and Dolphin are built with **Vulkan**, for the amdgpu driver. RetroArch's default stays glcore, and Flycast goes back to OpenGL while the 480i flicker filter is on. PCSX2 was seen running in Vulkan on the CRT with amdgpu (R7 240)
 - An emulator no longer fails to open, with no message, when the colour calibration cannot be applied (another program holds the screen): the launchers go on without it
+- ES-DE in 640x240 draws its interface in 4:3 (320x240) and stretches it 2x horizontally, so text and pictures keep their proportions on the tube (not yet seen on the CRT)
 - RetroArch: the **FinalBurn Neo** core comes in the image
 - RetroArch: one press of Esc closes the game. It asked for a second press with a notice that FliperOS keeps hidden
 - RetroArch's FBNeo core opens the console sets (Mega Drive, Master System, ZX Spectrum and the like) that sit loose in the arcade folder
