@@ -1112,6 +1112,9 @@ for _alias, _name in {
     "vertical-cw": "orientation", "vertical-ccw": "orientation",
     # Os programas sem icone proprio.
     "retrofe": "frontend", "lxde": "desktop", "supermodel": "emulators", "model3": "emulators", "kof": "games",
+    # O DuckStation tem, mas a licenca dele (CC BY-NC-ND) nao deixa
+    # redistribuir nem reduzir o icone.
+    "duckstation": "emulators",
     # Button mapping (controle ou teclado) e o jogo direto no boot.
     "panel": "joysticks", "game": "games",
     # Os itens que acrescentam ou editam (Custom games, Frontend) e o

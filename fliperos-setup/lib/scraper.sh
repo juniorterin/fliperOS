@@ -335,6 +335,7 @@ scraper_platform() {
     # procura como arcade.
     model2 | model3) echo arcade ;;
     ps2) echo ps2 ;;
+    psx) echo psx ;;
     dolphin) echo gc ;;
     *) return 1 ;;
   esac
@@ -512,6 +513,10 @@ scraper_attract_emulator() {
       echo "Model 2|$FLIPEROS_BIN/fliperos-x11-run|fliperos-model2 [name]|.zip" ;;
     ps2)
       echo "PCSX2|$FLIPEROS_BIN/fliperos-x11-run|pcsx2 \"[romfilename]\"|.iso;.chd;.cso;.bin;.gz" ;;
+    psx)
+      # Sem .bin: o jogo e o .cue que aponta para ele (um .bin sozinho
+      # apareceria em dobro na lista).
+      echo "DuckStation|$FLIPEROS_BIN/fliperos-x11-run|duckstation \"[romfilename]\"|.cue;.chd;.pbp;.m3u;.iso;.img;.ecm;.mds;.exe;.psexe" ;;
     dolphin)
       echo "Dolphin|$FLIPEROS_BIN/fliperos-x11-run|dolphin-emu -e \"[romfilename]\"|.iso;.gcm;.rvz;.wbfs;.ciso;.gcz;.wad" ;;
     retroarch/*)

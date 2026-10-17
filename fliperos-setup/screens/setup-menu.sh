@@ -650,7 +650,7 @@ screen_emulators() {
     done < <(emulators_list)
     entries+=("return|Return")
     choice=$(ui_menu "$title" \
-      "What is installed and what is not. Choose one that is not installed to install it; Model 2, Fightcade 2 and KOF Final Attack don't come in the image and need the network." \
+      "What is installed and what is not. Choose one that is not installed to install it; Model 2, Fightcade 2, DuckStation and KOF Final Attack don't come in the image and need the network." \
       "$last" "${entries[@]}") || return 0
     last=$choice
     [[ $choice == return ]] && return 0

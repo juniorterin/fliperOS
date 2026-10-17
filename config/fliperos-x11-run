@@ -183,6 +183,89 @@ case $name in
     # quadros/s so com isso).
     export mesa_glthread="${mesa_glthread:-true}"
     ;;
+  duckstation)
+    # O DuckStation (Setup > Games > Emulators & Games, config/fliperos-duckstation)
+    # le o settings.ini de ~/.local/share/duckstation (ou de
+    # $XDG_CONFIG_HOME/duckstation). Sem ele, o de partida: com o
+    # SetupWizardIncomplete o assistente nao abre, e sem os atalhos de teclado
+    # padrao (um settings.ini que ja existe nao os ganha) o Esc nao abriria o
+    # menu. Select+Start tambem o abre, pelo painel.
+    ini=${XDG_CONFIG_HOME:+$XDG_CONFIG_HOME/duckstation}
+    ini=${ini:-$HOME/.local/share/duckstation}/settings.ini
+    iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
+    if [[ ! -f $ini ]] && mkdir -p "${ini%/*}" 2> /dev/null; then
+      cat > "$ini" << 'INI'
+[Main]
+SetupWizardIncomplete = false
+
+[Display]
+VSync = true
+Scaling = Nearest
+
+[Hotkeys]
+FastForward = Keyboard/Tab
+TogglePause = Keyboard/Space
+Screenshot = Keyboard/F10
+OpenPauseMenu = Keyboard/Escape
+OpenPauseMenu = SDL-0/Back & SDL-0/Start
+LoadSelectedSaveState = Keyboard/F1
+SaveSelectedSaveState = Keyboard/F2
+SelectPreviousSaveStateSlot = Keyboard/F3
+SelectNextSaveStateSlot = Keyboard/F4
+INI
+    fi
+    if [[ -f $ini ]]; then
+      # A cada abertura: sem o assistente, tela cheia sem o ponteiro, sem
+      # perguntar ao fechar, a BIOS em ~/bios (a mesma do RetroArch) e a
+      # imagem esticada no modo (640x240 e 8:3 em pixels; o tubo o mostra 4:3).
+      "$iniset" "$ini" Main SetupWizardIncomplete false
+      "$iniset" "$ini" Main StartFullscreen true
+      "$iniset" "$ini" Main HideCursorInFullscreen true
+      "$iniset" "$ini" Main ConfirmPowerOff false
+      "$iniset" "$ini" BIOS SearchDirectory "$HOME/bios"
+      "$iniset" "$ini" Display AspectRatio "Stretch To Fill"
+      # O OpenGL com o filtro de flicker do 480i ligado: a camada nao alcanca
+      # o Vulkan, que o automatico escolhe onde ha (amdgpu, Intel). So nesta
+      # abertura: sem o filtro volta o automatico. O renderizador escolhido no
+      # proprio DuckStation fica.
+      if deflicker_on; then
+        if ! grep -q '^Renderer = OpenGL' "$ini"; then
+          "$iniset" "$ini" GPU Renderer OpenGL
+          : > "${ini%/*}/.fliperos-opengl"
+        fi
+      elif [[ -e ${ini%/*}/.fliperos-opengl ]]; then
+        grep -q '^Renderer = OpenGL' "$ini" && "$iniset" "$ini" GPU Renderer Automatic
+        rm -f "${ini%/*}/.fliperos-opengl"
+      fi
+      # Os jogos de ~/roms/psx (com as subpastas) e os da pasta do core PS1
+      # do RetroArch, se a pessoa ainda nao escolheu pastas.
+      grep -q '^RecursivePaths' "$ini" || "$iniset" "$ini" GameList RecursivePaths "$HOME/roms/psx"
+      grep -q '^Paths' "$ini" || "$iniset" "$ini" GameList Paths "$HOME/roms/retroarch/pcsx_rearmed"
+      # Os controles pelo SDL, Pad1 e Pad2 nos dois primeiros, como no PCSX2:
+      # o painel ja chega como fight stick (Setup > Joysticks > Button
+      # mapping), X Y RB / A B RT = Quadrado Triangulo R1 / X Bola R2. So
+      # enquanto nada estiver no SDL: um ajuste feito no DuckStation fica.
+      if ! grep -q 'SDL-[0-9]/[A-Z]' <(grep -v '^OpenPauseMenu' "$ini"); then
+        "$iniset" "$ini" InputSources SDL true
+        for pad in 1 2; do
+          for kv in Type=AnalogController Up=DPadUp Down=DPadDown Left=DPadLeft Right=DPadRight Cross=A \
+            Circle=B Square=X Triangle=Y L1=LeftShoulder R1=RightShoulder L2=+LeftTrigger R2=+RightTrigger \
+            Start=Start Select=Back; do
+            value=${kv#*=}
+            [[ ${kv%%=*} == Type ]] || value="SDL-$((pad - 1))/$value"
+            "$iniset" "$ini" "Pad$pad" "${kv%%=*}" "$value"
+          done
+        done
+      fi
+    fi
+    # Com um jogo (um frontend), -batch: fechar o jogo fecha o DuckStation e
+    # volta ao frontend. Sem jogo, o Big Picture, que se usa pelo controle.
+    if (($# > 1)); then
+      set -- "$1" -fullscreen -batch -- "${@:2}"
+    else
+      set -- "$1" -fullscreen -bigpicture
+    fi
+    ;;
   hypseus | singe)
     # O Hypseus le o jogo e o player primeiro ("hypseus lair vldp ..."); as
     # opcoes vao no fim. Sem -x/-y ele abriria em 640x480, e sem

@@ -4,6 +4,7 @@
 | RetroArch | many (cores) | KMS | switches per game by itself (CRT SwitchRes) |
 | Flycast | Dreamcast, Naomi, Atomiswave | its own Xorg (`fliperos-x11-run`) | 640x240 at 15 kHz, 640x480 on the others |
 | PCSX2 (official AppImage) | PS2 | its own Xorg | same |
+| DuckStation (downloaded through the Setup) | PlayStation | its own Xorg | same |
 | Dolphin | GameCube, Wii | its own Xorg | same |
 | Hypseus Singe | laserdisc (Dragon's Lair, Space Ace...) | its own Xorg | same |
 | OpenBOR | beat 'em ups | its own Xorg | 320x240 |
@@ -92,7 +93,7 @@ Marking **480i filter** on a row opens that program's level (light, medium, stro
 
 | Row | 640x240 means | 480i means | Default |
 | --- | --- | --- | --- |
-| Flycast, PCSX2, Dolphin, Hypseus Singe | `fliperos-x11-run` opens the 640x240 line of the table | the 640x480 line | 640x240 |
+| Flycast, PCSX2, DuckStation, Dolphin, Hypseus Singe | `fliperos-x11-run` opens the 640x240 line of the table | the 640x480 line | 640x240 |
 | Supermodel, SM2-Emu (384 lines) | 640x240 at 57.524 Hz | 496x384 at 57.524 Hz, interlaced | 640x240 |
 | GroovyMAME | `interlace 0` in `mame.ini`: Switchres never picks an interlaced mode | `interlace 1` | 480i filter |
 | RetroArch PS1, SNES, Mega Drive, FBNeo | `interlace 0` in the core's own `switchres.ini` | `interlace 1` | 480i filter |
@@ -135,10 +136,11 @@ For testing:
 
 ## Emulators & Games
 
-**Setup > Games > Emulators & Games** lists the emulators of the desktop menu (RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, Supermodel, OpenBOR, Model 2, Fightcade 2) and KOF Final Attack, each marked **installed** or **not installed** — the same file the desktop menu looks at (`TryExec`) to show the shortcut. Choosing one that is not installed installs it (`config/fliperos-emulators`):
+**Setup > Games > Emulators & Games** lists the emulators of the desktop menu (RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, Supermodel, OpenBOR, Model 2, Fightcade 2, DuckStation) and KOF Final Attack, each marked **installed** or **not installed** — the same file the desktop menu looks at (`TryExec`) to show the shortcut. Choosing one that is not installed installs it (`config/fliperos-emulators`):
 
 - **Model 2**: installs what is missing from the compiler and clones and builds SM2-Emu as the user, the same build the desktop menu does on the first click (`fliperos-sm2emu --deps` and `--build`). Chosen again when installed, it updates and rebuilds.
 - **Fightcade 2**: downloaded from its site, with Wine ([Fightcade 2](Fightcade-2.md)).
+- **DuckStation** (PlayStation): its license (CC BY-NC-ND 4.0) doesn't allow it in the image, so the official AppImage is downloaded from its GitHub (the `latest` release) and unpacked in `/opt/duckstation` (`config/fliperos-duckstation`). Chosen again when installed, it updates. Its games go in `~/roms/psx` (created once it is installed), and it also lists the ones in `~/roms/retroarch/pcsx_rearmed`; the BIOS is the one in `~/bios`, the same as RetroArch's. Each launch (`fliperos-x11-run`) sets full screen, `AspectRatio = Stretch To Fill` and the BIOS folder; the first one also skips its setup wizard and puts both panels on SDL (Cross/Circle/Square/Triangle on A/B/X/Y, as in PCSX2). Its renderer stays on Automatic, which picks **Vulkan** where there is one (amdgpu, Intel; radeon has none, and it uses OpenGL); with the [480i flicker filter](#480i-flicker-filter) on, that launch uses OpenGL, which the filter reaches, and the next one without the filter goes back to Automatic. A renderer chosen in DuckStation itself stays. Esc or Select+Start opens its menu. Opened from a frontend it closes with the game (`-batch`); from the desktop menu it opens in Big Picture. Not seen on the CRT yet.
 - **KOF Final Attack (Ikemen GO, 4:3)**: below.
 - The others come compiled in the image; one that is missing (an image built without it) can't be installed from here.
 

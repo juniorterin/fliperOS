@@ -104,6 +104,24 @@ table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nu
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--dim); font-weight: 500; font-size: 13px; }
 td.num, th.num { text-align: right; }
+/* Processos: colunas fixas; o nome comprido termina em "…" e rola como
+   letreiro (app.js, banner()). */
+#procs { table-layout: fixed; }
+#procs .c-pid { width: 4.5em; }
+#procs .c-cpu { width: 5em; }
+#procs .c-mem { width: 6.5em; }
+#procs td.name { overflow: hidden; }
+#procs .clip { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#procs .rolling .clip { text-overflow: clip; }
+#procs .rolling .clip span { display: inline-block; animation: banner var(--time, 6s) ease-in-out 1; }
+@keyframes banner {
+  0%, 15% { transform: translateX(0); }
+  50%, 65% { transform: translateX(var(--shift, 0)); }
+  100% { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #procs .rolling .clip span { animation: none; }
+}
 .modeline { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 13px; color: var(--cyan); overflow-wrap: anywhere; margin-top: 8px; }
 .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; border: 1px solid var(--line); }
 .tag.on { color: var(--green); border-color: var(--green); }

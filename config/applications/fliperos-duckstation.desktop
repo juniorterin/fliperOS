@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=DuckStation
+GenericName=PlayStation emulator
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch duckstation
+TryExec=/usr/local/bin/duckstation
+Icon=/usr/local/share/pixmaps/duckstation.png
+Terminal=false
+Categories=Game;Emulator;

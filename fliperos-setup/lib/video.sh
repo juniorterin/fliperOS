@@ -639,6 +639,7 @@ mode480_table() {
   cat << 'TABLE'
 flycast|Flycast|flycast|240p,filter,pure|240p|x11|Dreamcast, Naomi, Atomiswave.
 pcsx2|PCSX2|pcsx2|240p,filter,pure|240p|x11|PlayStation 2.
+duckstation|DuckStation|duckstation|240p,filter,pure|240p|x11|PlayStation (the few 480i games, like Tekken 3 menus or Tobal 2).
 dolphin|Dolphin|dolphin-emu|240p,filter,pure|240p|x11|GameCube and Wii.
 laserdisc|Hypseus Singe|hypseus singe|240p,filter,pure|240p|x11|Laserdisc games.
 model3|Supermodel|supermodel|240p,filter,pure|240p|x11|Sega Model 3 (384 lines).

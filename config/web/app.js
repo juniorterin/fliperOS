@@ -257,15 +257,81 @@ function render(s) {
   if (vol != null && document.activeElement !== $("vol")) $("vol").value = vol;
   $("vol").disabled = vol == null;
 
-  // Processos.
-  const procs = $("procs");
-  procs.replaceChildren(el("tr", {}, el("th", {}, "PID"), el("th", {}, t("name")),
-    el("th", { class: "num" }, t("cpu")), el("th", { class: "num" }, t("mem"))));
-  for (const p of s.processes || []) {
-    procs.append(el("tr", {}, el("td", {}, p.pid), el("td", {}, p.name),
-      el("td", { class: "num" }, p.cpu.toFixed(1) + "%"), el("td", { class: "num" }, p.mem_mb + " MB")));
+  renderProcesses(s.processes || []);
+}
+
+// ── Processos ────────────────────────────────────────────────────
+// A tabela tem colunas de largura fixa e as mesmas linhas a cada segundo
+// (so o texto muda): o layout nao pula quando um nome comprido aparece ou
+// some. O nome que nao cabe termina em "…" e, de tempos em tempos, rola
+// como um letreiro ate o fim e volta (banner()).
+
+const PROC_ROWS = 12;
+let procCells = null;
+
+function procTable() {
+  const table = $("procs");
+  const head = el("tr", {}, el("th", {}, "PID"), el("th", {}, t("name")),
+    el("th", { class: "num" }, t("cpu")), el("th", { class: "num" }, t("mem")));
+  const body = el("tbody");
+  procCells = [];
+  for (let i = 0; i < PROC_ROWS; i++) {
+    const text = el("span");
+    const cells = { pid: el("td"), name: el("td", { class: "name" }, el("span", { class: "clip" }, text)), text,
+      cpu: el("td", { class: "num" }), mem: el("td", { class: "num" }) };
+    cells.row = el("tr", {}, cells.pid, cells.name, cells.cpu, cells.mem);
+    body.append(cells.row);
+    procCells.push(cells);
+  }
+  table.replaceChildren(el("colgroup", {}, el("col", { class: "c-pid" }), el("col"), el("col", { class: "c-cpu" }),
+    el("col", { class: "c-mem" })), el("thead", {}, head), body);
+}
+
+function setText(node, value) {
+  if (node.textContent !== value) node.textContent = value;
+}
+
+function renderProcesses(list) {
+  if (!procCells || procCells.lang !== lang) {
+    procTable();
+    procCells.lang = lang;
+  }
+  procCells.forEach((cells, i) => {
+    const p = list[i];
+    cells.row.hidden = !p;
+    if (!p) return;
+    setText(cells.pid, String(p.pid));
+    if (cells.text.textContent !== p.name) {
+      // Outro nome nesta linha: o letreiro recomeca do inicio.
+      cells.name.classList.remove("rolling");
+      cells.text.textContent = p.name;
+      cells.name.title = p.name;
+    }
+    setText(cells.cpu, p.cpu.toFixed(1) + "%");
+    setText(cells.mem, p.mem_mb + " MB");
+  });
+}
+
+// banner: os nomes que nao cabem rolam ate o fim (devagar, uns 40 px por
+// segundo, parando nas pontas) e voltam ao "…".
+function banner() {
+  // Sem animacao pedida pelo sistema: fica so o "…" (o title tem o nome).
+  if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for (const cells of procCells || []) {
+    const clip = cells.name.firstChild;
+    if (cells.row.hidden || cells.name.classList.contains("rolling")) continue;
+    const extra = clip.scrollWidth - clip.clientWidth;
+    if (extra <= 2) continue;
+    cells.text.style.setProperty("--shift", -extra + "px");
+    cells.text.style.setProperty("--time", Math.max(3, extra / 40 + 2) + "s");
+    cells.name.classList.add("rolling");
   }
 }
+document.addEventListener("animationend", (event) => {
+  const cell = event.target.closest && event.target.closest("td.name");
+  if (cell) cell.classList.remove("rolling");
+});
+setInterval(banner, 5000);
 
 // ── Volume e logs ────────────────────────────────────────────────
 

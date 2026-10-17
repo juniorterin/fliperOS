@@ -50,6 +50,11 @@ folder() {
 
 folder "$roms/mame" "GroovyMAME: ROM sets (.zip/.7z, without unzipping) and CHD folders."
 folder "$roms/ps2" "PCSX2 (PlayStation 2): .iso .chd .cso .bin/.cue. The BIOS goes in ~/bios/ps2."
+# O DuckStation nao vem na imagem (Setup > Games > Emulators & Games): a pasta
+# so com ele instalado, senao seria uma segunda pasta de PS1 ao lado da do
+# core do RetroArch.
+[[ ! -x ${FLIPEROS_DUCKSTATION_BIN:-/usr/local/bin/duckstation} ]] ||
+  folder "$roms/psx" "DuckStation (PlayStation): .cue/.bin .chd .pbp .m3u .iso. It also lists the games in ~/roms/retroarch/pcsx_rearmed. The BIOS (scph5501.bin...) goes in ~/bios."
 folder "$roms/dreamcast" "Flycast: Dreamcast (.gdi .cdi .chd). BIOS in ~/bios/dc."
 folder "$roms/naomi" "Flycast: Sega Naomi (MAME .zip sets; a GD-ROM game also needs its CHD folder). BIOS (naomi.zip) in ~/bios/dc."
 folder "$roms/naomi2" "Flycast: Sega Naomi 2 (MAME .zip sets). BIOS (naomi2.zip) in ~/bios/dc."

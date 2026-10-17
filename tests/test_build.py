@@ -969,6 +969,21 @@ class RomFoldersTests(unittest.TestCase):
             self.assertIn('Arcade (MAME 2010). This is the MAME 3D: MAME 0.139 sets of the PlayStation-based (PSX)',
                           (roms / 'retroarch/mame2010/_info.txt').read_text())
 
+    def test_psx_folder_only_with_duckstation(self):
+        # Sem o DuckStation (baixado no Setup), nenhuma segunda pasta de PS1 ao
+        # lado da do core do RetroArch.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            env = dict(os.environ, HOME=str(tmp), FLIPEROS_CORE_INFO=str(tmp / 'nada'),
+                       FIGHTCADE_DIR=str(tmp / 'nenhum'), FLIPEROS_DUCKSTATION_BIN=str(tmp / 'duckstation'))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertFalse((tmp / 'roms/psx').exists())
+            (tmp / 'duckstation').write_text('#!/bin/sh\n')
+            (tmp / 'duckstation').chmod(0o755)
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertIn('DuckStation (PlayStation)', (tmp / 'roms/psx/_info.txt').read_text())
+            self.assertTrue((tmp / 'media/snap/psx').is_dir())
+
     def test_fightcade_reads_its_roms_from_the_roms_folder(self):
         # O Fightcade procura as ROMs dentro da pasta de cada emulador dele:
         # elas viram links para ~/roms/fightcade, e o que ja estava la vai junto.
@@ -6014,7 +6029,7 @@ class EmulatorMenuTests(unittest.TestCase):
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
         self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'supermodel',
-                                 'dolphin', 'openbor', 'model2', 'fightcade', 'kof'})
+                                 'dolphin', 'openbor', 'model2', 'fightcade', 'duckstation', 'kof'})
 
     def test_entries_go_through_the_launcher(self):
         launcher = (ROOT / 'config/fliperos-launch').read_text()
@@ -6032,8 +6047,11 @@ class EmulatorMenuTests(unittest.TestCase):
             icon = self.entry(path)['Icon']
             self.assertTrue(icon.startswith('/usr/local/share/pixmaps/'), icon)
             name = icon.rsplit('/', 1)[1]
-            # Os proprios (config/icons) ou os que o build copia de cada projeto.
-            self.assertTrue(name in own or ('pixmaps/' + name) in MKISO or name == 'com.libretro.RetroArch.svg',
+            # Os proprios (config/icons), os que o build copia de cada projeto ou o
+            # que o config/fliperos-duckstation tira do AppImage dele.
+            duckstation = (ROOT / 'config/fliperos-duckstation').read_text()
+            self.assertTrue(name in own or ('pixmaps/' + name) in MKISO or name == 'com.libretro.RetroArch.svg' or
+                            ('pixmaps/' + name) in duckstation,
                             name)
         self.assertIn('rm -f /usr/local/share/applications/com.libretro.RetroArch.desktop', MKISO)
 
@@ -6060,7 +6078,7 @@ class EmulatorModeTests(unittest.TestCase):
             (bin_dir / 'xinit').write_text('#!/bin/bash\necho "MODE=$FLIPEROS_RES_W $FLIPEROS_RES_H $FLIPEROS_RES_HZ"\n'
                                            'echo "ARGS=$*"\necho "APP=$FLIPEROS_DEFLICKER_APP"\n')
             for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog', 'supermodel', 'hypseus',
-                         'fightcade', 'sm2-emu'):
+                         'fightcade', 'sm2-emu', 'duckstation'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')
             for p in bin_dir.iterdir():
                 p.chmod(0o755)
@@ -6338,6 +6356,54 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertIn('StartBigPictureMode = true\n', ini)
             self.assertIn('LLeft = SDL-0/DPadLeft\n', ini)
             self.assertIn('LRight = SDL-0/LeftX+\n', ini)
+
+    def test_duckstation_starts_without_the_wizard_and_on_the_panel(self):
+        # Os nomes das opcoes sao os do src/core/settings.cpp e do
+        # src/duckstation-qt/qthost.cpp do DuckStation.
+        with tempfile.TemporaryDirectory() as home:
+            extra = {'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set'), 'XDG_CONFIG_HOME': ''}
+            out = self.run_x11(['duckstation', 'game.cue'], home=home, extra=extra).stdout
+            self.assertIn('MODE=640 240 60', out)
+            # Com jogo (um frontend): fechar o jogo fecha o emulador.
+            self.assertIn('duckstation -fullscreen -batch -- game.cue', out)
+            ini_path = Path(home) / '.local/share/duckstation/settings.ini'
+            ini = ini_path.read_text()
+            for section, line in (('Main', 'SetupWizardIncomplete = false'), ('Main', 'StartFullscreen = true'),
+                                  ('Main', 'ConfirmPowerOff = false'), ('BIOS', 'SearchDirectory = %s/bios' % home),
+                                  ('Display', 'AspectRatio = Stretch To Fill'), ('Display', 'Scaling = Nearest'),
+                                  ('GameList', 'RecursivePaths = %s/roms/psx' % home),
+                                  ('GameList', 'Paths = %s/roms/retroarch/pcsx_rearmed' % home),
+                                  ('Hotkeys', 'OpenPauseMenu = Keyboard/Escape'),
+                                  ('Hotkeys', 'OpenPauseMenu = SDL-0/Back & SDL-0/Start'),
+                                  ('Pad1', 'Type = AnalogController'), ('Pad1', 'Cross = SDL-0/A'),
+                                  ('Pad1', 'R2 = SDL-0/+RightTrigger'), ('Pad2', 'Square = SDL-1/X')):
+                self.assertRegex(ini, r'\[%s\][^\[]*\n%s\n' % (section, re.escape(line)), line)
+            self.assertNotIn('Renderer', ini)
+            # Sem jogo, o Big Picture; um controle mudado no DuckStation fica,
+            # as opcoes de abertura voltam.
+            ini_path.write_text(ini.replace('Cross = SDL-0/A', 'Cross = SDL-0/B')
+                                .replace('StartFullscreen = true', 'StartFullscreen = false'))
+            out = self.run_x11(['duckstation'], home=home, extra=extra).stdout
+            self.assertIn('duckstation -fullscreen -bigpicture', out)
+            ini = ini_path.read_text()
+            self.assertIn('Cross = SDL-0/B\n', ini)
+            self.assertIn('StartFullscreen = true\n', ini)
+            self.assertIn('-nocursor', out)
+            # 480i com o filtro: o OpenGL (a camada nao alcanca o Vulkan).
+            with tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / 'lib.so').write_text('')
+                self.run_x11(['--mode', '640x480@59.94', 'duckstation'], home=home,
+                             extra=dict(extra, FLIPEROS_DEFLICKER_LIB=str(Path(tmp) / 'lib.so')))
+                self.assertRegex(ini_path.read_text(), r'\[GPU\][^\[]*\nRenderer = OpenGL\n')
+                # Sem o filtro, o automatico de novo (o Vulkan onde ha).
+                self.run_x11(['duckstation'], home=home,
+                             extra=dict(extra, FLIPEROS_DEFLICKER_LIB=str(Path(tmp) / 'lib.so')))
+                self.assertRegex(ini_path.read_text(), r'\[GPU\][^\[]*\nRenderer = Automatic\n')
+                # Escolhido na mao no DuckStation, fica.
+                ini_path.write_text(ini_path.read_text().replace('Renderer = Automatic', 'Renderer = OpenGL'))
+                self.run_x11(['duckstation'], home=home,
+                             extra=dict(extra, FLIPEROS_DEFLICKER_LIB=str(Path(tmp) / 'lib.so')))
+                self.assertIn('Renderer = OpenGL\n', ini_path.read_text())
 
     def test_supermodel_finds_its_game_list(self):
         # Com ~/.config/supermodel ele procura ali o Games.xml; o build o deixa
@@ -9044,18 +9110,21 @@ class EmulatorsMenuTests(unittest.TestCase):
             rows = [r.split('|') for r in self.run_cmd('fliperos-emulators', 'list', env=env).stdout.splitlines()]
             # Os do menu do desktop (config/applications), na ordem dele, e o KOF.
             self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'flycast', 'pcsx2', 'dolphin',
-                                                    'supermodel', 'openbor', 'model2', 'fightcade', 'kof'])
+                                                    'supermodel', 'openbor', 'model2', 'fightcade', 'duckstation',
+                                                    'kof'])
             state = {r[0]: (r[1], r[2]) for r in rows}
             self.assertEqual(state['retroarch'], ('1', 'image'))
             self.assertEqual(state['flycast'], ('0', 'image'))
             self.assertEqual(state['model2'], ('1', 'build'))
             self.assertEqual(state['fightcade'], ('0', 'fetch'))
+            self.assertEqual(state['duckstation'], ('0', 'fetch'))
             self.assertEqual(state['kof'], ('0', 'source'))
             self.assertEqual(self.run_cmd('fliperos-emulators', 'installed', 'model2', env=env).returncode, 0)
             self.assertEqual(self.run_cmd('fliperos-emulators', 'installed', 'kof', env=env).returncode, 1)
         # O arquivo que diz "instalado" e o TryExec do atalho do desktop.
         script = (ROOT / 'config/fliperos-emulators').read_text()
-        for name in ('retroarch', 'groovymame', 'flycast', 'pcsx2', 'dolphin', 'supermodel', 'openbor', 'fightcade'):
+        for name in ('retroarch', 'groovymame', 'flycast', 'pcsx2', 'dolphin', 'supermodel', 'openbor', 'fightcade',
+                     'duckstation'):
             tryexec = re.search(r'(?m)^TryExec=(.+)$',
                                 (ROOT / 'config/applications' / ('fliperos-%s.desktop' % name)).read_text()).group(1)
             self.assertIn('|$root%s|' % tryexec, script, name)
@@ -9064,21 +9133,24 @@ class EmulatorsMenuTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             calls = tmp / 'calls'
-            for name in ('sm2emu', 'fightcade', 'kof'):
+            for name in ('sm2emu', 'fightcade', 'duckstation', 'kof'):
                 (tmp / name).write_text('#!/bin/sh\necho "%s $* HOME=$HOME" >> "%s"\n' % (name, calls))
                 (tmp / name).chmod(0o755)
             env = {'FLIPEROS_SM2EMU': str(tmp / 'sm2emu'), 'FLIPEROS_FIGHTCADE': str(tmp / 'fightcade'),
+                   'FLIPEROS_DUCKSTATION': str(tmp / 'duckstation'),
                    'FLIPEROS_KOF': str(tmp / 'kof'), 'FLIPEROS_HOME': str(tmp / 'home'),
                    'FLIPEROS_USER': 'root', 'FLIPEROS_EMULATORS_ROOT': str(tmp / 'root')}
             run = self.run_cmd('fliperos-emulators', 'install', 'model2', '--progress', env=env)
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertIn('@step 100 Model 2 installed', run.stdout)
             self.run_cmd('fliperos-emulators', 'install', 'fightcade', '--progress', env=env)
+            self.run_cmd('fliperos-emulators', 'install', 'duckstation', '--progress', env=env)
             self.run_cmd('fliperos-emulators', 'install', 'kof', '--progress', '--source', '/media/usb/KOF', env=env)
             self.assertEqual(calls.read_text().splitlines(),
                              ['sm2emu --deps HOME=%s' % os.environ.get('HOME', ''),
                               'sm2emu --build HOME=%s' % (tmp / 'home'),
                               'fightcade fetch --progress HOME=%s' % os.environ.get('HOME', ''),
+                              'duckstation fetch --progress HOME=%s' % os.environ.get('HOME', ''),
                               'kof install /media/usb/KOF --progress HOME=%s' % (tmp / 'home')])
             # O que vem compilado na imagem nao se instala daqui; o KOF pede a pasta do jogo.
             run = self.run_cmd('fliperos-emulators', 'install', 'flycast', '--progress', env=env)
@@ -9090,6 +9162,45 @@ class EmulatorsMenuTests(unittest.TestCase):
         sm2 = (ROOT / 'config/fliperos-sm2emu').read_text()
         self.assertIn('  --deps)\n    deps_missing || exit 0\n    install_deps\n', sm2)
         self.assertIn('if [[ -d $src/.git ]]; then build_tree update; else build_tree; fi', sm2)
+
+    def test_duckstation_fetch_extracts_the_appimage(self):
+        # A licenca do DuckStation nao deixa redistribuir: o AppImage oficial
+        # vem do GitHub dele na instalacao e e extraido (sem FUSE).
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            image = tmp / 'DuckStation-x64.AppImage'
+            image.write_text('#!/bin/sh\n[ "$1" = --appimage-extract ] || exit 1\nmkdir -p squashfs-root\n'
+                             'printf "#!/bin/sh\\n" > squashfs-root/AppRun\nchmod 755 squashfs-root/AppRun\n'
+                             'echo png > squashfs-root/org.duckstation.DuckStation.png\n')
+            folders = tmp / 'roms.sh'
+            folders.write_text('#!/bin/sh\necho ran > "%s/roms.ran"\n' % tmp)
+            folders.chmod(0o755)
+            env = {'DUCKSTATION_DIR': str(tmp / 'opt/duckstation'), 'DUCKSTATION_BIN': str(tmp / 'bin/duckstation'),
+                   'DUCKSTATION_ICON': str(tmp / 'pixmaps/duckstation.png'), 'DUCKSTATION_URL': image.as_uri(),
+                   'FLIPEROS_ROMS_SCRIPT': str(folders), 'FLIPEROS_USER': 'root'}
+            run = self.run_cmd('fliperos-duckstation', 'fetch', '--progress', env=env)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertIn('@step 100 DuckStation installed', run.stdout)
+            self.assertTrue(os.access(tmp / 'opt/duckstation/AppRun', os.X_OK))
+            self.assertEqual((tmp / 'bin/duckstation').read_text(),
+                             '#!/bin/sh\nexec %s/AppRun "$@"\n' % (tmp / 'opt/duckstation'))
+            self.assertEqual((tmp / 'pixmaps/duckstation.png').read_text(), 'png\n')
+            self.assertTrue((tmp / 'roms.ran').exists())
+            # Outro arquivo no lugar do AppImage: falha, e o instalado fica.
+            image.write_text('#!/bin/sh\nexit 1\n')
+            run = self.run_cmd('fliperos-duckstation', 'fetch', '--progress', env=env)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail DuckStation|the downloaded file is not the DuckStation AppImage', run.stdout)
+            self.assertTrue((tmp / 'opt/duckstation/AppRun').exists())
+        # Os atalhos: o menu do desktop, o fliperos-launch e o modo do X.
+        desktop = (ROOT / 'config/applications/fliperos-duckstation.desktop').read_text()
+        self.assertIn('Exec=/opt/fliperos/bin/fliperos-launch duckstation\n', desktop)
+        launch = (ROOT / 'config/fliperos-launch').read_text()
+        self.assertIn('  duckstation) label=DuckStation run=("$x11" duckstation) ;;', launch)
+        self.assertRegex((ROOT / 'config/fliperos-emulator-modes.conf').read_text(),
+                         r'(?m)^duckstation +640x240@60 +640x480@60$')
+        self.assertIn('install -Dm755 "$src/config/fliperos-duckstation" '
+                      '"$root/opt/fliperos/bin/fliperos-duckstation"', ROOTFS)
 
     def kof_repo(self, tmp, converter):
         repo = tmp / 'patch-repo'

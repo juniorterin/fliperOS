@@ -7,9 +7,10 @@
 #   fliperos-emulators install NOME [--progress] [--source PASTA]   (como root)
 #
 # tipo: image (compilado na imagem: nao se instala depois), build (o SM2-Emu,
-# clonado e compilado na maquina: config/fliperos-sm2emu), fetch (o Fightcade,
-# baixado do site dele: config/fliperos-fightcade) e source (um jogo que a
-# pessoa traz, --source PASTA: config/fliperos-kof).
+# clonado e compilado na maquina: config/fliperos-sm2emu), fetch (baixado do
+# site de quem o faz: o Fightcade, config/fliperos-fightcade, e o DuckStation,
+# config/fliperos-duckstation) e source (um jogo que a pessoa traz, --source
+# PASTA: config/fliperos-kof).
 #
 # Com --progress, as etapas saem no formato da tela de progresso do Setup
 # (lib/progress.sh); a saida dos comandos vai para o stderr (o log do Setup).
@@ -21,6 +22,7 @@ home=${home:-/home/$user}
 root=${FLIPEROS_EMULATORS_ROOT:-}
 sm2emu=${FLIPEROS_SM2EMU:-/usr/local/bin/fliperos-sm2emu}
 fightcade=${FLIPEROS_FIGHTCADE:-/opt/fliperos/bin/fliperos-fightcade}
+duckstation=${FLIPEROS_DUCKSTATION:-/opt/fliperos/bin/fliperos-duckstation}
 kof=${FLIPEROS_KOF:-/usr/local/bin/fliperos-kof}
 
 # nome|tipo|o arquivo que diz que esta instalado|descricao. Os caminhos sao
@@ -36,6 +38,7 @@ supermodel|image|$root/usr/local/bin/supermodel|Supermodel (Sega Model 3)
 openbor|image|$root/usr/local/bin/openbor|OpenBOR (beat 'em ups)
 model2|build|$home/.local/src/sm2-emu/build/bin/sm2-emu|Model 2 (SM2-Emu, Sega Model 2)
 fightcade|fetch|$root/opt/fliperos/fightcade/fightcade|Fightcade 2 (online arcade)
+duckstation|fetch|$root/usr/local/bin/duckstation|DuckStation (PlayStation)
 kof|source|$home/roms/ikemen/kof-final-attack/Ikemen_GO_Linux|KOF Final Attack (Ikemen GO, 4:3)
 EOF
 }
@@ -84,8 +87,13 @@ emulator_install() {
       say 100 "Model 2 installed"
       ;;
     fetch)
-      [[ -x $fightcade ]] || fail "the Fightcade installer ($fightcade) is missing"
-      "$fightcade" fetch "${args[@]}"
+      local fetcher
+      case $name in
+        fightcade) fetcher=$fightcade ;;
+        duckstation) fetcher=$duckstation ;;
+      esac
+      [[ -x $fetcher ]] || fail "the installer ($fetcher) is missing"
+      "$fetcher" fetch "${args[@]}"
       ;;
     source)
       [[ -x $kof ]] || fail "the installer ($kof) is missing"
