@@ -20,7 +20,7 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
   - configurações;
   - arquivos (upload e pastas): **feito em 2026-10-17** (~/roms, ~/bios, ~/media, ~/splashscreen);
   - tarefas;
-  - screenshot;
+  - screenshot: **feito em 2026-10-17** (jogos, frontends e menu pela camada OpenGL; o desktop pelo X);
   - torrent com o filtro do MAME;
   - terminal web;
   - trackball de toque pelo celular.
