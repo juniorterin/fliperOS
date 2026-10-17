@@ -18,7 +18,7 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
 - **5b:**
   - abrir e fechar jogos: **feito em 2026-10-17** (testado no gabinete: EmulationStation → Tekken Tag → VF4 → fechar, o EmulationStation volta);
   - configurações;
-  - arquivos (upload e pastas);
+  - arquivos (upload e pastas): **feito em 2026-10-17** (~/roms, ~/bios, ~/media, ~/splashscreen);
   - tarefas;
   - screenshot;
   - torrent com o filtro do MAME;
