@@ -469,6 +469,12 @@ mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
 ln -sfn /etc/systemd/system/fliperos-latency.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-latency.service"
 
+# ── Teste da troca de driver de video (Setup > Video Setup > Video driver) ─
+# Sem confirmar a imagem no boot seguinte, volta ao driver anterior.
+install -Dm644 "$src/config/fliperos-driver-trial.service" "$root/etc/systemd/system/fliperos-driver-trial.service"
+ln -sfn /etc/systemd/system/fliperos-driver-trial.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-driver-trial.service"
+
 # ── Servicos (Setup > System > Services, lib/services.sh) ─────────
 # O Wi-Fi em "After boot"/"Off" desligado antes do NetworkManager, e o timer
 # que sobe os "After boot" uns 40 s depois do boot.

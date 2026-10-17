@@ -87,11 +87,13 @@ amd_driver_cmdline() {
 
 # amd_driver_modprobe_clean [RAIZ] tira o si_support/cik_support que o
 # fliperos.conf do modprobe.d das imagens antigas (ver AMD_DRIVER_KEYS); o
-# resto das opcoes (dpm=1, som) fica.
+# resto das opcoes (dpm=1, som) fica. AMD_MODPROBE_CHANGED=1 quando mudou
+# (o initramfs leva o modprobe.d e tem de ser refeito).
 amd_driver_modprobe_clean() {
   local file=${1:-}$AMD_MODPROBE_CONF tmp
   [[ -f $file ]] || return 0
   grep -Eq '^options (radeon|amdgpu) .*(si|cik)_support=' "$file" || return 0
+  AMD_MODPROBE_CHANGED=1
   tmp=$(mktemp "$file.XXXXXX") || return 1
   awk '
     $1 == "options" && ($2 == "radeon" || $2 == "amdgpu") {
@@ -103,13 +105,105 @@ amd_driver_modprobe_clean() {
     { print }' "$file" > "$tmp" && chmod 644 "$tmp" && mv -f "$tmp" "$file"
 }
 
-# amd_driver_apply DRIVER grava a escolha. A linha do kernel e o initramfs
-# (que leva o modprobe.d) ficam com o boot_apply, so no sistema instalado.
+# amd_driver_apply DRIVER grava a escolha. A linha do kernel (e o
+# initramfs, se o modprobe.d mudou) ficam com o boot_apply, so no sistema
+# instalado.
 amd_driver_apply() {
   conf_set amd_driver "$1" || return 1
+  AMD_MODPROBE_CHANGED=0
   amd_driver_modprobe_clean || return 1
-  BOOT_INITRAMFS=1
+  ((AMD_MODPROBE_CHANGED)) && BOOT_INITRAMFS=1
   log_info "driver AMD: $1"
+}
+
+# ── Teste da troca de driver ─────────────────────────────────────
+# Como a troca de resolucao do Windows: trocado o driver, o boot seguinte
+# pede para confirmar a imagem (screen_amd_driver_confirm, 15 s, antes do
+# launcher); sem resposta, volta ao driver anterior e reinicia. A vigia do
+# boot (fliperos-driver-trial.service, amd_driver_trial_boot) cobre a tela
+# que nao chega a abrir, e um boot de teste que nao terminou (travou e foi
+# desligado no botao) volta ao anterior no boot seguinte. Estado no
+# fliperos.conf: amd_driver_trial (em teste), amd_driver_previous e
+# amd_driver_trial_boots.
+AMD_TRIAL_GRACE=${AMD_TRIAL_GRACE:-120}
+AMD_TRIAL_SECONDS=${AMD_TRIAL_SECONDS:-15}
+
+amd_driver_trial() {
+  conf_get amd_driver_trial 2> /dev/null
+}
+
+# amd_driver_trial_clear [ARQUIVO]
+amd_driver_trial_clear() {
+  local file=${1:-$FLIPEROS_CONF} key
+  for key in amd_driver_trial amd_driver_previous amd_driver_trial_boots; do
+    conf_unset "$key" "$file"
+  done
+}
+
+# amd_driver_trial_start NOVO ANTERIOR [ARQUIVO]: ANTERIOR e o driver com
+# que a placa roda agora, o que se sabe que da imagem.
+amd_driver_trial_start() {
+  local file=${3:-$FLIPEROS_CONF}
+  amd_driver_trial_clear "$file"
+  [[ -n $2 && $1 != "$2" ]] || return 0
+  conf_set amd_driver_trial "$1" "$file"
+  conf_set amd_driver_previous "$2" "$file"
+  conf_set amd_driver_trial_boots 0 "$file"
+  log_info "driver AMD em teste: $1 (anterior $2)"
+}
+
+amd_driver_trial_confirm() {
+  log_info "driver AMD confirmado: $(amd_driver_trial)"
+  amd_driver_trial_clear
+}
+
+# amd_driver_trial_running: a placa roda com o driver em teste? Pela
+# entrada de volta do Limine ela pode ter aberto com o anterior.
+amd_driver_trial_running() {
+  local trial card
+  trial=$(amd_driver_trial) || return 1
+  card=$(drm_dual_amd_cards | head -1)
+  [[ -n $card && $(drm_card_driver "$card") == "$trial" ]]
+}
+
+# amd_driver_revert volta ao driver anterior (linha do kernel e menu do
+# Limine) e encerra o teste. Reiniciar fica com quem chama.
+amd_driver_revert() {
+  local previous
+  previous=$(conf_get amd_driver_previous 2> /dev/null)
+  log_warn "driver AMD: $(amd_driver_trial) sem confirmacao, de volta a ${previous:-?}"
+  amd_driver_trial_clear
+  [[ -n $previous ]] || return 1
+  amd_driver_apply "$previous" || return 1
+  is_installed && ! is_live || return 0
+  boot_apply
+}
+
+# amd_driver_trial_boot: no boot (fliperos-driver-trial.service).
+amd_driver_trial_boot() {
+  local boots
+  amd_driver_trial > /dev/null || return 0
+  # Aberto pela entrada de volta do menu do Limine: a pessoa ja escolheu o
+  # anterior, e ele e o que esta rodando; nao ha o que reiniciar.
+  if ! amd_driver_trial_running; then
+    amd_driver_revert
+    return 0
+  fi
+  boots=$(conf_get amd_driver_trial_boots 2> /dev/null) || boots=0
+  [[ $boots =~ ^[0-9]+$ ]] || boots=0
+  boots=$((boots + 1))
+  conf_set amd_driver_trial_boots "$boots"
+  # O boot de teste anterior nem confirmou nem voltou: travou.
+  if ((boots >= 2)); then
+    amd_driver_revert && run_logged systemctl reboot
+    return 0
+  fi
+  # A tela de confirmacao abre antes do launcher; se ate aqui ela nao
+  # resolveu (a tela nao abriu), volta ao anterior.
+  sleep "$AMD_TRIAL_GRACE"
+  amd_driver_trial > /dev/null || return 0
+  amd_driver_revert && run_logged systemctl reboot
+  return 0
 }
 
 # boot_compose LINHA aplica a uma linha do kernel o que o setup decidiu:

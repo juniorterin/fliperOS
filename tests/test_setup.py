@@ -5276,6 +5276,135 @@ class AmdDriverTests(Base):
         self.env.cmdline.write_text("boot=live quiet\n")
         self.assertNotIn("ASKED:", self.env.out(self.CHECK))
 
+    # ── Teste da troca (confirmar a imagem no boot seguinte) ──────────
+    TRIAL = """
+        source %s/screens/amd-driver.sh
+        boot_apply() { echo "BOOT_APPLY initramfs=${BOOT_INITRAMFS:-0}"; }
+        ui_info() { :; }
+        ui_msg() { echo "MSG: $2"; }
+        screen_reboot_now() { echo REBOOT_NOW; }
+    """ % SETUP
+
+    def installed(self):
+        (self.env.etc / "installed").write_text("")
+        self.env.cmdline.write_text("quiet splash\n")
+        self.calls = self.env.dir / "calls"
+        self.calls.write_text("")
+        self.env.stub("systemctl", 'echo "systemctl $*" >> "%s"' % self.calls)
+
+    def rebooted(self):
+        return "systemctl reboot" in self.calls.read_text()
+
+    def conf(self):
+        return dict(l.split("=", 1) for l in (self.env.etc / "fliperos.conf").read_text().split("\n") if "=" in l)
+
+    def test_switch_puts_the_new_driver_on_trial(self):
+        self.installed()
+        self.gpu("card0", "radeon", "6798")
+        out = self.env.out(self.TRIAL + 'ui_yesno() { echo "ASKED: $2"; return 1; }\nscreen_amd_driver_apply amdgpu')
+        conf = self.conf()
+        self.assertEqual((conf["amd_driver"], conf["amd_driver_trial"], conf["amd_driver_previous"]),
+                         ("amdgpu", "amdgpu", "radeon"))
+        self.assertIn("with no answer in 15 s, FliperOS goes back to radeon", out)
+        # O modprobe.d ja limpo: so o menu do Limine, sem refazer o initramfs.
+        self.assertIn("BOOT_APPLY initramfs=0", out)
+
+    def test_choosing_the_running_driver_ends_the_trial(self):
+        self.installed()
+        self.gpu("card0", "radeon", "6798")
+        (self.env.etc / "fliperos.conf").write_text("amd_driver=amdgpu\namd_driver_trial=amdgpu\namd_driver_previous=radeon\n")
+        self.env.out(self.TRIAL + "ui_yesno() { return 1; }\nscreen_amd_driver_apply radeon")
+        conf = self.conf()
+        self.assertEqual(conf["amd_driver"], "radeon")
+        self.assertNotIn("amd_driver_trial", conf)
+
+    def trial_on_amdgpu(self, boots=0, card=True):
+        self.installed()
+        if card:
+            self.gpu("card0", "amdgpu", "6798")
+        (self.env.etc / "fliperos.conf").write_text(
+            "amd_driver=amdgpu\namd_driver_trial=amdgpu\namd_driver_previous=radeon\namd_driver_trial_boots=%d\n" % boots)
+
+    def test_enter_keeps_the_driver(self):
+        self.trial_on_amdgpu()
+        out = self.env.out(self.TRIAL + "ui_timed_confirm() { echo \"TIMED $2 s\"; return 0; }\nscreen_amd_driver_confirm")
+        self.assertIn("TIMED 15 s", out)
+        self.assertIn("MSG: The amdgpu driver stays.", out)
+        self.assertFalse(self.rebooted())
+        conf = self.conf()
+        self.assertEqual(conf["amd_driver"], "amdgpu")
+        self.assertNotIn("amd_driver_trial", conf)
+
+    def test_no_answer_goes_back_and_reboots(self):
+        self.trial_on_amdgpu()
+        for rc in (124, 1):
+            with self.subTest(rc=rc):
+                self.trial_on_amdgpu(card=False)
+                out = self.env.out(self.TRIAL + "ui_timed_confirm() { return %d; }\nscreen_amd_driver_confirm" % rc)
+                self.assertIn("BOOT_APPLY", out)
+                self.assertTrue(self.rebooted())
+                conf = self.conf()
+                self.assertEqual(conf["amd_driver"], "radeon")
+                self.assertNotIn("amd_driver_trial", conf)
+                self.assertNotIn("amd_driver_previous", conf)
+
+    def test_watchdog_reverts_when_the_screen_never_answered(self):
+        self.trial_on_amdgpu()
+        out = self.env.out(self.TRIAL + "amd_driver_trial_boot")
+        self.assertTrue(self.rebooted())
+        self.assertEqual(self.conf()["amd_driver"], "radeon")
+
+    def test_watchdog_leaves_a_confirmed_driver(self):
+        self.trial_on_amdgpu()
+        # A tela confirma enquanto a vigia espera.
+        out = self.env.out(self.TRIAL + "sleep() { amd_driver_trial_confirm; }\namd_driver_trial_boot")
+        self.assertFalse(self.rebooted())
+        self.assertEqual(self.conf()["amd_driver"], "amdgpu")
+
+    def test_a_trial_boot_that_hung_goes_back_at_once(self):
+        self.trial_on_amdgpu(boots=1)
+        out = self.env.out(self.TRIAL + "sleep() { echo SLEPT; }\namd_driver_trial_boot")
+        self.assertTrue(self.rebooted())
+        self.assertNotIn("SLEPT", out)
+        self.assertEqual(self.conf()["amd_driver"], "radeon")
+
+    def test_boot_menu_fallback_ends_the_trial_without_reboot(self):
+        # A entrada "FliperOS - radeon driver" do Limine: a placa abriu no radeon.
+        self.installed()
+        self.gpu("card0", "radeon", "6798")
+        (self.env.etc / "fliperos.conf").write_text("amd_driver=amdgpu\namd_driver_trial=amdgpu\namd_driver_previous=radeon\n")
+        out = self.env.out(self.TRIAL + "amd_driver_trial_boot")
+        self.assertFalse(self.rebooted())
+        self.assertEqual(self.conf()["amd_driver"], "radeon")
+        self.assertNotIn("amd_driver_trial", self.conf())
+
+    def test_install_with_another_driver_starts_a_trial(self):
+        self.gpu("card0", "radeon", "6798")
+        target = self.env.dir / "target"
+        conf = target / str(self.env.etc).lstrip("/") / "fliperos.conf"
+        conf.parent.mkdir(parents=True)
+        conf.write_text("amd_driver=amdgpu\n")
+        self.env.out('amd_driver_modprobe_clean() { :; }\n'
+                     'chosen=$(conf_get amd_driver "%s"); card=$(drm_dual_amd_cards | head -1); '
+                     'amd_driver_trial_start "$chosen" "$(drm_card_driver "$card")" "%s"' % (conf, conf))
+        text = conf.read_text()
+        self.assertIn("amd_driver_trial=amdgpu", text)
+        self.assertIn("amd_driver_previous=radeon", text)
+        install = (SETUP / "lib/install.sh").read_text()
+        self.assertIn('amd_driver_trial_start "$chosen" "$running" "$target$FLIPEROS_CONF"', install)
+
+    def test_trial_is_wired_into_boot(self):
+        tty1 = (ROOT / "config/fliperos-tty1").read_text()
+        self.assertLess(tty1.index("fliperos-setup --driver-confirm"), tty1.index("fliperos-setup --first-boot"))
+        main = (SETUP / "fliperos-setup").read_text()
+        self.assertIn("--driver-trial-boot)\n      # A vigia da troca de driver (fliperos-driver-trial.service).\n      amd_driver_trial_boot", main)
+        self.assertIn("--driver-confirm)\n      screen_amd_driver_confirm", main)
+        unit = (ROOT / "config/fliperos-driver-trial.service").read_text()
+        self.assertIn("ExecStart=/usr/local/bin/fliperos-setup --driver-trial-boot", unit)
+        self.assertIn("Type=simple", unit)
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        self.assertIn("multi-user.target.wants/fliperos-driver-trial.service", rootfs)
+
     def test_screens_are_wired(self):
         menu = (SETUP / "screens/main-menu.sh").read_text()
         self.assertIn("screen_amd_driver_check", menu.split("screen_main_menu() {")[1].split("while true")[0])

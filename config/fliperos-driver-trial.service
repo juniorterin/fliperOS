@@ -1,0 +1,17 @@
+# Vigia da troca de driver de video (Setup > Video Setup > Video driver): com
+# um driver em teste, o boot seguinte pede para confirmar a imagem antes do
+# launcher (fliperos-setup --driver-confirm). Se a tela nao resolve em 2
+# minutos (ela nem abriu) ou se o boot de teste anterior travou, este
+# servico volta ao driver anterior e reinicia. Sem driver em teste, sai na
+# hora (amd_driver_trial_boot em fliperos-setup/lib/bootloader.sh).
+[Unit]
+Description=FliperOS video driver trial
+After=systemd-modules-load.service local-fs.target
+ConditionPathExists=/etc/fliperos/installed
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/fliperos-setup --driver-trial-boot
+
+[Install]
+WantedBy=multi-user.target

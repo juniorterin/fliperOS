@@ -18,6 +18,7 @@
 #   sudo fliperos-setup --video-setup   abre direto o Video Setup
 #   sudo fliperos-setup --latency       abre direto o Setup > System > Latency
 #   sudo fliperos-setup --update-check  pergunta pelo update do FliperOS
+#   sudo fliperos-setup --driver-confirm  confirma a imagem do driver de video trocado
 #
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
@@ -198,6 +199,11 @@ main() {
       latency_boot
       return 0
       ;;
+    --driver-trial-boot)
+      # A vigia da troca de driver (fliperos-driver-trial.service).
+      amd_driver_trial_boot
+      return 0
+      ;;
     --session-start)
       # O jogo direto no boot (fliperos-session --session-start game): so a
       # latencia. As listas, a arte e a config dos frontends nao servem a
@@ -311,6 +317,10 @@ main() {
       ;;
     --update-check)
       screen_update_check
+      return 0
+      ;;
+    --driver-confirm)
+      screen_amd_driver_confirm
       return 0
       ;;
   esac

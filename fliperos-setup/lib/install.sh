@@ -81,7 +81,7 @@ install_write_fstab() {
 # Com "video" (Recovery Mode, placa trocada) so as chaves de video mudam no
 # fliperos.conf do disco; latencia, audio, launcher e o resto ficam.
 install_configure_video() {
-  local target=$1 only=${2:-} file key value
+  local target=$1 only=${2:-} file key value chosen card running
   mkdir -p "$target$FLIPEROS_ETC"
   if [[ $only == video ]]; then
     for key in $VIDEO_CONF_KEYS; do
@@ -114,6 +114,13 @@ install_configure_video() {
   # latencia e o driver AMD, e o Recovery Mode nao apaga os quirks que ja
   # estavam la. O driver AMD so a linha escolhe (amd_driver_modprobe_clean).
   amd_driver_modprobe_clean "$target" || return 1
+  # Driver AMD escolhido diferente do que a midia usa agora (o que se sabe
+  # que da imagem): o primeiro boot do disco pede para confirmar a imagem.
+  if chosen=$(conf_get amd_driver "$target$FLIPEROS_CONF" 2> /dev/null); then
+    card=$(drm_dual_amd_cards | head -1)
+    running=$(drm_card_driver "$card" 2> /dev/null) || running=""
+    amd_driver_trial_start "$chosen" "$running" "$target$FLIPEROS_CONF"
+  fi
   boot_write_cmdline "$(FLIPEROS_CONF=$target$FLIPEROS_CONF QUIRKS_FILE=$target$QUIRKS_FILE \
     boot_install_cmdline)" "$target$BOOT_DEFAULTS"
 }

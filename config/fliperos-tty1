@@ -94,6 +94,13 @@ if [[ ${1:-} != --menu ]]; then
   # No modo jogo, so quando o menu abrir.
   game_mode || "$BIN/fliperos-roms" > /dev/null 2>&1
   if [[ -f $ETC/installed ]]; then
+    # Driver de video recem-trocado (Setup > Video Setup > Video driver, ou a
+    # instalacao): confirmar a imagem antes de tudo, tambem no modo jogo.
+    # Sem resposta em 15 s ele volta ao driver anterior e reinicia.
+    if grep -q '^amd_driver_trial=' "$ETC/fliperos.conf" 2> /dev/null; then
+      splash_off
+      sudo /usr/local/bin/fliperos-setup --driver-confirm
+    fi
     if [[ -f $ETC/firstboot ]]; then
       splash_off
       sudo /usr/local/bin/fliperos-setup --first-boot

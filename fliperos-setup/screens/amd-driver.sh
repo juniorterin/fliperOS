@@ -42,7 +42,7 @@ screen_amd_driver() {
   fi
   [[ $choice == "$saved" && $choice == "$running" ]] && return 0
   if [[ $choice == amdgpu ]]; then
-    ui_yesno "Video driver" "amdgpu was only seen on the CRT with an R7 240. If there is no picture after the restart, press a key while it boots and pick \"FliperOS - radeon driver\" in the boot menu. Use amdgpu?" no || return 0
+    ui_yesno "Video driver" "amdgpu was only seen on the CRT with an R7 240. After the restart you confirm the picture; with no answer in $AMD_TRIAL_SECONDS s FliperOS goes back to $running by itself. Use amdgpu?" no || return 0
   fi
   screen_amd_driver_apply "$choice"
 }
@@ -64,11 +64,14 @@ screen_amd_driver_check() {
   screen_amd_driver_apply "$recommended"
 }
 
-# screen_amd_driver_apply DRIVER grava a escolha, a linha do kernel e o
-# initramfs, e oferece reiniciar (o driver so troca no proximo boot).
+# screen_amd_driver_apply DRIVER grava a escolha e a linha do kernel, poe a
+# troca em teste (amd_driver_trial_start: o boot seguinte pede para
+# confirmar a imagem) e oferece reiniciar (o driver so troca no boot).
 screen_amd_driver_apply() {
-  local driver=$1 ok=1
-  ui_info "Video driver" "Switching to $driver. Rebuilding the boot files takes a minute..."
+  local driver=$1 ok=1 card running
+  card=$(drm_dual_amd_cards | head -1)
+  running=$(drm_card_driver "$card" 2> /dev/null) || running=""
+  ui_info "Video driver" "Switching to $driver..."
   amd_driver_apply "$driver" || ok=0
   if ((ok)) && is_installed && ! is_live; then
     boot_apply || ok=0
@@ -77,8 +80,43 @@ screen_amd_driver_apply() {
     ui_msg "Video driver" "Could not switch the driver." "" "Details in $FLIPEROS_LOG."
     return 0
   fi
+  amd_driver_trial_start "$driver" "$running"
   speak "The $driver driver is set."
-  ui_yesno "Video driver" "The $driver driver is used after a restart. Restart now?" no \
-    && screen_reboot_now
+  if amd_driver_trial > /dev/null; then
+    ui_yesno "Video driver" "The $driver driver is used after a restart. Then confirm the picture with Enter: with no answer in $AMD_TRIAL_SECONDS s, FliperOS goes back to $running and restarts. Restart now?" no \
+      && screen_reboot_now
+  else
+    ui_yesno "Video driver" "The $driver driver is used after a restart. Restart now?" no \
+      && screen_reboot_now
+  fi
   return 0
+}
+
+# screen_amd_driver_confirm: no boot seguinte a troca (fliperos-tty1, antes
+# do launcher). Enter confirma; Esc ou nenhuma resposta em
+# AMD_TRIAL_SECONDS volta ao driver anterior e reinicia.
+screen_amd_driver_confirm() {
+  local trial previous rc
+  trial=$(amd_driver_trial) || return 0
+  previous=$(conf_get amd_driver_previous 2> /dev/null) || previous=radeon
+  # Aberto pela entrada de volta do Limine: ja esta no anterior.
+  if ! amd_driver_trial_running; then
+    amd_driver_revert
+    return 0
+  fi
+  speak "Press Enter if you can see this."
+  ui_timed_confirm "Video driver" "$AMD_TRIAL_SECONDS" "I can see this" \
+    "The picture now comes from the $trial driver." \
+    "Press Enter (button 1) if you can see this." \
+    "With no answer, FliperOS goes back to $previous and restarts."
+  rc=$?
+  if ((rc == 0)); then
+    amd_driver_trial_confirm
+    ui_msg "Video driver" "The $trial driver stays." "Change it in Setup > Video Setup > Video driver."
+    return 0
+  fi
+  ui_info "Video driver" "Going back to the $previous driver and restarting..."
+  amd_driver_revert
+  run_logged systemctl reboot
+  sleep 30
 }
