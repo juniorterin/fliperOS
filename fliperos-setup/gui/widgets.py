@@ -1347,18 +1347,38 @@ class Timed(Message):
 
 
 class Pager:
-    """ui_pager: um texto longo (um log, uma lista) com rolagem. As linhas
-    largas demais quebram no meio."""
+    """ui_pager: um texto longo (um log, uma lista, um changelog) com
+    rolagem. As linhas largas demais quebram nas palavras, e a continuacao de
+    um item ("- ", "1. ") fica alinhada ao texto dele; so uma palavra maior
+    que a linha quebra no meio."""
 
     ROWS, COLS = 17, 36
+    BULLET = re.compile(r"\s*(?:[-*]|\d+\.)\s+")
 
     def __init__(self, title, content, start=False):
         self.title = title
         self.lines = []
         for line in content.split("\n"):
-            line = line.expandtabs(4)
-            self.lines += [line[i:i + self.COLS] for i in range(0, len(line), self.COLS)] or [""]
+            self.lines += self.fold(line.expandtabs(4).rstrip())
         self.top = 0 if start else max(0, len(self.lines) - self.ROWS)
+
+    @classmethod
+    def fold(cls, line):
+        if len(line) <= cls.COLS:
+            return [line]
+        bullet = cls.BULLET.match(line)
+        hang = bullet.end() if bullet else len(line) - len(line.lstrip())
+        if hang > cls.COLS // 2:
+            hang = 0
+        out, rest = [], line
+        while len(rest) > cls.COLS:
+            cut = rest.rfind(" ", 0, cls.COLS + 1)
+            if cut <= hang:
+                cut = cls.COLS
+            out.append(rest[:cut].rstrip())
+            rest = " " * hang + rest[cut:].lstrip()
+        out.append(rest)
+        return out
 
     def key(self, k):
         last = max(0, len(self.lines) - self.ROWS)
