@@ -23,7 +23,8 @@
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
 #   --latency-boot, --session-start, --session-end, --volume up|down|mute, --outputs main|all,
-#   --padkeys on|off, --services-boot, --services-late (lib/services.sh)
+#   --padkeys on|off, --services-boot, --services-late (lib/services.sh),
+#   --bios-check (as BIOS que faltam, lib/downloader.sh)
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
 # screens/ tem as telas.
@@ -245,6 +246,11 @@ main() {
       ;;
     --services-late)
       services_late
+      return 0
+      ;;
+    --bios-check)
+      # A checagem automatica das BIOS, que o menu abre em segundo plano.
+      bios_auto
       return 0
       ;;
     --volume)

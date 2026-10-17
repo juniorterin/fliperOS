@@ -3,7 +3,8 @@
 # (o mesmo do MAME ROM Cleaner, salvo so para o torrent), o link magnetico
 # do romset (obrigatorio) e o dos CHDs, a pasta final e a barra do download.
 # Ao abrir, e depois de mudar o filtro, avisa o que o filtro novo acrescenta
-# ou apaga. A logica e a lib/downloader.sh.
+# ou apaga. A logica e a lib/downloader.sh. Download BIOS: as BIOS que faltam
+# aos jogos das pastas, do pacote de referencia (config/fliperos-bios).
 
 screen_downloads() {
   local choice last=""
@@ -11,14 +12,96 @@ screen_downloads() {
     choice=$(ui_menu_hints "Downloader" "Games downloaded straight to the emulator folders." "$last" \
       "torrent|ROM/CHD MAME torrent|Only the games your filter picks, from a romset magnet link." \
       "freeroms|Free games (open-source homebrew)|So the frontends have something to show." \
+      "biospack|Download BIOS|The BIOS your games lack, also checked when the menu opens." \
       "return|Return|Back to Games.") || return 0
     last=$choice
     case $choice in
       torrent) screen_downloader ;;
       freeroms) screen_free_roms ;;
+      biospack) screen_bios ;;
       *) return 0 ;;
     esac
   done
+}
+
+# screen_bios: Download BIOS. Ao entrar, a checagem na hora (as pastas de
+# jogos contra a ~/bios, e o que falta vem do pacote); depois, o resultado,
+# a lista e a checagem automatica do menu (lib/downloader.sh).
+screen_bios() {
+  local title="Download BIOS" result choice auto last=""
+  result=$(mktemp)
+  run_with_progress "$title" "" bios_check "$result" || {
+    rm -f "$result"
+    return 0
+  }
+  rm -f "$result"
+  while true; do
+    auto=on
+    [[ $(conf_get bios_auto 2> /dev/null) == off ]] && auto=off
+    choice=$(ui_menu "$title" "$(screen_bios_summary)" "$last" \
+      "list|See the list" \
+      "check|Check again" \
+      "auto|Check when the menu opens ($auto)" \
+      "return|Return") || return 0
+    last=$choice
+    case $choice in
+      list) screen_bios_list ;;
+      check)
+        result=$(mktemp)
+        run_with_progress "$title" "" bios_check "$result" --refresh
+        rm -f "$result"
+        ;;
+      auto)
+        if [[ $auto == on ]]; then
+          conf_set bios_auto off
+        else
+          conf_set bios_auto on
+          rm -f "$BIOS_STATE/stamp"
+        fi
+        ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
+# screen_bios_summary: o resumo da ultima checagem, para o topo da tela.
+screen_bios_summary() {
+  local kv
+  kv=$(cat "$BIOS_STATE/last.kv" 2> /dev/null)
+  if [[ -z $kv ]]; then
+    echo "No check yet."
+    return 0
+  fi
+  ui_fields "Downloaded|$(romclean_value "$kv" downloaded) ($(human_bytes "$(romclean_value "$kv" bytes)"))" \
+    "Already there|$(romclean_value "$kv" present)" \
+    "Not in the pack|$(romclean_value "$kv" missing)" \
+    "Failed|$(romclean_value "$kv" failed)" \
+    "Checked|$(romclean_value "$kv" when)"
+}
+
+# screen_bios_list: cada BIOS da ultima checagem, por estado e pasta.
+screen_bios_list() {
+  local list status folder dest label home="/home/$FLIPEROS_USER"
+  list=$(mktemp)
+  for status in downloaded failed missing big present; do
+    case $status in
+      downloaded) label="Downloaded now" ;;
+      failed) label="Download failed (tried again at the next check)" ;;
+      missing) label="Not in the BIOS pack (put them in ~/bios yourself)" ;;
+      big) label="Too big, left out" ;;
+      present) label="Already there" ;;
+    esac
+    grep -q "^$status"$'\t' "$BIOS_STATE/last.tsv" 2> /dev/null || continue
+    printf '%s:\n' "$label"
+    while IFS=$'\t' read -r _ folder dest _; do
+      printf '  %-24s %s\n' "$folder" "${dest//$home\//\~/}"
+    done < <(grep "^$status"$'\t' "$BIOS_STATE/last.tsv")
+    printf '\n'
+  done > "$list"
+  [[ -s $list ]] || echo "No game folder asks for a BIOS." > "$list"
+  ui_pager "Download BIOS" "$list" inicio
+  rm -f "$list"
+  return 0
 }
 
 screen_downloader() {

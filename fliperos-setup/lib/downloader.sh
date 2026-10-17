@@ -224,3 +224,189 @@ romclean_count_stop() {
   kill "$1" 2> /dev/null
   return 0
 }
+
+# ── Download BIOS ─────────────────────────────────────────────────
+# Setup > Games > Downloader > Download BIOS: as BIOS que faltam para os
+# jogos de cada pasta de ~/roms, baixadas uma a uma do pacote de referencia
+# (config/fliperos-bios-pack, um torrent do archive.org; a logica e o
+# config/fliperos-bios). A checagem roda sozinha, em segundo plano, a cada
+# vez que o menu do FliperOS abre (bios_auto_start), e na hora pela tela.
+BIOS_TOOL=${BIOS_TOOL:-/opt/fliperos/bin/fliperos-bios}
+BIOS_STATE=${BIOS_STATE:-/var/lib/fliperos/bios}
+BIOS_PACK=${BIOS_PACK:-/usr/local/share/fliperos/bios-pack}
+
+# bios_tool ARGS... roda o fliperos-bios com o estado e o pacote daqui.
+bios_tool() {
+  FLIPEROS_BIOS_STATE=$BIOS_STATE FLIPEROS_BIOS_PACK=$BIOS_PACK "$BIOS_TOOL" "$@"
+}
+
+# bios_core_firmware CORE imprime os firmwares que o .info do core lista
+# (o caminho dentro da pasta system do RetroArch, que e a ~/bios), um por
+# linha. Os opcionais tambem: sem eles o core usa uma BIOS imitada (HLE),
+# pior que a de verdade, ou nao abre parte dos jogos (Sega CD, FDS).
+bios_core_firmware() {
+  awk -F' *= *' '$1 ~ /^firmware[0-9]+_path$/ { v = $2; gsub(/^"|"[[:space:]]*$/, "", v); if (v != "") print v }' \
+    "$RA_INFO_DIR/${1}_libretro.info" 2> /dev/null
+}
+
+# bios_standalone PASTA imprime a subpasta de ~/bios e os arquivos do
+# pacote que o emulador daquela pasta de ~/roms le, fora do RetroArch.
+bios_standalone() {
+  case $1 in
+    # PCSX2: uma BIOS basta; a dos EUA (v1.60) e a europeia.
+    ps2) echo "ps2 scph39001.bin SCPH30004R.bin" ;;
+    # Flycast (Dreamcast.BiosPath).
+    dreamcast) echo "dc dc/dc_boot.bin dc_flash.bin" ;;
+  esac
+  return 0
+}
+
+# bios_arcade_dest CHAVE PASTA imprime onde vao as BIOS e os dispositivos
+# dos sets do MAME de uma pasta de arcade (onde o emulador os procura), ou
+# nada numa pasta que nao e de sets do MAME.
+bios_arcade_dest() {
+  case $1 in
+    mame) printf '%s\n' "$BIOS_ROOT/mame" ;;
+    naomi | naomi2 | atomiswave) printf '%s\n' "$BIOS_ROOT/dc" ;;
+    # O core FBNeo procura tambem na system/fbneo.
+    retroarch/fbneo) printf '%s\n' "$BIOS_ROOT/fbneo" ;;
+    # Os outros cores de MAME so as acham junto dos jogos.
+    retroarch/*) scraper_arcade "$1" && printf '%s\n' "$2" ;;
+  esac
+  return 0
+}
+
+# bios_folders imprime "chave|pasta" de cada pasta de ~/roms com jogos.
+bios_folders() {
+  local dir key
+  for dir in "$ROMS_ROOT"/*/ "$ROMS_ROOT"/retroarch/*/; do
+    dir=${dir%/}
+    key=${dir#"$ROMS_ROOT"/}
+    # As do Fightcade (com os sets dele) e as de Custom games ficam de fora.
+    [[ $key == retroarch || $key == fightcade || $key == custom ]] && continue
+    scraper_has_files "$dir" && printf '%s|%s\n' "$key" "$dir"
+  done
+  return 0
+}
+
+# bios_plan ARQUIVO grava o "wants" do fliperos-bios (o que cada pasta com
+# jogos pede, config/fliperos-bios). Eventos de progresso.
+bios_plan() {
+  local out=$1 key dir path sub files file dest name xml_key
+  local -a source folder_args
+  local -A arcade=() by_xml=()
+  : > "$out"
+  ev_step 0 "Looking at the game folders"
+  while IFS='|' read -r key dir; do
+    if [[ $key == retroarch/* ]]; then
+      while IFS= read -r path; do
+        printf 'fw\t%s\t%s\t%s\n' "$key" "$path" "$BIOS_ROOT/$path"
+      done < <(bios_core_firmware "${key#retroarch/}") >> "$out"
+    else
+      read -r sub files <<< "$(bios_standalone "$key")"
+      for file in $files; do
+        printf 'fw\t%s\t%s\t%s\n' "$key" "$file" "$BIOS_ROOT/$sub/${file##*/}"
+      done >> "$out"
+    fi
+    dest=$(bios_arcade_dest "$key" "$dir")
+    [[ -n $dest ]] || continue
+    arcade[$dir]="$key|$dest"
+    # O XML do MAME de cada pasta: o do core mame2010 na dele, o do
+    # GroovyMAME nas outras.
+    xml_key=groovymame
+    [[ $key == retroarch/mame2010 && -f $MAME2010_XML ]] && xml_key=mame2010
+    by_xml[$xml_key]+="$dir"$'\n'
+  done < <(bios_folders)
+  # As BIOS e os dispositivos dos sets de cada pasta de arcade (com o XML
+  # em cache, segundos; sem ele, o -listxml do GroovyMAME, um minuto).
+  for xml_key in "${!by_xml[@]}"; do
+    [[ $xml_key == groovymame ]] && ! have "$GROOVYMAME" && continue
+    ev_step 10 "Reading the game list of $(romclean_target_label "$xml_key")"
+    mapfile -t source < <(romclean_xml_args "$xml_key" "")
+    folder_args=()
+    while IFS= read -r dir; do
+      [[ -n $dir ]] && folder_args+=(--folder "$dir")
+    done <<< "${by_xml[$xml_key]}"
+    while IFS=$'\t' read -r dir name; do
+      [[ -n ${arcade[$dir]:-} && -n $name ]] || continue
+      key=${arcade[$dir]%%|*}
+      dest=${arcade[$dir]#*|}
+      # A que ja esta junto dos jogos tambem vale (no GroovyMAME, as duas
+      # pastas estao no rompath).
+      printf 'set\t%s\t%s\t%s\t%s\t%s\t%s\n' "$key" "$name" "$dest/$name.zip" "$dest/$name.7z" \
+        "$dir/$name.zip" "$dir/$name.7z"
+    done < <(nice -n 10 "$ROMCLEAN" uses "${source[@]}" "${folder_args[@]}" --by-folder 2>> "$FLIPEROS_LOG") >> "$out"
+  done
+  return 0
+}
+
+# bios_check RESULTADO [--refresh]: a checagem da tela (eventos de
+# progresso); o resumo do fliperos-bios vai para RESULTADO.
+bios_check() {
+  local result=$1 wants line rc
+  shift
+  wants=$(mktemp) || {
+    ev_fail "No space for the list of BIOS"
+    return 1
+  }
+  bios_plan "$wants"
+  log_info "Download BIOS: $(grep -c '' "$wants") BIOS pedidas pelas pastas"
+  # O andamento do fliperos-bios vai de 30 a 100% (antes, as pastas).
+  bios_tool check --wants "$wants" --owner "$BIOS_ROOT" --progress --result "$result" "$@" 2>> "$FLIPEROS_LOG" |
+    while IFS= read -r line; do
+      if [[ $line =~ ^@step\ ([0-9]+)\ (.*)$ ]]; then
+        printf '@step %d %s\n' $((30 + BASH_REMATCH[1] * 7 / 10)) "${BASH_REMATCH[2]}"
+      elif [[ $line == @* ]]; then
+        printf '%s\n' "$line"
+      fi
+    done
+  rc=${PIPESTATUS[0]}
+  rm -f "$wants"
+  return "$rc"
+}
+
+# bios_stamp imprime a marca das pastas de jogos e de BIOS (a data de cada
+# uma muda quando um arquivo entra ou sai), do pacote e dos emuladores: a
+# checagem automatica so roda quando ela muda.
+bios_stamp() {
+  {
+    cat "$BIOS_PACK" 2> /dev/null
+    find -L "$ROMS_ROOT" "$BIOS_ROOT" -maxdepth 2 -type d -printf '%p %T@\n' 2> /dev/null
+    stat -L -c '%n %Y' "$RA_INFO_DIR" "$MAME2010_XML" "$(command -v "$GROOVYMAME")" 2> /dev/null
+  } | md5sum | cut -d' ' -f1
+}
+
+# bios_auto: a checagem automatica (fliperos-setup --bios-check, que o menu
+# abre em segundo plano). So quando as pastas mudaram desde a ultima; sem
+# rede, de novo dali a 10 minutos. Desligada com bios_auto=off.
+bios_auto() {
+  local wants out rc
+  [[ $(conf_get bios_auto 2> /dev/null) == off || ! -x $BIOS_TOOL ]] && return 0
+  mkdir -p "$BIOS_STATE"
+  [[ -f $BIOS_STATE/stamp && $(< "$BIOS_STATE/stamp") == "$(bios_stamp)" ]] && return 0
+  [[ -n $(find "$BIOS_STATE/failed" -mmin -10 2> /dev/null) ]] && return 0
+  wants=$(mktemp) || return 1
+  bios_plan "$wants" > /dev/null
+  out=$(bios_tool check --wants "$wants" --owner "$BIOS_ROOT" --no-wait 2>> "$FLIPEROS_LOG")
+  rc=$?
+  rm -f "$wants"
+  if ((rc == 0)) && [[ $(romclean_value "$out" failed) == 0 || -n $(romclean_value "$out" busy) ]]; then
+    rm -f "$BIOS_STATE/failed"
+    # A marca de depois: as BIOS que chegaram mudaram a data da ~/bios.
+    bios_stamp > "$BIOS_STATE/stamp"
+    [[ $(romclean_value "$out" downloaded) =~ ^[1-9] ]] &&
+      log_info "Download BIOS (automatico): $(romclean_value "$out" downloaded) BIOS baixadas"
+  else
+    touch "$BIOS_STATE/failed"
+  fi
+  return 0
+}
+
+# bios_auto_start: a checagem automatica, solta do menu (o menu segue na
+# tela, e ela continua mesmo que um jogo abra).
+bios_auto_start() {
+  is_live && return 0
+  [[ $(conf_get bios_auto 2> /dev/null) == off || ! -x $BIOS_TOOL ]] && return 0
+  setsid -f nice -n 19 "$SETUP_DIR/fliperos-setup" --bios-check < /dev/null >> "$FLIPEROS_LOG" 2>&1
+  return 0
+}

@@ -33,7 +33,7 @@ placa, de joystick e 6 botoes, ate aos de volante.
                             [--result ARQUIVO]
   fliperos-romclean uses (--xml ARQUIVO|- | --xml-command COMANDO)
                          [--cache ARQUIVO] --folder PASTA...
-                         [--except LISTA]
+                         [--except LISTA] [--by-folder]
   fliperos-romclean buttons (--xml ARQUIVO|- | --xml-command COMANDO)
                             [--cache ARQUIVO] [--controls-xml ARQUIVO]
                             [--newer-xml ARQUIVO | --newer-xml-command COMANDO]
@@ -124,7 +124,8 @@ uses imprime, um por linha, os sets de que os jogos das pastas (--folder)
 precisam: o pai, a BIOS e os dispositivos, em cadeia. Os arquivos da lista
 --except (um caminho por linha: os que vao ser apagados) nao contam. O
 Downloader nao apaga a BIOS (o neogeo.zip, o qsound.zip...) de um jogo que
-fica, mesmo que o filtro nao o escolha mais.
+fica, mesmo que o filtro nao o escolha mais. Com --by-folder, "pasta<TAB>set": o
+que cada pasta pede (Setup > Games > Downloader > Download BIOS).
 
 Os sets do Flycast (Naomi, Naomi 2, Naomi GD-ROM, Atomiswave, System SP: os
 que chegam pelo romof as BIOS naomi, naomi2, naomigd, awbios, segasp e as
@@ -841,7 +842,7 @@ def cmd_uses(args):
     if args.except_list:
         with open(args.except_list, encoding='utf-8') as f:
             skip = {os.path.realpath(line.rstrip('\n')) for line in f if line.strip()}
-    names = set()
+    names, by_folder = set(), {}
     for folder in args.folder:
         try:
             entries = sets_in(folder)
@@ -852,6 +853,12 @@ def cmd_uses(args):
             if name in machines and any(size is not None and os.path.realpath(os.path.join(folder, f)) not in skip
                                         for f, size in files):
                 names.add(name)
+                by_folder.setdefault(folder, set()).add(name)
+    if args.by_folder:
+        for folder in args.folder:
+            for name in sorted(dependencies(machines, by_folder.get(folder, ()))):
+                print('%s\t%s' % (folder, name))
+        return
     for name in sorted(dependencies(machines, names)):
         print(name)
 
@@ -1305,6 +1312,7 @@ def main():
     p.add_argument('--cache')
     p.add_argument('--folder', action='append', required=True)
     p.add_argument('--except', dest='except_list')
+    p.add_argument('--by-folder', action='store_true')
     p.set_defaults(func=cmd_uses)
     p = sub.add_parser('buttons')
     p.add_argument('--xml')

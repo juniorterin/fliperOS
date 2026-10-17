@@ -49,6 +49,9 @@ screen_main_menu() {
   local choice last="" start
   # Placa AMD no driver que nao e o recomendado: sugere a troca, uma vez so.
   screen_amd_driver_check
+  # As BIOS que faltam aos jogos das pastas, em segundo plano (Setup > Games
+  # > Downloader > Download BIOS).
+  bios_auto_start
   while true; do
     screen_reload_if_updated
     UI_STATUS=$(status_line)

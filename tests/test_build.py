@@ -3266,6 +3266,157 @@ class MediaPacksTests(unittest.TestCase):
                       (ROOT / 'config/fliperos-downloader').read_text())
 
 
+class BiosPackTests(unittest.TestCase):
+    """config/fliperos-bios: as BIOS que faltam, uma a uma, do .zip do pacote
+    de referencia no archive.org (o torrent so diz o item e o .zip). O
+    archive.org e falso: o .torrent e a pagina da lista vem do fetch trocado,
+    e os arquivos de um servidor HTTP local."""
+
+    FILES = {'bios/scph5501.bin': b'P' * 512, 'bios/neogeo.zip': b'N' * 300, 'bios/dc/naomi.zip': b'D' * 200,
+             'bios/dc/dc_boot.bin': b'B' * 100, 'bios/mame2003-plus/artwork/invaders.zip': b'A' * 50,
+             'bios/huge.bin': b'H' * 10, 'roms/info.txt': b'i'}
+
+    def setUp(self):
+        import html
+        import http.server
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.bios = load_script('fliperos_bios', 'config/fliperos-bios')
+        self.bios.STATE = str(self.tmp / 'state')
+        self.bios.PACK = str(self.tmp / 'pack')
+        files = self.FILES
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                name = urllib_unquote(self.path.split('/pack.zip/', 1)[-1])
+                body = files.get(name)
+                self.send_response(200 if body is not None else 404)
+                self.end_headers()
+                self.wfile.write(body or b'')
+
+            def log_message(self, *args):
+                pass
+
+        from urllib.parse import unquote as urllib_unquote, quote
+        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        base = 'http://127.0.0.1:%d/download/full-pack/pack.zip/' % server.server_port
+        # O tamanho que a lista diz do huge.bin e o de uma NAND do DSi.
+        rows = ''.join('<tr><td><a href="%s%s">%s</a><td><td>2021<td id="size">%d</tr>\n'
+                       % (base, quote(name, safe=''), html.escape(name),
+                          (300 << 20) if name.endswith('huge.bin') else len(body))
+                       for name, body in files.items())
+        torrent = (b'd4:infod5:filesld6:lengthi1000e4:pathl8:pack.zipeed6:lengthi5e4:pathl13:item_meta.xmlee'
+                   b'e4:name9:full-packee')
+        self.fetched = []
+
+        def fetch(url, limit, timeout=60):
+            self.fetched.append(url)
+            if url.endswith('.torrent'):
+                return torrent
+            self.assertEqual(url, 'https://archive.org/download/full-pack/pack.zip/')
+            return ('<html><a href="/">archive.org</a>\n' + rows).encode()
+        self.bios.fetch = fetch
+        (self.tmp / 'pack').write_text('# o pacote\nhttps://archive.org/download/full-pack/full-pack_archive.torrent\n')
+        self.home = self.tmp / 'home'
+
+    def check(self, rows):
+        wants = self.tmp / 'wants'
+        wants.write_text(''.join('\t'.join(row) + '\n' for row in rows))
+        out = io.StringIO()
+        args = SimpleArgs(wants=str(wants), progress=False, result=None, no_wait=False, refresh=False, owner=None)
+        from contextlib import redirect_stdout
+        with redirect_stdout(out):
+            self.bios.cmd_check(args)
+        return dict(line.split('=', 1) for line in out.getvalue().splitlines() if '=' in line)
+
+    def test_downloads_only_what_the_folders_lack(self):
+        h = self.home
+        (h / 'roms/mame').mkdir(parents=True)
+        (h / 'roms/mame/neogeo.zip').write_bytes(b'mine')
+        stats = self.check([
+            ('fw', 'retroarch/pcsx_rearmed', 'scph5501.bin', str(h / 'bios/scph5501.bin')),
+            ('fw', 'retroarch/pcsx_rearmed', 'scph5502.bin', str(h / 'bios/scph5502.bin')),
+            # O caminho do core, ou o arquivo solto na raiz do pacote.
+            ('fw', 'retroarch/fbneo', 'fbneo/neogeo.zip', str(h / 'bios/fbneo/neogeo.zip')),
+            ('fw', 'retroarch/flycast', 'dc/dc_boot.bin', str(h / 'bios/dc/dc_boot.bin')),
+            ('fw', 'retroarch/melonds', 'huge.bin', str(h / 'bios/huge.bin')),
+            # Ja esta junto dos jogos: nao baixa.
+            ('set', 'mame', 'neogeo', str(h / 'bios/mame/neogeo.zip'), str(h / 'roms/mame/neogeo.zip')),
+            ('set', 'naomi', 'naomi', str(h / 'bios/dc/naomi.zip'), str(h / 'roms/naomi/naomi.zip')),
+            # Um pai que nao e BIOS: nao esta no pacote nem no relatorio. E a
+            # arte de outro core com o mesmo nome nao serve.
+            ('set', 'mame', 'invaders', str(h / 'bios/mame/invaders.zip')),
+            ('set', 'mame', 'sf2', str(h / 'bios/mame/sf2.zip')),
+        ])
+        self.assertEqual(stats['downloaded'], '4')
+        self.assertEqual(stats['missing'], '1')
+        self.assertEqual(stats['big'], '1')
+        self.assertEqual(stats['failed'], '0')
+        self.assertEqual((h / 'bios/scph5501.bin').read_bytes(), self.FILES['bios/scph5501.bin'])
+        self.assertEqual((h / 'bios/fbneo/neogeo.zip').read_bytes(), self.FILES['bios/neogeo.zip'])
+        self.assertEqual((h / 'bios/dc/naomi.zip').read_bytes(), self.FILES['bios/dc/naomi.zip'])
+        self.assertTrue((h / 'bios/dc/dc_boot.bin').exists())
+        self.assertFalse((h / 'bios/mame/neogeo.zip').exists())
+        self.assertFalse((h / 'bios/mame/invaders.zip').exists())
+        self.assertFalse((h / 'bios/huge.bin').exists())
+        report = (self.tmp / 'state/last.tsv').read_text()
+        self.assertIn('missing\tretroarch/pcsx_rearmed\t%s\tscph5502.bin' % (h / 'bios/scph5502.bin'), report)
+        self.assertNotIn('sf2', report)
+        # So o que esta na pasta bios do pacote, e sem baixar o .zip inteiro.
+        index = json.loads((self.tmp / 'state/index.json').read_text())
+        self.assertNotIn('info.txt', index['members'])
+        self.assertNotIn('item_meta.xml', index['members'])
+        self.assertEqual(index['item'], 'full-pack')
+        # A segunda vez: tudo no lugar, nem a lista e lida.
+        self.fetched.clear()
+        stats = self.check([('fw', 'retroarch/pcsx_rearmed', 'scph5501.bin', str(h / 'bios/scph5501.bin'))])
+        self.assertEqual((stats['downloaded'], stats['present']), ('0', '1'))
+        self.assertEqual(self.fetched, [])
+
+    def test_a_short_download_is_not_kept(self):
+        self.bios.load_index(False, False)
+        index = json.loads((self.tmp / 'state/index.json').read_text())
+        index['members']['scph5501.bin'][1] = 999
+        (self.tmp / 'state/index.json').write_text(json.dumps(index))
+        self.addCleanup(setattr, time, 'sleep', time.sleep)
+        time.sleep = lambda s: None
+        stats = self.check([('fw', 'ps', 'scph5501.bin', str(self.home / 'bios/scph5501.bin'))])
+        self.assertEqual(stats['failed'], '1')
+        self.assertEqual(list((self.home / 'bios').iterdir()), [])
+
+    def test_bencode_and_links(self):
+        b = self.bios
+        meta = b.bdecode(b'd4:infod6:lengthi7e4:name5:a.zipee')
+        self.assertEqual(b.torrent_files(meta), [('a.zip', 7)])
+        with self.assertRaises(OSError):
+            b.bdecode(b'<html>')
+        self.assertEqual(b.bios_rel('bios/dc/naomi.zip'), 'dc/naomi.zip')
+        self.assertIsNone(b.bios_rel('roms/info.txt'))
+        (self.tmp / 'pack').write_text('magnet:?xt=urn:btih:' + '0' * 40 + '\n')
+        with self.assertRaises(OSError):
+            b.load_index(True, False)
+
+    def test_install_and_the_setup(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-bios" "$root/opt/fliperos/bin/fliperos-bios"', ROOTFS)
+        self.assertIn('install -Dm644 "$src/config/fliperos-bios-pack" "$root/usr/local/share/fliperos/bios-pack"',
+                      ROOTFS)
+        self.assertRegex((ROOT / 'config/fliperos-bios-pack').read_text(),
+                         r'\nhttps://archive\.org/download/[^/]+/[^/]+_archive\.torrent\n')
+        setup = ROOT / 'fliperos-setup'
+        self.assertIn('biospack|Download BIOS|', (setup / 'screens/downloader.sh').read_text())
+        self.assertIn('bios_auto_start', (setup / 'screens/main-menu.sh').read_text())
+        self.assertIn('--bios-check)', (setup / 'fliperos-setup').read_text())
+        self.assertIn('--by-folder', (ROOT / 'config/fliperos-romclean').read_text())
+
+
+class SimpleArgs:
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+
 class QuietLaunchTests(unittest.TestCase):
     """Sem texto na tela ao abrir emuladores; o modo debug mostra tudo."""
 

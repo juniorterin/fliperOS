@@ -1,0 +1,436 @@
+#!/usr/bin/env python3
+"""BIOS automaticas do FliperOS (Setup > Games > Downloader > Download BIOS).
+
+O pacote de referencia e um torrent do archive.org com as BIOS de todos os
+sistemas (config/fliperos-bios-pack: o "full pack" do Batocera, um .zip de
+1 GB). O torrent inteiro nunca e baixado: dele sai o item do archive.org e
+o nome do .zip, e o archive.org lista o que ha dentro do .zip e entrega cada
+arquivo sozinho (https://archive.org/download/ITEM/ZIP/CAMINHO). Assim so
+chegam ao disco as BIOS que faltam para os jogos que estao nas pastas.
+
+Quem diz o que falta e o Setup (lib/downloader.sh, bios_plan): um arquivo
+"wants", uma linha por BIOS, com campos separados por TAB:
+
+  TIPO  PASTA  NOME  DESTINO  [OUTRO_LUGAR...]
+
+TIPO fw: um firmware do .info de um core do RetroArch ou de um emulador;
+NOME e o caminho dele dentro da pasta de BIOS (dc/dc_boot.bin,
+scph5501.bin). TIPO set: um set do MAME de que um jogo da pasta precisa
+(BIOS ou dispositivo, do "fliperos-romclean uses"); NOME e o nome do set
+(neogeo). PASTA so vai para o relatorio (mame, retroarch/pcsx_rearmed).
+DESTINO e o arquivo a gravar; a BIOS que ja esta nele ou num dos
+OUTRO_LUGAR nunca e baixada de novo.
+
+  fliperos-bios check --wants ARQUIVO [--progress] [--result ARQUIVO]
+                      [--no-wait] [--refresh] [--owner PASTA]
+  fliperos-bios index [--refresh]
+
+O estado fica em STATE: index.json (a lista do pacote, refeita a cada 30
+dias ou quando o link muda), last.kv (o resumo da ultima checagem) e
+last.tsv ("estado<TAB>pasta<TAB>destino<TAB>nome" de cada BIOS: present,
+downloaded, missing = nao esta no pacote, big = grande demais, failed).
+"""
+import argparse
+import fcntl
+import html
+import json
+import os
+import re
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+STATE = os.environ.get('FLIPEROS_BIOS_STATE', '/var/lib/fliperos/bios')
+PACK = os.environ.get('FLIPEROS_BIOS_PACK', '/usr/local/share/fliperos/bios-pack')
+AGENT = 'fliperos-bios (+https://github.com/juniorterin/fliperOS)'
+# Um .torrent nao passa disto; a pagina com a lista do .zip do Batocera
+# tem 1,2 MB.
+TORRENT_MAX = 32 << 20
+LISTING_MAX = 64 << 20
+# BIOS maiores que isto ficam de fora (as NAND do DSi e as atualizacoes do
+# PS3 e do Vita, de centenas de MB, que nenhum emulador do FliperOS usa).
+FILE_MAX = 64 << 20
+INDEX_DAYS = 30
+ITEM = re.compile(r'^https?://(?:www\.)?archive\.org/download/([^/]+)/[^?#]+\.torrent$', re.I)
+# Uma linha da lista do .zip no archive.org.
+ROW = re.compile(r'<a href="([^"]+)">([^<]+)</a>.*?id="size">(\d+)<')
+
+
+def say(progress, line):
+    if progress:
+        print(line, flush=True)
+
+
+def human(n):
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if n < 1024 or unit == 'GB':
+            return ('%d %s' if unit == 'B' else '%.1f %s') % (n, unit)
+        n /= 1024
+
+
+# ── Estado ────────────────────────────────────────────────────────
+
+def state(name):
+    return os.path.join(STATE, name)
+
+
+def write_state(name, text):
+    os.makedirs(STATE, exist_ok=True)
+    tmp = state('.%s.%d.tmp' % (name, os.getpid()))
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(text)
+    os.replace(tmp, state(name))
+
+
+def lock(wait):
+    os.makedirs(STATE, exist_ok=True)
+    f = open(state('.lock'), 'a')
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
+    except BlockingIOError:
+        return None
+    return f
+
+
+# ── O pacote ──────────────────────────────────────────────────────
+
+def pack_link():
+    try:
+        with open(PACK, encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    return line
+    except OSError:
+        pass
+    raise OSError('no BIOS pack link in %s' % PACK)
+
+
+def fetch(url, limit, timeout=60):
+    req = urllib.request.Request(url, headers={'User-Agent': AGENT})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = resp.read(limit + 1)
+    if len(data) > limit:
+        raise OSError('%s is too big' % url)
+    return data
+
+
+def bdecode(data):
+    """O .torrent (bencode) em objetos do Python; chaves e textos em bytes."""
+    def item(i):
+        c = data[i:i + 1]
+        if c == b'i':
+            j = data.index(b'e', i)
+            return int(data[i + 1:j]), j + 1
+        if c in (b'l', b'd'):
+            i, out = i + 1, []
+            while data[i:i + 1] != b'e':
+                value, i = item(i)
+                out.append(value)
+            if c == b'l':
+                return out, i + 1
+            return dict(zip(out[::2], out[1::2])), i + 1
+        j = data.index(b':', i)
+        n = int(data[i:j])
+        return data[j + 1:j + 1 + n], j + 1 + n
+    try:
+        return item(0)[0]
+    except (ValueError, IndexError) as e:
+        raise OSError('the link did not answer with a .torrent file (%s)' % e)
+
+
+def torrent_files(meta):
+    """[(caminho, bytes)] dos arquivos do torrent (sem a pasta do item)."""
+    info = meta.get(b'info') if isinstance(meta, dict) else None
+    if not isinstance(info, dict):
+        raise OSError('the link did not answer with a .torrent file')
+    if b'files' not in info:
+        return [(info[b'name'].decode('utf-8', 'replace'), info[b'length'])]
+    return [('/'.join(p.decode('utf-8', 'replace') for p in f[b'path']), f[b'length']) for f in info[b'files']]
+
+
+def download_url(item, path):
+    return 'https://archive.org/download/%s/%s' % (urllib.parse.quote(item), urllib.parse.quote(path))
+
+
+def list_zip(item, zipname):
+    """[(caminho, bytes, endereco)] do que ha dentro do .zip, pela pagina
+    que o archive.org gera dele."""
+    base = download_url(item, zipname) + '/'
+    page = fetch(base, LISTING_MAX, timeout=180).decode('utf-8', 'replace')
+    marker = '/download/%s/%s/' % (urllib.parse.quote(item), urllib.parse.quote(zipname))
+    out = []
+    for line in page.splitlines():
+        m = ROW.search(line)
+        if not m or marker not in m.group(1):
+            continue
+        href = html.unescape(m.group(1))
+        if href.startswith('//'):
+            href = 'https:' + href
+        out.append((html.unescape(m.group(2)), int(m.group(3)), href))
+    if not out:
+        raise OSError('archive.org did not list the files of %s' % zipname)
+    return out
+
+
+def bios_rel(path):
+    """O caminho dentro da pasta "bios" do pacote, ou None fora dela."""
+    parts = path.split('/')
+    for i, part in enumerate(parts[:-1]):
+        if part.lower() == 'bios':
+            return '/'.join(parts[i + 1:])
+    return None
+
+
+def build_index(link, progress):
+    m = ITEM.match(link)
+    if not m:
+        raise OSError('the BIOS pack must be an archive.org .torrent link (%s)' % link)
+    item = urllib.parse.unquote(m.group(1))
+    say(progress, '@step 5 Reading the BIOS pack torrent')
+    files = torrent_files(bdecode(fetch(link, TORRENT_MAX)))
+    found = []
+    zips = [f for f in files if f[0].lower().endswith('.zip')]
+    for n, (path, _) in enumerate(zips):
+        say(progress, '@step %d Listing the files of %s' % (10 + 20 * n // max(len(zips), 1), path))
+        found.extend(list_zip(item, path))
+    found.extend((path, size, download_url(item, path)) for path, size in files
+                 if not path.lower().endswith('.zip'))
+    # Num pacote com a pasta "bios" (o do Batocera tem tambem roms/, saves/),
+    # so o que esta nela; sem ela, tudo.
+    inside = any(bios_rel(path) for path, _, _ in found)
+    members = {}
+    for path, size, url in found:
+        rel = bios_rel(path) if inside else path
+        if rel and not rel.endswith('/') and size > 0:
+            members.setdefault(rel.lower(), [rel, size, url])
+    if not members:
+        raise OSError('no BIOS files in the pack')
+    index = {'link': link, 'item': item, 'when': int(time.time()), 'members': members}
+    write_state('index.json', json.dumps(index, separators=(',', ':')))
+    return index
+
+
+def load_index(refresh, progress):
+    link = pack_link()
+    old = None
+    try:
+        with open(state('index.json'), encoding='utf-8') as f:
+            old = json.load(f)
+    except (OSError, ValueError):
+        pass
+    fresh = old and old.get('link') == link and time.time() - old.get('when', 0) < INDEX_DAYS * 86400
+    if fresh and not refresh:
+        return old
+    try:
+        return build_index(link, progress)
+    except (OSError, urllib.error.URLError) as e:
+        # Sem rede agora: a lista de antes ainda serve.
+        if old and old.get('link') == link:
+            print('fliperos-bios: %s (using the list from before)' % e, file=sys.stderr)
+            return old
+        raise
+
+
+def find(members, kind, name):
+    """[caminho, bytes, endereco] da BIOS no pacote, ou None."""
+    name = name.lower()
+    if kind == 'fw':
+        # O caminho que o core pede (dc/dc_boot.bin); senao, o mesmo arquivo
+        # solto na raiz (o fbneo/neogeo.zip do FBNeo e o neogeo.zip de la).
+        return members.get(name) or members.get(name.rsplit('/', 1)[-1])
+    # Um set do MAME: solto na raiz (neogeo.zip, qsound.zip) ou na pasta de
+    # um emulador (dc/naomi.zip, dc/awbios.zip).
+    hit = members.get(name + '.zip')
+    if hit:
+        return hit
+    for key in sorted(members):
+        if key.count('/') == 1 and key.endswith('/' + name + '.zip'):
+            return members[key]
+    return None
+
+
+# ── Gravar ────────────────────────────────────────────────────────
+
+def owner_of(like):
+    if os.geteuid() != 0 or not like:
+        return None
+    try:
+        st = os.stat(like)
+    except OSError:
+        return None
+    return st.st_uid, st.st_gid
+
+
+def chown(path, owner):
+    if owner:
+        try:
+            os.chown(path, *owner)
+        except OSError:
+            pass
+
+
+def makedirs(path, owner):
+    """Cria a pasta e as de cima que faltam, do dono da pasta das BIOS (o
+    Setup roda como root; os emuladores, como o usuario)."""
+    missing = []
+    while path and not os.path.isdir(path):
+        missing.append(path)
+        path = os.path.dirname(path)
+    for p in reversed(missing):
+        os.mkdir(p)
+        chown(p, owner)
+
+
+def download(url, size, dest, owner):
+    makedirs(os.path.dirname(dest), owner)
+    tmp = os.path.join(os.path.dirname(dest), '.%s.part' % os.path.basename(dest))
+    error = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': AGENT})
+            got = 0
+            with urllib.request.urlopen(req, timeout=120) as resp, open(tmp, 'wb') as out:
+                while True:
+                    chunk = resp.read(1 << 16)
+                    if not chunk:
+                        break
+                    got += len(chunk)
+                    if got > size:
+                        break
+                    out.write(chunk)
+            if got != size:
+                raise OSError('got %d of %d bytes' % (got, size))
+            chown(tmp, owner)
+            os.replace(tmp, dest)
+            return
+        except (OSError, urllib.error.URLError) as e:
+            error = e
+            time.sleep(2 * (attempt + 1))
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
+    raise OSError(str(error))
+
+
+# ── Comandos ──────────────────────────────────────────────────────
+
+def read_wants(path):
+    """[(tipo, pasta, nome, destino, [outros lugares])], sem destino
+    repetido (duas pastas que pedem a mesma BIOS)."""
+    wants, seen = [], set()
+    with open(path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            fields = line.rstrip('\n').split('\t')
+            if len(fields) < 4 or fields[0] not in ('fw', 'set') or not fields[2] or '..' in fields[2].split('/'):
+                continue
+            dest = os.path.normpath(fields[3])
+            if not os.path.isabs(dest) or dest in seen:
+                continue
+            seen.add(dest)
+            wants.append((fields[0], fields[1], fields[2], dest, [p for p in fields[4:] if p]))
+    return wants
+
+
+def cmd_check(args):
+    stats = {'wanted': 0, 'present': 0, 'downloaded': 0, 'missing': 0, 'big': 0, 'failed': 0, 'bytes': 0}
+    held = lock(not args.no_wait)
+    if held is None:
+        say(args.progress, '@step 100 Another BIOS check is running')
+        print('busy=1')
+        return
+    wants = read_wants(args.wants)
+    owner = owner_of(args.owner)
+    rows, todo = [], []
+    say(args.progress, '@step 0 Checking %d BIOS files' % len(wants))
+    for kind, folder, name, dest, alts in wants:
+        if not any(os.path.exists(p) for p in [dest] + alts):
+            todo.append((kind, folder, name, dest))
+        elif kind == 'fw':
+            # O set que ja esta no lugar quase sempre e o pai de um clone:
+            # so os firmwares entram na conta.
+            rows.append(('present', folder, dest, name))
+    error = None
+    if todo:
+        try:
+            members = load_index(args.refresh, args.progress)['members']
+        except (OSError, urllib.error.URLError) as e:
+            error = 'could not read the BIOS pack: %s' % e
+            members = None
+        if members is not None:
+            plan = []
+            for kind, folder, name, dest in todo:
+                hit = find(members, kind, name)
+                if hit is None:
+                    # O set que nao esta no pacote e o pai ou um dispositivo
+                    # sem BIOS: nao entra no relatorio.
+                    if kind == 'fw':
+                        rows.append(('missing', folder, dest, name))
+                elif hit[1] > FILE_MAX:
+                    rows.append(('big', folder, dest, name))
+                else:
+                    plan.append((folder, name, dest, hit))
+            total = sum(hit[1] for _, _, _, hit in plan) or 1
+            done = 0
+            for folder, name, dest, (_, size, url) in plan:
+                say(args.progress, '@step %d Downloading %s (%s)'
+                    % (30 + 70 * done // total, os.path.basename(dest), human(size)))
+                try:
+                    download(url, size, dest, owner)
+                    rows.append(('downloaded', folder, dest, name))
+                    stats['bytes'] += size
+                except OSError as e:
+                    rows.append(('failed', folder, dest, name))
+                    print('fliperos-bios: %s: %s' % (dest, e), file=sys.stderr)
+                done += size
+    for row in rows:
+        stats[row[0]] += 1
+    stats['wanted'] = len(rows)
+    stats['when'] = time.strftime('%Y-%m-%d %H:%M')
+    if error:
+        stats['error'] = error
+    text = ''.join('%s=%s\n' % kv for kv in stats.items())
+    write_state('last.kv', text)
+    write_state('last.tsv', ''.join('\t'.join(row) + '\n' for row in sorted(rows, key=lambda r: (r[1], r[2]))))
+    if args.result:
+        with open(args.result, 'w', encoding='utf-8') as f:
+            f.write(text)
+    if error:
+        say(args.progress, '@fail Reading the BIOS pack|%s' % error)
+        sys.exit('fliperos-bios: %s' % error)
+    if stats['downloaded']:
+        say(args.progress, '@step 100 %d BIOS files downloaded (%s)' % (stats['downloaded'], human(stats['bytes'])))
+    else:
+        say(args.progress, '@step 100 No BIOS to download')
+    print(text, end='')
+
+
+def cmd_index(args):
+    index = load_index(args.refresh, False)
+    print('item=%s\nfiles=%d\nwhen=%s' % (index['item'], len(index['members']),
+                                          time.strftime('%Y-%m-%d %H:%M', time.localtime(index['when']))))
+
+
+def main():
+    parser = argparse.ArgumentParser(prog='fliperos-bios')
+    sub = parser.add_subparsers(dest='cmd', required=True)
+    p = sub.add_parser('check')
+    p.add_argument('--wants', required=True)
+    p.add_argument('--progress', action='store_true')
+    p.add_argument('--result')
+    p.add_argument('--no-wait', action='store_true')
+    p.add_argument('--refresh', action='store_true')
+    p.add_argument('--owner')
+    p.set_defaults(func=cmd_check)
+    p = sub.add_parser('index')
+    p.add_argument('--refresh', action='store_true')
+    p.set_defaults(func=cmd_index)
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()

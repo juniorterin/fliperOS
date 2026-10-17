@@ -217,6 +217,10 @@ install -Dm644 "$src/config/fliperos-media-torrents" "$root/usr/local/share/flip
 # Updates sem ISO nova (patches do updates/index, em ordem), perguntados no
 # boot pelo fliperos-tty1.
 install -Dm755 "$src/config/fliperos-update" "$root/opt/fliperos/bin/fliperos-update"
+# Setup > Games > Downloader > Download BIOS: as BIOS que faltam aos jogos das
+# pastas, uma a uma, do pacote de referencia (um torrent do archive.org).
+install -Dm755 "$src/config/fliperos-bios" "$root/opt/fliperos/bin/fliperos-bios"
+install -Dm644 "$src/config/fliperos-bios-pack" "$root/usr/local/share/fliperos/bios-pack"
 # catver.ini, nplayers.ini e controls.xml do ROM cleaner (config/romclean):
 # os desta pasta valem quando o romset nao traz os dele (lib/romclean.sh); e
 # onde ele guarda o que leu do XML do MAME.
