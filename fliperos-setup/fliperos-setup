@@ -22,7 +22,7 @@
 #
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
-#   --latency-boot, --session-start, --session-end, --volume up|down|mute|get|set N, --outputs main|all,
+#   --latency-boot, --session-start, --session-end, --volume up|down|mute|get|set N, --systems, --outputs main|all,
 #   --padkeys on|off, --services-boot, --services-late (lib/services.sh),
 #   --bios-check (as BIOS que faltam, lib/downloader.sh)
 #
@@ -246,6 +246,12 @@ main() {
       ;;
     --services-late)
       services_late
+      return 0
+      ;;
+    --systems)
+      # As pastas com jogos e o comando de cada uma (lib/frontends.sh): o
+      # painel web (config/fliperos-web, Games).
+      frontends_systems
       return 0
       ;;
     --bios-check)

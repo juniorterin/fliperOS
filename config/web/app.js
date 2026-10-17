@@ -20,6 +20,10 @@ const TEXT = {
     busy: "busy", vram: "VRAM", clock: "clock", temp: "temperature", power: "power",
     filtering: "flicker filter on", core: "core", wrong: "Wrong user or password.",
     uptime: "up", not_installed: "No volume control.",
+    games: "Games", search: "Search games", play: "Play", close_game: "Close the game",
+    confirm_launch: "Close what is on the cabinet screen and open %s?", launching: "Opening %s on the cabinet…",
+    confirm_close: "Close the game on the cabinet?", first: "Showing the first %n. Type to filter.",
+    no_games: "No games in this folder.", count: "%n games",
   },
   pt: {
     login_text: "Entre com o usuário e a senha do gabinete (os mesmos do SSH e da pasta de rede).",
@@ -36,6 +40,10 @@ const TEXT = {
     busy: "uso", vram: "VRAM", clock: "clock", temp: "temperatura", power: "consumo",
     filtering: "filtro de flicker ligado", core: "core", wrong: "Usuário ou senha errados.",
     uptime: "ligado há", not_installed: "Sem controle de volume.",
+    games: "Jogos", search: "Buscar jogos", play: "Jogar", close_game: "Fechar o jogo",
+    confirm_launch: "Fechar o que está na tela do gabinete e abrir %s?", launching: "Abrindo %s no gabinete…",
+    confirm_close: "Fechar o jogo no gabinete?", first: "Mostrando os primeiros %n. Digite para filtrar.",
+    no_games: "Nenhum jogo nesta pasta.", count: "%n jogos",
   },
 };
 
@@ -52,6 +60,7 @@ const $ = (id) => document.getElementById(id);
 function translate() {
   document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
   document.querySelectorAll("[data-t]").forEach((el) => { el.textContent = t(el.dataset.t); });
+  document.querySelectorAll("[data-tp]").forEach((el) => { el.placeholder = t(el.dataset.tp); });
   $("lang").textContent = lang === "pt" ? "EN" : "PT";
 }
 
@@ -131,6 +140,7 @@ $("lang").addEventListener("click", () => {
   try { localStorage.setItem("fliperos-lang", lang); } catch (e) { /* sem armazenamento */ }
   translate();
   if (last) render(last);
+  renderGames();
 });
 
 // ── O FPS do ultimo minuto ───────────────────────────────────────
@@ -182,6 +192,7 @@ function render(s) {
       .filter(Boolean).join(" · ")
     : "";
   $("frontend").textContent = front ? t("frontend") + ": " + front.program : "";
+  $("close-game").hidden = !game;
   $("fps").textContent = fps ? fps.fps.toFixed(1) : "-";
   fpsHistory.push(fps ? fps.fps : null);
   while (fpsHistory.length > 60) fpsHistory.shift();
@@ -410,6 +421,69 @@ async function showLog() {
 $("log-name").addEventListener("change", showLog);
 $("log-refresh").addEventListener("click", showLog);
 
+// ── Jogos: abrir e fechar no gabinete ────────────────────────────
+// As pastas com jogos (as mesmas dos frontends), a busca e o botao de
+// jogar. Abrir fecha o que esta na tela; quando o jogo fecha, volta o que
+// estava (o frontend, o desktop ou o menu).
+
+const GAMES_SHOWN = 300;
+let allGames = [];
+
+function toast(text) {
+  const box = el("div", { class: "toast", role: "status" }, text);
+  document.body.append(box);
+  setTimeout(() => box.remove(), 4000);
+}
+
+async function loadSystems() {
+  const res = await api("/api/systems");
+  const data = await res.json();
+  const select = $("system");
+  let keep = select.value;
+  try { keep = keep || localStorage.getItem("fliperos-system") || ""; } catch (e) { /* sem armazenamento */ }
+  const rows = (data.systems || []).filter((s) => s.games > 0);
+  select.replaceChildren(...rows.map((s) => el("option", { value: s.key }, s.name + " (" + s.games + ")")));
+  if (rows.some((s) => s.key === keep)) select.value = keep;
+  await loadGames();
+}
+
+async function loadGames() {
+  const key = $("system").value;
+  if (!key) { allGames = []; renderGames(); return; }
+  try { localStorage.setItem("fliperos-system", key); } catch (e) { /* sem armazenamento */ }
+  const res = await api("/api/games?system=" + encodeURIComponent(key));
+  allGames = (await res.json()).games || [];
+  renderGames();
+}
+
+function renderGames() {
+  const query = $("game-search").value.trim().toLowerCase();
+  const found = query ? allGames.filter((g) => g.toLowerCase().includes(query)) : allGames;
+  const shown = found.slice(0, GAMES_SHOWN);
+  $("games").replaceChildren(...shown.map((game) => {
+    const button = el("button", { type: "button", "aria-label": t("play") + " " + game }, "▶ " + t("play"));
+    button.addEventListener("click", () => play(game));
+    return el("li", {}, el("span", { title: game }, game), button);
+  }));
+  $("games-note").textContent = !allGames.length ? t("no_games")
+    : found.length > GAMES_SHOWN ? t("first").replace("%n", GAMES_SHOWN)
+      : t("count").replace("%n", found.length);
+}
+
+async function play(game) {
+  if (!confirm(t("confirm_launch").replace("%s", game))) return;
+  const res = await api("/api/launch", { method: "POST", body: JSON.stringify({ system: $("system").value, game }) });
+  const data = await res.json().catch(() => ({}));
+  toast(res.ok ? t("launching").replace("%s", game) : data.error || res.statusText);
+}
+
+$("system").addEventListener("change", () => loadGames().catch(() => {}));
+$("game-search").addEventListener("input", renderGames);
+$("close-game").addEventListener("click", async () => {
+  if (!confirm(t("confirm_close"))) return;
+  await api("/api/close", { method: "POST", body: "{}" }).catch(() => {});
+});
+
 // ── O laco ───────────────────────────────────────────────────────
 
 let timer = null;
@@ -428,6 +502,7 @@ function start() {
   stop();
   tick();
   loadLogs().catch(() => {});
+  loadSystems().catch(() => {});
   timer = setInterval(tick, 1000);
 }
 function stop() {

@@ -39,6 +39,7 @@
           <div class="big" id="game">-</div>
           <div class="dim" id="game-detail"></div>
           <div class="dim" id="frontend"></div>
+          <button id="close-game" class="ghost danger" type="button" data-t="close_game" hidden></button>
         </div>
         <div class="fps">
           <div class="big"><span id="fps">-</span> <small>FPS</small></div>
@@ -46,6 +47,16 @@
           <div class="dim" data-t="fps_note"></div>
         </div>
       </div>
+    </section>
+
+    <section class="card wide" aria-labelledby="h-games">
+      <h2 id="h-games" data-t="games"></h2>
+      <div class="games-bar">
+        <select id="system" aria-label="System"></select>
+        <input id="game-search" type="search" data-tp="search" autocomplete="off">
+      </div>
+      <p id="games-note" class="dim"></p>
+      <ul id="games" class="games"></ul>
     </section>
 
     <section class="card wide" aria-labelledby="h-video">

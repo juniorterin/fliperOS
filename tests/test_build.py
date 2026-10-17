@@ -4368,12 +4368,30 @@ class WebPanelTests(unittest.TestCase):
         (tmp / 'logs').mkdir()
         (tmp / 'logs/retroarch.log').write_text(''.join('line %d\n' % i for i in range(500)))
         (tmp / 'secret.log').write_text('do not show\n')
+        # Os sistemas (fliperos-setup --systems): uma pasta de Flycast com
+        # dois jogos, um arquivo de outra extensao, um oculto e uma pasta.
+        roms = tmp / 'roms/naomi'
+        roms.mkdir(parents=True)
+        for name in ('vf4.zip', 'Ikaruga.zip', 'notes.txt', '.hidden.zip'):
+            (roms / name).write_text('')
+        (roms / 'vf4').mkdir()
+        (roms.parent / 'other').mkdir()
+        (roms.parent / 'other/evil.zip').write_text('')
+        cls.roms = roms
         setup = tmp / 'fliperos-setup'
-        setup.write_text('#!/bin/sh\necho "$*" >> %s/volume.log\n[ "$2" = get ] && echo 42\nexit 0\n' % tmp)
+        setup.write_text('#!/bin/sh\necho "$*" >> %s/volume.log\n[ "$2" = get ] && echo 42\n'
+                         'if [ "$1" = --systems ]; then\n'
+                         '  echo \'naomi|%s|arcade|Naomi|/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z\'\n'
+                         '  echo \'shell|%s|arcade|Shell|/bin/sh|-c "[name]"|.zip\'\n'
+                         'fi\nexit 0\n' % (tmp, roms, roms))
         setup.chmod(0o755)
         run = tmp / 'run/1000'
         run.mkdir(parents=True)
         (run / 'fliperos-fps').write_text('%d 59.9 flycast - 1\n' % os.getpid())
+        cls.runtime = tmp / 'run' / str(os.getuid())
+        cls.runtime.mkdir(exist_ok=True)
+        import pwd
+        cls.user = pwd.getpwuid(os.getuid()).pw_name
         (tmp / 'fliperos.conf').write_text('monitor=generic_15\nfrequency=15k\nboot_resolution=640x240S\n')
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0))
@@ -4381,7 +4399,8 @@ class WebPanelTests(unittest.TestCase):
         env = dict(os.environ, FLIPEROS_SHADOW=str(tmp / 'shadow'), FLIPEROS_WEB_STATIC=str(ROOT / 'config/web'),
                    FLIPEROS_LOGS=str(tmp / 'logs'), FLIPEROS_SYSTEM_LOGS=str(tmp / 'missing.log'),
                    FLIPEROS_SETUP=str(setup), FLIPEROS_RUN_USER=str(tmp / 'run'),
-                   FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_VIDEO_CHECK=str(tmp / 'none'))
+                   FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_VIDEO_CHECK=str(tmp / 'none'),
+                   FLIPEROS_USER=cls.user, FLIPEROS_SESSION_FILE=str(tmp / 'session'))
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
                                        '--port', str(cls.port)], env=env)
         for _ in range(100):
@@ -4444,6 +4463,8 @@ class WebPanelTests(unittest.TestCase):
 
     def test_status_has_every_card(self):
         cookie = self.login()
+        # A camada regrava o FPS a cada segundo; o painel ignora o de mais de 3 s.
+        (Path(self.tmp.name) / 'run/1000/fliperos-fps').write_text('%d 59.9 flycast - 1\n' % os.getpid())
         status, _, data = self.request('GET', '/api/status', cookie=cookie)
         self.assertEqual(status, 200)
         s = json.loads(data)
@@ -4473,6 +4494,63 @@ class WebPanelTests(unittest.TestCase):
             self.assertEqual(self.request('POST', '/api/volume', bad, cookie=cookie)[0], 400, bad)
         self.assertIn('--volume set 30\n', self.volume_log.read_text())
         self.assertIn('--volume mute\n', self.volume_log.read_text())
+
+    def test_games_listed_from_the_setup_folders(self):
+        cookie = self.login()
+        systems = json.loads(self.request('GET', '/api/systems', cookie=cookie)[2])['systems']
+        self.assertEqual([(s['key'], s['games']) for s in systems], [('naomi', 2), ('shell', 2)])
+        games = json.loads(self.request('GET', '/api/games?system=naomi', cookie=cookie)[2])['games']
+        # So os arquivos do primeiro nivel com as extensoes do sistema.
+        self.assertEqual(games, ['Ikaruga.zip', 'vf4.zip'])
+        self.assertEqual(self.request('GET', '/api/games?system=nope', cookie=cookie)[0], 404)
+
+    def test_launch_asks_the_tty1_and_closes_what_is_on_screen(self):
+        import shutil as sh
+        cookie = self.login()
+        # Um "jogo" aberto (um processo chamado flycast): sai antes do novo.
+        fake = Path(self.tmp.name) / 'flycast'
+        sh.copy('/bin/sleep', fake)
+        game = subprocess.Popen([str(fake), '60'])
+        try:
+            status, _, data = self.request('POST', '/api/launch', {'system': 'naomi', 'game': 'vf4.zip'}, cookie=cookie)
+            self.assertEqual(status, 200, data)
+            self.assertEqual(json.loads(data), {'back': 'menu', 'via': 'tty1'})
+            self.assertIsNotNone(game.wait(timeout=10))
+        finally:
+            game.kill()
+        request = (self.runtime / 'fliperos-web-launch').read_text().splitlines()
+        self.assertEqual(request, ['return=menu', '/opt/fliperos/bin/fliperos-x11-run', 'flycast',
+                                   str(self.roms / 'vf4.zip')])
+        # Fora da pasta, um arquivo que nao e jogo, ou um comando que nao e um
+        # dos lancadores do FliperOS: nada.
+        for body in ({'system': 'naomi', 'game': '../other/evil.zip'}, {'system': 'naomi', 'game': 'notes.txt'},
+                     {'system': 'shell', 'game': 'vf4.zip'}, {'system': 'naomi'}):
+            self.assertEqual(self.request('POST', '/api/launch', body, cookie=cookie)[0], 400, body)
+
+    def test_close_game(self):
+        import shutil as sh
+        cookie = self.login()
+        fake = Path(self.tmp.name) / 'retroarch'
+        sh.copy('/bin/sleep', fake)
+        game = subprocess.Popen([str(fake), '60'])
+        try:
+            status, _, data = self.request('POST', '/api/close', {}, cookie=cookie)
+            self.assertEqual((status, json.loads(data)), (200, {'closed': 1}))
+            self.assertIsNotNone(game.wait(timeout=10))
+        finally:
+            game.kill()
+
+    def test_tty1_and_session_take_the_panel_request(self):
+        tty1 = (ROOT / 'config/fliperos-tty1').read_text()
+        self.assertIn('WEB_LAUNCH=${FLIPEROS_WEB_LAUNCH:-${XDG_RUNTIME_DIR:-/tmp}/fliperos-web-launch}', tty1)
+        loop = tty1.split('menu() {')[1]
+        # Antes do menu, e com o menu fechado pelo painel o laco segue.
+        self.assertLess(loop.index('web_launch; then'), loop.index('sudo /usr/local/bin/fliperos-setup --menu'))
+        self.assertIn('[[ ${#remote[@]} -eq 0 && -s $WEB_LAUNCH ]] && continue', loop)
+        self.assertIn('"$BIN/fliperos-kms-run" | "$BIN/fliperos-x11-run")', tty1.split('web_launch() {')[1])
+        session = (ROOT / 'config/fliperos-session').read_text()
+        self.assertIn('fliperos-web-launch} ]] && break', session)
+        self.assertIn('--systems)', (ROOT / 'fliperos-setup/fliperos-setup').read_text())
 
     def test_zz_too_many_wrong_passwords_lock_the_address(self):
         # Por ultimo (zz: os testes vao em ordem alfabetica): trava o

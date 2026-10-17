@@ -29,6 +29,36 @@ splash_off() {
   return 0
 }
 
+# O jogo pedido pelo painel web (config/fliperos-web, Games > Play): o painel
+# grava o pedido e fecha o que estiver na tela (o jogo, o frontend, o desktop
+# ou o menu). A primeira linha e o que volta depois ("return=" e um launcher
+# do sessions.conf, ou "menu"); as outras, o comando.
+WEB_LAUNCH=${FLIPEROS_WEB_LAUNCH:-${XDG_RUNTIME_DIR:-/tmp}/fliperos-web-launch}
+
+# web_launch abre o pedido do painel, se houver, e depois o que estava na
+# tela. Status 1: nenhum pedido.
+web_launch() {
+  local back
+  local -a lines
+  [[ -s $WEB_LAUNCH ]] || return 1
+  mapfile -t lines < "$WEB_LAUNCH"
+  rm -f "$WEB_LAUNCH"
+  splash_off
+  printf '\e[H\e[2J\e[?25l'
+  case ${lines[1]:-} in
+    # FLIPEROS_POWERKEY=game: o botao de desligar fecha o jogo.
+    "$BIN/fliperos-kms-run" | "$BIN/fliperos-x11-run")
+      FLIPEROS_POWERKEY=game "${lines[@]:1}"
+      ;;
+    *) echo "Ignoring an unknown request from the web panel: ${lines[*]:1}" >&2 ;;
+  esac
+  python3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)' 2> /dev/null
+  printf '\e[H\e[2J\e[?25l'
+  back=${lines[0]#return=}
+  [[ -n $back && $back != menu ]] && "$BIN/fliperos-session" "$back"
+  return 0
+}
+
 menu() {
   local rc name remote=()
   splash_off
@@ -37,6 +67,10 @@ menu() {
   # monitor do gabinete. O teste e aqui, antes do sudo, que sempre da um pty.
   [[ $(tty 2> /dev/null) == /dev/tty[0-9]* ]] || remote=(--remote)
   while true; do
+    # No SSH (--remote) o pedido do painel nao e deste terminal.
+    if ((${#remote[@]} == 0)) && web_launch; then
+      continue
+    fi
     sudo /usr/local/bin/fliperos-setup --menu "${remote[@]}"
     rc=$?
     # O que foi apertado no menu e caiu no console (setas, Enter do
@@ -44,6 +78,8 @@ menu() {
     # descartada e a tela limpa.
     python3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)' 2> /dev/null
     printf '\e[H\e[2J\e[?25l'
+    # O painel web fechou o menu para abrir um jogo: o laco o abre.
+    [[ ${#remote[@]} -eq 0 && -s $WEB_LAUNCH ]] && continue
     ((rc == 20)) || return 0
     name=$(cat "$REQUEST" 2> /dev/null)
     # O navegador do Downloader (Setup > Games > Downloader): o Setup volta

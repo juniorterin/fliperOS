@@ -135,6 +135,18 @@ td.num, th.num { text-align: right; }
 .tag.on { color: var(--green); border-color: var(--green); }
 .tag.off { color: var(--orange); border-color: var(--orange); }
 
+/* Jogos: o sistema, a busca e a lista com o botao de abrir. */
+.games-bar { display: flex; flex-wrap: wrap; gap: 8px; }
+.games-bar select { flex: 1 1 200px; min-width: 0; }
+.games-bar input { flex: 2 1 220px; min-width: 0; }
+.games { list-style: none; margin: 10px 0 0; padding: 0; max-height: 420px; overflow: auto; }
+.games li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.games li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.games li button { padding: 4px 12px; flex: none; }
+button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
+.toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); max-width: calc(100% - 32px);
+  background: var(--bg-deep); border: 1px solid var(--purple); border-radius: 10px; padding: 10px 16px; z-index: 5; }
+
 .volume { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .volume input { flex: 1; padding: 0; accent-color: var(--pink); }
 .volume button { width: 40px; padding: 6px 0; }

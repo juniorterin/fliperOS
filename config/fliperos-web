@@ -18,6 +18,10 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     GET  /api/status  o estado inteiro (o painel pede a cada 2 s)
     GET  /api/logs    os logs    GET /api/log?name=NOME&lines=N
     POST /api/volume  {"action": "up"|"down"|"mute"} ou {"set": 0..100}
+    GET  /api/systems as pastas com jogos   GET /api/games?system=CHAVE
+    POST /api/launch  {"system", "game"}: fecha o que esta na tela e abre o
+                      jogo; quando ele fecha, volta o que estava
+    POST /api/close   fecha o jogo aberto
 Os POST pedem o cabecalho X-FliperOS: 1 (um formulario de outro site nao
 consegue mandar).
 """
@@ -30,8 +34,11 @@ import hmac
 import importlib.util
 import json
 import os
+import pwd
 import re
 import secrets
+import shlex
+import signal
 import socket
 import subprocess
 import threading
@@ -55,6 +62,11 @@ RUN_USER = ENV("FLIPEROS_RUN_USER", "/run/user")
 VIDEO_CHECK = ENV("FLIPEROS_VIDEO_CHECK", "/usr/local/bin/fliperos-video-check")
 SETUP = ENV("FLIPEROS_SETUP", "/usr/local/bin/fliperos-setup")
 SETUP_SCRIPT = ENV("FLIPEROS_SETUP_SCRIPT", "/usr/local/lib/fliperos-setup/fliperos-setup")
+PLAYER = ENV("FLIPEROS_USER", "fliperos")
+SESSION_FILE = ENV("FLIPEROS_SESSION_FILE", "/etc/fliperos/session")
+BIN = ENV("FLIPEROS_BIN", "/opt/fliperos/bin")
+# Os comandos que o painel abre: os mesmos lancadores dos frontends.
+LAUNCHERS = (BIN + "/fliperos-kms-run", BIN + "/fliperos-x11-run")
 SESSION_HOURS = 12
 STATIC_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js",
                 "/style.css": "style.css", "/icon.svg": "icon.svg"}
@@ -452,6 +464,107 @@ def running():
     return found
 
 
+# ── Os jogos: abrir e fechar (fase 5b) ─────────────────────────────
+
+def processes():
+    """(pid, uid, nome, argumentos) de cada processo; o nome de um script
+    Python e o do script."""
+    rows = []
+    for cmdline in glob.glob(os.path.join(PROC, "[0-9]*/cmdline")):
+        args = [a for a in read(cmdline).split("\0") if a]
+        if not args:
+            continue
+        pid = int(cmdline.split("/")[-2])
+        try:
+            uid = os.stat(os.path.dirname(cmdline)).st_uid
+        except OSError:
+            continue
+        name = os.path.basename(args[0])
+        if (name.startswith("python") or name in ("bash", "sh", "env")) and len(args) > 1:
+            first = next((a for a in args[1:] if not a.startswith("-") and a not in ("bash", "sh")), args[1])
+            name = os.path.basename(first)
+        rows.append((pid, uid, name, args))
+    return rows
+
+
+def systems():
+    """As pastas com jogos e o comando de cada uma, as mesmas dos frontends
+    (fliperos-setup --systems, lib/frontends.sh)."""
+    out = subprocess.run([SETUP, "--systems"], capture_output=True, text=True, timeout=120).stdout
+    rows = []
+    for line in out.splitlines():
+        parts = line.split("|")
+        if len(parts) >= 7:
+            key, folder, platform, name, exe, args, exts = parts[:7]
+            rows.append({"key": key, "folder": folder, "platform": platform, "name": name, "exe": exe,
+                         "args": args, "extensions": [e.lower() for e in exts.split(";") if e]})
+    return rows
+
+
+def games(system):
+    """Os arquivos de jogo da pasta do sistema (so o primeiro nivel)."""
+    try:
+        names = os.listdir(system["folder"])
+    except OSError:
+        return []
+    exts = tuple(system["extensions"])
+    return sorted((n for n in names if not n.startswith(".") and n.lower().endswith(exts)
+                   and os.path.isfile(os.path.join(system["folder"], n))), key=str.lower)
+
+
+def game_command(system, name):
+    """O comando do jogo, como o frontend o montaria ([romfilename] e [name]
+    do Attract-Mode). None: o arquivo nao e da pasta, ou o comando nao e um
+    dos lancadores do FliperOS."""
+    if name != os.path.basename(name) or name not in games(system):
+        return None
+    path = os.path.join(system["folder"], name)
+    stem = os.path.splitext(name)[0]
+    try:
+        argv = shlex.split(system["exe"]) + shlex.split(system["args"])
+    except ValueError:
+        return None
+    argv = [a.replace("[romfilename]", path).replace("[name]", stem) for a in argv]
+    return argv if argv and argv[0] in LAUNCHERS else None
+
+
+def on_screen():
+    """O que esta na tela agora: os jogos abertos, o frontend, o desktop, o
+    menu do Setup e a sessao do fliperos-session (o que volta depois)."""
+    state = {"games": [], "frontends": [], "desktop": [], "menu": [], "session": None}
+    for pid, uid, name, args in processes():
+        if name in EMULATORS:
+            state["games"].append(pid)
+        elif name in FRONTENDS and name != "fliperos-gui":
+            state["frontends"].append(pid)
+        elif name == "lxsession":
+            state["desktop"].append(pid)
+        elif name == "fliperos-setup" and "--menu" in args and "--remote" not in args:
+            state["menu"].append(pid)
+        elif name == "fliperos-session":
+            rest = [a for a in args if not a.endswith("fliperos-session") and a not in ("bash", "/usr/bin/env")]
+            state["session"] = rest[0] if rest else read(SESSION_FILE).strip() or "setup"
+    return state
+
+
+def stop(pids, wait=8):
+    """SIGTERM (o jogo grava o que tem de gravar, como no botao de desligar)
+    e, para quem nao sair, SIGKILL."""
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+    end = time.monotonic() + wait
+    while time.monotonic() < end and any(os.path.exists(os.path.join(PROC, str(p))) for p in pids):
+        time.sleep(0.2)
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+
+
 def version():
     m = re.search(r"^FLIPEROS_SETUP_VERSION=(\S+)", read(SETUP_SCRIPT), re.M)
     return m.group(1).strip("\"'") if m else ""
@@ -495,6 +608,50 @@ class Panel:
         self.wifi = Cached(10, wifi)
         self.volume = Cached(2, volume)
         self.disks = Cached(10, disks)
+        self.systems = Cached(60, systems)
+        self.launch_lock = threading.Lock()
+        # O que volta depois de um jogo aberto daqui, para o proximo pedido
+        # feito com ele ainda na tela (sem fliperos-session no meio).
+        self.last_back = "menu"
+
+    def system(self, key):
+        rows = self.systems.get()
+        return next((s for s in rows if s["key"] == key), None) if isinstance(rows, list) else None
+
+    def launch(self, argv):
+        """Pede ao fliperos-tty1 que abra o jogo (o arquivo fliperos-web-launch
+        do usuario: o que volta depois e o comando) e fecha o que esta na
+        tela para ele chegar la. Com so o desktop aberto, o caminho e o do
+        menu Jogos do desktop (fliperos-next)."""
+        with self.launch_lock:
+            user = pwd.getpwnam(PLAYER)
+            runtime = os.path.join(RUN_USER, str(user.pw_uid))
+            state = on_screen()
+            session = state["session"]
+            if session and session not in ("setup", "game"):
+                back = session
+            elif state["games"] and not state["menu"]:
+                back = self.last_back
+            else:
+                back = "menu"
+            self.last_back = back
+            only_desktop = state["desktop"] and not state["games"]
+            path = os.path.join(runtime, "fliperos-next" if only_desktop else "fliperos-web-launch")
+            lines = argv if only_desktop else ["return=" + back] + argv
+            tmp = path + ".tmp"
+            with open(tmp, "w") as f:
+                f.write("\n".join(lines) + "\n")
+            os.chown(tmp, user.pw_uid, user.pw_gid)
+            os.replace(tmp, path)
+            # O jogo primeiro (grava e sai), depois quem esta por tras dele.
+            stop(state["games"])
+            stop(state["frontends"] + state["desktop"] + state["menu"], wait=4)
+            return {"back": back, "via": "desktop" if only_desktop else "tty1"}
+
+    def close_game(self):
+        state = on_screen()
+        stop(state["games"])
+        return {"closed": len(state["games"])}
 
     def status(self):
         cpu, net, procs = self.sampler.snapshot()
@@ -579,6 +736,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"text": tail(path, lines)})
         if url.path == "/api/volume":
             return self.send(200, self.panel.volume.get())
+        if url.path == "/api/systems":
+            rows = self.panel.systems.get()
+            if not isinstance(rows, list):
+                return self.send(500, rows)
+            return self.send(200, {"systems": [{"key": s["key"], "name": s["name"], "platform": s["platform"],
+                                                 "games": len(games(s))} for s in rows]})
+        if url.path == "/api/games":
+            system = self.panel.system((parse_qs(url.query).get("system") or [""])[0])
+            if not system:
+                return self.send(404, {"error": "no such system"})
+            return self.send(200, {"system": system["key"], "games": games(system)})
         return self.send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -618,6 +786,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(500, {"error": str(exc)})
             self.panel.volume.when = None
             return self.send(200, self.panel.volume.get())
+        if url.path == "/api/launch":
+            data = self.body()
+            system = self.panel.system(str(data.get("system", "")))
+            argv = game_command(system, str(data.get("game", ""))) if system else None
+            if not argv:
+                return self.send(400, {"error": "no such game, or this system does not open from the panel"})
+            return self.send(200, self.panel.launch(argv))
+        if url.path == "/api/close":
+            return self.send(200, self.panel.close_game())
         return self.send(404, {"error": "not found"})
 
 
