@@ -905,8 +905,9 @@ def settings():
         if kind == "choice":
             row["options"] = [dict(zip(("value", "label"), o.split("=", 1))) for o in options.split(";") if "=" in o]
         elif kind == "number" and ".." in options:
-            low, high = options.split("..", 1)
-            row["min"], row["max"] = int(low), int(high)
+            span, _, step = options.partition(":")
+            low, high = span.split("..", 1)
+            row["min"], row["max"], row["step"] = int(low), int(high), int(step or 1)
         rows.append(row)
     return rows
 

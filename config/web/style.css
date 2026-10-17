@@ -158,6 +158,10 @@ td.num, th.num { text-align: right; }
   padding: 8px 12px; border-top: 1px solid var(--line); }
 .setting label { font-weight: 550; }
 .setting select, .setting input { min-width: 9em; }
+/* Os sliders da cor, com o valor ao lado. */
+.slider { display: flex; align-items: center; gap: 10px; min-width: min(100%, 300px); }
+.slider input[type="range"] { flex: 1; min-width: 160px; padding: 0; accent-color: var(--pink); }
+.slider-value { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; color: var(--cyan); }
 .setting .dim { grid-column: 1 / -1; font-size: 13px; }
 @media (max-width: 520px) { .setting { grid-template-columns: 1fr; } }
 
@@ -196,6 +200,10 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); max-width: calc(100% - 32px);
   background: var(--bg-deep); border: 1px solid var(--purple); border-radius: 10px; padding: 10px 16px; z-index: 5; }
 
+/* Os icones dos botoes (data-icon): antes do texto, que a traducao troca. */
+[data-icon]::before { content: attr(data-icon); margin-right: 0.45em; }
+.icon-only[data-icon]::before { margin-right: 0; }
+
 /* Arquivos: a pasta, o caminho, as acoes e a lista. */
 .files-bar, .files-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
 .crumbs { display: flex; flex-wrap: wrap; gap: 2px; min-width: 0; }
@@ -208,7 +216,9 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 #files { table-layout: fixed; }
 #files .c-size { width: 6.5em; }
 #files .c-date { width: 10em; }
-#files .c-del { width: 3.2em; }
+#files .c-del { width: 5.5em; }
+#files td.fact { white-space: nowrap; text-align: right; }
+#files .dl { display: inline-block; padding: 2px 6px; text-decoration: none; color: var(--cyan); }
 #files td.fname { overflow: hidden; text-overflow: ellipsis; }
 #files td.fname a, #files td.fname button { color: var(--fg); text-decoration: none; background: transparent; border: 0;
   padding: 0; font: inherit; cursor: pointer; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }

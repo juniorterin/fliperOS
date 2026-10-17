@@ -31,13 +31,13 @@ password_set() {
 # fliperos-setup --settings imprime os ajustes que o painel web
 # (config/fliperos-web) mostra, um por linha:
 #   chave|grupo|rotulo|tipo|valor|opcoes|ajuda
-# tipo choice (opcoes "valor=Rotulo;...") ou number (opcoes "min..max").
+# tipo choice (opcoes "valor=Rotulo;...") ou number (opcoes "min..max:passo").
 # fliperos-setup --setting CHAVE VALOR muda um deles pelas mesmas funcoes das
 # telas do Setup. Ficam de fora o que pode deixar o gabinete sem imagem
 # (monitor, resolucao, driver de video): esses so pelo Setup, na tela.
 
 settings_list() {
-  local name desc key label state allowed help opts min max
+  local name desc key label state allowed help opts min max step
   opts=""
   while IFS='|' read -r name desc; do
     opts+="${opts:+;}$name=${desc//[;=|]/ }"
@@ -66,8 +66,8 @@ settings_list() {
     printf 'deflicker.%s|480i games|%s: filter level|choice|%s|light=Light;medium=Medium;strong=Strong|The flicker filter level when 480i filter is marked.\n' \
       "$key" "$label" "$(mode480_level "$key")"
   done < <(mode480_rows)
-  while IFS='|' read -r key label min max _ _ help; do
-    printf 'color.%s|Colour|%s|number|%s|%s..%s|%s\n' "$key" "$label" "$(color_get "$key")" "$min" "$max" "$help"
+  while IFS='|' read -r key label min max _ step help; do
+    printf 'color.%s|Colour|%s|number|%s|%s..%s:%s|%s\n' "$key" "$label" "$(color_get "$key")" "$min" "$max" "$step" "$help"
   done < <(color_table)
   if [[ $(color_caps | sed -n 's/^range //p') != none ]]; then
     printf 'color.range|Colour|RGB range|choice|%s|default=Card default;full=Full (0-255);limited=Limited (16-235)|Full for a PC monitor or CRT, limited for a TV that expects 16-235.\n' \

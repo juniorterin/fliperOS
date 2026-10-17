@@ -676,7 +676,8 @@ class SettingsCliTests(Base):
         # Nada que possa deixar o gabinete sem imagem.
         self.assertFalse([k for k in keys if k in ("monitor", "resolution", "amd_driver", "orientation")])
         gamma = rows[keys.index("color.gamma")]
-        self.assertEqual((gamma[1], gamma[3], gamma[5]), ("Colour", "number", "50..200"))
+        # O passo vai junto (o slider do painel anda de 5 em 5 no gama).
+        self.assertEqual((gamma[1], gamma[3], gamma[5]), ("Colour", "number", "50..200:5"))
         self.assertIn("240p=640x240;filter=480i filter;pure=480i pure", rows[keys.index("mode480.flycast")][5])
         self.assertIn("filter=480i filter;pure=480i pure", rows[keys.index("mode480.desktop")][5])
         # Mudar: pelas funcoes do Setup; chave ou valor que nao existe, 2.

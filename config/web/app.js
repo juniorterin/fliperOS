@@ -39,6 +39,7 @@ const TEXT = {
     term_on: "The cabinet's shell (zsh, user fliperos).", term_off: "Disconnected.",
     screen: "Screen", take_shot: "Take a screenshot", as_on_tube: "4:3, as on the tube", save_png: "Save PNG",
     shot_wait: "Taking the picture…", shot_from: "%w×%h, %s · %t", shot_x11: "desktop (X)", shot_gl: "OpenGL frame",
+    download: "Download",
     files: "Files", up_folder: "Up", upload: "Upload files", new_folder: "New folder", folder_name: "Name of the new folder:",
     confirm_delete: "Delete %s from the cabinet?", uploading: "Sending %s… %p%", uploaded: "Sent: %n file(s).",
     exists_overwrite: "%s already exists there. Replace it?", empty_folder: "Empty folder.", delete: "Delete",
@@ -78,6 +79,7 @@ const TEXT = {
     term_on: "O shell do gabinete (zsh, usuário fliperos).", term_off: "Desconectado.",
     screen: "Tela", take_shot: "Tirar screenshot", as_on_tube: "4:3, como no tubo", save_png: "Salvar PNG",
     shot_wait: "Tirando a foto…", shot_from: "%w×%h, %s · %t", shot_x11: "desktop (X)", shot_gl: "quadro OpenGL",
+    download: "Baixar",
     files: "Arquivos", up_folder: "Subir", upload: "Enviar arquivos", new_folder: "Nova pasta", folder_name: "Nome da pasta nova:",
     confirm_delete: "Apagar %s do gabinete?", uploading: "Enviando %s… %p%", uploaded: "Enviado(s): %n arquivo(s).",
     exists_overwrite: "%s já existe lá. Substituir?", empty_folder: "Pasta vazia.", delete: "Apagar",
@@ -557,9 +559,17 @@ function settingRow(row) {
     control = el("select", { id }, ...row.options.map((o) => el("option", { value: o.value }, o.label)));
     control.value = row.value;
   } else {
-    control = el("input", { id, type: "number", min: String(row.min), max: String(row.max), step: "1", value: row.value });
+    // Os numeros (a calibracao de cor): um slider com o valor ao lado, que
+    // anda junto; grava ao soltar.
+    control = el("input", { id, type: "range", min: String(row.min), max: String(row.max),
+      step: String(row.step || 1), value: row.value });
   }
   const about = el("div", { class: "dim" }, row.help);
+  let shown = null;
+  if (row.type === "number") {
+    shown = el("output", { for: id, class: "slider-value" }, prettyNumber(row.key, row.value));
+    control.addEventListener("input", () => { shown.textContent = prettyNumber(row.key, control.value); });
+  }
   control.addEventListener("change", async () => {
     control.disabled = true;
     try {
@@ -574,11 +584,23 @@ function settingRow(row) {
         control.value = row.value;
         toast(data.error || res.statusText);
       }
+      if (shown) shown.textContent = prettyNumber(row.key, control.value);
     } finally {
       control.disabled = false;
     }
   });
-  return el("div", { class: "setting" }, el("label", { for: id }, row.label), control, about);
+  const field = shown ? el("div", { class: "slider" }, control, shown) : control;
+  return el("div", { class: "setting" }, el("label", { for: id }, row.label), field, about);
+}
+
+// prettyNumber: o valor como o Setup mostra (1.00, 6500 K, 100%, +5).
+function prettyNumber(key, value) {
+  const v = Number(value);
+  if (/gamma$/.test(key)) return (v / 100).toFixed(2);
+  if (/temperature$/.test(key)) return v + " K";
+  if (/(contrast|gain|saturation)$/.test(key)) return v + "%";
+  if (/hue$/.test(key)) return v + "°";
+  return v > 0 ? "+" + v : String(v);
 }
 
 // ── Downloads e tarefas ──────────────────────────────────────────
@@ -602,7 +624,7 @@ async function loadDownloader() {
     const box = el("div", { class: "dl-kind" }, el("strong", {}, t("dl_" + kind)),
       el("div", { class: name ? "" : "dim" }, name ? name + " · " + (dlState[kind + "_sets"] || 0) + " sets" : t("dl_none")));
     if (name) {
-      const remove = el("button", { type: "button", class: "ghost danger" }, t("dl_remove"));
+      const remove = el("button", { type: "button", class: "ghost danger", "data-icon": "🗑" }, t("dl_remove"));
       remove.addEventListener("click", async () => {
         if (!confirm(t("dl_remove_ask"))) return;
         const del = confirm(t("dl_delete_ask"));
@@ -612,11 +634,11 @@ async function loadDownloader() {
       box.append(remove);
     } else {
       const input = el("input", { type: "text", placeholder: t("dl_paste"), autocomplete: "off" });
-      const add = el("button", { type: "button" }, t("dl_add"));
+      const add = el("button", { type: "button", "data-icon": "🔗" }, t("dl_add"));
       add.addEventListener("click", () => downloaderTask({ action: "add", kind, magnet: input.value.trim() }));
       box.append(el("div", { class: "row" }, input, add));
       if (dlState["default_" + kind]) {
-        const def = el("button", { type: "button", class: "ghost" }, t("dl_default"));
+        const def = el("button", { type: "button", class: "ghost", "data-icon": "⭐" }, t("dl_default"));
         def.addEventListener("click", () => downloaderTask({ action: "add", kind }));
         box.append(def);
       }
@@ -649,14 +671,14 @@ async function loadTasks() {
     const detail = task.error || task.step || task.last;
     if (detail) item.append(el("div", { class: "dim" }, detail));
     const actions = el("div", { class: "row" });
-    const logButton = el("button", { type: "button", class: "ghost" }, t("show_log"));
+    const logButton = el("button", { type: "button", class: "ghost", "data-icon": "📜" }, t("show_log"));
     logButton.addEventListener("click", () => {
       openLogs.has(task.id) ? openLogs.delete(task.id) : openLogs.add(task.id);
       loadTasks();
     });
     actions.append(logButton);
     if (task.running) {
-      const cancel = el("button", { type: "button", class: "ghost danger" }, t("cancel"));
+      const cancel = el("button", { type: "button", class: "ghost danger", "data-icon": "✖" }, t("cancel"));
       cancel.addEventListener("click", async () => {
         await api("/api/task/cancel", { method: "POST", body: JSON.stringify({ id: task.id }) });
         loadTasks();
@@ -920,7 +942,7 @@ async function loadFiles(path) {
   select.value = fileRoot;
   // O caminho: cada pedaco leva de volta a ele.
   const parts = filePath ? filePath.split("/") : [];
-  const crumbs = [el("button", { type: "button" }, "~/" + fileRoot)];
+  const crumbs = [el("button", { type: "button", "data-icon": "🏠" }, "~/" + fileRoot)];
   crumbs[0].addEventListener("click", () => loadFiles(""));
   parts.forEach((part, i) => {
     const b = el("button", { type: "button" }, part);
@@ -942,15 +964,23 @@ async function loadFiles(path) {
     } else {
       link = el("a", { href: "/api/download?" + filesQuery(target), title: e.name, download: e.name }, "📄 " + e.name);
     }
-    const del = el("button", { type: "button", class: "del", "aria-label": t("delete") + " " + e.name, title: t("delete") }, "🗑");
+    const del = el("button", { type: "button", class: "del icon-only", "data-icon": "🗑",
+      "aria-label": t("delete") + " " + e.name, title: t("delete") });
     del.addEventListener("click", async () => {
       if (!confirm(t("confirm_delete").replace("%s", e.name))) return;
       const r = await api("/api/delete", { method: "POST", body: JSON.stringify({ root: fileRoot, path: target }) });
       if (!r.ok) toast((await r.json().catch(() => ({}))).error || r.statusText);
       loadFiles();
     });
+    // Os arquivos tambem com o botao de baixar (o nome ja baixa).
+    const actions = el("td", { class: "fact" });
+    if (!e.dir) {
+      actions.append(el("a", { href: "/api/download?" + filesQuery(target), download: e.name, class: "dl icon-only",
+        "data-icon": "⬇", "aria-label": t("download") + " " + e.name, title: t("download") }));
+    }
+    actions.append(del);
     return el("tr", {}, el("td", { class: "fname" }, link), el("td", { class: "num" }, e.dir ? "" : bytes(e.size)),
-      el("td", { class: "fdate" }, stamp(e.mtime)), el("td", {}, del));
+      el("td", { class: "fdate" }, stamp(e.mtime)), actions);
   });
   if (!rows.length) rows.push(el("tr", {}, el("td", { colspan: "4", class: "dim" }, t("empty_folder"))));
   table.replaceChildren(el("colgroup", {}, el("col"), el("col", { class: "c-size" }), el("col", { class: "c-date" }),
@@ -1027,9 +1057,11 @@ let page = "frontend";
 function showPage(name) {
   if (!PAGES.includes(name)) name = "frontend";
   page = name;
-  // data-off: um cartao desligado por enquanto (o trackball).
+  // Um cartao pode estar em mais de uma pagina (data-page="frontend status":
+  // o jogo aberto e a tela tambem no topo do Status); data-off, desligado por
+  // enquanto (o trackball).
   document.querySelectorAll("main > section[data-page]").forEach((s) => {
-    s.hidden = s.dataset.page !== name || s.hasAttribute("data-off");
+    s.hidden = !s.dataset.page.split(" ").includes(name) || s.hasAttribute("data-off");
   });
   document.querySelectorAll(".pages a").forEach((a) => {
     if (a.dataset.page === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
@@ -1047,7 +1079,7 @@ function showPage(name) {
   } else if (name === "terminal" && termFit) {
     requestAnimationFrame(() => termFit.fit());
   }
-  if (name === "frontend") drawFps();
+  if (name === "frontend" || name === "status") drawFps();
 }
 
 window.addEventListener("hashchange", () => showPage(location.hash.slice(1)));

@@ -41,7 +41,7 @@
 
   <main class="grid">
     <!-- Frontend: o que esta aberto, os jogos, o volume, a tela e o trackball. -->
-    <section class="card wide" data-page="frontend" aria-labelledby="h-now">
+    <section class="card wide" data-page="frontend status" aria-labelledby="h-now">
       <h2 id="h-now" data-t="now_playing"></h2>
       <div class="now">
         <div>
@@ -79,7 +79,7 @@
       <button id="vol-mute" class="ghost" type="button" data-t="mute"></button>
     </section>
 
-    <section class="card wide" data-page="frontend" aria-labelledby="h-shot">
+    <section class="card wide" data-page="frontend status" aria-labelledby="h-shot">
       <h2 id="h-shot" data-t="screen"></h2>
       <div class="row">
         <button id="shot-take" type="button" data-t="take_shot"></button>
@@ -119,9 +119,9 @@
         <nav id="crumbs" class="crumbs" aria-label="Path"></nav>
       </div>
       <div class="files-actions">
-        <button id="file-up" class="ghost" type="button" data-t="up_folder"></button>
-        <label class="file-pick"><input id="file-input" type="file" multiple><span data-t="upload"></span></label>
-        <button id="file-mkdir" class="ghost" type="button" data-t="new_folder"></button>
+        <button id="file-up" class="ghost" type="button" data-icon="⬆" data-t="up_folder"></button>
+        <label class="file-pick"><input id="file-input" type="file" multiple><span data-icon="📤" data-t="upload"></span></label>
+        <button id="file-mkdir" class="ghost" type="button" data-icon="📁" data-t="new_folder"></button>
       </div>
       <div id="upload-status" class="dim" role="status"></div>
       <div id="file-drop" class="table-wrap drop"><table id="files"></table></div>
@@ -135,7 +135,7 @@
       <p class="dim"><span data-t="dl_filter"></span> <span id="dl-filter"></span></p>
       <div id="dl-kinds" class="dl-kinds"></div>
       <div class="row">
-        <button id="dl-start" type="button" data-t="dl_start"></button>
+        <button id="dl-start" type="button" data-icon="▶" data-t="dl_start"></button>
         <span class="dim" data-t="dl_note"></span>
       </div>
     </section>

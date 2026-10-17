@@ -4388,7 +4388,7 @@ class WebPanelTests(unittest.TestCase):
                          'if [ "$1 $2" = "--downloader add" ]; then sleep 30; fi\n'
                          'if [ "$1" = --settings ]; then\n'
                          '  echo "debug|System|Debug mode|choice|off|off=Off;on=On (show all text)|Shows all text."\n'
-                         '  echo "color.gamma|Colour|Gamma|number|100|50..200|The middle greys."\nfi\n'
+                         '  echo "color.gamma|Colour|Gamma|number|100|50..200:5|The middle greys."\nfi\n'
                          'if [ "$1" = --setting ]; then [ "$2" = nope ] && exit 2; [ "$2" = broken ] && { echo boom >&2; exit 1; }; fi\n'
                          'if [ "$1" = --systems ]; then\n'
                          '  echo \'naomi|%s|arcade|Naomi|/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z\'\n'
@@ -4716,7 +4716,7 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(rows[0], {'key': 'debug', 'group': 'System', 'label': 'Debug mode', 'type': 'choice', 'value': 'off',
                                    'help': 'Shows all text.', 'options': [{'value': 'off', 'label': 'Off'},
                                                                           {'value': 'on', 'label': 'On (show all text)'}]})
-        self.assertEqual((rows[1]['type'], rows[1]['min'], rows[1]['max']), ('number', 50, 200))
+        self.assertEqual((rows[1]['type'], rows[1]['min'], rows[1]['max'], rows[1]['step']), ('number', 50, 200, 5))
         status, _, data = self.request('POST', '/api/settings', {'key': 'color.gamma', 'value': '-5'}, cookie=cookie)
         self.assertEqual(status, 200, data)
         self.assertIn('--setting color.gamma -5\n', self.volume_log.read_text())
