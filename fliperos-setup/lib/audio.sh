@@ -57,7 +57,9 @@ audio_leveler_set() {
 
 # audio_write_conf grava o /etc/asound.conf: a placa padrao e, com o
 # nivelador ligado, o "default" passando pelo compressor antes do dmix da
-# placa (o plug converte o formato dos dois lados).
+# placa (o plug converte o formato dos dois lados). O plug do lado da placa
+# vai em bloco: escrito "plug:dmix:0,0", o ALSA le o ",0" como um segundo
+# argumento do plug, nada abre o default e tudo fica mudo.
 audio_write_conf() {
   local current card dev
   current=$(audio_current)
@@ -77,7 +79,10 @@ pcm.!default {
 }
 pcm.fliperos_leveler {
     type ladspa
-    slave.pcm "plug:dmix:$card,$dev"
+    slave.pcm {
+        type plug
+        slave.pcm "dmix:$card,$dev"
+    }
     path "${AUDIO_LEVELER_PLUGIN%/*}"
     plugins [ {
         label sc4

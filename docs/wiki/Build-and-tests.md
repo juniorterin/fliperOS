@@ -73,7 +73,7 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 - `tests/test_build.py` — boot menu, kernel and patches, pins, image files, the installed disk's Limine, `fliperos-video-check`.
 - `tools/ui-snapshot.sh SCREEN [WIDTH HEIGHT]` — captures a screen as text in an 80x30 tmux (or 64x24, 25 kHz's 512x384), with a fake system (`tools/ui-demo.sh`).
 - `tools/vm-test.py install ISO` — in QEMU: installs through the setup's lib onto a disposable disk and boots the disk on BIOS and UEFI. `tools/vm-test.py screens ISO` and `tools/vm-monitor.py` capture the real tty1 (Gum on the Linux console) screen by screen. `tools/vm-test.py desktop ISO` opens LXDE on the installed disk (from boot and from the menu, with the 15 kHz `xorg.conf`). `tools/vm-test.py dev ISO` takes the current repository's files to the installed disk, without a new ISO, and drives the menu with a fake gamepad (`tools/vm-fakepad.py`, uinput) up to the desktop, the resolution change and the quirks.
-- **Updating the cabinet without a new ISO** (over the network, with the default login):
+- **Updating the cabinet without a new ISO** (over the network, with the default user `fliperos` and password `fliperos`):
 
   ```powershell
   docker build -t fliperos-ssh -f tools/Dockerfile.ssh tools

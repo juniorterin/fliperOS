@@ -32,7 +32,7 @@ screen_amd_driver() {
   [[ $mode == install ]] && text+=$'\n'"You can change it later in Setup > Video Setup > Video driver."
   choice=$(ui_menu_hints "Video driver" "$text" "$saved" \
     "radeon|radeon (recommended)$([[ $saved == radeon ]] && echo " - current")|Tested at 15 kHz on the CRT. OpenGL only, no Vulkan." \
-    "amdgpu|amdgpu$([[ $saved == amdgpu ]] && echo " - current")|Adds Vulkan (PCSX2, Dolphin). Not tested on the CRT." \
+    "amdgpu|amdgpu$([[ $saved == amdgpu ]] && echo " - current")|Adds Vulkan (PCSX2, Dolphin, Flycast). Not tested on the CRT." \
     "return|Return|Keep the driver as it is.") || return 0
   [[ $choice == return ]] && return 0
   if [[ $mode == install ]]; then

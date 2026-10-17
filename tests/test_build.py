@@ -4075,10 +4075,13 @@ class DeflickerTests(unittest.TestCase):
         self.assertIn('emulator_command="env LD_PRELOAD=', client)
         self.assertRegex(client, r'fightcade\*[^)]*wine\*[^)]*\*\.exe\)')
 
-    def run_x11(self, args, conf, lib=True):
+    def run_x11(self, args, conf, lib=True, flycast_rend=None):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             (tmp / 'lib.so').write_text('')
+            if flycast_rend is not None:
+                (tmp / '.config/flycast').mkdir(parents=True)
+                (tmp / '.config/flycast/emu.cfg').write_text('[config]\npvr.rend = %d\n' % flycast_rend)
             extra = {'FLIPEROS_DEFLICKER_LIB': str(tmp / ('lib.so' if lib else 'missing.so')),
                      'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini'),
                      'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set')}
@@ -4101,6 +4104,13 @@ class DeflickerTests(unittest.TestCase):
         hd = ['--mode', '640x480@59.94', 'dolphin-emu']
         self.assertNotIn('GFXBackend', self.run_x11(hd, 'deflicker=medium\ndeflicker_dolphin-emu=off\n')[0])
         self.assertIn('GFXBackend=OGL', self.run_x11(hd, 'deflicker=off\ndeflicker_dolphin-emu=strong\n')[0])
+        # Flycast com Vulkan (4, 5) vira o OpenGL equivalente (0, 3); o OpenGL fica.
+        fc = ['--mode', '640x480@59.94', 'flycast']
+        self.assertIn('config:pvr.rend=0', self.run_x11(fc, '', flycast_rend=4)[0])
+        self.assertIn('config:pvr.rend=3', self.run_x11(fc, '', flycast_rend=5)[0])
+        self.assertNotIn('pvr.rend', self.run_x11(fc, '', flycast_rend=3)[0])
+        self.assertNotIn('pvr.rend', self.run_x11(['flycast'], '', flycast_rend=5)[0])
+        self.assertNotIn('pvr.rend', self.run_x11(fc, 'deflicker=off\n', flycast_rend=5)[0])
 
     def test_480i_per_program_on_15khz(self):
         # Setup > Video Setup > 480i games: com filtro ou puro, o modo da
@@ -8547,6 +8557,19 @@ class RetroArchConfigTests(unittest.TestCase):
         self.assertIn('libsdl2-dev', body)
         self.assertIn('--enable-sdl2', body)
         self.assertNotIn('--disable-sdl2', body)
+
+    def test_emulators_built_with_vulkan(self):
+        # Para o driver amdgpu (Setup > Video Setup > Video driver).
+        ra = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
+        self.assertIn('libvulkan-dev', ra)
+        self.assertIn('--enable-vulkan', ra)
+        fc = MKISO.split("<< 'FCSCRIPT'")[1].split('\nFCSCRIPT\n')[0]
+        self.assertIn('-DUSE_VULKAN=ON', fc)
+        self.assertNotIn('USE_VULKAN=OFF', fc)
+        dol = MKISO.split("<< 'DOLSCRIPT'")[1].split('\nDOLSCRIPT\n')[0]
+        self.assertIn('-DENABLE_VULKAN=ON', dol)
+        # O padrao do RetroArch segue o glcore: o khr_display nao troca o modo.
+        self.assertEqual(self.values()['video_driver'], 'glcore')
 
     def test_no_onscreen_notifications(self):
         values = self.values()

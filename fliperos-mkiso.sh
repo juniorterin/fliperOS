@@ -969,6 +969,10 @@ install_mame2010_xml() {
 # perfil, o "Standard Gamepad" embutido). Entrada e controle ficam no
 # linuxraw, video e audio no glcore/KMS e no sdl2 (que sai pelo ALSA), todos
 # fixos no retroarch.cfg.
+# Com Vulkan (--enable-vulkan, o configure so o acha com o libvulkan-dev),
+# para o driver amdgpu (Setup > Video Setup > Video driver). Sem X11 o
+# contexto dele e o khr_display, que nao troca o modo do CRT: o padrao segue
+# o glcore.
 # SDL 1.x fica fora.
 build_retroarch_chroot() {
   if $SKIP_RETROARCH; then
@@ -981,12 +985,12 @@ build_retroarch_chroot() {
 set -e
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-  libegl1-mesa-dev libgles2-mesa-dev libudev-dev libsdl2-dev
+  libegl1-mesa-dev libgles2-mesa-dev libudev-dev libsdl2-dev libvulkan-dev
 
 git clone --depth=1 https://github.com/libretro/RetroArch /tmp/retroarch
 cd /tmp/retroarch
 ./configure --enable-kms --enable-egl --disable-x11 --disable-wayland \
-  --disable-sdl --enable-sdl2
+  --disable-sdl --enable-sdl2 --enable-vulkan
 make -j"$(nproc)"
 make install
 # O atalho do proprio RetroArch abriria o binario dentro do X do desktop,
@@ -1104,8 +1108,10 @@ RASCRIPT
 # 'git submodule update --init --recursive' (nao vem no clone raso) e das
 # deps de build abaixo. Roda pelo fliperos-x11-run, onde o Switchres cria o
 # modo da tabela emulator-modes.conf (640x240 no 15 kHz). O SDL2 do Ubuntu
-# tambem tem o kmsdrm, se um dia voltar para o KMS. USE_VULKAN=OFF porque
-# adiciona deps novas (glslang/SPIRV) sem necessidade pro caminho OpenGL.
+# tambem tem o kmsdrm, se um dia voltar para o KMS. USE_VULKAN=ON para o
+# driver amdgpu (Setup > Video Setup > Video driver): o glslang e os headers
+# do Vulkan vem nos submodulos, e o renderizador de fabrica segue o OpenGL
+# (pvr.rend 3 no config/flycast-emu.cfg).
 # ── Filtro de flicker do 480i (config/fliperos-deflicker.c) ─────
 # A camada que o fliperos-kms-run e o fliperos-x11-client carregam nos
 # emuladores (Setup > Video Setup > 480i games), e a calibracao de cor
@@ -1156,7 +1162,7 @@ for patch in /tmp/flycast-patches/*.patch; do
     echo "WARNING: Flycast patch ${patch##*/} does not apply to this Flycast; left out"
   fi
 done
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_VULKAN=OFF
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_VULKAN=ON
 cmake --build build -j"$(nproc)"
 install -m755 build/flycast /usr/local/bin/flycast
 # Icone do menu do LXDE (config/applications/fliperos-flycast.desktop).
@@ -1353,7 +1359,7 @@ git clone --depth=1 --branch __DOLPHIN_TAG__ https://github.com/dolphin-emu/dolp
 cd /tmp/dolphin
 git submodule update --init --recursive --depth 1
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
-  -DENABLE_AUTOUPDATE=OFF -DENABLE_ANALYTICS=OFF -DENABLE_TESTS=OFF
+  -DENABLE_AUTOUPDATE=OFF -DENABLE_ANALYTICS=OFF -DENABLE_TESTS=OFF -DENABLE_VULKAN=ON
 cmake --build build -j"$(nproc)"
 cmake --install build
 rm -f /usr/local/share/applications/dolphin-emu.desktop

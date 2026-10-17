@@ -111,7 +111,7 @@ Use only games you have the right to use (your own dumps, or the free homebrew f
 
 **Over the network**, from another computer on the same network:
 
-- **Windows**: in File Explorer's address bar type `\\fliperos\roms` (or `\\IP-of-the-cabinet\roms`) and press Enter. If it asks for a login, use `fliperos` / `fliperos`.
+- **Windows**: in File Explorer's address bar type `\\fliperos\roms` (or `\\IP-of-the-cabinet\roms`) and press Enter. If it asks for a login: user `fliperos`, password `fliperos`.
 - **macOS**: Finder > Go > Connect to Server > `smb://fliperos.local/roms`.
 - **Linux**: `smb://fliperos.local/roms` in the file manager.
 - Also available: `\\fliperos\bios` (BIOS files), `\\fliperos\media` (artwork) and `\\fliperos\config` (emulator settings).

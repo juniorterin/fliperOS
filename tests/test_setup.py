@@ -1147,12 +1147,15 @@ class AudioTests(Base):
         text = conf.read_text()
         self.assertIn("defaults.pcm.card 1\n", text)
         self.assertIn('pcm.!default {\n    type plug\n    slave.pcm "fliperos_leveler"\n}', text)
-        self.assertIn('slave.pcm "plug:dmix:1,3"', text)
+        # O plug em bloco: "plug:dmix:1,3" numa string nao abre (o ALSA le o
+        # ",3" como argumento do plug) e deixava tudo mudo.
+        self.assertIn('slave.pcm {\n        type plug\n        slave.pcm "dmix:1,3"\n    }', text)
+        self.assertNotIn("plug:dmix", text)
         self.assertIn('path "%s"' % plugin.parent, text)
         self.assertIn("label sc4\n        input { controls [ 0 20 400 -20 4 6 6 ] }", text)
         # Trocar a placa mantem o nivelador, na placa nova.
         self.env.out("audio_set_default 0,0", env)
-        self.assertIn('slave.pcm "plug:dmix:0,0"', conf.read_text())
+        self.assertIn('slave.pcm "dmix:0,0"', conf.read_text())
         # Sem o plugin (apagado depois), o asound.conf volta ao simples.
         plugin.unlink()
         self.env.out("audio_write_conf", env)

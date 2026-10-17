@@ -95,7 +95,17 @@ case $name in
     # As saidas do jogo pela rede, se ha quem as leia (config/fliperos-outputs).
     netout=""
     [[ -x $outputs ]] && "$outputs" installed && netout=",network:NetworkOutput=yes"
-    set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch$netout" "${@:2}"
+    # Com o filtro de flicker do 480i ligado, o Vulkan escolhido no Flycast
+    # (pvr.rend 4 e 5) vira o OpenGL equivalente (0 e 3) so nesta abertura:
+    # a camada nao alcanca o Vulkan.
+    rend=""
+    if deflicker_on; then
+      case $(sed -n 's/^pvr\.rend *= *//p' "${FLIPEROS_FLYCAST_CFG:-$HOME/.config/flycast/emu.cfg}" 2> /dev/null | head -1) in
+        4) rend=",config:pvr.rend=0" ;;
+        5) rend=",config:pvr.rend=3" ;;
+      esac
+    fi
+    set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch$netout$rend" "${@:2}"
     # Jogos de varias placas NAOMI (Games[].multiboard no naomi_roms.cpp do
     # Flycast: esquerda, centro e direita) com 3 monitores e os jogos de
     # varias telas ligados: uma placa em cada monitor (fliperos-multiscreen).

@@ -111,7 +111,7 @@ Use só jogos que você tem direito de usar (cópias dos seus originais, ou os j
 
 **Pela rede**, de outro computador na mesma rede:
 
-- **Windows**: na barra de endereço do Explorador de Arquivos digite `\\fliperos\roms` (ou `\\IP-do-gabinete\roms`) e aperte Enter. Se pedir login, use `fliperos` / `fliperos`.
+- **Windows**: na barra de endereço do Explorador de Arquivos digite `\\fliperos\roms` (ou `\\IP-do-gabinete\roms`) e aperte Enter. Se pedir login: usuário `fliperos`, senha `fliperos`.
 - **macOS**: Finder > Ir > Conectar ao Servidor > `smb://fliperos.local/roms`.
 - **Linux**: `smb://fliperos.local/roms` no gerenciador de arquivos.
 - Também há: `\\fliperos\bios` (arquivos de BIOS), `\\fliperos\media` (imagens e vídeos) e `\\fliperos\config` (configurações dos emuladores).
