@@ -562,10 +562,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p><strong>Volume keys:</strong> the keyboard's volume keys (or those of a panel encoder programmed to send them) work on any screen — emulator in KMS, desktop, console. <code>triggerhappy</code> reads <code>/dev/input</code> and calls <code>fliperos-setup --volume up|down|mute</code> (5% steps on the Audio Setup card, saved on every press because cabinets are usually switched off at the wall); <code>config/fliperos-volume.triggers</code> says which keys. The LXDE panel only handles the mouse, so the volume doesn't change twice. No volume bar appears during a game (nothing draws on top of an emulator in KMS).</p>
 <h2 id="web-panel">Web panel</h2>
 <p>The cabinet's state in a browser on the same network (a phone too): <strong>http://fliperos.local:8080</strong>, or the cabinet's IP with <code>:8080</code>. You sign in with the same user and password as SSH and the network share (<code>fliperos</code>, changed in <strong>Setup &gt; System &gt; Password</strong>). The panel has five pages, tabs at the top, each with its own address (<code>#frontend</code>, <code>#files</code>, <code>#settings</code>, <code>#status</code>, <code>#terminal</code>); the browser remembers the last one:
-- <strong>Frontend:</strong> now playing with the FPS, games, volume, screen and trackball;
+- <strong>Frontend:</strong> now playing with the FPS, games, volume and screen;
 - <strong>Files:</strong> files, downloads and tasks;
-- <strong>Settings;</strong>
-- <strong>Status:</strong> video, CPU, GPU, memory, storage, network, processes and logs;
+- <strong>Settings:</strong> colour values are sliders;
+- <strong>Status:</strong> now playing and the screen at the top, then video, CPU, GPU, memory, storage, network, processes and logs;
 - <strong>Terminal.</strong></p>
 <p>The status refreshes every second. What each part shows:
 - <strong>Now playing:</strong> the game open (emulator, file, RetroArch core) and the frontend, with the <strong>FPS</strong> and a graph of the last minute. The FPS comes from the OpenGL layer of the flicker filter, which counts the frames of whatever game is open. The minute of history stays in the browser.
@@ -594,7 +594,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 - <strong>Tasks:</strong> what takes minutes (reading a torrent's link, applying the filter) runs in the background.
   - Each task shows the step and the percentage from the Setup's progress events, and has a log and <em>Cancel</em>.
   - Only one task of each kind runs at a time, and the last 20 stay listed.
-- <strong>Trackball:</strong> the phone as the cabinet's mouse, for trackball and spinner games (MAME reads the mouse for them), frontends and the desktop.
+- <strong>Trackball</strong> (off for now: the card is hidden and <code>/api/trackball</code> answers 404 unless the service has <code>FLIPEROS_WEB_TRACKBALL=1</code>): the phone as the cabinet's mouse, for trackball and spinner games (MAME reads the mouse for them), frontends and the desktop.
   - Roll with a finger on the pad. After a quick flick the ball keeps rolling and slows down by itself, like an arcade trackball, and a touch stops it.
   - There are three big buttons and a sensitivity slider; a mouse wheel on the pad also scrolls.
   - The panel creates a virtual USB mouse in <code>/dev/uinput</code> ("FliperOS web trackball": X, Y, wheel and three buttons) the first time it is used. It stays while the panel runs. The page sends the movement over a WebSocket (<code>/api/trackball</code>) once per screen frame.
