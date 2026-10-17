@@ -1027,7 +1027,10 @@ let page = "frontend";
 function showPage(name) {
   if (!PAGES.includes(name)) name = "frontend";
   page = name;
-  document.querySelectorAll("main > section[data-page]").forEach((s) => { s.hidden = s.dataset.page !== name; });
+  // data-off: um cartao desligado por enquanto (o trackball).
+  document.querySelectorAll("main > section[data-page]").forEach((s) => {
+    s.hidden = s.dataset.page !== name || s.hasAttribute("data-off");
+  });
   document.querySelectorAll(".pages a").forEach((a) => {
     if (a.dataset.page === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });

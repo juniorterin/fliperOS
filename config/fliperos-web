@@ -38,7 +38,8 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/downloader  {"action": "add", "kind": "roms"|"chds", "magnet"}
                       (sem magnet, o da imagem), {"action": "start"} (as duas
                       como tarefa) ou {"action": "remove", "kind", "delete"}
-    GET  /api/trackball   WebSocket: um mouse virtual (uinput); texto JSON
+    GET  /api/trackball   (desligado por enquanto; FLIPEROS_WEB_TRACKBALL=1 o liga)
+                      WebSocket: um mouse virtual (uinput); texto JSON
                       {"m": [dx, dy], "w": roda} e {"b": ["left", 1|0]}
 Os POST pedem o cabecalho X-FliperOS: 1 (um formulario de outro site nao
 consegue mandar).
@@ -1498,6 +1499,10 @@ class Handler(BaseHTTPRequestHandler):
             terminal(ws)
 
     def open_trackball(self):
+        # Desligado por enquanto: so com FLIPEROS_WEB_TRACKBALL=1 (nenhum
+        # mouse virtual aparece no gabinete sem isso).
+        if ENV("FLIPEROS_WEB_TRACKBALL", "0") != "1":
+            return self.send(404, {"error": "the trackball is turned off"})
         # O mouse antes do 101: sem /dev/uinput, um erro que a pagina mostra.
         try:
             self.panel.mouse.open()

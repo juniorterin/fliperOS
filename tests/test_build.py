@@ -4704,6 +4704,11 @@ class WebPanelTests(unittest.TestCase):
         # A abertura do dispositivo de verdade: o nome e os eixos do uinput.
         source = (ROOT / 'config/fliperos-web').read_text()
         self.assertIn('b"FliperOS web trackball"', source)
+        # Desligado por enquanto: o servidor recusa e a pagina esconde o cartao.
+        cookie = self.login()
+        self.assertEqual(self.request('GET', '/api/trackball', cookie=cookie)[0], 404)
+        self.assertIn('data-page="frontend" data-off aria-labelledby="h-ball"',
+                      (ROOT / 'config/web/index.html').read_text())
 
     def test_settings(self):
         cookie = self.login()
