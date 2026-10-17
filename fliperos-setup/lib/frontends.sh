@@ -579,9 +579,13 @@ frontends_romlist_systems() {
 # AttractPlus ROM List deixa as BIOS de fora de proposito.
 FRONTENDS_ROMLIST_STATE=${FRONTENDS_ROMLIST_STATE:-/var/lib/fliperos/attract-romlists.state}
 
-# frontends_folder_signature PASTA: o md5 dos nomes dos arquivos dela.
+# frontends_folder_signature PASTA: o md5 dos nomes dos arquivos dela. A
+# versao da romlist entra junto: quando o que ela leva muda (a 2, o sistema do
+# Flycast pela BIOS), as que ja existem sao refeitas ao abrir o frontend.
+FRONTENDS_ROMLIST_VERSION=2
 frontends_folder_signature() {
-  find -H "$1" -maxdepth 1 -type f ! -name '.*' -printf '%f\n' 2> /dev/null | LC_ALL=C sort | md5sum | cut -c1-32
+  { printf 'romlist %s\n' "$FRONTENDS_ROMLIST_VERSION"
+    find -H "$1" -maxdepth 1 -type f ! -name '.*' -printf '%f\n' 2> /dev/null | LC_ALL=C sort; } | md5sum | cut -c1-32
 }
 
 # frontends_romlist_state_save EMULADOR PASTA guarda a pasta da romlist feita.
@@ -640,7 +644,7 @@ frontends_arcade_resync() {
 # merged) so entram no MAME: o GroovyMAME abre o jogo pelo nome e acha o
 # clone no zip do pai; os outros emuladores abrem o arquivo.
 frontends_romlist() {
-  local result=$1 line key dir platform count name xml catver
+  local result=$1 line key dir platform count name xml catver flycast
   local -a specs=() source=()
   shift
   ev_step 0 "Preparing Attract-Mode Plus"
@@ -649,7 +653,11 @@ frontends_romlist() {
     name=$(scraper_attract_prepare "$key" "$dir" "$platform") || continue
     xml=main
     [[ $key == retroarch/mame2010 && -f $MAME2010_XML ]] && xml=alt
-    specs+=(--system "$name|$dir|$xml|$([[ $key == mame ]] && echo 1 || echo 0)")
+    # Naomi, Naomi 2 e Atomiswave: so os jogos daquele sistema, pela BIOS
+    # (as tres pastas podem ser a mesma, com o romset inteiro do Flycast).
+    flycast=
+    [[ $key == naomi || $key == naomi2 || $key == atomiswave ]] && flycast=$key
+    specs+=(--system "$name|$dir|$xml|$([[ $key == mame ]] && echo 1 || echo 0)|$flycast")
   done
   ((${#specs[@]})) || ev_fail "No arcade folder with games" || return 1
   scraper_attract_display "$ATTRACT_ROMLIST_ALL"

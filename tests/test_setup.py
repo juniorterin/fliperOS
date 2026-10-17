@@ -4218,6 +4218,32 @@ class RomCleanerTests(Base):
         self.assertIn("artwork    wheel           %s/logo/mame\n" % media,
                       (attract / "emulators" / "MAME.cfg").read_text())
 
+    def test_attract_romlist_splits_one_flycast_folder_by_bios(self):
+        # Naomi, Naomi 2 e Atomiswave apontando para a mesma pasta (o romset
+        # inteiro do Flycast): cada lista fica so com os jogos do sistema
+        # dela, pela BIOS; o que o XML nao conhece fica nas duas.
+        roms, attract = self.env.dir / "flycast-roms", self.env.dir / "flycast-attract"
+        (roms / "flycast").mkdir(parents=True)
+        for name in ("mvsc2.zip", "kofxi.zip", "awbios.zip", "naomi.zip", "meujogo.zip"):
+            (roms / "flycast" / name).write_text("x")
+        for key in ("naomi", "atomiswave"):
+            (roms / key).symlink_to(roms / "flycast")
+        env = dict(self.vars, ROMS_DIR=str(roms), RA_INFO_DIR=str(self.env.dir / "no-info"), ATTRACT_DIR=str(attract),
+                   MEDIA_DIR=str(self.env.dir / "media"), FLIPEROS_USER="ninguem")
+        self.env.out("""
+            mapfile -t s < <(frontends_romlist_systems)
+            frontends_romlist "$ROMCLEAN_CACHE.result" "${s[@]}" > /dev/null
+        """, env)
+
+        def names(name):
+            return sorted(line.split(";")[0] for line in
+                          (attract / "romlists" / (name + ".txt")).read_text().splitlines()[1:])
+        self.assertEqual(names("Naomi"), ["meujogo", "mvsc2"])
+        self.assertEqual(names("Atomiswave"), ["kofxi", "meujogo"])
+        # As romlists de antes desta separacao sao refeitas ao abrir o frontend.
+        frontends = (SETUP / "lib" / "frontends.sh").read_text()
+        self.assertIn("FRONTENDS_ROMLIST_VERSION=2\n", frontends)
+
     def test_attract_display_goes_to_displays_cfg_after_the_migration(self):
         # O Attract-Mode Plus 3.x, depois de migrar para config/, so le as
         # telas de config/displays.cfg.

@@ -28,7 +28,7 @@ placa, de joystick e 6 botoes, ate aos de volante.
   fliperos-romclean romlist (--xml ARQUIVO|- | --xml-command COMANDO)
                             [--cache ARQUIVO] [--alt-xml ARQUIVO
                             --alt-cache ARQUIVO] [--catver ARQUIVO]
-                            --system "EMULADOR|PASTA|XML|CLONES"...
+                            --system "EMULADOR|PASTA|XML|CLONES[|FLYCAST]"...
                             --out PASTA [--combined NOME] [--progress]
                             [--result ARQUIVO]
   fliperos-romclean uses (--xml ARQUIVO|- | --xml-command COMANDO)
@@ -1120,12 +1120,18 @@ def cmd_romlist(args):
     "EMULADOR|PASTA|XML|CLONES": o XML que vale primeiro (main, o de
     --xml/--xml-command; alt, o de --alt-xml) e, com CLONES 1, os clones
     que nao tem arquivo proprio (num romset merged eles estao no zip do pai;
-    so o emulador que abre o jogo pelo nome os acha)."""
+    so o emulador que abre o jogo pelo nome os acha). FLYCAST (naomi,
+    naomi2 ou atomiswave) deixa so os sets daquele sistema, pela BIOS da
+    cadeia de romof: uma pasta so com o romset inteiro do Flycast pode ser a
+    das tres."""
     systems = []
     for spec in args.system:
         parts = spec.split('|')
-        if len(parts) != 4 or parts[2] not in ('main', 'alt') or not parts[0]:
-            sys.exit('use --system "EMULATOR|FOLDER|main or alt|0 or 1"')
+        if len(parts) == 4:
+            parts.append('')
+        if (len(parts) != 5 or parts[2] not in ('main', 'alt') or not parts[0]
+                or parts[4] not in ('',) + FLYCAST_SYSTEMS):
+            sys.exit('use --system "EMULATOR|FOLDER|main or alt|0 or 1[|%s]"' % '|'.join(FLYCAST_SYSTEMS))
         systems.append(parts)
     progress = args.progress
     sources = {}
@@ -1137,12 +1143,15 @@ def cmd_romlist(args):
         if progress:
             print('@step 30 Reading the MAME 2010 game list', flush=True)
         sources['alt'] = load_machines(argparse.Namespace(xml=args.alt_xml, xml_command=None, cache=args.alt_cache))
+    if any(s[4] for s in systems):
+        for machines in sources.values():
+            annotate(machines, {}, {}, {})
     category = {}
     if args.catver:
         category = {n: MATURE.sub(' ', v).strip() for n, v in read_ini(args.catver, 'category').items()}
     os.makedirs(args.out, exist_ok=True)
     combined, results = [], []
-    for index, (emulator, folder, which, clones) in enumerate(systems):
+    for index, (emulator, folder, which, clones, flycast) in enumerate(systems):
         if progress:
             print('@step %d %s' % (40 + 55 * index // len(systems), emulator), flush=True)
         order = []
@@ -1163,6 +1172,9 @@ def cmd_romlist(args):
             name = os.path.splitext(sorted(real)[0])[0]
             m = next((s[key] for s in order if key in s), None)
             if m is not None and (m['isbios'] or m['isdevice']):
+                continue
+            # O set de outro sistema do Flycast (o que o XML nao conhece fica).
+            if flycast and m is not None and m['system'] != flycast:
                 continue
             unknown += m is None
             present.add(key)
