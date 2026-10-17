@@ -136,6 +136,19 @@ if ((${#missing[@]})) || [[ $repo_before != "$repo_after" ]]; then
   apt-get update -qq || echo "warning: apt-get update had errors (no network, or another program holding the lock?)"
   DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -y -q --no-install-recommends \
     "${packages[@]}" || echo "warning: did not install ${packages[*]}"
+  # Os frontends do repositorio local que ja estao instalados sobem para a
+  # versao nova dele (um pacote refeito, como o ES-DE com patch).
+  if [[ $repo_before != "$repo_after" ]]; then
+    ours=()
+    while read -r p; do
+      dpkg -s "$p" > /dev/null 2>&1 && ours+=("$p")
+    done < <(sed -n 's/^Package: //p' /opt/fliperos/repo/Packages 2> /dev/null)
+    if ((${#ours[@]})); then
+      echo "== Local repository packages: ${ours[*]}"
+      DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -y -q --only-upgrade \
+        "${ours[@]}" || echo "warning: did not upgrade ${ours[*]}"
+    fi
+  fi
 else
   echo "all installed and the local repository did not change: apt was not used"
 fi
