@@ -538,8 +538,8 @@ class DeflickerTests(Base):
         # GroovyMAME (interlace 1) e os cores (sem switchres.ini) em 480i, o
         # MAME 2010 (interlace 0) em 240p.
         self.assertEqual(states, {
-            "flycast": "240p", "pcsx2": "240p", "dolphin": "240p", "laserdisc": "240p", "model3": "240p",
-            "model2": "240p", "groovymame": "filter", "psx": "filter", "mame2010": "240p", "snes": "filter",
+            "flycast": "240p", "pcsx2": "240p", "duckstation": "240p", "dolphin": "240p", "laserdisc": "240p",
+            "model3": "240p", "model2": "240p", "groovymame": "filter", "psx": "filter", "mame2010": "240p", "snes": "filter",
             "megadrive": "filter", "fbneo": "filter", "fightcade": "240p", "desktop": "filter",
             "other": "filter"})
         allowed = {r[0]: r[4] for r in rows}
