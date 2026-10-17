@@ -154,20 +154,25 @@ else
 fi
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo ||
   echo "warning: Flathub was not added"
-# O filtro de flicker do 480i: compilado aqui, como no build da imagem,
-# quando o fonte e mais novo que a biblioteca.
-deflicker_lib=/usr/local/lib/fliperos/libfliperos-deflicker.so
-if [[ ! -f $deflicker_lib || $src/config/fliperos-deflicker.c -nt $deflicker_lib ]]; then
-  echo "== 480i flicker filter (fliperos-deflicker)"
-  bash "$src/config/fliperos-deflicker-build" "$src/config/fliperos-deflicker.c" "$deflicker_lib" ||
-    echo "warning: the 480i flicker filter did not compile"
-fi
-color_bin=/usr/local/bin/fliperos-color
-if [[ ! -f $color_bin || $src/config/fliperos-color.c -nt $color_bin ]]; then
-  echo "== Colour calibration (fliperos-color)"
-  bash "$src/config/fliperos-deflicker-build" "$src/config/fliperos-color.c" "$color_bin" ||
-    echo "warning: the colour calibration did not compile"
-fi
+# O filtro de flicker do 480i e a calibracao de cor: compilados aqui, como no
+# build da imagem, quando o fonte mudou. Pelo sha256 do fonte (gravado ao
+# lado do que saiu), nao pela data: o pacote traz a data do arquivo no PC
+# de quem enviou, e uma biblioteca compilada depois, de um fonte mais velho,
+# parecia em dia (o FPS do painel web nao chegava ao gabinete).
+build_native() {
+  local name=$1 source=$2 out=$3 sum
+  sum=$(sha256sum "$source" | cut -d' ' -f1)
+  [[ -f $out && $(cat "$out.source-sha256" 2> /dev/null) == "$sum" ]] && return 0
+  echo "== $name"
+  if bash "$src/config/fliperos-deflicker-build" "$source" "$out"; then
+    printf '%s\n' "$sum" > "$out.source-sha256"
+  else
+    echo "warning: $name did not compile"
+  fi
+}
+build_native "480i flicker filter (fliperos-deflicker)" "$src/config/fliperos-deflicker.c" \
+  /usr/local/lib/fliperos/libfliperos-deflicker.so
+build_native "Colour calibration (fliperos-color)" "$src/config/fliperos-color.c" /usr/local/bin/fliperos-color
 # O override da App Store (fliperos-rootfs.sh) pode ter chegado depois do
 # pacote.
 glib-compile-schemas /usr/share/glib-2.0/schemas 2> /dev/null || true

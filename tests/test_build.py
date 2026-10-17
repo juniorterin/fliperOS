@@ -4199,7 +4199,8 @@ class DeflickerTests(unittest.TestCase):
         self.assertIn('bash /tmp/fliperos-deflicker-build /tmp/fliperos-color.c /usr/local/bin/fliperos-color', MKISO)
         self.assertIn('pkg-config --cflags --libs libdrm x11 xrandr', (ROOT / 'config/fliperos-deflicker-build').read_text())
         update = (ROOT / 'tools/cabinet-update.sh').read_text()
-        self.assertIn('$src/config/fliperos-color.c -nt $color_bin', update)
+        self.assertIn('build_native "Colour calibration (fliperos-color)" "$src/config/fliperos-color.c" '
+                      '/usr/local/bin/fliperos-color', update)
         self.assertRegex(update, r'packages\+=\([^)]*\blibxrandr-dev\b')
         for script, call in (('fliperos-tty1', '/usr/local/bin/fliperos-color}" apply'),
                              ('fliperos-kms-run', '"$color" apply'), ('fliperos-x11-run', '"$color" apply'),
@@ -4226,7 +4227,10 @@ class DeflickerTests(unittest.TestCase):
         self.assertIn('bash /tmp/fliperos-deflicker-build /tmp/fliperos-deflicker.c ' + self.LIB, MKISO)
         self.assertLess(MKISO.index('\nbuild_flycast_chroot\n'), MKISO.index('\nbuild_deflicker_chroot\n'))
         update = (ROOT / 'tools/cabinet-update.sh').read_text()
-        self.assertIn('$src/config/fliperos-deflicker.c -nt $deflicker_lib', update)
+        # Recompilado quando o fonte muda (pelo sha256, nao pela data).
+        self.assertIn('build_native "480i flicker filter (fliperos-deflicker)" "$src/config/fliperos-deflicker.c"',
+                      update)
+        self.assertIn('$(cat "$out.source-sha256" 2> /dev/null) == "$sum"', update)
         for pkg in ('libdrm-dev', 'libgl-dev', 'libegl-dev', 'picom'):
             self.assertRegex(update, r'packages\+=\([^)]*\b%s\b' % pkg)
         self.assertRegex(MKISO, r'swh-plugins picom\n')
