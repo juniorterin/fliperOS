@@ -119,13 +119,16 @@ ui_gui_start() {
   elif [[ -c $UI_GUI_CONSOLE ]]; then
     console=$UI_GUI_CONSOLE
   fi
-  # A saturacao e o matiz da calibracao de cor por software (placa sem CTM):
-  # o menu tambem passa pela camada (config/fliperos-deflicker.c). No X o
-  # picom do desktop ja faz.
-  if [[ $driver == kmsdrm && $(conf_get color_ctm 2> /dev/null) == sw && -f ${DEFLICKER_LIB:-} ]]; then
+  # O menu tambem passa pela camada (config/fliperos-deflicker.c), como os
+  # jogos: a saturacao e o matiz da calibracao de cor por software (placa sem
+  # CTM), o filtro de flicker num boot em 480i (o nivel da linha "Other
+  # programs" de 480i games) e o screenshot do painel web. No X, o picom do
+  # desktop ja faz.
+  if [[ $driver == kmsdrm && -f ${DEFLICKER_LIB:-} ]]; then
     preload="$DEFLICKER_LIB${preload:+:$preload}"
   fi
-  LD_PRELOAD=$preload FLIPEROS_GUI_ORIENTATION=$(conf_get orientation 2> /dev/null || echo horizontal) \
+  LD_PRELOAD=$preload FLIPEROS_DEFLICKER_APP=fliperos-gui \
+    FLIPEROS_GUI_ORIENTATION=$(conf_get orientation 2> /dev/null || echo horizontal) \
     FLIPEROS_GUI_CONSOLE=$console \
     SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-$driver} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} \
     "$UI_GUI_BIN" --serve "$UI_GUI_DIR" < /dev/null >> "$FLIPEROS_LOG" 2>&1 &

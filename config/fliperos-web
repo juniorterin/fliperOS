@@ -26,6 +26,8 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/upload?root=&path=&name=[&overwrite=1] (o corpo e o arquivo)
     POST /api/mkdir {"root", "path", "name"}   POST /api/delete {"root", "path"}
     (root: roms, bios, media ou splashscreen, as pastas de ~)
+    GET  /api/screenshot  um PNG do que esta na tela (o jogo, o frontend,
+                      o menu grafico pela camada OpenGL; o desktop pelo X)
 Os POST pedem o cabecalho X-FliperOS: 1 (um formulario de outro site nao
 consegue mandar).
 """
@@ -44,9 +46,11 @@ import secrets
 import shlex
 import signal
 import socket
+import struct
 import subprocess
 import threading
 import time
+import zlib
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -623,6 +627,128 @@ def give_to_player(path):
         pass
 
 
+# ── Screenshot (fase 5b) ───────────────────────────────────────────
+
+def png(width, height, rows):
+    """Um PNG RGB de 8 bits das linhas (de cima para baixo), so com zlib."""
+    def chunk(tag, data):
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+    raw = b"".join(b"\0" + row for row in rows)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
+
+
+def read_ppm(path):
+    """(largura, altura, linhas) de um PPM P6 de 8 bits (o da camada)."""
+    with open(path, "rb") as f:
+        data = f.read()
+    fields, pos = [], 0
+    while len(fields) < 4:
+        while data[pos:pos + 1].isspace():
+            pos += 1
+        start = pos
+        while not data[pos:pos + 1].isspace():
+            pos += 1
+        fields.append(data[start:pos])
+    if fields[0] != b"P6" or fields[3] != b"255":
+        raise ValueError("not an 8-bit PPM")
+    width, height = int(fields[1]), int(fields[2])
+    body = data[pos + 1:]
+    stride = width * 3
+    if len(body) < stride * height:
+        raise ValueError("short PPM")
+    return width, height, [body[y * stride:(y + 1) * stride] for y in range(height)]
+
+
+class XImage(ctypes.Structure):
+    _fields_ = [("width", ctypes.c_int), ("height", ctypes.c_int), ("xoffset", ctypes.c_int),
+                ("format", ctypes.c_int), ("data", ctypes.c_void_p), ("byte_order", ctypes.c_int),
+                ("bitmap_unit", ctypes.c_int), ("bitmap_bit_order", ctypes.c_int), ("bitmap_pad", ctypes.c_int),
+                ("depth", ctypes.c_int), ("bytes_per_line", ctypes.c_int), ("bits_per_pixel", ctypes.c_int)]
+
+
+def x11_capture(display=":0"):
+    """A tela inteira do X (o desktop, que desenha sem OpenGL) pelo XGetImage.
+    None: sem X, ou num formato que nao seja 32 bits por pixel."""
+    try:
+        x = ctypes.CDLL("libX11.so.6")
+    except OSError:
+        return None
+    # O cookie do X da pessoa (o xinit grava em ~/.Xauthority, quando ha).
+    cookie = os.path.join(ENV("FLIPEROS_HOME") or pwd.getpwnam(PLAYER).pw_dir, ".Xauthority")
+    if os.path.exists(cookie):
+        os.environ["XAUTHORITY"] = cookie
+    x.XOpenDisplay.restype, x.XOpenDisplay.argtypes = ctypes.c_void_p, [ctypes.c_char_p]
+    x.XDefaultScreen.argtypes = [ctypes.c_void_p]
+    x.XRootWindow.restype, x.XRootWindow.argtypes = ctypes.c_ulong, [ctypes.c_void_p, ctypes.c_int]
+    x.XDisplayWidth.argtypes = x.XDisplayHeight.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    x.XGetImage.restype = ctypes.POINTER(XImage)
+    x.XGetImage.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint,
+                            ctypes.c_uint, ctypes.c_ulong, ctypes.c_int]
+    x.XFree.argtypes = [ctypes.c_void_p]
+    x.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    dpy = x.XOpenDisplay(display.encode())
+    if not dpy:
+        return None
+    try:
+        screen = x.XDefaultScreen(dpy)
+        width, height = x.XDisplayWidth(dpy, screen), x.XDisplayHeight(dpy, screen)
+        img = x.XGetImage(dpy, x.XRootWindow(dpy, screen), 0, 0, width, height, 0xFFFFFFFFFFFFFFFF, 2)
+        if not img:
+            return None
+        im = img.contents
+        try:
+            if im.bits_per_pixel != 32:
+                return None
+            data = ctypes.string_at(im.data, im.bytes_per_line * im.height)
+            rows = []
+            for y in range(im.height):
+                line = data[y * im.bytes_per_line:y * im.bytes_per_line + im.width * 4]
+                out = bytearray(im.width * 3)
+                out[0::3], out[1::3], out[2::3] = line[2::4], line[1::4], line[0::4]
+                rows.append(bytes(out))
+            return im.width, im.height, rows
+        finally:
+            x.XFree(im.data)
+            x.XFree(img)
+    finally:
+        x.XCloseDisplay(dpy)
+
+
+def screenshot():
+    """(PNG, de onde veio). O desktop pelo X; o resto (jogos, frontends, o
+    menu grafico) pela camada OpenGL, que grava o quadro pedido em
+    $XDG_RUNTIME_DIR/fliperos-shot.ppm. None: nada que de para fotografar
+    (o console de texto, um programa sem OpenGL)."""
+    state = on_screen()
+    if state["desktop"] and not state["games"]:
+        shot = x11_capture()
+        if shot:
+            return png(*shot), "x11"
+    user = pwd.getpwnam(PLAYER)
+    runtime = os.path.join(RUN_USER, str(user.pw_uid))
+    request = os.path.join(runtime, "fliperos-shot-request")
+    out = os.path.join(runtime, "fliperos-shot.ppm")
+    try:
+        os.unlink(out)
+    except OSError:
+        pass
+    with open(request, "w"):
+        pass
+    os.chown(request, user.pw_uid, user.pw_gid)
+    end = time.monotonic() + 3
+    while time.monotonic() < end:
+        if os.path.exists(out) and not os.path.exists(request):
+            return png(*read_ppm(out)), "opengl"
+        time.sleep(0.05)
+    try:
+        os.unlink(request)
+    except OSError:
+        pass
+    shot = x11_capture()
+    return (png(*shot), "x11") if shot else (None, None)
+
+
 def version():
     m = re.search(r"^FLIPEROS_SETUP_VERSION=(\S+)", read(SETUP_SCRIPT), re.M)
     return m.group(1).strip("\"'") if m else ""
@@ -814,6 +940,12 @@ class Handler(BaseHTTPRequestHandler):
             if not path or not os.path.isfile(path):
                 return self.send(404, {"error": "no such file"})
             return self.send_file(path)
+        if url.path == "/api/screenshot":
+            with self.panel.launch_lock:
+                image, source = screenshot()
+            if not image:
+                return self.send(503, {"error": "nothing to capture: the text console, or a program without OpenGL"})
+            return self.send(200, image, "image/png", headers={"X-Shot-Source": source})
         if url.path == "/api/games":
             system = self.panel.system((parse_qs(url.query).get("system") or [""])[0])
             if not system:

@@ -4583,6 +4583,37 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(delete('../roms'), 400)
         self.assertEqual(delete('naomi/missing.zip'), 404)
 
+    def test_screenshot_from_the_layer(self):
+        import struct
+        import threading
+        import zlib
+        cookie = self.login()
+        request, ppm = self.runtime / 'fliperos-shot-request', self.runtime / 'fliperos-shot.ppm'
+
+        def layer():
+            # O papel da camada: ve o pedido, grava o quadro (2x2) e o apaga.
+            for _ in range(100):
+                if request.exists():
+                    ppm.write_bytes(b'P6\n2 2\n255\n' + bytes([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255]))
+                    request.unlink()
+                    return
+                time.sleep(0.05)
+        thread = threading.Thread(target=layer)
+        thread.start()
+        status, _, data = self.request('GET', '/api/screenshot', cookie=cookie)
+        thread.join()
+        self.assertEqual(status, 200)
+        self.assertEqual(self.last_headers['Content-Type'], 'image/png')
+        self.assertEqual(self.last_headers['X-Shot-Source'], 'opengl')
+        self.assertEqual(data[:8], b'\x89PNG\r\n\x1a\n')
+        self.assertEqual(struct.unpack('>II', data[16:24]), (2, 2))
+        idat = data[data.index(b'IDAT') + 4:data.index(b'IEND') - 8]
+        self.assertEqual(zlib.decompress(idat), b'\0' + bytes([255, 0, 0, 0, 255, 0]) + b'\0' + bytes([0, 0, 255, 255, 255, 255]))
+        # Ninguem responde (o console de texto) e sem X: 503, e o pedido sai.
+        status, _, data = self.request('GET', '/api/screenshot', cookie=cookie)
+        self.assertEqual(status, 503, data)
+        self.assertFalse(request.exists())
+
     def test_tty1_and_session_take_the_panel_request(self):
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()
         self.assertIn('WEB_LAUNCH=${FLIPEROS_WEB_LAUNCH:-${XDG_RUNTIME_DIR:-/tmp}/fliperos-web-launch}', tty1)

@@ -56,6 +56,16 @@ run $pre FLIPEROS_DEFLICKER_APP=flycast FLIPEROS_DEFLICKER_FILE=$b/level $b/defl
 run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_FPS_FILE=$b/fps FLIPEROS_DEFLICKER_APP=flycast \
   DEFLICKER_TEST_LOOP=3 $b/deflicker_test link > /dev/null
 echo "== fps file: $(cat $b/fps)"
+# O screenshot do painel web: com o pedido em $XDG_RUNTIME_DIR, o quadro
+# (antes do filtro, de cima para baixo) vira fliperos-shot.ppm e o pedido sai.
+mkdir -p $b/xdg
+touch $b/xdg/fliperos-shot-request
+run LD_PRELOAD=$b/libfliperos-deflicker.so XDG_RUNTIME_DIR=$b/xdg FLIPEROS_DEFLICKER_FORCE=1 \
+  DEFLICKER_TEST_LOOP=1 $b/deflicker_test link > /dev/null
+echo "== shot: $(head -c 15 $b/xdg/fliperos-shot.ppm | tr '\n' ' ')request: $(ls $b/xdg/fliperos-shot-request 2> /dev/null || echo gone)"
+python3 -c "
+d = open('$b/xdg/fliperos-shot.ppm', 'rb').read().split(b'\n', 3)[3]
+print('== shot rows (red, top to bottom):', [d[y * 64 * 3] for y in range(16)])"
 
 # A calibracao de cor (config/fliperos-color.c): a tabela de gama de 5
 # pontos de cada canal e a matriz, com os padroes e com cada parametro.

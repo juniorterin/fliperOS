@@ -296,7 +296,7 @@ static struct {
     F(BindFramebuffer) F(ReadBuffer) F(DrawBuffer) F(UseProgram) F(CreateShader) F(ShaderSource)
     F(CompileShader) F(GetShaderiv) F(CreateProgram) F(AttachShader) F(LinkProgram) F(GetProgramiv)
     F(GetUniformLocation) F(Uniform1i) F(Uniform3f) F(GenVertexArrays) F(BindVertexArray) F(BindSampler)
-    F(DrawArrays) F(UniformMatrix3fv)
+    F(DrawArrays) F(UniformMatrix3fv) F(ReadPixels) F(PixelStorei) F(BindBuffer)
 } gl;
 #undef F
 
@@ -321,6 +321,7 @@ static int load_gl(getproc_fn get)
     L(CreateShader); L(ShaderSource); L(CompileShader); L(GetShaderiv); L(CreateProgram);
     L(AttachShader); L(LinkProgram); L(GetProgramiv); L(GetUniformLocation); L(Uniform1i);
     L(Uniform3f); L(GenVertexArrays); L(BindVertexArray); L(BindSampler); L(DrawArrays); L(UniformMatrix3fv);
+    L(ReadPixels); L(PixelStorei); L(BindBuffer);
 #undef L
     return gl.GetIntegerv && gl.GetString && gl.CopyTexSubImage2D && gl.CreateShader && gl.DrawArrays &&
            gl.BindFramebuffer && gl.UseProgram && gl.Uniform3f && gl.UniformMatrix3fv;
@@ -425,13 +426,18 @@ static struct ctx *context(void *id)
 /* filter: a imagem do quadro (o back buffer, LARGURA x ALTURA) passa pelo
  * filtro, no proprio back buffer: as tres linhas com o modo entrelacado
  * (deflick), so a propria linha sem ele (a matriz de cor sozinha). */
-static void filter(void *ctx_id, getproc_fn get, int w, int h, int deflick)
+static int gl_ready(getproc_fn get)
 {
     static int loaded = -1;
-    struct ctx *c;
     if (loaded < 0)
         loaded = load_gl(get);
-    if (!loaded || !ctx_id || w <= 0 || h <= 0)
+    return loaded;
+}
+
+static void filter(void *ctx_id, getproc_fn get, int w, int h, int deflick)
+{
+    struct ctx *c;
+    if (!gl_ready(get) || !ctx_id || w <= 0 || h <= 0)
         return;
     c = context(ctx_id);
     if (c->broken)
@@ -599,6 +605,85 @@ static void fps_tick(int what)
     start = now;
 }
 
+/* O screenshot do painel web (config/fliperos-web): com o pedido
+ * $XDG_RUNTIME_DIR/fliperos-shot-request (conferido a cada 15 quadros), o
+ * quadro pronto, antes do filtro, vai para fliperos-shot.ppm na mesma pasta
+ * e o pedido sai. */
+static char shot_dir[256];
+
+static int shot_wanted(void)
+{
+    static int frames, disabled;
+    char request[300];
+    if (disabled)
+        return 0;
+    if (!shot_dir[0]) {
+        const char *dir = getenv("XDG_RUNTIME_DIR");
+        if (!dir || !*dir) {
+            disabled = 1;
+            return 0;
+        }
+        snprintf(shot_dir, sizeof(shot_dir), "%s", dir);
+    }
+    if (frames++ % 15)
+        return 0;
+    snprintf(request, sizeof(request), "%s/fliperos-shot-request", shot_dir);
+    return access(request, F_OK) == 0;
+}
+
+static void shot_take(getproc_fn get, int w, int h)
+{
+    char path[300], tmp[320];
+    if (!gl_ready(get) || !gl.ReadPixels || !gl.PixelStorei || w <= 0 || h <= 0 || w > 16384 || h > 16384)
+        return;
+    unsigned char *pixels = malloc((size_t)w * h * 4);
+    if (!pixels)
+        return;
+    GLint read_fb = 0, pack = 4, pbo = 0, read_buf = 0;
+    const char *version = (const char *)gl.GetString(GL_VERSION);
+    int gles = version && strstr(version, "OpenGL ES") != NULL;
+    gl.GetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fb);
+    gl.GetIntegerv(GL_PACK_ALIGNMENT, &pack);
+    if (gl.BindBuffer)
+        gl.GetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pbo);
+    gl.BindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    if (!gles) {
+        gl.GetIntegerv(GL_READ_BUFFER, &read_buf);
+        gl.ReadBuffer(GL_BACK);
+    }
+    if (gl.BindBuffer && pbo)
+        gl.BindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    gl.PixelStorei(GL_PACK_ALIGNMENT, 1);
+    gl.ReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    gl.PixelStorei(GL_PACK_ALIGNMENT, pack);
+    if (gl.BindBuffer && pbo)
+        gl.BindBuffer(GL_PIXEL_PACK_BUFFER, (GLuint)pbo);
+    if (!gles)
+        gl.ReadBuffer((GLenum)read_buf);
+    gl.BindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)read_fb);
+    /* PPM de cima para baixo (o OpenGL conta de baixo), sem o alfa. */
+    snprintf(path, sizeof(path), "%s/fliperos-shot.ppm", shot_dir);
+    snprintf(tmp, sizeof(tmp), "%s.%d", path, (int)getpid());
+    FILE *f = fopen(tmp, "wb");
+    if (f) {
+        unsigned char *row = malloc((size_t)w * 3);
+        fprintf(f, "P6\n%d %d\n255\n", w, h);
+        for (int y = h - 1; row && y >= 0; y--) {
+            const unsigned char *src = pixels + (size_t)y * w * 4;
+            for (int x = 0; x < w; x++)
+                memcpy(row + x * 3, src + x * 4, 3);
+            fwrite(row, 3, (size_t)w, f);
+        }
+        free(row);
+        fclose(f);
+        if (rename(tmp, path))
+            unlink(tmp);
+    }
+    free(pixels);
+    snprintf(path, sizeof(path), "%s/fliperos-shot-request", shot_dir);
+    unlink(path);
+}
+
 /* ── As trocas de quadro ────────────────────────────────────────── */
 
 static void *glx_getproc(const char *name)
@@ -623,9 +708,9 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable)
     static void (*real)(Display *, GLXDrawable);
     if (!real)
         real = sym("glXSwapBuffers");
-    int what = active();
+    int what = active(), shot = shot_wanted();
     fps_tick(what);
-    if (what) {
+    if (what || shot) {
         static GLXContext (*current)(void);
         static void (*query)(Display *, GLXDrawable, int, unsigned int *);
         unsigned int w = 0, h = 0;
@@ -636,7 +721,10 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable)
         if (current && query) {
             query(dpy, drawable, GLX_WIDTH, &w);
             query(dpy, drawable, GLX_HEIGHT, &h);
-            filter((void *)current(), glx_getproc, (int)w, (int)h, what & 1);
+            if (shot)
+                shot_take(glx_getproc, (int)w, (int)h);
+            if (what)
+                filter((void *)current(), glx_getproc, (int)w, (int)h, what & 1);
         }
     }
     if (real)
@@ -648,9 +736,9 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     static EGLBoolean (*real)(EGLDisplay, EGLSurface);
     if (!real)
         real = sym("eglSwapBuffers");
-    int what = active();
+    int what = active(), shot = shot_wanted();
     fps_tick(what);
-    if (what) {
+    if (what || shot) {
         static EGLContext (*current)(void);
         static EGLBoolean (*query)(EGLDisplay, EGLSurface, EGLint, EGLint *);
         EGLint w = 0, h = 0;
@@ -658,8 +746,12 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
             current = sym("eglGetCurrentContext");
         if (!query)
             query = sym("eglQuerySurface");
-        if (current && query && query(dpy, surface, EGL_WIDTH, &w) && query(dpy, surface, EGL_HEIGHT, &h))
-            filter((void *)current(), egl_getproc, (int)w, (int)h, what & 1);
+        if (current && query && query(dpy, surface, EGL_WIDTH, &w) && query(dpy, surface, EGL_HEIGHT, &h)) {
+            if (shot)
+                shot_take(egl_getproc, (int)w, (int)h);
+            if (what)
+                filter((void *)current(), egl_getproc, (int)w, (int)h, what & 1);
+        }
     }
     return real ? real(dpy, surface) : EGL_FALSE;
 }

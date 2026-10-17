@@ -24,6 +24,8 @@ const TEXT = {
     confirm_launch: "Close what is on the cabinet screen and open %s?", launching: "Opening %s on the cabinet…",
     confirm_close: "Close the game on the cabinet?", first: "Showing the first %n. Type to filter.",
     no_games: "No games in this folder.", count: "%n games",
+    screen: "Screen", take_shot: "Take a screenshot", as_on_tube: "4:3, as on the tube", save_png: "Save PNG",
+    shot_wait: "Taking the picture…", shot_from: "%w×%h, %s · %t", shot_x11: "desktop (X)", shot_gl: "OpenGL frame",
     files: "Files", up_folder: "Up", upload: "Upload files", new_folder: "New folder", folder_name: "Name of the new folder:",
     confirm_delete: "Delete %s from the cabinet?", uploading: "Sending %s… %p%", uploaded: "Sent: %n file(s).",
     exists_overwrite: "%s already exists there. Replace it?", empty_folder: "Empty folder.", delete: "Delete",
@@ -48,6 +50,8 @@ const TEXT = {
     confirm_launch: "Fechar o que está na tela do gabinete e abrir %s?", launching: "Abrindo %s no gabinete…",
     confirm_close: "Fechar o jogo no gabinete?", first: "Mostrando os primeiros %n. Digite para filtrar.",
     no_games: "Nenhum jogo nesta pasta.", count: "%n jogos",
+    screen: "Tela", take_shot: "Tirar screenshot", as_on_tube: "4:3, como no tubo", save_png: "Salvar PNG",
+    shot_wait: "Tirando a foto…", shot_from: "%w×%h, %s · %t", shot_x11: "desktop (X)", shot_gl: "quadro OpenGL",
     files: "Arquivos", up_folder: "Subir", upload: "Enviar arquivos", new_folder: "Nova pasta", folder_name: "Nome da pasta nova:",
     confirm_delete: "Apagar %s do gabinete?", uploading: "Enviando %s… %p%", uploaded: "Enviado(s): %n arquivo(s).",
     exists_overwrite: "%s já existe lá. Substituir?", empty_folder: "Pasta vazia.", delete: "Apagar",
@@ -491,6 +495,44 @@ $("close-game").addEventListener("click", async () => {
   if (!confirm(t("confirm_close"))) return;
   await api("/api/close", { method: "POST", body: "{}" }).catch(() => {});
 });
+
+// ── Tela: o screenshot ───────────────────────────────────────────
+// O PNG do que esta na tela do gabinete (/api/screenshot): o quadro do jogo
+// ou do frontend pela camada OpenGL, o desktop pelo X. Em 4:3 como no tubo,
+// ou do tamanho do quadro (um 2560x240 fica largo).
+
+let shotUrl = null;
+$("shot-take").addEventListener("click", async () => {
+  $("shot-take").disabled = true;
+  $("shot-note").textContent = t("shot_wait");
+  try {
+    const res = await api("/api/screenshot");
+    if (!res.ok) {
+      $("shot-note").textContent = (await res.json().catch(() => ({}))).error || res.statusText;
+      return;
+    }
+    const blob = await res.blob();
+    if (shotUrl) URL.revokeObjectURL(shotUrl);
+    shotUrl = URL.createObjectURL(blob);
+    const img = $("shot");
+    img.onload = () => {
+      const source = res.headers.get("X-Shot-Source") === "x11" ? t("shot_x11") : t("shot_gl");
+      $("shot-note").textContent = t("shot_from").replace("%w", img.naturalWidth).replace("%h", img.naturalHeight)
+        .replace("%s", source).replace("%t", new Date().toLocaleTimeString(lang === "pt" ? "pt-BR" : "en"));
+    };
+    img.src = shotUrl;
+    img.hidden = false;
+    const save = $("shot-save");
+    save.href = shotUrl;
+    save.download = "fliperos-" + new Date().toISOString().replace(/[:.]/g, "-") + ".png";
+    save.hidden = false;
+  } catch (e) {
+    if (e.message !== "login") $("shot-note").textContent = String(e);
+  } finally {
+    $("shot-take").disabled = false;
+  }
+});
+$("shot-tube").addEventListener("change", () => $("shot").classList.toggle("tube", $("shot-tube").checked));
 
 // ── Arquivos: as pastas do gabinete ──────────────────────────────
 // roms, bios, media e splashscreen de ~: entrar nas pastas, baixar,
