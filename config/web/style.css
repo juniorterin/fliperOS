@@ -147,6 +147,27 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); max-width: calc(100% - 32px);
   background: var(--bg-deep); border: 1px solid var(--purple); border-radius: 10px; padding: 10px 16px; z-index: 5; }
 
+/* Arquivos: a pasta, o caminho, as acoes e a lista. */
+.files-bar, .files-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.crumbs { display: flex; flex-wrap: wrap; gap: 2px; min-width: 0; }
+.crumbs button { background: transparent; border: 0; color: var(--cyan); padding: 4px 6px; font-weight: 500; }
+.crumbs span { color: var(--dim); padding: 4px 0; }
+.file-pick { position: relative; display: inline-block; cursor: pointer; padding: 8px 12px; border-radius: 8px;
+  background: var(--purple); color: #191a21; font-weight: 650; }
+.file-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.file-pick:focus-within { outline: 2px solid var(--cyan); outline-offset: 2px; }
+#files { table-layout: fixed; }
+#files .c-size { width: 6.5em; }
+#files .c-date { width: 10em; }
+#files .c-del { width: 3.2em; }
+#files td.fname { overflow: hidden; text-overflow: ellipsis; }
+#files td.fname a, #files td.fname button { color: var(--fg); text-decoration: none; background: transparent; border: 0;
+  padding: 0; font: inherit; cursor: pointer; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+#files td.fname a:hover, #files td.fname button:hover { color: var(--cyan); text-decoration: underline; }
+#files .del { background: transparent; border: 0; color: var(--red); padding: 2px 6px; }
+.drop.over { outline: 2px dashed var(--pink); outline-offset: 4px; border-radius: 8px; }
+@media (max-width: 520px) { #files .c-date, #files td.fdate, #files th.fdate { display: none; } }
+
 .volume { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .volume input { flex: 1; padding: 0; accent-color: var(--pink); }
 .volume button { width: 40px; padding: 6px 0; }

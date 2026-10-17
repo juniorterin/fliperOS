@@ -22,6 +22,10 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/launch  {"system", "game"}: fecha o que esta na tela e abre o
                       jogo; quando ele fecha, volta o que estava
     POST /api/close   fecha o jogo aberto
+    GET  /api/files?root=roms&path=PASTA   GET /api/download?root=&path=
+    POST /api/upload?root=&path=&name=[&overwrite=1] (o corpo e o arquivo)
+    POST /api/mkdir {"root", "path", "name"}   POST /api/delete {"root", "path"}
+    (root: roms, bios, media ou splashscreen, as pastas de ~)
 Os POST pedem o cabecalho X-FliperOS: 1 (um formulario de outro site nao
 consegue mandar).
 """
@@ -47,7 +51,7 @@ from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.machinery import SourceFileLoader
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 ENV = os.environ.get
 PROC = ENV("FLIPEROS_PROC", "/proc")
@@ -67,6 +71,8 @@ SESSION_FILE = ENV("FLIPEROS_SESSION_FILE", "/etc/fliperos/session")
 BIN = ENV("FLIPEROS_BIN", "/opt/fliperos/bin")
 # Os comandos que o painel abre: os mesmos lancadores dos frontends.
 LAUNCHERS = (BIN + "/fliperos-kms-run", BIN + "/fliperos-x11-run")
+# As pastas de ~ que o painel mostra em Files.
+FILE_ROOTS = ENV("FLIPEROS_WEB_FILE_ROOTS", "roms bios media splashscreen").split()
 SESSION_HOURS = 12
 STATIC_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js",
                 "/style.css": "style.css", "/icon.svg": "icon.svg"}
@@ -565,6 +571,58 @@ def stop(pids, wait=8):
             pass
 
 
+# ── Arquivos: as pastas da pessoa (fase 5b) ────────────────────────
+
+def file_roots():
+    """As pastas que o painel mostra: as de ~ que o Setup cria (jogos,
+    BIOS, arte, splash). Os links dentro delas (uma pasta de jogos num disco
+    externo) valem."""
+    home = ENV("FLIPEROS_HOME") or pwd.getpwnam(PLAYER).pw_dir
+    return {name: os.path.join(home, name) for name in FILE_ROOTS}
+
+
+def file_path(root, rel):
+    """O caminho de REL dentro da pasta ROOT, ou None: sem "..", sem caminho
+    absoluto, sem sair da pasta."""
+    base = file_roots().get(root)
+    if not base:
+        return None
+    parts = [p for p in (rel or "").replace("\\", "/").split("/") if p not in ("", ".")]
+    if any(p == ".." or "\0" in p for p in parts):
+        return None
+    return os.path.join(base, *parts)
+
+
+def list_files(path):
+    rows = []
+    with os.scandir(path) as entries:
+        for e in entries:
+            if e.name.startswith("."):
+                continue
+            try:
+                st = e.stat()
+            except OSError:
+                continue
+            rows.append({"name": e.name, "dir": e.is_dir(), "size": None if e.is_dir() else st.st_size,
+                         "mtime": int(st.st_mtime)})
+    rows.sort(key=lambda r: (not r["dir"], r["name"].lower()))
+    return rows
+
+
+def valid_name(name):
+    """Um nome de arquivo ou pasta, sem caminho."""
+    return bool(name) and name not in (".", "..") and "/" not in name and "\\" not in name and "\0" not in name \
+        and len(name.encode()) <= 255
+
+
+def give_to_player(path):
+    user = pwd.getpwnam(PLAYER)
+    try:
+        os.chown(path, user.pw_uid, user.pw_gid)
+    except OSError:
+        pass
+
+
 def version():
     m = re.search(r"^FLIPEROS_SETUP_VERSION=(\S+)", read(SETUP_SCRIPT), re.M)
     return m.group(1).strip("\"'") if m else ""
@@ -742,6 +800,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(500, rows)
             return self.send(200, {"systems": [{"key": s["key"], "name": s["name"], "platform": s["platform"],
                                                  "games": len(games(s))} for s in rows]})
+        if url.path == "/api/files":
+            query = parse_qs(url.query)
+            root, rel = (query.get("root") or [FILE_ROOTS[0]])[0], (query.get("path") or [""])[0]
+            path = file_path(root, rel)
+            if not path or not os.path.isdir(path):
+                return self.send(404, {"error": "no such folder"})
+            return self.send(200, {"roots": FILE_ROOTS, "root": root, "path": rel.strip("/"),
+                                   "entries": list_files(path)})
+        if url.path == "/api/download":
+            query = parse_qs(url.query)
+            path = file_path((query.get("root") or [""])[0], (query.get("path") or [""])[0])
+            if not path or not os.path.isfile(path):
+                return self.send(404, {"error": "no such file"})
+            return self.send_file(path)
         if url.path == "/api/games":
             system = self.panel.system((parse_qs(url.query).get("system") or [""])[0])
             if not system:
@@ -795,7 +867,92 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, self.panel.launch(argv))
         if url.path == "/api/close":
             return self.send(200, self.panel.close_game())
+        if url.path == "/api/upload":
+            return self.upload(parse_qs(url.query))
+        if url.path in ("/api/mkdir", "/api/delete"):
+            data = self.body()
+            path = file_path(str(data.get("root", "")), str(data.get("path", "")))
+            if not path:
+                return self.send(400, {"error": "bad path"})
+            if url.path == "/api/mkdir":
+                name = str(data.get("name", ""))
+                if not valid_name(name) or not os.path.isdir(path):
+                    return self.send(400, {"error": "bad folder name"})
+                try:
+                    os.mkdir(os.path.join(path, name))
+                except FileExistsError:
+                    return self.send(409, {"error": "already exists"})
+                give_to_player(os.path.join(path, name))
+                return self.send(200, {})
+            # Apagar: um arquivo, ou uma pasta vazia; nunca a pasta de cima.
+            if not str(data.get("path", "")).strip("/"):
+                return self.send(400, {"error": "the top folder is not deleted"})
+            try:
+                if os.path.isdir(path) and not os.path.islink(path):
+                    os.rmdir(path)
+                else:
+                    os.unlink(path)
+            except FileNotFoundError:
+                return self.send(404, {"error": "no such file"})
+            except OSError as exc:
+                return self.send(409, {"error": "folder not empty" if os.path.isdir(path) else str(exc)})
+            return self.send(200, {})
         return self.send(404, {"error": "not found"})
+
+    def upload(self, query):
+        """O corpo do pedido e o arquivo: gravado aos pedacos num .part na
+        mesma pasta e renomeado no fim (um envio cortado nao deixa meio
+        arquivo com o nome certo)."""
+        folder = file_path((query.get("root") or [""])[0], (query.get("path") or [""])[0])
+        name = (query.get("name") or [""])[0]
+        try:
+            size = int(self.headers.get("Content-Length") or -1)
+        except ValueError:
+            size = -1
+        if not folder or not os.path.isdir(folder) or not valid_name(name) or size < 0:
+            self.close_connection = True
+            return self.send(400, {"error": "bad folder, name or size"})
+        target = os.path.join(folder, name)
+        if os.path.exists(target) and (query.get("overwrite") or ["0"])[0] != "1":
+            # O corpo nao lido fica na conexao: ela fecha.
+            self.close_connection = True
+            return self.send(409, {"error": "already exists"})
+        part = os.path.join(folder, ".%s.part-%s" % (name, secrets.token_hex(4)))
+        try:
+            with open(part, "wb") as f:
+                left = size
+                while left > 0:
+                    chunk = self.rfile.read(min(left, 1 << 20))
+                    if not chunk:
+                        raise OSError("the upload was cut")
+                    f.write(chunk)
+                    left -= len(chunk)
+            os.replace(part, target)
+        except OSError as exc:
+            try:
+                os.unlink(part)
+            except OSError:
+                pass
+            self.close_connection = True
+            return self.send(500, {"error": str(exc)})
+        give_to_player(target)
+        return self.send(200, {"name": name, "size": size})
+
+    def send_file(self, path):
+        size = os.path.getsize(path)
+        name = os.path.basename(path)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(size))
+        self.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + quote(name))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(1 << 20)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
 
 
 def main():

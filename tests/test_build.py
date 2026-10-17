@@ -4400,7 +4400,7 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_LOGS=str(tmp / 'logs'), FLIPEROS_SYSTEM_LOGS=str(tmp / 'missing.log'),
                    FLIPEROS_SETUP=str(setup), FLIPEROS_RUN_USER=str(tmp / 'run'),
                    FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_VIDEO_CHECK=str(tmp / 'none'),
-                   FLIPEROS_USER=cls.user, FLIPEROS_SESSION_FILE=str(tmp / 'session'))
+                   FLIPEROS_USER=cls.user, FLIPEROS_SESSION_FILE=str(tmp / 'session'), FLIPEROS_HOME=str(tmp))
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
                                        '--port', str(cls.port)], env=env)
         for _ in range(100):
@@ -4420,14 +4420,16 @@ class WebPanelTests(unittest.TestCase):
     def request(self, method, path, body=None, cookie=None, header=True):
         import http.client
         conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
-        headers = {'Content-Type': 'application/json'}
+        raw = isinstance(body, bytes)
+        headers = {'Content-Type': 'application/octet-stream' if raw else 'application/json'}
         if header:
             headers['X-FliperOS'] = '1'
         if cookie:
             headers['Cookie'] = cookie
-        conn.request(method, path, json.dumps(body) if body is not None else None, headers)
+        conn.request(method, path, body if raw else json.dumps(body) if body is not None else None, headers)
         res = conn.getresponse()
         data = res.read()
+        self.last_headers = dict(res.getheaders())
         conn.close()
         return res.status, res.getheader('Set-Cookie'), data
 
@@ -4539,6 +4541,47 @@ class WebPanelTests(unittest.TestCase):
             self.assertIsNotNone(game.wait(timeout=10))
         finally:
             game.kill()
+
+    def test_files_browse_upload_download_and_delete(self):
+        cookie = self.login()
+        listing = json.loads(self.request('GET', '/api/files?root=roms&path=', cookie=cookie)[2])
+        self.assertEqual(listing['roots'], ['roms', 'bios', 'media', 'splashscreen'])
+        self.assertEqual([(e['name'], e['dir']) for e in listing['entries']], [('naomi', True), ('other', True)])
+        naomi = json.loads(self.request('GET', '/api/files?root=roms&path=naomi', cookie=cookie)[2])['entries']
+        # Pastas primeiro; os ocultos ficam de fora.
+        self.assertEqual([e['name'] for e in naomi], ['vf4', 'Ikaruga.zip', 'notes.txt', 'vf4.zip'])
+        for query in ('root=roms&path=../', 'root=roms&path=naomi/../..', 'root=etc&path=', 'root=roms&path=/etc'):
+            self.assertEqual(self.request('GET', '/api/files?' + query, cookie=cookie)[0], 404, query)
+        # Enviar: o corpo e o arquivo; o que ja existe so com overwrite.
+        up = '/api/upload?root=roms&path=naomi&name=new%20game.zip'
+        self.assertEqual(self.request('POST', up, b'first', cookie=cookie)[0], 200)
+        self.assertEqual(self.request('POST', up, b'second', cookie=cookie)[0], 409)
+        self.assertEqual(self.request('POST', up + '&overwrite=1', b'second', cookie=cookie)[0], 200)
+        self.assertEqual((self.roms / 'new game.zip').read_bytes(), b'second')
+        self.assertFalse(list(self.roms.glob('.*part*')))
+        for bad in ('name=..%2Fevil.zip', 'name=a%2Fb.zip', 'name=..', 'name='):
+            self.assertEqual(self.request('POST', '/api/upload?root=roms&path=naomi&' + bad, b'x', cookie=cookie)[0],
+                             400, bad)
+        self.assertFalse((self.roms.parent / 'evil.zip').exists())
+        # Sem o cabecalho X-FliperOS, nada.
+        self.assertEqual(self.request('POST', up + '&overwrite=1', b'third', cookie=cookie, header=False)[0], 403)
+        status, _, data = self.request('GET', '/api/download?root=roms&path=naomi/new%20game.zip', cookie=cookie)
+        self.assertEqual((status, data), (200, b'second'))
+        self.assertIn("filename*=UTF-8''new%20game.zip", self.last_headers['Content-Disposition'])
+        self.assertEqual(self.request('GET', '/api/download?root=roms&path=naomi', cookie=cookie)[0], 404)
+        # Pasta nova, apagar arquivo, pasta com coisa dentro nao, a de cima nunca.
+        mk = {'root': 'roms', 'path': 'naomi', 'name': 'saves'}
+        self.assertEqual(self.request('POST', '/api/mkdir', mk, cookie=cookie)[0], 200)
+        self.assertEqual(self.request('POST', '/api/mkdir', mk, cookie=cookie)[0], 409)
+        self.assertEqual(self.request('POST', '/api/mkdir', dict(mk, name='../x'), cookie=cookie)[0], 400)
+        delete = lambda path: self.request('POST', '/api/delete', {'root': 'roms', 'path': path}, cookie=cookie)[0]
+        self.assertEqual(delete('naomi/new game.zip'), 200)
+        self.assertFalse((self.roms / 'new game.zip').exists())
+        self.assertEqual(delete('naomi/saves'), 200)
+        self.assertEqual(delete('naomi'), 409)
+        self.assertEqual(delete(''), 400)
+        self.assertEqual(delete('../roms'), 400)
+        self.assertEqual(delete('naomi/missing.zip'), 404)
 
     def test_tty1_and_session_take_the_panel_request(self):
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()

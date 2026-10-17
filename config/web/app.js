@@ -24,6 +24,10 @@ const TEXT = {
     confirm_launch: "Close what is on the cabinet screen and open %s?", launching: "Opening %s on the cabinet…",
     confirm_close: "Close the game on the cabinet?", first: "Showing the first %n. Type to filter.",
     no_games: "No games in this folder.", count: "%n games",
+    files: "Files", up_folder: "Up", upload: "Upload files", new_folder: "New folder", folder_name: "Name of the new folder:",
+    confirm_delete: "Delete %s from the cabinet?", uploading: "Sending %s… %p%", uploaded: "Sent: %n file(s).",
+    exists_overwrite: "%s already exists there. Replace it?", empty_folder: "Empty folder.", delete: "Delete",
+    size: "Size", modified: "Modified", drop_hint: "You can also drop files on the list to send them to this folder.",
   },
   pt: {
     login_text: "Entre com o usuário e a senha do gabinete (os mesmos do SSH e da pasta de rede).",
@@ -44,6 +48,10 @@ const TEXT = {
     confirm_launch: "Fechar o que está na tela do gabinete e abrir %s?", launching: "Abrindo %s no gabinete…",
     confirm_close: "Fechar o jogo no gabinete?", first: "Mostrando os primeiros %n. Digite para filtrar.",
     no_games: "Nenhum jogo nesta pasta.", count: "%n jogos",
+    files: "Arquivos", up_folder: "Subir", upload: "Enviar arquivos", new_folder: "Nova pasta", folder_name: "Nome da pasta nova:",
+    confirm_delete: "Apagar %s do gabinete?", uploading: "Enviando %s… %p%", uploaded: "Enviado(s): %n arquivo(s).",
+    exists_overwrite: "%s já existe lá. Substituir?", empty_folder: "Pasta vazia.", delete: "Apagar",
+    size: "Tamanho", modified: "Modificado", drop_hint: "Também dá para soltar arquivos na lista para enviá-los a esta pasta.",
   },
 };
 
@@ -484,6 +492,131 @@ $("close-game").addEventListener("click", async () => {
   await api("/api/close", { method: "POST", body: "{}" }).catch(() => {});
 });
 
+// ── Arquivos: as pastas do gabinete ──────────────────────────────
+// roms, bios, media e splashscreen de ~: entrar nas pastas, baixar,
+// enviar (um de cada vez, com o progresso; tambem soltando na lista), criar
+// pasta e apagar.
+
+let fileRoot = "roms", filePath = "";
+
+function filesQuery(path) {
+  return "root=" + encodeURIComponent(fileRoot) + "&path=" + encodeURIComponent(path);
+}
+const joinPath = (...parts) => parts.filter(Boolean).join("/");
+
+function stamp(seconds) {
+  const d = new Date(seconds * 1000);
+  return d.toLocaleDateString(lang === "pt" ? "pt-BR" : "en") + " " +
+    d.toLocaleTimeString(lang === "pt" ? "pt-BR" : "en", { hour: "2-digit", minute: "2-digit" });
+}
+
+async function loadFiles(path) {
+  const res = await api("/api/files?" + filesQuery(path == null ? filePath : path));
+  if (!res.ok) { filePath = ""; return; }
+  const data = await res.json();
+  fileRoot = data.root;
+  filePath = data.path;
+  const select = $("file-root");
+  if (select.options.length !== data.roots.length) {
+    select.replaceChildren(...data.roots.map((r) => el("option", { value: r }, "~/" + r)));
+  }
+  select.value = fileRoot;
+  // O caminho: cada pedaco leva de volta a ele.
+  const parts = filePath ? filePath.split("/") : [];
+  const crumbs = [el("button", { type: "button" }, "~/" + fileRoot)];
+  crumbs[0].addEventListener("click", () => loadFiles(""));
+  parts.forEach((part, i) => {
+    const b = el("button", { type: "button" }, part);
+    b.addEventListener("click", () => loadFiles(parts.slice(0, i + 1).join("/")));
+    crumbs.push(el("span", {}, "/"), b);
+  });
+  $("crumbs").replaceChildren(...crumbs);
+  $("file-up").disabled = !filePath;
+
+  const table = $("files");
+  const head = el("tr", {}, el("th", {}, t("name")), el("th", { class: "num" }, t("size")),
+    el("th", { class: "fdate" }, t("modified")), el("th", {}, ""));
+  const rows = data.entries.map((e) => {
+    const target = joinPath(filePath, e.name);
+    let link;
+    if (e.dir) {
+      link = el("button", { type: "button", title: e.name }, "📁 " + e.name);
+      link.addEventListener("click", () => loadFiles(target));
+    } else {
+      link = el("a", { href: "/api/download?" + filesQuery(target), title: e.name, download: e.name }, "📄 " + e.name);
+    }
+    const del = el("button", { type: "button", class: "del", "aria-label": t("delete") + " " + e.name, title: t("delete") }, "🗑");
+    del.addEventListener("click", async () => {
+      if (!confirm(t("confirm_delete").replace("%s", e.name))) return;
+      const r = await api("/api/delete", { method: "POST", body: JSON.stringify({ root: fileRoot, path: target }) });
+      if (!r.ok) toast((await r.json().catch(() => ({}))).error || r.statusText);
+      loadFiles();
+    });
+    return el("tr", {}, el("td", { class: "fname" }, link), el("td", { class: "num" }, e.dir ? "" : bytes(e.size)),
+      el("td", { class: "fdate" }, stamp(e.mtime)), el("td", {}, del));
+  });
+  if (!rows.length) rows.push(el("tr", {}, el("td", { colspan: "4", class: "dim" }, t("empty_folder"))));
+  table.replaceChildren(el("colgroup", {}, el("col"), el("col", { class: "c-size" }), el("col", { class: "c-date" }),
+    el("col", { class: "c-del" })), el("thead", {}, head), el("tbody", {}, ...rows));
+}
+
+// sendFile: um arquivo pelo XMLHttpRequest (o fetch nao da o progresso do
+// envio). Resolve com o status.
+function sendFile(file, overwrite) {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload?" + filesQuery(filePath) + "&name=" + encodeURIComponent(file.name) +
+      (overwrite ? "&overwrite=1" : ""));
+    xhr.setRequestHeader("X-FliperOS", "1");
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) {
+        $("upload-status").textContent = t("uploading").replace("%s", file.name)
+          .replace("%p", Math.round((100 * ev.loaded) / ev.total));
+      }
+    };
+    xhr.onload = () => resolve(xhr.status);
+    xhr.onerror = () => resolve(0);
+    xhr.send(file);
+  });
+}
+
+async function uploadFiles(files) {
+  let sent = 0;
+  for (const file of files) {
+    let status = await sendFile(file, false);
+    if (status === 409 && confirm(t("exists_overwrite").replace("%s", file.name))) status = await sendFile(file, true);
+    if (status === 401) { showLogin(); return; }
+    if (status === 200) sent++;
+    else if (status !== 409) toast(file.name + ": " + (status || "network error"));
+  }
+  $("upload-status").textContent = t("uploaded").replace("%n", sent);
+  loadFiles();
+}
+
+$("file-root").addEventListener("change", () => { fileRoot = $("file-root").value; loadFiles(""); });
+$("file-up").addEventListener("click", () => loadFiles(filePath.split("/").slice(0, -1).join("/")));
+$("file-input").addEventListener("change", () => {
+  const files = Array.from($("file-input").files);
+  $("file-input").value = "";
+  if (files.length) uploadFiles(files);
+});
+$("file-mkdir").addEventListener("click", async () => {
+  const name = prompt(t("folder_name"));
+  if (!name) return;
+  const r = await api("/api/mkdir", { method: "POST", body: JSON.stringify({ root: fileRoot, path: filePath, name }) });
+  if (!r.ok) toast((await r.json().catch(() => ({}))).error || r.statusText);
+  loadFiles();
+});
+const drop = $("file-drop");
+drop.addEventListener("dragover", (ev) => { ev.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (ev) => {
+  ev.preventDefault();
+  drop.classList.remove("over");
+  const files = Array.from(ev.dataTransfer.files || []);
+  if (files.length) uploadFiles(files);
+});
+
 // ── O laco ───────────────────────────────────────────────────────
 
 let timer = null;
@@ -503,6 +636,7 @@ function start() {
   tick();
   loadLogs().catch(() => {});
   loadSystems().catch(() => {});
+  loadFiles("").catch(() => {});
   timer = setInterval(tick, 1000);
 }
 function stop() {
