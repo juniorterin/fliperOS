@@ -10,6 +10,9 @@
 #   fliperos-sm2emu --build
 #     clona e compila, ou atualiza e compila de novo, sem perguntar nada
 #     (Setup > Games > Emulators & Games, config/fliperos-emulators).
+#   fliperos-sm2emu --outdated
+#     status 0 se ja compilado com outros patches que os desta versao do
+#     FliperOS: o update do sistema o recompila (tools/cabinet-update.sh).
 set -euo pipefail
 
 src=${FLIPEROS_SM2_SRC:-$HOME/.local/src/sm2-emu}
@@ -170,9 +173,15 @@ case ${1:-} in
     if [[ -d $src/.git ]]; then build_tree update; else build_tree; fi
     exit
     ;;
+  --outdated)
+    # Compilado, mas com outro conjunto de patches que o desta versao do
+    # FliperOS (o update do sistema o recompila: tools/cabinet-update.sh).
+    [[ -x $bin && $(cat "$stamp" 2> /dev/null) != "$(patches_id)" ]]
+    exit
+    ;;
 esac
 if [[ ${1:-} != --pick ]]; then
-  echo "Usage: fliperos-sm2emu --pick FILE | --deps | --build" >&2
+  echo "Usage: fliperos-sm2emu --pick FILE | --deps | --build | --outdated" >&2
   exit 2
 fi
 dest=${2:?}

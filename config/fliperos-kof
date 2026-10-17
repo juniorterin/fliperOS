@@ -22,6 +22,8 @@ repo=${FLIPEROS_KOF_REPO:-https://github.com/juniorterin/KOF-Final-Attack-4-3-pa
 dest=${FLIPEROS_KOF_DIR:-$HOME/roms/ikemen/kof-final-attack}
 cache=${FLIPEROS_KOF_CACHE:-$HOME/.local/share/fliperos/kof-patch}
 x11=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
+iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
+sdl_db=${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}
 exe=Ikemen_GO_Linux
 marker="Final Attack.exe"
 # A copia convertida tem cerca de 2,1 GB, mais o Ikemen GO e o PowerShell.
@@ -127,6 +129,16 @@ case ${1:-} in
       echo "KOF Final Attack is not installed: Setup > Games > Emulators & Games." >&2
       exit 1
     }
+    # Os controles do Setup > Joysticks > Button mapping: o Ikemen GO (SDL2)
+    # le o mapeamento do FliperOS ao abrir (SDL_GAMECONTROLLERCONFIG_FILE), mas
+    # logo depois soma o banco dele (GamepadMappings, external/
+    # gamecontrollerdb.txt), que vale mais para os controles que estao nele.
+    # A cada abertura, o banco dele com o do FliperOS por ultimo.
+    if [[ -f $sdl_db && -d save ]]; then
+      if { cat external/gamecontrollerdb.txt 2> /dev/null; cat "$sdl_db"; } > save/gamecontrollerdb-fliperos.txt; then
+        "$iniset" save/config.ini Config GamepadMappings save/gamecontrollerdb-fliperos.txt || true
+      fi
+    fi
     exec "./$exe" "${@:2}"
     ;;
   "")
