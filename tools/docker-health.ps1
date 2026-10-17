@@ -6,9 +6,11 @@
 # O Docker cai quando o Windows fica sem memoria comprometida (commit): os
 # programas recebem errno 1455 ("arquivo de paginacao muito pequeno") e o
 # motor do WSL para. Em 2026-10-16 o commit estava em 127,8 de 127,9 GB com
-# so ~21 GB de RAM em uso: memoria reservada de VMs derrubadas a forca, que
-# so volta reiniciando o Windows. Reiniciar o Docker ou rodar wsl --shutdown
-# nessa hora so piora (outra VM, mais memoria presa).
+# so ~21 GB de RAM em uso, ~84 GB sem dono visivel: o servico RunSwUSB da
+# Realtek (C:\Windows\runSW.exe, de um adaptador Wi-Fi USB) vazando handles,
+# 432 mil em 16 dias. Um vazamento assim aparece aqui como o processo com
+# handles demais. Reiniciar o Docker ou rodar wsl --shutdown nao devolve
+# essa memoria; parar o processo que vaza (ou reiniciar o Windows) devolve.
 #
 # Saida 0: pode usar. 1: commit acima de 85% (nao comece job pesado; feche
 # programas ou reinicie o Windows). 2: o Docker nao responde.
@@ -19,6 +21,9 @@ $uptime = (Get-Date) - $os.LastBootUpTime
 "Commit:   {0:N1} de {1:N1} GB ({2}%)" -f ($m.CommittedBytes / 1GB), ($m.CommitLimit / 1GB), $pct
 "RAM:      {0:N1} GB livres de {1:N1} GB" -f ($os.FreePhysicalMemory / 1MB), ($os.TotalVisibleMemorySize / 1MB)
 "Windows:  ligado ha {0} dias e {1} h" -f $uptime.Days, $uptime.Hours
+# Vazamento de handles: um processo normal tem ate alguns milhares.
+$leak = Get-Process | Where-Object { $_.HandleCount -gt 100000 } | Sort-Object HandleCount -Descending
+foreach ($p in $leak) { "VAZANDO:  {0} (PID {1}) com {2:N0} handles: pare esse processo/servico" -f $p.Name, $p.Id, $p.HandleCount }
 $vm = Get-CimInstance Win32_PerfFormattedData_VidPerfProvider_HyperVVMVidPartition -ErrorAction SilentlyContinue |
   Where-Object { $_.Name -ne '_Total' }
 foreach ($v in $vm) { "VM:       {0:N1} GB ({1})" -f ($v.PhysicalPagesAllocated * 4KB / 1GB), $v.Name }

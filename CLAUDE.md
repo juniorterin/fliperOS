@@ -26,8 +26,10 @@ Regras pra trabalhar nesse build:
 O Docker cai quando o Windows fica sem memória comprometida (commit): erro
 1455 ("arquivo de paginação muito pequeno") e "engine stopped unexpectedly"
 no log. Em 2026-10-16 o commit chegou a 127,8 de 127,9 GB com só ~21 GB de
-RAM em uso — memória reservada de VMs do WSL derrubadas à força, que só volta
-reiniciando o Windows. Várias sessões do Claude dividem este Docker.
+RAM em uso: o serviço RunSwUSB da Realtek (`C:\Windows\runSW.exe`, sobra de
+um adaptador Wi-Fi USB) vazava handles (432 mil em 16 dias). O
+`tools\docker-health.ps1` mostra um processo assim como VAZANDO. Várias
+sessões do Claude dividem este Docker.
 
 5. Antes de um job pesado (ISO, kernel, pacotes, as duas suítes de teste) e
    antes de reiniciar o Docker, rode
