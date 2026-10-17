@@ -19,9 +19,9 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
   - abrir e fechar jogos: **feito em 2026-10-17** (testado no gabinete: EmulationStation → Tekken Tag → VF4 → fechar, o EmulationStation volta);
   - configurações;
   - arquivos (upload e pastas): **feito em 2026-10-17** (~/roms, ~/bios, ~/media, ~/splashscreen);
-  - tarefas;
+  - tarefas: **feito em 2026-10-17** (em segundo plano, com etapa, porcentagem, log e cancelar);
   - screenshot: **feito em 2026-10-17** (jogos, frontends e menu pela camada OpenGL; o desktop pelo X);
-  - torrent com o filtro do MAME;
+  - torrent com o filtro do MAME: **feito em 2026-10-17** (o Downloader do Setup; o filtro em si continua escolhido no Setup);
   - terminal web: **feito em 2026-10-17** (xterm.js, o zsh do usuário fliperos);
   - trackball de toque pelo celular: **feito em 2026-10-17** (mouse virtual no uinput, com inércia).
 - **5c (experimental):**
