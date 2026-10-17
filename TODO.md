@@ -14,16 +14,7 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
 
 ## Painel web e API REST (fase 5)
 
-- **5a (leitura) feita em 2026-10-17:** http://fliperos.local:8080. Testada só no Docker; falta abrir no navegador com o gabinete de verdade e ver o FPS de um jogo.
-- **5b:**
-  - abrir e fechar jogos: **feito em 2026-10-17** (testado no gabinete: EmulationStation → Tekken Tag → VF4 → fechar, o EmulationStation volta);
-  - configurações;
-  - arquivos (upload e pastas): **feito em 2026-10-17** (~/roms, ~/bios, ~/media, ~/splashscreen);
-  - tarefas: **feito em 2026-10-17** (em segundo plano, com etapa, porcentagem, log e cancelar);
-  - screenshot: **feito em 2026-10-17** (jogos, frontends e menu pela camada OpenGL; o desktop pelo X);
-  - torrent com o filtro do MAME: **feito em 2026-10-17** (o Downloader do Setup; o filtro em si continua escolhido no Setup);
-  - terminal web: **feito em 2026-10-17** (xterm.js, o zsh do usuário fliperos);
-  - trackball de toque pelo celular: **feito em 2026-10-17** (mouse virtual no uinput, com inércia).
+- **5a (leitura) e 5b (controle) feitas em 2026-10-17:** http://fliperos.local:8080. Cada parte foi testada no gabinete pela API (abrir e fechar jogos, FPS, screenshot, arquivos, terminal, trackball, Downloader, configurações). Falta conferir num navegador de verdade, no PC e no celular: o layout, o terminal no Chrome e o trackball no toque.
 - **5c (experimental):**
   - transmissão por WebRTC em H.264 por hardware;
   - marquee do Pixelcade/ZeDMD como overlay para o OBS.
