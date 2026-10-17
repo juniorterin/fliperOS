@@ -4379,8 +4379,9 @@ class WebPanelTests(unittest.TestCase):
         (roms.parent / 'other/evil.zip').write_text('')
         cls.roms = roms
         # A romlist do Attract-Mode com os nomes de verdade (sem a BIOS e sem
-        # o jogo de Atomiswave da mesma pasta), os favoritos, as vezes
-        # jogadas e a tela com os filtros. Um jogo posto depois da lista entra.
+        # o jogo de Atomiswave da mesma pasta), os favoritos dele (copiados
+        # uma vez), as vezes jogadas e uma tela com filtros que o painel nao
+        # usa. Um jogo posto depois da lista entra.
         attract = tmp / '.attract'
         (attract / 'romlists').mkdir(parents=True)
         (attract / 'romlists/Naomi.txt').write_text(
@@ -4395,11 +4396,7 @@ class WebPanelTests(unittest.TestCase):
             'display\tMAME\n\tlayout               Basic\n\tromlist              MAME\n'
             '\tfilter               "Old"\n\n'
             'display\tNaomi\n\tlayout               Basic\n\tromlist              Naomi\n'
-            '\tfilter               "All Games"\n\t\tsort_by              Title\n'
-            '\tfilter               "Fighting Games"\n\t\trule                 Category equals Fight.+\n'
-            '\t\texception            Name equals Ikaruga\n'
-            '\tfilter               "Most Played"\n\t\tsort_by              PlayedTime\n\t\treverse_order        true\n'
-            '\t\tlist_limit           25\n\n')
+            '\tfilter               "Only in the frontend"\n\n')
         listed = time.time() - 100
         for name in ('vf4.zip', 'Ikaruga.zip', 'naomi.zip', 'kofxi.zip'):
             os.utime(roms / name, (listed - 10, listed - 10))
@@ -4440,6 +4437,12 @@ class WebPanelTests(unittest.TestCase):
                          '  echo "debug|System|Debug mode|choice|off|off=Off;on=On (show all text)|Shows all text."\n'
                          '  echo "color.gamma|Colour|Gamma|number|100|50..200:5|The middle greys."\nfi\n'
                          'if [ "$1" = --setting ]; then [ "$2" = nope ] && exit 2; [ "$2" = broken ] && { echo boom >&2; exit 1; }; fi\n'
+                         'if [ "$1" = --filters ]; then\n'
+                         '  printf \'\\tfilter               "All Games"\\n\\t\\tsort_by              Title\\n'
+                         '\\tfilter               "Fighting Games"\\n\\t\\trule                 Category equals Fight.+\\n'
+                         '\\t\\texception            Name equals Ikaruga\\n'
+                         '\\tfilter               "Most Played"\\n\\t\\tsort_by              PlayedTime\\n'
+                         '\\t\\treverse_order        true\\n\\t\\tlist_limit           25\\n\'\nfi\n'
                          'if [ "$1" = --systems ]; then\n'
                          '  echo \'naomi|%s|naomi|Naomi|/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z|1\'\n'
                          '  echo \'shell|%s|snes|Shell|/bin/sh|-c "[name]"|.zip|0\'\n'
@@ -4576,8 +4579,8 @@ class WebPanelTests(unittest.TestCase):
         self.assertNotIn('Favourite', games['Ikaruga'])        # favorito de outro emulador
         self.assertEqual(games['newgame'], {'Name': 'newgame', 'Title': 'newgame', 'file': 'newgame.7z'})
         self.assertTrue(data['arcade'])
-        # Os filtros da tela que mostra a romlist, como no attract.cfg.
-        self.assertEqual(data['display'], 'Naomi')
+        # Os filtros do FliperOS (fliperos-setup --filters), nao os da tela
+        # do frontend.
         self.assertEqual(data['filters'], [
             {'name': 'All Games', 'rules': [], 'sort_by': 'Title', 'reverse': False, 'limit': 0},
             {'name': 'Fighting Games', 'rules': [
@@ -4588,27 +4591,38 @@ class WebPanelTests(unittest.TestCase):
         # Sem romlist: os arquivos da pasta, pelo nome.
         shell = json.loads(self.request('GET', '/api/games?system=shell', cookie=cookie)[2])
         self.assertEqual([g['file'] for g in shell['games']], ['Ikaruga.zip', 'kofxi.zip', 'naomi.zip', 'vf4.zip'])
-        self.assertEqual((shell['display'], shell['filters'], shell['arcade']), (None, [], False))
+        self.assertEqual((shell['filters'], shell['arcade']), (data['filters'], False))
         self.assertEqual(self.request('GET', '/api/games?system=nope', cookie=cookie)[0], 404)
+        setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        self.assertIn('    --filters)\n', setup)
+        self.assertIn('      scraper_attract_filters\n', setup.split('    --filters)\n')[1].split(';;')[0])
 
-    def test_favourites_are_the_frontend_ones(self):
+    def test_favourites_are_fliperos_own_copied_from_the_frontend(self):
         cookie = self.login()
         tag = Path(self.tmp.name) / '.attract/romlists/Naomi.tag'
+        own = Path(self.tmp.name) / '.config/fliperos/favourites'
         before = tag.read_text()
         try:
             status, _, data = self.request('POST', '/api/favourite', {'system': 'naomi', 'game': 'Ikaruga', 'on': True},
                                            cookie=cookie)
             self.assertEqual((status, json.loads(data)), (200, {'game': 'Ikaruga', 'favourite': True}))
+            # O de antes veio do Attract-Mode na primeira vez.
+            self.assertEqual(own.read_text(), 'naomi\tIkaruga\nnaomi\tvf4\n')
             status, _, data = self.request('POST', '/api/favourite', {'system': 'naomi', 'game': 'vf4.zip', 'on': False},
                                            cookie=cookie)
             self.assertEqual((status, json.loads(data)), (200, {'game': 'vf4', 'favourite': False}))
-            # O do outro emulador fica; o formato e o do Attract-Mode.
-            self.assertEqual(tag.read_text(), 'Ikaruga;Other\nIkaruga;Naomi\n')
+            self.assertEqual(own.read_text(), 'naomi\tIkaruga\n')
+            # O arquivo do frontend nao muda, e o que muda nele nao volta.
+            self.assertEqual(tag.read_text(), before)
+            tag.write_text('vf4;Naomi\nIkaruga;Naomi\n')
+            games = json.loads(self.request('GET', '/api/games?system=naomi', cookie=cookie)[2])['games']
+            self.assertEqual([g['Name'] for g in games if g.get('Favourite')], ['Ikaruga'])
             for body in ({'system': 'naomi', 'game': 'kofxi', 'on': True}, {'system': 'naomi', 'game': 'vf4'},
                          {'system': 'naomi', 'game': '../other/evil', 'on': True}):
                 self.assertEqual(self.request('POST', '/api/favourite', body, cookie=cookie)[0], 400, body)
         finally:
             tag.write_text(before)
+            own.unlink()
 
     def test_game_info_from_the_arcade_database_and_libretro(self):
         cookie = self.login()

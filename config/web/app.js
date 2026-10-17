@@ -48,7 +48,7 @@ const TEXT = {
     screen: "Screen", take_shot: "Take a screenshot", as_on_tube: "4:3, as on the tube", save_png: "Save PNG",
     shot_wait: "Taking the picture…", shot_from: "%w×%h, %s · %t", shot_x11: "desktop (X)", shot_gl: "OpenGL frame",
     download: "Download",
-    files: "Files", up_folder: "Up", upload: "Upload files", new_folder: "New folder", folder_name: "Name of the new folder:",
+    files: "Files", up_folder: "Parent folder", upload: "Upload files", new_folder: "New folder", folder_name: "Name of the new folder:",
     confirm_delete: "Delete %s from the cabinet?", uploading: "Sending %s… %p%", uploaded: "Sent: %n file(s).",
     exists_overwrite: "%s already exists there. Replace it?", empty_folder: "Empty folder.", delete: "Delete",
     size: "Size", modified: "Modified", drop_hint: "You can also drop files on the list to send them to this folder.",
@@ -96,7 +96,7 @@ const TEXT = {
     screen: "Tela", take_shot: "Tirar screenshot", as_on_tube: "4:3, como no tubo", save_png: "Salvar PNG",
     shot_wait: "Tirando a foto…", shot_from: "%w×%h, %s · %t", shot_x11: "desktop (X)", shot_gl: "quadro OpenGL",
     download: "Baixar",
-    files: "Arquivos", up_folder: "Subir", upload: "Enviar arquivos", new_folder: "Nova pasta", folder_name: "Nome da pasta nova:",
+    files: "Arquivos", up_folder: "Pasta de cima", upload: "Enviar arquivos", new_folder: "Nova pasta", folder_name: "Nome da pasta nova:",
     confirm_delete: "Apagar %s do gabinete?", uploading: "Enviando %s… %p%", uploaded: "Enviado(s): %n arquivo(s).",
     exists_overwrite: "%s já existe lá. Substituir?", empty_folder: "Pasta vazia.", delete: "Apagar",
     size: "Tamanho", modified: "Modificado", drop_hint: "Também dá para soltar arquivos na lista para enviá-los a esta pasta.",
@@ -1214,7 +1214,6 @@ async function loadFiles(path) {
     crumbs.push(el("span", {}, "/"), b);
   });
   $("crumbs").replaceChildren(...crumbs);
-  $("file-up").disabled = !filePath;
 
   const table = $("files");
   const head = el("tr", {}, el("th", {}, t("name")), el("th", { class: "num" }, t("size")),
@@ -1247,6 +1246,12 @@ async function loadFiles(path) {
       el("td", { class: "fdate" }, stamp(e.mtime)), actions);
   });
   if (!rows.length) rows.push(el("tr", {}, el("td", { colspan: "4", class: "dim" }, t("empty_folder"))));
+  // Dentro de uma pasta, ".." no topo volta para a de cima.
+  if (filePath) {
+    const up = el("button", { type: "button", title: t("up_folder") }, "📁 ..");
+    up.addEventListener("click", () => loadFiles(filePath.split("/").slice(0, -1).join("/")));
+    rows.unshift(el("tr", {}, el("td", { class: "fname" }, up), el("td"), el("td", { class: "fdate" }), el("td")));
+  }
   table.replaceChildren(el("colgroup", {}, el("col"), el("col", { class: "c-size" }), el("col", { class: "c-date" }),
     el("col", { class: "c-del" })), el("thead", {}, head), el("tbody", {}, ...rows));
 }
@@ -1285,7 +1290,6 @@ async function uploadFiles(files) {
 }
 
 $("file-root").addEventListener("change", () => { fileRoot = $("file-root").value; loadFiles(""); });
-$("file-up").addEventListener("click", () => loadFiles(filePath.split("/").slice(0, -1).join("/")));
 $("file-input").addEventListener("change", () => {
   const files = Array.from($("file-input").files);
   $("file-input").value = "";

@@ -272,6 +272,12 @@ main() {
       done < <(frontends_systems)
       return 0
       ;;
+    --filters)
+      # Os filtros de jogos do FliperOS (genero, fabricante, ano), no formato
+      # do Attract-Mode: os das telas dele e os do painel web.
+      scraper_attract_filters
+      return 0
+      ;;
     --bios-check)
       # A checagem automatica das BIOS, que o menu abre em segundo plano.
       bios_auto

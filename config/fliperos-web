@@ -20,10 +20,10 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/volume  {"action": "up"|"down"|"mute"} ou {"set": 0..100}
     GET  /api/systems as pastas com jogos
     GET  /api/games?system=CHAVE  os jogos (os campos da romlist do
-                      Attract-Mode, Favourite, PlayedCount) e os filtros da tela
+                      Attract-Mode, Favourite, PlayedCount) e os filtros
     GET  /api/gameinfo?system=&game=&lang=  as informacoes da internet
                       (Arcade Database; consoles: libretro-thumbnails)
-    POST /api/favourite {"system", "game", "on"}: os favoritos do Attract-Mode
+    POST /api/favourite {"system", "game", "on"}: os favoritos do FliperOS
     POST /api/launch  {"system", "game"}: fecha o que esta na tela e abre o
                       jogo; quando ele fecha, volta o que estava
     POST /api/close   fecha o jogo aberto
@@ -541,8 +541,11 @@ def systems():
 # ── A lista de jogos: a do Attract-Mode Plus ───────────────────────
 # A romlist de cada pasta (~/.attract/romlists/EMULADOR.txt) da o nome de
 # verdade, o ano, o fabricante e o genero; as de arcade os tem do -listxml
-# (Setup > Games > AttractPlus ROM List). Os favoritos sao os do frontend
-# (romlists/EMULADOR.tag) e os filtros os da tela dele.
+# (Setup > Games > AttractPlus ROM List). Os favoritos e os filtros sao do
+# FliperOS, nao do frontend: os favoritos ficam em ~/.config/fliperos/favourites
+# (copiados uma vez dos do Attract-Mode) e os filtros sao os mesmos que o
+# Setup poe nas telas dele (fliperos-setup --filters). Um frontend proprio do
+# FliperOS usara os mesmos.
 
 ROMLIST_FIELDS = ("Name", "Title", "Emulator", "CloneOf", "Year", "Manufacturer", "Category", "Players", "Rotation",
                   "Control", "Status", "DisplayCount", "DisplayType", "AltRomname", "AltTitle", "Extra", "Buttons",
@@ -584,7 +587,7 @@ def read_romlist(system):
     return rows, real, mtime
 
 
-def favourites(system):
+def attract_favourites(system):
     """Os favoritos do Attract-Mode: as linhas "nome;emulador" (ou so o nome,
     o formato antigo) do .tag ao lado da romlist."""
     out = set()
@@ -595,43 +598,53 @@ def favourites(system):
     return out
 
 
-def set_favourite(system, name, on):
-    """Marca ou desmarca NAME nos favoritos do Attract-Mode, como ele grava
-    (sem nenhum, o arquivo sai). O Attract-Mode le o arquivo ao abrir a
-    lista."""
-    path = romlist_path(system, ".tag")
-    lines = []
-    for line in read(path).splitlines():
-        n, _, emulator = line.strip().partition(";")
-        if n and not (n == name and emulator in ("", system["name"])):
-            lines.append(line.strip())
-    if on:
-        lines.append("%s;%s" % (name, system["name"]))
-    if not lines:
-        try:
-            os.unlink(path)
-        except FileNotFoundError:
-            pass
-        return
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+FAVOURITES_LOCK = threading.Lock()
+
+
+def favourites_path():
+    return ENV("FLIPEROS_FAVOURITES") or os.path.join(player_home(), ".config", "fliperos", "favourites")
+
+
+def write_favourites(rows):
+    """Grava os favoritos ("chave<TAB>nome" por linha), do usuario."""
+    path = favourites_path()
+    folder = os.path.dirname(path)
+    if not os.path.isdir(folder):
+        os.makedirs(folder)
+        give_to_player(folder)
     tmp = "%s.%d.tmp" % (path, os.getpid())
     with open(tmp, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+        f.write("".join("%s\t%s\n" % row for row in sorted(rows)))
     give_to_player(tmp)
     os.replace(tmp, path)
 
 
-def tags(system):
-    """{nome: [tags]} das tags do Attract-Mode (romlists/EMULADOR/TAG.tag)."""
-    out = {}
-    folder = os.path.join(attract_dir(), "romlists", system["name"].replace("/", "-"))
-    for path in glob.glob(os.path.join(folder, "*.tag")):
-        tag = os.path.splitext(os.path.basename(path))[0]
-        for line in read(path).splitlines():
-            name, _, emulator = line.strip().partition(";")
-            if name and emulator in ("", system["name"]):
-                out.setdefault(name, []).append(tag)
-    return out
+def read_favourites(all_systems):
+    """{(chave da pasta, nome)}. Sem o arquivo ainda, os do Attract-Mode sao
+    copiados para ele; dali em diante o Attract-Mode nao conta mais."""
+    path = favourites_path()
+    if not os.path.exists(path):
+        if not isinstance(all_systems, list):
+            return set()            # a lista das pastas falhou: copia depois
+        rows = {(s["key"], n) for s in all_systems for n in attract_favourites(s)}
+        write_favourites(rows)
+        return rows
+    return {tuple(line.split("\t", 1)) for line in read(path).splitlines() if "\t" in line}
+
+
+def favourite_set(all_systems):
+    with FAVOURITES_LOCK:
+        return read_favourites(all_systems)
+
+
+def set_favourite(all_systems, system, name, on):
+    with FAVOURITES_LOCK:
+        rows = read_favourites(all_systems)
+        rows.discard((system["key"], name))
+        if on:
+            rows.add((system["key"], name))
+        write_favourites(rows)
+        return (system["key"], name) in rows
 
 
 def play_stats(system):
@@ -668,7 +681,7 @@ def game_files(system):
     return out
 
 
-def games(system):
+def games(system, favs=frozenset()):
     """Os jogos do sistema: as linhas da romlist do Attract-Mode com o
     arquivo na pasta (a romlist de arcade nao tem as BIOS nem os jogos de
     outro sistema do Flycast que estao na mesma pasta), os clones sem
@@ -698,48 +711,29 @@ def games(system):
             except OSError:
                 continue
         out.append({"Name": name, "Title": name, "file": file})
-    fav, tagged, stats = favourites(system), tags(system), play_stats(system)
+    stats = play_stats(system)
     for entry in out:
         name = entry["Name"]
-        if name in fav:
+        if (system["key"], name) in favs:
             entry["Favourite"] = "1"
-        if name in tagged:
-            entry["Tags"] = ";" + ";".join(tagged[name]) + ";"
         if name in stats:
             entry["PlayedCount"], entry["PlayedTime"] = stats[name]
     out.sort(key=lambda e: (e.get("Title") or e["Name"]).lower())
     return out
 
 
-def displays_file():
-    base = attract_dir()
-    if os.path.isfile(os.path.join(base, "config", "attract.cfg")):
-        return os.path.join(base, "config", "displays.cfg")
-    return os.path.join(base, "attract.cfg")
-
-
-def display_filters(system):
-    """(tela, [filtros]) da primeira tela do Attract-Mode que mostra a
-    romlist do sistema: cada filtro com as regras (campo, comparacao, o
-    que, excecao), a ordem e o limite, como no attract.cfg."""
-    romlist = system["name"].replace("/", "-")
-    display, chosen, filters, current = None, None, [], None
-    for raw in read(displays_file()).splitlines():
+def parse_filters(text):
+    """Os filtros no formato do Attract-Mode (filter "NOME", e dentro rule
+    CAMPO COMPARACAO VALOR, exception, sort_by, reverse_order, list_limit):
+    cada um com as regras, a ordem e o limite."""
+    filters, current = [], None
+    for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        if not raw[0].isspace():
-            if chosen:
-                break
-            display, filters, current = (line.split(None, 1) + [""])[1] if line.startswith("display") else None, [], None
-            continue
-        if display is None:
-            continue
         key, value = (line.split(None, 1) + [""])[:2]
         value = value.strip()
-        if key == "romlist" and value == romlist:
-            chosen = display
-        elif key == "filter":
+        if key == "filter":
             current = {"name": value.strip('"'), "rules": [], "sort_by": "", "reverse": False, "limit": 0}
             filters.append(current)
         elif current is not None and key in ("rule", "exception"):
@@ -756,7 +750,14 @@ def display_filters(system):
                 current["limit"] = int(value)
             except ValueError:
                 pass
-    return (chosen, filters) if chosen else (None, [])
+    return filters
+
+
+def setup_filters():
+    """Os filtros do FliperOS: os mesmos que o Setup poe em cada tela do
+    Attract-Mode (scraper_attract_filters, lib/scraper.sh)."""
+    out = subprocess.run([SETUP, "--filters"], capture_output=True, text=True, timeout=60).stdout
+    return parse_filters(out)
 
 
 def game_entry(system, name):
@@ -1479,6 +1480,7 @@ class Panel:
         self.disks = Cached(10, disks)
         self.systems = Cached(60, systems)
         self.gameinfo = GameInfo()
+        self.filters = Cached(600, setup_filters)
         self.mouse = VirtualMouse()
         self.tasks = Tasks()
         self.downloader = Cached(3, downloader_status)
@@ -1664,9 +1666,10 @@ class Handler(BaseHTTPRequestHandler):
             system = self.panel.system((parse_qs(url.query).get("system") or [""])[0])
             if not system:
                 return self.send(404, {"error": "no such system"})
-            display, filters = display_filters(system)
-            return self.send(200, {"system": system["key"], "arcade": system["arcade"], "games": games(system),
-                                   "display": display, "filters": filters})
+            filters = self.panel.filters.get()
+            favs = favourite_set(self.panel.systems.get())
+            return self.send(200, {"system": system["key"], "arcade": system["arcade"], "games": games(system, favs),
+                                   "filters": filters if isinstance(filters, list) else []})
         if url.path == "/api/gameinfo":
             query = parse_qs(url.query)
             system = self.panel.system((query.get("system") or [""])[0])
@@ -1735,10 +1738,10 @@ class Handler(BaseHTTPRequestHandler):
             if not entry or not isinstance(data.get("on"), bool):
                 return self.send(400, {"error": "no such game, or no on: true|false"})
             try:
-                set_favourite(system, entry["Name"], data["on"])
+                on = set_favourite(self.panel.systems.get(), system, entry["Name"], data["on"])
             except OSError as exc:
                 return self.send(500, {"error": str(exc)})
-            return self.send(200, {"game": entry["Name"], "favourite": entry["Name"] in favourites(system)})
+            return self.send(200, {"game": entry["Name"], "favourite": on})
         if url.path == "/api/close":
             return self.send(200, self.panel.close_game())
         if url.path == "/api/upload":
