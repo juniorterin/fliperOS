@@ -10,7 +10,7 @@ const TEXT = {
     user: "User", password: "Password", enter: "Sign in", logout: "Sign out",
     offline: "The cabinet is not answering. Retrying…", now_playing: "Now playing",
     nothing: "Nothing open", frontend: "Frontend", fps_note: "Last minute, from the OpenGL layer of the game.",
-    video: "Video", memory: "Memory", disks: "Disks", network: "Network", volume: "Volume", mute: "Mute / unmute",
+    video: "Video", memory: "Memory", storage: "Storage", network: "Network", volume: "Volume", mute: "Mute / unmute",
     processes: "Processes", logs: "Logs", refresh: "Refresh", wanted: "Asked in Video Setup", applied: "On screen now",
     monitor: "Monitor", frequency: "Frequency", resolution: "Resolution", connector: "Connector",
     orientation: "Orientation", mode: "Mode", hsync: "Horizontal", vsync: "Vertical", scan: "Scan",
@@ -26,7 +26,7 @@ const TEXT = {
     user: "Usuário", password: "Senha", enter: "Entrar", logout: "Sair",
     offline: "O gabinete não está respondendo. Tentando de novo…", now_playing: "Jogando agora",
     nothing: "Nada aberto", frontend: "Frontend", fps_note: "Último minuto, da camada OpenGL do jogo.",
-    video: "Vídeo", memory: "Memória", disks: "Discos", network: "Rede", volume: "Volume", mute: "Mudo / som",
+    video: "Vídeo", memory: "Memória", storage: "Armazenamento", network: "Rede", volume: "Volume", mute: "Mudo / som",
     processes: "Processos", logs: "Logs", refresh: "Atualizar", wanted: "Pedido no Video Setup", applied: "Na tela agora",
     monitor: "Monitor", frequency: "Frequência", resolution: "Resolução", connector: "Conector",
     orientation: "Orientação", mode: "Modo", hsync: "Horizontal", vsync: "Vertical", scan: "Varredura",
@@ -233,13 +233,14 @@ function render(s) {
     return el("div", { class: "item" }, ...lines);
   }));
 
-  // Memoria e discos.
+  // Memoria.
   const m = s.memory || {};
   $("memory").replaceChildren(
     el("div", { class: "row" }, el("span", {}, bytes(m.used) + " " + t("of") + " " + bytes(m.total)),
       el("span", { class: "dim" }, m.total ? Math.round((100 * m.used) / m.total) + "%" : "")),
     meter(m.total ? (100 * m.used) / m.total : 0),
     m.swap_total ? el("div", { class: "dim" }, t("swap") + " " + bytes(m.swap_used) + " " + t("of") + " " + bytes(m.swap_total)) : "");
+  // Armazenamento: cada disco montado.
   $("disks").replaceChildren(...(Array.isArray(s.disks) ? s.disks : []).map((d) => el("div", { class: "item" },
     el("div", { class: "row" }, el("span", {}, d.mount), el("span", { class: "dim" }, bytes(d.used) + " / " + bytes(d.total))),
     meter(d.total ? (100 * d.used) / d.total : 0))));
