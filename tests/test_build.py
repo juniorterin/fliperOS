@@ -5679,14 +5679,19 @@ class FightcadeTests(unittest.TestCase):
                                capture_output=True, timeout=120)
             self.assertTrue(os.access(root / 'opt/fliperos/bin/fliperos-fightcade', os.X_OK))
             self.assertTrue((root / 'etc/fliperos/openbox-fightcade.xml').is_file())
-            self.assertEqual((root / 'etc/fliperos/emulator-modes.conf').read_text(),
-                             'flycast             640x240@60      640x480@60\n'
-                             'fightcade-fc1       640x240@60      640x480@60\n'
-                             'fightcade           512x448@60      640x480@60\n'
-                             'fightcade-fbneo     320x240@60      640x480@60\n'
-                             'fightcade-snes9x    256x224@60.0988 640x480@60\n'
-                             'fightcade-flycast   640x240@60      640x480@60\n'
-                             'sm2-emu             640x240@57.524  496x384@57.524\n')
+            # As que faltam vem do config/, na ordem dele (todo programa, nao so
+            # o Fightcade: o DuckStation, baixado depois, abriria em 320x240).
+            table = (root / 'etc/fliperos/emulator-modes.conf').read_text().splitlines()
+            self.assertEqual(table[:2], ['flycast             640x240@60      640x480@60',
+                                         'fightcade-fc1       640x240@60      640x480@60'])
+            shipped = [l for l in (ROOT / 'config/fliperos-emulator-modes.conf').read_text().splitlines()
+                       if l and not l.startswith('#')]
+            self.assertEqual(table[2:], [l for l in shipped if l.split()[0] not in ('flycast', 'fightcade-fc1')])
+            for line in ('fightcade           512x448@60      640x480@60',
+                         'fightcade-snes9x    256x224@60.0988 640x480@60',
+                         'sm2-emu             640x240@57.524  496x384@57.524',
+                         'duckstation         640x240@60      640x480@60'):
+                self.assertIn(line, table)
             # O SNES9x de fabrica antigo (320x240) passa ao modo do console; um mudado fica.
             for old, new in (('320x240@60      640x480@60', '256x224@60.0988 640x480@60'),
                              ('320x240@60      320x240@60', '320x240@60      320x240@60')):

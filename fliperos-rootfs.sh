@@ -89,17 +89,13 @@ sed -i -E 's/^(supermodel|fliperos-model2)( +)496x384@57\.524  496x384@57\.524$/
 sed -i -E -e 's/^fightcade-snes9x    320x240@60      640x480@60$/fightcade-snes9x    256x224@60.0988 640x480@60/' \
   -e 's/^fightcade           640x480@60      640x480@60$/fightcade           512x448@60      640x480@60/' \
   "$root/etc/fliperos/emulator-modes.conf"
-# Tabelas de antes do Fightcade ganham as linhas dele, as do config/: a da
-# sala de jogos (640x480: nao cabe em 240 linhas; sem ela o fliperos-x11-run
-# o abriria em 320x240) e a de cada emulador das partidas.
+# Uma tabela de antes de um programa (o Fightcade, o SM2-Emu, o DuckStation)
+# ganha a linha dele, a do config/: sem ela o fliperos-x11-run o abriria em
+# 320x240. A linha que ja existe, mudada pela pessoa ou nao, fica.
 while IFS= read -r line; do
   grep -q "^${line%%[[:space:]]*}[[:space:]]" "$root/etc/fliperos/emulator-modes.conf" ||
     printf '%s\n' "$line" >> "$root/etc/fliperos/emulator-modes.conf"
-done < <(grep '^fightcade' "$src/config/fliperos-emulator-modes.conf")
-# SM2-Emu: o modo, numa tabela de antes dele. A linha mudada pela pessoa fica.
-line=$(grep '^sm2-emu[[:space:]]' "$src/config/fliperos-emulator-modes.conf" || true)
-[[ -z $line ]] || grep -q '^sm2-emu[[:space:]]' "$root/etc/fliperos/emulator-modes.conf" ||
-  printf '%s\n' "$line" >> "$root/etc/fliperos/emulator-modes.conf"
+done < <(grep -E '^[^#[:space:]]+[[:space:]]' "$src/config/fliperos-emulator-modes.conf")
 # Model 2 no Wine: no PATH, para os frontends tambem chamarem.
 install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model2"
 # SM2-Emu: so o lancador. O fonte e o binario nascem em ~/.local/src na
@@ -225,13 +221,13 @@ install -Dm644 "$src/config/fliperos-downloader-magnets" "$root/usr/local/share/
 # torrent, so os dos jogos das pastas, pelo mesmo Transmission.
 install -Dm755 "$src/config/fliperos-mediapacks" "$root/opt/fliperos/bin/fliperos-mediapacks"
 install -Dm644 "$src/config/fliperos-media-torrents" "$root/usr/local/share/fliperos/media-torrents"
-# Updates sem ISO nova (patches do updates/index, em ordem), perguntados no
-# boot pelo fliperos-tty1.
-install -Dm755 "$src/config/fliperos-update" "$root/opt/fliperos/bin/fliperos-update"
 # Setup > Games > Downloader > Download BIOS: as BIOS que faltam aos jogos das
 # pastas, uma a uma, do pacote de referencia (um torrent do archive.org).
 install -Dm755 "$src/config/fliperos-bios" "$root/opt/fliperos/bin/fliperos-bios"
 install -Dm644 "$src/config/fliperos-bios-pack" "$root/usr/local/share/fliperos/bios-pack"
+# Updates sem ISO nova (patches do updates/index, em ordem), perguntados no
+# boot pelo fliperos-tty1.
+install -Dm755 "$src/config/fliperos-update" "$root/opt/fliperos/bin/fliperos-update"
 # catver.ini, nplayers.ini e controls.xml do ROM cleaner (config/romclean):
 # os desta pasta valem quando o romset nao traz os dele (lib/romclean.sh); e
 # onde ele guarda o que leu do XML do MAME.
