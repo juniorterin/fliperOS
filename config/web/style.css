@@ -188,14 +188,46 @@ td.num, th.num { text-align: right; }
 /* Terminal: o xterm.js (config/web/xterm.js). */
 .term { margin-top: 10px; background: #191a21; border-radius: 8px; padding: 6px; overflow: hidden; }
 
-/* Jogos: o sistema, a busca e a lista com o botao de abrir. */
+/* Jogos: o sistema, a busca com o filtro da tela do Attract-Mode no fim e
+   a lista; cada jogo abre (um por vez) com as informacoes, Jogar e
+   Favoritar. */
 .games-bar { display: flex; flex-wrap: wrap; gap: 8px; }
-.games-bar select { flex: 1 1 200px; min-width: 0; }
-.games-bar input { flex: 2 1 220px; min-width: 0; }
-.games { list-style: none; margin: 10px 0 0; padding: 0; max-height: 420px; overflow: auto; }
-.games li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
-.games li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.games li button { padding: 4px 12px; flex: none; }
+.games-bar > select { flex: 1 1 200px; min-width: 0; }
+.search-group { flex: 2 1 300px; min-width: 0; display: flex; }
+.search-group input { flex: 1 1 auto; min-width: 0; border-radius: 8px 0 0 8px; }
+.search-group select { flex: 0 1 auto; max-width: 48%; min-width: 0; border-left: 0; border-radius: 0 8px 8px 0;
+  color: var(--purple); }
+.games { list-style: none; margin: 10px 0 0; padding: 0; max-height: 640px; overflow: auto; }
+.games li { border-bottom: 1px solid var(--line); }
+.game-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 4px; background: transparent;
+  border: 0; border-radius: 0; color: var(--fg); font-weight: 500; text-align: left; }
+.game-head:hover { background: var(--bg-deep); }
+.game-head .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-head .meta { flex: none; color: var(--dim); font-size: 13px; max-width: 40%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.game-head .star { flex: none; color: var(--yellow); width: 1em; }
+.game-head .chev { flex: none; color: var(--dim); transition: transform .2s; }
+.game-head[aria-expanded="true"] .chev { transform: rotate(90deg); color: var(--pink); }
+.game-head[aria-expanded="true"] .title { color: var(--pink); }
+.game-body { padding: 4px 4px 14px; display: grid; gap: 12px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 6px 16px;
+  margin: 0; }
+.facts div { min-width: 0; }
+.facts dt { color: var(--dim); font-size: 12px; }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+.pics { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.pics figure { margin: 0; flex: none; }
+.pics img { height: 150px; width: auto; max-width: 260px; object-fit: contain; border-radius: 6px; background: #000;
+  display: block; }
+.pics figcaption { font-size: 12px; color: var(--dim); text-align: center; }
+.history { max-height: 260px; overflow: auto; white-space: pre-wrap; background: var(--bg-deep); border-radius: 8px;
+  padding: 10px; font-size: 14px; margin: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 6px; }
+.controls .tag i { display: inline-block; width: .8em; height: .8em; border-radius: 50%; margin-right: 5px;
+  vertical-align: -1px; border: 1px solid var(--line); }
+.game-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.game-actions .fav.on { color: var(--yellow); border-color: var(--yellow); }
+.links { display: flex; flex-wrap: wrap; gap: 12px; font-size: 14px; }
 button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); max-width: calc(100% - 32px);
   background: var(--bg-deep); border: 1px solid var(--purple); border-radius: 10px; padding: 10px 16px; z-index: 5; }

@@ -264,8 +264,12 @@ main() {
       ;;
     --systems)
       # As pastas com jogos e o comando de cada uma (lib/frontends.sh): o
-      # painel web (config/fliperos-web, Games).
-      frontends_systems
+      # painel web (config/fliperos-web, Games), com "|1" no fim das de
+      # arcade (sets do MAME: o painel busca as informacoes pelo nome do set).
+      local line
+      while IFS= read -r line; do
+        if scraper_arcade "${line%%|*}"; then printf '%s|1\n' "$line"; else printf '%s|0\n' "$line"; fi
+      done < <(frontends_systems)
       return 0
       ;;
     --bios-check)

@@ -18,7 +18,12 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     GET  /api/status  o estado inteiro (o painel pede a cada 2 s)
     GET  /api/logs    os logs    GET /api/log?name=NOME&lines=N
     POST /api/volume  {"action": "up"|"down"|"mute"} ou {"set": 0..100}
-    GET  /api/systems as pastas com jogos   GET /api/games?system=CHAVE
+    GET  /api/systems as pastas com jogos
+    GET  /api/games?system=CHAVE  os jogos (os campos da romlist do
+                      Attract-Mode, Favourite, PlayedCount) e os filtros da tela
+    GET  /api/gameinfo?system=&game=&lang=  as informacoes da internet
+                      (Arcade Database; consoles: libretro-thumbnails)
+    POST /api/favourite {"system", "game", "on"}: os favoritos do Attract-Mode
     POST /api/launch  {"system", "game"}: fecha o que esta na tela e abre o
                       jogo; quando ele fecha, volta o que estava
     POST /api/close   fecha o jogo aberto
@@ -67,6 +72,7 @@ import subprocess
 import termios
 import threading
 import time
+import urllib.request
 import zlib
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -527,35 +533,328 @@ def systems():
         if len(parts) >= 7:
             key, folder, platform, name, exe, args, exts = parts[:7]
             rows.append({"key": key, "folder": folder, "platform": platform, "name": name, "exe": exe,
-                         "args": args, "extensions": [e.lower() for e in exts.split(";") if e]})
+                         "args": args, "extensions": [e.lower() for e in exts.split(";") if e],
+                         "arcade": len(parts) > 7 and parts[7] == "1"})
     return rows
 
 
-def games(system):
-    """Os arquivos de jogo da pasta do sistema (so o primeiro nivel)."""
+# ── A lista de jogos: a do Attract-Mode Plus ───────────────────────
+# A romlist de cada pasta (~/.attract/romlists/EMULADOR.txt) da o nome de
+# verdade, o ano, o fabricante e o genero; as de arcade os tem do -listxml
+# (Setup > Games > AttractPlus ROM List). Os favoritos sao os do frontend
+# (romlists/EMULADOR.tag) e os filtros os da tela dele.
+
+ROMLIST_FIELDS = ("Name", "Title", "Emulator", "CloneOf", "Year", "Manufacturer", "Category", "Players", "Rotation",
+                  "Control", "Status", "DisplayCount", "DisplayType", "AltRomname", "AltTitle", "Extra", "Buttons",
+                  "Series", "Language", "Region", "Rating")
+
+
+def player_home():
+    return ENV("FLIPEROS_HOME") or pwd.getpwnam(PLAYER).pw_dir
+
+
+def attract_dir():
+    return ENV("FLIPEROS_ATTRACT_DIR") or os.path.join(player_home(), ".attract")
+
+
+def romlist_path(system, ext=".txt"):
+    return os.path.join(attract_dir(), "romlists", system["name"].replace("/", "-") + ext)
+
+
+def read_romlist(system):
+    """({Name: {campo: valor}} na ordem da lista, a lista tem os nomes de
+    verdade?, quando foi gravada)."""
+    path = romlist_path(system)
+    rows, fields, real = {}, ROMLIST_FIELDS, False
+    try:
+        mtime = os.stat(path).st_mtime
+    except OSError:
+        return rows, False, 0
+    for line in read(path).splitlines():
+        if line.startswith("#"):
+            if not rows:
+                fields = tuple(line[1:].split(";"))
+            continue
+        values = line.split(";")
+        if len(values) < 2 or not values[0]:
+            continue
+        row = {k: v for k, v in zip(fields, values) if v}
+        rows[values[0]] = row
+        real = real or values[1] != values[0]
+    return rows, real, mtime
+
+
+def favourites(system):
+    """Os favoritos do Attract-Mode: as linhas "nome;emulador" (ou so o nome,
+    o formato antigo) do .tag ao lado da romlist."""
+    out = set()
+    for line in read(romlist_path(system, ".tag")).splitlines():
+        name, _, emulator = line.strip().partition(";")
+        if name and emulator in ("", system["name"]):
+            out.add(name)
+    return out
+
+
+def set_favourite(system, name, on):
+    """Marca ou desmarca NAME nos favoritos do Attract-Mode, como ele grava
+    (sem nenhum, o arquivo sai). O Attract-Mode le o arquivo ao abrir a
+    lista."""
+    path = romlist_path(system, ".tag")
+    lines = []
+    for line in read(path).splitlines():
+        n, _, emulator = line.strip().partition(";")
+        if n and not (n == name and emulator in ("", system["name"])):
+            lines.append(line.strip())
+    if on:
+        lines.append("%s;%s" % (name, system["name"]))
+    if not lines:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    give_to_player(tmp)
+    os.replace(tmp, path)
+
+
+def tags(system):
+    """{nome: [tags]} das tags do Attract-Mode (romlists/EMULADOR/TAG.tag)."""
+    out = {}
+    folder = os.path.join(attract_dir(), "romlists", system["name"].replace("/", "-"))
+    for path in glob.glob(os.path.join(folder, "*.tag")):
+        tag = os.path.splitext(os.path.basename(path))[0]
+        for line in read(path).splitlines():
+            name, _, emulator = line.strip().partition(";")
+            if name and emulator in ("", system["name"]):
+                out.setdefault(name, []).append(tag)
+    return out
+
+
+def play_stats(system):
+    """{nome: (vezes, segundos)} de ~/.attract/stats/EMULADOR/NOME.stat."""
+    out = {}
+    folder = os.path.join(attract_dir(), "stats", system["name"])
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return out
+    for n in names:
+        if n.endswith(".stat"):
+            lines = read(os.path.join(folder, n)).splitlines()
+            count, played = (lines + ["0", "0"])[:2]
+            out[n[:-5]] = (int(count) if count.strip().isdigit() else 0, int(played) if played.strip().isdigit() else 0)
+    return out
+
+
+def game_files(system):
+    """{nome sem extensao: arquivo} dos jogos da pasta (so o primeiro
+    nivel; de dois arquivos com o mesmo nome vale a primeira extensao)."""
     try:
         names = os.listdir(system["folder"])
     except OSError:
-        return []
-    exts = tuple(system["extensions"])
-    return sorted((n for n in names if not n.startswith(".") and n.lower().endswith(exts)
-                   and os.path.isfile(os.path.join(system["folder"], n))), key=str.lower)
+        return {}
+    exts = system["extensions"]
+    out = {}
+    for ext in exts:
+        for n in sorted(names, key=str.lower):
+            if not n.startswith(".") and n.lower().endswith(ext) and len(n) > len(ext):
+                stem = n[:-len(ext)]
+                if stem not in out and os.path.isfile(os.path.join(system["folder"], n)):
+                    out[stem] = n
+    return out
+
+
+def games(system):
+    """Os jogos do sistema: as linhas da romlist do Attract-Mode com o
+    arquivo na pasta (a romlist de arcade nao tem as BIOS nem os jogos de
+    outro sistema do Flycast que estao na mesma pasta), os clones sem
+    arquivo de um romset merged (so onde o jogo abre pelo nome) e os
+    arquivos que a romlist nao tem. Da lista de arcade com os nomes de
+    verdade, so os arquivos postos depois dela."""
+    files = game_files(system)
+    rows, real, mtime = read_romlist(system)
+    by_name = "[romfilename]" not in system["args"]
+    out, seen = [], set()
+    for name, row in rows.items():
+        file = files.get(name)
+        if file or (real and by_name and row.get("CloneOf")):
+            entry = dict(row, Name=name)
+            entry.pop("Emulator", None)
+            if file:
+                entry["file"] = file
+            out.append(entry)
+            seen.add(name)
+    for name, file in files.items():
+        if name in seen:
+            continue
+        if real and rows:
+            try:
+                if os.stat(os.path.join(system["folder"], file)).st_mtime <= mtime:
+                    continue
+            except OSError:
+                continue
+        out.append({"Name": name, "Title": name, "file": file})
+    fav, tagged, stats = favourites(system), tags(system), play_stats(system)
+    for entry in out:
+        name = entry["Name"]
+        if name in fav:
+            entry["Favourite"] = "1"
+        if name in tagged:
+            entry["Tags"] = ";" + ";".join(tagged[name]) + ";"
+        if name in stats:
+            entry["PlayedCount"], entry["PlayedTime"] = stats[name]
+    out.sort(key=lambda e: (e.get("Title") or e["Name"]).lower())
+    return out
+
+
+def displays_file():
+    base = attract_dir()
+    if os.path.isfile(os.path.join(base, "config", "attract.cfg")):
+        return os.path.join(base, "config", "displays.cfg")
+    return os.path.join(base, "attract.cfg")
+
+
+def display_filters(system):
+    """(tela, [filtros]) da primeira tela do Attract-Mode que mostra a
+    romlist do sistema: cada filtro com as regras (campo, comparacao, o
+    que, excecao), a ordem e o limite, como no attract.cfg."""
+    romlist = system["name"].replace("/", "-")
+    display, chosen, filters, current = None, None, [], None
+    for raw in read(displays_file()).splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not raw[0].isspace():
+            if chosen:
+                break
+            display, filters, current = (line.split(None, 1) + [""])[1] if line.startswith("display") else None, [], None
+            continue
+        if display is None:
+            continue
+        key, value = (line.split(None, 1) + [""])[:2]
+        value = value.strip()
+        if key == "romlist" and value == romlist:
+            chosen = display
+        elif key == "filter":
+            current = {"name": value.strip('"'), "rules": [], "sort_by": "", "reverse": False, "limit": 0}
+            filters.append(current)
+        elif current is not None and key in ("rule", "exception"):
+            parts = value.split(None, 2)
+            if len(parts) >= 2:
+                current["rules"].append({"field": parts[0], "op": parts[1], "what": parts[2] if len(parts) > 2 else "",
+                                         "exception": key == "exception"})
+        elif current is not None and key == "sort_by":
+            current["sort_by"] = value
+        elif current is not None and key == "reverse_order":
+            current["reverse"] = value == "true"
+        elif current is not None and key == "list_limit":
+            try:
+                current["limit"] = int(value)
+            except ValueError:
+                pass
+    return (chosen, filters) if chosen else (None, [])
+
+
+def game_entry(system, name):
+    """A linha do jogo NAME (o nome do set ou o arquivo) do sistema."""
+    if not name or name != os.path.basename(name):
+        return None
+    return next((g for g in games(system) if g["Name"] == name or g.get("file") == name), None)
 
 
 def game_command(system, name):
     """O comando do jogo, como o frontend o montaria ([romfilename] e [name]
-    do Attract-Mode). None: o arquivo nao e da pasta, ou o comando nao e um
+    do Attract-Mode). None: o jogo nao e da pasta, ou o comando nao e um
     dos lancadores do FliperOS."""
-    if name != os.path.basename(name) or name not in games(system):
+    entry = game_entry(system, name)
+    if not entry:
         return None
-    path = os.path.join(system["folder"], name)
-    stem = os.path.splitext(name)[0]
+    path = os.path.join(system["folder"], entry.get("file") or entry["Name"] + (system["extensions"] or [""])[0])
     try:
         argv = shlex.split(system["exe"]) + shlex.split(system["args"])
     except ValueError:
         return None
-    argv = [a.replace("[romfilename]", path).replace("[name]", stem) for a in argv]
+    argv = [a.replace("[romfilename]", path).replace("[name]", entry["Name"]) for a in argv]
     return argv if argv and argv[0] in LAUNCHERS else None
+
+
+# ── As informacoes de um jogo, da internet ─────────────────────────
+# Arcade: o Arcade Database (adb.arcadeitalia.net) pelo nome do set: titulo,
+# historia, genero, serie, botoes, imagens e video. Ele nao manda CORS, entao
+# o painel pede por aqui; o navegador guarda a resposta. Consoles: as
+# imagens do libretro-thumbnails pelo nome do arquivo (No-Intro).
+ADB_URL = ENV("FLIPEROS_ADB_URL", "https://adb.arcadeitalia.net/service_scraper.php")
+ADB_ORIGIN = "https://adb.arcadeitalia.net"
+ADB_FIELDS = ("title", "short_title", "cloneof", "manufacturer", "year", "genre", "players", "nplayers", "status",
+              "serie", "rate", "history", "history_copyright_short", "input_controls", "input_buttons",
+              "buttons_colors", "screen_orientation", "screen_resolution", "languages", "url", "url_image_ingame",
+              "url_image_title", "url_image_marquee", "url_image_cabinet", "url_image_flyer", "url_video_shortplay",
+              "youtube_video_id")
+THUMBS_URL = "https://thumbnails.libretro.com"
+# Plataforma (a do Skyscraper, scraper.sh) -> a lista do libretro-thumbnails.
+THUMB_SYSTEMS = {
+    "snes": "Nintendo - Super Nintendo Entertainment System", "nes": "Nintendo - Nintendo Entertainment System",
+    "psx": "Sony - PlayStation", "ps2": "Sony - PlayStation 2", "psp": "Sony - PlayStation Portable",
+    "gb": "Nintendo - Game Boy", "gbc": "Nintendo - Game Boy Color", "gba": "Nintendo - Game Boy Advance",
+    "n64": "Nintendo - Nintendo 64", "nds": "Nintendo - Nintendo DS", "3ds": "Nintendo - Nintendo 3DS",
+    "gc": "Nintendo - GameCube", "virtualboy": "Nintendo - Virtual Boy", "pokemini": "Nintendo - Pokemon Mini",
+    "megadrive": "Sega - Mega Drive - Genesis", "mastersystem": "Sega - Master System - Mark III",
+    "saturn": "Sega - Saturn", "dreamcast": "Sega - Dreamcast", "neogeocd": "SNK - Neo Geo CD",
+    "ngpc": "SNK - Neo Geo Pocket Color", "pcengine": "NEC - PC Engine - TurboGrafx 16", "pcfx": "NEC - PC-FX",
+    "wonderswancolor": "Bandai - WonderSwan Color", "atari2600": "Atari - 2600", "atari5200": "Atari - 5200",
+    "atari7800": "Atari - 7800", "atarilynx": "Atari - Lynx", "atarijaguar": "Atari - Jaguar",
+    "atarist": "Atari - ST", "amiga": "Commodore - Amiga", "c64": "Commodore - 64", "vic20": "Commodore - VIC-20",
+    "plus4": "Commodore - Plus-4", "coleco": "Coleco - ColecoVision", "intellivision": "Mattel - Intellivision",
+    "vectrex": "GCE - Vectrex", "videopac": "Magnavox - Odyssey2", "channelf": "Fairchild - Channel F",
+    "msx": "Microsoft - MSX", "amstradcpc": "Amstrad - CPC", "zxspectrum": "Sinclair - ZX Spectrum",
+    "x68000": "Sharp - X68000", "pc98": "NEC - PC-98", "pc": "DOS", "3do": "The 3DO Company - 3DO",
+    "cdi": "Philips - CD-i", "scummvm": "ScummVM",
+}
+
+
+class GameInfo:
+    """As respostas do Arcade Database por algumas horas (outro navegador,
+    o mesmo jogo)."""
+
+    def __init__(self, seconds=6 * 3600, size=500):
+        self.seconds, self.size = seconds, size
+        self.lock = threading.Lock()
+        self.cache = collections.OrderedDict()
+
+    def arcade(self, name, lang):
+        key = (name, lang)
+        with self.lock:
+            hit = self.cache.get(key)
+            if hit and time.monotonic() - hit[0] < self.seconds:
+                return hit[1]
+        url = "%s?ajax=query_mame&game_name=%s&lang=%s" % (ADB_URL, quote(name), lang)
+        request = urllib.request.Request(url, headers={"User-Agent": "FliperOS web panel"})
+        with urllib.request.urlopen(request, timeout=10) as res:
+            data = json.loads(res.read(2 << 20).decode("utf-8", "replace"))
+        rows = data.get("result") or []
+        info = None
+        if rows:
+            info = {k: rows[0][k] for k in ADB_FIELDS if rows[0].get(k) not in (None, "")}
+        with self.lock:
+            self.cache[key] = (time.monotonic(), info)
+            while len(self.cache) > self.size:
+                self.cache.popitem(last=False)
+        return info
+
+
+def thumbnails(system, entry):
+    """As imagens do libretro-thumbnails do jogo (capa, tela, titulo), pelo
+    nome do arquivo, como o RetroArch procura."""
+    playlist = THUMB_SYSTEMS.get(system["platform"])
+    if not playlist:
+        return []
+    name = re.sub(r'[&*/:`<>?\\|"]', "_", os.path.splitext(entry.get("file") or entry["Name"])[0])
+    return [{"kind": kind, "url": "%s/%s/%s/%s.png" % (THUMBS_URL, quote(playlist), folder, quote(name))}
+            for kind, folder in (("boxart", "Named_Boxarts"), ("snap", "Named_Snaps"), ("title", "Named_Titles"))]
 
 
 def on_screen():
@@ -1179,6 +1478,7 @@ class Panel:
         self.volume = Cached(2, volume)
         self.disks = Cached(10, disks)
         self.systems = Cached(60, systems)
+        self.gameinfo = GameInfo()
         self.mouse = VirtualMouse()
         self.tasks = Tasks()
         self.downloader = Cached(3, downloader_status)
@@ -1260,9 +1560,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         # O WebSocket do terminal (ws: deste endereco; o servidor confere o
-        # Origin) e os estilos que o xterm.js cria na pagina.
-        self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; "
-                         "connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'")
+        # Origin), os estilos que o xterm.js cria na pagina e as imagens das
+        # informacoes dos jogos (Arcade Database, libretro-thumbnails).
+        self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob: %s %s; "
+                         "connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'" % (ADB_ORIGIN, THUMBS_URL))
         for key, value in (headers or {}).items():
             self.send_header(key, value)
         self.end_headers()
@@ -1363,7 +1664,24 @@ class Handler(BaseHTTPRequestHandler):
             system = self.panel.system((parse_qs(url.query).get("system") or [""])[0])
             if not system:
                 return self.send(404, {"error": "no such system"})
-            return self.send(200, {"system": system["key"], "games": games(system)})
+            display, filters = display_filters(system)
+            return self.send(200, {"system": system["key"], "arcade": system["arcade"], "games": games(system),
+                                   "display": display, "filters": filters})
+        if url.path == "/api/gameinfo":
+            query = parse_qs(url.query)
+            system = self.panel.system((query.get("system") or [""])[0])
+            entry = game_entry(system, (query.get("game") or [""])[0]) if system else None
+            if not entry:
+                return self.send(404, {"error": "no such game"})
+            lang = (query.get("lang") or ["en"])[0]
+            lang = lang if re.fullmatch(r"[a-z]{2}", lang) else "en"
+            if not system["arcade"]:
+                return self.send(200, {"source": "libretro-thumbnails", "images": thumbnails(system, entry)})
+            try:
+                info = self.panel.gameinfo.arcade(entry["Name"], lang)
+            except (OSError, ValueError) as exc:
+                return self.send(502, {"error": "Arcade Database: %s" % exc})
+            return self.send(200, {"source": "Arcade Database", "info": info})
         return self.send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -1410,6 +1728,17 @@ class Handler(BaseHTTPRequestHandler):
             if not argv:
                 return self.send(400, {"error": "no such game, or this system does not open from the panel"})
             return self.send(200, self.panel.launch(argv))
+        if url.path == "/api/favourite":
+            data = self.body()
+            system = self.panel.system(str(data.get("system", "")))
+            entry = game_entry(system, str(data.get("game", ""))) if system else None
+            if not entry or not isinstance(data.get("on"), bool):
+                return self.send(400, {"error": "no such game, or no on: true|false"})
+            try:
+                set_favourite(system, entry["Name"], data["on"])
+            except OSError as exc:
+                return self.send(500, {"error": str(exc)})
+            return self.send(200, {"game": entry["Name"], "favourite": entry["Name"] in favourites(system)})
         if url.path == "/api/close":
             return self.send(200, self.panel.close_game())
         if url.path == "/api/upload":

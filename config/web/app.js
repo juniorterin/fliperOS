@@ -24,6 +24,14 @@ const TEXT = {
     confirm_launch: "Close what is on the cabinet screen and open %s?", launching: "Opening %s on the cabinet…",
     confirm_close: "Close the game on the cabinet?", first: "Showing the first %n. Type to filter.",
     no_games: "No games in this folder.", count: "%n games",
+    filter_all: "All games", favourites: "Favourites", favourite: "Favourite", favourited: "Favourite (remove)",
+    g_file: "Set / file", g_year: "Year", g_maker: "Manufacturer", g_genre: "Genre", g_players: "Players",
+    g_buttons: "Buttons", g_control: "Control", g_screen: "Screen", g_status: "Emulation", g_parent: "Clone of",
+    g_series: "Series", g_played: "Played", g_played_n: "%n times, %t", g_title: "Full title", g_rating: "Rating",
+    g_language: "Language", g_video: "Video (mp4)", g_loading: "Looking it up online…",
+    g_offline: "Could not reach the game database (is the cabinet online?).", g_not_found: "Not in the Arcade Database.",
+    pic_snap: "In game", pic_title: "Title", pic_marquee: "Marquee", pic_flyer: "Flyer", pic_cabinet: "Cabinet",
+    pic_boxart: "Box",
     page_frontend: "Frontend", page_files: "Files", page_settings: "Settings", page_status: "Status", page_terminal: "Terminal",
     settings: "Settings", settings_note: "Each change is saved and applied right away, through the Setup. Monitor, resolution and video driver stay in the Setup, on the cabinet screen.",
     saved: "Saved: %s", group_System: "System", group_Services: "Services", "group_480i games": "480i games", group_Colour: "Colour",
@@ -64,6 +72,14 @@ const TEXT = {
     confirm_launch: "Fechar o que está na tela do gabinete e abrir %s?", launching: "Abrindo %s no gabinete…",
     confirm_close: "Fechar o jogo no gabinete?", first: "Mostrando os primeiros %n. Digite para filtrar.",
     no_games: "Nenhum jogo nesta pasta.", count: "%n jogos",
+    filter_all: "Todos os jogos", favourites: "Favoritos", favourite: "Favoritar", favourited: "Favorito (tirar)",
+    g_file: "Set / arquivo", g_year: "Ano", g_maker: "Fabricante", g_genre: "Gênero", g_players: "Jogadores",
+    g_buttons: "Botões", g_control: "Controle", g_screen: "Tela", g_status: "Emulação", g_parent: "Clone de",
+    g_series: "Série", g_played: "Jogado", g_played_n: "%n vezes, %t", g_title: "Título completo", g_rating: "Nota",
+    g_language: "Idioma", g_video: "Vídeo (mp4)", g_loading: "Buscando na internet…",
+    g_offline: "Não deu para falar com a base de jogos (o gabinete está na internet?).", g_not_found: "Não está no Arcade Database.",
+    pic_snap: "Jogando", pic_title: "Título", pic_marquee: "Letreiro", pic_flyer: "Flyer", pic_cabinet: "Gabinete",
+    pic_boxart: "Capa",
     page_frontend: "Frontend", page_files: "Arquivos", page_settings: "Configurações", page_status: "Status", page_terminal: "Terminal",
     settings: "Configurações", settings_note: "Cada mudança é gravada e aplicada na hora, pelo Setup. Monitor, resolução e driver de vídeo ficam no Setup, na tela do gabinete.",
     saved: "Gravado: %s", group_System: "Sistema", group_Services: "Serviços", "group_480i games": "Jogos 480i", group_Colour: "Cor",
@@ -180,6 +196,7 @@ $("lang").addEventListener("click", () => {
   try { localStorage.setItem("fliperos-lang", lang); } catch (e) { /* sem armazenamento */ }
   translate();
   if (last) render(last);
+  renderFilters();
   renderGames();
   loadSettings().catch(() => {});
 });
@@ -463,12 +480,18 @@ $("log-name").addEventListener("change", showLog);
 $("log-refresh").addEventListener("click", showLog);
 
 // ── Jogos: abrir e fechar no gabinete ────────────────────────────
-// As pastas com jogos (as mesmas dos frontends), a busca e o botao de
-// jogar. Abrir fecha o que esta na tela; quando o jogo fecha, volta o que
-// estava (o frontend, o desktop ou o menu).
+// As pastas com jogos (as mesmas dos frontends). A lista e a do Attract-Mode
+// Plus (o nome de verdade, o ano, o fabricante), com os filtros da tela dele
+// no fim da busca. Cada jogo abre (um por vez) com as informacoes: as da
+// romlist e as da internet (/api/gameinfo: o Arcade Database nos arcades, o
+// libretro-thumbnails nos consoles), que o navegador guarda. No fim, Jogar
+// (fecha o que esta na tela; quando o jogo fecha, volta o que estava) e
+// Favoritar (os favoritos do frontend).
 
 const GAMES_SHOWN = 300;
-let allGames = [];
+const INFO_KEY = "fliperos-info:";
+const INFO_DAYS = 30;
+let allGames = [], gameFilters = [], openGame = null;
 
 function toast(text) {
   const box = el("div", { class: "toast", role: "status" }, text);
@@ -490,36 +513,277 @@ async function loadSystems() {
 
 async function loadGames() {
   const key = $("system").value;
-  if (!key) { allGames = []; renderGames(); return; }
+  openGame = null;
+  if (!key) { allGames = []; gameFilters = []; renderFilters(); renderGames(); return; }
   try { localStorage.setItem("fliperos-system", key); } catch (e) { /* sem armazenamento */ }
   const res = await api("/api/games?system=" + encodeURIComponent(key));
-  allGames = (await res.json()).games || [];
+  const data = await res.json();
+  allGames = data.games || [];
+  gameFilters = data.filters || [];
+  renderFilters();
   renderGames();
+}
+
+// Os filtros da tela do Attract-Mode, como ele os aplica: as regras na
+// ordem; uma regra que falha tira o jogo, uma excecao que bate o poe de
+// volta. Com uma regex (um caractere especial no valor), equals e a palavra
+// inteira; sem, a comparacao ignora maiusculas.
+const NUMERIC_OPS = { greater_than: (a, b) => a > b, less_than: (a, b) => a < b,
+  greater_than_or_equal: (a, b) => a >= b, less_than_or_equal: (a, b) => a <= b };
+
+function ruleMatches(rule, game) {
+  const target = String(game[rule.field] == null ? "" : game[rule.field]), what = rule.what || "";
+  if (NUMERIC_OPS[rule.op]) return NUMERIC_OPS[rule.op](parseFloat(target) || 0, parseFloat(what) || 0);
+  if (rule.rex === undefined) {
+    rule.rex = null;
+    if (/[.+*?^$()[\]{}|\\]/.test(what)) {
+      try { rule.rex = [new RegExp("^(?:" + what + ")$", "i"), new RegExp(what, "i")]; } catch (e) { /* literal */ }
+    }
+  }
+  const low = target.toLowerCase(), w = what.toLowerCase(), rex = rule.rex;
+  switch (rule.op) {
+    case "equals": return !target ? !what : rex ? rex[0].test(target) : low === w;
+    case "not_equals": return !target ? !!what : rex ? !rex[0].test(target) : low !== w;
+    case "contains": return !!target && (rex ? rex[1].test(target) : low.includes(w));
+    case "not_contains": return !target || (rex ? !rex[1].test(target) : !low.includes(w));
+    default: return true;
+  }
+}
+
+function compareValues(a, b) {
+  const x = a == null ? "" : String(a), y = b == null ? "" : String(b);
+  const nx = Number(x), ny = Number(y);
+  if (x !== "" && y !== "" && !isNaN(nx) && !isNaN(ny)) return nx - ny;
+  return x.localeCompare(y, undefined, { sensitivity: "base" });
+}
+
+function applyFilter(list, filter) {
+  if (!filter) return list;
+  let out = list.filter((game) => {
+    for (const rule of filter.rules || []) {
+      if (ruleMatches(rule, game) === !!rule.exception) return !!rule.exception;
+    }
+    return true;
+  });
+  if (filter.sort_by) out = out.slice().sort((a, b) => compareValues(a[filter.sort_by], b[filter.sort_by]));
+  if (filter.reverse) out.reverse();
+  if (filter.limit > 0) out = out.slice(0, filter.limit);
+  else if (filter.limit < 0) out = out.slice(filter.limit);
+  return out;
+}
+
+const FAV_FILTER = { name: "__fav", rules: [{ field: "Favourite", op: "equals", what: "1" }] };
+
+function filterOptions() {
+  // Os da tela (sem tela, todos os jogos) e os favoritos, se a tela nao os tem.
+  const rows = gameFilters.map((f) => ({ value: f.name, label: f.name, filter: f }));
+  if (!rows.length) rows.push({ value: "__all", label: t("filter_all"), filter: null });
+  if (!gameFilters.some((f) => (f.rules || []).some((r) => r.field === "Favourite"))) {
+    rows.push({ value: "__fav", label: "★ " + t("favourites"), filter: FAV_FILTER });
+  }
+  return rows;
+}
+
+function renderFilters() {
+  const select = $("game-filter");
+  let keep = select.value;
+  try { keep = localStorage.getItem("fliperos-filter") || keep; } catch (e) { /* sem armazenamento */ }
+  const rows = filterOptions();
+  select.replaceChildren(...rows.map((r) => el("option", { value: r.value }, r.label)));
+  select.value = rows.some((r) => r.value === keep) ? keep : rows[0].value;
+}
+
+function currentFilter() {
+  const row = filterOptions().find((r) => r.value === $("game-filter").value);
+  return row ? row.filter : null;
 }
 
 function renderGames() {
   const query = $("game-search").value.trim().toLowerCase();
-  const found = query ? allGames.filter((g) => g.toLowerCase().includes(query)) : allGames;
+  let found = applyFilter(allGames, currentFilter());
+  if (query) {
+    found = found.filter((g) => (g.Title || "").toLowerCase().includes(query) || g.Name.toLowerCase().includes(query));
+  }
   const shown = found.slice(0, GAMES_SHOWN);
-  $("games").replaceChildren(...shown.map((game) => {
-    const button = el("button", { type: "button", "aria-label": t("play") + " " + game }, "▶ " + t("play"));
-    button.addEventListener("click", () => play(game));
-    return el("li", {}, el("span", { title: game }, game), button);
-  }));
+  $("games").replaceChildren(...shown.map(gameItem));
   $("games-note").textContent = !allGames.length ? t("no_games")
     : found.length > GAMES_SHOWN ? t("first").replace("%n", GAMES_SHOWN)
       : t("count").replace("%n", found.length);
 }
 
-async function play(game) {
-  if (!confirm(t("confirm_launch").replace("%s", game))) return;
-  const res = await api("/api/launch", { method: "POST", body: JSON.stringify({ system: $("system").value, game }) });
+function gameItem(game) {
+  const open = openGame === game.Name;
+  const head = el("button", { type: "button", class: "game-head", "aria-expanded": String(open) },
+    el("span", { class: "star", "aria-label": game.Favourite ? t("favourites") : "" }, game.Favourite ? "★" : ""),
+    el("span", { class: "title", title: game.Title || game.Name }, game.Title || game.Name),
+    el("span", { class: "meta" }, [game.Year, game.Manufacturer].filter(Boolean).join(" · ")),
+    el("span", { class: "chev", "aria-hidden": "true" }, "▸"));
+  const li = el("li", {}, head);
+  head.addEventListener("click", () => toggleGame(game, li));
+  if (open) li.append(gameBody(game));
+  return li;
+}
+
+function toggleGame(game, li) {
+  const list = $("games");
+  list.querySelectorAll(".game-body").forEach((b) => b.remove());
+  list.querySelectorAll('.game-head[aria-expanded="true"]').forEach((h) => h.setAttribute("aria-expanded", "false"));
+  if (openGame === game.Name) { openGame = null; return; }
+  openGame = game.Name;
+  li.firstChild.setAttribute("aria-expanded", "true");
+  li.append(gameBody(game));
+  li.scrollIntoView({ block: "nearest" });
+}
+
+function factList() {
+  const dl = el("dl", { class: "facts" });
+  dl.add = (label, value) => {
+    if (value == null || value === "" || dl.querySelector('[data-k="' + label + '"]')) return;
+    dl.append(el("div", { "data-k": label }, el("dt", {}, t(label)), el("dd", {}, value)));
+  };
+  return dl;
+}
+
+function gameBody(game) {
+  const facts = factList();
+  facts.add("g_file", game.file || game.Name);
+  facts.add("g_year", game.Year);
+  facts.add("g_maker", game.Manufacturer);
+  facts.add("g_genre", game.Category);
+  facts.add("g_players", game.Players);
+  facts.add("g_buttons", game.Buttons);
+  facts.add("g_control", game.Control);
+  facts.add("g_screen", game.Rotation ? game.Rotation + "°" : "");
+  facts.add("g_status", game.Status);
+  facts.add("g_parent", game.CloneOf);
+  facts.add("g_series", game.Series);
+  if (game.PlayedCount) {
+    facts.add("g_played", t("g_played_n").replace("%n", game.PlayedCount).replace("%t", duration(game.PlayedTime || 0)));
+  }
+  const online = el("div", { class: "game-online" }, el("p", { class: "dim" }, t("g_loading")));
+  const play = el("button", { type: "button", "data-icon": "▶" }, t("play"));
+  play.addEventListener("click", () => playGame(game));
+  const fav = el("button", { type: "button", class: "ghost fav" + (game.Favourite ? " on" : ""),
+    "aria-pressed": String(!!game.Favourite) }, (game.Favourite ? "★ " : "☆ ") + t(game.Favourite ? "favourited" : "favourite"));
+  fav.addEventListener("click", () => toggleFavourite(game));
+  const body = el("div", { class: "game-body" }, facts, online, el("div", { class: "game-actions" }, play, fav));
+  gameInfo(game).then((data) => showOnline(online, facts, data))
+    .catch(() => online.replaceChildren(el("p", { class: "dim" }, t("g_offline"))));
+  return body;
+}
+
+// As informacoes da internet: do localStorage quando ja vieram (30 dias).
+async function gameInfo(game) {
+  const system = $("system").value, key = INFO_KEY + system + ":" + game.Name;
+  try {
+    const hit = JSON.parse(localStorage.getItem(key) || "null");
+    if (hit && Date.now() - hit.t < INFO_DAYS * 86400000) return hit.d;
+  } catch (e) { /* sem armazenamento */ }
+  const res = await api("/api/gameinfo?system=" + encodeURIComponent(system) + "&game=" + encodeURIComponent(game.Name));
+  if (!res.ok) throw new Error(res.statusText);
+  const data = await res.json();
+  cacheInfo(key, data);
+  return data;
+}
+
+function cacheInfo(key, data) {
+  const value = JSON.stringify({ t: Date.now(), d: data });
+  for (let tries = 0; tries < 2; tries++) {
+    try { localStorage.setItem(key, value); return; } catch (e) {
+      // Cheio: sai a metade mais antiga das informacoes guardadas.
+      try {
+        const old = Object.keys(localStorage).filter((k) => k.startsWith(INFO_KEY))
+          .map((k) => [k, (JSON.parse(localStorage.getItem(k)) || {}).t || 0]).sort((a, b) => a[1] - b[1]);
+        if (!old.length) return;
+        old.slice(0, Math.ceil(old.length / 2)).forEach(([k]) => localStorage.removeItem(k));
+      } catch (e2) { return; }
+    }
+  }
+}
+
+function pictures(list) {
+  // As imagens que existem (a que nao carrega sai); cada uma abre inteira.
+  const box = el("div", { class: "pics" });
+  for (const p of list) {
+    const img = el("img", { src: p.url, alt: t(p.label), loading: "lazy", referrerpolicy: "no-referrer" });
+    const fig = el("figure", {}, el("a", { href: p.url, target: "_blank", rel: "noopener noreferrer" }, img),
+      el("figcaption", {}, t(p.label)));
+    img.addEventListener("error", () => { fig.remove(); if (!box.children.length) box.remove(); });
+    box.append(fig);
+  }
+  return box;
+}
+
+function showOnline(online, facts, data) {
+  const parts = [];
+  if (data.images) {
+    parts.push(pictures(data.images.map((i) => ({ url: i.url, label: "pic_" + i.kind }))));
+  }
+  const info = data.info;
+  if (data.source === "Arcade Database" && !info) parts.push(el("p", { class: "dim" }, t("g_not_found")));
+  if (info) {
+    parts.push(pictures([["url_image_ingame", "pic_snap"], ["url_image_title", "pic_title"],
+      ["url_image_marquee", "pic_marquee"], ["url_image_flyer", "pic_flyer"], ["url_image_cabinet", "pic_cabinet"]]
+      .filter(([k]) => info[k]).map(([k, label]) => ({ url: info[k], label }))));
+    facts.add("g_title", info.title);
+    facts.add("g_genre", info.genre);
+    facts.add("g_series", info.serie);
+    facts.add("g_players", info.nplayers || info.players);
+    facts.add("g_buttons", info.input_buttons);
+    facts.add("g_control", info.input_controls);
+    facts.add("g_screen", [info.screen_orientation, info.screen_resolution].filter(Boolean).join(", "));
+    facts.add("g_status", info.status);
+    facts.add("g_rating", info.rate ? info.rate + "/100" : "");
+    facts.add("g_language", info.languages);
+    // Os botoes do jogador 1, com a cor e o que fazem.
+    const keys = (info.buttons_colors || "").split(";").map((s) => s.split(":"))
+      .filter((p) => p.length >= 3 && p[0].startsWith("P1_") && p[2]);
+    if (keys.length) {
+      parts.push(el("div", { class: "controls" }, ...keys.map(([, color, label]) => {
+        const dot = el("i");
+        dot.style.background = /^[a-z]+$/i.test(color) ? color : "transparent";
+        return el("span", { class: "tag" }, dot, label);
+      })));
+    }
+    if (info.history) {
+      parts.push(el("pre", { class: "history" }, info.history.trim()));
+    }
+    const links = el("div", { class: "links" });
+    if (info.url) links.append(el("a", { class: "ghost-link", href: info.url, target: "_blank", rel: "noopener" }, "Arcade Database"));
+    if (info.url_video_shortplay) links.append(el("a", { class: "ghost-link", href: info.url_video_shortplay, target: "_blank", rel: "noopener" }, t("g_video")));
+    if (info.youtube_video_id) {
+      links.append(el("a", { class: "ghost-link", target: "_blank", rel: "noopener",
+        href: "https://www.youtube.com/watch?v=" + encodeURIComponent(info.youtube_video_id) }, "YouTube"));
+    }
+    if (info.history_copyright_short) links.append(el("span", { class: "dim" }, info.history_copyright_short));
+    parts.push(links);
+  }
+  online.replaceChildren(...parts);
+}
+
+async function playGame(game) {
+  const name = game.Title || game.Name;
+  if (!confirm(t("confirm_launch").replace("%s", name))) return;
+  const res = await api("/api/launch", { method: "POST", body: JSON.stringify({ system: $("system").value, game: game.Name }) });
   const data = await res.json().catch(() => ({}));
-  toast(res.ok ? t("launching").replace("%s", game) : data.error || res.statusText);
+  toast(res.ok ? t("launching").replace("%s", name) : data.error || res.statusText);
+}
+
+async function toggleFavourite(game) {
+  const res = await api("/api/favourite", { method: "POST",
+    body: JSON.stringify({ system: $("system").value, game: game.Name, on: !game.Favourite }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { toast(data.error || res.statusText); return; }
+  if (data.favourite) game.Favourite = "1"; else delete game.Favourite;
+  renderGames();
 }
 
 $("system").addEventListener("change", () => loadGames().catch(() => {}));
 $("game-search").addEventListener("input", renderGames);
+$("game-filter").addEventListener("change", () => {
+  try { localStorage.setItem("fliperos-filter", $("game-filter").value); } catch (e) { /* sem armazenamento */ }
+  renderGames();
+});
 $("close-game").addEventListener("click", async () => {
   if (!confirm(t("confirm_close"))) return;
   await api("/api/close", { method: "POST", body: "{}" }).catch(() => {});

@@ -4372,12 +4372,62 @@ class WebPanelTests(unittest.TestCase):
         # dois jogos, um arquivo de outra extensao, um oculto e uma pasta.
         roms = tmp / 'roms/naomi'
         roms.mkdir(parents=True)
-        for name in ('vf4.zip', 'Ikaruga.zip', 'notes.txt', '.hidden.zip'):
+        for name in ('vf4.zip', 'Ikaruga.zip', 'notes.txt', '.hidden.zip', 'naomi.zip', 'kofxi.zip'):
             (roms / name).write_text('')
         (roms / 'vf4').mkdir()
         (roms.parent / 'other').mkdir()
         (roms.parent / 'other/evil.zip').write_text('')
         cls.roms = roms
+        # A romlist do Attract-Mode com os nomes de verdade (sem a BIOS e sem
+        # o jogo de Atomiswave da mesma pasta), os favoritos, as vezes
+        # jogadas e a tela com os filtros. Um jogo posto depois da lista entra.
+        attract = tmp / '.attract'
+        (attract / 'romlists').mkdir(parents=True)
+        (attract / 'romlists/Naomi.txt').write_text(
+            '#Name;Title;Emulator;CloneOf;Year;Manufacturer;Category;Players;Rotation;Control;Status;DisplayCount;'
+            'DisplayType;AltRomname;AltTitle;Extra;Buttons;Series;Language;Region;Rating\n'
+            'vf4;Virtua Fighter 4;Naomi;;2001;Sega;Fighter / Versus;2;0;joystick;good;1;raster;;;;6;;;;\n'
+            'Ikaruga;Ikaruga (GDL-0010);Naomi;;2001;Treasure;Shooter / Flying Vertical;2;270;;;;;;;;;;;;\n')
+        (attract / 'romlists/Naomi.tag').write_text('vf4;Naomi\nIkaruga;Other\n')
+        (attract / 'stats/Naomi').mkdir(parents=True)
+        (attract / 'stats/Naomi/vf4.stat').write_text('3\n600\n')
+        (attract / 'attract.cfg').write_text(
+            'display\tMAME\n\tlayout               Basic\n\tromlist              MAME\n'
+            '\tfilter               "Old"\n\n'
+            'display\tNaomi\n\tlayout               Basic\n\tromlist              Naomi\n'
+            '\tfilter               "All Games"\n\t\tsort_by              Title\n'
+            '\tfilter               "Fighting Games"\n\t\trule                 Category equals Fight.+\n'
+            '\t\texception            Name equals Ikaruga\n'
+            '\tfilter               "Most Played"\n\t\tsort_by              PlayedTime\n\t\treverse_order        true\n'
+            '\t\tlist_limit           25\n\n')
+        listed = time.time() - 100
+        for name in ('vf4.zip', 'Ikaruga.zip', 'naomi.zip', 'kofxi.zip'):
+            os.utime(roms / name, (listed - 10, listed - 10))
+        os.utime(attract / 'romlists/Naomi.txt', (listed, listed))
+        (roms / 'newgame.7z').write_text('')
+        # O Arcade Database falso: o JSON de query_mame para qualquer jogo.
+        import http.server
+        import threading
+        cls.adb_queries = []
+
+        class Adb(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                cls.adb_queries.append(self.path)
+                name = self.path.split('game_name=')[1].split('&')[0]
+                rows = [] if name == 'newgame' else [{'game_name': name, 'title': 'Virtua Fighter 4 (GDS-0012)',
+                                                       'history': 'A fighting game.', 'genre': 'Fighter',
+                                                       'url_image_ingame': 'https://adb.arcadeitalia.net/x.png',
+                                                       'serie': 'Virtua Fighter', 'rate': 90, 'unknown': 'no'}]
+                data = json.dumps({'release': 6, 'result': rows}).encode()
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def log_message(self, *args):
+                pass
+        cls.adb = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Adb)
+        threading.Thread(target=cls.adb.serve_forever, daemon=True).start()
         setup = tmp / 'fliperos-setup'
         setup.write_text('#!/bin/sh\necho "$*" >> %s/volume.log\n[ "$2" = get ] && echo 42\n'
                          'if [ "$1 $2" = "--downloader status" ]; then\n'
@@ -4391,8 +4441,8 @@ class WebPanelTests(unittest.TestCase):
                          '  echo "color.gamma|Colour|Gamma|number|100|50..200:5|The middle greys."\nfi\n'
                          'if [ "$1" = --setting ]; then [ "$2" = nope ] && exit 2; [ "$2" = broken ] && { echo boom >&2; exit 1; }; fi\n'
                          'if [ "$1" = --systems ]; then\n'
-                         '  echo \'naomi|%s|arcade|Naomi|/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z\'\n'
-                         '  echo \'shell|%s|arcade|Shell|/bin/sh|-c "[name]"|.zip\'\n'
+                         '  echo \'naomi|%s|naomi|Naomi|/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z|1\'\n'
+                         '  echo \'shell|%s|snes|Shell|/bin/sh|-c "[name]"|.zip|0\'\n'
                          'fi\nexit 0\n' % (tmp, roms, roms))
         setup.chmod(0o755)
         run = tmp / 'run/1000'
@@ -4410,7 +4460,8 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_LOGS=str(tmp / 'logs'), FLIPEROS_SYSTEM_LOGS=str(tmp / 'missing.log'),
                    FLIPEROS_SETUP=str(setup), FLIPEROS_RUN_USER=str(tmp / 'run'),
                    FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_VIDEO_CHECK=str(tmp / 'none'),
-                   FLIPEROS_USER=cls.user, FLIPEROS_SESSION_FILE=str(tmp / 'session'), FLIPEROS_HOME=str(tmp))
+                   FLIPEROS_USER=cls.user, FLIPEROS_SESSION_FILE=str(tmp / 'session'), FLIPEROS_HOME=str(tmp),
+                   FLIPEROS_ADB_URL='http://127.0.0.1:%d/service_scraper.php' % cls.adb.server_address[1])
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
                                        '--port', str(cls.port)], env=env)
         for _ in range(100):
@@ -4425,6 +4476,7 @@ class WebPanelTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.server.terminate()
         cls.server.wait(timeout=10)
+        cls.adb.shutdown()
         cls.tmp.cleanup()
 
     def request(self, method, path, body=None, cookie=None, header=True):
@@ -4510,11 +4562,76 @@ class WebPanelTests(unittest.TestCase):
     def test_games_listed_from_the_setup_folders(self):
         cookie = self.login()
         systems = json.loads(self.request('GET', '/api/systems', cookie=cookie)[2])['systems']
-        self.assertEqual([(s['key'], s['games']) for s in systems], [('naomi', 2), ('shell', 2)])
-        games = json.loads(self.request('GET', '/api/games?system=naomi', cookie=cookie)[2])['games']
-        # So os arquivos do primeiro nivel com as extensoes do sistema.
-        self.assertEqual(games, ['Ikaruga.zip', 'vf4.zip'])
+        self.assertEqual([(s['key'], s['games']) for s in systems], [('naomi', 3), ('shell', 4)])
+        data = json.loads(self.request('GET', '/api/games?system=naomi', cookie=cookie)[2])
+        games = {g['Name']: g for g in data['games']}
+        # A romlist do Attract-Mode (sem a BIOS e o jogo de outro sistema da
+        # pasta) e o arquivo posto depois dela, pelo titulo.
+        self.assertEqual([g['Name'] for g in data['games']], ['Ikaruga', 'newgame', 'vf4'])
+        self.assertEqual(games['vf4'], {'Name': 'vf4', 'Title': 'Virtua Fighter 4', 'Year': '2001', 'Manufacturer': 'Sega',
+                                        'Category': 'Fighter / Versus', 'Players': '2', 'Rotation': '0',
+                                        'Control': 'joystick', 'Status': 'good', 'DisplayCount': '1',
+                                        'DisplayType': 'raster', 'Buttons': '6', 'file': 'vf4.zip', 'Favourite': '1',
+                                        'PlayedCount': 3, 'PlayedTime': 600})
+        self.assertNotIn('Favourite', games['Ikaruga'])        # favorito de outro emulador
+        self.assertEqual(games['newgame'], {'Name': 'newgame', 'Title': 'newgame', 'file': 'newgame.7z'})
+        self.assertTrue(data['arcade'])
+        # Os filtros da tela que mostra a romlist, como no attract.cfg.
+        self.assertEqual(data['display'], 'Naomi')
+        self.assertEqual(data['filters'], [
+            {'name': 'All Games', 'rules': [], 'sort_by': 'Title', 'reverse': False, 'limit': 0},
+            {'name': 'Fighting Games', 'rules': [
+                {'field': 'Category', 'op': 'equals', 'what': 'Fight.+', 'exception': False},
+                {'field': 'Name', 'op': 'equals', 'what': 'Ikaruga', 'exception': True}],
+             'sort_by': '', 'reverse': False, 'limit': 0},
+            {'name': 'Most Played', 'rules': [], 'sort_by': 'PlayedTime', 'reverse': True, 'limit': 25}])
+        # Sem romlist: os arquivos da pasta, pelo nome.
+        shell = json.loads(self.request('GET', '/api/games?system=shell', cookie=cookie)[2])
+        self.assertEqual([g['file'] for g in shell['games']], ['Ikaruga.zip', 'kofxi.zip', 'naomi.zip', 'vf4.zip'])
+        self.assertEqual((shell['display'], shell['filters'], shell['arcade']), (None, [], False))
         self.assertEqual(self.request('GET', '/api/games?system=nope', cookie=cookie)[0], 404)
+
+    def test_favourites_are_the_frontend_ones(self):
+        cookie = self.login()
+        tag = Path(self.tmp.name) / '.attract/romlists/Naomi.tag'
+        before = tag.read_text()
+        try:
+            status, _, data = self.request('POST', '/api/favourite', {'system': 'naomi', 'game': 'Ikaruga', 'on': True},
+                                           cookie=cookie)
+            self.assertEqual((status, json.loads(data)), (200, {'game': 'Ikaruga', 'favourite': True}))
+            status, _, data = self.request('POST', '/api/favourite', {'system': 'naomi', 'game': 'vf4.zip', 'on': False},
+                                           cookie=cookie)
+            self.assertEqual((status, json.loads(data)), (200, {'game': 'vf4', 'favourite': False}))
+            # O do outro emulador fica; o formato e o do Attract-Mode.
+            self.assertEqual(tag.read_text(), 'Ikaruga;Other\nIkaruga;Naomi\n')
+            for body in ({'system': 'naomi', 'game': 'kofxi', 'on': True}, {'system': 'naomi', 'game': 'vf4'},
+                         {'system': 'naomi', 'game': '../other/evil', 'on': True}):
+                self.assertEqual(self.request('POST', '/api/favourite', body, cookie=cookie)[0], 400, body)
+        finally:
+            tag.write_text(before)
+
+    def test_game_info_from_the_arcade_database_and_libretro(self):
+        cookie = self.login()
+        status, _, data = self.request('GET', '/api/gameinfo?system=naomi&game=vf4', cookie=cookie)
+        self.assertEqual(status, 200, data)
+        info = json.loads(data)
+        self.assertEqual(info['source'], 'Arcade Database')
+        # So os campos conhecidos; a segunda vez vem do cache do servidor.
+        self.assertEqual(info['info']['title'], 'Virtua Fighter 4 (GDS-0012)')
+        self.assertNotIn('unknown', info['info'])
+        self.request('GET', '/api/gameinfo?system=naomi&game=vf4', cookie=cookie)
+        self.assertEqual(len([q for q in self.adb_queries if 'game_name=vf4&' in q]), 1)
+        self.assertIsNone(json.loads(self.request('GET', '/api/gameinfo?system=naomi&game=newgame', cookie=cookie)[2])
+                          ['info'])
+        self.assertEqual(self.request('GET', '/api/gameinfo?system=naomi&game=kofxi', cookie=cookie)[0], 404)
+        # Console: as imagens do libretro-thumbnails pelo nome do arquivo.
+        thumbs = json.loads(self.request('GET', '/api/gameinfo?system=shell&game=Ikaruga.zip', cookie=cookie)[2])
+        self.assertEqual(thumbs['images'][0], {'kind': 'boxart', 'url': 'https://thumbnails.libretro.com/'
+                                               'Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/'
+                                               'Named_Boxarts/Ikaruga.png'})
+        # A pagina pode mostrar as imagens dessas fontes, e so delas.
+        csp = self.last_headers['Content-Security-Policy']
+        self.assertIn("img-src 'self' data: blob: https://adb.arcadeitalia.net https://thumbnails.libretro.com;", csp)
 
     def test_launch_asks_the_tty1_and_closes_what_is_on_screen(self):
         import shutil as sh
@@ -4559,7 +4676,8 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual([(e['name'], e['dir']) for e in listing['entries']], [('naomi', True), ('other', True)])
         naomi = json.loads(self.request('GET', '/api/files?root=roms&path=naomi', cookie=cookie)[2])['entries']
         # Pastas primeiro; os ocultos ficam de fora.
-        self.assertEqual([e['name'] for e in naomi], ['vf4', 'Ikaruga.zip', 'notes.txt', 'vf4.zip'])
+        self.assertEqual([e['name'] for e in naomi],
+                         ['vf4', 'Ikaruga.zip', 'kofxi.zip', 'naomi.zip', 'newgame.7z', 'notes.txt', 'vf4.zip'])
         for query in ('root=roms&path=../', 'root=roms&path=naomi/../..', 'root=etc&path=', 'root=roms&path=/etc'):
             self.assertEqual(self.request('GET', '/api/files?' + query, cookie=cookie)[0], 404, query)
         # Enviar: o corpo e o arquivo; o que ja existe so com overwrite.

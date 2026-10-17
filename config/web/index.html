@@ -62,7 +62,10 @@
       <h2 id="h-games" data-t="games"></h2>
       <div class="games-bar">
         <select id="system" aria-label="System"></select>
-        <input id="game-search" type="search" data-tp="search" autocomplete="off">
+        <div class="search-group">
+          <input id="game-search" type="search" data-tp="search" autocomplete="off">
+          <select id="game-filter" aria-label="Filter"></select>
+        </div>
       </div>
       <p id="games-note" class="dim"></p>
       <ul id="games" class="games"></ul>
