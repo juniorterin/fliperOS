@@ -142,6 +142,16 @@ td.num, th.num { text-align: right; }
 .shot.tube { width: min(100%, 960px); aspect-ratio: 4 / 3; height: auto; object-fit: fill; }
 .ghost-link { color: var(--cyan); }
 
+/* Downloads e tarefas. */
+.dl-kinds { display: grid; gap: 10px; margin: 10px 0; }
+.dl-kind { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px; }
+.dl-kind .row input { flex: 1 1 260px; min-width: 0; }
+.tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.tasks li { border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.tasks .ok { color: var(--green); }
+.tasks .fail { color: var(--red); }
+.tasks pre { margin: 8px 0 0; }
+
 /* Trackball: a area de toque e os botoes grandes (para o dedo). */
 .ball { margin-top: 10px; display: grid; gap: 10px; }
 .ball-pad { height: 280px; border-radius: 16px; background: radial-gradient(circle at 40% 35%, #44475a, #191a21 70%);

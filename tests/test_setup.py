@@ -661,6 +661,25 @@ class DeflickerTests(Base):
         self.assertTrue((ROOT / "fliperos-setup/gui/flicker-preview.py").is_file())
 
 
+class DownloaderCliTests(Base):
+    """fliperos-setup --downloader (lib/downloader.sh, downloader_cli): o
+    Downloader sem tela, para o painel web."""
+
+    def test_checks_before_anything(self):
+        state = self.env.dir / "dl"
+        env = {"DOWNLOADER_STATE": str(state), "DOWNLOADER": str(self.env.bin / "fliperos-downloader")}
+        self.env.stub("fliperos-downloader", 'echo "$*" >> %s/dl.log' % self.env.dir)
+        self.env.stub("systemctl", "true")
+        for bad in ("bogus", "add roms http://x", "add games magnet:?xt=1", "remove all"):
+            self.assertEqual(self.env.run("downloader_cli " + bad, env).returncode, 2, bad)
+        # Sem filtro escolhido no Setup, nada comeca.
+        self.assertEqual(self.env.run("downloader_cli start", env).returncode, 3)
+        self.env.out("downloader_cli add chds 'magnet:?xt=urn:btih:abc'", env)
+        self.assertIn("add chds magnet:?xt=urn:btih:abc --progress\n", (self.env.dir / "dl.log").read_text())
+        out = self.env.out("downloader_cli status", env)
+        self.assertIn("filter=not chosen yet\n", out)
+
+
 class BootTests(Base):
     def test_install_cmdline_from_the_output_test(self):
         (self.env.etc / "fliperos.conf").write_text(

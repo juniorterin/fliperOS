@@ -127,6 +127,56 @@ downloader_filter_set_dest() {
   downloader_filter_save "$(downloader_filter_get target)" "$1" "$(downloader_filter_get preset)" "${kv[@]}"
 }
 
+# downloader_cli status|add TIPO LINK|start|remove TIPO [--delete-files]: o
+# Downloader sem tela, pelas mesmas funcoes da tela do Setup (o painel web,
+# config/fliperos-web, fliperos-setup --downloader). O start nao apaga nada
+# (o prune so vem do Setup, depois de mudar o filtro).
+downloader_cli() {
+  local result kind
+  downloader_prepare
+  case ${1:-} in
+    status)
+      downloader_status
+      printf 'filter=%s\n' "$(downloader_filter_label)"
+      for kind in roms chds; do
+        printf 'default_%s=%s\n' "$kind" "$(downloader_default_magnet "$kind")"
+      done
+      ;;
+    add)
+      [[ ${2:-} == roms || ${2:-} == chds ]] && [[ ${3:-} == magnet:\?* ]] || return 2
+      downloader_service_on
+      downloader_add "$2" "$3" || {
+        downloader_service_sync
+        return 1
+      }
+      ;;
+    start)
+      downloader_filter_get preset > /dev/null || {
+        echo "No filter yet: choose it in Setup > Games > Downloader." >&2
+        return 3
+      }
+      downloader_service_on
+      result=$(mktemp)
+      downloader_start "$result" || {
+        rm -f "$result"
+        return 1
+      }
+      cat "$result"
+      rm -f "$result"
+      ;;
+    remove)
+      [[ ${2:-} == roms || ${2:-} == chds ]] || return 2
+      if [[ ${3:-} == --delete-files ]]; then
+        downloader remove "$2" --delete-files 2>> "$FLIPEROS_LOG"
+      else
+        downloader remove "$2" 2>> "$FLIPEROS_LOG"
+      fi
+      downloader_service_sync
+      ;;
+    *) return 2 ;;
+  esac
+}
+
 # downloader_status imprime o andamento ("chave=valor": pct, state, line,
 # roms_name, chds_name).
 downloader_status() {

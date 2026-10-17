@@ -30,6 +30,12 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
                       o menu grafico pela camada OpenGL; o desktop pelo X)
     GET  /api/terminal    WebSocket: o shell do usuario num pty (binario =
                       teclas e tela, texto = {"resize": [colunas, linhas]})
+    GET  /api/tasks       as tarefas em segundo plano   GET /api/task?id=N (o log)
+    POST /api/task/cancel {"id": N}
+    GET  /api/downloader  o andamento do Downloader do Setup e o filtro
+    POST /api/downloader  {"action": "add", "kind": "roms"|"chds", "magnet"}
+                      (sem magnet, o da imagem), {"action": "start"} (as duas
+                      como tarefa) ou {"action": "remove", "kind", "delete"}
     GET  /api/trackball   WebSocket: um mouse virtual (uinput); texto JSON
                       {"m": [dx, dy], "w": roda} e {"b": ["left", 1|0]}
 Os POST pedem o cabecalho X-FliperOS: 1 (um formulario de outro site nao
@@ -790,6 +796,109 @@ def tail(path, lines):
     return "\n".join(text.splitlines()[-lines:])
 
 
+# ── Tarefas (fase 5b): o que leva minutos, em segundo plano ────────
+
+class Task:
+    """Um comando em segundo plano (o Downloader aplicando o filtro, lendo um
+    link...): a saida guardada e os eventos de progresso do Setup
+    (lib/progress.sh: @step PCT TEXTO, @pct PCT, @msg TEXTO, @fail ETAPA|ERRO)."""
+
+    def __init__(self, task_id, name, argv, kind):
+        self.id, self.name, self.kind = task_id, name, kind
+        self.started, self.ended, self.rc = time.time(), None, None
+        self.pct, self.step, self.error = None, "", ""
+        self.lines = collections.deque(maxlen=400)
+        self.lock = threading.Lock()
+        self.proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                     text=True, errors="replace", start_new_session=True)
+        threading.Thread(target=self.read, daemon=True).start()
+
+    def read(self):
+        for line in self.proc.stdout:
+            line = line.rstrip("\n")
+            with self.lock:
+                self.lines.append(line)
+                word, _, rest = line.partition(" ")
+                if word == "@step":
+                    pct, _, text = rest.partition(" ")
+                    self.pct, self.step = self.number(pct), text
+                elif word == "@pct":
+                    self.pct = self.number(rest)
+                elif word == "@msg":
+                    self.step = rest
+                elif word == "@fail":
+                    self.error = rest.partition("|")[2] or rest
+        rc = self.proc.wait()
+        with self.lock:
+            self.rc, self.ended = rc, time.time()
+
+    @staticmethod
+    def number(text):
+        try:
+            return max(0, min(100, int(float(text))))
+        except ValueError:
+            return None
+
+    def info(self, log=False):
+        with self.lock:
+            last = next((l for l in reversed(self.lines) if not l.startswith("@")), "")
+            row = {"id": self.id, "name": self.name, "kind": self.kind, "started": self.started, "ended": self.ended,
+                   "running": self.rc is None, "rc": self.rc, "pct": self.pct, "step": self.step,
+                   "error": self.error, "last": last}
+            if log:
+                row["log"] = "\n".join(self.lines)
+            return row
+
+    def cancel(self):
+        if self.rc is None:
+            try:
+                os.killpg(self.proc.pid, signal.SIGTERM)
+            except OSError:
+                pass
+
+
+class Tasks:
+    """As tarefas do painel (as 20 ultimas). De cada tipo (kind), uma por vez."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.items = collections.OrderedDict()
+        self.next = 1
+
+    def start(self, name, argv, kind):
+        with self.lock:
+            if any(t.kind == kind and t.rc is None for t in self.items.values()):
+                return None
+            task = Task(self.next, name, argv, kind)
+            self.items[task.id] = task
+            self.next += 1
+            while len(self.items) > 20:
+                oldest = next(iter(self.items))
+                if self.items[oldest].rc is None:
+                    break
+                del self.items[oldest]
+            return task
+
+    def get(self, task_id):
+        with self.lock:
+            return self.items.get(task_id)
+
+    def all(self):
+        with self.lock:
+            return [t.info() for t in reversed(self.items.values())]
+
+
+def downloader_status():
+    """O andamento do Downloader (fliperos-setup --downloader status)."""
+    out = subprocess.run([SETUP, "--downloader", "status"], capture_output=True, text=True, timeout=30).stdout
+    values = {}
+    for line in out.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values
+
+
 # ── O terminal (fase 5b): um WebSocket com um pty ──────────────────
 
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -1047,6 +1156,8 @@ class Panel:
         self.disks = Cached(10, disks)
         self.systems = Cached(60, systems)
         self.mouse = VirtualMouse()
+        self.tasks = Tasks()
+        self.downloader = Cached(3, downloader_status)
         self.launch_lock = threading.Lock()
         # O que volta depois de um jogo aberto daqui, para o proximo pedido
         # feito com ele ainda na tela (sem fliperos-session no meio).
@@ -1197,6 +1308,18 @@ class Handler(BaseHTTPRequestHandler):
             if not path or not os.path.isfile(path):
                 return self.send(404, {"error": "no such file"})
             return self.send_file(path)
+        if url.path == "/api/tasks":
+            return self.send(200, {"tasks": self.panel.tasks.all()})
+        if url.path == "/api/task":
+            try:
+                task = self.panel.tasks.get(int((parse_qs(url.query).get("id") or ["0"])[0]))
+            except ValueError:
+                task = None
+            if not task:
+                return self.send(404, {"error": "no such task"})
+            return self.send(200, task.info(log=True))
+        if url.path == "/api/downloader":
+            return self.send(200, self.panel.downloader.get())
         if url.path == "/api/terminal":
             return self.open_terminal()
         if url.path == "/api/trackball":
@@ -1262,6 +1385,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, self.panel.close_game())
         if url.path == "/api/upload":
             return self.upload(parse_qs(url.query))
+        if url.path == "/api/task/cancel":
+            data = self.body()
+            task = self.panel.tasks.get(data.get("id") if isinstance(data.get("id"), int) else -1)
+            if not task:
+                return self.send(404, {"error": "no such task"})
+            task.cancel()
+            return self.send(200, task.info())
+        if url.path == "/api/downloader":
+            return self.downloader_action(self.body())
         if url.path in ("/api/mkdir", "/api/delete"):
             data = self.body()
             path = file_path(str(data.get("root", "")), str(data.get("path", "")))
@@ -1330,6 +1462,37 @@ class Handler(BaseHTTPRequestHandler):
         ws = self.websocket()
         if ws:
             trackball(ws, self.panel.mouse)
+
+    def downloader_action(self, data):
+        """O Downloader do Setup (Setup > Games > Downloader) pelas mesmas
+        funcoes dele: cadastrar o link (add) e aplicar o filtro (start), como
+        tarefas; remover um link, na hora."""
+        action, kind = data.get("action"), data.get("kind")
+        if action == "add" and kind in ("roms", "chds"):
+            magnet = str(data.get("magnet") or "").strip()
+            if not magnet:
+                magnet = self.panel.downloader.get().get("default_" + kind, "")
+            if not magnet.startswith("magnet:?"):
+                return self.send(400, {"error": "a magnet link (magnet:?...) is needed"})
+            task = self.panel.tasks.start("Downloader: %s link" % ("ROM" if kind == "roms" else "CHD"),
+                                          [SETUP, "--downloader", "add", kind, magnet], "downloader")
+        elif action == "start":
+            task = self.panel.tasks.start("Downloader: apply the filter and start",
+                                          [SETUP, "--downloader", "start"], "downloader")
+        elif action == "remove" and kind in ("roms", "chds"):
+            args = [SETUP, "--downloader", "remove", kind] + (["--delete-files"] if data.get("delete") else [])
+            try:
+                subprocess.run(args, capture_output=True, timeout=120)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            self.panel.downloader.when = None
+            return self.send(200, self.panel.downloader.get())
+        else:
+            return self.send(400, {"error": "action add (kind roms|chds, magnet), start, or remove (kind)"})
+        if not task:
+            return self.send(409, {"error": "the downloader is already busy with another task"})
+        self.panel.downloader.when = None
+        return self.send(200, task.info())
 
     def upload(self, query):
         """O corpo do pedido e o arquivo: gravado aos pedacos num .part na

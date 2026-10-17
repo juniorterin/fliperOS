@@ -4380,6 +4380,12 @@ class WebPanelTests(unittest.TestCase):
         cls.roms = roms
         setup = tmp / 'fliperos-setup'
         setup.write_text('#!/bin/sh\necho "$*" >> %s/volume.log\n[ "$2" = get ] && echo 42\n'
+                         'if [ "$1 $2" = "--downloader status" ]; then\n'
+                         '  printf "pct=40\\nstate=downloading\\nline=ROMs 4 GB of 10 GB\\nroms_name=MAME 0.289\\n'
+                         'filter=Arcade, GroovyMAME\\ndefault_chds=magnet:?xt=urn:btih:chds\\n"\nfi\n'
+                         'if [ "$1 $2" = "--downloader start" ]; then\n'
+                         '  echo "@step 10 Reading the list"; echo "@pct 55"; echo "plain line"; sleep 1; echo "@msg almost"\nfi\n'
+                         'if [ "$1 $2" = "--downloader add" ]; then sleep 30; fi\n'
                          'if [ "$1" = --systems ]; then\n'
                          '  echo \'naomi|%s|arcade|Naomi|/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z\'\n'
                          '  echo \'shell|%s|arcade|Shell|/bin/sh|-c "[name]"|.zip\'\n'
@@ -4694,6 +4700,47 @@ class WebPanelTests(unittest.TestCase):
         # A abertura do dispositivo de verdade: o nome e os eixos do uinput.
         source = (ROOT / 'config/fliperos-web').read_text()
         self.assertIn('b"FliperOS web trackball"', source)
+
+    def test_downloader_and_tasks(self):
+        cookie = self.login()
+        status = json.loads(self.request('GET', '/api/downloader', cookie=cookie)[2])
+        self.assertEqual((status['pct'], status['roms_name'], status['filter']), ('40', 'MAME 0.289', 'Arcade, GroovyMAME'))
+        # Aplicar o filtro: uma tarefa, com os eventos de progresso do Setup.
+        status, _, data = self.request('POST', '/api/downloader', {'action': 'start'}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        task = json.loads(data)
+        for _ in range(50):
+            info = json.loads(self.request('GET', '/api/task?id=%d' % task['id'], cookie=cookie)[2])
+            if not info['running']:
+                break
+            time.sleep(0.1)
+        self.assertEqual((info['rc'], info['pct'], info['step'], info['last']), (0, 55, 'almost', 'plain line'))
+        self.assertIn('@step 10 Reading the list', info['log'])
+        self.assertIn('--downloader start\n', self.volume_log.read_text())
+        # Sem link colado, o que vem na imagem; um que nao e magnet, nao.
+        status, _, data = self.request('POST', '/api/downloader', {'action': 'add', 'kind': 'chds'}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        adding = json.loads(data)
+        for _ in range(50):
+            if '--downloader add' in self.volume_log.read_text():
+                break
+            time.sleep(0.1)
+        self.assertIn('--downloader add chds magnet:?xt=urn:btih:chds\n', self.volume_log.read_text())
+        # Um de cada vez: com o add rodando, outro pedido do Downloader espera.
+        self.assertEqual(self.request('POST', '/api/downloader', {'action': 'start'}, cookie=cookie)[0], 409)
+        self.assertEqual(self.request('POST', '/api/downloader', {'action': 'add', 'kind': 'roms', 'magnet': 'http://x'},
+                                      cookie=cookie)[0], 400)
+        # Cancelar.
+        info = json.loads(self.request('POST', '/api/task/cancel', {'id': adding['id']}, cookie=cookie)[2])
+        for _ in range(50):
+            info = json.loads(self.request('GET', '/api/task?id=%d' % adding['id'], cookie=cookie)[2])
+            if not info['running']:
+                break
+            time.sleep(0.1)
+        self.assertFalse(info['running'])
+        tasks = json.loads(self.request('GET', '/api/tasks', cookie=cookie)[2])['tasks']
+        self.assertEqual([t['id'] for t in tasks][:2], [adding['id'], task['id']])
+        self.assertIn('downloader_cli "${@:2}"', (ROOT / 'fliperos-setup/fliperos-setup').read_text())
 
     def test_tty1_and_session_take_the_panel_request(self):
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()

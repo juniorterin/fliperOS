@@ -24,6 +24,11 @@ const TEXT = {
     confirm_launch: "Close what is on the cabinet screen and open %s?", launching: "Opening %s on the cabinet…",
     confirm_close: "Close the game on the cabinet?", first: "Showing the first %n. Type to filter.",
     no_games: "No games in this folder.", count: "%n games",
+    downloads: "Downloads", dl_filter: "Filter (Setup > Games > Downloader):", dl_start: "Apply the filter and start",
+    dl_note: "The filter itself is chosen in the Setup.", dl_roms: "ROM torrent", dl_chds: "CHD torrent", dl_none: "No link yet.",
+    dl_add: "Add link", dl_default: "Use the link that comes with FliperOS", dl_paste: "magnet:?… (paste a link)", dl_remove: "Remove",
+    dl_remove_ask: "Remove this torrent from the downloader?", dl_delete_ask: "Also delete what it already downloaded (not what reached the game folders)?",
+    tasks: "Tasks", no_tasks: "Nothing running.", show_log: "Log", cancel: "Cancel", task_ok: "done", task_fail: "failed",
     trackball: "Trackball", ball_open: "Use the phone as a trackball", sensitivity: "Sensitivity", inertia: "Keeps rolling",
     ball_hint: "Roll with your finger (a quick flick keeps rolling; touch to stop it).", ball_on: "Connected: the cabinet sees a USB mouse.",
     btn_left: "Button 1", btn_middle: "3", btn_right: "Button 2",
@@ -55,6 +60,11 @@ const TEXT = {
     confirm_launch: "Fechar o que está na tela do gabinete e abrir %s?", launching: "Abrindo %s no gabinete…",
     confirm_close: "Fechar o jogo no gabinete?", first: "Mostrando os primeiros %n. Digite para filtrar.",
     no_games: "Nenhum jogo nesta pasta.", count: "%n jogos",
+    downloads: "Downloads", dl_filter: "Filtro (Setup > Games > Downloader):", dl_start: "Aplicar o filtro e começar",
+    dl_note: "O filtro em si é escolhido no Setup.", dl_roms: "Torrent das ROMs", dl_chds: "Torrent dos CHDs", dl_none: "Sem link ainda.",
+    dl_add: "Cadastrar link", dl_default: "Usar o link que vem no FliperOS", dl_paste: "magnet:?… (cole um link)", dl_remove: "Remover",
+    dl_remove_ask: "Tirar este torrent do downloader?", dl_delete_ask: "Apagar também o que ele já baixou (não o que já chegou às pastas dos jogos)?",
+    tasks: "Tarefas", no_tasks: "Nada rodando.", show_log: "Log", cancel: "Cancelar", task_ok: "pronto", task_fail: "falhou",
     trackball: "Trackball", ball_open: "Usar o celular como trackball", sensitivity: "Sensibilidade", inertia: "Continua rolando",
     ball_hint: "Role com o dedo (um giro rápido continua rolando; toque para parar).", ball_on: "Conectado: o gabinete vê um mouse USB.",
     btn_left: "Botão 1", btn_middle: "3", btn_right: "Botão 2",
@@ -506,6 +516,100 @@ $("close-game").addEventListener("click", async () => {
   await api("/api/close", { method: "POST", body: "{}" }).catch(() => {});
 });
 
+// ── Downloads e tarefas ──────────────────────────────────────────
+// O Downloader do Setup (o filtro do MAME ROM Cleaner escolhe o que baixar
+// dos torrents): o andamento, os links e o comecar. O que leva minutos vira
+// uma tarefa, com a etapa, a porcentagem e o log.
+
+let dlState = {}, openLogs = new Set();
+
+async function loadDownloader() {
+  const res = await api("/api/downloader");
+  dlState = await res.json();
+  const pct = Number(dlState.pct || 0);
+  $("dl-text").textContent = dlState.line || "";
+  $("dl-pct").textContent = dlState.state === "downloading" ? pct + "%" : "";
+  $("dl-bar").style.width = pct + "%";
+  $("dl-filter").textContent = dlState.filter || "-";
+  if (document.activeElement && document.activeElement.closest(".dl-kind")) return;
+  $("dl-kinds").replaceChildren(...["roms", "chds"].map((kind) => {
+    const name = dlState[kind + "_name"];
+    const box = el("div", { class: "dl-kind" }, el("strong", {}, t("dl_" + kind)),
+      el("div", { class: name ? "" : "dim" }, name ? name + " · " + (dlState[kind + "_sets"] || 0) + " sets" : t("dl_none")));
+    if (name) {
+      const remove = el("button", { type: "button", class: "ghost danger" }, t("dl_remove"));
+      remove.addEventListener("click", async () => {
+        if (!confirm(t("dl_remove_ask"))) return;
+        const del = confirm(t("dl_delete_ask"));
+        await api("/api/downloader", { method: "POST", body: JSON.stringify({ action: "remove", kind, delete: del }) });
+        loadDownloader();
+      });
+      box.append(remove);
+    } else {
+      const input = el("input", { type: "text", placeholder: t("dl_paste"), autocomplete: "off" });
+      const add = el("button", { type: "button" }, t("dl_add"));
+      add.addEventListener("click", () => downloaderTask({ action: "add", kind, magnet: input.value.trim() }));
+      box.append(el("div", { class: "row" }, input, add));
+      if (dlState["default_" + kind]) {
+        const def = el("button", { type: "button", class: "ghost" }, t("dl_default"));
+        def.addEventListener("click", () => downloaderTask({ action: "add", kind }));
+        box.append(def);
+      }
+    }
+    return box;
+  }));
+}
+
+async function downloaderTask(body) {
+  const res = await api("/api/downloader", { method: "POST", body: JSON.stringify(body) });
+  if (!res.ok) toast((await res.json().catch(() => ({}))).error || res.statusText);
+  loadTasks();
+  loadDownloader();
+}
+$("dl-start").addEventListener("click", () => downloaderTask({ action: "start" }));
+
+async function loadTasks() {
+  const res = await api("/api/tasks");
+  const tasks = (await res.json()).tasks || [];
+  const list = $("tasks");
+  if (!tasks.length) { list.replaceChildren(el("li", { class: "dim" }, t("no_tasks"))); return; }
+  const rows = [];
+  for (const task of tasks) {
+    const state = task.running ? (task.pct != null ? task.pct + "%" : "…")
+      : task.rc === 0 ? "✓ " + t("task_ok") : "✗ " + t("task_fail") + " (" + task.rc + ")";
+    const head = el("div", { class: "row" }, el("strong", {}, task.name),
+      el("span", { class: task.running ? "dim" : task.rc === 0 ? "ok" : "fail" }, state));
+    const item = el("li", {}, head);
+    if (task.running) item.append(meter(task.pct || 0));
+    const detail = task.error || task.step || task.last;
+    if (detail) item.append(el("div", { class: "dim" }, detail));
+    const actions = el("div", { class: "row" });
+    const logButton = el("button", { type: "button", class: "ghost" }, t("show_log"));
+    logButton.addEventListener("click", () => {
+      openLogs.has(task.id) ? openLogs.delete(task.id) : openLogs.add(task.id);
+      loadTasks();
+    });
+    actions.append(logButton);
+    if (task.running) {
+      const cancel = el("button", { type: "button", class: "ghost danger" }, t("cancel"));
+      cancel.addEventListener("click", async () => {
+        await api("/api/task/cancel", { method: "POST", body: JSON.stringify({ id: task.id }) });
+        loadTasks();
+      });
+      actions.append(cancel);
+    }
+    item.append(actions);
+    if (openLogs.has(task.id)) {
+      const r = await api("/api/task?id=" + task.id);
+      const pre = el("pre", { class: "log" }, (await r.json()).log || "");
+      item.append(pre);
+      requestAnimationFrame(() => { pre.scrollTop = pre.scrollHeight; });
+    }
+    rows.push(item);
+  }
+  list.replaceChildren(...rows);
+}
+
 // ── Trackball: o celular como mouse do gabinete ──────────────────
 // O dedo na area rola a bola: os movimentos vao pelo WebSocket
 // /api/trackball, juntados a cada quadro da tela. Soltando depois de um
@@ -848,11 +952,17 @@ drop.addEventListener("drop", (ev) => {
 // ── O laco ───────────────────────────────────────────────────────
 
 let timer = null;
+let ticks = 0;
 async function tick() {
   try {
     const res = await api("/api/status");
     render(await res.json());
     $("offline").hidden = true;
+    // Os downloads e as tarefas, a cada 3 s.
+    if (ticks++ % 3 === 0) {
+      loadDownloader().catch(() => {});
+      loadTasks().catch(() => {});
+    }
   } catch (e) {
     if (e.message !== "login") $("offline").hidden = false;
   }
