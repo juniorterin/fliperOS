@@ -407,7 +407,7 @@ screen_colour() {
     summary+=" Saturation and hue: $([[ $ctm == yes ]] && echo "by the card" || echo "by software (games, menus, desktop; not the text console)")."
     [[ ${range:-none} != none ]] && summary+=" RGB range: $range."
     choice=$(ui_menu_hints "$title" "$summary" "$last" \
-      "calibrate|Calibrate on the screen|Test patterns; the arrows change each setting while you look at the tube." \
+      "calibrate|Calibrate on the screen|Test patterns; the arrows change each setting on the tube." \
       "values|Settings in numbers|Each setting by its number (also over SSH)." \
       "reset|Back to the defaults|The picture exactly as the card sends it." \
       "return|Return|Back to Video Setup.") || return 0
@@ -583,7 +583,7 @@ screen_video_setup() {
       "geometry_reset|Reset Geometry|Undo the geometry: back to the monitor preset." \
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
       "mode480|480i games|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
-      "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour temperature, saturation and hue." \
+      "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour and hue." \
       "${driver[@]}" \
       "return|Return|Save and leave. New video settings need a reboot.") || choice="return"
     last=$choice
