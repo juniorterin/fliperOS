@@ -22,7 +22,7 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
   - tarefas;
   - screenshot: **feito em 2026-10-17** (jogos, frontends e menu pela camada OpenGL; o desktop pelo X);
   - torrent com o filtro do MAME;
-  - terminal web;
+  - terminal web: **feito em 2026-10-17** (xterm.js, o zsh do usuário fliperos);
   - trackball de toque pelo celular.
 - **5c (experimental):**
   - transmissão por WebRTC em H.264 por hardware;
