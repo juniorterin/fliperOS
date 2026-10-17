@@ -1191,6 +1191,8 @@ class Handler(BaseHTTPRequestHandler):
         if origin != self.headers.get("Host", ""):
             return self.send(403, {"error": "wrong origin"})
         accept = base64.b64encode(hashlib.sha1((key + WS_GUID).encode()).digest()).decode()
+        # O 101 tem de ser HTTP/1.1 (o Chrome recusa um HTTP/1.0 101).
+        self.protocol_version = "HTTP/1.1"
         self.send_response(101)
         self.send_header("Upgrade", "websocket")
         self.send_header("Connection", "Upgrade")

@@ -4642,7 +4642,8 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn(' 403 ', head.splitlines()[0])
         sock, head = handshake('http://127.0.0.1:%d' % self.port)
         try:
-            self.assertIn(' 101 ', head.splitlines()[0])
+            # HTTP/1.1: o Chrome recusa o 101 em HTTP/1.0.
+            self.assertTrue(head.startswith('HTTP/1.1 101 '), head)
             sock.sendall(frame(1, json.dumps({'resize': [100, 30]}).encode()))
             sock.sendall(frame(2, b'stty size; echo hello-$((40+2))\n'))
             out, end = b'', time.time() + 10
