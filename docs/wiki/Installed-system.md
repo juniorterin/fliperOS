@@ -99,7 +99,14 @@ How it works: `systemd-logind` ignores the button (`HandlePowerKey=ignore` in `/
 
 ## Web panel
 
-The cabinet's state in a browser on the same network (a phone too): **http://fliperos.local:8080**, or the cabinet's IP with `:8080`. You sign in with the same user and password as SSH and the network share (`fliperos`, changed in **Setup > System > Password**). The page refreshes every second:
+The cabinet's state in a browser on the same network (a phone too): **http://fliperos.local:8080**, or the cabinet's IP with `:8080`. You sign in with the same user and password as SSH and the network share (`fliperos`, changed in **Setup > System > Password**). The panel has five pages, tabs at the top, each with its own address (`#frontend`, `#files`, `#settings`, `#status`, `#terminal`); the browser remembers the last one:
+- **Frontend:** now playing with the FPS, games, volume, screen and trackball;
+- **Files:** files, downloads and tasks;
+- **Settings;**
+- **Status:** video, CPU, GPU, memory, storage, network, processes and logs;
+- **Terminal.**
+
+The status refreshes every second. What each part shows:
 - **Now playing:** the game open (emulator, file, RetroArch core) and the frontend, with the **FPS** and a graph of the last minute. The FPS comes from the OpenGL layer of the flicker filter, which counts the frames of whatever game is open. The minute of history stays in the browser.
 - **Video:** what Video Setup asks (monitor, frequency, resolution, connector, orientation) next to what is on screen now: the mode, the horizontal kHz and vertical Hz, interlaced or progressive, and the full **modeline** of each active output, read from DRM by `fliperos-video-check`.
 - **CPU:** the total, each core and the load, plus the temperatures of the sensors.
