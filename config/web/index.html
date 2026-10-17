@@ -29,10 +29,19 @@
       <button id="logout" class="ghost" type="button" data-t="logout"></button>
     </div>
   </header>
+  <!-- As paginas (app.js, showPage): o endereco #frontend, #files... -->
+  <nav class="pages" aria-label="Pages">
+    <a href="#frontend" data-page="frontend" data-t="page_frontend"></a>
+    <a href="#files" data-page="files" data-t="page_files"></a>
+    <a href="#settings" data-page="settings" data-t="page_settings"></a>
+    <a href="#status" data-page="status" data-t="page_status"></a>
+    <a href="#terminal" data-page="terminal" data-t="page_terminal"></a>
+  </nav>
   <p id="offline" class="error banner" hidden data-t="offline"></p>
 
   <main class="grid">
-    <section class="card wide" aria-labelledby="h-now">
+    <!-- Frontend: o que esta aberto, os jogos, o volume, a tela e o trackball. -->
+    <section class="card wide" data-page="frontend" aria-labelledby="h-now">
       <h2 id="h-now" data-t="now_playing"></h2>
       <div class="now">
         <div>
@@ -49,7 +58,28 @@
       </div>
     </section>
 
-    <section class="card wide" aria-labelledby="h-shot">
+    <section class="card wide" data-page="frontend" aria-labelledby="h-games">
+      <h2 id="h-games" data-t="games"></h2>
+      <div class="games-bar">
+        <select id="system" aria-label="System"></select>
+        <input id="game-search" type="search" data-tp="search" autocomplete="off">
+      </div>
+      <p id="games-note" class="dim"></p>
+      <ul id="games" class="games"></ul>
+    </section>
+
+    <section class="card" data-page="frontend" aria-labelledby="h-vol">
+      <h2 id="h-vol" data-t="volume"></h2>
+      <div class="volume">
+        <button id="vol-down" type="button" aria-label="Volume down">−</button>
+        <input id="vol" type="range" min="0" max="100" step="1" aria-label="Volume">
+        <button id="vol-up" type="button" aria-label="Volume up">+</button>
+        <span id="vol-value" class="big">-</span>
+      </div>
+      <button id="vol-mute" class="ghost" type="button" data-t="mute"></button>
+    </section>
+
+    <section class="card wide" data-page="frontend" aria-labelledby="h-shot">
       <h2 id="h-shot" data-t="screen"></h2>
       <div class="row">
         <button id="shot-take" type="button" data-t="take_shot"></button>
@@ -60,56 +90,7 @@
       <img id="shot" class="shot tube" alt="" hidden>
     </section>
 
-    <section class="card wide" aria-labelledby="h-games">
-      <h2 id="h-games" data-t="games"></h2>
-      <div class="games-bar">
-        <select id="system" aria-label="System"></select>
-        <input id="game-search" type="search" data-tp="search" autocomplete="off">
-      </div>
-      <p id="games-note" class="dim"></p>
-      <ul id="games" class="games"></ul>
-    </section>
-
-    <section class="card wide" aria-labelledby="h-files">
-      <h2 id="h-files" data-t="files"></h2>
-      <div class="files-bar">
-        <select id="file-root" aria-label="Folder"></select>
-        <nav id="crumbs" class="crumbs" aria-label="Path"></nav>
-      </div>
-      <div class="files-actions">
-        <button id="file-up" class="ghost" type="button" data-t="up_folder"></button>
-        <label class="file-pick"><input id="file-input" type="file" multiple><span data-t="upload"></span></label>
-        <button id="file-mkdir" class="ghost" type="button" data-t="new_folder"></button>
-      </div>
-      <div id="upload-status" class="dim" role="status"></div>
-      <div id="file-drop" class="table-wrap drop"><table id="files"></table></div>
-      <p class="dim" data-t="drop_hint"></p>
-    </section>
-
-    <section class="card wide" aria-labelledby="h-set">
-      <h2 id="h-set" data-t="settings"></h2>
-      <p class="dim" data-t="settings_note"></p>
-      <div id="settings"></div>
-    </section>
-
-    <section class="card wide" aria-labelledby="h-dl">
-      <h2 id="h-dl" data-t="downloads"></h2>
-      <div id="dl-line" class="row"><span id="dl-text"></span><span id="dl-pct" class="dim"></span></div>
-      <div class="meter"><div id="dl-bar"></div></div>
-      <p class="dim"><span data-t="dl_filter"></span> <span id="dl-filter"></span></p>
-      <div id="dl-kinds" class="dl-kinds"></div>
-      <div class="row">
-        <button id="dl-start" type="button" data-t="dl_start"></button>
-        <span class="dim" data-t="dl_note"></span>
-      </div>
-    </section>
-
-    <section class="card wide" aria-labelledby="h-tasks">
-      <h2 id="h-tasks" data-t="tasks"></h2>
-      <ul id="tasks" class="tasks"></ul>
-    </section>
-
-    <section class="card wide" aria-labelledby="h-ball">
+    <section class="card wide" data-page="frontend" aria-labelledby="h-ball">
       <h2 id="h-ball" data-t="trackball"></h2>
       <div class="row">
         <button id="ball-open" type="button" data-t="ball_open"></button>
@@ -128,23 +109,55 @@
       </div>
     </section>
 
-    <section class="card wide" aria-labelledby="h-term">
-      <h2 id="h-term" data-t="terminal"></h2>
-      <div class="row">
-        <button id="term-open" type="button" data-t="term_open"></button>
-        <button id="term-close" class="ghost" type="button" data-t="term_close" hidden></button>
-        <span id="term-note" class="dim" role="status"></span>
+    <!-- Arquivos: as pastas, os downloads (torrent) e as tarefas. -->
+    <section class="card wide" data-page="files" aria-labelledby="h-files">
+      <h2 id="h-files" data-t="files"></h2>
+      <div class="files-bar">
+        <select id="file-root" aria-label="Folder"></select>
+        <nav id="crumbs" class="crumbs" aria-label="Path"></nav>
       </div>
-      <div id="term" class="term" hidden></div>
+      <div class="files-actions">
+        <button id="file-up" class="ghost" type="button" data-t="up_folder"></button>
+        <label class="file-pick"><input id="file-input" type="file" multiple><span data-t="upload"></span></label>
+        <button id="file-mkdir" class="ghost" type="button" data-t="new_folder"></button>
+      </div>
+      <div id="upload-status" class="dim" role="status"></div>
+      <div id="file-drop" class="table-wrap drop"><table id="files"></table></div>
+      <p class="dim" data-t="drop_hint"></p>
     </section>
 
-    <section class="card wide" aria-labelledby="h-video">
+    <section class="card wide" data-page="files" aria-labelledby="h-dl">
+      <h2 id="h-dl" data-t="downloads"></h2>
+      <div id="dl-line" class="row"><span id="dl-text"></span><span id="dl-pct" class="dim"></span></div>
+      <div class="meter"><div id="dl-bar"></div></div>
+      <p class="dim"><span data-t="dl_filter"></span> <span id="dl-filter"></span></p>
+      <div id="dl-kinds" class="dl-kinds"></div>
+      <div class="row">
+        <button id="dl-start" type="button" data-t="dl_start"></button>
+        <span class="dim" data-t="dl_note"></span>
+      </div>
+    </section>
+
+    <section class="card wide" data-page="files" aria-labelledby="h-tasks">
+      <h2 id="h-tasks" data-t="tasks"></h2>
+      <ul id="tasks" class="tasks"></ul>
+    </section>
+
+    <!-- Configuracoes. -->
+    <section class="card wide" data-page="settings" aria-labelledby="h-set">
+      <h2 id="h-set" data-t="settings"></h2>
+      <p class="dim" data-t="settings_note"></p>
+      <div id="settings"></div>
+    </section>
+
+    <!-- Status: o video, o hardware, a rede, os processos e os logs. -->
+    <section class="card wide" data-page="status" aria-labelledby="h-video">
       <h2 id="h-video" data-t="video"></h2>
       <div class="table-wrap"><table id="video-table"></table></div>
       <div id="modelines"></div>
     </section>
 
-    <section class="card" aria-labelledby="h-cpu">
+    <section class="card" data-page="status" aria-labelledby="h-cpu">
       <h2 id="h-cpu">CPU</h2>
       <div class="meter"><div id="cpu-bar"></div></div>
       <div class="row"><span id="cpu-total" class="big">-</span><span id="load" class="dim"></span></div>
@@ -152,49 +165,49 @@
       <div id="temps" class="small-list"></div>
     </section>
 
-    <section class="card" aria-labelledby="h-gpu">
+    <section class="card" data-page="status" aria-labelledby="h-gpu">
       <h2 id="h-gpu">GPU</h2>
       <div id="gpus"></div>
     </section>
 
-    <section class="card" aria-labelledby="h-mem">
+    <section class="card" data-page="status" aria-labelledby="h-mem">
       <h2 id="h-mem" data-t="memory"></h2>
       <div id="memory"></div>
     </section>
 
-    <section class="card" aria-labelledby="h-disks">
+    <section class="card" data-page="status" aria-labelledby="h-disks">
       <h2 id="h-disks" data-t="storage"></h2>
       <div id="disks"></div>
     </section>
 
-    <section class="card" aria-labelledby="h-net">
+    <section class="card" data-page="status" aria-labelledby="h-net">
       <h2 id="h-net" data-t="network"></h2>
       <div id="network"></div>
     </section>
 
-    <section class="card" aria-labelledby="h-vol">
-      <h2 id="h-vol" data-t="volume"></h2>
-      <div class="volume">
-        <button id="vol-down" type="button" aria-label="Volume down">−</button>
-        <input id="vol" type="range" min="0" max="100" step="1" aria-label="Volume">
-        <button id="vol-up" type="button" aria-label="Volume up">+</button>
-        <span id="vol-value" class="big">-</span>
-      </div>
-      <button id="vol-mute" class="ghost" type="button" data-t="mute"></button>
-    </section>
-
-    <section class="card wide" aria-labelledby="h-proc">
+    <section class="card wide" data-page="status" aria-labelledby="h-proc">
       <h2 id="h-proc" data-t="processes"></h2>
       <div class="table-wrap"><table id="procs"></table></div>
     </section>
 
-    <section class="card wide" aria-labelledby="h-logs">
+    <section class="card wide" data-page="status" aria-labelledby="h-logs">
       <h2 id="h-logs" data-t="logs"></h2>
       <div class="row">
         <select id="log-name" aria-label="Log"></select>
         <button id="log-refresh" class="ghost" type="button" data-t="refresh"></button>
       </div>
       <pre id="log-text" class="log"></pre>
+    </section>
+
+    <!-- Terminal. -->
+    <section class="card wide" data-page="terminal" aria-labelledby="h-term">
+      <h2 id="h-term" data-t="terminal"></h2>
+      <div class="row">
+        <button id="term-open" type="button" data-t="term_open"></button>
+        <button id="term-close" class="ghost" type="button" data-t="term_close" hidden></button>
+        <span id="term-note" class="dim" role="status"></span>
+      </div>
+      <div id="term" class="term" hidden></div>
     </section>
   </main>
 </div>

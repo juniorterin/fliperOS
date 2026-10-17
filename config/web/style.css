@@ -73,6 +73,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .brand img { width: 28px; height: 28px; }
 .top-actions { display: flex; gap: 8px; }
 .banner { margin: 0; padding: 8px 16px; background: var(--bg-deep); }
+/* As paginas: abas no topo, que rolam de lado num celular. */
+.pages { display: flex; gap: 4px; padding: 0 16px; background: var(--bg-deep); border-bottom: 1px solid var(--line);
+  overflow-x: auto; scrollbar-width: none; position: sticky; top: 0; z-index: 4; }
+.pages a { padding: 10px 14px; color: var(--dim); text-decoration: none; white-space: nowrap; font-weight: 600;
+  border-bottom: 2px solid transparent; }
+.pages a:hover { color: var(--fg); }
+.pages a[aria-current="page"] { color: var(--pink); border-bottom-color: var(--pink); }
+.pages a:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.term { height: calc(100vh - 220px); min-height: 320px; }
 
 .grid {
   display: grid; gap: 16px; padding: 16px;
@@ -173,7 +182,7 @@ td.num, th.num { text-align: right; }
 .ball-buttons button.down { background: var(--pink); border-color: var(--pink); }
 
 /* Terminal: o xterm.js (config/web/xterm.js). */
-.term { margin-top: 10px; height: 420px; background: #191a21; border-radius: 8px; padding: 6px; overflow: hidden; }
+.term { margin-top: 10px; background: #191a21; border-radius: 8px; padding: 6px; overflow: hidden; }
 
 /* Jogos: o sistema, a busca e a lista com o botao de abrir. */
 .games-bar { display: flex; flex-wrap: wrap; gap: 8px; }

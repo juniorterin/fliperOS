@@ -24,6 +24,7 @@ const TEXT = {
     confirm_launch: "Close what is on the cabinet screen and open %s?", launching: "Opening %s on the cabinet…",
     confirm_close: "Close the game on the cabinet?", first: "Showing the first %n. Type to filter.",
     no_games: "No games in this folder.", count: "%n games",
+    page_frontend: "Frontend", page_files: "Files", page_settings: "Settings", page_status: "Status", page_terminal: "Terminal",
     settings: "Settings", settings_note: "Each change is saved and applied right away, through the Setup. Monitor, resolution and video driver stay in the Setup, on the cabinet screen.",
     saved: "Saved: %s", group_System: "System", group_Services: "Services", "group_480i games": "480i games", group_Colour: "Colour",
     downloads: "Downloads", dl_filter: "Filter (Setup > Games > Downloader):", dl_start: "Apply the filter and start",
@@ -62,6 +63,7 @@ const TEXT = {
     confirm_launch: "Fechar o que está na tela do gabinete e abrir %s?", launching: "Abrindo %s no gabinete…",
     confirm_close: "Fechar o jogo no gabinete?", first: "Mostrando os primeiros %n. Digite para filtrar.",
     no_games: "Nenhum jogo nesta pasta.", count: "%n jogos",
+    page_frontend: "Frontend", page_files: "Arquivos", page_settings: "Configurações", page_status: "Status", page_terminal: "Terminal",
     settings: "Configurações", settings_note: "Cada mudança é gravada e aplicada na hora, pelo Setup. Monitor, resolução e driver de vídeo ficam no Setup, na tela do gabinete.",
     saved: "Gravado: %s", group_System: "Sistema", group_Services: "Serviços", "group_480i games": "Jogos 480i", group_Colour: "Cor",
     downloads: "Downloads", dl_filter: "Filtro (Setup > Games > Downloader):", dl_start: "Aplicar o filtro e começar",
@@ -1015,6 +1017,44 @@ drop.addEventListener("drop", (ev) => {
 // ── O laco ───────────────────────────────────────────────────────
 
 let timer = null;
+// ── As paginas ───────────────────────────────────────────────────
+// Frontend, Arquivos, Configuracoes, Status e Terminal: o endereco (#files)
+// escolhe; sem ele, a ultima aberta (lembrada no navegador, quando da).
+
+const PAGES = ["frontend", "files", "settings", "status", "terminal"];
+let page = "frontend";
+
+function showPage(name) {
+  if (!PAGES.includes(name)) name = "frontend";
+  page = name;
+  document.querySelectorAll("main > section[data-page]").forEach((s) => { s.hidden = s.dataset.page !== name; });
+  document.querySelectorAll(".pages a").forEach((a) => {
+    if (a.dataset.page === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  });
+  try { localStorage.setItem("fliperos-page", name); } catch (e) { /* sem armazenamento */ }
+  // O que cada pagina busca ao aparecer.
+  if (name === "files") {
+    loadFiles().catch(() => {});
+    loadDownloader().catch(() => {});
+    loadTasks().catch(() => {});
+  } else if (name === "settings") {
+    loadSettings().catch(() => {});
+  } else if (name === "status") {
+    loadLogs().catch(() => {});
+  } else if (name === "terminal" && termFit) {
+    requestAnimationFrame(() => termFit.fit());
+  }
+  if (name === "frontend") drawFps();
+}
+
+window.addEventListener("hashchange", () => showPage(location.hash.slice(1)));
+
+function firstPage() {
+  let saved = "";
+  try { saved = localStorage.getItem("fliperos-page") || ""; } catch (e) { /* sem armazenamento */ }
+  return location.hash.slice(1) || saved || "frontend";
+}
+
 let ticks = 0;
 async function tick() {
   try {
@@ -1022,7 +1062,8 @@ async function tick() {
     render(await res.json());
     $("offline").hidden = true;
     // Os downloads e as tarefas, a cada 3 s.
-    if (ticks++ % 3 === 0) {
+    // Os downloads e as tarefas, a cada 3 s, com a pagina Arquivos aberta.
+    if (ticks++ % 3 === 0 && page === "files") {
       loadDownloader().catch(() => {});
       loadTasks().catch(() => {});
     }
@@ -1035,10 +1076,9 @@ function start() {
   $("app").hidden = false;
   stop();
   tick();
-  loadLogs().catch(() => {});
   loadSystems().catch(() => {});
   loadFiles("").catch(() => {});
-  loadSettings().catch(() => {});
+  showPage(firstPage());
   timer = setInterval(tick, 1000);
 }
 function stop() {
