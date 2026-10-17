@@ -9504,5 +9504,36 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertLess(body.rindex('buttons_capture'), body.index('padkeys_on'))
 
 
+class MkisoFunctionsTests(unittest.TestCase):
+    """Toda funcao que o fliperos-mkiso.sh chama existe nele, fora dos heredocs."""
+
+    @staticmethod
+    def undefined_calls(text):
+        # O texto de um heredoc (o script gravado no chroot) nao define nada
+        # no mkiso: a install_fbneo_sets ficou dentro do RASCRIPT e o build da
+        # 0.9.1 no GitHub parou em "command not found" depois de 1h23.
+        outside, end = [], None
+        for line in text.split('\n'):
+            if end is not None:
+                if line.strip() == end:
+                    end = None
+                continue
+            outside.append(line)
+            found = re.search(r"<<-?\s*['\"]?([A-Za-z_]\w*)['\"]?", line)
+            if found and not line.lstrip().startswith('#'):
+                end = found.group(1)
+        code = '\n'.join(outside)
+        defined = set(re.findall(r'^\s*([A-Za-z_]\w*)\(\)\s*\{', code, re.M))
+        called = set(re.findall(r'^\s*([a-z]\w*_\w*)\s*$', code, re.M))
+        return sorted(called - defined)
+
+    def test_every_called_function_is_defined(self):
+        self.assertEqual(self.undefined_calls(MKISO), [])
+
+    def test_a_function_inside_a_heredoc_is_caught(self):
+        script = "build_x() {\n  cat > /tmp/x.sh << 'EOF'\nhelper_y() {\n  :\n}\nEOF\n}\nbuild_x\nhelper_y\n"
+        self.assertEqual(self.undefined_calls(script), ['helper_y'])
+
+
 if __name__ == '__main__':
     unittest.main()
