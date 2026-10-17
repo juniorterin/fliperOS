@@ -1202,6 +1202,16 @@ class AudioTests(Base):
             "Master toggle", "Speaker toggle"])
         self.assertEqual(self.env.run("audio_step sideways").returncode, 1)
 
+    def test_volume_get_and_set_for_the_web_panel(self):
+        # fliperos-setup --volume get / set N (config/fliperos-web).
+        self.mixer(["Master", "PCM"], level=35)
+        self.assertEqual(self.env.out("audio_step get").strip(), "35")
+        self.env.out("audio_step set 070")
+        self.assertEqual(self.calls.read_text().splitlines(), ["PCM 100% unmute", "Master 70% unmute"])
+        for bad in ("set 101", "set -5", "set", "set 5x"):
+            self.assertEqual(self.env.run("audio_step " + bad).returncode, 1, bad)
+        self.assertIn('audio_step "${@:2}"', (SETUP / "fliperos-setup").read_text())
+
     def test_volume_shown_is_the_mixer_level(self):
         # As teclas mudam o mixer sem passar pelo Setup: vale o nivel real.
         self.mixer(["Master"], level=35)

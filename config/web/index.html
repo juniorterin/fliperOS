@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FliperOS Panel</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="login" class="login" hidden>
+  <form id="login-form" class="card login-card">
+    <img src="icon.svg" alt="" class="login-icon">
+    <h1>FliperOS</h1>
+    <p data-t="login_text"></p>
+    <label><span data-t="user"></span><input id="user" name="user" autocomplete="username" value="fliperos" required></label>
+    <label><span data-t="password"></span><input id="password" name="password" type="password" autocomplete="current-password" required></label>
+    <p id="login-error" class="error" role="alert"></p>
+    <button type="submit" data-t="enter"></button>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="brand"><img src="icon.svg" alt=""><span>FliperOS</span><span id="version" class="dim"></span></div>
+    <div id="host" class="dim"></div>
+    <div class="top-actions">
+      <button id="lang" class="ghost" type="button" aria-label="Language">PT</button>
+      <button id="logout" class="ghost" type="button" data-t="logout"></button>
+    </div>
+  </header>
+  <p id="offline" class="error banner" hidden data-t="offline"></p>
+
+  <main class="grid">
+    <section class="card wide" aria-labelledby="h-now">
+      <h2 id="h-now" data-t="now_playing"></h2>
+      <div class="now">
+        <div>
+          <div class="big" id="game">-</div>
+          <div class="dim" id="game-detail"></div>
+          <div class="dim" id="frontend"></div>
+        </div>
+        <div class="fps">
+          <div class="big"><span id="fps">-</span> <small>FPS</small></div>
+          <canvas id="fps-chart" width="320" height="70" aria-label="FPS, last minute"></canvas>
+          <div class="dim" data-t="fps_note"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card wide" aria-labelledby="h-video">
+      <h2 id="h-video" data-t="video"></h2>
+      <div class="table-wrap"><table id="video-table"></table></div>
+      <div id="modelines"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-cpu">
+      <h2 id="h-cpu">CPU</h2>
+      <div class="meter"><div id="cpu-bar"></div></div>
+      <div class="row"><span id="cpu-total" class="big">-</span><span id="load" class="dim"></span></div>
+      <div id="cores" class="cores"></div>
+      <div id="temps" class="small-list"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-gpu">
+      <h2 id="h-gpu">GPU</h2>
+      <div id="gpus"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-mem">
+      <h2 id="h-mem" data-t="memory"></h2>
+      <div id="memory"></div>
+      <h3 data-t="disks"></h3>
+      <div id="disks"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-net">
+      <h2 id="h-net" data-t="network"></h2>
+      <div id="network"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-vol">
+      <h2 id="h-vol" data-t="volume"></h2>
+      <div class="volume">
+        <button id="vol-down" type="button" aria-label="Volume down">−</button>
+        <input id="vol" type="range" min="0" max="100" step="1" aria-label="Volume">
+        <button id="vol-up" type="button" aria-label="Volume up">+</button>
+        <span id="vol-value" class="big">-</span>
+      </div>
+      <button id="vol-mute" class="ghost" type="button" data-t="mute"></button>
+    </section>
+
+    <section class="card wide" aria-labelledby="h-proc">
+      <h2 id="h-proc" data-t="processes"></h2>
+      <div class="table-wrap"><table id="procs"></table></div>
+    </section>
+
+    <section class="card wide" aria-labelledby="h-logs">
+      <h2 id="h-logs" data-t="logs"></h2>
+      <div class="row">
+        <select id="log-name" aria-label="Log"></select>
+        <button id="log-refresh" class="ghost" type="button" data-t="refresh"></button>
+      </div>
+      <pre id="log-text" class="log"></pre>
+    </section>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

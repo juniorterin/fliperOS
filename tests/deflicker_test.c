@@ -149,6 +149,16 @@ int main(int argc, char **argv)
     }
     swap(dpy, win);
     glFinish();
+    /* DEFLICKER_TEST_LOOP=SEGUNDOS: troca quadros a uns 50 por segundo nesse
+     * tempo (o FPS que a camada grava para o painel web). */
+    if (getenv("DEFLICKER_TEST_LOOP")) {
+        int frames = atoi(getenv("DEFLICKER_TEST_LOOP")) * 50;
+        for (int i = 0; i < frames; i++) {
+            stripes();
+            swap(dpy, win);
+            usleep(20000);
+        }
+    }
     /* O que foi para a janela, de baixo para cima (como no OpenGL). */
     return print_rows(dpy, win);
 }

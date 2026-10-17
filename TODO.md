@@ -14,14 +14,7 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
 
 ## Painel web e API REST (fase 5)
 
-- **5a:**
-  - um servidor na rede local, com login pelo usuário e senha do sistema, que entra na tabela de serviços;
-  - API de leitura:
-    - CPU/GPU;
-    - vídeo: modo pedido e aplicado, refresh real, modeline, kHz, conector, driver;
-    - discos, rede, processos, logs;
-    - volume, que pode ser mudado;
-  - FPS com histórico de 1 minuto guardado no navegador.
+- **5a (leitura) feita em 2026-10-17:** http://fliperos.local:8080. Testada só no Docker; falta abrir no navegador com o gabinete de verdade e ver o FPS de um jogo.
 - **5b:**
   - abrir e fechar jogos;
   - configurações;

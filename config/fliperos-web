@@ -1,0 +1,635 @@
+#!/usr/bin/env python3
+"""O painel web do FliperOS (fase 5a): o estado do gabinete num navegador da
+rede local, em http://fliperos.local:8080 (Setup > System > Services > Web
+panel). Le CPU, GPU, o modo de video pedido e o aplicado (kHz, Hz,
+modeline, conector), discos, rede, processos, logs, o FPS do jogo aberto
+(gravado pela camada config/fliperos-deflicker.c) e o volume, que tambem
+muda daqui.
+
+So a biblioteca padrao do Python. Entra com o usuario e a senha do sistema
+(o mesmo do SSH e do Samba, Setup > System > Password): a senha e conferida
+no /etc/shadow pela libcrypt, como o login faz; roda como root por isso e
+para ler o DRM.
+
+    fliperos-web [--port 8080] [--bind 0.0.0.0]
+
+API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
+    POST /api/login   {"user", "password"}   GET /api/me   POST /api/logout
+    GET  /api/status  o estado inteiro (o painel pede a cada 2 s)
+    GET  /api/logs    os logs    GET /api/log?name=NOME&lines=N
+    POST /api/volume  {"action": "up"|"down"|"mute"} ou {"set": 0..100}
+Os POST pedem o cabecalho X-FliperOS: 1 (um formulario de outro site nao
+consegue mandar).
+"""
+import argparse
+import collections
+import ctypes
+import ctypes.util
+import glob
+import hmac
+import importlib.util
+import json
+import os
+import re
+import secrets
+import socket
+import subprocess
+import threading
+import time
+from http import HTTPStatus
+from http.cookies import SimpleCookie
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib.machinery import SourceFileLoader
+from urllib.parse import parse_qs, urlparse
+
+ENV = os.environ.get
+PROC = ENV("FLIPEROS_PROC", "/proc")
+SYS = ENV("FLIPEROS_SYS", "/sys")
+CONF = ENV("FLIPEROS_CONF", "/etc/fliperos/fliperos.conf")
+SHADOW = ENV("FLIPEROS_SHADOW", "/etc/shadow")
+USERS = ENV("FLIPEROS_WEB_USERS", "fliperos").split()
+STATIC = ENV("FLIPEROS_WEB_STATIC", "/usr/local/share/fliperos/web")
+LOGS = ENV("FLIPEROS_LOGS", "/opt/fliperos/logs")
+SYSTEM_LOGS = ENV("FLIPEROS_SYSTEM_LOGS", "/var/log/fliperos-setup.log /var/log/fliperos-update.log").split()
+RUN_USER = ENV("FLIPEROS_RUN_USER", "/run/user")
+VIDEO_CHECK = ENV("FLIPEROS_VIDEO_CHECK", "/usr/local/bin/fliperos-video-check")
+SETUP = ENV("FLIPEROS_SETUP", "/usr/local/bin/fliperos-setup")
+SETUP_SCRIPT = ENV("FLIPEROS_SETUP_SCRIPT", "/usr/local/lib/fliperos-setup/fliperos-setup")
+SESSION_HOURS = 12
+STATIC_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js",
+                "/style.css": "style.css", "/icon.svg": "icon.svg"}
+TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+         ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml"}
+# Os programas que contam como "o jogo aberto", na ordem de preferencia.
+EMULATORS = ("retroarch", "groovymame", "mame", "flycast", "pcsx2", "pcsx2-qt", "duckstation", "duckstation-qt",
+             "dolphin-emu", "supermodel", "sm2-emu", "hypseus", "singe", "openbor", "fcadefbneo.exe")
+FRONTENDS = ("attractplus", "attract", "emulationstation", "es-de", "pegasus-fe", "retrofe", "fliperos-gui")
+
+
+def read(path, default=""):
+    try:
+        with open(path, errors="replace") as f:
+            return f.read()
+    except OSError:
+        return default
+
+
+def read_int(path):
+    try:
+        return int(read(path).strip())
+    except ValueError:
+        return None
+
+
+def conf_values():
+    values = {}
+    for line in read(CONF).splitlines():
+        if "=" in line and not line.startswith("#"):
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+    return values
+
+
+# ── A senha do sistema ─────────────────────────────────────────────
+
+_crypt_lock = threading.Lock()
+_crypt = None
+
+
+def crypt(password, salt):
+    """A crypt(3) da libcrypt (a mesma do login: yescrypt, SHA-512...)."""
+    global _crypt
+    with _crypt_lock:
+        if _crypt is None:
+            lib = ctypes.CDLL(ctypes.util.find_library("crypt") or "libcrypt.so.1")
+            lib.crypt.restype = ctypes.c_char_p
+            lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+            _crypt = lib
+        out = _crypt.crypt(password.encode(), salt.encode())
+        return out.decode() if out else None
+
+
+def check_password(user, password):
+    if user not in USERS or not password:
+        return False
+    for line in read(SHADOW).splitlines():
+        fields = line.split(":")
+        if len(fields) > 1 and fields[0] == user:
+            stored = fields[1]
+            if not stored or stored[0] in "!*":
+                return False
+            out = crypt(password, stored)
+            return out is not None and hmac.compare_digest(out, stored)
+    return False
+
+
+class Sessions:
+    """Sessoes na memoria (reiniciar o servico desloga) e o limite de
+    tentativas: 5 senhas erradas num minuto travam aquele endereco."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.tokens = {}
+        self.failures = collections.defaultdict(collections.deque)
+
+    def blocked(self, ip):
+        with self.lock:
+            fails = self.failures[ip]
+            while fails and fails[0] < time.monotonic() - 60:
+                fails.popleft()
+            return len(fails) >= 5
+
+    def failed(self, ip):
+        with self.lock:
+            self.failures[ip].append(time.monotonic())
+
+    def create(self, user):
+        token = secrets.token_urlsafe(32)
+        with self.lock:
+            self.tokens[token] = (user, time.monotonic() + SESSION_HOURS * 3600)
+        return token
+
+    def user(self, token):
+        with self.lock:
+            entry = self.tokens.get(token or "")
+            if not entry:
+                return None
+            if entry[1] < time.monotonic():
+                del self.tokens[token]
+                return None
+            return entry[0]
+
+    def drop(self, token):
+        with self.lock:
+            self.tokens.pop(token or "", None)
+
+
+# ── As leituras ────────────────────────────────────────────────────
+
+class Sampler(threading.Thread):
+    """A cada segundo: o uso de CPU (total e por nucleo), a taxa da rede e o
+    CPU de cada processo, que precisam de duas leituras."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.lock = threading.Lock()
+        self.cpu = {"total": 0.0, "cores": []}
+        self.net = {}
+        self.procs = []
+        self._cpu = None
+        self._net = None
+        self._proc = {}
+        self._time = None
+
+    def run(self):
+        while True:
+            try:
+                self.sample()
+            except Exception:  # um /proc estranho nao derruba o painel
+                pass
+            time.sleep(1)
+
+    def sample(self):
+        now = time.monotonic()
+        cpu = {}
+        for line in read(os.path.join(PROC, "stat")).splitlines():
+            if line.startswith("cpu"):
+                name, *values = line.split()
+                values = [int(v) for v in values[:8]]
+                cpu[name] = (sum(values), values[3] + values[4])
+        net = {}
+        for line in read(os.path.join(PROC, "net/dev")).splitlines()[2:]:
+            if ":" in line:
+                name, data = line.split(":", 1)
+                fields = data.split()
+                if len(fields) >= 9 and name.strip() != "lo":
+                    net[name.strip()] = (int(fields[0]), int(fields[8]))
+        procs = {}
+        for stat in glob.glob(os.path.join(PROC, "[0-9]*/stat")):
+            text = read(stat)
+            if ")" not in text:
+                continue
+            pid = int(stat.split("/")[-2])
+            comm = text[text.index("(") + 1:text.rindex(")")]
+            rest = text[text.rindex(")") + 2:].split()
+            if len(rest) < 22:
+                continue
+            procs[pid] = (comm, int(rest[11]) + int(rest[12]), int(rest[21]))
+        with self.lock:
+            if self._cpu:
+                def usage(name):
+                    total, idle = cpu[name]
+                    t0, i0 = self._cpu.get(name, (total, idle))
+                    return round(100.0 * (1 - (idle - i0) / max(1, total - t0)), 1)
+                self.cpu = {"total": usage("cpu"),
+                            "cores": [usage(n) for n in sorted((k for k in cpu if k != "cpu"),
+                                                               key=lambda k: int(k[3:]))]}
+            if self._net and self._time:
+                span = max(0.001, now - self._time)
+                self.net = {name: {"rx_bps": round((rx - self._net.get(name, (rx, tx))[0]) / span),
+                                   "tx_bps": round((tx - self._net.get(name, (rx, tx))[1]) / span),
+                                   "rx_total": rx, "tx_total": tx}
+                            for name, (rx, tx) in net.items()}
+            if self._time:
+                span = max(0.001, now - self._time)
+                hz = os.sysconf("SC_CLK_TCK")
+                page = os.sysconf("SC_PAGE_SIZE")
+                rows = []
+                for pid, (comm, ticks, rss) in procs.items():
+                    before = self._proc.get(pid, (comm, ticks, rss))[1]
+                    rows.append({"pid": pid, "name": comm, "cpu": round(100.0 * (ticks - before) / hz / span, 1),
+                                 "mem_mb": round(rss * page / 1048576, 1)})
+                rows.sort(key=lambda r: (-r["cpu"], -r["mem_mb"]))
+                self.procs = rows
+            self._cpu, self._net, self._proc, self._time = cpu, net, procs, now
+
+    def snapshot(self):
+        with self.lock:
+            return dict(self.cpu), dict(self.net), list(self.procs)
+
+
+class Cached:
+    """O resultado de uma leitura cara (o DRM, o nmcli, o lspci) por alguns
+    segundos."""
+
+    def __init__(self, seconds, fn):
+        self.seconds, self.fn = seconds, fn
+        self.lock = threading.Lock()
+        self.value, self.when = None, None
+
+    def get(self):
+        with self.lock:
+            if self.when is None or time.monotonic() - self.when > self.seconds:
+                try:
+                    self.value = self.fn()
+                except Exception as exc:
+                    self.value = {"error": str(exc)}
+                self.when = time.monotonic()
+            return self.value
+
+
+def memory():
+    info = {}
+    for line in read(os.path.join(PROC, "meminfo")).splitlines():
+        key, _, value = line.partition(":")
+        if value.strip().endswith("kB"):
+            info[key] = int(value.split()[0]) * 1024
+    total = info.get("MemTotal", 0)
+    return {"total": total, "used": total - info.get("MemAvailable", total),
+            "swap_total": info.get("SwapTotal", 0),
+            "swap_used": info.get("SwapTotal", 0) - info.get("SwapFree", 0)}
+
+
+def temperatures():
+    """Os sensores do hwmon: o da CPU (k10temp, coretemp...), da GPU, do
+    disco."""
+    rows = []
+    for mon in sorted(glob.glob(os.path.join(SYS, "class/hwmon/hwmon*"))):
+        name = read(os.path.join(mon, "name")).strip()
+        for temp in sorted(glob.glob(os.path.join(mon, "temp*_input"))):
+            value = read_int(temp)
+            if value is None:
+                continue
+            label = read(temp.replace("_input", "_label")).strip()
+            rows.append({"sensor": name, "label": label, "celsius": round(value / 1000, 1)})
+    return rows
+
+
+def pci_name(slot):
+    try:
+        out = subprocess.run(["lspci", "-mm", "-s", slot], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    fields = re.findall(r'"([^"]*)"', out)
+    return " ".join(fields[1:3]) if len(fields) >= 3 else out.strip()
+
+
+def gpus():
+    rows = []
+    for card in sorted(glob.glob(os.path.join(SYS, "class/drm/card[0-9]"))):
+        dev = os.path.join(card, "device")
+        slot = os.path.basename(os.path.realpath(dev))
+        driver = os.path.basename(os.path.realpath(os.path.join(dev, "driver")))
+        row = {"card": os.path.basename(card), "slot": slot, "driver": driver, "name": pci_name(slot)}
+        busy = read_int(os.path.join(dev, "gpu_busy_percent"))
+        if busy is not None:
+            row["busy"] = busy
+        used, total = read_int(os.path.join(dev, "mem_info_vram_used")), read_int(os.path.join(dev, "mem_info_vram_total"))
+        if used is not None and total:
+            row["vram_used"], row["vram_total"] = used, total
+        for line in read(os.path.join(dev, "pp_dpm_sclk")).splitlines():
+            if line.strip().endswith("*"):
+                row["clock"] = line.split(":", 1)[-1].replace("*", "").strip()
+        freq = read_int(os.path.join(card, "gt_cur_freq_mhz"))
+        if freq is not None:
+            row["clock"] = "%d Mhz" % freq
+        for mon in glob.glob(os.path.join(dev, "hwmon/hwmon*")):
+            temp = read_int(os.path.join(mon, "temp1_input"))
+            if temp is not None:
+                row["celsius"] = round(temp / 1000, 1)
+            power = read_int(os.path.join(mon, "power1_average"))
+            if power is not None:
+                row["watts"] = round(power / 1e6, 1)
+        rows.append(row)
+    return rows
+
+
+_video_check = None
+
+
+def modeline(row):
+    flags = row.get("flags", 0)
+    parts = ["+hsync" if flags & 1 else "-hsync" if flags & 2 else "",
+             "+vsync" if flags & 4 else "-vsync" if flags & 8 else "",
+             "interlace" if flags & 16 else "", "doublescan" if flags & 32 else ""]
+    return '"%dx%d" %.3f %d %d %d %d %d %d %d %d %s' % (
+        row["width"], row["height"], row["clock_khz"] / 1000.0, row["width"], row.get("hsync_start", 0),
+        row.get("hsync_end", 0), row["htotal"], row["height"], row.get("vsync_start", 0), row.get("vsync_end", 0),
+        row["vtotal"], " ".join(p for p in parts if p))
+
+
+def video():
+    """O pedido no Setup e o que o DRM mostra agora (o fliperos-video-check)."""
+    global _video_check
+    conf = conf_values()
+    wanted = {k: conf.get(k, "") for k in ("monitor", "frequency", "boot_resolution", "connector", "orientation")}
+    outputs, errors = [], []
+    if os.path.exists(VIDEO_CHECK):
+        if _video_check is None:
+            loader = SourceFileLoader("fliperos_video_check", VIDEO_CHECK)
+            module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+            loader.exec_module(module)
+            _video_check = module
+        rows, errors = _video_check.read_active()
+        for row in rows:
+            if row.get("active"):
+                row = dict(row)
+                row["modeline"] = modeline(row)
+                row["horizontal_khz"] = round(row["horizontal_khz"], 3)
+                row["vertical_hz"] = round(row["vertical_hz"], 3)
+            outputs.append(row)
+    fb = read(os.path.join(SYS, "class/graphics/fb0/virtual_size")).strip().replace(",", "x")
+    return {"wanted": wanted, "outputs": outputs, "errors": errors, "framebuffer": fb}
+
+
+def disks():
+    rows, seen = [], set()
+    real = {"ext4", "ext3", "ext2", "vfat", "exfat", "ntfs", "ntfs3", "fuseblk", "btrfs", "xfs", "cifs", "f2fs"}
+    for line in read(os.path.join(PROC, "mounts")).splitlines():
+        fields = line.split()
+        if len(fields) < 3 or fields[2] not in real or fields[0] in seen:
+            continue
+        mount = fields[1].replace("\\040", " ")
+        try:
+            st = os.statvfs(mount)
+        except OSError:
+            continue
+        seen.add(fields[0])
+        total = st.f_blocks * st.f_frsize
+        rows.append({"device": fields[0], "mount": mount, "type": fields[2], "total": total,
+                     "used": total - st.f_bavail * st.f_frsize})
+    return rows
+
+
+def addresses():
+    try:
+        out = subprocess.run(["ip", "-j", "addr"], capture_output=True, text=True, timeout=5).stdout
+        data = json.loads(out or "[]")
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return {}
+    return {i["ifname"]: [a["local"] for a in i.get("addr_info", []) if a.get("family") == "inet"]
+            for i in data if i.get("ifname") != "lo"}
+
+
+def wifi():
+    try:
+        out = subprocess.run(["nmcli", "-t", "-f", "ACTIVE,SSID,SIGNAL", "device", "wifi", "list", "--rescan", "no"],
+                             capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in out.splitlines():
+        parts = line.split(":")
+        if len(parts) >= 3 and parts[0] == "yes":
+            return {"ssid": ":".join(parts[1:-1]), "signal": int(parts[-1] or 0)}
+    return None
+
+
+def fps():
+    """O FPS gravado pela camada (fliperos-deflicker.c) de um programa ainda
+    aberto: o arquivo mais novo de /run/user/*/fliperos-fps."""
+    best = None
+    for path in glob.glob(os.path.join(RUN_USER, "*/fliperos-fps")):
+        try:
+            age = time.time() - os.path.getmtime(path)
+            fields = read(path).split()
+        except OSError:
+            continue
+        if len(fields) < 5 or age > 3 or not os.path.exists(os.path.join(PROC, fields[0])):
+            continue
+        row = {"pid": int(fields[0]), "fps": float(fields[1]), "program": fields[2],
+               "core": None if fields[3] == "-" else fields[3], "filtering": fields[4] == "1"}
+        if best is None or age < best[0]:
+            best = (age, row)
+    return best[1] if best else None
+
+
+def running():
+    """O jogo e o frontend abertos: o processo, o comando e o arquivo."""
+    found = {"game": None, "frontend": None}
+    for cmdline in glob.glob(os.path.join(PROC, "[0-9]*/cmdline")):
+        args = [a for a in read(cmdline).split("\0") if a]
+        if not args:
+            continue
+        name = os.path.basename(args[0])
+        if name.startswith("python") and len(args) > 1:
+            name = os.path.basename(args[1])
+        kind = "game" if name in EMULATORS else "frontend" if name in FRONTENDS else None
+        if not kind or found[kind]:
+            continue
+        files = [a for a in args[1:] if not a.startswith("-") and "." in os.path.basename(a)]
+        found[kind] = {"pid": int(cmdline.split("/")[-2]), "program": name,
+                       "file": os.path.basename(files[-1]) if files else None, "command": " ".join(args)[:400]}
+    return found
+
+
+def version():
+    m = re.search(r"^FLIPEROS_SETUP_VERSION=(\S+)", read(SETUP_SCRIPT), re.M)
+    return m.group(1).strip("\"'") if m else ""
+
+
+def volume():
+    try:
+        out = subprocess.run([SETUP, "--volume", "get"], capture_output=True, text=True, timeout=10).stdout
+        return {"percent": int(out.strip().split()[-1])}
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return {"percent": None}
+
+
+def log_names():
+    names = {}
+    for path in sorted(glob.glob(os.path.join(LOGS, "*.log"))) + SYSTEM_LOGS:
+        if os.path.isfile(path):
+            names[os.path.basename(path)] = path
+    return names
+
+
+def tail(path, lines):
+    with open(path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        f.seek(max(0, size - 256 * 1024))
+        text = f.read().decode(errors="replace")
+    return "\n".join(text.splitlines()[-lines:])
+
+
+# ── O servidor ─────────────────────────────────────────────────────
+
+class Panel:
+    def __init__(self):
+        self.sessions = Sessions()
+        self.sampler = Sampler()
+        self.sampler.start()
+        self.video = Cached(2, video)
+        self.gpus = Cached(2, gpus)
+        self.addresses = Cached(10, addresses)
+        self.wifi = Cached(10, wifi)
+        self.volume = Cached(2, volume)
+        self.disks = Cached(10, disks)
+
+    def status(self):
+        cpu, net, procs = self.sampler.snapshot()
+        addrs = self.addresses.get()
+        for name, row in net.items():
+            row["ipv4"] = addrs.get(name, []) if isinstance(addrs, dict) else []
+        load = read(os.path.join(PROC, "loadavg")).split()
+        uptime = read(os.path.join(PROC, "uptime")).split()
+        return {
+            "host": socket.gethostname(), "version": version(), "time": time.time(),
+            "uptime": float(uptime[0]) if uptime else None, "load": [float(x) for x in load[:3]],
+            "cpu": cpu, "memory": memory(), "temperatures": temperatures(), "gpus": self.gpus.get(),
+            "video": self.video.get(), "disks": self.disks.get(), "network": net, "wifi": self.wifi.get(),
+            "processes": procs[:12], "fps": fps(), "running": running(), "volume": self.volume.get(),
+        }
+
+
+class Handler(BaseHTTPRequestHandler):
+    panel = None
+    server_version = "fliperos-web"
+    sys_version = ""
+
+    def log_message(self, fmt, *args):
+        pass
+
+    def send(self, code, body, ctype="application/json", headers=None):
+        data = body if isinstance(body, bytes) else json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:")
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def token(self):
+        cookie = SimpleCookie(self.headers.get("Cookie", ""))
+        return cookie["fliperos_session"].value if "fliperos_session" in cookie else None
+
+    def body(self):
+        size = min(int(self.headers.get("Content-Length") or 0), 65536)
+        try:
+            return json.loads(self.rfile.read(size) or b"{}")
+        except ValueError:
+            return {}
+
+    def do_GET(self):
+        url = urlparse(self.path)
+        if url.path in STATIC_FILES:
+            name = STATIC_FILES[url.path]
+            try:
+                with open(os.path.join(STATIC, name), "rb") as f:
+                    data = f.read()
+            except OSError:
+                return self.send(404, {"error": "not found"})
+            return self.send(200, data, TYPES[os.path.splitext(name)[1]])
+        if not url.path.startswith("/api/"):
+            return self.send(404, {"error": "not found"})
+        user = self.panel.sessions.user(self.token())
+        if not user:
+            return self.send(401, {"error": "login"})
+        if url.path == "/api/me":
+            return self.send(200, {"user": user})
+        if url.path == "/api/status":
+            return self.send(200, self.panel.status())
+        if url.path == "/api/logs":
+            return self.send(200, {"logs": sorted(log_names())})
+        if url.path == "/api/log":
+            query = parse_qs(url.query)
+            path = log_names().get((query.get("name") or [""])[0])
+            if not path:
+                return self.send(404, {"error": "no such log"})
+            try:
+                lines = max(10, min(2000, int((query.get("lines") or ["300"])[0])))
+            except ValueError:
+                lines = 300
+            return self.send(200, {"text": tail(path, lines)})
+        if url.path == "/api/volume":
+            return self.send(200, self.panel.volume.get())
+        return self.send(404, {"error": "not found"})
+
+    def do_POST(self):
+        url = urlparse(self.path)
+        if self.headers.get("X-FliperOS") != "1":
+            return self.send(403, {"error": "missing X-FliperOS header"})
+        ip = self.client_address[0]
+        if url.path == "/api/login":
+            if self.panel.sessions.blocked(ip):
+                return self.send(429, {"error": "too many attempts, wait a minute"})
+            data = self.body()
+            user, password = str(data.get("user", "")), str(data.get("password", ""))
+            if not check_password(user, password):
+                self.panel.sessions.failed(ip)
+                return self.send(401, {"error": "wrong user or password"})
+            token = self.panel.sessions.create(user)
+            cookie = "fliperos_session=%s; HttpOnly; SameSite=Strict; Path=/; Max-Age=%d" % (
+                token, SESSION_HOURS * 3600)
+            return self.send(200, {"user": user}, headers={"Set-Cookie": cookie})
+        user = self.panel.sessions.user(self.token())
+        if not user:
+            return self.send(401, {"error": "login"})
+        if url.path == "/api/logout":
+            self.panel.sessions.drop(self.token())
+            return self.send(200, {}, headers={"Set-Cookie": "fliperos_session=; Path=/; Max-Age=0"})
+        if url.path == "/api/volume":
+            data = self.body()
+            if data.get("action") in ("up", "down", "mute"):
+                args = [data["action"]]
+            elif isinstance(data.get("set"), int) and 0 <= data["set"] <= 100:
+                args = ["set", str(data["set"])]
+            else:
+                return self.send(400, {"error": "action up|down|mute or set 0..100"})
+            try:
+                subprocess.run([SETUP, "--volume", *args], capture_output=True, timeout=15)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            self.panel.volume.when = None
+            return self.send(200, self.panel.volume.get())
+        return self.send(404, {"error": "not found"})
+
+
+def main():
+    parser = argparse.ArgumentParser(description="FliperOS web panel")
+    parser.add_argument("--port", type=int, default=int(ENV("FLIPEROS_WEB_PORT", "8080")))
+    parser.add_argument("--bind", default=ENV("FLIPEROS_WEB_BIND", "0.0.0.0"))
+    args = parser.parse_args()
+    Handler.panel = Panel()
+    server = ThreadingHTTPServer((args.bind, args.port), Handler)
+    server.daemon_threads = True
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

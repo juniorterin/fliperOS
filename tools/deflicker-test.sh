@@ -51,6 +51,12 @@ run $pre FLIPEROS_DEFLICKER_APP=flycast $b/deflicker_test link
 run $pre DEFLICKER_TEST_DLOPEN=$b/mame2010_libretro.so $b/deflicker_test link
 run $pre FLIPEROS_DEFLICKER_APP=flycast FLIPEROS_DEFLICKER_FILE=$b/level $b/deflicker_test link
 
+# O FPS para o painel web (config/fliperos-web): a camada grava a cada
+# segundo "pid fps programa core filtrando", mesmo sem filtrar.
+run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_FPS_FILE=$b/fps FLIPEROS_DEFLICKER_APP=flycast \
+  DEFLICKER_TEST_LOOP=3 $b/deflicker_test link > /dev/null
+echo "== fps file: $(cat $b/fps)"
+
 # A calibracao de cor (config/fliperos-color.c): a tabela de gama de 5
 # pontos de cada canal e a matriz, com os padroes e com cada parametro.
 bash config/fliperos-deflicker-build config/fliperos-color.c $b/fliperos-color

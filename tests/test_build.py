@@ -4328,6 +4328,151 @@ class DeflickerTests(unittest.TestCase):
                 self.assertRegex(syms, r' T %s\n' % name)
 
 
+class WebPanelTests(unittest.TestCase):
+    """config/fliperos-web, o painel web (fase 5a): o servidor de verdade num
+    endereco local, com um /etc/shadow, um fliperos-setup (o volume) e um FPS
+    da camada falsos."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ctypes
+        import ctypes.util
+        import socket
+        cls.tmp = tempfile.TemporaryDirectory()
+        tmp = Path(cls.tmp.name)
+        lib = ctypes.CDLL(ctypes.util.find_library('crypt') or 'libcrypt.so.1')
+        lib.crypt.restype = ctypes.c_char_p
+        lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        stored = lib.crypt(b'arcade', b'$6$fliperostest$').decode()
+        (tmp / 'shadow').write_text('root:!:19000::::::\nfliperos:%s:19000:0:99999:7:::\nother:%s:19000::::::\n'
+                                    % (stored, stored))
+        (tmp / 'logs').mkdir()
+        (tmp / 'logs/retroarch.log').write_text(''.join('line %d\n' % i for i in range(500)))
+        (tmp / 'secret.log').write_text('do not show\n')
+        setup = tmp / 'fliperos-setup'
+        setup.write_text('#!/bin/sh\necho "$*" >> %s/volume.log\n[ "$2" = get ] && echo 42\nexit 0\n' % tmp)
+        setup.chmod(0o755)
+        run = tmp / 'run/1000'
+        run.mkdir(parents=True)
+        (run / 'fliperos-fps').write_text('%d 59.9 flycast - 1\n' % os.getpid())
+        (tmp / 'fliperos.conf').write_text('monitor=generic_15\nfrequency=15k\nboot_resolution=640x240S\n')
+        with socket.socket() as s:
+            s.bind(('127.0.0.1', 0))
+            cls.port = s.getsockname()[1]
+        env = dict(os.environ, FLIPEROS_SHADOW=str(tmp / 'shadow'), FLIPEROS_WEB_STATIC=str(ROOT / 'config/web'),
+                   FLIPEROS_LOGS=str(tmp / 'logs'), FLIPEROS_SYSTEM_LOGS=str(tmp / 'missing.log'),
+                   FLIPEROS_SETUP=str(setup), FLIPEROS_RUN_USER=str(tmp / 'run'),
+                   FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_VIDEO_CHECK=str(tmp / 'none'))
+        cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
+                                       '--port', str(cls.port)], env=env)
+        for _ in range(100):
+            try:
+                with socket.create_connection(('127.0.0.1', cls.port), timeout=0.2):
+                    break
+            except OSError:
+                time.sleep(0.1)
+        cls.volume_log = tmp / 'volume.log'
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.terminate()
+        cls.server.wait(timeout=10)
+        cls.tmp.cleanup()
+
+    def request(self, method, path, body=None, cookie=None, header=True):
+        import http.client
+        conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
+        headers = {'Content-Type': 'application/json'}
+        if header:
+            headers['X-FliperOS'] = '1'
+        if cookie:
+            headers['Cookie'] = cookie
+        conn.request(method, path, json.dumps(body) if body is not None else None, headers)
+        res = conn.getresponse()
+        data = res.read()
+        conn.close()
+        return res.status, res.getheader('Set-Cookie'), data
+
+    def login(self):
+        status, cookie, _ = self.request('POST', '/api/login', {'user': 'fliperos', 'password': 'arcade'})
+        self.assertEqual(status, 200)
+        self.assertIn('HttpOnly', cookie)
+        self.assertIn('SameSite=Strict', cookie)
+        return cookie.split(';')[0]
+
+    def test_pages_are_served_and_the_api_asks_for_login(self):
+        status, _, page = self.request('GET', '/')
+        self.assertEqual(status, 200)
+        self.assertIn(b'<script src="app.js">', page)
+        for path in ('/app.js', '/style.css', '/icon.svg'):
+            self.assertEqual(self.request('GET', path)[0], 200, path)
+        self.assertEqual(self.request('GET', '/../fliperos-web')[0], 404)
+        for path in ('/api/status', '/api/me', '/api/logs'):
+            self.assertEqual(self.request('GET', path)[0], 401, path)
+
+    def test_login_with_the_system_password_only(self):
+        # So o usuario do FliperOS, com a senha dele; root sem senha valida e
+        # outro usuario de fora; sem o cabecalho X-FliperOS, nada.
+        for user, password in (('fliperos', 'wrong'), ('other', 'arcade'), ('root', ''), ('fliperos', '')):
+            self.assertEqual(self.request('POST', '/api/login', {'user': user, 'password': password})[0], 401)
+        self.assertEqual(self.request('POST', '/api/login', {'user': 'fliperos', 'password': 'arcade'},
+                                      header=False)[0], 403)
+        cookie = self.login()
+        status, _, data = self.request('GET', '/api/me', cookie=cookie)
+        self.assertEqual((status, json.loads(data)), (200, {'user': 'fliperos'}))
+        self.request('POST', '/api/logout', {}, cookie=cookie)
+        self.assertEqual(self.request('GET', '/api/me', cookie=cookie)[0], 401)
+
+    def test_status_has_every_card(self):
+        cookie = self.login()
+        status, _, data = self.request('GET', '/api/status', cookie=cookie)
+        self.assertEqual(status, 200)
+        s = json.loads(data)
+        for key in ('host', 'uptime', 'load', 'cpu', 'memory', 'temperatures', 'gpus', 'video', 'disks', 'network',
+                    'processes', 'fps', 'running', 'volume'):
+            self.assertIn(key, s)
+        self.assertEqual(s['fps'], {'pid': os.getpid(), 'fps': 59.9, 'program': 'flycast', 'core': None,
+                                    'filtering': True})
+        self.assertEqual(s['video']['wanted']['boot_resolution'], '640x240S')
+        self.assertEqual(s['volume'], {'percent': 42})
+        self.assertGreater(s['memory']['total'], 0)
+
+    def test_logs_only_from_the_list(self):
+        cookie = self.login()
+        logs = json.loads(self.request('GET', '/api/logs', cookie=cookie)[2])['logs']
+        self.assertEqual(logs, ['retroarch.log'])
+        text = json.loads(self.request('GET', '/api/log?name=retroarch.log&lines=20', cookie=cookie)[2])['text']
+        self.assertEqual(text.splitlines(), ['line %d' % i for i in range(480, 500)])
+        for name in ('../secret.log', '/etc/passwd', 'secret.log'):
+            self.assertEqual(self.request('GET', '/api/log?name=' + name, cookie=cookie)[0], 404, name)
+
+    def test_volume_goes_through_the_setup(self):
+        cookie = self.login()
+        self.assertEqual(self.request('POST', '/api/volume', {'set': 30}, cookie=cookie)[0], 200)
+        self.assertEqual(self.request('POST', '/api/volume', {'action': 'mute'}, cookie=cookie)[0], 200)
+        for bad in ({'set': 101}, {'set': '30; reboot'}, {'action': 'reboot'}):
+            self.assertEqual(self.request('POST', '/api/volume', bad, cookie=cookie)[0], 400, bad)
+        self.assertIn('--volume set 30\n', self.volume_log.read_text())
+        self.assertIn('--volume mute\n', self.volume_log.read_text())
+
+    def test_zz_too_many_wrong_passwords_lock_the_address(self):
+        # Por ultimo (zz: os testes vao em ordem alfabetica): trava o
+        # 127.0.0.1 por um minuto.
+        for _ in range(5):
+            self.request('POST', '/api/login', {'user': 'fliperos', 'password': 'nope'})
+        self.assertEqual(self.request('POST', '/api/login', {'user': 'fliperos', 'password': 'arcade'})[0], 429)
+
+    def test_modeline_and_install(self):
+        web = SourceFileLoader('fliperos_web', str(ROOT / 'config/fliperos-web')).load_module()
+        row = {'width': 640, 'height': 480, 'clock_khz': 12590, 'hsync_start': 656, 'hsync_end': 720, 'htotal': 800,
+               'vsync_start': 490, 'vsync_end': 496, 'vtotal': 525, 'flags': 2 | 8 | 16}
+        self.assertEqual(web.modeline(row), '"640x480" 12.590 640 656 720 800 480 490 496 525 -hsync -vsync interlace')
+        self.assertIn('install -Dm755 "$src/config/fliperos-web" "$root/opt/fliperos/bin/fliperos-web"', ROOTFS)
+        self.assertIn("echo 'web=after' >> \"$root/etc/fliperos/services.conf\"", ROOTFS)
+        services = (ROOT / 'fliperos-setup/lib/services.sh').read_text()
+        self.assertIn('web|Web panel|fliperos-web.service|', services)
+
+
 def fightcade_package(path, files=None):
     """Um pacote como o do Fightcade para Linux: tudo dentro de Fightcade/."""
     files = files if files is not None else {

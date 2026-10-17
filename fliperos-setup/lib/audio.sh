@@ -158,13 +158,24 @@ audio_set_volume() {
 # audio_step up|down|mute: as teclas de volume do teclado (triggerhappy, ver
 # config/fliperos-volume.triggers), em qualquer tela: KMS, X ou console. O
 # estado e gravado a cada toque, porque gabinete costuma ser desligado na
-# tomada.
+# tomada. Tambem get (imprime o volume) e set PORCENTAGEM: o painel web
+# (config/fliperos-web).
 audio_step() {
   local card control change
   case $1 in
     up) change="$AUDIO_STEP%+ unmute" ;;
     down) change="$AUDIO_STEP%-" ;;
     mute) change="toggle" ;;
+    get)
+      audio_volume
+      return 0
+      ;;
+    set)
+      [[ ${2:-} =~ ^[0-9]{1,3}$ ]] || return 1
+      ((10#$2 <= 100)) || return 1
+      audio_set_volume "$((10#$2))"
+      return 0
+      ;;
     *) return 1 ;;
   esac
   card=$(audio_card)

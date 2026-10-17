@@ -121,7 +121,11 @@ def read_active():
                     row.update(timing(mode.clock, mode.htotal, mode.vtotal, mode.flags, mode.vscan))
                     row.update(active=True, clock_khz=mode.clock, htotal=mode.htotal,
                                vtotal=mode.vtotal, width=mode.hdisplay, height=mode.vdisplay,
-                               crtc=crtc.contents.crtc_id)
+                               crtc=crtc.contents.crtc_id,
+                               # A modeline inteira (o painel web, config/fliperos-web).
+                               hsync_start=mode.hsync_start, hsync_end=mode.hsync_end,
+                               vsync_start=mode.vsync_start, vsync_end=mode.vsync_end,
+                               flags=mode.flags, mode_name=mode.name.decode(errors="replace"))
                 except (OSError, ValueError) as exc:
                     errors.append(f"{card}: {exc}")
                 finally:

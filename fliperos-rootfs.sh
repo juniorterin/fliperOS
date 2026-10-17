@@ -209,6 +209,14 @@ install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-sna
 # do ROM cleaner escolhe. O servico so e ligado pelo Setup, com um link.
 install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"
 install -Dm644 "$src/config/fliperos-transmission.service" "$root/etc/systemd/system/fliperos-transmission.service"
+# O painel web (config/fliperos-web, Setup > System > Services > Web panel):
+# sobe depois do boot (web=after no services.conf) ate a pessoa mudar.
+install -Dm755 "$src/config/fliperos-web" "$root/opt/fliperos/bin/fliperos-web"
+install -Dm644 "$src/config/fliperos-web.service" "$root/etc/systemd/system/fliperos-web.service"
+rm -rf "$root/usr/local/share/fliperos/web"
+install -Dm644 -t "$root/usr/local/share/fliperos/web" "$src"/config/web/*
+grep -q '^web=' "$root/etc/fliperos/services.conf" 2> /dev/null ||
+  echo 'web=after' >> "$root/etc/fliperos/services.conf"
 install -Dm644 "$src/config/fliperos-downloader-magnets" "$root/usr/local/share/fliperos/downloader-magnets"
 # Setup > Games > Scraper > Art packs by torrent: logos e videos de pacotes em
 # torrent, so os dos jogos das pastas, pelo mesmo Transmission.

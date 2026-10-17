@@ -1,0 +1,15 @@
+[Unit]
+Description=FliperOS: web panel (http://fliperos.local:8080, Setup > System > Services)
+After=network.target
+
+[Service]
+# Root: confere a senha no /etc/shadow e le o DRM (config/fliperos-web).
+ExecStart=/usr/bin/python3 /opt/fliperos/bin/fliperos-web
+# O painel nao pode roubar a CPU de quem esta jogando.
+Nice=15
+IOSchedulingClass=idle
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -53,6 +53,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <EGL/egl.h>
@@ -556,6 +557,48 @@ static int active(void)
     return (!level_off && interlaced() ? 1 : 0) | (matrix_on ? 2 : 0);
 }
 
+/* fps_tick: o FPS do programa para o painel web (config/fliperos-web): as
+ * trocas de quadro de cada segundo, gravadas a cada segundo em
+ * $XDG_RUNTIME_DIR/fliperos-fps (FLIPEROS_FPS_FILE troca o arquivo), numa
+ * linha "pid fps programa core filtrando". Sem a pasta, nada. */
+static void fps_tick(int what)
+{
+    static double start;
+    static int count, disabled;
+    static char path[256];
+    struct timespec ts;
+    if (disabled)
+        return;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    double now = (double)ts.tv_sec + ts.tv_nsec / 1e9;
+    if (!path[0]) {
+        const char *file = getenv("FLIPEROS_FPS_FILE"), *dir = getenv("XDG_RUNTIME_DIR");
+        if (file && *file)
+            snprintf(path, sizeof(path), "%s", file);
+        else if (dir && *dir)
+            snprintf(path, sizeof(path), "%s/fliperos-fps", dir);
+        else {
+            disabled = 1;
+            return;
+        }
+        start = now;
+    }
+    count++;
+    if (now - start < 1.0)
+        return;
+    char tmp[300];
+    snprintf(tmp, sizeof(tmp), "%s.%d", path, (int)getpid());
+    FILE *f = fopen(tmp, "w");
+    if (f) {
+        fprintf(f, "%d %.1f %s %s %d\n", (int)getpid(), count / (now - start), app, core[0] ? core : "-", what & 1);
+        fclose(f);
+        if (rename(tmp, path))
+            unlink(tmp);
+    }
+    count = 0;
+    start = now;
+}
+
 /* ── As trocas de quadro ────────────────────────────────────────── */
 
 static void *glx_getproc(const char *name)
@@ -581,6 +624,7 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable)
     if (!real)
         real = sym("glXSwapBuffers");
     int what = active();
+    fps_tick(what);
     if (what) {
         static GLXContext (*current)(void);
         static void (*query)(Display *, GLXDrawable, int, unsigned int *);
@@ -605,6 +649,7 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     if (!real)
         real = sym("eglSwapBuffers");
     int what = active();
+    fps_tick(what);
     if (what) {
         static EGLContext (*current)(void);
         static EGLBoolean (*query)(EGLDisplay, EGLSurface, EGLint, EGLint *);
