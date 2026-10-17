@@ -100,10 +100,10 @@ How it works: `systemd-logind` ignores the button (`HandlePowerKey=ignore` in `/
 ## Web panel
 
 The cabinet's state in a browser on the same network (a phone too): **http://fliperos.local:8080**, or the cabinet's IP with `:8080`. You sign in with the same user and password as SSH and the network share (`fliperos`, changed in **Setup > System > Password**). The panel has five pages, tabs at the top, each with its own address (`#frontend`, `#files`, `#settings`, `#status`, `#terminal`); the browser remembers the last one:
-- **Frontend:** now playing with the FPS, games, volume, screen and trackball;
+- **Frontend:** now playing with the FPS, games, volume and screen;
 - **Files:** files, downloads and tasks;
-- **Settings;**
-- **Status:** video, CPU, GPU, memory, storage, network, processes and logs;
+- **Settings:** colour values are sliders;
+- **Status:** now playing and the screen at the top, then video, CPU, GPU, memory, storage, network, processes and logs;
 - **Terminal.**
 
 The status refreshes every second. What each part shows:
@@ -134,7 +134,7 @@ The status refreshes every second. What each part shows:
 - **Tasks:** what takes minutes (reading a torrent's link, applying the filter) runs in the background.
   - Each task shows the step and the percentage from the Setup's progress events, and has a log and *Cancel*.
   - Only one task of each kind runs at a time, and the last 20 stay listed.
-- **Trackball:** the phone as the cabinet's mouse, for trackball and spinner games (MAME reads the mouse for them), frontends and the desktop.
+- **Trackball** (off for now: the card is hidden and `/api/trackball` answers 404 unless the service has `FLIPEROS_WEB_TRACKBALL=1`): the phone as the cabinet's mouse, for trackball and spinner games (MAME reads the mouse for them), frontends and the desktop.
   - Roll with a finger on the pad. After a quick flick the ball keeps rolling and slows down by itself, like an arcade trackball, and a touch stops it.
   - There are three big buttons and a sensitivity slider; a mouse wheel on the pad also scrolls.
   - The panel creates a virtual USB mouse in `/dev/uinput` ("FliperOS web trackball": X, Y, wheel and three buttons) the first time it is used. It stays while the panel runs. The page sends the movement over a WebSocket (`/api/trackball`) once per screen frame.

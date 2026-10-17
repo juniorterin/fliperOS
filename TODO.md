@@ -15,6 +15,7 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
 ## Painel web e API REST (fase 5)
 
 - **5a (leitura) e 5b (controle) feitas em 2026-10-17:** http://fliperos.local:8080. Cada parte foi testada no gabinete pela API (abrir e fechar jogos, FPS, screenshot, arquivos, terminal, trackball, Downloader, configurações). Falta conferir num navegador de verdade, no PC e no celular: o layout, o terminal no Chrome e o trackball no toque.
+- **Trackball pelo celular:** pronto, mas desligado por enquanto (2026-10-17, a pedido). O cartão está escondido e `FLIPEROS_WEB_TRACKBALL=1` no serviço liga de novo.
 - **5c (experimental):**
   - transmissão por WebRTC em H.264 por hardware;
   - marquee do Pixelcade/ZeDMD como overlay para o OBS.
