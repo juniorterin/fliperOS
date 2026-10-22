@@ -9395,6 +9395,35 @@ class AttractLayoutTests(unittest.TestCase):
         self.assertIn('local flw = fe.layout.width;', nut)
         self.assertIn('lb.char_size = Y( 22 );', nut)
         self.assertIn('fe.add_image( "bg.png", 0, 0, flw, flh );', nut)
+    def test_initramfs_goes_without_nouveau_and_the_nvidia_firmware(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-initramfs-nvidia" '
+                      '"$root/etc/initramfs-tools/hooks/fliperos-nvidia"', ROOTFS)
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp)
+            drm = dest / 'usr/lib/modules/6.18.54-15khz/kernel/drivers/gpu/drm'
+            keep = [drm / 'radeon/radeon.ko', drm / 'amd/amdgpu/amdgpu.ko', dest / 'usr/lib/firmware/edid/arcade_15.bin',
+                    dest / 'usr/lib/firmware/amdgpu/x.bin.zst', dest / 'usr/lib/firmware/radeon/y.bin.zst']
+            gone = [drm / 'nouveau/nouveau.ko', dest / 'usr/lib/firmware/nvidia/ga102/gsp/gsp-570.144.bin.zst']
+            for path in keep + gone:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'x')
+            # O usrmerge do initramfs: /lib e um link para usr/lib.
+            (dest / 'lib').symlink_to('usr/lib')
+            hook = ROOT / 'config/fliperos-initramfs-nvidia'
+            self.assertEqual(subprocess.run(['sh', str(hook), 'prereqs'], capture_output=True, text=True).stdout, '\n')
+            r = subprocess.run(['sh', str(hook)], env=dict(os.environ, DESTDIR=tmp), capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            for path in keep:
+                self.assertTrue(path.exists(), path)
+            for path in gone:
+                self.assertFalse(path.exists(), path)
+            self.assertFalse((drm / 'nouveau').exists())
+            self.assertTrue((dest / 'lib').is_symlink())
+        # O firmware continua no sistema, e a ISO e conferida sem ele no initramfs.
+        verify = (ROOT / 'tools/verify-iso.sh').read_text()
+        self.assertIn("grep -q 'squashfs-root/usr/lib/firmware/nvidia/'", verify)
+        self.assertIn("grep -qE 'firmware/nvidia/|drm/nouveau/' \"$work/initrd.txt\" && fail", verify)
+
         self.assertEqual((self.BASIC / 'bg.png').read_bytes()[:8], b'\x89PNG\r\n\x1a\n')
 
     def test_basic_is_installed_over_the_packaged_one(self):

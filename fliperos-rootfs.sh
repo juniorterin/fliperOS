@@ -442,6 +442,9 @@ rm -rf "$root/usr/share/fonts/truetype/fliperos"
 install -Dm644 -t "$root/usr/share/fonts/truetype/fliperos" \
   "$src"/config/fonts/jetbrains-mono/*.ttf "$src/config/fonts/jetbrains-mono/OFL.txt"
 install -Dm755 "$src/config/fliperos-initramfs-fonts" "$root/etc/initramfs-tools/hooks/fliperos-fonts"
+# O nouveau e o firmware da NVIDIA fora do initramfs (105 MB a menos nele):
+# o udev carrega o nouveau do disco, com o firmware de la.
+install -Dm755 "$src/config/fliperos-initramfs-nvidia" "$root/etc/initramfs-tools/hooks/fliperos-nvidia"
 
 # ── OpenBOR ───────────────────────────────────────────────────────
 # Onde ha o OpenBOR 4 (compilado no fliperos-mkiso.sh): o comando openbor e

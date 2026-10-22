@@ -1,0 +1,20 @@
+#!/bin/sh
+# Hook do initramfs-tools: tira do initramfs o nouveau e o firmware da
+# NVIDIA. Com MODULES=most eles iam juntos, e o firmware (o GSP das RTX 20 e
+# 30, ja comprimido) eram 105 MB de um initrd de 175 MB, na ISO e de novo no
+# disco instalado. O firmware fica no sistema (/usr/lib/firmware/nvidia): sem
+# o nouveau no initramfs, o udev o carrega depois que a raiz monta, ja com o
+# firmware e os EDIDs de la; ate isso o boot fica no simpledrm. O nouveau
+# no initramfs sem o firmware nao serve: uma placa que pede o GSP (RTX 30)
+# nao iniciaria, e ele nao tenta de novo.
+# Roda depois dos hooks do sistema (os de /etc vem por ultimo) e antes do
+# depmod, que tira o nouveau da lista de modulos.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+  prereqs) prereqs; exit 0 ;;
+esac
+
+rm -rf "${DESTDIR}/usr/lib/firmware/nvidia" "${DESTDIR}/lib/firmware/nvidia"
+find "${DESTDIR}" -type d -path '*/kernel/drivers/gpu/drm/nouveau' -prune -exec rm -rf {} +
+exit 0

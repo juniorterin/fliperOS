@@ -1406,7 +1406,8 @@ prepare_extras_chroot() {
 # compila, switches Marvell, SoCs Qualcomm de celular) sai por path-exclude
 # do dpkg, para uma atualizacao do linux-firmware nao o trazer de volta. O da
 # NVIDIA fica: o Setup atende essas placas (dotclock_min), e sem ele o
-# nouveau nao acelera as mais novas.
+# nouveau nao acelera as mais novas. Fica so no sistema: o initramfs vai sem
+# ele e sem o nouveau (config/fliperos-initramfs-nvidia).
 slim_rootfs_chroot() {
   step "Slimming the image"
   cat > "$CHROOT_DIR/tmp/slim-rootfs.sh" << 'SLIMSCRIPT'

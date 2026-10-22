@@ -105,6 +105,11 @@ echo "Switchres EDIDs in the rootfs and in the initramfs"
 # ── Splash, servicos, Limine do disco instalado ───────────────
 grep -q 'themes/default.plymouth' "$work/files.txt" || fail "no default splash theme"
 grep -q 'plymouth/themes' "$work/initrd.txt" || fail "splash theme missing from the initramfs"
+# O nouveau e o firmware da NVIDIA ficam no sistema, fora do initramfs
+# (config/fliperos-initramfs-nvidia); o radeon e o amdgpu continuam nele.
+grep -qE 'firmware/nvidia/|drm/nouveau/' "$work/initrd.txt" && fail "the initramfs carries nouveau or the NVIDIA firmware"
+grep -q 'drm/radeon/radeon.ko' "$work/initrd.txt" || fail "radeon missing from the initramfs"
+echo "initramfs without nouveau and the NVIDIA firmware (they load from the disk)"
 grep -q 'multi-user.target.wants/ssh.service' "$work/files.txt" || fail "ssh.service not enabled"
 grep -E 'etc/systemd/system/default.target ->' "$work/links.txt" | grep -q 'multi-user.target' \
   || fail "default.target does not point to multi-user"
