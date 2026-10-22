@@ -20,10 +20,19 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
   - a tela ao vivo no painel e o endereço dela para o OBS;
   - o marquee para o OBS.
 
-  No gabinete, falta conferir:
-  - **kmsgrab no radeon:** se o framebuffer sai certo pelo `hwdownload` (um framebuffer com tiling sairia embaralhado). Plano B: a camada OpenGL do filtro de flicker, que já lê os quadros para o screenshot.
-  - **Live screen sound:** o loopback no relógio da placa (`timer_source`) e se os jogos continuam com som pelo `fliperos_tee`.
-  - **A carga do x264** com um jogo pesado aberto (o serviço roda com Nice=10).
+  No gabinete, em 2026-10-22, a imagem funcionou: o Attract-Mode ao vivo no navegador do PC, 640x240 a 59 fps, com 13 ms no buffer, e a página do OBS também. O x264 roda a 62 fps no i7 870. O `hwdownload` direto falha no AMD (EPERM ao mapear o buffer); o quadro passa pelo VA-API e funciona. Falta conferir:
+  - **Live screen sound ainda não funciona no gabinete** (HDA Intel, 2026-10-22). Ao ligar, o Setup testa o `default` e, como ele não abriu, voltou sozinho para desligado; o som dos jogos não foi afetado. Testes com um asound.conf à parte:
+    - o `dmix` padrão do loopback não abre ("Sample format non available");
+    - o `timer_source` na placa deixa o loopback ocupado, e o `hrtimer` não abre;
+    - um `dmix` próprio na placa dá "busy" quando o `dmix` do sistema (chave 5678293, S32_LE, 48000, 1024/16384) já está aberto por quem toca;
+    - entrando no mesmo `dmix` do sistema (a mesma chave), cada parte abre sozinha, mas o `multi` dos dois recusa ("Slave PCM not usable");
+    - só funcionou com o cartão livre e os dois em S16/4096: 31 s sem xrun.
+
+    Opções:
+    - **(a)** continuar no ALSA (o `multi` com outros tamanhos, ou o plugin `file` num FIFO com um leitor sempre aberto);
+    - **(b)** PipeWire só para a transmissão (o monitor da saída), mexendo na pilha de áudio dos jogos;
+    - **(c)** ficar sem som na transmissão.
+  - **A carga com um jogo pesado aberto** (o serviço roda com Nice=10).
   - **Remote play:** ficou para depois, a pedido. Seria um controle virtual alimentado pelo navegador.
 
 ## Bugs

@@ -58,10 +58,18 @@ audio_leveler_set() {
 # ── O som da tela ao vivo ────────────────────────────────────────
 # Live screen sound (o painel web, config/fliperos-stream), desligado de
 # fabrica: uma copia de tudo o que toca vai para um loopback do ALSA
-# (snd-aloop, a placa FliperOSLoop), que o ffmpeg da transmissao grava. O
-# loopback anda no relogio da placa de verdade (timer_source, pelo nome dela):
-# sem isso as duas derivam e o som picota. A copia so entra no asound.conf com
-# o loopback aberto: sem ele o "default" nao abriria e tudo ficaria mudo.
+# (snd-aloop, a placa FliperOSLoop), que o ffmpeg da transmissao grava. A
+# copia so entra no asound.conf com o loopback aberto: sem ele o "default" nao
+# abriria e tudo ficaria mudo. Visto no gabinete (2026-10-22, HDA Intel):
+#   - o dmix padrao do loopback nao abre ("Sample format non available") e o
+#     multi so abre com os dois dmix iguais: os dois vao escritos, no mesmo
+#     formato, taxa e periodo (S16_LE, 48000, 1024/4096, o padrao do dmix);
+#   - o timer_source na placa deixava o loopback ocupado (EBUSY) e o hrtimer
+#     nao abre: fica o timer padrao (jiffies), 31 s sem nenhum xrun nem
+#     buraco no som.
+# Ao ligar, o "default" e testado (0,1 s de silencio); se nao abrir (uma placa
+# que nao aceita S16_LE), volta como estava.
+AUDIO_TEE_RATE=48000 AUDIO_TEE_PERIOD=1024 AUDIO_TEE_BUFFER=4096
 AUDIO_LOOP_ID=${AUDIO_LOOP_ID:-FliperOSLoop}
 AUDIO_LOOP_MODPROBE=${AUDIO_LOOP_MODPROBE:-/etc/modprobe.d/fliperos-aloop.conf}
 AUDIO_LOOP_LOAD=${AUDIO_LOOP_LOAD:-/etc/modules-load.d/fliperos-aloop.conf}
@@ -82,34 +90,59 @@ audio_loop_ready() {
   grep -qE "\[$AUDIO_LOOP_ID *\]" "$AUDIO_PROC_CARDS" 2> /dev/null
 }
 
-# audio_stream_set on|off: o modulo do loopback (agora e nos proximos boots,
-# no relogio da placa padrao) e o asound.conf de novo. Status 1: o loopback
-# nao abriu (o som da transmissao fica desligado).
+# audio_default_plays: o "default" abre e toca (0,1 s de silencio).
+audio_default_plays() {
+  head -c $((AUDIO_TEE_RATE / 10 * 4)) /dev/zero |
+    aplay -q -D default -f S16_LE -r "$AUDIO_TEE_RATE" -c 2 -t raw >> "$FLIPEROS_LOG" 2>&1
+}
+
+# audio_stream_off_now MOTIVO: o som da transmissao desligado, o asound.conf
+# sem a copia.
+audio_stream_off_now() {
+  log_error "audio: $1; o som da tela ao vivo fica desligado"
+  rm -f "$AUDIO_LOOP_LOAD" "$AUDIO_LOOP_MODPROBE"
+  modprobe -r snd-aloop 2> /dev/null
+  conf_set stream_audio off
+  audio_write_conf
+}
+
+# audio_stream_set on|off: o modulo do loopback (agora e nos proximos boots)
+# e o asound.conf de novo. Status 1: o loopback nao abriu, ou o "default" com
+# a copia nao tocou (o som da transmissao fica desligado, o resto como antes).
 audio_stream_set() {
-  local current id
   if [[ $1 == on ]]; then
-    current=$(audio_current)
-    id=$(audio_card_id "${current%,*}")
-    printf 'options snd-aloop index=10 id=%s pcm_substreams=1 timer_source=%s\n' \
-      "$AUDIO_LOOP_ID" "${id:-${current%,*}}.${current#*,}" > "$AUDIO_LOOP_MODPROBE" || return 1
+    printf 'options snd-aloop index=10 id=%s pcm_substreams=1\n' "$AUDIO_LOOP_ID" > "$AUDIO_LOOP_MODPROBE" || return 1
     echo snd-aloop > "$AUDIO_LOOP_LOAD" || return 1
+    # O modulo de antes podia estar no timer_source da placa (o que deixava o
+    # loopback ocupado): aberto de novo com as opcoes daqui.
+    modprobe -r snd-aloop 2> /dev/null
+    modprobe snd-aloop >> "$FLIPEROS_LOG" 2>&1
     if ! audio_loop_ready; then
-      modprobe -r snd-aloop 2> /dev/null
-      modprobe snd-aloop >> "$FLIPEROS_LOG" 2>&1
+      audio_stream_off_now "o loopback (snd-aloop) nao abriu"
+      return 1
     fi
-    if ! audio_loop_ready; then
-      log_error "audio: o loopback (snd-aloop) nao abriu; o som da tela ao vivo fica desligado"
-      rm -f "$AUDIO_LOOP_LOAD"
-      conf_set stream_audio off
-      audio_write_conf
+    conf_set stream_audio on
+    audio_write_conf
+    if ! audio_default_plays; then
+      audio_stream_off_now "o default nao tocou com a copia"
       return 1
     fi
   else
     rm -f "$AUDIO_LOOP_LOAD" "$AUDIO_LOOP_MODPROBE"
+    conf_set stream_audio off
+    audio_write_conf
   fi
-  conf_set stream_audio "$1"
-  audio_write_conf
   log_info "audio: som da tela ao vivo $1"
+}
+
+# audio_stream_check (a cada sessao, antes do frontend ou do jogo): com a copia
+# no asound.conf e o loopback fora (o modulo nao subiu neste boot), o
+# asound.conf sem ela, para o som nao sumir.
+audio_stream_check() {
+  grep -q fliperos_tee "$ASOUND_CONF" 2> /dev/null || return 0
+  audio_loop_ready && return 0
+  log_error "audio: o loopback do som da tela ao vivo nao esta aberto; o asound.conf fica sem a copia"
+  audio_write_conf
 }
 
 # audio_write_conf grava o /etc/asound.conf: a placa padrao e, com o
@@ -136,12 +169,39 @@ audio_write_conf() {
       cat << EOF
 
 # Live screen sound: o som de tudo tambem no loopback que a transmissao grava.
+# Os dois dmix iguais (formato, taxa, periodo): o multi so abre assim.
+pcm.fliperos_card {
+    type dmix
+    ipc_key 58201
+    ipc_perm 0666
+    slave {
+        pcm "hw:$card,$dev"
+        format S16_LE
+        rate $AUDIO_TEE_RATE
+        channels 2
+        period_size $AUDIO_TEE_PERIOD
+        buffer_size $AUDIO_TEE_BUFFER
+    }
+}
+pcm.fliperos_loop {
+    type dmix
+    ipc_key 58202
+    ipc_perm 0666
+    slave {
+        pcm "hw:$AUDIO_LOOP_ID,0,0"
+        format S16_LE
+        rate $AUDIO_TEE_RATE
+        channels 2
+        period_size $AUDIO_TEE_PERIOD
+        buffer_size $AUDIO_TEE_BUFFER
+    }
+}
 pcm.fliperos_tee {
     type route
     slave.pcm {
         type multi
-        slaves.a { pcm "dmix:$card,$dev" channels 2 }
-        slaves.b { pcm "dmix:$AUDIO_LOOP_ID,0" channels 2 }
+        slaves.a { pcm "fliperos_card" channels 2 }
+        slaves.b { pcm "fliperos_loop" channels 2 }
         bindings.0 { slave a channel 0 }
         bindings.1 { slave a channel 1 }
         bindings.2 { slave b channel 0 }

@@ -1230,8 +1230,13 @@ class AudioTests(Base):
         cards.write_text(cards.read_text() + "10 [FliperOSLoop   ]: Loopback - Loopback\n")
         self.env.out("audio_write_conf", env)
         text = conf.read_text()
-        self.assertIn('slaves.a { pcm "dmix:0,0" channels 2 }', text)
-        self.assertIn('slaves.b { pcm "dmix:FliperOSLoop,0" channels 2 }', text)
+        # Os dois dmix escritos, iguais: o padrao do loopback nao abre e o
+        # multi so abre com o mesmo formato, taxa e periodo (visto no gabinete).
+        self.assertIn('slaves.a { pcm "fliperos_card" channels 2 }', text)
+        self.assertIn('slaves.b { pcm "fliperos_loop" channels 2 }', text)
+        for hw in ('hw:0,0', 'hw:FliperOSLoop,0,0'):
+            self.assertIn('pcm "%s"\n        format S16_LE\n        rate 48000\n        channels 2\n'
+                          '        period_size 1024\n        buffer_size 4096\n' % hw, text)
         self.assertIn('pcm.!default {\n    type plug\n    slave.pcm "fliperos_tee"\n}', text)
         # Com o nivelador, o compressor sai no tee (um default so).
         plugin.write_text("")
@@ -1239,14 +1244,31 @@ class AudioTests(Base):
         text = conf.read_text()
         self.assertEqual(text.count("pcm.!default"), 1)
         self.assertIn('slave.pcm {\n        type plug\n        slave.pcm "fliperos_tee"\n    }', text)
-        # O modulo no relogio da placa, pelo nome dela.
+        # O modulo no timer padrao (o timer_source na placa o deixava ocupado).
         modprobe = self.env.dir / "aloop.conf"
+        load = self.env.dir / "aloop.load"
         self.env.stub("modprobe", "exit 0")
-        self.env.out("audio_stream_set on", dict(env, AUDIO_LOOP_MODPROBE=str(modprobe),
-                                                 AUDIO_LOOP_LOAD=str(self.env.dir / "aloop.load")))
-        self.assertEqual(modprobe.read_text(),
-                         "options snd-aloop index=10 id=FliperOSLoop pcm_substreams=1 timer_source=PCH.0\n")
-        self.assertEqual((self.env.dir / "aloop.load").read_text(), "snd-aloop\n")
+        self.env.stub("aplay", "cat > /dev/null; exit 0")
+        senv = dict(env, AUDIO_LOOP_MODPROBE=str(modprobe), AUDIO_LOOP_LOAD=str(load))
+        self.env.out("audio_stream_set on", senv)
+        self.assertEqual(modprobe.read_text(), "options snd-aloop index=10 id=FliperOSLoop pcm_substreams=1\n")
+        self.assertEqual(load.read_text(), "snd-aloop\n")
+        self.assertIn("fliperos_tee", conf.read_text())
+        # O default com a copia nao tocou (uma placa sem S16_LE): volta como estava.
+        self.env.stub("aplay", "cat > /dev/null; exit 1")
+        self.assertEqual(self.env.run("audio_stream_set on", senv).returncode, 1)
+        self.assertNotIn("fliperos_tee", conf.read_text())
+        self.assertIn("stream_audio=off\n", (self.env.etc / "fliperos.conf").read_text())
+        self.assertFalse(load.exists())
+        # Num boot sem o loopback, a sessao tira a copia do asound.conf.
+        self.env.stub("aplay", "cat > /dev/null; exit 0")
+        self.env.out("audio_stream_set on", senv)
+        cards.write_text(" 0 [PCH            ]: HDA-Intel - HDA Intel PCH\n")
+        self.env.out("audio_stream_check", senv)
+        self.assertNotIn("fliperos_tee", conf.read_text())
+        setup = (SETUP / "fliperos-setup").read_text()
+        self.assertIn("    --session-start)\n", setup)
+        self.assertIn("      audio_stream_check\n", setup.split("    --session-start)\n")[1].split(";;")[0])
 
     def mixer(self, controls, level=60):
         """amixer falso: lista os controles da placa, responde o nivel e
