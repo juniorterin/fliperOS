@@ -33,6 +33,7 @@
   <nav class="pages" aria-label="Pages">
     <a href="#frontend" data-page="frontend" data-t="page_frontend"></a>
     <a href="#files" data-page="files" data-t="page_files"></a>
+    <a href="#live" data-page="live" data-t="page_live"></a>
     <a href="#romfilter" data-page="romfilter" data-t="page_romfilter"></a>
     <a href="#settings" data-page="settings" data-t="page_settings"></a>
     <a href="#status" data-page="status" data-t="page_status"></a>
@@ -94,22 +95,48 @@
       <img id="shot" class="shot tube" alt="" hidden>
     </section>
 
-    <!-- A tela ao vivo (WebRTC pelo go2rtc, config/fliperos-stream). -->
-    <section class="card wide" data-page="frontend status" aria-labelledby="h-live">
-      <h2 id="h-live" data-t="live"></h2>
-      <div class="row live-bar">
+    <!-- Ao vivo: a tela do gabinete (WebRTC pelo go2rtc, config/fliperos-stream),
+         a transmissao e os enderecos para o OBS (a tela e o marquee). -->
+    <section class="card wide" data-page="live" aria-labelledby="h-live">
+      <div class="live-head">
+        <h2 id="h-live" data-t="live"></h2>
+        <span id="live-badge" class="live-badge" hidden data-t="live_on_air"></span>
+      </div>
+      <div class="live-bar">
         <button id="live-start" type="button" data-icon="▶" data-t="live_start"></button>
         <button id="live-stop" class="ghost" type="button" data-icon="■" data-t="live_stop" hidden></button>
         <label class="dim"><span data-t="live_fps"></span>
           <select id="live-fps"><option value="15">15</option><option value="30" selected>30</option><option value="60">60</option></select></label>
-        <button id="live-sound" class="ghost" type="button" data-icon="🔇" data-t="live_unmute" hidden></button>
-        <button id="live-full" class="ghost" type="button" data-icon="⤢" data-t="live_full" hidden></button>
+        <label class="dim"><input id="live-tube" type="checkbox" checked> <span data-t="as_on_tube"></span></label>
+        <span class="live-bar-end">
+          <button id="live-sound" class="ghost" type="button" data-icon="🔇" data-t="live_unmute" hidden></button>
+          <button id="live-full" class="ghost" type="button" data-icon="⤢" data-t="live_full" hidden></button>
+        </span>
       </div>
-      <p id="live-note" class="dim" role="status"></p>
-      <div id="live-setup" class="row" hidden></div>
-      <video id="live" class="shot tube" playsinline autoplay muted hidden></video>
-      <div id="live-obs" class="ovl-box live-obs" hidden>
-        <h3 data-t="live_obs_title"></h3>
+      <div id="live-stage" class="live-stage tube">
+        <video id="live" playsinline autoplay muted></video>
+        <div id="live-idle" class="live-idle">
+          <p id="live-idle-text"></p>
+          <button id="live-play" type="button" class="live-play" data-icon="▶" data-t="live_start" hidden></button>
+        </div>
+      </div>
+      <p id="live-note" class="dim live-note" role="status"></p>
+    </section>
+
+    <section class="card" data-page="live" aria-labelledby="h-live-set">
+      <h2 id="h-live-set" data-t="live_settings"></h2>
+      <dl class="live-facts">
+        <div><dt data-t="live_service"></dt><dd id="live-service">-</dd></div>
+        <div><dt data-t="live_encoder"></dt><dd id="live-encoder">-</dd></div>
+        <div><dt data-t="live_sound"></dt><dd id="live-audio">-</dd></div>
+      </dl>
+      <div id="live-setup" class="live-actions"></div>
+      <p class="dim" data-t="live_settings_note"></p>
+    </section>
+
+    <section class="card live-obs-card" data-page="live" aria-labelledby="h-live-obs">
+      <h2 id="h-live-obs" data-t="live_obs_title"></h2>
+      <div id="live-obs" class="ovl-box">
         <div class="ovl-url">
           <input id="live-url" type="text" readonly aria-label="OBS address">
           <button id="live-copy" type="button" data-icon="📋" data-t="copy"></button>
@@ -119,7 +146,7 @@
     </section>
 
     <!-- O marquee do jogo como pagina para o OBS (overlay.html). -->
-    <section class="card wide" data-page="frontend" aria-labelledby="h-ovl">
+    <section class="card wide" data-page="live" aria-labelledby="h-ovl">
       <h2 id="h-ovl" data-t="overlay"></h2>
       <p class="dim" data-t="overlay_note"></p>
       <label class="ovl-toggle"><input id="ovl-on" type="checkbox"> <span data-t="overlay_on"></span></label>

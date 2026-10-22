@@ -39,7 +39,13 @@ const TEXT = {
     live_turn_on: "Turn on", live_off_note: "The live screen is installed but off (Settings > Services > Live screen).",
     live_ready: "Ready: H.264 by %e.", live_hw: "the graphics card", live_no_audio: "no sound (Settings > Live screen sound)",
     live_connecting: "Connecting to the cabinet…", live_lost: "The connection dropped. Press Watch live again.",
-    live_buffer: "%n ms in the buffer", live_obs_title: "In OBS",
+    live_buffer: "%n ms in the buffer", live_obs_title: "Live screen in OBS", page_live: "Live",
+    live_on_air: "Live", live_settings: "Streaming", live_service: "Service", live_encoder: "H.264",
+    live_sound: "Sound", live_absent: "not installed", live_running: "running", live_stopped: "off",
+    live_enc_hw: "graphics card (VA-API)", live_enc_sw: "software (x264)", live_audio_on: "on", live_audio_off: "off",
+    live_turn_off: "Turn off", live_sound_on: "Turn the sound on", live_sound_off: "Turn the sound off",
+    live_not_installed: "The live screen is not installed yet: Install, under Streaming (or Setup > System > Extras > Live screen).",
+    live_settings_note: "ffmpeg only runs while someone watches (here or in OBS). The sound is a copy of the output on an ALSA loopback: games opened after turning it on get it.",
     live_obs: "Sources > + > Browser, paste the address, width 1440 and height 1080 (4:3, as on the tube), and tick Control audio via OBS for the sound. It reconnects by itself. &fit=fill stretches it to any size; &muted=1 drops the sound. It uses the same key as the marquee page (New address there changes both).",
     overlay: "Marquee for OBS", overlay_on: "Turn on the marquee page",
     overlay_note: "The marquee of the game on screen as a page for OBS: transparent background, the game's art (from ~/media), the high scores, the achievements and the versus score. No LED panel needed.",
@@ -124,7 +130,13 @@ const TEXT = {
     live_turn_on: "Ligar", live_off_note: "A tela ao vivo está instalada, mas desligada (Configurações > Serviços > Live screen).",
     live_ready: "Pronta: H.264 %e.", live_hw: "pela placa de vídeo", live_no_audio: "sem som (Configurações > Live screen sound)",
     live_connecting: "Conectando ao gabinete…", live_lost: "A conexão caiu. Aperte Assistir ao vivo de novo.",
-    live_buffer: "%n ms no buffer", live_obs_title: "No OBS",
+    live_buffer: "%n ms no buffer", live_obs_title: "A tela ao vivo no OBS", page_live: "Ao vivo",
+    live_on_air: "Ao vivo", live_settings: "Transmissão", live_service: "Serviço", live_encoder: "H.264",
+    live_sound: "Som", live_absent: "não instalado", live_running: "no ar", live_stopped: "desligado",
+    live_enc_hw: "placa de vídeo (VA-API)", live_enc_sw: "software (x264)", live_audio_on: "ligado", live_audio_off: "desligado",
+    live_turn_off: "Desligar", live_sound_on: "Ligar o som", live_sound_off: "Desligar o som",
+    live_not_installed: "A tela ao vivo ainda não está instalada: Instalar, em Transmissão (ou Setup > System > Extras > Live screen).",
+    live_settings_note: "O ffmpeg só roda enquanto alguém assiste (aqui ou no OBS). O som é uma cópia da saída num loopback do ALSA: os jogos abertos depois de ligar já saem com ele.",
     live_obs: "Fontes > + > Navegador, cole o endereço, largura 1440 e altura 1080 (4:3, como no tubo), e marque Controlar áudio pelo OBS para o som. Ele reconecta sozinho. Com &fit=fill estica para qualquer tamanho; com &muted=1 fica sem som. Usa a mesma chave da página do marquee (Endereço novo lá troca as duas).",
     overlay: "Marquee para o OBS", overlay_on: "Ligar a página do marquee",
     overlay_note: "O marquee do jogo na tela como página para o OBS: fundo transparente, a arte do jogo (de ~/media), os recordes, as conquistas e o placar versus. Não precisa de painel de LED.",
@@ -1248,17 +1260,15 @@ $("shot-take").addEventListener("click", async () => {
     $("shot-take").disabled = false;
   }
 });
-$("shot-tube").addEventListener("change", () => {
-  $("shot").classList.toggle("tube", $("shot-tube").checked);
-  $("live").classList.toggle("tube", $("shot-tube").checked);
-});
+$("shot-tube").addEventListener("change", () => $("shot").classList.toggle("tube", $("shot-tube").checked));
 
-// ── Tela ao vivo (WebRTC) ────────────────────────────────────────
+// ── Ao vivo: a tela do gabinete (WebRTC) ─────────────────────────
 // O go2rtc do gabinete (config/fliperos-stream) manda o que esta no tubo em
 // H.264 (e o som em Opus, se ligado). A oferta vai pelo painel
 // (/api/stream/offer); o video chega direto, pela rede local. Sem STUN: as
 // duas pontas estao na mesma rede. O som comeca mudo (o navegador so toca
-// som depois de um clique).
+// som depois de um clique). Sair da pagina para a transmissao: o ffmpeg do
+// gabinete so roda enquanto alguem assiste.
 
 let live = null, liveStats = null, liveStatus = null, liveObsPath = "";
 
@@ -1266,50 +1276,79 @@ function liveObsUrl() {
   if (liveObsPath) $("live-url").value = location.origin + liveObsPath + "&fps=" + $("live-fps").value;
 }
 
+function liveFact(id, text, cls) {
+  const dd = $(id);
+  dd.textContent = text;
+  dd.className = cls || "";
+}
+
+function liveIdle() {
+  // O palco sem video: o que falta para assistir, ou o botao grande.
+  const s = liveStatus || {};
+  const ready = s.installed && s.active;
+  $("live-idle").hidden = !!live;
+  $("live-play").hidden = !ready;
+  $("live-idle-text").textContent = !s.installed ? t("live_not_installed") : !s.active ? t("live_off_note")
+    : t("live_ready").replace("%e", s.encoder === "vaapi" ? t("live_hw") : "x264");
+  $("live-start").hidden = !!live || !ready;
+}
+
 async function loadLive() {
   const res = await api("/api/stream");
   liveStatus = await res.json();
-  const setup = $("live-setup");
+  const s = liveStatus, setup = $("live-setup");
+  liveFact("live-service", !s.installed ? t("live_absent") : s.active ? t("live_running") : t("live_stopped"),
+    s.installed && s.active ? "on" : "off");
+  liveFact("live-encoder", !s.installed ? "-" : s.encoder === "vaapi" ? t("live_enc_hw") : t("live_enc_sw"));
+  liveFact("live-audio", s.audio ? t("live_audio_on") : t("live_audio_off"), s.audio ? "on" : "off");
   setup.replaceChildren();
-  $("live-start").hidden = !!live || !liveStatus.installed || !liveStatus.active;
-  if (!liveStatus.installed) {
+  if (!s.installed) {
     const install = el("button", { type: "button", "data-icon": "⬇" }, t("live_install"));
     install.addEventListener("click", async () => {
       const r = await api("/api/stream/install", { method: "POST", body: "{}" });
       const data = await r.json().catch(() => ({}));
       toast(r.ok ? t("live_installing") : data.error || r.statusText);
     });
-    setup.append(install, el("span", { class: "dim" }, t("live_install_note")));
-  } else if (!liveStatus.active) {
-    const on = el("button", { type: "button", "data-icon": "⏻" }, t("live_turn_on"));
-    on.addEventListener("click", async () => {
-      await api("/api/settings", { method: "POST", body: JSON.stringify({ key: "service.stream", value: "boot" }) });
+    setup.append(install);
+  } else {
+    // Ligar ou desligar o servico (Setup > System > Services > Live screen).
+    const svc = el("button", { type: "button", class: s.active ? "ghost" : "", "data-icon": "🔌" },
+      t(s.active ? "live_turn_off" : "live_turn_on"));
+    svc.addEventListener("click", async () => {
+      if (s.active) liveStop();
+      await api("/api/settings", { method: "POST",
+        body: JSON.stringify({ key: "service.stream", value: s.active ? "off" : "boot" }) });
       setTimeout(() => loadLive().catch(() => {}), 2500);
     });
-    setup.append(on, el("span", { class: "dim" }, t("live_off_note")));
+    // O som: a copia no loopback do ALSA (Settings > Live screen sound).
+    const sound = el("button", { type: "button", class: "ghost", "data-icon": s.audio ? "🔇" : "🔊" },
+      t(s.audio ? "live_sound_off" : "live_sound_on"));
+    sound.addEventListener("click", async () => {
+      sound.disabled = true;
+      const r = await api("/api/settings", { method: "POST",
+        body: JSON.stringify({ key: "stream_audio", value: s.audio ? "off" : "on" }) });
+      if (!r.ok) toast((await r.json().catch(() => ({}))).error || r.statusText);
+      loadLive().catch(() => {});
+    });
+    setup.append(svc, sound);
   }
-  setup.hidden = !setup.children.length;
-  // O endereco para o OBS (a mesma chave do marquee), com a taxa escolhida.
-  $("live-obs").hidden = !liveStatus.installed;
-  if (liveStatus.installed) {
+  if (s.installed) {
     const r = await api("/api/overlay");
     liveObsPath = (await r.json()).live;
     liveObsUrl();
   }
-  if (!live) {
-    $("live-note").textContent = liveStatus.installed && liveStatus.active
-      ? t("live_ready").replace("%e", liveStatus.encoder === "vaapi" ? t("live_hw") : "x264")
-        + (liveStatus.audio ? "" : " · " + t("live_no_audio")) : "";
-  }
+  $("live-obs").hidden = !s.installed;
+  liveIdle();
 }
 
 function liveIce(pc) {
   // As candidatas da rede local saem em instantes; sem esperar mais que 2 s.
   if (pc.iceGatheringState === "complete") return Promise.resolve();
   return new Promise((resolve) => {
-    const done = () => { if (pc.iceGatheringState === "complete") { clearTimeout(timer); resolve(); } };
     const timer = setTimeout(resolve, 2000);
-    pc.addEventListener("icegatheringstatechange", done);
+    pc.addEventListener("icegatheringstatechange", () => {
+      if (pc.iceGatheringState === "complete") { clearTimeout(timer); resolve(); }
+    });
   });
 }
 
@@ -1319,6 +1358,10 @@ async function liveStart() {
   $("live-note").textContent = t("live_connecting");
   const pc = new RTCPeerConnection({ iceServers: [] });
   live = pc;
+  liveIdle();
+  $("live-idle-text").textContent = t("live_connecting");
+  $("live-idle").hidden = false;
+  $("live-play").hidden = true;
   const stream = new MediaStream();
   pc.addTransceiver("video", { direction: "recvonly" });
   pc.addTransceiver("audio", { direction: "recvonly" });
@@ -1327,11 +1370,12 @@ async function liveStart() {
     video.srcObject = stream;
     if (ev.track.kind === "audio") $("live-sound").hidden = false;
   };
+  video.onplaying = () => { if (live === pc) $("live-idle").hidden = true; };
   pc.onconnectionstatechange = () => {
     if (live !== pc) return;
     if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-      $("live-note").textContent = t("live_lost");
       liveStop(true);
+      $("live-note").textContent = t("live_lost");
     }
   };
   try {
@@ -1347,10 +1391,9 @@ async function liveStart() {
     if (e.message !== "login") $("live-note").textContent = String(e.message || e);
     return;
   }
-  video.hidden = false;
-  $("live-start").hidden = true;
   $("live-stop").hidden = false;
   $("live-full").hidden = false;
+  $("live-badge").hidden = false;
   liveStats = setInterval(() => liveShowStats(pc), 1000);
 }
 
@@ -1376,20 +1419,29 @@ function liveStop(keepNote) {
   live = null;
   const video = $("live");
   video.srcObject = null;
-  video.hidden = true;
   video.muted = true;
   $("live-sound").hidden = true;
   $("live-sound").dataset.icon = "🔇";
   $("live-sound").textContent = t("live_unmute");
   $("live-stop").hidden = true;
   $("live-full").hidden = true;
-  $("live-start").hidden = !(liveStatus && liveStatus.installed && liveStatus.active);
+  $("live-badge").hidden = true;
   if (!keepNote) $("live-note").textContent = "";
+  liveIdle();
 }
 
 $("live-start").addEventListener("click", () => liveStart());
+$("live-play").addEventListener("click", () => liveStart());
 $("live-stop").addEventListener("click", () => liveStop());
 $("live-fps").addEventListener("change", () => { liveObsUrl(); if (live) liveStart(); });
+$("live-tube").addEventListener("change", () => $("live-stage").classList.toggle("tube", $("live-tube").checked));
+$("live-sound").addEventListener("click", () => {
+  const video = $("live");
+  video.muted = !video.muted;
+  $("live-sound").dataset.icon = video.muted ? "🔇" : "🔊";
+  $("live-sound").textContent = t(video.muted ? "live_unmute" : "live_mute");
+});
+$("live-full").addEventListener("click", () => { $("live-stage").requestFullscreen().catch(() => {}); });
 $("live-copy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($("live-url").value); } catch (e) {
     $("live-url").select();
@@ -1397,13 +1449,6 @@ $("live-copy").addEventListener("click", async () => {
   }
   toast(t("copied"));
 });
-$("live-sound").addEventListener("click", () => {
-  const video = $("live");
-  video.muted = !video.muted;
-  $("live-sound").dataset.icon = video.muted ? "🔇" : "🔊";
-  $("live-sound").textContent = t(video.muted ? "live_unmute" : "live_mute");
-});
-$("live-full").addEventListener("click", () => { $("live").requestFullscreen().catch(() => {}); });
 
 // ── Marquee para o OBS ───────────────────────────────────────────
 // Ligado aqui (ou no Setup), o marquee do jogo na tela vira uma pagina
@@ -2044,7 +2089,7 @@ let timer = null;
 // Frontend, Arquivos, Configuracoes, Status e Terminal: o endereco (#files)
 // escolhe; sem ele, a ultima aberta (lembrada no navegador, quando da).
 
-const PAGES = ["frontend", "files", "romfilter", "settings", "status", "terminal"];
+const PAGES = ["frontend", "files", "live", "romfilter", "settings", "status", "terminal"];
 let page = "frontend";
 
 function showPage(name) {
@@ -2074,11 +2119,15 @@ function showPage(name) {
   } else if (name === "terminal" && termFit) {
     requestAnimationFrame(() => termFit.fit());
   }
-  if (name === "frontend" || name === "status") {
-    drawFps();
+  if (name === "frontend" || name === "status") drawFps();
+  if (name === "live") {
     loadLive().catch(() => {});
+    loadOverlay().catch(() => {});
+  } else if (live) {
+    // Fora da pagina Ao vivo a transmissao para: o ffmpeg do gabinete so
+    // roda enquanto alguem assiste.
+    liveStop();
   }
-  if (name === "frontend") loadOverlay().catch(() => {});
 }
 
 window.addEventListener("hashchange", () => showPage(location.hash.slice(1)));

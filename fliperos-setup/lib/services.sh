@@ -27,7 +27,7 @@ avahi|fliperos.local|avahi-daemon.service avahi-daemon.socket|Find this computer
 wifi|Wi-Fi|radio:wifi|The Wi-Fi radio. The network cable works either way.
 netwait|Wait for network|NetworkManager-wait-online.service|The boot waits for the network to come up. Off: it goes on without it.
 downloader|Downloader|fliperos-transmission.service|The torrents of Setup > Games > Downloader, in the background.
-web|Web panel|fliperos-web.service|This cabinet in a browser on the same network: http://fliperos.local:8080 (user and password of Setup > System > Password).
+web|Web panel|fliperos-web.service|This cabinet in a browser on the same network: http://fliperos.local:8081 (user and password of Setup > System > Password).
 stream|Live screen|fliperos-stream.service|The cabinet screen live in the web panel (installed in Setup > System > Extras > Live screen).
 EOF
 }

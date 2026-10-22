@@ -65,7 +65,7 @@ settings_list() {
     printf 'stream_audio|System|Live screen sound|choice|%s|off=Off;on=On|A copy of the sound for the live screen (an ALSA loopback on the card clock). Games opened after the change get it.\n' \
       "$(audio_stream_enabled && echo on || echo off)"
   fi
-  printf 'marquee_overlay|System|Marquee overlay for OBS|choice|%s|off=Off;on=On|The marquee of the game on screen as a page for an OBS Browser Source (the address is on the Frontend page of the panel).\n' \
+  printf 'marquee_overlay|System|Marquee overlay for OBS|choice|%s|off=Off;on=On|The marquee of the game on screen as a page for an OBS Browser Source (the address is on the Live page of the panel).\n' \
     "$(marquee_overlay_enabled && echo on || echo off)"
   while IFS='|' read -r key label state help; do
     printf 'service.%s|Services|%s|choice|%s|boot=Boot;after=After boot;off=Off|%s\n' "$key" "$label" "$state" "$help"

@@ -393,13 +393,42 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .rf-list td { overflow: hidden; text-overflow: ellipsis; }
 .rf-run { display: grid; gap: 6px; }
 
-/* A tela ao vivo e o marquee para o OBS. */
-.live-bar { justify-content: flex-start; align-items: center; }
+/* Ao vivo: o palco (4:3 como no tubo, ou o tamanho do quadro), os controles,
+   a transmissao e os enderecos para o OBS. */
+.live-head { display: flex; align-items: center; gap: 12px; }
+.live-head h2 { margin: 0; }
+.live-badge { padding: 2px 10px; border-radius: 999px; background: var(--red); color: #fff; font-size: 12px;
+  font-weight: 800; letter-spacing: .1em; text-transform: uppercase; animation: live-pulse 2s ease-in-out infinite; }
+@keyframes live-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .live-badge { animation: none; } }
+.live-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 12px 0; }
 .live-bar select { margin-left: 4px; }
-#live { background: #000; }
-#live:fullscreen { width: 100%; height: 100%; object-fit: contain; aspect-ratio: auto; }
-.live-obs { margin-top: 12px; }
-.live-obs h3 { margin: 0; }
+.live-bar-end { display: flex; gap: 8px; margin-left: auto; }
+.live-stage { position: relative; width: min(100%, 1120px); margin: 0 auto; background: #000; border-radius: 10px;
+  overflow: hidden; border: 1px solid var(--line); }
+.live-stage.tube { aspect-ratio: 4 / 3; }
+.live-stage video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.live-stage.tube video { object-fit: fill; }
+.live-stage:not(.tube) video { height: auto; min-height: 240px; }
+.live-stage:fullscreen { width: 100%; border: 0; border-radius: 0; aspect-ratio: auto; }
+.live-stage:fullscreen video { object-fit: contain; }
+.live-idle { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 14px;
+  padding: 16px; text-align: center; color: var(--dim);
+  background: radial-gradient(circle at 50% 40%, #2a2b38, #111218 70%); }
+.live-idle p { margin: 0; max-width: 44ch; }
+.live-play { font-size: 18px; padding: 14px 26px; border-radius: 999px; }
+.live-note { margin: 10px 0 0; text-align: center; font-variant-numeric: tabular-nums; }
+.live-facts { display: grid; gap: 8px; margin: 0 0 12px; }
+.live-facts div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line);
+  padding-bottom: 6px; }
+.live-facts dt { color: var(--dim); }
+.live-facts dd { margin: 0; text-align: right; font-weight: 600; }
+.live-facts .on { color: var(--green); }
+.live-facts .off { color: var(--orange); }
+.live-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.live-actions:empty { display: none; }
+/* Com tres colunas, o endereco do OBS ocupa duas: a linha fica cheia. */
+@media (min-width: 1040px) { .live-obs-card { grid-column: span 2; } }
 .ovl-toggle { display: inline-flex; gap: 8px; align-items: center; margin: 4px 0 10px; font-weight: 600; }
 .ovl-box { display: grid; gap: 8px; }
 .ovl-url { display: flex; flex-wrap: wrap; gap: 8px; }

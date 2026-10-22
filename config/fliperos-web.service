@@ -1,5 +1,5 @@
 [Unit]
-Description=FliperOS: web panel (http://fliperos.local:8080, Setup > System > Services)
+Description=FliperOS: web panel (http://fliperos.local:8081, Setup > System > Services)
 After=network.target
 
 [Service]
