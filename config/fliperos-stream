@@ -100,14 +100,35 @@ encoder() {
     return 0
   fi
   node=$(render "$(card)")
-  mkdir -p "$run" 2> /dev/null
+  local enc=x264
   if [[ -e $node ]] && "$ffmpeg" -hide_banner -loglevel error -init_hw_device "vaapi=va:$node" \
     -f lavfi -i color=black:s=256x144:d=0.2 -vf format=nv12,hwupload -c:v h264_vaapi -frames:v 1 -f null - \
     > /dev/null 2>&1; then
-    echo vaapi | tee "$cache" 2> /dev/null || echo vaapi
-  else
-    echo x264 | tee "$cache" 2> /dev/null || echo x264
+    enc=vaapi
   fi
+  # Sem poder gravar no /run (fora do root), so nao fica guardado.
+  { mkdir -p "$run" && echo "$enc" > "$cache"; } 2> /dev/null
+  echo "$enc"
+}
+
+# vpp: a placa faz o processamento de video do VA-API (copiar e escalar uma
+# superficie). E por ele que o quadro do kmsgrab chega a memoria: o radeon e
+# o amdgpu nao deixam mapear o buffer do DRM (o hwdownload direto falha com
+# EPERM; visto no gabinete, R7 240). A R7 240 tem o processamento, mesmo sem
+# o codificador. Guardado ate o proximo boot.
+vpp() {
+  local cache=$run/vpp node ok=0
+  if [[ -s $cache ]]; then
+    [[ $(cat "$cache") == 1 ]]
+    return
+  fi
+  node=$(render "$(card)")
+  if [[ -e $node ]] && "$ffmpeg" -hide_banner -loglevel error -init_hw_device "vaapi=va:$node" \
+    -f lavfi -i nullsrc=s=64x64:d=0.1 -vf format=nv12,hwupload,scale_vaapi=w=32:h=32 -f null - > /dev/null 2>&1; then
+    ok=1
+  fi
+  { mkdir -p "$run" && echo "$ok" > "$cache"; } 2> /dev/null
+  ((ok))
 }
 
 # audio_on: o som da transmissao ligado e o loopback aberto.
@@ -136,12 +157,19 @@ capture() {
     args+=(-thread_queue_size 64 -f alsa -ac 2 -ar 48000 -i "plughw:$AUDIO_LOOP,1,0")
   fi
   args+=(-map 0:v)
+  local scale="w='min(iw,960)':h='trunc(ih/2)*2'"
   if [[ $enc == vaapi ]]; then
-    args+=(-vf "hwmap=derive_device=vaapi,scale_vaapi=w='min(iw,960)':h='trunc(ih/2)*2':format=nv12"
+    args+=(-vf "hwmap=derive_device=vaapi,scale_vaapi=$scale:format=nv12"
       -c:v h264_vaapi -profile:v constrained_baseline -bf 0 -g $((fps * 2)) -b:v 3M)
   else
-    args+=(-vf "hwdownload,format=bgr0,scale=w='min(iw,960)':h='trunc(ih/2)*2':flags=bilinear,format=yuv420p"
-      -c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -bf 0 -g $((fps * 2))
+    # O quadro copiado e escalado pela placa (VA-API) e lido dali; sem o
+    # VA-API, mapeado direto (o hwdownload, nas placas que deixam).
+    if vpp; then
+      args+=(-vf "hwmap=derive_device=vaapi,scale_vaapi=$scale:format=nv12,hwdownload,format=nv12")
+    else
+      args+=(-vf "hwdownload,format=bgr0,scale=$scale:flags=bilinear,format=yuv420p")
+    fi
+    args+=(-c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -bf 0 -g $((fps * 2))
       -b:v 2500k -maxrate 3M -bufsize 1M)
   fi
   if audio_on; then
@@ -183,6 +211,7 @@ status() {
   systemctl is-active --quiet fliperos-stream.service 2> /dev/null && active=1
   echo "active=$active"
   installed && echo "encoder=$(encoder)"
+  installed && { vpp && echo copy=vaapi || echo copy=mmap; }
   audio_on && echo audio=1 || echo audio=0
   echo "rates=$RATES"
 }

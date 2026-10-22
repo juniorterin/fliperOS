@@ -5220,11 +5220,25 @@ class LiveScreenTests(unittest.TestCase):
                         FLIPEROS_DRI=str(t / 'dri'), FLIPEROS_STREAM_RUN=str(t / 'run'), FLIPEROS_STREAM_DIR=str(t / 'go2rtc'),
                         FLIPEROS_CONF=str(t / 'fliperos.conf'), FLIPEROS_ASOUND_CARDS=str(t / 'cards'))
 
-    def write_ffmpeg(self, vaapi):
-        # O teste do VA-API (um quadro em h264_vaapi) passa so com vaapi.
-        self.ffmpeg.write_text('#!/bin/sh\ncase "$*" in *h264_vaapi*-f\\ null*) exit %d ;; esac\n'
-                               'printf "%%s\\n" "$@" > %s\n' % (0 if vaapi else 1, self.args))
+    def write_ffmpeg(self, vaapi, vpp=None):
+        # Os testes do VA-API: um quadro em h264_vaapi (o codificador) e um
+        # scale_vaapi (o processamento, por onde o quadro do kmsgrab chega).
+        vpp = vaapi if vpp is None else vpp
+        self.ffmpeg.write_text('#!/bin/sh\ncase "$*" in *h264_vaapi*-f\\ null*) exit %d ;; '
+                               '*scale_vaapi=w=32:h=32*) exit %d ;; esac\n'
+                               'printf "%%s\\n" "$@" > %s\n' % (0 if vaapi else 1, 0 if vpp else 1, self.args))
         self.ffmpeg.chmod(0o755)
+
+    def test_capture_copied_by_the_card_without_its_encoder(self):
+        # A R7 240 (radeon e amdgpu): sem codificador, mas o buffer do DRM nao
+        # se mapeia (EPERM); o quadro passa pelo VA-API e vai ao x264.
+        self.write_ffmpeg(vaapi=False, vpp=True)
+        self.assertEqual(self.run_('capture', '60', 'out').returncode, 0)
+        args = self.args.read_text().splitlines()
+        self.assertIn('libx264', args)
+        self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=w='min(iw,960)':h='trunc(ih/2)*2':format=nv12,"
+                      "hwdownload,format=nv12", args)
+        self.assertEqual((self.tmp / 'run/vpp').read_text(), '1\n')
 
     def run_(self, *args):
         return subprocess.run(['bash', str(self.STREAM), *args], env=self.env, capture_output=True, text=True, timeout=30)
