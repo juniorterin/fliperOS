@@ -150,40 +150,71 @@
 
     <!-- ROM filter: o filtro do MAME ROM Cleaner, para o Downloader ou para
          limpar uma pasta com um romset (app.js, ROM filter). -->
-    <section class="card wide" data-page="romfilter" aria-labelledby="h-rf">
-      <h2 id="h-rf" data-t="page_romfilter"></h2>
-      <p class="dim" data-t="rf_intro"></p>
-      <div class="rf-modes" role="radiogroup" aria-label="Mode">
-        <button type="button" class="ghost" role="radio" data-mode="downloader" data-icon="🧲" data-t="rf_mode_dl"></button>
-        <button type="button" class="ghost" role="radio" data-mode="cleaner" data-icon="🧹" data-t="rf_mode_clean"></button>
+    <!-- O que filtrar: o modo (abas), a pasta, o emulador e o preset. -->
+    <section class="card wide rf-setup" data-page="romfilter" aria-labelledby="h-rf">
+      <div class="rf-head">
+        <div>
+          <h2 id="h-rf" data-t="page_romfilter"></h2>
+          <p class="dim" data-t="rf_intro"></p>
+        </div>
+        <div class="rf-tabs" role="tablist" aria-label="Mode">
+          <button type="button" role="tab" data-mode="downloader" data-icon="🧲" data-t="rf_mode_dl"></button>
+          <button type="button" role="tab" data-mode="cleaner" data-icon="🧹" data-t="rf_mode_clean"></button>
+        </div>
       </div>
       <div id="rf-source" class="rf-source" hidden>
-        <label class="dim" for="rf-folder" data-t="rf_folder"></label>
-        <div class="rf-folder-row">
-          <input id="rf-folder" type="text" readonly data-tp="rf_no_folder">
-          <button id="rf-browse" type="button" class="ghost" data-icon="📁" data-t="rf_choose"></button>
+        <span class="rf-source-icon" aria-hidden="true">📁</span>
+        <div class="rf-source-text">
+          <small data-t="rf_folder"></small>
+          <span id="rf-folder"></span>
         </div>
-        <div id="rf-dirs" class="rf-dirs" hidden></div>
+        <button id="rf-browse" type="button" class="ghost" data-t="rf_choose"></button>
       </div>
       <div class="rf-bar">
-        <label><span class="dim" data-t="rf_emulator"></span><select id="rf-target"></select></label>
-        <label><span class="dim" data-t="rf_preset"></span><select id="rf-preset"></select></label>
+        <label><small data-t="rf_emulator"></small><select id="rf-target"></select></label>
+        <label><small data-t="rf_preset"></small><select id="rf-preset"></select></label>
       </div>
-      <div class="rf-score" role="status" aria-live="polite">
-        <div><small data-t="rf_games"></small><span id="rf-games" class="big">-</span></div>
-        <div><small data-t="rf_size"></small><span id="rf-size" class="big">-</span></div>
-        <span id="rf-count-note" class="dim"></span>
+      <p class="rf-meta"><span data-t="rf_data"></span> <span id="rf-data"></span><br>
+        <span data-t="rf_dest"></span> <span id="rf-dest"></span></p>
+    </section>
+
+    <!-- O placar: fica a vista ao rolar os parametros. -->
+    <section class="card wide rf-score" data-page="romfilter" aria-label="Score">
+      <div class="rf-led"><small data-t="rf_games"></small><span id="rf-games">-</span></div>
+      <div class="rf-led"><small data-t="rf_size"></small><span id="rf-size">-</span></div>
+      <div class="rf-score-note" role="status" aria-live="polite">
+        <span id="rf-count-note"></span>
+        <span id="rf-note" class="dim"></span>
       </div>
-      <div id="rf-params" class="rf-params"></div>
-      <p class="dim"><span data-t="rf_data"></span> <span id="rf-data"></span></p>
-      <p class="dim"><span data-t="rf_dest"></span> <span id="rf-dest"></span></p>
-      <div class="row rf-actions">
+      <div class="rf-score-actions">
         <button id="rf-save" type="button" data-icon="💾" data-t="rf_save"></button>
         <button id="rf-scan" type="button" data-icon="🔍" data-t="rf_scan" hidden></button>
-        <span id="rf-note" class="dim" role="status"></span>
       </div>
-      <div id="rf-preview" class="rf-preview" hidden></div>
     </section>
+
+    <!-- Os parametros: um azulejo cada, em grupos; o azulejo abre as opcoes. -->
+    <section class="card wide" data-page="romfilter" aria-label="Parameters">
+      <div id="rf-board" class="rf-board"></div>
+    </section>
+
+    <section id="rf-preview" class="card wide rf-preview" data-page="romfilter" data-off aria-labelledby="h-rf-prev">
+      <h2 id="h-rf-prev" data-t="rf_scan"></h2>
+      <div id="rf-preview-body"></div>
+    </section>
+
+    <dialog id="rf-dialog" class="rf-dialog" aria-labelledby="rf-dlg-title">
+      <form method="dialog">
+        <header>
+          <h3 id="rf-dlg-title"></h3>
+          <button class="ghost icon-only" value="close" data-icon="✕" aria-label="Close"></button>
+        </header>
+        <p id="rf-dlg-help" class="dim"></p>
+        <div id="rf-dlg-body"></div>
+        <footer id="rf-dlg-foot">
+          <button value="close" data-t="rf_done"></button>
+        </footer>
+      </form>
+    </dialog>
 
     <!-- Configuracoes. -->
     <section class="card wide" data-page="settings" aria-labelledby="h-set">
