@@ -5216,7 +5216,10 @@ class LiveScreenTests(unittest.TestCase):
         self.args = t / 'ffmpeg.args'
         self.write_ffmpeg(vaapi=False)
         (t / 'cards').write_text(' 0 [PCH            ]: HDA-Intel\n')
+        self.dropmaster = t / 'libfliperos-dropmaster.so'
+        self.dropmaster.write_text('')
         self.env = dict(os.environ, FLIPEROS_FFMPEG=str(self.ffmpeg), FLIPEROS_SYS=str(t / 'sys'),
+                        FLIPEROS_DROPMASTER=str(self.dropmaster),
                         FLIPEROS_DRI=str(t / 'dri'), FLIPEROS_STREAM_RUN=str(t / 'run'), FLIPEROS_STREAM_DIR=str(t / 'go2rtc'),
                         FLIPEROS_CONF=str(t / 'fliperos.conf'), FLIPEROS_ASOUND_CARDS=str(t / 'cards'))
 
@@ -5226,7 +5229,8 @@ class LiveScreenTests(unittest.TestCase):
         vpp = vaapi if vpp is None else vpp
         self.ffmpeg.write_text('#!/bin/sh\ncase "$*" in *h264_vaapi*-f\\ null*) exit %d ;; '
                                '*scale_vaapi=w=32:h=32*) exit %d ;; esac\n'
-                               'printf "%%s\\n" "$@" > %s\n' % (0 if vaapi else 1, 0 if vpp else 1, self.args))
+                               'printf "%%s\\n" "$@" > %s\necho "$LD_PRELOAD" > %s.preload\n'
+                               % (0 if vaapi else 1, 0 if vpp else 1, self.args, self.args))
         self.ffmpeg.chmod(0o755)
 
     def test_capture_copied_by_the_card_without_its_encoder(self):
@@ -5264,6 +5268,36 @@ class LiveScreenTests(unittest.TestCase):
         self.assertNotIn('alsa', args)
         self.assertEqual((self.tmp / 'run/encoder').read_text(), 'x264\n')
         self.assertNotEqual(self.run_('capture', '200', 'x').returncode, 0)
+        # O ffmpeg devolve a tela ao abrir a placa (sem isso, aberto num
+        # momento sem dono da tela, ficava com ela e o X nao abria mais).
+        self.assertEqual(Path(str(self.args) + '.preload').read_text(), '%s\n' % self.dropmaster)
+        self.dropmaster.unlink()
+        r = self.run_('capture', '60', 'out')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('libfliperos-dropmaster.so is missing', r.stderr)
+
+    def test_dropmaster_library_builds_and_wraps_open(self):
+        # A biblioteca compila como as outras (fliperos-deflicker-build) e
+        # troca o open/openat do ffmpeg; aqui sem placa, so que um arquivo
+        # comum continua abrindo.
+        out = self.tmp / 'lib/libfliperos-dropmaster.so'
+        build = subprocess.run(['bash', str(ROOT / 'config/fliperos-deflicker-build'),
+                                str(ROOT / 'config/fliperos-dropmaster.c'), str(out)], capture_output=True, text=True)
+        if build.returncode != 0 and 'pkg-config' in build.stderr + build.stdout:
+            self.skipTest('no pkg-config/libdrm in this image')
+        self.assertEqual(build.returncode, 0, build.stderr)
+        syms = subprocess.run(['nm', '-D', '--defined-only', str(out)], capture_output=True, text=True).stdout
+        for name in ('open', 'open64', 'openat', 'openat64'):
+            self.assertRegex(syms, r'\bT %s\n' % name)
+        (self.tmp / 'file.txt').write_text('ok\n')
+        cat = subprocess.run(['cat', str(self.tmp / 'file.txt')], env=dict(os.environ, LD_PRELOAD=str(out)),
+                             capture_output=True, text=True)
+        self.assertEqual((cat.returncode, cat.stdout), (0, 'ok\n'))
+        for path, text in ((ROOT / 'fliperos-mkiso.sh', '/tmp/fliperos-dropmaster.c /usr/local/lib/fliperos/'
+                            'libfliperos-dropmaster.so'),
+                           (ROOT / 'tools/cabinet-update.sh', '"$src/config/fliperos-dropmaster.c" \\\n'
+                            '  /usr/local/lib/fliperos/libfliperos-dropmaster.so')):
+            self.assertIn(text, path.read_text())
 
     def test_capture_with_the_card_encoder_and_the_sound(self):
         self.write_ffmpeg(vaapi=True)

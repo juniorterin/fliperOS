@@ -173,6 +173,8 @@ build_native() {
 build_native "480i flicker filter (fliperos-deflicker)" "$src/config/fliperos-deflicker.c" \
   /usr/local/lib/fliperos/libfliperos-deflicker.so
 build_native "Colour calibration (fliperos-color)" "$src/config/fliperos-color.c" /usr/local/bin/fliperos-color
+build_native "Live screen DRM guard (fliperos-dropmaster)" "$src/config/fliperos-dropmaster.c" \
+  /usr/local/lib/fliperos/libfliperos-dropmaster.so
 # O painel web roda o codigo que leu ao subir: o novo vale ja (so se ele
 # estava no ar).
 systemctl try-restart fliperos-web.service 2> /dev/null || true

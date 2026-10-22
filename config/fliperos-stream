@@ -30,6 +30,11 @@ ffmpeg=${FLIPEROS_FFMPEG:-ffmpeg}
 sys=${FLIPEROS_SYS:-/sys}
 dri=${FLIPEROS_DRI:-/dev/dri}
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+# A biblioteca que faz o ffmpeg devolver a tela logo depois de abrir a placa
+# (config/fliperos-dropmaster.c): sem ela, o ffmpeg aberto num momento sem
+# dono da tela ficava com ela, e o X e o menu nao abriam mais. Sem a
+# biblioteca a captura nao abre.
+dropmaster=${FLIPEROS_DROPMASTER:-/usr/local/lib/fliperos/libfliperos-dropmaster.so}
 self=$(readlink -f "$0")
 # O loopback do ALSA que recebe a copia do som (lib/audio.sh, o id da placa).
 AUDIO_LOOP=${FLIPEROS_STREAM_LOOP:-FliperOSLoop}
@@ -176,7 +181,8 @@ capture() {
     args+=(-map 1:a -c:a libopus -b:a 96k -application lowdelay -frame_duration 10)
   fi
   args+=(-rtsp_transport tcp -f rtsp "$out")
-  exec "$ffmpeg" "${args[@]}"
+  [[ -f $dropmaster ]] || fail "$dropmaster is missing: the capture could take the screen from X and the menu"
+  LD_PRELOAD=$dropmaster${LD_PRELOAD:+:$LD_PRELOAD} exec "$ffmpeg" "${args[@]}"
 }
 
 # config: o go2rtc.yaml. A API e o RTSP so no proprio gabinete; o WebRTC na
