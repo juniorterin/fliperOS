@@ -28,8 +28,13 @@ wifi|Wi-Fi|radio:wifi|The Wi-Fi radio. The network cable works either way.
 netwait|Wait for network|NetworkManager-wait-online.service|The boot waits for the network to come up. Off: it goes on without it.
 downloader|Downloader|fliperos-transmission.service|The torrents of Setup > Games > Downloader, in the background.
 web|Web panel|fliperos-web.service|This cabinet in a browser on the same network: http://fliperos.local:8080 (user and password of Setup > System > Password).
+stream|Live screen|fliperos-stream.service|The cabinet screen live in the web panel (installed in Setup > System > Extras > Live screen).
 EOF
 }
+
+# A tela ao vivo so aparece na tabela depois de instalada (o go2rtc vem do
+# Setup > System > Extras; o .service ja vem na imagem).
+STREAM_GO2RTC=${STREAM_GO2RTC:-/opt/fliperos/go2rtc/go2rtc}
 
 # services_minimal_state CHAVE: o estado do servico no modo jogo. Esperar a
 # rede depois do boot nao serve a nada: desligado.
@@ -56,6 +61,7 @@ services_units() {
 
 # services_present CHAVE: o servico existe aqui (o Wi-Fi, com o nmcli).
 services_present() {
+  [[ $1 != stream || -x $STREAM_GO2RTC ]] || return 1
   if [[ $(services_field "$1" 3) == radio:* ]]; then
     have nmcli
   else

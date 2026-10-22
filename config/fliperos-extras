@@ -48,6 +48,12 @@ outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
 LEDSPICER_KEY=${FLIPEROS_LEDSPICER_KEY:-/usr/local/share/fliperos/ledspicer-ppa.asc}
 LEDSPICER_PPA="https://ppa.launchpadcontent.net/meduzapat/ledspicer/ubuntu"
 LEDSPICER_PACKAGES="ledspicer ledspicer-pacled64 ledspicer-pacdrive ledspicer-ultimateio ledspicer-nanoled ledspicer-ledwiz32 ledspicer-howler ledspicer-adalight"
+# A tela ao vivo no painel web (config/fliperos-stream): o ffmpeg do apt (o
+# kmsgrab, o x264, o Opus e o VA-API) e o go2rtc baixado do GitHub dele. O
+# driver VA-API da Mesa vai junto: as placas com codificador usam o H.264 dele.
+stream=${FLIPEROS_STREAM:-/opt/fliperos/bin/fliperos-stream}
+STREAM_PACKAGES="ffmpeg mesa-va-drivers"
+SERVICES_CONF=${SERVICES_CONF:-/etc/fliperos/services.conf}
 
 progress=0 label=""
 say() {
@@ -69,6 +75,7 @@ extras_label() {
     hotr) echo "Hook Of The Reaper" ;;
     qmamehook) echo "QMamehook" ;;
     ledspicer) echo "LEDSpicer" ;;
+    stream) echo "Live screen" ;;
   esac
 }
 
@@ -81,6 +88,7 @@ extras_installed() {
     zedmd) [[ -x $pixelcade ]] && "$pixelcade" zedmd-installed ;;
     doflinx) [[ -x $pixelcade ]] && "$pixelcade" doflinx-installed ;;
     hotr | qmamehook | ledspicer) [[ -x $outputs ]] && "$outputs" installed "$1" ;;
+    stream) [[ -x $stream ]] && "$stream" installed ;;
     *) return 2 ;;
   esac
 }
@@ -99,6 +107,7 @@ doflinx|DOFLinx (Pixelcade in-game effects)
 hotr|Hook Of The Reaper (game outputs: light guns, boards)
 qmamehook|QMamehook (game outputs: serial light guns, native)
 ledspicer|LEDSpicer (button LEDs: Ultimarc, LED-Wiz...)
+stream|Live screen (the cabinet screen in the web panel: go2rtc + ffmpeg)
 LIST
 }
 
@@ -156,13 +165,17 @@ install_heroic() {
 extras_install() {
   local name=$1
   label=$(extras_label "$name")
-  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade, zedmd, doflinx, hotr, qmamehook or ledspicer)"
+  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade, zedmd, doflinx, hotr, qmamehook, ledspicer or stream)"
   ((EUID == 0)) || fail "installing $label needs root (Setup > System > Extras)"
   case $name in
-    # shellcheck disable=SC2086 # um pacote por palavra
-    wine) apt_install --no-install-recommends $WINE_PACKAGES ;;
-    # shellcheck disable=SC2086
-    steam) apt_install $STEAM_PACKAGES ;;
+    wine)
+      # shellcheck disable=SC2086 # um pacote por palavra
+      apt_install --no-install-recommends $WINE_PACKAGES
+      ;;
+    steam)
+      # shellcheck disable=SC2086
+      apt_install $STEAM_PACKAGES
+      ;;
     heroic) install_heroic ;;
     # O Java (o hi2txt le com ele os recordes que rolam no marquee) do apt,
     # ate 15%; o pixelweb, a arte e o hi2txt pelo fetch, dali a 100%.
@@ -225,6 +238,22 @@ extras_install() {
         fail "could not add the LEDSpicer repository"
       # shellcheck disable=SC2086
       apt_install --no-install-recommends $LEDSPICER_PACKAGES
+      ;;
+    # O ffmpeg do apt ate 55%; o go2rtc pelo fetch, dali a 95%. O servico
+    # fica "depois do boot" (Setup > System > Services > Live screen), como o
+    # painel web, e ja sobe agora.
+    stream)
+      [[ -x $stream ]] || fail "$stream is missing"
+      if ! command -v ffmpeg > /dev/null; then
+        apt_end=55
+        # shellcheck disable=SC2086
+        apt_install --no-install-recommends $STREAM_PACKAGES
+      fi
+      if ((progress)); then "$stream" fetch --progress || exit 1; else "$stream" fetch || exit 1; fi
+      mkdir -p "$(dirname "$SERVICES_CONF")"
+      grep -q '^stream=' "$SERVICES_CONF" 2> /dev/null || echo 'stream=after' >> "$SERVICES_CONF"
+      systemctl daemon-reload 2> /dev/null
+      systemctl restart fliperos-stream.service 2> /dev/null || true
       ;;
   esac
   extras_installed "$name" || fail "$label was installed, but it was not found afterwards"

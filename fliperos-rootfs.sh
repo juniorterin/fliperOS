@@ -216,6 +216,10 @@ rm -rf "$root/usr/local/share/fliperos/web"
 install -Dm644 -t "$root/usr/local/share/fliperos/web" "$src"/config/web/*
 grep -q '^web=' "$root/etc/fliperos/services.conf" 2> /dev/null ||
   echo 'web=after' >> "$root/etc/fliperos/services.conf"
+# A tela ao vivo no painel web (config/fliperos-stream): o go2rtc e o ffmpeg
+# vem pelo Setup > System > Extras > Live screen, que liga o servico.
+install -Dm755 "$src/config/fliperos-stream" "$root/opt/fliperos/bin/fliperos-stream"
+install -Dm644 "$src/config/fliperos-stream.service" "$root/etc/systemd/system/fliperos-stream.service"
 install -Dm644 "$src/config/fliperos-downloader-magnets" "$root/usr/local/share/fliperos/downloader-magnets"
 # Setup > Games > Scraper > Art packs by torrent: logos e videos de pacotes em
 # torrent, so os dos jogos das pastas, pelo mesmo Transmission.

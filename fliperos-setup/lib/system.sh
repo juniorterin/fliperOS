@@ -36,6 +36,12 @@ password_set() {
 # telas do Setup. Ficam de fora o que pode deixar o gabinete sem imagem
 # (monitor, resolucao, driver de video): esses so pelo Setup, na tela.
 
+# marquee_overlay_enabled: o marquee do jogo para o OBS (config/fliperos-pixelcade
+# grava o estado, o painel web mostra a pagina).
+marquee_overlay_enabled() {
+  [[ $(conf_get marquee_overlay 2> /dev/null) == on ]]
+}
+
 settings_list() {
   local name desc key label state allowed help opts min max step
   opts=""
@@ -54,6 +60,13 @@ settings_list() {
   fi
   printf 'menu_sounds|System|Menu sounds|choice|%s|on=On;off=Off|The WAV files in sounds/menu, when there are any.\n' \
     "$(menu_sounds_state | sed 's/missing/off/')"
+  # A tela ao vivo (config/fliperos-stream): o som, so depois de instalada.
+  if [[ -x $STREAM_GO2RTC ]]; then
+    printf 'stream_audio|System|Live screen sound|choice|%s|off=Off;on=On|A copy of the sound for the live screen (an ALSA loopback on the card clock). Games opened after the change get it.\n' \
+      "$(audio_stream_enabled && echo on || echo off)"
+  fi
+  printf 'marquee_overlay|System|Marquee overlay for OBS|choice|%s|off=Off;on=On|The marquee of the game on screen as a page for an OBS Browser Source (the address is on the Frontend page of the panel).\n' \
+    "$(marquee_overlay_enabled && echo on || echo off)"
   while IFS='|' read -r key label state help; do
     printf 'service.%s|Services|%s|choice|%s|boot=Boot;after=After boot;off=Off|%s\n' "$key" "$label" "$state" "$help"
   done < <(services_rows)
@@ -111,6 +124,20 @@ settings_set() {
     menu_sounds)
       [[ $value == on || $value == off ]] || return 2
       menu_sounds_set "$value"
+      ;;
+    stream_audio)
+      [[ ($value == on || $value == off) && -x $STREAM_GO2RTC ]] || return 2
+      audio_stream_set "$value"
+      ;;
+    marquee_overlay)
+      [[ $value == on || $value == off ]] || return 2
+      conf_set marquee_overlay "$value"
+      # Os avisos dos frontends (os scripts do ES-DE, o plugin do Attract-Mode
+      # Plus), que sem Pixelcade nem ZeDMD ainda nao estao la; como o jogador,
+      # para os arquivos do ES-DE continuarem dele.
+      if [[ $value == on && -x $FLIPEROS_BIN/fliperos-pixelcade ]]; then
+        runuser -u "$FLIPEROS_USER" -- "$FLIPEROS_BIN/fliperos-pixelcade" frontends >> "$FLIPEROS_LOG" 2>&1 || true
+      fi
       ;;
     service.*)
       [[ -n $(services_field "${key#service.}" 1) && " ${SERVICE_STATES[*]} " == *" $value "* ]] || return 2

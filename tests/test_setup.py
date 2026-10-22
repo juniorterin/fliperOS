@@ -1215,6 +1215,39 @@ class AudioTests(Base):
         self.assertNotIn("ladspa", conf.read_text())
         self.assertIn("audio_leveler=off\n", (self.env.etc / "fliperos.conf").read_text())
 
+    def test_live_screen_sound_copies_the_output_only_with_the_loopback(self):
+        # Live screen sound: o mesmo som no dmix da placa e no do loopback
+        # (o fliperos_tee), so com o loopback aberto; sem ele o default nao
+        # abriria e tudo ficaria mudo.
+        conf = self.env.dir / "asound.conf"
+        cards = self.env.dir / "cards"
+        cards.write_text(" 0 [PCH            ]: HDA-Intel - HDA Intel PCH\n")
+        plugin = self.env.dir / "sc4.so"
+        env = {"ASOUND_CONF": str(conf), "AUDIO_PROC_CARDS": str(cards), "AUDIO_LEVELER_PLUGIN": str(plugin)}
+        self.env.out("conf_set alsa 0,0; conf_set stream_audio on; audio_write_conf", env)
+        self.assertNotIn("fliperos_tee", conf.read_text())
+        self.assertEqual(self.env.out("audio_card_id 0", env).strip(), "PCH")
+        cards.write_text(cards.read_text() + "10 [FliperOSLoop   ]: Loopback - Loopback\n")
+        self.env.out("audio_write_conf", env)
+        text = conf.read_text()
+        self.assertIn('slaves.a { pcm "dmix:0,0" channels 2 }', text)
+        self.assertIn('slaves.b { pcm "dmix:FliperOSLoop,0" channels 2 }', text)
+        self.assertIn('pcm.!default {\n    type plug\n    slave.pcm "fliperos_tee"\n}', text)
+        # Com o nivelador, o compressor sai no tee (um default so).
+        plugin.write_text("")
+        self.env.out("conf_set audio_leveler on; audio_write_conf", env)
+        text = conf.read_text()
+        self.assertEqual(text.count("pcm.!default"), 1)
+        self.assertIn('slave.pcm {\n        type plug\n        slave.pcm "fliperos_tee"\n    }', text)
+        # O modulo no relogio da placa, pelo nome dela.
+        modprobe = self.env.dir / "aloop.conf"
+        self.env.stub("modprobe", "exit 0")
+        self.env.out("audio_stream_set on", dict(env, AUDIO_LOOP_MODPROBE=str(modprobe),
+                                                 AUDIO_LOOP_LOAD=str(self.env.dir / "aloop.load")))
+        self.assertEqual(modprobe.read_text(),
+                         "options snd-aloop index=10 id=FliperOSLoop pcm_substreams=1 timer_source=PCH.0\n")
+        self.assertEqual((self.env.dir / "aloop.load").read_text(), "snd-aloop\n")
+
     def mixer(self, controls, level=60):
         """amixer falso: lista os controles da placa, responde o nivel e
         registra cada sset."""

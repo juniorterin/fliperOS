@@ -21,6 +21,7 @@
 #                                     o placar de uma partida versus: os nomes dos
 #                                     lados, as vitorias e os pontos ("-" = sem)
 #   fliperos-dmd title ROM            o nome do jogo nas listas dos frontends
+#   fliperos-dmd art SISTEMA [ROM]    o arquivo da imagem do jogo (ou do sistema)
 #
 # ABERTURA e um texto que rola uma vez antes da imagem (os recordes, "Now
 # Playing ...", uma conquista). Um GIF, um texto rolando ou o attract fica
@@ -428,6 +429,14 @@ def main(argv):
     if len(argv) == 3 and argv[1] == 'title':
         print(clean(title_of(argv[2])))
         return 0
+    # art SISTEMA [ROM]: a imagem que o painel mostraria (a do jogo ou, sem
+    # ROM, a do sistema); o marquee do OBS (config/fliperos-web) a usa.
+    if len(argv) in (3, 4) and argv[1] == 'art':
+        path = find_art(argv[2], argv[3]) if len(argv) == 4 and argv[3] else None
+        path = path or find_system_art(argv[2])
+        if path:
+            print(path)
+        return 0 if path else 1
     if Image is None:
         return 0
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
@@ -463,7 +472,8 @@ def run(argv):
                              '       fliperos-dmd text TEXT\n'
                              '       fliperos-dmd attract | startup\n'
                              '       fliperos-dmd versus LEFT WINS_LEFT WINS_RIGHT RIGHT SCORE_LEFT SCORE_RIGHT\n'
-                             '       fliperos-dmd title ROM\n')
+                             '       fliperos-dmd title ROM\n'
+                             '       fliperos-dmd art SYSTEM [ROM]\n')
             return 1
         play(frames, intro, retry)
     except OSError:

@@ -1,0 +1,18 @@
+[Unit]
+# A tela do gabinete ao vivo no painel web (config/fliperos-stream): o go2rtc,
+# que so abre o ffmpeg enquanto alguem assiste. Sobe pelo Setup > System >
+# Services > Live screen, depois de instalado no Setup > System > Extras.
+Description=FliperOS live screen (go2rtc)
+After=network-online.target fliperos-web.service
+ConditionPathExists=/opt/fliperos/go2rtc/go2rtc
+
+[Service]
+# Root: o kmsgrab le o framebuffer do DRM (CAP_SYS_ADMIN). A codificacao fica
+# abaixo do jogo.
+ExecStart=/opt/fliperos/bin/fliperos-stream daemon
+Nice=10
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

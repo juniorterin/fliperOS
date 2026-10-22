@@ -124,6 +124,35 @@ doflinx_installed() {
   [[ -x $doflinx_dir/DOFLinx ]]
 }
 
+# -- O marquee para o OBS --------------------------------------------
+# Com marquee_overlay=on no fliperos.conf (Setup e painel web), cada evento
+# grava o que o marquee mostra em $XDG_RUNTIME_DIR/fliperos-marquee
+# ("chave=valor"), que a pagina /overlay/marquee do painel web desenha. Nao
+# precisa de Pixelcade nem de ZeDMD: a arte vem de ~/media, como no ZeDMD (a
+# do Pixelcade so pode ser usada no hardware dele).
+overlay_file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-marquee
+
+overlay_on() {
+  [[ $(sed -n 's/^marquee_overlay=//p' "$conf" 2> /dev/null | tail -n 1) == on ]]
+}
+
+# overlay EVENTO SISTEMA ROM TITULO TEXTO [CHAVE=VALOR...]: EVENTO e game,
+# select, system, achievement, attract ou versus; sem TITULO, o das listas.
+overlay() {
+  local tmp title=${4:-} text=${5:-} kv
+  overlay_on || return 0
+  [[ -z $title && -n ${3:-} && $1 != achievement ]] && title=$(title_of "$3")
+  tmp=$(mktemp "$overlay_file.XXXXXX" 2> /dev/null) || return 0
+  {
+    printf 'event=%s\nsystem=%s\nrom=%s\n' "$1" "${2:-}" "${3:-}"
+    printf 'title=%s\ntext=%s\n' "${title//$'\n'/ }" "${text//$'\n'/ }"
+    for kv in "${@:6}"; do printf '%s\n' "${kv//$'\n'/ }"; done
+    printf 'time=%s\n' "$(date +%s)"
+  } > "$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$overlay_file" 2> /dev/null || rm -f "$tmp"
+}
+
 # -- Instalacao ------------------------------------------------------
 
 fetch() {
@@ -714,6 +743,7 @@ game() {
     call "arcade/stream/$(urlencode "$1")/$(urlencode "$2")?l=99999&event=GameStart"
   fi
   zedmd show game "$1" "$2" "$title" "$intro"
+  overlay game "$1" "$2" "$title" "$intro"
   return 0
 }
 
@@ -776,6 +806,10 @@ versus_score() {
   fi
   [[ $mode == host || $mode == join ]] && left=YOU right=RIVAL
   zedmd versus "$left" "$wl" "$wr" "$right" "$sl" "$sr"
+  last=$(cat "$last_file" 2> /dev/null)
+  last=${last#game:}
+  overlay versus "${last%%/*}" "${last#*/}" "" "" "left=$left" "right=$right" "wins_left=$wl" "wins_right=$wr" \
+    "score_left=$sl" "score_right=$sr"
   [[ $wl$wr =~ ^[0-9]+$ ]] && ((wl + wr > 0)) || return 0
   [[ $(cat "$last_file.versus" 2> /dev/null) == "$wl $wr" ]] && return 0
   printf '%s %s\n' "$wl" "$wr" > "$last_file.versus" 2> /dev/null
@@ -792,7 +826,7 @@ versus_score() {
 # ligadas e ha um painel para mostra-las. O fliperos-kms-run entao o abre com
 # --verbose: so assim a conquista aparece no log.
 cheevos() {
-  installed || zedmd_installed || return 1
+  installed || zedmd_installed || overlay_on || return 1
   grep -qE '^cheevos_enable[[:space:]]*=[[:space:]]*"true"' "$ra_cfg" 2> /dev/null
 }
 
@@ -824,6 +858,7 @@ achievement() {
   fi
   call "achievements/stream/$(urlencode "${sys:-mame}")/$(urlencode "$1")?t=$(urlencode "$text")&currentgame=$(urlencode "$rom")"
   zedmd show game "$sys" "$rom" "" "$text"
+  overlay achievement "$sys" "$rom" "" "$text"
 }
 
 # screensaver start|stop: o protetor de tela do frontend. No Pixelcade, o
@@ -838,6 +873,7 @@ screensaver() {
       printf 'screensaver:%s\n' "$last" > "$last_file" 2> /dev/null
       call "attract?nointerrupt"
       zedmd attract
+      overlay attract
       ;;
     stop)
       [[ $last == screensaver:* ]] || return 0
@@ -863,6 +899,7 @@ select_game() {
   printf '%s/%s\n' "$1" "$2" > "$last_file" 2> /dev/null
   call "arcade/stream/$(urlencode "$1")/$(urlencode "$2")?event=FEScroll"
   zedmd show select "$1" "$2" "${3:-}"
+  overlay select "$1" "$2" "${3:-}"
 }
 
 # system SISTEMA [TITULO]
@@ -871,6 +908,7 @@ system() {
   printf 'system/%s\n' "$1" > "$last_file" 2> /dev/null
   call "console/stream/$(urlencode "$1")"
   zedmd show system "$1" "" "${2:-}"
+  overlay system "$1" "" "${2:-}"
 }
 
 # launch PROGRAMA [ARGS...]: a linha de comando que o fliperos-kms-run ou o
@@ -1019,7 +1057,8 @@ case $cmd in
     exit 0
     ;;
   launch | esde | attract | game | select | system | end | screensaver | achievement | versus)
-    installed || zedmd_installed || exit 0
+    # Sem marquee nenhum (nem o do OBS), os eventos nao fazem nada.
+    installed || zedmd_installed || overlay_on || exit 0
     case $cmd in
       select) select_game "$@" ;;
       end) game_end "$@" ;;

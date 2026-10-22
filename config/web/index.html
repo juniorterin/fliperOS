@@ -94,6 +94,46 @@
       <img id="shot" class="shot tube" alt="" hidden>
     </section>
 
+    <!-- A tela ao vivo (WebRTC pelo go2rtc, config/fliperos-stream). -->
+    <section class="card wide" data-page="frontend status" aria-labelledby="h-live">
+      <h2 id="h-live" data-t="live"></h2>
+      <div class="row live-bar">
+        <button id="live-start" type="button" data-icon="▶" data-t="live_start"></button>
+        <button id="live-stop" class="ghost" type="button" data-icon="■" data-t="live_stop" hidden></button>
+        <label class="dim"><span data-t="live_fps"></span>
+          <select id="live-fps"><option value="15">15</option><option value="30" selected>30</option><option value="60">60</option></select></label>
+        <button id="live-sound" class="ghost" type="button" data-icon="🔇" data-t="live_unmute" hidden></button>
+        <button id="live-full" class="ghost" type="button" data-icon="⤢" data-t="live_full" hidden></button>
+      </div>
+      <p id="live-note" class="dim" role="status"></p>
+      <div id="live-setup" class="row" hidden></div>
+      <video id="live" class="shot tube" playsinline autoplay muted hidden></video>
+      <div id="live-obs" class="ovl-box live-obs" hidden>
+        <h3 data-t="live_obs_title"></h3>
+        <div class="ovl-url">
+          <input id="live-url" type="text" readonly aria-label="OBS address">
+          <button id="live-copy" type="button" data-icon="📋" data-t="copy"></button>
+        </div>
+        <p class="dim" data-t="live_obs"></p>
+      </div>
+    </section>
+
+    <!-- O marquee do jogo como pagina para o OBS (overlay.html). -->
+    <section class="card wide" data-page="frontend" aria-labelledby="h-ovl">
+      <h2 id="h-ovl" data-t="overlay"></h2>
+      <p class="dim" data-t="overlay_note"></p>
+      <label class="ovl-toggle"><input id="ovl-on" type="checkbox"> <span data-t="overlay_on"></span></label>
+      <div id="ovl-box" class="ovl-box" hidden>
+        <div class="ovl-url">
+          <input id="ovl-url" type="text" readonly aria-label="Overlay address">
+          <button id="ovl-copy" type="button" data-icon="📋" data-t="copy"></button>
+          <button id="ovl-new" class="ghost" type="button" data-icon="🔑" data-t="overlay_new"></button>
+        </div>
+        <p class="dim" data-t="overlay_obs"></p>
+        <iframe id="ovl-preview" class="ovl-preview" title="Marquee preview"></iframe>
+      </div>
+    </section>
+
     <!-- O trackball esta desligado por enquanto (data-off; no servidor,
          FLIPEROS_WEB_TRACKBALL=1 o liga). -->
     <section class="card wide" data-page="frontend" data-off aria-labelledby="h-ball">

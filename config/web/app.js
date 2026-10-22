@@ -32,6 +32,20 @@ const TEXT = {
     g_offline: "Could not reach the game database (is the cabinet online?).", g_not_found: "Not in the Arcade Database.",
     pic_snap: "In game", pic_title: "Title", pic_marquee: "Marquee", pic_flyer: "Flyer", pic_cabinet: "Cabinet",
     pic_boxart: "Box",
+    live: "Live screen", live_start: "Watch live", live_stop: "Stop", live_fps: "Frames per second",
+    live_unmute: "Sound", live_mute: "Mute", live_full: "Full screen", live_install: "Install the live screen",
+    live_installing: "Installing the live screen: the progress is in Files > Tasks.",
+    live_install_note: "Downloads go2rtc and ffmpeg (about 70 MB, needs the internet).",
+    live_turn_on: "Turn on", live_off_note: "The live screen is installed but off (Settings > Services > Live screen).",
+    live_ready: "Ready: H.264 by %e.", live_hw: "the graphics card", live_no_audio: "no sound (Settings > Live screen sound)",
+    live_connecting: "Connecting to the cabinet…", live_lost: "The connection dropped. Press Watch live again.",
+    live_buffer: "%n ms in the buffer", live_obs_title: "In OBS",
+    live_obs: "Sources > + > Browser, paste the address, width 1440 and height 1080 (4:3, as on the tube), and tick Control audio via OBS for the sound. It reconnects by itself. &fit=fill stretches it to any size; &muted=1 drops the sound. It uses the same key as the marquee page (New address there changes both).",
+    overlay: "Marquee for OBS", overlay_on: "Turn on the marquee page",
+    overlay_note: "The marquee of the game on screen as a page for OBS: transparent background, the game's art (from ~/media), the high scores, the achievements and the versus score. No LED panel needed.",
+    overlay_obs: "In OBS: Sources > + > Browser, paste the address, width 1280 and height 320. Add &led=1 at the end for LED dots.",
+    overlay_new: "New address", overlay_new_ask: "Make a new address? The old one stops working (update OBS).",
+    copy: "Copy", copied: "Copied.",
     page_romfilter: "ROM filter",
     rf_intro: "The MAME ROM Cleaner filter, the same as in the Setup: what the Downloader takes from the torrents, or what goes from a romset folder to the emulator's folder.",
     rf_mode_dl: "Downloader filter", rf_mode_clean: "Clean a romset folder", rf_folder: "Romset folder",
@@ -103,6 +117,20 @@ const TEXT = {
     g_offline: "Não deu para falar com a base de jogos (o gabinete está na internet?).", g_not_found: "Não está no Arcade Database.",
     pic_snap: "Jogando", pic_title: "Título", pic_marquee: "Letreiro", pic_flyer: "Flyer", pic_cabinet: "Gabinete",
     pic_boxart: "Capa",
+    live: "Tela ao vivo", live_start: "Assistir ao vivo", live_stop: "Parar", live_fps: "Quadros por segundo",
+    live_unmute: "Som", live_mute: "Mudo", live_full: "Tela cheia", live_install: "Instalar a tela ao vivo",
+    live_installing: "Instalando a tela ao vivo: o andamento está em Arquivos > Tarefas.",
+    live_install_note: "Baixa o go2rtc e o ffmpeg (uns 70 MB, precisa de internet).",
+    live_turn_on: "Ligar", live_off_note: "A tela ao vivo está instalada, mas desligada (Configurações > Serviços > Live screen).",
+    live_ready: "Pronta: H.264 %e.", live_hw: "pela placa de vídeo", live_no_audio: "sem som (Configurações > Live screen sound)",
+    live_connecting: "Conectando ao gabinete…", live_lost: "A conexão caiu. Aperte Assistir ao vivo de novo.",
+    live_buffer: "%n ms no buffer", live_obs_title: "No OBS",
+    live_obs: "Fontes > + > Navegador, cole o endereço, largura 1440 e altura 1080 (4:3, como no tubo), e marque Controlar áudio pelo OBS para o som. Ele reconecta sozinho. Com &fit=fill estica para qualquer tamanho; com &muted=1 fica sem som. Usa a mesma chave da página do marquee (Endereço novo lá troca as duas).",
+    overlay: "Marquee para o OBS", overlay_on: "Ligar a página do marquee",
+    overlay_note: "O marquee do jogo na tela como página para o OBS: fundo transparente, a arte do jogo (de ~/media), os recordes, as conquistas e o placar versus. Não precisa de painel de LED.",
+    overlay_obs: "No OBS: Fontes > + > Navegador, cole o endereço, largura 1280 e altura 320. Com &led=1 no fim, os pontos de LED.",
+    overlay_new: "Endereço novo", overlay_new_ask: "Criar um endereço novo? O antigo para de funcionar (atualize o OBS).",
+    copy: "Copiar", copied: "Copiado.",
     page_romfilter: "Filtro de ROMs",
     rf_intro: "O filtro do MAME ROM Cleaner, o mesmo do Setup: o que o Downloader baixa dos torrents, ou o que vai de uma pasta com um romset para a pasta do emulador.",
     rf_mode_dl: "Filtro do Downloader", rf_mode_clean: "Limpar uma pasta de romset", rf_folder: "Pasta do romset",
@@ -1220,7 +1248,210 @@ $("shot-take").addEventListener("click", async () => {
     $("shot-take").disabled = false;
   }
 });
-$("shot-tube").addEventListener("change", () => $("shot").classList.toggle("tube", $("shot-tube").checked));
+$("shot-tube").addEventListener("change", () => {
+  $("shot").classList.toggle("tube", $("shot-tube").checked);
+  $("live").classList.toggle("tube", $("shot-tube").checked);
+});
+
+// ── Tela ao vivo (WebRTC) ────────────────────────────────────────
+// O go2rtc do gabinete (config/fliperos-stream) manda o que esta no tubo em
+// H.264 (e o som em Opus, se ligado). A oferta vai pelo painel
+// (/api/stream/offer); o video chega direto, pela rede local. Sem STUN: as
+// duas pontas estao na mesma rede. O som comeca mudo (o navegador so toca
+// som depois de um clique).
+
+let live = null, liveStats = null, liveStatus = null, liveObsPath = "";
+
+function liveObsUrl() {
+  if (liveObsPath) $("live-url").value = location.origin + liveObsPath + "&fps=" + $("live-fps").value;
+}
+
+async function loadLive() {
+  const res = await api("/api/stream");
+  liveStatus = await res.json();
+  const setup = $("live-setup");
+  setup.replaceChildren();
+  $("live-start").hidden = !!live || !liveStatus.installed || !liveStatus.active;
+  if (!liveStatus.installed) {
+    const install = el("button", { type: "button", "data-icon": "⬇" }, t("live_install"));
+    install.addEventListener("click", async () => {
+      const r = await api("/api/stream/install", { method: "POST", body: "{}" });
+      const data = await r.json().catch(() => ({}));
+      toast(r.ok ? t("live_installing") : data.error || r.statusText);
+    });
+    setup.append(install, el("span", { class: "dim" }, t("live_install_note")));
+  } else if (!liveStatus.active) {
+    const on = el("button", { type: "button", "data-icon": "⏻" }, t("live_turn_on"));
+    on.addEventListener("click", async () => {
+      await api("/api/settings", { method: "POST", body: JSON.stringify({ key: "service.stream", value: "boot" }) });
+      setTimeout(() => loadLive().catch(() => {}), 2500);
+    });
+    setup.append(on, el("span", { class: "dim" }, t("live_off_note")));
+  }
+  setup.hidden = !setup.children.length;
+  // O endereco para o OBS (a mesma chave do marquee), com a taxa escolhida.
+  $("live-obs").hidden = !liveStatus.installed;
+  if (liveStatus.installed) {
+    const r = await api("/api/overlay");
+    liveObsPath = (await r.json()).live;
+    liveObsUrl();
+  }
+  if (!live) {
+    $("live-note").textContent = liveStatus.installed && liveStatus.active
+      ? t("live_ready").replace("%e", liveStatus.encoder === "vaapi" ? t("live_hw") : "x264")
+        + (liveStatus.audio ? "" : " · " + t("live_no_audio")) : "";
+  }
+}
+
+function liveIce(pc) {
+  // As candidatas da rede local saem em instantes; sem esperar mais que 2 s.
+  if (pc.iceGatheringState === "complete") return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => { if (pc.iceGatheringState === "complete") { clearTimeout(timer); resolve(); } };
+    const timer = setTimeout(resolve, 2000);
+    pc.addEventListener("icegatheringstatechange", done);
+  });
+}
+
+async function liveStart() {
+  liveStop();
+  const video = $("live"), fps = Number($("live-fps").value);
+  $("live-note").textContent = t("live_connecting");
+  const pc = new RTCPeerConnection({ iceServers: [] });
+  live = pc;
+  const stream = new MediaStream();
+  pc.addTransceiver("video", { direction: "recvonly" });
+  pc.addTransceiver("audio", { direction: "recvonly" });
+  pc.ontrack = (ev) => {
+    stream.addTrack(ev.track);
+    video.srcObject = stream;
+    if (ev.track.kind === "audio") $("live-sound").hidden = false;
+  };
+  pc.onconnectionstatechange = () => {
+    if (live !== pc) return;
+    if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+      $("live-note").textContent = t("live_lost");
+      liveStop(true);
+    }
+  };
+  try {
+    await pc.setLocalDescription(await pc.createOffer());
+    await liveIce(pc);
+    const res = await api("/api/stream/offer", { method: "POST", body: JSON.stringify({ fps, sdp: pc.localDescription.sdp }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    if (live !== pc) return;
+    await pc.setRemoteDescription({ type: "answer", sdp: data.sdp });
+  } catch (e) {
+    if (live === pc) liveStop(true);
+    if (e.message !== "login") $("live-note").textContent = String(e.message || e);
+    return;
+  }
+  video.hidden = false;
+  $("live-start").hidden = true;
+  $("live-stop").hidden = false;
+  $("live-full").hidden = false;
+  liveStats = setInterval(() => liveShowStats(pc), 1000);
+}
+
+async function liveShowStats(pc) {
+  // O que chega: o tamanho, os quadros por segundo e o atraso do buffer.
+  if (live !== pc) return;
+  let text = "";
+  const stats = await pc.getStats();
+  stats.forEach((s) => {
+    if (s.type === "inbound-rtp" && s.kind === "video") {
+      const delay = s.jitterBufferEmittedCount ? Math.round((1000 * s.jitterBufferDelay) / s.jitterBufferEmittedCount) : null;
+      text = (s.frameWidth ? s.frameWidth + "×" + s.frameHeight + " · " : "") + Math.round(s.framesPerSecond || 0) + " fps"
+        + (delay != null ? " · " + t("live_buffer").replace("%n", delay) : "");
+    }
+  });
+  if (text) $("live-note").textContent = text;
+}
+
+function liveStop(keepNote) {
+  if (liveStats) clearInterval(liveStats);
+  liveStats = null;
+  if (live) live.close();
+  live = null;
+  const video = $("live");
+  video.srcObject = null;
+  video.hidden = true;
+  video.muted = true;
+  $("live-sound").hidden = true;
+  $("live-sound").dataset.icon = "🔇";
+  $("live-sound").textContent = t("live_unmute");
+  $("live-stop").hidden = true;
+  $("live-full").hidden = true;
+  $("live-start").hidden = !(liveStatus && liveStatus.installed && liveStatus.active);
+  if (!keepNote) $("live-note").textContent = "";
+}
+
+$("live-start").addEventListener("click", () => liveStart());
+$("live-stop").addEventListener("click", () => liveStop());
+$("live-fps").addEventListener("change", () => { liveObsUrl(); if (live) liveStart(); });
+$("live-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("live-url").value); } catch (e) {
+    $("live-url").select();
+    document.execCommand("copy");
+  }
+  toast(t("copied"));
+});
+$("live-sound").addEventListener("click", () => {
+  const video = $("live");
+  video.muted = !video.muted;
+  $("live-sound").dataset.icon = video.muted ? "🔇" : "🔊";
+  $("live-sound").textContent = t(video.muted ? "live_unmute" : "live_mute");
+});
+$("live-full").addEventListener("click", () => { $("live").requestFullscreen().catch(() => {}); });
+
+// ── Marquee para o OBS ───────────────────────────────────────────
+// Ligado aqui (ou no Setup), o marquee do jogo na tela vira uma pagina
+// (/overlay/marquee) para o Browser Source do OBS: fundo transparente, a
+// arte do jogo, os recordes, as conquistas e o placar versus. O endereco
+// tem uma chave (o OBS nao faz login); uma chave nova invalida a antiga.
+
+async function loadOverlay() {
+  const res = await api("/api/overlay");
+  showOverlay(await res.json());
+}
+
+function showOverlay(data) {
+  const url = location.origin + data.path;
+  $("ovl-on").checked = !!data.enabled;
+  $("ovl-box").hidden = !data.enabled;
+  $("ovl-url").value = url;
+  const preview = $("ovl-preview");
+  if (data.enabled && preview.dataset.src !== url) {
+    preview.src = url;
+    preview.dataset.src = url;
+  } else if (!data.enabled && preview.dataset.src) {
+    preview.removeAttribute("src");
+    delete preview.dataset.src;
+  }
+}
+
+$("ovl-on").addEventListener("change", async () => {
+  const value = $("ovl-on").checked ? "on" : "off";
+  const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: "marquee_overlay", value }) });
+  if (!res.ok) toast((await res.json().catch(() => ({}))).error || res.statusText);
+  loadOverlay().catch(() => {});
+});
+$("ovl-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("ovl-url").value); toast(t("copied")); } catch (e) {
+    $("ovl-url").select();
+    document.execCommand("copy");
+    toast(t("copied"));
+  }
+});
+$("ovl-new").addEventListener("click", async () => {
+  if (!confirm(t("overlay_new_ask"))) return;
+  const res = await api("/api/overlay", { method: "POST", body: JSON.stringify({ action: "newkey" }) });
+  const data = await res.json();
+  showOverlay(data);
+  liveObsPath = data.live || liveObsPath;
+  liveObsUrl();
+});
 
 // ── Arquivos: as pastas do gabinete ──────────────────────────────
 // roms, bios, media e splashscreen de ~: entrar nas pastas, baixar,
@@ -1843,7 +2074,11 @@ function showPage(name) {
   } else if (name === "terminal" && termFit) {
     requestAnimationFrame(() => termFit.fit());
   }
-  if (name === "frontend" || name === "status") drawFps();
+  if (name === "frontend" || name === "status") {
+    drawFps();
+    loadLive().catch(() => {});
+  }
+  if (name === "frontend") loadOverlay().catch(() => {});
 }
 
 window.addEventListener("hashchange", () => showPage(location.hash.slice(1)));

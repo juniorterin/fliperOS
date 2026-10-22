@@ -1,0 +1,36 @@
+/* O marquee para o OBS: fundo transparente, a arte ocupando a area toda, os
+   textos com as cores do Setup (Dracula) e contorno escuro para ler sobre o
+   jogo. Com &led=1 (classe led), uma mascara de pontos, como um DMD 128x32. */
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+body { font: 800 16px/1.1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #f8f8f2; }
+[hidden] { display: none !important; }
+.stage { position: fixed; inset: 0; display: grid; place-items: center; }
+/* A arte cresce ate a area toda do OBS, sem distorcer. */
+.art { width: 100%; height: 100%; object-fit: contain; }
+.art.pixel { image-rendering: pixelated; }
+.title { padding: 0 4vw; text-align: center; font-size: min(18vh, 9vw); color: #ffb86c;
+  text-shadow: 0 0 2vh rgba(255, 184, 108, .6), 0 .4vh 0 #191a21; overflow-wrap: anywhere; }
+.title.system { color: #8be9fd; text-shadow: 0 0 2vh rgba(139, 233, 253, .6), 0 .4vh 0 #191a21; }
+.led .stage { -webkit-mask-image: radial-gradient(circle, #000 52%, transparent 60%);
+  mask-image: radial-gradient(circle, #000 52%, transparent 60%);
+  -webkit-mask-size: calc(100vw / 128) calc(100vh / 32); mask-size: calc(100vw / 128) calc(100vh / 32); }
+.versus { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4vw; width: 92vw; }
+.versus .side { display: grid; gap: 2vh; text-align: center; font-size: min(14vh, 6vw); color: #ff79c6;
+  text-shadow: 0 .4vh 0 #191a21; overflow-wrap: anywhere; }
+.versus .side:last-child { color: #8be9fd; }
+.versus small { font-size: .55em; color: #f8f8f2; }
+.versus .wins { display: flex; gap: 2vw; font: 800 min(34vh, 14vw)/1 ui-monospace, "JetBrains Mono", monospace;
+  color: #50fa7b; text-shadow: 0 0 3vh rgba(80, 250, 123, .55), 0 .5vh 0 #191a21; }
+.versus .wins b { color: #f8f8f2; }
+.ticker { position: fixed; left: 0; right: 0; bottom: 0; height: 22vh; overflow: hidden; display: flex;
+  align-items: center; background: rgba(25, 26, 33, .72); }
+.ticker span { white-space: nowrap; font-size: 13vh; color: #f1fa8c; padding-left: 100vw;
+  animation: ticker var(--time, 12s) linear 1 forwards; }
+@keyframes ticker { to { transform: translateX(-100%); } }
+.pop { position: fixed; top: 6vh; left: 50%; transform: translateX(-50%); max-width: 90vw; padding: 2vh 3vw;
+  border-radius: 2vh; background: rgba(25, 26, 33, .88); border: .5vh solid #bd93f9; font-size: 10vh; color: #f8f8f2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: pop .35s ease-out; }
+@keyframes pop { from { transform: translate(-50%, -40%); opacity: 0; } }
+.error { position: fixed; left: 2vw; bottom: 2vh; margin: 0; font-size: 14px; color: #ff5555;
+  background: rgba(25, 26, 33, .85); padding: 4px 8px; border-radius: 6px; }
+@media (prefers-reduced-motion: reduce) { .ticker span { animation: none; padding-left: 2vw; } .pop { animation: none; } }

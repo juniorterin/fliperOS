@@ -55,20 +55,106 @@ audio_leveler_set() {
   log_info "audio: nivelador de volume $1"
 }
 
+# ── O som da tela ao vivo ────────────────────────────────────────
+# Live screen sound (o painel web, config/fliperos-stream), desligado de
+# fabrica: uma copia de tudo o que toca vai para um loopback do ALSA
+# (snd-aloop, a placa FliperOSLoop), que o ffmpeg da transmissao grava. O
+# loopback anda no relogio da placa de verdade (timer_source, pelo nome dela):
+# sem isso as duas derivam e o som picota. A copia so entra no asound.conf com
+# o loopback aberto: sem ele o "default" nao abriria e tudo ficaria mudo.
+AUDIO_LOOP_ID=${AUDIO_LOOP_ID:-FliperOSLoop}
+AUDIO_LOOP_MODPROBE=${AUDIO_LOOP_MODPROBE:-/etc/modprobe.d/fliperos-aloop.conf}
+AUDIO_LOOP_LOAD=${AUDIO_LOOP_LOAD:-/etc/modules-load.d/fliperos-aloop.conf}
+AUDIO_PROC_CARDS=${AUDIO_PROC_CARDS:-/proc/asound/cards}
+
+audio_stream_enabled() {
+  [[ $(conf_get stream_audio 2> /dev/null) == on ]]
+}
+
+# audio_card_id PLACA: o nome da placa no ALSA (o /proc/asound/cards), que
+# nao muda quando a ordem das placas muda.
+audio_card_id() {
+  sed -nE "s/^ *$1 \[([^] ]+) *\].*/\1/p" "$AUDIO_PROC_CARDS" 2> /dev/null | head -n 1
+}
+
+# audio_loop_ready: o loopback esta aberto agora.
+audio_loop_ready() {
+  grep -qE "\[$AUDIO_LOOP_ID *\]" "$AUDIO_PROC_CARDS" 2> /dev/null
+}
+
+# audio_stream_set on|off: o modulo do loopback (agora e nos proximos boots,
+# no relogio da placa padrao) e o asound.conf de novo. Status 1: o loopback
+# nao abriu (o som da transmissao fica desligado).
+audio_stream_set() {
+  local current id
+  if [[ $1 == on ]]; then
+    current=$(audio_current)
+    id=$(audio_card_id "${current%,*}")
+    printf 'options snd-aloop index=10 id=%s pcm_substreams=1 timer_source=%s\n' \
+      "$AUDIO_LOOP_ID" "${id:-${current%,*}}.${current#*,}" > "$AUDIO_LOOP_MODPROBE" || return 1
+    echo snd-aloop > "$AUDIO_LOOP_LOAD" || return 1
+    if ! audio_loop_ready; then
+      modprobe -r snd-aloop 2> /dev/null
+      modprobe snd-aloop >> "$FLIPEROS_LOG" 2>&1
+    fi
+    if ! audio_loop_ready; then
+      log_error "audio: o loopback (snd-aloop) nao abriu; o som da tela ao vivo fica desligado"
+      rm -f "$AUDIO_LOOP_LOAD"
+      conf_set stream_audio off
+      audio_write_conf
+      return 1
+    fi
+  else
+    rm -f "$AUDIO_LOOP_LOAD" "$AUDIO_LOOP_MODPROBE"
+  fi
+  conf_set stream_audio "$1"
+  audio_write_conf
+  log_info "audio: som da tela ao vivo $1"
+}
+
 # audio_write_conf grava o /etc/asound.conf: a placa padrao e, com o
 # nivelador ligado, o "default" passando pelo compressor antes do dmix da
 # placa (o plug converte o formato dos dois lados). O plug do lado da placa
 # vai em bloco: escrito "plug:dmix:0,0", o ALSA le o ",0" como um segundo
-# argumento do plug, nada abre o default e tudo fica mudo.
+# argumento do plug, nada abre o default e tudo fica mudo. Com o som da tela
+# ao vivo, a saida e o fliperos_tee: o mesmo som no dmix da placa e no do
+# loopback (o route copia os 2 canais para os 4 do multi).
 audio_write_conf() {
-  local current card dev
+  local current card dev out tee=0
   current=$(audio_current)
   card=${current%,*} dev=${current#*,}
+  out="dmix:$card,$dev"
+  if audio_stream_enabled && audio_loop_ready; then
+    tee=1 out=fliperos_tee
+  fi
   {
     echo "# Gerado pelo fliperos-setup (Setup > Audio Setup)."
     echo "defaults.pcm.card $card"
     echo "defaults.ctl.card $card"
     echo "defaults.pcm.device $dev"
+    if ((tee)); then
+      cat << EOF
+
+# Live screen sound: o som de tudo tambem no loopback que a transmissao grava.
+pcm.fliperos_tee {
+    type route
+    slave.pcm {
+        type multi
+        slaves.a { pcm "dmix:$card,$dev" channels 2 }
+        slaves.b { pcm "dmix:$AUDIO_LOOP_ID,0" channels 2 }
+        bindings.0 { slave a channel 0 }
+        bindings.1 { slave a channel 1 }
+        bindings.2 { slave b channel 0 }
+        bindings.3 { slave b channel 1 }
+    }
+    ttable.0.0 1
+    ttable.1.1 1
+    ttable.0.2 1
+    ttable.1.3 1
+}
+EOF
+      audio_leveler_enabled || printf '%s\n' 'pcm.!default {' '    type plug' '    slave.pcm "fliperos_tee"' '}'
+    fi
     if audio_leveler_enabled; then
       cat << EOF
 
@@ -81,7 +167,7 @@ pcm.fliperos_leveler {
     type ladspa
     slave.pcm {
         type plug
-        slave.pcm "dmix:$card,$dev"
+        slave.pcm "$out"
     }
     path "${AUDIO_LEVELER_PLUGIN%/*}"
     plugins [ {

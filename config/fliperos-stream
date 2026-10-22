@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+# A tela do gabinete ao vivo no painel web (fase 5c): o que esta no tubo
+# (jogo, frontend, menu, desktop, console) capturado do DRM pelo ffmpeg
+# (kmsgrab), em H.264 e Opus, e entregue ao navegador por WebRTC pelo go2rtc
+# (github.com/AlexxIT/go2rtc, MIT). O go2rtc so abre o ffmpeg enquanto alguem
+# assiste. A API dele fica so no proprio gabinete: quem conversa com o
+# navegador (a oferta do WebRTC) e o config/fliperos-web, com o login do
+# painel; o video vai direto ao navegador pela porta 8555 da rede local.
+#
+# O H.264 e do hardware (VA-API) quando a placa tem o codificador; senao do
+# x264 (a R7 240 nao tem: o chip Oland ficou sem o VCE). Em 640x240 o x264 em
+# ultrafast quase nao pesa. O som (Setup > Audio Setup > Live screen sound, ou
+# o painel) vem de uma copia da saida num loopback do ALSA (lib/audio.sh).
+#
+#   fliperos-stream fetch [--progress]     baixa o go2rtc (versao fixa, sha256)
+#   fliperos-stream installed              status 0 se o go2rtc e o ffmpeg estao la
+#   fliperos-stream encoder                vaapi ou x264 (o que a placa faz)
+#   fliperos-stream capture FPS SAIDA      o ffmpeg que o go2rtc abre (RTSP em SAIDA)
+#   fliperos-stream config                 o go2rtc.yaml
+#   fliperos-stream daemon                 o servico (fliperos-stream.service)
+#   fliperos-stream status                 installed=, active=, encoder=, audio=
+set -uo pipefail
+
+GO2RTC_VERSION=${GO2RTC_VERSION:-1.9.14}
+GO2RTC_SHA256=${GO2RTC_SHA256:-32d616af226bd731678ffde328b94cfb94e30339bfefc469cfb76323144615a6}
+GO2RTC_URL=${GO2RTC_URL:-https://github.com/AlexxIT/go2rtc/releases/download/v${GO2RTC_VERSION}/go2rtc_linux_amd64}
+dir=${FLIPEROS_STREAM_DIR:-/opt/fliperos/go2rtc}
+run=${FLIPEROS_STREAM_RUN:-/run/fliperos-stream}
+ffmpeg=${FLIPEROS_FFMPEG:-ffmpeg}
+sys=${FLIPEROS_SYS:-/sys}
+dri=${FLIPEROS_DRI:-/dev/dri}
+conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+self=$(readlink -f "$0")
+# O loopback do ALSA que recebe a copia do som (lib/audio.sh, o id da placa).
+AUDIO_LOOP=${FLIPEROS_STREAM_LOOP:-FliperOSLoop}
+# Os quadros por segundo de cada stream (o painel escolhe).
+RATES="15 30 60"
+API=${FLIPEROS_STREAM_API:-127.0.0.1:1984}
+WEBRTC_PORT=${FLIPEROS_STREAM_PORT:-8555}
+
+progress=0 label="Live screen"
+say() {
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+fail() {
+  if ((progress)); then printf '@fail %s|%s\n' "$label" "$1"; else printf 'fliperos-stream: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+installed() {
+  [[ -x $dir/go2rtc ]] && command -v "$ffmpeg" > /dev/null
+}
+
+fetch() {
+  local tmp
+  [[ ${1:-} == --progress ]] && progress=1
+  mkdir -p "$dir" || fail "could not create $dir"
+  tmp=$(mktemp "$dir/go2rtc.XXXXXX") || fail "no space in $dir"
+  say 60 "Downloading go2rtc $GO2RTC_VERSION"
+  if ! curl -sSfL --retry 3 --max-time 600 -o "$tmp" "$GO2RTC_URL" >&2; then
+    rm -f "$tmp"
+    fail "the download failed (no network?)"
+  fi
+  if ! echo "$GO2RTC_SHA256  $tmp" | sha256sum -c --quiet - >&2; then
+    rm -f "$tmp"
+    fail "the downloaded file is not go2rtc $GO2RTC_VERSION"
+  fi
+  chmod 755 "$tmp" && mv -f "$tmp" "$dir/go2rtc" || fail "could not install go2rtc"
+  say 95 "go2rtc $GO2RTC_VERSION installed"
+}
+
+# card: o /dev/dri/cardN da saida que esta ligada (a do tubo).
+card() {
+  local status name
+  for status in "$sys"/class/drm/card[0-9]*-*/status; do
+    [[ -f $status && $(cat "$status" 2> /dev/null) == connected ]] || continue
+    [[ $(cat "${status%/status}/enabled" 2> /dev/null) == enabled ]] || continue
+    name=${status#"$sys"/class/drm/}
+    printf '%s/%s\n' "$dri" "${name%%-*}"
+    return 0
+  done
+  printf '%s/card0\n' "$dri"
+}
+
+# render: o /dev/dri/renderD* da mesma placa (o VA-API abre por ele).
+render() {
+  local c=${1##*/} node
+  for node in "$sys"/class/drm/"$c"/device/drm/renderD*; do
+    [[ -e $node ]] && printf '%s/%s\n' "$dri" "${node##*/}" && return 0
+  done
+  printf '%s/renderD128\n' "$dri"
+}
+
+# encoder: vaapi se a placa codifica H.264 (um quadro de teste), senao x264.
+# Fica guardado ate o proximo boot (o /run).
+encoder() {
+  local cache=$run/encoder node
+  if [[ -s $cache ]]; then
+    cat "$cache"
+    return 0
+  fi
+  node=$(render "$(card)")
+  mkdir -p "$run" 2> /dev/null
+  if [[ -e $node ]] && "$ffmpeg" -hide_banner -loglevel error -init_hw_device "vaapi=va:$node" \
+    -f lavfi -i color=black:s=256x144:d=0.2 -vf format=nv12,hwupload -c:v h264_vaapi -frames:v 1 -f null - \
+    > /dev/null 2>&1; then
+    echo vaapi | tee "$cache" 2> /dev/null || echo vaapi
+  else
+    echo x264 | tee "$cache" 2> /dev/null || echo x264
+  fi
+}
+
+# audio_on: o som da transmissao ligado e o loopback aberto.
+audio_on() {
+  [[ $(sed -n 's/^stream_audio=//p' "$conf" 2> /dev/null | tail -n 1) == on ]] &&
+    grep -q "\[$AUDIO_LOOP *\]" "${FLIPEROS_ASOUND_CARDS:-/proc/asound/cards}" 2> /dev/null
+}
+
+# capture FPS SAIDA: o ffmpeg que o go2rtc abre (exec, transporte RTSP). A
+# imagem: a largura ate 960 (a super resolucao de 2560x240 do RetroArch vira
+# 640), a altura como esta; o navegador a mostra em 4:3. Um keyframe a cada 2
+# s, sem quadros B (a latencia), no perfil que todo navegador decodifica.
+capture() {
+  local fps=${1:-30} out=${2:-} dev enc
+  local -a args
+  [[ $fps =~ ^[0-9]+$ ]] && ((fps >= 5 && fps <= 60)) || fail "frame rate 5 to 60"
+  [[ -n $out ]] || fail "no output"
+  dev=$(card)
+  enc=$(encoder)
+  # O VA-API sai do proprio dispositivo DRM do kmsgrab (hwmap derive_device).
+  args=(-hide_banner -loglevel warning -nostdin -fflags nobuffer)
+  args+=(-device "$dev" -framerate "$fps" -f kmsgrab -i -)
+  if audio_on; then
+    # O lado de gravacao do loopback (dispositivo 1); o plughw converte o
+    # formato que o dmix do outro lado escolheu.
+    args+=(-thread_queue_size 64 -f alsa -ac 2 -ar 48000 -i "plughw:$AUDIO_LOOP,1,0")
+  fi
+  args+=(-map 0:v)
+  if [[ $enc == vaapi ]]; then
+    args+=(-vf "hwmap=derive_device=vaapi,scale_vaapi=w='min(iw,960)':h='trunc(ih/2)*2':format=nv12"
+      -c:v h264_vaapi -profile:v constrained_baseline -bf 0 -g $((fps * 2)) -b:v 3M)
+  else
+    args+=(-vf "hwdownload,format=bgr0,scale=w='min(iw,960)':h='trunc(ih/2)*2':flags=bilinear,format=yuv420p"
+      -c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -bf 0 -g $((fps * 2))
+      -b:v 2500k -maxrate 3M -bufsize 1M)
+  fi
+  if audio_on; then
+    args+=(-map 1:a -c:a libopus -b:a 96k -application lowdelay -frame_duration 10)
+  fi
+  args+=(-rtsp_transport tcp -f rtsp "$out")
+  exec "$ffmpeg" "${args[@]}"
+}
+
+# config: o go2rtc.yaml. A API e o RTSP so no proprio gabinete; o WebRTC na
+# rede local, sem STUN de fora (o painel e da rede local). Um stream por taxa
+# de quadros, cada um aberto so enquanto alguem assiste.
+config() {
+  local fps
+  mkdir -p "$run" || fail "could not create $run"
+  {
+    echo "# Gerado pelo fliperos-stream (config/fliperos-stream)."
+    echo "api:"
+    echo "  listen: \"$API\""
+    echo "  origin: \"\""
+    echo "rtsp:"
+    echo "  listen: \"127.0.0.1:8554\""
+    echo "webrtc:"
+    echo "  listen: \":$WEBRTC_PORT\""
+    echo "  ice_servers: []"
+    echo "log:"
+    echo "  level: warn"
+    echo "streams:"
+    for fps in $RATES; do
+      echo "  cabinet$fps: exec:$self capture $fps {output}#killsignal=15#killtimeout=3"
+    done
+  } > "$run/go2rtc.yaml"
+  printf '%s\n' "$run/go2rtc.yaml"
+}
+
+status() {
+  local active=0
+  installed && echo installed=1 || echo installed=0
+  systemctl is-active --quiet fliperos-stream.service 2> /dev/null && active=1
+  echo "active=$active"
+  installed && echo "encoder=$(encoder)"
+  audio_on && echo audio=1 || echo audio=0
+  echo "rates=$RATES"
+}
+
+case ${1:-} in
+  fetch) fetch "${@:2}" ;;
+  installed)
+    installed
+    exit $?
+    ;;
+  encoder) encoder ;;
+  capture) capture "${@:2}" ;;
+  config) config > /dev/null ;;
+  status) status ;;
+  daemon)
+    installed || fail "go2rtc or ffmpeg is not installed (Setup > System > Extras > Live screen)"
+    yaml=$(config) || exit 1
+    exec "$dir/go2rtc" -config "$yaml"
+    ;;
+  *)
+    sed -n '/^#   fliperos-stream /p' "$0" | sed 's/^# *//' >&2
+    exit 1
+    ;;
+esac

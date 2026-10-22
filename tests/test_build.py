@@ -4458,8 +4458,20 @@ class WebPanelTests(unittest.TestCase):
                 self.end_headers()
                 self.wfile.write(data)
 
+            def do_POST(self):
+                # O go2rtc falso: a oferta SDP do WebRTC (o WHEP dele).
+                body = self.rfile.read(int(self.headers.get('Content-Length') or 0)).decode()
+                cls.webrtc.append((self.path, self.headers.get('Content-Type'), body))
+                data = b'v=0\r\no=- answer\r\n'
+                self.send_response(201)
+                self.send_header('Content-Type', 'application/sdp')
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
             def log_message(self, *args):
                 pass
+        cls.webrtc = []
         cls.adb = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Adb)
         threading.Thread(target=cls.adb.serve_forever, daemon=True).start()
         setup = tmp / 'fliperos-setup'
@@ -4511,7 +4523,26 @@ class WebPanelTests(unittest.TestCase):
         cls.runtime.mkdir(exist_ok=True)
         import pwd
         cls.user = pwd.getpwuid(os.getuid()).pw_name
-        (tmp / 'fliperos.conf').write_text('monitor=generic_15\nfrequency=15k\nboot_resolution=640x240S\n')
+        (tmp / 'fliperos.conf').write_text('monitor=generic_15\nfrequency=15k\nboot_resolution=640x240S\n'
+                                           'marquee_overlay=on\n')
+        # A tela ao vivo instalada e no ar (fliperos-stream status), o Extras
+        # falso e o marquee para o OBS: o jogo na tela e a arte dele.
+        stream = tmp / 'fake-stream'
+        stream.write_text('#!/bin/sh\n[ "$1" = status ] && printf "installed=1\\nactive=1\\nencoder=x264\\naudio=0\\n'
+                          'rates=15 30 60\\n"\nexit 0\n')
+        stream.chmod(0o755)
+        extras = tmp / 'fake-extras'
+        extras.write_text('#!/bin/sh\necho "$*" > %s/extras.log\necho "@step 50 Downloading"\n' % tmp)
+        extras.chmod(0o755)
+        (tmp / 'art').mkdir()
+        cls.art = tmp / 'art/sf2.png'
+        cls.art.write_bytes(b'\x89PNG fake')
+        dmd = tmp / 'fake-dmd'
+        dmd.write_text('#!/bin/sh\n[ "$1 $2 $3" = "art mame sf2" ] && echo %s && exit 0\nexit 1\n' % cls.art)
+        dmd.chmod(0o755)
+        (tmp / 'run/1000').mkdir(parents=True, exist_ok=True)
+        (tmp / 'run/1000/fliperos-marquee').write_text('event=game\nsystem=mame\nrom=sf2\ntitle=Street Fighter II\n'
+                                                       'text=#1 50,000 CAP\ntime=100\n')
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0))
             cls.port = s.getsockname()[1]
@@ -4521,7 +4552,9 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_VIDEO_CHECK=str(tmp / 'none'),
                    FLIPEROS_USER=cls.user, FLIPEROS_SESSION_FILE=str(tmp / 'session'), FLIPEROS_HOME=str(tmp),
                    FLIPEROS_ADB_URL='http://127.0.0.1:%d/service_scraper.php' % cls.adb.server_address[1],
-                   FLIPEROS_ROMSET_PLACES=str(tmp / 'media'))
+                   FLIPEROS_ROMSET_PLACES=str(tmp / 'media'), FLIPEROS_STREAM=str(stream),
+                   FLIPEROS_STREAM_API='http://127.0.0.1:%d' % cls.adb.server_address[1],
+                   FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'))
         (tmp / 'media/USB/romset').mkdir(parents=True)
         (tmp / 'media/USB/.hidden').mkdir()
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
@@ -4718,6 +4751,70 @@ class WebPanelTests(unittest.TestCase):
             time.sleep(0.1)
         self.assertEqual((info['rc'], info['last']), (0, 'copied=2'))
         self.assertIn('--romfilter run %s groovymame copy players=2\n' % folder, log.read_text())
+
+    def test_live_screen_offer_goes_to_go2rtc(self):
+        cookie = self.login()
+        status = json.loads(self.request('GET', '/api/stream', cookie=cookie)[2])
+        self.assertEqual(status, {'installed': True, 'active': True, 'encoder': 'x264', 'audio': False,
+                                  'rates': [15, 30, 60]})
+        offer = 'v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n'
+        for bad in ({'fps': 25, 'sdp': offer}, {'fps': 30, 'sdp': 'hello'}, {'fps': '30', 'sdp': offer}):
+            self.assertEqual(self.request('POST', '/api/stream/offer', bad, cookie=cookie)[0], 400, bad)
+        status, _, data = self.request('POST', '/api/stream/offer', {'fps': 60, 'sdp': offer}, cookie=cookie)
+        self.assertEqual((status, json.loads(data)), (200, {'sdp': 'v=0\r\no=- answer\r\n'}))
+        # A oferta vai como esta, no WHEP do go2rtc, no stream da taxa pedida.
+        self.assertEqual(self.webrtc[-1], ('/api/webrtc?src=cabinet60', 'application/sdp', offer))
+        # O OBS (/overlay/live): a mesma oferta, pela chave do endereco, sem login.
+        live = json.loads(self.request('GET', '/api/overlay', cookie=cookie)[2])['live']
+        self.assertTrue(live.startswith('/overlay/live?key='))
+        key = live.split('key=')[1]
+        self.assertEqual(self.request('POST', '/api/overlay/offer?key=wrong', {'fps': 30, 'sdp': offer})[0], 403)
+        status, _, data = self.request('POST', '/api/overlay/offer?key=' + key, {'fps': 30, 'sdp': offer})
+        self.assertEqual((status, json.loads(data)), (200, {'sdp': 'v=0\r\no=- answer\r\n'}))
+        self.assertEqual(self.webrtc[-1][0], '/api/webrtc?src=cabinet30')
+        status, _, page = self.request('GET', live)
+        self.assertEqual((status, b'live.js' in page), (200, True))
+        # Instalar: o Setup > System > Extras > Live screen, como tarefa.
+        status, _, data = self.request('POST', '/api/stream/install', {}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        log = Path(self.tmp.name) / 'extras.log'
+        for _ in range(50):
+            if log.exists():
+                break
+            time.sleep(0.1)
+        self.assertEqual(log.read_text(), 'install stream --progress\n')
+
+    def test_obs_marquee_needs_the_key(self):
+        cookie = self.login()
+        tmp = Path(self.tmp.name)
+        info = json.loads(self.request('GET', '/api/overlay', cookie=cookie)[2])
+        self.assertTrue(info['enabled'])
+        self.assertTrue(info['path'].startswith('/overlay/marquee?key='))
+        key = info['path'].split('key=')[1]
+        self.assertEqual(oct((tmp / 'overlay.key').stat().st_mode & 0o777), '0o600')
+        # A pagina e publica (e pode ir num iframe do proprio painel); os dados
+        # pedem a chave, sem login.
+        status, _, page = self.request('GET', '/overlay/marquee?key=x')
+        self.assertEqual(status, 200)
+        self.assertIn(b'overlay.js', page)
+        self.assertEqual(self.last_headers['X-Frame-Options'], 'SAMEORIGIN')
+        self.assertEqual(self.request('GET', '/')[0], 200)
+        self.assertEqual(self.last_headers['X-Frame-Options'], 'DENY')
+        for query in ('', '?key=', '?key=wrong'):
+            self.assertEqual(self.request('GET', '/api/overlay/state' + query)[0], 403, query)
+        status, _, data = self.request('GET', '/api/overlay/state?key=' + key)
+        state = json.loads(data)
+        self.assertEqual(state['state']['title'], 'Street Fighter II')
+        self.assertEqual(state['state']['event'], 'game')
+        self.assertTrue(state['art'].startswith('/api/overlay/art?key='))
+        status, _, data = self.request('GET', state['art'])
+        self.assertEqual((status, data, self.last_headers['Content-Type']), (200, b'\x89PNG fake', 'image/png'))
+        self.assertEqual(self.request('GET', '/api/overlay/art?key=%s&id=nope' % key)[0], 404)
+        # Um endereco novo invalida o antigo.
+        new = json.loads(self.request('POST', '/api/overlay', {'action': 'newkey'}, cookie=cookie)[2])['path']
+        self.assertNotEqual(new, info['path'])
+        self.assertEqual(self.request('GET', '/api/overlay/state?key=' + key)[0], 403)
+        self.assertEqual(self.request('GET', '/api/overlay/state?key=' + new.split('key=')[1])[0], 200)
 
     def test_folders_to_pick_a_romset(self):
         cookie = self.login()
@@ -5096,6 +5193,121 @@ def fightcade_package(path, files=None):
             info.size = len(data)
             info.mode = 0o755 if name.endswith(('.sh', 'fc2-electron', '.elf')) else 0o644
             tar.addfile(info, io.BytesIO(data))
+
+
+class LiveScreenTests(unittest.TestCase):
+    """config/fliperos-stream: a tela ao vivo (fase 5c) pelo go2rtc e o ffmpeg,
+    e o marquee para o OBS (fliperos-pixelcade, fliperos-dmd art)."""
+    STREAM = ROOT / 'config/fliperos-stream'
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        t = self.tmp
+        # Duas placas: a do tubo (card1, VGA ligada) e outra sem nada.
+        for name, status, enabled in (('card0-HDMI-A-1', 'disconnected', 'disabled'), ('card1-VGA-1', 'connected', 'enabled')):
+            (t / 'sys/class/drm' / name).mkdir(parents=True)
+            (t / 'sys/class/drm' / name / 'status').write_text(status + '\n')
+            (t / 'sys/class/drm' / name / 'enabled').write_text(enabled + '\n')
+        (t / 'sys/class/drm/card1/device/drm/renderD129').mkdir(parents=True)
+        (t / 'dri').mkdir()
+        (t / 'dri/renderD129').write_text('')
+        self.ffmpeg = t / 'ffmpeg'
+        self.args = t / 'ffmpeg.args'
+        self.write_ffmpeg(vaapi=False)
+        (t / 'cards').write_text(' 0 [PCH            ]: HDA-Intel\n')
+        self.env = dict(os.environ, FLIPEROS_FFMPEG=str(self.ffmpeg), FLIPEROS_SYS=str(t / 'sys'),
+                        FLIPEROS_DRI=str(t / 'dri'), FLIPEROS_STREAM_RUN=str(t / 'run'), FLIPEROS_STREAM_DIR=str(t / 'go2rtc'),
+                        FLIPEROS_CONF=str(t / 'fliperos.conf'), FLIPEROS_ASOUND_CARDS=str(t / 'cards'))
+
+    def write_ffmpeg(self, vaapi):
+        # O teste do VA-API (um quadro em h264_vaapi) passa so com vaapi.
+        self.ffmpeg.write_text('#!/bin/sh\ncase "$*" in *h264_vaapi*-f\\ null*) exit %d ;; esac\n'
+                               'printf "%%s\\n" "$@" > %s\n' % (0 if vaapi else 1, self.args))
+        self.ffmpeg.chmod(0o755)
+
+    def run_(self, *args):
+        return subprocess.run(['bash', str(self.STREAM), *args], env=self.env, capture_output=True, text=True, timeout=30)
+
+    def test_capture_in_software_from_the_tube_card(self):
+        r = self.run_('capture', '60', 'rtsp://127.0.0.1:8554/x')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        args = self.args.read_text().splitlines()
+        # O kmsgrab da placa ligada ao tubo, nos quadros pedidos.
+        self.assertEqual(args[args.index('-device') + 1], str(self.tmp / 'dri/card1'))
+        self.assertEqual(args[args.index('-framerate') + 1], '60')
+        self.assertEqual(args[args.index('-f') + 1], 'kmsgrab')
+        # Sem codificador na placa: x264 sem quadros B, keyframe a cada 2 s,
+        # no perfil baseline, a largura ate 960.
+        self.assertIn('libx264', args)
+        self.assertEqual(args[args.index('-g') + 1], '120')
+        self.assertEqual(args[args.index('-bf') + 1], '0')
+        self.assertIn('baseline', args)
+        self.assertIn("hwdownload,format=bgr0,scale=w='min(iw,960)':h='trunc(ih/2)*2':flags=bilinear,format=yuv420p",
+                      args)
+        self.assertEqual(args[-3:], ['-f', 'rtsp', 'rtsp://127.0.0.1:8554/x'])
+        # Sem o som ligado, nada do ALSA.
+        self.assertNotIn('alsa', args)
+        self.assertEqual((self.tmp / 'run/encoder').read_text(), 'x264\n')
+        self.assertNotEqual(self.run_('capture', '200', 'x').returncode, 0)
+
+    def test_capture_with_the_card_encoder_and_the_sound(self):
+        self.write_ffmpeg(vaapi=True)
+        (self.tmp / 'fliperos.conf').write_text('stream_audio=on\n')
+        (self.tmp / 'cards').write_text(' 0 [PCH            ]: HDA-Intel\n10 [FliperOSLoop   ]: Loopback\n')
+        self.assertEqual(self.run_('encoder').stdout, 'vaapi\n')
+        self.assertEqual(self.run_('capture', '30', 'out').returncode, 0)
+        args = self.args.read_text().splitlines()
+        self.assertIn('h264_vaapi', args)
+        self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=w='min(iw,960)':h='trunc(ih/2)*2':format=nv12", args)
+        # O som: o lado de gravacao do loopback, em Opus.
+        self.assertEqual(args[args.index('-i', args.index('alsa')) + 1], 'plughw:FliperOSLoop,1,0')
+        self.assertIn('libopus', args)
+        self.assertEqual(args[args.index('-map', args.index('-map') + 1) + 1], '1:a')
+
+    def test_go2rtc_config_keeps_the_api_on_the_cabinet(self):
+        self.assertEqual(self.run_('config').returncode, 0)
+        yaml = (self.tmp / 'run/go2rtc.yaml').read_text()
+        self.assertIn('api:\n  listen: "127.0.0.1:1984"\n', yaml)
+        self.assertIn('rtsp:\n  listen: "127.0.0.1:8554"\n', yaml)
+        self.assertIn('webrtc:\n  listen: ":8555"\n  ice_servers: []\n', yaml)
+        for fps in (15, 30, 60):
+            self.assertIn('  cabinet%d: exec:%s capture %d {output}#killsignal=15#killtimeout=3\n'
+                          % (fps, self.STREAM.resolve(), fps), yaml)
+        status = self.run_('status').stdout
+        self.assertIn('installed=0\n', status)
+        # O go2rtc fixo por versao e hash; o servico e as instalacoes.
+        script = self.STREAM.read_text()
+        self.assertRegex(script, r'GO2RTC_SHA256=\$\{GO2RTC_SHA256:-[0-9a-f]{64}\}')
+        unit = (ROOT / 'config/fliperos-stream.service').read_text()
+        self.assertIn('ExecStart=/opt/fliperos/bin/fliperos-stream daemon\n', unit)
+        self.assertIn('ConditionPathExists=/opt/fliperos/go2rtc/go2rtc\n', unit)
+        rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
+        self.assertIn('"$src/config/fliperos-stream" "$root/opt/fliperos/bin/fliperos-stream"', rootfs)
+        self.assertIn('"$src/config/fliperos-stream.service" "$root/etc/systemd/system/fliperos-stream.service"', rootfs)
+
+    def test_extras_installs_the_live_screen(self):
+        extras = ROOT / 'config/fliperos-extras'
+        env = dict(os.environ, FLIPEROS_STREAM=str(self.tmp / 'nothing'))
+        listing = subprocess.run(['bash', str(extras), 'list'], env=env, capture_output=True, text=True).stdout
+        self.assertIn('stream|0|Live screen (the cabinet screen in the web panel: go2rtc + ffmpeg)\n', listing)
+        text = extras.read_text()
+        self.assertIn('STREAM_PACKAGES="ffmpeg mesa-va-drivers"', text)
+        self.assertIn("grep -q '^stream=' \"$SERVICES_CONF\" 2> /dev/null || echo 'stream=after'", text)
+
+    def test_dmd_art_for_the_obs_marquee(self):
+        media = self.tmp / 'media'
+        (media / 'marquee/mame').mkdir(parents=True)
+        (media / 'dmd').mkdir()
+        (media / 'marquee/mame/sf2.png').write_bytes(b'x')
+        (media / 'dmd/mame.gif').write_bytes(b'x')
+        env = dict(os.environ, MEDIA_DIR=str(media))
+        art = lambda *a: subprocess.run(['python3', str(ROOT / 'config/fliperos-dmd'), 'art', *a], env=env,
+                                        capture_output=True, text=True)
+        self.assertEqual(art('mame', 'sf2').stdout.strip(), str(media / 'marquee/mame/sf2.png'))
+        # Sem arte do jogo, a do sistema; sem nenhuma, status 1.
+        self.assertEqual(art('mame', 'nope').stdout.strip(), str(media / 'dmd/mame.gif'))
+        self.assertEqual(art('snes', 'nope').returncode, 1)
 
 
 class ArcadeflowTests(unittest.TestCase):
@@ -7553,6 +7765,32 @@ class PixelcadeTests(unittest.TestCase):
         self.calls.unlink(missing_ok=True)
         return [c.replace('http://pc/', '') for c in calls]
 
+    def test_obs_marquee_state_without_any_panel(self):
+        # Sem Pixelcade nem ZeDMD, com marquee_overlay=on: os eventos gravam o
+        # que o marquee do OBS mostra (o painel web le o arquivo).
+        conf = self.tmp / 'fliperos.conf'
+        env = dict(self.env, FLIPEROS_CONF=str(conf))
+        state = self.tmp / 'run/fliperos-marquee'
+        run = lambda *a: subprocess.run(['bash', str(self.SCRIPT), *a], env=env, check=True, timeout=30)
+        run('game', 'mame', 'sf2', 'Street Fighter II')
+        self.assertFalse(state.exists())                    # desligado: nada
+        conf.write_text('marquee_overlay=on\n')
+        run('game', 'mame', 'sf2', 'Street Fighter II')
+        lines = state.read_text().splitlines()
+        self.assertEqual(lines[:4], ['event=game', 'system=mame', 'rom=sf2', 'title=Street Fighter II'])
+        self.assertEqual(lines[4], 'text=Now Playing Street Fighter II')
+        self.assertTrue(lines[5].startswith('time='))
+        self.assertFalse(self.calls.exists())               # o pixelweb nao foi chamado
+        run('achievement', '42', 'Perfect', 'No damage')
+        self.assertEqual(state.read_text().splitlines()[:5],
+                         ['event=achievement', 'system=mame', 'rom=sf2', 'title=', 'text=Perfect : No damage'])
+        run('select', 'snes', 'mario', 'Super Mario World')
+        self.assertEqual(state.read_text().splitlines()[0], 'event=select')
+        run('versus', '2', '1', '-', '-', 'RYU', 'KEN')
+        lines = state.read_text().splitlines()
+        self.assertIn('wins_left=2', lines)
+        self.assertIn('right=KEN', lines)
+
     def test_paid_art_pack_installs_with_the_license_code(self):
         # O "pixelweb -install-artpack CODIGO" do guia do Pixelcade, pelo Setup.
         env = dict(self.env, FLIPEROS_USER='root')
@@ -9395,6 +9633,35 @@ class SplashTests(unittest.TestCase):
         self.assertIn('/usr/share/fonts/truetype/fliperos', (ROOT / 'tools/cabinet-update.sh').read_text())
         self.assertIn('*.ttf binary', (ROOT / '.gitattributes').read_text())
 
+    def test_initramfs_goes_without_nouveau_and_the_nvidia_firmware(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-initramfs-nvidia" '
+                      '"$root/etc/initramfs-tools/hooks/fliperos-nvidia"', ROOTFS)
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp)
+            drm = dest / 'usr/lib/modules/6.18.54-15khz/kernel/drivers/gpu/drm'
+            keep = [drm / 'radeon/radeon.ko', drm / 'amd/amdgpu/amdgpu.ko', dest / 'usr/lib/firmware/edid/arcade_15.bin',
+                    dest / 'usr/lib/firmware/amdgpu/x.bin.zst', dest / 'usr/lib/firmware/radeon/y.bin.zst']
+            gone = [drm / 'nouveau/nouveau.ko', dest / 'usr/lib/firmware/nvidia/ga102/gsp/gsp-570.144.bin.zst']
+            for path in keep + gone:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'x')
+            # O usrmerge do initramfs: /lib e um link para usr/lib.
+            (dest / 'lib').symlink_to('usr/lib')
+            hook = ROOT / 'config/fliperos-initramfs-nvidia'
+            self.assertEqual(subprocess.run(['sh', str(hook), 'prereqs'], capture_output=True, text=True).stdout, '\n')
+            r = subprocess.run(['sh', str(hook)], env=dict(os.environ, DESTDIR=tmp), capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            for path in keep:
+                self.assertTrue(path.exists(), path)
+            for path in gone:
+                self.assertFalse(path.exists(), path)
+            self.assertFalse((drm / 'nouveau').exists())
+            self.assertTrue((dest / 'lib').is_symlink())
+        # O firmware continua no sistema, e a ISO e conferida sem ele no initramfs.
+        verify = (ROOT / 'tools/verify-iso.sh').read_text()
+        self.assertIn("grep -q 'squashfs-root/usr/lib/firmware/nvidia/'", verify)
+        self.assertIn("grep -qE 'firmware/nvidia/|drm/nouveau/' \"$work/initrd.txt\" && fail", verify)
+
     def test_update_6_moves_the_old_default_to_the_text_theme(self):
         script = (ROOT / 'updates/0006.sh').read_text()
         self.assertIn('== "$themes/fliperos/fliperos.plymouth" ]] || exit 0', script)
@@ -9432,35 +9699,6 @@ class AttractLayoutTests(unittest.TestCase):
         self.assertIn('local flw = fe.layout.width;', nut)
         self.assertIn('lb.char_size = Y( 22 );', nut)
         self.assertIn('fe.add_image( "bg.png", 0, 0, flw, flh );', nut)
-    def test_initramfs_goes_without_nouveau_and_the_nvidia_firmware(self):
-        self.assertIn('install -Dm755 "$src/config/fliperos-initramfs-nvidia" '
-                      '"$root/etc/initramfs-tools/hooks/fliperos-nvidia"', ROOTFS)
-        with tempfile.TemporaryDirectory() as tmp:
-            dest = Path(tmp)
-            drm = dest / 'usr/lib/modules/6.18.54-15khz/kernel/drivers/gpu/drm'
-            keep = [drm / 'radeon/radeon.ko', drm / 'amd/amdgpu/amdgpu.ko', dest / 'usr/lib/firmware/edid/arcade_15.bin',
-                    dest / 'usr/lib/firmware/amdgpu/x.bin.zst', dest / 'usr/lib/firmware/radeon/y.bin.zst']
-            gone = [drm / 'nouveau/nouveau.ko', dest / 'usr/lib/firmware/nvidia/ga102/gsp/gsp-570.144.bin.zst']
-            for path in keep + gone:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(b'x')
-            # O usrmerge do initramfs: /lib e um link para usr/lib.
-            (dest / 'lib').symlink_to('usr/lib')
-            hook = ROOT / 'config/fliperos-initramfs-nvidia'
-            self.assertEqual(subprocess.run(['sh', str(hook), 'prereqs'], capture_output=True, text=True).stdout, '\n')
-            r = subprocess.run(['sh', str(hook)], env=dict(os.environ, DESTDIR=tmp), capture_output=True, text=True)
-            self.assertEqual(r.returncode, 0, r.stderr)
-            for path in keep:
-                self.assertTrue(path.exists(), path)
-            for path in gone:
-                self.assertFalse(path.exists(), path)
-            self.assertFalse((drm / 'nouveau').exists())
-            self.assertTrue((dest / 'lib').is_symlink())
-        # O firmware continua no sistema, e a ISO e conferida sem ele no initramfs.
-        verify = (ROOT / 'tools/verify-iso.sh').read_text()
-        self.assertIn("grep -q 'squashfs-root/usr/lib/firmware/nvidia/'", verify)
-        self.assertIn("grep -qE 'firmware/nvidia/|drm/nouveau/' \"$work/initrd.txt\" && fail", verify)
-
         self.assertEqual((self.BASIC / 'bg.png').read_bytes()[:8], b'\x89PNG\r\n\x1a\n')
 
     def test_basic_is_installed_over_the_packaged_one(self):

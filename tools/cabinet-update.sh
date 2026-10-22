@@ -176,6 +176,9 @@ build_native "Colour calibration (fliperos-color)" "$src/config/fliperos-color.c
 # O painel web roda o codigo que leu ao subir: o novo vale ja (so se ele
 # estava no ar).
 systemctl try-restart fliperos-web.service 2> /dev/null || true
+# A tela ao vivo tambem (o go2rtc.yaml e refeito ao subir).
+systemctl daemon-reload 2> /dev/null
+systemctl try-restart fliperos-stream.service 2> /dev/null || true
 # O override da App Store (fliperos-rootfs.sh) pode ter chegado depois do
 # pacote.
 glib-compile-schemas /usr/share/glib-2.0/schemas 2> /dev/null || true

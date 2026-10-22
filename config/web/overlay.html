@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FliperOS Marquee</title>
+<!-- O marquee do jogo na tela para o Browser Source do OBS (config/fliperos-web,
+     /overlay/marquee?key=CHAVE). Fundo transparente; &led=1 desenha os pontos
+     de LED; &text=0 tira os textos. -->
+<link rel="stylesheet" href="/overlay.css">
+</head>
+<body>
+<main id="stage" class="stage">
+  <img id="art" class="art" alt="" hidden>
+  <div id="title" class="title" hidden></div>
+  <div id="versus" class="versus" hidden>
+    <div class="side"><span id="vs-left"></span><small id="vs-score-left"></small></div>
+    <div class="wins"><span id="vs-wins-left"></span><b>–</b><span id="vs-wins-right"></span></div>
+    <div class="side"><span id="vs-right"></span><small id="vs-score-right"></small></div>
+  </div>
+</main>
+<div id="ticker" class="ticker" hidden><span id="ticker-text"></span></div>
+<div id="pop" class="pop" hidden><span aria-hidden="true">🏆</span> <span id="pop-text"></span></div>
+<p id="error" class="error" hidden></p>
+<script src="/overlay.js"></script>
+</body>
+</html>

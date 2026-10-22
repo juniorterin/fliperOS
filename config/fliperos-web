@@ -50,6 +50,14 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/romfilter/scan  {"folder", "target", "values"}  a previa
     POST /api/romfilter/run   {"folder", "target", "transfer", "values"} (tarefa)
     GET  /api/dirs?path=  as pastas (sem path: onde costuma estar um romset)
+    GET  /api/stream      a tela ao vivo: installed, active, encoder, audio
+    POST /api/stream/offer {"fps": 15|30|60, "sdp"}: a resposta SDP do go2rtc
+    POST /api/stream/install  instala o go2rtc e o ffmpeg (tarefa)
+    GET  /api/overlay     o endereco do marquee para o OBS; POST {"action": "newkey"}
+    GET  /overlay/marquee?key=  a pagina do OBS; /api/overlay/state e /art (sem
+                      login, pela chave)
+    GET  /overlay/live?key=&fps=  a tela ao vivo para o OBS; POST
+                      /api/overlay/offer?key= {"fps", "sdp"} (sem login, pela chave)
     GET  /api/trackball   (desligado por enquanto; FLIPEROS_WEB_TRACKBALL=1 o liga)
                       WebSocket: um mouse virtual (uinput); texto JSON
                       {"m": [dx, dy], "w": roda} e {"b": ["left", 1|0]}
@@ -112,7 +120,11 @@ STATIC_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.
                 "/style.css": "style.css", "/icon.svg": "icon.svg",
                 # O terminal: o xterm.js (MIT, xterm-LICENSE.txt) vai junto.
                 "/xterm.js": "xterm.js", "/xterm.css": "xterm.css", "/xterm-addon-fit.js": "xterm-addon-fit.js",
-                "/xterm-LICENSE.txt": "xterm-LICENSE.txt"}
+                "/xterm-LICENSE.txt": "xterm-LICENSE.txt",
+                # O marquee para o OBS: a pagina e publica, os dados pedem a chave.
+                "/overlay/marquee": "overlay.html", "/overlay.js": "overlay.js", "/overlay.css": "overlay.css",
+                # A tela ao vivo para o OBS, com a mesma chave.
+                "/overlay/live": "live.html", "/live.js": "live.js"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8"}
 # Os programas que contam como "o jogo aberto", na ordem de preferencia.
@@ -1365,6 +1377,122 @@ def romset_places():
     return places
 
 
+# ── A tela ao vivo (fase 5c) ───────────────────────────────────────
+# config/fliperos-stream: o go2rtc, que so abre o ffmpeg (kmsgrab, H.264 e
+# Opus) enquanto alguem assiste. A API dele so escuta no proprio gabinete:
+# a oferta do WebRTC passa por aqui, com o login do painel; o video vai direto
+# ao navegador pela porta 8555 da rede local.
+STREAM = ENV("FLIPEROS_STREAM", BIN + "/fliperos-stream")
+STREAM_API = ENV("FLIPEROS_STREAM_API", "http://127.0.0.1:1984")
+EXTRAS = ENV("FLIPEROS_EXTRAS", BIN + "/fliperos-extras")
+STREAM_RATES = (15, 30, 60)
+
+
+def stream_status():
+    """installed, active, encoder, audio e as taxas (fliperos-stream status)."""
+    try:
+        out = subprocess.run([STREAM, "status"], capture_output=True, text=True, timeout=30).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {"installed": False, "active": False}
+    values = {}
+    for line in out.splitlines():
+        key, _, value = line.partition("=")
+        values[key] = value
+    return {"installed": values.get("installed") == "1", "active": values.get("active") == "1",
+            "encoder": values.get("encoder") or None, "audio": values.get("audio") == "1",
+            "rates": [int(r) for r in values.get("rates", "").split() if r.isdigit()] or list(STREAM_RATES)}
+
+
+def stream_answer(fps, offer):
+    """A resposta SDP do go2rtc para a oferta do navegador (o WHEP dele)."""
+    request = urllib.request.Request("%s/api/webrtc?src=cabinet%d" % (STREAM_API, fps), data=offer.encode(),
+                                     headers={"Content-Type": "application/sdp"}, method="POST")
+    with urllib.request.urlopen(request, timeout=20) as res:
+        return res.read(1 << 20).decode("utf-8", "replace")
+
+
+# ── O marquee para o OBS (fase 5c) ────────────────────────────────
+# config/fliperos-pixelcade grava em $XDG_RUNTIME_DIR/fliperos-marquee o que
+# o marquee mostra (marquee_overlay=on); /overlay/marquee e uma pagina para o
+# Browser Source do OBS, sem login: vale a chave do endereco (/etc/fliperos).
+OVERLAY_KEY = ENV("FLIPEROS_OVERLAY_KEY", "/etc/fliperos/overlay.key")
+DMD = ENV("FLIPEROS_DMD", BIN + "/fliperos-dmd")
+ART_TYPES = {".png": "image/png", ".gif": "image/gif", ".webp": "image/webp", ".jpg": "image/jpeg",
+             ".jpeg": "image/jpeg"}
+
+
+def overlay_key(new=False):
+    """A chave do endereco do overlay (criada na primeira vez)."""
+    key = read(OVERLAY_KEY).strip()
+    if key and not new:
+        return key
+    key = secrets.token_urlsafe(18)
+    os.makedirs(os.path.dirname(OVERLAY_KEY), exist_ok=True)
+    tmp = "%s.%d.tmp" % (OVERLAY_KEY, os.getpid())
+    with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+        f.write(key + "\n")
+    os.replace(tmp, OVERLAY_KEY)
+    return key
+
+
+def overlay_allowed(query):
+    key = read(OVERLAY_KEY).strip()
+    given = (query.get("key") or [""])[0]
+    return bool(key) and hmac.compare_digest(key.encode(), given.encode())
+
+
+def overlay_enabled():
+    return conf_values().get("marquee_overlay") == "on"
+
+
+def marquee_state():
+    """O ultimo estado do marquee (o mais novo dos usuarios), como dict."""
+    files = glob.glob(os.path.join(RUN_USER, "*", "fliperos-marquee"))
+    if not files:
+        return {}
+    newest = max(files, key=lambda p: os.stat(p).st_mtime if os.path.exists(p) else 0)
+    state = {}
+    for line in read(newest).splitlines():
+        key, sep, value = line.partition("=")
+        if sep and re.fullmatch(r"[a-z_]{1,20}", key):
+            state[key] = value
+    return state
+
+
+class ArtCache:
+    """O arquivo da arte de cada (sistema, jogo), pelo fliperos-dmd art (as
+    mesmas regras do ZeDMD: ~/media/dmd, marquee, logo)."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.items = collections.OrderedDict()
+
+    def find(self, system, rom):
+        key = (system, rom)
+        with self.lock:
+            hit = self.items.get(key)
+            if hit and time.monotonic() - hit[0] < 60:
+                return hit[1]
+        env = dict(os.environ, MEDIA_DIR=os.path.join(player_home(), "media"),
+                   ATTRACT_DIR=attract_dir())
+        try:
+            out = subprocess.run([DMD, "art", system] + ([rom] if rom else []), capture_output=True, text=True,
+                                 timeout=20, env=env).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            out = ""
+        path = out if out and os.path.isfile(out) and os.path.splitext(out)[1].lower() in ART_TYPES else None
+        with self.lock:
+            self.items[key] = (time.monotonic(), path)
+            while len(self.items) > 200:
+                self.items.popitem(last=False)
+        return path
+
+
+def art_id(path):
+    st = os.stat(path)
+    return hashlib.sha1(("%s:%d:%d" % (path, st.st_mtime, st.st_size)).encode()).hexdigest()[:16]
+
+
 def downloader_status():
     """O andamento do Downloader (fliperos-setup --downloader status)."""
     out = subprocess.run([SETUP, "--downloader", "status"], capture_output=True, text=True, timeout=30).stdout
@@ -1635,6 +1763,8 @@ class Panel:
         self.gameinfo = GameInfo()
         self.filters = Cached(600, setup_filters)
         self.romcount, self.romscan = RomCount(), RomCount()
+        self.stream = Cached(5, stream_status)
+        self.art = ArtCache()
         self.mouse = VirtualMouse()
         self.tasks = Tasks()
         self.downloader = Cached(3, downloader_status)
@@ -1707,14 +1837,15 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def send(self, code, body, ctype="application/json", headers=None):
+    def send(self, code, body, ctype="application/json", headers=None, frame="DENY"):
         data = body if isinstance(body, bytes) else json.dumps(body).encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
+        # O marquee para o OBS pode aparecer dentro do painel (a previa).
+        self.send_header("X-Frame-Options", frame)
         # O WebSocket do terminal (ws: deste endereco; o servidor confere o
         # Origin), os estilos que o xterm.js cria na pagina e as imagens das
         # informacoes dos jogos (Arcade Database, libretro-thumbnails).
@@ -1745,9 +1876,12 @@ class Handler(BaseHTTPRequestHandler):
                     data = f.read()
             except OSError:
                 return self.send(404, {"error": "not found"})
-            return self.send(200, data, TYPES[os.path.splitext(name)[1]])
+            return self.send(200, data, TYPES[os.path.splitext(name)[1]],
+                             frame="SAMEORIGIN" if name.startswith(("overlay", "live")) else "DENY")
         if not url.path.startswith("/api/"):
             return self.send(404, {"error": "not found"})
+        if url.path in ("/api/overlay/state", "/api/overlay/art"):
+            return self.overlay_data(url)
         user = self.panel.sessions.user(self.token())
         if not user:
             return self.send(401, {"error": "login"})
@@ -1844,6 +1978,12 @@ class Handler(BaseHTTPRequestHandler):
             if dirs is None:
                 return self.send(404, {"error": "no such folder"})
             return self.send(200, {"path": path, "parent": os.path.dirname(path) if path != "/" else "", "dirs": dirs})
+        if url.path == "/api/stream":
+            return self.send(200, self.panel.stream.get())
+        if url.path == "/api/overlay":
+            key = quote(overlay_key())
+            return self.send(200, {"enabled": overlay_enabled(), "path": "/overlay/marquee?key=" + key,
+                                   "live": "/overlay/live?key=" + key})
         if url.path == "/api/gameinfo":
             query = parse_qs(url.query)
             system = self.panel.system((query.get("system") or [""])[0])
@@ -1866,6 +2006,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("X-FliperOS") != "1":
             return self.send(403, {"error": "missing X-FliperOS header"})
         ip = self.client_address[0]
+        # A tela ao vivo para o OBS (/overlay/live): a oferta pela chave do
+        # endereco, sem login, como os dados do marquee.
+        if url.path == "/api/overlay/offer":
+            if not overlay_allowed(parse_qs(url.query)):
+                return self.send(403, {"error": "wrong or missing key"})
+            return self.stream_offer(self.body())
         if url.path == "/api/login":
             if self.panel.sessions.blocked(ip):
                 return self.send(429, {"error": "too many attempts, wait a minute"})
@@ -1931,6 +2077,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.downloader_action(self.body())
         if url.path.startswith("/api/romfilter/"):
             return self.romfilter_action(url.path.rsplit("/", 1)[1], self.body())
+        if url.path == "/api/stream/offer":
+            return self.stream_offer(self.body())
+        if url.path == "/api/stream/install":
+            task = self.panel.tasks.start("Install the live screen (go2rtc + ffmpeg)",
+                                          [EXTRAS, "install", "stream", "--progress"], "extras")
+            if not task:
+                return self.send(409, {"error": "another installation is running"})
+            self.panel.stream.when = None
+            return self.send(200, task.info())
+        if url.path == "/api/overlay":
+            if self.body().get("action") != "newkey":
+                return self.send(400, {"error": "action newkey"})
+            key = quote(overlay_key(new=True))
+            return self.send(200, {"enabled": overlay_enabled(), "path": "/overlay/marquee?key=" + key,
+                                   "live": "/overlay/live?key=" + key})
         if url.path == "/api/settings":
             data = self.body()
             key, value = str(data.get("key", "")), str(data.get("value", ""))
@@ -2051,6 +2212,43 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(409, {"error": "the downloader is already busy with another task"})
         self.panel.downloader.when = None
         return self.send(200, task.info())
+
+    def stream_offer(self, data):
+        """A oferta WebRTC do navegador (o painel ou o OBS) para o go2rtc."""
+        fps, offer = data.get("fps"), data.get("sdp")
+        if fps not in STREAM_RATES or not isinstance(offer, str) or not offer.startswith("v=0"):
+            return self.send(400, {"error": "fps 15, 30 or 60 and an SDP offer"})
+        if not self.panel.stream.get().get("active"):
+            return self.send(409, {"error": "the live screen is not running (Setup > System > Services)"})
+        try:
+            answer = stream_answer(fps, offer)
+        except (OSError, ValueError) as exc:
+            return self.send(502, {"error": "go2rtc: %s" % exc})
+        return self.send(200, {"sdp": answer})
+
+    def overlay_data(self, url):
+        """O marquee para o OBS, pela chave do endereco: o estado (state) e
+        a imagem do jogo que esta nele (art; so ela, pelo id)."""
+        query = parse_qs(url.query)
+        if not overlay_allowed(query):
+            return self.send(403, {"error": "wrong or missing key"})
+        state = marquee_state() if overlay_enabled() else {}
+        path = None
+        if state.get("system") or state.get("rom"):
+            path = self.panel.art.find(state.get("system", ""), state.get("rom", ""))
+        if url.path == "/api/overlay/art":
+            if not path or (query.get("id") or [""])[0] != art_id(path):
+                return self.send(404, {"error": "no such image"})
+            try:
+                with open(path, "rb") as f:
+                    data = f.read(16 << 20)
+            except OSError:
+                return self.send(404, {"error": "no such image"})
+            return self.send(200, data, ART_TYPES[os.path.splitext(path)[1].lower()])
+        out = {"enabled": overlay_enabled(), "state": state}
+        if path:
+            out["art"] = "/api/overlay/art?key=%s&id=%s" % (quote((query.get("key") or [""])[0]), art_id(path))
+        return self.send(200, out)
 
     def romfilter_action(self, action, data):
         """ROM filter: count (o que passa), save (o filtro do Downloader),

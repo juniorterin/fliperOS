@@ -16,9 +16,16 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
 
 - **5a (leitura) e 5b (controle) feitas em 2026-10-17:** http://fliperos.local:8080. Cada parte foi testada no gabinete pela API (abrir e fechar jogos, FPS, screenshot, arquivos, terminal, trackball, Downloader, configurações). Falta conferir num navegador de verdade, no PC e no celular: o layout, o terminal no Chrome e o trackball no toque.
 - **Trackball pelo celular:** pronto, mas desligado por enquanto (2026-10-17, a pedido). O cartão está escondido e `FLIPEROS_WEB_TRACKBALL=1` no serviço liga de novo.
-- **5c (experimental):**
-  - transmissão por WebRTC em H.264 por hardware;
-  - marquee do Pixelcade/ZeDMD como overlay para o OBS.
+- **5c feita em 2026-10-22, falta ver no gabinete** (ele estava desligado). Testada no Docker de ponta a ponta: go2rtc, WebRTC e o Chromium, com um padrão de teste no lugar da tela. Chegaram H.264 e Opus, 640x240 a 61 fps, com 10 a 40 ms no buffer. Partes:
+  - a tela ao vivo no painel e o endereço dela para o OBS;
+  - o marquee para o OBS.
+
+  No gabinete, falta conferir:
+  - **kmsgrab no radeon:** se o framebuffer sai certo pelo `hwdownload` (um framebuffer com tiling sairia embaralhado). Plano B: a camada OpenGL do filtro de flicker, que já lê os quadros para o screenshot.
+  - **Live screen sound:** o loopback no relógio da placa (`timer_source`) e se os jogos continuam com som pelo `fliperos_tee`.
+  - **A carga do x264** com um jogo pesado aberto (o serviço roda com Nice=10).
+  - **Remote play:** ficou para depois, a pedido. Seria um controle virtual alimentado pelo navegador.
+- **Pixelcade e painel web na mesma porta:** o pixelweb do Pixelcade usa a 8080 (`PIXELCADE_API`), a mesma do painel. Com o Pixelcade instalado, um dos dois não abre. Mudar a porta de um deles.
 
 ## Bugs
 

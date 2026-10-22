@@ -393,6 +393,20 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .rf-list td { overflow: hidden; text-overflow: ellipsis; }
 .rf-run { display: grid; gap: 6px; }
 
+/* A tela ao vivo e o marquee para o OBS. */
+.live-bar { justify-content: flex-start; align-items: center; }
+.live-bar select { margin-left: 4px; }
+#live { background: #000; }
+#live:fullscreen { width: 100%; height: 100%; object-fit: contain; aspect-ratio: auto; }
+.live-obs { margin-top: 12px; }
+.live-obs h3 { margin: 0; }
+.ovl-toggle { display: inline-flex; gap: 8px; align-items: center; margin: 4px 0 10px; font-weight: 600; }
+.ovl-box { display: grid; gap: 8px; }
+.ovl-url { display: flex; flex-wrap: wrap; gap: 8px; }
+.ovl-url input { flex: 1 1 280px; min-width: 0; font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 13px; }
+.ovl-preview { width: 100%; aspect-ratio: 4 / 1; border: 1px solid var(--line); border-radius: 10px;
+  background: repeating-conic-gradient(#2a2b36 0% 25%, #1e1f29 0% 50%) 0 0 / 20px 20px; }
+
 .volume { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .volume input { flex: 1; padding: 0; accent-color: var(--pink); }
 .volume button { width: 40px; padding: 6px 0; }
