@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Programas que nao vem na imagem e o Setup > System > Extras instala pela rede: o
-# Wine (Model 2 Emulator e os emuladores do Fightcade 2), o Steam e o Heroic
+# Wine (os emuladores do Fightcade 2), o Steam e o Heroic
 # (GOG). Juntos passavam de 1,5 GB na ISO, e o GitHub aceita ate 2 GiB por
 # arquivo. O Steam e o Heroic ja precisam de rede para servir; o Fightcade
 # tambem (o fliperos-fightcade fetch instala o Wine junto). A configuracao
@@ -90,7 +90,7 @@ extras_list() {
   while IFS='|' read -r name desc; do
     if extras_installed "$name"; then echo "$name|1|$desc"; else echo "$name|0|$desc"; fi
   done << 'LIST'
-wine|Wine (Model 2, Fightcade 2 emulators)
+wine|Wine (Fightcade 2 emulators)
 steam|Steam
 heroic|Heroic (GOG, Epic, Amazon)
 pixelcade|Pixelcade (LED/LCD marquee)

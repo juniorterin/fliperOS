@@ -1381,15 +1381,12 @@ DOLSCRIPT
 # Nao vem na imagem (passavam de 1,5 GB, e a ISO tem de caber num arquivo
 # do GitHub): o config/fliperos-extras os instala pela rede, com os mesmos
 # pacotes. Aqui fica o que eles pedem e nao baixa nada: a arquitetura i386
-# (Wine de 32 bits e Steam) e a pasta do Model 2 Emulator, que o usuario
-# copia (freeware de codigo fechado, sem permissao clara de redistribuicao).
+# (Wine de 32 bits e Steam).
 prepare_extras_chroot() {
   step "Wine, Steam and Heroic: Setup > System > Extras"
   chroot "$CHROOT_DIR" dpkg --print-foreign-architectures | grep -qx i386 ||
     chroot "$CHROOT_DIR" dpkg --add-architecture i386 || err "dpkg --add-architecture i386 falhou"
-  mkdir -p "$CHROOT_DIR/opt/fliperos/model2/roms"
-  chroot "$CHROOT_DIR" chown -R fliperos:fliperos /opt/fliperos/model2
-  ok "i386 enabled and /opt/fliperos/model2; Wine, Steam and Heroic through Setup > System > Extras"
+  ok "i386 enabled; Wine, Steam and Heroic through Setup > System > Extras"
 }
 
 # ── Imagem enxuta (o GitHub aceita ate 2 GiB por arquivo) ─────

@@ -27,7 +27,7 @@ alwaysApply: false
 - O build da ISO roda inteiro no Docker (`fliperos-mkiso.sh`), com testes em QEMU/TCG (`tools/verify-iso.sh`, `tools/vm-test.py`).
 - Antes de uma ISO completa, pré-valide qualquer build novo num container noble limpo.
 - O repositório APT próprio vai dentro da imagem (`/opt/fliperos/repo`). Frontends (Attract-Mode Plus, ES-DE, Pegasus...) v?m de .debs próprios.
-- Programas fechados (Model 2 Emulator, Fightcade 2) n?o entram na imagem: usam linhas `fetch:` em `config/fliperos-sessions.conf` ou s?o copiados pelo usuário.
+- Programas fechados ou sem licença para redistribuir (Fightcade 2, DuckStation, Arcadeflow) n?o entram na imagem: o Setup os baixa (`fetch`).
 - Download de BIOS e romsets: recusado. `~/bios` é onde o usuário coloca os dele.
 
 ## Pastas do usuário (`config/fliperos-roms`, a cada login)

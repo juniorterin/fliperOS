@@ -160,7 +160,7 @@ if [[ -z ${DISPLAY:-} ]]; then
 fi
 
 cd "$dir" || exit 1
-# Um prefixo do Wine so para ele, como o Model 2. Sem o Mono e o Gecko: os
+# Um prefixo do Wine so para ele. Sem o Mono e o Gecko: os
 # emuladores nao os usam, e sem isto o Wine abre uma janela pedindo para
 # baixa-los na primeira vez.
 export WINEPREFIX="${WINEPREFIX:-$HOME/.local/share/fliperos/wine-fightcade}"

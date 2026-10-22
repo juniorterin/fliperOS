@@ -19,9 +19,6 @@ FOLDERS_NAMES="roms bios media splashscreen"
 # Onde o fliperos-automount monta os discos: o navegador de pastas abre ali.
 FOLDERS_MOUNTS=${FOLDERS_MOUNTS:-/media/$FLIPEROS_USER}
 FOLDERS_SCRIPT=${FOLDERS_SCRIPT:-/opt/fliperos/bin/fliperos-roms}
-# A pasta do Model 2 Emulator (Wine) de uma instalacao antiga: o
-# fliperos-roms faz de ~/roms/model2 um link para ela.
-FOLDERS_MODEL2=${FOLDERS_MODEL2:-/opt/fliperos/model2/roms}
 # Por que a ultima troca foi recusada, em palavras para a tela.
 FOLDERS_ERROR=""
 # Onde ficou a pasta de antes na ultima troca (vazio: nenhuma foi guardada).
@@ -65,15 +62,6 @@ folders_old() {
   printf '%s/old-%s\n' "${dir%/*}" "${dir##*/}"
 }
 
-# folders_default_link PASTA imprime o alvo do link que o proprio FliperOS
-# faz ali (status 1: ali ele cria uma pasta comum).
-folders_default_link() {
-  case $1 in
-    roms/model2) printf '%s\n' "$FOLDERS_MODEL2" ;;
-    *) return 1 ;;
-  esac
-}
-
 # folders_description PASTA: o que vai na pasta. O texto das pastas de
 # dentro e o _info.txt que o fliperos-roms deixa em cada uma.
 folders_description() {
@@ -94,17 +82,15 @@ folders_description() {
 }
 
 # folders_state PASTA imprime como a pasta esta agora:
-#   default  a do FliperOS (uma pasta comum, ou o link que ele mesmo faz)
+#   default  a do FliperOS (uma pasta comum)
 #   custom   um link para uma pasta que existe
 #   offline  um link para uma pasta que nao esta la (o disco desligado)
 #   missing  nao ha nada
 folders_state() {
-  local path default
+  local path
   path=$(folders_path "$1")
   if [[ -L $path ]]; then
-    if default=$(folders_default_link "$1") && [[ $(readlink -- "$path") == "$default" ]]; then
-      echo default
-    elif [[ -d $path ]]; then
+    if [[ -d $path ]]; then
       echo custom
     else
       echo offline
@@ -349,10 +335,6 @@ folders_unlink() {
       FOLDERS_ERROR="Could not rename ${old/#$FOLDERS_HOME/\~} (details in the log)."
       return 1
     fi
-  elif default=$(folders_default_link "$rel") && [[ -d $default ]]; then
-    # A de antes era o link do proprio FliperOS.
-    ln -s -- "$default" "$path" 2>> "$FLIPEROS_LOG" || return 1
-    folders_own "$path"
   else
     mkdir -p -- "$path" || return 1
     folders_own "$path"

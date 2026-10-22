@@ -146,9 +146,6 @@ screen_folder_unlink() {
   if [[ -d $old && ! -L $old ]]; then
     ui_yesno "$title" "Unlink the custom folder? ~/$rel goes back to the folder used before it (${old/#$FOLDERS_HOME/\~}). Nothing is deleted from the custom folder." yes ||
       return 0
-  elif folders_default_link "$rel" > /dev/null; then
-    ui_yesno "$title" "Unlink the custom folder? ~/$rel goes back to the FliperOS default. Nothing is deleted from the custom folder." yes ||
-      return 0
   else
     ui_yesno "$title" "Unlink the custom folder? The folder used before it (${old/#$FOLDERS_HOME/\~}) is not there anymore: a new, empty ~/$rel is created. Nothing is deleted from the custom folder." yes ||
       return 0

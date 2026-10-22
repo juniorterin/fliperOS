@@ -280,7 +280,7 @@ def filteryears():
 
 def extras():
     return Menu("Extras", [
-        ("wine", "Wine (Model 2, Fightcade 2 emulators)"),
+        ("wine", "Wine (Fightcade 2 emulators)"),
         ("steam", "Steam (installed)"),
         ("heroic", "Heroic (GOG, Epic, Amazon)"),
         ("pixelcade", "Pixelcade (LED/LCD marquee)"),

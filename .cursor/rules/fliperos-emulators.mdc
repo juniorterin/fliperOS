@@ -38,7 +38,7 @@ alwaysApply: false
 - **Supermodel**:
   - só CLI; sem argumentos, o `fliperos-launch` abre um seletor (Alacritty + gum) com os jogos de Model 3;
   - o gargalo é o PPC: jogos stepping 1.5/2.x rodam com `-ppc-frequency=75` (`FLIPEROS_SUPERMODEL_PPC`, 0 desliga).
-- **Hypseus Singe** v2.12.1, OpenBOR, Wine 9 + `fliperos-model2` (o usuário copia o emulador), Steam e Heroic.
+- **Hypseus Singe** v2.12.1, OpenBOR; Wine (os emuladores do Fightcade), Steam e Heroic pelo Setup > System > Extras. O Model 2 Emulator (Wine) saiu: o Model 2 é o SM2-Emu (`fliperos-model2` só repassa para ele).
 - **Button mapping** (`config/fliperos-buttons`, Setup > Joysticks): aplica o mapeamento a todos os emuladores (RetroArch, Flycast + Flycast Dojo, Dolphin, Hypseus, PCSX2...). **Buttons layout** (mesmo menu): a posição no painel dos botões dos jogos de 1 a 5 botões (`/etc/fliperos/buttons.layout`), aplicada por jogo no GroovyMAME (ctrlr) nos cores MAME do RetroArch (`buttons-N.cfg` pelo `fliperos-kms-run`), no Supermodel (seção `[ jogo ]` do `Supermodel.ini`) e no SM2-Emu (`gamecontrollerdb-model2[-N].txt`, somado pelo `fliperos-x11-run`).
 
 ## Fightcade 2

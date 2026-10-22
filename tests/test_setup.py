@@ -5117,21 +5117,6 @@ class FoldersTests(Base):
                     "media/snap/retroarch/mame2010"):
             self.assertEqual(self.env.run('folders_known "%s"' % rel, self.vars).returncode, 0, rel)
 
-    def test_model2_link_of_fliperos_is_the_default(self):
-        self.inner()
-        emu = self.env.dir / "model2emu"
-        emu.mkdir()
-        (self.home / "roms" / "model2").symlink_to(emu)
-        env = dict(self.vars, FOLDERS_MODEL2=str(emu))
-        self.assertEqual(self.env.out("folders_state roms/model2", env).strip(), "default")
-        self.assertEqual(self.env.out("folders_customs", env).split(), [])
-        self.assertEqual(self.env.run("folders_unlink roms/model2", env).returncode, 1)
-        out = self.env.out('folders_link roms/model2 "%s"; echo "kept=$FOLDERS_KEPT"' % (self.disk / "model2"), env)
-        self.assertEqual(out.strip(), "kept=")
-        self.assertEqual(self.env.out("folders_state roms/model2", env).strip(), "custom")
-        self.env.out("folders_unlink roms/model2", env)
-        self.assertEqual(os.readlink(self.home / "roms" / "model2"), str(emu))
-
     def test_check_restores_an_inner_folder(self):
         self.inner()
         self.env.out('folders_link roms/retroarch/mame2010 "%s"; folders_link media/snap "%s"'

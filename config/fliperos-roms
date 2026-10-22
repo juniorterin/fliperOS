@@ -63,17 +63,21 @@ folder "$roms/model3" "Supermodel (Sega Model 3): MAME .zip sets."
 folder "$roms/dolphin" "Dolphin: GameCube and Wii (.iso .gcm .rvz .wbfs .ciso)."
 folder "$roms/openbor/Paks" "OpenBOR: .pak games."
 folder "$roms/hypseus" "Hypseus Singe (laserdisc): roms/, vldp/<game>/ and singe/<game>/."
-# O Model 2 Emulator (Wine) de uma instalacao antiga tem as ROMs dentro da
-# pasta dele: ~/roms/model2 e um link para la. Sem ele (SM2-Emu), uma pasta
-# como as outras.
-restore "$roms/model2"
-if [[ -e $roms/model2 || -L $roms/model2 ]]; then
-  :
-elif [[ -d /opt/fliperos/model2/roms ]]; then
-  ln -s /opt/fliperos/model2/roms "$roms/model2" 2> /dev/null
-else
-  folder "$roms/model2" "SM2-Emu (Sega Model 2): MAME .zip sets."
+# O Model 2 Emulator (Wine) saiu: o Model 2 e o SM2-Emu. Numa instalacao
+# antiga ~/roms/model2 era um link para as ROMs dentro da pasta dele; elas
+# vao para uma ~/roms/model2 comum (sem sobrescrever nada), e a pasta do
+# emulador sai. Se algum arquivo nao saiu (o mesmo nome ja estava la), a
+# pasta do emulador fica, com ele.
+old_model2=${FLIPEROS_OLD_MODEL2:-/opt/fliperos/model2}
+if [[ -L $roms/model2 && $(readlink -- "$roms/model2") == "$old_model2/roms" ]]; then
+  rm -f -- "$roms/model2"
+  mkdir -p "$roms/model2" 2> /dev/null &&
+    find "$old_model2/roms" -mindepth 1 -maxdepth 1 -exec mv -n -t "$roms/model2" {} + 2> /dev/null
 fi
+[[ ! -d $old_model2 || -n $(ls -A "$old_model2/roms" 2> /dev/null) ]] || rm -rf -- "$old_model2" 2> /dev/null
+[[ -L $config/model2 && $(readlink -- "$config/model2") == "$old_model2" ]] && rm -f -- "$config/model2"
+restore "$roms/model2"
+folder "$roms/model2" "SM2-Emu (Sega Model 2): MAME .zip sets."
 # Fightcade 2 (Setup > Games > Frontend): uma pasta por emulador dele. Os romsets
 # sao os que cada um pede, nao os do MAME atual.
 folder "$roms/fightcade" "Fightcade 2: one folder per emulator it uses. They work once Fightcade is installed (Setup > Games > Frontend)."
@@ -209,7 +213,7 @@ cfglink dolphin "$HOME/.config/dolphin-emu"
 cfglink supermodel "$HOME/.config/supermodel"
 cfglink openbor "$roms/openbor/Saves"
 cfglink hypseus "$HOME/.hypseus"
-cfglink model2 /opt/fliperos/model2
+cfglink model2 "$HOME/.config/sm2-emu"
 cfglink attractmode "$HOME/.attract"
 cfglink es-de "$HOME/ES-DE"
 cfglink pegasus "$HOME/.config/pegasus-frontend"

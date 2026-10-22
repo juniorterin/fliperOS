@@ -969,6 +969,43 @@ class RomFoldersTests(unittest.TestCase):
             self.assertIn('Arcade (MAME 2010). This is the MAME 3D: MAME 0.139 sets of the PlayStation-based (PSX)',
                           (roms / 'retroarch/mame2010/_info.txt').read_text())
 
+    def test_old_model2_emulator_leaves(self):
+        # O Model 2 Emulator (Wine) saiu: as ROMs de dentro da pasta dele vao
+        # para uma ~/roms/model2 comum, e a pasta dele sai (com o link de
+        # ~/config). Uma custom folder (Setup > Games > Folders) fica.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            old = tmp / 'opt-model2'
+            (old / 'roms/sub').mkdir(parents=True)
+            (old / 'emulator_multicpu.exe').write_text('exe')
+            (old / 'roms/daytona.zip').write_text('rom')
+            (old / 'roms/sub/x.zip').write_text('sub')
+            (tmp / 'roms').mkdir()
+            (tmp / 'roms/model2').symlink_to(old / 'roms')
+            (tmp / 'config').mkdir()
+            (tmp / 'config/model2').symlink_to(old)
+            env = dict(os.environ, HOME=str(tmp), FLIPEROS_CORE_INFO=str(tmp / 'nada'),
+                       FIGHTCADE_DIR=str(tmp / 'nenhum'), FLIPEROS_OLD_MODEL2=str(old))
+            for _ in range(2):  # a segunda rodada nao muda nada
+                subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+                model2 = tmp / 'roms/model2'
+                self.assertFalse(model2.is_symlink())
+                self.assertEqual((model2 / 'daytona.zip').read_text(), 'rom')
+                self.assertEqual((model2 / 'sub/x.zip').read_text(), 'sub')
+                self.assertTrue((model2 / '_info.txt').is_file())
+                self.assertFalse(old.exists())
+                self.assertFalse(os.path.lexists(tmp / 'config/model2'))
+            # A custom folder de ~/roms/model2 e a pasta antiga com ROMs ficam.
+            (old / 'roms').mkdir(parents=True)
+            (old / 'roms/srallyc.zip').write_text('rom')
+            (tmp / 'disk').mkdir()
+            shutil.rmtree(tmp / 'roms/model2')
+            (tmp / 'roms/model2').symlink_to(tmp / 'disk')
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertEqual(os.readlink(tmp / 'roms/model2'), str(tmp / 'disk'))
+            self.assertEqual((old / 'roms/srallyc.zip').read_text(), 'rom')
+        self.assertIn('cfglink model2 "$HOME/.config/sm2-emu"', (ROOT / 'config/fliperos-roms').read_text())
+
     def test_psx_folder_only_with_duckstation(self):
         # Sem o DuckStation (baixado no Setup), nenhuma segunda pasta de PS1 ao
         # lado da do core do RetroArch.
@@ -7256,7 +7293,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
             self.assertNotIn(gone, MKISO)
         prep = MKISO.split('prepare_extras_chroot() {')[1].split('\n}\n')[0]
         self.assertIn('dpkg --add-architecture i386', prep)
-        self.assertIn('/opt/fliperos/model2/roms', prep)
+        self.assertNotIn('model2', prep)
         self.assertIn('install -Dm755 "$src/config/fliperos-extras" "$root/opt/fliperos/bin/fliperos-extras"', ROOTFS)
 
     def test_extras_helper(self):

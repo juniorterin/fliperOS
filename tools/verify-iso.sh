@@ -206,7 +206,7 @@ if present usr/local/bin/dolphin-emu; then
 fi
 # Wine, Steam e Heroic: pelo Setup > System > Extras (config/fliperos-extras), fora
 # da imagem para a ISO caber num arquivo do GitHub.
-for path in usr/local/bin/fliperos-model2 opt/fliperos/model2/roms opt/fliperos/bin/fliperos-extras; do
+for path in usr/local/bin/fliperos-model2 opt/fliperos/bin/fliperos-extras; do
   has "$path"
 done
 for path in usr/bin/wine usr/games/steam opt/Heroic/heroic; do

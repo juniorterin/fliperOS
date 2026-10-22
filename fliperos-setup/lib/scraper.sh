@@ -331,7 +331,7 @@ scraper_platform() {
     dreamcast) echo dreamcast ;;
     # Os arcades do Flycast, uma pasta por sistema (MAME ROM Cleaner).
     naomi | naomi2 | atomiswave) echo "$1" ;;
-    # Supermodel e Model 2 Emulator: os .zip do MAME, que o Skyscraper
+    # Supermodel e SM2-Emu: os .zip do MAME, que o Skyscraper
     # procura como arcade.
     model2 | model3) echo arcade ;;
     ps2) echo ps2 ;;
@@ -411,7 +411,7 @@ scraper_core_info() {
 # scraper_count PASTA: arquivos de jogo, sem o _info.txt do fliperos-roms,
 # os ocultos e o que o proprio scraper gravou (lista e media/).
 scraper_count() {
-  # -H: ~/roms/model2 e um link para a pasta do Model 2 Emulator.
+  # -H: a pasta pode ser um link (a custom folder do Setup > Games > Folders).
   find -H "$1" -maxdepth 2 -type f ! -name '.*' ! -name '_info.txt' ! -name 'gamelist.xml' \
     ! -name 'metadata.pegasus.txt' ! -path "$1/media/*" 2> /dev/null | wc -l
 }
