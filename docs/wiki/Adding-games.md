@@ -15,7 +15,9 @@ Each emulator has its folder in `~/roms` (`/home/fliperos/roms`; over the networ
 | `dolphin` | GameCube and Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
 | `retroarch/<core>` | Whatever that core opens (the `_info.txt` in each folder lists the extensions) | RetroArch |
 
-BIOS files go in `~/bios` (`\\fliperos\bios`): `~/bios/mame` for MAME (`neogeo.zip`, `qsound.zip`), `~/bios/dc` for Flycast (`naomi.zip`, `awbios.zip`, `dc_boot.bin`), `~/bios/ps2` for PCSX2 and the folder itself for the RetroArch cores. A BIOS left in a games folder shows up as a game in the frontend.
+**BIOS** don't need to be looked for: Setup > Games > Downloader > **Download BIOS** brings the ones the games in your folders lack, and the menu checks for missing ones each time it opens ([ROMs, BIOS and artwork](ROMs.md#download-bios)).
+
+BIOS files of your own go in `~/bios` (`\\fliperos\bios`): `~/bios/mame` for MAME (`neogeo.zip`, `qsound.zip`), `~/bios/dc` for Flycast (`naomi.zip`, `awbios.zip`, `dc_boot.bin`), `~/bios/ps2` for PCSX2 and the folder itself for the RetroArch cores. A BIOS left in a games folder shows up as a game in the frontend.
 
 ## Make the frontend see the folder
 

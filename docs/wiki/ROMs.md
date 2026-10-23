@@ -14,7 +14,7 @@ RetroArch opens its file browser in `~/roms`, GroovyMAME looks in `~/roms/mame`,
 
   `~/bios/dc` is the one for **Flycast** and the Flycast core (`dc_boot.bin`, `dc_flash.bin`, `naomi.zip`, `awbios.zip`...; `Dreamcast.BiosPath` in `emu.cfg` and `FLYCAST_BIOS_PATH` in `fliperos-x11-run`), `~/bios/ps2` the one for **PCSX2** (its `bios` folder, `~/.config/PCSX2/bios`, becomes a link there, with whatever it already had) and `~/bios/mame` is in **GroovyMAME**'s `rompath` (BIOS and devices such as `neogeo.zip` and `qsound.zip`; they still work from `~/roms/mame`).
 
-  `/opt/fliperos/bios` became a link to `~/bios`. FliperOS ships no BIOS: everyone puts in their own.
+  `/opt/fliperos/bios` became a link to `~/bios`. FliperOS ships no BIOS, but you don't have to look for them: [Download BIOS](#download-bios) brings the ones the games in your folders need. BIOS of your own can still go here.
 - **`~/media`** (`\\fliperos\media`) — the frontends' artwork and text, one folder per type and, inside, the same folders as `~/roms` (`mame`, `model2`, `naomi`, `ps2`, `retroarch/snes9x`...), so the art of a games folder is in the folder of the same name: `snap` (screenshots), `preview` (videos), `logo` (wheel), `box` (covers and flyers), `marquee` and `texto` (each game's description, `.txt`).
 
   Setup > Games > Scraper writes there, and the frontends read from there: Attract-Mode through the emulator's `artwork` lines, ES-DE through `MediaDirectory`, Pegasus through `metadata.pegasus.txt` and GroovyMAME's game list through `mame.ini` (`snapshot_directory`) and `ui.ini` (`covers_directory`, `flyers_directory`, `marquees_directory`, `logos_directory`).

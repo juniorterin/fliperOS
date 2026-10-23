@@ -91,7 +91,7 @@ The stretch and the sizes given to the emulators follow that width (Flycast `ren
 
 The mouse cursor only appears in emulators with a mouse UI — PCSX2 (game list, BIOS wizard), Dolphin, Flycast and Fightcade —, which hide it themselves during full-screen play; the others open with Xorg `-nocursor`.
 
-**GroovyMAME: what's missing.** When a game stops at "System media audit failed", the reason is in `/opt/fliperos/logs/groovymame.log`, and `groovymame -verifyroms GAME` lists the missing files — BIOS and device ROMs come in zips separate from the game. Everything goes in `~/roms/mame` (BIOS can also go in `~/bios/mame`), from the same MAME version (0.289).
+**GroovyMAME: what's missing.** When a game stops at "System media audit failed", the reason is in `/opt/fliperos/logs/groovymame.log`, and `groovymame -verifyroms GAME` lists the missing files — BIOS and device ROMs come in zips separate from the game. A missing BIOS is brought by Setup > Games > Downloader > **Download BIOS** ([ROMs, BIOS and artwork](ROMs.md#download-bios)). By hand, everything goes in `~/roms/mame` (BIOS can also go in `~/bios/mame`), from the same MAME version (0.289).
 
 PCSX2 is the official AppImage (pinned by version and sha256, extracted to `/opt/pcsx2`): its current code requires SDL3 and Qt 6.10, which Ubuntu 24.04 doesn't have. Dolphin is compiled from the stable version (the official Linux distribution is the Flatpak, which would bring ~1 GB of runtime).
 

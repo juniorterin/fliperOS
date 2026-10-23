@@ -104,7 +104,7 @@ Use only games you have the right to use (your own dumps, or the free homebrew f
 **Use the LXDE desktop.** Plug a USB mouse and keyboard into the cabinet and choose **Start desktop** in the FliperOS menu. It is a regular desktop, and it makes all the work with games easier:
 
 - **Folders**: the file manager opens your home folder, with `roms`, `bios`, `media` and `config`. You see where each file goes and can create, rename and move files with the mouse.
-- **Browser**: *Falkon (browser)* in the desktop menu, to search for the torrents of your games and BIOS.
+- **Browser**: *Falkon (browser)* in the desktop menu, to search for the torrents of your games.
 - **Torrents**: *Transmission (torrent)* opens the `.torrent` files and magnet links from the browser. When the download finishes, move the files from `Downloads` to the right folder in `roms`.
 - **External storage**: plug in a USB stick or an external disk. It is mounted by itself and gets an icon on the desktop: open it, copy the files and paste them into the right folder in `roms` (or `bios`).
 - **To go back to the games**: *Logout* in the desktop menu > back to the FliperOS menu.
@@ -132,7 +132,7 @@ Use only games you have the right to use (your own dumps, or the free homebrew f
 | `retroarch/<core>` | Consoles and computers; the `_info.txt` in each folder lists the extensions | RetroArch |
 | `openbor/Paks` | OpenBOR games (`.pak`) | OpenBOR |
 
-**BIOS** go in `bios`, never in a games folder: `bios/mame` for MAME (`neogeo.zip`, `qsound.zip`...), `bios/dc` for Flycast (`naomi.zip`, `awbios.zip`, `dc_boot.bin`), `bios/ps2` for PCSX2, and the `bios` folder itself for the RetroArch cores.
+**BIOS** come by themselves: *Setup > Games > Downloader > Download BIOS* brings the ones your games lack. Ones you bring yourself go in `bios`, never in a games folder: `bios/mame` for MAME (`neogeo.zip`, `qsound.zip`...), `bios/dc` for Flycast (`naomi.zip`, `awbios.zip`, `dc_boot.bin`), `bios/ps2` for PCSX2, and the `bios` folder itself for the RetroArch cores.
 
 Has a full MAME romset? *Setup > Games > Cleaner > MAME ROM Cleaner* keeps only the games that work and suit your cabinet (horizontal or vertical, the controls you have) and puts them in the right emulator's folder. More in [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs).
 
@@ -160,7 +160,7 @@ Has a full MAME romset? *Setup > Games > Cleaner > MAME ROM Cleaner* keeps only 
 - **The picture is off-center or too big**: *Setup > Video Setup > Geometry*.
 - **Two or three monitors** (Darius, Punch-Out!!, F355 Challenge): *Setup > Video Setup > Multiple Monitors*, see [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors).
 - **A system doesn't appear in the frontend**: the folder needs at least one game file (the `_info.txt` doesn't count); then choose the frontend again in *Setup > Games > Frontend*.
-- **A game doesn't open**: turn on *Setup > System > Debug mode* to see the emulator's messages on screen; without it they are saved in `/opt/fliperos/logs`. Check the BIOS in `bios`.
+- **A game doesn't open**: turn on *Setup > System > Debug mode* to see the emulator's messages on screen; without it they are saved in `/opt/fliperos/logs`. A missing BIOS: *Setup > Games > Downloader > Download BIOS*.
 - **No sound**: *Setup > Audio Setup* chooses the card and the volume and plays a test.
 - **Something the menus don't cover**: over SSH (`ssh fliperos@fliperos.local`, password `fliperos`) it's a regular Ubuntu 24.04, and an AI assistant with terminal access can configure it for you. On a network you don't control, change the password with `passwd`.
 
