@@ -40,6 +40,9 @@ CONFIG = os.path.join(os.path.expanduser("~"), ".config", "fliperos", "frontend.
 # em letra (LRATE0 letras por segundo, e ate LRATE1 depois de LSPEEDUP).
 FIRST, RATE0, RATE1, LETTERS = 0.4, 6.0, 30.0, 3.0
 LRATE0, LRATE1, LSPEEDUP = 3.0, 10.0, 0.8
+# No modo letra cada toque passa uma letra; LETTER_IDLE segundos sem mexer e
+# a lista volta ao normal.
+LETTER_IDLE = 2.0
 MODES = ("list", "full", "flow")
 COLS = 5                     # as colunas da grade
 
@@ -210,7 +213,15 @@ class Frontend:
         idx = next((k for k, (c, _) in enumerate(letters) if c == here), 0)
         idx = max(0, min(len(letters) - 1, idx + step))
         self.cursor = letters[idx][1]
-        self.letter = (letters[idx][0], time.monotonic() + 0.6)
+        # A letra fica no meio da tela enquanto o modo letra dura.
+        self.letter = (letters[idx][0], float("inf"))
+        if self.letter_mode:
+            self.letter_mode["last"] = time.monotonic()
+
+    def letter_off(self):
+        """Fim do modo letra: a lista normal, no jogo da letra."""
+        self.letter_mode = None
+        self.letter = None
 
     def page(self):
         return {"list": 13, "full": 1, "flow": COLS * 2}[self.mode]
@@ -221,12 +232,22 @@ class Frontend:
             return "quit"
         if self.overlay:
             return self.overlay_act(a)
+        if self.letter_mode and a in ("up", "down"):
+            # No modo letra, cada toque passa uma letra; segurando, repete
+            # (tick). Dois segundos sem mexer, volta a lista normal.
+            now = time.monotonic()
+            self.letter_mode["press"] = now
+            self.letter_jump(1 if a == "down" else -1)
+            self.repeat[a] = now + FIRST
+            return None
+        if self.letter_mode:
+            # Outro botao: sai do modo letra e faz o que ele faz.
+            self.letter_off()
         if a in ("up", "down"):
             step = 1 if a == "down" else -1
             self.move(step * (COLS if self.mode == "flow" else 1))
             self.repeat[a] = time.monotonic() + FIRST
             self.acc = 0.0
-            self.letter_mode = None
         elif a in ("left", "right"):
             step = 1 if a == "right" else -1
             if self.mode == "flow":
@@ -500,6 +521,10 @@ class Frontend:
         """As repeticoes segurando, a aceleracao e o modo letra."""
         if self.overlay and self.overlay not in ("filter", "classify", "rename", "more"):
             return
+        # O modo letra acaba com LETTER_IDLE segundos sem mexer.
+        if (self.letter_mode and self.input.held("up") is None and self.input.held("down") is None
+                and now - self.letter_mode["last"] > LETTER_IDLE):
+            self.letter_off()
         for a in ("up", "down"):
             held = self.input.held(a)
             if held is None:
@@ -514,16 +539,19 @@ class Frontend:
                     self.overlay_act(a)
                 continue
             step = 1 if a == "down" else -1
-            if held >= LETTERS:
-                if self.letter_mode is None:
-                    self.letter_mode = now
-                    self.repeat[a] = now
-                lheld = now - self.letter_mode
-                rate = LRATE0 if lheld < LSPEEDUP else min(LRATE1, LRATE0 + (lheld - LSPEEDUP) * 9)
-                if now >= self.repeat.get(a, now):
+            if self.letter_mode:
+                # Segurando no modo letra: repete a letra, devagar e depois
+                # mais rapido.
+                lheld = now - self.letter_mode["press"]
+                if lheld >= FIRST and now >= self.repeat.get(a, 0):
+                    rate = LRATE0 if lheld < LSPEEDUP else min(LRATE1, LRATE0 + (lheld - LSPEEDUP) * 9)
                     self.letter_jump(step)
                     self.repeat[a] = now + 1.0 / rate
-                self.letter = (self.letter[0] if self.letter else "", now + 0.5)
+            elif held >= LETTERS:
+                # 3 s segurando: entra no modo letra, que ja comeca andando.
+                self.letter_mode = {"press": now - FIRST, "last": now}
+                self.letter_jump(step)
+                self.repeat[a] = now + 1.0 / LRATE0
             elif held >= FIRST:
                 k = min(1.0, (held - FIRST) / (LETTERS - FIRST))
                 self.acc += (RATE0 + (RATE1 - RATE0) * k ** 1.5) / FPS

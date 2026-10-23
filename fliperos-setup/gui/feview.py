@@ -141,7 +141,9 @@ def af_icon(fe, kind, name, h, color):
         try:
             src = pygame.image.load(path)
             src = src.convert_alpha() if pygame.display.get_surface() else src
-            rect = src.get_bounding_rect(min_alpha=40)
+            # So a parte solida: a sombra suave dos icones grandes do
+            # Arcadeflow ocupa o quadro inteiro.
+            rect = src.get_bounding_rect(min_alpha=180)
             if rect.w and rect.h:
                 src = src.subsurface(rect).copy()
                 w = max(1, round(src.get_width() * h / src.get_height()))
@@ -209,7 +211,7 @@ def control_short(control):
     return c
 
 
-def icon_rows(fe, game, h=10):
+def icon_rows(fe, game, h=10, icons_only=False):
     """[(icone ou None, texto, cor)] do genero, do controle e dos botoes e
     jogadores."""
     rows = []
@@ -220,7 +222,7 @@ def icon_rows(fe, game, h=10):
     parts = []
     if game.get("Buttons"):
         parts.append("%s BTN" % game["Buttons"])
-    if game.get("Players"):
+    if game.get("Players") and not icons_only:
         parts.append("%sP" % game["Players"])
     if parts:
         rows.append((buttons_icon(fe, game, h, T.YELLOW), ", ".join(parts), T.YELLOW))
@@ -355,18 +357,35 @@ def draw_list(fe, ui, now):
         y += 2
     W.text(ui, fit(facts_line(game), pw), T.YELLOW, px, y)
     y += 12
-    # Os icones do Arcadeflow com o texto ao lado; sem o icone, o rotulo.
-    labels = {T.CYAN: "GENRE", T.PINK: "CONTROL", T.YELLOW: "BUTTONS"}
-    for img, text, color in icon_rows(fe, game, 10):
+    # Os icones do Arcadeflow grandes, sem texto: o genero, o controle, os
+    # botoes e um boneco por jogador. Sem o icone (Arcadeflow nao baixado),
+    # o texto pequeno no lugar dele.
+    # Duas fileiras: genero e controle; botoes e jogadores.
+    rows = icon_rows(fe, game, 20, icons_only=True)
+    first = [r for r in rows if r[2] != T.YELLOW]
+    second = [r for r in rows if r[2] == T.YELLOW]
+    for line in (first, second):
         x = px
-        if img:
-            ui.blit(img, (px, y))
-            x = px + min(img.get_width(), 24) + 5
-        else:
-            tiny.text(ui, labels.get(color, ""), T.COMMENT, px, y + 2)
-            x = px + 36
-        W.text(ui, fit(text, SX + SW - x), T.FG, x, y + 1)
-        y += 13
+        for img, text, color in line:
+            if img:
+                if x + img.get_width() > SX + SW:
+                    break
+                ui.blit(img, (x, y))
+                x += img.get_width() + 8
+            else:
+                label = text.upper()
+                if x + tiny.width(label) > SX + SW:
+                    break
+                x += tiny.text(ui, label, color, x, y + 8) + 8
+        if line is second:
+            players = (game.get("Players") or "").strip()
+            if players.isdigit():
+                for i in range(min(int(players), 4)):
+                    if x + 8 > SX + SW:
+                        break
+                    W.person(ui, x, y + 4, 1, T.CYAN)
+                    x += 11
+        y += 24
     played = game.get("PlayedCount")
     chips = []
     if game.get("Favourite") == "1":
