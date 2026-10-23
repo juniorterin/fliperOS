@@ -4,13 +4,21 @@ const ptBR: Messages = {
   meta: {
     title: 'FliperOS — Arcade Linux feito para CRT',
     description:
-      'FliperOS é o Linux Ubuntu 24.04 para gabinetes arcade com monitor CRT: kernel 15 kHz, Switchres, GroovyMAME, RetroArch, dois ou mais CRTs para jogos de várias telas, light gun GunCon 2 e frontends prontos para jogar.',
+      'FliperOS é o Linux Ubuntu 24.04 para gabinetes arcade com monitor CRT: kernel 15 kHz, Switchres, GroovyMAME, RetroArch, um painel web para jogar pelo celular, dois ou mais CRTs para jogos de várias telas, light gun GunCon 2 e frontends prontos para jogar. Uma alternativa para PC ao GroovyArcade, Batocera, Recalbox, ReplayOS e RGB-Pi.',
     keywords: [
       'FliperOS',
       'Linux arcade',
+      'arcade Linux',
       'fliperama',
       'CRT',
       '15 kHz',
+      '15khz',
+      'emulação em CRT',
+      'ReplayOS',
+      'Batocera',
+      'Recalbox',
+      'RGB-Pi',
+      'painel web',
       'multimonitor',
       'vários monitores',
       'Darius',
@@ -29,6 +37,28 @@ const ptBR: Messages = {
       'retrogame',
     ],
     ogAlt: 'FliperOS: Arcade Linux. Feito para CRT. Ubuntu 24.04, kernel 15 kHz, Switchres, GroovyMAME, RetroArch.',
+    faq: [
+      {
+        q: 'O que é o FliperOS?',
+        a: 'O FliperOS é uma distribuição Linux gratuita, baseada no Ubuntu 24.04 (amd64), que transforma um PC num fliperama para monitor CRT. Tem kernel 15 kHz, Switchres, GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin e Supermodel, os frontends Attract-Mode Plus, ES-DE e Pegasus, e um menu de configuração feito para o tubo.',
+      },
+      {
+        q: 'Qual a diferença do FliperOS para o GroovyArcade, Batocera, Recalbox, ReplayOS e RGB-Pi?',
+        a: 'O FliperOS é feito para um PC (amd64) com CRT. Como o GroovyArcade, ele gera os 15 kHz do monitor de fliperama direto na placa de vídeo do PC com o Switchres, em cima de um Ubuntu 24.04 comum. Batocera e Recalbox são distribuições de retrogame em geral, e ReplayOS e RGB-Pi OS rodam no Raspberry Pi. O FliperOS também tem um painel web para jogar pelo celular, jogos de várias telas em dois ou três CRTs e a light gun GunCon 2 pronta para usar.',
+      },
+      {
+        q: 'Quais placas de vídeo funcionam a 15 kHz?',
+        a: 'As AMD Radeon com saída VGA ou DVI-I, da série HD 2000 até as R7/R9 200 e 300 (GCN 1.0), geram 15 kHz nativamente. Intel e NVIDIA funcionam a 15 kHz com modos de super resolução, e placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA.',
+      },
+      {
+        q: 'Dá para controlar o gabinete pelo celular?',
+        a: 'Dá. O painel web em http://fliperos.local abre em qualquer navegador da mesma rede: escolha um jogo e ele abre no tubo, veja o gabinete ao vivo, mude a cor e outros ajustes enquanto joga, copie jogos, filtre um romset do MAME e veja o estado do sistema.',
+      },
+      {
+        q: 'O FliperOS é gratuito?',
+        a: 'Sim. O FliperOS é gratuito e de código aberto, no GitHub, e a ISO é baixada dos releases do GitHub. Ele não traz jogos nem BIOS; o Setup baixa as BIOS que os seus jogos pedem.',
+      },
+    ],
   },
   cookies: {
     label: 'Aviso de cookies',
@@ -47,6 +77,7 @@ const ptBR: Messages = {
   },
   nav: {
     features: 'Recursos',
+    webPanel: 'Painel web',
     emulators: 'Emuladores',
     crt: 'CRT',
     multiMonitor: 'Multimonitor',
@@ -172,6 +203,34 @@ const ptBR: Messages = {
         points: ['GunCon 2', 'Driver DKMS', 'Calibração no CRT', 'Jogos de pistola'],
       },
     ],
+  },
+  faqSection: {
+    kicker: 'Perguntas',
+    title: 'O que todo mundo pergunta primeiro.',
+  },
+  webPanel: {
+    kicker: 'Painel web',
+    title: 'O gabinete, pelo celular.',
+    intro:
+      'Abra o endereço do gabinete em qualquer navegador da sua rede, no celular, no tablet ou no PC, e entre. Nada para instalar. Escolha um jogo e ele abre no tubo, veja o gabinete ao vivo, mude a cor enquanto joga, copie jogos e veja o que o sistema está fazendo.',
+    addressLabel: 'Abra no navegador:',
+    caption: 'Capturas reais do painel num gabinete com FliperOS: um jogo de arcade aberto com as informações do Arcade Database, e a lista de jogos no celular',
+    shots: {
+      frontend: 'O painel web num navegador de PC: a página Frontend com Fighters Swords aberto, os dados, as imagens do jogo e do título e a história do arcade-history.com.',
+      phone: 'O painel web no celular: o jogando agora com o FPS, e a lista de jogos do MAME com busca e filtros.',
+      status: 'A página Status do painel web: o jogando agora, o cartão de screenshot e o cartão de vídeo com o monitor, a resolução e o modo de 15,659 kHz na tela.',
+    },
+    points: [
+      { id: 'play', title: 'Escolha um jogo e jogue', text: 'Busque os jogos de cada sistema com os seus filtros e favoritos, veja as imagens, os botões e a história de cada jogo de arcade, e aperte Jogar: ele abre no tubo.' },
+      { id: 'live', title: 'Veja ao vivo', text: 'A tela do gabinete no navegador a 15, 30 ou 60 quadros por segundo, mais o FPS do jogo e um screenshot do tubo.' },
+      { id: 'obs', title: 'Pronto para o OBS', text: 'Endereços para uma Browser Source do OBS: a tela ao vivo em 4:3 e o marquee do jogo em andamento, com os recordes e o placar do versus.' },
+      { id: 'settings', title: 'Ajustes com o jogo aberto', text: 'Sliders de cor que mudam o jogo na tela enquanto você mexe, os jogos 480i de cada emulador, os serviços, o modo de latência e o volume.' },
+      { id: 'files', title: 'Seus jogos pelo navegador', text: 'Envie e baixe jogos, BIOS, imagens e telas de boot, com o andamento, direto na pasta certa.' },
+      { id: 'romfilter', title: 'Filtro de ROMs e downloads', text: 'Filtre um romset do MAME pelos controles e pela tela do seu gabinete, e baixe de um torrent só os jogos que passam.' },
+      { id: 'status', title: 'O estado de tudo', text: 'O modo de vídeo e a modeline no tubo, CPU, GPU, temperaturas, memória, discos, rede, processos e logs.' },
+      { id: 'terminal', title: 'Terminal', text: 'O shell do gabinete numa aba do navegador, o mesmo do SSH, sem programa para instalar.' },
+    ],
+    cta: 'Cada página do painel web, na documentação',
   },
   emulators: {
     kicker: 'Emuladores e frontends',

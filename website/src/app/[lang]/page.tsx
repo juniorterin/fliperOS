@@ -5,6 +5,7 @@ import { latestIsoUrl } from '@/lib/site';
 import { BadgeBar } from '@/sections/BadgeBar';
 import { Crt } from '@/sections/Crt';
 import { Emulators } from '@/sections/Emulators';
+import { Faq } from '@/sections/Faq';
 import { Features } from '@/sections/Features';
 import { Footer } from '@/sections/Footer';
 import { Hero } from '@/sections/Hero';
@@ -14,6 +15,7 @@ import { OpenSource } from '@/sections/OpenSource';
 import { Pixelcade } from '@/sections/Pixelcade';
 import { Setup } from '@/sections/Setup';
 import { Support } from '@/sections/Support';
+import { WebPanel } from '@/sections/WebPanel';
 
 // Estrelas, forks e release do GitHub revalidados a cada hora (ISR).
 export const revalidate = 3600;
@@ -27,6 +29,7 @@ export default async function Home() {
         <Hero screenshots={screenshots} downloadUrl={stats?.release?.iso ?? latestIsoUrl()} />
         <BadgeBar />
         <Features />
+        <WebPanel />
         <Emulators />
         <Crt />
         <MultiMonitor />
@@ -34,6 +37,7 @@ export default async function Home() {
         <OpenHardware />
         <Setup />
         <OpenSource stats={stats} />
+        <Faq />
         <Support />
       </main>
       <Footer />

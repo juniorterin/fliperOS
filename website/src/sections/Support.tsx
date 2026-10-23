@@ -47,7 +47,10 @@ export function Support() {
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <SectionHeading id="support" kicker={s.kicker} title={s.title} intro={s.intro} align="center" />
 
-        <div className="mt-14 grid gap-5 md:grid-cols-2">
+        {/* minmax(0, 1fr): sem ele, a chave Pix (que so se corta com reticencias)
+            alargava a coluna e, no celular, a pagina inteira ficava mais larga
+            que a tela. */}
+        <div className="mt-14 grid grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-2">
           <Reveal className="h-full">
             <div className="card flex h-full flex-col rounded-2xl p-6 sm:p-8">
               <span className="inline-flex size-12 items-center justify-center rounded-xl border border-cyan/40 bg-cyan/10 text-cyan">

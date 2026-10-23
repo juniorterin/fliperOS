@@ -47,7 +47,7 @@ export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? 'G-FTG8120HF8';
 // NEXT_PUBLIC_SITE_URL, lido no build, troca o domínio (outro ambiente).
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fliperos.juniorter.in').replace(/\/+$/, '');
 
-export const SECTION_IDS = ['features', 'emulators', 'crt', 'multi-monitor', 'setup', 'open-source'] as const;
+export const SECTION_IDS = ['features', 'web-panel', 'emulators', 'crt', 'multi-monitor', 'setup', 'open-source'] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
 // Na ordem do carrossel do hero; os textos de cada um ficam em hero.slides.

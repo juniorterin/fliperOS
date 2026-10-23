@@ -1,0 +1,21 @@
+# FliperOS
+
+> FliperOS is a free, open-source Linux distribution based on Ubuntu 24.04 (amd64) that turns a PC into an arcade machine for a CRT monitor. It has a 15 kHz kernel, Switchres, GroovyMAME, RetroArch and other emulators, frontends ready to play, a setup menu made for the tube and a web panel to control the cabinet from a phone. It is a PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi OS.
+
+Key facts:
+
+- Video: Linux 6.18 LTS with the 15 kHz patches (the same as GroovyArcade's linux-15khz), Switchres, boot at 15, 25 or 31 kHz or on an LCD. AMD Radeon cards with VGA or DVI-I output (HD 2000 to R7/R9 200 and 300) generate 15 kHz natively; Intel and NVIDIA work with super resolution modes.
+- Emulators: GroovyMAME, RetroArch, Flycast (Dreamcast, Naomi, Atomiswave), PCSX2, Dolphin, Supermodel (Model 3), SM2-Emu (Model 2), DuckStation, Hypseus Singe and OpenBOR.
+- Frontends: Attract-Mode Plus (Arcadeflow theme), EmulationStation (ES-DE), Pegasus and Fightcade 2 for online matches.
+- Web panel at http://fliperos.local: pick a game and play it on the tube, watch the cabinet live, put the live screen and the marquee in OBS, change colour and 480i settings while playing, upload games, filter a MAME romset, download only the games that pass, check the system status, open a terminal.
+- Multi-screen games on two or three CRTs (Darius, The Ninja Warriors, Punch-Out!!, Ferrari F355 Challenge), the GunCon 2 light gun with calibration for the tube, Pixelcade and ZeDMD LED displays with versus scores.
+- The Setup downloads the BIOS your games need; the image ships no games and no BIOS.
+- Installed from a USB stick (ISO from GitHub releases); SSH is on from the first boot (user fliperos).
+
+## Links
+
+- [Website](https://fliperos.juniorter.in): overview in English and Portuguese
+- [GitHub repository](https://github.com/juniorterin/fliperOS): source code, issues and README with a step-by-step guide
+- [Releases](https://github.com/juniorterin/fliperOS/releases): the ISO
+- [Documentation (wiki)](https://github.com/juniorterin/fliperOS/wiki): install, installed system, web panel, emulators, ROMs and BIOS, controls, latency
+- [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel): every page of the panel in detail

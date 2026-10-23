@@ -109,6 +109,18 @@ function jsonLd(locale: (typeof LOCALES)[number], downloadUrl: string) {
         sameAs: [LINKS.github],
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
       },
+      {
+        // As perguntas de quem procura um Linux de fliperama para CRT, com a
+        // resposta pronta para o Google e para os buscadores de IA.
+        '@type': 'FAQPage',
+        '@id': `${url}#faq`,
+        inLanguage: locale,
+        mainEntity: meta.faq.map((f) => ({
+          '@type': 'Question',
+          name: f.q,
+          acceptedAnswer: { '@type': 'Answer', text: f.a },
+        })),
+      },
     ],
   };
 }

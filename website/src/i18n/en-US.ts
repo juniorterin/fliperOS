@@ -2,12 +2,20 @@ const enUS = {
   meta: {
     title: 'FliperOS — Arcade Linux built for CRT',
     description:
-      'FliperOS is Ubuntu 24.04 Linux for arcade cabinets with CRT monitors: 15 kHz kernel, Switchres, GroovyMAME, RetroArch, two or more CRTs for multi-screen games, GunCon 2 light gun and frontends ready to play.',
+      'FliperOS is Ubuntu 24.04 Linux for arcade cabinets with CRT monitors: 15 kHz kernel, Switchres, GroovyMAME, RetroArch, a web panel to play from your phone, two or more CRTs for multi-screen games, GunCon 2 light gun and frontends ready to play. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi.',
     keywords: [
       'FliperOS',
       'arcade Linux',
+      'Linux arcade',
       'CRT',
       '15 kHz',
+      '15khz',
+      'CRT emulation',
+      'ReplayOS',
+      'Batocera',
+      'Recalbox',
+      'RGB-Pi',
+      'web panel',
       'multi-monitor',
       'multiple monitors',
       'Darius',
@@ -25,6 +33,29 @@ const enUS = {
       'retro gaming',
     ],
     ogAlt: 'FliperOS: Arcade Linux. Built for CRT. Ubuntu 24.04, 15 kHz kernel, Switchres, GroovyMAME, RetroArch.',
+    // Perguntas e respostas para o FAQPage do JSON-LD (Google e buscadores de IA).
+    faq: [
+      {
+        q: 'What is FliperOS?',
+        a: 'FliperOS is a free Linux distribution based on Ubuntu 24.04 (amd64) that turns a PC into an arcade machine for a CRT monitor. It has a 15 kHz kernel, Switchres, GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin and Supermodel, the Attract-Mode Plus, ES-DE and Pegasus frontends, and a setup menu made for the tube.',
+      },
+      {
+        q: 'How is FliperOS different from GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi?',
+        a: 'FliperOS is made for a PC (amd64) with a CRT. Like GroovyArcade, it drives a 15 kHz arcade CRT natively from the PC’s video card with Switchres, on top of a regular Ubuntu 24.04. Batocera and Recalbox are general retro-gaming distributions, and ReplayOS and RGB-Pi OS run on the Raspberry Pi. FliperOS also has a web panel to play from a phone, multi-screen games across two or three CRTs and the GunCon 2 light gun out of the box.',
+      },
+      {
+        q: 'Which video cards work at 15 kHz?',
+        a: 'AMD Radeon cards with VGA or DVI-I output, from the HD 2000 series to the R7/R9 200 and 300 (GCN 1.0), generate 15 kHz natively. Intel and NVIDIA work at 15 kHz with super resolution modes, and cards without an analog output need a DisplayPort or HDMI to VGA converter.',
+      },
+      {
+        q: 'Can I control the cabinet from my phone?',
+        a: 'Yes. The web panel at http://fliperos.local opens in any browser on the same network: pick a game and it starts on the tube, watch the cabinet live, change colour and other settings while you play, copy games, filter a MAME romset and check the system status.',
+      },
+      {
+        q: 'Is FliperOS free?',
+        a: 'Yes. FliperOS is free and open source, on GitHub, and the ISO is downloaded from the GitHub releases. It ships no games and no BIOS; the Setup downloads the BIOS your games need.',
+      },
+    ],
   },
   cookies: {
     label: 'Cookie notice',
@@ -43,6 +74,7 @@ const enUS = {
   },
   nav: {
     features: 'Features',
+    webPanel: 'Web panel',
     emulators: 'Emulators',
     crt: 'CRT',
     multiMonitor: 'Multi-monitor',
@@ -168,6 +200,34 @@ const enUS = {
         points: ['GunCon 2', 'DKMS driver', 'CRT calibration', 'Light gun games'],
       },
     ],
+  },
+  faqSection: {
+    kicker: 'FAQ',
+    title: 'Questions people ask first.',
+  },
+  webPanel: {
+    kicker: 'Web panel',
+    title: 'The cabinet, from your phone.',
+    intro:
+      'Open the cabinet’s address in any browser on your network, on a phone, a tablet or a PC, and sign in. Nothing to install. Pick a game and it starts on the tube, watch the cabinet live, change the colour while you play, copy games and check what the system is doing.',
+    addressLabel: 'Open in the browser:',
+    caption: 'Real captures of the panel on a FliperOS cabinet: an arcade game opened with its Arcade Database info, and the game list on a phone',
+    shots: {
+      frontend: 'The web panel in a desktop browser: the Frontend page with Fighters Swords opened, its details, in-game and title pictures and its history from arcade-history.com.',
+      phone: 'The web panel on a phone: now playing with the FPS, and the MAME game list with search and filters.',
+      status: 'The Status page of the web panel: now playing, the screenshot card and the video card with the monitor, the resolution and the 15.659 kHz mode on screen.',
+    },
+    points: [
+      { id: 'play', title: 'Pick a game, play it', text: 'Search every system’s games with your filters and favourites, see the pictures, buttons and history of each arcade game, and press Play: it opens on the tube.' },
+      { id: 'live', title: 'Watch it live', text: 'The cabinet’s screen in the browser at 15, 30 or 60 frames per second, plus the FPS of the game and a screenshot of the tube.' },
+      { id: 'obs', title: 'Ready for OBS', text: 'Addresses for an OBS Browser Source: the live screen in 4:3 and the marquee of the game being played, with high scores and versus scores.' },
+      { id: 'settings', title: 'Settings while you play', text: 'Colour sliders that change the game on screen as you move them, 480i games per emulator, services, latency mode and volume.' },
+      { id: 'files', title: 'Your games in the browser', text: 'Upload and download games, BIOS, artwork and splash screens, with progress, straight to the right folder.' },
+      { id: 'romfilter', title: 'ROM filter and downloads', text: 'Filter a MAME romset for your cabinet’s controls and screen, and download from a torrent only the games that pass.' },
+      { id: 'status', title: 'Status of everything', text: 'The video mode and modeline on the tube, CPU, GPU, temperatures, memory, disks, network, processes and logs.' },
+      { id: 'terminal', title: 'Terminal', text: 'The cabinet’s shell in a browser tab, the same as SSH, with no program to install.' },
+    ],
+    cta: 'Every page of the web panel, in the documentation',
   },
   emulators: {
     kicker: 'Emulators & Frontends',
