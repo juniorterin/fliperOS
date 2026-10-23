@@ -16,6 +16,18 @@ Em desenvolvimento: a 0.10 é testada no QEMU e num gabinete com CRT de 15 kHz. 
 - **Pastas** `roms`, `bios`, `media` e `config` em `~` e pela rede (Samba); desktop LXDE com loja de aplicativos.
 - **SSH** ligado desde o primeiro boot (`ssh fliperos@fliperos.local`, senha `fliperos`). Por baixo dos menus é um Ubuntu comum, então um assistente de IA consegue configurá-lo pelo SSH.
 
+## Painel web: o gabinete pelo celular
+
+Abra **http://fliperos.local** no celular ou no PC da mesma rede (usuário `fliperos`, senha `fliperos`). Nada para instalar. Do sofá você pode:
+
+- **escolher um jogo e jogar** no tubo, com as imagens, a história e os botões de cada jogo de arcade do Arcade Database;
+- **ver o gabinete ao vivo** no navegador, e pôr a tela ao vivo e o marquee do jogo no OBS;
+- **mudar a cor, os jogos 480i e outros ajustes** com o jogo aberto;
+- **copiar jogos, BIOS e imagens**, filtrar um romset do MAME e baixar só o que combina com o seu gabinete;
+- **ver o sistema** (modo de vídeo e modeline, temperaturas, logs) ou abrir um terminal.
+
+Cada página em detalhe: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
+
 ## Do zero ao jogo: passo a passo
 
 Este guia vai do gabinete vazio até um jogo na tela. Cada passo diz o que vai aparecer e o que apertar. Os detalhes de cada tela estão nas páginas da wiki citadas pelo caminho (em inglês).

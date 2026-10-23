@@ -16,6 +16,18 @@ In development: 0.10 is tested in QEMU and on a 15 kHz CRT cabinet. Full documen
 - **Folders** `roms`, `bios`, `media` and `config` in `~` and over the network (Samba); LXDE desktop with an app store.
 - **SSH** on from the first boot (`ssh fliperos@fliperos.local`, password `fliperos`). Under the menus it's a regular Ubuntu, so an AI assistant can configure it over SSH.
 
+## Web panel: the cabinet from your phone
+
+Open **http://fliperos.local** on a phone or PC on the same network (user `fliperos`, password `fliperos`). Nothing to install. From the couch you can:
+
+- **pick a game and play it** on the tube, with the pictures, history and buttons of each arcade game from the Arcade Database;
+- **watch the cabinet live** in the browser, and put the live screen and the game's marquee in OBS;
+- **change colour, 480i games and other settings** while a game runs;
+- **copy games, BIOS and artwork**, filter a MAME romset and download only what suits your cabinet;
+- **check the system** (video mode and modeline, temperatures, logs) or open a terminal.
+
+Every page in detail: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
+
 ## From zero to playing: step by step
 
 This guide goes from an empty cabinet to a game on screen. Each step says what you will see and what to press. The details behind each screen are in the wiki pages linked along the way.

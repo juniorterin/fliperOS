@@ -12,6 +12,7 @@ The screens belong to **`fliperos-setup`**, written in Bash with [Gum](https://g
 | --- | --- |
 | [Install](Install.md) | Writing the media, the boot menu, the video output test, installing to the HD/SSD, Recovery Mode |
 | [Installed system](Installed-system.md) | The boot, the default launcher, the Setup menu item by item (video, audio, network, debug, update) |
+| [Web panel](Web-panel.md) | The cabinet from a phone or PC at http://fliperos.local: games to play, the live screen and OBS, settings while you play, files, the ROM filter, downloads, the system status, a terminal |
 | [Frontends](Frontends.md) | Choosing the boot frontend, the 240p themes for EmulationStation and Pegasus, the APT repository |
 | [Scoreboard games](Scoreboard-games.md) | The fighting games whose match-up score shows on the ZeDMD or Pixelcade display, in GroovyMAME and in RetroArch |
 | [Emulators](Emulators.md) | Each emulator and the video mode it opens in, GroovyMAME, RetroArch, running a program at 640x240, laserdisc, Model 2, Steam and GOG |

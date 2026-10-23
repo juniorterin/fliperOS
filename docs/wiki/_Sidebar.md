@@ -4,6 +4,7 @@ Using it
 
 - [Install](Install.md)
 - [Installed system](Installed-system.md)
+- [Web panel](Web-panel.md)
 - [Frontends](Frontends.md)
 - [Scoreboard games](Scoreboard-games.md)
 - [Emulators](Emulators.md)

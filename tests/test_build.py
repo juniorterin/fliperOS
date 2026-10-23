@@ -4904,9 +4904,9 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn('href="https://github.com/juniorterin/fliperOS/wiki/Scoreboard-games"', index)
         self.assertTrue((ROOT / 'docs/wiki/Scoreboard-games.md').is_file())
         # E a parte da documentacao que explica o marquee para o OBS (a ancora existe).
-        self.assertIn('href="https://github.com/juniorterin/fliperOS/wiki/Installed-system#marquee-for-obs"', index)
+        self.assertIn('href="https://github.com/juniorterin/fliperOS/wiki/Web-panel#marquee-for-obs"', index)
         self.assertIn('<a id="marquee-for-obs"></a>**Marquee for OBS:**',
-                      (ROOT / 'docs/wiki/Installed-system.md').read_text())
+                      (ROOT / 'docs/wiki/Web-panel.md').read_text())
         self.assertIn('overlay_games: "🎮 Ver os jogos com placar versus', (ROOT / 'config/web/app.js').read_text())
 
     def test_live_screen_link_from_the_default_route(self):
