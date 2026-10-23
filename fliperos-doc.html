@@ -9,7 +9,7 @@ table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1p
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </style><main><h1 id="fliperos-010">FliperOS 0.10</h1>
 <p><strong>English</strong> | <a href="README.pt-BR.md">Português</a></p>
-<p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen.</p>
+<p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
 <p>In development: 0.10 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
 <h2 id="whats-included">What's included</h2>
 <ul>
@@ -709,7 +709,8 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
   - Each game opens like an accordion, one at a time. It shows what the list knows (file, year, manufacturer, genre, players, buttons, control, screen, emulation status, parent, how many times and how long it was played) and what the internet knows:
 - arcade games: the <a href="https://adb.arcadeitalia.net">Arcade Database</a> by the set name.</p>
 <p>That adds the full title, series, rating, the player 1 buttons with their colours and what they do, the history and trivia text (arcade-history.com), the in-game, title, marquee, flyer and cabinet pictures, and links to the video and the game's page.</p>
-<p>The browser can't ask the Arcade Database directly (it sends no CORS header), so the panel asks for it and keeps the answer for 6 hours;
+<p>The browser can't ask the Arcade Database directly (it sends no CORS header), so the panel asks for it.</p>
+<p>The answer is <strong>saved on the cabinet</strong>, next to the other media: <code>~/media/info/&lt;games folder&gt;/&lt;set&gt;.&lt;language&gt;.json</code> (<code>~/media/info/mame/samsho.en.json</code>). A game fetched once is never fetched again and opens without internet, and FliperOS's own frontend will read the same file. The page says when it was saved. A game the Arcade Database doesn't know is asked again after 30 days;
 - consoles: the box, screen and title pictures of <a href="https://github.com/libretro-thumbnails">libretro-thumbnails</a>, by the file name (No-Intro), the way RetroArch looks for them.
   - The browser keeps each game's answer for 30 days (<code>localStorage</code>), so opening it again is instant and works offline. When the storage is full, the older half goes.
   - At the end are <strong>Play</strong> and <strong>Favourite</strong>. Play closes what is on the cabinet screen and opens the game; when the game closes, what was there comes back (the frontend, the desktop or the menu). Favourite keeps FliperOS's own favourites, in <code>~/.config/fliperos/favourites</code> (one <code>folder&lt;TAB&gt;name</code> line per game).</p>
