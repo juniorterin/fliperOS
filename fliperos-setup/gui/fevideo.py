@@ -81,7 +81,9 @@ class Player:
         if key != self.want:
             self.want, self.since = key, now
             if self.video:
-                self.video.stop()
+                # Fechar o ffmpeg espera por ele: fora do desenho, para a
+                # troca de jogo nao travar.
+                threading.Thread(target=self.video.stop, daemon=True).start()
                 self.video = None
         if key and self.video is None and now - self.since >= self.DELAY:
             self.video = Video(path, w, h)

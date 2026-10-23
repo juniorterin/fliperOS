@@ -20,31 +20,95 @@ WW, HH = T.WIDTH, T.HEIGHT
 
 # ── Imagens ────────────────────────────────────────────────────────
 
+LIST_W, LIST_SH = 174, 74  # a lista do modo lista e a altura da imagem dela
+THUMB = (56, 42)           # as miniaturas da tela cheia
+CACHE = 400               # imagens e caminhos guardados (os mais antigos saem)
+
+
+def remember(fe, key, value):
+    fe.media[key] = value
+    while len(fe.media) > CACHE:
+        del fe.media[next(iter(fe.media))]
+    return value
+
+
+def media(fe, game, kind):
+    """O arquivo de midia do jogo (fedata), guardado: procurar no disco a
+    cada quadro deixava a troca de jogo lenta."""
+    key = ("path", kind, game["_system"]["key"], game["Name"])
+    if key in fe.media:
+        return fe.media[key]
+    return remember(fe, key, fe.lib.media(game, kind))
+
+
+def load(path, w, h, how):
+    """O arquivo lido e ajustado a w x h (fit: inteira; cover: cortada
+    para encher); serve tambem a thread que adianta os proximos jogos."""
+    try:
+        img = pygame.image.load(path)
+    except (pygame.error, OSError):
+        return None
+    iw, ih = img.get_size()
+    k = (max if how == "cover" else min)(w / iw, h / ih)
+    size = (max(1, round(iw * k)), max(1, round(ih * k)))
+    try:                       # (a PNG de paleta nao suaviza: fica o simples)
+        img = pygame.transform.smoothscale(img, size)
+    except ValueError:
+        img = pygame.transform.scale(img, size)
+    if how == "cover":
+        x, y = (size[0] - w) // 2, (size[1] - h) // 2
+        img = img.subsurface((max(0, x), max(0, y), min(w, size[0]), min(h, size[1]))).copy()
+    return img
+
+
 def image(fe, path, w, h, how="fit"):
-    """A imagem do arquivo ajustada a w x h (fit: inteira; cover: cortada
-    para encher), guardada para os proximos quadros."""
+    """A imagem do arquivo ajustada a w x h, guardada para os proximos
+    quadros. A que a thread de adiantar ja leu (fe.ready) so e convertida."""
     if not path:
         return None
     key = (path, w, h, how)
     if key in fe.media:
-        return fe.media[key]
-    try:
-        img = pygame.image.load(path)
-        img = img.convert_alpha() if pygame.display.get_surface() else img
-    except (pygame.error, OSError):
-        img = None
-    if img is not None:
-        iw, ih = img.get_size()
-        k = (max if how == "cover" else min)(w / iw, h / ih)
-        size = (max(1, round(iw * k)), max(1, round(ih * k)))
-        img = pygame.transform.smoothscale(img, size)
-        if how == "cover":
-            x, y = (size[0] - w) // 2, (size[1] - h) // 2
-            img = img.subsurface((max(0, x), max(0, y), min(w, size[0]), min(h, size[1]))).copy()
-    if len(fe.media) > 160:
-        fe.media.clear()
-    fe.media[key] = img
-    return img
+        img = fe.media.pop(key)
+        fe.media[key] = img
+        return img
+    img = fe.ready.pop(key, None) if key in fe.ready else load(path, w, h, how)
+    if img is not None and pygame.display.get_surface():
+        img = img.convert_alpha()
+    return remember(fe, key, img)
+
+
+def wanted(fe, game):
+    """As imagens que o modo de agora desenha para o jogo (caminho, w, h,
+    modo): o que a thread de adiantar le antes do cursor chegar nele."""
+    out = []
+    shot = media(fe, game, "snap") or media(fe, game, "box")
+    cover = media(fe, game, "box") or media(fe, game, "snap")
+    logo = media(fe, game, "logo")
+    if fe.mode == "list":
+        pw = SX + SW - (SX + LIST_W + 14)
+        out += [(shot, pw - 4, LIST_SH - 4, "cover"), (logo, pw - 8, 28, "fit")]
+    elif fe.mode == "full":
+        right = SX + SW - THUMB[0] - 8
+        out += [(shot, WW, HH, "cover"), (shot, THUMB[0] - 2, THUMB[1] - 2, "cover"),
+                (logo, min(200, right - SX), 44, "fit")]
+    else:
+        out += [(cover, 48, 70, "fit"), (cover, 64, 92, "fit"), (logo, 110, 30, "fit")]
+    return [k for k in out if k[0]]
+
+
+def ease(fe, name, target, now, speed=16.0, reach=6):
+    """O valor que corre ate target (a rolagem animada); de longe (um salto
+    de pagina, de letra) ele comeca a reach do destino."""
+    v, last = fe.anim.get(name, (target, now))
+    if fe.shot:                # os prints do --shot: ja no lugar
+        v = target
+    if abs(target - v) > reach:
+        v = target - reach if target > v else target + reach
+    v += (target - v) * min(1.0, max(0.0, now - last) * speed)
+    if abs(target - v) < 0.01:
+        v = target
+    fe.anim[name] = (v, now)
+    return v
 
 
 def video_frame(fe, game, w, h):
@@ -66,7 +130,7 @@ def video_frame(fe, game, w, h):
 def picture(fe, game, w, h):
     """O video do jogo e, sem ele, a imagem (a tela, ou a capa)."""
     return video_frame(fe, game, w, h) or image(
-        fe, fe.lib.media(game, "snap") or fe.lib.media(game, "box"), w, h, "cover")
+        fe, media(fe, game, "snap") or media(fe, game, "box"), w, h, "cover")
 
 
 def blit_center(surf, img, x, y, w, h):
@@ -383,7 +447,7 @@ def empty(fe, ui):
 
 def draw_list(fe, ui, now):
     frame(fe, ui)
-    lx, lw, y0, rows = SX, 174, 36, 13
+    lx, lw, y0, rows = SX, LIST_W, 36, 13
     if fe.cursor < fe.top:
         fe.top = fe.cursor
     if fe.cursor >= fe.top + rows:
@@ -425,7 +489,7 @@ def draw_list(fe, ui, now):
     game = fe.game()
     px = lx + lw + 14
     pw = SX + SW - px
-    sh = 74
+    sh = LIST_SH
     W.block(ui, (px, y0, pw, sh), T.BG_DEEP, T.PURPLE)
     shot = picture(fe, game, pw - 4, sh - 4)
     if shot:
@@ -435,7 +499,7 @@ def draw_list(fe, ui, now):
         W.glow(ui, (px + 2, y0 + 2, pw - 4, sh - 4), {"now": now})
         tiny.centered(ui, "LOOKING FOR ART...", T.CYAN, px + pw // 2, y0 + sh // 2 - 2)
     pygame.draw.rect(ui, T.PINK, (px, y0, pw, sh), 2)
-    logo = image(fe, fe.lib.media(game, "logo"), pw - 8, 28)
+    logo = image(fe, media(fe, game, "logo"), pw - 8, 28)
     y = y0 + sh + 6
     if logo:
         blit_center(ui, logo, px, y0 + sh - 14, pw, 28)
@@ -488,16 +552,33 @@ def draw_list(fe, ui, now):
         x += w + 4
 
 
+def full_shade(fe):
+    """O escuro em cima e embaixo da imagem da tela cheia (feito uma vez)."""
+    key = ("full_shade",)
+    if key not in fe.media:
+        shade = pygame.Surface((WW, HH), pygame.SRCALPHA)
+        for y in range(HH):
+            a = int(200 * (1 - y / 50)) if y < 50 else (int(235 * min(1, (y - 112) / 70)) if y > 112 else 0)
+            pygame.draw.line(shade, T.SPACE + (max(0, a),), (0, y), (WW, y))
+        remember(fe, key, shade)
+    return fe.media[key]
+
+
+def thumb_dim(fe):
+    key = ("thumb_dim",)
+    if key not in fe.media:
+        dim_ = pygame.Surface((THUMB[0] - 2, THUMB[1] - 2), pygame.SRCALPHA)
+        dim_.fill(T.SPACE + (115,))
+        remember(fe, key, dim_)
+    return fe.media[key]
+
+
 def draw_full(fe, ui, back, now):
     game = fe.game()
     snap = picture(fe, game, WW, HH)
     if snap:
         back.blit(snap, (0, 0))
-        shade = pygame.Surface((WW, HH), pygame.SRCALPHA)
-        for y in range(HH):
-            a = int(200 * (1 - y / 50)) if y < 50 else (int(235 * min(1, (y - 112) / 70)) if y > 112 else 0)
-            pygame.draw.line(shade, T.SPACE + (max(0, a),), (0, y), (WW, y))
-        back.blit(shade, (0, 0))
+        back.blit(full_shade(fe), (0, 0))
     cat = fe.category()
     W.text(ui, (cat or {}).get("name", "").upper()[:24], T.RED, SX, 12)
     W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, SX + SW, 12, right=True)
@@ -505,37 +586,42 @@ def draw_full(fe, ui, back, now):
         pygame.draw.rect(ui, c, (SX, 24 + i, 40, 1))
     # A lista na direita: quatro miniaturas empilhadas, a do jogo escolhido
     # acesa, com uma seta em cima e embaixo enquanto ha mais jogos para
-    # aquele lado.
-    tw, th, gap, n = 56, 42, 4, 4
+    # aquele lado. A coluna e a moldura rosa deslizam ate o lugar novo.
+    (tw, th), gap, n = THUMB, 4, 4
+    step = th + gap
     tx = SX + SW - tw
     ty = 38
     top = max(0, min(fe.cursor - 1, len(fe.rows) - n))
+    now = fe.abs_now
+    ftop = ease(fe, "full_top", top, now)
+    fsel = ease(fe, "full_sel", fe.cursor, now)
     arrow(ui, tx + tw // 2, ty - 7, (0, -1), T.PINK if top > 0 else T.LINE, 5)
-    for k in range(n):
-        i = top + k
-        if i >= len(fe.rows):
-            break
+    ui.set_clip((tx - 2, ty - 1, tw + 6, n * step - gap + 4))
+    first = int(math.floor(ftop))
+    for i in range(max(0, first), min(len(fe.rows), first + n + 1)):
         g = fe.rows[i][0]
-        y = ty + k * (th + gap)
+        y = round(ty + (i - ftop) * step)
         on = i == fe.cursor
-        W.block(ui, (tx, y, tw, th), T.BG_DEEP, T.PURPLE if on else T.LINE)
-        thumb = image(fe, fe.lib.media(g, "snap") or fe.lib.media(g, "box"), tw - 2, th - 2, "cover")
+        W.block(ui, (tx, y, tw, th), T.BG_DEEP, T.LINE)
+        thumb = image(fe, media(fe, g, "snap") or media(fe, g, "box"), tw - 2, th - 2, "cover")
         if thumb:
-            if not on:
-                thumb = thumb.copy()
-                thumb.set_alpha(140)
             ui.blit(thumb, (tx + 1, y + 1))
+            if not on:
+                ui.blit(thumb_dim(fe), (tx + 1, y + 1))
         else:
             for j, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4]):
                 tiny.text(ui, tiny.fit(line, tw - 6), T.FG if on else T.COMMENT, tx + 3, y + 5 + j * 8)
-        pygame.draw.rect(ui, T.PINK if on else T.LINE, (tx, y, tw, th), 2 if on else 1)
+        pygame.draw.rect(ui, T.LINE, (tx, y, tw, th), 1)
         if g.get("Favourite") == "1":
             star(ui, tx + tw - 6, y + 6, T.YELLOW, 4)
+    y = round(ty + (fsel - ftop) * step)
+    pygame.draw.rect(ui, T.PINK, (tx, y, tw, th), 2)
+    ui.set_clip(None)
     more = top + n < len(fe.rows)
-    arrow(ui, tx + tw // 2, ty + n * (th + gap) + 3, (0, 1), T.PINK if more else T.LINE, 5)
+    arrow(ui, tx + tw // 2, ty + n * step + 3, (0, 1), T.PINK if more else T.LINE, 5)
     # O jogo escolhido, embaixo a esquerda (fora da coluna).
     right = tx - 8
-    logo = image(fe, fe.lib.media(game, "logo"), min(200, right - SX), 44)
+    logo = image(fe, media(fe, game, "logo"), min(200, right - SX), 44)
     if logo:
         ui.blit(logo, (SX, 178 - logo.get_height()))
     y = 184
@@ -565,7 +651,7 @@ def draw_flow(fe, ui, now):
             sel = (g, x, y)
             continue
         pygame.draw.rect(ui, T.BG_DEEP, (x, y, tw, th))
-        img = image(fe, fe.lib.media(g, "box") or fe.lib.media(g, "snap"), tw - 2, th - 2)
+        img = image(fe, media(fe, g, "box") or media(fe, g, "snap"), tw - 2, th - 2)
         if img:
             blit_center(ui, img, x, y, tw, th)
         else:
@@ -584,7 +670,7 @@ def draw_flow(fe, ui, now):
         # Nao cobre a linha do filtro, debaixo do titulo.
         by = max(36, min(y + th // 2 - bh // 2, 188 - bh))
         tile_frame(ui, (bx, by, bw, bh), True, now)
-        img = image(fe, fe.lib.media(g, "box") or fe.lib.media(g, "snap"), bw - 8, bh - 8)
+        img = image(fe, media(fe, g, "box") or media(fe, g, "snap"), bw - 8, bh - 8)
         if img:
             blit_center(ui, img, bx, by, bw, bh)
         else:
@@ -599,7 +685,7 @@ def draw_flow(fe, ui, now):
             edge_tab(ui, nxt, side)
     g = fe.game()
     y = 194
-    logo = image(fe, fe.lib.media(g, "logo"), 110, 30)
+    logo = image(fe, media(fe, g, "logo"), 110, 30)
     tx = SX
     if logo:
         blit_center(ui, logo, SX, y, 110, 30)
@@ -714,7 +800,7 @@ def draw_more(fe, ui, now):
     y0 = 34
     bw, bh = 84, 122
     W.block(ui, (SX, y0, bw, bh), T.BG_DEEP, T.PURPLE)
-    blit_center(ui, image(fe, fe.lib.media(g, "box") or fe.lib.media(g, "snap"), bw - 6, bh - 6), SX, y0, bw, bh)
+    blit_center(ui, image(fe, media(fe, g, "box") or media(fe, g, "snap"), bw - 6, bh - 6), SX, y0, bw, bh)
     pygame.draw.rect(ui, T.PINK, (SX, y0, bw, bh), 2)
     x = SX + bw + 10
     y = y0 + 2

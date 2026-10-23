@@ -34,7 +34,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-FPS = 30
+FPS = 60                     # (o CRT e 60 Hz; o quadro custa poucos ms)
 CONFIG = os.path.join(os.path.expanduser("~"), ".config", "fliperos", "frontend.json")
 
 # A rolagem segurando cima/baixo: comeca a repetir depois de FIRST, acelera
@@ -114,6 +114,15 @@ class Frontend:
         self.repeat = {}           # acao -> proxima repeticao
         self.acc = 0.0
         self.media = {}            # (caminho, w, h, modo) -> surface
+        self.anim = {}             # a rolagem animada: nome -> (valor, quando)
+        # As imagens dos jogos em volta do cursor, lidas antes numa thread:
+        # a troca de jogo fica instantanea.
+        self.ready = {}            # (caminho, w, h, modo) -> surface lida
+        self.ahead = []            # o que a thread le, o mais perto primeiro
+        self.ahead_at = None
+        self.ahead_wake = threading.Event()
+        if not self.shot:
+            threading.Thread(target=self.prefetch_work, daemon=True).start()
         # O video do jogo (fevideo.py); no --shot, sem video.
         self.player = fevideo.Player()
         if self.shot:
@@ -579,6 +588,8 @@ class Frontend:
     # ── O laco ──
     def tick(self, now):
         """As repeticoes segurando, a aceleracao e o modo letra."""
+        dt = min(0.1, now - getattr(self, "last_tick", now))
+        self.last_tick = now
         if self.overlay and self.overlay not in ("filter", "classify", "rename", "more"):
             return
         # O modo letra acaba com LETTER_IDLE segundos sem mexer.
@@ -614,7 +625,7 @@ class Frontend:
                 self.repeat[a] = now + 1.0 / LRATE0
             elif held >= FIRST:
                 k = min(1.0, (held - FIRST) / (LETTERS - FIRST))
-                self.acc += (RATE0 + (RATE1 - RATE0) * k ** 1.5) / FPS
+                self.acc += (RATE0 + (RATE1 - RATE0) * k ** 1.5) * dt
                 n = int(self.acc)
                 if n:
                     self.acc -= n
@@ -662,9 +673,57 @@ class Frontend:
                     self.say("UPDATING THE LISTS...", 3)
                     self.lib.refresh()
             self.auto_scrape(now)
+            self.prefetch()
             self.draw(now)
             self.present()
             clock.tick(FPS)
+
+    # ── Adiantar as imagens ──
+    def prefetch(self):
+        """Quando o cursor (ou o modo, ou a lista) muda, passa a thread as
+        imagens dos proximos jogos para os dois lados, as do lado de baixo
+        primeiro; na grade, tambem as da fileira de cima e de baixo."""
+        at = (self.cursor, self.mode, id(self.rows), len(self.rows), self.overlay)
+        if at == self.ahead_at or not self.rows:
+            return
+        self.ahead_at = at
+        reach = 2 * COLS if self.mode == "flow" else 6
+        order = [0]
+        for k in range(1, reach + 1):
+            order += [k, -k]
+        keys = []
+        import feview
+        for k in order:
+            i = self.cursor + k
+            if 0 <= i < len(self.rows):
+                for key in feview.wanted(self, self.rows[i][0]):
+                    if key not in self.media and key not in self.ready and key not in keys:
+                        keys.append(key)
+        self.ahead = keys
+        self.ahead_wake.set()
+
+    def prefetch_work(self):
+        import feview
+        while True:
+            self.ahead_wake.wait()
+            self.ahead_wake.clear()
+            while self.ahead:
+                keys = self.ahead
+                key = keys[0]
+                if keys is self.ahead:
+                    self.ahead = keys[1:]
+                if key in self.media or key in self.ready:
+                    continue
+                try:
+                    img = feview.load(*key)
+                except Exception:  # um arquivo estragado: o desenho tenta de novo
+                    continue
+                if len(self.ready) > 120:
+                    try:
+                        self.ready.pop(next(iter(self.ready)), None)
+                    except (RuntimeError, StopIteration):
+                        pass
+                self.ready[key] = img
 
     def present(self):
         if self.window is None:
