@@ -1317,6 +1317,72 @@ class GroovyMameTests(unittest.TestCase):
                                  capture_output=True, text=True, timeout=60, check=True).stdout
             return out.split('\n')[:-1], str(tmp / 'ini')
 
+    def test_wrapper_sound_on_the_alsa_default(self):
+        # O MAME gravava no cfg de cada jogo o hw: da placa (o SDL do ALSA nao
+        # diz a saida padrao): com a biblioteca, os sound_map saem uma vez e o
+        # jogo vai pelo default (o dmix, a tela ao vivo).
+        mapped = ('<mameconfig version="10">\n    <system name="%s">\n        <mixer>\n'
+                  '            <sound_map tag=":speaker">\n'
+                  '                <node_mapping node="o:HDA Intel MID, ALC662 rev3 Analog" db="0.000000" />\n'
+                  '            </sound_map>\n            <sound_map tag=":mono" />\n'
+                  '        </mixer>\n    </system>\n</mameconfig>\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            cfg = tmp / 'cfg'
+            cfg.mkdir()
+            (cfg / 'tankfrce.cfg').write_text(mapped % 'tankfrce')
+            lib = tmp / 'libfliperos-sdl-audio.so'
+            lib.write_text('')
+            fake = tmp / 'groovymame'
+            fake.write_text('#!/bin/sh\necho "preload=$LD_PRELOAD"\n')
+            fake.chmod(0o755)
+            env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake), FLIPEROS_MAME_INI_DIR=str(tmp),
+                       FLIPEROS_SDL_AUDIO=str(lib), FLIPEROS_MAME_CFG_DIR=str(cfg), DISPLAY=':0',
+                       LD_PRELOAD='/x/deflicker.so')
+
+            def run(*args):
+                return subprocess.run(['bash', str(ROOT / 'config/fliperos-groovymame'), *args], env=env,
+                                      capture_output=True, text=True, timeout=60, check=True).stdout.strip()
+            self.assertEqual(run('tankfrce'), 'preload=/x/deflicker.so:%s' % lib)
+            text = (cfg / 'tankfrce.cfg').read_text()
+            self.assertNotIn('sound_map', text)
+            self.assertNotIn('node_mapping', text)
+            self.assertIn('        </mixer>\n    </system>', text)
+            self.assertTrue((cfg / '.fliperos-sound-default').exists())
+            # So uma vez: uma saida escolhida depois no mixer do MAME fica.
+            (cfg / 'mvsc.cfg').write_text(mapped % 'mvsc')
+            run('mvsc')
+            self.assertIn('node_mapping', (cfg / 'mvsc.cfg').read_text())
+            # Sem tela (-listxml) nada muda; sem a biblioteca, nada carrega.
+            self.assertEqual(run('-listxml', 'mvsc'), 'preload=/x/deflicker.so')
+            lib.unlink()
+            self.assertEqual(run('mvsc'), 'preload=/x/deflicker.so')
+
+    def test_sdl_audio_library_says_default(self):
+        # Sem um SDL que saiba a padrao (aqui nem ha SDL), a saida padrao e o
+        # "default" do ALSA, em estereo; a de gravacao continua sem padrao.
+        import ctypes
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'libfliperos-sdl-audio.so'
+            build = subprocess.run(['bash', str(ROOT / 'config/fliperos-deflicker-build'),
+                                    str(ROOT / 'config/fliperos-sdl-audio.c'), str(out)], capture_output=True, text=True)
+            if build.returncode != 0 and 'pkg-config' in build.stderr + build.stdout:
+                self.skipTest('no pkg-config/libdrm in this image')
+            self.assertEqual(build.returncode, 0, build.stderr)
+            lib = ctypes.CDLL(str(out))
+            name = ctypes.c_char_p()
+            spec = (ctypes.c_ubyte * 32)()
+            self.assertEqual(lib.SDL_GetDefaultAudioInfo(ctypes.byref(name), spec, 0), 0)
+            self.assertEqual(name.value, b'default')
+            self.assertEqual(int.from_bytes(bytes(spec[0:4]), 'little'), 48000)
+            self.assertEqual(spec[6], 2)
+            self.assertEqual(lib.SDL_GetDefaultAudioInfo(ctypes.byref(ctypes.c_char_p()), spec, 1), -1)
+        for path, text in ((ROOT / 'fliperos-mkiso.sh', '/tmp/fliperos-sdl-audio.c /usr/local/lib/fliperos/'
+                            'libfliperos-sdl-audio.so'),
+                           (ROOT / 'tools/cabinet-update.sh', '"$src/config/fliperos-sdl-audio.c" \\\n'
+                            '  /usr/local/lib/fliperos/libfliperos-sdl-audio.so')):
+            self.assertIn(text, path.read_text())
+
     def test_wrapper_opens_in_its_own_x(self):
         # No console, o GroovyMAME se abre num Xorg so para ele, onde o
         # Switchres troca o modo pelo XRandR (no KMS o SDL ficava no tamanho do
@@ -1542,7 +1608,7 @@ class GroovyMameTests(unittest.TestCase):
         # demais no gabinete.
         for key, value in (('plugin', 'hiscore'), ('skip_gameinfo', '1'), ('uifont', 'default'),
                            ('video', 'opengl'), ('lowlatency', '1'), ('switchres_ini', '1'), ('modesetting', '1'),
-                           ('sound', 'portaudio'), ('aspect', '4:3'), ('autoframedelay', '1'), ('framedelay', '0')):
+                           ('sound', 'sdl'), ('aspect', '4:3'), ('autoframedelay', '1'), ('framedelay', '0')):
             self.assertEqual(ini[key], value, key)
         self.assertEqual(ini['homepath'], '$HOME/.mame')
         self.assertEqual(ini['cfg_directory'], '$HOME/.mame/cfg')
@@ -6679,9 +6745,9 @@ class AudioBuildTests(unittest.TestCase):
         self.assertIn('echo N > /sys/module/snd_hda_intel/parameters/power_save_controller', update)
 
     def test_emulators_use_alsa(self):
-        # O portaudio abre o default do ALSA; o sdl abria o hw: da placa direto.
-        self.assertIn('\nsound portaudio\n', (ROOT / 'config/mame.ini').read_text())
-        self.assertIn(r"s/^(sound[[:space:]]+)sdl[[:space:]]*$/\1portaudio/", ROOTFS)
+        self.assertIn('\nsound sdl\n', (ROOT / 'config/mame.ini').read_text())
+        # O portaudio do MAME abre o hw: da placa: uma instalacao com ele volta ao sdl.
+        self.assertIn(r"s/^(sound[[:space:]]+)portaudio[[:space:]]*$/\1sdl/", ROOTFS)
         for script in ('config/fliperos-kms-run', 'config/fliperos-x11-run'):
             self.assertIn('export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"', (ROOT / script).read_text(), script)
 

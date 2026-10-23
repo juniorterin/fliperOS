@@ -125,6 +125,21 @@ if opens_video "$@" && [[ $game != -* && " $* " != *" -plugin "* && -x $versus &
   set -- -plugin hiscore,fliperos-versus \
     -pluginspath "/usr/local/share/groovymame/plugins;$plugins;$HOME/.mame/plugins" "$@"
 fi
+# O som pelo "default" do ALSA (config/fliperos-sdl-audio.c): o dmix, a
+# placa do Setup e a tela ao vivo. Sem a biblioteca, o MAME abria o hw: da
+# placa direto e gravava essa saida no cfg de cada jogo; esses sound_map
+# saem uma vez (o MAME grava o default no lugar ao fechar o jogo).
+sdlaudio=${FLIPEROS_SDL_AUDIO:-/usr/local/lib/fliperos/libfliperos-sdl-audio.so}
+cfgdir=${FLIPEROS_MAME_CFG_DIR:-$HOME/.mame/cfg}
+if opens_video "$@" && [[ -f $sdlaudio ]]; then
+  export LD_PRELOAD="${LD_PRELOAD:+$LD_PRELOAD:}$sdlaudio"
+  if [[ -d $cfgdir && ! -e $cfgdir/.fliperos-sound-default ]]; then
+    for cfg in "$cfgdir"/*.cfg; do
+      [[ -f $cfg ]] && sed -i -e '/<sound_map[^>]*\/>/d' -e '/<sound_map[^>]*[^/]>/,/<\/sound_map>/d' "$cfg"
+    done
+    : > "$cfgdir/.fliperos-sound-default"
+  fi
+fi
 if [[ -n $restore_primary ]]; then
   "$real" "$@"
   rc=$?

@@ -288,9 +288,9 @@ done
 # O modesetting 0 de antes (o GroovyMAME no KMS) no X nao troca o modo do
 # jogo: passa para o 1 do config/mame.ini.
 sed -i -E 's/^(modesetting[[:space:]]+)0[[:space:]]*$/\11/' "$root/etc/fliperos/mame/mame.ini"
-# O sound sdl de antes abria o hw: da placa direto, fora do default do ALSA
-# (sem a placa do Setup, o dmix e a tela ao vivo): passa para o portaudio.
-sed -i -E 's/^(sound[[:space:]]+)sdl[[:space:]]*$/\1portaudio/' "$root/etc/fliperos/mame/mame.ini"
+# O sound portaudio de uma atualizacao de 2026-10-23 deixava o jogo mudo (o
+# portaudio do MAME abre o hw: da placa): volta ao sdl do config/mame.ini.
+sed -i -E 's/^(sound[[:space:]]+)portaudio[[:space:]]*$/\1sdl/' "$root/etc/fliperos/mame/mame.ini"
 chown -R 1000:1000 "$root/etc/fliperos/mame" 2> /dev/null || true
 install -Dm644 "$src/config/retroarch.cfg" "$root/etc/fliperos/retroarch/retroarch.cfg"
 install -Dm644 "$src/config/retroarch-gl.cfg" "$root/etc/fliperos/retroarch/retroarch-gl.cfg"
