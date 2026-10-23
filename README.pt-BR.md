@@ -9,7 +9,7 @@ Em desenvolvimento: a 0.10 é testada no QEMU e num gabinete com CRT de 15 kHz. 
 ## O que vem nele
 
 - **Vídeo**: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.
-- **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, SM2-Emu (Model 2), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > System > Extras.
+- **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, SM2-Emu (Model 2), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Games > Extras.
 - **Frontends**: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus e Fightcade 2, cujas partidas online rodam na resolução nativa de cada jogo no tubo.
 - **Pistola de luz**: GunCon 2 pronta para usar (driver por DKMS), calibrada para o tubo no Setup > Joysticks. Volantes também.
 - **Setup**: vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência.

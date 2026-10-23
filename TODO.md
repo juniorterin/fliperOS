@@ -9,6 +9,7 @@ Menu e Setup:
 - **Extras dentro de Games** no menu.
 - **Update de cada emulador** no menu (Setup > Games > Emulators & Games).
 - **Downloader:** escolher um arquivo .torrent (além do link magnético) para o romset e para os CHDs.
+- **Relatório de erros pelo Resend.** A chave da API não vai em texto no repositório. Num projeto aberto, qualquer cifra que o próprio sistema desfaz só esconde a chave, não protege. Falta decidir com o Ademir entre: um relay próprio (a chave fica no servidor), uma chave restrita ao envio para um único destinatário, ou a chave só ofuscada.
 - **Rótulo do HD em /media/fliperos/** (o nome do volume no lugar do dispositivo).
 - **Boot lento:** subir só sob demanda o que não precisa estar no boot. Em andamento: há mudanças ainda não commitadas (os serviços depois da primeira tela, o Transmission só quando um download é pedido).
 

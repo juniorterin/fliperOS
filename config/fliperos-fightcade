@@ -147,7 +147,7 @@ if [[ ! -x $dir/Fightcade2.sh ]]; then
   exit 1
 fi
 # Sem o Wine a sala abre, mas so as partidas do Flycast rodam.
-command -v wine > /dev/null || echo "Wine is not installed: Setup > System > Extras installs it (FBNeo and SNES9x need it)." >&2
+command -v wine > /dev/null || echo "Wine is not installed: Setup > Games > Extras installs it (FBNeo and SNES9x need it)." >&2
 
 # Fora do X (a sessao de boot, o fliperos-launch): num Xorg so para ele. O
 # nome do comando (fightcade) e a linha da tabela de modos.

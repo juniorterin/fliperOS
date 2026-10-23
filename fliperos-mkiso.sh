@@ -123,7 +123,7 @@ while [[ $# -gt 0 ]]; do
     --skip-dolphin)    SKIP_DOLPHIN=true; shift ;;
     --skip-hypseus)    SKIP_HYPSEUS=true; shift ;;
     --skip-openbor)    SKIP_OPENBOR=true; shift ;;
-    # Compatibilidade: Wine, Steam e Heroic nao vem mais na imagem (Setup > System > Extras).
+    # Compatibilidade: Wine, Steam e Heroic nao vem mais na imagem (Setup > Games > Extras).
     --skip-wine|--skip-steam|--skip-heroic) shift ;;
     --skip-skyscraper) SKIP_SKYSCRAPER=true; shift ;;
     --skip-input-drivers) SKIP_INPUT_DRIVERS=true; shift ;;
@@ -1382,16 +1382,16 @@ DOLSCRIPT
     || err "Dolphin failed; use --skip-dolphin for an ISO without it"
 }
 
-# ── Wine, Steam e Heroic: sob demanda (Setup > System > Extras) ────────
+# ── Wine, Steam e Heroic: sob demanda (Setup > Games > Extras) ────────
 # Nao vem na imagem (passavam de 1,5 GB, e a ISO tem de caber num arquivo
 # do GitHub): o config/fliperos-extras os instala pela rede, com os mesmos
 # pacotes. Aqui fica o que eles pedem e nao baixa nada: a arquitetura i386
 # (Wine de 32 bits e Steam).
 prepare_extras_chroot() {
-  step "Wine, Steam and Heroic: Setup > System > Extras"
+  step "Wine, Steam and Heroic: Setup > Games > Extras"
   chroot "$CHROOT_DIR" dpkg --print-foreign-architectures | grep -qx i386 ||
     chroot "$CHROOT_DIR" dpkg --add-architecture i386 || err "dpkg --add-architecture i386 falhou"
-  ok "i386 enabled; Wine, Steam and Heroic through Setup > System > Extras"
+  ok "i386 enabled; Wine, Steam and Heroic through Setup > Games > Extras"
 }
 
 # ── Imagem enxuta (o GitHub aceita ate 2 GiB por arquivo) ─────

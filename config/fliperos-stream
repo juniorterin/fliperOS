@@ -288,7 +288,7 @@ case ${1:-} in
   config) config > /dev/null ;;
   status) status ;;
   daemon)
-    installed || fail "go2rtc or ffmpeg is not installed (Setup > System > Extras > Live screen)"
+    installed || fail "go2rtc or ffmpeg is not installed (Setup > Games > Extras > Live screen)"
     yaml=$(config) || exit 1
     exec "$dir/go2rtc" -config "$yaml"
     ;;

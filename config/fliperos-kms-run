@@ -43,7 +43,7 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   # (config/fliperos-buttons), por cima do perfil automatico do controle.
   buttons=${FLIPEROS_RA_BUTTONS:-/etc/fliperos/retroarch/buttons.cfg}
   [[ -f $buttons ]] && appendconfig+="|$buttons"
-  # O DOFLinx (Setup > System > Extras) le o jogo aberto pelo Network Command
+  # O DOFLinx (Setup > Games > Extras) le o jogo aberto pelo Network Command
   # Interface: o arquivo so existe com ele instalado.
   doflinx=${FLIPEROS_RA_DOFLINX:-/etc/fliperos/retroarch/doflinx.cfg}
   [[ -f $doflinx ]] && appendconfig+="|$doflinx"

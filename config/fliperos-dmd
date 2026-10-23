@@ -3,7 +3,7 @@
 # jogo aberto ou selecionado, ou o sistema.
 #
 # Quem fala com o painel pela USB e o dmdserver (libdmdutil, do Visual
-# Pinball), baixado pelo Setup > System > Extras > ZeDMD e aberto pelo servico
+# Pinball), baixado pelo Setup > Games > Extras > ZeDMD e aberto pelo servico
 # fliperos-zedmd.service. Daqui sai uma imagem RGB24 de 128x32 por TCP
 # (localhost:6789); o dmdserver a escala para um painel 256x64.
 #
@@ -37,7 +37,7 @@ import struct
 import sys
 import time
 
-# Sem o Pillow (Setup > System > Extras > ZeDMD) nada e desenhado; o "title" nao
+# Sem o Pillow (Setup > Games > Extras > ZeDMD) nada e desenhado; o "title" nao
 # precisa dele.
 try:
     from PIL import Image, ImageDraw, ImageFont, ImageSequence

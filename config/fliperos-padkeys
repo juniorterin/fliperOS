@@ -54,13 +54,7 @@ BUTTONS = {
 KEYS = sorted(set(BUTTONS.values()))
 REPEAT = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_PAGEUP, KEY_PAGEDOWN}
 # Mais lento que o teclado: num modo entrelacado o menu redesenha devagar.
-# Um toque rapido no direcional anda um item so; a repeticao so comeca
-# depois de meio segundo segurando.
-REPEAT_DELAY, REPEAT_RATE = 0.50, 0.12
-# O microswitch de um direcional de fliperama repica: ao fechar e ao abrir,
-# o contato solta e volta em poucos milissegundos, e cada volta seria mais um
-# item. Uma tecla solta so sai depois desse tempo sem voltar.
-DEBOUNCE = 0.06
+REPEAT_DELAY, REPEAT_RATE = 0.40, 0.12
 AXES = {ABS_X: (KEY_LEFT, KEY_RIGHT), ABS_Y: (KEY_UP, KEY_DOWN),
         ABS_HAT0X: (KEY_LEFT, KEY_RIGHT), ABS_HAT0Y: (KEY_UP, KEY_DOWN)}
 # Controle e quem tem botao de joystick ou de gamepad (BTN_JOYSTICK e
@@ -121,54 +115,44 @@ class Mapper:
 
 class Keys:
     """Teclas do teclado virtual: conta quem segura cada uma (o hat e o
-    analogico podem segurar a mesma seta) e repete as de mover. A tecla solta
-    espera DEBOUNCE: se voltar antes (o repique da chave), nada sai."""
+    analogico podem segurar a mesma seta) e repete as de mover."""
 
     def __init__(self, emit):
         self.emit = emit   # emit(tecla, valor): 1 aperta, 0 solta, 2 repete
         self.count = {}
         self.due = {}      # tecla -> hora da proxima repeticao
-        self.loose = {}    # tecla solta -> hora em que a soltura sai
 
     def apply(self, key, value, now):
         n = self.count.get(key, 0)
         if value:
             self.count[key] = n + 1
             if n == 0:
-                if self.loose.pop(key, None) is None:
-                    self.emit(key, 1)
-                # Um repique conta como um toque novo para a repeticao.
+                self.emit(key, 1)
                 if key in REPEAT:
                     self.due[key] = now + REPEAT_DELAY
         elif n == 1:
             del self.count[key]
             self.due.pop(key, None)
-            self.loose[key] = now + DEBOUNCE
+            self.emit(key, 0)
         elif n > 1:
             self.count[key] = n - 1
 
     def tick(self, now):
-        for key, when in list(self.loose.items()):
-            if now >= when:
-                del self.loose[key]
-                self.emit(key, 0)
         for key, when in list(self.due.items()):
             if now >= when:
                 self.emit(key, 2)
                 self.due[key] = now + REPEAT_RATE
 
     def timeout(self, now, idle):
-        times = list(self.due.values()) + list(self.loose.values())
-        if not times:
+        if not self.due:
             return idle
-        return max(0.0, min(min(times) - now, idle))
+        return max(0.0, min(min(self.due.values()) - now, idle))
 
     def release_all(self):
-        for key in list(self.count) + list(self.loose):
+        for key in list(self.count):
             self.emit(key, 0)
         self.count.clear()
         self.due.clear()
-        self.loose.clear()
 
 
 # ── evdev e uinput (linux/input.h, linux/uinput.h) ──────────────────

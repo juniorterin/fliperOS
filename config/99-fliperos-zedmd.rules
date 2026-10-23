@@ -1,7 +1,7 @@
 # ZeDMD (DMD de LED open source num ESP32): os conversores USB-serial das
 # placas ESP32 (CP210x, CH340, CH9102 e a USB nativa do ESP32-S3) ganham o
 # nome /dev/zedmd, o acesso do usuario (dialout) e abrem o servico do
-# dmdserver, que so sobe com o Setup > System > Extras > ZeDMD instalado.
+# dmdserver, que so sobe com o Setup > Games > Extras > ZeDMD instalado.
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="zedmd", GROUP="dialout", MODE="0660", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-zedmd.service"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="zedmd", GROUP="dialout", MODE="0660", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-zedmd.service"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", SYMLINK+="zedmd", GROUP="dialout", MODE="0660", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-zedmd.service"

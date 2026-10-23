@@ -13,9 +13,9 @@ screen_setup_menu() {
       "video|Video Setup|Monitor, orientation, resolution, geometry, extra monitors." \
       "audio|Audio Setup|Sound card, volume, MAME audio latency and menu sounds." \
       "network|Network Setup|Wi-Fi and the network status. Downloads and updates need it." \
-      "games|Games|Frontend, emulators, game folders, downloads, cleaner and art." \
+      "games|Games|Emulators, frontend, extras, downloads, cleaner and art." \
       "joysticks|Joysticks|Button mapping, light gun, wheel, LPT and USB controller fixes." \
-      "system|System|Extras, low latency, updates, debug mode and the boot splash." \
+      "system|System|Low latency, services, updates, debug mode and the boot splash." \
       "return|Return|Back to the FliperOS menu.") || return 0
     last=$choice
     case $choice in
@@ -39,6 +39,7 @@ screen_setup_games() {
     choice=$(ui_menu_hints "Games" "" "$last" \
       "emulators|Emulators & Games|What is installed, and install what is not in the image." \
       "frontend|Frontend|The game list that starts when the computer turns on." \
+      "extras|Extras|Wine, Steam, Heroic, Pixelcade, ZeDMD and game output tools." \
       "custom|Custom games|PC games, scripts and your own emulators, as frontend systems." \
       "folders|Folders|Where ROMs, BIOS and art are; use an external disk instead." \
       "downloader|Downloader|MAME ROM/CHD sets by torrent and free homebrew games." \
@@ -50,6 +51,7 @@ screen_setup_games() {
     case $choice in
       frontend) screen_frontend ;;
       emulators) screen_emulators ;;
+      extras) screen_extras ;;
       custom) screen_custom_games ;;
       folders) screen_folders ;;
       downloader) screen_downloads ;;
@@ -68,7 +70,6 @@ screen_setup_system() {
   while true; do
     screen_reload_if_updated
     choice=$(ui_menu_hints "System" "" "$last" \
-      "extras|Extras|Wine, Steam, Heroic, Pixelcade, ZeDMD and game output tools." \
       "latency|Latency|Standard or low latency mode, and a check of this computer." \
       "services|Services|SSH, network share, Wi-Fi: at boot, after boot or off." \
       "quirks|Quirks (USB device fixes)|Kernel fixes for a USB device read wrong: encoders, guns, disks." \
@@ -79,7 +80,6 @@ screen_setup_system() {
       "return|Return|Back to Setup.") || return 0
     last=$choice
     case $choice in
-      extras) screen_extras ;;
       latency) screen_latency ;;
       services) screen_services ;;
       quirks) screen_quirks ;;
@@ -650,17 +650,24 @@ screen_emulators() {
     done < <(emulators_list)
     entries+=("return|Return")
     choice=$(ui_menu "$title" \
-      "What is installed and what is not. Choose one that is not installed to install it; Model 2, Fightcade 2, DuckStation and KOF Final Attack don't come in the image and need the network." \
+      "Choose one to install it, or to update it when it is installed. Model 2, Fightcade 2, DuckStation and KOF Final Attack don't come in the image and need the network." \
       "$last" "${entries[@]}") || return 0
     last=$choice
     [[ $choice == return ]] && return 0
     label=$(emulators_field "$choice" 4)
     kind=$(emulators_field "$choice" 3)
     inst=$(emulators_field "$choice" 2)
+    # Instalado: o Update de cada um (o que vem na imagem atualiza com o
+    # FliperOS).
+    if ((inst)) && [[ $kind != image ]]; then
+      screen_emulator_update "$choice" "$label" "$kind"
+      continue
+    fi
     case $kind in
       image)
         if ((inst)); then
-          ui_msg "$title" "$label comes with FliperOS and is installed."
+          ui_msg "$title" "$label comes with FliperOS and is installed." "" \
+            "It is updated together with FliperOS: the updates offered at boot and each new version."
         else
           ui_msg "$title" "$label comes compiled in the FliperOS image, and this image was built without it." "" \
             "It can't be installed from here: use an image that has it."
@@ -668,9 +675,7 @@ screen_emulators() {
         ;;
       source) screen_emulators_kof "$choice" "$label" "$inst" ;;
       *)
-        if ((inst)); then
-          ui_yesno "$title" "$label is already installed. Download it again to update it?" no || continue
-        elif [[ $kind == build ]]; then
+        if [[ $kind == build ]]; then
           ui_yesno "$title" "Download and build $label now? It needs the network and takes several minutes." yes ||
             continue
         else
@@ -682,6 +687,29 @@ screen_emulators() {
         ;;
     esac
   done
+}
+
+# screen_emulator_update NOME ROTULO TIPO: um emulador instalado que nao
+# vem na imagem. Update baixa a versao nova por cima (o SM2-Emu: o codigo
+# novo e compila de novo; o KOF: o patch e o Ikemen GO novos, convertendo o
+# jogo original de novo).
+screen_emulator_update() {
+  local name=$1 label=$2 kind=$3 entry choice
+  case $kind in
+    build) entry="update|Update|The newest source, built again: several minutes." ;;
+    source) entry="update|Update|The newest 4:3 patch and Ikemen GO; converts again." ;;
+    *) entry="update|Update|Download the newest version over this one." ;;
+  esac
+  choice=$(ui_menu_hints "$label" "Installed." "" "$entry" \
+    "return|Return|Back to Emulators & Games.") || return 0
+  [[ $choice == update ]] || return 0
+  if [[ $kind == source ]]; then
+    screen_emulators_kof "$name" "$label" 0
+    return 0
+  fi
+  if run_with_progress "Updating $label" "" emulators_install "$name"; then
+    ui_msg "Emulators & Games" "$label updated."
+  fi
 }
 
 # screen_emulators_kof NOME ROTULO INSTALADO: o KOF Final Attack nao e

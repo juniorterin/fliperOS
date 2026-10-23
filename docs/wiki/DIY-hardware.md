@@ -39,20 +39,20 @@ The GunCon 2 calibration of the Setup is for the GunCon 2 only. These guns are c
 
 | Project | Board | With FliperOS |
 | --- | --- | --- |
-| [ZeDMD](https://github.com/PPUC/ZeDMD) | ESP32 (the ESP32-S3-N16R8 is the recommended one) or Raspberry Pi Pico, driving HUB75 LED panels of 128x32 or 256x64 | **Setup > System > Extras > ZeDMD** installs the support: the display shows the selected game, the game that is open, its high scores and the achievements ([Frontends](Frontends.md)). GPL-2.0 |
+| [ZeDMD](https://github.com/PPUC/ZeDMD) | ESP32 (the ESP32-S3-N16R8 is the recommended one) or Raspberry Pi Pico, driving HUB75 LED panels of 128x32 or 256x64 | **Setup > Games > Extras > ZeDMD** installs the support: the display shows the selected game, the game that is open, its high scores and the achievements ([Frontends](Frontends.md)). GPL-2.0 |
 | [libdmdutil](https://github.com/vpinball/libdmdutil) | (runs on the PC) | The library, from the Visual Pinball project, whose `dmdserver` FliperOS uses to talk to the ZeDMD |
 
 The Pixelcade marquee, which FliperOS also supports, is a commercial product with closed software; it is on the [Frontends](Frontends.md) page.
 
 ## Game outputs: lamps, recoil, motors and button lights
 
-Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast, Supermodel and SM2-Emu (Model 2) can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in **Setup > System > Extras**. They can be installed together.
+Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast, Supermodel and SM2-Emu (Model 2) can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in **Setup > Games > Extras**. They can be installed together.
 
 | Project | What it drives | With FliperOS |
 | --- | --- | --- |
-| [Hook Of The Reaper](https://hotr.6bolt.com/) | Light guns with recoil and lights (OpenFIRE, GUN4IR, Blamcon, Fusion, RS3 Reaper, Alien, AimTrak, Sinden and others), boards on a serial port or USB HID, Ultimarc light boards | **Setup > System > Extras > Hook Of The Reaper**. A Windows program, run through Wine. Its source isn't public at the moment |
-| [QMamehook](https://github.com/SeongGino/QMamehook) | Light guns on a serial port only: OpenFIRE, GUN4IR, Blamcon, RS3 Reaper | **Setup > System > Extras > QMamehook**. Native, without Wine: its source is built on the cabinet. LGPL-2.1 |
-| [LEDSpicer](https://github.com/meduzapat/LEDSpicer) | Ready-made LED boards: Ultimarc (PacLED64, PacDrive, Ultimate I/O, NanoLED), LED-Wiz 32, Howler, Adalight | **Setup > System > Extras > LEDSpicer**, from its author's Ubuntu repository. It lights the buttons each game uses. GPL-3.0 |
+| [Hook Of The Reaper](https://hotr.6bolt.com/) | Light guns with recoil and lights (OpenFIRE, GUN4IR, Blamcon, Fusion, RS3 Reaper, Alien, AimTrak, Sinden and others), boards on a serial port or USB HID, Ultimarc light boards | **Setup > Games > Extras > Hook Of The Reaper**. A Windows program, run through Wine. Its source isn't public at the moment |
+| [QMamehook](https://github.com/SeongGino/QMamehook) | Light guns on a serial port only: OpenFIRE, GUN4IR, Blamcon, RS3 Reaper | **Setup > Games > Extras > QMamehook**. Native, without Wine: its source is built on the cabinet. LGPL-2.1 |
+| [LEDSpicer](https://github.com/meduzapat/LEDSpicer) | Ready-made LED boards: Ultimarc (PacLED64, PacDrive, Ultimate I/O, NanoLED), LED-Wiz 32, Howler, Adalight | **Setup > Games > Extras > LEDSpicer**, from its author's Ubuntu repository. It lights the buttons each game uses. GPL-3.0 |
 
 The emulators only open port 8000 when one of them is installed, because the port is reachable from the network and accepts a pause command.
 

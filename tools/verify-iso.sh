@@ -204,13 +204,13 @@ if present usr/local/bin/dolphin-emu; then
   present usr/local/share/applications/dolphin-emu.desktop && fail "Dolphin's own shortcut was not removed"
   echo "Dolphin: without its own shortcut (opens through fliperos-launch)"
 fi
-# Wine, Steam e Heroic: pelo Setup > System > Extras (config/fliperos-extras), fora
+# Wine, Steam e Heroic: pelo Setup > Games > Extras (config/fliperos-extras), fora
 # da imagem para a ISO caber num arquivo do GitHub.
 for path in usr/local/bin/fliperos-model2 opt/fliperos/bin/fliperos-extras; do
   has "$path"
 done
 for path in usr/bin/wine usr/games/steam opt/Heroic/heroic; do
-  present "$path" && fail "/$path came in the image (it should come through Setup > System > Extras)"
+  present "$path" && fail "/$path came in the image (it should come through Setup > Games > Extras)"
 done
 unsquashfs -cat "$work/filesystem.squashfs" var/lib/dpkg/arch > "$work/f" 2> /dev/null
 grep -qx i386 "$work/f" || fail "the i386 architecture is not enabled (32-bit Wine would not install)"

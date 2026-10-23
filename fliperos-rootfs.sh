@@ -121,10 +121,10 @@ install -Dm755 "$src/config/fliperos-arcadeflow" "$root/opt/fliperos/bin/flipero
 install -Dm755 "$src/config/fliperos-arcadeflow-art" "$root/opt/fliperos/bin/fliperos-arcadeflow-art"
 # As saidas dos jogos (porta 8000, o protocolo do MAMEHooker) para placas e
 # LEDs: o helper que os lancadores chamam e a chave do PPA do LEDSpicer. O
-# Hook Of The Reaper e o LEDSpicer em si vem pelo Setup > System > Extras.
+# Hook Of The Reaper e o LEDSpicer em si vem pelo Setup > Games > Extras.
 install -Dm755 "$src/config/fliperos-outputs" "$root/opt/fliperos/bin/fliperos-outputs"
 install -Dm644 "$src/config/ledspicer-ppa.asc" "$root/usr/local/share/fliperos/ledspicer-ppa.asc"
-# Wine, Steam, Heroic e o Pixelcade nao vem na imagem: o Setup > System > Extras os
+# Wine, Steam, Heroic e o Pixelcade nao vem na imagem: o Setup > Games > Extras os
 # instala.
 install -Dm755 "$src/config/fliperos-extras" "$root/opt/fliperos/bin/fliperos-extras"
 # Setup > Games > Emulators & Games: o estado de cada emulador e a instalacao dos que
@@ -135,7 +135,7 @@ install -Dm755 "$src/config/fliperos-kof" "$root/usr/local/bin/fliperos-kof"
 # redistribuir, e o config/fliperos-duckstation baixa o AppImage oficial.
 install -Dm755 "$src/config/fliperos-duckstation" "$root/opt/fliperos/bin/fliperos-duckstation"
 # Pixelcade (marquee de LED/LCD): o pixelweb e a arte sao baixados pelo
-# Setup > System > Extras para ~/pixelcade (codigo fechado). Daqui vem o que liga os
+# Setup > Games > Extras para ~/pixelcade (codigo fechado). Daqui vem o que liga os
 # frontends e os lancadores a ele, o servico (so sobe com o pixelweb
 # baixado) e a regra da udev que o abre quando o marquee e conectado.
 install -Dm755 "$src/config/fliperos-pixelcade" "$root/opt/fliperos/bin/fliperos-pixelcade"
@@ -148,7 +148,7 @@ ln -sfn /etc/systemd/system/fliperos-pixelcade.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-pixelcade.service"
 # O logo do FliperOS que o marquee (e o ZeDMD) mostra ao ligar, o servico do
 # Pixelcade LCD ligado pela USB (aberto pela udev) e o do DOFLinx, os efeitos
-# durante o jogo (so sobe com o Setup > System > Extras > DOFLinx instalado).
+# durante o jogo (so sobe com o Setup > Games > Extras > DOFLinx instalado).
 install -Dm644 "$src/config/pixelcade-fliperos.png" "$root/usr/local/share/fliperos/pixelcade/fliperos.png"
 install -Dm644 "$src/config/fliperos-pixelcade-lcd@.service" \
   "$root/etc/systemd/system/fliperos-pixelcade-lcd@.service"
@@ -156,7 +156,7 @@ install -Dm644 "$src/config/fliperos-doflinx.service" "$root/etc/systemd/system/
 ln -sfn /etc/systemd/system/fliperos-doflinx.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-doflinx.service"
 # ZeDMD (DMD de LED open source): os mesmos eventos, desenhados pelo
-# fliperos-dmd. O dmdserver (libdmdutil) e o Pillow vem pelo Setup > System > Extras.
+# fliperos-dmd. O dmdserver (libdmdutil) e o Pillow vem pelo Setup > Games > Extras.
 install -Dm755 "$src/config/fliperos-dmd" "$root/opt/fliperos/bin/fliperos-dmd"
 install -Dm644 "$src/config/fliperos-zedmd.service" "$root/etc/systemd/system/fliperos-zedmd.service"
 install -Dm644 "$src/config/99-fliperos-zedmd.rules" "$root/etc/udev/rules.d/99-fliperos-zedmd.rules"
@@ -217,7 +217,7 @@ install -Dm644 -t "$root/usr/local/share/fliperos/web" "$src"/config/web/*
 grep -q '^web=' "$root/etc/fliperos/services.conf" 2> /dev/null ||
   echo 'web=after' >> "$root/etc/fliperos/services.conf"
 # A tela ao vivo no painel web (config/fliperos-stream): o go2rtc e o ffmpeg
-# vem pelo Setup > System > Extras > Live screen, que liga o servico.
+# vem pelo Setup > Games > Extras > Live screen, que liga o servico.
 install -Dm755 "$src/config/fliperos-stream" "$root/opt/fliperos/bin/fliperos-stream"
 install -Dm644 "$src/config/fliperos-stream.service" "$root/etc/systemd/system/fliperos-stream.service"
 install -Dm644 "$src/config/fliperos-downloader-magnets" "$root/usr/local/share/fliperos/downloader-magnets"

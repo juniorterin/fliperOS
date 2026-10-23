@@ -1,6 +1,6 @@
 # Icons
 
-The official icon of each program in Setup > System > Extras, taken from its
+The official icon of each program in Setup > Games > Extras, taken from its
 own repository or website and scaled down to 64 px. The Setup's graphical
 interface shows `VALUE.png` for the menu item of that value (`theme.py`).
 QMamehook has no icon of its own and keeps its initial.

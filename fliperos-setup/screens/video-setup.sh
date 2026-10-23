@@ -131,9 +131,7 @@ screen_resolution() {
   text="Boot resolution for $conn ($(monitor_label "$monitor"))."
   drm_card_low_dotclock "$(conf_get card 2> /dev/null)" 2> /dev/null ||
     text+=" This video card can't generate low dotclocks: only super resolutions are listed."
-  # Na interface grafica, a lista vertical: os modos se leem e se comparam
-  # melhor um embaixo do outro do que no carrossel.
-  choice=$(UI_STYLE=list ui_menu "Resolution" "$text" "$current" "${choices[@]}" \
+  choice=$(ui_menu "Resolution" "$text" "$current" "${choices[@]}" \
     "custom|Custom resolution (generates an EDID)") || return 0
   if [[ $choice == custom ]]; then
     screen_custom_resolution

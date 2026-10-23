@@ -200,7 +200,7 @@ const ptBR: Messages = {
     ],
     extrasTitle: 'Extras opcionais',
     extrasText:
-      'Ficam fora da ISO para ela caber num único download. Instalados pela rede em Setup > System > Extras.',
+      'Ficam fora da ISO para ela caber num único download. Instalados pela rede em Setup > Games > Extras.',
     extrasBadge: 'Opcional',
     extras: [
       { id: 'wine', name: 'Wine', text: 'Para os emuladores do Fightcade 2' },
@@ -264,7 +264,7 @@ const ptBR: Messages = {
     points: [
       { id: 'zedmd', title: 'ZeDMD: monte o seu', text: 'Um ESP32 e painéis de LED HUB75, de 128×32 ou 256×64. O FliperOS desenha cada quadro ele mesmo, com a arte de marquee da sua própria coleção.' },
       { id: 'versus', title: 'Modo placar', text: 'Nos jogos de luta o display vira placar: os dois personagens e as vitórias de cada lado na sessão, fixos no ZeDMD e em texto no Pixelcade. Cerca de 200 arcades no GroovyMAME e 100 no core FBNeo do RetroArch, pelos detectores do Fightcade.' },
-      { id: 'install', title: 'Instale pelo Setup', text: 'Setup > System > Extras > ZeDMD ou Pixelcade baixa o programa do display e liga o serviço, os scripts do ES-DE e o plugin do Attract-Mode Plus.' },
+      { id: 'install', title: 'Instale pelo Setup', text: 'Setup > Games > Extras > ZeDMD ou Pixelcade baixa o programa do display e liga o serviço, os scripts do ES-DE e o plugin do Attract-Mode Plus.' },
       { id: 'browse', title: 'Acompanha o menu', text: 'No ES-DE e no Attract-Mode Plus o display muda conforme você passa pelos sistemas e jogos.' },
       { id: 'launch', title: 'Em todo lançador', text: 'GroovyMAME, RetroArch, Flycast, Supermodel, Dolphin e os outros emuladores atualizam o display quando o jogo abre, seja qual for o frontend que o abriu.' },
       { id: 'usb', title: 'Ligou, funcionou', text: 'Ligue o display no USB e o serviço sobe sozinho. Sem display conectado, ele desiste depois de algumas tentativas e não atrapalha.' },
@@ -313,7 +313,7 @@ const ptBR: Messages = {
         id: 'display',
         title: 'Display de LED',
         boards: 'ESP32 ou Pico + painéis de LED',
-        text: 'Um ZeDMD mostra o jogo selecionado, o jogo aberto, os recordes e as conquistas, como o marquee da Pixelcade, com a arte da sua própria coleção. O Setup > System > Extras instala o suporte.',
+        text: 'Um ZeDMD mostra o jogo selecionado, o jogo aberto, os recordes e as conquistas, como o marquee da Pixelcade, com a arte da sua própria coleção. O Setup > Games > Extras instala o suporte.',
         projects: ['ZeDMD', 'libdmdutil'],
       },
       {

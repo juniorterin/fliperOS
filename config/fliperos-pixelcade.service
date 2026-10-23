@@ -1,6 +1,6 @@
 [Unit]
 Description=FliperOS Pixelcade marquee (pixelweb)
-# So depois do Setup > System > Extras > Pixelcade (config/fliperos-pixelcade fetch).
+# So depois do Setup > Games > Extras > Pixelcade (config/fliperos-pixelcade fetch).
 ConditionPathExists=/home/fliperos/pixelcade/pixelweb
 After=network.target
 # Sem o marquee conectado o pixelweb procura uns 30 s e sai com erro, mesmo

@@ -122,7 +122,7 @@ packages+=(gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev libx11-dev l
 packages+=(picom)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
-# Wine em si nao vem mais na imagem (Setup > System > Extras, config/fliperos-extras).
+# Wine em si nao vem mais na imagem (Setup > Games > Extras, config/fliperos-extras).
 dpkg -s wine32:i386 > /dev/null 2>&1 && packages+=(libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386)
 # So mexe no apt se falta algum pacote ou se o repositorio local mudou: o
 # apt-get segura a trava dos pacotes, e quem estivesse instalando um
@@ -349,13 +349,13 @@ systemctl restart fliperos-padkeys.service
 systemctl restart triggerhappy.service 2> /dev/null || true
 systemctl kill -s HUP systemd-logind.service 2> /dev/null || true
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
-# Pixelcade: so sobe com o pixelweb baixado (Setup > System > Extras).
+# Pixelcade: so sobe com o pixelweb baixado (Setup > Games > Extras).
 systemctl restart fliperos-pixelcade.service 2> /dev/null || true
 echo "fliperos-pixelcade: $(systemctl is-active fliperos-pixelcade.service 2> /dev/null)"
-# ZeDMD: so sobe com o dmdserver baixado (Setup > System > Extras).
+# ZeDMD: so sobe com o dmdserver baixado (Setup > Games > Extras).
 systemctl restart fliperos-zedmd.service 2> /dev/null || true
 echo "fliperos-zedmd: $(systemctl is-active fliperos-zedmd.service 2> /dev/null)"
-# DOFLinx: so sobe com ele baixado (Setup > System > Extras).
+# DOFLinx: so sobe com ele baixado (Setup > Games > Extras).
 systemctl restart fliperos-doflinx.service 2> /dev/null || true
 echo "fliperos-doflinx: $(systemctl is-active fliperos-doflinx.service 2> /dev/null)"
 # Os discos que ja estavam ligados (os que aparecerem depois, pela udev).

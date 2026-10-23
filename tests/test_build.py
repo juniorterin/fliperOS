@@ -647,17 +647,14 @@ class PadKeysTests(unittest.TestCase):
         keys = P.Keys(lambda k, v: sent.append((k, v)))
         keys.apply(P.KEY_DOWN, 1, 0.0)
         keys.apply(P.KEY_DOWN, 1, 0.0)  # hat e analogico juntos
-        keys.tick(0.45)
+        keys.tick(0.3)
         self.assertEqual(sent, [(P.KEY_DOWN, 1)])
-        for t in (0.51, 0.55, 0.64):
+        for t in (0.41, 0.45, 0.54):
             keys.tick(t)
         self.assertEqual(sent, [(P.KEY_DOWN, 1), (P.KEY_DOWN, 2), (P.KEY_DOWN, 2)])
-        keys.apply(P.KEY_DOWN, 0, 0.7)
-        keys.tick(0.8)
+        keys.apply(P.KEY_DOWN, 0, 0.6)
         self.assertEqual(sent[-1], (P.KEY_DOWN, 2))  # o outro ainda segura
-        keys.apply(P.KEY_DOWN, 0, 0.8)
-        self.assertEqual(sent[-1], (P.KEY_DOWN, 2))  # a soltura espera o repique
-        keys.tick(0.8 + P.DEBOUNCE)
+        keys.apply(P.KEY_DOWN, 0, 0.6)
         self.assertEqual(sent[-1], (P.KEY_DOWN, 0))
         keys.tick(5)
         # Enter nao repete; soltar o que nao foi apertado nao emite nada.
@@ -667,24 +664,6 @@ class PadKeysTests(unittest.TestCase):
         self.assertEqual(sent[-1], (P.KEY_ENTER, 1))
         keys.release_all()
         self.assertEqual(sent[-1], (P.KEY_ENTER, 0))
-
-    def test_switch_bounce_is_one_press(self):
-        # O microswitch repica ao fechar e ao abrir: um toque, um item.
-        P = self.P
-        sent = []
-        keys = P.Keys(lambda k, v: sent.append((k, v)))
-        for value, t in ((1, 0.0), (0, 0.004), (1, 0.008), (0, 0.15), (1, 0.153), (0, 0.157)):
-            keys.apply(P.KEY_DOWN, value, t)
-            keys.tick(t)
-        keys.tick(1)
-        self.assertEqual(sent, [(P.KEY_DOWN, 1), (P.KEY_DOWN, 0)])
-        # Dois toques de verdade, um depois do outro, sao dois itens.
-        keys.apply(P.KEY_DOWN, 1, 2.0)
-        keys.apply(P.KEY_DOWN, 0, 2.1)
-        keys.tick(2.2)
-        keys.apply(P.KEY_DOWN, 1, 2.25)
-        self.assertEqual(sent[2:], [(P.KEY_DOWN, 1), (P.KEY_DOWN, 0), (P.KEY_DOWN, 1)])
-        self.assertLessEqual(keys.timeout(2.25, 0.5), P.REPEAT_DELAY)
 
     def test_only_controllers_are_read(self):
         P = self.P
@@ -877,7 +856,7 @@ class DesktopTerminalTests(unittest.TestCase):
     def test_steam_does_not_bring_xterm_back(self):
         # O steam-libs:i386 recomenda "xterm | x-terminal-emulator", e o
         # Alacritty (amd64) nao vale para um pacote i386: o xterm voltou na
-        # ISO e virou o x-terminal-emulator. O Steam vem pelo Setup > System > Extras.
+        # ISO e virou o x-terminal-emulator. O Steam vem pelo Setup > Games > Extras.
         self.assertIn('STEAM_PACKAGES="steam-installer xterm- xterm:i386-"', EXTRAS)
 
     def test_ctrl_v_pastes_in_the_terminal(self):
@@ -4931,7 +4910,7 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(self.webrtc[-1][0], '/api/webrtc?src=cabinet30')
         status, _, page = self.request('GET', live)
         self.assertEqual((status, b'live.js' in page), (200, True))
-        # Instalar: o Setup > System > Extras > Live screen, como tarefa.
+        # Instalar: o Setup > Games > Extras > Live screen, como tarefa.
         status, _, data = self.request('POST', '/api/stream/install', {}, cookie=cookie)
         self.assertEqual(status, 200, data)
         log = Path(self.tmp.name) / 'extras.log'
@@ -7085,7 +7064,7 @@ class EmulatorMenuTests(unittest.TestCase):
     APPS = sorted(p for p in (ROOT / 'config/applications').glob('fliperos-*.desktop')
                   if 'Categories=Game;' in p.read_text())
     # O que mostra o atalho (TryExec): o binario do emulador; o do Model 2 e
-    # o lancador, que avisa quando falta o Wine (Setup > System > Extras) ou o
+    # o lancador, que avisa quando falta o Wine (Setup > Games > Extras) ou o
     # emulador (o usuario copia), e o Fightcade aparece depois de baixado
     # pelo Setup.
     TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/local/bin/fliperos-model2',
@@ -7773,7 +7752,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('--skip-wine|--skip-steam|--skip-heroic) shift ;;', MKISO)
 
     def test_extras_are_not_in_the_image(self):
-        # Wine, Steam e Heroic passavam de 1,5 GB: o Setup > System > Extras instala.
+        # Wine, Steam e Heroic passavam de 1,5 GB: o Setup > Games > Extras instala.
         for gone in ('apt-get install -y steam-installer', 'wine32:i386', 'heroic.deb'):
             self.assertNotIn(gone, MKISO)
         prep = MKISO.split('prepare_extras_chroot() {')[1].split('\n}\n')[0]
@@ -7794,7 +7773,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
             rows = [line.split('|') for line in run('list').stdout.splitlines()]
             self.assertEqual([(r[0], r[1]) for r in rows],
                              [('wine', '1'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0'), ('zedmd', '0'),
-                              ('doflinx', '0'), ('hotr', '0'), ('qmamehook', '0'), ('ledspicer', '0')])
+                              ('doflinx', '0'), ('hotr', '0'), ('qmamehook', '0'), ('ledspicer', '0'), ('stream', '0')])
             self.assertEqual(run('installed', 'wine').returncode, 0)
             self.assertNotEqual(run('installed', 'steam').returncode, 0)
             if os.geteuid() != 0:
@@ -7965,7 +7944,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
 
 class PixelcadeTests(unittest.TestCase):
     """config/fliperos-pixelcade: o marquee do Pixelcade pelo pixelweb (baixado
-    pelo Setup > System > Extras), com os eventos dos lancadores e dos frontends."""
+    pelo Setup > Games > Extras), com os eventos dos lancadores e dos frontends."""
     SCRIPT = ROOT / 'config/fliperos-pixelcade'
     GAME_DIGDUG = ['attract/stop', 'console/stream/black',
                    'text?t=Now%20Playing%20digdug&ss=1&l=1&scroll=true&game=digdug&system=mame&event=GameStart',
@@ -8566,7 +8545,7 @@ class PixelcadeTests(unittest.TestCase):
 class OutputsTests(unittest.TestCase):
     """config/fliperos-outputs: as saidas dos jogos (porta 8000, o protocolo do
     MAMEHooker) para o Hook Of The Reaper (pelo Wine) e o LEDSpicer, instalados
-    pelo Setup > System > Extras."""
+    pelo Setup > Games > Extras."""
     SCRIPT = ROOT / 'config/fliperos-outputs'
 
     def setUp(self):

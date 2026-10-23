@@ -122,15 +122,6 @@ def button(surf, label, cx, y, selected, w=80):
     text(surf, label, color, cx - width(label) // 2, y + 6)
 
 
-def scrollbar(surf, x, y, h, top, shown, total):
-    """A barra de rolagem de uma lista que nao cabe: o trilho de h pixels
-    com o canto em (x, y) e, nele, o pedaco que esta a vista."""
-    pygame.draw.rect(surf, T.LINE, (x, y, 4, h))
-    size = max(6, h * shown // total)
-    pos = y + (h - size) * top // max(1, total - shown)
-    pygame.draw.rect(surf, T.PINK, (x, pos, 4, size))
-
-
 def frame(surf, ctx, title, keys, error=False, score=False):
     """O letreiro com o titulo, a linha de placar e a legenda das teclas,
     numa tela transparente (o fundo animado fica por baixo). O placar
@@ -431,9 +422,13 @@ class Menu:
                 label += ".."
             text(surf, label, color, x + 18, y + 2)
 
-        # A barra de rolagem de quando a lista nao cabe.
-        if rows < len(self.entries):
-            scrollbar(surf, x + w + 8, y0, rows * ROW - 2, self.top, rows, len(self.entries))
+        # As setas de quando a lista rola.
+        ax = x + w + 8
+        if self.top > 0:
+            pygame.draw.polygon(surf, T.CYAN, [(ax, y0 + 6), (ax + 6, y0 + 6), (ax + 3, y0 + 2)])
+        if self.top + rows < len(self.entries):
+            by = y0 + rows * ROW - 4
+            pygame.draw.polygon(surf, T.CYAN, [(ax, by - 4), (ax + 6, by - 4), (ax + 3, by)])
 
         if hints:
             for i, line in enumerate(wrap(self.entries[self.cursor][2], T.SAFE_W)[:3]):
@@ -1269,40 +1264,38 @@ class Grid:
             frame(surf, ctx, self.title, [("< >", "MARK"), ("ENTER", "SAVE"), ("ESC", "BACK")])
         # A coluna dos nomes e, a direita, uma coluna por estado.
         col_w = 52
+        x0 = T.SAFE_X + T.SAFE_W - col_w * len(self.columns)
         y = CONTENT_Y
         if self.text:
             for line in wrap(self.text, T.SAFE_W)[:2]:
                 centered(surf, line, T.COMMENT, y)
                 y += 11
             y += 4
-        room = HINT_Y - 6 - y - 22
-        pitch = min(18, room // max(1, len(self.rows)))
-        shown = len(self.rows)
-        # Quando nao cabe, a lista rola e a barra de rolagem fica na direita,
-        # dentro da margem: as linhas encolhem para dar lugar a ela.
-        scrolls = pitch < self.PITCH
-        right = T.SAFE_X + T.SAFE_W - (12 if scrolls else 0)
-        x0 = right - col_w * len(self.columns)
         for i, (_, label) in enumerate(self.columns):
             for j, part in enumerate(wrap(label.upper(), col_w - 4)[:2]):
                 cx = x0 + i * col_w + col_w // 2
                 text(surf, part, T.CYAN, cx - width(part) // 2, y + j * 9)
         y += 22
-        if scrolls:
-            # A linha escolhida sempre a vista.
+        room = HINT_Y - 6 - y
+        pitch = min(18, room // max(1, len(self.rows)))
+        shown = len(self.rows)
+        if pitch < self.PITCH:
+            # Nao cabe: a lista rola, com a linha escolhida sempre a vista.
             pitch = self.PITCH
             shown = max(1, room // pitch)
             self.top = min(max(self.top, self.cursor - shown + 1), self.cursor)
-            scrollbar(surf, T.SAFE_X + T.SAFE_W - 4, y - 3, shown * pitch - 2, self.top, shown, len(self.rows))
+            if self.top > 0:
+                text(surf, "^", T.COMMENT, T.SAFE_X - 12, y + 1)
+            if self.top + shown < len(self.rows):
+                text(surf, "v", T.COMMENT, T.SAFE_X - 12, y + (shown - 1) * pitch + 1)
         else:
             self.top = 0
         for r in range(self.top, min(len(self.rows), self.top + shown)):
             label = self.rows[r][1]
             on = r == self.cursor
             if on:
-                bar = (T.SAFE_X - 4, y - 3, right - T.SAFE_X + 8, pitch - 2)
-                block(surf, bar, T.BG_DEEP, T.PURPLE)
-                pygame.draw.rect(surf, T.PINK, bar, 1)
+                block(surf, (T.SAFE_X - 4, y - 3, T.SAFE_W + 8, pitch - 2), T.BG_DEEP, T.PURPLE)
+                pygame.draw.rect(surf, T.PINK, (T.SAFE_X - 4, y - 3, T.SAFE_W + 8, pitch - 2), 1)
             name = label.upper()
             while name and width(name) > x0 - T.SAFE_X - 6:
                 name = name[:-1]

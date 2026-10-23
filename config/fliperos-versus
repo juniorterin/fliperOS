@@ -9,7 +9,7 @@
 #     um arquivo por jogo, mais de 300): onde a partida comeca, onde cada lado
 #     ganha e o personagem de cada um. E o mapa que o Fightcade usa para saber
 #     quem ganhou cada partida online. Sem licenca no repositorio, entao nao
-#     vem na imagem: o "fetch" os baixa (o Setup > System > Extras o chama junto do
+#     vem na imagem: o "fetch" os baixa (o Setup > Games > Extras o chama junto do
 #     Pixelcade e do ZeDMD). Dao as vitorias; os pontos, nao.
 #   - /etc/fliperos/versus-games.conf (e ~/config/versus-games.conf, para
 #     experimentar): valores lidos direto, como os pontos de cada jogador.
