@@ -647,14 +647,17 @@ class PadKeysTests(unittest.TestCase):
         keys = P.Keys(lambda k, v: sent.append((k, v)))
         keys.apply(P.KEY_DOWN, 1, 0.0)
         keys.apply(P.KEY_DOWN, 1, 0.0)  # hat e analogico juntos
-        keys.tick(0.3)
+        keys.tick(0.45)
         self.assertEqual(sent, [(P.KEY_DOWN, 1)])
-        for t in (0.41, 0.45, 0.54):
+        for t in (0.51, 0.55, 0.64):
             keys.tick(t)
         self.assertEqual(sent, [(P.KEY_DOWN, 1), (P.KEY_DOWN, 2), (P.KEY_DOWN, 2)])
-        keys.apply(P.KEY_DOWN, 0, 0.6)
+        keys.apply(P.KEY_DOWN, 0, 0.7)
+        keys.tick(0.8)
         self.assertEqual(sent[-1], (P.KEY_DOWN, 2))  # o outro ainda segura
-        keys.apply(P.KEY_DOWN, 0, 0.6)
+        keys.apply(P.KEY_DOWN, 0, 0.8)
+        self.assertEqual(sent[-1], (P.KEY_DOWN, 2))  # a soltura espera o repique
+        keys.tick(0.8 + P.DEBOUNCE)
         self.assertEqual(sent[-1], (P.KEY_DOWN, 0))
         keys.tick(5)
         # Enter nao repete; soltar o que nao foi apertado nao emite nada.
@@ -664,6 +667,24 @@ class PadKeysTests(unittest.TestCase):
         self.assertEqual(sent[-1], (P.KEY_ENTER, 1))
         keys.release_all()
         self.assertEqual(sent[-1], (P.KEY_ENTER, 0))
+
+    def test_switch_bounce_is_one_press(self):
+        # O microswitch repica ao fechar e ao abrir: um toque, um item.
+        P = self.P
+        sent = []
+        keys = P.Keys(lambda k, v: sent.append((k, v)))
+        for value, t in ((1, 0.0), (0, 0.004), (1, 0.008), (0, 0.15), (1, 0.153), (0, 0.157)):
+            keys.apply(P.KEY_DOWN, value, t)
+            keys.tick(t)
+        keys.tick(1)
+        self.assertEqual(sent, [(P.KEY_DOWN, 1), (P.KEY_DOWN, 0)])
+        # Dois toques de verdade, um depois do outro, sao dois itens.
+        keys.apply(P.KEY_DOWN, 1, 2.0)
+        keys.apply(P.KEY_DOWN, 0, 2.1)
+        keys.tick(2.2)
+        keys.apply(P.KEY_DOWN, 1, 2.25)
+        self.assertEqual(sent[2:], [(P.KEY_DOWN, 1), (P.KEY_DOWN, 0), (P.KEY_DOWN, 1)])
+        self.assertLessEqual(keys.timeout(2.25, 0.5), P.REPEAT_DELAY)
 
     def test_only_controllers_are_read(self):
         P = self.P
