@@ -31,7 +31,8 @@ password_set() {
 # fliperos-setup --settings imprime os ajustes que o painel web
 # (config/fliperos-web) mostra, um por linha:
 #   chave|grupo|rotulo|tipo|valor|opcoes|ajuda
-# tipo choice (opcoes "valor=Rotulo;...") ou number (opcoes "min..max:passo").
+# tipo choice (opcoes "valor=Rotulo;..."), number (opcoes "min..max:passo")
+# ou action (um botao, sem valor nem opcoes: o --setting recebe 1).
 # fliperos-setup --setting CHAVE VALOR muda um deles pelas mesmas funcoes das
 # telas do Setup. Ficam de fora o que pode deixar o gabinete sem imagem
 # (monitor, resolucao, driver de video): esses so pelo Setup, na tela.
@@ -86,6 +87,7 @@ settings_list() {
     printf 'color.range|Colour|RGB range|choice|%s|default=Card default;full=Full (0-255);limited=Limited (16-235)|Full for a PC monitor or CRT, limited for a TV that expects 16-235.\n' \
       "$(r=$(color_range); echo "${r:-default}")"
   fi
+  printf 'color.reset|Colour|Back to the defaults|action|||Every colour setting back to the default: the picture exactly as the card sends it.\n'
 }
 
 # settings_boot: a linha do kernel de novo (o debug, a latencia), como as
@@ -151,6 +153,10 @@ settings_set() {
       [[ -n $(mode480_field "${key#deflicker.}" 1) && " light medium strong " == *" $value "* ]] || return 2
       mode480_set "${key#deflicker.}" "$(mode480_state "${key#deflicker.}")" "$value"
       ;;
+    color.reset)
+      color_reset
+      color_apply > /dev/null 2>&1 || true
+      ;;
     color.range)
       [[ $value == default ]] && value=""
       color_range_set "$value" || return 2
@@ -158,7 +164,9 @@ settings_set() {
       ;;
     color.*)
       color_set "${key#color.}" "$value" || return 2
-      # Na placa agora; com um jogo aberto (dono do video), no proximo.
+      # Na placa agora, mesmo com um jogo aberto (o fliperos-color usa o
+      # descritor do dono do video); a saturacao e o matiz por software, a
+      # camada GL do jogo rele do fliperos.conf.
       color_apply > /dev/null 2>&1 || true
       ;;
     *) return 2 ;;

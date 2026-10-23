@@ -53,6 +53,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -105,13 +106,33 @@ static void log_once(const char *msg)
     fprintf(stderr, "fliperos-deflicker: %s\n", msg);
 }
 
-/* As linhas "deflicker...=" do fliperos.conf, lidas uma vez. */
+/* As linhas "deflicker...=" e "color_...=" do fliperos.conf. Relidas
+ * quando o arquivo muda (conf_changed): a cor mudada pelo painel web ou
+ * pelo SSH com o jogo aberto vale na hora. */
 static char conf_lines[4096];
+static struct timespec conf_mtime;
+
+static const char *conf_path(void)
+{
+    const char *conf = getenv("FLIPEROS_CONF");
+    return conf ? conf : "/etc/fliperos/fliperos.conf";
+}
+
+/* conf_changed: o fliperos.conf mudou desde a ultima leitura? */
+static int conf_changed(void)
+{
+    struct stat st;
+    if (stat(conf_path(), &st))
+        return 0;
+    return st.st_mtim.tv_sec != conf_mtime.tv_sec || st.st_mtim.tv_nsec != conf_mtime.tv_nsec;
+}
 
 static void load_conf(void)
 {
-    const char *conf = getenv("FLIPEROS_CONF");
-    FILE *f = fopen(conf ? conf : "/etc/fliperos/fliperos.conf", "r");
+    struct stat st;
+    FILE *f = fopen(conf_path(), "r");
+    if (f && !fstat(fileno(f), &st))
+        conf_mtime = st.st_mtim;
     char line[256];
     size_t used = 0;
     while (f && fgets(line, sizeof(line), f)) {
@@ -536,7 +557,8 @@ static void filter(void *ctx_id, getproc_fn get, int w, int h, int deflick)
 
 /* active: o que fazer neste quadro: 1 = o filtro de flicker, 2 = a matriz
  * de cor (0 = nada). A cada 30 quadros confere se o core do RetroArch mudou
- * (o nivel pode ser outro) e rele os arquivos do preview e do calibrador. */
+ * (o nivel pode ser outro) e rele os arquivos do preview e do calibrador,
+ * e o fliperos.conf quando ele muda. */
 static int active(void)
 {
     static int init, frames;
@@ -553,11 +575,14 @@ static int active(void)
     } else if (!(++frames % 30)) {
         char now[sizeof(core)] = "";
         dl_iterate_phdr(find_core, now);
-        if (strcmp(now, core) || getenv("FLIPEROS_DEFLICKER_FILE")) {
+        int changed = conf_changed();
+        if (changed)
+            load_conf();
+        if (changed || strcmp(now, core) || getenv("FLIPEROS_DEFLICKER_FILE")) {
             memcpy(core, now, sizeof(core));
             read_level();
         }
-        if (getenv("FLIPEROS_COLOR_FILE"))
+        if (changed || getenv("FLIPEROS_COLOR_FILE"))
             read_matrix();
     }
     return (!level_off && interlaced() ? 1 : 0) | (matrix_on ? 2 : 0);

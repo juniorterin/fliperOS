@@ -949,6 +949,24 @@ async function loadSettings() {
 function settingRow(row) {
   const id = "set-" + row.key.replace(/[^a-z0-9]/gi, "-");
   let control;
+  if (row.type === "action") {
+    // Um botao (o voltar ao padrao das cores): depois dele, os outros
+    // ajustes do grupo mudaram, e a lista volta do Setup.
+    const button = el("button", { id, type: "button", class: "ghost" }, row.label);
+    button.addEventListener("click", async () => {
+      if (!confirm(row.help)) return;
+      button.disabled = true;
+      try {
+        const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: row.key, value: "1" }) });
+        const data = await res.json().catch(() => ({}));
+        toast(res.ok ? t("saved").replace("%s", row.label) : (data.error || res.statusText));
+        await loadSettings();
+      } finally {
+        button.disabled = false;
+      }
+    });
+    return el("div", { class: "setting" }, button, el("div", { class: "dim" }, row.help));
+  }
   if (row.type === "choice") {
     control = el("select", { id }, ...row.options.map((o) => el("option", { value: o.value }, o.label)));
     control.value = row.value;
@@ -960,15 +978,27 @@ function settingRow(row) {
   }
   const about = el("div", { class: "dim" }, row.help);
   let shown = null;
+  // Os sliders gravam tambem enquanto andam (um a cada 300 ms): a cor muda
+  // na tela do jogo com o dedo ainda no slider. Eles nao ficam desligados
+  // enquanto gravam, senao o arrasto parava.
+  let timer = null, busy = false;
   if (row.type === "number") {
     shown = el("output", { for: id, class: "slider-value" }, prettyNumber(row.key, row.value));
-    control.addEventListener("input", () => { shown.textContent = prettyNumber(row.key, control.value); });
+    control.addEventListener("input", () => {
+      shown.textContent = prettyNumber(row.key, control.value);
+      clearTimeout(timer);
+      timer = setTimeout(() => { if (!busy) save(true); }, 300);
+    });
   }
-  control.addEventListener("change", async () => {
-    control.disabled = true;
+  control.addEventListener("change", () => { clearTimeout(timer); save(false); });
+  async function save(dragging) {
+    const number = row.type === "number";
+    if (!number) control.disabled = true;
+    busy = true;
     try {
       const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: row.key, value: control.value }) });
       const data = await res.json().catch(() => ({}));
+      if (dragging) return;
       if (res.ok && data.setting) {
         control.value = data.setting.value;
         about.textContent = data.setting.help;
@@ -980,9 +1010,10 @@ function settingRow(row) {
       }
       if (shown) shown.textContent = prettyNumber(row.key, control.value);
     } finally {
+      busy = false;
       control.disabled = false;
     }
-  });
+  }
   const field = shown ? el("div", { class: "slider" }, control, shown) : control;
   return el("div", { class: "setting" }, el("label", { for: id }, row.label), field, about);
 }

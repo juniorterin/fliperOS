@@ -35,7 +35,11 @@ Updates are numbered and **always applied in order**: update N only goes in on a
 - red, green, blue and grey ramps;
 - the 24 ColorChecker patches.
 
-Up and down pick a setting and left and right change it while you look at the tube. Space hides the bar, Enter keeps the settings and Esc goes back to the previous ones. **Settings in numbers** changes each setting by its number (it also works over SSH), and **Back to the defaults** clears them all.
+Up and down pick a setting and left and right change it while you look at the tube. Space hides the bar, Enter keeps the settings and Esc goes back to the previous ones. **Settings in numbers** changes each setting by its number (it also works over SSH), and **Back to the defaults** clears them all, the RGB range included (it goes back to the card's own default).
+
+A change made with a game open (from the web panel or over SSH) shows in that game at once:
+- the gamma table goes through the screen owner's own descriptor: `fliperos-color`, as root, takes a copy of it with `pidfd_getfd` (a card refuses the table from anyone but the program that owns the screen);
+- software saturation and hue come from the OpenGL layer, which reads `fliperos.conf` again when it changes.
 
 `config/fliperos-color.c` (built with the image and by each update as `/usr/local/bin/fliperos-color`) applies the settings. Its commands:
 - `fliperos-color caps` tells what the card has: the size of the gamma table, whether there is a CTM, which range property;
@@ -156,7 +160,7 @@ The status refreshes every second. What each part shows:
   - System: the default launcher, latency mode, debug mode, the volume leveler and menu sounds.
   - Services: the whole services table.
   - 480i games: each program's method and filter level.
-  - Colour: every colour calibration value.
+  - Colour: every colour calibration value and **Back to the defaults**. A slider saves while it moves, so the game on screen changes with it.
   - Each change is saved and applied at once, through the same functions as the Setup screens (`fliperos-setup --settings` and `--setting KEY VALUE`, `lib/system.sh`). Debug and latency rewrite the kernel line the way their screens do; their kernel part counts after a restart.
   - Monitor, resolution and video driver are not here, since a wrong choice can leave the cabinet without a picture. They stay in the Setup, on the cabinet screen.
 - **Downloads:** the Setup's Downloader (Setup > Games > Downloader), which takes from the MAME ROM and CHD torrents only what the MAME ROM Cleaner filter picks.

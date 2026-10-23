@@ -16,7 +16,8 @@
  *   fliperos-color caps        o que a placa tem: "lut N", "ctm yes|no",
  *                              "range NOME|none"
  *   fliperos-color apply       aplica no KMS (o dono do video, ou ninguem:
- *                              quem abre a placa primeiro vira o dono)
+ *                              quem abre a placa primeiro vira o dono; como
+ *                              root, com um jogo aberto, pelo descritor dele)
  *   fliperos-color x11         aplica a tabela de gama no X ($DISPLAY)
  *   fliperos-color lut [N]     imprime a tabela de N pontos e a matriz (testes)
  *
@@ -24,12 +25,15 @@
  * troca o /dev/dri/card0.
  */
 #define _GNU_SOURCE
+#include <dirent.h>
 #include <fcntl.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #include <X11/Xlib.h>
@@ -219,12 +223,82 @@ static uint32_t find_prop(int fd, uint32_t obj, uint32_t type, const char *name,
     return id;
 }
 
-/* O nome do enum da faixa RGB: output_csc (radeon) ou Broadcast RGB. */
+/* O nome do enum da faixa RGB: output_csc (radeon) ou Broadcast RGB. Sem
+ * faixa (Card default), o padrao do driver: o voltar ao padrao desfaz uma
+ * faixa escolhida antes. */
 static const char *range_value(const char *prop, const char *range)
 {
     if (!strcmp(prop, "output_csc"))
         return !strcmp(range, "limited") ? "tvrgb" : "bypass";
+    if (!range[0])
+        return "Automatic";
     return !strcmp(range, "limited") ? "Limited 16:235" : "Full";
+}
+
+/* prop_value: o valor atual da propriedade PROP do objeto (para nao mexer
+ * no que ja esta certo: a faixa RGB troca o modo do conector). */
+static int prop_value(int fd, uint32_t obj, uint32_t type, uint32_t prop, uint64_t *value)
+{
+    drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(fd, obj, type);
+    int found = 0;
+    for (uint32_t i = 0; props && i < props->count_props && !found; i++)
+        if (props->props[i] == prop) {
+            *value = props->prop_values[i];
+            found = 1;
+        }
+    drmModeFreeObjectProperties(props);
+    return found;
+}
+
+/* master_fd: com outro programa dono do video (o jogo no KMS, o Xorg), a
+ * placa recusa a tabela de gama de quem nao e o dono, e a mudanca so
+ * valeria no proximo jogo. Como root, uma copia do descritor da placa do
+ * dono pelo pidfd_getfd (Linux 5.6): o mesmo arquivo aberto, entao tambem
+ * dono. FD e a placa aberta aqui; -1 se ela ja e a dona ou nao achou. */
+static int master_fd(int fd)
+{
+    struct stat card;
+    if (fstat(fd, &card) || drmIsMaster(fd))
+        return -1;
+    DIR *proc = opendir("/proc");
+    struct dirent *p;
+    int found = -1;
+    while (proc && found < 0 && (p = readdir(proc))) {
+        char *end, dir[64];
+        long pid = strtol(p->d_name, &end, 10);
+        if (*end || pid <= 0 || pid == getpid())
+            continue;
+        snprintf(dir, sizeof(dir), "/proc/%ld/fd", pid);
+        DIR *fds = opendir(dir);
+        struct dirent *f;
+        int pidfd = -1;
+        while (fds && found < 0 && (f = readdir(fds))) {
+            char link[96];
+            struct stat st;
+            long n = strtol(f->d_name, &end, 10);
+            if (*end || n < 0)
+                continue;
+            snprintf(link, sizeof(link), "%s/%ld", dir, n);
+            if (stat(link, &st) || !S_ISCHR(st.st_mode) || st.st_rdev != card.st_rdev)
+                continue;
+            if (pidfd < 0 && (pidfd = (int)syscall(SYS_pidfd_open, (pid_t)pid, 0)) < 0)
+                break;
+            int copy = (int)syscall(SYS_pidfd_getfd, pidfd, (int)n, 0);
+            if (copy < 0)
+                continue;
+            if (drmIsMaster(copy))
+                found = copy;
+            else
+                close(copy);
+        }
+        if (pidfd >= 0)
+            close(pidfd);
+        if (fds)
+            closedir(fds);
+    }
+    if (proc)
+        closedir(proc);
+    return found;
 }
 
 static const char *range_props[] = {"output_csc", "Broadcast RGB", NULL};
@@ -265,10 +339,14 @@ static uint64_t s3132(double v)
 
 static int apply_kms(const struct params *p)
 {
-    int fd = open_card(), fails = 0;
+    int fd = open_card(), fails = 0, owner;
     if (fd < 0) {
         perror("fliperos-color: /dev/dri/card0");
         return 1;
+    }
+    if ((owner = master_fd(fd)) >= 0) {
+        close(fd);
+        fd = owner;
     }
     drmModeResPtr res = drmModeGetResources(fd);
     double m[9];
@@ -302,12 +380,14 @@ static int apply_kms(const struct params *p)
         }
         drmModeFreeCrtc(crtc);
     }
-    for (int i = 0; res && p->range[0] && i < res->count_connectors; i++)
+    for (int i = 0; res && i < res->count_connectors; i++)
         for (int k = 0; range_props[k]; k++) {
-            uint64_t value = 0;
+            uint64_t value = 0, now;
             uint32_t prop = find_prop(fd, res->connectors[i], DRM_MODE_OBJECT_CONNECTOR, range_props[k],
                                       range_value(range_props[k], p->range), &value);
-            if (prop && drmModeObjectSetProperty(fd, res->connectors[i], DRM_MODE_OBJECT_CONNECTOR, prop, value))
+            if (!prop || (prop_value(fd, res->connectors[i], DRM_MODE_OBJECT_CONNECTOR, prop, &now) && now == value))
+                continue;
+            if (drmModeObjectSetProperty(fd, res->connectors[i], DRM_MODE_OBJECT_CONNECTOR, prop, value))
                 fails++;
         }
     drmModeFreeResources(res);

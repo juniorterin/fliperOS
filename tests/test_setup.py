@@ -686,6 +686,13 @@ class SettingsCliTests(Base):
         conf = (self.env.etc / "fliperos.conf").read_text()
         for line in ("color_gamma=130", "mode480_flycast=pure", "deflicker_level_pcsx2=strong", "color_ctm=sw"):
             self.assertIn(line + "\n", conf)
+        # O voltar ao padrao das cores: um botao, que apaga tudo (a faixa
+        # RGB tambem) e aplica.
+        reset = rows[keys.index("color.reset")]
+        self.assertEqual((reset[1], reset[3], reset[4], reset[5]), ("Colour", "action", "", ""))
+        self.env.out("color_range_set limited; settings_set color.reset 1", env)
+        self.assertNotIn("color_gamma", (self.env.etc / "fliperos.conf").read_text())
+        self.assertNotIn("color_range", (self.env.etc / "fliperos.conf").read_text())
         for bad in ("monitor arcade_15", "latency fast", "mode480.desktop 240p", "deflicker.flycast blur",
                     "service.nope boot", "color.gamma abc", "launcher nothere"):
             self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
