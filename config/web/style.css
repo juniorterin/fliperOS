@@ -216,14 +216,17 @@ th.vid-part { color: var(--fg); font-weight: 700; font-size: 14px; padding-top: 
 .game-head .chev { flex: none; color: var(--dim); transition: transform .2s; }
 .game-head[aria-expanded="true"] .chev { transform: rotate(90deg); color: var(--pink); }
 .game-head[aria-expanded="true"] .title { color: var(--pink); }
-.game-body { padding: 4px 4px 16px; display: grid; gap: 16px; }
+/* Uma coluna do tamanho da lista: sem o minmax(0, ...), a fileira de imagens
+   alargava a coluna e, no celular, tudo saia da tela pela direita. */
+.game-body { padding: 4px 4px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.game-body > * { min-width: 0; }
 .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
   padding: 32px 0; color: var(--dim); font-size: 14px; }
 .spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--pink);
   border-right-color: var(--cyan); animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
-.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 6px 16px;
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 6px 16px;
   margin: 0; }
 .facts div { min-width: 0; }
 .facts dt { color: var(--dim); font-size: 12px; }
