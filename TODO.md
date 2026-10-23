@@ -14,9 +14,10 @@ Frontend próprio (o padrão no futuro), **primeiro mostrar o design:**
 
 Os desenhos foram mostrados e ajustados em 2026-10-23 (320x240, com mídia do gabinete e ícones do Arcadeflow); falta a aprovação do Ademir para começar a construir. O que já foi decidido:
 - sem textos de instrução na tela;
-- botão 1 abre um cartão flutuante com Jogar, Favoritar e "+";
-- "+" abre a página do jogo com o scrape, que fica salvo em `~/media/info` (o mesmo arquivo do painel web);
-- botão 3 troca a categoria (os displays do AttractPlus, um por sistema) e botão 4 abre os filtros (os do Setup, mais Favoritos);
+- ao abrir, um guia mostra o que faz o direcional e cada botão; qualquer botão fecha;
+- direcional: cima e baixo andam pelos jogos; esquerda e direita trocam de romlist (os displays do AttractPlus, um por sistema). No modo grade, esquerda e direita andam pela grade, e só trocam de romlist com o jogo escolhido já encostado na lateral (uma aba na borda mostra a próxima romlist);
+- botão 1: cartão flutuante com Jogar, Favoritar e "+"; "+" abre a página do jogo com o scrape, que fica salvo em `~/media/info` (o mesmo arquivo do painel web);
+- botão 2: voltar; botões 3 e 6: página para cima e para baixo; botão 4: favoritar e desfavoritar; botão 5: filtros (os do Setup, mais Favoritos);
 - segurar uma direção acelera a rolagem aos poucos (de 6 a 30 jogos/s) e, aos 3 s, entra no modo letra: a letra grande no centro, devagar no começo e mais rápido depois de pouco tempo segurando. Os ícones e logotipos do Arcadeflow não têm licença: como o próprio Arcadeflow, teriam de ser baixados pelo Setup, não ir na imagem.
 
 ## Vídeo: conferir no tubo
