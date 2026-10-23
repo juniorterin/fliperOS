@@ -5240,8 +5240,11 @@ class LiveScreenTests(unittest.TestCase):
         self.assertEqual(self.run_('capture', '60', 'out').returncode, 0)
         args = self.args.read_text().splitlines()
         self.assertIn('libx264', args)
-        self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=w='min(iw,960)':h='trunc(ih/2)*2':format=nv12,"
-                      "hwdownload,format=nv12", args)
+        # Os pixels nitidos: a copia em RGB, aumentada no vizinho mais proximo
+        # para 1280x960, so depois o YUV do H.264.
+        self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=format=bgr0,hwdownload,format=bgr0,"
+                      "scale=1280:960:flags=neighbor,format=yuv420p", args)
+        self.assertEqual(args[args.index('-b:v') + 1], '8M')
         self.assertEqual((self.tmp / 'run/vpp').read_text(), '1\n')
 
     def run_(self, *args):
@@ -5256,13 +5259,12 @@ class LiveScreenTests(unittest.TestCase):
         self.assertEqual(args[args.index('-framerate') + 1], '60')
         self.assertEqual(args[args.index('-f') + 1], 'kmsgrab')
         # Sem codificador na placa: x264 sem quadros B, keyframe a cada 2 s,
-        # no perfil baseline, a largura ate 960.
+        # no perfil baseline; os pixels nitidos em 1280x960.
         self.assertIn('libx264', args)
         self.assertEqual(args[args.index('-g') + 1], '120')
         self.assertEqual(args[args.index('-bf') + 1], '0')
         self.assertIn('baseline', args)
-        self.assertIn("hwdownload,format=bgr0,scale=w='min(iw,960)':h='trunc(ih/2)*2':flags=bilinear,format=yuv420p",
-                      args)
+        self.assertIn("hwdownload,format=bgr0,scale=1280:960:flags=neighbor,format=yuv420p", args)
         self.assertEqual(args[-3:], ['-f', 'rtsp', 'rtsp://127.0.0.1:8554/x'])
         # Sem o som ligado, nada do ALSA.
         self.assertNotIn('alsa', args)
@@ -5307,7 +5309,11 @@ class LiveScreenTests(unittest.TestCase):
         self.assertEqual(self.run_('capture', '30', 'out').returncode, 0)
         args = self.args.read_text().splitlines()
         self.assertIn('h264_vaapi', args)
-        self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=w='min(iw,960)':h='trunc(ih/2)*2':format=nv12", args)
+        # Aumentado na CPU (nitido) e enviado de volta a placa, que codifica.
+        self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=format=bgr0,hwdownload,format=bgr0,"
+                      "scale=1280:960:flags=neighbor,format=nv12,hwupload", args)
+        self.assertEqual(args[:4], ['-init_hw_device', 'vaapi=va:%s' % (self.tmp / 'dri/renderD129'),
+                                    '-filter_hw_device', 'va'])
         # O som: o lado de gravacao do loopback, em Opus.
         self.assertEqual(args[args.index('-i', args.index('alsa')) + 1], 'plughw:FliperOSLoop,1,0')
         self.assertIn('libopus', args)

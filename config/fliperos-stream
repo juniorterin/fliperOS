@@ -128,8 +128,11 @@ vpp() {
     return
   fi
   node=$(render "$(card)")
+  # Em RGB (bgr0): a copia sai com a cor de cada pixel, para os pixels
+  # nitidos (o capture os aumenta depois).
   if [[ -e $node ]] && "$ffmpeg" -hide_banner -loglevel error -init_hw_device "vaapi=va:$node" \
-    -f lavfi -i nullsrc=s=64x64:d=0.1 -vf format=nv12,hwupload,scale_vaapi=w=32:h=32 -f null - > /dev/null 2>&1; then
+    -f lavfi -i nullsrc=s=64x64:d=0.1 -vf format=nv12,hwupload,scale_vaapi=w=32:h=32:format=bgr0 -f null - \
+    > /dev/null 2>&1; then
     ok=1
   fi
   { mkdir -p "$run" && echo "$ok" > "$cache"; } 2> /dev/null
@@ -143,11 +146,17 @@ audio_on() {
 }
 
 # capture FPS SAIDA: o ffmpeg que o go2rtc abre (exec, transporte RTSP). A
-# imagem: a largura ate 960 (a super resolucao de 2560x240 do RetroArch vira
-# 640), a altura como esta; o navegador a mostra em 4:3. Um keyframe a cada 2
-# s, sem quadros B (a latencia), no perfil que todo navegador decodifica.
+# imagem: os pixels nitidos, como no tubo. O quadro (640x240, 480i, a super
+# resolucao de 2560x240) e aumentado no vizinho mais proximo para 1280x960 (4:3:
+# cada pixel vira um bloco inteiro, 2x de largura e 4x de altura no 640x240) e
+# so depois codificado. Em RGB ate ai: o H.264 guarda a cor a cada 2x2 pixels,
+# e no tamanho grande isso e um pixel do jogo. Sem isso o navegador esticava
+# 640x240 com suavizacao e saia borrado. Um keyframe a cada 2 s, sem quadros B
+# (a latencia), no perfil que todo navegador decodifica. O x264 aguenta 1280x960
+# a 60 fps no gabinete (i7 870).
+SHARP="scale=1280:960:flags=neighbor"
 capture() {
-  local fps=${1:-30} out=${2:-} dev enc
+  local fps=${1:-30} out=${2:-} dev enc copy
   local -a args
   [[ $fps =~ ^[0-9]+$ ]] && ((fps >= 5 && fps <= 60)) || fail "frame rate 5 to 60"
   [[ -n $out ]] || fail "no output"
@@ -162,20 +171,22 @@ capture() {
     args+=(-thread_queue_size 64 -f alsa -ac 2 -ar 48000 -i "plughw:$AUDIO_LOOP,1,0")
   fi
   args+=(-map 0:v)
-  local scale="w='min(iw,960)':h='trunc(ih/2)*2'"
-  if [[ $enc == vaapi ]]; then
-    args+=(-vf "hwmap=derive_device=vaapi,scale_vaapi=$scale:format=nv12"
-      -c:v h264_vaapi -profile:v constrained_baseline -bf 0 -g $((fps * 2)) -b:v 3M)
+  # O quadro em RGB: copiado pela placa (VA-API) e lido dali; sem o VA-API,
+  # mapeado direto (o hwdownload, nas placas que deixam).
+  if vpp; then
+    copy="hwmap=derive_device=vaapi,scale_vaapi=format=bgr0,hwdownload,format=bgr0"
   else
-    # O quadro copiado e escalado pela placa (VA-API) e lido dali; sem o
-    # VA-API, mapeado direto (o hwdownload, nas placas que deixam).
-    if vpp; then
-      args+=(-vf "hwmap=derive_device=vaapi,scale_vaapi=$scale:format=nv12,hwdownload,format=nv12")
-    else
-      args+=(-vf "hwdownload,format=bgr0,scale=$scale:flags=bilinear,format=yuv420p")
-    fi
-    args+=(-c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -bf 0 -g $((fps * 2))
-      -b:v 2500k -maxrate 3M -bufsize 1M)
+    copy="hwdownload,format=bgr0"
+  fi
+  if [[ $enc == vaapi ]]; then
+    # Aumentado aqui e enviado de volta a placa, que codifica.
+    args=(-init_hw_device "vaapi=va:$(render "$dev")" -filter_hw_device va "${args[@]}")
+    args+=(-vf "$copy,$SHARP,format=nv12,hwupload"
+      -c:v h264_vaapi -profile:v constrained_baseline -bf 0 -g $((fps * 2)) -b:v 8M -maxrate 10M)
+  else
+    args+=(-vf "$copy,$SHARP,format=yuv420p"
+      -c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -bf 0 -g $((fps * 2))
+      -b:v 8M -maxrate 10M -bufsize 2M)
   fi
   if audio_on; then
     args+=(-map 1:a -c:a libopus -b:a 96k -application lowdelay -frame_duration 10)
