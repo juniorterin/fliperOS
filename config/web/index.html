@@ -32,9 +32,10 @@
   <!-- As paginas (app.js, showPage): o endereco #frontend, #files... -->
   <nav class="pages" aria-label="Pages">
     <a href="#frontend" data-page="frontend" data-t="page_frontend"></a>
-    <a href="#files" data-page="files" data-t="page_files"></a>
     <a href="#live" data-page="live" data-t="page_live"></a>
     <a href="#romfilter" data-page="romfilter" data-t="page_romfilter"></a>
+    <a href="#downloads" data-page="downloads" data-t="page_downloads"></a>
+    <a href="#files" data-page="files" data-t="page_files"></a>
     <a href="#settings" data-page="settings" data-t="page_settings"></a>
     <a href="#status" data-page="status" data-t="page_status"></a>
     <a href="#terminal" data-page="terminal" data-t="page_terminal"></a>
@@ -234,7 +235,8 @@
       <p class="dim" data-t="drop_hint"></p>
     </section>
 
-    <section class="card wide" data-page="files" aria-labelledby="h-dl">
+    <!-- Downloads: o Downloader (torrent dos romsets) numa pagina so dele. -->
+    <section class="card wide" data-page="downloads" aria-labelledby="h-dl">
       <h2 id="h-dl" data-t="downloads"></h2>
       <div id="dl-line" class="row"><span id="dl-text"></span><span id="dl-pct" class="dim"></span></div>
       <div class="meter"><div id="dl-bar"></div></div>
@@ -246,7 +248,8 @@
       </div>
     </section>
 
-    <section class="card wide" data-page="files" aria-labelledby="h-tasks">
+    <!-- As tarefas (downloads, envios, a limpeza de romsets) nas duas paginas. -->
+    <section class="card wide" data-page="downloads files" aria-labelledby="h-tasks">
       <h2 id="h-tasks" data-t="tasks"></h2>
       <ul id="tasks" class="tasks"></ul>
     </section>

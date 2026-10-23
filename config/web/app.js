@@ -90,6 +90,7 @@ const TEXT = {
     rf_copy: "Copy them", rf_move: "Move them (out of the romset)", rf_nothing: "No game passed the filters.",
     rf_confirm_copy: "Copy the games that passed from %s?",
     rf_confirm_move: "Move the games that passed out of %s? They leave the romset.",
+    page_downloads: "Downloads",
     page_frontend: "Frontend", page_files: "Files", page_settings: "Settings", page_status: "Status", page_terminal: "Terminal",
     settings: "Settings", settings_note: "Each change is saved and applied right away, through the Setup. Monitor, resolution and video driver stay in the Setup, on the cabinet screen.",
     saved: "Saved: %s", group_System: "System", group_Services: "Services", "group_480i games": "480i games", group_Colour: "Colour",
@@ -196,6 +197,7 @@ const TEXT = {
     rf_copy: "Copiar", rf_move: "Mover (sai do romset)", rf_nothing: "Nenhum jogo passou nos filtros.",
     rf_confirm_copy: "Copiar de %s os jogos que passaram?",
     rf_confirm_move: "Mover para fora de %s os jogos que passaram? Eles saem do romset.",
+    page_downloads: "Downloads",
     page_frontend: "Frontend", page_files: "Arquivos", page_settings: "Configurações", page_status: "Status", page_terminal: "Terminal",
     settings: "Configurações", settings_note: "Cada mudança é gravada e aplicada na hora, pelo Setup. Monitor, resolução e driver de vídeo ficam no Setup, na tela do gabinete.",
     saved: "Gravado: %s", group_System: "Sistema", group_Services: "Serviços", "group_480i games": "Jogos 480i", group_Colour: "Cor",
@@ -2258,10 +2260,11 @@ $("rf-scan").addEventListener("click", () => rfScan().catch(() => {}));
 
 let timer = null;
 // ── As paginas ───────────────────────────────────────────────────
-// Frontend, Arquivos, Configuracoes, Status e Terminal: o endereco (#files)
+// Frontend, Ao vivo, Filtro de ROMs, Downloads, Arquivos, Configuracoes, Status
+// e Terminal: o endereco (#files)
 // escolhe; sem ele, a ultima aberta (lembrada no navegador, quando da).
 
-const PAGES = ["frontend", "files", "live", "romfilter", "settings", "status", "terminal"];
+const PAGES = ["frontend", "live", "romfilter", "downloads", "files", "settings", "status", "terminal"];
 let page = "frontend";
 
 function showPage(name) {
@@ -2282,6 +2285,8 @@ function showPage(name) {
   // O que cada pagina busca ao aparecer.
   if (name === "files") {
     loadFiles().catch(() => {});
+    loadTasks().catch(() => {});
+  } else if (name === "downloads") {
     loadDownloader().catch(() => {});
     loadTasks().catch(() => {});
   } else if (name === "settings") {
@@ -2318,10 +2323,9 @@ async function tick() {
     const res = await api("/api/status");
     render(await res.json());
     $("offline").hidden = true;
-    // Os downloads e as tarefas, a cada 3 s.
-    // Os downloads e as tarefas, a cada 3 s, com a pagina Arquivos aberta.
-    if (ticks++ % 3 === 0 && page === "files") {
-      loadDownloader().catch(() => {});
+    // Os downloads e as tarefas, a cada 3 s, com a pagina deles aberta.
+    if (ticks++ % 3 === 0 && (page === "downloads" || page === "files")) {
+      if (page === "downloads") loadDownloader().catch(() => {});
       loadTasks().catch(() => {});
     }
   } catch (e) {

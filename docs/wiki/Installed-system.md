@@ -101,9 +101,10 @@ How it works: `systemd-logind` ignores the button (`HandlePowerKey=ignore` in `/
 
 The cabinet's state in a browser on the same network (a phone too): **http://fliperos.local:8081**, or the cabinet's IP with `:8081`. You sign in with the same user and password as SSH and the network share (`fliperos`, changed in **Setup > System > Password**). Until 2026-10-22 the panel was on port 8080, which Pixelcade's own settings page also uses; with both installed one of them didn't open. The panel has seven pages, tabs at the top, each with its own address (`#frontend`, `#files`, `#live`, `#romfilter`, `#settings`, `#status`, `#terminal`); the browser remembers the last one:
 - **Frontend:** now playing with the FPS, games, volume and screen;
-- **Files:** files, downloads and tasks;
 - **Live:** the cabinet screen live, the streaming controls (service, encoder, sound) and the addresses for OBS (the live screen and the marquee). Leaving the page stops the stream, so ffmpeg on the cabinet stops too;
 - **ROM filter:** the MAME ROM Cleaner filter, for the Downloader or for a romset folder;
+- **Downloads:** the Downloader and the tasks;
+- **Files:** files and tasks;
 - **Settings:** colour values are sliders;
 - **Status:** now playing and the screen at the top, then video, CPU, GPU, memory, storage, network, processes and logs;
 - **Terminal.**

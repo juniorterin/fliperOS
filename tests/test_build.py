@@ -4818,6 +4818,20 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual((info['rc'], info['last']), (0, 'copied=2'))
         self.assertIn('--romfilter run %s groovymame copy players=2\n' % folder, log.read_text())
 
+    def test_downloads_have_their_own_page(self):
+        # O Downloader numa pagina so dele, depois do Filtro de ROMs; os
+        # Arquivos depois dela. As tarefas aparecem nas duas.
+        index = (ROOT / 'config/web/index.html').read_text()
+        nav = index[index.index('<nav class="pages"'):index.index('</nav>')]
+        self.assertEqual(re.findall(r'data-page="([a-z]+)"', nav),
+                         ['frontend', 'live', 'romfilter', 'downloads', 'files', 'settings', 'status', 'terminal'])
+        self.assertIn('<section class="card wide" data-page="downloads" aria-labelledby="h-dl">', index)
+        self.assertIn('<section class="card wide" data-page="downloads files" aria-labelledby="h-tasks">', index)
+        app = (ROOT / 'config/web/app.js').read_text()
+        self.assertIn('const PAGES = ["frontend", "live", "romfilter", "downloads", "files", "settings", "status", '
+                      '"terminal"];', app)
+        self.assertEqual(app.count('page_downloads: "Downloads"'), 2)
+
     def test_marquee_card_links_the_scoreboard_games_page(self):
         # O cartao Marquee para o OBS leva a lista dos jogos com placar versus
         # da documentacao (a pagina da wiki, gerada pelo tools/scoreboard-games.py).
