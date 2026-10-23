@@ -154,10 +154,23 @@ audio_on() {
 # 640x240 com suavizacao e saia borrado. Um keyframe a cada 2 s, sem quadros B
 # (a latencia), no perfil que todo navegador decodifica. O x264 aguenta 1280x960
 # a 60 fps no gabinete (i7 870).
+#
+# A taxa: 2 Mbit/s a 15 fps, 3 a 30, 5 a 60, com o buffer de uns 2 quadros
+# (nenhum quadro, nem o keyframe, sai muito maior que a media). Com 8 Mbit/s
+# e 2 Mbit de buffer o keyframe saia numa rajada, o Wi-Fi USB do gabinete
+# perdia pacotes e a imagem parava ate o keyframe seguinte (as "engasgadas"
+# de segundos em segundos; visto no gabinete: 321 pacotes perdidos e 8,6 s
+# parado em 20 s, contra nenhum com a taxa daqui). Como o go2rtc nao pede
+# keyframe ao ffmpeg, cada perda custava ate 2 s.
 SHARP="scale=1280:960:flags=neighbor"
+# rate FPS: as opcoes de taxa do codificador.
+rate() {
+  local kbps=$((1000 + $1 * 1000 / 15))
+  echo "-b:v ${kbps}k -maxrate ${kbps}k -bufsize $((kbps * 2 / $1))k"
+}
 capture() {
   local fps=${1:-30} out=${2:-} dev enc copy
-  local -a args
+  local -a args bitrate
   [[ $fps =~ ^[0-9]+$ ]] && ((fps >= 5 && fps <= 60)) || fail "frame rate 5 to 60"
   [[ -n $out ]] || fail "no output"
   dev=$(card)
@@ -178,15 +191,16 @@ capture() {
   else
     copy="hwdownload,format=bgr0"
   fi
+  read -r -a bitrate <<< "$(rate "$fps")"
   if [[ $enc == vaapi ]]; then
     # Aumentado aqui e enviado de volta a placa, que codifica.
     args=(-init_hw_device "vaapi=va:$(render "$dev")" -filter_hw_device va "${args[@]}")
     args+=(-vf "$copy,$SHARP,format=nv12,hwupload"
-      -c:v h264_vaapi -profile:v constrained_baseline -bf 0 -g $((fps * 2)) -b:v 8M -maxrate 10M)
+      -c:v h264_vaapi -profile:v constrained_baseline -bf 0 -g $((fps * 2)) "${bitrate[@]}")
   else
     args+=(-vf "$copy,$SHARP,format=yuv420p"
       -c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -bf 0 -g $((fps * 2))
-      -b:v 8M -maxrate 10M -bufsize 2M)
+      "${bitrate[@]}")
   fi
   if audio_on; then
     # Os tempos do som contados pelas amostras: os do ALSA chegam aos trancos

@@ -5310,8 +5310,22 @@ class LiveScreenTests(unittest.TestCase):
         # para 1280x960, so depois o YUV do H.264.
         self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=format=bgr0,hwdownload,format=bgr0,"
                       "scale=1280:960:flags=neighbor,format=yuv420p", args)
-        self.assertEqual(args[args.index('-b:v') + 1], '8M')
         self.assertEqual((self.tmp / 'run/vpp').read_text(), '1\n')
+
+    def test_capture_rate_without_bursts(self):
+        # A taxa pela taxa de quadros e o buffer de uns 2 quadros: o keyframe
+        # nao sai numa rajada (o Wi-Fi do gabinete perdia pacotes e a imagem
+        # engasgava ate o keyframe seguinte).
+        for vaapi in (False, True):
+            self.write_ffmpeg(vaapi=vaapi, vpp=True)
+            for cache in ('encoder', 'vpp'):
+                (self.tmp / 'run' / cache).unlink(missing_ok=True)
+            for fps, kbps, buf in (('15', '2000k', '266k'), ('30', '3000k', '200k'), ('60', '5000k', '166k')):
+                self.assertEqual(self.run_('capture', fps, 'out').returncode, 0)
+                args = self.args.read_text().splitlines()
+                rate = [args[args.index(opt) + 1] for opt in ('-b:v', '-maxrate', '-bufsize')]
+                self.assertEqual(rate, [kbps, kbps, buf], (vaapi, fps))
+                self.assertIn('h264_vaapi' if vaapi else 'libx264', args)
 
     def run_(self, *args):
         return subprocess.run(['bash', str(self.STREAM), *args], env=self.env, capture_output=True, text=True, timeout=30)
