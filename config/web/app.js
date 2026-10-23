@@ -94,6 +94,9 @@ const TEXT = {
     page_frontend: "Frontend", page_files: "Files", page_settings: "Settings", page_status: "Status", page_terminal: "Terminal",
     settings: "Settings", settings_note: "Each change is saved and applied right away, through the Setup. Monitor, resolution and video driver stay in the Setup, on the cabinet screen.",
     saved: "Saved: %s", group_System: "System", group_Services: "Services", "group_480i games": "480i games", group_Colour: "Colour",
+    m480_intro: "How each emulator draws on the tube. 640x240: sharp and steady, the right one for nearly every game. 480i with filter: 480 lines for games made for them (Dreamcast, PS2, GameCube menus and text), with the line flicker softened. 480i pure: 480 lines exactly as the hardware sends them, flicker included. Each change is saved at once.",
+    m480_240p: "640x240", m480_filter: "480i with filter", m480_pure: "480i pure", m480_level: "Filter strength:",
+    m480_light: "Light", m480_medium: "Medium", m480_strong: "Strong",
     downloads: "Downloads", dl_filter: "Filter (Setup > Games > Downloader):", dl_start: "Apply the filter and start",
     dl_note: "The filter is chosen on the ROM filter page (or in the Setup).", dl_roms: "ROM torrent", dl_chds: "CHD torrent", dl_none: "No link yet.",
     dl_add: "Add link", dl_default: "Use the link that comes with FliperOS", dl_paste: "magnet:?… (paste a link)", dl_remove: "Remove",
@@ -201,6 +204,9 @@ const TEXT = {
     page_frontend: "Frontend", page_files: "Arquivos", page_settings: "Configurações", page_status: "Status", page_terminal: "Terminal",
     settings: "Configurações", settings_note: "Cada mudança é gravada e aplicada na hora, pelo Setup. Monitor, resolução e driver de vídeo ficam no Setup, na tela do gabinete.",
     saved: "Gravado: %s", group_System: "Sistema", group_Services: "Serviços", "group_480i games": "Jogos 480i", group_Colour: "Cor",
+    m480_intro: "Como cada emulador desenha no tubo. 640x240: nítido e firme, o certo para quase todo jogo. 480i com filtro: 480 linhas para os jogos feitos para elas (menus e textos de Dreamcast, PS2, GameCube), com a tremida das linhas suavizada. 480i puro: as 480 linhas como o hardware manda, com a tremida. Cada mudança é gravada na hora.",
+    m480_240p: "640x240", m480_filter: "480i com filtro", m480_pure: "480i puro", m480_level: "Força do filtro:",
+    m480_light: "Leve", m480_medium: "Média", m480_strong: "Forte",
     downloads: "Downloads", dl_filter: "Filtro (Setup > Games > Downloader):", dl_start: "Aplicar o filtro e começar",
     dl_note: "O filtro é escolhido na página Filtro de ROMs (ou no Setup).", dl_roms: "Torrent das ROMs", dl_chds: "Torrent dos CHDs", dl_none: "Sem link ainda.",
     dl_add: "Cadastrar link", dl_default: "Usar o link que vem no FliperOS", dl_paste: "magnet:?… (cole um link)", dl_remove: "Remover",
@@ -942,7 +948,8 @@ async function loadSettings() {
     details.addEventListener("toggle", () => {
       details.open ? openGroups.add(group) : openGroups.delete(group);
     });
-    for (const row of items) details.append(settingRow(row));
+    if (group === "480i games") details.append(...mode480Rows(items));
+    else for (const row of items) details.append(settingRow(row));
     boxes.push(details);
   }
   $("settings").replaceChildren(...boxes);
@@ -1018,6 +1025,49 @@ function settingRow(row) {
   }
   const field = shown ? el("div", { class: "slider" }, control, shown) : control;
   return el("div", { class: "setting" }, el("label", { for: id }, row.label), field, about);
+}
+
+// Os jogos 480i: um cartao por emulador, com o modo em botoes (640x240,
+// 480i com filtro, 480i puro) e, so no 480i com filtro, o nivel do filtro
+// logo embaixo. O Setup manda duas linhas por emulador (mode480.CHAVE e
+// deflicker.CHAVE); aqui elas viram uma so.
+function mode480Rows(items) {
+  const levels = new Map(items.filter((r) => r.key.startsWith("deflicker.")).map((r) => [r.key.slice(10), r]));
+  const out = [el("div", { class: "setting m480-intro" },
+    el("div", { class: "dim" }, t("m480_intro")))];
+  for (const row of items.filter((r) => r.key.startsWith("mode480."))) {
+    const level = levels.get(row.key.slice(8));
+    const card = el("div", { class: "setting m480" }, el("label", {}, row.label),
+      choiceChips(row, (o) => t("m480_" + o.value)));
+    if (level && row.value === "filter") {
+      card.append(el("div", { class: "m480-level" }, el("span", { class: "dim" }, t("m480_level")),
+        choiceChips(level, (o) => t("m480_" + o.value))));
+    }
+    card.append(el("div", { class: "dim" }, row.help));
+    out.push(card);
+  }
+  return out;
+}
+
+// choiceChips: as opcoes de um ajuste de escolha como botoes; o marcado e o
+// valor de agora, e um clique grava e recarrega a lista.
+function choiceChips(row, label) {
+  return el("div", { class: "chips", role: "group", "aria-label": row.label }, ...row.options.map((o) => {
+    const b = el("button", { type: "button", "aria-pressed": String(o.value === row.value) }, label(o));
+    b.addEventListener("click", async () => {
+      if (o.value === row.value) return;
+      b.disabled = true;
+      try {
+        const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: row.key, value: o.value }) });
+        const data = await res.json().catch(() => ({}));
+        toast(res.ok ? t("saved").replace("%s", row.label) : (data.error || res.statusText));
+        await loadSettings();
+      } finally {
+        b.disabled = false;
+      }
+    });
+    return b;
+  }));
 }
 
 // prettyNumber: o valor como o Setup mostra (1.00, 6500 K, 100%, +5).

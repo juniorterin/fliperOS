@@ -166,6 +166,11 @@ th.vid-part { color: var(--fg); font-weight: 700; font-size: 14px; padding-top: 
 .slider-value { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; color: var(--cyan); }
 .setting .dim { grid-column: 1 / -1; font-size: 13px; }
 @media (max-width: 520px) { .setting { grid-template-columns: 1fr; } }
+/* Os jogos 480i: o modo em botoes e, no 480i com filtro, a forca dele. */
+.m480 .chips, .m480-level { grid-column: 1 / -1; }
+.m480-level { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 12px;
+  border-left: 2px solid var(--pink); }
+.m480-intro .dim { line-height: 1.5; }
 
 /* Downloads e tarefas. */
 .dl-kinds { display: grid; gap: 10px; margin: 10px 0; }
