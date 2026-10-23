@@ -195,6 +195,21 @@ pcm.fliperos_loop {
         buffer_size $AUDIO_TEE_BUFFER
     }
 }
+# O lado de gravacao do loopback para quantos lerem (o go2rtc abre um ffmpeg
+# por taxa de quadros; o hw so aceita um).
+pcm.fliperos_loopcap {
+    type dsnoop
+    ipc_key 58203
+    ipc_perm 0666
+    slave {
+        pcm "hw:$AUDIO_LOOP_ID,1,0"
+        format S16_LE
+        rate $AUDIO_TEE_RATE
+        channels 2
+        period_size $AUDIO_TEE_PERIOD
+        buffer_size $AUDIO_TEE_BUFFER
+    }
+}
 pcm.fliperos_tee {
     type route
     slave.pcm {

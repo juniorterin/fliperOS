@@ -5315,7 +5315,7 @@ class LiveScreenTests(unittest.TestCase):
         self.assertEqual(args[:4], ['-init_hw_device', 'vaapi=va:%s' % (self.tmp / 'dri/renderD129'),
                                     '-filter_hw_device', 'va'])
         # O som: o lado de gravacao do loopback, em Opus.
-        self.assertEqual(args[args.index('-i', args.index('alsa')) + 1], 'plughw:FliperOSLoop,1,0')
+        self.assertEqual(args[args.index('-i', args.index('alsa')) + 1], 'plug:fliperos_loopcap')
         self.assertIn('libopus', args)
         self.assertEqual(args[args.index('-map', args.index('-map') + 1) + 1], '1:a')
 

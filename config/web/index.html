@@ -84,11 +84,12 @@
       <button id="vol-mute" class="ghost" type="button" data-t="mute"></button>
     </section>
 
-    <section class="card wide" data-page="frontend status" aria-labelledby="h-shot">
+    <section class="card wide st-half" data-page="frontend status" aria-labelledby="h-shot">
       <h2 id="h-shot" data-t="screen"></h2>
       <div class="row">
         <button id="shot-take" type="button" data-t="take_shot"></button>
         <label class="dim"><input id="shot-tube" type="checkbox" checked> <span data-t="as_on_tube"></span></label>
+        <label class="dim"><input id="shot-auto" type="checkbox" checked> <span data-t="shot_auto"></span></label>
         <a id="shot-save" class="ghost-link" hidden data-t="save_png"></a>
       </div>
       <p id="shot-note" class="dim" role="status"></p>
@@ -314,7 +315,7 @@
     </section>
 
     <!-- Status: o video, o hardware, a rede, os processos e os logs. -->
-    <section class="card wide" data-page="status" aria-labelledby="h-video">
+    <section class="card wide st-half" data-page="status" aria-labelledby="h-video">
       <h2 id="h-video" data-t="video"></h2>
       <div class="table-wrap"><table id="video-table"></table></div>
       <div id="modelines"></div>
@@ -348,12 +349,12 @@
       <div id="network"></div>
     </section>
 
-    <section class="card wide" data-page="status" aria-labelledby="h-proc">
+    <section class="card wide st-half" data-page="status" aria-labelledby="h-proc">
       <h2 id="h-proc" data-t="processes"></h2>
       <div class="table-wrap"><table id="procs"></table></div>
     </section>
 
-    <section class="card wide" data-page="status" aria-labelledby="h-logs">
+    <section class="card wide st-half" data-page="status" aria-labelledby="h-logs">
       <h2 id="h-logs" data-t="logs"></h2>
       <div class="row">
         <select id="log-name" aria-label="Log"></select>

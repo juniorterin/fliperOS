@@ -1238,6 +1238,7 @@ class AudioTests(Base):
         self.assertIn('pcm "hw:FliperOSLoop,0,0"\n        format S16_LE\n        rate 48000\n        channels 2\n'
                       '        period_size 1024\n        buffer_size 16384\n', text)
         self.assertNotIn("fliperos_card", text)
+        self.assertIn('pcm.fliperos_loopcap {\n    type dsnoop', text)
         # Num dispositivo que nao e o 0 (uma HDMI), o dmix dele.
         self.env.out("conf_set alsa 1,3; audio_write_conf", env)
         self.assertIn('slaves.a { pcm { type plug slave.pcm "dmix:1,3" } channels 2 }', conf.read_text())

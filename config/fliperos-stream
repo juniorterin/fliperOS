@@ -166,9 +166,9 @@ capture() {
   args=(-hide_banner -loglevel warning -nostdin -fflags nobuffer)
   args+=(-device "$dev" -framerate "$fps" -f kmsgrab -i -)
   if audio_on; then
-    # O lado de gravacao do loopback (dispositivo 1); o plughw converte o
-    # formato que o dmix do outro lado escolheu.
-    args+=(-thread_queue_size 64 -f alsa -ac 2 -ar 48000 -i "plughw:$AUDIO_LOOP,1,0")
+    # O lado de gravacao do loopback pelo dsnoop do asound.conf (lib/audio.sh:
+    # o hw so aceita um leitor, e o go2rtc pode abrir mais de um ffmpeg).
+    args+=(-thread_queue_size 1024 -f alsa -ac 2 -ar 48000 -i "plug:fliperos_loopcap")
   fi
   args+=(-map 0:v)
   # O quadro em RGB: copiado pela placa (VA-API) e lido dali; sem o VA-API,

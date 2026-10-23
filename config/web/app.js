@@ -39,7 +39,7 @@ const TEXT = {
     live_turn_on: "Turn on", live_off_note: "The live screen is installed but off (Settings > Services > Live screen).",
     live_ready: "Ready: H.264 by %e.", live_hw: "the graphics card", live_no_audio: "no sound (Settings > Live screen sound)",
     live_connecting: "Connecting to the cabinet…", live_lost: "The connection dropped. Press Watch live again.",
-    live_buffer: "%n ms in the buffer", live_obs_title: "Live screen in OBS", page_live: "Live",
+    live_buffer: "%n ms in the buffer", shot_auto: "Every 10 s", live_obs_title: "Live screen in OBS", page_live: "Live",
     live_on_air: "Live", live_settings: "Streaming", live_service: "Service", live_encoder: "H.264",
     live_sound: "Sound", live_absent: "not installed", live_running: "running", live_stopped: "off",
     live_enc_hw: "graphics card (VA-API)", live_enc_sw: "software (x264)", live_audio_on: "on", live_audio_off: "off",
@@ -138,7 +138,7 @@ const TEXT = {
     live_turn_on: "Ligar", live_off_note: "A tela ao vivo está instalada, mas desligada (Configurações > Serviços > Live screen).",
     live_ready: "Pronta: H.264 %e.", live_hw: "pela placa de vídeo", live_no_audio: "sem som (Configurações > Live screen sound)",
     live_connecting: "Conectando ao gabinete…", live_lost: "A conexão caiu. Aperte Assistir ao vivo de novo.",
-    live_buffer: "%n ms no buffer", live_obs_title: "A tela ao vivo no OBS", page_live: "Ao vivo",
+    live_buffer: "%n ms no buffer", shot_auto: "A cada 10 s", live_obs_title: "A tela ao vivo no OBS", page_live: "Ao vivo",
     live_on_air: "Ao vivo", live_settings: "Transmissão", live_service: "Serviço", live_encoder: "H.264",
     live_sound: "Som", live_absent: "não instalado", live_running: "no ar", live_stopped: "desligado",
     live_enc_hw: "placa de vídeo (VA-API)", live_enc_sw: "software (x264)", live_audio_on: "ligado", live_audio_off: "desligado",
@@ -1245,8 +1245,17 @@ $("term-close").addEventListener("click", () => { if (termSocket) termSocket.clo
 // ou do frontend pela camada OpenGL, o desktop pelo X. Em 4:3 como no tubo,
 // ou do tamanho do quadro (um 2560x240 fica largo).
 
-let shotUrl = null;
-$("shot-take").addEventListener("click", async () => {
+let shotUrl = null, shotBusy = false;
+// Com "a cada 10 s" marcado, a foto se refaz sozinha enquanto a pagina
+// Frontend ou Status esta aberta e a aba visivel.
+setInterval(() => {
+  if ($("shot-auto").checked && !shotBusy && document.visibilityState === "visible" &&
+      (page === "frontend" || page === "status") && !$("app").hidden) takeShot();
+}, 10000);
+$("shot-take").addEventListener("click", () => takeShot());
+async function takeShot() {
+  if (shotBusy) return;
+  shotBusy = true;
   $("shot-take").disabled = true;
   $("shot-note").textContent = t("shot_wait");
   try {
@@ -1274,8 +1283,9 @@ $("shot-take").addEventListener("click", async () => {
     if (e.message !== "login") $("shot-note").textContent = String(e);
   } finally {
     $("shot-take").disabled = false;
+    shotBusy = false;
   }
-});
+}
 $("shot-tube").addEventListener("change", () => $("shot").classList.toggle("tube", $("shot-tube").checked));
 
 // ── Ao vivo: a tela do gabinete (WebRTC) ─────────────────────────
@@ -2163,6 +2173,8 @@ let page = "frontend";
 function showPage(name) {
   if (!PAGES.includes(name)) name = "frontend";
   page = name;
+  // O CSS arruma cada pagina (o Status em seis colunas no desktop).
+  document.querySelector("main").dataset.page = name;
   // Um cartao pode estar em mais de uma pagina (data-page="frontend status":
   // o jogo aberto e a tela tambem no topo do Status); data-off, desligado por
   // enquanto (o trackball).

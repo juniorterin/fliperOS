@@ -429,6 +429,15 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .live-actions:empty { display: none; }
 /* Com tres colunas, o endereco do OBS ocupa duas: a linha fica cheia. */
 @media (min-width: 1040px) { .live-obs-card { grid-column: span 2; } }
+/* Status no desktop: a Tela ao lado do Video e os Processos ao lado dos Logs
+   (seis colunas: os cartoes pequenos de dois em dois, os largos inteiros). */
+@media (min-width: 1100px) {
+  main.grid[data-page="status"] { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  main.grid[data-page="status"] > .card { grid-column: span 2; }
+  main.grid[data-page="status"] > .wide { grid-column: span 6; }
+  main.grid[data-page="status"] > .st-half { grid-column: span 3; }
+}
+
 /* Os enderecos para o OBS: o campo grande com Copiar e Abrir, as escolhas que
    o montam e os passos. */
 .obs-url { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
