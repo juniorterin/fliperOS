@@ -14,7 +14,7 @@ programa (script-torrent-done), que move cada arquivo completo para a pasta
 do emulador que o plano diz e tira o torrent da lista.
 
   fliperos-downloader config
-  fliperos-downloader add roms|chds MAGNET [--progress] [--timeout S]
+  fliperos-downloader add roms|chds MAGNET|TORRENT [--progress] [--timeout S]
   fliperos-downloader start [--progress] [--result ARQUIVO]
   fliperos-downloader count --scan ARQUIVO
   fliperos-downloader diff [--list ARQUIVO]
@@ -25,7 +25,8 @@ do emulador que o plano diz e tira o torrent da lista.
 
 O estado fica em STATE: o filtro que o Setup grava (filter.scan e
 filter.chds: as opcoes do fliperos-romclean, uma por linha) e, de cada tipo,
-o link (KIND.magnet), a lista de arquivos do torrent (KIND.json), o plano
+o link (KIND.magnet; de um .torrent, o caminho da copia KIND.torrent), a
+lista de arquivos do torrent (KIND.json), o plano
 aplicado (KIND.plan, no formato do fliperos-romclean) e o que ja chegou as
 pastas dos emuladores (KIND.installed, "set<TAB>caminho"). So o que esta em
 KIND.installed e apagado quando o filtro deixa de escolher um jogo (prune):
@@ -35,6 +36,7 @@ fica nas pastas (o neogeo.zip dos jogos de MVS postos pelo ROM cleaner, por
 exemplo) tambem ficam (in_use).
 """
 import argparse
+import base64
 import fcntl
 import json
 import os
@@ -61,6 +63,8 @@ MEDIAPACKS = os.environ.get('FLIPEROS_MEDIAPACKS', '/opt/fliperos/bin/fliperos-m
 KINDS = ('roms', 'chds')
 LABEL = {'roms': 'ROMs', 'chds': 'CHDs'}
 MAGNET = re.compile(r'^magnet:\?(.*&)?xt=urn:bt(ih|mh):[0-9a-z]+', re.I)
+# Um .torrent nao passa disto (o do MAME inteiro tem 2 MB).
+TORRENT_MAX = 32 << 20
 
 # O transmission-daemon do servico: so responde nesta maquina, sem senha;
 # para de semear quando termina (o arquivo sai da pasta dele) e chama este
@@ -332,21 +336,43 @@ def arrived(target, length):
         return False
 
 
-def fetch_metadata(rpc, kind, magnet, progress, timeout):
+def read_torrent(link):
+    """O conteudo de um .torrent: um arquivo desta maquina ou um endereco
+    http(s). OSError se nao for um."""
+    if re.match(r'^https?://', link, re.I):
+        req = urllib.request.Request(link, headers={'User-Agent': 'fliperos-downloader'})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = resp.read(TORRENT_MAX + 1)
+    else:
+        with open(link, 'rb') as f:
+            data = f.read(TORRENT_MAX + 1)
+    # Bencode: um .torrent e um dicionario, "d...e", com o "info" dentro.
+    if len(data) > TORRENT_MAX or not data.startswith(b'd') or b'4:info' not in data:
+        raise OSError('%s is not a .torrent file' % link)
+    return data
+
+
+def fetch_metadata(rpc, kind, link, progress, timeout):
     """Poe o link no Transmission e espera a lista de arquivos. Pausado, o
-    Transmission nem procura peers; por isso o link entra rodando e, assim
-    que a lista chega, todos os arquivos saem da lista do download e o
-    torrent para: nada baixa antes do filtro (cmd_start)."""
-    got = rpc.call('torrent-add', filename=magnet, paused=False, **{'download-dir': os.path.join(STAGING, kind)})
+    Transmission nem procura peers; por isso o link magnetico entra rodando
+    e, assim que a lista chega, todos os arquivos saem da lista do download
+    e o torrent para: nada baixa antes do filtro (cmd_start). Um .torrent
+    (o caminho da copia guardada no estado) ja traz a lista: entra parado."""
+    args = {'download-dir': os.path.join(STAGING, kind)}
+    if MAGNET.match(link):
+        args.update(filename=link, paused=False)
+    else:
+        args.update(metainfo=base64.b64encode(read_torrent(link)).decode(), paused=True)
+    got = rpc.call('torrent-add', **args)
     added = got.get('torrent-added') or got.get('torrent-duplicate')
     if not added:
-        raise OSError('Transmission did not take the magnet link')
+        raise OSError('Transmission did not take the torrent')
     hash_ = added['hashString']
     # O modo vai sozinho e antes de tudo: num mesmo torrent-set o Transmission
     # 4 aplica files-unwanted antes de seedRatioMode, e com tudo desmarcado o
     # torrent rodando "termina" e para pelo limite 0 da sessao.
     rpc.call('torrent-set', ids=[hash_], seedRatioMode=UNLIMITED)
-    if 'torrent-duplicate' in got:
+    if 'torrent-duplicate' in got and not args['paused']:
         rpc.call('torrent-start', ids=[hash_])
     end = time.monotonic() + timeout
     while True:
@@ -397,9 +423,20 @@ def cmd_config(args):
 
 
 def cmd_add(args):
+    """O link de um tipo: magnetico, ou um .torrent (arquivo ou endereco), de
+    que fica uma copia no estado (KIND.torrent, e o caminho dela em
+    KIND.magnet): o original pode estar num pendrive que sai."""
     magnet = args.magnet.strip()
+    torrent = None
     if not MAGNET.match(magnet):
-        sys.exit('fliperos-downloader: not a magnet link (magnet:?xt=urn:btih:...)')
+        if not (re.match(r'^https?://', magnet, re.I) or os.path.isfile(magnet)):
+            sys.exit('fliperos-downloader: not a magnet link (magnet:?xt=urn:btih:...) nor a .torrent file')
+        try:
+            say(args.progress, '@step 0 Reading the .torrent file')
+            torrent = read_torrent(magnet)
+        except (OSError, ValueError) as e:
+            say(args.progress, '@fail Reading the .torrent file|%s' % e)
+            sys.exit('fliperos-downloader: %s' % e)
     say(args.progress, '@step 0 Connecting to the download service')
     rpc = Rpc()
     try:
@@ -411,6 +448,17 @@ def cmd_add(args):
                     rpc.remove(old['hash'], delete=True)
                 except OSError:
                     pass
+            copy = state(args.kind + '.torrent')
+            if torrent is None:
+                if os.path.exists(copy):
+                    os.remove(copy)
+            else:
+                os.makedirs(STATE, exist_ok=True)
+                with open(copy + '.tmp', 'wb') as f:
+                    f.write(torrent)
+                give_to_owner(copy + '.tmp')
+                os.replace(copy + '.tmp', copy)
+                magnet = copy
             hash_, t = fetch_metadata(rpc, args.kind, magnet, args.progress, args.timeout)
             files = [[f['name'], f['length']] for f in t['files']]
             root, sets = find_base(args.kind, files)
@@ -425,7 +473,7 @@ def cmd_add(args):
                 if os.path.exists(state(stale)):
                     os.remove(state(stale))
     except OSError as e:
-        say(args.progress, '@fail Reading the magnet link|%s' % e)
+        say(args.progress, '@fail Reading the %s|%s' % ('magnet link' if torrent is None else '.torrent file', e))
         sys.exit('fliperos-downloader: %s' % e)
     say(args.progress, '@step 100 %d %s found in %s' % (sets, 'sets' if args.kind == 'roms' else 'games',
                                                        root or 'the top of the torrent'))
@@ -830,7 +878,7 @@ def cmd_remove(args):
                 if name not in used:
                     delete_path(path)
                     deleted += 1
-        for suffix in ('.json', '.magnet', '.plan', '.installed'):
+        for suffix in ('.json', '.magnet', '.torrent', '.plan', '.installed'):
             if os.path.exists(state(args.kind + suffix)):
                 os.remove(state(args.kind + suffix))
     print('deleted=%d' % deleted)

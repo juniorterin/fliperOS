@@ -3672,9 +3672,10 @@ class RomCleanerTests(Base):
 
     def test_downloader_magnet_warns_about_the_filter(self):
         out, calls, state = self.downloader_screen("""
+            ui_menu() { echo link; }
             ui_input() { echo ' magnet:?xt=urn:btih:abc&dn=MAME '; }
             screen_downloader_magnet roms
-            ui_input() { echo 'http://site/romset.torrent'; }
+            ui_input() { echo 'romset.torrent'; }
             screen_downloader_magnet chds
         """)
         self.assertIn("The MAME ROM Cleaner filter will be used: only the ROMs of the games the filter chooses", out)
@@ -3686,6 +3687,24 @@ class RomCleanerTests(Base):
         kv = (state / "filter.kv").read_text()
         self.assertIn("target=groovymame\n", kv)
         self.assertIn("preset=cabinet\n", kv)
+
+    def test_downloader_takes_a_torrent_file_or_address(self):
+        # Um .torrent escolhido no seletor de arquivos, ou o endereco de um.
+        torrent = self.env.dir / "usb" / "MAME 0.288 CHDs.torrent"
+        torrent.parent.mkdir()
+        torrent.write_text("d4:infod4:name4:mameee")
+        out, calls, _ = self.downloader_screen("""
+            ui_menu() { printf 'menu:%%s\\n' "${@:4}" >&2; echo file; }
+            ui_browse() { echo "browse:$3|${*:4}" >&2; echo '%s'; }
+            screen_downloader_magnet chds
+            ui_menu() { echo link; }
+            ui_input() { echo 'https://site/romset.torrent'; }
+            screen_downloader_magnet roms
+        """ % torrent)
+        self.assertIn("menu:file|Choose a .torrent file (USB disk, network share, home folder)", out)
+        self.assertIn("|file .torrent", out)
+        self.assertIn("add chds %s --progress" % torrent, calls)
+        self.assertIn("add roms https://site/romset.torrent --progress", calls)
 
     def update_screen(self, check, plan, apply_rc=0, script=""):
         calls = self.env.dir / "upd.calls"
@@ -3782,6 +3801,7 @@ class RomCleanerTests(Base):
         # Os links da imagem vem preenchidos: Enter usa o de cada tipo.
         out, calls, _ = self.downloader_screen("""
             DOWNLOADER_MAGNETS=%s
+            ui_menu() { echo link; }
             ui_input() { echo "input:$2" >&2; echo "$3"; }
             screen_downloader_magnet chds
             DOWNLOADER_MAGNETS=/nada
@@ -3809,9 +3829,9 @@ class RomCleanerTests(Base):
         plain = re.sub(r"\x1b\[[0-9;]*m", "", out)
         items = [line.split("|")[0] for line in plain.splitlines() if line.startswith("item:")]
         self.assertEqual(items, ["item:filter", "item:roms", "item:chds", "item:dest", "item:start", "item:return"])
-        self.assertIn("ROM set magnet link (required): not set", plain)
-        self.assertIn("CHD set magnet link (optional): MAME CHDs", plain)
-        self.assertIn("msg:ROM/CHD MAME torrent The ROM set magnet link is required.", plain)
+        self.assertIn("ROM set torrent (required): not set", plain)
+        self.assertIn("CHD set torrent (optional): MAME CHDs", plain)
+        self.assertIn("msg:ROM/CHD MAME torrent The ROM set torrent is required.", plain)
         self.assertNotIn("start:", out)
         # Com ele, comeca.
         out, _, _ = self.downloader_screen("""

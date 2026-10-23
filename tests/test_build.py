@@ -2998,8 +2998,37 @@ class DownloaderTests(unittest.TestCase):
         self.assertTrue(cfg['script-torrent-done-enabled'])
         self.assertEqual(cfg['download-dir'], str(self.staging))
 
+    def test_a_torrent_file_instead_of_the_magnet_link(self):
+        # Um .torrent de um pendrive: entra parado (ja traz a lista), fica uma
+        # copia no estado e e ela que volta se o torrent sair do Transmission.
+        usb = self.tmp / 'usb'
+        usb.mkdir()
+        (usb / 'romset.torrent').write_text('d4:infod6:pieces3:btih:%s;ee' % self.ROMS)
+        (usb / 'nada.torrent').write_text('<html>not found</html>')
+        r = self.dl('add', 'roms', str(usb / 'nada.torrent'), '--progress', check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('@fail Reading the .torrent file|', r.stdout)
+        out = self.dl('add', 'roms', str(usb / 'romset.torrent'), '--progress').stdout
+        self.assertIn('@step 100 4 sets found in MAME 0.289 ROMs', out)
+        self.assertEqual([a['paused'] for m, a in self.calls if m == 'torrent-add'], [True])
+        self.assertFalse(any(f['wanted'] for t in self.torrents.values() for f in t['files']))
+        copy = self.state / 'roms.torrent'
+        self.assertEqual(copy.read_text(), (usb / 'romset.torrent').read_text())
+        self.assertEqual((self.state / 'roms.magnet').read_text().strip(), str(copy))
+        (usb / 'romset.torrent').unlink()
+        self.torrents.clear()
+        self.dl('start')
+        self.assertIn(self.ROMS, self.torrents)
+        # Um link magnetico depois tira a copia; e o remove tambem.
+        self.dl('add', 'roms', 'magnet:?xt=urn:btih:%s' % self.ROMS)
+        self.assertFalse(copy.exists())
+        (usb / 'r2.torrent').write_text('d4:infod6:pieces3:btih:%s;ee' % self.ROMS)
+        self.dl('add', 'roms', str(usb / 'r2.torrent'))
+        self.dl('remove', 'roms')
+        self.assertFalse(copy.exists())
+
     def test_only_what_the_filter_chooses_and_the_filter_changes(self):
-        r = self.dl('add', 'roms', 'http://nao-e-magnet', check=False)
+        r = self.dl('add', 'roms', 'nao-e-magnet', check=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('not a magnet link', r.stderr)
         out = self.dl('add', 'roms', 'magnet:?xt=urn:btih:%s&dn=romset' % self.ROMS, '--progress').stdout

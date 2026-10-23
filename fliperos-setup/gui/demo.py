@@ -178,7 +178,7 @@ def gunresult():
 
 def downloads():
     return Menu("Downloader", [
-        ("torrent", "MAME torrent", "Only the games your filter picks, from a romset magnet link."),
+        ("torrent", "MAME torrent", "Only the games your filter picks, from a romset torrent."),
         ("freeroms", "Free games", "Open-source homebrew, so the frontends have something to show."),
         ("return", "Return", "Back to Games."),
     ], "torrent", "Games straight to the emulator folders")

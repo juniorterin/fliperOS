@@ -10,7 +10,7 @@ screen_downloads() {
   local choice last=""
   while true; do
     choice=$(ui_menu_hints "Downloader" "Games downloaded straight to the emulator folders." "$last" \
-      "torrent|ROM/CHD MAME torrent|Only the games your filter picks, from a romset magnet link." \
+      "torrent|ROM/CHD MAME torrent|Only the games your filter picks, from a romset torrent." \
       "freeroms|Free games (open-source homebrew)|So the frontends have something to show." \
       "biospack|Download BIOS|The BIOS your games lack, also checked when the menu opens." \
       "return|Return|Back to Games.") || return 0
@@ -117,8 +117,8 @@ screen_downloader() {
     roms=$(romclean_value "$status" roms_name)
     chds=$(romclean_value "$status" chds_name)
     entries=("filter|Filter: $(downloader_filter_label)"
-      "roms|ROM set magnet link (required): ${roms:-not set}"
-      "chds|CHD set magnet link (optional): ${chds:-not set}"
+      "roms|ROM set torrent (required): ${roms:-not set}"
+      "chds|CHD set torrent (optional): ${chds:-not set}"
       "dest|Download folder: $(downloader_dest_label)")
     if [[ $state == downloading ]]; then
       entries+=("watch|See the download ($pct%)")
@@ -134,8 +134,8 @@ screen_downloader() {
       dest) screen_downloader_dest ;;
       start)
         if [[ -z $roms ]]; then
-          ui_msg "$title" "$(ui_bad "The ROM set magnet link is required.")" \
-            "Paste it in ROM set magnet link, then Start the download."
+          ui_msg "$title" "$(ui_bad "The ROM set torrent is required.")" \
+            "Choose it in ROM set torrent, then Start the download."
           last=roms
         else
           screen_downloader_start
@@ -175,8 +175,8 @@ screen_downloader_magnet() {
   [[ $kind == chds ]] && only="only the CHDs of the games the filter chooses are downloaded"
   name=$(romclean_value "$(downloader_status)" "${kind}_name")
   if [[ -n $name && ${3:-} != from-browser ]]; then
-    choice=$(ui_menu "$title" "$what: $name" replace "replace|Replace the magnet link" \
-      "remove|Remove the magnet link" "cancel|Cancel") || return 0
+    choice=$(ui_menu "$title" "$what: $name" replace "replace|Replace the torrent" \
+      "remove|Remove the torrent" "cancel|Cancel") || return 0
     case $choice in
       remove)
         result="--keep"
@@ -188,35 +188,51 @@ screen_downloader_magnet() {
           result=$(downloader remove "$kind" --delete-files 2>> "$FLIPEROS_LOG")
         fi
         downloader_service_sync
-        ui_msg "$title" "The $what magnet link was removed." "$(romclean_value "$result" deleted) files deleted."
+        ui_msg "$title" "The $what torrent was removed." "$(romclean_value "$result" deleted) files deleted."
         return 0
         ;;
       replace) ;;
       *) return 0 ;;
     esac
   fi
-  magnet=$(downloader_default_magnet "$kind")
-  prompt="Paste the magnet link of the $what (magnet:?xt=urn:btih:...)."
-  [[ -n $magnet ]] && prompt="The FliperOS link of the $what is filled in: Enter uses it, or paste another."
-  if [[ ${3:-} == from-browser ]]; then
-    magnet=${2:-}
-    prompt="The link clicked in the browser is filled in: Enter uses it."
-    [[ -n $magnet ]] || prompt="No magnet link came from the browser. Paste the link of the $what, or open the browser again."
+  # O link magnetico (ou o endereco de um .torrent) colado, ou um arquivo
+  # .torrent desta maquina: de um pendrive, da rede ou da pasta pessoal.
+  if [[ ${3:-} != from-browser ]]; then
+    choice=$(ui_menu "$title" "How do you want to give the $what?" link \
+      "link|Paste a magnet link (or the address of a .torrent)" \
+      "file|Choose a .torrent file (USB disk, network share, home folder)") || return 0
+  else
+    choice=link
   fi
-  downloader_browser_ok &&
-    button=("Open the browser" "Search the web for the $what and click its magnet link: it comes back here.")
-  magnet=$(ui_input "$title" "$prompt" "$magnet" long "${button[@]}")
-  rc=$?
-  if ((rc == 3)); then
-    screen_downloader_browser "$kind"
-    return 0
-  fi
-  ((rc == 0)) || return 0
-  magnet=${magnet//[[:space:]]/}
-  [[ -n $magnet ]] || return 0
-  if [[ ! $magnet =~ ^magnet:\?.*xt=urn:bt(ih|mh): ]]; then
-    ui_msg "$title" "$(ui_bad "That is not a magnet link.")" "It starts with magnet:?xt=urn:btih:"
-    return 0
+  if [[ $choice == file ]]; then
+    local start=${ROMS_ROOT%/*}
+    [[ -d /media/fliperos ]] && compgen -G "/media/fliperos/*" > /dev/null && start=/media/fliperos
+    magnet=$(ui_browse "$title" "Choose the .torrent file of the $what." "$start" file .torrent) || return 0
+  else
+    magnet=$(downloader_default_magnet "$kind")
+    prompt="Paste the magnet link of the $what (magnet:?xt=urn:btih:...)."
+    [[ -n $magnet ]] && prompt="The FliperOS link of the $what is filled in: Enter uses it, or paste another."
+    if [[ ${3:-} == from-browser ]]; then
+      magnet=${2:-}
+      prompt="The link clicked in the browser is filled in: Enter uses it."
+      [[ -n $magnet ]] || prompt="No magnet link came from the browser. Paste the link of the $what, or open the browser again."
+    fi
+    downloader_browser_ok &&
+      button=("Open the browser" "Search the web for the $what and click its magnet link: it comes back here.")
+    magnet=$(ui_input "$title" "$prompt" "$magnet" long "${button[@]}")
+    rc=$?
+    if ((rc == 3)); then
+      screen_downloader_browser "$kind"
+      return 0
+    fi
+    ((rc == 0)) || return 0
+    magnet=${magnet//[[:space:]]/}
+    [[ -n $magnet ]] || return 0
+    if [[ ! $magnet =~ ^magnet:\?.*xt=urn:bt(ih|mh): && ! $magnet =~ ^https?://[^[:space:]]+$ ]]; then
+      ui_msg "$title" "$(ui_bad "That is not a magnet link.")" \
+        "It starts with magnet:?xt=urn:btih: (or http:// for the address of a .torrent)."
+      return 0
+    fi
   fi
   if ! downloader_filter_get preset > /dev/null; then
     downloader_filter_default
@@ -227,7 +243,7 @@ screen_downloader_magnet() {
       "Filter: $(downloader_filter_label)."
   fi
   downloader_service_on
-  run_with_progress "Reading the magnet link" "$what" downloader_add "$kind" "$magnet" || {
+  run_with_progress "Reading the torrent" "$what" downloader_add "$kind" "$magnet" || {
     downloader_service_sync
     return 0
   }
