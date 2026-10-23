@@ -113,6 +113,8 @@ table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nu
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--dim); font-weight: 500; font-size: 13px; }
 td.num, th.num { text-align: right; }
+/* No Video do Status: as duas partes (o pedido e o que esta na tela). */
+th.vid-part { color: var(--fg); font-weight: 700; font-size: 14px; padding-top: 12px; }
 /* Processos: colunas fixas; o nome comprido termina em "…" e rola como
    letreiro (app.js, banner()). */
 #procs { table-layout: fixed; }

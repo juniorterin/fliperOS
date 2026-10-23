@@ -383,10 +383,10 @@ function render(s) {
   const table = $("video-table");
   table.replaceChildren();
   const add = (k, val) => table.append(el("tr", {}, el("th", {}, t(k)), el("td", {}, val || "-")));
-  table.append(el("tr", {}, el("th", { colspan: "2" }, t("wanted"))));
+  table.append(el("tr", {}, el("th", { colspan: "2", class: "vid-part" }, t("wanted"))));
   add("monitor", w.monitor); add("frequency", w.frequency); add("resolution", w.boot_resolution);
   add("connector", w.connector); add("orientation", w.orientation);
-  table.append(el("tr", {}, el("th", { colspan: "2" }, t("applied"))));
+  table.append(el("tr", {}, el("th", { colspan: "2", class: "vid-part" }, t("applied"))));
   const active = (v.outputs || []).filter((o) => o.active);
   $("modelines").replaceChildren();
   if (!active.length) add("mode", t("no_output"));
