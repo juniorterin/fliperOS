@@ -12,7 +12,12 @@ Frontend próprio (o padrão no futuro), **primeiro mostrar o design:**
 - o mesmo desenho do menu de hoje, que ele vai integrar;
 - ícones e logotipos do Arcadeflow.
 
-Os primeiros desenhos dos três modos (320x240, com mídia do gabinete e ícones do Arcadeflow) foram mostrados em 2026-10-23; falta a aprovação do Ademir. Os ícones e logotipos do Arcadeflow não têm licença: como o próprio Arcadeflow, teriam de ser baixados pelo Setup, não ir na imagem.
+Os desenhos foram mostrados e ajustados em 2026-10-23 (320x240, com mídia do gabinete e ícones do Arcadeflow); falta a aprovação do Ademir para começar a construir. O que já foi decidido:
+- sem textos de instrução na tela;
+- botão 1 abre um cartão flutuante com Jogar, Favoritar e "+";
+- "+" abre a página do jogo com o scrape, que fica salvo em `~/media/info` (o mesmo arquivo do painel web);
+- botão 3 troca a categoria (os displays do AttractPlus, um por sistema) e botão 4 abre os filtros (os do Setup, mais Favoritos);
+- segurar uma direção acelera a rolagem aos poucos (de 6 a 30 jogos/s) e, aos 3 s, entra no modo letra: a letra grande no centro, devagar no começo e mais rápido depois de pouco tempo segurando. Os ícones e logotipos do Arcadeflow não têm licença: como o próprio Arcadeflow, teriam de ser baixados pelo Setup, não ir na imagem.
 
 ## Vídeo: conferir no tubo
 
