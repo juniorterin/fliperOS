@@ -1230,13 +1230,19 @@ class AudioTests(Base):
         cards.write_text(cards.read_text() + "10 [FliperOSLoop   ]: Loopback - Loopback\n")
         self.env.out("audio_write_conf", env)
         text = conf.read_text()
-        # Os dois dmix escritos, iguais: o padrao do loopback nao abre e o
-        # multi so abre com o mesmo formato, taxa e periodo (visto no gabinete).
-        self.assertIn('slaves.a { pcm "fliperos_card" channels 2 }', text)
-        self.assertIn('slaves.b { pcm "fliperos_loop" channels 2 }', text)
-        for hw in ('hw:0,0', 'hw:FliperOSLoop,0,0'):
-            self.assertIn('pcm "%s"\n        format S16_LE\n        rate 48000\n        channels 2\n'
-                          '        period_size 1024\n        buffer_size 4096\n' % hw, text)
+        # A placa pelo mesmo dmix dos jogos (o sysdefault: outro dmix da "busy"
+        # com algo tocando); o loopback pelo dmix dele, escrito, atras de um
+        # plug (o padrao dele nao abre). Visto no gabinete.
+        self.assertIn('slaves.a { pcm "sysdefault:0" channels 2 }', text)
+        self.assertIn('slaves.b { pcm { type plug slave.pcm "fliperos_loop" } channels 2 }', text)
+        self.assertIn('pcm "hw:FliperOSLoop,0,0"\n        format S16_LE\n        rate 48000\n        channels 2\n'
+                      '        period_size 1024\n        buffer_size 16384\n', text)
+        self.assertNotIn("fliperos_card", text)
+        # Num dispositivo que nao e o 0 (uma HDMI), o dmix dele.
+        self.env.out("conf_set alsa 1,3; audio_write_conf", env)
+        self.assertIn('slaves.a { pcm { type plug slave.pcm "dmix:1,3" } channels 2 }', conf.read_text())
+        self.env.out("conf_set alsa 0,0; audio_write_conf", env)
+        text = conf.read_text()
         self.assertIn('pcm.!default {\n    type plug\n    slave.pcm "fliperos_tee"\n}', text)
         # Com o nivelador, o compressor sai no tee (um default so).
         plugin.write_text("")

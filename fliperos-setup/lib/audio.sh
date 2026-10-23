@@ -60,16 +60,18 @@ audio_leveler_set() {
 # fabrica: uma copia de tudo o que toca vai para um loopback do ALSA
 # (snd-aloop, a placa FliperOSLoop), que o ffmpeg da transmissao grava. A
 # copia so entra no asound.conf com o loopback aberto: sem ele o "default" nao
-# abriria e tudo ficaria mudo. Visto no gabinete (2026-10-22, HDA Intel):
-#   - o dmix padrao do loopback nao abre ("Sample format non available") e o
-#     multi so abre com os dois dmix iguais: os dois vao escritos, no mesmo
-#     formato, taxa e periodo (S16_LE, 48000, 1024/4096, o padrao do dmix);
+# abriria e tudo ficaria mudo. Visto no gabinete (2026-10-22/23, HDA Intel):
+#   - o lado da placa tem de ser o mesmo dmix que os jogos ja usam (o
+#     sysdefault da placa): um dmix proprio, ou o "dmix:0,0" (outra chave),
+#     da "busy" com qualquer programa tocando;
+#   - o dmix padrao do loopback nao abre ("Sample format non available"): o
+#     dele vai escrito, atras de um plug;
 #   - o timer_source na placa deixava o loopback ocupado (EBUSY) e o hrtimer
-#     nao abre: fica o timer padrao (jiffies), 31 s sem nenhum xrun nem
-#     buraco no som.
-# Ao ligar, o "default" e testado (0,1 s de silencio); se nao abrir (uma placa
-# que nao aceita S16_LE), volta como estava.
-AUDIO_TEE_RATE=48000 AUDIO_TEE_PERIOD=1024 AUDIO_TEE_BUFFER=4096
+#     nao abre: fica o timer padrao (jiffies). 30 s com o Attract-Mode tocando
+#     junto: nenhum xrun nem buraco no som.
+# Ao ligar, o "default" e testado (0,1 s de silencio); se nao abrir, volta
+# como estava.
+AUDIO_TEE_RATE=48000 AUDIO_TEE_PERIOD=1024 AUDIO_TEE_BUFFER=16384
 AUDIO_LOOP_ID=${AUDIO_LOOP_ID:-FliperOSLoop}
 AUDIO_LOOP_MODPROBE=${AUDIO_LOOP_MODPROBE:-/etc/modprobe.d/fliperos-aloop.conf}
 AUDIO_LOOP_LOAD=${AUDIO_LOOP_LOAD:-/etc/modules-load.d/fliperos-aloop.conf}
@@ -100,6 +102,9 @@ audio_default_plays() {
 # sem a copia.
 audio_stream_off_now() {
   log_error "audio: $1; o som da tela ao vivo fica desligado"
+  # O painel web mostra esta linha no lugar de um "failed".
+  printf 'Live screen sound did not open on this sound card (%s); it stays off and the game sound is unchanged.\n' \
+    "$1" >&2
   rm -f "$AUDIO_LOOP_LOAD" "$AUDIO_LOOP_MODPROBE"
   modprobe -r snd-aloop 2> /dev/null
   conf_set stream_audio off
@@ -153,12 +158,19 @@ audio_stream_check() {
 # ao vivo, a saida e o fliperos_tee: o mesmo som no dmix da placa e no do
 # loopback (o route copia os 2 canais para os 4 do multi).
 audio_write_conf() {
-  local current card dev out tee=0
+  local current card dev out tee=0 cardpcm
   current=$(audio_current)
   card=${current%,*} dev=${current#*,}
   out="dmix:$card,$dev"
   if audio_stream_enabled && audio_loop_ready; then
     tee=1 out=fliperos_tee
+  fi
+  # O lado da placa da copia: o default dela (o mesmo dmix dos jogos); num
+  # dispositivo que nao e o 0 (uma HDMI), o dmix dele.
+  if ((dev == 0)); then
+    cardpcm="\"sysdefault:$card\""
+  else
+    cardpcm="{ type plug slave.pcm \"dmix:$card,$dev\" }"
   fi
   {
     echo "# Gerado pelo fliperos-setup (Setup > Audio Setup)."
@@ -169,20 +181,7 @@ audio_write_conf() {
       cat << EOF
 
 # Live screen sound: o som de tudo tambem no loopback que a transmissao grava.
-# Os dois dmix iguais (formato, taxa, periodo): o multi so abre assim.
-pcm.fliperos_card {
-    type dmix
-    ipc_key 58201
-    ipc_perm 0666
-    slave {
-        pcm "hw:$card,$dev"
-        format S16_LE
-        rate $AUDIO_TEE_RATE
-        channels 2
-        period_size $AUDIO_TEE_PERIOD
-        buffer_size $AUDIO_TEE_BUFFER
-    }
-}
+# A placa pelo mesmo dmix dos jogos; o loopback pelo dmix dele, atras de um plug.
 pcm.fliperos_loop {
     type dmix
     ipc_key 58202
@@ -200,8 +199,8 @@ pcm.fliperos_tee {
     type route
     slave.pcm {
         type multi
-        slaves.a { pcm "fliperos_card" channels 2 }
-        slaves.b { pcm "fliperos_loop" channels 2 }
+        slaves.a { pcm $cardpcm channels 2 }
+        slaves.b { pcm { type plug slave.pcm "fliperos_loop" } channels 2 }
         bindings.0 { slave a channel 0 }
         bindings.1 { slave a channel 1 }
         bindings.2 { slave b channel 0 }

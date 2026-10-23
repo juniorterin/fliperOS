@@ -46,10 +46,18 @@ const TEXT = {
     live_turn_off: "Turn off", live_sound_on: "Turn the sound on", live_sound_off: "Turn the sound off",
     live_not_installed: "The live screen is not installed yet: Install, under Streaming (or Setup > System > Extras > Live screen).",
     live_settings_note: "ffmpeg only runs while someone watches (here or in OBS). The sound is a copy of the output on an ALSA loopback: games opened after turning it on get it.",
-    live_obs: "Sources > + > Browser, paste the address, width 1440 and height 1080 (4:3, as on the tube), and tick Control audio via OBS for the sound. It reconnects by itself. &fit=fill stretches it to any size; &muted=1 drops the sound. It uses the same key as the marquee page (New address there changes both).",
+    obs_open: "Open", obs_fps60: "60 (recommended)", obs_fps30: "30 (lighter)", obs_fps15: "15 (very light)",
+    obs_fit: "Format", obs_fit_tube: "4:3 as on the tube (recommended)", obs_fit_fill: "Stretch to the whole source",
+    obs_size: "Size in OBS", obs_size_1440: "1440 × 1080 (4:3, recommended)", obs_size_960: "960 × 720 (4:3, lighter)",
+    obs_size_1920: "1920 × 1080 (16:9, black bars or stretched)", obs_sound: "With sound",
+    obs_wh: "width %w, height %h", obs_step1: "In OBS: Sources > + > Browser, and paste the address above.",
+    obs_step2: "Width and height:", obs_step3: "Tick Control audio via OBS for the sound. It reconnects by itself; the same key as the marquee (New address there changes both).",
+    live_obs_off: "The address is ready, but the live screen is not running on the cabinet: turn it on under Streaming.",
+    ovl_led: "LED dots", ovl_text: "Texts (name, high scores, achievements)",
+    ovl_size_1280: "1280 × 320 (recommended)", ovl_size_1920: "1920 × 480", ovl_size_1024: "1024 × 256",
+    ovl_obs: "In OBS: Sources > + > Browser, paste the address,",
     overlay: "Marquee for OBS", overlay_on: "Turn on the marquee page",
     overlay_note: "The marquee of the game on screen as a page for OBS: transparent background, the game's art (from ~/media), the high scores, the achievements and the versus score. No LED panel needed.",
-    overlay_obs: "In OBS: Sources > + > Browser, paste the address, width 1280 and height 320. Add &led=1 at the end for LED dots.",
     overlay_new: "New address", overlay_new_ask: "Make a new address? The old one stops working (update OBS).",
     copy: "Copy", copied: "Copied.",
     page_romfilter: "ROM filter",
@@ -137,10 +145,18 @@ const TEXT = {
     live_turn_off: "Desligar", live_sound_on: "Ligar o som", live_sound_off: "Desligar o som",
     live_not_installed: "A tela ao vivo ainda não está instalada: Instalar, em Transmissão (ou Setup > System > Extras > Live screen).",
     live_settings_note: "O ffmpeg só roda enquanto alguém assiste (aqui ou no OBS). O som é uma cópia da saída num loopback do ALSA: os jogos abertos depois de ligar já saem com ele.",
-    live_obs: "Fontes > + > Navegador, cole o endereço, largura 1440 e altura 1080 (4:3, como no tubo), e marque Controlar áudio pelo OBS para o som. Ele reconecta sozinho. Com &fit=fill estica para qualquer tamanho; com &muted=1 fica sem som. Usa a mesma chave da página do marquee (Endereço novo lá troca as duas).",
+    obs_open: "Abrir", obs_fps60: "60 (recomendado)", obs_fps30: "30 (mais leve)", obs_fps15: "15 (bem leve)",
+    obs_fit: "Formato", obs_fit_tube: "4:3 como no tubo (recomendado)", obs_fit_fill: "Esticar para a fonte inteira",
+    obs_size: "Tamanho no OBS", obs_size_1440: "1440 × 1080 (4:3, recomendado)", obs_size_960: "960 × 720 (4:3, mais leve)",
+    obs_size_1920: "1920 × 1080 (16:9, com barras ou esticado)", obs_sound: "Com som",
+    obs_wh: "largura %w, altura %h", obs_step1: "No OBS: Fontes > + > Navegador, e cole o endereço acima.",
+    obs_step2: "Largura e altura:", obs_step3: "Marque Controlar áudio pelo OBS para o som. Ele reconecta sozinho; usa a mesma chave do marquee (Endereço novo lá troca as duas).",
+    live_obs_off: "O endereço está pronto, mas a tela ao vivo não está no ar no gabinete: ligue em Transmissão.",
+    ovl_led: "Pontos de LED", ovl_text: "Textos (nome, recordes, conquistas)",
+    ovl_size_1280: "1280 × 320 (recomendado)", ovl_size_1920: "1920 × 480", ovl_size_1024: "1024 × 256",
+    ovl_obs: "No OBS: Fontes > + > Navegador, cole o endereço,",
     overlay: "Marquee para o OBS", overlay_on: "Ligar a página do marquee",
     overlay_note: "O marquee do jogo na tela como página para o OBS: fundo transparente, a arte do jogo (de ~/media), os recordes, as conquistas e o placar versus. Não precisa de painel de LED.",
-    overlay_obs: "No OBS: Fontes > + > Navegador, cole o endereço, largura 1280 e altura 320. Com &led=1 no fim, os pontos de LED.",
     overlay_new: "Endereço novo", overlay_new_ask: "Criar um endereço novo? O antigo para de funcionar (atualize o OBS).",
     copy: "Copiar", copied: "Copiado.",
     page_romfilter: "Filtro de ROMs",
@@ -1272,8 +1288,40 @@ $("shot-tube").addEventListener("change", () => $("shot").classList.toggle("tube
 
 let live = null, liveStats = null, liveStatus = null, liveObsPath = "";
 
+// O endereco da tela para o OBS, montado pelas escolhas do cartao: quadros,
+// formato (4:3 como no tubo ou esticado), som; o tamanho e o que digitar no
+// OBS. As escolhas ficam no navegador.
+const OBS_OPTS = ["obs-fps", "obs-fit", "obs-size", "obs-sound", "ovl-led", "ovl-text", "ovl-size"];
+
+function obsSaved() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("fliperos-obs") || "{}");
+    for (const id of OBS_OPTS) {
+      if (!(id in saved)) continue;
+      if ($(id).type === "checkbox") $(id).checked = !!saved[id]; else $(id).value = saved[id];
+    }
+  } catch (e) { /* sem armazenamento */ }
+}
+
+function obsSave() {
+  const saved = {};
+  for (const id of OBS_OPTS) saved[id] = $(id).type === "checkbox" ? $(id).checked : $(id).value;
+  try { localStorage.setItem("fliperos-obs", JSON.stringify(saved)); } catch (e) { /* sem armazenamento */ }
+}
+
+function sizeText(value) {
+  const [w, h] = value.split("x");
+  return t("obs_wh").replace("%w", w).replace("%h", h);
+}
+
 function liveObsUrl() {
-  if (liveObsPath) $("live-url").value = location.origin + liveObsPath + "&fps=" + $("live-fps").value;
+  $("obs-wh").textContent = sizeText($("obs-size").value);
+  if (!liveObsPath) return;
+  let url = location.origin + liveObsPath + "&fps=" + $("obs-fps").value;
+  if ($("obs-fit").value) url += "&fit=" + $("obs-fit").value;
+  if (!$("obs-sound").checked) url += "&muted=1";
+  $("live-url").value = url;
+  $("live-open").href = url;
 }
 
 function liveFact(id, text, cls) {
@@ -1332,12 +1380,11 @@ async function loadLive() {
     });
     setup.append(svc, sound);
   }
-  if (s.installed) {
-    const r = await api("/api/overlay");
-    liveObsPath = (await r.json()).live;
-    liveObsUrl();
-  }
-  $("live-obs").hidden = !s.installed;
+  // O endereco sempre a vista; sem a tela ao vivo no ar, o aviso do porque.
+  const r = await api("/api/overlay");
+  liveObsPath = (await r.json()).live;
+  liveObsUrl();
+  $("live-obs-off").hidden = s.installed && s.active;
   liveIdle();
 }
 
@@ -1433,7 +1480,14 @@ function liveStop(keepNote) {
 $("live-start").addEventListener("click", () => liveStart());
 $("live-play").addEventListener("click", () => liveStart());
 $("live-stop").addEventListener("click", () => liveStop());
-$("live-fps").addEventListener("change", () => { liveObsUrl(); if (live) liveStart(); });
+$("live-fps").addEventListener("change", () => { if (live) liveStart(); });
+obsSaved();
+for (const id of ["obs-fps", "obs-fit", "obs-size", "obs-sound"]) {
+  $(id).addEventListener("change", () => { obsSave(); liveObsUrl(); });
+}
+for (const id of ["ovl-led", "ovl-text", "ovl-size"]) {
+  $(id).addEventListener("change", () => { obsSave(); overlayUrl(); });
+}
 $("live-tube").addEventListener("change", () => $("live-stage").classList.toggle("tube", $("live-tube").checked));
 $("live-sound").addEventListener("click", () => {
   const video = $("live");
@@ -1461,16 +1515,30 @@ async function loadOverlay() {
   showOverlay(await res.json());
 }
 
+let ovlData = null;
+
 function showOverlay(data) {
-  const url = location.origin + data.path;
+  ovlData = data;
   $("ovl-on").checked = !!data.enabled;
   $("ovl-box").hidden = !data.enabled;
+  overlayUrl();
+}
+
+// O endereco do marquee com as escolhas (os pontos de LED, os textos); a
+// previa segue o mesmo endereco.
+function overlayUrl() {
+  $("ovl-wh").textContent = sizeText($("ovl-size").value);
+  if (!ovlData) return;
+  let url = location.origin + ovlData.path;
+  if ($("ovl-led").checked) url += "&led=1";
+  if (!$("ovl-text").checked) url += "&text=0";
   $("ovl-url").value = url;
+  $("ovl-open").href = url;
   const preview = $("ovl-preview");
-  if (data.enabled && preview.dataset.src !== url) {
+  if (ovlData.enabled && preview.dataset.src !== url) {
     preview.src = url;
     preview.dataset.src = url;
-  } else if (!data.enabled && preview.dataset.src) {
+  } else if (!ovlData.enabled && preview.dataset.src) {
     preview.removeAttribute("src");
     delete preview.dataset.src;
   }

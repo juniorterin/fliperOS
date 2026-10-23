@@ -134,14 +134,30 @@
       <p class="dim" data-t="live_settings_note"></p>
     </section>
 
+    <!-- O endereco da tela para o OBS: montado pelas escolhas abaixo dele. -->
     <section class="card live-obs-card" data-page="live" aria-labelledby="h-live-obs">
       <h2 id="h-live-obs" data-t="live_obs_title"></h2>
       <div id="live-obs" class="ovl-box">
-        <div class="ovl-url">
+        <div class="obs-url">
           <input id="live-url" type="text" readonly aria-label="OBS address">
           <button id="live-copy" type="button" data-icon="📋" data-t="copy"></button>
+          <a id="live-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
         </div>
-        <p class="dim" data-t="live_obs"></p>
+        <p id="live-obs-off" class="dim" data-t="live_obs_off" hidden></p>
+        <div class="obs-opts">
+          <label><span data-t="live_fps"></span>
+            <select id="obs-fps"><option value="60" data-t="obs_fps60"></option><option value="30" data-t="obs_fps30"></option><option value="15" data-t="obs_fps15"></option></select></label>
+          <label><span data-t="obs_fit"></span>
+            <select id="obs-fit"><option value="" data-t="obs_fit_tube"></option><option value="fill" data-t="obs_fit_fill"></option></select></label>
+          <label><span data-t="obs_size"></span>
+            <select id="obs-size"><option value="1440x1080" data-t="obs_size_1440"></option><option value="960x720" data-t="obs_size_960"></option><option value="1920x1080" data-t="obs_size_1920"></option></select></label>
+          <label class="obs-check"><input id="obs-sound" type="checkbox" checked> <span data-t="obs_sound"></span></label>
+        </div>
+        <ol class="obs-steps">
+          <li data-t="obs_step1"></li>
+          <li><span data-t="obs_step2"></span> <b id="obs-wh"></b></li>
+          <li data-t="obs_step3"></li>
+        </ol>
       </div>
     </section>
 
@@ -151,12 +167,19 @@
       <p class="dim" data-t="overlay_note"></p>
       <label class="ovl-toggle"><input id="ovl-on" type="checkbox"> <span data-t="overlay_on"></span></label>
       <div id="ovl-box" class="ovl-box" hidden>
-        <div class="ovl-url">
+        <div class="obs-url">
           <input id="ovl-url" type="text" readonly aria-label="Overlay address">
           <button id="ovl-copy" type="button" data-icon="📋" data-t="copy"></button>
+          <a id="ovl-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
           <button id="ovl-new" class="ghost" type="button" data-icon="🔑" data-t="overlay_new"></button>
         </div>
-        <p class="dim" data-t="overlay_obs"></p>
+        <div class="obs-opts">
+          <label class="obs-check"><input id="ovl-led" type="checkbox"> <span data-t="ovl_led"></span></label>
+          <label class="obs-check"><input id="ovl-text" type="checkbox" checked> <span data-t="ovl_text"></span></label>
+          <label><span data-t="obs_size"></span>
+            <select id="ovl-size"><option value="1280x320" data-t="ovl_size_1280"></option><option value="1920x480" data-t="ovl_size_1920"></option><option value="1024x256" data-t="ovl_size_1024"></option></select></label>
+        </div>
+        <p class="dim"><span data-t="ovl_obs"></span> <b id="ovl-wh"></b></p>
         <iframe id="ovl-preview" class="ovl-preview" title="Marquee preview"></iframe>
       </div>
     </section>
