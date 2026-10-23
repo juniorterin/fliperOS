@@ -160,43 +160,72 @@ audio_on() {
 # nao pede keyframe ao ffmpeg, cada perda parava a imagem ate o keyframe
 # seguinte (as "engasgadas"; visto no gabinete em 2026-10-23). Um buffer de
 # 2 quadros escondia isso, mas o keyframe saia borrado a cada 2 s.
+SIZE=640x480
 SHARP="scale=640:480:flags=neighbor"
 # rate FPS: as opcoes de taxa do codificador.
 rate() {
   local kbps=$((1000 + $1 * 1000 / 30))
   echo "-b:v ${kbps}k -maxrate ${kbps}k -bufsize $((kbps / 2))k"
 }
+
+# grab FPS PAI: os quadros da tela, ja em 640x480 RGB cru, na saida. O
+# kmsgrab para quando o framebuffer muda de tamanho ("framebuffer dimensions
+# changed": todo jogo que abre ou fecha num CRT de 15 kHz troca o modo), e o
+# go2rtc nao reabre a captura para quem ja assiste: ficava o ultimo quadro do
+# frontend parado (visto no gabinete em 2026-10-23). Aqui ele volta a abrir
+# no tamanho novo, e a saida segue sempre do mesmo tamanho para o codificador
+# (capture), que nao para. Termina quando o PAI (o codificador) sai.
+grab() {
+  local fps=$1 parent=$2 dev copy
+  dev=$(card)
+  # O quadro em RGB: copiado pela placa (VA-API) e lido dali; sem o VA-API,
+  # mapeado direto (o hwdownload, nas placas que deixam). O VA-API sai do
+  # proprio dispositivo DRM do kmsgrab (hwmap derive_device).
+  if vpp; then
+    copy="hwmap=derive_device=vaapi,scale_vaapi=format=bgr0,hwdownload,format=bgr0"
+  else
+    copy="hwdownload,format=bgr0"
+  fi
+  while :; do
+    LD_PRELOAD=$dropmaster${LD_PRELOAD:+:$LD_PRELOAD} "$ffmpeg" -hide_banner -loglevel error -nostdin \
+      -fflags nobuffer -device "$dev" -framerate "$fps" -f kmsgrab -i - \
+      -vf "$copy,$SHARP,format=bgr0" -f rawvideo -pix_fmt bgr0 pipe:1
+    # O codificador saiu (um zumbi, ainda sem o wait de quem o abriu, conta
+    # como saido: o kill -0 nele ainda da certo).
+    kill -0 "$parent" 2> /dev/null || return 0
+    grep -q '^State:[[:space:]]*Z' "/proc/$parent/status" 2> /dev/null && return 0
+    sleep 0.5
+  done
+}
+
 capture() {
-  local fps=${1:-30} out=${2:-} dev enc copy
+  local fps=${1:-30} out=${2:-} dev enc
   local -a args bitrate
   [[ $fps =~ ^[0-9]+$ ]] && ((fps >= 5 && fps <= 60)) || fail "frame rate 5 to 60"
   [[ -n $out ]] || fail "no output"
+  [[ -f $dropmaster ]] || fail "$dropmaster is missing: the capture could take the screen from X and the menu"
   dev=$(card)
   enc=$(encoder)
-  # O VA-API sai do proprio dispositivo DRM do kmsgrab (hwmap derive_device).
+  vpp > /dev/null
+  # Os quadros do grab pelo fd 3. Os tempos sao os do relogio: a pausa de
+  # quando a tela troca de modo nao atrasa a imagem em relacao ao som.
+  exec 3< <(grab "$fps" "$$")
   args=(-hide_banner -loglevel warning -nostdin -fflags nobuffer)
-  args+=(-device "$dev" -framerate "$fps" -f kmsgrab -i -)
+  args+=(-f rawvideo -pix_fmt bgr0 -video_size "$SIZE" -framerate "$fps" -use_wallclock_as_timestamps 1 -i pipe:3)
   if audio_on; then
     # O lado de gravacao do loopback pelo dsnoop do asound.conf (lib/audio.sh:
     # o hw so aceita um leitor, e o go2rtc pode abrir mais de um ffmpeg).
     args+=(-thread_queue_size 1024 -f alsa -ac 2 -ar 48000 -i "plug:fliperos_loopcap")
   fi
   args+=(-map 0:v)
-  # O quadro em RGB: copiado pela placa (VA-API) e lido dali; sem o VA-API,
-  # mapeado direto (o hwdownload, nas placas que deixam).
-  if vpp; then
-    copy="hwmap=derive_device=vaapi,scale_vaapi=format=bgr0,hwdownload,format=bgr0"
-  else
-    copy="hwdownload,format=bgr0"
-  fi
   read -r -a bitrate <<< "$(rate "$fps")"
   if [[ $enc == vaapi ]]; then
-    # Aumentado aqui e enviado de volta a placa, que codifica.
+    # Enviado de volta a placa, que codifica.
     args=(-init_hw_device "vaapi=va:$(render "$dev")" -filter_hw_device va "${args[@]}")
-    args+=(-vf "$copy,$SHARP,format=nv12,hwupload"
+    args+=(-vf "format=nv12,hwupload"
       -c:v h264_vaapi -profile:v constrained_baseline -bf 0 -g "$fps" "${bitrate[@]}")
   else
-    args+=(-vf "$copy,$SHARP,format=yuv420p"
+    args+=(-vf "format=yuv420p"
       -c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -bf 0 -g "$fps"
       "${bitrate[@]}")
   fi
@@ -207,8 +236,7 @@ capture() {
     args+=(-map 1:a -af "asetpts=N/SR/TB+STARTPTS" -c:a libopus -b:a 96k -application lowdelay -frame_duration 10)
   fi
   args+=(-rtsp_transport tcp -f rtsp "$out")
-  [[ -f $dropmaster ]] || fail "$dropmaster is missing: the capture could take the screen from X and the menu"
-  LD_PRELOAD=$dropmaster${LD_PRELOAD:+:$LD_PRELOAD} exec "$ffmpeg" "${args[@]}"
+  exec "$ffmpeg" "${args[@]}"
 }
 
 # config: o go2rtc.yaml. A API e o RTSP so no proprio gabinete; o WebRTC na

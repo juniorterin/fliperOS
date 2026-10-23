@@ -5321,12 +5321,16 @@ class LiveScreenTests(unittest.TestCase):
     def write_ffmpeg(self, vaapi, vpp=None):
         # Os testes do VA-API: um quadro em h264_vaapi (o codificador) e um
         # scale_vaapi (o processamento, por onde o quadro do kmsgrab chega).
+        # O kmsgrab (o grab, em laco) grava em ffmpeg.args.grab; o codificador
+        # (capture) em ffmpeg.args.
         vpp = vaapi if vpp is None else vpp
         self.ffmpeg.write_text('#!/bin/sh\ncase "$*" in *h264_vaapi*-f\\ null*) exit %d ;; '
                                '*scale_vaapi=w=32:h=32*) exit %d ;; esac\n'
-                               'printf "%%s\\n" "$@" > %s\necho "$LD_PRELOAD" > %s.preload\n'
-                               % (0 if vaapi else 1, 0 if vpp else 1, self.args, self.args))
+                               'out=%s; case "$*" in *kmsgrab*) out=$out.grab ;; esac\n'
+                               'printf "%%s\\n" "$@" > $out\necho "$LD_PRELOAD" > $out.preload\n'
+                               % (0 if vaapi else 1, 0 if vpp else 1, self.args))
         self.ffmpeg.chmod(0o755)
+        self.grab = Path(str(self.args) + '.grab')
 
     def test_capture_copied_by_the_card_without_its_encoder(self):
         # A R7 240 (radeon e amdgpu): sem codificador, mas o buffer do DRM nao
@@ -5338,8 +5342,28 @@ class LiveScreenTests(unittest.TestCase):
         # Os pixels nitidos: a copia em RGB, aumentada no vizinho mais proximo
         # para 640x480 (o maximo da transmissao), so depois o YUV do H.264.
         self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=format=bgr0,hwdownload,format=bgr0,"
-                      "scale=640:480:flags=neighbor,format=yuv420p", args)
+                      "scale=640:480:flags=neighbor,format=bgr0", self.grab.read_text().splitlines())
+        self.assertEqual(args[args.index('-vf') + 1], 'format=yuv420p')
         self.assertEqual((self.tmp / 'run/vpp').read_text(), '1\n')
+
+    def test_capture_survives_the_mode_change(self):
+        # O kmsgrab para quando o framebuffer muda de tamanho (todo jogo que
+        # abre ou fecha troca o modo): ele roda em laco (grab) e entrega
+        # sempre 640x480 cru; o codificador le esse cano e nao para, entao
+        # quem assiste nao fica no ultimo quadro do frontend.
+        self.assertEqual(self.run_('capture', '30', 'out').returncode, 0)
+        args = self.args.read_text().splitlines()
+        grab = self.grab.read_text().splitlines()
+        i = args.index('-i')
+        self.assertEqual(args[i - 10:i + 2], ['-f', 'rawvideo', '-pix_fmt', 'bgr0', '-video_size', '640x480',
+                                              '-framerate', '30', '-use_wallclock_as_timestamps', '1', '-i', 'pipe:3'])
+        self.assertNotIn('kmsgrab', args)
+        self.assertEqual(grab[grab.index('-f') + 1], 'kmsgrab')
+        self.assertEqual(grab[-5:], ['-f', 'rawvideo', '-pix_fmt', 'bgr0', 'pipe:1'])
+        stream = self.STREAM.read_text()
+        self.assertIn('exec 3< <(grab "$fps" "$$")', stream)
+        self.assertIn('kill -0 "$parent" 2> /dev/null || return 0', stream)
+        self.assertIn("grep -q '^State:[[:space:]]*Z' \"/proc/$parent/status\"", stream)
 
     def test_capture_rate_without_bursts(self):
         # A taxa pela taxa de quadros, com buffer de meio segundo: o keyframe
@@ -5363,17 +5387,18 @@ class LiveScreenTests(unittest.TestCase):
         r = self.run_('capture', '60', 'rtsp://127.0.0.1:8554/x')
         self.assertEqual(r.returncode, 0, r.stderr)
         args = self.args.read_text().splitlines()
+        grab = self.grab.read_text().splitlines()
         # O kmsgrab da placa ligada ao tubo, nos quadros pedidos.
-        self.assertEqual(args[args.index('-device') + 1], str(self.tmp / 'dri/card1'))
-        self.assertEqual(args[args.index('-framerate') + 1], '60')
-        self.assertEqual(args[args.index('-f') + 1], 'kmsgrab')
+        self.assertEqual(grab[grab.index('-device') + 1], str(self.tmp / 'dri/card1'))
+        self.assertEqual(grab[grab.index('-framerate') + 1], '60')
+        self.assertEqual(grab[grab.index('-f') + 1], 'kmsgrab')
         # Sem codificador na placa: x264 sem quadros B, keyframe por segundo,
         # no perfil baseline; os pixels nitidos em 640x480.
         self.assertIn('libx264', args)
         self.assertEqual(args[args.index('-g') + 1], '60')
         self.assertEqual(args[args.index('-bf') + 1], '0')
         self.assertIn('baseline', args)
-        self.assertIn("hwdownload,format=bgr0,scale=640:480:flags=neighbor,format=yuv420p", args)
+        self.assertIn("hwdownload,format=bgr0,scale=640:480:flags=neighbor,format=bgr0", grab)
         self.assertEqual(args[-3:], ['-f', 'rtsp', 'rtsp://127.0.0.1:8554/x'])
         # Sem o som ligado, nada do ALSA.
         self.assertNotIn('alsa', args)
@@ -5381,7 +5406,7 @@ class LiveScreenTests(unittest.TestCase):
         self.assertNotEqual(self.run_('capture', '200', 'x').returncode, 0)
         # O ffmpeg devolve a tela ao abrir a placa (sem isso, aberto num
         # momento sem dono da tela, ficava com ela e o X nao abria mais).
-        self.assertEqual(Path(str(self.args) + '.preload').read_text(), '%s\n' % self.dropmaster)
+        self.assertEqual(Path(str(self.grab) + '.preload').read_text(), '%s\n' % self.dropmaster)
         self.dropmaster.unlink()
         r = self.run_('capture', '60', 'out')
         self.assertNotEqual(r.returncode, 0)
@@ -5418,9 +5443,10 @@ class LiveScreenTests(unittest.TestCase):
         self.assertEqual(self.run_('capture', '30', 'out').returncode, 0)
         args = self.args.read_text().splitlines()
         self.assertIn('h264_vaapi', args)
-        # Aumentado na CPU (nitido) e enviado de volta a placa, que codifica.
+        # Aumentado na CPU (nitido, no grab) e enviado de volta a placa, que codifica.
         self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=format=bgr0,hwdownload,format=bgr0,"
-                      "scale=640:480:flags=neighbor,format=nv12,hwupload", args)
+                      "scale=640:480:flags=neighbor,format=bgr0", self.grab.read_text().splitlines())
+        self.assertEqual(args[args.index('-vf') + 1], 'format=nv12,hwupload')
         self.assertEqual(args[:4], ['-init_hw_device', 'vaapi=va:%s' % (self.tmp / 'dri/renderD129'),
                                     '-filter_hw_device', 'va'])
         # O som: o lado de gravacao do loopback, em Opus.
