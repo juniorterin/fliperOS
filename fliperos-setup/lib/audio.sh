@@ -299,6 +299,16 @@ audio_volume() {
   conf_get volume 2> /dev/null || echo 80
 }
 
+# audio_muted: status 0 se o som esta mudo (o primeiro controle de volume
+# em [off], o "toggle" das teclas e do painel web).
+audio_muted() {
+  local card control
+  card=$(audio_card)
+  control=$(audio_controls "$card" | head -1)
+  [[ -n $control ]] || return 1
+  amixer -c "$card" sget "$control" 2> /dev/null | grep -q '\[off\]'
+}
+
 # audio_set_volume PORCENTAGEM ajusta os controles de volume, deixa o PCM
 # no maximo e grava o estado (vale no proximo boot).
 audio_set_volume() {
@@ -318,7 +328,8 @@ audio_set_volume() {
 # audio_step up|down|mute: as teclas de volume do teclado (triggerhappy, ver
 # config/fliperos-volume.triggers), em qualquer tela: KMS, X ou console. O
 # estado e gravado a cada toque, porque gabinete costuma ser desligado na
-# tomada. Tambem get (imprime o volume) e set PORCENTAGEM: o painel web
+# tomada. Tambem get (imprime o volume), state ("PORCENTAGEM on|off", off
+# = mudo) e set PORCENTAGEM: o painel web
 # (config/fliperos-web).
 audio_step() {
   local card control change
@@ -328,6 +339,10 @@ audio_step() {
     mute) change="toggle" ;;
     get)
       audio_volume
+      return 0
+      ;;
+    state)
+      printf '%s %s\n' "$(audio_volume)" "$(audio_muted && echo off || echo on)"
       return 0
       ;;
     set)

@@ -482,6 +482,7 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .volume { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .volume input { flex: 1; padding: 0; accent-color: var(--pink); }
 .volume button { width: 40px; padding: 6px 0; }
+#vol-mute.on { background: var(--pink); color: #191a21; border-color: var(--pink); font-weight: 650; }
 
 .log {
   background: var(--bg-deep); border-radius: 8px; padding: 10px; margin: 10px 0 0;

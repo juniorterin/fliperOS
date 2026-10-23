@@ -448,6 +448,7 @@ function render(s) {
   $("vol-value").textContent = vol == null ? "-" : vol + "%";
   if (vol != null && document.activeElement !== $("vol")) $("vol").value = vol;
   $("vol").disabled = vol == null;
+  muteButton(s.volume && s.volume.muted);
 
   renderProcesses(s.processes || []);
 }
@@ -575,6 +576,13 @@ async function volume(body) {
   const res = await api("/api/volume", { method: "POST", body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (data.percent != null) { $("vol").value = data.percent; $("vol-value").textContent = data.percent + "%"; }
+  muteButton(data.muted);
+}
+// O botao Mudo fica marcado enquanto o som esta mudo (pelas teclas do
+// gabinete tambem: o status traz o estado do mixer).
+function muteButton(muted) {
+  $("vol-mute").setAttribute("aria-pressed", String(!!muted));
+  $("vol-mute").classList.toggle("on", !!muted);
 }
 $("vol-up").addEventListener("click", () => volume({ action: "up" }));
 $("vol-down").addEventListener("click", () => volume({ action: "down" }));

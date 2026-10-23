@@ -1095,10 +1095,11 @@ def version():
 
 def volume():
     try:
-        out = subprocess.run([SETUP, "--volume", "get"], capture_output=True, text=True, timeout=10).stdout
-        return {"percent": int(out.strip().split()[-1])}
+        out = subprocess.run([SETUP, "--volume", "state"], capture_output=True, text=True, timeout=10).stdout
+        words = out.split()
+        return {"percent": int(words[-2]), "muted": words[-1] == "off"}
     except (OSError, subprocess.SubprocessError, ValueError, IndexError):
-        return {"percent": None}
+        return {"percent": None, "muted": False}
 
 
 def log_names():

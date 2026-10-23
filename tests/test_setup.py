@@ -1277,7 +1277,7 @@ class AudioTests(Base):
         self.assertIn("    --session-start)\n", setup)
         self.assertIn("      audio_stream_check\n", setup.split("    --session-start)\n")[1].split(";;")[0])
 
-    def mixer(self, controls, level=60):
+    def mixer(self, controls, level=60, switch="on"):
         """amixer falso: lista os controles da placa, responde o nivel e
         registra cada sset."""
         self.calls = self.env.dir / "amixer.log"
@@ -1287,9 +1287,9 @@ class AudioTests(Base):
             args="$*"
             case $args in
               *scontrols*) printf "%s" ;;
-              *sget*) echo "  Front Left: Playback 52 [%d%%] [-10.00dB] [on]" ;;
+              *sget*) echo "  Front Left: Playback 52 [%d%%] [-10.00dB] [%s]" ;;
               *sset*) echo "${args#*sset }" >> "%s" ;;
-            esac""") % (listing, level, self.calls))
+            esac""") % (listing, level, switch, self.calls))
         self.env.stub("alsactl", "true")
         (self.env.etc / "fliperos.conf").write_text("alsa=1,0\n")
 
@@ -1323,6 +1323,10 @@ class AudioTests(Base):
         for bad in ("set 101", "set -5", "set", "set 5x"):
             self.assertEqual(self.env.run("audio_step " + bad).returncode, 1, bad)
         self.assertIn('audio_step "${@:2}"', (SETUP / "fliperos-setup").read_text())
+        # state: o volume e o mudo, para o botao Mudo do painel ficar marcado.
+        self.assertEqual(self.env.out("audio_step state").strip(), "35 on")
+        self.mixer(["Master", "PCM"], level=35, switch="off")
+        self.assertEqual(self.env.out("audio_step state").strip(), "35 off")
 
     def test_volume_shown_is_the_mixer_level(self):
         # As teclas mudam o mixer sem passar pelo Setup: vale o nivel real.
