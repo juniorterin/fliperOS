@@ -862,34 +862,89 @@ THUMB_SYSTEMS = {
 }
 
 
-class GameInfo:
-    """As respostas do Arcade Database por algumas horas (outro navegador,
-    o mesmo jogo)."""
+# O que veio da internet fica salvo no gabinete, junto da outra midia
+# (~/media/<tipo>/<pasta de jogos>): ~/media/info/mame/samsho.en.json. Um jogo
+# buscado uma vez nao e buscado de novo, abre sem internet e serve a qualquer
+# frontend do FliperOS. Um jogo que o Arcade Database nao conhece e
+# perguntado de novo so depois de MISS_DAYS.
+MISS_DAYS = 30
 
-    def __init__(self, seconds=6 * 3600, size=500):
-        self.seconds, self.size = seconds, size
+
+class GameInfo:
+    """As respostas do Arcade Database: salvas em ~/media/info (save) e, a
+    frente delas, em memoria."""
+
+    def __init__(self, root=None, size=500):
+        self.root = root or ENV("FLIPEROS_GAMEINFO_DIR") or os.path.join(player_home(), "media", "info")
+        self.size = size
         self.lock = threading.Lock()
         self.cache = collections.OrderedDict()
 
-    def arcade(self, name, lang):
-        key = (name, lang)
+    def path(self, folder, name, lang):
+        """O arquivo do jogo: a pasta de jogos (mame, retroarch/fbneo) e o
+        nome do set, sem sair de ~/media/info."""
+        parts = [p for p in folder.split("/") if p not in ("", ".", "..")]
+        base = re.sub(r"[^A-Za-z0-9._-]", "_", name)
+        if not parts or not base.strip("._"):
+            return None
+        return os.path.join(self.root, *parts, "%s.%s.json" % (base, lang))
+
+    def load(self, path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                saved = json.load(f)
+        except (OSError, ValueError):
+            return None
+        if saved.get("info") is None and time.time() - saved.get("saved", 0) > MISS_DAYS * 86400:
+            return None
+        return saved
+
+    def save(self, path, saved):
+        """Grava do dono de ~/media (o usuario fliperos), como o resto dela."""
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = "%s.%d.tmp" % (path, os.getpid())
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(saved, f, ensure_ascii=False, indent=1)
+            os.replace(tmp, path)
+            if os.geteuid() == 0:
+                owner = os.stat(os.path.dirname(self.root))
+                d = path
+                while d != self.root and d.startswith(self.root):
+                    os.chown(d, owner.st_uid, owner.st_gid)
+                    d = os.path.dirname(d)
+                os.chown(self.root, owner.st_uid, owner.st_gid)
+        except OSError:
+            pass
+
+    def arcade(self, folder, name, lang):
+        """(info, quando foi salvo): do disco, ou do Arcade Database e entao
+        salvo."""
+        key = (folder, name, lang)
         with self.lock:
             hit = self.cache.get(key)
-            if hit and time.monotonic() - hit[0] < self.seconds:
-                return hit[1]
-        url = "%s?ajax=query_mame&game_name=%s&lang=%s" % (ADB_URL, quote(name), lang)
-        request = urllib.request.Request(url, headers={"User-Agent": "FliperOS web panel"})
-        with urllib.request.urlopen(request, timeout=10) as res:
-            data = json.loads(res.read(2 << 20).decode("utf-8", "replace"))
-        rows = data.get("result") or []
-        info = None
-        if rows:
-            info = {k: rows[0][k] for k in ADB_FIELDS if rows[0].get(k) not in (None, "")}
+            if hit:
+                return hit
+        path = self.path(folder, name, lang)
+        saved = self.load(path) if path else None
+        if saved is None:
+            url = "%s?ajax=query_mame&game_name=%s&lang=%s" % (ADB_URL, quote(name), lang)
+            request = urllib.request.Request(url, headers={"User-Agent": "FliperOS web panel"})
+            with urllib.request.urlopen(request, timeout=10) as res:
+                data = json.loads(res.read(2 << 20).decode("utf-8", "replace"))
+            rows = data.get("result") or []
+            info = None
+            if rows:
+                info = {k: rows[0][k] for k in ADB_FIELDS if rows[0].get(k) not in (None, "")}
+            saved = {"source": "Arcade Database", "game": name, "lang": lang, "saved": int(time.time()), "info": info}
+            if path:
+                self.save(path, saved)
+        result = (saved["info"], saved["saved"])
         with self.lock:
-            self.cache[key] = (time.monotonic(), info)
+            self.cache[key] = result
             while len(self.cache) > self.size:
                 self.cache.popitem(last=False)
-        return info
+        return result
 
 
 def thumbnails(system, entry):
@@ -2039,10 +2094,10 @@ class Handler(BaseHTTPRequestHandler):
             if not system["arcade"]:
                 return self.send(200, {"source": "libretro-thumbnails", "images": thumbnails(system, entry)})
             try:
-                info = self.panel.gameinfo.arcade(entry["Name"], lang)
+                info, saved = self.panel.gameinfo.arcade(system["key"], entry["Name"], lang)
             except (OSError, ValueError) as exc:
                 return self.send(502, {"error": "Arcade Database: %s" % exc})
-            return self.send(200, {"source": "Arcade Database", "info": info})
+            return self.send(200, {"source": "Arcade Database", "info": info, "saved": saved})
         return self.send(404, {"error": "not found"})
 
     def do_POST(self):

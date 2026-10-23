@@ -5050,8 +5050,22 @@ class WebPanelTests(unittest.TestCase):
         self.assertNotIn('unknown', info['info'])
         self.request('GET', '/api/gameinfo?system=naomi&game=vf4', cookie=cookie)
         self.assertEqual(len([q for q in self.adb_queries if 'game_name=vf4&' in q]), 1)
+        # Fica salvo no gabinete, junto da midia: ~/media/info/<pasta>/<set>.<idioma>.json.
+        tmp = Path(self.tmp.name)
+        saved = json.loads((tmp / 'media/info/naomi/vf4.en.json').read_text())
+        self.assertEqual((saved['info']['title'], saved['lang'], saved['source']),
+                         ('Virtua Fighter 4 (GDS-0012)', 'en', 'Arcade Database'))
+        self.assertEqual(info['saved'], saved['saved'])
         self.assertIsNone(json.loads(self.request('GET', '/api/gameinfo?system=naomi&game=newgame', cookie=cookie)[2])
                           ['info'])
+        self.assertIsNone(json.loads((tmp / 'media/info/naomi/newgame.en.json').read_text())['info'])
+        # Salvo, ele vale mesmo para um servidor novo (o cache em memoria vazio).
+        web = SourceFileLoader('fliperos_web', str(ROOT / 'config/fliperos-web')).load_module()
+        gi = web.GameInfo(str(tmp / 'media/info'))
+        self.assertEqual(gi.arcade('naomi', 'vf4', 'en')[0]['title'], 'Virtua Fighter 4 (GDS-0012)')
+        self.assertEqual(len([q for q in self.adb_queries if 'game_name=vf4&' in q]), 1)
+        self.assertIsNone(gi.path('naomi', '../..', 'en'))
+        self.assertEqual(gi.path('../retroarch/fbneo', 'sf2', 'pt'), str(tmp / 'media/info/retroarch/fbneo/sf2.pt.json'))
         self.assertEqual(self.request('GET', '/api/gameinfo?system=naomi&game=kofxi', cookie=cookie)[0], 404)
         # Console: as imagens do libretro-thumbnails pelo nome do arquivo.
         thumbs = json.loads(self.request('GET', '/api/gameinfo?system=shell&game=Ikaruga.zip', cookie=cookie)[2])

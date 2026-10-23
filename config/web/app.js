@@ -29,7 +29,7 @@ const TEXT = {
     g_buttons: "Buttons", g_control: "Control", g_screen: "Screen", g_status: "Emulation", g_parent: "Clone of",
     g_series: "Series", g_played: "Played", g_played_n: "%n times, %t", g_title: "Full title", g_rating: "Rating",
     g_language: "Language", g_video: "Video (mp4)", g_loading: "Looking it up online…",
-    g_offline: "Could not reach the game database (is the cabinet online?).", g_not_found: "Not in the Arcade Database.",
+    g_offline: "Could not reach the game database (is the cabinet online?).", g_not_found: "Not in the Arcade Database.", g_saved: "Saved on the cabinet on %s",
     pic_snap: "In game", pic_title: "Title", pic_marquee: "Marquee", pic_flyer: "Flyer", pic_cabinet: "Cabinet",
     pic_boxart: "Box",
     live: "Live screen", live_start: "Watch live", live_stop: "Stop", live_fps: "Frames per second",
@@ -139,7 +139,7 @@ const TEXT = {
     g_buttons: "Botões", g_control: "Controle", g_screen: "Tela", g_status: "Emulação", g_parent: "Clone de",
     g_series: "Série", g_played: "Jogado", g_played_n: "%n vezes, %t", g_title: "Título completo", g_rating: "Nota",
     g_language: "Idioma", g_video: "Vídeo (mp4)", g_loading: "Buscando na internet…",
-    g_offline: "Não deu para falar com a base de jogos (o gabinete está na internet?).", g_not_found: "Não está no Arcade Database.",
+    g_offline: "Não deu para falar com a base de jogos (o gabinete está na internet?).", g_not_found: "Não está no Arcade Database.", g_saved: "Salvo no gabinete em %s",
     pic_snap: "Jogando", pic_title: "Título", pic_marquee: "Letreiro", pic_flyer: "Flyer", pic_cabinet: "Gabinete",
     pic_boxart: "Capa",
     live: "Tela ao vivo", live_start: "Assistir ao vivo", live_stop: "Parar", live_fps: "Quadros por segundo",
@@ -894,6 +894,12 @@ function showOnline(online, facts, data) {
         href: "https://www.youtube.com/watch?v=" + encodeURIComponent(info.youtube_video_id) }, "YouTube"));
     }
     if (info.history_copyright_short) links.append(el("span", { class: "dim" }, info.history_copyright_short));
+    // Salvo no gabinete (~/media/info): nao e buscado de novo, e o frontend
+    // do FliperOS le o mesmo arquivo.
+    if (data.saved) {
+      const when = new Date(data.saved * 1000).toLocaleDateString(lang === "pt" ? "pt-BR" : "en");
+      links.append(el("span", { class: "dim" }, "💾 " + t("g_saved").replace("%s", when)));
+    }
     parts.push(links);
   }
   online.replaceChildren(...parts);
