@@ -15,10 +15,12 @@ set -u
 dev=${1:?Uso: fliperos-automount /dev/DISPOSITIVO}
 ETC=${FLIPEROS_ETC:-/etc/fliperos}
 user=${FLIPEROS_AUTOMOUNT_USER:-fliperos}
+media=${FLIPEROS_MEDIA_ROOT:-/media}
 
 [[ -f $ETC/installed && -b $dev ]] || exit 0
 [[ -z $(findmnt -rno TARGET -S "$dev" 2> /dev/null) ]] || exit 0
-udevadm info -q property -n "$dev" 2> /dev/null | grep -qx 'UDISKS_IGNORE=1' && exit 0
+props=$(udevadm info -q property -n "$dev" 2> /dev/null)
+grep -qx 'UDISKS_IGNORE=1' <<< "$props" && exit 0
 
 case $(lsblk -dno FSTYPE "$dev" 2> /dev/null) in
   '' | swap | crypto_LUKS | LVM2_member | linux_raid_member | zfs_member | bcache | squashfs) exit 0 ;;
@@ -29,4 +31,18 @@ case $(lsblk -dno PARTTYPE "$dev" 2> /dev/null | tr 'A-F' 'a-f') in
     e3c9e316-0b5c-4db8-817d-f92df00215ae | 21686148-6449-6e6f-744e-656564454649 | 0xef | 0x27) exit 0 ;;
 esac
 
-exec runuser -u "$user" -- udisksctl mount --no-user-interaction -b "$dev"
+runuser -u "$user" -- udisksctl mount --no-user-interaction -b "$dev" || exit
+
+# O disco sem rotulo fica com o nome do modelo (99-fliperos-disks.rules);
+# antes ficava em /media/fliperos/<UUID>, que continua valendo como atalho
+# para o que ja guardou esse caminho (o jogo do boot, os frontends).
+uuid=$(sed -n 's/^ID_FS_UUID=//p' <<< "$props")
+target=$(findmnt -rno TARGET -S "$dev" 2> /dev/null | head -n1)
+if [[ -n $uuid && $uuid != */* && -z $(blkid -p -s LABEL -o value "$dev" 2> /dev/null) &&
+  $target == "$media/$user"/* && ${target##*/} != "$uuid" ]]; then
+  link=$media/$user/$uuid
+  if [[ -L $link || ! -e $link ]]; then
+    ln -sfn "${target##*/}" "$link" || true
+  fi
+fi
+exit 0

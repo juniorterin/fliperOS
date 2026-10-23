@@ -9560,6 +9560,45 @@ class AutomountTests(unittest.TestCase):
         for fstype in ('ntfs', 'vfat', 'ext4', 'btrfs'):
             self.assertTrue(self.mount(fstype=fstype), fstype)
 
+    def test_unlabeled_disk_keeps_its_uuid_path_as_a_link(self):
+        # Montado pelo nome do modelo (a regra da udev); o caminho antigo, pelo
+        # UUID, vira um atalho para ele.
+        dev = next((d for d in ('/dev/loop0', '/dev/sda', '/dev/vda') if Path(d).is_block_device()), None)
+        if dev is None:
+            self.skipTest('no block device')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            for d in ('bin', 'etc', 'media/fliperos/TOSHIBA_HDWD110'):
+                (tmp / d).mkdir(parents=True)
+            (tmp / 'etc/installed').write_text('')
+            target = tmp / 'media/fliperos/TOSHIBA_HDWD110'
+            count = tmp / 'count'
+            fakes = {
+                'lsblk': 'case "$*" in *FSTYPE*) echo exfat;; *PARTTYPE*) echo 0x7;; esac',
+                # Antes de montar, nada; depois, a pasta do nome.
+                'findmnt': '[ -f %s ] && echo %s; touch %s' % (count, target, count),
+                'udevadm': 'echo ID_FS_UUID=5E2C-4AEF; echo ID_FS_LABEL=TOSHIBA_HDWD110',
+                'blkid': 'true',
+                'runuser': 'true',
+            }
+            for name, body in fakes.items():
+                (tmp / 'bin' / name).write_text('#!/bin/bash\n%s\n' % body)
+                (tmp / 'bin' / name).chmod(0o755)
+            env = dict(os.environ, PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']),
+                       FLIPEROS_ETC=str(tmp / 'etc'), FLIPEROS_MEDIA_ROOT=str(tmp / 'media'))
+            subprocess.run(['bash', str(self.SCRIPT), dev], env=env, check=True, timeout=10)
+            self.assertEqual(os.readlink(tmp / 'media/fliperos/5E2C-4AEF'), 'TOSHIBA_HDWD110')
+            # Uma pasta de verdade com o nome do UUID nao e trocada.
+            (tmp / 'media/fliperos/5E2C-4AEF').unlink()
+            (tmp / 'media/fliperos/5E2C-4AEF').mkdir()
+            count.unlink()
+            subprocess.run(['bash', str(self.SCRIPT), dev], env=env, check=True, timeout=10)
+            self.assertTrue((tmp / 'media/fliperos/5E2C-4AEF').is_dir())
+            self.assertFalse((tmp / 'media/fliperos/5E2C-4AEF').is_symlink())
+        rules = (ROOT / 'config/99-fliperos-disks.rules').read_text()
+        self.assertIn('ENV{ID_FS_LABEL}=="", \\\n  ENV{ID_MODEL}=="?*", TEST=="/etc/fliperos/installed"', rules)
+        self.assertIn('ENV{ID_FS_LABEL}="$env{ID_MODEL}_$env{ID_PART_ENTRY_NUMBER}"', rules)
+
     def test_skips_what_is_not_a_data_disk(self):
         self.assertEqual(self.mount(installed=False), '')
         self.assertEqual(self.mount(mounted='/boot/efi'), '')

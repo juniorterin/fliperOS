@@ -2,3 +2,18 @@
 # pendrive, e montado em /media/fliperos (config/fliperos-automount).
 SUBSYSTEM=="block", ACTION=="add", ENV{ID_FS_USAGE}=="filesystem", \
   TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-automount@%k.service"
+
+# O disco sem rotulo: o udisks2 montaria em /media/fliperos/<UUID>
+# ("5E2C-4AEF"). Ele leva o nome do modelo do disco ("TOSHIBA_HDWD110"), e a
+# segunda particao em diante, o numero dela ("TOSHIBA_HDWD110_2"). So no
+# disco instalado: o instalador mostra os rotulos de verdade. O caminho pelo
+# UUID continua valendo (um atalho, config/fliperos-automount).
+SUBSYSTEM=="block", ACTION!="remove", ENV{ID_FS_USAGE}=="filesystem", ENV{ID_FS_LABEL}=="", \
+  ENV{ID_MODEL}=="?*", TEST=="/etc/fliperos/installed", GOTO="fliperos_name"
+GOTO="fliperos_name_end"
+LABEL="fliperos_name"
+ENV{ID_PART_ENTRY_NUMBER}=="", ENV{ID_FS_LABEL}="$env{ID_MODEL}"
+ENV{ID_PART_ENTRY_NUMBER}=="1", ENV{ID_FS_LABEL}="$env{ID_MODEL}"
+ENV{ID_FS_LABEL}=="", ENV{ID_FS_LABEL}="$env{ID_MODEL}_$env{ID_PART_ENTRY_NUMBER}"
+ENV{ID_FS_LABEL_ENC}="$env{ID_FS_LABEL}"
+LABEL="fliperos_name_end"
