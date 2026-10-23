@@ -557,7 +557,8 @@ def draw_guide(fe, ui):
         pygame.draw.circle(ui, T.SPACE, (cx, cy), 14, 1)
         draw_icon(ui, cx, cy, T.SPACE)
         tiny.centered(ui, num + " " + label, T.FG, cx, cy + 19)
-    tiny.centered(ui, "START: LIST / FULL SCREEN / GRID   TAB: GAME OPTIONS", T.COMMENT, px + pw // 2, py + ph - 30)
+    # Debaixo dos botoes (a esquerda ficam as dicas do direcional).
+    tiny.centered(ui, "START: VIEW MODE   TAB: GAME OPTIONS", T.COMMENT, px + 112 + (pw - 112) // 2, py + ph - 30)
     msg = "PRESS ANY BUTTON TO START"
     ui.blit(W.big(msg, 1, W.LABEL), (px + (pw - W.width(msg)) // 2, py + ph - 16))
 
