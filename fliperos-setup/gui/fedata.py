@@ -31,6 +31,7 @@ SETUP = os.environ.get("FLIPEROS_SETUP", "/usr/local/bin/fliperos-setup")
 WEB = os.environ.get("FLIPEROS_WEB_MODULE", "/opt/fliperos/bin/fliperos-web")
 MEDIA_TYPES = ("snap", "box", "logo", "marquee")
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+VIDEO_EXTS = (".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv")
 # Os campos que o Classify muda (os da romlist do Attract-Mode).
 EDIT_FIELDS = ("Title", "Category", "Players", "Buttons", "Control", "Year", "Manufacturer", "Rotation", "Series")
 ARCADE_ALL = "Arcade"
@@ -332,6 +333,19 @@ class Library:
                     return path
         return None
 
+    def video(self, game):
+        """O video do jogo (~/media/preview), o do set ou o do pai."""
+        system = game["_system"]
+        base = os.path.join(web.player_home(), "media", "preview", system["key"])
+        for name in (game["Name"], game.get("CloneOf")):
+            if not name:
+                continue
+            for ext in VIDEO_EXTS:
+                path = os.path.join(base, name + ext)
+                if os.path.isfile(path):
+                    return path
+        return None
+
     # ── Pastas que mudaram ──
     def folder_stamps(self):
         out = {}
@@ -441,9 +455,10 @@ def download(url, path):
 
 
 def scrape(library, game, lang="en"):
-    """As informacoes (salvas em ~/media/info) e as imagens do jogo em
-    ~/media: do Arcade Database nos de arcade, do libretro-thumbnails nos de
-    console. Devolve quantos arquivos novos vieram."""
+    """As informacoes (salvas em ~/media/info), as imagens e o video do jogo
+    em ~/media: do Arcade Database nos de arcade (a tela, o marquee, o flyer e
+    o video curto), do libretro-thumbnails nos de console. Devolve quantos
+    arquivos novos vieram."""
     system = game["_system"]
     home = web.player_home()
     got = 0
@@ -456,10 +471,10 @@ def scrape(library, game, lang="en"):
         if not info:
             return 0
         for field, kind in (("url_image_ingame", "snap"), ("url_image_marquee", "marquee"),
-                            ("url_image_flyer", "box")):
+                            ("url_image_flyer", "box"), ("url_video_shortplay", "preview")):
             url = info.get(field)
             if url:
-                ext = os.path.splitext(url.split("?")[0])[1].lower() or ".png"
+                ext = os.path.splitext(url.split("?")[0])[1].lower() or (".mp4" if kind == "preview" else ".png")
                 target = os.path.join(home, "media", kind, system["key"], game["Name"] + ext)
                 got += download(url, target)
         return got + 1

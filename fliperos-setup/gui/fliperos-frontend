@@ -23,8 +23,10 @@
 # video (os testes e os prints da documentacao).
 
 import argparse
+import atexit
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -43,6 +45,10 @@ LRATE0, LRATE1, LSPEEDUP = 3.0, 10.0, 0.8
 # No modo letra cada toque passa uma letra; LETTER_IDLE segundos sem mexer e
 # a lista volta ao normal.
 LETTER_IDLE = 2.0
+# Um jogo sem video e sem imagem, com o cursor parado nele por este tempo,
+# ganha o scrape sozinho (as informacoes, as imagens e o video, nas pastas de
+# ~/media).
+AUTO_SCRAPE = 2.0
 MODES = ("list", "full", "flow")
 MODE_NAMES = {"list": "LIST", "full": "FULL SCREEN", "flow": "GRID"}
 COLS = 5                     # as colunas da grade
@@ -77,6 +83,7 @@ class Frontend:
         import background
         import fedata
         import feinput
+        import fevideo
         import theme
         import tiny
         import widgets
@@ -107,6 +114,19 @@ class Frontend:
         self.repeat = {}           # acao -> proxima repeticao
         self.acc = 0.0
         self.media = {}            # (caminho, w, h, modo) -> surface
+        # O video do jogo (fevideo.py); no --shot, sem video.
+        self.player = fevideo.Player()
+        if self.shot:
+            self.player.ok = False
+        # O ffmpeg do video fecha junto, saia o frontend como sair (o
+        # SIGTERM da sessao ou do painel web passa pelo atexit).
+        atexit.register(self.player.stop)
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        # O scrape sozinho: o jogo sem video e sem imagem, com o cursor
+        # parado nele por AUTO_SCRAPE segundos.
+        self.rest = (None, 0.0)    # (jogo sob o cursor, desde quando)
+        self.scraped = set()       # os ja tentados nesta abertura
+        self.scraping = None       # o jogo que esta sendo buscado
         self.generation = self.lib.generation
         self.last_check = time.monotonic()
         self.rows = []
@@ -486,6 +506,35 @@ class Frontend:
         self.overlay = "classify"
         self.ov = {"game": g, "fields": fields, "sel": 0}
 
+    def auto_scrape(self, now):
+        """O jogo sob o cursor ha AUTO_SCRAPE segundos, sem video e sem
+        imagem: busca uma vez (o que vier fica nas pastas de ~/media)."""
+        g = self.game()
+        if g is None or self.overlay or self.letter_mode:
+            self.rest = (None, now)
+            return
+        if self.rest[0] is not g:
+            self.rest = (g, now)
+            return
+        key = (g["_system"]["key"], g["Name"])
+        if (self.scraping or key in self.scraped or now - self.rest[1] < AUTO_SCRAPE
+                or self.lib.video(g) or self.lib.media(g, "snap") or self.lib.media(g, "box")):
+            return
+        self.scraped.add(key)
+        self.scraping = g
+
+        def work():
+            try:
+                n = self.fd.scrape(self.lib, g)
+            except Exception:  # sem rede, um site fora: tenta de novo na proxima abertura
+                n = 0
+            self.media.clear()
+            self.scraping = None
+            if n and self.game() is g:
+                self.say("ART DOWNLOADED")
+
+        threading.Thread(target=work, daemon=True).start()
+
     def scrape(self, g):
         self.say("SCRAPING...", 60)
 
@@ -506,6 +555,7 @@ class Frontend:
         self.remember()
         pg = self.pg
         # O video, o som e os controles ficam para o jogo.
+        self.player.stop()
         self.input.close()
         try:
             pg.mixer.quit()
@@ -611,6 +661,7 @@ class Frontend:
                 if self.lib.changed():
                     self.say("UPDATING THE LISTS...", 3)
                     self.lib.refresh()
+            self.auto_scrape(now)
             self.draw(now)
             self.present()
             clock.tick(FPS)

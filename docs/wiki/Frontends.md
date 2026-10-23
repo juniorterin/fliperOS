@@ -14,7 +14,9 @@ It shows the same thing as the [Web panel](Web-panel.md), from the same code:
 - **Full screen**: the game's picture behind, the name and information in front.
 - **Grid**: the covers, as in Arcadeflow.
 
-Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they are big and without text, with one little figure per player.
+**The game's video.** In the list and in full screen, the game's video (`~/media/preview/<folder>/<set>.mp4`) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. A game with neither gets scraped by itself when the cursor stays on it for 2 seconds: the information, pictures and video land in the same `~/media` folders the scraper uses.
+
+Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control with the buttons.
 
 **Controls.** A guide shows them each time the frontend opens; any button closes it.
 - Up and down move through the games. Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).

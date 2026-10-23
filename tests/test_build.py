@@ -4060,6 +4060,23 @@ class FrontendDataTests(unittest.TestCase):
         self.assertEqual(names(flts[4]), ['sf2', 'samsho'])
         self.assertEqual(names(fd.FAVOURITES), ['samsho'])
 
+    def test_video_player(self):
+        # O video vem do ffmpeg da imagem; sem ele, o Player nao abre nada
+        # e a tela fica com a imagem.
+        self.assertRegex(MKISO, r'python3-pygame ffmpeg ')
+        import fevideo
+        old = fevideo.FFMPEG
+        try:
+            fevideo.FFMPEG = '/nonexistent/ffmpeg'
+            player = fevideo.Player()
+            self.assertFalse(player.ok)
+            self.assertIsNone(player.request('/x.mp4', 10, 10, 0.0))
+            self.assertIsNone(player.request('/x.mp4', 10, 10, 5.0))
+            self.assertIsNone(player.video)
+        finally:
+            fevideo.FFMPEG = old
+        self.assertIn('.mp4', self.fd.VIDEO_EXTS)
+
     def test_clones_under_their_parent(self):
         fd = self.fd
         games = [{'Name': 'samsho5', 'Title': 'Samurai Shodown V / Samurai Spirits Zero (NGM-2700, set 1)'},

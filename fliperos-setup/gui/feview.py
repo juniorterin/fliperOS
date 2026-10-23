@@ -47,6 +47,28 @@ def image(fe, path, w, h, how="fit"):
     return img
 
 
+def video_frame(fe, game, w, h):
+    """O quadro de agora do video do jogo em w x h (fevideo.py), ou None:
+    sem video, sem o ffmpeg, ou enquanto o primeiro quadro nao chega (a
+    imagem fica no lugar)."""
+    if not getattr(fe, "video_ok", False):
+        return None
+    key = ("video", game["_system"]["key"], game["Name"])
+    if key not in fe.media:
+        fe.media[key] = fe.lib.video(game)
+    fe.video_used = True
+    frame = fe.player.request(fe.media[key], w, h, fe.abs_now)
+    if not frame:
+        return None
+    return pygame.image.frombuffer(frame, (w, h), "RGB")
+
+
+def picture(fe, game, w, h):
+    """O video do jogo e, sem ele, a imagem (a tela, ou a capa)."""
+    return video_frame(fe, game, w, h) or image(
+        fe, fe.lib.media(game, "snap") or fe.lib.media(game, "box"), w, h, "cover")
+
+
 def blit_center(surf, img, x, y, w, h):
     if img:
         surf.blit(img, (x + (w - img.get_width()) // 2, y + (h - img.get_height()) // 2))
@@ -156,6 +178,32 @@ def af_icon(fe, kind, name, h, color):
     return img
 
 
+def af_glyph(fe, name, color):
+    """O icone de genero do Arcadeflow (16x16, um quadrado branco com o
+    desenho em preto) so com o desenho, na cor pedida e no tamanho
+    original: pintar o quadrado inteiro virava um borrao."""
+    key = ("glyph", name, color)
+    if key in fe.media:
+        return fe.media[key]
+    path = af_path(fe, "category", name)
+    img = None
+    if path:
+        try:
+            src = pygame.image.load(path)
+            out = pygame.Surface(src.get_size(), pygame.SRCALPHA)
+            for y in range(src.get_height()):
+                for x in range(src.get_width()):
+                    r, g, b, a = src.get_at((x, y))
+                    if a > 128 and r + g + b < 384:
+                        out.set_at((x, y), color + (255,))
+            rect = out.get_bounding_rect()
+            img = out.subsurface(rect).copy() if rect.w and rect.h else None
+        except (pygame.error, OSError, ValueError):
+            img = None
+    fe.media[key] = img
+    return img
+
+
 def genre_icon(fe, game, h, color):
     cat = game.get("Category") or ""
     if not cat:
@@ -163,10 +211,47 @@ def genre_icon(fe, game, h, color):
     full = re.sub(r"[^a-z0-9]", "", cat.lower())
     main = re.sub(r"[^a-z0-9]", "", cat.split("/")[0].lower())
     for name in (full, main, main.rstrip("s")):
-        img = af_icon(fe, "category", name, h, color) if name else None
+        img = af_glyph(fe, name, color) if name else None
+        if img and img.get_height() > h:
+            # A linha pequena da tela cheia e da grade.
+            w = max(1, round(img.get_width() * h / img.get_height()))
+            img = pygame.transform.smoothscale(img, (w, h))
         if img:
             return img
     return None
+
+
+# O icone de jogadores, no mesmo jeito dos de genero (16 pixels, cheio).
+PLAYER_ICON = (
+    "......####......",
+    ".....######.....",
+    "....########....",
+    "....########....",
+    "....########....",
+    "....########....",
+    ".....######.....",
+    "......####......",
+    "................",
+    "...##########...",
+    "..############..",
+    ".##############.",
+    ".##############.",
+    ".##############.",
+    ".##############.",
+    ".##############.",
+)
+
+
+def players_icon(fe, color):
+    key = ("players", color)
+    if key not in fe.media:
+        img = pygame.Surface((len(PLAYER_ICON[0]), len(PLAYER_ICON)), pygame.SRCALPHA)
+        for y, row in enumerate(PLAYER_ICON):
+            for x, c in enumerate(row):
+                if c == "#":
+                    img.set_at((x, y), color + (255,))
+        fe.media[key] = img
+    return fe.media[key]
 
 
 def control_icon(fe, game, h, color):
@@ -342,8 +427,13 @@ def draw_list(fe, ui, now):
     pw = SX + SW - px
     sh = 74
     W.block(ui, (px, y0, pw, sh), T.BG_DEEP, T.PURPLE)
-    blit_center(ui, image(fe, fe.lib.media(game, "snap") or fe.lib.media(game, "box"), pw - 4, sh - 4, "cover"),
-                px + 2, y0 + 2, pw - 4, sh - 4)
+    shot = picture(fe, game, pw - 4, sh - 4)
+    if shot:
+        blit_center(ui, shot, px + 2, y0 + 2, pw - 4, sh - 4)
+    elif fe.scraping is game:
+        # Sem nada ainda: o scrape sozinho esta buscando.
+        W.glow(ui, (px + 2, y0 + 2, pw - 4, sh - 4), {"now": now})
+        tiny.centered(ui, "LOOKING FOR ART...", T.CYAN, px + pw // 2, y0 + sh // 2 - 2)
     pygame.draw.rect(ui, T.PINK, (px, y0, pw, sh), 2)
     logo = image(fe, fe.lib.media(game, "logo"), pw - 8, 28)
     y = y0 + sh + 6
@@ -357,35 +447,32 @@ def draw_list(fe, ui, now):
         y += 2
     W.text(ui, fit(facts_line(game), pw), T.YELLOW, px, y)
     y += 12
-    # Os icones do Arcadeflow grandes, sem texto: o genero, o controle, os
-    # botoes e um boneco por jogador. Sem o icone (Arcadeflow nao baixado),
-    # o texto pequeno no lugar dele.
-    # Duas fileiras: genero e controle; botoes e jogadores.
+    # Os icones, sem texto, em duas fileiras: o genero e os jogadores (o
+    # boneco e o numero); o controle e os botoes. Sem o icone (Arcadeflow
+    # nao baixado), o texto pequeno no lugar dele.
     rows = icon_rows(fe, game, 20, icons_only=True)
-    first = [r for r in rows if r[2] != T.YELLOW]
-    second = [r for r in rows if r[2] == T.YELLOW]
-    for line in (first, second):
+    genre = [r for r in rows if r[2] == T.CYAN]
+    control = [r for r in rows if r[2] == T.PINK]
+    buttons = [(buttons_icon(fe, game, 13, T.YELLOW), t, c) for _, t, c in rows if c == T.YELLOW]
+    players = (game.get("Players") or "").strip()
+    for line in (genre, control + buttons):
         x = px
         for img, text, color in line:
             if img:
                 if x + img.get_width() > SX + SW:
                     break
-                ui.blit(img, (x, y))
+                ui.blit(img, (x, y + (20 - img.get_height()) // 2))
                 x += img.get_width() + 8
             else:
                 label = text.upper()
                 if x + tiny.width(label) > SX + SW:
                     break
                 x += tiny.text(ui, label, color, x, y + 8) + 8
-        if line is second:
-            players = (game.get("Players") or "").strip()
-            if players.isdigit():
-                for i in range(min(int(players), 4)):
-                    if x + 8 > SX + SW:
-                        break
-                    W.person(ui, x, y + 4, 1, T.CYAN)
-                    x += 11
-        y += 24
+        if line is genre and players.isdigit() and x + 30 <= SX + SW:
+            ui.blit(players_icon(fe, T.GREEN), (x, y + 2))
+            W.text(ui, players, T.GREEN, x + 19, y + 6)
+        if line or (line is genre and players.isdigit()):
+            y += 24
     played = game.get("PlayedCount")
     chips = []
     if game.get("Favourite") == "1":
@@ -403,7 +490,7 @@ def draw_list(fe, ui, now):
 
 def draw_full(fe, ui, back, now):
     game = fe.game()
-    snap = image(fe, fe.lib.media(game, "snap") or fe.lib.media(game, "box"), WW, HH, "cover")
+    snap = picture(fe, game, WW, HH)
     if snap:
         back.blit(snap, (0, 0))
         shade = pygame.Surface((WW, HH), pygame.SRCALPHA)
@@ -903,6 +990,11 @@ def draw(fe, now):
     t = now - fe.start
     fe.bg.draw(back, t)
     ui = pygame.Surface((WW, HH), pygame.SRCALPHA)
+    # O video so na lista e na tela cheia, e nao com uma tela inteira por
+    # cima (a pagina "+", o Classify, o Rename).
+    fe.abs_now = now
+    fe.video_used = False
+    fe.video_ok = fe.mode in ("list", "full") and fe.overlay not in ("more", "classify", "rename")
     if not fe.rows:
         empty(fe, ui)
     elif fe.mode == "list":
@@ -911,6 +1003,8 @@ def draw(fe, now):
         draw_full(fe, ui, back, t)
     else:
         draw_flow(fe, ui, t)
+    if not fe.video_used:
+        fe.player.request(None, 0, 0, now)
     back.blit(ui, (0, 0))
     if fe.letter and now < fe.letter[1] and fe.letter[0]:
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
