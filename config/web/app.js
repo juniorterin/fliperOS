@@ -46,6 +46,9 @@ const TEXT = {
     live_turn_off: "Turn off", live_sound_on: "Turn the sound on", live_sound_off: "Turn the sound off",
     live_not_installed: "The live screen is not installed yet: Install, under Streaming (or Setup > System > Extras > Live screen).",
     live_settings_note: "ffmpeg only runs while someone watches (here or in OBS). The sound is a copy of the output on an ALSA loopback: games opened after turning it on get it.",
+    sync_idle: "Watch live above to measure the stream delay: this then shows how many milliseconds to delay your camera and microphone in OBS so they line up with the game.",
+    sync_on: "The game arrives here about <b>%v ms</b> late (its sound, <b>%a ms</b>). In OBS, delay the camera by <b>%v ms</b> (camera source: Filters > + > Render Delay) and the microphone by <b>%a ms</b> (Edit > Advanced Audio Properties > Sync Offset). Measured in this browser; OBS on the same PC gets about the same.",
+    overlay_games: "🎮 See the supported games and their emulators (high scores, versus scoreboard)",
     live_net: "Network", live_net_wired: "cable", live_net_wifi: "Wi-Fi",
     live_net_tip_wifi: "The cabinet is on Wi-Fi. For a better stream, plug in a network cable: Wi-Fi loses packets and the picture can stall for a moment, mostly at 60 fps and in OBS.",
     live_net_tip: "Use a network cable instead of Wi-Fi for the best stream.",
@@ -148,6 +151,9 @@ const TEXT = {
     live_turn_off: "Desligar", live_sound_on: "Ligar o som", live_sound_off: "Desligar o som",
     live_not_installed: "A tela ao vivo ainda não está instalada: Instalar, em Transmissão (ou Setup > System > Extras > Live screen).",
     live_settings_note: "O ffmpeg só roda enquanto alguém assiste (aqui ou no OBS). O som é uma cópia da saída num loopback do ALSA: os jogos abertos depois de ligar já saem com ele.",
+    sync_idle: "Assista ao vivo acima para medir o atraso da transmissão: aqui aparece quantos ms atrasar a câmera e o microfone no OBS para ficarem no tempo do jogo.",
+    sync_on: "O jogo chega aqui com uns <b>%v ms</b> de atraso (o som dele, <b>%a ms</b>). No OBS, atrase a câmera em <b>%v ms</b> (na fonte da câmera: Filtros > + > Atraso de renderização) e o microfone em <b>%a ms</b> (Editar > Propriedades avançadas de áudio > Deslocamento de sincronização). Medido neste navegador; o OBS no mesmo PC fica quase igual.",
+    overlay_games: "🎮 Ver os jogos suportados e os emuladores (recordes, placar versus)",
     live_net: "Rede", live_net_wired: "cabo", live_net_wifi: "Wi-Fi",
     live_net_tip_wifi: "O gabinete está no Wi-Fi. Para uma transmissão melhor, ligue um cabo de rede: o Wi-Fi perde pacotes e a imagem pode engasgar por um instante, mais ainda a 60 fps e no OBS.",
     live_net_tip: "Use a rede cabeada em vez do Wi-Fi para a melhor transmissão.",
@@ -226,6 +232,9 @@ function translate() {
   document.querySelectorAll("[data-t]").forEach((el) => { el.textContent = t(el.dataset.t); });
   document.querySelectorAll("[data-tp]").forEach((el) => { el.placeholder = t(el.dataset.tp); });
   $("lang").textContent = lang === "pt" ? "EN" : "PT";
+  // O balao do atraso: sem medida, o convite (com medida ele se refaz a cada segundo).
+  const sync = $("live-sync-text");
+  if (sync && !sync.dataset.measured) sync.textContent = t("sync_idle");
 }
 
 function el(tag, attrs, ...children) {
@@ -1433,9 +1442,14 @@ async function liveStart() {
   const stream = new MediaStream();
   pc.addTransceiver("video", { direction: "recvonly" });
   pc.addTransceiver("audio", { direction: "recvonly" });
+  // Com som desde o comeco (o Assistir e um clique, o navegador deixa); se o
+  // navegador recusar mesmo assim, comeca mudo e o botao mostra.
+  video.muted = false;
+  liveMuteButton();
   pc.ontrack = (ev) => {
     stream.addTrack(ev.track);
     video.srcObject = stream;
+    video.play().catch(() => { video.muted = true; liveMuteButton(); video.play().catch(() => {}); });
     if (ev.track.kind === "audio") $("live-sound").hidden = false;
   };
   video.onplaying = () => { if (live === pc) $("live-idle").hidden = true; };
@@ -1465,19 +1479,62 @@ async function liveStart() {
   liveStats = setInterval(() => liveShowStats(pc), 1000);
 }
 
+// O balao do atraso para o OBS: sem medida, o convite a assistir aqui.
+let liveSyncSamples = [], liveSyncPrev = {};
+function liveSync(video, audio) {
+  const p = $("live-sync-text");
+  if (video == null) {
+    liveSyncSamples = [];
+    delete p.dataset.measured;
+    p.textContent = t("sync_idle");
+    return;
+  }
+  p.dataset.measured = "1";
+  liveSyncSamples = liveSyncSamples.concat([[video, audio]]).slice(-10);
+  const mean = (i) => Math.round(liveSyncSamples.reduce((sum, s) => sum + s[i], 0) / liveSyncSamples.length / 10) * 10;
+  p.innerHTML = t("sync_on").replaceAll("%v", String(mean(0))).replaceAll("%a", String(mean(1)));
+}
+
 async function liveShowStats(pc) {
   // O que chega: o tamanho, os quadros por segundo e o atraso do buffer.
   if (live !== pc) return;
-  let text = "";
+  let text = "", video = null, audio = null, rtt = 0;
+  const fps = Number($("live-fps").value);
+  // O atraso do ultimo segundo (a diferenca entre duas leituras): a media da
+  // sessao toda carregava o comeco, quando o Chrome ainda acerta a sincronia
+  // da imagem com o som.
+  const prev = liveSyncPrev.pc === pc ? liveSyncPrev : {};
+  const now = { pc };
+  const recent = (key, sum, n) => {
+    now[key] = [sum, n];
+    const [sum0, n0] = prev[key] || [0, 0];
+    return n > n0 ? (1000 * (sum - sum0)) / (n - n0) : null;
+  };
   const stats = await pc.getStats();
   stats.forEach((s) => {
     if (s.type === "inbound-rtp" && s.kind === "video") {
       const delay = s.jitterBufferEmittedCount ? Math.round((1000 * s.jitterBufferDelay) / s.jitterBufferEmittedCount) : null;
       text = (s.frameWidth ? s.frameWidth + "×" + s.frameHeight + " · " : "") + Math.round(s.framesPerSecond || 0) + " fps"
         + (delay != null ? " · " + t("live_buffer").replace("%n", delay) : "");
+      const buffer = recent("vjb", s.jitterBufferDelay || 0, s.jitterBufferEmittedCount || 0);
+      const decode = recent("vdec", s.totalDecodeTime || 0, s.framesDecoded || 0);
+      if (buffer != null) video = buffer + (decode || 0);
     }
+    if (s.type === "inbound-rtp" && s.kind === "audio") {
+      audio = recent("ajb", s.jitterBufferDelay || 0, s.jitterBufferEmittedCount || 0);
+    }
+    if (s.type === "candidate-pair" && s.nominated && s.currentRoundTripTime) rtt = s.currentRoundTripTime * 1000;
   });
+  liveSyncPrev = now;
   if (text) $("live-note").textContent = text;
+  // O atraso todo: o do navegador (buffer e decodificacao), meia volta da
+  // rede e o do gabinete. A imagem: a captura e o x264 sem quadros B, uns 2
+  // quadros. O som: o periodo do loopback (1024 amostras a 48 kHz, 21 ms) e o
+  // quadro do Opus (10 ms).
+  if (video != null) {
+    const v = video + rtt / 2 + 2000 / fps;
+    liveSync(v, audio != null ? audio + rtt / 2 + 31 : v);
+  }
 }
 
 function liveStop(keepNote) {
@@ -1489,6 +1546,7 @@ function liveStop(keepNote) {
   video.srcObject = null;
   video.muted = true;
   $("live-pixels").hidden = true;
+  liveSync(null);
   $("live-sound").hidden = true;
   $("live-sound").dataset.icon = "🔇";
   $("live-sound").textContent = t("live_unmute");
@@ -1528,11 +1586,16 @@ for (const id of ["ovl-led", "ovl-text", "ovl-size"]) {
   $(id).addEventListener("change", () => { obsSave(); overlayUrl(); });
 }
 $("live-tube").addEventListener("change", () => $("live-stage").classList.toggle("tube", $("live-tube").checked));
+// O botao do som mostra o que um clique faz (mudo: "Ligar o som").
+function liveMuteButton() {
+  const muted = $("live").muted;
+  $("live-sound").dataset.icon = muted ? "🔇" : "🔊";
+  $("live-sound").textContent = t(muted ? "live_unmute" : "live_mute");
+}
+
 $("live-sound").addEventListener("click", () => {
-  const video = $("live");
-  video.muted = !video.muted;
-  $("live-sound").dataset.icon = video.muted ? "🔇" : "🔊";
-  $("live-sound").textContent = t(video.muted ? "live_unmute" : "live_mute");
+  $("live").muted = !$("live").muted;
+  liveMuteButton();
 });
 $("live-full").addEventListener("click", () => { $("live-stage").requestFullscreen().catch(() => {}); });
 $("live-copy").addEventListener("click", async () => {

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FliperOS Marquee Games</title>
+<!-- Os jogos que o marquee para o OBS (e o de LED) mostra alem da arte: os
+     recordes (hi2txt) e o placar versus (fliperos-versus list), com o
+     emulador de cada um. Aberto pelo cartao Marquee para o OBS do painel; os
+     dados vem de /api/marquee/games, com o login do painel. -->
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { margin: 0 0 4px; font-size: 1.6em; }
+  .lead { margin: 0 0 18px; color: var(--dim); }
+  .search { width: 100%; max-width: 420px; margin: 0 0 18px; }
+  .feature { margin: 0 0 16px; }
+  .feature h2 { margin: 0 0 6px; font-size: 1.15em; }
+  .feature > p { margin: 0 0 10px; color: var(--dim); }
+  .emus { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .emu { padding: 2px 10px; border-radius: 999px; background: var(--bg-deep); border: 1px solid var(--line);
+    font-size: .9em; font-weight: 600; }
+  .emu small { color: var(--dim); font-weight: 400; margin-left: 4px; }
+  .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 14px;
+    max-height: 420px; overflow: auto; margin: 0; padding: 8px 0 0; list-style: none; border-top: 1px solid var(--line); }
+  .list li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dashed var(--line);
+    min-width: 0; }
+  .list li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list li code { color: var(--dim); font-size: .85em; flex: none; }
+  .tag { color: var(--cyan); font-size: .8em; margin-left: 6px; }
+  .missing { padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--orange) 14%, transparent);
+    border-left: 3px solid var(--orange); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<h1 id="h"></h1>
+<p id="lead" class="lead"></p>
+<input id="q" class="search" type="search">
+<p id="error" class="missing" hidden></p>
+<main id="features"></main>
+<script src="/games.js"></script>
+</body>
+</html>

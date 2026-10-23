@@ -4818,6 +4818,42 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual((info['rc'], info['last']), (0, 'copied=2'))
         self.assertIn('--romfilter run %s groovymame copy players=2\n' % folder, log.read_text())
 
+    def test_marquee_games_page(self):
+        # O cartao Marquee para o OBS leva a pagina dos jogos com recordes (os
+        # sets do hi2txt) e placar versus (fliperos-versus list), com os titulos
+        # do -listfull do GroovyMAME.
+        import zipfile
+        web = load_script('fliperos_web_games', 'config/fliperos-web')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'pixelcade/hi2txt').mkdir(parents=True)
+            versus = tmp / 'versus'
+            versus.write_text('#!/bin/sh\n[ "$1" = list ] && printf "groovymame\\tsf2\\twins\\nsm2-emu\\tvf2\\twins\\n"\n')
+            versus.chmod(0o755)
+            mame = tmp / 'groovymame'
+            mame.write_text('#!/bin/sh\n[ "$1" = -listfull ] && printf \'Name:     Description:\\n'
+                            'sf2       "Street Fighter II: The World Warrior"\\n1942      "1942 (Revision B)"\\n\'\n')
+            mame.chmod(0o755)
+            os.environ['FLIPEROS_HOME'] = str(tmp)
+            self.addCleanup(os.environ.pop, 'FLIPEROS_HOME', None)
+            web.VERSUS, web.GROOVYMAME, web._mame_titles = str(versus), str(mame), None
+            # Sem o hi2txt baixado: sem recordes (a pagina diz onde baixar).
+            self.assertEqual(web.marquee_games(), {'highscores': None,
+                                                   'versus': [['groovymame', 'sf2', 'wins'], ['sm2-emu', 'vf2', 'wins']],
+                                                   'titles': {'sf2': 'Street Fighter II: The World Warrior'}})
+            with zipfile.ZipFile(tmp / 'pixelcade/hi2txt/hi2txt.zip', 'w') as z:
+                for name in ('1942.xml', 'sf2.xml', '_template.xml'):
+                    z.writestr(name, '<hi2txt/>')
+            games = web.marquee_games()
+            self.assertEqual(games['highscores'], ['1942', 'sf2'])
+            self.assertEqual(games['titles']['1942'], '1942 (Revision B)')
+        # A pagina e publica (os dados pedem o login) e o cartao tem o link.
+        self.assertEqual(self.request('GET', '/api/marquee/games')[0], 401)
+        status, _, page = self.request('GET', '/marquee-games')
+        self.assertEqual(status, 200)
+        self.assertIn('/games.js', page.decode())
+        self.assertIn('href="/marquee-games"', (ROOT / 'config/web/index.html').read_text())
+
     def test_live_screen_link_from_the_default_route(self):
         # A pagina recomenda o cabo quando a rota padrao sai pelo Wi-Fi; com
         # os dois, vale a de menor metrica.
@@ -9120,6 +9156,26 @@ class VersusTests(unittest.TestCase):
         # passa pela porta 8000 (a do SM2-Emu, que publica os rounds ele mesmo).
         text = self.SCRIPT.read_text()
         self.assertNotIn('socket', text[text.index('def mame_source'):text.index('class Detector')])
+
+    def test_list_gives_every_game_with_a_score_and_its_emulator(self):
+        # A pagina dos jogos do marquee (painel web): os jogos com placar, os
+        # mesmos que o "has" aceita, com o emulador e o que ha (vitorias, pontos).
+        v = self.versus
+        self.detectors(sf2ce=self.DETECTOR, odd='start=Start,Sprite RAM,eq,0x10,1,8\nplayer1=P1 Win,raw,eq,0x11,1,8\n'
+                                                'player2=P2 Win,raw,eq,0x12,1,8\n')
+        games = self.tmp / 'games.xml'
+        wins = '<outputs><value name="P1_Wins" address="0x1"/><value name="P2_Wins" address="0x2"/></outputs>'
+        games.write_text('<games><game name="vf2">%s</game><game name="hotd"><outputs><value name="Credits" '
+                         'address="0x3"/></outputs></game></games>' % wins)
+        self.env['SM2_GAMES'] = v.SM2_GAMES = str(games)
+        expected = [('groovymame', 'sf2', 'score,wins'), ('retroarch', 'sf2', 'score,wins'), ('sm2-emu', 'vf2', 'wins')]
+        for source, emulator in (('mame', 'groovymame'), ('retroarch', 'fbneo')):
+            if v.read_detector('sf2ce', source):
+                expected.append((emulator, 'sf2ce', 'wins'))
+            self.assertIsNone(v.read_detector('odd', source))
+        self.assertEqual(v.listing(), sorted(expected))
+        out = subprocess.run([sys.executable, str(self.SCRIPT), 'list'], env=self.env, capture_output=True, text=True)
+        self.assertEqual(out.stdout.splitlines(), ['\t'.join(row) for row in sorted(expected)])
 
     def test_model2_rounds_come_from_the_emulators_outputs(self):
         # Os jogos sao os do games.xml do SM2-Emu com P1_Wins e P2_Wins; o

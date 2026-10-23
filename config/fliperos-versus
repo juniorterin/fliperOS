@@ -39,6 +39,7 @@
 #   fliperos-versus has SOURCE GAME          status 0 se ha placar para o jogo (SOURCE: mame | retroarch | model2)
 #   fliperos-versus run SOURCE GAME [PID]    o placar no LED ate o jogo (o processo PID) fechar
 #   fliperos-versus watch SOURCE GAME        mostra cada valor quando muda (para conferir um jogo)
+#   fliperos-versus list                     os jogos com placar: EMULADOR<TAB>JOGO<TAB>wins|score (o painel web)
 #   fliperos-versus fetch                    baixa os detectores do Fightcade (de novo: atualiza)
 import io
 import os
@@ -224,6 +225,40 @@ def model2_has(game):
                 all(re.search(r'<value\b[^>]*\bname="%s"' % name, block) for name in ('P1_Wins', 'P2_Wins')):
             return True
     return False
+
+
+# listing: os jogos com placar, para a pagina dos jogos do marquee (o painel
+# web): (emulador, jogo, o que ha), com o que "has" tambem aceitaria. O
+# emulador: groovymame, fbneo (o core do RetroArch dos detectores), retroarch
+# (as linhas "retroarch" da tabela) ou sm2-emu.
+def listing():
+    tables = read_tables()
+    found = {}
+
+    def add(emulator, game, what):
+        found.setdefault((emulator, game), set()).add(what)
+    try:
+        names = sorted(n[:-4] for n in os.listdir(DETECTORS) if n.endswith('.inf'))
+    except OSError:
+        names = []
+    for game in names:
+        for source, emulator in (('mame', 'groovymame'), ('retroarch', 'fbneo')):
+            if read_detector(game, source):
+                add(emulator, game, 'wins')
+    for source, emulator in (('mame', 'groovymame'), ('retroarch', 'retroarch')):
+        for game, fields in tables[0][source].items():
+            for field in fields:
+                add(emulator, game, 'score' if field.startswith('score') else 'wins')
+    try:
+        with open(SM2_GAMES, encoding='utf-8', errors='replace') as f:
+            text = f.read()
+    except OSError:
+        text = ''
+    for block in re.findall(r'<game\b.*?</game>', text, re.S):
+        named = re.search(r'\bname="([^"]*)"', block[:block.index('>')])
+        if named and all(re.search(r'<value\b[^>]*\bname="%s"' % n, block) for n in ('P1_Wins', 'P2_Wins')):
+            add('sm2-emu', named.group(1), 'wins')
+    return [(emulator, game, ','.join(sorted(what))) for (emulator, game), what in sorted(found.items())]
 
 
 # fetch: os .inf do repositorio do Fightcade, no commit fixado, para a pasta
@@ -614,6 +649,10 @@ def watch(source, game, core=''):
 def main(argv):
     if len(argv) == 2 and argv[1] == 'fetch':
         return fetch()
+    if len(argv) == 2 and argv[1] == 'list':
+        for row in listing():
+            print('\t'.join(row))
+        return 0
     if len(argv) >= 4 and argv[2] in ('mame', 'retroarch', 'model2'):
         # O core do RetroArch: o nome do arquivo, com ou sem pasta e "_libretro.so".
         rest = [a for a in argv[4:] if not a.isdigit()]
@@ -630,6 +669,7 @@ def main(argv):
     sys.stderr.write('usage: fliperos-versus has mame|retroarch|model2 GAME [CORE]\n'
                      '       fliperos-versus run mame|retroarch|model2 GAME [PID] [CORE]\n'
                      '       fliperos-versus watch mame|retroarch|model2 GAME [CORE]\n'
+                     '       fliperos-versus list\n'
                      '       fliperos-versus fetch\n')
     return 1
 

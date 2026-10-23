@@ -432,6 +432,14 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .live-facts dd { margin: 0; text-align: right; font-weight: 600; }
 .live-facts .on { color: var(--green); }
 .live-facts .off { color: var(--orange); }
+/* O balao do atraso para o OBS: a ponta aponta para os passos de cima. */
+.sync-tip { position: relative; margin: 16px 0 0; padding: 10px 12px 10px 38px; border-radius: 10px;
+  background: color-mix(in srgb, var(--cyan) 12%, var(--card)); border: 1px solid color-mix(in srgb, var(--cyan) 45%, transparent); }
+.sync-tip::before { content: "💡"; position: absolute; left: 12px; top: 9px; }
+.sync-tip::after { content: ""; position: absolute; left: 22px; top: -8px; width: 14px; height: 14px; transform: rotate(45deg);
+  background: inherit; border-left: inherit; border-top: inherit; }
+.sync-tip p { margin: 0; }
+.sync-tip b { color: var(--cyan); font-variant-numeric: tabular-nums; }
 .live-net-tip { margin: 0 0 12px; color: var(--dim); font-size: 0.92em; }
 .live-net-tip.warn { color: var(--fg); background: color-mix(in srgb, var(--orange) 14%, transparent);
   border-left: 3px solid var(--orange); padding: 8px 10px; border-radius: 6px; }

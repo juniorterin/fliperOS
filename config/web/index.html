@@ -162,6 +162,11 @@
           <li><span data-t="obs_step2"></span> <b id="obs-wh"></b></li>
           <li data-t="obs_step3"></li>
         </ol>
+        <!-- O atraso da transmissao, medido enquanto se assiste aqui: quanto
+             atrasar a camera e o microfone no OBS. -->
+        <div id="live-sync" class="sync-tip" role="note">
+          <p id="live-sync-text"></p>
+        </div>
       </div>
     </section>
 
@@ -169,6 +174,7 @@
     <section class="card wide" data-page="live" aria-labelledby="h-ovl">
       <h2 id="h-ovl" data-t="overlay"></h2>
       <p class="dim" data-t="overlay_note"></p>
+      <p><a class="ghost-link" href="/marquee-games" target="_blank" rel="noopener" data-t="overlay_games"></a></p>
       <label class="ovl-toggle"><input id="ovl-on" type="checkbox"> <span data-t="overlay_on"></span></label>
       <div id="ovl-box" class="ovl-box" hidden>
         <div class="obs-url">
