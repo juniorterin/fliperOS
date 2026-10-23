@@ -1542,7 +1542,7 @@ class GroovyMameTests(unittest.TestCase):
         # demais no gabinete.
         for key, value in (('plugin', 'hiscore'), ('skip_gameinfo', '1'), ('uifont', 'default'),
                            ('video', 'opengl'), ('lowlatency', '1'), ('switchres_ini', '1'), ('modesetting', '1'),
-                           ('sound', 'sdl'), ('aspect', '4:3'), ('autoframedelay', '1'), ('framedelay', '0')):
+                           ('sound', 'portaudio'), ('aspect', '4:3'), ('autoframedelay', '1'), ('framedelay', '0')):
             self.assertEqual(ini[key], value, key)
         self.assertEqual(ini['homepath'], '$HOME/.mame')
         self.assertEqual(ini['cfg_directory'], '$HOME/.mame/cfg')
@@ -6679,7 +6679,9 @@ class AudioBuildTests(unittest.TestCase):
         self.assertIn('echo N > /sys/module/snd_hda_intel/parameters/power_save_controller', update)
 
     def test_emulators_use_alsa(self):
-        self.assertIn('\nsound sdl\n', (ROOT / 'config/mame.ini').read_text())
+        # O portaudio abre o default do ALSA; o sdl abria o hw: da placa direto.
+        self.assertIn('\nsound portaudio\n', (ROOT / 'config/mame.ini').read_text())
+        self.assertIn(r"s/^(sound[[:space:]]+)sdl[[:space:]]*$/\1portaudio/", ROOTFS)
         for script in ('config/fliperos-kms-run', 'config/fliperos-x11-run'):
             self.assertIn('export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"', (ROOT / script).read_text(), script)
 
