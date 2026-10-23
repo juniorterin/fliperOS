@@ -12,6 +12,24 @@ const video = document.getElementById("video");
 video.muted = params.get("muted") === "1";
 let pc = null, retry = null;
 
+// Cada quadro do video copiado para o canvas do mesmo tamanho (640x480), que a
+// pagina aumenta sem suavizar: o <video> o Chrome sempre suaviza.
+function pixels(video, canvas) {
+  const ctx = canvas.getContext("2d", { alpha: false });
+  const next = () => video.requestVideoFrameCallback ? video.requestVideoFrameCallback(draw) : requestAnimationFrame(draw);
+  const draw = () => {
+    const w = video.videoWidth, h = video.videoHeight;
+    canvas.hidden = !w;
+    if (w) {
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      ctx.drawImage(video, 0, 0, w, h);
+    }
+    next();
+  };
+  next();
+}
+pixels(video, document.getElementById("pixels"));
+
 function note(text, bad) {
   const p = document.getElementById("note");
   p.hidden = !text;

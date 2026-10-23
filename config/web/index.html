@@ -116,6 +116,7 @@
       </div>
       <div id="live-stage" class="live-stage tube">
         <video id="live" playsinline autoplay muted></video>
+        <canvas id="live-pixels" class="live-pixels" hidden></canvas>
         <div id="live-idle" class="live-idle">
           <p id="live-idle-text"></p>
           <button id="live-play" type="button" class="live-play" data-icon="▶" data-t="live_start" hidden></button>
@@ -130,7 +131,9 @@
         <div><dt data-t="live_service"></dt><dd id="live-service">-</dd></div>
         <div><dt data-t="live_encoder"></dt><dd id="live-encoder">-</dd></div>
         <div><dt data-t="live_sound"></dt><dd id="live-audio">-</dd></div>
+        <div><dt data-t="live_net"></dt><dd id="live-net">-</dd></div>
       </dl>
+      <p id="live-net-tip" class="live-net-tip" role="note"></p>
       <div id="live-setup" class="live-actions"></div>
       <p class="dim" data-t="live_settings_note"></p>
     </section>

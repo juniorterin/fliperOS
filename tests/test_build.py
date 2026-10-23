@@ -4818,11 +4818,40 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual((info['rc'], info['last']), (0, 'copied=2'))
         self.assertIn('--romfilter run %s groovymame copy players=2\n' % folder, log.read_text())
 
+    def test_live_screen_link_from_the_default_route(self):
+        # A pagina recomenda o cabo quando a rota padrao sai pelo Wi-Fi; com
+        # os dois, vale a de menor metrica.
+        web = load_script('fliperos_web_link', 'config/fliperos-web')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'proc/net').mkdir(parents=True)
+            (tmp / 'sys/class/net/wlx1/wireless').mkdir(parents=True)
+            (tmp / 'sys/class/net/ens1').mkdir(parents=True)
+            web.PROC, web.SYS = str(tmp / 'proc'), str(tmp / 'sys')
+            head = 'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n'
+            route = tmp / 'proc/net/route'
+            wifi = 'wlx1\t00000000\t0101A8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n'
+            lan = 'wlx1\t0001A8C0\t00000000\t0001\t0\t0\t600\t00FFFFFF\t0\t0\t0\n'
+            wired = 'ens1\t00000000\t0101A8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n'
+            self.assertIsNone(web.stream_link())
+            route.write_text(head + lan)
+            self.assertIsNone(web.stream_link())
+            route.write_text(head + wifi + lan)
+            self.assertEqual(web.stream_link(), 'wifi')
+            route.write_text(head + wifi + wired)
+            self.assertEqual(web.stream_link(), 'wired')
+        index = (ROOT / 'config/web/index.html').read_text()
+        self.assertIn('id="live-net"', index)
+        self.assertIn('id="live-net-tip"', index)
+        app = (ROOT / 'config/web/app.js').read_text()
+        self.assertIn('live_net_tip_wifi: "O gabinete está no Wi-Fi.', app)
+
     def test_live_screen_offer_goes_to_go2rtc(self):
         cookie = self.login()
         status = json.loads(self.request('GET', '/api/stream', cookie=cookie)[2])
         self.assertEqual(status, {'installed': True, 'active': True, 'encoder': 'x264', 'audio': False,
-                                  'rates': [15, 30, 60]})
+                                  'rates': [15, 30, 60], 'link': status['link']})
+        self.assertIn(status['link'], ('wifi', 'wired', None))
         offer = 'v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n'
         for bad in ({'fps': 25, 'sdp': offer}, {'fps': 30, 'sdp': 'hello'}, {'fps': '30', 'sdp': offer}):
             self.assertEqual(self.request('POST', '/api/stream/offer', bad, cookie=cookie)[0], 400, bad)
@@ -5307,20 +5336,20 @@ class LiveScreenTests(unittest.TestCase):
         args = self.args.read_text().splitlines()
         self.assertIn('libx264', args)
         # Os pixels nitidos: a copia em RGB, aumentada no vizinho mais proximo
-        # para 1280x960, so depois o YUV do H.264.
+        # para 640x480 (o maximo da transmissao), so depois o YUV do H.264.
         self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=format=bgr0,hwdownload,format=bgr0,"
-                      "scale=1280:960:flags=neighbor,format=yuv420p", args)
+                      "scale=640:480:flags=neighbor,format=yuv420p", args)
         self.assertEqual((self.tmp / 'run/vpp').read_text(), '1\n')
 
     def test_capture_rate_without_bursts(self):
-        # A taxa pela taxa de quadros e o buffer de uns 2 quadros: o keyframe
-        # nao sai numa rajada (o Wi-Fi do gabinete perdia pacotes e a imagem
-        # engasgava ate o keyframe seguinte).
+        # A taxa pela taxa de quadros, com buffer de meio segundo: o keyframe
+        # com a qualidade dos outros quadros (o WebRTC vai por TCP, o que o
+        # Wi-Fi perde volta reenviado).
         for vaapi in (False, True):
             self.write_ffmpeg(vaapi=vaapi, vpp=True)
             for cache in ('encoder', 'vpp'):
                 (self.tmp / 'run' / cache).unlink(missing_ok=True)
-            for fps, kbps, buf in (('15', '2000k', '266k'), ('30', '3000k', '200k'), ('60', '5000k', '166k')):
+            for fps, kbps, buf in (('15', '1500k', '750k'), ('30', '2000k', '1000k'), ('60', '3000k', '1500k')):
                 self.assertEqual(self.run_('capture', fps, 'out').returncode, 0)
                 args = self.args.read_text().splitlines()
                 rate = [args[args.index(opt) + 1] for opt in ('-b:v', '-maxrate', '-bufsize')]
@@ -5338,13 +5367,13 @@ class LiveScreenTests(unittest.TestCase):
         self.assertEqual(args[args.index('-device') + 1], str(self.tmp / 'dri/card1'))
         self.assertEqual(args[args.index('-framerate') + 1], '60')
         self.assertEqual(args[args.index('-f') + 1], 'kmsgrab')
-        # Sem codificador na placa: x264 sem quadros B, keyframe a cada 2 s,
-        # no perfil baseline; os pixels nitidos em 1280x960.
+        # Sem codificador na placa: x264 sem quadros B, keyframe por segundo,
+        # no perfil baseline; os pixels nitidos em 640x480.
         self.assertIn('libx264', args)
-        self.assertEqual(args[args.index('-g') + 1], '120')
+        self.assertEqual(args[args.index('-g') + 1], '60')
         self.assertEqual(args[args.index('-bf') + 1], '0')
         self.assertIn('baseline', args)
-        self.assertIn("hwdownload,format=bgr0,scale=1280:960:flags=neighbor,format=yuv420p", args)
+        self.assertIn("hwdownload,format=bgr0,scale=640:480:flags=neighbor,format=yuv420p", args)
         self.assertEqual(args[-3:], ['-f', 'rtsp', 'rtsp://127.0.0.1:8554/x'])
         # Sem o som ligado, nada do ALSA.
         self.assertNotIn('alsa', args)
@@ -5391,7 +5420,7 @@ class LiveScreenTests(unittest.TestCase):
         self.assertIn('h264_vaapi', args)
         # Aumentado na CPU (nitido) e enviado de volta a placa, que codifica.
         self.assertIn("hwmap=derive_device=vaapi,scale_vaapi=format=bgr0,hwdownload,format=bgr0,"
-                      "scale=1280:960:flags=neighbor,format=nv12,hwupload", args)
+                      "scale=640:480:flags=neighbor,format=nv12,hwupload", args)
         self.assertEqual(args[:4], ['-init_hw_device', 'vaapi=va:%s' % (self.tmp / 'dri/renderD129'),
                                     '-filter_hw_device', 'va'])
         # O som: o lado de gravacao do loopback, em Opus.
@@ -5406,7 +5435,7 @@ class LiveScreenTests(unittest.TestCase):
         yaml = (self.tmp / 'run/go2rtc.yaml').read_text()
         self.assertIn('api:\n  listen: "127.0.0.1:1984"\n', yaml)
         self.assertIn('rtsp:\n  listen: "127.0.0.1:8554"\n', yaml)
-        self.assertIn('webrtc:\n  listen: ":8555"\n  ice_servers: []\n', yaml)
+        self.assertIn('webrtc:\n  listen: ":8555/tcp"\n  ice_servers: []\n', yaml)
         for fps in (15, 30, 60):
             self.assertIn('  cabinet%d: exec:%s capture %d {output}#killsignal=15#killtimeout=3\n'
                           % (fps, self.STREAM.resolve(), fps), yaml)

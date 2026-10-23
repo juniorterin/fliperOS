@@ -46,6 +46,9 @@ const TEXT = {
     live_turn_off: "Turn off", live_sound_on: "Turn the sound on", live_sound_off: "Turn the sound off",
     live_not_installed: "The live screen is not installed yet: Install, under Streaming (or Setup > System > Extras > Live screen).",
     live_settings_note: "ffmpeg only runs while someone watches (here or in OBS). The sound is a copy of the output on an ALSA loopback: games opened after turning it on get it.",
+    live_net: "Network", live_net_wired: "cable", live_net_wifi: "Wi-Fi",
+    live_net_tip_wifi: "The cabinet is on Wi-Fi. For a better stream, plug in a network cable: Wi-Fi loses packets and the picture can stall for a moment, mostly at 60 fps and in OBS.",
+    live_net_tip: "Use a network cable instead of Wi-Fi for the best stream.",
     obs_open: "Open", obs_fps60: "60 (recommended)", obs_fps30: "30 (lighter)", obs_fps15: "15 (very light)",
     obs_fit: "Format", obs_fit_tube: "4:3 as on the tube (recommended)", obs_fit_fill: "Stretch to the whole source",
     obs_size: "Size in OBS", obs_size_1440: "1440 × 1080 (4:3, recommended)", obs_size_960: "960 × 720 (4:3, lighter)",
@@ -145,6 +148,9 @@ const TEXT = {
     live_turn_off: "Desligar", live_sound_on: "Ligar o som", live_sound_off: "Desligar o som",
     live_not_installed: "A tela ao vivo ainda não está instalada: Instalar, em Transmissão (ou Setup > System > Extras > Live screen).",
     live_settings_note: "O ffmpeg só roda enquanto alguém assiste (aqui ou no OBS). O som é uma cópia da saída num loopback do ALSA: os jogos abertos depois de ligar já saem com ele.",
+    live_net: "Rede", live_net_wired: "cabo", live_net_wifi: "Wi-Fi",
+    live_net_tip_wifi: "O gabinete está no Wi-Fi. Para uma transmissão melhor, ligue um cabo de rede: o Wi-Fi perde pacotes e a imagem pode engasgar por um instante, mais ainda a 60 fps e no OBS.",
+    live_net_tip: "Use a rede cabeada em vez do Wi-Fi para a melhor transmissão.",
     obs_open: "Abrir", obs_fps60: "60 (recomendado)", obs_fps30: "30 (mais leve)", obs_fps15: "15 (bem leve)",
     obs_fit: "Formato", obs_fit_tube: "4:3 como no tubo (recomendado)", obs_fit_fill: "Esticar para a fonte inteira",
     obs_size: "Tamanho no OBS", obs_size_1440: "1440 × 1080 (4:3, recomendado)", obs_size_960: "960 × 720 (4:3, mais leve)",
@@ -1359,6 +1365,11 @@ async function loadLive() {
     s.installed && s.active ? "on" : "off");
   liveFact("live-encoder", !s.installed ? "-" : s.encoder === "vaapi" ? t("live_enc_hw") : t("live_enc_sw"));
   liveFact("live-audio", s.audio ? t("live_audio_on") : t("live_audio_off"), s.audio ? "on" : "off");
+  // A rede da rota padrao: no Wi-Fi a recomendacao do cabo em destaque.
+  liveFact("live-net", s.link === "wifi" ? t("live_net_wifi") : s.link === "wired" ? t("live_net_wired") : "-",
+    s.link === "wifi" ? "off" : s.link === "wired" ? "on" : "");
+  $("live-net-tip").textContent = t(s.link === "wifi" ? "live_net_tip_wifi" : "live_net_tip");
+  $("live-net-tip").classList.toggle("warn", s.link === "wifi");
   setup.replaceChildren();
   if (!s.installed) {
     const install = el("button", { type: "button", "data-icon": "⬇" }, t("live_install"));
@@ -1477,6 +1488,7 @@ function liveStop(keepNote) {
   const video = $("live");
   video.srcObject = null;
   video.muted = true;
+  $("live-pixels").hidden = true;
   $("live-sound").hidden = true;
   $("live-sound").dataset.icon = "🔇";
   $("live-sound").textContent = t("live_unmute");
@@ -1486,6 +1498,23 @@ function liveStop(keepNote) {
   if (!keepNote) $("live-note").textContent = "";
   liveIdle();
 }
+
+// Os pixels nitidos: cada quadro do video (640x480) copiado no canvas por
+// cima, que a pagina aumenta sem suavizar (o Chrome sempre suaviza o <video>).
+(() => {
+  const video = $("live"), canvas = $("live-pixels"), ctx = canvas.getContext("2d", { alpha: false });
+  const next = () => video.requestVideoFrameCallback ? video.requestVideoFrameCallback(draw) : requestAnimationFrame(draw);
+  const draw = () => {
+    const w = video.videoWidth, h = video.videoHeight;
+    if (w && live) {
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      ctx.drawImage(video, 0, 0, w, h);
+      canvas.hidden = false;
+    }
+    next();
+  };
+  next();
+})();
 
 $("live-start").addEventListener("click", () => liveStart());
 $("live-play").addEventListener("click", () => liveStart());

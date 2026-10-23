@@ -8,7 +8,7 @@
 # painel; o video vai direto ao navegador pela porta 8555 da rede local.
 #
 # O H.264 e do hardware (VA-API) quando a placa tem o codificador; senao do
-# x264 (a R7 240 nao tem: o chip Oland ficou sem o VCE). Em 640x240 o x264 em
+# x264 (a R7 240 nao tem: o chip Oland ficou sem o VCE). Em 640x480 o x264 em
 # ultrafast quase nao pesa. O som (Setup > Audio Setup > Live screen sound, ou
 # o painel) vem de uma copia da saida num loopback do ALSA (lib/audio.sh).
 #
@@ -146,27 +146,25 @@ audio_on() {
 }
 
 # capture FPS SAIDA: o ffmpeg que o go2rtc abre (exec, transporte RTSP). A
-# imagem: os pixels nitidos, como no tubo. O quadro (640x240, 480i, a super
-# resolucao de 2560x240) e aumentado no vizinho mais proximo para 1280x960 (4:3:
-# cada pixel vira um bloco inteiro, 2x de largura e 4x de altura no 640x240) e
-# so depois codificado. Em RGB ate ai: o H.264 guarda a cor a cada 2x2 pixels,
-# e no tamanho grande isso e um pixel do jogo. Sem isso o navegador esticava
-# 640x240 com suavizacao e saia borrado. Um keyframe a cada 2 s, sem quadros B
-# (a latencia), no perfil que todo navegador decodifica. O x264 aguenta 1280x960
-# a 60 fps no gabinete (i7 870).
+# imagem: no maximo 640x480, sempre 4:3. O quadro (640x240, 480i, a super
+# resolucao de 2560x240) vai a 640x480 no vizinho mais proximo (no 640x240
+# cada linha dobra), em RGB ate ai, e so depois e codificado. A pagina e o OBS
+# aumentam o video sem suavizar (image-rendering: pixelated), entao os pixels
+# ficam nitidos. Um keyframe por segundo (uma perda no Wi-Fi para a imagem
+# no maximo ate ele), sem quadros B (a latencia), no perfil
+# que todo navegador decodifica.
 #
-# A taxa: 2 Mbit/s a 15 fps, 3 a 30, 5 a 60, com o buffer de uns 2 quadros
-# (nenhum quadro, nem o keyframe, sai muito maior que a media). Com 8 Mbit/s
-# e 2 Mbit de buffer o keyframe saia numa rajada, o Wi-Fi USB do gabinete
-# perdia pacotes e a imagem parava ate o keyframe seguinte (as "engasgadas"
-# de segundos em segundos; visto no gabinete: 321 pacotes perdidos e 8,6 s
-# parado em 20 s, contra nenhum com a taxa daqui). Como o go2rtc nao pede
-# keyframe ao ffmpeg, cada perda custava ate 2 s.
-SHARP="scale=1280:960:flags=neighbor"
+# A taxa: 1,5 Mbit/s a 15 fps, 2 a 30, 3 a 60, com buffer de meio segundo
+# (o keyframe sai com a mesma qualidade dos outros quadros). O WebRTC vai por
+# TCP (config): o Wi-Fi USB do gabinete perdia pacotes no UDP e, como o go2rtc
+# nao pede keyframe ao ffmpeg, cada perda parava a imagem ate o keyframe
+# seguinte (as "engasgadas"; visto no gabinete em 2026-10-23). Um buffer de
+# 2 quadros escondia isso, mas o keyframe saia borrado a cada 2 s.
+SHARP="scale=640:480:flags=neighbor"
 # rate FPS: as opcoes de taxa do codificador.
 rate() {
-  local kbps=$((1000 + $1 * 1000 / 15))
-  echo "-b:v ${kbps}k -maxrate ${kbps}k -bufsize $((kbps * 2 / $1))k"
+  local kbps=$((1000 + $1 * 1000 / 30))
+  echo "-b:v ${kbps}k -maxrate ${kbps}k -bufsize $((kbps / 2))k"
 }
 capture() {
   local fps=${1:-30} out=${2:-} dev enc copy
@@ -196,10 +194,10 @@ capture() {
     # Aumentado aqui e enviado de volta a placa, que codifica.
     args=(-init_hw_device "vaapi=va:$(render "$dev")" -filter_hw_device va "${args[@]}")
     args+=(-vf "$copy,$SHARP,format=nv12,hwupload"
-      -c:v h264_vaapi -profile:v constrained_baseline -bf 0 -g $((fps * 2)) "${bitrate[@]}")
+      -c:v h264_vaapi -profile:v constrained_baseline -bf 0 -g "$fps" "${bitrate[@]}")
   else
     args+=(-vf "$copy,$SHARP,format=yuv420p"
-      -c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -bf 0 -g $((fps * 2))
+      -c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -bf 0 -g "$fps"
       "${bitrate[@]}")
   fi
   if audio_on; then
@@ -214,8 +212,9 @@ capture() {
 }
 
 # config: o go2rtc.yaml. A API e o RTSP so no proprio gabinete; o WebRTC na
-# rede local, sem STUN de fora (o painel e da rede local). Um stream por taxa
-# de quadros, cada um aberto so enquanto alguem assiste.
+# rede local, sem STUN de fora (o painel e da rede local), so por TCP: o que
+# o Wi-Fi perde volta reenviado em vez de parar a imagem ate o keyframe. Um
+# stream por taxa de quadros, cada um aberto so enquanto alguem assiste.
 config() {
   local fps
   mkdir -p "$run" || fail "could not create $run"
@@ -227,7 +226,7 @@ config() {
     echo "rtsp:"
     echo "  listen: \"127.0.0.1:8554\""
     echo "webrtc:"
-    echo "  listen: \":$WEBRTC_PORT\""
+    echo "  listen: \":$WEBRTC_PORT/tcp\""
     echo "  ice_servers: []"
     echo "log:"
     echo "  level: warn"

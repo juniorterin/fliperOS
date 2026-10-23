@@ -1388,19 +1388,36 @@ EXTRAS = ENV("FLIPEROS_EXTRAS", BIN + "/fliperos-extras")
 STREAM_RATES = (15, 30, 60)
 
 
+def stream_link():
+    """"wifi" ou "wired": a interface da rota padrao, que leva a transmissao.
+    No Wi-Fi (o USB do gabinete) a imagem engasgava com pacotes perdidos; a
+    pagina recomenda o cabo. Com o cabo e o Wi-Fi ligados vale a de menor
+    metrica (a que o kernel usa). None sem rota padrao."""
+    routes = []
+    for line in read(os.path.join(PROC, "net/route")).splitlines()[1:]:
+        fields = line.split()
+        if len(fields) > 7 and fields[1] == "00000000" and fields[7] == "00000000" and fields[6].isdigit():
+            routes.append((int(fields[6]), fields[0]))
+    if not routes:
+        return None
+    wireless = os.path.isdir(os.path.join(SYS, "class/net", min(routes)[1], "wireless"))
+    return "wifi" if wireless else "wired"
+
+
 def stream_status():
-    """installed, active, encoder, audio e as taxas (fliperos-stream status)."""
+    """installed, active, encoder, audio, as taxas (fliperos-stream status) e a rede."""
     try:
         out = subprocess.run([STREAM, "status"], capture_output=True, text=True, timeout=30).stdout
     except (OSError, subprocess.SubprocessError):
-        return {"installed": False, "active": False}
+        return {"installed": False, "active": False, "link": stream_link()}
     values = {}
     for line in out.splitlines():
         key, _, value = line.partition("=")
         values[key] = value
     return {"installed": values.get("installed") == "1", "active": values.get("active") == "1",
             "encoder": values.get("encoder") or None, "audio": values.get("audio") == "1",
-            "rates": [int(r) for r in values.get("rates", "").split() if r.isdigit()] or list(STREAM_RATES)}
+            "rates": [int(r) for r in values.get("rates", "").split() if r.isdigit()] or list(STREAM_RATES),
+            "link": stream_link()}
 
 
 def stream_answer(fps, offer):
