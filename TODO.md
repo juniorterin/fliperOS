@@ -5,8 +5,6 @@ O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai
 ## Pedidos de 2026-10-23
 
 Menu e Setup:
-- **Fundo animado no azulejo selecionado** do menu.
-- **Downloader:** escolher um arquivo .torrent (além do link magnético) para o romset e para os CHDs.
 - **Boot lento:** subir só sob demanda o que não precisa estar no boot. Em andamento: há mudanças ainda não commitadas (os serviços depois da primeira tela, o Transmission só quando um download é pedido).
 
 Frontend próprio (o padrão no futuro), **primeiro mostrar o design:**
@@ -14,8 +12,7 @@ Frontend próprio (o padrão no futuro), **primeiro mostrar o design:**
 - o mesmo desenho do menu de hoje, que ele vai integrar;
 - ícones e logotipos do Arcadeflow.
 
-Painel web:
-- **Filtro 480i** mais intuitivo.
+Os primeiros desenhos dos três modos (320x240, com mídia do gabinete e ícones do Arcadeflow) foram mostrados em 2026-10-23; falta a aprovação do Ademir. Os ícones e logotipos do Arcadeflow não têm licença: como o próprio Arcadeflow, teriam de ser baixados pelo Setup, não ir na imagem.
 
 Documentação e site:
 - **Respiro nos textos:** os MD e a wiki estão abarrotados.
