@@ -148,6 +148,12 @@ class Server:
         self.shot(name)
         redraw = True
         while True:
+            # O Setup morto com a tela aberta (o painel web fechando o menu
+            # para abrir um jogo, um SIGKILL): sem sair daqui, o servidor
+            # ficava orfao e dono da placa, e nem o X do jogo nem a proxima
+            # interface abriam.
+            if os.getppid() != self.parent:
+                raise SystemExit(0)
             for key in app.keys():
                 if key == "quit":
                     return ("back", None)
