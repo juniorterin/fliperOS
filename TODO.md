@@ -18,6 +18,8 @@ Os desenhos foram mostrados e ajustados em 2026-10-23 (320x240, com mídia do ga
 - direcional: cima e baixo andam pelos jogos; esquerda e direita trocam de romlist (os displays do AttractPlus, um por sistema). No modo grade, esquerda e direita andam pela grade, e só trocam de romlist com o jogo escolhido já encostado na lateral (uma aba na borda mostra a próxima romlist);
 - botão 1: cartão flutuante com Jogar, Favoritar e "+"; "+" abre a página do jogo com o scrape, que fica salvo em `~/media/info` (o mesmo arquivo do painel web);
 - botão 2: voltar; botões 3 e 6: página para cima e para baixo; botão 4: favoritar e desfavoritar; botão 5: filtros (os do Setup, mais Favoritos);
+- Tab num jogo abre um menu: classificar (gênero, jogadores, botões, controle, ano, fabricante, tela, série; gravado junto da informação do jogo e usado pelos filtros), renomear (com teclado na tela para o joystick) e fazer o scrape só daquele jogo;
+- no modo lista, o jogo com clones tem um "+" à esquerda; o botão 1 nele abre os clones logo embaixo, num galho, cada um com o que muda no nome (a região, o set, bootleg);
 - segurar uma direção acelera a rolagem aos poucos (de 6 a 30 jogos/s) e, aos 3 s, entra no modo letra: a letra grande no centro, devagar no começo e mais rápido depois de pouco tempo segurando. Os ícones e logotipos do Arcadeflow não têm licença: como o próprio Arcadeflow, teriam de ser baixados pelo Setup, não ir na imagem.
 
 ## Vídeo: conferir no tubo
