@@ -12,7 +12,7 @@ Frontend próprio (o padrão no futuro), **primeiro mostrar o design:**
 - o mesmo desenho do menu de hoje, que ele vai integrar;
 - ícones e logotipos do Arcadeflow.
 
-Os desenhos foram mostrados e ajustados em 2026-10-23 (320x240, com mídia do gabinete e ícones do Arcadeflow); falta a aprovação do Ademir para começar a construir. O que já foi decidido:
+**Construído em 2026-10-23 (c5bc185) e já é o padrão no gabinete.** Foi visto rodando no CRT (o guia dos controles), mas ainda não foi usado com o controle: falta conferir a rolagem acelerada, o modo letra, a abertura de um jogo e a volta, os botões do painel e o Tab. O que foi decidido no desenho:
 - sem textos de instrução na tela;
 - ao abrir, um guia mostra o que faz o direcional e cada botão; qualquer botão fecha;
 - direcional: cima e baixo andam pelos jogos; esquerda e direita trocam de romlist (os displays do AttractPlus, um por sistema). No modo grade, esquerda e direita andam pela grade, e só trocam de romlist com o jogo escolhido já encostado na lateral (uma aba na borda mostra a próxima romlist);

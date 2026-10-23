@@ -1,3 +1,36 @@
+## The FliperOS frontend
+
+The default since 2026-10-23: the game list in the look of the Setup menu (Press Start 2P, Dracula colours, the animated background), drawn at 320x240 and stretched to the screen mode. It ships in the image (`fliperos-setup/gui/fliperos-frontend`, Python and pygame) and is the `fliperos` row of the session table.
+
+It shows the same thing as the [Web panel](Web-panel.md), from the same code:
+- the games of each folder, from the Attract-Mode Plus romlists. The arcade ones carry the name, year, manufacturer, clones and category from MAME's XML (the AttractPlus ROM List, `fliperos-romclean romlist`);
+- the game filters the Setup writes into every Attract-Mode display (`fliperos-setup --filters`), plus Favourites;
+- FliperOS's own favourites (`~/.config/fliperos/favourites`) and the game information saved in `~/media/info`.
+
+**The lists follow the folders.** When the frontend opens, and whenever a games folder changes (games copied over the network or from a USB disk), it asks the Setup to redo the lists in the background (`fliperos-setup --romlists`). New arcade sets get their MAME names right away: when MAME's list is not cached yet, GroovyMAME's `-listxml` is read once (about a minute).
+
+**Three views** (Start switches them):
+- **List**: the games on the left, the picture, logo and information on the right. A game with clones has a "+" on its left: button 1 unfolds the clones under it, each with what differs in its name (the region, the set, bootleg).
+- **Full screen**: the game's picture behind, the name and information in front.
+- **Grid**: the covers, as in Arcadeflow.
+
+Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image).
+
+**Controls.** A guide shows them each time the frontend opens; any button closes it.
+- Up and down move through the games. Holding speeds up, and after 3 seconds it jumps letter by letter, with the letter big in the middle of the screen.
+- Left and right change the romlist (each games folder, and Arcade with all the arcade folders together). In the grid they move through it, and change the romlist only when the chosen game already touches that side; a tab on the edge names the next one.
+- Button 1 opens the game's menu: Play, Favourite and "+". The "+" page has the game's information from the Arcade Database, saved on the cabinet.
+- Button 2 goes back; from the list, it asks whether to return to the FliperOS menu.
+- Buttons 3 and 6 move a page up and down. Button 4 marks or unmarks the favourite. Button 5 opens the filters.
+- Tab (keyboard) opens the game options:
+  - Classify: genre, players, buttons, control, year, maker, rotation and series, saved in `~/media/info/<folder>/<set>.user.json`; the filters use them;
+  - Rename, with an on-screen keyboard;
+  - Scrape this game: its information and pictures, right away.
+
+The buttons are the panel's own, from Setup > Joysticks > Button mapping (`/etc/fliperos/buttons.map`). Without a mapping, a common pad works, and so does a keyboard encoder in MAME's layout.
+
+A game opened from the frontend gets the screen, the sound and the controls, and counts in Attract-Mode's play statistics (the Most Played filter).
+
 ## Setup > Games > Frontend
 
 The default launcher, the one that opens when the computer starts; one that isn't installed can be installed from the FliperOS repository, which ships inside the image (`/opt/fliperos/repo`, below). Whatever doesn't have a package yet shows as *not available yet*.
