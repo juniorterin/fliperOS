@@ -2,6 +2,34 @@
 
 O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai daqui e o que mudou vai para o [CHANGELOG](CHANGELOG.md).
 
+## Pedidos de 2026-10-23
+
+Menu e Setup:
+- **Fundo animado no azulejo selecionado** do menu.
+- **Extras dentro de Games** no menu.
+- **Update de cada emulador** no menu (Setup > Games > Emulators & Games).
+- **Downloader:** escolher um arquivo .torrent (além do link magnético) para o romset e para os CHDs.
+- **Relatório de erros pelo Resend.** A chave da API não vai em texto no repositório. Num projeto aberto, qualquer cifra que o próprio sistema desfaz só esconde a chave, não protege. Falta decidir com o Ademir entre: um relay próprio (a chave fica no servidor), uma chave restrita ao envio para um único destinatário, ou a chave só ofuscada.
+- **Rótulo do HD em /media/fliperos/** (o nome do volume no lugar do dispositivo).
+- **Boot lento:** subir só sob demanda o que não precisa estar no boot. Em andamento: há mudanças ainda não commitadas (os serviços depois da primeira tela, o Transmission só quando um download é pedido).
+
+Frontend próprio (o padrão no futuro), **primeiro mostrar o design:**
+- três modos: lista com mídia e informações (ícones à direita); tela cheia com a mídia ao fundo e o nome e as informações na frente; flow (como o Arcadeflow hoje);
+- o mesmo desenho do menu de hoje, que ele vai integrar;
+- ícones e logotipos do Arcadeflow.
+
+Painel web:
+- **Filtro 480i** mais intuitivo.
+- **Frontend:** um ícone animado no centro enquanto busca os dados na internet. O rodapé do jogo está apertado (Arcade Database, (C) arcade-history.com, Jogar, Favoritar): dar espaço.
+- **Marquee na live:** ligado no meio da transmissão, a imagem não se atualiza.
+- **FPS e jogo do PCSX2** não aparecem; testar todos os emuladores.
+
+Documentação e site:
+- **Respiro nos textos:** os MD e a wiki estão abarrotados.
+- **BIOS:** revisar o que fala de baixar e onde pôr as BIOS (o Download BIOS agora faz isso sozinho).
+- **Painel web em destaque** no site e na documentação.
+- **SEO** no site (Google e ChatGPT) e no GitHub: linux arcade 15khz groovyarcade replayos batocera recalbox rgbpi.
+
 ## Vídeo: conferir no tubo
 
 Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
