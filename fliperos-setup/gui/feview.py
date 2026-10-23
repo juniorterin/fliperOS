@@ -503,30 +503,45 @@ def draw_full(fe, ui, back, now):
     W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, SX + SW, 12, right=True)
     for i, c in enumerate(W.RAINBOW):
         pygame.draw.rect(ui, c, (SX, 24 + i, 40, 1))
-    logo = image(fe, fe.lib.media(game, "logo"), 200, 44)
+    # A lista na direita: quatro miniaturas empilhadas, a do jogo escolhido
+    # acesa, com uma seta em cima e embaixo enquanto ha mais jogos para
+    # aquele lado.
+    tw, th, gap, n = 56, 42, 4, 4
+    tx = SX + SW - tw
+    ty = 38
+    top = max(0, min(fe.cursor - 1, len(fe.rows) - n))
+    arrow(ui, tx + tw // 2, ty - 7, (0, -1), T.PINK if top > 0 else T.LINE, 5)
+    for k in range(n):
+        i = top + k
+        if i >= len(fe.rows):
+            break
+        g = fe.rows[i][0]
+        y = ty + k * (th + gap)
+        on = i == fe.cursor
+        W.block(ui, (tx, y, tw, th), T.BG_DEEP, T.PURPLE if on else T.LINE)
+        thumb = image(fe, fe.lib.media(g, "snap") or fe.lib.media(g, "box"), tw - 2, th - 2, "cover")
+        if thumb:
+            if not on:
+                thumb = thumb.copy()
+                thumb.set_alpha(140)
+            ui.blit(thumb, (tx + 1, y + 1))
+        else:
+            for j, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4]):
+                tiny.text(ui, tiny.fit(line, tw - 6), T.FG if on else T.COMMENT, tx + 3, y + 5 + j * 8)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, (tx, y, tw, th), 2 if on else 1)
+        if g.get("Favourite") == "1":
+            star(ui, tx + tw - 6, y + 6, T.YELLOW, 4)
+    more = top + n < len(fe.rows)
+    arrow(ui, tx + tw // 2, ty + n * (th + gap) + 3, (0, 1), T.PINK if more else T.LINE, 5)
+    # O jogo escolhido, embaixo a esquerda (fora da coluna).
+    right = tx - 8
+    logo = image(fe, fe.lib.media(game, "logo"), min(200, right - SX), 44)
     if logo:
         ui.blit(logo, (SX, 178 - logo.get_height()))
     y = 184
-    ui.blit(W.big(fit(fe.fd.short_title(game), SW), 1, W.LABEL), (SX, y))
-    W.text(ui, fit(facts_line(game), SW), T.CYAN, SX, y + 12)
-    icon_line(fe, ui, game, SX, y + 24, SX + SW - 14, 12)
-    if game.get("Favourite") == "1":
-        star(ui, SX + SW - 6, y + 4, T.YELLOW, 5)
-    # Os proximos, pequenos, no canto.
-    for k in (1, 2):
-        if fe.cursor + k >= len(fe.rows):
-            break
-        g = fe.rows[fe.cursor + k][0]
-        x, yy, w, h = SX + SW - 52 * k - 4 * (k - 1), 40, 52, 39
-        W.block(ui, (x, yy, w, h), T.BG_DEEP, T.PURPLE)
-        thumb = image(fe, fe.lib.media(g, "snap") or fe.lib.media(g, "box"), w - 2, h - 2, "cover")
-        if thumb:
-            thumb = thumb.copy()
-            thumb.set_alpha(150 if k == 2 else 210)
-            ui.blit(thumb, (x + 1, yy + 1))
-        else:
-            tiny.text(ui, tiny.fit(fe.fd.short_title(g), w - 6), T.COMMENT, x + 3, yy + 16)
-        pygame.draw.rect(ui, T.LINE, (x, yy, w, h), 1)
+    ui.blit(W.big(fit(fe.fd.short_title(game), right - SX), 1, W.LABEL), (SX, y))
+    W.text(ui, fit(facts_line(game), right - SX), T.CYAN, SX, y + 12)
+    icon_line(fe, ui, game, SX, y + 24, right, 12)
 
 
 def draw_flow(fe, ui, now):
