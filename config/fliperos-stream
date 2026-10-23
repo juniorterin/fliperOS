@@ -189,7 +189,10 @@ capture() {
       -b:v 8M -maxrate 10M -bufsize 2M)
   fi
   if audio_on; then
-    args+=(-map 1:a -c:a libopus -b:a 96k -application lowdelay -frame_duration 10)
+    # Os tempos do som contados pelas amostras: os do ALSA chegam aos trancos
+    # do loopback, e o Opus jogava fora os pedacos "voltando no tempo" (o som
+    # picotado; visto no gabinete, ~90 avisos em 10 s, nenhum com isto).
+    args+=(-map 1:a -af "asetpts=N/SR/TB+STARTPTS" -c:a libopus -b:a 96k -application lowdelay -frame_duration 10)
   fi
   args+=(-rtsp_transport tcp -f rtsp "$out")
   [[ -f $dropmaster ]] || fail "$dropmaster is missing: the capture could take the screen from X and the menu"

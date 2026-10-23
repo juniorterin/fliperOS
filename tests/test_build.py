@@ -5317,6 +5317,8 @@ class LiveScreenTests(unittest.TestCase):
         # O som: o lado de gravacao do loopback, em Opus.
         self.assertEqual(args[args.index('-i', args.index('alsa')) + 1], 'plug:fliperos_loopcap')
         self.assertIn('libopus', args)
+        # Os tempos do som pelas amostras (os do loopback chegam aos trancos).
+        self.assertEqual(args[args.index('-af') + 1], 'asetpts=N/SR/TB+STARTPTS')
         self.assertEqual(args[args.index('-map', args.index('-map') + 1) + 1], '1:a')
 
     def test_go2rtc_config_keeps_the_api_on_the_cabinet(self):
