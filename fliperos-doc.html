@@ -822,9 +822,11 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 - <strong>List</strong>: the games on the left, the picture, logo and information on the right. A game with clones has a "+" on its left: button 1 unfolds the clones under it, each with what differs in its name (the region, the set, bootleg).
 - <strong>Full screen</strong>: the game's picture behind, the name and information in front.
 - <strong>Grid</strong>: the covers, as in Arcadeflow.</p>
-<p>Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image).</p>
+<p>Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they are big and without text, with one little figure per player.</p>
 <p><strong>Controls.</strong> A guide shows them each time the frontend opens; any button closes it.
-- Up and down move through the games. Holding speeds up, and after 3 seconds it jumps letter by letter, with the letter big in the middle of the screen.
+- Up and down move through the games. Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).
+  - The letter mode stays after letting go: each tap of up or down moves one letter.
+  - Two seconds without touching anything (or any other button) end it, on the first game of that letter.
 - Left and right change the romlist (each games folder, and Arcade with all the arcade folders together). In the grid they move through it, and change the romlist only when the chosen game already touches that side; a tab on the edge names the next one.
 - Button 1 opens the game's menu: Play, Favourite and "+". The "+" page has the game's information from the Arcade Database, saved on the cabinet.
 - Button 2 goes back; from the list, it asks whether to return to the FliperOS menu.
