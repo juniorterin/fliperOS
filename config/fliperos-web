@@ -56,8 +56,6 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     GET  /api/overlay     o endereco do marquee para o OBS; POST {"action": "newkey"}
     GET  /overlay/marquee?key=  a pagina do OBS; /api/overlay/state e /art (sem
                       login, pela chave)
-    GET  /api/marquee/games  os jogos com recordes e placar versus no marquee
-                      (a pagina /marquee-games)
     GET  /overlay/live?key=&fps=  a tela ao vivo para o OBS; POST
                       /api/overlay/offer?key= {"fps", "sdp"} (sem login, pela chave)
     GET  /api/trackball   (desligado por enquanto; FLIPEROS_WEB_TRACKBALL=1 o liga)
@@ -90,7 +88,6 @@ import termios
 import threading
 import time
 import urllib.request
-import zipfile
 import zlib
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -127,9 +124,7 @@ STATIC_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.
                 # O marquee para o OBS: a pagina e publica, os dados pedem a chave.
                 "/overlay/marquee": "overlay.html", "/overlay.js": "overlay.js", "/overlay.css": "overlay.css",
                 # A tela ao vivo para o OBS, com a mesma chave.
-                "/overlay/live": "live.html", "/live.js": "live.js",
-                # Os jogos com recordes e placar no marquee (os dados pedem o login).
-                "/marquee-games": "games.html", "/games.js": "games.js"}
+                "/overlay/live": "live.html", "/live.js": "live.js"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8"}
 # Os programas que contam como "o jogo aberto", na ordem de preferencia.
@@ -1439,47 +1434,6 @@ def stream_answer(fps, offer):
 # Browser Source do OBS, sem login: vale a chave do endereco (/etc/fliperos).
 OVERLAY_KEY = ENV("FLIPEROS_OVERLAY_KEY", "/etc/fliperos/overlay.key")
 DMD = ENV("FLIPEROS_DMD", BIN + "/fliperos-dmd")
-VERSUS = ENV("FLIPEROS_VERSUS", BIN + "/fliperos-versus")
-GROOVYMAME = ENV("FLIPEROS_GROOVYMAME", "/usr/local/bin/groovymame")
-_mame_titles = None
-
-
-def mame_titles():
-    """{set: titulo} do -listfull do GroovyMAME, lido uma vez."""
-    global _mame_titles
-    if _mame_titles is None:
-        titles = {}
-        try:
-            out = subprocess.run([GROOVYMAME, "-listfull"], capture_output=True, text=True, timeout=120).stdout
-        except (OSError, subprocess.SubprocessError):
-            out = ""
-        for line in out.splitlines()[1:]:
-            name, _, title = line.partition(" ")
-            title = title.strip().strip('"')
-            if name and title:
-                titles[name] = title
-        _mame_titles = titles
-    return _mame_titles
-
-
-def marquee_games():
-    """Os jogos que o marquee mostra alem da arte (a pagina /marquee-games):
-    highscores, os sets do hi2txt (os recordes dos .hi do MAME; None sem ele
-    baixado), versus, as linhas [emulador, jogo, wins|score] do
-    fliperos-versus list, e os titulos desses sets."""
-    try:
-        with zipfile.ZipFile(os.path.join(player_home(), "pixelcade/hi2txt/hi2txt.zip")) as z:
-            scores = sorted(n[:-4] for n in z.namelist() if n.endswith(".xml") and not n.startswith("_"))
-    except (OSError, zipfile.BadZipFile):
-        scores = None
-    try:
-        out = subprocess.run([VERSUS, "list"], capture_output=True, text=True, timeout=60).stdout
-    except (OSError, subprocess.SubprocessError):
-        out = ""
-    versus = [line.split("\t") for line in out.splitlines() if line.count("\t") == 2]
-    titles = mame_titles()
-    names = set(scores or []) | {row[1] for row in versus}
-    return {"highscores": scores, "versus": versus, "titles": {n: titles[n] for n in sorted(names) if n in titles}}
 ART_TYPES = {".png": "image/png", ".gif": "image/gif", ".webp": "image/webp", ".jpg": "image/jpeg",
              ".jpeg": "image/jpeg"}
 
@@ -2047,8 +2001,6 @@ class Handler(BaseHTTPRequestHandler):
             key = quote(overlay_key())
             return self.send(200, {"enabled": overlay_enabled(), "path": "/overlay/marquee?key=" + key,
                                    "live": "/overlay/live?key=" + key})
-        if url.path == "/api/marquee/games":
-            return self.send(200, marquee_games())
         if url.path == "/api/gameinfo":
             query = parse_qs(url.query)
             system = self.panel.system((query.get("system") or [""])[0])
