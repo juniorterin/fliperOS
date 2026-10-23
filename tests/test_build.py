@@ -4541,7 +4541,7 @@ class WebPanelTests(unittest.TestCase):
         cls.adb = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Adb)
         threading.Thread(target=cls.adb.serve_forever, daemon=True).start()
         setup = tmp / 'fliperos-setup'
-        setup.write_text('#!/bin/sh\necho "$*" >> %s/volume.log\n[ "$2" = get ] && echo 42\n'
+        setup.write_text('#!/bin/sh\necho "$*" >> %s/volume.log\n[ "$2" = state ] && echo 42 off\n'
                          'if [ "$1 $2" = "--downloader status" ]; then\n'
                          '  printf "pct=40\\nstate=downloading\\nline=ROMs 4 GB of 10 GB\\nroms_name=MAME 0.289\\n'
                          'filter=Arcade, GroovyMAME\\ndefault_chds=magnet:?xt=urn:btih:chds\\n"\nfi\n'
@@ -4624,7 +4624,7 @@ class WebPanelTests(unittest.TestCase):
         (tmp / 'media/USB/romset').mkdir(parents=True)
         (tmp / 'media/USB/.hidden').mkdir()
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
-                                       '--port', str(cls.port)], env=env)
+                                       '--port', str(cls.port), '--redirect-port', str(cls.redirect_port)], env=env)
         for _ in range(100):
             try:
                 with socket.create_connection(('127.0.0.1', cls.port), timeout=0.2):
@@ -4655,6 +4655,9 @@ class WebPanelTests(unittest.TestCase):
         self.last_headers = dict(res.getheaders())
         conn.close()
         return res.status, res.getheader('Set-Cookie'), data
+        with socket.socket() as s:
+            s.bind(('127.0.0.1', 0))
+            cls.redirect_port = s.getsockname()[1]
 
     def login(self):
         status, cookie, _ = self.request('POST', '/api/login', {'user': 'fliperos', 'password': 'arcade'})
@@ -4699,7 +4702,7 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(s['fps'], {'pid': os.getpid(), 'fps': 59.9, 'program': 'flycast', 'core': None,
                                     'filtering': True})
         self.assertEqual(s['video']['wanted']['boot_resolution'], '640x240S')
-        self.assertEqual(s['volume'], {'percent': 42})
+        self.assertEqual(s['volume'], {'percent': 42, 'muted': True})
         self.assertGreater(s['memory']['total'], 0)
 
     def test_logs_only_from_the_list(self):
@@ -4716,6 +4719,18 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/volume', {'set': 30}, cookie=cookie)[0], 200)
         self.assertEqual(self.request('POST', '/api/volume', {'action': 'mute'}, cookie=cookie)[0], 200)
         for bad in ({'set': 101}, {'set': '30; reboot'}, {'action': 'reboot'}):
+    def test_port_80_leads_to_the_panel(self):
+        # http://fliperos.local, sem a porta: o mesmo nome e caminho na do painel.
+        import http.client
+        for host, want in (('fliperos.local', 'http://fliperos.local:%d/live' % self.port),
+                           ('192.168.1.9:80', 'http://192.168.1.9:%d/live' % self.port),
+                           ('evil"/x', 'http://fliperos.local:%d/live' % self.port)):
+            conn = http.client.HTTPConnection('127.0.0.1', self.redirect_port, timeout=10)
+            conn.request('GET', '/live', headers={'Host': host})
+            res = conn.getresponse()
+            self.assertEqual((res.status, res.getheader('Location')), (302, want), host)
+            conn.close()
+
             self.assertEqual(self.request('POST', '/api/volume', bad, cookie=cookie)[0], 400, bad)
         self.assertIn('--volume set 30\n', self.volume_log.read_text())
         self.assertIn('--volume mute\n', self.volume_log.read_text())
