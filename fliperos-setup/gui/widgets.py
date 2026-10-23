@@ -10,6 +10,7 @@
 # e, nos menus com icones, um carrossel. Tudo na Press Start 2P.
 
 
+import math
 import re
 import time
 
@@ -122,6 +123,46 @@ def button(surf, label, cx, y, selected, w=80):
     text(surf, label, color, cx - width(label) // 2, y + 6)
 
 
+def _dim(color, k):
+    return tuple(round(b + (c - b) * k) for c, b in zip(color, T.BG_DEEP))
+
+
+# As cores do fundo do azulejo escolhido: as do tema, apagadas sobre o fundo
+# do painel, para o icone e o texto continuarem a frente.
+GLOW = [_dim(c, k) for c, k in ((T.PURPLE, 0.10), (T.PURPLE, 0.22), (T.PINK, 0.22),
+                                (T.PINK, 0.32), (T.CYAN, 0.24), (T.CYAN, 0.12))]
+# Quadros por segundo do fundo animado: mais nao muda nada no tubo e so
+# gasta o processador redesenhando a tela.
+GLOW_FPS = 20
+
+
+def glow(surf, rect, ctx):
+    """O fundo animado do azulejo escolhido: um plasma em blocos de 4
+    pixels, nas cores do tema, que corre devagar dentro de rect."""
+    x, y, w, h = rect
+    t = ctx.get("now", time.monotonic()) if isinstance(ctx, dict) else time.monotonic()
+    n = len(GLOW)
+    for cy in range(0, h, 4):
+        for cx in range(0, w, 4):
+            v = (math.sin(cx * 0.16 + t * 1.9) + math.sin(cy * 0.13 - t * 1.4)
+                 + math.sin((cx + cy) * 0.08 + t * 1.1))
+            surf.fill(GLOW[min(n - 1, int((v + 3) / 6 * n))], (x + cx, y + cy, min(4, w - cx), min(4, h - cy)))
+
+
+class Animated:
+    """Uma tela com o azulejo escolhido animado: redesenha GLOW_FPS vezes
+    por segundo."""
+
+    _drawn = 0.0
+
+    def tick(self):
+        now = time.monotonic()
+        if now - self._drawn < 1 / GLOW_FPS:
+            return None
+        self._drawn = now
+        return "redraw"
+
+
 def scrollbar(surf, x, y, h, top, shown, total):
     """A barra de rolagem de uma lista que nao cabe: o trilho de h pixels
     com o canto em (x, y) e, nele, o pedaco que esta a vista."""
@@ -205,7 +246,7 @@ def body(surf, lines, button_h=20):
     return min(y + 12, FOOTER_Y - 12 - button_h)
 
 
-class Menu:
+class Menu(Animated):
     """ui_menu / ui_menu_hints, ui_radio (mode="radio") e ui_checklist
     (mode="check"). entries: (valor, rotulo[, dica]). O menu simples e um
     carrossel: o icone de cada item vem de tiles (valor -> funcao que o
@@ -268,8 +309,11 @@ class Menu:
         return []
 
     def tick(self):
-        """Redesenhar enquanto o carrossel desliza."""
-        return "redraw" if self.slide else None
+        """Redesenhar enquanto o carrossel desliza, e o azulejo do meio
+        animado."""
+        if self.slide:
+            return "redraw"
+        return Animated.tick(self) if self.carousel() else None
 
     def carousel(self):
         """O menu cabe no carrossel? Uma lista longa (pastas, redes) ou um
@@ -342,6 +386,7 @@ class Menu:
         surf.set_clip(None)
         left = (T.WIDTH - size) // 2
         block(surf, (left, top, size, size), T.BG_DEEP, T.PURPLE)
+        glow(surf, (left + 2, top + 2, size - 4, size - 4), ctx)
         # O icone que chega aparece so dentro da moldura.
         surf.set_clip((left + 2, top + 2, size - 4, size - 4))
         self.tile(surf, self.entries[self.cursor], left + 4 + dx, top + 4, scale)
@@ -960,7 +1005,7 @@ def mini(surf, kind, data, x, y):
         text(surf, data, T.GREEN if kind == "action" else T.FG, x, y + 5)
 
 
-class FilterBoard:
+class FilterBoard(Animated):
     """Os parametros do filtro de ROMs num painel de azulejos: cada um
     mostra o proprio valor desenhado. items: (chave, titulo, tipo, dado,
     ajuda); os tipos sao os de mini()."""
@@ -983,13 +1028,13 @@ class FilterBoard:
 
     def tick(self):
         if not self.score or time.monotonic() - self.checked < 0.5:
-            return None
+            return Animated.tick(self)
         self.checked = time.monotonic()
         try:
             with open(self.score, encoding="utf-8") as f:
                 values = dict(line.strip().split("=", 1) for line in f if "=" in line)
         except OSError:
-            return None
+            return Animated.tick(self)
         self.score = ""
         games, size = values.get("games", ""), values.get("bytes", "")
         if not games.isdigit():
@@ -1045,6 +1090,8 @@ class FilterBoard:
             ty = 48 + (i // self.COLS - self.top) * 44
             on = i == self.cursor
             block(surf, (tx, ty, 92, 40), T.BG_DEEP, T.PURPLE if on else None)
+            if on:
+                glow(surf, (tx + 2, ty + 2, 88, 36), ctx)
             pygame.draw.rect(surf, T.PINK if on else T.LINE, (tx, ty, 92, 40), 2 if on else 1)
             text(surf, title.upper(), T.PINK if on else T.COMMENT, tx + 4, ty + 4)
             mini(surf, kind, data, tx + 4, ty + 16)
@@ -1147,7 +1194,7 @@ def control_art(surf, cx, cy, value, color):
             d(surf, color, (cx + dx - 1, cy + dy - 1, 3, 3))
 
 
-class ToggleGrid:
+class ToggleGrid(Animated):
     """Um parametro de marcar varios (controles, anos) como uma grade de
     azulejos: o cursor anda pela grade e Espaco marca. art desenha cada
     opcao (surf, cx, cy, valor, cor); sem ela, o azulejo mostra o rotulo."""
@@ -1183,6 +1230,8 @@ class ToggleGrid:
             marked = value in self.marked
             on = i == self.cursor
             block(surf, (x, y, w, 38), T.BG_DEEP, T.PURPLE if on else None)
+            if on:
+                glow(surf, (x + 2, y + 2, w - 4, 34), ctx)
             pygame.draw.rect(surf, T.PINK if on else T.GREEN if marked else T.LINE, (x, y, w, 38), 2 if on else 1)
             color = T.FG if marked else T.LINE
             if self.art:
