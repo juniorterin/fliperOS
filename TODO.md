@@ -14,12 +14,6 @@ Frontend próprio (o padrão no futuro), **primeiro mostrar o design:**
 
 Os primeiros desenhos dos três modos (320x240, com mídia do gabinete e ícones do Arcadeflow) foram mostrados em 2026-10-23; falta a aprovação do Ademir. Os ícones e logotipos do Arcadeflow não têm licença: como o próprio Arcadeflow, teriam de ser baixados pelo Setup, não ir na imagem.
 
-Documentação e site:
-- **Respiro nos textos:** os MD e a wiki estão abarrotados.
-- **BIOS:** revisar o que fala de baixar e onde pôr as BIOS (o Download BIOS agora faz isso sozinho).
-- **Painel web em destaque** no site e na documentação.
-- **SEO** no site (Google e ChatGPT) e no GitHub: linux arcade 15khz groovyarcade replayos batocera recalbox rgbpi.
-
 ## Vídeo: conferir no tubo
 
 Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
