@@ -48,7 +48,9 @@ The status refreshes every second. What each part shows:
 
       That adds the full title, series, rating, the player 1 buttons with their colours and what they do, the history and trivia text (arcade-history.com), the in-game, title, marquee, flyer and cabinet pictures, and links to the video and the game's page.
 
-      The browser can't ask the Arcade Database directly (it sends no CORS header), so the panel asks for it and keeps the answer for 6 hours;
+      The browser can't ask the Arcade Database directly (it sends no CORS header), so the panel asks for it.
+
+      The answer is **saved on the cabinet**, next to the other media: `~/media/info/<games folder>/<set>.<language>.json` (`~/media/info/mame/samsho.en.json`). A game fetched once is never fetched again and opens without internet, and FliperOS's own frontend will read the same file. The page says when it was saved. A game the Arcade Database doesn't know is asked again after 30 days;
     - consoles: the box, screen and title pictures of [libretro-thumbnails](https://github.com/libretro-thumbnails), by the file name (No-Intro), the way RetroArch looks for them.
   - The browser keeps each game's answer for 30 days (`localStorage`), so opening it again is instant and works offline. When the storage is full, the older half goes.
   - At the end are **Play** and **Favourite**. Play closes what is on the cabinet screen and opens the game; when the game closes, what was there comes back (the frontend, the desktop or the menu). Favourite keeps FliperOS's own favourites, in `~/.config/fliperos/favourites` (one `folder<TAB>name` line per game).
