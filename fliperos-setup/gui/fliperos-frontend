@@ -44,6 +44,7 @@ LRATE0, LRATE1, LSPEEDUP = 3.0, 10.0, 0.8
 # a lista volta ao normal.
 LETTER_IDLE = 2.0
 MODES = ("list", "full", "flow")
+MODE_NAMES = {"list": "LIST", "full": "FULL SCREEN", "flow": "GRID"}
 COLS = 5                     # as colunas da grade
 
 
@@ -291,13 +292,19 @@ class Frontend:
         elif a == "b5":
             self.overlay, self.ov = "filter", {"sel": self.flt % len(self.lib.filters), "top": 0}
         elif a == "start":
-            g = self.game()
-            self.mode = MODES[(MODES.index(self.mode) + 1) % len(MODES)]
-            self.rebuild(keep=g["Name"] if g else None)
-            self.say({"list": "LIST", "full": "FULL SCREEN", "flow": "GRID"}[self.mode])
-        elif a == "tab" and self.game():
-            self.overlay, self.ov = "options", {"sel": 0}
+            self.set_mode(1)
+            self.say(MODE_NAMES[self.mode])
+        elif a == "tab":
+            # Sem jogo na lista, so as opcoes do frontend.
+            self.overlay, self.ov = "options", {"sel": 0 if self.game() else 3}
         return None
+
+    def set_mode(self, step):
+        """O modo seguinte (ou o anterior), ja gravado."""
+        g = self.game()
+        self.mode = MODES[(MODES.index(self.mode) + step) % len(MODES)]
+        self.rebuild(keep=g["Name"] if g else None)
+        self.remember()
 
     def toggle_fav(self):
         g = self.game()
@@ -370,10 +377,13 @@ class Frontend:
                 self.overlay = None
             return None
         if o == "options":
+            # 0 a 2: as opcoes do jogo; 3: o modo do frontend (Frontend options).
+            sel = self.ov["sel"]
             if a in ("up", "down"):
-                self.ov["sel"] = (self.ov["sel"] + (1 if a == "down" else -1)) % 3
-            elif a in ("b1",):
-                sel = self.ov["sel"]
+                self.ov["sel"] = (sel + (1 if a == "down" else -1)) % 4
+            elif sel == 3 and a in ("left", "right", "b1"):
+                self.set_mode(-1 if a == "left" else 1)
+            elif a in ("b1",) and self.game():
                 g = self.game()
                 if sel == 0:
                     self.open_classify(g)

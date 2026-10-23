@@ -15,6 +15,11 @@ import time
 MAP = os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
 CONTROLS = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "start", "coin")
 AXIS_ON = 0.55
+# O microswitch de um direcional de fliperama repica ao fechar e ao abrir: o
+# contato solta e volta em poucos milissegundos, e cada volta seria mais um
+# item (apertar pulava dois, soltar pulava mais um). Uma soltura so vale
+# depois desse tempo sem o contato voltar, como no fliperos-padkeys do menu.
+DEBOUNCE = 0.06
 
 
 def read_map(path=MAP):
@@ -47,6 +52,7 @@ class Input:
         self.rows = read_map() or DEFAULT
         self.sticks = []
         self.down = {}             # acao -> hora em que foi apertada
+        self.loose = {}            # acao solta -> quando a soltura vale
         self.sources = {}          # acao -> fontes que a seguram (teclado, botoes)
         self.text = False          # digitando: as teclas viram letras
         k = pygame
@@ -82,12 +88,15 @@ class Input:
         self.pg.joystick.quit()
         self.down.clear()
         self.sources.clear()
+        self.loose.clear()
 
     def press(self, action, source, out):
         held = self.sources.setdefault(action, set())
         if not held:
-            self.down[action] = time.monotonic()
-            out.append(action)
+            if self.loose.pop(action, None) is None:
+                self.down[action] = time.monotonic()
+                out.append(action)
+            # Voltou antes de DEBOUNCE: era o repique da chave, o mesmo toque.
         held.add(source)
 
     def release(self, action, source):
@@ -96,7 +105,16 @@ class Input:
             return
         held.discard(source)
         if not held:
-            self.down.pop(action, None)
+            # A soltura so vale depois de DEBOUNCE sem a chave voltar.
+            self.loose[action] = time.monotonic() + DEBOUNCE
+
+    def settle(self):
+        """As solturas que passaram de DEBOUNCE sem o contato voltar."""
+        now = time.monotonic()
+        for action, when in list(self.loose.items()):
+            if now >= when:
+                del self.loose[action]
+                self.down.pop(action, None)
 
     def match(self, element, joy, value=None):
         """As acoes de um elemento do controle joy."""
@@ -105,6 +123,7 @@ class Input:
     def poll(self):
         pg = self.pg
         out = []
+        self.settle()
         for ev in pg.event.get():
             if ev.type == pg.QUIT:
                 out.append("quit")

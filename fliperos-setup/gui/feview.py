@@ -746,21 +746,24 @@ def system_icon(cat):
 
 
 def draw_options(fe, ui, now):
+    """O menu do Tab: as opcoes do jogo e, abaixo de uma linha, as do
+    frontend (o modo de exibicao)."""
     g = fe.game()
-    pw, ph = 236, 134
-    px, py = (WW - pw) // 2, 52
+    pw, ph = 236, 196
+    px, py = (WW - pw) // 2, 30
     card(ui, (px, py, pw, ph))
     ui.blit(W.big("GAME OPTIONS", 1, W.LABEL), (px + 10, py + 8))
-    tiny.text(ui, tiny.fit(g.get("Title") or g["Name"], pw - 20), T.COMMENT, px + 10, py + 20)
+    if g:
+        tiny.text(ui, tiny.fit(g.get("Title") or g["Name"], pw - 20), T.COMMENT, px + 10, py + 20)
     items = [("CLASSIFY", "GENRE, PLAYERS, BUTTONS, CONTROL, YEAR", T.YELLOW),
              ("RENAME", "THE NAME SHOWN IN THE LISTS", T.CYAN),
              ("SCRAPE THIS GAME", "PICTURES AND TEXT, NOW", T.GREEN)]
     for i, (label, about, color) in enumerate(items):
-        y = py + 34 + i * 32
+        y = py + 30 + i * 30
         on = i == fe.ov["sel"]
-        tile_frame(ui, (px + 8, y, pw - 16, 28), on, now)
-        pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 28), 2 if on else 1)
-        ix, iy = px + 22, y + 14
+        tile_frame(ui, (px + 8, y, pw - 16, 26), on, now)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 26), 2 if on else 1)
+        ix, iy = px + 22, y + 13
         if i == 0:
             pygame.draw.polygon(ui, color, [(ix - 7, iy - 5), (ix + 3, iy - 5), (ix + 8, iy), (ix + 3, iy + 5),
                                             (ix - 7, iy + 5)])
@@ -772,8 +775,32 @@ def draw_options(fe, ui, now):
             ui.fill(color, (ix - 1, iy - 8, 3, 9))
             pygame.draw.polygon(ui, color, [(ix - 6, iy - 1), (ix + 6, iy - 1), (ix, iy + 5)])
             ui.fill(color, (ix - 7, iy + 6, 15, 2))
-        W.text(ui, label, T.FG if on else T.COMMENT, px + 36, y + 6)
-        tiny.text(ui, about, color if on else T.LINE, px + 36, y + 18)
+        W.text(ui, label, T.FG if on else T.COMMENT, px + 36, y + 5)
+        tiny.text(ui, about, color if on else T.LINE, px + 36, y + 17)
+    # A linha e as opcoes do frontend.
+    y = py + 122
+    pygame.draw.line(ui, T.LINE, (px + 8, y), (px + pw - 9, y))
+    for i, c in enumerate(W.RAINBOW):
+        pygame.draw.rect(ui, c, (px + 8, y + 1 + i, 24, 1))
+    ui.blit(W.big("FRONTEND OPTIONS", 1, W.LABEL), (px + 10, y + 10))
+    y += 26
+    on = fe.ov["sel"] == 3
+    tile_frame(ui, (px + 8, y, pw - 16, 40), on, now)
+    pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 40), 2 if on else 1)
+    W.text(ui, "VIEW MODE", T.FG if on else T.COMMENT, px + 16, y + 6)
+    # Os tres modos lado a lado; o de agora aceso.
+    x = px + 16
+    for mode, label in (("list", "LIST"), ("full", "FULL SCREEN"), ("flow", "GRID")):
+        cur = fe.mode == mode
+        w = tiny.width(label) + 10
+        if cur:
+            W.block(ui, (x, y + 20, w, 12), T.PINK if on else T.PURPLE, None)
+        else:
+            pygame.draw.rect(ui, T.LINE, (x, y + 20, w, 12), 1)
+        tiny.text(ui, label, T.SPACE if cur else T.COMMENT, x + 5, y + 23)
+        x += w + 6
+    if on:
+        tiny.text(ui, "< >", T.PINK, px + pw - 16, y + 8, right=True)
 
 
 LABELS = {"Category": "GENRE", "Players": "PLAYERS", "Buttons": "BUTTONS", "Control": "CONTROL", "Year": "YEAR",
@@ -909,7 +936,7 @@ def draw(fe, now):
             draw_more(fe, top, t)
         elif o == "filter":
             draw_filter(fe, top, t)
-        elif o == "options" and fe.rows:
+        elif o == "options":
             draw_options(fe, top, t)
         elif o == "classify":
             draw_classify(fe, top, t)

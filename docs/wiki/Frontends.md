@@ -29,6 +29,8 @@ Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has bee
   - Rename, with an on-screen keyboard;
   - Scrape this game: its information and pictures, right away.
 
+  Under a line come the **frontend options**: the view mode (list, full screen or grid), changed with left and right and saved at once. Start also switches it.
+
 The buttons are the panel's own, from Setup > Joysticks > Button mapping (`/etc/fliperos/buttons.map`). Without a mapping, a common pad works, and so does a keyboard encoder in MAME's layout.
 
 A game opened from the frontend gets the screen, the sound and the controls, and counts in Attract-Mode's play statistics (the Most Played filter).

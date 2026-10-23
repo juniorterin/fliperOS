@@ -4086,6 +4086,37 @@ class FrontendDataTests(unittest.TestCase):
                              [('up', 0, 'h0.1'), ('b1', 0, 'b0'), ('b5', 0, '+a5'), ('b1', 1, 'b0')])
         self.assertEqual(self.fi.read_map('/nonexistent'), [])
 
+    def test_switch_bounce_is_one_move(self):
+        # O repique do microswitch: apertar pulava dois, soltar mais um.
+        fi = self.fi
+        inp = object.__new__(fi.Input)
+        inp.down, inp.sources, inp.loose = {}, {}, {}
+        clock = [10.0]
+        real = fi.time.monotonic
+        fi.time.monotonic = lambda: clock[0]
+        try:
+            out = []
+            for pressed, t in ((1, 0.0), (0, 0.004), (1, 0.008), (0, 0.2), (1, 0.203), (0, 0.207)):
+                clock[0] = 10.0 + t
+                inp.settle()
+                if pressed:
+                    inp.press('up', 'hat', out)
+                else:
+                    inp.release('up', 'hat')
+            clock[0] = 10.5
+            inp.settle()
+            self.assertEqual(out, ['up'])
+            self.assertIsNone(inp.held('up'))
+            # Dois toques de verdade sao dois.
+            inp.press('up', 'hat', out)
+            inp.release('up', 'hat')
+            clock[0] = 10.7
+            inp.settle()
+            inp.press('up', 'hat', out)
+            self.assertEqual(out, ['up', 'up', 'up'])
+        finally:
+            fi.time.monotonic = real
+
     def test_romlists_from_the_setup_and_the_session(self):
         setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
         self.assertIn('FRONTENDS_RESYNC_FULL=1 frontends_attract', setup)
