@@ -1,4 +1,6 @@
-What weighs most in the delay between pressing the button and the picture changing is the same on FliperOS and on GroovyArcade: the same kernel patches (the same video output on radeon/amdgpu), the same Switchres and GroovyMAME, and the CRT, which doesn't process the image. FliperOS applies the tweaks GA already makes and adds others, in two modes chosen in **Setup > System > Latency** (`fliperos-setup/lib/latency.sh`).
+What weighs most in the delay between pressing the button and the picture changing is the same on FliperOS and on GroovyArcade: the same kernel patches (the same video output on radeon/amdgpu), the same Switchres and GroovyMAME, and the CRT, which doesn't process the image.
+
+FliperOS applies the tweaks GA already makes and adds others, in two modes chosen in **Setup > System > Latency** (`fliperos-setup/lib/latency.sh`).
 
 | Tweak | GroovyArcade | FliperOS Standard | FliperOS Low latency |
 | --- | --- | --- | --- |
@@ -16,7 +18,9 @@ What weighs most in the delay between pressing the button and the picture changi
 **What each tweak does:**
 
 - **`mitigations=off audit=0`** — GA's default line. Turns off the kernel's Spectre/Meltdown protections, which cost the most on the older CPUs (without hardware fixes) typical of cabinets. It trades security for performance, acceptable on a machine that only runs games.
-- **USB at 1000 Hz** — a full-speed controller is polled every 8 ms (125 Hz); the average wait drops from ~4 ms to ~0.5 ms. It applies to whatever uses the `usbhid` driver (Zero Delay/Xin-Mo style encoders, I-PAC as a keyboard, trackball); Xbox controllers use `xpad` and don't change. If a controller misbehaves, `usb_poll=default` in `/etc/fliperos/fliperos.conf` and applying the mode again restores the original polling.
+- **USB at 1000 Hz** — a full-speed controller is polled every 8 ms (125 Hz); the average wait drops from ~4 ms to ~0.5 ms. It applies to whatever uses the `usbhid` driver (Zero Delay/Xin-Mo style encoders, I-PAC as a keyboard, trackball); Xbox controllers use `xpad` and don't change.
+
+  If a controller misbehaves, `usb_poll=default` in `/etc/fliperos/fliperos.conf` and applying the mode again restores the original polling.
 - **`performance` governor** — frame delay counts on a fixed emulation time per frame; with the CPU raising its clock only after the load appears, that time varies. In the standard mode it only applies during the session (`fliperos-session` calls `fliperos-setup --session-start/--session-end`, like galauncher's `cpu_governor.sh`); in the low latency one, from boot (`fliperos-latency.service`).
 - **`preempt=full`** — FliperOS's 6.18 kernel is `PREEMPT_DYNAMIC`; with this parameter it interrupts any kernel work to run the emulator, which Ubuntu's old `lowlatency` kernel did. It reduces the variation (jitter) more than the average.
 - **Frame delay** (GroovyMAME's `autoframedelay`, RetroArch's `video_frame_delay_auto`) — the emulator waits part of the frame before emulating, and reads the controls closer to when the picture goes out: up to almost a frame (16.7 ms) less. The automatic one backs off by itself when the CPU can't keep up.

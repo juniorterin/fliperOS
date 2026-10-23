@@ -41,7 +41,9 @@ Nothing on FliperOS opens a frontend or an emulator by calling its binary direct
 
 ### From the boot to the launcher
 
-`fliperos-tty1` is the only entry point. At boot it runs `fliperos-session` with no argument, which opens the launcher chosen in **Setup > Games > Frontend** (`/etc/fliperos/session`); when that closes, it enters the menu loop. In the loop the Setup never opens anything itself: **Start frontend** and **Start desktop** write the launcher's name to `/run/fliperos/launch` and exit with code 20, and `fliperos-tty1` then calls `fliperos-session <name>` from the login shell, where tty1 is the controlling terminal ([Installed system](Installed-system.md) explains why). `fliperos-menu` is the same loop without the boot part.
+`fliperos-tty1` is the only entry point. At boot it runs `fliperos-session` with no argument, which opens the launcher chosen in **Setup > Games > Frontend** (`/etc/fliperos/session`); when that closes, it enters the menu loop.
+
+In the loop the Setup never opens anything itself: **Start frontend** and **Start desktop** write the launcher's name to `/run/fliperos/launch` and exit with code 20, and `fliperos-tty1` then calls `fliperos-session <name>` from the login shell, where tty1 is the controlling terminal ([Installed system](Installed-system.md) explains why). `fliperos-menu` is the same loop without the boot part.
 
 `fliperos-session` looks the name up in `/etc/fliperos/sessions.conf` (and in `sessions.custom.conf`, the frontends you registered), one launcher per line as `name|backend|binary|package|description`. The backend decides how it opens:
 
@@ -64,7 +66,13 @@ Every emulator is opened through one of them, and both refuse to run inside an X
 - gives the program the session's terminal as its input when a frontend handed it `/dev/null`;
 - sends the program's output to `/opt/fliperos/logs/<program>.log` (to the screen in Debug mode).
 
-**`fliperos-x11-run`** is for what needs X: Flycast, PCSX2, Dolphin, Supermodel, Model 2, OpenBOR, Hypseus. It starts an Xorg just for that program and closes it when the program exits. The mode comes from `--mode`, or from the program's line in `/etc/fliperos/emulator-modes.conf` (one column for a 15 kHz monitor, another for 25/31 kHz and LCD), or is 320x240@60. It also adds each emulator's own full-screen and stretch options, turns the extra monitors back on, exports `SDL_VIDEODRIVER=x11`, and writes the same log. The Xorg's client is `fliperos-x11-client`: it starts Openbox (which fits the window to the screen at every mode switch) and hands over to `switchres WIDTH HEIGHT HZ --switch --launch "<program>"`, which creates the modeline for the monitor in `/etc/switchres.ini`, switches to it and runs the program. More in [Emulators](Emulators.md#running-a-program-at-640x240).
+**`fliperos-x11-run`** is for what needs X: Flycast, PCSX2, Dolphin, Supermodel, Model 2, OpenBOR, Hypseus. It starts an Xorg just for that program and closes it when the program exits.
+
+The mode comes from `--mode`, or from the program's line in `/etc/fliperos/emulator-modes.conf` (one column for a 15 kHz monitor, another for 25/31 kHz and LCD), or is 320x240@60.
+
+It also adds each emulator's own full-screen and stretch options, turns the extra monitors back on, exports `SDL_VIDEODRIVER=x11`, and writes the same log.
+
+The Xorg's client is `fliperos-x11-client`: it starts Openbox (which fits the window to the screen at every mode switch) and hands over to `switchres WIDTH HEIGHT HZ --switch --launch "<program>"`, which creates the modeline for the monitor in `/etc/switchres.ini`, switches to it and runs the program. More in [Emulators](Emulators.md#running-a-program-at-640x240).
 
 ### Commands that wrap themselves
 
@@ -88,7 +96,9 @@ fliperos-tty1                                    the menu loop
 
 ### From the desktop
 
-The desktop is itself an X session, and the wrappers don't run inside one. `fliperos-launch <name>` (the items in **Games**, see [Desktop and theme](Desktop.md)) writes the full command, already with its wrapper, to `$XDG_RUNTIME_DIR/fliperos-next` and closes LXDE. `fliperos-session`, which was waiting for the desktop's X to end, runs that command with `FLIPEROS_POWERKEY=game` and then opens the desktop again. It only accepts a request that starts with `fliperos-kms-run` or `fliperos-x11-run`. `fliperos-launch --mode 640x240@60 program` does the same for any program.
+The desktop is itself an X session, and the wrappers don't run inside one. `fliperos-launch <name>` (the items in **Games**, see [Desktop and theme](Desktop.md)) writes the full command, already with its wrapper, to `$XDG_RUNTIME_DIR/fliperos-next` and closes LXDE.
+
+`fliperos-session`, which was waiting for the desktop's X to end, runs that command with `FLIPEROS_POWERKEY=game` and then opens the desktop again. It only accepts a request that starts with `fliperos-kms-run` or `fliperos-x11-run`. `fliperos-launch --mode 640x240@60 program` does the same for any program.
 
 ### Which one to type
 
@@ -106,9 +116,29 @@ On a console (tty1 after leaving the menu to the shell, or another VT), not over
 
 ## Other components
 
-**Splash.** Plymouth. The default `fliperos-text` theme is text only, in the style of a modern terminal: the name scrambles into place and then waves through a gradient, a prompt types the subtitle, a gradient progress bar with a moving shine, the last systemd units with a spinner (`SetUpdateStatusFunction`) and faint falling characters. It draws everything with JetBrains Mono (OFL, `config/fonts`), which goes to `/usr/share/fonts/truetype/fliperos` and, through the `fliperos-fonts` initramfs hook, into the initramfs: the Ubuntu plymouth hook only copies the Ubuntu font. `fliperos` is a full 640x480 image scaled to the boot mode (640x480, 640x240, 320x240...) with an animated bar. Three themes from Gnome-look come too: `cogwheel` (by DUKE93, GPL 3), `into-it` and `windoze95`, adapted to scale to the window, with the pixel twice as tall in the double-width modes (640x240), and Windoze 95's art reduced to 640x480. All of them live in `config/splashscreen` and go to `/usr/share/plymouth/themes` and to `~/splashscreen`, where Setup > System > Splash screen also lists the user's themes (more on [Gnome-look](https://www.gnome-look.org/browse?cat=108&ord=latest)). Setting one (`lib/splash.sh`) copies its folder with `ImageDir` and `ScriptFile` rewritten, points the `default.plymouth` alternative at it and runs `update-initramfs` (the initramfs hook takes the new initrd to the ESP); the preview runs `plymouthd` with `plymouth.splash=NAME`. `tools/cabinet-update.sh` rebuilds the initramfs when the boot theme's files change. The build can also use `evangelion` (202 frames, with a **seizure risk** declared by the author and no license in the package) or none.
+**Splash.** Plymouth.
 
-**Network.** Samba (`\\<ip>\FliperOS` → `/opt/fliperos`, and `\\<ip>\roms`, `bios`, `media` and `config` → the folders of the same name in `~`, writable only with the `fliperos` user; `config/smb.conf`), SSH/SFTP and Avahi (`fliperos.local`). Default user `fliperos` with password `fliperos`, like GroovyArcade's user `arcade` with password `arcade` (see [Installed system](Installed-system.md)). NetworkManager handles Wi-Fi **and wired** (the empty `10-globally-managed-devices.conf` overrides Ubuntu's, which only managed Wi-Fi) and writes `/etc/resolv.conf` itself with the DNS from DHCP (`90-fliperos-dns.conf`: Ubuntu would hand DNS to `systemd-resolved`, which isn't in the image). The clock comes from the network (`systemd-timesyncd`). On the first test on the cabinet all three were missing: `resolv.conf` was the build container's, the BIOS clock was two months behind, and apt didn't work (neither System Update nor frontends).
+The default `fliperos-text` theme is text only, in the style of a modern terminal: the name scrambles into place and then waves through a gradient, a prompt types the subtitle, a gradient progress bar with a moving shine, the last systemd units with a spinner (`SetUpdateStatusFunction`) and faint falling characters.
+
+It draws everything with JetBrains Mono (OFL, `config/fonts`), which goes to `/usr/share/fonts/truetype/fliperos` and, through the `fliperos-fonts` initramfs hook, into the initramfs: the Ubuntu plymouth hook only copies the Ubuntu font.
+
+`fliperos` is a full 640x480 image scaled to the boot mode (640x480, 640x240, 320x240...) with an animated bar.
+
+Three themes from Gnome-look come too: `cogwheel` (by DUKE93, GPL 3), `into-it` and `windoze95`, adapted to scale to the window, with the pixel twice as tall in the double-width modes (640x240), and Windoze 95's art reduced to 640x480.
+
+All of them live in `config/splashscreen` and go to `/usr/share/plymouth/themes` and to `~/splashscreen`, where Setup > System > Splash screen also lists the user's themes (more on [Gnome-look](https://www.gnome-look.org/browse?cat=108&ord=latest)).
+
+Setting one (`lib/splash.sh`) copies its folder with `ImageDir` and `ScriptFile` rewritten, points the `default.plymouth` alternative at it and runs `update-initramfs` (the initramfs hook takes the new initrd to the ESP); the preview runs `plymouthd` with `plymouth.splash=NAME`.
+
+`tools/cabinet-update.sh` rebuilds the initramfs when the boot theme's files change. The build can also use `evangelion` (202 frames, with a **seizure risk** declared by the author and no license in the package) or none.
+
+**Network.** Samba (`\\<ip>\FliperOS` → `/opt/fliperos`, and `\\<ip>\roms`, `bios`, `media` and `config` → the folders of the same name in `~`, writable only with the `fliperos` user; `config/smb.conf`), SSH/SFTP and Avahi (`fliperos.local`).
+
+Default user `fliperos` with password `fliperos`, like GroovyArcade's user `arcade` with password `arcade` (see [Installed system](Installed-system.md)).
+
+NetworkManager handles Wi-Fi **and wired** (the empty `10-globally-managed-devices.conf` overrides Ubuntu's, which only managed Wi-Fi) and writes `/etc/resolv.conf` itself with the DNS from DHCP (`90-fliperos-dns.conf`: Ubuntu would hand DNS to `systemd-resolved`, which isn't in the image).
+
+The clock comes from the network (`systemd-timesyncd`). On the first test on the cabinet all three were missing: `resolv.conf` was the build container's, the BIOS clock was two months behind, and apt didn't work (neither System Update nor frontends).
 
 **Diagnostics.** `sudo fliperos-video-check --json` reads the active mode of each output (current CRTC through libdrm, read-only): connector, resolution, kHz, Hz, interlaced.
 

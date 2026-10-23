@@ -203,7 +203,9 @@ The items come in the order of setting up a cabinet: picture, sound, network, co
   - *Resolution*: the resolution of the menus and the frontend;
   - *Geometry*: a grid to center the picture and fit its size on the tube; the arrows adjust and Enter saves;
   - *Reset Geometry*: goes back to the monitor's default geometry;
-  - *Multiple Monitors*: a second and a third arcade monitor, for games with 2 or 3 screens (Darius, Punch-Out!!, F355 Challenge). Inside: *Monitor 2* and *Monitor 3* (which video output each one uses), *Multi-Screen Games* (one screen per monitor, or everything on monitor 1), *Game Screen Order* (which monitor shows each screen) and *Identify Monitors* (turns each monitor off for 3 seconds, in order). See [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors).
+  - *Multiple Monitors*: a second and a third arcade monitor, for games with 2 or 3 screens (Darius, Punch-Out!!, F355 Challenge).
+
+    Inside: *Monitor 2* and *Monitor 3* (which video output each one uses), *Multi-Screen Games* (one screen per monitor, or everything on monitor 1), *Game Screen Order* (which monitor shows each screen) and *Identify Monitors* (turns each monitor off for 3 seconds, in order). See [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors).
 
   When you leave Video Setup with something changed, it saves the boot settings and offers to reboot.
 - **Audio Setup**: the sound.
@@ -225,18 +227,28 @@ The items come in the order of setting up a cabinet: picture, sound, network, co
   - *LPT joysticks (parallel port)*: old controllers on the parallel port: gamepad adapter (NES, SNES, N64, PlayStation), DB9 adapter (Atari, Amiga, Sega) or TurboGraFX interface (up to 7 joysticks). *Joysticks found now* shows what was detected and *Turn off* disables it.
   - *Quirks (USB controller fixes)*: fixes for USB encoders that arrive wrong (a dual encoder showing up as a single player, a controller that freezes). *Add a quirk* asks for a name and a code; *USB devices connected now* shows the codes of what is plugged in; choosing a quirk in the list deletes it. Applies after a reboot. See [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
 - **Games**: what puts games in the cabinet, in the order you use it.
-  - *Frontend*: what opens every time the cabinet is turned on: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, the LXDE desktop or the FliperOS Setup itself. What isn't installed is installed (or downloaded) from here. Choosing a frontend also puts every game folder into it, so choose it again whenever a folder gets its first games. *Add a custom frontend* adds another program by its command, and *Edit or delete a custom frontend* changes or removes it. See [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends).
-  - *Emulators & Games*: the emulators of the desktop menu, each marked *installed* or *not installed*. Choose one that is not installed to install it: **Model 2** (SM2-Emu, downloaded and built on the machine, several minutes), **Fightcade 2** (downloaded from its site) and **KOF Final Attack** on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with `Final Attack.exe`, on a USB disk or the network) and it downloads the [4:3 patch](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) and Ikemen GO and makes a converted copy. The others come in the image.
-  - *Folders*: the folders FliperOS uses (`roms`, `bios`, `media`, `splashscreen`) and the ones inside them: each emulator, each RetroArch core, each type of art. Choose one and *Link this to another folder* to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): `~/roms/mame` becomes a link to it and the folder used until then is kept as `~/roms/old-mame`. Each folder can point to a different place. *Unlink the custom folder* brings the previous one back.
+  - *Frontend*: what opens every time the cabinet is turned on: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, the LXDE desktop or the FliperOS Setup itself. What isn't installed is installed (or downloaded) from here.
+
+    Choosing a frontend also puts every game folder into it, so choose it again whenever a folder gets its first games. *Add a custom frontend* adds another program by its command, and *Edit or delete a custom frontend* changes or removes it. See [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends).
+  - *Emulators & Games*: the emulators of the desktop menu, each marked *installed* or *not installed*.
+
+    Choose one that is not installed to install it: **Model 2** (SM2-Emu, downloaded and built on the machine, several minutes), **Fightcade 2** (downloaded from its site) and **KOF Final Attack** on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with `Final Attack.exe`, on a USB disk or the network) and it downloads the [4:3 patch](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) and Ikemen GO and makes a converted copy. The others come in the image.
+  - *Folders*: the folders FliperOS uses (`roms`, `bios`, `media`, `splashscreen`) and the ones inside them: each emulator, each RetroArch core, each type of art.
+
+    Choose one and *Link this to another folder* to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): `~/roms/mame` becomes a link to it and the folder used until then is kept as `~/roms/old-mame`. Each folder can point to a different place. *Unlink the custom folder* brings the previous one back.
   - *Downloader*:
     - *ROM/CHD MAME torrent*: you paste the magnet link of a romset (and one of CHDs) and it downloads, through Transmission, only the games the ROM Cleaner filter chooses, straight into the emulator's folder. The MAME version of the romset must match the emulator;
     - *Free games (open-source homebrew)*: downloads free homebrew games to the RetroArch folders, so the frontend has something to show.
   - *Cleaner*: for those who have a full romset.
-    - *MAME ROM Cleaner*: you say where the romset is (a folder, USB disk or network share) and which emulator it is for (GroovyMAME, Flycast, Supermodel, Model 2, MAME 2010...). It keeps only the games that work and suit your cabinet (horizontal or vertical, players, buttons and controls you have, categories, with or without clones, bootlegs, prototypes and adult games), shows how many and how much space, and copies or moves them to the right folder. *See the list* shows the games, *Change the parameters* changes the filter;
+    - *MAME ROM Cleaner*: you say where the romset is (a folder, USB disk or network share) and which emulator it is for (GroovyMAME, Flycast, Supermodel, Model 2, MAME 2010...).
+
+      It keeps only the games that work and suit your cabinet (horizontal or vertical, players, buttons and controls you have, categories, with or without clones, bootlegs, prototypes and adult games), shows how many and how much space, and copies or moves them to the right folder. *See the list* shows the games, *Change the parameters* changes the filter;
     - *MAME CHD Cleaner*: brings the CHDs (the disk images some games need) of only the games that stayed.
 
     See [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs).
-  - *Scraper*: downloads screenshots, covers, logos, videos and descriptions for the games found in `roms`. You choose the systems (or all of them), the provider (*ScreenScraper*, *TheGamesDB*, *ArcadeDB*, *progetto-SNAPS*, *MobyGames*, *IGDB* or *OpenRetro*, with the login saved for the ones that ask) and the kinds of media. *Art packs by torrent* brings logos and videos only for the ROMs you have. An interrupted scrape can be resumed later. Needs internet. See [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper).
+  - *Scraper*: downloads screenshots, covers, logos, videos and descriptions for the games found in `roms`. You choose the systems (or all of them), the provider (*ScreenScraper*, *TheGamesDB*, *ArcadeDB*, *progetto-SNAPS*, *MobyGames*, *IGDB* or *OpenRetro*, with the login saved for the ones that ask) and the kinds of media.
+
+    *Art packs by torrent* brings logos and videos only for the ROMs you have. An interrupted scrape can be resumed later. Needs internet. See [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper).
   - *AttractPlus ROM List*: makes the Attract-Mode Plus game lists of the arcade folders with each game's real name, year and manufacturer (*Street Fighter II* instead of `sf2`), clones included. Works offline. Mark the folders and confirm.
 - **System**: the rest.
   - *Extras*: programs left out of the ISO to keep the download small, installed over the internet: Wine (needed by some Fightcade 2 emulators), Steam and Heroic (GOG games).

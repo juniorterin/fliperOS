@@ -40,7 +40,13 @@ Every new ISO goes to GitHub [Releases](https://github.com/juniorterin/fliperOS/
    git push origin 0.10
    ```
 
-Pushing the tag triggers the GitHub Actions **Release** workflow (`.github/workflows/release.yml`). It checks that the tag is `FLIPEROS_VERSION` and that `CHANGELOG.md` has its section, builds the frontends repository (`Dockerfile.packages`) and generates the ISO with the same `Dockerfile.fliperos` as the local build. Then it publishes through `tools/release-publish.sh`, with the workflow's own token. The kernel and frontend `.deb`s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h). If it fails, `fliperos-mkiso.log` is kept as a workflow artifact. Run by hand (*Actions > Release > Run workflow*), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing. To redo a version that was just tagged, move the tag and push it again (`git tag -f 0.10`, `git push -f origin 0.10`): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.
+Pushing the tag triggers the GitHub Actions **Release** workflow (`.github/workflows/release.yml`). It checks that the tag is `FLIPEROS_VERSION` and that `CHANGELOG.md` has its section, builds the frontends repository (`Dockerfile.packages`) and generates the ISO with the same `Dockerfile.fliperos` as the local build.
+
+Then it publishes through `tools/release-publish.sh`, with the workflow's own token. The kernel and frontend `.deb`s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h).
+
+If it fails, `fliperos-mkiso.log` is kept as a workflow artifact. Run by hand (*Actions > Release > Run workflow*), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.
+
+To redo a version that was just tagged, move the tag and push it again (`git tag -f 0.10`, `git push -f origin 0.10`): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.
 
 To publish an ISO generated here, in the audit container:
 
@@ -59,7 +65,21 @@ docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos
 - without the version's section in `CHANGELOG.md`, nothing is published;
 - an existing release isn't replaced without `--replace` (deletes and publishes again); the workflow passes it, because there a release only exists again when the tag was moved on purpose.
 
-GitHub accepts up to 2 GiB per file, and the ISO stays below that. The build's `slim_rootfs_chroot` removes the `-dev` packages and the build tools, but keeps `build-essential`, `dkms` and the kernel headers, which the DKMS drivers use. No `autoremove`, because the Qt plugins and Vulkan come in through `dlopen` and don't show in `ldd`; the libraries `ldd` shows are marked as manually installed, and an `ldd` before and after fails the build if any is missing. Switchres opens `libX11.so`, `libXrandr.so` and `libdrm.so` by those unversioned names, which belong to the `-dev` packages: `config/fliperos-dlopen-links` scans the binaries in `/usr/local` and `/opt` for such names and links them in `/usr/local/lib` to the installed version, and `tools/verify-iso.sh` checks the three. The packages left with nothing depending on them once the `-dev` are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an `apt autoremove` on the installed system doesn't take them. The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg `path-exclude` so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz. Wine, Steam and Heroic aren't in the image: Setup > Games > Extras installs them (`config/fliperos-extras`). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (`fliperos-0.10.iso.001`, `.002`...), and the release text gets the instructions to join them (`copy /b` on Windows, `cat` on Linux). Also published: `fliperos-0.10.sha256` (the whole ISO and each part) and `fliperos-0.10-pkglist.txt` (package, version and architecture of what's in the image). `--prerelease` marks it as a pre-release; `--to FOLDER` only prepares the files and the text (`notes.md`), without touching GitHub; `--notes VERSION` shows the version's text.
+GitHub accepts up to 2 GiB per file, and the ISO stays below that. The build's `slim_rootfs_chroot` removes the `-dev` packages and the build tools, but keeps `build-essential`, `dkms` and the kernel headers, which the DKMS drivers use.
+
+No `autoremove`, because the Qt plugins and Vulkan come in through `dlopen` and don't show in `ldd`; the libraries `ldd` shows are marked as manually installed, and an `ldd` before and after fails the build if any is missing.
+
+Switchres opens `libX11.so`, `libXrandr.so` and `libdrm.so` by those unversioned names, which belong to the `-dev` packages: `config/fliperos-dlopen-links` scans the binaries in `/usr/local` and `/opt` for such names and links them in `/usr/local/lib` to the installed version, and `tools/verify-iso.sh` checks the three.
+
+The packages left with nothing depending on them once the `-dev` are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an `apt autoremove` on the installed system doesn't take them.
+
+The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg `path-exclude` so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.
+
+Wine, Steam and Heroic aren't in the image: Setup > Games > Extras installs them (`config/fliperos-extras`). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (`fliperos-0.10.iso.001`, `.002`...), and the release text gets the instructions to join them (`copy /b` on Windows, `cat` on Linux).
+
+Also published: `fliperos-0.10.sha256` (the whole ISO and each part) and `fliperos-0.10-pkglist.txt` (package, version and architecture of what's in the image).
+
+`--prerelease` marks it as a pre-release; `--to FOLDER` only prepares the files and the text (`notes.md`), without touching GitHub; `--notes VERSION` shows the version's text.
 
 ## Tests
 
@@ -72,7 +92,11 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 - `tests/test_setup.py` — the logic of `fliperos-setup` with fake DRM sysfs, EDIDs, `lsblk`, `nmcli` and `aplay`, on the same Ubuntu (and the same `mawk`/`jq`) as the ISO.
 - `tests/test_build.py` — boot menu, kernel and patches, pins, image files, the installed disk's Limine, `fliperos-video-check`.
 - `tools/ui-snapshot.sh SCREEN [WIDTH HEIGHT]` — captures a screen as text in an 80x30 tmux (or 64x24, 25 kHz's 512x384), with a fake system (`tools/ui-demo.sh`).
-- `tools/vm-test.py install ISO` — in QEMU: installs through the setup's lib onto a disposable disk and boots the disk on BIOS and UEFI. `tools/vm-test.py screens ISO` and `tools/vm-monitor.py` capture the real tty1 (Gum on the Linux console) screen by screen. `tools/vm-test.py desktop ISO` opens LXDE on the installed disk (from boot and from the menu, with the 15 kHz `xorg.conf`). `tools/vm-test.py dev ISO` takes the current repository's files to the installed disk, without a new ISO, and drives the menu with a fake gamepad (`tools/vm-fakepad.py`, uinput) up to the desktop, the resolution change and the quirks.
+- `tools/vm-test.py install ISO` — in QEMU: installs through the setup's lib onto a disposable disk and boots the disk on BIOS and UEFI. `tools/vm-test.py screens ISO` and `tools/vm-monitor.py` capture the real tty1 (Gum on the Linux console) screen by screen.
+
+  `tools/vm-test.py desktop ISO` opens LXDE on the installed disk (from boot and from the menu, with the 15 kHz `xorg.conf`).
+
+  `tools/vm-test.py dev ISO` takes the current repository's files to the installed disk, without a new ISO, and drives the menu with a fake gamepad (`tools/vm-fakepad.py`, uinput) up to the desktop, the resolution change and the quirks.
 - **Updating the cabinet without a new ISO** (over the network, with the default user `fliperos` and password `fliperos`):
 
   ```powershell

@@ -1,10 +1,14 @@
 # Multiple monitors
 
-Some arcade games were built for two or three monitors side by side or stacked: Darius and The Ninja Warriors (3 screens in a row), Punch-Out!! and Super Punch-Out!! (2 screens, one above the other), Ferrari F355 Challenge, Airline Pilots and Sega Strike Fighter (3 screens in a row, one NAOMI board per screen). FliperOS drives **two arcade CRTs** from the analog outputs of one video card, and up to **three** with a second video card or an active converter on a digital output (both experimental). When a game has 2 or more screens and the multi-screen mode is on, the emulator sends each screen to its own monitor. Every other game stays on monitor 1.
+Some arcade games were built for two or three monitors side by side or stacked: Darius and The Ninja Warriors (3 screens in a row), Punch-Out!! and Super Punch-Out!! (2 screens, one above the other), Ferrari F355 Challenge, Airline Pilots and Sega Strike Fighter (3 screens in a row, one NAOMI board per screen).
+
+FliperOS drives **two arcade CRTs** from the analog outputs of one video card, and up to **three** with a second video card or an active converter on a digital output (both experimental). When a game has 2 or more screens and the multi-screen mode is on, the emulator sends each screen to its own monitor. Every other game stays on monitor 1.
 
 ## What you need
 
-- A video card with one **analog output** (VGA, DVI-I) for each monitor, supported by the [15 kHz kernel](Kernel-15-kHz.md). The tested way is every monitor on the **same card** as monitor 1; a second card is experimental (below). Older Radeons with VGA + DVI-I (HD 5000, 6000 and 7000 series, like the HD 5450 or HD 6450) are the tested way to get 2 CRTs. These cards usually have **two DACs**, so even with VGA + 2 DVI-I outputs only two analog monitors work at the same time.
+- A video card with one **analog output** (VGA, DVI-I) for each monitor, supported by the [15 kHz kernel](Kernel-15-kHz.md). The tested way is every monitor on the **same card** as monitor 1; a second card is experimental (below).
+
+  Older Radeons with VGA + DVI-I (HD 5000, 6000 and 7000 series, like the HD 5450 or HD 6450) are the tested way to get 2 CRTs. These cards usually have **two DACs**, so even with VGA + 2 DVI-I outputs only two analog monitors work at the same time.
 - Check the DVI connector: only **DVI-I** (the 4 extra pins around the flat blade) carries analog VGA, and works with a passive DVI-to-VGA adapter. **DVI-D** is digital only. For example the Radeon R7 240 has VGA + DVI-D + HDMI: only one analog output.
 - **You are not limited to one video card.** The outputs can also come from more than one card: each card brings its own outputs (and its own DACs), so how many cards you can use only depends on how many free **PCI/PCIe slots** the computer has. Monitor 1's card draws the picture and the others only add outputs (see [A second video card](#a-second-video-card-experimental)).
 - Monitors of the **same type** as monitor 1 (Setup > Video Setup > Monitor Type): they get the same video mode.
@@ -19,8 +23,12 @@ An HDMI, DVI-D or DisplayPort output can drive a CRT through an **active** conve
 
 ### A second video card (experimental)
 
-The extra monitors don't have to be on monitor 1's card: they can be on **another video card**, or on several. If one card doesn't have enough analog outputs, add another; the only limit is how many free PCI/PCIe slots the computer has. The Setup lists the outputs of every card it finds, as `card1:VGA-1 (AMD Radeon ...)`, and `fliperos.conf` saves them with the card in front (`screens=VGA-1,DVI-I-1,card1:VGA-1`). This is **not tested yet** on a cabinet:
-- **Monitor 1's card draws everything.** X opens on it (its `BusID` is in `/etc/X11/xorg.conf.d/10-fliperos.conf`) and adds the other card as a *GPU screen* (`AutoAddGPU`, `AutoBindGPU`): its outputs join the same desktop, and the picture is copied to them (reverse PRIME). In XRandR they get another name: `VGA-1` of the first extra card is `VGA-1-1`, of the second `VGA-1-2`. `fliperos-multiscreen xnames` makes that translation for GroovyMAME and Flycast, and binds the card (`xrandr --setprovideroutputsource`) if X didn't.
+The extra monitors don't have to be on monitor 1's card: they can be on **another video card**, or on several. If one card doesn't have enough analog outputs, add another; the only limit is how many free PCI/PCIe slots the computer has.
+
+The Setup lists the outputs of every card it finds, as `card1:VGA-1 (AMD Radeon ...)`, and `fliperos.conf` saves them with the card in front (`screens=VGA-1,DVI-I-1,card1:VGA-1`). This is **not tested yet** on a cabinet:
+- **Monitor 1's card draws everything.** X opens on it (its `BusID` is in `/etc/X11/xorg.conf.d/10-fliperos.conf`) and adds the other card as a *GPU screen* (`AutoAddGPU`, `AutoBindGPU`): its outputs join the same desktop, and the picture is copied to them (reverse PRIME).
+
+  In XRandR they get another name: `VGA-1` of the first extra card is `VGA-1-1`, of the second `VGA-1-2`. `fliperos-multiscreen xnames` makes that translation for GroovyMAME and Flycast, and binds the card (`xrandr --setprovideroutputsource`) if X didn't.
 - **The kernel's `video=` goes by connector name, on every card.** `video=VGA-1:640x480iSe` sets the VGA-1 of both cards, so an extra monitor on a second card's `VGA-1` gets monitor 1's mode, and an unused output with the same name on the other card is also forced on (with nothing plugged in, it does no harm).
 - Use a card the 15 kHz kernel supports with low dotclocks (AMD/ATI, `radeon` or `amdgpu`). On a card without them (Intel, NVIDIA) the monitor boots in the super resolution, and GroovyMAME's per-game modes may not reach it.
 - Programs in KMS (RetroArch, the frontends) only see monitor 1: the others are turned off while they run, as on one card.
@@ -62,15 +70,27 @@ The other emulators (RetroArch, PCSX2, Dolphin, Supermodel, Model 2...) and the 
 
 ## How it works
 
-**Boot.** Each extra monitor gets the boot mode of monitor 1, forced on, in the kernel line (`video=DVI-I-1:640x480iSe`; with an EDID boot, the preset's mode; on a digital output, the preset's super resolution). Rotation (Monitor Orientation) applies to all of them. The `fliperos.conf` keeps the outputs in the game screen order (`screens=DVI-I-1,VGA-1,DVI-I-2`) and the multi-screen switch (`multiscreen=off` when off).
+**Boot.** Each extra monitor gets the boot mode of monitor 1, forced on, in the kernel line (`video=DVI-I-1:640x480iSe`; with an EDID boot, the preset's mode; on a digital output, the preset's super resolution). Rotation (Monitor Orientation) applies to all of them.
+
+The `fliperos.conf` keeps the outputs in the game screen order (`screens=DVI-I-1,VGA-1,DVI-I-2`) and the multi-screen switch (`multiscreen=off` when off).
 
 **X.** Each output of monitor 1's card has its own `Monitor` section in `/etc/X11/xorg.conf.d/10-fliperos.conf`, side by side in the game screen order, with monitor 1 as the primary screen: single-screen programs open there. Outputs of a second card come in as a GPU screen (see above).
 
 **KMS.** RetroArch, Attract-Mode, EmulationStation and Pegasus open on the first connected output, which could be an extra monitor. So `fliperos-kms-run` turns the extra ones off (`fliperos-setup --outputs main`), and every X server (`fliperos-x11-run`, the desktop) turns them back on (`--outputs all`).
 
-**GroovyMAME.** `fliperos-mame-screens` reads GroovyMAME's own `-listxml` and writes one `.ini` with `numscreens` per system with 2 or more screens in `/etc/fliperos/mame/screens` (limited to the number of monitors). This takes about a minute the first time and only runs again when the GroovyMAME binary or the number of monitors changes. The `groovymame` command adds that folder to the `-inipath` after the main one, so a user `.ini` in the main folder wins, and sends each window to its output (`-screen0 screen1`...). GroovyMAME's Switchres finds `screenN` in XRandR order and SDL counts the primary screen first; for both to agree the command makes the first output primary, and on the desktop restores the previous one when GroovyMAME closes. Switchres sets the mode of each game on every monitor.
+**GroovyMAME.** `fliperos-mame-screens` reads GroovyMAME's own `-listxml` and writes one `.ini` with `numscreens` per system with 2 or more screens in `/etc/fliperos/mame/screens` (limited to the number of monitors).
 
-**Flycast.** Flycast runs each NAOMI board of these games as its own process, with its own window (`network:MultiboardSlaves=2`): the main board where `window:left` says and the others one window width to each side. For the F355 Challenge, Airline Pilots and Sega Strike Fighter sets (`f355`, `f355twin`, `f355twinp`, `f355twn2`, `alpilot`, `alpilotj`, `sstrkfgt`, `sstrkfgta`), with 3 monitors and the switch on, `fliperos-x11-run` puts `fliperos-multiscreen` in front of Flycast. Inside the X server it gives the three outputs the mode Switchres made for monitor 1, side by side with no gap, and places the main board on the middle one; in full screen SDL puts each window on the monitor it falls on. The other boards are new Flycast processes that only read `~/.config/flycast/emu.cfg`, so full screen and the stretch are saved there. The board BIOS (`f355dlx`, `airlbios`, `naomi`...) must be in a Flycast content folder, next to the game.
+This takes about a minute the first time and only runs again when the GroovyMAME binary or the number of monitors changes. The `groovymame` command adds that folder to the `-inipath` after the main one, so a user `.ini` in the main folder wins, and sends each window to its output (`-screen0 screen1`...).
+
+GroovyMAME's Switchres finds `screenN` in XRandR order and SDL counts the primary screen first; for both to agree the command makes the first output primary, and on the desktop restores the previous one when GroovyMAME closes. Switchres sets the mode of each game on every monitor.
+
+**Flycast.** Flycast runs each NAOMI board of these games as its own process, with its own window (`network:MultiboardSlaves=2`): the main board where `window:left` says and the others one window width to each side.
+
+For the F355 Challenge, Airline Pilots and Sega Strike Fighter sets (`f355`, `f355twin`, `f355twinp`, `f355twn2`, `alpilot`, `alpilotj`, `sstrkfgt`, `sstrkfgta`), with 3 monitors and the switch on, `fliperos-x11-run` puts `fliperos-multiscreen` in front of Flycast.
+
+Inside the X server it gives the three outputs the mode Switchres made for monitor 1, side by side with no gap, and places the main board on the middle one; in full screen SDL puts each window on the monitor it falls on.
+
+The other boards are new Flycast processes that only read `~/.config/flycast/emu.cfg`, so full screen and the stretch are saved there. The board BIOS (`f355dlx`, `airlbios`, `naomi`...) must be in a Flycast content folder, next to the game.
 
 ## Problems
 

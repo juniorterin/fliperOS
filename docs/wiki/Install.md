@@ -63,17 +63,29 @@ The media's menu (gasetup's `isomainmenu`): **Install to HD/SSD**, **Recovery Mo
 ### Install to HD/SSD
 
 1. **Do you want to configure video?** — *Yes* opens **Video Setup**:
-   - **Monitor Type**: the 29 Switchres presets, in the gatools list, plus **Custom**: your own `crt_range0` (the timings that really fit your monitor), made on the Geometry grid or typed in (16 values, as in `switchres.ini`, of the same 15/25/31 kHz band as the preset). It sits on top of the preset that was in use, which still gives the boot resolution, the EDID and the Xorg range; choosing a preset again discards it;
+   - **Monitor Type**: the 29 Switchres presets, in the gatools list, plus **Custom**: your own `crt_range0` (the timings that really fit your monitor), made on the Geometry grid or typed in (16 values, as in `switchres.ini`, of the same 15/25/31 kHz band as the preset).
+
+     It sits on top of the preset that was in use, which still gives the boot resolution, the EDID and the Xorg range; choosing a preset again discards it;
    - **Monitor Orientation**: horizontal, vertical clockwise, vertical counter-clockwise (console rotated with `fbcon=rotate`, `panel_orientation` in `video=`, MAME's `ror`/`rol` and the desktop through `xrandr`);
    - **Resolution**: only the modes of the kernel table that the monitor's range and the card accept (without low dotclock, only the super resolutions), plus a **custom resolution**: tested on the Switchres `grid` and turned into an EDID (`switchres -e`), like `worker_custom_video_mode`;
-   - **Geometry**: the same **`geometry`** as GroovyArcade — Switchres' `geometry.py`, which draws the grid and returns the `crt_range`, saved as `monitor custom` in `/etc/switchres.ini` (the Monitor Type becomes **Custom**). The grid is drawn with the lines and refresh rate of the resolution chosen above (50 Hz in PAL modes; with no choice, 640x480), 8 pixels wider, like GroovyArcade's 648x480: at the exact boot mode, Switchres would have to replace the mode on screen each time an arrow reopens the grid, and the tool stopped at the first arrow. Downwards the image only moves while there are blank lines below it (Switchres doesn't go past the *front porch*); when it stops, the adjustment is the monitor's **V-POS**;
+   - **Geometry**: the same **`geometry`** as GroovyArcade — Switchres' `geometry.py`, which draws the grid and returns the `crt_range`, saved as `monitor custom` in `/etc/switchres.ini` (the Monitor Type becomes **Custom**).
+
+     The grid is drawn with the lines and refresh rate of the resolution chosen above (50 Hz in PAL modes; with no choice, 640x480), 8 pixels wider, like GroovyArcade's 648x480: at the exact boot mode, Switchres would have to replace the mode on screen each time an arrow reopens the grid, and the tool stopped at the first arrow.
+
+     Downwards the image only moves while there are blank lines below it (Switchres doesn't go past the *front porch*); when it stops, the adjustment is the monitor's **V-POS**;
    - **Multiple Monitors**: a second arcade monitor on another analog output (VGA, DVI-I) of the same card, and a third, or one on a second video card or on a digital output through an active VGA converter, as an experimental option, for games with 2 or 3 screens (Darius, The Ninja Warriors and Punch-Out!! in GroovyMAME, F355 Challenge in Flycast), with a switch to turn the multi-screen mode off. See [Multiple monitors](Multiple-Monitors.md).
-2. **Automatically Partition** — lists the disks by **model, size, path and bus** (USB/NVMe/SATA). Not listed: the installation media itself, disks under 16 GiB, mounted or in swap, with RAID/LVM/encryption or active dependents — each one with the reason, above the list. **My drive is not listed (details)** shows everything Linux sees (`lsblk`, the controllers and the kernel messages): an HD/SSD that doesn't even show there is hidden before Linux, almost always by the BIOS SATA mode set to RAID/Intel RST (switch to AHCI) or by Intel VMD.
+2. **Automatically Partition** — lists the disks by **model, size, path and bus** (USB/NVMe/SATA). Not listed: the installation media itself, disks under 16 GiB, mounted or in swap, with RAID/LVM/encryption or active dependents — each one with the reason, above the list.
+
+   **My drive is not listed (details)** shows everything Linux sees (`lsblk`, the controllers and the kernel messages): an HD/SSD that doesn't even show there is hidden before Linux, almost always by the BIOS SATA mode set to RAID/Intel RST (switch to AHCI) or by Intel VMD.
 3. **WARNING** — model, path and size of the disk that will be erased; *No* goes back to the disk choice. If the disk already has FliperOS, the warning suggests Recovery Mode.
 4. **Installing FliperOS** — a single screen, with the target disk, a **real** progress bar (the system copy comes from the `unsquashfs` percentage, like gasetup's `dialog --gauge`), the step and short messages. Command output goes to `/var/log/fliperos-setup.log`. On error: step, error, **View log / Retry / Return**.
 5. **Installation completed successfully. Remove the installation CD/DVD/USB.** — and **Reboot now?**
 
-Partitioning: GPT, a 1 MiB BIOS boot partition, a 1 GiB FAT32 ESP, the rest in ext4. The new partitions have their old signatures wiped and the BIOS boot one is zeroed (a leftover file system from the previous disk there made `limine bios-install` refuse; it also runs with `--force`). Limine is installed for BIOS (stage 2 in the BIOS boot partition) and for UEFI (`EFI/BOOT/BOOTX64.EFI`, the removable path), without touching the NVRAM. Limine only reads FAT, so the kernel and initrd live **on the ESP** (`/boot/efi/fliperos/`), maintained by `fliperos-limine-update` — the equivalent of `update-grub`, called by the kernel and initramfs hooks. The kernel parameters are in `/etc/default/fliperos-boot`.
+Partitioning: GPT, a 1 MiB BIOS boot partition, a 1 GiB FAT32 ESP, the rest in ext4. The new partitions have their old signatures wiped and the BIOS boot one is zeroed (a leftover file system from the previous disk there made `limine bios-install` refuse; it also runs with `--force`).
+
+Limine is installed for BIOS (stage 2 in the BIOS boot partition) and for UEFI (`EFI/BOOT/BOOTX64.EFI`, the removable path), without touching the NVRAM.
+
+Limine only reads FAT, so the kernel and initrd live **on the ESP** (`/boot/efi/fliperos/`), maintained by `fliperos-limine-update` — the equivalent of `update-grub`, called by the kernel and initramfs hooks. The kernel parameters are in `/etc/default/fliperos-boot`.
 
 The new disk carries what was decided on the media: `fliperos.conf`, Switchres, MAME, Xorg, the kernel line, the configured Wi-Fi networks and the sound card.
 

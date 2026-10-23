@@ -203,7 +203,9 @@ Os itens vêm na ordem de quem arruma um gabinete: imagem, som, rede, controles,
   - *Resolution*: a resolução dos menus e do frontend;
   - *Geometry*: uma grade para centralizar a imagem e acertar o tamanho dela no tubo; as setas ajustam e o Enter grava;
   - *Reset Geometry*: volta à geometria padrão do monitor;
-  - *Multiple Monitors*: um segundo e um terceiro monitor arcade, para jogos de 2 ou 3 telas (Darius, Punch-Out!!, F355 Challenge). Dentro: *Monitor 2* e *Monitor 3* (qual saída de vídeo cada um usa), *Multi-Screen Games* (uma tela em cada monitor, ou tudo no monitor 1), *Game Screen Order* (qual monitor mostra cada tela) e *Identify Monitors* (apaga cada monitor por 3 segundos, em ordem). Veja [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors).
+  - *Multiple Monitors*: um segundo e um terceiro monitor arcade, para jogos de 2 ou 3 telas (Darius, Punch-Out!!, F355 Challenge).
+
+    Dentro: *Monitor 2* e *Monitor 3* (qual saída de vídeo cada um usa), *Multi-Screen Games* (uma tela em cada monitor, ou tudo no monitor 1), *Game Screen Order* (qual monitor mostra cada tela) e *Identify Monitors* (apaga cada monitor por 3 segundos, em ordem). Veja [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors).
 
   Ao sair do Video Setup com algo mudado, ele grava a configuração do boot e oferece reiniciar.
 - **Audio Setup**: o som.
@@ -225,17 +227,25 @@ Os itens vêm na ordem de quem arruma um gabinete: imagem, som, rede, controles,
   - *LPT joysticks (parallel port)*: controles antigos na porta paralela: adaptador de gamepad (NES, SNES, N64, PlayStation), adaptador DB9 (Atari, Amiga, Sega) ou interface TurboGraFX (até 7 joysticks). *Joysticks found now* mostra o que foi detectado e *Turn off* desliga.
   - *Quirks (USB controller fixes)*: correções para encoders USB que chegam errados (um encoder duplo aparecendo como um jogador só, um controle que trava). *Add a quirk* pede um nome e um código; *USB devices connected now* mostra os códigos do que está ligado; escolher um quirk da lista o apaga. Vale depois de reiniciar. Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
 - **Games**: o que põe jogos no gabinete, na ordem de uso.
-  - *Frontend*: o que abre toda vez que o gabinete liga: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, o desktop LXDE ou o próprio FliperOS Setup. O que não está instalado é instalado (ou baixado) daqui. Escolher um frontend também coloca nele todas as pastas de jogos, então escolha de novo sempre que uma pasta ganhar os primeiros jogos. *Add a custom frontend* cadastra outro programa pelo comando, e *Edit or delete a custom frontend* muda ou apaga. Veja [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends).
-  - *Emulators & Games*: os emuladores do menu do desktop, cada um marcado *installed* ou *not installed*. Escolha um que não está instalado para instalar: o **Model 2** (SM2-Emu, baixado e compilado na máquina, vários minutos), o **Fightcade 2** (baixado do site dele) e o **KOF Final Attack** no Ikemen GO em 4:3 a 320x240: você aponta a pasta do jogo original (a que tem o `Final Attack.exe`, num pendrive ou na rede) e ele baixa o [patch 4:3](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) e o Ikemen GO e monta uma cópia convertida. Os outros vêm na imagem.
+  - *Frontend*: o que abre toda vez que o gabinete liga: Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, o desktop LXDE ou o próprio FliperOS Setup. O que não está instalado é instalado (ou baixado) daqui.
+
+    Escolher um frontend também coloca nele todas as pastas de jogos, então escolha de novo sempre que uma pasta ganhar os primeiros jogos. *Add a custom frontend* cadastra outro programa pelo comando, e *Edit or delete a custom frontend* muda ou apaga. Veja [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends).
+  - *Emulators & Games*: os emuladores do menu do desktop, cada um marcado *installed* ou *not installed*.
+
+    Escolha um que não está instalado para instalar: o **Model 2** (SM2-Emu, baixado e compilado na máquina, vários minutos), o **Fightcade 2** (baixado do site dele) e o **KOF Final Attack** no Ikemen GO em 4:3 a 320x240: você aponta a pasta do jogo original (a que tem o `Final Attack.exe`, num pendrive ou na rede) e ele baixa o [patch 4:3](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) e o Ikemen GO e monta uma cópia convertida. Os outros vêm na imagem.
   - *Downloader*:
     - *ROM/CHD MAME torrent*: você cola o link magnet de um romset (e um de CHDs) e ele baixa, pelo Transmission, só os jogos que o filtro do ROM Cleaner escolhe, direto na pasta do emulador. A versão do MAME do romset precisa ser a do emulador;
     - *Free games (open-source homebrew)*: baixa jogos homebrew livres para as pastas do RetroArch, para o frontend ter o que mostrar.
   - *Cleaner*: para quem tem um romset completo.
-    - *MAME ROM Cleaner*: você diz onde está o romset (uma pasta, um disco USB ou um compartilhamento de rede) e para qual emulador ele é (GroovyMAME, Flycast, Supermodel, Model 2, MAME 2010...). Ele fica só com os jogos que funcionam e combinam com o seu gabinete (horizontal ou vertical, jogadores, botões e controles que você tem, categorias, com ou sem clones, bootlegs, protótipos e jogos adultos), mostra quantos são e o espaço, e copia ou move para a pasta certa. *See the list* mostra os jogos, *Change the parameters* muda o filtro;
+    - *MAME ROM Cleaner*: você diz onde está o romset (uma pasta, um disco USB ou um compartilhamento de rede) e para qual emulador ele é (GroovyMAME, Flycast, Supermodel, Model 2, MAME 2010...).
+
+      Ele fica só com os jogos que funcionam e combinam com o seu gabinete (horizontal ou vertical, jogadores, botões e controles que você tem, categorias, com ou sem clones, bootlegs, protótipos e jogos adultos), mostra quantos são e o espaço, e copia ou move para a pasta certa. *See the list* mostra os jogos, *Change the parameters* muda o filtro;
     - *MAME CHD Cleaner*: traz os CHDs (as imagens de disco que alguns jogos precisam) só dos jogos que ficaram.
 
     Veja [ROMs, BIOS and artwork](https://github.com/juniorterin/fliperOS/wiki/ROMs).
-  - *Scraper*: baixa screenshots, capas, logos, vídeos e descrições dos jogos encontrados em `roms`. Você escolhe os sistemas (ou todos), a fonte (*ScreenScraper*, com conta gratuita recomendada; *ArcadeDB* e *progetto-SNAPS* para arcade, sem conta; ou *TheGamesDB*) e os tipos de mídia. Uma busca interrompida pode ser retomada depois. Precisa de internet. Veja [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper).
+  - *Scraper*: baixa screenshots, capas, logos, vídeos e descrições dos jogos encontrados em `roms`. Você escolhe os sistemas (ou todos), a fonte (*ScreenScraper*, com conta gratuita recomendada; *ArcadeDB* e *progetto-SNAPS* para arcade, sem conta; ou *TheGamesDB*) e os tipos de mídia.
+
+    Uma busca interrompida pode ser retomada depois. Precisa de internet. Veja [Scraper](https://github.com/juniorterin/fliperOS/wiki/Scraper).
   - *AttractPlus ROM List*: faz as listas de jogos do Attract-Mode Plus das pastas de arcade com o nome real, o ano e o fabricante de cada jogo (*Street Fighter II* em vez de `sf2`), clones incluídos. Funciona sem internet. Marque as pastas e confirme.
 - **System**: o resto.
   - *Extras*: programas que ficaram fora da ISO para o download ser menor, instalados pela internet: Wine (precisa para alguns emuladores do Fightcade 2), Steam e Heroic (jogos da GOG).

@@ -1,6 +1,8 @@
 Every game shows on the LED display (ZeDMD or Pixelcade): its artwork or name when it is selected and when it opens, see [Frontends](Frontends.md). This page lists the games that also have the **scoreboard mode**: the two characters and each side's wins in the session, described in [Versus score on the LED display](Frontends.md#versus-score-on-the-led-display).
 
-The list is the set of games [Fightcade](https://www.fightcade.com) has a detector for ([fightcade-detectors](https://github.com/fightcadeorg/fightcade-detectors), commit `de9e7a9`), crossed with the sets each emulator has: 230 ROM sets. The set name is the one the detector was written for: a clone without a detector of its own has no scoreboard. Fightcade's other detectors (89) are for console games and for hacks that neither emulator has under that name.
+The list is the set of games [Fightcade](https://www.fightcade.com) has a detector for ([fightcade-detectors](https://github.com/fightcadeorg/fightcade-detectors), commit `de9e7a9`), crossed with the sets each emulator has: 230 ROM sets.
+
+The set name is the one the detector was written for: a clone without a detector of its own has no scoreboard. Fightcade's other detectors (89) are for console games and for hacks that neither emulator has under that name.
 
 - **GroovyMAME**: 199 sets (the ones in MAME 0.289).
 - **RetroArch (FBNeo core)**: 103 sets (the ones in the core's game list). Detectors written as CPU addresses can't be read there.
