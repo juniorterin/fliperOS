@@ -122,6 +122,14 @@ case $backend in
         # SIGTERM do Esc: fechou como pedido.
         ((rc == 143)) && rc=0
         ;;
+      # O frontend do FliperOS: em primeiro plano e sem o fliperos-escquit (o
+      # Esc e o botao 2 voltam dentro dele; na lista, ele pergunta se sai).
+      # FLIPEROS_POWERKEY=frontend: com um jogo aberto o botao de desligar
+      # fecha o jogo.
+      fliperos)
+        FLIPEROS_POWERKEY=frontend "$BIN/fliperos-kms-run" "${program[@]}"
+        rc=$?
+        ;;
       # Um jogo direto no boot (config/fliperos-bootgame): o comando ja traz o
       # fliperos-kms-run ou o fliperos-x11-run. FLIPEROS_POWERKEY=game: o
       # botao de desligar fecha o jogo e o menu volta.

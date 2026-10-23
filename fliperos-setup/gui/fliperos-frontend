@@ -1,0 +1,600 @@
+#!/usr/bin/env python3
+# O frontend do FliperOS: a lista de jogos no visual do menu do Setup
+# (Press Start 2P, Dracula, o fundo animado), em 320x240 esticado para o
+# modo da tela, como a interface grafica (gui/fliperos-gui). Os dados sao os
+# do painel web (gui/fedata.py); o controle, o do Button mapping
+# (gui/feinput.py).
+#
+# Tres modos: lista (os jogos a esquerda, a midia e as informacoes a
+# direita), tela cheia (a imagem do jogo no fundo) e grade (as capas, como o
+# Arcadeflow). O Start troca o modo.
+#
+#   cima/baixo    os jogos (segurando acelera; com 3 s, de letra em letra)
+#   esquerda/dir. a romlist (na grade: anda nela e troca so com o jogo
+#                 encostado na lateral)
+#   1  o menu do jogo (Jogar, Favoritar, +); na lista, num jogo com clones,
+#      abre e fecha os clones
+#   2  volta       3/6  pagina acima/abaixo   4  favorito   5  filtros
+#   Tab  classificar, renomear, scrape do jogo
+#
+#   fliperos-frontend [--shot PREFIXO] [--keys "b1 down ..."]
+#
+# --shot grava a tela em PREFIXO-<n>.png depois de cada tecla de --keys, sem
+# video (os testes e os prints da documentacao).
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import threading
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+FPS = 30
+CONFIG = os.path.join(os.path.expanduser("~"), ".config", "fliperos", "frontend.json")
+
+# A rolagem segurando cima/baixo: comeca a repetir depois de FIRST, acelera
+# de RATE0 a RATE1 jogos por segundo ate LETTERS segundos, e dai vai de letra
+# em letra (LRATE0 letras por segundo, e ate LRATE1 depois de LSPEEDUP).
+FIRST, RATE0, RATE1, LETTERS = 0.4, 6.0, 30.0, 3.0
+LRATE0, LRATE1, LSPEEDUP = 3.0, 10.0, 0.8
+MODES = ("list", "full", "flow")
+COLS = 5                     # as colunas da grade
+
+
+def load_config():
+    try:
+        with open(CONFIG, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_config(data):
+    try:
+        os.makedirs(os.path.dirname(CONFIG), exist_ok=True)
+        with open(CONFIG + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(CONFIG + ".tmp", CONFIG)
+    except OSError:
+        pass
+
+
+class Frontend:
+    def __init__(self, args):
+        if args.shot:
+            os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+        import pygame
+        self.pg = pygame
+        pygame.init()
+        import background
+        import fedata
+        import feinput
+        import theme
+        import tiny
+        import widgets
+        self.T, self.W, self.tiny, self.fd = theme, widgets, tiny, fedata
+        self.shot = args.shot
+        self.window = None
+        self.open()
+        self.input = feinput.Input(pygame)
+        self.back = pygame.Surface((theme.WIDTH, theme.HEIGHT))
+        self.bg = background.pick(None if not self.shot else "stars", seed=7 if self.shot else None)
+        self.start = time.monotonic()
+        self.lib = fedata.Library()
+        cfg = load_config()
+        self.mode = cfg.get("mode", "list") if cfg.get("mode") in MODES else "list"
+        self.cats = self.lib.categories()
+        self.cat = next((i for i, c in enumerate(self.cats) if c["key"] == cfg.get("category")), 0)
+        names = [f["name"] for f in self.lib.filters]
+        self.flt = names.index(cfg.get("filter")) if cfg.get("filter") in names else self.default_filter()
+        self.opened = set()        # os jogos pai com os clones abertos (na lista)
+        self.cursor = 0
+        self.top = 0
+        self.overlay = "guide"     # o guia dos controles ao abrir
+        self.ov = {}               # o estado do que esta por cima
+        self.ribbon_until = 0
+        self.letter = None         # (letra, ate quando aparece)
+        self.letter_mode = None
+        self.toast = None
+        self.repeat = {}           # acao -> proxima repeticao
+        self.acc = 0.0
+        self.media = {}            # (caminho, w, h, modo) -> surface
+        self.generation = self.lib.generation
+        self.last_check = time.monotonic()
+        self.rows = []
+        self.rebuild(keep=cfg.get("game"))
+        # As listas acompanham as pastas: o Setup confere e refaz (as de
+        # arcade pelo XML do MAME) em segundo plano.
+        if not self.shot:
+            self.lib.refresh()
+
+    # ── Video ──
+    def open(self):
+        pg = self.pg
+        pg.display.init()
+        size, flags = self.T.MODE, 0
+        driver = os.environ.get("SDL_VIDEODRIVER")
+        if driver == "kmsdrm":
+            flags = pg.FULLSCREEN
+            modes = pg.display.list_modes()
+            if not isinstance(modes, list) or size not in modes:
+                info = pg.display.Info()
+                size = (info.current_w, info.current_h)
+        elif driver == "x11":
+            info = pg.display.Info()
+            size, flags = (info.current_w, info.current_h), pg.NOFRAME
+        self.window = pg.display.set_mode(size, flags)
+        pg.display.set_caption("FliperOS")
+        pg.mouse.set_visible(False)
+
+    def close(self):
+        self.pg.display.quit()
+        self.window = None
+
+    def default_filter(self):
+        names = [f["name"].lower() for f in self.lib.filters]
+        return names.index("all games") if "all games" in names else 0
+
+    # ── A lista da tela ──
+    def category(self):
+        return self.cats[self.cat % len(self.cats)] if self.cats else None
+
+    def filtered(self):
+        cat = self.category()
+        if not cat:
+            return []
+        games = self.lib.games(cat)
+        return self.fd.apply_filter(games, self.lib.filters[self.flt % len(self.lib.filters)])
+
+    def rebuild(self, keep=None):
+        """As linhas da tela: (jogo, nivel, clones). Na lista os clones ficam
+        debaixo do pai (abertos ou nao); nos outros modos, so os pais."""
+        games = self.filtered()
+        rows = []
+        for game, clones in self.fd.tree(games):
+            if self.mode == "list":
+                rows.append((game, 0, clones))
+                if clones and game["Name"] in self.opened:
+                    rows.append((game, 1, "main"))
+                    rows.extend((c, 1, game) for c in clones)
+            else:
+                rows.append((game, 0, clones))
+        self.rows = rows
+        if keep:
+            for i, (g, level, _) in enumerate(rows):
+                if g["Name"] == keep and (level == 0 or i == self.cursor):
+                    self.cursor = i
+                    break
+        self.cursor = max(0, min(self.cursor, len(rows) - 1))
+
+    def game(self):
+        return self.rows[self.cursor][0] if self.rows else None
+
+    def remember(self):
+        g = self.game()
+        save_config({"mode": self.mode, "category": (self.category() or {}).get("key"),
+                     "filter": self.lib.filters[self.flt % len(self.lib.filters)]["name"],
+                     "game": g["Name"] if g else None})
+
+    # ── Andar ──
+    def move(self, step):
+        if not self.rows:
+            return
+        self.cursor = max(0, min(len(self.rows) - 1, self.cursor + step))
+
+    def switch_category(self, step):
+        if len(self.cats) < 2:
+            return
+        self.cat = (self.cat + step) % len(self.cats)
+        self.cursor = 0
+        self.opened.clear()
+        self.rebuild()
+        self.ribbon_until = time.monotonic() + 1.4
+
+    def letter_jump(self, step):
+        """O cursor no primeiro jogo da letra seguinte (ou anterior)."""
+        if not self.rows:
+            return
+        letters = []
+        for i, (g, level, _) in enumerate(self.rows):
+            if level:
+                continue
+            c = self.fd.first_letter(g)
+            if not letters or letters[-1][0] != c:
+                letters.append((c, i))
+        here = self.fd.first_letter(self.rows[self.cursor][0])
+        idx = next((k for k, (c, _) in enumerate(letters) if c == here), 0)
+        idx = max(0, min(len(letters) - 1, idx + step))
+        self.cursor = letters[idx][1]
+        self.letter = (letters[idx][0], time.monotonic() + 0.6)
+
+    def page(self):
+        return {"list": 13, "full": 1, "flow": COLS * 2}[self.mode]
+
+    # ── As acoes ──
+    def act(self, a):
+        if a == "quit":
+            return "quit"
+        if self.overlay:
+            return self.overlay_act(a)
+        if a in ("up", "down"):
+            step = 1 if a == "down" else -1
+            self.move(step * (COLS if self.mode == "flow" else 1))
+            self.repeat[a] = time.monotonic() + FIRST
+            self.acc = 0.0
+            self.letter_mode = None
+        elif a in ("left", "right"):
+            step = 1 if a == "right" else -1
+            if self.mode == "flow":
+                col = self.cursor % COLS
+                edge = (step < 0 and col == 0) or (step > 0 and (col == COLS - 1 or self.cursor == len(self.rows) - 1))
+                if edge:
+                    self.switch_category(step)
+                else:
+                    self.move(step)
+            else:
+                self.switch_category(step)
+        elif a == "b3":
+            self.move(-self.page())
+        elif a == "b6":
+            self.move(self.page())
+        elif a == "b1":
+            g, level, clones = self.rows[self.cursor] if self.rows else (None, 0, None)
+            if g is None:
+                return None
+            if self.mode == "list" and level == 0 and clones:
+                if g["Name"] in self.opened:
+                    self.opened.discard(g["Name"])
+                else:
+                    self.opened.add(g["Name"])
+                self.rebuild()
+                if g["Name"] in self.opened:
+                    self.cursor += 1
+            else:
+                self.overlay, self.ov = "popup", {"sel": 0}
+        elif a == "b2":
+            # Num clone aberto, fecha o grupo; senao, pergunta se sai.
+            g, level, parent = self.rows[self.cursor] if self.rows else (None, 0, None)
+            if level:
+                owner = g if parent == "main" else parent
+                self.opened.discard(owner["Name"])
+                self.rebuild(keep=owner["Name"])
+            else:
+                self.overlay, self.ov = "exit", {"sel": 1}
+        elif a == "b4":
+            self.toggle_fav()
+        elif a == "b5":
+            self.overlay, self.ov = "filter", {"sel": self.flt % len(self.lib.filters), "top": 0}
+        elif a == "start":
+            g = self.game()
+            self.mode = MODES[(MODES.index(self.mode) + 1) % len(MODES)]
+            self.rebuild(keep=g["Name"] if g else None)
+            self.say({"list": "LIST", "full": "FULL SCREEN", "flow": "GRID"}[self.mode])
+        elif a == "tab" and self.game():
+            self.overlay, self.ov = "options", {"sel": 0}
+        return None
+
+    def toggle_fav(self):
+        g = self.game()
+        if g:
+            on = self.lib.set_favourite(g, g.get("Favourite") != "1")
+            self.say("ADDED TO FAVOURITES" if on else "REMOVED FROM FAVOURITES")
+
+    def say(self, text, seconds=1.6):
+        self.toast = (text, time.monotonic() + seconds)
+
+    def overlay_act(self, a):
+        o = self.overlay
+        if o == "guide":
+            if a not in ("up", "down", "left", "right"):
+                self.overlay = None
+            return None
+        if a == "b2" and o not in ("rename",):
+            self.overlay = {"more": "popup", "classify": "options"}.get(o)
+            if self.overlay == "popup":
+                self.ov = {"sel": 2}
+            elif self.overlay == "options":
+                self.ov = {"sel": 0}
+            return None
+        if o == "exit":
+            if a in ("left", "right", "up", "down"):
+                self.ov["sel"] ^= 1
+            elif a == "b1":
+                if self.ov["sel"] == 0:
+                    return "quit"
+                self.overlay = None
+            return None
+        if o == "popup":
+            if a in ("left", "right"):
+                self.ov["sel"] = (self.ov["sel"] + (1 if a == "right" else -1)) % 3
+            elif a == "b4":
+                self.toggle_fav()
+            elif a == "b1":
+                sel = self.ov["sel"]
+                if sel == 0:
+                    self.overlay = None
+                    return "launch"
+                if sel == 1:
+                    self.toggle_fav()
+                    self.overlay = None
+                else:
+                    self.open_more()
+            return None
+        if o == "more":
+            if a in ("up", "down"):
+                self.ov["scroll"] = max(0, self.ov.get("scroll", 0) + (1 if a == "down" else -1))
+            elif a == "b1":
+                self.overlay = None
+                return "launch"
+            elif a == "b4":
+                self.toggle_fav()
+            return None
+        if o == "filter":
+            n = len(self.lib.filters)
+            if a in ("up", "down"):
+                self.ov["sel"] = (self.ov["sel"] + (1 if a == "down" else -1)) % n
+            elif a in ("b3", "b6"):
+                self.ov["sel"] = max(0, min(n - 1, self.ov["sel"] + (-10 if a == "b3" else 10)))
+            elif a in ("b1", "b5"):
+                if a == "b1":
+                    g = self.game()
+                    self.flt = self.ov["sel"]
+                    self.cursor = 0
+                    self.rebuild(keep=g["Name"] if g else None)
+                    self.remember()
+                self.overlay = None
+            return None
+        if o == "options":
+            if a in ("up", "down"):
+                self.ov["sel"] = (self.ov["sel"] + (1 if a == "down" else -1)) % 3
+            elif a in ("b1",):
+                sel = self.ov["sel"]
+                g = self.game()
+                if sel == 0:
+                    self.open_classify(g)
+                elif sel == 1:
+                    self.overlay = "rename"
+                    self.ov = {"value": g.get("Title") or g["Name"], "key": (1, 0)}
+                    self.input.text = True
+                else:
+                    self.overlay = None
+                    self.scrape(g)
+            elif a == "tab":
+                self.overlay = None
+            return None
+        if o == "classify":
+            fields = self.ov["fields"]
+            sel = self.ov["sel"]
+            if a in ("up", "down"):
+                self.ov["sel"] = (sel + (1 if a == "down" else -1)) % (len(fields) + 1)
+            elif a in ("left", "right") and sel < len(fields):
+                field, values, i = fields[sel]
+                if values:
+                    i = (i + (1 if a == "right" else -1)) % len(values)
+                    fields[sel] = (field, values, i)
+            elif a == "b1":
+                changes = {f: v[i] for f, v, i in fields if v and v[i] != (self.ov["game"].get(f) or "")}
+                if changes and self.lib.save_edits(self.ov["game"], changes):
+                    self.say("SAVED")
+                    self.lib.forget()
+                    self.rebuild(keep=self.ov["game"]["Name"])
+                self.overlay = None
+            return None
+        if o == "rename":
+            return self.rename_act(a)
+        return None
+
+    KEYS = ["1234567890", "QWERTYUIOP", "ASDFGHJKL-", "ZXCVBNM.:/"]
+
+    def rename_act(self, a):
+        r, c = self.ov["key"]
+        if a.startswith("char:"):
+            self.ov["value"] += a[5:]
+        elif a == "backspace":
+            self.ov["value"] = self.ov["value"][:-1]
+        elif a in ("up", "down"):
+            r = (r + (1 if a == "down" else -1)) % 5
+        elif a in ("left", "right"):
+            c = (c + (1 if a == "right" else -1)) % (10 if r < 4 else 3)
+        elif a == "b1":
+            if r < 4:
+                self.ov["value"] += self.KEYS[r][c]
+            elif c == 0:
+                self.ov["value"] += " "
+            elif c == 1:
+                self.ov["value"] = self.ov["value"][:-1]
+            else:
+                g = self.game()
+                title = self.ov["value"].strip()
+                if title and self.lib.save_edits(g, {"Title": title}):
+                    self.lib.forget()
+                    self.rebuild(keep=g["Name"])
+                    self.say("RENAMED")
+                self.overlay = None
+                self.input.text = False
+        elif a == "b2":
+            self.overlay = None
+            self.input.text = False
+        if r == 4:
+            c = min(c, 2)
+        self.ov["key"] = (r, c)
+        return None
+
+    def open_more(self):
+        g = self.game()
+        self.overlay = "more"
+        self.ov = {"game": g, "info": None, "loading": False, "scroll": 0}
+        system = g["_system"]
+        if not system["arcade"]:
+            return
+        self.ov["loading"] = True
+        ov = self.ov
+
+        def work():
+            try:
+                info, _ = self.lib.info.arcade(system["key"], g["Name"], "en")
+            except (OSError, ValueError):
+                info = None
+            ov["info"], ov["loading"] = info, False
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def open_classify(self, g):
+        cat = self.category()
+        fields = []
+        for field in ("Category", "Players", "Buttons", "Control", "Year", "Manufacturer", "Rotation", "Series"):
+            values = self.lib.values(cat, field)
+            cur = g.get(field) or ""
+            if cur and cur not in values:
+                values.insert(0, cur)
+            fields.append((field, values, values.index(cur) if cur in values else 0))
+        self.overlay = "classify"
+        self.ov = {"game": g, "fields": fields, "sel": 0}
+
+    def scrape(self, g):
+        self.say("SCRAPING...", 60)
+
+        def work():
+            n = self.fd.scrape(self.lib, g)
+            self.media.clear()
+            self.say("%d FILES" % n if n else "NOTHING FOUND")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    # ── Jogar ──
+    def launch(self):
+        g = self.game()
+        argv = self.lib.command(g) if g else None
+        if not argv:
+            self.say("CANNOT OPEN THIS GAME")
+            return
+        self.remember()
+        pg = self.pg
+        # O video, o som e os controles ficam para o jogo.
+        self.input.close()
+        try:
+            pg.mixer.quit()
+        except pg.error:
+            pass
+        self.close()
+        started = time.monotonic()
+        try:
+            subprocess.run(argv)
+        except OSError:
+            pass
+        played = time.monotonic() - started
+        if played > 10:
+            self.lib.played(g, played)
+        self.open()
+        self.input.open()
+        self.media.clear()
+        self.repeat.clear()
+        pg.event.clear()
+
+    # ── O laco ──
+    def tick(self, now):
+        """As repeticoes segurando, a aceleracao e o modo letra."""
+        if self.overlay and self.overlay not in ("filter", "classify", "rename", "more"):
+            return
+        for a in ("up", "down"):
+            held = self.input.held(a)
+            if held is None:
+                self.repeat.pop(a, None)
+                continue
+            if self.overlay:
+                # Nos menus, a repeticao simples (sem acelerar).
+                if a not in self.repeat:
+                    self.repeat[a] = now + FIRST
+                elif now >= self.repeat[a]:
+                    self.repeat[a] = now + 0.12
+                    self.overlay_act(a)
+                continue
+            step = 1 if a == "down" else -1
+            if held >= LETTERS:
+                if self.letter_mode is None:
+                    self.letter_mode = now
+                    self.repeat[a] = now
+                lheld = now - self.letter_mode
+                rate = LRATE0 if lheld < LSPEEDUP else min(LRATE1, LRATE0 + (lheld - LSPEEDUP) * 9)
+                if now >= self.repeat.get(a, now):
+                    self.letter_jump(step)
+                    self.repeat[a] = now + 1.0 / rate
+                self.letter = (self.letter[0] if self.letter else "", now + 0.5)
+            elif held >= FIRST:
+                k = min(1.0, (held - FIRST) / (LETTERS - FIRST))
+                self.acc += (RATE0 + (RATE1 - RATE0) * k ** 1.5) / FPS
+                n = int(self.acc)
+                if n:
+                    self.acc -= n
+                    self.move(step * n * (COLS if self.mode == "flow" else 1))
+        for a, gap in (("left", 0.5), ("right", 0.5), ("b3", 0.18), ("b6", 0.18)):
+            held = self.input.held(a)
+            if held is None or self.overlay:
+                continue
+            if held >= gap and now >= self.repeat.get(a, 0):
+                self.repeat[a] = now + (0.35 if a in ("left", "right") else 0.15)
+                self.act(a)
+
+    def run(self, keys=()):
+        clock = self.pg.time.Clock()
+        if self.shot:
+            self.overlay = None
+            frames = [None] + list(keys)
+            for i, k in enumerate(frames):
+                if k:
+                    if self.act(k) == "quit":
+                        break
+                self.draw(time.monotonic())
+                self.pg.image.save(self.back, "%s-%d.png" % (self.shot, i))
+            return 0
+        while True:
+            now = time.monotonic()
+            for a in self.input.poll():
+                r = self.act(a)
+                if r == "quit":
+                    self.remember()
+                    return 0
+                if r == "launch":
+                    self.launch()
+            self.tick(now)
+            if self.lib.generation != self.generation:
+                self.generation = self.lib.generation
+                g = self.game()
+                key = (self.category() or {}).get("key")
+                self.cats = self.lib.categories()
+                self.cat = next((i for i, c in enumerate(self.cats) if c["key"] == key), 0)
+                self.rebuild(keep=g["Name"] if g else None)
+            if now - self.last_check > 4 and not self.lib.refreshing:
+                self.last_check = now
+                if self.lib.changed():
+                    self.say("UPDATING THE LISTS...", 3)
+                    self.lib.refresh()
+            self.draw(now)
+            self.present()
+            clock.tick(FPS)
+
+    def present(self):
+        if self.window is None:
+            return
+        self.pg.transform.scale(self.back, self.window.get_size(), self.window)
+        self.pg.display.flip()
+
+    # ── Desenho ──
+    from feview import draw  # noqa: E402  (o desenho fica em gui/feview.py)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="FliperOS frontend")
+    parser.add_argument("--shot", help="no video: write PREFIX-N.png after each key of --keys")
+    parser.add_argument("--keys", default="", help="actions to run first, e.g. 'b1 right b1'")
+    args = parser.parse_args()
+    fe = Frontend(args)
+    return fe.run(args.keys.split())
+
+
+if __name__ == "__main__":
+    sys.exit(main())

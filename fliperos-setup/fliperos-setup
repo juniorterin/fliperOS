@@ -287,6 +287,18 @@ main() {
       scraper_attract_filters
       return 0
       ;;
+    --romlists)
+      # O frontend do FliperOS (gui/fliperos-frontend), ao abrir e quando uma
+      # pasta de jogos muda: as listas seguem as pastas, e as de arcade ganham
+      # o nome, o ano e os clones do XML do MAME (o -listxml e lido se ainda
+      # nao esta no cache). Um de cada vez.
+      local lock
+      exec {lock}> /run/fliperos-romlists.lock
+      flock -n "$lock" || return 0
+      FRONTENDS_RESYNC_FULL=1 frontends_attract > /dev/null
+      chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
+      return 0
+      ;;
     --bios-check)
       # A checagem automatica das BIOS, que o menu abre em segundo plano.
       bios_auto

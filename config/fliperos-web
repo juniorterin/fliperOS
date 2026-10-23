@@ -133,7 +133,8 @@ TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=u
 # Os programas que contam como "o jogo aberto", na ordem de preferencia.
 EMULATORS = ("retroarch", "groovymame", "mame", "flycast", "pcsx2", "pcsx2-qt", "duckstation", "duckstation-qt",
              "dolphin-emu", "supermodel", "sm2-emu", "hypseus", "singe", "openbor", "fcadefbneo.exe")
-FRONTENDS = ("attractplus", "attract", "emulationstation", "es-de", "pegasus-fe", "retrofe", "fliperos-gui")
+FRONTENDS = ("attractplus", "attract", "emulationstation", "es-de", "pegasus-fe", "retrofe", "fliperos-gui",
+             "fliperos-frontend")
 
 
 def read(path, default=""):

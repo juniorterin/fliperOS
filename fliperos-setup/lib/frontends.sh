@@ -616,7 +616,9 @@ frontends_arcade_stale() {
 # frontends_arcade_resync refaz as romlists de arcade (como a AttractPlus ROM
 # List) quando alguma esta atrasada, so com a lista do GroovyMAME ja no
 # cache: le-la de novo (o -listxml) leva um minuto, e isto roda ao abrir o
-# frontend. Sem o cache, a romlist simples fica ate a AttractPlus ROM List.
+# frontend. Sem o cache, a romlist simples fica ate a AttractPlus ROM List;
+# com FRONTENDS_RESYNC_FULL=1 (o frontend do FliperOS, em segundo plano) o
+# -listxml e lido na hora, e os jogos novos ja ganham o nome do MAME.
 frontends_arcade_resync() {
   local line key dir name stale=0 version
   local -a systems
@@ -629,7 +631,7 @@ frontends_arcade_resync() {
   done
   ((stale)) || return 0
   version=$(groovymame_version)
-  if [[ -z $version || ! -f $ROMCLEAN_CACHE/romclean-groovymame-$version.json ]]; then
+  if [[ -z $version || ! -f $ROMCLEAN_CACHE/romclean-groovymame-$version.json ]] && ((!${FRONTENDS_RESYNC_FULL:-0})); then
     log_info "Attract-Mode Plus: romlist de arcade atrasada, sem a lista do GroovyMAME no cache (AttractPlus ROM List)"
     return 0
   fi

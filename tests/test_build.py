@@ -4022,6 +4022,80 @@ class DesktopAppsTests(unittest.TestCase):
             self.assertEqual((root / 'usr/share/applications/transmission-gtk.desktop').read_text().count('torrent'), 0)
 
 
+class FrontendDataTests(unittest.TestCase):
+    """O frontend do FliperOS (fliperos-setup/gui): os filtros como o
+    Attract-Mode os aplica, os clones debaixo do pai e o mapa do Button
+    mapping. O desenho (pygame) nao entra aqui."""
+
+    @classmethod
+    def setUpClass(cls):
+        gui = str(ROOT / 'fliperos-setup/gui')
+        sys.path.insert(0, gui)
+        os.environ['FLIPEROS_WEB_MODULE'] = str(ROOT / 'config/fliperos-web')
+        sys.dont_write_bytecode = True
+        import fedata
+        import feinput
+        cls.fd, cls.fi = fedata, feinput
+
+    def test_filters_like_attract_mode(self):
+        fd = self.fd
+        games = [{'Name': 'sf2', 'Title': 'Street Fighter II', 'Category': 'Fighter / Versus', 'Year': '1991',
+                  'Manufacturer': 'Capcom', 'PlayedTime': '50'},
+                 {'Name': '1944', 'Title': '1944', 'Category': 'Shooter / Flying Vertical', 'Year': '2000',
+                  'Manufacturer': 'Eighting / Raizing (Capcom license)', 'PlayedTime': '300'},
+                 {'Name': 'samsho', 'Title': 'Samurai Shodown', 'Category': 'Fighter / Versus', 'Year': '1993',
+                  'Manufacturer': 'SNK', 'Favourite': '1'}]
+        flts = fd.web.parse_filters(
+            '\tfilter "Fighting Games"\n\t\tsort_by Title\n\t\trule Category equals Fight.+\n'
+            '\tfilter "Most Played"\n\t\tsort_by PlayedTime\n\t\treverse_order true\n\t\tlist_limit 1\n'
+            '\tfilter "Capcom"\n\t\trule Manufacturer equals (Capco.*)|(.*/.Capco.*)\n'
+            '\tfilter "Not fighters"\n\t\trule Category not_contains Fighter\n'
+            '\tfilter "90s"\n\t\trule Year greater_than_or_equal 1990\n\t\trule Year less_than 2000\n')
+        names = lambda f: [g['Name'] for g in fd.apply_filter(games, f)]
+        self.assertEqual(names(flts[0]), ['samsho', 'sf2'])
+        self.assertEqual(names(flts[1]), ['1944'])
+        # Regex inteira (equals): "Eighting / Raizing (Capcom license)" nao casa.
+        self.assertEqual(names(flts[2]), ['sf2'])
+        self.assertEqual(names(flts[3]), ['1944'])
+        self.assertEqual(names(flts[4]), ['sf2', 'samsho'])
+        self.assertEqual(names(fd.FAVOURITES), ['samsho'])
+
+    def test_clones_under_their_parent(self):
+        fd = self.fd
+        games = [{'Name': 'samsho5', 'Title': 'Samurai Shodown V / Samurai Spirits Zero (NGM-2700, set 1)'},
+                 {'Name': 'samsho5a', 'Title': 'Samurai Shodown V / Samurai Spirits Zero (NGM-2700, set 2)',
+                  'CloneOf': 'samsho5'},
+                 {'Name': 'samsho5b', 'Title': 'Samurai Shodown V / Samurai Spirits Zero (bootleg)',
+                  'CloneOf': 'samsho5'},
+                 {'Name': 'lonely', 'Title': 'Lonely (World)', 'CloneOf': 'notinlist'},
+                 {'Name': 'sengoku2', 'Title': 'Sengoku 2 / Sengoku Denshou 2'}]
+        tree = fd.tree(games)
+        self.assertEqual([(g['Name'], [c['Name'] for c in cl]) for g, cl in tree],
+                         [('samsho5', ['samsho5a', 'samsho5b']), ('lonely', []), ('sengoku2', [])])
+        self.assertEqual(fd.variant(games[1], games[0]), 'NGM-2700, set 2')
+        self.assertEqual(fd.variant(games[2], games[0]), 'bootleg')
+        self.assertEqual(fd.short_title(games[0]), 'Samurai Shodown V')
+        self.assertEqual([fd.first_letter(g) for g in games[:1] + [{'Name': '1944', 'Title': '1944'}]], ['S', '#'])
+
+    def test_button_map_from_the_setup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'buttons.map'
+            path.write_text('1 up 0 h0.1 Xbox 360 Controller\n1 b1 0 b0 Xbox 360 Controller\n'
+                            '1 b5 0 +a5 Xbox 360 Controller\n2 b1 1 b0 Xbox 360 Controller\nbroken\n')
+            self.assertEqual(self.fi.read_map(str(path)),
+                             [('up', 0, 'h0.1'), ('b1', 0, 'b0'), ('b5', 0, '+a5'), ('b1', 1, 'b0')])
+        self.assertEqual(self.fi.read_map('/nonexistent'), [])
+
+    def test_romlists_from_the_setup_and_the_session(self):
+        setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        self.assertIn('FRONTENDS_RESYNC_FULL=1 frontends_attract', setup)
+        frontends = (ROOT / 'fliperos-setup/lib/frontends.sh').read_text()
+        self.assertIn('&& ((!${FRONTENDS_RESYNC_FULL:-0}))', frontends)
+        session = (ROOT / 'config/fliperos-session').read_text()
+        self.assertIn('fliperos)\n        FLIPEROS_POWERKEY=frontend "$BIN/fliperos-kms-run" "${program[@]}"', session)
+        self.assertIn('"fliperos-frontend"', (ROOT / 'config/fliperos-web').read_text())
+
+
 class SessionTableTests(unittest.TestCase):
     TABLE = ROOT / 'config/fliperos-sessions.conf'
 
@@ -4040,7 +4114,12 @@ class SessionTableTests(unittest.TestCase):
         self.assertNotIn('openbox', names)
         lxde = [r for r in self.rows() if r[0] == 'lxde'][0]
         self.assertEqual(lxde[2], '/opt/fliperos/bin/fliperos-lxde')
-        self.assertIn('printf \'setup\\n\'', ROOTFS)
+        # Ao ligar abre o frontend do FliperOS, que vem na imagem; o menu do
+        # Setup continua o primeiro da tabela.
+        self.assertIn('printf \'fliperos\\n\'', ROOTFS)
+        own = [r for r in self.rows() if r[0] == 'fliperos'][0]
+        self.assertEqual(own[2], '/usr/local/lib/fliperos-setup/gui/fliperos-frontend')
+        self.assertIn('chmod 755 "$root/usr/local/lib/fliperos-setup/gui/fliperos-frontend"', ROOTFS)
 
     def test_session_script_falls_back_to_the_setup(self):
         script = (ROOT / 'config/fliperos-session').read_text()
