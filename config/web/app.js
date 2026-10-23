@@ -790,7 +790,9 @@ function gameBody(game) {
   if (game.PlayedCount) {
     facts.add("g_played", t("g_played_n").replace("%n", game.PlayedCount).replace("%t", duration(game.PlayedTime || 0)));
   }
-  const online = el("div", { class: "game-online" }, el("p", { class: "dim" }, t("g_loading")));
+  // Enquanto as informacoes da internet chegam: um icone girando no meio.
+  const online = el("div", { class: "game-online" }, el("div", { class: "loading", role: "status" },
+    el("span", { class: "spinner", "aria-hidden": "true" }), el("span", {}, t("g_loading"))));
   const play = el("button", { type: "button", "data-icon": "▶" }, t("play"));
   play.addEventListener("click", () => playGame(game));
   const fav = el("button", { type: "button", class: "ghost fav" + (game.Favourite ? " on" : ""),

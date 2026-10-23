@@ -211,7 +211,13 @@ th.vid-part { color: var(--fg); font-weight: 700; font-size: 14px; padding-top: 
 .game-head .chev { flex: none; color: var(--dim); transition: transform .2s; }
 .game-head[aria-expanded="true"] .chev { transform: rotate(90deg); color: var(--pink); }
 .game-head[aria-expanded="true"] .title { color: var(--pink); }
-.game-body { padding: 4px 4px 14px; display: grid; gap: 12px; }
+.game-body { padding: 4px 4px 16px; display: grid; gap: 16px; }
+.loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  padding: 32px 0; color: var(--dim); font-size: 14px; }
+.spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--pink);
+  border-right-color: var(--cyan); animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
 .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 6px 16px;
   margin: 0; }
 .facts div { min-width: 0; }
@@ -227,9 +233,14 @@ th.vid-part { color: var(--fg); font-weight: 700; font-size: 14px; padding-top: 
 .controls { display: flex; flex-wrap: wrap; gap: 6px; }
 .controls .tag i { display: inline-block; width: .8em; height: .8em; border-radius: 50%; margin-right: 5px;
   vertical-align: -1px; border: 1px solid var(--line); }
-.game-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* O rodape do jogo: as fontes (Arcade Database, video, o credito) e os
+   botoes, cada um no seu bloco, com espaco. */
+.game-actions { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+.game-actions button { min-width: 140px; padding: 10px 20px; }
 .game-actions .fav.on { color: var(--yellow); border-color: var(--yellow); }
-.links { display: flex; flex-wrap: wrap; gap: 12px; font-size: 14px; }
+.links { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; font-size: 14px; padding-top: 14px;
+  border-top: 1px solid var(--line); }
+.links .dim { flex-basis: 100%; font-size: 12px; line-height: 1.5; }
 button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); max-width: calc(100% - 32px);
   background: var(--bg-deep); border: 1px solid var(--purple); border-radius: 10px; padding: 10px 16px; z-index: 5; }
