@@ -503,6 +503,30 @@ def fps():
     return best[1] if best else None
 
 
+def program_name(args):
+    """O nome do programa: o do executavel; um AppImage desempacotado
+    (/opt/pcsx2/AppRun, /opt/duckstation/AppRun) pelo nome da pasta, que e o
+    do emulador. Sem isso o PCSX2 nao aparecia como jogo no painel (nem o
+    FPS ganhava nome, nem o fechar o achava)."""
+    name = os.path.basename(args[0])
+    if name == "AppRun":
+        name = os.path.basename(os.path.dirname(args[0])) or name
+    return name
+
+
+def game_file(name, args):
+    """O jogo da linha de comando: o ultimo arquivo (com extensao) que nao e
+    uma opcao; no GroovyMAME e no Model 2, o nome do set (o ultimo argumento
+    sem "-" que nao e o valor de uma opcao)."""
+    files = [a for a in args[1:] if not a.startswith("-") and "." in os.path.basename(a)]
+    if files:
+        return os.path.basename(files[-1])
+    if name in ("groovymame", "mame", "fliperos-model2") and len(args) > 1 and not args[-1].startswith("-") \
+            and not args[-2].startswith("-"):
+        return args[-1]
+    return None
+
+
 def running():
     """O jogo e o frontend abertos: o processo, o comando e o arquivo."""
     found = {"game": None, "frontend": None}
@@ -510,15 +534,14 @@ def running():
         args = [a for a in read(cmdline).split("\0") if a]
         if not args:
             continue
-        name = os.path.basename(args[0])
+        name = program_name(args)
         if name.startswith("python") and len(args) > 1:
             name = os.path.basename(args[1])
         kind = "game" if name in EMULATORS else "frontend" if name in FRONTENDS else None
         if not kind or found[kind]:
             continue
-        files = [a for a in args[1:] if not a.startswith("-") and "." in os.path.basename(a)]
         found[kind] = {"pid": int(cmdline.split("/")[-2]), "program": name,
-                       "file": os.path.basename(files[-1]) if files else None, "command": " ".join(args)[:400]}
+                       "file": game_file(name, args), "command": " ".join(args)[:400]}
     return found
 
 
@@ -537,7 +560,7 @@ def processes():
             uid = os.stat(os.path.dirname(cmdline)).st_uid
         except OSError:
             continue
-        name = os.path.basename(args[0])
+        name = program_name(args)
         if (name.startswith("python") or name in ("bash", "sh", "env")) and len(args) > 1:
             first = next((a for a in args[1:] if not a.startswith("-") and a not in ("bash", "sh")), args[1])
             name = os.path.basename(first)

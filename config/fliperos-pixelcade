@@ -37,6 +37,7 @@
 #   fliperos-pixelcade doflinx-daemon              o servico do DOFLinx
 #   fliperos-pixelcade frontends                   scripts do ES-DE e plugin do Attract-Mode Plus
 #   fliperos-pixelcade launch PROGRAMA [ARGS...]   o jogo da linha de comando, se houver
+#   fliperos-pixelcade now                         o jogo que ja esta aberto (o marquee do OBS ligado no meio dele)
 #   fliperos-pixelcade esde EVENTO [ARGS...]       os argumentos de um evento do ES-DE
 #   fliperos-pixelcade attract EMULADOR ROM        o jogo selecionado no Attract-Mode Plus
 #   fliperos-pixelcade game|select SISTEMA ROM [TITULO]   o marquee do jogo (aberto | selecionado)
@@ -945,6 +946,29 @@ launch() {
   game "$sys" "$rom" && watch "$sys" "$rom" "$prog" "${core:-}"
 }
 
+# now: o jogo que ja esta aberto, como o launch dele. O marquee do OBS
+# ligado no meio de uma partida nao recebia nada ate o proximo jogo (os
+# eventos so chegam ao abrir e ao trocar a selecao). O jogo e o processo do
+# usuario cujo ultimo argumento e um arquivo de ~/roms, ou o set do
+# GroovyMAME.
+now() {
+  local dir last
+  local -a args
+  rm -f "$last_file"
+  for dir in /proc/[0-9]*; do
+    [[ $(stat -c %U "$dir" 2> /dev/null) == "$user" ]] || continue
+    mapfile -d '' -t args < "$dir/cmdline" 2> /dev/null || continue
+    ((${#args[@]} >= 2)) || continue
+    last=${args[-1]}
+    case ${args[0]##*/} in
+      groovymame | fliperos-model2) [[ $last != -* ]] || continue ;;
+      *) [[ $last == "$roms"/* && -f $last ]] || continue ;;
+    esac
+    PIXELCADE_GAME_PID=${dir#/proc/} launch "${args[@]}"
+    return 0
+  done
+}
+
 # esde EVENTO ARGS...: game-select "rom" "nome" "sistema" "nome do sistema";
 # system-select "sistema" "nome do sistema" "pasta"; screensaver-start e
 # screensaver-end. Com rolagem rapida o game-select chega vazio. No Linux o
@@ -1056,7 +1080,7 @@ case $cmd in
     setsid "$self" "$@" < /dev/null > /dev/null 2>&1 &
     exit 0
     ;;
-  launch | esde | attract | game | select | system | end | screensaver | achievement | versus)
+  launch | esde | attract | game | select | system | end | screensaver | achievement | versus | now)
     # Sem marquee nenhum (nem o do OBS), os eventos nao fazem nada.
     installed || zedmd_installed || overlay_on || exit 0
     case $cmd in

@@ -4612,6 +4612,9 @@ class WebPanelTests(unittest.TestCase):
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0))
             cls.port = s.getsockname()[1]
+        with socket.socket() as s:
+            s.bind(('127.0.0.1', 0))
+            cls.redirect_port = s.getsockname()[1]
         env = dict(os.environ, FLIPEROS_SHADOW=str(tmp / 'shadow'), FLIPEROS_WEB_STATIC=str(ROOT / 'config/web'),
                    FLIPEROS_LOGS=str(tmp / 'logs'), FLIPEROS_SYSTEM_LOGS=str(tmp / 'missing.log'),
                    FLIPEROS_SETUP=str(setup), FLIPEROS_RUN_USER=str(tmp / 'run'),
@@ -4655,9 +4658,6 @@ class WebPanelTests(unittest.TestCase):
         self.last_headers = dict(res.getheaders())
         conn.close()
         return res.status, res.getheader('Set-Cookie'), data
-        with socket.socket() as s:
-            s.bind(('127.0.0.1', 0))
-            cls.redirect_port = s.getsockname()[1]
 
     def login(self):
         status, cookie, _ = self.request('POST', '/api/login', {'user': 'fliperos', 'password': 'arcade'})
@@ -4675,6 +4675,18 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(self.request('GET', '/../fliperos-web')[0], 404)
         for path in ('/api/status', '/api/me', '/api/logs'):
             self.assertEqual(self.request('GET', path)[0], 401, path)
+
+    def test_port_80_leads_to_the_panel(self):
+        # http://fliperos.local, sem a porta: o mesmo nome e caminho na do painel.
+        import http.client
+        for host, want in (('fliperos.local', 'http://fliperos.local:%d/live' % self.port),
+                           ('192.168.1.9:80', 'http://192.168.1.9:%d/live' % self.port),
+                           ('evil"/x', 'http://fliperos.local:%d/live' % self.port)):
+            conn = http.client.HTTPConnection('127.0.0.1', self.redirect_port, timeout=10)
+            conn.request('GET', '/live', headers={'Host': host})
+            res = conn.getresponse()
+            self.assertEqual((res.status, res.getheader('Location')), (302, want), host)
+            conn.close()
 
     def test_login_with_the_system_password_only(self):
         # So o usuario do FliperOS, com a senha dele; root sem senha valida e
@@ -4719,18 +4731,6 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/volume', {'set': 30}, cookie=cookie)[0], 200)
         self.assertEqual(self.request('POST', '/api/volume', {'action': 'mute'}, cookie=cookie)[0], 200)
         for bad in ({'set': 101}, {'set': '30; reboot'}, {'action': 'reboot'}):
-    def test_port_80_leads_to_the_panel(self):
-        # http://fliperos.local, sem a porta: o mesmo nome e caminho na do painel.
-        import http.client
-        for host, want in (('fliperos.local', 'http://fliperos.local:%d/live' % self.port),
-                           ('192.168.1.9:80', 'http://192.168.1.9:%d/live' % self.port),
-                           ('evil"/x', 'http://fliperos.local:%d/live' % self.port)):
-            conn = http.client.HTTPConnection('127.0.0.1', self.redirect_port, timeout=10)
-            conn.request('GET', '/live', headers={'Host': host})
-            res = conn.getresponse()
-            self.assertEqual((res.status, res.getheader('Location')), (302, want), host)
-            conn.close()
-
             self.assertEqual(self.request('POST', '/api/volume', bad, cookie=cookie)[0], 400, bad)
         self.assertIn('--volume set 30\n', self.volume_log.read_text())
         self.assertIn('--volume mute\n', self.volume_log.read_text())
@@ -5298,6 +5298,24 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn("echo 'web=after' >> \"$root/etc/fliperos/services.conf\"", ROOTFS)
         services = (ROOT / 'fliperos-setup/lib/services.sh').read_text()
         self.assertIn('web|Web panel|fliperos-web.service|', services)
+
+    def test_game_from_the_command_line(self):
+        # O PCSX2 e o DuckStation sao AppImages desempacotados: o processo e
+        # o AppRun da pasta. O GroovyMAME recebe o nome do set, sem extensao.
+        web = SourceFileLoader('fliperos_web', str(ROOT / 'config/fliperos-web')).load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            for pid, args in ((10, ['/opt/pcsx2/AppRun', '-fullscreen', '/roms/ps2/Need for Speed.ISO']),
+                              (11, ['/usr/bin/attractplus'])):
+                (Path(tmp) / str(pid)).mkdir()
+                (Path(tmp) / str(pid) / 'cmdline').write_text('\0'.join(args) + '\0')
+            web.PROC = tmp
+            found = web.running()
+        self.assertEqual((found['game']['program'], found['game']['file']), ('pcsx2', 'Need for Speed.ISO'))
+        self.assertEqual(found['frontend']['program'], 'attractplus')
+        self.assertEqual(web.program_name(['/opt/duckstation/AppRun']), 'duckstation')
+        self.assertEqual(web.game_file('groovymame', ['groovymame', 'sf2']), 'sf2')
+        self.assertEqual(web.game_file('groovymame', ['groovymame', '-inipath', '/etc/mame', 'sf2']), 'sf2')
+        self.assertIsNone(web.game_file('groovymame', ['groovymame']))
 
 
 def fightcade_package(path, files=None):
@@ -8024,6 +8042,16 @@ class PixelcadeTests(unittest.TestCase):
         lines = state.read_text().splitlines()
         self.assertIn('wins_left=2', lines)
         self.assertIn('right=KEN', lines)
+        # Ligado no meio de um jogo (o "now" do Setup ao ligar): o jogo aberto,
+        # o processo cujo ultimo argumento e um arquivo de ~/roms.
+        rom = self.roms / 'naomi/mvsc2.zip'
+        rom.write_text('')
+        game = subprocess.Popen(['python3', '-c', 'import time; time.sleep(30)', str(rom)])
+        self.addCleanup(game.kill)
+        env['FLIPEROS_USER'] = __import__('pwd').getpwuid(os.getuid()).pw_name
+        run('now')
+        self.assertEqual(state.read_text().splitlines()[:3], ['event=game', 'system=mame', 'rom=mvsc2'])
+        self.assertIn('fliperos-pixelcade" now', (ROOT / 'fliperos-setup/lib/system.sh').read_text())
 
     def test_paid_art_pack_installs_with_the_license_code(self):
         # O "pixelweb -install-artpack CODIGO" do guia do Pixelcade, pelo Setup.

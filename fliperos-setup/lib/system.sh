@@ -137,8 +137,12 @@ settings_set() {
       # Os avisos dos frontends (os scripts do ES-DE, o plugin do Attract-Mode
       # Plus), que sem Pixelcade nem ZeDMD ainda nao estao la; como o jogador,
       # para os arquivos do ES-DE continuarem dele.
+      # E o jogo que ja esta aberto (ligado no meio de uma live): sem
+      # isto, a pagina so mostrava algo no proximo jogo.
       if [[ $value == on && -x $FLIPEROS_BIN/fliperos-pixelcade ]]; then
         runuser -u "$FLIPEROS_USER" -- "$FLIPEROS_BIN/fliperos-pixelcade" frontends >> "$FLIPEROS_LOG" 2>&1 || true
+        runuser -u "$FLIPEROS_USER" -- env XDG_RUNTIME_DIR="/run/user/$(id -u "$FLIPEROS_USER")" \
+          "$FLIPEROS_BIN/fliperos-pixelcade" now >> "$FLIPEROS_LOG" 2>&1 || true
       fi
       ;;
     service.*)
