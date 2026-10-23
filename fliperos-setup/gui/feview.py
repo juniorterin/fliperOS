@@ -558,7 +558,7 @@ def full_shade(fe):
     if key not in fe.media:
         shade = pygame.Surface((WW, HH), pygame.SRCALPHA)
         for y in range(HH):
-            a = int(200 * (1 - y / 50)) if y < 50 else (int(235 * min(1, (y - 112) / 70)) if y > 112 else 0)
+            a = int(120 * (1 - y / 40)) if y < 40 else (int(165 * min(1, (y - 125) / 60)) if y > 125 else 0)
             pygame.draw.line(shade, T.SPACE + (max(0, a),), (0, y), (WW, y))
         remember(fe, key, shade)
     return fe.media[key]
