@@ -563,9 +563,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <h2 id="web-panel">Web panel</h2>
 <p>The cabinet's state in a browser on the same network (a phone too): <strong>http://fliperos.local:8081</strong>, or the cabinet's IP with <code>:8081</code>. You sign in with the same user and password as SSH and the network share (<code>fliperos</code>, changed in <strong>Setup &gt; System &gt; Password</strong>). Until 2026-10-22 the panel was on port 8080, which Pixelcade's own settings page also uses; with both installed one of them didn't open. The panel has seven pages, tabs at the top, each with its own address (<code>#frontend</code>, <code>#files</code>, <code>#live</code>, <code>#romfilter</code>, <code>#settings</code>, <code>#status</code>, <code>#terminal</code>); the browser remembers the last one:
 - <strong>Frontend:</strong> now playing with the FPS, games, volume and screen;
-- <strong>Files:</strong> files, downloads and tasks;
 - <strong>Live:</strong> the cabinet screen live, the streaming controls (service, encoder, sound) and the addresses for OBS (the live screen and the marquee). Leaving the page stops the stream, so ffmpeg on the cabinet stops too;
 - <strong>ROM filter:</strong> the MAME ROM Cleaner filter, for the Downloader or for a romset folder;
+- <strong>Downloads:</strong> the Downloader and the tasks;
+- <strong>Files:</strong> files and tasks;
 - <strong>Settings:</strong> colour values are sliders;
 - <strong>Status:</strong> now playing and the screen at the top, then video, CPU, GPU, memory, storage, network, processes and logs;
 - <strong>Terminal.</strong></p>
