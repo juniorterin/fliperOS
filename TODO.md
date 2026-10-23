@@ -6,10 +6,7 @@ O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai
 
 Menu e Setup:
 - **Fundo animado no azulejo selecionado** do menu.
-- **Extras dentro de Games** no menu.
-- **Update de cada emulador** no menu (Setup > Games > Emulators & Games).
 - **Downloader:** escolher um arquivo .torrent (além do link magnético) para o romset e para os CHDs.
-- **Relatório de erros pelo Resend.** A chave da API não vai em texto no repositório. Num projeto aberto, qualquer cifra que o próprio sistema desfaz só esconde a chave, não protege. Falta decidir com o Ademir entre: um relay próprio (a chave fica no servidor), uma chave restrita ao envio para um único destinatário, ou a chave só ofuscada.
 - **Rótulo do HD em /media/fliperos/** (o nome do volume no lugar do dispositivo).
 - **Boot lento:** subir só sob demanda o que não precisa estar no boot. Em andamento: há mudanças ainda não commitadas (os serviços depois da primeira tela, o Transmission só quando um download é pedido).
 
@@ -20,9 +17,7 @@ Frontend próprio (o padrão no futuro), **primeiro mostrar o design:**
 
 Painel web:
 - **Filtro 480i** mais intuitivo.
-- **Frontend:** um ícone animado no centro enquanto busca os dados na internet. O rodapé do jogo está apertado (Arcade Database, (C) arcade-history.com, Jogar, Favoritar): dar espaço.
-- **Marquee na live:** ligado no meio da transmissão, a imagem não se atualiza.
-- **FPS e jogo do PCSX2** não aparecem; testar todos os emuladores.
+- **FPS e jogo de cada emulador:** o PCSX2 e o DuckStation foram corrigidos (2026-10-23); falta testar os outros um a um.
 
 Documentação e site:
 - **Respiro nos textos:** os MD e a wiki estão abarrotados.
