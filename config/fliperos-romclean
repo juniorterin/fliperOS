@@ -211,6 +211,8 @@ CONTROL_FAMILIES = {
     'mahjong': 'mahjong', 'hanafuda': 'mahjong', 'gambling': 'mahjong',
 }
 JOYSTICKS = ('joy8', 'joy4', 'joy2', 'twin')
+# As familias da tabela do Flycast como o Attract-Mode escreve o controle.
+FLYCAST_LABELS = {'analog': 'analog stick'}
 FAMILIES = sorted(set(CONTROL_FAMILIES.values()) | set(JOYSTICKS))
 CONTROL_ALIASES = {'joystick': JOYSTICKS}
 
@@ -513,6 +515,7 @@ def annotate(machines, catver, nplayers, buttons, flycast=None):
             # trackball, que ela nao diz), fica o que o XML diz.
             if families:
                 m['controls'] = set(families)
+                m['control'] = ','.join(FLYCAST_LABELS.get(f, f) for f in sorted(families))
 
 
 def sets_in(folder):
@@ -1143,9 +1146,14 @@ def cmd_romlist(args):
         if progress:
             print('@step 30 Reading the MAME 2010 game list', flush=True)
         sources['alt'] = load_machines(argparse.Namespace(xml=args.alt_xml, xml_command=None, cache=args.alt_cache))
-    if any(s[4] for s in systems):
+    # Os botoes de verdade: os do Controls.dat e, nos jogos do Flycast, os da
+    # tabela dele (o XML da a Naomi e Atomiswave o painel generico de 6
+    # botoes; o NeoGeo Battle Coliseum tem 5).
+    buttons = read_controls(args.controls_xml) if args.controls_xml else {}
+    flycast = read_flycast(args.flycast_controls) if args.flycast_controls else {}
+    if buttons or flycast or any(s[4] for s in systems):
         for machines in sources.values():
-            annotate(machines, {}, {}, {})
+            annotate(machines, {}, {}, buttons, flycast)
     category = {}
     if args.catver:
         category = {n: MATURE.sub(' ', v).strip() for n, v in read_ini(args.catver, 'category').items()}
@@ -1312,6 +1320,8 @@ def main():
     p.add_argument('--alt-xml')
     p.add_argument('--alt-cache')
     p.add_argument('--catver')
+    p.add_argument('--controls-xml', '--controls-file', dest='controls_xml')
+    p.add_argument('--flycast-controls')
     p.add_argument('--system', action='append', required=True)
     p.add_argument('--out', required=True)
     p.add_argument('--combined')

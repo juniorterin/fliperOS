@@ -4376,9 +4376,14 @@ class RomCleanerTests(Base):
                           (attract / "romlists" / (name + ".txt")).read_text().splitlines()[1:])
         self.assertEqual(names("Naomi"), ["meujogo", "mvsc2"])
         self.assertEqual(names("Atomiswave"), ["kofxi", "meujogo"])
-        # As romlists de antes desta separacao sao refeitas ao abrir o frontend.
+        # Os botoes da tabela do Flycast, nao os 6 do painel generico do XML.
+        kofxi = next(line.split(";") for line in (attract / "romlists" / "Atomiswave.txt").read_text().splitlines()
+                     if line.startswith("kofxi;"))
+        self.assertEqual(kofxi[16], "5")
+        # As romlists de antes (sem a separacao, sem esses botoes) sao
+        # refeitas ao abrir o frontend.
         frontends = (SETUP / "lib" / "frontends.sh").read_text()
-        self.assertIn("FRONTENDS_ROMLIST_VERSION=2\n", frontends)
+        self.assertIn("FRONTENDS_ROMLIST_VERSION=3\n", frontends)
 
     def test_attract_display_goes_to_displays_cfg_after_the_migration(self):
         # O Attract-Mode Plus 3.x, depois de migrar para config/, so le as

@@ -581,8 +581,9 @@ FRONTENDS_ROMLIST_STATE=${FRONTENDS_ROMLIST_STATE:-/var/lib/fliperos/attract-rom
 
 # frontends_folder_signature PASTA: o md5 dos nomes dos arquivos dela. A
 # versao da romlist entra junto: quando o que ela leva muda (a 2, o sistema do
-# Flycast pela BIOS), as que ja existem sao refeitas ao abrir o frontend.
-FRONTENDS_ROMLIST_VERSION=2
+# Flycast pela BIOS; a 3, os botoes do Controls.dat e da tabela do Flycast),
+# as que ja existem sao refeitas ao abrir o frontend.
+FRONTENDS_ROMLIST_VERSION=3
 frontends_folder_signature() {
   { printf 'romlist %s\n' "$FRONTENDS_ROMLIST_VERSION"
     find -H "$1" -maxdepth 1 -type f ! -name '.*' -printf '%f\n' 2> /dev/null | LC_ALL=C sort; } | md5sum | cut -c1-32
@@ -646,7 +647,7 @@ frontends_arcade_resync() {
 # merged) so entram no MAME: o GroovyMAME abre o jogo pelo nome e acha o
 # clone no zip do pai; os outros emuladores abrem o arquivo.
 frontends_romlist() {
-  local result=$1 line key dir platform count name xml catver flycast
+  local result=$1 line key dir platform count name xml catver controls flycast
   local -a specs=() source=()
   shift
   ev_step 0 "Preparing Attract-Mode Plus"
@@ -666,6 +667,10 @@ frontends_romlist() {
   mapfile -t source < <(romclean_xml_args groovymame)
   [[ -f $MAME2010_XML ]] && source+=(--alt-xml "$MAME2010_XML" --alt-cache "$ROMCLEAN_CACHE/romclean-mame2010.json")
   catver=$(romclean_data_find catver.ini "$ROMS_DIR/mame") && source+=(--catver "$catver")
+  # Os botoes de verdade de cada jogo (o Controls.dat e a tabela do Flycast,
+  # como no ROM Cleaner): o XML da o painel generico a Naomi e Atomiswave.
+  controls=$(romclean_data_find controls.xml "$ROMS_DIR/mame") && source+=(--controls-xml "$controls")
+  [[ -f $ROMCLEAN_DATA/flycast-controls.tsv ]] && source+=(--flycast-controls "$ROMCLEAN_DATA/flycast-controls.tsv")
   log_info "AttractPlus ROM List: $*"
   if ! "$ROMCLEAN" romlist "${source[@]}" "${specs[@]}" --out "$ATTRACT_DIR/romlists" \
     --combined "$ATTRACT_ROMLIST_ALL" --progress --result "$result" 2>> "$FLIPEROS_LOG"; then
