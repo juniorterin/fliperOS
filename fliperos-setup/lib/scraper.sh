@@ -1019,7 +1019,8 @@ scraper_artwork() {
 }
 
 # scraper_files CHAVE PASTA lista os jogos da pasta (as extensoes do
-# emulador da pasta), um por linha.
+# emulador da pasta), um por linha. A pasta pode ser um link (para um
+# disco, a pasta de outro romset): o -H a segue.
 scraper_files() {
   local key=$1 dir=$2 exts e args=()
   IFS='|' read -r _ _ _ exts <<< "$(scraper_attract_emulator "$key")"
@@ -1027,7 +1028,7 @@ scraper_files() {
     args+=(-o -iname "*$e")
   done
   ((${#args[@]})) || return 0
-  find "$dir" -maxdepth 1 \( -type f -o -type l \) \( "${args[@]:1}" \) 2> /dev/null | sort
+  find -H "$dir" -maxdepth 1 \( -type f -o -type l \) \( "${args[@]:1}" \) 2> /dev/null | sort
 }
 
 # scraper_run CHAVE PASTA PLATAFORMA FONTE MIDIA [USUARIO:SENHA] [CLONES]

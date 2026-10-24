@@ -431,7 +431,7 @@ romclean_data_find() {
   done
   for dir in "${dirs[@]}"; do
     [[ -d $dir ]] || continue
-    file=$(find "$dir" -maxdepth 1 -type f -iname "$name" 2> /dev/null | head -1)
+    file=$(find -H "$dir" -maxdepth 1 -type f -iname "$name" 2> /dev/null | head -1)
     if [[ -n $file ]]; then
       printf '%s\n' "$file"
       return 0

@@ -188,7 +188,8 @@ mediapacks_auto() {
       started=1
     fi
     result=$(mktemp) || return 1
-    mediapacks_start "$id" "$result" > /dev/null 2>&1 < /dev/null
+    # Os erros vao para o log (o mediapacks_start os manda para la).
+    mediapacks_start "$id" "$result" > /dev/null < /dev/null
     out=$(cat "$result")
     rm -f "$result"
     printf '%s\t%s\t%s\n' "$id" "$(romclean_value "$out" games)" "$(romclean_value "$out" files)"

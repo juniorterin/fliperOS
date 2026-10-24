@@ -2951,6 +2951,18 @@ class ScraperTests(Base):
         self.assertEqual(self.env.run("mediapacks_link_ok 'magnet:?xt=urn:btih:abc' && mediapacks_link_ok "
                                       "https://a/b.torrent && ! mediapacks_link_ok 'so um texto'", env).returncode, 0)
 
+    def test_scraper_files_follow_a_linked_folder(self):
+        # ~/roms/mame como link para a pasta de um disco: os jogos sao os de
+        # la (sem o -H, o find via so o link e os pacotes de arte achavam 0).
+        disk = self.env.dir / "disk-romset"
+        disk.mkdir()
+        for name in ("sf2.zip", "kof98.7z", "notes.txt"):
+            (disk / name).write_text("x")
+        link = self.env.dir / "linked-mame"
+        link.symlink_to(disk)
+        out = self.env.out("scraper_files mame %s" % link).splitlines()
+        self.assertEqual([os.path.basename(p) for p in out], ["kof98.7z", "sf2.zip"])
+
     def test_art_packs_started_by_the_frontend_auto_scrape(self):
         # fliperos-setup --mediapacks auto (o scrape automatico do frontend do
         # FliperOS): todo pacote com ROMs nas pastas vai para o torrent, sem
