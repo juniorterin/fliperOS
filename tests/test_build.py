@@ -2709,6 +2709,20 @@ class UpdateTests(unittest.TestCase):
     def level(self):
         return self.run_update('level').stdout.strip()
 
+    def test_notes_show_what_each_pending_update_changes(self):
+        # O changelog de cada update (updates/notes/NNNN.md no commit dele),
+        # em texto para a tela; sem o arquivo, so o titulo.
+        self.env['FLIPEROS_UPDATE_NOTES_URL'] = (self.tmp / 'notes').as_uri() + '/{commit}/{n:04d}.md'
+        self.assertEqual(self.run_update('notes').stdout, '')
+        first = self.publish('v1')
+        self.publish('v2', reboot='yes')
+        (self.tmp / 'notes' / first).mkdir(parents=True)
+        (self.tmp / 'notes' / first / '0001.md').write_text(
+            '- **Frontend:** the `grid` keeps its place ([wiki](https://x/y)).\n')
+        self.assertEqual(self.run_update('notes').stdout,
+                         'Update 1: Fix 1\n\n- Frontend: the grid keeps its place (wiki).\n\n'
+                         'Update 2: Fix 2 (restarts the computer)\n')
+
     def conf(self):
         return (self.root / 'etc/app/app.conf').read_text()
 
@@ -2823,6 +2837,21 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(engine.treehash(str(tree)), first)
         (tree / 'config/x').write_text('2')
         self.assertNotEqual(engine.treehash(str(tree)), first)
+
+    def test_whats_new_reads_the_log_and_the_changelog(self):
+        # O What's new do Setup (lib/whatsnew.sh) tira os titulos destas duas
+        # linhas do log; mudar o texto delas o deixa sem os updates.
+        engine = (ROOT / 'config/fliperos-update').read_text()
+        self.assertIn("log('update %d (%s): %d files replaced", engine)
+        self.assertIn("log('update %d applied' % n)", engine)
+        self.assertIn("f.write('%s %s\\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), text))", engine)
+        # O CHANGELOG.md vai na ISO, no cabinet-push e em cada update (o tar
+        # do commit inteiro; ele fica fora do treehash: o updates/index dos
+        # patches antigos nao o tem).
+        self.assertIn('install -Dm644 "$src/CHANGELOG.md" "$root/usr/local/share/fliperos/CHANGELOG.md"', ROOTFS)
+        self.assertIn('COPY CHANGELOG.md ./', (ROOT / 'Dockerfile.fliperos').read_text())
+        self.assertIn('updates CHANGELOG.md', (ROOT / 'tools/cabinet-push.sh').read_text())
+        self.assertNotIn("'CHANGELOG.md'", engine)
 
     def test_install_boot_and_iso(self):
         self.assertIn('install -Dm755 "$src/config/fliperos-update" "$root/opt/fliperos/bin/fliperos-update"', ROOTFS)

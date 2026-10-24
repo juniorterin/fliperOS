@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators", "services", "system", "customgames"]
+        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators", "services", "system", "customgames", "whatsnew"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -1148,8 +1148,11 @@ class RecoveryTests(Base):
         (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nalsa=1,0\n")
         target = self.env.dir / "target"
         conf = self.target_conf(target)
-        self.env.out("install_configure_video '%s'" % target)
-        self.assertEqual(conf.read_text(), "connector=VGA-1\nalsa=1,0\n")
+        Path(str(target) + str(self.env.etc / "patch-level")).write_text("12\n")
+        self.env.out("install_configure_video '%s'" % target, {"FLIPEROS_SETUP_VERSION": "0.10"})
+        # Com o What's new desta versao e do update da ISO ja vistos: um disco
+        # novo nao tem nada de novo.
+        self.assertEqual(conf.read_text(), "connector=VGA-1\nalsa=1,0\nwhatsnew_version=0.10\nwhatsnew_level=12\n")
 
     def test_dpkg_keeps_packages_installed_later(self):
         old = self.env.dir / "old-status"
@@ -3819,7 +3822,7 @@ class RomCleanerTests(Base):
         self.assertIn("add chds %s --progress" % torrent, calls)
         self.assertIn("add roms https://site/romset.torrent --progress", calls)
 
-    def update_screen(self, check, plan, apply_rc=0, script=""):
+    def update_screen(self, check, plan, apply_rc=0, script="", notes=""):
         calls = self.env.dir / "upd.calls"
         self.env.stub("fliperos-update", """
             echo "$*" >> %s
@@ -3827,10 +3830,11 @@ class RomCleanerTests(Base):
             for a in "$@"; do [[ $prev == --result ]] && out=$a; prev=$a; done
             case $1 in
               check) printf "%%b" "%s" ;;
+              notes) printf "%%b" "%s" ;;
               plan) printf "%%b" "%s" > "$out" ;;
               apply) printf 'applied\\t1\\tno\\t/b/0001\\tFix\\nlevel=1\\n' > "$out"; exit %d ;;
             esac
-        """ % (calls, check.replace("\t", "\\t").replace("\n", "\\n"),
+        """ % (calls, check.replace("\t", "\\t").replace("\n", "\\n"), notes.replace("\n", "\\n"),
                plan.replace("\t", "\\t").replace("\n", "\\n"), apply_rc))
         r = self.env.run("""
             source %s/lib/ui.sh
@@ -3838,7 +3842,7 @@ class RomCleanerTests(Base):
             source %s/screens/patches.sh
             ui_msg() { printf 'msg:%%s\\n' "$*"; }
             ui_yesno() { return 1; }
-            ui_pager() { echo "pager:$(cat "$2")"; }
+            ui_pager() { echo "pager:$1:$(cat "$2")"; }
             run_with_progress() { shift 2; "$@" > /dev/null; }
         """ % (SETUP, SETUP, SETUP) + script, dict(self.vars, PATCH_BIN=str(self.env.bin / "fliperos-update")))
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -3866,7 +3870,9 @@ class RomCleanerTests(Base):
         self.assertIn("  /etc/f5", out)
         self.assertNotIn("  /etc/f6\n", out.split("pager:")[0])
         self.assertIn("...and 2 more (View the files)", out)
-        self.assertIn("pager:/etc/f0", out)
+        self.assertIn("pager:Files the update replaces:/etc/f0", out)
+        self.assertNotIn("What's new", out)
+        self.assertNotIn("item:notes", out)
         self.assertIn("item:later|Not now (asks again at the next boot)", out)
         self.assertNotIn("apply", calls)
         # Aplicar: o update roda e diz como ficou.
@@ -3878,6 +3884,25 @@ class RomCleanerTests(Base):
         out, _ = self.update_screen("1\tno\tFix\n", "pending=1\n", apply_rc=1,
                                     script="ui_menu() { echo apply; }; screen_update_check")
         self.assertIn("The update did not finish.", out)
+
+    def test_update_screen_shows_the_changelog_first(self):
+        # O que muda vem antes da pergunta, com rolagem, e pode ser lido de
+        # novo pelo menu.
+        out, calls = self.update_screen("1\tno\tFix menu\n", "pending=1\nchanged=0\nexact=yes\n",
+                                        notes="Update 1: Fix menu\n\n- The grid keeps its place.\n", script="""
+            ui_menu() {
+              printf 'item:%%s\\n' "${@:4}" >&2
+              echo x >> "$PATCH_BACKUPS.menus"
+              [[ $(wc -l < "$PATCH_BACKUPS.menus") == 1 ]] && echo notes || echo later
+            }
+            PATCH_BACKUPS=%s/backups
+            screen_update_check
+        """ % self.env.dir)
+        self.assertEqual(out.count("pager:What's new in this FliperOS update:Update 1: Fix menu"), 2)
+        self.assertIn("- The grid keeps its place.", out)
+        self.assertLess(out.index("pager:What's new"), out.index("item:apply|Apply now"))
+        self.assertIn("item:notes|Read what changes", out)
+        self.assertEqual(calls.splitlines()[:2], ["check", "notes"])
 
     def test_wifi_connected_checks_for_the_update_right_away(self):
         # O boot so procura o update com a rede no ar: quem liga o Wi-Fi pelo
@@ -4929,7 +4954,7 @@ class SetupGroupsTests(Base):
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "extras", "custom", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])
         self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "update",
-                                                        "debug", "splash", "return"])
+                                                        "whatsnew", "debug", "splash", "return"])
         self.assertIn("games) screen_setup_games ;;", menu)
         self.assertIn("system) screen_setup_system ;;", menu)
 
@@ -5482,6 +5507,114 @@ class ProgressScreenTests(Base):
     def test_the_last_line_has_no_line_break(self):
         screen = (SETUP / "screens" / "progress.sh").read_text()
         self.assertIn("""printf '  %s\\e[K' "$(ui_c "$C_COMMENT" "${footer:0:UI_COLS-3}")\"""", screen)
+
+
+class WhatsNewTests(Base):
+    """lib/whatsnew.sh e screens/whatsnew.sh: o changelog da versao e os
+    updates aplicados, uma vez no menu e de novo em Setup > System."""
+    CHANGELOG = ("# Changelog\n\nIntro text.\n\n"
+                 "## 0.11\n\n**Big thing** in `code`, see [the wiki](https://x/y).\n\n- item eleven\n\n"
+                 "## 0.10\n\n- item ten\n\n"
+                 "## 0.9\n\n- item nine\n")
+    LOG = ("2026-10-01 10:00:00 update 16 (FliperOS 0.9.1: data files): 3 files replaced, 0 with local changes, backup /b\n"
+           "2026-10-01 10:00:09 update 16 applied\n"
+           "2026-10-02 10:00:00 update 17 (Menu fix (the big one)): 1 files replaced, 0 with local changes, backup /b\n"
+           "2026-10-02 10:00:05 update 17 applied\n"
+           "2026-10-03 10:00:00 update 18 (Broken one): 2 files replaced, 0 with local changes, backup /b\n"
+           "2026-10-03 10:00:01 error: update 18 stopped (exit 1, see log); its backup is in /b\n")
+
+    def setUp(self):
+        super().setUp()
+        (self.env.dir / "CHANGELOG.md").write_text(self.CHANGELOG)
+        (self.env.dir / "update.log").write_text(self.LOG)
+        (self.env.etc / "patch-level").write_text("17\n")
+        (self.env.etc / "installed").write_text("")
+        self.env.cmdline.write_text("quiet splash\n")
+        self.vars = {"WHATSNEW_CHANGELOG": str(self.env.dir / "CHANGELOG.md"),
+                     "WHATSNEW_UPDATE_LOG": str(self.env.dir / "update.log"),
+                     "WHATSNEW_NOTES": str(self.env.dir / "notes"),
+                     "FLIPEROS_SETUP_VERSION": "0.11"}
+
+    CHECK = """
+        source %s/screens/whatsnew.sh
+        ui_pager() { echo "PAGER:$1"; cat "$2"; }
+        screen_whatsnew_check
+    """ % SETUP
+
+    def conf(self, text):
+        (self.env.etc / "fliperos.conf").write_text(text)
+
+    def test_updates_from_the_log_newest_first_only_the_applied(self):
+        self.assertEqual(self.env.out("whatsnew_updates", self.vars),
+                         "17\tMenu fix (the big one)\n16\tFliperOS 0.9.1: data files\n")
+        self.assertEqual(self.env.out("whatsnew_updates 16", self.vars), "17\tMenu fix (the big one)\n")
+
+    def test_first_time_shows_only_this_version_then_nothing(self):
+        out = self.env.out(self.CHECK, self.vars)
+        self.assertIn("PAGER:What's new in FliperOS", out)
+        self.assertIn("This is FliperOS 0.11, update 17.", out)
+        # Markdown em texto: sem **, ` e o endereco do link.
+        self.assertIn("FliperOS 0.11\n\nBig thing in code, see the wiki.\n\n- item eleven", out)
+        self.assertNotIn("item ten", out)
+        self.assertNotIn("Updates installed", out)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("whatsnew_version=0.11\n", conf)
+        self.assertIn("whatsnew_level=17\n", conf)
+        self.assertNotIn("PAGER", self.env.out(self.CHECK, self.vars))
+
+    def test_new_update_shows_its_title_without_the_changelog_again(self):
+        self.conf("whatsnew_version=0.11\nwhatsnew_level=16\n")
+        out = self.env.out(self.CHECK, self.vars)
+        self.assertIn("Updates installed:\n- 17. Menu fix (the big one)\n", out)
+        self.assertNotIn("16.", out)
+        self.assertNotIn("item eleven", out)
+
+    def test_update_notes_under_its_title(self):
+        # O que o update mudou (updates/notes/0017.md), debaixo do titulo.
+        (self.env.dir / "notes").mkdir()
+        (self.env.dir / "notes" / "0017.md").write_text("- **Menu:** opens `faster`.\n\n- [Wiki](x) fixed.\n")
+        self.conf("whatsnew_version=0.11\nwhatsnew_level=16\n")
+        out = self.env.out(self.CHECK, self.vars)
+        self.assertIn("- 17. Menu fix (the big one)\n  - Menu: opens faster.\n\n  - Wiki fixed.\n", out)
+
+    def test_new_version_shows_every_version_since_the_last_seen(self):
+        self.conf("whatsnew_version=0.9\nwhatsnew_level=17\n")
+        out = self.env.out(self.CHECK, self.vars)
+        self.assertLess(out.index("item eleven"), out.index("item ten"))
+        self.assertNotIn("item nine", out)
+        self.assertNotIn("Intro text", out)
+
+    def test_not_on_the_live_media(self):
+        self.env.cmdline.write_text("boot=live quiet splash\n")
+        self.assertNotIn("PAGER", self.env.out(self.CHECK, self.vars))
+        self.assertFalse((self.env.etc / "fliperos.conf").exists())
+
+    def test_menu_entry_shows_everything(self):
+        self.conf("whatsnew_version=0.11\nwhatsnew_level=17\n")
+        out = self.env.out("""
+            source %s/screens/whatsnew.sh
+            ui_pager() { cat "$2"; }
+            screen_whatsnew
+        """ % SETUP, self.vars)
+        self.assertIn("- 17. Menu fix (the big one)\n- 16. FliperOS 0.9.1: data files\n", out)
+        for item in ("item eleven", "item ten", "item nine"):
+            self.assertIn(item, out)
+        out = self.env.out("""
+            source %s/screens/whatsnew.sh
+            ui_msg() { echo "MSG:$*"; }
+            screen_whatsnew
+        """ % SETUP, dict(self.vars, WHATSNEW_CHANGELOG="/nonexistent", WHATSNEW_UPDATE_LOG="/nonexistent"))
+        self.assertIn("The changelog is not on this system.", out)
+
+    def test_wired_into_the_menus(self):
+        main = (SETUP / "screens/main-menu.sh").read_text()
+        self.assertIn("screen_whatsnew_check", main.split("screen_main_menu() {")[1].split("while true")[0])
+        menu = (SETUP / "screens/setup-menu.sh").read_text()
+        self.assertIn('"whatsnew|What\'s new|', menu)
+        self.assertIn("whatsnew) screen_whatsnew ;;", menu)
+        setup = (SETUP / "fliperos-setup").read_text()
+        self.assertIn('source "$SETUP_DIR/lib/whatsnew.sh"', setup)
+        self.assertIn('source "$SETUP_DIR/screens/whatsnew.sh"', setup)
 
 
 class AmdDriverTests(Base):

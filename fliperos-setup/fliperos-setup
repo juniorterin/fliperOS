@@ -92,6 +92,8 @@ source "$SETUP_DIR/lib/customgames.sh"
 source "$SETUP_DIR/lib/update.sh"
 # shellcheck source=lib/patches.sh
 source "$SETUP_DIR/lib/patches.sh"
+# shellcheck source=lib/whatsnew.sh
+source "$SETUP_DIR/lib/whatsnew.sh"
 # shellcheck source=lib/splash.sh
 source "$SETUP_DIR/lib/splash.sh"
 # shellcheck source=lib/folders.sh
@@ -154,6 +156,8 @@ source "$SETUP_DIR/screens/downloader.sh"
 source "$SETUP_DIR/screens/mediapacks.sh"
 # shellcheck source=screens/patches.sh
 source "$SETUP_DIR/screens/patches.sh"
+# shellcheck source=screens/whatsnew.sh
+source "$SETUP_DIR/screens/whatsnew.sh"
 # shellcheck source=screens/splash.sh
 source "$SETUP_DIR/screens/splash.sh"
 # shellcheck source=screens/folders.sh

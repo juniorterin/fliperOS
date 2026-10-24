@@ -75,6 +75,7 @@ screen_setup_system() {
       "quirks|Quirks (USB device fixes)|Kernel fixes for a USB device read wrong: encoders, guns, disks." \
       "password|Password|The password of the fliperos user: login, SSH and network share." \
       "update|System Update|Download and install the updates of all packages." \
+      "whatsnew|What's new|The changelog of each FliperOS version and the updates installed." \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))|Show boot and emulator messages on screen to find a problem." \
       "splash|Splash screen|The boot screen theme, with a preview." \
       "return|Return|Back to Setup.") || return 0
@@ -85,6 +86,7 @@ screen_setup_system() {
       quirks) screen_quirks ;;
       password) screen_password ;;
       update) screen_update ;;
+      whatsnew) screen_whatsnew ;;
       debug) screen_debug ;;
       splash) screen_splash ;;
       return) return 0 ;;

@@ -17,7 +17,7 @@ opts="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts
 
 bundle=/tmp/fliperos-update.tar
 set -- fliperos-setup config fliperos-rootfs.sh fliperos-video-check.py fliperos-limine-update.py tools/cabinet-update.sh \
-  updates
+  updates CHANGELOG.md
 tar cf "$bundle" --exclude=__pycache__ "$@"
 # O repositorio de frontends vai como repo/ dentro do pacote.
 [ -d output/repo ] && tar rf "$bundle" -C output repo

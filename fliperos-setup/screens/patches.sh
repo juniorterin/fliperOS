@@ -1,14 +1,15 @@
 # shellcheck shell=bash
-# O update do FliperOS no boot (fliperos-setup --update-check): avisa, mostra
-# os arquivos mudados nesta maquina que ele troca (com copia antes) e
-# pergunta. "Agora nao" pergunta de novo no proximo boot.
+# O update do FliperOS no boot (fliperos-setup --update-check): mostra o que
+# muda (o changelog de cada parte, com rolagem), os arquivos mudados nesta
+# maquina que ele troca (com copia antes) e pergunta. "Agora nao" pergunta de
+# novo no proximo boot.
 
 # Quantos arquivos cabem na tela; o resto fica em "View the files".
 PATCH_FILES_SHOWN=6
 
 screen_update_check() {
-  local title="FliperOS update" list n reboot name result files text choice count shown=0 more
-  local -a titles=()
+  local title="FliperOS update" list n reboot name result files notes text choice count shown=0 more
+  local -a titles=() options
   list=$(patch_pending) || return 0
   [[ -n $list ]] || return 0
   while IFS=$'\t' read -r n reboot name; do
@@ -16,8 +17,13 @@ screen_update_check() {
   done <<< "$list"
   result=$(mktemp)
   files=$(mktemp)
+  notes=$(mktemp)
+  # O que muda, antes de tudo: o changelog das partes, na tela com rolagem.
+  if patch_notes "$notes"; then
+    ui_pager "What's new in this FliperOS update" "$notes" inicio
+  fi
   if ! run_with_progress "Checking the FliperOS update" "" patch_plan "$result"; then
-    rm -f "$result" "$files"
+    rm -f "$result" "$files" "$notes"
     return 0
   fi
   awk -F'\t' '$1 == "local" || $1 == "unknown" { print $2 }' "$result" > "$files"
@@ -36,24 +42,23 @@ screen_update_check() {
   fi
   text+=$'\n'"The Setup choices (video, latency, buttons) are applied again afterwards."
   while true; do
-    if ((count)); then
-      choice=$(ui_menu "$title" "$text" apply "apply|Apply now" "files|View the files" \
-        "later|Not now (asks again at the next boot)") || choice=later
-    else
-      choice=$(ui_menu "$title" "$text" apply "apply|Apply now" \
-        "later|Not now (asks again at the next boot)") || choice=later
-    fi
+    options=("apply|Apply now")
+    [[ -s $notes ]] && options+=("notes|Read what changes")
+    ((count)) && options+=("files|View the files")
+    options+=("later|Not now (asks again at the next boot)")
+    choice=$(ui_menu "$title" "$text" apply "${options[@]}") || choice=later
     case $choice in
+      notes) ui_pager "What's new in this FliperOS update" "$notes" inicio ;;
       files) ui_pager "Files the update replaces" "$files" inicio ;;
       apply) break ;;
       *)
         log_info "FliperOS update: not now"
-        rm -f "$result" "$files"
+        rm -f "$result" "$files" "$notes"
         return 0
         ;;
     esac
   done
-  rm -f "$files"
+  rm -f "$files" "$notes"
   if run_with_progress "Updating FliperOS" "" patch_apply "$result"; then
     reboot=$(awk -F'\t' '$1 == "applied" && $3 == "yes" { print "yes"; exit }' "$result")
     n=$(awk -F'\t' '$1 == "applied" { n = $2 } END { print n }' "$result")

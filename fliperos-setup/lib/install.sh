@@ -96,6 +96,9 @@ install_configure_video() {
     done
   else
     [[ -f $FLIPEROS_CONF ]] && cp -f "$FLIPEROS_CONF" "$target$FLIPEROS_CONF"
+    # Um disco novo ja esta nesta versao: o What's new so aparece no proximo
+    # update ou versao.
+    whatsnew_seen "$target"
     [[ -f $QUIRKS_FILE ]] && cp -p "$QUIRKS_FILE" "$target$QUIRKS_FILE"
   fi
   for file in "$SWITCHRES_INI" "$MAME_INI"; do

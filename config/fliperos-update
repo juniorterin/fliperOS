@@ -4,6 +4,7 @@
 
   fliperos-update level                 o ultimo patch aplicado (0: nenhum)
   fliperos-update check                 os pendentes, "N<TAB>reboot<TAB>titulo"
+  fliperos-update notes                 o que muda em cada pendente (o changelog)
   fliperos-update plan [--progress] [--result ARQUIVO]
   fliperos-update apply [--progress] [--result ARQUIVO]
   fliperos-update restore N
@@ -28,6 +29,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -40,6 +42,10 @@ INDEX_URL = os.environ.get('FLIPEROS_UPDATE_INDEX_URL',
                            'https://raw.githubusercontent.com/juniorterin/fliperOS/main/updates/index')
 TARBALL_URL = os.environ.get('FLIPEROS_UPDATE_TARBALL_URL',
                              'https://codeload.github.com/juniorterin/fliperOS/tar.gz/{commit}')
+# O changelog de cada update (updates/notes/NNNN.md, no commit dele): o Setup
+# o mostra quando pergunta se aplica.
+NOTES_URL = os.environ.get('FLIPEROS_UPDATE_NOTES_URL',
+                           'https://raw.githubusercontent.com/juniorterin/fliperOS/{commit}/updates/notes/{n:04d}.md')
 STATE = os.environ.get('FLIPEROS_UPDATE_STATE', '/var/lib/fliperos/update')
 LEVEL = os.environ.get('FLIPEROS_UPDATE_LEVEL', '/etc/fliperos/patch-level')
 ROOT = os.environ.get('FLIPEROS_UPDATE_ROOT', '/')
@@ -383,6 +389,27 @@ def cmd_check(args):
         print('%d\t%s\t%s' % (n, 'yes' if reboot else 'no', title))
 
 
+def plain(text):
+    """O Markdown das notas em texto para a tela (sem **, ` e enderecos)."""
+    text = re.sub(r'\*\*|`', '', text)
+    return re.sub(r'\[([^]]*)\]\([^)]*\)', r'\1', text).strip()
+
+
+def cmd_notes(args):
+    """O que muda em cada update pendente, do mais velho ao mais novo: o
+    titulo e as notas dele (sem notas, so o titulo)."""
+    blocks = []
+    for n, commit, _, reboot, title in pending():
+        try:
+            notes = plain(fetch(NOTES_URL.format(commit=commit, n=n)).decode('utf-8', 'replace'))
+        except OSError:
+            notes = ''
+        head = 'Update %d: %s%s' % (n, title, ' (restarts the computer)' if reboot else '')
+        blocks.append(head + ('\n\n' + notes if notes else ''))
+    if blocks:
+        print('\n\n'.join(blocks))
+
+
 def cmd_plan(args):
     """O aviso antes de aplicar: o ensaio da arvore do ultimo pendente (a
     que fica no fim) contra a raiz de agora."""
@@ -489,6 +516,7 @@ def main():
     sub = p.add_subparsers(dest='cmd', required=True)
     sub.add_parser('level').set_defaults(func=cmd_level)
     sub.add_parser('check').set_defaults(func=cmd_check)
+    sub.add_parser('notes').set_defaults(func=cmd_notes)
     for name, func in (('plan', cmd_plan), ('apply', cmd_apply)):
         s = sub.add_parser(name)
         s.add_argument('--progress', action='store_true')

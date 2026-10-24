@@ -8,7 +8,9 @@
 #
 # O commit atual tem de estar no origin/main (o gabinete o baixa do
 # GitHub). Passos extras so deste update vao em updates/NNNN.sh, no mesmo
-# commit. Roda onde houver python3 de Linux (no Windows, pelo WSL).
+# commit; o changelog dele, obrigatorio, em updates/notes/NNNN.md (o gabinete
+# o mostra antes de perguntar se aplica). Roda onde houver python3 de Linux
+# (no Windows, pelo WSL).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 die() {
@@ -31,6 +33,11 @@ script=$(printf 'updates/%04d.sh' "$n")
 if [[ -f $script ]] && ! "$git" cat-file -e "$commit:$script" 2> /dev/null; then
   die "$script is not in the commit"
 fi
+# O changelog do update, que o gabinete mostra antes de perguntar se aplica
+# (fliperos-update notes): sem ele, o update nao sai.
+notes=$(printf 'updates/notes/%04d.md' "$n")
+"$git" cat-file -e "$commit:$notes" 2> /dev/null ||
+  die "write $notes (what changes, in English, shown on the cabinet) and commit it first"
 
 # O treehash da arvore que o gabinete baixa (o git archive do commit, como
 # o tar do GitHub), pela mesma funcao do fliperos-update. Sem o autocrlf:

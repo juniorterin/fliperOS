@@ -32,9 +32,13 @@ Each of those files is copied to `/var/lib/fliperos/update/backup/NNNN-date/` be
 
 Updates are numbered and **always applied in order**: update N only goes in on a machine at N−1 (`/etc/fliperos/patch-level`), a list with a gap is refused, and if one fails nothing after it is applied (it is offered again at the next boot; log in `/var/log/fliperos-update.log`).
 
-Each one is a repository commit listed in `updates/index` with the sha256 of its files (downloaded over HTTPS from GitHub and checked before anything is written), plus an optional `updates/NNNN.sh` for what isn't a file copy. They are published with `tools/make-update.sh "title" [--reboot]`.
+Each one is a repository commit listed in `updates/index` with the sha256 of its files (downloaded over HTTPS from GitHub and checked before anything is written), plus an optional `updates/NNNN.sh` for what isn't a file copy and its changelog in `updates/notes/NNNN.md` (required). They are published with `tools/make-update.sh "title" [--reboot]`.
+
+When an update is available, the boot screen first shows **what it changes** (the changelog of each pending part, with scrolling: `fliperos-update notes`), then the files of this machine it replaces, and asks; *Read what changes* in that menu shows the changelog again. After it is applied, the [What's new](#whats-new) screen lists it with its changelog.
 
 An install older than this system gets it with `curl -fsSL https://raw.githubusercontent.com/juniorterin/fliperOS/main/updates/bootstrap.sh | sudo bash`.
+
+<a id="whats-new"></a>**What's new:** after a new version or a new update, the FliperOS menu opens once on a *What's new in FliperOS* screen, with scrolling (up/down a line, left/right a page): the updates installed since the last time, each with its changelog (`/usr/local/share/fliperos/update-notes`), and the [CHANGELOG](https://github.com/juniorterin/fliperOS/blob/main/CHANGELOG.md) sections of the versions since then (an update alone does not repeat the version sections; the first time, only this version's section). *Setup > System > What's new* shows it again, with every update and every version. The changelog is `/usr/local/share/fliperos/CHANGELOG.md` (put there by the ISO, by each update and by `cabinet-push`); the titles come from `/var/log/fliperos-update.log`, and what was already seen is `whatsnew_version` and `whatsnew_level` in `fliperos.conf`. A new install starts with its own version and update marked as seen. The installation media does not show it.
 
 **Colour calibration** (Setup > Video Setup) sets the picture's colour: everything the card can do, plus saturation and hue by software when it can't. The fifteen settings are saved in `fliperos.conf` as `color_NAME=`:
 
@@ -149,6 +153,7 @@ Without a CTM (the cabinet's Radeon R7 240 on the `radeon` driver has only the 2
     - **Quirks** — kernel fixes for USB devices that arrive wrong: controllers, guns, keyboards and disks. See [Controls](Controls.md#setup--system--quirks);
     - **Password** — the password of the `fliperos` user: the login, `sudo`, SSH and the network share (Samba keeps a password of its own, and both change together);
     - **System Update** — `apt-get update` and `upgrade`, with apt's real progress;
+    - **What's new** — the updates installed on this machine (newest first) and the changelog of every FliperOS version, with scrolling (see [What's new](#whats-new));
     - **Debug mode** — off (the default), the boot goes straight to Plymouth and the output of frontends and emulators (X, Switchres, the program itself) goes to `/opt/fliperos/logs/<program>.log`, rewritten on each launch: only the picture is on screen.
 
       On, everything shows: the Limine menu (`FLIPEROS_QUIET="no"` in `/etc/default/fliperos-boot`), the kernel and systemd messages at boot (without `quiet splash` or the silencing parameters) and the programs' output on the console. Programs follow immediately; the boot, after a reboot;

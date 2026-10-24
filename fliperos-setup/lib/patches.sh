@@ -11,6 +11,12 @@ patch_pending() {
   "$PATCH_BIN" check 2>> "$FLIPEROS_LOG"
 }
 
+# patch_notes ARQUIVO: o changelog dos updates pendentes (o titulo e as
+# notas de cada um, updates/notes/NNNN.md no commit dele). Status 1: nada.
+patch_notes() {
+  "$PATCH_BIN" notes > "$1" 2>> "$FLIPEROS_LOG" && [[ -s $1 ]]
+}
+
 # patch_plan RESULTADO: o que o update troca, falando com a tela por
 # eventos; o resumo (local/unknown<TAB>arquivo) fica em RESULTADO.
 patch_plan() {

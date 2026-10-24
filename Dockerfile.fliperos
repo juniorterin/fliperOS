@@ -17,4 +17,5 @@ COPY fliperos-setup/ ./fliperos-setup/
 COPY config/ ./config/
 COPY patches/ ./patches/
 COPY updates/ ./updates/
+COPY CHANGELOG.md ./
 RUN chmod +x ./*.sh ./fliperos-setup/fliperos-setup

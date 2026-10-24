@@ -1131,7 +1131,7 @@ for _alias, _name in {
     "delete": "remove", "replace": "edit", "custom": "edit", "rescan": "reset", "retry": "reset",
     "restore": "reset", "default": "reset", "check": "scan", "identify": "scan", "preview": "video",
     "list": "romlist", "log": "romlist", "details": "romlist", "files": "romlist", "data": "romlist",
-    "order": "romlist", "all": "install", "artpack": "scraper", "biospack": "chip",
+    "order": "romlist", "whatsnew": "romlist", "all": "install", "artpack": "scraper", "biospack": "chip",
     # Latency, LPT joysticks, Recovery, Cleaner e Video Setup.
     "low": "latency", "ideal": "freeroms", "standard": "setup", "db9": "lpt", "gamecon": "lpt",
     "turbografx": "lpt", "bootloader": "system", "chdcleaner": "chds", "romcleaner": "filter",

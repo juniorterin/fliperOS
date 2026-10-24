@@ -25,6 +25,15 @@ chmod 755 "$root/usr/local/lib/fliperos-setup/gui/fliperos-gui"
 mkdir -p "$root/usr/local/bin" "$root/usr/local/sbin"
 ln -sfn /usr/local/lib/fliperos-setup/fliperos-setup "$root/usr/local/bin/fliperos-setup"
 install -Dm644 "$src/config/fliperos-setup.desktop" "$root/usr/share/applications/fliperos-setup.desktop"
+# O changelog, para a tela What's new do Setup (lib/whatsnew.sh). Uma arvore
+# sem ele deixa o que ja estava.
+[[ ! -f $src/CHANGELOG.md ]] || install -Dm644 "$src/CHANGELOG.md" "$root/usr/local/share/fliperos/CHANGELOG.md"
+# E as notas de cada update (updates/notes), que a mesma tela mostra debaixo
+# do titulo dele.
+if [[ -d $src/updates/notes ]]; then
+  mkdir -p "$root/usr/local/share/fliperos/update-notes"
+  cp "$src"/updates/notes/*.md "$root/usr/local/share/fliperos/update-notes/" 2> /dev/null || true
+fi
 
 # Diagnostico do modo ativo (alimenta o "Testing Results") e EDIDs por preset.
 install -Dm755 "$src/fliperos-video-check.py" "$root/usr/local/bin/fliperos-video-check"
