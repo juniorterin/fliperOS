@@ -240,6 +240,9 @@ class Frontend:
         if len(self.cats) < 2:
             return
         self.cat = (self.cat + step) % len(self.cats)
+        # A tela de antes desliza para fora (feview.draw).
+        if getattr(self, "last_ui", None) is not None:
+            self.slide = (self.last_ui, 1 if step > 0 else -1, time.monotonic())
         self.cursor = 0
         self.opened.clear()
         self.rebuild()

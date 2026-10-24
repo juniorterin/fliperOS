@@ -31,7 +31,8 @@ def grid_geom(fe):
     if getattr(fe, "vertical", False):
         return (54, 72), (72, 96), 2, 14
     return (80, 60), (112, 84), 2, 10
-CACHE = 400               # imagens e caminhos guardados (os mais antigos saem)
+SLIDE = 0.3                # segundos da troca de romlist
+CACHE = 400              # imagens e caminhos guardados (os mais antigos saem)
 
 
 def remember(fe, key, value):
@@ -1022,11 +1023,8 @@ def draw_options(fe, ui, now):
             trash(ui, ix, iy, color)
         W.text(ui, label, T.FG if on else T.COMMENT, px + 36, y + 4)
         tiny.text(ui, about, color if on else T.LINE, px + 36, y + 16)
-    # A linha e as opcoes do frontend.
+    # As opcoes do frontend, debaixo das do jogo.
     y = py + 144
-    pygame.draw.line(ui, T.LINE, (px + 8, y), (px + pw - 9, y))
-    for i, c in enumerate(W.RAINBOW):
-        pygame.draw.rect(ui, c, (px + 8, y + 1 + i, 24, 1))
     ui.blit(W.big("FRONTEND OPTIONS", 1, W.LABEL), (px + 10, y + 10))
     y += 26
     on = fe.ov["sel"] == 4
@@ -1188,7 +1186,19 @@ def draw(fe, now):
         draw_flow(fe, ui, t)
     if not fe.video_used:
         fe.player.request(None, 0, 0, now)
-    back.blit(ui, (0, 0))
+    slide = getattr(fe, "slide", None)
+    if slide and not fe.shot and now - slide[2] < SLIDE:
+        # A troca de romlist: a tela de antes sai para um lado e a nova
+        # entra pelo outro (o fundo fica).
+        old, side, start = slide
+        p = (now - start) / SLIDE
+        p = 1 - (1 - p) ** 3
+        back.blit(old, (round(-side * p * WW), 0))
+        back.blit(ui, (round(side * (1 - p) * WW), 0))
+    else:
+        fe.slide = None
+        back.blit(ui, (0, 0))
+    fe.last_ui = ui
     if fe.letter and now < fe.letter[1] and fe.letter[0]:
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         draw_letter(top, fe.letter[0])

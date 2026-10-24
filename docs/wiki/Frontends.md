@@ -22,7 +22,7 @@ Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has bee
 - Up and down move through the games; past the last one comes the first again, and before the first the last (holding stops at the end, the next press goes around). Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).
   - The letter mode stays after letting go: each tap of up or down moves one letter.
   - Two seconds without touching anything (or any other button) end it, on the first game of that letter.
-- Left and right change the romlist (each games folder, and Arcade with all the arcade folders together). In the grid they move through it, and change the romlist only when the chosen game already touches that side; a tab on the edge names the next one.
+- Left and right change the romlist (each games folder, and Arcade with all the arcade folders together); the screen slides to the new one. In the grid they move through it, and change the romlist only when the chosen game already touches that side; a tab on the edge names the next one.
 - Button 1 opens the game's menu: Play, Favourite and "+". The "+" page has the game's information from the Arcade Database, saved on the cabinet.
 - Button 2 goes back; from the list, it asks whether to return to the FliperOS menu.
 - Buttons 3 and 6 move a page up and down. Button 4 marks or unmarks the favourite. Button 5 opens the filters.
