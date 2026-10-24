@@ -63,7 +63,7 @@ An install older than this system gets it with `curl -fsSL https://raw.githubuse
 - red, green, blue and grey ramps;
 - the 24 ColorChecker patches.
 
-Up and down pick a setting and left and right change it while you look at the tube. Space hides the bar, Enter keeps the settings and Esc goes back to the previous ones. **Settings in numbers** changes each setting by its number (it also works over SSH), and **Back to the defaults** clears them all, the RGB range included (it goes back to the card's own default).
+Up and down pick a setting and left and right change it while you look at the tube. Space hides the bar, Enter keeps the settings and Esc goes back to the previous ones. **Settings in numbers** opens each setting with **[ - ]** and **[ + ]** buttons (one step: 1, or 5 for gamma, 100 K for temperature), **Type a value** and **Default**; every press counts at once, and it also works over SSH, and **Back to the defaults** clears them all, the RGB range included (it goes back to the card's own default).
 
 A change made with a game open (from the web panel or over SSH) shows in that game at once:
 - the gamma table goes through the screen owner's own descriptor: `fliperos-color`, as root, takes a copy of it with `pidfd_getfd` (a card refuses the table from anyone but the program that owns the screen);

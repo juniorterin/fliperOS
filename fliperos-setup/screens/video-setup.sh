@@ -499,10 +499,37 @@ screen_colour_values() {
         color_range_set "$value"
         ;;
       *)
-        value=$(ui_input "$(color_field "$choice" 2)" \
-          "$(color_field "$choice" 7) From $(color_field "$choice" 3) to $(color_field "$choice" 4)." \
-          "$(color_get "$choice")") || continue
-        color_set "$choice" "$value" || { ui_msg "Colour settings" "Not a number: $value"; continue; }
+        screen_colour_step "$choice"
+        continue
+        ;;
+    esac
+    ui_text color_apply
+  done
+}
+
+# screen_colour_step CHAVE: um parametro com - e + (o passo da tabela), o
+# numero digitado e o padrao. Cada mudanca vale na hora.
+screen_colour_step() {
+  local key=$1 label min max def step help value choice last=minus
+  IFS='|' read -r _ label min max def step help < <(color_table | awk -F'|' -v k="$key" '$1 == k')
+  [[ -n $label ]] || return 0
+  while true; do
+    value=$(color_get "$key")
+    choice=$(ui_menu_hints "$label: $(color_pretty "$key" "$value")" "$help" "$last" \
+      "minus|[ - ]  $(color_pretty "$key" "$((value - step < min ? min : value - step))")|One step down (from $min)." \
+      "plus|[ + ]  $(color_pretty "$key" "$((value + step > max ? max : value + step))")|One step up (to $max)." \
+      "type|Type a value|From $min to $max." \
+      "default|Default: $(color_pretty "$key" "$def")|Back to the default." \
+      "return|Return|Back.") || return 0
+    last=$choice
+    case $choice in
+      return) return 0 ;;
+      minus) color_set "$key" "$((value - step))" ;;
+      plus) color_set "$key" "$((value + step))" ;;
+      default) color_set "$key" "$def" ;;
+      type)
+        value=$(ui_input "$label" "$help From $min to $max." "$value") || continue
+        color_set "$key" "$value" || { ui_msg "Colour settings" "Not a number: $value"; continue; }
         ;;
     esac
     ui_text color_apply

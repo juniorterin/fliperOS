@@ -662,6 +662,36 @@ class DeflickerTests(Base):
         self.assertNotIn("color_", self.conf())
         self.assertNotEqual(self.env.run("color_changed").returncode, 0)
 
+    def test_colour_value_has_minus_and_plus(self):
+        # Colour settings: cada parametro com [ - ] e [ + ] no passo da tabela
+        # (gamma de 5 em 5), valendo na hora; no limite, fica no limite.
+        env, log = self.colour_bin("no")
+        env["PICKS"] = str(self.env.dir / "picks")
+        (self.env.dir / "picks").write_text("plus\nplus\nminus\nreturn\n")
+        out = self.env.out("""
+            source %s/screens/video-setup.sh
+            ui_menu_hints() {
+              printf 'titulo:%%s\\n' "$1" >&2
+              shift 3
+              printf 'opcao:%%s\\n' "$@" >&2
+              head -n 1 "$PICKS"; sed -i 1d "$PICKS"
+            }
+            ui_text() { "$@"; }
+            screen_colour_step gamma
+        """ % SETUP, env)
+        self.assertEqual(out.strip(), "")
+        self.assertIn("color_gamma=105\n", self.conf())
+        self.assertEqual(log.read_text().splitlines().count("apply"), 3)
+        err = self.env.run("""
+            source %s/screens/video-setup.sh
+            ui_menu_hints() { shift 3; printf 'opcao:%%s\\n' "$@" >&2; echo return; }
+            color_set brightness 50
+            screen_colour_step brightness
+        """ % SETUP, env).stderr
+        self.assertIn("opcao:minus|[ - ]  +49|One step down (from -50).", err)
+        self.assertIn("opcao:plus|[ + ]  +50|One step up (to 50).", err)
+        self.assertIn("opcao:default|Default: 0|Back to the default.", err)
+
     def test_colour_apply_picks_hardware_or_software_matrix(self):
         env, log = self.colour_bin("no")
         self.env.out("color_apply", env)
