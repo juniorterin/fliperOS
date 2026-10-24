@@ -22,6 +22,8 @@ WW, HH = T.WIDTH, T.HEIGHT
 
 LIST_W, LIST_SH = 174, 74  # a lista do modo lista e a altura da imagem dela
 THUMB = (56, 42)           # as miniaturas da tela cheia
+GRID_COLS = 5              # a grade (o fliperos-frontend anda de GRID_COLS)
+GRID_TILE, GRID_BIG = (48, 36), (84, 63)  # 4:3; a escolhida maior
 CACHE = 400               # imagens e caminhos guardados (os mais antigos saem)
 
 
@@ -92,7 +94,10 @@ def wanted(fe, game):
         out += [(shot, WW, HH, "cover"), (shot, THUMB[0] - 2, THUMB[1] - 2, "cover"),
                 (logo, min(200, right - SX), 44, "fit")]
     else:
-        out += [(cover, 48, 70, "fit"), (cover, 64, 92, "fit"), (logo, 110, 30, "fit")]
+        snap = media(fe, game, "snap")
+        for (w, h), pad in ((GRID_TILE, 2), (GRID_BIG, 6)):
+            out.append((snap, w - pad, h - pad, "cover") if snap else (cover, w - pad, h - pad, "fit"))
+        out.append((logo, 110, 30, "fit"))
     return [k for k in out if k[0]]
 
 
@@ -643,52 +648,80 @@ def draw_full(fe, ui, back, now):
     icon_line(fe, ui, game, SX, y + 24, right, 12)
 
 
+def grid_image(fe, g, w, h):
+    """A miniatura 4:3 da grade: a tela do jogo cortada para encher; sem
+    ela, a capa inteira."""
+    shot = media(fe, g, "snap")
+    if shot:
+        return image(fe, shot, w, h, "cover")
+    return image(fe, media(fe, g, "box"), w, h)
+
+
+def grid_dim(fe):
+    key = ("grid_dim",)
+    if key not in fe.media:
+        d = pygame.Surface(GRID_TILE, pygame.SRCALPHA)
+        d.fill(T.SPACE + (90,))
+        remember(fe, key, d)
+    return fe.media[key]
+
+
 def draw_flow(fe, ui, now):
     frame(fe, ui)
-    cols, tw, th, gap = 5, 50, 72, 8
-    x0 = (WW - (cols * tw + (cols - 1) * gap)) // 2
-    # A janela de duas fileiras acompanha o cursor.
+    # A grade: miniaturas 4:3 (a tela do jogo; sem ela, a capa inteira), tres
+    # fileiras; a esquerda as setas de quando ha mais fileiras, no canto
+    # direito a barra de rolagem.
+    cols, (tw, th), gap, rows_shown = GRID_COLS, GRID_TILE, 6, 3
+    x0 = SX + 14
+    y0 = 40
+    step_y = th + 8
     row, top_row = fe.cursor // cols, fe.top // cols
     if row < top_row:
         top_row = row
-    elif row > top_row + 1:
-        top_row = row - 1
+    elif row > top_row + rows_shown - 1:
+        top_row = row - rows_shown + 1
     fe.top = top_row * cols
     first = fe.top
+    total_rows = (len(fe.rows) + cols - 1) // cols
     sel = None
-    for i in range(first, min(len(fe.rows), first + 2 * cols)):
+    for i in range(first, min(len(fe.rows), first + rows_shown * cols)):
         r, c = divmod(i - first, cols)
-        x, y = x0 + c * (tw + gap), 36 + r * (th + 6)
+        x, y = x0 + c * (tw + gap), y0 + r * step_y
         g = fe.rows[i][0]
         if i == fe.cursor:
             sel = (g, x, y)
             continue
         pygame.draw.rect(ui, T.BG_DEEP, (x, y, tw, th))
-        img = image(fe, media(fe, g, "box") or media(fe, g, "snap"), tw - 2, th - 2)
+        img = grid_image(fe, g, tw - 2, th - 2)
         if img:
             blit_center(ui, img, x, y, tw, th)
         else:
-            for k, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:5]):
-                tiny.text(ui, tiny.fit(line, tw - 6), T.COMMENT, x + 3, y + 6 + k * 8)
-        dim = pygame.Surface((tw, th), pygame.SRCALPHA)
-        dim.fill(T.SPACE + (90,))
-        ui.blit(dim, (x, y))
+            for k, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4]):
+                tiny.text(ui, tiny.fit(line, tw - 6), T.COMMENT, x + 3, y + 4 + k * 8)
+        ui.blit(grid_dim(fe), (x, y))
         pygame.draw.rect(ui, T.LINE, (x, y, tw, th), 1)
         if g.get("Favourite") == "1":
             star(ui, x + tw - 6, y + 6, T.YELLOW, 4)
+    # As setas a esquerda e a barra no canto.
+    ax = SX + 4
+    arrow(ui, ax, y0 + 6, (0, -1), T.PINK if top_row > 0 else T.LINE, 5)
+    arrow(ui, ax, y0 + rows_shown * step_y - 14, (0, 1),
+          T.PINK if top_row + rows_shown < total_rows else T.LINE, 5)
+    if total_rows > rows_shown:
+        W.scrollbar(ui, SX + SW - 2, y0, rows_shown * step_y - 8, top_row, rows_shown, total_rows)
     if sel:
         g, x, y = sel
-        bw, bh = 72, 100
-        bx = max(SX, min(x + tw // 2 - bw // 2, SX + SW - bw))
+        bw, bh = GRID_BIG
+        bx = max(x0, min(x + tw // 2 - bw // 2, x0 + cols * (tw + gap) - gap - bw))
         # Nao cobre a linha do filtro, debaixo do titulo.
         by = max(36, min(y + th // 2 - bh // 2, 188 - bh))
         tile_frame(ui, (bx, by, bw, bh), True, now)
-        img = image(fe, media(fe, g, "box") or media(fe, g, "snap"), bw - 8, bh - 8)
+        img = grid_image(fe, g, bw - 6, bh - 6)
         if img:
             blit_center(ui, img, bx, by, bw, bh)
         else:
-            for k, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), bw - 8)[:6]):
-                W.text(ui, fit(line, bw - 8), T.FG, bx + 4, by + 8 + k * 11)
+            for k, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), bw - 8)[:4]):
+                W.text(ui, fit(line, bw - 8), T.FG, bx + 4, by + 6 + k * 11)
         pygame.draw.rect(ui, T.PINK, (bx, by, bw, bh), 2)
         if fe.scraping is g:
             looking(ui, bx + 2, by + bh - 12, bw - 4)
@@ -952,21 +985,22 @@ def draw_options(fe, ui, now):
     """O menu do Tab: as opcoes do jogo e, abaixo de uma linha, as do
     frontend (o modo de exibicao)."""
     g = fe.game()
-    pw, ph = 236, 196
-    px, py = (WW - pw) // 2, 30
+    pw, ph = 236, 214
+    px, py = (WW - pw) // 2, 14
     card(ui, (px, py, pw, ph))
     ui.blit(W.big("GAME OPTIONS", 1, W.LABEL), (px + 10, py + 8))
     if g:
         tiny.text(ui, tiny.fit(g.get("Title") or g["Name"], pw - 20), T.COMMENT, px + 10, py + 20)
     items = [("CLASSIFY", "GENRE, PLAYERS, BUTTONS, CONTROL, YEAR", T.YELLOW),
              ("RENAME", "THE NAME SHOWN IN THE LISTS", T.CYAN),
-             ("SCRAPE THIS GAME", "PICTURES AND TEXT, NOW", T.GREEN)]
+             ("SCRAPE THIS GAME", "PICTURES, LOGO, VIDEO AND TEXT, NOW", T.GREEN),
+             ("DELETE THIS GAME", "ITS FILES GO AWAY FROM THE FOLDER", T.RED)]
     for i, (label, about, color) in enumerate(items):
-        y = py + 30 + i * 30
+        y = py + 30 + i * 28
         on = i == fe.ov["sel"]
-        tile_frame(ui, (px + 8, y, pw - 16, 26), on, now)
-        pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 26), 2 if on else 1)
-        ix, iy = px + 22, y + 13
+        tile_frame(ui, (px + 8, y, pw - 16, 25), on, now)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 25), 2 if on else 1)
+        ix, iy = px + 22, y + 12
         if i == 0:
             pygame.draw.polygon(ui, color, [(ix - 7, iy - 5), (ix + 3, iy - 5), (ix + 8, iy), (ix + 3, iy + 5),
                                             (ix - 7, iy + 5)])
@@ -974,20 +1008,22 @@ def draw_options(fe, ui, now):
         elif i == 1:
             pygame.draw.polygon(ui, color, [(ix - 6, iy + 6), (ix - 6, iy + 2), (ix + 4, iy - 8), (ix + 8, iy - 4),
                                             (ix - 2, iy + 6)])
-        else:
+        elif i == 2:
             ui.fill(color, (ix - 1, iy - 8, 3, 9))
             pygame.draw.polygon(ui, color, [(ix - 6, iy - 1), (ix + 6, iy - 1), (ix, iy + 5)])
             ui.fill(color, (ix - 7, iy + 6, 15, 2))
-        W.text(ui, label, T.FG if on else T.COMMENT, px + 36, y + 5)
-        tiny.text(ui, about, color if on else T.LINE, px + 36, y + 17)
+        else:
+            trash(ui, ix, iy, color)
+        W.text(ui, label, T.FG if on else T.COMMENT, px + 36, y + 4)
+        tiny.text(ui, about, color if on else T.LINE, px + 36, y + 16)
     # A linha e as opcoes do frontend.
-    y = py + 122
+    y = py + 144
     pygame.draw.line(ui, T.LINE, (px + 8, y), (px + pw - 9, y))
     for i, c in enumerate(W.RAINBOW):
         pygame.draw.rect(ui, c, (px + 8, y + 1 + i, 24, 1))
     ui.blit(W.big("FRONTEND OPTIONS", 1, W.LABEL), (px + 10, y + 10))
     y += 26
-    on = fe.ov["sel"] == 3
+    on = fe.ov["sel"] == 4
     tile_frame(ui, (px + 8, y, pw - 16, 40), on, now)
     pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 40), 2 if on else 1)
     W.text(ui, "VIEW MODE", T.FG if on else T.COMMENT, px + 16, y + 6)
@@ -1068,6 +1104,31 @@ def draw_rename(fe, ui, now):
                          2 if on else 1)
         W.text(ui, label, T.FG if on else (T.GREEN if label == "SAVE" else T.COMMENT),
                x + (wd - W.width(label)) // 2, y + 7)
+
+
+def trash(ui, cx, cy, c):
+    ui.fill(c, (cx - 6, cy - 6, 13, 2))
+    ui.fill(c, (cx - 2, cy - 8, 5, 2))
+    pygame.draw.polygon(ui, c, [(cx - 5, cy - 3), (cx + 5, cy - 3), (cx + 4, cy + 7), (cx - 4, cy + 7)])
+    for dx in (-2, 0, 2):
+        ui.fill(T.BG_DEEP, (cx + dx, cy - 1, 1, 6))
+
+
+def draw_delete(fe, ui, now):
+    """A pergunta antes de apagar o jogo, com os arquivos que saem."""
+    import os
+    g = fe.ov["game"]
+    files = fe.ov["files"]
+    pw, ph = 248, 98
+    px, py = (WW - pw) // 2, (HH - ph) // 2
+    card(ui, (px, py, pw, ph))
+    W.centered(ui, "DELETE THIS GAME?", T.RED, py + 10)
+    tiny.centered(ui, tiny.fit(g.get("Title") or g["Name"], pw - 16), T.FG, WW // 2, py + 24)
+    names = ", ".join(os.path.basename(f) + ("/" if os.path.isdir(f) else "") for f in files)
+    tiny.centered(ui, tiny.fit(names, pw - 16), T.COMMENT, WW // 2, py + 34)
+    tiny.centered(ui, "THE FILES CANNOT BE BROUGHT BACK", T.ORANGE, WW // 2, py + 44)
+    W.button(ui, "YES", WW // 2 - 50, py + 60, fe.ov["sel"] == 0)
+    W.button(ui, "NO", WW // 2 + 50, py + 60, fe.ov["sel"] == 1)
 
 
 def draw_exit(fe, ui, now):
@@ -1154,6 +1215,8 @@ def draw(fe, now):
             draw_rename(fe, top, t)
         elif o == "exit":
             draw_exit(fe, top, t)
+        elif o == "delete":
+            draw_delete(fe, top, t)
         back.blit(top, (0, 0))
     if fe.toast and now < fe.toast[1]:
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)

@@ -255,7 +255,7 @@ class Frontend:
         self.letter = None
 
     def page(self):
-        return {"list": 13, "full": 1, "flow": COLS * 2}[self.mode]
+        return {"list": 13, "full": 1, "flow": COLS * 3}[self.mode]
 
     # ── As acoes ──
     def act(self, a):
@@ -326,7 +326,7 @@ class Frontend:
             self.say(MODE_NAMES[self.mode])
         elif a == "tab":
             # Sem jogo na lista, so as opcoes do frontend.
-            self.overlay, self.ov = "options", {"sel": 0 if self.game() else 3}
+            self.overlay, self.ov = "options", {"sel": 0 if self.game() else 4}
         return None
 
     def set_mode(self, step):
@@ -407,11 +407,11 @@ class Frontend:
                 self.overlay = None
             return None
         if o == "options":
-            # 0 a 2: as opcoes do jogo; 3: o modo do frontend (Frontend options).
+            # 0 a 3: as opcoes do jogo (3: apagar); 4: o modo do frontend (Frontend options).
             sel = self.ov["sel"]
             if a in ("up", "down"):
-                self.ov["sel"] = (sel + (1 if a == "down" else -1)) % 4
-            elif sel == 3 and a in ("left", "right", "b1"):
+                self.ov["sel"] = (sel + (1 if a == "down" else -1)) % 5
+            elif sel == 4 and a in ("left", "right", "b1"):
                 self.set_mode(-1 if a == "left" else 1)
             elif a in ("b1",) and self.game():
                 g = self.game()
@@ -421,10 +421,30 @@ class Frontend:
                     self.overlay = "rename"
                     self.ov = {"value": g.get("Title") or g["Name"], "key": (1, 0)}
                     self.input.text = True
-                else:
+                elif sel == 2:
                     self.overlay = None
                     self.scrape(g)
+                elif self.lib.rom_files(g):
+                    # Apagar pergunta antes, com o NO escolhido.
+                    self.overlay, self.ov = "delete", {"sel": 1, "game": g, "files": self.lib.rom_files(g)}
+                else:
+                    self.overlay = None
+                    self.say("NO FILE OF ITS OWN (IT IS IN THE PARENT'S)", 2.5)
             elif a == "tab":
+                self.overlay = None
+            return None
+        if o == "delete":
+            if a in ("left", "right", "up", "down"):
+                self.ov["sel"] ^= 1
+            elif a == "b1":
+                g = self.ov["game"]
+                if self.ov["sel"] == 0:
+                    self.player.stop()
+                    n = self.lib.delete(g)
+                    self.media.clear()
+                    self.ready.clear()
+                    self.rebuild(keep=None)
+                    self.say("GAME DELETED" if n else "COULD NOT DELETE IT")
                 self.overlay = None
             return None
         if o == "classify":
@@ -699,7 +719,7 @@ class Frontend:
         if at == self.ahead_at or not self.rows:
             return
         self.ahead_at = at
-        reach = 2 * COLS if self.mode == "flow" else 6
+        reach = 3 * COLS if self.mode == "flow" else 6
         order = [0]
         for k in range(1, reach + 1):
             order += [k, -k]

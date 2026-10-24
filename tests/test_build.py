@@ -4090,8 +4090,9 @@ class FrontendDataTests(unittest.TestCase):
         old = fd.download
         try:
             os.environ['FLIPEROS_HOME'] = '/nonexistent'
+            fd.PACKS_FILE = '/nonexistent'
             fd.download = lambda url, path: got.append(os.path.basename(path)) or True
-            self.assertEqual(fd.missing_art(Lib(), game), ['box', 'marquee', 'preview'])
+            self.assertEqual(fd.missing_art(Lib(), game), ['box', 'marquee', 'logo', 'preview'])
             fd.scrape(Lib(), game, only_missing=True)
             self.assertEqual(got, ['sf2.png', 'sf2.png', 'sf2.mp4'])
             got.clear()
@@ -4100,6 +4101,63 @@ class FrontendDataTests(unittest.TestCase):
         finally:
             fd.download = old
             os.environ.pop('FLIPEROS_HOME', None)
+
+    def test_logo_and_video_from_art_packs(self):
+        # O logo e o video que o Arcade Database nao tem saem dos pacotes do
+        # archive.org da lista do Setup, um arquivo so: solto, ou de dentro
+        # do .zip da letra.
+        fd = self.fd
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        packs = tmp / 'packs'
+        packs.write_text('wheels\tlogo\tmame,@arcade-cores\thttps://archive.org/download/wheels/w.torrent\tLogos\n'
+                         'videos\tpreview\t@arcade\thttps://archive.org/download/videos/v.torrent\tVideos\n'
+                         'naomi\tlogo\tnaomi\thttps://archive.org/download/naomi/n.torrent\tNaomi\n')
+        pages = {'metadata/wheels/files': json.dumps({'result': [{'name': 'sf2.png'}, {'name': 'sf2_thumb.jpg'}]}),
+                 'metadata/videos/files': json.dumps({'result': [{'name': 'S.zip'}, {'name': '#.zip'}]}),
+                 'download/videos/S.zip/': '<a href="//archive.org/download/videos/S.zip/S%2Fsf2.mp4">x</a>'}
+        old = fd.PACKS_FILE, fd.fetch_text, fd.download
+        got = []
+        try:
+            os.environ['FLIPEROS_HOME'] = str(tmp)
+            fd.PACKS_FILE = str(packs)
+            fd.fetch_text = lambda url, name: pages.get(url.split('archive.org/', 1)[1])
+            fd.download = lambda url, path: got.append((url, os.path.relpath(path, tmp))) or True
+            mame = {'key': 'mame', 'arcade': True}
+            self.assertEqual(fd.art_packs(mame, 'logo'), ['wheels'])
+            self.assertEqual(fd.art_packs({'key': 'retroarch/fbneo', 'arcade': True}, 'logo'), ['wheels'])
+            self.assertEqual(fd.art_packs({'key': 'naomi', 'arcade': True}, 'preview'), ['videos'])
+            self.assertEqual(fd.art_packs({'key': 'snes', 'arcade': False}, 'logo'), [])
+            game = {'Name': 'sf2ce', 'CloneOf': 'sf2', '_system': mame}
+            self.assertEqual(fd.pack_art(None, game, ['logo', 'preview']), 2)
+            self.assertEqual(got, [('https://archive.org/download/wheels/sf2.png', 'media/logo/mame/sf2ce.png'),
+                                   ('https://archive.org/download/videos/S.zip/S%2Fsf2.mp4',
+                                    'media/preview/mame/sf2ce.mp4')])
+        finally:
+            fd.PACKS_FILE, fd.fetch_text, fd.download = old
+            os.environ.pop('FLIPEROS_HOME', None)
+
+    def test_delete_game(self):
+        # Apagar um jogo (Tab > Delete this game): a ROM e, no arcade, a
+        # pasta dos CHDs de mesmo nome; a arte fica.
+        fd = self.fd
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        (tmp / 'kinst.zip').write_bytes(b'x')
+        (tmp / 'kinst').mkdir()
+        (tmp / 'kinst' / 'kinst.chd').write_bytes(b'x')
+        (tmp / 'sf2.zip').write_bytes(b'x')
+        lib = fd.Library.__new__(fd.Library)
+        lib.lock = threading.Lock()
+        lib.cache = {'x': []}
+        system = {'key': 'mame', 'arcade': True, 'folder': str(tmp)}
+        game = {'Name': 'kinst', 'file': 'kinst.zip', '_system': system}
+        self.assertEqual(len(lib.rom_files(game)), 2)
+        self.assertEqual(lib.delete(game), 2)
+        self.assertEqual(sorted(p.name for p in tmp.iterdir()), ['sf2.zip'])
+        self.assertEqual(lib.cache, {})
+        # O clone sem arquivo proprio (dentro do zip do pai) nao tem o que apagar.
+        self.assertEqual(lib.rom_files({'Name': 'sf2ce', '_system': system}), [])
 
     def test_video_player(self):
         # O video vem do ffmpeg da imagem; sem ele, o Player nao abre nada

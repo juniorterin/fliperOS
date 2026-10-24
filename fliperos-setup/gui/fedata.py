@@ -319,6 +319,38 @@ class Library:
     def command(self, game):
         return web.game_command(game["_system"], game["Name"])
 
+    def rom_files(self, game):
+        """Os arquivos do jogo na pasta: a ROM e, no MAME, a pasta dos CHDs
+        de mesmo nome. A arte em ~/media fica."""
+        system = game["_system"]
+        folder = system["folder"]
+        out = []
+        if game.get("file"):
+            out.append(os.path.join(folder, game["file"]))
+        chd = os.path.join(folder, game["Name"])
+        if system.get("arcade") and os.path.isdir(chd) and not os.path.islink(chd):
+            out.append(chd)
+        return [p for p in out if os.path.lexists(p)]
+
+    def delete(self, game):
+        """Apaga o jogo da pasta (rom_files). Devolve quantos itens sairam;
+        a lista e lida de novo (a pasta mudou: o frontend pede ao Setup as
+        romlists novas, como com um jogo copiado)."""
+        import shutil
+        n = 0
+        for path in self.rom_files(game):
+            try:
+                if os.path.isdir(path) and not os.path.islink(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+                n += 1
+            except OSError:
+                pass
+        if n:
+            self.forget()
+        return n
+
     # ── Midia ──
     def media(self, game, kind):
         """O arquivo de midia do jogo (o do set; o clone sem o dele usa o do pai)."""
@@ -454,9 +486,125 @@ def download(url, path):
         return False
 
 
+# ── Os pacotes de arte do archive.org ──────────────────────────────
+# Os mesmos do Setup > Games > Scraper > Art packs by torrent
+# (config/fliperos-media-torrents): o logo e o video de um jogo saem dali um
+# arquivo so, pelo HTTP do archive.org, sem baixar o pacote. O Arcade
+# Database nao tem logos. A lista de arquivos de cada pacote (e a de dentro
+# de cada .zip de letra) fica guardada em ~/.cache/fliperos/archive.
+PACKS_FILE = os.environ.get("FLIPEROS_MEDIA_TORRENTS", "/usr/local/share/fliperos/media-torrents")
+ARCHIVE = os.environ.get("FLIPEROS_ARCHIVE_URL", "https://archive.org")
+PACK_EXTS = {"logo": (".png", ".jpg"), "preview": VIDEO_EXTS}
+LISTING_DAYS = 30
+
+
+def art_packs(system, kind):
+    """Os pacotes (id) do tipo de arte para a pasta do jogo."""
+    out = []
+    try:
+        with open(PACKS_FILE, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return out
+    key = system["key"]
+    for line in lines:
+        parts = line.split("\t")
+        if len(parts) < 4 or line.startswith("#") or parts[1] != kind:
+            continue
+        folders = parts[2].split(",")
+        if (key in folders or ("@arcade" in folders and system.get("arcade"))
+                or ("@arcade-cores" in folders and system.get("arcade") and key.startswith("retroarch/"))):
+            m = re.search(r"/download/([^/]+)/", parts[3])
+            if m:
+                out.append(m.group(1))
+    return out
+
+
+def fetch_text(url, cache_name):
+    """O texto do endereco, guardado LISTING_DAYS dias."""
+    import urllib.request
+    path = os.path.join(web.player_home(), ".cache", "fliperos", "archive", cache_name)
+    try:
+        if time.time() - os.path.getmtime(path) < LISTING_DAYS * 86400:
+            with open(path, encoding="utf-8") as f:
+                return f.read()
+    except OSError:
+        pass
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "FliperOS frontend"})
+        with urllib.request.urlopen(req, timeout=30) as res:
+            text = res.read(32 << 20).decode("utf-8", "replace")
+    except (OSError, ValueError):
+        return None
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path + ".tmp", "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(path + ".tmp", path)
+    except OSError:
+        pass
+    return text
+
+
+def pack_file(item, names, exts):
+    """O endereco do arquivo do jogo (um dos nomes) no pacote: solto, ou
+    dentro do .zip da letra dele (o archive.org serve um arquivo de dentro
+    do zip). None: o pacote nao tem."""
+    from urllib.parse import quote, unquote
+    text = fetch_text("%s/metadata/%s/files" % (ARCHIVE, item), item + ".json")
+    try:
+        files = [f["name"] for f in json.loads(text or "{}").get("result", [])]
+    except (ValueError, AttributeError, TypeError):
+        return None
+    loose = {}
+    for name in files:
+        stem, ext = os.path.splitext(os.path.basename(name))
+        if ext.lower() in exts and not stem.endswith(".ia"):
+            loose.setdefault(stem.lower(), name)
+    zips = {os.path.splitext(n)[0].upper(): n for n in files if n.lower().endswith(".zip") and "/" not in n}
+    for game in names:
+        if game.lower() in loose:
+            return "%s/download/%s/%s" % (ARCHIVE, item, quote(loose[game.lower()]))
+    for game in names:
+        letter = game[:1].upper()
+        zname = zips.get(letter) or (zips.get("#") if not letter.isalpha() else None)
+        if not zname:
+            continue
+        listing = fetch_text("%s/download/%s/%s/" % (ARCHIVE, item, quote(zname)),
+                             "%s-%s.html" % (item, re.sub(r"[^A-Za-z0-9]", "_", zname)))
+        for href in re.findall(r'href="([^"]+)"', listing or ""):
+            inner = href.rsplit("/", 1)[-1]
+            stem, ext = os.path.splitext(unquote(inner).rsplit("/", 1)[-1])
+            if stem.lower() == game.lower() and ext.lower() in exts:
+                return "%s/download/%s/%s/%s" % (ARCHIVE, item, quote(zname), inner)
+    return None
+
+
+def pack_art(library, game, kinds):
+    """O logo e o video do jogo dos pacotes do archive.org. Devolve
+    quantos arquivos vieram."""
+    system = game["_system"]
+    names = [n for n in (game["Name"], game.get("CloneOf")) if n]
+    got = 0
+    for kind in kinds:
+        exts = PACK_EXTS.get(kind)
+        if not exts:
+            continue
+        for item in art_packs(system, kind):
+            url = pack_file(item, names, exts)
+            if not url:
+                continue
+            ext = os.path.splitext(url)[1].lower()
+            target = os.path.join(web.player_home(), "media", kind, system["key"], game["Name"] + ext)
+            if download(url, target):
+                got += 1
+                break
+    return got
+
+
 def missing_art(library, game):
     """As midias que o jogo ainda nao tem (das que o scrape traz)."""
-    out = [kind for kind in ("snap", "box", "marquee") if not library.media(game, kind)]
+    out = [kind for kind in ("snap", "box", "marquee", "logo") if not library.media(game, kind)]
     if not library.video(game):
         out.append("preview")
     return out
@@ -478,19 +626,21 @@ def scrape(library, game, lang="en", only_missing=False):
             os.remove(path)            # pedido de novo: busca de verdade
         library.info.cache.clear()
         info, _ = library.info.arcade(system["key"], game["Name"], lang)
-        if not info:
-            return 0
         for field, kind in (("url_image_ingame", "snap"), ("url_image_marquee", "marquee"),
                             ("url_image_flyer", "box"), ("url_video_shortplay", "preview")):
-            url = info.get(field)
+            url = (info or {}).get(field)
             if url and (want is None or kind in want):
                 ext = os.path.splitext(url.split("?")[0])[1].lower() or (".mp4" if kind == "preview" else ".png")
                 target = os.path.join(home, "media", kind, system["key"], game["Name"] + ext)
                 got += download(url, target)
-        return got + 1
-    for item in web.thumbnails(system, game):
-        kind = {"boxart": "box", "snap": "snap"}.get(item["kind"])
-        if kind and (want is None or kind in want):
-            target = os.path.join(home, "media", kind, system["key"], game["Name"] + ".png")
-            got += download(item["url"], target)
+        got += 1 if info else 0
+    else:
+        for item in web.thumbnails(system, game):
+            kind = {"boxart": "box", "snap": "snap"}.get(item["kind"])
+            if kind and (want is None or kind in want):
+                target = os.path.join(home, "media", kind, system["key"], game["Name"] + ".png")
+                got += download(item["url"], target)
+    # O logo (e o video que o Arcade Database nao tinha) dos pacotes.
+    missing = missing_art(library, game)
+    got += pack_art(library, game, [k for k in ("logo", "preview") if k in missing])
     return got

@@ -12,9 +12,9 @@ It shows the same thing as the [Web panel](Web-panel.md), from the same code:
 **Three views** (Start switches them):
 - **List**: the games on the left, the picture, logo and information on the right. A game with clones has a "+" on its left: button 1 unfolds the clones under it, each with what differs in its name (the region, the set, bootleg).
 - **Full screen**: the game's video or picture behind, the name and information in front, and on the right the list as four stacked thumbnails, with arrows above and below while there are more games that way; the column slides to its new place. The pictures of the games around the cursor are read ahead, so changing game is instant.
-- **Grid**: the covers, as in Arcadeflow.
+- **Grid**: five 4:3 thumbnails a row (the game's screenshot, or its cover), three rows, the chosen one bigger; arrows on the left while there are more rows, a scrollbar in the corner.
 
-**The game's video.** In the list and in full screen, the game's video (`~/media/preview/<folder>/<set>.mp4`) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. In any view, a game missing some of its art (screenshot, cover, marquee or video) gets the missing pieces scraped by itself when the cursor stays on it for 2 seconds, once per game; they land in the same `~/media` folders the scraper uses.
+**The game's video.** In the list and in full screen, the game's video (`~/media/preview/<folder>/<set>.mp4`) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. In any view, a game missing some of its art (screenshot, cover, marquee, logo or video) gets the missing pieces scraped by itself when the cursor stays on it for 2 seconds, once per game; they land in the same `~/media` folders the scraper uses. The Arcade Database has no logos: the logo, and the video it lacks, come one file at a time from the archive.org packs of Setup > Games > Scraper > Art packs by torrent, without downloading the pack.
 
 Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control with the buttons.
 
@@ -29,7 +29,8 @@ Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has bee
 - Tab (keyboard) opens the game options:
   - Classify: genre, players, buttons, control, year, maker, rotation and series, saved in `~/media/info/<folder>/<set>.user.json`; the filters use them;
   - Rename, with an on-screen keyboard;
-  - Scrape this game: its information and pictures, right away.
+  - Scrape this game: its information, pictures, logo and video, right away;
+  - Delete this game: after a YES/NO question, its file goes away from the folder (for MAME, also the CHD folder of the same name); its art in `~/media` stays. A clone kept inside its parent's zip has no file of its own to delete.
 
   Under a line come the **frontend options**: the view mode (list, full screen or grid), changed with left and right and saved at once. Start also switches it.
 
