@@ -239,6 +239,10 @@ class Frontend:
     def switch_category(self, step):
         if len(self.cats) < 2:
             return
+        # A tira das romlists anda de onde estava (cat_pos nao da a volta).
+        old = getattr(self, "cat_pos", self.cat)
+        self.anim.setdefault("ribbon", (old, time.monotonic()))
+        self.cat_pos = old + step
         self.cat = (self.cat + step) % len(self.cats)
         # A tela de antes desliza para fora (feview.draw).
         if getattr(self, "last_ui", None) is not None:

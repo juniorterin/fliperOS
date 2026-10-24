@@ -950,21 +950,31 @@ def draw_ribbon(fe, ui, now):
     pygame.draw.line(ui, T.PINK, (0, band_y + band_h - 1), (WW, band_y + band_h - 1))
     tiny.centered(ui, "ROMLIST", T.COMMENT, WW // 2, band_y + 7)
     n = len(fe.cats)
-    for off, size in ((-2, 32), (2, 32), (-1, 40), (1, 40), (0, 56)):
-        if n < 2 and off:
+    # A tira desliza ate a romlist nova: pos corre ate fe.cat_pos (o indice
+    # sem dar a volta), e cada quadrado cresce ao passar pelo meio.
+    pos = ease(fe, "ribbon", getattr(fe, "cat_pos", fe.cat), fe.abs_now, speed=12.0, reach=3)
+    base = math.floor(pos)
+    tiles = []
+    for k in range(-3, 5):
+        d = base + k - pos
+        if abs(d) > 2.6 or (n < 2 and abs(d) > 0.5):
             continue
-        c = fe.cats[(fe.cat + off) % n]
-        cx = WW // 2 + off * 66
+        tiles.append((abs(d), d, (fe.cat + round(base + k - getattr(fe, "cat_pos", fe.cat))) % n))
+    for dist, d, idx in sorted(tiles, reverse=True):
+        c = fe.cats[idx]
+        size = round(56 - 16 * dist if dist <= 1 else max(32, 40 - 8 * (dist - 1)))
+        on = dist < 0.5
+        cx = round(WW / 2 + d * 66)
         x, y = cx - size // 2, band_y + 20 + (56 - size) // 2
-        tile_frame(ui, (x, y, size, size), off == 0, now)
-        pygame.draw.rect(ui, T.PINK if off == 0 else T.LINE, (x, y, size, size), 2 if off == 0 else 1)
+        tile_frame(ui, (x, y, size, size), on, now)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, y, size, size), 2 if on else 1)
         name = system_icon(c)
         icon = T.icon(name, 2 if size >= 44 else 1) if name else None
         if icon is None:
             icon = W.big(c["name"][:1].upper(), 3 if size >= 44 else 2, W.MARQUEE)
-        if off:
+        if dist > 0.05:
             icon = icon.copy()
-            icon.set_alpha(110)
+            icon.set_alpha(round(255 - 145 * min(1.0, dist)))
         blit_center(ui, icon, x, y, size, size)
     c = fe.cats[fe.cat % n]
     label = fit(c["name"], WW - 20)
@@ -976,7 +986,7 @@ def draw_ribbon(fe, ui, now):
 def system_icon(cat):
     """O icone do programa da pasta (os de gui/icons)."""
     if cat.get("key") == "@arcade":
-        return "attractplus"
+        return "frontend"         # (o joystick do FliperOS, nao o logo de um frontend)
     exe = (cat.get("exe", "") + " " + cat.get("args", "")).lower()
     for name in ("groovymame", "flycast", "pcsx2", "dolphin", "model2", "openbor", "retroarch", "fightcade"):
         if name in exe:
