@@ -96,8 +96,31 @@ class Frontend:
         self.back = pygame.Surface((theme.WIDTH, theme.HEIGHT))
         self.bg = background.pick(None if not self.shot else "stars", seed=7 if self.shot else None)
         self.start = time.monotonic()
-        self.lib = fedata.Library()
+        # As listas levam uns segundos: enquanto isso, o fundo do menu e o
+        # aviso na tela (vindo do menu, a tela ficava preta ate aqui).
         cfg = load_config()
+        loaded = {}
+
+        def load():
+            try:
+                lib = fedata.Library()
+                cats = lib.categories()
+                cat = next((c for c in cats if c["key"] == cfg.get("category")), cats[0] if cats else None)
+                if cat:
+                    lib.games(cat)       # a lista que abre, ja lida
+                loaded["lib"] = lib
+            except Exception as e:  # o erro sai aqui, no laco principal
+                loaded["error"] = e
+
+        worker = threading.Thread(target=load, daemon=True)
+        worker.start()
+        while worker.is_alive() and not self.shot:
+            self.splash()
+            time.sleep(1 / 30)
+        worker.join()
+        if "error" in loaded:
+            raise loaded["error"]
+        self.lib = loaded["lib"]
         self.mode = cfg.get("mode", "list") if cfg.get("mode") in MODES else "list"
         # O monitor em pe (Video Setup > orientation): a grade em 3:4.
         try:
@@ -754,6 +777,18 @@ class Frontend:
             self.draw(now)
             self.present()
             clock.tick(FPS)
+
+    def splash(self):
+        """A tela de abrir: o fundo animado do menu e o aviso."""
+        T, W = self.T, self.W
+        self.pg.event.pump()
+        self.bg.draw(self.back, time.monotonic() - self.start)
+        ui = self.pg.Surface((T.WIDTH, T.HEIGHT), self.pg.SRCALPHA)
+        W.frame(ui, {}, "FliperOS", [])
+        msg = "LOADING THE GAMES..."
+        ui.blit(W.big(msg, 1, W.LABEL), ((T.WIDTH - W.width(msg)) // 2, T.HEIGHT // 2 - 4))
+        self.back.blit(ui, (0, 0))
+        self.present()
 
     # ── Adiantar as imagens ──
     def prefetch(self):
