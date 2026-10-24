@@ -809,12 +809,13 @@ def draw_flow(fe, ui, now):
     arrow(ui, bx_ + 2, by_ - 4, (0, -1), T.PINK if top_row > 0 else T.LINE, 3)
     arrow(ui, bx_ + 2, by_ + bh_ + 4, (0, 1), T.PINK if top_row + rows_shown < total_rows else T.LINE, 3)
     if sel:
-        # A aba na borda: mais um toque para aquele lado troca a romlist.
+        # A aba debaixo das miniaturas, do lado do jogo escolhido: mais um
+        # toque para aquele lado troca a romlist.
         col = fe.cursor % cols
         if len(fe.cats) > 1 and (col == cols - 1 or fe.cursor == len(fe.rows) - 1 or col == 0):
             side = 1 if (col == cols - 1 or fe.cursor == len(fe.rows) - 1) else -1
             nxt = fe.cats[(fe.cat + side) % len(fe.cats)]["name"].upper()
-            edge_tab(ui, nxt, side)
+            bottom_tab(ui, nxt, side, x0, gw, y0 + rows_shown * step_y - 4)
     g = fe.game()
     y = 194
     logo = image(fe, media(fe, g, "logo"), 110, 30)
@@ -831,6 +832,21 @@ def draw_flow(fe, ui, now):
     else:
         W.text(ui, fit(facts_line(g), 150), T.CYAN, SX + 154, y + 2)
         icon_line(fe, ui, g, SX, y + 14, SX + SW, 12)
+
+
+def bottom_tab(ui, label, side, x0, width, y):
+    """A aba deitada da proxima romlist, encostada no lado (side 1: a
+    direita, -1: a esquerda) da faixa de x0 a x0 + width."""
+    label = tiny.fit(label, width - 30)
+    w = tiny.width(label) + 22
+    x = x0 + width - w if side > 0 else x0
+    W.block(ui, (x, y, w, 11), T.PINK, T.PURPLE)
+    if side > 0:
+        tiny.text(ui, label, T.SPACE, x + 5, y + 3)
+        arrow(ui, x + w - 7, y + 5, (1, 0), T.SPACE, 4)
+    else:
+        arrow(ui, x + 6, y + 5, (-1, 0), T.SPACE, 4)
+        tiny.text(ui, label, T.SPACE, x + 15, y + 3)
 
 
 def edge_tab(ui, label, side):
