@@ -467,8 +467,9 @@ for theme in "$src"/config/splashscreen/*/; do
 done
 chmod -R a+rX "$root/usr/share/fliperos/splashscreen" "$root/usr/share/plymouth/themes"
 # O tema do FliperOS segue o monitor em pe (lib/splash.sh splash_orientation):
-# a copia nova volta a orientacao gravada.
-orientation=$(sed -n 's/^orientation=//p' "$root/etc/fliperos/fliperos.conf" 2> /dev/null | tail -1)
+# a copia nova volta a orientacao gravada (a imagem nova ainda nao tem o
+# fliperos.conf).
+orientation=$(sed -n 's/^orientation=//p' "$root/etc/fliperos/fliperos.conf" 2> /dev/null | tail -1) || orientation=""
 if [[ $orientation == vertical-cw || $orientation == vertical-ccw ]]; then
   sed -i "s/^orientation = \"[^\"]*\";/orientation = \"$orientation\";/" "$root"/usr/share/plymouth/themes/*/*.script
 fi

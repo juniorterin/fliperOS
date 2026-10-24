@@ -4,7 +4,7 @@ The media is **installation-only** and follows the GroovyArcade flow: a boot men
 
 The screens belong to **`fliperos-setup`**, written in Bash with [Gum](https://github.com/charmbracelet/gum), with the **Dracula** theme and English text, designed for **640x480i**: 80x30 characters, nothing animated or blinking.
 
-> In development: 0.10 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT.
+> In development: 0.11 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT.
 
 ## Using it
 

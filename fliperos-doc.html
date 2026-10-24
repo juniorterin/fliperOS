@@ -7,10 +7,10 @@ h1,h2,h3{line-height:1.25;color:#8fd5bb}h1{margin-top:3em;border-top:1px solid #
 pre{overflow:auto;background:#202b36;padding:20px;border-radius:6px}code{font-size:.9em}
 table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1px solid #405060;text-align:left;padding:12px}
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
-</style><main><h1 id="fliperos-010">FliperOS 0.10</h1>
+</style><main><h1 id="fliperos-011">FliperOS 0.11</h1>
 <p><strong>English</strong> | <a href="README.pt-BR.md">Português</a></p>
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
-<p>In development: 0.10 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
+<p>In development: 0.11 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
 <h2 id="whats-included">What's included</h2>
 <ul>
 <li><strong>Video</strong>: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.</li>
@@ -45,8 +45,8 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </ul>
 <h3 id="2-download-the-iso">2. Download the ISO</h3>
 <ol>
-<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.10.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
-<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.10.iso</code> on Linux, <code>Get-FileHash fliperos-0.10.iso</code> in Windows PowerShell.</li>
+<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.11.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
+<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.11.iso</code> on Linux, <code>Get-FileHash fliperos-0.11.iso</code> in Windows PowerShell.</li>
 </ol>
 <h3 id="3-write-the-usb-stick">3. Write the USB stick</h3>
 <p>The ISO must be written <strong>byte for byte</strong>. Programs that rebuild the stick's boot structure break it: <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work.</strong></p>
@@ -56,7 +56,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Linux</strong>: find the stick with <code>lsblk</code> (here <code>/dev/sdX</code>; the wrong device erases the wrong disk) and run:</li>
 </ul>
 <p><code>bash
-  sudo dd if=fliperos-0.10.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+  sudo dd if=fliperos-0.11.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
 <h3 id="4-prepare-the-cabinets-bios">4. Prepare the cabinet's BIOS</h3>
 <p>Enter the BIOS/UEFI setup (usually <strong>Del</strong>, <strong>F2</strong> or <strong>F10</strong> right after power-on) and:</p>
 <ol>
@@ -301,7 +301,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="build-and-tests">Build and tests</h2>
 <p>Always in Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> explains why).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.10.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.11.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -316,7 +316,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <h2 id="writing-the-media">Writing the media</h2>
 <p>Write the ISO <strong>byte for byte</strong> to a USB stick and disable Secure Boot (the 15 kHz kernel is custom and unsigned).</p>
 <p>The ISO uses the <strong>Limine</strong> bootloader and is <strong>hybrid</strong> (<code>xorriso</code> + <code>limine bios-install</code>): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work</strong>. Use <strong>balenaEtcher</strong>, or Rufus in "DD Image mode", or <code>dd</code>:</p>
-<pre><code class="language-bash">sudo dd if=fliperos-0.10.iso of=/dev/sdX bs=4M status=progress conv=fsync
+<pre><code class="language-bash">sudo dd if=fliperos-0.11.iso of=/dev/sdX bs=4M status=progress conv=fsync
 </code></pre>
 <p>Check <code>/dev/sdX</code> with <code>lsblk</code> first: the wrong device erases the wrong disk.</p>
 <h2 id="boot-menu">Boot menu</h2>
@@ -410,7 +410,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li>
 <p><strong>Monitor Type</strong>: the 29 Switchres presets, in the gatools list, plus <strong>Custom</strong>: your own <code>crt_range0</code> (the timings that really fit your monitor), made on the Geometry grid or typed in (16 values, as in <code>switchres.ini</code>, of the same 15/25/31 kHz band as the preset).</p>
 <p>It sits on top of the preset that was in use, which still gives the boot resolution, the EDID and the Xorg range; choosing a preset again discards it;
-   - <strong>Monitor Orientation</strong>: horizontal, vertical clockwise, vertical counter-clockwise (console rotated with <code>fbcon=rotate</code>, <code>panel_orientation</code> in <code>video=</code>, MAME's <code>ror</code>/<code>rol</code> and the desktop through <code>xrandr</code>);
+   - <strong>Monitor Orientation</strong>: horizontal, vertical clockwise, vertical counter-clockwise (console rotated with <code>fbcon=rotate</code>, <code>panel_orientation</code> in <code>video=</code>, MAME's <code>ror</code>/<code>rol</code> and the desktop through <code>xrandr</code>). Standing up, the Setup menu and the FliperOS frontend are laid out for the tall screen (240x320) and turned to the monitor's side; the few screens made only for a wide screen (the Button mapping panel, the ROM filter board) are shrunk to the width, between the real title and keys. The FliperOS boot screen uses its pre-rotated pictures. The console and terminal go to 640x480i standing up (60 columns, letters in proportion; in 640x240 they had 30): the boot line gets an EDID made for the monitor (<code>edid/fliperos-vertical.bin</code>, with Switchres' 640x240 and 640x480i), so the menu and the frontend still switch to their 640x240. A boot line that already carries an EDID stays as it is;
    - <strong>Resolution</strong>: only the modes of the kernel table that the monitor's range and the card accept (without low dotclock, only the super resolutions), plus a <strong>custom resolution</strong>: tested on the Switchres <code>grid</code> and turned into an EDID (<code>switchres -e</code>), like <code>worker_custom_video_mode</code>;
    - <strong>Geometry</strong>: the same <strong><code>geometry</code></strong> as GroovyArcade — Switchres' <code>geometry.py</code>, which draws the grid and returns the <code>crt_range</code>, saved as <code>monitor custom</code> in <code>/etc/switchres.ini</code> (the Monitor Type becomes <strong>Custom</strong>).</p>
 <p>The grid is drawn with the lines and refresh rate of the resolution chosen above (50 Hz in PAL modes; with no choice, 640x480), 8 pixels wider, like GroovyArcade's 648x480: at the exact boot mode, Switchres would have to replace the mode on screen each time an arrow reopens the grid, and the tool stopped at the first arrow.</p>
@@ -447,8 +447,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>Before asking it lists the <strong>files changed on this machine that the update replaces</strong> (up to six on screen, the rest in <em>View the files</em>): it rehearses the update in an overlay over <code>/</code> and compares each file it would write with what FliperOS itself installed (<code>/var/lib/fliperos/update/manifest</code>, the sha256 of each file, recorded by the ISO and by each update).</p>
 <p>Each of those files is copied to <code>/var/lib/fliperos/update/backup/NNNN-date/</code> before being replaced (<code>fliperos-update restore N</code> puts them back), and the Setup choices (video, latency, buttons) are applied again afterwards. Personal files (<code>fliperos.conf</code>, button maps, ROMs, saves, frontend lists) aren't touched.</p>
 <p>Updates are numbered and <strong>always applied in order</strong>: update N only goes in on a machine at N−1 (<code>/etc/fliperos/patch-level</code>), a list with a gap is refused, and if one fails nothing after it is applied (it is offered again at the next boot; log in <code>/var/log/fliperos-update.log</code>).</p>
-<p>Each one is a repository commit listed in <code>updates/index</code> with the sha256 of its files (downloaded over HTTPS from GitHub and checked before anything is written), plus an optional <code>updates/NNNN.sh</code> for what isn't a file copy. They are published with <code>tools/make-update.sh "title" [--reboot]</code>.</p>
+<p>Each one is a repository commit listed in <code>updates/index</code> with the sha256 of its files (downloaded over HTTPS from GitHub and checked before anything is written), plus an optional <code>updates/NNNN.sh</code> for what isn't a file copy and its changelog in <code>updates/notes/NNNN.md</code> (required). They are published with <code>tools/make-update.sh "title" [--reboot]</code>.</p>
+<p>When an update is available, the boot screen first shows <strong>what it changes</strong> (the changelog of each pending part, with scrolling: <code>fliperos-update notes</code>), then the files of this machine it replaces, and asks; <em>Read what changes</em> in that menu shows the changelog again. After it is applied, the <a href="#whats-new">What's new</a> screen lists it with its changelog.</p>
 <p>An install older than this system gets it with <code>curl -fsSL https://raw.githubusercontent.com/juniorterin/fliperOS/main/updates/bootstrap.sh | sudo bash</code>.</p>
+<p><a id="whats-new"></a><strong>What's new:</strong> after a new version or a new update, the FliperOS menu opens once on a <em>What's new in FliperOS</em> screen, with scrolling (up/down a line, left/right a page): the updates installed since the last time, each with its changelog (<code>/usr/local/share/fliperos/update-notes</code>), and the <a href="https://github.com/juniorterin/fliperOS/blob/main/CHANGELOG.md">CHANGELOG</a> sections of the versions since then (an update alone does not repeat the version sections; the first time, only this version's section). <em>Setup &gt; System &gt; What's new</em> shows it again, with every update and every version. The changelog is <code>/usr/local/share/fliperos/CHANGELOG.md</code> (put there by the ISO, by each update and by <code>cabinet-push</code>); the titles come from <code>/var/log/fliperos-update.log</code>, and what was already seen is <code>whatsnew_version</code> and <code>whatsnew_level</code> in <code>fliperos.conf</code>. A new install starts with its own version and update marked as seen. The installation media does not show it.</p>
 <p><strong>Colour calibration</strong> (Setup &gt; Video Setup) sets the picture's colour: everything the card can do, plus saturation and hue by software when it can't. The fifteen settings are saved in <code>fliperos.conf</code> as <code>color_NAME=</code>:</p>
 <table>
 <thead>
@@ -581,6 +583,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 - <strong>Quirks</strong> — kernel fixes for USB devices that arrive wrong: controllers, guns, keyboards and disks. See <a href="#Controls">Controls</a>;
 - <strong>Password</strong> — the password of the <code>fliperos</code> user: the login, <code>sudo</code>, SSH and the network share (Samba keeps a password of its own, and both change together);
 - <strong>System Update</strong> — <code>apt-get update</code> and <code>upgrade</code>, with apt's real progress;
+- <strong>What's new</strong> — the updates installed on this machine (newest first) and the changelog of every FliperOS version, with scrolling (see <a href="#whats-new">What's new</a>);
 - <strong>Debug mode</strong> — off (the default), the boot goes straight to Plymouth and the output of frontends and emulators (X, Switchres, the program itself) goes to <code>/opt/fliperos/logs/&lt;program&gt;.log</code>, rewritten on each launch: only the picture is on screen.</p>
 <p>On, everything shows: the Limine menu (<code>FLIPEROS_QUIET="no"</code> in <code>/etc/default/fliperos-boot</code>), the kernel and systemd messages at boot (without <code>quiet splash</code> or the silencing parameters) and the programs' output on the console. Programs follow immediately; the boot, after a reboot;
 - <strong>Splash screen</strong> — the boot screen (Plymouth).</p>
@@ -602,7 +605,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </thead>
 <tbody>
 <tr>
-<td>A game opened from a frontend (Attract-Mode Plus, ES-DE, RetroFE, Pegasus, your own frontends)</td>
+<td>A game opened from a frontend (Attract-Mode Plus, ES-DE, Pegasus, your own frontends)</td>
 <td>closes the game; the frontend comes back</td>
 </tr>
 <tr>
@@ -814,21 +817,27 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <h2 id="the-fliperos-frontend">The FliperOS frontend</h2>
 <p>The default since 2026-10-23: the game list in the look of the Setup menu (Press Start 2P, Dracula colours, the animated background), drawn at 320x240 and stretched to the screen mode. It ships in the image (<code>fliperos-setup/gui/fliperos-frontend</code>, Python and pygame) and is the <code>fliperos</code> row of the session table.</p>
 <p>It shows the same thing as the <a href="#Web-panel">Web panel</a>, from the same code:
-- the games of each folder, from the Attract-Mode Plus romlists. The arcade ones carry the name, year, manufacturer, clones and category from MAME's XML (the AttractPlus ROM List, <code>fliperos-romclean romlist</code>);
+- the games of each folder, from FliperOS's own lists (<code>~/.local/share/fliperos/lists</code>, in the format of Attract-Mode's romlists; Attract-Mode Plus is optional). The arcade ones carry the name, year, manufacturer, clones and category from MAME's XML (the AttractPlus ROM List, <code>fliperos-romclean romlist</code>);
 - the game filters the Setup writes into every Attract-Mode display (<code>fliperos-setup --filters</code>), plus Favourites;
 - FliperOS's own favourites (<code>~/.config/fliperos/favourites</code>) and the game information saved in <code>~/media/info</code>.</p>
 <p><strong>The lists follow the folders.</strong> When the frontend opens, and whenever a games folder changes (games copied over the network or from a USB disk), it asks the Setup to redo the lists in the background (<code>fliperos-setup --romlists</code>). New arcade sets get their MAME names right away: when MAME's list is not cached yet, GroovyMAME's <code>-listxml</code> is read once (about a minute).</p>
+<p><strong>Vertical monitor.</strong> With Video Setup &gt; Monitor orientation on a vertical setting, the frontend is laid out standing up (240x320) and turned to the monitor's side when shown, the same side GroovyMAME turns the games to (<code>ror</code> for clockwise, <code>rol</code> for counter-clockwise). In the list the picture goes on top and the games below; the grid has three rows of 3:4 thumbnails; the controls guide stacks the stick above the buttons.</p>
 <p><strong>Three views</strong> (Start switches them):
 - <strong>List</strong>: the games on the left, the picture, logo and information on the right. A game with clones has a "+" on its left: button 1 unfolds the clones under it, each with what differs in its name (the region, the set, bootleg).
-- <strong>Full screen</strong>: the game's video or picture behind, the name and information in front, and on the right the list as four stacked thumbnails, with arrows above and below while there are more games that way; the column slides to its new place. The pictures of the games around the cursor are read ahead, so changing game is instant.
-- <strong>Grid</strong>: three thumbnails a row, two rows, the chosen one bigger: 4:3 with the game's screenshot (or its cover), 3:4 when Video Setup has the monitor vertical. A scrollbar in the corner, with a small arrow above and below it while there are more rows that way.</p>
-<p><strong>The game's video.</strong> In the list and in full screen, the game's video (<code>~/media/preview/&lt;folder&gt;/&lt;set&gt;.mp4</code>) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. In any view, a game missing some of its art (screenshot, cover, marquee, logo or video) gets the missing pieces scraped by itself when the cursor stays on it for 2 seconds, once per game; they land in the same <code>~/media</code> folders the scraper uses. The Arcade Database has no logos: the logo, and the video it lacks, come one file at a time from the archive.org packs of Setup &gt; Games &gt; Scraper &gt; Art packs by torrent, without downloading the pack.</p>
-<p>Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control with the buttons.</p>
+- <strong>Full screen</strong>: the game's video or picture behind (it slides to the next game with the cursor; the videos of the 3 games before and after are opened ahead, held on their first frame), the name and information in front, and on the right the list as four stacked thumbnails, with arrows above and below while there are more games that way; the column slides to its new place. The pictures of the games around the cursor are read ahead, so changing game is instant.
+- <strong>Grid</strong>: three thumbnails a row, two rows, all the same size: 4:3 with the game's screenshot (or its cover), 3:4 when Video Setup has the monitor vertical. The chosen one has a pink frame that slides to it, and the rows slide too. Every visible game plays its video at once, silent except the chosen one; the videos of the 3 rows above and below are opened and held on their first frame, so a new row starts playing at once. A scrollbar in the corner, with a small arrow above and below it while there are more rows that way.</p>
+<p><strong>The game's video.</strong> In the three views, the game's video (<code>~/media/preview/&lt;folder&gt;/&lt;set&gt;.mp4</code>) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. In any view, a game missing some of its art (screenshot, cover, marquee, logo or video) gets the missing pieces scraped by itself when the cursor stays on it for 2 seconds, once per game; they land in the same <code>~/media</code> folders the scraper uses. The logo comes from the Arcade Database too (its "decals"); what it lacks comes one file at a time from the archive.org packs of Setup &gt; Games &gt; Scraper &gt; Art packs by torrent, without downloading the pack.</p>
+<p><strong>Automatic scrape.</strong> While the frontend is open, it fetches in the background, one game at a time, what each game in the folders still lacks:
+- arcade: the information, screenshot, flyer, marquee and logo from the Arcade Database;
+- consoles: the cover and screenshot from libretro-thumbnails;
+- videos and the logos still missing: the torrent packs of Setup &gt; Games &gt; Scraper &gt; Art packs by torrent, only the files of the games you have (<code>fliperos-setup --mediapacks auto</code>, checked every 6 hours). A pack that keeps its files in one .zip per letter (the MAME videos) would download whole letters, gigabytes for a few videos: it stays out of the torrent, and the frontend fetches each file from inside the zip over HTTP instead.</p>
+<p>It pauses while a game is open. A game is tried once every 30 days (what a source does not have stays missing): <code>~/.local/share/fliperos/scrape-state.json</code>. Tab &gt; Frontend options shows a progress bar, how many games are left and the torrents' progress.</p>
+<p>Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control (a pistol for light-gun games, which Arcadeflow has no icon for) with the buttons.</p>
 <p><strong>Controls.</strong> A guide shows them each time the frontend opens; any button closes it.
 - Up and down move through the games; past the last one comes the first again, and before the first the last (holding stops at the end, the next press goes around). Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).
   - The letter mode stays after letting go: each tap of up or down moves one letter.
   - Two seconds without touching anything (or any other button) end it, on the first game of that letter.
-- Left and right change the romlist (each games folder, and Arcade with all the arcade folders together); the screen slides to the new one. In the grid they move through it, and change the romlist only when the chosen game already touches that side; a tab on the edge names the next one.
+- Left and right change the game list (each games folder, and Arcade with all the arcade folders together); the screen slides to the new one. Each game list remembers where the cursor was, also after the frontend is closed or the cabinet turned off. In the grid they move through it, and change the game list only when the chosen game already touches that side; a tab below the thumbnails names the next one.
 - Button 1 opens the game's menu: Play, Favourite and "+". The "+" page has the game's information from the Arcade Database, saved on the cabinet.
 - Button 2 goes back; from the list, it asks whether to return to the FliperOS menu.
 - Buttons 3 and 6 move a page up and down. Button 4 marks or unmarks the favourite. Button 5 opens the filters.
@@ -862,9 +871,9 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>When there is no game (a frontend, an emulator's menu) nothing happens. First a text scrolls once: the game's high scores, or "Now Playing" and the game's name. Then the game's marquee stays.
 - <strong>High scores</strong>: for arcade games, the text is the top three scores (<code>#1 19,130 DAA #2 ...</code>). They come from the game's <code>.hi</code> file, the newest one among <code>~/.mame/hiscore</code> (GroovyMAME's <code>hiscore</code> plugin) and the RetroArch saves folder (<code>/opt/fliperos/saves/retroarch</code>, where the MAME and FBNeo cores write theirs).</p>
 <p>The hi2txt program reads the file, as in Pixelcade's installer. Extras &gt; Pixelcade downloads it (pinned by hash) into <code>~/pixelcade/hi2txt</code> and installs Java from apt (<code>default-jre-headless</code>), which it needs. A game that hi2txt doesn't know shows its name instead.
-- <strong>Game closed</strong>: the helper waits for the game to end and then shows the game's marquee the way the frontend selection does. That matters in Pegasus and RetroFE, which don't report what is selected.
+- <strong>Game closed</strong>: the helper waits for the game to end and then shows the game's marquee the way the frontend selection does. That matters in Pegasus, which doesn't report what is selected.
 - <strong>Game selected</strong>: in <strong>ES-DE</strong>, through its custom event scripts (<code>~/ES-DE/scripts/game-select</code> and <code>system-select</code>, with <em>Custom event scripts</em> and <em>Browsing custom events</em> turned on; browsing doesn't wait for them).</p>
-<p>In <strong>Attract-Mode Plus</strong>, through FliperOS's <em>Pixelcade</em> plugin, which is copied to <code>~/.attract/plugins</code> and turned on in <code>plugins.cfg</code>. Pegasus and RetroFE have no event hooks, so they only show the game that was opened.</p>
+<p>In <strong>Attract-Mode Plus</strong>, through FliperOS's <em>Pixelcade</em> plugin, which is copied to <code>~/.attract/plugins</code> and turned on in <code>plugins.cfg</code>. Pegasus has no event hooks, so it only shows the game that was opened.</p>
 <p>The service writes these frontend settings at every boot; if the frontend is open at that moment, they wait for the next boot.
 - <strong>Screensaver</strong>: when the screensaver of ES-DE (<code>screensaver-start</code> and <code>screensaver-end</code> scripts) or Attract-Mode Plus starts, the marquee goes into Pixelcade's attract mode, a playlist you set up on the settings page. When it ends, the marquee shows the selected game or system again.
 - <strong>Achievements</strong>: with RetroAchievements turned on in RetroArch (<code>cheevos_enable = "true"</code>), each unlocked achievement shows on the marquee, and then the game's marquee comes back.</p>
@@ -934,10 +943,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 - <strong>Checking a game</strong>: open it and run <code>fliperos-versus watch mame &lt;game&gt;</code> over SSH: it prints the wins and the characters as they change, to compare with the screen.
 - The count starts again when the game closes. Only with a Pixelcade or a ZeDMD installed; without one, nothing is turned on.</p>
 <h2 id="apt-repository">APT repository</h2>
-<p>The frontends (Attract-Mode Plus, EmulationStation, RetroFE, Pegasus) come from a dedicated APT repository of prebuilt <code>.deb</code>s, like GroovyArcade's <code>groovy-ux-repo</code> (<code>packaging/build-deb.sh</code>, <code>packaging/make-repo.sh</code>, <code>Dockerfile.packages</code>, recipes in <code>packaging/packages/</code>).</p>
+<p>The frontends (Attract-Mode Plus, EmulationStation, Pegasus) come from a dedicated APT repository of prebuilt <code>.deb</code>s, like GroovyArcade's <code>groovy-ux-repo</code> (<code>packaging/build-deb.sh</code>, <code>packaging/make-repo.sh</code>, <code>Dockerfile.packages</code>, recipes in <code>packaging/packages/</code>).</p>
 <p>The <code>config/fliperos-sessions.conf</code> table says, for each launcher, whether it runs in KMS or X (from galauncher's <code>videodata.conf</code> table) and which package it comes from.</p>
 <p>The build carries the repository into the image (<code>/opt/fliperos/repo</code>, <code>deb [trusted=yes] file:/opt/fliperos/repo ./</code>, option <code>--repo</code>) and already installs Attract-Mode Plus; without it, the cabinet's apt said "Unable to locate package".</p>
-<p>Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus have recipes; RetroFE doesn't yet, and shows in Setup &gt; Games &gt; Frontend as <em>not available yet</em>.</p>
+<p>Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus have recipes.</p>
 <h1 id="Scoreboard-games">Scoreboard games</h1>
 <p>Every game shows on the LED display (ZeDMD or Pixelcade): its artwork or name when it is selected and when it opens, see <a href="#Frontends">Frontends</a>. This page lists the games that also have the <strong>scoreboard mode</strong>: the two characters and each side's wins in the session, described in <a href="#Frontends">Versus score on the LED display</a>.</p>
 <p>The list is the set of games <a href="https://www.fightcade.com">Fightcade</a> has a detector for (<a href="https://github.com/fightcadeorg/fightcade-detectors">fightcade-detectors</a>, commit <code>de9e7a9</code>), crossed with the sets each emulator has: 230 ROM sets.</p>
@@ -3000,7 +3009,13 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>It only runs when a folder of <code>~/roms</code> or <code>~/bios</code> changed since the last check (a deleted BIOS comes back); without network it tries again 10 minutes later. <strong>Check when the menu opens</strong> turns it off (<code>bios_auto=off</code> in <code>fliperos.conf</code>).</p>
 <p>The screen shows how many were downloaded, how many were already there and which ones <strong>aren't in the pack</strong>, which you put in <code>~/bios</code> yourself. The pack is Batocera 36's: a newer MAME may want a BIOS file it doesn't have yet. State in <code>/var/lib/fliperos/bios</code> (<code>config/fliperos-bios</code>, <code>lib/downloader.sh</code>).</p>
 <h1 id="Scraper">Scraper</h1>
-<p><strong>Setup &gt; Games &gt; Scraper</strong> has three items: <strong>Scrape the games</strong>, <strong>Scraper provider</strong> and <strong>Art packs by torrent</strong>.</p>
+<p><strong>Setup &gt; Games &gt; Scraper</strong> has four items: <strong>Scrape the games</strong>, <strong>Scrape with a site (Skyscraper)</strong>, <strong>Scraper provider</strong> and <strong>Art packs by torrent</strong>.</p>
+<p><strong>Scrape the games</strong> is the FliperOS scraper, the same one the <a href="#Frontends">FliperOS frontend</a> runs by itself in the background. For every game in the folders (or one folder), it fetches only what the game still lacks, with no account:
+- arcade: the information, screenshot, flyer, marquee and logo from the Arcade Database;
+- consoles: the cover and screenshot from libretro-thumbnails;
+- logos and videos: the art packs below, by torrent; a pack kept in one <code>.zip</code> per letter (the MAME videos) is fetched one file at a time from inside the zip over HTTP instead of whole letters.</p>
+<p>A bar shows each game and how many are left; at the end it says how many games still lack something no source has. It is <code>gui/fliperos-scrape</code>, run as the player; while it runs, the frontend's own scrape waits. The games it tried are recorded in <code>~/.local/share/fliperos/scrape-state.json</code>, so the frontend does not try them again for 30 days.</p>
+<p><strong>Scrape with a site</strong> is the Skyscraper scraper below: the site chosen in Scraper provider (ScreenScraper with your account, for instance), and the game lists of Attract-Mode Plus, ES-DE and Pegasus.</p>
 <p><strong>Scraper provider</strong> picks where the art and the information come from, and keeps the account of the providers that ask for one, the way ES-DE and Arcadeflow keep the ScreenScraper login in their options:</p>
 <table>
 <thead>
@@ -3054,7 +3069,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>Where a pack keeps the files inside <code>.zip</code> archives by letter (the MAME videos), only the archives of the letters your games start with are downloaded, and only your games' files come out of them.</p>
 <p>The download is done by the same Transmission service as the <a href="#ROMs">Downloader</a>, in the background, even with a game open; when a torrent ends, each file goes to <code>~/media/logo/&lt;games folder&gt;</code> or <code>~/media/preview/&lt;games folder&gt;</code> with the name of the ROM, and the torrent is removed.</p>
 <p><strong>Add a torrent</strong> takes a pack of your own (a magnet link or the address of a <code>.torrent</code>, the kind of art and the folder it is for), and the link of a pack that comes filled in can be changed. The packs are in <code>config/fliperos-media-torrents</code> and the program is <code>/opt/fliperos/bin/fliperos-mediapacks</code>.</p>
-<p><strong>Scrape the games</strong> — covers, screenshots, logos, videos and information for each ROM, with <strong>Skyscraper</strong> (the same one GroovyArcade packages), from the one chosen in Scraper provider.</p>
+<p><strong>Scrape with a site</strong> — covers, screenshots, logos, videos and information for each ROM, with <strong>Skyscraper</strong> (the same one GroovyArcade packages), from the one chosen in Scraper provider.</p>
 <p><strong>What to fetch</strong> is a checklist: screenshots (<code>snap</code>), logos, covers (<code>box</code>), marquees, descriptions (<code>texto</code>) and videos (<code>preview</code>, unchecked at first: they take much more space).</p>
 <p>Skyscraper only downloads the checked types (<code>--flags noscreenshots,nocovers,nowheels,nomarquees</code> and <code>videos</code>) and only exports those; the choice is remembered. An artwork type the folder didn't have yet makes it fetch again the games already in the cache (<code>--refresh</code>): without that Skyscraper doesn't go back to them.</p>
 <p>The folders with games (each one's <code>_info.txt</code> doesn't count) that FliperOS knows how to open are included: <code>~/roms/mame</code>, <code>dreamcast</code>, <code>ps2</code>, <code>dolphin</code> and the RetroArch core folders (<code>~/roms/retroarch/&lt;core&gt;</code>, by the platform of the <code>systemid</code> in the core's <code>.info</code>).</p>
@@ -3984,7 +3999,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <h2 id="build">Build</h2>
 <p>Always in Docker (<code>CLAUDE.md</code> forbids chroot with the host's <code>/dev</code> on WSL).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.10.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.11.iso
 </code></pre>
 <table>
 <thead>
@@ -4031,7 +4046,7 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <p>What doesn't exist in Ubuntu 24.04 is downloaded with a pinned version and hash: Limine 11.4.1, Gum 2.0.2 (the <code>.deb</code> stays for the man pages; the binary is built from the same version's source with <code>patches/gum</code>, compiled with Go 1.26.7: ▲/▼ arrows instead of dots in the menus' pagination, the menu sounds and Space toggling in checklists — gum 2.0.2 only knows the key as <code>" "</code>, and its library calls it <code>space</code> —, put in place of <code>/usr/bin/gum</code> with <code>dpkg-divert</code>), AntiMicroX 3.6.1 (official <code>.deb</code> for 24.04), Skyscraper 3.21.0 (Gemba fork, compiled with Qt6).</p>
 <p>Audit of the generated ISO (read-only): checks the boot menu, kernel, setup files, libraries of the compiled programs, EDIDs and BIOS/UEFI boot.</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.10.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.11.iso
 </code></pre>
 <h2 id="release">Release</h2>
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
@@ -4041,16 +4056,16 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
 <p><code>powershell
-   git tag 0.10
-   git push origin 0.10</code></p>
+   git tag 0.11
+   git push origin 0.11</code></p>
 <p>Pushing the tag triggers the GitHub Actions <strong>Release</strong> workflow (<code>.github/workflows/release.yml</code>). It checks that the tag is <code>FLIPEROS_VERSION</code> and that <code>CHANGELOG.md</code> has its section, builds the frontends repository (<code>Dockerfile.packages</code>) and generates the ISO with the same <code>Dockerfile.fliperos</code> as the local build.</p>
 <p>Then it publishes through <code>tools/release-publish.sh</code>, with the workflow's own token. The kernel and frontend <code>.deb</code>s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h).</p>
 <p>If it fails, <code>fliperos-mkiso.log</code> is kept as a workflow artifact. Run by hand (<em>Actions &gt; Release &gt; Run workflow</em>), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.</p>
-<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.10</code>, <code>git push -f origin 0.10</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
+<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.11</code>, <code>git push -f origin 0.11</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
 <p>To publish an ISO generated here, in the audit container:</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.10.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.11.iso
 </code></pre>
 <p><code>gh auth login</code> is a one-time step: the login stays in the <code>fliperos-gh</code> volume.</p>
 <p><code>tools/release-publish.sh</code> only publishes what can go public:</p>
@@ -4065,8 +4080,8 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p>Switchres opens <code>libX11.so</code>, <code>libXrandr.so</code> and <code>libdrm.so</code> by those unversioned names, which belong to the <code>-dev</code> packages: <code>config/fliperos-dlopen-links</code> scans the binaries in <code>/usr/local</code> and <code>/opt</code> for such names and links them in <code>/usr/local/lib</code> to the installed version, and <code>tools/verify-iso.sh</code> checks the three.</p>
 <p>The packages left with nothing depending on them once the <code>-dev</code> are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an <code>apt autoremove</code> on the installed system doesn't take them.</p>
 <p>The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg <code>path-exclude</code> so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.</p>
-<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.10.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
-<p>Also published: <code>fliperos-0.10.sha256</code> (the whole ISO and each part) and <code>fliperos-0.10-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
+<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.11.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
+<p>Also published: <code>fliperos-0.11.sha256</code> (the whole ISO and each part) and <code>fliperos-0.11-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
 <h2 id="tests">Tests</h2>
 <pre><code class="language-powershell">docker build -t fliperos-tests -f tests/Dockerfile tests
@@ -4173,7 +4188,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>In the loop the Setup never opens anything itself: <strong>Start frontend</strong> and <strong>Start desktop</strong> write the launcher's name to <code>/run/fliperos/launch</code> and exit with code 20, and <code>fliperos-tty1</code> then calls <code>fliperos-session &lt;name&gt;</code> from the login shell, where tty1 is the controlling terminal (<a href="#Installed-system">Installed system</a> explains why). <code>fliperos-menu</code> is the same loop without the boot part.</p>
 <p><code>fliperos-session</code> looks the name up in <code>/etc/fliperos/sessions.conf</code> (and in <code>sessions.custom.conf</code>, the frontends you registered), one launcher per line as <code>name|backend|binary|package|description</code>. The backend decides how it opens:</p>
 <ul>
-<li><code>kms</code>: <code>fliperos-kms-run &lt;binary&gt;</code>. For the frontends (Attract-Mode Plus, ES-DE, RetroFE, Pegasus and your own) it also starts <code>fliperos-escquit</code> and marks the process with <code>FLIPEROS_POWERKEY=frontend</code>.</li>
+<li><code>kms</code>: <code>fliperos-kms-run &lt;binary&gt;</code>. For the frontends (Attract-Mode Plus, ES-DE, Pegasus and your own) it also starts <code>fliperos-escquit</code> and marks the process with <code>FLIPEROS_POWERKEY=frontend</code>.</li>
 <li><code>x</code>: <code>xinit &lt;binary&gt;</code> on the same VT. Only the LXDE desktop uses it.</li>
 <li><code>none</code>: opens nothing; the boot goes straight to the menu.</li>
 </ul>

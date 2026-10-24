@@ -84,7 +84,7 @@ const enUS = {
     viewOnGithub: 'View on GitHub',
   },
   hero: {
-    eyebrow: 'fliperos 0.10 · in development',
+    eyebrow: 'fliperos 0.11 · in development',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Built for CRT.',
     description:

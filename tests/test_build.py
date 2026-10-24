@@ -7353,10 +7353,10 @@ class DraculaThemeTests(unittest.TestCase):
         for key, value in colors:
             self.assertRegex(value, r'^[0-9a-f]{8}$', key)
         # Fora as cores, so o tamanho do texto do GroovyArcade e as pastas da
-        # arte em ~/media.
+        # arte em ~/media, e o skip_warnings (o jogo abre sem a tela de avisos).
         self.assertEqual({key for key, _ in rows} - {key for key, _ in colors},
                          {'font_rows', 'infos_text_size', 'ui_path', 'covers_directory', 'flyers_directory',
-                          'marquees_directory', 'logos_directory'})
+                          'marquees_directory', 'logos_directory', 'skip_warnings'})
         self.assertIn('config/mame-ui.ini', ROOTFS)
         self.assertIn('etc/fliperos/mame/ui.ini', ROOTFS)
 
@@ -10121,7 +10121,7 @@ class DocsTests(unittest.TestCase):
             # Leva a cada pagina da wiki, e so a paginas que existem.
             linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
             self.assertEqual(linked, self.pages())
-            for needed in ('dd if=fliperos-0.10.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
+            for needed in ('dd if=fliperos-0.11.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
                            'tools/wiki-publish.sh', 'openbor/Paks', 'Video Setup'):
                 self.assertIn(needed, readme)
         # O passo a passo tem os mesmos passos numerados nas duas linguas.

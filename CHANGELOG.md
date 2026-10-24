@@ -2,6 +2,49 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.11
+
+FliperOS has a frontend of its own, and it is the default: game lists made by FliperOS itself (Attract-Mode and ES-DE are optional), a grid and a full-screen view with each game's video, and a scraper that fetches the missing art, logos, videos and info of every game by itself. The cabinet also has a web panel at http://fliperos.local: open and close games, see the screen live with sound, change settings mid-game, manage files, the ROM filter and the downloads from a phone. On a vertical monitor the frontend, the Setup menu, the boot screen and the terminal now stand upright. Updates show what they change before asking to apply, and after a new version or update the menu shows what's new once. The frontend and the web panel run on the cabinet; the vertical mode has not been seen on a CRT yet. An installed 0.10 gets all of this through update 18 at boot.
+
+**System changes:**
+
+- **FliperOS frontend** (`fliperos-frontend`, the default session): the look of the Setup menu, a list, a grid of three per row (3:4 tiles on a vertical monitor) and a full-screen view with four thumbnails on the right. Every visible game plays its video, the videos around the cursor are loaded ahead, moves and list changes slide, the list wraps from the last game to the first, and each game list remembers where the cursor stopped. A button guide, clones grouped under their parent, and a Tab menu with Frontend options, favourites, filters and deleting a game. A loading screen replaces the black screen when it opens from the menu
+- **Automatic scrape** in the frontend: what each game lacks (art, logo, video, description, players, buttons) comes from the Arcade Database, libretro-thumbnails and the Internet Archive art packs, torrents first and zip packs one file at a time. Tab > Frontend options shows the progress and how many games are left. A game left under the cursor for 2 s is scraped only when something is missing, once every 30 days
+- **Game lists of FliperOS's own** (`~/.local/share/fliperos/lists`), with the real names from MAME, the real buttons of each arcade game (Controls.dat and Flycast's table) and Naomi, Naomi 2 and Atomiswave split by BIOS. Attract-Mode and ES-DE get copies; favourites, filters and play statistics stay in FliperOS
+- **Vertical monitor**: the frontend and the Setup menu lay out for a 3:4 screen, the boot screen (Plymouth) has upright art, and the terminal boots in 640x480i with an EDID of FliperOS's own (640x240 and 640x480i), so the console has room on its side
+- **GroovyMAME** opens the game straight away: no warnings screen and no "Initializing" (a patch to the binary). Its sound goes through ALSA's default again
+- **Web panel** at http://fliperos.local (port 8081): Status, Games (FliperOS's names, filters, info and favourites), Files, ROM filter, Downloads, Settings that save at once, Terminal, Screenshot, and **Live**: the screen in the browser through WebRTC with the game's sound, plus `/overlay/live` and `/overlay/marquee` pages for OBS
+- The power button closes a game opened from the web panel instead of turning the cabinet off
+- Disks without a label mount in `/media/fliperos` with the disk model's name
+- The initramfs no longer carries nouveau and the NVIDIA firmware (104 MB less); the firmware stays in the system
+- **What's new**: after a new version or update the FliperOS menu shows, once, the changelog of what came in. Setup > System > What's new shows it again
+- **Updates show their changelog** (`updates/notes/NNNN.md`) before asking to apply, with scrolling, and *Read what changes* shows it again
+
+**Package changes:**
+
+- `ffmpeg` is in the image (the frontend's videos and the live screen)
+- **DuckStation** (PlayStation) installs from Setup > Emulators & Games; its license does not allow it in the image
+- RetroFE is no longer offered as a frontend, and the Model 2 Emulator (Wine) is gone: Model 2 is SM2-Emu only
+
+**fliperos-setup changes:**
+
+- Setup > Games > Scraper scrapes the same way as the frontend, with no account needed; the sites with login stay as an option
+- Extras moved into Games, and each emulator has its own Update
+- The graphical menu: a conventional scroll bar in lists, Video Setup > Resolution as a vertical list, one tap on the joystick moves one item, and the menu closes when the Setup dies with a menu on screen
+- The Downloader takes a magnet link or a `.torrent` file
+- Colour calibration changes live with a game open, and going back to the default resets everything
+
+**Tool changes:**
+
+- `fliperos-update notes` prints the changelog of the pending updates; `tools/make-update.sh` refuses to publish an update without `updates/notes/NNNN.md`
+- New `fliperos-scrape` (the scraper of the frontend and the Setup) and `fliperos-web` (the web panel)
+- `tools/cabinet-update.sh` rebuilds the flicker filter and `fliperos-color` when their source changes, and updates the frontends of the local repository
+
+**Documentation:**
+
+- New wiki page: Web panel. The paragraphs are shorter, and the BIOS come through Download BIOS
+- The README presents FliperOS as an alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi
+
 ## 0.10
 
 The Setup has a graphical interface: on the cabinet every menu is a carousel of big icons over an animated background (snow, water, fire, smoke, stars), and over SSH the same menus stay in text. Also new are a flicker filter for 480i, the choice of 640x240 or 480i for each program, colour calibration, a custom monitor range made on the geometry grid, and the choice between the radeon and amdgpu drivers on the AMD cards that work with both. The 0.9.1 ISO never got out (its build stopped on GitHub), so everything written for it below comes in this one. The amdgpu driver was seen working at 15 kHz on the cabinet's R7 240; the 480i filter and the colour calibration have not been seen on a CRT yet. An installed 0.9 already has updates 16 and 17; the rest of this list comes with this ISO.
