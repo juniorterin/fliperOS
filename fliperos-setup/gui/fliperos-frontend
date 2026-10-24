@@ -133,11 +133,15 @@ class Frontend:
             threading.Thread(target=self.prefetch_work, daemon=True).start()
         # O video do jogo (fevideo.py); no --shot, sem video.
         self.player = fevideo.Player()
+        # Os da grade, um por miniatura (fevideo.Grid).
+        self.grid = fevideo.Grid()
         if self.shot:
             self.player.ok = False
+            self.grid.ok = False
         # O ffmpeg do video fecha junto, saia o frontend como sair (o
         # SIGTERM da sessao ou do painel web passa pelo atexit).
         atexit.register(self.player.stop)
+        atexit.register(self.grid.stop)
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
         # O scrape sozinho: o jogo sem video e sem imagem, com o cursor
         # parado nele por AUTO_SCRAPE segundos.
@@ -622,6 +626,7 @@ class Frontend:
         pg = self.pg
         # O video, o som, os controles (e a rede) ficam para o jogo.
         self.player.stop()
+        self.grid.stop()
         self.harvest.paused = True
         self.input.close()
         try:

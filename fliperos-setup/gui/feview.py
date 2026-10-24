@@ -23,6 +23,7 @@ WW, HH = T.WIDTH, T.HEIGHT
 LIST_W, LIST_SH = 174, 74  # a lista do modo lista e a altura da imagem dela
 THUMB = (56, 42)           # as miniaturas da tela cheia
 GRID_COLS = 3              # a grade (o COLS do fliperos-frontend)
+PRELOAD_ROWS = 3           # fileiras da grade com o video pronto, antes e depois
 
 
 def grid_geom(fe):
@@ -104,7 +105,7 @@ def wanted(fe, game):
     else:
         snap = media(fe, game, "snap")
         tile, big, _, _ = grid_geom(fe)
-        for (w, h), pad in ((tile, 2), (big, 6)):
+        for (w, h), pad in ((tile, 2),):
             out.append((snap, w - pad, h - pad, "cover") if snap else (cover, w - pad, h - pad, "fit"))
         out.append((logo, 110, 30, "fit"))
     return [k for k in out if k[0]]
@@ -705,13 +706,50 @@ def grid_image(fe, g, w, h):
     return image(fe, media(fe, g, "box"), w, h)
 
 
-def grid_dim(fe):
-    key = ("grid_dim", grid_geom(fe)[0])
+def video_path(fe, game):
+    key = ("video", game["_system"]["key"], game["Name"])
     if key not in fe.media:
-        d = pygame.Surface(grid_geom(fe)[0], pygame.SRCALPHA)
-        d.fill(T.SPACE + (90,))
-        remember(fe, key, d)
+        remember(fe, key, fe.lib.video(game))
     return fe.media[key]
+
+
+def grid_picture(fe, g, w, h, index):
+    """A miniatura da grade: o video do jogo (o do escolhido com o som, pelo
+    Player; os outros mudos, pelo fevideo.Grid) ou a imagem."""
+    frame_ = None
+    if getattr(fe, "video_ok", False):
+        path = video_path(fe, g)
+        if index == fe.cursor:
+            fe.video_used = True
+            frame_ = fe.player.request(path, w, h, fe.abs_now)
+        if frame_ is None and getattr(fe, "grid", None) is not None:
+            frame_ = fe.grid.frame(path, w, h)
+    if frame_:
+        return pygame.image.frombuffer(frame_, (w, h), "RGB")
+    return grid_image(fe, g, w, h)
+
+
+def grid_videos(fe, top_row, rows_shown, w, h):
+    """Os videos da grade: tocando os das fileiras a vista, prontos (parados no
+    primeiro quadro) os de PRELOAD_ROWS fileiras antes e depois."""
+    if getattr(fe, "grid", None) is None:
+        return
+    if not getattr(fe, "video_ok", False):
+        fe.grid.stop()
+        return
+    cols = GRID_COLS
+
+    def paths(r0, r1):
+        out = []
+        for i in range(max(0, r0) * cols, min(len(fe.rows), r1 * cols)):
+            p = video_path(fe, fe.rows[i][0])
+            if p:
+                out.append(p)
+        return out
+    visible = paths(top_row, top_row + rows_shown + 1)
+    preload = paths(top_row - PRELOAD_ROWS, top_row) + paths(top_row + rows_shown + 1,
+                                                              top_row + rows_shown + 1 + PRELOAD_ROWS)
+    fe.grid.update(visible, preload, w, h)
 
 
 def draw_flow(fe, ui, now):
@@ -730,47 +768,47 @@ def draw_flow(fe, ui, now):
     elif row > top_row + rows_shown - 1:
         top_row = row - rows_shown + 1
     fe.top = top_row * cols
-    first = fe.top
     total_rows = (len(fe.rows) + cols - 1) // cols
+    # As fileiras deslizam ate o lugar novo, e a moldura rosa ate o jogo
+    # escolhido; todo jogo do mesmo tamanho, nenhum escurecido.
+    now_abs = fe.abs_now
+    ftop = ease(fe, "flow_top", top_row, now_abs)
+    frow = ease(fe, "flow_row", row, now_abs)
+    fcol = ease(fe, "flow_col", fe.cursor % cols, now_abs)
+    gw = cols * tw + (cols - 1) * gap
+    ui.set_clip((x0 - 3, y0 - 3, gw + 6, rows_shown * step_y + 2))
     sel = None
-    for i in range(first, min(len(fe.rows), first + rows_shown * cols)):
-        r, c = divmod(i - first, cols)
-        x, y = x0 + c * (tw + gap), y0 + r * step_y
+    first_row = int(math.floor(ftop))
+    for i in range(first_row * cols, min(len(fe.rows), (first_row + rows_shown + 1) * cols)):
+        r, c = divmod(i, cols)
+        x, y = x0 + c * (tw + gap), round(y0 + (r - ftop) * step_y)
         g = fe.rows[i][0]
         if i == fe.cursor:
-            sel = (g, x, y)
-            continue
+            sel = g
         pygame.draw.rect(ui, T.BG_DEEP, (x, y, tw, th))
-        img = grid_image(fe, g, tw - 2, th - 2)
+        img = grid_picture(fe, g, tw - 2, th - 2, i)
         if img:
             blit_center(ui, img, x, y, tw, th)
         else:
             for k, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4]):
-                tiny.text(ui, tiny.fit(line, tw - 6), T.COMMENT, x + 3, y + 4 + k * 8)
-        ui.blit(grid_dim(fe), (x, y))
+                tiny.text(ui, tiny.fit(line, tw - 6), T.FG if i == fe.cursor else T.COMMENT,
+                          x + 3, y + 4 + k * 8)
         pygame.draw.rect(ui, T.LINE, (x, y, tw, th), 1)
         if g.get("Favourite") == "1":
             star(ui, x + tw - 6, y + 6, T.YELLOW, 4)
+        if fe.scraping is g:
+            looking(ui, x + 2, y + th - 12, tw - 4)
+    grid_videos(fe, top_row, rows_shown, tw - 2, th - 2)
+    fx = round(x0 + fcol * (tw + gap))
+    fy = round(y0 + (frow - ftop) * step_y)
+    pygame.draw.rect(ui, T.PINK, (fx - 2, fy - 2, tw + 4, th + 4), 2)
+    ui.set_clip(None)
     # No canto, a barra de rolagem com uma seta pequena em cima e embaixo.
     bx_, by_, bh_ = SX + SW - 2, y0 + 7, rows_shown * step_y - 22
     W.scrollbar(ui, bx_, by_, bh_, top_row, rows_shown, max(rows_shown, total_rows))
     arrow(ui, bx_ + 2, by_ - 4, (0, -1), T.PINK if top_row > 0 else T.LINE, 3)
     arrow(ui, bx_ + 2, by_ + bh_ + 4, (0, 1), T.PINK if top_row + rows_shown < total_rows else T.LINE, 3)
     if sel:
-        g, x, y = sel
-        bx = max(x0, min(x + tw // 2 - bw // 2, x0 + cols * (tw + gap) - gap - bw))
-        # Nao cobre a linha do filtro, debaixo do titulo.
-        by = max(36, min(y + th // 2 - bh // 2, 188 - bh))
-        tile_frame(ui, (bx, by, bw, bh), True, now)
-        img = grid_image(fe, g, bw - 6, bh - 6)
-        if img:
-            blit_center(ui, img, bx, by, bw, bh)
-        else:
-            for k, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), bw - 8)[:4]):
-                W.text(ui, fit(line, bw - 8), T.FG, bx + 4, by + 6 + k * 11)
-        pygame.draw.rect(ui, T.PINK, (bx, by, bw, bh), 2)
-        if fe.scraping is g:
-            looking(ui, bx + 2, by + bh - 12, bw - 4)
         # A aba na borda: mais um toque para aquele lado troca a romlist.
         col = fe.cursor % cols
         if len(fe.cats) > 1 and (col == cols - 1 or fe.cursor == len(fe.rows) - 1 or col == 0):
@@ -1302,11 +1340,13 @@ def draw(fe, now):
     t = now - fe.start
     fe.bg.draw(back, t)
     ui = pygame.Surface((WW, HH), pygame.SRCALPHA)
-    # O video so na lista e na tela cheia, e nao com uma tela inteira por
-    # cima (a pagina "+", o Classify, o Rename).
+    # O video nos tres modos, e nao com uma tela inteira por cima (a pagina
+    # "+", o Classify, o Rename). Fora da grade, os videos dela param.
     fe.abs_now = now
     fe.video_used = False
-    fe.video_ok = fe.mode in ("list", "full") and fe.overlay not in ("more", "classify", "rename")
+    fe.video_ok = fe.overlay not in ("more", "classify", "rename")
+    if (fe.mode != "flow" or not fe.video_ok) and getattr(fe, "grid", None) is not None and fe.grid.videos:
+        fe.grid.stop()
     if not fe.rows:
         empty(fe, ui)
     elif fe.mode == "list":
