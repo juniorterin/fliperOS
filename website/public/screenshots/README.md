@@ -6,6 +6,10 @@ one of these files (`.avif`, `.webp`, `.png` or `.jpg`, first match wins) and is
 left out until it exists. Captions live in `hero.slides` in `src/i18n`.
 Rebuild the site after adding images.
 
+`frontend/` holds the FliperOS frontend in its three views, each with what
+opens in it: 320x240 captures of `fliperos-frontend` (the `--shot` rig),
+scaled 3x nearest-neighbour to 960x720 and saved as lossless WebP.
+
 `gui/` holds every screen of the graphical interface: the `-crt` 960x720 PNGs
 that `sh tools/gui-shots.sh` writes to `.shots/gui` (how the 640x240 frame shows
 on a 4:3 tube), named without the number and converted to lossless WebP. When

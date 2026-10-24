@@ -13,6 +13,7 @@ import { MultiMonitor } from '@/sections/MultiMonitor';
 import { OpenHardware } from '@/sections/OpenHardware';
 import { OpenSource } from '@/sections/OpenSource';
 import { Pixelcade } from '@/sections/Pixelcade';
+import { Requirements } from '@/sections/Requirements';
 import { Setup } from '@/sections/Setup';
 import { Support } from '@/sections/Support';
 import { WebPanel } from '@/sections/WebPanel';
@@ -36,6 +37,7 @@ export default async function Home() {
         <Pixelcade />
         <OpenHardware />
         <Setup />
+        <Requirements />
         <OpenSource stats={stats} />
         <Faq />
         <Support />

@@ -19,6 +19,7 @@ const ICON: Record<string, string> = {
   'es-de': '/icons/es-de.svg',
   pegasus: '/icons/pegasus.png',
   fightcade: '/icons/fightcade.png',
+  fliperos: '/fliperos-logo.png',
 };
 
 // Monogramas no estilo dos ícones do menu do FliperOS, para quem não tem ícone próprio.
@@ -27,6 +28,7 @@ const MONOGRAM: Record<string, string> = {
   retroarch: 'RA',
   flycast: 'FC',
   pcsx2: 'P2',
+  duckstation: 'DS',
   dolphin: 'DO',
   supermodel: 'SM',
   model2: 'M2',

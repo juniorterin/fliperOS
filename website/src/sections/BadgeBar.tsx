@@ -10,7 +10,7 @@ export function BadgeBar() {
   const { t } = useI18n();
   return (
     <section aria-label={t.badges.label} className="relative border-y border-line/60 bg-bg-deeper/50">
-      <ul className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-2.5 px-4 py-6 sm:gap-3 sm:px-6 lg:justify-between lg:px-8">
+      <ul className="flex w-full flex-wrap items-center justify-center gap-2.5 px-4 py-6 sm:gap-3 sm:px-6 lg:px-8 2xl:justify-between">
         {t.badges.items.map((label, i) => {
           const Icon = ICONS[i % ICONS.length];
           return (

@@ -40,7 +40,7 @@ const ptBR: Messages = {
     faq: [
       {
         q: 'O que é o FliperOS?',
-        a: 'O FliperOS é uma distribuição Linux gratuita, baseada no Ubuntu 24.04 (amd64), que transforma um PC num fliperama para monitor CRT. Tem kernel 15 kHz, Switchres, GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin e Supermodel, os frontends Attract-Mode Plus, ES-DE e Pegasus, e um menu de configuração feito para o tubo.',
+        a: 'O FliperOS é uma distribuição Linux gratuita, baseada no Ubuntu 24.04 (amd64), que transforma um PC num fliperama para monitor CRT. Tem kernel 15 kHz, Switchres, GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin e Supermodel, um frontend próprio (Attract-Mode Plus, ES-DE e Pegasus são opções), um painel web e um menu de configuração feito para o tubo.',
       },
       {
         q: 'Qual a diferença do FliperOS para o GroovyArcade, Batocera, Recalbox, ReplayOS e RGB-Pi?',
@@ -82,6 +82,7 @@ const ptBR: Messages = {
     crt: 'CRT',
     multiMonitor: 'Multimonitor',
     setup: 'Setup',
+    requirements: 'Requisitos',
     github: 'GitHub',
     guide: 'Guia de instruções',
     viewOnGithub: 'Ver no GitHub',
@@ -108,6 +109,21 @@ const ptBR: Messages = {
     slides: [
       { id: 'gui/main', title: 'Menu principal', caption: 'Sobe direto em 15 kHz. Não precisa de LCD para instalar.' },
       { id: 'gui/main-setup', title: 'Setup', caption: 'Vídeo, áudio, rede, controles, jogos e sistema.' },
+      { id: 'frontend/list-guide', title: 'Frontend do FliperOS', caption: 'O frontend padrão abre com um guia dos botões do painel.' },
+      { id: 'frontend/list', title: 'Modo lista', caption: 'Os jogos à esquerda, a imagem, o logo e as informações à direita.' },
+      { id: 'frontend/list-clones', title: 'Clones', caption: 'O botão 1 abre os clones do jogo logo embaixo dele.' },
+      { id: 'frontend/list-card', title: 'Cartão do jogo', caption: 'Jogar, favoritar, ou + para tudo sobre o jogo.' },
+      { id: 'frontend/list-more', title: 'Página do jogo', caption: 'Botões, nota e história, salvos para ver sem internet.' },
+      { id: 'frontend/list-filter', title: 'Filtros', caption: 'Favoritos, mais jogados e os filtros do próprio Setup.' },
+      { id: 'frontend/list-options', title: 'Menu do Tab', caption: 'Classificar, renomear, fazer o scrape ou apagar um jogo; o modo de exibição.' },
+      { id: 'frontend/list-classify', title: 'Classificar', caption: 'Gênero, jogadores, botões e mais, usados pelos filtros.' },
+      { id: 'frontend/list-rename', title: 'Renomear', caption: 'Um teclado na tela, digitado com o joystick.' },
+      { id: 'frontend/full', title: 'Tela cheia', caption: 'O vídeo do jogo ao fundo, o nome e as informações na frente.' },
+      { id: 'frontend/full-card', title: 'Cartão na tela cheia', caption: 'O mesmo cartão, por cima da imagem do jogo.' },
+      { id: 'frontend/full-clone', title: 'Clones na tela cheia', caption: 'Cada clone vem depois do pai, com a tag CLONE.' },
+      { id: 'frontend/grid', title: 'Modo grade', caption: 'Três por fileira, cada jogo à vista tocando o seu vídeo.' },
+      { id: 'frontend/grid-card', title: 'Cartão na grade', caption: 'O botão 1 abre o cartão em qualquer miniatura.' },
+      { id: 'frontend/grid-options', title: 'Modo de exibição', caption: 'Lista, tela cheia ou grade, trocado no menu do Tab ou no Start.' },
       { id: 'gui/live', title: 'Instalar no HD/SSD', caption: 'Copia o FliperOS para um disco deste computador.' },
       { id: 'gui/setup', title: 'FliperOS Setup', caption: 'Todo menu é um carrossel arcade, desenhado em 320x240 para o CRT.' },
       { id: 'gui/setup-games', title: 'Jogos', caption: 'Frontend, emuladores, pastas, downloader e scraper.' },
@@ -146,7 +162,7 @@ const ptBR: Messages = {
   },
   badges: {
     label: 'Destaques técnicos',
-    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'Multimonitor', 'Pixelcade', 'ZeDMD', 'GunCon 2', 'Open Source'],
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'Frontend FliperOS', 'Painel web', 'Ao vivo + OBS', 'Monitor vertical', 'Multimonitor', 'Baixa latência', 'GunCon 2', 'Pixelcade', 'ZeDMD', 'Updates OTA', 'Open Source'],
   },
   features: {
     kicker: 'Recursos',
@@ -191,6 +207,24 @@ const ptBR: Messages = {
         points: ['Samba', 'SSH', 'roms', 'bios', 'media', 'config'],
       },
       {
+        id: 'frontend',
+        title: 'Um frontend próprio',
+        text: 'O lançador padrão, no visual do Setup: uma lista, uma tela cheia com o vídeo de cada jogo e uma grade. Ele busca sozinho a arte, os logos, os vídeos e as informações que faltam e agrupa os clones debaixo do pai. O Attract-Mode Plus e o ES-DE ficam como opção.',
+        points: [],
+      },
+      {
+        id: 'vertical',
+        title: 'Monitor vertical',
+        text: 'Deite o tubo de lado e o frontend, o menu do Setup, a tela de boot e o terminal ficam em pé com ele. Ainda não visto num tubo de verdade.',
+        points: [],
+      },
+      {
+        id: 'updates',
+        title: 'Updates sem ISO nova',
+        text: 'Os updates chegam pela rede no boot e mostram o que mudam antes de perguntar. Cada emulador em Setup > Emulators & Games mostra a sua versão e o que o update dele traz.',
+        points: [],
+      },
+      {
         id: 'multimonitor',
         title: 'Dois ou três monitores',
         text: 'Ligue dois CRTs de arcade nas saídas analógicas de uma placa de vídeo, ou mais com uma segunda placa de vídeo ou um conversor ativo (ainda em teste). Jogos feitos para várias telas, como Darius, Punch-Out!! e Ferrari F355 Challenge, abrem cada tela no seu próprio tubo, no seu próprio modo de 15 kHz. O resto fica no monitor 1.',
@@ -214,11 +248,11 @@ const ptBR: Messages = {
     intro:
       'Abra o endereço do gabinete em qualquer navegador da sua rede, no celular, no tablet ou no PC, e entre. Nada para instalar. Escolha um jogo e ele abre no tubo, veja o gabinete ao vivo, mude a cor enquanto joga, copie jogos e veja o que o sistema está fazendo.',
     addressLabel: 'Abra no navegador:',
-    caption: 'Capturas reais do painel num gabinete com FliperOS: um jogo de arcade aberto com as informações do Arcade Database, e a lista de jogos no celular',
+    caption: 'Capturas reais do painel num gabinete com FliperOS rodando Street Fighter II: o jogo aberto com as informações do Arcade Database, e o jogando agora no celular',
     shots: {
-      frontend: 'O painel web num navegador de PC: a página Frontend com Fighters Swords aberto, os dados, as imagens do jogo e do título e a história do arcade-history.com.',
-      phone: 'O painel web no celular: o jogando agora com o FPS, e a lista de jogos do MAME com busca e filtros.',
-      status: 'A página Status do painel web: o jogando agora, o cartão de screenshot e o cartão de vídeo com o monitor, a resolução e o modo de 15,659 kHz na tela.',
+      frontend: 'O painel web num navegador de PC: a página Frontend com Street Fighter II: The World Warrior aberto, os dados, as imagens do jogo, do título, do marquee, do flyer e do gabinete, os botões e a história do arcade-history.com.',
+      phone: 'O painel web no celular: Street Fighter II jogando agora a 59,6 FPS, e a lista de jogos do MAME com busca e filtros.',
+      status: 'A página Status do painel web com Street Fighter II rodando: jogando agora a 59,6 FPS, um screenshot do tubo (Ken contra Ryu) e o cartão de vídeo com o modo 384x224 a 15,623 kHz na tela.',
     },
     points: [
       { id: 'play', title: 'Escolha um jogo e jogue', text: 'Busque os jogos de cada sistema com os seus filtros e favoritos, veja as imagens, os botões e a história de cada jogo de arcade, e aperte Jogar: ele abre no tubo.' },
@@ -243,6 +277,7 @@ const ptBR: Messages = {
       { id: 'retroarch', name: 'RetroArch', systems: 'NES, SNES, Mega Drive, GBA, PS1, MAME 2010 (MAME 3D: arcade baseado no PlayStation)', note: 'KMS, CRT SwitchRes, 6 cores inclusos' },
       { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressivo em 15 kHz, F355 Challenge em 3 monitores' },
       { id: 'pcsx2', name: 'PCSX2', systems: 'PlayStation 2', note: 'AppImage oficial' },
+      { id: 'duckstation', name: 'DuckStation', systems: 'PlayStation', note: 'Instalado pelo Setup (a licença dele o deixa fora da imagem)' },
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', note: 'Compilado da versão estável' },
       { id: 'supermodel', name: 'Supermodel', systems: 'Sega Model 3', note: '640x240 a 57,524 Hz em 15 kHz' },
       { id: 'model2', name: 'SM2-Emu', systems: 'Sega Model 2', note: 'Compilado pelo menu, a toda velocidade em CPUs antigas' },
@@ -252,7 +287,8 @@ const ptBR: Messages = {
     frontendsTitle: 'Frontends',
     frontendsIntro: 'Escolha o lançador padrão em Setup > Games > Frontend.',
     frontends: [
-      { id: 'attract-mode', name: 'Attract-Mode Plus', text: 'Build KMS/DRM com o tema AdvanceMenu.' },
+      { id: 'fliperos', name: 'Frontend FliperOS', text: 'O padrão: lista, tela cheia e grade, com scrape automático.' },
+      { id: 'attract-mode', name: 'Attract-Mode Plus', text: 'Build KMS/DRM; o Setup baixa o tema Arcadeflow.' },
       { id: 'es-de', name: 'EmulationStation (ES-DE)', text: 'Tema FliperOS 240p nas cores Dracula.' },
       { id: 'pegasus', name: 'Pegasus', text: 'Tema FliperOS 240p; esquerda e direita trocam de sistema.' },
       { id: 'fightcade', name: 'Fightcade 2', text: 'Partidas online na resolução nativa de cada jogo; baixado pelo Setup.' },
@@ -427,6 +463,49 @@ const ptBR: Messages = {
       { id: 'update', label: 'System Update', text: 'apt update e upgrade com progresso real' },
     ],
     hint: 'setas: mover  ·  enter: selecionar  ·  esc: voltar',
+  },
+  requirements: {
+    kicker: 'Requisitos',
+    title: 'O que o seu PC precisa.',
+    intro:
+      'O FliperOS roda num PC comum de 64 bits. O mínimo joga até o PlayStation 1 e a maior parte dos arcades; o ideal joga tudo o que vem na imagem, PS2, Model 3 e Dreamcast incluídos, no modo Low latency.',
+    tiers: [
+      {
+        id: 'minimum',
+        title: 'Mínimo',
+        badge: 'Modo Standard',
+        text: 'Até o PlayStation 1 e a maior parte dos arcades.',
+        rows: [
+          { id: 'cpu', label: 'CPU', value: 'x86 de 64 bits (amd64) com 2 núcleos' },
+          { id: 'memory', label: 'Memória', value: '4 GB de RAM' },
+          { id: 'disk', label: 'Disco', value: '16 GB (HD, SSD ou um disco USB)' },
+          { id: 'gpu', label: 'Vídeo', value: 'AMD Radeon com VGA ou DVI-I, da HD 2000 às R7/R9 200 e 300 (GCN 1.0), para 15 kHz nativo. Intel e NVIDIA funcionam a 15 kHz com super resoluções.' },
+          { id: 'monitor', label: 'Monitor', value: 'Um CRT de arcade de 15 kHz, um monitor de 25 ou 31 kHz, ou um LCD' },
+          { id: 'boot', label: 'Boot', value: 'BIOS ou UEFI com o Secure Boot desligado; um pendrive para a ISO' },
+          { id: 'network', label: 'Rede', value: 'Opcional: cabo ou Wi-Fi para o painel web, o scraper, os downloads e os updates' },
+        ],
+      },
+      {
+        id: 'ideal',
+        title: 'Ideal',
+        badge: 'Tudo, em Low latency',
+        text: 'Todos os emuladores da imagem, PS2, Model 3 e Dreamcast incluídos, com o modo Low latency.',
+        rows: [
+          { id: 'cpu', label: 'CPU', value: '4 núcleos físicos com AVX2, PassMark de uma thread 2000 ou mais (Core i7-7700, Ryzen 5 3600 ou mais novo)' },
+          { id: 'memory', label: 'Memória', value: '16 GB de RAM' },
+          { id: 'disk', label: 'Disco', value: 'SSD' },
+          { id: 'gpu', label: 'Vídeo', value: 'AMD GCN 1.0 ou 1.1 com VGA ou DVI-I (HD 7000, R7/R9 200 e 300, como a R7 240): radeon ou amdgpu, com Vulkan' },
+          { id: 'monitor', label: 'Monitor', value: 'Um CRT de arcade de 15 kHz; dois ou três para os jogos de várias telas' },
+          { id: 'boot', label: 'Boot', value: 'BIOS ou UEFI com o Secure Boot desligado' },
+          { id: 'network', label: 'Rede', value: 'Cabo: a tela ao vivo com som no painel web' },
+        ],
+      },
+    ],
+    testedLabel: 'Onde é testado:',
+    tested:
+      'O FliperOS é feito num gabinete com Intel Core i7 870, 6 GB de RAM, uma Radeon R7 240 na VGA a 15 kHz e um SSD, uma máquina mais antiga que a ideal.',
+    note: 'No CRT a placa de vídeo pesa pouco: em 240 linhas até a R7 240 passa do que o PCSX2 pede. Placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA. Setup > System > Latency > Check this computer compara o seu PC com estes números.',
+    cta: 'Hardware recomendado, na documentação',
   },
   openSource: {
     kicker: 'Código aberto',

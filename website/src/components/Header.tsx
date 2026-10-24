@@ -8,13 +8,14 @@ import { GithubIcon } from './GithubIcon';
 import { LanguageSwitch } from './LanguageSwitch';
 import { LogoMark, Wordmark } from './Logo';
 
-const NAV: { id: SectionId; key: 'features' | 'webPanel' | 'emulators' | 'crt' | 'multiMonitor' | 'setup' | 'github' }[] = [
+const NAV: { id: SectionId; key: 'features' | 'webPanel' | 'emulators' | 'crt' | 'multiMonitor' | 'setup' | 'requirements' | 'github' }[] = [
   { id: 'features', key: 'features' },
   { id: 'web-panel', key: 'webPanel' },
   { id: 'emulators', key: 'emulators' },
   { id: 'crt', key: 'crt' },
   { id: 'multi-monitor', key: 'multiMonitor' },
   { id: 'setup', key: 'setup' },
+  { id: 'requirements', key: 'requirements' },
   { id: 'open-source', key: 'github' },
 ];
 
@@ -69,7 +70,7 @@ export function Header() {
       >
         {t.a11y.skipToContent}
       </a>
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="flex h-16 w-full items-center gap-4 px-4 sm:px-6 lg:px-8">
         <a href="#top" className="flex items-center gap-2.5" aria-label="FliperOS">
           <LogoMark />
           <Wordmark />
