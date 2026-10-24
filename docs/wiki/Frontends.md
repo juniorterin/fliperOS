@@ -16,6 +16,13 @@ It shows the same thing as the [Web panel](Web-panel.md), from the same code:
 
 **The game's video.** In the list and in full screen, the game's video (`~/media/preview/<folder>/<set>.mp4`) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. In any view, a game missing some of its art (screenshot, cover, marquee, logo or video) gets the missing pieces scraped by itself when the cursor stays on it for 2 seconds, once per game; they land in the same `~/media` folders the scraper uses. The logo comes from the Arcade Database too (its "decals"); what it lacks comes one file at a time from the archive.org packs of Setup > Games > Scraper > Art packs by torrent, without downloading the pack.
 
+**Automatic scrape.** While the frontend is open, it fetches in the background, one game at a time, what each game in the folders still lacks:
+- arcade: the information, screenshot, flyer, marquee and logo from the Arcade Database;
+- consoles: the cover and screenshot from libretro-thumbnails;
+- videos and the logos still missing: the torrent packs of Setup > Games > Scraper > Art packs by torrent, only the files of the games you have (`fliperos-setup --mediapacks auto`, checked every 6 hours).
+
+It pauses while a game is open. A game is tried once every 30 days (what a source does not have stays missing): `~/.local/share/fliperos/scrape-state.json`. Tab > Frontend options shows a progress bar, how many games are left and the torrents' progress.
+
 Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control with the buttons.
 
 **Controls.** A guide shows them each time the frontend opens; any button closes it.

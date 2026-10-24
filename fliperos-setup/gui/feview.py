@@ -999,11 +999,11 @@ def system_icon(cat):
 
 
 def draw_options(fe, ui, now):
-    """O menu do Tab: as opcoes do jogo e, abaixo de uma linha, as do
-    frontend (o modo de exibicao)."""
+    """O menu do Tab: as opcoes do jogo e, debaixo delas, as do frontend (o
+    modo de exibicao e o andamento do scrape automatico)."""
     g = fe.game()
-    pw, ph = 236, 214
-    px, py = (WW - pw) // 2, 14
+    pw, ph = 236, 224
+    px, py = (WW - pw) // 2, 8
     card(ui, (px, py, pw, ph))
     ui.blit(W.big("GAME OPTIONS", 1, W.LABEL), (px + 10, py + 8))
     if g:
@@ -1013,10 +1013,10 @@ def draw_options(fe, ui, now):
              ("SCRAPE THIS GAME", "PICTURES, LOGO, VIDEO AND TEXT, NOW", T.GREEN),
              ("DELETE THIS GAME", "ITS FILES GO AWAY FROM THE FOLDER", T.RED)]
     for i, (label, about, color) in enumerate(items):
-        y = py + 30 + i * 28
+        y = py + 30 + i * 26
         on = i == fe.ov["sel"]
-        tile_frame(ui, (px + 8, y, pw - 16, 25), on, now)
-        pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 25), 2 if on else 1)
+        tile_frame(ui, (px + 8, y, pw - 16, 24), on, now)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 24), 2 if on else 1)
         ix, iy = px + 22, y + 12
         if i == 0:
             pygame.draw.polygon(ui, color, [(ix - 7, iy - 5), (ix + 3, iy - 5), (ix + 8, iy), (ix + 3, iy + 5),
@@ -1032,28 +1032,61 @@ def draw_options(fe, ui, now):
         else:
             trash(ui, ix, iy, color)
         W.text(ui, label, T.FG if on else T.COMMENT, px + 36, y + 4)
-        tiny.text(ui, about, color if on else T.LINE, px + 36, y + 16)
+        tiny.text(ui, about, color if on else T.LINE, px + 36, y + 15)
     # As opcoes do frontend, debaixo das do jogo.
-    y = py + 144
-    ui.blit(W.big("FRONTEND OPTIONS", 1, W.LABEL), (px + 10, y + 10))
-    y += 26
+    y = py + 134
+    ui.blit(W.big("FRONTEND OPTIONS", 1, W.LABEL), (px + 10, y + 2))
+    y += 14
     on = fe.ov["sel"] == 4
-    tile_frame(ui, (px + 8, y, pw - 16, 40), on, now)
-    pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 40), 2 if on else 1)
-    W.text(ui, "VIEW MODE", T.FG if on else T.COMMENT, px + 16, y + 6)
+    tile_frame(ui, (px + 8, y, pw - 16, 36), on, now)
+    pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 36), 2 if on else 1)
+    W.text(ui, "VIEW MODE", T.FG if on else T.COMMENT, px + 16, y + 5)
     # Os tres modos lado a lado; o de agora aceso.
     x = px + 16
     for mode, label in (("list", "LIST"), ("full", "FULL SCREEN"), ("flow", "GRID")):
         cur = fe.mode == mode
         w = tiny.width(label) + 10
         if cur:
-            W.block(ui, (x, y + 20, w, 12), T.PINK if on else T.PURPLE, None)
+            W.block(ui, (x, y + 18, w, 12), T.PINK if on else T.PURPLE, None)
         else:
-            pygame.draw.rect(ui, T.LINE, (x, y + 20, w, 12), 1)
-        tiny.text(ui, label, T.SPACE if cur else T.COMMENT, x + 5, y + 23)
+            pygame.draw.rect(ui, T.LINE, (x, y + 18, w, 12), 1)
+        tiny.text(ui, label, T.SPACE if cur else T.COMMENT, x + 5, y + 21)
         x += w + 6
     if on:
-        tiny.text(ui, "< >", T.PINK, px + pw - 16, y + 8, right=True)
+        tiny.text(ui, "< >", T.PINK, px + pw - 16, y + 7, right=True)
+    draw_harvest(fe, ui, px + 8, y + 40, pw - 16)
+
+
+def draw_harvest(fe, ui, x, y, w):
+    """O scrape automatico (feharvest.py): a barra dos jogos que ja tem os
+    dados, quantos faltam e o andamento dos torrents de logos e videos."""
+    h = fe.harvest
+    pygame.draw.rect(ui, T.LINE, (x, y, w, 31), 1)
+    W.text(ui, "AUTO SCRAPE", T.COMMENT, x + 8, y + 3)
+    if not h.scanned:
+        tiny.text(ui, "COUNTING THE GAMES...", T.COMMENT, x + w - 8, y + 5, right=True)
+        return
+    done = h.total - h.left
+    if h.left:
+        text = "%d GAMES LEFT" % h.left
+    else:
+        text = "ALL %d GAMES DONE" % h.total
+    tiny.text(ui, text, T.CYAN if h.left else T.GREEN, x + w - 8, y + 5, right=True)
+    bx, by, bw = x + 8, y + 13, w - 16
+    W.block(ui, (bx, by, bw, 6), T.BG_DEEP, None)
+    fill = round(bw * done / h.total) if h.total else bw
+    if fill:
+        ui.fill(T.GREEN if not h.left else T.PINK, (bx, by, fill, 6))
+    pygame.draw.rect(ui, T.LINE, (bx, by, bw, 6), 1)
+    info = "%d OF %d HAVE THEIR DATA" % (done, h.total)
+    if h.current is not None:
+        info = "NOW: " + fe.fd.short_title(h.current)
+    if h.paused:
+        info = "PAUSED: A GAME IS OPEN"
+    if h.torrent and h.torrent[1] == "downloading":
+        info = tiny.fit(info, bw - 90)
+        tiny.text(ui, "TORRENTS %d%%" % h.torrent[0], T.YELLOW, bx + bw, y + 22, right=True)
+    tiny.text(ui, tiny.fit(info.upper(), bw - (90 if h.torrent else 0)), T.COMMENT, bx, y + 22)
 
 
 LABELS = {"Category": "GENRE", "Players": "PLAYERS", "Buttons": "BUTTONS", "Control": "CONTROL", "Year": "YEAR",

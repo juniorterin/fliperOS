@@ -2951,6 +2951,19 @@ class ScraperTests(Base):
         self.assertEqual(self.env.run("mediapacks_link_ok 'magnet:?xt=urn:btih:abc' && mediapacks_link_ok "
                                       "https://a/b.torrent && ! mediapacks_link_ok 'so um texto'", env).returncode, 0)
 
+    def test_art_packs_started_by_the_frontend_auto_scrape(self):
+        # fliperos-setup --mediapacks auto (o scrape automatico do frontend do
+        # FliperOS): todo pacote com ROMs nas pastas vai para o torrent, sem
+        # tela; os sem ROMs ficam de fora.
+        env, roms, calls = self.packs_env()
+        out = self.env.out("mediapacks_auto", env).splitlines()
+        self.assertEqual(sorted(line.split("\t")[0] for line in out),
+                         ["arcade-wheels", "mame-videos-snaps", "sega-naomi-wheels", "seganaominaomi2videosnaps"])
+        self.assertTrue(all(line.split("\t")[1:] == ["2", "2"] for line in out))
+        started = [line.split()[1] for line in calls.read_text().splitlines() if line.startswith("start ")]
+        self.assertEqual(len(started), 4)
+        self.assertIn("finish", calls.read_text().split())
+
     def test_art_pack_only_downloads_with_roms_in_its_folders(self):
         # So baixa com ROMs nas pastas do pacote, e so os nomes dos jogos que
         # estao nelas vao para o fliperos-mediapacks.

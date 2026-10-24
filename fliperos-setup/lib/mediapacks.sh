@@ -161,3 +161,39 @@ mediapacks_start() {
   rm -rf "$tmp"
   return "$rc"
 }
+
+# mediapacks_auto: o scrape automatico do frontend do FliperOS
+# (fliperos-setup --mediapacks auto). Poe para baixar os pacotes de toda
+# pasta com jogos, so os arquivos dos jogos que ainda nao tem a arte, como o
+# "Download every pack" da tela; o pacote que ja esta baixando fica como
+# esta. Imprime "id<TAB>jogos sem a arte<TAB>arquivos" de cada um.
+mediapacks_auto() {
+  local status id folders st result out started=0
+  MEDIAPACKS_FOUND=$(scraper_detect)
+  [[ -n $MEDIAPACKS_FOUND ]] || return 0
+  downloader_prepare
+  mediapacks_prepare
+  status=$(mediapacks_status)
+  if [[ $(romclean_value "$status" state) == ready ]]; then
+    mediapacks_finish
+    status=$(mediapacks_status)
+  fi
+  # O fd 3: o mediapacks_start nao le a lista no lugar do teclado.
+  while IFS=$'\t' read -r id _ folders _ <&3; do
+    (($(mediapacks_games "$folders") > 0)) || continue
+    st=$(romclean_value "$status" "pack.$id")
+    [[ ${st%%|*} == downloading ]] && continue
+    if ((!started)); then
+      downloader_service_on
+      started=1
+    fi
+    result=$(mktemp) || return 1
+    mediapacks_start "$id" "$result" > /dev/null 2>&1 < /dev/null
+    out=$(cat "$result")
+    rm -f "$result"
+    printf '%s\t%s\t%s\n' "$id" "$(romclean_value "$out" games)" "$(romclean_value "$out" files)"
+  done 3< <(mediapacks_list)
+  mediapacks_finish
+  downloader_service_sync
+  return 0
+}

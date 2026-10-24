@@ -83,6 +83,7 @@ class Frontend:
         import background
         import fedata
         import feinput
+        import feharvest
         import fevideo
         import theme
         import tiny
@@ -143,6 +144,12 @@ class Frontend:
         self.rest = (None, 0.0)    # (jogo sob o cursor, desde quando)
         self.scraped = set()       # os ja tentados nesta abertura
         self.scraping = None       # o jogo que esta sendo buscado
+        # O scrape automatico de todos os jogos (feharvest.py), em segundo
+        # plano; os jogos que ele buscou tem os caminhos de midia lidos de novo.
+        self.dirty = set()         # (pasta, jogo)
+        self.harvest = feharvest.Harvester(self)
+        if not self.shot:
+            self.harvest.start()
         self.generation = self.lib.generation
         self.last_check = time.monotonic()
         self.rows = []
@@ -572,7 +579,8 @@ class Frontend:
             self.rest = (g, now)
             return
         key = (g["_system"]["key"], g["Name"])
-        if self.scraping or key in self.scraped or now - self.rest[1] < AUTO_SCRAPE:
+        if (self.scraping or key in self.scraped or now - self.rest[1] < AUTO_SCRAPE
+                or self.harvest.current is g):
             return
         self.scraped.add(key)
         before = self.fd.missing_art(self.lib, g)
@@ -612,8 +620,9 @@ class Frontend:
             return
         self.remember()
         pg = self.pg
-        # O video, o som e os controles ficam para o jogo.
+        # O video, o som, os controles (e a rede) ficam para o jogo.
         self.player.stop()
+        self.harvest.paused = True
         self.input.close()
         try:
             pg.mixer.quit()
@@ -628,6 +637,7 @@ class Frontend:
         played = time.monotonic() - started
         if played > 10:
             self.lib.played(g, played)
+        self.harvest.paused = False
         self.open()
         self.input.open()
         self.media.clear()
@@ -722,6 +732,12 @@ class Frontend:
                     self.say("UPDATING THE LISTS...", 3)
                     self.lib.refresh()
             self.auto_scrape(now)
+            while self.dirty:
+                folder, name = self.dirty.pop()
+                for kind in ("snap", "box", "marquee", "logo", "preview"):
+                    self.media.pop(("path", kind, folder, name), None)
+                self.media.pop(("video", folder, name), None)
+                self.ahead_at = None
             if self.flush:
                 # Um scrape trouxe arquivos: os caminhos e as imagens guardados
                 # sao lidos de novo (limpos aqui, fora da thread dele).

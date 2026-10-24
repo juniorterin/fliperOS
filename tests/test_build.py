@@ -4103,6 +4103,68 @@ class FrontendDataTests(unittest.TestCase):
             fd.download = old
             os.environ.pop('FLIPEROS_HOME', None)
 
+    def test_auto_scrape_of_every_game(self):
+        # O scrape automatico (feharvest.py): conta os jogos sem os dados,
+        # busca cada um sem os videos (que vem dos torrents, fliperos-setup
+        # --mediapacks auto) e nao tenta de novo o que ja tentou.
+        import feharvest
+        fd = self.fd
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        arcade = {'key': 'mame', 'arcade': True}
+        console = {'key': 'snes', 'arcade': False}
+        have = {('sf2', 'snap'), ('sf2', 'box'), ('sf2', 'marquee'), ('sf2', 'logo'),
+                ('mario', 'snap'), ('mario', 'box')}
+
+        class Info:
+            cache = {}
+
+            def path(self, key, name, lang):
+                return str(tmp / ('%s.json' % name))
+
+            def arcade(self, *a):
+                return {'url_image_ingame': 'http://x/s.png', 'url_video_shortplay': 'http://x/v.mp4'}, None
+
+        class Lib:
+            info = Info()
+            systems = [arcade, console]
+            generation = 0
+
+            def media(self, game, kind):
+                return '/m' if (game['Name'], kind) in have else None
+
+            def video(self, game):
+                return None
+
+            def games(self, system):
+                names = {'mame': ['sf2', 'kof98'], 'snes': ['mario', 'zelda']}[system['key']]
+                return [{'Name': n, '_system': system} for n in names]
+
+        (tmp / 'sf2.json').write_text('{}')
+        fe = type('Fe', (), {})()
+        fe.fd, fe.lib, fe.scraping = fd, Lib(), None
+        os.environ['FLIPEROS_HOME'] = str(tmp)
+        got = []
+        old = fd.download, fd.PACKS_FILE
+        try:
+            fd.download = lambda url, path: got.append(url) or True
+            fd.PACKS_FILE = '/nonexistent'
+            h = feharvest.Harvester(fe)
+            todo = h.scan()
+            self.assertEqual((h.total, h.left), (4, 2))
+            self.assertEqual([g['Name'] for g in todo], ['kof98', 'zelda'])
+            fd.scrape(fe.lib, todo[0], only_missing=True, bulk=True)
+            self.assertIn('http://x/s.png', got)
+            self.assertNotIn('http://x/v.mp4', got)
+            h.state['tried'] = {'mame/kof98': int(time.time())}
+            self.assertEqual([g['Name'] for g in h.scan()], ['zelda'])
+        finally:
+            fd.download, fd.PACKS_FILE = old
+            os.environ.pop('FLIPEROS_HOME', None)
+        setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        self.assertIn('auto) mediapacks_auto ;;', setup)
+        self.assertIn('mediapacks_auto() {', (ROOT / 'fliperos-setup/lib/mediapacks.sh').read_text())
+
     def test_logo_and_video_from_art_packs(self):
         # O logo e o video que o Arcade Database nao tem saem dos pacotes do
         # archive.org da lista do Setup, um arquivo so: solto, ou de dentro

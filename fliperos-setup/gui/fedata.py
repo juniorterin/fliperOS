@@ -613,16 +613,20 @@ def missing_art(library, game):
     return out
 
 
-def scrape(library, game, lang="en", only_missing=False):
+def scrape(library, game, lang="en", only_missing=False, bulk=False):
     """As informacoes (salvas em ~/media/info), as imagens e o video do jogo
-    em ~/media: do Arcade Database nos de arcade (a tela, o marquee, o flyer e
-    o video curto), do libretro-thumbnails nos de console. Devolve quantos
+    em ~/media: do Arcade Database nos de arcade (a tela, o marquee, o flyer,
+    o logo e o video curto), do libretro-thumbnails nos de console e, o logo
+    e o video que faltarem, dos pacotes do archive.org. Devolve quantos
     arquivos novos vieram. only_missing: so o que falta (o scrape sozinho do
-    frontend nao baixa de novo o que ja esta la)."""
+    frontend nao baixa de novo o que ja esta la). bulk: o scrape de todos os
+    jogos (feharvest.py), sem os videos, que vem dos pacotes em torrent."""
     system = game["_system"]
     home = web.player_home()
     got = 0
     want = set(missing_art(library, game)) if only_missing else None
+    if bulk and want is not None:
+        want.discard("preview")
     if system["arcade"]:
         path = library.info.path(system["key"], game["Name"], lang)
         if path and os.path.exists(path):
@@ -632,7 +636,7 @@ def scrape(library, game, lang="en", only_missing=False):
         for field, kind in (("url_image_ingame", "snap"), ("url_image_marquee", "marquee"),
                             ("url_image_flyer", "box"), ("url_video_shortplay", "preview")):
             url = (info or {}).get(field)
-            if url and (want is None or kind in want):
+            if url and (want is None or kind in want) and not (bulk and kind == "preview"):
                 ext = os.path.splitext(url.split("?")[0])[1].lower() or (".mp4" if kind == "preview" else ".png")
                 target = os.path.join(home, "media", kind, system["key"], game["Name"] + ext)
                 got += download(url, target)
@@ -651,7 +655,9 @@ def scrape(library, game, lang="en", only_missing=False):
             if kind and (want is None or kind in want):
                 target = os.path.join(home, "media", kind, system["key"], game["Name"] + ".png")
                 got += download(item["url"], target)
-    # O logo (e o video que o Arcade Database nao tinha) dos pacotes.
-    missing = missing_art(library, game)
-    got += pack_art(library, game, [k for k in ("logo", "preview") if k in missing])
+    # O logo (e o video que o Arcade Database nao tinha) dos pacotes; no bulk,
+    # quem os traz e o torrent deles (fliperos-setup --mediapacks auto).
+    if not bulk:
+        missing = missing_art(library, game)
+        got += pack_art(library, game, [k for k in ("logo", "preview") if k in missing])
     return got
