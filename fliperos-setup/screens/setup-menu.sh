@@ -749,8 +749,8 @@ screen_scraper() {
     name=$(scraper_source_field "$source" 2)
     account=$(scraper_account_label "$source")
     choice=$(ui_menu_hints "Scraper" "" "$last" \
-      "scrape|Scrape the games|What each game still lacks, the same as the FliperOS frontend: Arcade Database, libretro-thumbnails and the art packs. No account needed." \
-      "site|Scrape with $name (Skyscraper)|Covers, screenshots, logos, videos and descriptions from a site, and the game lists of the other frontends." \
+      "scrape|Scrape the games|What each game lacks, like the frontend. No account needed." \
+      "site|Scrape with $name (Skyscraper)|Art, videos and text from a site, and lists for other frontends." \
       "source|Scraper provider: $name, $account|Pick the site for Skyscraper and log in to the ones that ask." \
       "torrent|Art packs by torrent|Logos and videos from torrents, only for the ROMs you have." \
       "return|Return|Back to Games.") || return 0

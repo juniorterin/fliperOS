@@ -1824,8 +1824,12 @@ class ArcadeResyncTests(Base):
         self.roms.mkdir()
         for game in ("sf2.zip", "pacman.7z"):
             (self.roms / game).write_text("")
-        self.list = self.attract / "romlists" / "MAME.txt"
-        self.e = {"ATTRACT_DIR": str(self.attract), "FRONTENDS_ROMLIST_STATE": str(self.env.dir / "state")}
+        # As listas sao do FliperOS (a pasta propria), nao do Attract-Mode.
+        lists = self.env.dir / "lists"
+        lists.mkdir()
+        self.list = lists / "MAME.txt"
+        self.e = {"ATTRACT_DIR": str(self.attract), "FLIPEROS_LISTS": str(lists),
+                  "FRONTENDS_ROMLIST_STATE": str(self.env.dir / "state")}
 
     def stale(self):
         return self.env.run('frontends_arcade_stale "%s" MAME' % self.roms, self.e).returncode == 0
@@ -1869,7 +1873,7 @@ class ArcadeResyncTests(Base):
                          ["romlist /dev/null mame|%s|arcade|2|MAME resync=1" % self.roms])
         frontends = (SETUP / "lib" / "frontends.sh").read_text()
         self.assertIn("frontends_attract() {\n  local key dir platform n=0\n", frontends)
-        self.assertLess(frontends.index("  frontends_arcade_resync\n  frontends_attract_prune"),
+        self.assertLess(frontends.index("  frontends_arcade_resync\n  frontends_attract_lists\n  frontends_attract_prune"),
                         frontends.index("frontends_attract_empty\n"))
 
 
