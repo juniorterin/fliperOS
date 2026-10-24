@@ -1355,7 +1355,9 @@ class GroovyMameTests(unittest.TestCase):
         # do mesmo tamanho; de novo, nada muda. O build e o update o chamam.
         with tempfile.TemporaryDirectory() as tmp:
             gm = Path(tmp) / 'groovymame'
-            data = b'\x7fELF...machine::soft_reset\0Initializing...\0%4d%2d\0Initializing BGFX library\0'
+            data = (b'\x7fELF...machine::soft_reset\0Initializing...\0%4d%2d\0Initializing BGFX library\0'
+                    b'NOT FOUND%s\n\0Loading Software\0Loading Machine\0%s (%d%%)\0Loading Complete\0'
+                    b'%s ROM NEEDS REDUMP\n\0exists.\0Decrypting %d%%\0decrypted_gamerom\0')
             gm.write_bytes(data)
             tool = str(ROOT / 'config/fliperos-groovymame-quiet')
             out = subprocess.run([sys.executable, tool, str(gm)], capture_output=True, text=True)
@@ -1364,6 +1366,9 @@ class GroovyMameTests(unittest.TestCase):
             self.assertEqual(len(got), len(data))
             self.assertIn(b'soft_reset\0\0nitializing...\0', got)
             self.assertIn(b'Initializing BGFX library', got)
+            # O carregamento das ROMs: "Loading Machine (45%)", "Loading Complete".
+            self.assertIn(b'\0\0oading Software\0\0oading Machine\0\0s (%d%%)\0\0oading Complete\0%s ROM', got)
+            self.assertIn(b'\0\0ecrypting %d%%\0', got)
             again = subprocess.run([sys.executable, tool, str(gm)], capture_output=True, text=True)
             self.assertIn('unchanged', again.stdout)
             self.assertEqual(gm.read_bytes(), got)
@@ -1478,6 +1483,9 @@ class GroovyMameTests(unittest.TestCase):
         x11 = (ROOT / 'config/fliperos-x11-run').read_text()
         self.assertIn('\nexport SDL_VIDEODRIVER=x11\n', x11)
         self.assertLess(x11.index('SDL_VIDEODRIVER=x11'), x11.index('exec xinit'))
+        # O Qt (PCSX2) aberto pelo frontend nao fica no eglfs do console.
+        self.assertIn('\nexport QT_QPA_PLATFORM=xcb\n', x11)
+        self.assertLess(x11.index('QT_QPA_PLATFORM=xcb'), x11.index('exec xinit'))
         launcher = (ROOT / 'config/fliperos-launch').read_text()
         self.assertIn('groovymame) label=GroovyMAME run=("$x11" groovymame) ;;', launcher)
 

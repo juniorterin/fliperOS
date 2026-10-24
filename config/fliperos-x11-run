@@ -377,6 +377,11 @@ export FLIPEROS_X11_RUN_SESSION=1
 # SDL no X: chamado de dentro do fliperos-kms-run (o GroovyMAME, que se abre
 # no X sozinho), herdaria o kmsdrm de la.
 export SDL_VIDEODRIVER=x11
+# O Qt tambem (PCSX2, Dolphin, DuckStation): aberto por um frontend no
+# fliperos-kms-run, herdaria o eglfs do console, nao acharia a tela com o X
+# dono dela e fecharia na hora.
+export QT_QPA_PLATFORM=xcb
+unset QT_QPA_EGLFS_INTEGRATION QT_QPA_EGLFS_HIDECURSOR
 # Audio SDL direto no ALSA (o FliperOS nao tem servidor de som).
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
 # Mapeamentos de controle do SDL (fliperos-rootfs.sh).
