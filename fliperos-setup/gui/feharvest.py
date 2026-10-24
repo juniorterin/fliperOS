@@ -101,6 +101,9 @@ class Harvester:
     def run(self):
         time.sleep(5)              # a tela abre primeiro
         while True:
+            # Os torrents primeiro: baixam sozinhos (o Transmission) enquanto
+            # o laco busca o resto, um jogo de cada vez.
+            self.torrents()
             generation = self.lib.generation
             for g in self.scan():
                 while self.paused:
@@ -122,7 +125,6 @@ class Harvester:
                     self.save()
                 time.sleep(PAUSE)
             self.save()
-            self.torrents()
             self.wake.wait(600)
             self.wake.clear()
 
