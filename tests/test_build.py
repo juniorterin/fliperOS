@@ -7834,7 +7834,9 @@ class EmulatorModeTests(unittest.TestCase):
         seed = (ROOT / 'config/pcsx2.ini').read_text()
         for line in ('SettingsVersion = 1', 'SetupWizardIncomplete = false', 'StartBigPictureMode = true',
                      'HideMouseCursor = true', 'VsyncEnable = true', 'Bios = /home/fliperos/bios/ps2',
-                     'RecursivePaths = /home/fliperos/roms/ps2', 'OpenPauseMenu = Keyboard/Escape'):
+                     'RecursivePaths = /home/fliperos/roms/ps2', 'OpenPauseMenu = Keyboard/Escape',
+                     # O video escolhido no gabinete: textura e saida sem suavizar.
+                     'filter = 0', 'linear_present_mode = 0', 'UseVSyncForTiming = true'):
             self.assertIn(line + '\n', seed, line)
         self.assertIn('install -Dm644 "$src/config/pcsx2.ini" "$root/etc/fliperos/pcsx2.ini"', ROOTFS)
         with tempfile.TemporaryDirectory() as home:

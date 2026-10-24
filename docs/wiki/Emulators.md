@@ -97,6 +97,8 @@ PCSX2 is the official AppImage (pinned by version and sha256, extracted to `/opt
 
 **PCSX2: performance and controls.** `fliperos-x11-run` opens PCSX2 with `mesa_glthread=true` (Mesa's OpenGL thread, which takes the sending of commands to the card off the main CPU thread; to run without it, export `mesa_glthread=false`). Per-game tweaks go in that game's ini, `~/.config/PCSX2/gamesettings/<serial>_<crc>.ini`.
 
+**PCSX2: default video.** The first `PCSX2.ini` (`config/pcsx2.ini`) comes with the settings chosen on the cabinet's CRT: texture filtering **Nearest** (`filter = 0`), no bilinear smoothing on the output (`linear_present_mode = 0`), VSync on and used for timing, 3 software-renderer threads, and the renderer left on **Automatic** (Vulkan on a card that has it, OpenGL otherwise). PCSX2 warns that Nearest is an "unsafe setting"; set Bilinear (PS2) back in a game that draws wrong.
+
 Turning on `UserHacks = true` there disables the fixes PCSX2's GameDB applies to that game. The panel's D-pad also works as the **left analog stick** (`LUp`/`LDown`/`LLeft`/`LRight` in `PCSX2.ini` point to the controller's D-pad when they are empty or on the keyboard): many PS2 games only move with the analog stick.
 
 **Supermodel: game choice and speed.** Opened without a game (from the desktop menu), `fliperos-launch` opens a terminal (Alacritty) with the list of games in `~/roms/model3`, by the names in Supermodel's `Games.xml`; Enter opens the chosen one, Esc exits.
