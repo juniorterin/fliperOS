@@ -314,12 +314,15 @@ class Server:
                 self.put(screen, cmd)
             return 0, ""
         if cmd == "input":
-            # Com um botao (a[4], explicado em a[5]): status 3 quando e ele.
-            button = (" button", plain(a[4]).upper(), plain(a[5])) if len(a) > 5 and a[4] else None
-            screen = W.Input(plain(a[0]), self.lines([a[1]]), a[2], a[3] == "password", action=button)
+            # Com botoes (a partir de a[4], pares rotulo e explicacao): status
+            # 3 para o primeiro, 4 para o segundo...
+            buttons = [(" button%d" % i, plain(a[j]).upper(), plain(a[j + 1]))
+                       for i, j in enumerate(range(4, len(a) - 1, 2)) if a[j]]
+            screen = W.Input(plain(a[0]), self.lines([a[1]]), a[2], a[3] == "password", action=buttons)
             action, value = self.ask(screen, cmd)
-            if action == "select" and button and value == button[0]:
-                return 3, ""
+            for i, b in enumerate(buttons):
+                if action == "select" and value == b[0]:
+                    return 3 + i, ""
             return (0, value) if action == "select" else (1, "")
         if cmd == "timed":
             screen = W.Timed(plain(a[0]), self.lines(a[3:]), plain(a[2]), int(a[1]))

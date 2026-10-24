@@ -198,9 +198,12 @@ def torrent():
 def magnet(focus=0):
     return Input("ROM set link", ["Paste or type the magnet link of the", "MAME ROM set:"],
                  "magnet:?xt=urn:btih:9f3c0a71e5b84d2c6a17d0e2b45f8a3391c7de60",
-                 action=("browser", "OPEN THE BROWSER",
-                         "Find the romset on the web, copy its magnet link and close the browser: "
-                         "the link comes back here."), focus=focus)
+                 action=[("browser", "WEB BROWSER",
+                          "Find the romset on the web, copy its magnet link and close the browser: "
+                          "the link comes back here."),
+                         ("file", ".TORRENT FILE",
+                          "Choose a .torrent file of the ROM set on a USB disk, the network share or the home folder.")],
+                 focus=focus)
 
 
 def magnetbrowser():

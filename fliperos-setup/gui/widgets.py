@@ -607,25 +607,41 @@ class Message:
 
 class Input:
     """ui_input: um campo de texto. O cursor e fixo, nao pisca. Com action
-    (valor, rotulo, explicacao) ha um botao embaixo do campo: as setas para
-    cima e para baixo trocam entre os dois, e o Enter no botao devolve o
-    valor dele."""
+    (valor, rotulo, explicacao), ou uma lista delas, ha botoes lado a lado
+    embaixo do campo: cima e baixo vao do campo aos botoes, esquerda e
+    direita trocam de botao, e o Enter num botao devolve o valor dele. A
+    explicacao embaixo e a do botao escolhido."""
 
     def __init__(self, title, lines, value="", password=False, action=None, focus=0):
         self.title = title
         self.lines = lines
         self.value = value
         self.password = password
-        self.action = action
-        self.focus = focus if action else 0
+        self.actions = [] if not action else list(action) if isinstance(action, list) else [action]
+        self.action = self.actions[0] if self.actions else None
+        self.focus = min(focus, len(self.actions))    # 0: o campo; 1...: os botoes
 
     def key(self, k):
         if k == "esc":
             return ("back", None)
-        if k in ("up", "down") and self.action:
-            self.focus ^= 1
-        elif k == "enter":
-            return ("select", self.action[0] if self.focus else self.value)
+        n = len(self.actions)
+        if n and k in ("up", "down", "left", "right"):
+            # Lado a lado: cima e baixo vao do campo aos botoes, esquerda e
+            # direita trocam de botao. Empilhados: cima e baixo andam pela
+            # pilha (do primeiro botao, cima volta ao campo).
+            stacked = getattr(self, "stacked", False)
+            if k in ("left", "right"):
+                if self.focus and n > 1:
+                    self.focus = (self.focus - 1 + (1 if k == "right" else -1)) % n + 1
+            elif not stacked:
+                self.focus = 0 if self.focus else 1
+            elif k == "down":
+                self.focus = min(n, self.focus + 1)
+            else:
+                self.focus = max(0, self.focus - 1)
+            return None
+        if k == "enter":
+            return ("select", self.actions[self.focus - 1][0] if self.focus else self.value)
         elif self.focus:
             return None
         elif k == "backspace":
@@ -636,10 +652,10 @@ class Input:
 
     def draw(self, surf, ctx):
         keys = [("ENTER", "OK"), ("ESC", "BACK")]
-        if self.action:
-            keys.insert(0, ("UP DOWN", "SELECT"))
+        if self.actions:
+            keys.insert(0, ("ARROWS" if len(self.actions) > 1 else "UP DOWN", "SELECT"))
         frame(surf, ctx, self.title, keys)
-        y = paragraph(surf, self.lines, (56 if self.action else 80) + extra() // 2) + 12
+        y = paragraph(surf, self.lines, (56 if self.actions else 80) + extra() // 2) + 12
         x = T.SAFE_X
         on = not self.focus
         block(surf, (x, y, T.SAFE_W - 2, 22), T.BG_DEEP, T.PURPLE if on else None)
@@ -653,10 +669,24 @@ class Input:
         w = text(surf, shown, T.FG, x + 8, y + 7)
         if on:
             pygame.draw.rect(surf, T.PINK, (x + 9 + w, y + 6, 7, 10))
-        if self.action:
-            _, label, about = self.action
-            button(surf, label, T.WIDTH // 2, y + 40, bool(self.focus), w=width(label) + 32)
-            paragraph(surf, [about], y + 72, T.CYAN)
+        if self.actions:
+            # Os botoes lado a lado, centrados (um embaixo do outro, se nao
+            # cabem); a explicacao e a do escolhido.
+            ws = [width(label) + (32 if len(self.actions) == 1 else 16) for _, label, _ in self.actions]
+            gap = 8
+            row = sum(ws) + gap * (len(ws) - 1) <= T.SAFE_W
+            self.stacked = not row
+            bx = T.WIDTH // 2 - (sum(ws) + gap * (len(ws) - 1)) // 2
+            by = y + 40
+            for i, ((_, label, _), bw) in enumerate(zip(self.actions, ws)):
+                if row:
+                    button(surf, label, bx + bw // 2, by, self.focus == i + 1, w=bw)
+                    bx += bw + gap
+                else:
+                    button(surf, label, T.WIDTH // 2, by, self.focus == i + 1, w=bw)
+                    by += 22
+            about = self.actions[max(0, self.focus - 1)][2]
+            paragraph(surf, [about], (y + 72) if row else (by + 10), T.CYAN)
 
 
 class Progress:

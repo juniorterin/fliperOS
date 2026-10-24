@@ -195,36 +195,34 @@ screen_downloader_magnet() {
       *) return 0 ;;
     esac
   fi
-  # O link magnetico (ou o endereco de um .torrent) colado, ou um arquivo
-  # .torrent desta maquina: de um pendrive, da rede ou da pasta pessoal.
-  if [[ ${3:-} != from-browser ]]; then
-    choice=$(ui_menu "$title" "How do you want to give the $what?" link \
-      "link|Paste a magnet link (or the address of a .torrent)" \
-      "file|Choose a .torrent file (USB disk, network share, home folder)") || return 0
-  else
-    choice=link
+  # O link magnetico (ou o endereco de um .torrent) colado no campo; os
+  # botoes embaixo dele abrem o navegador ou escolhem um arquivo .torrent
+  # desta maquina (de um pendrive, da rede ou da pasta pessoal).
+  magnet=$(downloader_default_magnet "$kind")
+  prompt="Paste the magnet link of the $what (magnet:?xt=urn:btih:...)."
+  [[ -n $magnet ]] && prompt="The FliperOS link of the $what is filled in: Enter uses it, or paste another."
+  if [[ ${3:-} == from-browser ]]; then
+    magnet=${2:-}
+    prompt="The link clicked in the browser is filled in: Enter uses it."
+    [[ -n $magnet ]] || prompt="No magnet link came from the browser. Paste the link of the $what, or open the browser again."
   fi
-  if [[ $choice == file ]]; then
+  local browser_rc=0
+  if downloader_browser_ok; then
+    button=("Web browser" "Search the web for the $what and click its magnet link: it comes back here.")
+    browser_rc=3
+  fi
+  button+=(".torrent file" "Choose a .torrent file of the $what on a USB disk, the network share or the home folder.")
+  magnet=$(ui_input "$title" "$prompt" "$magnet" long "${button[@]}")
+  rc=$?
+  if ((browser_rc && rc == browser_rc)); then
+    screen_downloader_browser "$kind"
+    return 0
+  fi
+  if ((rc == 3 + (browser_rc != 0))); then
     local start=${ROMS_ROOT%/*}
     [[ -d /media/fliperos ]] && compgen -G "/media/fliperos/*" > /dev/null && start=/media/fliperos
     magnet=$(ui_browse "$title" "Choose the .torrent file of the $what." "$start" file .torrent) || return 0
   else
-    magnet=$(downloader_default_magnet "$kind")
-    prompt="Paste the magnet link of the $what (magnet:?xt=urn:btih:...)."
-    [[ -n $magnet ]] && prompt="The FliperOS link of the $what is filled in: Enter uses it, or paste another."
-    if [[ ${3:-} == from-browser ]]; then
-      magnet=${2:-}
-      prompt="The link clicked in the browser is filled in: Enter uses it."
-      [[ -n $magnet ]] || prompt="No magnet link came from the browser. Paste the link of the $what, or open the browser again."
-    fi
-    downloader_browser_ok &&
-      button=("Open the browser" "Search the web for the $what and click its magnet link: it comes back here.")
-    magnet=$(ui_input "$title" "$prompt" "$magnet" long "${button[@]}")
-    rc=$?
-    if ((rc == 3)); then
-      screen_downloader_browser "$kind"
-      return 0
-    fi
     ((rc == 0)) || return 0
     magnet=${magnet//[[:space:]]/}
     [[ -n $magnet ]] || return 0

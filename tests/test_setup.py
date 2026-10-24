@@ -3829,17 +3829,27 @@ class RomCleanerTests(Base):
         torrent = self.env.dir / "usb" / "MAME 0.288 CHDs.torrent"
         torrent.parent.mkdir()
         torrent.write_text("d4:infod4:name4:mameee")
+        # O seletor e um botao do proprio campo do link: o segundo, depois do
+        # navegador (status 4), ou o unico sem navegador (status 3).
         out, calls, _ = self.downloader_screen("""
-            ui_menu() { printf 'menu:%%s\\n' "${@:4}" >&2; echo file; }
+            downloader_browser_ok() { return 0; }
+            ui_input() { printf 'buttons:%%s\\n' "${@:5}" >&2; return 4; }
             ui_browse() { echo "browse:$3|${*:4}" >&2; echo '%s'; }
             screen_downloader_magnet chds
-            ui_menu() { echo link; }
+            downloader_browser_ok() { return 1; }
+            ui_input() { printf 'alone:%%s\\n' "${@:5}" >&2; return 3; }
+            ui_browse() { echo "browse2" >&2; return 1; }
+            screen_downloader_magnet roms
             ui_input() { echo 'https://site/romset.torrent'; }
             screen_downloader_magnet roms
         """ % torrent)
-        self.assertIn("menu:file|Choose a .torrent file (USB disk, network share, home folder)", out)
+        self.assertIn("buttons:Web browser", out)
+        self.assertIn("buttons:.torrent file", out)
         self.assertIn("|file .torrent", out)
         self.assertIn("add chds %s --progress" % torrent, calls)
+        self.assertIn("alone:.torrent file", out)
+        self.assertNotIn("alone:Web browser", out)
+        self.assertIn("browse2", out)
         self.assertIn("add roms https://site/romset.torrent --progress", calls)
 
     def update_screen(self, check, plan, apply_rc=0, script="", notes=""):

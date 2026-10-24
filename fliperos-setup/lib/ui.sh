@@ -744,26 +744,34 @@ ui_info() {
   ui_screen "$1" "${@:2}"
 }
 
-# ui_input TITULO TEXTO [VALOR] [password|long] [BOTAO EXPLICACAO] pede um
+# ui_input TITULO TEXTO [VALOR] [password|long] [BOTAO EXPLICACAO]... pede um
 # texto e o imprime (long: sem o limite de 400 caracteres do gum, para um
 # link magnetico). Com BOTAO, a tela oferece tambem essa acao (abrir o
-# navegador): na interface grafica um botao embaixo do campo, no texto um
-# menu antes dele. Status 3 = a pessoa escolheu o botao.
+# navegador, escolher um arquivo): na interface grafica botoes lado a lado
+# embaixo do campo, no texto um menu antes dele. Status 3 = o primeiro
+# botao, 4 = o segundo...
 ui_input() {
-  local title=$1 text=$2 value=${3:-} mode=${4:-} action=${5:-} about=${6:-} w args choice
+  local title=$1 text=$2 value=${3:-} mode=${4:-} w args choice rc i about=""
+  local -a actions=("${@:5}") entries=()
   if ui_gui_alive; then
-    ui_gui_call input "$title" "$text" "$value" "$mode" "$action" "$about"
-    case $? in
+    ui_gui_call input "$title" "$text" "$value" "$mode" "${actions[@]}"
+    rc=$?
+    case $rc in
       0) printf '%s\n' "$UI_GUI_REPLY" ;;
-      3) return 3 ;;
-      *) return 1 ;;
+      1) return 1 ;;
+      *) return "$rc" ;;
     esac
     return 0
   fi
-  if [[ -n $action ]]; then
-    choice=$(ui_menu "$title" "$text${about:+$'\n\n'$about}" type "type|Type or paste it" "action|$action") ||
-      return 1
-    [[ $choice == action ]] && return 3
+  # No texto, os botoes viram uma escolha antes do campo.
+  for ((i = 0; i + 1 < ${#actions[@]}; i += 2)); do
+    [[ -n ${actions[i]} ]] || continue
+    entries+=("$((3 + i / 2))|${actions[i]}")
+    about+=$'\n'"${actions[i]}: ${actions[i + 1]}"
+  done
+  if ((${#entries[@]})); then
+    choice=$(ui_menu "$title" "$text"$'\n'"$about" type "type|Type or paste it" "${entries[@]}") || return 1
+    [[ $choice == type ]] || return "$choice"
   fi
   ui_screen "$title" "$text"
   w=$(($(ui_box_width) - 6))
