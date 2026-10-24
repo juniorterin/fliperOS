@@ -19,3 +19,4 @@
 16	01fce25eafc9c67c3b4a38465c2f8a7fb862ee46	cbaeb5bc0fe432604ebb4e6e099b5c0914e38e66ee596ef34040e3a187309575	no	FliperOS 0.9.1: ROM Cleaner data files, versus scoreboard and game outputs
 17	ebb658d7eca05be0023595b69d5efa76c9220f2f	6af071972121ef04bf2c5fca8eb0d7448746e3e5ec066a8fa98fb93851afbc91	no	GroovyMAME no longer closes at its game list
 18	2d51fce7a5b1e60de71a659f9492d7c817ae1fcd	2023474a48e3d3a5f196f1e6833a759022ba39d10cef34d6e2778404c229b228	yes	FliperOS 0.11: own frontend, web panel, vertical monitor
+19	48fc8d9dd7fff3c4690ed91faf28d894e78d6b33	6857bd1f4026033c632999c0c2630d9fc075149639b82df122817534e5548612	no	Faster boot: services after the first screen, torrents only on demand
