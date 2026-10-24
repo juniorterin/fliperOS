@@ -1201,3 +1201,28 @@ scraper_stream() {
   done < <("$@" 2>&1; printf '@rc %s\n' "$?")
   ((rc == 0))
 }
+
+# ── O scraper do FliperOS ─────────────────────────────────────────
+# O mesmo do frontend do FliperOS (gui/feharvest.py): o que falta de cada
+# jogo, um de cada vez. Arcade: as informacoes, a tela, o flyer, o marquee e
+# o logo do Arcade Database; console: a capa e a tela do libretro-thumbnails;
+# logos e videos: os pacotes em torrent (mediapacks_auto) e, os de .zip de
+# letra, arquivo por arquivo pelo archive.org. Sem conta em site nenhum. O
+# Skyscraper (scraper_run) fica para os sites com conta e para as listas de
+# jogos dos outros frontends.
+FLIPEROS_SCRAPE=${FLIPEROS_SCRAPE:-/usr/local/lib/fliperos-setup/gui/fliperos-scrape}
+
+# scraper_fliperos RESULTADO [CHAVE...]: o scraper do FliperOS, com eventos de
+# progresso, nas pastas das chaves (sem chave, todas). RESULTADO recebe
+# total, tried e left (gui/fliperos-scrape).
+scraper_fliperos() {
+  local result=$1 key
+  local -a args=(--progress --retry --result "$result")
+  shift
+  for key in "$@"; do args+=(--folder "$key"); done
+  ev_step 0 "Starting the art packs by torrent"
+  mediapacks_auto > /dev/null
+  touch "$result"
+  chown "$FLIPEROS_USER:" "$result" 2> /dev/null
+  runuser -u "$FLIPEROS_USER" -- python3 "$FLIPEROS_SCRAPE" "${args[@]}" 2>> "$FLIPEROS_LOG"
+}

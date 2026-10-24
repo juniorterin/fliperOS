@@ -13,6 +13,7 @@
 # jogo aberto, para (a rede e o disco sao do jogo). O menu do Tab mostra o
 # andamento (total, left, torrent).
 
+import fcntl
 import json
 import os
 import threading
@@ -74,6 +75,10 @@ class Harvester:
         tried = self.state.get("tried", {}).get(self.key(game), 0)
         if time.time() - tried < RETRY_DAYS * 86400:
             return False
+        return self.missing(game)
+
+    def missing(self, game):
+        """O jogo ainda sem as informacoes (arcade) ou sem alguma arte."""
         if game["_system"].get("arcade"):
             path = self.lib.info.path(game["_system"]["key"], game["Name"], "en")
             if path and not os.path.exists(path):
@@ -97,6 +102,31 @@ class Harvester:
         self.total, self.left, self.scanned = len(games), len(todo), True
         return todo
 
+    def mark(self, game):
+        self.state.setdefault("tried", {})[self.key(game)] = int(time.time())
+
+    # ── Um scraper de cada vez ──
+    # O do Setup (gui/fliperos-scrape) segura a trava enquanto roda; o laco do
+    # frontend a pega a cada jogo e espera quando ela esta com o outro.
+    def lock(self, wait):
+        try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            f = open(self.path[:-len(".json")] + ".lock", "w")
+        except OSError:
+            return None
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
+        except OSError:
+            f.close()
+            return False
+        return f
+
+    @staticmethod
+    def unlock(f):
+        if f:
+            fcntl.flock(f, fcntl.LOCK_UN)
+            f.close()
+
     # ── O laco ──
     def run(self):
         time.sleep(5)              # a tela abre primeiro
@@ -110,16 +140,28 @@ class Harvester:
                     time.sleep(1)
                 if self.lib.generation != generation:
                     break          # as listas mudaram: conta de novo
-                k = self.key(g)
-                if self.fe.scraping is not g:
-                    self.current = g
-                    try:
-                        self.fd.scrape(self.lib, g, only_missing=True, bulk=True)
-                    except Exception:  # sem rede, um site fora: na proxima volta
-                        pass
-                    self.current = None
-                    self.fe.dirty.add((g["_system"]["key"], g["Name"]))
-                self.state.setdefault("tried", {})[k] = int(time.time())
+                lock, waited = self.lock(wait=False), False
+                while lock is False:   # o scraper do Setup esta rodando
+                    if not waited:
+                        self.save()
+                    waited = True
+                    time.sleep(5)
+                    lock = self.lock(wait=False)
+                try:
+                    # O do Setup pode ter feito este enquanto o laco esperava.
+                    if waited:
+                        self.state = self.load()
+                    if self.fe.scraping is not g and self.needs(g):
+                        self.current = g
+                        try:
+                            self.fd.scrape(self.lib, g, only_missing=True, bulk=True)
+                        except Exception:  # sem rede, um site fora: na proxima volta
+                            pass
+                        self.current = None
+                        self.fe.dirty.add((g["_system"]["key"], g["Name"]))
+                    self.mark(g)
+                finally:
+                    self.unlock(lock)
                 self.left = max(0, self.left - 1)
                 if self.left % 20 == 0:
                     self.save()

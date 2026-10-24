@@ -1,4 +1,13 @@
-**Setup > Games > Scraper** has three items: **Scrape the games**, **Scraper provider** and **Art packs by torrent**.
+**Setup > Games > Scraper** has four items: **Scrape the games**, **Scrape with a site (Skyscraper)**, **Scraper provider** and **Art packs by torrent**.
+
+**Scrape the games** is the FliperOS scraper, the same one the [FliperOS frontend](Frontends.md) runs by itself in the background. For every game in the folders (or one folder), it fetches only what the game still lacks, with no account:
+- arcade: the information, screenshot, flyer, marquee and logo from the Arcade Database;
+- consoles: the cover and screenshot from libretro-thumbnails;
+- logos and videos: the art packs below, by torrent; a pack kept in one `.zip` per letter (the MAME videos) is fetched one file at a time from inside the zip over HTTP instead of whole letters.
+
+A bar shows each game and how many are left; at the end it says how many games still lack something no source has. It is `gui/fliperos-scrape`, run as the player; while it runs, the frontend's own scrape waits. The games it tried are recorded in `~/.local/share/fliperos/scrape-state.json`, so the frontend does not try them again for 30 days.
+
+**Scrape with a site** is the Skyscraper scraper below: the site chosen in Scraper provider (ScreenScraper with your account, for instance), and the game lists of Attract-Mode Plus, ES-DE and Pegasus.
 
 **Scraper provider** picks where the art and the information come from, and keeps the account of the providers that ask for one, the way ES-DE and Arcadeflow keep the ScreenScraper login in their options:
 
@@ -24,7 +33,7 @@ The download is done by the same Transmission service as the [Downloader](ROMs.m
 
 **Add a torrent** takes a pack of your own (a magnet link or the address of a `.torrent`, the kind of art and the folder it is for), and the link of a pack that comes filled in can be changed. The packs are in `config/fliperos-media-torrents` and the program is `/opt/fliperos/bin/fliperos-mediapacks`.
 
-**Scrape the games** — covers, screenshots, logos, videos and information for each ROM, with **Skyscraper** (the same one GroovyArcade packages), from the one chosen in Scraper provider.
+**Scrape with a site** — covers, screenshots, logos, videos and information for each ROM, with **Skyscraper** (the same one GroovyArcade packages), from the one chosen in Scraper provider.
 
 **What to fetch** is a checklist: screenshots (`snap`), logos, covers (`box`), marquees, descriptions (`texto`) and videos (`preview`, unchecked at first: they take much more space).
 

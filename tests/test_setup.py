@@ -2894,9 +2894,26 @@ class ScraperTests(Base):
                                                  "mobygames", "igdb", "openretro"])
         self.assertEqual({s[2] for s in sites}, {"login", "none", "key", "idsecret"})
         menu = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_scraper() {")[1].split("\n}\n")[0]
-        for value in ("scrape) screen_scraper_scrape ;;", "source) screen_scraper_source ;;",
-                      "torrent) screen_mediapacks ;;"):
+        # Scrape the games e o scraper do FliperOS (o mesmo do frontend); o
+        # Skyscraper fica no item do site.
+        for value in ("scrape) screen_scraper_fliperos ;;", "site) screen_scraper_scrape ;;",
+                      "source) screen_scraper_source ;;", "torrent) screen_mediapacks ;;"):
             self.assertIn(value, menu)
+
+    def test_fliperos_scraper_from_the_setup(self):
+        # scraper_fliperos: os torrents (como root) e o fliperos-scrape como o
+        # usuario, nas pastas pedidas, com a barra (os @step dele).
+        env, roms, _ = self.scraper_env()
+        calls = self.env.dir / "fs.calls"
+        self.env.stub("runuser", 'echo "runuser $*" >> %s; echo "@step 50 sf2 (1 left)"' % calls)
+        env = dict(env, FLIPEROS_SCRAPE="/x/fliperos-scrape", FLIPEROS_USER="ninguem")
+        out = self.env.out("mediapacks_auto() { echo torrents >> %s; }\n"
+                           "scraper_fliperos %s/r mame naomi" % (calls, self.env.dir), env)
+        self.assertIn("@step 50 sf2 (1 left)", out)
+        lines = calls.read_text().splitlines()
+        self.assertEqual(lines[0], "torrents")
+        self.assertEqual(lines[1], "runuser -u ninguem -- python3 /x/fliperos-scrape --progress --retry --result "
+                                   "%s/r --folder mame --folder naomi" % self.env.dir)
 
     def packs_env(self):
         env, roms, _ = self.scraper_env()

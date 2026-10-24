@@ -747,18 +747,49 @@ screen_scraper() {
     name=$(scraper_source_field "$source" 2)
     account=$(scraper_account_label "$source")
     choice=$(ui_menu_hints "Scraper" "" "$last" \
-      "scrape|Scrape the games ($name)|Covers, screenshots, logos, videos and descriptions of your ROMs." \
-      "source|Scraper provider: $name, $account|Pick the scraper provider and log in to the ones that ask." \
+      "scrape|Scrape the games|What each game still lacks, the same as the FliperOS frontend: Arcade Database, libretro-thumbnails and the art packs. No account needed." \
+      "site|Scrape with $name (Skyscraper)|Covers, screenshots, logos, videos and descriptions from a site, and the game lists of the other frontends." \
+      "source|Scraper provider: $name, $account|Pick the site for Skyscraper and log in to the ones that ask." \
       "torrent|Art packs by torrent|Logos and videos from torrents, only for the ROMs you have." \
       "return|Return|Back to Games.") || return 0
     last=$choice
     case $choice in
-      scrape) screen_scraper_scrape ;;
+      scrape) screen_scraper_fliperos ;;
+      site) screen_scraper_scrape ;;
       source) screen_scraper_source ;;
       torrent) screen_mediapacks ;;
       return) return 0 ;;
     esac
   done
+}
+
+# screen_scraper_fliperos: o scraper do FliperOS (lib/scraper.sh
+# scraper_fliperos), o mesmo que o frontend roda sozinho, em todas as pastas
+# ou numa so, com a barra e quantos jogos ficaram sem algum dado.
+screen_scraper_fliperos() {
+  local -a found entries keys=()
+  local line key dir platform count choice result out
+  mapfile -t found < <(scraper_detect | grep -v '^custom/')
+  if ((${#found[@]} == 0)); then
+    ui_msg "Scraper" "No ROMs were found in $ROMS_DIR."
+    return 0
+  fi
+  entries=("all|All systems (${#found[@]})")
+  for line in "${found[@]}"; do
+    IFS='|' read -r key dir platform count <<< "$line"
+    entries+=("$key|$key - $count files")
+  done
+  choice=$(ui_menu "Scraper" "What each game still lacks: information, pictures, logos and videos. What is already in ~/media stays." \
+    all "${entries[@]}") || return 0
+  [[ $choice == all ]] || keys=("$choice")
+  result=$(mktemp)
+  if run_with_progress "Scraper" "Scraping the games" scraper_fliperos "$result" "${keys[@]}"; then
+    out=$(cat "$result")
+    ui_msg "Scraper" "$(romclean_value "$out" tried) games were looked up, of $(romclean_value "$out" total)." \
+      "$(romclean_value "$out" left) still lack something no source has." "" \
+      "Logos and videos from the torrents keep arriving in the background."
+  fi
+  rm -f "$result"
 }
 
 # screen_scraper_source: o site de onde o Scraper busca e, nos que pedem, a

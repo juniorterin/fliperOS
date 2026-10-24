@@ -36,7 +36,7 @@ mkdir -p "$root/etc/fliperos" "$root/etc/fliperos/mame" "$root/etc/fliperos/retr
 install -Dm644 "$src/config/fliperos-sessions.conf" "$root/etc/fliperos/sessions.conf"
 # O frontend do FliperOS abre ao ligar (Setup > Games > Frontend troca).
 [[ -f "$root/etc/fliperos/session" ]] || printf 'fliperos\n' > "$root/etc/fliperos/session"
-chmod 755 "$root/usr/local/lib/fliperos-setup/gui/fliperos-frontend"
+chmod 755 "$root/usr/local/lib/fliperos-setup/gui/fliperos-frontend" "$root/usr/local/lib/fliperos-setup/gui/fliperos-scrape"
 for name in fliperos-session fliperos-bootgame fliperos-kms-run fliperos-x11-run fliperos-x11-client fliperos-lxde fliperos-launch \
   fliperos-tty1 fliperos-ini-set fliperos-resolution fliperos-logout fliperos-escquit fliperos-powerkey fliperos-desktop-deflicker \
   fliperos-panning fliperos-automount fliperos-multiscreen fliperos-dlopen-links fliperos-browser fliperos-magnet; do

@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+# O scraper do FliperOS sem tela: o mesmo do frontend (feharvest.py), para o
+# Setup > Games > Scraper > Scrape the games. Busca o que falta de cada jogo
+# das pastas (arcade: o Arcade Database; console: o libretro-thumbnails; os
+# videos de .zip de letra: o archive.org arquivo por arquivo), um de cada vez,
+# e fala com a barra do Setup por eventos (@step PORCENTAGEM TEXTO). Os
+# pacotes em torrent o Setup poe antes (fliperos-setup --mediapacks auto, que
+# precisa do root); este roda como o usuario, dono de ~/media.
+#
+#   fliperos-scrape [--progress] [--folder CHAVE] [--retry] [--result ARQUIVO]
+#
+# --retry: tenta de novo os jogos tentados ha menos de 30 dias (o frontend
+# espera). O resultado: total, done (com os dados), left, tried.
+
+import argparse
+import os
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+
+
+def say(progress, pct, text):
+    if progress:
+        print("@step %d %s" % (pct, text), flush=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="FliperOS scraper")
+    parser.add_argument("--progress", action="store_true")
+    parser.add_argument("--folder", action="append", help="only this games folder (a key: mame, naomi...)")
+    parser.add_argument("--retry", action="store_true", help="also the games tried in the last 30 days")
+    parser.add_argument("--result")
+    args = parser.parse_args()
+    import fedata
+    import feharvest
+
+    say(args.progress, 0, "Reading the game lists")
+    fe = type("Scrape", (), {})()
+    fe.fd, fe.lib, fe.scraping, fe.dirty = fedata, fedata.Library(), None, set()
+    if args.folder:
+        fe.lib.systems = [s for s in fe.lib.systems if s["key"] in args.folder]
+    h = feharvest.Harvester(fe)
+    if args.retry:
+        h.state["tried"] = {}
+    lock = h.lock(wait=True)
+    try:
+        todo = h.scan()
+        total = len(todo)
+        say(args.progress, 2, "%d of %d games without their data" % (total, h.total))
+        for i, g in enumerate(todo):
+            say(args.progress, 2 + 97 * i // max(1, total),
+                "%s (%d left)" % (fedata.short_title(g), total - i))
+            try:
+                fedata.scrape(fe.lib, g, only_missing=True, bulk=True)
+            except Exception:  # sem rede, um site fora: fica para a proxima
+                pass
+            h.mark(g)
+            if i % 20 == 19:
+                h.save()
+            time.sleep(feharvest.PAUSE)
+        h.save()
+        left = sum(1 for g in todo if h.missing(g))
+    finally:
+        h.unlock(lock)
+    say(args.progress, 100, "Done: %d games, %d still without some data" % (h.total, left))
+    if args.result:
+        with open(args.result, "w", encoding="utf-8") as f:
+            f.write("total=%d\ntried=%d\nleft=%d\n" % (h.total, total, left))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
