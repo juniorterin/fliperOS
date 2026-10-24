@@ -4094,10 +4094,11 @@ class FrontendDataTests(unittest.TestCase):
             fd.download = lambda url, path: got.append(os.path.basename(path)) or True
             self.assertEqual(fd.missing_art(Lib(), game), ['box', 'marquee', 'logo', 'preview'])
             fd.scrape(Lib(), game, only_missing=True)
-            self.assertEqual(got, ['sf2.png', 'sf2.png', 'sf2.mp4'])
+            # O marquee, o flyer, o video e o logo (o decal do Arcade Database).
+            self.assertEqual(got, ['sf2.png', 'sf2.png', 'sf2.mp4', 'sf2.png'])
             got.clear()
             fd.scrape(Lib(), game)
-            self.assertEqual(len(got), 4)
+            self.assertEqual(len(got), 5)
         finally:
             fd.download = old
             os.environ.pop('FLIPEROS_HOME', None)

@@ -491,9 +491,9 @@ def download(url, path):
 
 # ── Os pacotes de arte do archive.org ──────────────────────────────
 # Os mesmos do Setup > Games > Scraper > Art packs by torrent
-# (config/fliperos-media-torrents): o logo e o video de um jogo saem dali um
-# arquivo so, pelo HTTP do archive.org, sem baixar o pacote. O Arcade
-# Database nao tem logos. A lista de arquivos de cada pacote (e a de dentro
+# (config/fliperos-media-torrents): o logo e o video que o Arcade Database
+# nao tem para o jogo saem dali, um arquivo so, pelo HTTP do archive.org,
+# sem baixar o pacote. A lista de arquivos de cada pacote (e a de dentro
 # de cada .zip de letra) fica guardada em ~/.cache/fliperos/archive.
 PACKS_FILE = os.environ.get("FLIPEROS_MEDIA_TORRENTS", "/usr/local/share/fliperos/media-torrents")
 ARCHIVE = os.environ.get("FLIPEROS_ARCHIVE_URL", "https://archive.org")
@@ -636,6 +636,14 @@ def scrape(library, game, lang="en", only_missing=False):
                 ext = os.path.splitext(url.split("?")[0])[1].lower() or (".mp4" if kind == "preview" else ".png")
                 target = os.path.join(home, "media", kind, system["key"], game["Name"] + ext)
                 got += download(url, target)
+        # O logo: o "decal" do Arcade Database (fora da API, o mesmo que o
+        # Skyscraper busca), o do set ou o do pai.
+        if info and (want is None or "logo" in want):
+            target = os.path.join(home, "media", "logo", system["key"], game["Name"] + ".png")
+            for name in (game["Name"], game.get("CloneOf")):
+                if name and download("%s/media/mame.current/decals/%s.png" % (web.ADB_ORIGIN, name), target):
+                    got += 1
+                    break
         got += 1 if info else 0
     else:
         for item in web.thumbnails(system, game):
