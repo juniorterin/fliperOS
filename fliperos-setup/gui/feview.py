@@ -702,7 +702,7 @@ def full_background(fe, back):
 
 def clone_badge(ui, right, y):
     """O selo do clone, no canto de cima a direita da miniatura da tela
-    cheia (a seta para cima: o jogo pai vem antes); devolve onde comeca."""
+    cheia e da grade (a seta para cima: o jogo pai vem antes); devolve onde comeca."""
     label = "CLONE"
     w = tiny.width(label) + 6
     x = right - w
@@ -884,12 +884,18 @@ def draw_flow(fe, ui, now):
         if img:
             blit_center(ui, img, x, y, tw, th)
         else:
+            # No clone, o texto comeca embaixo do selo.
+            top = 10 if fe.rows[i][1] else 4
             for k, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4]):
                 tiny.text(ui, tiny.fit(line, tw - 6), T.FG if i == fe.cursor else T.COMMENT,
-                          x + 3, y + 4 + k * 8)
+                          x + 3, y + top + k * 8)
         pygame.draw.rect(ui, T.LINE, (x, y, tw, th), 1)
+        clone = fe.rows[i][1]
+        if clone:
+            clone_badge(ui, x + tw - 1, y + 1)
         if g.get("Favourite") == "1":
-            star(ui, x + tw - 6, y + 6, T.YELLOW, 4)
+            # No clone a estrela vai para a esquerda: a direita e do selo.
+            star(ui, x + 6 if clone else x + tw - 6, y + 6, T.YELLOW, 4)
         if fe.scraping is g:
             looking(ui, x + 2, y + th - 12, tw - 4)
     grid_videos(fe, top_row, rows_shown, tw - 2, th - 2)
@@ -918,7 +924,10 @@ def draw_flow(fe, ui, now):
         blit_center(ui, logo, SX, y, 110, 30)
         tx = SX + 118
     else:
-        W.text(ui, fit(fe.fd.short_title(g), 150), T.YELLOW, SX, y + 2)
+        title = fe.fd.short_title(g)
+        if fe.rows and fe.rows[fe.cursor][1]:
+            title += " (%s)" % fe.fd.variant(g, fe.rows[fe.cursor][2])
+        W.text(ui, fit(title, 150), T.YELLOW, SX, y + 2)
         tx = SX
     if logo:
         W.text(ui, fit(facts_line(g), SX + SW - tx), T.CYAN, tx, y + 2)
