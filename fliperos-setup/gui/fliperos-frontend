@@ -615,8 +615,15 @@ class Frontend:
                 or self.harvest.current is g):
             return
         self.scraped.add(key)
+        # Com tudo (as informacoes, a arte e o video), nada a buscar; e o que
+        # ja foi buscado assim nos ultimos dias (a fonte nao tem o que falta)
+        # nao e buscado de novo a cada abertura.
         before = self.fd.missing_art(self.lib, g)
-        if not before:
+        if not before and not self.harvest.missing(g):
+            return
+        hkey = self.harvest.key(g)
+        rested = self.harvest.state.setdefault("rested", {})
+        if time.time() - rested.get(hkey, 0) < self.harvest.RETRY_DAYS * 86400:
             return
         self.scraping = g
 
@@ -626,6 +633,8 @@ class Frontend:
             except Exception:  # sem rede, um site fora: tenta de novo na proxima abertura
                 pass
             after = self.fd.missing_art(self.lib, g)
+            rested[hkey] = int(time.time())
+            self.harvest.save()
             self.flush = True
             self.scraping = None
             if len(after) < len(before) and self.game() is g:

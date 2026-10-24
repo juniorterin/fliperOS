@@ -26,6 +26,7 @@ STATUS_EVERY = 20          # o andamento dos torrents, enquanto baixam
 
 
 class Harvester:
+    RETRY_DAYS = RETRY_DAYS
     def __init__(self, fe):
         self.fe, self.fd, self.lib = fe, fe.fd, fe.lib
         self.total = 0             # jogos nas pastas
