@@ -19,7 +19,7 @@ It shows the same thing as the [Web panel](Web-panel.md), from the same code:
 Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control with the buttons.
 
 **Controls.** A guide shows them each time the frontend opens; any button closes it.
-- Up and down move through the games. Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).
+- Up and down move through the games; past the last one comes the first again, and before the first the last (holding stops at the end, the next press goes around). Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).
   - The letter mode stays after letting go: each tap of up or down moves one letter.
   - Two seconds without touching anything (or any other button) end it, on the first game of that letter.
 - Left and right change the romlist (each games folder, and Arcade with all the arcade folders together). In the grid they move through it, and change the romlist only when the chosen game already touches that side; a tab on the edge names the next one.

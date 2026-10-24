@@ -221,10 +221,20 @@ class Frontend:
                      "game": g["Name"] if g else None})
 
     # ── Andar ──
-    def move(self, step):
+    def move(self, step, wrap=True):
+        """Anda step jogos; do ultimo para a frente volta ao primeiro, e do
+        primeiro para tras vai ao ultimo (o salto que passa do fim para no
+        fim, e o proximo da a volta). Segurando (wrap False) para no fim: um
+        toque novo da a volta."""
         if not self.rows:
             return
-        self.cursor = max(0, min(len(self.rows) - 1, self.cursor + step))
+        last = len(self.rows) - 1
+        if wrap and step > 0 and self.cursor == last:
+            self.cursor = 0
+        elif wrap and step < 0 and self.cursor == 0:
+            self.cursor = last
+        else:
+            self.cursor = max(0, min(last, self.cursor + step))
 
     def switch_category(self, step):
         if len(self.cats) < 2:
@@ -235,7 +245,7 @@ class Frontend:
         self.rebuild()
         self.ribbon_until = time.monotonic() + 1.4
 
-    def letter_jump(self, step):
+    def letter_jump(self, step, wrap=True):
         """O cursor no primeiro jogo da letra seguinte (ou anterior)."""
         if not self.rows:
             return
@@ -248,7 +258,8 @@ class Frontend:
                 letters.append((c, i))
         here = self.fd.first_letter(self.rows[self.cursor][0])
         idx = next((k for k, (c, _) in enumerate(letters) if c == here), 0)
-        idx = max(0, min(len(letters) - 1, idx + step))
+        # Do Z volta ao comeco (segurando, para nele).
+        idx = (idx + step) % len(letters) if wrap else max(0, min(len(letters) - 1, idx + step))
         self.cursor = letters[idx][1]
         # A letra fica no meio da tela enquanto o modo letra dura.
         self.letter = (letters[idx][0], float("inf"))
@@ -647,12 +658,12 @@ class Frontend:
                 lheld = now - self.letter_mode["press"]
                 if lheld >= FIRST and now >= self.repeat.get(a, 0):
                     rate = LRATE0 if lheld < LSPEEDUP else min(LRATE1, LRATE0 + (lheld - LSPEEDUP) * 9)
-                    self.letter_jump(step)
+                    self.letter_jump(step, wrap=False)
                     self.repeat[a] = now + 1.0 / rate
             elif held >= LETTERS:
                 # 3 s segurando: entra no modo letra, que ja comeca andando.
                 self.letter_mode = {"press": now - FIRST, "last": now}
-                self.letter_jump(step)
+                self.letter_jump(step, wrap=False)
                 self.repeat[a] = now + 1.0 / LRATE0
             elif held >= FIRST:
                 k = min(1.0, (held - FIRST) / (LETTERS - FIRST))
@@ -660,7 +671,7 @@ class Frontend:
                 n = int(self.acc)
                 if n:
                     self.acc -= n
-                    self.move(step * n * (COLS if self.mode == "flow" else 1))
+                    self.move(step * n * (COLS if self.mode == "flow" else 1), wrap=False)
         for a, gap in (("left", 0.5), ("right", 0.5), ("b3", 0.18), ("b6", 0.18)):
             held = self.input.held(a)
             if held is None or self.overlay:
