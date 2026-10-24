@@ -35,6 +35,34 @@ MODE = (640, 240)
 # Margem de overscan: nada de texto fora dela.
 SAFE_X, SAFE_Y = 16, 10
 SAFE_W = WIDTH - 2 * SAFE_X
+# O monitor em pe (Video Setup > Monitor orientation): a tela logica vira
+# 240x320, desenhada em pe e girada ao mostrar (para o lado do ror/rol do
+# MAME); a margem do overscan troca de eixo com a varredura.
+VERTICAL = None            # None, "vertical-cw" ou "vertical-ccw"
+
+
+def set_orientation(orientation):
+    """A tela logica para a orientacao do monitor. Chamar antes de importar
+    o que guarda o tamanho (background.py, feview.py)."""
+    global WIDTH, HEIGHT, SAFE_X, SAFE_Y, SAFE_W, VERTICAL
+    if orientation in ("vertical-cw", "vertical-ccw"):
+        VERTICAL = orientation
+        WIDTH, HEIGHT = 240, 320
+        SAFE_X, SAFE_Y = 10, 16
+    else:
+        VERTICAL = None
+        WIDTH, HEIGHT = 320, 240
+        SAFE_X, SAFE_Y = 16, 10
+    SAFE_W = WIDTH - 2 * SAFE_X
+
+
+def upright(surface):
+    """A tela logica girada para o monitor (no horizontal, ela mesma)."""
+    if VERTICAL == "vertical-cw":
+        return pygame.transform.rotate(surface, -90)
+    if VERTICAL == "vertical-ccw":
+        return pygame.transform.rotate(surface, 90)
+    return surface
 
 # A fonte de pixel de tudo, sem antialias: a Press Start 2P (8x8), que vai
 # junto do codigo (gui/fonts, com a licenca OFL).

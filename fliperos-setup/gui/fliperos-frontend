@@ -80,14 +80,25 @@ class Frontend:
         import pygame
         self.pg = pygame
         pygame.init()
-        import background
         import fedata
+        import theme
+        # O monitor em pe (Video Setup > orientation): a tela logica em pe,
+        # antes de importar o que guarda o tamanho dela.
+        try:
+            orientation = fedata.web.conf_values().get("orientation", "")
+        except OSError:
+            orientation = ""
+        orientation = os.environ.get("FLIPEROS_FE_ORIENTATION", orientation)
+        theme.set_orientation(orientation)
+        self.vertical = theme.VERTICAL is not None
+        import background
         import feinput
         import feharvest
         import fevideo
-        import theme
+        import feview
         import tiny
         import widgets
+        self.view = feview
         self.T, self.W, self.tiny, self.fd = theme, widgets, tiny, fedata
         self.shot = args.shot
         self.window = None
@@ -122,12 +133,6 @@ class Frontend:
             raise loaded["error"]
         self.lib = loaded["lib"]
         self.mode = cfg.get("mode", "list") if cfg.get("mode") in MODES else "list"
-        # O monitor em pe (Video Setup > orientation): a grade em 3:4.
-        try:
-            orientation = self.fd.web.conf_values().get("orientation", "")
-        except OSError:
-            orientation = ""
-        self.vertical = orientation.startswith("vertical") or os.environ.get("FLIPEROS_FE_VERTICAL") == "1"
         self.cats = self.lib.categories()
         self.cat = next((i for i, c in enumerate(self.cats) if c["key"] == cfg.get("category")), 0)
         names = [f["name"] for f in self.lib.filters]
@@ -313,7 +318,7 @@ class Frontend:
         self.letter = None
 
     def page(self):
-        return {"list": 13, "full": 1, "flow": COLS * 2}[self.mode]
+        return {"list": 13, "full": 1, "flow": COLS * (3 if self.vertical else 2)}[self.mode]
 
     # ── As acoes ──
     def act(self, a):
@@ -840,11 +845,13 @@ class Frontend:
     def present(self):
         if self.window is None:
             return
-        self.pg.transform.scale(self.back, self.window.get_size(), self.window)
+        # Em pe, a tela logica gira para o lado do monitor antes de esticar.
+        self.pg.transform.scale(self.T.upright(self.back), self.window.get_size(), self.window)
         self.pg.display.flip()
 
     # ── Desenho ──
-    from feview import draw  # noqa: E402  (o desenho fica em gui/feview.py)
+    def draw(self, now):
+        self.view.draw(self, now)   # (o desenho fica em gui/feview.py)
 
 
 def main():

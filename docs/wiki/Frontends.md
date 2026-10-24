@@ -9,6 +9,8 @@ It shows the same thing as the [Web panel](Web-panel.md), from the same code:
 
 **The lists follow the folders.** When the frontend opens, and whenever a games folder changes (games copied over the network or from a USB disk), it asks the Setup to redo the lists in the background (`fliperos-setup --romlists`). New arcade sets get their MAME names right away: when MAME's list is not cached yet, GroovyMAME's `-listxml` is read once (about a minute).
 
+**Vertical monitor.** With Video Setup > Monitor orientation on a vertical setting, the frontend is laid out standing up (240x320) and turned to the monitor's side when shown, the same side GroovyMAME turns the games to (`ror` for clockwise, `rol` for counter-clockwise). In the list the picture goes on top and the games below; the grid has three rows of 3:4 thumbnails; the controls guide stacks the stick above the buttons.
+
 **Three views** (Start switches them):
 - **List**: the games on the left, the picture, logo and information on the right. A game with clones has a "+" on its left: button 1 unfolds the clones under it, each with what differs in its name (the region, the set, bootleg).
 - **Full screen**: the game's video or picture behind (it slides to the next game with the cursor; the videos of the 3 games before and after are opened ahead, held on their first frame), the name and information in front, and on the right the list as four stacked thumbnails, with arrows above and below while there are more games that way; the column slides to its new place. The pictures of the games around the cursor are read ahead, so changing game is instant.

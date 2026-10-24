@@ -30,7 +30,7 @@ def grid_geom(fe):
     """(miniatura, a escolhida, fileiras, espaco): 4:3, ou 3:4 com o
     monitor em pe (orientation=vertical-* no fliperos.conf)."""
     if getattr(fe, "vertical", False):
-        return (54, 72), (72, 96), 2, 14
+        return (54, 72), (72, 96), (3 if T.VERTICAL else 2), 14
     return (80, 60), (112, 84), 2, 10
 SLIDE = 0.3                # segundos da troca de romlist
 CACHE = 400              # imagens e caminhos guardados (os mais antigos saem)
@@ -96,8 +96,8 @@ def wanted(fe, game):
     cover = media(fe, game, "box") or media(fe, game, "snap")
     logo = media(fe, game, "logo")
     if fe.mode == "list":
-        pw = SX + SW - (SX + LIST_W + 14)
-        out += [(shot, pw - 4, LIST_SH - 4, "cover"), (logo, pw - 8, 28, "fit")]
+        _, (_, _, pw, ph) = list_geom()
+        out += [(shot, pw - 4, ph - 4, "cover"), (logo, min(pw - 8, 200), 28, "fit")]
     elif fe.mode == "full":
         right = SX + SW - THUMB[0] - 8
         out += [(shot, WW, HH, "cover"), (shot, THUMB[0] - 2, THUMB[1] - 2, "cover"),
@@ -499,9 +499,19 @@ def empty(fe, ui):
                      "Copy games to the folders in ~/roms (the network share \\\\fliperos\\roms)."], 80)
 
 
+def list_geom():
+    """((x, largura, y, linhas) da lista, (x, y, largura, altura) da imagem).
+    Deitado, a lista a esquerda e a imagem a direita; em pe, a imagem em
+    cima, larga, e a lista embaixo."""
+    if T.VERTICAL:
+        return (SX, SW - 8, 200, 6), (SX, 34, SW, 112)
+    px = SX + LIST_W + 14
+    return (SX, LIST_W, 36, 13), (px, 36, SX + SW - px, LIST_SH)
+
+
 def draw_list(fe, ui, now):
     frame(fe, ui)
-    lx, lw, y0, rows = SX, LIST_W, 36, 13
+    (lx, lw, y0, rows), (px, py, pw, sh) = list_geom()
     if fe.cursor < fe.top:
         fe.top = fe.cursor
     if fe.cursor >= fe.top + rows:
@@ -539,11 +549,9 @@ def draw_list(fe, ui, now):
     if len(fe.rows) > rows:
         W.scrollbar(ui, lx + lw + 4, y0, rows * 14 - 2, fe.top, rows, len(fe.rows))
     W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.LINE, lx + lw, y0 + rows * 14 + 1, right=True)
-    # A direita: a imagem, o logo e as informacoes.
+    # A imagem, o logo e as informacoes (a direita, ou em cima em pe).
     game = fe.game()
-    px = lx + lw + 14
-    pw = SX + SW - px
-    sh = LIST_SH
+    y0 = py
     W.block(ui, (px, y0, pw, sh), T.BG_DEEP, T.PURPLE)
     shot = picture(fe, game, pw - 4, sh - 4)
     if shot:
@@ -555,7 +563,7 @@ def draw_list(fe, ui, now):
         W.glow(ui, (px + 2, y0 + 2, pw - 4, sh - 4), {"now": now})
         tiny.centered(ui, "LOOKING FOR ART...", T.CYAN, px + pw // 2, y0 + sh // 2 - 2)
     pygame.draw.rect(ui, T.PINK, (px, y0, pw, sh), 2)
-    logo = image(fe, media(fe, game, "logo"), pw - 8, 28)
+    logo = image(fe, media(fe, game, "logo"), min(pw - 8, 200), 28)
     y = y0 + sh + 6
     if logo:
         blit_center(ui, logo, px, y0 + sh - 14, pw, 28)
@@ -575,8 +583,9 @@ def draw_list(fe, ui, now):
     control = [r for r in rows if r[2] == T.PINK]
     buttons = [(buttons_icon(fe, game, 13, T.YELLOW), t, c) for _, t, c in rows if c == T.YELLOW]
     players = (game.get("Players") or "").strip()
+    px_next = px
     for line in (genre, control + buttons):
-        x = px
+        x = px_next if T.VERTICAL else px
         for img, text, color in line:
             if img:
                 if x + img.get_width() > SX + SW:
@@ -591,8 +600,14 @@ def draw_list(fe, ui, now):
         if line is genre and players.isdigit() and x + 30 <= SX + SW:
             ui.blit(players_icon(fe, T.GREEN), (x, y + 2))
             W.text(ui, players, T.GREEN, x + 19, y + 6)
+        if T.VERTICAL and line is genre:
+            # Em pe, tudo numa fileira so: a lista vem logo embaixo.
+            px_next = x + (38 if players.isdigit() else 0)
+            continue
         if line or (line is genre and players.isdigit()):
             y += 24
+    if T.VERTICAL:
+        return
     played = game.get("PlayedCount")
     chips = []
     if game.get("Favourite") == "1":
@@ -623,7 +638,7 @@ def full_shade(fe):
     if key not in fe.media:
         shade = pygame.Surface((WW, HH), pygame.SRCALPHA)
         for y in range(HH):
-            a = int(120 * (1 - y / 40)) if y < 40 else (int(165 * min(1, (y - 125) / 60)) if y > 125 else 0)
+            a = int(120 * (1 - y / 40)) if y < 40 else (int(165 * min(1, (y - (HH - 115)) / 60)) if y > HH - 115 else 0)
             pygame.draw.line(shade, T.SPACE + (max(0, a),), (0, y), (WW, y))
         remember(fe, key, shade)
     return fe.media[key]
@@ -694,7 +709,7 @@ def draw_full(fe, ui, back, now):
     # A lista na direita: quatro miniaturas empilhadas, a do jogo escolhido
     # acesa, com uma seta em cima e embaixo enquanto ha mais jogos para
     # aquele lado. A coluna e a moldura rosa deslizam ate o lugar novo.
-    (tw, th), gap, n = THUMB, 4, 4
+    (tw, th), gap, n = THUMB, 4, (5 if T.VERTICAL else 4)
     step = th + gap
     tx = SX + SW - tw
     ty = 38
@@ -730,8 +745,8 @@ def draw_full(fe, ui, back, now):
     right = tx - 8
     logo = image(fe, media(fe, game, "logo"), min(200, right - SX), 44)
     if logo:
-        ui.blit(logo, (SX, 178 - logo.get_height()))
-    y = 184
+        ui.blit(logo, (SX, HH - 62 - logo.get_height()))
+    y = HH - 56
     ui.blit(W.big(fit(fe.fd.short_title(game), right - SX), 1, W.LABEL), (SX, y))
     W.text(ui, fit(facts_line(game), right - SX), T.CYAN, SX, y + 12)
     icon_line(fe, ui, game, SX, y + 24, right, 12)
@@ -857,7 +872,7 @@ def draw_flow(fe, ui, now):
             nxt = fe.cats[(fe.cat + side) % len(fe.cats)]["name"].upper()
             bottom_tab(ui, nxt, side, x0, gw, y0 + rows_shown * step_y - 4)
     g = fe.game()
-    y = 194
+    y = HH - 46
     logo = image(fe, media(fe, g, "logo"), 110, 30)
     tx = SX
     if logo:
@@ -954,14 +969,17 @@ def button3d(ui, cx, cy, r, color):
 
 
 def draw_guide(fe, ui):
-    pw, ph = SW, 162
+    # Deitado, o direcional a esquerda e os botoes a direita; em pe, o
+    # direcional em cima e os botoes embaixo.
+    vertical = T.VERTICAL is not None
+    pw, ph = SW, (276 if vertical else 162)
     px, py = SX, (HH - ph) // 2 + 6
     card(ui, (px, py, pw, ph))
     title = "CONTROLS"
     ui.blit(W.big(title, 1, W.LABEL), (px + 10, py + 9))
     for i, c in enumerate(W.RAINBOW):
         pygame.draw.rect(ui, c, (px + 18 + W.width(title), py + 10 + i, pw - 28 - W.width(title), 1))
-    jx, jy = px + 54, py + 70
+    jx, jy = (WW // 2, py + 70) if vertical else (px + 54, py + 70)
     pygame.draw.circle(ui, T.SPACE, (jx, jy), 21)
     pygame.draw.circle(ui, T.LINE, (jx, jy), 21, 2)
     pygame.draw.circle(ui, T.RED, (jx, jy), 9)
@@ -974,11 +992,17 @@ def draw_guide(fe, ui):
     tiny.centered(ui, "GAMES", T.CYAN, jx, jy + 40)
     tiny.centered(ui, "HOLD: FASTER", T.COMMENT, jx, jy + 49)
     tiny.centered(ui, "3 S: LETTER BY LETTER", T.COMMENT, jx, jy + 56)
-    pygame.draw.line(ui, T.LINE, (px + 112, py + 28), (px + 112, py + ph - 26))
+    if vertical:
+        pygame.draw.line(ui, T.LINE, (px + 10, py + 136), (px + pw - 11, py + 136))
+    else:
+        pygame.draw.line(ui, T.LINE, (px + 112, py + 28), (px + 112, py + ph - 26))
     # Os seis botoes juntos, como no painel; o nome de cada um fora, em cima
     # (a fileira de cima) ou embaixo, com uma linha e a seta ate ele.
     r, step = 12, 30
-    bx0, by0 = px + 112 + (pw - 112 - 2 * step) // 2, py + 60
+    if vertical:
+        bx0, by0 = WW // 2 - step, py + 172
+    else:
+        bx0, by0 = px + 112 + (pw - 112 - 2 * step) // 2, py + 60
     ry = round(r * FLAT)
     for i, (num, color, draw_icon, label) in enumerate(PANEL):
         col, row = i % 3, i // 3
@@ -995,14 +1019,15 @@ def draw_guide(fe, ui):
         tx = {0: cx + 3 - w, 1: cx - w // 2, 2: cx - 3}[col]
         top, bottom = cy - ry - 4, cy + LIFT + ry + 5
         if row == 0:
-            ty, y0, y1, d = py + 30, py + 37, top, (0, 1)
+            ty, y0, y1, d = by0 - 30, by0 - 23, top, (0, 1)
         else:
             ty, y0, y1, d = bottom + 13, bottom + 11, bottom, (0, -1)
         tiny.text(ui, text, T.FG, tx, ty)
         pygame.draw.line(ui, T.COMMENT, (cx, y0), (cx, y1 - d[1] * 2))
         arrow(ui, cx, y1, d, T.COMMENT, 3)
     # Debaixo dos botoes (a esquerda ficam as dicas do direcional).
-    tiny.centered(ui, "START: VIEW MODE   TAB: GAME OPTIONS", T.COMMENT, px + 112 + (pw - 112) // 2, py + ph - 30)
+    hint_x = WW // 2 if vertical else px + 112 + (pw - 112) // 2
+    tiny.centered(ui, "START: VIEW MODE   TAB: GAME OPTIONS", T.COMMENT, hint_x, py + ph - 30)
     msg = "PRESS ANY BUTTON TO START"
     ui.blit(W.big(msg, 1, W.LABEL), (px + (pw - W.width(msg)) // 2, py + ph - 16))
 
@@ -1035,7 +1060,8 @@ def draw_more(fe, ui, now):
     info = fe.ov.get("info") or {}
     W.frame(ui, {}, fit(fe.fd.short_title(g), 240) or "Game", [])
     y0 = 34
-    bw, bh = 84, 122
+    bw, bh = (60, 82) if T.VERTICAL else (84, 122)
+    lw = 34 if T.VERTICAL else 62       # a coluna dos rotulos
     W.block(ui, (SX, y0, bw, bh), T.BG_DEEP, T.PURPLE)
     blit_center(ui, image(fe, media(fe, g, "box") or media(fe, g, "snap"), bw - 6, bh - 6), SX, y0, bw, bh)
     pygame.draw.rect(ui, T.PINK, (SX, y0, bw, bh), 2)
@@ -1049,26 +1075,33 @@ def draw_more(fe, ui, now):
     for label, value in rows:
         if not value:
             continue
-        W.text(ui, label, T.COMMENT, x, y)
-        W.text(ui, fit(str(value), SX + SW - x - 62), T.FG, x + 62, y)
+        if T.VERTICAL:
+            tiny.text(ui, label, T.COMMENT, x, y + 2)
+        else:
+            W.text(ui, label, T.COMMENT, x, y)
+        W.text(ui, fit(str(value), SX + SW - x - lw), T.FG, x + lw, y)
         y += 13
     if info.get("rate"):
-        W.text(ui, "RATING", T.COMMENT, x, y + 2)
-        stars(ui, x + 62, y + 1, float(info["rate"]), 5)
+        if T.VERTICAL:
+            tiny.text(ui, "RATING", T.COMMENT, x, y + 4)
+        else:
+            W.text(ui, "RATING", T.COMMENT, x, y + 2)
+        stars(ui, x + lw, y + 1, float(info["rate"]), 5)
         y += 16
     keys = [p.split(":") for p in (info.get("buttons_colors") or "").split(";")]
     keys = [k for k in keys if len(k) >= 3 and k[0].startswith("P1_") and k[2]]
+    col = (SX + SW - x) // 2
     for i, (_, color, label) in enumerate(keys[:6]):
-        bx = x + (i % 2) * 104
+        bx = x + (i % 2) * col
         by = y + (i // 2) * 10
         try:
             c = pygame.Color(color.lower())
         except ValueError:
             c = pygame.Color(T.COMMENT)
         pygame.draw.circle(ui, c, (bx + 3, by + 3), 3)
-        tiny.text(ui, tiny.fit(label, 92), T.FG, bx + 9, by + 1)
-    ty = y0 + bh + 8
-    th = 228 - ty
+        tiny.text(ui, tiny.fit(label, col - 12), T.FG, bx + 9, by + 1)
+    ty = max(y0 + bh, y + 30 if keys else y) + 8
+    th = HH - 12 - ty
     W.block(ui, (SX, ty, SW, th), T.BG_DEEP, None)
     pygame.draw.rect(ui, T.LINE, (SX, ty, SW, th), 1)
     if fe.ov.get("loading"):
@@ -1184,8 +1217,8 @@ def draw_options(fe, ui, now):
     """O menu do Tab: as opcoes do jogo e, debaixo delas, as do frontend (o
     modo de exibicao e o andamento do scrape automatico)."""
     g = fe.game()
-    pw, ph = 236, 224
-    px, py = (WW - pw) // 2, 8
+    pw, ph = min(236, WW - 4), 224
+    px, py = (WW - pw) // 2, max(8, (HH - ph) // 2)
     card(ui, (px, py, pw, ph))
     ui.blit(W.big("GAME OPTIONS", 1, W.LABEL), (px + 10, py + 8))
     if g:
@@ -1314,7 +1347,7 @@ def draw_rename(fe, ui, now):
     pygame.draw.rect(ui, T.PINK, (SX + 9 + w, 42, 7, 10))
     tiny.text(ui, tiny.fit("ORIGINAL: " + (g.get("Title") or g["Name"]), SW), T.COMMENT, SX, 62)
     keys = fe.KEYS
-    kw, kh = 28, 22
+    kw, kh = min(28, (SW + 4) // 10), 22   # (em pe, as teclas encolhem)
     kx0 = (WW - 10 * kw) // 2
     r0, c0 = fe.ov["key"]
     for r, row in enumerate(keys):
@@ -1325,7 +1358,9 @@ def draw_rename(fe, ui, now):
             pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, y, kw - 3, kh), 2 if on else 1)
             W.text(ui, ch, T.FG if on else T.COMMENT, x + (kw - 3 - W.width(ch)) // 2 + 1, y + 7)
     y = 74 + 4 * (kh + 3)
-    for i, (label, wd, xo) in enumerate((("SPACE", 92, 0), ("DELETE", 72, 98), ("SAVE", 72, 176))):
+    k = kw / 28
+    for i, (label, wd, xo) in enumerate((("SPACE", round(92 * k), 0), ("DELETE", round(72 * k), round(98 * k)),
+                                         ("SAVE", round(72 * k), round(176 * k)))):
         x = kx0 + xo
         on = (r0, c0) == (4, i)
         tile_frame(ui, (x, y, wd, kh), on, now)
@@ -1348,7 +1383,7 @@ def draw_delete(fe, ui, now):
     import os
     g = fe.ov["game"]
     files = fe.ov["files"]
-    pw, ph = 248, 98
+    pw, ph = min(248, WW - 6), 98
     px, py = (WW - pw) // 2, (HH - ph) // 2
     card(ui, (px, py, pw, ph))
     W.centered(ui, "DELETE THIS GAME?", T.RED, py + 10)
