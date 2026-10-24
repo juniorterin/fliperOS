@@ -4,9 +4,6 @@ O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai
 
 ## Pedidos de 2026-10-24
 
-Setup:
-- **Emulators & Games:** mostrar a versão instalada de cada emulador e para qual versão vai o update. Em andamento: a versão sai de arquivos (sem abrir o emulador), e a do update vem da rede só ao escolher um.
-
 Site (website/):
 - o menu fora do container;
 - depois da segunda foto do slider, fotos do frontend em todos os modos, com cada componente aberto;

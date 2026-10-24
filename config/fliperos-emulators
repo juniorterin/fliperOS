@@ -4,6 +4,8 @@
 #
 #   fliperos-emulators list                    nome|instalado (0 ou 1)|tipo|descricao
 #   fliperos-emulators installed NOME          status 0 se instalado
+#   fliperos-emulators versions                nome|versao instalada
+#   fliperos-emulators latest NOME             instalada|a do update|same, new ou unknown
 #   fliperos-emulators install NOME [--progress] [--source PASTA]   (como root)
 #
 # tipo: image (compilado na imagem: nao se instala depois), build (o SM2-Emu,
@@ -51,6 +53,79 @@ emulator_installed() {
   local file
   file=$(field "$1" 3)
   [[ -n $file && -x $file ]]
+}
+
+# ── Versoes ──────────────────────────────────────────────────────
+# A versao instalada sai de arquivos, sem abrir o emulador: o que o build da
+# imagem gravou (emulator-versions, nome=versao), o metainfo dos AppImages, o
+# VERSION.txt do Fightcade, o commit do codigo do SM2-Emu e, numa imagem
+# antiga sem o arquivo, o texto de versao do binario do GroovyMAME.
+versions_file=${FLIPEROS_EMULATOR_VERSIONS:-$root/usr/local/share/fliperos/emulator-versions}
+# O que a proxima imagem do FliperOS traz (as versoes fixadas no build).
+mkiso_url=${FLIPEROS_MKISO_URL:-https://raw.githubusercontent.com/juniorterin/fliperOS/main/fliperos-mkiso.sh}
+net_timeout=${FLIPEROS_VERSION_TIMEOUT:-8}
+
+metainfo_version() {
+  sed -n 's/.*<release [^>]*version="v\{0,1\}\([^"]*\)".*/\1/p' "$1"/usr/share/metainfo/*.xml 2> /dev/null | head -n 1
+}
+
+emulator_version() {
+  local name=$1 v
+  v=$(awk -F= -v n="$name" '$1 == n { sub(/^[^=]*=/, ""); print; exit }' "$versions_file" 2> /dev/null)
+  if [[ -z $v ]]; then
+    case $name in
+      pcsx2) v=$(metainfo_version "$root/opt/pcsx2") ;;
+      duckstation) v=$(metainfo_version "$root/opt/duckstation") ;;
+      fightcade) v=$(tr -d '[:space:]' < "$root/opt/fliperos/fightcade/VERSION.txt" 2> /dev/null) ;;
+      model2) v=$(git -c safe.directory='*' -C "$home/.local/src/sm2-emu" log -1 --format='%cs %h' 2> /dev/null) ;;
+      groovymame)
+        v=$(grep -a -o -m 1 -E '0\.[0-9]{3} \((unknown|mame[0-9]+)\)' "$root/usr/local/libexec/groovymame" 2> /dev/null |
+          head -n 1)
+        v=${v%% *}
+        ;;
+    esac
+  fi
+  [[ -n $v ]] && printf '%s\n' "$v"
+}
+
+# remote_head URL [REF]: o commit curto do ramo principal (ou de REF).
+remote_head() {
+  timeout "$net_timeout" git ls-remote "$1" "${2:-HEAD}" 2> /dev/null | awk 'NR == 1 { print substr($1, 1, 7) }'
+}
+
+# pinned VARIAVEL: o valor fixado no fliperos-mkiso.sh do repositorio.
+pinned() {
+  timeout "$net_timeout" curl -fsL "$mkiso_url" 2> /dev/null |
+    sed -n "s/^$1=\"\\([^\"]*\\)\".*/\\1/p" | head -n 1
+}
+
+# emulator_latest NOME: a versao que o update traz (precisa da rede; sem
+# ela, nada). As da imagem mudam com a proxima imagem do FliperOS.
+emulator_latest() {
+  local v
+  case $1 in
+    pcsx2) pinned PCSX2_VERSION ;;
+    dolphin) pinned DOLPHIN_TAG ;;
+    groovymame)
+      v=$(pinned GROOVYMAME_TAG)
+      [[ $v =~ ^gm0([0-9]{3}) ]] && echo "0.${BASH_REMATCH[1]}"
+      ;;
+    openbor)
+      v=$(pinned OPENBOR_COMMIT)
+      [[ -n $v ]] && echo "${v:0:7}"
+      ;;
+    retroarch) remote_head https://github.com/libretro/RetroArch ;;
+    flycast) remote_head https://github.com/flyinghead/flycast ;;
+    supermodel) remote_head https://github.com/trzy/Supermodel ;;
+    model2) remote_head "${FLIPEROS_SM2_REPO:-https://github.com/dmanlfc/sm2-emu.git}" ;;
+    duckstation) remote_head https://github.com/stenzek/duckstation refs/tags/latest ;;
+  esac
+}
+
+# same_version INSTALADA NOVA: a mesma (o commit curto dentro da instalada,
+# como "0.1-12083-g00e299795" e 00e2997).
+same_version() {
+  [[ -n $1 && -n $2 ]] && { [[ $1 == "$2" ]] || [[ $2 =~ ^[0-9a-f]{7}$ && $1 == *"$2"* ]]; }
 }
 
 progress=0 label=""
@@ -112,6 +187,26 @@ case ${1:-} in
     done < <(table)
     ;;
   installed) emulator_installed "${2:?name}" ;;
+  versions)
+    # nome|versao instalada (vazia: nao instalado, ou sem como saber)
+    while IFS='|' read -r name kind file _; do
+      version=""
+      [[ -x $file ]] && version=$(emulator_version "$name")
+      printf '%s|%s\n' "$name" "$version"
+    done < <(table)
+    ;;
+  latest)
+    # instalada|nova|same (a mesma), new (outra) ou unknown (sem rede)
+    name=${2:?name}
+    have=""
+    emulator_installed "$name" && have=$(emulator_version "$name")
+    want=$(emulator_latest "$name")
+    if [[ -z $want ]]; then state=unknown
+    elif same_version "$have" "$want"; then state=same
+    else state=new
+    fi
+    printf '%s|%s|%s\n' "$have" "$want" "$state"
+    ;;
   install)
     name=${2:?name} source=""
     shift 2
@@ -125,7 +220,7 @@ case ${1:-} in
     emulator_install "$name" "$source"
     ;;
   *)
-    echo "Usage: fliperos-emulators list | installed NAME | install NAME [--progress] [--source FOLDER]" >&2
+    echo "Usage: fliperos-emulators list | installed NAME | versions | latest NAME | install NAME [--progress] [--source FOLDER]" >&2
     exit 2
     ;;
 esac

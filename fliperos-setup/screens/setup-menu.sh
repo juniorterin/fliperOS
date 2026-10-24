@@ -640,12 +640,18 @@ screen_extras() {
 # um por um dos que nao vem na imagem (lib/emulators.sh).
 
 screen_emulators() {
-  local title="Emulators & Games" entries=() name inst kind desc choice last="" label
+  local title="Emulators & Games" entries=() name inst kind desc choice last="" label version
+  local -A versions
   while true; do
     entries=()
+    versions=()
+    while IFS='|' read -r name version; do
+      versions[$name]=$version
+    done < <(emulators_versions)
     while IFS='|' read -r name inst kind desc; do
       if ((inst)); then
-        entries+=("$name|$desc (installed)")
+        version=${versions[$name]:-}
+        entries+=("$name|$desc${version:+ $version} (installed)")
       else
         entries+=("$name|$desc (not installed)")
       fi
@@ -669,7 +675,8 @@ screen_emulators() {
       image)
         if ((inst)); then
           ui_msg "$title" "$label comes with FliperOS and is installed." "" \
-            "It is updated together with FliperOS: the updates offered at boot and each new version."
+            "$(emulators_update_line "$choice" "$label")" "" \
+            "It changes version with each new FliperOS image (the updates offered at boot keep it)."
         else
           ui_msg "$title" "$label comes compiled in the FliperOS image, and this image was built without it." "" \
             "It can't be installed from here: use an image that has it."
@@ -691,18 +698,33 @@ screen_emulators() {
   done
 }
 
+# emulators_update_line NOME ROTULO: "Installed: X. Update: Y." (a versao
+# nova vem do GitHub; sem rede, so a instalada).
+emulators_update_line() {
+  local have want state
+  ui_info "$2" "Checking the newest version..." > /dev/tty 2>&1 || true
+  IFS='|' read -r have want state < <(emulators_latest "$1")
+  have="Installed: ${have:-version unknown}."
+  case $state in
+    same) echo "$have Up to date ($want)." ;;
+    new) echo "$have Update: $want." ;;
+    *) echo "$have The newest version could not be checked (no network?)." ;;
+  esac
+}
+
 # screen_emulator_update NOME ROTULO TIPO: um emulador instalado que nao
 # vem na imagem. Update baixa a versao nova por cima (o SM2-Emu: o codigo
 # novo e compila de novo; o KOF: o patch e o Ikemen GO novos, convertendo o
 # jogo original de novo).
 screen_emulator_update() {
-  local name=$1 label=$2 kind=$3 entry choice
+  local name=$1 label=$2 kind=$3 entry choice line
+  line=$(emulators_update_line "$name" "$label")
   case $kind in
     build) entry="update|Update|The newest source, built again: several minutes." ;;
     source) entry="update|Update|The newest 4:3 patch and Ikemen GO; converts again." ;;
     *) entry="update|Update|Download the newest version over this one." ;;
   esac
-  choice=$(ui_menu_hints "$label" "Installed." "" "$entry" \
+  choice=$(ui_menu_hints "$label" "$line" "" "$entry" \
     "return|Return|Back to Emulators & Games.") || return 0
   [[ $choice == update ]] || return 0
   if [[ $kind == source ]]; then

@@ -38,3 +38,17 @@ emulators_install() {
   log_line cmd "\$ $EMULATORS_CMD install $1 --progress ${args[*]}"
   "$EMULATORS_CMD" install "$1" --progress "${args[@]}" 2>> "$FLIPEROS_LOG"
 }
+
+# emulators_versions imprime "nome|versao instalada" (vazia: nao instalado
+# ou sem como saber). Le arquivos, nao abre os emuladores.
+emulators_versions() {
+  [[ -x $EMULATORS_CMD ]] || return 1
+  "$EMULATORS_CMD" versions
+}
+
+# emulators_latest NOME imprime "instalada|a do update|estado" (same, new ou
+# unknown, este sem rede). Pergunta ao GitHub: alguns segundos.
+emulators_latest() {
+  [[ -x $EMULATORS_CMD ]] || return 1
+  "$EMULATORS_CMD" latest "$1"
+}

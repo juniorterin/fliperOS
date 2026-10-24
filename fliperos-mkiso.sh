@@ -164,6 +164,15 @@ err()  { echo -e "${RED}✗${RST} $*" | tee -a "$LOG_FILE"; exit 1; }
 info() { echo -e "${BLU}→${RST} $*" | tee -a "$LOG_FILE"; }
 step() { echo -e "\n${BLD}${CYN}══ $* ══${RST}" | tee -a "$LOG_FILE"; }
 
+# record_version NOME VERSAO: a versao do emulador da imagem, que o Setup
+# mostra em Emulators & Games (config/fliperos-emulators versions).
+record_version() {
+  local file="$CHROOT_DIR/usr/local/share/fliperos/emulator-versions"
+  mkdir -p "${file%/*}"
+  sed -i "/^$1=/d" "$file" 2> /dev/null || true
+  echo "$1=$2" >> "$file"
+}
+
 # ── Dependências do host ──────────────────────────────────────
 check_host_deps() {
   step "Checking host dependencies"
@@ -947,6 +956,7 @@ install_groovymame_chroot() {
   chroot "$CHROOT_DIR" /opt/fliperos/bin/fliperos-mame-ini /etc/fliperos/mame/mame.ini /etc/fliperos/mame/mame.ini \
     >> "$LOG_FILE" 2>&1 || err "GroovyMAME: mame.ini was not generated"
   ok "GroovyMAME ${GROOVYMAME_TAG} in /usr/local/libexec/groovymame"
+  record_version groovymame "0.${GROOVYMAME_TAG:3:3}"
 }
 
 # ── XML do MAME 2010 (ROM cleaner) ────────────────────────────
@@ -994,6 +1004,9 @@ apt-get install -y --no-install-recommends \
 
 git clone --depth=1 https://github.com/libretro/RetroArch /tmp/retroarch
 cd /tmp/retroarch
+# A versao (o commit de hoje do master) para o Setup > Emulators & Games.
+mkdir -p /usr/local/share/fliperos
+echo "retroarch=$(git log -1 --format='%cs %h')" >> /usr/local/share/fliperos/emulator-versions
 ./configure --enable-kms --enable-egl --disable-x11 --disable-wayland \
   --disable-sdl --enable-sdl2 --enable-vulkan
 make -j"$(nproc)"
@@ -1163,6 +1176,9 @@ apt-get install -y --no-install-recommends \
   libcurl4-openssl-dev libminiupnpc-dev libzip-dev libao-dev libpng-dev
 git clone --depth=1 https://github.com/flyinghead/flycast /tmp/flycast
 cd /tmp/flycast
+# A versao (o commit de hoje do master) para o Setup > Emulators & Games.
+mkdir -p /usr/local/share/fliperos
+echo "flycast=$(git log -1 --format='%cs %h')" >> /usr/local/share/fliperos/emulator-versions
 git submodule update --init --recursive
 # Os patches do FliperOS (config/flycast-patches): o que nao encaixa mais
 # no master do Flycast fica de fora com um aviso, e o Flycast segue na ISO.
@@ -1221,6 +1237,7 @@ build_pcsx2_chroot() {
   install -Dm644 "$CHROOT_DIR/opt/pcsx2/PCSX2.png" "$CHROOT_DIR/usr/local/share/pixmaps/pcsx2.png"
   rm -f "$image"
   ok "PCSX2 ${PCSX2_VERSION} in /opt/pcsx2"
+  record_version pcsx2 "$PCSX2_VERSION"
 }
 
 # ── Compilar Supermodel (Sega Model 3), X11 ───────────────────
@@ -1238,6 +1255,9 @@ set -e
 apt-get install -y --no-install-recommends libsdl2-dev libsdl2-net-dev libglu1-mesa-dev zlib1g-dev
 git clone --depth=1 https://github.com/trzy/Supermodel /tmp/supermodel
 cd /tmp/supermodel
+# A versao (o commit de hoje do master) para o Setup > Emulators & Games.
+mkdir -p /usr/local/share/fliperos
+echo "supermodel=$(git log -1 --format='%cs %h')" >> /usr/local/share/fliperos/emulator-versions
 # Makefile proprio (sem CMake), como o README do projeto manda no Linux.
 make -f Makefiles/Makefile.UNIX -j"$(nproc)"
 install -m755 bin/supermodel /usr/local/bin/supermodel
@@ -1337,6 +1357,7 @@ OBSCRIPT
   chroot "$CHROOT_DIR" /tmp/build-openbor.sh >> "$LOG_FILE" 2>&1 \
     && ok "OpenBOR compilado" \
     || err "OpenBOR failed; use --skip-openbor for an ISO without it"
+  record_version openbor "${OPENBOR_COMMIT:0:7}"
   # O comando openbor (Paks em /opt/fliperos/roms/openbor/Paks) e o 3.0 dos
   # paks antigos: os mesmos do fliperos-rootfs.sh, que os atualiza depois.
   local src
@@ -1385,6 +1406,7 @@ DOLSCRIPT
   chroot "$CHROOT_DIR" /tmp/build-dolphin.sh >> "$LOG_FILE" 2>&1 \
     && ok "Dolphin compilado" \
     || err "Dolphin failed; use --skip-dolphin for an ISO without it"
+  record_version dolphin "$DOLPHIN_TAG"
 }
 
 # ── Wine, Steam e Heroic: sob demanda (Setup > Games > Extras) ────────

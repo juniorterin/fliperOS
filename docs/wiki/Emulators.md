@@ -230,7 +230,11 @@ For testing:
 
 ## Emulators & Games
 
-**Setup > Games > Emulators & Games** lists the emulators of the desktop menu (RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, Supermodel, OpenBOR, Model 2, Fightcade 2, DuckStation) and KOF Final Attack, each marked **installed** or **not installed** — the same file the desktop menu looks at (`TryExec`) to show the shortcut. Choosing one that is not installed installs it (`config/fliperos-emulators`):
+**Setup > Games > Emulators & Games** lists the emulators of the desktop menu (RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, Supermodel, OpenBOR, Model 2, Fightcade 2, DuckStation) and KOF Final Attack, each marked **installed** or **not installed** — the same file the desktop menu looks at (`TryExec`) to show the shortcut.
+
+Next to each installed one is its **version**, read from files without opening the emulator (`fliperos-emulators versions`): the `/usr/local/share/fliperos/emulator-versions` the image build writes (the pinned version, or the date and commit of the master branch built that day), the AppImages' metainfo (PCSX2, DuckStation), Fightcade's `VERSION.txt`, the commit of the SM2-Emu source and, on an older image without the file, GroovyMAME's version text. Choosing an installed one asks GitHub what the update brings (`fliperos-emulators latest NAME`, a few seconds; without network it only shows the installed one): **Up to date**, or **Update: X**. For the image's emulators that is the version the next FliperOS image pins (from the repository's `fliperos-mkiso.sh`) or the newest master commit; Fightcade doesn't publish its version before the download.
+
+Choosing one that is not installed installs it (`config/fliperos-emulators`):
 
 - **Model 2**: installs what is missing from the compiler and clones and builds SM2-Emu as the user, the same build the desktop menu does on the first click (`fliperos-sm2emu --deps` and `--build`). Chosen again when installed, it updates and rebuilds.
 

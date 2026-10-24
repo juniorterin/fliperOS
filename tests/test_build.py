@@ -10739,6 +10739,69 @@ class EmulatorsMenuTests(unittest.TestCase):
                                 (ROOT / 'config/applications' / ('fliperos-%s.desktop' % name)).read_text()).group(1)
             self.assertIn('|$root%s|' % tryexec, script, name)
 
+    def test_versions_and_what_the_update_brings(self):
+        # A versao instalada sai de arquivos, sem abrir o emulador; a do update
+        # vem do fliperos-mkiso.sh do repositorio (as da imagem) ou do git.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            root, home = tmp / 'root', tmp / 'home'
+            for path in ('usr/local/bin/retroarch', 'usr/local/bin/groovymame', 'usr/local/bin/pcsx2',
+                         'usr/local/bin/duckstation', 'opt/fliperos/fightcade/fightcade'):
+                (root / path).parent.mkdir(parents=True, exist_ok=True)
+                (root / path).write_text('')
+                (root / path).chmod(0o755)
+            share = root / 'usr/local/share/fliperos'
+            share.mkdir(parents=True)
+            (share / 'emulator-versions').write_text('retroarch=2026-10-12 55c2026\n')
+            (root / 'usr/local/libexec').mkdir(parents=True)
+            (root / 'usr/local/libexec/groovymame').write_bytes(b'\0x 0.976 (\0Lua 5.4\0' b'0.289 (unknown)\0')
+            for app, version in (('pcsx2', 'v2.8.2'), ('duckstation', '0.1-12083-g00e299795')):
+                (root / 'opt' / app / 'usr/share/metainfo').mkdir(parents=True)
+                (root / 'opt' / app / 'usr/share/metainfo/a.xml').write_text(
+                    '<releases>\n  <release version="%s" date="2026-10-01"/>\n</releases>\n' % version)
+            (root / 'opt/fliperos/fightcade/VERSION.txt').write_text('2.1.45\n')
+            # O SM2-Emu: o codigo compilado num commit, e o repositorio com um novo.
+            repo = tmp / 'sm2-remote'
+            git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@t']
+            subprocess.run([*git, 'init', '-q', str(repo)], check=True)
+            subprocess.run([*git, '-C', str(repo), 'commit', '-q', '--allow-empty', '-m', 'a'], check=True)
+            src = home / '.local/src/sm2-emu'
+            subprocess.run(['git', 'clone', '-q', str(repo), str(src)], check=True)
+            (src / 'build/bin').mkdir(parents=True)
+            (src / 'build/bin/sm2-emu').write_text('')
+            (src / 'build/bin/sm2-emu').chmod(0o755)
+            subprocess.run([*git, '-C', str(repo), 'commit', '-q', '--allow-empty', '-m', 'b'], check=True)
+            new = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--short=7', 'HEAD'], capture_output=True,
+                                 text=True).stdout.strip()
+            mkiso = tmp / 'fliperos-mkiso.sh'
+            mkiso.write_text('PCSX2_VERSION="2.8.2"\nGROOVYMAME_TAG="gm0290sr222g"\n')
+            env = {'FLIPEROS_EMULATORS_ROOT': str(root), 'FLIPEROS_HOME': str(home),
+                   'FLIPEROS_MKISO_URL': mkiso.as_uri(), 'FLIPEROS_SM2_REPO': str(repo)}
+            got = dict(r.split('|') for r in self.run_cmd('fliperos-emulators', 'versions', env=env).stdout.splitlines())
+            self.assertEqual(got['retroarch'], '2026-10-12 55c2026')
+            self.assertEqual(got['groovymame'], '0.289')
+            self.assertEqual(got['pcsx2'], '2.8.2')
+            self.assertEqual(got['duckstation'], '0.1-12083-g00e299795')
+            self.assertEqual(got['fightcade'], '2.1.45')
+            self.assertRegex(got['model2'], r'^\d{4}-\d\d-\d\d [0-9a-f]{7}$')
+            # Nao instalado: sem versao.
+            self.assertEqual(got['flycast'], '')
+
+            def latest(name):
+                return self.run_cmd('fliperos-emulators', 'latest', name, env=env).stdout.strip()
+            self.assertEqual(latest('pcsx2'), '2.8.2|2.8.2|same')
+            self.assertEqual(latest('groovymame'), '0.289|0.290|new')
+            self.assertEqual(latest('model2'), '%s|%s|new' % (got['model2'], new))
+            # Sem como saber a nova (o Fightcade nao diz a versao antes de baixar).
+            self.assertEqual(latest('fightcade'), '2.1.45||unknown')
+        # O build da imagem grava a versao de cada emulador dela.
+        mk = (ROOT / 'fliperos-mkiso.sh').read_text()
+        for name in ('groovymame', 'pcsx2', 'openbor', 'dolphin'):
+            self.assertIn('  record_version %s "' % name, mk)
+        for name in ('retroarch', 'flycast', 'supermodel'):
+            self.assertIn('echo "%s=$(git log -1 --format=\'%%cs %%h\')" >> /usr/local/share/fliperos/emulator-versions'
+                          % name, mk)
+
     def test_install_calls_the_installer_of_each_kind(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
