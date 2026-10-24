@@ -6366,9 +6366,9 @@ class PowerKeyTests(unittest.TestCase):
     """config/fliperos-powerkey: o botao de desligar fecha o jogo aberto e,
     sem jogo, desliga. A sessao aqui e um script chamado fliperos-session."""
 
-    def start(self, tmp, body):
-        (tmp / 'fliperos-session').write_text('#!/bin/bash\ncd %s\n%s' % (tmp, body))
-        session = subprocess.Popen(['bash', str(tmp / 'fliperos-session')], start_new_session=True)
+    def start(self, tmp, body, name='fliperos-session'):
+        (tmp / name).write_text('#!/bin/bash\ncd %s\n%s' % (tmp, body))
+        session = subprocess.Popen(['bash', str(tmp / name)], start_new_session=True)
         self.addCleanup(session.wait)
         self.addCleanup(lambda: os.killpg(session.pid, signal.SIGKILL))
         return session
@@ -6429,6 +6429,18 @@ class PowerKeyTests(unittest.TestCase):
             # De volta ao desktop (um filho sem a variavel): desliga.
             self.press(tmp, grace='0')
             self.assertTrue((tmp / 'off').exists())
+
+    def test_game_opened_from_the_web_panel_closes(self):
+        # O painel web pede o jogo e o fliperos-tty1 o abre direto (sem
+        # fliperos-session): o botao fecha o jogo, nao desliga.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.start(tmp, 'FLIPEROS_POWERKEY=game sleep 300 &\necho $! > game.pid\nwait\nsleep 300 &\nwait\n',
+                       name='fliperos-tty1')
+            game = self.pid(tmp, 'game.pid')
+            self.press(tmp, grace='0')
+            self.assertTrue(self.gone(game))
+            self.assertFalse((tmp / 'off').exists())
 
     def test_games_listed_in_a_file(self):
         # O Fightcade: os emuladores nao sao filhos dele.

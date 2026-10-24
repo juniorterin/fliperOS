@@ -65,7 +65,10 @@ def descendants(pid):
 
 
 def sessions():
-    """Os PIDs dos fliperos-session abertos."""
+    """Os PIDs dos fliperos-session abertos e do fliperos-tty1: o jogo pedido
+    pelo painel web abre direto debaixo dele (com FLIPEROS_POWERKEY=game),
+    sem fliperos-session no meio; sem ele aqui, o botao desligava a maquina
+    no lugar de fechar o jogo."""
     found = []
     for path in glob.glob('/proc/[0-9]*/cmdline'):
         try:
@@ -73,7 +76,7 @@ def sessions():
                 argv = f.read().split(b'\0')
         except OSError:
             continue
-        if any(os.path.basename(arg) == b'fliperos-session' for arg in argv[:2]):
+        if any(os.path.basename(arg) in (b'fliperos-session', b'fliperos-tty1') for arg in argv[:2]):
             found.append(int(path.split('/')[2]))
     return found
 
