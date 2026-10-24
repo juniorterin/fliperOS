@@ -400,6 +400,64 @@ orientation_apply() {
   log_info "orientacao: $o"
 }
 
+# ── Console em pe ────────────────────────────────────────────────
+# Em pe, o console no modo de boot (640x240) tem so 30 colunas de texto, com
+# letras largas: as 240 linhas viram a largura. O console vai em 640x480i
+# (60 colunas, letras na proporcao), e o menu e o frontend trocam para o
+# 640x240 deles. Sem EDID o kernel so conhece o modo do video=: o EDID do
+# FliperOS (VERTICAL_EDID) traz os dois, com os tempos do Switchres para o
+# monitor do Video Setup (config/fliperos-edid-modes).
+VERTICAL_EDID=${VERTICAL_EDID:-fliperos-vertical.bin}
+EDID_MODES=${EDID_MODES:-/opt/fliperos/bin/fliperos-edid-modes}
+
+# vertical_edid grava o EDID com 640x240 e 640x480i do monitor. Status 1 (e
+# sem o arquivo) se o monitor nao tem o 480 entrelacado (um de 31 kHz).
+vertical_edid() {
+  local monitor m240 m480
+  monitor=$(conf_get monitor 2> /dev/null) || monitor=generic_15
+  rm -f "$EDID_DIR/$VERTICAL_EDID"
+  have switchres || return 1
+  m240=$(switchres 640 240 60 --monitor "$monitor" --calc 2>&1 | sed -n 's/.*Modeline //p' | head -1)
+  m480=$(switchres 640 480 60 --monitor "$monitor" --calc 2>&1 | sed -n 's/.*Modeline //p' | head -1)
+  [[ -n $m240 && $m480 == *interlace* ]] || return 1
+  mkdir -p "$EDID_DIR"
+  printf '%s\n%s\n' "$m240" "$m480" | "$EDID_MODES" "$EDID_DIR/$VERTICAL_EDID" 2>> "$FLIPEROS_LOG"
+}
+
+# vertical_console_cmdline LINHA CONECTOR ORIENTACAO: em pe, com o EDID do
+# FliperOS gravado, o modo do console vira 640x480i (as letras S e e do
+# video= ficam) e o drm.edid_firmware aponta para ele. Uma linha que ja traz
+# um EDID (o boot por EDID, a super resolucao) fica como esta.
+vertical_console_cmdline() {
+  local line=$1 conn=$2 o=$3 spec mode rest
+  if [[ $o != vertical-* || -z $conn || ! -f $EDID_DIR/$VERTICAL_EDID ]] ||
+    cmdline_get "$line" drm.edid_firmware > /dev/null ||
+    ! spec=$(cmdline_video_spec "$line" "$conn"); then
+    printf '%s\n' "$line"
+    return
+  fi
+  mode=${spec%%,*}
+  rest=${spec#"$mode"}
+  [[ $mode =~ ^[0-9]+x[0-9]+(@[0-9.]+)?i?(.*)$ ]] || { printf '%s\n' "$line"; return; }
+  line=$(cmdline_set_video "$line" "$conn" "640x480i${BASH_REMATCH[2]}$rest")
+  cmdline_set "$line" drm.edid_firmware "$conn:edid/$VERTICAL_EDID"
+}
+
+# orientation_boot ORIENTACAO: o que o boot precisa para a orientacao (o
+# EDID do console em pe, o splash girado) e o initramfs refeito uma vez.
+orientation_boot() {
+  local o=$1 changed=0
+  if [[ $o == vertical-* ]]; then
+    ev_step 10 "The console for a vertical monitor"
+    vertical_edid && changed=1
+  fi
+  ev_step 30 "The boot screen"
+  splash_orientation "$o" && changed=1
+  ((changed)) || return 0
+  ev_step 50 "Rebuilding the initramfs"
+  run_logged "$UPDATE_INITRAMFS" -u
+}
+
 # orientation_cmdline LINHA CONECTOR ORIENTACAO acerta fbcon=rotate e o
 # panel_orientation do conector na linha do kernel.
 orientation_cmdline() {

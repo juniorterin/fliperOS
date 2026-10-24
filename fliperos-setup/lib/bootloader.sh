@@ -234,7 +234,9 @@ boot_compose() {
     [[ $extra == "$conn" ]] && continue
     line=$(orientation_cmdline "$line" "$extra" "$orientation")
   done < <(mm_extras | sed 's/^[^:]*://' | sort -u)
-  orientation_cmdline "$line" "$conn" "$orientation"
+  line=$(orientation_cmdline "$line" "$conn" "$orientation")
+  # Em pe, o console em 640x480i com o EDID dos dois modos (lib/video.sh).
+  vertical_console_cmdline "$line" "$conn" "$orientation"
 }
 
 # boot_install_cmdline imprime a linha do kernel para um disco novo. Sem

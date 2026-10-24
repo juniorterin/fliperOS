@@ -502,6 +502,39 @@ class OrientationTests(Base):
         out = self.env.out("orientation_cmdline '%s' VGA-1 horizontal" % out).strip()
         self.assertEqual(out, "quiet video=VGA-1:640x480iSe")
 
+    def test_vertical_console_in_480i_with_both_modes(self):
+        # Em pe, o console em 640x480i (60 colunas) e o EDID do FliperOS com
+        # o 640x240 do menu e do frontend e o 640x480i, dos tempos do
+        # Switchres para o monitor; deitado, a linha volta a de antes.
+        edid_dir = self.env.dir / "edid"
+        self.env.stub("switchres", 'case $2 in\n'
+                      '  240) echo \'Switchres: Modeline "640x240_60 15.66KHz 60Hz" 13.013460 640 666 727 831 '
+                      '240 242 245 261   -hsync -vsync\' ;;\n'
+                      '  480) echo \'Switchres: Modeline "640x480_60i 15.69KHz 60Hz" 13.038390 640 666 727 831 '
+                      '480 483 489 523 interlace  -hsync -vsync\' ;;\nesac')
+        env = {"EDID_DIR": str(edid_dir), "EDID_MODES": str(SETUP.parent / "config" / "fliperos-edid-modes")}
+        self.env.out("conf_set monitor generic_15; vertical_edid", env)
+        data = (edid_dir / "fliperos-vertical.bin").read_bytes()
+        self.assertEqual(len(data), 128)
+        self.assertEqual(sum(data) % 256, 0)
+        self.assertEqual(data[:8], b"\x00\xff\xff\xff\xff\xff\xff\x00")
+        # Os dois modos: 640x240 progressivo e 640x480i (campo de 240 linhas).
+        self.assertEqual((data[56], data[59], data[71] & 0x80), (0x80, 0xF0, 0))
+        self.assertEqual((data[74], data[77], data[89] & 0x80), (0x80, 0xF0, 0x80))
+        line = "quiet video=VGA-1:640x240Se,panel_orientation=right_side_up fbcon=rotate:1"
+        out = self.env.out("vertical_console_cmdline '%s' VGA-1 vertical-cw" % line, env).strip()
+        self.assertEqual(out, "quiet video=VGA-1:640x480iSe,panel_orientation=right_side_up fbcon=rotate:1 "
+                              "drm.edid_firmware=VGA-1:edid/fliperos-vertical.bin")
+        self.assertEqual(self.env.out("vertical_console_cmdline '%s' VGA-1 horizontal" % line, env).strip(), line)
+        # Com um EDID ja na linha (boot por EDID), fica como esta.
+        own = "video=VGA-1:e drm.edid_firmware=VGA-1:edid/ntsc.bin"
+        self.assertEqual(self.env.out("vertical_console_cmdline '%s' VGA-1 vertical-cw" % own, env).strip(), own)
+        # Um monitor de 31 kHz (480 progressivo): sem o EDID, nada muda.
+        self.env.stub("switchres", "echo 'Switchres: Modeline \"640x480\" 25.2 640 656 752 800 480 490 492 525 -hsync -vsync'")
+        self.assertNotEqual(self.env.run("vertical_edid", env).returncode, 0)
+        self.assertFalse((edid_dir / "fliperos-vertical.bin").exists())
+        self.assertEqual(self.env.out("vertical_console_cmdline '%s' VGA-1 vertical-cw" % line, env).strip(), line)
+
     def test_rotation_keeps_fbcon_map(self):
         out = self.env.out("orientation_cmdline 'quiet fbcon=map:1 fbcon=rotate:1' VGA-1 horizontal").strip()
         self.assertEqual(out, "quiet fbcon=map:1")
@@ -3488,16 +3521,18 @@ class SplashTests(Base):
             (d / "fliperos.script").write_text('// x\norientation = "horizontal";\nside = "";\n')
         self.theme(self.themes, "other", script="other.script")
         (self.themes / "default.plymouth").symlink_to(self.themes / "other" / "other.plymouth")
-        self.env.out("splash_orientation vertical-cw", self.vars)
+        # Status 1: o tema do boot nao e um que gira (nada a refazer).
+        self.assertEqual(self.env.run("splash_orientation vertical-cw", self.vars).returncode, 1)
         for base in (self.themes, self.home):
             self.assertIn('orientation = "vertical-cw";', (base / "fliperos" / "fliperos.script").read_text())
         self.assertEqual((self.themes / "other" / "other.script").read_text(), "// script\n")
-        self.assertFalse(self.calls.exists())
         (self.themes / "default.plymouth").unlink()
         (self.themes / "default.plymouth").symlink_to(self.themes / "fliperos" / "fliperos.plymouth")
-        self.env.out("splash_orientation vertical-ccw", self.vars)
+        self.assertEqual(self.env.run("splash_orientation vertical-ccw", self.vars).returncode, 0)
         self.assertIn('orientation = "vertical-ccw";', (self.themes / "fliperos" / "fliperos.script").read_text())
-        self.assertIn("update-initramfs -u", self.calls.read_text())
+        # O orientation_boot refaz o initramfs uma vez (o splash e o EDID).
+        self.env.out("orientation_boot horizontal", self.vars)
+        self.assertEqual(self.calls.read_text().count("update-initramfs -u"), 1)
         # O tema do repositorio tem a linha e as imagens giradas.
         theme = SETUP.parent / "config" / "splashscreen" / "fliperos"
         self.assertIn('orientation = "horizontal";\n', (theme / "fliperos.script").read_text())

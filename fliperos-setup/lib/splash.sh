@@ -122,7 +122,8 @@ splash_orient_scripts() {
 
 # splash_orientation ORIENTACAO: o splash do boot segue o monitor (Video
 # Setup > Monitor Orientation). O tema no Plymouth e as copias em
-# ~/splashscreen; com um deles de padrao, o initramfs e refeito.
+# ~/splashscreen. Status 0: o tema do boot mudou e o initramfs precisa ser
+# refeito (lib/video.sh orientation_boot o refaz).
 splash_orientation() {
   local o=$1 dir current changed=1
   current=$(splash_current 2> /dev/null)
@@ -132,8 +133,7 @@ splash_orientation() {
       changed=0
     fi
   done
-  ((changed == 0)) || return 0
-  run_logged "$UPDATE_INITRAMFS" -u
+  return "$changed"
 }
 
 # splash_set NOME faz do tema o do boot (vale no proximo boot).

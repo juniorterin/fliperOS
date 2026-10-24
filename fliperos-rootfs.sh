@@ -29,6 +29,8 @@ install -Dm644 "$src/config/fliperos-setup.desktop" "$root/usr/share/application
 # Diagnostico do modo ativo (alimenta o "Testing Results") e EDIDs por preset.
 install -Dm755 "$src/fliperos-video-check.py" "$root/usr/local/bin/fliperos-video-check"
 install -Dm755 "$src/config/fliperos-rebuild-edids" "$root/usr/local/sbin/fliperos-rebuild-edids"
+# O EDID com os dois modos do console em pe (lib/video.sh vertical_edid).
+install -Dm755 "$src/config/fliperos-edid-modes" "$root/opt/fliperos/bin/fliperos-edid-modes"
 install -Dm755 "$src/config/fliperos-edid-hook" "$root/etc/initramfs-tools/hooks/fliperos-edid"
 
 # ── Estado e sessao de boot ───────────────────────────────────────
