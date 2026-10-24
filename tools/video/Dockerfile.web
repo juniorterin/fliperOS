@@ -1,0 +1,7 @@
+# O navegador que grava o painel web no tablet (tools/video/web_rec.py):
+# o Chromium sem tela, dirigido pelo protocolo de depuracao.
+#   docker build -t fliperos-video-web -f tools/video/Dockerfile.web tools/video
+FROM debian:bookworm-slim
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      chromium python3 python3-websocket fonts-dejavu-core fonts-noto-color-emoji ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
