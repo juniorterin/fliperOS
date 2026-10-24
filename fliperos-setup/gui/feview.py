@@ -663,7 +663,8 @@ def full_picture(fe, i):
         path = video_path(fe, g)
         if i == fe.cursor:
             fe.video_used = True
-            frame_ = fe.player.request(path, WW, HH, fe.abs_now)
+            start = fe.grid.offset(path, WW, HH) if getattr(fe, "grid", None) is not None else 0.0
+            frame_ = fe.player.request(path, WW, HH, fe.abs_now, start)
         if frame_ is None and getattr(fe, "grid", None) is not None:
             frame_ = fe.grid.frame(path, WW, HH)
     if frame_:
@@ -779,7 +780,8 @@ def grid_picture(fe, g, w, h, index):
         path = video_path(fe, g)
         if index == fe.cursor:
             fe.video_used = True
-            frame_ = fe.player.request(path, w, h, fe.abs_now)
+            start = fe.grid.offset(path, w, h) if getattr(fe, "grid", None) is not None else 0.0
+            frame_ = fe.player.request(path, w, h, fe.abs_now, start)
         if frame_ is None and getattr(fe, "grid", None) is not None:
             frame_ = fe.grid.frame(path, w, h)
     if frame_:

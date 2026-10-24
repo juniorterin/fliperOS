@@ -21,10 +21,11 @@ def available():
 class Video:
     """Um video tocando em w x h (cortado para encher, como a imagem)."""
 
-    def __init__(self, path, w, h, sound=True, paced=False):
+    def __init__(self, path, w, h, sound=True, paced=False, start=0.0):
         """paced: sem som e sem o -re; quem da o ritmo e a leitura (30
         quadros por segundo), e parado (paused) o ffmpeg trava no pipe cheio,
-        sem gastar nada: a miniatura da grade pronta para continuar na hora."""
+        sem gastar nada: a miniatura da grade pronta para continuar na hora.
+        start: comeca nesse ponto (s), o quadro em que a copia muda parou."""
         self.path, self.w, self.h = path, w, h
         self.frame = None          # o ultimo quadro (bytes RGB)
         self.count = 0             # quantos quadros ja chegaram
@@ -33,7 +34,7 @@ class Video:
         self.paused = False
         vf = ("scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,fps=30" % (w, h, w, h))
         cmd = [FFMPEG, "-nostdin", "-loglevel", "quiet", "-threads", "1"] + ([] if paced else ["-re"]) + [
-               "-stream_loop", "-1", "-i", path, "-map", "0:v:0", "-filter_threads", "1", "-vf", vf,
+               "-stream_loop", "-1"] + (["-ss", "%.3f" % start] if start > 0 else []) + ["-i", path, "-map", "0:v:0", "-filter_threads", "1", "-vf", vf,
                "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"]
         if sound and not paced:
             cmd += ["-map", "0:a:0?", "-f", "alsa", os.environ.get("FLIPEROS_VIDEO_AUDIO", "default")]
@@ -51,7 +52,9 @@ class Video:
         out = self.proc.stdout
         due = time.monotonic()
         while self.alive:
-            if self.paused and self.frame:
+            # Parado, mas nao num quadro preto do comeco (o fade de abertura
+            # de muitos videos): segue ate o primeiro com imagem (ate 3 s).
+            if self.paused and self.frame and not (self.count < DARK_LIMIT and dark(self.frame)):
                 time.sleep(0.05)
                 due = time.monotonic()
                 continue
@@ -60,7 +63,7 @@ class Video:
                 break
             self.frame = data
             self.count += 1
-            if self.paced:
+            if self.paced and not self.paused:     # (pulando o preto, sem esperar)
                 due += 1 / 30
                 wait = due - time.monotonic()
                 if wait > 0:
@@ -80,6 +83,15 @@ class Video:
         self.proc = None
 
 
+DARK_LIMIT = 90               # quadros (3 s) atras de um que nao seja preto
+
+
+def dark(frame):
+    """O quadro e (quase) todo preto?"""
+    sample = frame[::97]
+    return sum(sample) < 20 * len(sample)
+
+
 class Player:
     """O video da tela: troca quando o jogo (ou o tamanho) muda, depois de o
     cursor parar um instante (andando pela lista nao abre um ffmpeg por
@@ -93,9 +105,10 @@ class Player:
         self.since = 0.0
         self.ok = available()
 
-    def request(self, path, w, h, now):
+    def request(self, path, w, h, now, start=0.0):
         """O video que a tela quer agora (None: nenhum). Devolve o quadro
-        atual (bytes) ou None enquanto ele nao chega."""
+        atual (bytes) ou None enquanto ele nao chega. start: o ponto onde o
+        video comeca (o da copia muda parada, Grid.offset)."""
         key = (path, w, h) if path and self.ok else None
         if key != self.want:
             self.want, self.since = key, now
@@ -105,7 +118,7 @@ class Player:
                 threading.Thread(target=self.video.stop, daemon=True).start()
                 self.video = None
         if key and self.video is None and now - self.since >= self.DELAY:
-            self.video = Video(path, w, h)
+            self.video = Video(path, w, h, start=start)
         if self.video and self.video.frame:
             return self.video.frame
         return None
@@ -133,6 +146,15 @@ class Grid:
     def frame(self, path, w, h):
         v = self.videos.get((path, w, h)) if path else None
         return v.frame if v else None
+
+    def offset(self, path, w, h):
+        """Em que ponto (s) a copia muda esta: o video com som comeca dali e
+        a troca entre os dois nao pula (nem mostra o preto do comeco)."""
+        v = self.videos.get((path, w, h)) if path else None
+        if v is None or not v.count:
+            return 0.0
+        seconds = (v.count - 1) / 30
+        return seconds if seconds < 20 else 0.0
 
     def update(self, visible, preload, w, h):
         """visible e preload: os caminhos dos videos (sem None). Os que nao
