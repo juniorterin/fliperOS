@@ -826,6 +826,25 @@ PANEL = [("1", T.GREEN, menu_icon, "MENU"), ("2", T.RED, back_icon, "BACK"),
          ("6", T.CYAN, lambda s, x, y, c: chevrons(s, x, y, c, False), "PAGE DOWN")]
 
 
+def shade(color, k):
+    """A cor mais escura (k < 1) ou mais clara (k > 1)."""
+    if k < 1:
+        return tuple(int(c * k) for c in color)
+    return tuple(min(255, int(c + (255 - c) * (k - 1))) for c in color)
+
+
+def concave_button(ui, cx, cy, r, color):
+    """O botao do painel afundado: a borda de cima por dentro escura (a
+    sombra da beirada), a de baixo clara (a luz batendo no fundo), e a
+    sombra da caneca em volta."""
+    pygame.draw.circle(ui, T.SPACE, (cx, cy + 1), r + 2)
+    pygame.draw.circle(ui, shade(color, 0.45), (cx, cy), r)
+    pygame.draw.circle(ui, color, (cx, cy + 2), r - 2)
+    pygame.draw.arc(ui, shade(color, 1.45), (cx - r + 1, cy - r + 1, 2 * r - 2, 2 * r - 2),
+                    math.radians(200), math.radians(340), 1)
+    pygame.draw.circle(ui, shade(color, 0.3), (cx, cy), r, 1)
+
+
 def draw_guide(fe, ui):
     pw, ph = SW, 162
     px, py = SX, (HH - ph) // 2 + 6
@@ -848,16 +867,26 @@ def draw_guide(fe, ui):
     tiny.centered(ui, "HOLD: FASTER", T.COMMENT, jx, jy + 49)
     tiny.centered(ui, "3 S: LETTER BY LETTER", T.COMMENT, jx, jy + 56)
     pygame.draw.line(ui, T.LINE, (px + 112, py + 28), (px + 112, py + ph - 26))
-    bx0, by0 = px + 112 + (pw - 112 - 2 * 48) // 2, py + 52
+    # Os seis botoes juntos, como no painel; o nome de cada um fora, em cima
+    # (a fileira de cima) ou embaixo, com uma linha e a seta ate ele.
+    r, step = 11, 28
+    bx0, by0 = px + 112 + (pw - 112 - 2 * step) // 2, py + 62
     for i, (num, color, draw_icon, label) in enumerate(PANEL):
         col, row = i % 3, i // 3
-        cx = bx0 + col * 48
-        cy = by0 + row * 44 - (3 if col == 1 else 0)
-        pygame.draw.circle(ui, T.SPACE, (cx + 2, cy + 2), 14)
-        pygame.draw.circle(ui, color, (cx, cy), 14)
-        pygame.draw.circle(ui, T.SPACE, (cx, cy), 14, 1)
-        draw_icon(ui, cx, cy, T.SPACE)
-        tiny.centered(ui, num + " " + label, T.FG, cx, cy + 19)
+        cx = bx0 + col * step
+        cy = by0 + row * 32 - (3 if col == 1 else 0)
+        concave_button(ui, cx, cy, r, color)
+        draw_icon(ui, cx, cy + 1, T.SPACE)
+        text = num + " " + label
+        w = tiny.width(text)
+        tx = {0: cx + 3 - w, 1: cx - w // 2, 2: cx - 3}[col]
+        if row == 0:
+            ty, y0, y1, d = py + 33 + (3 if col == 1 else 0) - 3, py + 40, cy - r - 2, (0, 1)
+        else:
+            ty, y0, y1, d = cy + r + 14, cy + r + 12, cy + r + 2, (0, -1)
+        tiny.text(ui, text, T.FG, tx, ty)
+        pygame.draw.line(ui, T.COMMENT, (cx, y0), (cx, y1 - d[1] * 2))
+        arrow(ui, cx, y1, d, T.COMMENT, 3)
     # Debaixo dos botoes (a esquerda ficam as dicas do direcional).
     tiny.centered(ui, "START: VIEW MODE   TAB: GAME OPTIONS", T.COMMENT, px + 112 + (pw - 112) // 2, py + ph - 30)
     msg = "PRESS ANY BUTTON TO START"
