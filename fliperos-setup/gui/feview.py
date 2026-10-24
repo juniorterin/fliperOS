@@ -987,8 +987,8 @@ def draw_guide(fe, ui):
     for d, color in (((0, -1), T.CYAN), ((0, 1), T.CYAN), ((-1, 0), T.PINK), ((1, 0), T.PINK)):
         arrow(ui, jx + d[0] * 30, jy + d[1] * 30, d, color, 5)
     tiny.centered(ui, "GAMES", T.CYAN, jx, jy - 44)
-    tiny.text(ui, "ROMLIST", T.PINK, jx - 46, jy + 9)
-    tiny.text(ui, "ROMLIST", T.PINK, jx + 19, jy + 9)
+    tiny.text(ui, "GAME LIST", T.PINK, jx - 19 - tiny.width("GAME LIST"), jy + 9)
+    tiny.text(ui, "GAME LIST", T.PINK, jx + 19, jy + 9)
     tiny.centered(ui, "GAMES", T.CYAN, jx, jy + 40)
     tiny.centered(ui, "HOLD: FASTER", T.COMMENT, jx, jy + 49)
     tiny.centered(ui, "3 S: LETTER BY LETTER", T.COMMENT, jx, jy + 56)
@@ -1163,7 +1163,7 @@ def draw_ribbon(fe, ui, now):
     W.block(ui, (0, band_y, WW, band_h), T.BG_DEEP, None)
     pygame.draw.line(ui, T.PINK, (0, band_y), (WW, band_y))
     pygame.draw.line(ui, T.PINK, (0, band_y + band_h - 1), (WW, band_y + band_h - 1))
-    tiny.centered(ui, "ROMLIST", T.COMMENT, WW // 2, band_y + 7)
+    tiny.centered(ui, "GAME LIST", T.COMMENT, WW // 2, band_y + 7)
     n = len(fe.cats)
     # A tira desliza ate a romlist nova: pos corre ate fe.cat_pos (o indice
     # sem dar a volta), e cada quadrado cresce ao passar pelo meio.

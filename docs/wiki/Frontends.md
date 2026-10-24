@@ -3,7 +3,7 @@
 The default since 2026-10-23: the game list in the look of the Setup menu (Press Start 2P, Dracula colours, the animated background), drawn at 320x240 and stretched to the screen mode. It ships in the image (`fliperos-setup/gui/fliperos-frontend`, Python and pygame) and is the `fliperos` row of the session table.
 
 It shows the same thing as the [Web panel](Web-panel.md), from the same code:
-- the games of each folder, from the Attract-Mode Plus romlists. The arcade ones carry the name, year, manufacturer, clones and category from MAME's XML (the AttractPlus ROM List, `fliperos-romclean romlist`);
+- the games of each folder, from FliperOS's own lists (`~/.local/share/fliperos/lists`, in the format of Attract-Mode's romlists; Attract-Mode Plus is optional). The arcade ones carry the name, year, manufacturer, clones and category from MAME's XML (the AttractPlus ROM List, `fliperos-romclean romlist`);
 - the game filters the Setup writes into every Attract-Mode display (`fliperos-setup --filters`), plus Favourites;
 - FliperOS's own favourites (`~/.config/fliperos/favourites`) and the game information saved in `~/media/info`.
 
@@ -31,7 +31,7 @@ Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has bee
 - Up and down move through the games; past the last one comes the first again, and before the first the last (holding stops at the end, the next press goes around). Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).
   - The letter mode stays after letting go: each tap of up or down moves one letter.
   - Two seconds without touching anything (or any other button) end it, on the first game of that letter.
-- Left and right change the romlist (each games folder, and Arcade with all the arcade folders together); the screen slides to the new one. In the grid they move through it, and change the romlist only when the chosen game already touches that side; a tab on the edge names the next one.
+- Left and right change the game list (each games folder, and Arcade with all the arcade folders together); the screen slides to the new one. Each game list remembers where the cursor was, also after the frontend is closed or the cabinet turned off. In the grid they move through it, and change the game list only when the chosen game already touches that side; a tab below the thumbnails names the next one.
 - Button 1 opens the game's menu: Play, Favourite and "+". The "+" page has the game's information from the Arcade Database, saved on the cabinet.
 - Button 2 goes back; from the list, it asks whether to return to the FliperOS menu.
 - Buttons 3 and 6 move a page up and down. Button 4 marks or unmarks the favourite. Button 5 opens the filters.

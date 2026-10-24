@@ -185,7 +185,9 @@ class Frontend:
         self.generation = self.lib.generation
         self.last_check = time.monotonic()
         self.rows = []
-        self.rebuild(keep=cfg.get("game"))
+        # Onde o cursor parou em cada game list (frontend.json positions).
+        self.positions = dict(cfg.get("positions") or {})
+        self.rebuild(keep=self.positions.get((self.category() or {}).get("key")) or cfg.get("game"))
         # As listas acompanham as pastas: o Setup confere e refaz (as de
         # arcade pelo XML do MAME) em segundo plano.
         if not self.shot:
@@ -255,9 +257,17 @@ class Frontend:
 
     def remember(self):
         g = self.game()
+        self.keep_position()
         save_config({"mode": self.mode, "category": (self.category() or {}).get("key"),
                      "filter": self.lib.filters[self.flt % len(self.lib.filters)]["name"],
-                     "game": g["Name"] if g else None})
+                     "game": g["Name"] if g else None, "positions": self.positions})
+
+    def keep_position(self):
+        """O jogo onde o cursor esta, anotado para a game list de agora: ao
+        voltar a ela (ou abrir o frontend de novo), o cursor volta nele."""
+        g, cat = self.game(), self.category()
+        if g and cat:
+            self.positions[cat["key"]] = g["Name"]
 
     # ── Andar ──
     def move(self, step, wrap=True):
@@ -282,13 +292,16 @@ class Frontend:
         old = getattr(self, "cat_pos", self.cat)
         self.anim.setdefault("ribbon", (old, time.monotonic()))
         self.cat_pos = old + step
+        self.keep_position()
         self.cat = (self.cat + step) % len(self.cats)
         # A tela de antes desliza para fora (feview.draw).
         if getattr(self, "last_ui", None) is not None:
             self.slide = (self.last_ui, 1 if step > 0 else -1, time.monotonic())
         self.cursor = 0
         self.opened.clear()
-        self.rebuild()
+        # O jogo onde o cursor parou nesta game list da ultima vez.
+        self.rebuild(keep=self.positions.get((self.category() or {}).get("key")))
+        self.remember()
         self.ribbon_until = time.monotonic() + 1.4
 
     def letter_jump(self, step, wrap=True):
@@ -610,6 +623,11 @@ class Frontend:
         if self.rest[0] is not g:
             self.rest = (g, now)
             return
+        # Parado ali: a posicao ja fica gravada (desligar sem sair do
+        # frontend tambem volta nela).
+        if now - self.rest[1] >= AUTO_SCRAPE and getattr(self, "saved_at", None) is not g:
+            self.saved_at = g
+            self.remember()
         key = (g["_system"]["key"], g["Name"])
         if (self.scraping or key in self.scraped or now - self.rest[1] < AUTO_SCRAPE
                 or self.harvest.current is g):
