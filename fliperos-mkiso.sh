@@ -912,6 +912,11 @@ install_groovymame_chroot() {
     "$tarball" "$WORK_DIR" || err "GroovyMAME: the package did not extract"
   install -Dm755 "$WORK_DIR/groovymame" "$CHROOT_DIR/usr/local/libexec/groovymame"
   rm -f "$tarball" "$WORK_DIR/groovymame"
+  # Sem o "Initializing..." ao abrir o jogo (o fliperos-rootfs.sh roda antes
+  # deste binario chegar; nos updates, ele mesmo o faz).
+  python3 "$(dirname "$(realpath "$0")")/config/fliperos-groovymame-quiet" \
+    "$CHROOT_DIR/usr/local/libexec/groovymame" >> "$LOG_FILE" 2>&1 \
+    || warn "GroovyMAME: the Initializing text stays"
   # O release so traz o binario. Como o pacote do GroovyArcade, os arquivos
   # do codigo da mesma tag: plugins (hiscore), a fonte uismall.bdf da
   # interface, bgfx, artwork, language, ctrlr, keymaps e hash (listas de

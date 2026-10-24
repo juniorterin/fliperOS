@@ -184,6 +184,12 @@ if [[ -f $gm ]] && [[ $(head -c 4 "$gm" | od -An -c | tr -d ' ') == '177ELF' ]];
   mv -f "$gm" "$root/usr/local/libexec/groovymame"
 fi
 install -Dm755 "$src/config/fliperos-groovymame" "$gm"
+# Sem o "Initializing..." ao abrir o jogo: o texto vira vazio no binario do
+# release (config/fliperos-groovymame-quiet; o build da imagem faz o mesmo
+# ao instalar o GroovyMAME).
+install -Dm755 "$src/config/fliperos-groovymame-quiet" "$root/opt/fliperos/bin/fliperos-groovymame-quiet"
+[[ -f $root/usr/local/libexec/groovymame ]] &&
+  python3 "$src/config/fliperos-groovymame-quiet" "$root/usr/local/libexec/groovymame" > /dev/null
 # Jogos de 2 ou 3 telas com mais de um monitor: o numscreens de cada um, do
 # XML do GroovyMAME (Setup > Video Setup > Multiple Monitors).
 install -Dm755 "$src/config/fliperos-mame-screens" "$root/opt/fliperos/bin/fliperos-mame-screens"

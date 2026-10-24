@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""Tira o "Initializing..." que o GroovyMAME mostra ao abrir o jogo.
+
+    fliperos-groovymame-quiet [BINARIO]
+
+O MAME nao tem opcao para ele (o skip_warnings e o skip_gameinfo tiram as
+outras telas; o "nonag" dos builds proprios tira esta no codigo). O FliperOS
+usa o release oficial, sem compilar: o texto vira vazio no proprio binario
+(a primeira letra vira o fim do texto, o tamanho do arquivo nao muda). Um
+binario ja mudado, ou de uma versao sem o texto, fica como esta. Roda no
+build da imagem (fliperos-mkiso.sh) e a cada update (fliperos-rootfs.sh).
+"""
+import os
+import sys
+
+BINARY = '/usr/local/libexec/groovymame'
+TEXT = b'\0Initializing...\0'
+
+
+def main():
+    path = sys.argv[1] if len(sys.argv) > 1 else BINARY
+    try:
+        with open(path, 'rb') as f:
+            data = f.read()
+    except OSError as e:
+        print('fliperos-groovymame-quiet: %s' % e, file=sys.stderr)
+        return 1
+    count = data.count(TEXT)
+    if count != 1:
+        # 0: ja mudado (ou outra versao); mais de um: nao e o texto do MAME.
+        print('unchanged (%d)' % count)
+        return 0
+    at = data.index(TEXT) + 1
+    with open(path, 'r+b') as f:
+        f.seek(at)
+        f.write(b'\0')
+    os.utime(path)
+    print('patched at %d' % at)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

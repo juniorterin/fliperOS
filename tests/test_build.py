@@ -1322,6 +1322,26 @@ class RomFoldersTests(unittest.TestCase):
 class GroovyMameTests(unittest.TestCase):
     """O release oficial do GroovyMAME e o atalho config/fliperos-groovymame."""
 
+    def test_initializing_text_is_emptied_in_the_binary(self):
+        # O "Initializing..." ao abrir o jogo: o texto vira vazio no binario,
+        # do mesmo tamanho; de novo, nada muda. O build e o update o chamam.
+        with tempfile.TemporaryDirectory() as tmp:
+            gm = Path(tmp) / 'groovymame'
+            data = b'\x7fELF...machine::soft_reset\0Initializing...\0%4d%2d\0Initializing BGFX library\0'
+            gm.write_bytes(data)
+            tool = str(ROOT / 'config/fliperos-groovymame-quiet')
+            out = subprocess.run([sys.executable, tool, str(gm)], capture_output=True, text=True)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            got = gm.read_bytes()
+            self.assertEqual(len(got), len(data))
+            self.assertIn(b'soft_reset\0\0nitializing...\0', got)
+            self.assertIn(b'Initializing BGFX library', got)
+            again = subprocess.run([sys.executable, tool, str(gm)], capture_output=True, text=True)
+            self.assertIn('unchanged', again.stdout)
+            self.assertEqual(gm.read_bytes(), got)
+        self.assertIn('config/fliperos-groovymame-quiet" "$root/usr/local/libexec/groovymame"', ROOTFS)
+        self.assertIn('config/fliperos-groovymame-quiet', (ROOT / 'fliperos-mkiso.sh').read_text())
+
     def run_wrapper(self, *args, display=':0'):
         # O GroovyMAME e o fliperos-x11-run falsos so imprimem os argumentos.
         with tempfile.TemporaryDirectory() as tmp:
