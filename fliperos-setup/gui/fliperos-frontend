@@ -464,6 +464,11 @@ class Frontend:
         if o == "more":
             if a in ("up", "down"):
                 self.ov["scroll"] = max(0, self.ov.get("scroll", 0) + (1 if a == "down" else -1))
+            elif a in ("left", "right"):
+                # A pagina 2 (fotos e mais dados) fica a direita.
+                page = 1 if a == "right" else 0
+                if page != self.ov.get("page", 0):
+                    self.ov["page"], self.ov["scroll"] = page, 0
             elif a == "b1":
                 self.overlay = None
                 return "launch"

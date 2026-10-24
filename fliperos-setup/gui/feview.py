@@ -1103,78 +1103,201 @@ def draw_popup(fe, ui, now):
     ui.blit(W.big(label, 1, W.LABEL), (px + (pw - W.width(label)) // 2, ty + size + 10))
 
 
-def draw_more(fe, ui, now):
-    g = fe.ov["game"]
-    info = fe.ov.get("info") or {}
-    W.frame(ui, {}, fit(fe.fd.short_title(g), 240) or "Game", [])
-    y0 = 34
-    bw, bh = (60, 82) if T.VERTICAL else (84, 122)
-    lw = 34 if T.VERTICAL else 62       # a coluna dos rotulos
-    W.block(ui, (SX, y0, bw, bh), T.BG_DEEP, T.PURPLE)
-    blit_center(ui, image(fe, media(fe, g, "box") or media(fe, g, "snap"), bw - 6, bh - 6), SX, y0, bw, bh)
-    pygame.draw.rect(ui, T.PINK, (SX, y0, bw, bh), 2)
-    x = SX + bw + 10
-    y = y0 + 2
-    rows = [("YEAR", " ".join(p for p in (info.get("year") or g.get("Year"),
-                                          info.get("manufacturer") or g.get("Manufacturer")) if p)),
-            ("GENRE", info.get("genre") or g.get("Category")), ("SERIES", info.get("serie") or g.get("Series")),
-            ("PLAYERS", info.get("nplayers") or g.get("Players")),
-            ("CONTROL", info.get("input_controls") or g.get("Control"))]
+# O letreiro de um texto que nao cabe: parado com "..." por MARQUEE_HOLD
+# segundos, rola ate o fim a MARQUEE_SPEED pixels por segundo, para no fim
+# e volta ao comeco.
+MARQUEE_HOLD, MARQUEE_SPEED = 1.6, 28.0
+
+
+def marquee(ui, s, color, x, y, w, now):
+    s = s.upper()
+    full = W.width(s)
+    if full <= w:
+        W.text(ui, s, color, x, y)
+        return
+    travel = full - w
+    run = travel / MARQUEE_SPEED
+    t = now % (2 * MARQUEE_HOLD + run)
+    if t < MARQUEE_HOLD:
+        W.text(ui, fit(s, w - W.width("...")) + "...", color, x, y)
+        return
+    offset = min(travel, (t - MARQUEE_HOLD) * MARQUEE_SPEED)
+    old = ui.get_clip()
+    ui.set_clip(pygame.Rect(x, y - 2, w, 12).clip(old))
+    W.text(ui, s, color, x - round(offset), y)
+    ui.set_clip(old)
+
+
+def more_rows(ui, rows, x, y, right, lw, now, small=False):
+    """Linhas "ROTULO valor" da pagina do jogo (small: o rotulo na fonte
+    pequena e a linha mais baixa); o valor que nao cabe vira letreiro.
+    Devolve o y de baixo."""
     for label, value in rows:
         if not value:
             continue
-        if T.VERTICAL:
+        if T.VERTICAL or small:
             tiny.text(ui, label, T.COMMENT, x, y + 2)
         else:
             W.text(ui, label, T.COMMENT, x, y)
-        W.text(ui, fit(str(value), SX + SW - x - lw), T.FG, x + lw, y)
-        y += 13
-    if info.get("rate"):
-        if T.VERTICAL:
-            tiny.text(ui, "RATING", T.COMMENT, x, y + 4)
+        marquee(ui, str(value), T.FG, x + lw, y, right - x - lw, now)
+        y += 11 if small else 13
+    return y
+
+
+def button_panel(fe, g, info):
+    """O painel de 6 posicoes com os botoes do jogo onde o Buttons layout os
+    poe (o mesmo do painel web); sem o Arcade Database, so os numeros."""
+    web = fe.fd.web
+    if info:
+        return web.button_panel(info)
+    try:
+        count = min(web.PANEL_SIZE, int(g.get("Buttons") or 0))
+    except ValueError:
+        count = 0
+    if not count:
+        return []
+    cells = [None] * web.PANEL_SIZE
+    for n, pos in zip(range(1, count + 1), web.button_layout(count)):
+        cells[pos - 1] = {"button": n, "color": "", "label": ""}
+    return cells
+
+
+def draw_button_panel(ui, cells, x, y, w):
+    """Os botoes no painel como no guia dos controles: os seis juntos, em
+    perspectiva, o do jogo na cor dele e a posicao livre apagada; a funcao
+    fora, em cima (a fileira de cima) ou embaixo, com a linha e a seta.
+    Devolve a altura."""
+    r, step = 8, 21
+    ry = round(r * FLAT)
+    bx0 = x + (w - 2 * step) // 2
+    by0 = y + 14
+    for i, cell in enumerate(cells):
+        col, row = i % 3, i // 3
+        cx = bx0 + col * step
+        cy = by0 + row * 22 - (2 if col == 1 else 0)
+        color = T.LINE
+        if cell:
+            try:
+                color = tuple(pygame.Color(cell["color"].lower()))[:3] if cell["color"] else T.PURPLE
+            except ValueError:
+                color = T.PURPLE
+        button3d(ui, cx, cy, r, color)
+        if not cell:
+            continue
+        text = (cell["label"] or str(cell["button"])).upper()
+        text = tiny.fit(text, 70)
+        tw = tiny.width(text)
+        tx = {0: cx + 3 - tw, 1: cx - tw // 2, 2: cx - 3}[col]
+        top, bottom = cy - ry - 3, cy + LIFT + ry + 4
+        if row == 0:
+            ty, y0, y1, d = by0 - 16, by0 - 8, top, (0, 1)
         else:
-            W.text(ui, "RATING", T.COMMENT, x, y + 2)
-        stars(ui, x + lw, y + 1, float(info["rate"]), 5)
-        y += 16
-    keys = [p.split(":") for p in (info.get("buttons_colors") or "").split(";")]
-    keys = [k for k in keys if len(k) >= 3 and k[0].startswith("P1_") and k[2]]
-    col = (SX + SW - x) // 2
-    for i, (_, color, label) in enumerate(keys[:6]):
-        bx = x + (i % 2) * col
-        by = y + (i // 2) * 10
-        try:
-            c = pygame.Color(color.lower())
-        except ValueError:
-            c = pygame.Color(T.COMMENT)
-        pygame.draw.circle(ui, c, (bx + 3, by + 3), 3)
-        tiny.text(ui, tiny.fit(label, col - 12), T.FG, bx + 9, by + 1)
-    ty = max(y0 + bh, y + 30 if keys else y) + 8
-    th = HH - 12 - ty
-    W.block(ui, (SX, ty, SW, th), T.BG_DEEP, None)
-    pygame.draw.rect(ui, T.LINE, (SX, ty, SW, th), 1)
-    if fe.ov.get("loading"):
-        W.glow(ui, (SX + 2, ty + 2, SW - 4, th - 4), {"now": now})
-        W.centered(ui, "LOOKING IT UP...", T.CYAN, ty + th // 2 - 4)
-        return
-    text = (info.get("history") or "").replace("\r", "")
-    text = re.sub(r"\n{2,}", "\n", text).strip()
-    if not text:
-        text = "No information yet. Tab > Scrape this game brings it." if not g["_system"]["arcade"] else \
-            "Not in the Arcade Database."
+            ty, y0, y1, d = bottom + 9, bottom + 7, bottom, (0, -1)
+        tiny.text(ui, text, T.FG, tx, ty)
+        pygame.draw.line(ui, T.COMMENT, (cx, y0), (cx, y1 - d[1] * 2))
+        arrow(ui, cx, y1, d, T.COMMENT, 2)
+    return 62
+
+
+def text_box(fe, ui, box, parts, empty):
+    """A caixa de texto rolavel: parts sao (cor, texto); o titulo de uma
+    secao vem em rosa."""
+    x, y, w, h = box
+    W.block(ui, box, T.BG_DEEP, None)
+    pygame.draw.rect(ui, T.LINE, box, 1)
     lines = []
-    for para in text.split("\n"):
-        lines.extend(W.wrap(para, SW - 20) if para.strip() else [""])
-    shown = (th - 8) // 11 - 1
+    for color, text in parts or [(T.FG, empty)]:
+        for para in text.split("\n"):
+            lines.extend((color, line) for line in (W.wrap(para, w - 20) if para.strip() else [""]))
+    shown = max(1, (h - 8) // 11 - 1)
     top = min(fe.ov.get("scroll", 0), max(0, len(lines) - shown))
     fe.ov["scroll"] = top
-    for i, line in enumerate(lines[top:top + shown]):
-        W.text(ui, line, T.FG, SX + 6, ty + 5 + i * 11)
+    for i, (color, line) in enumerate(lines[top:top + shown]):
+        W.text(ui, line, color, x + 6, y + 5 + i * 11)
     if len(lines) > shown:
-        W.scrollbar(ui, SX + SW - 7, ty + 4, th - 8, top, shown, len(lines))
-    source = "ARCADE DATABASE - SAVED" if info else ""
-    if info.get("history_copyright_short"):
-        source = info["history_copyright_short"].upper()
-    tiny.text(ui, tiny.fit(source, SW - 20), T.COMMENT, SX + SW - 12, ty + th - 9, right=True)
+        W.scrollbar(ui, x + w - 7, y + 4, h - 8, top, shown, len(lines))
+
+
+def page_arrow(ui, now, side):
+    """A seta que pisca na borda: ha mais para aquele lado."""
+    if int(now * 2.5) % 2 == 0:
+        return
+    cx = WW - 5 if side > 0 else 5
+    arrow(ui, cx, HH // 2, (side, 0), T.PINK, 5)
+
+
+def draw_more(fe, ui, now):
+    """A pagina do jogo (o "+"): na 1, a capa, os dados, os botoes no painel
+    e a descricao; na 2 (a direita), as fotos, mais dados e as secoes do
+    arcade-history."""
+    g = fe.ov["game"]
+    info = fe.ov.get("info") or {}
+    page = fe.ov.get("page", 0)
+    W.frame(ui, {}, fit(fe.fd.short_title(g), 240) or "Game", [])
+    y0 = 34
+    lw = 34 if T.VERTICAL else 62       # a coluna dos rotulos
+    right = SX + SW - 8                 # a direita fica a seta
+    description, sections = fe.fd.web.history_parts(info.get("history"))
+    if page == 0:
+        bw, bh = (60, 82) if T.VERTICAL else (84, 122)
+        W.block(ui, (SX, y0, bw, bh), T.BG_DEEP, T.PURPLE)
+        blit_center(ui, image(fe, media(fe, g, "box") or media(fe, g, "snap"), bw - 6, bh - 6), SX, y0, bw, bh)
+        pygame.draw.rect(ui, T.PINK, (SX, y0, bw, bh), 2)
+        x = SX + bw + 10
+        y = more_rows(ui, [
+            ("YEAR", " ".join(p for p in (info.get("year") or g.get("Year"),
+                                          info.get("manufacturer") or g.get("Manufacturer")) if p)),
+            ("GENRE", info.get("genre") or g.get("Category")),
+            ("PLAYERS", info.get("nplayers") or g.get("Players")),
+            ("CONTROL", info.get("input_controls") or g.get("Control"))], x, y0 + 2, right, lw, now)
+        cells = button_panel(fe, g, info)
+        if cells:
+            y += 2 + draw_button_panel(ui, cells, x, y + 2, min(right - x, 180))
+        ty = max(y0 + bh, y) + 8
+        box = (SX, ty, right - SX, HH - 12 - ty)
+        if fe.ov.get("loading"):
+            W.block(ui, box, T.BG_DEEP, None)
+            W.glow(ui, (box[0] + 2, box[1] + 2, box[2] - 4, box[3] - 4), {"now": now})
+            W.centered(ui, "LOOKING IT UP...", T.CYAN, ty + box[3] // 2 - 4)
+        else:
+            empty = "Not in the Arcade Database." if g["_system"]["arcade"] else \
+                "No information yet. Tab > Scrape this game brings it."
+            text_box(fe, ui, box, [(T.FG, description)] if description else [], empty)
+        page_arrow(ui, now, 1)
+        return
+    # Pagina 2: as fotos que o jogo tem, lado a lado.
+    pics = [p for p in (media(fe, g, k) for k in ("snap", "marquee", "box", "logo")) if p][:3]
+    ph = 44 if T.VERTICAL else 50
+    if pics:
+        pw = (right - SX - 6 * (len(pics) - 1)) // len(pics)
+        for i, path in enumerate(pics):
+            px = SX + i * (pw + 6)
+            W.block(ui, (px, y0, pw, ph), T.BG_DEEP, None)
+            blit_center(ui, image(fe, path, pw - 4, ph - 4), px, y0, pw, ph)
+            pygame.draw.rect(ui, T.LINE, (px, y0, pw, ph), 1)
+        y0 += ph + 8
+    parent = g.get("CloneOf")
+    y = more_rows(ui, [
+        ("MAKER", info.get("manufacturer") or g.get("Manufacturer")),
+        ("SERIES", info.get("serie") or g.get("Series")),
+        ("SCREEN", ", ".join(p for p in (info.get("screen_resolution"), info.get("screen_orientation")) if p)),
+        ("STATUS", info.get("status") or g.get("Status")),
+        ("LANGUAGE", info.get("languages")),
+        ("SET", g["Name"] + (" (clone of %s)" % parent if parent else ""))], SX, y0, right, 40, now, small=True)
+    if info.get("rate"):
+        tiny.text(ui, "RATING", T.COMMENT, SX, y + 3)
+        stars(ui, SX + 40, y, float(info["rate"]), 4)
+        y += 11
+    parts = []
+    for title, body in sections:
+        parts += [(T.PINK, title.upper()), (T.FG, body)]
+    ty = y + 6
+    if HH - 12 - ty >= 30:
+        text_box(fe, ui, (SX, ty, right - SX, HH - 12 - ty), parts, "Nothing more about this game.")
+    source = (info.get("history_copyright_short") or "").upper()
+    if source:
+        tiny.text(ui, tiny.fit(source, SW - 20), T.COMMENT, right - 4, HH - 9, right=True)
+    page_arrow(ui, now, -1)
 
 
 def draw_filter(fe, ui, now):

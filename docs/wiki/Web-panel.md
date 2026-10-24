@@ -46,7 +46,7 @@ The status refreshes every second. What each part shows:
   - Each game opens like an accordion, one at a time. It shows what the list knows (file, year, manufacturer, genre, players, buttons, control, screen, emulation status, parent, how many times and how long it was played) and what the internet knows:
     - arcade games: the [Arcade Database](https://adb.arcadeitalia.net) by the set name.
 
-      That adds the full title, series, rating, the player 1 buttons with their colours and what they do, the history and trivia text (arcade-history.com), the in-game, title, marquee, flyer and cabinet pictures, and links to the video and the game's page.
+      That adds the full title, series, rating, the player 1 buttons drawn on the panel where Setup > Joysticks > Buttons layout puts them (colour and function, no joystick directions), the game's description and then each section of the arcade-history.com text (Technical, Trivia...), the in-game, title, marquee, flyer and cabinet pictures, and links to the video and the game's page.
 
       The browser can't ask the Arcade Database directly (it sends no CORS header), so the panel asks for it.
 

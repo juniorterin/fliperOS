@@ -981,6 +981,90 @@ class GameInfo:
         return result
 
 
+# ── Os botoes e a descricao de um jogo (painel web e frontend) ──────
+# O Setup > Joysticks > Buttons layout grava onde ficam no painel os botoes
+# dos jogos de N botoes: "4 1 4 2 5" (o botao 1 na posicao 1, o 2 na 4...;
+# 1 2 3 em cima, 4 5 6 embaixo). Sem linha, o botao N na posicao N.
+BUTTONS_LAYOUT = ENV("FLIPEROS_BUTTONS_LAYOUT", "/etc/fliperos/buttons.layout")
+PANEL_SIZE = 6
+# As secoes do arcade-history que nao sao sobre o jogo.
+HISTORY_SKIP = ("CONTRIBUTE", "SOURCES")
+
+
+def button_layout(count):
+    """A posicao no painel (1 a 6) de cada botao dos jogos de COUNT botoes."""
+    try:
+        with open(BUTTONS_LAYOUT, encoding="utf-8") as f:
+            for line in f:
+                parts = line.split()
+                if parts and parts[0] == str(count):
+                    pos = [int(p) for p in parts[1:] if p.isdigit()]
+                    if len(pos) == count and len(set(pos)) == count and all(1 <= p <= PANEL_SIZE for p in pos):
+                        return pos
+    except OSError:
+        pass
+    return list(range(1, min(count, PANEL_SIZE) + 1))
+
+
+def game_buttons(info):
+    """Os botoes do jogador 1 do Arcade Database, sem o direcional: [(numero,
+    cor, funcao)], do 1 ao ultimo que o jogo usa."""
+    found = {}
+    for part in (info.get("buttons_colors") or "").split(";"):
+        bits = part.split(":")
+        m = re.fullmatch(r"P1_BUTTON(\d+)", bits[0]) if len(bits) >= 2 else None
+        if m:
+            found[int(m.group(1))] = (bits[1], bits[2] if len(bits) > 2 else "")
+    try:
+        count = int(info.get("input_buttons") or 0)
+    except (TypeError, ValueError):
+        count = 0
+    count = min(PANEL_SIZE, max([count, *found]))
+    return [(n, *found.get(n, ("", ""))) for n in range(1, count + 1)]
+
+
+def button_panel(info):
+    """O painel de 6 posicoes com os botoes do jogo onde o Buttons layout os
+    poe: uma lista de 6, cada uma None ou {button, color, label}. Vazia: o
+    jogo nao tem botoes conhecidos."""
+    buttons = game_buttons(info)
+    if not buttons:
+        return []
+    cells = [None] * PANEL_SIZE
+    for (n, color, label), pos in zip(buttons, button_layout(len(buttons))):
+        cells[pos - 1] = {"button": n, "color": color, "label": label}
+    return cells
+
+
+def history_parts(text):
+    """A historia do arcade-history em (descricao, [(secao, texto)]): a
+    descricao e o comeco, sem o cabecalho ("... published 26 years ago:" e a
+    linha do (c)); as secoes sao as "- TECHNICAL -", "- TRIVIA -"..., sem as
+    que nao falam do jogo."""
+    blocks, title, lines = [], "", []
+    for line in (text or "").replace("\r", "").split("\n"):
+        m = re.fullmatch(r"-\s+([A-Z0-9][A-Z0-9 '&/.,()-]*?)\s+-", line.strip())
+        if m:
+            blocks.append((title, lines))
+            title, lines = m.group(1), []
+        else:
+            lines.append(line)
+    blocks.append((title, lines))
+
+    def clean(rows):
+        return re.sub(r"\n{3,}", "\n\n", "\n".join(rows)).strip()
+
+    intro = clean(blocks[0][1]).split("\n")
+    if intro and intro[0].rstrip().endswith(":"):
+        intro = intro[1:]
+    while intro and not intro[0].strip():
+        intro = intro[1:]
+    if intro and "(c)" in intro[0].lower():
+        intro = intro[1:]
+    sections = [(name.title(), clean(rows)) for name, rows in blocks[1:] if name not in HISTORY_SKIP and clean(rows)]
+    return clean(intro), sections
+
+
 def thumbnails(system, entry):
     """As imagens do libretro-thumbnails do jogo (capa, tela, titulo), pelo
     nome do arquivo, como o RetroArch procura."""
@@ -2131,7 +2215,11 @@ class Handler(BaseHTTPRequestHandler):
                 info, saved = self.panel.gameinfo.arcade(system["key"], entry["Name"], lang)
             except (OSError, ValueError) as exc:
                 return self.send(502, {"error": "Arcade Database: %s" % exc})
-            return self.send(200, {"source": "Arcade Database", "info": info, "saved": saved})
+            extra = {}
+            if info:
+                description, sections = history_parts(info.get("history"))
+                extra = {"panel": button_panel(info), "description": description, "sections": sections}
+            return self.send(200, {"source": "Arcade Database", "info": info, "saved": saved, **extra})
         return self.send(404, {"error": "not found"})
 
     def do_POST(self):

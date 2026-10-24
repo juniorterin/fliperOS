@@ -5,12 +5,7 @@ O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai
 ## Pedidos de 2026-10-24
 
 Site (website/):
-- o menu fora do container;
-- depois da segunda foto do slider, fotos do frontend em todos os modos, com cada componente aberto;
-- Technical highlights fora do container e atualizado com o que entrou desde a última revisão;
-- o print do painel web com o SF2 rodando;
-- uma seção de requisitos mínimos e ideais;
-- revisar a página inteira com o que é novo.
+- no desktop, o menu numa sidebar à esquerda.
 
 ## Pedidos de 2026-10-23
 

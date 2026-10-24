@@ -5743,6 +5743,33 @@ class WebPanelTests(unittest.TestCase):
         services = (ROOT / 'fliperos-setup/lib/services.sh').read_text()
         self.assertIn('web|Web panel|fliperos-web.service|', services)
 
+    def test_buttons_on_the_panel_and_the_description(self):
+        # Os botoes do jogo no painel do Buttons layout, sem o direcional; a
+        # descricao sem o cabecalho do arcade-history, e as secoes separadas.
+        web = SourceFileLoader('fliperos_web', str(ROOT / 'config/fliperos-web')).load_module()
+        info = {'input_buttons': 2, 'buttons_colors': 'P1_COIN:White:;P1_BUTTON1:Red:Shoot;P1_BUTTON2:Blue:Bomb;'
+                'P1_JOYSTICK:Black:;P2_BUTTON1:Red:;P1_JOYSTICK_UP:Black:Up;P1_JOYSTICK_LEFT:Black:Left'}
+        self.assertEqual(web.game_buttons(info), [(1, 'Red', 'Shoot'), (2, 'Blue', 'Bomb')])
+        with tempfile.TemporaryDirectory() as tmp:
+            web.BUTTONS_LAYOUT = str(Path(tmp) / 'buttons.layout')
+            # Sem layout gravado, o botao N na posicao N.
+            panel = web.button_panel(info)
+            self.assertEqual([c and c['label'] for c in panel], ['Shoot', 'Bomb', None, None, None, None])
+            # Com "2 1 4", o botao 2 vai para baixo do 1; linha invalida, o padrao.
+            Path(web.BUTTONS_LAYOUT).write_text('3 1 1 2\n2 1 4\n')
+            panel = web.button_panel(info)
+            self.assertEqual([c and c['button'] for c in panel], [1, None, None, 2, None, None])
+            self.assertEqual(web.button_layout(3), [1, 2, 3])
+        # Sem o nome da funcao, o botao fica com a cor; sem botoes, nada.
+        self.assertEqual(web.game_buttons({'input_buttons': 3}), [(1, '', ''), (2, '', ''), (3, '', '')])
+        self.assertEqual(web.button_panel({}), [])
+        history = ('Capcom CPS-II cart. published 26 years ago:\r\n\r\n1944 - The Loop Master (c) 2000 Capcom.\r\n\r\n'
+                   'North American release.\r\n\r\n- TECHNICAL -\r\n\r\nRuns on the "CP System II" hardware.\r\n\r\n'
+                   '- TRIVIA -\r\n\r\nReleased in 2000.\r\n\r\n- CONTRIBUTE -\r\n\r\nEdit this entry: https://x')
+        self.assertEqual(web.history_parts(history), ('North American release.', [
+            ('Technical', 'Runs on the "CP System II" hardware.'), ('Trivia', 'Released in 2000.')]))
+        self.assertEqual(web.history_parts(''), ('', []))
+
     def test_game_from_the_command_line(self):
         # O PCSX2 e o DuckStation sao AppImages desempacotados: o processo e
         # o AppRun da pasta. O GroovyMAME recebe o nome do set, sem extensao.

@@ -873,18 +873,26 @@ function showOnline(online, facts, data) {
     facts.add("g_status", info.status);
     facts.add("g_rating", info.rate ? info.rate + "/100" : "");
     facts.add("g_language", info.languages);
-    // Os botoes do jogador 1, com a cor e o que fazem.
-    const keys = (info.buttons_colors || "").split(";").map((s) => s.split(":"))
-      .filter((p) => p.length >= 3 && p[0].startsWith("P1_") && p[2]);
-    if (keys.length) {
-      parts.push(el("div", { class: "controls" }, ...keys.map(([, color, label]) => {
+    // Os botoes do jogador 1 no painel, onde o Setup > Joysticks > Buttons
+    // layout os poe (1 2 3 em cima, 4 5 6 embaixo), com a cor e a funcao.
+    if ((data.panel || []).some(Boolean)) {
+      parts.push(el("div", { class: "panel-layout" }, ...data.panel.map((cell) => {
         const dot = el("i");
-        dot.style.background = /^[a-z]+$/i.test(color) ? color : "transparent";
-        return el("span", { class: "tag" }, dot, label);
+        if (cell) dot.style.background = /^[a-z]+$/i.test(cell.color) ? cell.color : "var(--dim)";
+        return el("div", { class: cell ? "pbtn on" : "pbtn" }, dot,
+          el("span", {}, cell ? cell.label || String(cell.button) : ""));
       })));
     }
-    if (info.history) {
-      parts.push(el("pre", { class: "history" }, info.history.trim()));
+    // A descricao do jogo e, depois, as secoes do arcade-history (tecnica,
+    // curiosidades...), cada uma com o seu titulo.
+    const text = data.description !== undefined ? data.description : (info.history || "").trim();
+    if (text || (data.sections || []).length) {
+      const pre = el("div", { class: "history" });
+      if (text) pre.append(el("p", {}, text));
+      for (const [title, body] of data.sections || []) {
+        pre.append(el("h4", {}, title), el("p", {}, body));
+      }
+      parts.push(pre);
     }
     const links = el("div", { class: "links" });
     if (info.url) links.append(el("a", { class: "ghost-link", href: info.url, target: "_blank", rel: "noopener" }, "Arcade Database"));
