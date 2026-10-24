@@ -549,10 +549,11 @@ def fetch_text(url, cache_name):
     return text
 
 
-def pack_file(item, names, exts):
+def pack_file(item, names, exts, zipped_only=False):
     """O endereco do arquivo do jogo (um dos nomes) no pacote: solto, ou
     dentro do .zip da letra dele (o archive.org serve um arquivo de dentro
-    do zip). None: o pacote nao tem."""
+    do zip). None: o pacote nao tem. zipped_only: so o de dentro de um zip
+    (os soltos vem pelo torrent do pacote)."""
     from urllib.parse import quote, unquote
     text = fetch_text("%s/metadata/%s/files" % (ARCHIVE, item), item + ".json")
     try:
@@ -567,6 +568,8 @@ def pack_file(item, names, exts):
     zips = {os.path.splitext(n)[0].upper(): n for n in files if n.lower().endswith(".zip") and "/" not in n}
     for game in names:
         if game.lower() in loose:
+            if zipped_only:
+                return None
             return "%s/download/%s/%s" % (ARCHIVE, item, quote(loose[game.lower()]))
     for game in names:
         letter = game[:1].upper()
@@ -583,7 +586,7 @@ def pack_file(item, names, exts):
     return None
 
 
-def pack_art(library, game, kinds):
+def pack_art(library, game, kinds, zipped_only=False):
     """O logo e o video do jogo dos pacotes do archive.org. Devolve
     quantos arquivos vieram."""
     system = game["_system"]
@@ -594,7 +597,7 @@ def pack_art(library, game, kinds):
         if not exts:
             continue
         for item in art_packs(system, kind):
-            url = pack_file(item, names, exts)
+            url = pack_file(item, names, exts, zipped_only)
             if not url:
                 continue
             ext = os.path.splitext(url)[1].lower()
@@ -620,7 +623,9 @@ def scrape(library, game, lang="en", only_missing=False, bulk=False):
     e o video que faltarem, dos pacotes do archive.org. Devolve quantos
     arquivos novos vieram. only_missing: so o que falta (o scrape sozinho do
     frontend nao baixa de novo o que ja esta la). bulk: o scrape de todos os
-    jogos (feharvest.py), sem os videos, que vem dos pacotes em torrent."""
+    jogos (feharvest.py): os videos grandes do Arcade Database nao; dos
+    pacotes, so o que esta dentro dos .zip de letra (os arquivos soltos vem
+    pelo torrent; um zip de letra inteiro, de GB, por uns videos, nao)."""
     system = game["_system"]
     home = web.player_home()
     got = 0
@@ -656,8 +661,7 @@ def scrape(library, game, lang="en", only_missing=False, bulk=False):
                 target = os.path.join(home, "media", kind, system["key"], game["Name"] + ".png")
                 got += download(item["url"], target)
     # O logo (e o video que o Arcade Database nao tinha) dos pacotes; no bulk,
-    # quem os traz e o torrent deles (fliperos-setup --mediapacks auto).
-    if not bulk:
-        missing = missing_art(library, game)
-        got += pack_art(library, game, [k for k in ("logo", "preview") if k in missing])
+    # os soltos vem pelo torrent deles (fliperos-setup --mediapacks auto).
+    missing = missing_art(library, game)
+    got += pack_art(library, game, [k for k in ("logo", "preview") if k in missing], zipped_only=bulk)
     return got

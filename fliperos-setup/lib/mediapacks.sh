@@ -166,9 +166,10 @@ mediapacks_start() {
 # (fliperos-setup --mediapacks auto). Poe para baixar os pacotes de toda
 # pasta com jogos, so os arquivos dos jogos que ainda nao tem a arte, como o
 # "Download every pack" da tela; o pacote que ja esta baixando fica como
-# esta. Imprime "id<TAB>jogos sem a arte<TAB>arquivos" de cada um.
+# esta. Imprime "id<TAB>jogos sem a arte<TAB>arquivos" de cada um ("zip" no
+# lugar dos arquivos: o pacote de .zip por letra, que fica de fora).
 mediapacks_auto() {
-  local status id folders st result out started=0
+  local status id folders st result out archives started=0
   MEDIAPACKS_FOUND=$(scraper_detect)
   [[ -n $MEDIAPACKS_FOUND ]] || return 0
   downloader_prepare
@@ -192,6 +193,16 @@ mediapacks_auto() {
     mediapacks_start "$id" "$result" > /dev/null < /dev/null
     out=$(cat "$result")
     rm -f "$result"
+    # Um pacote de .zip por letra (os videos do MAME) baixaria a letra inteira,
+    # GB, por uns videos: fica de fora, e o frontend traz cada arquivo de
+    # dentro do zip pelo HTTP do archive.org (gui/fedata.py pack_art).
+    archives=$(romclean_value "$out" archives)
+    if ((${archives:-0} > 0)); then
+      mediapacks cancel "$id" 2>> "$FLIPEROS_LOG"
+      log_info "Pacotes de arte: $id vem em .zip de letra; os arquivos vem um a um pelo frontend"
+      printf '%s\t%s\tzip\n' "$id" "$(romclean_value "$out" games)"
+      continue
+    fi
     printf '%s\t%s\t%s\n' "$id" "$(romclean_value "$out" games)" "$(romclean_value "$out" files)"
   done 3< <(mediapacks_list)
   mediapacks_finish

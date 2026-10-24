@@ -332,9 +332,48 @@ def players_icon(fe, color):
     return fe.media[key]
 
 
+# A pistola (o Arcadeflow nao tem icone de lightgun), no jeito do boneco
+# dos jogadores: um bitmap de pixels cheios.
+LIGHTGUN_ICON = (
+    "......................",
+    ".###################..",
+    ".####################.",
+    ".####################.",
+    ".###################..",
+    ".######...............",
+    ".######.###...........",
+    ".######...#...........",
+    ".######.###...........",
+    ".######...............",
+    "..#####...............",
+    "..#####...............",
+    "..#####...............",
+    "...####...............",
+    "...####...............",
+    "......................",
+)
+
+
+def lightgun_icon(fe, h, color):
+    key = ("lightgun", h, color)
+    if key not in fe.media:
+        img = pygame.Surface((len(LIGHTGUN_ICON[0]), len(LIGHTGUN_ICON)), pygame.SRCALPHA)
+        for y, row in enumerate(LIGHTGUN_ICON):
+            for x, ch in enumerate(row):
+                if ch == "#":
+                    img.set_at((x, y), color + (255,))
+        img = img.subsurface(img.get_bounding_rect()).copy()
+        if img.get_height() > h:
+            img = pygame.transform.smoothscale(img, (max(1, round(img.get_width() * h / img.get_height())), h))
+        fe.media[key] = img
+    return fe.media[key]
+
+
 def control_icon(fe, game, h, color):
     c = (game.get("Control") or "").lower()
     name = None
+    if "lightgun" in c or "gun" in c.split(","):
+        return lightgun_icon(fe, h, color)
     if "trackball" in c:
         name = "control_trackball"
     elif "double joystick" in c:

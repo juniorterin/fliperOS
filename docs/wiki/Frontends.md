@@ -19,11 +19,11 @@ It shows the same thing as the [Web panel](Web-panel.md), from the same code:
 **Automatic scrape.** While the frontend is open, it fetches in the background, one game at a time, what each game in the folders still lacks:
 - arcade: the information, screenshot, flyer, marquee and logo from the Arcade Database;
 - consoles: the cover and screenshot from libretro-thumbnails;
-- videos and the logos still missing: the torrent packs of Setup > Games > Scraper > Art packs by torrent, only the files of the games you have (`fliperos-setup --mediapacks auto`, checked every 6 hours).
+- videos and the logos still missing: the torrent packs of Setup > Games > Scraper > Art packs by torrent, only the files of the games you have (`fliperos-setup --mediapacks auto`, checked every 6 hours). A pack that keeps its files in one .zip per letter (the MAME videos) would download whole letters, gigabytes for a few videos: it stays out of the torrent, and the frontend fetches each file from inside the zip over HTTP instead.
 
 It pauses while a game is open. A game is tried once every 30 days (what a source does not have stays missing): `~/.local/share/fliperos/scrape-state.json`. Tab > Frontend options shows a progress bar, how many games are left and the torrents' progress.
 
-Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control with the buttons.
+Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control (a pistol for light-gun games, which Arcadeflow has no icon for) with the buttons.
 
 **Controls.** A guide shows them each time the frontend opens; any button closes it.
 - Up and down move through the games; past the last one comes the first again, and before the first the last (holding stops at the end, the next press goes around). Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).
