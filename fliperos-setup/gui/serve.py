@@ -364,7 +364,7 @@ class Server:
             return 0, ""
         if cmd == "orient":
             # A orientacao do monitor mudou em Video Setup: a imagem gira ja.
-            self.app.orientation = a[0]
+            self.app.set_orientation(a[0])
             self.app.show(self.screen, self.ctx)
             return 0, ""
         if cmd == "ping":

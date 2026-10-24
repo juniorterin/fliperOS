@@ -18,6 +18,13 @@ import theme as T
 W, H = T.WIDTH, T.HEIGHT
 
 
+def set_size(width, height):
+    """O tamanho da tela logica (em pe, 240x320) para os fundos criados
+    depois (pick)."""
+    global W, H
+    W, H = width, height
+
+
 def gradient(top, bottom):
     surf = pygame.Surface((W, H))
     for y in range(H):

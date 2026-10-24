@@ -20,8 +20,21 @@ import theme as T
 
 ROW = 14
 CONTENT_Y = 40
-HINT_Y = 180
-FOOTER_Y = 220
+
+
+# A dica e a legenda das teclas seguem o pe da tela (240 deitado, 320 em pe,
+# theme.set_orientation); o que fica no meio desce a metade da sobra.
+def hint_y():
+    return T.HEIGHT - 60
+
+
+def footer_y():
+    return T.HEIGHT - 20
+
+
+def extra():
+    """Quanto a tela tem de altura a mais que a deitada (em pe, 80)."""
+    return T.HEIGHT - 240
 RAINBOW = [T.RED, T.ORANGE, T.YELLOW, T.GREEN, T.CYAN, T.PURPLE]
 MARQUEE = [T.YELLOW, T.ORANGE, T.PINK, T.PINK, T.PURPLE, T.CYAN, T.CYAN, T.CYAN]
 MARQUEE_ERROR = [T.FG, T.ORANGE, T.RED, T.RED]
@@ -172,10 +185,46 @@ def scrollbar(surf, x, y, h, top, shown, total):
     pygame.draw.rect(surf, T.PINK, (x, pos, 4, size))
 
 
+LAST_FRAME = []                # o ultimo frame() (landscape o redesenha em pe)
+
+
+def landscape(draw):
+    """Para as telas feitas so para a tela deitada (o painel do Button
+    mapping, a grade do ROM filter...): em pe, o desenho e feito em 320x240
+    e encolhido para a largura, no meio da altura; o titulo e a legenda das
+    teclas sao os da tela em pe."""
+    def wrapped(self, surf, ctx):
+        if T.VERTICAL is None:
+            return draw(self, surf, ctx)
+        orientation = T.VERTICAL
+        T.set_orientation("horizontal")
+        try:
+            tmp = pygame.Surface((T.WIDTH, T.HEIGHT), pygame.SRCALPHA)
+            del LAST_FRAME[:]
+            result = draw(self, tmp, ctx)
+        finally:
+            T.set_orientation(orientation)
+        args = LAST_FRAME[-1] if LAST_FRAME else (ctx, getattr(self, "title", ""), [], False, False)
+        frame(surf, *args)
+        # O miolo (sem o titulo e a legenda de 320x240) encolhido.
+        top, bottom = 30, footer_y_landscape() - 4
+        part = tmp.subsurface((0, top, tmp.get_width(), bottom - top))
+        k = T.WIDTH / tmp.get_width()
+        small = pygame.transform.smoothscale(part, (T.WIDTH, round(part.get_height() * k)))
+        surf.blit(small, (0, 30 + (footer_y() - 34 - small.get_height()) // 2))
+        return result
+    return wrapped
+
+
+def footer_y_landscape():
+    return 240 - 20
+
+
 def frame(surf, ctx, title, keys, error=False, score=False):
     """O letreiro com o titulo, a linha de placar e a legenda das teclas,
     numa tela transparente (o fundo animado fica por baixo). O placar
     (score) so aparece nos menus principais."""
+    LAST_FRAME[:] = [(ctx, title, keys, error, score)]
     surf.fill((0, 0, 0, 0))
     title = title.upper()
     scale = 2 if width(title) * 2 <= 240 else 1
@@ -205,10 +254,19 @@ def frame(surf, ctx, title, keys, error=False, score=False):
             surf.blit(T.small_icon("disk"), (right - w - 12, 32))
 
     total = sum(width(k) + 8 + width(a) for k, a in keys) + 16 * (len(keys) - 1)
+    if total > T.SAFE_W:
+        # Nao cabe (em pe): a letra pequena.
+        import tiny
+        total = sum(tiny.width(k) + 4 + tiny.width(a) for k, a in keys) + 10 * (len(keys) - 1)
+        x = (T.WIDTH - total) // 2
+        for key, action in keys:
+            x += tiny.text(surf, key, T.CYAN, x, footer_y() + 2) + 4
+            x += tiny.text(surf, action, T.COMMENT, x, footer_y() + 2) + 10
+        return
     x = (T.WIDTH - total) // 2
     for key, action in keys:
-        x += text(surf, key, T.CYAN, x, FOOTER_Y) + 8
-        x += text(surf, action, T.COMMENT, x, FOOTER_Y) + 16
+        x += text(surf, key, T.CYAN, x, footer_y()) + 8
+        x += text(surf, action, T.COMMENT, x, footer_y()) + 16
 
 
 def flow(lines, color=T.FG):
@@ -242,8 +300,8 @@ def body(surf, lines, button_h=20):
     """O texto de uma pergunta ou de um aviso: comeca mais embaixo quando e
     curto. Devolve o y do botao."""
     count = len(flow(lines))
-    y = paragraph(surf, lines, 80 if count <= 5 else 40, bottom=FOOTER_Y - 12 - button_h - 8)
-    return min(y + 12, FOOTER_Y - 12 - button_h)
+    y = paragraph(surf, lines, (80 if count <= 5 else 40) + extra() // 2, bottom=footer_y() - 12 - button_h - 8)
+    return min(y + 12, footer_y() - 12 - button_h)
 
 
 class Menu(Animated):
@@ -351,7 +409,7 @@ class Menu(Animated):
         # icone do meio passa de 64 para 48 pixels.
         scale = 4 if len(notes) <= 1 else 3
         size = 16 * scale + 8
-        top = 48 if len(notes) <= 1 else 36 + len(notes) * 10
+        top = (48 if len(notes) <= 1 else 36 + len(notes) * 10) + extra() // 2
         for i, (line, _) in enumerate(notes):
             centered(surf, line, T.PINK, 34 + i * 10)
 
@@ -369,7 +427,7 @@ class Menu(Animated):
         shade.fill(T.SPACE + (130,))
         # Os vizinhos deslizam so dentro da margem de overscan.
         surf.set_clip((T.SAFE_X, 0, T.SAFE_W, T.HEIGHT))
-        for off, cx in ((-2, 36), (2, 284), (-1, 92), (1, 228)):
+        for off, cx in ((-2, T.WIDTH // 2 - 124), (2, T.WIDTH // 2 + 124), (-1, T.WIDTH // 2 - 68), (1, T.WIDTH // 2 + 68)):
             # Com poucos itens, cada um aparece uma vez so (os da direita
             # primeiro).
             if n < abs(off) * 2 + (1 if off < 0 else 0):
@@ -416,15 +474,15 @@ class Menu(Animated):
         hint = hint or ("" if notes else self.text)
         y += 26 if scale == 4 else 22
         for i, line in enumerate(wrap(hint, T.SAFE_W)[:3]):
-            if y + i * 11 <= FOOTER_Y - 12:
+            if y + i * 11 <= footer_y() - 12:
                 centered(surf, line, T.CYAN, y + i * 11)
 
         if scale == 4:
             for i in range(n):
                 color = T.PINK if i == self.cursor else T.LINE
-                pygame.draw.rect(surf, color, (T.WIDTH // 2 - n * 5 + 2 + i * 10, 200, 6, 6))
+                pygame.draw.rect(surf, color, (T.WIDTH // 2 - n * 5 + 2 + i * 10, T.HEIGHT - 40, 6, 6))
         if self.title == "FliperOS" and ctx.get("version"):
-            text(surf, "V" + ctx["version"], T.LINE, T.SAFE_X + T.SAFE_W, 199, right=True)
+            text(surf, "V" + ctx["version"], T.LINE, T.SAFE_X + T.SAFE_W, T.HEIGHT - 41, right=True)
 
     def draw_list(self, surf, ctx):
         keys = [("ENTER", "OK"), ("ESC", "BACK")]
@@ -433,7 +491,7 @@ class Menu(Animated):
         frame(surf, ctx, self.title, keys)
         y0 = CONTENT_Y
         hints = any(e[2] for e in self.entries)
-        bottom = HINT_Y - 6 if hints else FOOTER_Y - 8
+        bottom = hint_y() - 6 if hints else footer_y() - 8
         if not hints and any(width(e[1]) > T.SAFE_W - 46 for e in self.entries):
             # Ha rotulos cortados: sobra espaco para o do cursor, inteiro.
             bottom -= 24
@@ -482,7 +540,7 @@ class Menu(Animated):
 
         if hints:
             for i, line in enumerate(wrap(self.entries[self.cursor][2], T.SAFE_W)[:3]):
-                centered(surf, line, T.CYAN, HINT_Y + i * 11)
+                centered(surf, line, T.CYAN, hint_y() + i * 11)
         elif full:
             for i, line in enumerate(wrap(full, T.SAFE_W)[:2]):
                 centered(surf, line, T.CYAN, bottom + 6 + i * 10)
@@ -581,7 +639,7 @@ class Input:
         if self.action:
             keys.insert(0, ("UP DOWN", "SELECT"))
         frame(surf, ctx, self.title, keys)
-        y = paragraph(surf, self.lines, 56 if self.action else 80) + 12
+        y = paragraph(surf, self.lines, (56 if self.action else 80) + extra() // 2) + 12
         x = T.SAFE_X
         on = not self.focus
         block(surf, (x, y, T.SAFE_W - 2, 22), T.BG_DEEP, T.PURPLE if on else None)
@@ -616,7 +674,7 @@ class Progress:
 
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [])
-        x, y = T.SAFE_X + 24, 56
+        x, y = T.SAFE_X + 24, 56 + extra() // 3
         for label, state in self.steps:
             color = {"done": T.GREEN, "run": T.YELLOW, "fail": T.RED}.get(state, T.COMMENT)
             if state == "run":
@@ -627,12 +685,13 @@ class Progress:
                 pygame.draw.rect(surf, color, (x + 1, y + 1, 6, 6))
             text(surf, label, color, x + 16, y)
             y += ROW
-        # A barra em blocos: 24 de 10 pixels, com 2 de espaco, uma cor do
-        # arco-iris a cada 4.
-        x, y = T.SAFE_X, 150
+        # A barra em blocos: 24, com 2 pixels de espaco, uma cor do arco-iris
+        # a cada 4; o bloco encolhe para caber na largura (em pe, 7).
+        cell = min(12, (T.SAFE_W + 2) // 24)
+        x, y = (T.WIDTH - 24 * cell + 2) // 2, 150 + extra() // 2
         full = round(self.pct * 24 / 100)
         for i in range(24):
-            pygame.draw.rect(surf, RAINBOW[i // 4] if i < full else T.LINE, (x + i * 12, y, 10, 12))
+            pygame.draw.rect(surf, RAINBOW[i // 4] if i < full else T.LINE, (x + i * cell, y, cell - 2, 12))
         pct = "%d%%" % self.pct
         name = big(pct, 2, T.YELLOW)
         surf.blit(name, ((T.WIDTH - name.get_width()) // 2, y + 22))
@@ -699,6 +758,7 @@ class Capture:
             return "ask"
         return "done" if control in self.done else "todo"
 
+    @landscape
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [("WAIT", "TO SKIP IT")])
         block(surf, (24, 44, 272, 104), T.BG_DEEP, T.PURPLE)
@@ -780,6 +840,7 @@ class LayoutEdit:
         self.cursor = row * 3 + col
         return None
 
+    @landscape
     def draw(self, surf, ctx):
         keys = [("ARROWS", "MOVE"), ("ENTER", "OK"), ("ESC", "BACK")]
         if self.default and not self.order:
@@ -825,7 +886,8 @@ class GunTarget:
     a pistola so enxerga a tela onde ha luz, entao aqui nao ha fundo escuro
     nem letreiro. where e "top-left", "bottom-right" ou "center"."""
 
-    SPOTS = {"top-left": (44, 40), "bottom-right": (276, 200), "center": (160, 120)}
+    # Os alvos nos cantos de verdade da tela (deitada ou em pe).
+    SPOTS = {"top-left": (44 / 320, 40 / 240), "bottom-right": (276 / 320, 200 / 240), "center": (0.5, 0.5)}
 
     def __init__(self, step, steps, where, need=3, shots=0, last=""):
         self.step, self.steps = step, steps
@@ -838,7 +900,8 @@ class GunTarget:
 
     def draw(self, surf, ctx):
         surf.fill(WHITE)
-        bullseye(surf, *self.SPOTS[self.where])
+        fx, fy = self.SPOTS[self.where]
+        bullseye(surf, round(fx * T.WIDTH), round(fy * T.HEIGHT))
         # No alvo do centro o texto sobe, para nao ficar em cima dele.
         y = 40 if self.where == "center" else 84
         centered(surf, "GUNCON 2 CALIBRATION", T.COMMENT, y)
@@ -847,7 +910,10 @@ class GunTarget:
         surf.blit(name, ((T.WIDTH - name.get_width()) // 2, y + 14))
         if self.where == "center":
             y = 140
-        centered(surf, "Aim at the + and pull the trigger", T.SPACE, y + 38)
+        aim = "Aim at the + and pull the trigger"
+        if width(aim) > T.SAFE_W:
+            aim = "Aim at the + and shoot"
+        centered(surf, aim, T.SPACE, y + 38)
         # Um cartucho por tiro: cheio o que falta, vazio o ja dado.
         x = T.WIDTH // 2 - self.need * 8
         for i in range(self.need):
@@ -860,9 +926,9 @@ class GunTarget:
                 pygame.draw.rect(surf, T.SPACE, rect, 1)
         centered(surf, self.last, T.COMMENT, y + 76)
         if self.where != "bottom-right":
-            text(surf, "ESC CANCEL", T.COMMENT, T.SAFE_X + T.SAFE_W, FOOTER_Y, right=True)
+            text(surf, "ESC CANCEL", T.COMMENT, T.SAFE_X + T.SAFE_W, footer_y(), right=True)
         else:
-            text(surf, "ESC CANCEL", T.COMMENT, T.SAFE_X, FOOTER_Y)
+            text(surf, "ESC CANCEL", T.COMMENT, T.SAFE_X, footer_y())
 
 
 class GunResult:
@@ -883,6 +949,7 @@ class GunResult:
             return ("select", "yes" if self.choice == 0 else "no")
         return None
 
+    @landscape
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [("< >", "SELECT"), ("ENTER", "OK"), ("ESC", "BACK")])
         # A tela em miniatura, com o alvo no centro e o tiro onde caiu.
@@ -922,6 +989,7 @@ class Download:
     def key(self, k):
         return ("back", None)
 
+    @landscape
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [("ANY KEY", "BACK TO THE MENU")])
         x, right = T.SAFE_X, T.SAFE_X + T.SAFE_W
@@ -1060,6 +1128,7 @@ class FilterBoard(Animated):
             return ("select", self.items[self.cursor][0])
         return None
 
+    @landscape
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [("ARROWS", "MOVE"), ("ENTER", "CHANGE"), ("ESC", "BACK")])
         x, right = T.SAFE_X, T.SAFE_X + T.SAFE_W
@@ -1123,6 +1192,7 @@ class Stepper:
             return ("select", self.options[self.cursor][0])
         return None
 
+    @landscape
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [("< >", "CHANGE"), ("ENTER", "OK"), ("ESC", "BACK")])
         top = max(int(o[0]) for o in self.options)
@@ -1311,6 +1381,7 @@ class Grid:
             return ("back", None) if self.live else ("select", self.marks())
         return None
 
+    @landscape
     def draw(self, surf, ctx):
         if self.live:
             frame(surf, ctx, self.title, [("< >", "MARK, SAVED"), ("ESC", "BACK")])
@@ -1324,7 +1395,7 @@ class Grid:
                 centered(surf, line, T.COMMENT, y)
                 y += 11
             y += 4
-        room = HINT_Y - 6 - y - 22
+        room = hint_y() - 6 - y - 22
         pitch = min(18, room // max(1, len(self.rows)))
         shown = len(self.rows)
         # Quando nao cabe, a lista rola e a barra de rolagem fica na direita,
@@ -1368,7 +1439,7 @@ class Grid:
                     pygame.draw.rect(surf, T.PINK if on else T.LINE, box, 1)
             y += pitch
         for i, line in enumerate(wrap(self.rows[self.cursor][2], T.SAFE_W)[:3]):
-            centered(surf, line, T.CYAN, HINT_Y + i * 11)
+            centered(surf, line, T.CYAN, hint_y() + i * 11)
 
 
 class Timed(Message):
@@ -1474,6 +1545,7 @@ class Live:
     def key(self, k):
         return None
 
+    @landscape
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [])
         x = T.SAFE_X
@@ -1490,7 +1562,7 @@ class Live:
             y += 12
         parts = wrap(self.footer, T.SAFE_W)[:2]
         for i, part in enumerate(parts):
-            centered(surf, part, T.COMMENT, FOOTER_Y - 11 * (len(parts) - 1) + i * 11)
+            centered(surf, part, T.COMMENT, footer_y() - 11 * (len(parts) - 1) + i * 11)
 
 
 HOURGLASS = """

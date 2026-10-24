@@ -44,20 +44,31 @@ class App:
         import background
         import theme
 
-        self.pygame, self.theme = pygame, theme
+        self.pygame, self.theme, self.background = pygame, theme, background
         self.preview = preview
         self.queue = list(keys)   # teclas de teste, apertadas antes das de verdade
         self.window = None
         self.open()
         pygame.font.init()
         self.clock = pygame.time.Clock()
-        self.back = pygame.Surface((theme.WIDTH, theme.HEIGHT))
-        self.ui = pygame.Surface((theme.WIDTH, theme.HEIGHT), pygame.SRCALPHA)
-        self.bg = background.pick(bg)
+        self.bg_name = bg
         self.start = time.monotonic()
         self.fixed_time = None    # os prints: um instante fixo do fundo
         # A orientacao do monitor (lib/ui.sh a passa; o pedido "orient" a troca).
-        self.orientation = os.environ.get("FLIPEROS_GUI_ORIENTATION", "horizontal")
+        self.set_orientation(os.environ.get("FLIPEROS_GUI_ORIENTATION", "horizontal"))
+
+    def set_orientation(self, orientation):
+        """Em pe (Video Setup > Monitor Orientation), a tela logica e
+        240x320: a interface e desenhada em pe, do tamanho dela, e so o
+        quadro pronto gira para o lado do monitor (final)."""
+        pygame, theme = self.pygame, self.theme
+        self.orientation = orientation
+        theme.set_orientation(orientation)
+        self.background.set_size(theme.WIDTH, theme.HEIGHT)
+        self.back = pygame.Surface((theme.WIDTH, theme.HEIGHT))
+        self.ui = pygame.Surface((theme.WIDTH, theme.HEIGHT), pygame.SRCALPHA)
+        old = getattr(self, "bg", None)
+        self.bg = self.background.pick(self.bg_name or (old.name if old else None))
         self.sounds = {}
         self.names = {
             pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
@@ -190,20 +201,9 @@ class App:
         return self.back
 
     def final(self, frame):
-        """O quadro como vai ao tubo. Com o monitor em pe (Video Setup >
-        Monitor Orientation) a imagem gira para ficar de pe: a tela de
-        320x240 encolhe para a largura do tubo em pe (240) e fica no meio de
-        um quadro de 240x320, com o fundo animado em volta, e o todo gira
-        como o console (fbcon rotate 1 = horario)."""
-        pygame = self.pygame
-        if self.orientation not in ("vertical-cw", "vertical-ccw"):
-            return frame
-        if getattr(self, "portrait_bg", None) is None:
-            self.portrait_bg = pygame.Surface((self.theme.WIDTH, self.theme.HEIGHT))
-        self.bg.draw(self.portrait_bg, getattr(self, "now", 0))
-        canvas = pygame.transform.smoothscale(self.portrait_bg, (240, 320))
-        canvas.blit(pygame.transform.smoothscale(frame, (240, 180)), (0, 70))
-        return pygame.transform.rotate(canvas, -90 if self.orientation == "vertical-cw" else 90)
+        """O quadro como vai ao tubo: em pe, a tela de 240x320 gira para o
+        lado do monitor, como o console (fbcon rotate 1 = horario)."""
+        return self.theme.upright(frame)
 
     def show(self, screen, ctx, redraw=True, busy=False):
         """Um quadro no video. busy: o Setup esta trabalhando, e a ampulheta

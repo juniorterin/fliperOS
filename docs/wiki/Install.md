@@ -66,7 +66,7 @@ The media's menu (gasetup's `isomainmenu`): **Install to HD/SSD**, **Recovery Mo
    - **Monitor Type**: the 29 Switchres presets, in the gatools list, plus **Custom**: your own `crt_range0` (the timings that really fit your monitor), made on the Geometry grid or typed in (16 values, as in `switchres.ini`, of the same 15/25/31 kHz band as the preset).
 
      It sits on top of the preset that was in use, which still gives the boot resolution, the EDID and the Xorg range; choosing a preset again discards it;
-   - **Monitor Orientation**: horizontal, vertical clockwise, vertical counter-clockwise (console rotated with `fbcon=rotate`, `panel_orientation` in `video=`, MAME's `ror`/`rol` and the desktop through `xrandr`);
+   - **Monitor Orientation**: horizontal, vertical clockwise, vertical counter-clockwise (console rotated with `fbcon=rotate`, `panel_orientation` in `video=`, MAME's `ror`/`rol` and the desktop through `xrandr`). Standing up, the Setup menu and the FliperOS frontend are laid out for the tall screen (240x320) and turned to the monitor's side; the few screens made only for a wide screen (the Button mapping panel, the ROM filter board) are shrunk to the width, between the real title and keys;
    - **Resolution**: only the modes of the kernel table that the monitor's range and the card accept (without low dotclock, only the super resolutions), plus a **custom resolution**: tested on the Switchres `grid` and turned into an EDID (`switchres -e`), like `worker_custom_video_mode`;
    - **Geometry**: the same **`geometry`** as GroovyArcade — Switchres' `geometry.py`, which draws the grid and returns the `crt_range`, saved as `monitor custom` in `/etc/switchres.ini` (the Monitor Type becomes **Custom**).
 
