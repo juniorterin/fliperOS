@@ -690,7 +690,10 @@ def full_background(fe, back):
             def paths(idx):
                 return [p for p in (video_path(fe, fe.rows[k][0]) for k in idx if 0 <= k < len(fe.rows)) if p]
             near = range(fe.cursor - PRELOAD_ROWS, fe.cursor + PRELOAD_ROWS + 1)
-            fe.grid.update(paths(shown + [fe.cursor]), paths(near), WW, HH)
+            # O do jogo escolhido fica parado no primeiro quadro, o mesmo
+            # com que o video com som (o Player) comeca: a troca entre os
+            # dois nao pisca.
+            fe.grid.update(paths([i for i in shown if i != fe.cursor]), paths(near), WW, HH)
         else:
             fe.grid.stop()
     back.blit(full_shade(fe), (0, 0))
@@ -804,6 +807,12 @@ def grid_videos(fe, top_row, rows_shown, w, h):
     visible = paths(top_row, top_row + rows_shown + 1)
     preload = paths(top_row - PRELOAD_ROWS, top_row) + paths(top_row + rows_shown + 1,
                                                               top_row + rows_shown + 1 + PRELOAD_ROWS)
+    # O escolhido parado no primeiro quadro, ate o video com som (o Player)
+    # chegar nele: sem a piscada da troca.
+    chosen = video_path(fe, fe.rows[fe.cursor][0]) if fe.rows else None
+    if chosen in visible:
+        visible.remove(chosen)
+        preload.append(chosen)
     fe.grid.update(visible, preload, w, h)
 
 
