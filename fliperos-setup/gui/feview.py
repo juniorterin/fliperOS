@@ -638,12 +638,52 @@ def thumb_dim(fe):
     return fe.media[key]
 
 
+def full_picture(fe, i):
+    """O fundo da tela cheia para o jogo da linha i: o do escolhido e o
+    video com o som (o Player); o dos outros, o video mudo ja aberto
+    (fevideo.Grid) ou a imagem."""
+    g = fe.rows[i][0]
+    frame_ = None
+    if getattr(fe, "video_ok", False):
+        path = video_path(fe, g)
+        if i == fe.cursor:
+            fe.video_used = True
+            frame_ = fe.player.request(path, WW, HH, fe.abs_now)
+        if frame_ is None and getattr(fe, "grid", None) is not None:
+            frame_ = fe.grid.frame(path, WW, HH)
+    if frame_:
+        return pygame.image.frombuffer(frame_, (WW, HH), "RGB")
+    return image(fe, media(fe, g, "snap") or media(fe, g, "box"), WW, HH, "cover")
+
+
+def full_background(fe, back):
+    """O fundo desliza com o cursor, como a coluna de miniaturas: o jogo de
+    antes sai e o novo entra (de baixo, andando para baixo). Os videos de
+    PRELOAD_ROWS jogos antes e depois ficam abertos, parados no primeiro
+    quadro, para o novo ja entrar tocando."""
+    pos = ease(fe, "full_bg", fe.cursor, fe.abs_now)
+    base = int(math.floor(pos))
+    frac = pos - base
+    shown = [base] if frac < 0.002 else [base, base + 1]
+    for i in shown:
+        if 0 <= i < len(fe.rows):
+            pic = full_picture(fe, i)
+            if pic:
+                back.blit(pic, (0, round((i - pos) * HH)))
+    if getattr(fe, "grid", None) is not None:
+        if getattr(fe, "video_ok", False):
+            def paths(idx):
+                return [p for p in (video_path(fe, fe.rows[k][0]) for k in idx if 0 <= k < len(fe.rows)) if p]
+            near = range(fe.cursor - PRELOAD_ROWS, fe.cursor + PRELOAD_ROWS + 1)
+            fe.grid.update(paths(shown + [fe.cursor]), paths(near), WW, HH)
+        else:
+            fe.grid.stop()
+    back.blit(full_shade(fe), (0, 0))
+
+
 def draw_full(fe, ui, back, now):
     game = fe.game()
-    snap = picture(fe, game, WW, HH)
-    if snap:
-        back.blit(snap, (0, 0))
-        back.blit(full_shade(fe), (0, 0))
+    full_background(fe, back)
     cat = fe.category()
     W.text(ui, (cat or {}).get("name", "").upper()[:24], T.RED, SX, 12)
     W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, SX + SW, 12, right=True)
@@ -1357,11 +1397,11 @@ def draw(fe, now):
     fe.bg.draw(back, t)
     ui = pygame.Surface((WW, HH), pygame.SRCALPHA)
     # O video nos tres modos, e nao com uma tela inteira por cima (a pagina
-    # "+", o Classify, o Rename). Fora da grade, os videos dela param.
+    # "+", o Classify, o Rename). Na lista, os da grade e da tela cheia param.
     fe.abs_now = now
     fe.video_used = False
     fe.video_ok = fe.overlay not in ("more", "classify", "rename")
-    if (fe.mode != "flow" or not fe.video_ok) and getattr(fe, "grid", None) is not None and fe.grid.videos:
+    if (fe.mode == "list" or not fe.video_ok) and getattr(fe, "grid", None) is not None and fe.grid.videos:
         fe.grid.stop()
     if not fe.rows:
         empty(fe, ui)
