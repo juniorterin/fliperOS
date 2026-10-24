@@ -53,58 +53,85 @@ export function Header() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const linkClass = (id: SectionId) =>
-    `relative rounded-md px-3 py-2 text-sm transition-colors ${
-      active === id ? 'text-fg' : 'text-muted hover:text-fg'
-    }`;
-
   return (
+    <>
+    <a
+      href="#main"
+      className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-md focus:bg-purple focus:px-3 focus:py-2 focus:text-bg-deeper"
+    >
+      {t.a11y.skipToContent}
+    </a>
+    {/* No desktop o menu e uma coluna fixa a esquerda; no celular e no
+        tablet, a barra de cima com o menu que abre. */}
+    <aside
+      aria-label={t.a11y.mainNav}
+      className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-line/70 bg-bg-deep/85 px-4 py-6 backdrop-blur-xl lg:flex"
+    >
+      <a href="#top" className="flex items-center gap-2.5 px-3" aria-label="FliperOS">
+        <LogoMark />
+        <Wordmark />
+      </a>
+      <nav aria-label={t.a11y.mainNav} className="mt-8 flex-1 overflow-y-auto">
+        <ul className="grid gap-1">
+          {NAV.map(({ id, key }) => (
+            <li key={id}>
+              <a
+                href={`#${id}`}
+                aria-current={active === id ? 'true' : undefined}
+                className={`relative flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors ${
+                  active === id ? 'bg-line/50 text-fg' : 'text-muted hover:bg-line/30 hover:text-fg'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-y-2 left-0 w-0.5 rounded-full bg-gradient-to-b from-purple to-pink transition-opacity ${
+                    active === id ? 'opacity-100' : 'opacity-0'
+                  }`}
+                />
+                {t.nav[key]}
+              </a>
+            </li>
+          ))}
+          <li>
+            <a
+              href={guideUrl(locale)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-cyan transition-colors hover:bg-line/30 hover:text-fg"
+            >
+              <BookOpen className="size-4" aria-hidden="true" />
+              {t.nav.guide}
+              <span className="sr-only">{t.a11y.external}</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <div className="mt-6 grid gap-3 px-1">
+        <div>
+          <LanguageSwitch />
+        </div>
+        <a
+          href={readmeUrl(locale)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-purple/60 bg-purple/10 px-3.5 py-2 text-sm font-medium text-fg transition hover:border-purple hover:bg-purple/20 hover:shadow-[0_0_20px_-6px] hover:shadow-purple"
+        >
+          <GithubIcon className="size-4" />
+          {t.nav.viewOnGithub}
+          <span className="sr-only">{t.a11y.external}</span>
+        </a>
+      </div>
+    </aside>
     <header
-      className={`fixed inset-x-0 top-0 z-50 border-b backdrop-blur-xl transition-colors duration-300 ${
+      className={`fixed inset-x-0 top-0 z-50 border-b backdrop-blur-xl transition-colors duration-300 lg:hidden ${
         scrolled || open ? 'border-line/70 bg-bg-deep/80' : 'border-transparent bg-bg-deep/30'
       }`}
     >
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-purple focus:px-3 focus:py-2 focus:text-bg-deeper"
-      >
-        {t.a11y.skipToContent}
-      </a>
-      <div className="flex h-16 w-full items-center gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="flex h-16 w-full items-center gap-4 px-4 sm:px-6">
         <a href="#top" className="flex items-center gap-2.5" aria-label="FliperOS">
           <LogoMark />
           <Wordmark />
         </a>
-
-        <nav aria-label={t.a11y.mainNav} className="ml-6 hidden lg:block">
-          <ul className="flex items-center gap-1">
-            {NAV.map(({ id, key }) => (
-              <li key={id}>
-                <a href={`#${id}`} className={linkClass(id)} aria-current={active === id ? 'true' : undefined}>
-                  {t.nav[key]}
-                  <span
-                    aria-hidden="true"
-                    className={`absolute inset-x-3 -bottom-px h-px bg-gradient-to-r from-purple to-pink transition-opacity ${
-                      active === id ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  />
-                </a>
-              </li>
-            ))}
-            <li>
-              <a
-                href={guideUrl(locale)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-cyan transition-colors hover:text-fg"
-              >
-                <BookOpen className="size-4" aria-hidden="true" />
-                {t.nav.guide}
-                <span className="sr-only">{t.a11y.external}</span>
-              </a>
-            </li>
-          </ul>
-        </nav>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <LanguageSwitch />
@@ -181,5 +208,6 @@ export function Header() {
         </a>
       </nav>
     </header>
+    </>
   );
 }

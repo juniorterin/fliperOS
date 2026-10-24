@@ -26,6 +26,7 @@ export default async function Home() {
   return (
     <>
       <Header />
+      <div className="lg:pl-64">
       <main id="main">
         <Hero screenshots={screenshots} downloadUrl={stats?.release?.iso ?? latestIsoUrl()} />
         <BadgeBar />
@@ -43,6 +44,7 @@ export default async function Home() {
         <Support />
       </main>
       <Footer />
+      </div>
     </>
   );
 }

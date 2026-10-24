@@ -2,11 +2,6 @@
 
 O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai daqui e o que mudou vai para o [CHANGELOG](CHANGELOG.md).
 
-## Pedidos de 2026-10-24
-
-Site (website/):
-- no desktop, o menu numa sidebar à esquerda.
-
 ## Pedidos de 2026-10-23
 
 Menu e Setup:

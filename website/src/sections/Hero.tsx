@@ -17,7 +17,7 @@ export function Hero({ screenshots, downloadUrl }: { screenshots: ScreenshotMap;
     return src ? [{ ...slide, src, alt: `${slide.title}. ${slide.caption}` }] : [];
   });
   return (
-    <section id="top" aria-labelledby="hero-title" className="relative overflow-hidden pt-28 pb-16 sm:pt-36 lg:pb-24">
+    <section id="top" aria-labelledby="hero-title" className="relative overflow-hidden pt-28 pb-16 sm:pt-36 lg:pt-20 lg:pb-24">
       <div aria-hidden="true" className="bg-grid pointer-events-none absolute inset-0" />
       <div aria-hidden="true" className="glow-purple pointer-events-none absolute -top-40 left-1/2 h-[560px] w-[900px] -translate-x-1/2" />
       <div aria-hidden="true" className="glow-pink pointer-events-none absolute top-40 -right-40 h-[420px] w-[520px]" />

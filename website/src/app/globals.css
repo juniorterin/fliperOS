@@ -27,6 +27,13 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* No desktop o menu e a coluna da esquerda: nada em cima para descontar. */
+@media (min-width: 64rem) {
+  html {
+    scroll-padding-top: 1.5rem;
+  }
+}
+
 body {
   background-color: var(--color-bg-deep);
   color: var(--color-fg);
