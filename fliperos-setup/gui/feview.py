@@ -700,12 +700,29 @@ def full_background(fe, back):
     back.blit(full_shade(fe), (0, 0))
 
 
+def clone_badge(ui, right, y):
+    """O selo do clone na tela cheia (a seta para cima: o jogo pai vem
+    antes): encostado em right; devolve onde ele comeca."""
+    label = "CLONE"
+    w = tiny.width(label) + 16
+    x = right - w
+    W.block(ui, (x, y, w, 11), T.BG_DEEP, None)
+    pygame.draw.rect(ui, T.ORANGE, (x, y, w, 11), 1)
+    pygame.draw.polygon(ui, T.ORANGE, [(x + 6, y + 2), (x + 3, y + 5), (x + 9, y + 5)])
+    ui.fill(T.ORANGE, (x + 5, y + 5, 3, 4))
+    tiny.text(ui, label, T.ORANGE, x + 12, y + 3)
+    return x
+
+
 def draw_full(fe, ui, back, now):
     game = fe.game()
     full_background(fe, back)
     cat = fe.category()
     W.text(ui, (cat or {}).get("name", "").upper()[:24], T.RED, SX, 12)
-    W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, SX + SW, 12, right=True)
+    count_x = SX + SW
+    if fe.rows and fe.rows[fe.cursor][1]:
+        count_x = clone_badge(ui, SX + SW, 10) - 6
+    W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, count_x, 12, right=True)
     for i, c in enumerate(W.RAINBOW):
         pygame.draw.rect(ui, c, (SX, 24 + i, 40, 1))
     if fe.scraping is game:
@@ -740,6 +757,8 @@ def draw_full(fe, ui, back, now):
         pygame.draw.rect(ui, T.LINE, (tx, y, tw, th), 1)
         if g.get("Favourite") == "1":
             star(ui, tx + tw - 6, y + 6, T.YELLOW, 4)
+        if fe.rows[i][1]:
+            arrow(ui, tx + 6, y + 6, (0, -1), T.ORANGE, 4)
     y = round(ty + (fsel - ftop) * step)
     pygame.draw.rect(ui, T.PINK, (tx, y, tw, th), 2)
     ui.set_clip(None)
@@ -751,7 +770,11 @@ def draw_full(fe, ui, back, now):
     if logo:
         ui.blit(logo, (SX, HH - 62 - logo.get_height()))
     y = HH - 56
-    ui.blit(W.big(fit(fe.fd.short_title(game), right - SX), 1, W.LABEL), (SX, y))
+    title = fe.fd.short_title(game)
+    if fe.rows and fe.rows[fe.cursor][1]:
+        # O clone: o que muda em relacao ao pai (a regiao, o set, bootleg).
+        title += " (%s)" % fe.fd.variant(game, fe.rows[fe.cursor][2])
+    ui.blit(W.big(fit(title, right - SX), 1, W.LABEL), (SX, y))
     W.text(ui, fit(facts_line(game), right - SX), T.CYAN, SX, y + 12)
     icon_line(fe, ui, game, SX, y + 24, right, 12)
 

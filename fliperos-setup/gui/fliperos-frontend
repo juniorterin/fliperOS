@@ -233,7 +233,8 @@ class Frontend:
 
     def rebuild(self, keep=None):
         """As linhas da tela: (jogo, nivel, clones). Na lista os clones ficam
-        debaixo do pai (abertos ou nao); nos outros modos, so os pais."""
+        debaixo do pai (abertos ou nao); na tela cheia, sempre logo depois
+        dele (com o selo CLONE); na grade, so os pais."""
         games = self.filtered()
         rows = []
         for game, clones in self.fd.tree(games):
@@ -242,6 +243,9 @@ class Frontend:
                 if clones and game["Name"] in self.opened:
                     rows.append((game, 1, "main"))
                     rows.extend((c, 1, game) for c in clones)
+            elif self.mode == "full":
+                rows.append((game, 0, clones))
+                rows.extend((c, 1, game) for c in clones or ())
             else:
                 rows.append((game, 0, clones))
         self.rows = rows
@@ -385,7 +389,8 @@ class Frontend:
             else:
                 self.overlay, self.ov = "popup", {"sel": 0}
         elif a == "b2":
-            # Num clone aberto, fecha o grupo; senao, pergunta se sai.
+            # Num clone aberto, fecha o grupo (na tela cheia, volta ao pai);
+            # senao, pergunta se sai.
             g, level, parent = self.rows[self.cursor] if self.rows else (None, 0, None)
             if level:
                 owner = g if parent == "main" else parent
