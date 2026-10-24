@@ -82,10 +82,10 @@ The events below are the ones of Pixelcade's own EmulationStation scripts ([alin
 - **High scores**: for arcade games, the text is the top three scores (`#1 19,130 DAA #2 ...`). They come from the game's `.hi` file, the newest one among `~/.mame/hiscore` (GroovyMAME's `hiscore` plugin) and the RetroArch saves folder (`/opt/fliperos/saves/retroarch`, where the MAME and FBNeo cores write theirs).
 
   The hi2txt program reads the file, as in Pixelcade's installer. Extras > Pixelcade downloads it (pinned by hash) into `~/pixelcade/hi2txt` and installs Java from apt (`default-jre-headless`), which it needs. A game that hi2txt doesn't know shows its name instead.
-- **Game closed**: the helper waits for the game to end and then shows the game's marquee the way the frontend selection does. That matters in Pegasus and RetroFE, which don't report what is selected.
+- **Game closed**: the helper waits for the game to end and then shows the game's marquee the way the frontend selection does. That matters in Pegasus, which doesn't report what is selected.
 - **Game selected**: in **ES-DE**, through its custom event scripts (`~/ES-DE/scripts/game-select` and `system-select`, with *Custom event scripts* and *Browsing custom events* turned on; browsing doesn't wait for them).
 
-  In **Attract-Mode Plus**, through FliperOS's *Pixelcade* plugin, which is copied to `~/.attract/plugins` and turned on in `plugins.cfg`. Pegasus and RetroFE have no event hooks, so they only show the game that was opened.
+  In **Attract-Mode Plus**, through FliperOS's *Pixelcade* plugin, which is copied to `~/.attract/plugins` and turned on in `plugins.cfg`. Pegasus has no event hooks, so it only shows the game that was opened.
 
   The service writes these frontend settings at every boot; if the frontend is open at that moment, they wait for the next boot.
 - **Screensaver**: when the screensaver of ES-DE (`screensaver-start` and `screensaver-end` scripts) or Attract-Mode Plus starts, the marquee goes into Pixelcade's attract mode, a playlist you set up on the settings page. When it ends, the marquee shows the selected game or system again.
@@ -181,10 +181,10 @@ What was checked on a FliperOS cabinet, with Fightcade's own detectors and no pi
 
 ## APT repository
 
-The frontends (Attract-Mode Plus, EmulationStation, RetroFE, Pegasus) come from a dedicated APT repository of prebuilt `.deb`s, like GroovyArcade's `groovy-ux-repo` (`packaging/build-deb.sh`, `packaging/make-repo.sh`, `Dockerfile.packages`, recipes in `packaging/packages/`).
+The frontends (Attract-Mode Plus, EmulationStation, Pegasus) come from a dedicated APT repository of prebuilt `.deb`s, like GroovyArcade's `groovy-ux-repo` (`packaging/build-deb.sh`, `packaging/make-repo.sh`, `Dockerfile.packages`, recipes in `packaging/packages/`).
 
 The `config/fliperos-sessions.conf` table says, for each launcher, whether it runs in KMS or X (from galauncher's `videodata.conf` table) and which package it comes from.
 
 The build carries the repository into the image (`/opt/fliperos/repo`, `deb [trusted=yes] file:/opt/fliperos/repo ./`, option `--repo`) and already installs Attract-Mode Plus; without it, the cabinet's apt said "Unable to locate package".
 
-Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus have recipes; RetroFE doesn't yet, and shows in Setup > Games > Frontend as *not available yet*.
+Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus have recipes.

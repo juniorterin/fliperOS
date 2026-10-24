@@ -110,7 +110,7 @@ case $backend in
       # /dev/null como entrada. O FLIPEROS_POWERKEY diz ao botao de desligar
       # (config/fliperos-powerkey) que este e um frontend: com um jogo aberto
       # por ele o botao fecha o jogo; sem jogo, desliga.
-      attractplus | emulationstation | retrofe | pegasus | custom-*)
+      attractplus | emulationstation | pegasus | custom-*)
         FLIPEROS_POWERKEY=frontend "$BIN/fliperos-kms-run" "${program[@]}" <&0 &
         pid=$!
         frontend_pid=$pid

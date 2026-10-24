@@ -750,7 +750,7 @@ game() {
 
 # end SISTEMA ROM: o jogo fechou. O painel volta para o pixelweb e o
 # dmdserver (dmd_hold), e o marquee para o do jogo como selecao do frontend:
-# o Pegasus e o RetroFE nao avisam o que esta selecionado.
+# o Pegasus nao avisa o que esta selecionado.
 game_end() {
   rm -f "$hold_file"
   [[ $(cat "$last_file" 2> /dev/null) == "game:${1:-}/${2:-}" ]] || return 0

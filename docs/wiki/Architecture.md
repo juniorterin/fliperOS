@@ -47,7 +47,7 @@ In the loop the Setup never opens anything itself: **Start frontend** and **Star
 
 `fliperos-session` looks the name up in `/etc/fliperos/sessions.conf` (and in `sessions.custom.conf`, the frontends you registered), one launcher per line as `name|backend|binary|package|description`. The backend decides how it opens:
 
-- `kms`: `fliperos-kms-run <binary>`. For the frontends (Attract-Mode Plus, ES-DE, RetroFE, Pegasus and your own) it also starts `fliperos-escquit` and marks the process with `FLIPEROS_POWERKEY=frontend`.
+- `kms`: `fliperos-kms-run <binary>`. For the frontends (Attract-Mode Plus, ES-DE, Pegasus and your own) it also starts `fliperos-escquit` and marks the process with `FLIPEROS_POWERKEY=frontend`.
 - `x`: `xinit <binary>` on the same VT. Only the LXDE desktop uses it.
 - `none`: opens nothing; the boot goes straight to the menu.
 

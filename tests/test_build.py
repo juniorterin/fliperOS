@@ -4432,7 +4432,7 @@ class EscQuitTests(unittest.TestCase):
     def test_installed_and_wired_to_the_frontends(self):
         self.assertRegex(ROOTFS, r' fliperos-escquit[ \w\\\n-]*; do')
         session = (ROOT / 'config/fliperos-session').read_text()
-        self.assertIn('attractplus | emulationstation | retrofe | pegasus | custom-*)', session)
+        self.assertIn('attractplus | emulationstation | pegasus | custom-*)', session)
         self.assertIn('fliperos-escquit" "$pid"', session)
         # O LXDE (backend x) fica de fora.
         x_branch = session.split('\n  x)\n')[1]

@@ -1111,7 +1111,7 @@ for _alias, _name in {
     "local": "disk", "mounted": "network", "missing": "network", "horizontal": "video",
     "vertical-cw": "orientation", "vertical-ccw": "orientation",
     # Os programas sem icone proprio.
-    "retrofe": "frontend", "lxde": "desktop", "supermodel": "emulators", "model3": "emulators", "kof": "games",
+    "lxde": "desktop", "supermodel": "emulators", "model3": "emulators", "kof": "games",
     # O DuckStation tem, mas a licenca dele (CC BY-NC-ND) nao deixa
     # redistribuir nem reduzir o icone.
     "duckstation": "emulators",

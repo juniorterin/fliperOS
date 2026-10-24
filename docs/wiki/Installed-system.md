@@ -167,7 +167,7 @@ Without a CTM (the cabinet's Radeon R7 240 on the `radeon` driver has only the 2
 
 | On screen | The button |
 | --- | --- |
-| A game opened from a frontend (Attract-Mode Plus, ES-DE, RetroFE, Pegasus, your own frontends) | closes the game; the frontend comes back |
+| A game opened from a frontend (Attract-Mode Plus, ES-DE, Pegasus, your own frontends) | closes the game; the frontend comes back |
 | A Fightcade match | closes the match's emulator; the lobby comes back |
 | An emulator opened from the desktop's Games menu | closes the emulator; the desktop comes back |
 | A frontend's game list, the Fightcade lobby, the desktop, the FliperOS menu, the shell, the install media | powers the machine off |
