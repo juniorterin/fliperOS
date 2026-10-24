@@ -1266,7 +1266,8 @@ class RomFoldersTests(unittest.TestCase):
             # pastas de ~/roms: a do MAME no lugar dela.
             (mame / 'ui.ini').write_text('covers_directory          /home/fliperos/.mame/scraped/mame/covers;covers;'
                                          '/home/fliperos/media/box/arcade\n'
-                                         'logos_directory           logo\nui_path                   ui\n')
+                                         'logos_directory           logo\nui_path                   ui\n'
+                                         'skip_warnings             0\n')
             # O cfg/nvram que esse mame.ini gravou na home: vale o mais novo.
             home = root / 'home/fliperos'
             for d in ('cfg', '.mame/cfg'):
@@ -1303,6 +1304,9 @@ class RomFoldersTests(unittest.TestCase):
             self.assertIn('logos_directory           /home/fliperos/media/logo/mame\n', ui)
             self.assertIn('marquees_directory        /home/fliperos/media/marquee/mame\n', ui)
             self.assertIn('ui_path                   $HOME/.mame/ui\n', ui)
+            # Sem a tela de avisos do MAME, tambem no ui.ini de antes.
+            self.assertIn('skip_warnings             1\n', ui)
+            self.assertNotIn('skip_warnings             0', ui)
             self.assertEqual(ui.count('covers_directory'), 1)
             self.assertFalse((home / 'cfg').exists())
             self.assertEqual((home / '.mame/cfg/mvsc.cfg').read_text(), 'novo')

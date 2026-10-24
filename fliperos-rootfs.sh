@@ -245,6 +245,9 @@ done
 # Cores Dracula da interface do GroovyMAME; o ui.ini e do usuario porque o
 # MAME o regrava quando a interface e personalizada pelo proprio menu.
 [[ -f "$root/etc/fliperos/mame/ui.ini" ]] || install -Dm644 "$src/config/mame-ui.ini" "$root/etc/fliperos/mame/ui.ini"
+# A tela de avisos ao abrir o jogo sai tambem num ui.ini de antes, que ja
+# tem o skip_warnings 0 do -createconfig.
+sed -i 's/^skip_warnings[[:space:]].*/skip_warnings             1/' "$root/etc/fliperos/mame/ui.ini"
 # Numa instalacao anterior, o mame.ini e o ui.ini ganham as chaves de
 # config/ que ainda nao tem; as que o Setup, o MAME ou o usuario ja
 # gravaram ficam como estao.
