@@ -60,6 +60,7 @@ export const SCREENSHOT_IDS = [
   'frontend/list-clones',
   'frontend/list-card',
   'frontend/list-more',
+  'frontend/list-more-2',
   'frontend/list-filter',
   'frontend/list-options',
   'frontend/list-classify',

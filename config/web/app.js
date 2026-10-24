@@ -876,11 +876,14 @@ function showOnline(online, facts, data) {
     // Os botoes do jogador 1 no painel, onde o Setup > Joysticks > Buttons
     // layout os poe (1 2 3 em cima, 4 5 6 embaixo), com a cor e a funcao.
     if ((data.panel || []).some(Boolean)) {
-      parts.push(el("div", { class: "panel-layout" }, ...data.panel.map((cell) => {
+      // Como o guia dos controles do frontend: os botoes juntos, a funcao
+      // fora (em cima na fileira de cima, embaixo na de baixo).
+      parts.push(el("div", { class: "panel-layout" }, ...data.panel.map((cell, i) => {
         const dot = el("i");
-        if (cell) dot.style.background = /^[a-z]+$/i.test(cell.color) ? cell.color : "var(--dim)";
-        return el("div", { class: cell ? "pbtn on" : "pbtn" }, dot,
-          el("span", {}, cell ? cell.label || String(cell.button) : ""));
+        if (cell) dot.style.backgroundColor = /^[a-z]+$/i.test(cell.color) ? cell.color : "var(--purple)";
+        const where = (i < 3 ? " top" : " bottom") + " c" + (i % 3);
+        return el("div", { class: (cell ? "pbtn on" : "pbtn") + where }, dot,
+          cell ? el("span", {}, cell.label || String(cell.button)) : "");
       })));
     }
     // A descricao do jogo e, depois, as secoes do arcade-history (tecnica,

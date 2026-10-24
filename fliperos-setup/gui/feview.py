@@ -1170,7 +1170,7 @@ def draw_button_panel(ui, cells, x, y, w):
     r, step = 8, 21
     ry = round(r * FLAT)
     bx0 = x + (w - 2 * step) // 2
-    by0 = y + 14
+    by0 = y + 22
     for i, cell in enumerate(cells):
         col, row = i % 3, i // 3
         cx = bx0 + col * step
@@ -1189,14 +1189,17 @@ def draw_button_panel(ui, cells, x, y, w):
         tw = tiny.width(text)
         tx = {0: cx + 3 - tw, 1: cx - tw // 2, 2: cx - 3}[col]
         top, bottom = cy - ry - 3, cy + LIFT + ry + 4
+        # O nome do meio uma linha mais para fora: nomes longos lado a lado
+        # (LIGHT PUNCH, MIDDLE PUNCH) nao se encostam.
+        out = 8 if col == 1 else 0
         if row == 0:
-            ty, y0, y1, d = by0 - 16, by0 - 8, top, (0, 1)
+            ty, y0, y1, d = by0 - 16 - out, by0 - 9 - out, top, (0, 1)
         else:
-            ty, y0, y1, d = bottom + 9, bottom + 7, bottom, (0, -1)
+            ty, y0, y1, d = bottom + 9 + out, bottom + 7 + out, bottom, (0, -1)
         tiny.text(ui, text, T.FG, tx, ty)
         pygame.draw.line(ui, T.COMMENT, (cx, y0), (cx, y1 - d[1] * 2))
         arrow(ui, cx, y1, d, T.COMMENT, 2)
-    return 62
+    return 78
 
 
 def text_box(fe, ui, box, parts, empty):

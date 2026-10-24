@@ -240,14 +240,31 @@ th.vid-part { color: var(--fg); font-weight: 700; font-size: 14px; padding-top: 
   padding: 10px; font-size: 14px; margin: 0; }
 .history p { margin: 0 0 8px; }
 .history h4 { margin: 10px 0 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--pink); }
-/* O painel do Buttons layout: 3 por fileira, cada botao com a cor e a funcao. */
-.panel-layout { display: grid; grid-template-columns: repeat(3, minmax(0, 96px)); gap: 8px 14px; padding: 12px 14px;
-  background: var(--bg-deep); border-radius: 8px; width: max-content; max-width: 100%; }
-.pbtn { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
-.pbtn i { width: 30px; height: 30px; border-radius: 50%; border: 2px dashed var(--line); box-sizing: border-box; }
-.pbtn.on i { border: 2px solid rgba(0, 0, 0, .45); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .3); }
-.pbtn span { font-size: 12px; color: var(--fg); text-align: center; max-width: 96px; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; min-height: 1em; }
+/* O painel do Buttons layout, no desenho do guia dos controles do frontend:
+   os seis botoes juntos, o do meio um pouco acima, a funcao fora com uma
+   linha ate o botao (em cima na fileira de cima, embaixo na de baixo). */
+.panel-layout { display: grid; grid-template-columns: repeat(3, 38px); gap: 6px 4px; padding: 46px 120px;
+  background: var(--bg-deep); border-radius: 8px; width: max-content; max-width: 100%; box-sizing: border-box; }
+.pbtn { position: relative; height: 38px; }
+.pbtn.c1 { top: -4px; }
+.pbtn i { position: absolute; inset: 3px; border-radius: 50%; background-color: #44475a;
+  background-image: radial-gradient(circle at 35% 28%, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 38%);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, .45), 0 0 0 3px #101016, 0 0 0 4px var(--line); }
+.pbtn:not(.on) i { opacity: .45; }
+.pbtn span { position: absolute; font-size: 12px; color: var(--fg); white-space: nowrap; }
+.pbtn.top span { bottom: calc(100% + 12px); }
+.pbtn.bottom span { top: calc(100% + 12px); }
+.pbtn.c0 span { right: calc(50% - 6px); }
+.pbtn.c1 span { left: 50%; transform: translateX(-50%); }
+.pbtn.c2 span { left: calc(50% - 6px); }
+.pbtn.on::before { content: ""; position: absolute; left: 50%; width: 1px; height: 10px; background: var(--dim); }
+.pbtn.on.top::before { bottom: calc(100% + 1px); }
+.pbtn.on.bottom::before { top: calc(100% + 4px); }
+/* O nome do botao do meio uma linha mais para fora: nomes longos lado a
+   lado (Light Punch, Middle Punch) nao se encostam. */
+.pbtn.c1.top span { bottom: calc(100% + 28px); }
+.pbtn.c1.bottom span { top: calc(100% + 28px); }
+.pbtn.on.c1::before { height: 26px; }
 .controls { display: flex; flex-wrap: wrap; gap: 6px; }
 .controls .tag i { display: inline-block; width: .8em; height: .8em; border-radius: 50%; margin-right: 5px;
   vertical-align: -1px; border: 1px solid var(--line); }
