@@ -295,8 +295,7 @@ main() {
       local lock
       exec {lock}> /run/fliperos-romlists.lock
       flock -n "$lock" || return 0
-      FRONTENDS_RESYNC_FULL=1 frontends_attract > /dev/null
-      chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
+      FRONTENDS_RESYNC_FULL=1 frontends_lists > /dev/null
       return 0
       ;;
     --bios-check)

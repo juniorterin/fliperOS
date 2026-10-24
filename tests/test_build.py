@@ -4235,7 +4235,7 @@ class FrontendDataTests(unittest.TestCase):
 
     def test_romlists_from_the_setup_and_the_session(self):
         setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
-        self.assertIn('FRONTENDS_RESYNC_FULL=1 frontends_attract', setup)
+        self.assertIn('FRONTENDS_RESYNC_FULL=1 frontends_lists', setup)
         frontends = (ROOT / 'fliperos-setup/lib/frontends.sh').read_text()
         self.assertIn('&& ((!${FRONTENDS_RESYNC_FULL:-0}))', frontends)
         session = (ROOT / 'config/fliperos-session').read_text()
@@ -4757,13 +4757,15 @@ class WebPanelTests(unittest.TestCase):
         (roms.parent / 'other').mkdir()
         (roms.parent / 'other/evil.zip').write_text('')
         cls.roms = roms
-        # A romlist do Attract-Mode com os nomes de verdade (sem a BIOS e sem
-        # o jogo de Atomiswave da mesma pasta), os favoritos dele (copiados
-        # uma vez), as vezes jogadas e uma tela com filtros que o painel nao
-        # usa. Um jogo posto depois da lista entra.
+        # A lista do FliperOS com os nomes de verdade (sem a BIOS e sem o jogo
+        # de Atomiswave da mesma pasta) e, do Attract-Mode que estava antes,
+        # os favoritos e as vezes jogadas (copiados uma vez) e uma tela com
+        # filtros que o painel nao usa. Um jogo posto depois da lista entra.
         attract = tmp / '.attract'
         (attract / 'romlists').mkdir(parents=True)
-        (attract / 'romlists/Naomi.txt').write_text(
+        lists = tmp / '.local/share/fliperos/lists'
+        lists.mkdir(parents=True)
+        (lists / 'Naomi.txt').write_text(
             '#Name;Title;Emulator;CloneOf;Year;Manufacturer;Category;Players;Rotation;Control;Status;DisplayCount;'
             'DisplayType;AltRomname;AltTitle;Extra;Buttons;Series;Language;Region;Rating\n'
             'vf4;Virtua Fighter 4;Naomi;;2001;Sega;Fighter / Versus;2;0;joystick;good;1;raster;;;;6;;;;\n'

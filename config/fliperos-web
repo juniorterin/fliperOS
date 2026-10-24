@@ -83,6 +83,7 @@ import pwd
 import re
 import secrets
 import shlex
+import shutil
 import signal
 import socket
 import struct
@@ -584,14 +585,16 @@ def systems():
     return rows
 
 
-# ── A lista de jogos: a do Attract-Mode Plus ───────────────────────
-# A romlist de cada pasta (~/.attract/romlists/EMULADOR.txt) da o nome de
-# verdade, o ano, o fabricante e o genero; as de arcade os tem do -listxml
-# (Setup > Games > AttractPlus ROM List). Os favoritos e os filtros sao do
-# FliperOS, nao do frontend: os favoritos ficam em ~/.config/fliperos/favourites
-# (copiados uma vez dos do Attract-Mode) e os filtros sao os mesmos que o
-# Setup poe nas telas dele (fliperos-setup --filters). Um frontend proprio do
-# FliperOS usara os mesmos.
+# ── A lista de jogos ───────────────────────────────────────────────
+# A lista de cada pasta de arcade (~/.local/share/fliperos/lists/EMULADOR.txt,
+# no formato das romlists do Attract-Mode) da o nome de verdade, o ano, o
+# fabricante e o genero, do -listxml (Setup > Games > AttractPlus ROM List,
+# lib/frontends.sh); as outras pastas sao os arquivos. Tudo e do FliperOS, nao
+# de um frontend (o Attract-Mode Plus e o ES-DE sao opcionais): os favoritos
+# em ~/.config/fliperos/favourites e as partidas em
+# ~/.local/share/fliperos/stats (os dois copiados uma vez do Attract-Mode, se
+# ele estava), e os filtros sao os que o Setup escreve (fliperos-setup
+# --filters). O frontend do FliperOS (gui/fliperos-frontend) le os mesmos.
 
 ROMLIST_FIELDS = ("Name", "Title", "Emulator", "CloneOf", "Year", "Manufacturer", "Category", "Players", "Rotation",
                   "Control", "Status", "DisplayCount", "DisplayType", "AltRomname", "AltTitle", "Extra", "Buttons",
@@ -606,7 +609,19 @@ def attract_dir():
     return ENV("FLIPEROS_ATTRACT_DIR") or os.path.join(player_home(), ".attract")
 
 
+def lists_dir():
+    return ENV("FLIPEROS_LISTS") or os.path.join(player_home(), ".local", "share", "fliperos", "lists")
+
+
+def stats_dir():
+    return ENV("FLIPEROS_STATS") or os.path.join(player_home(), ".local", "share", "fliperos", "stats")
+
+
 def romlist_path(system, ext=".txt"):
+    return os.path.join(lists_dir(), system["name"].replace("/", "-") + ext)
+
+
+def attract_romlist_path(system, ext=".txt"):
     return os.path.join(attract_dir(), "romlists", system["name"].replace("/", "-") + ext)
 
 
@@ -637,7 +652,7 @@ def attract_favourites(system):
     """Os favoritos do Attract-Mode: as linhas "nome;emulador" (ou so o nome,
     o formato antigo) do .tag ao lado da romlist."""
     out = set()
-    for line in read(romlist_path(system, ".tag")).splitlines():
+    for line in read(attract_romlist_path(system, ".tag")).splitlines():
         name, _, emulator = line.strip().partition(";")
         if name and emulator in ("", system["name"]):
             out.add(name)
@@ -693,10 +708,28 @@ def set_favourite(all_systems, system, name, on):
         return (system["key"], name) in rows
 
 
+def stats_folder(system):
+    """A pasta das partidas do sistema (stats_dir()/EMULADOR, um NOME.stat
+    por jogo, "vezes\nsegundos" como no Attract-Mode). Sem ela ainda, as do
+    Attract-Mode sao copiadas uma vez; dali em diante ele nao conta mais."""
+    folder = os.path.join(stats_dir(), system["name"])
+    if not os.path.isdir(folder):
+        old = os.path.join(attract_dir(), "stats", system["name"])
+        if os.path.isdir(old):
+            try:
+                shutil.copytree(old, folder)
+                for top, _, names in os.walk(stats_dir()):
+                    for path in [top] + [os.path.join(top, n) for n in names]:
+                        give_to_player(path)
+            except (OSError, KeyError):
+                pass
+    return folder
+
+
 def play_stats(system):
-    """{nome: (vezes, segundos)} de ~/.attract/stats/EMULADOR/NOME.stat."""
+    """{nome: (vezes, segundos)} das partidas (stats_folder)."""
     out = {}
-    folder = os.path.join(attract_dir(), "stats", system["name"])
+    folder = stats_folder(system)
     try:
         names = os.listdir(folder)
     except OSError:

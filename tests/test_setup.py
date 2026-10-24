@@ -4311,8 +4311,12 @@ class RomCleanerTests(Base):
         (info / "fbneo_libretro.info").write_text('systemname = "Arcade (various)"\nsystemid = "fb_alpha"\n'
                                                   'corename = "FinalBurn Neo"\nsupported_extensions = "zip|7z"\n')
         (info / "snes9x_libretro.info").write_text('systemname = "Super Nintendo"\nsystemid = "super_nes"\n')
+        # O Attract-Mode Plus ja configurado: as listas do FliperOS vao para
+        # ele tambem.
+        (attract / "romlists").mkdir(parents=True)
+        lists = self.env.dir / "lists-names"
         env = dict(self.vars, ROMS_DIR=str(roms), RA_INFO_DIR=str(info), ATTRACT_DIR=str(attract),
-                   MEDIA_DIR=str(self.env.dir / "media"), FLIPEROS_USER="ninguem")
+                   MEDIA_DIR=str(self.env.dir / "media"), FLIPEROS_USER="ninguem", FLIPEROS_LISTS=str(lists))
         lines = self.env.out("""
             mapfile -t s < <(frontends_romlist_systems)
             printf '%s\\n' "${s[@]}"
@@ -4340,6 +4344,8 @@ class RomCleanerTests(Base):
         self.assertEqual(sorted(romlist(fbneo)), ["mslug"])
         self.assertEqual(len(romlist("Arcade")), 4)
         self.assertEqual(sum(1 for line in (attract / "romlists" / "Arcade.txt").read_text().splitlines()), 6)
+        # A lista e do FliperOS; a do Attract-Mode e uma copia.
+        self.assertEqual((lists / "MAME.txt").read_text(), (attract / "romlists" / "MAME.txt").read_text())
         acfg = (attract / "attract.cfg").read_text()
         self.assertIn("display Arcade\n", acfg)
         self.assertIn("display Naomi\n", acfg)
@@ -4364,8 +4370,11 @@ class RomCleanerTests(Base):
             (roms / "flycast" / name).write_text("x")
         for key in ("naomi", "atomiswave"):
             (roms / key).symlink_to(roms / "flycast")
+        # Sem o Attract-Mode Plus: as listas sao so as do FliperOS, e nada do
+        # Attract-Mode e criado.
+        lists = self.env.dir / "flycast-lists"
         env = dict(self.vars, ROMS_DIR=str(roms), RA_INFO_DIR=str(self.env.dir / "no-info"), ATTRACT_DIR=str(attract),
-                   MEDIA_DIR=str(self.env.dir / "media"), FLIPEROS_USER="ninguem")
+                   MEDIA_DIR=str(self.env.dir / "media"), FLIPEROS_USER="ninguem", FLIPEROS_LISTS=str(lists))
         self.env.out("""
             mapfile -t s < <(frontends_romlist_systems)
             frontends_romlist "$ROMCLEAN_CACHE.result" "${s[@]}" > /dev/null
@@ -4373,13 +4382,14 @@ class RomCleanerTests(Base):
 
         def names(name):
             return sorted(line.split(";")[0] for line in
-                          (attract / "romlists" / (name + ".txt")).read_text().splitlines()[1:])
+                          (lists / (name + ".txt")).read_text().splitlines()[1:])
         self.assertEqual(names("Naomi"), ["meujogo", "mvsc2"])
         self.assertEqual(names("Atomiswave"), ["kofxi", "meujogo"])
         # Os botoes da tabela do Flycast, nao os 6 do painel generico do XML.
-        kofxi = next(line.split(";") for line in (attract / "romlists" / "Atomiswave.txt").read_text().splitlines()
+        kofxi = next(line.split(";") for line in (lists / "Atomiswave.txt").read_text().splitlines()
                      if line.startswith("kofxi;"))
         self.assertEqual(kofxi[16], "5")
+        self.assertFalse(attract.exists())
         # As romlists de antes (sem a separacao, sem esses botoes) sao
         # refeitas ao abrir o frontend.
         frontends = (SETUP / "lib" / "frontends.sh").read_text()

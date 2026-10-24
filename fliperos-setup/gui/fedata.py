@@ -5,15 +5,18 @@
 # mesma coisa.
 #
 # - As pastas e o comando de cada uma: fliperos-setup --systems.
-# - Os jogos: a romlist do Attract-Mode Plus de cada pasta. As de arcade tem
-#   o nome, o ano, o fabricante, os clones e a categoria do XML do MAME (a
-#   AttractPlus ROM List, fliperos-romclean romlist); um arquivo que a lista
-#   ainda nao tem aparece pelo nome. Uma pasta que muda pede ao Setup que
-#   refaca as listas (fliperos-setup --romlists) e o frontend as le de novo.
-# - Os filtros: os que o Setup poe em cada tela do Attract-Mode
-#   (fliperos-setup --filters), aplicados como ele aplica.
-# - Os favoritos: ~/.config/fliperos/favourites. As vezes jogadas: as do
-#   Attract-Mode (~/.attract/stats), que o frontend tambem grava.
+# Nada aqui depende do Attract-Mode Plus ou do ES-DE, que sao opcionais.
+#
+# - Os jogos: os arquivos de cada pasta e, nas de arcade, a lista do FliperOS
+#   (~/.local/share/fliperos/lists, no formato das romlists do Attract-Mode)
+#   com o nome, o ano, o fabricante, os clones e a categoria do XML do MAME
+#   (fliperos-romclean romlist); um arquivo que a lista ainda nao tem aparece
+#   pelo nome. Uma pasta que muda pede ao Setup que refaca as listas
+#   (fliperos-setup --romlists) e o frontend as le de novo.
+# - Os filtros: os do Setup (fliperos-setup --filters, no formato dos do
+#   Attract-Mode), aplicados como ele aplica.
+# - Os favoritos: ~/.config/fliperos/favourites. As vezes jogadas:
+#   ~/.local/share/fliperos/stats (fliperos-web stats_folder).
 # - O que a pessoa muda num jogo (Classify, Rename):
 #   ~/media/info/<pasta>/<set>.user.json, por cima da romlist.
 
@@ -304,7 +307,7 @@ class Library:
     def played(self, game, seconds):
         """Uma partida a mais no stats do Attract-Mode (os filtros Most Played)."""
         system = game["_system"]
-        folder = os.path.join(web.attract_dir(), "stats", system["name"])
+        folder = web.stats_folder(system)
         path = os.path.join(folder, game["Name"] + ".stat")
         count, total = web.play_stats(system).get(game["Name"], (0, 0))
         count, total = count + 1, total + int(seconds)

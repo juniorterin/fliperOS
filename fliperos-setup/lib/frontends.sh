@@ -232,8 +232,10 @@ frontends_attract_theme() {
 frontends_attract() {
   local key dir platform n=0
   # As romlists das pastas de arcade com o nome e as informacoes de cada
-  # jogo (os filtros das telas leem a categoria, o fabricante e o ano).
+  # jogo (os filtros das telas leem a categoria, o fabricante e o ano): as
+  # listas do FliperOS, copiadas para o Attract-Mode.
   frontends_arcade_resync
+  frontends_attract_lists
   frontends_attract_prune
   while IFS='|' read -r key dir platform _; do
     frontends_attract_system "$key" "$dir" "$platform" > /dev/null || continue
@@ -554,13 +556,48 @@ frontends_attract_refresh() {
   return 0
 }
 
-# ── ROM List do Attract-Mode Plus ────────────────────────────────
-# Setup > Games > AttractPlus ROM List: a romlist de cada pasta de arcade com o nome
-# de verdade de cada jogo (o --build-romlist do Attract-Mode so poe o nome
-# do arquivo), do -listxml do GroovyMAME (fliperos-romclean romlist). A
-# pasta do core mame2010 le primeiro o XML do 0.139. Uma romlist a mais,
-# ATTRACT_ROMLIST_ALL, junta todas numa tela so.
+# ── As listas de jogos de arcade ─────────────────────────────────
+# Setup > Games > AttractPlus ROM List: a lista de cada pasta de arcade com o
+# nome de verdade de cada jogo, do -listxml do GroovyMAME (fliperos-romclean
+# romlist), no formato das romlists do Attract-Mode. A pasta do core
+# mame2010 le primeiro o XML do 0.139. Uma lista a mais, ATTRACT_ROMLIST_ALL,
+# junta todas numa tela so. As listas sao do FliperOS (FLIPEROS_LISTS: o
+# frontend do FliperOS e o painel web as leem); o Attract-Mode Plus e um
+# frontend opcional, e so quando ele esta ganha uma copia delas nas romlists
+# dele (frontends_attract_lists).
 ATTRACT_ROMLIST_ALL=${ATTRACT_ROMLIST_ALL:-Arcade}
+FLIPEROS_LISTS=${FLIPEROS_LISTS:-/home/fliperos/.local/share/fliperos/lists}
+
+# frontends_attract_wanted: o Attract-Mode Plus esta instalado (ou ja foi
+# configurado): as listas vao para ele tambem.
+frontends_attract_wanted() {
+  launcher_installed attractplus || [[ -d $ATTRACT_DIR/emulators || -d $ATTRACT_DIR/romlists ]]
+}
+
+# frontends_attract_lists copia as listas do FliperOS que mudaram para as
+# romlists do Attract-Mode.
+frontends_attract_lists() {
+  local list target
+  [[ -d $FLIPEROS_LISTS ]] || return 0
+  mkdir -p "$ATTRACT_DIR/romlists" || return 1
+  for list in "$FLIPEROS_LISTS"/*.txt; do
+    [[ -f $list ]] || continue
+    target="$ATTRACT_DIR/romlists/${list##*/}"
+    cmp -s "$list" "$target" || cp -f "$list" "$target"
+  done
+  return 0
+}
+
+# frontends_lists: as listas do FliperOS em dia com as pastas e, com o
+# Attract-Mode Plus, as telas e as romlists dele (fliperos-setup --romlists).
+frontends_lists() {
+  frontends_arcade_resync
+  if frontends_attract_wanted; then
+    frontends_attract > /dev/null
+    chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
+  fi
+  return 0
+}
 
 # frontends_romlist_systems imprime "chave|pasta|plataforma|quantidade|emulador"
 # das pastas de arcade com jogos.
@@ -607,7 +644,7 @@ frontends_romlist_state_save() {
 # ficam vazios) ou a pasta mudou desde que ela foi feita (jogos postos
 # depois da AttractPlus ROM List, pelo Downloader ou pela rede).
 frontends_arcade_stale() {
-  local dir=$1 name=$2 list="$ATTRACT_DIR/romlists/$2.txt" saved
+  local dir=$1 name=$2 list="$FLIPEROS_LISTS/$2.txt" saved
   [[ -s $list ]] || return 0
   awk -F';' '!/^#/ && NF > 1 && $2 != $1 { f = 1; exit } END { exit !f }' "$list" || return 0
   saved=$(awk -F'\t' -v n="$name" '$1 == n { s = $2 } END { print s }' "$FRONTENDS_ROMLIST_STATE" 2> /dev/null)
@@ -653,7 +690,12 @@ frontends_romlist() {
   ev_step 0 "Preparing Attract-Mode Plus"
   for line in "$@"; do
     IFS='|' read -r key dir platform count name <<< "$line"
-    name=$(scraper_attract_prepare "$key" "$dir" "$platform") || continue
+    if frontends_attract_wanted; then
+      name=$(scraper_attract_prepare "$key" "$dir" "$platform") || continue
+    else
+      IFS='|' read -r name _ <<< "$(scraper_attract_emulator "$key")"
+      [[ -n $name ]] || continue
+    fi
     xml=main
     [[ $key == retroarch/mame2010 && -f $MAME2010_XML ]] && xml=alt
     # Naomi, Naomi 2 e Atomiswave: so os jogos daquele sistema, pela BIOS
@@ -672,7 +714,8 @@ frontends_romlist() {
   controls=$(romclean_data_find controls.xml "$ROMS_DIR/mame") && source+=(--controls-xml "$controls")
   [[ -f $ROMCLEAN_DATA/flycast-controls.tsv ]] && source+=(--flycast-controls "$ROMCLEAN_DATA/flycast-controls.tsv")
   log_info "AttractPlus ROM List: $*"
-  if ! "$ROMCLEAN" romlist "${source[@]}" "${specs[@]}" --out "$ATTRACT_DIR/romlists" \
+  mkdir -p "$FLIPEROS_LISTS" || { ev_fail "Could not create $FLIPEROS_LISTS"; return 1; }
+  if ! "$ROMCLEAN" romlist "${source[@]}" "${specs[@]}" --out "$FLIPEROS_LISTS" \
     --combined "$ATTRACT_ROMLIST_ALL" --progress --result "$result" 2>> "$FLIPEROS_LOG"; then
     ev_fail "Could not read the GroovyMAME game list (details in the log)"
     return 1
@@ -682,10 +725,14 @@ frontends_romlist() {
     IFS='|' read -r _ dir _ _ name <<< "$line"
     frontends_romlist_state_save "$name" "$dir"
   done
-  # As outras pastas com jogos (consoles, as de arcade nao marcadas): o
-  # emulador, a tela e a lista que faltarem, para todo sistema aparecer.
-  frontends_attract
-  chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
+  chown -R "$FLIPEROS_USER:" "${FLIPEROS_LISTS%/lists}" 2> /dev/null
+  # Com o Attract-Mode Plus: as listas vao para ele, e as outras pastas com
+  # jogos (consoles, as de arcade nao marcadas) ganham o emulador, a tela e
+  # a lista que faltarem, para todo sistema aparecer.
+  if frontends_attract_wanted; then
+    frontends_attract
+    chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
+  fi
   return 0
 }
 
