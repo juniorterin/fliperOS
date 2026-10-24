@@ -642,7 +642,11 @@ def scrape(library, game, lang="en", only_missing=False, bulk=False):
                             ("url_image_flyer", "box"), ("url_video_shortplay", "preview")):
             url = (info or {}).get(field)
             if url and (want is None or kind in want) and not (bulk and kind == "preview"):
-                ext = os.path.splitext(url.split("?")[0])[1].lower() or (".mp4" if kind == "preview" else ".png")
+                # O video do Arcade Database vem de download_file.php?...: a
+                # extensao do endereco nao serve (um .php nunca era achado).
+                ext = os.path.splitext(url.split("?")[0])[1].lower()
+                if ext not in (VIDEO_EXTS if kind == "preview" else IMAGE_EXTS):
+                    ext = ".mp4" if kind == "preview" else ".png"
                 target = os.path.join(home, "media", kind, system["key"], game["Name"] + ext)
                 got += download(url, target)
         # O logo: o "decal" do Arcade Database (fora da API, o mesmo que o

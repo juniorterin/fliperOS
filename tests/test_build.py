@@ -4074,7 +4074,7 @@ class FrontendDataTests(unittest.TestCase):
 
             def arcade(self, *a):
                 return {'url_image_ingame': 'http://x/s.png', 'url_image_marquee': 'http://x/m.png',
-                        'url_image_flyer': 'http://x/f.png', 'url_video_shortplay': 'http://x/v.mp4'}, None
+                        'url_image_flyer': 'http://x/f.png', 'url_video_shortplay': 'http://x/download_file.php?codice=sf2'}, None
 
         class Lib:
             info = Info()
