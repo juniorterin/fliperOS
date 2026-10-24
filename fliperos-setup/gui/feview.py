@@ -704,13 +704,16 @@ def clone_badge(ui, right, y):
     """O selo do clone, no canto de cima a direita da miniatura da tela
     cheia (a seta para cima: o jogo pai vem antes); devolve onde comeca."""
     label = "CLONE"
-    w = tiny.width(label) + 16
+    w = tiny.width(label) + 8
     x = right - w
-    W.block(ui, (x, y, w, 11), T.BG_DEEP, None)
-    pygame.draw.rect(ui, T.ORANGE, (x, y, w, 11), 1)
-    pygame.draw.polygon(ui, T.ORANGE, [(x + 6, y + 2), (x + 3, y + 5), (x + 9, y + 5)])
-    ui.fill(T.ORANGE, (x + 5, y + 5, 3, 4))
-    tiny.text(ui, label, T.ORANGE, x + 12, y + 3)
+    # Fino e discreto: uma faixa escura de 7 pixels, sem moldura.
+    shade = pygame.Surface((w, 7), pygame.SRCALPHA)
+    shade.fill(T.SPACE + (170,))
+    ui.blit(shade, (x, y))
+    ui.fill(T.ORANGE, (x + 3, y + 1, 1, 1))
+    ui.fill(T.ORANGE, (x + 2, y + 2, 3, 1))
+    ui.fill(T.ORANGE, (x + 3, y + 3, 1, 3))
+    tiny.text(ui, label, T.ORANGE, x + 7, y + 1)
     return x
 
 
@@ -750,13 +753,13 @@ def draw_full(fe, ui, back, now):
                 ui.blit(thumb_dim(fe), (tx + 1, y + 1))
         else:
             # No clone, o texto comeca embaixo do selo.
-            top = 15 if fe.rows[i][1] else 5
+            top = 11 if fe.rows[i][1] else 5
             for j, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4 if top == 5 else 3]):
                 tiny.text(ui, tiny.fit(line, tw - 6), T.FG if on else T.COMMENT, tx + 3, y + top + j * 8)
         pygame.draw.rect(ui, T.LINE, (tx, y, tw, th), 1)
         clone = fe.rows[i][1]
         if clone:
-            clone_badge(ui, tx + tw - 2, y + 2)
+            clone_badge(ui, tx + tw - 1, y + 1)
         if g.get("Favourite") == "1":
             # No clone a estrela vai para a esquerda: a direita e do selo.
             star(ui, tx + 6 if clone else tx + tw - 6, y + 6, T.YELLOW, 4)
