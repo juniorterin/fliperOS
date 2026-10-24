@@ -524,12 +524,16 @@ def draw_list(fe, ui, now):
         if level == 0:
             x = lx + 14 if extra else lx
             if extra:
+                # O [+] do jogo pai, um pouco transparente (aberto, menos).
                 opened = game["Name"] in fe.opened
-                W.block(ui, (lx, y + 1, 10, 10), T.BG_DEEP, None)
-                pygame.draw.rect(ui, T.PINK if opened else T.COMMENT, (lx, y + 1, 10, 10), 1)
-                ui.fill(T.PINK if opened else T.COMMENT, (lx + 2, y + 5, 6, 2))
+                mark = pygame.Surface((10, 10), pygame.SRCALPHA)
+                mark.fill(T.BG_DEEP)
+                pygame.draw.rect(mark, T.PINK if opened else T.COMMENT, (0, 0, 10, 10), 1)
+                mark.fill(T.PINK if opened else T.COMMENT, (2, 4, 6, 2))
                 if not opened:
-                    ui.fill(T.COMMENT, (lx + 4, y + 3, 2, 6))
+                    mark.fill(T.COMMENT, (4, 2, 2, 6))
+                mark.set_alpha(190 if opened else 120)
+                ui.blit(mark, (lx, y + 1))
             label = fe.fd.short_title(game)
             color = T.FG if game["Name"] in fe.opened else T.COMMENT
         else:
