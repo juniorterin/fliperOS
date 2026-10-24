@@ -22,8 +22,15 @@ WW, HH = T.WIDTH, T.HEIGHT
 
 LIST_W, LIST_SH = 174, 74  # a lista do modo lista e a altura da imagem dela
 THUMB = (56, 42)           # as miniaturas da tela cheia
-GRID_COLS = 5              # a grade (o fliperos-frontend anda de GRID_COLS)
-GRID_TILE, GRID_BIG = (48, 36), (84, 63)  # 4:3; a escolhida maior
+GRID_COLS = 3              # a grade (o COLS do fliperos-frontend)
+
+
+def grid_geom(fe):
+    """(miniatura, a escolhida, fileiras, espaco): 4:3, ou 3:4 com o
+    monitor em pe (orientation=vertical-* no fliperos.conf)."""
+    if getattr(fe, "vertical", False):
+        return (54, 72), (72, 96), 2, 14
+    return (80, 60), (112, 84), 2, 10
 CACHE = 400               # imagens e caminhos guardados (os mais antigos saem)
 
 
@@ -95,7 +102,8 @@ def wanted(fe, game):
                 (logo, min(200, right - SX), 44, "fit")]
     else:
         snap = media(fe, game, "snap")
-        for (w, h), pad in ((GRID_TILE, 2), (GRID_BIG, 6)):
+        tile, big, _, _ = grid_geom(fe)
+        for (w, h), pad in ((tile, 2), (big, 6)):
             out.append((snap, w - pad, h - pad, "cover") if snap else (cover, w - pad, h - pad, "fit"))
         out.append((logo, 110, 30, "fit"))
     return [k for k in out if k[0]]
@@ -658,9 +666,9 @@ def grid_image(fe, g, w, h):
 
 
 def grid_dim(fe):
-    key = ("grid_dim",)
+    key = ("grid_dim", grid_geom(fe)[0])
     if key not in fe.media:
-        d = pygame.Surface(GRID_TILE, pygame.SRCALPHA)
+        d = pygame.Surface(grid_geom(fe)[0], pygame.SRCALPHA)
         d.fill(T.SPACE + (90,))
         remember(fe, key, d)
     return fe.media[key]
@@ -668,13 +676,14 @@ def grid_dim(fe):
 
 def draw_flow(fe, ui, now):
     frame(fe, ui)
-    # A grade: miniaturas 4:3 (a tela do jogo; sem ela, a capa inteira), tres
-    # fileiras; a esquerda as setas de quando ha mais fileiras, no canto
-    # direito a barra de rolagem.
-    cols, (tw, th), gap, rows_shown = GRID_COLS, GRID_TILE, 6, 3
-    x0 = SX + 14
-    y0 = 40
-    step_y = th + 8
+    # A grade: tres por fileira, miniaturas 4:3 (3:4 no monitor em pe) com a
+    # tela do jogo (sem ela, a capa inteira); a esquerda as setas de quando
+    # ha mais fileiras, no canto direito a barra de rolagem.
+    (tw, th), (bw, bh), rows_shown, gap = grid_geom(fe)
+    cols = GRID_COLS
+    x0 = SX + (SW - 8 - (cols * tw + (cols - 1) * gap)) // 2
+    y0 = 40 if th <= 60 else 38
+    step_y = th + (8 if th <= 60 else 4)
     row, top_row = fe.cursor // cols, fe.top // cols
     if row < top_row:
         top_row = row
@@ -702,16 +711,13 @@ def draw_flow(fe, ui, now):
         pygame.draw.rect(ui, T.LINE, (x, y, tw, th), 1)
         if g.get("Favourite") == "1":
             star(ui, x + tw - 6, y + 6, T.YELLOW, 4)
-    # As setas a esquerda e a barra no canto.
-    ax = SX + 4
-    arrow(ui, ax, y0 + 6, (0, -1), T.PINK if top_row > 0 else T.LINE, 5)
-    arrow(ui, ax, y0 + rows_shown * step_y - 14, (0, 1),
-          T.PINK if top_row + rows_shown < total_rows else T.LINE, 5)
-    if total_rows > rows_shown:
-        W.scrollbar(ui, SX + SW - 2, y0, rows_shown * step_y - 8, top_row, rows_shown, total_rows)
+    # No canto, a barra de rolagem com uma seta pequena em cima e embaixo.
+    bx_, by_, bh_ = SX + SW - 2, y0 + 7, rows_shown * step_y - 22
+    W.scrollbar(ui, bx_, by_, bh_, top_row, rows_shown, max(rows_shown, total_rows))
+    arrow(ui, bx_ + 2, by_ - 4, (0, -1), T.PINK if top_row > 0 else T.LINE, 3)
+    arrow(ui, bx_ + 2, by_ + bh_ + 4, (0, 1), T.PINK if top_row + rows_shown < total_rows else T.LINE, 3)
     if sel:
         g, x, y = sel
-        bw, bh = GRID_BIG
         bx = max(x0, min(x + tw // 2 - bw // 2, x0 + cols * (tw + gap) - gap - bw))
         # Nao cobre a linha do filtro, debaixo do titulo.
         by = max(36, min(y + th // 2 - bh // 2, 188 - bh))

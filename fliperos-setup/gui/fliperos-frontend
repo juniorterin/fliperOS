@@ -51,7 +51,7 @@ LETTER_IDLE = 2.0
 AUTO_SCRAPE = 2.0
 MODES = ("list", "full", "flow")
 MODE_NAMES = {"list": "LIST", "full": "FULL SCREEN", "flow": "GRID"}
-COLS = 5                     # as colunas da grade
+COLS = 3                     # as colunas da grade (o GRID_COLS do feview.py)
 
 
 def load_config():
@@ -98,6 +98,12 @@ class Frontend:
         self.lib = fedata.Library()
         cfg = load_config()
         self.mode = cfg.get("mode", "list") if cfg.get("mode") in MODES else "list"
+        # O monitor em pe (Video Setup > orientation): a grade em 3:4.
+        try:
+            orientation = self.fd.web.conf_values().get("orientation", "")
+        except OSError:
+            orientation = ""
+        self.vertical = orientation.startswith("vertical") or os.environ.get("FLIPEROS_FE_VERTICAL") == "1"
         self.cats = self.lib.categories()
         self.cat = next((i for i, c in enumerate(self.cats) if c["key"] == cfg.get("category")), 0)
         names = [f["name"] for f in self.lib.filters]
@@ -255,7 +261,7 @@ class Frontend:
         self.letter = None
 
     def page(self):
-        return {"list": 13, "full": 1, "flow": COLS * 3}[self.mode]
+        return {"list": 13, "full": 1, "flow": COLS * 2}[self.mode]
 
     # ── As acoes ──
     def act(self, a):
