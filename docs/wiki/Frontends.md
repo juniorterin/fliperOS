@@ -14,7 +14,7 @@ It shows the same thing as the [Web panel](Web-panel.md), from the same code:
 - **Full screen**: the game's video or picture behind, the name and information in front, and on the right the list as four stacked thumbnails, with arrows above and below while there are more games that way; the column slides to its new place. The pictures of the games around the cursor are read ahead, so changing game is instant.
 - **Grid**: the covers, as in Arcadeflow.
 
-**The game's video.** In the list and in full screen, the game's video (`~/media/preview/<folder>/<set>.mp4`) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. A game with neither gets scraped by itself when the cursor stays on it for 2 seconds: the information, pictures and video land in the same `~/media` folders the scraper uses.
+**The game's video.** In the list and in full screen, the game's video (`~/media/preview/<folder>/<set>.mp4`) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. In any view, a game missing some of its art (screenshot, cover, marquee or video) gets the missing pieces scraped by itself when the cursor stays on it for 2 seconds, once per game; they land in the same `~/media` folders the scraper uses.
 
 Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control with the buttons.
 

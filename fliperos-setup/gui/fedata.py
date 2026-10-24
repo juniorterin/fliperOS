@@ -454,14 +454,24 @@ def download(url, path):
         return False
 
 
-def scrape(library, game, lang="en"):
+def missing_art(library, game):
+    """As midias que o jogo ainda nao tem (das que o scrape traz)."""
+    out = [kind for kind in ("snap", "box", "marquee") if not library.media(game, kind)]
+    if not library.video(game):
+        out.append("preview")
+    return out
+
+
+def scrape(library, game, lang="en", only_missing=False):
     """As informacoes (salvas em ~/media/info), as imagens e o video do jogo
     em ~/media: do Arcade Database nos de arcade (a tela, o marquee, o flyer e
     o video curto), do libretro-thumbnails nos de console. Devolve quantos
-    arquivos novos vieram."""
+    arquivos novos vieram. only_missing: so o que falta (o scrape sozinho do
+    frontend nao baixa de novo o que ja esta la)."""
     system = game["_system"]
     home = web.player_home()
     got = 0
+    want = set(missing_art(library, game)) if only_missing else None
     if system["arcade"]:
         path = library.info.path(system["key"], game["Name"], lang)
         if path and os.path.exists(path):
@@ -473,14 +483,14 @@ def scrape(library, game, lang="en"):
         for field, kind in (("url_image_ingame", "snap"), ("url_image_marquee", "marquee"),
                             ("url_image_flyer", "box"), ("url_video_shortplay", "preview")):
             url = info.get(field)
-            if url:
+            if url and (want is None or kind in want):
                 ext = os.path.splitext(url.split("?")[0])[1].lower() or (".mp4" if kind == "preview" else ".png")
                 target = os.path.join(home, "media", kind, system["key"], game["Name"] + ext)
                 got += download(url, target)
         return got + 1
     for item in web.thumbnails(system, game):
         kind = {"boxart": "box", "snap": "snap"}.get(item["kind"])
-        if kind:
+        if kind and (want is None or kind in want):
             target = os.path.join(home, "media", kind, system["key"], game["Name"] + ".png")
             got += download(item["url"], target)
     return got

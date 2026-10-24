@@ -4060,6 +4060,47 @@ class FrontendDataTests(unittest.TestCase):
         self.assertEqual(names(flts[4]), ['sf2', 'samsho'])
         self.assertEqual(names(fd.FAVOURITES), ['samsho'])
 
+    def test_auto_scrape_only_missing(self):
+        # O scrape sozinho (2 s parado no jogo, em qualquer modo) so baixa a
+        # arte que falta; o Scrape this game do Tab baixa tudo de novo.
+        fd = self.fd
+        have = {'snap'}
+
+        class Info:
+            cache = {}
+
+            def path(self, *a):
+                return None
+
+            def arcade(self, *a):
+                return {'url_image_ingame': 'http://x/s.png', 'url_image_marquee': 'http://x/m.png',
+                        'url_image_flyer': 'http://x/f.png', 'url_video_shortplay': 'http://x/v.mp4'}, None
+
+        class Lib:
+            info = Info()
+
+            def media(self, game, kind):
+                return '/m/' + kind if kind in have else None
+
+            def video(self, game):
+                return None
+
+        game = {'Name': 'sf2', '_system': {'key': 'mame', 'arcade': True}}
+        got = []
+        old = fd.download
+        try:
+            os.environ['FLIPEROS_HOME'] = '/nonexistent'
+            fd.download = lambda url, path: got.append(os.path.basename(path)) or True
+            self.assertEqual(fd.missing_art(Lib(), game), ['box', 'marquee', 'preview'])
+            fd.scrape(Lib(), game, only_missing=True)
+            self.assertEqual(got, ['sf2.png', 'sf2.png', 'sf2.mp4'])
+            got.clear()
+            fd.scrape(Lib(), game)
+            self.assertEqual(len(got), 4)
+        finally:
+            fd.download = old
+            os.environ.pop('FLIPEROS_HOME', None)
+
     def test_video_player(self):
         # O video vem do ffmpeg da imagem; sem ele, o Player nao abre nada
         # e a tela fica com a imagem.

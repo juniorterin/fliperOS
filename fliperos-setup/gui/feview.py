@@ -494,6 +494,8 @@ def draw_list(fe, ui, now):
     shot = picture(fe, game, pw - 4, sh - 4)
     if shot:
         blit_center(ui, shot, px + 2, y0 + 2, pw - 4, sh - 4)
+        if fe.scraping is game:
+            looking(ui, px + 4, y0 + sh - 14, pw - 8)
     elif fe.scraping is game:
         # Sem nada ainda: o scrape sozinho esta buscando.
         W.glow(ui, (px + 2, y0 + 2, pw - 4, sh - 4), {"now": now})
@@ -552,6 +554,15 @@ def draw_list(fe, ui, now):
         x += w + 4
 
 
+def looking(ui, x, y, w=None):
+    """O aviso de que o scrape sozinho esta buscando a arte do jogo."""
+    label = "LOOKING FOR ART..." if w is None or w >= tiny.width("LOOKING FOR ART...") + 6 else "SCRAPING..."
+    w = w or tiny.width(label) + 8
+    W.block(ui, (x, y, w, 10), T.BG_DEEP, None)
+    pygame.draw.rect(ui, T.CYAN, (x, y, w, 10), 1)
+    tiny.centered(ui, label, T.CYAN, x + w // 2, y + 3)
+
+
 def full_shade(fe):
     """O escuro em cima e embaixo da imagem da tela cheia (feito uma vez)."""
     key = ("full_shade",)
@@ -584,6 +595,8 @@ def draw_full(fe, ui, back, now):
     W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, SX + SW, 12, right=True)
     for i, c in enumerate(W.RAINBOW):
         pygame.draw.rect(ui, c, (SX, 24 + i, 40, 1))
+    if fe.scraping is game:
+        looking(ui, SX, 36)
     # A lista na direita: quatro miniaturas empilhadas, a do jogo escolhido
     # acesa, com uma seta em cima e embaixo enquanto ha mais jogos para
     # aquele lado. A coluna e a moldura rosa deslizam ate o lugar novo.
@@ -677,6 +690,8 @@ def draw_flow(fe, ui, now):
             for k, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), bw - 8)[:6]):
                 W.text(ui, fit(line, bw - 8), T.FG, bx + 4, by + 8 + k * 11)
         pygame.draw.rect(ui, T.PINK, (bx, by, bw, bh), 2)
+        if fe.scraping is g:
+            looking(ui, bx + 2, by + bh - 12, bw - 4)
         # A aba na borda: mais um toque para aquele lado troca a romlist.
         col = fe.cursor % cols
         if len(fe.cats) > 1 and (col == cols - 1 or fe.cursor == len(fe.rows) - 1 or col == 0):

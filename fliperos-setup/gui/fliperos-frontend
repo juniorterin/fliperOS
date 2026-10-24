@@ -118,6 +118,7 @@ class Frontend:
         # As imagens dos jogos em volta do cursor, lidas antes numa thread:
         # a troca de jogo fica instantanea.
         self.ready = {}            # (caminho, w, h, modo) -> surface lida
+        self.flush = False         # um scrape trouxe arquivos novos
         self.ahead = []            # o que a thread le, o mais perto primeiro
         self.ahead_at = None
         self.ahead_wake = threading.Event()
@@ -516,8 +517,9 @@ class Frontend:
         self.ov = {"game": g, "fields": fields, "sel": 0}
 
     def auto_scrape(self, now):
-        """O jogo sob o cursor ha AUTO_SCRAPE segundos, sem video e sem
-        imagem: busca uma vez (o que vier fica nas pastas de ~/media)."""
+        """O jogo sob o cursor ha AUTO_SCRAPE segundos, em qualquer modo, sem
+        alguma das artes (a tela, a capa, o marquee, o video): busca uma vez
+        so o que falta (o que vier fica nas pastas de ~/media)."""
         g = self.game()
         if g is None or self.overlay or self.letter_mode:
             self.rest = (None, now)
@@ -526,20 +528,23 @@ class Frontend:
             self.rest = (g, now)
             return
         key = (g["_system"]["key"], g["Name"])
-        if (self.scraping or key in self.scraped or now - self.rest[1] < AUTO_SCRAPE
-                or self.lib.video(g) or self.lib.media(g, "snap") or self.lib.media(g, "box")):
+        if self.scraping or key in self.scraped or now - self.rest[1] < AUTO_SCRAPE:
             return
         self.scraped.add(key)
+        before = self.fd.missing_art(self.lib, g)
+        if not before:
+            return
         self.scraping = g
 
         def work():
             try:
-                n = self.fd.scrape(self.lib, g)
+                self.fd.scrape(self.lib, g, only_missing=True)
             except Exception:  # sem rede, um site fora: tenta de novo na proxima abertura
-                n = 0
-            self.media.clear()
+                pass
+            after = self.fd.missing_art(self.lib, g)
+            self.flush = True
             self.scraping = None
-            if n and self.game() is g:
+            if len(after) < len(before) and self.game() is g:
                 self.say("ART DOWNLOADED")
 
         threading.Thread(target=work, daemon=True).start()
@@ -549,7 +554,7 @@ class Frontend:
 
         def work():
             n = self.fd.scrape(self.lib, g)
-            self.media.clear()
+            self.flush = True
             self.say("%d FILES" % n if n else "NOTHING FOUND")
 
         threading.Thread(target=work, daemon=True).start()
@@ -673,6 +678,13 @@ class Frontend:
                     self.say("UPDATING THE LISTS...", 3)
                     self.lib.refresh()
             self.auto_scrape(now)
+            if self.flush:
+                # Um scrape trouxe arquivos: os caminhos e as imagens guardados
+                # sao lidos de novo (limpos aqui, fora da thread dele).
+                self.flush = False
+                self.media.clear()
+                self.ready.clear()
+                self.ahead_at = None
             self.prefetch()
             self.draw(now)
             self.present()
