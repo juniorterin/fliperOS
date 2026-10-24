@@ -701,8 +701,8 @@ def full_background(fe, back):
 
 
 def clone_badge(ui, right, y):
-    """O selo do clone na tela cheia (a seta para cima: o jogo pai vem
-    antes): encostado em right; devolve onde ele comeca."""
+    """O selo do clone, no canto de cima a direita da miniatura da tela
+    cheia (a seta para cima: o jogo pai vem antes); devolve onde comeca."""
     label = "CLONE"
     w = tiny.width(label) + 16
     x = right - w
@@ -719,10 +719,7 @@ def draw_full(fe, ui, back, now):
     full_background(fe, back)
     cat = fe.category()
     W.text(ui, (cat or {}).get("name", "").upper()[:24], T.RED, SX, 12)
-    count_x = SX + SW
-    if fe.rows and fe.rows[fe.cursor][1]:
-        count_x = clone_badge(ui, SX + SW, 10) - 6
-    W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, count_x, 12, right=True)
+    W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, SX + SW, 12, right=True)
     for i, c in enumerate(W.RAINBOW):
         pygame.draw.rect(ui, c, (SX, 24 + i, 40, 1))
     if fe.scraping is game:
@@ -752,13 +749,17 @@ def draw_full(fe, ui, back, now):
             if not on:
                 ui.blit(thumb_dim(fe), (tx + 1, y + 1))
         else:
-            for j, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4]):
-                tiny.text(ui, tiny.fit(line, tw - 6), T.FG if on else T.COMMENT, tx + 3, y + 5 + j * 8)
+            # No clone, o texto comeca embaixo do selo.
+            top = 15 if fe.rows[i][1] else 5
+            for j, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4 if top == 5 else 3]):
+                tiny.text(ui, tiny.fit(line, tw - 6), T.FG if on else T.COMMENT, tx + 3, y + top + j * 8)
         pygame.draw.rect(ui, T.LINE, (tx, y, tw, th), 1)
+        clone = fe.rows[i][1]
+        if clone:
+            clone_badge(ui, tx + tw - 2, y + 2)
         if g.get("Favourite") == "1":
-            star(ui, tx + tw - 6, y + 6, T.YELLOW, 4)
-        if fe.rows[i][1]:
-            arrow(ui, tx + 6, y + 6, (0, -1), T.ORANGE, 4)
+            # No clone a estrela vai para a esquerda: a direita e do selo.
+            star(ui, tx + 6 if clone else tx + tw - 6, y + 6, T.YELLOW, 4)
     y = round(ty + (fsel - ftop) * step)
     pygame.draw.rect(ui, T.PINK, (tx, y, tw, th), 2)
     ui.set_clip(None)
