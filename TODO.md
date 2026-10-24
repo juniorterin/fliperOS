@@ -2,6 +2,19 @@
 
 O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai daqui e o que mudou vai para o [CHANGELOG](CHANGELOG.md).
 
+## Pedidos de 2026-10-24
+
+Setup:
+- **Emulators & Games:** mostrar a versão instalada de cada emulador e para qual versão vai o update. Em andamento: a versão sai de arquivos (sem abrir o emulador), e a do update vem da rede só ao escolher um.
+
+Site (website/):
+- o menu fora do container;
+- depois da segunda foto do slider, fotos do frontend em todos os modos, com cada componente aberto;
+- Technical highlights fora do container e atualizado com o que entrou desde a última revisão;
+- o print do painel web com o SF2 rodando;
+- uma seção de requisitos mínimos e ideais;
+- revisar a página inteira com o que é novo.
+
 ## Pedidos de 2026-10-23
 
 Menu e Setup:
