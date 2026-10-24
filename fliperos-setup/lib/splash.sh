@@ -98,10 +98,42 @@ splash_stage() {
     { print }' "$file" > "$dest.new/.theme" || return 1
   rm -f "$dest.new/${file##*/}"
   mv -f "$dest.new/.theme" "$dest.new/$name.plymouth"
+  # O tema que sabe girar (o do FliperOS) segue o monitor.
+  splash_orient_scripts "$dest.new" "$(conf_get orientation 2> /dev/null || echo horizontal)"
   chmod -R a+rX "$dest.new"
   rm -rf "$dest"
   mv "$dest.new" "$dest"
   log_info "splash: $src -> $dest"
+}
+
+# splash_orient_scripts PASTA ORIENTACAO troca a linha orientation dos
+# .script da pasta que a tem (o tema do FliperOS: com o monitor em pe ele usa
+# as imagens ja giradas, porque o Plymouth nao gira a tela num CRT). Status
+# 1: nenhum tinha a linha.
+splash_orient_scripts() {
+  local dir=$1 o=$2 f found=1
+  for f in "$dir"/*.script; do
+    [[ -f $f ]] && grep -q '^orientation = "' "$f" || continue
+    sed -i "s/^orientation = \"[^\"]*\";/orientation = \"$o\";/" "$f"
+    found=0
+  done
+  return "$found"
+}
+
+# splash_orientation ORIENTACAO: o splash do boot segue o monitor (Video
+# Setup > Monitor Orientation). O tema no Plymouth e as copias em
+# ~/splashscreen; com um deles de padrao, o initramfs e refeito.
+splash_orientation() {
+  local o=$1 dir current changed=1
+  current=$(splash_current 2> /dev/null)
+  for dir in "$PLYMOUTH_THEMES"/*/ "$SPLASH_DIR"/*/; do
+    [[ -d $dir ]] || continue
+    if splash_orient_scripts "${dir%/}" "$o" && [[ $(basename "$dir") == "$current" && $dir == "$PLYMOUTH_THEMES"/* ]]; then
+      changed=0
+    fi
+  done
+  ((changed == 0)) || return 0
+  run_logged "$UPDATE_INITRAMFS" -u
 }
 
 # splash_set NOME faz do tema o do boot (vale no proximo boot).

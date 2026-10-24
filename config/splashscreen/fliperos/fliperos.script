@@ -4,6 +4,18 @@
 // e escalada para a janela: cabe igual em 640x480, 640x240, 320x240 ou num
 // monitor moderno. A barra (throbber-0N.png) escala na mesma proporcao.
 // Fora do boot (desligar, reiniciar) o logo pulsa sem a barra.
+//
+// O monitor em pe (Video Setup > Monitor Orientation): o Plymouth nao gira
+// a tela num CRT, entao o tema usa as imagens ja giradas (logo-cw.png,
+// throbber-cw-0N.png..., de tools/splash-vertical.py). O Setup troca a
+// linha do orientation (lib/splash.sh splash_orientation).
+
+orientation = "horizontal";
+side = "";
+if (orientation == "vertical-cw")
+  side = "cw-";
+if (orientation == "vertical-ccw")
+  side = "ccw-";
 
 Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
 Window.SetBackgroundBottomColor(0.0, 0.0, 0.0);
@@ -13,7 +25,10 @@ screen_height = Window.GetHeight();
 scale_x = screen_width / 640;
 scale_y = screen_height / 480;
 
-logo.image = Image("logo.png").Scale(screen_width, screen_height);
+if (side == "")
+  logo.image = Image("logo.png").Scale(screen_width, screen_height);
+else
+  logo.image = Image("logo-" + side + "png").Scale(screen_width, screen_height);
 logo.sprite = Sprite(logo.image);
 logo.sprite.SetPosition(0, 0, 1);
 logo.opacity_angle = 0;
@@ -21,13 +36,26 @@ logo.opacity_angle = 0;
 FRAMES = 33;
 for (frame = 0; frame < FRAMES; frame++)
   {
-    source = Image("throbber-0" + frame + ".png");
+    source = Image("throbber-" + side + "0" + frame + ".png");
     throbber[frame] = source.Scale(Math.Int(source.GetWidth() * scale_x), Math.Int(source.GetHeight() * scale_y));
   }
 progress = 0;
 bar.sprite = Sprite(throbber[0]);
-bar.sprite.SetPosition(Math.Int(screen_width / 2 - throbber[0].GetWidth() / 2 - 2 * scale_x),
-                       Math.Int(screen_height / 2 - throbber[0].GetHeight() / 2 + 117 * scale_y), 2);
+bar.x = screen_width / 2 - throbber[0].GetWidth() / 2 - 2 * scale_x;
+bar.y = screen_height / 2 - throbber[0].GetHeight() / 2 + 117 * scale_y;
+// Em pe, "embaixo do logo" vira um lado da tela deitada (o logo encolheu
+// para 3/4).
+if (side == "cw-")
+  {
+    bar.x = screen_width / 2 - throbber[0].GetWidth() / 2 - 117 * 0.75 * scale_x;
+    bar.y = screen_height / 2 - throbber[0].GetHeight() / 2;
+  }
+if (side == "ccw-")
+  {
+    bar.x = screen_width / 2 - throbber[0].GetWidth() / 2 + 117 * 0.75 * scale_x;
+    bar.y = screen_height / 2 - throbber[0].GetHeight() / 2;
+  }
+bar.sprite.SetPosition(Math.Int(bar.x), Math.Int(bar.y), 2);
 if (Plymouth.GetMode() != "boot")
   bar.sprite.SetOpacity(0);
 

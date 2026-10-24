@@ -455,6 +455,12 @@ for theme in "$src"/config/splashscreen/*/; do
   cp -r "$src/config/splashscreen/$theme" "$root/usr/share/plymouth/themes/$theme"
 done
 chmod -R a+rX "$root/usr/share/fliperos/splashscreen" "$root/usr/share/plymouth/themes"
+# O tema do FliperOS segue o monitor em pe (lib/splash.sh splash_orientation):
+# a copia nova volta a orientacao gravada.
+orientation=$(sed -n 's/^orientation=//p' "$root/etc/fliperos/fliperos.conf" 2> /dev/null | tail -1)
+if [[ $orientation == vertical-cw || $orientation == vertical-ccw ]]; then
+  sed -i "s/^orientation = \"[^\"]*\";/orientation = \"$orientation\";/" "$root"/usr/share/plymouth/themes/*/*.script
+fi
 # JetBrains Mono, a fonte do tema de texto, tambem no initramfs (o hook).
 rm -rf "$root/usr/share/fonts/truetype/fliperos"
 install -Dm644 -t "$root/usr/share/fonts/truetype/fliperos" \

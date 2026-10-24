@@ -3478,6 +3478,33 @@ class SplashTests(Base):
         (d / "logo.png").write_bytes(b"\x89PNG")
         return d
 
+    def test_boot_screen_follows_a_vertical_monitor(self):
+        # O Plymouth nao gira a tela num CRT: o tema do FliperOS escolhe as
+        # imagens ja giradas pela linha orientation, que o Setup troca no
+        # tema do boot e na copia de ~/splashscreen; o initramfs e refeito so
+        # quando o tema do boot e um que tem a linha.
+        for base in (self.themes, self.home):
+            d = self.theme(base, "fliperos", script="fliperos.script")
+            (d / "fliperos.script").write_text('// x\norientation = "horizontal";\nside = "";\n')
+        self.theme(self.themes, "other", script="other.script")
+        (self.themes / "default.plymouth").symlink_to(self.themes / "other" / "other.plymouth")
+        self.env.out("splash_orientation vertical-cw", self.vars)
+        for base in (self.themes, self.home):
+            self.assertIn('orientation = "vertical-cw";', (base / "fliperos" / "fliperos.script").read_text())
+        self.assertEqual((self.themes / "other" / "other.script").read_text(), "// script\n")
+        self.assertFalse(self.calls.exists())
+        (self.themes / "default.plymouth").unlink()
+        (self.themes / "default.plymouth").symlink_to(self.themes / "fliperos" / "fliperos.plymouth")
+        self.env.out("splash_orientation vertical-ccw", self.vars)
+        self.assertIn('orientation = "vertical-ccw";', (self.themes / "fliperos" / "fliperos.script").read_text())
+        self.assertIn("update-initramfs -u", self.calls.read_text())
+        # O tema do repositorio tem a linha e as imagens giradas.
+        theme = SETUP.parent / "config" / "splashscreen" / "fliperos"
+        self.assertIn('orientation = "horizontal";\n', (theme / "fliperos.script").read_text())
+        for side in ("cw", "ccw"):
+            self.assertTrue((theme / ("logo-%s.png" % side)).is_file())
+            self.assertTrue((theme / ("throbber-%s-032.png" % side)).is_file())
+
     def test_list_puts_the_home_folder_first(self):
         self.theme(self.bundled, "fliperos", name="FliperOS")
         self.theme(self.home, "fliperos", name="FliperOS changed")

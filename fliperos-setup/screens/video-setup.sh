@@ -106,6 +106,8 @@ screen_orientation() {
   [[ $o == "$current" ]] && return 0
   orientation_apply "$o"
   ui_orientation "$o"
+  # O splash do boot em pe tambem (o initramfs e refeito: uns segundos).
+  run_with_progress "Monitor Orientation" "Turning the boot screen" splash_orientation "$o"
   # Os filtros de ROMs seguem o monitor: so os jogos desta orientacao.
   downloader_filter_orientation
   ui_msg "Monitor Orientation" "$(orientation_label "$o") saved." "" \
