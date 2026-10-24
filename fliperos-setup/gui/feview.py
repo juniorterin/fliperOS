@@ -704,16 +704,17 @@ def clone_badge(ui, right, y):
     """O selo do clone, no canto de cima a direita da miniatura da tela
     cheia (a seta para cima: o jogo pai vem antes); devolve onde comeca."""
     label = "CLONE"
-    w = tiny.width(label) + 8
+    w = tiny.width(label) + 6
     x = right - w
-    # Fino e discreto: uma faixa escura de 7 pixels, sem moldura.
+    # Fino e discreto: um fundo preto leve e transparente, 1 pixel de
+    # folga em volta da seta e do texto.
     shade = pygame.Surface((w, 7), pygame.SRCALPHA)
-    shade.fill(T.SPACE + (170,))
+    shade.fill((0, 0, 0, 110))
     ui.blit(shade, (x, y))
-    ui.fill(T.ORANGE, (x + 3, y + 1, 1, 1))
-    ui.fill(T.ORANGE, (x + 2, y + 2, 3, 1))
-    ui.fill(T.ORANGE, (x + 3, y + 3, 1, 3))
-    tiny.text(ui, label, T.ORANGE, x + 7, y + 1)
+    ui.fill(T.ORANGE, (x + 2, y + 1, 1, 1))
+    ui.fill(T.ORANGE, (x + 1, y + 2, 3, 1))
+    ui.fill(T.ORANGE, (x + 2, y + 3, 1, 3))
+    tiny.text(ui, label, T.ORANGE, x + 5, y + 1)
     return x
 
 
