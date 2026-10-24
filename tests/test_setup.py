@@ -1664,15 +1664,28 @@ class ServicesTests(Base):
 
     def test_units_and_menu(self):
         rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
-        for unit in ("fliperos-services.service", "fliperos-services-late.service", "fliperos-services-late.timer"):
+        for unit in ("fliperos-services.service", "fliperos-services-late.service", "fliperos-services-late.timer",
+                     "fliperos-services-screen.timer"):
             self.assertIn(unit, rootfs)
             self.assertTrue((ROOT / "config" / unit).is_file(), unit)
         self.assertIn("ExecStart=/usr/local/bin/fliperos-setup --services-boot",
                       (ROOT / "config" / "fliperos-services.service").read_text())
         self.assertIn("Before=NetworkManager.service", (ROOT / "config" / "fliperos-services.service").read_text())
-        self.assertIn("OnBootSec=40s", (ROOT / "config" / "fliperos-services-late.timer").read_text())
+        # Os "After boot" sobem 15 s depois da primeira tela (o tty1 liga o
+        # timer); sem tela, a reserva de 3 min. Uma vez por boot.
+        self.assertIn("OnBootSec=3min", (ROOT / "config" / "fliperos-services-late.timer").read_text())
+        screen = (ROOT / "config" / "fliperos-services-screen.timer").read_text()
+        self.assertIn("OnActiveSec=15s", screen)
+        self.assertIn("Unit=fliperos-services-late.service", screen)
+        self.assertNotIn("[Install]", screen)
+        self.assertIn("RemainAfterExit=yes", (ROOT / "config" / "fliperos-services-late.service").read_text())
+        self.assertIn("sudo -n /usr/local/bin/fliperos-setup --services-screen", (ROOT / "config" / "fliperos-tty1").read_text())
         entry = (SETUP / "fliperos-setup").read_text()
         self.assertIn("--services-late)\n      services_late", entry)
+        self.assertIn("--services-screen)\n      services_screen", entry)
+        # O Transmission do Downloader nao e um servico da tabela: so sobe
+        # quando um download e pedido.
+        self.assertNotIn("fliperos-transmission", self.env.out("services_table"))
 
 
 class PasswordTests(Base):
@@ -3091,7 +3104,9 @@ class ScraperTests(Base):
         self.assertIn("opcao:start|Download the logos of the ROMs found", arcade)
         self.assertIn("msg:Art pack Arcade logos (MAME): 2 files to download (2.0 KB).", arcade)
         self.assertIn("barra", arcade)
-        self.assertIn("systemctl enable --now fliperos-transmission.service", calls.read_text())
+        # O servico sobe so agora, com o download pedido (nunca no boot).
+        self.assertIn("systemctl start fliperos-transmission.service", calls.read_text())
+        self.assertNotIn("enable", calls.read_text())
         # Sem ROM nenhuma a tela nem abre a lista.
         shutil.rmtree(roms)
         out = self.env.out(screens + "ui_menu() { echo return; }; screen_mediapacks", env)
@@ -3801,7 +3816,8 @@ class RomCleanerTests(Base):
         self.assertIn("The MAME ROM Cleaner filter will be used: only the ROMs of the games the filter chooses", out)
         self.assertIn("starts with the Joystick cabinet (2 players, 6 buttons) preset", out)
         self.assertIn("add roms magnet:?xt=urn:btih:abc&dn=MAME --progress", calls)
-        self.assertIn("systemctl enable --now fliperos-transmission.service", calls)
+        self.assertIn("systemctl start fliperos-transmission.service", calls)
+        self.assertNotIn("systemctl enable", calls)
         self.assertIn("msg:Downloader That is not a magnet link.", re.sub(r"\x1b\[[0-9;]*m", "", out))
         self.assertNotIn("add chds", calls)
         kv = (state / "filter.kv").read_text()

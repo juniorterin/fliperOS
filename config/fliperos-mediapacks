@@ -415,9 +415,10 @@ def cmd_status(args):
     rpc = dl.Rpc()
     if active:
         try:
-            rpc.wait(3)
+            # Parado (ele so sobe quando um download e pedido), sem esperar.
+            rpc.wait(3 if dl.service_up() else 0)
         except OSError:
-            out.update(state='waiting', line='The download service is not running')
+            out.update(state='waiting', line='Stopped: start it again')
             rpc = None
     total = left = rate = 0
     eta = -1

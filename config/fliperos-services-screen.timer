@@ -1,0 +1,13 @@
+# Os servicos em "After boot" (Setup > System > Services) uns 15 s depois
+# que a primeira tela do boot abre (o menu, o frontend ou o jogo): o
+# fliperos-tty1 o liga (fliperos-setup --services-screen) ao tirar o
+# splash, e o que esta na tela ja carregou quando eles sobem. Nao e ligado
+# no boot.
+[Unit]
+Description=FliperOS services after the first screen
+
+[Timer]
+OnActiveSec=15s
+AccuracySec=1s
+Unit=fliperos-services-late.service
+RemainAfterElapse=no

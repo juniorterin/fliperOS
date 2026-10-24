@@ -330,7 +330,9 @@ echo "== Scraper artwork in ~/media"
     echo "$t: $(find "$MEDIA_DIR/$t" -mindepth 2 -type f | wc -l) file(s)"
   done
 )
-systemctl restart smbd 2> /dev/null || true
+# So se estiver no ar: em "After boot" (Setup > System > Services) ele sobe
+# depois da primeira tela.
+systemctl try-restart smbd 2> /dev/null || true
 udevadm control --reload 2> /dev/null || true
 sed -n 's/^FLIPEROS_CMDLINE=//p' /etc/default/fliperos-boot
 
@@ -364,10 +366,11 @@ lsblk -rnpo NAME,FSTYPE | awk '$2 != "" { print $1 }' | while read -r dev; do
 done
 echo "Disks: $(findmnt -rno TARGET | grep -c '^/media/fliperos/')"
 # O transmission-daemon do pacote nao: o do Setup > Games > Downloader e o
-# fliperos-transmission, que o Setup liga quando ganha um link.
+# fliperos-transmission, que o Setup sobe quando um download e pedido (nunca
+# no boot: o fliperos-rootfs.sh tirou o "enabled" de versoes anteriores).
 systemctl disable --now transmission-daemon.service > /dev/null 2>&1 || true
 systemctl mask transmission-daemon.service > /dev/null 2>&1 || true
-systemctl is-enabled -q fliperos-transmission.service 2> /dev/null && systemctl restart fliperos-transmission.service
+systemctl try-restart fliperos-transmission.service
 echo "fliperos-transmission: $(systemctl is-active fliperos-transmission.service 2> /dev/null)"
 
 # Pelo fliperos-update (FLIPEROS_UPDATE=1) ele mesmo grava o manifesto e o

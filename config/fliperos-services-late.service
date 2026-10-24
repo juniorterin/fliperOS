@@ -1,8 +1,12 @@
 # Setup > System > Services (fliperos-setup/lib/services.sh): sobe os
-# servicos em "After boot". Quem o chama e o fliperos-services-late.timer.
+# servicos em "After boot". Quem o chama e o fliperos-services-screen.timer
+# (a primeira tela do boot: menu, frontend ou jogo) ou, se nada abrir, o
+# fliperos-services-late.timer. Uma vez por boot: ativo depois de rodar, o
+# segundo gatilho nao o roda de novo.
 [Unit]
 Description=FliperOS services after boot
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
 ExecStart=/usr/local/bin/fliperos-setup --services-late

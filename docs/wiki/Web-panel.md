@@ -148,7 +148,7 @@ The status refreshes every second. What each part shows:
   - What you send belongs to the `fliperos` user.
   - Nothing outside those folders is reachable (no `..`, no absolute paths), but links inside them work (a games folder on an external disk). The folder at the top is never deleted.
 
-It is a service in **Setup > System > Services** (*Web panel*). By default it is **After boot**, so it starts about 40 s after the boot, with the game already on screen.
+It is a service in **Setup > System > Services** (*Web panel*). By default it is **After boot**, so it starts about 15 s after the menu, frontend or game opens at boot.
 
 `config/fliperos-web` (installed as `/opt/fliperos/bin/fliperos-web`, the `fliperos-web.service` unit) uses only Python's standard library, on port 8081 (`--port` changes it; 8080 is Pixelcade's own settings page).
 

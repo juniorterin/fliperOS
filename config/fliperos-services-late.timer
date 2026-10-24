@@ -1,11 +1,14 @@
-# Os servicos em "After boot" (Setup > System > Services) sobem uns 40 s
-# depois do boot, com o jogo ou o frontend ja na tela.
+# Os servicos em "After boot" (Setup > System > Services) sobem depois que
+# a primeira tela abre (fliperos-services-screen.timer). Este e a reserva:
+# sem tela nenhuma (o tty1 nao abriu), eles sobem 3 min depois do boot,
+# para o SSH e o painel web chegarem mesmo assim.
 [Unit]
-Description=FliperOS services after boot
+Description=FliperOS services after boot (if no screen opens)
 
 [Timer]
-OnBootSec=40s
+OnBootSec=3min
 AccuracySec=1s
+Unit=fliperos-services-late.service
 
 [Install]
 WantedBy=timers.target

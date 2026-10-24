@@ -114,6 +114,8 @@ It downloads **only what the filter chooses** — the games, with their parents,
 
 A torrent without any (the CHD link pasted as the romset) is refused. **Transmission** does the download: its own `transmission-daemon` (`fliperos-transmission.service`, as the `fliperos` user, at low CPU and disk priority, RPC only on `127.0.0.1:9092`; the stock `transmission-daemon.service` is masked).
 
+It never starts at boot: the Setup (or the web panel) starts it when a link is added or a download (or an art pack) is started, and it quits by itself when its last torrent ends. A download stopped by a shutdown shows as *stopped* and goes on with **Start the download**.
+
 The link is added running (paused, Transmission doesn't look for peers) and, as soon as the file list arrives, stopped with no file marked; the list goes through `fliperos-romclean` (`scan --names`, `chds --names --with`), only the chosen files are marked, and what is already in the emulator folders isn't downloaded again.
 
 The terminal shows a **progress bar** (size, peers, speed, time left); any key returns to the menu and the download goes on, even with a game open. When a torrent ends, each file goes to the download folder (the BIOS to `~/bios/mame`, the CHDs in `<game>/`) and the torrent leaves Transmission without seeding.

@@ -2,9 +2,11 @@
 # Setup > System > Services: o que sobe com o computador. Cada servico fica
 # em um de tres estados:
 #   boot   sobe no boot (o "enabled" do systemd);
-#   after  sobe uns 40 s depois do boot, com o jogo ou o frontend ja na tela
-#          (config/fliperos-services-late.timer roda --services-late): o boot
-#          chega antes ao que importa;
+#   after  sobe uns 15 s depois que a primeira tela abre (o menu, o frontend
+#          ou o jogo: o fliperos-tty1 roda --services-screen, que liga o
+#          config/fliperos-services-screen.timer) ou, sem tela nenhuma, 3 min
+#          depois do boot (fliperos-services-late.timer): o boot chega antes
+#          ao que importa;
 #   off    nao sobe.
 # /etc/fliperos/services.conf guarda "chave=estado"; sem linha, o estado e o
 # que o systemd (ou o NetworkManager, no Wi-Fi) diz agora: boot ou off.
@@ -18,7 +20,9 @@ SERVICE_STATES=(boot after off)
 # do Wi-Fi do NetworkManager: o NetworkManager mesmo nunca e desligado, e ele
 # que liga o cabo. Um .socket so e desligado junto (a ativacao por socket
 # subiria o servico na primeira conexao); quem sobe e o .service. O Pixelcade
-# e o ZeDMD ficam fora: o udev os sobe quando o aparelho aparece.
+# e o ZeDMD ficam fora: o udev os sobe quando o aparelho aparece. O
+# Transmission do Downloader tambem: so sobe quando um download e pedido
+# (lib/downloader.sh).
 services_table() {
   cat << 'EOF'
 ssh|SSH|ssh.service ssh.socket|The terminal of this computer from another one (PuTTY, ssh, WinSCP).
@@ -26,7 +30,6 @@ samba|Network share|smbd.service nmbd.service|The FliperOS folder on the network
 avahi|fliperos.local|avahi-daemon.service avahi-daemon.socket|Find this computer on the network by the name fliperos.local.
 wifi|Wi-Fi|radio:wifi|The Wi-Fi radio. The network cable works either way.
 netwait|Wait for network|NetworkManager-wait-online.service|The boot waits for the network to come up. Off: it goes on without it.
-downloader|Downloader|fliperos-transmission.service|The torrents of Setup > Games > Downloader, in the background.
 web|Web panel|fliperos-web.service|This cabinet in a browser on the same network: http://fliperos.local (user and password of Setup > System > Password).
 stream|Live screen|fliperos-stream.service|The cabinet screen live in the web panel (installed in Setup > Games > Extras > Live screen).
 EOF
@@ -182,8 +185,16 @@ services_boot() {
   log_info "servicos: Wi-Fi desligado no boot ($state)"
 }
 
-# services_late (fliperos-services-late.timer, uns 40 s depois do boot):
-# sobe os servicos em "after".
+# services_screen (o fliperos-tty1, quando a primeira tela abre): os
+# servicos em "after" sobem daqui a pouco, com o que esta na tela ja
+# carregado. Liga o timer e volta na hora.
+services_screen() {
+  systemctl start --no-block fliperos-services-screen.timer >> "$FLIPEROS_LOG" 2>&1
+}
+
+# services_late (fliperos-services-late.service, pelo services_screen ou
+# pela reserva de 3 min do boot; uma vez por boot): sobe os servicos em
+# "after".
 services_late() {
   local key
   local -a up

@@ -145,11 +145,13 @@ Without a CTM (the cabinet's Radeon R7 240 on the `radeon` driver has only the 2
     - **AttractPlus ROM List** — Attract-Mode Plus game lists of the arcade folders with each game's real name, from GroovyMAME's list, clones and bootlegs included. See [Adding games](Adding-games.md);
   - **System** — the rest:
     - **Latency** — **Standard** mode (any machine) or **Low latency** (modern CPUs), with a check of this machine against the recommendation and the list of ideal hardware ([Latency](Latency.md));
-    - **Services** — a table with one mark per service: **Boot** (starts with the computer), **After boot** (about 40 s after the boot, with the game or the frontend already on screen: `fliperos-services-late.timer`) or **Off**.
+    - **Services** — a table with one mark per service: **Boot** (starts with the computer), **After boot** (about 15 s after the first screen of the boot opens, the menu, the frontend or the game, so it has loaded first: `fliperos-tty1` starts `fliperos-services-screen.timer`; if nothing opens on the screen, `fliperos-services-late.timer` starts them 3 min after the boot) or **Off**.
 
-      The services are SSH, the network share (Samba), `fliperos.local` (Avahi), the Wi-Fi radio (only the radio: NetworkManager stays, it runs the network cable), *Wait for network* (`NetworkManager-wait-online`: off, the boot goes on without waiting for the network), the Downloader's Transmission, when installed, and the [web panel](#web-panel) (After boot by default).
+      The services are SSH, the network share (Samba, After boot by default: `nmbd` alone took about 13 s at boot), `fliperos.local` (Avahi), the Wi-Fi radio (only the radio: NetworkManager stays, it runs the network cable), *Wait for network* (`NetworkManager-wait-online`: off, the boot goes on without waiting for the network) and the [web panel](#web-panel) (After boot by default).
 
-      What Ubuntu starts at boot and a cabinet doesn't use is masked in the image: Samba as a domain controller, `gpu-manager`, Ubuntu Pro and the MOTD news. The choice is kept in `/etc/fliperos/services.conf`; the Pixelcade and the ZeDMD are not in it, udev starts them when the device shows up;
+      The Downloader's Transmission is not in the table: it starts only when a download is asked for (see [Downloader](ROMs.md#downloader)). What Ubuntu starts at boot and a cabinet doesn't use is masked in the image: Samba as a domain controller, `gpu-manager`, Ubuntu Pro and the MOTD news.
+
+      The choice is kept in `/etc/fliperos/services.conf`; the Pixelcade and the ZeDMD are not in it, udev starts them when the device shows up;
     - **Quirks** — kernel fixes for USB devices that arrive wrong: controllers, guns, keyboards and disks. See [Controls](Controls.md#setup--system--quirks);
     - **Password** — the password of the `fliperos` user: the login, `sudo`, SSH and the network share (Samba keeps a password of its own, and both change together);
     - **System Update** — `apt-get update` and `upgrade`, with apt's real progress;

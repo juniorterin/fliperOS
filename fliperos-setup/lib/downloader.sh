@@ -30,22 +30,21 @@ downloader_prepare() {
   chown "$FLIPEROS_USER:" "$DOWNLOADER_STATE" 2> /dev/null || true
 }
 
-# downloader_service_on: o servico ligado (e no boot), antes de cadastrar um
-# link.
+# downloader_service_on: o servico no ar, antes de cadastrar um link ou de
+# comecar um download. So sobe assim, quando um download e pedido: nunca no
+# boot (o fliperos-rootfs.sh tira o "enabled" de versoes anteriores), e sai
+# sozinho quando o ultimo torrent termina (o session-close do
+# config/fliperos-downloader).
 downloader_service_on() {
-  systemctl enable --now "$DOWNLOADER_SERVICE" >> "$FLIPEROS_LOG" 2>&1
+  systemctl start "$DOWNLOADER_SERVICE" >> "$FLIPEROS_LOG" 2>&1
 }
 
-# downloader_service_sync: o servico ligado enquanto houver um link
-# cadastrado ou um pacote de arte baixando (lib/mediapacks.sh), desligado
-# sem nenhum.
+# downloader_service_sync: sem nenhum link cadastrado nem pacote de arte
+# baixando (lib/mediapacks.sh), o servico sai.
 downloader_service_sync() {
-  if compgen -G "$DOWNLOADER_STATE/*.json" > /dev/null ||
-    compgen -G "${MEDIAPACKS_STATE:-/var/lib/fliperos/mediapacks}/*.json" > /dev/null; then
-    downloader_service_on
-  else
-    systemctl disable --now "$DOWNLOADER_SERVICE" >> "$FLIPEROS_LOG" 2>&1 || true
-  fi
+  compgen -G "$DOWNLOADER_STATE/*.json" > /dev/null && return 0
+  compgen -G "${MEDIAPACKS_STATE:-/var/lib/fliperos/mediapacks}/*.json" > /dev/null && return 0
+  systemctl stop "$DOWNLOADER_SERVICE" >> "$FLIPEROS_LOG" 2>&1 || true
 }
 
 # downloader_filter_get CHAVE imprime um valor do filtro salvo (target,
@@ -155,7 +154,6 @@ downloader_cli() {
         echo "No filter yet: choose it in Setup > Games > Downloader." >&2
         return 3
       }
-      downloader_service_on
       result=$(mktemp)
       downloader_start "$result" || {
         rm -f "$result"
@@ -187,6 +185,8 @@ downloader_status() {
 # progresso); "tipo<TAB>wanted<TAB>arquivos<TAB>bytes" vai para RESULTADO.
 downloader_start() {
   log_info "Downloader: aplicando o filtro"
+  # Um download parado por um desligamento continua daqui.
+  downloader_service_on
   downloader start --progress --result "$1" 2>> "$FLIPEROS_LOG"
 }
 

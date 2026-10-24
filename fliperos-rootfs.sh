@@ -224,9 +224,11 @@ install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-
 # Setup > Games > Scraper > progetto-SNAPS: as capturas dos jogos de arcade.
 install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-snaps"
 # Setup > Games > Downloader: o romset e os CHDs por link magnetico, so o que o filtro
-# do ROM cleaner escolhe. O servico so e ligado pelo Setup, com um link.
+# do ROM cleaner escolhe. O servico so sobe quando um download e pedido, nunca
+# no boot: o "enabled" de versoes anteriores sai.
 install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"
 install -Dm644 "$src/config/fliperos-transmission.service" "$root/etc/systemd/system/fliperos-transmission.service"
+rm -f "$root/etc/systemd/system/multi-user.target.wants/fliperos-transmission.service"
 # O painel web (config/fliperos-web, Setup > System > Services > Web panel):
 # sobe depois do boot (web=after no services.conf) ate a pessoa mudar.
 install -Dm755 "$src/config/fliperos-web" "$root/opt/fliperos/bin/fliperos-web"
@@ -526,9 +528,11 @@ ln -sfn /etc/systemd/system/fliperos-driver-trial.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-driver-trial.service"
 
 # ── Servicos (Setup > System > Services, lib/services.sh) ─────────
-# O Wi-Fi em "After boot"/"Off" desligado antes do NetworkManager, e o timer
-# que sobe os "After boot" uns 40 s depois do boot.
-for unit in fliperos-services.service fliperos-services-late.service fliperos-services-late.timer; do
+# O Wi-Fi em "After boot"/"Off" desligado antes do NetworkManager; os "After
+# boot" sobem depois da primeira tela (fliperos-services-screen.timer, ligado
+# pelo fliperos-tty1) ou, sem tela, pelo timer de reserva.
+for unit in fliperos-services.service fliperos-services-late.service fliperos-services-late.timer \
+  fliperos-services-screen.timer; do
   install -Dm644 "$src/config/$unit" "$root/etc/systemd/system/$unit"
 done
 ln -sfn /etc/systemd/system/fliperos-services.service \
@@ -536,6 +540,13 @@ ln -sfn /etc/systemd/system/fliperos-services.service \
 mkdir -p "$root/etc/systemd/system/timers.target.wants"
 ln -sfn /etc/systemd/system/fliperos-services-late.timer \
   "$root/etc/systemd/system/timers.target.wants/fliperos-services-late.timer"
+# O compartilhamento (o smbd e o nmbd, que sozinho levava uns 13 s no boot)
+# sobe depois da primeira tela ate a pessoa mudar.
+if ! grep -q '^samba=' "$root/etc/fliperos/services.conf" 2> /dev/null; then
+  echo 'samba=after' >> "$root/etc/fliperos/services.conf"
+  rm -f "$root/etc/systemd/system/multi-user.target.wants/smbd.service" \
+    "$root/etc/systemd/system/multi-user.target.wants/nmbd.service"
+fi
 # Nada de apt nem man-db rodando sozinho no meio de uma partida (picos de
 # CPU e disco). Atualizar fica no Setup > System > System Update, como no GA.
 for timer in apt-daily.timer apt-daily-upgrade.timer man-db.timer; do

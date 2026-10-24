@@ -1,3 +1,8 @@
+# Setup > Games > Downloader e Scraper > Art packs by torrent: so sobe
+# quando um download e pedido (fliperos-setup/lib/downloader.sh, o
+# downloader_service_on), nunca no boot. Sai sozinho quando o ultimo
+# torrent termina (o session-close do fliperos-downloader); um download
+# parado por um desligamento volta no "Start the download".
 [Unit]
 Description=FliperOS: downloader (Transmission) of Setup > Games > Downloader
 Wants=network-online.target
@@ -12,6 +17,3 @@ ExecStartPre=/usr/bin/python3 /opt/fliperos/bin/fliperos-downloader config
 ExecStart=/usr/bin/transmission-daemon --foreground --config-dir /home/fliperos/.config/fliperos-transmission
 Restart=on-failure
 RestartSec=10
-
-[Install]
-WantedBy=multi-user.target

@@ -57,6 +57,7 @@ ROMCLEAN = os.environ.get('FLIPEROS_ROMCLEAN', '/opt/fliperos/bin/fliperos-romcl
 # O rompath do GroovyMAME: os jogos dali tambem seguram a BIOS (in_use).
 MAME_INI = os.environ.get('FLIPEROS_MAME_INI', '/etc/fliperos/mame/mame.ini')
 SELF = '/opt/fliperos/bin/fliperos-downloader'
+SERVICE = 'fliperos-transmission.service'
 # Os pacotes de arte (Setup > Games > Scraper) baixam pelo mesmo Transmission:
 # o fim de um torrent tambem e avisado a eles (main).
 MEDIAPACKS = os.environ.get('FLIPEROS_MEDIAPACKS', '/opt/fliperos/bin/fliperos-mediapacks')
@@ -150,6 +151,27 @@ class Rpc:
 
     def remove(self, hash_, delete=False):
         self.call('torrent-remove', ids=[hash_], **{'delete-local-data': delete})
+
+
+def service_up():
+    """O fliperos-transmission no ar (ou subindo). Ele so sobe quando um
+    download e pedido: parado, o andamento nao espera a RPC responder."""
+    try:
+        return subprocess.run(['systemctl', 'is-active', '--quiet', SERVICE]).returncode == 0
+    except OSError:
+        return False
+
+
+def close_if_idle():
+    """Sem torrent nenhum no Transmission (o ultimo terminou), ele sai: so
+    volta quando o Setup pedir outro download (lib/downloader.sh)."""
+    try:
+        rpc = Rpc()
+        with lock():
+            if not rpc.call('torrent-get', fields=['id']).get('torrents'):
+                rpc.call('session-close')
+    except OSError:
+        pass
 
 
 # ?? Estado ????????????????????????????????????????????????????????
@@ -762,20 +784,26 @@ def cmd_status(args):
     if kinds:
         rpc = Rpc()
         try:
-            rpc.wait(3)
+            rpc.wait(3 if service_up() else 0)
         except OSError:
-            out.update(state='waiting', line='The download service is not running')
-            kinds = []
+            rpc = None
         total = left = rate = 0
         eta = -1
         parts = []
         active = pending = False
         for kind in kinds:
             t = rpc.torrent(meta_of(kind)['hash'], ['status', 'sizeWhenDone', 'leftUntilDone', 'rateDownload',
-                                                    'eta', 'peersConnected', 'errorString'])
+                                                    'eta', 'peersConnected', 'errorString']) if rpc else None
             if t is None:
                 done = read_state(kind + '.installed') is not None
-                parts.append('%s %s' % (LABEL[kind], 'done' if done else 'not started'))
+                word = 'done' if done else 'not started'
+                # O servico so sobe quando um download e pedido: sem ele, um
+                # Start aplicado com a pasta do torrent ainda ali (o fim a
+                # apaga) e um download que um desligamento parou.
+                if rpc is None and read_state(kind + '.plan') is not None and (
+                        not done or os.path.isdir(os.path.join(STAGING, kind))):
+                    done, word = False, 'stopped (Start the download goes on)'
+                parts.append('%s %s' % (LABEL[kind], word))
                 pending = pending or not done
                 continue
             if t['status'] == 0 and not t['sizeWhenDone']:
@@ -920,8 +948,10 @@ def main():
     try:
         args.func(args)
     finally:
-        if by_transmission and os.path.exists(MEDIAPACKS):
-            subprocess.run([sys.executable, MEDIAPACKS, 'finish'])
+        if by_transmission:
+            if os.path.exists(MEDIAPACKS):
+                subprocess.run([sys.executable, MEDIAPACKS, 'finish'])
+            close_if_idle()
 
 
 if __name__ == '__main__':

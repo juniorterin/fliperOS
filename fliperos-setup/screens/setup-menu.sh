@@ -1153,7 +1153,7 @@ screen_services() {
     ui_msg "$title" "No services to choose on this computer."
     return 0
   fi
-  result=$(ui_grid "$title" "Boot: with the computer. After boot: 40 s later. Off: never." \
+  result=$(ui_grid "$title" "Boot: with the computer. After boot: once the menu or game is on screen. Off: never." \
     "boot|Boot;after|After boot;off|Off" "${rows[@]}") || return 0
   # Pelo SSH: a conexao aberta fica, mas nenhuma outra entra.
   if ((SETUP_REMOTE == 1)) && [[ ,$result, == *,ssh=off,* && $(services_state ssh) != off ]]; then
@@ -1166,7 +1166,7 @@ screen_services() {
     ui_msg "$title" "$(ui_bad "Could not change: ${failed//$'\n'/, }.")" "" "Details in /var/log/fliperos-setup.log."
     return 0
   fi
-  ui_msg "$title" "Saved." "" "After boot: the service starts about 40 s after the computer turns on."
+  ui_msg "$title" "Saved." "" "After boot: the service starts about 15 s after the menu, frontend or game opens."
 }
 
 # ── Senha ────────────────────────────────────────────────────────

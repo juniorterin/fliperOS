@@ -20,8 +20,16 @@ PLYMOUTH_PID=${FLIPEROS_PLYMOUTH_PID:-/run/plymouth/pid}
 # splash_off: tira o splash do boot logo antes do que aparece na tela. O
 # systemd o deixa no ar ate aqui (o plymouth-quit do fliperos-rootfs.sh),
 # para o login e a espera da rede do update nao ficarem com a tela preta.
+services_screen=""
 splash_off() {
   [[ -e $PLYMOUTH_PID ]] && sudo -n /usr/bin/plymouth quit 2> /dev/null
+  # A primeira tela do boot (o menu, o frontend ou o jogo): os servicos em
+  # "After boot" (Setup > System > Services) sobem daqui a uns 15 s, com
+  # ela ja carregada. Volta na hora.
+  if [[ -z $services_screen ]]; then
+    services_screen=1
+    sudo -n /usr/local/bin/fliperos-setup --services-screen > /dev/null 2>&1
+  fi
   # A calibracao de cor (Setup > Video Setup > Colour calibration) na placa,
   # agora que o splash soltou o video.
   [[ -x ${FLIPEROS_COLOR:-/usr/local/bin/fliperos-color} ]] &&

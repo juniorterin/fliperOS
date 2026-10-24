@@ -23,7 +23,7 @@
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
 #   --latency-boot, --session-start, --session-end, --volume up|down|mute|get|set N, --systems, --downloader status|add|start|remove, --settings, --setting KEY VALUE, --outputs main|all,
-#   --padkeys on|off, --services-boot, --services-late (lib/services.sh),
+#   --padkeys on|off, --services-boot, --services-screen, --services-late (lib/services.sh),
 #   --bios-check (as BIOS que faltam, lib/downloader.sh),
 #   --romlists, --mediapacks auto|status (o frontend do FliperOS)
 #
@@ -250,6 +250,10 @@ main() {
       ;;
     --services-boot)
       services_boot
+      return 0
+      ;;
+    --services-screen)
+      services_screen
       return 0
       ;;
     --services-late)

@@ -436,13 +436,15 @@ class ImageTests(unittest.TestCase):
         self.assertIn("sudo /usr/local/bin/fliperos-setup --desktop \"$DISPLAY\"", desktop)
         self.assertIn('Terminal=true', desktop)
 
+    SERVICES_SCREEN = 'sudo -n /usr/local/bin/fliperos-setup --services-screen'
+
     def tty1(self, installed, setup_codes, requests, *args, splash=False, firstboot=True, terminal='/dev/tty1',
-             game=False):
+             game=False, services=False):
         """Roda o config/fliperos-tty1 com sudo e fliperos-session falsos.
         setup_codes: status de cada "fliperos-setup --menu"; requests: o
         pedido gravado antes de cada um; splash: o Plymouth do boot no ar;
         terminal: o que o tty responde (o VT do gabinete, ou o pty do SSH).
-        Devolve as chamadas, em ordem."""
+        Devolve as chamadas, em ordem (o --services-screen so com services)."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             (tmp / 'bin').mkdir()
@@ -480,7 +482,33 @@ class ImageTests(unittest.TestCase):
                        FLIPEROS_PLYMOUTH_PID=str(tmp / 'plymouth.pid'))
             subprocess.run(['bash', str(ROOT / 'config/fliperos-tty1')] + list(args),
                            env=env, check=True, timeout=30)
-            return [line.strip() for line in log.read_text().splitlines()]
+            calls = [line.strip() for line in log.read_text().splitlines()]
+            return calls if services else [c for c in calls if c != self.SERVICES_SCREEN]
+
+    def test_after_boot_services_wait_for_the_first_screen(self):
+        # Os servicos em "After boot" sobem depois da primeira tela (o menu,
+        # o frontend ou o jogo), uma vez so, e nao mais por um tempo fixo.
+        quit = 'sudo -n /usr/bin/plymouth quit'
+        calls = self.tty1(True, [0], ['-'], splash=True, firstboot=False, services=True)
+        self.assertEqual(calls[1:4], [quit, self.SERVICES_SCREEN, 'session'])
+        self.assertEqual(calls.count(self.SERVICES_SCREEN), 1)
+        calls = self.tty1(True, [0], ['-'], firstboot=False, game=True, services=True)
+        self.assertEqual(calls[1:3], [self.SERVICES_SCREEN, 'session'])
+        calls = self.tty1(False, [20, 0], ['lxde', '-'], '--menu', services=True)
+        self.assertEqual(calls[0], self.SERVICES_SCREEN)
+        self.assertEqual(calls.count(self.SERVICES_SCREEN), 1)
+        late = (ROOT / 'config/fliperos-services-late.service').read_text()
+        self.assertIn('RemainAfterExit=yes', late)
+        screen = (ROOT / 'config/fliperos-services-screen.timer').read_text()
+        self.assertIn('OnActiveSec=15s', screen)
+        self.assertIn('Unit=fliperos-services-late.service', screen)
+        self.assertNotIn('[Install]', screen)
+        fallback = (ROOT / 'config/fliperos-services-late.timer').read_text()
+        self.assertIn('OnBootSec=3min', fallback)
+        self.assertIn('fliperos-services-screen.timer', ROOTFS.split('# ── Servicos')[1].split('for timer')[0])
+        # O compartilhamento vai para "After boot" ate a pessoa mudar.
+        self.assertIn("echo 'samba=after' >>", ROOTFS)
+        self.assertIn('multi-user.target.wants/nmbd.service', ROOTFS)
 
     def test_tty1_flow_like_groovyarcade(self):
         """No disco: primeiro boot, launcher e depois o menu. Na midia: menu."""
@@ -4897,7 +4925,7 @@ class WebPanelTests(unittest.TestCase):
         listed = time.time() - 100
         for name in ('vf4.zip', 'Ikaruga.zip', 'naomi.zip', 'kofxi.zip'):
             os.utime(roms / name, (listed - 10, listed - 10))
-        os.utime(attract / 'romlists/Naomi.txt', (listed, listed))
+        os.utime(lists / 'Naomi.txt', (listed, listed))
         (roms / 'newgame.7z').write_text('')
         # O Arcade Database falso: o JSON de query_mame para qualquer jogo.
         import http.server
