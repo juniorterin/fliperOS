@@ -833,16 +833,30 @@ def shade(color, k):
     return tuple(min(255, int(c + (255 - c) * (k - 1))) for c in color)
 
 
-def concave_button(ui, cx, cy, r, color):
-    """O botao do painel afundado: a borda de cima por dentro escura (a
-    sombra da beirada), a de baixo clara (a luz batendo no fundo), e a
-    sombra da caneca em volta."""
-    pygame.draw.circle(ui, T.SPACE, (cx, cy + 1), r + 2)
-    pygame.draw.circle(ui, shade(color, 0.45), (cx, cy), r)
-    pygame.draw.circle(ui, color, (cx, cy + 2), r - 2)
-    pygame.draw.arc(ui, shade(color, 1.45), (cx - r + 1, cy - r + 1, 2 * r - 2, 2 * r - 2),
-                    math.radians(200), math.radians(340), 1)
-    pygame.draw.circle(ui, shade(color, 0.3), (cx, cy), r, 1)
+FLAT, LIFT = 0.62, 4       # o botao visto de cima e de lado: a elipse e a altura
+
+
+def ellipse(ui, color, cx, cy, rx, ry, width=0):
+    pygame.draw.ellipse(ui, color, (cx - rx, cy - ry, 2 * rx, 2 * ry), width)
+
+
+def button3d(ui, cx, cy, r, color):
+    """O botao do painel em perspectiva, visto um pouco de cima: o aro preto
+    no painel, o lado do botao (um cilindro mais escuro) e o topo, com o
+    brilho. (cx, cy) e o centro do topo."""
+    ry = round(r * FLAT)
+    # O aro, no painel, um pouco maior e abaixo do topo.
+    ellipse(ui, (0x10, 0x10, 0x16), cx, cy + LIFT + 1, r + 4, ry + 3)
+    ellipse(ui, T.LINE, cx, cy + LIFT + 1, r + 4, ry + 3, 1)
+    # O lado: a elipse de baixo e o retangulo ate o topo.
+    side = shade(color, 0.5)
+    ellipse(ui, shade(color, 0.35), cx, cy + LIFT, r, ry)
+    ui.fill(side, (cx - r, cy, 2 * r, LIFT))
+    pygame.draw.line(ui, shade(color, 0.7), (cx - r + 2, cy + 1), (cx - r + 2, cy + LIFT))
+    # O topo e o brilho do lado da luz (em cima, a esquerda).
+    ellipse(ui, color, cx, cy, r, ry)
+    ellipse(ui, shade(color, 1.35), cx - r // 3, cy - ry // 3, r // 2, max(1, ry // 3))
+    ellipse(ui, shade(color, 0.6), cx, cy, r, ry, 1)
 
 
 def draw_guide(fe, ui):
@@ -869,21 +883,27 @@ def draw_guide(fe, ui):
     pygame.draw.line(ui, T.LINE, (px + 112, py + 28), (px + 112, py + ph - 26))
     # Os seis botoes juntos, como no painel; o nome de cada um fora, em cima
     # (a fileira de cima) ou embaixo, com uma linha e a seta ate ele.
-    r, step = 11, 28
-    bx0, by0 = px + 112 + (pw - 112 - 2 * step) // 2, py + 62
+    r, step = 12, 30
+    bx0, by0 = px + 112 + (pw - 112 - 2 * step) // 2, py + 60
+    ry = round(r * FLAT)
     for i, (num, color, draw_icon, label) in enumerate(PANEL):
         col, row = i % 3, i // 3
         cx = bx0 + col * step
         cy = by0 + row * 32 - (3 if col == 1 else 0)
-        concave_button(ui, cx, cy, r, color)
-        draw_icon(ui, cx, cy + 1, T.SPACE)
+        button3d(ui, cx, cy, r, color)
+        # O desenho no topo, achatado como ele.
+        icon = pygame.Surface((24, 24), pygame.SRCALPHA)
+        draw_icon(icon, 12, 12, shade(color, 0.3))
+        icon = pygame.transform.smoothscale(icon, (24, round(24 * FLAT)))
+        ui.blit(icon, (cx - 12, cy - icon.get_height() // 2))
         text = num + " " + label
         w = tiny.width(text)
         tx = {0: cx + 3 - w, 1: cx - w // 2, 2: cx - 3}[col]
+        top, bottom = cy - ry - 4, cy + LIFT + ry + 5
         if row == 0:
-            ty, y0, y1, d = py + 33 + (3 if col == 1 else 0) - 3, py + 40, cy - r - 2, (0, 1)
+            ty, y0, y1, d = py + 30, py + 37, top, (0, 1)
         else:
-            ty, y0, y1, d = cy + r + 14, cy + r + 12, cy + r + 2, (0, -1)
+            ty, y0, y1, d = bottom + 13, bottom + 11, bottom, (0, -1)
         tiny.text(ui, text, T.FG, tx, ty)
         pygame.draw.line(ui, T.COMMENT, (cx, y0), (cx, y1 - d[1] * 2))
         arrow(ui, cx, y1, d, T.COMMENT, 3)
