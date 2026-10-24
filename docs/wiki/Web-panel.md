@@ -114,7 +114,7 @@ The status refreshes every second. What each part shows:
   - System: the default launcher, latency mode, debug mode, the volume leveler and menu sounds.
   - Services: the whole services table.
   - 480i games: a card per program, with an explanation of each method at the top. The method is a row of buttons (640x240, 480i with filter, 480i pure), and the filter strength (light, medium, strong) shows only when the filter is on.
-  - Colour: every colour calibration value and **Back to the defaults**. A slider saves while it moves, so the game on screen changes with it.
+  - Colour: every colour calibration value and **Back to the defaults**. A slider saves while it moves, so the game on screen changes with it; the **−** and **+** on its sides move it one step per tap (a run of taps saves once, just after the last).
   - Each change is saved and applied at once, through the same functions as the Setup screens (`fliperos-setup --settings` and `--setting KEY VALUE`, `lib/system.sh`). Debug and latency rewrite the kernel line the way their screens do; their kernel part counts after a restart.
   - Monitor, resolution and video driver are not here, since a wrong choice can leave the cabinet without a picture. They stay in the Setup, on the cabinet screen.
 - **Downloads:** the Setup's Downloader (Setup > Games > Downloader), which takes from the MAME ROM and CHD torrents only what the MAME ROM Cleaner filter picks.

@@ -20,7 +20,7 @@ const TEXT = {
     busy: "busy", vram: "VRAM", clock: "clock", temp: "temperature", power: "power",
     filtering: "flicker filter on", core: "core", wrong: "Wrong user or password.",
     uptime: "up", not_installed: "No volume control.",
-    games: "Games", search: "Search games", play: "Play", close_game: "Close the game",
+    games: "Games", search: "Search games", play: "Play", close_game: "Close the game", less: "Less", more: "More",
     confirm_launch: "Close what is on the cabinet screen and open %s?", launching: "Opening %s on the cabinet…",
     confirm_close: "Close the game on the cabinet?", first: "Showing the first %n. Type to filter.",
     no_games: "No games in this folder.", count: "%n games",
@@ -130,7 +130,7 @@ const TEXT = {
     busy: "uso", vram: "VRAM", clock: "clock", temp: "temperatura", power: "consumo",
     filtering: "filtro de flicker ligado", core: "core", wrong: "Usuário ou senha errados.",
     uptime: "ligado há", not_installed: "Sem controle de volume.",
-    games: "Jogos", search: "Buscar jogos", play: "Jogar", close_game: "Fechar o jogo",
+    games: "Jogos", search: "Buscar jogos", play: "Jogar", close_game: "Fechar o jogo", less: "Menos", more: "Mais",
     confirm_launch: "Fechar o que está na tela do gabinete e abrir %s?", launching: "Abrindo %s no gabinete…",
     confirm_close: "Fechar o jogo no gabinete?", first: "Mostrando os primeiros %n. Digite para filtrar.",
     no_games: "Nenhum jogo nesta pasta.", count: "%n jogos",
@@ -1040,7 +1040,24 @@ function settingRow(row) {
       control.disabled = false;
     }
   }
-  const field = shown ? el("div", { class: "slider" }, control, shown) : control;
+  let field = control;
+  if (shown) {
+    // - e +: um passo do ajuste por toque, para acertar sem arrastar. Os
+    // toques seguidos gravam juntos, um pouco depois do ultimo.
+    const stepper = (sign, label) => {
+      const button = el("button", { type: "button", class: "step", "aria-label": t(sign < 0 ? "less" : "more") + ": " + row.label }, label);
+      button.addEventListener("click", () => {
+        const step = Number(row.step || 1);
+        const value = Math.min(Number(row.max), Math.max(Number(row.min), Number(control.value) + sign * step));
+        control.value = String(value);
+        shown.textContent = prettyNumber(row.key, control.value);
+        clearTimeout(timer);
+        timer = setTimeout(() => { if (!busy) save(false); }, 400);
+      });
+      return button;
+    };
+    field = el("div", { class: "slider" }, stepper(-1, "−"), control, stepper(1, "+"), shown);
+  }
   return el("div", { class: "setting" }, el("label", { for: id }, row.label), field, about);
 }
 

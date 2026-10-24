@@ -539,3 +539,8 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
   .grid { padding: 16px 16px; gap: 12px; }
   .big { font-size: 22px; }
 }
+/* O - e o + de cada ajuste de cor, dos lados do slider. */
+.slider button.step { width: 36px; padding: 4px 0; flex: none; font-size: 18px; line-height: 1.2; }
+/* Com os dois botoes, o slider encolhe para caber no celular. */
+.slider:has(button.step) input[type="range"] { min-width: 0; }
+.slider:has(button.step) .slider-value { min-width: 3.6em; }
