@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # The King of Fighters: Final Attack (MUGEN) no Ikemen GO, em 4:3 e 320x240
-# com pixel 1:1, para o CRT. O jogo nao vem com o FliperOS nem e baixado
-# daqui: a pessoa traz a pasta do jogo original (a que tem o "Final
-# Attack.exe"), num pendrive, pela rede ou na pasta pessoal. O instalador
-# baixa o patch 4:3 (github.com/juniorterin/KOF-Final-Attack-4-3-patch), que
-# por sua vez baixa o Ikemen GO e um PowerShell portatil, e monta uma copia
-# do jogo ja convertida em ~/roms/ikemen/kof-final-attack. A pasta original
-# nao e alterada.
+# com pixel 1:1, para o CRT. O jogo nao vem com o FliperOS: o instalador o
+# baixa da pagina dele no itch.io (gratis, United By Games), ou a pessoa traz
+# a pasta do jogo original (a que tem o "Final Attack.exe"), num pendrive,
+# pela rede ou na pasta pessoal. O instalador baixa o patch 4:3
+# (github.com/juniorterin/KOF-Final-Attack-4-3-patch), que por sua vez baixa
+# o Ikemen GO e um PowerShell portatil, e monta uma copia do jogo ja
+# convertida em ~/roms/ikemen/kof-final-attack. A pasta original nao e
+# alterada; o jogo baixado sai depois da conversao.
 #
 #   fliperos-kof                           abre o jogo (num Xorg proprio)
 #   fliperos-kof installed                 status 0 se instalado
 #   fliperos-kof find PASTA                imprime a pasta do jogo original
 #                                          achada em PASTA (ou dentro dela)
-#   fliperos-kof install PASTA [--progress]   instala (como o usuario)
+#   fliperos-kof install [PASTA] [--progress]   instala (como o usuario);
+#                                          sem PASTA, baixa o jogo do itch.io
 #
 # Com --progress, as etapas saem no formato da tela de progresso do Setup
 # (lib/progress.sh); a saida do git e do conversor vai para o stderr.
@@ -21,17 +23,26 @@ set -uo pipefail
 repo=${FLIPEROS_KOF_REPO:-https://github.com/juniorterin/KOF-Final-Attack-4-3-patch.git}
 dest=${FLIPEROS_KOF_DIR:-$HOME/roms/ikemen/kof-final-attack}
 cache=${FLIPEROS_KOF_CACHE:-$HOME/.local/share/fliperos/kof-patch}
+# O jogo no itch.io; FLIPEROS_KOF_ZIP aponta direto para um zip (os testes).
+itch=${FLIPEROS_KOF_ITCH:-https://united-by-games.itch.io/the-king-of-fighters-final-attack}
+zip_url=${FLIPEROS_KOF_ZIP:-}
+download=${FLIPEROS_KOF_DOWNLOAD:-$HOME/.local/share/fliperos/kof-game}
 x11=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
 iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
 sdl_db=${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/fliperos/gamecontrollerdb.txt}
 exe=Ikemen_GO_Linux
 marker="Final Attack.exe"
 # A copia convertida tem cerca de 2,1 GB, mais o Ikemen GO e o PowerShell.
+# Baixando o jogo: o zip (1,4 GB) e o jogo aberto (uns 2 GB) tambem.
 need_kb=$((3 * 1024 * 1024))
+need_dl_kb=${FLIPEROS_KOF_DOWNLOAD_KB:-$((7 * 1024 * 1024))}
 
 progress=0
+# Com o download antes, as etapas da conversao ficam de base a 100%.
+base=0
 say() {
-  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+  local pct=$((base + $1 * (100 - base) / 100))
+  if ((progress)); then printf '@step %s %s\n' "$pct" "$2"; else printf '%s\n' "$2"; fi
 }
 fail() {
   if ((progress)); then printf '@fail KOF Final Attack|%s\n' "$1"; else printf 'fliperos-kof: %s\n' "$1" >&2; fi
@@ -52,8 +63,89 @@ copy_patch() {
   git -C "$cache" archive HEAD | tar -x -C "$1"
 }
 
+# download_game: o zip do jogo da pagina do itch.io (o botao Download, sem
+# conta: o link assinado vale um minuto), aberto em $download. De 0 a 20%.
+download_game() {
+  local free zip=$download.zip
+  mkdir -p "${download%/*}" || fail "could not create ${download%/*}"
+  free=$(df -Pk "${download%/*}" | awk 'NR == 2 { print $4 }')
+  ((${free:-0} >= need_dl_kb)) || fail "not enough free space in ${download%/*} (7 GB needed to download the game)"
+  rm -rf "$download" "$zip"
+  # shellcheck disable=SC2064 # as pastas de agora
+  trap "rm -rf '$download' '$zip'" EXIT
+  say 0 "Downloading the game from itch.io"
+  python3 - "$itch" "$zip_url" "$zip" "$progress" << 'PY' || fail "could not download the game from itch.io (no network?)"
+import html
+import http.cookiejar
+import json
+import re
+import sys
+import urllib.parse
+import urllib.request
+
+page, url, part, progress = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == '1'
+opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+opener.addheaders = [('User-Agent', 'fliperos-kof')]
+
+
+def signed_url():
+    # O botao Download da pagina: um POST com o csrf_token dela devolve o
+    # link do arquivo. O Windows (o MUGEN) e o zip, se houver mais de um.
+    text = opener.open(page, timeout=60).read().decode('utf-8', 'replace')
+    token = re.search(r'name="csrf_token" value="([^"]+)"', text)
+    uploads = []
+    for block in text.split('class="upload"')[1:]:
+        uid = re.search(r'data-upload_id="(\d+)"', block)
+        name = re.search(r'title="([^"]+)" class="name"|class="name" title="([^"]+)"', block)
+        if uid:
+            uploads.append((uid.group(1), html.unescape(next(filter(None, name.groups()), '')) if name else ''))
+    if not token or not uploads:
+        raise OSError('no download button on %s' % page)
+    uploads.sort(key=lambda u: (not u[1].endswith('.zip'), 'win' not in u[1].lower()))
+    data = urllib.parse.urlencode({'csrf_token': token.group(1)}).encode()
+    reply = opener.open('%s/file/%s?source=view_game&as_props=1&after_download_lightbox=true'
+                        % (page, uploads[0][0]), data, timeout=60).read()
+    return json.loads(reply)['url']
+
+
+last = -1
+for attempt in range(3):
+    try:
+        with opener.open(url or signed_url(), timeout=60) as resp, open(part, 'wb') as out:
+            total = int(resp.headers.get('Content-Length') or 0)
+            done = 0
+            while True:
+                chunk = resp.read(1 << 18)
+                if not chunk:
+                    break
+                out.write(chunk)
+                done += len(chunk)
+                pct = done * 18 // total if total else 0
+                if progress and pct != last:
+                    last = pct
+                    print('@step %d Downloading the game from itch.io (%d of %d MB)' % (pct, done >> 20, total >> 20),
+                          flush=True)
+            if total and done != total:
+                raise OSError('incomplete download')
+        break
+    except (OSError, ValueError, KeyError) as e:
+        print('fliperos-kof: %s' % e, file=sys.stderr)
+        if attempt == 2:
+            sys.exit(1)
+PY
+  say 19 "Unpacking the game"
+  python3 -m zipfile -e "$zip" "$download" >&2 || fail "the downloaded file is not a zip of the game"
+  rm -f "$zip"
+  find_game "$download" > /dev/null || fail "the download has no \"$marker\""
+  base=20
+}
+
 install_game() {
   local src=$1 patch stage="" made="" old="" free rc
+  if [[ -z $src ]]; then
+    download_game
+    src=$download
+  fi
   src=$(find_game "$src") || fail "no \"$marker\" in that folder: choose the folder of the original game"
   command -v git > /dev/null || fail "git is not installed"
   mkdir -p "${dest%/*}" || fail "could not create ${dest%/*}"
@@ -121,8 +213,11 @@ case ${1:-} in
   installed) [[ -x $dest/$exe ]] ;;
   find) find_game "${2:?folder}" ;;
   install)
-    [[ ${3:-} == --progress ]] && progress=1
-    install_game "${2:?folder of the original game}"
+    src=""
+    for arg in "${@:2}"; do
+      if [[ $arg == --progress ]]; then progress=1; else src=$arg; fi
+    done
+    install_game "$src"
     ;;
   run)
     cd "$dest" 2> /dev/null && [[ -x ./$exe ]] || {
@@ -153,7 +248,7 @@ case ${1:-} in
     exec "$0" run
     ;;
   *)
-    echo "Usage: fliperos-kof [installed | find FOLDER | install FOLDER [--progress]]" >&2
+    echo "Usage: fliperos-kof [installed | find FOLDER | install [FOLDER] [--progress]]" >&2
     exit 2
     ;;
 esac

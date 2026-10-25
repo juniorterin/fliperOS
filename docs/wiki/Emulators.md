@@ -256,7 +256,10 @@ Choosing one that is not installed installs it (`config/fliperos-emulators`):
 
 *The King of Fighters: Final Attack* is a MUGEN game in 16:9. The [4:3 patch](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) converts it to [Ikemen GO](https://github.com/ikemen-engine/Ikemen-GO) in 4:3 at 320x240 with one sprite pixel per screen pixel, for the CRT.
 
-**The game itself is not downloaded**: bring the folder of the original game (the one with `Final Attack.exe`) on a USB disk, over the network share or in the home folder, and point to it in the installer (the folder above it also works).
+The installer offers two ways to get the game:
+
+- **Download from itch.io**: the free game from [its page](https://united-by-games.itch.io/the-king-of-fighters-final-attack) (United By Games, a 1.4 GB zip) is downloaded, unpacked, patched and deleted by itself. It asks for 7 GB free (the zip, the unpacked game and the converted copy).
+- **Use a folder I have**: the folder of the original game (the one with `Final Attack.exe`) on a USB disk, over the network share or in the home folder (the folder above it also works).
 
 The installer (`config/fliperos-kof`) downloads the patch, which downloads Ikemen GO and a portable PowerShell (the conversion scripts are PowerShell), and makes the converted copy in `~/roms/ikemen/kof-final-attack` (about 2 GB; 3 GB free are asked for).
 

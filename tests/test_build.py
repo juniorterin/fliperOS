@@ -24,6 +24,7 @@ import tempfile
 import threading
 import time
 import unittest
+import zipfile
 from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11166,19 +11167,20 @@ class EmulatorsMenuTests(unittest.TestCase):
             self.run_cmd('fliperos-emulators', 'install', 'fightcade', '--progress', env=env)
             self.run_cmd('fliperos-emulators', 'install', 'duckstation', '--progress', env=env)
             self.run_cmd('fliperos-emulators', 'install', 'kof', '--progress', '--source', '/media/usb/KOF', env=env)
+            # Sem a pasta, o KOF baixa o jogo do itch.io.
+            self.run_cmd('fliperos-emulators', 'install', 'kof', '--progress', env=env)
             self.assertEqual(calls.read_text().splitlines(),
                              ['sm2emu --deps HOME=%s' % os.environ.get('HOME', ''),
                               'sm2emu --build HOME=%s' % (tmp / 'home'),
                               'fightcade fetch --progress HOME=%s' % os.environ.get('HOME', ''),
                               'duckstation fetch --progress HOME=%s' % os.environ.get('HOME', ''),
-                              'kof install /media/usb/KOF --progress HOME=%s' % (tmp / 'home')])
-            # O que vem compilado na imagem nao se instala daqui; o KOF pede a pasta do jogo.
+                              'kof install /media/usb/KOF --progress HOME=%s' % (tmp / 'home'),
+                              'kof install --progress HOME=%s' % (tmp / 'home')])
+            # O que vem compilado na imagem nao se instala daqui.
             run = self.run_cmd('fliperos-emulators', 'install', 'flycast', '--progress', env=env)
             self.assertEqual(run.returncode, 1)
             self.assertIn('@fail Flycast (Dreamcast, Naomi, Atomiswave)|it comes compiled in the FliperOS image',
                           run.stdout)
-            run = self.run_cmd('fliperos-emulators', 'install', 'kof', '--progress', env=env)
-            self.assertIn('@fail KOF Final Attack (Ikemen GO, 4:3)|the folder of the original game', run.stdout)
         sm2 = (ROOT / 'config/fliperos-sm2emu').read_text()
         self.assertIn('  --deps)\n    deps_missing || exit 0\n    install_deps\n', sm2)
         self.assertIn('if [[ -d $src/.git ]]; then build_tree update; else build_tree; fi', sm2)
@@ -11300,6 +11302,42 @@ class EmulatorsMenuTests(unittest.TestCase):
             # Sem o jogo na pasta: nada a fazer.
             run = self.run_cmd('fliperos-kof', 'install', str(tmp / 'home'), '--progress', env=env)
             self.assertIn('@fail KOF Final Attack|no "Final Attack.exe"', run.stdout)
+
+    @unittest.skipUnless(shutil.which('git'), 'sem git')
+    def test_kof_install_downloads_the_game_when_no_folder_is_given(self):
+        # Sem pasta, o zip do jogo (o do itch.io; aqui um file://) e baixado,
+        # aberto, convertido e apagado.
+        converter = ('#!/bin/bash\n[ -f "$(dirname "$0")/../Final Attack.exe" ] || exit 3\n'
+                     'while [ $# -gt 0 ]; do [ "$1" = -Out ] && out=$2; shift; done\n'
+                     'mkdir -p "$out" && echo ok > "$out/Ikemen_GO_Linux"\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            archive = tmp / 'the-king-of-fighters-final-attack-win.zip'
+            with zipfile.ZipFile(archive, 'w') as z:
+                z.writestr('Final Attack.exe', 'x')
+                z.writestr('data/mugen.cfg', '')
+            dest = tmp / 'home' / 'roms' / 'ikemen' / 'kof-final-attack'
+            download = tmp / 'home' / 'kof-game'
+            env = {'HOME': str(tmp / 'home'), 'FLIPEROS_KOF_REPO': str(self.kof_repo(tmp, converter)),
+                   'FLIPEROS_KOF_DIR': str(dest), 'FLIPEROS_KOF_CACHE': str(tmp / 'cache'),
+                   'FLIPEROS_KOF_ZIP': archive.as_uri(), 'FLIPEROS_KOF_DOWNLOAD': str(download),
+                   'FLIPEROS_KOF_DOWNLOAD_KB': '1', 'GIT_CONFIG_GLOBAL': '/dev/null'}
+            run = self.run_cmd('fliperos-kof', 'install', '--progress', env=env)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            steps = [int(line.split()[1]) for line in run.stdout.splitlines() if line.startswith('@step ')]
+            self.assertEqual(steps, sorted(steps))
+            self.assertIn('@step 0 Downloading the game from itch.io', run.stdout)
+            self.assertIn('@step 100 KOF Final Attack installed', run.stdout)
+            self.assertEqual((dest / 'Ikemen_GO_Linux').read_text(), 'ok\n')
+            self.assertFalse(download.exists())
+            self.assertFalse(Path(str(download) + '.zip').exists())
+            # Outro arquivo no lugar do zip: falha, e o instalado fica.
+            archive.write_text('not a zip')
+            run = self.run_cmd('fliperos-kof', 'install', '--progress', env=env)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail KOF Final Attack|the downloaded file is not a zip of the game', run.stdout)
+            self.assertEqual((dest / 'Ikemen_GO_Linux').read_text(), 'ok\n')
+            self.assertFalse(download.exists())
 
     def test_kof_opens_at_320x240_from_the_desktop_and_the_console(self):
         modes = (ROOT / 'config/fliperos-emulator-modes.conf').read_text()

@@ -749,7 +749,7 @@ screen_emulator_update() {
   line=$(emulators_update_line "$name" "$label")
   case $kind in
     build) entry="update|Update|The newest source, built again: several minutes." ;;
-    source) entry="update|Update|The newest 4:3 patch and Ikemen GO; converts again." ;;
+    source) entry="update|Update|The newest game, 4:3 patch and Ikemen GO; converts again." ;;
     *) entry="update|Update|Download the newest version over this one." ;;
   esac
   choice=$(ui_menu_hints "$label" "$line" "" "$entry" \
@@ -764,19 +764,32 @@ screen_emulator_update() {
   fi
 }
 
-# screen_emulators_kof NOME ROTULO INSTALADO: o KOF Final Attack nao e
-# baixado: a pessoa aponta a pasta do jogo original, e a instalacao baixa o
-# patch 4:3 e o Ikemen GO e monta a copia convertida (config/fliperos-kof).
+# screen_emulators_kof NOME ROTULO INSTALADO: o KOF Final Attack baixado do
+# itch.io, ou da pasta do jogo original que a pessoa aponta; a instalacao
+# baixa o patch 4:3 e o Ikemen GO e monta a copia convertida
+# (config/fliperos-kof).
 screen_emulators_kof() {
-  local name=$1 label=$2 inst=$3 title="KOF Final Attack" dir game
+  local name=$1 label=$2 inst=$3 title="KOF Final Attack" dir game choice
   if ((inst)); then
-    ui_yesno "$title" "$label is already installed. Install it again from the original game? The installed copy is replaced." no ||
+    ui_yesno "$title" "$label is already installed. Install it again? The installed copy is replaced." no ||
       return 0
   fi
-  ui_msg "$title" "The King of Fighters: Final Attack on Ikemen GO, in 4:3 at 320x240 for the CRT." "" \
-    "The game itself is not downloaded: bring the folder of the original game (the one with Final Attack.exe) on a USB disk, over the network share or in the home folder." \
-    "" "The installer downloads the 4:3 patch and Ikemen GO and makes a converted copy in ~/roms/ikemen (about 2 GB; needs the network). The original folder is not changed."
-  dir=$(ui_browse "$title" "Open the folder of the original game, then Use this folder." \
+  choice=$(ui_menu_hints "$title" \
+    "The King of Fighters: Final Attack on Ikemen GO, in 4:3 at 320x240 for the CRT. The 4:3 patch and Ikemen GO are downloaded and a converted copy is made in ~/roms/ikemen (about 2 GB)." "" \
+    "download|Download from itch.io|The free game from its page (1.4 GB), patched by itself. 7 GB free." \
+    "folder|Use a folder I have|The original game (Final Attack.exe) on a USB disk, the network or home." \
+    "return|Return|Back to Emulators & Games.") || return 0
+  case $choice in
+    download)
+      if run_online "Installing $title" "" emulators_install "$name"; then
+        ui_msg "$title" "$title installed." "" "It is in the desktop menu, in Games; on a terminal, fliperos-kof."
+      fi
+      return 0
+      ;;
+    folder) ;;
+    *) return 0 ;;
+  esac
+  dir=$(ui_browse "$title" "Open the folder of the original game, then Use this folder. It is not changed." \
     "$(folders_browse_start)" dir) || return 0
   if ! game=$(emulators_kof_find "$dir"); then
     ui_msg "$title" "No Final Attack.exe in $dir." "" "Choose the folder of the original game (MUGEN)."

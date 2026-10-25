@@ -129,7 +129,7 @@ Without a CTM (the cabinet's Radeon R7 240 on the `radeon` driver has only the 2
       Leaving the game (Esc) opens the FliperOS menu, whose first item becomes *Start* and the game's name. Choosing a game moves every service that starts at boot to *After boot* (below) and turns *Wait for network* off, so the game reaches the screen sooner.
 
       Before the game the boot also skips what only serves the frontends or needs the network: the FliperOS update check (it runs when the game closes, on the way to the menu, without waiting for a network that isn't up), the creation of missing `~/roms` folders and the frontends' preparation (game lists, art, 240p settings);
-    - **Emulators & Games** — the emulators of the desktop menu, each marked installed or not, and the installation of the ones that don't come in the image: Model 2 (built on the machine), Fightcade 2, DuckStation and KOF Final Attack on Ikemen GO.
+    - **Emulators & Games** — the emulators of the desktop menu, each marked installed or not, and the installation of the ones that don't come in the image: Model 2 (built on the machine), Fightcade 2, DuckStation and KOF Final Attack on Ikemen GO (downloaded from itch.io and patched by itself, or from a folder you bring).
 
       An installed one has **Update**, which downloads the newest version over it (Model 2: the newest source, built again; KOF Final Attack: the newest patch and Ikemen GO, converting the original game again); the ones that come in the image are updated with FliperOS. See [Emulators](Emulators.md#emulators--games);
     - **Extras** — installs over the network Wine (the Fightcade 2 emulators), Steam and Heroic (GOG), which are left out of the ISO so it fits in a single GitHub file. See [Emulators](Emulators.md).

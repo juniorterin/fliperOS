@@ -11,8 +11,9 @@
 # tipo: image (compilado na imagem: nao se instala depois), build (o SM2-Emu,
 # clonado e compilado na maquina: config/fliperos-sm2emu), fetch (baixado do
 # site de quem o faz: o Fightcade, config/fliperos-fightcade, e o DuckStation,
-# config/fliperos-duckstation) e source (um jogo que a pessoa traz, --source
-# PASTA: config/fliperos-kof).
+# config/fliperos-duckstation) e source (um jogo convertido: config/
+# fliperos-kof; baixado do itch.io, ou da pasta que a pessoa traz, --source
+# PASTA).
 #
 # Com --progress, as etapas saem no formato da tela de progresso do Setup
 # (lib/progress.sh); a saida dos comandos vai para o stderr (o log do Setup).
@@ -172,8 +173,8 @@ emulator_install() {
       ;;
     source)
       [[ -x $kof ]] || fail "the installer ($kof) is missing"
-      [[ -n $source ]] || fail "the folder of the original game was not given"
-      as_user "$kof" install "$source" "${args[@]}"
+      # Sem --source, o jogo vem do itch.io.
+      as_user "$kof" install ${source:+"$source"} "${args[@]}"
       ;;
     *) fail "unknown emulator: $name" ;;
   esac

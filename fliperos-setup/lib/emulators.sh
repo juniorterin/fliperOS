@@ -2,7 +2,8 @@
 # Setup > Games > Emulators & Games: os emuladores do menu do desktop, quais estao
 # instalados, e a instalacao dos que nao vem na imagem (o Model 2, compilado
 # na maquina; o Fightcade 2, baixado do site dele; o KOF Final Attack no
-# Ikemen GO, da pasta do jogo que a pessoa traz). O config/fliperos-emulators
+# Ikemen GO, baixado do itch.io ou da pasta que a pessoa traz). O
+# config/fliperos-emulators
 # os instala, escrevendo os eventos da tela de progresso (lib/progress.sh).
 
 EMULATORS_CMD=${EMULATORS_CMD:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-emulators}
@@ -26,7 +27,8 @@ emulators_kof_find() {
   [[ -x $KOF_CMD ]] && "$KOF_CMD" find "$1"
 }
 
-# emulators_install NOME [PASTA]: PASTA e a do jogo original (tipo source).
+# emulators_install NOME [PASTA]: PASTA e a do jogo original (tipo source;
+# sem ela, o jogo e baixado).
 emulators_install() {
   local args=()
   ev_step 0 "Starting"
