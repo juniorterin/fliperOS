@@ -1886,7 +1886,9 @@ function padUrl() {
   const url = location.origin + ovlData.input + (players !== "1" ? "&players=" + players : "");
   $("pad-url").value = url;
   $("pad-open").href = url;
-  if (location.hash.slice(1) === "live") padPreview(true);
+  // A pagina aberta, nao o #: o painel tambem abre na ultima pagina usada,
+  // sem # no endereco, e ai a previa nao carregava.
+  if (page === "live") padPreview(true);
 }
 
 // A previa: o mesmo endereco, com o CSS do editor; com Demonstracao, aperta
