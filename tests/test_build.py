@@ -5705,6 +5705,16 @@ class WebPanelTests(unittest.TestCase):
             if line.startswith(b'data: '):
                 event = json.loads(line[len(b'data: '):])
         self.assertEqual(event, {'1': ['up', 'b1'], '2': []})
+        # O CSS ao vivo: salvo no painel, a pagina aberta recebe "event: css"
+        # e o pede de novo, sem atualizar a fonte no OBS.
+        self.assertEqual(self.request('POST', '/api/overlay/input/style', {'css': '.pad { opacity: 1; }'},
+                                      cookie=cookie)[0], 200)
+        line = b''
+        while line != b'event: css\n':
+            line = res.fp.readline()
+            self.assertTrue(line)
+        self.assertTrue(res.fp.readline().startswith(b'data: '))
+        self.request('POST', '/api/overlay/input/style', {'reset': True}, cookie=cookie)
         conn.close()
         self.assertEqual((tmp / 'buttons.log').read_text(), 'watch /etc/fliperos/buttons.map\n')
 

@@ -32,7 +32,7 @@ The web panel's Live screen works again on AMD cards, and it now says what went 
 **Tool changes:**
 
 - `fliperos-buttons watch [MAP]` prints the pressed controls of each player as one JSON line per change
-- Web panel: the Controller for OBS card has a CSS editor with syntax colours, a live preview and a demo that presses the buttons by itself; *Save* writes `/etc/fliperos/input-overlay.css`, *Factory CSS* goes back to the default
+- Web panel: the Controller for OBS card has a CSS editor with syntax colours, a live preview, a demo that presses the buttons by itself and *Format* (one property per line). *Save* writes `/etc/fliperos/input-overlay.css` and the pages open in OBS change at once, without refreshing the source; *Factory CSS* goes back to the default
 - `fliperos-stream status` reports the quality and the last capture error
 
 **Documentation:**

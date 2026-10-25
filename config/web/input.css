@@ -4,58 +4,182 @@
    .stick. As classes estao em /input.js. */
 
 :root {
-  --u: min(1vh, 0.5vw);          /* 1 jogador: a fonte inteira em 2:1 */
-  --b1: #ff5555; --b2: #ffb86c; --b3: #f1fa8c;
-  --b4: #50fa7b; --b5: #8be9fd; --b6: #bd93f9;
+  --u: min(1vh, 0.5vw);  /* 1 jogador: a fonte inteira em 2:1 */
+  --b1: #ff5555;
+  --b2: #ffb86c;
+  --b3: #f1fa8c;
+  --b4: #50fa7b;
+  --b5: #8be9fd;
+  --b6: #bd93f9;
   --ink: #191a21;
   --text: #f8f8f2;
 }
-.players-2 { --u: min(1vh, 0.25vw); }   /* 2 jogadores lado a lado */
+
+/* 2, 3 ou 4 jogadores lado a lado. */
+.players-2 { --u: min(1vh, 0.25vw); }
 .players-3 { --u: min(1vh, 0.1667vw); }
 .players-4 { --u: min(1vh, 0.125vw); }
 
-html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
-body { font: 800 calc(var(--u) * 6)/1 system-ui, "Segoe UI", Roboto, sans-serif; color: var(--text); }
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  font: 800 calc(var(--u) * 6)/1 system-ui, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+}
+
 [hidden] { display: none !important; }
 
-.pads { display: flex; justify-content: center; align-items: center; height: 100%; }
-.pad { position: relative; width: calc(var(--u) * 200); height: calc(var(--u) * 100); flex: none; }
+.pads {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
 
-.label { position: absolute; left: calc(var(--u) * 8); top: calc(var(--u) * 6);
-  font-size: calc(var(--u) * 9); color: #ff79c6; text-shadow: 0 calc(var(--u) * .6) 0 var(--ink); }
+.pad {
+  position: relative;
+  flex: none;
+  width: calc(var(--u) * 200);
+  height: calc(var(--u) * 100);
+}
+
+/* P1, P2... */
+.label {
+  position: absolute;
+  left: calc(var(--u) * 8);
+  top: calc(var(--u) * 6);
+  font-size: calc(var(--u) * 9);
+  color: #ff79c6;
+  text-shadow: 0 calc(var(--u) * 0.6) 0 var(--ink);
+}
+
 .p2 .label { color: #8be9fd; }
 
 /* O direcional: a base e a bola, que vai para o lado apertado. */
-.stick { position: absolute; left: calc(var(--u) * 16); top: calc(var(--u) * 24);
-  width: calc(var(--u) * 60); height: calc(var(--u) * 60); --x: 0; --y: 0; }
-.stick.up { --y: -1; } .stick.down { --y: 1; } .stick.left { --x: -1; } .stick.right { --x: 1; }
-.stick[data-dir*="-"] { --k: .7; }   /* na diagonal, a mesma distancia do centro */
-.gate { position: absolute; inset: 0; border-radius: 50%; background: rgba(25, 26, 33, .75);
-  border: calc(var(--u) * 1.2) solid #44475a; box-sizing: border-box; }
-.ball { position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 28); height: calc(var(--u) * 28);
-  margin: calc(var(--u) * -14) 0 0 calc(var(--u) * -14); border-radius: 50%;
+.stick {
+  --x: 0;
+  --y: 0;
+  position: absolute;
+  left: calc(var(--u) * 16);
+  top: calc(var(--u) * 24);
+  width: calc(var(--u) * 60);
+  height: calc(var(--u) * 60);
+}
+
+.stick.up { --y: -1; }
+.stick.down { --y: 1; }
+.stick.left { --x: -1; }
+.stick.right { --x: 1; }
+
+/* Na diagonal, a mesma distancia do centro. */
+.stick[data-dir*="-"] { --k: 0.7; }
+
+.gate {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: calc(var(--u) * 1.2) solid #44475a;
+  background: rgba(25, 26, 33, 0.75);
+}
+
+.ball {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--u) * 28);
+  height: calc(var(--u) * 28);
+  margin: calc(var(--u) * -14) 0 0 calc(var(--u) * -14);
+  border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #ff9bd3, #ff79c6 45%, #b0337f);
-  box-shadow: 0 calc(var(--u) * 1.5) calc(var(--u) * 3) rgba(0, 0, 0, .55);
-  transform: translate(calc(var(--x) * var(--k, 1) * var(--u) * 16), calc(var(--y) * var(--k, 1) * var(--u) * 16));
-  transition: transform 40ms linear; }
+  box-shadow: 0 calc(var(--u) * 1.5) calc(var(--u) * 3) rgba(0, 0, 0, 0.55);
+  transform: translate(calc(var(--x) * var(--k, 1) * var(--u) * 16),
+                       calc(var(--y) * var(--k, 1) * var(--u) * 16));
+  transition: transform 40ms linear;
+}
 
 /* Os botoes: 1 2 3 em cima e 4 5 6 embaixo, na curva de um painel Vewlix. */
-.buttons { position: absolute; left: calc(var(--u) * 92); top: calc(var(--u) * 26);
-  display: grid; grid-template-columns: repeat(3, calc(var(--u) * 26)); gap: calc(var(--u) * 8) calc(var(--u) * 6); }
-.buttons .b1, .buttons .b4 { transform: translateY(calc(var(--u) * 6)); }
-.button { position: relative; display: grid; place-items: center; width: calc(var(--u) * 26); height: calc(var(--u) * 26);
-  border-radius: 50%; background: var(--c, #6272a4); color: var(--ink); opacity: .55;
-  border: calc(var(--u) * 1.2) solid rgba(25, 26, 33, .8); box-sizing: border-box;
-  box-shadow: inset 0 calc(var(--u) * -2.5) 0 rgba(0, 0, 0, .3); transition: opacity 40ms, filter 40ms; }
-.b1 { --c: var(--b1); } .b2 { --c: var(--b2); } .b3 { --c: var(--b3); }
-.b4 { --c: var(--b4); } .b5 { --c: var(--b5); } .b6 { --c: var(--b6); }
-.button.on { opacity: 1; filter: brightness(1.25); box-shadow: 0 0 calc(var(--u) * 6) var(--c, #f8f8f2), inset 0 calc(var(--u) * 1.5) 0 rgba(0, 0, 0, .3); }
-.buttons .button.on { scale: .92; }
+.buttons {
+  position: absolute;
+  left: calc(var(--u) * 92);
+  top: calc(var(--u) * 26);
+  display: grid;
+  grid-template-columns: repeat(3, calc(var(--u) * 26));
+  gap: calc(var(--u) * 8) calc(var(--u) * 6);
+}
+
+.buttons .b1,
+.buttons .b4 {
+  transform: translateY(calc(var(--u) * 6));
+}
+
+.button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: calc(var(--u) * 26);
+  height: calc(var(--u) * 26);
+  border-radius: 50%;
+  border: calc(var(--u) * 1.2) solid rgba(25, 26, 33, 0.8);
+  background: var(--c, #6272a4);
+  color: var(--ink);
+  opacity: 0.55;
+  box-shadow: inset 0 calc(var(--u) * -2.5) 0 rgba(0, 0, 0, 0.3);
+  transition: opacity 40ms, filter 40ms;
+}
+
+/* A cor de cada botao. */
+.b1 { --c: var(--b1); }
+.b2 { --c: var(--b2); }
+.b3 { --c: var(--b3); }
+.b4 { --c: var(--b4); }
+.b5 { --c: var(--b5); }
+.b6 { --c: var(--b6); }
+
+/* Apertado. */
+.button.on {
+  opacity: 1;
+  filter: brightness(1.25);
+  box-shadow: 0 0 calc(var(--u) * 6) var(--c, #f8f8f2),
+              inset 0 calc(var(--u) * 1.5) 0 rgba(0, 0, 0, 0.3);
+}
+
+.buttons .button.on { scale: 0.92; }
 
 /* Start e Coin: pilulas pequenas em cima. */
-.system { position: absolute; right: calc(var(--u) * 10); top: calc(var(--u) * 6); display: flex; gap: calc(var(--u) * 4); }
-.system .button { width: calc(var(--u) * 26); height: calc(var(--u) * 11); border-radius: calc(var(--u) * 6);
-  font-size: calc(var(--u) * 4.5); text-transform: uppercase; --c: #f8f8f2; }
+.system {
+  position: absolute;
+  right: calc(var(--u) * 10);
+  top: calc(var(--u) * 6);
+  display: flex;
+  gap: calc(var(--u) * 4);
+}
 
-.error { position: fixed; left: 2vw; bottom: 2vh; margin: 0; font-size: 14px; color: #ff5555;
-  background: rgba(25, 26, 33, .85); padding: 4px 8px; border-radius: 6px; }
+.system .button {
+  --c: #f8f8f2;
+  width: calc(var(--u) * 26);
+  height: calc(var(--u) * 11);
+  border-radius: calc(var(--u) * 6);
+  font-size: calc(var(--u) * 4.5);
+  text-transform: uppercase;
+}
+
+/* O aviso de endereco errado. */
+.error {
+  position: fixed;
+  left: 2vw;
+  bottom: 2vh;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #ff5555;
+  background: rgba(25, 26, 33, 0.85);
+}

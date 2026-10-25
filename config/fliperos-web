@@ -1762,6 +1762,14 @@ class InputWatch:
         self.proc = None
         self.state = "{}"
         self.version = 0
+        # O CSS salvo no painel: cada pagina aberta o pede de novo na hora.
+        self.css = 0
+
+    def css_changed(self):
+        with self.cond:
+            self.css += 1
+            self.version += 1
+            self.cond.notify_all()
 
     def join(self):
         with self.cond:
@@ -1809,11 +1817,11 @@ class InputWatch:
                 self.start()
 
     def wait(self, version, timeout):
-        """O estado (versao, JSON) quando mudar da versao dada, ou o mesmo
-        depois de timeout segundos."""
+        """(versao, JSON do estado, versao do CSS) quando mudar da versao
+        dada, ou os mesmos depois de timeout segundos."""
         with self.cond:
             self.cond.wait_for(lambda: self.version != version, timeout)
-            return self.version, self.state
+            return self.version, self.state, self.css
 
 
 def input_css():
@@ -2456,6 +2464,7 @@ class Handler(BaseHTTPRequestHandler):
                 save_input_css(css)
             except OSError as exc:
                 return self.send(500, {"error": str(exc)})
+            self.panel.input.css_changed()
             return self.send(200, {"css": input_css(), "custom": os.path.isfile(INPUT_CSS)})
         if url.path == "/api/settings":
             data = self.body()
@@ -2622,14 +2631,18 @@ class Handler(BaseHTTPRequestHandler):
         watch = self.panel.input
         watch.join()
         try:
-            version, sent = None, None
+            version, sent, css = None, None, None
             while True:
-                version, state = watch.wait(version, 15)
+                version, state, now = watch.wait(version, 15)
+                out = b""
+                # O CSS mudou no painel: a pagina o pede de novo (event: css).
+                if css is not None and now != css:
+                    out += b"event: css\ndata: %d\n\n" % now
+                css = now
                 if state != sent:
-                    self.wfile.write(b"data: " + state.encode() + b"\n\n")
+                    out += b"data: " + state.encode() + b"\n\n"
                     sent = state
-                else:
-                    self.wfile.write(b": ping\n\n")
+                self.wfile.write(out or b": ping\n\n")
                 self.wfile.flush()
         except OSError:
             pass

@@ -77,7 +77,7 @@ const TEXT = {
     pad_note: "Your controller on the stream: the stick and the buttons light up while you press them on the cabinet (the controls of Setup > Joysticks > Button mapping, or a keyboard encoder). Transparent background; same key as the marquee.",
     pad_players: "Players", pad_p1: "Player 1", pad_p2: "Player 2", pad_p12: "Players 1 and 2",
     pad_demo: "Demo in the preview (presses by itself)", pad_css: "Page CSS",
-    pad_css_save: "Save", pad_css_reset: "Factory CSS", pad_css_saved: "CSS saved. In OBS, refresh the source (Properties > Refresh cache of current page).",
+    pad_css_save: "Save", pad_css_reset: "Factory CSS", pad_css_format: "Format", pad_css_saved: "CSS saved: the open OBS pages change right away.",
     pad_css_reset_ask: "Go back to the factory CSS? Your CSS is erased.",
     pad_css_changed: "not saved", pad_css_custom: "yours", pad_css_default: "factory",
     pad_css_note: "The preview follows what you type. Classes: .pad (.p1, .p2, .active), .label, .stick (.up .down .left .right) with .gate and .ball, .button (.b1 to .b6, .start, .coin; .on while pressed). The sizes use --u (one panel is 200 × 100 --u).",
@@ -202,7 +202,7 @@ const TEXT = {
     pad_note: "O seu controle na transmissão: o direcional e os botões acendem enquanto você aperta no gabinete (os controles do Setup > Joysticks > Button mapping, ou um encoder de teclado). Fundo transparente; mesma chave do marquee.",
     pad_players: "Jogadores", pad_p1: "Jogador 1", pad_p2: "Jogador 2", pad_p12: "Jogadores 1 e 2",
     pad_demo: "Demonstração na prévia (aperta sozinho)", pad_css: "CSS da página",
-    pad_css_save: "Salvar", pad_css_reset: "CSS de fábrica", pad_css_saved: "CSS salvo. No OBS, recarregue a fonte (Propriedades > Atualizar cache da página atual).",
+    pad_css_save: "Salvar", pad_css_reset: "CSS de fábrica", pad_css_format: "Formatar", pad_css_saved: "CSS salvo: as páginas abertas no OBS mudam na hora.",
     pad_css_reset_ask: "Voltar ao CSS de fábrica? O seu CSS é apagado.",
     pad_css_changed: "não salvo", pad_css_custom: "seu", pad_css_default: "de fábrica",
     pad_css_note: "A prévia segue o que você digita. Classes: .pad (.p1, .p2, .active), .label, .stick (.up .down .left .right) com .gate e .ball, .button (.b1 a .b6, .start, .coin; .on enquanto apertado). Os tamanhos usam --u (um painel tem 200 × 100 --u).",
@@ -1966,6 +1966,77 @@ function cssTokens(text) {
   return out;
 }
 
+// Formatar: uma propriedade por linha, dois espacos por nivel, uma linha
+// em branco entre as regras e cada seletor de uma lista na sua linha. Os
+// comentarios e os textos ficam como estao (os tokens do realce).
+function cssFormat(text) {
+  const toks = cssTokens(text).map(([, tok]) => tok);
+  // nextOf[i]: o primeiro "{", ";" ou "}" depois do token i.
+  const nextOf = new Array(toks.length + 1).fill("");
+  for (let i = toks.length - 1; i >= 0; i--) {
+    const t = toks[i + 1];
+    nextOf[i] = t === "{" || t === ";" || t === "}" ? t : nextOf[i + 1];
+  }
+  let out = "", depth = 0, paren = 0, gap = "";
+  const pad = () => "  ".repeat(depth);
+  const line = () => { out = out.replace(/[ \t]+$/, ""); if (out && !out.endsWith("\n")) out += "\n"; };
+  const fresh = () => out === "" || out.endsWith("\n");
+  for (let i = 0; i < toks.length; i++) {
+    const tok = toks[i];
+    if (/^\s+$/.test(tok)) {
+      gap = tok;
+      // A linha em branco do original entre as regras fica.
+      if (fresh() && out && depth === 0 && (tok.match(/\n/g) || []).length >= 2 && !out.endsWith("\n\n")) out += "\n";
+      if (!fresh() && !out.endsWith(" ")) out += " ";
+      continue;
+    }
+    const before = gap;
+    gap = "";
+    if (tok.startsWith("/*")) {
+      if (fresh() && out && !before.includes("\n")) {
+        // Depois do codigo na mesma linha: continua no fim dela.
+        const breaks = out.match(/\n*$/)[0];
+        out = out.slice(0, out.length - breaks.length) + "  " + tok + breaks;
+      } else if (fresh()) {
+        out += pad() + tok + "\n";
+      } else {
+        // No meio de um valor: fica ali.
+        out = out.replace(/\s+$/, "") + " " + tok;
+      }
+      continue;
+    }
+    if (tok === "(") paren++;
+    if (tok === ")") paren = Math.max(0, paren - 1);
+    if (tok === "{") {
+      out = out.replace(/\s+$/, "") + " {\n";
+      depth++;
+    } else if (tok === "}") {
+      // A ultima declaracao sem ";" ganha o seu.
+      const last = out.replace(/\s+$/, "");
+      if (!/[;{}]$/.test(last) && !last.endsWith("*/") && !fresh()) out = last + ";";
+      line();
+      depth = Math.max(0, depth - 1);
+      out += pad() + "}\n";
+      if (depth === 0) out += "\n";
+    } else if (tok === ";" && paren === 0) {
+      out = out.replace(/\s+$/, "") + ";\n";
+    } else if (tok === "," && depth === 0 && paren === 0) {
+      out = out.replace(/\s+$/, "") + ",\n";
+    } else {
+      if (fresh()) out += pad();
+      // O proximo { ; ou }: um "{" antes e seletor (a:hover num @media).
+      if (tok === ":" && depth > 0 && paren === 0 && nextOf[i] !== "{") {
+        // A propriedade: "nome: valor".
+        out = out.replace(/\s+$/, "") + ":";
+        if (toks[i + 1] && !/^\s/.test(toks[i + 1])) out += " ";
+        continue;
+      }
+      out += tok;
+    }
+  }
+  return out.replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+
 function padHighlight() {
   const pre = $("pad-css-hl");
   pre.replaceChildren(...cssTokens($("pad-css").value).map(([cls, tok]) => cls ? el("span", { class: cls }, tok) : document.createTextNode(tok)),
@@ -2024,6 +2095,17 @@ async function padSave(body) {
   toast(t("pad_css_saved"));
 }
 $("pad-css-save").addEventListener("click", () => padSave({ css: $("pad-css").value }));
+// Formatar entra no historico do campo (Ctrl+Z desfaz).
+$("pad-css-format").addEventListener("click", () => {
+  const area = $("pad-css"), css = cssFormat(area.value);
+  if (css === area.value) return;
+  area.focus();
+  area.select();
+  if (!document.execCommand("insertText", false, css)) area.value = css;
+  area.setSelectionRange(0, 0);
+  area.scrollTop = 0;
+  area.dispatchEvent(new Event("input"));
+});
 $("pad-css-reset").addEventListener("click", () => {
   if (confirm(t("pad_css_reset_ask"))) padSave({ reset: true });
 });

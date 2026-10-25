@@ -22,6 +22,7 @@
 const params = new URLSearchParams(location.search);
 const key = params.get("key") || "";
 const demo = params.get("demo") === "1";
+const preview = params.get("preview") === "1" && window.parent !== window;
 const players = (params.get("players") || "1").split(",").filter((p) => /^[1-4]$/.test(p));
 if (!players.length) players.push("1");
 const $ = (id) => document.getElementById(id);
@@ -93,6 +94,9 @@ function listen() {
     try { show(JSON.parse(ev.data)); } catch (e) { /* linha estragada */ }
   };
   events.onerror = () => show({});
+  // Salvo no painel (ou de volta ao de fabrica): o CSS novo na hora, sem
+  // atualizar a fonte no OBS. Na previa o CSS vem do editor.
+  events.addEventListener("css", () => { if (!preview) loadStyle(); });
 }
 
 // A demonstracao: um golpe de luta (meia-lua para frente + soco) e os outros
@@ -110,5 +114,5 @@ function runDemo() {
 build();
 // Na previa do painel (&preview=1) o CSS e o que esta sendo escrito, que o
 // painel poe no <style>.
-if (!(params.get("preview") === "1" && window.parent !== window)) loadStyle();
+if (!preview) loadStyle();
 if (demo) runDemo(); else listen();
