@@ -29,6 +29,7 @@ RETRY_DAYS = 30
 PAUSE = 0.6                # entre um jogo e outro (o Arcade Database agradece)
 TORRENT_EVERY = 6 * 3600   # de quanto em quanto tempo os pacotes sao conferidos
 STATUS_EVERY = 20          # o andamento dos torrents, enquanto baixam
+RESUME_EVERY = 600         # um pacote parado (servico fora do ar): tenta retomar
 # O plano B dos pacotes parados (config/fliperos-mediapacks kick): o arquivo
 # da vez por HTTP do archive.org quando o torrent nao anda.
 MEDIAPACKS = os.environ.get("FLIPEROS_MEDIAPACKS", "/opt/fliperos/bin/fliperos-mediapacks")
@@ -338,12 +339,26 @@ class Harvester:
 
         threading.Thread(target=run, daemon=True).start()
 
+    def resume(self):
+        """Um pacote "stopped": o servico de download nao sobe no boot, e um
+        reboot no meio dos videos deixava o pacote parado ate o proximo
+        torrents(), 6 h depois. O Setup o sobe e retoma o torrent de onde
+        parou (--mediapacks resume), de RESUME_EVERY em RESUME_EVERY."""
+        if not any(state == "stopped" for state, _ in self.packs.values()):
+            return
+        if time.time() - getattr(self, "resumed", 0) < RESUME_EVERY:
+            return
+        self.resumed = time.time()
+        self.fd.setup("--mediapacks", "resume", timeout=600)
+        self.status()
+
     def watch(self):
         """O andamento dos torrents enquanto houver um baixando."""
         time.sleep(15)
         while True:
             if self.state.get("torrents") and not self.external:
                 self.status()
+                self.resume()
                 self.publish()
                 if self.publishing and self.torrent and self.torrent[1] == "downloading":
                     self.kick()

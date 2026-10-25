@@ -638,6 +638,47 @@ def cmd_kick(args):
             step_done(rpc, pack, meta)
 
 
+def cmd_resume(args):
+    """Os pacotes em andamento continuam de onde pararam, com o servico de
+    volta (ele nao sobe no boot: o gabinete desligado no meio dos videos do
+    MAME deixava o pacote "stopped" ate o proximo auto, 6 h depois, e o auto
+    recomecava do primeiro .zip). O torrent que sumiu do Transmission volta
+    pelo link, com so os arquivos da vez marcados; o que ia por HTTP fica
+    com o kick, que retoma o arquivo pelo Range."""
+    active = packs('.json')
+    if not active:
+        return
+    rpc = dl.Rpc()
+    try:
+        rpc.wait(30)
+    except OSError as e:
+        sys.exit('fliperos-mediapacks: %s' % e)
+    for pack in active:
+        with lock():
+            meta = meta_of(pack)
+            if not meta or meta.get('http'):
+                continue
+            try:
+                t = rpc.torrent(meta['hash'], ['status'])
+                if t is None:
+                    hash_, t = add_torrent(rpc, meta['link'], folder_of(pack), False, args.timeout)
+                    if hash_ != meta['hash'] or len(t['files']) != len(meta['files']):
+                        print('fliperos-mediapacks: %s: the link now gives another torrent' % pack, file=sys.stderr)
+                        continue
+                    wanted = set(meta['wanted'])
+                    rpc.call('torrent-set', ids=[hash_], **{'files-wanted': sorted(wanted)})
+                    unwanted = [i for i in range(len(meta['files'])) if i not in wanted]
+                    if unwanted:
+                        rpc.call('torrent-set', ids=[hash_], **{'files-unwanted': unwanted})
+                elif t['status'] != 0:
+                    continue
+                rpc.call('torrent-set', ids=[meta['hash']], seedRatioMode=dl.UNLIMITED)
+                dl.start_running(rpc, meta['hash'])
+                print('fliperos-mediapacks: %s resumed' % pack, file=sys.stderr)
+            except OSError as e:
+                print('fliperos-mediapacks: %s: %s' % (pack, e), file=sys.stderr)
+
+
 def next_archive(rpc, pack, meta, found):
     """Depois de instalar o compactado da vez: ele sai do disco e o proximo
     da fila que ainda pode ter algo que falta comeca. False: acabou a fila."""
@@ -698,6 +739,9 @@ def main():
     sub.add_parser('status').set_defaults(func=cmd_status)
     sub.add_parser('finish').set_defaults(func=cmd_finish)
     sub.add_parser('kick').set_defaults(func=cmd_kick)
+    p = sub.add_parser('resume')
+    p.add_argument('--timeout', type=int, default=300)
+    p.set_defaults(func=cmd_resume)
     p = sub.add_parser('cancel')
     p.add_argument('id')
     p.set_defaults(func=cmd_cancel)

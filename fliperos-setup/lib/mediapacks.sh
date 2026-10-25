@@ -162,6 +162,22 @@ mediapacks_start() {
   return "$rc"
 }
 
+# mediapacks_active: algum pacote em andamento (o .json do estado).
+mediapacks_active() {
+  compgen -G "$MEDIAPACKS_STATE/*.json" > /dev/null
+}
+
+# mediapacks_resume (fliperos-setup --mediapacks resume): com pacote em
+# andamento, o servico de volta e cada torrent continuando de onde parou. O
+# servico nao sobe no boot, entao um reboot no meio deixava o pacote parado.
+mediapacks_resume() {
+  mediapacks_active || return 0
+  downloader_prepare
+  mediapacks_prepare
+  downloader_service_on
+  mediapacks resume >> "$FLIPEROS_LOG" 2>&1
+}
+
 # mediapacks_auto: o scrape automatico do frontend do FliperOS
 # (fliperos-setup --mediapacks auto). Poe para baixar os pacotes de toda
 # pasta com jogos, so os arquivos dos jogos que ainda nao tem a arte, como o
@@ -181,11 +197,15 @@ mediapacks_auto() {
     mediapacks_finish
     status=$(mediapacks_status)
   fi
+  mediapacks_resume
   # O fd 3: o mediapacks_start nao le a lista no lugar do teclado.
   while IFS=$'\t' read -r id _ folders _ <&3; do
     (($(mediapacks_games "$folders") > 0)) || continue
     st=$(romclean_value "$status" "pack.$id")
     [[ ${st%%|*} == downloading ]] && continue
+    # Em andamento, mesmo parado: o resume ja o retomou. O start o apagaria
+    # e recomecaria do primeiro .zip (GB cada, nos videos do MAME).
+    [[ -f $MEDIAPACKS_STATE/$id.json ]] && continue
     if ((!started)); then
       downloader_service_on
       started=1

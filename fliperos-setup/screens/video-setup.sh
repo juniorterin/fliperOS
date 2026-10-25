@@ -148,6 +148,39 @@ screen_resolution() {
   VIDEO_CHANGED=1
 }
 
+# screen_low_dotclock_retest repete o grid de dotclock baixo da NVIDIA (o
+# teste de saidas o faz uma vez) e, se o resultado mudou, refaz o modo de
+# boot, o Switchres, o MAME e o RetroArch com ele.
+screen_low_dotclock_retest() {
+  local title="Low resolution test" card conn monitor before=0 after=0
+  card=$(conf_get card 2> /dev/null) || return 0
+  conn=$(conf_get connector 2> /dev/null) || return 0
+  monitor=$(conf_get monitor 2> /dev/null) || monitor=generic_15
+  if ((SETUP_REMOTE == 1)) || [[ -n ${DISPLAY:-} ]]; then
+    ui_msg "$title" "The grid opens on the cabinet screen, from the FliperOS menu (not over SSH or inside the desktop)."
+    return 0
+  fi
+  if ! drm_is_analog "$conn" || [[ $(monitor_frequency "$monitor" 2> /dev/null) != 15k ]]; then
+    ui_msg "$title" "The test needs an analog output (VGA, DVI-I) and a 15 kHz monitor." "" \
+      "This output ($conn, $(monitor_label "$monitor")) keeps the super resolutions."
+    return 0
+  fi
+  drm_card_low_dotclock "$card" && before=1
+  screen_low_dotclock_test "$card" "$monitor" && after=1
+  if ((after)); then
+    ui_msg "$title" "$(ui_yes "Native low resolutions will be used on this card.")"
+  else
+    ui_msg "$title" "Super resolutions will be used on this card."
+  fi
+  ((before == after)) && return 0
+  if ! video_low_dotclock_apply; then
+    ui_msg "$title" "Could not save the new video settings (see the log)."
+    return 0
+  fi
+  xorg_generate
+  VIDEO_CHANGED=1
+}
+
 # screen_custom_resolution e o worker_custom_video_mode do gasetup: testa o
 # modo no grid do Switchres antes de gerar o EDID, para ninguem ficar com
 # tela preta no proximo boot.
@@ -570,6 +603,10 @@ screen_video_setup() {
   local driver=()
   [[ -n $(drm_dual_amd_cards) ]] &&
     driver=("driver|Video driver|radeon (tested on the CRT) or amdgpu (with Vulkan).")
+  # O grid de dotclock baixo so com uma NVIDIA (nouveau) na saida principal.
+  local lowdot=()
+  drm_card_low_dotclock_testable "$(conf_get card 2> /dev/null)" 2> /dev/null &&
+    lowdot=("lowdot|Low resolutions|NVIDIA: test if this card shows native 15 kHz modes.")
   while true; do
     # Ate 5 linhas na interface grafica, ou o carrossel de icones vira lista:
     # a orientacao vai junto da resolucao, e Monitors so com mais de um.
@@ -590,6 +627,7 @@ screen_video_setup() {
       "mode480|480i hacks|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
       "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour and hue." \
       "${driver[@]}" \
+      "${lowdot[@]}" \
       "return|Return|Save and leave. New video settings need a reboot.") || choice="return"
     last=$choice
     case $choice in
@@ -602,6 +640,7 @@ screen_video_setup() {
       mode480) screen_mode480 ;;
       colour) screen_colour ;;
       driver) screen_amd_driver ;;
+      lowdot) screen_low_dotclock_retest ;;
       return) break ;;
     esac
   done

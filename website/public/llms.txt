@@ -4,7 +4,7 @@
 
 Key facts:
 
-- Video: Linux 6.18 LTS with the 15 kHz patches (the same as GroovyArcade's linux-15khz), Switchres, boot at 15, 25 or 31 kHz or on an LCD. AMD Radeon cards with VGA or DVI-I output (HD 2000 to R7/R9 200 and 300) generate 15 kHz natively; Intel and NVIDIA work with super resolution modes.
+- Video: Linux 6.18 LTS with the 15 kHz patches (the same as GroovyArcade's linux-15khz), Switchres, boot at 15, 25 or 31 kHz or on an LCD. AMD Radeon cards with VGA or DVI-I output (HD 2000 to R7/R9 200 and 300) generate 15 kHz natively; Intel and NVIDIA work with super resolution modes; an NVIDIA with VGA or DVI-I (GeForce 8 to GTX 900) gets native resolutions if it passes a 320x240 grid test.
 - Emulators: GroovyMAME, RetroArch, Flycast (Dreamcast, Naomi, Atomiswave), PCSX2, Dolphin, Supermodel (Model 3), SM2-Emu (Model 2), DuckStation, Hypseus Singe and OpenBOR.
 - Frontends: Attract-Mode Plus (Arcadeflow theme), EmulationStation (ES-DE), Pegasus and Fightcade 2 for online matches.
 - Web panel at http://fliperos.local: pick a game and play it on the tube, watch the cabinet live, put the live screen and the marquee in OBS, change colour and 480i settings while playing, upload games, filter a MAME romset, download only the games that pass, check the system status, open a terminal.

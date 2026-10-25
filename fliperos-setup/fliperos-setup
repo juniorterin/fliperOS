@@ -25,7 +25,7 @@
 #   --latency-boot, --session-start, --session-end, --volume up|down|mute|get|set N, --systems, --downloader status|add|start|remove, --settings, --setting KEY VALUE, --outputs main|all,
 #   --padkeys on|off, --services-boot, --services-screen, --services-late (lib/services.sh),
 #   --bios-check (as BIOS que faltam, lib/downloader.sh),
-#   --romlists, --mediapacks auto|status (o frontend do FliperOS),
+#   --romlists, --mediapacks auto|resume|status (o frontend do FliperOS),
 #   --scrape-now RESULTADO [CHAVE...] (o Scrape the games em segundo plano)
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
@@ -316,9 +316,11 @@ main() {
     --mediapacks)
       # O scrape automatico do frontend do FliperOS: auto poe os pacotes de
       # arte em torrent para baixar (so o que falta, lib/mediapacks.sh);
-      # status diz o andamento.
+      # resume retoma os que pararam (servico fora do ar depois de um
+      # reboot); status diz o andamento.
       case ${2:-} in
         auto) mediapacks_auto ;;
+        resume) mediapacks_resume ;;
         status) mediapacks_status ;;
         *) return 1 ;;
       esac

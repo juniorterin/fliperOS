@@ -2,6 +2,7 @@
 
 Using it
 
+- [Video cards](Video-cards.md)
 - [Install](Install.md)
 - [Installed system](Installed-system.md)
 - [Web panel](Web-panel.md)

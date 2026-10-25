@@ -29,9 +29,11 @@ version-specific.
 | `08_linux_15khz_interlace_force_even.patch` | Even fields in interlaced mode on **amdgpu/DCN1** |
 | `09_linux_15khz_i915_gen9_interlace.patch` | Interlacing on **Intel Gen9** with `i915.no_ytiled_scanout=1` (the "Intel 15 kHz" boot entry passes this parameter) |
 
-Covers **radeon**, **amdgpu** (DCE and DCN1-3) and, through 09, **i915 Gen9**.
-NVIDIA (nouveau) and the other Intel generations use the `1280x480iS` super
-resolution.
+| `10_fliperos_nouveau_analog_low_dotclock.patch` | **FliperOS's own**, not D0023R's: **nouveau** accepts modes under 25 MHz on analog outputs (VGA, DVI-I). `fliperos-setup` confirms each card with a 320x240 grid before using them |
+
+Covers **radeon**, **amdgpu** (DCE and DCN1-3), through 09 **i915 Gen9** and,
+through 10, **nouveau** on analog outputs. NVIDIA cards that fail the grid and
+the other Intel generations use the `1280x480iS` super resolution.
 
 Applying: `patch -p1 < file.patch`, from the root of the kernel tree, in
 numeric order.

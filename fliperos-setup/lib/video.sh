@@ -5,7 +5,7 @@
 # (screens/output-test.sh, screens/testing-results.sh) conduzem a conversa.
 #
 # Letras de resultado, as mesmas do gatools:
-#   s  a placa gera dotclock baixo (radeon, amdgpu)
+#   s  a placa gera dotclock baixo (radeon, amdgpu; nouveau que passou no grid)
 #   o  achou um EDID do Switchres na saida
 #   d  o EDID foi forcado na linha do kernel (drm.edid_firmware)
 #   l  EDID de fabrica: LCD ou CRT moderno
@@ -270,7 +270,7 @@ video_mame_monitor() {
 # Chaves do fliperos.conf que dependem da placa e da saida: e o que o
 # Recovery Mode leva para o disco quando a placa foi trocada. A orientacao
 # e do gabinete, nao da placa, e so vai se foi escolhida nesta sessao.
-VIDEO_CONF_KEYS="gpu driver card connector detection forced kernel_video boot_resolution fb_map
+VIDEO_CONF_KEYS="gpu driver card connector detection forced low_dotclock_pci kernel_video boot_resolution fb_map
   monitor frequency geometry custom_width custom_height custom_refresh screens"
 VIDEO_CONF_KEEP="orientation"
 
@@ -290,6 +290,42 @@ video_retroarch_super() {
     width=0
   fi
   rcfg_set "$file" crt_switch_resolution_super "$width"
+}
+
+# video_low_dotclock_grid MONITOR mostra o grid do Switchres em 320x240 com
+# dotclock_min 0 (uns 6,5 MHz num monitor de 15 kHz), o modo mais exigente
+# para o PLL da placa. Com o tubo sem imagem ninguem acha a tecla: o timeout
+# devolve o console sozinho, com SIGINT para o Switchres restaurar o modo.
+video_low_dotclock_grid() {
+  timeout -s INT -k 5 "${LOWDOT_TEST_SECONDS:-20}" \
+    switchres 320 240 60 -s -m "$1" --dotclock_min 0 -l grid
+}
+
+# video_low_dotclock_set CARD 1|0 grava a placa que passou no grid, ou a
+# esquece (a outra placa que estava gravada tambem: so vale uma).
+video_low_dotclock_set() {
+  local pci
+  if [[ $2 == 1 ]]; then
+    pci=$(drm_card_pci "$1") || return 1
+    conf_set low_dotclock_pci "$pci"
+  else
+    conf_unset low_dotclock_pci
+  fi
+  log_info "dotclock baixo: $1 -> $2"
+}
+
+# video_low_dotclock_apply refaz o resultado do teste de saidas com ou sem
+# o "s", depois de o grid ser repetido no Video Setup: modo de boot,
+# dotclock_min do Switchres e do MAME e a largura do RetroArch.
+video_low_dotclock_apply() {
+  local card conn flags monitor
+  card=$(conf_get card 2> /dev/null) || return 1
+  conn=$(conf_get connector 2> /dev/null) || return 1
+  flags=$(conf_get detection 2> /dev/null) || return 1
+  monitor=$(conf_get monitor 2> /dev/null) || monitor=generic_15
+  flags=${flags#s}
+  drm_card_low_dotclock "$card" && flags=s$flags
+  video_save_result "$card-$conn" "$flags" "$monitor"
 }
 
 # video_save_result CONECTOR FLAGS MONITOR grava o resultado validado do
@@ -321,6 +357,11 @@ video_save_result() {
   if [[ $base =~ ^[er]$ ]]; then
     ini_set "$SWITCHRES_INI" dotclock_min 25.0
     [[ -f $MAME_INI ]] && ini_set "$MAME_INI" dotclock_min 25.0
+  elif [[ $base == s* ]]; then
+    # A NVIDIA que passou no grid depois de um teste sem ele: desfaz o 25.0
+    # gravado aqui antes (um valor proprio da pessoa fica).
+    [[ $(ini_get "$SWITCHRES_INI" dotclock_min 2> /dev/null) == 25.0 ]] && ini_set "$SWITCHRES_INI" dotclock_min 0
+    [[ -f $MAME_INI && $(ini_get "$MAME_INI" dotclock_min 2> /dev/null) == 25.0 ]] && ini_set "$MAME_INI" dotclock_min 0
   fi
   if [[ $flags == *a ]]; then
     ini_set "$SWITCHRES_INI" interlace_force_even 1

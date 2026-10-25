@@ -12,13 +12,20 @@ DISK_LABEL=""
 disk_menu_label() {
   local model=$1 size=$2 path=$3 tran=$4 rm=$5 kind=""
   [[ -n $model ]] || model="Unknown disk"
-  ((${#model} > 30)) && model="${model:0:29}~"
   case $tran in
     usb) kind="USB" ;;
     nvme) kind="NVMe" ;;
     sata | ata) kind="SATA" ;;
     *) ((rm)) && kind="removable" ;;
   esac
+  # A lista da interface grafica tem uns 30 caracteres: o que decide a
+  # escolha vem primeiro e o modelo por ultimo (o do cursor aparece inteiro
+  # embaixo da lista). No texto, as colunas alinhadas.
+  if ui_gui_alive; then
+    printf '%s %s %s%s\n' "${path#/dev/}" "$(human_size "$size")" "${kind:+$kind }" "$model"
+    return 0
+  fi
+  ((${#model} > 30)) && model="${model:0:29}~"
   printf '%-30s %8s  %-13s %s\n' "$model" "$(human_size "$size")" "$path" "$kind"
 }
 
@@ -49,7 +56,10 @@ screen_disk_selection() {
     if ((${#entries[@]} == 0)); then
       text+=$'\n\n'"No drive can receive the installation (at least 16 GiB, not in use)."
     fi
-    choice=$(ui_menu "Automatically Partition" "$text" "" "${entries[@]}" \
+    # Na interface grafica, a lista vertical em texto: modelo, tamanho e
+    # /dev de cada disco se comparam melhor um embaixo do outro do que nos
+    # azulejos do carrossel.
+    choice=$(UI_STYLE=list ui_menu "Automatically Partition" "$text" "" "${entries[@]}" \
       "rescan|Rescan drives" "details|My drive is not listed (details)" "return|Return") || return 1
     case $choice in
       rescan) continue ;;

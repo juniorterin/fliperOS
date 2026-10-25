@@ -1,0 +1,21 @@
+FliperOS: low dotclocks on nouveau analog outputs (VGA, DVI-I/DVI-A)
+
+nouveau_connector_mode_valid() rejects every mode under 25 MHz, so the
+video=640x480iS boot mode of the 15 kHz patch and the user modes of patch 06
+(Switchres drmkms) never reach the DAC. Batocera community reports show
+GeForce 8400 GS and Quadro K600 on nouveau running at dotclock_min 0. Only the analog encoder changes: TMDS, DP and LVDS
+keep their limits. fliperos-setup still confirms it per card with a grid
+test before using native modes.
+
+--- a/drivers/gpu/drm/nouveau/nouveau_connector.c
++++ b/drivers/gpu/drm/nouveau/nouveau_connector.c
+@@ -1096,6 +1096,9 @@
+ 		max_clock = get_tmds_link_bandwidth(connector);
+ 		break;
+ 	case DCB_OUTPUT_ANALOG:
++		/* 15 kHz CRTs need dotclocks of 6-15 MHz. Whether the PLL of
++		 * a given card reaches them is tested by fliperos-setup. */
++		min_clock = 0;
+ 		max_clock = nv_encoder->dcb->crtconf.maxfreq;
+ 		if (!max_clock)
+ 			max_clock = 350000;

@@ -45,7 +45,7 @@ const enUS = {
       },
       {
         q: 'Which video cards work at 15 kHz?',
-        a: 'AMD Radeon cards with VGA or DVI-I output, from the HD 2000 series to the R7/R9 200 and 300 (GCN 1.0), generate 15 kHz natively. Intel and NVIDIA work at 15 kHz with super resolution modes, and cards without an analog output need a DisplayPort or HDMI to VGA converter.',
+        a: 'AMD Radeon cards with VGA or DVI-I output, from the HD 2000 series to the R7/R9 200 and 300 (GCN 1.0), generate 15 kHz natively. Intel and NVIDIA work at 15 kHz with super resolution modes (an NVIDIA with VGA or DVI-I gets native resolutions if it passes the low resolution test), and cards without an analog output need a DisplayPort or HDMI to VGA converter.',
       },
       {
         q: 'Can I control the cabinet from my phone?',
@@ -477,7 +477,7 @@ const enUS = {
           { id: 'cpu', label: 'CPU', value: '64-bit x86 (amd64) with 2 cores' },
           { id: 'memory', label: 'Memory', value: '4 GB of RAM' },
           { id: 'disk', label: 'Disk', value: '16 GB (HD, SSD or a USB disk)' },
-          { id: 'gpu', label: 'Video', value: 'AMD Radeon with VGA or DVI-I, from the HD 2000 to the R7/R9 200 and 300 (GCN 1.0), for native 15 kHz. Intel and NVIDIA work at 15 kHz with super resolutions.' },
+          { id: 'gpu', label: 'Video', value: 'AMD Radeon with VGA or DVI-I, from the HD 2000 to the R7/R9 200 and 300 (GCN 1.0), for native 15 kHz. Intel and NVIDIA work at 15 kHz with super resolutions; an NVIDIA with VGA or DVI-I can pass a test for native ones.' },
           { id: 'monitor', label: 'Monitor', value: 'A 15 kHz arcade CRT, a 25 or 31 kHz monitor, or an LCD' },
           { id: 'boot', label: 'Boot', value: 'BIOS or UEFI with Secure Boot off; a USB stick for the ISO' },
           { id: 'network', label: 'Network', value: 'Optional: Ethernet or Wi-Fi for the web panel, scraper, downloads and updates' },

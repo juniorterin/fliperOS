@@ -30,7 +30,7 @@ The Setup lists the outputs of every card it finds, as `card1:VGA-1 (AMD Radeon 
 
   In XRandR they get another name: `VGA-1` of the first extra card is `VGA-1-1`, of the second `VGA-1-2`. `fliperos-multiscreen xnames` makes that translation for GroovyMAME and Flycast, and binds the card (`xrandr --setprovideroutputsource`) if X didn't.
 - **The kernel's `video=` goes by connector name, on every card.** `video=VGA-1:640x480iSe` sets the VGA-1 of both cards, so an extra monitor on a second card's `VGA-1` gets monitor 1's mode, and an unused output with the same name on the other card is also forced on (with nothing plugged in, it does no harm).
-- Use a card the 15 kHz kernel supports with low dotclocks (AMD/ATI, `radeon` or `amdgpu`). On a card without them (Intel, NVIDIA) the monitor boots in the super resolution, and GroovyMAME's per-game modes may not reach it.
+- Use a card the 15 kHz kernel supports with low dotclocks (AMD/ATI, `radeon` or `amdgpu`). On a card without them (Intel, NVIDIA; the NVIDIA low resolution test only covers the main card) the monitor boots in the super resolution, and GroovyMAME's per-game modes may not reach it.
 - Programs in KMS (RetroArch, the frontends) only see monitor 1: the others are turned off while they run, as on one card.
 
 Reports from anyone testing a converter or a second card are welcome in the [issues](https://github.com/juniorterin/fliperOS/issues).

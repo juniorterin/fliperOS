@@ -36,7 +36,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h3 id="1-what-you-need">1. What you need</h3>
 <ul>
 <li><strong>A PC (amd64)</strong> for the cabinet. For arcade games up to the 90s and consoles up to the PlayStation, a 2-core CPU, 4 GB of RAM and a 16 GB disk are enough. For PS2, Model 3 and Dreamcast, a 4-core CPU with AVX2 (Core i7-7700, Ryzen 5 3600 or newer), 16 GB and an SSD. The disk you install to is <strong>erased completely</strong>.</li>
-<li><strong>A graphics card with analog output.</strong> The best fit is an <strong>AMD Radeon with VGA or DVI-I</strong> from the HD 2000 series to the R7/R9 (GCN 1.0), which generates 15 kHz natively. Intel and NVIDIA work at 15 kHz with "super resolution" modes. Cards without an analog output need a DisplayPort/HDMI to VGA converter.</li>
+<li><strong>A graphics card with analog output.</strong> The best fit is an <strong>AMD Radeon with VGA or DVI-I</strong> from the HD 2000 series to the R7/R9 (GCN 1.0), which generates 15 kHz natively. Intel and NVIDIA work at 15 kHz with "super resolution" modes; an NVIDIA with VGA or DVI-I (GeForce 8 to GTX 900) gets native resolutions if it passes the low resolution test. Cards without an analog output need a DisplayPort/HDMI to VGA converter. The full list is in <a href="#Video-cards">Video cards</a>.</li>
 <li><strong>The monitor</strong>: an arcade CRT (15 kHz), a TV through a VGA to SCART/component adapter, or a 25/31 kHz monitor. An LCD also works.</li>
 <li><strong>A USB stick of 4 GB or more</strong> (it will be erased).</li>
 <li><strong>A USB keyboard</strong> for the installation. After that, the panel or a gamepad moves through all the menus.</li>
@@ -308,9 +308,88 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_build.py
 </code></pre>
 <h2 id="documentation">Documentation</h2>
-<p><strong>Using it:</strong> <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Scoreboard-games">Scoreboard games</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Adding-games">Adding games</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a> · <a href="#Multiple-Monitors">Multiple monitors</a> · <a href="#DIY-hardware">DIY hardware</a></p>
+<p><strong>Using it:</strong> <a href="#Video-cards">Video cards</a> · <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Scoreboard-games">Scoreboard games</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Adding-games">Adding games</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a> · <a href="#Multiple-Monitors">Multiple monitors</a> · <a href="#DIY-hardware">DIY hardware</a></p>
 <p><strong>Hacking on it:</strong> <a href="#Kernel-15-kHz">15 kHz kernel</a> · <a href="#Build-and-tests">Build and tests</a> · <a href="#Architecture">Architecture</a> · <a href="#Sources">Sources</a></p>
 <p>The pages live in <a href="docs/wiki"><code>docs/wiki</code></a> and go to the wiki with <code>bash tools/wiki-publish.sh</code>. <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> is all of it in one file (<code>tools/render-docs.py</code>).</p>
+<h1 id="Video-cards">Video cards</h1>
+<p>Which video cards FliperOS supports, and what each one gives on a 15 kHz CRT.</p>
+<p>The difference between them is the <strong>dotclock</strong>: a 320x240 game at 15 kHz needs about 6.5 MHz, a 640x480i boot about 13 MHz. A card that generates those clocks shows each game at its <strong>native resolution</strong>.</p>
+<p>A card that doesn't uses a <strong>super resolution</strong>: the same lines and the same refresh as the game, with the width multiplied (1280 or 2560 instead of 320). On a CRT the picture is almost the same, since the beam has no horizontal pixels. What gives it away: RetroArch draws its notifications at 2560 wide, so they come out squeezed.</p>
+<h2 id="summary">Summary</h2>
+<table>
+<thead>
+<tr>
+<th>Card</th>
+<th>Driver</th>
+<th>Analog output</th>
+<th>15 kHz</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AMD/ATI Radeon HD 2000 to HD 7000, R7/R9 200 and 300 (GCN 1.0)</td>
+<td><code>radeon</code> or <code>amdgpu</code></td>
+<td>VGA, DVI-I</td>
+<td><strong>Native</strong> (recommended)</td>
+</tr>
+<tr>
+<td>AMD Radeon RX and newer, Ryzen APUs</td>
+<td><code>amdgpu</code></td>
+<td>None on the card; VGA on some motherboards</td>
+<td>Native, through an active DisplayPort/HDMI to VGA converter that accepts low clocks</td>
+</tr>
+<tr>
+<td>NVIDIA GeForce 8 to GTX 900, Quadro up to K series</td>
+<td><code>nouveau</code></td>
+<td>VGA, DVI-I</td>
+<td>Super resolution; <strong>native if the card passes the low resolution test</strong></td>
+</tr>
+<tr>
+<td>NVIDIA GTX 10 and newer (Pascal, Turing, Ampere...)</td>
+<td><code>nouveau</code></td>
+<td>None</td>
+<td>Super resolution, through a converter</td>
+</tr>
+<tr>
+<td>Intel Gen9 (HD/UHD 500 and 600 series: Skylake to Comet Lake)</td>
+<td><code>i915</code></td>
+<td>VGA on the motherboard</td>
+<td>Super resolution, with interlace (patch 09)</td>
+</tr>
+<tr>
+<td>Other Intel generations</td>
+<td><code>i915</code></td>
+<td>VGA on the motherboard</td>
+<td>Super resolution; 480i may not work</td>
+</tr>
+</tbody>
+</table>
+<p>Only one card has been seen on a CRT by the project: an AMD R7 240 (<code>radeon</code>). The other lines come from the kernel patches and from what the GroovyArcade and Batocera communities report.</p>
+<h2 id="amdati">AMD/ATI</h2>
+<p>The cards CRT_EmuDriver covers on Windows, with VGA or DVI-I: the HD 2000 series to the R7/R9 200 and 300 with GCN 1.0. The 15 kHz kernel patches cover <code>radeon</code> and <code>amdgpu</code> (DCE and DCN 1 to 3): native boot at <code>640x480iS</code> and every game at its own resolution, in GroovyMAME, RetroArch and the frontends.</p>
+<p>Good, cheap choices: <strong>HD 5450, HD 6450, HD 7750, R7 240, R7 250</strong>.</p>
+<p>SI and CIK cards (HD 7000, R7/R9) work on both drivers; the Setup picks <code>radeon</code> by default and offers <code>amdgpu</code> (with Vulkan) in <em>Video Setup &gt; Video driver</em>.</p>
+<p>Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an <strong>active DisplayPort or HDMI to VGA converter</strong>. The card generates the low clocks; whether they reach the tube depends on the converter's chip, so pick one that the GroovyMAME community reports for 15 kHz.</p>
+<h2 id="nvidia">NVIDIA</h2>
+<p>NVIDIA cards run on the open driver, <strong>nouveau</strong>. The proprietary driver is not in FliperOS.</p>
+<p><strong>With VGA or DVI-I (GeForce 8 to GTX 900, Quadro up to the K series).</strong> Out of the box nouveau refuses every mode under 25 MHz. FliperOS's own kernel patch (<code>10_fliperos_nouveau_analog_low_dotclock.patch</code>) lifts that floor on the analog outputs, but whether each card's PLL actually reaches 6.5 MHz varies.</p>
+<p>So the card is tested on the tube:</p>
+<ol>
+<li>boot the <strong>NVIDIA 15 kHz</strong> entry (super resolution, <code>1280x480iS</code>);</li>
+<li>after you confirm the output in the video output test, the Setup shows a <strong>Switchres grid at 320x240</strong> for 20 seconds;</li>
+<li>saw the grid → native resolutions (boot at <code>640x480iS</code>, <code>dotclock_min 0</code>, RetroArch at native width);</li>
+<li>black screen or no answer → super resolutions, as before. Nothing is lost by trying.</li>
+</ol>
+<p>The test can be repeated on the installed system in <em>Setup &gt; Video Setup &gt; Low resolutions</em>. It only runs on an analog output with a 15 kHz monitor.</p>
+<p>Community reports with low clocks on nouveau: <strong>GeForce 8400 GS</strong> and <strong>Quadro K600</strong> (Batocera). No NVIDIA card has been seen on a CRT by the project yet.</p>
+<p>Mind the speed: nouveau runs most GTX 600, 700 and 900 cards at their boot clock (it can't raise the clock of Maxwell 2, and on Kepler only by hand). For arcade and 2D consoles that is enough; for PS2, GameCube and Model 3, an AMD card is better.</p>
+<p><strong>Without analog output (GTX 10 and newer).</strong> Super resolution only, through an active converter. RTX 20 and 30 cards need their GSP firmware, which stays in the system (<code>/usr/lib/firmware/nvidia</code>).</p>
+<h2 id="intel">Intel</h2>
+<p>Intel integrated graphics use the <strong>Intel 15 kHz</strong> boot entry, always in super resolution (<code>1280x480iS</code>): <code>i915</code> doesn't generate the low clocks.</p>
+<p>On <strong>Gen9</strong> (Skylake, Kaby Lake, Coffee Lake, Comet Lake) patch 09 enables interlace, with <code>i915.no_ytiled_scanout=1</code> on the kernel line. Other generations have no interlace patch: 240p works, 480i may not.</p>
+<p>The VGA port of many motherboards is a DisplayPort to VGA bridge chip on the board, so results vary by motherboard.</p>
+<h2 id="several-cards">Several cards</h2>
+<p>A second card for a second or third monitor works best if it is AMD too. See <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
 <h1 id="Install">Install</h1>
 <p>From the written media to the system on disk: writing the ISO, the boot menu, the video output test and the installation through <strong>FliperOS Setup</strong>.</p>
 <h2 id="writing-the-media">Writing the media</h2>
@@ -358,7 +437,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <tr>
 <td>NVIDIA 15 kHz</td>
 <td><code>video=1280x480iS</code></td>
-<td>NVIDIA: super resolution</td>
+<td>NVIDIA: super resolution; the output test then tries native modes (see <a href="#Video-cards">Video cards</a>)</td>
 </tr>
 <tr>
 <td>NTSC</td>
@@ -394,12 +473,13 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li><strong>stops at the first ENTER</strong> and goes to the <em>Testing Results</em> screen (gatools tests all of them and picks the best; here, whoever is looking at the screen has already decided). Without ENTER, it repeats the round up to three times.</li>
 </ol>
 <p>With two cards, the console is moved to the framebuffer of the card being tested (<code>con2fbmap</code>), as in gatools.</p>
+<p>On an <strong>NVIDIA</strong> card (nouveau) with the output on VGA or DVI-I and a 15 kHz boot, the confirmed output gets one more step: a Switchres grid at 320x240 (about 6.5 MHz) for 20 seconds, with <em>"Did you see the test grid clearly?"</em> afterwards. Yes → the card counts as generating low dotclocks (<code>low_dotclock_pci</code> in <code>fliperos.conf</code>); no or no answer → super resolution. See <a href="#Video-cards">Video cards</a>.</p>
 <p>The <strong>Testing Results</strong> screen shows the GPU, driver, connector, current mode and horizontal frequency (read from the active CRTC by <code>fliperos-video-check</code>), whether the card generates low dotclocks, whether there is an interlaced mode, the EDID, whether the monitor was identified and whether the output will be forced at boot — with the same sentences as gatools' <code>inform_user</code> — and offers <strong>Validate settings</strong> or <strong>Repeat test</strong>.</p>
 <p>Once validated, gatools' <code>configure_from_connector</code> applies:</p>
 <ul>
 <li>Switchres EDID (dongle) → the monitor comes from the EDID itself;</li>
 <li>otherwise, the monitor type is <strong>mandatory</strong> (the list opens on the suggestion of the boot entry);</li>
-<li>the kernel line comes from the monitor: <code>video=VGA-1:640x480iSe</code> (the <code>e</code> when the output had to be forced); a card without low dotclock (Intel, NVIDIA) → super resolution <code>1280x480iS</code> and <code>dotclock_min 25.0</code> in Switchres; APU → <code>interlace_force_even 1</code>; EDID boot → <code>drm.edid_firmware=CONNECTOR:edid/&lt;monitor&gt;.bin</code>; LCD → nothing (its EDID applies).</li>
+<li>the kernel line comes from the monitor: <code>video=VGA-1:640x480iSe</code> (the <code>e</code> when the output had to be forced); a card without low dotclock (Intel, NVIDIA that didn't pass the grid) → super resolution <code>1280x480iS</code> and <code>dotclock_min 25.0</code> in Switchres; APU → <code>interlace_force_even 1</code>; EDID boot → <code>drm.edid_firmware=CONNECTOR:edid/&lt;monitor&gt;.bin</code>; LCD → nothing (its EDID applies).</li>
 </ul>
 <p>Everything is saved in <strong><code>/etc/fliperos/fliperos.conf</code></strong> (GPU, driver, connector, detection, monitor, range, boot mode, kernel parameters, orientation, launcher), the equivalent of <code>ga.conf</code>, and in <code>switchres.ini</code>/<code>mame.ini</code>.</p>
 <h2 id="fliperos-setup">FliperOS Setup</h2>
@@ -442,6 +522,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>It works with arcade encoders (digital axis 0–255), gamepads and USB joysticks; light guns are left out (aiming would move through the menu).</p>
 <p>The <code>fliperos-padkeys</code> service (pure Python, the kernel's <code>uinput</code>) only translates while <code>/run/fliperos/padkeys</code> exists, which the setup creates when it opens and deletes when it exits: frontends, emulators and the desktop read the controller by themselves, without a button counting twice.</p>
 <p><strong>First boot:</strong> <em>Choose default launcher</em>, with the generated list of the launchers actually installed (Attract-Mode Plus, RetroArch, EmulationStation..., LXDE) and <em>FliperOS Setup</em> itself. Change it later in Setup &gt; Games &gt; Frontend.</p>
+<p>Right after it, the first boot installs the web panel's <strong>Live screen</strong> and turns it on (go2rtc from its GitHub, a pinned version checked by sha256; ffmpeg is already in the image). Without internet it offers the Wi-Fi first; if it still can't download, it says so and the Live screen stays in Setup &gt; Games &gt; Extras &gt; Live screen.</p>
 <p><strong>FliperOS updates (without a new ISO):</strong> at every boot with internet, before the launcher, tty1 asks the repository whether there are FliperOS updates (<code>fliperos-update check</code>, waiting for NetworkManager and, with a cable plugged in or a saved Wi-Fi network, up to 30 s for the connection, since Wi-Fi connects after NetworkManager starts; offline or with GitHub out of reach, the boot goes on as always).</p>
 <p>Connecting to a Wi-Fi network in <em>Setup &gt; Network Setup</em> runs the same check right after the connection, without waiting for the next boot. With one pending, a screen says what it brings and asks: <strong>Apply now</strong> or <strong>Not now</strong> (asked again at the next boot).</p>
 <p>Before asking it lists the <strong>files changed on this machine that the update replaces</strong> (up to six on screen, the rest in <em>View the files</em>): it rehearses the update in an overlay over <code>/</code> and compares each file it would write with what FliperOS itself installed (<code>/var/lib/fliperos/update/manifest</code>, the sha256 of each file, recorded by the ISO and by each update).</p>
@@ -729,7 +810,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 - <strong>Screen:</strong> a screenshot of what is on the cabinet screen, shown in 4:3 as on the tube or at the frame's own size (a 2560x240 frame of RetroArch's super resolution is very wide), with <em>Save PNG</em>. Games, frontends and the Setup's graphical menu go through the OpenGL layer of the flicker filter.</p>
 <p>When the panel asks (<code>$XDG_RUNTIME_DIR/fliperos-shot-request</code>), the layer reads the next finished frame, before the filter, into <code>fliperos-shot.ppm</code>, and the panel turns it into a PNG. The LXDE desktop draws without OpenGL, so it is read from X (<code>XGetImage</code>). The text console and programs without OpenGL have no screenshot.
 - <strong>Live screen:</strong> what is on the tube, live, in the browser. It covers the game, the frontend, the menu, the desktop and the text console, with sound when <em>Live screen sound</em> is on. Pick 15, 30 or 60 frames per second. The card shows the size, the frame rate and the delay in the browser's buffer, and has <em>Sound</em> (it starts muted, as browsers ask) and <em>Full screen</em>.
-  - It is installed in <strong>Setup &gt; Games &gt; Extras &gt; Live screen</strong> (or with <em>Install</em> on the card): ffmpeg from apt and <a href="https://github.com/AlexxIT/go2rtc">go2rtc</a> (MIT, a pinned version checked by sha256). Then it is a service in Setup &gt; System &gt; Services (<em>Live screen</em>, after boot by default).
+  - It is installed and turned on by the <strong>first boot</strong> of the installed system. When that couldn't download it (no internet), install it in <strong>Setup &gt; Games &gt; Extras &gt; Live screen</strong> (or with <em>Install</em> on the card): ffmpeg from apt and <a href="https://github.com/AlexxIT/go2rtc">go2rtc</a> (MIT, a pinned version checked by sha256). Then it is a service in Setup &gt; System &gt; Services (<em>Live screen</em>, after boot by default).
   - How it works: go2rtc (<code>fliperos-stream.service</code>) opens ffmpeg only while someone watches. ffmpeg reads the screen from DRM (<code>kmsgrab</code>) and encodes H.264.
     - <strong>Video:</strong> On AMD cards (radeon and amdgpu) the driver does not let the screen's buffer be mapped into memory, so the frame goes through VA-API's video processing, which copies and scales it on the card; the R7 240 has that part even without an encoder.</p>
 <pre><code>  Cards that allow the mapping read it directly (`hwdownload`). ffmpeg runs with `libfliperos-dropmaster.so` (`LD_PRELOAD`, `config/fliperos-dropmaster.c`): opening `/dev/dri/cardN` at a moment when nobody owns the screen made it the DRM master.
@@ -2670,7 +2751,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </table>
 <p>Dedicated pages: <a href="#Fightcade-2">Fightcade 2</a>, <a href="#ROMs">ROMs, BIOS and artwork</a> (the folders in <code>~</code>) and <a href="#Controls">Controls</a> (buttons, SDL, calibration).</p>
 <p>All of them appear in LXDE's <strong>Games</strong> menu (<a href="#Desktop">Desktop and theme</a>).</p>
-<p>RetroArch uses <code>crt_switch_resolution 4</code> (the Setup's <code>/etc/switchres.ini</code>) at each game's <strong>native width</strong> when the card generates low dotclocks (the "s" in the output test result: radeon/amdgpu), like GroovyArcade; the 2560 super resolution is only for cards that don't (Intel, NVIDIA).</p>
+<p>RetroArch uses <code>crt_switch_resolution 4</code> (the Setup's <code>/etc/switchres.ini</code>) at each game's <strong>native width</strong> when the card generates low dotclocks (the "s" in the output test result: radeon/amdgpu, and an NVIDIA that passed the low resolution grid), like GroovyArcade; the 2560 super resolution is only for cards that don't (Intel, the other NVIDIA).</p>
 <p>At 2560 RetroArch draws its notifications at that width, and on the tube they came out squashed (<code>video_retroarch_super</code>, saved by the output test and at installation).</p>
 <p>RetroArch's video is the <code>glcore</code> driver (OpenGL 3.2 core) and its audio is <code>sdl2</code>, which goes straight into ALSA; both come from the system <code>retroarch.cfg</code> (<code>/etc/fliperos/retroarch</code>), which is applied on top of the user's on each launch.</p>
 <p>From there also come input and joypad in <code>linuxraw</code> (the kernel's <code>/dev/input/js*</code>; <code>fliperos-controllers</code> generates the automatic controller profiles for <code>udev</code> and <code>linuxraw</code>), RetroArch without on-screen notifications and a single Esc to close the game (<code>confirm_quit</code> off; the default asks for a second Esc, with a notice that would not show).</p>
@@ -2701,7 +2782,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>With <strong>Multi-Screen Games</strong> on, GroovyMAME opens each screen of Darius, The Ninja Warriors or Punch-Out!! on its own monitor, and Flycast does the same with the NAOMI multi-board games (F355 Challenge, Airline Pilots, Sega Strike Fighter) on 3 monitors. The other emulators and the frontends stay on monitor 1. Details in <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
 <p><strong>Nothing interlaced at 15 kHz, by default.</strong> On a 15 kHz tube no <code>fliperos-x11-run</code> emulator opens at 480i unless it is chosen for it in <a href="#480i-hacks-640x240-filter-or-pure-480i">480i hacks</a> (the exception is the Fightcade 2 lobby, which doesn't fit in 240 lines; its matches do): the 480-line ones and the 384-line ones (Model 2 and 3) run at <strong>640x240 progressive</strong>, <strong>stretched to 200%</strong> horizontally — 640x240 has 8:3 pixels, and the 4:3 image only fills the tube when stretched: Flycast <code>rend.ScreenStretching=200</code> (300·W/4H), PCSX2 <code>AspectRatio = Stretch</code>, Dolphin <code>AspectRatio=3</code>, Supermodel <code>-fullscreen -res=640,240 -stretch</code>, Hypseus <code>-x 640 -y 240 -ignore_aspect_ratio</code> (options at the end of the line: Hypseus reads the game and the player first), and Model 2 (SM2-Emu) with <code>aspect_mode = stretch</code> set on every launch when the mode is wider than 4:3 (its settings file starts at 4:3).</p>
 <p>On the cabinet Flycast opened at 640x480i: the setup saves <code>frequency=15k</code>, and the script only recognized <code>15</code>, so every emulator fell into the 31 kHz column.</p>
-<p><strong>Cards without low dotclocks (Intel, NVIDIA).</strong> They cannot generate the ~12 MHz pixel clock of a 640x240 mode at 15 kHz, so the Setup writes <code>dotclock_min 25.0</code> to <code>/etc/switchres.ini</code>.</p>
+<p><strong>Cards without low dotclocks (Intel, NVIDIA that didn't pass the grid; see <a href="#Video-cards">Video cards</a>).</strong> They cannot generate the ~12 MHz pixel clock of a 640x240 mode at 15 kHz, so the Setup writes <code>dotclock_min 25.0</code> to <code>/etc/switchres.ini</code>.</p>
 <p>With it, <code>fliperos-x11-run</code> asks for the super resolution width (<code>super_width</code>, 2560) instead of the table's, as RetroArch does: the lines and the frequencies are the same, only the pixels are thinner.</p>
 <p>The stretch and the sizes given to the emulators follow that width (Flycast <code>rend.ScreenStretching=800</code>, Supermodel <code>-res=2560,240</code>, Hypseus <code>-x 2560</code>). Otherwise Switchres would double the width by itself until it passed the minimum, and the emulators that are given the table's size would draw in part of the screen. Fightcade's per-game modes don't go through this yet.</p>
 <p><strong>No loading screen in Flycast.</strong> While a game loads, Flycast shows the box art and a "Loading..." window with a progress bar. FliperOS builds it with a patch (<code>config/flycast-patches</code>) that keeps the screen black until the game starts, as on the arcade board; a load error still shows. If a newer Flycast no longer takes the patch, the image build warns and leaves it out, and the loading screen comes back.</p>
@@ -3706,7 +3787,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 - <strong>Monitor 1's card draws everything.</strong> X opens on it (its <code>BusID</code> is in <code>/etc/X11/xorg.conf.d/10-fliperos.conf</code>) and adds the other card as a <em>GPU screen</em> (<code>AutoAddGPU</code>, <code>AutoBindGPU</code>): its outputs join the same desktop, and the picture is copied to them (reverse PRIME).</p>
 <p>In XRandR they get another name: <code>VGA-1</code> of the first extra card is <code>VGA-1-1</code>, of the second <code>VGA-1-2</code>. <code>fliperos-multiscreen xnames</code> makes that translation for GroovyMAME and Flycast, and binds the card (<code>xrandr --setprovideroutputsource</code>) if X didn't.
 - <strong>The kernel's <code>video=</code> goes by connector name, on every card.</strong> <code>video=VGA-1:640x480iSe</code> sets the VGA-1 of both cards, so an extra monitor on a second card's <code>VGA-1</code> gets monitor 1's mode, and an unused output with the same name on the other card is also forced on (with nothing plugged in, it does no harm).
-- Use a card the 15 kHz kernel supports with low dotclocks (AMD/ATI, <code>radeon</code> or <code>amdgpu</code>). On a card without them (Intel, NVIDIA) the monitor boots in the super resolution, and GroovyMAME's per-game modes may not reach it.
+- Use a card the 15 kHz kernel supports with low dotclocks (AMD/ATI, <code>radeon</code> or <code>amdgpu</code>). On a card without them (Intel, NVIDIA; the NVIDIA low resolution test only covers the main card) the monitor boots in the super resolution, and GroovyMAME's per-game modes may not reach it.
 - Programs in KMS (RetroArch, the frontends) only see monitor 1: the others are turned off while they run, as on one card.</p>
 <p>Reports from anyone testing a converter or a second card are welcome in the <a href="https://github.com/juniorterin/fliperOS/issues">issues</a>.</p>
 <h2 id="step-by-step">Step by step</h2>
@@ -3998,7 +4079,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>A project fits here if its firmware or software is open source and it works on Linux without a closed driver.</p>
 <p>If you use one of these on your cabinet, or another one, open an issue in the <a href="https://github.com/juniorterin/fliperOS/issues">repository</a> saying which board, what the Setup showed in <strong>Setup &gt; System &gt; Quirks &gt; USB devices connected now</strong>, and whether it needed a quirk: that is what turns a line of this page from "should work" into "tested".</p>
 <h1 id="Kernel-15-kHz">15 kHz kernel</h1>
-<p><code>fliperos-kernel.sh</code> downloads kernel.org <strong>6.18.54</strong>, applies <code>patches/kernel-15khz/6.18/</code> (D0023R, 01 to 09) on top of the <code>.config</code> of Ubuntu 24.04's own kernel and builds the <code>.deb</code>s. No module signing and no debug info. Compiling takes hours, so the <code>.deb</code>s stay in a cache keyed by version and patch hash (<code>/output/kernel-cache/&lt;key&gt;/</code>): the next build reuses them.</p>
+<p><code>fliperos-kernel.sh</code> downloads kernel.org <strong>6.18.54</strong>, applies <code>patches/kernel-15khz/6.18/</code> (D0023R's 01 to 09, plus FliperOS's own 10, which lets nouveau take modes under 25 MHz on analog outputs: see <a href="#Video-cards">Video cards</a>) on top of the <code>.config</code> of Ubuntu 24.04's own kernel and builds the <code>.deb</code>s. No module signing and no debug info. Compiling takes hours, so the <code>.deb</code>s stay in a cache keyed by version and patch hash (<code>/output/kernel-cache/&lt;key&gt;/</code>): the next build reuses them.</p>
 <p>Switchres (<code>v2.2.1</code>, the same version as GroovyArcade's package) is compiled with <code>grid</code> and <code>geometry</code>, and at build time generates one EDID per monitor preset plus the two super resolution ones used by the boot's EDID entries (<code>fliperos-rebuild-edids</code>, GroovyArcade's <code>rebuild_edids</code>). The initramfs hook carries all of them into the initramfs.</p>
 <h1 id="Build-and-tests">Build and tests</h1>
 <h2 id="build">Build</h2>

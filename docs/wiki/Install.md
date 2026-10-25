@@ -23,7 +23,7 @@ The same options as GroovyArcade (`os/groovyarcade/syslinux/syslinux.cfg`). Here
 | 31 kHz | `video=640x480S` | High resolution monitor |
 | SVGA / LCD monitor | — | PC monitor or LCD (its EDID applies) |
 | Intel 15 kHz | `video=1280x480iS i915.no_ytiled_scanout=1` | Intel: super resolution; the parameter comes from patch 09 and enables interlacing on Gen9 |
-| NVIDIA 15 kHz | `video=1280x480iS` | NVIDIA: super resolution |
+| NVIDIA 15 kHz | `video=1280x480iS` | NVIDIA: super resolution; the output test then tries native modes (see [Video cards](Video-cards.md)) |
 | NTSC | `video=720x480iS` | NTSC TV |
 | PAL | `video=768x576iS` | PAL TV |
 | EDID progressive | `drm.edid_firmware=edid/generic_15_super_resp.bin video=e` | Switchres EDID, all outputs forced |
@@ -46,13 +46,15 @@ Ported from `gatools` (`video/video.sh`): as soon as the media boots, `fliperos-
 
 With two cards, the console is moved to the framebuffer of the card being tested (`con2fbmap`), as in gatools.
 
+On an **NVIDIA** card (nouveau) with the output on VGA or DVI-I and a 15 kHz boot, the confirmed output gets one more step: a Switchres grid at 320x240 (about 6.5 MHz) for 20 seconds, with *"Did you see the test grid clearly?"* afterwards. Yes → the card counts as generating low dotclocks (`low_dotclock_pci` in `fliperos.conf`); no or no answer → super resolution. See [Video cards](Video-cards.md).
+
 The **Testing Results** screen shows the GPU, driver, connector, current mode and horizontal frequency (read from the active CRTC by `fliperos-video-check`), whether the card generates low dotclocks, whether there is an interlaced mode, the EDID, whether the monitor was identified and whether the output will be forced at boot — with the same sentences as gatools' `inform_user` — and offers **Validate settings** or **Repeat test**.
 
 Once validated, gatools' `configure_from_connector` applies:
 
 - Switchres EDID (dongle) → the monitor comes from the EDID itself;
 - otherwise, the monitor type is **mandatory** (the list opens on the suggestion of the boot entry);
-- the kernel line comes from the monitor: `video=VGA-1:640x480iSe` (the `e` when the output had to be forced); a card without low dotclock (Intel, NVIDIA) → super resolution `1280x480iS` and `dotclock_min 25.0` in Switchres; APU → `interlace_force_even 1`; EDID boot → `drm.edid_firmware=CONNECTOR:edid/<monitor>.bin`; LCD → nothing (its EDID applies).
+- the kernel line comes from the monitor: `video=VGA-1:640x480iSe` (the `e` when the output had to be forced); a card without low dotclock (Intel, NVIDIA that didn't pass the grid) → super resolution `1280x480iS` and `dotclock_min 25.0` in Switchres; APU → `interlace_force_even 1`; EDID boot → `drm.edid_firmware=CONNECTOR:edid/<monitor>.bin`; LCD → nothing (its EDID applies).
 
 Everything is saved in **`/etc/fliperos/fliperos.conf`** (GPU, driver, connector, detection, monitor, range, boot mode, kernel parameters, orientation, launcher), the equivalent of `ga.conf`, and in `switchres.ini`/`mame.ini`.
 

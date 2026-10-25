@@ -53,8 +53,11 @@ screen_output_test() {
         OT_CONN=$c
         OT_FORCED=$VT_FORCED
         OT_EDID_SIZE=$VT_EDID_SIZE
-        OT_FLAGS=$(video_classify "$c")
         speak_stop
+        if drm_is_analog "$name" && drm_card_low_dotclock_testable "$card"; then
+          screen_low_dotclock_test "$card" "$(video_suggested_monitor)"
+        fi
+        OT_FLAGS=$(video_classify "$c")
         log_info "teste de saidas: $name confirmada (flags $OT_FLAGS)"
         video_restore "$c" "$OT_FORCED"
         return 0
@@ -68,6 +71,34 @@ screen_output_test() {
   ui_msg "Video output test" "No output was confirmed." "" \
     "The settings chosen in the boot menu will be kept." \
     "You can run the test again from the boot menu (reboot)."
+  return 1
+}
+
+# screen_low_dotclock_test CARD MONITOR: uma NVIDIA (nouveau) com saida
+# analogica pode gerar os dotclocks de 15 kHz com o patch 10 do kernel, mas
+# depende do PLL de cada placa. O grid em 320x240 decide: quem viu, fica com
+# as resolucoes nativas; quem nao viu (ou nao respondeu), com a super
+# resolucao. So num monitor de 15 kHz: e o unico que recebe esse modo.
+# Status 0 = a placa passou.
+screen_low_dotclock_test() {
+  local card=$1 monitor=$2 title="Low resolution test" gpu
+  [[ $(monitor_frequency "$monitor" 2> /dev/null) == 15k ]] || return 1
+  have switchres || return 1
+  gpu=$(drm_card_name "$card")
+  speak "Testing native low resolutions. A grid will be shown for ${LOWDOT_TEST_SECONDS:-20} seconds. Press Enter if you can see it, or wait."
+  ui_timed_confirm "$title" 8 "Start now" \
+    "$gpu may be able to show native 15 kHz resolutions (320x240)." "" \
+    "A test grid will now be shown for up to ${LOWDOT_TEST_SECONDS:-20} seconds." \
+    "Press ENTER if you can see it. If the screen stays black, just wait."
+  ui_clear
+  GRID_TEXT="320x240 native" ui_text video_low_dotclock_grid "$monitor" >> "$FLIPEROS_LOG" 2>&1
+  ui_flush_input
+  speak "Did you see the grid?"
+  if ui_yesno "$title" "Did you see the test grid clearly?" no; then
+    video_low_dotclock_set "$card" 1
+    return 0
+  fi
+  video_low_dotclock_set "$card" 0
   return 1
 }
 

@@ -22,6 +22,8 @@ The `fliperos-padkeys` service (pure Python, the kernel's `uinput`) only transla
 
 **First boot:** *Choose default launcher*, with the generated list of the launchers actually installed (Attract-Mode Plus, RetroArch, EmulationStation..., LXDE) and *FliperOS Setup* itself. Change it later in Setup > Games > Frontend.
 
+Right after it, the first boot installs the web panel's **Live screen** and turns it on (go2rtc from its GitHub, a pinned version checked by sha256; ffmpeg is already in the image). Without internet it offers the Wi-Fi first; if it still can't download, it says so and the Live screen stays in Setup > Games > Extras > Live screen.
+
 **FliperOS updates (without a new ISO):** at every boot with internet, before the launcher, tty1 asks the repository whether there are FliperOS updates (`fliperos-update check`, waiting for NetworkManager and, with a cable plugged in or a saved Wi-Fi network, up to 30 s for the connection, since Wi-Fi connects after NetworkManager starts; offline or with GitHub out of reach, the boot goes on as always).
 
 Connecting to a Wi-Fi network in *Setup > Network Setup* runs the same check right after the connection, without waiting for the next boot. With one pending, a screen says what it brings and asks: **Apply now** or **Not now** (asked again at the next boot).

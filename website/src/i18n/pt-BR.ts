@@ -48,7 +48,7 @@ const ptBR: Messages = {
       },
       {
         q: 'Quais placas de vídeo funcionam a 15 kHz?',
-        a: 'As AMD Radeon com saída VGA ou DVI-I, da série HD 2000 até as R7/R9 200 e 300 (GCN 1.0), geram 15 kHz nativamente. Intel e NVIDIA funcionam a 15 kHz com modos de super resolução, e placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA.',
+        a: 'As AMD Radeon com saída VGA ou DVI-I, da série HD 2000 até as R7/R9 200 e 300 (GCN 1.0), geram 15 kHz nativamente. Intel e NVIDIA funcionam a 15 kHz com modos de super resolução (uma NVIDIA com VGA ou DVI-I ganha resolução nativa se passar no teste de baixa resolução), e placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA.',
       },
       {
         q: 'Dá para controlar o gabinete pelo celular?',
@@ -480,7 +480,7 @@ const ptBR: Messages = {
           { id: 'cpu', label: 'CPU', value: 'x86 de 64 bits (amd64) com 2 núcleos' },
           { id: 'memory', label: 'Memória', value: '4 GB de RAM' },
           { id: 'disk', label: 'Disco', value: '16 GB (HD, SSD ou um disco USB)' },
-          { id: 'gpu', label: 'Vídeo', value: 'AMD Radeon com VGA ou DVI-I, da HD 2000 às R7/R9 200 e 300 (GCN 1.0), para 15 kHz nativo. Intel e NVIDIA funcionam a 15 kHz com super resoluções.' },
+          { id: 'gpu', label: 'Vídeo', value: 'AMD Radeon com VGA ou DVI-I, da HD 2000 às R7/R9 200 e 300 (GCN 1.0), para 15 kHz nativo. Intel e NVIDIA funcionam a 15 kHz com super resoluções; uma NVIDIA com VGA ou DVI-I pode passar num teste para as nativas.' },
           { id: 'monitor', label: 'Monitor', value: 'Um CRT de arcade de 15 kHz, um monitor de 25 ou 31 kHz, ou um LCD' },
           { id: 'boot', label: 'Boot', value: 'BIOS ou UEFI com o Secure Boot desligado; um pendrive para a ISO' },
           { id: 'network', label: 'Rede', value: 'Opcional: cabo ou Wi-Fi para o painel web, o scraper, os downloads e os updates' },

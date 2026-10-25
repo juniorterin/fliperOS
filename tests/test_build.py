@@ -298,8 +298,10 @@ class KernelTests(unittest.TestCase):
         version = re.search(r'KERNEL_VERSION="([0-9.]+)"', self.SCRIPT).group(1)
         series = '.'.join(version.split('.')[:2])
         patches = sorted(p.name for p in (ROOT / 'patches/kernel-15khz' / series).glob('*.patch'))
-        self.assertEqual([p[:2] for p in patches], ['%02d' % n for n in range(1, 10)])
+        self.assertEqual([p[:2] for p in patches], ['%02d' % n for n in range(1, 11)])
         self.assertIn('09_linux_15khz_i915_gen9_interlace.patch', patches)
+        # O 10 e do FliperOS: o nouveau aceita dotclock baixo na saida analogica.
+        self.assertIn('10_fliperos_nouveau_analog_low_dotclock.patch', patches)
 
     def test_patches_have_unix_line_endings(self):
         for patch in (ROOT / 'patches/kernel-15khz').rglob('*.patch'):
@@ -3585,6 +3587,49 @@ class MediaPacksTests(unittest.TestCase):
         meta = json.loads(meta_path.read_text())
         self.assertNotIn('http', meta)
         self.assertFalse((self.staging / 'videos/videos/S.zip').exists())
+
+    def test_resume_after_reboot_keeps_the_queue(self):
+        # O gabinete desligado no meio: o pacote ficava "stopped" e o auto o
+        # recomecava do primeiro .zip. O resume continua do arquivo da vez.
+        import zipfile
+        self.mp('start', 'videos', '--link', 'magnet:?xt=urn:btih:%s&dn=videos' % self.VIDEOS,
+                '--type', 'preview', *self.target('mame', 'preview', ['mslug', 'SF2', '1942']))
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, 'w') as z:
+            z.writestr('S/sf2.mp4', b'video do sf2')
+        self.complete({'videos/S.zip': data.getvalue(), 'videos/mslug.mp4': b'video do mslug'})
+        self.mp('finish')
+        meta = json.loads((self.state / 'videos.json').read_text())
+
+        def wanted():
+            return [f['name'] for f in self.torrents[self.VIDEOS]['files'] if f['wanted']]
+        self.assertEqual(wanted(), ['videos/#.zip'])
+        # Parado no Transmission: so volta a rodar.
+        self.torrents[self.VIDEOS]['status'] = 0
+        self.mp('resume')
+        self.assertEqual(self.torrents[self.VIDEOS]['status'], 4)
+        # Sumiu do Transmission: volta pelo link, so com o arquivo da vez.
+        del self.torrents[self.VIDEOS]
+        self.assertTrue(self.status()['pack.videos'].startswith('stopped|'))
+        self.mp('resume')
+        self.assertEqual(wanted(), ['videos/#.zip'])
+        self.assertEqual(self.torrents[self.VIDEOS]['status'], 4)
+        self.assertEqual(json.loads((self.state / 'videos.json').read_text()), meta)
+        self.assertTrue(self.status()['pack.videos'].startswith('downloading|'))
+        # Nada em andamento: nem fala com o Transmission.
+        self.mp('cancel', 'videos')
+        calls = len(self.calls)
+        self.mp('resume')
+        self.assertEqual(len(self.calls), calls)
+
+    def test_setup_auto_never_restarts_a_pack_in_progress(self):
+        lib = (ROOT / 'fliperos-setup/lib/mediapacks.sh').read_text()
+        auto = lib.split('mediapacks_auto() {')[1].split('\n}\n')[0]
+        self.assertIn('[[ -f $MEDIAPACKS_STATE/$id.json ]] && continue', auto)
+        self.assertLess(auto.index('mediapacks_resume'), auto.index('mediapacks_start'))
+        self.assertIn('resume) mediapacks_resume ;;', (ROOT / 'fliperos-setup/fliperos-setup').read_text())
+        harvest = (ROOT / 'fliperos-setup/gui/feharvest.py').read_text()
+        self.assertIn('self.fd.setup("--mediapacks", "resume", timeout=600)', harvest)
 
     def test_nothing_to_download_and_no_space(self):
         # Todos os jogos ja tem o logo: nem fala com o Transmission.

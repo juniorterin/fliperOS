@@ -123,14 +123,29 @@ gpu_short_name() {
   esac
 }
 
-# drm_card_low_dotclock CARD: so radeon e amdgpu geram os dotclocks de 15 kHz
-# (6 a 15 MHz). As demais precisam de super resolucao (gatools
-# card_supports_low_dot_clock).
+# drm_card_low_dotclock CARD: radeon e amdgpu geram os dotclocks de 15 kHz
+# (6 a 15 MHz) sempre (gatools card_supports_low_dot_clock). O nouveau so os
+# aceita com o patch 10 do kernel, e nem todo PLL de NVIDIA chega la: vale
+# para a placa que passou no grid em 320x240 (low_dotclock_pci no
+# fliperos.conf, gravado pelo teste de saidas ou pelo Video Setup). As demais
+# precisam de super resolucao.
 drm_card_low_dotclock() {
+  local pci
   case $(drm_card_driver "$1") in
     radeon | amdgpu) return 0 ;;
+    nouveau)
+      pci=$(drm_card_pci "$1") || return 1
+      [[ -n $pci && $(conf_get low_dotclock_pci 2> /dev/null) == "$pci" ]]
+      return
+      ;;
   esac
   return 1
+}
+
+# drm_card_low_dotclock_testable CARD: placa em que o grid de dotclock baixo
+# vale a pena (nouveau). Na Intel o driver nao tem o patch.
+drm_card_low_dotclock_testable() {
+  [[ $(drm_card_driver "$1") == nouveau ]]
 }
 
 # drm_card_is_apu CARD usa o mesmo sinal do gatools: o lspci -v mostra

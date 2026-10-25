@@ -17,7 +17,7 @@ Dedicated pages: [Fightcade 2](Fightcade-2.md), [ROMs, BIOS and artwork](ROMs.md
 
 All of them appear in LXDE's **Games** menu ([Desktop and theme](Desktop.md)).
 
-RetroArch uses `crt_switch_resolution 4` (the Setup's `/etc/switchres.ini`) at each game's **native width** when the card generates low dotclocks (the "s" in the output test result: radeon/amdgpu), like GroovyArcade; the 2560 super resolution is only for cards that don't (Intel, NVIDIA).
+RetroArch uses `crt_switch_resolution 4` (the Setup's `/etc/switchres.ini`) at each game's **native width** when the card generates low dotclocks (the "s" in the output test result: radeon/amdgpu, and an NVIDIA that passed the low resolution grid), like GroovyArcade; the 2560 super resolution is only for cards that don't (Intel, the other NVIDIA).
 
 At 2560 RetroArch draws its notifications at that width, and on the tube they came out squashed (`video_retroarch_super`, saved by the output test and at installation).
 
@@ -79,7 +79,7 @@ With **Multi-Screen Games** on, GroovyMAME opens each screen of Darius, The Ninj
 
 On the cabinet Flycast opened at 640x480i: the setup saves `frequency=15k`, and the script only recognized `15`, so every emulator fell into the 31 kHz column.
 
-**Cards without low dotclocks (Intel, NVIDIA).** They cannot generate the ~12 MHz pixel clock of a 640x240 mode at 15 kHz, so the Setup writes `dotclock_min 25.0` to `/etc/switchres.ini`.
+**Cards without low dotclocks (Intel, NVIDIA that didn't pass the grid; see [Video cards](Video-cards.md)).** They cannot generate the ~12 MHz pixel clock of a 640x240 mode at 15 kHz, so the Setup writes `dotclock_min 25.0` to `/etc/switchres.ini`.
 
 With it, `fliperos-x11-run` asks for the super resolution width (`super_width`, 2560) instead of the table's, as RetroArch does: the lines and the frequencies are the same, only the pixels are thinner.
 

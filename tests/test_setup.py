@@ -463,6 +463,96 @@ class OutputTestTests(Base):
         self.assertEqual(self.env.out("speech_connector DP-2").strip(), "Display Port 2")
 
 
+class NouveauLowDotclockTests(Base):
+    """NVIDIA (nouveau): o patch 10 do kernel libera os dotclocks baixos na
+    saida analogica, mas so a placa que passou no grid em 320x240 os usa."""
+
+    def setUp(self):
+        super().setUp()
+        self.env.card("card0", "nouveau")
+        self.env.connector("card0-VGA-1", "disconnected")
+
+    def conf(self):
+        return (self.env.etc / "fliperos.conf").read_text()
+
+    def low(self, card="card0"):
+        return self.env.run("drm_card_low_dotclock %s" % card).returncode == 0
+
+    def test_super_until_the_grid_passes(self):
+        self.assertEqual(self.env.run("drm_card_low_dotclock_testable card0").returncode, 0)
+        self.assertFalse(self.low())
+        self.env.out("video_low_dotclock_set card0 1")
+        self.assertIn("low_dotclock_pci=0000:00:00.0\n", self.conf())
+        self.assertTrue(self.low())
+        self.env.out("video_low_dotclock_set card0 0")
+        self.assertNotIn("low_dotclock_pci", self.conf())
+        self.assertFalse(self.low())
+
+    def test_another_card_passing_does_not_count(self):
+        self.env.out("conf_set low_dotclock_pci 0000:09:00.0")
+        self.assertFalse(self.low())
+
+    def test_only_nouveau_is_tested(self):
+        self.env.card("card1", "i915")
+        self.env.card("card2", "amdgpu")
+        self.assertNotEqual(self.env.run("drm_card_low_dotclock_testable card1").returncode, 0)
+        self.assertNotEqual(self.env.run("drm_card_low_dotclock_testable card2").returncode, 0)
+
+    def test_classified_native_after_the_grid(self):
+        self.env.out("video_low_dotclock_set card0 1")
+        r = self.env.run("video_test_begin card0-VGA-1; video_classify card0-VGA-1")
+        self.assertEqual(r.stdout.splitlines()[-1], "se")
+
+    def test_retest_switches_boot_mode_and_dotclock_min(self):
+        ini = self.env.etc / "switchres.ini"
+        self.env.out("video_save_result card0-VGA-1 e generic_15")
+        self.assertIn("kernel_video=video=VGA-1:1280x480iSe\n", self.conf())
+        self.assertRegex(ini.read_text(), r"(?m)^\s*dotclock_min\s+25\.0$")
+        self.env.out("video_low_dotclock_set card0 1; video_low_dotclock_apply")
+        self.assertIn("detection=se\n", self.conf())
+        self.assertIn("kernel_video=video=VGA-1:640x480iSe\n", self.conf())
+        self.assertRegex(ini.read_text(), r"(?m)^\s*dotclock_min\s+0$")
+        self.env.out("video_low_dotclock_set card0 0; video_low_dotclock_apply")
+        self.assertIn("detection=e\n", self.conf())
+        self.assertIn("kernel_video=video=VGA-1:1280x480iSe\n", self.conf())
+        self.assertRegex(ini.read_text(), r"(?m)^\s*dotclock_min\s+25\.0$")
+
+    def test_own_dotclock_min_is_kept(self):
+        ini = self.env.etc / "switchres.ini"
+        ini.write_text("dotclock_min 8.0\n")
+        self.env.out("video_low_dotclock_set card0 1; video_save_result card0-VGA-1 se generic_15")
+        self.assertRegex(ini.read_text(), r"(?m)^\s*dotclock_min\s+8\.0$")
+
+    def test_carried_by_recovery_mode(self):
+        self.assertIn("low_dotclock_pci", self.env.out("echo $VIDEO_CONF_KEYS").split())
+
+    def test_grid_is_wired_to_the_output_test_and_video_setup(self):
+        test = (ROOT / "fliperos-setup/screens/output-test.sh").read_text()
+        self.assertIn('drm_card_low_dotclock_testable "$card"', test)
+        self.assertIn("switchres 320 240 60 -s -m \"$1\" --dotclock_min 0 -l grid",
+                      (ROOT / "fliperos-setup/lib/video.sh").read_text())
+        self.assertIn("lowdot) screen_low_dotclock_retest ;;",
+                      (ROOT / "fliperos-setup/screens/video-setup.sh").read_text())
+
+
+class DiskMenuLabelTests(Base):
+    """A escolha do disco na instalacao: lista vertical em texto, com o
+    /dev, o tamanho e o tipo antes do modelo na interface grafica."""
+
+    def test_list_style_not_tiles(self):
+        screen = (SETUP / "screens/disk-selection.sh").read_text()
+        self.assertIn('choice=$(UI_STYLE=list ui_menu "Automatically Partition"', screen)
+
+    def test_short_label_in_the_gui(self):
+        lib = "source %s/screens/disk-selection.sh; " % SETUP
+        out = self.env.out(lib + "ui_gui_alive() { return 0; }; "
+                           "disk_menu_label 'Kingston SA400S37240G' 240057409536 /dev/sda sata 0").strip()
+        self.assertEqual(out, "sda 240 GB SATA Kingston SA400S37240G")
+        out = self.env.out(lib + "ui_gui_alive() { return 1; }; "
+                           "disk_menu_label 'Kingston SA400S37240G' 240057409536 /dev/sda sata 0").rstrip()
+        self.assertRegex(out, r"^Kingston SA400S37240G +240 GB  /dev/sda +SATA$")
+
+
 class ResolutionTests(Base):
     def setUp(self):
         super().setUp()
@@ -1828,6 +1918,37 @@ class BootGameTests(Base):
         session = (ROOT / "config" / "fliperos-session").read_text()
         self.assertIn('game)\n        FLIPEROS_POWERKEY=game "${program[@]}"', session)
         self.assertIn("fliperos-bootgame", (ROOT / "fliperos-rootfs.sh").read_text())
+
+
+class FirstBootLiveTests(Base):
+    """O primeiro boot ja instala e liga a tela ao vivo do painel web."""
+
+    def run_live(self, installed, online):
+        script = ("source %s/screens/first-boot.sh; "
+                  "extras_installed() { return %d; }; "
+                  "run_online() { echo \"online $*\"; return %d; }; "
+                  "ui_msg() { echo \"msg $*\"; }; "
+                  "screen_first_boot_live; echo rc=$?") % (SETUP, 0 if installed else 1, 0 if online else 1)
+        return self.env.out(script)
+
+    def test_installs_the_live_screen(self):
+        out = self.run_live(installed=False, online=True)
+        self.assertIn("online Installing Live screen  extras_install stream", out)
+        self.assertIn("rc=0", out)
+        self.assertNotIn("msg", out)
+
+    def test_already_installed_is_kept(self):
+        self.assertNotIn("online", self.run_live(installed=True, online=True))
+
+    def test_offline_points_to_extras(self):
+        out = self.run_live(installed=False, online=False)
+        self.assertIn("Setup > Games > Extras > Live screen", out)
+        self.assertIn("rc=1", out)
+
+    def test_called_by_the_first_boot(self):
+        screen = (SETUP / "screens/first-boot.sh").read_text().split("screen_first_boot() {")[1]
+        body = screen.split("\n}\n")[0]
+        self.assertLess(body.index("screen_first_boot_live"), body.index('rm -f "$FLIPEROS_ETC/firstboot"'))
 
 
 class CustomGamesTests(Base):
@@ -6144,7 +6265,7 @@ class AmdDriverTests(Base):
         # Em Video Setup, nao mais em System.
         video = (SETUP / "screens/video-setup.sh").read_text().split("screen_video_setup() {")[1]
         self.assertIn("driver) screen_amd_driver ;;", video)
-        self.assertIn('"${driver[@]}" \\\n      "return|', video)
+        self.assertIn('"${driver[@]}" \\\n      "${lowdot[@]}" \\\n      "return|', video)
         self.assertNotIn("screen_amd_driver", (SETUP / "screens/setup-menu.sh").read_text())
         # Na midia so grava a escolha, e a instalacao nao pergunta de novo.
         self.assertIn("is_live && mode=install", (SETUP / "screens/amd-driver.sh").read_text())
