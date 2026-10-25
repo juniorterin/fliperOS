@@ -579,10 +579,9 @@ def draw_list(fe, ui, now):
         blit_center(ui, logo, px, y0 + sh - 14, pw, 28)
         y = y0 + sh + 18
     else:
-        for line in W.wrap(fe.fd.short_title(game).upper(), pw)[:2]:
-            W.text(ui, line, T.YELLOW, px, y)
-            y += 10
-        y += 2
+        # Sem logo, o titulo numa linha: o que nao cabe corre em circulo.
+        ticker(ui, text_img(fe.fd.short_title(game).upper(), T.YELLOW), px, y, pw, now)
+        y += 12
     W.text(ui, fit(facts_line(game), pw), T.YELLOW, px, y)
     y += 12
     # Os icones, sem texto, em duas fileiras: o genero e os jogadores (o
