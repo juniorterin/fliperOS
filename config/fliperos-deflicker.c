@@ -17,7 +17,7 @@
  *   medium  0.50 0.50 0.00   a media de duas linhas, como o RePlayOS
  *   strong  0.33 0.34 0.33
  *   off     nada
- * O nivel de cada programa (Setup > Video Setup > 480i games), do primeiro
+ * O nivel de cada programa (Setup > Video Setup > 480i hacks), do primeiro
  * que existir:
  *   FLIPEROS_DEFLICKER_FILE  um arquivo com o nivel, relido a cada 30
  *                            quadros (o preview, que troca o nivel na hora)

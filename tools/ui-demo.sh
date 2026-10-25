@@ -127,7 +127,7 @@ demo_services() {
   screen_services
 }
 
-# Video Setup > 480i games num gabinete de 15 kHz, com tudo instalado e
+# Video Setup > 480i hacks num gabinete de 15 kHz, com tudo instalado e
 # alguns programas ja em 480i.
 demo_mode480() {
   export RA_HOME=$FAKE/retroarch

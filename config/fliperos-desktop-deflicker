@@ -4,7 +4,7 @@
 # (config/fliperos-deflicker.c), como shader de janela do picom. O desktop
 # desenha pelo X, sem OpenGL: a camada nao o alcanca, o compositor sim.
 #   - o filtro: so com o modo da tela entrelacado e o filtro ligado para o
-#     desktop (Setup > Video Setup > 480i games, a linha Desktop:
+#     desktop (Setup > Video Setup > 480i hacks, a linha Desktop:
 #     deflicker_desktop= no fliperos.conf);
 #   - a matriz de cor: so numa placa sem CTM (color_ctm=sw, de Setup > Video
 #     Setup > Colour calibration), com color_saturation= ou color_hue=.

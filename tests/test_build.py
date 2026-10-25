@@ -4879,7 +4879,7 @@ class DeflickerTests(unittest.TestCase):
         self.assertNotIn('pvr.rend', self.run_x11(fc, 'deflicker=off\n', flycast_rend=5)[0])
 
     def test_480i_per_program_on_15khz(self):
-        # Setup > Video Setup > 480i games: com filtro ou puro, o modo da
+        # Setup > Video Setup > 480i hacks: com filtro ou puro, o modo da
         # coluna dos outros monitores (640x480, entrelacado no tubo); sem
         # nada ou em 240p, o 640x240 de sempre. Supermodel no seu 496x384.
         for conf, mode in (('', 'MODE=640 240 60'), ('mode480_flycast=240p\n', 'MODE=640 240 60'),
@@ -4921,7 +4921,7 @@ class DeflickerTests(unittest.TestCase):
         # Medio por padrao: a media de duas linhas, como no RePlayOS.
         self.assertIn('const vec3 w = vec3(0.50, 0.50, 0.00);', shader)
         self.assertIn('default_post_processing(', shader)
-        # O nivel da linha Desktop da tabela 480i games; o deflicker= e o dos
+        # O nivel da linha Desktop da tabela 480i hacks; o deflicker= e o dos
         # outros programas.
         self.assertIn('vec3(0.15, 0.70, 0.15)', self.desktop('deflicker=off\ndeflicker_desktop=light\n')[1])
         self.assertEqual(self.desktop('deflicker_desktop=off\n'), ('', ''))

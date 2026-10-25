@@ -25,7 +25,7 @@ Frontend próprio (o padrão no futuro), **primeiro mostrar o design:**
 ## Vídeo: conferir no tubo
 
 Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
-- **Video Setup > 480i games:** um emulador marcado em "480i filter" ou "480i pure", e o preview do filtro (o Setup abre um Xorg só dele: se a tela ficar preta ou não voltar ao menu, é aí).
+- **Video Setup > 480i hacks:** um emulador marcado em "480i filter" ou "480i pure", e o preview do filtro (o Setup abre um Xorg só dele: se a tela ficar preta ou não voltar ao menu, é aí).
 - **Video Setup > Colour calibration:** os padrões de teste e as mudanças ao vivo; se a cor fica depois de sair do calibrador, ao abrir um jogo e ao voltar ao menu.
 
 ## Modo Tour/Welcome (fase 4)

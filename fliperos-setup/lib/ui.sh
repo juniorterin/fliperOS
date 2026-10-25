@@ -127,7 +127,7 @@ ui_gui_start() {
   # O menu tambem passa pela camada (config/fliperos-deflicker.c), como os
   # jogos: a saturacao e o matiz da calibracao de cor por software (placa sem
   # CTM), o filtro de flicker num boot em 480i (o nivel da linha "Other
-  # programs" de 480i games) e o screenshot do painel web. No X, o picom do
+  # programs" de 480i hacks) e o screenshot do painel web. No X, o picom do
   # desktop ja faz.
   if [[ $driver == kmsdrm && -f ${DEFLICKER_LIB:-} ]]; then
     preload="$DEFLICKER_LIB${preload:+:$preload}"

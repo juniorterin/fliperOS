@@ -50,7 +50,7 @@ SUBS = {
     ],
     "s3": [
         (0.2, 7.0, "Video Setup: monitor, resolução, geometria, jogos 480i e cor.",
-         "Video Setup: monitor, resolution, geometry, 480i games and colour."),
+         "Video Setup: monitor, resolution, geometry, 480i hacks and colour."),
         (7.0, 14.2, "Calibração de cor com botões − e +: muda na hora, até com um jogo aberto.",
          "Colour calibration with − and + buttons: it changes at once, even mid-game."),
         (14.4, 20.3, "Wi-Fi escolhido numa lista, com a senha digitada no próprio CRT.",

@@ -1134,7 +1134,7 @@ install_fbneo_sets() {
 # (pvr.rend 3 no config/flycast-emu.cfg).
 # ── Filtro de flicker do 480i (config/fliperos-deflicker.c) ─────
 # A camada que o fliperos-kms-run e o fliperos-x11-client carregam nos
-# emuladores (Setup > Video Setup > 480i games), e a calibracao de cor
+# emuladores (Setup > Video Setup > 480i hacks), e a calibracao de cor
 # (config/fliperos-color.c, Setup > Video Setup > Colour calibration). Sem
 # elas a ISO sai igual, so sem o filtro e sem a calibracao.
 build_deflicker_chroot() {

@@ -75,7 +75,7 @@ The `cfg`/`nvram` left in the home folder moves to `~/.mame`; when both exist, e
 
 With **Multi-Screen Games** on, GroovyMAME opens each screen of Darius, The Ninja Warriors or Punch-Out!! on its own monitor, and Flycast does the same with the NAOMI multi-board games (F355 Challenge, Airline Pilots, Sega Strike Fighter) on 3 monitors. The other emulators and the frontends stay on monitor 1. Details in [Multiple monitors](Multiple-Monitors.md).
 
-**Nothing interlaced at 15 kHz, by default.** On a 15 kHz tube no `fliperos-x11-run` emulator opens at 480i unless it is chosen for it in [480i games](#480i-games-640x240-filter-or-pure-480i) (the exception is the Fightcade 2 lobby, which doesn't fit in 240 lines; its matches do): the 480-line ones and the 384-line ones (Model 2 and 3) run at **640x240 progressive**, **stretched to 200%** horizontally — 640x240 has 8:3 pixels, and the 4:3 image only fills the tube when stretched: Flycast `rend.ScreenStretching=200` (300·W/4H), PCSX2 `AspectRatio = Stretch`, Dolphin `AspectRatio=3`, Supermodel `-fullscreen -res=640,240 -stretch`, Hypseus `-x 640 -y 240 -ignore_aspect_ratio` (options at the end of the line: Hypseus reads the game and the player first), and Model 2 (SM2-Emu) with `aspect_mode = stretch` set on every launch when the mode is wider than 4:3 (its settings file starts at 4:3).
+**Nothing interlaced at 15 kHz, by default.** On a 15 kHz tube no `fliperos-x11-run` emulator opens at 480i unless it is chosen for it in [480i hacks](#480i-hacks-640x240-filter-or-pure-480i) (the exception is the Fightcade 2 lobby, which doesn't fit in 240 lines; its matches do): the 480-line ones and the 384-line ones (Model 2 and 3) run at **640x240 progressive**, **stretched to 200%** horizontally — 640x240 has 8:3 pixels, and the 4:3 image only fills the tube when stretched: Flycast `rend.ScreenStretching=200` (300·W/4H), PCSX2 `AspectRatio = Stretch`, Dolphin `AspectRatio=3`, Supermodel `-fullscreen -res=640,240 -stretch`, Hypseus `-x 640 -y 240 -ignore_aspect_ratio` (options at the end of the line: Hypseus reads the game and the player first), and Model 2 (SM2-Emu) with `aspect_mode = stretch` set on every launch when the mode is wider than 4:3 (its settings file starts at 4:3).
 
 On the cabinet Flycast opened at 640x480i: the setup saves `frequency=15k`, and the script only recognized `15`, so every emulator fell into the 31 kHz column.
 
@@ -163,9 +163,9 @@ In RetroArch, the **MAME 2010** core already ships that way: CRT SwitchRes reads
 
 The same file named after another core (`config/<Core>/<Core>.switchres.ini`) does the same for it; to go back to 480i, `interlace 1` and without the `# FliperOS` line at the top (updates only rewrite the file that has it).
 
-## 480i games: 640x240, filter or pure 480i
+## 480i hacks: 640x240, filter or pure 480i
 
-**Setup > Video Setup > 480i games** is a table with one row per program and three columns, one mark per row, like the Services table. It sets how each program shows games with more than 240 lines on a 15 kHz tube:
+**Setup > Video Setup > 480i hacks** is a table with one row per program and three columns, one mark per row, like the Services table. It sets how each program shows games with more than 240 lines on a 15 kHz tube:
 
 - **640x240**: the 640x240 progressive mode described above. No flicker, half the lines.
 - **480i filter**: true 480i (the program's 640x480 line in `emulator-modes.conf`, which Switchres makes interlaced on the tube) with the flicker filter at that program's level.
@@ -201,7 +201,7 @@ When a game does run interlaced (480i on a 15 kHz tube), a line one pixel tall e
 - **Strong** (a third each from the line above, the line and the line below) hides the most.
 - **Off** leaves the picture sharp, with the flicker.
 
-The level is per program, in the 480i games table above.
+The level is per program, in the 480i hacks table above.
 
 The filter finds the level from the first of these that is set:
 1. a file named by `FLIPEROS_DEFLICKER_FILE`, re-read every 30 frames (the preview);

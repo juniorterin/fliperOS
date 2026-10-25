@@ -256,7 +256,7 @@ const enUS = {
       { id: 'play', title: 'Pick a game, play it', text: 'Search every system’s games with your filters and favourites, see the pictures, buttons and history of each arcade game, and press Play: it opens on the tube.' },
       { id: 'live', title: 'Watch it live', text: 'The cabinet’s screen in the browser at 15, 30 or 60 frames per second, plus the FPS of the game and a screenshot of the tube.' },
       { id: 'obs', title: 'Ready for OBS', text: 'Addresses for an OBS Browser Source: the live screen in 4:3 and the marquee of the game being played, with high scores and versus scores.' },
-      { id: 'settings', title: 'Settings while you play', text: 'Colour sliders that change the game on screen as you move them, 480i games per emulator, services, latency mode and volume.' },
+      { id: 'settings', title: 'Settings while you play', text: 'Colour sliders that change the game on screen as you move them, 480i hacks per emulator, services, latency mode and volume.' },
       { id: 'files', title: 'Your games in the browser', text: 'Upload and download games, BIOS, artwork and splash screens, with progress, straight to the right folder.' },
       { id: 'romfilter', title: 'ROM filter and downloads', text: 'Filter a MAME romset for your cabinet’s controls and screen, and download from a torrent only the games that pass.' },
       { id: 'status', title: 'Status of everything', text: 'The video mode and modeline on the tube, CPU, GPU, temperatures, memory, disks, network, processes and logs.' },

@@ -453,7 +453,7 @@ ICONS.update({
 ................
 ................
 """,
-    # 480i games: um tubo com as linhas do entrelacado, metade piscando
+    # 480i hacks: um tubo com as linhas do entrelacado, metade piscando
     # (linhas acesas e apagadas, um campo de cada vez) e metade ja filtrada
     # (as linhas misturadas, uma cor so).
     "mode480": """

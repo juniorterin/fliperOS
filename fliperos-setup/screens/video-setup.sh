@@ -369,7 +369,7 @@ screen_mm_changed() {
 # (screen_deflicker_level), com o preview, e cancelar deixa a linha como
 # estava. A tabela volta na mesma linha; Esc sai.
 screen_mode480() {
-  local title="480i games" text result key state level
+  local title="480i hacks" text result key state level
   local -a rows
   text="How each program shows 480-line games. Changes save at once."
   [[ $(conf_get frequency 2> /dev/null) == 15* ]] ||
@@ -587,7 +587,7 @@ screen_video_setup() {
       "geometry|Geometry|Center and size the picture on the tube, with a test grid." \
       "geometry_reset|Reset Geometry|Undo the geometry: back to the monitor preset." \
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
-      "mode480|480i games|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
+      "mode480|480i hacks|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
       "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour and hue." \
       "${driver[@]}" \
       "return|Return|Save and leave. New video settings need a reboot.") || choice="return"

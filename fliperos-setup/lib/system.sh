@@ -76,8 +76,8 @@ settings_list() {
     [[ ,$allowed, == *,240p,* ]] && opts+="240p=640x240;"
     [[ ,$allowed, == *,filter,* ]] && opts+="filter=480i filter;"
     [[ ,$allowed, == *,pure,* ]] && opts+="pure=480i pure;"
-    printf 'mode480.%s|480i games|%s|choice|%s|%s|%s\n' "$key" "$label" "$state" "${opts%;}" "$help"
-    printf 'deflicker.%s|480i games|%s: filter level|choice|%s|light=Light;medium=Medium;strong=Strong|The flicker filter level when 480i filter is marked.\n' \
+    printf 'mode480.%s|480i hacks|%s|choice|%s|%s|%s\n' "$key" "$label" "$state" "${opts%;}" "$help"
+    printf 'deflicker.%s|480i hacks|%s: filter level|choice|%s|light=Light;medium=Medium;strong=Strong|The flicker filter level when 480i filter is marked.\n' \
       "$key" "$label" "$(mode480_level "$key")"
   done < <(mode480_rows)
   while IFS='|' read -r key label min max _ step help; do

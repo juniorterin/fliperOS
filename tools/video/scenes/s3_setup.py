@@ -39,7 +39,7 @@ def script(R):
         ("orientation", "Monitor Orientation", "Horizontal or vertical (rotated) screen."),
         ("resolution", "Resolution", "The video mode of the menus and the frontend."),
         ("geometry", "Geometry", "Center and size the picture on the tube."),
-        ("mode480", "480i games", "640x240 or 480i (with the flicker filter) for each program."),
+        ("mode480", "480i hacks", "640x240 or 480i (with the flicker filter) for each program."),
         ("colour", "Colour calibration", "Brightness, contrast, gamma, each gun, colour and hue."),
         ("outputs", "Multiple Monitors", "Two or three CRTs for the multi-screen games."),
         ("return", "Return"),

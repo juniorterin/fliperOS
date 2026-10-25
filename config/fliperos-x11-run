@@ -34,7 +34,7 @@ if [[ -z $mode ]]; then
   # O setup grava "15k" (e versoes antigas "15"). Comparar so com "15" fazia
   # todo emulador cair na coluna de 31 kHz: 640x480, entrelacado no tubo.
   [[ $(sed -n 's/^frequency=//p' "$CONF" 2> /dev/null) == 15* ]] && column=2
-  # Setup > Video Setup > 480i games: com o 480i (filtro ou puro) escolhido
+  # Setup > Video Setup > 480i hacks: com o 480i (filtro ou puro) escolhido
   # para o programa, o modo da coluna dos outros monitores (640x480, que no
   # tubo de 15 kHz sai entrelacado) em vez do 640x240.
   if ((column == 2)); then

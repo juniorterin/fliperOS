@@ -5,7 +5,7 @@ What you can do from the couch:
 - **Pick a game and play it** on the tube, with the pictures, the history and the buttons of each arcade game from the Arcade Database, your favourites and the game filters.
 - **See what is playing**, with the FPS, and take a screenshot of the tube.
 - **Watch the cabinet live** in the browser, and put the live screen and the game's marquee in OBS.
-- **Change settings while you play**: colour, 480i games, services, latency mode, volume.
+- **Change settings while you play**: colour, 480i hacks, services, latency mode, volume.
 - **Copy games, BIOS and artwork** through the browser: upload, download, new folders.
 - **Filter a MAME romset** and **download** only the games that suit your cabinet.
 - **Check the system**: the video mode with its modeline, CPU, GPU, temperatures, network and logs.
@@ -110,10 +110,10 @@ The status refreshes every second. What each part shows:
     The opening text (the high scores, or "Now Playing") scrolls once, achievements pop up and the versus score shows each side's name and wins. `&led=1` draws it as LED dots and `&text=0` leaves out the texts. In OBS: width 1280, height 320.
   - How it works: `fliperos-pixelcade`, which already gets every event (kms-run, x11-run, GroovyMAME, the Attract-Mode Plus plugin and the ES-DE scripts, installed when the page is turned on), writes the current marquee to `$XDG_RUNTIME_DIR/fliperos-marquee`. The page asks the panel for it every second; the art comes from `fliperos-dmd art`.
   - The OBS pages can't sign in, so their address carries a key, created on first use in `/etc/fliperos/overlay.key` (root only). *New address* makes another key and the old address stops working, the live screen's included. The key only opens the marquee state, the current game's picture and the live screen.
-- **Settings:** the Setup settings that are safe to change over the network, grouped as System, Services, 480i games and Colour.
+- **Settings:** the Setup settings that are safe to change over the network, grouped as System, Services, 480i hacks and Colour.
   - System: the default launcher, latency mode, debug mode, the volume leveler and menu sounds.
   - Services: the whole services table.
-  - 480i games: a card per program, with an explanation of each method at the top. The method is a row of buttons (640x240, 480i with filter, 480i pure), and the filter strength (light, medium, strong) shows only when the filter is on.
+  - 480i hacks: a card per program, with an explanation of each method at the top. The method is a row of buttons (640x240, 480i with filter, 480i pure), and the filter strength (light, medium, strong) shows only when the filter is on.
   - Colour: every colour calibration value and **Back to the defaults**. A slider saves while it moves, so the game on screen changes with it; the **−** and **+** on its sides move it one step per tap (a run of taps saves once, just after the last).
   - Each change is saved and applied at once, through the same functions as the Setup screens (`fliperos-setup --settings` and `--setting KEY VALUE`, `lib/system.sh`). Debug and latency rewrite the kernel line the way their screens do; their kernel part counts after a restart.
   - Monitor, resolution and video driver are not here, since a wrong choice can leave the cabinet without a picture. They stay in the Setup, on the cabinet screen.

@@ -668,7 +668,7 @@ video_preset_range() {
 }
 
 # ── Jogos de 480 linhas num tubo de 15 kHz ───────────────────────
-# Setup > Video Setup > 480i games: o metodo de cada aplicacao para o que tem
+# Setup > Video Setup > 480i hacks: o metodo de cada aplicacao para o que tem
 # 480 linhas, numa tabela de tres colunas:
 #   240p    o hack de 640x240 progressivo (sem flicker, metade das linhas)
 #   filter  480i com o filtro de flicker (config/fliperos-deflicker.c), no
@@ -818,7 +818,7 @@ mode480_core_ini() {
   dir="$RA_HOME/config/$name"
   file="$dir/$name.switchres.ini"
   mkdir -p "$dir" || return 1
-  printf '# Setup > Video Setup > 480i games: interlace 0 = 240p, 1 = 480i.\ninterlace %s\n' "$2" > "$file" || return 1
+  printf '# Setup > Video Setup > 480i hacks: interlace 0 = 240p, 1 = 480i.\ninterlace %s\n' "$2" > "$file" || return 1
   chown "$FLIPEROS_USER:" "$RA_HOME/config" "$dir" "$file" 2> /dev/null || true
 }
 

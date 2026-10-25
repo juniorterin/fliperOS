@@ -200,7 +200,7 @@ fi
 # ── O modo de cada emulador ───────────────────────────────────────
 # table_mode NOME: o modo de NOME na tabela (LARGURAxALTURA@HZ), na coluna
 # do monitor escolhido no Setup, como o fliperos-x11-run (com o 480i de
-# Setup > Video Setup > 480i games, a coluna dos outros monitores).
+# Setup > Video Setup > 480i hacks, a coluna dos outros monitores).
 table_mode() {
   local column=3
   [[ $(sed -n 's/^frequency=//p' "$conf" 2> /dev/null) == 15* ]] && column=2

@@ -89,7 +89,7 @@ Without a CTM (the cabinet's Radeon R7 240 on the `radeon` driver has only the 2
 - **Setup** — the items come in the order of setting up a cabinet, and a balloon under the list says what the item under the cursor is for (FliperOS's gum, `patches/gum/0004-choose-balao.patch`: framed at 80 columns, two lines of text in place of the key help at 40):
   - **Video Setup** — the same as in the installation, including [Multiple monitors](Multiple-Monitors.md); saves the kernel line and offers to reboot.
 
-    Also **480i games**: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, 480i with the flicker filter at its own level (with a preview on the tube), or pure 480i ([Emulators](Emulators.md#480i-games-640x240-filter-or-pure-480i)).
+    Also **480i hacks**: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, 480i with the flicker filter at its own level (with a preview on the tube), or pure 480i ([Emulators](Emulators.md#480i-hacks-640x240-filter-or-pure-480i)).
 
     Changes in that table are saved as they are made; there is no Save step. Also **Colour calibration** (below). Also **Video driver**, only with an AMD card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240).
 

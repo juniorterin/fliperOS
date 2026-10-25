@@ -93,7 +93,7 @@ const TEXT = {
     page_downloads: "Downloads",
     page_frontend: "Frontend", page_files: "Files", page_settings: "Settings", page_status: "Status", page_terminal: "Terminal",
     settings: "Settings", settings_note: "Each change is saved and applied right away, through the Setup. Monitor, resolution and video driver stay in the Setup, on the cabinet screen.",
-    saved: "Saved: %s", group_System: "System", group_Services: "Services", "group_480i games": "480i games", group_Colour: "Colour",
+    saved: "Saved: %s", group_System: "System", group_Services: "Services", "group_480i hacks": "480i hacks", group_Colour: "Colour",
     m480_intro: "How each emulator draws on the tube. 640x240: sharp and steady, the right one for nearly every game. 480i with filter: 480 lines for games made for them (Dreamcast, PS2, GameCube menus and text), with the line flicker softened. 480i pure: 480 lines exactly as the hardware sends them, flicker included. Each change is saved at once.",
     m480_240p: "640x240", m480_filter: "480i with filter", m480_pure: "480i pure", m480_level: "Filter strength:",
     m480_light: "Light", m480_medium: "Medium", m480_strong: "Strong",
@@ -203,7 +203,7 @@ const TEXT = {
     page_downloads: "Downloads",
     page_frontend: "Frontend", page_files: "Arquivos", page_settings: "Configurações", page_status: "Status", page_terminal: "Terminal",
     settings: "Configurações", settings_note: "Cada mudança é gravada e aplicada na hora, pelo Setup. Monitor, resolução e driver de vídeo ficam no Setup, na tela do gabinete.",
-    saved: "Gravado: %s", group_System: "Sistema", group_Services: "Serviços", "group_480i games": "Jogos 480i", group_Colour: "Cor",
+    saved: "Gravado: %s", group_System: "Sistema", group_Services: "Serviços", "group_480i hacks": "Hacks 480i", group_Colour: "Cor",
     m480_intro: "Como cada emulador desenha no tubo. 640x240: nítido e firme, o certo para quase todo jogo. 480i com filtro: 480 linhas para os jogos feitos para elas (menus e textos de Dreamcast, PS2, GameCube), com a tremida das linhas suavizada. 480i puro: as 480 linhas como o hardware manda, com a tremida. Cada mudança é gravada na hora.",
     m480_240p: "640x240", m480_filter: "480i com filtro", m480_pure: "480i puro", m480_level: "Força do filtro:",
     m480_light: "Leve", m480_medium: "Média", m480_strong: "Forte",
@@ -965,7 +965,7 @@ async function loadSettings() {
     details.addEventListener("toggle", () => {
       details.open ? openGroups.add(group) : openGroups.delete(group);
     });
-    if (group === "480i games") details.append(...mode480Rows(items));
+    if (group === "480i hacks") details.append(...mode480Rows(items));
     else for (const row of items) details.append(settingRow(row));
     boxes.push(details);
   }

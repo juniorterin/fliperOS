@@ -22,7 +22,7 @@ Open **http://fliperos.local** on a phone or PC on the same network (user `flipe
 
 - **pick a game and play it** on the tube, with the pictures, history and buttons of each arcade game from the Arcade Database;
 - **watch the cabinet live** in the browser, and put the live screen and the game's marquee in OBS;
-- **change colour, 480i games and other settings** while a game runs;
+- **change colour, 480i hacks and other settings** while a game runs;
 - **copy games, BIOS and artwork**, filter a MAME romset and download only what suits your cabinet;
 - **check the system** (video mode and modeline, temperatures, logs) or open a terminal.
 
