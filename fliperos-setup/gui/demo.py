@@ -210,6 +210,11 @@ def magnetbrowser():
     return magnet(1)
 
 
+def wifipass():
+    return Input("Wi-Fi", ["Password for Casa Terin (leave empty for an open network)"], "fliper",
+                 password=True, keyboard=True)
+
+
 def download():
     return Download("Downloader", [
         ("ROMS", "3.5 GB", "9.6 GB", 18, 0.37),
@@ -305,6 +310,7 @@ SCREENS = {
     "guntarget1": guntarget1, "guntarget2": guntarget2, "guntarget3": guntarget3,
     "gunresult": gunresult, "downloads": downloads, "torrent": torrent, "magnet": magnet,
     "magnetbrowser": magnetbrowser,
+    "wifipass": wifipass,
     "download": download, "extras": extras, "romfilter": romfilter, "romfilter2": romfilter2,
     "filterplayers": filterplayers, "filterbuttons": filterbuttons,
     "filtercontrols": filtercontrols, "filteryears": filteryears,

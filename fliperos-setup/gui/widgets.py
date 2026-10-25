@@ -618,9 +618,20 @@ class Input:
     (valor, rotulo, explicacao), ou uma lista delas, ha botoes lado a lado
     embaixo do campo: cima e baixo vao do campo aos botoes, esquerda e
     direita trocam de botao, e o Enter num botao devolve o valor dele. A
-    explicacao embaixo e a do botao escolhido."""
+    explicacao embaixo e a do botao escolhido.
 
-    def __init__(self, title, lines, value="", password=False, action=None, focus=0):
+    keyboard: um teclado na tela embaixo do campo, para o controle (a senha
+    do Wi-Fi, como o Rename do frontend). As setas andam pelas teclas e o
+    Enter (botao 1) digita a tecla; SHIFT troca minusculas por maiusculas e
+    simbolos, SHOW mostra a senha e OK confirma. Quem digita num teclado de
+    verdade digita direto, e ai o Enter confirma."""
+
+    KB_ROWS = (("1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm.@_"),
+               ("!#$%&*()+=", "QWERTYUIOP", "ASDFGHJKL:", "ZXCVBNM,?/"))
+    # A ultima fileira: rotulo e largura (em teclas de 1/10 da fileira).
+    KB_LAST = (("SHIFT", 2), ("SPACE", 3), ("DEL", 2), ("SHOW", 1.5), ("OK", 1.5))
+
+    def __init__(self, title, lines, value="", password=False, action=None, focus=0, keyboard=False):
         self.title = title
         self.lines = lines
         self.value = value
@@ -628,10 +639,55 @@ class Input:
         self.actions = [] if not action else list(action) if isinstance(action, list) else [action]
         self.action = self.actions[0] if self.actions else None
         self.focus = min(focus, len(self.actions))    # 0: o campo; 1...: os botoes
+        self.keyboard = keyboard and not self.actions
+        self.kb = (1, 0)          # fileira e coluna (na ultima, o indice em KB_LAST)
+        self.shift = False
+        self.show = False
+        self.typed = False        # algo veio de um teclado de verdade
+
+    def kb_key(self, k):
+        r, c = self.kb
+        last = len(self.KB_LAST)
+        if k in ("up", "down"):
+            nr = (r + (1 if k == "down" else -1)) % 5
+            # Da fileira de baixo para as outras (e de volta), a coluna mais perto.
+            if nr == 4:
+                c = min(last - 1, c * last // 10)
+            elif r == 4:
+                c = min(9, round((c + 0.5) * 10 / last))
+            r = nr
+        elif k in ("left", "right"):
+            c = (c + (1 if k == "right" else -1)) % (last if r == 4 else 10)
+        elif k == "enter" and self.typed:
+            return ("select", self.value)
+        elif k == "enter":
+            if r < 4:
+                self.value += self.KB_ROWS[self.shift][r][c]
+            else:
+                label = self.KB_LAST[c][0]
+                if label == "OK":
+                    return ("select", self.value)
+                if label == "SHIFT":
+                    self.shift = not self.shift
+                elif label == "SPACE":
+                    self.value += " "
+                elif label == "DEL":
+                    self.value = self.value[:-1]
+                else:
+                    self.show = not self.show
+        elif k == "backspace":
+            self.value = self.value[:-1]
+        elif len(k) == 1:
+            self.value += k
+            self.typed = True
+        self.kb = (r, c)
+        return None
 
     def key(self, k):
         if k == "esc":
             return ("back", None)
+        if self.keyboard:
+            return self.kb_key(k)
         n = len(self.actions)
         if n and k in ("up", "down", "left", "right"):
             # Lado a lado: cima e baixo vao do campo aos botoes, esquerda e
@@ -658,17 +714,51 @@ class Input:
             self.value += k
         return None
 
+    def draw_keyboard(self, surf, y, ctx):
+        kw = min(28, T.SAFE_W // 10)
+        kh = 18
+        x0 = (T.WIDTH - 10 * kw) // 2
+        r0, c0 = self.kb
+        rows = self.KB_ROWS[self.shift]
+
+        def key(rect, label, on, color=T.LINE):
+            block(surf, rect, T.BG_DEEP, T.PURPLE if on else None)
+            if on:
+                glow(surf, (rect[0] + 2, rect[1] + 2, rect[2] - 4, rect[3] - 4), ctx)
+            pygame.draw.rect(surf, T.PINK if on else color, rect, 2 if on else 1)
+            text(surf, label, T.FG if on else (color if color != T.LINE else T.COMMENT),
+                 rect[0] + (rect[2] - width(label)) // 2 + 1, rect[1] + 5)
+
+        for r, row in enumerate(rows):
+            for c, ch in enumerate(row):
+                key((x0 + c * kw, y + r * (kh + 2), kw - 3, kh), ch, (r, c) == (r0, c0))
+        y += 4 * (kh + 2)
+        x = x0
+        for i, (label, units) in enumerate(self.KB_LAST):
+            wd = round(units * kw)
+            on_label = (label == "SHIFT" and self.shift) or (label == "SHOW" and self.show)
+            color = T.GREEN if label == "OK" else (T.CYAN if on_label else T.LINE)
+            key((x, y, wd - 3, kh), label, (r0, c0) == (4, i), color)
+            x += wd
+
     def draw(self, surf, ctx):
         keys = [("ENTER", "OK"), ("ESC", "BACK")]
         if self.actions:
             keys.insert(0, ("ARROWS" if len(self.actions) > 1 else "UP DOWN", "SELECT"))
+        if self.keyboard:
+            keys = [("ARROWS", "KEY"), ("ENTER", "TYPE"), ("ESC", "BACK")]
         frame(surf, ctx, self.title, keys)
-        y = paragraph(surf, self.lines, (56 if self.actions else 80) + extra() // 2) + 12
+        if self.keyboard:
+            y = paragraph(surf, self.lines, 34 + extra() // 2, bottom=60 + extra() // 2) + 4
+        else:
+            y = paragraph(surf, self.lines, (56 if self.actions else 80) + extra() // 2) + 12
         x = T.SAFE_X
         on = not self.focus
         block(surf, (x, y, T.SAFE_W - 2, 22), T.BG_DEEP, T.PURPLE if on else None)
         pygame.draw.rect(surf, T.PINK if on else T.LINE, (x, y, T.SAFE_W - 2, 22), 2 if on else 1)
-        shown = "*" * len(self.value) if self.password else self.value
+        if self.keyboard:
+            self.draw_keyboard(surf, y + 28, ctx)
+        shown = "*" * len(self.value) if self.password and not self.show else self.value
         # Um texto longo (um magnet link) mostra so o fim, onde se digita.
         if width(shown) > T.SAFE_W - 32:
             while width(".." + shown) > T.SAFE_W - 32:

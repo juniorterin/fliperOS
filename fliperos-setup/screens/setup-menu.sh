@@ -286,7 +286,7 @@ screen_wifi() {
     dev=$(ui_menu "Wi-Fi" "Select the Wi-Fi adapter." "" "${entries[@]}") || return 0
   fi
   if ((hidden)); then
-    ssid=$(ui_input "Hidden network" "Type the network name (SSID)") || return 0
+    ssid=$(ui_input "Hidden network" "Type the network name (SSID)" "" keyboard) || return 0
     [[ -n $ssid ]] || return 0
   else
     ui_info "Wi-Fi" "Scanning for networks on $dev..."
