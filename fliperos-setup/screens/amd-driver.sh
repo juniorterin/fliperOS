@@ -117,6 +117,5 @@ screen_amd_driver_confirm() {
   fi
   ui_info "Video driver" "Going back to the $previous driver and restarting..."
   amd_driver_revert
-  run_logged systemctl reboot
-  sleep 30
+  screen_power_now reboot
 }

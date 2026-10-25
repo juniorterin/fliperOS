@@ -65,7 +65,7 @@ screen_update_check() {
     rm -f "$result"
     if [[ $reboot == yes ]]; then
       ui_yesno "$title" "FliperOS is up to date (update $n). It needs a restart to finish. Restart now?" yes &&
-        systemctl reboot
+        screen_power_now reboot
     else
       ui_msg "$title" "FliperOS is up to date (update $n)." "The copies of the replaced files are in $PATCH_BACKUPS."
     fi

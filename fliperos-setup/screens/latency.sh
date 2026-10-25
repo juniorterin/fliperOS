@@ -59,7 +59,7 @@ screen_latency_apply() {
   fi
   speak "$(latency_label "$mode") mode is on."
   ui_yesno "Latency" "$(latency_label "$mode") mode is on. The emulator settings apply now; the kernel settings apply after a restart. Restart now?" no \
-    && run_logged systemctl reboot
+    && screen_power_now reboot
   return 0
 }
 

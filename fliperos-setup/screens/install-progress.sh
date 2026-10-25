@@ -43,10 +43,21 @@ screen_install_done() {
 # screen_reboot_now desmonta o que o setup montou, sincroniza e reinicia.
 screen_reboot_now() {
   ui_info "Rebooting" "Syncing the drives and rebooting..."
+  screen_power_now reboot
+}
+
+# screen_power_now reboot|poweroff: desmonta, sincroniza, solta a interface
+# grafica e o terminal e so entao pede o reboot (ou o desligamento). Com a
+# limpeza do trap de EXIT ainda por fazer quando o SIGTERM do desligamento
+# chegava, a sessao do tty1 (sudo, sudo, bash) segurava o reboot ate o
+# SIGKILL, 90 s depois. No fim o bash vira um sleep, que o SIGTERM encerra.
+screen_power_now() {
   install_unmount
   recovery_umount
   sync
-  log_info "reiniciando"
-  systemctl reboot
-  sleep 30
+  log_info "desligando: $1"
+  restore_terminal
+  trap - EXIT
+  systemctl "$1" >> "$FLIPEROS_LOG" 2>&1
+  exec sleep 60
 }

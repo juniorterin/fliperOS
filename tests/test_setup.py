@@ -2075,6 +2075,33 @@ class HarvestServiceTests(unittest.TestCase):
         self.assertIn("scrape|Auto scrape|fliperos-scrape.service|", (SETUP / "lib" / "services.sh").read_text())
 
 
+class PowerNowTests(Base):
+    """Reiniciar e desligar pelo Setup: tudo solto antes do pedido, e o bash
+    vira um sleep (a sessao do tty1 segurava o reboot 90 s ate o SIGKILL)."""
+
+    def test_releases_the_screen_before_asking_and_ends_as_a_sleep(self):
+        calls = self.env.dir / "calls"
+        self.env.stub("systemctl", 'echo "systemctl $*" >> %s' % calls)
+        self.env.stub("sleep", 'echo "sleep $*" >> %s' % calls)
+        r = self.env.run("""
+            source %s/screens/install-progress.sh
+            install_unmount() { :; }; recovery_umount() { :; }; sync() { :; }
+            restore_terminal() { echo restore >> %s; }
+            trap 'echo exit-trap >> %s' EXIT
+            unset -f sleep
+            screen_power_now reboot
+        """ % (SETUP, calls, calls))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(calls.read_text().splitlines(), ["restore", "systemctl reboot", "sleep 60"])
+        for name in ("main-menu.sh", "amd-driver.sh", "latency.sh", "patches.sh"):
+            self.assertNotRegex((SETUP / "screens" / name).read_text(), r"\bsystemctl (reboot|poweroff)\b", name)
+
+    def test_session_gets_10_seconds_to_stop(self):
+        self.assertIn("TimeoutStopSec=10s", (ROOT / "config" / "fliperos-session-stop.conf").read_text())
+        self.assertIn('"$root/etc/systemd/system/session-.scope.d/fliperos-stop.conf"',
+                      (ROOT / "fliperos-rootfs.sh").read_text())
+
+
 class BackgroundJobTests(Base):
     """Scrape the games em segundo plano: a tela mostra o andamento e
     qualquer tecla volta ao menu, com o trabalho seguindo."""
@@ -5986,6 +6013,7 @@ class AmdDriverTests(Base):
         ui_info() { :; }
         ui_msg() { echo "MSG: $2"; }
         screen_reboot_now() { echo REBOOT_NOW; }
+        screen_power_now() { systemctl "$1"; }
     """ % SETUP
 
     def installed(self):

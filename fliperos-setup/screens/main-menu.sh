@@ -96,11 +96,7 @@ screen_power() {
     poweroff)
       ui_yesno "Power off" "Really power off the computer?" no || return 0
       ui_info "Power off" "Powering off..."
-      install_unmount
-      recovery_umount
-      sync
-      systemctl poweroff
-      sleep 30
+      screen_power_now poweroff
       ;;
     reboot)
       ui_yesno "Reboot" "Really reboot the computer?" no || return 0

@@ -237,6 +237,9 @@ rm -rf "$root/usr/local/share/fliperos/web"
 install -Dm644 -t "$root/usr/local/share/fliperos/web" "$src"/config/web/*
 grep -q '^web=' "$root/etc/fliperos/services.conf" 2> /dev/null ||
   echo 'web=after' >> "$root/etc/fliperos/services.conf"
+# Desligar sem esperar 90 s pelo que ficou preso na sessao do tty1.
+install -Dm644 "$src/config/fliperos-session-stop.conf" \
+  "$root/etc/systemd/system/session-.scope.d/fliperos-stop.conf"
 # O scrape automatico (config/fliperos-scrape.service, Setup > System >
 # Services > Auto scrape): sobe depois do boot (scrape=after) ate a pessoa
 # mudar, e segue com um jogo aberto.
