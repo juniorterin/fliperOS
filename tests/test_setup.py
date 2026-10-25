@@ -2474,6 +2474,21 @@ class LatencyTests(Base):
         conf.write_text("")
         self.assertEqual(self.env.out("latency_mode").strip(), "standard")
 
+    def test_i8042_noaux_when_the_kernel_asks_for_it(self):
+        # Sem a porta do mouse PS/2 o kernel espera uns 2 s por ela a cada
+        # boot; o aviso dele no log poe o i8042.noaux na linha.
+        self.assertNotIn("i8042.noaux", self.env.out("boot_compose 'quiet'"))
+        self.env.stub("dmesg", "echo \"[    2.320970] i8042: If AUX port is really absent "
+                               "please use the 'i8042.noaux' option\"")
+        line = self.env.out("boot_compose 'quiet'").split()
+        self.assertEqual(line.count("i8042.noaux"), 1)
+        again = self.env.out("boot_compose '%s'" % " ".join(line)).split()
+        self.assertEqual(again.count("i8042.noaux"), 1)
+        # Com ele o aviso some, e ele fica.
+        self.env.stub("dmesg", ":")
+        again = self.env.out("boot_compose '%s'" % " ".join(line)).split()
+        self.assertEqual(again.count("i8042.noaux"), 1)
+
     def test_emulators_low_and_back_to_the_shipped_files(self):
         shutil.copy(ROOT / "config/retroarch.cfg", self.env.etc / "retroarch.cfg")
         shutil.copy(ROOT / "config/mame.ini", self.env.etc / "mame.ini")

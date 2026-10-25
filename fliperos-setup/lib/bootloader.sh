@@ -224,6 +224,7 @@ boot_compose() {
   line=$(amd_driver_cmdline "$line")
   line=$(quirks_cmdline "$line")
   line=$(debug_cmdline "$line")
+  line=$(i8042_cmdline "$line")
   if [[ -n $conn ]]; then
     line=$(words "$(cmdline_without_video "$line") $video")
     line=$(mm_cmdline "$line")
@@ -237,6 +238,39 @@ boot_compose() {
   line=$(orientation_cmdline "$line" "$conn" "$orientation")
   # Em pe, o console em 640x480i com o EDID dos dois modos (lib/video.sh).
   vertical_console_cmdline "$line" "$conn" "$orientation"
+}
+
+# Placa-mae sem a porta do mouse PS/2 (AUX): o kernel espera por ela uns 2 s
+# a cada boot e avisa no log deste boot. Com o i8042.noaux ele nem tenta; o
+# teclado PS/2 segue funcionando. Nunca sai sozinho da linha: com ele o
+# aviso some.
+I8042_NOAUX_HINT="If AUX port is really absent please use the 'i8042.noaux' option"
+KERNEL_LOG=${KERNEL_LOG:-dmesg}
+
+# i8042_noaux_needed: o kernel deste boot pediu o i8042.noaux.
+i8042_noaux_needed() {
+  $KERNEL_LOG 2> /dev/null | grep -qF "$I8042_NOAUX_HINT"
+}
+
+# i8042_cmdline LINHA acrescenta o i8042.noaux quando o kernel o pediu.
+i8042_cmdline() {
+  if [[ " $1 " != *" i8042.noaux "* ]] && i8042_noaux_needed; then
+    printf '%s i8042.noaux\n' "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
+# boot_i8042_check (uma vez por boot, pelo --services-late): grava o
+# i8042.noaux no sistema instalado quando falta, para o proximo boot.
+boot_i8042_check() {
+  local line
+  is_installed && ! is_live || return 0
+  line=$(boot_read_cmdline) || return 0
+  [[ " $line " == *" i8042.noaux "* ]] && return 0
+  i8042_noaux_needed || return 0
+  log_info "i8042: porta AUX ausente, i8042.noaux na linha do kernel"
+  boot_apply
 }
 
 # boot_install_cmdline imprime a linha do kernel para um disco novo. Sem

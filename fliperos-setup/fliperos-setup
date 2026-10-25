@@ -258,6 +258,8 @@ main() {
       ;;
     --services-late)
       services_late
+      # Um ajuste do boot visto so no log deste boot (lib/bootloader.sh).
+      boot_i8042_check
       return 0
       ;;
     --settings)
