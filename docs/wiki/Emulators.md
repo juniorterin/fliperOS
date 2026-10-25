@@ -182,7 +182,7 @@ It is made to flicker: one-pixel stripes and a checkerboard, small text, thin fr
 | GroovyMAME | `interlace 0` in `mame.ini`: Switchres never picks an interlaced mode | `interlace 1` | 480i filter |
 | RetroArch PS1, SNES, Mega Drive, FBNeo | `interlace 0` in the core's own `switchres.ini` | `interlace 1` | 480i filter |
 | RetroArch MAME 2010 | the same, `interlace 0` (the shipped file) | `interlace 1` | 640x240 |
-| Fightcade Flycast | its Flycast matches at 640x240 | 640x480 (no filter: Fightcade runs without it) | 640x240 |
+| Fightcade Flycast | its Flycast matches at 640x240 | 640x480, with or without the filter (picom, see below) | 640x240 |
 | Desktop | none (the resolution comes from Screen Resolution) | picom with or without the filter | 480i filter |
 | Other programs | none | custom games and anything else in a 480i mode | 480i filter |
 
@@ -214,13 +214,15 @@ It works below the emulators, so no emulator needs a shader of its own.
 
 `libfliperos-deflicker.so` (`config/fliperos-deflicker.c`, built with the image and on each update into `/usr/local/lib/fliperos`) is loaded through `LD_PRELOAD` by `fliperos-kms-run` (RetroArch and the other KMS emulators) and by `fliperos-x11-client` (the emulators in their own Xorg).
 
-It is not loaded into Xorg, into Switchres or into the 32-bit Wine programs. The library catches the frame swap (`glXSwapBuffers`, `eglSwapBuffers`, including lookups through `dlsym` and `GetProcAddress`, as SDL does).
+It is not loaded into Xorg or into Switchres: `fliperos-x11-run` takes it out of an `LD_PRELOAD` inherited from a frontend, and `fliperos-x11-client` puts it back on the emulator alone. The library catches the frame swap (`glXSwapBuffers`, `eglSwapBuffers`, including lookups through `dlsym` and `GetProcAddress`, as SDL does).
 
-It copies the frame, draws it back through a three-tap vertical filter and restores the GL state the emulator had. It checks the CRTC mode through DRM every 30 frames: in a progressive mode (240p, 31 kHz, LCD) it does nothing.
+It copies the frame, draws it back through a three-tap vertical filter and restores the GL state the emulator had. It checks the CRTC mode of every card (`/dev/dri/card0` to `card7`, since the monitor's card is not always `card0`) through DRM every 30 frames: in a progressive mode (240p, 31 kHz, LCD) it does nothing.
 
-The filter works with OpenGL (compatibility, core and GLES), not with Vulkan, so when it is on for them and the mode is interlaced, `fliperos-x11-run` puts PCSX2 (`Renderer = 12`), Dolphin (`GFXBackend=OGL`) and Flycast (Vulkan `pvr.rend` 4 and 5 become OpenGL's 0 and 3, for that launch only) on OpenGL.
+The filter works with OpenGL (compatibility, core and GLES), not with Vulkan, so when it is on for them and the mode is interlaced, `fliperos-x11-run` puts PCSX2 (`Renderer = 12`), Dolphin (`GFXBackend=OGL`), DuckStation (`Renderer = OpenGL`) and Flycast (Vulkan `pvr.rend` 4 and 5 become OpenGL's 0 and 3, for that launch only) on OpenGL.
 
-The LXDE desktop draws without OpenGL, so it gets the same filter through **picom** with a window shader (`config/fliperos-desktop-deflicker`, started by `fliperos-lxde` only when the screen mode is interlaced, at the Desktop row's level `deflicker_desktop=`).
+The LXDE desktop draws without OpenGL, so it gets the same filter through **picom** with a window shader (`config/fliperos-desktop-deflicker --watch`, started by `fliperos-lxde`, at the Desktop row's level `deflicker_desktop=`). It checks the screen mode every 2 seconds and runs picom only while it is interlaced, so a change in Screen Resolution counts at once. Ubuntu's own picom autostart (`/etc/xdg/autostart/picom.desktop`, without the shader) would take the screen first, since only one compositor runs at a time: `fliperos-lxde` puts `/etc/fliperos/xdg` first in `XDG_CONFIG_DIRS`, where a `picom.desktop` with `Hidden=true` hides it.
+
+The programs that cannot take the library get the same picom over their whole Xorg: `fliperos-x11-client` starts it for Fightcade (its lobby is Electron, and FBNeo, SNES9x and FBA are 32-bit Wine programs) and for any `wine` or `.exe` command. The Fightcade lobby (512x448, interlaced on a 15 kHz tube) uses the Other programs level; while a Flycast match is open, `fliperos-fightcade` switches it to the Fightcade Flycast row's level (`deflicker_fightcade-flycast=`). The Wine matches run at 240 lines, so there picom has nothing to filter and stays off.
 
 For testing:
 - `FLIPEROS_DEFLICKER=off|light|medium|strong` overrides the level.

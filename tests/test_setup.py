@@ -669,7 +669,7 @@ class DeflickerTests(Base):
             "other": "filter"})
         allowed = {r[0]: r[4] for r in rows}
         self.assertEqual(allowed["desktop"], "filter,pure")
-        self.assertEqual(allowed["fightcade"], "240p,pure")
+        self.assertEqual(allowed["fightcade"], "240p,filter,pure")
         self.assertEqual(allowed["other"], "filter,pure")
         self.assertTrue(all(r[3].endswith(("Now: 640x240. Not installed.", "Now: 480i, filter medium.",
                                            "Now: 640x240.", "Now: 480i, filter medium. Not installed."))
@@ -690,7 +690,7 @@ class DeflickerTests(Base):
         self.assertIn("deflicker_hypseus=light\n", self.conf())
         self.assertIn("mode480_singe=filter\n", self.conf())
         # O que a linha nao tem, um estado ou nivel que nao existe: nada.
-        for bad in ("desktop 240p", "fightcade filter", "flycast 480i", "flycast filter blur"):
+        for bad in ("desktop 240p", "fightcade 480i", "flycast 480i", "flycast filter blur"):
             self.assertNotEqual(self.env.run("mode480_set " + bad).returncode, 0, bad)
         self.assertNotIn("mode480_desktop", self.conf())
 

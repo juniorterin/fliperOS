@@ -388,6 +388,17 @@ if grep -q '^screens=.*,' "$CONF" 2> /dev/null; then
   sudo -n /usr/local/bin/fliperos-setup --outputs all > /dev/null 2>&1 || true
 fi
 export FLIPEROS_X11_RUN_SESSION=1
+# A camada do filtro herdada de um frontend do fliperos-kms-run sai daqui:
+# o fliperos-x11-client a poe so no emulador (no Xorg, no Switchres e no
+# Electron do Fightcade ela nao tem o que fazer, e no Wine de 32 bits so
+# gera erro).
+if [[ -n ${LD_PRELOAD:-} ]]; then
+  preload=""
+  for lib in ${LD_PRELOAD//:/ }; do
+    [[ $lib == */libfliperos-deflicker.so ]] || preload+=${preload:+:}$lib
+  done
+  if [[ -n $preload ]]; then export LD_PRELOAD=$preload; else unset LD_PRELOAD; fi
+fi
 # SDL no X: chamado de dentro do fliperos-kms-run (o GroovyMAME, que se abre
 # no X sozinho), herdaria o kmsdrm de la.
 export SDL_VIDEODRIVER=x11

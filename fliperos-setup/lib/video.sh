@@ -749,7 +749,7 @@ mame2010|RA MAME 2010|mame2010|240p,filter,pure|240p|core:MAME 2010|Arcade games
 snes|RetroArch SNES|snes9x|240p,filter,pure|filter|core:Snes9x|The few interlaced SNES games (Snes9x core).
 megadrive|RA Mega Drive|genesis_plus_gx|240p,filter,pure|filter|core:Genesis Plus GX|Interlaced Mega Drive games, like Sonic 2 split screen (Genesis Plus GX core).
 fbneo|RetroArch FBNeo|fbneo|240p,filter,pure|filter|core:FinalBurn Neo|Arcade games with more than 240 lines in the FBNeo core.
-fightcade|Fightcade Flycast|fightcade-flycast|240p,pure|240p|fightcade|Flycast matches in Fightcade 2, which runs without the filter.
+fightcade|Fightcade Flycast|fightcade-flycast|240p,filter,pure|240p|fightcade|Flycast matches in Fightcade 2.
 desktop|Desktop|desktop|filter,pure|filter|desktop|The LXDE desktop, when Screen Resolution puts it in a 480-line mode.
 other|Other programs|other|filter,pure|filter|other|Custom games and any other program in a 480i mode.
 TABLE

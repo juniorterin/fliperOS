@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=picom
+# O FliperOS sobe o picom com o filtro de flicker (fliperos-desktop-deflicker).
+Hidden=true

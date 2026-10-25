@@ -5028,6 +5028,16 @@ class DeflickerTests(unittest.TestCase):
         client = (ROOT / 'config/fliperos-x11-client').read_text()
         self.assertIn('emulator_command="env LD_PRELOAD=', client)
         self.assertRegex(client, r'fightcade\*[^)]*wine\*[^)]*\*\.exe\)')
+        # Neles, o picom do desktop por cima do X todo, no nivel do programa.
+        wine = client.split('*.exe)')[1].split(';;')[0]
+        self.assertIn('"$compositor" --app "${FLIPEROS_DEFLICKER_APP:-$(basename -- "$1")}" --watch', wine)
+        # A camada herdada de um frontend (fliperos-kms-run) sai do Xorg.
+        with tempfile.TemporaryDirectory() as home:
+            run = EmulatorModeTests.run_x11(
+                EmulatorModeTests(), ['flycast'], home=Path(home),
+                extra={'LD_PRELOAD': '/a/x.so:/usr/local/lib/fliperos/libfliperos-deflicker.so'})
+        self.assertIn('PRELOAD=/a/x.so\n', run.stdout)
+        self.assertNotIn('libfliperos-deflicker', run.stdout)
 
     def run_x11(self, args, conf, lib=True, flycast_rend=None):
         with tempfile.TemporaryDirectory() as tmp:
@@ -5116,7 +5126,64 @@ class DeflickerTests(unittest.TestCase):
         # Modo progressivo na tela: nada.
         self.assertEqual(self.desktop('', env={'XRANDR_CURRENT': '+preferred'}), ('', ''))
         lxde = (ROOT / 'config/fliperos-lxde').read_text()
-        self.assertLess(lxde.index('fliperos-desktop-deflicker'), lxde.index('exec startlxde'))
+        self.assertLess(lxde.index('fliperos-desktop-deflicker --watch'), lxde.index('exec startlxde'))
+        # O picom do autostart do Ubuntu (sem o shader) escondido: subia
+        # antes e o nosso fechava com "Another composite manager".
+        self.assertLess(lxde.index('export XDG_CONFIG_DIRS=/etc/fliperos/xdg:'), lxde.index('exec startlxde'))
+        self.assertIn('install -Dm644 "$src/config/picom-autostart-hidden.desktop" '
+                      '"$root/etc/fliperos/xdg/autostart/picom.desktop"', ROOTFS)
+        self.assertIn('Hidden=true', (ROOT / 'config/picom-autostart-hidden.desktop').read_text())
+
+    def test_desktop_watch_follows_the_mode_and_the_program(self):
+        # --watch: o picom sobe com o modo entrelacado, troca com o nivel do
+        # programa aberto agora (o arquivo do fliperos-fightcade), fecha no
+        # progressivo e tudo sai quando o X fecha.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            conf = tmp / 'fliperos.conf'
+            conf.write_text('deflicker=strong\ndeflicker_fightcade-flycast=light\n')
+            mode = tmp / 'mode'
+            mode.write_text('Interlace *current')
+            bin_dir = tmp / 'bin'
+            bin_dir.mkdir()
+            (bin_dir / 'picom').write_text('#!/bin/bash\necho "start ${LD_PRELOAD:-none} $(grep -o "vec3(0[^)]*)" "${@: -1}")" >> %s\n'
+                                           'trap \'echo stop >> %s; exit\' TERM\nwhile :; do sleep 0.05; done\n'
+                                           % (tmp / 'log', tmp / 'log'))
+            (bin_dir / 'xrandr').write_text('#!/bin/sh\n[ -e %s ] || exit 1\necho "  640x480i $(cat %s)"\n'
+                                            % (mode, mode))
+            for p in bin_dir.iterdir():
+                p.chmod(0o755)
+            app = tmp / 'app'
+            proc = subprocess.Popen(
+                ['bash', str(ROOT / 'config/fliperos-desktop-deflicker'), '--app', 'fightcade', '--watch'],
+                cwd=tmp, env=dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), FLIPEROS_CONF=str(conf),
+                                  XDG_RUNTIME_DIR=str(tmp), FLIPEROS_DEFLICKER_WATCH='0.2',
+                                  FLIPEROS_DEFLICKER_APP_FILE=str(app), LD_PRELOAD=''))
+
+            def log_until(text):
+                for _ in range(100):
+                    log = (tmp / 'log').read_text() if (tmp / 'log').exists() else ''
+                    if log.endswith(text):
+                        return log
+                    time.sleep(0.05)
+                self.fail('no %r in %r' % (text, log))
+
+            light = 'stop\nstart none vec3(0.15, 0.70, 0.15)\n'
+            try:
+                # A sala: sem linha propria, o nivel dos outros programas.
+                log_until('start none vec3(0.33, 0.34, 0.33)\n')
+                app.write_text('fightcade-flycast\n')
+                log_until(light)
+                mode.write_text('+preferred')
+                log_until('stop\n')
+                mode.write_text('Interlace *current')
+                log_until(light)
+                mode.unlink()
+                self.assertEqual(proc.wait(timeout=5), 0)
+                log_until('stop\n')
+                self.assertEqual(list(tmp.glob('fliperos-deflicker-*.glsl')), [])
+            finally:
+                proc.kill()
 
     @unittest.skipUnless(shutil.which('gcc') and subprocess.run(['pkg-config', '--exists', 'libdrm', 'gl', 'egl'],
                                                                 capture_output=True).returncode == 0
@@ -8039,7 +8106,8 @@ class EmulatorModeTests(unittest.TestCase):
             bin_dir.mkdir()
             # xinit falso: mostra o modo pedido e o comando.
             (bin_dir / 'xinit').write_text('#!/bin/bash\necho "MODE=$FLIPEROS_RES_W $FLIPEROS_RES_H $FLIPEROS_RES_HZ"\n'
-                                           'echo "ARGS=$*"\necho "APP=$FLIPEROS_DEFLICKER_APP"\n')
+                                           'echo "ARGS=$*"\necho "APP=$FLIPEROS_DEFLICKER_APP"\n'
+                                           'echo "PRELOAD=${LD_PRELOAD:-}"\n')
             for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog', 'supermodel', 'hypseus',
                          'fightcade', 'sm2-emu', 'duckstation'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')

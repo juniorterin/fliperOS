@@ -1,50 +1,90 @@
 #!/usr/bin/env bash
 # O filtro de flicker do 480i e a saturacao/matiz por software no desktop
-# (LXDE): as mesmas contas da camada dos emuladores
+# (LXDE) e nos X onde a camada dos emuladores nao entra (o Fightcade: o Wine
+# e de 32 bits, o Electron nao a aceita): as mesmas contas da camada
 # (config/fliperos-deflicker.c), como shader de janela do picom. O desktop
 # desenha pelo X, sem OpenGL: a camada nao o alcanca, o compositor sim.
 #   - o filtro: so com o modo da tela entrelacado e o filtro ligado para o
-#     desktop (Setup > Video Setup > 480i hacks, a linha Desktop:
-#     deflicker_desktop= no fliperos.conf);
+#     programa (Setup > Video Setup > 480i hacks: deflicker_NOME= no
+#     fliperos.conf; fora do desktop, sem a linha dele, o deflicker= dos
+#     outros programas, como na camada);
 #   - a matriz de cor: so numa placa sem CTM (color_ctm=sw, de Setup > Video
 #     Setup > Colour calibration), com color_saturation= ou color_hue=.
-# Sem nenhum dos dois, nao sobe nada. Roda no comeco da sessao
-# (config/fliperos-lxde) e sai junto com o X.
+# Sem nenhum dos dois, nao sobe nada.
 #
-#   fliperos-desktop-deflicker [--shader ARQUIVO]   so grava o shader (testes)
+#   fliperos-desktop-deflicker [--app NOME] [--watch]
+#   fliperos-desktop-deflicker [--app NOME] --shader ARQUIVO   so grava o shader (testes)
+#
+# --app: o nome do programa no fliperos.conf (sem ele, desktop).
+# FLIPEROS_DEFLICKER_APP_FILE: um arquivo com o nome do programa aberto
+# agora, que passa o --app (o fliperos-fightcade grava o do emulador).
+# --watch: fica olhando a cada 2 s e sobe, troca ou fecha o picom quando o
+# modo da tela (o Screen Resolution, a troca de modo de cada jogo), o
+# programa ou o fliperos.conf mudam; sai junto com o X. Assim roda no
+# comeco da sessao do desktop (config/fliperos-lxde) e no X de cada
+# programa sem a camada (config/fliperos-x11-client). O picom do autostart
+# do Ubuntu, sem o shader, nao sobe no desktop (fliperos-lxde): so um
+# compositor fica com a tela.
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 get() { sed -n "s/^$1=//p" "$conf" 2> /dev/null | tail -n 1; }
 
-deflick=1
-case $(get deflicker_desktop) in
-  off) deflick=0 w="0.00, 1.00, 0.00" ;;
-  light) w="0.15, 0.70, 0.15" ;;
-  strong) w="0.33, 0.34, 0.33" ;;
-  *) w="0.50, 0.50, 0.00" ;;
-esac
+app=desktop watch=0 shader_only=""
+while (($#)); do
+  case $1 in
+    --app) app=${2:?nome} && shift ;;
+    --watch) watch=1 ;;
+    --shader) shader_only=${2:?arquivo} && shift ;;
+  esac
+  shift
+done
 
-# A matriz da saturacao e do matiz, a do config/fliperos-color.c (por
-# coluna, como o mat3 do GLSL).
-sat=$(get color_saturation) hue=$(get color_hue)
-[[ $sat =~ ^[0-9]+$ ]] || sat=100
-[[ $hue =~ ^-?[0-9]+$ ]] || hue=0
-color=0
-[[ $(get color_ctm) == sw ]] && ((sat != 100 || hue != 0)) && color=1
-m=$(LC_ALL=C awk -v s="$sat" -v h="$hue" 'BEGIN {
-  if (s > 200) s = 200; if (h > 180) h = 180; if (h < -180) h = -180
-  lr = 0.213; lg = 0.715; lb = 0.072; s /= 100; a = h * atan2(0, -1) / 180; c = cos(a); n = sin(a)
-  split(lr + (1 - lr) * s " " lg - lg * s " " lb - lb * s " " lr - lr * s " " lg + (1 - lg) * s " " \
-        lb - lb * s " " lr - lr * s " " lg - lg * s " " lb + (1 - lb) * s, S, " ")
-  split(lr + c * (1 - lr) - n * lr " " lg - c * lg - n * lg " " lb - c * lb + n * (1 - lb) " " \
-        lr - c * lr + n * 0.143 " " lg + c * (1 - lg) + n * 0.140 " " lb - c * lb - n * 0.283 " " \
-        lr - c * lr - n * (1 - lr) " " lg - c * lg + n * lg " " lb + c * (1 - lb) + n * lb, H, " ")
-  out = ""
-  for (j = 0; j < 3; j++) for (i = 0; i < 3; i++) {
-    v = 0; for (k = 0; k < 3; k++) v += H[i * 3 + k + 1] * S[k * 3 + j + 1]
-    out = out (out == "" ? "" : ", ") sprintf("%.5f", v)
-  }
-  print out }')
-((color)) || m="1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0"
+# settings: o que vale agora, em deflick, color, w (os pesos) e m (a matriz).
+settings() {
+  local name=$app level sat hue now
+  if [[ -n ${FLIPEROS_DEFLICKER_APP_FILE:-} ]] && read -r now 2> /dev/null < "$FLIPEROS_DEFLICKER_APP_FILE" &&
+    [[ -n $now ]]; then
+    name=$now
+  fi
+  level=$(get "deflicker_$name")
+  [[ -n $level || $name == desktop ]] || level=$(get deflicker)
+  deflick=1
+  case $level in
+    off) deflick=0 w="0.00, 1.00, 0.00" ;;
+    light) w="0.15, 0.70, 0.15" ;;
+    strong) w="0.33, 0.34, 0.33" ;;
+    *) w="0.50, 0.50, 0.00" ;;
+  esac
+
+  # A matriz da saturacao e do matiz, a do config/fliperos-color.c (por
+  # coluna, como o mat3 do GLSL).
+  sat=$(get color_saturation) hue=$(get color_hue)
+  [[ $sat =~ ^[0-9]+$ ]] || sat=100
+  [[ $hue =~ ^-?[0-9]+$ ]] || hue=0
+  color=0
+  [[ $(get color_ctm) == sw ]] && ((sat != 100 || hue != 0)) && color=1
+  m=$(LC_ALL=C awk -v s="$sat" -v h="$hue" 'BEGIN {
+    if (s > 200) s = 200; if (h > 180) h = 180; if (h < -180) h = -180
+    lr = 0.213; lg = 0.715; lb = 0.072; s /= 100; a = h * atan2(0, -1) / 180; c = cos(a); n = sin(a)
+    split(lr + (1 - lr) * s " " lg - lg * s " " lb - lb * s " " lr - lr * s " " lg + (1 - lg) * s " " \
+          lb - lb * s " " lr - lr * s " " lg - lg * s " " lb + (1 - lb) * s, S, " ")
+    split(lr + c * (1 - lr) - n * lr " " lg - c * lg - n * lg " " lb - c * lb + n * (1 - lb) " " \
+          lr - c * lr + n * 0.143 " " lg + c * (1 - lg) + n * 0.140 " " lb - c * lb - n * 0.283 " " \
+          lr - c * lr - n * (1 - lr) " " lg - c * lg + n * lg " " lb + c * (1 - lb) + n * lb, H, " ")
+    out = ""
+    for (j = 0; j < 3; j++) for (i = 0; i < 3; i++) {
+      v = 0; for (k = 0; k < 3; k++) v += H[i * 3 + k + 1] * S[k * 3 + j + 1]
+      out = out (out == "" ? "" : ", ") sprintf("%.5f", v)
+    }
+    print out }')
+  ((color)) || m="1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0"
+
+  # O modo da tela: --current, sem sondar o monitor de novo a cada vez. O
+  # --shader grava o filtro do nivel em qualquer modo.
+  if [[ -z $shader_only && ${FLIPEROS_DEFLICKER_FORCE:-0} != 1 ]] &&
+    ! xrandr --current --verbose 2> /dev/null | grep -q 'Interlace.*\*current'; then
+    deflick=0 w="0.00, 1.00, 0.00"
+  fi
+}
 
 # shader ARQUIVO: as tres linhas (a de cima, a propria, a de baixo) pelos
 # pesos e a matriz de cor, na interface de shader de janela do picom
@@ -69,16 +109,43 @@ vec4 window_shader() {
 EOF
 }
 
-if [[ ${1:-} == --shader ]]; then
-  shader "${2:?arquivo}"
+settings
+if [[ -n $shader_only ]]; then
+  shader "$shader_only"
   exit 0
 fi
 command -v picom > /dev/null || exit 0
-if [[ ${FLIPEROS_DEFLICKER_FORCE:-0} != 1 ]] &&
-  ! xrandr --verbose 2> /dev/null | grep -q 'Interlace.*\*current'; then
-  deflick=0 w="0.00, 1.00, 0.00"
+file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-deflicker-$$.glsl
+# O picom sem a camada no LD_PRELOAD (herdada de um frontend): ela
+# filtraria a tela do proprio compositor de novo.
+if ((!watch)); then
+  ((deflick || color)) || exit 0
+  file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-deflicker.glsl
+  shader "$file"
+  exec env -u LD_PRELOAD picom --backend glx --vsync --window-shader-fg "$file"
 fi
-((deflick || color)) || exit 0
-file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-deflicker.glsl
-shader "$file"
-exec picom --backend glx --vsync --window-shader-fg "$file"
+
+pid="" last=""
+trap '[[ -n $pid ]] && kill "$pid" 2> /dev/null; rm -f "$file"' EXIT
+trap 'exit 0' TERM INT HUP
+while :; do
+  # Um picom que fechou sozinho sobe de novo na volta seguinte.
+  [[ -z $pid ]] || kill -0 "$pid" 2> /dev/null || pid="" last=""
+  if [[ "$deflick $color $w $m" != "$last" ]]; then
+    if [[ -n $pid ]]; then
+      kill "$pid" 2> /dev/null
+      wait "$pid" 2> /dev/null
+      pid=""
+    fi
+    if ((deflick || color)); then
+      shader "$file"
+      env -u LD_PRELOAD picom --backend glx --vsync --window-shader-fg "$file" &
+      pid=$!
+    fi
+    last="$deflick $color $w $m"
+  fi
+  sleep "${FLIPEROS_DEFLICKER_WATCH:-2}"
+  # O X fechou: sai (o trap fecha o picom).
+  xrandr --current > /dev/null 2>&1 || exit 0
+  settings
+done

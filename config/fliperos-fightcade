@@ -156,6 +156,12 @@ if [[ -z ${DISPLAY:-} ]]; then
   # O botao de desligar (config/fliperos-powerkey) fecha a partida aberta,
   # pelos PIDs do arquivo busy (abaixo); na sala, desliga.
   export FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.busy"
+  # O filtro de flicker do 480i neste X e o picom (config/fliperos-x11-client):
+  # o laco abaixo grava nele o programa aberto, a sala (fightcade, o nivel
+  # dos outros programas) ou o Flycast (a linha Fightcade Flycast do
+  # Setup > Video Setup > 480i hacks).
+  export FLIPEROS_DEFLICKER_APP_FILE="${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.app"
+  rm -f "$FLIPEROS_DEFLICKER_APP_FILE"
   exec "$x11run" "$dir/fightcade" "$@"
 fi
 
@@ -625,6 +631,13 @@ while ((gone < ${FIGHTCADE_QUIT_WAIT:-5})); do
     *flycast.elf* | *.exe*) awk '/flycast\.elf|\.exe/ { print $1 }' <<< "$running" > "$busy" ;;
     *) rm -f "$busy" ;;
   esac
+  if [[ -n ${FLIPEROS_DEFLICKER_APP_FILE:-} ]]; then
+    case $running in
+      *flycast.elf*) app=fightcade-flycast ;;
+      *) app=fightcade ;;
+    esac
+    [[ $app == "$(cat "$FLIPEROS_DEFLICKER_APP_FILE" 2> /dev/null)" ]] || echo "$app" > "$FLIPEROS_DEFLICKER_APP_FILE"
+  fi
   case $running in
     *fcadefbneo.exe* | *fcv39.exe* | *ggpofba-ng.exe*) idle_close ;;
     *) idle=() ;;

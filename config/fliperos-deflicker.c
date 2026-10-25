@@ -277,29 +277,37 @@ static void read_matrix(void)
 
 /* interlaced: o modo ativo de alguma saida e entrelacado? Pergunta ao DRM
  * a cada 30 quadros (o RetroArch troca de modo no meio do jogo). Ler os
- * modos nao precisa ser o dono da tela. */
+ * modos nao precisa ser o dono da tela. Todas as placas (card0 a card7): a
+ * do monitor nem sempre e a card0 (o simpledrm do boot, um iGPU ao lado
+ * da placa de video). FLIPEROS_DRM_CARD: so aquela. */
+#define CARDS 8
 static int interlaced(void)
 {
-    static int fd = -2, frames, state;
+    static int fds[CARDS], opened, frames, state;
     if (forced)
         return 1;
     if (frames++ % 30)
         return state;
-    if (fd == -2) {
+    if (!opened) {
         const char *card = getenv("FLIPEROS_DRM_CARD");
-        fd = open(card ? card : "/dev/dri/card0", O_RDWR | O_CLOEXEC);
+        char path[32];
+        for (int n = 0; n < CARDS; n++) {
+            snprintf(path, sizeof(path), "/dev/dri/card%d", n);
+            fds[n] = card && n ? -1 : open(card ? card : path, O_RDWR | O_CLOEXEC);
+        }
+        opened = 1;
     }
     state = 0;
-    if (fd < 0)
-        return 0;
-    drmModeResPtr res = drmModeGetResources(fd);
-    for (int i = 0; res && i < res->count_crtcs && !state; i++) {
-        drmModeCrtcPtr crtc = drmModeGetCrtc(fd, res->crtcs[i]);
-        if (crtc && crtc->mode_valid && (crtc->mode.flags & DRM_MODE_FLAG_INTERLACE))
-            state = 1;
-        drmModeFreeCrtc(crtc);
+    for (int n = 0; n < CARDS && !state; n++) {
+        drmModeResPtr res = fds[n] < 0 ? NULL : drmModeGetResources(fds[n]);
+        for (int i = 0; res && i < res->count_crtcs && !state; i++) {
+            drmModeCrtcPtr crtc = drmModeGetCrtc(fds[n], res->crtcs[i]);
+            if (crtc && crtc->mode_valid && (crtc->mode.flags & DRM_MODE_FLAG_INTERLACE))
+                state = 1;
+            drmModeFreeCrtc(crtc);
+        }
+        drmModeFreeResources(res);
     }
-    drmModeFreeResources(res);
     return state;
 }
 

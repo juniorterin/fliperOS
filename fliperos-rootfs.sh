@@ -89,6 +89,10 @@ ln -sfn /etc/systemd/system/fliperos-padkeys.service \
 # modo; config/fliperos-x11-client).
 install -Dm644 "$src/config/openbox-x11-run.xml" "$root/etc/fliperos/openbox-x11-run.xml"
 install -Dm644 "$src/config/openbox-black-themerc" "$root/usr/share/themes/FliperOS-Black/openbox-3/themerc"
+# O picom do autostart do pacote fica de fora do desktop: o fliperos-lxde
+# poe /etc/fliperos/xdg antes no XDG_CONFIG_DIRS, e o do filtro de flicker
+# (fliperos-desktop-deflicker) e o unico compositor.
+install -Dm644 "$src/config/picom-autostart-hidden.desktop" "$root/etc/fliperos/xdg/autostart/picom.desktop"
 # Modo de video de cada emulador do fliperos-x11-run (640x240 nos de 480i
 # num monitor de 15 kHz). O usuario pode editar: a imagem nao sobrescreve.
 [[ -f "$root/etc/fliperos/emulator-modes.conf" ]] \

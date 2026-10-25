@@ -28,7 +28,11 @@ esac
 # (config/fliperos-panning). Sai junto com o X.
 /opt/fliperos/bin/fliperos-panning < /dev/null > /dev/null 2>&1 &
 # O filtro de flicker do 480i no desktop (o picom com o shader), so com o
-# modo entrelacado. Sai junto com o X.
-/opt/fliperos/bin/fliperos-desktop-deflicker < /dev/null > /dev/null 2>&1 &
+# modo entrelacado, acompanhando o Screen Resolution. Sai junto com o X.
+# O picom.desktop do pacote, no autostart do Ubuntu, subia antes sem o
+# shader e ficava com a tela (so um compositor por vez): o do
+# /etc/fliperos/xdg/autostart, com Hidden=true, vem primeiro e o esconde.
+export XDG_CONFIG_DIRS=/etc/fliperos/xdg:${XDG_CONFIG_DIRS:-/etc/xdg}
+/opt/fliperos/bin/fliperos-desktop-deflicker --watch < /dev/null > /dev/null 2>&1 &
 
 exec startlxde
