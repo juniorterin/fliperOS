@@ -8037,6 +8037,22 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertNotIn('-nocursor', self.run_x11([prog]).stdout, prog)
         # O Dolphin aberto direto num jogo deixava a seta no meio da tela.
         self.assertIn('-nocursor', self.run_x11(['dolphin-emu', '-e', 'game.iso']).stdout)
+
+    def test_esc_closes_flycast_and_dolphin(self):
+        # Nenhum dos dois sai pelo Esc: o fliperos-escquit vigia o xinit.
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = Path(tmp) / 'calls'
+            esc = Path(tmp) / 'escquit'
+            esc.write_text('#!/bin/sh\necho "$*" >> %s\n' % calls)
+            esc.chmod(0o755)
+            for prog, watched in (('flycast', True), ('dolphin-emu', True), ('supermodel', False)):
+                calls.write_text('')
+                self.run_x11([prog], extra={'FLIPEROS_ESCQUIT': str(esc)})
+                for _ in range(50):
+                    if calls.read_text() or not watched:
+                        break
+                    time.sleep(0.1)
+                self.assertEqual(calls.read_text().startswith('--ignore-children '), watched, prog)
         self.assertIn('-nocursor', self.run_x11(['myprog']).stdout)
         # O PCSX2 abre no Big Picture, que se usa pelo controle.
         self.assertIn('-nocursor', self.run_x11(['pcsx2']).stdout)
