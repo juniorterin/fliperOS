@@ -30,6 +30,26 @@ TORRENT_EVERY = 6 * 3600   # de quanto em quanto tempo os pacotes sao conferidos
 STATUS_EVERY = 20          # o andamento dos torrents, enquanto baixam
 
 
+# Os pacotes de arte da imagem e os da pessoa (lib/mediapacks.sh): o tipo
+# de cada um, para o quadro do Tab dizer LOGOS e VIDEOS.
+MEDIA_TORRENTS = ("/usr/local/share/fliperos/media-torrents", "/etc/fliperos/media-torrents")
+KIND_LABELS = {"logo": "LOGOS", "preview": "VIDEOS", "snap": "SCREENS", "box": "BOXES", "marquee": "MARQUEES"}
+
+
+def pack_kinds():
+    kinds = {}
+    for path in MEDIA_TORRENTS:
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    parts = line.rstrip("\n").split("\t")
+                    if len(parts) >= 2 and not line.startswith("#"):
+                        kinds[parts[0]] = KIND_LABELS.get(parts[1], parts[1].upper())
+        except OSError:
+            pass
+    return kinds
+
+
 class Harvester:
     RETRY_DAYS = RETRY_DAYS
     def __init__(self, fe):
@@ -40,6 +60,7 @@ class Harvester:
         self.current = None
         self.paused = False        # um jogo aberto
         self.torrent = None        # (porcentagem, estado) dos pacotes
+        self.packs = {}            # pacote -> (estado, porcentagem)
         self.wake = threading.Event()
         self.path = os.path.join(self.fd.web.player_home(), ".local", "share", "fliperos", "scrape-state.json")
         self.status_path = self.path.replace("scrape-state", "scrape-status")
@@ -90,7 +111,7 @@ class Harvester:
         self.write(self.status_path, {
             "total": self.total, "left": self.left, "scanned": self.scanned,
             "current": self.fd.short_title(self.current) if self.current else "",
-            "torrent": self.torrent, "pid": os.getpid()})
+            "torrent": self.torrent, "packs": self.packs, "pid": os.getpid()})
 
     def follow(self):
         """No frontend com o servico no ar: o andamento dele, e os jogos que
@@ -108,6 +129,7 @@ class Harvester:
             self.followed = (mtime, time.time())
             self.total, self.left = data.get("total", 0), data.get("left", 0)
             self.scanned, self.torrent = data.get("scanned", False), data.get("torrent")
+            self.packs = {k: tuple(v) for k, v in (data.get("packs") or {}).items()}
             self.current = {"Title": data["current"], "Name": data["current"]} if data.get("current") else None
             self.state = self.load()
             for key, t in self.state.get("tried", {}).items():
@@ -245,12 +267,18 @@ class Harvester:
         self.publish()
 
     def torrents(self):
-        """Os pacotes em torrent, de TORRENT_EVERY em TORRENT_EVERY."""
-        if self.paused or time.time() - self.state.get("torrents", 0) < TORRENT_EVERY:
+        """Os pacotes em torrent, de TORRENT_EVERY em TORRENT_EVERY. A saida
+        diz os pacotes de .zip de letra ("ID<TAB>jogos<TAB>zip"): esses vem
+        arquivo por arquivo, pelo scrape de cada jogo (fedata.pack_art)."""
+        if self.paused or (time.time() - self.state.get("torrents", 0) < TORRENT_EVERY
+                           and "zip" in self.state):
             return
         self.state["torrents"] = int(time.time())
         self.save()
-        self.fd.setup("--mediapacks", "auto", timeout=1800)
+        out = self.fd.setup("--mediapacks", "auto", timeout=1800)
+        self.state["zip"] = sorted(line.split("\t")[0] for line in out.splitlines()
+                                   if line.count("\t") == 2 and line.endswith("\tzip"))
+        self.save()
         self.status()
 
     def status(self):
@@ -262,6 +290,32 @@ class Harvester:
         except ValueError:
             pct = 0
         self.torrent = (pct, state) if state not in ("none", "") else None
+        # Cada pacote: "pack.ID=estado|pct|texto".
+        self.packs = {}
+        for key, value in values.items():
+            if key.startswith("pack."):
+                parts = value.split("|")
+                try:
+                    self.packs[key[5:]] = (parts[0], int(float(parts[1])) if len(parts) > 1 else 0)
+                except ValueError:
+                    self.packs[key[5:]] = (parts[0], 0)
+
+    def pack_line(self):
+        """Os pacotes de arte por tipo, para o quadro do Tab: "LOGOS 34%",
+        "LOGOS DONE", "VIDEOS ONE BY ONE" (o .zip de letra). Vazio sem
+        nenhum pacote."""
+        kinds = pack_kinds()
+        rows = {}
+        for pack, (state, pct) in self.packs.items():
+            label = kinds.get(pack, "ART")
+            text = {"downloading": "%d%%" % pct, "ready": "SAVING", "done": "DONE",
+                    "stopped": "STOPPED"}.get(state, state.upper())
+            # O tipo com mais de um pacote: o que ainda baixa vale.
+            if label not in rows or state == "downloading":
+                rows[label] = text
+        for pack in self.state.get("zip", []):
+            rows.setdefault(kinds.get(pack, "ART"), "ONE BY ONE")
+        return "  ".join("%s %s" % (label, rows[label]) for label in sorted(rows))
 
     def watch(self):
         """O andamento dos torrents enquanto houver um baixando."""
