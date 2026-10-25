@@ -2,6 +2,35 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.12
+
+NVIDIA cards with VGA or DVI-I can now show native 15 kHz resolutions: FliperOS's own kernel patch lets the open driver (nouveau) take the low clocks, and the output test checks each card with a 320x240 grid before using them. Cards that don't pass keep the super resolutions. The new Video cards page of the wiki lists which AMD, NVIDIA and Intel cards work and what each one gives. The first boot of an installed system already installs and turns on the web panel's Live screen. Art packs that stopped when the cabinet was turned off now continue where they were, and the Auto scrape panel says which system each pack is for (MAME logos, MAME videos). The NVIDIA path has not been seen on a real NVIDIA card yet.
+
+**System changes:**
+
+- **15 kHz kernel**: patch 10 (FliperOS's own) removes nouveau's 25 MHz floor on analog outputs (VGA, DVI-I), so NVIDIA cards from the GeForce 8 to the GTX 900 can boot at `640x480iS` and run each game at its native resolution
+- The frontend: switching between list, grid and full screen stays on the same game, clones too; clones with a name of their own (hacks, bootlegs) show the whole title in the list, and the selected title scrolls in a loop instead of wrapping
+- Art packs: a torrent stuck with no peers comes by HTTP straight from archive.org; a pack interrupted by a reboot continues from the file it was on instead of starting over
+
+**Package changes:**
+
+- go2rtc (the Live screen) is downloaded by the first boot of the installed system, a pinned version checked by sha256; it still isn't in the image
+
+**fliperos-setup changes:**
+
+- The video output test shows a 320x240 grid on NVIDIA cards with an analog output: seen, native resolutions; not seen, super resolutions. Video Setup > Low resolutions repeats it
+- The installer lists the HD/SSDs as a vertical text list (device, size, type and model)
+- The first boot installs and turns on the Live screen of the web panel (it offers Wi-Fi when there is no internet)
+- The Auto scrape panel names the system of each art pack: MAME LOGOS, MAME VIDEOS, NAOMI LOGOS...
+
+**Tool changes:**
+
+- `fliperos-mediapacks resume` and `fliperos-setup --mediapacks resume` continue the art packs in progress; the automatic scrape calls them when a pack is stopped
+
+**Documentation:**
+
+- New wiki page: Video cards, the list of supported AMD, NVIDIA and Intel cards
+
 ## 0.11
 
 FliperOS has a frontend of its own, and it is the default: game lists made by FliperOS itself (Attract-Mode and ES-DE are optional), a grid and a full-screen view with each game's video, and a scraper that fetches the missing art, logos, videos and info of every game by itself. The cabinet also has a web panel at http://fliperos.local: open and close games, see the screen live with sound, change settings mid-game, manage files, the ROM filter and the downloads from a phone. On a vertical monitor the frontend, the Setup menu, the boot screen and the terminal now stand upright. Updates show what they change before asking to apply, and after a new version or update the menu shows what's new once. The frontend and the web panel run on the cabinet; the vertical mode has not been seen on a CRT yet. An installed 0.10 gets all of this through updates 18 to 22. This ISO was rebuilt on 2026-10-25 with updates 19 to 22: a faster boot, a reboot without the 90 s wait, updates applied at power off, the installer in the graphical menu, an on-screen keyboard for the Wi-Fi password, MAME 2010 buttons pressed once (also on panels that show up as Xbox 360 pads), the automatic scrape running during games, the arcade videos by torrent one letter at a time, and hiding games and clones in the frontend.
