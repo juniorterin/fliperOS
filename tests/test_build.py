@@ -2900,9 +2900,33 @@ class UpdateTests(unittest.TestCase):
         # No modo jogo a pergunta vem depois do jogo (ImageTests).
         self.assertIn('elif ! game_mode && update_pending; then\n      splash_off\n'
                       '      sudo /usr/local/bin/fliperos-setup --update-check', tty1)
-        self.assertIn('nm-online -q -t 5', tty1)
+        # Ja conectado: sem espera nenhuma.
+        self.assertIn('if ! nm-online -q -t 0 > /dev/null 2>&1; then', tty1)
         # O Wi-Fi conecta depois do "startup complete" do NetworkManager.
         self.assertIn('net_expected || return 1\n      nm-online -q -t "${FLIPEROS_UPDATE_NET_WAIT:-30}"', tty1)
+        # Wi-Fi em "After boot": o radio desligado no boot nao e rede a esperar.
+        self.assertIn("[[ $(nmcli radio wifi 2> /dev/null) == enabled ]]", tty1)
+
+    def test_net_expected_skips_a_radio_that_is_off(self):
+        # Wi-Fi em "After boot": o radio so liga depois da primeira tela, e o
+        # boot esperava os 30 s inteiros por ele.
+        func = re.search(r'^net_expected\(\) \{.*?^\}\n', (ROOT / 'config/fliperos-tty1').read_text(),
+                         re.S | re.M).group(0)
+        with tempfile.TemporaryDirectory() as tmp:
+            nmcli = Path(tmp) / 'nmcli'
+
+            def expected(devices, radio):
+                nmcli.write_text('#!/bin/bash\ncase "$*" in\n'
+                                 '  *device*) printf "%s" ;;\n'
+                                 '  "radio wifi") echo %s ;;\n'
+                                 '  *connection*) echo 802-11-wireless ;;\nesac\n' % (devices, radio))
+                nmcli.chmod(0o755)
+                env = dict(os.environ, PATH='%s:%s' % (tmp, os.environ['PATH']))
+                return subprocess.run(['bash', '-c', func + 'net_expected'], env=env).returncode == 0
+
+            self.assertTrue(expected(r'wifi:unavailable\nethernet:unavailable\n', 'enabled'))
+            self.assertFalse(expected(r'wifi:unavailable\nethernet:unavailable\n', 'disabled'))
+            self.assertTrue(expected(r'wifi:unavailable\nethernet:connecting\n', 'disabled'))
         update = (ROOT / 'tools/cabinet-update.sh').read_text()
         self.assertIn('config/fliperos-update" record "$src"', update)
         self.assertIn('if [[ -n ${FLIPEROS_UPDATE:-} ]]; then', update)

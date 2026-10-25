@@ -105,12 +105,15 @@ menu() {
 }
 
 # net_expected: a rede ainda pode subir? Cabo ligado (a placa sem cabo fica
-# "unavailable") ou Wi-Fi com uma rede salva.
+# "unavailable") ou Wi-Fi com uma rede salva e o radio ligado. Com o Wi-Fi em
+# "After boot" (Setup > System > Services) o radio so liga depois da primeira
+# tela: espera-lo aqui era segurar o boot os 30 s inteiros.
 net_expected() {
   local devs
   devs=$(nmcli -t -f TYPE,STATE device 2> /dev/null)
   grep -qE '^ethernet:(connecting|connected|disconnected)' <<< "$devs" && return 0
-  grep -q '^wifi:' <<< "$devs" && nmcli -t -f TYPE connection show 2> /dev/null | grep -q '802-11-wireless'
+  grep -q '^wifi:' <<< "$devs" && [[ $(nmcli radio wifi 2> /dev/null) == enabled ]] &&
+    nmcli -t -f TYPE connection show 2> /dev/null | grep -q '802-11-wireless'
 }
 
 # update_pending: com rede, ha um update do FliperOS (config/fliperos-update)?
@@ -121,7 +124,7 @@ update_pending() {
   [[ -x $BIN/fliperos-update ]] || return 1
   if command -v nm-online > /dev/null; then
     nm-online -q -s -t 15 > /dev/null 2>&1
-    if ! nm-online -q -t 5 > /dev/null 2>&1; then
+    if ! nm-online -q -t 0 > /dev/null 2>&1; then
       net_expected || return 1
       nm-online -q -t "${FLIPEROS_UPDATE_NET_WAIT:-30}" > /dev/null 2>&1 || return 1
     fi
