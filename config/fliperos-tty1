@@ -116,12 +116,16 @@ net_expected() {
     nmcli -t -f TYPE connection show 2> /dev/null | grep -q '802-11-wireless'
 }
 
-# update_pending: com rede, ha um update do FliperOS (config/fliperos-update)?
-# Espera o NetworkManager subir (ate 15 s) e, se ha cabo ou Wi-Fi salvo, a
-# conexao (ate 30 s: o "startup complete" do NetworkManager vem antes do
-# Wi-Fi conectar). Sem rede, ou com qualquer erro, o boot segue sem perguntar.
+# update_pending: ha um update do FliperOS (config/fliperos-update)? O boot
+# nao procura: le o que o fliperos-update-check.service guardou num boot
+# anterior, sem rede. So com um update ja conhecido ele espera a rede, que a
+# tela do update usa: o NetworkManager (ate 15 s) e, se ha cabo ou Wi-Fi
+# salvo, a conexao (ate 30 s: o "startup complete" do NetworkManager vem
+# antes do Wi-Fi conectar). Sem rede, o boot segue sem perguntar, e o update
+# entra ao desligar (fliperos-update-shutdown.service).
 update_pending() {
   [[ -x $BIN/fliperos-update ]] || return 1
+  [[ -n $("$BIN/fliperos-update" pending 2> /dev/null) ]] || return 1
   if command -v nm-online > /dev/null; then
     nm-online -q -s -t 15 > /dev/null 2>&1
     if ! nm-online -q -t 0 > /dev/null 2>&1; then
@@ -129,7 +133,7 @@ update_pending() {
       nm-online -q -t "${FLIPEROS_UPDATE_NET_WAIT:-30}" > /dev/null 2>&1 || return 1
     fi
   fi
-  [[ -n $(FLIPEROS_UPDATE_LOG=/dev/null "$BIN/fliperos-update" check 2> /dev/null) ]]
+  return 0
 }
 
 # game_mode: o boot abre um jogo direto (Setup > Games > Frontend). Nada

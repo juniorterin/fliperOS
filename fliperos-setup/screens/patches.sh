@@ -45,7 +45,7 @@ screen_update_check() {
     options=("apply|Apply now")
     [[ -s $notes ]] && options+=("notes|Read what changes")
     ((count)) && options+=("files|View the files")
-    options+=("later|Not now (asks again at the next boot)")
+    options+=("later|Not now (installs when the cabinet powers off)")
     choice=$(ui_menu "$title" "$text" apply "${options[@]}") || choice=later
     case $choice in
       notes) ui_pager "What's new in this FliperOS update" "$notes" inicio ;;

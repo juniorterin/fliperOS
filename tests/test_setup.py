@@ -3994,7 +3994,7 @@ class RomCleanerTests(Base):
         self.assertIn("pager:Files the update replaces:/etc/f0", out)
         self.assertNotIn("What's new", out)
         self.assertNotIn("item:notes", out)
-        self.assertIn("item:later|Not now (asks again at the next boot)", out)
+        self.assertIn("item:later|Not now (installs when the cabinet powers off)", out)
         self.assertNotIn("apply", calls)
         # Aplicar: o update roda e diz como ficou.
         out, calls = self.update_screen("1\tno\tFix menu\n", "pending=1\nchanged=0\nexact=yes\n",

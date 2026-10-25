@@ -540,6 +540,13 @@ ln -sfn /etc/systemd/system/fliperos-services.service \
 mkdir -p "$root/etc/systemd/system/timers.target.wants"
 ln -sfn /etc/systemd/system/fliperos-services-late.timer \
   "$root/etc/systemd/system/timers.target.wants/fliperos-services-late.timer"
+# O update do FliperOS: procurado em segundo plano depois da primeira tela
+# (o --services-late liga o check) e aplicado ao desligar.
+for unit in fliperos-update-check.service fliperos-update-shutdown.service; do
+  install -Dm644 "$src/config/$unit" "$root/etc/systemd/system/$unit"
+done
+ln -sfn /etc/systemd/system/fliperos-update-shutdown.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-update-shutdown.service"
 # O compartilhamento (o smbd e o nmbd, que sozinho levava uns 13 s no boot)
 # sobe depois da primeira tela ate a pessoa mudar.
 if ! grep -q '^samba=' "$root/etc/fliperos/services.conf" 2> /dev/null; then

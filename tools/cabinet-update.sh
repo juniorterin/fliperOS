@@ -339,6 +339,8 @@ sed -n 's/^FLIPEROS_CMDLINE=//p' /etc/default/fliperos-boot
 echo "== Services"
 systemctl daemon-reload
 systemctl enable --now systemd-timesyncd.service > /dev/null 2>&1 || true
+# O update ao desligar e o ExecStop dele: so roda se ele subiu neste boot.
+systemctl start fliperos-update-shutdown.service 2> /dev/null || true
 # Mapeamentos de controle do SDL dos controles ligados agora (o servico tambem
 # roda no boot e a cada controle ligado).
 systemctl start fliperos-controllers.service 2> /dev/null || true

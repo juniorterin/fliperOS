@@ -264,6 +264,9 @@ main() {
       services_late
       # Um ajuste do boot visto so no log deste boot (lib/bootloader.sh).
       boot_i8042_check
+      # O update procurado em segundo plano, com a tela ja aberta: o boot
+      # seguinte so le o resultado (fliperos-tty1, update_pending).
+      systemctl start --no-block fliperos-update-check.service >> "$FLIPEROS_LOG" 2>&1
       return 0
       ;;
     --settings)

@@ -1,0 +1,16 @@
+# Ha update do FliperOS? (config/fliperos-update). Roda em segundo plano, uma
+# vez por boot, depois da primeira tela (o --services-late o chama): espera a
+# rede e guarda o resultado. O boot seguinte so le o que ficou guardado
+# (fliperos-update pending) e nao espera mais a rede antes da tela; ao
+# desligar, o fliperos-update-shutdown.service aplica o que estiver pendente.
+[Unit]
+Description=FliperOS: check for an update in the background
+ConditionPathExists=/etc/fliperos/installed
+After=NetworkManager.service
+
+[Service]
+Type=oneshot
+Nice=10
+ExecStartPre=-/usr/bin/nm-online -q -t 120
+ExecStart=/opt/fliperos/bin/fliperos-update check --save
+StandardOutput=null

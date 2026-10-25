@@ -1,0 +1,18 @@
+# Ao desligar (poweroff, nao reboot), o update do FliperOS que ficou
+# pendente entra (fliperos-update shutdown). Nao faz nada no boot: o trabalho
+# e o ExecStop. Com o After= ele para antes da rede e do DNS, que o download
+# do update ainda usa.
+[Unit]
+Description=FliperOS: apply a pending update when powering off
+ConditionPathExists=/etc/fliperos/installed
+After=NetworkManager.service wpa_supplicant.service systemd-resolved.service local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/opt/fliperos/bin/fliperos-update shutdown
+TimeoutStopSec=20min
+
+[Install]
+WantedBy=multi-user.target

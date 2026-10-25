@@ -523,7 +523,7 @@ class ImageTests(unittest.TestCase):
         # Modo jogo: nada de esperar a rede pelo update nem varrer pastas
         # antes do jogo; os dois vem depois dele, a caminho do menu.
         calls = self.tty1(True, [0], ['-'], firstboot=False, game=True)
-        self.assertEqual(calls, ['sudo setterm --blank 0 --powerdown 0', 'session', 'roms', 'update check',
+        self.assertEqual(calls, ['sudo setterm --blank 0 --powerdown 0', 'session', 'roms', 'update pending',
                                  'sudo /usr/local/bin/fliperos-setup --update-check',
                                  'sudo /usr/local/bin/fliperos-setup --menu'])
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()
@@ -2759,6 +2759,44 @@ class UpdateTests(unittest.TestCase):
                          'Update 1: Fix 1\n\n- Frontend: the grid keeps its place (wiki).\n\n'
                          'Update 2: Fix 2 (restarts the computer)\n')
 
+    def test_saved_check_drives_the_boot_and_the_power_off(self):
+        # O check em segundo plano guarda; o boot le sem rede (pending); ao
+        # desligar (nao ao reiniciar) o update guardado entra.
+        (self.root / 'etc/app/app.conf').write_text('v0')
+        self.publish('v1')
+        self.assertEqual(self.run_update('pending').stdout, '')
+        self.assertEqual(self.run_update('check', '--save').stdout, '1\tno\tFix 1\n')
+        self.assertEqual(self.run_update('pending').stdout, '1\tno\tFix 1\n')
+        # Sem rede o check falha e o guardado fica.
+        self.env['FLIPEROS_UPDATE_INDEX_URL'] = (self.tmp / 'nao-existe').as_uri()
+        self.assertNotEqual(self.run_update('check', '--save', check=False).returncode, 0)
+        self.assertEqual(self.run_update('pending').stdout, '1\tno\tFix 1\n')
+        self.env['FLIPEROS_UPDATE_INDEX_URL'] = (self.tmp / 'index').as_uri()
+        jobs = self.tmp / 'jobs'
+        self.env['FLIPEROS_UPDATE_JOBS'] = 'cat %s' % jobs
+        jobs.write_text('105 reboot.target start waiting\n')
+        self.run_update('shutdown')
+        self.assertEqual((self.level(), self.conf()), ('0', 'v0'))
+        jobs.write_text('105 poweroff.target start waiting\n')
+        self.run_update('shutdown')
+        self.assertEqual((self.level(), self.conf()), ('1', 'v1'))
+        # Aplicado, o guardado nao conta mais (o boot nao pergunta de novo).
+        self.assertEqual(self.run_update('pending').stdout, '')
+
+    def test_update_check_and_power_off_units(self):
+        check = (ROOT / 'config/fliperos-update-check.service').read_text()
+        self.assertIn('ExecStart=/opt/fliperos/bin/fliperos-update check --save', check)
+        stop = (ROOT / 'config/fliperos-update-shutdown.service').read_text()
+        self.assertIn('ExecStop=/opt/fliperos/bin/fliperos-update shutdown', stop)
+        self.assertIn('After=NetworkManager.service', stop)
+        self.assertIn('multi-user.target.wants/fliperos-update-shutdown.service', ROOTFS)
+        self.assertIn('systemctl start fliperos-update-shutdown.service',
+                      (ROOT / 'tools/cabinet-update.sh').read_text())
+        setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        late = setup.split('    --services-late)')[1].split(';;')[0]
+        self.assertIn('systemctl start --no-block fliperos-update-check.service', late)
+        self.assertIn("os.environ['SYSTEMD_OFFLINE'] = '1'", (ROOT / 'config/fliperos-update').read_text())
+
     def conf(self):
         return (self.root / 'etc/app/app.conf').read_text()
 
@@ -2902,6 +2940,9 @@ class UpdateTests(unittest.TestCase):
                       '      sudo /usr/local/bin/fliperos-setup --update-check', tty1)
         # Ja conectado: sem espera nenhuma.
         self.assertIn('if ! nm-online -q -t 0 > /dev/null 2>&1; then', tty1)
+        # O boot nao procura: le o que o check em segundo plano guardou.
+        self.assertIn('[[ -n $("$BIN/fliperos-update" pending 2> /dev/null) ]] || return 1', tty1)
+        self.assertNotIn('fliperos-update" check', tty1)
         # O Wi-Fi conecta depois do "startup complete" do NetworkManager.
         self.assertIn('net_expected || return 1\n      nm-online -q -t "${FLIPEROS_UPDATE_NET_WAIT:-30}"', tty1)
         # Wi-Fi em "After boot": o radio desligado no boot nao e rede a esperar.

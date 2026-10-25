@@ -3,7 +3,12 @@
 (updates/index), aplicados um de cada vez e sempre em ordem.
 
   fliperos-update level                 o ultimo patch aplicado (0: nenhum)
-  fliperos-update check                 os pendentes, "N<TAB>reboot<TAB>titulo"
+  fliperos-update check [--save]        os pendentes, "N<TAB>reboot<TAB>titulo"
+                                        (--save: guarda para o pending)
+  fliperos-update pending               os do ultimo check --save ainda nao
+                                        aplicados, sem rede (o boot)
+  fliperos-update shutdown              ao desligar: aplica os pendentes
+                                        guardados (fliperos-update-shutdown)
   fliperos-update notes                 o que muda em cada pendente (o changelog)
   fliperos-update plan [--progress] [--result ARQUIVO]
   fliperos-update apply [--progress] [--result ARQUIVO]
@@ -56,6 +61,8 @@ INSTALL = os.environ.get('FLIPEROS_UPDATE_INSTALL', 'bash "$SRC/tools/cabinet-up
 # $UPPER o que o patch escreveria na raiz.
 DRYRUN = os.environ.get('FLIPEROS_UPDATE_DRYRUN', '')
 TIMEOUT = int(os.environ.get('FLIPEROS_UPDATE_TIMEOUT', '20'))
+# Os jobs do systemd agora: o shutdown so aplica num poweroff (nao no reboot).
+JOBS = os.environ.get('FLIPEROS_UPDATE_JOBS', 'systemctl list-jobs --no-legend').split()
 
 # As partes do repo que o patch usa: as do tools/cabinet-push.sh e os
 # updates/NNNN.sh. O treehash e o sha256 da lista "caminho<TAB>sha256".
@@ -384,9 +391,64 @@ def cmd_level(args):
     print(read_level())
 
 
+def pending_file():
+    return os.path.join(STATE, 'pending')
+
+
 def cmd_check(args):
-    for n, _, _, reboot, title in pending():
-        print('%d\t%s\t%s' % (n, 'yes' if reboot else 'no', title))
+    lines = ['%d\t%s\t%s' % (n, 'yes' if reboot else 'no', title) for n, _, _, reboot, title in pending()]
+    for line in lines:
+        print(line)
+    if args.save:
+        # O boot nao espera a rede para perguntar: le isto (cmd_pending). So
+        # um check que leu o indice grava; sem rede fica o anterior.
+        os.makedirs(STATE, exist_ok=True)
+        tmp = pending_file() + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(''.join(line + '\n' for line in lines))
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, pending_file())
+
+
+def saved_pending():
+    """As linhas do ultimo check --save que o nivel de agora ainda nao tem."""
+    level = read_level()
+    try:
+        with open(pending_file(), encoding='utf-8') as f:
+            return [line.rstrip('\n') for line in f
+                    if line[:1].isdigit() and int(line.split('\t', 1)[0]) > level]
+    except (OSError, ValueError):
+        return []
+
+
+def cmd_pending(args):
+    for line in saved_pending():
+        print(line)
+
+
+def powering_off():
+    try:
+        jobs = subprocess.run(JOBS, capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return 'poweroff.target' in jobs or 'halt.target' in jobs
+
+
+def cmd_shutdown(args):
+    """O ExecStop do fliperos-update-shutdown.service: desligando com um
+    update pendente, ele entra agora, com a rede ainda de pe."""
+    if not saved_pending() or not powering_off():
+        return
+    log('powering off with an update pending: applying it')
+    try:
+        subprocess.run(['plymouth', 'display-message', '--text=Updating FliperOS, do not turn off'],
+                       capture_output=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    # O tools/cabinet-update.sh reinicia servicos; desligando, o systemd
+    # recusaria. Assim o systemctl so mexe nos arquivos das unidades.
+    os.environ['SYSTEMD_OFFLINE'] = '1'
+    cmd_apply(argparse.Namespace(progress=False, result=None))
 
 
 def plain(text):
@@ -515,7 +577,11 @@ def main():
     p = argparse.ArgumentParser(prog='fliperos-update')
     sub = p.add_subparsers(dest='cmd', required=True)
     sub.add_parser('level').set_defaults(func=cmd_level)
-    sub.add_parser('check').set_defaults(func=cmd_check)
+    s = sub.add_parser('check')
+    s.add_argument('--save', action='store_true')
+    s.set_defaults(func=cmd_check)
+    sub.add_parser('pending').set_defaults(func=cmd_pending)
+    sub.add_parser('shutdown').set_defaults(func=cmd_shutdown)
     sub.add_parser('notes').set_defaults(func=cmd_notes)
     for name, func in (('plan', cmd_plan), ('apply', cmd_apply)):
         s = sub.add_parser(name)
