@@ -20,3 +20,4 @@
 17	ebb658d7eca05be0023595b69d5efa76c9220f2f	6af071972121ef04bf2c5fca8eb0d7448746e3e5ec066a8fa98fb93851afbc91	no	GroovyMAME no longer closes at its game list
 18	2d51fce7a5b1e60de71a659f9492d7c817ae1fcd	2023474a48e3d3a5f196f1e6833a759022ba39d10cef34d6e2778404c229b228	yes	FliperOS 0.11: own frontend, web panel, vertical monitor
 19	48fc8d9dd7fff3c4690ed91faf28d894e78d6b33	6857bd1f4026033c632999c0c2630d9fc075149639b82df122817534e5548612	no	Faster boot: services after the first screen, torrents only on demand
+20	2151026795f51c2fa3e6ce3239655e1abcf8c449	5c4cb57eb581cf87119890c5f664ee5306cd94fada1d1e24a88e8759e16946fa	no	Wi-Fi keyboard, MAME 2010 buttons, background scrape, updates at power off
