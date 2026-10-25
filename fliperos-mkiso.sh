@@ -294,13 +294,16 @@ apt-get update -qq
 # (config/fliperos-snaps), mesmo numa imagem sem Skyscraper.
 # transmission-daemon: o Setup > Games > Downloader (config/fliperos-downloader).
 # picom: o filtro de flicker do 480i no desktop (config/fliperos-desktop-deflicker).
+# mesa-va-drivers: a tela ao vivo (config/fliperos-stream) le a tela das AMD
+# pelo VA-API (sem ele o hwdownload da EPERM); na imagem, a tela ao vivo do
+# primeiro boot nao depende do apt.
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
   coreutils util-linux e2fsprogs dosfstools parted \
   wget curl git ca-certificates jq rsync fbset zstd \
   xserver-xorg-core xserver-xorg-input-libinput xinit x11-xserver-utils x11-utils \
-  libdrm2 libgbm1 mesa-vulkan-drivers mesa-utils \
+  libdrm2 libgbm1 mesa-vulkan-drivers mesa-va-drivers mesa-utils \
   libsdl2-2.0-0 libsdl2-dev build-essential cmake \
   libdrm-dev libgbm-dev libxrandr-dev libxi-dev libxext-dev libfontconfig1-dev \
   joystick alsa-utils linux-firmware \
