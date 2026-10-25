@@ -2513,7 +2513,7 @@ class FreeRomsTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-freeroms"',
                       ROOTFS)
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
-        self.assertIn('run_with_progress "Downloading the free games" "" freeroms_fetch "$result"', menu)
+        self.assertIn('run_online "Downloading the free games" "" freeroms_fetch "$result"', menu)
         # Em Setup > Games > Downloader.
         screen = (ROOT / 'fliperos-setup/screens/downloader.sh').read_text()
         self.assertIn('"freeroms|Free games (open-source homebrew)|', screen)
@@ -6535,7 +6535,7 @@ class ArcadeflowTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-arcadeflow" "$root/opt/fliperos/bin/fliperos-arcadeflow"',
                       ROOTFS)
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
-        self.assertIn('run_with_progress "Downloading the Arcadeflow theme" "" frontends_attract_theme', menu)
+        self.assertIn('run_online "Downloading the Arcadeflow theme" "" frontends_attract_theme', menu)
         self.assertIn('/opt/fliperos/bin/fliperos-arcadeflow fetch', (ROOT / 'tools/cabinet-update.sh').read_text())
 
 
