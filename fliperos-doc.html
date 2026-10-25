@@ -7,10 +7,10 @@ h1,h2,h3{line-height:1.25;color:#8fd5bb}h1{margin-top:3em;border-top:1px solid #
 pre{overflow:auto;background:#202b36;padding:20px;border-radius:6px}code{font-size:.9em}
 table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1px solid #405060;text-align:left;padding:12px}
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
-</style><main><h1 id="fliperos-012">FliperOS 0.12</h1>
+</style><main><h1 id="fliperos-013">FliperOS 0.13</h1>
 <p><strong>English</strong> | <a href="README.pt-BR.md">Português</a></p>
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
-<p>In development: 0.12 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
+<p>In development: 0.13 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
 <h2 id="whats-included">What's included</h2>
 <ul>
 <li><strong>Video</strong>: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.</li>
@@ -45,8 +45,8 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </ul>
 <h3 id="2-download-the-iso">2. Download the ISO</h3>
 <ol>
-<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.12.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
-<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.12.iso</code> on Linux, <code>Get-FileHash fliperos-0.12.iso</code> in Windows PowerShell.</li>
+<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.13.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
+<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.13.iso</code> on Linux, <code>Get-FileHash fliperos-0.13.iso</code> in Windows PowerShell.</li>
 </ol>
 <h3 id="3-write-the-usb-stick">3. Write the USB stick</h3>
 <p>The ISO must be written <strong>byte for byte</strong>. Programs that rebuild the stick's boot structure break it: <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work.</strong></p>
@@ -56,7 +56,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Linux</strong>: find the stick with <code>lsblk</code> (here <code>/dev/sdX</code>; the wrong device erases the wrong disk) and run:</li>
 </ul>
 <p><code>bash
-  sudo dd if=fliperos-0.12.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+  sudo dd if=fliperos-0.13.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
 <h3 id="4-prepare-the-cabinets-bios">4. Prepare the cabinet's BIOS</h3>
 <p>Enter the BIOS/UEFI setup (usually <strong>Del</strong>, <strong>F2</strong> or <strong>F10</strong> right after power-on) and:</p>
 <ol>
@@ -301,7 +301,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="build-and-tests">Build and tests</h2>
 <p>Always in Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> explains why).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.12.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.13.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -395,7 +395,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <h2 id="writing-the-media">Writing the media</h2>
 <p>Write the ISO <strong>byte for byte</strong> to a USB stick and disable Secure Boot (the 15 kHz kernel is custom and unsigned).</p>
 <p>The ISO uses the <strong>Limine</strong> bootloader and is <strong>hybrid</strong> (<code>xorriso</code> + <code>limine bios-install</code>): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work</strong>. Use <strong>balenaEtcher</strong>, or Rufus in "DD Image mode", or <code>dd</code>:</p>
-<pre><code class="language-bash">sudo dd if=fliperos-0.12.iso of=/dev/sdX bs=4M status=progress conv=fsync
+<pre><code class="language-bash">sudo dd if=fliperos-0.13.iso of=/dev/sdX bs=4M status=progress conv=fsync
 </code></pre>
 <p>Check <code>/dev/sdX</code> with <code>lsblk</code> first: the wrong device erases the wrong disk.</p>
 <h2 id="boot-menu">Boot menu</h2>
@@ -644,7 +644,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p><strong>A game, straight from the boot</strong> opens a single game instead of a game list: pick the system among the folders with games, then the file; the command is the one the frontends use for that folder, saved in <code>/etc/fliperos/bootgame</code> and run by <code>fliperos-bootgame</code>.</p>
 <p>Leaving the game (Esc) opens the FliperOS menu, whose first item becomes <em>Start</em> and the game's name. Choosing a game moves every service that starts at boot to <em>After boot</em> (below) and turns <em>Wait for network</em> off, so the game reaches the screen sooner.</p>
 <p>Before the game the boot also skips what only serves the frontends or needs the network: the FliperOS update check (it runs when the game closes, on the way to the menu, without waiting for a network that isn't up), the creation of missing <code>~/roms</code> folders and the frontends' preparation (game lists, art, 240p settings);
-- <strong>Emulators &amp; Games</strong> — the emulators of the desktop menu, each marked installed or not, and the installation of the ones that don't come in the image: Model 2 (built on the machine), Fightcade 2, DuckStation and KOF Final Attack on Ikemen GO.</p>
+- <strong>Emulators &amp; Games</strong> — the emulators of the desktop menu, each marked installed or not, and the installation of the ones that don't come in the image: Model 2 (built on the machine), Fightcade 2, DuckStation and KOF Final Attack on Ikemen GO (downloaded from itch.io and patched by itself, or from a folder you bring).</p>
 <p>An installed one has <strong>Update</strong>, which downloads the newest version over it (Model 2: the newest source, built again; KOF Final Attack: the newest patch and Ikemen GO, converting the original game again); the ones that come in the image are updated with FliperOS. See <a href="#Emulators">Emulators</a>;
 - <strong>Extras</strong> — installs over the network Wine (the Fightcade 2 emulators), Steam and Heroic (GOG), which are left out of the ISO so it fits in a single GitHub file. See <a href="#Emulators">Emulators</a>.</p>
 <p>Also the <strong>Pixelcade</strong> LED/LCD marquee software, which is closed source, the <strong>ZeDMD</strong> open-source LED display and <strong>DOFLinx</strong>, the effects on the Pixelcade marquee during a game (<a href="#Frontends">Frontends</a>).</p>
@@ -850,7 +850,13 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
   - The page has a transparent background. It shows the game's art, the same as the ZeDMD uses: <code>~/media/dmd</code>, <code>marquee</code> or <code>logo</code> (Pixelcade's art may only be used on its own hardware). Without art it shows the name.</p>
 <p>The opening text (the high scores, or "Now Playing") scrolls once, achievements pop up and the versus score shows each side's name and wins. <code>&amp;led=1</code> draws it as LED dots and <code>&amp;text=0</code> leaves out the texts. In OBS: width 1280, height 320.
   - How it works: <code>fliperos-pixelcade</code>, which already gets every event (kms-run, x11-run, GroovyMAME, the Attract-Mode Plus plugin and the ES-DE scripts, installed when the page is turned on), writes the current marquee to <code>$XDG_RUNTIME_DIR/fliperos-marquee</code>. The page asks the panel for it every second; the art comes from <code>fliperos-dmd art</code>.
-  - The OBS pages can't sign in, so their address carries a key, created on first use in <code>/etc/fliperos/overlay.key</code> (root only). <em>New address</em> makes another key and the old address stops working, the live screen's included. The key only opens the marquee state, the current game's picture and the live screen.
+  - The OBS pages can't sign in, so their address carries a key, created on first use in <code>/etc/fliperos/overlay.key</code> (root only). <em>New address</em> makes another key and the old address stops working, the live screen's and the controller's included. The key only opens the marquee state, the current game's picture, the live screen and the controller.
+- <a id="controller-for-obs"></a><strong>Controller for OBS:</strong> the player's controller on the stream, <code>/overlay/input?key=…</code>. The stick and the six buttons (1 2 3 on top, 4 5 6 below), Start and Coin light up while they are pressed on the cabinet.
+  - It reads the controls of Setup &gt; Joysticks &gt; Button mapping (<code>/etc/fliperos/buttons.map</code>): the joysticks through SDL and a keyboard encoder's keys straight from the input devices, without taking them from the game. With no mapping, it uses MAME's default keys for players 1 and 2.
+  - <code>&amp;players=2</code> or <code>&amp;players=1,2</code> picks the players. In OBS: width 800, height 400 for one player, 1600 × 400 for two. The background is transparent.
+  - The card has a CSS editor with syntax colours. The preview follows each key you type, and <em>Demo in the preview</em> presses the buttons by itself, so the look can be tried with nobody at the cabinet. <em>Save</em> writes it to <code>/etc/fliperos/input-overlay.css</code>; <em>Factory CSS</em> goes back to <code>input.css</code>. In OBS, refresh the source to get a saved CSS.
+  - The classes: <code>.pad</code> (<code>.p1</code>, <code>.p2</code>, <code>.active</code> while something is pressed), <code>.label</code>, <code>.stick</code> (<code>.up</code> <code>.down</code> <code>.left</code> <code>.right</code>, and <code>data-dir</code> such as <code>up-left</code>) with <code>.gate</code> and <code>.ball</code>, and <code>.button</code> (<code>.b1</code> to <code>.b6</code>, <code>.start</code>, <code>.coin</code>; <code>.on</code> while pressed). The sizes use <code>--u</code>: one panel is 200 × 100 <code>--u</code>.
+  - How it works: while at least one controller page is open, the panel runs one <code>fliperos-buttons watch</code> at low priority. It sends the panel a line each time the pressed controls change, and the panel passes it to the pages as Server-Sent Events. It stops when the last page closes.
 - <strong>Settings:</strong> the Setup settings that are safe to change over the network, grouped as System, Services, 480i hacks and Colour.
   - System: the default launcher, latency mode, debug mode, the volume leveler and menu sounds.
   - Services: the whole services table.
@@ -2939,7 +2945,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>When a system update brings other FliperOS patches for it (<code>config/sm2-emu-patches</code>), the update rebuilds it by itself (<code>fliperos-sm2emu --outdated</code>, log in <code>/opt/fliperos/logs/sm2-emu-build.log</code>; if the build fails the previous one stays), so it also reaches whoever only plays from a frontend.
 - <strong>Fightcade 2</strong>: downloaded from its site, with Wine (<a href="#Fightcade-2">Fightcade 2</a>).
 - <strong>DuckStation</strong> (PlayStation): its license (CC BY-NC-ND 4.0) doesn't allow it in the image, so the official AppImage is downloaded from its GitHub (the <code>latest</code> release) and unpacked in <code>/opt/duckstation</code> (<code>config/fliperos-duckstation</code>). Chosen again when installed, it updates.</p>
-<p>Its games go in <code>~/roms/psx</code> (created once it is installed), and it also lists the ones in <code>~/roms/retroarch/pcsx_rearmed</code>; the BIOS is the one in <code>~/bios</code>, the same as RetroArch's.</p>
+<p>Its games go in <code>~/roms/duckstation</code> (created once it is installed; a <code>~/roms/psx</code> from before is moved there), and it also lists the ones in <code>~/roms/retroarch/pcsx_rearmed</code>; the BIOS is the one in <code>~/bios</code>, the same as RetroArch's.</p>
 <p>Each launch (<code>fliperos-x11-run</code>) sets full screen, <code>AspectRatio = Stretch To Fill</code> and the BIOS folder; the first one also skips its setup wizard and puts both panels on SDL (Cross/Circle/Square/Triangle on A/B/X/Y, as in PCSX2).</p>
 <p>Its renderer stays on Automatic, which picks <strong>Vulkan</strong> where there is one (amdgpu, Intel; radeon has none, and it uses OpenGL); with the <a href="#480i-flicker-filter">480i flicker filter</a> on, that launch uses OpenGL, which the filter reaches, and the next one without the filter goes back to Automatic.</p>
 <p>A renderer chosen in DuckStation itself stays. Esc or Select+Start opens its menu. Opened from a frontend it closes with the game (<code>-batch</code>); from the desktop menu it opens in Big Picture. Not seen on the CRT yet.
@@ -2947,7 +2953,11 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 - The others come compiled in the image; one that is missing (an image built without it) can't be installed from here.</p>
 <h3 id="kof-final-attack">KOF Final Attack</h3>
 <p><em>The King of Fighters: Final Attack</em> is a MUGEN game in 16:9. The <a href="https://github.com/juniorterin/KOF-Final-Attack-4-3-patch">4:3 patch</a> converts it to <a href="https://github.com/ikemen-engine/Ikemen-GO">Ikemen GO</a> in 4:3 at 320x240 with one sprite pixel per screen pixel, for the CRT.</p>
-<p><strong>The game itself is not downloaded</strong>: bring the folder of the original game (the one with <code>Final Attack.exe</code>) on a USB disk, over the network share or in the home folder, and point to it in the installer (the folder above it also works).</p>
+<p>The installer offers two ways to get the game:</p>
+<ul>
+<li><strong>Download from itch.io</strong>: the free game from <a href="https://united-by-games.itch.io/the-king-of-fighters-final-attack">its page</a> (United By Games, a 1.4 GB zip) is downloaded, unpacked, patched and deleted by itself. It asks for 7 GB free (the zip, the unpacked game and the converted copy).</li>
+<li><strong>Use a folder I have</strong>: the folder of the original game (the one with <code>Final Attack.exe</code>) on a USB disk, over the network share or in the home folder (the folder above it also works).</li>
+</ul>
 <p>The installer (<code>config/fliperos-kof</code>) downloads the patch, which downloads Ikemen GO and a portable PowerShell (the conversion scripts are PowerShell), and makes the converted copy in <code>~/roms/ikemen/kof-final-attack</code> (about 2 GB; 3 GB free are asked for).</p>
 <p>The original folder is not changed: the patch works from a <code>Patch 4x3</code> folder inside it, removed at the end, and a folder that can't be written to (a read-only disk) is copied to the disk first. Installing again replaces the copy only after the new one is ready.</p>
 <p>It opens from the desktop menu (<strong>Games &gt; KOF Final Attack</strong>) or with <code>fliperos-kof</code> on a terminal, in its own Xorg at 320x240@60 (<code>fliperos-kof</code> in <code>emulator-modes.conf</code>). It is not in the frontends' game lists.</p>
@@ -4085,7 +4095,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <h2 id="build">Build</h2>
 <p>Always in Docker (<code>CLAUDE.md</code> forbids chroot with the host's <code>/dev</code> on WSL).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.12.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.13.iso
 </code></pre>
 <table>
 <thead>
@@ -4132,7 +4142,7 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <p>What doesn't exist in Ubuntu 24.04 is downloaded with a pinned version and hash: Limine 11.4.1, Gum 2.0.2 (the <code>.deb</code> stays for the man pages; the binary is built from the same version's source with <code>patches/gum</code>, compiled with Go 1.26.7: ▲/▼ arrows instead of dots in the menus' pagination, the menu sounds and Space toggling in checklists — gum 2.0.2 only knows the key as <code>" "</code>, and its library calls it <code>space</code> —, put in place of <code>/usr/bin/gum</code> with <code>dpkg-divert</code>), AntiMicroX 3.6.1 (official <code>.deb</code> for 24.04), Skyscraper 3.21.0 (Gemba fork, compiled with Qt6).</p>
 <p>Audit of the generated ISO (read-only): checks the boot menu, kernel, setup files, libraries of the compiled programs, EDIDs and BIOS/UEFI boot.</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.12.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.13.iso
 </code></pre>
 <h2 id="release">Release</h2>
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
@@ -4142,16 +4152,16 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
 <p><code>powershell
-   git tag 0.12
-   git push origin 0.12</code></p>
+   git tag 0.13
+   git push origin 0.13</code></p>
 <p>Pushing the tag triggers the GitHub Actions <strong>Release</strong> workflow (<code>.github/workflows/release.yml</code>). It checks that the tag is <code>FLIPEROS_VERSION</code> and that <code>CHANGELOG.md</code> has its section, builds the frontends repository (<code>Dockerfile.packages</code>) and generates the ISO with the same <code>Dockerfile.fliperos</code> as the local build.</p>
 <p>Then it publishes through <code>tools/release-publish.sh</code>, with the workflow's own token. The kernel and frontend <code>.deb</code>s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h).</p>
 <p>If it fails, <code>fliperos-mkiso.log</code> is kept as a workflow artifact. Run by hand (<em>Actions &gt; Release &gt; Run workflow</em>), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.</p>
-<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.12</code>, <code>git push -f origin 0.12</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
+<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.13</code>, <code>git push -f origin 0.13</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
 <p>To publish an ISO generated here, in the audit container:</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.12.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.13.iso
 </code></pre>
 <p><code>gh auth login</code> is a one-time step: the login stays in the <code>fliperos-gh</code> volume.</p>
 <p><code>tools/release-publish.sh</code> only publishes what can go public:</p>
@@ -4166,8 +4176,8 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p>Switchres opens <code>libX11.so</code>, <code>libXrandr.so</code> and <code>libdrm.so</code> by those unversioned names, which belong to the <code>-dev</code> packages: <code>config/fliperos-dlopen-links</code> scans the binaries in <code>/usr/local</code> and <code>/opt</code> for such names and links them in <code>/usr/local/lib</code> to the installed version, and <code>tools/verify-iso.sh</code> checks the three.</p>
 <p>The packages left with nothing depending on them once the <code>-dev</code> are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an <code>apt autoremove</code> on the installed system doesn't take them.</p>
 <p>The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg <code>path-exclude</code> so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.</p>
-<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.12.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
-<p>Also published: <code>fliperos-0.12.sha256</code> (the whole ISO and each part) and <code>fliperos-0.12-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
+<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.13.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
+<p>Also published: <code>fliperos-0.13.sha256</code> (the whole ISO and each part) and <code>fliperos-0.13-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
 <h2 id="tests">Tests</h2>
 <pre><code class="language-powershell">docker build -t fliperos-tests -f tests/Dockerfile tests

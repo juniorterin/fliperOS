@@ -6,7 +6,7 @@ from widgets import (Capture, Download, FilterBoard, GunResult, GunTarget, Input
                      Progress, Stepper, ToggleGrid, YesNo, control_art,
                      layout_tile)
 
-CONTEXT = {"version": "0.12", "status": "192.168.1.155 - 42%"}
+CONTEXT = {"version": "0.13", "status": "192.168.1.155 - 42%"}
 
 
 def main():

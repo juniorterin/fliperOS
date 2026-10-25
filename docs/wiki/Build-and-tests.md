@@ -4,7 +4,7 @@ Always in Docker (`CLAUDE.md` forbids chroot with the host's `/dev` on WSL).
 
 ```powershell
 docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.12.iso
+docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.13.iso
 ```
 
 | Option | Effect |
@@ -24,7 +24,7 @@ Audit of the generated ISO (read-only): checks the boot menu, kernel, setup file
 
 ```powershell
 docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.12.iso
+docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.13.iso
 ```
 
 ## Release
@@ -36,8 +36,8 @@ Every new ISO goes to GitHub [Releases](https://github.com/juniorterin/fliperOS/
 3. Tag the version and push the tag (the name is the version, without "v"):
 
    ```powershell
-   git tag 0.12
-   git push origin 0.12
+   git tag 0.13
+   git push origin 0.13
    ```
 
 Pushing the tag triggers the GitHub Actions **Release** workflow (`.github/workflows/release.yml`). It checks that the tag is `FLIPEROS_VERSION` and that `CHANGELOG.md` has its section, builds the frontends repository (`Dockerfile.packages`) and generates the ISO with the same `Dockerfile.fliperos` as the local build.
@@ -46,14 +46,14 @@ Then it publishes through `tools/release-publish.sh`, with the workflow's own to
 
 If it fails, `fliperos-mkiso.log` is kept as a workflow artifact. Run by hand (*Actions > Release > Run workflow*), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.
 
-To redo a version that was just tagged, move the tag and push it again (`git tag -f 0.12`, `git push -f origin 0.12`): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.
+To redo a version that was just tagged, move the tag and push it again (`git tag -f 0.13`, `git push -f origin 0.13`): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.
 
 To publish an ISO generated here, in the audit container:
 
 ```powershell
 docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.12.iso
+docker run --rm -v "${PWD}:/w:ro" -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.13.iso
 ```
 
 `gh auth login` is a one-time step: the login stays in the `fliperos-gh` volume.
@@ -75,9 +75,9 @@ The packages left with nothing depending on them once the `-dev` are gone (Qt SV
 
 The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg `path-exclude` so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.
 
-Wine, Steam and Heroic aren't in the image: Setup > Games > Extras installs them (`config/fliperos-extras`). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (`fliperos-0.12.iso.001`, `.002`...), and the release text gets the instructions to join them (`copy /b` on Windows, `cat` on Linux).
+Wine, Steam and Heroic aren't in the image: Setup > Games > Extras installs them (`config/fliperos-extras`). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (`fliperos-0.13.iso.001`, `.002`...), and the release text gets the instructions to join them (`copy /b` on Windows, `cat` on Linux).
 
-Also published: `fliperos-0.12.sha256` (the whole ISO and each part) and `fliperos-0.12-pkglist.txt` (package, version and architecture of what's in the image).
+Also published: `fliperos-0.13.sha256` (the whole ISO and each part) and `fliperos-0.13-pkglist.txt` (package, version and architecture of what's in the image).
 
 `--prerelease` marks it as a pre-release; `--to FOLDER` only prepares the files and the text (`notes.md`), without touching GitHub; `--notes VERSION` shows the version's text.
 

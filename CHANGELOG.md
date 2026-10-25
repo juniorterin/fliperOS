@@ -2,6 +2,42 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.13
+
+The web panel's Live screen works again on AMD cards, and it now says what went wrong instead of staying on "Connecting". A Quality choice sets how sharp the stream is, from Light for a weak Wi-Fi to Maximum for a network cable. A new Controller for OBS page shows the player's stick and buttons lighting up on the stream, and its look is changed right in the panel, in a CSS editor with a live preview. The Setup downloads KOF Final Attack from itch.io and applies the 4:3 patch by itself. Esc now closes Flycast, Dolphin and OpenBOR like the other emulators, and Dolphin fills the screen without the cursor or on-screen messages. The Controller page has been tried on the cabinet without a player pressing the buttons yet, and the new qualities have not been looked at on a stream yet.
+
+**System changes:**
+
+- Live screen: on AMD cards the capture only reads the screen through VA-API, and the live screen's installation left that driver out because the image already has ffmpeg, so Watch live waited until it gave up. The driver is now in the image, the installation adds whatever is missing, and the VA-API check runs again every time the service starts
+- Live screen: when the capture fails, the panel shows why within about a second, on the video area, with a button to try again (and to install again when the VA-API driver is missing). It also says so when the cabinet doesn't answer in 35 s, or connects but sends no picture in 15 s
+- Live screen quality: Light, Normal, High or Maximum (1.8, 3, 6 or 10.5 Mbit/s at 60 fps). High and Maximum also use slower x264 presets that compress better; on the cabinet's i7 870, Maximum still encodes 640x480 at 2.5 times real time. It counts from the next connection
+- Controller for OBS: `/overlay/input?key=…` (the marquee's key) draws the stick, buttons 1 to 6, Start and Coin of one or two players, lit while pressed. It reads the Button mapping controls, joysticks through SDL and a keyboard encoder's keys from the input devices without taking them from the game, and runs only while a page is open
+- Esc closes the game in Flycast, Dolphin and OpenBOR (4 and 3.0), as in the other emulators; before, leaving meant going through their own menus
+- Dolphin stretches 4:3 games to the whole 640x240 screen, with VSync and without the cursor; Dolphin and PCSX2 no longer show messages on the screen
+- Flycast: Tab opens its menu again when the panel is mapped as a keyboard, so Naomi games have a way to the menu
+- Programs opened in X get `/dev/null` as their input: KOF Final Attack (Ikemen GO) stopped on a black screen with no sound, waiting to read the terminal
+
+**Package changes:**
+
+- mesa-va-drivers is in the image (the live screen reads AMD screens through it)
+
+**fliperos-setup changes:**
+
+- Emulators & Games > KOF Final Attack > Download from itch.io downloads the free game, converts it with the 4:3 patch and deletes the download (about 7 GB free needed); Use a folder I have stays for a copy you already have. Only one installation runs at a time
+- The graphical Setup marks installed items with a green check, in the list and on the carousel icon
+- DuckStation uses `~/roms/duckstation` instead of `~/roms/psx`; what was in the old folder, and its art in `~/media`, moves over without overwriting anything
+- Settings > Live screen quality, also on the web panel's Live page
+
+**Tool changes:**
+
+- `fliperos-buttons watch [MAP]` prints the pressed controls of each player as one JSON line per change
+- Web panel: the Controller for OBS card has a CSS editor with syntax colours, a live preview and a demo that presses the buttons by itself; *Save* writes `/etc/fliperos/input-overlay.css`, *Factory CSS* goes back to the default
+- `fliperos-stream status` reports the quality and the last capture error
+
+**Documentation:**
+
+- Web panel page of the wiki: Controller for OBS, its classes and how it works
+
 ## 0.12
 
 NVIDIA cards with VGA or DVI-I can now show native 15 kHz resolutions: FliperOS's own kernel patch lets the open driver (nouveau) take the low clocks, and the output test checks each card with a 320x240 grid before using them. Cards that don't pass keep the super resolutions. The new Video cards page of the wiki lists which AMD, NVIDIA and Intel cards work and what each one gives. The first boot of an installed system already installs and turns on the web panel's Live screen. Art packs that stopped when the cabinet was turned off now continue where they were, and the Auto scrape panel says which system each pack is for (MAME logos, MAME videos). The NVIDIA path has not been seen on a real NVIDIA card yet.
