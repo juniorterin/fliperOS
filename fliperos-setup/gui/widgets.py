@@ -407,12 +407,17 @@ class Menu(Animated):
             # Marca todas ou, com todas marcadas, nenhuma.
             values = {e[0] for e in self.entries}
             self.marked = set() if self.marked >= values else values
-        elif k == "up":
-            self.cursor = (self.cursor - 1) % n
-            self.slide = (time.monotonic(), -1)
-        elif k == "down":
-            self.cursor = (self.cursor + 1) % n
-            self.slide = (time.monotonic(), 1)
+        elif k in ("up", "down"):
+            step = -1 if k == "up" else 1
+            # Os azulejos param no primeiro e no ultimo (sem dar a volta);
+            # a lista vertical da a volta.
+            if self.carousel():
+                if 0 <= self.cursor + step < n:
+                    self.cursor += step
+                    self.slide = (time.monotonic(), step)
+            else:
+                self.cursor = (self.cursor + step) % n
+                self.slide = (time.monotonic(), step)
         elif k == "pgup":
             self.cursor = max(0, self.cursor - 5)
         elif k == "pgdn":
@@ -500,11 +505,10 @@ class Menu(Animated):
         # Os vizinhos deslizam so dentro da margem de overscan.
         surf.set_clip((T.SAFE_X, 0, T.SAFE_W, T.HEIGHT))
         for off, cx in ((-2, T.WIDTH // 2 - 124), (2, T.WIDTH // 2 + 124), (-1, T.WIDTH // 2 - 68), (1, T.WIDTH // 2 + 68)):
-            # Com poucos itens, cada um aparece uma vez so (os da direita
-            # primeiro).
-            if n < abs(off) * 2 + (1 if off < 0 else 0):
+            # Sem volta: antes do primeiro e depois do ultimo, nada.
+            if not 0 <= self.cursor + off < n:
                 continue
-            entry = self.entries[(self.cursor + off) % n]
+            entry = self.entries[self.cursor + off]
             cx += dx
             pygame.draw.rect(surf, T.BG_DEEP, (cx - 20, mid - 20, 40, 40))
             self.tile(surf, entry, cx - 16, mid - 16, 2)
