@@ -28,6 +28,11 @@ nome da ROM, e o torrent sai com o que sobrou.
   fliperos-mediapacks status
   fliperos-mediapacks finish
   fliperos-mediapacks cancel ID
+  fliperos-mediapacks kick
+
+kick: um torrent parado (o webseed do archive.org que o Transmission larga,
+sem peers) baixa os arquivos da vez por HTTP, direto do archive.org (o
+servico do scrape automatico chama de tempos em tempos).
 
 LINK: um link magnetico ou o endereco de um .torrent. NOMES: um arquivo com
 o nome de cada jogo da pasta (sem a extensao), um por linha; DESTINO: a
@@ -46,6 +51,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 import zipfile
 from importlib.machinery import SourceFileLoader
@@ -434,6 +440,15 @@ def cmd_status(args):
     eta = -1
     for pack in active:
         meta = meta_of(pack)
+        if meta and meta.get('http'):
+            done, size = http_done(pack, meta)
+            total += size
+            left += size - done
+            rows[pack] = ('downloading', done * 100 // max(1, size), '%s of %s by HTTP (archive.org)%s'
+                          % (human(done), human(size), ', file %d of %d' % (
+                              meta['steps'] - len(meta.get('queue', [])), meta['steps'])
+                             if meta.get('steps', 0) > 1 else ''))
+            continue
         t = rpc.torrent(meta['hash'], ['status', 'sizeWhenDone', 'leftUntilDone', 'rateDownload', 'eta',
                                        'peersConnected', 'errorString']) if rpc and meta else None
         if t is None or not t['sizeWhenDone']:
@@ -493,19 +508,134 @@ def cmd_finish(args):
             t = rpc.torrent(meta['hash'], ['leftUntilDone', 'sizeWhenDone'])
             if t is None or not t['sizeWhenDone'] or t['leftUntilDone']:
                 continue
-            found, missing = install(pack, meta)
-            if next_archive(rpc, pack, meta, found):
-                continue
-            found = meta.get('found', found)
-            rpc.remove(meta['hash'], delete=True)
-            clean_staging(pack)
-            write_state(pack + '.done', 'found=%d\nmissing=%d\nwhen=%s\n'
-                        % (found, missing, time.strftime('%Y-%m-%d %H:%M:%S')))
-            forget(pack + '.json')
-            with open(state('finish.log'), 'a', encoding='utf-8') as log:
-                log.write('%s %s: %d games, %d not in the pack\n'
-                          % (time.strftime('%Y-%m-%d %H:%M:%S'), pack, found, missing))
-            own(state('finish.log'), STATE)
+            step_done(rpc, pack, meta)
+
+
+def step_done(rpc, pack, meta):
+    """Os arquivos da vez estao na pasta: vao para as pastas de arte e vem o
+    proximo compactado da fila, ou o pacote acaba e o torrent sai."""
+    found, missing = install(pack, meta)
+    if next_archive(rpc, pack, meta, found):
+        return
+    found = meta.get('found', found)
+    rpc.remove(meta['hash'], delete=True)
+    clean_staging(pack)
+    write_state(pack + '.done', 'found=%d\nmissing=%d\nwhen=%s\n'
+                % (found, missing, time.strftime('%Y-%m-%d %H:%M:%S')))
+    forget(pack + '.json')
+    with open(state('finish.log'), 'a', encoding='utf-8') as log:
+        log.write('%s %s: %d games, %d not in the pack\n'
+                  % (time.strftime('%Y-%m-%d %H:%M:%S'), pack, found, missing))
+    own(state('finish.log'), STATE)
+
+
+# ── O plano B por HTTP ────────────────────────────────────────────
+# Os pacotes sao do archive.org, que semeia so pelo webseed: sem peers, o
+# Transmission 4 as vezes larga o webseed e o torrent fica parado (os videos
+# do MAME em 9%, 0 B/s, em 2026-10-25), com o HTTP do archive.org de pe.
+STALL = int(os.environ.get('FLIPEROS_MEDIAPACKS_STALL', '300'))
+HTTP_CHUNK = 1 << 20
+
+
+def archive_base(link):
+    """https://archive.org/download/ITEM/ do .torrent de um item, ou None."""
+    m = re.match(r'^(https?://[^/]+/download/[^/]+/)[^/]+\.torrent$', link or '')
+    return m.group(1) if m else None
+
+
+def http_get(url, path, size):
+    """Baixa url em path, continuando de onde parou (Range)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    have = os.path.getsize(path) if os.path.exists(path) else 0
+    if have >= size:
+        return
+    req = urllib.request.Request(url, headers={'User-Agent': AGENT, 'Range': 'bytes=%d-' % have})
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        if resp.status != 206:
+            have = 0
+        with open(path, 'ab' if have else 'wb') as out:
+            while True:
+                chunk = resp.read(HTTP_CHUNK)
+                if not chunk:
+                    break
+                out.write(chunk)
+    if os.path.getsize(path) != size:
+        raise OSError('%s: %d of %d bytes' % (os.path.basename(path), os.path.getsize(path), size))
+
+
+def http_done(pack, meta):
+    """(baixado, total) dos arquivos da vez na pasta, para o status."""
+    total = done = 0
+    for index in meta['wanted']:
+        name, size = meta['files'][index]
+        path = os.path.join(folder_of(pack), name)
+        total += size
+        done += min(size, os.path.getsize(path)) if os.path.exists(path) else 0
+    return done, total
+
+
+def cmd_kick(args):
+    """Cada pacote parado ha STALL segundos (nada novo, nenhum peer) e do
+    archive.org: o torrent para e os arquivos da vez vem por HTTP; depois
+    segue como no fim do torrent (step_done), e o proximo compactado volta a
+    tentar o torrent."""
+    active = packs('.json')
+    if not active:
+        return
+    rpc = dl.Rpc()
+    try:
+        rpc.wait(10)
+    except OSError as e:
+        sys.exit('fliperos-mediapacks: %s' % e)
+    now = time.time()
+    for pack in active:
+        meta = meta_of(pack)
+        base = archive_base((meta or {}).get('link'))
+        if not meta or not base:
+            continue
+        t = rpc.torrent(meta['hash'], ['leftUntilDone', 'sizeWhenDone', 'peersSendingToUs',
+                                       'webseedsSendingToUs', 'rateDownload'])
+        if t is None or not t['sizeWhenDone'] or not t['leftUntilDone']:
+            continue
+        got = t['sizeWhenDone'] - t['leftUntilDone']
+        if got != meta.get('kick_got') or t.get('rateDownload') or t.get('peersSendingToUs'):
+            meta.update(kick_got=got, kick_at=now)
+            with lock():
+                write_state(pack + '.json', json.dumps(meta))
+            continue
+        if now - meta.get('kick_at', now) < STALL:
+            continue
+        print('fliperos-mediapacks: %s parado: os arquivos da vez por HTTP' % pack, file=sys.stderr)
+        rpc.call('torrent-stop', ids=[meta['hash']])
+        if not meta.get('http'):
+            # O que o Transmission deixou pela metade tem buracos (ele grava
+            # pedaco por pedaco, fora de ordem): o HTTP comeca do zero, e so
+            # o que ele mesmo gravou e retomado depois.
+            for index in meta['wanted']:
+                path = os.path.join(folder_of(pack), meta['files'][index][0])
+                if os.path.exists(path):
+                    os.remove(path)
+        meta['http'] = True
+        with lock():
+            write_state(pack + '.json', json.dumps(meta))
+        try:
+            for index in meta['wanted']:
+                name, size = meta['files'][index]
+                # No torrent do item o primeiro nivel e o nome do item.
+                inner = name.split('/', 1)[1] if '/' in name else name
+                http_get(base + urllib.parse.quote(inner), os.path.join(folder_of(pack), name), size)
+        except OSError as e:
+            print('fliperos-mediapacks: %s: %s' % (pack, e), file=sys.stderr)
+            meta['kick_at'] = time.time()
+            with lock():
+                write_state(pack + '.json', json.dumps(meta))
+            continue
+        with lock():
+            meta = meta_of(pack) or meta
+            meta.pop('http', None)
+            meta.pop('kick_got', None)
+            meta['kick_at'] = time.time()
+            step_done(rpc, pack, meta)
 
 
 def next_archive(rpc, pack, meta, found):
@@ -567,6 +697,7 @@ def main():
     p.set_defaults(func=cmd_start)
     sub.add_parser('status').set_defaults(func=cmd_status)
     sub.add_parser('finish').set_defaults(func=cmd_finish)
+    sub.add_parser('kick').set_defaults(func=cmd_kick)
     p = sub.add_parser('cancel')
     p.add_argument('id')
     p.set_defaults(func=cmd_cancel)

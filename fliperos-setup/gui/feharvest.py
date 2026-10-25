@@ -21,6 +21,7 @@
 import fcntl
 import json
 import os
+import subprocess
 import threading
 import time
 
@@ -28,6 +29,9 @@ RETRY_DAYS = 30
 PAUSE = 0.6                # entre um jogo e outro (o Arcade Database agradece)
 TORRENT_EVERY = 6 * 3600   # de quanto em quanto tempo os pacotes sao conferidos
 STATUS_EVERY = 20          # o andamento dos torrents, enquanto baixam
+# O plano B dos pacotes parados (config/fliperos-mediapacks kick): o arquivo
+# da vez por HTTP do archive.org quando o torrent nao anda.
+MEDIAPACKS = os.environ.get("FLIPEROS_MEDIAPACKS", "/opt/fliperos/bin/fliperos-mediapacks")
 
 
 # Os pacotes de arte da imagem e os da pessoa (lib/mediapacks.sh): o tipo
@@ -317,6 +321,23 @@ class Harvester:
             rows.setdefault(kinds.get(pack, "ART"), "ONE BY ONE")
         return "  ".join("%s %s" % (label, rows[label]) for label in sorted(rows))
 
+    def kick(self):
+        """O kick dos pacotes, numa thread: um download por HTTP leva tempo,
+        e o andamento continua sendo lido enquanto isso. Um de cada vez."""
+        if getattr(self, "kicking", False) or not os.path.exists(MEDIAPACKS):
+            return
+        self.kicking = True
+
+        def run():
+            try:
+                subprocess.run(["python3", MEDIAPACKS, "kick"], stdout=subprocess.DEVNULL, timeout=6 * 3600)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            finally:
+                self.kicking = False
+
+        threading.Thread(target=run, daemon=True).start()
+
     def watch(self):
         """O andamento dos torrents enquanto houver um baixando."""
         time.sleep(15)
@@ -324,4 +345,6 @@ class Harvester:
             if self.state.get("torrents") and not self.external:
                 self.status()
                 self.publish()
+                if self.publishing and self.torrent and self.torrent[1] == "downloading":
+                    self.kick()
             time.sleep(STATUS_EVERY if self.torrent and self.torrent[1] == "downloading" else 300)

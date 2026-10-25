@@ -3066,7 +3066,8 @@ class DownloaderTests(unittest.TestCase):
                             'peersConnected': 3, 'error': 0, 'errorString': '', 'status': t['status'],
                             'sizeWhenDone': sum(f['length'] for f in wanted),
                             'leftUntilDone': sum(f['length'] - f['done'] for f in wanted),
-                            'rateDownload': 2048, 'eta': 90})
+                            'rateDownload': t.get('rate', 2048), 'peersSendingToUs': t.get('sending', 1),
+                            'webseedsSendingToUs': 0, 'eta': 90})
                     out = {'torrents': found}
                 elif method == 'torrent-set':
                     # Na ordem do Transmission 4: files-unwanted, files-wanted e so
@@ -3535,6 +3536,55 @@ class MediaPacksTests(unittest.TestCase):
         self.assertEqual((self.state / 'videos.done').read_text().splitlines()[:2], ['found=3', 'missing=1'])
         self.assertFalse((self.staging / 'videos').exists())
         self.assertNotIn(self.VIDEOS, self.torrents)
+
+    def test_stalled_torrent_comes_by_http_from_archive_org(self):
+        # O webseed do archive.org largado pelo Transmission (0 B/s, sem
+        # peers): o kick baixa os arquivos da vez por HTTP e segue a fila.
+        import functools
+        import http.server
+        import threading
+        import zipfile
+        www = self.tmp / 'www'
+        item = www / 'download' / 'videos'
+        item.mkdir(parents=True)
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, 'w') as z:
+            z.writestr('S/sf2.mp4', b'video do sf2')
+        (item / 'S.zip').write_bytes(data.getvalue())
+        (item / 'mslug.mp4').write_bytes(b'video do mslug')
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(www))
+        handler.log_message = lambda *a: None
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        # Os tamanhos do torrent falso iguais aos do servidor.
+        specs = dict(self.TORRENTS)
+        name, files = specs[self.VIDEOS]
+        sizes = {'videos/S.zip': len(data.getvalue()), 'videos/mslug.mp4': 14}
+        self.TORRENTS[self.VIDEOS] = (name, [(f, sizes.get(f, n)) for f, n in files])
+        self.addCleanup(self.TORRENTS.__setitem__, self.VIDEOS, (name, files))
+        self.mp('start', 'videos', '--link', 'magnet:?xt=urn:btih:%s&dn=videos' % self.VIDEOS,
+                '--type', 'preview', *self.target('mame', 'preview', ['mslug', 'SF2', '1942']))
+        meta_path = self.state / 'videos.json'
+        meta = json.loads(meta_path.read_text())
+        meta['link'] = 'http://127.0.0.1:%d/download/videos/videos_archive.torrent' % server.server_address[1]
+        meta_path.write_text(json.dumps(meta))
+        t = self.torrents[self.VIDEOS]
+        self.env['FLIPEROS_MEDIAPACKS_STALL'] = '0'
+        # Andando: nada muda.
+        self.mp('kick')
+        self.assertFalse((self.media / 'preview/mame').exists())
+        # Parado: por HTTP, instala e passa ao proximo da fila.
+        t.update(rate=0, sending=0)
+        self.mp('kick')
+        self.mp('kick')
+        dest = self.media / 'preview/mame'
+        self.assertEqual((dest / 'SF2.mp4').read_bytes(), b'video do sf2')
+        self.assertEqual((dest / 'mslug.mp4').read_bytes(), b'video do mslug')
+        self.assertEqual([f['name'] for f in t['files'] if f['wanted']], ['videos/#.zip'])
+        meta = json.loads(meta_path.read_text())
+        self.assertNotIn('http', meta)
+        self.assertFalse((self.staging / 'videos/videos/S.zip').exists())
 
     def test_nothing_to_download_and_no_space(self):
         # Todos os jogos ja tem o logo: nem fala com o Transmission.
