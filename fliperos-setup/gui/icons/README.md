@@ -21,3 +21,6 @@ The emulators and frontends use the icons of the website
 way: `attractplus`, `emulationstation`, `pegasus`, `retroarch`, `groovymame`
 (also MAME 2010), `fightcade`, `flycast`, `pcsx2`, `dolphin`, `openbor` and
 `model2`.
+
+`metapics/` holds the Arcadeflow theme's metapics (genre, controller and
+button icons), used by the FliperOS frontend's game info (`feview.py`).

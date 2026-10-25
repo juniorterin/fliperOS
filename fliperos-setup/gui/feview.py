@@ -5,6 +5,7 @@
 # em fe.back, a tela logica de 320x240.
 
 import math
+import os
 import re
 import time
 
@@ -217,16 +218,17 @@ def funnel(surf, cx, cy, c):
 
 
 # ── Os icones do Arcadeflow ────────────────────────────────────────
-# O genero, o controle e os botoes de cada jogo com os icones do Arcadeflow
-# (~/.attract/layouts/Arcadeflow/metapics): o Setup o baixa para o
-# Attract-Mode Plus, e eles nao podem vir na imagem (sem licenca). Sem o
-# Arcadeflow, as linhas ficam so com o texto. O icone do genero tem o nome
-# da categoria do MAME sem pontuacao ("Fighter / Versus" e fighterversus.png);
-# sem ele, o do genero principal (fighter.png).
+# O genero, o controle e os botoes de cada jogo com os icones do Arcadeflow,
+# copiados em gui/icons/metapics. Sem o icone, a linha fica so com o texto.
+# O icone do genero tem o nome da categoria do MAME sem pontuacao
+# ("Fighter / Versus" e fighterversus.png); sem ele, o do genero principal
+# (fighter.png).
+
+METAPICS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "metapics")
+
 
 def af_path(fe, kind, name):
-    import os
-    base = os.path.join(fe.fd.web.attract_dir(), "layouts", "Arcadeflow", "metapics", kind, name + ".png")
+    base = os.path.join(METAPICS, kind, name + ".png")
     return base if os.path.isfile(base) else None
 
 
@@ -580,8 +582,8 @@ def draw_list(fe, ui, now):
     W.text(ui, fit(facts_line(game), pw), T.YELLOW, px, y)
     y += 12
     # Os icones, sem texto, em duas fileiras: o genero e os jogadores (o
-    # boneco e o numero); o controle e os botoes. Sem o icone (Arcadeflow
-    # nao baixado), o texto pequeno no lugar dele.
+    # boneco e o numero); o controle e os botoes. Sem o icone, o texto
+    # pequeno no lugar dele.
     rows = icon_rows(fe, game, 20, icons_only=True)
     genre = [r for r in rows if r[2] == T.CYAN]
     control = [r for r in rows if r[2] == T.PINK]
