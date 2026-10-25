@@ -1,0 +1,18 @@
+[Unit]
+# O modo lab (config/fliperos-lab): o painel web num endereco temporario da
+# internet, por um Quick Tunnel do cloudflared. So sobe pelo fliperos-lab
+# start (Setup > System > Lab mode ou o painel); nunca no boot.
+Description=FliperOS lab mode (cloudflared quick tunnel to the web panel)
+After=network-online.target fliperos-web.service
+ConditionPathExists=/opt/fliperos/cloudflared/cloudflared
+
+[Service]
+# O cloudflared nao precisa de root: um usuario que so existe enquanto roda.
+DynamicUser=yes
+ExecStart=/opt/fliperos/cloudflared/cloudflared tunnel --no-autoupdate --metrics 127.0.0.1:20241 --url http://127.0.0.1:8081
+# A chave sai junto (o + roda como root, que e o dono do /run/fliperos-lab).
+ExecStopPost=+/opt/fliperos/bin/fliperos-lab cleanup
+# Temporario: acaba sozinho depois de 4 horas (o LAB_HOURS do fliperos-lab).
+# Sem Restart: um tunel novo teria outro endereco.
+RuntimeMaxSec=4h
+Nice=10

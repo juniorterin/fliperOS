@@ -5294,6 +5294,13 @@ class WebPanelTests(unittest.TestCase):
         buttons.write_text('#!/bin/sh\necho "$*" > %s/buttons.log\necho \'{"1": ["up", "b1"], "2": []}\'\n'
                            'exec sleep 30\n' % tmp)
         buttons.chmod(0o755)
+        # O fliperos-lab falso: o status do tunel ligado; o stop fica no log.
+        lab = tmp / 'fake-lab'
+        lab.write_text('#!/bin/sh\necho "$*" >> %s/lab.log\n[ "$1" = status ] || exit 0\n'
+                       'printf "installed=1\\nactive=1\\nurl=https://a-b.trycloudflare.com/lab?key=K\\n'
+                       'expires=100\\nhours=4\\n"\n' % tmp)
+        lab.chmod(0o755)
+        (tmp / 'lab').mkdir()
         (tmp / 'run/1000').mkdir(parents=True, exist_ok=True)
         (tmp / 'run/1000/fliperos-marquee').write_text('event=game\nsystem=mame\nrom=sf2\ntitle=Street Fighter II\n'
                                                        'text=#1 50,000 CAP\ntime=100\n')
@@ -5311,6 +5318,7 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_ADB_URL='http://127.0.0.1:%d/service_scraper.php' % cls.adb.server_address[1],
                    FLIPEROS_ROMSET_PLACES=str(tmp / 'media'), FLIPEROS_STREAM=str(stream),
                    FLIPEROS_STREAM_API='http://127.0.0.1:%d' % cls.adb.server_address[1],
+                   FLIPEROS_LAB=str(lab), FLIPEROS_LAB_RUN=str(tmp / 'lab'),
                    FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'),
                    FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'))
         (tmp / 'media/USB/romset').mkdir(parents=True)
@@ -5389,6 +5397,53 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual((status, json.loads(data)), (200, {'user': 'fliperos'}))
         self.request('POST', '/api/logout', {}, cookie=cookie)
         self.assertEqual(self.request('GET', '/api/me', cookie=cookie)[0], 401)
+
+    def test_lab_address_opens_a_session_while_its_key_lasts(self):
+        # Setup > System > Lab mode: o endereco do tunel leva a chave do /run;
+        # ela abre uma sessao sem a senha, que acaba com o lab desligado.
+        key_file = Path(self.tmp.name) / 'lab/key'
+        self.assertEqual(self.request('GET', '/lab?key=anything')[0], 403)
+        key_file.write_text('S3cretKey_-1\n')
+        try:
+            self.assertEqual(self.request('GET', '/lab?key=S3cretKey_-2')[0], 403)
+            self.assertEqual(self.request('GET', '/lab')[0], 403)
+            status, cookie, _ = self.request('GET', '/lab?key=S3cretKey_-1')
+            self.assertEqual((status, self.last_headers.get('Location')), (302, '/#status'))
+            self.assertIn('HttpOnly', cookie)
+            self.assertIn('SameSite=Lax', cookie)
+            cookie = cookie.split(';')[0]
+            self.assertEqual(json.loads(self.request('GET', '/api/me', cookie=cookie)[2]), {'user': 'lab'})
+            lab = json.loads(self.request('GET', '/api/lab', cookie=cookie)[2])
+            self.assertEqual(lab, {'installed': True, 'active': True, 'url': 'https://a-b.trycloudflare.com/lab?key=K',
+                                   'expires': 100, 'hours': 4, 'you': True})
+            # A sessao com a senha ve o mesmo, sem ser a do lab.
+            self.assertFalse(json.loads(self.request('GET', '/api/lab', cookie=self.login())[2])['you'])
+            self.assertEqual(self.request('POST', '/api/lab', {'action': 'nope'}, cookie=cookie)[0], 400)
+            self.assertEqual(self.request('POST', '/api/lab', {'action': 'stop'}, cookie=cookie)[0], 200)
+            self.assertIn('stop', (Path(self.tmp.name) / 'lab.log').read_text().split())
+            # Outra chave (um lab novo) ou nenhuma: a sessao antiga acaba.
+            key_file.write_text('OtherKey\n')
+            self.assertEqual(self.request('GET', '/api/me', cookie=cookie)[0], 401)
+        finally:
+            key_file.unlink()
+
+    def test_lab_terminal_is_root_only_in_the_lab_session(self):
+        source = (ROOT / 'config/fliperos-web').read_text()
+        self.assertIn('return self.open_terminal(user == LAB_USER)', source)
+        self.assertIn('user = pwd.getpwnam("root" if root else PLAYER)', source)
+        unit = (ROOT / 'config/fliperos-lab.service').read_text()
+        # Temporario e sem root: acaba sozinho, a chave sai junto, nunca no boot.
+        for line in ('DynamicUser=yes', 'RuntimeMaxSec=4h', 'ExecStopPost=+/opt/fliperos/bin/fliperos-lab cleanup',
+                     '--url http://127.0.0.1:8081', '--metrics 127.0.0.1:20241'):
+            self.assertIn(line, unit)
+        self.assertNotIn('[Install]', unit)
+        lab = (ROOT / 'config/fliperos-lab').read_text()
+        self.assertIn('LAB_HOURS=4', lab)
+        self.assertIn('METRICS=${FLIPEROS_LAB_METRICS:-127.0.0.1:20241}', lab)
+        self.assertRegex(lab, r'CLOUDFLARED_SHA256=\$\{CLOUDFLARED_SHA256:-[0-9a-f]{64}\}')
+        rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
+        self.assertIn('"$src/config/fliperos-lab" "$root/opt/fliperos/bin/fliperos-lab"', rootfs)
+        self.assertIn('"$src/config/fliperos-lab.service" "$root/etc/systemd/system/fliperos-lab.service"', rootfs)
 
     def test_status_has_every_card(self):
         cookie = self.login()

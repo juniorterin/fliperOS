@@ -5376,7 +5376,7 @@ class SetupGroupsTests(Base):
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "extras", "custom", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])
         self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "update",
-                                                        "whatsnew", "debug", "splash", "return"])
+                                                        "whatsnew", "debug", "lab", "splash", "return"])
         self.assertIn("games) screen_setup_games ;;", menu)
         self.assertIn("system) screen_setup_system ;;", menu)
 
@@ -5481,6 +5481,60 @@ class ExtrasScreenTests(Base):
         self.assertIn("msg:Pixelcade art pack The art pack is installed.", r.stdout)
         # O Pixelcade instalado tem o menu dele, nao a pergunta de atualizar.
         self.assertNotIn("yesno:", r.stdout)
+
+
+class LabModeTests(Base):
+    """Setup > System > Lab mode (lib/services.sh, config/fliperos-lab): liga,
+    mostra o endereco e desliga."""
+
+    def setUp(self):
+        super().setUp()
+        state = self.env.dir / "lab.on"
+        self.state = state
+        self.env.stub("fliperos-lab", """
+            case $1 in
+              status) if [ -e %(s)s ]; then on=1; url=https://a-b.trycloudflare.com/lab?key=K; else on=0; url=; fi
+                      printf 'installed=1\\nactive=%%s\\nurl=%%s\\nexpires=0\\nhours=4\\n' $on "$url" ;;
+              start) [ "$2" = --progress ] && touch %(s)s && echo '@step 100 Lab mode is on' ;;
+              stop) rm -f %(s)s ;;
+            esac
+        """ % {"s": state})
+        self.lab_env = {"LAB_CMD": str(self.env.bin / "fliperos-lab")}
+
+    def screen(self, answer):
+        return self.env.run("""
+            source %s/lib/ui.sh
+            source %s/screens/progress.sh
+            source %s/screens/setup-menu.sh
+            ui_msg() { echo "msg:$*"; }
+            ui_yesno() { echo "yesno:$2"; return %d; }
+            run_with_progress() { shift 2; "$@"; }
+            net_online() { :; }
+            screen_lab
+        """ % (SETUP, SETUP, SETUP, 0 if answer else 1), self.lab_env)
+
+    def test_turn_on_shows_the_address_and_turn_off(self):
+        self.assertEqual(self.env.out("lab_enabled && echo on || echo off", self.lab_env).strip(), "off")
+        r = self.screen(False)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(self.state.exists())
+        self.assertIn("root terminal", r.stdout)
+        r = self.screen(True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(self.state.exists())
+        self.assertIn("msg:Lab mode Send this address to who is helping you:  "
+                      "https://a-b.trycloudflare.com/lab?key=K", r.stdout)
+        self.assertEqual(self.env.out("lab_enabled && echo on || echo off", self.lab_env).strip(), "on")
+        # Ligado: a mesma entrada mostra o endereco e desliga.
+        r = self.screen(True)
+        self.assertIn("https://a-b.trycloudflare.com/lab?key=K", r.stdout)
+        self.assertIn("msg:Lab mode Lab mode is off", r.stdout)
+        self.assertFalse(self.state.exists())
+
+    def test_system_menu_has_the_toggle(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn('"lab|Lab mode ($(lab_enabled && echo on || echo off))|', menu)
+        self.assertIn("lab) screen_lab ;;", menu)
 
 
 class FreeRomsTests(Base):

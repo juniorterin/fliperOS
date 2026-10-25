@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# Modo lab (Setup > System > Lab mode, ou a pagina Configuracoes do painel
+# web): um endereco temporario na internet para o painel web deste gabinete,
+# para quem desenvolve o FliperOS olhar um problema de longe (o Status, os
+# logs, os arquivos, a tela e um terminal de root). O tunel e um Quick Tunnel
+# do cloudflared (github.com/cloudflare/cloudflared, Apache 2.0): sem conta,
+# o endereco https://PALAVRAS.trycloudflare.com sai a cada vez, e so o
+# gabinete abre a conexao (nada muda no roteador).
+#
+# O endereco leva uma chave (/lab?key=...): quem o abre entra no painel sem
+# a senha do gabinete, e o terminal dele e de root. A chave fica no /run: o
+# modo lab acaba ao desligar, ao fim de LAB_HOURS (o RuntimeMaxSec do
+# fliperos-lab.service) ou quando a pessoa o desliga; acabou, a chave e as
+# sessoes abertas com ela deixam de valer.
+#
+#   fliperos-lab fetch [--progress]   baixa o cloudflared (versao fixa, sha256)
+#   fliperos-lab installed            status 0 se o cloudflared esta la
+#   fliperos-lab start [--progress]   liga (como root) e escreve url=
+#   fliperos-lab stop                 desliga
+#   fliperos-lab status               installed=, active=, url=, expires=
+#   fliperos-lab cleanup              apaga a chave (o ExecStopPost do servico)
+set -uo pipefail
+
+CLOUDFLARED_VERSION=${CLOUDFLARED_VERSION:-2026.10.0}
+CLOUDFLARED_SHA256=${CLOUDFLARED_SHA256:-d33ff2d14475178d2012c2c56beba87389ac5ded27649519f198a7d3134a99db}
+CLOUDFLARED_URL=${CLOUDFLARED_URL:-https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64}
+dir=${FLIPEROS_LAB_DIR:-/opt/fliperos/cloudflared}
+run=${FLIPEROS_LAB_RUN:-/run/fliperos-lab}
+# As metricas do cloudflared (o /quicktunnel delas da o endereco); a mesma
+# porta do config/fliperos-lab.service.
+METRICS=${FLIPEROS_LAB_METRICS:-127.0.0.1:20241}
+LAB_HOURS=4
+UNIT=fliperos-lab.service
+
+progress=0 label="Lab mode"
+say() {
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+fail() {
+  if ((progress)); then printf '@fail %s|%s\n' "$label" "$1"; else printf 'fliperos-lab: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+installed() {
+  [[ -x $dir/cloudflared ]]
+}
+
+fetch() {
+  local tmp
+  mkdir -p "$dir" || fail "could not create $dir"
+  tmp=$(mktemp "$dir/cloudflared.XXXXXX") || fail "no space in $dir"
+  say 10 "Downloading cloudflared $CLOUDFLARED_VERSION"
+  if ! curl -sSfL --retry 3 --max-time 600 -o "$tmp" "$CLOUDFLARED_URL" >&2; then
+    rm -f "$tmp"
+    fail "the download failed (no network?)"
+  fi
+  if ! echo "$CLOUDFLARED_SHA256  $tmp" | sha256sum -c --quiet - >&2; then
+    rm -f "$tmp"
+    fail "the downloaded file is not cloudflared $CLOUDFLARED_VERSION"
+  fi
+  chmod 755 "$tmp" && mv -f "$tmp" "$dir/cloudflared" || fail "could not install cloudflared"
+  say 50 "cloudflared $CLOUDFLARED_VERSION installed"
+}
+
+active() {
+  systemctl is-active --quiet "$UNIT"
+}
+
+# tunnel_host: o endereco que o Quick Tunnel recebeu (vazio enquanto nao sai).
+tunnel_host() {
+  curl -s --max-time 2 "http://$METRICS/quicktunnel" 2> /dev/null |
+    sed -n 's/.*"hostname":"\([^"]*trycloudflare\.com\)".*/\1/p'
+}
+
+start() {
+  local key host i
+  [[ $EUID -eq 0 ]] || fail "run as root"
+  installed || fetch
+  # O painel web e o que o tunel mostra: ligado agora, se estava desligado
+  # (Setup > System > Services; volta ao que estava no proximo boot).
+  if ! systemctl is-active --quiet fliperos-web.service; then
+    say 55 "Starting the web panel"
+    systemctl start fliperos-web.service || fail "the web panel did not start"
+  fi
+  # Um tunel novo a cada vez: o anterior (e a chave dele) acaba antes.
+  systemctl stop "$UNIT" 2> /dev/null
+  say 60 "Opening the tunnel"
+  mkdir -p "$run" && chmod 700 "$run" || fail "could not create $run"
+  key=$(head -c 9 /dev/urandom | base64 | tr '+/' '-_')
+  (umask 077 && printf '%s\n' "$key" > "$run/key") || fail "could not save the key"
+  date +%s > "$run/started"
+  systemctl start "$UNIT" || { cleanup; fail "the tunnel did not start (journalctl -u $UNIT)"; }
+  for ((i = 0; i < 60; i++)); do
+    host=$(tunnel_host)
+    [[ -n $host ]] && break
+    active || break
+    sleep 1
+  done
+  if [[ -z $host ]]; then
+    systemctl stop "$UNIT" 2> /dev/null
+    fail "no address from trycloudflare.com (no internet? journalctl -u $UNIT)"
+  fi
+  printf 'https://%s/lab?key=%s\n' "$host" "$key" > "$run/url"
+  say 100 "Lab mode is on"
+  ((progress)) || printf 'url=%s\n' "$(cat "$run/url")"
+}
+
+stop() {
+  [[ $EUID -eq 0 ]] || fail "run as root"
+  systemctl stop "$UNIT" 2> /dev/null
+  cleanup
+}
+
+cleanup() {
+  rm -f "$run/key" "$run/url" "$run/started"
+}
+
+status() {
+  local on=0 url="" expires=""
+  if active && [[ -s $run/url ]]; then
+    on=1
+    url=$(cat "$run/url" 2> /dev/null)
+    expires=$(($(cat "$run/started" 2> /dev/null || date +%s) + LAB_HOURS * 3600))
+  fi
+  printf 'installed=%d\nactive=%d\nurl=%s\nexpires=%s\nhours=%d\n' \
+    "$(installed && echo 1 || echo 0)" "$on" "$url" "$expires" "$LAB_HOURS"
+}
+
+[[ ${2:-} == --progress ]] && progress=1
+case ${1:-} in
+  fetch) fetch ;;
+  installed) installed ;;
+  start) start ;;
+  stop) stop ;;
+  status) status ;;
+  cleanup) cleanup ;;
+  *)
+    echo "usage: fliperos-lab fetch|installed|start|stop|status|cleanup" >&2
+    exit 2
+    ;;
+esac

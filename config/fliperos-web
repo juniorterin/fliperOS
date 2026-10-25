@@ -65,6 +65,11 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
                       /api/overlay/input/events (Server-Sent Events, os
                       comandos apertados) e /api/overlay/input/css
     GET  /api/overlay/input/style  o CSS dele; POST {"css"} ou {"reset": true}
+    GET  /lab?key=        o endereco do modo lab (config/fliperos-lab): entra sem
+                      a senha enquanto a chave vale; o terminal dessa sessao e de root
+    GET  /api/lab         installed, active, url, expires, hours, you (a sessao e do lab)
+    POST /api/lab         {"action": "start"} (tarefa: baixa o cloudflared e abre o
+                      tunel) ou {"action": "stop"}
     GET  /api/trackball   (desligado por enquanto; FLIPEROS_WEB_TRACKBALL=1 o liga)
                       WebSocket: um mouse virtual (uinput); texto JSON
                       {"m": [dx, dy], "w": roda} e {"b": ["left", 1|0]}
@@ -124,6 +129,10 @@ LAUNCHERS = (BIN + "/fliperos-kms-run", BIN + "/fliperos-x11-run")
 # As pastas de ~ que o painel mostra em Files.
 FILE_ROOTS = ENV("FLIPEROS_WEB_FILE_ROOTS", "roms bios media splashscreen").split()
 SESSION_HOURS = 12
+# O modo lab (config/fliperos-lab): a chave do endereco temporario, no /run.
+LAB = ENV("FLIPEROS_LAB", BIN + "/fliperos-lab")
+LAB_RUN = ENV("FLIPEROS_LAB_RUN", "/run/fliperos-lab")
+LAB_USER = "lab"
 STATIC_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js",
                 "/style.css": "style.css", "/icon.svg": "icon.svg",
                 # O terminal: o xterm.js (MIT, xterm-LICENSE.txt) vai junto.
@@ -201,9 +210,30 @@ def check_password(user, password):
     return False
 
 
+def lab_key():
+    """A chave do modo lab ligado ("" desligado)."""
+    return read(os.path.join(LAB_RUN, "key")).strip()
+
+
+def lab_status():
+    """O fliperos-lab status: installed, active, url, expires, hours."""
+    try:
+        out = subprocess.run([LAB, "status"], capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        out = ""
+    values = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+
+    def number(key):
+        return int(values[key]) if values.get(key, "").isdigit() else None
+    return {"installed": values.get("installed") == "1", "active": values.get("active") == "1",
+            "url": values.get("url", ""), "expires": number("expires"), "hours": number("hours")}
+
+
 class Sessions:
     """Sessoes na memoria (reiniciar o servico desloga) e o limite de
-    tentativas: 5 senhas erradas num minuto travam aquele endereco."""
+    tentativas: 5 senhas erradas num minuto travam aquele endereco. A sessao
+    do modo lab guarda a chave com que entrou: o lab desligado (outra chave
+    ou nenhuma), ela acaba."""
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -221,10 +251,10 @@ class Sessions:
         with self.lock:
             self.failures[ip].append(time.monotonic())
 
-    def create(self, user):
+    def create(self, user, lab=""):
         token = secrets.token_urlsafe(32)
         with self.lock:
-            self.tokens[token] = (user, time.monotonic() + SESSION_HOURS * 3600)
+            self.tokens[token] = (user, time.monotonic() + SESSION_HOURS * 3600, lab)
         return token
 
     def user(self, token):
@@ -232,7 +262,7 @@ class Sessions:
             entry = self.tokens.get(token or "")
             if not entry:
                 return None
-            if entry[1] < time.monotonic():
+            if entry[1] < time.monotonic() or (entry[2] and not hmac.compare_digest(entry[2], lab_key())):
                 del self.tokens[token]
                 return None
             return entry[0]
@@ -1915,11 +1945,12 @@ class WebSocket:
                 return first, message
 
 
-def terminal(ws):
+def terminal(ws, root=False):
     """Um shell de login do usuario do FliperOS num pty (o zsh dele; o
-    .zprofile so abre o fluxo do tty1 no /dev/tty1). Do navegador: binario =
-    teclas, texto = {"resize": [colunas, linhas]}."""
-    user = pwd.getpwnam(PLAYER)
+    .zprofile so abre o fluxo do tty1 no /dev/tty1); o de root na sessao do
+    modo lab (quem ajuda de longe nao tem a senha do sudo). Do navegador:
+    binario = teclas, texto = {"resize": [colunas, linhas]}."""
+    user = pwd.getpwnam("root" if root else PLAYER)
     shell = user.pw_shell if os.path.exists(user.pw_shell or "") else "/bin/bash"
     env = {"HOME": user.pw_dir, "USER": user.pw_name, "LOGNAME": user.pw_name, "SHELL": shell,
            "TERM": "xterm-256color", "LANG": ENV("LANG", "C.UTF-8"), "COLORTERM": "truecolor",
@@ -2230,6 +2261,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(404, {"error": "not found"})
             return self.send(200, data, TYPES[os.path.splitext(name)[1]],
                              frame="SAMEORIGIN" if name.startswith(("overlay", "live", "input")) else "DENY")
+        if url.path == "/lab":
+            return self.lab_login(parse_qs(url.query))
         if not url.path.startswith("/api/"):
             return self.send(404, {"error": "not found"})
         if url.path in ("/api/overlay/state", "/api/overlay/art"):
@@ -2299,7 +2332,9 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
         if url.path == "/api/terminal":
-            return self.open_terminal()
+            return self.open_terminal(user == LAB_USER)
+        if url.path == "/api/lab":
+            return self.send(200, dict(lab_status(), you=user == LAB_USER))
         if url.path == "/api/trackball":
             return self.open_trackball()
         if url.path == "/api/screenshot":
@@ -2442,6 +2477,20 @@ class Handler(BaseHTTPRequestHandler):
             return self.romfilter_action(url.path.rsplit("/", 1)[1], self.body())
         if url.path == "/api/stream/offer":
             return self.stream_offer(self.body())
+        if url.path == "/api/lab":
+            action = self.body().get("action")
+            if action == "start":
+                task = self.panel.tasks.start("Lab mode", [LAB, "start", "--progress"], "lab")
+                if not task:
+                    return self.send(409, {"error": "the lab mode is already starting"})
+                return self.send(200, task.info())
+            if action == "stop":
+                try:
+                    subprocess.run([LAB, "stop"], capture_output=True, timeout=60)
+                except (OSError, subprocess.SubprocessError) as exc:
+                    return self.send(500, {"error": str(exc)})
+                return self.send(200, lab_status())
+            return self.send(400, {"error": "action start or stop"})
         if url.path == "/api/stream/install":
             task = self.panel.tasks.start("Install the live screen (go2rtc + ffmpeg)",
                                           [EXTRAS, "install", "stream", "--progress"], "extras")
@@ -2537,10 +2586,28 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
         return WebSocket(self.rfile, self.wfile)
 
-    def open_terminal(self):
+    def open_terminal(self, root=False):
         ws = self.websocket()
         if ws:
-            terminal(ws)
+            terminal(ws, root)
+
+    def lab_login(self, query):
+        """O endereco do modo lab: a chave certa abre uma sessao (sem a senha
+        do gabinete) e leva ao painel. SameSite=Lax: o endereco chega de
+        outro site (um chat), e o cookie Strict nao ia na volta ao painel. As
+        chaves erradas tem um limite so delas, de todos os enderecos juntos:
+        pelo tunel todo mundo chega de 127.0.0.1."""
+        if self.panel.sessions.blocked(LAB_USER):
+            return self.send(429, {"error": "too many attempts, wait a minute"})
+        given, key = (query.get("key") or [""])[0], lab_key()
+        if not key:
+            return self.send(403, {"error": "the lab mode is off"})
+        if not hmac.compare_digest(given.encode(), key.encode()):
+            self.panel.sessions.failed(LAB_USER)
+            return self.send(403, {"error": "this lab address is old or wrong"})
+        token = self.panel.sessions.create(LAB_USER, lab=key)
+        cookie = "fliperos_session=%s; HttpOnly; SameSite=Lax; Path=/; Max-Age=%d" % (token, SESSION_HOURS * 3600)
+        return self.send(302, b"", "text/plain", headers={"Location": "/#status", "Set-Cookie": cookie})
 
     def open_trackball(self):
         # Desligado por enquanto: so com FLIPEROS_WEB_TRACKBALL=1 (nenhum

@@ -250,6 +250,10 @@ grep -q '^scrape=' "$root/etc/fliperos/services.conf" 2> /dev/null ||
 # vem pelo Setup > Games > Extras > Live screen, que liga o servico.
 install -Dm755 "$src/config/fliperos-stream" "$root/opt/fliperos/bin/fliperos-stream"
 install -Dm644 "$src/config/fliperos-stream.service" "$root/etc/systemd/system/fliperos-stream.service"
+# Setup > System > Lab mode: o painel web num endereco temporario da internet
+# (o cloudflared vem da rede na primeira vez; config/fliperos-lab).
+install -Dm755 "$src/config/fliperos-lab" "$root/opt/fliperos/bin/fliperos-lab"
+install -Dm644 "$src/config/fliperos-lab.service" "$root/etc/systemd/system/fliperos-lab.service"
 install -Dm644 "$src/config/fliperos-downloader-magnets" "$root/usr/local/share/fliperos/downloader-magnets"
 # Setup > Games > Scraper > Art packs by torrent: logos e videos de pacotes em
 # torrent, so os dos jogos das pastas, pelo mesmo Transmission.

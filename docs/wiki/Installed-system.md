@@ -161,6 +161,7 @@ Without a CTM (the cabinet's Radeon R7 240 on the `radeon` driver has only the 2
     - **Debug mode** — off (the default), the boot goes straight to Plymouth and the output of frontends and emulators (X, Switchres, the program itself) goes to `/opt/fliperos/logs/<program>.log`, rewritten on each launch: only the picture is on screen.
 
       On, everything shows: the Limine menu (`FLIPEROS_QUIET="no"` in `/etc/default/fliperos-boot`), the kernel and systemd messages at boot (without `quiet splash` or the silencing parameters) and the programs' output on the console. Programs follow immediately; the boot, after a reboot;
+    - **Lab mode** — a temporary internet address to the web panel, with a root terminal, for someone helping you from far away. It ends after 4 hours, at power off, or here. See [Web panel](Web-panel.md#lab-mode);
     - **Splash screen** — the boot screen (Plymouth).
 
       The themes are the folders in `~/splashscreen` (`\\fliperos\splashscreen` over the network); picking one shows a **preview** on screen for 10 seconds (from the FliperOS menu, not from the desktop) or sets it for the boot: it is copied to `/usr/share/plymouth/themes`, becomes the default and the initramfs is rebuilt (about a minute).

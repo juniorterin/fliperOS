@@ -108,6 +108,11 @@ const TEXT = {
     page_downloads: "Downloads",
     page_frontend: "Frontend", page_files: "Files", page_settings: "Settings", page_status: "Status", page_terminal: "Terminal",
     settings: "Settings", settings_note: "Each change is saved and applied right away, through the Setup. Monitor, resolution and video driver stay in the Setup, on the cabinet screen.",
+    lab: "Lab mode", lab_start: "Turn on lab mode", lab_stop: "Turn off", lab_starting: "Opening the tunnel…",
+    lab_note: "A temporary internet address to this panel, for someone helping you from far away (a FliperOS developer): they see the status, logs, files and screen, and get a root terminal, without your password. Send the address only to who you trust. It ends by itself after %n hours, at power off, or here. The live screen does not work through it.",
+    lab_off: "Off.", lab_on: "On until %s. Copy the address and send it:", lab_you: "You came in through the lab address: turning it off closes this page.",
+    lab_ask: "Open this panel to the internet, with a root terminal, for whoever has the address?",
+    lab_ask_stop: "Turn off lab mode? The address stops working.",
     saved: "Saved: %s", group_System: "System", group_Services: "Services", "group_480i hacks": "480i hacks", group_Colour: "Colour",
     m480_intro: "How each emulator draws on the tube. 640x240: sharp and steady, the right one for nearly every game. 480i with filter: 480 lines for games made for them (Dreamcast, PS2, GameCube menus and text), with the line flicker softened. 480i pure: 480 lines exactly as the hardware sends them, flicker included. Each change is saved at once.",
     m480_240p: "640x240", m480_filter: "480i with filter", m480_pure: "480i pure", m480_level: "Filter strength:",
@@ -233,6 +238,11 @@ const TEXT = {
     page_downloads: "Downloads",
     page_frontend: "Frontend", page_files: "Arquivos", page_settings: "Configurações", page_status: "Status", page_terminal: "Terminal",
     settings: "Configurações", settings_note: "Cada mudança é gravada e aplicada na hora, pelo Setup. Monitor, resolução e driver de vídeo ficam no Setup, na tela do gabinete.",
+    lab: "Modo lab", lab_start: "Ligar o modo lab", lab_stop: "Desligar", lab_starting: "Abrindo o túnel…",
+    lab_note: "Um endereço temporário na internet para este painel, para alguém ajudar de longe (quem desenvolve o FliperOS): ele vê o status, os logs, os arquivos e a tela, e tem um terminal de root, sem a sua senha. Mande o endereço só para quem você confia. Acaba sozinho depois de %n horas, ao desligar o gabinete, ou aqui. A tela ao vivo não funciona por ele.",
+    lab_off: "Desligado.", lab_on: "Ligado até %s. Copie o endereço e mande:", lab_you: "Você entrou pelo endereço do lab: desligar fecha esta página.",
+    lab_ask: "Abrir este painel para a internet, com um terminal de root, para quem tiver o endereço?",
+    lab_ask_stop: "Desligar o modo lab? O endereço para de funcionar.",
     saved: "Gravado: %s", group_System: "Sistema", group_Services: "Serviços", "group_480i hacks": "Hacks 480i", group_Colour: "Cor",
     m480_intro: "Como cada emulador desenha no tubo. 640x240: nítido e firme, o certo para quase todo jogo. 480i com filtro: 480 linhas para os jogos feitos para elas (menus e textos de Dreamcast, PS2, GameCube), com a tremida das linhas suavizada. 480i puro: as 480 linhas como o hardware manda, com a tremida. Cada mudança é gravada na hora.",
     m480_240p: "640x240", m480_filter: "480i com filtro", m480_pure: "480i puro", m480_level: "Força do filtro:",
@@ -1143,6 +1153,67 @@ function prettyNumber(key, value) {
   if (/hue$/.test(key)) return v + "°";
   return v > 0 ? "+" + v : String(v);
 }
+
+// ── Modo lab ─────────────────────────────────────────────────────
+// Este painel num endereco temporario da internet (config/fliperos-lab):
+// ligar e uma tarefa (baixa o cloudflared na primeira vez e espera o
+// endereco); ligado, o endereco com a chave para copiar.
+
+let labState = null;
+
+async function loadLab() {
+  const res = await api("/api/lab");
+  showLab(await res.json());
+}
+
+function showLab(data) {
+  labState = data;
+  $("lab-note").textContent = t("lab_note").replace("%n", data.hours || 4);
+  const until = data.expires ? new Date(data.expires * 1000).toLocaleTimeString(lang === "pt" ? "pt-BR" : "en",
+    { hour: "2-digit", minute: "2-digit" }) : "";
+  $("lab-state").textContent = data.active ? t("lab_on").replace("%s", until) + (data.you ? " " + t("lab_you") : "")
+    : t("lab_off");
+  $("lab-box").hidden = !data.active;
+  $("lab-url").value = data.url || "";
+  $("lab-start").hidden = !!data.active;
+  $("lab-stop").hidden = !data.active;
+}
+
+async function labStart() {
+  if (!confirm(t("lab_ask"))) return;
+  $("lab-start").disabled = true;
+  $("lab-step").hidden = false;
+  $("lab-step").textContent = t("lab_starting");
+  try {
+    const res = await api("/api/lab", { method: "POST", body: JSON.stringify({ action: "start" }) });
+    let task = await res.json();
+    if (!res.ok) { toast(task.error || res.statusText); return; }
+    while (task.running) {
+      await new Promise((done) => setTimeout(done, 1500));
+      task = await (await api("/api/task?id=" + task.id)).json();
+      $("lab-step").textContent = task.step || t("lab_starting");
+    }
+    if (task.rc !== 0) toast(task.error || task.last || t("task_fail"));
+  } finally {
+    $("lab-start").disabled = false;
+    $("lab-step").hidden = true;
+    loadLab().catch(() => {});
+  }
+}
+
+$("lab-start").addEventListener("click", () => labStart().catch(() => {}));
+$("lab-stop").addEventListener("click", async () => {
+  if (!confirm(t("lab_ask_stop"))) return;
+  const res = await api("/api/lab", { method: "POST", body: JSON.stringify({ action: "stop" }) });
+  if (res.ok) showLab(await res.json());
+});
+$("lab-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("lab-url").value); toast(t("copied")); } catch (e) {
+    $("lab-url").select();
+    document.execCommand("copy");
+    toast(t("copied"));
+  }
+});
 
 // ── Downloads e tarefas ──────────────────────────────────────────
 // O Downloader do Setup (o filtro do MAME ROM Cleaner escolhe o que baixar
@@ -2736,6 +2807,7 @@ function showPage(name) {
     loadTasks().catch(() => {});
   } else if (name === "settings") {
     loadSettings().catch(() => {});
+    loadLab().catch(() => {});
   } else if (name === "romfilter") {
     if (!rf.loaded) loadRomFilter("").catch(() => {});
   } else if (name === "status") {

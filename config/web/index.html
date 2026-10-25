@@ -368,6 +368,25 @@
       <div id="settings"></div>
     </section>
 
+    <!-- O modo lab (config/fliperos-lab): este painel num endereco
+         temporario da internet, para alguem ajudar de longe. -->
+    <section class="card wide" data-page="settings" aria-labelledby="h-lab">
+      <h2 id="h-lab" data-t="lab"></h2>
+      <p id="lab-note" class="dim"></p>
+      <p id="lab-state"></p>
+      <div id="lab-box" class="ovl-box" hidden>
+        <div class="obs-url">
+          <input id="lab-url" type="text" readonly aria-label="Lab address">
+          <button id="lab-copy" type="button" data-icon="📋" data-t="copy"></button>
+        </div>
+      </div>
+      <p id="lab-step" class="dim" hidden></p>
+      <div class="row">
+        <button id="lab-start" type="button" data-icon="🧪" data-t="lab_start"></button>
+        <button id="lab-stop" class="ghost danger" type="button" data-icon="✖" data-t="lab_stop" hidden></button>
+      </div>
+    </section>
+
     <!-- Status: o video, o hardware, a rede, os processos e os logs. -->
     <section class="card wide st-half" data-page="status" aria-labelledby="h-video">
       <h2 id="h-video" data-t="video"></h2>

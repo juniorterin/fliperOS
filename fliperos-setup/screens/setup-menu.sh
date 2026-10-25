@@ -77,6 +77,7 @@ screen_setup_system() {
       "update|System Update|Download and install the updates of all packages." \
       "whatsnew|What's new|The changelog of each FliperOS version and the updates installed." \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))|Show boot and emulator messages on screen to find a problem." \
+      "lab|Lab mode ($(lab_enabled && echo on || echo off))|Remote help: a temporary internet address to this cabinet." \
       "splash|Splash screen|The boot screen theme, with a preview." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
@@ -88,6 +89,7 @@ screen_setup_system() {
       update) screen_need_internet "System Update" && screen_update ;;
       whatsnew) screen_whatsnew ;;
       debug) screen_debug ;;
+      lab) screen_lab ;;
       splash) screen_splash ;;
       return) return 0 ;;
     esac
@@ -1148,6 +1150,29 @@ screen_debug() {
   fi
   ui_msg "Debug mode" "Debug mode is $(debug_enabled && echo on || echo off)." "" \
     "Frontends and emulators follow it now; the boot, after a restart."
+}
+
+# ── Modo lab ─────────────────────────────────────────────────────
+# lib/services.sh: o painel web num endereco temporario da internet
+# (config/fliperos-lab), para quem ajuda de longe; o endereco para copiar
+# fica tambem no painel (Settings > Lab mode).
+
+screen_lab() {
+  local until
+  if lab_enabled; then
+    until=$(date -d "@$(lab_value expires)" +%H:%M 2> /dev/null)
+    ui_yesno "Lab mode" "$(printf 'Lab mode is on until %s. The address:\n\n%s\n\nTurn it off? The address stops working.' \
+      "$until" "$(lab_value url)")" no || return 0
+    lab_stop
+    ui_msg "Lab mode" "Lab mode is off: the address no longer works."
+    return 0
+  fi
+  ui_yesno "Lab mode" "Open the web panel of this cabinet on a temporary internet address, for someone helping you from far away (a FliperOS developer)? Whoever has the address sees the cabinet and gets a root terminal, without your password. It ends by itself after $(lab_value hours) hours, at power off, or here." no ||
+    return 0
+  screen_need_internet "Lab mode" || return 0
+  run_with_progress "Lab mode" "" lab_start || return 0
+  ui_msg "Lab mode" "Send this address to who is helping you:" "" "$(lab_value url)" "" \
+    "To copy it: the web panel (http://fliperos.local), Settings > Lab mode."
 }
 
 # ── Quirks ───────────────────────────────────────────────────────

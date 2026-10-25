@@ -123,6 +123,14 @@ The status refreshes every second. What each part shows:
   - Colour: every colour calibration value and **Back to the defaults**. A slider saves while it moves, so the game on screen changes with it; the **−** and **+** on its sides move it one step per tap (a run of taps saves once, just after the last).
   - Each change is saved and applied at once, through the same functions as the Setup screens (`fliperos-setup --settings` and `--setting KEY VALUE`, `lib/system.sh`). Debug and latency rewrite the kernel line the way their screens do; their kernel part counts after a restart.
   - Monitor, resolution and video driver are not here, since a wrong choice can leave the cabinet without a picture. They stay in the Setup, on the cabinet screen.
+- <a id="lab-mode"></a>**Lab mode** (on the Settings page, and in **Setup > System > Lab mode**): a temporary internet address to this panel, so someone far away can help you (a FliperOS developer looking at a problem).
+  - *Turn on lab mode* gives an address like `https://some-random-words.trycloudflare.com/lab?key=…`. *Copy* puts it on the clipboard, to send by chat or email. In the Setup it shows on the screen.
+  - Whoever opens it gets into the panel without your password: status, logs, files, screenshots, and a **root** terminal (`su - fliperos` there gives the normal user). Send it only to someone you trust.
+  - It ends by itself after 4 hours, when the cabinet powers off, or with *Turn off*. Then the address and every session opened with it stop working. A new start gives a new address.
+  - Nothing changes on your router. The cabinet opens the connection to Cloudflare, through a [Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) of `cloudflared` (no account). It is downloaded the first time, about 40 MB, with a fixed version and checksum, to `/opt/fliperos/cloudflared`.
+  - If the web panel is off in Services, lab mode starts it until the next boot.
+  - The live screen doesn't work through the address. Its video goes straight to the browser on the local network.
+  - How it works: `fliperos-lab start` writes a random key to `/run/fliperos-lab` and starts `fliperos-lab.service`, which runs `cloudflared` as a temporary user with `RuntimeMaxSec=4h`. The address comes from cloudflared's `/quicktunnel` metrics. The panel's `/lab?key=` compares the key; wrong keys have their own limit of 5 a minute.
 - **Downloads:** the Setup's Downloader (Setup > Games > Downloader), which takes from the MAME ROM and CHD torrents only what the MAME ROM Cleaner filter picks.
   - The panel shows the progress and the filter that is chosen.
   - It adds a torrent's link (the one that comes with FliperOS, or one you paste), applies the filter and starts, and removes a torrent (optionally with what it already downloaded).

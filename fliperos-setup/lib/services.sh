@@ -211,3 +211,36 @@ services_late() {
   done < <(services_table)
   return 0
 }
+
+# ── Modo lab ─────────────────────────────────────────────────────
+# Setup > System > Lab mode (e o painel web): o painel num endereco
+# temporario da internet, para alguem ajudar de longe. O
+# config/fliperos-lab faz o tunel (cloudflared) e guarda a chave no /run.
+LAB_CMD=${LAB_CMD:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-lab}
+
+# lab_value CAMPO: installed, active, url, expires ou hours do status.
+lab_value() {
+  [[ -x $LAB_CMD ]] || return 1
+  "$LAB_CMD" status 2>> "$FLIPEROS_LOG" | sed -n "s/^$1=//p"
+}
+
+lab_enabled() {
+  [[ $(lab_value active) == 1 ]]
+}
+
+# lab_start: os eventos da tela de progresso (baixa o cloudflared na
+# primeira vez e espera o endereco).
+lab_start() {
+  ev_step 0 "Starting"
+  if [[ ! -x $LAB_CMD ]]; then
+    ev_fail "the lab mode helper ($LAB_CMD) is missing"
+    return 1
+  fi
+  log_line cmd "\$ $LAB_CMD start --progress"
+  "$LAB_CMD" start --progress 2>> "$FLIPEROS_LOG"
+}
+
+lab_stop() {
+  log_info "modo lab desligado"
+  "$LAB_CMD" stop >> "$FLIPEROS_LOG" 2>&1
+}
