@@ -124,7 +124,9 @@ def badge(surf, x, y, size, on):
     text(surf, label, T.SPACE if on else T.COMMENT, rect[0] + 4, rect[1] + 2)
 
 
-def button(surf, label, cx, y, selected, w=80):
+def button(surf, label, cx, y, selected, w=80, icon=None):
+    """Um botao de 20 pixels de altura. icon: o nome de um icone de 16
+    pixels, desenhado a esquerda do rotulo."""
     x = cx - w // 2
     if selected:
         block(surf, (x, y, w, 20), T.PINK, T.PURPLE)
@@ -133,6 +135,12 @@ def button(surf, label, cx, y, selected, w=80):
         block(surf, (x, y, w, 20), T.BG_DEEP, None)
         pygame.draw.rect(surf, T.LINE, (x, y, w, 20), 1)
         color = T.FG
+    img = T.icon(icon, 1) if icon else None
+    if img:
+        tx = cx - (width(label) + 20) // 2
+        surf.blit(img, (tx, y + 2))
+        text(surf, label, color, tx + 20, y + 6)
+        return
     text(surf, label, color, cx - width(label) // 2, y + 6)
 
 
@@ -672,18 +680,21 @@ class Input:
         if self.actions:
             # Os botoes lado a lado, centrados (um embaixo do outro, se nao
             # cabem); a explicacao e a do escolhido.
-            ws = [width(label) + (32 if len(self.actions) == 1 else 16) for _, label, _ in self.actions]
+            # Cada botao com o icone do que ele faz (o .torrent, o navegador).
+            icons = [T.guess(label, "", "") or None for _, label, _ in self.actions]
+            ws = [width(label) + (32 if len(self.actions) == 1 else 16) + (20 if ic else 0)
+                  for (_, label, _), ic in zip(self.actions, icons)]
             gap = 8
             row = sum(ws) + gap * (len(ws) - 1) <= T.SAFE_W
             self.stacked = not row
             bx = T.WIDTH // 2 - (sum(ws) + gap * (len(ws) - 1)) // 2
             by = y + 40
-            for i, ((_, label, _), bw) in enumerate(zip(self.actions, ws)):
+            for i, ((_, label, _), bw, ic) in enumerate(zip(self.actions, ws, icons)):
                 if row:
-                    button(surf, label, bx + bw // 2, by, self.focus == i + 1, w=bw)
+                    button(surf, label, bx + bw // 2, by, self.focus == i + 1, w=bw, icon=ic)
                     bx += bw + gap
                 else:
-                    button(surf, label, T.WIDTH // 2, by, self.focus == i + 1, w=bw)
+                    button(surf, label, T.WIDTH // 2, by, self.focus == i + 1, w=bw, icon=ic)
                     by += 22
             about = self.actions[max(0, self.focus - 1)][2]
             paragraph(surf, [about], (y + 72) if row else (by + 10), T.CYAN)
