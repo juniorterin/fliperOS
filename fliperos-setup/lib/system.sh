@@ -65,6 +65,8 @@ settings_list() {
   if [[ -x $STREAM_GO2RTC ]]; then
     printf 'stream_audio|System|Live screen sound|choice|%s|off=Off;on=On|A copy of the sound for the live screen (an ALSA loopback on the card clock). Games opened after the change get it.\n' \
       "$(audio_stream_enabled && echo on || echo off)"
+    printf 'stream_quality|System|Live screen quality|choice|%s|light=Light (weak Wi-Fi);normal=Normal;high=High;max=Maximum (network cable)|The picture of the live screen: more quality takes more network and CPU. It counts from the next connection.\n' \
+      "$(conf_get stream_quality 2> /dev/null | grep -xE 'light|high|max' || echo normal)"
   fi
   printf 'marquee_overlay|System|Marquee overlay for OBS|choice|%s|off=Off;on=On|The marquee of the game on screen as a page for an OBS Browser Source (the address is on the Live page of the panel).\n' \
     "$(marquee_overlay_enabled && echo on || echo off)"
@@ -130,6 +132,10 @@ settings_set() {
     stream_audio)
       [[ ($value == on || $value == off) && -x $STREAM_GO2RTC ]] || return 2
       audio_stream_set "$value"
+      ;;
+    stream_quality)
+      [[ $value =~ ^(light|normal|high|max)$ && -x $STREAM_GO2RTC ]] || return 2
+      conf_set stream_quality "$value"
       ;;
     marquee_overlay)
       [[ $value == on || $value == off ]] || return 2

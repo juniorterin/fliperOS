@@ -41,6 +41,8 @@ const TEXT = {
     live_connecting: "Connecting to the cabinet…", live_lost: "The connection dropped. Press Watch live again.",
     live_err_vaapi: "The cabinet can't read its screen: this video card needs the VA-API driver (mesa-va-drivers), which is missing. Install the live screen again under Streaming.",
     live_err_capture: "The cabinet couldn't capture the screen: %s",
+    live_quality: "Quality", live_q_light: "Light (weak Wi-Fi)", live_q_normal: "Normal", live_q_high: "High",
+    live_q_max: "Maximum (network cable)",
     live_err_go2rtc: "The cabinet's stream server didn't answer. Try again; if it keeps happening, restart the live screen (Turn off and on, under Streaming).",
     live_err_timeout: "The cabinet took too long to answer. Check that it is on the network and try again.",
     live_err_nopicture: "Connected, but no picture arrived from the cabinet. Try again; on Wi-Fi a network cable helps.",
@@ -50,7 +52,7 @@ const TEXT = {
     live_enc_hw: "graphics card (VA-API)", live_enc_sw: "software (x264)", live_audio_on: "on", live_audio_off: "off",
     live_turn_off: "Turn off", live_sound_on: "Turn the sound on", live_sound_off: "Turn the sound off",
     live_not_installed: "The live screen is not installed yet: Install, under Streaming (or Setup > Games > Extras > Live screen).",
-    live_settings_note: "ffmpeg only runs while someone watches (here or in OBS). The sound is a copy of the output on an ALSA loopback: games opened after turning it on get it.",
+    live_settings_note: "ffmpeg only runs while someone watches (here or in OBS). The sound is a copy of the output on an ALSA loopback: games opened after turning it on get it. A new quality counts once nobody is watching the old one: refresh the OBS source too.",
     sync_idle: "Watch live above to measure the stream delay: this then shows how many milliseconds to delay your camera and microphone in OBS so they line up with the game.",
     sync_on: "The game arrives here about <b>%v ms</b> late (its sound, <b>%a ms</b>). In OBS, delay the camera by <b>%v ms</b> (camera source: Filters > + > Render Delay) and the microphone by <b>%a ms</b> (Edit > Advanced Audio Properties > Sync Offset). Measured in this browser; OBS on the same PC gets about the same.",
     overlay_docs: "📖 How to set up the marquee (documentation)",
@@ -164,6 +166,8 @@ const TEXT = {
     live_connecting: "Conectando ao gabinete…", live_lost: "A conexão caiu. Aperte Assistir ao vivo de novo.",
     live_err_vaapi: "O gabinete não consegue ler a própria tela: esta placa de vídeo precisa do driver VA-API (mesa-va-drivers), que está faltando. Instale a tela ao vivo de novo em Transmissão.",
     live_err_capture: "O gabinete não conseguiu capturar a tela: %s",
+    live_quality: "Qualidade", live_q_light: "Leve (Wi-Fi fraco)", live_q_normal: "Normal", live_q_high: "Alta",
+    live_q_max: "Máxima (cabo de rede)",
     live_err_go2rtc: "O servidor de transmissão do gabinete não respondeu. Tente de novo; se continuar, reinicie a tela ao vivo (Desligar e ligar, em Transmissão).",
     live_err_timeout: "O gabinete demorou demais para responder. Confira se ele está na rede e tente de novo.",
     live_err_nopicture: "Conectou, mas a imagem do gabinete não chegou. Tente de novo; no Wi-Fi, um cabo de rede ajuda.",
@@ -173,7 +177,7 @@ const TEXT = {
     live_enc_hw: "placa de vídeo (VA-API)", live_enc_sw: "software (x264)", live_audio_on: "ligado", live_audio_off: "desligado",
     live_turn_off: "Desligar", live_sound_on: "Ligar o som", live_sound_off: "Desligar o som",
     live_not_installed: "A tela ao vivo ainda não está instalada: Instalar, em Transmissão (ou Setup > Games > Extras > Live screen).",
-    live_settings_note: "O ffmpeg só roda enquanto alguém assiste (aqui ou no OBS). O som é uma cópia da saída num loopback do ALSA: os jogos abertos depois de ligar já saem com ele.",
+    live_settings_note: "O ffmpeg só roda enquanto alguém assiste (aqui ou no OBS). O som é uma cópia da saída num loopback do ALSA: os jogos abertos depois de ligar já saem com ele. Uma qualidade nova vale quando ninguém mais assiste a anterior: atualize também a fonte do OBS.",
     sync_idle: "Assista ao vivo acima para medir o atraso da transmissão: aqui aparece quantos ms atrasar a câmera e o microfone no OBS para ficarem no tempo do jogo.",
     sync_on: "O jogo chega aqui com uns <b>%v ms</b> de atraso (o som dele, <b>%a ms</b>). No OBS, atrase a câmera em <b>%v ms</b> (na fonte da câmera: Filtros > + > Atraso de renderização) e o microfone em <b>%a ms</b> (Editar > Propriedades avançadas de áudio > Deslocamento de sincronização). Medido neste navegador; o OBS no mesmo PC fica quase igual.",
     overlay_docs: "📖 Como configurar o marquee (documentação)",
@@ -1566,7 +1570,20 @@ async function loadLive() {
       if (!r.ok) toast((await r.json().catch(() => ({}))).error || r.statusText);
       loadLive().catch(() => {});
     });
-    setup.append(svc, sound);
+    // A qualidade (Settings > Live screen quality): a taxa e o preset do
+    // codificador. Vale na proxima conexao, entao o que esta passando reconecta.
+    const quality = el("select", { "aria-label": t("live_quality") },
+      ...["light", "normal", "high", "max"].map((q) => el("option", { value: q }, t("live_q_" + q))));
+    quality.value = s.quality || "normal";
+    quality.addEventListener("change", async () => {
+      quality.disabled = true;
+      const r = await api("/api/settings", { method: "POST",
+        body: JSON.stringify({ key: "stream_quality", value: quality.value }) });
+      if (!r.ok) toast((await r.json().catch(() => ({}))).error || r.statusText);
+      else if (live) liveStart();
+      loadLive().catch(() => {});
+    });
+    setup.append(svc, sound, el("label", { class: "live-quality dim" }, t("live_quality"), quality));
   }
   // O endereco sempre a vista; sem a tela ao vivo no ar, o aviso do porque.
   const r = await api("/api/overlay");

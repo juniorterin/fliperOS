@@ -5572,7 +5572,8 @@ class WebPanelTests(unittest.TestCase):
         cookie = self.login()
         status = json.loads(self.request('GET', '/api/stream', cookie=cookie)[2])
         self.assertEqual(status, {'installed': True, 'active': True, 'encoder': 'x264', 'audio': False,
-                                  'rates': [15, 30, 60], 'link': status['link'], 'copy': None, 'error': None,
+                                  'rates': [15, 30, 60], 'link': status['link'], 'quality': 'normal',
+                                  'copy': None, 'error': None,
                                   'error_at': None})
         self.assertIn(status['link'], ('wifi', 'wired', None))
         offer = 'v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n'
@@ -6195,6 +6196,20 @@ class LiveScreenTests(unittest.TestCase):
         self.assertIn('exec 3< <(grab "$fps" "$$")', stream)
         self.assertIn('kill -0 "$parent" 2> /dev/null || return 0', stream)
         self.assertIn("grep -q '^State:[[:space:]]*Z' \"/proc/$parent/status\"", stream)
+
+    def test_capture_quality_sets_rate_and_preset(self):
+        # stream_quality (painel > Ao vivo, Settings): a taxa vezes o fator
+        # e, no x264, um preset mais lento nas altas; sem ela, a normal.
+        conf = self.tmp / 'fliperos.conf'
+        for quality, kbps, preset in (('light', '1800k', 'ultrafast'), ('', '3000k', 'ultrafast'),
+                                      ('high', '6000k', 'superfast'), ('max', '10500k', 'veryfast'),
+                                      ('bogus', '3000k', 'ultrafast')):
+            conf.write_text('stream_quality=%s\n' % quality if quality else '')
+            self.assertEqual(self.run_('capture', '60', 'out').returncode, 0)
+            args = self.args.read_text().splitlines()
+            self.assertEqual((args[args.index('-b:v') + 1], args[args.index('-preset') + 1]), (kbps, preset), quality)
+            self.assertIn('quality=%s\n' % (quality if quality in ('light', 'high', 'max') else 'normal'),
+                          self.run_('status').stdout)
 
     def test_capture_error_reaches_the_status(self):
         # Um kmsgrab que sai na hora com erro (o amdgpu sem VA-API: o

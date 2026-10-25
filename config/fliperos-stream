@@ -160,12 +160,38 @@ audio_on() {
 # nao pede keyframe ao ffmpeg, cada perda parava a imagem ate o keyframe
 # seguinte (as "engasgadas"; visto no gabinete em 2026-10-23). Um buffer de
 # 2 quadros escondia isso, mas o keyframe saia borrado a cada 2 s.
+#
+# A qualidade (stream_quality no fliperos.conf; painel web > Ao vivo e
+# Settings): essa taxa e a normal; leve 0,6x (Wi-Fi fraco), alta 2x, maxima
+# 3,5x (no cabo). No x264 as altas tambem usam um preset mais lento, que
+# comprime melhor (a 640x480 cabe na CPU). Vale na proxima conexao.
 SIZE=640x480
 SHARP="scale=640:480:flags=neighbor"
+quality() {
+  local q
+  q=$(sed -n 's/^stream_quality=//p' "$conf" 2> /dev/null | tail -n 1)
+  case $q in
+    light | high | max) echo "$q" ;;
+    *) echo normal ;;
+  esac
+}
 # rate FPS: as opcoes de taxa do codificador.
 rate() {
   local kbps=$((1000 + $1 * 1000 / 30))
+  case $(quality) in
+    light) kbps=$((kbps * 6 / 10)) ;;
+    high) kbps=$((kbps * 2)) ;;
+    max) kbps=$((kbps * 7 / 2)) ;;
+  esac
   echo "-b:v ${kbps}k -maxrate ${kbps}k -bufsize $((kbps / 2))k"
+}
+# preset: o do x264 pela qualidade.
+preset() {
+  case $(quality) in
+    high) echo superfast ;;
+    max) echo veryfast ;;
+    *) echo ultrafast ;;
+  esac
 }
 
 # grab FPS PAI: os quadros da tela, ja em 640x480 RGB cru, na saida. O
@@ -236,7 +262,7 @@ capture() {
       -c:v h264_vaapi -profile:v constrained_baseline -bf 0 -g "$fps" "${bitrate[@]}")
   else
     args+=(-vf "format=yuv420p"
-      -c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -bf 0 -g "$fps"
+      -c:v libx264 -preset "$(preset)" -tune zerolatency -profile:v baseline -bf 0 -g "$fps"
       "${bitrate[@]}")
   fi
   if audio_on; then
@@ -288,6 +314,7 @@ status() {
   installed && { vpp && echo copy=vaapi || echo copy=mmap; }
   audio_on && echo audio=1 || echo audio=0
   echo "rates=$RATES"
+  echo "quality=$(quality)"
   # O ultimo erro da captura (grab), dos ultimos 10 s, e quando foi.
   if [[ -n $(find "$run/grab.err" -newermt '-10 seconds' 2> /dev/null) ]]; then
     echo "error=$(grep -v -e '^[[:space:]]*$' -e '^ERROR: ld.so:' "$run/grab.err" | head -n 1 | tr -d '\r' | cut -c1-200)"

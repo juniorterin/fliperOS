@@ -1623,6 +1623,7 @@ def stream_status():
     return {"installed": values.get("installed") == "1", "active": values.get("active") == "1",
             "encoder": values.get("encoder") or None, "audio": values.get("audio") == "1",
             "rates": [int(r) for r in values.get("rates", "").split() if r.isdigit()] or list(STREAM_RATES),
+            "quality": values.get("quality") or "normal",
             "link": stream_link(), "copy": values.get("copy") or None, "error": values.get("error") or None,
             "error_at": int(values["error_at"]) if values.get("error_at", "").isdigit() else None}
 

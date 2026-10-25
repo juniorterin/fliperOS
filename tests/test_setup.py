@@ -823,6 +823,24 @@ class SettingsCliTests(Base):
             self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
         self.assertIn('settings_set "${2:-}" "${3:-}"', (SETUP / "fliperos-setup").read_text())
 
+    def test_live_screen_quality(self):
+        # A qualidade da tela ao vivo so aparece (e muda) com o go2rtc instalado.
+        go2rtc = self.env.dir / "go2rtc"
+        env = {"COLOR_BIN": str(self.env.dir / "none"), "STREAM_GO2RTC": str(go2rtc)}
+        keys = [line.split("|")[0] for line in self.env.out("settings_list", env).splitlines()]
+        self.assertNotIn("stream_quality", keys)
+        self.assertEqual(self.env.run("settings_set stream_quality high", env).returncode, 2)
+        go2rtc.write_text("#!/bin/sh\n")
+        go2rtc.chmod(0o755)
+        rows = {r[0]: r for r in (line.split("|") for line in self.env.out("settings_list", env).splitlines())}
+        self.assertEqual(rows["stream_quality"][4], "normal")
+        self.assertIn("max=Maximum (network cable)", rows["stream_quality"][5])
+        self.env.out("settings_set stream_quality high", env)
+        self.assertIn("stream_quality=high\n", (self.env.etc / "fliperos.conf").read_text())
+        rows = {r[0]: r for r in (line.split("|") for line in self.env.out("settings_list", env).splitlines())}
+        self.assertEqual(rows["stream_quality"][4], "high")
+        self.assertEqual(self.env.run("settings_set stream_quality ultra", env).returncode, 2)
+
 
 class DownloaderCliTests(Base):
     """fliperos-setup --downloader (lib/downloader.sh, downloader_cli): o
