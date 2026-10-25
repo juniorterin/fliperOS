@@ -1630,10 +1630,17 @@ async function liveStart() {
   // navegador recusar mesmo assim, comeca mudo e o botao mostra.
   video.muted = false;
   liveMuteButton();
+  // O stream vai ao <video> uma vez so: dar o srcObject de novo na faixa do
+  // som interrompia o play (AbortError), e o video ficava mudo sem motivo.
+  video.srcObject = stream;
   pc.ontrack = (ev) => {
     stream.addTrack(ev.track);
-    video.srcObject = stream;
-    video.play().catch(() => { video.muted = true; liveMuteButton(); video.play().catch(() => {}); });
+    video.play().catch((e) => {
+      if (e.name !== "NotAllowedError" || video.muted) return;
+      video.muted = true;
+      liveMuteButton();
+      video.play().catch(() => {});
+    });
     if (ev.track.kind === "audio") $("live-sound").hidden = false;
   };
   video.onplaying = () => { if (live === pc) $("live-idle").hidden = true; };

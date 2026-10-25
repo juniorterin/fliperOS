@@ -37,6 +37,17 @@ function note(text, bad) {
   p.classList.toggle("bad", !!bad);
 }
 
+// Fora do OBS o navegador pode recusar som sem um clique (NotAllowedError):
+// so ai fica mudo. Outra falha (o play interrompido) nao e motivo.
+function play() {
+  video.play().catch((e) => {
+    if (e.name === "NotAllowedError" && !video.muted) {
+      video.muted = true;
+      video.play().catch(() => {});
+    }
+  });
+}
+
 function again(text) {
   if (pc) pc.close();
   pc = null;
@@ -52,11 +63,13 @@ async function connect() {
   const stream = new MediaStream();
   conn.addTransceiver("video", { direction: "recvonly" });
   conn.addTransceiver("audio", { direction: "recvonly" });
+  // O stream vai ao <video> uma vez so: o som chega como uma segunda faixa,
+  // e dar o srcObject de novo interrompia o play (AbortError), que deixava
+  // o video mudo para sempre; no OBS ninguem clica para tirar.
+  video.srcObject = stream;
   conn.ontrack = (ev) => {
     stream.addTrack(ev.track);
-    video.srcObject = stream;
-    // Fora do OBS o navegador pode recusar som sem um clique: mudo, entao.
-    video.play().catch(() => { video.muted = true; video.play().catch(() => {}); });
+    play();
   };
   conn.onconnectionstatechange = () => {
     if (pc !== conn) return;
