@@ -304,6 +304,50 @@ class Library:
             game.pop("Favourite", None)
         return on
 
+    # Os jogos escondidos (Tab > Hide this game): "pasta<TAB>jogo" por linha
+    # em ~/.config/fliperos/hidden, junto dos favoritos. Os arquivos ficam;
+    # o frontend so nao os mostra, e Tab > Hidden games os traz de volta.
+    def hidden_path(self):
+        return os.path.join(web.player_home(), ".config", "fliperos", "hidden")
+
+    def hidden(self):
+        if getattr(self, "_hidden", None) is None:
+            try:
+                with open(self.hidden_path(), encoding="utf-8") as f:
+                    self._hidden = {tuple(line.rstrip("\n").split("\t", 1)) for line in f if "\t" in line}
+            except OSError:
+                self._hidden = set()
+        return self._hidden
+
+    def set_hidden(self, key, name, on):
+        rows = set(self.hidden())
+        rows.discard((key, name))
+        if on:
+            rows.add((key, name))
+        path = self.hidden_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                f.writelines("%s\t%s\n" % row for row in sorted(rows))
+            os.replace(path + ".tmp", path)
+        except OSError:
+            return False
+        self._hidden = rows
+        return True
+
+    def hidden_games(self):
+        """Os escondidos para a lista do Tab: (pasta, jogo, nome da pasta,
+        titulo), pelo titulo."""
+        out = []
+        systems = {s["key"]: s for s in self.systems}
+        for key, name in self.hidden():
+            system = systems.get(key)
+            title = name
+            if system:
+                title = next((g.get("Title") or name for g in self.games(system) if g["Name"] == name), name)
+            out.append((key, name, (system or {}).get("name", key), title))
+        return sorted(out, key=lambda r: r[3].lower())
+
     def played(self, game, seconds):
         """Uma partida a mais no stats do Attract-Mode (os filtros Most Played)."""
         system = game["_system"]

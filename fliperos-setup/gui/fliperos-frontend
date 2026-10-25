@@ -54,6 +54,11 @@ MODE_NAMES = {"list": "LIST", "full": "FULL SCREEN", "flow": "GRID"}
 COLS = 3                     # as colunas da grade (o GRID_COLS do feview.py)
 
 
+# As linhas do Tab: 0 a 4 do jogo, e as do frontend.
+OPT_MODE, OPT_CLONES, OPT_HIDDEN = 5, 6, 7
+OPT_COUNT = 8
+
+
 def load_config():
     try:
         with open(CONFIG, encoding="utf-8") as f:
@@ -138,6 +143,8 @@ class Frontend:
         names = [f["name"] for f in self.lib.filters]
         self.flt = names.index(cfg.get("filter")) if cfg.get("filter") in names else self.default_filter()
         self.opened = set()        # os jogos pai com os clones abertos (na lista)
+        # Tab > Frontend options > Show clones (gravado no frontend.json).
+        self.show_clones = cfg.get("clones", True) is not False
         self.cursor = 0
         self.top = 0
         self.overlay = "guide"     # o guia dos controles ao abrir
@@ -230,7 +237,8 @@ class Frontend:
         cat = self.category()
         if not cat:
             return []
-        games = self.lib.games(cat)
+        hidden = self.lib.hidden()
+        games = [g for g in self.lib.games(cat) if (g["_system"]["key"], g["Name"]) not in hidden]
         return self.fd.apply_filter(games, self.lib.filters[self.flt % len(self.lib.filters)])
 
     def rebuild(self, keep=None):
@@ -240,6 +248,10 @@ class Frontend:
         games = self.filtered()
         rows = []
         for game, clones in self.fd.tree(games):
+            if not self.show_clones:
+                # Sem clones: so os jogos pai (e o clone sem o pai na lista).
+                rows.append((game, 0, []))
+                continue
             if self.mode == "list":
                 rows.append((game, 0, clones))
                 if clones and game["Name"] in self.opened:
@@ -264,7 +276,8 @@ class Frontend:
         self.keep_position()
         save_config({"mode": self.mode, "category": (self.category() or {}).get("key"),
                      "filter": self.lib.filters[self.flt % len(self.lib.filters)]["name"],
-                     "game": g["Name"] if g else None, "positions": self.positions})
+                     "game": g["Name"] if g else None, "positions": self.positions,
+                     "clones": self.show_clones})
 
     def keep_position(self):
         """O jogo onde o cursor esta, anotado para a game list de agora: ao
@@ -407,7 +420,7 @@ class Frontend:
             self.say(MODE_NAMES[self.mode])
         elif a == "tab":
             # Sem jogo na lista, so as opcoes do frontend.
-            self.overlay, self.ov = "options", {"sel": 0 if self.game() else 4}
+            self.overlay, self.ov = "options", {"sel": 0 if self.game() else OPT_MODE}
         return None
 
     def set_mode(self, step):
@@ -493,13 +506,28 @@ class Frontend:
                 self.overlay = None
             return None
         if o == "options":
-            # 0 a 3: as opcoes do jogo (3: apagar); 4: o modo do frontend (Frontend options).
+            # 0 a 4: as opcoes do jogo (3: esconder, 4: apagar); depois as do
+            # frontend: o modo, os clones e a lista dos escondidos.
             sel = self.ov["sel"]
             if a in ("up", "down"):
-                self.ov["sel"] = (sel + (1 if a == "down" else -1)) % 5
-            elif sel == 4 and a in ("left", "right", "b1"):
+                self.ov["sel"] = (sel + (1 if a == "down" else -1)) % OPT_COUNT
+            elif sel == OPT_MODE and a in ("left", "right", "b1"):
                 self.set_mode(-1 if a == "left" else 1)
-            elif a in ("b1",) and self.game():
+            elif sel == OPT_CLONES and a in ("left", "right", "b1"):
+                g = self.game()
+                self.show_clones = not self.show_clones
+                self.rebuild(keep=(g.get("CloneOf") or g["Name"]) if g else None)
+                self.remember()
+                self.say("CLONES SHOWN" if self.show_clones else "CLONES HIDDEN")
+            elif sel == OPT_HIDDEN and a == "b1":
+                self.overlay, self.ov = "hidden", {"sel": 0, "rows": self.lib.hidden_games()}
+            elif a == "b1" and sel == 3 and self.game():
+                g = self.game()
+                self.lib.set_hidden(g["_system"]["key"], g["Name"], True)
+                self.overlay = None
+                self.rebuild(keep=None)
+                self.say("HIDDEN: TAB > HIDDEN GAMES BRINGS IT BACK", 2.5)
+            elif a in ("b1",) and self.game() and sel < OPT_MODE:
                 g = self.game()
                 if sel == 0:
                     self.open_classify(g)
@@ -518,6 +546,21 @@ class Frontend:
                     self.say("NO FILE OF ITS OWN (IT IS IN THE PARENT'S)", 2.5)
             elif a == "tab":
                 self.overlay = None
+            return None
+        if o == "hidden":
+            # Os escondidos: o botao 1 traz o jogo de volta; o 2 volta ao Tab.
+            rows = self.ov["rows"]
+            if a in ("up", "down") and rows:
+                self.ov["sel"] = (self.ov["sel"] + (1 if a == "down" else -1)) % len(rows)
+            elif a == "b1" and rows:
+                key, name, _, title = rows.pop(self.ov["sel"])
+                self.lib.set_hidden(key, name, False)
+                self.ov["sel"] = min(self.ov["sel"], max(0, len(rows) - 1))
+                g = self.game()
+                self.rebuild(keep=g["Name"] if g else None)
+                self.say("BACK IN THE LIST: " + title.upper(), 2)
+            elif a in ("b2", "tab"):
+                self.overlay, self.ov = "options", {"sel": OPT_HIDDEN}
             return None
         if o == "delete":
             if a in ("left", "right", "up", "down"):

@@ -1428,63 +1428,125 @@ def system_icon(cat):
     return None
 
 
+def eye(ui, cx, cy, c, crossed=False):
+    """O olho do Hide this game (riscado: escondido)."""
+    pygame.draw.ellipse(ui, c, (cx - 7, cy - 4, 15, 9), 1)
+    pygame.draw.circle(ui, c, (cx, cy), 2)
+    if crossed:
+        pygame.draw.line(ui, c, (cx - 7, cy + 5), (cx + 7, cy - 5), 2)
+
+
+def option_row(ui, rect, label, on, now):
+    """Uma linha do menu do Tab: o azulejo e o rotulo."""
+    x, y, w, h = rect
+    tile_frame(ui, rect, on, now)
+    pygame.draw.rect(ui, T.PINK if on else T.LINE, rect, 2 if on else 1)
+    W.text(ui, label, T.FG if on else T.COMMENT, x + 28, y + 4)
+
+
 def draw_options(fe, ui, now):
     """O menu do Tab: as opcoes do jogo e, debaixo delas, as do frontend (o
-    modo de exibicao e o andamento do scrape automatico)."""
+    modo de exibicao, os clones, os jogos escondidos e o andamento do scrape
+    automatico)."""
     g = fe.game()
     pw, ph = min(236, WW - 4), 224
     px, py = (WW - pw) // 2, max(8, (HH - ph) // 2)
+    sel = fe.ov["sel"]
     card(ui, (px, py, pw, ph))
     ui.blit(W.big("GAME OPTIONS", 1, W.LABEL), (px + 10, py + 8))
     if g:
         tiny.text(ui, tiny.fit(g.get("Title") or g["Name"], pw - 20), T.COMMENT, px + 10, py + 20)
-    items = [("CLASSIFY", "GENRE, PLAYERS, BUTTONS, CONTROL, YEAR", T.YELLOW),
-             ("RENAME", "THE NAME SHOWN IN THE LISTS", T.CYAN),
-             ("SCRAPE THIS GAME", "PICTURES, LOGO, VIDEO AND TEXT, NOW", T.GREEN),
-             ("DELETE THIS GAME", "ITS FILES GO AWAY FROM THE FOLDER", T.RED)]
-    for i, (label, about, color) in enumerate(items):
-        y = py + 30 + i * 24
-        on = i == fe.ov["sel"]
-        tile_frame(ui, (px + 8, y, pw - 16, 22), on, now)
-        pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 22), 2 if on else 1)
-        ix, iy = px + 22, y + 11
+    items = [("CLASSIFY", T.YELLOW), ("RENAME", T.CYAN), ("SCRAPE THIS GAME", T.GREEN),
+             ("HIDE THIS GAME", T.PURPLE), ("DELETE THIS GAME", T.RED)]
+    for i, (label, color) in enumerate(items):
+        y = py + 28 + i * 17
+        option_row(ui, (px + 8, y, pw - 16, 16), label, i == sel, now)
+        ix, iy = px + 20, y + 8
         if i == 0:
-            pygame.draw.polygon(ui, color, [(ix - 7, iy - 5), (ix + 3, iy - 5), (ix + 8, iy), (ix + 3, iy + 5),
-                                            (ix - 7, iy + 5)])
-            pygame.draw.circle(ui, T.BG_DEEP, (ix - 3, iy), 2)
+            pygame.draw.polygon(ui, color, [(ix - 6, iy - 4), (ix + 2, iy - 4), (ix + 6, iy), (ix + 2, iy + 4),
+                                            (ix - 6, iy + 4)])
+            pygame.draw.circle(ui, T.BG_DEEP, (ix - 3, iy), 1)
         elif i == 1:
-            pygame.draw.polygon(ui, color, [(ix - 6, iy + 6), (ix - 6, iy + 2), (ix + 4, iy - 8), (ix + 8, iy - 4),
-                                            (ix - 2, iy + 6)])
+            pygame.draw.polygon(ui, color, [(ix - 5, iy + 5), (ix - 5, iy + 2), (ix + 3, iy - 6), (ix + 6, iy - 3),
+                                            (ix - 2, iy + 5)])
         elif i == 2:
-            ui.fill(color, (ix - 1, iy - 8, 3, 9))
-            pygame.draw.polygon(ui, color, [(ix - 6, iy - 1), (ix + 6, iy - 1), (ix, iy + 5)])
-            ui.fill(color, (ix - 7, iy + 6, 15, 2))
+            ui.fill(color, (ix - 1, iy - 6, 3, 7))
+            pygame.draw.polygon(ui, color, [(ix - 5, iy), (ix + 5, iy), (ix, iy + 4)])
+            ui.fill(color, (ix - 6, iy + 5, 13, 2))
+        elif i == 3:
+            eye(ui, ix, iy, color, crossed=True)
         else:
-            trash(ui, ix, iy, color)
-        W.text(ui, label, T.FG if on else T.COMMENT, px + 36, y + 3)
-        tiny.text(ui, about, color if on else T.LINE, px + 36, y + 14)
+            trash(ui, ix, iy - 1, color)
     # As opcoes do frontend, debaixo das do jogo.
-    y = py + 126
-    ui.blit(W.big("FRONTEND OPTIONS", 1, W.LABEL), (px + 10, y + 2))
-    y += 14
-    on = fe.ov["sel"] == 4
-    tile_frame(ui, (px + 8, y, pw - 16, 36), on, now)
-    pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 36), 2 if on else 1)
-    W.text(ui, "VIEW MODE", T.FG if on else T.COMMENT, px + 16, y + 5)
-    # Os tres modos lado a lado; o de agora aceso.
-    x = px + 16
-    for mode, label in (("list", "LIST"), ("full", "FULL SCREEN"), ("flow", "GRID")):
+    y = py + 116
+    ui.blit(W.big("FRONTEND OPTIONS", 1, W.LABEL), (px + 10, y))
+    y += 12
+    right = px + pw - 14
+    # O modo: os tres lado a lado, o de agora aceso.
+    on = sel == 5
+    option_row(ui, (px + 8, y, pw - 16, 16), "", on, now)
+    W.text(ui, "VIEW", T.FG if on else T.COMMENT, px + 16, y + 4)
+    x = right
+    for mode, label in reversed((("list", "LIST"), ("full", "FULL SCREEN"), ("flow", "GRID"))):
         cur = fe.mode == mode
-        w = tiny.width(label) + 10
+        w = tiny.width(label) + 8
+        x -= w
         if cur:
-            W.block(ui, (x, y + 18, w, 12), T.PINK if on else T.PURPLE, None)
+            W.block(ui, (x, y + 3, w, 10), T.PINK if on else T.PURPLE, None)
         else:
-            pygame.draw.rect(ui, T.LINE, (x, y + 18, w, 12), 1)
-        tiny.text(ui, label, T.SPACE if cur else T.COMMENT, x + 5, y + 21)
-        x += w + 6
-    if on:
-        tiny.text(ui, "< >", T.PINK, px + pw - 16, y + 7, right=True)
-    draw_harvest(fe, ui, px + 8, y + 40, pw - 16)
+            pygame.draw.rect(ui, T.LINE, (x, y + 3, w, 10), 1)
+        tiny.text(ui, label, T.SPACE if cur else T.COMMENT, x + 4, y + 6)
+        x -= 4
+    # Os clones: ligados ou nao.
+    y += 17
+    on = sel == 6
+    option_row(ui, (px + 8, y, pw - 16, 16), "", on, now)
+    W.text(ui, "SHOW CLONES", T.FG if on else T.COMMENT, px + 16, y + 4)
+    state = "ON" if fe.show_clones else "OFF"
+    w = tiny.width(state) + 8
+    W.block(ui, (right - w, y + 3, w, 10), (T.PINK if on else T.PURPLE) if fe.show_clones else T.BG_DEEP, None)
+    if not fe.show_clones:
+        pygame.draw.rect(ui, T.LINE, (right - w, y + 3, w, 10), 1)
+    tiny.text(ui, state, T.SPACE if fe.show_clones else T.COMMENT, right - w + 4, y + 6)
+    # Os escondidos: quantos, e a lista deles.
+    y += 17
+    on = sel == 7
+    option_row(ui, (px + 8, y, pw - 16, 16), "", on, now)
+    W.text(ui, "HIDDEN GAMES", T.FG if on else T.COMMENT, px + 16, y + 4)
+    count = len(fe.lib.hidden())
+    tiny.text(ui, "%d  >" % count, T.PINK if on else T.COMMENT, right, y + 6, right=True)
+    draw_harvest(fe, ui, px + 8, y + 20, pw - 16)
+
+
+def draw_hidden(fe, ui, now):
+    """Tab > Hidden games: os jogos escondidos, com a pasta de cada um; o
+    botao 1 traz o escolhido de volta."""
+    pw, ph = min(236, WW - 4), 224
+    px, py = (WW - pw) // 2, max(8, (HH - ph) // 2)
+    card(ui, (px, py, pw, ph))
+    ui.blit(W.big("HIDDEN GAMES", 1, W.LABEL), (px + 10, py + 8))
+    rows, sel = fe.ov["rows"], fe.ov["sel"]
+    if not rows:
+        tiny.centered(ui, "NO HIDDEN GAMES", T.COMMENT, px + pw // 2, py + ph // 2)
+        return
+    shown = (ph - 34) // 15
+    top = max(0, min(sel - shown // 2, len(rows) - shown))
+    for i in range(top, min(len(rows), top + shown)):
+        key, name, folder, title = rows[i]
+        y = py + 26 + (i - top) * 15
+        on = i == sel
+        tile_frame(ui, (px + 8, y, pw - 16, 14), on, now)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 14), 2 if on else 1)
+        eye(ui, px + 19, y + 7, T.PURPLE if on else T.LINE, crossed=True)
+        label = tiny.fit(folder.upper(), 70)
+        tiny.text(ui, label, T.CYAN if on else T.LINE, px + pw - 14, y + 5, right=True)
+        room = pw - 16 - 28 - tiny.width(label) - 10
+        if on:
+            ticker(ui, text_img(title.upper(), T.FG), px + 30, y + 3, room, now)
+        else:
+            W.text(ui, fit(title, room), T.COMMENT, px + 30, y + 3)
+    if len(rows) > shown:
+        W.scrollbar(ui, px + pw - 6, py + 26, shown * 15 - 1, top, shown, len(rows))
 
 
 def draw_harvest(fe, ui, x, y, w):
@@ -1703,6 +1765,8 @@ def draw(fe, now):
             draw_filter(fe, top, t)
         elif o == "options":
             draw_options(fe, top, t)
+        elif o == "hidden":
+            draw_hidden(fe, top, t)
         elif o == "classify":
             draw_classify(fe, top, t)
         elif o == "rename":
