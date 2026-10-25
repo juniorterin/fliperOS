@@ -777,15 +777,17 @@ def draw_full(fe, ui, back, now):
     arrow(ui, tx + tw // 2, ty + n * step + 3, (0, 1), T.PINK if more else T.LINE, 5)
     # O jogo escolhido, embaixo a esquerda (fora da coluna).
     right = tx - 8
-    logo = image(fe, media(fe, game, "logo"), min(200, right - SX), 44)
+    clone = is_clone(fe, game)
+    logo = None if clone else image(fe, media(fe, game, "logo"), min(200, right - SX), 44)
     if logo:
         ui.blit(logo, (SX, HH - 62 - logo.get_height()))
     y = HH - 56
-    title = fe.fd.short_title(game)
-    if fe.rows and fe.rows[fe.cursor][1]:
-        # O clone: o que muda em relacao ao pai (a regiao, o set, bootleg).
-        title += " (%s)" % fe.fd.variant(game, fe.rows[fe.cursor][2])
-    ui.blit(W.big(fit(title, right - SX), 1, W.LABEL), (SX, y))
+    if clone:
+        # O clone: o logo seria o do pai; o nome completo dele, correndo.
+        ticker(ui, text_img((game.get("Title") or game["Name"]).upper(), T.YELLOW, big=True),
+               SX, y, right - SX, now)
+    else:
+        ui.blit(W.big(fit(fe.fd.short_title(game), right - SX), 1, W.LABEL), (SX, y))
     W.text(ui, fit(facts_line(game), right - SX), T.CYAN, SX, y + 12)
     icon_line(fe, ui, game, SX, y + 24, right, 12)
 
@@ -924,17 +926,17 @@ def draw_flow(fe, ui, now):
             bottom_tab(ui, nxt, side, x0, gw, y0 + rows_shown * step_y - 4)
     g = fe.game()
     y = HH - 46
-    logo = image(fe, media(fe, g, "logo"), 110, 30)
+    clone = is_clone(fe, g)
+    logo = None if clone else image(fe, media(fe, g, "logo"), 110, 30)
     tx = SX
     if logo:
         blit_center(ui, logo, SX, y, 110, 30)
         tx = SX + 118
+    elif clone:
+        # O clone: o nome completo, correndo (o logo seria o do pai).
+        ticker(ui, text_img((g.get("Title") or g["Name"]).upper(), T.YELLOW), SX, y + 2, 150, now)
     else:
-        title = fe.fd.short_title(g)
-        if fe.rows and fe.rows[fe.cursor][1]:
-            title += " (%s)" % fe.fd.variant(g, fe.rows[fe.cursor][2])
-        W.text(ui, fit(title, 150), T.YELLOW, SX, y + 2)
-        tx = SX
+        W.text(ui, fit(fe.fd.short_title(g), 150), T.YELLOW, SX, y + 2)
     if logo:
         W.text(ui, fit(facts_line(g), SX + SW - tx), T.CYAN, tx, y + 2)
         icon_line(fe, ui, g, tx, y + 14, SX + SW, 12)
@@ -1132,6 +1134,35 @@ def marquee(ui, s, color, x, y, w, now):
     ui.set_clip(pygame.Rect(x, y - 2, w, 12).clip(old))
     W.text(ui, s, color, x - round(offset), y)
     ui.set_clip(old)
+
+
+def text_img(s, color, big=False):
+    """O texto numa surface (para o ticker): a letra normal ou a grande."""
+    if big:
+        return W.big(s, 1, W.LABEL)
+    surf = pygame.Surface((W.width(s) + 1, 10), pygame.SRCALPHA)
+    W.text(surf, s, color, 0, 0)
+    return surf
+
+
+def ticker(ui, img, x, y, w, now):
+    """Um texto que nao cabe em w corre em circulo: sai pela esquerda e
+    volta pela direita, depois de um espaco."""
+    if img.get_width() <= w:
+        ui.blit(img, (x, y))
+        return
+    period = img.get_width() + 40
+    off = int(now * MARQUEE_SPEED) % period
+    old = ui.get_clip()
+    ui.set_clip(pygame.Rect(x, y - 2, w, img.get_height() + 4).clip(old))
+    ui.blit(img, (x - off, y))
+    ui.blit(img, (x - off + period, y))
+    ui.set_clip(old)
+
+
+def is_clone(fe, game):
+    """O jogo e um clone (na lista com o pai, ou pelos dados do MAME)."""
+    return bool(game.get("CloneOf") or (fe.rows and fe.rows[fe.cursor][1]))
 
 
 def more_rows(ui, rows, x, y, right, lw, now, small=False):
