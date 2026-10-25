@@ -5262,8 +5262,8 @@ class RomCleanerTests(Base):
         self.env.out("scraper_attract_display Atomiswave; scraper_attract_display Naomi", env)
         self.assertEqual(path.read_text(encoding="utf-8"), displays)
 
-    def test_psx_folder_opens_in_duckstation(self):
-        self.assertEqual(self.env.out("scraper_platform psx; scraper_attract_emulator psx").splitlines(),
+    def test_duckstation_folder_opens_in_duckstation(self):
+        self.assertEqual(self.env.out("scraper_platform duckstation; scraper_attract_emulator duckstation").splitlines(),
                          ["psx", "DuckStation|/opt/fliperos/bin/fliperos-x11-run|duckstation \"[romfilename]\"|"
                                  ".cue;.chd;.pbp;.m3u;.iso;.img;.ecm;.mds;.exe;.psexe"])
 

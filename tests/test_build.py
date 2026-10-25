@@ -1057,7 +1057,7 @@ class RomFoldersTests(unittest.TestCase):
             self.assertEqual((old / 'roms/srallyc.zip').read_text(), 'rom')
         self.assertIn('cfglink model2 "$HOME/.config/sm2-emu"', (ROOT / 'config/fliperos-roms').read_text())
 
-    def test_psx_folder_only_with_duckstation(self):
+    def test_duckstation_folder_only_with_duckstation(self):
         # Sem o DuckStation (baixado no Setup), nenhuma segunda pasta de PS1 ao
         # lado da do core do RetroArch.
         with tempfile.TemporaryDirectory() as tmp:
@@ -1065,12 +1065,39 @@ class RomFoldersTests(unittest.TestCase):
             env = dict(os.environ, HOME=str(tmp), FLIPEROS_CORE_INFO=str(tmp / 'nada'),
                        FIGHTCADE_DIR=str(tmp / 'nenhum'), FLIPEROS_DUCKSTATION_BIN=str(tmp / 'duckstation'))
             subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
-            self.assertFalse((tmp / 'roms/psx').exists())
+            self.assertFalse((tmp / 'roms/duckstation').exists())
             (tmp / 'duckstation').write_text('#!/bin/sh\n')
             (tmp / 'duckstation').chmod(0o755)
             subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
-            self.assertIn('DuckStation (PlayStation)', (tmp / 'roms/psx/_info.txt').read_text())
-            self.assertTrue((tmp / 'media/snap/psx').is_dir())
+            self.assertIn('DuckStation (PlayStation)', (tmp / 'roms/duckstation/_info.txt').read_text())
+            self.assertTrue((tmp / 'media/snap/duckstation').is_dir())
+            self.assertFalse((tmp / 'roms/psx').exists())
+
+    def test_old_psx_folder_becomes_duckstation(self):
+        # A pasta do DuckStation era ~/roms/psx: os jogos e a arte vao para a
+        # nova; uma psx que nao era dele fica.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'duckstation').write_text('#!/bin/sh\n')
+            (tmp / 'duckstation').chmod(0o755)
+            env = dict(os.environ, HOME=str(tmp), FLIPEROS_CORE_INFO=str(tmp / 'nada'),
+                       FIGHTCADE_DIR=str(tmp / 'nenhum'), FLIPEROS_DUCKSTATION_BIN=str(tmp / 'duckstation'))
+            (tmp / 'roms/psx').mkdir(parents=True)
+            (tmp / 'roms/psx/_info.txt').write_text('DuckStation (PlayStation): old text\n')
+            (tmp / 'roms/psx/game.cue').write_text('cue')
+            (tmp / 'media/snap/psx').mkdir(parents=True)
+            (tmp / 'media/snap/psx/game.png').write_text('png')
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertFalse((tmp / 'roms/psx').exists())
+            self.assertFalse((tmp / 'media/snap/psx').exists())
+            self.assertEqual((tmp / 'roms/duckstation/game.cue').read_text(), 'cue')
+            self.assertEqual((tmp / 'media/snap/duckstation/game.png').read_text(), 'png')
+            self.assertNotIn('old text', (tmp / 'roms/duckstation/_info.txt').read_text())
+            # Uma psx da pessoa (sem o _info.txt do DuckStation) fica onde esta.
+            (tmp / 'roms/psx').mkdir()
+            (tmp / 'roms/psx/mine.bin').write_text('x')
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertTrue((tmp / 'roms/psx/mine.bin').exists())
 
     def test_fightcade_reads_its_roms_from_the_roms_folder(self):
         # O Fightcade procura as ROMs dentro da pasta de cada emulador dele:
@@ -8135,7 +8162,7 @@ class EmulatorModeTests(unittest.TestCase):
             for section, line in (('Main', 'SetupWizardIncomplete = false'), ('Main', 'StartFullscreen = true'),
                                   ('Main', 'ConfirmPowerOff = false'), ('BIOS', 'SearchDirectory = %s/bios' % home),
                                   ('Display', 'AspectRatio = Stretch To Fill'), ('Display', 'Scaling = Nearest'),
-                                  ('GameList', 'RecursivePaths = %s/roms/psx' % home),
+                                  ('GameList', 'RecursivePaths = %s/roms/duckstation' % home),
                                   ('GameList', 'Paths = %s/roms/retroarch/pcsx_rearmed' % home),
                                   ('Hotkeys', 'OpenPauseMenu = Keyboard/Escape'),
                                   ('Hotkeys', 'OpenPauseMenu = SDL-0/Back & SDL-0/Start'),

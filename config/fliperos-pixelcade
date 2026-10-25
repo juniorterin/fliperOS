@@ -591,6 +591,7 @@ system_of() {
   case $folder in
     mame | naomi | naomi2 | atomiswave | model2 | model3 | fightcade) echo mame ;;
     dolphin) echo nintendo_gamecube ;;
+    duckstation) echo psx ;;
     retroarch)
       core=${rel#retroarch/}
       core=${core%%/*}

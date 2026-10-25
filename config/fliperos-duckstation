@@ -13,7 +13,7 @@
 # O comando e /usr/local/bin/duckstation (o TryExec do atalho do desktop); o
 # fliperos-x11-run o abre no modo da tabela emulator-modes.conf, em tela
 # cheia, e grava a configuracao de partida (BIOS em ~/bios, jogos em
-# ~/roms/psx, os controles pelo SDL).
+# ~/roms/duckstation, os controles pelo SDL).
 # shellcheck disable=SC2015 # "a && b || fail": falhar em qualquer passo e o que se quer
 set -uo pipefail
 dir=${DUCKSTATION_DIR:-/opt/duckstation}
@@ -87,7 +87,7 @@ PY
   local png
   png=$(find "$dir" -maxdepth 1 -name '*.png' -print -quit)
   [[ -z $png ]] || install -Dm644 "$(readlink -f "$png")" "$icon" 2> /dev/null || true
-  say 95 "ROM folder in ~/roms/psx"
+  say 95 "ROM folder in ~/roms/duckstation"
   if [[ -x $folders ]]; then
     if ((EUID == 0)) && [[ $user != root ]]; then
       runuser -u "$user" -- env HOME="$(getent passwd "$user" | cut -d: -f6)" "$folders"

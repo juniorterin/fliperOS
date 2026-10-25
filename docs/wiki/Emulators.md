@@ -242,7 +242,7 @@ Choosing one that is not installed installs it (`config/fliperos-emulators`):
 - **Fightcade 2**: downloaded from its site, with Wine ([Fightcade 2](Fightcade-2.md)).
 - **DuckStation** (PlayStation): its license (CC BY-NC-ND 4.0) doesn't allow it in the image, so the official AppImage is downloaded from its GitHub (the `latest` release) and unpacked in `/opt/duckstation` (`config/fliperos-duckstation`). Chosen again when installed, it updates.
 
-  Its games go in `~/roms/psx` (created once it is installed), and it also lists the ones in `~/roms/retroarch/pcsx_rearmed`; the BIOS is the one in `~/bios`, the same as RetroArch's.
+  Its games go in `~/roms/duckstation` (created once it is installed; a `~/roms/psx` from before is moved there), and it also lists the ones in `~/roms/retroarch/pcsx_rearmed`; the BIOS is the one in `~/bios`, the same as RetroArch's.
 
   Each launch (`fliperos-x11-run`) sets full screen, `AspectRatio = Stretch To Fill` and the BIOS folder; the first one also skips its setup wizard and puts both panels on SDL (Cross/Circle/Square/Triangle on A/B/X/Y, as in PCSX2).
 

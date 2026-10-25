@@ -249,9 +249,11 @@ INI
         grep -q '^Renderer = OpenGL' "$ini" && "$iniset" "$ini" GPU Renderer Automatic
         rm -f "${ini%/*}/.fliperos-opengl"
       fi
-      # Os jogos de ~/roms/psx (com as subpastas) e os da pasta do core PS1
-      # do RetroArch, se a pessoa ainda nao escolheu pastas.
-      grep -q '^RecursivePaths' "$ini" || "$iniset" "$ini" GameList RecursivePaths "$HOME/roms/psx"
+      # Os jogos de ~/roms/duckstation (com as subpastas) e os da pasta do
+      # core PS1 do RetroArch, se a pessoa ainda nao escolheu pastas. A
+      # ~/roms/psx de antes (config/fliperos-roms) vira a nova.
+      sed -i "s|^RecursivePaths = $HOME/roms/psx\$|RecursivePaths = $HOME/roms/duckstation|" "$ini" 2> /dev/null || true
+      grep -q '^RecursivePaths' "$ini" || "$iniset" "$ini" GameList RecursivePaths "$HOME/roms/duckstation"
       grep -q '^Paths' "$ini" || "$iniset" "$ini" GameList Paths "$HOME/roms/retroarch/pcsx_rearmed"
       # Os controles pelo SDL, Pad1 e Pad2 nos dois primeiros, como no PCSX2:
       # o painel ja chega como fight stick (Setup > Joysticks > Button

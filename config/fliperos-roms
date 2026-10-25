@@ -52,9 +52,25 @@ folder "$roms/mame" "GroovyMAME: ROM sets (.zip/.7z, without unzipping) and CHD 
 folder "$roms/ps2" "PCSX2 (PlayStation 2): .iso .chd .cso .bin/.cue. The BIOS goes in ~/bios/ps2."
 # O DuckStation nao vem na imagem (Setup > Games > Emulators & Games): a pasta
 # so com ele instalado, senao seria uma segunda pasta de PS1 ao lado da do
-# core do RetroArch.
+# core do RetroArch. Com o nome do emulador, como a do Dolphin; antes era
+# ~/roms/psx: o que tem nela (e nas pastas da arte em ~/media) vai para a
+# nova sem sobrescrever, e a velha sai se ficar vazia.
+moveto() {
+  [[ -d $1 && ! -L $1 ]] || return 0
+  mkdir -p "$2" 2> /dev/null || return 0
+  find "$1" -mindepth 1 -maxdepth 1 -exec mv -n -t "$2" {} + 2> /dev/null
+  rmdir "$1" 2> /dev/null
+  return 0
+}
+if [[ -d $roms/psx && ! -L $roms/psx ]] && grep -qs DuckStation "$roms/psx/_info.txt"; then
+  rm -f "$roms/psx/_info.txt"
+  moveto "$roms/psx" "$roms/duckstation"
+  for dir in "$media"/*/psx; do
+    moveto "$dir" "${dir%/psx}/duckstation"
+  done
+fi
 [[ ! -x ${FLIPEROS_DUCKSTATION_BIN:-/usr/local/bin/duckstation} ]] ||
-  folder "$roms/psx" "DuckStation (PlayStation): .cue/.bin .chd .pbp .m3u .iso. It also lists the games in ~/roms/retroarch/pcsx_rearmed. The BIOS (scph5501.bin...) goes in ~/bios."
+  folder "$roms/duckstation" "DuckStation (PlayStation): .cue/.bin .chd .pbp .m3u .iso. It also lists the games in ~/roms/retroarch/pcsx_rearmed. The BIOS (scph5501.bin...) goes in ~/bios."
 folder "$roms/dreamcast" "Flycast: Dreamcast (.gdi .cdi .chd). BIOS in ~/bios/dc."
 folder "$roms/naomi" "Flycast: Sega Naomi (MAME .zip sets; a GD-ROM game also needs its CHD folder). BIOS (naomi.zip) in ~/bios/dc."
 folder "$roms/naomi2" "Flycast: Sega Naomi 2 (MAME .zip sets). BIOS (naomi2.zip) in ~/bios/dc."
