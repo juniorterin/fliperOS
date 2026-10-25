@@ -11202,13 +11202,30 @@ class ButtonMappingTests(unittest.TestCase):
         # Os botoes do painel no layout dos cores de arcade: 1 2 3 = Y X L,
         # 4 5 6 = B A R, ficha = Select. O outro tipo de bind fica vazio.
         lines = self.rc.retroarch_lines
-        self.assertEqual(lines(1, 'b1', 'b2'), ['input_player1_y_btn = "2"', 'input_player1_y_axis = "nul"'])
-        self.assertEqual(lines(2, 'b4', 'b0'), ['input_player2_b_btn = "0"', 'input_player2_b_axis = "nul"'])
+        self.assertEqual(lines(1, 'b1', 'b2'), ['input_player1_y_btn = "2"', 'input_player1_y_axis = "+99"'])
+        self.assertEqual(lines(2, 'b4', 'b0'), ['input_player2_b_btn = "0"', 'input_player2_b_axis = "+99"'])
         self.assertEqual(lines(1, 'coin', 'b9'), ['input_player1_select_btn = "9"',
-                                                  'input_player1_select_axis = "nul"'])
-        self.assertEqual(lines(1, 'up', '-a1'), ['input_player1_up_axis = "-1"', 'input_player1_up_btn = "nul"'])
+                                                  'input_player1_select_axis = "+99"'])
+        self.assertEqual(lines(1, 'up', '-a1'), ['input_player1_up_axis = "-1"', 'input_player1_up_btn = "99"'])
         self.assertEqual(lines(1, 'left', 'h0.8'), ['input_player1_left_btn = "h0left"',
-                                                    'input_player1_left_axis = "nul"'])
+                                                    'input_player1_left_axis = "+99"'])
+
+    def test_retroarch_profile_does_not_add_a_second_button(self):
+        # Painel que se diz Xbox 360 (o do gabinete em 2026-10-25): botao 2 no
+        # B e os 5 e 6 nos gatilhos. Com "nul" no lado sem uso, o RetroArch
+        # usava o do perfil automatico (o B e o A do RetroPad): o botao 2
+        # apertava junto o 5 no MAME 2010. E os gatilhos tambem eram L2/R2.
+        panel = {'b1': (0, 'b0'), 'b2': (0, 'b1'), 'b3': (0, 'b2'), 'b4': (0, 'b3'),
+                 'b5': (0, '+a5'), 'b6': (0, '+a2')}
+        cfg = self.rc.retroarch_cfg({1: panel}, {0: 'Xbox 360 Controller'}).split('\n')
+        self.assertNotIn('"nul"', '\n'.join(l for l in cfg if '_btn' in l or '_axis' in l))
+        for line in ('input_player1_a_axis = "+5"', 'input_player1_a_btn = "99"', 'input_player1_x_btn = "1"',
+                     'input_player1_l2_axis = "+99"', 'input_player1_r2_axis = "+99"',
+                     'input_player1_l2_btn = "99"', 'input_player1_r2_btn = "99"'):
+            self.assertIn(line, cfg)
+        # So botoes (sem gatilho): L2 e R2 ficam com o perfil.
+        buttons = {c: (0, 'b%d' % n) for n, c in enumerate(('b1', 'b2', 'b3', 'b4', 'b5', 'b6'))}
+        self.assertNotIn('l2', self.rc.retroarch_cfg({1: buttons}, {0: 'Pad'}))
 
     def test_save_both(self):
         # Painel V-USB do gabinete: dois aparelhos iguais, um por jogador.
@@ -11297,7 +11314,7 @@ class ButtonMappingTests(unittest.TestCase):
                          'input_player1_start = "num1"', 'input_player1_select = "num5"',
                          'input_player2_down = "f"', 'input_player2_a = "e"', 'input_player3_l = "enter"',
                          'input_player4_up = "keypad8"', 'input_player4_x = "kp_period"',
-                         'input_player1_y_btn = "nul"',
+                         'input_player1_y_btn = "99"',
                          # Os atalhos padrao do RetroArch nessas teclas, desligados.
                          'input_toggle_fast_forward = "nul"', 'input_toggle_fullscreen = "nul"',
                          'input_frame_advance = "nul"', 'input_hold_fast_forward = "nul"'):
@@ -11627,7 +11644,7 @@ class ButtonMappingTests(unittest.TestCase):
                      'input_player1_b_btn = "4"', 'input_player1_a_btn = "2"', 'input_player1_r_btn = "5"'):
             self.assertIn(line, cfg)
         short = {c: b for c, b in self.PANEL.items() if c != 'b4'}
-        self.assertIn('input_player1_x_btn = "nul"', rc.retroarch_layout_cfg({1: short}, 4, [1, 4, 2, 5, 3, 6]))
+        self.assertIn('input_player1_x_btn = "99"', rc.retroarch_layout_cfg({1: short}, 4, [1, 4, 2, 5, 3, 6]))
 
     def test_supermodel_layout_goes_to_the_section_of_the_game(self):
         # O Supermodel soma a secao [ jogo ] a [ Global ]: os botoes do tipo

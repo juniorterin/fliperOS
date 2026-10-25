@@ -202,17 +202,36 @@ def mame_code(index, element):
     return joy + '%s_%s_SWITCH' % (name, side)
 
 
+# O lado que o bind nao usa (o botao de um bind por eixo, o eixo de um bind
+# por botao). "nul" nao serve: para o RetroArch e "sem bind do usuario", e
+# ele usa o do perfil automatico do controle. No Xbox 360 o B (botao 2 de um
+# painel assim) e o A do RetroPad, e o botao 2 apertava junto o 5 no MAME
+# 2010. Um indice que nao existe nunca e apertado.
+RA_NONE_BTN, RA_NONE_AXIS = '99', '+99'
+
+
 def retroarch_lines(player, control, element):
     """Os binds do RetroArch (driver udev) de um controle de um jogador."""
     key = 'input_player%d_%s' % (player, RA_KEYS[control])
     if is_key(element):
-        return ['%s = "%s"' % (key, KEYS[element[2:]][0]), '%s_btn = "nul"' % key, '%s_axis = "nul"' % key]
+        return ['%s = "%s"' % (key, KEYS[element[2:]][0]), '%s_btn = "%s"' % (key, RA_NONE_BTN),
+                '%s_axis = "%s"' % (key, RA_NONE_AXIS)]
     if element.startswith('b'):
-        return ['%s_btn = "%s"' % (key, element[1:]), '%s_axis = "nul"' % key]
+        return ['%s_btn = "%s"' % (key, element[1:]), '%s_axis = "%s"' % (key, RA_NONE_AXIS)]
     if element.startswith('h'):
         hat, direction = element[1:].split('.')
-        return ['%s_btn = "h%s%s"' % (key, hat, RA_HAT[direction]), '%s_axis = "nul"' % key]
-    return ['%s_axis = "%s%s"' % (key, element[0], element[2:]), '%s_btn = "nul"' % key]
+        return ['%s_btn = "h%s%s"' % (key, hat, RA_HAT[direction]), '%s_axis = "%s"' % (key, RA_NONE_AXIS)]
+    return ['%s_axis = "%s%s"' % (key, element[0], element[2:]), '%s_btn = "%s"' % (key, RA_NONE_BTN)]
+
+
+def retroarch_triggers(player, binds):
+    """Os botoes nos gatilhos (um eixo que so vai para um lado, como o LT e o
+    RT do Xbox 360): o perfil automatico os poe tambem no L2 e no R2, e cada
+    um apertaria dois botoes do RetroPad. L2 e R2 ficam sem nada."""
+    if not any(e[0] in '+-' and control.startswith('b') for control, (_, e) in binds.items()):
+        return []
+    return ['input_player%d_%s_%s = "%s"' % (player, pad, kind, RA_NONE_BTN if kind == 'btn' else RA_NONE_AXIS)
+            for pad in ('l2', 'r2') for kind in ('btn', 'axis')]
 
 
 def read_map(path):
@@ -273,6 +292,7 @@ def retroarch_cfg(players, names):
         for control in CONTROLS:
             if control in binds:
                 lines += retroarch_lines(player, control, binds[control][1])
+        lines += retroarch_triggers(player, binds)
     # As teclas de atalho do RetroArch que caem nas teclas do mapa.
     used = {KEYS[e[2:]][0] for binds in players.values() for _, e in binds.values() if is_key(e)}
     hotkeys = sorted(RA_HOTKEYS[k] for k in used if k in RA_HOTKEYS)
@@ -400,7 +420,7 @@ def retroarch_layout_cfg(players, count, order):
                 lines += retroarch_lines(player, 'b%d' % n, binds['b%d' % position][1])
             else:
                 key = 'input_player%d_%s' % (player, RA_KEYS['b%d' % n])
-                lines += ['%s_btn = "nul"' % key, '%s_axis = "nul"' % key]
+                lines += ['%s_btn = "%s"' % (key, RA_NONE_BTN), '%s_axis = "%s"' % (key, RA_NONE_AXIS)]
     return '\n'.join(lines) + '\n'
 
 
