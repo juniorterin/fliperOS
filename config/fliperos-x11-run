@@ -122,6 +122,16 @@ case $name in
     ;;
   dolphin-emu)
     set -- "$1" -C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3 "${@:2}"
+    # O -C do AspectRatio sozinho nao estica (visto no gabinete com o 2609:
+    # 4:3 no meio do 640x240, com o GFX.ini vazio); no GFX.ini, sim. O VSync
+    # tambem: sem ele o jogo rasgava a imagem no tubo.
+    iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
+    gfx="$HOME/.config/dolphin-emu/GFX.ini"
+    mkdir -p "${gfx%/*}" 2> /dev/null || true
+    "$iniset" "$gfx" Settings AspectRatio 3 2> /dev/null || true
+    "$iniset" "$gfx" Hardware VSync True 2> /dev/null || true
+    # Sem os avisos do emulador na tela ao abrir o jogo.
+    "$iniset" "${gfx%/*}/Dolphin.ini" Interface OnScreenDisplayMessages False 2> /dev/null || true
     # Com o filtro de flicker do 480i ligado, o OpenGL: a camada
     # (config/fliperos-deflicker.c) nao alcanca o Vulkan.
     deflicker_on && set -- "$1" -C Dolphin.Core.GFXBackend=OGL "${@:2}"
@@ -143,6 +153,8 @@ case $name in
       "$iniset" "$ini" UI StartFullscreen true
       "$iniset" "$ini" UI StartBigPictureMode true
       "$iniset" "$ini" UI HideMouseCursor true
+      # Sem os avisos na tela ao abrir o jogo (0 = None no OsdOverlayPos).
+      "$iniset" "$ini" EmuCore/GS OsdMessagesPos 0
       "$iniset" "$ini" Folders Bios "$HOME/bios/ps2"
       # Lista de jogos em ~/roms/ps2, se a pessoa ainda nao escolheu pastas.
       grep -q '^RecursivePaths' "$ini" ||
@@ -397,12 +409,14 @@ vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}
 [[ $vt =~ ^[0-9]+$ ]] || vt=1
 # Cursor so para quem tem interface de mouse: Dolphin, Flycast, o Fightcade
-# (a sala de jogos) e o navegador do Downloader (fliperos-browser). Eles
-# mesmos o escondem durante o jogo em tela cheia. O PCSX2 abre no Big Picture, que se usa pelo controle;
-# os demais abrem direto no jogo.
+# (a sala de jogos) e o navegador do Downloader (fliperos-browser). O Flycast
+# o esconde durante o jogo em tela cheia; o Dolphin aberto direto num jogo
+# (-e, pelo frontend) deixava a seta no meio da tela, entao vai sem. O PCSX2
+# abre no Big Picture, que se usa pelo controle; os demais abrem direto no jogo.
 cursor=(-nocursor)
 case $name in
-  dolphin-emu | flycast | fightcade | fliperos-browser) cursor=() ;;
+  flycast | fightcade | fliperos-browser) cursor=() ;;
+  dolphin-emu) [[ " $* " == *" -e "* || " $* " == *" --exec"* ]] || cursor=() ;;
 esac
 export FLIPEROS_X11_CURSOR=$((${#cursor[@]} == 0))
 # A saida do X, do Switchres e do emulador vai para

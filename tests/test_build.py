@@ -7971,6 +7971,18 @@ class EmulatorModeTests(unittest.TestCase):
         # a imagem para a largura toda (o "200%").
         self.assertIn('rend.ScreenStretching=200', self.run_x11(['flycast']).stdout)
         self.assertIn('GFX.Settings.AspectRatio=3', self.run_x11(['dolphin-emu']).stdout)
+        # O -C sozinho nao esticava no gabinete: vai no GFX.ini, com o VSync.
+        with tempfile.TemporaryDirectory() as home:
+            self.run_x11(['dolphin-emu', '-e', 'game.iso'], home=Path(home),
+                         extra={'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set')})
+            gfx = (Path(home) / '.config/dolphin-emu/GFX.ini').read_text()
+            self.assertRegex(gfx, r'\[Settings\]\nAspectRatio = 3\n')
+            self.assertRegex(gfx, r'\[Hardware\]\nVSync = True\n')
+            main = (Path(home) / '.config/dolphin-emu/Dolphin.ini').read_text()
+            self.assertRegex(main, r'\[Interface\]\nOnScreenDisplayMessages = False\n')
+        # Nem os avisos do PCSX2 na tela.
+        _, ini = DeflickerTests().run_x11(['pcsx2'], '')
+        self.assertRegex(ini, r'\[EmuCore/GS\][^\[]*OsdMessagesPos = 0\n')
         self.assertIn('-stretch', self.run_x11(['supermodel']).stdout)
         # Hypseus: jogo e player primeiro, opcoes no fim.
         out = self.run_x11(['hypseus', 'lair', 'vldp', '-framefile', 'f.txt']).stdout
@@ -8023,6 +8035,8 @@ class EmulatorModeTests(unittest.TestCase):
     def test_mouse_cursor_only_for_emulators_with_a_mouse_interface(self):
         for prog in ('dolphin-emu', 'flycast'):
             self.assertNotIn('-nocursor', self.run_x11([prog]).stdout, prog)
+        # O Dolphin aberto direto num jogo deixava a seta no meio da tela.
+        self.assertIn('-nocursor', self.run_x11(['dolphin-emu', '-e', 'game.iso']).stdout)
         self.assertIn('-nocursor', self.run_x11(['myprog']).stdout)
         # O PCSX2 abre no Big Picture, que se usa pelo controle.
         self.assertIn('-nocursor', self.run_x11(['pcsx2']).stdout)
