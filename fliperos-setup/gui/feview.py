@@ -551,7 +551,11 @@ def draw_list(fe, ui, now):
             color = T.FG
         if game.get("Favourite") == "1" and level == 0:
             star(ui, lx + lw - 6, y + 6, T.YELLOW, 4)
-        W.text(ui, fit(label, lx + lw - x - 12), color, x, y + 2)
+        if on:
+            # O escolhido inteiro: o que nao cabe corre em circulo.
+            ticker(ui, text_img(label.upper(), color), x, y + 2, lx + lw - x - 12, now)
+        else:
+            W.text(ui, fit(label, lx + lw - x - 12), color, x, y + 2)
     if len(fe.rows) > rows:
         W.scrollbar(ui, lx + lw + 4, y0, rows * 14 - 2, fe.top, rows, len(fe.rows))
     W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.LINE, lx + lw, y0 + rows * 14 + 1, right=True)
