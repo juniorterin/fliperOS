@@ -1210,6 +1210,63 @@ class NetworkTests(Base):
         self.assertEqual(self.env.out("net_hardware").splitlines(),
                          ["No network adapter besides Ethernet was found."])
 
+    def test_online_from_the_networkmanager_state(self):
+        state = self.env.dir / "nmstate"
+        self.env.stub("nmcli", 'case "$*" in "-t -f STATE general") cat %s ;; esac' % state)
+        for value, online in (("connected", 0), ("connected (site only)", 0),
+                              ("connected (local only)", 1), ("disconnected", 1), ("connecting", 1)):
+            state.write_text(value + "\n")
+            self.assertEqual(self.env.run("net_online").returncode, online, value)
+        # Sem o NetworkManager: a rota padrao.
+        state.write_text("")
+        self.env.stub("ip", "echo 'default via 192.168.1.1 dev eth0'")
+        self.assertEqual(self.env.run("net_online").returncode, 0)
+        self.env.stub("ip", ":")
+        self.assertEqual(self.env.run("net_online").returncode, 1)
+
+    def need_internet(self, wifi, answer):
+        state = self.env.dir / "nmstate"
+        state.write_text("disconnected\n")
+        self.env.stub("nmcli", 'case "$*" in "-t -f STATE general") cat %s ;; '
+                               '"-t -f DEVICE,TYPE device status") echo eth0:ethernet; %s ;; esac'
+                      % (state, "echo wlan0:wifi" if wifi else ":"))
+        return self.env.run("""
+            source %s/lib/ui.sh
+            source %s/screens/progress.sh
+            source %s/screens/setup-menu.sh
+            ui_msg() { echo "msg:$*"; }
+            ui_yesno() { echo "yesno:$2"; return %d; }
+            screen_wifi() { echo "wifi:$*"; echo connected > %s; }
+            run_with_progress() { echo "run:$*"; }
+            run_online "Installing X" "" emulators_install x
+        """ % (SETUP, SETUP, SETUP, 0 if answer else 1, state))
+
+    def test_offline_with_wifi_offers_it_and_goes_on_once_connected(self):
+        r = self.need_internet(wifi=True, answer=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("yesno:This needs the internet", r.stdout)
+        self.assertIn("wifi:0 quiet", r.stdout)
+        self.assertIn("run:Installing X  emulators_install x", r.stdout)
+
+    def test_offline_wifi_refused_or_no_adapter_does_not_run(self):
+        r = self.need_internet(wifi=True, answer=False)
+        self.assertEqual(r.returncode, 1)
+        self.assertNotIn("run:", r.stdout)
+        self.assertNotIn("wifi:", r.stdout)
+        r = self.need_internet(wifi=False, answer=True)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("msg:Installing X", r.stdout)
+        self.assertIn("Plug in a network cable", r.stdout)
+        self.assertNotIn("yesno:", r.stdout)
+
+    def test_menus_that_download_check_the_internet_first(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        for line in ('downloader) screen_need_internet "The Downloader" && screen_downloads ;;',
+                     'scraper) screen_need_internet "The Scraper" && screen_scraper ;;',
+                     'update) screen_need_internet "System Update" && screen_update ;;'):
+            self.assertIn(line, menu)
+        self.assertNotRegex(menu, r'run_with_progress "(Installing|Downloading|Updating)')
+
 
 class AudioTests(Base):
     def test_devices(self):
@@ -1444,7 +1501,7 @@ class LauncherTests(Base):
         # A tela: quem tem fetch aparece como "not installed" e e baixado.
         screen = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_frontend() {")[1].split("\n}\n")[0]
         self.assertIn('launcher_package_available "$name" || [[ -n $(launcher_fetcher "$name") ]]', screen)
-        self.assertIn('run_with_progress "Downloading $label" "" launcher_fetch "$choice" || return 0', screen)
+        self.assertIn('run_online "Downloading $label" "" launcher_fetch "$choice" || return 0', screen)
         self.assertLess(screen.index("launcher_fetch "), screen.index('launcher_set "$choice"'))
         self.assertIn("roms/fightcade", self.env.out("frontends_hint fightcade"))
         self.assertEqual(self.env.out("frontends_hint pegasus"), "")
@@ -4263,7 +4320,7 @@ class RomCleanerTests(Base):
         self.assertIn('"chdcleaner|MAME CHD Cleaner"', screen)
         self.assertIn("chdcleaner) screen_chd_cleaner ;;", screen)
         self.assertIn('"downloader|Downloader|', menu)
-        self.assertIn("downloader) screen_downloads ;;", menu)
+        self.assertIn('downloader) screen_need_internet "The Downloader" && screen_downloads ;;', menu)
         self.assertNotIn("freeroms|", menu)
         self.assertIn('source "$SETUP_DIR/screens/downloader.sh"', (SETUP / "fliperos-setup").read_text())
 
@@ -5114,6 +5171,7 @@ class ExtrasScreenTests(Base):
             ui_msg() { echo "msg:$*"; }
             ui_yesno() { echo "yesno:$*"; return 1; }
             run_with_progress() { shift 2; "$@" > /dev/null; }
+            net_online() { :; }
             screen_extras
         """ % (SETUP, SETUP, SETUP, SETUP), env)
         self.assertEqual(r.returncode, 0, r.stderr)

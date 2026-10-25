@@ -54,9 +54,9 @@ screen_setup_games() {
       extras) screen_extras ;;
       custom) screen_custom_games ;;
       folders) screen_folders ;;
-      downloader) screen_downloads ;;
+      downloader) screen_need_internet "The Downloader" && screen_downloads ;;
       cleaner) screen_cleaner ;;
-      scraper) screen_scraper ;;
+      scraper) screen_need_internet "The Scraper" && screen_scraper ;;
       romlist) screen_romlist ;;
       return) return 0 ;;
     esac
@@ -85,7 +85,7 @@ screen_setup_system() {
       services) screen_services ;;
       quirks) screen_quirks ;;
       password) screen_password ;;
-      update) screen_update ;;
+      update) screen_need_internet "System Update" && screen_update ;;
       whatsnew) screen_whatsnew ;;
       debug) screen_debug ;;
       splash) screen_splash ;;
@@ -104,7 +104,7 @@ screen_free_roms() {
   names=$(freeroms_list | paste -sd'|' - | sed 's/|/, /g')
   ui_yesno "$title" "$(printf 'Open-source homebrew, from the releases of each project, so the frontends have something to show:\n\n%s\n\nDownload them to ~/roms/retroarch?' "$names")" || return 0
   result=$(mktemp)
-  if run_with_progress "Downloading the free games" "" freeroms_fetch "$result"; then
+  if run_online "Downloading the free games" "" freeroms_fetch "$result"; then
     out=$(cat "$result")
     # As pastas novas com jogos entram no frontend padrao.
     ui_info "$title" "Putting the games in the frontend..."
@@ -194,7 +194,7 @@ screen_audio() {
         if ! audio_leveler_available; then
           ui_yesno "Volume leveler" "The leveler needs the swh-plugins package (a few MB). Install it now? It needs the network." yes ||
             continue
-          run_with_progress "Installing swh-plugins" "" update_install_package swh-plugins || continue
+          run_online "Installing swh-plugins" "" update_install_package swh-plugins || continue
         fi
         if ! audio_leveler_set on; then
           ui_msg "Volume leveler" "$(ui_bad "The compressor was not found after installing swh-plugins.")" "" \
@@ -230,10 +230,38 @@ screen_network() {
   done
 }
 
-# screen_wifi OCULTA segue o worker_configure_wifi do gasetup: placa, rede,
-# senha e a tentativa de conexao.
+# screen_need_internet O_QUE: antes do que precisa da internet (baixar,
+# instalar, o update). Sem conexao e com uma placa Wi-Fi, oferece conectar e,
+# conectado, volta para o que foi pedido; sem placa Wi-Fi, pede o cabo.
+# Status 1: continua sem internet.
+screen_need_internet() {
+  local what=$1 i
+  net_online && return 0
+  # O cabo recem-ligado ou o Wi-Fi salvo ainda subindo: espera um pouco.
+  if net_connecting; then
+    ui_info "$what" "Waiting for the network to connect..."
+    for ((i = 0; i < 15; i++)); do
+      sleep 1
+      net_online && return 0
+    done
+  fi
+  log_info "sem internet para: $what"
+  if [[ -z $(net_wifi_devices) ]]; then
+    ui_msg "$what" "$(ui_bad "This needs the internet, and this computer is not connected.")" "" \
+      "Plug in a network cable and try again (Setup > Network Setup shows the status)."
+    return 1
+  fi
+  ui_yesno "$what" "This needs the internet, and this computer is not connected. Connect to a Wi-Fi network now?" yes ||
+    return 1
+  screen_wifi 0 quiet
+  net_online
+}
+
+# screen_wifi OCULTA [quiet] segue o worker_configure_wifi do gasetup: placa,
+# rede, senha e a tentativa de conexao. quiet: chamada por
+# screen_need_internet, sem o update logo depois.
 screen_wifi() {
-  local hidden=$1 devs=() dev ssid pass nets=() entries=() line sig sec
+  local hidden=$1 quiet=${2:-} devs=() dev ssid pass nets=() entries=() line sig sec
   # O radio desligado (Setup > System > Services, ou ainda nao ligado no
   # "After boot"): sem ele a lista de redes vem vazia.
   if have nmcli && [[ $(nmcli radio wifi 2> /dev/null) == disabled ]]; then
@@ -288,7 +316,7 @@ screen_wifi() {
     # A rede acabou de chegar: o update do FliperOS, que o boot so procura
     # com ela no ar, e oferecido ja (sem nenhum pendente, nenhuma tela). Na
     # midia de instalacao nao: o update e para o disco instalado.
-    if ! is_live; then
+    if ! is_live && [[ -z $quiet ]]; then
       ui_info "FliperOS update" "Checking for FliperOS updates..."
       screen_update_check
     fi
@@ -346,7 +374,7 @@ screen_frontend() {
     # do site do proprio programa.
     ui_yesno "Frontend" "$label is not installed, and it does not come with FliperOS. Download it now from its own website?" yes ||
       return 0
-    run_with_progress "Downloading $label" "" launcher_fetch "$choice" || return 0
+    run_online "Downloading $label" "" launcher_fetch "$choice" || return 0
     if ! launcher_installed "$choice"; then
       ui_msg "Frontend" "$label was downloaded, but it was not found afterwards (details in the log)."
       return 0
@@ -359,7 +387,7 @@ screen_frontend() {
       return 0
     fi
     ui_yesno "Frontend" "$label is not installed. Install the $pkg package now?" yes || return 0
-    run_with_progress "Installing $pkg" "" update_install_package "$pkg" || return 0
+    run_online "Installing $pkg" "" update_install_package "$pkg" || return 0
     if ! launcher_installed "$choice"; then
       ui_msg "Frontend" "$pkg was installed, but $label was not found."
       return 0
@@ -369,7 +397,7 @@ screen_frontend() {
   # O tema padrao do Attract-Mode Plus nao vem com o FliperOS: baixado do
   # GitHub dele, se faltar. Sem ele (sem rede) as telas ficam no Basic.
   if [[ $choice == attractplus && $(scraper_attract_layout) != Arcadeflow ]]; then
-    run_with_progress "Downloading the Arcadeflow theme" "" frontends_attract_theme ||
+    run_online "Downloading the Arcadeflow theme" "" frontends_attract_theme ||
       theme=("" "The Arcadeflow theme was not downloaded: the displays use the Basic layout."
         "Choose Attract-Mode Plus here again to try once more.")
   fi
@@ -598,7 +626,7 @@ screen_extras_pixelcade() {
         code=$(ui_input "Pixelcade art pack" "The license code you got when you bought the art pack from Pixelcade. It needs the network.") || continue
         code=${code//[[:space:]]/}
         [[ -n $code ]] || continue
-        if run_with_progress "Installing the Pixelcade art pack" "" extras_artpack "$code"; then
+        if run_online "Installing the Pixelcade art pack" "" extras_artpack "$code"; then
           ui_msg "Pixelcade art pack" "The art pack is installed."
         fi
         ;;
@@ -629,7 +657,7 @@ screen_extras() {
     else
       ui_yesno "Extras" "Download and install $label now?" yes || continue
     fi
-    if run_with_progress "Installing $label" "" extras_install "$choice"; then
+    if run_online "Installing $label" "" extras_install "$choice"; then
       ui_msg "Extras" "$label installed."
     fi
   done
@@ -690,7 +718,7 @@ screen_emulators() {
         else
           ui_yesno "$title" "Download and install $label now?" yes || continue
         fi
-        if run_with_progress "Installing $label" "" emulators_install "$choice"; then
+        if run_online "Installing $label" "" emulators_install "$choice"; then
           ui_msg "$title" "$label installed." "" "It is in the desktop menu, in Games."
         fi
         ;;
@@ -731,7 +759,7 @@ screen_emulator_update() {
     screen_emulators_kof "$name" "$label" 0
     return 0
   fi
-  if run_with_progress "Updating $label" "" emulators_install "$name"; then
+  if run_online "Updating $label" "" emulators_install "$name"; then
     ui_msg "Emulators & Games" "$label updated."
   fi
 }
@@ -754,7 +782,7 @@ screen_emulators_kof() {
     ui_msg "$title" "No Final Attack.exe in $dir." "" "Choose the folder of the original game (MUGEN)."
     return 0
   fi
-  if run_with_progress "Installing $title" "$game" emulators_install "$name" "$game"; then
+  if run_online "Installing $title" "$game" emulators_install "$name" "$game"; then
     ui_msg "$title" "$title installed." "" "It is in the desktop menu, in Games; on a terminal, fliperos-kof."
   fi
 }

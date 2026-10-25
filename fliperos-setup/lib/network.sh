@@ -75,6 +75,26 @@ net_ips() {
   ip -4 -o addr show scope global 2> /dev/null | awk '{ split($4, a, "/"); printf "%s%s", sep, a[1]; sep = " " } END { print "" }'
 }
 
+# net_online: ha uma conexao com saida (cabo ou Wi-Fi)? O estado geral do
+# NetworkManager ("connected", ou "site only" quando a checagem de
+# conectividade nao alcanca o servidor dela); sem o NetworkManager, uma rota
+# padrao. "local only" nao serve: e a rede sem gateway.
+net_online() {
+  local state
+  state=$(nmcli -t -f STATE general 2> /dev/null)
+  if [[ -n $state ]]; then
+    [[ $state == connected* && $state != *local* ]]
+    return
+  fi
+  [[ -n $(ip route show default 2> /dev/null) ]]
+}
+
+# net_connecting: alguma placa ainda esta conectando (o cabo acabou de
+# entrar, o Wi-Fi salvo subindo depois do boot)?
+net_connecting() {
+  nmcli -t -f STATE device status 2> /dev/null | grep -q '^connecting'
+}
+
 # net_summary imprime uma linha por interface: nome, estado, conexao e IP.
 net_summary() {
   local dev type state conn ip

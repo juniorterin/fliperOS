@@ -175,3 +175,10 @@ run_with_progress() {
     [[ $choice == retry ]] || return 1
   done
 }
+
+# run_online TITULO ALVO COMANDO... e o run_with_progress de algo que baixa:
+# sem internet, antes a oferta do Wi-Fi (screen_need_internet).
+run_online() {
+  screen_need_internet "$1" || return 1
+  run_with_progress "$@"
+}
