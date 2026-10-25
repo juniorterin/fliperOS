@@ -10763,6 +10763,36 @@ class RetroArchMameRemapTests(unittest.TestCase):
                              (ROOT / 'config/retroarch-remaps/MAME.rmp').read_text())
             self.assertEqual((remaps / 'MAME 2010' / 'MAME 2010.rmp').read_text(), 'input_player1_btn_b = "0"\n')
 
+    def test_mame2010_buttons_only_from_the_retropad(self):
+        # O core le o teclado direto: com as teclas padrao do MAME (as do
+        # painel) cada botao chegava duas vezes. Cada botao de cada jogador
+        # so no Joy do mesmo numero, nenhuma tecla.
+        text = (ROOT / 'config/mame2010-default.cfg').read_text()
+        self.assertNotIn('KEYCODE', text)
+        for player in range(1, 5):
+            for n in range(1, 7):
+                self.assertRegex(text, r'<port type="P%d_BUTTON%d">\s*<newseq type="standard">\s*'
+                                       r'JOYCODE_%d_BUTTON%d\s*</newseq>' % (player, n, player, n))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'etc/fliperos/mame', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            cfg = root / 'opt/fliperos/saves/retroarch/MAME 2010/mame2010/cfg/default.cfg'
+            cfg.parent.mkdir(parents=True)
+            # O que o menu do MAME gravou no gabinete: o botao 2 junto do 5.
+            cfg.write_text('<port type="P1_BUTTON2"><newseq type="standard">JOYCODE_1_BUTTON2 JOYCODE_1_BUTTON5'
+                           '</newseq></port>\n')
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            self.assertEqual(cfg.read_text(), text)
+            # O nosso (mesmo reescrito pelo MAME, sem o comentario) fica.
+            cfg.write_text(text.replace('FliperOS', 'x'))
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            self.assertIn('<!-- x', cfg.read_text())
+
 
 class RetroArchCoreSwitchresTests(unittest.TestCase):
     """config/retroarch-switchres: o switchres.ini que o CRT SwitchRes do

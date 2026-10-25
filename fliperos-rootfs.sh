@@ -611,6 +611,19 @@ EOF
     fi
   done
   chown -R 1000:1000 "$home/.config/retroarch" 2> /dev/null || true
+  # O MAME 2010 le o teclado direto, e as teclas do painel sao as padrao do
+  # MAME: cada botao chegava duas vezes (teclado e RetroPad), e o Buttons
+  # layout so trocava uma delas. O default.cfg do core deixa os botoes so no
+  # RetroPad (config/mame2010-default.cfg). Um sem o P4 Button 6 nosso (o
+  # de antes, ou o que o menu do MAME gravou) e trocado.
+  mame2010_cfg="$root/opt/fliperos/saves/retroarch/MAME 2010/mame2010/cfg"
+  if [[ ! -f $mame2010_cfg/default.cfg ]] || ! grep -q JOYCODE_4_BUTTON6 "$mame2010_cfg/default.cfg"; then
+    for dir in "$root/opt/fliperos/saves" "$root/opt/fliperos/saves/retroarch" \
+      "$root/opt/fliperos/saves/retroarch/MAME 2010" "${mame2010_cfg%/cfg}" "$mame2010_cfg"; do
+      [[ -d $dir ]] || install -d -o 1000 -g 1000 "$dir"
+    done
+    install -m644 -o 1000 -g 1000 "$src/config/mame2010-default.cfg" "$mame2010_cfg/default.cfg"
+  fi
   # Acervo em ~/roms; /opt/fliperos/roms vira um link para la, e os caminhos
   # antigos (mame.ini, frontends, Hypseus, OpenBOR) continuam valendo. Uma
   # instalacao com ROMs em /opt/fliperos/roms as leva junto: so renomeia
