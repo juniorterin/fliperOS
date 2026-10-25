@@ -28,6 +28,12 @@ Open **http://fliperos.local** on a phone or PC on the same network (user `flipe
 
 Every page in detail: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 
+### New: your controller on the stream
+
+The stick and the buttons light up on your live stream while you press them on the cabinet, like the input displays of fighting game streams. It's a page for an OBS Browser Source, with a transparent background: copy its address from **Live > Controller for OBS** and paste it in OBS.
+
+It reads the controls of Button mapping, joysticks and keyboard encoders alike, for one or two players. You restyle it in the panel, in a CSS editor with a live preview, and a saved style shows up in OBS at once. Step by step and CSS examples: [Controller on the stream](https://github.com/juniorterin/fliperOS/wiki/Controller-overlay).
+
 ## From zero to playing: step by step
 
 This guide goes from an empty cabinet to a game on screen. Each step says what you will see and what to press. The details behind each screen are in the wiki pages linked along the way.

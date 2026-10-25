@@ -255,7 +255,7 @@ const enUS = {
     points: [
       { id: 'play', title: 'Pick a game, play it', text: 'Search every system’s games with your filters and favourites, see the pictures, buttons and history of each arcade game, and press Play: it opens on the tube.' },
       { id: 'live', title: 'Watch it live', text: 'The cabinet’s screen in the browser at 15, 30 or 60 frames per second, plus the FPS of the game and a screenshot of the tube.' },
-      { id: 'obs', title: 'Ready for OBS', text: 'Addresses for an OBS Browser Source: the live screen in 4:3 and the marquee of the game being played, with high scores and versus scores.' },
+      { id: 'obs', title: 'Ready for OBS', text: 'Addresses for an OBS Browser Source: the live screen in 4:3 with sound, the marquee of the game being played, with high scores and versus scores, and your controller lighting up on screen.' },
       { id: 'settings', title: 'Settings while you play', text: 'Colour sliders that change the game on screen as you move them, 480i hacks per emulator, services, latency mode and volume.' },
       { id: 'files', title: 'Your games in the browser', text: 'Upload and download games, BIOS, artwork and splash screens, with progress, straight to the right folder.' },
       { id: 'romfilter', title: 'ROM filter and downloads', text: 'Filter a MAME romset for your cabinet’s controls and screen, and download from a torrent only the games that pass.' },
@@ -263,6 +263,22 @@ const enUS = {
       { id: 'terminal', title: 'Terminal', text: 'The cabinet’s shell in a browser tab, the same as SSH, with no program to install.' },
     ],
     cta: 'Every page of the web panel, in the documentation',
+    controller: {
+      badge: 'New in 0.13',
+      title: 'Your controller, live on the stream.',
+      text: 'The stick and the buttons light up on your stream while you press them on the cabinet, like the input displays of fighting game streams. Viewers see every motion and every button. Copy the address from the Live page, paste it in an OBS Browser Source, and it sits over the game with a transparent background.',
+      points: [
+        { id: 'any', title: 'Any controller', text: 'It reads the controls of Button mapping: joysticks, Xbox-style panels and keyboard encoders, for one or two players. No extra program.' },
+        { id: 'css', title: 'Your style, in the panel', text: 'A CSS editor with syntax colours and a live preview, a Format button and a demo that presses the buttons by itself.' },
+        { id: 'live', title: 'Changes on air', text: 'Save, and the page open in OBS takes the new look at once, mid-stream, without refreshing the source.' },
+      ],
+      stageLabel: 'Animated simulation of the controller page in OBS: the sticks and buttons of players 1 and 2 lighting up as a special move and the other buttons are pressed.',
+      caption: 'Simulation of the OBS page with the factory style',
+      live: 'LIVE',
+      start: 'Start',
+      coin: 'Coin',
+      cta: 'Put it in OBS: step by step and CSS examples',
+    },
   },
   emulators: {
     kicker: 'Emulators & Frontends',

@@ -6,13 +6,17 @@ import {
   ArrowUpRight,
   FolderOpen,
   Gamepad2,
+  Palette,
   Radio,
   SlidersHorizontal,
+  Sparkles,
   SquareTerminal,
   Video,
   Wand2,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
+import { ControllerOverlay } from '@/components/ControllerOverlay';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -27,6 +31,13 @@ const POINT_STYLE: Record<string, { icon: LucideIcon; color: string }> = {
   romfilter: { icon: Wand2, color: 'text-yellow border-yellow/40 bg-yellow/10' },
   status: { icon: Activity, color: 'text-cyan border-cyan/40 bg-cyan/10' },
   terminal: { icon: SquareTerminal, color: 'text-pink border-pink/40 bg-pink/10' },
+};
+
+// O destaque do controle para o OBS (config/web/input.html).
+const CONTROLLER_STYLE: Record<string, { icon: LucideIcon; color: string }> = {
+  any: { icon: Gamepad2, color: 'text-cyan border-cyan/40 bg-cyan/10' },
+  css: { icon: Palette, color: 'text-purple border-purple/40 bg-purple/10' },
+  live: { icon: Zap, color: 'text-green border-green/40 bg-green/10' },
 };
 
 // A janela de navegador desenhada em volta do print do painel.
@@ -96,6 +107,71 @@ export function WebPanel() {
             );
           })}
         </ul>
+
+        <Reveal className="mt-16">
+          <article
+            aria-labelledby="controller-overlay-title"
+            className="relative overflow-hidden rounded-3xl border border-pink/40 bg-gradient-to-br from-pink/10 via-bg-deep to-purple/10 p-6 sm:p-10"
+          >
+            <div aria-hidden="true" className="glow-pink pointer-events-none absolute -bottom-32 -left-32 h-[360px] w-[520px]" />
+            <div className="relative grid items-center gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+              <div>
+                <p className="inline-flex items-center gap-2 rounded-full border border-pink/50 bg-pink/15 px-3 py-1 font-mono text-xs font-semibold tracking-widest text-pink uppercase">
+                  <Sparkles className="size-3.5" aria-hidden="true" />
+                  {w.controller.badge}
+                </p>
+                <h3 id="controller-overlay-title" className="mt-4 text-2xl font-bold tracking-tight text-fg sm:text-3xl">
+                  {w.controller.title}
+                </h3>
+                <p className="mt-4 leading-relaxed text-muted">{w.controller.text}</p>
+                <ul className="mt-6 grid gap-4">
+                  {w.controller.points.map((pt) => {
+                    const style = CONTROLLER_STYLE[pt.id] ?? CONTROLLER_STYLE.any;
+                    const Icon = style.icon;
+                    return (
+                      <li key={pt.id} className="flex gap-3">
+                        <span className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg border ${style.color}`}>
+                          <Icon className="size-4" aria-hidden="true" />
+                        </span>
+                        <div>
+                          <h4 className="font-semibold text-fg">{pt.title}</h4>
+                          <p className="mt-0.5 text-sm leading-relaxed text-muted">{pt.text}</p>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <a
+                  href={`${LINKS.docs}/Controller-overlay`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-8 inline-flex items-center gap-2 text-sm font-medium text-pink transition hover:text-fg"
+                >
+                  {w.controller.cta}
+                  <ArrowUpRight className="size-4" aria-hidden="true" />
+                  <span className="sr-only">{t.a11y.external}</span>
+                </a>
+              </div>
+              <figure>
+                <div
+                  role="img"
+                  aria-label={w.controller.stageLabel}
+                  className="relative overflow-hidden rounded-xl border border-line bg-bg-deeper p-4 pt-12 shadow-2xl shadow-black/40 sm:p-6 sm:pt-14"
+                >
+                  <div aria-hidden="true" className="bg-grid pointer-events-none absolute inset-0 opacity-60" />
+                  <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-md bg-red px-2 py-0.5 font-mono text-xs font-bold tracking-widest text-bg-deeper">
+                    <span aria-hidden="true" className="size-1.5 animate-pulse rounded-full bg-bg-deeper" />
+                    {w.controller.live}
+                  </span>
+                  <div className="relative">
+                    <ControllerOverlay labels={{ start: w.controller.start, coin: w.controller.coin }} />
+                  </div>
+                </div>
+                <figcaption className="mt-3 font-mono text-xs tracking-widest text-comment uppercase">{w.controller.caption}</figcaption>
+              </figure>
+            </div>
+          </article>
+        </Reveal>
 
         <Reveal className="mt-10">
           <BrowserFrame src={`/screenshots/web/status-${lang}.webp`} alt={w.shots.status} url="fliperos.local/#status" />

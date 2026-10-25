@@ -28,6 +28,12 @@ Abra **http://fliperos.local** no celular ou no PC da mesma rede (usuário `flip
 
 Cada página em detalhe: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 
+### Novo: o seu controle na transmissão
+
+O direcional e os botões acendem na sua live enquanto você aperta no gabinete, como os input displays das transmissões de jogos de luta. É uma página para a fonte Navegador do OBS, com fundo transparente: copie o endereço em **Ao vivo > Controle para o OBS** e cole no OBS.
+
+Ela lê os controles do Button mapping, joysticks e encoders de teclado, de um ou dois jogadores. O visual muda no próprio painel, num editor de CSS com prévia ao vivo, e o estilo salvo aparece no OBS na hora. Passo a passo e exemplos de CSS: [Controller on the stream](https://github.com/juniorterin/fliperOS/wiki/Controller-overlay) (em inglês).
+
 ## Do zero ao jogo: passo a passo
 
 Este guia vai do gabinete vazio até um jogo na tela. Cada passo diz o que vai aparecer e o que apertar. Os detalhes de cada tela estão nas páginas da wiki citadas pelo caminho (em inglês).

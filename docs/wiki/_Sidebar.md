@@ -6,6 +6,7 @@ Using it
 - [Install](Install.md)
 - [Installed system](Installed-system.md)
 - [Web panel](Web-panel.md)
+- [Controller on the stream](Controller-overlay.md)
 - [Frontends](Frontends.md)
 - [Scoreboard games](Scoreboard-games.md)
 - [Emulators](Emulators.md)

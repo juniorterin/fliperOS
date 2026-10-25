@@ -258,7 +258,7 @@ const ptBR: Messages = {
     points: [
       { id: 'play', title: 'Escolha um jogo e jogue', text: 'Busque os jogos de cada sistema com os seus filtros e favoritos, veja as imagens, os botões e a história de cada jogo de arcade, e aperte Jogar: ele abre no tubo.' },
       { id: 'live', title: 'Veja ao vivo', text: 'A tela do gabinete no navegador a 15, 30 ou 60 quadros por segundo, mais o FPS do jogo e um screenshot do tubo.' },
-      { id: 'obs', title: 'Pronto para o OBS', text: 'Endereços para uma Browser Source do OBS: a tela ao vivo em 4:3 e o marquee do jogo em andamento, com os recordes e o placar do versus.' },
+      { id: 'obs', title: 'Pronto para o OBS', text: 'Endereços para uma Browser Source do OBS: a tela ao vivo em 4:3 com som, o marquee do jogo em andamento, com os recordes e o placar do versus, e o seu controle acendendo na tela.' },
       { id: 'settings', title: 'Ajustes com o jogo aberto', text: 'Sliders de cor que mudam o jogo na tela enquanto você mexe, os jogos 480i de cada emulador, os serviços, o modo de latência e o volume.' },
       { id: 'files', title: 'Seus jogos pelo navegador', text: 'Envie e baixe jogos, BIOS, imagens e telas de boot, com o andamento, direto na pasta certa.' },
       { id: 'romfilter', title: 'Filtro de ROMs e downloads', text: 'Filtre um romset do MAME pelos controles e pela tela do seu gabinete, e baixe de um torrent só os jogos que passam.' },
@@ -266,6 +266,22 @@ const ptBR: Messages = {
       { id: 'terminal', title: 'Terminal', text: 'O shell do gabinete numa aba do navegador, o mesmo do SSH, sem programa para instalar.' },
     ],
     cta: 'Cada página do painel web, na documentação',
+    controller: {
+      badge: 'Novo na 0.13',
+      title: 'O seu controle, ao vivo na transmissão.',
+      text: 'O direcional e os botões acendem na sua live enquanto você aperta no gabinete, como os input displays das transmissões de jogos de luta. Quem assiste vê cada movimento e cada botão. Copie o endereço na página Ao vivo, cole numa fonte Navegador do OBS, e ele fica por cima do jogo, com fundo transparente.',
+      points: [
+        { id: 'any', title: 'Qualquer controle', text: 'Lê os controles do Button mapping: joysticks, painéis estilo Xbox e encoders de teclado, de um ou dois jogadores. Nenhum programa a mais.' },
+        { id: 'css', title: 'O seu visual, no painel', text: 'Um editor de CSS com cores de sintaxe e prévia ao vivo, um botão Formatar e uma demonstração que aperta os botões sozinha.' },
+        { id: 'live', title: 'Muda no ar', text: 'Salvou, e a página aberta no OBS pega o visual novo na hora, no meio da live, sem atualizar a fonte.' },
+      ],
+      stageLabel: 'Simulação animada da página do controle no OBS: os direcionais e os botões dos jogadores 1 e 2 acendendo enquanto um golpe especial e os outros botões são apertados.',
+      caption: 'Simulação da página do OBS com o visual de fábrica',
+      live: 'AO VIVO',
+      start: 'Start',
+      coin: 'Coin',
+      cta: 'Ponha no OBS: passo a passo e exemplos de CSS',
+    },
   },
   emulators: {
     kicker: 'Emuladores e frontends',
