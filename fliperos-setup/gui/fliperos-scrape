@@ -8,6 +8,7 @@
 # precisa do root); este roda como o usuario, dono de ~/media.
 #
 #   fliperos-scrape [--progress] [--folder CHAVE] [--retry] [--result ARQUIVO]
+#   fliperos-scrape --daemon      o scrape automatico, como servico (daemon())
 #
 # --retry: tenta de novo os jogos tentados ha menos de 30 dias (o frontend
 # espera). O resultado: total, done (com os dados), left, tried.
@@ -26,13 +27,43 @@ def say(progress, pct, text):
         print("@step %d %s" % (pct, text), flush=True)
 
 
+def daemon():
+    """O scrape automatico como servico (config/fliperos-scrape.service): o
+    laco do frontend (feharvest.py), que segue durante o jogo e fora do
+    frontend. O andamento vai para scrape-status.json, que o frontend mostra."""
+    import signal
+    import threading
+    import fedata
+    import feharvest
+
+    fe = type("Scrape", (), {})()
+    fe.fd, fe.lib, fe.scraping, fe.dirty = fedata, fedata.Library(), None, set()
+    h = feharvest.Harvester(fe)
+    h.publishing = True
+
+    def stop(*_):
+        try:
+            os.remove(h.status_path)
+        except OSError:
+            pass
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    threading.Thread(target=h.watch, daemon=True).start()
+    h.run(reload=fedata.Library)
+
+
 def main():
     parser = argparse.ArgumentParser(description="FliperOS scraper")
     parser.add_argument("--progress", action="store_true")
     parser.add_argument("--folder", action="append", help="only this games folder (a key: mame, naomi...)")
     parser.add_argument("--retry", action="store_true", help="also the games tried in the last 30 days")
     parser.add_argument("--result")
+    parser.add_argument("--daemon", action="store_true", help="the automatic scrape, as a service")
     args = parser.parse_args()
+    if args.daemon:
+        return daemon()
     import fedata
     import feharvest
 

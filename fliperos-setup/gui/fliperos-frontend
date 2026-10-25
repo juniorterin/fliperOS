@@ -180,7 +180,9 @@ class Frontend:
         # plano; os jogos que ele buscou tem os caminhos de midia lidos de novo.
         self.dirty = set()         # (pasta, jogo)
         self.harvest = feharvest.Harvester(self)
+        self.followed_at = 0.0
         if not self.shot:
+            self.harvest.external = self.harvest.follow()
             self.harvest.start()
         self.generation = self.lib.generation
         self.last_check = time.monotonic()
@@ -800,6 +802,11 @@ class Frontend:
                     self.say("UPDATING THE LISTS...", 3)
                     self.lib.refresh()
             self.auto_scrape(now)
+            # O servico do scrape automatico (fliperos-scrape --daemon): o
+            # andamento dele e a midia nova; sem ele, o laco e o daqui.
+            if now - self.followed_at > 3:
+                self.followed_at = now
+                self.harvest.external = self.harvest.follow()
             while self.dirty:
                 folder, name = self.dirty.pop()
                 for kind in ("snap", "box", "marquee", "logo", "preview"):

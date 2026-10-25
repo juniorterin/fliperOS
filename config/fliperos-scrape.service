@@ -1,0 +1,21 @@
+# O scrape automatico (fliperos-setup/gui/feharvest.py): busca o que falta de
+# cada jogo das pastas, um de cada vez, tambem com um jogo aberto e com o
+# frontend fechado; o frontend so mostra o andamento. Setup > System >
+# Services > Auto scrape (depois do boot, ate a pessoa mudar).
+[Unit]
+Description=FliperOS: automatic scrape of the games (Setup > System > Services)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=fliperos
+# O jogo aberto vem antes: a CPU e o disco so quando sobram.
+Nice=19
+IOSchedulingClass=idle
+CPUSchedulingPolicy=idle
+ExecStart=/usr/bin/python3 /usr/local/lib/fliperos-setup/gui/fliperos-scrape --daemon
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

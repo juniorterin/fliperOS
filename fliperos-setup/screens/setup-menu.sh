@@ -820,7 +820,12 @@ screen_scraper() {
 # ou numa so, com a barra e quantos jogos ficaram sem algum dado.
 screen_scraper_fliperos() {
   local -a found entries keys=()
-  local line key dir platform count choice result out
+  local line key dir platform count choice result="$JOBS_DIR/scrape.result"
+  # Rodando (a pessoa saiu da tela antes): de volta ao andamento.
+  if job_running scrape; then
+    screen_scraper_fliperos_watch
+    return 0
+  fi
   mapfile -t found < <(scraper_detect | grep -v '^custom/')
   if ((${#found[@]} == 0)); then
     ui_msg "Scraper" "No ROMs were found in $ROMS_DIR."
@@ -834,14 +839,29 @@ screen_scraper_fliperos() {
   choice=$(ui_menu "Scraper" "What each game still lacks: information, pictures, logos and videos. What is already in ~/media stays." \
     all "${entries[@]}") || return 0
   [[ $choice == all ]] || keys=("$choice")
-  result=$(mktemp)
-  if run_with_progress "Scraper" "Scraping the games" scraper_fliperos "$result" "${keys[@]}"; then
-    out=$(cat "$result")
-    ui_msg "Scraper" "$(romclean_value "$out" tried) games were looked up, of $(romclean_value "$out" total)." \
-      "$(romclean_value "$out" left) still lack something no source has." "" \
-      "Logos and videos from the torrents keep arriving in the background."
-  fi
   rm -f "$result"
+  if ! job_start scrape "$SETUP_DIR/fliperos-setup" --scrape-now "$result" "${keys[@]}"; then
+    ui_msg "Scraper" "$(ui_bad "The scraper did not start.")" "Details in /var/log/fliperos-setup.log."
+    return 0
+  fi
+  screen_scraper_fliperos_watch
+}
+
+# screen_scraper_fliperos_watch: o andamento do Scrape the games e, quando
+# ele termina com a tela aberta, o resultado.
+screen_scraper_fliperos_watch() {
+  local result="$JOBS_DIR/scrape.result" out rc=0
+  screen_job_watch scrape "Scraper" "Scraping the games" || rc=$?
+  case $rc in
+    0)
+      out=$(cat "$result" 2> /dev/null)
+      ui_msg "Scraper" "$(romclean_value "$out" tried) games were looked up, of $(romclean_value "$out" total)." \
+        "$(romclean_value "$out" left) still lack something no source has." "" \
+        "Logos and videos from the torrents keep arriving in the background."
+      ;;
+    2) ui_msg "Scraper" "$(ui_bad "The scraper stopped: $PROGRESS_FAIL_MSG")" "Details in /var/log/fliperos-setup.log." ;;
+  esac
+  return 0
 }
 
 # screen_scraper_source: o site de onde o Scraper busca e, nos que pedem, a

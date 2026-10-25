@@ -2020,6 +2020,98 @@ class RemoteMenuTests(Base):
         self.assertIn("conf_set output_test skipped\n      fi\n      # A saida ja escolhida: o resto do instalador na interface grafica.\n      ui_gui_start", entry)
 
 
+class HarvestServiceTests(unittest.TestCase):
+    """O scrape automatico como servico (fliperos-scrape --daemon): segue com
+    um jogo aberto e fora do frontend, que so mostra o andamento dele."""
+
+    def harvester(self, home):
+        import importlib
+        import sys
+        sys.path.insert(0, str(SETUP / "gui"))
+        feharvest = importlib.import_module("feharvest")
+        fd = type("Fd", (), {})()
+        fd.web = type("Web", (), {"player_home": staticmethod(lambda: str(home))})()
+        fd.short_title = staticmethod(lambda g: g.get("Title") or g["Name"])
+        fe = type("Fe", (), {})()
+        fe.fd, fe.lib, fe.scraping, fe.dirty = fd, None, None, set()
+        return feharvest.Harvester(fe)
+
+    def test_frontend_follows_the_service_and_rereads_what_it_fetched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            service, frontend = self.harvester(tmp), self.harvester(tmp)
+            # Sem o servico: o frontend roda o laco.
+            self.assertFalse(frontend.follow())
+            frontend.publish()          # o frontend nunca grava o andamento
+            self.assertFalse(frontend.follow())
+            service.publishing = True
+            service.total, service.left, service.scanned = 10, 4, True
+            service.current = {"Name": "sf2", "Title": "Street Fighter II"}
+            service.state["tried"] = {"mame/sf2": int(__import__("time").time())}
+            service.save()
+            service.publish()
+            self.assertTrue(frontend.follow())
+            self.assertEqual((frontend.total, frontend.left), (10, 4))
+            self.assertEqual(frontend.current["Title"], "Street Fighter II")
+            self.assertIn(("mame", "sf2"), frontend.fe.dirty)
+
+    def test_save_keeps_what_the_other_process_wrote(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a, b = self.harvester(tmp), self.harvester(tmp)
+            a.state["tried"] = {"mame/sf2": 100}
+            a.save()
+            b.state.setdefault("rested", {})["mame/kof98"] = 50
+            b.save()
+            data = json.loads(Path(a.path).read_text())
+            self.assertEqual(data["tried"], {"mame/sf2": 100})
+            self.assertEqual(data["rested"], {"mame/kof98": 50})
+
+    def test_service_installed_after_boot_and_in_the_services_menu(self):
+        unit = (ROOT / "config" / "fliperos-scrape.service").read_text()
+        self.assertIn("fliperos-scrape --daemon", unit)
+        self.assertIn("User=fliperos", unit)
+        self.assertIn("IOSchedulingClass=idle", unit)
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        self.assertIn("echo 'scrape=after' >> \"$root/etc/fliperos/services.conf\"", rootfs)
+        self.assertIn("scrape|Auto scrape|fliperos-scrape.service|", (SETUP / "lib" / "services.sh").read_text())
+
+
+class BackgroundJobTests(Base):
+    """Scrape the games em segundo plano: a tela mostra o andamento e
+    qualquer tecla volta ao menu, com o trabalho seguindo."""
+
+    def watch(self, running, key):
+        jobs = self.env.dir / "jobs"
+        jobs.mkdir()
+        (jobs / "scrape.events").write_text("@step 10 Reading\n@msg a\n@step 42 Street Fighter II (3 left)\n")
+        return self.env.run("""
+            source %s/lib/ui.sh
+            source %s/screens/progress.sh
+            ui_size() { :; }; ui_clear() { :; }; ui_topbar() { :; }; ui_flush_input() { :; }
+            ui_progress() { echo "draw:$3:$4:$5:${*:6}"; }
+            job_running() { %s; }
+            ui_wait_key() { %s; }
+            screen_job_watch scrape Scraper "Scraping the games"
+            echo "rc=$?"
+        """ % (SETUP, SETUP, "true" if running else "false", "true" if key else "false"),
+            {"JOBS_DIR": str(jobs)})
+
+    def test_a_key_leaves_while_it_goes_on(self):
+        r = self.watch(running=True, key=True)
+        self.assertIn("draw:42:Street Fighter II (3 left):Any key returns to the menu; it goes on in the background.:a",
+                      r.stdout)
+        self.assertIn("rc=1", r.stdout)
+
+    def test_finished_with_the_screen_open(self):
+        self.assertIn("rc=0", self.watch(running=False, key=False).stdout)
+
+    def test_scrape_the_games_runs_as_a_job_and_comes_back_to_it(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn('job_start scrape "$SETUP_DIR/fliperos-setup" --scrape-now "$result" "${keys[@]}"', menu)
+        self.assertIn("if job_running scrape; then\n    screen_scraper_fliperos_watch", menu)
+        self.assertIn("--scrape-now)\n      # Setup > Games > Scraper > Scrape the games",
+                      (SETUP / "fliperos-setup").read_text())
+
+
 class UiParityTests(unittest.TestCase):
     """O menu grafico e o de texto tem as mesmas telas: cada primitiva que as
     telas chamam tem o ramo da interface grafica (ou passa por uma que tem),

@@ -176,6 +176,76 @@ run_with_progress() {
   done
 }
 
+# Um trabalho longo que segue sem a tela (o Scrape the games): roda num unit
+# do systemd, que sobrevive ao Setup fechar, com os eventos de progresso num
+# arquivo; a tela so os mostra, e qualquer tecla volta ao menu.
+JOBS_DIR=${JOBS_DIR:-/run/fliperos/jobs}
+
+# job_start NOME COMANDO...: o trabalho em segundo plano (fliperos-job-NOME).
+# Status 1: nao subiu.
+job_start() {
+  local name=$1
+  shift
+  mkdir -p "$JOBS_DIR"
+  rm -f "$JOBS_DIR/$name.events"
+  log_info "trabalho em segundo plano: $name ($*)"
+  systemd-run --unit "fliperos-job-$name" --collect --quiet -p Nice=10 -p IOSchedulingClass=idle \
+    -p StandardOutput="file:$JOBS_DIR/$name.events" -p StandardError="append:$FLIPEROS_LOG" \
+    "$@" >> "$FLIPEROS_LOG" 2>&1
+}
+
+# job_running NOME: o trabalho ainda esta rodando?
+job_running() {
+  systemctl is-active --quiet "fliperos-job-$1.service" 2> /dev/null
+}
+
+# screen_job_watch NOME TITULO ALVO: a barra do trabalho ate ele terminar ou
+# ate uma tecla. Status 0 = terminou bem, 1 = a pessoa saiu (ele segue),
+# 2 = falhou (PROGRESS_FAIL_STEP e PROGRESS_FAIL_MSG).
+screen_job_watch() {
+  local name=$1 title=$2 target=$3 events="$JOBS_DIR/$1.events" line pct=0 step="Starting" rc=1
+  local -a msgs=()
+  PROGRESS_FAIL_STEP="" PROGRESS_FAIL_MSG=""
+  ui_size
+  ui_clear
+  ui_topbar
+  stty -echo < /dev/tty 2> /dev/null
+  printf '\e[?25l' > /dev/tty
+  # shellcheck disable=SC2034 # lido pelo _progress_draw
+  PROGRESS_FOOTER="Any key returns to the menu; it goes on in the background."
+  while true; do
+    msgs=()
+    while IFS= read -r line; do
+      case $line in
+        "@step "*)
+          line=${line#@step }
+          pct=${line%% *} step=${line#* }
+          ;;
+        "@msg "*) msgs+=("${line#@msg }") ;;
+        "@fail "*)
+          line=${line#@fail }
+          PROGRESS_FAIL_STEP=${line%%|*} PROGRESS_FAIL_MSG=${line#*|}
+          ;;
+      esac
+    done < "$events" 2> /dev/null
+    [[ $pct =~ ^[0-9]+$ ]] || pct=0
+    # As ultimas tres mensagens (com menos, todas).
+    _progress_draw "$title" "$target" "$pct" "$step" "${msgs[@]:$((${#msgs[@]} > 3 ? ${#msgs[@]} - 3 : 0))}"
+    if ! job_running "$name"; then
+      rc=0
+      [[ -n $PROGRESS_FAIL_MSG ]] && rc=2
+      break
+    fi
+    ui_wait_key 2 && break
+  done
+  # shellcheck disable=SC2034
+  PROGRESS_FOOTER=""
+  printf '\e[?25h' > /dev/tty
+  stty echo < /dev/tty 2> /dev/null
+  ui_flush_input
+  return "$rc"
+}
+
 # run_online TITULO ALVO COMANDO... e o run_with_progress de algo que baixa:
 # sem internet, antes a oferta do Wi-Fi (screen_need_internet).
 run_online() {

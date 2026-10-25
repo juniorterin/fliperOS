@@ -237,6 +237,12 @@ rm -rf "$root/usr/local/share/fliperos/web"
 install -Dm644 -t "$root/usr/local/share/fliperos/web" "$src"/config/web/*
 grep -q '^web=' "$root/etc/fliperos/services.conf" 2> /dev/null ||
   echo 'web=after' >> "$root/etc/fliperos/services.conf"
+# O scrape automatico (config/fliperos-scrape.service, Setup > System >
+# Services > Auto scrape): sobe depois do boot (scrape=after) ate a pessoa
+# mudar, e segue com um jogo aberto.
+install -Dm644 "$src/config/fliperos-scrape.service" "$root/etc/systemd/system/fliperos-scrape.service"
+grep -q '^scrape=' "$root/etc/fliperos/services.conf" 2> /dev/null ||
+  echo 'scrape=after' >> "$root/etc/fliperos/services.conf"
 # A tela ao vivo no painel web (config/fliperos-stream): o go2rtc e o ffmpeg
 # vem pelo Setup > Games > Extras > Live screen, que liga o servico.
 install -Dm755 "$src/config/fliperos-stream" "$root/opt/fliperos/bin/fliperos-stream"
@@ -735,6 +741,9 @@ EOF
   install -Dm644 "$src/config/wallpaper.jpg" "$root/usr/share/fliperos/wallpaper.jpg"
   mkdir -p "$home/.config"
   cp -r "$src/config/lxde/." "$home/.config/"
+  # No desktop, o atalho da pasta pessoal (roms, bios, media, config).
+  [[ -d $home/Desktop ]] || install -d -o 1000 -g 1000 "$home/Desktop"
+  install -m755 -o 1000 -g 1000 "$src/config/fliperos-home.desktop" "$home/Desktop/home.desktop"
   # Layouts do Attract-Mode Plus (config/attractplus-layouts): os de
   # ~/.attract/layouts valem antes dos de /usr/share/attractplus de mesmo nome.
   mkdir -p "$home/.attract/layouts"

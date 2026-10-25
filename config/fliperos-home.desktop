@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Home
+Name[pt_BR]=Pasta pessoal
+Comment=Your folders: roms, bios, media, config, downloads
+Icon=user-home
+Exec=pcmanfm /home/fliperos
+Terminal=false
