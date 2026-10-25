@@ -11338,6 +11338,20 @@ class EmulatorsMenuTests(unittest.TestCase):
             self.assertIn('@fail KOF Final Attack|the downloaded file is not a zip of the game', run.stdout)
             self.assertEqual((dest / 'Ikemen_GO_Linux').read_text(), 'ok\n')
             self.assertFalse(download.exists())
+            # Com outra instalacao rodando (o lock preso), esta nao comeca.
+            lock = download.parent / 'kof-install.lock'
+            with subprocess.Popen(['flock', str(lock), 'sleep', '30']) as held:
+                try:
+                    for _ in range(50):
+                        if subprocess.run(['flock', '-n', str(lock), 'true']).returncode:
+                            break
+                        time.sleep(0.1)
+                    run = self.run_cmd('fliperos-kof', 'install', '--progress', env=env)
+                finally:
+                    held.kill()
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail KOF Final Attack|KOF Final Attack is already being installed', run.stdout)
+            self.assertNotIn('Downloading', run.stdout)
 
     def test_kof_opens_at_320x240_from_the_desktop_and_the_console(self):
         modes = (ROOT / 'config/fliperos-emulator-modes.conf').read_text()

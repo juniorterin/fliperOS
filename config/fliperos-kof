@@ -217,6 +217,10 @@ case ${1:-} in
     for arg in "${@:2}"; do
       if [[ $arg == --progress ]]; then progress=1; else src=$arg; fi
     done
+    # Uma instalacao por vez: duas escreveriam o mesmo zip e a mesma copia.
+    mkdir -p "${download%/*}" || fail "could not create ${download%/*}"
+    exec 9> "${download%/*}/kof-install.lock" || fail "could not create ${download%/*}"
+    flock -n 9 || fail "KOF Final Attack is already being installed: wait for it to finish"
     install_game "$src"
     ;;
   run)
