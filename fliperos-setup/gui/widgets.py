@@ -124,6 +124,13 @@ def badge(surf, x, y, size, on):
     text(surf, label, T.SPACE if on else T.COMMENT, rect[0] + 4, rect[1] + 2)
 
 
+def check(surf, x, y):
+    """O check verde de instalado, de 9x7 pixels com o canto em (x, y), com
+    sombra escura: aparece no fundo rosa do cursor e sobre os icones."""
+    for dx, dy, color in ((1, 1, T.SPACE), (0, 0, T.GREEN)):
+        pygame.draw.lines(surf, color, False, [(x + dx, y + 3 + dy), (x + 3 + dx, y + 6 + dy), (x + 8 + dx, y + dy)], 2)
+
+
 def button(surf, label, cx, y, selected, w=80, icon=None):
     """Um botao de 20 pixels de altura. icon: o nome de um icone de 16
     pixels, desenhado a esquerda do rotulo."""
@@ -385,6 +392,8 @@ class Menu(Animated):
         self.vertical = vertical
         self.tiles = tiles or {}
         self.entries = [(e[0], e[1], e[2] if len(e) > 2 else "") for e in entries]
+        # Os itens "(installed)" (serve.py): um check verde no icone ou na linha.
+        self.installed = {e[0] for e in entries if len(e) > 3 and e[3]}
         self.marked = set(marked)
         self.cursor = 0
         self.top = 0
@@ -512,6 +521,8 @@ class Menu(Animated):
             state = toggle(entry[1])[1]
             if state is not None:
                 badge(surf, cx - 20, mid - 20, 40, state)
+            if entry[0] in self.installed:
+                check(surf, cx + 9, mid + 11)
         surf.set_clip(None)
         left = (T.WIDTH - size) // 2
         block(surf, (left, top, size, size), T.BG_DEEP, T.PURPLE)
@@ -525,6 +536,8 @@ class Menu(Animated):
         label, state = toggle(self.entries[self.cursor][1])
         if state is not None:
             badge(surf, left, top, size, state)
+        if self.entries[self.cursor][0] in self.installed:
+            check(surf, left + size - 13, top + size - 11)
 
         y = top + size + 12
         hint = self.entries[self.cursor][2]
@@ -599,14 +612,18 @@ class Menu(Animated):
                     if not selected:
                         color = T.GREEN
             # O rotulo que nao cabe e cortado; o do cursor aparece inteiro
-            # embaixo, no lugar da dica.
-            if width(label) > w - 22:
+            # embaixo, no lugar da dica. O check de instalado fica no fim da
+            # linha.
+            room = w - 22 - (14 if value in self.installed else 0)
+            if width(label) > room:
                 if selected:
                     full = label
-                while width(label + "..") > w - 22:
+                while width(label + "..") > room:
                     label = label[:-1]
                 label += ".."
             text(surf, label, color, x + 18, y + 2)
+            if value in self.installed:
+                check(surf, x + w - 14, y + 2)
 
         # A barra de rolagem de quando a lista nao cabe.
         if rows < len(self.entries):

@@ -65,9 +65,10 @@ class Server:
         return out
 
     def entries(self, args):
-        """Os itens de um menu: (valor, rotulo, dica). Um rotulo sem dica que
-        termina com um parentese ("Pixelcade (LED/LCD marquee)") vira o nome
-        e a dica: o nome cabe grande no carrossel."""
+        """Os itens de um menu: (valor, rotulo, dica, instalado). Um rotulo sem
+        dica que termina com um parentese ("Pixelcade (LED/LCD marquee)") vira
+        o nome e a dica: o nome cabe grande no carrossel. "(installed)" no fim
+        tambem marca o item: o Menu desenha um check verde nele."""
         out = []
         for arg in args:
             value, label, hint = (plain(arg).split(GS) + ["", ""])[:3]
@@ -81,7 +82,7 @@ class Server:
                 found = NOTE.match(label)
             if notes:
                 hint = ". ".join(notes + ([hint] if hint else []))
-            out.append((value, label, hint))
+            out.append((value, label, hint, "Installed" in notes))
         return out
 
     @staticmethod
@@ -249,12 +250,12 @@ class Server:
                 # Buttons layout: "3-button games   [ ][ ][ ] / [1][2][3]" vira
                 # o nome e o icone do painel com os botoes nas posicoes.
                 fixed = []
-                for value, label, hint in entries:
+                for value, label, hint, installed in entries:
                     cells = re.findall(r"\[(.)\]", label)
                     if len(cells) == 6:
                         tiles[value] = W.layout_tile([cells.index(str(n)) + 1 for n in range(1, 7) if str(n) in cells])
                         label = label.split("  ")[0].strip()
-                    fixed.append((value, label, hint))
+                    fixed.append((value, label, hint, installed))
                 entries = fixed
             options = [(e[0], e[1]) for e in entries]
             if cmd == "radio" and style in ("people", "dots") and all(e[0].isdigit() for e in entries):
