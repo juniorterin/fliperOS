@@ -4,7 +4,7 @@ What changed in each ISO published in [Releases](https://github.com/juniorterin/
 
 ## 0.11
 
-FliperOS has a frontend of its own, and it is the default: game lists made by FliperOS itself (Attract-Mode and ES-DE are optional), a grid and a full-screen view with each game's video, and a scraper that fetches the missing art, logos, videos and info of every game by itself. The cabinet also has a web panel at http://fliperos.local: open and close games, see the screen live with sound, change settings mid-game, manage files, the ROM filter and the downloads from a phone. On a vertical monitor the frontend, the Setup menu, the boot screen and the terminal now stand upright. Updates show what they change before asking to apply, and after a new version or update the menu shows what's new once. The frontend and the web panel run on the cabinet; the vertical mode has not been seen on a CRT yet. An installed 0.10 gets all of this through update 18 at boot.
+FliperOS has a frontend of its own, and it is the default: game lists made by FliperOS itself (Attract-Mode and ES-DE are optional), a grid and a full-screen view with each game's video, and a scraper that fetches the missing art, logos, videos and info of every game by itself. The cabinet also has a web panel at http://fliperos.local: open and close games, see the screen live with sound, change settings mid-game, manage files, the ROM filter and the downloads from a phone. On a vertical monitor the frontend, the Setup menu, the boot screen and the terminal now stand upright. Updates show what they change before asking to apply, and after a new version or update the menu shows what's new once. The frontend and the web panel run on the cabinet; the vertical mode has not been seen on a CRT yet. An installed 0.10 gets all of this through updates 18 to 20. This ISO was rebuilt on 2026-10-25 with updates 19 and 20: a faster boot, updates applied at power off, the installer in the graphical menu, an on-screen keyboard for the Wi-Fi password, MAME 2010 buttons pressed once, and the automatic scrape running during games.
 
 **System changes:**
 
@@ -33,6 +33,11 @@ FliperOS has a frontend of its own, and it is the default: game lists made by Fl
 - The graphical menu: a conventional scroll bar in lists, Video Setup > Resolution as a vertical list, one tap on the joystick moves one item, and the menu closes when the Setup dies with a menu on screen
 - The Downloader takes a magnet link or a `.torrent` file
 - Colour calibration changes live with a game open, and going back to the default resets everything
+- The install media opens the graphical menu after the video output test, so installing is graphical too
+- Everything that downloads checks the internet first and offers to connect to Wi-Fi; passwords have an on-screen keyboard for the joystick
+- Scraper > Scrape the games and the automatic scrape go on in the background (a service, Setup > System > Services > Auto scrape), also during a game
+- MAME 2010 reads each panel button once (only through the RetroPad), so Buttons layout works in it
+- Video Setup > 480i games is now 480i hacks; the menu shows the network use, and its tiles stop at the ends
 
 **Tool changes:**
 
