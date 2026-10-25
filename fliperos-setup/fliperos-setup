@@ -228,6 +228,10 @@ main() {
       # A configuracao de 240p dos frontends que ainda nao a tem (nenhum
       # esta aberto agora).
       frontends_240p
+      # O resto e do Attract-Mode Plus e do Arcadeflow: so quando e ele que
+      # abre. O frontend do FliperOS faz as listas dele no --romlists (o
+      # boot fazia o mesmo trabalho duas vezes antes da primeira tela).
+      [[ ${2:-} == attractplus ]] || return 0
       if launcher_installed attractplus && [[ -d $ATTRACT_DIR/emulators ]]; then
         # Os jogos copiados desde a ultima vez (pela rede, num disco): a
         # pasta nova ganha a tela dela e a lista de cada pasta segue os

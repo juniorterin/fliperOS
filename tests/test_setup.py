@@ -3489,6 +3489,12 @@ class FrontendsTests(Base):
         start = main.split("--session-start)")[1].split(";;")[0]
         self.assertIn("        frontends_attract\n      else\n", start)
         self.assertIn("        frontends_arcadeflow_sync\n      fi\n", start)
+        # Mas so quando quem abre e o Attract-Mode: o frontend do FliperOS faz
+        # as listas no --romlists, e o boot as fazia duas vezes.
+        self.assertLess(start.index("[[ ${2:-} == attractplus ]] || return 0"),
+                        start.index("frontends_attract"))
+        self.assertIn("frontends_attract > /dev/null",
+                      (SETUP / "lib" / "frontends.sh").read_text().split("frontends_lists() {")[1].split("\n}\n")[0])
         self.assertIn("  frontends_240p\n", (ROOT / "tools/cabinet-update.sh").read_text())
 
     def test_chosen_frontend_is_configured(self):
