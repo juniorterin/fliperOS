@@ -8628,6 +8628,34 @@ class NewEmulatorBuildTests(unittest.TestCase):
             run('Game Selected: ./Paks/New.pak\n')
             self.assertEqual(calls.read_text(), 'v4\n')
 
+    def test_openbor_closes_on_esc(self):
+        # No jogo o Esc do OpenBOR nao faz nada: o fliperos-escquit vigia o
+        # processo dele, o 4 e o 3.0 (depois do exec, o PID do script).
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            games = tmp / 'openbor'
+            for d in ('Paks', 'Logs', 'v3'):
+                (games / d).mkdir(parents=True)
+            (games / 'Paks' / 'Old.pak').write_bytes(b'')
+            calls = tmp / 'calls'
+            v4, v3, esc = tmp / 'v4', tmp / 'v3', tmp / 'escquit'
+            v4.write_text('#!/bin/sh\necho "v4 $$" >> %s\nsleep 1\n' % calls)
+            v3.write_text('#!/bin/sh\necho "v3 $$" >> %s\nsleep 1\n' % calls)
+            esc.write_text('#!/bin/sh\necho "esc $*" >> %s\n' % calls)
+            for f in (v4, v3, esc):
+                f.chmod(0o755)
+            env = dict(os.environ, FLIPEROS_OPENBOR_DIR=str(games), FLIPEROS_OPENBOR4=str(v4),
+                       FLIPEROS_OPENBOR3=str(v3), FLIPEROS_ESCQUIT=str(esc))
+            for paks in ('', 'Old.pak\n'):
+                (games / 'v3' / 'paks.txt').write_text(paks)
+                calls.write_text('')
+                subprocess.run(['bash', str(ROOT / 'config/fliperos-openbor')], timeout=30, env=env, check=True)
+                lines = sorted(calls.read_text().split('\n')[:-1])
+                self.assertEqual(len(lines), 2, lines)
+                pid = lines[1].split()[1]
+                self.assertEqual(lines[0], 'esc --ignore-children %s' % pid)
+                self.assertEqual(lines[1].split()[0], 'v3' if paks else 'v4')
+
     def test_steam_installs_without_questions(self):
         body = EXTRAS.split('apt_install() {')[1].split('\n}\n')[0]
         self.assertIn('export DEBIAN_FRONTEND=noninteractive', body)
@@ -11505,6 +11533,9 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertRegex(hyp, r'(?m)^KEY_START2 +\= SDLK_2 +0 +0$')
             arcade = (tmp / 'flycast' / 'SDL_Keyboard_arcade.cfg').read_text()
             self.assertIn('224:btn_a', arcade)
+            # O Tab abre o menu do Flycast, como no mapa padrao dele.
+            self.assertIn('43:btn_menu', arcade)
+            self.assertIn('43:btn_menu', (tmp / 'flycast' / 'SDL_Keyboard.cfg').read_text())
             import struct
             keys = struct.unpack_from('<52i', (tmp / 'Saves' / 'default.cfg').read_bytes(), 40)
             self.assertEqual(keys[:5], (82, 81, 80, 79, 224))

@@ -571,6 +571,11 @@ def flycast_cfg(name, binds, keys, rests=()):
                     triggers.append(trigger)
             else:
                 analog.append('%s%s:%s' % (element[2:], element[0], key))
+    # O mapa do teclado substitui o padrao do Flycast, e com ele ia o Tab do
+    # menu (o unico jeito de chegar nele num jogo de arcade). Volta, se o
+    # painel nao usa o Tab.
+    if any(is_key(element) for _, element in binds.values()) and not any(b.startswith('43:') for b in digital):
+        digital.append('43:btn_menu')
     text = '[analog]\n' + ''.join('bind%d = %s\n' % (i, b) for i, b in enumerate(analog))
     text += '\n[digital]\n' + ''.join('bind%d = %s\n' % (i, b) for i, b in enumerate(digital))
     text += ('\n[emulator]\ndead_zone = 10\nmapping_name = %s\nrumble_power = 100\nsaturation = 100\n'
