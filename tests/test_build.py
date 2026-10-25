@@ -10117,6 +10117,10 @@ class AutomountTests(unittest.TestCase):
                        FLIPEROS_ETC=str(tmp / 'etc'), FLIPEROS_MEDIA_ROOT=str(tmp / 'media'))
             subprocess.run(['bash', str(self.SCRIPT), dev], env=env, check=True, timeout=10)
             self.assertEqual(os.readlink(tmp / 'media/fliperos/5E2C-4AEF'), 'TOSHIBA_HDWD110')
+            # Escondido no gerenciador de arquivos, uma linha so a cada montagem.
+            count.unlink()
+            subprocess.run(['bash', str(self.SCRIPT), dev], env=env, check=True, timeout=10)
+            self.assertEqual((tmp / 'media/fliperos/.hidden').read_text(), '5E2C-4AEF\n')
             # Uma pasta de verdade com o nome do UUID nao e trocada.
             (tmp / 'media/fliperos/5E2C-4AEF').unlink()
             (tmp / 'media/fliperos/5E2C-4AEF').mkdir()

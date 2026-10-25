@@ -43,6 +43,10 @@ if [[ -n $uuid && $uuid != */* && -z $(blkid -p -s LABEL -o value "$dev" 2> /dev
   link=$media/$user/$uuid
   if [[ -L $link || ! -e $link ]]; then
     ln -sfn "${target##*/}" "$link" || true
+    # Escondido no gerenciador de arquivos (o .hidden do GIO, que o PCManFM
+    # le): la o disco aparece uma vez so, pelo nome.
+    grep -qxF "$uuid" "$media/$user/.hidden" 2> /dev/null ||
+      echo "$uuid" >> "$media/$user/.hidden" || true
   fi
 fi
 exit 0
