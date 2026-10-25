@@ -1920,6 +1920,33 @@ class BootGameTests(Base):
         self.assertIn("fliperos-bootgame", (ROOT / "fliperos-rootfs.sh").read_text())
 
 
+class HarvestPackLineTests(unittest.TestCase):
+    """O quadro do Auto scrape diz de que sistema e cada pacote: os videos e
+    os logos de arcade sao so do MAME (e dos cores de arcade)."""
+
+    def test_system_in_every_pack_label(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("feharvest", SETUP / "gui/feharvest.py")
+        fh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fh)
+        names = {}
+        for line in (ROOT / "config/fliperos-media-torrents").read_text().splitlines():
+            parts = line.split("\t")
+            if not line.startswith("#") and len(parts) >= 5:
+                kind = fh.KIND_LABELS[parts[1]]
+                names[parts[0]] = ("%s %s" % (fh.pack_system(parts[4]), kind)).strip()
+        self.assertEqual(names["mame-videos-snaps"], "MAME VIDEOS")
+        self.assertEqual(names["arcade-wheels"], "MAME LOGOS")
+        self.assertEqual(names["sega-naomi-wheels"], "NAOMI LOGOS")
+        self.assertEqual(names["atomiswave_202210"], "ATOMISWAVE VIDEOS")
+        self.assertEqual(names["SegaModel2VideoSnaps"], "MODEL 2 VIDEOS")
+        h = fh.Harvester.__new__(fh.Harvester)
+        h.packs = {"mame-videos-snaps": ("downloading", 80), "arcade-wheels": ("done", 100)}
+        h.state = {}
+        fh.pack_kinds = lambda: names
+        self.assertEqual(h.pack_line(), "MAME LOGOS DONE  MAME VIDEOS 80%")
+
+
 class FirstBootLiveTests(Base):
     """O primeiro boot ja instala e liga a tela ao vivo do painel web."""
 

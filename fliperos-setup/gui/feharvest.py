@@ -35,10 +35,22 @@ RESUME_EVERY = 600         # um pacote parado (servico fora do ar): tenta retoma
 MEDIAPACKS = os.environ.get("FLIPEROS_MEDIAPACKS", "/opt/fliperos/bin/fliperos-mediapacks")
 
 
-# Os pacotes de arte da imagem e os da pessoa (lib/mediapacks.sh): o tipo
-# de cada um, para o quadro do Tab dizer LOGOS e VIDEOS.
+# Os pacotes de arte da imagem e os da pessoa (lib/mediapacks.sh): o sistema
+# e o tipo de cada um, para o quadro do Tab dizer MAME VIDEOS e NAOMI LOGOS
+# (os videos e os logos de arcade so servem as pastas do MAME e dos cores de
+# arcade; quem tem so console nao espera por eles).
 MEDIA_TORRENTS = ("/usr/local/share/fliperos/media-torrents", "/etc/fliperos/media-torrents")
 KIND_LABELS = {"logo": "LOGOS", "preview": "VIDEOS", "snap": "SCREENS", "box": "BOXES", "marquee": "MARQUEES"}
+
+
+def pack_system(name):
+    """O sistema do nome do pacote: "Arcade videos (MAME)" -> MAME, "Sega
+    Naomi logos" -> NAOMI, "Sammy Atomiswave videos" -> ATOMISWAVE."""
+    if "(" in name and name.endswith(")"):
+        return name[name.rindex("(") + 1:-1].upper()
+    words = [w for w in name.split() if w.lower() not in ("sega", "sammy", "logos", "videos", "art",
+                                                          "screenshots", "boxes", "marquees")]
+    return " ".join(words).upper()
 
 
 def pack_kinds():
@@ -49,7 +61,9 @@ def pack_kinds():
                 for line in f:
                     parts = line.rstrip("\n").split("\t")
                     if len(parts) >= 2 and not line.startswith("#"):
-                        kinds[parts[0]] = KIND_LABELS.get(parts[1], parts[1].upper())
+                        kind = KIND_LABELS.get(parts[1], parts[1].upper())
+                        system = pack_system(parts[4]) if len(parts) >= 5 else ""
+                        kinds[parts[0]] = ("%s %s" % (system, kind)).strip()
         except OSError:
             pass
     return kinds
@@ -306,9 +320,9 @@ class Harvester:
                     self.packs[key[5:]] = (parts[0], 0)
 
     def pack_line(self):
-        """Os pacotes de arte por tipo, para o quadro do Tab: "LOGOS 34%",
-        "LOGOS DONE", "VIDEOS ONE BY ONE" (o .zip de letra). Vazio sem
-        nenhum pacote."""
+        """Os pacotes de arte por sistema e tipo, para o quadro do Tab: "MAME
+        LOGOS 34%", "MAME LOGOS DONE", "MAME VIDEOS ONE BY ONE" (o .zip de
+        letra). Vazio sem nenhum pacote."""
         kinds = pack_kinds()
         rows = {}
         for pack, (state, pct) in self.packs.items():
