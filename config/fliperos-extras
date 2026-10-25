@@ -54,6 +54,10 @@ LEDSPICER_PACKAGES="ledspicer ledspicer-pacled64 ledspicer-pacdrive ledspicer-ul
 stream=${FLIPEROS_STREAM:-/opt/fliperos/bin/fliperos-stream}
 STREAM_PACKAGES="ffmpeg mesa-va-drivers"
 SERVICES_CONF=${SERVICES_CONF:-/etc/fliperos/services.conf}
+# O som da transmissao ja vem ligado (Settings > Live screen sound), pelo
+# Setup, que o desliga sozinho se o loopback nao abrir nesta placa.
+SETUP=${FLIPEROS_SETUP:-/usr/local/bin/fliperos-setup}
+FLIPEROS_CONF=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 
 progress=0 label=""
 say() {
@@ -257,6 +261,10 @@ extras_install() {
       if ((progress)); then "$stream" fetch --progress || exit 1; else "$stream" fetch || exit 1; fi
       mkdir -p "$(dirname "$SERVICES_CONF")"
       grep -q '^stream=' "$SERVICES_CONF" 2> /dev/null || echo 'stream=after' >> "$SERVICES_CONF"
+      # Com som, a menos que alguem ja o tenha desligado.
+      if ! grep -q '^stream_audio=' "$FLIPEROS_CONF" 2> /dev/null && [[ -x $SETUP ]]; then
+        "$SETUP" --setting stream_audio on > /dev/null 2>&1 || true
+      fi
       systemctl daemon-reload 2> /dev/null
       systemctl restart fliperos-stream.service 2> /dev/null || true
       ;;

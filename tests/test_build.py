@@ -6387,6 +6387,11 @@ class LiveScreenTests(unittest.TestCase):
         text = extras.read_text()
         self.assertIn('STREAM_PACKAGES="ffmpeg mesa-va-drivers"', text)
         self.assertIn("grep -q '^stream=' \"$SERVICES_CONF\" 2> /dev/null || echo 'stream=after'", text)
+        # O som da transmissao ja ligado, a menos que alguem o tenha desligado.
+        self.assertIn("if ! grep -q '^stream_audio=' \"$FLIPEROS_CONF\" 2> /dev/null && [[ -x $SETUP ]]; then", text)
+        self.assertIn('"$SETUP" --setting stream_audio on', text)
+        update = (ROOT / 'updates/0028.sh').read_text()
+        self.assertIn("grep -q '^stream_audio=' \"$conf\" 2> /dev/null && exit 0", update)
 
     def test_dmd_art_for_the_obs_marquee(self):
         media = self.tmp / 'media'
