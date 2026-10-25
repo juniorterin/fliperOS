@@ -11218,19 +11218,22 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertEqual(lines(2, 'b4', 'b0'), ['input_player2_b_btn = "0"', 'input_player2_b_axis = "+99"'])
         self.assertEqual(lines(1, 'coin', 'b9'), ['input_player1_select_btn = "9"',
                                                   'input_player1_select_axis = "+99"'])
-        self.assertEqual(lines(1, 'up', '-a1'), ['input_player1_up_axis = "-1"', 'input_player1_up_btn = "99"'])
+        self.assertEqual(lines(1, 'up', '-a1'), ['input_player1_up_axis = "-1"', 'input_player1_up_btn = "nul"'])
         self.assertEqual(lines(1, 'left', 'h0.8'), ['input_player1_left_btn = "h0left"',
-                                                    'input_player1_left_axis = "+99"'])
+                                                    'input_player1_left_axis = "nul"'])
 
     def test_retroarch_profile_does_not_add_a_second_button(self):
         # Painel que se diz Xbox 360 (o do gabinete em 2026-10-25): botao 2 no
         # B e os 5 e 6 nos gatilhos. Com "nul" no lado sem uso, o RetroArch
         # usava o do perfil automatico (o B e o A do RetroPad): o botao 2
         # apertava junto o 5 no MAME 2010. E os gatilhos tambem eram L2/R2.
-        panel = {'b1': (0, 'b0'), 'b2': (0, 'b1'), 'b3': (0, 'b2'), 'b4': (0, 'b3'),
+        panel = {'up': (0, 'h0.1'), 'b1': (0, 'b0'), 'b2': (0, 'b1'), 'b3': (0, 'b2'), 'b4': (0, 'b3'),
                  'b5': (0, '+a5'), 'b6': (0, '+a2')}
         cfg = self.rc.retroarch_cfg({1: panel}, {0: 'Xbox 360 Controller'}).split('\n')
-        self.assertNotIn('"nul"', '\n'.join(l for l in cfg if '_btn' in l or '_axis' in l))
+        self.assertNotIn('"nul"', '\n'.join(l for l in cfg if ('_btn' in l or '_axis' in l) and '_up_' not in l))
+        # O direcional: no driver linuxraw o hat chega como eixo, e o eixo do
+        # perfil (a mesma direcao) continua valendo.
+        self.assertIn('input_player1_up_axis = "nul"', cfg)
         for line in ('input_player1_a_axis = "+5"', 'input_player1_a_btn = "99"', 'input_player1_x_btn = "1"',
                      'input_player1_l2_axis = "+99"', 'input_player1_r2_axis = "+99"',
                      'input_player1_l2_btn = "99"', 'input_player1_r2_btn = "99"'):

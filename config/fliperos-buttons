@@ -207,21 +207,29 @@ def mame_code(index, element):
 # ele usa o do perfil automatico do controle. No Xbox 360 o B (botao 2 de um
 # painel assim) e o A do RetroPad, e o botao 2 apertava junto o 5 no MAME
 # 2010. Um indice que nao existe nunca e apertado.
+# Nas direcoes o "nul" fica: o perfil ali so traz a mesma direcao, e e por
+# ele que o direcional anda no driver linuxraw do RetroArch (o /dev/input/js,
+# onde o hat do Xbox 360 chega como eixo e o "h0up" nunca e apertado).
 RA_NONE_BTN, RA_NONE_AXIS = '99', '+99'
+DIRECTIONS = ('up', 'down', 'left', 'right')
 
 
 def retroarch_lines(player, control, element):
     """Os binds do RetroArch (driver udev) de um controle de um jogador."""
     key = 'input_player%d_%s' % (player, RA_KEYS[control])
+    if control in DIRECTIONS:
+        none_btn = none_axis = 'nul'
+    else:
+        none_btn, none_axis = RA_NONE_BTN, RA_NONE_AXIS
     if is_key(element):
-        return ['%s = "%s"' % (key, KEYS[element[2:]][0]), '%s_btn = "%s"' % (key, RA_NONE_BTN),
-                '%s_axis = "%s"' % (key, RA_NONE_AXIS)]
+        return ['%s = "%s"' % (key, KEYS[element[2:]][0]), '%s_btn = "%s"' % (key, none_btn),
+                '%s_axis = "%s"' % (key, none_axis)]
     if element.startswith('b'):
-        return ['%s_btn = "%s"' % (key, element[1:]), '%s_axis = "%s"' % (key, RA_NONE_AXIS)]
+        return ['%s_btn = "%s"' % (key, element[1:]), '%s_axis = "%s"' % (key, none_axis)]
     if element.startswith('h'):
         hat, direction = element[1:].split('.')
-        return ['%s_btn = "h%s%s"' % (key, hat, RA_HAT[direction]), '%s_axis = "%s"' % (key, RA_NONE_AXIS)]
-    return ['%s_axis = "%s%s"' % (key, element[0], element[2:]), '%s_btn = "%s"' % (key, RA_NONE_BTN)]
+        return ['%s_btn = "h%s%s"' % (key, hat, RA_HAT[direction]), '%s_axis = "%s"' % (key, none_axis)]
+    return ['%s_axis = "%s%s"' % (key, element[0], element[2:]), '%s_btn = "%s"' % (key, none_btn)]
 
 
 def retroarch_triggers(player, binds):
