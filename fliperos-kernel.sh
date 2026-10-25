@@ -64,6 +64,11 @@ build() {
   ./scripts/config --disable MODULE_SIG --disable MODULE_SIG_ALL
   ./scripts/config --disable DEBUG_INFO --disable DEBUG_INFO_DWARF5 \
     --disable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT --disable DEBUG_INFO_BTF --enable DEBUG_INFO_NONE
+  # Sem o ftrace: a cada modulo carregado ele procura no kallsyms cada funcao
+  # do modulo (test_for_valid_rec), uma busca linear por vez. No amdgpu sao
+  # uns 4 s com o boot inteiro parado; no i915, 0,6 dos 0,86 s da carga. O
+  # STACK_TRACER do Ubuntu religaria o FUNCTION_TRACER (select).
+  ./scripts/config --disable FUNCTION_TRACER --disable STACK_TRACER
   # O que o FliperOS precisa de fato: EDID por firmware (entradas EDID do
   # boot e resolucao personalizada) e console girado (monitor vertical).
   ./scripts/config --enable DRM_LOAD_EDID_FIRMWARE --enable FRAMEBUFFER_CONSOLE_ROTATION
@@ -80,6 +85,7 @@ build() {
   for opt in DRM_LOAD_EDID_FIRMWARE FRAMEBUFFER_CONSOLE_ROTATION; do
     grep -q "^CONFIG_$opt=y" .config || { echo "CONFIG_$opt ended up disabled" >&2; exit 1; }
   done
+  ! grep -q '^CONFIG_DYNAMIC_FTRACE=y' .config || { echo "CONFIG_DYNAMIC_FTRACE ended up enabled" >&2; exit 1; }
 
   make -j"$(nproc)" bindeb-pkg KDEB_PKGVERSION="$KERNEL_VERSION-1fliperos" KDEB_CHANGELOG_DIST=noble \
     > "$work/make.log" 2>&1 || {
