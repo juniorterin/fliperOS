@@ -1210,6 +1210,20 @@ class NetworkTests(Base):
         self.assertEqual(self.env.out("net_hardware").splitlines(),
                          ["No network adapter besides Ethernet was found."])
 
+    def test_browse_shows_a_disk_once_not_its_uuid_shortcut(self):
+        media = self.env.dir / "media"
+        (media / "TOSHIBA_HDWD110").mkdir(parents=True)
+        (media / "5E2C-4AEF").symlink_to("TOSHIBA_HDWD110")
+        (media / "roms").symlink_to(self.env.dir)
+        r = self.env.run("""
+            source %s/lib/ui.sh
+            ui_menu() { shift 3; printf '%%s\\n' "$@" >&2; return 1; }
+            ui_browse T X %s dir
+        """ % (SETUP, media))
+        self.assertIn("0|TOSHIBA_HDWD110/", r.stderr)
+        self.assertIn("roms/", r.stderr)
+        self.assertNotIn("5E2C-4AEF", r.stderr)
+
     def test_online_from_the_networkmanager_state(self):
         state = self.env.dir / "nmstate"
         self.env.stub("nmcli", 'case "$*" in "-t -f STATE general") cat %s ;; esac' % state)

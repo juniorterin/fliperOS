@@ -843,6 +843,9 @@ ui_browse() {
       [[ -d $path ]] || continue
       path=${path%/}
       name=${path##*/}
+      # Um atalho para uma pasta ao lado (o /media/fliperos/<UUID> do disco
+      # sem rotulo, config/fliperos-automount): o mesmo disco duas vezes.
+      [[ -L $path && $(readlink -- "$path") != */* ]] && continue
       [[ $name == "$from" ]] && default=${#paths[@]}
       entries+=("${#paths[@]}|$name/")
       paths+=("$path")
