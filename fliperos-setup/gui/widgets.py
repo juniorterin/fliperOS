@@ -270,23 +270,21 @@ def rate_text(n):
             return "%d%s" % (n, unit)
 
 
-def net_usage(surf, left, right, y):
-    """Entre o IP e o disco: a seta para baixo com o que entra e a para
-    cima com o que sai. Fica de fora se nao cabe (em pe)."""
-    import tiny
+def net_usage(surf, x, y, right):
+    """Na linha dos pontos do carrossel e da versao, a esquerda: a seta para
+    baixo com o que entra e a para cima com o que sai. Fica de fora se nao
+    cabe antes de right (em pe)."""
     rate = net_rate()
     if not rate:
         return
     down, up = rate_text(rate[0]), rate_text(rate[1])
-    need = 6 + tiny.width(down) + 8 + 6 + tiny.width(up)
-    if right - left - 16 < need:
+    if x + 8 + width(down) + 10 + 8 + width(up) > right:
         return
-    x = (left + right - need) // 2
-    pygame.draw.polygon(surf, T.GREEN, [(x, y + 1), (x + 4, y + 1), (x + 2, y + 4)])
-    x += 6
-    x += tiny.text(surf, down, T.FG, x, y) + 8
-    pygame.draw.polygon(surf, T.PINK, [(x, y + 4), (x + 4, y + 4), (x + 2, y + 1)])
-    tiny.text(surf, up, T.FG, x + 6, y)
+    pygame.draw.polygon(surf, T.GREEN, [(x, y + 2), (x + 6, y + 2), (x + 3, y + 6)])
+    x += 9
+    x += text(surf, down, T.LINE, x, y) + 10
+    pygame.draw.polygon(surf, T.PINK, [(x, y + 6), (x + 6, y + 6), (x + 3, y + 2)])
+    text(surf, up, T.LINE, x + 9, y)
 
 
 def frame(surf, ctx, title, keys, error=False, score=False):
@@ -316,14 +314,11 @@ def frame(surf, ctx, title, keys, error=False, score=False):
         # Cada um com o icone na frente: a rede e o disco.
         surf.blit(T.small_icon("net"), (T.SAFE_X, 32))
         w = text(surf, "NET", T.RED, T.SAFE_X + 12, 32) + 12
-        ip_end = T.SAFE_X + w + 8 + text(surf, ip, T.FG, T.SAFE_X + w + 8, 32)
-        disk_x = right
+        text(surf, ip, T.FG, T.SAFE_X + w + 8, 32)
         if used:
             w = text(surf, used, T.FG, right, 32, right=True)
             w += text(surf, "DISK", T.RED, right - w - 8, 32, right=True) + 8
             surf.blit(T.small_icon("disk"), (right - w - 12, 32))
-            disk_x = right - w - 12
-        net_usage(surf, ip_end, disk_x, 33)
 
     total = sum(width(k) + 8 + width(a) for k, a in keys) + 16 * (len(keys) - 1)
     if total > T.SAFE_W:
@@ -557,6 +552,9 @@ class Menu(Animated):
             for i in range(n):
                 color = T.PINK if i == self.cursor else T.LINE
                 pygame.draw.rect(surf, color, (T.WIDTH // 2 - n * 5 + 2 + i * 10, T.HEIGHT - 40, 6, 6))
+        if self.title.startswith("FliperOS"):
+            # O uso da rede, a esquerda dos pontos.
+            net_usage(surf, T.SAFE_X, T.HEIGHT - 41, T.WIDTH // 2 - n * 5 - 8)
         if self.title == "FliperOS" and ctx.get("version"):
             text(surf, "V" + ctx["version"], T.LINE, T.SAFE_X + T.SAFE_W, T.HEIGHT - 41, right=True)
 
