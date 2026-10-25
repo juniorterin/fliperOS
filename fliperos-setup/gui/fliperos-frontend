@@ -262,10 +262,18 @@ class Frontend:
                 rows.extend((c, 1, game) for c in clones or ())
         self.rows = rows
         if keep:
-            for i, (g, level, _) in enumerate(rows):
-                if g["Name"] == keep and (level == 0 or i == self.cursor):
-                    self.cursor = i
-                    break
+            # O mesmo jogo, onde ele estiver agora (trocar de modo muda a
+            # posicao dos clones): a linha dele mesmo, nao a "MAIN SET".
+            found = [i for i, (g, _, extra) in enumerate(rows) if g["Name"] == keep and extra != "main"]
+            if found:
+                self.cursor = min(found, key=lambda i: (abs(i - self.cursor) if rows[i][1] else -1))
+            else:
+                # Um clone com o pai fechado na lista: o pai abre e ele aparece.
+                g = next((g for g in games if g["Name"] == keep), None)
+                parent = g.get("CloneOf") if g else None
+                if parent and self.mode == "list" and self.show_clones and parent not in self.opened:
+                    self.opened.add(parent)
+                    return self.rebuild(keep)
         self.cursor = max(0, min(self.cursor, len(rows) - 1))
 
     def game(self):

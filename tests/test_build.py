@@ -4426,6 +4426,29 @@ class FrontendDataTests(unittest.TestCase):
                             ('kof10th', 'The King of Fighters 10th Anniversary (bootleg of The King of Fighters 2002)')):
             self.assertEqual(fd.variant({'Name': name, 'Title': title, 'CloneOf': 'kof2002'}, kof), title)
         self.assertEqual(fd.short_title(games[0]), 'Samurai Shodown V')
+
+        # Trocar de modo para no mesmo jogo, tambem num clone (na lista ele
+        # fica debaixo do pai, que abre; na grade a posicao dele muda).
+        from importlib.machinery import SourceFileLoader
+        import types
+        loader = SourceFileLoader('fliperos_frontend_test', str(ROOT / 'fliperos-setup/gui/fliperos-frontend'))
+        frontend = types.ModuleType(loader.name)
+        frontend.__file__ = loader.path
+        loader.exec_module(frontend)
+        fe = types.SimpleNamespace(fd=fd, show_clones=True, opened=set(), cursor=0, mode='flow',
+                                   filtered=lambda: games)
+        rebuild = frontend.Frontend.rebuild
+        fe.rebuild = lambda keep=None: rebuild(fe, keep)
+        rebuild(fe, keep='samsho5b')
+        self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'samsho5b')
+        fe.mode = 'list'
+        rebuild(fe, keep='samsho5b')
+        self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'samsho5b')
+        self.assertIn('samsho5', fe.opened)
+        fe.mode = 'flow'
+        rebuild(fe, keep='sengoku2')
+        rebuild(fe, keep='sengoku2')
+        self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'sengoku2')
         self.assertEqual([fd.first_letter(g) for g in games[:1] + [{'Name': '1944', 'Title': '1944'}]], ['S', '#'])
 
     def test_button_map_from_the_setup(self):
