@@ -397,6 +397,7 @@ def fetch_metadata(rpc, kind, link, progress, timeout):
     if 'torrent-duplicate' in got and not args['paused']:
         rpc.call('torrent-start', ids=[hash_])
     end = time.monotonic() + timeout
+    warned = False
     while True:
         t = rpc.torrent(hash_, ['name', 'files', 'metadataPercentComplete', 'peersConnected',
                                 'error', 'errorString'])
@@ -409,8 +410,13 @@ def fetch_metadata(rpc, kind, link, progress, timeout):
             rpc.remove(hash_)
             raise OSError('no peer sent the file list in %d minutes (is the link alive?)' % (timeout // 60))
         pct = int(90 * float((t or {}).get('metadataPercentComplete') or 0))
-        say(progress, '@step %d Asking the peers for the file list (%d connected)'
-            % (pct, (t or {}).get('peersConnected') or 0))
+        peers = (t or {}).get('peersConnected') or 0
+        say(progress, '@step %d Asking the peers for the file list (%d connected)' % (pct, peers))
+        # Nenhum peer depois de meio minuto: quase sempre e a rede (o Wi-Fi
+        # ainda nao conectado numa instalacao nova), nao o Transmission.
+        if not peers and not warned and time.monotonic() > end - timeout + 30:
+            warned = True
+            say(progress, '@msg No peer found yet: check the internet (Setup > Network Setup)')
         time.sleep(0.5)
 
 
