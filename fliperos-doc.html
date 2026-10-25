@@ -31,6 +31,9 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>check the system</strong> (video mode and modeline, temperatures, logs) or open a terminal.</li>
 </ul>
 <p>Every page in detail: <a href="#Web-panel">Web panel</a>.</p>
+<h3 id="new-your-controller-on-the-stream">New: your controller on the stream</h3>
+<p>The stick and the buttons light up on your live stream while you press them on the cabinet, like the input displays of fighting game streams. It's a page for an OBS Browser Source, with a transparent background: copy its address from <strong>Live &gt; Controller for OBS</strong> and paste it in OBS.</p>
+<p>It reads the controls of Button mapping, joysticks and keyboard encoders alike, for one or two players. You restyle it in the panel, in a CSS editor with a live preview, and a saved style shows up in OBS at once. Step by step and CSS examples: <a href="#Controller-overlay">Controller on the stream</a>.</p>
 <h2 id="from-zero-to-playing-step-by-step">From zero to playing: step by step</h2>
 <p>This guide goes from an empty cabinet to a game on screen. Each step says what you will see and what to press. The details behind each screen are in the wiki pages linked along the way.</p>
 <h3 id="1-what-you-need">1. What you need</h3>
@@ -851,7 +854,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>The opening text (the high scores, or "Now Playing") scrolls once, achievements pop up and the versus score shows each side's name and wins. <code>&amp;led=1</code> draws it as LED dots and <code>&amp;text=0</code> leaves out the texts. In OBS: width 1280, height 320.
   - How it works: <code>fliperos-pixelcade</code>, which already gets every event (kms-run, x11-run, GroovyMAME, the Attract-Mode Plus plugin and the ES-DE scripts, installed when the page is turned on), writes the current marquee to <code>$XDG_RUNTIME_DIR/fliperos-marquee</code>. The page asks the panel for it every second; the art comes from <code>fliperos-dmd art</code>.
   - The OBS pages can't sign in, so their address carries a key, created on first use in <code>/etc/fliperos/overlay.key</code> (root only). <em>New address</em> makes another key and the old address stops working, the live screen's and the controller's included. The key only opens the marquee state, the current game's picture, the live screen and the controller.
-- <a id="controller-for-obs"></a><strong>Controller for OBS:</strong> the player's controller on the stream, <code>/overlay/input?key=…</code>. The stick and the six buttons (1 2 3 on top, 4 5 6 below), Start and Coin light up while they are pressed on the cabinet.
+- <a id="controller-for-obs"></a><strong>Controller for OBS:</strong> the player's controller on the stream, <code>/overlay/input?key=…</code>. Its own page, with the OBS steps and CSS examples: <a href="#Controller-overlay">Controller on the stream</a>. The stick and the six buttons (1 2 3 on top, 4 5 6 below), Start and Coin light up while they are pressed on the cabinet.
   - It reads the controls of Setup &gt; Joysticks &gt; Button mapping (<code>/etc/fliperos/buttons.map</code>): the joysticks through SDL and a keyboard encoder's keys straight from the input devices, without taking them from the game. With no mapping, it uses MAME's default keys for players 1 and 2.
   - <code>&amp;players=2</code> or <code>&amp;players=1,2</code> picks the players. In OBS: width 800, height 400 for one player, 1600 × 400 for two. The background is transparent.
   - The card has a CSS editor with syntax colours. The preview follows each key you type, and <em>Demo in the preview</em> presses the buttons by itself, so the look can be tried with nobody at the cabinet. <em>Format</em> lays the CSS out with one property per line (Ctrl+Z undoes it). <em>Save</em> writes it to <code>/etc/fliperos/input-overlay.css</code>, and the pages open in OBS take it at once, with no need to refresh the source; <em>Factory CSS</em> goes back to <code>input.css</code>.
@@ -901,6 +904,154 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>Every <code>POST</code> asks for the <code>X-FliperOS: 1</code> header, which a form on another site cannot send, and five wrong passwords in a minute lock that address for a minute. The page is plain HTTP, so the password crosses the network unencrypted: use it on a network you trust.</p>
 <p>The page is in English, or in Portuguese with a Portuguese browser; the button at the top switches.</p>
 <p>The JSON API is the same one the page uses, so it also serves scripts: <code>POST /api/login {"user","password"}</code>, then <code>GET /api/status</code> (all of it), <code>/api/logs</code>, <code>/api/log?name=NAME&amp;lines=N</code> and <code>POST /api/volume {"action":"up"|"down"|"mute"}</code> or <code>{"set":0..100}</code>, <code>GET /api/systems</code>, <code>GET /api/games?system=KEY</code> (the romlist fields, <code>Favourite</code>, <code>PlayedCount</code>, <code>PlayedTime</code>, and the <code>filters</code>), <code>GET /api/gameinfo?system=&amp;game=</code>, <code>POST /api/favourite {"system","game","on":true|false}</code>, <code>POST /api/launch {"system","game"}</code> (the set name or the file), <code>POST /api/close</code>, <code>GET /api/files?root=roms&amp;path=FOLDER</code>, <code>GET /api/download?root=&amp;path=</code>, <code>POST /api/upload?root=&amp;path=&amp;name=</code> (the body is the file; <code>&amp;overwrite=1</code> replaces), <code>POST /api/mkdir {"root","path","name"}</code>, <code>POST /api/delete {"root","path"}</code>, <code>GET /api/settings</code>, <code>POST /api/settings {"key","value"}</code>, <code>GET /api/downloader</code>, <code>POST /api/downloader</code> (<code>{"action":"add","kind":"roms"|"chds","magnet"}</code>, <code>{"action":"start"}</code> or <code>{"action":"remove","kind","delete"}</code>), <code>GET /api/romfilter?target=&amp;folder=</code> (the parameters, presets and saved Downloader filter), <code>POST /api/romfilter/count</code>, <code>/save</code>, <code>/scan</code> and <code>/run</code> (<code>{"target","folder","values":{KEY:VALUE},"preset"|"transfer"}</code>), <code>GET /api/dirs?path=</code>, <code>GET /api/stream</code>, <code>POST /api/stream/offer {"fps":15|30|60,"sdp"}</code> (the SDP answer), <code>POST /api/stream/install</code>, <code>GET /api/overlay</code> and <code>POST /api/overlay {"action":"newkey"}</code>, and without login, by the key: <code>GET /overlay/marquee?key=</code>, <code>/overlay/live?key=</code>, <code>/api/overlay/state?key=</code>, <code>/api/overlay/art?key=&amp;id=</code> and <code>POST /api/overlay/offer?key=</code>, <code>GET /api/tasks</code>, <code>GET /api/task?id=N</code> (with the log), <code>POST /api/task/cancel {"id":N}</code>, <code>GET /api/screenshot</code> (a PNG) and <code>GET /api/terminal</code> (a WebSocket: binary frames are the keys and the screen, a text frame <code>{"resize":[columns,rows]}</code> sets the size) and <code>GET /api/trackball</code> (a WebSocket of text frames <code>{"m":[dx,dy],"w":wheel}</code> and <code>{"b":["left"|"right"|"middle",1|0]}</code>).</p>
+<h1 id="Controller-overlay">Controller on the stream</h1>
+<h1 id="controller-on-the-stream">Controller on the stream</h1>
+<p>Put your controller on the screen of your live stream. The stick and the buttons light up while you press them on the cabinet, like the input displays of fighting game streams. Viewers see every motion and every button.</p>
+<p>It's a page for an OBS <strong>Browser Source</strong>, with a transparent background, so it sits on top of the game. You restyle it in the web panel, in a CSS editor with a live preview. A saved style shows up in OBS at once.</p>
+<p>It needs no extra hardware or program: it reads the same controls you set in Setup &gt; Joysticks &gt; Button mapping.</p>
+<h2 id="put-it-in-obs">Put it in OBS</h2>
+<ol>
+<li>Open the web panel (<code>http://fliperos.local</code>) and go to <strong>Live</strong>.</li>
+<li>Scroll to the <strong>Controller for OBS</strong> card and press <strong>Copy</strong> next to the address.</li>
+<li>In OBS: <strong>Sources &gt; + &gt; Browser</strong>, and paste the address in <strong>URL</strong>.</li>
+<li>Width and height: <strong>800 × 400</strong> for one player, <strong>1600 × 400</strong> for two.</li>
+<li>Place it over the game, in a corner or below it, and resize it as you like: everything scales with the source.</li>
+</ol>
+<p>The address carries a key, the same as the marquee's and the live screen's, because OBS can't sign in. <strong>New address</strong>, on the Marquee for OBS card (it shows with the marquee page on), makes a new key for all three; then copy the addresses again.</p>
+<h2 id="options">Options</h2>
+<table>
+<thead>
+<tr>
+<th>In the panel</th>
+<th>In the address</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Players: Player 1</td>
+<td>(nothing)</td>
+<td>One panel, player 1</td>
+</tr>
+<tr>
+<td>Players: Player 2</td>
+<td><code>&amp;players=2</code></td>
+<td>One panel, player 2</td>
+</tr>
+<tr>
+<td>Players: 1 and 2</td>
+<td><code>&amp;players=1,2</code></td>
+<td>Two panels side by side (also <code>1,2,3</code> and <code>1,2,3,4</code>)</td>
+</tr>
+<tr>
+<td>Demo in the preview</td>
+<td><code>&amp;demo=1</code></td>
+<td>Presses the buttons by itself, with no one at the cabinet</td>
+</tr>
+</tbody>
+</table>
+<p>The demo only changes the preview in the panel. In OBS, leave it out of the address, or the buttons light up on their own.</p>
+<h2 id="what-it-shows">What it shows</h2>
+<p>Each player has:</p>
+<ul>
+<li>the <strong>stick</strong>: a ball that leans to the direction pressed, diagonals too;</li>
+<li><strong>six buttons</strong>: 1 2 3 on top and 4 5 6 below, the panel order of Button mapping, on the curve of a Vewlix panel;</li>
+<li><strong>Start</strong> and <strong>Coin</strong>;</li>
+<li>the <strong>P1</strong> / <strong>P2</strong> label.</li>
+</ul>
+<p>The buttons follow the Button mapping, not one game's labels: button 1 is the panel's button 1 in every game.</p>
+<h2 id="change-the-look-css">Change the look (CSS)</h2>
+<p>The card has a CSS editor next to the preview, with syntax colours. The preview changes at each key you type.</p>
+<ul>
+<li><strong>Save</strong> writes the CSS to the cabinet, and the pages open in OBS take it at once. No need to refresh the source.</li>
+<li><strong>Format</strong> lays the CSS out with one property per line. Ctrl+Z undoes it.</li>
+<li><strong>Factory CSS</strong> goes back to the default style.</li>
+</ul>
+<p>The factory CSS is commented part by part, and the best start is to edit it.</p>
+<h3 id="the-classes">The classes</h3>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.pad</code></td>
+<td>One player's panel; also <code>.p1</code>, <code>.p2</code>, and <code>.active</code> while something is pressed</td>
+</tr>
+<tr>
+<td><code>.label</code></td>
+<td>P1, P2...</td>
+</tr>
+<tr>
+<td><code>.stick</code></td>
+<td>The stick; gets <code>.up</code> <code>.down</code> <code>.left</code> <code>.right</code> while pressed, and <code>data-dir</code> such as <code>up-left</code></td>
+</tr>
+<tr>
+<td><code>.gate</code>, <code>.ball</code></td>
+<td>The base of the stick and its ball</td>
+</tr>
+<tr>
+<td><code>.buttons</code></td>
+<td>The six buttons</td>
+</tr>
+<tr>
+<td><code>.button</code></td>
+<td>Each button: <code>.b1</code> to <code>.b6</code>, <code>.start</code>, <code>.coin</code>; <code>.on</code> while pressed</td>
+</tr>
+<tr>
+<td><code>.system</code></td>
+<td>Start and Coin</td>
+</tr>
+<tr>
+<td><code>body.players-2</code></td>
+<td>Two panels (also <code>players-3</code>, <code>players-4</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Sizes use <strong><code>--u</code></strong>: one panel is 200 × 100 <code>--u</code>, and <code>--u</code> grows with the OBS source. Write sizes as <code>calc(var(--u) * 26)</code> and the style fits any source size.</p>
+<h3 id="examples">Examples</h3>
+<p>Add these at the end of the CSS and press Save.</p>
+<p>Other button colours (here, the Sega Astro City pattern):</p>
+<pre><code class="language-css">:root {
+  --b1: #ff5555;
+  --b2: #f1fa8c;
+  --b3: #8be9fd;
+  --b4: #ff5555;
+  --b5: #f1fa8c;
+  --b6: #8be9fd;
+}
+</code></pre>
+<p>Unpressed buttons hidden, only the presses show:</p>
+<pre><code class="language-css">.button { opacity: 0; }
+.button.on { opacity: 1; }
+</code></pre>
+<p>No Start and Coin:</p>
+<pre><code class="language-css">.system { display: none; }
+</code></pre>
+<p>A dark box behind each panel:</p>
+<pre><code class="language-css">.pad {
+  background: rgba(25, 26, 33, 0.7);
+  border-radius: calc(var(--u) * 8);
+}
+</code></pre>
+<p>The whole panel lights up while anything is pressed:</p>
+<pre><code class="language-css">.pad.active .gate { border-color: #ff79c6; }
+</code></pre>
+<h2 id="if-nothing-lights-up">If nothing lights up</h2>
+<ul>
+<li><strong>The page says "wrong overlay address"</strong>: the key changed (New address). Copy the address again from the panel.</li>
+<li><strong>Nothing lights up, or the wrong button does</strong>: check Setup &gt; Joysticks &gt; Button mapping. The page shows exactly what that map says; with no map it uses MAME's default keys for players 1 and 2.</li>
+<li><strong>A controller plugged in after the page opened</strong>: it's picked up in about 2 seconds; a keyboard encoder too.</li>
+<li><strong>The page stays blank</strong>: the cabinet is off or out of the network. The page reconnects by itself when it comes back.</li>
+</ul>
+<h2 id="how-it-works">How it works</h2>
+<p>While at least one controller page is open, the web panel runs one <strong><code>fliperos-buttons watch</code></strong> at low priority. It reads the Button mapping controls: joysticks through SDL, and a keyboard encoder's keys straight from the input devices, without taking them from the game.</p>
+<p>Each change of the pressed controls is one line of JSON, which the panel sends to the pages as Server-Sent Events. A saved CSS goes the same way (<code>event: css</code>), so the open pages fetch it again.</p>
+<p>When the last page closes, the reader stops. The CSS lives in <code>/etc/fliperos/input-overlay.css</code>; without it, the page uses the factory <code>input.css</code>.</p>
+<p>The page, the events and the CSS are at <code>/overlay/input</code>, <code>/api/overlay/input/events</code> and <code>/api/overlay/input/css</code>, all opened by the address's key. More of the web panel: <a href="#Web-panel">Web panel</a>.</p>
 <h1 id="Frontends">Frontends</h1>
 <h2 id="the-fliperos-frontend">The FliperOS frontend</h2>
 <p>The default since 2026-10-23: the game list in the look of the Setup menu (Press Start 2P, Dracula colours, the animated background), drawn at 320x240 and stretched to the screen mode. It ships in the image (<code>fliperos-setup/gui/fliperos-frontend</code>, Python and pygame) and is the <code>fliperos</code> row of the session table.</p>
