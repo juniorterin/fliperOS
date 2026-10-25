@@ -26,3 +26,4 @@
 23	12aeccf928ced16c3fa2eff27a53a0f8191688c4	2afe71c8e0ad929887fc4d137e7c4143dac1b769aa581101c5b8fc6c565f6423	no	Live works on AMD again, Live quality, controller page for OBS
 24	3843306ef76f63a8e3311d2d52fe8466cf28640f	f7b1fae3f8cd03358c79595441a4adaa327b0a7771e0bddcadfa1d9c1440a38c	no	Button 2 no longer closes the game
 25	eb94c4cf6856578322de762de29d435618e48a64	f28ee86d2943dd2c3ea465f246e75995bf6bd0f2bccb4908c8e4e845841ca89f	no	Controller preview on the Live page
+26	804d2ea6423d8e586677688c3876d4a93e83a540	9b836940b5a9c906cd451466c3c71c621b130474e8a19dc73e34676e0384b372	no	Live CSS for the OBS controller, Format button
