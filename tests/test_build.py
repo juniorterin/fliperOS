@@ -8095,6 +8095,8 @@ class EmulatorModeTests(unittest.TestCase):
         wm = client.index('openbox --config-file "${FLIPEROS_OPENBOX_RC:-/etc/fliperos/openbox-x11-run.xml}" &')
         self.assertLess(client.index('_NET_SUPPORTING_WM_CHECK'), client.index('exec /usr/local/bin/switchres'))
         self.assertLess(wm, client.index('exec /usr/local/bin/switchres'))
+        # O programa nao herda o tty1 como stdin (SIGTTIN o parava).
+        self.assertIn('--switch --launch "$emulator_command" < /dev/null\n', client)
         import xml.etree.ElementTree as ET
         rc = ET.parse(ROOT / 'config/openbox-x11-run.xml').getroot()
         ns = {'o': 'http://openbox.org/3.4/rc'}

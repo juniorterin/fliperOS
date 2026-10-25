@@ -46,5 +46,8 @@ case $(basename -- "$1") in
       emulator_command="env LD_PRELOAD=$(printf '%q' "$deflicker${LD_PRELOAD:+:$LD_PRELOAD}") $emulator_command"
     ;;
 esac
+# O stdin e o /dev/null: o programa roda fora do grupo da frente do tty1 (o
+# xinit -keeptty), e um que le o terminal leva SIGTTIN e fica parado, tela
+# preta e sem som (o Ikemen GO do KOF Final Attack, visto no gabinete).
 exec /usr/local/bin/switchres "$FLIPEROS_RES_W" "$FLIPEROS_RES_H" "$FLIPEROS_RES_HZ" \
-  --ini /etc/switchres.ini --api xrandr "${args[@]}" --switch --launch "$emulator_command"
+  --ini /etc/switchres.ini --api xrandr "${args[@]}" --switch --launch "$emulator_command" < /dev/null
