@@ -10,6 +10,11 @@ de .zip/.7z. So chega ao disco o que e de um jogo que a pessoa tem:
   so com um jogo comecando por ela; outro, sempre. Dele so saem os arquivos
   dos jogos.
 
+Os compactados vem um de cada vez (os videos do MAME sao um .zip de varios
+GB por letra): baixa um, tira dele o que e dos jogos, apaga e marca o
+proximo que ainda pode ter algo que falta. O disco so precisa de espaco
+para o maior deles.
+
 O jogo que ja tem a arte na pasta nao entra na conta. O download e do
 Transmission do Downloader (servico fliperos-transmission, de quem este
 programa usa a RPC, config/fliperos-downloader); quando o torrent termina o
@@ -367,9 +372,13 @@ def cmd_start(args):
             files = [[f['name'], f['length']] for f in t['files']]
             say(args.progress, '@step 75 Looking for the %d games in %d files' % (len(need), len(files)))
             loose, archives = select(files, need, exts)
-            wanted = sorted(set(loose) | set(archives))
-            size = sum(files[i][1] for i in wanted)
-            stats.update(files=len(wanted), bytes=size, loose=len(loose), archives=len(archives))
+            stats.update(files=len(loose) + len(archives), loose=len(loose), archives=len(archives),
+                         bytes=sum(files[i][1] for i in set(loose) | set(archives)))
+            # Os compactados, um de cada vez: os soltos e o primeiro agora,
+            # os outros na fila (cmd_finish).
+            queue = archives[1:]
+            wanted = sorted(set(loose) | set(archives[:1]))
+            size = sum(files[i][1] for i in loose) + max((files[i][1] for i in archives), default=0)
             if not wanted:
                 rpc.remove(hash_, delete=True)
                 clean_staging(args.id)
@@ -390,14 +399,15 @@ def cmd_start(args):
                 rpc.call('torrent-set', ids=[hash_], **{'files-unwanted': unwanted})
             write_state(args.id + '.json', json.dumps({
                 'hash': hash_, 'name': t.get('name') or args.id, 'type': args.type, 'link': args.link.strip(),
-                'files': files, 'wanted': wanted, 'targets': targets}))
+                'files': files, 'wanted': wanted, 'targets': targets, 'queue': queue,
+                'steps': len(archives), 'found': 0}))
             forget(args.id + '.done')
             dl.start_running(rpc, hash_)
     except OSError as e:
         say(args.progress, '@fail Starting the download|%s' % e)
         sys.exit('fliperos-mediapacks: %s' % e)
     write_result(args.result, stats)
-    say(args.progress, '@step 100 Downloading %d files (%s)' % (len(wanted), human(size)))
+    say(args.progress, '@step 100 Downloading %d files (%s)' % (stats['files'], human(stats['bytes'])))
 
 
 def cmd_status(args):
@@ -438,6 +448,8 @@ def cmd_status(args):
         rate += t['rateDownload']
         eta = max(eta, t['eta'])
         text = '%s of %s' % (human(size - rest), human(size))
+        if meta.get('steps', 0) > 1:
+            text += ', file %d of %d' % (meta['steps'] - len(meta.get('queue', [])), meta['steps'])
         if t.get('errorString'):
             text += ' (%s)' % t['errorString'][:40]
         elif t['status'] == 0:
@@ -482,6 +494,9 @@ def cmd_finish(args):
             if t is None or not t['sizeWhenDone'] or t['leftUntilDone']:
                 continue
             found, missing = install(pack, meta)
+            if next_archive(rpc, pack, meta, found):
+                continue
+            found = meta.get('found', found)
             rpc.remove(meta['hash'], delete=True)
             clean_staging(pack)
             write_state(pack + '.done', 'found=%d\nmissing=%d\nwhen=%s\n'
@@ -491,6 +506,36 @@ def cmd_finish(args):
                 log.write('%s %s: %d games, %d not in the pack\n'
                           % (time.strftime('%Y-%m-%d %H:%M:%S'), pack, found, missing))
             own(state('finish.log'), STATE)
+
+
+def next_archive(rpc, pack, meta, found):
+    """Depois de instalar o compactado da vez: ele sai do disco e o proximo
+    da fila que ainda pode ter algo que falta comeca. False: acabou a fila."""
+    for index in meta['wanted']:
+        path = os.path.join(folder_of(pack), meta['files'][index][0])
+        if os.path.isfile(path):
+            os.remove(path)
+    meta['found'] = meta.get('found', 0) + found
+    need, _ = needed(meta['targets'], EXTS[meta['type']])
+    queue = [i for i in meta.get('queue', []) if may_have(split(meta['files'][i][0])[0], set(need))]
+    if not queue:
+        return False
+    nxt, meta['queue'] = queue[0], queue[1:]
+    done = meta['wanted']
+    meta['wanted'] = [nxt]
+    # Os de antes desmarcados (nao voltam a baixar) e o proximo marcado; o
+    # torrent nunca fica "completo" no meio (ver o fliperos-downloader).
+    rpc.call('torrent-set', ids=[meta['hash']], seedRatioMode=dl.UNLIMITED)
+    rpc.call('torrent-set', ids=[meta['hash']], **{'files-wanted': [nxt]})
+    rpc.call('torrent-set', ids=[meta['hash']], **{'files-unwanted': done})
+    write_state(pack + '.json', json.dumps(meta))
+    dl.start_running(rpc, meta['hash'])
+    with open(state('finish.log'), 'a', encoding='utf-8') as log:
+        log.write('%s %s: %s done (%d games), next %s\n'
+                  % (time.strftime('%Y-%m-%d %H:%M:%S'), pack, ', '.join(meta['files'][i][0] for i in done),
+                     found, meta['files'][nxt][0]))
+    own(state('finish.log'), STATE)
+    return True
 
 
 def cmd_cancel(args):

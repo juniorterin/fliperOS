@@ -3265,15 +3265,15 @@ class ScraperTests(Base):
         started = [line.split()[1] for line in calls.read_text().splitlines() if line.startswith("start ")]
         self.assertEqual(len(started), 4)
         self.assertIn("finish", calls.read_text().split())
-        # Um pacote de .zip por letra baixaria letras inteiras (GB): sai do
-        # torrent, e o frontend traz arquivo por arquivo.
+        # Um pacote de .zip por letra fica no torrent (o fliperos-mediapacks
+        # baixa uma letra de cada vez): nada e cancelado.
         stub = (self.env.bin / "fliperos-mediapacks").read_text()
         (self.env.bin / "fliperos-mediapacks").write_text(
             stub.replace("bytes=2048\\n", "bytes=2048\\narchives=1\\n"))
         calls.unlink()
         out = self.env.out("mediapacks_auto", env).splitlines()
-        self.assertTrue(all(line.endswith("\tzip") for line in out))
-        self.assertEqual(sum(1 for line in calls.read_text().splitlines() if line.startswith("cancel ")), 4)
+        self.assertFalse([line for line in out if line.endswith("\tzip")])
+        self.assertNotIn("cancel ", calls.read_text())
 
     def test_art_pack_only_downloads_with_roms_in_its_folders(self):
         # So baixa com ROMs nas pastas do pacote, e so os nomes dos jogos que

@@ -3500,9 +3500,11 @@ class MediaPacksTests(unittest.TestCase):
         # Um link magnetico entra rodando, para os peers mandarem a lista.
         self.assertFalse([a for m, a in self.calls if m == 'torrent-add'][0]['paused'])
         # O video solto cobre o unico jogo com M; nenhum jogo comeca com Q; o
-        # P.zip do pong nao existe.
-        wanted = [f['name'] for f in self.torrents[self.VIDEOS]['files'] if f['wanted']]
-        self.assertEqual(wanted, ['videos/S.zip', 'videos/#.zip', 'videos/mslug.mp4'])
+        # P.zip do pong nao existe. Os .zip vem um de cada vez (cada letra
+        # do MAME tem GB): agora o S e o solto; o # na fila.
+        def wanted():
+            return [f['name'] for f in self.torrents[self.VIDEOS]['files'] if f['wanted']]
+        self.assertEqual(wanted(), ['videos/S.zip', 'videos/mslug.mp4'])
 
         def pack(members):
             data = io.BytesIO()
@@ -3513,16 +3515,26 @@ class MediaPacksTests(unittest.TestCase):
 
         self.complete({'videos/S.zip': pack([('S/sf2.mp4', b'video do sf2'), ('S/sonic.mp4', b'outro'),
                                              ('S/sf2.txt', b'texto'), ('../../sf2.mp4', b'fora')]),
-                       'videos/#.zip': pack([('#/1942.mp4', b'video do 1942')]),
                        'videos/mslug.mp4': b'video do mslug'})
         self.mp('finish')
         dest = self.media / 'preview/mame'
-        self.assertEqual(sorted(p.name for p in dest.iterdir()), ['1942.mp4', 'SF2.mp4', 'mslug.mp4'])
+        self.assertEqual(sorted(p.name for p in dest.iterdir()), ['SF2.mp4', 'mslug.mp4'])
         self.assertEqual((dest / 'SF2.mp4').read_bytes(), b'video do sf2')
-        self.assertEqual((dest / '1942.mp4').read_bytes(), b'video do 1942')
         self.assertFalse((self.tmp / 'sf2.mp4').exists())
+        # O S.zip saiu do disco, e o torrent segue com o proximo.
+        self.assertFalse((self.staging / 'videos/videos/S.zip').exists())
+        self.assertEqual(wanted(), ['videos/#.zip'])
+        self.assertIn(self.VIDEOS, self.torrents)
+        self.assertFalse((self.state / 'videos.done').exists())
+        meta = json.loads((self.state / 'videos.json').read_text())
+        self.assertEqual((meta['queue'], meta['steps'], meta['found']), ([], 2, 2))
+        self.complete({'videos/#.zip': pack([('#/1942.mp4', b'video do 1942')])})
+        self.mp('finish')
+        self.assertEqual(sorted(p.name for p in dest.iterdir()), ['1942.mp4', 'SF2.mp4', 'mslug.mp4'])
+        self.assertEqual((dest / '1942.mp4').read_bytes(), b'video do 1942')
         self.assertEqual((self.state / 'videos.done').read_text().splitlines()[:2], ['found=3', 'missing=1'])
         self.assertFalse((self.staging / 'videos').exists())
+        self.assertNotIn(self.VIDEOS, self.torrents)
 
     def test_nothing_to_download_and_no_space(self):
         # Todos os jogos ja tem o logo: nem fala com o Transmission.
