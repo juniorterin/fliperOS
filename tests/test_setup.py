@@ -2641,8 +2641,10 @@ class LatencyTests(Base):
         # Sem a porta do mouse PS/2 o kernel espera uns 2 s por ela a cada
         # boot; o aviso dele no log poe o i8042.noaux na linha.
         self.assertNotIn("i8042.noaux", self.env.out("boot_compose 'quiet'"))
+        # O log segue longo depois do aviso, como no gabinete (com pipefail,
+        # um grep que sai cedo matava o dmesg com SIGPIPE e dava falha).
         self.env.stub("dmesg", "echo \"[    2.320970] i8042: If AUX port is really absent "
-                               "please use the 'i8042.noaux' option\"")
+                               "please use the 'i8042.noaux' option\"; seq 200000")
         line = self.env.out("boot_compose 'quiet'").split()
         self.assertEqual(line.count("i8042.noaux"), 1)
         again = self.env.out("boot_compose '%s'" % " ".join(line)).split()

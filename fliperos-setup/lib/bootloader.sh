@@ -247,9 +247,10 @@ boot_compose() {
 I8042_NOAUX_HINT="If AUX port is really absent please use the 'i8042.noaux' option"
 KERNEL_LOG=${KERNEL_LOG:-dmesg}
 
-# i8042_noaux_needed: o kernel deste boot pediu o i8042.noaux.
+# i8042_noaux_needed: o kernel deste boot pediu o i8042.noaux. Sem o -q: ele
+# sairia no aviso, o dmesg morreria com SIGPIPE e o pipefail daria falha.
 i8042_noaux_needed() {
-  $KERNEL_LOG 2> /dev/null | grep -qF "$I8042_NOAUX_HINT"
+  $KERNEL_LOG 2> /dev/null | grep -F "$I8042_NOAUX_HINT" > /dev/null
 }
 
 # i8042_cmdline LINHA acrescenta o i8042.noaux quando o kernel o pediu.
