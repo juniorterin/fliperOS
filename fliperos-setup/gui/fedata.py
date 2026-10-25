@@ -492,15 +492,18 @@ def tree(games):
 
 def variant(clone, parent):
     """O que muda no nome do clone em relacao ao pai: o que esta entre
-    parenteses e o pai nao tem (a regiao, o set, bootleg)."""
+    parenteses e o pai nao tem (a regiao, o set, bootleg). Um hack ou
+    bootleg com nome proprio ("The King of Fighters 2002 Plus", "Crouching
+    Tiger Hidden Dragon 2003") mostra o titulo inteiro: so os parenteses
+    perdiam o nome dele."""
     title = clone.get("Title") or clone["Name"]
+    short = title.split(" (")[0]
+    if short != (parent.get("Title") or "").split(" (")[0]:
+        return title
     own = re.findall(r"\(([^()]*)\)", title)
     theirs = set(re.findall(r"\(([^()]*)\)", parent.get("Title") or ""))
     parts = [p for p in own if p not in theirs]
-    if parts:
-        return ", ".join(parts)
-    short = title.split(" (")[0]
-    return short if short != (parent.get("Title") or "").split(" (")[0] else clone["Name"]
+    return ", ".join(parts) if parts else clone["Name"]
 
 
 def short_title(game):

@@ -4419,6 +4419,12 @@ class FrontendDataTests(unittest.TestCase):
                          [('samsho5', ['samsho5a', 'samsho5b']), ('lonely', []), ('sengoku2', [])])
         self.assertEqual(fd.variant(games[1], games[0]), 'NGM-2700, set 2')
         self.assertEqual(fd.variant(games[2], games[0]), 'bootleg')
+        # Hack ou bootleg com nome proprio: o titulo inteiro, nao so os
+        # parenteses ("bootleg, set 1" sem o "Plus").
+        kof = {'Name': 'kof2002', 'Title': 'The King of Fighters 2002 (NGM-2650 ~ NGH-2650)'}
+        for name, title in (('kf2k2pls', 'The King of Fighters 2002 Plus (bootleg, set 1)'),
+                            ('kof10th', 'The King of Fighters 10th Anniversary (bootleg of The King of Fighters 2002)')):
+            self.assertEqual(fd.variant({'Name': name, 'Title': title, 'CloneOf': 'kof2002'}, kof), title)
         self.assertEqual(fd.short_title(games[0]), 'Samurai Shodown V')
         self.assertEqual([fd.first_letter(g) for g in games[:1] + [{'Name': '1944', 'Title': '1944'}]], ['S', '#'])
 
