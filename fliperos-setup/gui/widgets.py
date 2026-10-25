@@ -228,6 +228,67 @@ def footer_y_landscape():
     return 240 - 20
 
 
+# O uso da rede na linha de placar: os bytes de todas as placas (menos a lo)
+# em /proc/net/dev, lidos uma vez por segundo.
+_net = {"at": 0.0, "bytes": None, "rate": None}
+NET_DEV = "/proc/net/dev"
+
+
+def net_rate():
+    """(recebidos, enviados) em bytes por segundo; None antes da segunda
+    leitura ou sem /proc/net/dev."""
+    now = time.monotonic()
+    if now - _net["at"] < 1:
+        return _net["rate"]
+    rx = tx = 0
+    try:
+        with open(NET_DEV, encoding="utf-8") as f:
+            for line in f.readlines()[2:]:
+                name, _, data = line.partition(":")
+                if name.strip() == "lo":
+                    continue
+                fields = data.split()
+                rx, tx = rx + int(fields[0]), tx + int(fields[8])
+    except (OSError, ValueError, IndexError):
+        return None
+    if _net["bytes"]:
+        dt = now - _net["at"]
+        _net["rate"] = (max(0, rx - _net["bytes"][0]) / dt, max(0, tx - _net["bytes"][1]) / dt)
+    _net["at"], _net["bytes"] = now, (rx, tx)
+    return _net["rate"]
+
+
+def rate_text(n):
+    """Bytes por segundo em poucas letras: 512B, 1.2K, 340K, 12M."""
+    if n < 1000:
+        return "%dB" % n
+    for unit in "KMG":
+        n /= 1024
+        if n < 10:
+            return "%.1f%s" % (n, unit)
+        if n < 1000 or unit == "G":
+            return "%d%s" % (n, unit)
+
+
+def net_usage(surf, left, right, y):
+    """Entre o IP e o disco: a seta para baixo com o que entra e a para
+    cima com o que sai. Fica de fora se nao cabe (em pe)."""
+    import tiny
+    rate = net_rate()
+    if not rate:
+        return
+    down, up = rate_text(rate[0]), rate_text(rate[1])
+    need = 6 + tiny.width(down) + 8 + 6 + tiny.width(up)
+    if right - left - 16 < need:
+        return
+    x = (left + right - need) // 2
+    pygame.draw.polygon(surf, T.GREEN, [(x, y + 1), (x + 4, y + 1), (x + 2, y + 4)])
+    x += 6
+    x += tiny.text(surf, down, T.FG, x, y) + 8
+    pygame.draw.polygon(surf, T.PINK, [(x, y + 4), (x + 4, y + 4), (x + 2, y + 1)])
+    tiny.text(surf, up, T.FG, x + 6, y)
+
+
 def frame(surf, ctx, title, keys, error=False, score=False):
     """O letreiro com o titulo, a linha de placar e a legenda das teclas,
     numa tela transparente (o fundo animado fica por baixo). O placar
@@ -255,11 +316,14 @@ def frame(surf, ctx, title, keys, error=False, score=False):
         # Cada um com o icone na frente: a rede e o disco.
         surf.blit(T.small_icon("net"), (T.SAFE_X, 32))
         w = text(surf, "NET", T.RED, T.SAFE_X + 12, 32) + 12
-        text(surf, ip, T.FG, T.SAFE_X + w + 8, 32)
+        ip_end = T.SAFE_X + w + 8 + text(surf, ip, T.FG, T.SAFE_X + w + 8, 32)
+        disk_x = right
         if used:
             w = text(surf, used, T.FG, right, 32, right=True)
             w += text(surf, "DISK", T.RED, right - w - 8, 32, right=True) + 8
             surf.blit(T.small_icon("disk"), (right - w - 12, 32))
+            disk_x = right - w - 12
+        net_usage(surf, ip_end, disk_x, 33)
 
     total = sum(width(k) + 8 + width(a) for k, a in keys) + 16 * (len(keys) - 1)
     if total > T.SAFE_W:
