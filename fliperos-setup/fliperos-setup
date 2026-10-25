@@ -410,6 +410,8 @@ main() {
       else
         conf_set output_test skipped
       fi
+      # A saida ja escolhida: o resto do instalador na interface grafica.
+      ui_gui_start
     fi
     screen_live_menu
     rc=$?

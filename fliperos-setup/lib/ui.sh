@@ -66,15 +66,20 @@ ui_init() {
   export GUM_PAGER_HELP_FOREGROUND=$C_COMMENT
   export GUM_PAGER_LINE_NUMBER_FOREGROUND=$C_COMMENT
   ui_sounds
-  ui_gui_start
+  # Na midia, antes do teste de saidas, o texto (ver ui_gui_wanted).
+  if ! is_live || conf_get output_test > /dev/null 2>&1; then
+    ui_gui_start
+  fi
   return 0
 }
 
 # A interface grafica (gui/fliperos-gui, em pygame) e a outra saida desta
 # camada: com ela no ar, cada funcao daqui manda a tela ao servidor em vez de
 # chamar o gum, e as telas do Setup nao mudam. So abre no menu do gabinete
-# (fliperos-menu, o --menu), nunca num "sudo fliperos-setup" digitado por SSH,
-# e na midia de instalacao fica o texto. FLIPEROS_UI=text|gui (ou "ui" no
+# (fliperos-menu, o --menu, tambem o da midia de instalacao), nunca num
+# "sudo fliperos-setup" digitado por SSH. Na midia ela so abre depois do
+# teste de saidas, que troca o modo de video e fica no texto (ui_init e o
+# main do fliperos-setup). FLIPEROS_UI=text|gui (ou "ui" no
 # fliperos.conf) forca um dos dois. Sem video, sem pygame ou com o servidor
 # morto, tudo volta ao gum.
 UI_GUI=0
@@ -94,7 +99,7 @@ ui_gui_wanted() {
   esac
   # Pelo desktop (o atalho FliperOS Setup do LXDE, --desktop): numa janela.
   ((${SETUP_DESKTOP:-0} == 1)) && [[ -n ${DISPLAY:-} ]] && return 0
-  ((${SETUP_MENU_LOOP:-0} == 1)) && [[ -z ${DISPLAY:-} && -e $UI_DRI ]] && ! is_live
+  ((${SETUP_MENU_LOOP:-0} == 1)) && [[ -z ${DISPLAY:-} && -e $UI_DRI ]]
 }
 
 # ui_gui_alive: a interface grafica esta no ar?

@@ -66,6 +66,8 @@ class Env:
                            '"Cedar [Radeon HD 5000/6000/7350/8350 Series]" -r87 '
                            '"Advanced Micro Devices, Inc. [AMD/ATI]" "Device 0b0c"\'')
         self.cards = 0
+        # O log do kernel do container nao entra na linha do kernel.
+        self.stub("dmesg", ":")
 
     def stub(self, name, body):
         path = self.bin / name
@@ -1934,6 +1936,17 @@ class RemoteMenuTests(Base):
         self.assertEqual(self.env.run("source %s/lib/ui.sh; ui_gui_wanted" % SETUP, env).returncode, 0)
         env["FLIPEROS_UI"] = "text"
         self.assertEqual(self.env.run("source %s/lib/ui.sh; ui_gui_wanted" % SETUP, env).returncode, 1)
+
+    def test_install_media_opens_the_gui_after_the_output_test(self):
+        dri = self.env.dir / "card0"
+        dri.write_text("")
+        self.env.cmdline.write_text("boot=live quiet\n")
+        env = {"UI_DRI": str(dri), "SETUP_MENU_LOOP": "1"}
+        self.assertEqual(self.env.run("source %s/lib/ui.sh; ui_gui_wanted" % SETUP, env).returncode, 0)
+        ui = (SETUP / "lib" / "ui.sh").read_text()
+        self.assertIn("if ! is_live || conf_get output_test > /dev/null 2>&1; then\n    ui_gui_start", ui)
+        entry = (SETUP / "fliperos-setup").read_text()
+        self.assertIn("conf_set output_test skipped\n      fi\n      # A saida ja escolhida: o resto do instalador na interface grafica.\n      ui_gui_start", entry)
 
 
 class UiParityTests(unittest.TestCase):
