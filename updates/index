@@ -22,3 +22,4 @@
 19	48fc8d9dd7fff3c4690ed91faf28d894e78d6b33	6857bd1f4026033c632999c0c2630d9fc075149639b82df122817534e5548612	no	Faster boot: services after the first screen, torrents only on demand
 20	2151026795f51c2fa3e6ce3239655e1abcf8c449	5c4cb57eb581cf87119890c5f664ee5306cd94fada1d1e24a88e8759e16946fa	no	Wi-Fi keyboard, MAME 2010 buttons, background scrape, updates at power off
 21	878086f2e05dbc2b45f6f7f5d4e817657345d66e	5835c879ccba15e7a6aabd093d508c39f03ed3a7d0038a6a74d79d72dcca716d	no	Reboot without the 90 s wait, Xbox-style panels press one button
+22	00fd589b5641bcd0f5d99df9af89eaf57a8215db	9306bf19ef8b435e3a459f14b59a031b774c2bc729a75e73967f54f2bac207d5	no	Directional back on Xbox-style panels, hide games, videos by letter
