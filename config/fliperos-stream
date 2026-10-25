@@ -186,10 +186,20 @@ grab() {
   else
     copy="hwdownload,format=bgr0"
   fi
+  local started
   while :; do
+    started=$SECONDS
     LD_PRELOAD=$dropmaster${LD_PRELOAD:+:$LD_PRELOAD} "$ffmpeg" -hide_banner -loglevel error -nostdin \
       -fflags nobuffer -device "$dev" -framerate "$fps" -f kmsgrab -i - \
-      -vf "$copy,$SHARP,format=bgr0" -f rawvideo -pix_fmt bgr0 pipe:1
+      -vf "$copy,$SHARP,format=bgr0" -f rawvideo -pix_fmt bgr0 pipe:1 2> "$run/grab.new"
+    # Saiu sem chegar a mandar quadros (em ate 1 s): o erro fica para o
+    # status (o painel o mostra em vez de esperar o go2rtc desistir). A saida
+    # de uma troca de modo, depois de rodar um tempo, nao conta.
+    if ((SECONDS - started <= 1)) && [[ -s $run/grab.new ]]; then
+      mv -f "$run/grab.new" "$run/grab.err" 2> /dev/null
+    else
+      rm -f "$run/grab.new" "$run/grab.err" 2> /dev/null
+    fi
     # O codificador saiu (um zumbi, ainda sem o wait de quem o abriu, conta
     # como saido: o kill -0 nele ainda da certo).
     kill -0 "$parent" 2> /dev/null || return 0
@@ -246,6 +256,9 @@ capture() {
 config() {
   local fps
   mkdir -p "$run" || fail "could not create $run"
+  # O VA-API e testado de novo a cada inicio: o driver pode ter chegado
+  # depois (fliperos-extras, update 23), e o "0" guardado ficava ate o boot.
+  rm -f "$run/vpp" "$run/grab.err"
   {
     echo "# Gerado pelo fliperos-stream (config/fliperos-stream)."
     echo "api:"
@@ -275,6 +288,11 @@ status() {
   installed && { vpp && echo copy=vaapi || echo copy=mmap; }
   audio_on && echo audio=1 || echo audio=0
   echo "rates=$RATES"
+  # O ultimo erro da captura (grab), dos ultimos 10 s, e quando foi.
+  if [[ -n $(find "$run/grab.err" -newermt '-10 seconds' 2> /dev/null) ]]; then
+    echo "error=$(grep -v -e '^[[:space:]]*$' -e '^ERROR: ld.so:' "$run/grab.err" | head -n 1 | tr -d '\r' | cut -c1-200)"
+    echo "error_at=$(stat -c %Y "$run/grab.err" 2> /dev/null)"
+  fi
 }
 
 case ${1:-} in

@@ -61,6 +61,10 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
                       login, pela chave)
     GET  /overlay/live?key=&fps=  a tela ao vivo para o OBS; POST
                       /api/overlay/offer?key= {"fps", "sdp"} (sem login, pela chave)
+    GET  /overlay/input?key=&players=1,2  o controle para o OBS; pela chave:
+                      /api/overlay/input/events (Server-Sent Events, os
+                      comandos apertados) e /api/overlay/input/css
+    GET  /api/overlay/input/style  o CSS dele; POST {"css"} ou {"reset": true}
     GET  /api/trackball   (desligado por enquanto; FLIPEROS_WEB_TRACKBALL=1 o liga)
                       WebSocket: um mouse virtual (uinput); texto JSON
                       {"m": [dx, dy], "w": roda} e {"b": ["left", 1|0]}
@@ -128,7 +132,9 @@ STATIC_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.
                 # O marquee para o OBS: a pagina e publica, os dados pedem a chave.
                 "/overlay/marquee": "overlay.html", "/overlay.js": "overlay.js", "/overlay.css": "overlay.css",
                 # A tela ao vivo para o OBS, com a mesma chave.
-                "/overlay/live": "live.html", "/live.js": "live.js"}
+                "/overlay/live": "live.html", "/live.js": "live.js",
+                # O controle para o OBS, com a mesma chave.
+                "/overlay/input": "input.html", "/input.js": "input.js", "/input.css": "input.css"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8"}
 # Os programas que contam como "o jogo aberto", na ordem de preferencia.
@@ -1617,7 +1623,23 @@ def stream_status():
     return {"installed": values.get("installed") == "1", "active": values.get("active") == "1",
             "encoder": values.get("encoder") or None, "audio": values.get("audio") == "1",
             "rates": [int(r) for r in values.get("rates", "").split() if r.isdigit()] or list(STREAM_RATES),
-            "link": stream_link()}
+            "link": stream_link(), "copy": values.get("copy") or None, "error": values.get("error") or None,
+            "error_at": int(values["error_at"]) if values.get("error_at", "").isdigit() else None}
+
+
+def capture_problem(status, since=0):
+    """O erro da captura da tela (fliperos-stream grab) desde o tempo dado,
+    para o painel: {"error", "code"}; None sem erro. no_vaapi: o amdgpu nao
+    deixa mapear o framebuffer (EPERM no hwdownload) e falta o VA-API, que
+    copia o quadro pela placa."""
+    error = status.get("error")
+    if not error or (status.get("error_at") or 0) < since:
+        return None
+    if status.get("copy") == "mmap" and re.search(r"map DRM object|download frame", error):
+        return {"error": "the video card only lets the screen be read through VA-API, which is missing "
+                         "(mesa-va-drivers): install the live screen again under Streaming (%s)" % error,
+                "code": "no_vaapi"}
+    return {"error": "the cabinet could not capture the screen: %s" % error, "code": "capture"}
 
 
 def stream_answer(fps, offer):
@@ -1660,6 +1682,13 @@ def overlay_allowed(query):
 
 def overlay_enabled():
     return conf_values().get("marquee_overlay") == "on"
+
+
+def overlay_paths(key):
+    """Os enderecos para o OBS com a chave: o marquee, a tela e o controle."""
+    key = quote(key)
+    return {"enabled": overlay_enabled(), "path": "/overlay/marquee?key=" + key, "live": "/overlay/live?key=" + key,
+            "input": "/overlay/input?key=" + key}
 
 
 def marquee_state():
@@ -1708,6 +1737,102 @@ class ArtCache:
 def art_id(path):
     st = os.stat(path)
     return hashlib.sha1(("%s:%d:%d" % (path, st.st_mtime, st.st_size)).encode()).hexdigest()[:16]
+
+
+# ── O controle para o OBS ─────────────────────────────────────────
+# /overlay/input desenha o direcional e os botoes de um jogador, acesos
+# enquanto apertados: o fliperos-buttons watch le os controles do Button
+# mapping (e as teclas de um encoder) e o painel os manda por Server-Sent
+# Events, pela mesma chave do marquee. O CSS da pagina muda pelo painel
+# (INPUT_CSS; sem ele, o input.css de fabrica).
+BUTTONS_TOOL = ENV("FLIPEROS_BUTTONS_TOOL", BIN + "/fliperos-buttons")
+BUTTONS_MAP = ENV("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
+INPUT_CSS = ENV("FLIPEROS_INPUT_CSS", "/etc/fliperos/input-overlay.css")
+INPUT_CSS_MAX = 32768
+
+
+class InputWatch:
+    """Um fliperos-buttons watch so para todas as paginas abertas: comeca
+    com a primeira, para com a ultima e volta sozinho se cair."""
+
+    def __init__(self):
+        self.cond = threading.Condition()
+        self.clients = 0
+        self.proc = None
+        self.state = "{}"
+        self.version = 0
+
+    def join(self):
+        with self.cond:
+            self.clients += 1
+            if self.proc is None:
+                self.start()
+
+    def leave(self):
+        with self.cond:
+            self.clients -= 1
+            if self.clients <= 0 and self.proc:
+                self.proc.terminate()
+                self.proc = None
+
+    def start(self):
+        try:
+            proc = subprocess.Popen([BUTTONS_TOOL, "watch", BUTTONS_MAP], stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, text=True)
+        except OSError:
+            return
+        self.proc = proc
+        threading.Thread(target=self.read, args=(proc,), daemon=True).start()
+
+    def read(self, proc):
+        for line in proc.stdout:
+            line = line.strip()
+            if line.startswith("{"):
+                with self.cond:
+                    self.state = line
+                    self.version += 1
+                    self.cond.notify_all()
+        proc.wait()
+        with self.cond:
+            # Caiu (o SDL, um erro): tudo solto, e de novo em 2 s se ainda
+            # ha pagina aberta.
+            self.state = "{}"
+            self.version += 1
+            self.cond.notify_all()
+            if self.proc is not proc:
+                return
+            self.proc = None
+        time.sleep(2)
+        with self.cond:
+            if self.clients > 0 and self.proc is None:
+                self.start()
+
+    def wait(self, version, timeout):
+        """O estado (versao, JSON) quando mudar da versao dada, ou o mesmo
+        depois de timeout segundos."""
+        with self.cond:
+            self.cond.wait_for(lambda: self.version != version, timeout)
+            return self.version, self.state
+
+
+def input_css():
+    """O CSS da pagina do controle: o do usuario ou o de fabrica."""
+    return read(INPUT_CSS) or read(os.path.join(STATIC, "input.css"))
+
+
+def save_input_css(css):
+    """Grava o CSS do usuario (None volta ao de fabrica)."""
+    if css is None:
+        try:
+            os.remove(INPUT_CSS)
+        except FileNotFoundError:
+            pass
+        return
+    os.makedirs(os.path.dirname(INPUT_CSS), exist_ok=True)
+    tmp = "%s.%d.tmp" % (INPUT_CSS, os.getpid())
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(css)
+    os.replace(tmp, INPUT_CSS)
 
 
 def downloader_status():
@@ -1982,6 +2107,7 @@ class Panel:
         self.romcount, self.romscan = RomCount(), RomCount()
         self.stream = Cached(5, stream_status)
         self.art = ArtCache()
+        self.input = InputWatch()
         self.mouse = VirtualMouse()
         self.tasks = Tasks()
         self.downloader = Cached(3, downloader_status)
@@ -2094,11 +2220,17 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 return self.send(404, {"error": "not found"})
             return self.send(200, data, TYPES[os.path.splitext(name)[1]],
-                             frame="SAMEORIGIN" if name.startswith(("overlay", "live")) else "DENY")
+                             frame="SAMEORIGIN" if name.startswith(("overlay", "live", "input")) else "DENY")
         if not url.path.startswith("/api/"):
             return self.send(404, {"error": "not found"})
         if url.path in ("/api/overlay/state", "/api/overlay/art"):
             return self.overlay_data(url)
+        if url.path in ("/api/overlay/input/events", "/api/overlay/input/css"):
+            if not overlay_allowed(parse_qs(url.query)):
+                return self.send(403, {"error": "wrong or missing key"})
+            if url.path.endswith("/css"):
+                return self.send(200, input_css().encode(), TYPES[".css"])
+            return self.input_events()
         user = self.panel.sessions.user(self.token())
         if not user:
             return self.send(401, {"error": "login"})
@@ -2198,9 +2330,10 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/api/stream":
             return self.send(200, self.panel.stream.get())
         if url.path == "/api/overlay":
-            key = quote(overlay_key())
-            return self.send(200, {"enabled": overlay_enabled(), "path": "/overlay/marquee?key=" + key,
-                                   "live": "/overlay/live?key=" + key})
+            return self.send(200, overlay_paths(overlay_key()))
+        if url.path == "/api/overlay/input/style":
+            return self.send(200, {"css": input_css(), "custom": os.path.isfile(INPUT_CSS),
+                                   "default": read(os.path.join(STATIC, "input.css"))})
         if url.path == "/api/gameinfo":
             query = parse_qs(url.query)
             system = self.panel.system((query.get("system") or [""])[0])
@@ -2310,9 +2443,19 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/api/overlay":
             if self.body().get("action") != "newkey":
                 return self.send(400, {"error": "action newkey"})
-            key = quote(overlay_key(new=True))
-            return self.send(200, {"enabled": overlay_enabled(), "path": "/overlay/marquee?key=" + key,
-                                   "live": "/overlay/live?key=" + key})
+            return self.send(200, overlay_paths(overlay_key(new=True)))
+        if url.path == "/api/overlay/input/style":
+            data = self.body()
+            css = None if data.get("reset") is True else data.get("css")
+            # Sem "css" nem "reset" (um corpo grande demais chega cortado): nada muda.
+            if (css is None and data.get("reset") is not True) or (
+                    css is not None and (not isinstance(css, str) or len(css.encode()) > INPUT_CSS_MAX)):
+                return self.send(400, {"error": "css: text up to %d bytes" % INPUT_CSS_MAX})
+            try:
+                save_input_css(css)
+            except OSError as exc:
+                return self.send(500, {"error": str(exc)})
+            return self.send(200, {"css": input_css(), "custom": os.path.isfile(INPUT_CSS)})
         if url.path == "/api/settings":
             data = self.body()
             key, value = str(data.get("key", "")), str(data.get("value", ""))
@@ -2441,11 +2584,56 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(400, {"error": "fps 15, 30 or 60 and an SDP offer"})
         if not self.panel.stream.get().get("active"):
             return self.send(409, {"error": "the live screen is not running (Setup > System > Services)"})
+        # O go2rtc so responde quando a captura manda o primeiro quadro, ou
+        # desiste depois de uns 20 s. Enquanto isso, a cada segundo, o erro
+        # da captura (se ela nao consegue ler a tela) responde na hora.
+        result, since = {}, int(time.time())
+
+        def ask():
+            try:
+                result["sdp"] = stream_answer(fps, offer)
+            except (OSError, ValueError) as exc:
+                result["error"] = exc
+
+        thread = threading.Thread(target=ask, daemon=True)
+        thread.start()
+        deadline = time.monotonic() + 25
+        while thread.is_alive() and time.monotonic() < deadline:
+            thread.join(1)
+            problem = None if not thread.is_alive() else capture_problem(stream_status(), since)
+            if problem:
+                return self.send(502, problem)
+        if "sdp" in result:
+            return self.send(200, {"sdp": result["sdp"]})
+        problem = capture_problem(stream_status(), since)
+        return self.send(502, problem or {"error": "go2rtc: %s" % result.get("error", "no answer"), "code": "go2rtc"})
+
+    def input_events(self):
+        """Os comandos apertados para a pagina do controle (Server-Sent
+        Events): o estado na hora e a cada mudanca; um comentario a cada 15 s
+        mostra se a pagina fechou."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.close_connection = True
+        watch = self.panel.input
+        watch.join()
         try:
-            answer = stream_answer(fps, offer)
-        except (OSError, ValueError) as exc:
-            return self.send(502, {"error": "go2rtc: %s" % exc})
-        return self.send(200, {"sdp": answer})
+            version, sent = None, None
+            while True:
+                version, state = watch.wait(version, 15)
+                if state != sent:
+                    self.wfile.write(b"data: " + state.encode() + b"\n\n")
+                    sent = state
+                else:
+                    self.wfile.write(b": ping\n\n")
+                self.wfile.flush()
+        except OSError:
+            pass
+        finally:
+            watch.leave()
 
     def overlay_data(self, url):
         """O marquee para o OBS, pela chave do endereco: o estado (state) e

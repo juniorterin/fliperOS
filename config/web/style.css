@@ -471,6 +471,7 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
   padding: 16px; text-align: center; color: var(--dim);
   background: radial-gradient(circle at 50% 40%, #2a2b38, #111218 70%); }
 .live-idle p { margin: 0; max-width: 44ch; }
+.live-idle.bad p { color: #ff6e6e; font-weight: 600; }
 .live-play { font-size: 18px; padding: 14px 26px; border-radius: 999px; }
 .live-note { margin: 10px 0 0; text-align: center; font-variant-numeric: tabular-nums; }
 .live-facts { display: grid; gap: 8px; margin: 0 0 12px; }
@@ -522,8 +523,38 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .ovl-box { display: grid; gap: 8px; }
 .ovl-url { display: flex; flex-wrap: wrap; gap: 8px; }
 .ovl-url input { flex: 1 1 280px; min-width: 0; font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 13px; }
-.ovl-preview { width: 100%; aspect-ratio: 4 / 1; border: 1px solid var(--line); border-radius: 10px;
+.ovl-preview, .pad-preview { width: 100%; aspect-ratio: 4 / 1; border: 1px solid var(--line); border-radius: 10px;
   background: repeating-conic-gradient(#2a2b36 0% 25%, #1e1f29 0% 50%) 0 0 / 20px 20px; }
+
+/* O controle para o OBS: a previa e o editor de CSS lado a lado no desktop.
+   O editor e um textarea de texto transparente sobre o <pre> colorido. */
+.pad-preview { aspect-ratio: 2 / 1; box-sizing: border-box; }
+.pad-preview.wide { aspect-ratio: 4 / 1; }
+.pad-split { display: grid; gap: 12px; align-items: start; }
+@media (min-width: 960px) { .pad-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.css-editor { display: grid; gap: 8px; min-width: 0; }
+.css-editor p { margin: 0; font-size: 13px; }
+.css-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.css-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.css-code { position: relative; height: 380px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg-deep); overflow: hidden; }
+.css-code:focus-within { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.css-hl, .css-code textarea { position: absolute; inset: 0; margin: 0; padding: 10px 12px; box-sizing: border-box;
+  font: 13px/1.5 ui-monospace, "JetBrains Mono", Consolas, monospace; white-space: pre; tab-size: 2;
+  overflow-wrap: normal; letter-spacing: 0; border: 0; border-radius: 0; }
+.css-hl { overflow: hidden; color: var(--fg); pointer-events: none; }
+.css-code textarea { width: 100%; height: 100%; overflow: auto; resize: none; color: transparent; background: transparent;
+  caret-color: var(--fg); outline: none; }
+.css-code textarea::selection { background: color-mix(in srgb, var(--purple) 40%, transparent); color: transparent; }
+.css-hl .c { color: var(--dim); font-style: italic; }
+.css-hl .s { color: var(--green); }
+.css-hl .p { color: var(--cyan); }
+.css-hl .n { color: var(--purple); }
+.css-hl .h { color: var(--orange); }
+.css-hl .a { color: var(--pink); }
+.css-hl .q { color: var(--yellow); }
+.css-hl .f { color: var(--pink); }
+.css-hl .x { color: var(--dim); }
 
 .volume { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .volume input { flex: 1; padding: 0; accent-color: var(--pink); }

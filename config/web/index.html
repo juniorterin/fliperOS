@@ -198,6 +198,44 @@
       </div>
     </section>
 
+    <!-- O controle do jogador como pagina para o OBS (input.html), com o CSS
+         dela editado aqui. -->
+    <section class="card wide" data-page="live" aria-labelledby="h-pad">
+      <h2 id="h-pad" data-t="pad"></h2>
+      <p class="dim" data-t="pad_note"></p>
+      <div class="ovl-box">
+        <div class="obs-url">
+          <input id="pad-url" type="text" readonly aria-label="Controls address">
+          <button id="pad-copy" type="button" data-icon="📋" data-t="copy"></button>
+          <a id="pad-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
+        </div>
+        <div class="obs-opts">
+          <label><span data-t="pad_players"></span>
+            <select id="pad-players"><option value="1" data-t="pad_p1"></option><option value="2" data-t="pad_p2"></option><option value="1,2" data-t="pad_p12"></option></select></label>
+          <label class="obs-check"><input id="pad-demo" type="checkbox" checked> <span data-t="pad_demo"></span></label>
+        </div>
+        <p class="dim"><span data-t="ovl_obs"></span> <b id="pad-wh"></b></p>
+        <div class="pad-split">
+          <iframe id="pad-preview" class="pad-preview" title="Controls preview"></iframe>
+          <div class="css-editor">
+            <div class="css-head">
+              <b data-t="pad_css"></b>
+              <span id="pad-css-state" class="dim"></span>
+            </div>
+            <div class="css-code">
+              <pre id="pad-css-hl" class="css-hl" aria-hidden="true"></pre>
+              <textarea id="pad-css" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="CSS"></textarea>
+            </div>
+            <div class="css-actions">
+              <button id="pad-css-save" type="button" data-icon="💾" data-t="pad_css_save"></button>
+              <button id="pad-css-reset" class="ghost" type="button" data-icon="↺" data-t="pad_css_reset"></button>
+            </div>
+            <p class="dim" data-t="pad_css_note"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- O trackball esta desligado por enquanto (data-off; no servidor,
          FLIPEROS_WEB_TRACKBALL=1 o liga). -->
     <section class="card wide" data-page="frontend" data-off aria-labelledby="h-ball">

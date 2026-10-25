@@ -5265,6 +5265,11 @@ class WebPanelTests(unittest.TestCase):
         dmd = tmp / 'fake-dmd'
         dmd.write_text('#!/bin/sh\n[ "$1 $2 $3" = "art mame sf2" ] && echo %s && exit 0\nexit 1\n' % cls.art)
         dmd.chmod(0o755)
+        # O fliperos-buttons watch falso: o jogador 1 aperta cima e o botao 1.
+        buttons = tmp / 'fake-buttons'
+        buttons.write_text('#!/bin/sh\necho "$*" > %s/buttons.log\necho \'{"1": ["up", "b1"], "2": []}\'\n'
+                           'exec sleep 30\n' % tmp)
+        buttons.chmod(0o755)
         (tmp / 'run/1000').mkdir(parents=True, exist_ok=True)
         (tmp / 'run/1000/fliperos-marquee').write_text('event=game\nsystem=mame\nrom=sf2\ntitle=Street Fighter II\n'
                                                        'text=#1 50,000 CAP\ntime=100\n')
@@ -5282,7 +5287,8 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_ADB_URL='http://127.0.0.1:%d/service_scraper.php' % cls.adb.server_address[1],
                    FLIPEROS_ROMSET_PLACES=str(tmp / 'media'), FLIPEROS_STREAM=str(stream),
                    FLIPEROS_STREAM_API='http://127.0.0.1:%d' % cls.adb.server_address[1],
-                   FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'))
+                   FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'),
+                   FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'))
         (tmp / 'media/USB/romset').mkdir(parents=True)
         (tmp / 'media/USB/.hidden').mkdir()
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
@@ -5518,6 +5524,22 @@ class WebPanelTests(unittest.TestCase):
                       (ROOT / 'docs/wiki/Web-panel.md').read_text())
         self.assertIn('overlay_games: "🎮 Ver os jogos com placar versus', (ROOT / 'config/web/app.js').read_text())
 
+    def test_live_capture_problem_in_words(self):
+        # O erro da captura (fliperos-stream status) vira a resposta da
+        # oferta: sem VA-API o painel pede para instalar de novo.
+        web = load_script('fliperos_web_capture', 'config/fliperos-web')
+        problem = web.capture_problem
+        mmap = {'copy': 'mmap', 'error': '[AVHWFramesContext @ 0x1] Failed to map DRM object 4 to memory: 1.',
+                'error_at': 100}
+        self.assertEqual(problem(mmap, 90)['code'], 'no_vaapi')
+        self.assertIn('mesa-va-drivers', problem(mmap)['error'])
+        # Um erro de antes da tentativa nao conta; sem erro, nada.
+        self.assertIsNone(problem(mmap, 101))
+        self.assertIsNone(problem({'copy': 'mmap'}))
+        other = dict(mmap, copy='vaapi', error='Failed to open DRM device.')
+        self.assertEqual(problem(other), {'error': 'the cabinet could not capture the screen: Failed to open DRM device.',
+                                          'code': 'capture'})
+
     def test_live_screen_link_from_the_default_route(self):
         # A pagina recomenda o cabo quando a rota padrao sai pelo Wi-Fi; com
         # os dois, vale a de menor metrica.
@@ -5550,7 +5572,8 @@ class WebPanelTests(unittest.TestCase):
         cookie = self.login()
         status = json.loads(self.request('GET', '/api/stream', cookie=cookie)[2])
         self.assertEqual(status, {'installed': True, 'active': True, 'encoder': 'x264', 'audio': False,
-                                  'rates': [15, 30, 60], 'link': status['link']})
+                                  'rates': [15, 30, 60], 'link': status['link'], 'copy': None, 'error': None,
+                                  'error_at': None})
         self.assertIn(status['link'], ('wifi', 'wired', None))
         offer = 'v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n'
         for bad in ({'fps': 25, 'sdp': offer}, {'fps': 30, 'sdp': 'hello'}, {'fps': '30', 'sdp': offer}):
@@ -5610,6 +5633,55 @@ class WebPanelTests(unittest.TestCase):
         self.assertNotEqual(new, info['path'])
         self.assertEqual(self.request('GET', '/api/overlay/state?key=' + key)[0], 403)
         self.assertEqual(self.request('GET', '/api/overlay/state?key=' + new.split('key=')[1])[0], 200)
+
+    def test_obs_controls_page_and_its_css(self):
+        import http.client
+        cookie = self.login()
+        tmp = Path(self.tmp.name)
+        info = json.loads(self.request('GET', '/api/overlay', cookie=cookie)[2])
+        self.assertTrue(info['input'].startswith('/overlay/input?key='))
+        key = info['input'].split('key=')[1]
+        status, _, page = self.request('GET', '/overlay/input?key=x')
+        self.assertEqual(status, 200)
+        self.assertIn(b'/input.js', page)
+        self.assertEqual(self.last_headers['X-Frame-Options'], 'SAMEORIGIN')
+        # Os dados pedem a chave.
+        for path in ('/api/overlay/input/css', '/api/overlay/input/events'):
+            self.assertEqual(self.request('GET', path + '?key=wrong')[0], 403, path)
+        default = (ROOT / 'config/web/input.css').read_text()
+        status, _, css = self.request('GET', '/api/overlay/input/css?key=' + key)
+        self.assertEqual((status, css.decode(), self.last_headers['Content-Type']),
+                         (200, default, 'text/css; charset=utf-8'))
+        # O CSS do usuario: gravado, servido no lugar do de fabrica e apagado
+        # pelo reset; sem login nao muda, e um corpo sem "css" nao apaga nada.
+        self.assertEqual(self.request('POST', '/api/overlay/input/style', {'css': 'x'})[0], 401)
+        self.assertEqual(self.request('POST', '/api/overlay/input/style', {}, cookie=cookie)[0], 400)
+        self.assertEqual(self.request('POST', '/api/overlay/input/style', {'css': 'x' * 40000}, cookie=cookie)[0], 400)
+        status, _, data = self.request('POST', '/api/overlay/input/style', {'css': '.pad { opacity: .5; }'}, cookie=cookie)
+        self.assertEqual((status, json.loads(data)['custom']), (200, True))
+        self.assertEqual((tmp / 'etc/input-overlay.css').read_text(), '.pad { opacity: .5; }')
+        self.assertEqual(self.request('GET', '/api/overlay/input/css?key=' + key)[2], b'.pad { opacity: .5; }')
+        style = json.loads(self.request('GET', '/api/overlay/input/style', cookie=cookie)[2])
+        self.assertEqual((style['css'], style['custom'], style['default']), ('.pad { opacity: .5; }', True, default))
+        status, _, data = self.request('POST', '/api/overlay/input/style', {'reset': True}, cookie=cookie)
+        self.assertEqual(json.loads(data), {'css': default, 'custom': False})
+        self.assertFalse((tmp / 'etc/input-overlay.css').exists())
+        # Os comandos apertados: Server-Sent Events do fliperos-buttons watch,
+        # com o mapa do Button mapping.
+        conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
+        conn.request('GET', '/api/overlay/input/events?key=' + key)
+        res = conn.getresponse()
+        self.assertEqual((res.status, res.getheader('Content-Type')), (200, 'text/event-stream'))
+        # O primeiro evento pode ser o "{}" de antes do watch ler.
+        event = {}
+        while event == {}:
+            line = res.fp.readline()
+            self.assertTrue(line)
+            if line.startswith(b'data: '):
+                event = json.loads(line[len(b'data: '):])
+        self.assertEqual(event, {'1': ['up', 'b1'], '2': []})
+        conn.close()
+        self.assertEqual((tmp / 'buttons.log').read_text(), 'watch /etc/fliperos/buttons.map\n')
 
     def test_folders_to_pick_a_romset(self):
         cookie = self.login()
@@ -6123,6 +6195,28 @@ class LiveScreenTests(unittest.TestCase):
         self.assertIn('exec 3< <(grab "$fps" "$$")', stream)
         self.assertIn('kill -0 "$parent" 2> /dev/null || return 0', stream)
         self.assertIn("grep -q '^State:[[:space:]]*Z' \"/proc/$parent/status\"", stream)
+
+    def test_capture_error_reaches_the_status(self):
+        # Um kmsgrab que sai na hora com erro (o amdgpu sem VA-API: o
+        # framebuffer nao se mapeia) fica no status, para o painel dizer o
+        # porque em vez de esperar o go2rtc desistir.
+        self.ffmpeg.write_text('#!/bin/sh\ncase "$*" in *kmsgrab*) '
+                               'echo "[AVHWFramesContext @ 0x1] Failed to map DRM object 4 to memory: 1." >&2; exit 1 ;;\n'
+                               '*scale_vaapi=w=32:h=32*|*h264_vaapi*) exit 1 ;; esac\nsleep 2\n')
+        self.ffmpeg.chmod(0o755)
+        self.assertEqual(self.run_('capture', '30', 'out').returncode, 0)
+        for _ in range(30):
+            status = self.run_('status').stdout
+            if 'error=' in status:
+                break
+            time.sleep(0.1)
+        self.assertIn('error=[AVHWFramesContext @ 0x1] Failed to map DRM object 4 to memory: 1.\n', status)
+        self.assertRegex(status, r'\nerror_at=\d+\n')
+        # O servico ao subir (config) esquece o erro e o teste do VA-API.
+        (self.tmp / 'run/vpp').write_text('0\n')
+        self.run_('config')
+        self.assertFalse((self.tmp / 'run/vpp').exists())
+        self.assertNotIn('error=', self.run_('status').stdout)
 
     def test_capture_rate_without_bursts(self):
         # A taxa pela taxa de quadros, com buffer de meio segundo: o keyframe
@@ -11440,6 +11534,37 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertEqual(code(0, '+a2'), 'JOYCODE_1_ZAXIS_POS_SWITCH')
         self.assertEqual(code(2, 'h0.1'), 'JOYCODE_3_HAT1UP')
         self.assertEqual(code(0, 'h1.8'), 'JOYCODE_1_HAT2LEFT')
+
+    def test_watch_reads_the_map_state(self):
+        # O controle para o OBS: o que esta apertado, pelos binds do mapa (o
+        # SDL do controle, as teclas pelo evdev).
+        rc = self.rc
+        players = {1: {'up': (0, 'h0.1'), 'left': (0, '-a0'), 'b1': (0, 'b2'), 'b4': (0, '+a5'), 'coin': (-1, 'k:5')},
+                   2: {'b1': (1, 'b0'), 'start': (-1, 'k:2')}}
+        sticks = {0: ([0, 0, 1], [-30000, 0, 0, 0, 0, 32767], [1])}
+        self.assertEqual(rc.watch_state(players, sticks, {6}), {'1': ['up', 'left', 'b1', 'b4', 'coin'], '2': []})
+        self.assertEqual(rc.watch_state(players, {0: ([0], [0], [4])}, {3}), {'1': [], '2': ['start']})
+        # Um gatilho solto (-32768) nao e o "+"; um eixo que nao existe, nada.
+        self.assertFalse(rc.held('+a5', ([], [0] * 5 + [-32768], [])))
+        self.assertFalse(rc.held('-a9', ([], [0], [])))
+        # Sem mapa: as teclas padrao do MAME dos jogadores 1 e 2.
+        default = rc.watch_players('/nao/existe')
+        self.assertEqual(sorted(default), [1, 2])
+        self.assertEqual(default[1]['b1'], (-1, 'k:LCONTROL'))
+        self.assertEqual(rc.EVDEV_KEYS['LCONTROL'], 29)
+        self.assertEqual((rc.EVDEV_KEYS['A'], rc.EVDEV_KEYS['Q'], rc.EVDEV_KEYS['Z'], rc.EVDEV_KEYS['1']), (30, 16, 44, 2))
+        # O evdev: as teclas apertadas e soltas de cada aparelho.
+        with tempfile.TemporaryDirectory() as tmp:
+            dev = Path(tmp) / 'event0'
+            ev = rc.INPUT_EVENT
+            dev.write_bytes(ev.pack(0, 0, 1, 29, 1) + ev.pack(0, 0, 1, 56, 1) + ev.pack(0, 0, 0, 0, 0)
+                            + ev.pack(0, 0, 1, 56, 0))
+            keys = rc.Keyboards(str(Path(tmp) / 'event*'))
+            keys.read(0)
+            self.assertEqual(keys.down(), {29})
+            # O fim do arquivo e o aparelho que saiu: as teclas dele soltam.
+            keys.read(0)
+            self.assertEqual(keys.down(), set())
 
     def test_fbneo_preset(self):
         # DirectInput do FBNeo: 0x4000 | joystick << 8; botao 0x80 + n, eixo

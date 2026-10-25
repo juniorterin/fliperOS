@@ -244,7 +244,12 @@ extras_install() {
     # painel web, e ja sobe agora.
     stream)
       [[ -x $stream ]] || fail "$stream is missing"
-      if ! command -v ffmpeg > /dev/null; then
+      # Pacote por pacote: a imagem ja traz o ffmpeg (os videos do frontend),
+      # e olhar so ele deixava de fora o VA-API, sem o qual o amdgpu nao deixa
+      # ler a tela (o hwdownload da EPERM).
+      # shellcheck disable=SC2086
+      if ! dpkg-query -W -f='${Status}\n' $STREAM_PACKAGES 2> /dev/null | grep -c 'ok installed' |
+        grep -qx "$(wc -w <<< "$STREAM_PACKAGES")"; then
         apt_end=55
         # shellcheck disable=SC2086
         apt_install --no-install-recommends $STREAM_PACKAGES

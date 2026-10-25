@@ -12,6 +12,11 @@
       o mapa ganha linhas "JOGADOR CONTROLE -1 k:TECLA Keyboard"
   fliperos-buttons attract MAPA
       so o Attract-Mode Plus (abaixo), que o Setup chama ao abri-lo
+  fliperos-buttons watch [MAPA]
+      os comandos apertados de cada jogador do mapa, uma linha JSON a cada
+      mudanca ({"1": ["up", "b1"], "2": []}), para a pagina do controle no
+      OBS (fliperos-web); as teclas do mapa pelo evdev, sem tomar o
+      teclado. Sem mapa, as teclas padrao do MAME dos jogadores 1 e 2
 
 ELEMENTO na numeracao do SDL (joystick, nao game controller): b3 (botao),
 -a1 / +a1 (meio eixo), h0.1 / h0.2 / h0.4 / h0.8 (hat: cima, direita,
@@ -95,8 +100,11 @@ fliperos-x11-run poe por cima do gamecontrollerdb.txt ao abrir o jogo.
 import argparse
 import ctypes
 import ctypes.util
+import glob
+import json
 import os
 import re
+import select
 import struct
 import sys
 import time
@@ -1434,6 +1442,165 @@ def cmd_capture(args):
         lib.SDL_Quit()
 
 
+# ── watch: os comandos apertados agora ──────────────────────────
+# As teclas do MAME no evdev (linux/input-event-codes.h).
+EVDEV_KEYS = {'UP': 103, 'DOWN': 108, 'LEFT': 105, 'RIGHT': 106, 'LCONTROL': 29, 'LALT': 56, 'LSHIFT': 42,
+              'SPACE': 57, 'RCONTROL': 97, 'RSHIFT': 54, 'ENTER': 28, '8_PAD': 72, '2_PAD': 80, '4_PAD': 75,
+              '6_PAD': 77, '0_PAD': 82, 'DEL_PAD': 83, 'ENTER_PAD': 96}
+EVDEV_KEYS.update(zip('QWERTYUIOP', range(16, 26)))
+EVDEV_KEYS.update(zip('ASDFGHJKL', range(30, 39)))
+EVDEV_KEYS.update(zip('ZXCVBNM', range(44, 51)))
+EVDEV_KEYS.update({str(n): n + 1 for n in range(1, 10)})
+INPUT_EVENT = struct.Struct('llHHi')
+EV_KEY = 1
+WATCH_HZ = 60
+
+
+def held(element, now):
+    """O elemento do SDL (b3, +a1, h0.4) esta apertado no estado now?"""
+    buttons, axes, hats = now
+    if element.startswith('b'):
+        i = int(element[1:])
+        return i < len(buttons) and bool(buttons[i])
+    if element.startswith('h'):
+        hat, bit = element[1:].split('.')
+        return int(hat) < len(hats) and bool(hats[int(hat)] & int(bit))
+    i = int(element[2:])
+    if i >= len(axes):
+        return False
+    return axes[i] > AXIS_PRESS if element[0] == '+' else axes[i] < -AXIS_PRESS
+
+
+class Keyboards:
+    """As teclas apertadas em todos os /dev/input/event*, lidas junto com o
+    jogo (sem EVIOCGRAB); os aparelhos ligados depois entram a cada 2 s."""
+
+    def __init__(self, pattern=None):
+        self.pattern = pattern or os.environ.get('FLIPEROS_INPUT_EVENTS', '/dev/input/event*')
+        self.devices = {}
+        self.scanned = None
+
+    def scan(self):
+        if self.scanned is not None and time.monotonic() - self.scanned < 2:
+            return
+        self.scanned = time.monotonic()
+        known = {path for path, _ in self.devices.values()}
+        for path in glob.glob(self.pattern):
+            if path in known:
+                continue
+            try:
+                fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+            except OSError:
+                continue
+            self.devices[fd] = (path, set())
+
+    def read(self, timeout):
+        self.scan()
+        try:
+            ready = select.select(list(self.devices), [], [], timeout)[0]
+        except (OSError, ValueError):
+            ready = list(self.devices)
+        for fd in ready:
+            try:
+                data = os.read(fd, INPUT_EVENT.size * 64)
+            except BlockingIOError:
+                continue
+            except OSError:
+                data = b''
+            if not data:
+                # O aparelho saiu: as teclas dele soltam.
+                os.close(fd)
+                del self.devices[fd]
+                continue
+            keys = self.devices[fd][1]
+            for i in range(0, len(data) - INPUT_EVENT.size + 1, INPUT_EVENT.size):
+                _, _, kind, code, value = INPUT_EVENT.unpack_from(data, i)
+                if kind == EV_KEY:
+                    (keys.add if value else keys.discard)(code)
+
+    def down(self):
+        return set().union(*(keys for _, keys in self.devices.values()))
+
+
+def watch_state(players, sticks, keys):
+    """{"jogador": [os controles apertados, na ordem de CONTROLS]}; sticks e
+    {indice: estado do SDL}, keys os codigos do evdev apertados."""
+    out = {}
+    for player in sorted(players):
+        on = []
+        for control in CONTROLS:
+            if control not in players[player]:
+                continue
+            index, element = players[player][control]
+            if is_key(element):
+                if EVDEV_KEYS.get(element[2:]) in keys:
+                    on.append(control)
+            elif sticks.get(index) is not None and held(element, sticks[index]):
+                on.append(control)
+        out[str(player)] = on
+    return out
+
+
+def watch_players(path):
+    """Os binds do mapa; sem ele, as teclas padrao do MAME dos jogadores 1 e 2."""
+    players = read_map(path)[0] if path and os.path.exists(path) else {}
+    if not players:
+        for line in keyboard_map(2):
+            player, control, index, element = line.split()[:4]
+            players.setdefault(int(player), {})[control] = (int(index), element)
+    return players
+
+
+def cmd_watch(args):
+    # Roda junto com o jogo: abaixo dele na fila da CPU.
+    try:
+        os.nice(10)
+    except OSError:
+        pass
+    players = watch_players(args.map)
+    elements = [e for binds in players.values() for _, e in binds.values()]
+    keyboards = Keyboards() if any(is_key(e) for e in elements) else None
+    lib = None
+    if not all(is_key(e) for e in elements):
+        for var in ('SDL_GAMECONTROLLERCONFIG', 'SDL_GAMECONTROLLERCONFIG_FILE'):
+            os.environ.pop(var, None)
+        try:
+            lib = sdl()
+            lib.SDL_JoystickClose.argtypes = [ctypes.c_void_p]
+            if lib.SDL_Init(0x200) != 0:  # JOYSTICK
+                lib = None
+        except OSError:
+            lib = None
+    sticks, count, last = {}, -1, None
+    try:
+        while True:
+            states = {}
+            if lib:
+                lib.SDL_JoystickUpdate()
+                # Um controle ligado ou tirado muda os indices do SDL: abre todos de novo.
+                if lib.SDL_NumJoysticks() != count:
+                    for js in sticks.values():
+                        if js:
+                            lib.SDL_JoystickClose(js)
+                    count = lib.SDL_NumJoysticks()
+                    sticks = {i: lib.SDL_JoystickOpen(i) for i in range(count)}
+                    lib.SDL_JoystickUpdate()
+                states = {i: state(lib, js) for i, js in sticks.items() if js}
+            if keyboards:
+                keyboards.read(1 / WATCH_HZ)
+            else:
+                time.sleep(1 / WATCH_HZ)
+            now = watch_state(players, states, keyboards.down() if keyboards else set())
+            if now != last:
+                print(json.dumps(now), flush=True)
+                last = now
+    except (BrokenPipeError, KeyboardInterrupt):
+        return 0
+    finally:
+        if lib:
+            lib.SDL_Quit()
+
+
 def main():
     parser = argparse.ArgumentParser(prog='fliperos-buttons')
     sub = parser.add_subparsers(dest='command', required=True)
@@ -1449,6 +1616,9 @@ def main():
     p = sub.add_parser('attract')
     p.add_argument('map')
     p.set_defaults(func=cmd_attract)
+    p = sub.add_parser('watch')
+    p.add_argument('map', nargs='?', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
+    p.set_defaults(func=cmd_watch)
     p = sub.add_parser('fbneo')
     p.add_argument('map')
     p.add_argument('version')

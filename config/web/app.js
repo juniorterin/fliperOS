@@ -39,6 +39,11 @@ const TEXT = {
     live_turn_on: "Turn on", live_off_note: "The live screen is installed but off (Settings > Services > Live screen).",
     live_ready: "Ready: H.264 by %e.", live_hw: "the graphics card", live_no_audio: "no sound (Settings > Live screen sound)",
     live_connecting: "Connecting to the cabinet…", live_lost: "The connection dropped. Press Watch live again.",
+    live_err_vaapi: "The cabinet can't read its screen: this video card needs the VA-API driver (mesa-va-drivers), which is missing. Install the live screen again under Streaming.",
+    live_err_capture: "The cabinet couldn't capture the screen: %s",
+    live_err_go2rtc: "The cabinet's stream server didn't answer. Try again; if it keeps happening, restart the live screen (Turn off and on, under Streaming).",
+    live_err_timeout: "The cabinet took too long to answer. Check that it is on the network and try again.",
+    live_err_nopicture: "Connected, but no picture arrived from the cabinet. Try again; on Wi-Fi a network cable helps.",
     live_buffer: "%n ms in the buffer", shot_auto: "Every 10 s", live_obs_title: "Live screen in OBS", page_live: "Live",
     live_on_air: "Live", live_settings: "Streaming", live_service: "Service", live_encoder: "H.264",
     live_sound: "Sound", live_absent: "not installed", live_running: "running", live_stopped: "off",
@@ -66,6 +71,14 @@ const TEXT = {
     overlay: "Marquee for OBS", overlay_on: "Turn on the marquee page",
     overlay_note: "The marquee of the game on screen as a page for OBS: transparent background, the game's art (from ~/media), the high scores, the achievements and the versus score. No LED panel needed.",
     overlay_new: "New address", overlay_new_ask: "Make a new address? The old one stops working (update OBS).",
+    pad: "Controller for OBS",
+    pad_note: "Your controller on the stream: the stick and the buttons light up while you press them on the cabinet (the controls of Setup > Joysticks > Button mapping, or a keyboard encoder). Transparent background; same key as the marquee.",
+    pad_players: "Players", pad_p1: "Player 1", pad_p2: "Player 2", pad_p12: "Players 1 and 2",
+    pad_demo: "Demo in the preview (presses by itself)", pad_css: "Page CSS",
+    pad_css_save: "Save", pad_css_reset: "Factory CSS", pad_css_saved: "CSS saved. In OBS, refresh the source (Properties > Refresh cache of current page).",
+    pad_css_reset_ask: "Go back to the factory CSS? Your CSS is erased.",
+    pad_css_changed: "not saved", pad_css_custom: "yours", pad_css_default: "factory",
+    pad_css_note: "The preview follows what you type. Classes: .pad (.p1, .p2, .active), .label, .stick (.up .down .left .right) with .gate and .ball, .button (.b1 to .b6, .start, .coin; .on while pressed). The sizes use --u (one panel is 200 × 100 --u).",
     copy: "Copy", copied: "Copied.",
     page_romfilter: "ROM filter",
     rf_intro: "The MAME ROM Cleaner filter, the same as in the Setup: what the Downloader takes from the torrents, or what goes from a romset folder to the emulator's folder.",
@@ -149,6 +162,11 @@ const TEXT = {
     live_turn_on: "Ligar", live_off_note: "A tela ao vivo está instalada, mas desligada (Configurações > Serviços > Live screen).",
     live_ready: "Pronta: H.264 %e.", live_hw: "pela placa de vídeo", live_no_audio: "sem som (Configurações > Live screen sound)",
     live_connecting: "Conectando ao gabinete…", live_lost: "A conexão caiu. Aperte Assistir ao vivo de novo.",
+    live_err_vaapi: "O gabinete não consegue ler a própria tela: esta placa de vídeo precisa do driver VA-API (mesa-va-drivers), que está faltando. Instale a tela ao vivo de novo em Transmissão.",
+    live_err_capture: "O gabinete não conseguiu capturar a tela: %s",
+    live_err_go2rtc: "O servidor de transmissão do gabinete não respondeu. Tente de novo; se continuar, reinicie a tela ao vivo (Desligar e ligar, em Transmissão).",
+    live_err_timeout: "O gabinete demorou demais para responder. Confira se ele está na rede e tente de novo.",
+    live_err_nopicture: "Conectou, mas a imagem do gabinete não chegou. Tente de novo; no Wi-Fi, um cabo de rede ajuda.",
     live_buffer: "%n ms no buffer", shot_auto: "A cada 10 s", live_obs_title: "A tela ao vivo no OBS", page_live: "Ao vivo",
     live_on_air: "Ao vivo", live_settings: "Transmissão", live_service: "Serviço", live_encoder: "H.264",
     live_sound: "Som", live_absent: "não instalado", live_running: "no ar", live_stopped: "desligado",
@@ -176,6 +194,14 @@ const TEXT = {
     overlay: "Marquee para o OBS", overlay_on: "Ligar a página do marquee",
     overlay_note: "O marquee do jogo na tela como página para o OBS: fundo transparente, a arte do jogo (de ~/media), os recordes, as conquistas e o placar versus. Não precisa de painel de LED.",
     overlay_new: "Endereço novo", overlay_new_ask: "Criar um endereço novo? O antigo para de funcionar (atualize o OBS).",
+    pad: "Controle para o OBS",
+    pad_note: "O seu controle na transmissão: o direcional e os botões acendem enquanto você aperta no gabinete (os controles do Setup > Joysticks > Button mapping, ou um encoder de teclado). Fundo transparente; mesma chave do marquee.",
+    pad_players: "Jogadores", pad_p1: "Jogador 1", pad_p2: "Jogador 2", pad_p12: "Jogadores 1 e 2",
+    pad_demo: "Demonstração na prévia (aperta sozinho)", pad_css: "CSS da página",
+    pad_css_save: "Salvar", pad_css_reset: "CSS de fábrica", pad_css_saved: "CSS salvo. No OBS, recarregue a fonte (Propriedades > Atualizar cache da página atual).",
+    pad_css_reset_ask: "Voltar ao CSS de fábrica? O seu CSS é apagado.",
+    pad_css_changed: "não salvo", pad_css_custom: "seu", pad_css_default: "de fábrica",
+    pad_css_note: "A prévia segue o que você digita. Classes: .pad (.p1, .p2, .active), .label, .stick (.up .down .left .right) com .gate e .ball, .button (.b1 a .b6, .start, .coin; .on enquanto apertado). Os tamanhos usam --u (um painel tem 200 × 100 --u).",
     copy: "Copiar", copied: "Copiado.",
     page_romfilter: "Filtro de ROMs",
     rf_intro: "O filtro do MAME ROM Cleaner, o mesmo do Setup: o que o Downloader baixa dos torrents, ou o que vai de uma pasta com um romset para a pasta do emulador.",
@@ -1440,12 +1466,12 @@ $("shot-tube").addEventListener("change", () => $("shot").classList.toggle("tube
 // som depois de um clique). Sair da pagina para a transmissao: o ffmpeg do
 // gabinete so roda enquanto alguem assiste.
 
-let live = null, liveStats = null, liveStatus = null, liveObsPath = "";
+let live = null, liveStats = null, liveStatus = null, liveObsPath = "", liveError = "", liveNoVaapi = false;
 
 // O endereco da tela para o OBS, montado pelas escolhas do cartao: quadros,
 // formato (4:3 como no tubo ou esticado), som; o tamanho e o que digitar no
 // OBS. As escolhas ficam no navegador.
-const OBS_OPTS = ["obs-fps", "obs-fit", "obs-size", "obs-sound", "ovl-led", "ovl-text", "ovl-size"];
+const OBS_OPTS = ["obs-fps", "obs-fit", "obs-size", "obs-sound", "ovl-led", "ovl-text", "ovl-size", "pad-players", "pad-demo"];
 
 function obsSaved() {
   try {
@@ -1490,8 +1516,10 @@ function liveIdle() {
   const ready = s.installed && s.active;
   $("live-idle").hidden = !!live;
   $("live-play").hidden = !ready;
+  // Depois de uma tentativa que falhou, o porque fica no palco ate a proxima.
   $("live-idle-text").textContent = !s.installed ? t("live_not_installed") : !s.active ? t("live_off_note")
-    : t("live_ready").replace("%e", s.encoder === "vaapi" ? t("live_hw") : "x264");
+    : liveError || t("live_ready").replace("%e", s.encoder === "vaapi" ? t("live_hw") : "x264");
+  $("live-idle").classList.toggle("bad", !!liveError && !live);
   $("live-start").hidden = !!live || !ready;
 }
 
@@ -1509,7 +1537,8 @@ async function loadLive() {
   $("live-net-tip").textContent = t(s.link === "wifi" ? "live_net_tip_wifi" : "live_net_tip");
   $("live-net-tip").classList.toggle("warn", s.link === "wifi");
   setup.replaceChildren();
-  if (!s.installed) {
+  // Sem o VA-API que a placa pede, instalar de novo o traz (fliperos-extras).
+  if (!s.installed || liveNoVaapi) {
     const install = el("button", { type: "button", "data-icon": "⬇" }, t("live_install"));
     install.addEventListener("click", async () => {
       const r = await api("/api/stream/install", { method: "POST", body: "{}" });
@@ -1558,8 +1587,17 @@ function liveIce(pc) {
   });
 }
 
+// Uma tentativa que falhou: o motivo no palco (com o botao de tentar de
+// novo) e embaixo dele.
+function liveFail(text) {
+  liveError = text;
+  liveIdle();
+  $("live-note").textContent = text;
+}
+
 async function liveStart() {
   liveStop();
+  liveError = "";
   const video = $("live"), fps = Number($("live-fps").value);
   $("live-note").textContent = t("live_connecting");
   const pc = new RTCPeerConnection({ iceServers: [] });
@@ -1586,22 +1624,40 @@ async function liveStart() {
     if (live !== pc) return;
     if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
       liveStop(true);
-      $("live-note").textContent = t("live_lost");
+      liveFail(t("live_lost"));
     }
   };
+  // O painel responde em ate uns 25 s (o go2rtc desiste em 20); sem resposta
+  // ate 35 s, desiste daqui.
+  const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 35000);
   try {
     await pc.setLocalDescription(await pc.createOffer());
     await liveIce(pc);
-    const res = await api("/api/stream/offer", { method: "POST", body: JSON.stringify({ fps, sdp: pc.localDescription.sdp }) });
+    const res = await api("/api/stream/offer", { method: "POST", signal: abort.signal,
+      body: JSON.stringify({ fps, sdp: pc.localDescription.sdp }) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || res.statusText);
+    if (!res.ok) {
+      if (data.code === "no_vaapi") { liveNoVaapi = true; loadLive().catch(() => {}); }
+      throw new Error(data.code === "no_vaapi" ? t("live_err_vaapi")
+        : data.code === "capture" ? t("live_err_capture").replace("%s", data.error.replace(/^.*?: /, ""))
+          : data.code === "go2rtc" ? t("live_err_go2rtc") : data.error || res.statusText);
+    }
     if (live !== pc) return;
     await pc.setRemoteDescription({ type: "answer", sdp: data.sdp });
   } catch (e) {
     if (live === pc) liveStop(true);
-    if (e.message !== "login") $("live-note").textContent = String(e.message || e);
+    if (e.message !== "login" && live === null) liveFail(e.name === "AbortError" ? t("live_err_timeout") : String(e.message || e));
     return;
+  } finally {
+    clearTimeout(timer);
   }
+  // Conectou, mas a imagem nao chega: o porque em vez de "Conectando" para sempre.
+  setTimeout(() => {
+    if (live === pc && !$("live-idle").hidden) {
+      liveStop(true);
+      liveFail(t("live_err_nopicture"));
+    }
+  }, 15000);
   $("live-stop").hidden = false;
   $("live-full").hidden = false;
   $("live-badge").hidden = false;
@@ -1753,6 +1809,7 @@ function showOverlay(data) {
   $("ovl-on").checked = !!data.enabled;
   $("ovl-box").hidden = !data.enabled;
   overlayUrl();
+  padUrl();
 }
 
 // O endereco do marquee com as escolhas (os pontos de LED, os textos); a
@@ -1795,6 +1852,161 @@ $("ovl-new").addEventListener("click", async () => {
   showOverlay(data);
   liveObsPath = data.live || liveObsPath;
   liveObsUrl();
+});
+
+// ── O controle para o OBS ────────────────────────────────────────
+// /overlay/input: o direcional e os botoes do jogador acesos enquanto ele
+// aperta (os controles do Button mapping), com a mesma chave do marquee. O
+// CSS da pagina se escreve aqui: a previa troca o <style> dela a cada tecla,
+// e Salvar o grava no gabinete (o OBS o pega ao recarregar a fonte).
+
+const padOn = { css: "", saved: "", custom: false, defaultCss: "" };
+
+function padUrl() {
+  const players = $("pad-players").value;
+  $("pad-wh").textContent = sizeText(players.includes(",") ? "1600x400" : "800x400");
+  if (!ovlData || !ovlData.input) return;
+  const url = location.origin + ovlData.input + (players !== "1" ? "&players=" + players : "");
+  $("pad-url").value = url;
+  $("pad-open").href = url;
+  if (location.hash.slice(1) === "live") padPreview(true);
+}
+
+// A previa: o mesmo endereco, com o CSS do editor; com Demonstracao, aperta
+// sozinho (sem ela, abre os comandos do gabinete, como o OBS).
+function padPreview(on) {
+  const frame = $("pad-preview");
+  frame.classList.toggle("wide", $("pad-players").value.includes(","));
+  const src = on && $("pad-url").value ? $("pad-url").value + "&preview=1" + ($("pad-demo").checked ? "&demo=1" : "") : "";
+  if (frame.dataset.src === src) return;
+  frame.dataset.src = src;
+  if (src) frame.src = src; else frame.removeAttribute("src");
+}
+
+function padApply() {
+  try {
+    const style = $("pad-preview").contentDocument.getElementById("style");
+    if (style) style.textContent = $("pad-css").value;
+  } catch (e) { /* a previa ainda carregando */ }
+}
+
+async function loadPadStyle() {
+  const res = await api("/api/overlay/input/style");
+  const data = await res.json();
+  padOn.saved = data.css;
+  padOn.custom = data.custom;
+  padOn.defaultCss = data.default;
+  // O que esta sendo escrito e nao foi salvo fica.
+  if ($("pad-css").value === padOn.css || !$("pad-css").value) padSet(data.css);
+  padState();
+}
+
+function padSet(css) {
+  padOn.css = css;
+  $("pad-css").value = css;
+  padHighlight();
+  padApply();
+}
+
+function padState() {
+  const changed = $("pad-css").value !== padOn.saved;
+  $("pad-css-state").textContent = t(changed ? "pad_css_changed" : padOn.custom ? "pad_css_custom" : "pad_css_default");
+  $("pad-css-save").disabled = !changed;
+  $("pad-css-reset").disabled = !padOn.custom && !changed;
+}
+
+// O realce do CSS: comentarios, seletores, propriedades, valores, numeros,
+// cores, @regras e textos. Um nome antes de "{" e seletor; dentro do bloco,
+// antes de ":" e propriedade, depois e valor.
+function cssTokens(text) {
+  const re = /(\/\*[\s\S]*?(?:\*\/|$))|("(?:\\.|[^"\\\n])*"?|'(?:\\.|[^'\\\n])*'?)|(@[\w-]+)|(#[0-9a-fA-F]{3,8}\b)|(-?(?:\d+\.?\d*|\.\d+)(?:[a-zA-Z%]+)?)|([\w-]+(?=\())|([{}:;,()])|([^\s{}:;,()"'/@#]+|[/@#])|(\s+)/g;
+  // Do ponto dado, o proximo "{" vem antes de um ";" ou "}"?
+  const block = /[^;{}]*\{/y;
+  const opensBlock = (at) => { block.lastIndex = at; return block.test(text); };
+  const out = [];
+  let depth = 0, value = false, m;
+  while ((m = re.exec(text))) {
+    const [tok, comment, str, at, hex, num, fn, punct] = m;
+    let cls = "";
+    if (comment) cls = "c";
+    else if (str) cls = "q";
+    else if (at) cls = "a";
+    else if (punct) {
+      cls = "x";
+      if (tok === "{") { depth++; value = false; }
+      else if (tok === "}") { depth = Math.max(0, depth - 1); value = false; }
+      else if (tok === ";") value = false;
+      else if (tok === ":" && depth > 0 && !value && !opensBlock(re.lastIndex)) value = true;
+      else if (tok === ":" && !value) cls = "s";
+    } else if (m[9]) cls = "";
+    else if (value) cls = hex ? "h" : num ? "n" : fn ? "f" : "";
+    else if (depth === 0 || opensBlock(m.index)) cls = "s";
+    else cls = "p";
+    out.push([cls, tok]);
+  }
+  return out;
+}
+
+function padHighlight() {
+  const pre = $("pad-css-hl");
+  pre.replaceChildren(...cssTokens($("pad-css").value).map(([cls, tok]) => cls ? el("span", { class: cls }, tok) : document.createTextNode(tok)),
+    // A ultima linha vazia do textarea tambem ocupa altura no <pre>.
+    document.createTextNode("\n "));
+  pre.scrollTop = $("pad-css").scrollTop;
+  pre.scrollLeft = $("pad-css").scrollLeft;
+}
+
+let padTimer = null;
+$("pad-css").addEventListener("input", () => {
+  padHighlight();
+  padState();
+  clearTimeout(padTimer);
+  padTimer = setTimeout(padApply, 120);
+});
+$("pad-css").addEventListener("scroll", () => {
+  $("pad-css-hl").scrollTop = $("pad-css").scrollTop;
+  $("pad-css-hl").scrollLeft = $("pad-css").scrollLeft;
+});
+// Tab recua dois espacos em vez de sair do campo (Esc e depois Tab sai).
+let padEsc = false;
+$("pad-css").addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape") { padEsc = true; return; }
+  if (ev.key !== "Tab" || padEsc || ev.ctrlKey || ev.altKey || ev.metaKey) { padEsc = false; return; }
+  ev.preventDefault();
+  const area = $("pad-css"), start = area.selectionStart, end = area.selectionEnd;
+  if (ev.shiftKey) {
+    const lineStart = area.value.lastIndexOf("\n", start - 1) + 1;
+    if (area.value.startsWith("  ", lineStart)) {
+      area.setRangeText("", lineStart, lineStart + 2, "preserve");
+    }
+  } else {
+    area.setRangeText("  ", start, end, "end");
+  }
+  area.dispatchEvent(new Event("input"));
+});
+$("pad-preview").addEventListener("load", padApply);
+$("pad-players").addEventListener("change", () => { obsSave(); padUrl(); });
+$("pad-demo").addEventListener("change", () => { obsSave(); padPreview(true); });
+$("pad-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("pad-url").value); } catch (e) {
+    $("pad-url").select();
+    document.execCommand("copy");
+  }
+  toast(t("copied"));
+});
+async function padSave(body) {
+  const res = await api("/api/overlay/input/style", { method: "POST", body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return toast(data.error || res.statusText);
+  padOn.saved = data.css;
+  padOn.custom = data.custom;
+  padSet(data.css);
+  padState();
+  toast(t("pad_css_saved"));
+}
+$("pad-css-save").addEventListener("click", () => padSave({ css: $("pad-css").value }));
+$("pad-css-reset").addEventListener("click", () => {
+  if (confirm(t("pad_css_reset_ask"))) padSave({ reset: true });
 });
 
 // ── Arquivos: as pastas do gabinete ──────────────────────────────
@@ -2427,7 +2639,9 @@ function showPage(name) {
   if (name === "live") {
     loadLive().catch(() => {});
     loadOverlay().catch(() => {});
-  } else if (live) {
+    loadPadStyle().catch(() => {});
+  } else padPreview(false);
+  if (name !== "live" && live) {
     // Fora da pagina Ao vivo a transmissao para: o ffmpeg do gabinete so
     // roda enquanto alguem assiste.
     liveStop();
