@@ -352,8 +352,14 @@ main() {
       ;;
     --padkeys)
       # O controle como teclado fora do Setup: o navegador do Downloader
-      # (config/fliperos-browser) o liga enquanto esta aberto.
-      if [[ ${2:-} == on ]]; then padkeys_on; else padkeys_off; fi
+      # (config/fliperos-browser) o liga enquanto esta aberto, com o PID dele.
+      if [[ ${2:-} == on && ${3:-} =~ ^[0-9]+$ ]]; then
+        padkeys_on "$3"
+      elif [[ ${2:-} == on ]]; then
+        padkeys_on "$PPID"
+      else
+        padkeys_off
+      fi
       return 0
       ;;
   esac

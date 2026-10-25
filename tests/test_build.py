@@ -742,6 +742,30 @@ class PadKeysTests(unittest.TestCase):
         self.assertIn('padkeys_off', setup.split('restore_terminal() {')[1].split('}')[0])
         self.assertLess(setup.index('  ui_init\n'), setup.index('  padkeys_on\n'))
 
+    def test_flag_left_by_a_dead_owner_is_ignored(self):
+        # O Setup morto sem o trap (o tty1 reiniciado) deixava o arquivo, e no
+        # frontend e nos jogos o botao 2 saia tambem como Esc (fechava o
+        # Flycast). Vale so com o dono vivo; sem ele, o arquivo some.
+        with tempfile.TemporaryDirectory() as tmp:
+            flag = Path(tmp) / 'padkeys'
+            old, self.P.FLAG = self.P.FLAG, str(flag)
+            try:
+                self.assertFalse(self.P.flag_on())
+                flag.write_text('%d\n' % os.getpid())
+                self.assertTrue(self.P.flag_on())
+                dead = subprocess.Popen(['true'])
+                dead.wait()
+                for text in ('%d\n' % dead.pid, '', 'abc'):
+                    flag.write_text(text)
+                    self.assertFalse(self.P.flag_on(), text)
+                    self.assertFalse(flag.exists(), text)
+            finally:
+                self.P.FLAG = old
+        # O dono que o Setup e o navegador do Downloader gravam.
+        lib = (ROOT / 'fliperos-setup/lib/padkeys.sh').read_text()
+        self.assertIn('echo "${1:-$$}" > "$PADKEYS_FLAG"', lib)
+        self.assertIn('--padkeys on $$', (ROOT / 'config/fliperos-browser').read_text())
+
 
 class RootfsRunTests(unittest.TestCase):
     """O fliperos-rootfs.sh de verdade numa raiz falsa."""

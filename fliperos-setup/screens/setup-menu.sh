@@ -776,8 +776,8 @@ screen_emulators_kof() {
   fi
   choice=$(ui_menu_hints "$title" \
     "The King of Fighters: Final Attack on Ikemen GO, in 4:3 at 320x240 for the CRT. The 4:3 patch and Ikemen GO are downloaded and a converted copy is made in ~/roms/ikemen (about 2 GB)." "" \
-    "download|Download from itch.io|The free game from its page (1.4 GB), patched by itself. 7 GB free." \
-    "folder|Use a folder I have|The original game (Final Attack.exe) on a USB disk, the network or home." \
+    "download|Download from itch.io|The free game (1.4 GB), patched by itself. Needs 7 GB free." \
+    "folder|Use a folder I have|The game you have (Final Attack.exe): USB, network or home." \
     "return|Return|Back to Emulators & Games.") || return 0
   case $choice in
     download)

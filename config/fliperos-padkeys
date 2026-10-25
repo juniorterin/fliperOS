@@ -29,6 +29,31 @@ import time
 FLAG = os.environ.get('FLIPEROS_PADKEYS_FLAG', '/run/fliperos/padkeys')
 NAME = b'FliperOS pad keys'
 
+
+def flag_on():
+    """O arquivo existe e o PID dentro dele (o Setup, o navegador do
+    Downloader) esta vivo. Um dono que morreu sem apagar o arquivo (o tty1
+    reiniciado com o Setup aberto) o deixava para tras, e no frontend e nos
+    jogos cada botao saia tambem como tecla: o botao 2 era um Esc, que
+    fechava o Flycast, o Dolphin e o MAME. Esse arquivo e apagado aqui."""
+    try:
+        with open(FLAG) as f:
+            text = f.read().strip()
+    except OSError:
+        return False
+    if text.isdigit():
+        try:
+            with open('/proc/%s/stat' % text) as f:
+                if f.read().rsplit(')', 1)[1].split()[0] != 'Z':
+                    return True
+        except (OSError, IndexError):
+            pass
+    try:
+        os.remove(FLAG)
+    except OSError:
+        pass
+    return False
+
 EV_SYN, EV_KEY, EV_ABS = 0x00, 0x01, 0x03
 ABS_X, ABS_Y, ABS_HAT0X, ABS_HAT0Y = 0x00, 0x01, 0x10, 0x11
 
@@ -255,7 +280,7 @@ def main():
     pads = {}
     scanned = 0.0
     while True:
-        if not os.path.exists(FLAG):
+        if not flag_on():
             if pads:
                 for pad in pads.values():
                     pad.close()
