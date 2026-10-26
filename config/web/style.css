@@ -176,6 +176,22 @@ th.vid-part { color: var(--fg); font-weight: 700; font-size: 14px; padding-top: 
 .dl-kinds { display: grid; gap: 10px; margin: 10px 0; }
 .dl-kind { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px; }
 .dl-kind .row input { flex: 1 1 260px; min-width: 0; }
+/* Download BIOS (as listas por estado) e a conta do site do Scraper. */
+#bios-list details { margin-top: 8px; }
+#bios-list summary { cursor: pointer; color: var(--purple); font-weight: 650; }
+#bios-list ul { padding-left: 18px; overflow-wrap: anywhere; }
+#scr-account label small { min-width: 7em; color: var(--dim); }
+/* Scraper: o que cada tipo de pasta ganha (arcade tem muito mais arte). */
+.scope { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 8px; }
+.scope li, p.scope { display: flex; gap: 10px; align-items: baseline; }
+.scope .tag, #scr-systems .tag { font-weight: 650; white-space: nowrap; }
+.tag.arcade { color: var(--orange); border-color: var(--orange); }
+.tag.console { color: var(--cyan); border-color: var(--cyan); }
+.tag.all { color: var(--green); border-color: var(--green); }
+#scr-systems .chips { margin: 6px 0 10px; align-items: center; }
+/* Os botoes juntos, da esquerda; uma caixa de marcar junto do texto dela. */
+.row.start { justify-content: flex-start; align-items: center; }
+.check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 .tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .tasks li { border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
 .tasks .ok { color: var(--green); }

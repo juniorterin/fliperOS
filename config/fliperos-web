@@ -53,6 +53,20 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/romfilter/scan  {"folder", "target", "values"}  a previa
     POST /api/romfilter/run   {"folder", "target", "transfer", "values"} (tarefa)
     GET  /api/dirs?path=  as pastas (sem path: onde costuma estar um romset)
+    GET  /api/scraper     Setup > Games > Scraper: a fonte, a conta (sem a senha),
+                      os tipos de midia, as pastas, o trabalho interrompido e
+                      os pacotes de arte
+    POST /api/scraper {"action": "source", "source"}, {"action": "account",
+                      "source", "user"+"password" | "key" | "id"+"secret" |
+                      "remove": true} (a conta vai pela entrada padrao),
+                      {"action": "media", "media": [...]}, e as tarefas
+                      {"action": "scrape"|"site", "systems": [...], "clones"},
+                      {"action": "resume"} e {"action": "packs"}
+    GET  /api/bios        Download BIOS: auto, o resumo e a lista da ultima checagem
+    POST /api/bios    {"action": "check", "refresh"} (tarefa) ou {"action": "auto", "on"}
+    GET  /api/install     os emuladores (Emulators & Games) e os extras
+    GET  /api/install/latest?name=  a versao nova de um emulador (GitHub)
+    POST /api/install {"group": "emulators"|"extras", "name"[, "artpack": CODIGO]} (tarefa)
     GET  /api/stream      a tela ao vivo: installed, active, encoder, audio
     POST /api/stream/offer {"fps": 15|30|60, "sdp"}: a resposta SDP do go2rtc
     POST /api/stream/install  instala o go2rtc e o ffmpeg (tarefa)
@@ -1877,12 +1891,99 @@ def save_input_css(css):
 def downloader_status():
     """O andamento do Downloader (fliperos-setup --downloader status)."""
     out = subprocess.run([SETUP, "--downloader", "status"], capture_output=True, text=True, timeout=30).stdout
+    return key_values(out)
+
+
+def key_values(text):
+    """As linhas "chave=valor" de uma saida do Setup."""
     values = {}
-    for line in out.splitlines():
+    for line in text.splitlines():
         if "=" in line:
             key, value = line.split("=", 1)
             values[key] = value
     return values
+
+
+def setup_out(*args, timeout=60):
+    return subprocess.run([SETUP, *args], capture_output=True, text=True, timeout=timeout).stdout
+
+
+# ── Scraper, Download BIOS, emuladores e extras ───────────────────
+# As telas do Setup que tambem estao aqui: Setup > Games > Scraper
+# (fliperos-setup --scraper e --mediapacks), Downloader > Download BIOS
+# (--bios), Emulators & Games (config/fliperos-emulators) e Extras
+# (config/fliperos-extras). O que leva minutos e uma tarefa.
+EMULATORS_TOOL = ENV("FLIPEROS_EMULATORS", BIN + "/fliperos-emulators")
+PIXELCADE = ENV("FLIPEROS_PIXELCADE", BIN + "/fliperos-pixelcade")
+# Uma pasta de jogos do Scraper: mame, retroarch/fbneo.
+SYSTEM_KEY = re.compile(r"[A-Za-z0-9_+-][A-Za-z0-9_.+-]*(/[A-Za-z0-9_+-][A-Za-z0-9_.+-]*)?")
+
+
+def scraper_info():
+    """O Scraper: a fonte e a conta (sem a senha), os tipos de midia, o
+    trabalho interrompido, as fontes, as pastas com jogos e os pacotes de
+    arte por torrent."""
+    info = key_values(setup_out("--scraper", "status"))
+    sources = []
+    for line in setup_out("--scraper", "sources").splitlines():
+        parts = line.split("|", 3)
+        if len(parts) == 4:
+            sources.append(dict(zip(("key", "name", "kind", "note"), parts)))
+    systems = []
+    for line in setup_out("--scraper", "systems", timeout=120).splitlines():
+        parts = line.split("|")
+        if len(parts) >= 4 and parts[3].isdigit():
+            systems.append({"key": parts[0], "platform": parts[2], "count": int(parts[3]),
+                            "arcade": len(parts) > 4 and parts[4] == "1"})
+    packs = key_values(setup_out("--mediapacks", "status"))
+    return {"source": info.get("source", ""), "name": info.get("name", ""), "kind": info.get("kind", ""),
+            "account": info.get("account", ""), "user": info.get("user", ""),
+            "media": [m for m in info.get("media", "").split(",") if m and m != "none"],
+            "skyscraper": info.get("skyscraper") == "1", "running": info.get("running") == "1",
+            "pending": info.get("pending", "").split(), "sources": sources, "systems": systems,
+            "packs": {"pct": packs.get("pct", "0"), "state": packs.get("state", "none"), "line": packs.get("line", "")}}
+
+
+def bios_info():
+    """Download BIOS: a checagem automatica, o resumo da ultima e cada BIOS
+    dela (estado, pasta e onde fica, com ~ no lugar da casa do jogador)."""
+    status = key_values(setup_out("--bios", "status"))
+    home = os.path.join(player_home(), "")
+    rows = []
+    for line in setup_out("--bios", "list").splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 3:
+            dest = parts[2]
+            if dest.startswith(home):
+                dest = "~/" + dest[len(home):]
+            rows.append({"status": parts[0], "folder": parts[1], "dest": dest})
+    return {"auto": status.pop("auto", "on") == "on", "last": status, "items": rows}
+
+
+def tool_lines(argv, fields):
+    """As linhas "a|b|c" de um instalador (list, versions), como dicionarios."""
+    try:
+        out = subprocess.run(argv, capture_output=True, text=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    rows = []
+    for line in out.splitlines():
+        parts = line.split("|", len(fields) - 1)
+        if len(parts) == len(fields):
+            rows.append(dict(zip(fields, parts)))
+    return rows
+
+
+def installables():
+    """Os emuladores (com a versao instalada) e os extras, como nas telas
+    Emulators & Games e Extras."""
+    versions = {r["name"]: r["version"] for r in tool_lines([EMULATORS_TOOL, "versions"], ("name", "version"))}
+    emulators = [{"name": r["name"], "installed": r["installed"] == "1", "kind": r["kind"], "label": r["label"],
+                  "version": versions.get(r["name"], "")}
+                 for r in tool_lines([EMULATORS_TOOL, "list"], ("name", "installed", "kind", "label"))]
+    extras = [{"name": r["name"], "installed": r["installed"] == "1", "label": r["label"]}
+              for r in tool_lines([EXTRAS, "list"], ("name", "installed", "label"))]
+    return {"emulators": emulators, "extras": extras}
 
 
 # ── O terminal (fase 5b): um WebSocket com um pty ──────────────────
@@ -2326,6 +2427,27 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, task.info(log=True))
         if url.path == "/api/downloader":
             return self.send(200, self.panel.downloader.get())
+        if url.path == "/api/scraper" and parse_qs(url.query).get("packs"):
+            # So o andamento dos pacotes de arte (a pagina pede a cada 3 s).
+            try:
+                packs = key_values(setup_out("--mediapacks", "status"))
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            return self.send(200, {"packs": {k: packs.get(k, "") for k in ("pct", "state", "line")}})
+        if url.path in ("/api/scraper", "/api/bios", "/api/install"):
+            try:
+                info = {"/api/scraper": scraper_info, "/api/bios": bios_info,
+                        "/api/install": installables}[url.path]()
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            return self.send(200, info)
+        if url.path == "/api/install/latest":
+            # A versao nova de um emulador (pergunta ao GitHub: segundos).
+            name = (parse_qs(url.query).get("name") or [""])[0]
+            if not re.fullmatch(r"[a-z0-9_-]{1,40}", name):
+                return self.send(400, {"error": "bad name"})
+            rows = tool_lines([EMULATORS_TOOL, "latest", name], ("have", "want", "state"))
+            return self.send(200, rows[0] if rows else {"have": "", "want": "", "state": "unknown"})
         if url.path == "/api/settings":
             try:
                 return self.send(200, {"settings": settings()})
@@ -2473,6 +2595,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, task.info())
         if url.path == "/api/downloader":
             return self.downloader_action(self.body())
+        if url.path == "/api/scraper":
+            return self.scraper_action(self.body())
+        if url.path == "/api/bios":
+            return self.bios_action(self.body())
+        if url.path == "/api/install":
+            return self.install_action(self.body())
         if url.path.startswith("/api/romfilter/"):
             return self.romfilter_action(url.path.rsplit("/", 1)[1], self.body())
         if url.path == "/api/stream/offer":
@@ -2652,6 +2780,115 @@ class Handler(BaseHTTPRequestHandler):
         if not task:
             return self.send(409, {"error": "the downloader is already busy with another task"})
         self.panel.downloader.when = None
+        return self.send(200, task.info())
+
+    def setup_call(self, args, stdin=None):
+        """Um ajuste do Setup na hora: 200, 400 (pedido errado, status 2) ou 500."""
+        try:
+            done = subprocess.run([SETUP, *args], input=stdin, capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return self.send(500, {"error": str(exc)})
+        if done.returncode == 2:
+            return self.send(400, {"error": "bad request"})
+        if done.returncode != 0:
+            return self.send(500, {"error": (done.stderr or done.stdout).strip()[-300:] or "failed"})
+        return self.send(200, {})
+
+    def scraper_action(self, data):
+        """Setup > Games > Scraper: a fonte, a conta, os tipos de midia (na
+        hora) e as raspagens e os pacotes de arte (tarefas)."""
+        action = data.get("action")
+        systems = data.get("systems") or []
+        if not isinstance(systems, list) or not all(isinstance(s, str) and SYSTEM_KEY.fullmatch(s) for s in systems):
+            return self.send(400, {"error": "bad systems"})
+        source = str(data.get("source", ""))
+        if action == "source":
+            if not re.fullmatch(r"[a-z]{1,32}", source):
+                return self.send(400, {"error": "bad source"})
+            return self.setup_call(["--scraper", "source", source])
+        if action == "account":
+            # A conta vai pela entrada padrao: nem na linha de comando (a
+            # lista de processos), nem no log.
+            if not re.fullmatch(r"[a-z]{1,32}", source):
+                return self.send(400, {"error": "bad source"})
+            # remove: sem conta; key: a chave de API; id e secret; user e password.
+            if data.get("remove") is True:
+                creds = ""
+            elif "key" in data:
+                creds = str(data["key"])
+            else:
+                first, second = ("id", "secret") if "id" in data else ("user", "password")
+                first, second = str(data.get(first) or ""), str(data.get(second) or "")
+                if not first or not second or ":" in first:
+                    return self.send(400, {"error": "both fields are needed"})
+                creds = first + ":" + second
+            if re.search(r"\s", creds) or (not creds and data.get("remove") is not True):
+                return self.send(400, {"error": "bad account"})
+            return self.setup_call(["--scraper", "account", source], creds + "\n")
+        if action == "media":
+            media = data.get("media")
+            if not isinstance(media, list) or not all(isinstance(m, str) and re.fullmatch(r"[a-z]{1,10}", m)
+                                                      for m in media):
+                return self.send(400, {"error": "bad media"})
+            return self.setup_call(["--scraper", "media", ",".join(media)])
+        if action == "scrape":
+            task = self.panel.tasks.start("Scraper: the art each game lacks", [SETUP, "--scraper", "scrape", *systems],
+                                          "scraper")
+        elif action == "site":
+            args = ["--clones"] if data.get("clones") is True else []
+            task = self.panel.tasks.start("Scraper: scrape with the site", [SETUP, "--scraper", "site", *args, *systems],
+                                          "scraper")
+        elif action == "resume":
+            task = self.panel.tasks.start("Scraper: resume", [SETUP, "--scraper", "resume"], "scraper")
+        elif action == "packs":
+            task = self.panel.tasks.start("Art packs by torrent", [SETUP, "--mediapacks", "auto"], "mediapacks")
+        else:
+            return self.send(400, {"error": "action source, account, media, scrape, site, resume or packs"})
+        if not task:
+            return self.send(409, {"error": "the scraper is already running"})
+        return self.send(200, task.info())
+
+    def bios_action(self, data):
+        """Download BIOS: a checagem (tarefa) e a checagem automatica do menu."""
+        action = data.get("action")
+        if action == "check":
+            argv = [SETUP, "--bios", "check"] + (["--refresh"] if data.get("refresh") is True else [])
+            task = self.panel.tasks.start("Download BIOS", argv, "bios")
+            if not task:
+                return self.send(409, {"error": "the BIOS are already being checked"})
+            return self.send(200, task.info())
+        if action == "auto" and isinstance(data.get("on"), bool):
+            return self.setup_call(["--bios", "auto", "on" if data["on"] else "off"])
+        return self.send(400, {"error": "action check, or auto with on: true|false"})
+
+    def install_action(self, data):
+        """Emulators & Games e Extras: instalar ou atualizar um (tarefa; uma
+        instalacao por vez, como a da tela ao vivo). O Pixelcade instalado
+        aceita o codigo do pacote de arte pago."""
+        group, name = data.get("group"), str(data.get("name", ""))
+        if group == "emulators":
+            row = next((r for r in installables()["emulators"] if r["name"] == name), None)
+            if not row:
+                return self.send(404, {"error": "no such emulator"})
+            if row["kind"] == "image":
+                return self.send(400, {"error": "it comes with the FliperOS image and updates with it"})
+            argv, label = [EMULATORS_TOOL, "install", name, "--progress"], row["label"]
+        elif group == "extras":
+            row = next((r for r in installables()["extras"] if r["name"] == name), None)
+            if not row:
+                return self.send(404, {"error": "no such extra"})
+            code = re.sub(r"\s", "", str(data.get("artpack") or ""))
+            if code:
+                if name != "pixelcade" or not row["installed"] or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", code):
+                    return self.send(400, {"error": "the art pack code is for an installed Pixelcade"})
+                argv, label = [PIXELCADE, "artpack", code, "--progress"], "Pixelcade art pack"
+            else:
+                argv, label = [EXTRAS, "install", name, "--progress"], row["label"]
+        else:
+            return self.send(400, {"error": "group emulators or extras"})
+        task = self.panel.tasks.start("%s %s" % ("Update" if row["installed"] else "Install", label), argv, "extras")
+        if not task:
+            return self.send(409, {"error": "another installation is running"})
         return self.send(200, task.info())
 
     def stream_offer(self, data):

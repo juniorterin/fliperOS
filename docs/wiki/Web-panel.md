@@ -7,7 +7,9 @@ What you can do from the couch:
 - **Watch the cabinet live** in the browser, and put the live screen and the game's marquee in OBS.
 - **Change settings while you play**: colour, 480i hacks, services, latency mode, volume.
 - **Copy games, BIOS and artwork** through the browser: upload, download, new folders.
-- **Filter a MAME romset** and **download** only the games that suit your cabinet.
+- **Filter a MAME romset** and **download** only the games that suit your cabinet, plus the **BIOS** your games lack.
+- **Scrape the art** of your games, typing the site's login on a real keyboard, and download the art packs.
+- **Install or update emulators and extras** that don't come in the image.
 - **Check the system**: the video mode with its modeline, CPU, GPU, temperatures, network and logs.
 - **Open a terminal** on the cabinet, without an SSH program.
 
@@ -17,11 +19,13 @@ The cabinet's state in a browser on the same network (a phone too): **http://fli
 
 You sign in with the same user and password as SSH and the network share (`fliperos`, changed in **Setup > System > Password**). Until 2026-10-22 the panel was on port 8080, which Pixelcade's own settings page also uses; with both installed one of them didn't open.
 
-The panel has eight pages, tabs at the top, each with its own address (`#frontend`, `#live`, `#romfilter`, `#downloads`, `#files`, `#settings`, `#status`, `#terminal`); the browser remembers the last one:
+The panel has ten pages, tabs at the top, each with its own address (`#frontend`, `#live`, `#romfilter`, `#downloads`, `#scraper`, `#install`, `#files`, `#settings`, `#status`, `#terminal`); the browser remembers the last one:
 - **Frontend:** now playing with the FPS, games, volume and screen;
 - **Live:** the cabinet screen live, the streaming controls (service, encoder, sound) and the addresses for OBS (the live screen and the marquee). Leaving the page stops the stream, so ffmpeg on the cabinet stops too;
 - **ROM filter:** the MAME ROM Cleaner filter, for the Downloader or for a romset folder;
-- **Downloads:** the Downloader and the tasks;
+- **Downloads:** the Downloader, Download BIOS and the tasks;
+- **Scraper:** the art of the games, from the FliperOS scraper or a site, and the art packs by torrent;
+- **Install:** the emulators and the extras, installed or updated;
 - **Files:** files and tasks;
 - **Settings:** colour values are sliders;
 - **Status:** now playing and the screen at the top, then video, CPU, GPU, memory, storage, network, processes and logs;
@@ -136,6 +140,23 @@ The status refreshes every second. What each part shows:
   - It adds a torrent's link (the one that comes with FliperOS, or one you paste), applies the filter and starts, and removes a torrent (optionally with what it already downloaded).
   - The filter itself is chosen on the ROM filter page or in the Setup. Starting from the panel deletes nothing; deleting what a changed filter leaves out stays a Setup step.
   - It goes through the Setup's own functions (`fliperos-setup --downloader status|add|start|remove`, `lib/downloader.sh`).
+- **Download BIOS** (on the Downloads page): the same as **Setup > Games > Downloader > Download BIOS**.
+  - It shows the last check (downloaded, already there, not in the pack, failed) and the list by state. The BIOS that failed or are not in the pack open first, since they ask for something from you.
+  - *Check now* runs the check as a task. *Check, reading the pack again* reads the BIOS pack's list again first. The box turns the automatic check off or on; that check runs each time the cabinet menu opens.
+  - It goes through `fliperos-setup --bios status|list|check [--refresh]|auto on|off` (`lib/downloader.sh`).
+- **Scraper:** the same as **Setup > Games > Scraper**.
+  - The page says what each kind of folder gets, since arcade has much more art. The folders come in two groups, **Arcade** (MAME sets) and **Consoles**.
+  - Pick the folders (none picked means all). *Scrape the games* is the FliperOS scraper: what each game lacks, like the frontend does by itself, with no account. An arcade folder gets the description, screenshot, flyer, marquee and logo from the Arcade Database. A console folder gets only the screenshot and the box art from libretro-thumbnails; logos, videos and descriptions of console games come from a site (ScreenScraper covers every system).
+  - *Scrape with a site* is Skyscraper. Each provider shows what it covers: every system (ScreenScraper, MobyGames), arcade only (ArcadeDB; progetto-SNAPS, only screenshots) or consoles and computers (TheGamesDB, IGDB, OpenRetro). Pick the provider, type its account (user and password, the API key, or the client ID and secret), mark what to fetch and, with a MAME folder, the clones. The account is easier to type here than with the joystick.
+
+    The account goes to the Setup through standard input, never on a command line or in a log, and the saved password never comes back to the page. A scrape that stopped before the end (a power off) can be resumed here or in the Setup.
+  - *Art packs by torrent* puts every pack with ROMs to download, as in the Setup, and shows its progress. The packs are arcade only: logos and videos of MAME, RetroArch's arcade cores, Naomi, Atomiswave, Model 2 and Model 3.
+  - It goes through `fliperos-setup --scraper status|sources|systems|source|account|media|scrape|site|resume` (`lib/scraper.sh`) and `--mediapacks auto|status`.
+- **Install:** **Setup > Games > Emulators & Games** and **Extras**.
+  - Each emulator shows whether it is installed and its version. *Check for an update* asks GitHub for the newest one. Those that come in the image update with FliperOS, so they have no button.
+  - *Install* or *Update* runs as a task. Only one installation runs at a time, the live screen's included.
+  - KOF Final Attack is downloaded from itch.io; installing it from a copy of the original game stays a Setup step. An installed Pixelcade also takes the code of the paid art pack.
+  - It runs `fliperos-emulators`, `fliperos-extras` and `fliperos-pixelcade`, the same programs as the Setup.
 - **ROM filter:** the filter of the MAME ROM Cleaner (Setup > Games > Cleaner), with the same parameters, options and presets as the Setup's screen, which come from the Setup itself (`fliperos-setup --romfilter`, `lib/romclean.sh`).
   - It has two uses. *Downloader filter*: what the Downloader takes from the ROM and CHD torrents; it opens with the saved filter, and *Save* records it as Setup > Games > Downloader > Filter does. *Clean a romset folder*: a folder with a romset (a disk, a USB drive, the network folder mounted by the Setup), chosen in a folder list.
   - Pick the emulator (the MAME version of the romset: GroovyMAME, Flycast, SM2-Emu, Supermodel, MAME 2010) and a preset. The emulator of a romset folder is guessed from its name, as in the Setup.
@@ -144,7 +165,7 @@ The status refreshes every second. What each part shows:
     A pink dot marks a value changed from the preset or the saved filter. A yes/no tile switches with a click; the others open their options in a dialog, one choice or chips for several, with a search box on long lists such as the categories.
   - The scoreboard (GAMES and SIZE) stays in view while scrolling and counts what passes after every change: on the ROM torrent's list for the Downloader, on the folder for a romset. Only the latest count is kept; a new one stops the one before it.
   - For a folder, *Preview* shows what goes where (sets, size, parents, BIOS and devices, free space) and the list. *Copy them*, or *Move them* from a folder that can be written to, runs as a task with its progress. Deleting what is left over after a move stays a Setup step.
-- **Tasks:** what takes minutes (reading a torrent's link, applying the filter) runs in the background.
+- **Tasks:** what takes minutes (reading a torrent's link, applying the filter, scraping, checking the BIOS, installing) runs in the background. The card is on the Downloads, Scraper, Install and Files pages, and when a task ends, its card refreshes by itself.
   - Each task shows the step and the percentage from the Setup's progress events, and has a log and *Cancel*.
   - Only one task of each kind runs at a time, and the last 20 stay listed.
 - **Trackball** (off for now: the card is hidden and `/api/trackball` answers 404 unless the service has `FLIPEROS_WEB_TRACKBALL=1`): the phone as the cabinet's mouse, for trackball and spinner games (MAME reads the mouse for them), frontends and the desktop.

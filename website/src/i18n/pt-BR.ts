@@ -376,7 +376,7 @@ const ptBR: Messages = {
       { id: 'obs', title: 'Pronto para o OBS', text: 'Endereços para uma Browser Source do OBS: a tela ao vivo em 4:3 com som, o marquee do jogo em andamento, com os recordes e o placar do versus, e o seu controle acendendo na tela.' },
       { id: 'settings', title: 'Ajustes com o jogo aberto', text: 'Sliders de cor que mudam o jogo na tela enquanto você mexe, os jogos 480i de cada emulador, os serviços, o modo de latência e o volume.' },
       { id: 'files', title: 'Seus jogos pelo navegador', text: 'Envie e baixe jogos, BIOS, imagens e telas de boot, com o andamento, direto na pasta certa.' },
-      { id: 'romfilter', title: 'Filtro de ROMs e downloads', text: 'Filtre um romset do MAME pelos controles e pela tela do seu gabinete, e baixe de um torrent só os jogos que passam.' },
+      { id: 'romfilter', title: 'Jogos, BIOS e arte', text: 'Filtre um romset do MAME pelos controles e pela tela do seu gabinete, baixe só os jogos que passam e as BIOS que faltam, busque a arte deles com o login do site digitado num teclado de verdade, e instale ou atualize emuladores.' },
       { id: 'status', title: 'O estado de tudo', text: 'O modo de vídeo e a modeline no tubo, CPU, GPU, temperaturas, memória, discos, rede, processos e logs.' },
       { id: 'terminal', title: 'Terminal', text: 'O shell do gabinete numa aba do navegador, o mesmo do SSH, sem programa para instalar.' },
     ],

@@ -5330,7 +5330,34 @@ class WebPanelTests(unittest.TestCase):
                          'if [ "$1" = --systems ]; then\n'
                          '  echo \'naomi|%s|naomi|Naomi|/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z|1\'\n'
                          '  echo \'shell|%s|snes|Shell|/bin/sh|-c "[name]"|.zip|0\'\n'
-                         'fi\nexit 0\n' % (tmp, tmp, roms, roms))
+                         'fi\n'
+                         # O Scraper, os pacotes de arte e o Download BIOS
+                         # (--scraper, --mediapacks, --bios); a conta chega
+                         # pela entrada padrao.
+                         'if [ "$1" = --scraper ]; then\n'
+                         '  case "$2" in\n'
+                         '    status) echo source=screenscraper; echo name=ScreenScraper; echo kind=login\n'
+                         '      echo "account=account joe"; echo user=joe; echo media=snap,logo; echo skyscraper=1\n'
+                         '      echo pending=mame; echo running=0 ;;\n'
+                         '    sources) echo "screenscraper|ScreenScraper|login|every system"\n'
+                         '      echo "mobygames|MobyGames|key|needs your API key" ;;\n'
+                         '    systems) echo "mame|/r/mame|arcade|12|1"; echo "retroarch/snes9x|/r/snes|snes|3|0" ;;\n'
+                         '    source) [ "$3" = nope ] && exit 2 ;;\n'
+                         '    account) cat > "$(dirname "$0")/account.in" ;;\n'
+                         '    scrape|site|resume) echo "@step 5 Scraping"; echo failed= ;;\n'
+                         '  esac\n  exit 0\nfi\n'
+                         'if [ "$1 $2" = "--mediapacks status" ]; then\n'
+                         '  echo pct=30; echo state=downloading; echo "line=Logos 3 of 10"; exit 0\nfi\n'
+                         'if [ "$1" = --bios ]; then\n'
+                         '  case "$2" in\n'
+                         '    status) echo auto=off; echo downloaded=2; echo bytes=2048; echo present=5; echo missing=1\n'
+                         '      echo failed=0; echo "when=2026-10-26 10:00" ;;\n'
+                         '    list) printf "missing\\tretroarch/fbneo\\t$FLIPEROS_HOME/bios/fbneo/neogeo.zip\\tneogeo\\n"\n'
+                         '      printf "present\\tps2\\t/elsewhere/scph39001.bin\\tscph39001.bin\\n" ;;\n'
+                         '    auto) [ "$3" = on ] || [ "$3" = off ] || exit 2 ;;\n'
+                         '    check) echo "@step 40 Checking"; echo downloaded=1 ;;\n'
+                         '  esac\n  exit 0\nfi\n'
+                         'exit 0\n' % (tmp, tmp, roms, roms))
         setup.chmod(0o755)
         run = tmp / 'run/1000'
         run.mkdir(parents=True)
@@ -5348,8 +5375,22 @@ class WebPanelTests(unittest.TestCase):
                           'rates=15 30 60\\n"\nexit 0\n')
         stream.chmod(0o755)
         extras = tmp / 'fake-extras'
-        extras.write_text('#!/bin/sh\necho "$*" > %s/extras.log\necho "@step 50 Downloading"\n' % tmp)
+        extras.write_text('#!/bin/sh\nif [ "$1" = list ]; then echo "wine|0|Wine"; '
+                          'echo "pixelcade|1|Pixelcade (LED/LCD marquee)"; exit 0; fi\n'
+                          'echo "$*" > %s/extras.log\necho "@step 50 Downloading"\n' % tmp)
         extras.chmod(0o755)
+        # Os emuladores (config/fliperos-emulators) e o Pixelcade falsos.
+        emulators = tmp / 'fake-emulators'
+        emulators.write_text('#!/bin/sh\ncase "$1" in\n'
+                             '  list) echo "groovymame|1|image|GroovyMAME"; echo "duckstation|1|fetch|DuckStation"\n'
+                             '    echo "model2|0|build|Model 2 (SM2-Emu)" ;;\n'
+                             '  versions) echo "duckstation|0.1-9"; echo "groovymame|0.289" ;;\n'
+                             '  latest) echo "0.1-9|0.2|new" ;;\n'
+                             '  *) echo "$*" > %s/emulators.log; echo "@step 50 Downloading" ;;\nesac\n' % tmp)
+        emulators.chmod(0o755)
+        pixelcade = tmp / 'fake-pixelcade'
+        pixelcade.write_text('#!/bin/sh\necho "$*" > %s/pixelcade.log\n' % tmp)
+        pixelcade.chmod(0o755)
         (tmp / 'art').mkdir()
         cls.art = tmp / 'art/sf2.png'
         cls.art.write_bytes(b'\x89PNG fake')
@@ -5387,6 +5428,7 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_STREAM_API='http://127.0.0.1:%d' % cls.adb.server_address[1],
                    FLIPEROS_LAB=str(lab), FLIPEROS_LAB_RUN=str(tmp / 'lab'),
                    FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'),
+                   FLIPEROS_EMULATORS=str(emulators), FLIPEROS_PIXELCADE=str(pixelcade),
                    FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'))
         (tmp / 'media/USB/romset').mkdir(parents=True)
         (tmp / 'media/USB/.hidden').mkdir()
@@ -5650,12 +5692,14 @@ class WebPanelTests(unittest.TestCase):
         index = (ROOT / 'config/web/index.html').read_text()
         nav = index[index.index('<nav class="pages"'):index.index('</nav>')]
         self.assertEqual(re.findall(r'data-page="([a-z]+)"', nav),
-                         ['frontend', 'live', 'romfilter', 'downloads', 'files', 'settings', 'status', 'terminal'])
+                         ['frontend', 'live', 'romfilter', 'downloads', 'scraper', 'install', 'files', 'settings',
+                          'status', 'terminal'])
         self.assertIn('<section class="card wide" data-page="downloads" aria-labelledby="h-dl">', index)
-        self.assertIn('<section class="card wide" data-page="downloads files" aria-labelledby="h-tasks">', index)
+        self.assertIn('<section class="card wide" data-page="downloads files scraper install" aria-labelledby="h-tasks">',
+                      index)
         app = (ROOT / 'config/web/app.js').read_text()
-        self.assertIn('const PAGES = ["frontend", "live", "romfilter", "downloads", "files", "settings", "status", '
-                      '"terminal"];', app)
+        self.assertIn('const PAGES = ["frontend", "live", "romfilter", "downloads", "scraper", "install", "files", '
+                      '"settings", "status", "terminal"];', app)
         self.assertEqual(app.count('page_downloads: "Downloads"'), 2)
 
     def test_marquee_card_links_the_scoreboard_games_page(self):
@@ -6167,6 +6211,115 @@ class WebPanelTests(unittest.TestCase):
         tasks = json.loads(self.request('GET', '/api/tasks', cookie=cookie)[2])['tasks']
         self.assertEqual([t['id'] for t in tasks][:2], [adding['id'], task['id']])
         self.assertIn('downloader_cli "${@:2}"', (ROOT / 'fliperos-setup/fliperos-setup').read_text())
+
+    def wait_task(self, cookie, data):
+        task = json.loads(data)
+        for _ in range(50):
+            info = json.loads(self.request('GET', '/api/task?id=%d' % task['id'], cookie=cookie)[2])
+            if not info['running']:
+                return info
+            time.sleep(0.1)
+        self.fail('task still running: %s' % info)
+
+    def test_scraper_page_through_the_setup(self):
+        # Setup > Games > Scraper no painel: a fonte, a conta (pela entrada
+        # padrao, nunca na linha de comando), os tipos de midia e as raspagens.
+        cookie, tmp = self.login(), Path(self.tmp.name)
+        status, _, data = self.request('GET', '/api/scraper', cookie=cookie)
+        self.assertEqual(status, 200, data)
+        info = json.loads(data)
+        self.assertEqual((info['source'], info['user'], info['media'], info['pending'], info['skyscraper']),
+                         ('screenscraper', 'joe', ['snap', 'logo'], ['mame'], True))
+        self.assertEqual(info['systems'], [{'key': 'mame', 'platform': 'arcade', 'count': 12, 'arcade': True},
+                                           {'key': 'retroarch/snes9x', 'platform': 'snes', 'count': 3, 'arcade': False}])
+        self.assertEqual(info['sources'][1], {'key': 'mobygames', 'name': 'MobyGames', 'kind': 'key',
+                                              'note': 'needs your API key'})
+        packs = {'pct': '30', 'state': 'downloading', 'line': 'Logos 3 of 10'}
+        self.assertEqual(info['packs'], packs)
+        self.assertEqual(json.loads(self.request('GET', '/api/scraper?packs=1', cookie=cookie)[2]), {'packs': packs})
+        account = {'action': 'account', 'source': 'screenscraper', 'user': 'joe', 'password': 's3cret'}
+        self.assertEqual(self.request('POST', '/api/scraper', account, cookie=cookie)[0], 200)
+        self.assertEqual((tmp / 'account.in').read_text(), 'joe:s3cret\n')
+        self.assertNotIn('s3cret', self.volume_log.read_text())
+        self.assertEqual(self.request('POST', '/api/scraper', {'action': 'account', 'source': 'igdb', 'id': 'a', 'secret': 'b'},
+                                      cookie=cookie)[0], 200)
+        self.assertEqual((tmp / 'account.in').read_text(), 'a:b\n')
+        self.assertEqual(self.request('POST', '/api/scraper', {'action': 'account', 'source': 'screenscraper', 'remove': True},
+                                      cookie=cookie)[0], 200)
+        self.assertEqual((tmp / 'account.in').read_text(), '\n')
+        for body in ({'action': 'account', 'source': 'screenscraper', 'user': 'joe'},
+                     {'action': 'account', 'source': 'mobygames', 'key': 'a b'},
+                     {'action': 'account', 'source': 'mobygames'},
+                     {'action': 'source', 'source': 'nope'}, {'action': 'source', 'source': '../x'},
+                     {'action': 'site', 'systems': ['../etc']}, {'action': 'scrape', 'systems': 'mame'},
+                     {'action': 'media', 'media': ['snap;rm']}, {'action': 'nope'}):
+            self.assertEqual(self.request('POST', '/api/scraper', body, cookie=cookie)[0], 400, body)
+        self.assertEqual(self.request('POST', '/api/scraper', {'action': 'media', 'media': ['snap', 'preview']},
+                                      cookie=cookie)[0], 200)
+        self.assertIn('--scraper media snap,preview\n', self.volume_log.read_text())
+        status, _, data = self.request('POST', '/api/scraper', {'action': 'site', 'systems': ['mame', 'retroarch/snes9x'],
+                                                                'clones': True}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        self.assertEqual(self.wait_task(cookie, data)['rc'], 0)
+        self.assertIn('--scraper site --clones mame retroarch/snes9x\n', self.volume_log.read_text())
+        for body, line in (({'action': 'scrape', 'systems': []}, '--scraper scrape\n'),
+                           ({'action': 'resume'}, '--scraper resume\n'), ({'action': 'packs'}, '--mediapacks auto\n')):
+            status, _, data = self.request('POST', '/api/scraper', body, cookie=cookie)
+            self.assertEqual(status, 200, data)
+            self.wait_task(cookie, data)
+            self.assertIn(line, self.volume_log.read_text())
+        main = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        self.assertIn('scraper_cli "${@:2}"', main)
+        self.assertIn('bios_cli "${@:2}"', main)
+
+    def test_bios_through_the_setup(self):
+        cookie = self.login()
+        bios = json.loads(self.request('GET', '/api/bios', cookie=cookie)[2])
+        self.assertFalse(bios['auto'])
+        self.assertEqual(bios['last']['downloaded'], '2')
+        self.assertEqual(bios['items'], [{'status': 'missing', 'folder': 'retroarch/fbneo', 'dest': '~/bios/fbneo/neogeo.zip'},
+                                         {'status': 'present', 'folder': 'ps2', 'dest': '/elsewhere/scph39001.bin'}])
+        self.assertEqual(self.request('POST', '/api/bios', {'action': 'auto', 'on': True}, cookie=cookie)[0], 200)
+        self.assertIn('--bios auto on\n', self.volume_log.read_text())
+        self.assertEqual(self.request('POST', '/api/bios', {'action': 'auto', 'on': 'yes'}, cookie=cookie)[0], 400)
+        status, _, data = self.request('POST', '/api/bios', {'action': 'check', 'refresh': True}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        info = self.wait_task(cookie, data)
+        self.assertEqual((info['rc'], info['step']), (0, 'Checking'))
+        self.assertIn('--bios check --refresh\n', self.volume_log.read_text())
+
+    def test_install_emulators_and_extras(self):
+        cookie, tmp = self.login(), Path(self.tmp.name)
+        data = json.loads(self.request('GET', '/api/install', cookie=cookie)[2])
+        self.assertEqual(data['emulators'][1], {'name': 'duckstation', 'installed': True, 'kind': 'fetch',
+                                                'label': 'DuckStation', 'version': '0.1-9'})
+        self.assertEqual(data['extras'], [{'name': 'wine', 'installed': False, 'label': 'Wine'},
+                                          {'name': 'pixelcade', 'installed': True,
+                                           'label': 'Pixelcade (LED/LCD marquee)'}])
+        self.assertEqual(json.loads(self.request('GET', '/api/install/latest?name=duckstation', cookie=cookie)[2]),
+                         {'have': '0.1-9', 'want': '0.2', 'state': 'new'})
+        self.assertEqual(self.request('GET', '/api/install/latest?name=../x', cookie=cookie)[0], 400)
+        # O que vem na imagem atualiza com ela; nome desconhecido, 404.
+        for body, code in (({'group': 'emulators', 'name': 'groovymame'}, 400),
+                           ({'group': 'emulators', 'name': 'nope'}, 404), ({'group': 'nope', 'name': 'wine'}, 400),
+                           ({'group': 'extras', 'name': 'wine', 'artpack': 'ABC'}, 400),
+                           ({'group': 'extras', 'name': 'pixelcade', 'artpack': 'A;B'}, 400)):
+            self.assertEqual(self.request('POST', '/api/install', body, cookie=cookie)[0], code, body)
+        status, _, data = self.request('POST', '/api/install', {'group': 'emulators', 'name': 'duckstation'}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        self.assertEqual(json.loads(data)['name'], 'Update DuckStation')
+        self.wait_task(cookie, data)
+        self.assertEqual((tmp / 'emulators.log').read_text(), 'install duckstation --progress\n')
+        status, _, data = self.request('POST', '/api/install', {'group': 'extras', 'name': 'wine'}, cookie=cookie)
+        self.wait_task(cookie, data)
+        self.assertEqual((tmp / 'extras.log').read_text(), 'install wine --progress\n')
+        status, _, data = self.request('POST', '/api/install', {'group': 'extras', 'name': 'pixelcade',
+                                                                'artpack': ' AB-12 '}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        self.wait_task(cookie, data)
+        self.assertEqual((tmp / 'pixelcade.log').read_text(), 'artpack AB-12 --progress\n')
+        # O teste da tela ao vivo le o mesmo log do fliperos-extras falso.
+        (tmp / 'extras.log').unlink()
 
     def test_tty1_and_session_take_the_panel_request(self):
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()

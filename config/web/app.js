@@ -106,6 +106,52 @@ const TEXT = {
     rf_confirm_copy: "Copy the games that passed from %s?",
     rf_confirm_move: "Move the games that passed out of %s? They leave the romset.",
     page_downloads: "Downloads",
+    page_scraper: "Scraper", page_install: "Install",
+    bios: "Download BIOS",
+    bios_note: "The BIOS the games in your folders lack, downloaded one by one from the BIOS pack and checked by their hash. The same as Setup > Games > Downloader > Download BIOS.",
+    bios_check: "Check now", bios_refresh: "Check, reading the pack again", bios_auto: "Check when the cabinet menu opens",
+    bios_none: "No check yet.", bios_downloaded: "Downloaded", bios_present: "Already there", bios_missing: "Not in the pack",
+    bios_failed: "Failed", bios_when: "Checked", bios_big: "Too big",
+    bios_s_downloaded: "Downloaded at the last check", bios_s_failed: "Download failed (tried again at the next check)",
+    bios_s_missing: "Not in the BIOS pack: put them in ~/bios yourself", bios_s_big: "Too big, left out",
+    bios_s_present: "Already there",
+    scr_intro: "Pictures, logos, videos and information for the games, as in Setup > Games > Scraper. What is already in ~/media stays.",
+    scr_systems: "Folders", scr_all: "All", scr_run: "Scrape the games", scr_none: "No ROMs in ~/roms yet.",
+    scr_run_note: "What each game lacks, like the frontend does by itself. No account needed.",
+    scr_running: "A scrape opened from the cabinet's Setup is running.",
+    scr_pending: "A scrape stopped before the end. Folders left: %s.",
+    scr_site: "Scrape with a site (Skyscraper)", scr_site_note: "Art, videos and text from the site you choose, and the game lists of the other frontends (Attract-Mode Plus, ES-DE, Pegasus). The account is kept on the cabinet for the next times.",
+    scr_source: "Provider", scr_site_run: "Scrape with %s", scr_resume: "Resume the stopped scrape",
+    scr_user: "User", scr_password: "Password", scr_key: "API key", scr_id: "Client ID", scr_secret: "Client secret",
+    scr_save: "Save the account", scr_remove: "Remove the account", scr_saved: "Saved.",
+    scr_account: "Account: %s", scr_acc_none: "none needed", scr_acc_no: "none (it works, with lower limits)",
+    scr_acc_key: "key saved", scr_acc_nokey: "key missing: type it below", scr_acc_user: "%s", scr_media: "What to fetch", scr_clones: "Also the clones of the MAME games (other versions; takes longer)",
+    scr_no_sky: "Skyscraper is not installed on the cabinet.",
+    tag_arcade: "Arcade", tag_console: "Consoles", tag_all: "All systems", tag_arcade_only: "Arcade only",
+    scr_gets_arcade: "Description, screenshot, flyer, marquee and logo, from the Arcade Database. Videos and more logos come from the art packs below.",
+    scr_gets_console: "Only the screenshot and the box art, from libretro-thumbnails. For logos, videos and descriptions of console games, scrape with a site below (ScreenScraper covers every system).",
+    scr_src_screenscraper: "Arcade and consoles: screenshots, box art, logos, marquees, videos and descriptions. Works without an account; a free account raises the daily limit.",
+    scr_src_thegamesdb: "Consoles and computers, not arcade. No account.",
+    scr_src_arcadedb: "Arcade games only (MAME sets). No account.",
+    scr_src_progettosnaps: "Arcade games only, and only their screenshots (a pack of about 520 MB, kept for the next time). No account.",
+    scr_src_mobygames: "Every system. Needs your API key (from your profile at the site).",
+    scr_src_igdb: "Consoles and computers, not arcade. Needs a Twitch client ID and secret.",
+    scr_src_openretro: "Amiga and old computers. No account.",
+    packs_scope: "logos and videos of MAME, RetroArch's arcade cores, Naomi, Atomiswave, Model 2 and Model 3. Console folders get nothing from here.",
+    media_snap: "Screenshots", media_logo: "Logos", media_box: "Box art", media_marquee: "Marquees",
+    media_texto: "Descriptions", media_preview: "Videos (much more disk)",
+    packs: "Art packs by torrent", packs_note: "Logos and videos from torrents, only for the ROMs you have (the same as Setup > Games > Scraper > Art packs by torrent).",
+    packs_start: "Download every pack that has ROMs", packs_idle: "No pack downloading.",
+    emulators: "Emulators & Games", emulators_note: "What is installed, and the ones that don't come in the image (they need the network). The same as Setup > Games > Emulators & Games.",
+    extras: "Extras", extras_note: "Programs left out of the ISO to keep the download small, installed over the network. The same as Setup > Games > Extras.",
+    inst_installed: "installed", inst_not: "not installed", inst_install: "Install", inst_update: "Update",
+    inst_check: "Check for an update", inst_checking: "Checking…", inst_same: "Up to date (%s).", inst_new: "Update: %s.",
+    inst_unknown: "The newest version could not be checked (no network?).", inst_image: "Comes with FliperOS and updates with it.",
+    inst_image_missing: "Not in this image: it can't be installed from here.",
+    inst_build: "Download and build %s? It takes several minutes.", inst_ask: "Download and install %s?",
+    inst_again: "%s is installed. Download it again to update it?", inst_artpack: "Paid art pack code", inst_artpack_go: "Install the art pack",
+    inst_kof: "Downloads the game from itch.io (1.4 GB, 7 GB free needed). A copy of the original game: Setup > Games > Emulators & Games.",
+    inst_started: "Started: the progress is under Tasks.",
     page_frontend: "Frontend", page_files: "Files", page_settings: "Settings", page_status: "Status", page_terminal: "Terminal",
     settings: "Settings", settings_note: "Each change is saved and applied right away, through the Setup. Monitor, resolution and video driver stay in the Setup, on the cabinet screen.",
     lab: "Lab mode", lab_start: "Turn on lab mode", lab_stop: "Turn off", lab_starting: "Opening the tunnel…",
@@ -236,6 +282,52 @@ const TEXT = {
     rf_confirm_copy: "Copiar de %s os jogos que passaram?",
     rf_confirm_move: "Mover para fora de %s os jogos que passaram? Eles saem do romset.",
     page_downloads: "Downloads",
+    page_scraper: "Scraper", page_install: "Instalar",
+    bios: "Download BIOS",
+    bios_note: "As BIOS que faltam aos jogos das suas pastas, baixadas uma a uma do pacote de BIOS e conferidas pelo hash. O mesmo que Setup > Games > Downloader > Download BIOS.",
+    bios_check: "Conferir agora", bios_refresh: "Conferir, lendo o pacote de novo", bios_auto: "Conferir quando o menu do gabinete abre",
+    bios_none: "Nenhuma conferência ainda.", bios_downloaded: "Baixadas", bios_present: "Já estavam", bios_missing: "Fora do pacote",
+    bios_failed: "Falharam", bios_when: "Conferido", bios_big: "Grandes demais",
+    bios_s_downloaded: "Baixadas na última conferência", bios_s_failed: "O download falhou (tenta de novo na próxima conferência)",
+    bios_s_missing: "Fora do pacote de BIOS: coloque você mesmo em ~/bios", bios_s_big: "Grandes demais, ficaram de fora",
+    bios_s_present: "Já estavam",
+    scr_intro: "Imagens, logos, vídeos e informações dos jogos, como em Setup > Games > Scraper. O que já está em ~/media fica.",
+    scr_systems: "Pastas", scr_all: "Todas", scr_run: "Buscar a arte dos jogos", scr_none: "Ainda não há ROMs em ~/roms.",
+    scr_run_note: "O que falta a cada jogo, como o frontend faz sozinho. Não precisa de conta.",
+    scr_running: "Uma busca aberta pelo Setup do gabinete está rodando.",
+    scr_pending: "Uma busca parou antes do fim. Faltam as pastas: %s.",
+    scr_site: "Buscar num site (Skyscraper)", scr_site_note: "Arte, vídeos e textos do site que você escolher, e as listas de jogos dos outros frontends (Attract-Mode Plus, ES-DE, Pegasus). A conta fica guardada no gabinete para as próximas vezes.",
+    scr_source: "Site", scr_site_run: "Buscar no %s", scr_resume: "Continuar a busca que parou",
+    scr_user: "Usuário", scr_password: "Senha", scr_key: "Chave de API", scr_id: "Client ID", scr_secret: "Client secret",
+    scr_save: "Gravar a conta", scr_remove: "Tirar a conta", scr_saved: "Gravado.",
+    scr_account: "Conta: %s", scr_acc_none: "não precisa", scr_acc_no: "nenhuma (funciona, com limites menores)",
+    scr_acc_key: "chave gravada", scr_acc_nokey: "falta a chave: digite abaixo", scr_acc_user: "%s", scr_media: "O que buscar", scr_clones: "Também os clones dos jogos do MAME (outras versões; demora mais)",
+    scr_no_sky: "O Skyscraper não está instalado no gabinete.",
+    tag_arcade: "Arcade", tag_console: "Consoles", tag_all: "Todos os sistemas", tag_arcade_only: "Só arcade",
+    scr_gets_arcade: "Descrição, tela, flyer, marquee e logo, do Arcade Database. Vídeos e mais logos vêm dos pacotes de arte abaixo.",
+    scr_gets_console: "Só a tela e a capa, do libretro-thumbnails. Para logos, vídeos e descrições dos jogos de console, busque num site abaixo (o ScreenScraper cobre todos os sistemas).",
+    scr_src_screenscraper: "Arcade e consoles: telas, capas, logos, marquees, vídeos e descrições. Funciona sem conta; uma conta grátis aumenta o limite por dia.",
+    scr_src_thegamesdb: "Consoles e computadores, sem arcade. Sem conta.",
+    scr_src_arcadedb: "Só jogos de arcade (sets do MAME). Sem conta.",
+    scr_src_progettosnaps: "Só jogos de arcade, e só as telas (um pacote de uns 520 MB, guardado para a próxima vez). Sem conta.",
+    scr_src_mobygames: "Todos os sistemas. Precisa da sua chave de API (no seu perfil no site).",
+    scr_src_igdb: "Consoles e computadores, sem arcade. Precisa de um client ID e secret da Twitch.",
+    scr_src_openretro: "Amiga e computadores antigos. Sem conta.",
+    packs_scope: "logos e vídeos do MAME, dos cores de arcade do RetroArch, Naomi, Atomiswave, Model 2 e Model 3. As pastas de console não ganham nada daqui.",
+    media_snap: "Screenshots", media_logo: "Logos", media_box: "Capas", media_marquee: "Marquees",
+    media_texto: "Descrições", media_preview: "Vídeos (muito mais disco)",
+    packs: "Pacotes de arte por torrent", packs_note: "Logos e vídeos de torrents, só das ROMs que você tem (o mesmo que Setup > Games > Scraper > Art packs by torrent).",
+    packs_start: "Baixar todos os pacotes que têm ROMs", packs_idle: "Nenhum pacote baixando.",
+    emulators: "Emuladores e jogos", emulators_note: "O que está instalado, e os que não vêm na imagem (precisam de rede). O mesmo que Setup > Games > Emulators & Games.",
+    extras: "Extras", extras_note: "Programas que ficaram fora da ISO para o download ser menor, instalados pela rede. O mesmo que Setup > Games > Extras.",
+    inst_installed: "instalado", inst_not: "não instalado", inst_install: "Instalar", inst_update: "Atualizar",
+    inst_check: "Procurar update", inst_checking: "Procurando…", inst_same: "Em dia (%s).", inst_new: "Update: %s.",
+    inst_unknown: "Não deu para ver a versão nova (sem rede?).", inst_image: "Vem com o FliperOS e atualiza com ele.",
+    inst_image_missing: "Não está nesta imagem: não dá para instalar daqui.",
+    inst_build: "Baixar e compilar %s? Leva vários minutos.", inst_ask: "Baixar e instalar %s?",
+    inst_again: "%s já está instalado. Baixar de novo para atualizar?", inst_artpack: "Código do pacote de arte pago", inst_artpack_go: "Instalar o pacote de arte",
+    inst_kof: "Baixa o jogo do itch.io (1,4 GB, precisa de 7 GB livres). Uma cópia do jogo original: Setup > Games > Emulators & Games.",
+    inst_started: "Começou: o andamento está em Tarefas.",
     page_frontend: "Frontend", page_files: "Arquivos", page_settings: "Configurações", page_status: "Status", page_terminal: "Terminal",
     settings: "Configurações", settings_note: "Cada mudança é gravada e aplicada na hora, pelo Setup. Monitor, resolução e driver de vídeo ficam no Setup, na tela do gabinete.",
     lab: "Modo lab", lab_start: "Ligar o modo lab", lab_stop: "Desligar", lab_starting: "Abrindo o túnel…",
@@ -1267,9 +1359,255 @@ async function downloaderTask(body) {
 }
 $("dl-start").addEventListener("click", () => downloaderTask({ action: "start" }));
 
+// ── Download BIOS, Scraper e Instalar ────────────────────────────
+// As telas do Setup que tambem ficam aqui: Download BIOS (na pagina
+// Downloads), o Scraper e os pacotes de arte, Emulators & Games e Extras.
+// O que leva minutos vira uma tarefa; quando ela termina, o cartao dela se
+// refaz (taskDone).
+
+async function postJson(path, body) {
+  const res = await api(path, { method: "POST", body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) toast(data.error || res.statusText);
+  return res.ok ? data : null;
+}
+
+async function startTask(path, body) {
+  if (await postJson(path, body)) toast(t("inst_started"));
+  loadTasks().catch(() => {});
+}
+
+const BIOS_FIELDS = ["downloaded", "present", "missing", "failed", "when"];
+const BIOS_GROUPS = ["failed", "missing", "downloaded", "big", "present"];
+
+async function loadBios() {
+  const data = await (await api("/api/bios")).json();
+  const last = data.last || {};
+  $("bios-auto").checked = !!data.auto;
+  $("bios-last").replaceChildren(...(Object.keys(last).length ? BIOS_FIELDS.map((key) => {
+    let value = last[key] || "-";
+    if (key === "downloaded" && last.bytes) value += " (" + bytes(Number(last.bytes)) + ")";
+    return el("div", {}, el("dt", {}, t("bios_" + key)), el("dd", {}, value));
+  }) : [el("div", {}, el("dd", { class: "dim" }, t("bios_none")))]));
+  // Uma lista por estado; as que pedem algo da pessoa ja abertas.
+  $("bios-list").replaceChildren(...BIOS_GROUPS.flatMap((status) => {
+    const rows = (data.items || []).filter((r) => r.status === status);
+    if (!rows.length) return [];
+    const box = el("details", {}, el("summary", {}, t("bios_s_" + status) + " (" + rows.length + ")"),
+      el("ul", { class: "small-list" }, ...rows.map((r) => el("li", {}, el("span", { class: "dim" }, r.folder + "  "), r.dest))));
+    if (status === "failed" || status === "missing") box.open = true;
+    return [box];
+  }));
+}
+$("bios-check").addEventListener("click", () => startTask("/api/bios", { action: "check" }));
+$("bios-refresh").addEventListener("click", () => startTask("/api/bios", { action: "check", refresh: true }));
+$("bios-auto").addEventListener("change", async (event) => {
+  await postJson("/api/bios", { action: "auto", on: event.target.checked });
+  loadBios().catch(() => {});
+});
+
+const MEDIA = ["snap", "logo", "box", "marquee", "texto", "preview"];
+let scr = null, scrPicked = new Set();
+
+function chip(label, pressed, onClick) {
+  const button = el("button", { type: "button", "aria-pressed": pressed ? "true" : "false" }, label);
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+async function loadScraper() {
+  scr = await (await api("/api/scraper")).json();
+  const notes = [];
+  if (scr.running) notes.push(t("scr_running"));
+  if (scr.pending.length) notes.push(t("scr_pending").replace("%s", scr.pending.join(", ")));
+  $("scr-state").textContent = notes.join(" ");
+  $("scr-state").hidden = !notes.length;
+  $("scr-resume").hidden = !scr.pending.length;
+  renderScraperSystems();
+  $("scr-source").replaceChildren(...scr.sources.map((s) => {
+    const scope = SOURCE_SCOPE[s.key] || "all";
+    const option = el("option", { value: s.key }, s.name + " · " + t(scope === "arcade" ? "tag_arcade_only" : "tag_" + scope));
+    option.selected = s.key === scr.source;
+    return option;
+  }));
+  showSourceScope(scr.source);
+  // O rotulo da conta vem do Setup (scraper_account_label), em ingles.
+  const account = { "no account needed": t("scr_acc_none"), "no account": t("scr_acc_no"),
+    "key saved": t("scr_acc_key"), "key missing": t("scr_acc_nokey") }[scr.account]
+    || (scr.user ? t("scr_acc_user").replace("%s", scr.user) : scr.account);
+  $("scr-source-note").textContent = t("scr_account").replace("%s", account);
+  renderScraperAccount();
+  $("scr-media").replaceChildren(...MEDIA.map((m) => chip(t("media_" + m), scr.media.includes(m), async () => {
+    const media = scr.media.includes(m) ? scr.media.filter((x) => x !== m) : scr.media.concat(m);
+    if (await postJson("/api/scraper", { action: "media", media })) {
+      scr.media = media;
+      loadScraper().catch(() => {});
+    }
+  })));
+  // O progetto-SNAPS so tem as capturas: os tipos nao valem para ele.
+  $("scr-media").hidden = scr.source === "progettosnaps";
+  $("scr-clones-box").hidden = !scr.systems.some((s) => s.key === "mame");
+  const site = $("scr-site");
+  site.textContent = t("scr_site_run").replace("%s", scr.name);
+  const noSky = !scr.skyscraper && scr.source !== "progettosnaps";
+  site.disabled = noSky || !scr.systems.length;
+  site.title = noSky ? t("scr_no_sky") : "";
+  showPacks(scr.packs);
+}
+
+function renderScraperSystems() {
+  const keys = new Set(scr.systems.map((s) => s.key));
+  scrPicked = new Set([...scrPicked].filter((k) => keys.has(k)));
+  const box = $("scr-systems");
+  if (!scr.systems.length) {
+    box.replaceChildren(el("span", { class: "dim" }, t("scr_none")));
+    $("scr-run").disabled = true;
+    return;
+  }
+  $("scr-run").disabled = false;
+  const pick = (s) => chip(s.key + " · " + s.count, scrPicked.has(s.key), () => {
+    scrPicked.has(s.key) ? scrPicked.delete(s.key) : scrPicked.add(s.key);
+    renderScraperSystems();
+  });
+  // As pastas de arcade e as de console separadas: cada uma ganha arte
+  // diferente. Nenhuma marcada vale como todas, como o "All systems" da tela.
+  const groups = [["arcade", true], ["console", false]].flatMap(([kind, arcade]) => {
+    const list = scr.systems.filter((s) => !!s.arcade === arcade);
+    return list.length ? [el("div", { class: "chips" }, el("span", { class: "tag " + kind }, t("tag_" + kind)),
+      ...list.map(pick))] : [];
+  });
+  box.replaceChildren(el("div", { class: "chips" },
+    chip(t("scr_all"), !scrPicked.size, () => { scrPicked.clear(); renderScraperSystems(); })), ...groups);
+}
+
+// O que cada site cobre: todos os sistemas, so arcade ou so consoles.
+const SOURCE_SCOPE = { screenscraper: "all", mobygames: "all", thegamesdb: "console", igdb: "console",
+  openretro: "console", arcadedb: "arcade", progettosnaps: "arcade" };
+
+function showSourceScope(key) {
+  const scope = SOURCE_SCOPE[key] || "all";
+  const tag = $("scr-source-tag");
+  tag.className = "tag " + scope;
+  tag.textContent = t(scope === "arcade" ? "tag_arcade_only" : "tag_" + scope);
+  $("scr-source-what").textContent = t("scr_src_" + key);
+}
+
+// A conta do site escolhido: usuario e senha, a chave de API ou o client ID
+// e o secret. A senha guardada nunca volta para ca.
+function renderScraperAccount() {
+  const form = $("scr-account");
+  const source = scr.sources.find((s) => s.key === $("scr-source").value) || {};
+  const fields = { login: [["user", "text"], ["password", "password"]], key: [["key", "password"]],
+    idsecret: [["id", "text"], ["secret", "password"]] }[source.kind];
+  form.hidden = !fields;
+  if (!fields) return;
+  const inputs = fields.map(([name, type]) => {
+    const input = el("input", { type, name, autocomplete: type === "password" ? "new-password" : "off" });
+    if (name === "user" && scr.user) input.value = scr.user;
+    return el("label", { class: "row" }, el("small", {}, t("scr_" + name)), input);
+  });
+  const save = el("button", { type: "submit", "data-icon": "💾" }, t("scr_save"));
+  const remove = el("button", { type: "button", class: "ghost danger", "data-icon": "🗑" }, t("scr_remove"));
+  remove.addEventListener("click", async () => {
+    if (await postJson("/api/scraper", { action: "account", source: source.key, remove: true })) loadScraper().catch(() => {});
+  });
+  form.replaceChildren(...inputs, el("div", { class: "row" }, save, remove));
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const body = { action: "account", source: source.key };
+    for (const [name] of fields) body[name] = form.elements[name].value.trim();
+    if (await postJson("/api/scraper", body)) {
+      toast(t("scr_saved"));
+      loadScraper().catch(() => {});
+    }
+  };
+}
+
+$("scr-source").addEventListener("change", async (event) => {
+  showSourceScope(event.target.value);
+  await postJson("/api/scraper", { action: "source", source: event.target.value });
+  loadScraper().catch(() => {});
+});
+$("scr-run").addEventListener("click", () => startTask("/api/scraper", { action: "scrape", systems: [...scrPicked] }));
+$("scr-site").addEventListener("click", () => startTask("/api/scraper",
+  { action: "site", systems: [...scrPicked], clones: $("scr-clones").checked }));
+$("scr-resume").addEventListener("click", () => startTask("/api/scraper", { action: "resume" }));
+$("packs-start").addEventListener("click", () => startTask("/api/scraper", { action: "packs" }));
+
+function showPacks(packs) {
+  const pct = Number(packs.pct || 0);
+  const downloading = packs.state === "downloading";
+  $("packs-text").textContent = packs.line && packs.state !== "none" ? packs.line : t("packs_idle");
+  $("packs-pct").textContent = downloading ? pct + "%" : "";
+  $("packs-bar").style.width = (downloading ? pct : 0) + "%";
+}
+
+async function loadPacks() {
+  showPacks((await (await api("/api/scraper?packs=1")).json()).packs || {});
+}
+
+async function loadInstall() {
+  const data = await (await api("/api/install")).json();
+  $("emu-list").replaceChildren(...data.emulators.map((e) => installBox("emulators", e)));
+  $("extras-list").replaceChildren(...data.extras.map((e) => installBox("extras", e)));
+}
+
+function installBox(group, item) {
+  const state = item.installed ? t("inst_installed") + (item.version ? " · " + item.version : "") : t("inst_not");
+  const box = el("div", { class: "dl-kind" }, el("div", { class: "row" }, el("strong", {}, item.label),
+    el("span", { class: "dim" }, state)));
+  if (item.kind === "image") {
+    box.append(el("div", { class: "dim" }, t(item.installed ? "inst_image" : "inst_image_missing")));
+    return box;
+  }
+  const go = el("button", { type: "button", "data-icon": item.installed ? "↻" : "⬇" },
+    t(item.installed ? "inst_update" : "inst_install"));
+  go.addEventListener("click", () => {
+    const ask = item.installed ? "inst_again" : item.kind === "build" ? "inst_build" : "inst_ask";
+    if (confirm(t(ask).replace("%s", item.label))) startTask("/api/install", { group, name: item.name });
+  });
+  const actions = el("div", { class: "row start" }, go);
+  if (group === "emulators" && item.installed) {
+    const note = el("span", { class: "dim" });
+    const check = el("button", { type: "button", class: "ghost", "data-icon": "🔎" }, t("inst_check"));
+    check.addEventListener("click", async () => {
+      note.textContent = t("inst_checking");
+      const r = await (await api("/api/install/latest?name=" + encodeURIComponent(item.name))).json();
+      note.textContent = r.state === "same" ? t("inst_same").replace("%s", r.want)
+        : r.state === "new" ? t("inst_new").replace("%s", r.want) : t("inst_unknown");
+    });
+    actions.append(check, note);
+  }
+  box.append(actions);
+  if (item.kind === "source") box.append(el("div", { class: "dim" }, t("inst_kof")));
+  // O Pixelcade instalado: o codigo do pacote de arte pago.
+  if (group === "extras" && item.name === "pixelcade" && item.installed) {
+    const code = el("input", { type: "text", placeholder: t("inst_artpack"), autocomplete: "off" });
+    const art = el("button", { type: "button", class: "ghost", "data-icon": "🎨" }, t("inst_artpack_go"));
+    art.addEventListener("click", () => {
+      if (code.value.trim()) startTask("/api/install", { group, name: item.name, artpack: code.value.trim() });
+    });
+    box.append(el("div", { class: "row" }, code, art));
+  }
+  return box;
+}
+
+// O que se refaz quando uma tarefa termina.
+function taskDone(kind) {
+  if (kind === "bios" && page === "downloads") loadBios().catch(() => {});
+  if ((kind === "scraper" || kind === "mediapacks") && page === "scraper") loadScraper().catch(() => {});
+  if (kind === "extras" && page === "install") loadInstall().catch(() => {});
+}
+
+const taskRunning = new Map();
+
 async function loadTasks() {
   const res = await api("/api/tasks");
   const tasks = (await res.json()).tasks || [];
+  for (const task of tasks) {
+    if (taskRunning.get(task.id) && !task.running) taskDone(task.kind);
+    taskRunning.set(task.id, task.running);
+  }
   const list = $("tasks");
   if (!tasks.length) { list.replaceChildren(el("li", { class: "dim" }, t("no_tasks"))); return; }
   const rows = [];
@@ -2780,7 +3118,7 @@ let timer = null;
 // e Terminal: o endereco (#files)
 // escolhe; sem ele, a ultima aberta (lembrada no navegador, quando da).
 
-const PAGES = ["frontend", "live", "romfilter", "downloads", "files", "settings", "status", "terminal"];
+const PAGES = ["frontend", "live", "romfilter", "downloads", "scraper", "install", "files", "settings", "status", "terminal"];
 let page = "frontend";
 
 function showPage(name) {
@@ -2804,6 +3142,13 @@ function showPage(name) {
     loadTasks().catch(() => {});
   } else if (name === "downloads") {
     loadDownloader().catch(() => {});
+    loadBios().catch(() => {});
+    loadTasks().catch(() => {});
+  } else if (name === "scraper") {
+    loadScraper().catch(() => {});
+    loadTasks().catch(() => {});
+  } else if (name === "install") {
+    loadInstall().catch(() => {});
     loadTasks().catch(() => {});
   } else if (name === "settings") {
     loadSettings().catch(() => {});
@@ -2843,8 +3188,9 @@ async function tick() {
     render(await res.json());
     $("offline").hidden = true;
     // Os downloads e as tarefas, a cada 3 s, com a pagina deles aberta.
-    if (ticks++ % 3 === 0 && (page === "downloads" || page === "files")) {
+    if (ticks++ % 3 === 0 && ["downloads", "files", "scraper", "install"].includes(page)) {
       if (page === "downloads") loadDownloader().catch(() => {});
+      if (page === "scraper") loadPacks().catch(() => {});
       loadTasks().catch(() => {});
     }
   } catch (e) {

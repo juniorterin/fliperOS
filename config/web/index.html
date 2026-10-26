@@ -35,6 +35,8 @@
     <a href="#live" data-page="live" data-t="page_live"></a>
     <a href="#romfilter" data-page="romfilter" data-t="page_romfilter"></a>
     <a href="#downloads" data-page="downloads" data-t="page_downloads"></a>
+    <a href="#scraper" data-page="scraper" data-t="page_scraper"></a>
+    <a href="#install" data-page="install" data-t="page_install"></a>
     <a href="#files" data-page="files" data-t="page_files"></a>
     <a href="#settings" data-page="settings" data-t="page_settings"></a>
     <a href="#status" data-page="status" data-t="page_status"></a>
@@ -287,8 +289,81 @@
       </div>
     </section>
 
-    <!-- As tarefas (downloads, envios, a limpeza de romsets) nas duas paginas. -->
-    <section class="card wide" data-page="downloads files" aria-labelledby="h-tasks">
+    <!-- Download BIOS (Setup > Games > Downloader > Download BIOS): as BIOS
+         que faltam aos jogos das pastas, do pacote de referencia. -->
+    <section class="card wide" data-page="downloads" aria-labelledby="h-bios">
+      <h2 id="h-bios" data-t="bios"></h2>
+      <p class="dim" data-t="bios_note"></p>
+      <dl id="bios-last" class="facts"></dl>
+      <div class="row start">
+        <button id="bios-check" type="button" data-icon="🔍" data-t="bios_check"></button>
+        <button id="bios-refresh" type="button" class="ghost" data-icon="↻" data-t="bios_refresh"></button>
+        <label class="check"><input id="bios-auto" type="checkbox"> <span data-t="bios_auto"></span></label>
+      </div>
+      <div id="bios-list"></div>
+    </section>
+
+    <!-- Scraper (Setup > Games > Scraper): as pastas, o scraper do FliperOS,
+         o site com a conta e os pacotes de arte por torrent. -->
+    <section class="card wide" data-page="scraper" aria-labelledby="h-scr">
+      <h2 id="h-scr" data-t="page_scraper"></h2>
+      <p class="dim" data-t="scr_intro"></p>
+      <p id="scr-state" role="status"></p>
+      <!-- O que cada tipo de pasta ganha: arcade tem muito mais arte. -->
+      <ul class="scope">
+        <li><span class="tag arcade" data-t="tag_arcade"></span><span data-t="scr_gets_arcade"></span></li>
+        <li><span class="tag console" data-t="tag_console"></span><span data-t="scr_gets_console"></span></li>
+      </ul>
+      <h3 data-t="scr_systems"></h3>
+      <div id="scr-systems"></div>
+      <div class="row">
+        <button id="scr-run" type="button" data-icon="🖼" data-t="scr_run"></button>
+        <span class="dim" data-t="scr_run_note"></span>
+      </div>
+    </section>
+
+    <section class="card wide" data-page="scraper" aria-labelledby="h-scr-site">
+      <h2 id="h-scr-site" data-t="scr_site"></h2>
+      <p class="dim" data-t="scr_site_note"></p>
+      <div class="rf-bar"><label><small data-t="scr_source"></small><select id="scr-source"></select></label></div>
+      <p class="scope"><span id="scr-source-tag" class="tag"></span> <span id="scr-source-what"></span></p>
+      <p id="scr-source-note" class="dim"></p>
+      <form id="scr-account" class="dl-kind"></form>
+      <h3 data-t="scr_media"></h3>
+      <div id="scr-media" class="chips" role="group"></div>
+      <label id="scr-clones-box" class="check"><input id="scr-clones" type="checkbox"> <span data-t="scr_clones"></span></label>
+      <div class="row start">
+        <button id="scr-site" type="button" data-icon="🌐"></button>
+        <button id="scr-resume" type="button" class="ghost" data-icon="⏯" data-t="scr_resume" hidden></button>
+      </div>
+    </section>
+
+    <section class="card wide" data-page="scraper" aria-labelledby="h-packs">
+      <h2 id="h-packs" data-t="packs"></h2>
+      <p class="scope"><span class="tag arcade" data-t="tag_arcade_only"></span> <span data-t="packs_scope"></span></p>
+      <p class="dim" data-t="packs_note"></p>
+      <div class="row"><span id="packs-text"></span><span id="packs-pct" class="dim"></span></div>
+      <div class="meter"><div id="packs-bar"></div></div>
+      <div class="row"><button id="packs-start" type="button" data-icon="🧲" data-t="packs_start"></button></div>
+    </section>
+
+    <!-- Instalar (Setup > Games > Emulators & Games e Extras): o que nao vem
+         na imagem, e o update de cada um. -->
+    <section class="card wide" data-page="install" aria-labelledby="h-emu">
+      <h2 id="h-emu" data-t="emulators"></h2>
+      <p class="dim" data-t="emulators_note"></p>
+      <div id="emu-list" class="dl-kinds"></div>
+    </section>
+
+    <section class="card wide" data-page="install" aria-labelledby="h-extras">
+      <h2 id="h-extras" data-t="extras"></h2>
+      <p class="dim" data-t="extras_note"></p>
+      <div id="extras-list" class="dl-kinds"></div>
+    </section>
+
+    <!-- As tarefas (downloads, envios, a limpeza de romsets, o scraper, as
+         instalacoes) nas paginas que as comecam. -->
+    <section class="card wide" data-page="downloads files scraper install" aria-labelledby="h-tasks">
       <h2 id="h-tasks" data-t="tasks"></h2>
       <ul id="tasks" class="tasks"></ul>
     </section>

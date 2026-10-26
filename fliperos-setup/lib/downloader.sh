@@ -415,6 +415,48 @@ bios_check() {
   return "$rc"
 }
 
+# bios_cli status|list|check [--refresh]|auto on|off: Download BIOS sem tela
+# (fliperos-setup --bios, o painel web). status: auto= e o resumo da ultima
+# checagem (last.kv); list: o last.tsv; check: a checagem com eventos de
+# progresso e, no fim, o resumo. Status 2: pedido errado.
+bios_cli() {
+  local result rc
+  case ${1:-} in
+    status)
+      printf 'auto=%s\n' "$([[ $(conf_get bios_auto 2> /dev/null) == off ]] && echo off || echo on)"
+      # Sem nenhuma checagem ainda, so o auto.
+      cat "$BIOS_STATE/last.kv" 2> /dev/null || true
+      ;;
+    list) cat "$BIOS_STATE/last.tsv" 2> /dev/null || true ;;
+    check)
+      [[ -z ${2:-} || $2 == --refresh ]] || return 2
+      if [[ ! -x $BIOS_TOOL ]]; then
+        ev_fail "The BIOS downloader ($BIOS_TOOL) is missing"
+        return 1
+      fi
+      mkdir -p "$BIOS_STATE"
+      result=$(mktemp) || return 1
+      bios_check "$result" ${2:+"$2"}
+      rc=$?
+      cat "$result" 2> /dev/null
+      rm -f "$result"
+      return "$rc"
+      ;;
+    auto)
+      case ${2:-} in
+        on)
+          conf_set bios_auto on
+          # A proxima abertura do menu checa de novo.
+          rm -f "$BIOS_STATE/stamp"
+          ;;
+        off) conf_set bios_auto off ;;
+        *) return 2 ;;
+      esac
+      ;;
+    *) return 2 ;;
+  esac
+}
+
 # bios_stamp imprime a marca das pastas de jogos e de BIOS (a data de cada
 # uma muda quando um arquivo entra ou sai), do pacote e dos emuladores: a
 # checagem automatica so roda quando ela muda.

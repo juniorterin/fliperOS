@@ -3351,6 +3351,86 @@ class ScraperTests(Base):
                       "source) screen_scraper_source ;;", "torrent) screen_mediapacks ;;"):
             self.assertIn(value, menu)
 
+    def test_scraper_cli_for_the_web_panel(self):
+        # fliperos-setup --scraper (a pagina Scraper do painel web): o mesmo
+        # da tela, com a conta pela entrada padrao (nunca na linha de comando
+        # nem no log) e a raspagem com o site sem tela, retomavel.
+        env, roms, _ = self.scraper_env()
+        accounts = self.env.dir / "accounts-cli"
+        env.update({"SCRAPER_ACCOUNTS": str(accounts), "SKYSCRAPER": "true",
+                    "SCRAPER_JOB_DIR": str(self.env.dir / "job-cli")})
+        self.env.stub("systemctl", "exit 3")
+        status = self.env.out("scraper_cli status", env).splitlines()
+        for line in ("source=screenscraper", "kind=login", "account=no account", "media=snap,logo,box,marquee,texto",
+                     "skyscraper=1", "pending=", "running=0"):
+            self.assertIn(line, status)
+        # Com a marca de arcade, para o painel separar as pastas.
+        self.assertEqual(self.env.out("scraper_cli systems", env).splitlines(),
+                         ["mame|%s/mame|arcade|2|1" % roms, "retroarch/snes9x|%s/retroarch/snes9x|snes|1|0" % roms])
+        self.env.out("printf 'eu:segredo\\n' | scraper_cli account screenscraper", env)
+        status = self.env.out("scraper_cli status", env)
+        self.assertIn("user=eu\n", status)
+        self.assertIn("account=account eu\n", status)
+        self.assertNotIn("segredo", status)
+        self.assertNotIn("segredo", (self.env.dir / "setup.log").read_text())
+        self.assertEqual(accounts.read_text(), "screenscraper=eu:segredo\n")
+        for bad in ("scraper_cli source nope", "scraper_cli account arcadedb < /dev/null",
+                    "printf 'semsecret\\n' | scraper_cli account igdb", "scraper_cli media snap,rm",
+                    "scraper_cli site naoexiste", "scraper_cli scrape ../x", "scraper_cli nope"):
+            self.assertEqual(self.env.run(bad, env).returncode, 2, bad)
+        self.env.out("scraper_cli source mobygames; scraper_cli media snap,preview", env)
+        status = self.env.out("scraper_cli status", env)
+        self.assertIn("source=mobygames\n", status)
+        self.assertIn("media=snap,preview\n", status)
+        # Sem a chave, o MobyGames nao raspa.
+        r = self.env.run("scraper_cli site", env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("@fail ", r.stdout)
+        self.env.out("printf 'chave123\\n' | scraper_cli account mobygames", env)
+        # Uma pasta que falha fica para o resume, com as mesmas escolhas.
+        fake = 'scraper_run() { echo "run:$1 $4 $5 $6 $7"; [[ $1 != retroarch/snes9x || -n $OK ]]; }\n'
+        r = self.env.run(fake + "scraper_cli site --clones", env)
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual([l for l in r.stdout.splitlines() if l.startswith(("run:", "failed="))],
+                         ["run:mame mobygames snap,preview chave123 1",
+                          "run:retroarch/snes9x mobygames snap,preview chave123 1", "failed=retroarch/snes9x"])
+        self.assertIn("pending=retroarch/snes9x\n", self.env.out("scraper_cli status", env))
+        out = self.env.out(fake + "OK=1 scraper_cli resume", env)
+        self.assertIn("run:retroarch/snes9x mobygames snap,preview chave123 1", out)
+        self.assertIn("pending=\n", self.env.out("scraper_cli status", env))
+        self.assertEqual(self.env.run("scraper_cli resume", env).returncode, 1)
+        # Uma pasta so; o progetto-SNAPS so nas de arcade.
+        out = self.env.out(fake + "scraper_cli source progettosnaps; scraper_cli site", env)
+        self.assertEqual([l for l in out.splitlines() if l.startswith("run:")], ["run:mame progettosnaps snap  0"])
+        # Scrape the games: o scraper do FliperOS e o resultado.
+        out = self.env.out('scraper_fliperos() { echo "fs:$*"; echo total=3 > "$1"; }; scraper_cli scrape mame', env)
+        self.assertRegex(out, r"fs:\S+ mame\n")
+        self.assertIn("total=3", out)
+
+    def test_bios_cli_for_the_web_panel(self):
+        # fliperos-setup --bios (Download BIOS no painel web).
+        state = self.env.dir / "bios-state"
+        env = {"BIOS_STATE": str(state), "BIOS_TOOL": str(self.env.bin / "fliperos-bios")}
+        self.assertEqual(self.env.out("bios_cli status", env), "auto=on\n")
+        state.mkdir()
+        (state / "last.kv").write_text("downloaded=1\nwhen=hoje\n")
+        (state / "last.tsv").write_text("missing\tmame\t/x/neogeo.zip\tneogeo\n")
+        (state / "stamp").write_text("x")
+        self.env.out("bios_cli auto off", env)
+        self.assertEqual(self.env.out("bios_cli status", env), "auto=off\ndownloaded=1\nwhen=hoje\n")
+        self.assertEqual(self.env.out("bios_cli list", env), "missing\tmame\t/x/neogeo.zip\tneogeo\n")
+        self.env.out("bios_cli auto on", env)
+        self.assertFalse((state / "stamp").exists())
+        for bad in ("bios_cli auto talvez", "bios_cli check --tudo", "bios_cli nope"):
+            self.assertEqual(self.env.run(bad, env).returncode, 2, bad)
+        # Sem o fliperos-bios, a falha na tarefa; com ele, a checagem e o resumo.
+        r = self.env.run("bios_cli check", env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("@fail ", r.stdout)
+        self.env.stub("fliperos-bios", "exit 0")
+        out = self.env.out('bios_check() { echo "@step 10 x $2"; echo downloaded=4 > "$1"; }; bios_cli check --refresh', env)
+        self.assertEqual(out, "@step 10 x --refresh\ndownloaded=4\n")
+
     def test_fliperos_scraper_from_the_setup(self):
         # scraper_fliperos: os torrents (como root) e o fliperos-scrape como o
         # usuario, nas pastas pedidas, com a barra (os @step dele).

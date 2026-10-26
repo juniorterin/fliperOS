@@ -1226,3 +1226,155 @@ scraper_fliperos() {
   chown "$FLIPEROS_USER:" "$result" 2> /dev/null
   runuser -u "$FLIPEROS_USER" -- python3 "$FLIPEROS_SCRAPE" "${args[@]}" 2>> "$FLIPEROS_LOG"
 }
+
+# ── Sem tela (o painel web) ──────────────────────────────────────
+# fliperos-setup --scraper (config/fliperos-web, pagina Scraper): o mesmo que
+# Setup > Games > Scraper, pelas mesmas funcoes.
+
+# scraper_scrape_all FONTE MIDIA CREDENCIAIS CLONES ALVO... a raspagem com o
+# site, pasta por pasta, sem tela: anota o trabalho (o Resume da tela e do
+# painel), eventos de progresso de cada pasta e, no fim, "failed=CHAVES".
+# Status 1 se alguma pasta nao terminou.
+scraper_scrape_all() {
+  local source=$1 media=$2 creds=$3 clones=$4 t key dir platform count n=0 failed=()
+  shift 4
+  scraper_job_start "$source" "$media" "$clones" "$creds" "$@"
+  for t in "$@"; do
+    IFS='|' read -r key dir platform count <<< "$t"
+    n=$((n + 1))
+    ev_msg "Folder $n of $#: $key ($count files)"
+    if scraper_run "$key" "$dir" "$platform" "$source" "$media" "$creds" "$clones"; then
+      scraper_job_done "$key"
+    else
+      failed+=("$key")
+    fi
+  done
+  printf 'failed=%s\n' "${failed[*]}"
+  ((${#failed[@]} == 0))
+}
+
+# scraper_cli_targets [CHAVE...] imprime as linhas do scraper_detect das
+# chaves (sem chave, todas; os Custom games nunca). Status 2 com uma chave
+# que nao e pasta de jogos.
+scraper_cli_targets() {
+  local found key line ok
+  found=$(scraper_detect | grep -v '^custom/')
+  if (($# == 0)); then
+    [[ -n $found ]] && printf '%s\n' "$found"
+    return 0
+  fi
+  for key in "$@"; do
+    ok=0
+    while IFS= read -r line; do
+      [[ ${line%%|*} == "$key" ]] && printf '%s\n' "$line" && ok=1
+    done <<< "$found"
+    ((ok)) || return 2
+  done
+}
+
+# scraper_cli status|sources|systems|source FONTE|account FONTE|media LISTA|
+# scrape [CHAVE...]|site [--clones] [CHAVE...]|resume. A conta do account vem
+# pela entrada padrao (uma linha: usuario:senha, a chave ou id:secret; vazia
+# tira a conta), para nao aparecer na lista de processos. Status 2: pedido
+# errado.
+scraper_cli() {
+  local source name kind creds media clones=0 result rc t line
+  local -a targets pending
+  source=$(scraper_source_saved)
+  case ${1:-} in
+    status)
+      kind=$(scraper_source_field "$source" 3)
+      creds=$(scraper_account "$source") || creds=""
+      printf 'source=%s\nname=%s\nkind=%s\naccount=%s\n' "$source" "$(scraper_source_field "$source" 2)" "$kind" \
+        "$(scraper_account_label "$source")"
+      # O usuario do login, sem a senha.
+      [[ $kind == login && -n $creds ]] && printf 'user=%s\n' "${creds%%:*}"
+      printf 'media=%s\nskyscraper=%s\n' "$(scraper_media_saved)" "$(have "$SKYSCRAPER" && echo 1 || echo 0)"
+      mapfile -t pending < <(scraper_job_pending)
+      printf 'pending=%s\n' "$(printf '%s\n' "${pending[@]}" | cut -d'|' -f1 | xargs)"
+      # O Scrape the games aberto pela tela (o job_start de screens/progress.sh).
+      printf 'running=%s\n' "$(systemctl is-active --quiet fliperos-job-scrape.service 2> /dev/null && echo 1 || echo 0)"
+      ;;
+    sources) scraper_sources ;;
+    systems)
+      # Com "|1" no fim as de arcade (sets do MAME), que tem mais arte: o
+      # Arcade Database e os pacotes por torrent so servem a elas.
+      while IFS= read -r line; do
+        if scraper_arcade "${line%%|*}"; then printf '%s|1\n' "$line"; else printf '%s|0\n' "$line"; fi
+      done < <(scraper_detect | grep -v '^custom/')
+      ;;
+    source)
+      scraper_source_field "${2:-}" 1 > /dev/null 2>&1 || return 2
+      conf_set scraper_source "$2"
+      ;;
+    account)
+      kind=$(scraper_source_field "${2:-}" 3 2> /dev/null) || return 2
+      [[ $kind != none ]] || return 2
+      IFS= read -r creds || true
+      creds=${creds//[[:space:]]/}
+      # Usuario e senha, id e secret: os dois, ou so o usuario (o login do
+      # ScreenScraper e opcional).
+      if [[ $kind == idsecret && -n $creds && ! $creds =~ ^[^:]+:.+$ ]]; then
+        return 2
+      fi
+      scraper_account_set "$2" "$creds"
+      ;;
+    media)
+      media=${2:-}
+      [[ -z $media || $media =~ ^(snap|logo|box|marquee|texto|preview)(,(snap|logo|box|marquee|texto|preview))*$ ]] ||
+        return 2
+      conf_set scraper_media "${media:-none}"
+      ;;
+    scrape)
+      shift
+      scraper_cli_targets "$@" > /dev/null || return 2
+      result=$(mktemp) || return 1
+      scraper_fliperos "$result" "$@"
+      rc=$?
+      cat "$result" 2> /dev/null
+      rm -f "$result"
+      return "$rc"
+      ;;
+    site)
+      shift
+      [[ ${1:-} == --clones ]] && clones=1 && shift
+      scraper_cli_targets "$@" > /dev/null || return 2
+      mapfile -t targets < <(scraper_cli_targets "$@")
+      if ((${#targets[@]} == 0)); then
+        ev_fail "No ROMs were found in $ROMS_DIR"
+        return 1
+      fi
+      name=$(scraper_source_field "$source" 2)
+      if [[ $source == progettosnaps ]]; then
+        # So as pastas de arcade, e so as capturas (como a tela).
+        mapfile -t targets < <(for t in "${targets[@]}"; do scraper_arcade "${t%%|*}" && printf '%s\n' "$t"; done)
+        if ((${#targets[@]} == 0)); then
+          ev_fail "progetto-SNAPS only has arcade games (MAME sets)"
+          return 1
+        fi
+        scraper_scrape_all progettosnaps snap "" "$clones" "${targets[@]}"
+        return
+      fi
+      if ! have "$SKYSCRAPER"; then
+        ev_fail "Skyscraper is not installed"
+        return 1
+      fi
+      if scraper_account_missing "$source"; then
+        ev_fail "$name only works with an account, and none is saved"
+        return 1
+      fi
+      creds=$(scraper_account "$source") || creds=""
+      scraper_scrape_all "$source" "$(scraper_media_saved)" "$creds" "$clones" "${targets[@]}"
+      ;;
+    resume)
+      mapfile -t pending < <(scraper_job_pending)
+      if ((${#pending[@]} == 0)); then
+        ev_fail "No interrupted scrape to resume"
+        return 1
+      fi
+      IFS='|' read -r source media clones creds <<< "$(scraper_job_options)"
+      scraper_scrape_all "$source" "$media" "$creds" "$clones" "${pending[@]}"
+      ;;
+    *) return 2 ;;
+  esac
+}

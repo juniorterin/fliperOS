@@ -26,7 +26,8 @@
 #   --padkeys on|off, --services-boot, --services-screen, --services-late (lib/services.sh),
 #   --bios-check (as BIOS que faltam, lib/downloader.sh),
 #   --romlists, --mediapacks auto|resume|status (o frontend do FliperOS),
-#   --scrape-now RESULTADO [CHAVE...] (o Scrape the games em segundo plano)
+#   --scrape-now RESULTADO [CHAVE...] (o Scrape the games em segundo plano),
+#   --scraper ... e --bios ... (o Scraper e o Download BIOS do painel web)
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
 # screens/ tem as telas.
@@ -341,6 +342,16 @@ main() {
       # A checagem automatica das BIOS, que o menu abre em segundo plano.
       bios_auto
       return 0
+      ;;
+    --bios)
+      # Setup > Games > Downloader > Download BIOS sem tela: o painel web.
+      bios_cli "${@:2}"
+      return
+      ;;
+    --scraper)
+      # Setup > Games > Scraper sem tela (lib/scraper.sh): o painel web.
+      scraper_cli "${@:2}"
+      return
       ;;
     --volume)
       audio_step "${@:2}"

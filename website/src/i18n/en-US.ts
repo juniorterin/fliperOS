@@ -374,7 +374,7 @@ const enUS = {
       { id: 'obs', title: 'Ready for OBS', text: 'Addresses for an OBS Browser Source: the live screen in 4:3 with sound, the marquee of the game being played, with high scores and versus scores, and your controller lighting up on screen.' },
       { id: 'settings', title: 'Settings while you play', text: 'Colour sliders that change the game on screen as you move them, 480i hacks per emulator, services, latency mode and volume.' },
       { id: 'files', title: 'Your games in the browser', text: 'Upload and download games, BIOS, artwork and splash screens, with progress, straight to the right folder.' },
-      { id: 'romfilter', title: 'ROM filter and downloads', text: 'Filter a MAME romset for your cabinet’s controls and screen, and download from a torrent only the games that pass.' },
+      { id: 'romfilter', title: 'Games, BIOS and art', text: 'Filter a MAME romset for your cabinet’s controls and screen, download only the games that pass and the BIOS they lack, scrape their art with your site login typed on a real keyboard, and install or update emulators.' },
       { id: 'status', title: 'Status of everything', text: 'The video mode and modeline on the tube, CPU, GPU, temperatures, memory, disks, network, processes and logs.' },
       { id: 'terminal', title: 'Terminal', text: 'The cabinet’s shell in a browser tab, the same as SSH, with no program to install.' },
     ],
