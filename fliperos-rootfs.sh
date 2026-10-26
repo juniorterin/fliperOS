@@ -257,6 +257,9 @@ install -Dm644 "$src/config/fliperos-stream.service" "$root/etc/systemd/system/f
 # Setup > System > Lab mode: o painel web num endereco temporario da internet
 # (o cloudflared vem da rede na primeira vez; config/fliperos-lab).
 install -Dm755 "$src/config/fliperos-lab" "$root/opt/fliperos/bin/fliperos-lab"
+# Setup > Video Setup > Video driver numa NVIDIA: o driver dela, do apt do
+# Ubuntu, compilado pelo DKMS para o kernel 15 kHz (config/fliperos-nvidia).
+install -Dm755 "$src/config/fliperos-nvidia" "$root/opt/fliperos/bin/fliperos-nvidia"
 install -Dm644 "$src/config/fliperos-lab.service" "$root/etc/systemd/system/fliperos-lab.service"
 install -Dm644 "$src/config/fliperos-downloader-magnets" "$root/usr/local/share/fliperos/downloader-magnets"
 # Setup > Games > Scraper > Art packs by torrent: logos e videos de pacotes em

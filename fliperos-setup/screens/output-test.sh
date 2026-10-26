@@ -138,7 +138,7 @@ screen_testing_results() {
     # A placa pode gerar dotclock baixo; o que falta e o nouveau (o PLL dele
     # nesta placa). O driver da NVIDIA e outra historia (o Batocera o usa).
     lowres=$(ui_no "NO (super resolutions)")
-    notes+=("The native 320x240 test did not show on the nouveau driver: super resolutions will be used, with the same picture on a CRT.")
+    notes+=("The native 320x240 test did not show on the nouveau driver: super resolutions will be used, with the same picture on a CRT." "Once installed, Setup > Video Setup > Video driver can switch to the NVIDIA driver.")
   else
     lowres=$(ui_no "NO (super resolutions)")
     notes+=("Your video card doesn't support low dotclocks: super resolutions will be used.")

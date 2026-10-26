@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# O driver da NVIDIA (fechado) para as placas NVIDIA, no lugar do nouveau:
+# Setup > Video Setup > Video driver. O nouveau nao gera os dotclocks de
+# 15 kHz em toda placa (numa GTX 980 Ti o grid de 320x240 nao apareceu, o
+# PLL dele nao desce tanto); o Batocera usa o driver da NVIDIA nessas placas,
+# e nele o 320x240 com dotclock 0 funciona. Vem do apt do Ubuntu
+# (restricted), compilado pelo DKMS para o kernel 15 kHz.
+#
+# Os dois drivers ficam instalados; quem escolhe e a linha do kernel
+# (modprobe.blacklist, lib/bootloader.sh), como no radeon/amdgpu: assim a
+# troca pode ser testada e desfeita, e o Limine tem a entrada de volta ao
+# nouveau. Para isso a lista negra do nouveau que o pacote poe em
+# /lib/modprobe.d e anulada pelo arquivo de mesmo nome em /etc/modprobe.d.
+#
+#   fliperos-nvidia package DEVICE           o nvidia-driver-NNN para o PCI ID (ex. 17c8)
+#   fliperos-nvidia installed                status 0 se o modulo existe para o kernel atual
+#   fliperos-nvidia install DEVICE [--progress]   instala (como root)
+#
+# Com --progress, as etapas saem no formato da tela de progresso do Setup
+# (lib/progress.sh); a saida do apt vai para o stderr (o log do Setup).
+set -uo pipefail
+
+MODPROBE_DIR=${FLIPEROS_MODPROBE_DIR:-/etc/modprobe.d}
+KERNEL=${FLIPEROS_KERNEL:-$(uname -r)}
+# Do mais novo ao mais velho: o primeiro cuja lista de placas (Modaliases do
+# pacote) tem esta placa. So os que compilam no kernel 15 kHz (conferido no
+# 6.18.54): o 580 vai das Maxwell (GTX 900, as ultimas com saida analogica,
+# DVI-I) as atuais. O 470 das Kepler nao compila no 6.18 (o Batocera tem
+# patches proprios para ele): as GTX 600 e 700 ficam no nouveau.
+VERSIONS=${FLIPEROS_NVIDIA_VERSIONS:-"580"}
+
+progress=0 label="NVIDIA driver"
+say() {
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+fail() {
+  if ((progress)); then printf '@fail %s|%s\n' "$label" "$1"; else printf 'fliperos-nvidia: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+# package DEVICE: o metapacote que lista a placa (pci:v000010DEd0000XXXX).
+package() {
+  local device=${1^^} v
+  [[ $device =~ ^[0-9A-F]{4}$ ]] || return 1
+  for v in $VERSIONS; do
+    apt-cache show "nvidia-driver-$v" 2> /dev/null | grep '^Modaliases:' |
+      grep -q "pci:v000010DEd0000${device}sv" && { echo "nvidia-driver-$v"; return 0; }
+  done
+  return 1
+}
+
+installed() {
+  modinfo -k "$KERNEL" nvidia > /dev/null 2>&1
+}
+
+# O /lib/modprobe.d/nvidia-graphics-drivers.conf do pacote poe o nouveau na
+# lista negra; o de /etc, de mesmo nome, o substitui.
+modprobe_override() {
+  mkdir -p "$MODPROBE_DIR"
+  cat > "$MODPROBE_DIR/nvidia-graphics-drivers.conf" << 'EOF'
+# FliperOS: substitui o /lib/modprobe.d/nvidia-graphics-drivers.conf, que
+# poe o nouveau na lista negra. Quem escolhe entre o nouveau e o driver da
+# NVIDIA e a linha do kernel (Setup > Video Setup > Video driver).
+EOF
+}
+
+install() {
+  local device=$1 pkg version extra=()
+  [[ $EUID -eq 0 ]] || fail "run as root"
+  say 5 "Reading the package lists"
+  apt-get update -q >&2 || fail "apt-get update failed (no network?)"
+  pkg=$(package "$device") || fail "no NVIDIA driver that builds on this kernel supports this card ($device): it stays on nouveau"
+  version=${pkg##*-}
+  # O OpenGL de 32 bits: o Wine (Fightcade 2) desenha por ele.
+  dpkg --print-foreign-architectures | grep -qx i386 && extra=("libnvidia-gl-$version:i386")
+  say 15 "Installing $pkg (the kernel module is compiled: a few minutes)"
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -y -q --no-install-recommends \
+    "$pkg" "${extra[@]}" >&2 || fail "the installation of $pkg failed"
+  say 85 "Checking the kernel module"
+  modprobe_override || fail "could not write $MODPROBE_DIR"
+  installed || fail "the module was not built for the kernel $KERNEL (see /var/lib/dkms)"
+  say 100 "$pkg installed"
+}
+
+[[ ${3:-} == --progress || ${2:-} == --progress ]] && progress=1
+case ${1:-} in
+  package) package "${2:-}" ;;
+  installed) installed ;;
+  install) install "${2:-}" ;;
+  *)
+    echo "usage: fliperos-nvidia package DEVICE | installed | install DEVICE [--progress]" >&2
+    exit 2
+    ;;
+esac

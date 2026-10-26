@@ -64,16 +64,59 @@ screen_amd_driver_check() {
   screen_amd_driver_apply "$recommended"
 }
 
+# screen_nvidia_driver (Setup > Video Setup > Video driver numa NVIDIA):
+# nouveau ou o driver da NVIDIA, baixado na primeira vez (config/fliperos-
+# nvidia). A troca passa pelo mesmo teste de imagem do radeon/amdgpu.
+screen_nvidia_driver() {
+  local card saved running choice text
+  card=$(nvidia_card) || return 0
+  if is_live || ! is_installed; then
+    ui_msg "Video driver" "The NVIDIA driver is installed after FliperOS is installed: Setup > Video Setup > Video driver."
+    return 0
+  fi
+  saved=$(nvidia_driver)
+  running=$(drm_card_driver "$card") || running=none
+  text=$(ui_fields \
+    "Card|$(drm_card_name "$card")" \
+    "In use now|$running" \
+    "Saved|$saved" \
+    "NVIDIA driver|$(nvidia_installed && echo installed || echo "not installed (downloaded, a few hundred MB)")")
+  text+=$'\n\n'"nouveau doesn't show native 15 kHz modes on every card; the NVIDIA driver does on the cards Batocera runs at 320x240."
+  choice=$(ui_menu_hints "Video driver" "$text" "$saved" \
+    "nouveau|nouveau$([[ $saved == nouveau ]] && echo " - current")|Open source, in the kernel. Super resolutions when the grid fails." \
+    "nvidia|NVIDIA driver$([[ $saved == nvidia ]] && echo " - current")|NVIDIA's own driver: full 3D speed, native 15 kHz on more cards." \
+    "return|Return|Keep the driver as it is.") || return 0
+  [[ $choice == return ]] && return 0
+  [[ $choice == "$saved" && $choice == "$running" ]] && return 0
+  if [[ $choice == nvidia ]] && ! nvidia_installed; then
+    ui_yesno "Video driver" "Download and install the NVIDIA driver for $(drm_card_name "$card")? A few hundred MB; the kernel module is compiled here (a few minutes)." yes ||
+      return 0
+    run_online "Installing the NVIDIA driver" "" nvidia_driver_install || return 0
+  fi
+  screen_amd_driver_apply "$choice"
+}
+
+# screen_video_driver: o Video driver do Video Setup, da placa que tem escolha.
+screen_video_driver() {
+  if [[ -n $(drm_dual_amd_cards) ]]; then
+    screen_amd_driver
+  else
+    screen_nvidia_driver
+  fi
+}
+
 # screen_amd_driver_apply DRIVER grava a escolha e a linha do kernel, poe a
 # troca em teste (amd_driver_trial_start: o boot seguinte pede para
 # confirmar a imagem) e oferece reiniciar (o driver so troca no boot).
 screen_amd_driver_apply() {
   local driver=$1 ok=1 card running
-  card=$(drm_dual_amd_cards | head -1)
+  card=$(video_driver_card)
   running=$(drm_card_driver "$card" 2> /dev/null) || running=""
   ui_info "Video driver" "Switching to $driver..."
-  amd_driver_apply "$driver" || ok=0
+  video_driver_apply "$driver" || ok=0
   if ((ok)) && is_installed && ! is_live; then
+    # O X muda de driver junto (o da NVIDIA tem o seu).
+    xorg_generate
     boot_apply || ok=0
   fi
   if ((!ok)); then
@@ -113,6 +156,13 @@ screen_amd_driver_confirm() {
   if ((rc == 0)); then
     amd_driver_trial_confirm
     ui_msg "Video driver" "The $trial driver stays." "Change it in Setup > Video Setup > Video driver."
+    # O driver da NVIDIA ficou: o grid de 320x240 diz se ele faz o nativo
+    # (a troca esqueceu o resultado do outro driver).
+    if [[ $trial == nvidia ]] && ui_yesno "Video driver" "Test now if the NVIDIA driver shows native 15 kHz resolutions (a 320x240 grid)?" yes; then
+      VIDEO_CHANGED=0
+      screen_low_dotclock_retest
+      ((VIDEO_CHANGED)) && boot_apply
+    fi
     return 0
   fi
   ui_info "Video driver" "Going back to the $previous driver and restarting..."

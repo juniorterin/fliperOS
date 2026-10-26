@@ -3,7 +3,9 @@
 # launcher (fliperos-setup --driver-confirm). Se a tela nao resolve em 2
 # minutos (ela nem abriu) ou se o boot de teste anterior travou, este
 # servico volta ao driver anterior e reinicia. Sem driver em teste, sai na
-# hora (amd_driver_trial_boot em fliperos-setup/lib/bootloader.sh).
+# hora (amd_driver_trial_boot em fliperos-setup/lib/bootloader.sh). Antes,
+# com o driver da NVIDIA escolhido, confere o modulo dele para o kernel que
+# subiu; sem ele, volta ao nouveau (nvidia_driver_boot_check).
 [Unit]
 Description=FliperOS video driver trial
 After=systemd-modules-load.service local-fs.target

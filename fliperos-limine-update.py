@@ -97,7 +97,27 @@ def render(versions, root, cmdline, timeout, quiet="yes"):
         text += "\n" + entry("FliperOS - radeon driver",
                              "Back to the radeon driver if amdgpu shows no picture",
                              versions[0], radeon)
+    nouveau = nouveau_cmdline(normal)
+    if nouveau != normal:
+        text += "\n" + entry("FliperOS - nouveau driver",
+                             "Back to nouveau if the NVIDIA driver shows no picture",
+                             versions[0], nouveau)
     return text
+
+
+# O driver da NVIDIA escolhido no Setup (nvidia_driver_params em
+# fliperos-setup/lib/bootloader.sh) e a linha que volta ao nouveau.
+NVIDIA_KEYS = ("modprobe.blacklist", "nvidia-drm.modeset", "nvidia-drm.fbdev")
+NOUVEAU = ["modprobe.blacklist=nvidia,nvidia_drm,nvidia_modeset,nvidia_uvm"]
+
+
+def nouveau_cmdline(cmdline):
+    """A linha com o nouveau no lugar do driver da NVIDIA; a mesma linha se
+    o nouveau ja e o escolhido."""
+    words = cmdline.split()
+    if "modprobe.blacklist=nouveau" not in words:
+        return cmdline
+    return " ".join([w for w in words if w.split("=")[0] not in NVIDIA_KEYS] + NOUVEAU)
 
 
 # Parametros do driver AMD das placas SI/CIK (AMD_DRIVER_KEYS em

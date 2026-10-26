@@ -6375,7 +6375,7 @@ class AmdDriverTests(Base):
         self.assertIn("screen_amd_driver install", install)
         # Em Video Setup, nao mais em System.
         video = (SETUP / "screens/video-setup.sh").read_text().split("screen_video_setup() {")[1]
-        self.assertIn("driver) screen_amd_driver ;;", video)
+        self.assertIn("driver) screen_video_driver ;;", video)
         self.assertIn('"${driver[@]}" \\\n      "${lowdot[@]}" \\\n      "return|', video)
         self.assertNotIn("screen_amd_driver", (SETUP / "screens/setup-menu.sh").read_text())
         # Na midia so grava a escolha, e a instalacao nao pergunta de novo.
@@ -6385,6 +6385,192 @@ class AmdDriverTests(Base):
         self.assertIn('source "$SETUP_DIR/screens/amd-driver.sh"', (SETUP / "fliperos-setup").read_text())
         screen = (SETUP / "screens/amd-driver.sh").read_text()
         self.assertIn('"radeon|radeon (recommended)', screen)
+
+
+class NvidiaDriverTests(Base):
+    """nouveau ou o driver da NVIDIA (Video Setup > Video driver numa NVIDIA)."""
+    NVIDIA = "modprobe.blacklist=nouveau nvidia-drm.modeset=1 nvidia-drm.fbdev=1"
+    NOUVEAU = "modprobe.blacklist=nvidia,nvidia_drm,nvidia_modeset,nvidia_uvm"
+    TRIAL = AmdDriverTests.TRIAL
+
+    def gpu(self, card="card0", driver="nouveau", device="0x17c8"):
+        self.env.card(card, driver)
+        (self.env.drm / card / "device" / "vendor").write_text("0x10de\n")
+        (self.env.drm / card / "device" / "device").write_text(device + "\n")
+
+    def conf(self):
+        return dict(l.split("=", 1) for l in (self.env.etc / "fliperos.conf").read_text().split("\n") if "=" in l)
+
+    def installed(self, module=True):
+        (self.env.etc / "installed").write_text("")
+        self.env.cmdline.write_text("quiet splash\n")
+        self.calls = self.env.dir / "calls"
+        self.calls.write_text("")
+        self.env.stub("systemctl", 'echo "systemctl $*" >> "%s"' % self.calls)
+        self.env.stub("dkms", 'echo "dkms $*" >> "%s"' % self.calls)
+        self.env.stub("modprobe", 'echo "modprobe $*" >> "%s"' % self.calls)
+        self.env.stub("fliperos-nvidia", '[ "$1" = installed ] && exit %d; exit 0' % (0 if module else 1))
+        return {"NVIDIA_CMD": str(self.env.bin / "fliperos-nvidia")}
+
+    def test_the_card_and_its_pci_id(self):
+        self.env.card("card0", "i915")
+        (self.env.drm / "card0" / "device" / "vendor").write_text("0x8086\n")
+        self.assertEqual(self.env.run("nvidia_card").returncode, 1)
+        self.gpu("card1")
+        self.assertEqual(self.env.out("nvidia_card").strip(), "card1")
+        self.assertEqual(self.env.out("nvidia_device card1").strip(), "17c8")
+
+    def test_line_unchanged_until_a_choice(self):
+        line = "quiet splash consoleblank=0"
+        self.assertEqual(self.env.out("nvidia_driver_cmdline '%s'" % line).strip(), line)
+        self.assertEqual(self.env.out("nvidia_driver").strip(), "nouveau")
+
+    def test_nvidia_and_back(self):
+        line = "quiet splash consoleblank=0"
+        out = self.env.out("conf_set nvidia_driver nvidia; nvidia_driver_cmdline '%s'" % line).strip()
+        self.assertEqual(out, line + " " + self.NVIDIA)
+        out = self.env.out("conf_set nvidia_driver nouveau; nvidia_driver_cmdline '%s'" % out).strip()
+        self.assertEqual(out, line + " " + self.NOUVEAU)
+        # Pelo boot_compose, uma vez so.
+        (self.env.etc / "fliperos.conf").write_text("nvidia_driver=nvidia\n")
+        words = self.env.out("boot_compose 'quiet splash %s'" % self.NOUVEAU).split()
+        self.assertEqual([w for w in words if w.startswith("modprobe.blacklist")], ["modprobe.blacklist=nouveau"])
+        self.assertIn("nvidia-drm.modeset=1", words)
+
+    def test_switch_forgets_the_grid_and_goes_super(self):
+        self.gpu()
+        (self.env.etc / "fliperos.conf").write_text("low_dotclock_pci=0000:00:00.0\n")
+        out = self.env.out("video_low_dotclock_apply() { echo REDONE; }\nnvidia_driver_apply nvidia; echo $BOOT_INITRAMFS")
+        self.assertEqual(out.split(), ["REDONE", "1"])
+        self.assertEqual(self.conf(), {"nvidia_driver": "nvidia"})
+
+    def test_grid_counts_on_the_nvidia_driver(self):
+        self.gpu(driver="nvidia")
+        self.assertEqual(self.env.run("drm_card_low_dotclock_testable card0").returncode, 0)
+        self.assertNotEqual(self.env.run("drm_card_low_dotclock card0").returncode, 0)
+        self.env.out("conf_set low_dotclock_pci 0000:00:00.0")
+        self.assertEqual(self.env.run("drm_card_low_dotclock card0").returncode, 0)
+
+    def test_xorg_uses_the_nvidia_driver(self):
+        self.gpu(driver="nvidia")
+        xorg = self.env.etc / "xorg.conf"
+        self.env.out("conf_set monitor generic_15; conf_set boot_resolution 640x480iS; conf_set card card0; "
+                     "conf_set connector DVI-I-1; conf_set nvidia_driver nvidia; xorg_generate")
+        text = xorg.read_text()
+        self.assertIn('Driver "nvidia"', text)
+        self.assertIn("AllowNonEdidModes", text)
+        self.assertIn("NoMaxPClkCheck", text)
+        self.env.out("conf_set nvidia_driver nouveau; xorg_generate")
+        self.assertIn('Driver "modesetting"', xorg.read_text())
+        self.assertNotIn("ModeValidation", xorg.read_text())
+
+    def test_switch_puts_nvidia_on_trial(self):
+        env = self.installed()
+        self.gpu()
+        out = self.env.out(self.TRIAL + 'xorg_generate() { echo XORG; }\n'
+                           'ui_yesno() { echo "ASKED: $2"; return 1; }\nscreen_amd_driver_apply nvidia', env)
+        conf = self.conf()
+        self.assertEqual((conf["nvidia_driver"], conf["amd_driver_trial"], conf["amd_driver_previous"]),
+                         ("nvidia", "nvidia", "nouveau"))
+        self.assertIn("XORG", out)
+        self.assertIn("BOOT_APPLY initramfs=1", out)
+        self.assertIn("FliperOS goes back to nouveau", out)
+
+    def test_no_answer_goes_back_to_nouveau(self):
+        env = self.installed()
+        self.gpu(driver="nvidia")
+        (self.env.etc / "fliperos.conf").write_text(
+            "nvidia_driver=nvidia\namd_driver_trial=nvidia\namd_driver_previous=nouveau\n")
+        out = self.env.out(self.TRIAL + "xorg_generate() { :; }\n"
+                           "ui_timed_confirm() { return 124; }\nscreen_amd_driver_confirm", env)
+        self.assertIn("BOOT_APPLY", out)
+        self.assertIn("systemctl reboot", self.calls.read_text())
+        self.assertEqual(self.conf()["nvidia_driver"], "nouveau")
+        self.assertNotIn("amd_driver_trial", self.conf())
+
+    def test_confirm_offers_the_grid(self):
+        env = self.installed()
+        self.gpu(driver="nvidia")
+        (self.env.etc / "fliperos.conf").write_text(
+            "nvidia_driver=nvidia\namd_driver_trial=nvidia\namd_driver_previous=nouveau\n")
+        out = self.env.out(self.TRIAL + 'ui_timed_confirm() { return 0; }\nui_yesno() { echo "ASKED: $2"; return 0; }\n'
+                           "screen_low_dotclock_retest() { echo GRID; VIDEO_CHANGED=1; }\n"
+                           "screen_amd_driver_confirm", env)
+        self.assertIn("ASKED: Test now if the NVIDIA driver shows native 15 kHz", out)
+        self.assertIn("GRID", out)
+        self.assertIn("BOOT_APPLY", out)
+
+    def test_boot_without_the_module_goes_back_to_nouveau(self):
+        # Um kernel novo que o DKMS nao compilou: com o nouveau na lista
+        # negra nao haveria imagem.
+        env = self.installed(module=False)
+        self.gpu(driver="nouveau")
+        (self.env.etc / "fliperos.conf").write_text("nvidia_driver=nvidia\n")
+        self.env.out(self.TRIAL + "xorg_generate() { :; }\namd_driver_trial_boot", env)
+        calls = self.calls.read_text()
+        self.assertIn("dkms autoinstall", calls)
+        self.assertIn("systemctl reboot", calls)
+        self.assertEqual(self.conf()["nvidia_driver"], "nouveau")
+
+    def test_boot_with_the_module_does_nothing(self):
+        env = self.installed(module=True)
+        self.gpu(driver="nvidia")
+        (self.env.etc / "fliperos.conf").write_text("nvidia_driver=nvidia\n")
+        self.env.out(self.TRIAL + "amd_driver_trial_boot", env)
+        self.assertEqual(self.calls.read_text(), "")
+        self.assertEqual(self.conf()["nvidia_driver"], "nvidia")
+
+    def test_package_by_modalias(self):
+        apt = self.env.dir / "apt"
+        apt.mkdir()
+        (apt / "nvidia-driver-580").write_text(
+            "Package: nvidia-driver-580\nModaliases: nvidia(pci:v000010DEd000017C8sv*sd*bc03sc*i*, "
+            "pci:v000010DEd00001B80sv*sd*bc03sc*i*)\n")
+        (apt / "nvidia-driver-595").write_text(
+            "Package: nvidia-driver-595\nModaliases: nvidia(pci:v000010DEd00002204sv*sd*bc03sc*i*)\n")
+        (apt / "nvidia-driver-470").write_text(
+            "Package: nvidia-driver-470\nModaliases: nvidia(pci:v000010DEd00001180sv*sd*bc03sc*i*, "
+            "pci:v000010DEd000017C8sv*sd*bc03sc*i*)\n")
+        self.env.stub("apt-cache", '[ "$1" = show ] && cat "%s/$2" 2> /dev/null' % apt)
+        tool = str(ROOT / "config/fliperos-nvidia")
+        r = lambda dev, versions=None: self.env.run(
+            '"%s" package %s' % (tool, dev), {"FLIPEROS_NVIDIA_VERSIONS": versions} if versions else None)
+        # So o 580 compila no kernel 15 kHz: a Kepler (1180) fica no nouveau.
+        self.assertEqual(r("17c8").stdout.strip(), "nvidia-driver-580")
+        self.assertNotEqual(r("1180").returncode, 0)
+        self.assertNotEqual(r("2204").returncode, 0)
+        # Com mais versoes, a mais nova que lista a placa.
+        self.assertEqual(r("2204", "595 580 470").stdout.strip(), "nvidia-driver-595")
+        self.assertEqual(r("1180", "595 580 470").stdout.strip(), "nvidia-driver-470")
+        self.assertEqual(r("17c8", "595 580 470").stdout.strip(), "nvidia-driver-580")
+        self.assertNotEqual(r("0fff").returncode, 0)
+        self.assertNotEqual(r("x;y").returncode, 0)
+
+    def test_boot_menu_offers_nouveau_back(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("limine_update", ROOT / "fliperos-limine-update.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        text = mod.render(["6.18.54-15khz"], "UUID=abc", "quiet splash " + self.NVIDIA, "3")
+        entry = text.split("/FliperOS - nouveau driver\n")[1]
+        cmdline = re.search(r"cmdline: (.*)", entry).group(1).split()
+        self.assertIn(self.NOUVEAU, cmdline)
+        self.assertNotIn("modprobe.blacklist=nouveau", cmdline)
+        self.assertNotIn("nvidia-drm.modeset=1", cmdline)
+        plain = mod.render(["6.18.54-15khz"], "UUID=abc", "quiet splash " + self.NOUVEAU, "3")
+        self.assertNotIn("nouveau driver", plain)
+
+    def test_menu_and_installer_are_wired(self):
+        video = (SETUP / "screens/video-setup.sh").read_text()
+        self.assertIn("elif nvidia_card > /dev/null; then", video)
+        screen = (SETUP / "screens/amd-driver.sh").read_text()
+        self.assertIn('run_online "Installing the NVIDIA driver" "" nvidia_driver_install', screen)
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        self.assertIn('"$src/config/fliperos-nvidia" "$root/opt/fliperos/bin/fliperos-nvidia"', rootfs)
+        tool = (ROOT / "config/fliperos-nvidia").read_text()
+        # A lista negra do nouveau do pacote e anulada: quem escolhe e a linha.
+        self.assertIn('"$MODPROBE_DIR/nvidia-graphics-drivers.conf"', tool)
+        self.assertIn("--no-install-recommends", tool)
 
 
 if __name__ == "__main__":

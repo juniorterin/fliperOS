@@ -128,12 +128,13 @@ gpu_short_name() {
 # aceita com o patch 10 do kernel, e nem todo PLL de NVIDIA chega la: vale
 # para a placa que passou no grid em 320x240 (low_dotclock_pci no
 # fliperos.conf, gravado pelo teste de saidas ou pelo Video Setup). As demais
-# precisam de super resolucao.
+# precisam de super resolucao. O driver da NVIDIA (o fechado) passa pelo
+# mesmo grid: no Batocera ele mostra o 320x240 com dotclock 0.
 drm_card_low_dotclock() {
   local pci
   case $(drm_card_driver "$1") in
     radeon | amdgpu) return 0 ;;
-    nouveau)
+    nouveau | nvidia)
       pci=$(drm_card_pci "$1") || return 1
       [[ -n $pci && $(conf_get low_dotclock_pci 2> /dev/null) == "$pci" ]]
       return
@@ -143,9 +144,11 @@ drm_card_low_dotclock() {
 }
 
 # drm_card_low_dotclock_testable CARD: placa em que o grid de dotclock baixo
-# vale a pena (nouveau). Na Intel o driver nao tem o patch.
+# vale a pena (nouveau ou o driver da NVIDIA). Na Intel o driver nao tem o
+# patch.
 drm_card_low_dotclock_testable() {
-  [[ $(drm_card_driver "$1") == nouveau ]]
+  case $(drm_card_driver "$1") in nouveau | nvidia) return 0 ;; esac
+  return 1
 }
 
 # drm_card_is_apu CARD usa o mesmo sinal do gatools: o lspci -v mostra

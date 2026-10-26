@@ -116,6 +116,107 @@ amd_driver_apply() {
   log_info "driver AMD: $1"
 }
 
+# ── Driver das placas NVIDIA ─────────────────────────────────────
+# nouveau (o padrao, ja no kernel) ou o driver da NVIDIA, baixado do apt
+# pelo config/fliperos-nvidia. Os dois ficam instalados e a linha do kernel
+# escolhe (nvidia_driver= no fliperos.conf), como no radeon/amdgpu: a troca
+# passa pelo mesmo teste de imagem e o Limine tem a entrada de volta ao
+# nouveau. O modeset e o fbdev do nvidia-drm sao o KMS e o console dele:
+# o RetroArch, o Switchres e o modo de boot do kernel 15 kHz saem por ali.
+NVIDIA_CMD=${NVIDIA_CMD:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-nvidia}
+NVIDIA_DRIVER_KEYS="modprobe.blacklist nvidia-drm.modeset nvidia-drm.fbdev"
+NVIDIA_MODULES="nvidia,nvidia_drm,nvidia_modeset,nvidia_uvm"
+
+# nvidia_card: a primeira placa NVIDIA (vendor 0x10de).
+nvidia_card() {
+  local card
+  for card in $(drm_cards); do
+    [[ $(cat "$DRM_SYSFS/$card/device/vendor" 2> /dev/null) == 0x10de ]] && { echo "$card"; return 0; }
+  done
+  return 1
+}
+
+# nvidia_device CARD: o PCI ID da placa, sem o 0x (17c8).
+nvidia_device() {
+  local id
+  id=$(cat "$DRM_SYSFS/$1/device/device" 2> /dev/null) || return 1
+  printf '%s\n' "${id#0x}"
+}
+
+nvidia_driver() {
+  local driver
+  driver=$(conf_get nvidia_driver 2> /dev/null) || driver=nouveau
+  [[ $driver == nvidia ]] || driver=nouveau
+  printf '%s\n' "$driver"
+}
+
+nvidia_installed() {
+  [[ -x $NVIDIA_CMD ]] && "$NVIDIA_CMD" installed
+}
+
+# nvidia_driver_params DRIVER: o que a linha do kernel leva para ele.
+nvidia_driver_params() {
+  case $1 in
+    nvidia) echo "modprobe.blacklist=nouveau nvidia-drm.modeset=1 nvidia-drm.fbdev=1" ;;
+    *) echo "modprobe.blacklist=$NVIDIA_MODULES" ;;
+  esac
+}
+
+# nvidia_driver_cmdline LINHA troca os parametros de driver pelos do
+# fliperos.conf. Sem nvidia_driver gravado (nunca trocado) a linha fica.
+nvidia_driver_cmdline() {
+  local line=$1 driver key
+  driver=$(conf_get nvidia_driver 2> /dev/null) || { printf '%s\n' "$line"; return 0; }
+  for key in $NVIDIA_DRIVER_KEYS; do
+    line=$(cmdline_remove "$line" "$key")
+  done
+  words "$line $(nvidia_driver_params "$driver")"
+}
+
+# nvidia_driver_install [--progress]: baixa e instala o driver desta placa.
+nvidia_driver_install() {
+  local card
+  ev_step 0 "Starting"
+  card=$(nvidia_card) || { ev_fail "no NVIDIA card here"; return 1; }
+  if [[ ! -x $NVIDIA_CMD ]]; then
+    ev_fail "the NVIDIA driver installer ($NVIDIA_CMD) is missing"
+    return 1
+  fi
+  log_line cmd "\$ $NVIDIA_CMD install $(nvidia_device "$card") --progress"
+  "$NVIDIA_CMD" install "$(nvidia_device "$card")" --progress 2>> "$FLIPEROS_LOG"
+}
+
+# nvidia_driver_apply DRIVER grava a escolha. O teste de dotclock baixo e
+# de um driver: trocado, ele e esquecido (o Video Setup o repete). O Xorg
+# muda de driver junto (xorg_generate).
+nvidia_driver_apply() {
+  conf_set nvidia_driver "$1" || return 1
+  # Ate o grid passar de novo, super resolucao: o modo de boot nativo do
+  # outro driver pode nao dar imagem neste.
+  if conf_get low_dotclock_pci > /dev/null 2>&1; then
+    conf_unset low_dotclock_pci
+    video_low_dotclock_apply || log_warn "driver NVIDIA: o video nao foi refeito"
+  fi
+  BOOT_INITRAMFS=1
+  log_info "driver NVIDIA: $1"
+}
+
+# video_driver_apply DRIVER: a troca de qualquer placa (a volta do teste).
+video_driver_apply() {
+  case $1 in
+    nouveau | nvidia) nvidia_driver_apply "$1" ;;
+    *) amd_driver_apply "$1" ;;
+  esac
+}
+
+# video_driver_card: a placa que tem escolha de driver (AMD SI/CIK ou NVIDIA).
+video_driver_card() {
+  local card
+  card=$(drm_dual_amd_cards | head -1)
+  [[ -n $card ]] || card=$(nvidia_card) || return 1
+  printf '%s\n' "$card"
+}
+
 # ── Teste da troca de driver ─────────────────────────────────────
 # Como a troca de resolucao do Windows: trocado o driver, o boot seguinte
 # pede para confirmar a imagem (screen_amd_driver_confirm, 15 s, antes do
@@ -162,8 +263,8 @@ amd_driver_trial_confirm() {
 amd_driver_trial_running() {
   local trial card
   trial=$(amd_driver_trial) || return 1
-  card=$(drm_dual_amd_cards | head -1)
-  [[ -n $card && $(drm_card_driver "$card") == "$trial" ]]
+  card=$(video_driver_card) || return 1
+  [[ $(drm_card_driver "$card") == "$trial" ]]
 }
 
 # amd_driver_revert volta ao driver anterior (linha do kernel e menu do
@@ -174,14 +275,32 @@ amd_driver_revert() {
   log_warn "driver AMD: $(amd_driver_trial) sem confirmacao, de volta a ${previous:-?}"
   amd_driver_trial_clear
   [[ -n $previous ]] || return 1
-  amd_driver_apply "$previous" || return 1
+  video_driver_apply "$previous" || return 1
   is_installed && ! is_live || return 0
+  xorg_generate
   boot_apply
+}
+
+# nvidia_driver_boot_check: no boot. O driver da NVIDIA escolhido, mas sem o
+# modulo para este kernel (um kernel novo que o DKMS nao compilou): com o
+# nouveau na lista negra nao haveria imagem. Tenta o DKMS; sem modulo, volta
+# ao nouveau e reinicia.
+nvidia_driver_boot_check() {
+  [[ $(nvidia_driver) == nvidia ]] || return 0
+  nvidia_installed && return 0
+  log_warn "driver NVIDIA: sem modulo para $(uname -r), tentando o DKMS"
+  run_logged dkms autoinstall
+  nvidia_installed && { run_logged modprobe nvidia_drm; return 0; }
+  log_warn "driver NVIDIA: sem modulo, de volta ao nouveau"
+  nvidia_driver_apply nouveau || return 1
+  xorg_generate
+  boot_apply && run_logged systemctl reboot
 }
 
 # amd_driver_trial_boot: no boot (fliperos-driver-trial.service).
 amd_driver_trial_boot() {
   local boots
+  nvidia_driver_boot_check
   amd_driver_trial > /dev/null || return 0
   # Aberto pela entrada de volta do menu do Limine: a pessoa ja escolheu o
   # anterior, e ele e o que esta rodando; nao ha o que reiniciar.
@@ -222,6 +341,7 @@ boot_compose() {
   done
   line=$(latency_cmdline "${out[*]}")
   line=$(amd_driver_cmdline "$line")
+  line=$(nvidia_driver_cmdline "$line")
   line=$(quirks_cmdline "$line")
   line=$(debug_cmdline "$line")
   line=$(i8042_cmdline "$line")

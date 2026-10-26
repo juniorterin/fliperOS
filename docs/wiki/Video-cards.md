@@ -10,7 +10,7 @@ A card that doesn't uses a **super resolution**: the same lines and the same ref
 | --- | --- | --- | --- |
 | AMD/ATI Radeon HD 2000 to HD 7000, R7/R9 200 and 300 (GCN 1.0) | `radeon` or `amdgpu` | VGA, DVI-I | **Native** (recommended) |
 | AMD Radeon RX and newer, Ryzen APUs | `amdgpu` | None on the card; VGA on some motherboards | Native, through an active DisplayPort/HDMI to VGA converter that accepts low clocks |
-| NVIDIA GeForce 8 to GTX 900, Quadro up to K series | `nouveau` | VGA, DVI-I | Super resolution; **native if the card passes the low resolution test** |
+| NVIDIA GeForce 8 to GTX 900, Quadro up to K series | `nouveau`, or NVIDIA's own driver (GTX 900) | VGA, DVI-I | Super resolution; **native if the card passes the low resolution test** |
 | NVIDIA GTX 10 and newer (Pascal, Turing, Ampere...) | `nouveau` | None | Super resolution, through a converter |
 | Intel Gen9 (HD/UHD 500 and 600 series: Skylake to Comet Lake) | `i915` | VGA on the motherboard | Super resolution, with interlace (patch 09) |
 | Other Intel generations | `i915` | VGA on the motherboard | Super resolution; 480i may not work |
@@ -29,7 +29,7 @@ Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an **acti
 
 ## NVIDIA
 
-NVIDIA cards run on the open driver, **nouveau**. The proprietary driver is not in FliperOS.
+NVIDIA cards run on the open driver, **nouveau**, out of the box. On the installed system, *Setup > Video Setup > Video driver* can switch to **NVIDIA's own driver** (see below).
 
 **With VGA or DVI-I (GeForce 8 to GTX 900, Quadro up to the K series).** Out of the box nouveau refuses every mode under 25 MHz. FliperOS's own kernel patch (`10_fliperos_nouveau_analog_low_dotclock.patch`) lifts that floor on the analog outputs, but whether each card's PLL actually reaches 6.5 MHz varies.
 
@@ -44,7 +44,20 @@ The test can be repeated on the installed system in *Setup > Video Setup > Low r
 
 Community reports with low clocks on nouveau: **GeForce 8400 GS** and **Quadro K600** (Batocera). No NVIDIA card has been seen on a CRT by the project yet.
 
-Mind the speed: nouveau runs most GTX 600, 700 and 900 cards at their boot clock (it can't raise the clock of Maxwell 2, and on Kepler only by hand). For arcade and 2D consoles that is enough; for PS2, GameCube and Model 3, an AMD card is better.
+Mind the speed: nouveau runs most GTX 600, 700 and 900 cards at their boot clock (it can't raise the clock of Maxwell 2, and on Kepler only by hand). For arcade and 2D consoles that is enough; for PS2, GameCube and Model 3, an AMD card is better, or NVIDIA's own driver.
+
+A user's **GTX 980 Ti** (DVI-I, VGA-SCART) failed the grid on nouveau, while Batocera showed 320x240 at `dotclock_min 0` on the same card. Batocera uses NVIDIA's own driver on those cards, not nouveau. On nouveau the likely limit is the pixel clock PLL: its calculation caps the divider at the VBIOS maximum and doesn't check the oscillator's minimum, so 6.5 MHz gives a black screen with no error. The kernel lines of the grid are saved in the Setup's log (`/var/log/fliperos-setup.log`) to confirm it.
+
+<a id="nvidia-driver"></a>**NVIDIA's own driver.** In *Setup > Video Setup > Video driver* on a card with an NVIDIA chip:
+
+- **NVIDIA driver** downloads it from Ubuntu's own repository (a few hundred MB), and DKMS compiles its kernel module for the 15 kHz kernel (a few minutes). The package is **`nvidia-driver-580`**, from the GTX 900 (Maxwell, the last with DVI-I) to the current cards; it is the one checked to build on the 15 kHz kernel. The 470 of the GTX 600/700 (Kepler) does not build on kernel 6.18, so those cards and the older ones stay on nouveau.
+- Both drivers stay installed; the kernel line chooses (`modprobe.blacklist=nouveau nvidia-drm.modeset=1 nvidia-drm.fbdev=1`, or the NVIDIA modules blacklisted for nouveau). The package's own nouveau blacklist in `/lib/modprobe.d` is overridden by a file of the same name in `/etc/modprobe.d`.
+- The switch is on trial, like radeon/amdgpu: after the restart, press Enter to confirm the picture. With no answer in 15 s FliperOS goes back to nouveau and restarts. The boot menu (a key during the countdown) also has **FliperOS - nouveau driver**.
+- The low resolution result belongs to a driver, so a switch starts in super resolution. Once the picture is confirmed, the Setup offers the 320x240 grid on the NVIDIA driver.
+- X uses the `nvidia` driver with mode validation relaxed (`ModeValidation`: modes without EDID, low pixel clocks, any sync range), which a 15 kHz tube needs. RetroArch, Switchres and the console use its KMS (`nvidia-drm`).
+- If a kernel update leaves no NVIDIA module for the new kernel, the boot tries DKMS again; with no module, it goes back to nouveau and restarts, so the screen is never left black.
+
+Not seen on an NVIDIA card yet: the module was built against the FliperOS kernel (580.178.04 on 6.18.54-15khz), but nobody has run it on a CRT.
 
 **Without analog output (GTX 10 and newer).** Super resolution only, through an active converter. RTX 20 and 30 cards need their GSP firmware, which stays in the system (`/usr/lib/firmware/nvidia`).
 

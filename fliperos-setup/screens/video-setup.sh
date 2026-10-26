@@ -599,10 +599,14 @@ screen_deflicker_preview() {
 screen_video_setup() {
   local choice last="" summary monitors=()
   VIDEO_CHANGED=0
-  # Video driver so aparece com uma placa AMD que aceita os dois drivers.
+  # Video driver so aparece com uma placa que tem escolha: AMD que aceita os
+  # dois drivers, ou NVIDIA (nouveau ou o driver dela).
   local driver=()
-  [[ -n $(drm_dual_amd_cards) ]] &&
+  if [[ -n $(drm_dual_amd_cards) ]]; then
     driver=("driver|Video driver|radeon (tested on the CRT) or amdgpu (with Vulkan).")
+  elif nvidia_card > /dev/null; then
+    driver=("driver|Video driver|nouveau or NVIDIA's own driver (native 15 kHz, 3D speed).")
+  fi
   # O grid de dotclock baixo so com uma NVIDIA (nouveau) na saida principal.
   local lowdot=()
   drm_card_low_dotclock_testable "$(conf_get card 2> /dev/null)" 2> /dev/null &&
@@ -639,7 +643,7 @@ screen_video_setup() {
       monitors) screen_multi_monitor ;;
       mode480) screen_mode480 ;;
       colour) screen_colour ;;
-      driver) screen_amd_driver ;;
+      driver) screen_video_driver ;;
       lowdot) screen_low_dotclock_retest ;;
       return) break ;;
     esac

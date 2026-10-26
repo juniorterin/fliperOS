@@ -24,6 +24,16 @@ xorg_busid() {
   printf 'PCI:%d:%d:%d\n' "$bus" "$dev" "$fn"
 }
 
+XORG_NVIDIA_VALIDATION="AllowNonEdidModes, NoEdidMaxPClkCheck, NoMaxPClkCheck, NoHorizSyncCheck, NoVertRefreshCheck, NoMaxSizeCheck, NoVirtualSizeCheck, NoTotalSizeCheck, NoDualLinkDVICheck"
+
+# xorg_nvidia: a placa principal e NVIDIA e o driver escolhido e o dela.
+xorg_nvidia() {
+  local card
+  [[ $(nvidia_driver) == nvidia ]] || return 1
+  card=$(conf_get card 2> /dev/null) || return 1
+  [[ $(cat "$DRM_SYSFS/$card/device/vendor" 2> /dev/null) == 0x10de ]]
+}
+
 # xorg_generate [ARQUIVO] grava a configuracao a partir do fliperos.conf.
 xorg_generate() {
   local file=${1:-$XORG_CONF} monitor freq mode modeline="" name="" hsync="" conn
@@ -55,7 +65,15 @@ xorg_generate() {
     echo "# Gerado pelo fliperos-setup a partir de /etc/fliperos/fliperos.conf."
     echo "# Refeito a cada mudanca de monitor ou resolucao; editar aqui nao adianta."
     if [[ -n $modeline ]] || ((${#extras[@]} > 0 || others)); then
-      printf 'Section "Device"\n    Identifier "GPU"\n    Driver "modesetting"\n'
+      if xorg_nvidia; then
+        # O driver da NVIDIA (Setup > Video Setup > Video driver): o X dele
+        # recusa um modo sem EDID, de clock baixo ou fora das faixas que ele
+        # supoe para o monitor; o tubo de 15 kHz precisa de todos.
+        printf 'Section "Device"\n    Identifier "GPU"\n    Driver "nvidia"\n'
+        printf '    Option "ModeValidation" "%s"\n' "$XORG_NVIDIA_VALIDATION"
+      else
+        printf 'Section "Device"\n    Identifier "GPU"\n    Driver "modesetting"\n'
+      fi
       [[ -n $busid ]] && printf '    BusID "%s"\n' "$busid"
       printf '    Option "Monitor-%s" "CRT"\n' "$conn"
       for i in "${!extras[@]}"; do
