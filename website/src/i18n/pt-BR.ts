@@ -88,7 +88,7 @@ const ptBR: Messages = {
     viewOnGithub: 'Ver no GitHub',
   },
   hero: {
-    eyebrow: 'fliperos 0.13 · em desenvolvimento',
+    eyebrow: 'fliperos 0.14 · em desenvolvimento',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Feito para CRT.',
     description:
@@ -267,7 +267,7 @@ const ptBR: Messages = {
     ],
     cta: 'Cada página do painel web, na documentação',
     controller: {
-      badge: 'Novo na 0.13',
+      badge: 'Novo na 0.14',
       title: 'O seu controle, ao vivo na transmissão.',
       text: 'O direcional e os botões acendem na sua live enquanto você aperta no gabinete, como os input displays das transmissões de jogos de luta. Quem assiste vê cada movimento e cada botão. Copie o endereço na página Ao vivo, cole numa fonte Navegador do OBS, e ele fica por cima do jogo, com fundo transparente.',
       points: [

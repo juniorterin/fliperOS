@@ -2,6 +2,41 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.14
+
+NVIDIA cards can now switch from nouveau to NVIDIA's own driver in Video Setup > Video driver. It is downloaded from Ubuntu and compiled for the 15 kHz kernel, and it is the driver Batocera uses for native 320x240 on these cards. A new Lab mode gives a temporary internet address to the web panel, for someone helping you from far away. The live screen in OBS has sound, sound is on from the start and Watch live opens at 60 fps. The 480i flicker filter works on the desktop again and covers Fightcade. The install media's boot menu, invisible on a 15 kHz tube, now boots by itself after 10 seconds instead of 30. The NVIDIA driver has not been seen on an NVIDIA card yet, and Lab mode has only been tried on the project's cabinet.
+
+**System changes:**
+
+- NVIDIA's own driver (`nvidia-driver-580`, GTX 900 series and newer) as an option to nouveau. Both stay installed and the kernel line chooses (`modprobe.blacklist=nouveau nvidia-drm.modeset=1 nvidia-drm.fbdev=1`, or the NVIDIA modules blacklisted). The package's own nouveau blacklist is overridden in `/etc/modprobe.d`. X uses the `nvidia` driver with relaxed `ModeValidation` (modes without EDID, low pixel clocks, any sync range). The 470 driver of the GTX 600/700 doesn't build on kernel 6.18, so those cards stay on nouveau
+- The switch is on trial, like radeon/amdgpu: confirm the picture after the restart, or FliperOS goes back to nouveau. The installed boot menu has a *FliperOS - nouveau driver* entry. If a kernel update leaves no NVIDIA module, the boot tries DKMS again and otherwise goes back to nouveau and restarts
+- Install media: the boot menu waits 10 s instead of 30 before booting the 15 kHz entry by itself. Any key stops the countdown
+- Lab mode: a Cloudflare Quick Tunnel (`cloudflared`, downloaded the first time with a fixed version and checksum) to the web panel. The address carries a key kept in `/run`; it opens a session without the password, with a root terminal. It ends after 4 hours, at power off or when turned off, and its sessions end with it
+- Flicker filter: Ubuntu's own picom started first on the desktop and took the screen, so the filter's picom closed. It is now kept out, and the filter follows a change of Screen Resolution without closing the desktop
+- Flicker filter: the Fightcade 2 lobby (480i on a 15 kHz tube) and its Flycast matches are covered, and the filter finds the interlaced mode on any video card, not only card0
+- Live screen in OBS with sound: the page set the stream twice, once per track, and the second time interrupted the first play, which it took as the browser refusing sound
+- Live screen sound is on from the start: installing the live screen turns it on, and a cabinet that never changed the setting gets it on with the update
+
+**Package changes:**
+
+- None in the image: `cloudflared` (Lab mode) and the NVIDIA driver are downloaded only when they are turned on
+
+**fliperos-setup changes:**
+
+- Video Setup > Video driver also shows on NVIDIA cards: nouveau or the NVIDIA driver, with the download, the trial and, after the picture is confirmed, the 320x240 low resolution test on the new driver
+- Video output test on nouveau: when the 320x240 grid doesn't show, the result says the grid didn't show on nouveau (super resolutions, the same picture on a CRT) instead of "your video card doesn't support low dotclocks". It also points to the Video driver. The kernel lines of the grid go to the Setup's log
+- System > Lab mode, with the address on screen; the graphical Setup has a lab flask icon for it
+
+**Tool changes:**
+
+- `fliperos-lab fetch|start|stop|status` and `fliperos-lab.service`; the web panel's `/lab?key=` and `/api/lab`, and a Lab mode card on the Settings page with the address to copy
+- `fliperos-nvidia package|installed|install`: the newest `nvidia-driver-NNN` whose Modaliases list the card, built by DKMS
+- Web panel, Live: Watch live starts at 60 fps (15 and 30 are still in the list)
+
+**Documentation:**
+
+- Web panel page: Lab mode. Video cards page: NVIDIA's own driver, and why a GTX 980 Ti didn't show 320x240 on nouveau while it does on Batocera. Install page and READMEs: the 10 s boot menu
+
 ## 0.13
 
 The web panel's Live screen works again on AMD cards, and it now says what went wrong instead of staying on "Connecting". A Quality choice sets how sharp the stream is, from Light for a weak Wi-Fi to Maximum for a network cable. A new Controller for OBS page shows the player's stick and buttons lighting up on the stream, and its look is changed right in the panel, in a CSS editor with a live preview. The Setup downloads KOF Final Attack from itch.io and applies the 4:3 patch by itself. Esc now closes Flycast, Dolphin and OpenBOR like the other emulators, and Dolphin fills the screen without the cursor or on-screen messages. The Controller page has been tried on the cabinet without a player pressing the buttons yet, and the new qualities have not been looked at on a stream yet.
