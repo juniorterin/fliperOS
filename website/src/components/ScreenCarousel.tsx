@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Pause, Play, X } from 'lucide-react';
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
 import { track } from '@/lib/analytics';
 
-export type Slide = { id: string; src: string; title: string; caption: string; alt: string };
+export type Slide = { id: string; src: string; title: string; caption: string; alt: string; pixelated?: boolean };
 
 type Labels = {
   label: string;
@@ -192,7 +192,7 @@ export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: La
                           priority={turn === 0 && face === 0}
                           sizes="(min-width: 1024px) 560px, 92vw"
                           unoptimized
-                          className="object-contain"
+                          className={`object-contain ${s.pixelated ? '[image-rendering:pixelated]' : ''}`}
                         />
                       ) : null}
                       <span
@@ -289,7 +289,7 @@ export function ScreenCarousel({ slides, labels }: { slides: Slide[]; labels: La
         {zoomed ? (
           <div>
             <div className="relative aspect-[4/3] w-full bg-black sm:aspect-[16/10]">
-              <Image src={slide.src} alt={slide.alt} fill sizes="94vw" unoptimized className="object-contain" />
+              <Image src={slide.src} alt={slide.alt} fill sizes="94vw" unoptimized className={`object-contain ${slide.pixelated ? '[image-rendering:pixelated]' : ''}`} />
             </div>
             <div className="flex items-center gap-3 border-t border-line px-4 py-3 sm:px-5">
               <div className="min-w-0 flex-1">

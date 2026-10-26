@@ -1,18 +1,20 @@
 import type { MetadataRoute } from 'next';
-import { LOCALES, localePath } from '@/i18n';
-import { SITE_URL } from '@/lib/site';
+import { LOCALES, pagePath } from '@/i18n';
+import { PAGE_SLUGS, SITE_URL } from '@/lib/site';
 
-const languages = {
-  ...Object.fromEntries(LOCALES.map((l) => [l, `${SITE_URL}${localePath(l)}`])),
-  'x-default': `${SITE_URL}/`,
-};
-
+// A home e cada página de detalhe, nos dois idiomas, com os alternates de cada uma.
 export default function sitemap(): MetadataRoute.Sitemap {
-  return LOCALES.map((l) => ({
-    url: `${SITE_URL}${localePath(l)}`,
-    lastModified: new Date(),
-    changeFrequency: 'weekly',
-    priority: 1,
-    alternates: { languages },
-  }));
+  return [undefined, ...PAGE_SLUGS].flatMap((page) => {
+    const languages = {
+      ...Object.fromEntries(LOCALES.map((l) => [l, `${SITE_URL}${pagePath(l, page)}`])),
+      'x-default': page ? `${SITE_URL}${pagePath('en-US', page)}` : `${SITE_URL}/`,
+    };
+    return LOCALES.map((l) => ({
+      url: `${SITE_URL}${pagePath(l, page)}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: page ? 0.8 : 1,
+      alternates: { languages },
+    }));
+  });
 }

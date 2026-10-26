@@ -47,6 +47,17 @@ export function localePath(locale: Locale): string {
   return `/${LOCALE_SEGMENT[locale]}`;
 }
 
+// Uma página de detalhe no idioma: /pt/frontend. Sem página, a home.
+export function pagePath(locale: Locale, page?: string): string {
+  return page ? `${localePath(locale)}/${page}` : localePath(locale);
+}
+
+// O mesmo caminho no outro idioma: /en/video -> /pt/video.
+export function switchLocalePath(pathname: string, locale: Locale): string {
+  const rest = pathname.replace(/^\/[^/]+/, '');
+  return localePath(locale) + rest;
+}
+
 // pt, pt-BR, pt-PT... abrem em português; qualquer outro idioma, em inglês.
 export function detectLocale(language: string | undefined | null): Locale {
   return language && language.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US';

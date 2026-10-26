@@ -1,6 +1,7 @@
 'use client';
 
-import { LOCALES, LOCALE_COOKIE, LOCALE_NAME, LOCALE_SHORT, localePath, type Locale } from '@/i18n';
+import { usePathname } from 'next/navigation';
+import { LOCALES, LOCALE_COOKIE, LOCALE_NAME, LOCALE_SHORT, switchLocalePath, type Locale } from '@/i18n';
 import { useI18n } from '@/i18n/I18nProvider';
 
 // Grava a escolha para a raiz (/) abrir neste idioma nas próximas visitas.
@@ -10,6 +11,8 @@ function remember(locale: Locale) {
 
 export function LanguageSwitch({ className = '' }: { className?: string }) {
   const { locale, t } = useI18n();
+  // A mesma página no outro idioma: /en/video <-> /pt/video.
+  const pathname = usePathname();
   return (
     <div
       role="group"
@@ -26,7 +29,7 @@ export function LanguageSwitch({ className = '' }: { className?: string }) {
               </span>
             ) : null}
             <a
-              href={localePath(code)}
+              href={switchLocalePath(pathname, code)}
               hrefLang={code}
               data-ga="language_switch"
               lang={code}
@@ -37,7 +40,7 @@ export function LanguageSwitch({ className = '' }: { className?: string }) {
                 if (active) e.preventDefault();
                 else if (window.location.hash) {
                   e.preventDefault();
-                  window.location.assign(localePath(code) + window.location.hash);
+                  window.location.assign(switchLocalePath(pathname, code) + window.location.hash);
                 }
               }}
               className={`rounded-md px-2.5 py-1.5 font-semibold tracking-wider transition-colors ${

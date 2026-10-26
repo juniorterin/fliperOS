@@ -5,17 +5,13 @@ import Image from 'next/image';
 import { CrtMonitor } from '@/components/CrtMonitor';
 import { ScreenCarousel } from '@/components/ScreenCarousel';
 import { useI18n } from '@/i18n/I18nProvider';
-import type { ScreenshotMap } from '@/lib/screenshots';
+import type { Media } from '@/lib/media';
+import { HERO_SHOTS } from '@/lib/site';
 
-export function Hero({ screenshots, downloadUrl }: { screenshots: ScreenshotMap; downloadUrl: string }) {
+// slides: as telas de HERO_SHOTS que têm arquivo em public/screenshots.
+export function Hero({ slides, downloadUrl }: { slides: Media[]; downloadUrl: string }) {
   const { t } = useI18n();
   const h = t.hero;
-  // Só entram no carrossel as telas com arquivo em public/screenshots; o texto
-  // alternativo é o título com a legenda.
-  const slides = h.slides.flatMap((slide) => {
-    const src = screenshots[slide.id];
-    return src ? [{ ...slide, src, alt: `${slide.title}. ${slide.caption}` }] : [];
-  });
   return (
     <section id="top" aria-labelledby="hero-title" className="relative overflow-hidden pt-28 pb-16 sm:pt-36 lg:pt-20 lg:pb-24">
       <div aria-hidden="true" className="bg-grid pointer-events-none absolute inset-0" />
@@ -72,10 +68,10 @@ export function Hero({ screenshots, downloadUrl }: { screenshots: ScreenshotMap;
           <figure className="float relative mx-auto w-full max-w-xl">
             <CrtMonitor
               src={null}
-              alt={h.slides[0].title}
+              alt={h.titleLine1}
               placeholderTitle={h.screenPlaceholderTitle}
               placeholderHint={h.screenPlaceholderHint}
-              expectedPath={`/public/screenshots/${h.slides[0].id}.webp`}
+              expectedPath={`/public/screenshots/${HERO_SHOTS[0]}.webp`}
             />
           </figure>
         )}

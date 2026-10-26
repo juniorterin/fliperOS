@@ -47,63 +47,132 @@ export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? 'G-FTG8120HF8';
 // NEXT_PUBLIC_SITE_URL, lido no build, troca o domínio (outro ambiente).
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fliperos.juniorter.in').replace(/\/+$/, '');
 
-export const SECTION_IDS = ['features', 'web-panel', 'emulators', 'crt', 'multi-monitor', 'setup', 'requirements', 'open-source'] as const;
-export type SectionId = (typeof SECTION_IDS)[number];
+// As páginas de detalhe, na ordem do menu e do "Próxima"; o slug é o mesmo
+// nos dois idiomas (/en/frontend, /pt/frontend).
+export const PAGE_SLUGS = ['frontend', 'setup', 'games', 'video', 'web-panel', 'emulators', 'hardware'] as const;
+export type PageSlug = (typeof PAGE_SLUGS)[number];
 
-// Na ordem do carrossel do hero; os textos de cada um ficam em hero.slides.
-export const SCREENSHOT_IDS = [
+export function isPageSlug(value: string): value is PageSlug {
+  return (PAGE_SLUGS as readonly string[]).includes(value);
+}
+
+// A página da wiki com o detalhe completo de cada uma.
+export const PAGE_WIKI: Record<PageSlug, string> = {
+  frontend: 'Frontends',
+  setup: 'Installed-system',
+  games: 'ROMs',
+  video: 'Kernel-15-kHz',
+  'web-panel': 'Web-panel',
+  emulators: 'Emulators',
+  hardware: 'Video-cards',
+};
+
+// Os ids abaixo são caminhos em public/screenshots sem a extensão; os textos
+// de cada um ficam em shots no src/i18n. anim/* são WebP animados cortados
+// das cenas gravadas do vídeo de apresentação (tools/video).
+
+// O carrossel do hero: poucas telas, as que mais mostram.
+export const HERO_SHOTS = [
+  'anim/frontend-list',
   'gui/main',
-  'gui/main-setup',
-  // O frontend do FliperOS: os tres modos, cada um com o que abre nele.
-  'frontend/list-guide',
-  'frontend/list',
-  'frontend/list-clones',
-  'frontend/list-card',
-  'frontend/list-more',
-  'frontend/list-more-2',
-  'frontend/list-filter',
-  'frontend/list-options',
-  'frontend/list-classify',
-  'frontend/list-rename',
-  'frontend/full',
-  'frontend/full-card',
-  'frontend/full-clone',
-  'frontend/grid',
-  'frontend/grid-card',
-  'frontend/grid-options',
-  'gui/live',
-  'gui/setup',
-  'gui/setup-games',
-  'gui/video',
-  'gui/joysticks',
-  'gui/buttons-players',
-  'gui/buttons-capture',
-  'gui/layout',
-  'gui/layout-edit',
-  'gui/guncon',
+  'anim/frontend-full',
+  'anim/setup-carousel',
+  'anim/frontend-grid',
+  'anim/romfilter',
+  'anim/frontend-play',
+  'anim/setup-buttons',
   'gui/guncon-target1',
-  'gui/guncon-target2',
-  'gui/guncon-target3',
-  'gui/guncon-result',
-  'gui/downloader',
-  'gui/downloader-torrent',
-  'gui/downloader-filter',
-  'gui/filter',
-  'gui/filter-scrolled',
-  'gui/filter-players',
-  'gui/filter-buttons',
-  'gui/filter-controls',
-  'gui/filter-years',
-  'gui/downloader-magnet',
-  'gui/downloader-magnet-browser',
-  'gui/downloader-progress',
-  'gui/power',
-  'gui/radio',
-  'gui/checklist',
-  'gui/yesno',
-  'gui/progress',
-  'gui/error',
-  'gui/input',
   'desktop',
-] as const;
-export const SCREENSHOT_EXTENSIONS = ['avif', 'webp', 'png', 'jpg'] as const;
+];
+
+// A galeria da home: um grupo por página, com o "ver mais" levando a ela.
+// {lang} vira en ou pt (os prints do painel web têm um por idioma).
+export const HOME_GALLERY: { page: PageSlug; shots: string[] }[] = [
+  { page: 'frontend', shots: ['anim/frontend-grid', 'frontend/list-card', 'anim/frontend-info', 'frontend/full'] },
+  { page: 'setup', shots: ['anim/setup-guncon', 'gui/video', 'anim/install', 'gui/layout-edit'] },
+  { page: 'games', shots: ['anim/downloader', 'gui/filter', 'gui/filter-controls', 'anim/bios'] },
+  { page: 'web-panel', shots: ['web/frontend-{lang}', 'web/phone-{lang}', 'web/status-{lang}'] },
+  { page: 'video', shots: ['multi/darius-1', 'multi/darius-2', 'multi/darius-3', 'multi/punchout-1'] },
+];
+
+// "Todas as telas" no fim de cada página de detalhe.
+export const PAGE_SHOTS: Record<PageSlug, string[]> = {
+  frontend: [
+    'frontend/list-guide',
+    'frontend/list',
+    'frontend/list-clones',
+    'frontend/list-card',
+    'frontend/list-more',
+    'frontend/list-more-2',
+    'frontend/list-filter',
+    'frontend/list-options',
+    'frontend/list-classify',
+    'frontend/list-rename',
+    'frontend/full',
+    'frontend/full-card',
+    'frontend/full-clone',
+    'frontend/grid',
+    'frontend/grid-card',
+    'frontend/grid-options',
+  ],
+  setup: [
+    'gui/main',
+    'gui/main-setup',
+    'gui/live',
+    'gui/progress',
+    'gui/setup',
+    'gui/video',
+    'gui/radio',
+    'gui/joysticks',
+    'gui/buttons-players',
+    'gui/buttons-capture',
+    'gui/layout',
+    'gui/layout-edit',
+    'gui/guncon',
+    'gui/guncon-target1',
+    'gui/guncon-target2',
+    'gui/guncon-target3',
+    'gui/guncon-result',
+    'gui/input',
+    'gui/power',
+    'gui/yesno',
+    'gui/error',
+    'desktop',
+  ],
+  games: [
+    'gui/setup-games',
+    'gui/downloader',
+    'gui/downloader-torrent',
+    'gui/downloader-filter',
+    'gui/filter',
+    'gui/filter-scrolled',
+    'gui/filter-players',
+    'gui/filter-buttons',
+    'gui/filter-controls',
+    'gui/filter-years',
+    'gui/downloader-magnet',
+    'gui/downloader-magnet-browser',
+    'gui/downloader-progress',
+  ],
+  video: [],
+  'web-panel': [],
+  emulators: [],
+  hardware: [],
+};
+
+// Telas usadas só nos blocos das páginas de detalhe.
+const ROW_ONLY_SHOTS = ['anim/frontend-systems', 'anim/setup-colour', 'anim/setup-latency', 'gui/checklist'];
+
+const withLang = (id: string) => (id.includes('{lang}') ? ['en', 'pt'].map((l) => id.replace('{lang}', l)) : [id]);
+
+// Todo id que pode ter um arquivo em public/screenshots.
+export const SCREENSHOT_IDS = [
+  ...new Set([
+    ...HERO_SHOTS,
+    ...HOME_GALLERY.flatMap((g) => g.shots.flatMap(withLang)),
+    ...Object.values(PAGE_SHOTS).flat(),
+    ...ROW_ONLY_SHOTS,
+  ]),
+];
+// gif vale também: uma animação em GIF entra no lugar do WebP animado.
+export const SCREENSHOT_EXTENSIONS = ['avif', 'webp', 'gif', 'png', 'jpg'] as const;

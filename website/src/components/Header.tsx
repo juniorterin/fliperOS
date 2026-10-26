@@ -1,49 +1,33 @@
 'use client';
 
 import { BookOpen, Menu, X } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { localePath, pagePath } from '@/i18n';
 import { useI18n } from '@/i18n/I18nProvider';
-import { guideUrl, readmeUrl, SECTION_IDS, type SectionId } from '@/lib/site';
+import { guideUrl, PAGE_SLUGS, readmeUrl } from '@/lib/site';
 import { GithubIcon } from './GithubIcon';
 import { LanguageSwitch } from './LanguageSwitch';
 import { LogoMark, Wordmark } from './Logo';
 
-const NAV: { id: SectionId; key: 'features' | 'webPanel' | 'emulators' | 'crt' | 'multiMonitor' | 'setup' | 'requirements' | 'github' }[] = [
-  { id: 'features', key: 'features' },
-  { id: 'web-panel', key: 'webPanel' },
-  { id: 'emulators', key: 'emulators' },
-  { id: 'crt', key: 'crt' },
-  { id: 'multi-monitor', key: 'multiMonitor' },
-  { id: 'setup', key: 'setup' },
-  { id: 'requirements', key: 'requirements' },
-  { id: 'open-source', key: 'github' },
-];
-
 export function Header() {
   const { t, locale } = useI18n();
-  const [active, setActive] = useState<SectionId | null>(null);
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+
+  // A home e uma linha por página de detalhe; a ativa é a do endereço atual.
+  const nav = [
+    { href: localePath(locale), label: t.nav.home },
+    ...PAGE_SLUGS.map((slug) => ({ href: pagePath(locale, slug), label: t.nav.pages[slug] })),
+  ];
+  const isActive = (href: string) => pathname.replace(/\/+$/, '') === href;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => {
-    const sections = SECTION_IDS.map((id) => document.getElementById(id)).filter((el): el is HTMLElement => !!el);
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) setActive(entry.target.id as SectionId);
-        }
-      },
-      { rootMargin: '-45% 0px -50% 0px' },
-    );
-    sections.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -67,28 +51,28 @@ export function Header() {
       aria-label={t.a11y.mainNav}
       className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-line/70 bg-bg-deep/85 px-4 py-6 backdrop-blur-xl lg:flex"
     >
-      <a href="#top" className="flex items-center gap-2.5 px-3" aria-label="FliperOS">
+      <a href={localePath(locale)} className="flex items-center gap-2.5 px-3" aria-label="FliperOS">
         <LogoMark />
         <Wordmark />
       </a>
       <nav aria-label={t.a11y.mainNav} className="mt-8 flex-1 overflow-y-auto">
         <ul className="grid gap-1">
-          {NAV.map(({ id, key }) => (
-            <li key={id}>
+          {nav.map(({ href, label }) => (
+            <li key={href}>
               <a
-                href={`#${id}`}
-                aria-current={active === id ? 'true' : undefined}
+                href={href}
+                aria-current={isActive(href) ? 'page' : undefined}
                 className={`relative flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                  active === id ? 'bg-line/50 text-fg' : 'text-muted hover:bg-line/30 hover:text-fg'
+                  isActive(href) ? 'bg-line/50 text-fg' : 'text-muted hover:bg-line/30 hover:text-fg'
                 }`}
               >
                 <span
                   aria-hidden="true"
                   className={`absolute inset-y-2 left-0 w-0.5 rounded-full bg-gradient-to-b from-purple to-pink transition-opacity ${
-                    active === id ? 'opacity-100' : 'opacity-0'
+                    isActive(href) ? 'opacity-100' : 'opacity-0'
                   }`}
                 />
-                {t.nav[key]}
+                {label}
               </a>
             </li>
           ))}
@@ -128,7 +112,7 @@ export function Header() {
       }`}
     >
       <div className="flex h-16 w-full items-center gap-4 px-4 sm:px-6">
-        <a href="#top" className="flex items-center gap-2.5" aria-label="FliperOS">
+        <a href={localePath(locale)} className="flex items-center gap-2.5" aria-label="FliperOS">
           <LogoMark />
           <Wordmark />
         </a>
@@ -162,22 +146,22 @@ export function Header() {
         id="mobile-nav"
         aria-label={t.a11y.mainNav}
         hidden={!open}
-        className="border-t border-line/70 bg-bg-deep/95 px-4 pt-2 pb-5 lg:hidden"
+        className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-line/70 bg-bg-deep/95 px-4 pt-2 pb-5 lg:hidden"
       >
         <ul className="grid gap-1">
-          {NAV.map(({ id, key }) => (
-            <li key={id}>
+          {nav.map(({ href, label }) => (
+            <li key={href}>
               <a
-                href={`#${id}`}
+                href={href}
                 onClick={() => setOpen(false)}
-                aria-current={active === id ? 'true' : undefined}
+                aria-current={isActive(href) ? 'page' : undefined}
                 className={`flex items-center justify-between rounded-lg px-3 py-3 text-base ${
-                  active === id ? 'bg-line/50 text-fg' : 'text-muted'
+                  isActive(href) ? 'bg-line/50 text-fg' : 'text-muted'
                 }`}
               >
-                {t.nav[key]}
+                {label}
                 <span aria-hidden="true" className="font-mono text-xs text-comment">
-                  #{id}
+                  {href}
                 </span>
               </a>
             </li>

@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..', 'src');
-const ALLOW = new Set(['|', '15 kHz', 'switchres', 'SR-1_384x224@59.64', 'fliperos@fliperos:~$', 'Fliper', 'OS']);
+const ALLOW = new Set(['|', '15 kHz', 'switchres', 'SR-1_384x224@59.64', 'fliperos@fliperos:~$', 'Fliper', 'OS', 'http://fliperos.local']);
 
 const files = ['components', 'sections'].flatMap((dir) =>
   readdirSync(path.join(root, dir))
