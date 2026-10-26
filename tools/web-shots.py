@@ -344,6 +344,9 @@ def main():
         SHOTS.append(("15-jogo-pc", "#frontend", 1440, 900, 1, False, False, "sheet"))
         SHOTS.append(("15-jogo-celular", "#frontend", 390, 844, 2, True, True, "sheet"))
         SHOTS.append(("16-tarefas-pc", "#library", 1440, 900, 1, False, False, "tasks"))
+        for pick in ("marquee", "pad"):
+            SHOTS.append(("03-live-obs-%s-pc" % pick, "#live/obs", 1440, 900, 1, False, True, "obs-" + pick))
+            SHOTS.append(("03-live-obs-%s-celular" % pick, "#live/obs", 390, 844, 2, True, True, "obs-" + pick))
     if len(args.paths) != (1 if args.demo else 2):
         parser.error("give OUT with --demo, or the address and OUT")
     args.out = args.paths[-1]
@@ -375,6 +378,10 @@ def main():
         elif action == "list":
             browser.js("document.getElementById('view-list').click(); document.getElementById('games-head').scrollIntoView()")
             browser.wait(1.5)
+        elif action.startswith("obs-"):
+            browser.js("obsPick(%s); document.getElementById('ovl-on').click()" % json.dumps(action[4:]) if action == "obs-marquee"
+                       else "obsPick(%s)" % json.dumps(action[4:]))
+            browser.wait(2)
         elif action == "tasks":
             browser.js("document.getElementById('tasks-btn').click()")
             browser.wait(1.5)

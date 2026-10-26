@@ -25,7 +25,8 @@ async function loadSystems() {
   systemsList = (data.systems || []).filter((s) => s.games > 0);
   let keep = gameSystem && gameSystem.key;
   try { keep = keep || localStorage.getItem("fliperos-system") || ""; } catch (e) { /* sem armazenamento */ }
-  gameSystem = systemsList.find((s) => s.key === keep) || systemsList[0] || null;
+  // Sem escolha guardada, a pasta com mais jogos.
+  gameSystem = systemsList.find((s) => s.key === keep) || systemsList.slice().sort((a, b) => b.games - a.games)[0] || null;
   $("systems-count").textContent = t("systems_n").replace("%n", systemsList.length);
   renderSystems();
   await loadGames();
@@ -49,7 +50,7 @@ function renderSystems() {
     const card = el("button", { type: "button", class: "sys" + (gameSystem && s.key === gameSystem.key ? " on" : ""),
       "aria-pressed": String(gameSystem && s.key === gameSystem.key) },
     mosaic, el("span", { class: "info" }, systemIcon(s), el("span", {}, el("b", {}, s.name),
-      el("small", {}, t("count").replace("%n", num(s.games))))));
+      el("small", {}, gamesCount(s.games)))));
     card.style.animationDelay = i * 0.05 + "s";
     card.addEventListener("click", () => {
       gameSystem = s;
@@ -70,11 +71,13 @@ async function loadGames() {
   gameFilters = data.filters || [];
   $("games-system").textContent = gameSystem.name;
   $("games-icon").replaceChildren(systemIcon(gameSystem, "head-icon"));
-  $("games-count").textContent = t("count").replace("%n", num(allGames.length));
+  $("games-count").textContent = gamesCount(allGames.length);
   renderChips();
   renderRails();
   renderGames();
 }
+
+const gamesCount = (n) => (n === 1 ? t("count_one") : t("count").replace("%n", num(n)));
 
 // ── Os filtros (os do Setup, como o Attract-Mode os aplica) ──────
 // As regras na ordem; uma regra que falha tira o jogo, uma excecao que bate o

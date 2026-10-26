@@ -12,6 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="cabinet.css">
+<link rel="stylesheet" href="stream.css">
 </head>
 <body>
 <div class="stars" aria-hidden="true"></div>
@@ -213,149 +214,185 @@
       </div>
     </div>
 
-    <!-- ===== Ao vivo ===== -->
+    <!-- ===== Ao vivo: a tela do gabinete (WebRTC pelo go2rtc, config/fliperos-stream)
+         e as tres paginas para o OBS (a tela, o letreiro e o controle). ===== -->
     <div class="area" data-area="live">
-      <div class="sub grid" data-sub="watch">
-      <!-- Ao vivo: a tela do gabinete (WebRTC pelo go2rtc, config/fliperos-stream),
-           a transmissao e os enderecos para o OBS (a tela e o marquee). -->
-      <section class="card wide" aria-labelledby="h-live">
-        <div class="live-head">
-          <h2 id="h-live" data-t="live"></h2>
-          <span id="live-badge" class="live-badge" hidden data-t="live_on_air"></span>
-        </div>
-        <div class="live-bar">
-          <button id="live-start" type="button" data-icon="▶" data-t="live_start"></button>
-          <button id="live-stop" class="ghost" type="button" data-icon="■" data-t="live_stop" hidden></button>
-          <label class="dim"><span data-t="live_fps"></span>
-            <select id="live-fps" autocomplete="off"><option value="15">15</option><option value="30">30</option><option value="60" selected>60</option></select></label>
-          <label class="dim"><input id="live-tube" type="checkbox" checked> <span data-t="as_on_tube"></span></label>
-          <span class="live-bar-end">
-            <button id="live-sound" class="ghost" type="button" data-icon="🔇" data-t="live_unmute" hidden></button>
-            <button id="live-full" class="ghost" type="button" data-icon="⤢" data-t="live_full" hidden></button>
-          </span>
-        </div>
-        <div id="live-stage" class="live-stage tube">
-          <video id="live" playsinline autoplay muted></video>
-          <canvas id="live-pixels" class="live-pixels" hidden></canvas>
-          <div id="live-idle" class="live-idle">
-            <p id="live-idle-text"></p>
-            <button id="live-play" type="button" class="live-play" data-icon="▶" data-t="live_start" hidden></button>
+      <div class="sub" data-sub="watch">
+        <section class="tv" aria-labelledby="h-live">
+          <div class="tv-head">
+            <h2 id="h-live" class="tv-title" data-t="live"></h2>
+            <span id="live-badge" class="live-badge" hidden data-t="live_on_air"></span>
+            <span id="live-note" class="live-note" role="status"></span>
           </div>
-        </div>
-        <p id="live-note" class="dim live-note" role="status"></p>
-      </section>
-  
-      <section class="card" aria-labelledby="h-live-set">
-        <h2 id="h-live-set" data-t="live_settings"></h2>
-        <dl class="live-facts">
-          <div><dt data-t="live_service"></dt><dd id="live-service">-</dd></div>
-          <div><dt data-t="live_encoder"></dt><dd id="live-encoder">-</dd></div>
-          <div><dt data-t="live_sound"></dt><dd id="live-audio">-</dd></div>
-          <div><dt data-t="live_net"></dt><dd id="live-net">-</dd></div>
-        </dl>
-        <p id="live-net-tip" class="live-net-tip" role="note"></p>
-        <div id="live-setup" class="live-actions"></div>
-        <p class="dim" data-t="live_settings_note"></p>
-      </section>
-      </div>
-      <div class="sub grid" data-sub="obs">
-      <!-- O endereco da tela para o OBS: montado pelas escolhas abaixo dele. -->
-      <section class="card live-obs-card" aria-labelledby="h-live-obs">
-        <h2 id="h-live-obs" data-t="live_obs_title"></h2>
-        <div id="live-obs" class="ovl-box">
-          <div class="obs-url">
-            <input id="live-url" type="text" readonly aria-label="OBS address">
-            <button id="live-copy" type="button" data-icon="📋" data-t="copy"></button>
-            <a id="live-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
-          </div>
-          <p id="live-obs-off" class="dim" data-t="live_obs_off" hidden></p>
-          <div class="obs-opts">
-            <label><span data-t="live_fps"></span>
-              <select id="obs-fps"><option value="60" data-t="obs_fps60"></option><option value="30" data-t="obs_fps30"></option><option value="15" data-t="obs_fps15"></option></select></label>
-            <label><span data-t="obs_fit"></span>
-              <select id="obs-fit"><option value="" data-t="obs_fit_tube"></option><option value="fill" data-t="obs_fit_fill"></option></select></label>
-            <label><span data-t="obs_size"></span>
-              <select id="obs-size"><option value="1440x1080" data-t="obs_size_1440"></option><option value="960x720" data-t="obs_size_960"></option><option value="1920x1080" data-t="obs_size_1920"></option></select></label>
-            <label class="obs-check"><input id="obs-sound" type="checkbox" checked> <span data-t="obs_sound"></span></label>
-          </div>
-          <ol class="obs-steps">
-            <li data-t="obs_step1"></li>
-            <li><span data-t="obs_step2"></span> <b id="obs-wh"></b></li>
-            <li data-t="obs_step3"></li>
-          </ol>
-          <!-- O atraso da transmissao, medido enquanto se assiste aqui: quanto
-               atrasar a camera e o microfone no OBS. -->
-          <div id="live-sync" class="sync-tip" role="note">
-            <p id="live-sync-text"></p>
-          </div>
-        </div>
-      </section>
-  
-      <!-- O marquee do jogo como pagina para o OBS (overlay.html). -->
-      <section class="card wide" aria-labelledby="h-ovl">
-        <h2 id="h-ovl" data-t="overlay"></h2>
-        <p class="dim" data-t="overlay_note"></p>
-        <p class="ovl-docs">
-          <a class="ghost-link" href="https://github.com/juniorterin/fliperOS/wiki/Web-panel#marquee-for-obs" target="_blank" rel="noopener" data-t="overlay_docs"></a>
-          <a class="ghost-link" href="https://github.com/juniorterin/fliperOS/wiki/Scoreboard-games" target="_blank" rel="noopener" data-t="overlay_games"></a>
-        </p>
-        <label class="ovl-toggle"><input id="ovl-on" type="checkbox"> <span data-t="overlay_on"></span></label>
-        <div id="ovl-box" class="ovl-box" hidden>
-          <div class="obs-url">
-            <input id="ovl-url" type="text" readonly aria-label="Overlay address">
-            <button id="ovl-copy" type="button" data-icon="📋" data-t="copy"></button>
-            <a id="ovl-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
-            <button id="ovl-new" class="ghost" type="button" data-icon="🔑" data-t="overlay_new"></button>
-          </div>
-          <div class="obs-opts">
-            <label class="obs-check"><input id="ovl-led" type="checkbox"> <span data-t="ovl_led"></span></label>
-            <label class="obs-check"><input id="ovl-text" type="checkbox" checked> <span data-t="ovl_text"></span></label>
-            <label><span data-t="obs_size"></span>
-              <select id="ovl-size"><option value="1280x320" data-t="ovl_size_1280"></option><option value="1920x480" data-t="ovl_size_1920"></option><option value="1024x256" data-t="ovl_size_1024"></option></select></label>
-          </div>
-          <p class="dim"><span data-t="ovl_obs"></span> <b id="ovl-wh"></b></p>
-          <iframe id="ovl-preview" class="ovl-preview" title="Marquee preview"></iframe>
-        </div>
-      </section>
-  
-      <!-- O controle do jogador como pagina para o OBS (input.html), com o CSS
-           dela editado aqui. -->
-      <section class="card wide" aria-labelledby="h-pad">
-        <h2 id="h-pad" data-t="pad"></h2>
-        <p class="dim" data-t="pad_note"></p>
-        <div class="ovl-box">
-          <div class="obs-url">
-            <input id="pad-url" type="text" readonly aria-label="Controls address">
-            <button id="pad-copy" type="button" data-icon="📋" data-t="copy"></button>
-            <a id="pad-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
-          </div>
-          <div class="obs-opts">
-            <label><span data-t="pad_players"></span>
-              <select id="pad-players"><option value="1" data-t="pad_p1"></option><option value="2" data-t="pad_p2"></option><option value="1,2" data-t="pad_p12"></option></select></label>
-            <label class="obs-check"><input id="pad-demo" type="checkbox" checked> <span data-t="pad_demo"></span></label>
-          </div>
-          <p class="dim"><span data-t="ovl_obs"></span> <b id="pad-wh"></b></p>
-          <div class="pad-split">
-            <iframe id="pad-preview" class="pad-preview" title="Controls preview"></iframe>
-            <div class="css-editor">
-              <div class="css-head">
-                <b data-t="pad_css"></b>
-                <span id="pad-css-state" class="dim"></span>
+          <div class="tv-body">
+            <div id="live-stage" class="live-stage tube">
+              <video id="live" playsinline autoplay muted></video>
+              <canvas id="live-pixels" class="live-pixels" hidden></canvas>
+              <div id="live-idle" class="live-idle">
+                <svg class="px"><use href="icons.svg#px-video"/></svg>
+                <p id="live-idle-text"></p>
+                <button id="live-play" type="button" class="live-play" hidden><svg class="g"><use href="icons.svg#g-play"/></svg><span data-t="live_start"></span></button>
               </div>
-              <div class="css-code">
-                <pre id="pad-css-hl" class="css-hl" aria-hidden="true"></pre>
-                <textarea id="pad-css" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="CSS"></textarea>
-              </div>
-              <div class="css-actions">
-                <button id="pad-css-save" type="button" data-icon="💾" data-t="pad_css_save"></button>
-                <button id="pad-css-format" class="ghost" type="button" data-icon="⇥" data-t="pad_css_format"></button>
-                <button id="pad-css-reset" class="ghost" type="button" data-icon="↺" data-t="pad_css_reset"></button>
-              </div>
-              <p class="dim" data-t="pad_css_note"></p>
             </div>
           </div>
+          <div class="tv-controls">
+            <button id="live-start" class="btn hot" type="button"><svg class="g"><use href="icons.svg#g-play"/></svg><span data-t="live_start"></span></button>
+            <button id="live-stop" class="btn ghost" type="button" hidden><svg class="g"><use href="icons.svg#g-stop"/></svg><span data-t="live_stop"></span></button>
+            <div class="fps-pick" role="group" data-ta="live_fps" id="live-fps-pick"></div>
+            <select id="live-fps" hidden><option value="15">15</option><option value="30">30</option><option value="60" selected>60</option></select>
+            <label class="switch"><input id="live-tube" type="checkbox" checked><i></i><span data-t="as_on_tube"></span></label>
+            <span class="grow"></span>
+            <button id="live-sound" class="btn ghost small" type="button" hidden></button>
+            <button id="live-full" class="icon-btn" type="button" hidden data-ta="live_full"><svg class="g"><use href="icons.svg#g-full"/></svg></button>
+          </div>
+        </section>
+
+        <section class="stream-strip" aria-labelledby="h-live-set">
+          <h3 id="h-live-set" data-t="live_settings"></h3>
+          <dl class="stream-pills">
+            <div><dt><svg class="px"><use href="icons.svg#px-services"/></svg><span data-t="live_service"></span></dt><dd id="live-service">-</dd></div>
+            <div><dt><svg class="px"><use href="icons.svg#px-chip"/></svg><span data-t="live_encoder"></span></dt><dd id="live-encoder">-</dd></div>
+            <div><dt><svg class="px"><use href="icons.svg#px-audio"/></svg><span data-t="live_sound"></span></dt><dd id="live-audio">-</dd></div>
+            <div><dt><svg class="px"><use href="icons.svg#px-network"/></svg><span data-t="live_net"></span></dt><dd id="live-net">-</dd></div>
+          </dl>
+          <p id="live-net-tip" class="live-net-tip" role="note"></p>
+          <details class="more">
+            <summary><svg class="g"><use href="icons.svg#g-chevd"/></svg><span data-t="live_more"></span></summary>
+            <div id="live-setup" class="live-actions"></div>
+            <p class="dim" data-t="live_settings_note"></p>
+          </details>
+        </section>
+      </div>
+
+      <div class="sub" data-sub="obs">
+        <p class="obs-intro" data-t="obs_intro"></p>
+        <div class="obs-pick" role="tablist">
+          <button type="button" role="tab" data-obs="screen"><svg class="px"><use href="icons.svg#px-video"/></svg><b data-t="obs_pick_screen"></b><small data-t="obs_pick_screen_sub"></small></button>
+          <button type="button" role="tab" data-obs="marquee"><svg class="px"><use href="icons.svg#px-romlist"/></svg><b data-t="obs_pick_marquee"></b><small data-t="obs_pick_marquee_sub"></small></button>
+          <button type="button" role="tab" data-obs="pad"><svg class="px"><use href="icons.svg#px-joysticks"/></svg><b data-t="obs_pick_pad"></b><small data-t="obs_pick_pad_sub"></small></button>
         </div>
-      </section>
+
+        <!-- A tela ao vivo no OBS: o endereco montado pelas escolhas. -->
+        <section class="obs-panel" data-obs="screen" aria-labelledby="h-live-obs">
+          <h2 id="h-live-obs" class="obs-title" data-t="live_obs_title"></h2>
+          <div id="live-obs" class="obs-flow">
+            <div class="step"><i>1</i><div>
+              <b data-t="step_copy"></b>
+              <div class="obs-url">
+                <input id="live-url" type="text" readonly aria-label="OBS address">
+                <button id="live-copy" type="button" class="btn small"><svg class="g"><use href="icons.svg#g-copy"/></svg><span data-t="copy"></span></button>
+                <a id="live-open" class="btn ghost small" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-ext"/></svg><span data-t="obs_open"></span></a>
+              </div>
+              <p id="live-obs-off" class="warn-line" data-t="live_obs_off" hidden></p>
+            </div></div>
+            <div class="step"><i>2</i><div>
+              <b data-t="step_choose"></b>
+              <div class="obs-opts">
+                <label><span data-t="live_fps"></span>
+                  <select id="obs-fps"><option value="60" data-t="obs_fps60"></option><option value="30" data-t="obs_fps30"></option><option value="15" data-t="obs_fps15"></option></select></label>
+                <label><span data-t="obs_fit"></span>
+                  <select id="obs-fit"><option value="" data-t="obs_fit_tube"></option><option value="fill" data-t="obs_fit_fill"></option></select></label>
+                <label><span data-t="obs_size"></span>
+                  <select id="obs-size"><option value="1440x1080" data-t="obs_size_1440"></option><option value="960x720" data-t="obs_size_960"></option><option value="1920x1080" data-t="obs_size_1920"></option></select></label>
+                <label class="switch"><input id="obs-sound" type="checkbox" checked><i></i><span data-t="obs_sound"></span></label>
+              </div>
+            </div></div>
+            <div class="step"><i>3</i><div>
+              <b data-t="step_obs"></b>
+              <ol class="obs-steps">
+                <li data-t="obs_step1"></li>
+                <li><span data-t="obs_step2"></span> <b id="obs-wh"></b></li>
+                <li data-t="obs_step3"></li>
+              </ol>
+            </div></div>
+            <!-- O atraso da transmissao, medido enquanto se assiste: quanto
+                 atrasar a camera e o microfone no OBS. -->
+            <div id="live-sync" class="sync-tip" role="note">
+              <p id="live-sync-text"></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- O letreiro do jogo como pagina para o OBS (overlay.html). -->
+        <section class="obs-panel" data-obs="marquee" aria-labelledby="h-ovl">
+          <h2 id="h-ovl" class="obs-title" data-t="overlay"></h2>
+          <p class="dim" data-t="overlay_note"></p>
+          <label class="switch big"><input id="ovl-on" type="checkbox"><i></i><span data-t="overlay_on"></span></label>
+          <div id="ovl-box" class="obs-flow" hidden>
+            <div class="step"><i>1</i><div>
+              <b data-t="step_copy"></b>
+              <div class="obs-url">
+                <input id="ovl-url" type="text" readonly aria-label="Overlay address">
+                <button id="ovl-copy" type="button" class="btn small"><svg class="g"><use href="icons.svg#g-copy"/></svg><span data-t="copy"></span></button>
+                <a id="ovl-open" class="btn ghost small" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-ext"/></svg><span data-t="obs_open"></span></a>
+              </div>
+            </div></div>
+            <div class="step"><i>2</i><div>
+              <b data-t="step_choose"></b>
+              <div class="obs-opts">
+                <label class="switch"><input id="ovl-led" type="checkbox"><i></i><span data-t="ovl_led"></span></label>
+                <label class="switch"><input id="ovl-text" type="checkbox" checked><i></i><span data-t="ovl_text"></span></label>
+                <label><span data-t="obs_size"></span>
+                  <select id="ovl-size"><option value="1280x320" data-t="ovl_size_1280"></option><option value="1920x480" data-t="ovl_size_1920"></option><option value="1024x256" data-t="ovl_size_1024"></option></select></label>
+              </div>
+            </div></div>
+            <div class="step"><i>3</i><div>
+              <b data-t="step_obs"></b>
+              <p class="dim"><span data-t="ovl_obs"></span> <b id="ovl-wh"></b></p>
+            </div></div>
+            <iframe id="ovl-preview" class="ovl-preview" title="Marquee preview"></iframe>
+            <div class="obs-foot">
+              <a class="link" href="https://github.com/juniorterin/fliperOS/wiki/Web-panel#marquee-for-obs" target="_blank" rel="noopener" data-t="overlay_docs"></a>
+              <a class="link" href="https://github.com/juniorterin/fliperOS/wiki/Scoreboard-games" target="_blank" rel="noopener" data-t="overlay_games"></a>
+              <button id="ovl-new" class="btn ghost small" type="button"><svg class="px"><use href="icons.svg#px-password"/></svg><span data-t="overlay_new"></span></button>
+            </div>
+          </div>
+        </section>
+
+        <!-- O controle do jogador como pagina para o OBS (input.html), com o
+             CSS dela editado aqui. -->
+        <section class="obs-panel" data-obs="pad" aria-labelledby="h-pad">
+          <h2 id="h-pad" class="obs-title" data-t="pad"></h2>
+          <p class="dim" data-t="pad_note"></p>
+          <div class="obs-flow">
+            <div class="step"><i>1</i><div>
+              <b data-t="step_copy"></b>
+              <div class="obs-url">
+                <input id="pad-url" type="text" readonly aria-label="Controls address">
+                <button id="pad-copy" type="button" class="btn small"><svg class="g"><use href="icons.svg#g-copy"/></svg><span data-t="copy"></span></button>
+                <a id="pad-open" class="btn ghost small" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-ext"/></svg><span data-t="obs_open"></span></a>
+              </div>
+            </div></div>
+            <div class="step"><i>2</i><div>
+              <b data-t="step_choose"></b>
+              <div class="obs-opts">
+                <label><span data-t="pad_players"></span>
+                  <select id="pad-players"><option value="1" data-t="pad_p1"></option><option value="2" data-t="pad_p2"></option><option value="1,2" data-t="pad_p12"></option></select></label>
+                <label class="switch"><input id="pad-demo" type="checkbox" checked><i></i><span data-t="pad_demo"></span></label>
+              </div>
+            </div></div>
+            <div class="step"><i>3</i><div>
+              <b data-t="step_obs"></b>
+              <p class="dim"><span data-t="ovl_obs"></span> <b id="pad-wh"></b></p>
+            </div></div>
+            <iframe id="pad-preview" class="pad-preview" title="Controls preview"></iframe>
+            <details class="more">
+              <summary><svg class="g"><use href="icons.svg#g-chevd"/></svg><span data-t="css_more"></span> <span id="pad-css-state" class="dim"></span></summary>
+              <div class="css-editor">
+                <div class="css-code">
+                  <pre id="pad-css-hl" class="css-hl" aria-hidden="true"></pre>
+                  <textarea id="pad-css" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="CSS"></textarea>
+                </div>
+                <div class="css-actions">
+                  <button id="pad-css-save" type="button" class="btn small"><svg class="g"><use href="icons.svg#g-check"/></svg><span data-t="pad_css_save"></span></button>
+                  <button id="pad-css-format" class="btn ghost small" type="button"><svg class="g"><use href="icons.svg#g-list"/></svg><span data-t="pad_css_format"></span></button>
+                  <button id="pad-css-reset" class="btn ghost small" type="button"><svg class="g"><use href="icons.svg#g-refresh"/></svg><span data-t="pad_css_reset"></span></button>
+                </div>
+                <p class="dim" data-t="pad_css_note"></p>
+              </div>
+            </details>
+          </div>
+        </section>
       </div>
     </div>
 

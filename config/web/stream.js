@@ -82,7 +82,7 @@ async function loadLive() {
   setup.replaceChildren();
   // Sem o VA-API que a placa pede, instalar de novo o traz (fliperos-extras).
   if (!s.installed || liveNoVaapi) {
-    const install = el("button", { type: "button", "data-icon": "⬇" }, t("live_install"));
+    const install = el("button", { type: "button", class: "btn small" }, icon("g-tasks"), t("live_install"));
     install.addEventListener("click", async () => {
       const r = await api("/api/stream/install", { method: "POST", body: "{}" });
       const data = await r.json().catch(() => ({}));
@@ -91,7 +91,7 @@ async function loadLive() {
     setup.append(install);
   } else {
     // Ligar ou desligar o servico (Setup > System > Services > Live screen).
-    const svc = el("button", { type: "button", class: s.active ? "ghost" : "", "data-icon": "🔌" },
+    const svc = el("button", { type: "button", class: s.active ? "btn ghost small" : "btn small" }, icon("g-power"),
       t(s.active ? "live_turn_off" : "live_turn_on"));
     svc.addEventListener("click", async () => {
       if (s.active) liveStop();
@@ -100,7 +100,7 @@ async function loadLive() {
       setTimeout(() => loadLive().catch(() => {}), 2500);
     });
     // O som: a copia no loopback do ALSA (Settings > Live screen sound).
-    const sound = el("button", { type: "button", class: "ghost", "data-icon": s.audio ? "🔇" : "🔊" },
+    const sound = el("button", { type: "button", class: "btn ghost small" }, icon(s.audio ? "g-mute" : "g-volume"),
       t(s.audio ? "live_sound_off" : "live_sound_on"));
     sound.addEventListener("click", async () => {
       sound.disabled = true;
@@ -296,8 +296,7 @@ function liveStop(keepNote) {
   $("live-pixels").hidden = true;
   liveSync(null);
   $("live-sound").hidden = true;
-  $("live-sound").dataset.icon = "🔇";
-  $("live-sound").textContent = t("live_unmute");
+  $("live-sound").replaceChildren(icon("g-mute"), t("live_unmute"));
   $("live-stop").hidden = true;
   $("live-full").hidden = true;
   $("live-badge").hidden = true;
@@ -337,9 +336,36 @@ $("live-tube").addEventListener("change", () => $("live-stage").classList.toggle
 // O botao do som mostra o que um clique faz (mudo: "Ligar o som").
 function liveMuteButton() {
   const muted = $("live").muted;
-  $("live-sound").dataset.icon = muted ? "🔇" : "🔊";
-  $("live-sound").textContent = t(muted ? "live_unmute" : "live_mute");
+  $("live-sound").replaceChildren(icon(muted ? "g-mute" : "g-volume"), t(muted ? "live_unmute" : "live_mute"));
 }
+
+// Os quadros por segundo em botoes (o select escondido continua sendo o valor).
+function liveFpsPick() {
+  const box = $("live-fps-pick"), select = $("live-fps");
+  box.replaceChildren(...[...select.options].map((o) => {
+    const b = el("button", { type: "button", class: o.value === select.value ? "on" : "" }, o.value, el("small", {}, "FPS"));
+    b.addEventListener("click", () => {
+      select.value = o.value;
+      select.dispatchEvent(new Event("change"));
+      liveFpsPick();
+    });
+    return b;
+  }));
+}
+liveFpsPick();
+
+// O OBS: uma pagina por vez (a tela, o letreiro ou o controle), lembrada.
+function obsPick(name) {
+  try { name = name || localStorage.getItem("fliperos-obs-pick") || "screen"; } catch (e) { name = name || "screen"; }
+  document.querySelectorAll(".obs-pick [data-obs]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.obs === name);
+    b.setAttribute("aria-selected", String(b.dataset.obs === name));
+  });
+  document.querySelectorAll(".obs-panel[data-obs]").forEach((p) => { p.hidden = p.dataset.obs !== name; });
+  try { localStorage.setItem("fliperos-obs-pick", name); } catch (e) { /* sem armazenamento */ }
+}
+document.querySelectorAll(".obs-pick [data-obs]").forEach((b) => b.addEventListener("click", () => obsPick(b.dataset.obs)));
+obsPick();
 
 $("live-sound").addEventListener("click", () => {
   $("live").muted = !$("live").muted;

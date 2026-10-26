@@ -1,0 +1,115 @@
+/* Ao vivo: a TV com a tela do gabinete, os controles numa barra so, o
+   estado da transmissao em selos, e o OBS escolhido de uma pagina por vez
+   (a tela, o letreiro ou o controle), em tres passos. */
+
+/* ── Assistir ── */
+.tv { max-width: 1100px; margin: 0 auto; padding: 16px 18px 14px; border-radius: 24px; background: linear-gradient(180deg, #262735, #15161d);
+  box-shadow: 0 0 0 2px #0c0c11, 0 0 0 4px var(--purple), 0 0 30px rgba(189,147,249,.35), 0 30px 60px rgba(0,0,0,.5); animation: rise .4s both; }
+.tv-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; min-height: 26px; }
+.tv-title { margin: 0; font: 11px var(--px); color: var(--muted); letter-spacing: .1em; }
+.live-note { margin-left: auto; color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
+.live-badge { padding: 4px 10px; border-radius: 999px; background: var(--red); color: #fff; font: 8px var(--px); letter-spacing: .08em;
+  box-shadow: 0 0 14px rgba(255,85,85,.6); animation: blink 1.6s steps(1) infinite; }
+.tv-body { padding: 14px; border-radius: 16px; background: #07070b; box-shadow: inset 0 0 0 2px #2a2b36, inset 0 10px 30px rgba(0,0,0,.9); }
+.tv .live-stage { width: 100%; border: 0; border-radius: 22px / 26px; box-shadow: 0 0 30px rgba(139,233,253,.15); }
+.tv .live-stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.18) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,.55) 100%); }
+.tv .live-idle { background: radial-gradient(circle at 50% 45%, #1b1a35, #05050b 75%); gap: 18px; }
+.tv .live-idle svg.px { width: 84px; height: 84px; animation: hover 3s ease-in-out infinite; filter: drop-shadow(0 0 14px rgba(189,147,249,.5)); }
+.tv .live-idle p { color: var(--muted); font-size: 15px; }
+.live-play { display: inline-flex; align-items: center; gap: 12px; padding: 16px 30px; border-radius: 999px; border: 0; font: 12px var(--px);
+  color: #fff; background: linear-gradient(90deg, #ff5555, #ff79c6); box-shadow: 0 0 30px rgba(255,85,85,.5); }
+.live-play svg.g { width: 20px; height: 20px; }
+.tv-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 14px; }
+.grow { flex: 1; }
+.fps-pick { display: inline-flex; padding: 3px; gap: 3px; border-radius: 12px; background: var(--deep); border: 1px solid var(--line); }
+.fps-pick button { border: 0; background: transparent; color: var(--dim); font: 9px var(--px); padding: 8px 10px; border-radius: 9px; }
+.fps-pick button.on { background: var(--purple); color: var(--deep); }
+.fps-pick button small { font: 7px var(--px); opacity: .8; margin-left: 3px; }
+/* Um interruptor no lugar da caixa de marcar. */
+.switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; color: var(--muted); font-size: 14px; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch i { position: relative; flex: none; width: 40px; height: 22px; border-radius: 11px; background: #3a3c50; transition: background .2s; }
+.switch i::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--fg); transition: left .2s; }
+.switch input:checked + i { background: var(--green); } .switch input:checked + i::after { left: 21px; background: var(--deep); }
+.switch input:focus-visible + i { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.switch.big { font-weight: 700; color: var(--fg); margin: 6px 0 4px; }
+
+.stream-strip { max-width: 1100px; margin: 22px auto 0; padding: 16px 18px; border-radius: 20px; border: 1px solid var(--line); background: var(--card); }
+.stream-strip h3 { margin: 0 0 12px; font: 10px var(--px); color: var(--cyan); }
+.stream-pills { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.stream-pills div { display: grid; gap: 4px; padding: 10px 12px; border-radius: 14px; background: var(--card2); border: 1px solid rgba(68,71,90,.6); }
+.stream-pills dt { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 12.5px; }
+.stream-pills dt svg.px { width: 22px; height: 22px; }
+.stream-pills dd { margin: 0; font-weight: 700; }
+.stream-pills dd.on { color: var(--green); } .stream-pills dd.off { color: var(--orange); }
+.live-net-tip:not(.warn) { display: none; }
+.live-net-tip.warn { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; color: var(--fg); background: rgba(255,184,108,.12);
+  border-left: 3px solid var(--orange); }
+details.more { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+details.more summary { cursor: pointer; display: inline-flex; align-items: center; gap: 8px; color: var(--purple); font-weight: 700; list-style: none; }
+details.more summary::-webkit-details-marker { display: none; }
+details.more summary svg { transition: transform .2s; } details.more[open] summary svg { transform: rotate(180deg); }
+details.more .live-actions { margin: 12px 0 8px; }
+.live-actions .btn svg.g { width: 14px; height: 14px; }
+
+/* ── OBS: uma pagina por vez ── */
+.obs-intro { max-width: 1000px; margin: 0 auto 16px; color: var(--muted); }
+.obs-pick { max-width: 1000px; margin: 0 auto 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.obs-pick button { display: grid; justify-items: center; gap: 6px; padding: 16px 10px; border-radius: 18px; border: 1px solid var(--line);
+  background: var(--card); color: var(--muted); text-align: center; transition: border-color .2s, transform .2s; }
+.obs-pick button:hover { border-color: var(--purple); transform: translateY(-2px); }
+.obs-pick button svg.px { width: 40px; height: 40px; }
+.obs-pick button b { color: var(--fg); font-size: 15px; } .obs-pick button small { color: var(--dim); font-size: 12.5px; }
+.obs-pick button.on { border-color: var(--pink); background: rgba(255,121,198,.12); box-shadow: 0 0 20px rgba(255,121,198,.25); }
+.obs-panel { max-width: 1000px; margin: 0 auto; padding: 20px 22px; border-radius: 22px; border: 1px solid var(--line); background: var(--card);
+  animation: rise .3s both; }
+.obs-title { margin: 0 0 8px; font: 11px var(--px); color: var(--pink); }
+.obs-panel > p { margin: 0 0 12px; }
+.obs-flow { display: grid; gap: 14px; margin-top: 12px; }
+.step { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: start; }
+.step > i { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 10px var(--px); font-style: normal;
+  background: var(--pink); color: var(--deep); box-shadow: 0 0 12px rgba(255,121,198,.4); }
+.step > div { display: grid; gap: 8px; min-width: 0; }
+.step > div > b { font-size: 15px; padding-top: 4px; }
+.obs-panel .obs-url { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.obs-panel .obs-url input { flex: 1 1 280px; min-width: 0; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--purple);
+  background: var(--deep); color: var(--cyan); font: 13px ui-monospace, "JetBrains Mono", monospace; }
+.obs-panel .obs-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 10px 14px; align-items: end; }
+.obs-panel .obs-opts label:not(.switch) { display: grid; gap: 4px; color: var(--dim); font-size: 13px; }
+.obs-panel select { height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--deep); color: var(--fg); font: inherit; padding: 0 10px; }
+.obs-panel .obs-steps { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); font-size: 14px; }
+.obs-panel .obs-steps b, .step p b { color: var(--fg); }
+.step p { margin: 0; }
+.warn-line { margin: 0; color: var(--orange); font-size: 13px; }
+.obs-panel .sync-tip { margin: 4px 0 0 46px; }
+.obs-panel .ovl-preview, .obs-panel .pad-preview { margin-left: 46px; width: calc(100% - 46px); }
+.obs-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; margin-left: 46px; padding-top: 10px; border-top: 1px solid var(--line); }
+.obs-foot .btn { margin-left: auto; } .obs-foot .btn svg.px { width: 20px; height: 20px; }
+.obs-panel details.more { margin-left: 46px; }
+.obs-panel .css-editor { margin-top: 12px; }
+
+@media (max-width: 760px) {
+  .tv { padding: 12px 10px 10px; border-radius: 18px; }
+  .tv-body { padding: 8px; }
+  .live-note { flex-basis: 100%; text-align: left; margin-left: 0; }
+  .tv-head { flex-wrap: wrap; }
+  .stream-pills { grid-template-columns: 1fr 1fr; }
+  .obs-pick { gap: 8px; } .obs-pick button { padding: 12px 6px; } .obs-pick button small { display: none; }
+  .obs-panel { padding: 16px 14px; }
+  .step { grid-template-columns: 28px minmax(0, 1fr); gap: 10px; } .step > i { width: 26px; height: 26px; }
+  .obs-panel .sync-tip, .obs-panel .ovl-preview, .obs-panel .pad-preview, .obs-foot, .obs-panel details.more { margin-left: 0; width: 100%; }
+  .obs-foot .btn { margin-left: 0; }
+}
+
+/* O play grande no meio da TV basta: o da barra so aparece assistindo (Parar). */
+.tv #live-start { display: none !important; }
+.tv .live-stage::after { z-index: 1; }
+.tv .live-idle { z-index: 2; }
+.tv .live-play { display: inline-flex; align-items: center; gap: 12px; padding: 16px 30px; border-radius: 999px; border: 0; font: 12px var(--px);
+  color: #fff; background: linear-gradient(90deg, #ff5555, #ff79c6); box-shadow: 0 0 30px rgba(255,85,85,.5); }
+.tv .live-note:empty { display: none; }
+.obs-panel .obs-opts label.switch { display: inline-flex; align-self: center; padding-top: 18px; color: var(--muted); font-size: 14px; }
+
+.obs-panel .pad-preview { max-width: 560px; } .obs-panel .pad-preview.wide { max-width: 100%; }
