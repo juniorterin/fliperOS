@@ -24,4 +24,8 @@ updates/** text eol=lf
 *.PNG binary
 *.jpg binary
 *.ttf binary
+*.webp binary
+*.woff2 binary
+*.gif binary
+*.ico binary
 config/openbor-legacy/OpenBOR-3.0 binary

@@ -2,527 +2,692 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FliperOS Panel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#191a21">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>FliperOS</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="cabinet.css">
 </head>
 <body>
-<div id="login" class="login" hidden>
-  <form id="login-form" class="card login-card">
-    <img src="icon.svg" alt="" class="login-icon">
-    <h1>FliperOS</h1>
-    <p data-t="login_text"></p>
-    <label><span data-t="user"></span><input id="user" name="user" autocomplete="username" value="fliperos" required></label>
-    <label><span data-t="password"></span><input id="password" name="password" type="password" autocomplete="current-password" required></label>
-    <p id="login-error" class="error" role="alert"></p>
-    <button type="submit" data-t="enter"></button>
-  </form>
-</div>
+<div class="stars" aria-hidden="true"></div>
 
-<div id="app" hidden>
-  <header class="top">
-    <div class="brand"><img src="icon.svg" alt=""><span>FliperOS</span><span id="version" class="dim"></span></div>
-    <div id="host" class="dim"></div>
-    <div class="top-actions">
-      <button id="lang" class="ghost" type="button" aria-label="Language">PT</button>
-      <button id="logout" class="ghost" type="button" data-t="logout"></button>
+<!-- O login: o letreiro FLIPEROS e o formulario dentro da tela do tubo. -->
+<section id="login" class="login" hidden>
+  <div class="login-cab">
+    <div class="marquee login-marquee"><div class="marquee-text neon">FLIPEROS</div></div>
+    <div class="rainbow"></div>
+    <div class="bezel">
+      <form id="login-form" class="crt crt-form">
+        <div class="p1">PLAYER 1</div>
+        <label><span data-t="user"></span><input id="user" name="user" autocomplete="username" value="fliperos" required></label>
+        <label><span data-t="password"></span><input id="password" name="password" type="password" autocomplete="current-password" required></label>
+        <p id="login-error" class="login-error" role="alert"></p>
+        <button type="submit" class="btn-start"><span data-t="enter"></span><svg class="g"><use href="icons.svg#g-play"/></svg></button>
+      </form>
     </div>
-  </header>
-  <!-- As paginas (app.js, showPage): o endereco #frontend, #files... -->
-  <nav class="pages" aria-label="Pages">
-    <a href="#frontend" data-page="frontend" data-t="page_frontend"></a>
-    <a href="#live" data-page="live" data-t="page_live"></a>
-    <a href="#romfilter" data-page="romfilter" data-t="page_romfilter"></a>
-    <a href="#downloads" data-page="downloads" data-t="page_downloads"></a>
-    <a href="#scraper" data-page="scraper" data-t="page_scraper"></a>
-    <a href="#install" data-page="install" data-t="page_install"></a>
-    <a href="#files" data-page="files" data-t="page_files"></a>
-    <a href="#settings" data-page="settings" data-t="page_settings"></a>
-    <a href="#status" data-page="status" data-t="page_status"></a>
-    <a href="#terminal" data-page="terminal" data-t="page_terminal"></a>
-  </nav>
-  <p id="offline" class="error banner" hidden data-t="offline"></p>
+    <p class="insert">INSERT COIN</p>
+    <p class="login-note" data-t="login_text"></p>
+  </div>
+</section>
 
-  <main class="grid">
-    <!-- Frontend: o que esta aberto, os jogos, o volume, a tela e o trackball. -->
-    <section class="card wide" data-page="frontend status" aria-labelledby="h-now">
-      <h2 id="h-now" data-t="now_playing"></h2>
-      <div class="now">
-        <div>
-          <div class="big" id="game">-</div>
-          <div class="dim" id="game-detail"></div>
-          <div class="dim" id="frontend"></div>
-          <button id="close-game" class="ghost danger" type="button" data-t="close_game" hidden></button>
-        </div>
-        <div class="fps">
-          <div class="big"><span id="fps">-</span> <small>FPS</small></div>
-          <canvas id="fps-chart" width="320" height="70" aria-label="FPS, last minute"></canvas>
-          <div class="dim" data-t="fps_note"></div>
-        </div>
-      </div>
-    </section>
+<div id="app" class="app" hidden>
+  <!-- A barra lateral (PC): as quatro areas, o gabinete e a conta. -->
+  <aside class="side">
+    <div class="brand"><svg class="px"><use href="icons.svg#px-frontend"/></svg><span>Fliper<b>OS</b></span></div>
+    <div class="rainbow thin"></div>
+    <nav class="nav" aria-label="Areas">
+      <a href="#frontend" data-area="frontend"><svg class="px"><use href="icons.svg#px-frontend"/></svg><span><b data-t="area_frontend"></b><small data-t="area_frontend_sub"></small></span></a>
+      <a href="#live" data-area="live"><svg class="px"><use href="icons.svg#px-video"/></svg><span><b data-t="area_live"></b><small data-t="area_live_sub"></small></span></a>
+      <a href="#library" data-area="library"><svg class="px"><use href="icons.svg#px-games"/></svg><span><b data-t="area_library"></b><small data-t="area_library_sub"></small></span></a>
+      <a href="#system" data-area="system"><svg class="px"><use href="icons.svg#px-setup"/></svg><span><b data-t="area_system"></b><small data-t="area_system_sub"></small></span></a>
+    </nav>
+    <div class="side-foot">
+      <div class="host"><span id="conn-dot" class="dot ok"></span><div><b id="host-name">FliperOS</b><small id="host"></small></div></div>
+      <div class="side-actions"><button id="lang" class="chip-btn" type="button" aria-label="Language">PT</button><button id="logout" class="chip-btn" type="button" data-t="logout"></button><span id="version" class="ver"></span></div>
+    </div>
+  </aside>
 
-    <section class="card wide" data-page="frontend" aria-labelledby="h-games">
-      <h2 id="h-games" data-t="games"></h2>
-      <div class="games-bar">
-        <select id="system" aria-label="System"></select>
-        <div class="search-group">
-          <input id="game-search" type="search" data-tp="search" autocomplete="off">
-          <select id="game-filter" aria-label="Filter"></select>
-        </div>
+  <main class="main">
+    <header class="topbar">
+      <div class="mob-brand"><svg class="px"><use id="area-icon" href="icons.svg#px-frontend"/></svg></div>
+      <div class="titles">
+        <h1 class="page-title" id="page-title"></h1>
+        <p class="page-sub" id="page-sub"></p>
       </div>
-      <p id="games-note" class="dim"></p>
-      <ul id="games" class="games"></ul>
-    </section>
+      <div class="top-actions">
+        <span id="conn" class="pill ok" role="status"><span class="dot"></span><span class="hide-sm" id="conn-text"></span></span>
+        <button id="tasks-btn" class="icon-btn" type="button" data-ta="tasks"><svg class="g"><use href="icons.svg#g-tasks"/></svg><span id="tasks-badge" class="badge" hidden></span></button>
+        <button id="menu-btn" class="icon-btn only-sm" type="button" data-ta="menu" aria-expanded="false"><svg class="g"><use href="icons.svg#g-menu"/></svg></button>
+      </div>
+      <div id="top-menu" class="top-menu" hidden>
+        <button id="lang2" type="button" class="menu-item"></button>
+        <button id="logout2" type="button" class="menu-item" data-t="logout"></button>
+        <small id="host2" class="menu-host"></small>
+      </div>
+    </header>
+    <nav id="subtabs" class="subtabs" aria-label="Pages"></nav>
 
-    <section class="card" data-page="frontend" aria-labelledby="h-vol">
-      <h2 id="h-vol" data-t="volume"></h2>
-      <div class="volume">
-        <button id="vol-down" type="button" aria-label="Volume down">−</button>
-        <input id="vol" type="range" min="0" max="100" step="1" aria-label="Volume">
-        <button id="vol-up" type="button" aria-label="Volume up">+</button>
-        <span id="vol-value" class="big">-</span>
-      </div>
-      <button id="vol-mute" class="ghost" type="button" data-t="mute"></button>
-    </section>
-
-    <section class="card wide st-half" data-page="frontend status" aria-labelledby="h-shot">
-      <h2 id="h-shot" data-t="screen"></h2>
-      <div class="row">
-        <button id="shot-take" type="button" data-t="take_shot"></button>
-        <label class="dim"><input id="shot-tube" type="checkbox" checked> <span data-t="as_on_tube"></span></label>
-        <label class="dim"><input id="shot-auto" type="checkbox" checked> <span data-t="shot_auto"></span></label>
-        <a id="shot-save" class="ghost-link" hidden data-t="save_png"></a>
-      </div>
-      <p id="shot-note" class="dim" role="status"></p>
-      <img id="shot" class="shot tube" alt="" hidden>
-    </section>
-
-    <!-- Ao vivo: a tela do gabinete (WebRTC pelo go2rtc, config/fliperos-stream),
-         a transmissao e os enderecos para o OBS (a tela e o marquee). -->
-    <section class="card wide" data-page="live" aria-labelledby="h-live">
-      <div class="live-head">
-        <h2 id="h-live" data-t="live"></h2>
-        <span id="live-badge" class="live-badge" hidden data-t="live_on_air"></span>
-      </div>
-      <div class="live-bar">
-        <button id="live-start" type="button" data-icon="▶" data-t="live_start"></button>
-        <button id="live-stop" class="ghost" type="button" data-icon="■" data-t="live_stop" hidden></button>
-        <label class="dim"><span data-t="live_fps"></span>
-          <select id="live-fps" autocomplete="off"><option value="15">15</option><option value="30">30</option><option value="60" selected>60</option></select></label>
-        <label class="dim"><input id="live-tube" type="checkbox" checked> <span data-t="as_on_tube"></span></label>
-        <span class="live-bar-end">
-          <button id="live-sound" class="ghost" type="button" data-icon="🔇" data-t="live_unmute" hidden></button>
-          <button id="live-full" class="ghost" type="button" data-icon="⤢" data-t="live_full" hidden></button>
-        </span>
-      </div>
-      <div id="live-stage" class="live-stage tube">
-        <video id="live" playsinline autoplay muted></video>
-        <canvas id="live-pixels" class="live-pixels" hidden></canvas>
-        <div id="live-idle" class="live-idle">
-          <p id="live-idle-text"></p>
-          <button id="live-play" type="button" class="live-play" data-icon="▶" data-t="live_start" hidden></button>
-        </div>
-      </div>
-      <p id="live-note" class="dim live-note" role="status"></p>
-    </section>
-
-    <section class="card" data-page="live" aria-labelledby="h-live-set">
-      <h2 id="h-live-set" data-t="live_settings"></h2>
-      <dl class="live-facts">
-        <div><dt data-t="live_service"></dt><dd id="live-service">-</dd></div>
-        <div><dt data-t="live_encoder"></dt><dd id="live-encoder">-</dd></div>
-        <div><dt data-t="live_sound"></dt><dd id="live-audio">-</dd></div>
-        <div><dt data-t="live_net"></dt><dd id="live-net">-</dd></div>
-      </dl>
-      <p id="live-net-tip" class="live-net-tip" role="note"></p>
-      <div id="live-setup" class="live-actions"></div>
-      <p class="dim" data-t="live_settings_note"></p>
-    </section>
-
-    <!-- O endereco da tela para o OBS: montado pelas escolhas abaixo dele. -->
-    <section class="card live-obs-card" data-page="live" aria-labelledby="h-live-obs">
-      <h2 id="h-live-obs" data-t="live_obs_title"></h2>
-      <div id="live-obs" class="ovl-box">
-        <div class="obs-url">
-          <input id="live-url" type="text" readonly aria-label="OBS address">
-          <button id="live-copy" type="button" data-icon="📋" data-t="copy"></button>
-          <a id="live-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
-        </div>
-        <p id="live-obs-off" class="dim" data-t="live_obs_off" hidden></p>
-        <div class="obs-opts">
-          <label><span data-t="live_fps"></span>
-            <select id="obs-fps"><option value="60" data-t="obs_fps60"></option><option value="30" data-t="obs_fps30"></option><option value="15" data-t="obs_fps15"></option></select></label>
-          <label><span data-t="obs_fit"></span>
-            <select id="obs-fit"><option value="" data-t="obs_fit_tube"></option><option value="fill" data-t="obs_fit_fill"></option></select></label>
-          <label><span data-t="obs_size"></span>
-            <select id="obs-size"><option value="1440x1080" data-t="obs_size_1440"></option><option value="960x720" data-t="obs_size_960"></option><option value="1920x1080" data-t="obs_size_1920"></option></select></label>
-          <label class="obs-check"><input id="obs-sound" type="checkbox" checked> <span data-t="obs_sound"></span></label>
-        </div>
-        <ol class="obs-steps">
-          <li data-t="obs_step1"></li>
-          <li><span data-t="obs_step2"></span> <b id="obs-wh"></b></li>
-          <li data-t="obs_step3"></li>
-        </ol>
-        <!-- O atraso da transmissao, medido enquanto se assiste aqui: quanto
-             atrasar a camera e o microfone no OBS. -->
-        <div id="live-sync" class="sync-tip" role="note">
-          <p id="live-sync-text"></p>
-        </div>
-      </div>
-    </section>
-
-    <!-- O marquee do jogo como pagina para o OBS (overlay.html). -->
-    <section class="card wide" data-page="live" aria-labelledby="h-ovl">
-      <h2 id="h-ovl" data-t="overlay"></h2>
-      <p class="dim" data-t="overlay_note"></p>
-      <p class="ovl-docs">
-        <a class="ghost-link" href="https://github.com/juniorterin/fliperOS/wiki/Web-panel#marquee-for-obs" target="_blank" rel="noopener" data-t="overlay_docs"></a>
-        <a class="ghost-link" href="https://github.com/juniorterin/fliperOS/wiki/Scoreboard-games" target="_blank" rel="noopener" data-t="overlay_games"></a>
-      </p>
-      <label class="ovl-toggle"><input id="ovl-on" type="checkbox"> <span data-t="overlay_on"></span></label>
-      <div id="ovl-box" class="ovl-box" hidden>
-        <div class="obs-url">
-          <input id="ovl-url" type="text" readonly aria-label="Overlay address">
-          <button id="ovl-copy" type="button" data-icon="📋" data-t="copy"></button>
-          <a id="ovl-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
-          <button id="ovl-new" class="ghost" type="button" data-icon="🔑" data-t="overlay_new"></button>
-        </div>
-        <div class="obs-opts">
-          <label class="obs-check"><input id="ovl-led" type="checkbox"> <span data-t="ovl_led"></span></label>
-          <label class="obs-check"><input id="ovl-text" type="checkbox" checked> <span data-t="ovl_text"></span></label>
-          <label><span data-t="obs_size"></span>
-            <select id="ovl-size"><option value="1280x320" data-t="ovl_size_1280"></option><option value="1920x480" data-t="ovl_size_1920"></option><option value="1024x256" data-t="ovl_size_1024"></option></select></label>
-        </div>
-        <p class="dim"><span data-t="ovl_obs"></span> <b id="ovl-wh"></b></p>
-        <iframe id="ovl-preview" class="ovl-preview" title="Marquee preview"></iframe>
-      </div>
-    </section>
-
-    <!-- O controle do jogador como pagina para o OBS (input.html), com o CSS
-         dela editado aqui. -->
-    <section class="card wide" data-page="live" aria-labelledby="h-pad">
-      <h2 id="h-pad" data-t="pad"></h2>
-      <p class="dim" data-t="pad_note"></p>
-      <div class="ovl-box">
-        <div class="obs-url">
-          <input id="pad-url" type="text" readonly aria-label="Controls address">
-          <button id="pad-copy" type="button" data-icon="📋" data-t="copy"></button>
-          <a id="pad-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
-        </div>
-        <div class="obs-opts">
-          <label><span data-t="pad_players"></span>
-            <select id="pad-players"><option value="1" data-t="pad_p1"></option><option value="2" data-t="pad_p2"></option><option value="1,2" data-t="pad_p12"></option></select></label>
-          <label class="obs-check"><input id="pad-demo" type="checkbox" checked> <span data-t="pad_demo"></span></label>
-        </div>
-        <p class="dim"><span data-t="ovl_obs"></span> <b id="pad-wh"></b></p>
-        <div class="pad-split">
-          <iframe id="pad-preview" class="pad-preview" title="Controls preview"></iframe>
-          <div class="css-editor">
-            <div class="css-head">
-              <b data-t="pad_css"></b>
-              <span id="pad-css-state" class="dim"></span>
+    <!-- ===== Frontend: o gabinete desenhado e a vitrine dos jogos ===== -->
+    <div class="area" data-area="frontend">
+      <section class="hero">
+        <div class="cab" id="cab" data-state="off">
+          <div class="cab-body">
+            <div class="marquee" id="cab-marquee">
+              <img id="cab-marquee-img" alt="" hidden>
+              <div class="marquee-art" id="cab-marquee-text"><span>FLIPEROS</span><small></small></div>
+              <i class="sweep"></i>
             </div>
-            <div class="css-code">
-              <pre id="pad-css-hl" class="css-hl" aria-hidden="true"></pre>
-              <textarea id="pad-css" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="CSS"></textarea>
+            <div class="rainbow"></div>
+            <div class="bezel">
+              <div class="crt" id="crt">
+                <img id="crt-img" alt="" hidden>
+                <video id="crt-video" muted playsinline loop hidden></video>
+                <video id="crt-live-video" muted playsinline hidden></video>
+                <canvas id="crt-live" hidden></canvas>
+                <div class="crt-attract" id="crt-attract"><svg class="px"><use href="icons.svg#px-frontend"/></svg><b id="crt-attract-text">INSERT COIN</b></div>
+                <div class="crt-noise" id="crt-noise"></div>
+                <span class="crt-tag" id="crt-tag" hidden></span>
+                <button class="crt-live" id="crt-live-btn" type="button" hidden><span class="rec"></span><span id="crt-live-text"></span></button>
+              </div>
+              <div class="bezel-foot"><span>FLIPEROS</span><span class="pwr" id="cab-pwr"></span></div>
             </div>
-            <div class="css-actions">
-              <button id="pad-css-save" type="button" data-icon="💾" data-t="pad_css_save"></button>
-              <button id="pad-css-format" class="ghost" type="button" data-icon="⇥" data-t="pad_css_format"></button>
-              <button id="pad-css-reset" class="ghost" type="button" data-icon="↺" data-t="pad_css_reset"></button>
+            <div class="cp" aria-hidden="true">
+              <div class="player" data-player="1">
+                <span class="plabel">1P</span>
+                <div class="stick"><i></i></div>
+                <div class="btns"><b class="c1" data-control="b1"></b><b class="c2" data-control="b2"></b><b class="c3" data-control="b3"></b><b class="c4" data-control="b4"></b><b class="c5" data-control="b5"></b><b class="c6" data-control="b6"></b></div>
+              </div>
+              <div class="sysbtns"><b data-control="start">START</b><b data-control="coin">COIN</b></div>
+              <div class="player" data-player="2">
+                <span class="plabel">2P</span>
+                <div class="stick"><i></i></div>
+                <div class="btns"><b class="c1" data-control="b1"></b><b class="c2" data-control="b2"></b><b class="c3" data-control="b3"></b><b class="c4" data-control="b4"></b><b class="c5" data-control="b5"></b><b class="c6" data-control="b6"></b></div>
+              </div>
             </div>
-            <p class="dim" data-t="pad_css_note"></p>
+            <div class="base">
+              <div class="ledbox"><div class="led" id="fps-led"></div><small>FPS</small></div>
+              <div class="coins"><div class="slot"><i></i></div><div class="slot"><i></i></div><span class="insert" id="cab-insert">INSERT COIN</span></div>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- O trackball esta desligado por enquanto (data-off; no servidor,
-         FLIPEROS_WEB_TRACKBALL=1 o liga). -->
-    <section class="card wide" data-page="frontend" data-off aria-labelledby="h-ball">
-      <h2 id="h-ball" data-t="trackball"></h2>
-      <div class="row">
-        <button id="ball-open" type="button" data-t="ball_open"></button>
-        <label class="dim"><span data-t="sensitivity"></span>
-          <input id="ball-sens" type="range" min="0.5" max="6" step="0.25" value="2"></label>
-        <label class="dim"><input id="ball-spin" type="checkbox" checked> <span data-t="inertia"></span></label>
-        <span id="ball-note" class="dim" role="status"></span>
-      </div>
-      <div id="ball" class="ball" hidden>
-        <div id="ball-pad" class="ball-pad" data-t="ball_hint"></div>
-        <div class="ball-buttons">
-          <button type="button" data-button="left" data-t="btn_left"></button>
-          <button type="button" data-button="middle" data-t="btn_middle"></button>
-          <button type="button" data-button="right" data-t="btn_right"></button>
+        <div class="now">
+          <div class="now-card" id="now-card">
+            <div class="eyebrow"><span class="rec"></span><span id="now-eyebrow"></span></div>
+            <h2 class="now-title" id="now-title"></h2>
+            <div class="sys-chip" id="now-system" hidden></div>
+            <div class="now-facts" id="now-facts"></div>
+            <div class="stats">
+              <div class="stat"><small data-t="frames"></small><canvas id="fps-chart" class="spark" width="220" height="38" aria-label="FPS"></canvas><span id="fps-note"></span></div>
+              <div class="stat"><small data-t="on_tube"></small><b id="now-khz">-</b><span id="now-mode"></span></div>
+              <div class="stat"><small data-t="played"></small><b id="now-played">-</b><span id="now-played-time"></span></div>
+            </div>
+            <div class="actions">
+              <button id="now-live" class="btn hot" type="button" hidden><span class="rec"></span><span data-t="live_in_tube"></span></button>
+              <button id="shot-take" class="btn ghost" type="button"><svg class="g"><use href="icons.svg#g-camera"/></svg><span data-t="take_shot"></span></button>
+              <a id="shot-save" class="btn ghost" hidden><svg class="g"><use href="icons.svg#g-tasks"/></svg><span data-t="save_png"></span></a>
+              <button id="close-game" class="btn red" type="button" hidden><svg class="g"><use href="icons.svg#g-power"/></svg><span data-t="close_game"></span></button>
+            </div>
+            <p class="now-note"><label class="check"><input id="shot-auto" type="checkbox" checked> <span data-t="shot_auto"></span></label> <span id="shot-note" role="status"></span></p>
+          </div>
+          <div class="mini-cards">
+            <div class="mini volume">
+              <div class="mini-head"><svg class="px"><use href="icons.svg#px-audio"/></svg><b data-t="volume"></b><span class="vol-num" id="vol-value">-</span></div>
+              <div class="vu" id="vu" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" data-ta="volume"></div>
+              <div class="vol-btns">
+                <button id="vol-down" class="sq" type="button" data-ta="vol_down"><svg class="g"><use href="icons.svg#g-minus"/></svg></button>
+                <button id="vol-up" class="sq" type="button" data-ta="vol_up"><svg class="g"><use href="icons.svg#g-plus"/></svg></button>
+                <button id="vol-mute" class="btn ghost small" type="button" aria-pressed="false"><svg class="g"><use href="icons.svg#g-mute"/></svg><span data-t="mute"></span></button>
+              </div>
+            </div>
+            <div class="mini" id="now-front">
+              <div class="mini-head"><span id="front-icon"></span><b data-t="behind"></b></div>
+              <p id="front-text"></p>
+            </div>
+          </div>
         </div>
+      </section>
+
+      <div id="mini-now" class="mini-now" hidden>
+        <span class="rec"></span><b id="mini-title"></b><span id="mini-fps" class="mini-fps"></span>
+        <button id="mini-close" class="icon-btn small" type="button" data-ta="close_game"><svg class="g"><use href="icons.svg#g-power"/></svg></button>
       </div>
-    </section>
 
-    <!-- Arquivos: as pastas, os downloads (torrent) e as tarefas. -->
-    <section class="card wide" data-page="files" aria-labelledby="h-files">
-      <h2 id="h-files" data-t="files"></h2>
-      <div class="files-bar">
-        <select id="file-root" aria-label="Folder"></select>
-        <nav id="crumbs" class="crumbs" aria-label="Path"></nav>
+      <div class="sec-head"><h2><svg class="px"><use href="icons.svg#px-romlist"/></svg><span data-t="systems"></span></h2><span class="muted" id="systems-count"></span></div>
+      <div class="systems" id="systems"></div>
+
+      <div id="rail-fav-box" hidden>
+        <div class="sec-head"><h2><svg class="g yellow"><use href="icons.svg#g-star"/></svg><span id="rail-fav-title"></span></h2></div>
+        <div class="rail" id="rail-fav"></div>
       </div>
-      <div class="files-actions">
-        <label class="file-pick"><input id="file-input" type="file" multiple><span data-icon="📤" data-t="upload"></span></label>
-        <button id="file-mkdir" class="ghost" type="button" data-icon="📁" data-t="new_folder"></button>
+      <div id="rail-top-box" hidden>
+        <div class="sec-head"><h2><svg class="g"><use href="icons.svg#g-top"/></svg><span id="rail-top-title"></span></h2></div>
+        <div class="rail" id="rail-top"></div>
       </div>
-      <div id="upload-status" class="dim" role="status"></div>
-      <div id="file-drop" class="table-wrap drop"><table id="files"></table></div>
-      <p class="dim" data-t="drop_hint"></p>
-    </section>
 
-    <!-- Downloads: o Downloader (torrent dos romsets) numa pagina so dele. -->
-    <section class="card wide" data-page="downloads" aria-labelledby="h-dl">
-      <h2 id="h-dl" data-t="downloads"></h2>
-      <div id="dl-line" class="row"><span id="dl-text"></span><span id="dl-pct" class="dim"></span></div>
-      <div class="meter"><div id="dl-bar"></div></div>
-      <p class="dim"><span data-t="dl_filter"></span> <span id="dl-filter"></span></p>
-      <div id="dl-kinds" class="dl-kinds"></div>
-      <div class="row">
-        <button id="dl-start" type="button" data-icon="▶" data-t="dl_start"></button>
-        <span class="dim" data-t="dl_note"></span>
+      <div class="sec-head" id="games-head"><h2><span id="games-icon"></span><span id="games-system"></span> <span class="count" id="games-count"></span></h2></div>
+      <div class="toolbar" id="games-toolbar">
+        <label class="search"><svg class="g"><use href="icons.svg#g-search"/></svg><input id="game-search" type="search" data-tp="search" autocomplete="off"><span id="games-shown" class="shown"></span></label>
+        <div class="fchips" id="game-chips" role="group"></div>
+        <div class="seg" role="group"><button id="view-grid" type="button" class="on" data-ta="view_grid"><svg class="g"><use href="icons.svg#g-grid"/></svg></button><button id="view-list" type="button" data-ta="view_list"><svg class="g"><use href="icons.svg#g-list"/></svg></button></div>
       </div>
-    </section>
-
-    <!-- Download BIOS (Setup > Games > Downloader > Download BIOS): as BIOS
-         que faltam aos jogos das pastas, do pacote de referencia. -->
-    <section class="card wide" data-page="downloads" aria-labelledby="h-bios">
-      <h2 id="h-bios" data-t="bios"></h2>
-      <p class="dim" data-t="bios_note"></p>
-      <dl id="bios-last" class="facts"></dl>
-      <div class="row start">
-        <button id="bios-check" type="button" data-icon="🔍" data-t="bios_check"></button>
-        <button id="bios-refresh" type="button" class="ghost" data-icon="↻" data-t="bios_refresh"></button>
-        <label class="check"><input id="bios-auto" type="checkbox"> <span data-t="bios_auto"></span></label>
+      <div class="games-wrap">
+        <div class="games" id="games"></div>
+        <nav class="letters" id="letters" aria-label="A-Z"></nav>
       </div>
-      <div id="bios-list"></div>
-    </section>
-
-    <!-- Scraper (Setup > Games > Scraper): as pastas, o scraper do FliperOS,
-         o site com a conta e os pacotes de arte por torrent. -->
-    <section class="card wide" data-page="scraper" aria-labelledby="h-scr">
-      <h2 id="h-scr" data-t="page_scraper"></h2>
-      <p class="dim" data-t="scr_intro"></p>
-      <p id="scr-state" role="status"></p>
-      <!-- O que cada tipo de pasta ganha: arcade tem muito mais arte. -->
-      <ul class="scope">
-        <li><span class="tag arcade" data-t="tag_arcade"></span><span data-t="scr_gets_arcade"></span></li>
-        <li><span class="tag console" data-t="tag_console"></span><span data-t="scr_gets_console"></span></li>
-      </ul>
-      <h3 data-t="scr_systems"></h3>
-      <div id="scr-systems"></div>
-      <div class="row">
-        <button id="scr-run" type="button" data-icon="🖼" data-t="scr_run"></button>
-        <span class="dim" data-t="scr_run_note"></span>
+      <div id="games-more" class="games-more"></div>
+      <div id="games-empty" class="empty" hidden>
+        <svg class="px big"><use href="icons.svg#px-games"/></svg>
+        <h3 data-t="no_games_title"></h3>
+        <p data-t="no_games_text"></p>
+        <div class="actions"><a class="btn" href="#library/files" data-t="go_files"></a><a class="btn ghost" href="#library/downloads" data-t="go_downloads"></a></div>
       </div>
-    </section>
+      <button id="to-top" class="to-top" type="button" hidden data-ta="to_top"><svg class="g"><use href="icons.svg#g-top"/></svg></button>
 
-    <section class="card wide" data-page="scraper" aria-labelledby="h-scr-site">
-      <h2 id="h-scr-site" data-t="scr_site"></h2>
-      <p class="dim" data-t="scr_site_note"></p>
-      <div class="rf-bar"><label><small data-t="scr_source"></small><select id="scr-source"></select></label></div>
-      <p class="scope"><span id="scr-source-tag" class="tag"></span> <span id="scr-source-what"></span></p>
-      <p id="scr-source-note" class="dim"></p>
-      <form id="scr-account" class="dl-kind"></form>
-      <h3 data-t="scr_media"></h3>
-      <div id="scr-media" class="chips" role="group"></div>
-      <label id="scr-clones-box" class="check"><input id="scr-clones" type="checkbox"> <span data-t="scr_clones"></span></label>
-      <div class="row start">
-        <button id="scr-site" type="button" data-icon="🌐"></button>
-        <button id="scr-resume" type="button" class="ghost" data-icon="⏯" data-t="scr_resume" hidden></button>
-      </div>
-    </section>
-
-    <section class="card wide" data-page="scraper" aria-labelledby="h-packs">
-      <h2 id="h-packs" data-t="packs"></h2>
-      <p class="scope"><span class="tag arcade" data-t="tag_arcade_only"></span> <span data-t="packs_scope"></span></p>
-      <p class="dim" data-t="packs_note"></p>
-      <div class="row"><span id="packs-text"></span><span id="packs-pct" class="dim"></span></div>
-      <div class="meter"><div id="packs-bar"></div></div>
-      <div class="row"><button id="packs-start" type="button" data-icon="🧲" data-t="packs_start"></button></div>
-    </section>
-
-    <!-- Instalar (Setup > Games > Emulators & Games e Extras): o que nao vem
-         na imagem, e o update de cada um. -->
-    <section class="card wide" data-page="install" aria-labelledby="h-emu">
-      <h2 id="h-emu" data-t="emulators"></h2>
-      <p class="dim" data-t="emulators_note"></p>
-      <div id="emu-list" class="dl-kinds"></div>
-    </section>
-
-    <section class="card wide" data-page="install" aria-labelledby="h-extras">
-      <h2 id="h-extras" data-t="extras"></h2>
-      <p class="dim" data-t="extras_note"></p>
-      <div id="extras-list" class="dl-kinds"></div>
-    </section>
-
-    <!-- As tarefas (downloads, envios, a limpeza de romsets, o scraper, as
-         instalacoes) nas paginas que as comecam. -->
-    <section class="card wide" data-page="downloads files scraper install" aria-labelledby="h-tasks">
-      <h2 id="h-tasks" data-t="tasks"></h2>
-      <ul id="tasks" class="tasks"></ul>
-    </section>
-
-    <!-- ROM filter: o filtro do MAME ROM Cleaner, para o Downloader ou para
-         limpar uma pasta com um romset (app.js, ROM filter). -->
-    <!-- O que filtrar: o modo (abas), a pasta, o emulador e o preset. -->
-    <section class="card wide rf-setup" data-page="romfilter" aria-labelledby="h-rf">
-      <div class="rf-head">
-        <div>
-          <h2 id="h-rf" data-t="page_romfilter"></h2>
-          <p class="dim" data-t="rf_intro"></p>
+      <div class="sub grid">
+      <!-- O trackball esta desligado por enquanto (data-off; no servidor,
+           FLIPEROS_WEB_TRACKBALL=1 o liga). -->
+      <section class="card wide" data-off aria-labelledby="h-ball">
+        <h2 id="h-ball" data-t="trackball"></h2>
+        <div class="row">
+          <button id="ball-open" type="button" data-t="ball_open"></button>
+          <label class="dim"><span data-t="sensitivity"></span>
+            <input id="ball-sens" type="range" min="0.5" max="6" step="0.25" value="2"></label>
+          <label class="dim"><input id="ball-spin" type="checkbox" checked> <span data-t="inertia"></span></label>
+          <span id="ball-note" class="dim" role="status"></span>
         </div>
-        <div class="rf-tabs" role="tablist" aria-label="Mode">
-          <button type="button" role="tab" data-mode="downloader" data-icon="🧲" data-t="rf_mode_dl"></button>
-          <button type="button" role="tab" data-mode="cleaner" data-icon="🧹" data-t="rf_mode_clean"></button>
+        <div id="ball" class="ball" hidden>
+          <div id="ball-pad" class="ball-pad" data-t="ball_hint"></div>
+          <div class="ball-buttons">
+            <button type="button" data-button="left" data-t="btn_left"></button>
+            <button type="button" data-button="middle" data-t="btn_middle"></button>
+            <button type="button" data-button="right" data-t="btn_right"></button>
+          </div>
         </div>
+      </section>
       </div>
-      <div id="rf-source" class="rf-source" hidden>
-        <span class="rf-source-icon" aria-hidden="true">📁</span>
-        <div class="rf-source-text">
-          <small data-t="rf_folder"></small>
-          <span id="rf-folder"></span>
+    </div>
+
+    <!-- ===== Ao vivo ===== -->
+    <div class="area" data-area="live">
+      <div class="sub grid" data-sub="watch">
+      <!-- Ao vivo: a tela do gabinete (WebRTC pelo go2rtc, config/fliperos-stream),
+           a transmissao e os enderecos para o OBS (a tela e o marquee). -->
+      <section class="card wide" aria-labelledby="h-live">
+        <div class="live-head">
+          <h2 id="h-live" data-t="live"></h2>
+          <span id="live-badge" class="live-badge" hidden data-t="live_on_air"></span>
         </div>
-        <button id="rf-browse" type="button" class="ghost" data-t="rf_choose"></button>
-      </div>
-      <div class="rf-bar">
-        <label><small data-t="rf_emulator"></small><select id="rf-target"></select></label>
-        <label><small data-t="rf_preset"></small><select id="rf-preset"></select></label>
-      </div>
-      <p class="rf-meta"><span data-t="rf_data"></span> <span id="rf-data"></span><br>
-        <span data-t="rf_dest"></span> <span id="rf-dest"></span></p>
-    </section>
-
-    <!-- O placar: fica a vista ao rolar os parametros. -->
-    <section class="card wide rf-score" data-page="romfilter" aria-label="Score">
-      <div class="rf-led"><small data-t="rf_games"></small><span id="rf-games">-</span></div>
-      <div class="rf-led"><small data-t="rf_size"></small><span id="rf-size">-</span></div>
-      <div class="rf-score-note" role="status" aria-live="polite">
-        <span id="rf-count-note"></span>
-        <span id="rf-note" class="dim"></span>
-      </div>
-      <div class="rf-score-actions">
-        <button id="rf-save" type="button" data-icon="💾" data-t="rf_save"></button>
-        <button id="rf-scan" type="button" data-icon="🔍" data-t="rf_scan" hidden></button>
-      </div>
-    </section>
-
-    <!-- Os parametros: um azulejo cada, em grupos; o azulejo abre as opcoes. -->
-    <section class="card wide" data-page="romfilter" aria-label="Parameters">
-      <div id="rf-board" class="rf-board"></div>
-    </section>
-
-    <section id="rf-preview" class="card wide rf-preview" data-page="romfilter" data-off aria-labelledby="h-rf-prev">
-      <h2 id="h-rf-prev" data-t="rf_scan"></h2>
-      <div id="rf-preview-body"></div>
-    </section>
-
-    <dialog id="rf-dialog" class="rf-dialog" aria-labelledby="rf-dlg-title">
-      <form method="dialog">
-        <header>
-          <h3 id="rf-dlg-title"></h3>
-          <button class="ghost icon-only" value="close" data-icon="✕" aria-label="Close"></button>
-        </header>
-        <p id="rf-dlg-help" class="dim"></p>
-        <div id="rf-dlg-body"></div>
-        <footer id="rf-dlg-foot">
-          <button value="close" data-t="rf_done"></button>
-        </footer>
-      </form>
-    </dialog>
-
-    <!-- Configuracoes. -->
-    <section class="card wide" data-page="settings" aria-labelledby="h-set">
-      <h2 id="h-set" data-t="settings"></h2>
-      <p class="dim" data-t="settings_note"></p>
-      <div id="settings"></div>
-    </section>
-
-    <!-- O modo lab (config/fliperos-lab): este painel num endereco
-         temporario da internet, para alguem ajudar de longe. -->
-    <section class="card wide" data-page="settings" aria-labelledby="h-lab">
-      <h2 id="h-lab" data-t="lab"></h2>
-      <p id="lab-note" class="dim"></p>
-      <p id="lab-state"></p>
-      <div id="lab-box" class="ovl-box" hidden>
-        <div class="obs-url">
-          <input id="lab-url" type="text" readonly aria-label="Lab address">
-          <button id="lab-copy" type="button" data-icon="📋" data-t="copy"></button>
+        <div class="live-bar">
+          <button id="live-start" type="button" data-icon="▶" data-t="live_start"></button>
+          <button id="live-stop" class="ghost" type="button" data-icon="■" data-t="live_stop" hidden></button>
+          <label class="dim"><span data-t="live_fps"></span>
+            <select id="live-fps" autocomplete="off"><option value="15">15</option><option value="30">30</option><option value="60" selected>60</option></select></label>
+          <label class="dim"><input id="live-tube" type="checkbox" checked> <span data-t="as_on_tube"></span></label>
+          <span class="live-bar-end">
+            <button id="live-sound" class="ghost" type="button" data-icon="🔇" data-t="live_unmute" hidden></button>
+            <button id="live-full" class="ghost" type="button" data-icon="⤢" data-t="live_full" hidden></button>
+          </span>
         </div>
+        <div id="live-stage" class="live-stage tube">
+          <video id="live" playsinline autoplay muted></video>
+          <canvas id="live-pixels" class="live-pixels" hidden></canvas>
+          <div id="live-idle" class="live-idle">
+            <p id="live-idle-text"></p>
+            <button id="live-play" type="button" class="live-play" data-icon="▶" data-t="live_start" hidden></button>
+          </div>
+        </div>
+        <p id="live-note" class="dim live-note" role="status"></p>
+      </section>
+  
+      <section class="card" aria-labelledby="h-live-set">
+        <h2 id="h-live-set" data-t="live_settings"></h2>
+        <dl class="live-facts">
+          <div><dt data-t="live_service"></dt><dd id="live-service">-</dd></div>
+          <div><dt data-t="live_encoder"></dt><dd id="live-encoder">-</dd></div>
+          <div><dt data-t="live_sound"></dt><dd id="live-audio">-</dd></div>
+          <div><dt data-t="live_net"></dt><dd id="live-net">-</dd></div>
+        </dl>
+        <p id="live-net-tip" class="live-net-tip" role="note"></p>
+        <div id="live-setup" class="live-actions"></div>
+        <p class="dim" data-t="live_settings_note"></p>
+      </section>
       </div>
-      <p id="lab-step" class="dim" hidden></p>
-      <div class="row">
-        <button id="lab-start" type="button" data-icon="🧪" data-t="lab_start"></button>
-        <button id="lab-stop" class="ghost danger" type="button" data-icon="✖" data-t="lab_stop" hidden></button>
+      <div class="sub grid" data-sub="obs">
+      <!-- O endereco da tela para o OBS: montado pelas escolhas abaixo dele. -->
+      <section class="card live-obs-card" aria-labelledby="h-live-obs">
+        <h2 id="h-live-obs" data-t="live_obs_title"></h2>
+        <div id="live-obs" class="ovl-box">
+          <div class="obs-url">
+            <input id="live-url" type="text" readonly aria-label="OBS address">
+            <button id="live-copy" type="button" data-icon="📋" data-t="copy"></button>
+            <a id="live-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
+          </div>
+          <p id="live-obs-off" class="dim" data-t="live_obs_off" hidden></p>
+          <div class="obs-opts">
+            <label><span data-t="live_fps"></span>
+              <select id="obs-fps"><option value="60" data-t="obs_fps60"></option><option value="30" data-t="obs_fps30"></option><option value="15" data-t="obs_fps15"></option></select></label>
+            <label><span data-t="obs_fit"></span>
+              <select id="obs-fit"><option value="" data-t="obs_fit_tube"></option><option value="fill" data-t="obs_fit_fill"></option></select></label>
+            <label><span data-t="obs_size"></span>
+              <select id="obs-size"><option value="1440x1080" data-t="obs_size_1440"></option><option value="960x720" data-t="obs_size_960"></option><option value="1920x1080" data-t="obs_size_1920"></option></select></label>
+            <label class="obs-check"><input id="obs-sound" type="checkbox" checked> <span data-t="obs_sound"></span></label>
+          </div>
+          <ol class="obs-steps">
+            <li data-t="obs_step1"></li>
+            <li><span data-t="obs_step2"></span> <b id="obs-wh"></b></li>
+            <li data-t="obs_step3"></li>
+          </ol>
+          <!-- O atraso da transmissao, medido enquanto se assiste aqui: quanto
+               atrasar a camera e o microfone no OBS. -->
+          <div id="live-sync" class="sync-tip" role="note">
+            <p id="live-sync-text"></p>
+          </div>
+        </div>
+      </section>
+  
+      <!-- O marquee do jogo como pagina para o OBS (overlay.html). -->
+      <section class="card wide" aria-labelledby="h-ovl">
+        <h2 id="h-ovl" data-t="overlay"></h2>
+        <p class="dim" data-t="overlay_note"></p>
+        <p class="ovl-docs">
+          <a class="ghost-link" href="https://github.com/juniorterin/fliperOS/wiki/Web-panel#marquee-for-obs" target="_blank" rel="noopener" data-t="overlay_docs"></a>
+          <a class="ghost-link" href="https://github.com/juniorterin/fliperOS/wiki/Scoreboard-games" target="_blank" rel="noopener" data-t="overlay_games"></a>
+        </p>
+        <label class="ovl-toggle"><input id="ovl-on" type="checkbox"> <span data-t="overlay_on"></span></label>
+        <div id="ovl-box" class="ovl-box" hidden>
+          <div class="obs-url">
+            <input id="ovl-url" type="text" readonly aria-label="Overlay address">
+            <button id="ovl-copy" type="button" data-icon="📋" data-t="copy"></button>
+            <a id="ovl-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
+            <button id="ovl-new" class="ghost" type="button" data-icon="🔑" data-t="overlay_new"></button>
+          </div>
+          <div class="obs-opts">
+            <label class="obs-check"><input id="ovl-led" type="checkbox"> <span data-t="ovl_led"></span></label>
+            <label class="obs-check"><input id="ovl-text" type="checkbox" checked> <span data-t="ovl_text"></span></label>
+            <label><span data-t="obs_size"></span>
+              <select id="ovl-size"><option value="1280x320" data-t="ovl_size_1280"></option><option value="1920x480" data-t="ovl_size_1920"></option><option value="1024x256" data-t="ovl_size_1024"></option></select></label>
+          </div>
+          <p class="dim"><span data-t="ovl_obs"></span> <b id="ovl-wh"></b></p>
+          <iframe id="ovl-preview" class="ovl-preview" title="Marquee preview"></iframe>
+        </div>
+      </section>
+  
+      <!-- O controle do jogador como pagina para o OBS (input.html), com o CSS
+           dela editado aqui. -->
+      <section class="card wide" aria-labelledby="h-pad">
+        <h2 id="h-pad" data-t="pad"></h2>
+        <p class="dim" data-t="pad_note"></p>
+        <div class="ovl-box">
+          <div class="obs-url">
+            <input id="pad-url" type="text" readonly aria-label="Controls address">
+            <button id="pad-copy" type="button" data-icon="📋" data-t="copy"></button>
+            <a id="pad-open" class="ghost-link obs-open" target="_blank" rel="noopener" data-t="obs_open"></a>
+          </div>
+          <div class="obs-opts">
+            <label><span data-t="pad_players"></span>
+              <select id="pad-players"><option value="1" data-t="pad_p1"></option><option value="2" data-t="pad_p2"></option><option value="1,2" data-t="pad_p12"></option></select></label>
+            <label class="obs-check"><input id="pad-demo" type="checkbox" checked> <span data-t="pad_demo"></span></label>
+          </div>
+          <p class="dim"><span data-t="ovl_obs"></span> <b id="pad-wh"></b></p>
+          <div class="pad-split">
+            <iframe id="pad-preview" class="pad-preview" title="Controls preview"></iframe>
+            <div class="css-editor">
+              <div class="css-head">
+                <b data-t="pad_css"></b>
+                <span id="pad-css-state" class="dim"></span>
+              </div>
+              <div class="css-code">
+                <pre id="pad-css-hl" class="css-hl" aria-hidden="true"></pre>
+                <textarea id="pad-css" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="CSS"></textarea>
+              </div>
+              <div class="css-actions">
+                <button id="pad-css-save" type="button" data-icon="💾" data-t="pad_css_save"></button>
+                <button id="pad-css-format" class="ghost" type="button" data-icon="⇥" data-t="pad_css_format"></button>
+                <button id="pad-css-reset" class="ghost" type="button" data-icon="↺" data-t="pad_css_reset"></button>
+              </div>
+              <p class="dim" data-t="pad_css_note"></p>
+            </div>
+          </div>
+        </div>
+      </section>
       </div>
-    </section>
+    </div>
 
-    <!-- Status: o video, o hardware, a rede, os processos e os logs. -->
-    <section class="card wide st-half" data-page="status" aria-labelledby="h-video">
-      <h2 id="h-video" data-t="video"></h2>
-      <div class="table-wrap"><table id="video-table"></table></div>
-      <div id="modelines"></div>
-    </section>
-
-    <section class="card" data-page="status" aria-labelledby="h-cpu">
-      <h2 id="h-cpu">CPU</h2>
-      <div class="meter"><div id="cpu-bar"></div></div>
-      <div class="row"><span id="cpu-total" class="big">-</span><span id="load" class="dim"></span></div>
-      <div id="cores" class="cores"></div>
-      <div id="temps" class="small-list"></div>
-    </section>
-
-    <section class="card" data-page="status" aria-labelledby="h-gpu">
-      <h2 id="h-gpu">GPU</h2>
-      <div id="gpus"></div>
-    </section>
-
-    <section class="card" data-page="status" aria-labelledby="h-mem">
-      <h2 id="h-mem" data-t="memory"></h2>
-      <div id="memory"></div>
-    </section>
-
-    <section class="card" data-page="status" aria-labelledby="h-disks">
-      <h2 id="h-disks" data-t="storage"></h2>
-      <div id="disks"></div>
-    </section>
-
-    <section class="card" data-page="status" aria-labelledby="h-net">
-      <h2 id="h-net" data-t="network"></h2>
-      <div id="network"></div>
-    </section>
-
-    <section class="card wide st-half" data-page="status" aria-labelledby="h-proc">
-      <h2 id="h-proc" data-t="processes"></h2>
-      <div class="table-wrap"><table id="procs"></table></div>
-    </section>
-
-    <section class="card wide st-half" data-page="status" aria-labelledby="h-logs">
-      <h2 id="h-logs" data-t="logs"></h2>
-      <div class="row">
-        <select id="log-name" aria-label="Log"></select>
-        <button id="log-refresh" class="ghost" type="button" data-t="refresh"></button>
+    <!-- ===== Biblioteca ===== -->
+    <div class="area" data-area="library">
+      <div class="sub" data-sub="overview">
+        <section class="steps">
+          <h2 class="steps-title" data-t="how_games"></h2>
+          <ol>
+            <li><svg class="px"><use href="icons.svg#px-dest"/></svg><b data-t="step1"></b><span data-t="step1_text"></span></li>
+            <li><svg class="px"><use href="icons.svg#px-chip"/></svg><b data-t="step2"></b><span data-t="step2_text"></span></li>
+            <li><svg class="px"><use href="icons.svg#px-scraper"/></svg><b data-t="step3"></b><span data-t="step3_text"></span></li>
+            <li><svg class="px"><use href="icons.svg#px-frontend"/></svg><b data-t="step4"></b><span data-t="step4_text"></span></li>
+          </ol>
+        </section>
+        <section class="tools" id="tools"></section>
       </div>
-      <pre id="log-text" class="log"></pre>
-    </section>
-
-    <!-- Terminal. -->
-    <section class="card wide" data-page="terminal" aria-labelledby="h-term">
-      <h2 id="h-term" data-t="terminal"></h2>
-      <div class="row">
-        <button id="term-open" type="button" data-t="term_open"></button>
-        <button id="term-close" class="ghost" type="button" data-t="term_close" hidden></button>
-        <span id="term-note" class="dim" role="status"></span>
+      <div class="sub grid" data-sub="install">
+      <!-- Instalar (Setup > Games > Emulators & Games e Extras): o que nao vem
+           na imagem, e o update de cada um. -->
+      <section class="card wide" aria-labelledby="h-emu">
+        <h2 id="h-emu" data-t="emulators"></h2>
+        <p class="dim" data-t="emulators_note"></p>
+        <div id="emu-list" class="dl-kinds"></div>
+      </section>
+  
+      <section class="card wide" aria-labelledby="h-extras">
+        <h2 id="h-extras" data-t="extras"></h2>
+        <p class="dim" data-t="extras_note"></p>
+        <div id="extras-list" class="dl-kinds"></div>
+      </section>
       </div>
-      <div id="term" class="term" hidden></div>
-    </section>
+      <div class="sub grid" data-sub="downloads">
+      <!-- Downloads: o Downloader (torrent dos romsets) numa pagina so dele. -->
+      <section class="card wide" aria-labelledby="h-dl">
+        <h2 id="h-dl" data-t="downloads"></h2>
+        <div id="dl-line" class="row"><span id="dl-text"></span><span id="dl-pct" class="dim"></span></div>
+        <div class="meter"><div id="dl-bar"></div></div>
+        <p class="dim"><span data-t="dl_filter"></span> <span id="dl-filter"></span></p>
+        <div id="dl-kinds" class="dl-kinds"></div>
+        <div class="row">
+          <button id="dl-start" type="button" data-icon="▶" data-t="dl_start"></button>
+          <span class="dim" data-t="dl_note"></span>
+        </div>
+      </section>
+  
+      <!-- Download BIOS (Setup > Games > Downloader > Download BIOS): as BIOS
+           que faltam aos jogos das pastas, do pacote de referencia. -->
+      <section class="card wide" aria-labelledby="h-bios">
+        <h2 id="h-bios" data-t="bios"></h2>
+        <p class="dim" data-t="bios_note"></p>
+        <dl id="bios-last" class="facts"></dl>
+        <div class="row start">
+          <button id="bios-check" type="button" data-icon="🔍" data-t="bios_check"></button>
+          <button id="bios-refresh" type="button" class="ghost" data-icon="↻" data-t="bios_refresh"></button>
+          <label class="check"><input id="bios-auto" type="checkbox"> <span data-t="bios_auto"></span></label>
+        </div>
+        <div id="bios-list"></div>
+      </section>
+      </div>
+      <div class="sub grid" data-sub="romfilter">
+      <!-- ROM filter: o filtro do MAME ROM Cleaner, para o Downloader ou para
+           limpar uma pasta com um romset (app.js, ROM filter). -->
+      <!-- O que filtrar: o modo (abas), a pasta, o emulador e o preset. -->
+      <section class="card wide rf-setup" aria-labelledby="h-rf">
+        <div class="rf-head">
+          <div>
+            <h2 id="h-rf" data-t="page_romfilter"></h2>
+            <p class="dim" data-t="rf_intro"></p>
+          </div>
+          <div class="rf-tabs" role="tablist" aria-label="Mode">
+            <button type="button" role="tab" data-mode="downloader" data-icon="🧲" data-t="rf_mode_dl"></button>
+            <button type="button" role="tab" data-mode="cleaner" data-icon="🧹" data-t="rf_mode_clean"></button>
+          </div>
+        </div>
+        <div id="rf-source" class="rf-source" hidden>
+          <span class="rf-source-icon" aria-hidden="true">📁</span>
+          <div class="rf-source-text">
+            <small data-t="rf_folder"></small>
+            <span id="rf-folder"></span>
+          </div>
+          <button id="rf-browse" type="button" class="ghost" data-t="rf_choose"></button>
+        </div>
+        <div class="rf-bar">
+          <label><small data-t="rf_emulator"></small><select id="rf-target"></select></label>
+          <label><small data-t="rf_preset"></small><select id="rf-preset"></select></label>
+        </div>
+        <p class="rf-meta"><span data-t="rf_data"></span> <span id="rf-data"></span><br>
+          <span data-t="rf_dest"></span> <span id="rf-dest"></span></p>
+      </section>
+  
+      <!-- O placar: fica a vista ao rolar os parametros. -->
+      <section class="card wide rf-score" aria-label="Score">
+        <div class="rf-led"><small data-t="rf_games"></small><span id="rf-games">-</span></div>
+        <div class="rf-led"><small data-t="rf_size"></small><span id="rf-size">-</span></div>
+        <div class="rf-score-note" role="status" aria-live="polite">
+          <span id="rf-count-note"></span>
+          <span id="rf-note" class="dim"></span>
+        </div>
+        <div class="rf-score-actions">
+          <button id="rf-save" type="button" data-icon="💾" data-t="rf_save"></button>
+          <button id="rf-scan" type="button" data-icon="🔍" data-t="rf_scan" hidden></button>
+        </div>
+      </section>
+  
+      <!-- Os parametros: um azulejo cada, em grupos; o azulejo abre as opcoes. -->
+      <section class="card wide" aria-label="Parameters">
+        <div id="rf-board" class="rf-board"></div>
+      </section>
+  
+      <section id="rf-preview" class="card wide rf-preview" data-off aria-labelledby="h-rf-prev">
+        <h2 id="h-rf-prev" data-t="rf_scan"></h2>
+        <div id="rf-preview-body"></div>
+      </section>
+  
+      <dialog id="rf-dialog" class="rf-dialog" aria-labelledby="rf-dlg-title">
+        <form method="dialog">
+          <header>
+            <h3 id="rf-dlg-title"></h3>
+            <button class="ghost icon-only" value="close" data-icon="✕" aria-label="Close"></button>
+          </header>
+          <p id="rf-dlg-help" class="dim"></p>
+          <div id="rf-dlg-body"></div>
+          <footer id="rf-dlg-foot">
+            <button value="close" data-t="rf_done"></button>
+          </footer>
+        </form>
+      </dialog>
+      </div>
+      <div class="sub grid" data-sub="art">
+      <!-- Scraper (Setup > Games > Scraper): as pastas, o scraper do FliperOS,
+           o site com a conta e os pacotes de arte por torrent. -->
+      <section class="card wide" aria-labelledby="h-scr">
+        <h2 id="h-scr" data-t="page_scraper"></h2>
+        <p class="dim" data-t="scr_intro"></p>
+        <p id="scr-state" role="status"></p>
+        <!-- O que cada tipo de pasta ganha: arcade tem muito mais arte. -->
+        <ul class="scope">
+          <li><span class="tag arcade" data-t="tag_arcade"></span><span data-t="scr_gets_arcade"></span></li>
+          <li><span class="tag console" data-t="tag_console"></span><span data-t="scr_gets_console"></span></li>
+        </ul>
+        <h3 data-t="scr_systems"></h3>
+        <div id="scr-systems"></div>
+        <div class="row">
+          <button id="scr-run" type="button" data-icon="🖼" data-t="scr_run"></button>
+          <span class="dim" data-t="scr_run_note"></span>
+        </div>
+      </section>
+  
+      <section class="card wide" aria-labelledby="h-scr-site">
+        <h2 id="h-scr-site" data-t="scr_site"></h2>
+        <p class="dim" data-t="scr_site_note"></p>
+        <div class="rf-bar"><label><small data-t="scr_source"></small><select id="scr-source"></select></label></div>
+        <p class="scope"><span id="scr-source-tag" class="tag"></span> <span id="scr-source-what"></span></p>
+        <p id="scr-source-note" class="dim"></p>
+        <form id="scr-account" class="dl-kind"></form>
+        <h3 data-t="scr_media"></h3>
+        <div id="scr-media" class="chips" role="group"></div>
+        <label id="scr-clones-box" class="check"><input id="scr-clones" type="checkbox"> <span data-t="scr_clones"></span></label>
+        <div class="row start">
+          <button id="scr-site" type="button" data-icon="🌐"></button>
+          <button id="scr-resume" type="button" class="ghost" data-icon="⏯" data-t="scr_resume" hidden></button>
+        </div>
+      </section>
+  
+      <section class="card wide" aria-labelledby="h-packs">
+        <h2 id="h-packs" data-t="packs"></h2>
+        <p class="scope"><span class="tag arcade" data-t="tag_arcade_only"></span> <span data-t="packs_scope"></span></p>
+        <p class="dim" data-t="packs_note"></p>
+        <div class="row"><span id="packs-text"></span><span id="packs-pct" class="dim"></span></div>
+        <div class="meter"><div id="packs-bar"></div></div>
+        <div class="row"><button id="packs-start" type="button" data-icon="🧲" data-t="packs_start"></button></div>
+      </section>
+      </div>
+      <div class="sub grid" data-sub="files">
+      <!-- Arquivos: as pastas, os downloads (torrent) e as tarefas. -->
+      <section class="card wide" aria-labelledby="h-files">
+        <h2 id="h-files" data-t="files"></h2>
+        <div class="files-bar">
+          <select id="file-root" aria-label="Folder"></select>
+          <nav id="crumbs" class="crumbs" aria-label="Path"></nav>
+        </div>
+        <div class="files-actions">
+          <label class="file-pick"><input id="file-input" type="file" multiple><span data-icon="📤" data-t="upload"></span></label>
+          <button id="file-mkdir" class="ghost" type="button" data-icon="📁" data-t="new_folder"></button>
+        </div>
+        <div id="upload-status" class="dim" role="status"></div>
+        <div id="file-drop" class="table-wrap drop"><table id="files"></table></div>
+        <p class="dim" data-t="drop_hint"></p>
+      </section>
+      </div>
+    </div>
+
+    <!-- ===== Sistema ===== -->
+    <div class="area" data-area="system">
+      <div class="sub grid" data-sub="status">
+      <!-- Status: o video, o hardware, a rede, os processos e os logs. -->
+      <section class="card wide st-half" aria-labelledby="h-video">
+        <h2 id="h-video" data-t="video"></h2>
+        <div class="table-wrap"><table id="video-table"></table></div>
+        <div id="modelines"></div>
+      </section>
+  
+      <section class="card" aria-labelledby="h-cpu">
+        <h2 id="h-cpu">CPU</h2>
+        <div class="meter"><div id="cpu-bar"></div></div>
+        <div class="row"><span id="cpu-total" class="big">-</span><span id="load" class="dim"></span></div>
+        <div id="cores" class="cores"></div>
+        <div id="temps" class="small-list"></div>
+      </section>
+  
+      <section class="card" aria-labelledby="h-gpu">
+        <h2 id="h-gpu">GPU</h2>
+        <div id="gpus"></div>
+      </section>
+  
+      <section class="card" aria-labelledby="h-mem">
+        <h2 id="h-mem" data-t="memory"></h2>
+        <div id="memory"></div>
+      </section>
+  
+      <section class="card" aria-labelledby="h-disks">
+        <h2 id="h-disks" data-t="storage"></h2>
+        <div id="disks"></div>
+      </section>
+  
+      <section class="card" aria-labelledby="h-net">
+        <h2 id="h-net" data-t="network"></h2>
+        <div id="network"></div>
+      </section>
+      </div>
+      <div class="sub grid" data-sub="logs">
+      <section class="card wide st-half" aria-labelledby="h-proc">
+        <h2 id="h-proc" data-t="processes"></h2>
+        <div class="table-wrap"><table id="procs"></table></div>
+      </section>
+  
+      <section class="card wide st-half" aria-labelledby="h-logs">
+        <h2 id="h-logs" data-t="logs"></h2>
+        <div class="row">
+          <select id="log-name" aria-label="Log"></select>
+          <button id="log-refresh" class="ghost" type="button" data-t="refresh"></button>
+        </div>
+        <pre id="log-text" class="log"></pre>
+      </section>
+      </div>
+      <div class="sub grid" data-sub="settings">
+      <!-- Configuracoes. -->
+      <section class="card wide" aria-labelledby="h-set">
+        <h2 id="h-set" data-t="settings"></h2>
+        <p class="dim" data-t="settings_note"></p>
+        <div id="settings"></div>
+      </section>
+      </div>
+      <div class="sub grid" data-sub="terminal">
+      <!-- Terminal. -->
+      <section class="card wide" aria-labelledby="h-term">
+        <h2 id="h-term" data-t="terminal"></h2>
+        <div class="row">
+          <button id="term-open" type="button" data-t="term_open"></button>
+          <button id="term-close" class="ghost" type="button" data-t="term_close" hidden></button>
+          <span id="term-note" class="dim" role="status"></span>
+        </div>
+        <div id="term" class="term" hidden></div>
+      </section>
+      </div>
+      <div class="sub grid" data-sub="lab">
+      <!-- O modo lab (config/fliperos-lab): este painel num endereco
+           temporario da internet, para alguem ajudar de longe. -->
+      <section class="card wide" aria-labelledby="h-lab">
+        <h2 id="h-lab" data-t="lab"></h2>
+        <p id="lab-note" class="dim"></p>
+        <p id="lab-state"></p>
+        <div id="lab-box" class="ovl-box" hidden>
+          <div class="obs-url">
+            <input id="lab-url" type="text" readonly aria-label="Lab address">
+            <button id="lab-copy" type="button" data-icon="📋" data-t="copy"></button>
+          </div>
+        </div>
+        <p id="lab-step" class="dim" hidden></p>
+        <div class="row">
+          <button id="lab-start" type="button" data-icon="🧪" data-t="lab_start"></button>
+          <button id="lab-stop" class="ghost danger" type="button" data-icon="✖" data-t="lab_stop" hidden></button>
+        </div>
+      </section>
+      </div>
+    </div>
   </main>
+
+  <!-- A barra de baixo (celular). -->
+  <nav class="bottomnav" aria-label="Areas">
+    <a href="#frontend" data-area="frontend"><svg class="px"><use href="icons.svg#px-frontend"/></svg><span data-t="area_frontend"></span></a>
+    <a href="#live" data-area="live"><svg class="px"><use href="icons.svg#px-video"/></svg><span data-t="area_live"></span></a>
+    <a href="#library" data-area="library"><svg class="px"><use href="icons.svg#px-games"/></svg><span data-t="area_library"></span></a>
+    <a href="#system" data-area="system"><svg class="px"><use href="icons.svg#px-setup"/></svg><span data-t="area_system"></span></a>
+  </nav>
 </div>
+
+<!-- As tarefas (downloads, scraper, instalacoes...): uma gaveta so. -->
+<div id="drawer-back" class="drawer-back" hidden></div>
+<aside id="drawer" class="drawer" hidden aria-labelledby="drawer-title">
+  <header><h2 id="drawer-title" data-t="tasks"></h2><button id="drawer-close" class="icon-btn" type="button" data-ta="close"><svg class="g"><use href="icons.svg#g-close"/></svg></button></header>
+  <ul id="tasks" class="tasks"></ul>
+</aside>
+
+<!-- A folha de um jogo (de baixo no celular, do lado no PC). -->
+<div id="sheet-back" class="sheet-back" hidden>
+  <aside id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"></aside>
+</div>
+
+<!-- Confirmar e perguntar (no lugar do confirm e do prompt do navegador). -->
+<dialog id="ask" class="ask">
+  <form method="dialog">
+    <h3 id="ask-title"></h3>
+    <p id="ask-text"></p>
+    <input id="ask-input" autocomplete="off" hidden>
+    <footer><button id="ask-no" class="btn ghost" value="no"></button><button id="ask-yes" class="btn" value="yes"></button></footer>
+  </form>
+</dialog>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script src="text.js"></script>
+<script src="ui.js"></script>
+<script src="tasks.js"></script>
+<script src="stream.js"></script>
+<script src="cabinet.js"></script>
+<script src="games.js"></script>
+<script src="library.js"></script>
+<script src="romfilter.js"></script>
+<script src="system.js"></script>
+<script src="trackball.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

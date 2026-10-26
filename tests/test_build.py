@@ -5241,7 +5241,8 @@ class WebPanelTests(unittest.TestCase):
             '#Name;Title;Emulator;CloneOf;Year;Manufacturer;Category;Players;Rotation;Control;Status;DisplayCount;'
             'DisplayType;AltRomname;AltTitle;Extra;Buttons;Series;Language;Region;Rating\n'
             'vf4;Virtua Fighter 4;Naomi;;2001;Sega;Fighter / Versus;2;0;joystick;good;1;raster;;;;6;;;;\n'
-            'Ikaruga;Ikaruga (GDL-0010);Naomi;;2001;Treasure;Shooter / Flying Vertical;2;270;;;;;;;;;;;;\n')
+            'Ikaruga;Ikaruga (GDL-0010);Naomi;;2001;Treasure;Shooter / Flying Vertical;2;270;;;;;;;;;;;;\n'
+            'vf4a;Virtua Fighter 4 (alt);Naomi;vf4;2001;Sega;Fighter / Versus;2;0;;;;;;;;;;;;\n')
         (attract / 'romlists/Naomi.tag').write_text('vf4;Naomi\nIkaruga;Other\n')
         (attract / 'stats/Naomi').mkdir(parents=True)
         (attract / 'stats/Naomi/vf4.stat').write_text('3\n600\n')
@@ -5424,14 +5425,23 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_VIDEO_CHECK=str(tmp / 'none'),
                    FLIPEROS_USER=cls.user, FLIPEROS_SESSION_FILE=str(tmp / 'session'), FLIPEROS_HOME=str(tmp),
                    FLIPEROS_ADB_URL='http://127.0.0.1:%d/service_scraper.php' % cls.adb.server_address[1],
-                   FLIPEROS_ROMSET_PLACES=str(tmp / 'media'), FLIPEROS_STREAM=str(stream),
+                   FLIPEROS_ROMSET_PLACES=str(tmp / 'mnt'), FLIPEROS_STREAM=str(stream),
                    FLIPEROS_STREAM_API='http://127.0.0.1:%d' % cls.adb.server_address[1],
                    FLIPEROS_LAB=str(lab), FLIPEROS_LAB_RUN=str(tmp / 'lab'),
                    FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'),
                    FLIPEROS_EMULATORS=str(emulators), FLIPEROS_PIXELCADE=str(pixelcade),
-                   FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'))
-        (tmp / 'media/USB/romset').mkdir(parents=True)
-        (tmp / 'media/USB/.hidden').mkdir()
+                   FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'),
+                   FLIPEROS_WEB_GUI=str(ROOT / 'fliperos-setup/gui'))
+        (tmp / 'mnt/USB/romset').mkdir(parents=True)
+        (tmp / 'mnt/USB/.hidden').mkdir()
+        # A midia dos jogos (~/media/TIPO/PASTA): o snap, o video e o logo do
+        # vf4 (o clone vf4a usa os dele), um video que o navegador nao toca e
+        # a descricao do Ikaruga.
+        for path, data in (('snap/naomi/vf4.png', b'PNGDATA'), ('preview/naomi/vf4.mp4', bytes(range(256)) * 4),
+                           ('logo/naomi/vf4.webp', b'WEBP'), ('preview/naomi/Ikaruga.avi', b'AVI'),
+                           ('texto/naomi/Ikaruga.txt', 'Atire nos inimigos.'.encode())):
+            (tmp / 'media' / path).parent.mkdir(parents=True, exist_ok=True)
+            (tmp / 'media' / path).write_bytes(data)
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
                                        '--port', str(cls.port), '--redirect-port', str(cls.redirect_port)], env=env)
         for _ in range(100):
@@ -5449,11 +5459,11 @@ class WebPanelTests(unittest.TestCase):
         cls.adb.shutdown()
         cls.tmp.cleanup()
 
-    def request(self, method, path, body=None, cookie=None, header=True):
+    def request(self, method, path, body=None, cookie=None, header=True, headers=None):
         import http.client
         conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
         raw = isinstance(body, bytes)
-        headers = {'Content-Type': 'application/octet-stream' if raw else 'application/json'}
+        headers = dict(headers or {}, **{'Content-Type': 'application/octet-stream' if raw else 'application/json'})
         if header:
             headers['X-FliperOS'] = '1'
         if cookie:
@@ -5601,10 +5611,16 @@ class WebPanelTests(unittest.TestCase):
                                         'Category': 'Fighter / Versus', 'Players': '2', 'Rotation': '0',
                                         'Control': 'joystick', 'Status': 'good', 'DisplayCount': '1',
                                         'DisplayType': 'raster', 'Buttons': '6', 'file': 'vf4.zip', 'Favourite': '1',
-                                        'PlayedCount': 3, 'PlayedTime': 600})
+                                        'PlayedCount': 3, 'PlayedTime': 600, 'art': 'slv'})
         self.assertNotIn('Favourite', games['Ikaruga'])        # favorito de outro emulador
-        self.assertEqual(games['newgame'], {'Name': 'newgame', 'Title': 'newgame', 'file': 'newgame.7z'})
+        # A midia que cada um tem: o .avi nao conta (o navegador nao o toca).
+        self.assertEqual(games['Ikaruga']['art'], 't')
+        self.assertEqual(games['newgame'], {'Name': 'newgame', 'Title': 'newgame', 'file': 'newgame.7z', 'art': ''})
         self.assertTrue(data['arcade'])
+        self.assertEqual(data['icon'], 'flycast')
+        naomi = systems[0]
+        self.assertEqual((naomi['arcade'], naomi['icon'], naomi['covers']), (True, 'flycast', ['vf4']))
+        self.assertEqual((systems[1]['icon'], systems[1]['covers']), (None, []))
         # Os filtros do FliperOS (fliperos-setup --filters), nao os da tela
         # do frontend.
         self.assertEqual(data['filters'], [
@@ -5623,6 +5639,101 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn('    --filters)\n', setup)
         self.assertIn('      scraper_attract_filters\n', setup.split('    --filters)\n')[1].split(';;')[0])
 
+    def test_game_media_from_the_cabinet(self):
+        # ~/media do gabinete: o set, o pai para o clone, Range para o video
+        # (o Safari do iPhone pede pedacos) e o ETag para o navegador guardar.
+        cookie = self.login()
+        url = '/api/media?system=naomi&kind=%s&game=%s'
+        self.assertEqual(self.request('GET', url % ('snap', 'vf4'))[0], 401)
+        status, _, data = self.request('GET', url % ('snap', 'vf4'), cookie=cookie)
+        self.assertEqual((status, data, self.last_headers['Content-Type']), (200, b'PNGDATA', 'image/png'))
+        self.assertEqual(self.last_headers['Cache-Control'], 'private, max-age=86400')
+        etag = self.last_headers['ETag']
+        self.assertEqual(self.request('GET', url % ('snap', 'vf4'), cookie=cookie,
+                                      headers={'If-None-Match': etag})[0], 304)
+        self.assertEqual(self.request('GET', url % ('logo', 'vf4a'), cookie=cookie)[2], b'WEBP')
+        video = bytes(range(256)) * 4
+        status, _, data = self.request('GET', url % ('preview', 'vf4'), cookie=cookie, headers={'Range': 'bytes=10-19'})
+        self.assertEqual((status, data, self.last_headers['Content-Range'], self.last_headers['Content-Type']),
+                         (206, video[10:20], 'bytes 10-19/1024', 'video/mp4'))
+        self.assertEqual(self.request('GET', url % ('preview', 'vf4'), cookie=cookie,
+                                      headers={'Range': 'bytes=-4'})[2], video[-4:])
+        self.assertEqual(self.request('GET', url % ('preview', 'vf4'), cookie=cookie,
+                                      headers={'Range': 'bytes=5000-'})[0], 416)
+        self.assertEqual(self.request('GET', url % ('preview', 'vf4'), cookie=cookie)[2], video)
+        status, _, data = self.request('GET', url % ('texto', 'Ikaruga'), cookie=cookie)
+        self.assertEqual((status, data.decode(), self.last_headers['Content-Type']),
+                         (200, 'Atire nos inimigos.', 'text/plain; charset=utf-8'))
+        for path in (url % ('preview', 'Ikaruga'), url % ('nope', 'vf4'), url % ('snap', '../vf4'),
+                     url % ('snap', 'Ikaruga'), '/api/media?system=nope&kind=snap&game=vf4'):
+            self.assertEqual(self.request('GET', path, cookie=cookie)[0], 404, path)
+
+    def test_panel_files_and_the_setup_icons(self):
+        # A pasta plana do painel: o codigo confere a cada vez (ETag), as
+        # imagens e as fontes ficam guardadas; da interface do Setup, so os
+        # icones dos programas e a fonte (os metapics do Arcadeflow nao).
+        status, _, _ = self.request('GET', '/style.css')
+        self.assertEqual((status, self.last_headers['Cache-Control']), (200, 'no-cache'))
+        self.assertEqual(self.request('GET', '/style.css', headers={'If-None-Match': self.last_headers['ETag']})[0], 304)
+        self.assertEqual(self.request('GET', '/xterm-LICENSE.txt')[0], 200)
+        status, _, data = self.request('GET', '/gui/icons/flycast.png')
+        self.assertEqual((status, self.last_headers['Content-Type'], self.last_headers['Cache-Control']),
+                         (200, 'image/png', 'max-age=604800'))
+        self.assertEqual(data, (ROOT / 'fliperos-setup/gui/icons/flycast.png').read_bytes())
+        self.assertEqual(self.request('GET', '/gui/fonts/PressStart2P-Regular.ttf')[0], 200)
+        self.assertEqual(self.last_headers['Content-Type'], 'font/ttf')
+        # O sprite dos icones (os do Setup e os glifos) em dia com o theme.py,
+        # e o icone de "Adicionar a tela inicial".
+        icons = subprocess.run([sys.executable, str(ROOT / 'tools/web-icons.py'), '--check'], capture_output=True,
+                               text=True)
+        self.assertEqual(icons.returncode, 0, icons.stderr)
+        sprite = self.request('GET', '/icons.svg')[2].decode()
+        for name in ('px-frontend', 'px-games', 'px-setup', 'px-video', 'g-play', 'g-star', 'g-coin'):
+            self.assertIn('id="%s"' % name, sprite)
+        self.assertEqual(self.request('GET', '/manifest.webmanifest')[0], 200)
+        self.assertEqual(self.last_headers['Content-Type'], 'application/manifest+json')
+        self.assertEqual(self.request('GET', '/icon-192.png')[0], 200)
+        for path in ('/nope.js', '/.gitignore', '/fliperos-web', '/gui/icons/metapics/category/action.png',
+                     '/gui/theme.py', '/gui/icons/../theme.py', '/gui/fonts/OFL.txt', '/index'):
+            self.assertEqual(self.request('GET', path)[0], 404, path)
+
+    def test_open_game_named_with_its_art(self):
+        # O jogo aberto com o nome de verdade, a pasta e a arte dele (o
+        # gabinete desenhado da pagina), pelo caminho da ROM no comando.
+        cookie = self.login()
+        game = subprocess.Popen(['/opt/x/flycast', '-c', 'import time\ntime.sleep(30)', str(self.roms / 'vf4.zip')],
+                                executable=sys.executable)
+        try:
+            for _ in range(50):
+                found = json.loads(self.request('GET', '/api/status', cookie=cookie)[2])['running']['game']
+                if found and found.get('name'):
+                    break
+                time.sleep(0.1)
+            self.assertEqual({k: found.get(k) for k in ('program', 'system', 'name', 'title', 'year', 'art', 'icon')},
+                             {'program': 'flycast', 'system': 'naomi', 'name': 'vf4', 'title': 'Virtua Fighter 4',
+                              'year': '2001', 'art': 'slv', 'icon': 'flycast'})
+        finally:
+            game.kill()
+            game.wait()
+
+    def test_panel_lights_the_cabinet_buttons(self):
+        # Os comandos apertados tambem para o gabinete desenhado da pagina,
+        # com o login (sem a chave do OBS).
+        import http.client
+        self.assertEqual(self.request('GET', '/api/input/events')[0], 401)
+        conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
+        conn.request('GET', '/api/input/events', headers={'Cookie': self.login()})
+        res = conn.getresponse()
+        self.assertEqual((res.status, res.getheader('Content-Type')), (200, 'text/event-stream'))
+        event = {}
+        while event == {}:
+            line = res.fp.readline()
+            self.assertTrue(line)
+            if line.startswith(b'data: '):
+                event = json.loads(line[len(b'data: '):])
+        self.assertEqual(event, {'1': ['up', 'b1'], '2': []})
+        conn.close()
+
     def test_rom_filter_goes_through_the_setup(self):
         cookie = self.login()
         log = Path(self.tmp.name) / 'romfilter.log'
@@ -5639,7 +5750,7 @@ class WebPanelTests(unittest.TestCase):
         self.assertFalse(info['params'][2]['visible'])
         self.assertEqual(info['saved'], {'target': 'groovymame', 'preset': 'custom', 'players': '0'})
         self.assertEqual((info['saved_label'], info['dest']), ('Custom, GroovyMAME', {'path': '/r/mame', 'label': '~/roms/mame'}))
-        folder = Path(self.tmp.name) / 'media/USB/romset'
+        folder = Path(self.tmp.name) / 'mnt/USB/romset'
         info = json.loads(self.request('GET', '/api/romfilter?target=groovymame&folder=%s' % folder, cookie=cookie)[2])
         self.assertEqual((info['default_target'], info['writable']), ('groovymame', True))
         for query in ('target=nope', 'target=groovymame&folder=/nao/existe', 'target=groovymame&folder=relative'):
@@ -5686,21 +5797,32 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual((info['rc'], info['last']), (0, 'copied=2'))
         self.assertIn('--romfilter run %s groovymame copy players=2\n' % folder, log.read_text())
 
-    def test_downloads_have_their_own_page(self):
-        # O Downloader numa pagina so dele, depois do Filtro de ROMs; os
-        # Arquivos depois dela. As tarefas aparecem nas duas.
+    def test_four_areas_with_their_tabs(self):
+        # Quatro areas (a barra lateral no PC e a de baixo no celular), cada
+        # uma com as suas abas; o Downloader e a BIOS numa aba da Biblioteca e
+        # as tarefas numa gaveta so. Os enderecos das dez paginas de antes
+        # continuam abrindo (o /lab manda para #status).
         index = (ROOT / 'config/web/index.html').read_text()
-        nav = index[index.index('<nav class="pages"'):index.index('</nav>')]
-        self.assertEqual(re.findall(r'data-page="([a-z]+)"', nav),
-                         ['frontend', 'live', 'romfilter', 'downloads', 'scraper', 'install', 'files', 'settings',
-                          'status', 'terminal'])
-        self.assertIn('<section class="card wide" data-page="downloads" aria-labelledby="h-dl">', index)
-        self.assertIn('<section class="card wide" data-page="downloads files scraper install" aria-labelledby="h-tasks">',
-                      index)
+        for nav in ('<nav class="nav"', '<nav class="bottomnav"'):
+            part = index[index.index(nav):index.index('</nav>', index.index(nav))]
+            self.assertEqual(re.findall(r'data-area="([a-z]+)"', part), ['frontend', 'live', 'library', 'system'])
+        self.assertIn('<div class="sub grid" data-sub="downloads">', index)
+        self.assertIn('aria-labelledby="h-dl">', index)
+        self.assertIn('<ul id="tasks" class="tasks"></ul>', index)
+        self.assertNotIn('h-tasks', index)
         app = (ROOT / 'config/web/app.js').read_text()
-        self.assertIn('const PAGES = ["frontend", "live", "romfilter", "downloads", "scraper", "install", "files", '
-                      '"settings", "status", "terminal"];', app)
-        self.assertEqual(app.count('page_downloads: "Downloads"'), 2)
+        areas = app[app.index('const AREAS = {'):app.index('};', app.index('const AREAS = {'))]
+        self.assertEqual(re.findall(r'\["([a-z]+)", "px-', areas),
+                         ['watch', 'obs', 'overview', 'install', 'downloads', 'romfilter', 'art', 'files',
+                          'status', 'logs', 'settings', 'terminal', 'lab'])
+        self.assertIn('status: "system/status"', app)
+        self.assertIn('downloads: "library/downloads"', app)
+        # Os scripts, em ordem (as globais de um valem nos outros), e o app.js por ultimo.
+        scripts = re.findall(r'<script src="([a-z]+\.js)"></script>', index)
+        self.assertEqual(scripts[:2], ['text.js', 'ui.js'])
+        self.assertEqual(scripts[-1], 'app.js')
+        for name in scripts:
+            self.assertEqual(self.request('GET', '/' + name)[0], 200, name)
 
     def test_marquee_card_links_the_scoreboard_games_page(self):
         # O cartao Marquee para o OBS leva a lista dos jogos com placar versus
@@ -5712,7 +5834,7 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn('href="https://github.com/juniorterin/fliperOS/wiki/Web-panel#marquee-for-obs"', index)
         self.assertIn('<a id="marquee-for-obs"></a>**Marquee for OBS:**',
                       (ROOT / 'docs/wiki/Web-panel.md').read_text())
-        self.assertIn('overlay_games: "🎮 Ver os jogos com placar versus', (ROOT / 'config/web/app.js').read_text())
+        self.assertIn('overlay_games: "🎮 Ver os jogos com placar versus', (ROOT / 'config/web/text.js').read_text())
 
     def test_live_capture_problem_in_words(self):
         # O erro da captura (fliperos-stream status) vira a resposta da
@@ -5755,7 +5877,7 @@ class WebPanelTests(unittest.TestCase):
         index = (ROOT / 'config/web/index.html').read_text()
         self.assertIn('id="live-net"', index)
         self.assertIn('id="live-net-tip"', index)
-        app = (ROOT / 'config/web/app.js').read_text()
+        app = (ROOT / 'config/web/text.js').read_text()
         self.assertIn('live_net_tip_wifi: "O gabinete está no Wi-Fi.', app)
 
     def test_live_screen_offer_goes_to_go2rtc(self):
@@ -5888,9 +6010,9 @@ class WebPanelTests(unittest.TestCase):
         cookie = self.login()
         tmp = Path(self.tmp.name)
         places = json.loads(self.request('GET', '/api/dirs', cookie=cookie)[2])
-        self.assertEqual(places, {'path': '', 'places': [str(tmp / 'roms'), str(tmp / 'media/USB')]})
-        listing = json.loads(self.request('GET', '/api/dirs?path=%s' % (tmp / 'media/USB'), cookie=cookie)[2])
-        self.assertEqual(listing, {'path': str(tmp / 'media/USB'), 'parent': str(tmp / 'media'), 'dirs': ['romset']})
+        self.assertEqual(places, {'path': '', 'places': [str(tmp / 'roms'), str(tmp / 'mnt/USB')]})
+        listing = json.loads(self.request('GET', '/api/dirs?path=%s' % (tmp / 'mnt/USB'), cookie=cookie)[2])
+        self.assertEqual(listing, {'path': str(tmp / 'mnt/USB'), 'parent': str(tmp / 'mnt'), 'dirs': ['romset']})
         for path in ('relative', '/nao/existe'):
             self.assertEqual(self.request('GET', '/api/dirs?path=' + path, cookie=cookie)[0], 404, path)
 
@@ -6150,7 +6272,7 @@ class WebPanelTests(unittest.TestCase):
         # Desligado por enquanto: o servidor recusa e a pagina esconde o cartao.
         cookie = self.login()
         self.assertEqual(self.request('GET', '/api/trackball', cookie=cookie)[0], 404)
-        self.assertIn('data-page="frontend" data-off aria-labelledby="h-ball"',
+        self.assertIn('<section class="card wide" data-off aria-labelledby="h-ball">',
                       (ROOT / 'config/web/index.html').read_text())
 
     def test_settings(self):

@@ -26,6 +26,12 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
                       Attract-Mode, Favourite, PlayedCount) e os filtros
     GET  /api/gameinfo?system=&game=&lang=  as informacoes da internet
                       (Arcade Database; consoles: libretro-thumbnails)
+                      (cada jogo com "art": as letras da midia que ele tem)
+    GET  /api/media?system=&game=&kind=snap|box|logo|marquee|preview|texto
+                      a midia do jogo em ~/media (o set ou o pai), com Range
+    GET  /api/input/events  os comandos apertados no gabinete (Server-Sent
+                      Events, como o do controle para o OBS)
+    GET  /gui/icons/NOME.png, /gui/fonts/NOME.ttf  da interface do Setup
     POST /api/favourite {"system", "game", "on"}: os favoritos do FliperOS
     POST /api/launch  {"system", "game"}: fecha o que esta na tela e abre o
                       jogo; quando ele fecha, volta o que estava
@@ -103,6 +109,7 @@ import importlib.util
 import json
 import os
 import pwd
+import random
 import re
 import secrets
 import shlex
@@ -147,19 +154,21 @@ SESSION_HOURS = 12
 LAB = ENV("FLIPEROS_LAB", BIN + "/fliperos-lab")
 LAB_RUN = ENV("FLIPEROS_LAB_RUN", "/run/fliperos-lab")
 LAB_USER = "lab"
-STATIC_FILES = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js",
-                "/style.css": "style.css", "/icon.svg": "icon.svg",
-                # O terminal: o xterm.js (MIT, xterm-LICENSE.txt) vai junto.
-                "/xterm.js": "xterm.js", "/xterm.css": "xterm.css", "/xterm-addon-fit.js": "xterm-addon-fit.js",
-                "/xterm-LICENSE.txt": "xterm-LICENSE.txt",
-                # O marquee para o OBS: a pagina e publica, os dados pedem a chave.
-                "/overlay/marquee": "overlay.html", "/overlay.js": "overlay.js", "/overlay.css": "overlay.css",
-                # A tela ao vivo para o OBS, com a mesma chave.
-                "/overlay/live": "live.html", "/live.js": "live.js",
-                # O controle para o OBS, com a mesma chave.
-                "/overlay/input": "input.html", "/input.js": "input.js", "/input.css": "input.css"}
+# A pasta do painel e plana: /NOME serve o arquivo NOME dela (static_name).
+# Os enderecos com outro nome: a pagina e as do OBS (publicas; os dados delas
+# pedem a chave: o marquee, a tela ao vivo e o controle).
+STATIC_ALIASES = {"/": "index.html", "/overlay/marquee": "overlay.html", "/overlay/live": "live.html",
+                  "/overlay/input": "input.html"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-         ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8"}
+         ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8",
+         ".png": "image/png", ".webp": "image/webp", ".ttf": "font/ttf", ".json": "application/json",
+         ".webmanifest": "application/manifest+json"}
+# O codigo e as paginas: o navegador confere a cada vez (um update vale na
+# hora); as imagens e as fontes ficam guardadas uma semana.
+STATIC_CACHE = {".png": "max-age=604800", ".webp": "max-age=604800", ".ttf": "max-age=604800"}
+# A interface grafica do Setup: o painel usa os icones dos programas e a
+# fonte de pixel dela (/gui/icons/NOME.png, /gui/fonts/NOME.ttf).
+GUI = ENV("FLIPEROS_WEB_GUI", "/usr/local/lib/fliperos-setup/gui")
 # Os programas que contam como "o jogo aberto", na ordem de preferencia.
 EMULATORS = ("retroarch", "groovymame", "mame", "flycast", "pcsx2", "pcsx2-qt", "duckstation", "duckstation-qt",
              "dolphin-emu", "supermodel", "sm2-emu", "hypseus", "singe", "openbor", "fcadefbneo.exe")
@@ -189,6 +198,25 @@ def conf_values():
             key, value = line.split("=", 1)
             values[key.strip()] = value.strip()
     return values
+
+
+def static_name(path):
+    """O arquivo da pasta do painel que o endereco pede: um apelido ou um
+    nome simples (sem pasta) com um tipo conhecido, que exista nela."""
+    name = STATIC_ALIASES.get(path) or path[1:]
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) or os.path.splitext(name)[1] not in TYPES:
+        return None
+    return name if os.path.isfile(os.path.join(STATIC, name)) else None
+
+
+def gui_file(path):
+    """/gui/icons/NOME.png ou /gui/fonts/NOME.ttf da interface do Setup (so
+    esses, sem subpastas: os metapics do Arcadeflow ficam de fora)."""
+    m = re.fullmatch(r"/gui/(icons/[A-Za-z0-9_-]+\.png|fonts/[A-Za-z0-9_-]+\.ttf)", path)
+    if not m:
+        return None
+    full = os.path.join(GUI, m.group(1))
+    return full if os.path.isfile(full) else None
 
 
 # ── A senha do sistema ─────────────────────────────────────────────
@@ -910,6 +938,93 @@ def game_command(system, name):
         return None
     argv = [a.replace("[romfilename]", path).replace("[name]", entry["Name"]) for a in argv]
     return argv if argv and argv[0] in LAUNCHERS else None
+
+
+# ── A midia dos jogos ──────────────────────────────────────────────
+# ~/media/TIPO/PASTA/NOME.ext, o que o scraper e os pacotes de arte gravam:
+# snap, box (capa ou flyer), logo, marquee, preview (o video) e texto (a
+# descricao). NOME e o set (arcade) ou o arquivo sem a extensao; um clone sem
+# arte usa a do pai. O frontend do FliperOS (gui/fedata.py) busca por aqui.
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+VIDEO_EXTS = (".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv")
+# Os videos que o navegador toca.
+WEB_VIDEO_EXTS = (".mp4", ".webm", ".mov")
+MEDIA_EXTS = {"snap": IMAGE_EXTS, "box": IMAGE_EXTS, "logo": IMAGE_EXTS, "marquee": IMAGE_EXTS,
+              "preview": WEB_VIDEO_EXTS, "texto": (".txt",)}
+MEDIA_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+               ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+               ".txt": "text/plain; charset=utf-8"}
+# A letra de cada tipo no campo "art" dos jogos (/api/games).
+ART_LETTERS = (("snap", "s"), ("box", "b"), ("logo", "l"), ("marquee", "m"), ("preview", "v"), ("texto", "t"))
+
+
+def media_dir(kind, key):
+    parts = [p for p in key.split("/") if p not in ("", ".", "..")]
+    return os.path.join(player_home(), "media", kind, *parts)
+
+
+def media_file(key, names, kind, exts):
+    """O arquivo de midia do jogo: o primeiro dos nomes (o do set, depois o
+    do pai) que tem um arquivo, na ordem das extensoes."""
+    base = media_dir(kind, key)
+    for name in names:
+        if not name or name != os.path.basename(name) or name.startswith("."):
+            continue
+        for ext in exts:
+            path = os.path.join(base, name + ext)
+            if os.path.isfile(path):
+                return path
+    return None
+
+
+class MediaIndex:
+    """Os nomes com midia de cada ~/media/TIPO/PASTA: um os.listdir guardado
+    ate a pasta mudar (a lista de jogos diz que arte cada um tem, e a pagina
+    nunca pede uma imagem que nao existe)."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.items = {}
+
+    def names(self, kind, key):
+        folder = media_dir(kind, key)
+        try:
+            mtime = os.stat(folder).st_mtime
+        except OSError:
+            return frozenset()
+        with self.lock:
+            hit = self.items.get((kind, key))
+            if hit and hit[0] == mtime:
+                return hit[1]
+        try:
+            files = os.listdir(folder)
+        except OSError:
+            files = []
+        exts = MEDIA_EXTS[kind]
+        names = frozenset(stem for stem, ext in map(os.path.splitext, files) if ext in exts)
+        with self.lock:
+            self.items[(kind, key)] = (mtime, names)
+        return names
+
+    def art(self, key, game):
+        """As letras dos tipos de midia do jogo (ART_LETTERS), o do set ou o do pai."""
+        names = (game.get("Name"), game.get("CloneOf"))
+        return "".join(letter for kind, letter in ART_LETTERS
+                       if any(n and n in self.names(kind, key) for n in names))
+
+
+def system_icon(system):
+    """O icone do programa da pasta (gui/icons/NOME.png), a mesma regra do
+    system_icon() do frontend (gui/feview.py); None: so o nome."""
+    exe = (system.get("exe", "") + " " + system.get("args", "")).lower()
+    for name in ("groovymame", "flycast", "pcsx2", "dolphin", "model2", "openbor", "retroarch", "fightcade"):
+        if name in exe:
+            return name
+    if "sm2" in exe:
+        return "model2"
+    if "duckstation" in exe:
+        return "pcsx2"
+    return None
 
 
 # ── As informacoes de um jogo, da internet ─────────────────────────
@@ -2256,6 +2371,10 @@ class Panel:
         # O que volta depois de um jogo aberto daqui, para o proximo pedido
         # feito com ele ainda na tela (sem fliperos-session no meio).
         self.last_back = "menu"
+        self.media = MediaIndex()
+        # O jogo aberto, por processo (identify), e o ultimo pedido de Jogar.
+        self.found = {}
+        self.last_launch = None
 
     def system(self, key):
         rows = self.systems.get()
@@ -2296,6 +2415,50 @@ class Panel:
         stop(state["games"])
         return {"closed": len(state["games"])}
 
+    def identify(self, game):
+        """A pasta e o jogo do processo aberto, para o painel mostrar o nome de
+        verdade, o letreiro e a arte: a pasta de jogos que aparece no comando
+        (o caminho da ROM ou o -rompath; a mais longa ganha), senao a do
+        programa com esse set; o ultimo Jogar do painel desempata. Guardado
+        por processo."""
+        key = (game["pid"], game["command"])
+        if key in self.found:
+            return self.found[key]
+        rows = self.systems.get()
+        rows = rows if isinstance(rows, list) else []
+        file = game.get("file") or ""
+        command = game["command"] + " "
+        hits = [s for s in rows if s["folder"]
+                and re.search(re.escape(s["folder"].rstrip("/")) + r"(/|;|\s)", command)]
+        if not hits and file:
+            hits = [s for s in rows if game["program"] in (s["exe"] + " " + s["args"])]
+        last = self.last_launch
+        if last and time.time() - last[2] < 300:
+            hits.sort(key=lambda s: s["key"] != last[0])
+        else:
+            hits.sort(key=lambda s: -len(s["folder"]))
+        out = {}
+        for system in hits:
+            stem = file
+            for ext in system["extensions"]:
+                if stem.lower().endswith(ext):
+                    stem = stem[:-len(ext)]
+                    break
+            entry = game_entry(system, stem) or game_entry(system, file)
+            if entry:
+                out = {"system": system["key"], "system_name": system["name"], "icon": system_icon(system),
+                       "name": entry["Name"], "title": entry.get("Title") or entry["Name"],
+                       "art": self.media.art(system["key"], entry)}
+                out.update({k.lower(): entry[k] for k in ("Year", "Manufacturer", "Category", "Players", "Buttons",
+                                                         "Control", "CloneOf", "PlayedCount", "PlayedTime")
+                            if entry.get(k)})
+                break
+        if len(self.found) > 50:
+            self.found.clear()
+        if rows:
+            self.found[key] = out
+        return out
+
     def status(self):
         cpu, net, procs = self.sampler.snapshot()
         addrs = self.addresses.get()
@@ -2303,13 +2466,16 @@ class Panel:
             row["ipv4"] = addrs.get(name, []) if isinstance(addrs, dict) else []
         load = read(os.path.join(PROC, "loadavg")).split()
         uptime = read(os.path.join(PROC, "uptime")).split()
+        found = running()
+        if found["game"]:
+            found["game"].update(self.identify(found["game"]))
         return {
             "host": socket.gethostname(), "version": version(), "time": time.time(),
             "uptime": float(uptime[0]) if uptime else None, "load": [float(x) for x in load[:3]],
             "cpu": cpu, "memory": memory(), "temperatures": temperatures(), "gpus": self.gpus.get(),
             "video": self.video.get(), "disks": self.disks.get(), "network": net, "wifi": self.wifi.get(),
             # Todos: o painel ordena pela coluna escolhida e mostra os primeiros.
-            "processes": procs, "fps": fps(), "running": running(), "volume": self.volume.get(),
+            "processes": procs, "fps": fps(), "running": found, "volume": self.volume.get(),
         }
 
 
@@ -2327,6 +2493,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
+        self.guard_headers(frame)
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def guard_headers(self, frame):
         self.send_header("X-Content-Type-Options", "nosniff")
         # O marquee para o OBS pode aparecer dentro do painel (a previa).
         self.send_header("X-Frame-Options", frame)
@@ -2335,10 +2508,62 @@ class Handler(BaseHTTPRequestHandler):
         # informacoes dos jogos (Arcade Database, libretro-thumbnails).
         self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob: %s %s; "
                          "connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'" % (ADB_ORIGIN, THUMBS_URL))
-        for key, value in (headers or {}).items():
-            self.send_header(key, value)
+
+    def send_inline(self, path, ctype, cache, frame="DENY"):
+        """Um arquivo para a pagina mostrar, em pedacos: o ETag (304 quando o
+        navegador ja o tem), o cache pedido e Range (o Safari do iPhone so
+        toca video assim)."""
+        try:
+            st = os.stat(path)
+        except OSError:
+            return self.send(404, {"error": "not found"})
+        size = st.st_size
+        etag = '"%x-%x"' % (int(st.st_mtime), size)
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", cache)
+            self.end_headers()
+            return None
+        start, end = 0, size - 1
+        m = re.fullmatch(r"bytes=(\d*)-(\d*)", (self.headers.get("Range") or "").strip())
+        partial = bool(m and (m.group(1) or m.group(2)))
+        if partial:
+            first, last = m.groups()
+            if first:
+                start = int(first)
+                end = min(int(last), size - 1) if last else size - 1
+            else:
+                start = max(0, size - int(last))
+            if start > end or start >= size:
+                self.send_response(416)
+                self.send_header("Content-Range", "bytes */%d" % size)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return None
+        self.send_response(206 if partial else 200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(end - start + 1))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control", cache)
+        if partial:
+            self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
+        self.guard_headers(frame)
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            with open(path, "rb") as f:
+                f.seek(start)
+                left = end - start + 1
+                while left > 0:
+                    chunk = f.read(min(left, 1 << 18))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except OSError:
+            pass
+        return None
 
     def token(self):
         cookie = SimpleCookie(self.headers.get("Cookie", ""))
@@ -2353,15 +2578,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         url = urlparse(self.path)
-        if url.path in STATIC_FILES:
-            name = STATIC_FILES[url.path]
-            try:
-                with open(os.path.join(STATIC, name), "rb") as f:
-                    data = f.read()
-            except OSError:
-                return self.send(404, {"error": "not found"})
-            return self.send(200, data, TYPES[os.path.splitext(name)[1]],
-                             frame="SAMEORIGIN" if name.startswith(("overlay", "live", "input")) else "DENY")
+        name = static_name(url.path)
+        if name:
+            ext = os.path.splitext(name)[1]
+            return self.send_inline(os.path.join(STATIC, name), TYPES[ext], STATIC_CACHE.get(ext, "no-cache"),
+                                    frame="SAMEORIGIN" if name.startswith(("overlay", "live", "input")) else "DENY")
+        gui = gui_file(url.path)
+        if gui:
+            return self.send_inline(gui, TYPES[os.path.splitext(gui)[1]], "max-age=604800")
         if url.path == "/lab":
             return self.lab_login(parse_qs(url.query))
         if not url.path.startswith("/api/"):
@@ -2399,8 +2623,16 @@ class Handler(BaseHTTPRequestHandler):
             rows = self.panel.systems.get()
             if not isinstance(rows, list):
                 return self.send(500, rows)
-            return self.send(200, {"systems": [{"key": s["key"], "name": s["name"], "platform": s["platform"],
-                                                 "games": len(games(s))} for s in rows]})
+            out = []
+            for s in rows:
+                found = games(s)
+                # O mosaico do cartao da pasta: alguns jogos com snap, sorteados.
+                snaps = self.panel.media.names("snap", s["key"])
+                covers = [g["Name"] for g in found if g["Name"] in snaps or g.get("CloneOf") in snaps]
+                out.append({"key": s["key"], "name": s["name"], "platform": s["platform"], "games": len(found),
+                            "arcade": s["arcade"], "icon": system_icon(s),
+                            "covers": random.sample(covers, min(4, len(covers)))})
+            return self.send(200, {"systems": out})
         if url.path == "/api/files":
             query = parse_qs(url.query)
             root, rel = (query.get("root") or [FILE_ROOTS[0]])[0], (query.get("path") or [""])[0]
@@ -2471,8 +2703,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(404, {"error": "no such system"})
             filters = self.panel.filters.get()
             favs = favourite_set(self.panel.systems.get())
-            return self.send(200, {"system": system["key"], "arcade": system["arcade"], "games": games(system, favs),
-                                   "filters": filters if isinstance(filters, list) else []})
+            rows = games(system, favs)
+            for entry in rows:
+                entry["art"] = self.panel.media.art(system["key"], entry)
+            return self.send(200, {"system": system["key"], "arcade": system["arcade"], "icon": system_icon(system),
+                                   "games": rows, "filters": filters if isinstance(filters, list) else []})
+        if url.path == "/api/media":
+            query = parse_qs(url.query)
+            system = self.panel.system((query.get("system") or [""])[0])
+            kind, name = (query.get("kind") or [""])[0], (query.get("game") or [""])[0]
+            if not system or kind not in MEDIA_EXTS:
+                return self.send(404, {"error": "no such media"})
+            clone = read_romlist(system)[0].get(name, {}).get("CloneOf")
+            path = media_file(system["key"], (name, clone), kind, MEDIA_EXTS[kind])
+            if not path:
+                return self.send(404, {"error": "no such media"})
+            return self.send_inline(path, MEDIA_TYPES[os.path.splitext(path)[1]], "private, max-age=86400")
+        if url.path == "/api/input/events":
+            # O controle aceso no gabinete desenhado da pagina (o mesmo do OBS).
+            return self.input_events()
         if url.path == "/api/romfilter":
             query = parse_qs(url.query)
             folder = romfilter_folder((query.get("folder") or [""])[0])
@@ -2570,6 +2819,8 @@ class Handler(BaseHTTPRequestHandler):
             argv = game_command(system, str(data.get("game", ""))) if system else None
             if not argv:
                 return self.send(400, {"error": "no such game, or this system does not open from the panel"})
+            # Para o painel saber de que pasta e o jogo que abrir (identify).
+            self.panel.last_launch = (system["key"], str(data.get("game", "")), time.time())
             return self.send(200, self.panel.launch(argv))
         if url.path == "/api/favourite":
             data = self.body()

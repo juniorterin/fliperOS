@@ -400,30 +400,13 @@ class Library:
 
     # ── Midia ──
     def media(self, game, kind):
-        """O arquivo de midia do jogo (o do set; o clone sem o dele usa o do pai)."""
-        system = game["_system"]
-        base = os.path.join(web.player_home(), "media", kind, system["key"])
-        for name in (game["Name"], game.get("CloneOf")):
-            if not name:
-                continue
-            for ext in IMAGE_EXTS:
-                path = os.path.join(base, name + ext)
-                if os.path.isfile(path):
-                    return path
-        return None
+        """O arquivo de midia do jogo (o do set; o clone sem o dele usa o do
+        pai), pela busca do painel web (a mesma nos dois)."""
+        return web.media_file(game["_system"]["key"], (game["Name"], game.get("CloneOf")), kind, IMAGE_EXTS)
 
     def video(self, game):
         """O video do jogo (~/media/preview), o do set ou o do pai."""
-        system = game["_system"]
-        base = os.path.join(web.player_home(), "media", "preview", system["key"])
-        for name in (game["Name"], game.get("CloneOf")):
-            if not name:
-                continue
-            for ext in VIDEO_EXTS:
-                path = os.path.join(base, name + ext)
-                if os.path.isfile(path):
-                    return path
-        return None
+        return web.media_file(game["_system"]["key"], (game["Name"], game.get("CloneOf")), "preview", VIDEO_EXTS)
 
     # ── Pastas que mudaram ──
     def folder_stamps(self):
