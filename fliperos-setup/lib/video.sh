@@ -301,6 +301,15 @@ video_low_dotclock_grid() {
     switchres 320 240 60 -s -m "$1" --dotclock_min 0 -l grid
 }
 
+# video_low_dotclock_kernel_log: as ultimas linhas do kernel sobre o driver
+# de video e o PLL, para o log do Setup depois do grid.
+DMESG_CMD=${DMESG_CMD:-dmesg}
+video_low_dotclock_kernel_log() {
+  echo "dotclock baixo: o kernel depois do grid:"
+  "$DMESG_CMD" 2> /dev/null | grep -iE 'nouveau|pll|drm' | tail -n 20
+  return 0
+}
+
 # video_low_dotclock_set CARD 1|0 grava a placa que passou no grid, ou a
 # esquece (a outra placa que estava gravada tambem: so vale uma).
 video_low_dotclock_set() {

@@ -70,7 +70,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <p>Save and exit with the stick plugged in.</p>
 <h3 id="5-boot-from-the-usb-stick">5. Boot from the USB stick</h3>
 <ol>
-<li><strong>Wait about 30 seconds without pressing anything.</strong> The boot menu (15 kHz, 25 kHz, 31 kHz, LCD...) is drawn at 31 kHz, so <strong>it doesn't show on a 15 kHz tube</strong>. With no key pressed, the <strong>15 kHz</strong> entry boots by itself, which is the safe one for a cabinet. On a PC monitor or an LCD, you can pick <em>SVGA / LCD monitor</em> in the menu instead.</li>
+<li><strong>Wait about 10 seconds without pressing anything.</strong> The boot menu (15 kHz, 25 kHz, 31 kHz, LCD...) is drawn at 31 kHz, so <strong>it doesn't show on a 15 kHz tube</strong>. With no key pressed, the <strong>15 kHz</strong> entry boots by itself, which is the safe one for a cabinet. On a PC monitor or an LCD, you can pick <em>SVGA / LCD monitor</em> in the menu instead.</li>
 <li>The FliperOS splash appears, already at 15 kHz.</li>
 <li><strong>Output test.</strong> FliperOS turns on one video output at a time and a voice says <em>"Testing output VGA 1. If you can see this screen, press Enter."</em> When the text <em>"If you can see this screen clearly, press ENTER"</em> is readable on <strong>your</strong> monitor, press <strong>Enter</strong>. Without Enter it moves on to the next output and repeats the round up to three times.</li>
 <li><strong>Testing Results</strong> shows the card, the output, the mode and the frequency. Choose <strong>Validate settings</strong> (or <strong>Repeat test</strong>).</li>
@@ -202,7 +202,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </ol>
 <h3 id="12-if-something-goes-wrong">12. If something goes wrong</h3>
 <ul>
-<li><strong>No picture at boot</strong>: wait the 30 seconds (the menu doesn't show at 15 kHz). On a 15 kHz-only tube, connect an LCD temporarily to choose another boot entry.</li>
+<li><strong>No picture at boot</strong>: wait 10 seconds (the menu doesn't show at 15 kHz). On a 15 kHz-only tube, connect an LCD temporarily to choose another boot entry.</li>
 <li><strong>The installer doesn't list the disk</strong>: SATA mode on AHCI in the BIOS. <em>My drive is not listed (details)</em> shows what Linux sees.</li>
 <li><strong>The picture is off-center or too big</strong>: <em>Setup &gt; Video Setup &gt; Geometry</em>.</li>
 <li><strong>Two or three monitors</strong> (Darius, Punch-Out!!, F355 Challenge): <em>Setup &gt; Video Setup &gt; Multiple Monitors</em>, see <a href="#Multiple-Monitors">Multiple monitors</a>.</li>
@@ -466,7 +466,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </table>
 <p>The <code>S</code> at the end of the mode comes from the 15 kHz patch: it uses the kernel's fixed table of low-dotclock modes (<code>drm_modes_low_dotclock.c</code>), and <code>i</code> means interlaced. Every entry carries <code>quiet splash consoleblank=0</code> and <code>radeon</code> on SI/CIK cards.</p>
 <p><strong>30-second timer.</strong> With no key pressed, the <strong>15 kHz</strong> entry boots, which is the safe one for a cabinet: an LCD receiving 15 kHz only shows "out of range", but 31 kHz on a 15 kHz-only tube can damage it.</p>
-<p>The menu itself <strong>doesn't show on a 15 kHz CRT</strong> — it is drawn in the firmware's text mode (~31 kHz), before the kernel. GroovyArcade is the same. To choose another entry on a 15 kHz-only cabinet, connect an LCD temporarily; with the CRT, wait the 30 s. The first readable thing on the tube is the splash, already in the boot mode.</p>
+<p>The menu itself <strong>doesn't show on a 15 kHz CRT</strong> — it is drawn in the firmware's text mode (~31 kHz), before the kernel. GroovyArcade is the same. To choose another entry on a 15 kHz-only cabinet, connect an LCD temporarily; with the CRT, wait the 10 s (any key stops the countdown). The first readable thing on the tube is the splash, already in the boot mode.</p>
 <h2 id="output-test-and-testing-results">Output test and <em>Testing Results</em></h2>
 <p>Ported from <code>gatools</code> (<code>video/video.sh</code>): as soon as the media boots, <code>fliperos-setup</code>:</p>
 <ol>
@@ -3049,7 +3049,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <tr>
 <td>Fightcade Flycast</td>
 <td>its Flycast matches at 640x240</td>
-<td>640x480 (no filter: Fightcade runs without it)</td>
+<td>640x480, with or without the filter (picom, see below)</td>
 <td>640x240</td>
 </tr>
 <tr>
@@ -3086,10 +3086,11 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 5. <code>deflicker=</code>.</p>
 <p>It works below the emulators, so no emulator needs a shader of its own.</p>
 <p><code>libfliperos-deflicker.so</code> (<code>config/fliperos-deflicker.c</code>, built with the image and on each update into <code>/usr/local/lib/fliperos</code>) is loaded through <code>LD_PRELOAD</code> by <code>fliperos-kms-run</code> (RetroArch and the other KMS emulators) and by <code>fliperos-x11-client</code> (the emulators in their own Xorg).</p>
-<p>It is not loaded into Xorg, into Switchres or into the 32-bit Wine programs. The library catches the frame swap (<code>glXSwapBuffers</code>, <code>eglSwapBuffers</code>, including lookups through <code>dlsym</code> and <code>GetProcAddress</code>, as SDL does).</p>
-<p>It copies the frame, draws it back through a three-tap vertical filter and restores the GL state the emulator had. It checks the CRTC mode through DRM every 30 frames: in a progressive mode (240p, 31 kHz, LCD) it does nothing.</p>
-<p>The filter works with OpenGL (compatibility, core and GLES), not with Vulkan, so when it is on for them and the mode is interlaced, <code>fliperos-x11-run</code> puts PCSX2 (<code>Renderer = 12</code>), Dolphin (<code>GFXBackend=OGL</code>) and Flycast (Vulkan <code>pvr.rend</code> 4 and 5 become OpenGL's 0 and 3, for that launch only) on OpenGL.</p>
-<p>The LXDE desktop draws without OpenGL, so it gets the same filter through <strong>picom</strong> with a window shader (<code>config/fliperos-desktop-deflicker</code>, started by <code>fliperos-lxde</code> only when the screen mode is interlaced, at the Desktop row's level <code>deflicker_desktop=</code>).</p>
+<p>It is not loaded into Xorg or into Switchres: <code>fliperos-x11-run</code> takes it out of an <code>LD_PRELOAD</code> inherited from a frontend, and <code>fliperos-x11-client</code> puts it back on the emulator alone. The library catches the frame swap (<code>glXSwapBuffers</code>, <code>eglSwapBuffers</code>, including lookups through <code>dlsym</code> and <code>GetProcAddress</code>, as SDL does).</p>
+<p>It copies the frame, draws it back through a three-tap vertical filter and restores the GL state the emulator had. It checks the CRTC mode of every card (<code>/dev/dri/card0</code> to <code>card7</code>, since the monitor's card is not always <code>card0</code>) through DRM every 30 frames: in a progressive mode (240p, 31 kHz, LCD) it does nothing.</p>
+<p>The filter works with OpenGL (compatibility, core and GLES), not with Vulkan, so when it is on for them and the mode is interlaced, <code>fliperos-x11-run</code> puts PCSX2 (<code>Renderer = 12</code>), Dolphin (<code>GFXBackend=OGL</code>), DuckStation (<code>Renderer = OpenGL</code>) and Flycast (Vulkan <code>pvr.rend</code> 4 and 5 become OpenGL's 0 and 3, for that launch only) on OpenGL.</p>
+<p>The LXDE desktop draws without OpenGL, so it gets the same filter through <strong>picom</strong> with a window shader (<code>config/fliperos-desktop-deflicker --watch</code>, started by <code>fliperos-lxde</code>, at the Desktop row's level <code>deflicker_desktop=</code>). It checks the screen mode every 2 seconds and runs picom only while it is interlaced, so a change in Screen Resolution counts at once. Ubuntu's own picom autostart (<code>/etc/xdg/autostart/picom.desktop</code>, without the shader) would take the screen first, since only one compositor runs at a time: <code>fliperos-lxde</code> puts <code>/etc/fliperos/xdg</code> first in <code>XDG_CONFIG_DIRS</code>, where a <code>picom.desktop</code> with <code>Hidden=true</code> hides it.</p>
+<p>The programs that cannot take the library get the same picom over their whole Xorg: <code>fliperos-x11-client</code> starts it for Fightcade (its lobby is Electron, and FBNeo, SNES9x and FBA are 32-bit Wine programs) and for any <code>wine</code> or <code>.exe</code> command. The Fightcade lobby (512x448, interlaced on a 15 kHz tube) uses the Other programs level; while a Flycast match is open, <code>fliperos-fightcade</code> switches it to the Fightcade Flycast row's level (<code>deflicker_fightcade-flycast=</code>). The Wine matches run at 240 lines, so there picom has nothing to filter and stays off.</p>
 <p>For testing:
 - <code>FLIPEROS_DEFLICKER=off|light|medium|strong</code> overrides the level.
 - <code>FLIPEROS_DEFLICKER_FORCE=1</code> filters in any mode.

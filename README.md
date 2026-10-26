@@ -77,7 +77,7 @@ Save and exit with the stick plugged in.
 
 ### 5. Boot from the USB stick
 
-1. **Wait about 30 seconds without pressing anything.** The boot menu (15 kHz, 25 kHz, 31 kHz, LCD...) is drawn at 31 kHz, so **it doesn't show on a 15 kHz tube**. With no key pressed, the **15 kHz** entry boots by itself, which is the safe one for a cabinet. On a PC monitor or an LCD, you can pick *SVGA / LCD monitor* in the menu instead.
+1. **Wait about 10 seconds without pressing anything.** The boot menu (15 kHz, 25 kHz, 31 kHz, LCD...) is drawn at 31 kHz, so **it doesn't show on a 15 kHz tube**. With no key pressed, the **15 kHz** entry boots by itself, which is the safe one for a cabinet. On a PC monitor or an LCD, you can pick *SVGA / LCD monitor* in the menu instead.
 2. The FliperOS splash appears, already at 15 kHz.
 3. **Output test.** FliperOS turns on one video output at a time and a voice says *"Testing output VGA 1. If you can see this screen, press Enter."* When the text *"If you can see this screen clearly, press ENTER"* is readable on **your** monitor, press **Enter**. Without Enter it moves on to the next output and repeats the round up to three times.
 4. **Testing Results** shows the card, the output, the mode and the frequency. Choose **Validate settings** (or **Repeat test**).
@@ -173,7 +173,7 @@ Has a full MAME romset? *Setup > Games > Cleaner > MAME ROM Cleaner* keeps only 
 
 ### 12. If something goes wrong
 
-- **No picture at boot**: wait the 30 seconds (the menu doesn't show at 15 kHz). On a 15 kHz-only tube, connect an LCD temporarily to choose another boot entry.
+- **No picture at boot**: wait 10 seconds (the menu doesn't show at 15 kHz). On a 15 kHz-only tube, connect an LCD temporarily to choose another boot entry.
 - **The installer doesn't list the disk**: SATA mode on AHCI in the BIOS. *My drive is not listed (details)* shows what Linux sees.
 - **The picture is off-center or too big**: *Setup > Video Setup > Geometry*.
 - **Two or three monitors** (Darius, Punch-Out!!, F355 Challenge): *Setup > Video Setup > Multiple Monitors*, see [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors).

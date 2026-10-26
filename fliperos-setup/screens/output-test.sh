@@ -92,6 +92,10 @@ screen_low_dotclock_test() {
     "Press ENTER if you can see it. If the screen stays black, just wait."
   ui_clear
   GRID_TEXT="320x240 native" ui_text video_low_dotclock_grid "$monitor" >> "$FLIPEROS_LOG" 2>&1
+  # O que o nouveau disse no grid vai para o log: o modo passa da validacao
+  # (patch 10), e o que falha numa placa e o PLL do pixel clock ("unable to
+  # find matching pll values" ou nada, com o VCO abaixo da faixa).
+  video_low_dotclock_kernel_log >> "$FLIPEROS_LOG" 2>&1
   ui_flush_input
   speak "Did you see the grid?"
   if ui_yesno "$title" "Did you see the test grid clearly?" no; then
@@ -130,6 +134,11 @@ screen_testing_results() {
   if [[ $flags == s* ]]; then
     lowres=$(ui_yes YES)
     notes+=("Your video card supports low dotclocks: native 15 kHz resolutions will be used.")
+  elif [[ $driver == nouveau ]]; then
+    # A placa pode gerar dotclock baixo; o que falta e o nouveau (o PLL dele
+    # nesta placa). O driver da NVIDIA e outra historia (o Batocera o usa).
+    lowres=$(ui_no "NO (super resolutions)")
+    notes+=("The native 320x240 test did not show on the nouveau driver: super resolutions will be used, with the same picture on a CRT.")
   else
     lowres=$(ui_no "NO (super resolutions)")
     notes+=("Your video card doesn't support low dotclocks: super resolutions will be used.")

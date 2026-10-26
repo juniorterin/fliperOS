@@ -33,7 +33,7 @@ The `S` at the end of the mode comes from the 15 kHz patch: it uses the kernel's
 
 **30-second timer.** With no key pressed, the **15 kHz** entry boots, which is the safe one for a cabinet: an LCD receiving 15 kHz only shows "out of range", but 31 kHz on a 15 kHz-only tube can damage it.
 
-The menu itself **doesn't show on a 15 kHz CRT** — it is drawn in the firmware's text mode (~31 kHz), before the kernel. GroovyArcade is the same. To choose another entry on a 15 kHz-only cabinet, connect an LCD temporarily; with the CRT, wait the 30 s. The first readable thing on the tube is the splash, already in the boot mode.
+The menu itself **doesn't show on a 15 kHz CRT** — it is drawn in the firmware's text mode (~31 kHz), before the kernel. GroovyArcade is the same. To choose another entry on a 15 kHz-only cabinet, connect an LCD temporarily; with the CRT, wait the 10 s (any key stops the countdown). The first readable thing on the tube is the splash, already in the boot mode.
 
 ## Output test and *Testing Results*
 

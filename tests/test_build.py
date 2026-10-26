@@ -136,7 +136,7 @@ class VideoCheckTests(unittest.TestCase):
 
 
 class BootMenuTests(unittest.TestCase):
-    """O menu da midia tem as opcoes do GroovyArcade e escolhe sozinho em 30 s."""
+    """O menu da midia tem as opcoes do GroovyArcade e escolhe sozinho em 10 s."""
 
     EXPECTED = [
         ('15 kHz', '15khz', 'video=640x480iS'),
@@ -166,7 +166,7 @@ class BootMenuTests(unittest.TestCase):
 
     def test_thirty_second_timer_defaults_to_15khz(self):
         text = (ROOT / 'config/limine.conf').read_text()
-        self.assertRegex(text, r'(?m)^timeout: 30$')
+        self.assertRegex(text, r'(?m)^timeout: 10$')
         self.assertRegex(text, r'(?m)^default_entry: 1$')
         self.assertEqual(boot_entries(text)[0][0], '15 kHz')
 

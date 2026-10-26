@@ -77,7 +77,7 @@ Salve e saia com o pendrive conectado.
 
 ### 5. Dê boot pelo pendrive
 
-1. **Espere uns 30 segundos sem apertar nada.** O menu de boot (15 kHz, 25 kHz, 31 kHz, LCD...) é desenhado em 31 kHz, então **ele não aparece num tubo de 15 kHz**. Sem nenhuma tecla, a opção **15 kHz** entra sozinha, que é a segura para gabinete. Num monitor de PC ou LCD, você pode escolher *SVGA / LCD monitor* no menu.
+1. **Espere uns 10 segundos sem apertar nada.** O menu de boot (15 kHz, 25 kHz, 31 kHz, LCD...) é desenhado em 31 kHz, então **ele não aparece num tubo de 15 kHz**. Sem nenhuma tecla, a opção **15 kHz** entra sozinha, que é a segura para gabinete. Num monitor de PC ou LCD, você pode escolher *SVGA / LCD monitor* no menu.
 2. O splash do FliperOS aparece, já em 15 kHz.
 3. **Teste das saídas.** O FliperOS liga uma saída de vídeo por vez e uma voz diz *"Testing output VGA 1. If you can see this screen, press Enter."* Quando o texto *"If you can see this screen clearly, press ENTER"* estiver legível no **seu** monitor, aperte **Enter**. Sem Enter ele passa para a próxima saída e repete a rodada até três vezes.
 4. **Testing Results** mostra a placa, a saída, o modo e a frequência. Escolha **Validate settings** (ou **Repeat test** para testar de novo).
@@ -173,7 +173,7 @@ Tem um romset completo do MAME? *Setup > Games > Cleaner > MAME ROM Cleaner* dei
 
 ### 12. Se algo der errado
 
-- **Sem imagem no boot**: espere os 30 segundos (o menu não aparece em 15 kHz). Num tubo só de 15 kHz, ligue um LCD temporariamente para escolher outra opção de boot.
+- **Sem imagem no boot**: espere 10 segundos (o menu não aparece em 15 kHz). Num tubo só de 15 kHz, ligue um LCD temporariamente para escolher outra opção de boot.
 - **O instalador não lista o disco**: modo SATA em AHCI na BIOS. *My drive is not listed (details)* mostra o que o Linux enxerga.
 - **A imagem está fora do centro ou grande demais**: *Setup > Video Setup > Geometry*.
 - **Dois ou três monitores** (Darius, Punch-Out!!, F355 Challenge): *Setup > Video Setup > Multiple Monitors*, veja [Multiple monitors](https://github.com/juniorterin/fliperOS/wiki/Multiple-Monitors).

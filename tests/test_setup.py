@@ -526,6 +526,18 @@ class NouveauLowDotclockTests(Base):
     def test_carried_by_recovery_mode(self):
         self.assertIn("low_dotclock_pci", self.env.out("echo $VIDEO_CONF_KEYS").split())
 
+    def test_kernel_lines_of_the_grid_go_to_the_log(self):
+        # O que o nouveau diz no grid (o PLL) fica no log do Setup.
+        self.env.stub("fake-dmesg", "printf '%s\\n' 'usb 1-1: new device' "
+                      "'nouveau 0000:01:00.0: disp: unable to find matching pll values' 'drm: modeset'")
+        out = self.env.out("video_low_dotclock_kernel_log", {"DMESG_CMD": str(self.env.bin / "fake-dmesg")})
+        self.assertEqual(out.splitlines(), ["dotclock baixo: o kernel depois do grid:",
+                                            "nouveau 0000:01:00.0: disp: unable to find matching pll values",
+                                            "drm: modeset"])
+        test = (ROOT / "fliperos-setup/screens/output-test.sh").read_text()
+        self.assertIn('video_low_dotclock_kernel_log >> "$FLIPEROS_LOG"', test)
+        self.assertIn("did not show on the nouveau driver", test)
+
     def test_grid_is_wired_to_the_output_test_and_video_setup(self):
         test = (ROOT / "fliperos-setup/screens/output-test.sh").read_text()
         self.assertIn('drm_card_low_dotclock_testable "$card"', test)
