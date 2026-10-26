@@ -33,3 +33,4 @@
 30	bd638cffe03d2deec2654ebb42144ef24b9735fa	60bcc964f669b38d4871a80415124e27427a45cf54808284e6463b53fa451ba3	no	Lab mode: remote help over a temporary address
 31	bce290a394fad60c7f69a6d0226c6efe104dc4da	ef7ace0c12ab1441fe1855f9b430718164f0247b743b840fa52edf72f6a597c5	no	Flicker filter on the desktop and in Fightcade again
 32	8b9b250121c8b021f615d5da85b80ec7768aaf91	957712edf075eee71a6429611fdabfdaaeb14bb4f4cb349723a612b26306318a	no	NVIDIA nouveau: clearer low resolution test result
+33	3e0846637b1bdd96bc7eb9a40e9e4273ad4581ed	d3891f30124347e862df0b7b125ccda9a5848538b29c099f58f076881c1d5232	no	NVIDIA: own driver as an option to nouveau
