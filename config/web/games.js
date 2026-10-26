@@ -197,7 +197,8 @@ function renderGames() {
 
 function moreGames() {
   const next = foundGames.slice(gamesShown, gamesShown + GAMES_BATCH);
-  $("games").append(...next.map((g, i) => gameCard(g, i)));
+  const first = gamesShown === 0;
+  $("games").append(...next.map((g, i) => gameCard(g, i, first)));
   gamesShown += next.length;
   $("games-shown").textContent = foundGames.length ? t("shown").replace("%n", num(gamesShown)).replace("%t", num(foundGames.length)) : "";
 }
@@ -226,10 +227,10 @@ function gamePicture(g, kinds) {
   return img;
 }
 
-function gameCard(g, i) {
+function gameCard(g, i, enter = true) {
   const shot = el("div", { class: "shot" }, gamePicture(g, [["s", "snap"], ["b", "box"], ["m", "marquee"], ["l", "logo"]]));
   if (g.Favourite) shot.append(el("span", { class: "star" }, icon("g-star")));
-  const card = el("button", { type: "button", class: "game" }, shot,
+  const card = el("button", { type: "button", class: enter && i < 24 ? "game enter" : "game" }, shot,
     el("span", { class: "meta" }, el("b", {}, gameTitle(g)), el("span", {}, [g.Year, g.Manufacturer].filter(Boolean).join(" · "))));
   card.style.animationDelay = Math.min(i, 12) * 0.03 + "s";
   card.dataset.letter = letterOf(g);

@@ -41,21 +41,25 @@ svg.g { width: 16px; height: 16px; flex: none; }
 .dim, .muted { color: var(--dim); }
 .offscreen { position: fixed; left: -9999px; }
 
-/* O fundo: as estrelas e o brilho, devagar. */
-.stars { position: fixed; inset: 0; z-index: -1; pointer-events: none;
+/* O fundo: o brilho parado e as estrelas andando devagar. Elas andam por
+   transform numa camada propria (a placa de video move, nada e repintado):
+   animar o background-position repintava a tela toda a cada quadro. */
+.stars { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
   background:
     radial-gradient(900px 500px at 75% -10%, rgba(189,147,249,.16), transparent 70%),
     radial-gradient(700px 500px at 0% 100%, rgba(255,121,198,.10), transparent 70%),
+    var(--space); }
+.stars::before { content: ""; position: absolute; left: 0; top: -300px; right: -360px; bottom: 0; will-change: transform;
+  background:
     radial-gradient(1px 1px at 20px 30px, #fff8, transparent),
     radial-gradient(1px 1px at 140px 80px, #fff6, transparent),
     radial-gradient(1.5px 1.5px at 260px 160px, #8be9fd88, transparent),
     radial-gradient(1px 1px at 330px 40px, #fff5, transparent),
     radial-gradient(1.5px 1.5px at 90px 210px, #ff79c677, transparent),
-    radial-gradient(1px 1px at 210px 260px, #fff6, transparent),
-    var(--space);
-  background-size: auto, auto, 360px 300px, 360px 300px, 360px 300px, 360px 300px, 360px 300px, 360px 300px, auto;
+    radial-gradient(1px 1px at 210px 260px, #fff6, transparent);
+  background-size: 360px 300px;
   animation: drift 160s linear infinite; }
-@keyframes drift { to { background-position: 0 0, 0 0, -360px 300px, -360px 300px, -360px 300px, -360px 300px, -360px 300px, -360px 300px, 0 0; } }
+@keyframes drift { to { transform: translate(-360px, 300px); } }
 /* A faixa arco-iris do frontend do FliperOS. */
 .rainbow { height: 8px; background: linear-gradient(to bottom, #ff5555 0 17%, #ffb86c 17% 34%, #f1fa8c 34% 51%, #50fa7b 51% 67%,
   #8be9fd 67% 84%, #bd93f9 84%); }
@@ -698,14 +702,14 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
   .side { display: none; }
   .main { padding: 14px 16px calc(96px + env(safe-area-inset-bottom)); }
   .topbar { position: sticky; top: 0; z-index: 20; margin: -14px -16px 14px; padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-    background: rgba(11,11,18,.88); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(68,71,90,.6); }
+    background: rgb(13,13,20); border-bottom: 1px solid rgba(68,71,90,.6); }
   .mob-brand { display: block; } .mob-brand svg { width: 34px; height: 34px; }
   .page-title { font-size: 13px; } .page-sub { display: none; }
   .hide-sm { display: none; } .pill { padding: 10px; } .only-sm { display: grid; }
   .subtabs { margin: 0 -16px 16px; padding: 2px 16px; }
   .subtabs a { padding: 7px 12px 7px 8px; font-size: 14px; } .subtabs a svg.px { width: 22px; height: 22px; }
   .bottomnav { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; z-index: 30; left: 0; right: 0; bottom: 0;
-    padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); background: rgba(20,21,28,.95); backdrop-filter: blur(12px); border-top: 1px solid var(--line); }
+    padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); background: rgb(20,21,28); border-top: 1px solid var(--line); }
   .bottomnav a { display: grid; justify-items: center; gap: 4px; font-size: 11.5px; font-weight: 650; color: var(--dim); padding: 4px 0;
     border-radius: 12px; text-decoration: none; }
   .bottomnav a svg { width: 28px; height: 28px; opacity: .75; }
