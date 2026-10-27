@@ -43,7 +43,7 @@ function renderSystems() {
     const covers = s.covers.length ? s.covers : [];
     for (let j = 0; j < 4; j++) {
       const name = covers[j % Math.max(1, covers.length)];
-      mosaic.append(name ? el("img", { src: mediaUrl(s.key, name, "snap"), alt: "", loading: "lazy" })
+      mosaic.append(name ? fadeIn(el("img", { src: mediaUrl(s.key, name, "snap"), alt: "", class: "fade" }))
         : el("i", { style: "--h:" + nameHue(s.name + j) }));
     }
     const card = el("button", { type: "button", class: "sys" + (gameSystem && s.key === gameSystem.key ? " on" : ""),
@@ -228,8 +228,11 @@ function gridDraw() {
   if (!foundGames.length || !box.offsetParent) return;
   const top = box.getBoundingClientRect().top + window.scrollY;
   const rows = Math.ceil(foundGames.length / gridCols);
-  const first = Math.max(0, Math.floor((window.scrollY - top) / gridRowH) - 3);
-  const last = Math.min(rows - 1, Math.floor((window.scrollY + window.innerHeight - top) / gridRowH) + 3);
+  // 30 jogos prontos antes e 30 depois da tela, com as imagens ja baixadas:
+  // ao rolar, o cartao chega pronto.
+  const extra = Math.ceil(30 / gridCols);
+  const first = Math.max(0, Math.floor((window.scrollY - top) / gridRowH) - extra);
+  const last = Math.min(rows - 1, Math.floor((window.scrollY + window.innerHeight - top) / gridRowH) + extra);
   const want = new Set();
   for (let r = first; r <= last; r++) {
     for (let c = 0; c < gridCols; c++) {
@@ -273,8 +276,9 @@ function gamePicture(g, kinds) {
   const art = g.art || "";
   const kind = kinds.find((k) => art.includes(k[0]));
   if (!kind) return cover(g);
-  const img = el("img", { src: mediaUrl(gameSystem.key, g.Name, kind[1]), alt: "", loading: "lazy", decoding: "async",
-    class: "pic-" + kind[1] });
+  const img = el("img", { src: mediaUrl(gameSystem.key, g.Name, kind[1]), alt: "", decoding: "async",
+    class: "fade pic-" + kind[1] });
+  fadeIn(img);
   img.addEventListener("error", () => img.replaceWith(cover(g)));
   return img;
 }
@@ -395,7 +399,7 @@ function fact(glyph, label, value) {
 }
 
 function picture(url, label, cls) {
-  const img = el("img", { src: url, alt: label, loading: "lazy", referrerpolicy: "no-referrer" });
+  const img = fadeIn(el("img", { src: url, alt: label, loading: "lazy", referrerpolicy: "no-referrer" }));
   const fig = el("figure", { class: cls || "" }, el("button", { type: "button", class: "pic" }, img), el("figcaption", {}, label));
   img.addEventListener("error", () => fig.remove());
   fig.firstChild.addEventListener("click", () => viewer(url));
@@ -413,12 +417,12 @@ function openGame(g) {
   const system = gameSystem, art = g.art || "";
   const media = el("div", { class: "sheet-media" });
   const still = art.includes("s") ? mediaUrl(system.key, g.Name, "snap") : art.includes("b") ? mediaUrl(system.key, g.Name, "box") : "";
-  if (still) media.append(el("img", { class: "blur", src: still, alt: "" }));
+  if (still) media.append(fadeIn(el("img", { class: "blur", src: still, alt: "" })));
   if (art.includes("v")) {
     const video = el("video", { class: "main-shot", src: mediaUrl(system.key, g.Name, "preview"), muted: "", loop: "", playsinline: "", autoplay: "" });
     video.muted = true;
     media.append(video, el("span", { class: "video-tag" }, icon("g-play"), t("video_tag")));
-  } else if (still) media.append(el("img", { class: "main-shot", src: still, alt: "" }));
+  } else if (still) media.append(fadeIn(el("img", { class: "main-shot", src: still, alt: "" })));
   else media.append(el("div", { class: "main-shot cover-box" }, cover(g)));
   if (art.includes("l")) media.append(el("img", { class: "logo-over", src: mediaUrl(system.key, g.Name, "logo"), alt: "" }));
   const close = el("button", { type: "button", class: "sheet-close", "aria-label": t("close") }, icon("g-close"));

@@ -151,10 +151,10 @@ function crtShow() {
   video.hidden = mode !== "video";
   img.hidden = !(mode === "shot" || mode === "snap");
   $("crt-attract").hidden = mode !== "attract";
-  if (mode === "shot" && img.src !== shotUrl) img.src = shotUrl;
+  if (mode === "shot" && img.src !== shotUrl) crtImage(img, shotUrl);
   if (mode === "snap") {
     const url = mediaUrl(game.system, game.name, "snap");
-    if (img.dataset.src !== url) { img.dataset.src = url; img.src = url; }
+    if (img.dataset.src !== url) { img.dataset.src = url; crtImage(img, url); }
   } else if (mode === "shot") img.dataset.src = "";
   if (mode === "video") {
     const url = mediaUrl(game.system, game.name, "preview");
@@ -164,6 +164,14 @@ function crtShow() {
   if (mode === "shot") tag.textContent = t("crt_shot").replace("%s", shotAge());
   else tag.textContent = t("crt_art");
   $("crt-attract-text").textContent = mode === "attract" && cabFront ? frontName(cabFront.program).toUpperCase() : "INSERT COIN";
+}
+
+// Uma imagem nova na tela do tubo aparece aos poucos.
+function crtImage(img, url) {
+  img.classList.add("fade");
+  img.classList.remove("in");
+  img.onload = () => img.classList.add("in");
+  img.src = url;
 }
 
 function shotAge() {

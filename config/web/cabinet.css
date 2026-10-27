@@ -358,3 +358,20 @@ span.inl { display: inline-grid; font-size: 9px; }
 }
 
 .fact-cell > svg.g { width: 26px; height: 26px; color: var(--cyan); grid-row: span 2; margin: 0 1px; }
+
+/* O gabinete liga ao abrir o Frontend: o letreiro acende e o painel sobe. */
+.area[data-area="frontend"] .cab-body { animation: cab-in .8s cubic-bezier(.2, .8, .2, 1) both; }
+.area[data-area="frontend"] .cp { animation: cp-in .7s .25s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes cab-in { from { opacity: 0; transform: translateY(30px) scale(.96); filter: brightness(.3); } 60% { filter: brightness(1.15); } }
+@keyframes cp-in { from { opacity: 0; transform: perspective(600px) rotateX(60deg); } }
+.now-facts > * { animation: enter .45s both; }
+.now-facts > :nth-child(2) { animation-delay: .08s; } .now-facts > :nth-child(3) { animation-delay: .16s; }
+.stat { animation: enter .5s both; } .stat:nth-child(2) { animation-delay: .08s; } .stat:nth-child(3) { animation-delay: .16s; }
+/* Os cartoes da grade surgem ao entrar na pagina (so opacidade e transform:
+   a placa de video faz, a rolagem nao pesa). */
+.games .game { animation: pop .4s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.97); } }
+.sys { animation-duration: .6s; }
+.rail .game { animation: pop .45s both; }
+.rail .game:nth-child(2) { animation-delay: .05s; } .rail .game:nth-child(3) { animation-delay: .1s; }
+.rail .game:nth-child(4) { animation-delay: .15s; } .rail .game:nth-child(n+5) { animation-delay: .2s; }

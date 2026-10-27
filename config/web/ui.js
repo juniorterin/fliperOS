@@ -172,6 +172,14 @@ window.addEventListener("popstate", () => closeSheet(true));
 $("sheet-back").addEventListener("click", (ev) => { if (ev.target === $("sheet-back")) closeSheet(); });
 document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && sheetOpen) closeSheet(); });
 
+// Uma imagem aparece aos poucos quando chega (a do cache, na hora).
+function fadeIn(img) {
+  img.classList.add("fade");
+  if (img.complete && img.naturalWidth) img.classList.add("in");
+  else img.addEventListener("load", () => img.classList.add("in"), { once: true });
+  return img;
+}
+
 // Uma cor pelo nome (as capas geradas dos jogos sem imagem).
 function nameHue(text) {
   let h = 0;

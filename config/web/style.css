@@ -742,3 +742,21 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
   .sub.grid[data-sub="logs"] > .card { grid-column: auto; }
   .sub.grid[data-sub="logs"] .log { max-height: 640px; }
 }
+
+/* ?? Animacoes de entrada: a area e a aba que abrem entram em cascata ?? */
+.area > *, .sub > * { animation: enter .55s cubic-bezier(.2, .8, .2, 1) both; }
+.area > :nth-child(2), .sub > :nth-child(2) { animation-delay: .06s; }
+.area > :nth-child(3), .sub > :nth-child(3) { animation-delay: .12s; }
+.area > :nth-child(4), .sub > :nth-child(4) { animation-delay: .18s; }
+.area > :nth-child(5), .sub > :nth-child(5) { animation-delay: .24s; }
+.area > :nth-child(n+6), .sub > :nth-child(n+6) { animation-delay: .3s; }
+.subtabs a { animation: enter .4s cubic-bezier(.2, .8, .2, 1) both; }
+.subtabs a:nth-child(2) { animation-delay: .04s; } .subtabs a:nth-child(3) { animation-delay: .08s; }
+.subtabs a:nth-child(4) { animation-delay: .12s; } .subtabs a:nth-child(5) { animation-delay: .16s; }
+.subtabs a:nth-child(6) { animation-delay: .2s; }
+.page-title { animation: title-in .5s steps(6) both; }
+@keyframes enter { from { opacity: 0; transform: translateY(18px) scale(.985); } }
+@keyframes title-in { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+/* As imagens chegam aos poucos (fadeIn, ui.js). */
+img.fade { opacity: 0; transform: scale(1.04); transition: opacity .45s ease, transform .7s cubic-bezier(.2, .8, .2, 1); }
+img.fade.in { opacity: 1; transform: none; }
