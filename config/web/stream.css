@@ -149,7 +149,7 @@ details.more .live-actions { margin: 12px 0 8px; }
 .therms { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 18px 10px; }
 .therm { display: grid; justify-items: center; gap: 8px; text-align: center; --c: var(--green); }
 .therm.t2 { --c: var(--yellow); } .therm.t3 { --c: var(--orange); } .therm.t4 { --c: var(--red); }
-.tube { position: relative; width: 26px; height: 150px; }
+.therm-tube { position: relative; width: 26px; height: 150px; }
 .glass { position: absolute; left: 3px; right: 3px; top: 0; bottom: 30px; border-radius: 10px 10px 0 0; background: #12131a;
   box-shadow: inset 0 0 0 2px #3a3c50; overflow: hidden; }
 .glass::before { content: ""; position: absolute; inset: 0; z-index: 2;

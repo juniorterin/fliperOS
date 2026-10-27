@@ -43,7 +43,7 @@ function renderTemps(rows) {
     const [name, label, fallback] = sensorName(x);
     const limit = x.max || fallback, top = Math.max(110, limit + 10);
     if (!th) {
-      th = { node: el("div", { class: "therm" }, el("div", { class: "tube" }, el("div", { class: "glass" }, el("div", { class: "fill" })),
+      th = { node: el("div", { class: "therm" }, el("div", { class: "therm-tube" }, el("div", { class: "glass" }, el("div", { class: "fill" })),
         el("div", { class: "bulb" }), el("div", { class: "limit" })), el("div", { class: "deg" }), el("b", {}, name), el("small", {}, label)) };
       th.fill = th.node.querySelector(".fill");
       th.deg = th.node.querySelector(".deg");
