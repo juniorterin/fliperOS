@@ -131,6 +131,8 @@ function showPage(hash) {
   $("top-menu").hidden = true;
   if (before !== a) window.scrollTo(0, 0);
   cabinetShown(a === "frontend");
+  // A grade virtual se mede de novo ao aparecer (escondida, ela tem largura 0).
+  if (a === "frontend") requestAnimationFrame(() => { gridMeasure(); gridItems.forEach((c) => c.remove()); gridItems.clear(); gridDraw(); });
   // O que cada aba busca ao aparecer.
   if (page === "files") loadFiles().catch(() => {});
   else if (page === "downloads") { loadDownloader().catch(() => {}); loadBios().catch(() => {}); }

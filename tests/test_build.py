@@ -6119,7 +6119,12 @@ class WebPanelTests(unittest.TestCase):
     def test_files_browse_upload_download_and_delete(self):
         cookie = self.login()
         listing = json.loads(self.request('GET', '/api/files?root=roms&path=', cookie=cookie)[2])
-        self.assertEqual(listing['roots'], ['roms', 'bios', 'media', 'splashscreen'])
+        self.assertEqual(listing['roots'], ['roms', 'bios', 'media', 'splashscreen', 'home'])
+        # A pasta pessoal inteira (~): sem os ocultos e sem sair dela.
+        home = json.loads(self.request('GET', '/api/files?root=home&path=', cookie=cookie)[2])
+        self.assertIn('roms', [e['name'] for e in home['entries']])
+        self.assertNotIn('.attract', [e['name'] for e in home['entries']])
+        self.assertEqual(self.request('GET', '/api/files?root=home&path=..', cookie=cookie)[0], 404)
         self.assertEqual([(e['name'], e['dir']) for e in listing['entries']], [('naomi', True), ('other', True)])
         naomi = json.loads(self.request('GET', '/api/files?root=roms&path=naomi', cookie=cookie)[2])['entries']
         # Pastas primeiro; os ocultos ficam de fora.

@@ -9,10 +9,9 @@
 //    arcades, libretro-thumbnails nos consoles; o navegador guarda 30 dias).
 "use strict";
 
-const GAMES_BATCH = 60;
 const INFO_KEY = "fliperos-info:";
 const INFO_DAYS = 30;
-let systemsList = [], gameSystem = null, allGames = [], gameFilters = [], foundGames = [], gamesShown = 0;
+let systemsList = [], gameSystem = null, allGames = [], gameFilters = [], foundGames = [];
 let gameChip = "", gameView = "grid", searchTimer = null;
 try {
   gameView = localStorage.getItem("fliperos-view") === "list" ? "list" : "grid";
@@ -182,31 +181,84 @@ function renderGames() {
   let found = applyFilter(allGames, currentFilter());
   if (query) found = found.filter((g) => gameTitle(g).toLowerCase().includes(query) || g.Name.toLowerCase().includes(query));
   foundGames = found;
-  gamesShown = 0;
   const grid = $("games");
   grid.classList.toggle("list", gameView === "list");
   grid.replaceChildren();
+  gridItems.clear();
+  gridFresh = true;
   $("view-grid").classList.toggle("on", gameView === "grid");
   $("view-list").classList.toggle("on", gameView === "list");
   $("games-empty").hidden = !!allGames.length;
   $("games-toolbar").hidden = !allGames.length;
+  $("games-shown").textContent = found.length ? gamesCount(found.length) : "";
   if (allGames.length && !found.length) grid.append(el("p", { class: "no-match" }, t("no_match")));
-  moreGames();
+  gridMeasure();
+  gridDraw();
   renderLetters();
 }
 
-function moreGames() {
-  const next = foundGames.slice(gamesShown, gamesShown + GAMES_BATCH);
-  const first = gamesShown === 0;
-  $("games").append(...next.map((g, i) => gameCard(g, i, first)));
-  gamesShown += next.length;
-  $("games-shown").textContent = foundGames.length ? t("shown").replace("%n", num(gamesShown)).replace("%t", num(foundGames.length)) : "";
+// A grade virtual: so existem na pagina os cartoes perto da tela (umas
+// dezenas), cada um na posicao da sua linha; a altura da grade e a de todas
+// as linhas. Com milhares de jogos a rolagem fica leve ate o fim.
+let gridCols = 1, gridRowH = 1, gridCardW = 0, gridGap = 18, gridFrame = 0, gridFresh = false;
+const gridItems = new Map();
+const phone = () => window.innerWidth <= 760;
+
+function gridMeasure() {
+  const box = $("games"), w = box.clientWidth;
+  if (gameView === "list") {
+    gridGap = 8;
+    gridCols = 1;
+    gridCardW = w;
+    gridRowH = 74 + gridGap;
+  } else {
+    gridGap = phone() ? 12 : 18;
+    const min = phone() ? 150 : 190;
+    gridCols = Math.max(1, Math.floor((w + gridGap) / (min + gridGap)));
+    gridCardW = (w - gridGap * (gridCols - 1)) / gridCols;
+    gridRowH = Math.round(gridCardW * 0.75) + (phone() ? 60 : 66) + gridGap;
+  }
+  const rows = Math.ceil(foundGames.length / gridCols);
+  box.style.height = foundGames.length ? Math.max(0, rows * gridRowH - gridGap) + "px" : "";
 }
 
-// O proximo lote quando o fim da grade chega perto.
-new IntersectionObserver((entries) => {
-  if (entries[0].isIntersecting && gamesShown < foundGames.length) moreGames();
-}, { rootMargin: "800px" }).observe($("games-more"));
+function gridDraw() {
+  gridFrame = 0;
+  const box = $("games");
+  if (!foundGames.length || !box.offsetParent) return;
+  const top = box.getBoundingClientRect().top + window.scrollY;
+  const rows = Math.ceil(foundGames.length / gridCols);
+  const first = Math.max(0, Math.floor((window.scrollY - top) / gridRowH) - 3);
+  const last = Math.min(rows - 1, Math.floor((window.scrollY + window.innerHeight - top) / gridRowH) + 3);
+  const want = new Set();
+  for (let r = first; r <= last; r++) {
+    for (let c = 0; c < gridCols; c++) {
+      const i = r * gridCols + c;
+      if (i >= foundGames.length) break;
+      want.add(i);
+      if (gridItems.has(i)) continue;
+      const card = gameCard(foundGames[i], i, gridFresh);
+      card.style.cssText += ";position:absolute;left:" + c * (gridCardW + gridGap) + "px;top:" + r * gridRowH + "px;width:"
+        + gridCardW + "px;height:" + (gridRowH - gridGap) + "px";
+      box.append(card);
+      gridItems.set(i, card);
+    }
+  }
+  for (const [i, card] of gridItems) {
+    if (!want.has(i)) { card.remove(); gridItems.delete(i); }
+  }
+  gridFresh = false;
+}
+
+const gridSoon = () => { if (!gridFrame) gridFrame = requestAnimationFrame(gridDraw); };
+window.addEventListener("scroll", gridSoon, { passive: true });
+window.addEventListener("resize", () => {
+  if (!foundGames.length) return;
+  gridItems.forEach((card) => card.remove());
+  gridItems.clear();
+  gridMeasure();
+  gridSoon();
+});
 
 function cover(g) {
   // A capa de quem nao tem imagem: as iniciais em pixel sobre uma cor do nome.
@@ -271,9 +323,8 @@ function renderLetters() {
 function jumpTo(letter) {
   const index = foundGames.findIndex((g) => letterOf(g) === letter);
   if (index < 0) return;
-  while (gamesShown <= index) moreGames();
-  const card = $("games").children[index];
-  if (card) card.scrollIntoView({ block: "center" });
+  const top = $("games").getBoundingClientRect().top + window.scrollY;
+  window.scrollTo(0, top + Math.floor(index / gridCols) * gridRowH - 140);
   $("letters").querySelectorAll("button").forEach((b) => b.classList.toggle("now", b.dataset.letter === letter));
 }
 
@@ -387,7 +438,8 @@ function openGame(g) {
   const ctrl = controlIcons(g, null, true);
   if (ctrl) { ctrlCell.append(ctrl); facts.append(ctrlCell); }
   if (g.Rotation !== undefined) {
-    facts.append(fact("px-orientation", t("g_screen"), /^(90|270)$/.test(String(g.Rotation)) ? t("orient_v") : t("orient_h")));
+    const vertical = /^(90|270)$/.test(String(g.Rotation));
+    facts.append(fact(vertical ? "g-screenv" : "g-screenh", t("g_screen"), vertical ? t("orient_v") : t("orient_h")));
   }
   if (g.Status) {
     const status = g.Status.toLowerCase();
@@ -451,14 +503,6 @@ function showOnline(data, gallery, about, ctrlCell, g) {
     const colors = (data.panel || []).map((c) => c && c.color);
     const ctrl = controlIcons(Object.assign({}, g, { Buttons: g.Buttons || String(panel.length) }), colors, true);
     if (ctrl) { if (old) old.replaceWith(ctrl); else ctrlCell.append(ctrl); }
-    // Os botoes do jogador 1 no painel, onde o Setup > Joysticks > Buttons
-    // layout os poe (1 2 3 em cima, 4 5 6 embaixo), com a cor e a funcao.
-    about.append(el("h3", {}, t("buttons_p1")), el("div", { class: "panel-layout" }, ...data.panel.map((cell, i) => {
-      const dot = el("i");
-      if (cell) dot.style.backgroundColor = /^[a-z]+$/i.test(cell.color) ? cell.color : "var(--purple)";
-      const where = (i < 3 ? " top" : " bottom") + " c" + (i % 3);
-      return el("div", { class: (cell ? "pbtn on" : "pbtn") + where }, dot, cell ? el("span", {}, cell.label || String(cell.button)) : "");
-    })));
   }
   // A descricao e as secoes do arcade-history (tecnica, curiosidades...).
   const text = data.description !== undefined ? data.description : (info.history || "").trim();
@@ -509,7 +553,7 @@ async function toggleFavourite(g, button) {
   if (g.Favourite) { button.classList.remove("burst"); void button.offsetWidth; button.classList.add("burst"); }
   renderRails();
   // A estrela no cartao da grade, sem refazer a grade (a posicao fica).
-  [...$("games").children].forEach((card, i) => {
+  gridItems.forEach((card, i) => {
     if (foundGames[i] !== g) return;
     const star = card.querySelector(".star");
     if (g.Favourite && !star) card.querySelector(".shot").append(el("span", { class: "star" }, icon("g-star")));

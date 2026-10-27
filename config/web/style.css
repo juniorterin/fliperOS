@@ -242,16 +242,27 @@ svg.g { width: 16px; height: 16px; flex: none; }
 .tool-foot { display: flex; justify-content: flex-end; }
 
 /* ── Os cartoes das areas (os de antes, com os mesmos ids) ── */
-.sub h1, .sub h2, .sub h3 { margin: 0 0 10px; font-weight: 650; }
-.sub h2 { font: 11px/1.5 var(--px); color: var(--pink); letter-spacing: .02em; }
-.sub h3 { font-size: 13px; color: var(--purple); margin-top: 14px; }
+/* Com :where, estas regras gerais valem menos que qualquer classe: o azulejo
+   do Filtro de ROMs ou o botao de apagar dos Arquivos ficam com o estilo
+   deles. */
+:where(.sub) :is(h1, h2, h3) { margin: 0 0 12px; font-weight: 650; }
+:where(.sub) h2 { font: 11px/1.5 var(--px); color: var(--pink); letter-spacing: .02em; }
+:where(.sub) h3 { font-size: 13px; color: var(--purple); margin-top: 18px; }
 .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .error { color: var(--red); min-height: 1.2em; }
-.sub :is(button, select, input, textarea) { font: inherit; color: var(--fg); background: var(--bg-deep); border: 1px solid var(--line);
-  border-radius: 10px; padding: 8px 12px; }
-.sub button { cursor: pointer; background: var(--purple); color: #191a21; border-color: var(--purple); font-weight: 650; }
-.sub button.ghost { background: transparent; color: var(--fg); border-color: var(--line); font-weight: 500; }
-.sub input[type="checkbox"], .sub input[type="range"] { padding: 0; accent-color: var(--pink); }
+:where(.sub) :is(button, select, input, textarea) { font: inherit; color: var(--fg); background: var(--bg-deep);
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; }
+:where(.sub) button { cursor: pointer; background: var(--purple); color: #191a21; border-color: var(--purple); font-weight: 650; }
+:where(.sub) button:where(.ghost) { background: transparent; color: var(--fg); border-color: var(--line); font-weight: 500; }
+:where(.sub) input:is([type="checkbox"], [type="range"]) { padding: 0; accent-color: var(--pink); }
+/* Respiro: mais espaco dentro dos cartoes e entre o que vai neles. */
+.sub .card { padding: 22px 24px; border-radius: 18px; }
+.sub .card > * + * { margin-top: 14px; }
+.sub .card > h2 + * { margin-top: 8px; }
+.sub .row { gap: 12px 16px; }
+.sub .chips { gap: 8px; margin: 10px 0 14px; }
+.sub .check { margin: 6px 0; }
+.sub .facts { gap: 12px 20px; }
 .term { height: calc(100dvh - 300px); min-height: 320px; }
 
 /* Os cartoes das outras areas (as abas da Biblioteca, do Sistema e do Ao vivo). */
@@ -724,3 +735,10 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 }
 @keyframes up { from { transform: translateY(60px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* Sistema > Processos e logs: lado a lado no PC. */
+@media (min-width: 1000px) {
+  .sub.grid[data-sub="logs"] { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .sub.grid[data-sub="logs"] > .card { grid-column: auto; }
+  .sub.grid[data-sub="logs"] .log { max-height: 640px; }
+}

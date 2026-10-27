@@ -148,7 +148,7 @@ BIN = ENV("FLIPEROS_BIN", "/opt/fliperos/bin")
 # Os comandos que o painel abre: os mesmos lancadores dos frontends.
 LAUNCHERS = (BIN + "/fliperos-kms-run", BIN + "/fliperos-x11-run")
 # As pastas de ~ que o painel mostra em Files.
-FILE_ROOTS = ENV("FLIPEROS_WEB_FILE_ROOTS", "roms bios media splashscreen").split()
+FILE_ROOTS = ENV("FLIPEROS_WEB_FILE_ROOTS", "roms bios media splashscreen home").split()
 SESSION_HOURS = 12
 # O modo lab (config/fliperos-lab): a chave do endereco temporario, no /run.
 LAB = ENV("FLIPEROS_LAB", BIN + "/fliperos-lab")
@@ -1282,10 +1282,10 @@ def stop(pids, wait=8):
 
 def file_roots():
     """As pastas que o painel mostra: as de ~ que o Setup cria (jogos,
-    BIOS, arte, splash). Os links dentro delas (uma pasta de jogos num disco
-    externo) valem."""
+    BIOS, arte, splash) e a propria ~ ("home"). Os links dentro delas (uma
+    pasta de jogos num disco externo) valem."""
     home = ENV("FLIPEROS_HOME") or pwd.getpwnam(PLAYER).pw_dir
-    return {name: os.path.join(home, name) for name in FILE_ROOTS}
+    return {name: home if name == "home" else os.path.join(home, name) for name in FILE_ROOTS}
 
 
 def file_path(root, rel):

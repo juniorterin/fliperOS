@@ -227,8 +227,10 @@
   border: 1px solid var(--line); color: var(--fg); position: relative; transition: transform .25s, box-shadow .25s, border-color .25s; }
 /* So o primeiro lote entra animado; fora da tela, o navegador nem desenha o cartao. */
 .game.enter { animation: rise .45s both; }
-.games .game { content-visibility: auto; contain-intrinsic-size: auto 230px; }
-.games.list .game { contain-intrinsic-size: auto 74px; }
+/* A grade virtual (games.js): cada cartao na posicao da sua linha. */
+.games { position: relative; display: block; }
+.games .game { display: flex; flex-direction: column; }
+.games .game .meta { flex: 1; min-height: 0; overflow: hidden; }
 .game .shot { position: relative; display: block; aspect-ratio: 4 / 3; background: #000; overflow: hidden; }
 .game .shot > img, .game .shot > video { width: 100%; height: 100%; display: block; object-fit: cover; image-rendering: pixelated; }
 .game .shot > img:is(.pic-marquee, .pic-logo, .pic-box) { object-fit: contain; image-rendering: auto; background: radial-gradient(#25263a, #0b0b12); }
@@ -354,3 +356,5 @@ span.inl { display: inline-grid; font-size: 9px; }
   .fact-grid { grid-template-columns: 1fr 1fr; }
   .fact-grid > .fact-cell:first-child, .fact-cell.ctrl-cell { grid-column: 1 / -1; }
 }
+
+.fact-cell > svg.g { width: 26px; height: 26px; color: var(--cyan); grid-row: span 2; margin: 0 1px; }

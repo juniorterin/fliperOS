@@ -313,12 +313,12 @@ async function loadFiles(path) {
   filePath = data.path;
   const select = $("file-root");
   if (select.options.length !== data.roots.length) {
-    select.replaceChildren(...data.roots.map((r) => el("option", { value: r }, "~/" + r)));
+    select.replaceChildren(...data.roots.map((r) => el("option", { value: r }, r === "home" ? "~/ (" + t("home_all") + ")" : "~/" + r)));
   }
   select.value = fileRoot;
   // O caminho: cada pedaco leva de volta a ele.
   const parts = filePath ? filePath.split("/") : [];
-  const crumbs = [el("button", { type: "button", "data-icon": "🏠" }, "~/" + fileRoot)];
+  const crumbs = [el("button", { type: "button" }, icon("g-home"), fileRoot === "home" ? "~" : "~/" + fileRoot)];
   crumbs[0].addEventListener("click", () => loadFiles(""));
   parts.forEach((part, i) => {
     const b = el("button", { type: "button" }, part);
