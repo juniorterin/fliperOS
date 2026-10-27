@@ -432,7 +432,7 @@ def memory():
 
 def temperatures():
     """Os sensores do hwmon: o da CPU (k10temp, coretemp...), da GPU, do
-    disco."""
+    disco; com o limite da peca (crit, senao max), quando o sensor diz."""
     rows = []
     for mon in sorted(glob.glob(os.path.join(SYS, "class/hwmon/hwmon*"))):
         name = read(os.path.join(mon, "name")).strip()
@@ -441,7 +441,11 @@ def temperatures():
             if value is None:
                 continue
             label = read(temp.replace("_input", "_label")).strip()
-            rows.append({"sensor": name, "label": label, "celsius": round(value / 1000, 1)})
+            row = {"sensor": name, "label": label, "celsius": round(value / 1000, 1)}
+            limit = read_int(temp.replace("_input", "_crit")) or read_int(temp.replace("_input", "_max"))
+            if limit and 30000 < limit < 150000:
+                row["max"] = round(limit / 1000, 1)
+            rows.append(row)
     return rows
 
 

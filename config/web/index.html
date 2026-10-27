@@ -587,41 +587,51 @@
 
     <!-- ===== Sistema ===== -->
     <div class="area" data-area="system">
-      <div class="sub grid" data-sub="status">
-      <!-- Status: o video, o hardware, a rede, os processos e os logs. -->
-      <section class="card wide st-half" aria-labelledby="h-video">
-        <h2 id="h-video" data-t="video"></h2>
-        <div class="table-wrap"><table id="video-table"></table></div>
-        <div id="modelines"></div>
-      </section>
-  
-      <section class="card" aria-labelledby="h-cpu">
-        <h2 id="h-cpu">CPU</h2>
-        <div class="meter"><div id="cpu-bar"></div></div>
-        <div class="row"><span id="cpu-total" class="big">-</span><span id="load" class="dim"></span></div>
-        <div id="cores" class="cores"></div>
-        <div id="temps" class="small-list"></div>
-      </section>
-  
-      <section class="card" aria-labelledby="h-gpu">
-        <h2 id="h-gpu">GPU</h2>
-        <div id="gpus"></div>
-      </section>
-  
-      <section class="card" aria-labelledby="h-mem">
-        <h2 id="h-mem" data-t="memory"></h2>
-        <div id="memory"></div>
-      </section>
-  
-      <section class="card" aria-labelledby="h-disks">
-        <h2 id="h-disks" data-t="storage"></h2>
-        <div id="disks"></div>
-      </section>
-  
-      <section class="card" aria-labelledby="h-net">
-        <h2 id="h-net" data-t="network"></h2>
-        <div id="network"></div>
-      </section>
+      <!-- Status: o video no tubo num mostrador, a CPU em anel, os
+           termometros, a GPU, a memoria, os discos e a rede (system.js). -->
+      <div class="sub" data-sub="status">
+        <div class="dash">
+          <section class="dcard dial-card" aria-labelledby="h-video">
+            <h2 id="h-video"><svg class="px"><use href="icons.svg#px-video"/></svg><span data-t="st_tube"></span></h2>
+            <div class="dial">
+              <div class="dial-screen"><div class="led" id="st-khz"></div><small>kHz</small></div>
+              <span class="band" id="st-band"></span>
+            </div>
+            <div class="st-chips" id="st-mode"></div>
+            <div id="modelines"></div>
+            <details class="more">
+              <summary><svg class="g"><use href="icons.svg#g-chevd"/></svg><span data-t="wanted"></span></summary>
+              <div class="table-wrap"><table id="video-table"></table></div>
+            </details>
+          </section>
+          <section class="dcard" aria-labelledby="h-cpu">
+            <h2 id="h-cpu"><svg class="px"><use href="icons.svg#px-chip"/></svg>CPU</h2>
+            <div class="ring-row"><div class="ring" id="cpu-ring"></div><div class="ring-text"><b id="cpu-total" class="big">-</b><span id="load" class="dim"></span></div></div>
+            <div id="cores" class="eq"></div>
+          </section>
+          <section class="dcard temps-card" aria-labelledby="h-temps">
+            <h2 id="h-temps"><svg class="px"><use href="icons.svg#px-latency"/></svg><span data-t="st_temps"></span></h2>
+            <div class="therms" id="temps"></div>
+            <div class="legend"><span><i class="t1"></i><span data-t="st_cold"></span></span><span><i class="t2"></i><span data-t="st_warm"></span></span>
+              <span><i class="t3"></i><span data-t="st_hot"></span></span><span><i class="t4"></i><span data-t="st_limit"></span></span></div>
+          </section>
+          <section class="dcard" aria-labelledby="h-gpu">
+            <h2 id="h-gpu"><svg class="px"><use href="icons.svg#px-system"/></svg>GPU</h2>
+            <div id="gpus"></div>
+          </section>
+          <section class="dcard" aria-labelledby="h-mem">
+            <h2 id="h-mem"><svg class="px"><use href="icons.svg#px-chip"/></svg><span data-t="memory"></span></h2>
+            <div id="memory"></div>
+          </section>
+          <section class="dcard" aria-labelledby="h-disks">
+            <h2 id="h-disks"><svg class="px"><use href="icons.svg#px-disk"/></svg><span data-t="storage"></span></h2>
+            <div id="disks"></div>
+          </section>
+          <section class="dcard" aria-labelledby="h-net">
+            <h2 id="h-net"><svg class="px"><use href="icons.svg#px-network"/></svg><span data-t="network"></span></h2>
+            <div id="network"></div>
+          </section>
+        </div>
       </div>
       <div class="sub grid" data-sub="logs">
       <section class="card wide st-half" aria-labelledby="h-proc">

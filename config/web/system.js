@@ -3,71 +3,143 @@
 // modo lab e o terminal.
 "use strict";
 
+// O anel de um medidor (CPU, memoria): a cor pelo quanto esta usado.
+function ringSvg(pct) {
+  const p = Math.max(0, Math.min(100, pct || 0)), r = 26, len = 2 * Math.PI * r;
+  const color = p > 90 ? "var(--red)" : p > 70 ? "var(--orange)" : "var(--green)";
+  return '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="' + r + '" class="ring-base"/>' +
+    '<circle cx="32" cy="32" r="' + r + '" class="ring-fill" stroke="' + color + '" stroke-dasharray="' + (len * p / 100).toFixed(1) +
+    " " + len.toFixed(1) + '" transform="rotate(-90 32 32)"/><text x="32" y="37" text-anchor="middle">' + Math.round(p) + "%</text></svg>";
+}
+
+// Uma barra com a cor pelo quanto esta usado.
+function bar(pct) {
+  const p = Math.max(0, Math.min(100, pct || 0));
+  const box = el("div", { class: "sbar " + (p > 90 ? "hot" : p > 70 ? "warn" : "") }, el("i"));
+  box.firstChild.style.width = p + "%";
+  return box;
+}
+
+// O nome de gente de cada sensor e o limite padrao da peca, quando o sensor
+// nao diz o dele.
+function sensorName(x) {
+  const s = x.sensor;
+  if (/coretemp|k10temp|zenpower|cpu/.test(s)) return ["CPU", x.label || s, 95];
+  if (/amdgpu|radeon|nouveau|nvidia/.test(s)) return ["GPU", x.label || s, 95];
+  if (/nvme|drivetemp|sata/.test(s)) return [t("st_disk"), x.label || s, 70];
+  if (/iwl|rtw|ath|mt7|wifi/.test(s)) return ["Wi-Fi", x.label || s, 90];
+  if (/acpitz|pch|it87|nct/.test(s)) return [t("st_board"), x.label || s, 90];
+  return [s, x.label, 90];
+}
+
+// Os termometros: feitos uma vez por sensor; a coluna sobe e desce suave.
+const therms = new Map();
+function renderTemps(rows) {
+  const box = $("temps"), seen = new Set();
+  rows.slice(0, 10).forEach((x, i) => {
+    const key = x.sensor + "|" + x.label + "|" + i;
+    seen.add(key);
+    let th = therms.get(key);
+    const [name, label, fallback] = sensorName(x);
+    const limit = x.max || fallback, top = Math.max(110, limit + 10);
+    if (!th) {
+      th = { node: el("div", { class: "therm" }, el("div", { class: "tube" }, el("div", { class: "glass" }, el("div", { class: "fill" })),
+        el("div", { class: "bulb" }), el("div", { class: "limit" })), el("div", { class: "deg" }), el("b", {}, name), el("small", {}, label)) };
+      th.fill = th.node.querySelector(".fill");
+      th.deg = th.node.querySelector(".deg");
+      th.limit = th.node.querySelector(".limit");
+      box.append(th.node);
+      therms.set(key, th);
+    }
+    const ratio = x.celsius / limit;
+    const level = ratio < .55 ? "t1" : ratio < .75 ? "t2" : ratio < .88 ? "t3" : "t4";
+    th.node.className = "therm " + level;
+    th.fill.style.height = Math.min(100, (x.celsius / top) * 100) + "%";
+    th.limit.style.bottom = "calc(30px + " + (limit / top) + " * (100% - 30px))";
+    th.deg.textContent = Math.round(x.celsius) + "°";
+    th.node.title = name + " " + label + ": " + x.celsius + " °C (" + t("st_limit") + " " + limit + " °C)";
+  });
+  for (const [key, th] of therms) if (!seen.has(key)) { th.node.remove(); therms.delete(key); }
+  $("temps").closest(".dcard").hidden = !rows.length;
+}
+
+// Uma linha de fato: o rotulo e o valor.
+const kv = (label, value) => el("div", { class: "kv" }, el("span", {}, label), el("b", {}, value));
+
 function renderStatus(s) {
-  // Video: o pedido e o aplicado.
+  // O video no tubo: os kHz no mostrador, a faixa (15, 25 ou 31 kHz) e o modo.
   const v = s.video || {}, w = v.wanted || {};
+  const out = (v.outputs || []).find((o) => o.active);
+  led($("st-khz"), out ? Number(out.horizontal_khz).toFixed(2) : "--.--");
+  const khz = out ? Number(out.horizontal_khz) : 0;
+  const band = !out ? "" : khz < 20 ? "15 kHz" : khz < 28 ? "25 kHz" : "31 kHz";
+  $("st-band").textContent = band;
+  $("st-band").className = "band " + (khz < 20 ? "b15" : khz < 28 ? "b25" : "b31");
+  $("st-mode").replaceChildren(...(out ? [
+    el("span", { class: "chip-s" }, icon("g-screenh"), out.width + "×" + out.height),
+    el("span", { class: "chip-s" }, Number(out.vertical_hz).toFixed(2) + " Hz"),
+    el("span", { class: "chip-s" }, out.interlaced ? t("interlaced") : t("progressive")),
+    el("span", { class: "chip-s" }, icon("g-ext"), out.connector + " · " + out.card.replace("/dev/dri/", "")),
+  ] : [el("span", { class: "dim" }, t("no_output"))]));
+  $("modelines").replaceChildren(...(v.outputs || []).filter((o) => o.active).map((o) =>
+    el("div", { class: "modeline" }, o.connector + ": Modeline " + o.modeline)));
   const table = $("video-table");
-  table.replaceChildren();
-  const add = (k, val) => table.append(el("tr", {}, el("th", {}, t(k)), el("td", {}, val || "-")));
-  table.append(el("tr", {}, el("th", { colspan: "2", class: "vid-part" }, t("wanted"))));
-  add("monitor", w.monitor); add("frequency", w.frequency); add("resolution", w.boot_resolution);
-  add("connector", w.connector); add("orientation", w.orientation);
-  table.append(el("tr", {}, el("th", { colspan: "2", class: "vid-part" }, t("applied"))));
-  const active = (v.outputs || []).filter((o) => o.active);
-  $("modelines").replaceChildren();
-  if (!active.length) add("mode", t("no_output"));
-  for (const o of active) {
-    add("connector", o.connector + " (" + o.card.replace("/dev/dri/", "") + ")");
-    add("mode", o.width + "x" + o.height);
-    add("hsync", o.horizontal_khz + " kHz");
-    add("vsync", o.vertical_hz + " Hz");
-    add("scan", o.interlaced ? t("interlaced") : t("progressive"));
-    $("modelines").append(el("div", { class: "modeline" }, o.connector + ": Modeline " + o.modeline));
-  }
-  if (v.framebuffer) add("framebuffer", v.framebuffer);
+  table.replaceChildren(...[["monitor", w.monitor], ["frequency", w.frequency], ["resolution", w.boot_resolution],
+    ["connector", w.connector], ["orientation", w.orientation], ["framebuffer", v.framebuffer]]
+    .map(([k, val]) => el("tr", {}, el("th", {}, t(k)), el("td", {}, val || "-"))));
 
-  // CPU.
+  // CPU: o anel, a carga e os nucleos em barras que sobem e descem.
   const cpu = s.cpu || {};
+  $("cpu-ring").innerHTML = ringSvg(cpu.total);
   $("cpu-total").textContent = (cpu.total ?? 0).toFixed(0) + "%";
-  $("cpu-bar").style.width = (cpu.total || 0) + "%";
   $("load").textContent = t("load") + " " + (s.load || []).join(" ");
-  $("cores").replaceChildren(...(cpu.cores || []).map((c, i) =>
-    el("div", { class: "core" }, "#" + i + " " + c.toFixed(0) + "%", meter(c))));
-  $("temps").replaceChildren(...(s.temperatures || []).filter((x) => !/amdgpu|radeon|nouveau/.test(x.sensor))
-    .slice(0, 6).map((x) => el("div", {}, el("span", {}, x.sensor + (x.label ? " " + x.label : "")),
-      el("span", {}, x.celsius + " °C"))));
+  const cores = $("cores"), list = cpu.cores || [];
+  if (cores.children.length !== list.length) {
+    cores.replaceChildren(...list.map((_, i) => el("div", { class: "core" }, el("div", { class: "col" }, el("i")), el("small", {}, "#" + i))));
+  }
+  list.forEach((c, i) => {
+    const bar = cores.children[i].querySelector("i");
+    bar.style.height = Math.max(2, c) + "%";
+    bar.className = c > 90 ? "hot" : c > 70 ? "warn" : "";
+    cores.children[i].title = "#" + i + " " + c.toFixed(0) + "%";
+  });
 
-  // GPU.
+  renderTemps(s.temperatures || []);
+
+  // GPU: o nome, o driver, e o que a placa diz (uso, VRAM, relogio, consumo).
   $("gpus").replaceChildren(...(Array.isArray(s.gpus) ? s.gpus : []).map((g) => {
-    const lines = [el("div", { class: "row" }, el("span", {}, g.name || g.slot), el("span", { class: "tag" }, g.driver))];
-    if (g.busy != null) lines.push(el("div", { class: "dim" }, t("busy") + " " + g.busy + "%"), meter(g.busy));
-    const facts = [];
-    if (g.vram_total) facts.push(t("vram") + " " + bytes(g.vram_used) + " " + t("of") + " " + bytes(g.vram_total));
-    if (g.clock) facts.push(t("clock") + " " + g.clock);
-    if (g.celsius != null) facts.push(t("temp") + " " + g.celsius + " °C");
-    if (g.watts != null) facts.push(t("power") + " " + g.watts + " W");
-    if (facts.length) lines.push(el("div", { class: "dim" }, facts.join(" · ")));
-    return el("div", { class: "item" }, ...lines);
+    const box = el("div", { class: "gpu" }, el("div", { class: "gpu-head" }, el("b", {}, g.name || g.slot), el("span", { class: "tag" }, g.driver)));
+    if (g.busy != null) box.append(kv(t("busy"), g.busy + "%"), bar(g.busy));
+    if (g.vram_total) box.append(kv(t("vram"), bytes(g.vram_used) + " " + t("of") + " " + bytes(g.vram_total)), bar((100 * g.vram_used) / g.vram_total));
+    if (g.clock) box.append(kv(t("clock"), g.clock));
+    if (g.celsius != null) box.append(kv(t("temp"), g.celsius + " °C"));
+    if (g.watts != null) box.append(kv(t("power"), g.watts + " W"));
+    return box;
   }));
 
-  // Memoria.
+  // Memoria: o anel e a troca.
   const m = s.memory || {};
-  $("memory").replaceChildren(
-    el("div", { class: "row" }, el("span", {}, bytes(m.used) + " " + t("of") + " " + bytes(m.total)),
-      el("span", { class: "dim" }, m.total ? Math.round((100 * m.used) / m.total) + "%" : "")),
-    meter(m.total ? (100 * m.used) / m.total : 0),
-    m.swap_total ? el("div", { class: "dim" }, t("swap") + " " + bytes(m.swap_used) + " " + t("of") + " " + bytes(m.swap_total)) : "");
-  // Armazenamento: cada disco montado.
-  $("disks").replaceChildren(...(Array.isArray(s.disks) ? s.disks : []).map((d) => el("div", { class: "item" },
-    el("div", { class: "row" }, el("span", {}, d.mount), el("span", { class: "dim" }, bytes(d.used) + " / " + bytes(d.total))),
-    meter(d.total ? (100 * d.used) / d.total : 0))));
+  const used = m.total ? (100 * m.used) / m.total : 0;
+  const ring = el("div", { class: "ring" });
+  ring.innerHTML = ringSvg(used);
+  $("memory").replaceChildren(el("div", { class: "ring-row" }, ring, el("div", { class: "ring-text" },
+    el("b", {}, bytes(m.used)), el("span", { class: "dim" }, t("of") + " " + bytes(m.total)))),
+  m.swap_total ? el("div", {}, kv(t("swap"), bytes(m.swap_used) + " " + t("of") + " " + bytes(m.swap_total)),
+    bar((100 * m.swap_used) / m.swap_total)) : "");
 
-  // Rede.
+  // Os discos montados.
+  $("disks").replaceChildren(...(Array.isArray(s.disks) ? s.disks : []).map((d) => el("div", { class: "disk" },
+    el("div", { class: "disk-head" }, icon("px-disk"), el("b", {}, d.mount), el("span", { class: "dim" }, bytes(d.used) + " / " + bytes(d.total))),
+    bar(d.total ? (100 * d.used) / d.total : 0))));
+
+  // A rede: cada placa, os enderecos, o trafego e o sinal do Wi-Fi.
   const net = Object.entries(s.network || {});
-  $("network").replaceChildren(...net.map(([name, n]) => el("div", { class: "item" },
-    el("div", { class: "row" }, el("span", {}, name), el("span", { class: "dim" }, (n.ipv4 || []).join(", "))),
-    el("div", { class: "dim" }, "↓ " + rate(n.rx_bps) + " · ↑ " + rate(n.tx_bps)))),
-  s.wifi ? el("div", { class: "dim" }, "Wi-Fi " + s.wifi.ssid + " · " + t("signal") + " " + s.wifi.signal + "%") : "");
+  $("network").replaceChildren(...net.map(([name, n]) => el("div", { class: "nic" },
+    el("div", { class: "nic-head" }, icon(/^w/.test(name) ? "px-network" : "px-link"), el("b", {}, name),
+      el("span", { class: "dim" }, (n.ipv4 || []).join(", ") || "-")),
+    el("div", { class: "nic-rates" }, el("span", { class: "down" }, "↓ " + rate(n.rx_bps)), el("span", { class: "up" }, "↑ " + rate(n.tx_bps))))),
+  s.wifi ? el("div", { class: "wifi" }, el("span", { class: "signal", "data-bars": String(Math.ceil((s.wifi.signal || 0) / 25)) },
+    el("i"), el("i"), el("i"), el("i")), el("b", {}, s.wifi.ssid), el("span", { class: "dim" }, t("signal") + " " + s.wifi.signal + "%")) : "");
 
   renderProcesses(s.processes || []);
 }

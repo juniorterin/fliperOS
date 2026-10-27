@@ -251,7 +251,18 @@ def demo(tmp):
                FLIPEROS_SETUP=setup, FLIPEROS_RUN_USER=os.path.join(tmp, "run"), FLIPEROS_CONF=os.path.join(tmp, "fliperos.conf"),
                FLIPEROS_VIDEO_CHECK=check, FLIPEROS_BUTTONS_TOOL=buttons, FLIPEROS_STREAM=stream,
                FLIPEROS_LOGS=os.path.join(tmp, "logs"), FLIPEROS_ADB_URL="http://127.0.0.1:9/none",
-               FLIPEROS_OVERLAY_KEY=os.path.join(tmp, "overlay.key"))
+               FLIPEROS_OVERLAY_KEY=os.path.join(tmp, "overlay.key"), FLIPEROS_SYS=os.path.join(tmp, "sys"))
+    # Os sensores de temperatura (o hwmon do /sys): CPU, GPU, disco e Wi-Fi.
+    for n, (name, label, temp, crit) in enumerate((("coretemp", "Core 0", 52, 100), ("coretemp", "Core 1", 58, 100),
+                                                   ("amdgpu", "edge", 71, 0), ("nvme", "Composite", 38, 84),
+                                                   ("acpitz", "", 44, 0), ("rtw88", "", 83, 0))):
+        mon = os.path.join(tmp, "sys/class/hwmon/hwmon%d" % n)
+        write(os.path.join(mon, "name"), name + "\n")
+        write(os.path.join(mon, "temp1_input"), "%d\n" % (temp * 1000))
+        if label:
+            write(os.path.join(mon, "temp1_label"), label + "\n")
+        if crit:
+            write(os.path.join(mon, "temp1_crit"), "%d\n" % (crit * 1000))
     os.makedirs(os.path.join(tmp, "logs"), exist_ok=True)
     write(os.path.join(tmp, "logs", "retroarch.log"), "[INFO] Loading content\n")
     subprocess.Popen([sys.executable, os.path.join(ROOT, "config/fliperos-web"), "--bind", "127.0.0.1", "--port", str(port),
