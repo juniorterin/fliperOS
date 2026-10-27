@@ -56,7 +56,7 @@ Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has bee
 - Each coin (the panel's COIN, also during a game) adds the minutes chosen in Minutes per coin to the time left. The time runs by the clock, also on the menu and with the cabinet off.
 - When the time runs out during a game, the game closes and the frontend says TIME IS UP.
 - The indicator: without time, a coin going into a slot and INSERT COIN blinking, in a frame. With time, a clock with the minutes left (the seconds, in red, in the last minute). In the list it sits under the game's control icons; in full screen in the top left corner; in the grid in the bottom right corner (the logo, the texts and the icons move up a little, the icons in two lines).
-- It is a kiosk: button 2 (and Esc) never closes the frontend. Turn commercial mode off in Tab > Frontend options to leave it.
+- It is a kiosk: the controller's button 2 never closes the frontend. The Esc key of a real keyboard (the operator's) still asks whether to go back to the FliperOS menu.
 
 **The power button.** With no game open, the cabinet's power button powers off; with a game open it closes the game (Tab > Frontend options > Power closes game). The frontend tells `fliperos-powerkey` which process is the game through the file named in `FLIPEROS_POWERKEY=games:FILE` (`$XDG_RUNTIME_DIR/fliperos-frontend.game`): its other children, the video player and the scraper, are not a game. Before this, the button killed the video and never powered off.
 

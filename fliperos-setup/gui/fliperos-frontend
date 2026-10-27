@@ -504,8 +504,13 @@ class Frontend:
                 owner = g if parent == "main" else parent
                 self.opened.discard(owner["Name"])
                 self.rebuild(keep=owner["Name"])
+                self.closed_group = time.monotonic()
             elif not self.commercial:
                 self.overlay, self.ov = "exit", {"sel": 1}
+        elif a == "esc" and self.commercial and time.monotonic() - getattr(self, "closed_group", 0) > 0.3:
+            # O Esc do teclado (o operador) fecha o frontend mesmo no modo
+            # comercial; o botao 2 do controle (o cliente), nao.
+            self.overlay, self.ov = "exit", {"sel": 1}
         elif a == "b4":
             self.toggle_fav()
         elif a == "b5":

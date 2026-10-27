@@ -147,6 +147,10 @@ class Input:
                 action = self.keys.get(ev.key)
                 if action:
                     self.press(action, ("k", ev.key), out)
+                # O Esc de um teclado de verdade, alem do botao 2: no modo
+                # comercial so ele (o operador) fecha o frontend.
+                if ev.key == pg.K_ESCAPE and not self.text:
+                    out.append("esc")
             elif ev.type == pg.KEYUP:
                 action = self.keys.get(ev.key)
                 if action:
