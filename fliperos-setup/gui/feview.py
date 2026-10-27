@@ -282,7 +282,8 @@ def coin_moving(ui, x, y, t):
         if face >= 5:
             pygame.draw.ellipse(coin, COIN_LINE, (0, 0, face, h), 1)
             coin.fill(COIN_LINE, (face // 2, 4, 1, 3))   # o relevo
-    ui.blit(coin, (cx - w // 2, sy - 4))
+    # Espelhada: a espessura a esquerda, a face a direita (o giro e para la).
+    ui.blit(pygame.transform.flip(coin, True, False), (cx - w // 2, sy - 4))
 
 
 def clock_icon(ui, cx, cy, color, t):
