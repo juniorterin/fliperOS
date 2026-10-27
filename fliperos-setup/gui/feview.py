@@ -264,7 +264,8 @@ def coin_moving(ui, x, y, t):
     (so a espessura) e some nela."""
     sx, sy = coin_slot(x, y)
     p = (t % COIN_CYCLE) / COIN_CYCLE
-    h, thick = 11, 3
+    # A altura e a da fenda (10, de sy - 4 a sy + 5): a ficha entra justa.
+    h, thick = 10, 3
     if p < 0.3:                               # vem deslizando
         k = p / 0.3
         cx, face = round(x - 14 + (sx - x + 14) * (1 - (1 - k) ** 2)), 7
@@ -282,7 +283,7 @@ def coin_moving(ui, x, y, t):
         if face >= 5:
             pygame.draw.ellipse(coin, COIN_LINE, (0, 0, face, h), 1)
             coin.fill(COIN_LINE, (face // 2, 4, 1, 3))   # o relevo
-    ui.blit(coin, (cx - w // 2, sy - h // 2))
+    ui.blit(coin, (cx - w // 2, sy - 4))
 
 
 def clock_icon(ui, cx, cy, color, t):
