@@ -656,6 +656,10 @@ class Frontend:
             elif sel == OPT_COMMERCIAL and a in ("left", "right", "b1"):
                 self.commercial = not self.commercial
                 self.say("COMMERCIAL MODE ON" if self.commercial else "COMMERCIAL MODE OFF")
+                if not self.commercial:
+                    # Desligado, o tempo que restava some: ligado de novo,
+                    # comeca sem ficha.
+                    self.credit_until = 0.0
                 if self.commercial and "coin" in self.exit_combo:
                     # A ficha passa a somar tempo: o atalho com ela sai.
                     self.exit_combo = []
