@@ -253,7 +253,9 @@ def coin_icon(ui, x, y, t):
     ui.fill(COIN_GLASS, (px + 7, py + 12, 9, 5))
 
 
-COIN_EDGE = (196, 140, 40)                    # a borda (a espessura) da ficha
+# A ficha prateada: a face cinza clara, o contorno e o relevo mais escuros,
+# e a borda (a espessura) no cinza do meio.
+COIN_FACE, COIN_LINE, COIN_EDGE = (214, 216, 222), (150, 153, 162), (128, 131, 140)
 
 
 def coin_moving(ui, x, y, t):
@@ -276,10 +278,10 @@ def coin_moving(ui, x, y, t):
     pygame.draw.ellipse(coin, COIN_EDGE, (thick, 0, max(2, face), h))
     coin.fill(COIN_EDGE, (max(1, face // 2), 1, thick, h - 2))
     if face >= 2:
-        pygame.draw.ellipse(coin, T.YELLOW, (0, 0, face, h))
+        pygame.draw.ellipse(coin, COIN_FACE, (0, 0, face, h))
         if face >= 5:
-            pygame.draw.ellipse(coin, T.ORANGE, (0, 0, face, h), 1)
-            coin.fill(T.ORANGE, (face // 2, 4, 1, 3))   # o relevo
+            pygame.draw.ellipse(coin, COIN_LINE, (0, 0, face, h), 1)
+            coin.fill(COIN_LINE, (face // 2, 4, 1, 3))   # o relevo
     ui.blit(coin, (cx - w // 2, sy - h // 2))
 
 
