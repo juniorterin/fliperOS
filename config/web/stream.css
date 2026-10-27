@@ -134,7 +134,7 @@ details.more .live-actions { margin: 12px 0 8px; }
 .dcard details.more table { margin-top: 8px; }
 .ring-row { display: flex; align-items: center; gap: 18px; }
 .ring { width: 110px; height: 110px; flex: none; }
-.ring svg { width: 100%; height: 100%; }
+.ring svg { width: 100%; height: 100%; overflow: visible; }
 .ring .ring-base { fill: none; stroke: #2a2b38; stroke-width: 7; }
 .ring .ring-fill { fill: none; stroke-width: 7; stroke-linecap: round; transition: stroke-dasharray .8s ease; filter: drop-shadow(0 0 4px currentColor); }
 .ring text { font: 11px var(--px); fill: var(--fg); }

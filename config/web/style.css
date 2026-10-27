@@ -91,6 +91,13 @@ svg.g { width: 16px; height: 16px; flex: none; }
 .side-actions { display: flex; gap: 8px; align-items: center; }
 .chip-btn { background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; color: var(--muted); }
 .chip-btn:hover { color: var(--fg); border-color: var(--purple); }
+.side-power { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.side-power .chip-btn, .menu-item:has(svg) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.menu-item:has(svg) { justify-content: flex-start; }
+.side-power svg.g, .menu-item svg.g { width: 14px; height: 14px; }
+.chip-btn.red, .menu-item.red { color: var(--red); }
+.chip-btn.red { border-color: rgba(255,85,85,.45); }
+.chip-btn.red:hover { border-color: var(--red); background: rgba(255,85,85,.12); }
 .ver { margin-left: auto; color: var(--dim); font: 9px var(--px); }
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; background: var(--dim); }
 .dot.ok, .pill.ok .dot { background: var(--green); animation: ping 2s infinite; }

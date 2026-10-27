@@ -68,6 +68,20 @@ async function logout() {
 $("logout").addEventListener("click", logout);
 $("logout2").addEventListener("click", logout);
 
+// Reiniciar e desligar o gabinete (os ajustes power.* do Setup), com o
+// dialogo antes: na barra lateral e no menu do celular.
+async function power(kind) {
+  $("top-menu").hidden = true;
+  const reboot = kind === "reboot";
+  if (!(await ask({ title: t(reboot ? "power_reboot" : "power_off"), text: t(reboot ? "power_reboot_ask" : "power_off_ask"),
+    yes: t(reboot ? "power_reboot" : "power_off"), danger: true }))) return;
+  const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: "power." + (reboot ? "reboot" : "poweroff"), value: "1" }) });
+  const data = await res.json().catch(() => ({}));
+  toast(res.ok ? t(reboot ? "power_bye_reboot" : "power_bye_off") : (data.error || res.statusText), res.ok ? "ok" : "bad");
+}
+for (const id of ["power-reboot", "power-reboot2"]) $(id).addEventListener("click", () => power("reboot"));
+for (const id of ["power-off", "power-off2"]) $(id).addEventListener("click", () => power("off"));
+
 function switchLang() {
   lang = lang === "pt" ? "en" : "pt";
   try { localStorage.setItem("fliperos-lang", lang); } catch (e) { /* sem armazenamento */ }
