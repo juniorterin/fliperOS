@@ -34,7 +34,7 @@ screen_joysticks() {
 # controle como teclado do menu fica desligado enquanto isso: os botoes
 # apertados nao podem responder o menu.
 screen_buttons() {
-  local title="Button mapping" kind players p control dev name got index element tries summary map n
+  local title="Button mapping" kind players p control dev name got index element tries summary map n used
   local -a pressed
   kind=$(ui_menu_hints "$title" "What is wired to the panel?" panel \
     "panel|Controllers (press each control)|Joystick encoders and pads: press each control when asked." \
@@ -64,6 +64,15 @@ screen_buttons() {
             "$n of ${#BUTTON_CONTROLS[@]}. Wait 8 seconds to skip it."
         got=$(buttons_capture 8) || break
         read -r index element name <<< "$got"
+        # Um botao so faz uma coisa: o que ja foi dado a outro comando (deste
+        # jogador ou de outro, no mesmo controle) nao vale.
+        used=$(buttons_used "$map" "$index" "$element")
+        if [[ -n $used ]]; then
+          ui_info "$title" "That one is already ${used% *} of player ${used##* }." \
+            "Press another control for ${BUTTON_LABELS[$control]}."
+          sleep 1.5
+          continue
+        fi
         if [[ -z $dev || $index == "$dev" ]]; then
           dev=$index
           printf '%s %s %s %s %s\n' "$p" "$control" "$index" "$element" "$name" >> "$map"

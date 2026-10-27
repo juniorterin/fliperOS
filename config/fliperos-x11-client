@@ -50,6 +50,9 @@ case $(basename -- "$1") in
   *)
     [[ -f $deflicker ]] &&
       emulator_command="env LD_PRELOAD=$(printf '%q' "$deflicker${LD_PRELOAD:+:$LD_PRELOAD}") $emulator_command"
+    # O FPS do painel web num emulador em Vulkan: a camada do Vulkan
+    # (config/fliperos-vkfps.c) so entra com esta variavel.
+    emulator_command="env FLIPEROS_VK_FPS=1 $emulator_command"
     ;;
 esac
 # O stdin e o /dev/null: o programa roda fora do grupo da frente do tty1 (o

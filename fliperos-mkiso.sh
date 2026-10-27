@@ -1145,7 +1145,8 @@ build_deflicker_chroot() {
   here=$(dirname "$(realpath "$0")")
   step "Compiling the 480i flicker filter and the colour calibration"
   cp "$here/config/fliperos-deflicker.c" "$here/config/fliperos-color.c" "$here/config/fliperos-dropmaster.c" \
-    "$here/config/fliperos-sdl-audio.c" "$here/config/fliperos-deflicker-build" "$CHROOT_DIR/tmp/"
+    "$here/config/fliperos-sdl-audio.c" "$here/config/fliperos-vkfps.c" "$here/config/fliperos-deflicker-build" \
+    "$CHROOT_DIR/tmp/"
   cat > "$CHROOT_DIR/tmp/build-deflicker.sh" << 'DFSCRIPT'
 #!/bin/bash
 set -e
@@ -1157,8 +1158,10 @@ bash /tmp/fliperos-deflicker-build /tmp/fliperos-color.c /usr/local/bin/fliperos
 bash /tmp/fliperos-deflicker-build /tmp/fliperos-dropmaster.c /usr/local/lib/fliperos/libfliperos-dropmaster.so
 # O GroovyMAME no "default" do ALSA (config/fliperos-groovymame).
 bash /tmp/fliperos-deflicker-build /tmp/fliperos-sdl-audio.c /usr/local/lib/fliperos/libfliperos-sdl-audio.so
+# O FPS dos emuladores em Vulkan para o painel web (a camada do Vulkan).
+bash /tmp/fliperos-deflicker-build /tmp/fliperos-vkfps.c /usr/local/lib/fliperos/libfliperos-vkfps.so
 rm -f /tmp/fliperos-deflicker.c /tmp/fliperos-color.c /tmp/fliperos-dropmaster.c /tmp/fliperos-sdl-audio.c \
-  /tmp/fliperos-deflicker-build
+  /tmp/fliperos-vkfps.c /tmp/fliperos-deflicker-build
 DFSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-deflicker.sh"
   chroot "$CHROOT_DIR" /tmp/build-deflicker.sh >> "$LOG_FILE" 2>&1 \

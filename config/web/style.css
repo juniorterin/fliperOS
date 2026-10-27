@@ -596,9 +596,13 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .live-bar-end { display: flex; gap: 8px; margin-left: auto; }
 .live-stage { position: relative; width: min(100%, 1120px); margin: 0 auto; background: #000; border-radius: 10px;
   overflow: hidden; border: 1px solid var(--line); }
+/* Em 4:3 quem manda e a caixa: o video e o canvas a cobrem por cima, e o
+   tamanho do quadro nao mexe na altura dela (no celular a imagem ficava
+   achatada); o navegador sem aspect-ratio ganha a altura pelo padding. */
 .live-stage.tube { aspect-ratio: 4 / 3; }
+@supports not (aspect-ratio: 4 / 3) { .live-stage.tube::before { content: ""; display: block; padding-top: 75%; } }
 .live-stage video { display: block; width: 100%; height: 100%; object-fit: contain; }
-.live-stage.tube video { object-fit: fill; }
+.live-stage.tube video { position: absolute; inset: 0; object-fit: fill; }
 .live-stage:not(.tube) video { height: auto; min-height: 240px; }
 .live-stage:fullscreen { width: 100%; border: 0; border-radius: 0; aspect-ratio: auto; }
 .live-stage:fullscreen video { object-fit: contain; }

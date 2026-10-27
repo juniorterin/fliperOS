@@ -114,6 +114,8 @@ It downloads **only what the filter chooses** — the games, with their parents,
 
 A torrent without any (the CHD link pasted as the romset) is refused. **Transmission** does the download: its own `transmission-daemon` (`fliperos-transmission.service`, as the `fliperos` user, at low CPU and disk priority, RPC only on `127.0.0.1:9092`; the stock `transmission-daemon.service` is masked).
 
+It is set for speed (`fliperos-downloader config`, at each start): up to 150 peers per torrent and 500 in all (Transmission's default, 50 and 200, left most of a big romset's peers out), a 64 MB write cache, no speed limit, DHT, PEX, local peer discovery, µTP and UPnP on, and a stalled torrent leaves the queue after 5 minutes. The disk priority is the lowest normal one (best-effort 7): the "idle" class it had only wrote while nothing else read the disk, and the frontend's videos read it all the time.
+
 It never starts at boot: the Setup (or the web panel) starts it when a link is added or a download (or an art pack) is started, and it quits by itself when its last torrent ends. A download stopped by a shutdown shows as *stopped* and goes on with **Start the download**.
 
 The link is added running (paused, Transmission doesn't look for peers) and, as soon as the file list arrives, stopped with no file marked; the list goes through `fliperos-romclean` (`scan --names`, `chds --names --with`), only the chosen files are marked, and what is already in the emulator folders isn't downloaded again.

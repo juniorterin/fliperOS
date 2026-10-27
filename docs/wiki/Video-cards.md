@@ -25,6 +25,8 @@ Good, cheap choices: **HD 5450, HD 6450, HD 7750, R7 240, R7 250**.
 
 SI and CIK cards (HD 7000, R7/R9) work on both drivers; the Setup picks `radeon` by default and offers `amdgpu` (with Vulkan) in *Video Setup > Video driver*.
 
+The emulators follow the driver the card runs on, checked at every session start: on `amdgpu`, Flycast goes to the Vulkan renderer that matches its OpenGL one (per-pixel or per-triangle) and Dolphin to Vulkan; PCSX2 and DuckStation stay on Automatic, which already picks Vulkan there. Back on `radeon` (no Vulkan), each goes back to its factory renderer: Flycast to OpenGL with per-pixel transparency, Dolphin to OpenGL. RetroArch stays on `glcore` on both: its Vulkan output can't switch the CRT's modes. A choice made in an emulator is kept until the driver changes again.
+
 Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an **active DisplayPort or HDMI to VGA converter**. The card generates the low clocks; whether they reach the tube depends on the converter's chip, so pick one that the GroovyMAME community reports for 15 kHz.
 
 ## NVIDIA

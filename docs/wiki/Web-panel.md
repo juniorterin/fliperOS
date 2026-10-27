@@ -32,7 +32,9 @@ The panel has ten pages, tabs at the top, each with its own address (`#frontend`
 - **Terminal.**
 
 The status refreshes every second. What each part shows:
-- **Now playing:** the game open (emulator, file, RetroArch core) and the frontend, with the **FPS** and a graph of the last minute. The FPS comes from the OpenGL layer of the flicker filter, which counts the frames of whatever game is open. The minute of history stays in the browser.
+- **Now playing:** the game open (emulator, file, RetroArch core) and the frontend, with the **FPS** and a graph of the last minute. The FPS comes from the OpenGL layer of the flicker filter, which counts the frames of whatever game is open, and for games in Vulkan (Flycast, PCSX2, Dolphin, DuckStation on amdgpu) from a small implicit Vulkan layer (`config/fliperos-vkfps.c`, on with `FLIPEROS_VK_FPS=1`) that counts their frames the same way. The minute of history stays in the browser.
+
+The browser never keeps the panel: its pages, code, icons and fonts are sent with `Cache-Control: no-store`, so every visit gets the version on the cabinet, right after an update. The games' pictures and videos are checked each time (`no-cache` with an ETag), so new art from a scrape shows at once.
 - **Video:** what Video Setup asks (monitor, frequency, resolution, connector, orientation) next to what is on screen now: the mode, the horizontal kHz and vertical Hz, interlaced or progressive, and the full **modeline** of each active output, read from DRM by `fliperos-video-check`.
 - **CPU:** the total, each core and the load, plus the temperatures of the sensors.
 - **GPU:** the name and the driver, plus whatever the card reports: use, VRAM, clock, temperature, power.

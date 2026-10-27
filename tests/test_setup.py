@@ -2131,6 +2131,63 @@ class HarvestPackLineTests(unittest.TestCase):
         self.assertEqual(h.pack_line(), "MAME LOGOS DONE  MAME VIDEOS 80%")
 
 
+class EmulatorsVulkanTests(Base):
+    """O driver da placa AMD manda no renderizador: amdgpu liga o Vulkan nos
+    emuladores; radeon (sem Vulkan) volta cada um ao de fabrica."""
+
+    def setUp(self):
+        super().setUp()
+        self.home = self.env.dir / "home"
+        for path, text in (("flycast/emu.cfg", "[config]\npvr.rend = 3\n"),
+                           ("dolphin-emu/Dolphin.ini", "[Core]\nCPUThread = True\n"),
+                           ("PCSX2/inis/PCSX2.ini", "[EmuCore/GS]\nRenderer = 12\n")):
+            f = self.home / ".config" / path
+            f.parent.mkdir(parents=True)
+            f.write_text(text)
+        ds = self.home / ".local/share/duckstation/settings.ini"
+        ds.parent.mkdir(parents=True)
+        ds.write_text("[GPU]\nRenderer = OpenGL\n")
+        self.envs = {"EMULATORS_HOME": str(self.home), "EMULATORS_INI_SET": str(ROOT / "config/fliperos-ini-set")}
+
+    def values(self):
+        read = lambda p: (self.home / p).read_text()
+        return (re.search(r"pvr\.rend = (\d)", read(".config/flycast/emu.cfg")).group(1),
+                re.search(r"GFXBackend = ([\w-]+)", read(".config/dolphin-emu/Dolphin.ini") + "GFXBackend = -").group(1),
+                re.search(r"Renderer = (-?\d+)", read(".config/PCSX2/inis/PCSX2.ini")).group(1),
+                re.search(r"Renderer = (\w+)", read(".local/share/duckstation/settings.ini")).group(1))
+
+    def test_amdgpu_then_radeon(self):
+        self.env.card("card0", "amdgpu")
+        self.env.out("emulators_vulkan_sync", self.envs)
+        self.assertEqual(self.values(), ("5", "Vulkan", "-1", "Automatic"))
+        self.assertIn("emulators_driver=amdgpu", (self.env.etc / "fliperos.conf").read_text())
+        self.assertIn("CPUThread = True", (self.home / ".config/dolphin-emu/Dolphin.ini").read_text())
+        # A mesma placa no mesmo driver: nada muda (a escolha da pessoa fica).
+        (self.home / ".config/flycast/emu.cfg").write_text("[config]\npvr.rend = 0\n")
+        self.env.out("emulators_vulkan_sync", self.envs)
+        self.assertEqual(self.values()[0], "0")
+        # De volta ao radeon: o OpenGL equivalente e o automatico.
+        (self.home / ".config/flycast/emu.cfg").write_text("[config]\npvr.rend = 5\n")
+        (self.home / ".config/PCSX2/inis/PCSX2.ini").write_text("[EmuCore/GS]\nRenderer = 14\n")
+        (self.env.drm / "card0").rename(self.env.drm / "card9-old")
+        self.env.card("card0", "radeon")
+        self.env.out("emulators_vulkan_sync", self.envs)
+        self.assertEqual(self.values(), ("3", "OGL", "-1", "Automatic"))
+
+    def test_other_drivers_and_missing_emulators_are_left_alone(self):
+        self.env.card("card0", "i915")
+        self.env.out("emulators_vulkan_sync", self.envs)
+        self.assertEqual(self.values(), ("3", "-", "12", "OpenGL"))
+        shutil.rmtree(self.home / ".config/dolphin-emu")
+        self.env.out("emulators_vulkan amdgpu", self.envs)
+        self.assertFalse((self.home / ".config/dolphin-emu").exists())
+
+    def test_called_at_every_session_start(self):
+        setup = (SETUP / "fliperos-setup").read_text()
+        body = setup.split("    --session-start)\n")[1].split(";;")[0]
+        self.assertLess(body.index("emulators_vulkan_sync"), body.index("[[ ${2:-} == game ]]"))
+
+
 class FirstBootLiveTests(Base):
     """O primeiro boot ja instala e liga a tela ao vivo do painel web."""
 
@@ -2160,6 +2217,56 @@ class FirstBootLiveTests(Base):
         screen = (SETUP / "screens/first-boot.sh").read_text().split("screen_first_boot() {")[1]
         body = screen.split("\n}\n")[0]
         self.assertLess(body.index("screen_first_boot_live"), body.index('rm -f "$FLIPEROS_ETC/firstboot"'))
+
+
+class FirstBootWizardTests(Base):
+    """O primeiro boot nao pergunta o launcher (e o frontend do FliperOS) e
+    leva ao Wi-Fi, quando o cabo nao traz a internet, e aos controles."""
+
+    def first_boot(self, online=True, wifi="wlan0", mapped=True):
+        (self.env.etc / "firstboot").write_text("")
+        if mapped:
+            (self.env.etc / "buttons.map").write_text("1 b1 0 b0 x\n")
+        flag = self.env.dir / "online"
+        if online:
+            flag.write_text("")
+        script = """
+            source %s/screens/first-boot.sh
+            launcher_installed() { [[ $1 == fliperos ]]; }
+            net_online() { [[ -e %s ]]; }
+            net_connecting() { return 1; }
+            net_wifi_devices() { [[ -n "%s" ]] && echo "%s"; }
+            ui_menu() { echo "MENU $1"; }
+            ui_msg() { echo "msg $2"; }
+            ui_info() { :; }
+            ui_yesno() { echo "ask $2"; return 0; }
+            screen_wifi() { echo "wifi $*"; touch %s; }
+            screen_buttons() { echo "buttons"; }
+            extras_installed() { return 0; }
+            BUTTONS_MAP=%s
+            screen_first_boot
+        """ % (SETUP, flag, wifi, wifi, flag, self.env.etc / "buttons.map")
+        out = self.env.out(script)
+        self.assertFalse((self.env.etc / "firstboot").exists())
+        self.assertNotIn("MENU", out)
+        self.assertEqual((self.env.etc / "session").read_text(), "fliperos\n")
+        return out
+
+    def test_cable_with_internet_and_controls_mapped_asks_nothing(self):
+        (self.env.etc / "session").write_text("setup\n")
+        self.assertEqual(self.first_boot().strip(), "")
+
+    def test_no_internet_on_the_cable_offers_the_wifi_then_the_controls(self):
+        out = self.first_boot(online=False, mapped=False).splitlines()
+        self.assertTrue(out[0].startswith("ask There is no internet on the network cable."), out)
+        self.assertEqual(out[1], "wifi 0 quiet")
+        self.assertTrue(out[2].startswith("msg Now the controls"), out)
+        self.assertEqual(out[3], "buttons")
+
+    def test_no_wifi_adapter_goes_straight_to_the_controls(self):
+        out = self.first_boot(online=False, wifi="", mapped=False).splitlines()
+        self.assertTrue(out[0].startswith("msg Now the controls"), out)
+        self.assertEqual(out[1:], ["buttons"])
 
 
 class CustomGamesTests(Base):
@@ -2430,8 +2537,18 @@ class PowerNowTests(Base):
 
     def test_session_gets_10_seconds_to_stop(self):
         self.assertIn("TimeoutStopSec=10s", (ROOT / "config" / "fliperos-session-stop.conf").read_text())
-        self.assertIn('"$root/etc/systemd/system/session-.scope.d/fliperos-stop.conf"',
-                      (ROOT / "fliperos-rootfs.sh").read_text())
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        self.assertIn('"$root/etc/systemd/system/session-.scope.d/fliperos-stop.conf"', rootfs)
+
+    def test_every_service_gets_10_seconds_but_the_update(self):
+        # O reboot nao espera 90 s por servico nenhum preso no SIGTERM; o
+        # update ao desligar diz o tempo dele.
+        conf = (ROOT / "config" / "fliperos-stop-timeout.conf").read_text()
+        self.assertIn("[Manager]\nDefaultTimeoutStopSec=10s", conf)
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        for where in ("system.conf.d", "user.conf.d"):
+            self.assertIn('fliperos-stop-timeout.conf" "$root/etc/systemd/%s/fliperos-stop.conf"' % where, rootfs)
+        self.assertIn("TimeoutStopSec=20min", (ROOT / "config" / "fliperos-update-shutdown.service").read_text())
 
 
 class BackgroundJobTests(Base):
@@ -2584,6 +2701,35 @@ class EmulatorsTests(Base):
         r = self.env.run("emulators_install model2", {"EMULATORS_CMD": str(d / "nada")})
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("@fail", r.stdout)
+
+
+class ButtonMappingNoRepeatTests(Base):
+    """Button mapping: um botao ja dado a um comando nao vale para outro."""
+
+    def test_repeated_press_is_refused_and_asked_again(self):
+        presses = self.env.dir / "presses"
+        # O botao 0 duas vezes (a segunda e recusada) e depois um por comando.
+        presses.write_text("\n".join(["0 b0 Pad", "0 b0 Pad"] + ["0 b%d Pad" % i for i in range(1, 12)]) + "\n")
+        saved = self.env.dir / "saved"
+        out = self.env.out("""
+            source %s/screens/joysticks.sh
+            ui_menu_hints() { echo panel; }
+            ui_menu() { echo 1; }
+            ui_capture() { return 1; }
+            ui_info() { echo "info $*"; }
+            ui_msg() { echo "msg $*"; }
+            ui_yesno() { return 0; }
+            ui_flush_input() { :; }
+            padkeys_on() { :; }; padkeys_off() { :; }
+            buttons_capture() { local line; line=$(head -n 1 %s); sed -i 1d %s; [[ -n $line ]] && echo "$line"; }
+            buttons_save() { cp "$1" %s; }
+            screen_buttons
+        """ % (SETUP, presses, presses, saved))
+        self.assertIn("info Button mapping That one is already UP of player 1. Press another control for DOWN.", out)
+        rows = [line.split() for line in saved.read_text().splitlines()]
+        self.assertEqual(len(rows), 12)
+        self.assertEqual(len({(r[2], r[3]) for r in rows}), 12)
+        self.assertEqual(rows[1][:4], ["1", "down", "0", "b1"])
 
 
 class ButtonsLayoutTests(Base):

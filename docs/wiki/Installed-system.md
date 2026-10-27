@@ -20,9 +20,11 @@ It works with arcade encoders (digital axis 0–255), gamepads and USB joysticks
 
 The `fliperos-padkeys` service (pure Python, the kernel's `uinput`) only translates while `/run/fliperos/padkeys` exists, which the setup creates when it opens and deletes when it exits: frontends, emulators and the desktop read the controller by themselves, without a button counting twice.
 
-**First boot:** *Choose default launcher*, with the generated list of the launchers actually installed (Attract-Mode Plus, RetroArch, EmulationStation..., LXDE) and *FliperOS Setup* itself. Change it later in Setup > Games > Frontend.
+**First boot:** nothing to choose for what opens at power on: it is the FliperOS frontend (change it later in Setup > Games > Frontend). A short wizard gets the cabinet ready:
 
-Right after it, the first boot installs the web panel's **Live screen** and turns it on (go2rtc from its GitHub, a pinned version checked by sha256; ffmpeg is already in the image). Without internet it offers the Wi-Fi first; if it still can't download, it says so and the Live screen stays in Setup > Games > Extras > Live screen.
+- **Wi-Fi:** only when the network cable brings no internet and there is a Wi-Fi adapter. It asks again after a failed connection, until you say no (later: Setup > Network Setup).
+- **Controls:** the Button mapping of Setup > Joysticks, which every emulator and the frontend use. A mapping that already exists is kept.
+- **Live screen:** the web panel's Live screen is installed and turned on (go2rtc from its GitHub, a pinned version checked by sha256; ffmpeg is already in the image). If it can't download, it says so and the Live screen stays in Setup > Games > Extras > Live screen.
 
 **FliperOS updates (without a new ISO):** at every boot with internet, before the launcher, tty1 asks the repository whether there are FliperOS updates (`fliperos-update check`, waiting for NetworkManager and, with a cable plugged in or a saved Wi-Fi network, up to 30 s for the connection, since Wi-Fi connects after NetworkManager starts; offline or with GitHub out of reach, the boot goes on as always).
 

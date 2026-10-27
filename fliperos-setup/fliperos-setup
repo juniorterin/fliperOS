@@ -218,6 +218,9 @@ main() {
       # O som da tela ao vivo sem o loopback neste boot: o asound.conf sem a
       # copia, senao nada toca (lib/audio.sh).
       audio_stream_check
+      # O driver da placa AMD trocado: o Vulkan nos emuladores (amdgpu) ou o
+      # renderizador de fabrica (radeon).
+      emulators_vulkan_sync
       # O jogo direto no boot (fliperos-session --session-start game): so a
       # latencia. As listas, a arte e a config dos frontends nao servem a
       # ele e atrasavam a abertura do jogo.

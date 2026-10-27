@@ -371,7 +371,14 @@ $("live-sound").addEventListener("click", () => {
   $("live").muted = !$("live").muted;
   liveMuteButton();
 });
-$("live-full").addEventListener("click", () => { $("live-stage").requestFullscreen().catch(() => {}); });
+// A tela cheia: a do palco; no iPhone so o <video> vai a tela cheia (o
+// player do sistema, em 4:3 como o quadro de 640x480).
+$("live-full").addEventListener("click", () => {
+  const stage = $("live-stage"), video = $("live");
+  const full = stage.requestFullscreen || stage.webkitRequestFullscreen;
+  if (full) Promise.resolve(full.call(stage)).catch(() => {});
+  else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+});
 $("live-copy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($("live-url").value); } catch (e) {
     $("live-url").select();

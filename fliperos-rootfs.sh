@@ -93,6 +93,10 @@ install -Dm644 "$src/config/openbox-black-themerc" "$root/usr/share/themes/Flipe
 # poe /etc/fliperos/xdg antes no XDG_CONFIG_DIRS, e o do filtro de flicker
 # (fliperos-desktop-deflicker) e o unico compositor.
 install -Dm644 "$src/config/picom-autostart-hidden.desktop" "$root/etc/fliperos/xdg/autostart/picom.desktop"
+# O FPS dos emuladores em Vulkan para o painel web: a camada implicita
+# (config/fliperos-vkfps.c, compilada com o filtro de flicker), que so entra
+# com FLIPEROS_VK_FPS=1 (o fliperos-kms-run e o fliperos-x11-client).
+install -Dm644 "$src/config/fliperos-vkfps.json" "$root/usr/share/vulkan/implicit_layer.d/fliperos-vkfps.json"
 # Modo de video de cada emulador do fliperos-x11-run (640x240 nos de 480i
 # num monitor de 15 kHz). O usuario pode editar: a imagem nao sobrescreve.
 [[ -f "$root/etc/fliperos/emulator-modes.conf" ]] \
@@ -244,6 +248,9 @@ grep -q '^web=' "$root/etc/fliperos/services.conf" 2> /dev/null ||
 # Desligar sem esperar 90 s pelo que ficou preso na sessao do tty1.
 install -Dm644 "$src/config/fliperos-session-stop.conf" \
   "$root/etc/systemd/system/session-.scope.d/fliperos-stop.conf"
+# Nem por um servico (do sistema ou do usuario) que nao sai no SIGTERM.
+install -Dm644 "$src/config/fliperos-stop-timeout.conf" "$root/etc/systemd/system.conf.d/fliperos-stop.conf"
+install -Dm644 "$src/config/fliperos-stop-timeout.conf" "$root/etc/systemd/user.conf.d/fliperos-stop.conf"
 # O scrape automatico (config/fliperos-scrape.service, Setup > System >
 # Services > Auto scrape): sobe depois do boot (scrape=after) ate a pessoa
 # mudar, e segue com um jogo aberto.

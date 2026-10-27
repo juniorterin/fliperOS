@@ -54,3 +54,83 @@ emulators_latest() {
   [[ -x $EMULATORS_CMD ]] || return 1
   "$EMULATORS_CMD" latest "$1"
 }
+
+# ── O Vulkan pelo driver de video ────────────────────────────────
+# Com o amdgpu (Setup > Video Setup > Video driver) os emuladores que tem
+# Vulkan passam a usa-lo; com o radeon, que nao tem Vulkan, cada um volta ao
+# renderizador de fabrica. Vale o driver que a placa usa de fato:
+# emulators_vulkan_sync roda a cada sessao (--session-start) e so mexe
+# quando ele muda (a troca, a volta do teste da troca, a instalacao).
+# O Flycast vai do OpenGL ao Vulkan equivalente (pvr.rend 0 e 3, 4 e 5) e o
+# Dolphin ao Vulkan; o PCSX2 e o DuckStation ficam no automatico, que ja
+# escolhe o Vulkan onde ha. O RetroArch segue no glcore: o Vulkan dele
+# (khr_display) nao troca o modo do CRT.
+EMULATORS_HOME=${EMULATORS_HOME:-/home/$FLIPEROS_USER}
+EMULATORS_INI_SET=${EMULATORS_INI_SET:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-ini-set}
+
+# emulators_ini ARQUIVO SECAO CHAVE VALOR: a chave no ini do emulador, que
+# continua do usuario (o ini-set grava um arquivo novo, de quem roda). Sem a
+# pasta do emulador (nunca aberto, nao instalado), nada.
+emulators_ini() {
+  [[ -d ${1%/*} ]] || return 0
+  bash "$EMULATORS_INI_SET" "$@" 2>> "$FLIPEROS_LOG" || return 1
+  chown --reference="${1%/*}" "$1" 2> /dev/null
+  return 0
+}
+
+# emulators_ini_get ARQUIVO CHAVE: o valor de "CHAVE = valor" (vazio sem ele).
+emulators_ini_get() {
+  sed -n "s/^$2 *= *//p" "$1" 2> /dev/null | head -1 | tr -d '\r'
+}
+
+# emulators_vulkan DRIVER (amdgpu ou radeon) acerta o renderizador de cada
+# emulador.
+emulators_vulkan() {
+  local driver=$1 home=$EMULATORS_HOME file value
+  [[ $driver == amdgpu || $driver == radeon ]] || return 0
+  file=$home/.config/flycast/emu.cfg
+  value=$(emulators_ini_get "$file" 'pvr\.rend')
+  case $driver:$value in
+    amdgpu:0) emulators_ini "$file" config pvr.rend 4 ;;
+    amdgpu:3 | amdgpu:) emulators_ini "$file" config pvr.rend 5 ;;
+    radeon:4) emulators_ini "$file" config pvr.rend 0 ;;
+    radeon:5) emulators_ini "$file" config pvr.rend 3 ;;
+  esac
+  file=$home/.config/dolphin-emu/Dolphin.ini
+  value=$(emulators_ini_get "$file" GFXBackend)
+  if [[ $driver == amdgpu ]]; then
+    [[ $value == Vulkan ]] || emulators_ini "$file" Core GFXBackend Vulkan
+  elif [[ $value == Vulkan ]]; then
+    emulators_ini "$file" Core GFXBackend OGL
+  fi
+  # PCSX2: -1 o automatico, 12 OpenGL, 14 Vulkan.
+  file=$home/.config/PCSX2/inis/PCSX2.ini
+  value=$(emulators_ini_get "$file" Renderer)
+  if [[ -f $file ]] && [[ $driver:$value == amdgpu:12 || $driver:$value == radeon:14 ]]; then
+    emulators_ini "$file" EmuCore/GS Renderer -1
+  fi
+  file=$home/.local/share/duckstation/settings.ini
+  value=$(emulators_ini_get "$file" Renderer)
+  if [[ -f $file ]] && [[ $driver:$value == amdgpu:OpenGL || $driver:$value == radeon:Vulkan ]]; then
+    emulators_ini "$file" GPU Renderer Automatic
+  fi
+  log_info "emuladores no driver $driver: $([[ $driver == amdgpu ]] && echo Vulkan || echo o renderizador de fabrica)"
+}
+
+# emulators_vulkan_sync: o driver da placa AMD mudou desde a ultima vez
+# (emulators_driver no fliperos.conf)? Os emuladores o acompanham.
+emulators_vulkan_sync() {
+  local card driver=""
+  for card in "$DRM_SYSFS"/card[0-9]*; do
+    [[ ${card##*/} == *-* ]] && continue
+    case $(drm_card_driver "${card##*/}") in
+      amdgpu | radeon) driver=$(drm_card_driver "${card##*/}") ;;
+      *) continue ;;
+    esac
+    break
+  done
+  [[ -n $driver ]] || return 0
+  [[ $(conf_get emulators_driver 2> /dev/null) == "$driver" ]] && return 0
+  emulators_vulkan "$driver"
+  conf_set emulators_driver "$driver"
+}

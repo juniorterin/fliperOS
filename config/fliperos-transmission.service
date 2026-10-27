@@ -10,9 +10,12 @@ After=network-online.target
 
 [Service]
 User=fliperos
-# O download nao pode roubar a CPU nem o disco de quem esta jogando.
+# O download nao pode roubar a CPU nem o disco de quem esta jogando: a
+# menor prioridade normal. A classe "idle" so gravava com o disco parado, e
+# o video do frontend le o tempo todo: o download quase nao andava.
 Nice=15
-IOSchedulingClass=idle
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
 ExecStartPre=/usr/bin/python3 /opt/fliperos/bin/fliperos-downloader config
 ExecStart=/usr/bin/transmission-daemon --foreground --config-dir /home/fliperos/.config/fliperos-transmission
 Restart=on-failure

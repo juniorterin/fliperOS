@@ -171,9 +171,12 @@ TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=u
          ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8",
          ".png": "image/png", ".webp": "image/webp", ".ttf": "font/ttf", ".json": "application/json",
          ".webmanifest": "application/manifest+json"}
-# O codigo e as paginas: o navegador confere a cada vez (um update vale na
-# hora); as imagens e as fontes ficam guardadas uma semana.
-STATIC_CACHE = {".png": "max-age=604800", ".webp": "max-age=604800", ".ttf": "max-age=604800"}
+# O painel nunca fica guardado no navegador: o codigo, as paginas, os icones
+# e as fontes vem do gabinete a cada abertura (um update vale na hora, sem
+# limpar o cache). A midia dos jogos o navegador confere a cada vez (ETag):
+# a arte nova de um scrape aparece, e a que nao mudou nao desce de novo.
+NO_STORE = "no-store"
+MEDIA_CACHE = "private, no-cache"
 # A interface grafica do Setup: o painel usa os icones dos programas e a
 # fonte de pixel dela (/gui/icons/NOME.png, /gui/fonts/NOME.ttf).
 GUI = ENV("FLIPEROS_WEB_GUI", "/usr/local/lib/fliperos-setup/gui")
@@ -2612,11 +2615,11 @@ class Handler(BaseHTTPRequestHandler):
         name = static_name(url.path)
         if name:
             ext = os.path.splitext(name)[1]
-            return self.send_inline(os.path.join(STATIC, name), TYPES[ext], STATIC_CACHE.get(ext, "no-cache"),
+            return self.send_inline(os.path.join(STATIC, name), TYPES[ext], NO_STORE,
                                     frame="SAMEORIGIN" if name.startswith(("overlay", "live", "input")) else "DENY")
         gui = gui_file(url.path)
         if gui:
-            return self.send_inline(gui, TYPES[os.path.splitext(gui)[1]], "max-age=604800")
+            return self.send_inline(gui, TYPES[os.path.splitext(gui)[1]], NO_STORE)
         if url.path == "/lab":
             return self.lab_login(parse_qs(url.query))
         if not url.path.startswith("/api/"):
@@ -2749,7 +2752,7 @@ class Handler(BaseHTTPRequestHandler):
             path = media_file(system["key"], (name, clone), kind, MEDIA_EXTS[kind])
             if not path:
                 return self.send(404, {"error": "no such media"})
-            return self.send_inline(path, MEDIA_TYPES[os.path.splitext(path)[1]], "private, max-age=86400")
+            return self.send_inline(path, MEDIA_TYPES[os.path.splitext(path)[1]], MEDIA_CACHE)
         if url.path == "/api/geometry":
             # Video Setup > Geometry: o crt_range salvo e o do preset do monitor.
             try:

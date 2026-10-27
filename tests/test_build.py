@@ -5649,13 +5649,14 @@ class WebPanelTests(unittest.TestCase):
 
     def test_game_media_from_the_cabinet(self):
         # ~/media do gabinete: o set, o pai para o clone, Range para o video
-        # (o Safari do iPhone pede pedacos) e o ETag para o navegador guardar.
+        # (o Safari do iPhone pede pedacos) e o ETag: o navegador confere a
+        # cada vez (a arte nova de um scrape aparece).
         cookie = self.login()
         url = '/api/media?system=naomi&kind=%s&game=%s'
         self.assertEqual(self.request('GET', url % ('snap', 'vf4'))[0], 401)
         status, _, data = self.request('GET', url % ('snap', 'vf4'), cookie=cookie)
         self.assertEqual((status, data, self.last_headers['Content-Type']), (200, b'PNGDATA', 'image/png'))
-        self.assertEqual(self.last_headers['Cache-Control'], 'private, max-age=86400')
+        self.assertEqual(self.last_headers['Cache-Control'], 'private, no-cache')
         etag = self.last_headers['ETag']
         self.assertEqual(self.request('GET', url % ('snap', 'vf4'), cookie=cookie,
                                       headers={'If-None-Match': etag})[0], 304)
@@ -5677,16 +5678,16 @@ class WebPanelTests(unittest.TestCase):
             self.assertEqual(self.request('GET', path, cookie=cookie)[0], 404, path)
 
     def test_panel_files_and_the_setup_icons(self):
-        # A pasta plana do painel: o codigo confere a cada vez (ETag), as
-        # imagens e as fontes ficam guardadas; da interface do Setup, so os
-        # icones dos programas e a fonte (os metapics do Arcadeflow nao).
-        status, _, _ = self.request('GET', '/style.css')
-        self.assertEqual((status, self.last_headers['Cache-Control']), (200, 'no-cache'))
-        self.assertEqual(self.request('GET', '/style.css', headers={'If-None-Match': self.last_headers['ETag']})[0], 304)
+        # A pasta plana do painel, nunca guardada no navegador (cada abertura
+        # traz a versao do gabinete); da interface do Setup, so os icones dos
+        # programas e a fonte (os metapics do Arcadeflow nao).
+        for path in ('/', '/style.css', '/app.js', '/icon-192.png'):
+            status, _, _ = self.request('GET', path)
+            self.assertEqual((status, self.last_headers['Cache-Control']), (200, 'no-store'), path)
         self.assertEqual(self.request('GET', '/xterm-LICENSE.txt')[0], 200)
         status, _, data = self.request('GET', '/gui/icons/flycast.png')
         self.assertEqual((status, self.last_headers['Content-Type'], self.last_headers['Cache-Control']),
-                         (200, 'image/png', 'max-age=604800'))
+                         (200, 'image/png', 'no-store'))
         self.assertEqual(data, (ROOT / 'fliperos-setup/gui/icons/flycast.png').read_bytes())
         self.assertEqual(self.request('GET', '/gui/fonts/PressStart2P-Regular.ttf')[0], 200)
         self.assertEqual(self.last_headers['Content-Type'], 'font/ttf')
@@ -12748,6 +12749,44 @@ class ButtonMappingTests(unittest.TestCase):
         body = screen.split('screen_buttons() {')[1].split('\n}\n')[0]
         self.assertLess(body.index('padkeys_off'), body.index('buttons_capture'))
         self.assertLess(body.rindex('buttons_capture'), body.index('padkeys_on'))
+
+
+class VulkanFpsLayerTests(unittest.TestCase):
+    """O FPS do painel web num emulador em Vulkan: a camada implicita
+    (config/fliperos-vkfps.c), que a do OpenGL nao alcanca."""
+
+    def test_layer_builds_and_answers_the_loader(self):
+        import ctypes
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'libfliperos-vkfps.so'
+            build = subprocess.run(['bash', str(ROOT / 'config/fliperos-deflicker-build'),
+                                    str(ROOT / 'config/fliperos-vkfps.c'), str(out)], capture_output=True, text=True)
+            if build.returncode != 0 and 'pkg-config' in build.stderr + build.stdout:
+                self.skipTest('no pkg-config/libdrm in this image')
+            self.assertEqual(build.returncode, 0, build.stderr)
+            lib = ctypes.CDLL(str(out))
+            gipa = lib.fliperos_vkfps_GetInstanceProcAddr
+            gipa.restype = ctypes.c_void_p
+            gipa.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+            # Sem instancia, so as funcoes da propria camada.
+            for name in (b'vkCreateInstance', b'vkCreateDevice', b'vkGetDeviceProcAddr', b'vkGetInstanceProcAddr'):
+                self.assertTrue(gipa(None, name), name)
+            self.assertFalse(gipa(None, b'vkEnumeratePhysicalDevices'))
+
+    def test_manifest_and_where_it_is_turned_on(self):
+        layer = json.loads((ROOT / 'config/fliperos-vkfps.json').read_text())['layer']
+        self.assertEqual(layer['library_path'], '/usr/local/lib/fliperos/libfliperos-vkfps.so')
+        self.assertEqual(layer['enable_environment'], {'FLIPEROS_VK_FPS': '1'})
+        self.assertIn('disable_environment', layer)   # obrigatorio numa camada implicita
+        source = (ROOT / 'config/fliperos-vkfps.c').read_text()
+        for name in layer['functions'].values():
+            self.assertIn('API PFN_vkVoidFunction %s(' % name, source)
+        self.assertIn('"$src/config/fliperos-vkfps.json" "$root/usr/share/vulkan/implicit_layer.d/', ROOTFS)
+        self.assertIn('/tmp/fliperos-vkfps.c /usr/local/lib/fliperos/libfliperos-vkfps.so', MKISO)
+        self.assertIn('"$src/config/fliperos-vkfps.c" \\\n  /usr/local/lib/fliperos/libfliperos-vkfps.so',
+                      (ROOT / 'tools/cabinet-update.sh').read_text())
+        self.assertIn('export FLIPEROS_VK_FPS=1', (ROOT / 'config/fliperos-kms-run').read_text())
+        self.assertIn('env FLIPEROS_VK_FPS=1 $emulator_command', (ROOT / 'config/fliperos-x11-client').read_text())
 
 
 class MkisoFunctionsTests(unittest.TestCase):

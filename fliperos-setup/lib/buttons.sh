@@ -18,6 +18,15 @@ buttons_capture() {
   "$BUTTONS" capture --timeout "$1" 2>> "$FLIPEROS_LOG"
 }
 
+# buttons_used MAPA INDICE ELEMENTO imprime "NOME JOGADOR" do comando que ja
+# tem esse elemento do controle no mapa; nada se ele esta livre.
+buttons_used() {
+  local p control
+  read -r p control < <(awk -v i="$2" -v e="$3" '$3 == i && $4 == e { print $1, $2; exit }' "$1" 2> /dev/null) ||
+    return 0
+  printf '%s %s\n' "${BUTTON_LABELS[$control]:-$control}" "$p"
+}
+
 # buttons_save MAPA grava os botoes no RetroArch e no GroovyMAME: o ctrlr
 # fliperos e o joystickprovider sdljoy, em que o MAME numera os botoes como o
 # SDL, na ordem do aparelho.

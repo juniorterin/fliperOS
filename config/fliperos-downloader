@@ -84,6 +84,24 @@ SETTINGS = {
     'script-torrent-done-enabled': True,
     'watch-dir-enabled': False,
     'umask': 18,
+    # A velocidade: os romsets tem centenas de pares, e o padrao (50 por
+    # torrent, 200 ao todo) deixava a maior parte de fora; o cache de 4 MB
+    # escrevia o disco a cada pedaco. Sem limite de velocidade, e um torrent
+    # parado nao segura a fila dos outros.
+    'peer-limit-global': 500,
+    'peer-limit-per-torrent': 150,
+    'cache-size-mb': 64,
+    'speed-limit-down-enabled': False,
+    'speed-limit-up-enabled': False,
+    'alt-speed-enabled': False,
+    'alt-speed-time-enabled': False,
+    'queue-stalled-enabled': True,
+    'queue-stalled-minutes': 5,
+    'dht-enabled': True,
+    'pex-enabled': True,
+    'lpd-enabled': True,
+    'utp-enabled': True,
+    'port-forwarding-enabled': True,
 }
 # seedRatioMode de cada torrent: sem limite. Com o limite 0 da sessao, um
 # torrent que ja "terminou" (tudo desmarcado) para com "Seed ratio reached"
