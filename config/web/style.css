@@ -429,15 +429,16 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .file-pick:focus-within { outline: 2px solid var(--cyan); outline-offset: 2px; }
 #files { table-layout: fixed; }
 #files .c-size { width: 6.5em; }
-#files .c-date { width: 10em; }
-#files .c-del { width: 5.5em; }
+#files .c-date { width: 13em; }
+#files .c-del { width: 3.5em; }
 #files td.fact { white-space: nowrap; text-align: right; }
 #files .dl { display: inline-block; padding: 2px 6px; text-decoration: none; color: var(--cyan); }
 #files td.fname { overflow: hidden; text-overflow: ellipsis; }
 #files td.fname a, #files td.fname button { color: var(--fg); text-decoration: none; background: transparent; border: 0;
   padding: 0; font: inherit; cursor: pointer; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 #files td.fname a:hover, #files td.fname button:hover { color: var(--cyan); text-decoration: underline; }
-#files .del { background: transparent; border: 0; color: var(--red); padding: 2px 6px; }
+#files .del { background: transparent; border: 0; color: var(--red); padding: 6px 8px; opacity: .7; }
+#files .del:hover { opacity: 1; }
 .drop.over { outline: 2px dashed var(--pink); outline-offset: 4px; border-radius: 8px; }
 @media (max-width: 520px) { #files .c-date, #files td.fdate, #files th.fdate { display: none; } }
 

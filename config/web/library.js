@@ -345,8 +345,8 @@ async function loadFiles(path) {
     } else {
       link = el("a", { href: "/api/download?" + filesQuery(target), title: e.name, download: e.name }, "📄 " + e.name);
     }
-    const del = el("button", { type: "button", class: "del icon-only", "data-icon": "🗑",
-      "aria-label": t("delete") + " " + e.name, title: t("delete") });
+    const del = el("button", { type: "button", class: "del icon-only",
+      "aria-label": t("delete") + " " + e.name, title: t("delete") }, icon("g-trash"));
     del.addEventListener("click", async () => {
       if (!confirm(t("confirm_delete").replace("%s", e.name))) return;
       const r = await api("/api/delete", { method: "POST", body: JSON.stringify({ root: fileRoot, path: target }) });

@@ -132,8 +132,8 @@
 .sys-chip img, .sys-chip svg { width: 22px; height: 22px; border-radius: 6px; image-rendering: pixelated; }
 .now-facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
 .now-facts p { margin: 0; }
-.fact { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 7px; border-radius: 12px; background: rgba(68,71,90,.35); font-size: 13.5px; }
-.fact svg.px { width: 22px; height: 22px; }
+.nfact { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 7px; border-radius: 12px; background: rgba(68,71,90,.35); font-size: 13.5px; }
+.nfact svg.px { width: 22px; height: 22px; }
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .stat { padding: 12px 14px; border-radius: 14px; background: rgba(15,15,21,.65); border: 1px solid rgba(68,71,90,.7); display: grid; gap: 4px; min-width: 0; }
 .stat small { font: 8px var(--px); color: var(--dim); letter-spacing: .06em; }

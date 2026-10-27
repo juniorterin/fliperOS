@@ -395,10 +395,10 @@ function renderNow(s) {
     facts.replaceChildren();
     if (game) {
       const genre = [game.category, game.year, game.manufacturer].filter(Boolean).join(" · ");
-      if (genre) facts.append(el("span", { class: "fact" }, icon("px-games"), genre));
+      if (genre) facts.append(el("span", { class: "nfact" }, icon("px-games"), genre));
       const ctrl = controlIcons(game, cabPanel && cabPanel.map((c) => c && c.color));
-      if (ctrl) { ctrl.classList.add("fact"); facts.append(ctrl); }
-      if (fps && fps.core) facts.append(el("span", { class: "fact" }, icon("px-emulators"), t("core") + " " + fps.core));
+      if (ctrl) { ctrl.classList.add("nfact"); facts.append(ctrl); }
+      if (fps && fps.core) facts.append(el("span", { class: "nfact" }, icon("px-emulators"), t("core") + " " + fps.core));
     } else {
       facts.append(el("p", { class: "dim" }, cabOnline ? t("idle_text") : t("offline")));
     }
