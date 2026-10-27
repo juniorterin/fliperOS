@@ -1,6 +1,6 @@
 Open-source projects you can build yourself, with an Arduino, a Raspberry Pi Pico or an ESP32, and use on a FliperOS cabinet. Most of them plug into USB and show up as a standard joystick, mouse or keyboard, so FliperOS needs no driver for them. This page says, for each one, what FliperOS does with it and whether it has been tried.
 
-Only two of these have been used with FliperOS so far: the V-USB MamePanel, which is the control panel of the test cabinet, and the ZeDMD support, which is written but has not been tried on a real display. The others are listed because of how they present themselves to the computer, not because they were tested.
+Only two of these have been used with FliperOS so far: the V-USB MamePanel, which is the control panel of the test cabinet, and the ZeDMD, which connected on a user's cabinet in October 2026 once its firmware was updated to 5.1.8. The others are listed because of how they present themselves to the computer, not because they were tested.
 
 ## Control panel (joysticks and buttons)
 
@@ -39,7 +39,7 @@ The GunCon 2 calibration of the Setup is for the GunCon 2 only. These guns are c
 
 | Project | Board | With FliperOS |
 | --- | --- | --- |
-| [ZeDMD](https://github.com/PPUC/ZeDMD) | ESP32 (the ESP32-S3-N16R8 is the recommended one) or Raspberry Pi Pico, driving HUB75 LED panels of 128x32 or 256x64 | **Setup > Games > Extras > ZeDMD** installs the support: the display shows the selected game, the game that is open, its high scores and the achievements ([Frontends](Frontends.md)). GPL-2.0 |
+| [ZeDMD](https://github.com/PPUC/ZeDMD) | ESP32 (the ESP32-S3-N16R8 is the recommended one) or Raspberry Pi Pico, driving HUB75 LED panels of 128x32 or 256x64 | **Setup > Games > Extras > ZeDMD** installs the support: the display shows the selected game, the game that is open, its high scores and the achievements ([Frontends](Frontends.md)). **Needs ZeDMD firmware 5.1.0 or newer**: older firmware, like the one that works on Batocera 41, doesn't connect ([how to check and update it](Frontends.md#zedmd-firmware-version)). GPL-2.0 |
 | [libdmdutil](https://github.com/vpinball/libdmdutil) | (runs on the PC) | The library, from the Visual Pinball project, whose `dmdserver` FliperOS uses to talk to the ZeDMD |
 
 The Pixelcade marquee, which FliperOS also supports, is a commercial product with closed software; it is on the [Frontends](Frontends.md) page.

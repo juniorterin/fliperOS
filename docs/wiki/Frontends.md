@@ -115,6 +115,8 @@ The events below are the ones of Pixelcade's own EmulationStation scripts ([alin
 
 [ZeDMD](https://github.com/PPUC/ZeDMD) is an open-source LED display you can build yourself: an ESP32 board driving HUB75 LED panels, 128x32 (two 64x32 panels) or 256x64. **Setup > Games > Extras > ZeDMD** installs support for it.
 
+**It needs ZeDMD firmware 5.1.0 or newer.** Older firmware, like the one that works on Batocera 41, doesn't connect to FliperOS. [ZeDMD firmware version](#zedmd-firmware-version) says how to check yours and how to update it.
+
 The display gets the same events as the Pixelcade marquee: the game selected in ES-DE or Attract-Mode Plus, the system selected in ES-DE, the game opened from any frontend or emulator (with the high scores or "Now Playing" scrolling first), the game closed, the screensaver, the RetroAchievements and "Bye" at shutdown.
 
 Pixelcade and ZeDMD can be installed together. The high scores need hi2txt and Java, which come with Extras > Pixelcade.
@@ -130,6 +132,59 @@ Pixelcade and ZeDMD can be installed together. The high scores need hi2txt and J
   Without any picture it shows the game's name, taken from the Attract-Mode or ES-DE game list, scrolling when it doesn't fit. A system picture goes in `~/media/dmd/<system>.png`.
 - **Screensaver and startup**: during the frontend's screensaver the display cycles through the pictures in `~/media/dmd` and `~/media/marquee`, in random order, 8 seconds each. When the service starts it shows the FliperOS logo.
 - **Artwork**: Pixelcade's artwork is licensed only for Pixelcade hardware, so FliperOS doesn't use it on the ZeDMD.
+
+### ZeDMD firmware version
+
+FliperOS talks to the display through `dmdserver` from libdmdutil 0.11.0, which brings libzedmd 0.10. That library only understands **ZeDMD firmware 5.1.0 or newer**. The newest release is [5.1.8](https://github.com/PPUC/ZeDMD/releases/latest).
+
+The firmware changed its USB handshake twice, and each time the new library stopped talking to the older firmware:
+
+| Firmware | Works with FliperOS |
+| --- | --- |
+| 3.x and 4.x | **No.** 3.6.0 was tried on a user's cabinet: it never answers |
+| 5.0.x | **No.** Its handshake reply is shorter than libzedmd 0.10 expects (read from the code, not tried) |
+| 5.1.0 and newer | **Yes.** 5.1.8 was tried on the same cabinet: a 128x32 ESP32 board with a CH340 USB adapter |
+
+**Coming from Batocera.** Batocera 41 has an older libzedmd, which still talks to firmware before 5.1. Batocera 42 and 43 have the new one, like FliperOS: the ZeDMD 5.1.0 release notes told Batocera users to wait for Batocera 42.
+
+So a ZeDMD that works on Batocera 41 but not on 42 or 43 has old firmware, and FliperOS won't see it either until it is updated. After the update it no longer works on Batocera 41.
+
+**Seeing the version.** The display shows it at the bottom right of its logo when it powers on (every version does). Once it connects, the service log has it too: `journalctl -u fliperos-zedmd` shows `ZeDMD 5.1.8 found: device=/dev/zedmd, width=128, height=32`.
+
+**What old firmware looks like.** The display stays on its logo. The log shows `ZeDMD handshake response error, result: 0`, then `Unable to connect to ZeDMD on /dev/zedmd` and `No DMD displays found`, three times, and the service stops.
+
+A ZeDMD 5.x gives the same messages while its settings menu is open: it only talks over USB after **Exit** in that menu.
+
+### Updating the ZeDMD firmware
+
+FliperOS doesn't update the display by itself. It is done once, from FliperOS or from a PC.
+
+1. From the [latest ZeDMD release](https://github.com/PPUC/ZeDMD/releases/latest), download the zip for your board and panels. `ZeDMD-128x32.zip` is for an ESP32 with two 64x32 panels, `ZeDMD-256x64.zip` for HD, `ZeDMD-128x64.zip` for a single 128x64 panel, and the `ZeDMD-S3-N16R8_…` ones for an ESP32-S3 N16R8. The [ZeDMD README](https://github.com/PPUC/ZeDMD#flashing-the-firmware) describes each one.
+
+   The zip has `ZeDMD.bin`: the firmware and its files in one image, written at address 0.
+2. On FliperOS, in a terminal (SSH, or the web panel's Terminal), with the display plugged in:
+
+   ```
+   sudo systemctl stop fliperos-zedmd
+   sudo apt install esptool
+   esptool --chip esp32 --port /dev/zedmd -b 460800 --no-stub write_flash 0x0 ZeDMD.bin
+   ```
+
+   Ubuntu's esptool comes without esptool's helper program (the "stub"), hence `--no-stub`: the ESP32's own ROM writes the flash. It takes about 2 minutes and ends with `Hash of data verified`. For an ESP32-S3 the chip is `esp32s3`.
+
+   From a Windows PC, the ZeDMD project's [ZeDMD_Updater2](https://github.com/zesinger/ZeDMD_Updater2) does the same.
+3. On the first start after the update the display opens its settings menu, and it doesn't talk over USB while the menu is open. Set **RGB Order** until the top left shows red as red, green as green and blue as blue, then pick **Exit**. Without buttons, unplugging the display and plugging it back also leaves the menu.
+
+   The update doesn't keep the old RGB order and brightness.
+4. Start the service again, since it gave up after its 3 tries: `sudo systemctl reset-failed fliperos-zedmd`, then `sudo systemctl start fliperos-zedmd`. The log should show `ZeDMD 5.1.8 found`.
+
+**Two warnings in the log are normal.** With 5.1.8 on the original ESP32 the log says `The ZeDMD USB package size of 32 is a very low value` and `The ZeDMD panel minimal refresh rate of 30 is a very low value`. Those are the firmware's defaults, and pictures and scrolling text are fine with them.
+
+If animations stutter, the ZeDMD README suggests a USB package size of 512 for the original ESP32 (`USB packet size` in the display's menu).
+
+**Keeping the old firmware.** To go back to it later (to use the display on Batocera 41 again), save the flash before updating. Ubuntu's esptool can't do it: with `--no-stub`, `read_flash` stops at 2 MB with `CRC or checksum was invalid`, because in that mode it doesn't tell the ROM the flash size.
+
+Espressif's own esptool, which has the stub (`pipx install esptool`, or its [releases](https://github.com/espressif/esptool/releases)), reads the whole flash with `esptool --chip esp32 --port /dev/zedmd read_flash 0 ALL zedmd-backup.bin` (not tried here). It goes back the same way as the update: `write_flash 0x0 zedmd-backup.bin`.
 
 ## Versus score on the LED display
 

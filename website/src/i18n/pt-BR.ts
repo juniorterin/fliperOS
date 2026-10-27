@@ -506,7 +506,7 @@ const ptBR: Messages = {
         id: 'zedmd',
         title: 'ZeDMD (open source)',
         resolution: '128×32 ou 256×64 LEDs',
-        text: 'Você escolhe os painéis HUB75: o tamanho vem do espaçamento dos LEDs. O firmware é gravado num ESP32, e o display liga no USB.',
+        text: 'Você escolhe os painéis HUB75: o tamanho vem do espaçamento dos LEDs. O firmware é gravado num ESP32, e o display liga no USB. Use o firmware 5.1 ou mais novo: os mais antigos, como os que funcionam no Batocera 41, não conectam.',
         sizes: ['ZeDMD: 2 × 64×32', 'ZeDMD HD: 2 × 128×64', 'ESP32 ou ESP32-S3'],
       },
       {

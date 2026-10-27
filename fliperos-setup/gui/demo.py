@@ -292,7 +292,7 @@ def extras():
         ("steam", "Steam (installed)"),
         ("heroic", "Heroic (GOG, Epic, Amazon)"),
         ("pixelcade", "Pixelcade (LED/LCD marquee)"),
-        ("zedmd", "ZeDMD (open-source LED DMD)"),
+        ("zedmd", "ZeDMD (open-source LED DMD, firmware 5.1+)"),
         ("doflinx", "DOFLinx (Pixelcade in-game effects)"),
         ("hotr", "Hook Of The Reaper (game outputs: light guns, boards)"),
         ("qmamehook", "QMamehook (game outputs: serial light guns, native)"),

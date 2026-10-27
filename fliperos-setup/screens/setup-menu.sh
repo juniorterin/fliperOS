@@ -638,7 +638,7 @@ screen_extras_pixelcade() {
 }
 
 screen_extras() {
-  local entries=() name inst desc choice label last=""
+  local entries=() name inst desc choice label note last=""
   while true; do
     entries=()
     while IFS='|' read -r name inst desc; do
@@ -657,10 +657,13 @@ screen_extras() {
     elif extras_installed "$choice"; then
       ui_yesno "Extras" "$label is already installed. Download it again to update it?" no || continue
     else
-      ui_yesno "Extras" "Download and install $label now?" yes || continue
+      # O aviso do extra antes da pergunta (o firmware que o ZeDMD pede).
+      note=$(extras_note "$choice")
+      ui_yesno "Extras" "${note:+$note }Download and install $label now?" yes || continue
     fi
     if run_online "Installing $label" "" extras_install "$choice"; then
-      ui_msg "Extras" "$label installed."
+      note=$(extras_done "$choice")
+      ui_msg "Extras" "$label installed.${note:+ $note}"
     fi
   done
 }

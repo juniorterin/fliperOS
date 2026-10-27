@@ -9876,7 +9876,7 @@ class PixelcadeTests(unittest.TestCase):
                     '"303a", ATTRS{idProduct}=="1001"'):
             self.assertIn(ids, rules)
         self.assertIn('SYMLINK+="zedmd"', rules)
-        self.assertIn('zedmd|ZeDMD (open-source LED DMD)', EXTRAS)
+        self.assertIn('zedmd|ZeDMD (open-source LED DMD, firmware 5.1+)', EXTRAS)
         # O Pillow e o dmdserver vem pelo Extras: nada na imagem.
         self.assertNotIn('python3-pil', MKISO)
         self.assertNotIn('libdmdutil', MKISO)

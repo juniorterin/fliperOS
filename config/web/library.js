@@ -275,6 +275,12 @@ function installBox(group, item) {
   }
   box.append(actions);
   if (item.kind === "source") box.append(el("div", { class: "dim" }, t("inst_kof")));
+  // O ZeDMD so conecta com o firmware 5.1 ou mais novo (docs/wiki/Frontends.md).
+  if (group === "extras" && item.name === "zedmd") {
+    box.append(el("div", { class: "dim" }, t("inst_zedmd") + " ",
+      el("a", { href: "https://github.com/juniorterin/fliperOS/wiki/Frontends#zedmd-firmware-version",
+        target: "_blank", rel: "noopener" }, t("inst_zedmd_link"))));
+  }
   // O Pixelcade instalado: o codigo do pacote de arte pago.
   if (group === "extras" && item.name === "pixelcade" && item.installed) {
     const code = el("input", { type: "text", placeholder: t("inst_artpack"), autocomplete: "off" });

@@ -21,6 +21,22 @@ extras_label() {
   extras_list | awk -F'|' -v n="$1" '$1 == n { print $3; exit }'
 }
 
+# extras_note NOME: o aviso antes de instalar; extras_done NOME: o de depois.
+# O ZeDMD so conecta com o firmware 5.1 ou mais novo (o libzedmd 0.10 do
+# dmdserver): o 3.x, o 4.x e o 5.0, os do Batocera 41, nunca respondem
+# (docs/wiki/Frontends.md, ZeDMD firmware version).
+extras_note() {
+  case $1 in
+    zedmd) echo "ZeDMD needs firmware 5.1.0 or newer. Older ones (3.x, 4.x, 5.0, which work on Batocera 41) don't connect. The display shows its version on its logo at power on. How to update: FliperOS wiki, Frontends page." ;;
+  esac
+}
+
+extras_done() {
+  case $1 in
+    zedmd) echo "If the display stays on its logo, its firmware is older than 5.1: update it (FliperOS wiki, Frontends page)." ;;
+  esac
+}
+
 # extras_artpack CODIGO: o pacote de arte pago do Pixelcade, com o codigo de
 # licenca da compra (config/fliperos-pixelcade artpack).
 PIXELCADE_CMD=${PIXELCADE_CMD:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-pixelcade}

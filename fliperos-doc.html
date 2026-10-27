@@ -1215,6 +1215,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 - It has not been tested with a marquee yet.</p>
 <h2 id="zedmd-open-source-led-display">ZeDMD (open-source LED display)</h2>
 <p><a href="https://github.com/PPUC/ZeDMD">ZeDMD</a> is an open-source LED display you can build yourself: an ESP32 board driving HUB75 LED panels, 128x32 (two 64x32 panels) or 256x64. <strong>Setup &gt; Games &gt; Extras &gt; ZeDMD</strong> installs support for it.</p>
+<p><strong>It needs ZeDMD firmware 5.1.0 or newer.</strong> Older firmware, like the one that works on Batocera 41, doesn't connect to FliperOS. <a href="#zedmd-firmware-version">ZeDMD firmware version</a> says how to check yours and how to update it.</p>
 <p>The display gets the same events as the Pixelcade marquee: the game selected in ES-DE or Attract-Mode Plus, the system selected in ES-DE, the game opened from any frontend or emulator (with the high scores or "Now Playing" scrolling first), the game closed, the screensaver, the RetroAchievements and "Bye" at shutdown.</p>
 <p>Pixelcade and ZeDMD can be installed together. The high scores need hi2txt and Java, which come with Extras &gt; Pixelcade.</p>
 <ul>
@@ -1227,6 +1228,55 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>Without any picture it shows the game's name, taken from the Attract-Mode or ES-DE game list, scrolling when it doesn't fit. A system picture goes in <code>~/media/dmd/&lt;system&gt;.png</code>.
 - <strong>Screensaver and startup</strong>: during the frontend's screensaver the display cycles through the pictures in <code>~/media/dmd</code> and <code>~/media/marquee</code>, in random order, 8 seconds each. When the service starts it shows the FliperOS logo.
 - <strong>Artwork</strong>: Pixelcade's artwork is licensed only for Pixelcade hardware, so FliperOS doesn't use it on the ZeDMD.</p>
+<h3 id="zedmd-firmware-version">ZeDMD firmware version</h3>
+<p>FliperOS talks to the display through <code>dmdserver</code> from libdmdutil 0.11.0, which brings libzedmd 0.10. That library only understands <strong>ZeDMD firmware 5.1.0 or newer</strong>. The newest release is <a href="https://github.com/PPUC/ZeDMD/releases/latest">5.1.8</a>.</p>
+<p>The firmware changed its USB handshake twice, and each time the new library stopped talking to the older firmware:</p>
+<table>
+<thead>
+<tr>
+<th>Firmware</th>
+<th>Works with FliperOS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3.x and 4.x</td>
+<td><strong>No.</strong> 3.6.0 was tried on a user's cabinet: it never answers</td>
+</tr>
+<tr>
+<td>5.0.x</td>
+<td><strong>No.</strong> Its handshake reply is shorter than libzedmd 0.10 expects (read from the code, not tried)</td>
+</tr>
+<tr>
+<td>5.1.0 and newer</td>
+<td><strong>Yes.</strong> 5.1.8 was tried on the same cabinet: a 128x32 ESP32 board with a CH340 USB adapter</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Coming from Batocera.</strong> Batocera 41 has an older libzedmd, which still talks to firmware before 5.1. Batocera 42 and 43 have the new one, like FliperOS: the ZeDMD 5.1.0 release notes told Batocera users to wait for Batocera 42.</p>
+<p>So a ZeDMD that works on Batocera 41 but not on 42 or 43 has old firmware, and FliperOS won't see it either until it is updated. After the update it no longer works on Batocera 41.</p>
+<p><strong>Seeing the version.</strong> The display shows it at the bottom right of its logo when it powers on (every version does). Once it connects, the service log has it too: <code>journalctl -u fliperos-zedmd</code> shows <code>ZeDMD 5.1.8 found: device=/dev/zedmd, width=128, height=32</code>.</p>
+<p><strong>What old firmware looks like.</strong> The display stays on its logo. The log shows <code>ZeDMD handshake response error, result: 0</code>, then <code>Unable to connect to ZeDMD on /dev/zedmd</code> and <code>No DMD displays found</code>, three times, and the service stops.</p>
+<p>A ZeDMD 5.x gives the same messages while its settings menu is open: it only talks over USB after <strong>Exit</strong> in that menu.</p>
+<h3 id="updating-the-zedmd-firmware">Updating the ZeDMD firmware</h3>
+<p>FliperOS doesn't update the display by itself. It is done once, from FliperOS or from a PC.</p>
+<ol>
+<li>From the <a href="https://github.com/PPUC/ZeDMD/releases/latest">latest ZeDMD release</a>, download the zip for your board and panels. <code>ZeDMD-128x32.zip</code> is for an ESP32 with two 64x32 panels, <code>ZeDMD-256x64.zip</code> for HD, <code>ZeDMD-128x64.zip</code> for a single 128x64 panel, and the <code>ZeDMD-S3-N16R8_…</code> ones for an ESP32-S3 N16R8. The <a href="https://github.com/PPUC/ZeDMD#flashing-the-firmware">ZeDMD README</a> describes each one.</li>
+</ol>
+<p>The zip has <code>ZeDMD.bin</code>: the firmware and its files in one image, written at address 0.
+2. On FliperOS, in a terminal (SSH, or the web panel's Terminal), with the display plugged in:</p>
+<p><code>sudo systemctl stop fliperos-zedmd
+   sudo apt install esptool
+   esptool --chip esp32 --port /dev/zedmd -b 460800 --no-stub write_flash 0x0 ZeDMD.bin</code></p>
+<p>Ubuntu's esptool comes without esptool's helper program (the "stub"), hence <code>--no-stub</code>: the ESP32's own ROM writes the flash. It takes about 2 minutes and ends with <code>Hash of data verified</code>. For an ESP32-S3 the chip is <code>esp32s3</code>.</p>
+<p>From a Windows PC, the ZeDMD project's <a href="https://github.com/zesinger/ZeDMD_Updater2">ZeDMD_Updater2</a> does the same.
+3. On the first start after the update the display opens its settings menu, and it doesn't talk over USB while the menu is open. Set <strong>RGB Order</strong> until the top left shows red as red, green as green and blue as blue, then pick <strong>Exit</strong>. Without buttons, unplugging the display and plugging it back also leaves the menu.</p>
+<p>The update doesn't keep the old RGB order and brightness.
+4. Start the service again, since it gave up after its 3 tries: <code>sudo systemctl reset-failed fliperos-zedmd</code>, then <code>sudo systemctl start fliperos-zedmd</code>. The log should show <code>ZeDMD 5.1.8 found</code>.</p>
+<p><strong>Two warnings in the log are normal.</strong> With 5.1.8 on the original ESP32 the log says <code>The ZeDMD USB package size of 32 is a very low value</code> and <code>The ZeDMD panel minimal refresh rate of 30 is a very low value</code>. Those are the firmware's defaults, and pictures and scrolling text are fine with them.</p>
+<p>If animations stutter, the ZeDMD README suggests a USB package size of 512 for the original ESP32 (<code>USB packet size</code> in the display's menu).</p>
+<p><strong>Keeping the old firmware.</strong> To go back to it later (to use the display on Batocera 41 again), save the flash before updating. Ubuntu's esptool can't do it: with <code>--no-stub</code>, <code>read_flash</code> stops at 2 MB with <code>CRC or checksum was invalid</code>, because in that mode it doesn't tell the ROM the flash size.</p>
+<p>Espressif's own esptool, which has the stub (<code>pipx install esptool</code>, or its <a href="https://github.com/espressif/esptool/releases">releases</a>), reads the whole flash with <code>esptool --chip esp32 --port /dev/zedmd read_flash 0 ALL zedmd-backup.bin</code> (not tried here). It goes back the same way as the update: <code>write_flash 0x0 zedmd-backup.bin</code>.</p>
 <h2 id="versus-score-on-the-led-display">Versus score on the LED display</h2>
 <p>During a two-player match the display shows the score: the matches each side has won since the game opened. On a ZeDMD the score stays on the display (<code>GUILE 3 x 1 KEN</code>, with each side's character when the game tells it, or <code>P1</code> and <code>P2</code>).</p>
 <p>On a Pixelcade a text scrolls each time someone wins a match, and then the game's marquee comes back. The score appears with the first win: until then (the game's demo, the character select, the first match) the display keeps the game's picture.</p>
@@ -4121,7 +4171,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>See also <a href="#Emulators">Emulators</a> and <a href="#Installed-system">Installed system</a>.</p>
 <h1 id="DIY-hardware">DIY hardware</h1>
 <p>Open-source projects you can build yourself, with an Arduino, a Raspberry Pi Pico or an ESP32, and use on a FliperOS cabinet. Most of them plug into USB and show up as a standard joystick, mouse or keyboard, so FliperOS needs no driver for them. This page says, for each one, what FliperOS does with it and whether it has been tried.</p>
-<p>Only two of these have been used with FliperOS so far: the V-USB MamePanel, which is the control panel of the test cabinet, and the ZeDMD support, which is written but has not been tried on a real display. The others are listed because of how they present themselves to the computer, not because they were tested.</p>
+<p>Only two of these have been used with FliperOS so far: the V-USB MamePanel, which is the control panel of the test cabinet, and the ZeDMD, which connected on a user's cabinet in October 2026 once its firmware was updated to 5.1.8. The others are listed because of how they present themselves to the computer, not because they were tested.</p>
 <h2 id="control-panel-joysticks-and-buttons">Control panel (joysticks and buttons)</h2>
 <p>After plugging the panel in, map each player's buttons once in <strong>Setup &gt; Joysticks &gt; Button mapping</strong>; the mapping goes to every emulator (<a href="#Controls">Controls</a>).</p>
 <table>
@@ -4214,7 +4264,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <tr>
 <td><a href="https://github.com/PPUC/ZeDMD">ZeDMD</a></td>
 <td>ESP32 (the ESP32-S3-N16R8 is the recommended one) or Raspberry Pi Pico, driving HUB75 LED panels of 128x32 or 256x64</td>
-<td><strong>Setup &gt; Games &gt; Extras &gt; ZeDMD</strong> installs the support: the display shows the selected game, the game that is open, its high scores and the achievements (<a href="#Frontends">Frontends</a>). GPL-2.0</td>
+<td><strong>Setup &gt; Games &gt; Extras &gt; ZeDMD</strong> installs the support: the display shows the selected game, the game that is open, its high scores and the achievements (<a href="#Frontends">Frontends</a>). <strong>Needs ZeDMD firmware 5.1.0 or newer</strong>: older firmware, like the one that works on Batocera 41, doesn't connect (<a href="#Frontends">how to check and update it</a>). GPL-2.0</td>
 </tr>
 <tr>
 <td><a href="https://github.com/vpinball/libdmdutil">libdmdutil</a></td>

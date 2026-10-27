@@ -5675,6 +5675,39 @@ class ExtrasScreenTests(Base):
         # O Pixelcade instalado tem o menu dele, nao a pergunta de atualizar.
         self.assertNotIn("yesno:", r.stdout)
 
+    def test_zedmd_says_which_firmware_it_needs(self):
+        calls = self.env.dir / "extras.calls"
+        self.env.stub("fliperos-extras", 'case $1 in list) echo "zedmd|0|ZeDMD (open-source LED DMD, firmware 5.1+)" ;; '
+                      'installed) exit 1 ;; *) echo "extras $*" >> %s ;; esac' % calls)
+        env = dict(EXTRAS_CMD=str(self.env.bin / "fliperos-extras"), MENU_COUNT=str(self.env.dir / "menu.count"))
+        r = self.env.run("""
+            source %s/lib/ui.sh
+            source %s/lib/extras.sh
+            source %s/screens/progress.sh
+            source %s/screens/setup-menu.sh
+            # Extras > ZeDMD > Yes > Return.
+            ui_menu() {
+              echo x >> "$MENU_COUNT"
+              case $(wc -l < "$MENU_COUNT") in 1) echo zedmd ;; *) echo return ;; esac
+            }
+            ui_msg() { echo "msg:$*"; }
+            ui_yesno() { echo "yesno:$*"; }
+            run_with_progress() { shift 2; "$@" > /dev/null; }
+            net_online() { :; }
+            screen_extras
+        """ % (SETUP, SETUP, SETUP, SETUP), env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(calls.read_text().splitlines(), ["extras install zedmd --progress"])
+        # Antes de instalar: a versao que conecta, as que nao (as do Batocera
+        # 41) e onde ver a versao; o texto cabe no dialogo.
+        ask = next(line for line in r.stdout.splitlines() if line.startswith("yesno:"))
+        for part in ("firmware 5.1.0 or newer", "3.x, 4.x, 5.0", "Batocera 41", "on its logo", "Frontends page",
+                     "Download and install ZeDMD (open-source LED DMD, firmware 5.1+) now?"):
+            self.assertIn(part, ask)
+        self.assertLessEqual(len(ask.split(" ", 1)[1]), 300)
+        # Depois: o que o painel parado no logo quer dizer.
+        self.assertIn("installed. If the display stays on its logo, its firmware is older than 5.1", r.stdout)
+
 
 class LabModeTests(Base):
     """Setup > System > Lab mode (lib/services.sh, config/fliperos-lab): liga,

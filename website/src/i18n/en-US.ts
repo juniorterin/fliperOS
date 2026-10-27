@@ -504,7 +504,7 @@ const enUS = {
         id: 'zedmd',
         title: 'ZeDMD (open source)',
         resolution: '128×32 or 256×64 LEDs',
-        text: 'You pick the HUB75 panels: the size comes from the LED pitch. The firmware is flashed onto an ESP32, and the display plugs into USB.',
+        text: 'You pick the HUB75 panels: the size comes from the LED pitch. The firmware is flashed onto an ESP32, and the display plugs into USB. Use firmware 5.1 or newer: older ones, like those that work on Batocera 41, don’t connect.',
         sizes: ['ZeDMD: 2 × 64×32', 'ZeDMD HD: 2 × 128×64', 'ESP32 or ESP32-S3'],
       },
       {
