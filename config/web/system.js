@@ -287,9 +287,12 @@ $("log-refresh").addEventListener("click", showLog);
 
 const openGroups = new Set(["System"]);
 // Os icones do Setup em cada grupo e em cada ajuste (os do carrossel no tubo).
-const GROUP_ICONS = { System: "px-system", Services: "px-services", "480i hacks": "px-mode480", Colour: "px-colour" };
+const GROUP_ICONS = { System: "px-system", Video: "px-video", Audio: "px-audio", Power: "px-power", Services: "px-services",
+  "480i hacks": "px-mode480", Colour: "px-colour" };
 const SETTING_ICONS = [["launcher", "px-frontend"], ["latency", "px-latency"], ["debug", "px-debug"], ["leveler", "px-audio"],
   ["menu_sounds", "px-audio"], ["stream_audio", "px-audio"], ["stream_quality", "px-video"], ["marquee_overlay", "px-outputs"],
+  ["orientation", "px-orientation"], ["splash", "px-desktop"], ["mm_games", "px-outputs"], ["audio_card", "px-audio"],
+  ["mame_latency", "px-latency"], ["audio.", "px-mixer"], ["power.", "px-power"],
   ["service.", "px-services"], ["mode480.", "px-mode480"], ["color.", "px-colour"]];
 const settingIcon = (key) => (SETTING_ICONS.find(([k]) => key === k || (k.endsWith(".") && key.startsWith(k))) || [0, "px-setup"])[1];
 
@@ -312,8 +315,114 @@ async function loadSettings() {
     else for (const row of items) details.append(settingRow(row));
     boxes.push(details);
   }
-  boxes.push(await geometryBox().catch(() => ""));
+  boxes.push(await geometryBox().catch(() => ""), await wifiBox().catch(() => ""), passwordBox(), whatsnewBox());
   $("settings").replaceChildren(...boxes);
+}
+
+// settingsBox: um grupo dos que nao vem do --settings (Geometria, Rede...),
+// que tambem lembra se estava aberto.
+function settingsBox(name, iconName, ...content) {
+  const details = el("details", { class: "box-" + name.toLowerCase() },
+    el("summary", {}, icon(iconName), t("group_" + name)), ...content);
+  if (openGroups.has(name)) details.open = true;
+  details.addEventListener("toggle", () => { details.open ? openGroups.add(name) : openGroups.delete(name); });
+  return details;
+}
+
+// Setup > Network: as interfaces, as redes ao alcance (so ao pedir: a busca
+// leva uns segundos) e conectar com a senha.
+async function wifiBox() {
+  const res = await api("/api/wifi");
+  const devices = (await res.json()).devices || [];
+  const wifi = devices.filter((d) => d.type === "wifi");
+  const list = el("div", { class: "nics" }, ...devices.map((d) => el("div", { class: "nic-row" },
+    icon(d.type === "wifi" ? "px-network" : "px-link"), el("b", {}, d.device),
+    el("span", { class: "tag " + (d.state === "connected" ? "on" : "") }, d.state),
+    el("span", { class: "dim" }, [d.connection, d.ip].filter(Boolean).join(" · ")))));
+  const nets = el("div", { class: "wifi-nets" });
+  const scan = el("button", { type: "button", class: "btn ghost" }, icon("px-scan"), t("wifi_scan"));
+  scan.disabled = !wifi.length;
+  scan.addEventListener("click", async () => {
+    scan.disabled = true;
+    nets.replaceChildren(el("div", { class: "dim" }, t("wifi_scanning")));
+    try {
+      const r = await api("/api/wifi?scan=1");
+      const found = (await r.json()).networks || [];
+      nets.replaceChildren(found.length ? el("div", { class: "dim" }, t("wifi_nets")) : el("div", { class: "dim" }, t("wifi_nonet")),
+        ...found.map((n) => {
+          const b = el("button", { type: "button", class: "wifi-net" }, wifiBars(Number(n.signal)), el("b", {}, n.ssid),
+            el("span", { class: "dim" }, n.security || t("wifi_open")));
+          b.addEventListener("click", () => wifiConnect(n.device, n.ssid, !!n.security, false));
+          return b;
+        }));
+    } finally {
+      scan.disabled = false;
+    }
+  });
+  const hidden = el("button", { type: "button", class: "btn ghost" }, icon("px-add"), t("wifi_hidden"));
+  hidden.disabled = !wifi.length;
+  hidden.addEventListener("click", async () => {
+    const ssid = await ask({ title: t("wifi_hidden"), text: t("wifi_name"), input: "" });
+    if (ssid) wifiConnect(wifi[0].device, ssid, true, true);
+  });
+  return settingsBox("Network", "px-network", el("div", { class: "setting" }, list,
+    wifi.length ? el("div", { class: "row start" }, scan, hidden) : el("div", { class: "dim" }, t("wifi_none")), nets));
+}
+
+// wifiBars: o sinal em 4 barrinhas (como o do Status).
+function wifiBars(signal) {
+  const bars = signal >= 75 ? 4 : signal >= 50 ? 3 : signal >= 25 ? 2 : 1;
+  return el("span", { class: "signal", "data-bars": String(bars), title: signal + "%" }, el("i"), el("i"), el("i"), el("i"));
+}
+
+async function wifiConnect(device, ssid, secured, isHidden) {
+  let password = "";
+  if (secured) {
+    password = await ask({ title: ssid, text: t("wifi_pass").replace("%s", ssid), yes: t("wifi_connect"), input: "" });
+    if (password === null) return;
+  }
+  toast(ssid + "…");
+  const r = await api("/api/wifi", { method: "POST", body: JSON.stringify({ device, ssid, password, hidden: isHidden }) });
+  toast(t(r.ok ? "wifi_ok" : "wifi_fail").replace("%s", ssid), r.ok ? "ok" : "bad");
+  if (r.ok) loadSettings().catch(() => {});
+}
+
+// Setup > System > Password: a de agora e a nova duas vezes.
+function passwordBox() {
+  const field = (key, auto) => el("input", { type: "password", autocomplete: auto, "aria-label": t(key), placeholder: t(key) });
+  const current = field("pw_current", "current-password"), first = field("pw_new", "new-password"), again = field("pw_again", "new-password");
+  const save = el("button", { type: "submit", class: "btn" }, icon("px-password"), t("pw_save"));
+  const form = el("form", { class: "setting pw" }, current, first, again, el("div", { class: "row start" }, save),
+    el("div", { class: "dim" }, t("pw_note")));
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (first.value !== again.value) return toast(t("pw_diff"), "bad");
+    if (first.value.length < 4) return toast(t("pw_short"), "bad");
+    save.disabled = true;
+    try {
+      const r = await api("/api/password", { method: "POST", body: JSON.stringify({ current: current.value, password: first.value }) });
+      const data = await r.json().catch(() => ({}));
+      toast(r.ok ? t("pw_done") : r.status === 403 ? t("pw_wrong") : (data.error || r.statusText), r.ok ? "ok" : "bad");
+      if (r.ok) form.reset();
+    } finally {
+      save.disabled = false;
+    }
+  });
+  return settingsBox("Password", "px-password", form);
+}
+
+// Setup > System > What's new: o texto so ao abrir o grupo.
+function whatsnewBox() {
+  const pre = el("pre", { class: "log whatsnew" });
+  const box = settingsBox("Whatsnew", "px-up", el("div", { class: "setting" }, pre));
+  const fill = async () => {
+    if (!box.open || pre.textContent) return;
+    const r = await api("/api/whatsnew");
+    pre.textContent = ((await r.json()).text || "").trim() || t("wn_none");
+  };
+  box.addEventListener("toggle", () => fill().catch(() => {}));
+  fill().catch(() => {});
+  return box;
 }
 
 // Video Setup > Geometry: o monitor e o crt_range em uso, um digitado e a
@@ -349,21 +458,33 @@ async function geometryBox() {
   return details;
 }
 
+// settingPost grava um ajuste. Os que refazem a imagem do boot (row.task)
+// voltam como tarefa: o andamento fica na gaveta, e a lista se refaz no fim.
+async function settingPost(row, value) {
+  const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: row.key, value }) });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.task) {
+    toast(t("set_task").replace("%s", row.label));
+    taskNext = 0;
+  }
+  return { res, data };
+}
+
 function settingRow(row) {
   const id = "set-" + row.key.replace(/[^a-z0-9]/gi, "-");
   let control;
   if (row.type === "action") {
     // Um botao (o voltar ao padrao das cores): depois dele, os outros
     // ajustes do grupo mudaram, e a lista volta do Setup.
-    const button = el("button", { id, type: "button", class: "ghost" }, row.label);
+    const danger = row.key.startsWith("power.");
+    const button = el("button", { id, type: "button", class: "btn " + (danger ? "red" : "ghost") }, icon(settingIcon(row.key)), row.label);
     button.addEventListener("click", async () => {
-      if (!confirm(row.help)) return;
+      if (!(await ask({ title: row.label, text: row.help, yes: t("set_go"), danger }))) return;
       button.disabled = true;
       try {
-        const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: row.key, value: "1" }) });
-        const data = await res.json().catch(() => ({}));
-        toast(res.ok ? t("saved").replace("%s", row.label) : (data.error || res.statusText));
-        await loadSettings();
+        const { res, data } = await settingPost(row, "1");
+        toast(res.ok ? t("saved").replace("%s", row.label) : (data.error || res.statusText), res.ok ? "ok" : "bad");
+        if (!danger) await loadSettings();
       } finally {
         button.disabled = false;
       }
@@ -399,10 +520,11 @@ function settingRow(row) {
     if (!number) control.disabled = true;
     busy = true;
     try {
-      const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: row.key, value: control.value }) });
-      const data = await res.json().catch(() => ({}));
+      const { res, data } = await settingPost(row, control.value);
       if (dragging) return;
-      if (res.ok && data.setting) {
+      if (res.ok && data.task) {
+        row.value = control.value;
+      } else if (res.ok && data.setting) {
         control.value = data.setting.value;
         about.textContent = data.setting.help;
         row.value = data.setting.value;

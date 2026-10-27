@@ -878,7 +878,7 @@ class SettingsCliTests(Base):
                     "color.gamma", "color.hue"):
             self.assertIn(key, keys)
         # Nada que possa deixar o gabinete sem imagem.
-        self.assertFalse([k for k in keys if k in ("monitor", "resolution", "amd_driver", "orientation")])
+        self.assertFalse([k for k in keys if k in ("monitor", "resolution", "amd_driver")])
         gamma = rows[keys.index("color.gamma")]
         # O passo vai junto (o slider do painel anda de 5 em 5 no gama).
         self.assertEqual((gamma[1], gamma[3], gamma[5]), ("Colour", "number", "50..200:5"))
@@ -901,6 +901,59 @@ class SettingsCliTests(Base):
                     "service.nope boot", "color.gamma abc", "launcher nothere"):
             self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
         self.assertIn('settings_set "${2:-}" "${3:-}"', (SETUP / "fliperos-setup").read_text())
+
+    def test_video_audio_and_power_rows(self):
+        # O que faltava do Video Setup e do Audio Setup no painel, e desligar.
+        env = {"COLOR_BIN": str(self.env.dir / "none"), "ASOUND_CONF": str(self.env.dir / "asound.conf"),
+               "SPLASH_DIR": str(self.env.dir / "none"), "SPLASH_BUNDLED": str(self.env.dir / "none"),
+               "PLYMOUTH_THEMES": str(self.env.dir / "none")}
+        self.env.stub("aplay", "echo 'card 1: Generic [HD-Audio Generic], device 0: ALC887 Analog [ALC887 Analog]'")
+        rows = {r.split("|")[0]: r.split("|") for r in self.env.out("settings_list", env).splitlines()}
+        self.assertEqual(rows["orientation"][1:5], ["Video", "Monitor orientation", "choice", "horizontal"])
+        self.assertEqual(rows["audio_card"][5], "1_0=HD-Audio Generic - ALC887 Analog")
+        self.assertEqual(rows["mame_latency"][3:6], ["number", "0.0", "0..50:0.5"])
+        for key in ("audio.test", "power.reboot", "power.poweroff"):
+            self.assertEqual(rows[key][3], "action", key)
+        # Um monitor so: os jogos de varias telas nao aparecem nem mudam.
+        self.assertNotIn("mm_games", rows)
+        self.assertEqual(self.env.run("settings_set mm_games off", env).returncode, 2)
+        self.env.out("settings_set audio_card 1_0; settings_set mame_latency 12.5", env)
+        self.assertIn("alsa=1,0\n", (self.env.etc / "fliperos.conf").read_text())
+        self.assertIn("12.5", self.env.out('ini_get "$MAME_INI" audio_latency', env))
+        # A orientacao pelas funcoes do Monitor Orientation (o boot aqui de mentira).
+        out = self.env.out("orientation_boot() { echo \"boot $1\"; }; downloader_filter_orientation() { echo filters; }; "
+                           "settings_set orientation vertical-cw; settings_set orientation vertical-cw", env)
+        self.assertEqual(out.split(), ["boot", "vertical-cw", "filters"])
+        self.assertIn("orientation=vertical-cw\n", (self.env.etc / "fliperos.conf").read_text())
+        for bad in ("orientation sideways", "audio_card 7_0", "audio_card 1,0", "mame_latency 51", "splash nothere"):
+            self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
+        # Desligar e reiniciar: depois da resposta ao painel.
+        self.env.stub("systemd-run", 'echo "systemd-run $*" >> %s' % self.env.writes)
+        self.env.out("settings_set power.reboot 1", env)
+        self.assertIn("systemd-run --on-active=2 --unit=fliperos-web-power systemctl reboot",
+                      self.env.writes.read_text())
+
+    def test_wifi_and_password_without_a_screen(self):
+        # Setup > Network e Setup > System > Password pelo painel web.
+        env = {"COLOR_BIN": str(self.env.dir / "none")}
+        self.env.stub("nmcli", textwrap.dedent("""\
+            case "$*" in
+              "-t -f DEVICE,TYPE,STATE,CONNECTION device status") printf 'lo:loopback:unmanaged:\\nwlan0:wifi:connected:Casa\\n' ;;
+              "-t -f DEVICE,TYPE device status") printf 'wlan0:wifi\\n' ;;
+              *"device wifi list"*) printf 'Casa:80:WPA2\\nVizinho:30:\\n' ;;
+              *) echo "nmcli $*" >> %s ;;
+            esac""" % self.env.writes))
+        self.assertEqual(self.env.out("net_cli status", env).splitlines(), ["wlan0|wifi|connected|Casa|"])
+        self.assertEqual(self.env.out("net_cli scan", env).splitlines(), ["wlan0|Casa|80|WPA2", "wlan0|Vizinho|30|"])
+        self.env.out("net_cli connect wlan0 Casa <<< 'segredo1'", env)
+        self.assertIn("nmcli --wait 45 device wifi connect Casa ifname wlan0 password segredo1",
+                      self.env.writes.read_text())
+        for bad in ("net_cli connect eth9 Casa", "net_cli connect wlan0 ''", "net_cli nope"):
+            self.assertEqual(self.env.run(bad + " < /dev/null", env).returncode, 2, bad)
+        setup = (SETUP / "fliperos-setup").read_text()
+        self.assertIn('net_cli "${@:2}"', setup)
+        # A senha so pela entrada; curta demais, 2.
+        self.assertIn('IFS= read -r pass || true\n      password_valid "$pass" || return 2', setup)
 
     def test_boot_game_in_the_launcher_list(self):
         # O jogo direto no boot: so aparece (e so vale) depois de escolhido, no

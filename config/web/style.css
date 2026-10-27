@@ -773,6 +773,19 @@ img.fade.in { opacity: 1; transform: none; }
 #settings .setting > label svg.px { width: 24px; height: 24px; }
 #settings .geo { grid-template-columns: minmax(0, 1fr); }
 .geo-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+#settings .setting > button.btn { justify-self: start; }
+/* Rede, senha e novidades: uma coluna so, como a Geometria. */
+#settings .box-network .setting, #settings .pw, #settings .box-whatsnew .setting { grid-template-columns: minmax(0, 1fr); }
+.nics { display: grid; gap: 8px; }
+.nic-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.nic-row svg.px { width: 22px; height: 22px; }
+.wifi-nets { display: grid; gap: 6px; }
+:where(.sub) .wifi-net { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 12px;
+  background: var(--card2); border: 1px solid var(--line); border-radius: 10px; color: var(--fg); }
+.wifi-net b { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.wifi-net:hover { border-color: var(--purple); }
+#settings .pw input { width: 100%; max-width: 360px; }
+pre.whatsnew { max-height: 420px; overflow: auto; white-space: pre-wrap; }
 .geo input.mono { width: 100%; font: 13px ui-monospace, "JetBrains Mono", monospace; color: var(--cyan); }
 .boot-btn { margin-top: 14px; }
 .boot-btn svg.px { width: 20px; height: 20px; }

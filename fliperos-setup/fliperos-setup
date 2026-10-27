@@ -27,7 +27,9 @@
 #   --bios-check (as BIOS que faltam, lib/downloader.sh),
 #   --romlists, --mediapacks auto|resume|status (o frontend do FliperOS),
 #   --scrape-now RESULTADO [CHAVE...] (o Scrape the games em segundo plano),
-#   --scraper ... e --bios ... (o Scraper e o Download BIOS do painel web)
+#   --scraper ... e --bios ... (o Scraper e o Download BIOS do painel web),
+#   --bootgame, --geometry, --wifi status|scan|connect, --password (na
+#   entrada), --whatsnew (o painel web)
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
 # screens/ tem as telas.
@@ -290,6 +292,25 @@ main() {
       # A geometria sem tela (lib/video.sh): o painel web.
       geometry_cli "${@:2}"
       return
+      ;;
+    --wifi)
+      # O Wi-Fi sem tela (lib/network.sh): o painel web.
+      net_cli "${@:2}"
+      return
+      ;;
+    --password)
+      # A senha do gabinete (lib/system.sh), lida da entrada: nunca na linha
+      # de comando, que aparece no ps. Status 2: curta demais.
+      local pass
+      IFS= read -r pass || true
+      password_valid "$pass" || return 2
+      password_set "$pass"
+      return
+      ;;
+    --whatsnew)
+      # Tudo o que mudou (Setup > System > What's new), para o painel web.
+      whatsnew_text all
+      return 0
       ;;
     --downloader)
       # O Downloader sem tela (lib/downloader.sh): o painel web.

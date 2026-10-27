@@ -5301,8 +5301,16 @@ class WebPanelTests(unittest.TestCase):
                          'if [ "$1 $2" = "--downloader add" ]; then sleep 30; fi\n'
                          'if [ "$1" = --settings ]; then\n'
                          '  echo "debug|System|Debug mode|choice|off|off=Off;on=On (show all text)|Shows all text."\n'
-                         '  echo "color.gamma|Colour|Gamma|number|100|50..200:5|The middle greys."\nfi\n'
+                         '  echo "color.gamma|Colour|Gamma|number|100|50..200:5|The middle greys."\n'
+                         '  echo "mame_latency|Audio|MAME audio latency|number|0.0|0..50:0.5|Lower responds faster."\n'
+                         '  echo "orientation|Video|Monitor orientation|choice|horizontal|horizontal=Horizontal;'
+                         'vertical-cw=Vertical clockwise|Rebuilds the boot."\nfi\n'
                          'if [ "$1" = --setting ]; then [ "$2" = nope ] && exit 2; [ "$2" = broken ] && { echo boom >&2; exit 1; }; fi\n'
+                         'if [ "$1 $2" = "--wifi status" ]; then echo "wlan0|wifi|connected|Casa|192.168.1.9"; fi\n'
+                         'if [ "$1 $2" = "--wifi scan" ]; then echo "wlan0|Casa|80|WPA2"; fi\n'
+                         'if [ "$1 $2" = "--wifi connect" ]; then read -r p; echo "wifi $p" >> %s/secret.log; fi\n'
+                         'if [ "$1" = --password ]; then read -r p; [ ${#p} -lt 4 ] && exit 2; echo "password $p" >> %s/secret.log; fi\n'
+                         'if [ "$1" = --whatsnew ]; then echo "This is FliperOS 0.14, update 34."; fi\n'
                          'if [ "$1" = --romfilter ]; then\n'
                          '  echo "$*" >> %s/romfilter.log\n'
                          '  case "$2 $3" in\n'
@@ -5358,7 +5366,7 @@ class WebPanelTests(unittest.TestCase):
                          '    auto) [ "$3" = on ] || [ "$3" = off ] || exit 2 ;;\n'
                          '    check) echo "@step 40 Checking"; echo downloaded=1 ;;\n'
                          '  esac\n  exit 0\nfi\n'
-                         'exit 0\n' % (tmp, tmp, roms, roms))
+                         'exit 0\n' % (tmp, tmp, tmp, tmp, roms, roms))
         setup.chmod(0o755)
         run = tmp / 'run/1000'
         run.mkdir(parents=True)
@@ -6314,6 +6322,45 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/settings', {'key': 'nope', 'value': 'x'}, cookie=cookie)[0], 400)
         status, _, data = self.request('POST', '/api/settings', {'key': 'broken', 'value': 'x'}, cookie=cookie)
         self.assertEqual((status, json.loads(data)['error']), (500, 'boom'))
+        # A latencia do MAME anda de meio em meio; a orientacao refaz o boot:
+        # uma tarefa, com o andamento na gaveta.
+        latency, orientation = rows[2], rows[3]
+        self.assertEqual((latency['min'], latency['max'], latency['step']), (0, 50, 0.5))
+        self.assertTrue(orientation['task'])
+        self.assertNotIn('task', latency)
+        status, _, data = self.request('POST', '/api/settings', {'key': 'orientation', 'value': 'vertical-cw'},
+                                       cookie=cookie)
+        self.assertEqual(status, 200, data)
+        self.assertEqual(json.loads(data)['task']['kind'], 'settings')
+
+    def test_wifi_password_and_whatsnew(self):
+        # Setup > Network, a senha e o What's new: pelo Setup, com as senhas
+        # so pela entrada (nunca na linha de comando, que o ps mostra).
+        cookie = self.login()
+        secret = Path(self.tmp.name) / 'secret.log'
+        info = json.loads(self.request('GET', '/api/wifi', cookie=cookie)[2])
+        self.assertEqual(info, {'devices': [{'device': 'wlan0', 'type': 'wifi', 'state': 'connected',
+                                             'connection': 'Casa', 'ip': '192.168.1.9'}]})
+        info = json.loads(self.request('GET', '/api/wifi?scan=1', cookie=cookie)[2])
+        self.assertEqual(info['networks'], [{'device': 'wlan0', 'ssid': 'Casa', 'signal': '80', 'security': 'WPA2'}])
+        body = {'device': 'wlan0', 'ssid': 'Casa', 'password': 'segredo wifi'}
+        self.assertEqual(self.request('POST', '/api/wifi', body, cookie=cookie)[0], 200)
+        self.assertIn('--wifi connect wlan0 Casa\n', self.volume_log.read_text())
+        self.assertIn('wifi segredo wifi\n', secret.read_text())
+        for bad in ({'device': 'wlan0; reboot', 'ssid': 'Casa'}, {'device': 'wlan0', 'ssid': ''},
+                    {'device': 'wlan0', 'ssid': 'Casa', 'password': 'a\nb'}):
+            self.assertEqual(self.request('POST', '/api/wifi', bad, cookie=cookie)[0], 400, bad)
+        # A senha do gabinete: so com a de agora.
+        wrong = {'current': 'nope', 'password': 'nova senha'}
+        self.assertEqual(self.request('POST', '/api/password', wrong, cookie=cookie)[0], 403)
+        self.assertEqual(self.request('POST', '/api/password', {'current': 'arcade', 'password': 'abc'},
+                                      cookie=cookie)[0], 400)
+        self.assertEqual(self.request('POST', '/api/password', {'current': 'arcade', 'password': 'nova senha'},
+                                      cookie=cookie)[0], 200)
+        self.assertIn('password nova senha\n', secret.read_text())
+        self.assertNotIn('nova senha', self.volume_log.read_text())
+        text = json.loads(self.request('GET', '/api/whatsnew', cookie=cookie)[2])['text']
+        self.assertIn('update 34', text)
 
     def test_downloader_and_tasks(self):
         cookie = self.login()

@@ -76,6 +76,36 @@ settings_list() {
   fi
   printf 'marquee_overlay|System|Marquee overlay for OBS|choice|%s|off=Off;on=On|The marquee of the game on screen as a page for an OBS Browser Source (the address is on the Live page of the panel).\n' \
     "$(marquee_overlay_enabled && echo on || echo off)"
+  # Video Setup: o que nao deixa o gabinete sem imagem.
+  printf 'orientation|Video|Monitor orientation|choice|%s|horizontal=Horizontal;vertical-cw=Vertical clockwise (rotated right);vertical-ccw=Vertical counter-clockwise (rotated left)|How the monitor is mounted in the cabinet. The boot is prepared again (about a minute); everything follows it after a restart.\n' \
+    "$(conf_get orientation 2> /dev/null || echo horizontal)"
+  opts=""
+  while IFS='|' read -r name desc; do
+    opts+="${opts:+;}$name=${desc//[;=|]/ }"
+  done < <(splash_list)
+  if [[ -n $opts ]]; then
+    printf 'splash|Video|Boot splash|choice|%s|%s|The picture while the cabinet boots (Setup > Splash screen, where the preview is). The boot image is rebuilt: about a minute.\n' \
+      "$(splash_current 2> /dev/null)" "$opts"
+  fi
+  if (($(mm_count) > 1)); then
+    printf 'mm_games|Video|Multi-screen games|choice|%s|on=One screen on each monitor;off=Everything on monitor 1|Games with 2 or 3 screens. Counts after a restart.\n' \
+      "$(mm_games_on && echo on || echo off)"
+  fi
+  # Audio Setup (o volume fica no Frontend, no gabinete desenhado).
+  opts=""
+  while IFS='|' read -r name desc; do
+    opts+="${opts:+;}${name/,/_}=${desc//[;=|]/ }"
+  done < <(audio_devices)
+  if [[ -n $opts ]]; then
+    name=$(audio_current)
+    printf 'audio_card|Audio|Sound card|choice|%s|%s|The card used by the system and the emulators. Games opened after the change use it.\n' \
+      "${name/,/_}" "$opts"
+  fi
+  printf 'mame_latency|Audio|MAME audio latency|number|%s|0..50:0.5|GroovyMAME audio latency (0 = default). Lower responds faster; raise it if the sound crackles.\n' \
+    "$(audio_mame_latency)"
+  printf 'audio.test|Audio|Test sound|action|||A voice on the cabinet speakers: if it is heard, the sound card is the right one.\n'
+  printf 'power.reboot|Power|Restart the cabinet|action|||The game on screen closes and the cabinet restarts. The panel comes back in about a minute.\n'
+  printf 'power.poweroff|Power|Turn off the cabinet|action|||The game on screen closes and the cabinet turns off. It is turned on again at the cabinet.\n'
   while IFS='|' read -r key label state help; do
     printf 'service.%s|Services|%s|choice|%s|boot=Boot;after=After boot;off=Off|%s\n' "$key" "$label" "$state" "$help"
   done < <(services_rows)
@@ -102,6 +132,14 @@ settings_list() {
 # telas: so no sistema instalado.
 settings_boot() {
   is_installed && ! is_live || return 0
+  boot_apply
+}
+
+# settings_video: o Xorg e a linha do kernel de novo, como ao fechar o Video
+# Setup com algo mudado (vale no proximo boot).
+settings_video() {
+  is_installed && ! is_live || return 0
+  xorg_generate
   boot_apply
 }
 
@@ -160,6 +198,43 @@ settings_set() {
         runuser -u "$FLIPEROS_USER" -- env XDG_RUNTIME_DIR="/run/user/$(id -u "$FLIPEROS_USER")" \
           "$FLIPEROS_BIN/fliperos-pixelcade" now >> "$FLIPEROS_LOG" 2>&1 || true
       fi
+      ;;
+    orientation)
+      [[ $value =~ ^(horizontal|vertical-cw|vertical-ccw)$ ]] || return 2
+      [[ $value == "$(conf_get orientation 2> /dev/null || echo horizontal)" ]] && return 0
+      # Como o Video Setup > Monitor Orientation: o console agora, o boot (o
+      # splash girado, o console em pe), os filtros de ROMs e, ao sair, o
+      # Xorg e a linha do kernel.
+      orientation_apply "$value"
+      orientation_boot "$value" || return 1
+      downloader_filter_orientation
+      settings_video
+      ;;
+    splash)
+      [[ -n $value ]] && splash_list | cut -d"|" -f1 | grep -qxF "$value" || return 2
+      [[ $value == "$(splash_current 2> /dev/null)" ]] && return 0
+      splash_set "$value"
+      ;;
+    mm_games)
+      [[ ($value == on || $value == off) && $(mm_count) -gt 1 ]] || return 2
+      mm_set_games "$value"
+      # Os .ini do GroovyMAME para os jogos de varias telas (screen_mm_changed).
+      [[ $value == off ]] || mm_mame_prepare || log_info "settings: mm_mame_prepare falhou"
+      settings_video
+      ;;
+    audio_card)
+      [[ $value =~ ^[0-9]+_[0-9]+$ ]] && audio_devices | cut -d"|" -f1 | grep -qxF "${value/_/,}" || return 2
+      audio_set_default "${value/_/,}"
+      ;;
+    mame_latency)
+      audio_set_mame_latency "$value" || return 2
+      ;;
+    audio.test)
+      audio_test
+      ;;
+    power.reboot | power.poweroff)
+      # Depois da resposta: o painel recebe o 200 antes de o gabinete sair.
+      systemd-run --on-active=2 --unit=fliperos-web-power systemctl "${key#power.}" >> "$FLIPEROS_LOG" 2>&1
       ;;
     service.*)
       [[ -n $(services_field "${key#service.}" 1) && " ${SERVICE_STATES[*]} " == *" $value "* ]] || return 2

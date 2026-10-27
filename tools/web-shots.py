@@ -48,6 +48,8 @@ SHOTS = [
     ("downloads-pc", "#library/downloads", 1440, 900, 1, False, False, ""),
     ("status-pc", "#system", 1440, 900, 1, False, False, ""),
     ("ajustes-celular", "#system/settings", 390, 844, 2, True, False, ""),
+    ("ajustes-pc-aberto", "#system/settings", 1440, 900, 1, False, True, "open-all"),
+    ("ajustes-celular-aberto", "#system/settings", 390, 844, 2, True, True, "open-all"),
     ("aovivo-pc", "#live/obs", 1440, 900, 1, False, False, ""),
 ]
 
@@ -215,7 +217,18 @@ def demo(tmp):
           "filter \"Shooters\"\\n\\trule Category contains Shooter\\nfilter \"80s\"\\n\\trule Year less_than 1990\\n' ;;\n"
           "  --downloader) echo pct=45; echo state=downloading; echo 'line=5.2 GB of 11.6 GB, 3.1 MB/s'; echo filter=Cabinet ;;\n"
           "  --bios) [ \"$2\" = status ] && printf 'auto=1\\ndownloaded=3\\npresent=128\\nmissing=3\\nfailed=1\\n' ;;\n"
-          "  --settings) echo 'latency|System|Latency mode|choice|low|standard=Standard;low=Low|Shorter input lag.' ;;\n"
+          "  --settings) echo 'latency|System|Latency mode|choice|low|standard=Standard;low=Low|Shorter input lag.'\n"
+          "    echo 'orientation|Video|Monitor orientation|choice|horizontal|horizontal=Horizontal;"
+          "vertical-cw=Vertical clockwise|How the monitor is mounted in the cabinet.'\n"
+          "    echo 'audio_card|Audio|Sound card|choice|1_0|0_3=HDMI 0;1_0=HD-Audio Generic - ALC887 Analog|The card used by the system.'\n"
+          "    echo 'mame_latency|Audio|MAME audio latency|number|0.0|0..50:0.5|Lower responds faster.'\n"
+          "    echo 'audio.test|Audio|Test sound|action|||A voice on the cabinet speakers.'\n"
+          "    echo 'power.reboot|Power|Restart the cabinet|action|||The cabinet restarts.'\n"
+          "    echo 'power.poweroff|Power|Turn off the cabinet|action|||The cabinet turns off.' ;;\n"
+          "  --geometry) printf 'monitor=generic_15\\nlabel=Generic 15 kHz\\nrange=\\npreset=15625-16200,49.5-65,2.0,4.7,8.0,0.064,0.192,1.024,0,0,192,288,448,576\\n' ;;\n"
+          "  --wifi) case \"$2\" in status) echo 'eth0|ethernet|unavailable||'; echo 'wlan0|wifi|connected|Casa|192.168.1.241' ;;\n"
+          "    scan) echo 'wlan0|Casa|82|WPA2'; echo 'wlan0|Vizinho 5G|41|WPA2'; echo 'wlan0|Cafe|20|' ;; esac ;;\n"
+          "  --whatsnew) printf 'This is FliperOS 0.14, update 34.\\n\\nUpdates installed:\\n- 34. Web panel redesign\\n' ;;\n"
           "esac\nexit 0\n" % tmp, mode=0o755)
     write(os.path.join(tmp, "systems"), "\n".join(lines) + "\n")
     # O jogo aberto: um processo "groovymame" com o set na linha de comando.
@@ -389,6 +402,9 @@ def main():
         elif action == "list":
             browser.js("document.getElementById('view-list').click(); document.getElementById('games-head').scrollIntoView()")
             browser.wait(1.5)
+        elif action == "open-all":
+            browser.js("document.querySelectorAll('#settings details').forEach((d) => { d.open = true; })")
+            browser.wait(2)
         elif action.startswith("obs-"):
             browser.js("obsPick(%s); document.getElementById('ovl-on').click()" % json.dumps(action[4:]) if action == "obs-marquee"
                        else "obsPick(%s)" % json.dumps(action[4:]))

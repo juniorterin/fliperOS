@@ -35,6 +35,11 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/bootgame {"system", "game"}: o jogo que abre ao ligar (--bootgame)
     GET  /api/geometry  monitor, label, range (o crt_range salvo), preset, tool
     POST /api/geometry {"action": "reset"} ou {"action": "set", "range"} (--geometry)
+    GET  /api/wifi[?scan=1] as interfaces (e as redes visiveis)   (--wifi)
+    POST /api/wifi {"device", "ssid", "password", "hidden"}: conecta
+    POST /api/password {"current", "password"}: a senha do gabinete (--password)
+    GET  /api/whatsnew  o texto do What's new (--whatsnew)
+    Os ajustes orientation, splash e mm_games viram tarefas ({"task": ...}).
     POST /api/favourite {"system", "game", "on"}: os favoritos do FliperOS
     POST /api/launch  {"system", "game"}: fecha o que esta na tela e abre o
                       jogo; quando ele fecha, volta o que estava
@@ -1598,8 +1603,27 @@ def settings():
         elif kind == "number" and ".." in options:
             span, _, step = options.partition(":")
             low, high = span.split("..", 1)
-            row["min"], row["max"], row["step"] = int(low), int(high), int(step or 1)
+            number = lambda text: float(text) if "." in text else int(text)
+            row["min"], row["max"], row["step"] = number(low), number(high), number(step or "1")
+        if key in SLOW_SETTINGS:
+            row["task"] = True
         rows.append(row)
+    return rows
+
+
+# Os ajustes que refazem a imagem do boot (o initramfs, cerca de um minuto):
+# viram tarefas, com o andamento na gaveta.
+SLOW_SETTINGS = ("orientation", "splash", "mm_games")
+
+
+def wifi_rows(args, fields):
+    """fliperos-setup --wifi status|scan: uma linha "a|b|..." por item."""
+    out = setup_out("--wifi", *args, timeout=60)
+    rows = []
+    for line in out.splitlines():
+        parts = line.split("|")
+        if len(parts) == len(fields):
+            rows.append(dict(zip(fields, parts)))
     return rows
 
 
@@ -2733,6 +2757,22 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
             return self.send(200, {k: info.get(k, "") for k in ("monitor", "label", "range", "preset", "tool")})
+        if url.path == "/api/wifi":
+            # Setup > Network: as interfaces e, com scan=1, as redes visiveis.
+            scan = (parse_qs(url.query).get("scan") or [""])[0] == "1"
+            try:
+                data = {"devices": wifi_rows(["status"], ("device", "type", "state", "connection", "ip"))}
+                if scan:
+                    data["networks"] = wifi_rows(["scan"], ("device", "ssid", "signal", "security"))
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            return self.send(200, data)
+        if url.path == "/api/whatsnew":
+            # Setup > System > What's new: os updates e o CHANGELOG.
+            try:
+                return self.send(200, {"text": setup_out("--whatsnew")})
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
         if url.path == "/api/input/events":
             # O controle aceso no gabinete desenhado da pagina (o mesmo do OBS).
             return self.input_events()
@@ -2844,6 +2884,32 @@ class Handler(BaseHTTPRequestHandler):
             if not entry or not entry.get("file"):
                 return self.send(400, {"error": "no such game file"})
             return self.setup_call(["--bootgame", system["key"], os.path.join(system["folder"], entry["file"])])
+        if url.path == "/api/wifi":
+            # Setup > Network > Wi-Fi: a senha vai pela entrada do Setup.
+            data = self.body()
+            device, ssid = str(data.get("device", "")), str(data.get("ssid", ""))
+            password = str(data.get("password", ""))
+            if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,32}", device) or not 0 < len(ssid.encode()) <= 32 or \
+                    "\n" in ssid or "\n" in password or len(password) > 63:
+                return self.send(400, {"error": "a device, a network name and a password up to 63 characters"})
+            return self.setup_call(["--wifi", "connect", device, ssid] + (["1"] if data.get("hidden") else []),
+                                   password + "\n", timeout=90)
+        if url.path == "/api/password":
+            # Setup > System > Password: com a senha de agora. O modo lab nao
+            # troca a senha de ninguem.
+            data = self.body()
+            current, new = str(data.get("current", "")), str(data.get("password", ""))
+            if user == LAB_USER:
+                return self.send(403, {"error": "not in the lab mode"})
+            if "\n" in new or len(new) < 4 or len(new) > 128:
+                return self.send(400, {"error": "at least 4 characters"})
+            # Um limite so da troca de senha (uma sessao aberta tentando adivinhar).
+            if self.panel.sessions.blocked("password " + ip):
+                return self.send(429, {"error": "too many attempts, wait a minute"})
+            if not check_password(user, current):
+                self.panel.sessions.failed("password " + ip)
+                return self.send(403, {"error": "the current password is wrong"})
+            return self.setup_call(["--password"], new + "\n")
         if url.path == "/api/geometry":
             # Video Setup > Geometry: voltar ao padrao do monitor, ou um
             # crt_range digitado (o Custom monitor); o grid fica no Setup.
@@ -2936,6 +3002,11 @@ class Handler(BaseHTTPRequestHandler):
             key, value = str(data.get("key", "")), str(data.get("value", ""))
             if not re.fullmatch(r"[a-z0-9_.-]{1,64}", key) or not re.fullmatch(r"[A-Za-z0-9_.-]{0,64}", value):
                 return self.send(400, {"error": "bad key or value"})
+            if key in SLOW_SETTINGS:
+                task = self.panel.tasks.start("Setup: %s" % key, [SETUP, "--setting", key, value], "settings")
+                if not task:
+                    return self.send(409, {"error": "another setting is still being applied"})
+                return self.send(200, {"task": task.info()})
             try:
                 done = subprocess.run([SETUP, "--setting", key, value], capture_output=True, text=True, timeout=120)
             except (OSError, subprocess.SubprocessError) as exc:
@@ -3070,10 +3141,10 @@ class Handler(BaseHTTPRequestHandler):
         self.panel.downloader.when = None
         return self.send(200, task.info())
 
-    def setup_call(self, args, stdin=None):
+    def setup_call(self, args, stdin=None, timeout=60):
         """Um ajuste do Setup na hora: 200, 400 (pedido errado, status 2) ou 500."""
         try:
-            done = subprocess.run([SETUP, *args], input=stdin, capture_output=True, text=True, timeout=60)
+            done = subprocess.run([SETUP, *args], input=stdin, capture_output=True, text=True, timeout=timeout)
         except (OSError, subprocess.SubprocessError) as exc:
             return self.send(500, {"error": str(exc)})
         if done.returncode == 2:

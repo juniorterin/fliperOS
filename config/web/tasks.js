@@ -11,6 +11,7 @@ function taskDone(kind) {
   if (kind === "bios" && page === "downloads") loadBios().catch(() => {});
   if ((kind === "scraper" || kind === "mediapacks") && page === "scraper") loadScraper().catch(() => {});
   if (kind === "extras" && page === "install") loadInstall().catch(() => {});
+  if (kind === "settings" && page === "settings") loadSettings().catch(() => {});
 }
 
 async function loadTasks() {

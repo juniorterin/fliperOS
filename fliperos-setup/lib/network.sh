@@ -95,6 +95,39 @@ net_connecting() {
   nmcli -t -f STATE device status 2> /dev/null | grep -q '^connecting'
 }
 
+# net_cli status|scan|connect: a rede sem tela (o painel web).
+#   status                 "placa|tipo|estado|conexao|IP" de cada interface
+#   scan                   "placa|SSID|sinal|seguranca" de cada rede visivel
+#   connect PLACA SSID [1] conecta (1: rede oculta); a senha vem na entrada,
+#                          numa linha (nunca na linha de comando)
+# Status 1: nao conectou; 2: pedido errado.
+net_cli() {
+  local dev type state conn ip ssid pass
+  case ${1:-} in
+    status)
+      while IFS=: read -r dev type state conn; do
+        [[ $type == loopback || $dev == lo ]] && continue
+        ip=$(ip -4 -o addr show dev "$dev" scope global 2> /dev/null | awk '{ split($4, a, "/"); print a[1]; exit }')
+        printf '%s|%s|%s|%s|%s\n' "$dev" "$type" "$state" "${conn//|/ }" "$ip"
+      done < <(nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status 2> /dev/null)
+      ;;
+    scan)
+      while IFS= read -r dev; do
+        while IFS= read -r ssid; do
+          printf '%s|%s\n' "$dev" "$ssid"
+        done < <(net_scan "$dev")
+      done < <(net_wifi_devices)
+      ;;
+    connect)
+      dev=${2:-} ssid=${3:-}
+      [[ -n $ssid ]] && net_wifi_devices | grep -qxF "$dev" || return 2
+      IFS= read -r pass || true
+      net_connect "$dev" "$ssid" "$pass" "$([[ ${4:-} == 1 ]] && echo 1 || echo 0)"
+      ;;
+    *) return 2 ;;
+  esac
+}
+
 # net_summary imprime uma linha por interface: nome, estado, conexao e IP.
 net_summary() {
   local dev type state conn ip
