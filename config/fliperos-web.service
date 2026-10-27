@@ -10,6 +10,9 @@ Nice=15
 IOSchedulingClass=idle
 Restart=on-failure
 RestartSec=10
+# Nada do painel precisa de tempo para sair: um filho preso (o watch dos
+# botoes) nao segura o desligar por 90 s.
+TimeoutStopSec=5
 
 [Install]
 WantedBy=multi-user.target

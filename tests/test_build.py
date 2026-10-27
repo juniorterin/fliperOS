@@ -12063,6 +12063,12 @@ class ButtonMappingTests(unittest.TestCase):
     def setUp(self):
         self.rc = load_script('buttons', 'config/fliperos-buttons')
 
+    def test_sdl_leaves_sigterm_alone(self):
+        # O SDL trocava o SIGTERM por um SDL_QUIT: o watch do painel web nao
+        # saia, e o gabinete ficava 90 s no plymouth-poweroff ao desligar.
+        self.assertEqual(os.environ.get('SDL_NO_SIGNAL_HANDLERS'), '1')
+        self.assertIn('TimeoutStopSec=5', (ROOT / 'config/fliperos-web.service').read_text())
+
     def test_mame_codes(self):
         # Na numeracao do SDL (joystickprovider sdljoy): botao 0 = BUTTON1.
         code = self.rc.mame_code
