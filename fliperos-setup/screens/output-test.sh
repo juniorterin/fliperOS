@@ -76,12 +76,13 @@ screen_output_test() {
 
 # screen_low_dotclock_test CARD MONITOR: uma NVIDIA (nouveau) com saida
 # analogica pode gerar os dotclocks de 15 kHz com o patch 10 do kernel, mas
-# depende do PLL de cada placa. O grid em 320x240 decide: quem viu, fica com
-# as resolucoes nativas; quem nao viu (ou nao respondeu), com a super
-# resolucao. So num monitor de 15 kHz: e o unico que recebe esse modo.
-# Status 0 = a placa passou.
+# cada PLL tem o seu piso. O grid sobe pelos degraus do LOWDOT_STEPS (320x240
+# a 6,5 MHz, depois 384, 512 e 640 de largura): o primeiro visto fica com as
+# resolucoes nativas a partir dele; quem nao viu nenhum (ou nao respondeu),
+# com a super resolucao. So num monitor de 15 kHz: e o unico que recebe esses
+# modos. Status 0 = a placa passou.
 screen_low_dotclock_test() {
-  local card=$1 monitor=$2 title="Low resolution test" gpu
+  local card=$1 monitor=$2 title="Low resolution test" gpu step width min mhz first=1
   [[ $(monitor_frequency "$monitor" 2> /dev/null) == 15k ]] || return 1
   have switchres || return 1
   gpu=$(drm_card_name "$card")
@@ -89,19 +90,32 @@ screen_low_dotclock_test() {
   ui_timed_confirm "$title" 8 "Start now" \
     "$gpu may be able to show native 15 kHz resolutions (320x240)." "" \
     "A test grid will now be shown for up to ${LOWDOT_TEST_SECONDS:-20} seconds." \
-    "Press ENTER if you can see it. If the screen stays black, just wait."
-  ui_clear
-  GRID_TEXT="320x240 native" ui_text video_low_dotclock_grid "$monitor" >> "$FLIPEROS_LOG" 2>&1
-  # O que o nouveau disse no grid vai para o log: o modo passa da validacao
-  # (patch 10), e o que falha numa placa e o PLL do pixel clock ("unable to
-  # find matching pll values" ou nada, com o VCO abaixo da faixa).
-  video_low_dotclock_kernel_log >> "$FLIPEROS_LOG" 2>&1
-  ui_flush_input
-  speak "Did you see the grid?"
-  if ui_yesno "$title" "Did you see the test grid clearly?" no; then
-    video_low_dotclock_set "$card" 1
-    return 0
-  fi
+    "Press ENTER if you can see it. If the screen stays black, just wait." \
+    "If not, a wider grid is tried (up to 640x240)."
+  for step in $LOWDOT_STEPS; do
+    width=${step%%:*}
+    min=${step#*:}
+    mhz=$(video_low_dotclock_mhz "$width")
+    if ((!first)); then
+      speak "Trying a wider grid."
+      ui_timed_confirm "$title" 5 "Start now" \
+        "Next: a ${width}x240 grid ($mhz MHz), easier for the card." "" \
+        "Press ENTER if you can see it. If the screen stays black, just wait."
+    fi
+    first=0
+    ui_clear
+    GRID_TEXT="${width}x240 native" ui_text video_low_dotclock_grid "$monitor" "$width" >> "$FLIPEROS_LOG" 2>&1
+    # O que o nouveau disse no grid vai para o log: o modo passa da validacao
+    # (patch 10), e o que falha numa placa e o PLL do pixel clock ("unable to
+    # find matching pll values" ou nada, com o VCO abaixo da faixa).
+    video_low_dotclock_kernel_log >> "$FLIPEROS_LOG" 2>&1
+    ui_flush_input
+    speak "Did you see the grid?"
+    if ui_yesno "$title" "Did you see the ${width}x240 test grid ($mhz MHz) clearly?" no; then
+      video_low_dotclock_set "$card" 1 "$min"
+      return 0
+    fi
+  done
   video_low_dotclock_set "$card" 0
   return 1
 }
@@ -131,7 +145,10 @@ screen_testing_results() {
     freq="$(printf '%.2f' "$khz") kHz"
   fi
 
-  if [[ $flags == s* ]]; then
+  if [[ $flags == s* && $(video_low_dotclock_min "$card") != 0 ]]; then
+    lowres=$(ui_yes "YES (from $(video_low_dotclock_min "$card") MHz)")
+    notes+=("Native 15 kHz resolutions will be used from $(video_low_dotclock_min "$card") MHz. Narrower games are shown at double width, with the same picture on a CRT.")
+  elif [[ $flags == s* ]]; then
     lowres=$(ui_yes YES)
     notes+=("Your video card supports low dotclocks: native 15 kHz resolutions will be used.")
   elif [[ $driver == nouveau ]]; then

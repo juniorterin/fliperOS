@@ -54,13 +54,23 @@ export FLIPEROS_RES_W=${BASH_REMATCH[1]} FLIPEROS_RES_H=${BASH_REMATCH[2]} FLIPE
 # Placa sem dotclock baixo (Intel, NVIDIA: o Setup grava dotclock_min no
 # switchres.ini). O Switchres dobraria a largura ate passar do minimo, e o
 # modo sairia com uma largura que as contas abaixo nao conhecem (o Flycast
-# estreito no meio, o Supermodel num pedaco da tela). Pede direto a super
-# resolucao, como o RetroArch: so a largura muda, linhas e frequencias ficam.
+# estreito no meio, o Supermodel num pedaco da tela). Com a super resolucao
+# (25 MHz) pede direto a largura dela, como o RetroArch: so a largura muda,
+# linhas e frequencias ficam. Com o minimo de uma NVIDIA no nouveau (o degrau
+# do grid, abaixo de 25) faz aqui a mesma dobra do Switchres, so quando o
+# modo fica abaixo dele: 640x240 (13 MHz) fica, 320x240 (6,5 MHz) vira 640.
 sr_ini=${FLIPEROS_SWITCHRES_INI:-/etc/switchres.ini}
 read -r dotclock_min super_width < <(awk '$1 == "dotclock_min" { d = $2 } $1 == "super_width" { s = $2 }
   END { print d + 0, (s + 0 > 0 ? int(s) : 2560) }' "$sr_ini" 2> /dev/null) || dotclock_min=0
-if [[ ${dotclock_min:-0} != 0 ]] && ((FLIPEROS_RES_W < super_width)); then
-  FLIPEROS_RES_W=$super_width
+if awk -v d="${dotclock_min:-0}" 'BEGIN { exit !(d >= 25) }'; then
+  ((FLIPEROS_RES_W < super_width)) && FLIPEROS_RES_W=$super_width
+elif [[ ${dotclock_min:-0} != 0 ]]; then
+  # O pixel clock do Switchres: a largura com uns 30% de apagamento, vezes a
+  # frequencia horizontal do monitor (15,66 kHz no de 15 kHz).
+  khz=$(awk -v f="$(sed -n 's/^frequency=//p' "$CONF" 2> /dev/null)" \
+    'BEGIN { print (f ~ /^25/ ? 25 : f ~ /^31/ ? 31.5 : f == "lcd" ? 31.5 : 15.66) }')
+  FLIPEROS_RES_W=$(awk -v w="$FLIPEROS_RES_W" -v d="$dotclock_min" -v k="$khz" \
+    'BEGIN { while (w * 1.3 * k / 1000 <= d) w *= 2; print w }')
 fi
 
 # Tela cheia e imagem esticada: num modo como 640x240 (tela 8:3 em pixels,

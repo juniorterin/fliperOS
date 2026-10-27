@@ -195,6 +195,7 @@ nvidia_driver_apply() {
   # outro driver pode nao dar imagem neste.
   if conf_get low_dotclock_pci > /dev/null 2>&1; then
     conf_unset low_dotclock_pci
+    conf_unset low_dotclock_min
     video_low_dotclock_apply || log_warn "driver NVIDIA: o video nao foi refeito"
   fi
   BOOT_INITRAMFS=1

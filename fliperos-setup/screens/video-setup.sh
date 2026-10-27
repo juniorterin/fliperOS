@@ -165,14 +165,17 @@ screen_low_dotclock_retest() {
       "This output ($conn, $(monitor_label "$monitor")) keeps the super resolutions."
     return 0
   fi
-  drm_card_low_dotclock "$card" && before=1
-  screen_low_dotclock_test "$card" "$monitor" && after=1
-  if ((after)); then
+  drm_card_low_dotclock "$card" && before=1:$(video_low_dotclock_min "$card")
+  screen_low_dotclock_test "$card" "$monitor" && after=1:$(video_low_dotclock_min "$card")
+  if [[ $after == 1:0 ]]; then
     ui_msg "$title" "$(ui_yes "Native low resolutions will be used on this card.")"
+  elif [[ $after == 1:* ]]; then
+    ui_msg "$title" "$(ui_yes "Native low resolutions will be used from ${after#1:} MHz.")" "" \
+      "Narrower games are shown at double width, with the same picture on a CRT."
   else
     ui_msg "$title" "Super resolutions will be used on this card."
   fi
-  ((before == after)) && return 0
+  [[ $before == "$after" ]] && return 0
   if ! video_low_dotclock_apply; then
     ui_msg "$title" "Could not save the new video settings (see the log)."
     return 0

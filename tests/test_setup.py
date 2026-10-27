@@ -495,8 +495,10 @@ class NouveauLowDotclockTests(Base):
     def test_only_nouveau_is_tested(self):
         self.env.card("card1", "i915")
         self.env.card("card2", "amdgpu")
-        self.assertNotEqual(self.env.run("drm_card_low_dotclock_testable card1").returncode, 0)
-        self.assertNotEqual(self.env.run("drm_card_low_dotclock_testable card2").returncode, 0)
+        # O KMS do driver da NVIDIA nao aceita os modos do Switchres.
+        self.env.card("card3", "nvidia")
+        for card in ("card1", "card2", "card3"):
+            self.assertNotEqual(self.env.run("drm_card_low_dotclock_testable %s" % card).returncode, 0, card)
 
     def test_classified_native_after_the_grid(self):
         self.env.out("video_low_dotclock_set card0 1")
@@ -523,6 +525,71 @@ class NouveauLowDotclockTests(Base):
         self.env.out("video_low_dotclock_set card0 1; video_save_result card0-VGA-1 se generic_15")
         self.assertRegex(ini.read_text(), r"(?m)^\s*dotclock_min\s+8\.0$")
 
+    def test_step_minimum_goes_to_switchres_and_mame(self):
+        # A GTX 980 Ti no nouveau: preta em 320x240 (6,5 MHz), imagem de
+        # 7,15 MHz para cima. O degrau de 384 de largura vale 7.7.
+        ini, mame = self.env.etc / "switchres.ini", self.env.etc / "mame.ini"
+        ini.write_text("dotclock_min 25.0\n")
+        mame.write_text("dotclock_min 25.0\n")
+        self.env.out("video_low_dotclock_set card0 1 7.7; video_save_result card0-VGA-1 se generic_15")
+        self.assertIn("low_dotclock_min=7.7\n", self.conf())
+        self.assertEqual(self.env.out("video_low_dotclock_min card0").strip(), "7.7")
+        self.assertRegex(ini.read_text(), r"(?m)^\s*dotclock_min\s+7\.7$")
+        self.assertRegex(mame.read_text(), r"(?m)^\s*dotclock_min\s+7\.7$")
+        # O grid de novo, agora visto em 320x240: o degrau gravado antes sai.
+        self.env.out("video_low_dotclock_set card0 1 0; video_save_result card0-VGA-1 se generic_15")
+        self.assertRegex(ini.read_text(), r"(?m)^\s*dotclock_min\s+0$")
+        self.assertRegex(mame.read_text(), r"(?m)^\s*dotclock_min\s+0$")
+        self.env.out("video_low_dotclock_set card0 0")
+        self.assertNotIn("low_dotclock", self.conf())
+
+    def test_minimum_only_for_the_card_that_passed(self):
+        self.env.out("conf_set low_dotclock_pci 0000:09:00.0; conf_set low_dotclock_min 7.7")
+        self.assertEqual(self.env.out("video_low_dotclock_min card0").strip(), "0")
+        self.env.card("card1", "amdgpu")
+        self.assertEqual(self.env.out("video_low_dotclock_min card1").strip(), "0")
+
+    def test_steps_from_320_to_640(self):
+        steps = self.env.out("echo $LOWDOT_STEPS").split()
+        self.assertEqual([s.split(":")[0] for s in steps], ["320", "384", "512", "640"])
+        for step in steps:
+            width, minimum = step.split(":")
+            mhz = float(self.env.out("video_low_dotclock_mhz %s" % width))
+            # O proprio modo do degrau passa do minimo dele.
+            self.assertGreater(mhz, float(minimum), step)
+        self.assertEqual(self.env.out("video_low_dotclock_mhz 320").strip(), "6.5")
+        self.assertEqual(self.env.out("video_low_dotclock_mhz 640").strip(), "13.0")
+
+    def test_boot_modes_below_the_minimum_are_not_offered(self):
+        self.env.out("conf_set card card0; conf_set monitor generic_15; video_low_dotclock_set card0 1 0")
+        self.assertIn("320x240S|", self.env.out("video_resolution_choices"))
+        self.env.out("video_low_dotclock_set card0 1 7.7")
+        modes = [l.split("|")[0] for l in self.env.out("video_resolution_choices").splitlines()]
+        self.assertNotIn("320x240S", modes)
+        for mode in ("384x288S", "640x240S", "640x480iS", "1280x480iS"):
+            self.assertIn(mode, modes)
+
+    def test_grid_climbs_the_steps(self):
+        # Preto em 320, visto em 384: fica o degrau de 384 (7.7).
+        script = ("source %s/screens/output-test.sh\n"
+                  "have() { return 0; }; speak() { :; }; ui_clear() { :; }; ui_flush_input() { :; }\n"
+                  "ui_timed_confirm() { :; }; ui_text() { \"$@\"; }\n"
+                  "video_low_dotclock_grid() { echo \"GRID ${2:-320}\" >&2; }\n"
+                  "ui_yesno() { echo \"ASKED: $2\" >&2; [[ $2 == *384x240* ]]; }\n"
+                  "screen_low_dotclock_test card0 generic_15; echo rc=$?" % SETUP)
+        log = self.env.dir / "log"
+        r = self.env.run(script, {"FLIPEROS_LOG": str(log)})
+        self.assertIn("rc=0", r.stdout)
+        self.assertEqual(re.findall(r"GRID \d+", log.read_text()), ["GRID 320", "GRID 384"])
+        self.assertIn("ASKED: Did you see the 384x240 test grid (7.8 MHz) clearly?", r.stderr)
+        self.assertIn("low_dotclock_min=7.7\n", self.conf())
+        # Nenhum visto: super resolucao.
+        log.write_text("")
+        r = self.env.run(script.replace("[[ $2 == *384x240* ]]", "false"), {"FLIPEROS_LOG": str(log)})
+        self.assertIn("rc=1", r.stdout)
+        self.assertEqual(re.findall(r"GRID \d+", log.read_text()), ["GRID 320", "GRID 384", "GRID 512", "GRID 640"])
+        self.assertNotIn("low_dotclock", self.conf())
+
     def test_carried_by_recovery_mode(self):
         self.assertIn("low_dotclock_pci", self.env.out("echo $VIDEO_CONF_KEYS").split())
 
@@ -541,7 +608,7 @@ class NouveauLowDotclockTests(Base):
     def test_grid_is_wired_to_the_output_test_and_video_setup(self):
         test = (ROOT / "fliperos-setup/screens/output-test.sh").read_text()
         self.assertIn('drm_card_low_dotclock_testable "$card"', test)
-        self.assertIn("switchres 320 240 60 -s -m \"$1\" --dotclock_min 0 -l grid",
+        self.assertIn("switchres \"${2:-320}\" 240 60 -s -m \"$1\" --dotclock_min 0 -l grid",
                       (ROOT / "fliperos-setup/lib/video.sh").read_text())
         self.assertIn("lowdot) screen_low_dotclock_retest ;;",
                       (ROOT / "fliperos-setup/screens/video-setup.sh").read_text())
@@ -6519,17 +6586,17 @@ class NvidiaDriverTests(Base):
 
     def test_switch_forgets_the_grid_and_goes_super(self):
         self.gpu()
-        (self.env.etc / "fliperos.conf").write_text("low_dotclock_pci=0000:00:00.0\n")
+        (self.env.etc / "fliperos.conf").write_text("low_dotclock_pci=0000:00:00.0\nlow_dotclock_min=7.7\n")
         out = self.env.out("video_low_dotclock_apply() { echo REDONE; }\nnvidia_driver_apply nvidia; echo $BOOT_INITRAMFS")
         self.assertEqual(out.split(), ["REDONE", "1"])
         self.assertEqual(self.conf(), {"nvidia_driver": "nvidia"})
 
-    def test_grid_counts_on_the_nvidia_driver(self):
+    def test_no_grid_on_the_nvidia_driver(self):
+        # O KMS do driver da NVIDIA so aceita os modos progressivos do EDID:
+        # o Switchres nao cria os seus, e o grid nao testaria nada.
         self.gpu(driver="nvidia")
-        self.assertEqual(self.env.run("drm_card_low_dotclock_testable card0").returncode, 0)
+        self.assertNotEqual(self.env.run("drm_card_low_dotclock_testable card0").returncode, 0)
         self.assertNotEqual(self.env.run("drm_card_low_dotclock card0").returncode, 0)
-        self.env.out("conf_set low_dotclock_pci 0000:00:00.0")
-        self.assertEqual(self.env.run("drm_card_low_dotclock card0").returncode, 0)
 
     def test_xorg_uses_the_nvidia_driver(self):
         self.gpu(driver="nvidia")
@@ -6568,17 +6635,56 @@ class NvidiaDriverTests(Base):
         self.assertEqual(self.conf()["nvidia_driver"], "nouveau")
         self.assertNotIn("amd_driver_trial", self.conf())
 
-    def test_confirm_offers_the_grid(self):
+    CONFIRM = ('ui_timed_confirm() { return 0; }\nui_yesno() { echo "ASKED: $2"; return 0; }\n'
+               "screen_low_dotclock_retest() { echo GRID; VIDEO_CHANGED=1; }\n"
+               "screen_amd_driver_confirm")
+
+    def test_confirm_on_nouveau_offers_the_grid(self):
+        env = self.installed()
+        self.gpu(driver="nouveau")
+        (self.env.etc / "fliperos.conf").write_text(
+            "nvidia_driver=nouveau\namd_driver_trial=nouveau\namd_driver_previous=nvidia\n")
+        out = self.env.out(self.TRIAL + self.CONFIRM, env)
+        self.assertIn("ASKED: Test now which native 15 kHz resolutions the nouveau driver shows", out)
+        self.assertIn("GRID", out)
+        self.assertIn("BOOT_APPLY", out)
+
+    def test_confirm_on_the_nvidia_driver_has_no_grid(self):
         env = self.installed()
         self.gpu(driver="nvidia")
         (self.env.etc / "fliperos.conf").write_text(
             "nvidia_driver=nvidia\namd_driver_trial=nvidia\namd_driver_previous=nouveau\n")
-        out = self.env.out(self.TRIAL + 'ui_timed_confirm() { return 0; }\nui_yesno() { echo "ASKED: $2"; return 0; }\n'
-                           "screen_low_dotclock_retest() { echo GRID; VIDEO_CHANGED=1; }\n"
-                           "screen_amd_driver_confirm", env)
-        self.assertIn("ASKED: Test now if the NVIDIA driver shows native 15 kHz", out)
-        self.assertIn("GRID", out)
-        self.assertIn("BOOT_APPLY", out)
+        out = self.env.out(self.TRIAL + self.CONFIRM, env)
+        self.assertNotIn("GRID", out)
+        self.assertNotIn("amd_driver_trial", self.conf())
+
+    MENU = ('ui_fields() { :; }; ui_yes() { echo "$*"; }; ui_no() { echo "$*"; }\n'
+            'ui_msg() { echo "MSG $1: ${*:2}"; }\n'
+            'ui_yesno() { echo "ASKED: $2"; return 1; }\n'
+            'screen_amd_driver_apply() { echo "APPLY $1"; }\n')
+
+    def test_driver_menu_compares_the_two(self):
+        env = self.installed()
+        self.gpu()
+        answers = self.env.dir / "answers"
+        answers.write_text("compare\nreturn\n")
+        out = self.env.out(self.TRIAL + self.MENU +
+                           'ui_menu_hints() { local a; read -r a < "%s"; sed -i 1d "%s"; echo "$a"; }\n'
+                           "screen_nvidia_driver" % (answers, answers), env)
+        self.assertIn("MSG nouveau (open source): + Every FliperOS program changes resolution", out)
+        self.assertIn("MSG NVIDIA driver (closed): + Full 3D speed", out)
+        self.assertIn("- Outside Xorg only the boot modes", out)
+        self.assertNotIn("APPLY", out)
+
+    def test_choosing_a_driver_shows_it_and_asks(self):
+        env = self.installed()
+        self.gpu()
+        out = self.env.out(self.TRIAL + self.MENU + 'ui_menu_hints() { echo nvidia; }\nscreen_nvidia_driver', env)
+        self.assertIn("MSG NVIDIA driver (closed)", out)
+        self.assertNotIn("MSG nouveau", out)
+        self.assertIn("ASKED: Use the NVIDIA driver?", out)
+        # Nao confirmou: nada muda.
+        self.assertNotIn("APPLY", out)
 
     def test_boot_without_the_module_goes_back_to_nouveau(self):
         # Um kernel novo que o DKMS nao compilou: com o nouveau na lista

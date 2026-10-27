@@ -376,27 +376,65 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <h2 id="nvidia">NVIDIA</h2>
 <p>NVIDIA cards run on the open driver, <strong>nouveau</strong>, out of the box. On the installed system, <em>Setup &gt; Video Setup &gt; Video driver</em> can switch to <strong>NVIDIA's own driver</strong> (see below).</p>
 <p><strong>With VGA or DVI-I (GeForce 8 to GTX 900, Quadro up to the K series).</strong> Out of the box nouveau refuses every mode under 25 MHz. FliperOS's own kernel patch (<code>10_fliperos_nouveau_analog_low_dotclock.patch</code>) lifts that floor on the analog outputs, but whether each card's PLL actually reaches 6.5 MHz varies.</p>
-<p>So the card is tested on the tube:</p>
+<p>Each card's PLL has its own lowest clock, so the card is tested on the tube:</p>
 <ol>
 <li>boot the <strong>NVIDIA 15 kHz</strong> entry (super resolution, <code>1280x480iS</code>);</li>
-<li>after you confirm the output in the video output test, the Setup shows a <strong>Switchres grid at 320x240</strong> for 20 seconds;</li>
-<li>saw the grid → native resolutions (boot at <code>640x480iS</code>, <code>dotclock_min 0</code>, RetroArch at native width);</li>
-<li>black screen or no answer → super resolutions, as before. Nothing is lost by trying.</li>
+<li>after you confirm the output in the video output test, the Setup shows a <strong>Switchres grid at 320x240</strong> (6.5 MHz) for 20 seconds;</li>
+<li>black screen → a wider grid, easier for the PLL: 384x240 (7.8 MHz), 512x240 (10.4 MHz), then 640x240 (13 MHz);</li>
+<li>the first grid you see sets <code>dotclock_min</code> for Switchres, MAME and RetroArch (0 at 320, then 7.7, 10.3 or 12.9);</li>
+<li>none seen, or no answer → super resolutions, as before. Nothing is lost by trying.</li>
 </ol>
+<p>Below the card's minimum, Switchres, MAME, RetroArch and the standalone emulators double the width: a 320x240 game comes out at 640x240. On a CRT the picture is the same. Boot modes under the minimum are not offered.</p>
 <p>The test can be repeated on the installed system in <em>Setup &gt; Video Setup &gt; Low resolutions</em>. It only runs on an analog output with a 15 kHz monitor.</p>
-<p>Community reports with low clocks on nouveau: <strong>GeForce 8400 GS</strong> and <strong>Quadro K600</strong> (Batocera). No NVIDIA card has been seen on a CRT by the project yet.</p>
+<p><strong>Seen on a CRT: GTX 980 Ti</strong> (GM200, DVI-I, VGA-SCART) on nouveau, with the patch. Black at 6.5 and 6.8 MHz, picture at 7.15 MHz and above: every width from 352x240 to 2560x240, plus 640x480i and 1280x480i. Community reports with lower clocks on nouveau: <strong>GeForce 8400 GS</strong> and <strong>Quadro K600</strong> (Batocera).</p>
 <p>Mind the speed: nouveau runs most GTX 600, 700 and 900 cards at their boot clock (it can't raise the clock of Maxwell 2, and on Kepler only by hand). For arcade and 2D consoles that is enough; for PS2, GameCube and Model 3, an AMD card is better, or NVIDIA's own driver.</p>
-<p>A user's <strong>GTX 980 Ti</strong> (DVI-I, VGA-SCART) failed the grid on nouveau, while Batocera showed 320x240 at <code>dotclock_min 0</code> on the same card. Batocera uses NVIDIA's own driver on those cards, not nouveau. On nouveau the likely limit is the pixel clock PLL: its calculation caps the divider at the VBIOS maximum and doesn't check the oscillator's minimum, so 6.5 MHz gives a black screen with no error. The kernel lines of the grid are saved in the Setup's log (<code>/var/log/fliperos-setup.log</code>) to confirm it.</p>
-<p><a id="nvidia-driver"></a><strong>NVIDIA's own driver.</strong> In <em>Setup &gt; Video Setup &gt; Video driver</em> on a card with an NVIDIA chip:</p>
+<p><a id="nvidia-driver"></a><strong>NVIDIA's own driver.</strong> In <em>Setup &gt; Video Setup &gt; Video driver</em> on a card with an NVIDIA chip. <em>Compare the two</em> there lists what each driver gives and takes:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>nouveau</th>
+<th>NVIDIA's own driver</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Programs that change resolution</td>
+<td>All: menus, frontends, RetroArch, MAME, standalone emulators</td>
+<td>Only those in Xorg (MAME, the standalone emulators)</td>
+</tr>
+<tr>
+<td>Lowest pixel clock</td>
+<td>The card's PLL (7.15 MHz on the GTX 980 Ti)</td>
+<td>Any (320x240 at 6.5 MHz), in Xorg</td>
+</tr>
+<tr>
+<td>480i</td>
+<td>Yes</td>
+<td>In Xorg only</td>
+</tr>
+<tr>
+<td>3D speed</td>
+<td>Boot clock: slow for PS2, GameCube</td>
+<td>Full</td>
+</tr>
+<tr>
+<td>Cards</td>
+<td>GeForce 8 to GTX 900 with VGA/DVI-I</td>
+<td>GTX 750 to 900 (Maxwell)</td>
+</tr>
+</tbody>
+</table>
+<p>Measured on the same GTX 980 Ti with driver 580: its KMS (<code>nvidia-drm</code>) only takes <strong>progressive modes from the EDID</strong>. It drops interlaced ones (an EDID with only 1280x480i leaves no mode at all, and the boot is black) and every mode Switchres adds ("Kernel doesn't supports user modes"). That check is inside NVIDIA's binary module, so no kernel patch reaches it. In Xorg, with <code>ModeValidation</code>, <code>UseEDID false</code> and its own modelines, every 15 kHz mode worked, as Batocera does on these cards.</p>
+<p>Details of the switch:</p>
 <ul>
 <li><strong>NVIDIA driver</strong> downloads it from Ubuntu's own repository (a few hundred MB), and DKMS compiles its kernel module for the 15 kHz kernel (a few minutes). The package is <strong><code>nvidia-driver-580</code></strong>, from the GTX 900 (Maxwell, the last with DVI-I) to the current cards; it is the one checked to build on the 15 kHz kernel. The 470 of the GTX 600/700 (Kepler) does not build on kernel 6.18, so those cards and the older ones stay on nouveau.</li>
 <li>Both drivers stay installed; the kernel line chooses (<code>modprobe.blacklist=nouveau nvidia-drm.modeset=1 nvidia-drm.fbdev=1</code>, or the NVIDIA modules blacklisted for nouveau). The package's own nouveau blacklist in <code>/lib/modprobe.d</code> is overridden by a file of the same name in <code>/etc/modprobe.d</code>.</li>
 <li>The switch is on trial, like radeon/amdgpu: after the restart, press Enter to confirm the picture. With no answer in 15 s FliperOS goes back to nouveau and restarts. The boot menu (a key during the countdown) also has <strong>FliperOS - nouveau driver</strong>.</li>
-<li>The low resolution result belongs to a driver, so a switch starts in super resolution. Once the picture is confirmed, the Setup offers the 320x240 grid on the NVIDIA driver.</li>
+<li>The low resolution result belongs to a driver, so a switch starts in super resolution. Back on nouveau, once the picture is confirmed, the Setup offers the grid again. The NVIDIA driver has no grid: its KMS doesn't take Switchres modes.</li>
 <li>X uses the <code>nvidia</code> driver with mode validation relaxed (<code>ModeValidation</code>: modes without EDID, low pixel clocks, any sync range), which a 15 kHz tube needs. RetroArch, Switchres and the console use its KMS (<code>nvidia-drm</code>).</li>
 <li>If a kernel update leaves no NVIDIA module for the new kernel, the boot tries DKMS again; with no module, it goes back to nouveau and restarts, so the screen is never left black.</li>
 </ul>
-<p>Not seen on an NVIDIA card yet: the module was built against the FliperOS kernel (580.178.04 on 6.18.54-15khz), but nobody has run it on a CRT.</p>
 <p><strong>Without analog output (GTX 10 and newer).</strong> Super resolution only, through an active converter. RTX 20 and 30 cards need their GSP firmware, which stays in the system (<code>/usr/lib/firmware/nvidia</code>).</p>
 <h2 id="intel">Intel</h2>
 <p>Intel integrated graphics use the <strong>Intel 15 kHz</strong> boot entry, always in super resolution (<code>1280x480iS</code>): <code>i915</code> doesn't generate the low clocks.</p>
@@ -773,18 +811,22 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li><strong>Watch the cabinet live</strong> in the browser, and put the live screen and the game's marquee in OBS.</li>
 <li><strong>Change settings while you play</strong>: colour, 480i hacks, services, latency mode, volume.</li>
 <li><strong>Copy games, BIOS and artwork</strong> through the browser: upload, download, new folders.</li>
-<li><strong>Filter a MAME romset</strong> and <strong>download</strong> only the games that suit your cabinet.</li>
+<li><strong>Filter a MAME romset</strong> and <strong>download</strong> only the games that suit your cabinet, plus the <strong>BIOS</strong> your games lack.</li>
+<li><strong>Scrape the art</strong> of your games, typing the site's login on a real keyboard, and download the art packs.</li>
+<li><strong>Install or update emulators and extras</strong> that don't come in the image.</li>
 <li><strong>Check the system</strong>: the video mode with its modeline, CPU, GPU, temperatures, network and logs.</li>
 <li><strong>Open a terminal</strong> on the cabinet, without an SSH program.</li>
 </ul>
 <h2 id="page-by-page">Page by page</h2>
 <p>The cabinet's state in a browser on the same network (a phone too): <strong>http://fliperos.local</strong>, or the cabinet's IP. Port 80 only forwards to the panel's own port, 8081, so <code>http://fliperos.local:8081</code> works too.</p>
 <p>You sign in with the same user and password as SSH and the network share (<code>fliperos</code>, changed in <strong>Setup &gt; System &gt; Password</strong>). Until 2026-10-22 the panel was on port 8080, which Pixelcade's own settings page also uses; with both installed one of them didn't open.</p>
-<p>The panel has eight pages, tabs at the top, each with its own address (<code>#frontend</code>, <code>#live</code>, <code>#romfilter</code>, <code>#downloads</code>, <code>#files</code>, <code>#settings</code>, <code>#status</code>, <code>#terminal</code>); the browser remembers the last one:
+<p>The panel has ten pages, tabs at the top, each with its own address (<code>#frontend</code>, <code>#live</code>, <code>#romfilter</code>, <code>#downloads</code>, <code>#scraper</code>, <code>#install</code>, <code>#files</code>, <code>#settings</code>, <code>#status</code>, <code>#terminal</code>); the browser remembers the last one:
 - <strong>Frontend:</strong> now playing with the FPS, games, volume and screen;
 - <strong>Live:</strong> the cabinet screen live, the streaming controls (service, encoder, sound) and the addresses for OBS (the live screen and the marquee). Leaving the page stops the stream, so ffmpeg on the cabinet stops too;
 - <strong>ROM filter:</strong> the MAME ROM Cleaner filter, for the Downloader or for a romset folder;
-- <strong>Downloads:</strong> the Downloader and the tasks;
+- <strong>Downloads:</strong> the Downloader, Download BIOS and the tasks;
+- <strong>Scraper:</strong> the art of the games, from the FliperOS scraper or a site, and the art packs by torrent;
+- <strong>Install:</strong> the emulators and the extras, installed or updated;
 - <strong>Files:</strong> files and tasks;
 - <strong>Settings:</strong> colour values are sliders;
 - <strong>Status:</strong> now playing and the screen at the top, then video, CPU, GPU, memory, storage, network, processes and logs;
@@ -892,6 +934,22 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
   - It adds a torrent's link (the one that comes with FliperOS, or one you paste), applies the filter and starts, and removes a torrent (optionally with what it already downloaded).
   - The filter itself is chosen on the ROM filter page or in the Setup. Starting from the panel deletes nothing; deleting what a changed filter leaves out stays a Setup step.
   - It goes through the Setup's own functions (<code>fliperos-setup --downloader status|add|start|remove</code>, <code>lib/downloader.sh</code>).
+- <strong>Download BIOS</strong> (on the Downloads page): the same as <strong>Setup &gt; Games &gt; Downloader &gt; Download BIOS</strong>.
+  - It shows the last check (downloaded, already there, not in the pack, failed) and the list by state. The BIOS that failed or are not in the pack open first, since they ask for something from you.
+  - <em>Check now</em> runs the check as a task. <em>Check, reading the pack again</em> reads the BIOS pack's list again first. The box turns the automatic check off or on; that check runs each time the cabinet menu opens.
+  - It goes through <code>fliperos-setup --bios status|list|check [--refresh]|auto on|off</code> (<code>lib/downloader.sh</code>).
+- <strong>Scraper:</strong> the same as <strong>Setup &gt; Games &gt; Scraper</strong>.
+  - The page says what each kind of folder gets, since arcade has much more art. The folders come in two groups, <strong>Arcade</strong> (MAME sets) and <strong>Consoles</strong>.
+  - Pick the folders (none picked means all). <em>Scrape the games</em> is the FliperOS scraper: what each game lacks, like the frontend does by itself, with no account. An arcade folder gets the description, screenshot, flyer, marquee and logo from the Arcade Database. A console folder gets only the screenshot and the box art from libretro-thumbnails; logos, videos and descriptions of console games come from a site (ScreenScraper covers every system).
+  - <em>Scrape with a site</em> is Skyscraper. Each provider shows what it covers: every system (ScreenScraper, MobyGames), arcade only (ArcadeDB; progetto-SNAPS, only screenshots) or consoles and computers (TheGamesDB, IGDB, OpenRetro). Pick the provider, type its account (user and password, the API key, or the client ID and secret), mark what to fetch and, with a MAME folder, the clones. The account is easier to type here than with the joystick.</p>
+<p>The account goes to the Setup through standard input, never on a command line or in a log, and the saved password never comes back to the page. A scrape that stopped before the end (a power off) can be resumed here or in the Setup.
+  - <em>Art packs by torrent</em> puts every pack with ROMs to download, as in the Setup, and shows its progress. The packs are arcade only: logos and videos of MAME, RetroArch's arcade cores, Naomi, Atomiswave, Model 2 and Model 3.
+  - It goes through <code>fliperos-setup --scraper status|sources|systems|source|account|media|scrape|site|resume</code> (<code>lib/scraper.sh</code>) and <code>--mediapacks auto|status</code>.
+- <strong>Install:</strong> <strong>Setup &gt; Games &gt; Emulators &amp; Games</strong> and <strong>Extras</strong>.
+  - Each emulator shows whether it is installed and its version. <em>Check for an update</em> asks GitHub for the newest one. Those that come in the image update with FliperOS, so they have no button.
+  - <em>Install</em> or <em>Update</em> runs as a task. Only one installation runs at a time, the live screen's included.
+  - KOF Final Attack is downloaded from itch.io; installing it from a copy of the original game stays a Setup step. An installed Pixelcade also takes the code of the paid art pack.
+  - It runs <code>fliperos-emulators</code>, <code>fliperos-extras</code> and <code>fliperos-pixelcade</code>, the same programs as the Setup.
 - <strong>ROM filter:</strong> the filter of the MAME ROM Cleaner (Setup &gt; Games &gt; Cleaner), with the same parameters, options and presets as the Setup's screen, which come from the Setup itself (<code>fliperos-setup --romfilter</code>, <code>lib/romclean.sh</code>).
   - It has two uses. <em>Downloader filter</em>: what the Downloader takes from the ROM and CHD torrents; it opens with the saved filter, and <em>Save</em> records it as Setup &gt; Games &gt; Downloader &gt; Filter does. <em>Clean a romset folder</em>: a folder with a romset (a disk, a USB drive, the network folder mounted by the Setup), chosen in a folder list.
   - Pick the emulator (the MAME version of the romset: GroovyMAME, Flycast, SM2-Emu, Supermodel, MAME 2010) and a preset. The emulator of a romset folder is guessed from its name, as in the Setup.
@@ -899,7 +957,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>A pink dot marks a value changed from the preset or the saved filter. A yes/no tile switches with a click; the others open their options in a dialog, one choice or chips for several, with a search box on long lists such as the categories.
   - The scoreboard (GAMES and SIZE) stays in view while scrolling and counts what passes after every change: on the ROM torrent's list for the Downloader, on the folder for a romset. Only the latest count is kept; a new one stops the one before it.
   - For a folder, <em>Preview</em> shows what goes where (sets, size, parents, BIOS and devices, free space) and the list. <em>Copy them</em>, or <em>Move them</em> from a folder that can be written to, runs as a task with its progress. Deleting what is left over after a move stays a Setup step.
-- <strong>Tasks:</strong> what takes minutes (reading a torrent's link, applying the filter) runs in the background.
+- <strong>Tasks:</strong> what takes minutes (reading a torrent's link, applying the filter, scraping, checking the BIOS, installing) runs in the background. The card is on the Downloads, Scraper, Install and Files pages, and when a task ends, its card refreshes by itself.
   - Each task shows the step and the percentage from the Setup's progress events, and has a log and <em>Cancel</em>.
   - Only one task of each kind runs at a time, and the last 20 stay listed.
 - <strong>Trackball</strong> (off for now: the card is hidden and <code>/api/trackball</code> answers 404 unless the service has <code>FLIPEROS_WEB_TRACKBALL=1</code>): the phone as the cabinet's mouse, for trackball and spinner games (MAME reads the mouse for them), frontends and the desktop.

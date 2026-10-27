@@ -64,6 +64,28 @@ screen_amd_driver_check() {
   screen_amd_driver_apply "$recommended"
 }
 
+# screen_nvidia_driver_about DRIVER: as vantagens e as desvantagens de cada
+# driver numa NVIDIA, medidas numa GTX 980 Ti (Maxwell) com tubo de 15 kHz.
+# nouveau: tudo troca de resolucao pelo KMS, a partir do piso do PLL da
+# placa. Driver da NVIDIA: o KMS dele so aceita os modos progressivos do
+# EDID, e qualquer largura e o 480i so pelo Xorg (com ModeValidation, como no
+# Batocera).
+screen_nvidia_driver_about() {
+  if [[ $1 == nouveau ]]; then
+    ui_msg "nouveau (open source)" \
+      "$(ui_yes "+ Every FliperOS program changes resolution: menus, frontends, RetroArch, MAME and the other emulators.")" \
+      "$(ui_yes "+ Comes with FliperOS, nothing to download.")" \
+      "$(ui_no "- Each card has a lowest pixel clock (the grid test finds it). Narrower games are shown at double width: the same picture on a CRT.")" \
+      "$(ui_no "- Slower 3D: heavy emulators (PCSX2, Dolphin) may not reach full speed.")"
+  else
+    ui_msg "NVIDIA driver (closed)" \
+      "$(ui_yes "+ Full 3D speed for the heavy emulators (PCSX2, Dolphin, Flycast).")" \
+      "$(ui_yes "+ In programs that open in Xorg (MAME, the standalone emulators): every width, even 320x240 at 6.5 MHz, and 480i.")" \
+      "$(ui_no "- Outside Xorg only the boot modes: the menus and RetroArch can't switch resolution, and there is no 480i.")" \
+      "$(ui_no "- Only GTX 750 to 900 (Maxwell). A few hundred MB to download, compiled for each new kernel.")"
+  fi
+}
+
 # screen_nvidia_driver (Setup > Video Setup > Video driver numa NVIDIA):
 # nouveau ou o driver da NVIDIA, baixado na primeira vez (config/fliperos-
 # nvidia). A troca passa pelo mesmo teste de imagem do radeon/amdgpu.
@@ -81,13 +103,21 @@ screen_nvidia_driver() {
     "In use now|$running" \
     "Saved|$saved" \
     "NVIDIA driver|$(nvidia_installed && echo installed || echo "not installed (downloaded, a few hundred MB)")")
-  text+=$'\n\n'"nouveau doesn't show native 15 kHz modes on every card; the NVIDIA driver does on the cards Batocera runs at 320x240."
-  choice=$(ui_menu_hints "Video driver" "$text" "$saved" \
-    "nouveau|nouveau$([[ $saved == nouveau ]] && echo " - current")|Open source, in the kernel. Super resolutions when the grid fails." \
-    "nvidia|NVIDIA driver$([[ $saved == nvidia ]] && echo " - current")|NVIDIA's own driver: full 3D speed, native 15 kHz on more cards." \
-    "return|Return|Keep the driver as it is.") || return 0
+  text+=$'\n\n'"$(ui_yes "Recommended: nouveau, every FliperOS program changes resolution with it.")"
+  while :; do
+    choice=$(ui_menu_hints "Video driver" "$text" "$saved" \
+      "nouveau|nouveau (recommended)$([[ $saved == nouveau ]] && echo " - current")|Open source. Every program changes resolution." \
+      "nvidia|NVIDIA driver$([[ $saved == nvidia ]] && echo " - current")|Full 3D speed. Low widths only in Xorg programs." \
+      "compare|Compare the two|Advantages and disadvantages of each driver." \
+      "return|Return|Keep the driver as it is.") || return 0
+    [[ $choice == compare ]] || break
+    screen_nvidia_driver_about nouveau
+    screen_nvidia_driver_about nvidia
+  done
   [[ $choice == return ]] && return 0
   [[ $choice == "$saved" && $choice == "$running" ]] && return 0
+  screen_nvidia_driver_about "$choice"
+  ui_yesno "Video driver" "Use the $([[ $choice == nvidia ]] && echo "NVIDIA driver" || echo nouveau)?" yes || return 0
   if [[ $choice == nvidia ]] && ! nvidia_installed; then
     ui_yesno "Video driver" "Download and install the NVIDIA driver for $(drm_card_name "$card")? A few hundred MB; the kernel module is compiled here (a few minutes)." yes ||
       return 0
@@ -156,9 +186,10 @@ screen_amd_driver_confirm() {
   if ((rc == 0)); then
     amd_driver_trial_confirm
     ui_msg "Video driver" "The $trial driver stays." "Change it in Setup > Video Setup > Video driver."
-    # O driver da NVIDIA ficou: o grid de 320x240 diz se ele faz o nativo
-    # (a troca esqueceu o resultado do outro driver).
-    if [[ $trial == nvidia ]] && ui_yesno "Video driver" "Test now if the NVIDIA driver shows native 15 kHz resolutions (a 320x240 grid)?" yes; then
+    # De volta ao nouveau: o grid diz o piso do PLL desta placa (a troca
+    # esqueceu o resultado anterior). No driver da NVIDIA o grid nao serve:
+    # o KMS dele nao aceita os modos do Switchres.
+    if [[ $trial == nouveau ]] && ui_yesno "Video driver" "Test now which native 15 kHz resolutions the nouveau driver shows (a test grid)?" yes; then
       VIDEO_CHANGED=0
       screen_low_dotclock_retest
       ((VIDEO_CHANGED)) && boot_apply

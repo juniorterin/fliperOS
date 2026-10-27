@@ -8525,6 +8525,24 @@ class EmulatorModeTests(unittest.TestCase):
             extra = {'FLIPEROS_SWITCHRES_INI': str(Path(tmp) / 'nao-existe.ini')}
             self.assertIn('MODE=640 240 60', self.run_x11(['flycast'], extra=extra).stdout)
 
+    def test_nouveau_minimum_doubles_only_narrow_modes(self):
+        # Uma NVIDIA no nouveau que so mostrou o grid de 384 de largura
+        # (dotclock_min 7.7): o 640x240 (13 MHz) fica, o 320x240 (6,5 MHz)
+        # e o 256x224 dobram como no Switchres, e as contas seguem a largura.
+        with tempfile.TemporaryDirectory() as tmp:
+            ini = Path(tmp) / 'switchres.ini'
+            ini.write_text('\tdotclock_min              7.7\n\tsuper_width               2560\n')
+            extra = {'FLIPEROS_SWITCHRES_INI': str(ini)}
+            out = self.run_x11(['flycast', 'game.gdi'], extra=extra).stdout
+            self.assertIn('MODE=640 240 60', out)
+            self.assertIn('rend.ScreenStretching=200', out)
+            self.assertIn('MODE=640 240 60', self.run_x11(['--mode', '320x240@60', 'myprog'], extra=extra).stdout)
+            self.assertIn('MODE=512 224 60', self.run_x11(['--mode', '256x224@60', 'myprog'], extra=extra).stdout)
+            # O degrau de 640 (12.9): o proprio 640x240 ainda passa.
+            ini.write_text('dotclock_min 12.9\n')
+            self.assertIn('MODE=640 240 60', self.run_x11(['flycast'], extra=extra).stdout)
+            self.assertIn('MODE=640 240 60', self.run_x11(['--mode', '320x240@60', 'myprog'], extra=extra).stdout)
+
     def test_nothing_interlaced_on_15khz(self):
         # No gabinete o Flycast abria em 640x480 (480i): frequency=15k nao
         # batia com "15". Versoes antigas gravavam "15".

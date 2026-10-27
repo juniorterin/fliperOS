@@ -125,11 +125,10 @@ gpu_short_name() {
 
 # drm_card_low_dotclock CARD: radeon e amdgpu geram os dotclocks de 15 kHz
 # (6 a 15 MHz) sempre (gatools card_supports_low_dot_clock). O nouveau so os
-# aceita com o patch 10 do kernel, e nem todo PLL de NVIDIA chega la: vale
-# para a placa que passou no grid em 320x240 (low_dotclock_pci no
-# fliperos.conf, gravado pelo teste de saidas ou pelo Video Setup). As demais
-# precisam de super resolucao. O driver da NVIDIA (o fechado) passa pelo
-# mesmo grid: no Batocera ele mostra o 320x240 com dotclock 0.
+# aceita com o patch 10 do kernel, e cada PLL de NVIDIA tem o seu piso: vale
+# para a placa que passou num degrau do grid (low_dotclock_pci no
+# fliperos.conf, com o low_dotclock_min do degrau, gravados pelo teste de
+# saidas ou pelo Video Setup). As demais precisam de super resolucao.
 drm_card_low_dotclock() {
   local pci
   case $(drm_card_driver "$1") in
@@ -144,11 +143,12 @@ drm_card_low_dotclock() {
 }
 
 # drm_card_low_dotclock_testable CARD: placa em que o grid de dotclock baixo
-# vale a pena (nouveau ou o driver da NVIDIA). Na Intel o driver nao tem o
-# patch.
+# vale a pena: o nouveau. Na Intel o driver nao tem o patch, e o KMS do
+# driver da NVIDIA so aceita os modos progressivos do EDID (o Switchres nao
+# cria os seus: "Kernel doesn't supports user modes"); nele os modos do jogo
+# sao os do Xorg.
 drm_card_low_dotclock_testable() {
-  case $(drm_card_driver "$1") in nouveau | nvidia) return 0 ;; esac
-  return 1
+  [[ $(drm_card_driver "$1") == nouveau ]]
 }
 
 # drm_card_is_apu CARD usa o mesmo sinal do gatools: o lspci -v mostra

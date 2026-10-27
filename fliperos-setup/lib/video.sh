@@ -270,7 +270,7 @@ video_mame_monitor() {
 # Chaves do fliperos.conf que dependem da placa e da saida: e o que o
 # Recovery Mode leva para o disco quando a placa foi trocada. A orientacao
 # e do gabinete, nao da placa, e so vai se foi escolhida nesta sessao.
-VIDEO_CONF_KEYS="gpu driver card connector detection forced low_dotclock_pci kernel_video boot_resolution fb_map
+VIDEO_CONF_KEYS="gpu driver card connector detection forced low_dotclock_pci low_dotclock_min kernel_video boot_resolution fb_map
   monitor frequency geometry custom_width custom_height custom_refresh screens"
 VIDEO_CONF_KEEP="orientation"
 
@@ -292,13 +292,31 @@ video_retroarch_super() {
   rcfg_set "$file" crt_switch_resolution_super "$width"
 }
 
-# video_low_dotclock_grid MONITOR mostra o grid do Switchres em 320x240 com
-# dotclock_min 0 (uns 6,5 MHz num monitor de 15 kHz), o modo mais exigente
-# para o PLL da placa. Com o tubo sem imagem ninguem acha a tecla: o timeout
-# devolve o console sozinho, com SIGINT para o Switchres restaurar o modo.
+# Os degraus do teste de dotclock baixo (screen_low_dotclock_test), do mais
+# exigente para o PLL ao mais leve: "LARGURA:MINIMO". O grid sai em
+# LARGURAx240, e o primeiro que a pessoa ve decide o dotclock_min. Cada PLL de
+# NVIDIA tem o seu piso: uma GTX 980 Ti no nouveau ficou preta em 6,5 e 6,8 MHz
+# e mostrou tudo de 7,15 MHz para cima. O minimo fica um pouco abaixo do clock
+# do degrau (384x240 sai a 7,8 MHz) para o proprio modo testado passar; o que
+# fica abaixo dele o Switchres, o MAME e o RetroArch dobram na largura (320
+# vira 640), com a mesma imagem no tubo.
+LOWDOT_STEPS=${LOWDOT_STEPS:-"320:0 384:7.7 512:10.3 640:12.9"}
+
+# video_low_dotclock_mhz LARGURA [kHz]: o pixel clock aproximado de um modo
+# dessa largura (o Switchres poe uns 30% de apagamento horizontal), em MHz
+# com uma casa. Para o texto do teste e para comparar com o dotclock_min.
+video_low_dotclock_mhz() {
+  awk -v w="$1" -v k="${2:-15.66}" 'BEGIN { printf "%.1f\n", w * 1.3 * k / 1000 }'
+}
+
+# video_low_dotclock_grid MONITOR [LARGURA] mostra o grid do Switchres em
+# LARGURAx240 (320: uns 6,5 MHz num monitor de 15 kHz, o modo mais exigente
+# para o PLL da placa) com dotclock_min 0. Com o tubo sem imagem ninguem acha
+# a tecla: o timeout devolve o console sozinho, com SIGINT para o Switchres
+# restaurar o modo.
 video_low_dotclock_grid() {
   timeout -s INT -k 5 "${LOWDOT_TEST_SECONDS:-20}" \
-    switchres 320 240 60 -s -m "$1" --dotclock_min 0 -l grid
+    switchres "${2:-320}" 240 60 -s -m "$1" --dotclock_min 0 -l grid
 }
 
 # video_low_dotclock_kernel_log: as ultimas linhas do kernel sobre o driver
@@ -310,17 +328,47 @@ video_low_dotclock_kernel_log() {
   return 0
 }
 
-# video_low_dotclock_set CARD 1|0 grava a placa que passou no grid, ou a
-# esquece (a outra placa que estava gravada tambem: so vale uma).
+# video_low_dotclock_set CARD 1|0 [MINIMO] grava a placa que passou no grid
+# e o dotclock_min do degrau visto (0: o 320x240 nativo), ou a esquece (a
+# outra placa que estava gravada tambem: so vale uma).
 video_low_dotclock_set() {
   local pci
   if [[ $2 == 1 ]]; then
     pci=$(drm_card_pci "$1") || return 1
     conf_set low_dotclock_pci "$pci"
+    conf_set low_dotclock_min "${3:-0}"
   else
     conf_unset low_dotclock_pci
+    conf_unset low_dotclock_min
   fi
-  log_info "dotclock baixo: $1 -> $2"
+  log_info "dotclock baixo: $1 -> $2${3:+ (dotclock_min $3)}"
+}
+
+# video_low_dotclock_min CARD: o dotclock_min que a placa precisa (MHz). 0
+# nas que geram tudo (radeon, amdgpu, a NVIDIA que mostrou o 320x240); o
+# degrau do teste numa NVIDIA que so mostrou um modo mais largo.
+video_low_dotclock_min() {
+  local min=0
+  case $(drm_card_driver "$1" 2> /dev/null) in
+    nouveau | nvidia)
+      if drm_card_low_dotclock "$1"; then
+        min=$(conf_get low_dotclock_min 2> /dev/null) || min=0
+      fi
+      ;;
+  esac
+  printf '%s\n' "${min:-0}"
+}
+
+# video_dotclock_min_ours VALOR: um dotclock_min que o proprio Setup grava
+# (0, o 25.0 da super resolucao ou um degrau do teste), que pode trocar. Um
+# valor que a pessoa escolheu fica.
+video_dotclock_min_ours() {
+  local step
+  case $1 in "" | 0 | 0.0 | 25 | 25.0) return 0 ;; esac
+  for step in $LOWDOT_STEPS; do
+    [[ $1 == "${step#*:}" ]] && return 0
+  done
+  return 1
 }
 
 # video_low_dotclock_apply refaz o resultado do teste de saidas com ou sem
@@ -340,7 +388,7 @@ video_low_dotclock_apply() {
 # video_save_result CONECTOR FLAGS MONITOR grava o resultado validado do
 # teste de saidas para o instalador e para o sistema instalado.
 video_save_result() {
-  local c=$1 flags=$2 monitor=$3 card name base params
+  local c=$1 flags=$2 monitor=$3 card name base params min
   card=$(drm_card "$c")
   name=$(drm_name "$c")
   base=${flags%a}
@@ -367,10 +415,14 @@ video_save_result() {
     ini_set "$SWITCHRES_INI" dotclock_min 25.0
     [[ -f $MAME_INI ]] && ini_set "$MAME_INI" dotclock_min 25.0
   elif [[ $base == s* ]]; then
-    # A NVIDIA que passou no grid depois de um teste sem ele: desfaz o 25.0
-    # gravado aqui antes (um valor proprio da pessoa fica).
-    [[ $(ini_get "$SWITCHRES_INI" dotclock_min 2> /dev/null) == 25.0 ]] && ini_set "$SWITCHRES_INI" dotclock_min 0
-    [[ -f $MAME_INI && $(ini_get "$MAME_INI" dotclock_min 2> /dev/null) == 25.0 ]] && ini_set "$MAME_INI" dotclock_min 0
+    # O minimo da placa: 0, ou o degrau do grid numa NVIDIA. Troca o que o
+    # Setup gravou antes (o 25.0 de um teste sem o grid, outro degrau); um
+    # valor proprio da pessoa fica.
+    min=$(video_low_dotclock_min "$card")
+    video_dotclock_min_ours "$(ini_get "$SWITCHRES_INI" dotclock_min 2> /dev/null)" &&
+      ini_set "$SWITCHRES_INI" dotclock_min "$min"
+    [[ -f $MAME_INI ]] && video_dotclock_min_ours "$(ini_get "$MAME_INI" dotclock_min 2> /dev/null)" &&
+      ini_set "$MAME_INI" dotclock_min "$min"
   fi
   if [[ $flags == *a ]]; then
     ini_set "$SWITCHRES_INI" interlace_force_even 1
@@ -533,14 +585,20 @@ orientation_cmdline() {
 # video_resolution_choices imprime "modo|descricao" validos para o monitor
 # configurado e a placa da saida escolhida.
 video_resolution_choices() {
-  local monitor freq card low=1
+  local monitor freq card low=1 min=0 khz=15.66
   monitor=$(conf_get monitor) || monitor=generic_15
   freq=$(monitor_frequency "$monitor") || return 1
   card=$(conf_get card) || card=""
-  if [[ -n $card ]] && ! drm_card_low_dotclock "$card"; then
-    low=0
+  if [[ -n $card ]]; then
+    drm_card_low_dotclock "$card" || low=0
+    min=$(video_low_dotclock_min "$card")
   fi
-  monitor_resolutions "$freq" "$low"
+  case $freq in 25k) khz=25 ;; 31k) khz=31.5 ;; esac
+  # Numa NVIDIA que so mostrou um degrau mais largo no grid, sem os modos de
+  # boot abaixo do minimo dela (o 320x240 na GTX 980 Ti).
+  monitor_resolutions "$freq" "$low" | awk -F'|' -v min="$min" -v k="$khz" '
+    { w = $1; sub(/x.*/, "", w) }
+    min + 0 == 0 || w * 1.3 * k / 1000 >= min + 0'
 }
 
 # video_set_resolution MODO troca o modo de boot da saida configurada,
