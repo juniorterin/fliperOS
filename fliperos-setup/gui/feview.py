@@ -240,7 +240,7 @@ def coin_slot(x, y):
 def coin_icon(ui, x, y, t):
     """A entrada de ficha da porta do gabinete: numa moldura preta sobre a
     chapa cinza, a faixa clara com a fenda fina e, ao lado, a janelinha
-    iluminada (acende quando a ficha entra)."""
+    iluminada."""
     px, py = x, y
     pygame.draw.rect(ui, (112, 114, 120), (px - 1, py - 1, 19, 20), 1)   # a chapa da porta
     ui.fill(T.SPACE, (px, py, 17, 18))
@@ -248,9 +248,7 @@ def coin_icon(ui, x, y, t):
     sx, sy = coin_slot(px, py)
     # A fenda, centrada na faixa: a largura e a espessura da ficha de lado.
     ui.fill(T.SPACE, (sx - 1, sy - 4, 3, 10))
-    p = (t % COIN_CYCLE) / COIN_CYCLE
-    lit = 0.45 <= p < 0.65                    # logo depois de a ficha entrar
-    ui.fill(T.YELLOW if lit else COIN_CREAM, (px + 7, py + 1, 9, 16))
+    ui.fill(COIN_CREAM, (px + 7, py + 1, 9, 16))
     ui.fill(COIN_GLASS, (px + 7, py + 12, 9, 5))
 
 
