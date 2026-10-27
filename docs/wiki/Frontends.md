@@ -41,7 +41,24 @@ Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has bee
   - Scrape this game: its information, pictures, logo and video, right away;
   - Delete this game: after a YES/NO question, its file goes away from the folder (for MAME, also the CHD folder of the same name); its art in `~/media` stays. A clone kept inside its parent's zip has no file of its own to delete.
 
-  Under a line come the **frontend options**: the view mode (list, full screen or grid), changed with left and right and saved at once. Start also switches it.
+  Under a line come the **frontend options**, three at a time (the list scrolls with the chosen one). Each is saved at once in `~/.config/fliperos/frontend.json`:
+  - **View**: list, full screen or grid, with left and right (Start also switches it).
+  - **Show clones** and **Hidden games** (the list of hidden games; button 1 brings one back).
+  - **Exit key**: the keyboard key that closes the game. Button 1 asks for it: press it within 8 seconds; button 2 on a controller cancels. A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing. Left or right turns it off.
+  - **Exit buttons**: panel buttons that close the game when held together for a second. Button 1 asks for them: hold two or more together for a second. Left or right turns it off. In commercial mode the coin can't be one of them.
+  - **Power closes game**: on (the default), the cabinet's power button closes the open game; off, it does nothing while a game is open. With no game open it always powers off.
+  - **Commercial mode** and, with it on, **Minutes per coin** (1 to 60, left and right).
+
+  The exit key and buttons are read alongside the game by `fliperos-buttons hotkey`, without taking anything from it. The frontend closes the game and what runs under it (the X server, the emulator) with SIGTERM, and SIGKILL after 4 seconds.
+
+**Commercial mode** (Tab > Frontend options), for a cabinet that charges by the time played:
+- Without time, the customer can browse the games but not choose one: button 1 shows INSERT COIN.
+- Each coin (the panel's COIN, also during a game) adds the minutes chosen in Minutes per coin to the time left. The time runs by the clock, also on the menu and with the cabinet off.
+- When the time runs out during a game, the game closes and the frontend says TIME IS UP.
+- The indicator: without time, a coin going into a slot and INSERT COIN blinking, in a frame. With time, a clock with the minutes left (the seconds, in red, in the last minute). In the list it sits under the game's control icons; in full screen in the top left corner; in the grid in the bottom right corner (the logo, the texts and the icons move up a little, the icons in two lines).
+- It is a kiosk: button 2 (and Esc) never closes the frontend. Turn commercial mode off in Tab > Frontend options to leave it.
+
+**The power button.** With no game open, the cabinet's power button powers off; with a game open it closes the game (Tab > Frontend options > Power closes game). The frontend tells `fliperos-powerkey` which process is the game through the file named in `FLIPEROS_POWERKEY=games:FILE` (`$XDG_RUNTIME_DIR/fliperos-frontend.game`): its other children, the video player and the scraper, are not a game. Before this, the button killed the video and never powered off.
 
 The buttons are the panel's own, from Setup > Joysticks > Button mapping (`/etc/fliperos/buttons.map`). Without a mapping, a common pad works, and so does a keyboard encoder in MAME's layout.
 

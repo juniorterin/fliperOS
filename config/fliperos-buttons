@@ -1557,6 +1557,43 @@ def watch_players(path):
     return players
 
 
+class Sticks:
+    """Os controles pelo SDL (so o joystick, sem tela), lidos junto com o
+    jogo: read() da {indice: estado} de cada um. Um controle ligado ou tirado
+    muda os indices do SDL: abre todos de novo."""
+
+    def __init__(self):
+        for var in ('SDL_GAMECONTROLLERCONFIG', 'SDL_GAMECONTROLLERCONFIG_FILE'):
+            os.environ.pop(var, None)
+        self.lib = None
+        try:
+            lib = sdl()
+            lib.SDL_JoystickClose.argtypes = [ctypes.c_void_p]
+            if lib.SDL_Init(0x200) == 0:  # JOYSTICK
+                self.lib = lib
+        except OSError:
+            pass
+        self.sticks, self.count = {}, -1
+
+    def read(self):
+        lib = self.lib
+        if not lib:
+            return {}
+        lib.SDL_JoystickUpdate()
+        if lib.SDL_NumJoysticks() != self.count:
+            for js in self.sticks.values():
+                if js:
+                    lib.SDL_JoystickClose(js)
+            self.count = lib.SDL_NumJoysticks()
+            self.sticks = {i: lib.SDL_JoystickOpen(i) for i in range(self.count)}
+            lib.SDL_JoystickUpdate()
+        return {i: state(lib, js) for i, js in self.sticks.items() if js}
+
+    def close(self):
+        if self.lib:
+            self.lib.SDL_Quit()
+
+
 def cmd_watch(args):
     # Roda junto com o jogo: abaixo dele na fila da CPU.
     try:
@@ -1566,32 +1603,11 @@ def cmd_watch(args):
     players = watch_players(args.map)
     elements = [e for binds in players.values() for _, e in binds.values()]
     keyboards = Keyboards() if any(is_key(e) for e in elements) else None
-    lib = None
-    if not all(is_key(e) for e in elements):
-        for var in ('SDL_GAMECONTROLLERCONFIG', 'SDL_GAMECONTROLLERCONFIG_FILE'):
-            os.environ.pop(var, None)
-        try:
-            lib = sdl()
-            lib.SDL_JoystickClose.argtypes = [ctypes.c_void_p]
-            if lib.SDL_Init(0x200) != 0:  # JOYSTICK
-                lib = None
-        except OSError:
-            lib = None
-    sticks, count, last = {}, -1, None
+    sticks = None if all(is_key(e) for e in elements) else Sticks()
+    last = None
     try:
         while True:
-            states = {}
-            if lib:
-                lib.SDL_JoystickUpdate()
-                # Um controle ligado ou tirado muda os indices do SDL: abre todos de novo.
-                if lib.SDL_NumJoysticks() != count:
-                    for js in sticks.values():
-                        if js:
-                            lib.SDL_JoystickClose(js)
-                    count = lib.SDL_NumJoysticks()
-                    sticks = {i: lib.SDL_JoystickOpen(i) for i in range(count)}
-                    lib.SDL_JoystickUpdate()
-                states = {i: state(lib, js) for i, js in sticks.items() if js}
+            states = sticks.read() if sticks else {}
             if keyboards:
                 keyboards.read(1 / WATCH_HZ)
             else:
@@ -1603,8 +1619,59 @@ def cmd_watch(args):
     except (BrokenPipeError, KeyboardInterrupt):
         return 0
     finally:
-        if lib:
-            lib.SDL_Quit()
+        if sticks:
+            sticks.close()
+
+
+def cmd_hotkey(args):
+    """Junto com o jogo que o frontend do FliperOS abriu: o atalho que fecha o
+    jogo imprime "exit" e sai. O atalho e uma tecla (--key, o codigo do evdev)
+    ou os comandos do painel segurados juntos por --hold segundos (--combo
+    start+b2, os do Button mapping, de um mesmo jogador). Com --coin, cada
+    ficha imprime "coin" (o modo comercial soma o tempo). Nada e tomado do
+    jogo: ele le os mesmos controles."""
+    try:
+        os.nice(10)
+    except OSError:
+        pass
+    combo = set(c for c in (args.combo or '').split('+') if c in CONTROLS)
+    players = watch_players(args.map)
+    wanted = combo | ({'coin'} if args.coin else set())
+    elements = [e for binds in players.values() for c, (_, e) in binds.items() if c in wanted]
+    keyboards = Keyboards() if args.key or any(is_key(e) for e in elements) else None
+    sticks = Sticks() if any(not is_key(e) for e in elements) else None
+    since, coin, key_was = None, None, None
+    try:
+        while True:
+            states = sticks.read() if sticks else {}
+            if keyboards:
+                keyboards.read(1 / WATCH_HZ)
+            else:
+                time.sleep(1 / WATCH_HZ)
+            keys = keyboards.down() if keyboards else set()
+            # A tecla vale ao ser apertada (segura desde a abertura, nao).
+            key = args.key in keys
+            if key and key_was is False:
+                print('exit', flush=True)
+                return 0
+            key_was = key
+            now = watch_state(players, states, keys)
+            if combo and any(combo <= set(on) for on in now.values()):
+                since = since or time.monotonic()
+                if time.monotonic() - since >= args.hold:
+                    print('exit', flush=True)
+                    return 0
+            else:
+                since = None
+            down = any('coin' in on for on in now.values())
+            if args.coin and down and coin is False:
+                print('coin', flush=True)
+            coin = down
+    except (BrokenPipeError, KeyboardInterrupt):
+        return 0
+    finally:
+        if sticks:
+            sticks.close()
 
 
 def main():
@@ -1625,6 +1692,13 @@ def main():
     p = sub.add_parser('watch')
     p.add_argument('map', nargs='?', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
     p.set_defaults(func=cmd_watch)
+    p = sub.add_parser('hotkey')
+    p.add_argument('--key', type=int, default=0)
+    p.add_argument('--combo', default='')
+    p.add_argument('--hold', type=float, default=1.0)
+    p.add_argument('--coin', action='store_true')
+    p.add_argument('map', nargs='?', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
+    p.set_defaults(func=cmd_hotkey)
     p = sub.add_parser('fbneo')
     p.add_argument('map')
     p.add_argument('version')

@@ -191,7 +191,9 @@ The game gets a `SIGTERM`, the same as closing it normally, so RetroArch still w
 
 How it works: `systemd-logind` ignores the button (`HandlePowerKey=ignore` in `/etc/systemd/logind.conf.d/fliperos.conf`; by default it would power off at every press), and triggerhappy, which already reads the volume keys, runs `config/fliperos-powerkey` on `KEY_POWER` (`config/fliperos-power.triggers`).
 
-The script finds the open game through the `FLIPEROS_POWERKEY` variable that `fliperos-session` gives what it opens: `frontend` (the game is whatever runs below it), `game` (an emulator opened from the desktop) or `games:FILE` (Fightcade, whose emulators are not its children, lists their PIDs in `FILE`).
+The script finds the open game through the `FLIPEROS_POWERKEY` variable that `fliperos-session` gives what it opens: `frontend` (the game is whatever runs below it), `game` (an emulator opened from the desktop) or `games:FILE` (the game is the PIDs listed in `FILE` and what runs below them). Fightcade, whose emulators are not its children, and the FliperOS frontend, whose other children (the video player, the scraper) are not games, use `FILE`. `hold` in it means the button does nothing while that game is open (the FliperOS frontend's Power closes game option, off).
+
+**Shutting down.** No service holds the reboot or the power off for long: every system and user service that doesn't stop on `SIGTERM` gets `SIGKILL` after 10 seconds (`DefaultTimeoutStopSec=10s` in `/etc/systemd/system.conf.d` and `user.conf.d`, `config/fliperos-stop-timeout.conf`), instead of systemd's 90. The session on tty1 has the same 10 seconds. Only applying a pending update at power off gets more (20 minutes, in its own unit).
 
 **Volume keys:** the keyboard's volume keys (or those of a panel encoder programmed to send them) work on any screen — emulator in KMS, desktop, console.
 

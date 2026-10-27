@@ -4598,6 +4598,68 @@ class FrontendDataTests(unittest.TestCase):
         self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'sengoku2')
         self.assertEqual([fd.first_letter(g) for g in games[:1] + [{'Name': '1944', 'Title': '1944'}]], ['S', '#'])
 
+    @staticmethod
+    def frontend_module():
+        import types
+        loader = SourceFileLoader('fliperos_frontend_play', str(ROOT / 'fliperos-setup/gui/fliperos-frontend'))
+        module = types.ModuleType(loader.name)
+        module.__file__ = loader.path
+        loader.exec_module(module)
+        return module
+
+    def test_game_open_power_mark_hotkey_and_time(self):
+        # O jogo aberto pelo frontend: o arquivo do botao de desligar tem o PID
+        # (ou "hold"), o atalho do fliperos-buttons hotkey o fecha, e no modo
+        # comercial o fim do tempo tambem.
+        import types
+        fm = self.frontend_module()
+        play = fm.Frontend.play
+        with tempfile.TemporaryDirectory() as tmp:
+            mark, seen = Path(tmp) / 'fe.game', Path(tmp) / 'seen'
+            old = os.environ.get('FLIPEROS_POWERKEY')
+            os.environ['FLIPEROS_POWERKEY'] = 'games:%s' % mark
+            try:
+                fe = types.SimpleNamespace(power_exit=True, commercial=False, hotkeys=lambda: None, left=lambda: 0)
+                fe.stop = lambda proc, state, sig=signal.SIGTERM: fm.Frontend.stop(fe, proc, state, sig)
+                self.assertIsNone(play(fe, ['sh', '-c', 'cat %s > %s' % (mark, seen)]))
+                self.assertRegex(seen.read_text(), r'^\d+\n$')
+                self.assertFalse(mark.exists())
+                fe.power_exit = False
+                play(fe, ['sh', '-c', 'cat %s > %s' % (mark, seen)])
+                self.assertEqual(seen.read_text(), 'hold\n')
+                # O tempo acabou: o jogo fecha, e a volta avisa.
+                fe.commercial = True
+                started = time.monotonic()
+                self.assertEqual(play(fe, ['sleep', '30']), 'TIME IS UP - INSERT COIN')
+                self.assertLess(time.monotonic() - started, 5)
+                # O atalho: o vigia diz "exit".
+                fe.commercial = False
+                fe.hotkeys = lambda: subprocess.Popen(['echo', 'exit'], stdout=subprocess.PIPE, text=True)
+                started = time.monotonic()
+                self.assertIsNone(play(fe, ['sleep', '30']))
+                self.assertLess(time.monotonic() - started, 5)
+            finally:
+                if old is None:
+                    os.environ.pop('FLIPEROS_POWERKEY', None)
+                else:
+                    os.environ['FLIPEROS_POWERKEY'] = old
+
+    def test_exit_key_table_and_panel_keys(self):
+        import types
+        fm = self.frontend_module()
+        names = ['K_ESCAPE', 'K_BACKSPACE', 'K_TAB', 'K_RETURN', 'K_SPACE', 'K_PAUSE', 'K_HOME', 'K_END', 'K_INSERT',
+                 'K_DELETE', 'K_PAGEUP', 'K_PAGEDOWN', 'K_0'] + ['K_F%d' % n for n in range(1, 13)] + \
+            ['K_' + c for c in 'qwertyuiopasdfghjklzxcvbnm'] + ['K_%d' % n for n in range(1, 10)]
+        pg = types.SimpleNamespace(**{n: i for i, n in enumerate(names)})
+        table = fm.evdev_keys(pg)
+        self.assertEqual(table[pg.K_ESCAPE], ('ESC', 1))
+        self.assertEqual(table[pg.K_F12], ('F12', 88))
+        self.assertEqual(table[pg.K_p], ('P', 25))
+        self.assertEqual(table[pg.K_5], ('5', 6))
+        # A tecla de um encoder do painel (k:5 e a ficha) nao fecha o jogo.
+        self.assertEqual(fm.panel_keys([('coin', 0, 'k:5'), ('b1', 0, 'k:LCONTROL'), ('b2', 0, 'b1')]), {'5', 'CTRL'})
+        self.assertEqual(fm.combo_names(['b2', 'start', 'coin']), ['2', 'START', 'COIN'])
+
     def test_button_map_from_the_setup(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'buttons.map'
@@ -4644,7 +4706,8 @@ class FrontendDataTests(unittest.TestCase):
         frontends = (ROOT / 'fliperos-setup/lib/frontends.sh').read_text()
         self.assertIn('&& ((!${FRONTENDS_RESYNC_FULL:-0}))', frontends)
         session = (ROOT / 'config/fliperos-session').read_text()
-        self.assertIn('fliperos)\n        FLIPEROS_POWERKEY=frontend "$BIN/fliperos-kms-run" "${program[@]}"', session)
+        self.assertIn('fliperos)\n        FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-frontend.game" \\\n'
+                      '          "$BIN/fliperos-kms-run" "${program[@]}"', session)
         self.assertIn('"fliperos-frontend"', (ROOT / 'config/fliperos-web').read_text())
 
 
@@ -7416,6 +7479,41 @@ class PowerKeyTests(unittest.TestCase):
             (tmp / 'busy').unlink()
             self.press(tmp, grace='0')
             self.assertTrue((tmp / 'off').exists())
+
+    def test_fliperos_frontend_with_its_video_powers_off(self):
+        # O frontend do FliperOS tem filhos que nao sao jogo (o ffmpeg do
+        # video, o scrape): sem jogo no arquivo, o botao desliga (antes ele
+        # matava o video e nao desligava).
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            mark = tmp / 'fe.game'
+            self.start(tmp, 'FLIPEROS_POWERKEY=games:%s bash -c \'sleep 300 & echo $! > video.pid\n'
+                            'sleep 300 & echo $! > game.pid; wait\' &\nwait\n' % mark)
+            video, game = self.pid(tmp, 'video.pid'), self.pid(tmp, 'game.pid')
+            self.press(tmp, grace='0')
+            self.assertTrue((tmp / 'off').exists())
+            self.assertTrue(Path('/proc/%d' % video).exists())
+            # Com o jogo no arquivo: fecha o jogo (e o que esta abaixo dele).
+            (tmp / 'off').unlink()
+            mark.write_text('%d\n' % game)
+            self.press(tmp, grace='0')
+            self.assertTrue(self.gone(game))
+            self.assertTrue(Path('/proc/%d' % video).exists())
+            self.assertFalse((tmp / 'off').exists())
+
+    def test_hold_in_the_file_ignores_the_button(self):
+        # Frontend options > Power closes game desligado: com o jogo aberto o
+        # botao nao faz nada (nem desliga).
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            mark = tmp / 'fe.game'
+            mark.write_text('hold\n')
+            self.start(tmp, 'FLIPEROS_POWERKEY=games:%s bash -c \'sleep 300 & echo $! > game.pid; wait\' &\nwait\n'
+                       % mark)
+            game = self.pid(tmp, 'game.pid')
+            self.press(tmp, grace='0')
+            self.assertFalse((tmp / 'off').exists())
+            self.assertTrue(Path('/proc/%d' % game).exists())
 
     def test_a_stuck_game_is_killed_on_the_next_press(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -12063,6 +12161,49 @@ class ButtonMappingTests(unittest.TestCase):
 
     def setUp(self):
         self.rc = load_script('buttons', 'config/fliperos-buttons')
+
+    def hotkey(self, frames, **opts):
+        """O fliperos-buttons hotkey com um teclado falso: frames sao as
+        teclas (evdev) apertadas a cada leitura; acabadas, ele para."""
+        import argparse
+        import contextlib
+        rc = self.rc
+
+        class Keys:
+            def __init__(self, *a):
+                pass
+
+            def read(self, timeout):
+                if not frames:
+                    raise KeyboardInterrupt
+                self.now = frames.pop(0)
+
+            def down(self):
+                return self.now
+
+        old = rc.Keyboards
+        rc.Keyboards = Keys
+        out = io.StringIO()
+        try:
+            args = argparse.Namespace(key=0, combo='', hold=1.0, coin=False, map='/nonexistent')
+            vars(args).update(opts)
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(rc.cmd_hotkey(args), 0)
+        finally:
+            rc.Keyboards = old
+        return out.getvalue().split()
+
+    def test_hotkey_closes_the_game_and_counts_coins(self):
+        # O frontend do FliperOS le, junto com o jogo, o atalho que o fecha e
+        # (modo comercial) as fichas. Sem mapa, o painel e o teclado do MAME:
+        # o Start 1 e a tecla 1 (evdev 2), a ficha a 5 (evdev 6).
+        self.assertEqual(self.hotkey([set(), {1}], key=1), ['exit'])
+        # A tecla ja apertada ao abrir o jogo nao vale; solta e de novo, sim.
+        self.assertEqual(self.hotkey([{1}, {1}, set()], key=1), [])
+        self.assertEqual(self.hotkey([set(), {2, 6}, {2, 6}], combo='start+coin', hold=0), ['exit'])
+        self.assertEqual(self.hotkey([set(), {2}, set()], combo='start+coin', hold=0), [])
+        self.assertEqual(self.hotkey([set(), {6}, {6}, set(), {6}], coin=True), ['coin', 'coin'])
+        self.assertIn("'hotkey'", (ROOT / 'config/fliperos-buttons').read_text())
 
     def test_sdl_leaves_sigterm_alone(self):
         # O SDL trocava o SIGTERM por um SDL_QUIT: o watch do painel web nao

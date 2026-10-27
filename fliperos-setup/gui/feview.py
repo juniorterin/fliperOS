@@ -217,6 +217,77 @@ def funnel(surf, cx, cy, c):
                                   (cx - 1, cy + 6), (cx - 1, cy + 1)])
 
 
+# ── O modo comercial ──────────────────────────────────────────────
+# O indicador (Tab > Frontend options > Commercial mode): na lista debaixo
+# dos icones dos comandos, na tela cheia no canto de cima a esquerda, na
+# grade no canto de baixo a direita.
+
+COIN_W, COIN_H = 76, 30
+
+
+def coin_icon(ui, x, y, t):
+    """A ficha caindo na fenda, de lado, num ciclo de 1,2 s: some ao entrar."""
+    sx, sy = x + 1, y + 20                    # a fenda, 14x4
+    pygame.draw.rect(ui, T.COMMENT, (sx - 1, sy - 1, 16, 6), 1)
+    ui.fill(T.SPACE, (sx, sy, 14, 4))
+    p = (t % 1.2) / 0.8
+    if p >= 1:
+        return
+    top = round(y + 1 + p * 19)
+    seen = max(0, min(12, sy - top))
+    if seen:
+        coin = pygame.Surface((8, 12), pygame.SRCALPHA)
+        pygame.draw.ellipse(coin, T.YELLOW, (0, 0, 8, 12))
+        pygame.draw.ellipse(coin, T.ORANGE, (0, 0, 8, 12), 1)
+        coin.fill(T.ORANGE, (3, 3, 2, 6))     # o relevo da ficha
+        ui.blit(coin, (sx + 3, top), (0, 0, 8, seen))
+
+
+def clock_icon(ui, cx, cy, color, t):
+    """O relogio: o ponteiro dos segundos da a volta em 4 s."""
+    pygame.draw.circle(ui, color, (cx, cy), 7, 2)
+    ui.fill(color, (cx - 1, cy - 10, 3, 2))
+    pygame.draw.line(ui, color, (cx, cy), (cx, cy - 4))
+    a = t * math.pi / 2
+    pygame.draw.line(ui, color, (cx, cy), (cx + round(5 * math.sin(a)), cy - round(5 * math.cos(a))))
+
+
+def time_left(seconds):
+    """O tempo que resta no indicador: MIN, SEC no ultimo minuto, e horas
+    com muitas fichas."""
+    if seconds < 60:
+        return "%d SEC" % math.ceil(seconds)
+    minutes = math.ceil(seconds / 60)
+    return "%d MIN" % minutes if minutes < 100 else "%dH%02d" % divmod(minutes, 60)
+
+
+def coin_box(fe, ui, x, y, t):
+    """Sem tempo: a ficha entrando na fenda e o INSERT COIN piscando (mais
+    rapido logo depois de um jogo pedido sem ficha). Com tempo: o relogio e
+    o que resta, piscando logo depois da ficha e no ultimo minuto (vermelho).
+    Tudo numa moldura."""
+    left = fe.left()
+    W.block(ui, (x, y, COIN_W, COIN_H), T.BG_DEEP, None)
+    if left <= 0:
+        nag = time.monotonic() - getattr(fe, "nag_at", 0.0) < 1.5
+        on = int(t * (6 if nag else 2)) % 2 == 0
+        coin_icon(ui, x + 3, y + 3, t)
+        if on:
+            W.text(ui, "INSERT", T.YELLOW, x + 22, y + 6)
+            W.text(ui, "COIN", T.YELLOW, x + 22, y + 17)
+        border = T.YELLOW if nag and on else T.PINK
+    else:
+        last = left < 60
+        color = T.RED if last else T.GREEN
+        fresh = time.monotonic() - getattr(fe, "coin_at", 0.0) < 2
+        clock_icon(ui, x + 11, y + 16, color, t)
+        if not (last and int(t * 2) % 2) and not (fresh and int(t * 6) % 2):
+            W.text(ui, time_left(left), color, x + 22, y + 6)
+        tiny.text(ui, "LEFT", T.COMMENT, x + 22, y + 19)
+        border = color
+    pygame.draw.rect(ui, border, (x, y, COIN_W, COIN_H), 2)
+
+
 # ── Os icones do Arcadeflow ────────────────────────────────────────
 # O genero, o controle e os botoes de cada jogo com os icones do Arcadeflow,
 # copiados em gui/icons/metapics. Sem o icone, a linha fica so com o texto.
@@ -434,9 +505,10 @@ def icon_rows(fe, game, h=10, icons_only=False):
     return rows
 
 
-def icon_line(fe, ui, game, x, y, right, h=10):
-    """Os icones lado a lado numa linha (a tela cheia e a grade)."""
-    for img, text, color in icon_rows(fe, game, h):
+def icon_line(fe, ui, game, x, y, right, h=10, rows=None):
+    """Os icones lado a lado numa linha (a tela cheia e a grade); rows: so
+    esses (a grade do modo comercial os divide em duas linhas)."""
+    for img, text, color in icon_rows(fe, game, h) if rows is None else rows:
         if img:
             if x + img.get_width() > right:
                 break
@@ -616,6 +688,9 @@ def draw_list(fe, ui, now):
         if line or (line is genre and players.isdigit()):
             y += 24
     if T.VERTICAL:
+        # Em pe, o indicador do modo comercial embaixo, a esquerda.
+        if fe.commercial:
+            coin_box(fe, ui, SX, HH - COIN_H - 4, now)
         return
     played = game.get("PlayedCount")
     chips = []
@@ -630,6 +705,9 @@ def draw_list(fe, ui, now):
         pygame.draw.rect(ui, T.LINE, (x, y + 2, w, 10), 1)
         tiny.text(ui, text, color, x + 4, y + 5)
         x += w + 4
+    # O modo comercial: o indicador debaixo dos icones dos comandos.
+    if fe.commercial:
+        coin_box(fe, ui, px, min(y + (16 if chips else 4), HH - COIN_H - 6), now)
 
 
 def looking(ui, x, y, w=None):
@@ -735,8 +813,11 @@ def draw_full(fe, ui, back, now):
     W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, SX + SW, 12, right=True)
     for i, c in enumerate(W.RAINBOW):
         pygame.draw.rect(ui, c, (SX, 24 + i, 40, 1))
+    # O modo comercial: o indicador no canto de cima, a esquerda.
+    if fe.commercial:
+        coin_box(fe, ui, SX, 34, now)
     if fe.scraping is game:
-        looking(ui, SX, 36)
+        looking(ui, SX, 38 + COIN_H if fe.commercial else 36)
     # A lista na direita: quatro miniaturas empilhadas, a do jogo escolhido
     # acesa, com uma seta em cima e embaixo enquanto ha mais jogos para
     # aquele lado. A coluna e a moldura rosa deslizam ate o lugar novo.
@@ -928,9 +1009,15 @@ def draw_flow(fe, ui, now):
             nxt = fe.cats[(fe.cat + side) % len(fe.cats)]["name"].upper()
             bottom_tab(ui, nxt, side, x0, gw, y0 + rows_shown * step_y - 4)
     g = fe.game()
-    y = HH - 46
+    # No modo comercial o logo, os textos e os icones sobem um pouco, os
+    # icones vao em duas linhas, e o indicador fica no canto de baixo a
+    # direita.
+    commercial = fe.commercial
+    y = HH - 52 if commercial else HH - 46
     clone = is_clone(fe, g)
-    logo = None if clone else image(fe, media(fe, g, "logo"), 110, 30)
+    # Em pe nao ha largura para o logo, os icones e o indicador: o nome.
+    narrow = commercial and getattr(fe, "vertical", False)
+    logo = None if clone or narrow else image(fe, media(fe, g, "logo"), 110, 30)
     tx = SX
     if logo:
         blit_center(ui, logo, SX, y, 110, 30)
@@ -942,10 +1029,17 @@ def draw_flow(fe, ui, now):
         W.text(ui, fit(fe.fd.short_title(g), 150), T.YELLOW, SX, y + 2)
     if logo:
         W.text(ui, fit(facts_line(g), SX + SW - tx), T.CYAN, tx, y + 2)
-        icon_line(fe, ui, g, tx, y + 14, SX + SW, 12)
     else:
         W.text(ui, fit(facts_line(g), 150), T.CYAN, SX + 154, y + 2)
-        icon_line(fe, ui, g, SX, y + 14, SX + SW, 12)
+        tx = SX
+    if commercial:
+        bx, by = SX + SW - COIN_W, HH - COIN_H - 8
+        rows = icon_rows(fe, g, 12)
+        icon_line(fe, ui, g, tx, y + 13, bx - 4, 12, rows[:2])
+        icon_line(fe, ui, g, tx, y + 26, bx - 4, 12, rows[2:])
+        coin_box(fe, ui, bx, by, now)
+    else:
+        icon_line(fe, ui, g, tx, y + 14, SX + SW, 12)
 
 
 def bottom_tab(ui, label, side, x0, width, y):
@@ -1476,45 +1570,70 @@ def draw_options(fe, ui, now):
             eye(ui, ix, iy, color, crossed=True)
         else:
             trash(ui, ix, iy - 1, color)
-    # As opcoes do frontend, debaixo das do jogo.
+    # As opcoes do frontend, debaixo das do jogo: tres linhas a vista, que
+    # rolam com a escolhida (as linhas 5 a 12 do fliperos-frontend, OPT_*).
     y = py + 116
     ui.blit(W.big("FRONTEND OPTIONS", 1, W.LABEL), (px + 10, y))
     y += 12
     right = px + pw - 14
-    # O modo: os tres lado a lado, o de agora aceso.
-    on = sel == 5
-    option_row(ui, (px + 8, y, pw - 16, 16), "", on, now)
-    W.text(ui, "VIEW", T.FG if on else T.COMMENT, px + 16, y + 4)
-    x = right
-    for mode, label in reversed((("list", "LIST"), ("full", "FULL SCREEN"), ("flow", "GRID"))):
-        cur = fe.mode == mode
-        w = tiny.width(label) + 8
-        x -= w
-        if cur:
-            W.block(ui, (x, y + 3, w, 10), T.PINK if on else T.PURPLE, None)
-        else:
-            pygame.draw.rect(ui, T.LINE, (x, y + 3, w, 10), 1)
-        tiny.text(ui, label, T.SPACE if cur else T.COMMENT, x + 4, y + 6)
-        x -= 4
-    # Os clones: ligados ou nao.
-    y += 17
-    on = sel == 6
-    option_row(ui, (px + 8, y, pw - 16, 16), "", on, now)
-    W.text(ui, "SHOW CLONES", T.FG if on else T.COMMENT, px + 16, y + 4)
-    state = "ON" if fe.show_clones else "OFF"
-    w = tiny.width(state) + 8
-    W.block(ui, (right - w, y + 3, w, 10), (T.PINK if on else T.PURPLE) if fe.show_clones else T.BG_DEEP, None)
-    if not fe.show_clones:
+    rows = [5, 6, 7, 8, 9, 10, 11] + ([12] if fe.commercial else [])
+    shown = 3
+    top = fe.ov.get("ftop", 0)
+    if sel in rows:
+        k = rows.index(sel)
+        top = k if k < top else (k - shown + 1 if k >= top + shown else top)
+    top = fe.ov["ftop"] = max(0, min(top, len(rows) - shown))
+    for k, opt in enumerate(rows[top:top + shown]):
+        draw_option(fe, ui, opt, (px + 8, y + k * 17, pw - 16, 16), sel == opt, right, now)
+    if len(rows) > shown:
+        W.scrollbar(ui, px + pw - 5, y, shown * 17 - 1, top, shown, len(rows))
+    draw_harvest(fe, ui, px + 8, y + 2 * 17 + 20, pw - 16)
+
+
+def chip(ui, right, y, text, lit, on):
+    """O valor de uma linha do Tab, encostado a direita: aceso (ON, o modo de
+    agora) ou so contornado. Devolve onde comeca."""
+    w = tiny.width(text) + 8
+    if lit:
+        W.block(ui, (right - w, y + 3, w, 10), T.PINK if on else T.PURPLE, None)
+    else:
+        W.block(ui, (right - w, y + 3, w, 10), T.BG_DEEP, None)
         pygame.draw.rect(ui, T.LINE, (right - w, y + 3, w, 10), 1)
-    tiny.text(ui, state, T.SPACE if fe.show_clones else T.COMMENT, right - w + 4, y + 6)
-    # Os escondidos: quantos, e a lista deles.
-    y += 17
-    on = sel == 7
-    option_row(ui, (px + 8, y, pw - 16, 16), "", on, now)
-    W.text(ui, "HIDDEN GAMES", T.FG if on else T.COMMENT, px + 16, y + 4)
-    count = len(fe.lib.hidden())
-    tiny.text(ui, "%d  >" % count, T.PINK if on else T.COMMENT, right, y + 6, right=True)
-    draw_harvest(fe, ui, px + 8, y + 20, pw - 16)
+    tiny.text(ui, text, T.SPACE if lit else T.COMMENT, right - w + 4, y + 6)
+    return right - w
+
+
+def draw_option(fe, ui, opt, rect, on, right, now):
+    """Uma linha das opcoes do frontend: o rotulo e o valor dela."""
+    x, y, _, _ = rect
+    labels = {5: "VIEW", 6: "SHOW CLONES", 7: "HIDDEN GAMES", 8: "EXIT KEY", 9: "EXIT BUTTONS",
+              10: "POWER CLOSES GAME", 11: "COMMERCIAL MODE", 12: "MINUTES PER COIN"}
+    option_row(ui, rect, "", on, now)
+    W.text(ui, labels[opt], T.FG if on else T.COMMENT, x + 8, y + 4)
+    if opt == 5:
+        # O modo: os tres lado a lado, o de agora aceso.
+        cx = right
+        for mode, label in reversed((("list", "LIST"), ("full", "FULL SCREEN"), ("flow", "GRID"))):
+            cx = chip(ui, cx, y, label, fe.mode == mode, on) - 3
+    elif opt == 6:
+        chip(ui, right, y, "ON" if fe.show_clones else "OFF", fe.show_clones, on)
+    elif opt == 7:
+        tiny.text(ui, "%d  >" % len(fe.lib.hidden()), T.PINK if on else T.COMMENT, right, y + 6, right=True)
+    elif opt == 8:
+        key = fe.exit_key[0] if fe.exit_key else "OFF"
+        chip(ui, right, y, key, bool(fe.exit_key), on)
+    elif opt == 9:
+        combo = "+".join(c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper() for c in fe.exit_combo)
+        chip(ui, right, y, combo or "OFF", bool(fe.exit_combo), on)
+    elif opt == 10:
+        chip(ui, right, y, "ON" if fe.power_exit else "OFF", fe.power_exit, on)
+    elif opt == 11:
+        chip(ui, right, y, "ON" if fe.commercial else "OFF", fe.commercial, on)
+    elif opt == 12:
+        cx = chip(ui, right - 8, y, "%d" % fe.coin_minutes, True, on)
+        if on:
+            arrow(ui, cx - 5, y + 8, (-1, 0), T.PINK, 3)
+            arrow(ui, right - 3, y + 8, (1, 0), T.PINK, 3)
 
 
 def draw_hidden(fe, ui, now):
@@ -1672,6 +1791,43 @@ def draw_delete(fe, ui, now):
     W.button(ui, "NO", WW // 2 + 50, py + 60, fe.ov["sel"] == 1)
 
 
+def draw_capture(fe, ui, now):
+    """A escolha do atalho que fecha o jogo: a tecla (a proxima apertada) ou
+    os botoes do painel segurados juntos, com o tempo que falta."""
+    pw, ph = min(250, WW - 6), 110
+    px, py = (WW - pw) // 2, (HH - ph) // 2
+    card(ui, (px, py, pw, ph))
+    mono = time.monotonic()
+    if fe.overlay == "exitkey":
+        W.centered(ui, "PRESS THE KEY", T.FG, py + 10)
+        tiny.centered(ui, "ON THE KEYBOARD THAT CLOSES THE GAME", T.COMMENT, WW // 2, py + 24)
+        # Uma tecla desenhada, piscando.
+        kx, ky = WW // 2 - 16, py + 36
+        W.block(ui, (kx, ky, 32, 28), T.BG_DEEP, None)
+        pygame.draw.rect(ui, T.PINK if int(now * 2) % 2 else T.PURPLE, (kx, ky, 32, 28), 2)
+        pygame.draw.rect(ui, T.LINE, (kx + 3, ky + 3, 26, 18), 1)
+        W.text(ui, "?", T.YELLOW, kx + 12, ky + 8)
+        tiny.centered(ui, "BUTTON 2 ON A CONTROLLER: CANCEL", T.COMMENT, WW // 2, py + 72)
+    else:
+        W.centered(ui, "HOLD THE BUTTONS", T.FG, py + 10)
+        tiny.centered(ui, "2 OR MORE TOGETHER, FOR 1 SECOND", T.COMMENT, WW // 2, py + 24)
+        held = fe.ov.get("held")
+        names = "+".join(c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper()
+                         for c in ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "start", "coin")
+                         if held and c in held)
+        W.centered(ui, names or "...", T.YELLOW, py + 40)
+        # A barra de quanto ja foi segurado.
+        bx, bw = px + 30, pw - 60
+        W.block(ui, (bx, py + 56, bw, 8), T.BG_DEEP, None)
+        if held:
+            fill = min(1.0, (mono - fe.ov.get("at", mono)) / 1.0)
+            ui.fill(T.GREEN, (bx, py + 56, round(bw * fill), 8))
+        pygame.draw.rect(ui, T.LINE, (bx, py + 56, bw, 8), 1)
+        tiny.centered(ui, "THE SAME BUTTONS CLOSE THE GAME, HELD 1 SECOND", T.COMMENT, WW // 2, py + 72)
+    wait = max(0, 8 - (mono - fe.ov.get("since", mono)))
+    tiny.centered(ui, "NOTHING PRESSED: KEEPS AS IT WAS IN %d S" % math.ceil(wait), T.ORANGE, WW // 2, py + 90)
+
+
 def draw_exit(fe, ui, now):
     pw, ph = 220, 74
     px, py = (WW - pw) // 2, (HH - ph) // 2
@@ -1774,6 +1930,8 @@ def draw(fe, now):
             draw_exit(fe, top, t)
         elif o == "delete":
             draw_delete(fe, top, t)
+        elif o in ("exitkey", "exitpad"):
+            draw_capture(fe, top, t)
         back.blit(top, (0, 0))
     if fe.toast and now < fe.toast[1]:
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)

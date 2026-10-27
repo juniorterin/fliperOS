@@ -55,6 +55,9 @@ class Input:
         self.loose = {}            # acao solta -> quando a soltura vale
         self.sources = {}          # acao -> fontes que a seguram (teclado, botoes)
         self.text = False          # digitando: as teclas viram letras
+        # Escolhendo a tecla que fecha o jogo: cada tecla vira "key:CODIGO"
+        # (o do pygame), e nao a acao dela.
+        self.capture = False
         k = pygame
         self.keys = {k.K_UP: "up", k.K_DOWN: "down", k.K_LEFT: "left", k.K_RIGHT: "right",
                      k.K_RETURN: "b1", k.K_KP_ENTER: "b1", k.K_LCTRL: "b1",
@@ -128,6 +131,9 @@ class Input:
             if ev.type == pg.QUIT:
                 out.append("quit")
             elif ev.type == pg.KEYDOWN:
+                if self.capture:
+                    out.append("key:%d" % ev.key)
+                    continue
                 if self.text:
                     if ev.key == pg.K_BACKSPACE:
                         out.append("backspace")

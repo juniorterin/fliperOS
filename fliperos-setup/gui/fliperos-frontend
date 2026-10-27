@@ -15,7 +15,13 @@
 #   1  o menu do jogo (Jogar, Favoritar, +); na lista, num jogo com clones,
 #      abre e fecha os clones
 #   2  volta       3/6  pagina acima/abaixo   4  favorito   5  filtros
-#   Tab  classificar, renomear, scrape do jogo
+#   Tab  classificar, renomear, scrape do jogo; e as opcoes do frontend
+#
+# Tab > Frontend options tambem tem o atalho que fecha o jogo (uma tecla do
+# teclado e/ou botoes do painel segurados juntos), o botao de desligar nos
+# jogos e o modo comercial: sem ficha nao se escolhe jogo, cada ficha soma
+# os minutos escolhidos, o tempo que acaba fecha o jogo, e o controle nao
+# fecha o frontend (quiosque).
 #
 #   fliperos-frontend [--shot PREFIXO] [--keys "b1 down ..."]
 #
@@ -54,9 +60,64 @@ MODE_NAMES = {"list": "LIST", "full": "FULL SCREEN", "flow": "GRID"}
 COLS = 3                     # as colunas da grade (o GRID_COLS do feview.py)
 
 
-# As linhas do Tab: 0 a 4 do jogo, e as do frontend.
-OPT_MODE, OPT_CLONES, OPT_HIDDEN = 5, 6, 7
-OPT_COUNT = 8
+# As linhas do Tab: 0 a 4 do jogo, e as do frontend (os minutos por ficha so
+# com o modo comercial ligado).
+OPT_MODE, OPT_CLONES, OPT_HIDDEN, OPT_EXIT_KEY, OPT_EXIT_PAD, OPT_POWER, OPT_COMMERCIAL, OPT_COIN = range(5, 13)
+
+# O atalho que fecha o jogo e as fichas do modo comercial, lidos junto com o
+# jogo (config/fliperos-buttons hotkey).
+BUTTONS_TOOL = os.environ.get("FLIPEROS_BUTTONS_TOOL", "/opt/fliperos/bin/fliperos-buttons")
+# Os botoes do atalho do painel, segurados juntos por EXIT_HOLD segundos
+# (no jogo e na hora de escolher). CAPTURE_WAIT: sem apertar, a escolha sai.
+EXIT_HOLD, CAPTURE_WAIT = 1.0, 8.0
+COMBO_CONTROLS = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "start", "coin")
+# Os minutos de cada ficha (Frontend options > Minutes per coin).
+COIN_MINUTES = (1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 45, 50, 60)
+
+
+def evdev_keys(pg):
+    """As teclas que fecham o jogo: a do pygame -> (nome, codigo do evdev,
+    o do kernel, que o fliperos-buttons hotkey le junto com o jogo)."""
+    k = pg
+    table = {k.K_ESCAPE: ("ESC", 1), k.K_BACKSPACE: ("BACKSPACE", 14), k.K_TAB: ("TAB", 15),
+             k.K_RETURN: ("ENTER", 28), k.K_SPACE: ("SPACE", 57), k.K_PAUSE: ("PAUSE", 119),
+             k.K_HOME: ("HOME", 102), k.K_END: ("END", 107), k.K_INSERT: ("INSERT", 110),
+             k.K_DELETE: ("DELETE", 111), k.K_PAGEUP: ("PAGE UP", 104), k.K_PAGEDOWN: ("PAGE DOWN", 109),
+             k.K_0: ("0", 11)}
+    for n, code in enumerate((59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 87, 88), 1):
+        table[getattr(k, "K_F%d" % n)] = ("F%d" % n, code)
+    for row, first in (("qwertyuiop", 16), ("asdfghjkl", 30), ("zxcvbnm", 44)):
+        for i, c in enumerate(row):
+            table[getattr(k, "K_" + c)] = (c.upper(), first + i)
+    for n in range(1, 10):
+        table[getattr(k, "K_%d" % n)] = (str(n), n + 1)
+    return table
+
+
+def panel_keys(rows):
+    """Os nomes das teclas que o Button mapping deu ao painel (um encoder
+    que se diz teclado, "k:NOME" do MAME): uma delas nao fecha o jogo."""
+    alias = {"LCONTROL": "CTRL", "RCONTROL": "CTRL", "LALT": "ALT", "LSHIFT": "SHIFT", "RSHIFT": "SHIFT"}
+    return {alias.get(e[2:], e[2:]) for _, _, e in rows if e.startswith("k:")}
+
+
+def combo_names(combo):
+    """Os botoes do atalho na tela: START, COIN, 1 a 6 e as direcoes."""
+    return [c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper() for c in combo]
+
+
+def tree(pid):
+    """O processo e os que estao abaixo dele (o jogo e o X, o emulador...)."""
+    import glob
+    found = [pid]
+    for path in glob.glob("/proc/%d/task/*/children" % pid):
+        try:
+            with open(path) as f:
+                for child in f.read().split():
+                    found += tree(int(child))
+        except (OSError, ValueError):
+            pass
+    return found
 
 
 def load_config():
@@ -109,6 +170,8 @@ class Frontend:
         self.window = None
         self.open()
         self.input = feinput.Input(pygame)
+        self.keytable = evdev_keys(pygame)
+        self.nag_at = 0.0
         self.back = pygame.Surface((theme.WIDTH, theme.HEIGHT))
         self.bg = background.pick(None if not self.shot else "stars", seed=7 if self.shot else None)
         self.start = time.monotonic()
@@ -145,6 +208,20 @@ class Frontend:
         self.opened = set()        # os jogos pai com os clones abertos (na lista)
         # Tab > Frontend options > Show clones (gravado no frontend.json).
         self.show_clones = cfg.get("clones", True) is not False
+        # Tab > Frontend options: o atalho que fecha o jogo (a tecla, como
+        # [nome, codigo do evdev], e os botoes do painel), o botao de desligar
+        # no jogo, o modo comercial e os minutos de cada ficha; o tempo
+        # comprado vai ate credit_until (a hora do relogio: segue correndo
+        # com o gabinete desligado).
+        key = cfg.get("exit_key")
+        self.exit_key = key if isinstance(key, list) and len(key) == 2 else None
+        combo = cfg.get("exit_combo")
+        self.exit_combo = [c for c in combo if c in COMBO_CONTROLS] if isinstance(combo, list) else []
+        self.power_exit = cfg.get("power_exit", True) is not False
+        self.commercial = cfg.get("commercial") is True
+        self.coin_minutes = cfg.get("coin_minutes") if cfg.get("coin_minutes") in COIN_MINUTES else 5
+        self.credit_until = float(cfg.get("credit_until") or 0)
+        self.coin_at = 0.0         # a ultima ficha (o relogio aparece piscando)
         self.cursor = 0
         self.top = 0
         self.overlay = "guide"     # o guia dos controles ao abrir
@@ -285,7 +362,9 @@ class Frontend:
         save_config({"mode": self.mode, "category": (self.category() or {}).get("key"),
                      "filter": self.lib.filters[self.flt % len(self.lib.filters)]["name"],
                      "game": g["Name"] if g else None, "positions": self.positions,
-                     "clones": self.show_clones})
+                     "clones": self.show_clones, "exit_key": self.exit_key, "exit_combo": self.exit_combo,
+                     "power_exit": self.power_exit, "commercial": self.commercial,
+                     "coin_minutes": self.coin_minutes, "credit_until": self.credit_until})
 
     def keep_position(self):
         """O jogo onde o cursor esta, anotado para a game list de agora: ao
@@ -362,6 +441,10 @@ class Frontend:
     def act(self, a):
         if a == "quit":
             return "quit"
+        if a == "coin" and self.commercial and self.overlay != "exitpad":
+            # A ficha vale em qualquer tela, ate com um menu aberto.
+            self.insert_coin()
+            return None
         if self.overlay:
             return self.overlay_act(a)
         if self.letter_mode and a in ("up", "down"):
@@ -407,17 +490,21 @@ class Frontend:
                 self.rebuild()
                 if g["Name"] in self.opened:
                     self.cursor += 1
+            elif self.locked():
+                # O modo comercial sem tempo: escolher um jogo, so com ficha.
+                self.nag()
             else:
                 self.overlay, self.ov = "popup", {"sel": 0}
         elif a == "b2":
             # Num clone aberto, fecha o grupo (na tela cheia e na grade, volta ao pai);
-            # senao, pergunta se sai.
+            # senao, pergunta se sai. No modo comercial (quiosque) o cliente
+            # nao fecha o frontend: so o Tab > Frontend options o desliga.
             g, level, parent = self.rows[self.cursor] if self.rows else (None, 0, None)
             if level:
                 owner = g if parent == "main" else parent
                 self.opened.discard(owner["Name"])
                 self.rebuild(keep=owner["Name"])
-            else:
+            elif not self.commercial:
                 self.overlay, self.ov = "exit", {"sel": 1}
         elif a == "b4":
             self.toggle_fav()
@@ -447,13 +534,37 @@ class Frontend:
     def say(self, text, seconds=1.6):
         self.toast = (text, time.monotonic() + seconds)
 
+    # ── O modo comercial ──
+    def left(self):
+        """Os segundos de jogo que a ficha ainda paga."""
+        return max(0.0, self.credit_until - time.time())
+
+    def locked(self):
+        """Modo comercial sem tempo: nao se escolhe jogo."""
+        return self.commercial and self.left() <= 0
+
+    def insert_coin(self):
+        """Cada ficha soma os minutos dela ao tempo que ainda resta."""
+        self.credit_until = max(time.time(), self.credit_until) + self.coin_minutes * 60
+        self.coin_at = time.monotonic()
+        self.say("+%d MIN" % self.coin_minutes)
+        self.remember()
+
+    def nag(self):
+        """Um jogo pedido sem tempo: o indicador pisca mais forte."""
+        self.nag_at = time.monotonic()
+        self.say("INSERT COIN")
+
+    def option_count(self):
+        return OPT_COIN + 1 if self.commercial else OPT_COIN
+
     def overlay_act(self, a):
         o = self.overlay
         if o == "guide":
             if a not in ("up", "down", "left", "right"):
                 self.overlay = None
             return None
-        if a == "b2" and o not in ("rename",):
+        if a == "b2" and o not in ("rename", "exitkey", "exitpad"):
             self.overlay = {"more": "popup", "classify": "options"}.get(o)
             if self.overlay == "popup":
                 self.ov = {"sel": 2}
@@ -515,10 +626,40 @@ class Frontend:
             return None
         if o == "options":
             # 0 a 4: as opcoes do jogo (3: esconder, 4: apagar); depois as do
-            # frontend: o modo, os clones e a lista dos escondidos.
+            # frontend: o modo, os clones, a lista dos escondidos, o atalho
+            # que fecha o jogo (teclado e painel), o botao de desligar no
+            # jogo, o modo comercial e os minutos de cada ficha.
             sel = self.ov["sel"]
             if a in ("up", "down"):
-                self.ov["sel"] = (sel + (1 if a == "down" else -1)) % OPT_COUNT
+                self.ov["sel"] = (sel + (1 if a == "down" else -1)) % self.option_count()
+            elif sel == OPT_EXIT_KEY and a == "b1":
+                self.overlay, self.ov = "exitkey", {"since": time.monotonic()}
+                self.input.capture = True
+            elif sel == OPT_EXIT_PAD and a == "b1":
+                self.overlay, self.ov = "exitpad", {"since": time.monotonic(), "held": None}
+            elif sel in (OPT_EXIT_KEY, OPT_EXIT_PAD) and a in ("left", "right"):
+                # Para o lado: o atalho sai (OFF).
+                if sel == OPT_EXIT_KEY:
+                    self.exit_key = None
+                else:
+                    self.exit_combo = []
+                self.remember()
+            elif sel == OPT_POWER and a in ("left", "right", "b1"):
+                self.power_exit = not self.power_exit
+                self.remember()
+                self.say("POWER BUTTON CLOSES THE GAME" if self.power_exit else "POWER BUTTON OFF IN GAMES", 2.2)
+            elif sel == OPT_COMMERCIAL and a in ("left", "right", "b1"):
+                self.commercial = not self.commercial
+                self.say("COMMERCIAL MODE ON" if self.commercial else "COMMERCIAL MODE OFF")
+                if self.commercial and "coin" in self.exit_combo:
+                    # A ficha passa a somar tempo: o atalho com ela sai.
+                    self.exit_combo = []
+                    self.say("EXIT BUTTONS OFF: COIN NOW ADDS TIME", 2.6)
+                self.remember()
+            elif sel == OPT_COIN and a in ("left", "right"):
+                i = COIN_MINUTES.index(self.coin_minutes) + (1 if a == "right" else -1)
+                self.coin_minutes = COIN_MINUTES[max(0, min(len(COIN_MINUTES) - 1, i))]
+                self.remember()
             elif sel == OPT_MODE and a in ("left", "right", "b1"):
                 self.set_mode(-1 if a == "left" else 1)
             elif sel == OPT_CLONES and a in ("left", "right", "b1"):
@@ -554,6 +695,27 @@ class Frontend:
                     self.say("NO FILE OF ITS OWN (IT IS IN THE PARENT'S)", 2.5)
             elif a == "tab":
                 self.overlay = None
+            return None
+        if o == "exitkey":
+            # A tecla que fecha o jogo: a proxima apertada no teclado. Uma do
+            # painel (o encoder que se diz teclado) nao serve: cada botao faz
+            # uma coisa so. O botao 2 de um controle desiste.
+            if a.startswith("key:"):
+                key = self.keytable.get(int(a[4:]))
+                if key is None:
+                    self.say("THIS KEY CANNOT BE USED", 2)
+                elif key[0] in panel_keys(self.input.rows):
+                    self.say("%s IS A PANEL CONTROL" % key[0], 2.4)
+                else:
+                    self.exit_key = list(key)
+                    self.remember()
+                    self.say("EXIT KEY: " + key[0], 2)
+                self.capture_done("options", OPT_EXIT_KEY)
+            elif a == "b2":
+                self.capture_done("options", OPT_EXIT_KEY)
+            return None
+        if o == "exitpad":
+            # Os botoes segurados juntos (capture_tick): os toques nao fazem nada.
             return None
         if o == "hidden":
             # Os escondidos: o botao 1 traz o jogo de volta; o 2 volta ao Tab.
@@ -605,6 +767,41 @@ class Frontend:
         if o == "rename":
             return self.rename_act(a)
         return None
+
+    def capture_done(self, overlay, sel):
+        """Fim da escolha do atalho: de volta ao Tab, na linha dele."""
+        self.input.capture = False
+        self.overlay, self.ov = overlay, {"sel": sel}
+
+    def capture_tick(self, now):
+        """A escolha dos botoes do atalho: dois ou mais comandos do painel
+        segurados juntos por EXIT_HOLD segundos; CAPTURE_WAIT sem nada, sai
+        como estava."""
+        o = self.overlay
+        if o not in ("exitkey", "exitpad"):
+            return
+        held = frozenset(a for a in COMBO_CONTROLS if self.input.held(a) is not None)
+        if o == "exitpad" and self.commercial and "coin" in held:
+            # No modo comercial a ficha soma tempo: ela nao fecha o jogo.
+            self.say("IN COMMERCIAL MODE COIN ADDS TIME", 2.4)
+            self.capture_done("options", OPT_EXIT_PAD)
+            return
+        if o == "exitpad" and len(held) >= 2:
+            if held != self.ov["held"]:
+                self.ov["held"], self.ov["at"] = held, now
+            elif now - self.ov["at"] >= EXIT_HOLD:
+                self.exit_combo = [a for a in COMBO_CONTROLS if a in held]
+                self.remember()
+                self.say("EXIT BUTTONS: " + "+".join(combo_names(self.exit_combo)), 2.4)
+                self.capture_done("options", OPT_EXIT_PAD)
+            return
+        if o == "exitpad":
+            self.ov["held"] = None
+            if held:
+                self.ov["since"] = now
+        if now - self.ov["since"] > CAPTURE_WAIT:
+            self.say("NOTHING CHANGED")
+            self.capture_done("options", OPT_EXIT_KEY if o == "exitkey" else OPT_EXIT_PAD)
 
     KEYS = ["1234567890", "QWERTYUIOP", "ASDFGHJKL-", "ZXCVBNM.:/"]
 
@@ -738,6 +935,9 @@ class Frontend:
         if not argv:
             self.say("CANNOT OPEN THIS GAME")
             return
+        if self.locked():
+            self.nag()
+            return
         self.remember()
         pg = self.pg
         # O video, o som, os controles (e a rede) ficam para o jogo.
@@ -751,10 +951,7 @@ class Frontend:
             pass
         self.close()
         started = time.monotonic()
-        try:
-            subprocess.run(argv)
-        except OSError:
-            pass
+        ended = self.play(argv)
         played = time.monotonic() - started
         if played > 10:
             self.lib.played(g, played)
@@ -764,6 +961,91 @@ class Frontend:
         self.media.clear()
         self.repeat.clear()
         pg.event.clear()
+        if ended:
+            self.say(ended, 3)
+
+    def play(self, argv):
+        """Abre o jogo e espera ele fechar. Enquanto isso: o atalho que o
+        fecha (Tab > Frontend options), as fichas e o fim do tempo do modo
+        comercial, e o arquivo do botao de desligar (FLIPEROS_POWERKEY
+        games:ARQ, do config/fliperos-session) com o PID do jogo, ou "hold"
+        com o botao desligado nos jogos. Devolve o aviso para a volta."""
+        try:
+            proc = subprocess.Popen(argv)
+        except OSError:
+            return None
+        role = os.environ.get("FLIPEROS_POWERKEY", "")
+        mark = role[len("games:"):] if role.startswith("games:") else None
+        if mark:
+            try:
+                with open(mark, "w") as f:
+                    f.write("%d\n" % proc.pid if self.power_exit else "hold\n")
+            except OSError:
+                mark = None
+        state = {}
+        watch = self.hotkeys()
+        if watch:
+            def read():
+                for line in watch.stdout:
+                    if line.strip() == "exit":
+                        state["exit"] = True
+                    elif line.strip() == "coin":
+                        self.insert_coin()
+            threading.Thread(target=read, daemon=True).start()
+        try:
+            while proc.poll() is None:
+                if state.pop("exit", False):
+                    self.stop(proc, state)
+                elif self.commercial and self.left() <= 0 and "time" not in state:
+                    # O tempo acabou: o jogo fecha.
+                    state["time"] = True
+                    self.stop(proc, state)
+                elif state.get("kill") and time.monotonic() > state["kill"]:
+                    self.stop(proc, state, signal.SIGKILL)
+                time.sleep(0.1)
+        finally:
+            if proc.poll() is None:
+                self.stop(proc, state)
+            if watch:
+                watch.terminate()
+                try:
+                    watch.wait(2)
+                except subprocess.TimeoutExpired:
+                    watch.kill()
+            if mark:
+                try:
+                    os.unlink(mark)
+                except OSError:
+                    pass
+        return "TIME IS UP - INSERT COIN" if state.get("time") else None
+
+    def stop(self, proc, state, sig=signal.SIGTERM):
+        """Fecha o jogo: ele e o que esta abaixo dele (o X, o emulador); quem
+        nao sai em 4 s leva o SIGKILL."""
+        for pid in tree(proc.pid):
+            try:
+                os.kill(pid, sig)
+            except OSError:
+                pass
+        state["kill"] = time.monotonic() + 4 if sig == signal.SIGTERM else None
+
+    def hotkeys(self):
+        """O fliperos-buttons hotkey junto com o jogo: o atalho que o fecha e,
+        no modo comercial, as fichas. Sem nada a ler, nenhum."""
+        args = []
+        if self.exit_key:
+            args += ["--key", str(self.exit_key[1])]
+        if self.exit_combo:
+            args += ["--combo", "+".join(self.exit_combo), "--hold", str(EXIT_HOLD)]
+        if self.commercial:
+            args.append("--coin")
+        if not args or not os.access(BUTTONS_TOOL, os.X_OK):
+            return None
+        try:
+            return subprocess.Popen([BUTTONS_TOOL, "hotkey"] + args, stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        except OSError:
+            return None
 
     # ── O laco ──
     def tick(self, now):
@@ -840,6 +1122,12 @@ class Frontend:
                 if r == "launch":
                     self.launch()
             self.tick(now)
+            self.capture_tick(now)
+            # O tempo do modo comercial acabou aqui no frontend.
+            paid = self.commercial and self.left() > 0
+            if getattr(self, "paid", False) and not paid:
+                self.say("TIME IS UP - INSERT COIN", 3)
+            self.paid = paid
             if self.lib.generation != self.generation:
                 self.generation = self.lib.generation
                 g = self.game()

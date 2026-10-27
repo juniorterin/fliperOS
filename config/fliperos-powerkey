@@ -14,8 +14,12 @@ fliperos-session:
 
     frontend     o filho e um frontend: o jogo sao os processos abaixo dele
     game         o filho e o proprio jogo (emulador aberto pelo desktop)
-    games:ARQ    os PIDs dos jogos estao em ARQ (o Fightcade, cujos
-                 emuladores nao sao filhos dele)
+    games:ARQ    os PIDs dos jogos estao em ARQ, e o jogo e eles e o que
+                 esta abaixo deles (o Fightcade, cujos emuladores nao sao
+                 filhos dele; o frontend do FliperOS, que tem outros filhos,
+                 o video e o scrape, que nao sao jogo). "hold" no ARQ: o
+                 jogo esta aberto e o botao nao faz nada (Frontend options >
+                 Power button, desligado)
 
 Sem a variavel (o menu do Setup, o desktop, o RetroArch e o GroovyMAME como
 launcher) nao ha jogo a fechar: desliga.
@@ -92,17 +96,29 @@ def role(pid):
     return ''
 
 
+HOLD = 'hold'
+
+
 def listed(path):
+    """Os PIDs de ARQ que estao vivos, e o que esta abaixo deles; HOLD se o
+    arquivo pede que o botao nao faca nada."""
     try:
         with open(path) as f:
-            pids = [int(word) for word in f.read().split() if word.isdigit()]
+            words = f.read().split()
     except OSError:
         return []
-    return [pid for pid in pids if alive(pid)]
+    if HOLD in words:
+        return HOLD
+    found = []
+    for pid in (int(word) for word in words if word.isdigit()):
+        if alive(pid):
+            found += [pid] + descendants(pid)
+    return found
 
 
 def games():
-    """Os PIDs do jogo aberto; nenhum, se a tela e a de um frontend."""
+    """Os PIDs do jogo aberto; nenhum, se a tela e a de um frontend; HOLD, se
+    o jogo esta aberto e o botao foi desligado para ele."""
     found = []
     for session in sessions():
         for child in children(session):
@@ -112,7 +128,10 @@ def games():
             elif what == 'frontend':
                 found += descendants(child)
             elif what.startswith('games:'):
-                found += listed(what[len('games:'):])
+                pids = listed(what[len('games:'):])
+                if pids == HOLD:
+                    return HOLD
+                found += pids
     return found
 
 
@@ -128,6 +147,8 @@ def main():
         except (IndexError, ValueError):
             pass
         pids = games()
+        if pids == HOLD:
+            return
         for pid in pids:
             try:
                 os.kill(pid, signal.SIGKILL if str(pid) in last[1:] else signal.SIGTERM)

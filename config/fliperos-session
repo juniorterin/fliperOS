@@ -124,10 +124,12 @@ case $backend in
         ;;
       # O frontend do FliperOS: em primeiro plano e sem o fliperos-escquit (o
       # Esc e o botao 2 voltam dentro dele; na lista, ele pergunta se sai).
-      # FLIPEROS_POWERKEY=frontend: com um jogo aberto o botao de desligar
-      # fecha o jogo.
+      # O jogo que ele abre fica no arquivo do FLIPEROS_POWERKEY: o botao de
+      # desligar fecha o jogo e, sem jogo, desliga (os outros filhos dele, o
+      # video e o scrape, nao contam como jogo).
       fliperos)
-        FLIPEROS_POWERKEY=frontend "$BIN/fliperos-kms-run" "${program[@]}"
+        FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-frontend.game" \
+          "$BIN/fliperos-kms-run" "${program[@]}"
         rc=$?
         ;;
       # Um jogo direto no boot (config/fliperos-bootgame): o comando ja traz o
