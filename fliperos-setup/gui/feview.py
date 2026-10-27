@@ -246,7 +246,8 @@ def coin_icon(ui, x, y, t):
     ui.fill(T.SPACE, (px, py, 17, 18))
     ui.fill(COIN_CREAM, (px + 1, py + 1, 5, 16))
     sx, sy = coin_slot(px, py)
-    ui.fill(T.SPACE, (sx, sy - 4, 1, 10))     # a fenda, centrada na faixa
+    # A fenda, centrada na faixa: a largura e a espessura da ficha de lado.
+    ui.fill(T.SPACE, (sx - 1, sy - 4, 3, 10))
     p = (t % COIN_CYCLE) / COIN_CYCLE
     lit = 0.45 <= p < 0.65                    # logo depois de a ficha entrar
     ui.fill(T.YELLOW if lit else COIN_CREAM, (px + 7, py + 1, 9, 16))
