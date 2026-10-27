@@ -25,6 +25,10 @@ export function guideUrl(locale: string): string {
 export const AUTHOR_HANDLE = '@juniorter.in';
 export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorterin' } as const;
 
+// Quem ajudou o projeto (código, testes no próprio hardware, ideias). A mesma
+// lista está no fim dos dois READMEs: um nome novo entra nos três.
+export const CONTRIBUTORS = [{ name: 'ultimatevga-dot', url: 'https://github.com/ultimatevga-dot' }] as const;
+
 export const FLIPEROS_VERSION = '0.14';
 
 // A ISO se chama fliperos-VERSAO.iso. Este endereco baixa o arquivo direto

@@ -5,7 +5,7 @@ import { GithubIcon } from '@/components/GithubIcon';
 import { Reveal } from '@/components/Reveal';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { RepoStats } from '@/lib/github';
-import { readmeUrl } from '@/lib/site';
+import { CONTRIBUTORS, readmeUrl } from '@/lib/site';
 
 export function OpenSource({ stats }: { stats: RepoStats | null }) {
   const { t, locale } = useI18n();
@@ -71,6 +71,27 @@ export function OpenSource({ stats }: { stats: RepoStats | null }) {
                   </div>
                 </dl>
               ) : null}
+
+              <div className="mx-auto mt-14 max-w-2xl border-t border-line pt-10">
+                <h3 className="text-xl font-semibold text-fg">{o.contributors}</h3>
+                <p className="mt-2 text-muted">{o.contributorsText}</p>
+                <ul className="mt-6 flex flex-wrap justify-center gap-3 font-mono text-sm">
+                  {CONTRIBUTORS.map((person) => (
+                    <li key={person.url}>
+                      <a
+                        href={person.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg border border-line bg-bg-deeper/70 px-4 py-2 text-fg transition hover:border-purple/60 hover:text-purple"
+                      >
+                        <GithubIcon className="size-4" />
+                        {person.name}
+                        <span className="sr-only">{t.a11y.external}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
         </Reveal>

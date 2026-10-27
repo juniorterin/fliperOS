@@ -646,6 +646,8 @@ const enUS = {
     forks: 'Forks',
     release: 'Latest release',
     noRelease: 'No release yet',
+    contributors: 'Contributors',
+    contributorsText: 'People who helped FliperOS with code, tests on their own hardware or ideas.',
   },
   support: {
     kicker: 'Support',

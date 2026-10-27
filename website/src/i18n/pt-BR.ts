@@ -648,6 +648,8 @@ const ptBR: Messages = {
     forks: 'Forks',
     release: 'Último release',
     noRelease: 'Nenhum release ainda',
+    contributors: 'Quem contribuiu',
+    contributorsText: 'Pessoas que ajudaram o FliperOS com código, testes no próprio hardware ou ideias.',
   },
   support: {
     kicker: 'Apoio',

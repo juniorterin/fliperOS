@@ -299,3 +299,9 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 **Hacking on it:** [15 kHz kernel](https://github.com/juniorterin/fliperOS/wiki/Kernel-15-kHz) · [Build and tests](https://github.com/juniorterin/fliperOS/wiki/Build-and-tests) · [Architecture](https://github.com/juniorterin/fliperOS/wiki/Architecture) · [Sources](https://github.com/juniorterin/fliperOS/wiki/Sources)
 
 The pages live in [`docs/wiki`](docs/wiki) and go to the wiki with `bash tools/wiki-publish.sh`. [`fliperos-doc.html`](fliperos-doc.html) is all of it in one file (`tools/render-docs.py`).
+
+## Contributors
+
+People who helped FliperOS with code, tests on their own hardware or ideas:
+
+- [ultimatevga-dot](https://github.com/ultimatevga-dot)

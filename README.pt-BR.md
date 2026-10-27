@@ -298,3 +298,9 @@ As páginas da wiki estão em inglês.
 **Para mexer nele:** [15 kHz kernel](https://github.com/juniorterin/fliperOS/wiki/Kernel-15-kHz) · [Build and tests](https://github.com/juniorterin/fliperOS/wiki/Build-and-tests) · [Architecture](https://github.com/juniorterin/fliperOS/wiki/Architecture) · [Sources](https://github.com/juniorterin/fliperOS/wiki/Sources)
 
 As páginas ficam em [`docs/wiki`](docs/wiki) e vão para a wiki com `bash tools/wiki-publish.sh`. O [`fliperos-doc.html`](fliperos-doc.html) junta tudo num arquivo só (`tools/render-docs.py`).
+
+## Quem contribuiu
+
+Pessoas que ajudaram o FliperOS com código, testes no próprio hardware ou ideias:
+
+- [ultimatevga-dot](https://github.com/ultimatevga-dot)
