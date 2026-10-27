@@ -5716,6 +5716,23 @@ class WebPanelTests(unittest.TestCase):
             game.kill()
             game.wait()
 
+    def test_boot_game_and_geometry_go_through_the_setup(self):
+        # O jogo direto ao ligar e a geometria: pelo Setup (--bootgame,
+        # --geometry), com o arquivo resolvido aqui e o crt_range conferido.
+        cookie = self.login()
+        self.assertEqual(self.request('POST', '/api/bootgame', {'system': 'naomi', 'game': 'vf4'}, cookie=cookie)[0], 200)
+        self.assertIn('--bootgame naomi %s\n' % (self.roms / 'vf4.zip'), self.volume_log.read_text())
+        self.assertEqual(self.request('POST', '/api/bootgame', {'system': 'naomi', 'game': 'nope'}, cookie=cookie)[0], 400)
+        info = json.loads(self.request('GET', '/api/geometry', cookie=cookie)[2])
+        self.assertEqual(set(info), {'monitor', 'label', 'range', 'preset', 'tool'})
+        good = '15625-16200,49.5-65,2.0,4.7,8.0,0.064,0.192,1.024,0,0,192,288,448,576'
+        self.assertEqual(self.request('POST', '/api/geometry', {'action': 'set', 'range': good}, cookie=cookie)[0], 200)
+        self.assertIn('--geometry set %s\n' % good, self.volume_log.read_text())
+        for body in ({'action': 'set', 'range': '; rm -rf /'}, {'action': 'nope'}):
+            self.assertEqual(self.request('POST', '/api/geometry', body, cookie=cookie)[0], 400, body)
+        self.assertEqual(self.request('POST', '/api/geometry', {'action': 'reset'}, cookie=cookie)[0], 200)
+        self.assertIn('--geometry reset\n', self.volume_log.read_text())
+
     def test_panel_lights_the_cabinet_buttons(self):
         # Os comandos apertados tambem para o gabinete desenhado da pagina,
         # com o login (sem a chave do OBS).

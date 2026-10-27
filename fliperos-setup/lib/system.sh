@@ -49,7 +49,13 @@ settings_list() {
   while IFS='|' read -r name desc; do
     opts+="${opts:+;}$name=${desc//[;=|]/ }"
   done < <(launcher_available)
-  printf 'launcher|System|What starts when the cabinet turns on|choice|%s|%s|The default launcher (Setup > Games > Frontend). Counts from the next boot.\n' \
+  # O jogo direto no boot, quando um ja foi escolhido (no Setup ou na pagina do
+  # jogo no painel web).
+  if [[ -s $BOOTGAME_FILE ]]; then
+    name=$(bootgame_label)
+    opts+=";game=A game: ${name//[;=|]/ }"
+  fi
+  printf 'launcher|System|What starts when the cabinet turns on|choice|%s|%s|The default launcher (Setup > Games > Frontend). To open one game, use Open at power on on its page in Frontend. Counts from the next boot.\n' \
     "$(launcher_current)" "$opts"
   printf 'latency|System|Latency mode|choice|%s|standard=Standard;low=Low latency|The emulator settings apply now; the kernel settings after a restart.\n' \
     "$(latency_mode)"
@@ -104,6 +110,10 @@ settings_set() {
   local key=$1 value=$2 name
   case $key in
     launcher)
+      if [[ $value == game && -s $BOOTGAME_FILE ]]; then
+        launcher_set game
+        return 0
+      fi
       while IFS='|' read -r name _; do
         if [[ $name == "$value" ]]; then
           launcher_set "$value"

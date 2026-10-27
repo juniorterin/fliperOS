@@ -902,6 +902,40 @@ class SettingsCliTests(Base):
             self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
         self.assertIn('settings_set "${2:-}" "${3:-}"', (SETUP / "fliperos-setup").read_text())
 
+    def test_boot_game_in_the_launcher_list(self):
+        # O jogo direto no boot: so aparece (e so vale) depois de escolhido, no
+        # Setup ou na pagina do jogo no painel web (--bootgame).
+        env = {"COLOR_BIN": str(self.env.dir / "none")}
+
+        def launcher():
+            return next(line.split("|") for line in self.env.out("settings_list", env).splitlines()
+                        if line.startswith("launcher|"))
+        self.assertNotIn("game=", launcher()[5])
+        self.assertEqual(self.env.run("settings_set launcher game", env).returncode, 2)
+        (self.env.etc / "bootgame").write_text("Street Fighter II\n/r/sf2.zip\ngroovymame\nsf2\n")
+        self.assertIn("game=A game: Street Fighter II", launcher()[5])
+        self.env.out("settings_set launcher game", env)
+        self.assertEqual(self.env.out("launcher_current", env).strip(), "game")
+        setup = (SETUP / "fliperos-setup").read_text()
+        self.assertIn('bootgame_set "${2:-}" "${3:-}" || return 2', setup)
+        self.assertIn('geometry_cli "${@:2}"', setup)
+
+    def test_geometry_without_a_screen(self):
+        # Video Setup > Geometry pelo painel web: o status, um crt_range
+        # digitado (so da faixa do monitor) e a volta ao padrao.
+        env = {"COLOR_BIN": str(self.env.dir / "none")}
+        self.env.out("conf_set monitor generic_15", env)
+        status = dict(line.split("=", 1) for line in self.env.out("geometry_cli status", env).splitlines())
+        self.assertEqual((status["monitor"], status["range"]), ("generic_15", ""))
+        good = "15625-16200,49.5-65,2.0,4.7,8.0,0.064,0.192,1.024,0,0,192,288,448,576"
+        self.assertEqual(self.env.run("geometry_cli set 'not a range'", env).returncode, 2)
+        self.assertEqual(self.env.run("geometry_cli set 31000-32000,50-70,1,1,1,1,1,1,0,0,192,288,448,576", env)
+                         .returncode, 3)
+        self.assertEqual(self.env.run("geometry_cli set " + good, env).returncode, 0)
+        self.assertIn("geometry=" + good + "\n", (self.env.etc / "fliperos.conf").read_text())
+        self.env.out("geometry_cli reset", env)
+        self.assertNotIn("geometry=", (self.env.etc / "fliperos.conf").read_text())
+
     def test_live_screen_quality(self):
         # A qualidade da tela ao vivo so aparece (e muda) com o go2rtc instalado.
         go2rtc = self.env.dir / "go2rtc"

@@ -286,6 +286,12 @@ $("log-refresh").addEventListener("click", showLog);
 // cada mudanca grava na hora. Os grupos abertos ficam abertos.
 
 const openGroups = new Set(["System"]);
+// Os icones do Setup em cada grupo e em cada ajuste (os do carrossel no tubo).
+const GROUP_ICONS = { System: "px-system", Services: "px-services", "480i hacks": "px-mode480", Colour: "px-colour" };
+const SETTING_ICONS = [["launcher", "px-frontend"], ["latency", "px-latency"], ["debug", "px-debug"], ["leveler", "px-audio"],
+  ["menu_sounds", "px-audio"], ["stream_audio", "px-audio"], ["stream_quality", "px-video"], ["marquee_overlay", "px-outputs"],
+  ["service.", "px-services"], ["mode480.", "px-mode480"], ["color.", "px-colour"]];
+const settingIcon = (key) => (SETTING_ICONS.find(([k]) => key === k || (k.endsWith(".") && key.startsWith(k))) || [0, "px-setup"])[1];
 
 async function loadSettings() {
   const res = await api("/api/settings");
@@ -297,7 +303,7 @@ async function loadSettings() {
   }
   const boxes = [];
   for (const [group, items] of groups) {
-    const details = el("details", {}, el("summary", {}, t("group_" + group)));
+    const details = el("details", {}, el("summary", {}, icon(GROUP_ICONS[group] || "px-setup"), t("group_" + group)));
     if (openGroups.has(group)) details.open = true;
     details.addEventListener("toggle", () => {
       details.open ? openGroups.add(group) : openGroups.delete(group);
@@ -306,7 +312,41 @@ async function loadSettings() {
     else for (const row of items) details.append(settingRow(row));
     boxes.push(details);
   }
+  boxes.push(await geometryBox().catch(() => ""));
   $("settings").replaceChildren(...boxes);
+}
+
+// Video Setup > Geometry: o monitor e o crt_range em uso, um digitado e a
+// volta ao padrao do monitor. O ajuste com a grade de teste e no tubo, com as
+// setas: fica no Setup do gabinete.
+async function geometryBox() {
+  const res = await api("/api/geometry");
+  const g = await res.json();
+  const details = el("details", { class: "geometry" }, el("summary", {}, icon("px-geometry"), t("group_Geometry")));
+  if (openGroups.has("Geometry")) details.open = true;
+  details.addEventListener("toggle", () => { details.open ? openGroups.add("Geometry") : openGroups.delete("Geometry"); });
+  const field = el("input", { type: "text", class: "mono", value: g.range || g.preset || "", spellcheck: "false", "aria-label": "crt_range0" });
+  const save = el("button", { type: "button" }, t("geo_save"));
+  save.addEventListener("click", async () => {
+    const r = await api("/api/geometry", { method: "POST", body: JSON.stringify({ action: "set", range: field.value }) });
+    const data = await r.json().catch(() => ({}));
+    toast(r.ok ? t("geo_saved") : r.status === 409 ? t("geo_freq") : t("geo_bad"), r.ok ? "ok" : "bad");
+    if (r.ok) loadSettings().catch(() => {});
+  });
+  const reset = el("button", { type: "button", class: "ghost" }, t("geo_reset"));
+  reset.disabled = !g.range;
+  reset.addEventListener("click", async () => {
+    if (!(await ask({ title: t("geo_reset"), text: t("geo_reset_text"), yes: t("geo_reset") }))) return;
+    const r = await api("/api/geometry", { method: "POST", body: JSON.stringify({ action: "reset" }) });
+    toast(r.ok ? t("geo_was_reset") : r.statusText, r.ok ? "ok" : "bad");
+    loadSettings().catch(() => {});
+  });
+  details.append(el("div", { class: "setting geo" },
+    el("div", { class: "geo-head" }, el("span", { class: "dim" }, t("monitor")), el("b", {}, g.label || g.monitor || "-"),
+      el("span", { class: "tag " + (g.range ? "on" : "") }, t(g.range ? "geo_custom" : "geo_preset"))),
+    el("label", {}, t("geo_range")), field, el("div", { class: "row start" }, save, reset),
+    el("div", { class: "dim" }, t("geo_note"))));
+  return details;
 }
 
 function settingRow(row) {
@@ -395,7 +435,7 @@ function settingRow(row) {
     };
     field = el("div", { class: "slider" }, stepper(-1, "−"), control, stepper(1, "+"), shown);
   }
-  return el("div", { class: "setting" }, el("label", { for: id }, row.label), field, about);
+  return el("div", { class: "setting" }, el("label", { for: id }, icon(settingIcon(row.key)), row.label), field, about);
 }
 
 // Os jogos 480i: um cartao por emulador, com o modo em botoes (640x240,

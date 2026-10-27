@@ -434,6 +434,14 @@ function openGame(g) {
   const fav = el("button", { type: "button", class: "fav-btn" + (g.Favourite ? " on" : ""), "aria-pressed": String(!!g.Favourite) },
     icon(g.Favourite ? "g-star" : "g-staro"), t(g.Favourite ? "favourited" : "favourite"));
   fav.addEventListener("click", () => toggleFavourite(g, fav));
+  // Este jogo direto ao ligar o gabinete (Setup > Games > Frontend).
+  const boot = el("button", { type: "button", class: "btn ghost small boot-btn" }, icon("px-power"), t("boot_open"));
+  boot.hidden = !g.file;
+  boot.addEventListener("click", async () => {
+    if (!(await ask({ title: t("boot_open"), text: t("boot_ask").replace("%s", gameTitle(g)), yes: t("boot_open") }))) return;
+    const res = await api("/api/bootgame", { method: "POST", body: JSON.stringify({ system: system.key, game: g.Name }) });
+    toast(res.ok ? t("boot_done").replace("%s", gameTitle(g)) : (await res.json().catch(() => ({}))).error || res.statusText, res.ok ? "ok" : "bad");
+  });
 
   const facts = el("div", { class: "fact-grid" });
   const genre = g.Category || "";
@@ -462,7 +470,7 @@ function openGame(g) {
   const body = el("div", { class: "sheet-body" },
     el("h2", { id: "sheet-title" }, gameTitle(g)),
     el("p", { class: "sheet-meta" }, [g.Year, g.Manufacturer].filter(Boolean).join(" · "), " ", systemIcon(system, "inl"), " ", system.name),
-    el("div", { class: "cta" }, play, fav), facts,
+    el("div", { class: "cta" }, play, fav), facts, boot,
     el("h3", {}, t("pictures")), gallery, online, about);
   openSheet(() => [media, body]);
 

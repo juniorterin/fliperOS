@@ -280,6 +280,17 @@ main() {
       settings_set "${2:-}" "${3:-}"
       return
       ;;
+    --bootgame)
+      # O jogo que abre direto ao ligar (lib/launcher.sh), escolhido no
+      # painel web: a pasta e o arquivo da ROM. Status 2: jogo que nao abre.
+      bootgame_set "${2:-}" "${3:-}" || return 2
+      return 0
+      ;;
+    --geometry)
+      # A geometria sem tela (lib/video.sh): o painel web.
+      geometry_cli "${@:2}"
+      return
+      ;;
     --downloader)
       # O Downloader sem tela (lib/downloader.sh): o painel web.
       downloader_cli "${@:2}"

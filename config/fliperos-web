@@ -32,6 +32,9 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     GET  /api/input/events  os comandos apertados no gabinete (Server-Sent
                       Events, como o do controle para o OBS)
     GET  /gui/icons/NOME.png, /gui/fonts/NOME.ttf  da interface do Setup
+    POST /api/bootgame {"system", "game"}: o jogo que abre ao ligar (--bootgame)
+    GET  /api/geometry  monitor, label, range (o crt_range salvo), preset, tool
+    POST /api/geometry {"action": "reset"} ou {"action": "set", "range"} (--geometry)
     POST /api/favourite {"system", "game", "on"}: os favoritos do FliperOS
     POST /api/launch  {"system", "game"}: fecha o que esta na tela e abre o
                       jogo; quando ele fecha, volta o que estava
@@ -2723,6 +2726,13 @@ class Handler(BaseHTTPRequestHandler):
             if not path:
                 return self.send(404, {"error": "no such media"})
             return self.send_inline(path, MEDIA_TYPES[os.path.splitext(path)[1]], "private, max-age=86400")
+        if url.path == "/api/geometry":
+            # Video Setup > Geometry: o crt_range salvo e o do preset do monitor.
+            try:
+                info = key_values(setup_out("--geometry", "status"))
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            return self.send(200, {k: info.get(k, "") for k in ("monitor", "label", "range", "preset", "tool")})
         if url.path == "/api/input/events":
             # O controle aceso no gabinete desenhado da pagina (o mesmo do OBS).
             return self.input_events()
@@ -2826,6 +2836,29 @@ class Handler(BaseHTTPRequestHandler):
             # Para o painel saber de que pasta e o jogo que abrir (identify).
             self.panel.last_launch = (system["key"], str(data.get("game", "")), time.time())
             return self.send(200, self.panel.launch(argv))
+        if url.path == "/api/bootgame":
+            # O jogo que abre direto ao ligar o gabinete (Setup > Games > Frontend).
+            data = self.body()
+            system = self.panel.system(str(data.get("system", "")))
+            entry = game_entry(system, str(data.get("game", ""))) if system else None
+            if not entry or not entry.get("file"):
+                return self.send(400, {"error": "no such game file"})
+            return self.setup_call(["--bootgame", system["key"], os.path.join(system["folder"], entry["file"])])
+        if url.path == "/api/geometry":
+            # Video Setup > Geometry: voltar ao padrao do monitor, ou um
+            # crt_range digitado (o Custom monitor); o grid fica no Setup.
+            data = self.body()
+            if data.get("action") == "reset":
+                return self.setup_call(["--geometry", "reset"])
+            value = re.sub(r"\s+", "", str(data.get("range", "")))
+            if data.get("action") != "set" or not re.fullmatch(r"[0-9.,-]{20,200}", value):
+                return self.send(400, {"error": "not a crt_range"})
+            done = subprocess.run([SETUP, "--geometry", "set", value], capture_output=True, text=True, timeout=60)
+            if done.returncode == 3:
+                return self.send(409, {"error": "this crt_range is for another frequency than the monitor"})
+            if done.returncode:
+                return self.send(400, {"error": "not a crt_range"})
+            return self.send(200, {})
         if url.path == "/api/favourite":
             data = self.body()
             system = self.panel.system(str(data.get("system", "")))

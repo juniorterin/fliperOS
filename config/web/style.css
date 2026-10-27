@@ -760,3 +760,18 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 /* As imagens chegam aos poucos (fadeIn, ui.js). */
 img.fade { opacity: 0; transform: scale(1.04); transition: opacity .45s ease, transform .7s cubic-bezier(.2, .8, .2, 1); }
 img.fade.in { opacity: 1; transform: none; }
+
+/* Ajustes: os icones do Setup nos grupos e em cada ajuste. */
+#settings details { border-radius: 16px; margin-bottom: 14px; background: var(--card2); overflow: hidden; }
+#settings summary { display: flex; align-items: center; gap: 12px; padding: 14px 16px; font-size: 15px; list-style: none; }
+#settings summary::-webkit-details-marker { display: none; }
+#settings summary svg.px { width: 30px; height: 30px; }
+#settings details[open] summary { border-bottom: 1px solid var(--line); }
+#settings .setting { padding: 14px 16px; gap: 8px 16px; }
+#settings .setting > label { display: flex; align-items: center; gap: 10px; }
+#settings .setting > label svg.px { width: 24px; height: 24px; }
+#settings .geo { grid-template-columns: minmax(0, 1fr); }
+.geo-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.geo input.mono { width: 100%; font: 13px ui-monospace, "JetBrains Mono", monospace; color: var(--cyan); }
+.boot-btn { margin-top: 14px; }
+.boot-btn svg.px { width: 20px; height: 20px; }

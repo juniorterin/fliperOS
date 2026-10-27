@@ -740,6 +740,36 @@ video_monitor_label() {
   fi
 }
 
+# geometry_cli status|reset|set RANGE: a geometria pelo painel web, pelas
+# mesmas funcoes das telas. status imprime monitor=, label=, range= (o
+# crt_range salvo; vazio, o do preset vale), preset= e tool= (1: o grid do
+# Switchres existe). set grava um crt_range digitado, como o Custom monitor:
+# status 2 se nao e um crt_range (ou o monitor e LCD), 3 se e de outra faixa
+# de frequencia que a do monitor escolhido.
+geometry_cli() {
+  local base range rfreq bfreq
+  base=$(conf_get monitor 2> /dev/null) || base=""
+  case ${1:-} in
+    status)
+      printf 'monitor=%s\nlabel=%s\nrange=%s\npreset=%s\ntool=%s\n' "$base" "$(video_monitor_label 2> /dev/null)" \
+        "$(conf_get geometry 2> /dev/null)" "$(video_preset_range "$base" 2> /dev/null)" "$(have geometry && echo 1 || echo 0)"
+      ;;
+    reset)
+      conf_get geometry > /dev/null 2>&1 || return 0
+      geometry_reset
+      ;;
+    set)
+      range=${2//[[:space:]]/}
+      [[ -n $base && $base != lcd ]] && crt_range_valid "$range" || return 2
+      rfreq=$(crt_range_frequency "$range") || return 2
+      bfreq=$(monitor_frequency "$base") || return 2
+      [[ $rfreq == "$bfreq" ]] || return 3
+      geometry_apply "$range"
+      ;;
+    *) return 2 ;;
+  esac
+}
+
 # crt_range_valid RANGE: os 16 valores de um crt_range do Switchres,
 # HfreqMin-HfreqMax,VfreqMin-VfreqMax, os seis porches/sync, as duas
 # polaridades e as quatro contagens de linhas.
