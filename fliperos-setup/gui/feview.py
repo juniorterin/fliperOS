@@ -225,22 +225,34 @@ def funnel(surf, cx, cy, c):
 COIN_W, COIN_H = 76, 30
 
 
+COIN_CREAM, COIN_GLASS = (236, 232, 218), (178, 176, 170)
+
+
 def coin_icon(ui, x, y, t):
-    """A ficha caindo na fenda, de lado, num ciclo de 1,2 s: some ao entrar."""
-    sx, sy = x + 1, y + 20                    # a fenda, 14x4
-    pygame.draw.rect(ui, T.COMMENT, (sx - 1, sy - 1, 16, 6), 1)
-    ui.fill(T.SPACE, (sx, sy, 14, 4))
+    """A entrada de ficha da porta do gabinete: numa moldura preta, a faixa
+    clara com a fenda em zigue-zague e, ao lado, a janelinha iluminada. A
+    ficha, de lado, desce e some no alto da fenda (ciclo de 1,2 s); ao
+    entrar, a janelinha acende."""
+    px, py = x + 1, y + 7                     # a placa, 17x19
+    pygame.draw.rect(ui, (112, 114, 120), (px - 1, py - 1, 19, 21), 1)   # a chapa da porta
+    ui.fill(T.SPACE, (px, py, 17, 19))
+    ui.fill(COIN_CREAM, (px + 1, py + 1, 5, 17))
+    pygame.draw.lines(ui, T.SPACE, False, [(px + 2, py + 3), (px + 4, py + 5), (px + 2, py + 7), (px + 4, py + 9),
+                                          (px + 2, py + 11), (px + 4, py + 13), (px + 3, py + 15)], 2)
     p = (t % 1.2) / 0.8
+    lit = 1.0 <= p < 1.3                      # logo depois de a ficha entrar
+    ui.fill(T.YELLOW if lit else COIN_CREAM, (px + 7, py + 1, 9, 17))
+    ui.fill(COIN_GLASS, (px + 7, py + 12, 9, 5))
     if p >= 1:
         return
-    top = round(y + 1 + p * 19)
-    seen = max(0, min(12, sy - top))
+    # A ficha de lado (4x8) aparece so acima da placa: entra nela pela fenda.
+    top = round(y + 1 + p * 7)
+    seen = max(0, min(8, py + 1 - top))
     if seen:
-        coin = pygame.Surface((8, 12), pygame.SRCALPHA)
-        pygame.draw.ellipse(coin, T.YELLOW, (0, 0, 8, 12))
-        pygame.draw.ellipse(coin, T.ORANGE, (0, 0, 8, 12), 1)
-        coin.fill(T.ORANGE, (3, 3, 2, 6))     # o relevo da ficha
-        ui.blit(coin, (sx + 3, top), (0, 0, 8, seen))
+        coin = pygame.Surface((4, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(coin, T.YELLOW, (0, 0, 4, 8))
+        coin.fill(T.ORANGE, (1, 2, 1, 4))     # a borda da ficha
+        ui.blit(coin, (px + 1, top), (0, 0, 4, seen))
 
 
 def clock_icon(ui, cx, cy, color, t):
