@@ -64,7 +64,8 @@ class Input:
                      k.K_ESCAPE: "b2", k.K_LALT: "b2",
                      k.K_SPACE: "b3", k.K_PAGEUP: "b3", k.K_LSHIFT: "b4", k.K_f: "b4",
                      k.K_z: "b5", k.K_x: "b6", k.K_PAGEDOWN: "b6",
-                     k.K_1: "start", k.K_5: "coin", k.K_TAB: "tab", k.K_v: "start"}
+                     k.K_1: "start", k.K_5: "coin", k.K_TAB: "tab", k.K_v: "start",
+                     k.K_DELETE: "delete"}
         self.open()
 
     def open(self):

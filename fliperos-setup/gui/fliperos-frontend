@@ -642,13 +642,15 @@ class Frontend:
                 self.input.capture = True
             elif sel == OPT_EXIT_PAD and a == "b1":
                 self.overlay, self.ov = "exitpad", {"since": time.monotonic(), "held": None}
-            elif sel in (OPT_EXIT_KEY, OPT_EXIT_PAD) and a in ("left", "right"):
-                # Para o lado: o atalho sai (OFF).
+            elif sel in (OPT_EXIT_KEY, OPT_EXIT_PAD) and a in ("left", "right", "delete"):
+                # Para o lado ou DELETE: o atalho sai (OFF).
                 if sel == OPT_EXIT_KEY:
                     self.exit_key = None
                 else:
                     self.exit_combo = []
                 self.remember()
+                if a == "delete":  # DELETE
+                    self.say("EXIT KEY CLEARED" if sel == OPT_EXIT_KEY else "EXIT BUTTONS CLEARED", 2)
             elif sel == OPT_POWER and a in ("left", "right", "b1"):
                 self.power_exit = not self.power_exit
                 self.remember()

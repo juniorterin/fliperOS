@@ -1583,57 +1583,99 @@ def option_row(ui, rect, label, on, now):
     W.text(ui, label, T.FG if on else T.COMMENT, x + 28, y + 4)
 
 
+GAME_ITEMS = [("CLASSIFY", T.YELLOW), ("RENAME", T.CYAN), ("SCRAPE THIS GAME", T.GREEN),
+              ("HIDE THIS GAME", T.PURPLE), ("DELETE THIS GAME", T.RED)]
+
+
+def game_option(ui, i, rect, on, now):
+    """Uma linha das opcoes do jogo: o icone e o rotulo."""
+    label, color = GAME_ITEMS[i]
+    option_row(ui, rect, label, on, now)
+    ix, iy = rect[0] + 12, rect[1] + 8
+    if i == 0:
+        pygame.draw.polygon(ui, color, [(ix - 6, iy - 4), (ix + 2, iy - 4), (ix + 6, iy), (ix + 2, iy + 4),
+                                        (ix - 6, iy + 4)])
+        pygame.draw.circle(ui, T.BG_DEEP, (ix - 3, iy), 1)
+    elif i == 1:
+        pygame.draw.polygon(ui, color, [(ix - 5, iy + 5), (ix - 5, iy + 2), (ix + 3, iy - 6), (ix + 6, iy - 3),
+                                        (ix - 2, iy + 5)])
+    elif i == 2:
+        ui.fill(color, (ix - 1, iy - 6, 3, 7))
+        pygame.draw.polygon(ui, color, [(ix - 5, iy), (ix + 5, iy), (ix, iy + 4)])
+        ui.fill(color, (ix - 6, iy + 5, 13, 2))
+    elif i == 3:
+        eye(ui, ix, iy, color, crossed=True)
+    else:
+        trash(ui, ix, iy - 1, color)
+
+
 def draw_options(fe, ui, now):
-    """O menu do Tab: as opcoes do jogo e, debaixo delas, as do frontend (o
-    modo de exibicao, os clones, os jogos escondidos e o andamento do scrape
-    automatico)."""
+    """O menu do Tab: as opcoes do jogo e, debaixo delas, as do frontend (as
+    linhas 5 a 12 do fliperos-frontend, OPT_*), numa lista so que rola com a
+    escolhida, com os titulos; o andamento do scrape automatico fica fixo
+    embaixo. O cartao tem 200 de altura: cabe inteiro no tubo."""
     g = fe.game()
-    pw, ph = min(236, WW - 4), 224
+    pw, ph = min(236, WW - 4), 200
     px, py = (WW - pw) // 2, max(8, (HH - ph) // 2)
     sel = fe.ov["sel"]
     card(ui, (px, py, pw, ph))
-    ui.blit(W.big("GAME OPTIONS", 1, W.LABEL), (px + 10, py + 8))
-    if g:
-        tiny.text(ui, tiny.fit(g.get("Title") or g["Name"], pw - 20), T.COMMENT, px + 10, py + 20)
-    items = [("CLASSIFY", T.YELLOW), ("RENAME", T.CYAN), ("SCRAPE THIS GAME", T.GREEN),
-             ("HIDE THIS GAME", T.PURPLE), ("DELETE THIS GAME", T.RED)]
-    for i, (label, color) in enumerate(items):
-        y = py + 28 + i * 17
-        option_row(ui, (px + 8, y, pw - 16, 16), label, i == sel, now)
-        ix, iy = px + 20, y + 8
-        if i == 0:
-            pygame.draw.polygon(ui, color, [(ix - 6, iy - 4), (ix + 2, iy - 4), (ix + 6, iy), (ix + 2, iy + 4),
-                                            (ix - 6, iy + 4)])
-            pygame.draw.circle(ui, T.BG_DEEP, (ix - 3, iy), 1)
-        elif i == 1:
-            pygame.draw.polygon(ui, color, [(ix - 5, iy + 5), (ix - 5, iy + 2), (ix + 3, iy - 6), (ix + 6, iy - 3),
-                                            (ix - 2, iy + 5)])
-        elif i == 2:
-            ui.fill(color, (ix - 1, iy - 6, 3, 7))
-            pygame.draw.polygon(ui, color, [(ix - 5, iy), (ix + 5, iy), (ix, iy + 4)])
-            ui.fill(color, (ix - 6, iy + 5, 13, 2))
-        elif i == 3:
-            eye(ui, ix, iy, color, crossed=True)
+    # A lista: (y no conteudo, altura, o que e). Titulo e linha tem cada um a
+    # sua altura, e a rolagem e em pixels.
+    lines, y = [], 0
+    lines.append((y, 22 if g else 14, "game-title"))
+    y += 22 if g else 14
+    for i in range(5):
+        lines.append((y, 17, i))
+        y += 17
+    y += 4
+    lines.append((y, 14, "fe-title"))
+    y += 14
+    for opt in [5, 6, 7, 8, 9, 10, 11] + ([12] if fe.commercial else []):
+        lines.append((y, 17, opt))
+        y += 17
+    total = y
+    # A janela: do alto do cartao ate o quadro do scrape automatico.
+    vx, vy, vw = px + 8, py + 8, pw - 16
+    hy = py + ph - 44
+    vh = hy - 4 - vy
+    # A escolhida sempre inteira a vista; a primeira de cada parte leva o
+    # titulo junto.
+    scroll = fe.ov.get("scroll", 0)
+    for ly, lh, what in lines:
+        if what == sel:
+            top = ly
+            if sel == 0:
+                top = 0
+            elif sel == 5:
+                top = ly - 14
+            scroll = min(scroll, top)
+            scroll = max(scroll, ly + lh - vh)
+    scroll = max(0, min(scroll, total - vh))
+    # Sem linha cortada: em cima a lista para no comeco de uma linha, e
+    # embaixo a que nao cabe inteira nao aparece.
+    scroll = fe.ov["scroll"] = min((ly for ly, _, _ in lines if ly >= scroll), default=0)
+    shown = max(ly + lh for ly, lh, _ in lines if ly + lh <= scroll + vh) - scroll
+    # As linhas deixam 8 pixels a direita para a barra de rolagem.
+    right = vx + vw - 14
+    ui.set_clip((vx - 2, vy, vw + 4, shown))
+    for ly, lh, what in lines:
+        sy = vy + ly - scroll
+        if sy + lh < vy or sy > vy + vh:
+            continue
+        if what == "game-title":
+            ui.blit(W.big("GAME OPTIONS", 1, W.LABEL), (px + 10, sy))
+            if g:
+                tiny.text(ui, tiny.fit(g.get("Title") or g["Name"], pw - 20), T.COMMENT, px + 10, sy + 12)
+        elif what == "fe-title":
+            ui.blit(W.big("FRONTEND OPTIONS", 1, W.LABEL), (px + 10, sy + 2))
+        elif what < 5:
+            game_option(ui, what, (vx, sy, vw - 8, 16), what == sel, now)
         else:
-            trash(ui, ix, iy - 1, color)
-    # As opcoes do frontend, debaixo das do jogo: tres linhas a vista, que
-    # rolam com a escolhida (as linhas 5 a 12 do fliperos-frontend, OPT_*).
-    y = py + 116
-    ui.blit(W.big("FRONTEND OPTIONS", 1, W.LABEL), (px + 10, y))
-    y += 12
-    right = px + pw - 14
-    rows = [5, 6, 7, 8, 9, 10, 11] + ([12] if fe.commercial else [])
-    shown = 3
-    top = fe.ov.get("ftop", 0)
-    if sel in rows:
-        k = rows.index(sel)
-        top = k if k < top else (k - shown + 1 if k >= top + shown else top)
-    top = fe.ov["ftop"] = max(0, min(top, len(rows) - shown))
-    for k, opt in enumerate(rows[top:top + shown]):
-        draw_option(fe, ui, opt, (px + 8, y + k * 17, pw - 16, 16), sel == opt, right, now)
-    if len(rows) > shown:
-        W.scrollbar(ui, px + pw - 5, y, shown * 17 - 1, top, shown, len(rows))
-    draw_harvest(fe, ui, px + 8, y + 2 * 17 + 20, pw - 16)
+            draw_option(fe, ui, what, (vx, sy, vw - 8, 16), what == sel, right, now)
+    ui.set_clip(None)
+    if total > vh:
+        W.scrollbar(ui, px + pw - 7, vy, vh, scroll, vh, total)
+    draw_harvest(fe, ui, px + 8, hy, pw - 16)
 
 
 def chip(ui, right, y, text, lit, on):

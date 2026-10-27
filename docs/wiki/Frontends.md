@@ -41,11 +41,11 @@ Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has bee
   - Scrape this game: its information, pictures, logo and video, right away;
   - Delete this game: after a YES/NO question, its file goes away from the folder (for MAME, also the CHD folder of the same name); its art in `~/media` stays. A clone kept inside its parent's zip has no file of its own to delete.
 
-  Under a line come the **frontend options**, three at a time (the list scrolls with the chosen one). Each is saved at once in `~/.config/fliperos/frontend.json`:
+  Under them come the **frontend options**. The game options and the frontend options are one list that scrolls with the chosen line (always whole lines, never cut in half), with the Auto scrape box fixed at the bottom; the card is 200 pixels tall, so it fits on the tube. Each option is saved at once in `~/.config/fliperos/frontend.json`:
   - **View**: list, full screen or grid, with left and right (Start also switches it).
   - **Show clones** and **Hidden games** (the list of hidden games; button 1 brings one back).
-  - **Exit key**: the keyboard key that closes the game. Button 1 asks for it: press it within 8 seconds; button 2 on a controller cancels. A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing. Left or right turns it off.
-  - **Exit buttons**: panel buttons that close the game when held together for a second. Button 1 asks for them: hold two or more together for a second. Left or right turns it off. In commercial mode the coin can't be one of them.
+  - **Exit key**: the keyboard key that closes the game. Button 1 asks for it: press it within 8 seconds; button 2 on a controller cancels. A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing. Left, right or the Delete key turns it off.
+  - **Exit buttons**: panel buttons that close the game when held together for a second. Button 1 asks for them: hold two or more together for a second. Left, right or the Delete key turns it off. In commercial mode the coin can't be one of them.
   - **Power closes game**: on (the default), the cabinet's power button closes the open game; off, it does nothing while a game is open. With no game open it always powers off.
   - **Commercial mode** and, with it on, **Minutes per coin** (1 to 60, left and right).
 
