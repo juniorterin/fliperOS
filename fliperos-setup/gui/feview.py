@@ -301,7 +301,8 @@ def coin_box(fe, ui, x, y, t):
     if left <= 0:
         nag = time.monotonic() - getattr(fe, "nag_at", 0.0) < 1.5
         on = int(t * (6 if nag else 2)) % 2 == 0
-        coin_icon(ui, x + 3, y + 3, t)
+        # A placa (com a chapa, 21 de altura) no meio da altura da moldura.
+        coin_icon(ui, x + 3, y + (COIN_H - 19) // 2, t)
         if on:
             W.text(ui, "INSERT", T.YELLOW, x + 22, y + 6)
             W.text(ui, "COIN", T.YELLOW, x + 22, y + 17)
