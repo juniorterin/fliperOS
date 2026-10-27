@@ -222,55 +222,65 @@ def funnel(surf, cx, cy, c):
 # dos icones dos comandos, na tela cheia no canto de cima a esquerda, na
 # grade no canto de baixo a direita.
 
-COIN_W, COIN_H = 76, 30
-
-
+COIN_W, COIN_H = 80, 30
 COIN_CREAM, COIN_GLASS = (236, 232, 218), (178, 176, 170)
-
-
 COIN_CYCLE = 1.6                              # segundos de uma ficha entrando
+# A placa (17x18; com a chapa cinza, 19x20) tem a mesma folga de 3 pixels
+# ate a linha da moldura (2 pixels) em cima, embaixo e a esquerda.
+COIN_PLATE = (6, 6)                           # onde a placa comeca na moldura
+COIN_TEXT = 27                                # onde o texto comeca
 
 
 def coin_slot(x, y):
     """(x, y) do meio da fenda, no meio da faixa clara da placa que comeca
-    em x, y (a faixa vai de y + 1 a y + 17)."""
-    return x + 3, y + 9
+    em x, y (a faixa vai de y + 1 a y + 16; a fenda, de y + 4 a y + 13)."""
+    return x + 3, y + 8
 
 
 def coin_icon(ui, x, y, t):
     """A entrada de ficha da porta do gabinete: numa moldura preta sobre a
     chapa cinza, a faixa clara com a fenda fina e, ao lado, a janelinha
     iluminada (acende quando a ficha entra)."""
-    px, py = x, y                             # a placa, 17x19
-    pygame.draw.rect(ui, (112, 114, 120), (px - 1, py - 1, 19, 21), 1)   # a chapa da porta
-    ui.fill(T.SPACE, (px, py, 17, 19))
-    ui.fill(COIN_CREAM, (px + 1, py + 1, 5, 17))
+    px, py = x, y
+    pygame.draw.rect(ui, (112, 114, 120), (px - 1, py - 1, 19, 20), 1)   # a chapa da porta
+    ui.fill(T.SPACE, (px, py, 17, 18))
+    ui.fill(COIN_CREAM, (px + 1, py + 1, 5, 16))
     sx, sy = coin_slot(px, py)
-    ui.fill(T.SPACE, (sx, sy - 5, 1, 11))     # a fenda, centrada na faixa
+    ui.fill(T.SPACE, (sx, sy - 4, 1, 10))     # a fenda, centrada na faixa
     p = (t % COIN_CYCLE) / COIN_CYCLE
     lit = 0.45 <= p < 0.65                    # logo depois de a ficha entrar
-    ui.fill(T.YELLOW if lit else COIN_CREAM, (px + 7, py + 1, 9, 17))
+    ui.fill(T.YELLOW if lit else COIN_CREAM, (px + 7, py + 1, 9, 16))
     ui.fill(COIN_GLASS, (px + 7, py + 12, 9, 5))
 
 
+COIN_EDGE = (196, 140, 40)                    # a borda (a espessura) da ficha
+
+
 def coin_moving(ui, x, y, t):
-    """A ficha de frente vem da esquerda (passa por cima da moldura), chega
-    na fenda, vira de lado e some nela."""
+    """A ficha, um pouco de lado (a face e a espessura dela), vem da
+    esquerda (passa por cima da moldura), chega na fenda, termina de virar
+    (so a espessura) e some nela."""
     sx, sy = coin_slot(x, y)
     p = (t % COIN_CYCLE) / COIN_CYCLE
+    h, thick = 11, 3
     if p < 0.3:                               # vem deslizando
         k = p / 0.3
-        cx, w = round(x - 12 + (sx - x + 12) * (1 - (1 - k) ** 2)), 9
-    elif p < 0.45:                            # vira de lado e entra
-        cx, w = sx, max(1, round(9 - (p - 0.3) / 0.15 * 8))
+        cx, face = round(x - 14 + (sx - x + 14) * (1 - (1 - k) ** 2)), 7
+    elif p < 0.45:                            # termina de virar e entra
+        cx, face = sx, round(7 - (p - 0.3) / 0.15 * 7)
     else:
         return
-    coin = pygame.Surface((w, 9), pygame.SRCALPHA)
-    pygame.draw.ellipse(coin, T.YELLOW, (0, 0, w, 9))
-    if w >= 5:
-        pygame.draw.ellipse(coin, T.ORANGE, (0, 0, w, 9), 1)
-        coin.fill(T.ORANGE, (w // 2, 3, 1, 3))   # o relevo
-    ui.blit(coin, (cx - w // 2, sy - 4))
+    w = face + thick
+    coin = pygame.Surface((w, h), pygame.SRCALPHA)
+    # A espessura: a mesma elipse, atras, deslocada para a direita.
+    pygame.draw.ellipse(coin, COIN_EDGE, (thick, 0, max(2, face), h))
+    coin.fill(COIN_EDGE, (max(1, face // 2), 1, thick, h - 2))
+    if face >= 2:
+        pygame.draw.ellipse(coin, T.YELLOW, (0, 0, face, h))
+        if face >= 5:
+            pygame.draw.ellipse(coin, T.ORANGE, (0, 0, face, h), 1)
+            coin.fill(T.ORANGE, (face // 2, 4, 1, 3))   # o relevo
+    ui.blit(coin, (cx - w // 2, sy - h // 2))
 
 
 def clock_icon(ui, cx, cy, color, t):
@@ -301,25 +311,24 @@ def coin_box(fe, ui, x, y, t):
     if left <= 0:
         nag = time.monotonic() - getattr(fe, "nag_at", 0.0) < 1.5
         on = int(t * (6 if nag else 2)) % 2 == 0
-        # A placa (com a chapa, 21 de altura) no meio da altura da moldura.
-        coin_icon(ui, x + 3, y + (COIN_H - 19) // 2, t)
+        coin_icon(ui, x + COIN_PLATE[0], y + COIN_PLATE[1], t)
         if on:
-            W.text(ui, "INSERT", T.YELLOW, x + 22, y + 6)
-            W.text(ui, "COIN", T.YELLOW, x + 22, y + 17)
+            W.text(ui, "INSERT", T.YELLOW, x + COIN_TEXT, y + 6)
+            W.text(ui, "COIN", T.YELLOW, x + COIN_TEXT, y + 17)
         border = T.YELLOW if nag and on else T.PINK
     else:
         last = left < 60
         color = T.RED if last else T.GREEN
         fresh = time.monotonic() - getattr(fe, "coin_at", 0.0) < 2
-        clock_icon(ui, x + 11, y + 16, color, t)
+        clock_icon(ui, x + 14, y + 16, color, t)
         if not (last and int(t * 2) % 2) and not (fresh and int(t * 6) % 2):
-            W.text(ui, time_left(left), color, x + 22, y + 6)
-        tiny.text(ui, "LEFT", T.COMMENT, x + 22, y + 19)
+            W.text(ui, time_left(left), color, x + COIN_TEXT, y + 6)
+        tiny.text(ui, "LEFT", T.COMMENT, x + COIN_TEXT, y + 19)
         border = color
     pygame.draw.rect(ui, border, (x, y, COIN_W, COIN_H), 2)
     if left <= 0:
         # A ficha por ultimo: ela vem de fora da moldura, por cima dela.
-        coin_moving(ui, x + 3, y + (COIN_H - 19) // 2, t)
+        coin_moving(ui, x + COIN_PLATE[0], y + COIN_PLATE[1], t)
 
 
 # ── Os icones do Arcadeflow ────────────────────────────────────────
