@@ -187,7 +187,7 @@ const ptBR: Messages = {
   },
   badges: {
     label: 'Destaques técnicos',
-    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'Frontend FliperOS', 'Painel web', 'Ao vivo + OBS', 'Monitor vertical', 'Multimonitor', 'Baixa latência', 'GunCon 2', 'Pixelcade', 'ZeDMD', 'Updates OTA', 'Open Source'],
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'AMD · NVIDIA · Intel', 'GroovyMAME', 'Frontend FliperOS', 'Fightcade 2', 'Painel web', 'Ao vivo + OBS', 'Monitor vertical', 'Multimonitor', 'Baixa latência', 'Vulkan', 'GunCon 2', 'Pixelcade', 'ZeDMD', 'Modo comercial', 'Lab mode', 'Updates OTA', 'Open Source'],
   },
   gallery: {
     kicker: 'Screenshots',

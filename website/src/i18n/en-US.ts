@@ -185,7 +185,7 @@ const enUS = {
   },
   badges: {
     label: 'Technical highlights',
-    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'FliperOS frontend', 'Web panel', 'Live + OBS', 'Vertical monitor', 'Multi-monitor', 'Low latency', 'GunCon 2', 'Pixelcade', 'ZeDMD', 'OTA updates', 'Open Source'],
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'AMD · NVIDIA · Intel', 'GroovyMAME', 'FliperOS frontend', 'Fightcade 2', 'Web panel', 'Live + OBS', 'Vertical monitor', 'Multi-monitor', 'Low latency', 'Vulkan', 'GunCon 2', 'Pixelcade', 'ZeDMD', 'Commercial mode', 'Lab mode', 'OTA updates', 'Open Source'],
   },
   gallery: {
     kicker: 'Screenshots',
