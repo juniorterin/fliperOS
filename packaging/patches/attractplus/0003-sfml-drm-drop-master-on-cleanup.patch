@@ -1,0 +1,31 @@
+SFML DRM: drop the DRM master when the DRM context is cleaned up
+
+The frontend closes its window to start a game and makes a new one when the
+game ends. On an Intel Ironlake the Mesa leaves descriptors of /dev/dri/card0
+open after eglTerminate() and gbm_device_destroy(), so the process stays the
+master of the screen even after SFML closes its descriptor. The emulator
+cannot take the screen ("Error when switching mode", it exits at once) and
+the frontend, when it makes its window again, dies with "Failed to set mode:
+Permission denied". drmDropMaster() on the descriptor before closing it
+releases the master for every copy of it.
+
+Closing the descriptor already drops the master where nothing is left open
+(amdgpu, radeon), so there the call changes nothing.
+
+diff --git a/extlibs/SFML/src/SFML/Window/DRM/DRMContext.cpp b/extlibs/SFML/src/SFML/Window/DRM/DRMContext.cpp
+--- a/extlibs/SFML/src/SFML/Window/DRM/DRMContext.cpp
++++ b/extlibs/SFML/src/SFML/Window/DRM/DRMContext.cpp
+@@ -122,6 +122,13 @@
+     gbm_device_destroy(gbmDevice);
+     gbmDevice = nullptr;
+ 
++    // The Mesa of the Intel Ironlake keeps descriptors of the card open after
++    // eglTerminate and gbm_device_destroy, so the process stays the master of
++    // the screen even after close(): the emulator the frontend starts next
++    // fails to set its mode, and the frontend itself cannot take the screen
++    // back when it makes its window again. The master goes first.
++    drmDropMaster(drmNode.fileDescriptor);
++
+     close(drmNode.fileDescriptor);
+ 
+     drmNode.fileDescriptor = -1;

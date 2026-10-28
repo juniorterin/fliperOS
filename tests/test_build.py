@@ -11209,7 +11209,7 @@ class OnDemandFrontendTests(unittest.TestCase):
             self.assertIn(label + ' does not come with FliperOS', run.stdout)
             self.assertIn('built on this machine', run.stdout)
 
-    def build(self, tmp, name='fliperos-emulationstation', fail=False):
+    def build(self, tmp, name='fliperos-emulationstation', fail=False, eglinfo=''):
         """Roda o fetch com um build-deb.sh e um apt de mentira; devolve o
         resultado e o que o apt recebeu."""
         packaging, bin_dir, out = tmp / 'packaging', tmp / 'bin', tmp / 'work'
@@ -11230,9 +11230,13 @@ class OnDemandFrontendTests(unittest.TestCase):
         (bin_dir / 'dpkg').write_text('#!/bin/sh\n[ "$1 $2" = "-s aaa" ] && exit 1\nexit 0\n')
         for tool in ('apt-get', 'dpkg'):
             (bin_dir / tool).chmod(0o755)
+        if eglinfo:
+            (tmp / 'eglinfo').write_text('#!/bin/sh\ncat <<\'EOF\'\n%s\nEOF\n' % eglinfo)
+            (tmp / 'eglinfo').chmod(0o755)
         env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), APT_LOG=str(tmp / 'apt.log'),
                    FLIPEROS_FRONTEND_PKG=name, FLIPEROS_PACKAGING=str(packaging), FLIPEROS_BUILD_DIR=str(out),
-                   FLIPEROS_BUILD_LOG=str(tmp / 'build.log'), FLIPEROS_BUILD_MIN_MB='1')
+                   FLIPEROS_BUILD_LOG=str(tmp / 'build.log'), FLIPEROS_BUILD_MIN_MB='1',
+                   FLIPEROS_EGLINFO=str(tmp / 'eglinfo') if eglinfo else str(tmp / 'sem-eglinfo'))
         run = subprocess.run(['bash', str(self.SCRIPT), 'fetch', '--progress'], capture_output=True, text=True,
                              env=env, timeout=60)
         apt = (tmp / 'apt.log').read_text().splitlines() if (tmp / 'apt.log').exists() else []
@@ -11266,6 +11270,49 @@ class OnDemandFrontendTests(unittest.TestCase):
             self.assertFalse(any(' install ' in line for line in apt), apt)
             self.assertIn('Compiling', (Path(tmp) / 'build.log').read_text())
             self.assertEqual(list(out.iterdir()), [])
+
+    IRONLAKE = ('EGL client APIs: OpenGL OpenGL_ES \n'
+                'OpenGL compatibility profile version: 2.1 Mesa 25.2.8\n'
+                'OpenGL ES profile version: OpenGL ES 2.0 Mesa 25.2.8')
+    MODERN = ('EGL client APIs: OpenGL OpenGL_ES \n'
+              'OpenGL core profile version: 4.6 (Core Profile) Mesa 25.2.8\n'
+              'OpenGL ES profile version: OpenGL ES 3.2 Mesa 25.2.8')
+
+    @unittest.skipUnless(hasattr(os, 'geteuid') and os.geteuid() == 0, 'o instalador exige root')
+    def test_esde_is_not_built_on_a_card_without_opengl_3_3_or_es_3_0(self):
+        # O ES-DE 3.x pede OpenGL 3.3 core ou ES 3.0: na Intel Ironlake (2.1 e
+        # ES 2.0) ele nao abre, e a compilacao seria em vao.
+        with tempfile.TemporaryDirectory() as tmp:
+            run, apt, out = self.build(Path(tmp), eglinfo=self.IRONLAKE)
+            self.assertEqual(run.returncode, 1, run.stdout)
+            self.assertIn('@fail EmulationStation-DE|EmulationStation-DE needs OpenGL 3.3 or OpenGL ES 3.0, '
+                          'and this video card gives OpenGL ES 2.0.', run.stdout)
+            self.assertEqual(apt, [], 'nem o apt update devia rodar')
+        with tempfile.TemporaryDirectory() as tmp:
+            run, apt, out = self.build(Path(tmp), eglinfo=self.MODERN)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        # O Pegasus (Qt, OpenGL ES 2.0) nao tem essa exigencia.
+        with tempfile.TemporaryDirectory() as tmp:
+            run, apt, out = self.build(Path(tmp), 'fliperos-pegasus', eglinfo=self.IRONLAKE)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_about_warns_when_the_card_cannot_run_esde(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'eglinfo').write_text('#!/bin/sh\ncat <<\'EOF\'\n%s\nEOF\n' % self.IRONLAKE)
+            (tmp / 'eglinfo').chmod(0o755)
+            env = dict(os.environ, FLIPEROS_EGLINFO=str(tmp / 'eglinfo'))
+            run = subprocess.run(['bash', str(self.SCRIPT), 'about'], capture_output=True, text=True,
+                                 env=dict(env, FLIPEROS_FRONTEND_PKG='fliperos-emulationstation'))
+            self.assertIn('WARNING: EmulationStation-DE needs OpenGL 3.3 or OpenGL ES 3.0', run.stdout)
+            run = subprocess.run(['bash', str(self.SCRIPT), 'about'], capture_output=True, text=True,
+                                 env=dict(env, FLIPEROS_FRONTEND_PKG='fliperos-pegasus'))
+            self.assertNotIn('WARNING', run.stdout)
+            # Sem eglinfo (ou sem resposta) nao da para saber: sem aviso.
+            run = subprocess.run(['bash', str(self.SCRIPT), 'about'], capture_output=True, text=True,
+                                 env=dict(env, FLIPEROS_EGLINFO=str(tmp / 'nada'),
+                                          FLIPEROS_FRONTEND_PKG='fliperos-emulationstation'))
+            self.assertNotIn('WARNING', run.stdout)
 
     def test_an_unknown_program_name_is_refused(self):
         run = subprocess.run(['bash', str(self.SCRIPT), 'about'], capture_output=True, text=True,
@@ -11317,6 +11364,10 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('+++ b/extlibs/SFML/src/SFML/Window/DRM/DRMContext.cpp', xrgb)
         self.assertIn('if (result && format == GBM_FORMAT_ARGB8888)', xrgb)
         self.assertIn('+                               GBM_FORMAT_XRGB8888,', xrgb)
+        # O Mesa da Ironlake deixa o master da tela para tras: o SFML o solta
+        # antes de fechar o descritor, senao o emulador nao abre.
+        master = (ROOT / 'packaging/patches/attractplus/0003-sfml-drm-drop-master-on-cleanup.patch').read_text()
+        self.assertIn('+    drmDropMaster(drmNode.fileDescriptor);', master)
 
 
 class DocsTests(unittest.TestCase):

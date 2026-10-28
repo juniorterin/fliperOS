@@ -11,7 +11,7 @@
 
 PKG_NAME="fliperos-attractplus"
 PKG_VERSION="3.2.3"
-PKG_REVISION="1fliperos3"
+PKG_REVISION="1fliperos4"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://github.com/oomek/attractplus"
 PKG_SUMMARY="Attract-Mode Plus (KMS/DRM build for CRT)"

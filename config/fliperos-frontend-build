@@ -53,9 +53,31 @@ fail() {
   exit 1
 }
 
+# gl_problem: o ES-DE 3.x pede OpenGL 3.3 (perfil core) ou OpenGL ES 3.0
+# (RendererOpenGL.cpp). A placa que so da OpenGL 2.1 e ES 2.0, como a Intel
+# Ironlake (Core i3/i5 de 1a geracao), nao o abre: "Could not create EGL
+# context". Imprime o que a placa da e devolve 0 se NAO serve; devolve 1 se
+# serve ou se nao da para saber (sem eglinfo, ou o EGL nao abre).
+gl_problem() {
+  [[ $pkg == fliperos-emulationstation ]] || return 1
+  local eglinfo=${FLIPEROS_EGLINFO:-eglinfo} out core="" es=""
+  command -v "$eglinfo" > /dev/null || return 1
+  out=$(timeout 8 "$eglinfo" -B -p gbm 2> /dev/null) || return 1
+  [[ $out == *"profile version"* ]] || return 1
+  [[ $out =~ OpenGL\ core\ profile\ version:\ ([0-9]+)\.([0-9]+) ]] && core="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+  [[ $out =~ OpenGL\ ES\ profile\ version:\ OpenGL\ ES\ ([0-9]+)\.([0-9]+) ]] && es="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+  awk -v c="${core:-0}" -v e="${es:-0}" 'BEGIN { exit !(c >= 3.3 || e >= 3.0) }' && return 1
+  printf 'this video card gives %s' "${core:+OpenGL $core}${core:+${es:+ and }}${es:+OpenGL ES $es}"
+  [[ -n $core$es ]] || printf 'no OpenGL 3.3 or OpenGL ES 3.0'
+  printf '\n'
+}
+
 # O que a pessoa le antes de confirmar (screens/setup-menu.sh).
 if [[ ${1:-} == about ]]; then
   echo "$label does not come with FliperOS. It is built on this machine, with FliperOS's patches, from the official source: it needs the internet, downloads $download and takes $minutes minutes."
+  if problem=$(gl_problem); then
+    echo "WARNING: $label needs OpenGL 3.3 or OpenGL ES 3.0, and $problem, so it would not open here."
+  fi
   exit 0
 fi
 [[ ${1:-} == fetch ]] || {
@@ -66,6 +88,9 @@ shift
 [[ ${1:-} == --progress ]] && progress=1
 
 ((EUID == 0)) || fail "needs root (Setup > Games > Frontend runs it)"
+if problem=$(gl_problem); then
+  fail "$label needs OpenGL 3.3 or OpenGL ES 3.0, and $problem. It would not open on this machine, so it was not built."
+fi
 [[ -f $packaging/build-deb.sh && -f $packaging/packages/$pkg.sh ]] ||
   fail "the build recipe is missing in $packaging (an older FliperOS: run the system update)"
 mkdir -p "$workdir" 2> /dev/null || fail "could not create $workdir"
