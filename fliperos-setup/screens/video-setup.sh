@@ -599,6 +599,22 @@ screen_deflicker_preview() {
   return "$rc"
 }
 
+# screen_video_retest_request: o teste de saidas precisa da tela livre (sem a
+# interface grafica aberta), entao roda no proximo boot, antes do launcher
+# (screen_hw_change_check, fliperos-tty1). Pede o teste e oferece reiniciar.
+screen_video_retest_request() {
+  if ! is_installed || is_live; then
+    ui_msg "Test the video outputs" "On the install media the test runs when the media starts."
+    return 0
+  fi
+  conf_set hw_retest 1
+  ui_yesno "Test the video outputs" "The test runs at the next start, before the frontend, with the screen free. Reboot now?" yes || {
+    ui_msg "Test the video outputs" "It will run the next time the computer starts."
+    return 0
+  }
+  screen_reboot_now
+}
+
 screen_video_setup() {
   local choice last="" summary monitors=() mode480_label mode480_why=""
   VIDEO_CHANGED=0
@@ -640,6 +656,7 @@ screen_video_setup() {
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
       "mode480|$mode480_label|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
       "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour and hue." \
+      "retest|Test the video outputs|Run the output test again after a card change." \
       "${driver[@]}" \
       "${lowdot[@]}" \
       "return|Return|Save and leave. New video settings need a reboot.") || choice="return"
@@ -657,6 +674,7 @@ screen_video_setup() {
         fi
         ;;
       colour) screen_colour ;;
+      retest) screen_video_retest_request ;;
       driver) screen_video_driver ;;
       lowdot) screen_low_dotclock_retest ;;
       return) break ;;

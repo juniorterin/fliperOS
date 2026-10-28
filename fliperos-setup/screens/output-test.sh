@@ -231,3 +231,75 @@ screen_video_detection() {
   speak "Video settings saved."
   return 0
 }
+
+# ── Placa de video trocada, ou teste pedido (sistema instalado) ───────
+# video_hw_boot_check (lib/video.sh) marca hw_changed no boot e grava um modo
+# seguro; antes do launcher o fliperos-tty1 chama --hw-check, que pergunta e
+# refaz o teste de saidas. O Video Setup pode pedir o teste (hw_retest) para o
+# proximo boot: o teste precisa da tela livre, sem a interface grafica aberta.
+HW_CHECK_MAX_ASKS=${HW_CHECK_MAX_ASKS:-3}
+HW_FLAGS="hw_changed hw_old_gpu hw_safe_boot hw_check_asked hw_retest"
+
+# screen_hw_retest_apply: o teste de saidas, e o que ele decidiu no sistema
+# instalado (Xorg, linha do kernel, Limine), como o fim do Video Setup.
+screen_hw_retest_apply() {
+  local key
+  if ! screen_video_detection; then
+    ui_msg "Video output test" "The test did not finish. The video settings were not changed."
+    return 1
+  fi
+  for key in $HW_FLAGS; do
+    conf_unset "$key"
+  done
+  xorg_generate
+  if ! boot_apply; then
+    ui_msg "Video output test" "Could not update the boot settings (see the log)."
+    return 1
+  fi
+  if ui_yesno "Video output test" "The new video settings are used after a reboot. Reboot now?" yes; then
+    screen_reboot_now
+  fi
+  return 0
+}
+
+# screen_hw_change_check (fliperos-setup --hw-check, antes do launcher, tambem
+# no modo jogo): so no sistema instalado. Roda quando a placa trocou
+# (hw_changed, ou video_hw_changed se o boot nao rodou) ou o teste foi pedido
+# (hw_retest). "Nao" pergunta de novo no proximo boot; depois de
+# HW_CHECK_MAX_ASKS respostas, aceita a placa de agora e para de perguntar.
+screen_hw_change_check() {
+  local change="" old new asked text key id
+  is_installed && ! is_live || return 0
+  if conf_get hw_retest > /dev/null 2>&1; then
+    text="You asked to test the video outputs again. Run the test now? It takes about a minute."
+  else
+    if conf_get hw_changed > /dev/null 2>&1; then
+      change=$(video_hw_changed) ||
+        change="$(conf_get hw_old_gpu 2> /dev/null || echo "the old card")|$(drm_card_name "$(video_main_card)")"
+    else
+      change=$(video_hw_changed) || return 0
+      conf_set hw_changed 1
+    fi
+    old=${change%%|*}
+    new=${change#*|}
+    text="The video card changed: it was $old and now it is $new. FliperOS put a safe video mode on it. Redo the video output test now, to set the right resolution for this card? It takes about a minute."
+  fi
+  log_info "aviso de hardware de video: ${change:-teste pedido}"
+  if ui_yesno "Video card changed" "$text" yes; then
+    screen_hw_retest_apply
+    return 0
+  fi
+  asked=$(conf_get hw_check_asked 2> /dev/null) || asked=0
+  [[ $asked =~ ^[0-9]+$ ]] || asked=0
+  asked=$((asked + 1))
+  if ((asked >= HW_CHECK_MAX_ASKS)) || conf_get hw_retest > /dev/null 2>&1; then
+    id=$(drm_card_id "$(video_main_card)" 2> /dev/null) && conf_set gpu_id "$id"
+    for key in $HW_FLAGS; do
+      conf_unset "$key"
+    done
+    log_info "aviso de hardware de video: dispensado"
+  else
+    conf_set hw_check_asked "$asked"
+  fi
+  return 0
+}

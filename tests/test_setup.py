@@ -635,6 +635,240 @@ class DiskMenuLabelTests(Base):
         self.assertRegex(out, r"^Kingston SA400S37240G +240 GB  /dev/sda +SATA$")
 
 
+class HardwareChangeTests(Base):
+    """Placa de video (ou GPU da CPU) trocada no sistema instalado: o ID do
+    PCI, a deteccao, o modo seguro do boot e o aviso antes do launcher."""
+    AMD = ("1002", "6613")
+    INTEL = ("8086", "0042")
+
+    def gpu(self, card, driver, ids, boot=False):
+        self.env.card(card, driver)
+        dev = self.env.drm / card / "device"
+        (dev / "vendor").write_text("0x%s\n" % ids[0])
+        (dev / "device").write_text("0x%s\n" % ids[1])
+        if boot:
+            (dev / "boot_vga").write_text("1\n")
+
+    def conf(self, text):
+        (self.env.etc / "fliperos.conf").write_text(text)
+
+    def installed(self):
+        # Sistema instalado: o arquivo "installed" e uma linha sem boot=live
+        # (a do ambiente de teste e a da midia).
+        (self.env.etc / "installed").write_text("")
+        self.env.cmdline.write_text("quiet splash\n")
+
+    def saved(self, ids=AMD, **extra):
+        keys = {"gpu": "AMD Radeon R7 240", "driver": "radeon", "card": "card0", "connector": "VGA-1",
+                "detection": "se", "monitor": "generic_15", "kernel_video": "video=VGA-1:320x240Se"}
+        if ids:
+            keys["gpu_id"] = "%s:%s" % ids
+        keys.update(extra)
+        self.conf("".join("%s=%s\n" % kv for kv in keys.items()))
+
+    def read_conf(self):
+        return (self.env.etc / "fliperos.conf").read_text()
+
+    # Em bash: o que o boot usa quando ele age (sem reiniciar de verdade).
+    STUBS = ('boot_apply() { echo BOOT_APPLY; }; xorg_generate() { :; }; run_logged() { echo "RUN $*"; }; '
+             'ui_msg() { :; }; ')
+
+    def test_the_card_id_is_the_pci_vendor_and_device(self):
+        self.gpu("card0", "radeon", self.AMD)
+        self.assertEqual(self.env.out("drm_card_id card0").strip(), "1002:6613")
+        self.assertEqual(self.env.run("drm_card_id card9").returncode, 1)
+
+    def test_the_same_card_is_not_a_change(self):
+        self.gpu("card0", "radeon", self.AMD, boot=True)
+        self.saved()
+        run = self.env.run("video_hw_changed")
+        self.assertEqual((run.returncode, run.stdout), (1, ""))
+
+    def test_a_swapped_card_is_a_change_with_the_old_name(self):
+        self.gpu("card0", "i915", self.INTEL, boot=True)
+        self.saved()
+        run = self.env.run("video_hw_changed")
+        self.assertEqual(run.returncode, 0)
+        self.assertTrue(run.stdout.startswith("AMD Radeon R7 240|"), run.stdout)
+
+    def test_a_card_that_comes_or_goes_but_is_not_the_main_one_is_not_a_change(self):
+        # A GPU da CPU nova, com a AMD ainda la.
+        self.gpu("card0", "radeon", self.AMD, boot=True)
+        self.gpu("card1", "i915", self.INTEL)
+        self.saved()
+        self.assertEqual(self.env.run("video_hw_changed").returncode, 1)
+
+    def test_an_old_install_without_the_id_compares_the_driver(self):
+        self.gpu("card0", "radeon", self.AMD, boot=True)
+        self.saved(ids=None)
+        self.assertEqual(self.env.run("video_hw_changed").returncode, 1)
+        # O ID fica gravado: o baseline para as proximas trocas.
+        self.assertIn("gpu_id=1002:6613\n", self.read_conf())
+        self.saved(ids=None, driver="i915")
+        self.assertEqual(self.env.run("video_hw_changed").returncode, 0)
+
+    def test_nothing_to_compare_without_a_saved_test_or_a_card(self):
+        self.gpu("card0", "i915", self.INTEL, boot=True)
+        self.conf("monitor=generic_15\n")
+        self.assertEqual(self.env.run("video_hw_changed").returncode, 1)
+        self.saved()
+        shutil.rmtree(self.env.drm / "card0")
+        self.assertEqual(self.env.run("video_hw_changed").returncode, 1)
+
+    def test_the_output_test_records_the_id(self):
+        self.gpu("card0", "radeon", self.AMD, boot=True)
+        self.env.connector("card0-VGA-1", "connected")
+        self.env.out("video_save_result card0-VGA-1 se generic_15")
+        self.assertIn("gpu_id=1002:6613\n", self.read_conf())
+        self.assertIn("gpu_id", self.env.out('echo "$VIDEO_CONF_KEYS"'))
+
+    def test_boot_writes_a_safe_mode_for_an_intel_and_reboots_once(self):
+        self.gpu("card0", "i915", self.INTEL, boot=True)
+        self.env.connector("card0-VGA-1", "connected")
+        self.installed()
+        self.saved(screens="VGA-1,DVI-I-1", low_dotclock_pci="0000:01:00.0")
+        out = self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"})
+        self.assertEqual(out.split(), ["BOOT_APPLY", "RUN", "systemctl", "reboot"])
+        conf = self.read_conf()
+        # 320x240 nao existe na Intel (sem dotclock baixo): super resolucao.
+        for line in ("gpu_id=8086:0042", "driver=i915", "kernel_video=video=VGA-1:1280x480iSe", "hw_changed=1",
+                     "hw_old_gpu=AMD Radeon R7 240", "hw_safe_boot=8086:0042"):
+            self.assertIn(line + "\n", conf)
+        for gone in ("screens=", "low_dotclock_pci="):
+            self.assertNotIn(gone, conf)
+        # A trava: de novo, no mesmo boot ou no seguinte, nao reinicia.
+        self.assertEqual(self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"}).strip(), "")
+        self.saved(hw_safe_boot="8086:0042", hw_changed=1)
+        self.assertEqual(self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"}).strip(), "")
+
+    def test_boot_gives_an_amd_its_native_mode(self):
+        self.gpu("card0", "radeon", self.AMD, boot=True)
+        self.env.connector("card0-VGA-1", "connected")
+        self.installed()
+        self.saved(ids=self.INTEL, gpu="Intel HD", driver="i915", kernel_video="video=VGA-1:1280x480iSe")
+        self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"})
+        conf = self.read_conf()
+        # O modo nativo de boot do 15 kHz (a AMD gera o dotclock baixo), nao o
+        # 1280x480 da Intel; um 320x240 e escolha da pessoa no Video Setup.
+        self.assertIn("kernel_video=video=VGA-1:640x480iSe\n", conf)
+        self.assertIn("gpu_id=1002:6613\n", conf)
+
+    def test_boot_without_an_analog_output_only_marks_the_change(self):
+        self.gpu("card0", "i915", self.INTEL, boot=True)
+        self.env.connector("card0-HDMI-A-1", "connected")
+        self.installed()
+        self.saved()
+        out = self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"})
+        self.assertEqual(out.strip(), "")
+        conf = self.read_conf()
+        self.assertIn("hw_changed=1\n", conf)
+        self.assertIn("kernel_video=video=VGA-1:320x240Se\n", conf)
+
+    def test_boot_does_nothing_on_the_install_media_or_without_a_change(self):
+        # Na midia (boot=live, mesmo com o arquivo "installed"): nada.
+        self.gpu("card0", "i915", self.INTEL, boot=True)
+        self.env.connector("card0-VGA-1", "connected")
+        self.saved()
+        self.installed()
+        self.env.cmdline.write_text("boot=live quiet\n")
+        self.assertEqual(self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"}).strip(), "")
+        self.assertNotIn("hw_changed", self.read_conf())
+        # Instalado e com a mesma placa: nada.
+        shutil.rmtree(self.env.drm / "card0")
+        self.gpu("card0", "radeon", self.AMD, boot=True)
+        self.installed()
+        self.assertEqual(self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"}).strip(), "")
+        self.assertNotIn("hw_changed", self.read_conf())
+
+    def screen(self, answers):
+        """screen_hw_change_check com ui_yesno respondendo ANSWERS (0 = sim)."""
+        return self.env.out(
+            'source %s/screens/output-test.sh\n' % SETUP + self.STUBS +
+            'ui_yesno() { echo "ASK $2"; return %s; }; screen_video_detection() { echo DETECT; }; '
+            'screen_reboot_now() { echo REBOOT; }; screen_hw_change_check' % answers)
+
+    def test_the_check_asks_and_redoes_the_test(self):
+        self.gpu("card0", "i915", self.INTEL, boot=True)
+        self.installed()
+        self.saved(hw_changed=1, hw_old_gpu="AMD Radeon R7 240", hw_safe_boot="8086:0042", hw_check_asked=1)
+        out = self.screen(0)
+        self.assertIn("ASK The video card changed: it was AMD Radeon R7 240 and now it is ", out)
+        self.assertEqual([w for w in out.split() if w in ("DETECT", "BOOT_APPLY", "REBOOT")],
+                         ["DETECT", "BOOT_APPLY", "REBOOT"])
+        for gone in ("hw_changed", "hw_old_gpu", "hw_safe_boot", "hw_check_asked"):
+            self.assertNotIn(gone, self.read_conf())
+
+    def test_saying_no_asks_again_and_after_three_times_accepts_the_card(self):
+        self.gpu("card0", "i915", self.INTEL, boot=True)
+        self.installed()
+        self.saved(hw_changed=1, hw_old_gpu="AMD Radeon R7 240")
+        for times in (1, 2):
+            self.assertNotIn("DETECT", self.screen(1))
+            self.assertIn("hw_changed=1\n", self.read_conf())
+            self.assertIn("hw_check_asked=%d\n" % times, self.read_conf())
+        self.screen(1)
+        conf = self.read_conf()
+        self.assertNotIn("hw_changed", conf)
+        self.assertNotIn("hw_check_asked", conf)
+        self.assertIn("gpu_id=8086:0042\n", conf)
+        # E nao pergunta mais.
+        self.assertEqual(self.screen(0).strip(), "")
+
+    def test_the_check_notices_a_change_the_boot_did_not_mark(self):
+        self.gpu("card0", "i915", self.INTEL, boot=True)
+        self.installed()
+        self.saved()
+        self.assertIn("ASK The video card changed", self.screen(1))
+        self.assertIn("hw_changed=1\n", self.read_conf())
+
+    def test_the_check_runs_a_test_asked_in_the_video_setup(self):
+        self.gpu("card0", "radeon", self.AMD, boot=True)
+        self.installed()
+        self.saved(hw_retest=1)
+        out = self.screen(0)
+        self.assertIn("ASK You asked to test the video outputs again", out)
+        self.assertIn("DETECT", out)
+        self.assertNotIn("hw_retest", self.read_conf())
+
+    def test_the_check_does_nothing_without_a_change_and_on_the_media(self):
+        # Na midia, mesmo com a placa trocada: nada.
+        self.gpu("card0", "i915", self.INTEL, boot=True)
+        self.saved(hw_changed=1)
+        self.installed()
+        self.env.cmdline.write_text("boot=live quiet\n")
+        self.assertEqual(self.screen(0).strip(), "")
+        # Instalado e com a mesma placa: nada.
+        shutil.rmtree(self.env.drm / "card0")
+        self.gpu("card0", "radeon", self.AMD, boot=True)
+        self.saved()
+        self.installed()
+        self.assertEqual(self.screen(0).strip(), "")
+
+    def test_the_wiring_in_the_session_the_dispatcher_and_the_menu(self):
+        tty1 = (ROOT / "config" / "fliperos-tty1").read_text()
+        self.assertIn("sudo /usr/local/bin/fliperos-setup --hw-check", tty1)
+        self.assertIn("hw_maybe_changed", tty1)
+        # Antes do primeiro boot e do update, tambem no modo jogo.
+        self.assertLess(tty1.index("--hw-check"), tty1.index("--first-boot"))
+        main = (SETUP / "fliperos-setup").read_text()
+        self.assertIn("--hw-check)", main)
+        self.assertIn("screen_hw_change_check", main)
+        trial = (SETUP / "lib" / "bootloader.sh").read_text().split("amd_driver_trial_boot() {")[1]
+        self.assertLess(trial.index("video_hw_boot_check"), trial.index("nvidia_driver_boot_check"))
+        video = (SETUP / "screens" / "video-setup.sh").read_text()
+        self.assertIn('"retest|Test the video outputs|', video)
+        self.assertIn("retest) screen_video_retest_request ;;", video)
+
+    def test_the_intel_driver_word_follows_the_card(self):
+        self.conf("driver=i915\n")
+        self.assertEqual(self.env.out('i915_driver_cmdline "quiet splash"').strip(),
+                         "quiet splash i915.no_ytiled_scanout=1")
+        self.assertEqual(self.env.out('i915_driver_cmdline "quiet i915.no_ytiled_scanout=1"').strip(),
+                         "quiet i915.no_ytiled_scanout=1")
+        self.conf("driver=radeon\n")
+        self.assertEqual(self.env.out('i915_driver_cmdline "quiet splash"').strip(), "quiet splash")
+
+
 class GpuCapabilityTests(Base):
     """lib/drm.sh gpu_needs: o que a placa nao roda (OpenGL 3 numa Intel HD de
     1a geracao) leva a marca "(not supported)" no Setup."""

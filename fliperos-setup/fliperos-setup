@@ -19,6 +19,7 @@
 #   sudo fliperos-setup --latency       abre direto o Setup > System > Latency
 #   sudo fliperos-setup --update-check  pergunta pelo update do FliperOS
 #   sudo fliperos-setup --driver-confirm  confirma a imagem do driver de video trocado
+#   sudo fliperos-setup --hw-check      a placa de video trocou: pergunta e refaz o teste de saidas
 #
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
@@ -468,6 +469,12 @@ main() {
       ;;
     --driver-confirm)
       screen_amd_driver_confirm
+      return 0
+      ;;
+    --hw-check)
+      # A placa de video trocada (video_hw_boot_check) ou o teste pedido no
+      # Video Setup: pergunta e refaz o teste de saidas, antes do launcher.
+      screen_hw_change_check
       return 0
       ;;
   esac

@@ -108,7 +108,20 @@ What a user of this card has to know:
   - **The 480i flicker filter and the software colour adjustments are off** (the log says `OpenGL 3.0 or newer is needed; filter off for this program`). Setup > Video Setup > 480i hacks has no effect on this card.
 - **No Vulkan on Ironlake.** Emulators that need it (the Vulkan renderers of Flycast, Dolphin, PCSX2, DuckStation) are not usable, and the Vulkan-by-driver switch of the Setup only acts on `amdgpu`. Not tested; it follows from the hardware. The same goes for the 3D emulators on a card from 2010: not tried.
 - **The processor must have graphics.** The VGA port of a board only works with a CPU that has them: Clarkdale (Core i3 5xx, i5 6xx) does; Lynnfield (Core i7 8xx, i5 7xx) does not, and the board shows no video device at all (seen on an i7 870).
-- **Changing the video card on an installed system is not detected by the system.** The kernel line and `/etc/fliperos/fliperos.conf` keep the settings of the previous card (a `320x240` mode, the AMD driver options), and the system may boot without a picture. Boot the media and use **Recovery Mode**: it runs the output test again and rewrites only the video settings on the disk (see [Install](Install.md)).
+- **Changing the video card (or the CPU that has the graphics) is noticed at boot.** See [Changing the video card](#changing-the-video-card) below. **Recovery Mode** of the media (see [Install](Install.md)) stays as the last resort.
+
+### Changing the video card
+
+The output test stores the card's PCI id (`gpu_id` in `/etc/fliperos/fliperos.conf`). At each boot the installed system checks that the card is still there; a card that comes or goes but is not the main one (a new CPU graphics with the AMD still in) changes nothing.
+
+When the main card changed:
+
+1. **Before any picture** (`fliperos-driver-trial.service`): FliperOS writes a safe mode for the new card on its first analog output, with the monitor that was set (native boot mode on a card that makes low clocks, `1280x480iS` on an Intel), drops what belonged to the old card (extra monitors, the NVIDIA grid step) and **reboots once**. A saved `320x240` mode on an Intel, which can't make that clock, no longer leaves the screen black. Without an analog output, or with an LCD monitor, it only marks the change.
+2. **Before the frontend opens** (also when the boot goes straight into a game): a question says which card it was and which it is now, and offers to redo the **output test**. *Yes* runs the same test as the installation, saves the result (kernel line, Switchres, RetroArch, Xorg) and offers a reboot. *No* asks again at the next boot; after three answers it accepts the card.
+
+Installs from before this feature have no `gpu_id`: the first boot compares the saved driver with the cards that are there, and records the id if they match.
+
+**Setup > Video Setup > Test the video outputs** asks for the same test on the next boot (it needs the screen free, without the graphic menu open).
 
 ### What the Setup marks as not supported
 

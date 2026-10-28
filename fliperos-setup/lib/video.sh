@@ -276,7 +276,7 @@ video_mame_monitor() {
 # Chaves do fliperos.conf que dependem da placa e da saida: e o que o
 # Recovery Mode leva para o disco quando a placa foi trocada. A orientacao
 # e do gabinete, nao da placa, e so vai se foi escolhida nesta sessao.
-VIDEO_CONF_KEYS="gpu driver card connector detection forced low_dotclock_pci low_dotclock_min kernel_video boot_resolution fb_map
+VIDEO_CONF_KEYS="gpu gpu_id driver card connector detection forced low_dotclock_pci low_dotclock_min kernel_video boot_resolution fb_map
   monitor frequency geometry custom_width custom_height custom_refresh screens"
 VIDEO_CONF_KEEP="orientation"
 
@@ -394,7 +394,7 @@ video_low_dotclock_apply() {
 # video_save_result CONECTOR FLAGS MONITOR grava o resultado validado do
 # teste de saidas para o instalador e para o sistema instalado.
 video_save_result() {
-  local c=$1 flags=$2 monitor=$3 card name base params min
+  local c=$1 flags=$2 monitor=$3 card name base params min id
   card=$(drm_card "$c")
   name=$(drm_name "$c")
   base=${flags%a}
@@ -405,6 +405,13 @@ video_save_result() {
     conf_unset screens
   fi
   conf_set gpu "$(drm_card_name "$card")"
+  # O ID do PCI: com ele o sistema instalado percebe que a placa foi trocada
+  # (video_hw_changed).
+  if id=$(drm_card_id "$card"); then
+    conf_set gpu_id "$id"
+  else
+    conf_unset gpu_id
+  fi
   conf_set driver "$(drm_card_driver "$card" || echo unknown)"
   conf_set card "$card"
   conf_set connector "$name"
@@ -435,6 +442,100 @@ video_save_result() {
   fi
   video_retroarch_super
   log_info "resultado: $name flags=$flags monitor=$monitor params=$params"
+}
+
+# ── Troca de hardware de video ───────────────────────────────────
+# Trocar a placa de video (ou a CPU que tem GPU) deixa o fliperos.conf, o
+# Switchres, o RetroArch e a linha do kernel com os valores da placa antiga:
+# um 320x240 numa Intel, que nao gera esse clock, nao da imagem. O boot
+# percebe a troca (video_hw_boot_check, sem tela) e grava um modo seguro para
+# a placa nova; o aviso antes do launcher (screen_hw_change_check) refaz o
+# teste de saidas. O Recovery Mode da midia continua como ultimo recurso.
+
+# video_main_card imprime a placa que o boot usa (a VGA de boot da BIOS), ou
+# a primeira.
+video_main_card() {
+  local card
+  for card in $(drm_cards); do
+    [[ $(cat "$DRM_SYSFS/$card/device/boot_vga" 2> /dev/null) == 1 ]] && { printf '%s\n' "$card"; return 0; }
+  done
+  drm_cards | head -n 1
+}
+
+# video_hw_changed: a placa principal do fliperos.conf nao esta mais aqui.
+# Status 0 e imprime "NOME ANTIGO|NOME NOVO" se trocou; 1 se e a mesma ou se
+# nao ha o que comparar (sem teste de saidas feito, ou sem placa). Uma placa a
+# mais ou a menos que nao e a principal (uma GPU de CPU nova com a AMD ainda
+# la) nao conta. Instalacao antiga, sem gpu_id: vale o driver; se ele bate,
+# e a mesma placa e o ID fica gravado.
+video_hw_changed() {
+  local saved_id saved_driver card id driver first
+  conf_get card > /dev/null 2>&1 || return 1
+  saved_id=$(conf_get gpu_id 2> /dev/null) || saved_id=""
+  saved_driver=$(conf_get driver 2> /dev/null) || saved_driver=""
+  first=$(video_main_card)
+  [[ -n $first ]] || return 1
+  for card in $(drm_cards); do
+    id=$(drm_card_id "$card" 2> /dev/null) || id=""
+    driver=$(drm_card_driver "$card" 2> /dev/null) || driver=""
+    if [[ -n $saved_id ]]; then
+      [[ $id == "$saved_id" ]] && return 1
+    elif [[ -n $driver && $driver == "$saved_driver" ]]; then
+      [[ -n $id ]] && conf_set gpu_id "$id"
+      return 1
+    fi
+  done
+  printf '%s|%s\n' "$(conf_get gpu 2> /dev/null || echo "the old card")" "$(drm_card_name "$first")"
+  return 0
+}
+
+# video_hw_safe_connector CARD imprime a primeira saida analogica da placa
+# (cardN-VGA-1): o modo seguro so existe para CRT. Status 1 sem ela.
+video_hw_safe_connector() {
+  local c
+  for c in $(drm_connectors); do
+    [[ $(drm_card "$c") == "$1" ]] && drm_is_analog "$(drm_name "$c")" && { printf '%s\n' "$c"; return 0; }
+  done
+  return 1
+}
+
+# video_hw_boot_check (no boot, fliperos-driver-trial.service, sem tela): a
+# placa trocou. Marca o aviso (hw_changed) e grava para a placa nova o modo
+# que ela aguenta (nativo se gera dotclock baixo, super resolucao se nao),
+# na primeira saida analogica, com o monitor que ja estava; depois reinicia
+# UMA vez (hw_safe_boot guarda o ID da placa e impede o laco). Sem saida
+# analogica, ou com monitor LCD, so marca o aviso.
+video_hw_boot_check() {
+  local id card conn monitor flags change tries
+  is_installed && ! is_live || return 0
+  conf_get card > /dev/null 2>&1 || return 0
+  # A placa pode demorar a aparecer no sysfs (o servico nao espera o udev).
+  for ((tries = 0; tries < ${HW_BOOT_WAIT:-20}; tries++)); do
+    [[ -n $(drm_cards) ]] && break
+    sleep 0.5
+  done
+  change=$(video_hw_changed) || return 0
+  card=$(video_main_card)
+  id=$(drm_card_id "$card" 2> /dev/null) || id=unknown
+  [[ $(conf_get hw_safe_boot 2> /dev/null) == "$id" ]] && return 0
+  log_warn "placa de video trocada: ${change/|/ -> }"
+  # O nome da placa antiga, para o aviso: o modo seguro grava o da nova.
+  conf_set hw_old_gpu "${change%%|*}"
+  conf_set hw_changed 1
+  conf_set hw_safe_boot "$id"
+  monitor=$(conf_get monitor 2> /dev/null) || monitor=generic_15
+  conn=$(video_hw_safe_connector "$card") || return 0
+  [[ $monitor == lcd ]] && return 0
+  flags=e
+  drm_card_low_dotclock "$card" && flags=se
+  # O que era da placa antiga: os monitores extras e o degrau do grid da NVIDIA.
+  conf_unset screens
+  conf_unset low_dotclock_pci
+  conf_unset low_dotclock_min
+  video_save_result "$conn" "$flags" "$monitor" || return 1
+  xorg_generate
+  boot_apply || return 1
+  run_logged systemctl reboot
 }
 
 # video_current_mode CONECTOR imprime "LARGURAxALTURA|kHz|Hz|entrelacado" do

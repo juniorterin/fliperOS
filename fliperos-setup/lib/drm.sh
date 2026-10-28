@@ -83,6 +83,17 @@ drm_card_pci() {
   printf '%s\n' "${link##*/}"
 }
 
+# drm_card_id CARD imprime "fabricante:dispositivo" do PCI (1002:6613). O
+# cardN renumera quando a placa muda; o ID e o que reconhece a placa (a
+# troca de hardware, video_hw_changed).
+drm_card_id() {
+  local vendor device
+  vendor=$(cat "$DRM_SYSFS/$1/device/vendor" 2> /dev/null) || return 1
+  device=$(cat "$DRM_SYSFS/$1/device/device" 2> /dev/null) || return 1
+  [[ -n $vendor && -n $device ]] || return 1
+  printf '%s:%s\n' "${vendor#0x}" "${device#0x}"
+}
+
 # drm_card_name CARD imprime o nome curto da GPU, como o short_gpu_name do
 # gatools ("Radeon HD 5450" em vez da linha inteira do lspci). A linha do
 # "lspci -mm" e: 01:00.0 "classe" "fabricante" "dispositivo" -rREV

@@ -142,6 +142,23 @@ game_mode() {
   [[ $(tr -d '[:space:]' < "$ETC/session" 2> /dev/null) == game ]]
 }
 
+# hw_maybe_changed: o fliperos.conf tem o ID da placa de video (gpu_id) e
+# nenhuma placa daqui tem esse ID: a placa foi trocada. So le o sysfs, sem
+# subir o Setup. Sem gpu_id (instalacao antiga) quem decide e o servico de boot
+# (video_hw_boot_check), que grava o ID na primeira vez.
+hw_maybe_changed() {
+  local id dev vendor device
+  id=$(sed -n 's/^gpu_id=//p' "$ETC/fliperos.conf" 2> /dev/null | head -n 1)
+  [[ -n $id ]] || return 1
+  for dev in /sys/class/drm/card[0-9]*/device; do
+    [[ -r $dev/vendor && -r $dev/device ]] || continue
+    vendor=$(< "$dev/vendor")
+    device=$(< "$dev/device")
+    [[ ${vendor#0x}:${device#0x} == "$id" ]] && return 1
+  done
+  compgen -G '/sys/class/drm/card[0-9]*/device' > /dev/null
+}
+
 if [[ ${1:-} != --menu ]]; then
   sudo setterm --blank 0 --powerdown 0 2> /dev/null
   # Pastas de ~/roms que faltarem (um core novo do RetroArch, por exemplo).
@@ -154,6 +171,13 @@ if [[ ${1:-} != --menu ]]; then
     if grep -q '^amd_driver_trial=' "$ETC/fliperos.conf" 2> /dev/null; then
       splash_off
       sudo /usr/local/bin/fliperos-setup --driver-confirm
+    fi
+    # Placa de video trocada (o boot gravou um modo seguro) ou o teste pedido no
+    # Video Setup: o teste de saidas antes de tudo, tambem no modo jogo (com o
+    # video errado o jogo nao adianta). Sem nada a fazer, sai em silencio.
+    if grep -q -E '^(hw_changed|hw_retest)=' "$ETC/fliperos.conf" 2> /dev/null || hw_maybe_changed; then
+      splash_off
+      sudo /usr/local/bin/fliperos-setup --hw-check
     fi
     if [[ -f $ETC/firstboot ]]; then
       splash_off

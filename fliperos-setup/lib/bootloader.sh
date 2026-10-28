@@ -301,6 +301,9 @@ nvidia_driver_boot_check() {
 # amd_driver_trial_boot: no boot (fliperos-driver-trial.service).
 amd_driver_trial_boot() {
   local boots
+  # A placa de video trocada (lib/video.sh): o modo seguro da placa nova antes
+  # de qualquer outra coisa; reinicia uma vez e nao segue por este boot.
+  video_hw_boot_check
   nvidia_driver_boot_check
   amd_driver_trial > /dev/null || return 0
   # Aberto pela entrada de volta do menu do Limine: a pessoa ja escolheu o
@@ -326,6 +329,18 @@ amd_driver_trial_boot() {
   return 0
 }
 
+# i915_driver_cmdline LINHA: a placa e Intel (driver i915 no fliperos.conf):
+# a linha leva o i915.no_ytiled_scanout=1, que deixa a Gen9 mostrar modo
+# entrelacado (patch 09). Vem da entrada "Intel 15 kHz" do menu de boot da
+# instalacao; numa placa trocada por uma Intel ele precisa ser posto aqui.
+i915_driver_cmdline() {
+  if [[ $(conf_get driver 2> /dev/null) == i915 && " $1 " != *" i915.no_ytiled_scanout=1 "* ]]; then
+    printf '%s i915.no_ytiled_scanout=1\n' "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
 # boot_compose LINHA aplica a uma linha do kernel o que o setup decidiu:
 # modo de latencia, quirks do usbhid, modo debug (boot calado ou nao),
 # parametros de video do teste de saidas (se houve teste) e dos monitores
@@ -343,6 +358,7 @@ boot_compose() {
   line=$(latency_cmdline "${out[*]}")
   line=$(amd_driver_cmdline "$line")
   line=$(nvidia_driver_cmdline "$line")
+  line=$(i915_driver_cmdline "$line")
   line=$(quirks_cmdline "$line")
   line=$(debug_cmdline "$line")
   line=$(i8042_cmdline "$line")
