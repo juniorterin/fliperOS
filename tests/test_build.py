@@ -11132,6 +11132,44 @@ class DockerfileTests(unittest.TestCase):
         self.assertIn('ubuntu:24.04', (ROOT / 'Dockerfile.packages').read_text())
 
 
+class DrmMasterTests(unittest.TestCase):
+    """gui/drmmaster.py: na Intel o Mesa deixa o master da tela depois do
+    display.quit() do pygame, e o jogo seguinte nao abria."""
+    GUI = ROOT / 'fliperos-setup/gui'
+
+    def module(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('drmmaster', self.GUI / 'drmmaster.py')
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_drop_releases_only_the_dri_card_descriptors(self):
+        from unittest import mock
+        mod = self.module()
+        links = {'3': '/dev/dri/card0', '4': '/dev/dri/renderD128', '5': '/tmp/x', '6': '/dev/dri/card1'}
+        with mock.patch.object(mod.os, 'listdir', return_value=list(links)), \
+                mock.patch.object(mod.os, 'readlink', side_effect=lambda p: links[p.rsplit('/', 1)[1]]), \
+                mock.patch.object(mod.fcntl, 'ioctl') as ioctl:
+            self.assertEqual(mod.drop(), 2)
+        self.assertEqual([c.args for c in ioctl.call_args_list],
+                         [(3, mod.DRM_IOCTL_DROP_MASTER), (6, mod.DRM_IOCTL_DROP_MASTER)])
+        self.assertEqual(mod.DRM_IOCTL_DROP_MASTER, 0x641F)
+
+    def test_a_descriptor_that_is_not_the_master_is_skipped(self):
+        from unittest import mock
+        mod = self.module()
+        with mock.patch.object(mod.os, 'listdir', return_value=['3']), \
+                mock.patch.object(mod.os, 'readlink', return_value='/dev/dri/card0'), \
+                mock.patch.object(mod.fcntl, 'ioctl', side_effect=PermissionError):
+            self.assertEqual(mod.drop(), 0)
+
+    def test_both_pygame_programs_drop_it_after_closing_the_display(self):
+        for name in ('fliperos-frontend', 'fliperos-gui'):
+            text = (self.GUI / name).read_text()
+            self.assertRegex(text, r'display\.quit\(\)[^\n]*\n(?:[^\n]*\n)*?[^\n]*drmmaster\.drop\(\)', name)
+
+
 class OnDemandFrontendTests(unittest.TestCase):
     """O ES-DE e o Pegasus nao vem na imagem: o Setup os compila no gabinete
     (config/fliperos-frontend-build) com a receita e os patches do packaging/."""

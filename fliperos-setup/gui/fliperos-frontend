@@ -299,7 +299,10 @@ class Frontend:
         pg.mouse.set_visible(False)
 
     def close(self):
+        import drmmaster
         self.pg.display.quit()
+        # Na Intel o Mesa deixa o master da tela para tras e o jogo nao abre.
+        drmmaster.drop()
         self.window = None
 
     def default_filter(self):

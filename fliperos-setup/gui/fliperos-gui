@@ -106,6 +106,9 @@ class App:
         if self.window is not None:
             self.mute_console(False)
             self.pygame.display.quit()
+            # Na Intel o Mesa deixa o master da tela para tras (gui/drmmaster.py).
+            import drmmaster
+            drmmaster.drop()
             self.window = None
 
     def mute_console(self, mute):
