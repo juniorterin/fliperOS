@@ -2188,6 +2188,42 @@ class EmulatorsVulkanTests(Base):
         self.assertLess(body.index("emulators_vulkan_sync"), body.index("[[ ${2:-} == game ]]"))
 
 
+class BootGameFastTests(Base):
+    """O jogo direto no boot quer o boot mais curto: o Limine espera 1 s (3
+    com os outros launchers) e o login do tty1 nao espera a rede."""
+
+    def test_menu_timeout_follows_the_launcher(self):
+        defaults = self.env.etc / "fliperos-boot"
+        defaults.write_text('FLIPEROS_CMDLINE="quiet"\nFLIPEROS_TIMEOUT="3"\n')
+        calls = self.env.dir / "limine"
+        self.env.stub("limine-update", "echo run >> %s" % calls)
+        script = """
+            is_installed() { return 0; }; is_live() { return 1; }
+            LIMINE_UPDATE=limine-update
+            launcher_set %s
+        """
+        self.env.out(script % "game")
+        self.assertIn('FLIPEROS_TIMEOUT="1"', defaults.read_text())
+        self.assertIn('FLIPEROS_CMDLINE="quiet"', defaults.read_text())
+        self.assertEqual((self.env.etc / "session").read_text(), "game\n")
+        # O mesmo valor: o menu nao e reescrito.
+        self.env.out(script % "game")
+        self.assertEqual(calls.read_text().split(), ["run"])
+        self.env.out(script % "fliperos")
+        self.assertIn('FLIPEROS_TIMEOUT="3"', defaults.read_text())
+        self.assertEqual(calls.read_text().split(), ["run", "run"])
+
+    def test_login_does_not_wait_for_the_network(self):
+        unit = (ROOT / "config" / "fliperos-user-sessions.service").read_text()
+        after = [l for l in unit.splitlines() if l.startswith("After=")]
+        self.assertEqual(len(after), 1)
+        self.assertNotIn("network", after[0])
+        self.assertIn("ExecStart=/usr/lib/systemd/systemd-user-sessions start", unit)
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        self.assertIn('fliperos-user-sessions.service" "$root/etc/systemd/system/systemd-user-sessions.service"', rootfs)
+        self.assertIn("sed -i '/^[^#]*pam_lastlog\\.so/d' \"$root/etc/pam.d/login\"", rootfs)
+
+
 class FirstBootLiveTests(Base):
     """O primeiro boot ja instala e liga a tela ao vivo do painel web."""
 

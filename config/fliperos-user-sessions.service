@@ -1,0 +1,15 @@
+# /etc/systemd/system/systemd-user-sessions.service (fliperos-rootfs.sh): o
+# do systemd, sem o After=network.target. O login automatico do tty1 espera
+# este servico, e ele esperava o NetworkManager subir (1 s no gabinete): o
+# jogo direto no boot e o frontend abriam depois da rede, que nenhum deles
+# espera. A rede sobe em paralelo, como antes.
+[Unit]
+Description=Permit User Sessions
+Documentation=man:systemd-user-sessions.service(8)
+After=remote-fs.target nss-user-lookup.target home.mount
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/systemd/systemd-user-sessions start
+ExecStop=/usr/lib/systemd/systemd-user-sessions stop

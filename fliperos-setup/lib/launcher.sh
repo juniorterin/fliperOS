@@ -190,6 +190,8 @@ launcher_set() {
   printf '%s\n' "$1" > "$SESSION_FILE"
   conf_set launcher "$1"
   log_info "launcher padrao: $1"
+  # O jogo direto no boot quer o boot mais curto: o Limine espera menos.
+  boot_menu_timeout "$1"
 }
 
 # launcher_package NOME imprime o pacote que traz o launcher (repositorio

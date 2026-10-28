@@ -448,6 +448,25 @@ boot_write_var() {
     chmod 644 "$tmp" && mv -f "$tmp" "$file"
 }
 
+# boot_menu_timeout LAUNCHER: os segundos do menu (escondido) do Limine
+# (FLIPEROS_TIMEOUT). Com o jogo direto no boot, 1: o boot mais curto, e uma
+# tecla segurada ainda abre o menu (o kernel anterior, o driver radeon, o
+# diagnostico). Com os outros launchers, os 3 de sempre. So reescreve o menu
+# quando o valor muda.
+boot_menu_timeout() {
+  local want=3 now
+  [[ $1 == game ]] && want=1
+  [[ -f $BOOT_DEFAULTS ]] || return 0
+  now=$(sed -n 's/^FLIPEROS_TIMEOUT="\(.*\)"$/\1/p' "$BOOT_DEFAULTS" | head -1)
+  [[ $now == "$want" ]] && return 0
+  boot_write_var FLIPEROS_TIMEOUT "$want" || return 1
+  log_info "menu do Limine: ${want} s"
+  if is_installed && ! is_live; then
+    run_logged "$LIMINE_UPDATE"
+  fi
+  return 0
+}
+
 # boot_apply grava no sistema instalado a linha do kernel da configuracao
 # atual (modo de boot, EDID, orientacao e latencia) e atualiza o menu do
 # Limine.

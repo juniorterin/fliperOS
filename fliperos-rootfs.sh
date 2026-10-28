@@ -251,6 +251,13 @@ install -Dm644 "$src/config/fliperos-session-stop.conf" \
 # Nem por um servico (do sistema ou do usuario) que nao sai no SIGTERM.
 install -Dm644 "$src/config/fliperos-stop-timeout.conf" "$root/etc/systemd/system.conf.d/fliperos-stop.conf"
 install -Dm644 "$src/config/fliperos-stop-timeout.conf" "$root/etc/systemd/user.conf.d/fliperos-stop.conf"
+# Ligar mais rapido: o login automatico do tty1 nao espera a rede subir.
+install -Dm644 "$src/config/fliperos-user-sessions.service" "$root/etc/systemd/system/systemd-user-sessions.service"
+# O pam_lastlog saiu do Ubuntu 24.04, mas a linha dele ficou no login: um
+# erro a cada login, nada mais.
+if [[ -f "$root/etc/pam.d/login" && ! -e "$root/usr/lib/security/pam_lastlog.so" ]]; then
+  sed -i '/^[^#]*pam_lastlog\.so/d' "$root/etc/pam.d/login"
+fi
 # O scrape automatico (config/fliperos-scrape.service, Setup > System >
 # Services > Auto scrape): sobe depois do boot (scrape=after) ate a pessoa
 # mudar, e segue com um jogo aberto.
