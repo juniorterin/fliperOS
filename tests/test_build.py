@@ -11298,6 +11298,14 @@ class DocsTests(unittest.TestCase):
 class ReleaseTests(unittest.TestCase):
     """Toda ISO nova vai para os Releases do GitHub com o changelog da versao,
     no formato dos releases do GroovyArcade (tools/release-publish.sh)."""
+
+    def test_audit_expects_the_boot_menu_timer_of_the_template(self):
+        # A 0.14 baixou o timer do menu da ISO de 30 para 10 s e a auditoria
+        # seguiu esperando 30: o build inteiro nao foi publicado.
+        audit = (ROOT / 'tools/verify-iso.sh').read_text()
+        self.assertNotIn("timeout: 30$", audit)
+        self.assertIn("sed -n 's/^timeout: \\([0-9]*\\)$/\\1/p' \"$src/config/limine.conf\"", audit)
+        self.assertRegex((ROOT / 'config/limine.conf').read_text(), r'(?m)^timeout: \d+$')
     SCRIPT = ROOT / 'tools/release-publish.sh'
     VERSION = re.search(r'^FLIPEROS_VERSION="(.*)"$', MKISO, re.M).group(1)
 
