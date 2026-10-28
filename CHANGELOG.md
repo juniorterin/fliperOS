@@ -2,6 +2,39 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.16
+
+FliperOS now runs on Intel HD graphics. On a Core i3-540 (Ironlake, first generation) with the VGA output, the FliperOS frontend, the Setup, RetroArch, GroovyMAME and Attract-Mode Plus work, and the boot menu has a new **Intel 15 kHz 240p** entry that comes up in progressive 1280x240 instead of 1280x480 interlaced. The Setup marks with a red X what a card without OpenGL 3 can't run (EmulationStation-DE, the 480i filter, PCSX2, Dolphin, DuckStation) and asks before opening it. EmulationStation-DE and Pegasus are no longer in the image: the Setup builds the one you choose, on the cabinet, with FliperOS's patches. The limits of the Intel HD are in the Video cards page of the wiki.
+
+**System changes:**
+
+- Intel HD graphics: the screen is released when a program closes it. On Ironlake the Mesa leaves descriptors of `/dev/dri/card0` open after `pygame.display.quit()`, so the process stayed the master of the screen: RetroArch failed with `Error when switching mode` and the frontend could not reopen (`kmsdrm not available`). The frontend and the graphic Setup now drop the master (`gui/drmmaster.py`)
+- Boot menu: new entry **Intel 15 kHz 240p** (`drm.edid_firmware=edid/fliperos-1280x240.bin`). The image builds the EDID (26.058 MHz, 15.66 kHz, 60 Hz) and checks it; the installer and the installed system keep the mode, with the EDID in the initramfs. Seen on a CRT with an Ironlake
+- EmulationStation-DE and Pegasus are not in the image or in its local repository any more. Setup > Games > Frontend builds the one you choose the first time, with its patches (the horizontal stretch of ES-DE, the KMS patch of Pegasus). It needs the network and takes a while
+- Attract-Mode Plus on Intel Ironlake: its SFML makes the screen buffer in ARGB8888, which the card refuses to show, so the screen stayed black (`Failed to create fb`). The package carries two SFML patches: a fallback to XRGB8888 and the release of the screen master when the context is cleaned up
+
+**Package changes:**
+
+- Removed from the image and from `/opt/fliperos/repo`: `fliperos-emulationstation` and `fliperos-pegasus` (their recipes stay, marked `PKG_ON_DEMAND=1`, and are built on the cabinet)
+- `fliperos-attractplus` 3.2.3-1fliperos4: SFML patches `0002` (XRGB8888 fallback) and `0003` (drop the DRM master)
+
+**fliperos-setup changes:**
+
+- Video Setup > Resolution: on an Intel i915 card with a 15 kHz monitor, a new **1280x240 60 Hz progressive** mode, made from an EDID of the FliperOS. Pick a 480i entry to go back
+- Items the card can't run get a red X (the text menus show `(not supported)`), the reason (`Needs OpenGL 3.3 or Vulkan, and this video card gives OpenGL 2.1 and OpenGL ES 2.0`) and a question before they open, with *No* as the default: EmulationStation-DE in Games > Frontend, 480i hacks in Video Setup, and PCSX2, Dolphin and DuckStation in Games > Emulators & Games. The check reads the card with `eglinfo`; without it nothing is marked
+- Games > Frontend: choosing EmulationStation-DE or Pegasus says that it will be built on this machine (network, time) and asks. ES-DE is refused before the build on a card without OpenGL 3.3 or OpenGL ES 3.0
+- The installer takes the Intel 240p EDID to the disk (`install_configure_video`), and `boot_apply` rebuilds the initramfs when that mode is chosen
+
+**Tool changes:**
+
+- `config/fliperos-frontend-build`, installed as `fliperos-emulationstation` and `fliperos-pegasus`: `about`, `unsupported` and `fetch --progress`. It installs the build tools of the recipe, builds the `.deb`, installs it and removes only the tools it brought. The log is `/var/log/<package>-build.log`
+- `packaging/build-deb.sh --list-iso` lists the recipes the CI builds for the image (the ones without `PKG_ON_DEMAND=1`); the recipes and patches are in `/usr/local/share/fliperos/packaging`
+- `lib/drm.sh`: `gpu_gl_levels` and `gpu_needs` read the OpenGL of the card; `gui/widgets.py` draws the red X; `config/fliperos-rebuild-edids` also writes `fliperos-1280x240.bin`
+
+**Documentation:**
+
+- Video cards page: what was tested on the Intel HD, its limits (no native low resolutions, OpenGL 2.1, no Vulkan, the processor must have graphics, Recovery Mode for a changed card) and what the Setup marks. Install page: the new boot entry. Frontends page: building ES-DE and Pegasus on the cabinet
+
 ## 0.15
 
 The first boot is now a short wizard instead of a launcher question: the FliperOS frontend is already what opens, and the wizard offers the Wi-Fi (only when the network cable brings no internet), then the controls. The FliperOS frontend can charge by the time played (commercial mode, with a coin slot on screen), closes a game with a key or a button combination of your choice, and its power button now powers off the cabinet when no game is open. On the AMD amdgpu driver, Flycast and Dolphin run in Vulkan. Booting straight into one game and rebooting are quicker, and the web panel is never kept by the browser. None of the frontend's new options, the Vulkan renderers or the first boot wizard have been seen on a CRT yet.

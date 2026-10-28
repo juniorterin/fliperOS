@@ -29,7 +29,7 @@ export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorteri
 // lista está no fim dos dois READMEs: um nome novo entra nos três.
 export const CONTRIBUTORS = [{ name: 'ultimatevga-dot', url: 'https://github.com/ultimatevga-dot' }] as const;
 
-export const FLIPEROS_VERSION = '0.15';
+export const FLIPEROS_VERSION = '0.16';
 
 // A ISO se chama fliperos-VERSAO.iso. Este endereco baixa o arquivo direto
 // no release mais recente; se o nome mudar, a API (github.ts) manda o certo.

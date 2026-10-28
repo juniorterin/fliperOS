@@ -4758,10 +4758,13 @@ class SessionTableTests(unittest.TestCase):
         # "fetch:COMANDO" na coluna do pacote: o que nao pode vir na imagem. O
         # comando vem na imagem, e o binario da linha so existe depois do fetch.
         fetched = {r[0]: r for r in self.rows() if r[3].startswith('fetch:')}
-        self.assertEqual(sorted(fetched), ['fightcade'])
-        for row in fetched.values():
+        # O ES-DE e o Pegasus tambem: o comando os COMPILA no gabinete
+        # (config/fliperos-frontend-build, instalado com o nome de cada pacote).
+        self.assertEqual(sorted(fetched), ['emulationstation', 'fightcade', 'pegasus'])
+        for name, row in fetched.items():
             command = row[3][len('fetch:'):]
-            self.assertTrue((ROOT / 'config' / command).is_file(), command)
+            source = 'fliperos-frontend-build' if name in ('emulationstation', 'pegasus') else command
+            self.assertTrue((ROOT / 'config' / source).is_file(), command)
             self.assertIn('"$root/opt/fliperos/bin/%s"' % command, ROOTFS)
             self.assertFalse(row[2].startswith('/opt/fliperos/bin/'), row)
         self.assertEqual(fetched['fightcade'],
@@ -5386,7 +5389,7 @@ class WebPanelTests(unittest.TestCase):
                          'if [ "$1 $2" = "--wifi scan" ]; then echo "wlan0|Casa|80|WPA2"; fi\n'
                          'if [ "$1 $2" = "--wifi connect" ]; then read -r p; echo "wifi $p" >> %s/secret.log; fi\n'
                          'if [ "$1" = --password ]; then read -r p; [ ${#p} -lt 4 ] && exit 2; echo "password $p" >> %s/secret.log; fi\n'
-                         'if [ "$1" = --whatsnew ]; then echo "This is FliperOS 0.15, update 34."; fi\n'
+                         'if [ "$1" = --whatsnew ]; then echo "This is FliperOS 0.16, update 35."; fi\n'
                          'if [ "$1" = --romfilter ]; then\n'
                          '  echo "$*" >> %s/romfilter.log\n'
                          '  case "$2 $3" in\n'
@@ -11471,7 +11474,7 @@ class DocsTests(unittest.TestCase):
             # Leva a cada pagina da wiki, e so a paginas que existem.
             linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
             self.assertEqual(linked, self.pages())
-            for needed in ('dd if=fliperos-0.15.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
+            for needed in ('dd if=fliperos-0.16.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
                            'tools/wiki-publish.sh', 'openbor/Paks', 'Video Setup'):
                 self.assertIn(needed, readme)
         # O passo a passo tem os mesmos passos numerados nas duas linguas.

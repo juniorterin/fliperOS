@@ -966,8 +966,9 @@ class DeflickerTests(Base):
         self.assertIn('python3 "$SETUP_DIR/gui/color-calibrate.py"', calibrate)
         self.assertIn("FLIPEROS_COLOR_FILE=", calibrate)
         self.assertTrue((ROOT / "fliperos-setup/gui/color-calibrate.py").is_file())
-        self.assertIn('"mode480|480i hacks|', screen)
-        self.assertIn("mode480) screen_mode480 ;;", screen)
+        self.assertIn('"mode480|$mode480_label|', screen)
+        self.assertIn("screen_mode480\n", screen)
+        self.assertIn('gpu_unsupported_ok "480i hacks" "480i hacks" "$mode480_why"', screen)
         body = screen.split("screen_mode480()")[1]
         self.assertIn("UI_GRID_LIVE=1", body)
         self.assertIn('"240p|640x240;filter|480i filter;pure|480i pure"', body)

@@ -90,7 +90,7 @@ const ptBR: Messages = {
     viewOnGithub: 'Ver no GitHub',
   },
   hero: {
-    eyebrow: 'fliperos 0.15 · em desenvolvimento',
+    eyebrow: 'fliperos 0.16 · em desenvolvimento',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Feito para CRT.',
     description:
@@ -236,7 +236,7 @@ const ptBR: Messages = {
       { id: 'pc', title: 'Um PC 64 bits comum', text: '2 núcleos e 4 GB de RAM rodam até PlayStation 1; 4 núcleos e 16 GB rodam tudo o que vem na imagem.' },
       { id: 'network', title: 'Aberto pela rede', text: 'Copie jogos de qualquer PC para \\\\fliperos\\roms. O SSH vem ligado desde o primeiro boot.' },
       { id: 'updates', title: 'Updates no boot', text: 'Os updates chegam pela rede e mostram o que mudam antes de perguntar. Não precisa de ISO nova.' },
-      { id: 'status', title: 'Ainda em desenvolvimento', text: 'Versão 0.15. Alguns recursos, como o monitor vertical e os displays de LED, ainda não foram vistos em hardware de verdade.' },
+      { id: 'status', title: 'Ainda em desenvolvimento', text: 'Versão 0.16. Alguns recursos, como o monitor vertical e os displays de LED, ainda não foram vistos em hardware de verdade.' },
     ],
     cta: 'Requisitos completos',
   },

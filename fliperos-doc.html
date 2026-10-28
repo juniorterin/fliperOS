@@ -7,10 +7,10 @@ h1,h2,h3{line-height:1.25;color:#8fd5bb}h1{margin-top:3em;border-top:1px solid #
 pre{overflow:auto;background:#202b36;padding:20px;border-radius:6px}code{font-size:.9em}
 table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1px solid #405060;text-align:left;padding:12px}
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
-</style><main><h1 id="fliperos-015">FliperOS 0.15</h1>
+</style><main><h1 id="fliperos-016">FliperOS 0.16</h1>
 <p><strong>English</strong> | <a href="README.pt-BR.md">Português</a></p>
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
-<p>In development: 0.15 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
+<p>In development: 0.16 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
 <h2 id="whats-included">What's included</h2>
 <ul>
 <li><strong>Video</strong>: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.</li>
@@ -39,7 +39,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h3 id="1-what-you-need">1. What you need</h3>
 <ul>
 <li><strong>A PC (amd64)</strong> for the cabinet. For arcade games up to the 90s and consoles up to the PlayStation, a 2-core CPU, 4 GB of RAM and a 16 GB disk are enough. For PS2, Model 3 and Dreamcast, a 4-core CPU with AVX2 (Core i7-7700, Ryzen 5 3600 or newer), 16 GB and an SSD. The disk you install to is <strong>erased completely</strong>.</li>
-<li><strong>A graphics card with analog output.</strong> The best fit is an <strong>AMD Radeon with VGA or DVI-I</strong> from the HD 2000 series to the R7/R9 (GCN 1.0), which generates 15 kHz natively. Intel and NVIDIA work at 15 kHz with "super resolution" modes; an NVIDIA with VGA or DVI-I (GeForce 8 to GTX 900) gets native resolutions if it passes the low resolution test. Cards without an analog output need a DisplayPort/HDMI to VGA converter. The full list is in <a href="#Video-cards">Video cards</a>.</li>
+<li><strong>A graphics card with analog output.</strong> The best fit is an <strong>AMD Radeon with VGA or DVI-I</strong> from the HD 2000 series to the R7/R9 (GCN 1.0), which generates 15 kHz natively. Intel and NVIDIA work at 15 kHz with "super resolution" modes (an Intel HD of the first generation has only OpenGL 2.1: no EmulationStation-DE, no 480i flicker filter, no Vulkan; see its limits in the wiki); an NVIDIA with VGA or DVI-I (GeForce 8 to GTX 900) gets native resolutions if it passes the low resolution test. Cards without an analog output need a DisplayPort/HDMI to VGA converter. The full list is in <a href="#Video-cards">Video cards</a>.</li>
 <li><strong>The monitor</strong>: an arcade CRT (15 kHz), a TV through a VGA to SCART/component adapter, or a 25/31 kHz monitor. An LCD also works.</li>
 <li><strong>A USB stick of 4 GB or more</strong> (it will be erased).</li>
 <li><strong>A USB keyboard</strong> for the installation. After that, the panel or a gamepad moves through all the menus.</li>
@@ -48,8 +48,8 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </ul>
 <h3 id="2-download-the-iso">2. Download the ISO</h3>
 <ol>
-<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.15.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
-<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.15.iso</code> on Linux, <code>Get-FileHash fliperos-0.15.iso</code> in Windows PowerShell.</li>
+<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.16.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
+<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.16.iso</code> on Linux, <code>Get-FileHash fliperos-0.16.iso</code> in Windows PowerShell.</li>
 </ol>
 <h3 id="3-write-the-usb-stick">3. Write the USB stick</h3>
 <p>The ISO must be written <strong>byte for byte</strong>. Programs that rebuild the stick's boot structure break it: <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work.</strong></p>
@@ -59,7 +59,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Linux</strong>: find the stick with <code>lsblk</code> (here <code>/dev/sdX</code>; the wrong device erases the wrong disk) and run:</li>
 </ul>
 <p><code>bash
-  sudo dd if=fliperos-0.15.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+  sudo dd if=fliperos-0.16.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
 <h3 id="4-prepare-the-cabinets-bios">4. Prepare the cabinet's BIOS</h3>
 <p>Enter the BIOS/UEFI setup (usually <strong>Del</strong>, <strong>F2</strong> or <strong>F10</strong> right after power-on) and:</p>
 <ol>
@@ -304,7 +304,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="build-and-tests">Build and tests</h2>
 <p>Always in Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> explains why).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.15.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.16.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -365,6 +365,12 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <td>Super resolution, with interlace (patch 09)</td>
 </tr>
 <tr>
+<td>Intel HD Graphics Gen5 (Ironlake: Core i3 5xx, i5 6xx)</td>
+<td><code>i915</code></td>
+<td>VGA on the motherboard</td>
+<td>Super resolution, 480i, <strong>seen on a CRT</strong>. Only OpenGL 2.1: <a href="#limits-of-the-intel-hd">no ES-DE, no filter, no Vulkan</a></td>
+</tr>
+<tr>
 <td>Other Intel generations</td>
 <td><code>i915</code></td>
 <td>VGA on the motherboard</td>
@@ -372,7 +378,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </tr>
 </tbody>
 </table>
-<p>Only one card has been seen on a CRT by the project: an AMD R7 240 (<code>radeon</code>). The other lines come from the kernel patches and from what the GroovyArcade and Batocera communities report.</p>
+<p>Two cards have been seen on a CRT by the project: an AMD R7 240 (<code>radeon</code>) and an Intel HD Graphics (Ironlake, <code>i915</code>). The other lines come from the kernel patches and from what the GroovyArcade and Batocera communities report.</p>
 <h2 id="amdati">AMD/ATI</h2>
 <p>The cards CRT_EmuDriver covers on Windows, with VGA or DVI-I: the HD 2000 series to the R7/R9 200 and 300 with GCN 1.0. The 15 kHz kernel patches cover <code>radeon</code> and <code>amdgpu</code> (DCE and DCN 1 to 3): native boot at <code>640x480iS</code> and every game at its own resolution, in GroovyMAME, RetroArch and the frontends.</p>
 <p>Good, cheap choices: <strong>HD 5450, HD 6450, HD 7750, R7 240, R7 250</strong>.</p>
@@ -444,8 +450,67 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p><strong>Without analog output (GTX 10 and newer).</strong> Super resolution only, through an active converter. RTX 20 and 30 cards need their GSP firmware, which stays in the system (<code>/usr/lib/firmware/nvidia</code>).</p>
 <h2 id="intel">Intel</h2>
 <p>Intel integrated graphics use the <strong>Intel 15 kHz</strong> boot entry, always in super resolution (<code>1280x480iS</code>): <code>i915</code> doesn't generate the low clocks.</p>
+<p>In Setup &gt; Video Setup &gt; Resolution an Intel card also lists <strong>1280x240 60 Hz progressive</strong> (240p, no interlace flicker in the menus). It is not in the kernel's mode table, so the Setup writes an EDID with that mode (<code>fliperos-1280x240.bin</code>, 26.058 MHz, 15.66 kHz), puts it in the initramfs and points <code>drm.edid_firmware</code> at it. Pick the 480i entry again to go back. <strong>Seen on the tube</strong> (Core i3-540, VGA).</p>
+<p>The same mode is in the media's boot menu as <strong>Intel 15 kHz 240p</strong> (next to <em>Intel 15 kHz</em>): the installer, the Setup and the frontend already come up in progressive 240p, and the installed system keeps it. The image builds the EDID (<code>fliperos-rebuild-edids</code>); on the installed disk it goes into the initramfs.</p>
 <p>On <strong>Gen9</strong> (Skylake, Kaby Lake, Coffee Lake, Comet Lake) patch 09 enables interlace, with <code>i915.no_ytiled_scanout=1</code> on the kernel line. Other generations have no interlace patch: 240p works, 480i may not.</p>
 <p>The VGA port of many motherboards is a DisplayPort to VGA bridge chip on the board, so results vary by motherboard.</p>
+<h3 id="what-was-tested">What was tested</h3>
+<p>Seen working on a CRT, through the VGA output, installed from the <strong>Intel 15 kHz</strong> boot entry:</p>
+<ul>
+<li><strong>Card:</strong> Intel HD Graphics of a Core i3-540 (Clarkdale, Ironlake, Gen5), driver <code>i915</code>, kernel 6.18, Mesa 25.2.</li>
+<li><strong>Works:</strong> the boot menu and the Setup (1280x480i), the <strong>FliperOS frontend</strong>, <strong>RetroArch</strong> (each game in its own super resolution, such as 2560x224), <strong>GroovyMAME</strong> and <strong>Attract-Mode Plus</strong>.</li>
+<li><strong>Starts, games not tried:</strong> Pegasus.</li>
+<li><strong>Also seen:</strong> the 1280x240 progressive mode above.</li>
+<li><strong>Not seen on the tube:</strong> any other Intel generation, and the 3D emulators.</li>
+</ul>
+<h3 id="limits-of-the-intel-hd">Limits of the Intel HD</h3>
+<p>What a user of this card has to know:</p>
+<ul>
+<li><strong>No native low resolutions.</strong> The card can't generate a pixel clock under about 25 MHz, so a 320x240 game is shown as 2560x240 (same lines, same refresh, wider). On a CRT the picture is almost the same. The boot, the Setup and the frontend are in 1280x480i by default: interlaced, so thin horizontal lines flicker. The 1280x240 option above is the way out, once it is checked on a tube.</li>
+<li><strong>OpenGL 2.1 and OpenGL ES 2.0 only</strong> (Ironlake; the Mesa driver is <code>crocus</code>). Everything that asks for OpenGL 3 does not run:</li>
+<li><strong>EmulationStation-DE does not open</strong> (it needs OpenGL 3.3 or OpenGL ES 3.0). Setup &gt; Games &gt; Frontend marks it with a red X and a warning, asks before choosing it, and the installer refuses to build it. Pegasus (Qt, OpenGL ES 2.0) is not affected.</li>
+<li><strong>RetroArch uses its <code>gl</code> driver instead of <code>glcore</code></strong>: <code>fliperos-kms-run</code> checks the card and switches by itself. A core or a shader that needs OpenGL 3 will not work.</li>
+<li><strong>The 480i flicker filter and the software colour adjustments are off</strong> (the log says <code>OpenGL 3.0 or newer is needed; filter off for this program</code>). Setup &gt; Video Setup &gt; 480i hacks has no effect on this card.</li>
+<li><strong>No Vulkan on Ironlake.</strong> Emulators that need it (the Vulkan renderers of Flycast, Dolphin, PCSX2, DuckStation) are not usable, and the Vulkan-by-driver switch of the Setup only acts on <code>amdgpu</code>. Not tested; it follows from the hardware. The same goes for the 3D emulators on a card from 2010: not tried.</li>
+<li><strong>The processor must have graphics.</strong> The VGA port of a board only works with a CPU that has them: Clarkdale (Core i3 5xx, i5 6xx) does; Lynnfield (Core i7 8xx, i5 7xx) does not, and the board shows no video device at all (seen on an i7 870).</li>
+<li><strong>Changing the video card on an installed system is not detected by the system.</strong> The kernel line and <code>/etc/fliperos/fliperos.conf</code> keep the settings of the previous card (a <code>320x240</code> mode, the AMD driver options), and the system may boot without a picture. Boot the media and use <strong>Recovery Mode</strong>: it runs the output test again and rewrites only the video settings on the disk (see <a href="#Install">Install</a>).</li>
+</ul>
+<h3 id="what-the-setup-marks-as-not-supported">What the Setup marks as not supported</h3>
+<p>On a card that gives less than OpenGL 3, the Setup marks the item with a red X (and <code>(not supported)</code> in the text menus), shows the reason (<code>Needs OpenGL 3.3 or Vulkan, and this video card gives OpenGL 2.1 and OpenGL ES 2.0</code>) and asks before opening it (the default is <em>No</em>). The check reads the card with <code>eglinfo</code>; without it, nothing is marked.</p>
+<table>
+<thead>
+<tr>
+<th>Where</th>
+<th>Item</th>
+<th>Needs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Games &gt; Frontend</td>
+<td>EmulationStation-DE</td>
+<td>OpenGL 3.3 or OpenGL ES 3.0</td>
+</tr>
+<tr>
+<td>Video Setup</td>
+<td>480i hacks (the flicker filter)</td>
+<td>OpenGL 3.0</td>
+</tr>
+<tr>
+<td>Games &gt; Emulators &amp; Games</td>
+<td>PCSX2, Dolphin, DuckStation</td>
+<td>OpenGL 3.3 or Vulkan (each project's own minimum)</td>
+</tr>
+</tbody>
+</table>
+<p>Flycast, Supermodel and the other emulators are not marked: their minimum was not checked against this card.</p>
+<h3 id="intel-specific-workarounds-in-fliperos">Intel-specific workarounds in FliperOS</h3>
+<p>Three things only the Intel showed, fixed in the code:</p>
+<ul>
+<li><strong>The screen was not released after a program closed it.</strong> On Ironlake the Mesa leaves descriptors of <code>/dev/dri/card0</code> open after <code>pygame.display.quit()</code>, so the process stayed the owner (DRM master) of the screen: RetroArch failed with <code>Error when switching mode</code> and the frontend could not reopen (<code>kmsdrm not available</code>). <code>gui/drmmaster.py</code> drops the master after the display is closed (frontend and Setup).</li>
+<li><strong>Attract-Mode Plus showed a black screen</strong> because SFML makes its buffer in ARGB8888, which Ironlake refuses to scan out (<code>Failed to create fb</code>). The package <code>fliperos-attractplus</code> carries two SFML patches: a fallback to XRGB8888 (<code>0002</code>) and the same drop of the master when its context is cleaned up (<code>0003</code>).</li>
+<li><strong>The frontend chooser</strong> marks what the card can't run (see above).</li>
+</ul>
 <h2 id="several-cards">Several cards</h2>
 <p>A second card for a second or third monitor works best if it is AMD too. See <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
 <h1 id="Install">Install</h1>
@@ -453,7 +518,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <h2 id="writing-the-media">Writing the media</h2>
 <p>Write the ISO <strong>byte for byte</strong> to a USB stick and disable Secure Boot (the 15 kHz kernel is custom and unsigned).</p>
 <p>The ISO uses the <strong>Limine</strong> bootloader and is <strong>hybrid</strong> (<code>xorriso</code> + <code>limine bios-install</code>): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work</strong>. Use <strong>balenaEtcher</strong>, or Rufus in "DD Image mode", or <code>dd</code>:</p>
-<pre><code class="language-bash">sudo dd if=fliperos-0.15.iso of=/dev/sdX bs=4M status=progress conv=fsync
+<pre><code class="language-bash">sudo dd if=fliperos-0.16.iso of=/dev/sdX bs=4M status=progress conv=fsync
 </code></pre>
 <p>Check <code>/dev/sdX</code> with <code>lsblk</code> first: the wrong device erases the wrong disk.</p>
 <h2 id="boot-menu">Boot menu</h2>
@@ -491,6 +556,11 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <td>Intel 15 kHz</td>
 <td><code>video=1280x480iS i915.no_ytiled_scanout=1</code></td>
 <td>Intel: super resolution; the parameter comes from patch 09 and enables interlacing on Gen9</td>
+</tr>
+<tr>
+<td>Intel 15 kHz 240p</td>
+<td><code>drm.edid_firmware=edid/fliperos-1280x240.bin video=e i915.no_ytiled_scanout=1</code></td>
+<td>Intel: 1280x240 progressive (240p, no interlace flicker), from a FliperOS EDID; the installed system keeps it</td>
 </tr>
 <tr>
 <td>NVIDIA 15 kHz</td>
@@ -1336,10 +1406,19 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 - <strong>Checking a game</strong>: open it and run <code>fliperos-versus watch mame &lt;game&gt;</code> over SSH: it prints the wins and the characters as they change, to compare with the screen.
 - The count starts again when the game closes. Only with a Pixelcade or a ZeDMD installed; without one, nothing is turned on.</p>
 <h2 id="apt-repository">APT repository</h2>
-<p>The frontends (Attract-Mode Plus, EmulationStation, Pegasus) come from a dedicated APT repository of prebuilt <code>.deb</code>s, like GroovyArcade's <code>groovy-ux-repo</code> (<code>packaging/build-deb.sh</code>, <code>packaging/make-repo.sh</code>, <code>Dockerfile.packages</code>, recipes in <code>packaging/packages/</code>).</p>
+<p>Attract-Mode Plus comes from a dedicated APT repository of prebuilt <code>.deb</code>s, like GroovyArcade's <code>groovy-ux-repo</code> (<code>packaging/build-deb.sh</code>, <code>packaging/make-repo.sh</code>, <code>Dockerfile.packages</code>, recipes in <code>packaging/packages/</code>). The build carries the repository into the image (<code>/opt/fliperos/repo</code>, <code>deb [trusted=yes] file:/opt/fliperos/repo ./</code>, option <code>--repo</code>) and already installs Attract-Mode Plus; without it, the cabinet's apt said "Unable to locate package".</p>
 <p>The <code>config/fliperos-sessions.conf</code> table says, for each launcher, whether it runs in KMS or X (from galauncher's <code>videodata.conf</code> table) and which package it comes from.</p>
-<p>The build carries the repository into the image (<code>/opt/fliperos/repo</code>, <code>deb [trusted=yes] file:/opt/fliperos/repo ./</code>, option <code>--repo</code>) and already installs Attract-Mode Plus; without it, the cabinet's apt said "Unable to locate package".</p>
-<p>Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus have recipes.</p>
+<h2 id="emulationstation-and-pegasus-built-on-the-cabinet">EmulationStation and Pegasus: built on the cabinet</h2>
+<p>ES-DE and Pegasus are <strong>not</strong> in the image or in its repository. The first time you choose one in Setup &gt; Games &gt; Frontend, the Setup says it will be built on that machine and asks for confirmation. It needs the internet.</p>
+<p>What happens (<code>config/fliperos-frontend-build</code>, installed as <code>/opt/fliperos/bin/fliperos-emulationstation</code> and <code>fliperos-pegasus</code>; the name picks the recipe):</p>
+<ol>
+<li>It installs the build tools of the recipe (<code>packaging/packages/&lt;package&gt;.sh</code>, the same recipe the CI uses, kept in <code>/usr/local/share/fliperos/packaging</code>).</li>
+<li><code>build-deb.sh</code> downloads the official source at the pinned version, <strong>applies FliperOS's patches</strong> (ES-DE: the 2x horizontal stretch in <code>packaging/patches/emulationstation</code>; Pegasus: its own KMS patch) and compiles.</li>
+<li>The <code>.deb</code> is installed with apt, which brings the runtime libraries from Ubuntu.</li>
+<li>The build tools that were not on the system before are removed.</li>
+</ol>
+<p><strong>ES-DE needs OpenGL 3.3 or OpenGL ES 3.0.</strong> A card that gives less (an Intel HD of the first generation has OpenGL 2.1 and ES 2.0) can't open it: the Frontend screen marks it with a red X and the reason, asks before choosing it, and the installer refuses to build it (<code>fliperos-emulationstation unsupported</code> prints the reason). See <a href="#Video-cards">Video cards</a>.</p>
+<p>Everything the build prints goes to <code>/var/log/&lt;package&gt;-build.log</code>. It needs about 4 GB free in <code>/var/tmp</code>. Choosing the frontend again rebuilds it. A recipe marked <code>PKG_ON_DEMAND=1</code> is left out of <code>build-deb.sh --list-iso</code>, which is the list the CI builds for the image.</p>
 <h1 id="Scoreboard-games">Scoreboard games</h1>
 <p>Every game shows on the LED display (ZeDMD or Pixelcade): its artwork or name when it is selected and when it opens, see <a href="#Frontends">Frontends</a>. This page lists the games that also have the <strong>scoreboard mode</strong>: the two characters and each side's wins in the session, described in <a href="#Frontends">Versus score on the LED display</a>.</p>
 <p>The list is the set of games <a href="https://www.fightcade.com">Fightcade</a> has a detector for (<a href="https://github.com/fightcadeorg/fightcade-detectors">fightcade-detectors</a>, commit <code>de9e7a9</code>), crossed with the sets each emulator has: 230 ROM sets.</p>
@@ -4403,7 +4482,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <h2 id="build">Build</h2>
 <p>Always in Docker (<code>CLAUDE.md</code> forbids chroot with the host's <code>/dev</code> on WSL).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.15.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.16.iso
 </code></pre>
 <table>
 <thead>
@@ -4450,7 +4529,7 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <p>What doesn't exist in Ubuntu 24.04 is downloaded with a pinned version and hash: Limine 11.4.1, Gum 2.0.2 (the <code>.deb</code> stays for the man pages; the binary is built from the same version's source with <code>patches/gum</code>, compiled with Go 1.26.7: ▲/▼ arrows instead of dots in the menus' pagination, the menu sounds and Space toggling in checklists — gum 2.0.2 only knows the key as <code>" "</code>, and its library calls it <code>space</code> —, put in place of <code>/usr/bin/gum</code> with <code>dpkg-divert</code>), AntiMicroX 3.6.1 (official <code>.deb</code> for 24.04), Skyscraper 3.21.0 (Gemba fork, compiled with Qt6).</p>
 <p>Audit of the generated ISO (read-only): checks the boot menu, kernel, setup files, libraries of the compiled programs, EDIDs and BIOS/UEFI boot.</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.15.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.16.iso
 </code></pre>
 <h2 id="release">Release</h2>
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
@@ -4460,16 +4539,16 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
 <p><code>powershell
-   git tag 0.15
-   git push origin 0.15</code></p>
+   git tag 0.16
+   git push origin 0.16</code></p>
 <p>Pushing the tag triggers the GitHub Actions <strong>Release</strong> workflow (<code>.github/workflows/release.yml</code>). It checks that the tag is <code>FLIPEROS_VERSION</code> and that <code>CHANGELOG.md</code> has its section, builds the frontends repository (<code>Dockerfile.packages</code>) and generates the ISO with the same <code>Dockerfile.fliperos</code> as the local build.</p>
 <p>Then it publishes through <code>tools/release-publish.sh</code>, with the workflow's own token. The kernel and frontend <code>.deb</code>s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h).</p>
 <p>If it fails, <code>fliperos-mkiso.log</code> is kept as a workflow artifact. Run by hand (<em>Actions &gt; Release &gt; Run workflow</em>), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.</p>
-<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.15</code>, <code>git push -f origin 0.15</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
+<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.16</code>, <code>git push -f origin 0.16</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
 <p>To publish an ISO generated here, in the audit container:</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.15.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.16.iso
 </code></pre>
 <p><code>gh auth login</code> is a one-time step: the login stays in the <code>fliperos-gh</code> volume.</p>
 <p><code>tools/release-publish.sh</code> only publishes what can go public:</p>
@@ -4484,8 +4563,8 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p>Switchres opens <code>libX11.so</code>, <code>libXrandr.so</code> and <code>libdrm.so</code> by those unversioned names, which belong to the <code>-dev</code> packages: <code>config/fliperos-dlopen-links</code> scans the binaries in <code>/usr/local</code> and <code>/opt</code> for such names and links them in <code>/usr/local/lib</code> to the installed version, and <code>tools/verify-iso.sh</code> checks the three.</p>
 <p>The packages left with nothing depending on them once the <code>-dev</code> are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an <code>apt autoremove</code> on the installed system doesn't take them.</p>
 <p>The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg <code>path-exclude</code> so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.</p>
-<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.15.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
-<p>Also published: <code>fliperos-0.15.sha256</code> (the whole ISO and each part) and <code>fliperos-0.15-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
+<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.16.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
+<p>Also published: <code>fliperos-0.16.sha256</code> (the whole ISO and each part) and <code>fliperos-0.16-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
 <h2 id="tests">Tests</h2>
 <pre><code class="language-powershell">docker build -t fliperos-tests -f tests/Dockerfile tests
