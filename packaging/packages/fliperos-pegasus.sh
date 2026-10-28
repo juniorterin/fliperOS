@@ -12,6 +12,9 @@ PKG_VERSION="0.16+2024w38"
 PKG_REVISION="1fliperos1"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://pegasus-frontend.org"
+# Fora da imagem: o Setup > Games > Frontend o compila no gabinete, com o
+# patch de KMS daqui (config/fliperos-frontend-build).
+PKG_ON_DEMAND=1
 PKG_SUMMARY="Pegasus Frontend (KMS/eglfs build for CRT)"
 PKG_DESCRIPTION="Graphical frontend for launching emulators, with QML themes.
 

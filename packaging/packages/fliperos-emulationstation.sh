@@ -11,6 +11,9 @@ PKG_VERSION="3.5.0"
 PKG_REVISION="1fliperos2"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://es-de.org"
+# Fora da imagem: o Setup > Games > Frontend o compila no gabinete, com os
+# patches daqui (config/fliperos-frontend-build).
+PKG_ON_DEMAND=1
 PKG_SUMMARY="EmulationStation Desktop Edition (KMS build for CRT)"
 PKG_DESCRIPTION="Graphical frontend for launching emulators, with themes and
 scraped game lists.

@@ -213,6 +213,17 @@ launcher_fetcher() {
   fi
 }
 
+# launcher_fetch_note NOME imprime o aviso do proprio comando antes de
+# instalar ("about"), se ele tem um: o ES-DE e o Pegasus sao compilados aqui
+# (config/fliperos-frontend-build) e a pessoa precisa saber do tempo. Vazio
+# para quem so baixa (o Fightcade).
+launcher_fetch_note() {
+  local cmd
+  cmd=$(launcher_fetcher "$1")
+  [[ -x $cmd ]] && "$cmd" about 2> /dev/null
+  return 0
+}
+
 # launcher_fetch NOME baixa e instala o launcher, falando com a tela de
 # progresso por eventos (lib/progress.sh): o proprio comando os escreve.
 launcher_fetch() {

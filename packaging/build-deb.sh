@@ -7,7 +7,11 @@
 #  pacotes desse repositorio.
 #
 #  Uso: bash packaging/build-deb.sh [--output DIR] <pacote>...
-#       bash packaging/build-deb.sh --list
+#       bash packaging/build-deb.sh --list       todas as receitas
+#       bash packaging/build-deb.sh --list-iso   as que vao no repositorio da ISO
+#
+#  Uma receita com PKG_ON_DEMAND=1 nao vai para a ISO: o Setup a compila no
+#  gabinete quando a pessoa escolhe o programa (config/fliperos-frontend-build).
 #
 #  Precisa rodar no MESMO Ubuntu da ISO (24.04): o binario linka contra as
 #  libs da imagem, e o Depends e calculado com dpkg-shlibdeps a partir do que
@@ -46,11 +50,21 @@ list_recipes() {
   done
 }
 
+# list_iso: as receitas que a CI compila para o repositorio da imagem (as
+# sob demanda ficam de fora).
+list_iso() {
+  for recipe in "$RECIPES"/*.sh; do
+    [[ -f "$recipe" ]] || continue
+    grep -q '^PKG_ON_DEMAND=1' "$recipe" || basename "$recipe" .sh
+  done
+}
+
 TARGETS=()
 while [[ $# -gt 0 ]]; do
   case $1 in
     --output) [[ $# -ge 2 ]] || err "--output requer diretorio"; OUTPUT="$2"; shift 2 ;;
     --list)   list_recipes; exit 0 ;;
+    --list-iso) list_iso; exit 0 ;;
     -*)       err "Opcao desconhecida: $1" ;;
     *)        TARGETS+=("$1"); shift ;;
   esac
@@ -74,7 +88,7 @@ build_one() {
   # Cada receita define estas variaveis e a funcao pkg_build().
   PKG_NAME=""; PKG_VERSION=""; PKG_REVISION="1"; PKG_SUMMARY=""
   PKG_DESCRIPTION=""; PKG_SECTION="games"; PKG_HOMEPAGE=""
-  PKG_BUILD_DEPS=""; PKG_RUNTIME_EXTRA=""; PKG_SHLIB_TARGETS=""
+  PKG_BUILD_DEPS=""; PKG_RUNTIME_EXTRA=""; PKG_SHLIB_TARGETS=""; PKG_ON_DEMAND=""
   unset -f pkg_build 2>/dev/null || true
   # shellcheck disable=SC1090
   source "$recipe"
@@ -84,7 +98,7 @@ build_one() {
 
   step "Packaging $PKG_NAME $PKG_VERSION-$PKG_REVISION"
 
-  WORK=$(mktemp -d /tmp/fliperos-deb.XXXXXX)
+  WORK=$(mktemp -d "${TMPDIR:-/tmp}/fliperos-deb.XXXXXX")
   SRC="$WORK/src"; STAGING="$WORK/staging"
   mkdir -p "$SRC" "$STAGING"
   export SRC STAGING

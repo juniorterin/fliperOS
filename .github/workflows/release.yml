@@ -76,7 +76,7 @@ jobs:
       - name: Repositorio dos frontends
         run: |
           docker build -f Dockerfile.packages -t fliperos-packages .
-          recipes=$(ls packaging/packages | sed 's/\.sh$//' | tr '\n' ' ')
+          recipes=$(bash packaging/build-deb.sh --list-iso | tr '\n' ' ')
           docker run --rm -v "$OUT:/pkg/output" fliperos-packages bash -c "
             set -e
             if [ '${{ steps.packages.outputs.cache-hit }}' != true ]; then bash packaging/build-deb.sh $recipes; fi

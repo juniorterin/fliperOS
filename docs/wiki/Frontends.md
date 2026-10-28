@@ -255,10 +255,19 @@ What was checked on a FliperOS cabinet, with Fightcade's own detectors and no pi
 
 ## APT repository
 
-The frontends (Attract-Mode Plus, EmulationStation, Pegasus) come from a dedicated APT repository of prebuilt `.deb`s, like GroovyArcade's `groovy-ux-repo` (`packaging/build-deb.sh`, `packaging/make-repo.sh`, `Dockerfile.packages`, recipes in `packaging/packages/`).
+Attract-Mode Plus comes from a dedicated APT repository of prebuilt `.deb`s, like GroovyArcade's `groovy-ux-repo` (`packaging/build-deb.sh`, `packaging/make-repo.sh`, `Dockerfile.packages`, recipes in `packaging/packages/`). The build carries the repository into the image (`/opt/fliperos/repo`, `deb [trusted=yes] file:/opt/fliperos/repo ./`, option `--repo`) and already installs Attract-Mode Plus; without it, the cabinet's apt said "Unable to locate package".
 
 The `config/fliperos-sessions.conf` table says, for each launcher, whether it runs in KMS or X (from galauncher's `videodata.conf` table) and which package it comes from.
 
-The build carries the repository into the image (`/opt/fliperos/repo`, `deb [trusted=yes] file:/opt/fliperos/repo ./`, option `--repo`) and already installs Attract-Mode Plus; without it, the cabinet's apt said "Unable to locate package".
+## EmulationStation and Pegasus: built on the cabinet
 
-Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus have recipes.
+ES-DE and Pegasus are **not** in the image or in its repository. The first time you choose one in Setup > Games > Frontend, the Setup says it will be built on that machine and asks for confirmation. It needs the internet.
+
+What happens (`config/fliperos-frontend-build`, installed as `/opt/fliperos/bin/fliperos-emulationstation` and `fliperos-pegasus`; the name picks the recipe):
+
+1. It installs the build tools of the recipe (`packaging/packages/<package>.sh`, the same recipe the CI uses, kept in `/usr/local/share/fliperos/packaging`).
+2. `build-deb.sh` downloads the official source at the pinned version, **applies FliperOS's patches** (ES-DE: the 2x horizontal stretch in `packaging/patches/emulationstation`; Pegasus: its own KMS patch) and compiles.
+3. The `.deb` is installed with apt, which brings the runtime libraries from Ubuntu.
+4. The build tools that were not on the system before are removed.
+
+Everything the build prints goes to `/var/log/<package>-build.log`. It needs about 4 GB free in `/var/tmp`. Choosing the frontend again rebuilds it. A recipe marked `PKG_ON_DEMAND=1` is left out of `build-deb.sh --list-iso`, which is the list the CI builds for the image.

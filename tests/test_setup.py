@@ -1781,15 +1781,24 @@ class LauncherTests(Base):
                          ["@step 0 Starting", "@step 50 args=fetch --progress"])
         self.assertEqual(self.env.run("launcher_installed fightcade", env).returncode, 0)
         self.assertIn("fightcade|Fightcade 2", self.env.out("launcher_available", env))
+        # O aviso de quem se explica ("about": o ES-DE e o Pegasus, compilados
+        # aqui); quem so baixa nao tem aviso.
+        command.write_text('#!/bin/sh\n[ "$1" = about ] && echo "Built on this machine."\nexit 0\n')
+        self.assertEqual(self.env.out("launcher_fetch_note fightcade", env).strip(), "Built on this machine.")
+        command.write_text("#!/bin/sh\nexit 0\n")
+        self.assertEqual(self.env.out("launcher_fetch_note fightcade", env), "")
         # Sem o comando na imagem: a tela recebe a falha, nao um erro do shell.
         command.unlink()
+        self.assertEqual(self.env.out("launcher_fetch_note fightcade", env), "")
         run = self.env.run("launcher_fetch fightcade", env)
         self.assertEqual(run.returncode, 1)
         self.assertIn("@fail Starting|the installer of Fightcade 2 is missing", run.stdout)
         # A tela: quem tem fetch aparece como "not installed" e e baixado.
         screen = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_frontend() {")[1].split("\n}\n")[0]
         self.assertIn('launcher_package_available "$name" || [[ -n $(launcher_fetcher "$name") ]]', screen)
-        self.assertIn('run_online "Downloading $label" "" launcher_fetch "$choice" || return 0', screen)
+        self.assertIn('run_online "$verb $label" "" launcher_fetch "$choice" || return 0', screen)
+        self.assertIn("Download it now from its own website?", screen)
+        self.assertIn('prompt="$note Install it now?" verb=Installing', screen)
         self.assertLess(screen.index("launcher_fetch "), screen.index('launcher_set "$choice"'))
         self.assertIn("roms/fightcade", self.env.out("frontends_hint fightcade"))
         self.assertEqual(self.env.out("frontends_hint pegasus"), "")

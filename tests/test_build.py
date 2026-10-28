@@ -11132,6 +11132,109 @@ class DockerfileTests(unittest.TestCase):
         self.assertIn('ubuntu:24.04', (ROOT / 'Dockerfile.packages').read_text())
 
 
+class OnDemandFrontendTests(unittest.TestCase):
+    """O ES-DE e o Pegasus nao vem na imagem: o Setup os compila no gabinete
+    (config/fliperos-frontend-build) com a receita e os patches do packaging/."""
+    SCRIPT = ROOT / 'config/fliperos-frontend-build'
+    ON_DEMAND = ('fliperos-emulationstation', 'fliperos-pegasus')
+
+    def list_recipes(self, flag):
+        run = subprocess.run(['bash', str(ROOT / 'packaging/build-deb.sh'), flag], capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        return run.stdout.split()
+
+    def test_the_iso_repository_keeps_only_the_recipes_that_are_not_on_demand(self):
+        self.assertEqual(self.list_recipes('--list-iso'), ['fliperos-attractplus'])
+        self.assertEqual(sorted(self.list_recipes('--list')), sorted(('fliperos-attractplus',) + self.ON_DEMAND))
+        self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
+
+    def test_the_session_table_fetches_them_instead_of_installing_a_package(self):
+        table = (ROOT / 'config/fliperos-sessions.conf').read_text()
+        self.assertIn('emulationstation|kms|emulationstation|fetch:fliperos-emulationstation|', table)
+        self.assertIn('pegasus|kms|pegasus-fe|fetch:fliperos-pegasus|', table)
+
+    def test_the_image_carries_the_installer_the_recipes_and_the_patches(self):
+        rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
+        for name in self.ON_DEMAND:
+            self.assertIn('"$root/opt/fliperos/bin/%s"' % name, rootfs)
+            self.assertIn(name, rootfs)
+        self.assertIn('config/fliperos-frontend-build', rootfs)
+        self.assertIn('packaging/patches/emulationstation/*.patch', rootfs)
+        self.assertIn('COPY packaging/', (ROOT / 'Dockerfile.fliperos').read_text())
+        self.assertIn('config packaging', (ROOT / 'tools/cabinet-push.sh').read_text())
+
+    def test_about_warns_that_it_is_built_here(self):
+        for name, label in (('fliperos-emulationstation', 'EmulationStation-DE'), ('fliperos-pegasus', 'Pegasus')):
+            run = subprocess.run(['bash', str(self.SCRIPT), 'about'], capture_output=True, text=True,
+                                 env=dict(os.environ, FLIPEROS_FRONTEND_PKG=name))
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertIn(label + ' does not come with FliperOS', run.stdout)
+            self.assertIn('built on this machine', run.stdout)
+
+    def build(self, tmp, name='fliperos-emulationstation', fail=False):
+        """Roda o fetch com um build-deb.sh e um apt de mentira; devolve o
+        resultado e o que o apt recebeu."""
+        packaging, bin_dir, out = tmp / 'packaging', tmp / 'bin', tmp / 'work'
+        (packaging / 'packages').mkdir(parents=True)
+        bin_dir.mkdir()
+        out.mkdir()
+        (packaging / 'packages' / (name + '.sh')).write_text('PKG_BUILD_DEPS="aaa \\\nbbb"\n')
+        (packaging / 'build-deb.sh').write_text(
+            '#!/bin/bash\n'
+            'echo "Installing build dependencies"\n'
+            'echo "Compiling (this can take a while)"\n'
+            'echo "[ 50%%] Building CXX object x.o"\n'
+            'echo "Computing Depends with dpkg-shlibdeps"\n'
+            '%s'
+            'touch "$2/%s_1-1_amd64.deb"\n' % ('exit 1\n' if fail else '', name))
+        (bin_dir / 'apt-get').write_text('#!/bin/sh\necho "$@" >> "$APT_LOG"\n')
+        # "aaa" nao estava instalada (sai no fim); "bbb" ja estava.
+        (bin_dir / 'dpkg').write_text('#!/bin/sh\n[ "$1 $2" = "-s aaa" ] && exit 1\nexit 0\n')
+        for tool in ('apt-get', 'dpkg'):
+            (bin_dir / tool).chmod(0o755)
+        env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), APT_LOG=str(tmp / 'apt.log'),
+                   FLIPEROS_FRONTEND_PKG=name, FLIPEROS_PACKAGING=str(packaging), FLIPEROS_BUILD_DIR=str(out),
+                   FLIPEROS_BUILD_LOG=str(tmp / 'build.log'), FLIPEROS_BUILD_MIN_MB='1')
+        run = subprocess.run(['bash', str(self.SCRIPT), 'fetch', '--progress'], capture_output=True, text=True,
+                             env=env, timeout=60)
+        apt = (tmp / 'apt.log').read_text().splitlines() if (tmp / 'apt.log').exists() else []
+        return run, apt, out
+
+    @unittest.skipUnless(hasattr(os, 'geteuid') and os.geteuid() == 0, 'o instalador exige root')
+    def test_fetch_builds_installs_and_removes_only_the_tools_it_brought(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run, apt, out = self.build(Path(tmp))
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            steps = [line for line in run.stdout.splitlines() if line.startswith('@step')]
+            self.assertEqual(steps[0], '@step 1 Updating the package lists')
+            self.assertIn('@step 3 Installing the build tools', steps)
+            self.assertIn('@step 12 Compiling EmulationStation-DE (30 or more minutes)', steps)
+            # O cmake conta 50%: 12 + 50 * 75 / 100.
+            self.assertIn('@step 49 Compiling EmulationStation-DE (30 or more minutes)', steps)
+            self.assertEqual(steps[-1], '@step 100 EmulationStation-DE installed')
+            self.assertTrue(apt[0].endswith('update -qq'), apt)
+            self.assertTrue(any(line.startswith('-y') and ' install ' in line and line.endswith('_1-1_amd64.deb')
+                                for line in apt), apt)
+            # So a que faltava sai do sistema; a que ja estava fica.
+            self.assertEqual(apt[-1], '-y -o DPkg::Lock::Timeout=120 purge aaa')
+            self.assertEqual(list(out.iterdir()), [], 'a pasta de trabalho do build ficou para tras')
+
+    @unittest.skipUnless(hasattr(os, 'geteuid') and os.geteuid() == 0, 'o instalador exige root')
+    def test_a_failed_build_reports_the_log_and_installs_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run, apt, out = self.build(Path(tmp), 'fliperos-pegasus', fail=True)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail Pegasus|the build failed (details in %s/build.log)' % tmp, run.stdout)
+            self.assertFalse(any(' install ' in line for line in apt), apt)
+            self.assertIn('Compiling', (Path(tmp) / 'build.log').read_text())
+            self.assertEqual(list(out.iterdir()), [])
+
+    def test_an_unknown_program_name_is_refused(self):
+        run = subprocess.run(['bash', str(self.SCRIPT), 'about'], capture_output=True, text=True,
+                             env=dict(os.environ, FLIPEROS_FRONTEND_PKG='outro'))
+        self.assertEqual(run.returncode, 2)
+
+
 class PackagingTests(unittest.TestCase):
     RECIPES = ROOT / 'packaging/packages'
 

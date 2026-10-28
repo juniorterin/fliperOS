@@ -16,7 +16,7 @@ pass=${FLIPEROS_PASSWORD:-fliperos}
 opts="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts -o LogLevel=ERROR -o ConnectTimeout=10"
 
 bundle=/tmp/fliperos-update.tar
-set -- fliperos-setup config fliperos-rootfs.sh fliperos-video-check.py fliperos-limine-update.py tools/cabinet-update.sh \
+set -- fliperos-setup config packaging fliperos-rootfs.sh fliperos-video-check.py fliperos-limine-update.py tools/cabinet-update.sh \
   updates CHANGELOG.md
 tar cf "$bundle" --exclude=__pycache__ "$@"
 # O repositorio de frontends vai como repo/ dentro do pacote.

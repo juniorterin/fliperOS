@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# Instala o EmulationStation-DE ou o Pegasus compilando-os no proprio
+# gabinete, com os patches do FliperOS. Nenhum dos dois vem na imagem: o
+# Setup > Games > Frontend roda este programa na primeira vez que a pessoa
+# escolhe um deles (a coluna "fetch:" de config/fliperos-sessions.conf).
+#
+# O arquivo e instalado com o nome de cada pacote, e o nome decide a receita
+# (packaging/packages/<nome>.sh, a mesma que a CI usa):
+#
+#   fliperos-emulationstation   ES-DE, com o esticado 2x do 640x240
+#   fliperos-pegasus            Pegasus, com o patch de KMS dele
+#
+#   fliperos-emulationstation about          o que o Setup avisa antes
+#   fliperos-emulationstation fetch [--progress]
+#                                            compila e instala (de novo: atualiza)
+#
+# A receita (packaging/build-deb.sh) baixa o fonte oficial na versao fixada,
+# aplica os patches, compila e monta um .deb; este programa o instala com o
+# apt (as bibliotecas de uso vem do Ubuntu) e tira as ferramentas de
+# compilacao que ele mesmo trouxe. A saida inteira do build vai para
+# /var/log/<pacote>-build.log.
+set -uo pipefail
+pkg=${FLIPEROS_FRONTEND_PKG:-$(basename -- "$0")}
+packaging=${FLIPEROS_PACKAGING:-/usr/local/share/fliperos/packaging}
+workdir=${FLIPEROS_BUILD_DIR:-/var/tmp}
+log=${FLIPEROS_BUILD_LOG:-/var/log/$pkg-build.log}
+min_mb=${FLIPEROS_BUILD_MIN_MB:-4096}
+
+# label, tamanho do download e quantas linhas de compilacao a tela de
+# progresso espera (o make do Pegasus nao conta porcentagem como o cmake).
+case $pkg in
+  fliperos-emulationstation)
+    label="EmulationStation-DE" download="a few hundred MB" minutes="30 or more" lines=0
+    ;;
+  fliperos-pegasus)
+    label="Pegasus" download="a few hundred MB" minutes="30 or more" lines=${FLIPEROS_BUILD_LINES:-900}
+    ;;
+  *)
+    echo "Usage: name this program fliperos-emulationstation or fliperos-pegasus." >&2
+    exit 2
+    ;;
+esac
+
+# say PORCENTAGEM TEXTO: uma etapa para a tela de progresso do Setup
+# (lib/progress.sh), ou so o texto.
+progress=0
+say() {
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+# fail TEXTO: sai com erro, avisando a tela de progresso.
+fail() {
+  if ((progress)); then printf '@fail %s|%s\n' "$label" "$1"; else printf '%s: %s\n' "$pkg" "$1" >&2; fi
+  exit 1
+}
+
+# O que a pessoa le antes de confirmar (screens/setup-menu.sh).
+if [[ ${1:-} == about ]]; then
+  echo "$label does not come with FliperOS. It is built on this machine, with FliperOS's patches, from the official source: it needs the internet, downloads $download and takes $minutes minutes."
+  exit 0
+fi
+[[ ${1:-} == fetch ]] || {
+  echo "Usage: $pkg about | fetch [--progress]" >&2
+  exit 2
+}
+shift
+[[ ${1:-} == --progress ]] && progress=1
+
+((EUID == 0)) || fail "needs root (Setup > Games > Frontend runs it)"
+[[ -f $packaging/build-deb.sh && -f $packaging/packages/$pkg.sh ]] ||
+  fail "the build recipe is missing in $packaging (an older FliperOS: run the system update)"
+mkdir -p "$workdir" 2> /dev/null || fail "could not create $workdir"
+free=$(df -Pm -- "$workdir" 2> /dev/null | awk 'NR == 2 { print $4 }')
+((${free:-0} >= min_mb)) || fail "needs $min_mb MB free in $workdir (${free:-0} MB there)"
+
+out=$(mktemp -d "$workdir/$pkg.XXXXXX") || fail "could not create a work folder in $workdir"
+trap 'rm -rf "$out"' EXIT
+: > "$log" 2> /dev/null || log=/dev/null
+export DEBIAN_FRONTEND=noninteractive TMPDIR=$workdir
+
+say 1 "Updating the package lists"
+apt-get -o DPkg::Lock::Timeout=120 update -qq >> "$log" 2>&1 || fail "no network? (details in $log)"
+
+# As ferramentas de compilacao que ainda nao estavam aqui: saem no fim.
+# shellcheck disable=SC1090
+build_deps=$(source "$packaging/packages/$pkg.sh" > /dev/null 2>&1 && printf '%s\n' "${PKG_BUILD_DEPS:-}")
+new_deps=()
+for dep in $build_deps; do
+  dpkg -s "$dep" > /dev/null 2>&1 || new_deps+=("$dep")
+done
+
+# A receita narra o que faz; as linhas viram etapas. O cmake escreve
+# "[ 45%]" e o make do Pegasus so as linhas de compilacao.
+say 3 "Installing the build tools"
+compiled=0
+bash "$packaging/build-deb.sh" --output "$out" "$pkg" 2>&1 | while IFS= read -r line; do
+  printf '%s\n' "$line" >> "$log"
+  line=${line//$'\e'\[[0-9;]*m/}
+  case $line in
+    *"Compiling"*) say 12 "Compiling $label ($minutes minutes)" ;;
+    *"Computing Depends"*) say 88 "Packaging" ;;
+    *)
+      if [[ $line =~ ^\[\ *([0-9]+)%\] ]]; then
+        say $((12 + BASH_REMATCH[1] * 75 / 100)) "Compiling $label ($minutes minutes)"
+      elif ((lines > 0)) && [[ $line =~ ^(g\+\+|gcc|cc|c\+\+)\  ]]; then
+        compiled=$((compiled + 1))
+        ((compiled % 20 == 0)) && say $((12 + (compiled > lines ? lines : compiled) * 75 / lines)) "Compiling $label ($minutes minutes)"
+      fi
+      ;;
+  esac
+done
+((${PIPESTATUS[0]} == 0)) || fail "the build failed (details in $log)"
+deb=$(ls -- "$out/${pkg}"_*.deb 2> /dev/null | head -n 1)
+[[ -n $deb ]] || fail "the build made no package (details in $log)"
+
+say 90 "Installing $label"
+apt-get -y -o DPkg::Lock::Timeout=120 install "$deb" >> "$log" 2>&1 || fail "could not install the package (details in $log)"
+
+# Sem as ferramentas de compilacao (centenas de MB). Se o apt quiser levar o
+# programa junto, elas ficam.
+if ((${#new_deps[@]})); then
+  say 96 "Removing the build tools"
+  if ! apt-get -s purge "${new_deps[@]}" 2> /dev/null | grep -q "^Remv $pkg "; then
+    apt-get -y -o DPkg::Lock::Timeout=120 purge "${new_deps[@]}" >> "$log" 2>&1 || true
+  fi
+fi
+dpkg -s "$pkg" > /dev/null 2>&1 || fail "$pkg is not installed after the removal of the build tools (details in $log)"
+say 100 "$label installed"

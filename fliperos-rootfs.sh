@@ -134,6 +134,20 @@ done
 # nao vem na imagem (codigo fechado).
 install -Dm755 "$src/config/fliperos-fightcade" "$root/opt/fliperos/bin/fliperos-fightcade"
 install -Dm644 "$src/config/openbox-fightcade.xml" "$root/etc/fliperos/openbox-fightcade.xml"
+# EmulationStation-DE e Pegasus (Setup > Games > Frontend): nao vem na imagem. O
+# Setup os compila no gabinete na primeira escolha, com a receita e os patches
+# abaixo (a mesma receita da CI). O programa tem o nome do pacote: e o nome que
+# escolhe a receita.
+install -Dm755 "$src/config/fliperos-frontend-build" "$root/opt/fliperos/bin/fliperos-emulationstation"
+install -Dm755 "$src/config/fliperos-frontend-build" "$root/opt/fliperos/bin/fliperos-pegasus"
+install -Dm755 "$src/packaging/build-deb.sh" "$root/usr/local/share/fliperos/packaging/build-deb.sh"
+for recipe in fliperos-emulationstation fliperos-pegasus; do
+  install -Dm644 "$src/packaging/packages/$recipe.sh" "$root/usr/local/share/fliperos/packaging/packages/$recipe.sh"
+done
+rm -rf "$root/usr/local/share/fliperos/packaging/patches"
+for patch in "$src"/packaging/patches/emulationstation/*.patch; do
+  install -Dm644 "$patch" "$root/usr/local/share/fliperos/packaging/patches/emulationstation/${patch##*/}"
+done
 # Arcadeflow, o tema padrao do Attract-Mode Plus (Setup > Games > Frontend): o que o
 # baixa do GitHub dele. O tema em si nao vem na imagem (sem licenca).
 install -Dm755 "$src/config/fliperos-arcadeflow" "$root/opt/fliperos/bin/fliperos-arcadeflow"

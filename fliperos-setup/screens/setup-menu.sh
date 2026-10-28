@@ -330,7 +330,7 @@ screen_wifi() {
 # ── Frontend ─────────────────────────────────────────────────────
 
 screen_frontend() {
-  local entries=() name desc current choice pkg label lines=() theme=()
+  local entries=() name desc current choice pkg label lines=() theme=() note prompt verb
   current=$(launcher_current)
   while IFS='|' read -r name desc; do
     if [[ $name == game ]]; then
@@ -374,9 +374,14 @@ screen_frontend() {
   elif ! launcher_installed "$choice" && [[ -n $(launcher_fetcher "$choice") ]]; then
     # De codigo fechado: nao vem na imagem nem no repositorio, o Setup baixa
     # do site do proprio programa.
-    ui_yesno "Frontend" "$label is not installed, and it does not come with FliperOS. Download it now from its own website?" yes ||
-      return 0
-    run_online "Downloading $label" "" launcher_fetch "$choice" || return 0
+    note=$(launcher_fetch_note "$choice")
+    if [[ -n $note ]]; then
+      prompt="$note Install it now?" verb=Installing
+    else
+      prompt="$label is not installed, and it does not come with FliperOS. Download it now from its own website?" verb=Downloading
+    fi
+    ui_yesno "Frontend" "$prompt" yes || return 0
+    run_online "$verb $label" "" launcher_fetch "$choice" || return 0
     if ! launcher_installed "$choice"; then
       ui_msg "Frontend" "$label was downloaded, but it was not found afterwards (details in the log)."
       return 0
