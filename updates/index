@@ -35,3 +35,4 @@
 32	8b9b250121c8b021f615d5da85b80ec7768aaf91	957712edf075eee71a6429611fdabfdaaeb14bb4f4cb349723a612b26306318a	no	NVIDIA nouveau: clearer low resolution test result
 33	3e0846637b1bdd96bc7eb9a40e9e4273ad4581ed	d3891f30124347e862df0b7b125ccda9a5848538b29c099f58f076881c1d5232	no	NVIDIA: own driver as an option to nouveau
 34	0be2e5b01a52b16ff134ccf86f142650492178a7	f7aff1f3dac7ecc355dc76d4999d2e729276a2a9b105e40f78a2449aac279354	yes	First boot wizard, Vulkan by driver, commercial mode, faster boot
+35	831b9b1f1ce563221a489f792243ac0e375e38c2	33bb105fe9df16636abbf8d2646cc62f60de04f4aeeb0157b33419833488d65b	no	Intel HD fixes, 240p mode, marks for what the card cannot run
