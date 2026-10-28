@@ -34,3 +34,4 @@
 31	bce290a394fad60c7f69a6d0226c6efe104dc4da	ef7ace0c12ab1441fe1855f9b430718164f0247b743b840fa52edf72f6a597c5	no	Flicker filter on the desktop and in Fightcade again
 32	8b9b250121c8b021f615d5da85b80ec7768aaf91	957712edf075eee71a6429611fdabfdaaeb14bb4f4cb349723a612b26306318a	no	NVIDIA nouveau: clearer low resolution test result
 33	3e0846637b1bdd96bc7eb9a40e9e4273ad4581ed	d3891f30124347e862df0b7b125ccda9a5848538b29c099f58f076881c1d5232	no	NVIDIA: own driver as an option to nouveau
+34	0be2e5b01a52b16ff134ccf86f142650492178a7	f7aff1f3dac7ecc355dc76d4999d2e729276a2a9b105e40f78a2449aac279354	yes	First boot wizard, Vulkan by driver, commercial mode, faster boot
