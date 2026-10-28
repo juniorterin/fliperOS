@@ -28,12 +28,12 @@ common=$(sed -n 's/^BOOT_COMMON="\(.*\)"$/\1/p' "$src/fliperos-mkiso.sh")
 sed -e "s|__VERSION__|$version|g" -e "s|__COMMON__|$common|g" "$src/config/limine.conf" > "$work/limine.expected"
 cmp "$work/limine.expected" "$work/limine.conf" || fail "limine.conf differs from the template"
 entries=$(grep -c '^/' "$work/limine.conf")
-[[ $entries == 10 ]] || fail "boot menu with $entries entries (expected 10)"
+[[ $entries == 11 ]] || fail "boot menu with $entries entries (expected 11)"
 # O timer e o do config/limine.conf (a 0.14 baixou de 30 para 10 s e esta
 # conferencia continuou esperando 30: o build de 2h37 nao foi publicado).
 timer=$(sed -n 's/^timeout: \([0-9]*\)$/\1/p' "$src/config/limine.conf")
 [[ -n $timer ]] && grep -q "^timeout: $timer\$" "$work/limine.conf" || fail "boot menu timer is not $timer s"
-echo "boot menu: 10 entries, $timer s, 15 kHz default"
+echo "boot menu: 11 entries, $timer s, 15 kHz default"
 
 # ── Kernel 15 kHz ─────────────────────────────────────────────
 kernel=$(sed -n 's/^KERNEL_VERSION="\(.*\)"$/\1/p' "$src/fliperos-kernel.sh")
