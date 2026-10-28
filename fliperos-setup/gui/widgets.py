@@ -124,6 +124,18 @@ def badge(surf, x, y, size, on):
     text(surf, label, T.SPACE if on else T.COMMENT, rect[0] + 4, rect[1] + 2)
 
 
+def cross(surf, x, y, size):
+    """O X vermelho de "nao funciona aqui", em um quadrado de size pixels com o
+    canto em (x, y), com sombra escura: aparece sobre qualquer icone."""
+    pad = max(2, size // 6)
+    thick = 2 if size < 48 else 4
+    a, b = (x + pad, y + pad), (x + size - pad, y + size - pad)
+    c, d = (x + size - pad, y + pad), (x + pad, y + size - pad)
+    for dx, dy, color in ((1, 1, T.SPACE), (0, 0, T.RED)):
+        for p, q in ((a, b), (c, d)):
+            pygame.draw.line(surf, color, (p[0] + dx, p[1] + dy), (q[0] + dx, q[1] + dy), thick)
+
+
 def check(surf, x, y):
     """O check verde de instalado, de 9x7 pixels com o canto em (x, y), com
     sombra escura: aparece no fundo rosa do cursor e sobre os icones."""
@@ -394,6 +406,8 @@ class Menu(Animated):
         self.entries = [(e[0], e[1], e[2] if len(e) > 2 else "") for e in entries]
         # Os itens "(installed)" (serve.py): um check verde no icone ou na linha.
         self.installed = {e[0] for e in entries if len(e) > 3 and e[3]}
+        # Os "(not supported)": a placa nao roda o item, um X vermelho nele.
+        self.blocked = {e[0] for e in entries if len(e) > 4 and e[4]}
         self.marked = set(marked)
         self.cursor = 0
         self.top = 0
@@ -521,6 +535,8 @@ class Menu(Animated):
             state = toggle(entry[1])[1]
             if state is not None:
                 badge(surf, cx - 20, mid - 20, 40, state)
+            if entry[0] in self.blocked:
+                cross(surf, cx - 20, mid - 20, 40)
             if entry[0] in self.installed:
                 check(surf, cx + 9, mid + 11)
         surf.set_clip(None)
@@ -536,6 +552,8 @@ class Menu(Animated):
         label, state = toggle(self.entries[self.cursor][1])
         if state is not None:
             badge(surf, left, top, size, state)
+        if self.entries[self.cursor][0] in self.blocked:
+            cross(surf, left + 2, top + 2, size - 4)
         if self.entries[self.cursor][0] in self.installed:
             check(surf, left + size - 13, top + size - 11)
 
@@ -614,7 +632,7 @@ class Menu(Animated):
             # O rotulo que nao cabe e cortado; o do cursor aparece inteiro
             # embaixo, no lugar da dica. O check de instalado fica no fim da
             # linha.
-            room = w - 22 - (14 if value in self.installed else 0)
+            room = w - 22 - (14 if value in self.installed or value in self.blocked else 0)
             if width(label) > room:
                 if selected:
                     full = label
@@ -622,6 +640,8 @@ class Menu(Animated):
                     label = label[:-1]
                 label += ".."
             text(surf, label, color, x + 18, y + 2)
+            if value in self.blocked:
+                cross(surf, x + w - 14, y, 10)
             if value in self.installed:
                 check(surf, x + w - 14, y + 2)
 

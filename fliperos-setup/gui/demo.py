@@ -302,6 +302,19 @@ def extras():
        "Installing one needs the network.")
 
 
+
+
+def frontend():
+    reason = "Needs OpenGL 3.3 or OpenGL ES 3.0, and this video card gives OpenGL ES 2.0"
+    return Menu("Frontend", [
+        ("fliperos", "FliperOS frontend", "", True),
+        ("attractplus", "Attract-Mode Plus", "", True),
+        ("emulationstation", "EmulationStation", "Not installed. " + reason + ". Not supported", False, True),
+        ("pegasus", "Pegasus", "Not installed", False),
+        ("retroarch", "RetroArch", "", True),
+    ], "fliperos", "Choose what starts when the computer turns on. Now: FliperOS frontend.")
+
+
 SCREENS = {
     "main": main, "live": live, "setup": setup, "video": video, "monitor": monitor,
     "emulators": emulators, "power": power, "poweroff": poweroff, "install": install,
@@ -309,14 +322,14 @@ SCREENS = {
     "capture": capture, "layout": layout, "layoutedit": layoutedit, "guncon": guncon,
     "guntarget1": guntarget1, "guntarget2": guntarget2, "guntarget3": guntarget3,
     "gunresult": gunresult, "downloads": downloads, "torrent": torrent, "magnet": magnet,
-    "magnetbrowser": magnetbrowser,
+    "magnetbrowser": magnetbrowser, "frontend": frontend,
     "wifipass": wifipass,
     "download": download, "extras": extras, "romfilter": romfilter, "romfilter2": romfilter2,
     "filterplayers": filterplayers, "filterbuttons": filterbuttons,
     "filtercontrols": filtercontrols, "filteryears": filteryears,
 }
 # A escolha de um menu que abre outra tela de demonstracao.
-LINKS = {"games": "emulators", "frontend": "error", "network": "wifi", "shutdown": "power",
+LINKS = {"games": "emulators", "network": "wifi", "shutdown": "power",
          "buttons": "players", "2": "capture", "3": "layoutedit", "roms": "magnet",
          "start": "download", "filter": "romfilter", "players": "filterplayers",
          "controls": "filtercontrols", "decades": "filteryears"}

@@ -1854,6 +1854,36 @@ class LauncherTests(Base):
         self.assertIn("roms/fightcade", self.env.out("frontends_hint fightcade"))
         self.assertEqual(self.env.out("frontends_hint pegasus"), "")
 
+    def test_a_frontend_the_card_cannot_run_is_marked_not_supported(self):
+        # O ES-DE pede OpenGL 3.3 ou ES 3.0 e uma Intel HD de 1a geracao so da
+        # 2.1: o instalador (config/fliperos-frontend-build "unsupported") diz
+        # o motivo, e o Setup poe o motivo na dica e um X no icone.
+        with open(self.env.etc / "sessions.conf", "a") as table:
+            table.write("emulationstation|kms|emulationstation|fetch:fliperos-emulationstation|EmulationStation\n"
+                        "pegasus|kms|pegasus-fe|fetch:fliperos-pegasus|Pegasus\n"
+                        "retroarch|kms|retroarch||RetroArch\n")
+        fbin = self.env.dir / "fbin"
+        fbin.mkdir(exist_ok=True)
+        (fbin / "fliperos-emulationstation").write_text(
+            '#!/bin/sh\n[ "$1" = unsupported ] && { echo "Needs OpenGL 3.3, and this card gives ES 2.0"; exit 0; }\nexit 1\n')
+        (fbin / "fliperos-pegasus").write_text("#!/bin/sh\nexit 1\n")
+        for name in ("fliperos-emulationstation", "fliperos-pegasus"):
+            (fbin / name).chmod(0o755)
+        env = {"FLIPEROS_BIN": str(fbin)}
+        self.assertEqual(self.env.out("launcher_unsupported emulationstation", env).strip(),
+                         "Needs OpenGL 3.3, and this card gives ES 2.0")
+        for name in ("pegasus", "retroarch", "attractplus", "game", "setup"):
+            self.assertEqual(self.env.run("launcher_unsupported %s" % name, env).returncode, 1, name)
+        # Sem o instalador na maquina, nao da para saber: nao marca.
+        self.assertEqual(self.env.run("launcher_unsupported emulationstation",
+                                      {"FLIPEROS_BIN": str(self.env.dir / "nada")}).returncode, 1)
+        screen = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_frontend() {")[1].split("\n}\n")[0]
+        self.assertIn('suffix=" ($reason) (not supported)"', screen)
+        self.assertIn('entries+=("$name|$desc$suffix")', screen)
+        self.assertIn('entries+=("$name|$desc (not installed)$suffix")', screen)
+        self.assertIn("WARNING: it will not open on this video card.", screen)
+        self.assertIn('will not open on this video card: ${reason}. Choose it anyway?" no || return 0', screen)
+
     def test_custom_frontends_are_added_edited_and_deleted(self):
         custom = self.env.etc / "sessions.custom.conf"
         self.env.stub("myfe", "true")

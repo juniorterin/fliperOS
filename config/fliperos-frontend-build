@@ -80,8 +80,16 @@ if [[ ${1:-} == about ]]; then
   fi
   exit 0
 fi
+# "unsupported": a placa nao roda este programa. Imprime o motivo e sai 0; sai
+# 1 se roda (ou se nao da para saber). O Setup marca com um X o frontend que
+# nao abre nesta maquina (lib/launcher.sh launcher_unsupported).
+if [[ ${1:-} == unsupported ]]; then
+  problem=$(gl_problem) || exit 1
+  echo "Needs OpenGL 3.3 or OpenGL ES 3.0, and $problem"
+  exit 0
+fi
 [[ ${1:-} == fetch ]] || {
-  echo "Usage: $pkg about | fetch [--progress]" >&2
+  echo "Usage: $pkg about | unsupported | fetch [--progress]" >&2
   exit 2
 }
 shift

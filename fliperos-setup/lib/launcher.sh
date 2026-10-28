@@ -213,6 +213,18 @@ launcher_fetcher() {
   fi
 }
 
+# launcher_unsupported NOME: o frontend nao abre nesta maquina. Imprime o
+# motivo e devolve 0; devolve 1 se abre ou se nao da para saber. Quem sabe
+# e o proprio instalador (config/fliperos-frontend-build "unsupported"): o
+# ES-DE pede OpenGL 3.3 ou ES 3.0, e uma Intel HD de 1a geracao so da 2.1.
+launcher_unsupported() {
+  local cmd
+  case $1 in emulationstation | pegasus) ;; *) return 1 ;; esac
+  cmd=$(launcher_fetcher "$1")
+  [[ -x $cmd ]] || return 1
+  "$cmd" unsupported 2> /dev/null
+}
+
 # launcher_fetch_note NOME imprime o aviso do proprio comando antes de
 # instalar ("about"), se ele tem um: o ES-DE e o Pegasus sao compilados aqui
 # (config/fliperos-frontend-build) e a pessoa precisa saber do tempo. Vazio

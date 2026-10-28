@@ -330,9 +330,18 @@ screen_wifi() {
 # ── Frontend ─────────────────────────────────────────────────────
 
 screen_frontend() {
-  local entries=() name desc current choice pkg label lines=() theme=() note prompt verb
+  local entries=() name desc current choice pkg label lines=() theme=() note prompt verb reason suffix warning=""
   current=$(launcher_current)
+  if reason=$(launcher_unsupported "$current"); then
+    warning=" WARNING: it will not open on this video card."
+  fi
   while IFS='|' read -r name desc; do
+    # O que a placa nao roda (ES-DE numa Intel HD sem OpenGL 3.3) leva um X no
+    # icone e o motivo na dica.
+    suffix=""
+    if [[ $name != game ]] && reason=$(launcher_unsupported "$name"); then
+      suffix=" ($reason) (not supported)"
+    fi
     if [[ $name == game ]]; then
       # O jogo no boot: escolhido na tela seguinte (screen_bootgame).
       if [[ $current == game && -n $(bootgame_label) ]]; then
@@ -341,16 +350,16 @@ screen_frontend() {
         entries+=("game|$desc (choose the game)")
       fi
     elif launcher_installed "$name"; then
-      entries+=("$name|$desc")
+      entries+=("$name|$desc$suffix")
     elif launcher_package_available "$name" || [[ -n $(launcher_fetcher "$name") ]]; then
-      entries+=("$name|$desc (not installed)")
+      entries+=("$name|$desc (not installed)$suffix")
     else
       entries+=("$name|$desc (not available yet)")
     fi
   done < <(launcher_all)
   entries+=("+add|Add a custom frontend")
   [[ -n $(launcher_custom_list) ]] && entries+=("+edit|Edit or delete a custom frontend")
-  choice=$(ui_menu "Frontend" "Choose what starts when the computer turns on. Now: $(launcher_label "$current")." \
+  choice=$(ui_menu "Frontend" "Choose what starts when the computer turns on. Now: $(launcher_label "$current").$warning" \
     "$current" "${entries[@]}") || return 0
   case $choice in
     +add)
@@ -367,6 +376,11 @@ screen_frontend() {
       ;;
   esac
   label=$(launcher_label "$choice")
+  # Um frontend que esta placa nao roda: avisa antes de instalar ou escolher,
+  # e o padrao e nao (a pessoa ficaria com o gabinete abrindo no menu).
+  if reason=$(launcher_unsupported "$choice"); then
+    ui_yesno "Frontend" "$label will not open on this video card: ${reason}. Choose it anyway?" no || return 0
+  fi
   if launcher_custom "$choice" && ! launcher_installed "$choice"; then
     ui_msg "Frontend" "$label: the program $(launcher_custom_program "$(launcher_field "$choice" 3)") was not found." "" \
       "Fix its command in Edit or delete a custom frontend."

@@ -11132,6 +11132,55 @@ class DockerfileTests(unittest.TestCase):
         self.assertIn('ubuntu:24.04', (ROOT / 'Dockerfile.packages').read_text())
 
 
+
+class GuiNotSupportedTests(unittest.TestCase):
+    """Um item "(not supported)" de um menu do Setup grafico: a dica traz o
+    motivo e o Menu desenha um X vermelho no icone (gui/serve.py, widgets.py)."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    def serve(self):
+        sys.path.insert(0, str(self.GUI))
+        try:
+            import serve
+        finally:
+            sys.path.remove(str(self.GUI))
+        return serve
+
+    def test_the_label_notes_become_the_hint_and_the_blocked_flag(self):
+        serve = self.serve()
+        gs = serve.GS
+        reason = "Needs OpenGL 3.3 or OpenGL ES 3.0, and this video card gives OpenGL ES 2.0"
+        entries = serve.Server.entries(None, [
+            "emulationstation" + gs + "EmulationStation (not installed) (" + reason + ") (not supported)" + gs,
+            "pegasus" + gs + "Pegasus (not installed)" + gs,
+            "retroarch" + gs + "RetroArch (installed)" + gs,
+        ])
+        self.assertEqual(entries[0], ("emulationstation", "EmulationStation",
+                                      "Not installed. " + reason + ". Not supported", False, True))
+        self.assertEqual(entries[1], ("pegasus", "Pegasus", "Not installed", False, False))
+        self.assertEqual(entries[2][3:], (True, False))
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_the_menu_draws_a_red_cross_over_a_blocked_item(self):
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        try:
+            import pygame
+            import theme
+            import widgets
+        finally:
+            sys.path.remove(str(self.GUI))
+        pygame.init()
+        surf = pygame.Surface((64, 64))
+        surf.fill((0, 0, 0))
+        widgets.cross(surf, 0, 0, 64)
+        reds = sum(1 for x in range(64) for y in range(64) if surf.get_at((x, y))[:3] == theme.RED)
+        self.assertGreater(reds, 100)
+        menu = widgets.Menu("Frontend", [("emulationstation", "ES", "hint", False, True), ("pegasus", "P", "", False, False)])
+        self.assertEqual(menu.blocked, {"emulationstation"})
+
+
 class DrmMasterTests(unittest.TestCase):
     """gui/drmmaster.py: na Intel o Mesa deixa o master da tela depois do
     display.quit() do pygame, e o jogo seguinte nao abria."""
