@@ -1,0 +1,43 @@
+SFML DRM: fall back to XRGB8888 when the framebuffer of an ARGB8888 buffer is refused
+
+SFML makes the GBM surface in ARGB8888 and registers each buffer it renders
+with drmModeAddFB2. On an Intel Ironlake (the HD Graphics of the Core i3 5xx
+and i5 6xx, Gen5) that call fails with "Invalid argument" for the X-tiled
+buffer Mesa gives: SFML prints "Failed to create fb" and "Failed to get FB
+from buffer object" for every frame and the screen stays black. The same
+buffer in XRGB8888 is accepted (tested with gbm_bo_create + drmModeAddFB2 at
+1280x480, 640x480 and 1280x240).
+
+When both attempts fail for an ARGB8888 buffer, the framebuffer is made again
+as XRGB8888: the same memory, with the alpha ignored, which is all a display
+does with it. A driver that takes ARGB8888 (amdgpu, radeon) never reaches the
+new code.
+
+diff --git a/extlibs/SFML/src/SFML/Window/DRM/DRMContext.cpp b/extlibs/SFML/src/SFML/Window/DRM/DRMContext.cpp
+--- a/extlibs/SFML/src/SFML/Window/DRM/DRMContext.cpp
++++ b/extlibs/SFML/src/SFML/Window/DRM/DRMContext.cpp
+@@ -196,6 +196,24 @@
+         result = drmModeAddFB2(drmFd, width, height, format, handles.data(), strides.data(), offsets.data(), &fb->fbId, 0);
+     }
+ 
++    // The i915 on Ironlake (Gen5) does not scan out a format with alpha:
++    // the X-tiled ARGB8888 buffer EGL gives is refused with EINVAL and the screen
++    // stays black. XRGB8888 is the same memory with the alpha ignored, which is
++    // all the display does with it. It only runs after the attempts above fail,
++    // so a driver that takes ARGB8888 is not touched.
++    if (result && format == GBM_FORMAT_ARGB8888)
++    {
++        result = drmModeAddFB2(drmFd,
++                               width,
++                               height,
++                               GBM_FORMAT_XRGB8888,
++                               handles.data(),
++                               strides.data(),
++                               offsets.data(),
++                               &fb->fbId,
++                               0);
++    }
++
+     if (result)
+     {
+         sf::err() << "Failed to create fb: " << std::strerror(errno) << std::endl;

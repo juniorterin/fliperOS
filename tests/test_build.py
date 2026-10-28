@@ -11273,6 +11273,12 @@ class PackagingTests(unittest.TestCase):
         order = (ROOT / 'packaging/patches/attractplus/0001-sfml-joysticks-in-kernel-order.patch').read_text()
         self.assertIn('+++ b/extlibs/SFML/src/SFML/Window/Unix/JoystickImpl.cpp', order)
         self.assertIn('joystickNumber(left.deviceNode) < joystickNumber(right.deviceNode)', order)
+        # Intel Ironlake recusa o framebuffer ARGB8888 do SFML (tela preta e
+        # "Failed to create fb"): so depois das duas tentativas, XRGB8888.
+        xrgb = (ROOT / 'packaging/patches/attractplus/0002-sfml-drm-xrgb-fallback-for-ironlake.patch').read_text()
+        self.assertIn('+++ b/extlibs/SFML/src/SFML/Window/DRM/DRMContext.cpp', xrgb)
+        self.assertIn('if (result && format == GBM_FORMAT_ARGB8888)', xrgb)
+        self.assertIn('+                               GBM_FORMAT_XRGB8888,', xrgb)
 
 
 class DocsTests(unittest.TestCase):
