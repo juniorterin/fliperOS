@@ -166,7 +166,7 @@ video_needs_monitor_choice() {
 # boot escolhida, para deixar o cursor do menu nele.
 video_suggested_monitor() {
   case $(boot_profile 2>/dev/null) in
-    15khz | intel | nvidia | edid-progressive | edid-interlaced) echo generic_15 ;;
+    15khz | intel | intel240 | nvidia | edid-progressive | edid-interlaced) echo generic_15 ;;
     25khz) echo arcade_25 ;;
     31khz) echo arcade_31 ;;
     ntsc) echo ntsc ;;
@@ -199,6 +199,10 @@ video_kernel_params() {
     fw=${fw##*:}
     [[ -n $fw ]] || fw=edid/$monitor.bin
     echo "video=$conn:e drm.edid_firmware=$conn:$fw"
+  elif [[ $(cmdline_get "$(< "$PROC_CMDLINE")" drm.edid_firmware 2> /dev/null) == *"$SUPER240_EDID" ]]; then
+    # A entrada "Intel 15 kHz 240p" do boot: o EDID do FliperOS com o
+    # 1280x240 progressivo segue para o sistema (e nao o do preset).
+    echo "video=$conn:e drm.edid_firmware=$conn:edid/$SUPER240_EDID"
   elif cmdline_get "$(< "$PROC_CMDLINE")" drm.edid_firmware > /dev/null; then
     echo "video=$conn:e drm.edid_firmware=$conn:edid/$monitor.bin"
   elif [[ -n $res ]]; then
@@ -213,6 +217,8 @@ video_kernel_params() {
 # parametros, ou nada se o modo vem de EDID.
 video_boot_resolution() {
   local word spec
+  # O 240p da Intel vem de um EDID, nao de um modo da linha video=.
+  [[ $1 == *"drm.edid_firmware="*"$SUPER240_EDID"* ]] && { echo "$SUPER240_MODE"; return 0; }
   for word in $1; do
     if [[ $word == video=*:* ]]; then
       spec=${word#video=*:}

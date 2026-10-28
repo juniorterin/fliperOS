@@ -236,3 +236,49 @@ edid_is_switchres() {
   serial=$(edid_serial_text "$1") || return 1
   [[ $serial == *Switchres* ]]
 }
+
+# ── O que a placa roda (OpenGL) ──────────────────────────────────
+# Uma Intel HD de 1a geracao (Ironlake) so da OpenGL 2.1 e ES 2.0: o que pede
+# OpenGL 3 nao abre. O Setup marca esses itens com "(not supported)" (o X
+# vermelho da interface grafica) e avisa antes de abri-los.
+
+# gpu_gl_levels imprime "GL ES" da placa principal, lidos do eglinfo do Mesa
+# (o maior OpenGL, core ou de compatibilidade, e o OpenGL ES; 0 se nao ha).
+# Status 1 se nao da para saber (sem eglinfo, ou o EGL nao abre).
+gpu_gl_levels() {
+  local eglinfo=${FLIPEROS_EGLINFO:-eglinfo} out core="" compat="" es=""
+  command -v "$eglinfo" > /dev/null || return 1
+  out=$(timeout 8 "$eglinfo" -B -p gbm 2> /dev/null) || return 1
+  [[ $out == *"profile version"* ]] || return 1
+  [[ $out =~ OpenGL\ core\ profile\ version:\ ([0-9]+\.[0-9]+) ]] && core=${BASH_REMATCH[1]}
+  [[ $out =~ OpenGL\ compatibility\ profile\ version:\ ([0-9]+\.[0-9]+) ]] && compat=${BASH_REMATCH[1]}
+  [[ $out =~ OpenGL\ ES\ profile\ version:\ OpenGL\ ES\ ([0-9]+\.[0-9]+) ]] && es=${BASH_REMATCH[1]}
+  printf '%s %s\n' "${core:-${compat:-0}}" "${es:-0}"
+}
+
+# gpu_needs GL_MINIMO [OU]: a placa nao da o OpenGL minimo. Imprime o motivo
+# ("Needs OpenGL 3.3 or Vulkan, and this video card gives OpenGL 2.1 and
+# OpenGL ES 2.0") e devolve 0; devolve 1 se da, ou se nao da para saber. OU
+# e o que mais serve ("or Vulkan"): uma placa com Vulkan tem OpenGL 4 de
+# qualquer jeito.
+gpu_needs() {
+  local need=$1 alt=${2:-} gl es extra=""
+  [[ -n ${GPU_GL_CACHE:-} ]] || GPU_GL_CACHE=$(gpu_gl_levels 2> /dev/null) || GPU_GL_CACHE=unknown
+  [[ $GPU_GL_CACHE == unknown ]] && return 1
+  read -r gl es <<< "$GPU_GL_CACHE"
+  awk -v g="$gl" -v n="$need" 'BEGIN { exit !(g + 0 >= n + 0) }' && return 1
+  awk -v e="$es" 'BEGIN { exit !(e + 0 > 0) }' && extra=" and OpenGL ES $es"
+  printf 'Needs OpenGL %s%s, and this video card gives OpenGL %s%s\n' "$need" "${alt:+ $alt}" "$gl" "$extra"
+}
+
+# gpu_unsupported_label ROTULO MOTIVO imprime o rotulo de um menu com o
+# motivo e a marca: "480i hacks (Needs OpenGL 3.0, ...) (not supported)".
+gpu_unsupported_label() {
+  printf '%s (%s) (not supported)\n' "$1" "$2"
+}
+
+# gpu_unsupported_ok TITULO ROTULO MOTIVO: avisa que o item nao roda nesta
+# placa e pergunta se abre mesmo assim (o padrao e nao).
+gpu_unsupported_ok() {
+  ui_yesno "$1" "$2 is not supported on this video card. $3. Open it anyway?" no
+}

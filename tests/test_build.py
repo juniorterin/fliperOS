@@ -144,6 +144,7 @@ class BootMenuTests(unittest.TestCase):
         ('31 kHz', '31khz', 'video=640x480S'),
         ('SVGA / LCD monitor', 'svga', None),
         ('Intel 15 kHz', 'intel', 'video=1280x480iS'),
+        ('Intel 15 kHz 240p', 'intel240', 'drm.edid_firmware=edid/fliperos-1280x240.bin'),
         ('NVIDIA 15 kHz', 'nvidia', 'video=1280x480iS'),
         ('NTSC', 'ntsc', 'video=720x480iS'),
         ('PAL', 'pal', 'video=768x576iS'),
@@ -151,7 +152,7 @@ class BootMenuTests(unittest.TestCase):
         ('EDID interlaced', 'edid-interlaced', 'drm.edid_firmware=edid/generic_15_super_resi.bin'),
     ]
 
-    def test_ten_entries_in_groovyarcade_order(self):
+    def test_entries_in_groovyarcade_order_with_the_intel_240p_after_the_intel(self):
         entries = boot_entries()
         self.assertEqual([t for t, _ in entries], [t for t, _, _ in self.EXPECTED])
         for (title, body), (_, profile, video_param) in zip(entries, self.EXPECTED):
@@ -172,13 +173,25 @@ class BootMenuTests(unittest.TestCase):
 
     def test_edid_entries_force_the_outputs_on(self):
         for title, body in boot_entries():
-            if title.startswith('EDID'):
+            if title.startswith(("EDID", "Intel 15 kHz 240p")):
                 self.assertIn('video=e', cmdline(body))
 
     def test_intel_entry_enables_gen9_interlace(self):
         intel = dict(boot_entries())['Intel 15 kHz']
         self.assertIn('i915.no_ytiled_scanout=1', cmdline(intel))
         self.assertNotIn('i915.no_ytiled_scanout=1', cmdline(dict(boot_entries())['NVIDIA 15 kHz']))
+
+    def test_the_intel_240p_edid_is_built_in_the_image_with_the_setup_modeline(self):
+        # A entrada "Intel 15 kHz 240p" aponta para um EDID que a imagem gera
+        # (fliperos-rebuild-edids) com o mesmo modeline do Video Setup.
+        rebuild = (ROOT / 'config/fliperos-rebuild-edids').read_text()
+        monitor = (ROOT / 'fliperos-setup/lib/monitor.sh').read_text()
+        modeline = re.search(r"'(\"1280x240\" [^']+)'", rebuild).group(1)
+        self.assertIn("1280x240p) echo '%s' ;;" % modeline, monitor)
+        self.assertIn('fliperos-1280x240.bin', rebuild)
+        self.assertIn('fliperos-1280x240 generic_15', MKISO)
+        entry = dict(boot_entries())['Intel 15 kHz 240p']
+        self.assertIn('i915.no_ytiled_scanout=1', cmdline(entry))
 
     def test_entries_boot_the_iso_kernel_in_text_mode(self):
         for title, body in boot_entries():

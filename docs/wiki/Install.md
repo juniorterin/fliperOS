@@ -23,6 +23,7 @@ The same options as GroovyArcade (`os/groovyarcade/syslinux/syslinux.cfg`). Here
 | 31 kHz | `video=640x480S` | High resolution monitor |
 | SVGA / LCD monitor | — | PC monitor or LCD (its EDID applies) |
 | Intel 15 kHz | `video=1280x480iS i915.no_ytiled_scanout=1` | Intel: super resolution; the parameter comes from patch 09 and enables interlacing on Gen9 |
+| Intel 15 kHz 240p | `drm.edid_firmware=edid/fliperos-1280x240.bin video=e i915.no_ytiled_scanout=1` | Intel: 1280x240 progressive (240p, no interlace flicker), from a FliperOS EDID; the installed system keeps it |
 | NVIDIA 15 kHz | `video=1280x480iS` | NVIDIA: super resolution; the output test then tries native modes (see [Video cards](Video-cards.md)) |
 | NTSC | `video=720x480iS` | NTSC TV |
 | PAL | `video=768x576iS` | PAL TV |

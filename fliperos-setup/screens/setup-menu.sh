@@ -692,20 +692,33 @@ screen_extras() {
 # um por um dos que nao vem na imagem (lib/emulators.sh).
 
 screen_emulators() {
-  local title="Emulators & Games" entries=() name inst kind desc choice last="" label version
-  local -A versions
+  local title="Emulators & Games" entries=() name inst kind desc choice last="" label version why suffix
+  local -A versions unsupported
   while true; do
     entries=()
     versions=()
+    unsupported=()
     while IFS='|' read -r name version; do
       versions[$name]=$version
     done < <(emulators_versions)
     while IFS='|' read -r name inst kind desc; do
+      # O que pede OpenGL 3.3 ou Vulkan (o minimo de cada um, segundo quem
+      # os faz) leva um X numa placa que so da OpenGL 2.1, como a Intel HD
+      # de 1a geracao.
+      suffix=""
+      case $name in
+        pcsx2 | dolphin | duckstation)
+          if why=$(gpu_needs 3.3 "or Vulkan"); then
+            unsupported[$name]=$why
+            suffix=" ($why) (not supported)"
+          fi
+          ;;
+      esac
       if ((inst)); then
         version=${versions[$name]:-}
-        entries+=("$name|$desc${version:+ $version} (installed)")
+        entries+=("$name|$desc${version:+ $version} (installed)$suffix")
       else
-        entries+=("$name|$desc (not installed)")
+        entries+=("$name|$desc (not installed)$suffix")
       fi
     done < <(emulators_list)
     entries+=("return|Return")
@@ -717,6 +730,9 @@ screen_emulators() {
     label=$(emulators_field "$choice" 4)
     kind=$(emulators_field "$choice" 3)
     inst=$(emulators_field "$choice" 2)
+    if [[ -n ${unsupported[$choice]:-} ]]; then
+      gpu_unsupported_ok "$title" "$label" "${unsupported[$choice]}" || continue
+    fi
     # Instalado: o Update de cada um (o que vem na imagem atualiza com o
     # FliperOS).
     if ((inst)) && [[ $kind != image ]]; then

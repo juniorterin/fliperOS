@@ -624,7 +624,7 @@ SRSCRIPT
   chroot "$CHROOT_DIR" /tmp/build-switchres.sh >> "$LOG_FILE" 2>&1 \
     && ok "SwitchRes, grid, geometry e $(ls "$CHROOT_DIR/lib/firmware/edid" | wc -l) EDIDs" \
     || err "SwitchRes failed; the ISO will not be published as complete"
-  for edid in generic_15_super_resp generic_15_super_resi generic_15 arcade_15; do
+  for edid in generic_15_super_resp generic_15_super_resi fliperos-1280x240 generic_15 arcade_15; do
     [[ -s "$CHROOT_DIR/lib/firmware/edid/$edid.bin" ]] || err "EDID ausente: $edid.bin"
   done
 }

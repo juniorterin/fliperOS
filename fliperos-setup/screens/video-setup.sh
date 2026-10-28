@@ -600,7 +600,7 @@ screen_deflicker_preview() {
 }
 
 screen_video_setup() {
-  local choice last="" summary monitors=()
+  local choice last="" summary monitors=() mode480_label mode480_why=""
   VIDEO_CHANGED=0
   # Video driver so aparece com uma placa que tem escolha: AMD que aceita os
   # dois drivers, ou NVIDIA (nouveau ou o driver dela).
@@ -619,6 +619,13 @@ screen_video_setup() {
     # a orientacao vai junto da resolucao, e Monitors so com mais de um.
     monitors=()
     (($(mm_count) > 1)) && monitors=("Monitors|$(mm_count)")
+    # O filtro de flicker do 480i pede OpenGL 3.0 (o log do programa diz "OpenGL
+    # 3.0 or newer is needed; filter off"): numa Intel HD de 1a geracao ele
+    # fica desligado, e a tela leva a marca de nao suportado.
+    mode480_label="480i hacks"
+    if mode480_why=$(gpu_needs 3.0); then
+      mode480_label=$(gpu_unsupported_label "480i hacks" "$mode480_why")
+    fi
     summary=$(ui_fields \
       "Monitor|$(video_monitor_label)" \
       "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "boot menu")"), $(orientation_short "$(conf_get orientation 2> /dev/null || echo horizontal)")" \
@@ -631,7 +638,7 @@ screen_video_setup() {
       "geometry|Geometry|Center and size the picture on the tube, with a test grid." \
       "geometry_reset|Reset Geometry|Undo the geometry: back to the monitor preset." \
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
-      "mode480|480i hacks|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
+      "mode480|$mode480_label|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
       "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour and hue." \
       "${driver[@]}" \
       "${lowdot[@]}" \
@@ -644,7 +651,11 @@ screen_video_setup() {
       geometry) screen_geometry ;;
       geometry_reset) screen_geometry_reset ;;
       monitors) screen_multi_monitor ;;
-      mode480) screen_mode480 ;;
+      mode480)
+        if [[ -z $mode480_why ]] || gpu_unsupported_ok "480i hacks" "480i hacks" "$mode480_why"; then
+          screen_mode480
+        fi
+        ;;
       colour) screen_colour ;;
       driver) screen_video_driver ;;
       lowdot) screen_low_dotclock_retest ;;

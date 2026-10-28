@@ -41,6 +41,11 @@ mv generic_15.bin generic_15_super_resi.bin
 echo "interlace 0" >> switchres.ini
 switchres 640 240 60 --edid --monitor generic_15 > /dev/null
 mv generic_15.bin generic_15_super_resp.bin
+# O 240p progressivo da Intel i915 (Setup > Video Setup > Resolution e a
+# entrada "Intel 15 kHz 240p" do boot): 1280x240 a 15,66 kHz, os tempos de
+# mode_modeline 1280x240p em lib/monitor.sh (um teste confere os dois).
+printf '%s\n' '"1280x240" 26.058 1280 1332 1455 1664 240 241 244 261 -HSync -VSync' |
+  "${FLIPEROS_EDID_MODES:-/opt/fliperos/bin/fliperos-edid-modes}" fliperos-1280x240.bin
 cd ..
 
 install -d "$dest"

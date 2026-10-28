@@ -106,9 +106,13 @@ install_configure_video() {
   done
   # Resolucao personalizada: o EDID gerado nesta sessao vai junto (o
   # update-initramfs do disco novo o poe no initramfs).
-  if [[ -f $EDID_DIR/custom_resolution.bin ]]; then
-    install -D -m 644 "$EDID_DIR/custom_resolution.bin" "$target$EDID_DIR/custom_resolution.bin"
-  fi
+  # O mesmo para o 240p da Intel (Video Setup > Resolution ou a entrada
+  # "Intel 15 kHz 240p" do boot): o EDID da imagem live e o do disco novo.
+  for file in custom_resolution.bin "$SUPER240_EDID"; do
+    if [[ -f $EDID_DIR/$file ]]; then
+      install -D -m 644 "$EDID_DIR/$file" "$target$EDID_DIR/$file"
+    fi
+  done
   xorg_generate "$target$XORG_CONF" || return 1
   # O retroarch.cfg do disco vem da imagem (super resolucao); a largura sai
   # da placa testada nesta sessao.

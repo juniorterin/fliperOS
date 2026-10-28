@@ -635,6 +635,55 @@ class DiskMenuLabelTests(Base):
         self.assertRegex(out, r"^Kingston SA400S37240G +240 GB  /dev/sda +SATA$")
 
 
+class GpuCapabilityTests(Base):
+    """lib/drm.sh gpu_needs: o que a placa nao roda (OpenGL 3 numa Intel HD de
+    1a geracao) leva a marca "(not supported)" no Setup."""
+    IRONLAKE = ("EGL client APIs: OpenGL OpenGL_ES \n"
+                "OpenGL compatibility profile version: 2.1 Mesa 25.2.8\n"
+                "OpenGL ES profile version: OpenGL ES 2.0 Mesa 25.2.8")
+    MODERN = ("EGL client APIs: OpenGL OpenGL_ES \n"
+              "OpenGL core profile version: 4.6 (Core Profile) Mesa 25.2.8\n"
+              "OpenGL compatibility profile version: 4.6 (Compatibility Profile) Mesa 25.2.8\n"
+              "OpenGL ES profile version: OpenGL ES 3.2 Mesa 25.2.8")
+
+    def eglinfo(self, text):
+        path = self.env.dir / "eglinfo"
+        path.write_text("#!/bin/sh\ncat <<'EOF'\n%s\nEOF\n" % text)
+        path.chmod(0o755)
+        return {"FLIPEROS_EGLINFO": str(path)}
+
+    def test_levels_come_from_eglinfo(self):
+        self.assertEqual(self.env.out("gpu_gl_levels", self.eglinfo(self.IRONLAKE)).strip(), "2.1 2.0")
+        self.assertEqual(self.env.out("gpu_gl_levels", self.eglinfo(self.MODERN)).strip(), "4.6 3.2")
+        self.assertEqual(self.env.run("gpu_gl_levels", {"FLIPEROS_EGLINFO": str(self.env.dir / "nada")}).returncode, 1)
+
+    def test_a_card_below_the_minimum_gets_the_reason(self):
+        env = self.eglinfo(self.IRONLAKE)
+        self.assertEqual(self.env.out('gpu_needs 3.3 "or Vulkan"', env).strip(),
+                         "Needs OpenGL 3.3 or Vulkan, and this video card gives OpenGL 2.1 and OpenGL ES 2.0")
+        self.assertEqual(self.env.out("gpu_needs 3.0", env).strip(),
+                         "Needs OpenGL 3.0, and this video card gives OpenGL 2.1 and OpenGL ES 2.0")
+        self.assertEqual(self.env.run("gpu_needs 2.1", env).returncode, 1)
+        self.assertEqual(self.env.run("gpu_needs 3.3", self.eglinfo(self.MODERN)).returncode, 1)
+        # Sem como saber (sem eglinfo): nao marca nada.
+        self.assertEqual(self.env.run("gpu_needs 3.3", {"FLIPEROS_EGLINFO": str(self.env.dir / "nada")}).returncode, 1)
+
+    def test_the_label_carries_the_reason_and_the_mark(self):
+        self.assertEqual(self.env.out('gpu_unsupported_label "480i hacks" "Needs OpenGL 3.0, and no"').strip(),
+                         "480i hacks (Needs OpenGL 3.0, and no) (not supported)")
+
+    def test_the_screens_mark_and_ask_before_opening(self):
+        video = (SETUP / "screens" / "video-setup.sh").read_text()
+        self.assertIn('mode480_label=$(gpu_unsupported_label "480i hacks" "$mode480_why")', video)
+        self.assertIn('"mode480|$mode480_label|', video)
+        self.assertIn('gpu_unsupported_ok "480i hacks" "480i hacks" "$mode480_why"', video)
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_emulators() {")[1].split("\n}\n")[0]
+        self.assertIn('pcsx2 | dolphin | duckstation)', menu)
+        self.assertIn('gpu_needs 3.3 "or Vulkan"', menu)
+        self.assertIn('suffix=" ($why) (not supported)"', menu)
+        self.assertIn('gpu_unsupported_ok "$title" "$label" "${unsupported[$choice]}" || continue', menu)
+
+
 class ResolutionTests(Base):
     def setUp(self):
         super().setUp()
@@ -682,6 +731,21 @@ class ResolutionTests(Base):
         conf = (self.env.etc / "fliperos.conf").read_text()
         self.assertIn("kernel_video=video=VGA-1:1280x480iSe\n", conf)
         self.assertNotIn("drm.edid_firmware", conf)
+
+    def test_the_intel_240p_boot_entry_goes_to_the_installed_system(self):
+        # A entrada "Intel 15 kHz 240p" do menu de boot forca o EDID do
+        # FliperOS: o sistema instalado fica com ele, nao com o do preset.
+        self.env.cmdline.write_text("boot=live fliperos.boot=intel240 drm.edid_firmware=edid/fliperos-1280x240.bin "
+                                    "video=e i915.no_ytiled_scanout=1\n")
+        params = self.env.out("video_kernel_params VGA-1 l generic_15").strip()
+        self.assertEqual(params, "video=VGA-1:e drm.edid_firmware=VGA-1:edid/fliperos-1280x240.bin")
+        self.assertEqual(self.env.out('video_boot_resolution "%s"' % params).strip(), "1280x240p")
+        self.assertEqual(self.env.out("video_suggested_monitor").strip(), "generic_15")
+        # Os outros EDIDs forcados no boot seguem com o do preset, como antes.
+        self.env.cmdline.write_text("boot=live fliperos.boot=edid-progressive "
+                                    "drm.edid_firmware=edid/generic_15_super_resp.bin video=e\n")
+        self.assertEqual(self.env.out("video_kernel_params VGA-1 l generic_15").strip(),
+                         "video=VGA-1:e drm.edid_firmware=VGA-1:edid/generic_15.bin")
 
     def test_the_progressive_240p_is_only_for_the_intel_i915_at_15_khz(self):
         for number, driver in enumerate(("radeon", "nouveau"), 1):
@@ -1470,6 +1534,22 @@ class RecoveryTests(Base):
         self.assertIn("preempt=full", boot)
         self.assertIn("video=DVI-I-1:640x480iSe", boot)
         self.assertIn("fbcon=rotate:1", boot)
+
+    def test_the_intel_240p_edid_goes_to_the_installed_disk(self):
+        # Video Setup > Resolution ou a entrada "Intel 15 kHz 240p" do boot: o
+        # EDID da midia segue para o disco, onde o update-initramfs o poe no
+        # initramfs.
+        (self.env.etc / "fliperos.conf").write_text(
+            "connector=VGA-1\nboot_resolution=1280x240p\n"
+            "kernel_video=video=VGA-1:e drm.edid_firmware=VGA-1:edid/fliperos-1280x240.bin\n")
+        edid = self.env.dir / "edid"
+        edid.mkdir()
+        (edid / "fliperos-1280x240.bin").write_bytes(b"x" * 128)
+        target = self.env.dir / "target"
+        self.target_conf(target)
+        self.env.out("install_configure_video '%s'" % target, {"EDID_DIR": str(edid)})
+        self.assertEqual((Path(str(target) + str(edid)) / "fliperos-1280x240.bin").read_bytes(), b"x" * 128)
+        self.assertFalse((Path(str(target) + str(edid)) / "custom_resolution.bin").exists())
 
     def test_new_install_copies_the_whole_session(self):
         (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nalsa=1,0\n")

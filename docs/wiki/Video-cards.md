@@ -79,7 +79,9 @@ Details of the switch:
 
 Intel integrated graphics use the **Intel 15 kHz** boot entry, always in super resolution (`1280x480iS`): `i915` doesn't generate the low clocks.
 
-In Setup > Video Setup > Resolution an Intel card also lists **1280x240 60 Hz progressive** (240p, no interlace flicker in the menus). It is not in the kernel's mode table, so the Setup writes an EDID with that mode (`fliperos-1280x240.bin`, 26.058 MHz, 15.66 kHz), puts it in the initramfs and points `drm.edid_firmware` at it. Pick the 480i entry again to go back. The EDID and the kernel line are generated and checked by the tests; **the picture of this mode has not been seen on the tube yet.**
+In Setup > Video Setup > Resolution an Intel card also lists **1280x240 60 Hz progressive** (240p, no interlace flicker in the menus). It is not in the kernel's mode table, so the Setup writes an EDID with that mode (`fliperos-1280x240.bin`, 26.058 MHz, 15.66 kHz), puts it in the initramfs and points `drm.edid_firmware` at it. Pick the 480i entry again to go back. **Seen on the tube** (Core i3-540, VGA).
+
+The same mode is in the media's boot menu as **Intel 15 kHz 240p** (next to *Intel 15 kHz*): the installer, the Setup and the frontend already come up in progressive 240p, and the installed system keeps it. The image builds the EDID (`fliperos-rebuild-edids`); on the installed disk it goes into the initramfs.
 
 On **Gen9** (Skylake, Kaby Lake, Coffee Lake, Comet Lake) patch 09 enables interlace, with `i915.no_ytiled_scanout=1` on the kernel line. Other generations have no interlace patch: 240p works, 480i may not.
 
@@ -92,7 +94,8 @@ Seen working on a CRT, through the VGA output, installed from the **Intel 15 kHz
 - **Card:** Intel HD Graphics of a Core i3-540 (Clarkdale, Ironlake, Gen5), driver `i915`, kernel 6.18, Mesa 25.2.
 - **Works:** the boot menu and the Setup (1280x480i), the **FliperOS frontend**, **RetroArch** (each game in its own super resolution, such as 2560x224), **GroovyMAME** and **Attract-Mode Plus**.
 - **Starts, games not tried:** Pegasus.
-- **Not seen on the tube:** the 1280x240 progressive mode above, any other Intel generation, and the 3D emulators.
+- **Also seen:** the 1280x240 progressive mode above.
+- **Not seen on the tube:** any other Intel generation, and the 3D emulators.
 
 ### Limits of the Intel HD
 
@@ -105,7 +108,19 @@ What a user of this card has to know:
   - **The 480i flicker filter and the software colour adjustments are off** (the log says `OpenGL 3.0 or newer is needed; filter off for this program`). Setup > Video Setup > 480i hacks has no effect on this card.
 - **No Vulkan on Ironlake.** Emulators that need it (the Vulkan renderers of Flycast, Dolphin, PCSX2, DuckStation) are not usable, and the Vulkan-by-driver switch of the Setup only acts on `amdgpu`. Not tested; it follows from the hardware. The same goes for the 3D emulators on a card from 2010: not tried.
 - **The processor must have graphics.** The VGA port of a board only works with a CPU that has them: Clarkdale (Core i3 5xx, i5 6xx) does; Lynnfield (Core i7 8xx, i5 7xx) does not, and the board shows no video device at all (seen on an i7 870).
-- **Changing the video card on an installed system is not detected.** The kernel line and `/etc/fliperos/fliperos.conf` keep the settings of the previous card (a `320x240` mode, the AMD driver options), and the system may boot without a picture. Install FliperOS with the card it will use.
+- **Changing the video card on an installed system is not detected by the system.** The kernel line and `/etc/fliperos/fliperos.conf` keep the settings of the previous card (a `320x240` mode, the AMD driver options), and the system may boot without a picture. Boot the media and use **Recovery Mode**: it runs the output test again and rewrites only the video settings on the disk (see [Install](Install.md)).
+
+### What the Setup marks as not supported
+
+On a card that gives less than OpenGL 3, the Setup marks the item with a red X (and `(not supported)` in the text menus), shows the reason (`Needs OpenGL 3.3 or Vulkan, and this video card gives OpenGL 2.1 and OpenGL ES 2.0`) and asks before opening it (the default is *No*). The check reads the card with `eglinfo`; without it, nothing is marked.
+
+| Where | Item | Needs |
+| --- | --- | --- |
+| Games > Frontend | EmulationStation-DE | OpenGL 3.3 or OpenGL ES 3.0 |
+| Video Setup | 480i hacks (the flicker filter) | OpenGL 3.0 |
+| Games > Emulators & Games | PCSX2, Dolphin, DuckStation | OpenGL 3.3 or Vulkan (each project's own minimum) |
+
+Flycast, Supermodel and the other emulators are not marked: their minimum was not checked against this card.
 
 ### Intel-specific workarounds in FliperOS
 
