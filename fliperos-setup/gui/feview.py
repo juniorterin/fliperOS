@@ -440,14 +440,17 @@ PLAYER_ICON = (
 )
 
 
-def players_icon(fe, color):
-    key = ("players", color)
+def players_icon(fe, color, h=None):
+    """h: a altura pedida (o bitmap tem 16); sem h, o tamanho do bitmap."""
+    key = ("players", color, h)
     if key not in fe.media:
         img = pygame.Surface((len(PLAYER_ICON[0]), len(PLAYER_ICON)), pygame.SRCALPHA)
         for y, row in enumerate(PLAYER_ICON):
             for x, c in enumerate(row):
                 if c == "#":
                     img.set_at((x, y), color + (255,))
+        if h and h != img.get_height():
+            img = pygame.transform.smoothscale(img, (round(img.get_width() * h / img.get_height()), h))
         fe.media[key] = img
     return fe.media[key]
 
@@ -539,13 +542,18 @@ def icon_rows(fe, game, h=10, icons_only=False):
     rows = []
     if game.get("Category"):
         rows.append((genre_icon(fe, game, h, T.CYAN), game["Category"].split(" / ")[0], T.CYAN))
+    # Os jogadores: o boneco e o numero, depois do genero (o modo lista os
+    # desenha a parte, por isso o icons_only os deixa de fora).
+    players = (game.get("Players") or "").strip()
+    if players.isdigit() and not icons_only:
+        rows.append((players_icon(fe, T.GREEN, h), players, T.GREEN))
     if game.get("Control"):
         rows.append((control_icon(fe, game, h, T.PINK), control_short(game["Control"]), T.PINK))
     parts = []
     if game.get("Buttons"):
         parts.append("%s BTN" % game["Buttons"])
-    if game.get("Players") and not icons_only:
-        parts.append("%sP" % game["Players"])
+    if players and not players.isdigit() and not icons_only:
+        parts.append("%sP" % players)
     if parts:
         rows.append((buttons_icon(fe, game, h, T.YELLOW), ", ".join(parts), T.YELLOW))
     return rows
