@@ -35,3 +35,7 @@ the interface changes, run it again and convert them all.
 cut into one image per screen (4x nearest-neighbour, lossless WebP).
 
 Captures must be 4:3: the frame shows the whole image without cropping it.
+
+Ids used in a row of a page with no file yet are simply left out (the row becomes a card with the text only). Waiting for a capture: `gui/video-driver`, `gui/unsupported` and `gui/lab` (Setup screens, to add to `tools/gui-shots.sh`), `frontend/commercial` and `frontend/options` (the `--shot` rig of the frontend) and `web/obs-en` / `web/obs-pt` (the Controller for OBS page, by `tools/web-shots.py`). An empty file never counts: `npm run build` fails on one.
+
+The pixel-art rooms of the home are not captures: they live in `public/art` and are drawn by `node tools/site-art/iso-arcade.mjs`.

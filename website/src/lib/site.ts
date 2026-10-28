@@ -205,7 +205,6 @@ const ROW_ONLY_SHOTS = [
   'anim/frontend-systems',
   'anim/setup-colour',
   'anim/setup-latency',
-  'anim/firstboot',
   'gui/checklist',
   'gui/video-driver',
   'gui/unsupported',
