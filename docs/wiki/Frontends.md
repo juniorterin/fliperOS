@@ -270,4 +270,6 @@ What happens (`config/fliperos-frontend-build`, installed as `/opt/fliperos/bin/
 3. The `.deb` is installed with apt, which brings the runtime libraries from Ubuntu.
 4. The build tools that were not on the system before are removed.
 
+**ES-DE needs OpenGL 3.3 or OpenGL ES 3.0.** A card that gives less (an Intel HD of the first generation has OpenGL 2.1 and ES 2.0) can't open it: the Frontend screen marks it with a red X and the reason, asks before choosing it, and the installer refuses to build it (`fliperos-emulationstation unsupported` prints the reason). See [Video cards](Video-cards.md#limits-of-the-intel-hd).
+
 Everything the build prints goes to `/var/log/<package>-build.log`. It needs about 4 GB free in `/var/tmp`. Choosing the frontend again rebuilds it. A recipe marked `PKG_ON_DEMAND=1` is left out of `build-deb.sh --list-iso`, which is the list the CI builds for the image.

@@ -13,9 +13,10 @@ A card that doesn't uses a **super resolution**: the same lines and the same ref
 | NVIDIA GeForce 8 to GTX 900, Quadro up to K series | `nouveau`, or NVIDIA's own driver (GTX 900) | VGA, DVI-I | Super resolution; **native if the card passes the low resolution test** |
 | NVIDIA GTX 10 and newer (Pascal, Turing, Ampere...) | `nouveau` | None | Super resolution, through a converter |
 | Intel Gen9 (HD/UHD 500 and 600 series: Skylake to Comet Lake) | `i915` | VGA on the motherboard | Super resolution, with interlace (patch 09) |
+| Intel HD Graphics Gen5 (Ironlake: Core i3 5xx, i5 6xx) | `i915` | VGA on the motherboard | Super resolution, 480i, **seen on a CRT**. Only OpenGL 2.1: [no ES-DE, no filter, no Vulkan](#limits-of-the-intel-hd) |
 | Other Intel generations | `i915` | VGA on the motherboard | Super resolution; 480i may not work |
 
-Only one card has been seen on a CRT by the project: an AMD R7 240 (`radeon`). The other lines come from the kernel patches and from what the GroovyArcade and Batocera communities report.
+Two cards have been seen on a CRT by the project: an AMD R7 240 (`radeon`) and an Intel HD Graphics (Ironlake, `i915`). The other lines come from the kernel patches and from what the GroovyArcade and Batocera communities report.
 
 ## AMD/ATI
 
@@ -78,11 +79,41 @@ Details of the switch:
 
 Intel integrated graphics use the **Intel 15 kHz** boot entry, always in super resolution (`1280x480iS`): `i915` doesn't generate the low clocks.
 
-In Setup > Video Setup > Resolution an Intel card also lists **1280x240 60 Hz progressive** (240p, no interlace flicker in the menus). It is not in the kernel's mode table, so the Setup writes an EDID with that mode (`fliperos-1280x240.bin`, 26.058 MHz, 15.66 kHz), puts it in the initramfs and points `drm.edid_firmware` at it. Pick the 480i entry again to go back. Tested on an Ironlake (Core i3-540): the EDID and the kernel line are generated and checked; the picture of this mode has not been seen on the tube yet.
+In Setup > Video Setup > Resolution an Intel card also lists **1280x240 60 Hz progressive** (240p, no interlace flicker in the menus). It is not in the kernel's mode table, so the Setup writes an EDID with that mode (`fliperos-1280x240.bin`, 26.058 MHz, 15.66 kHz), puts it in the initramfs and points `drm.edid_firmware` at it. Pick the 480i entry again to go back. The EDID and the kernel line are generated and checked by the tests; **the picture of this mode has not been seen on the tube yet.**
 
 On **Gen9** (Skylake, Kaby Lake, Coffee Lake, Comet Lake) patch 09 enables interlace, with `i915.no_ytiled_scanout=1` on the kernel line. Other generations have no interlace patch: 240p works, 480i may not.
 
 The VGA port of many motherboards is a DisplayPort to VGA bridge chip on the board, so results vary by motherboard.
+
+### What was tested
+
+Seen working on a CRT, through the VGA output, installed from the **Intel 15 kHz** boot entry:
+
+- **Card:** Intel HD Graphics of a Core i3-540 (Clarkdale, Ironlake, Gen5), driver `i915`, kernel 6.18, Mesa 25.2.
+- **Works:** the boot menu and the Setup (1280x480i), the **FliperOS frontend**, **RetroArch** (each game in its own super resolution, such as 2560x224), **GroovyMAME** and **Attract-Mode Plus**.
+- **Starts, games not tried:** Pegasus.
+- **Not seen on the tube:** the 1280x240 progressive mode above, any other Intel generation, and the 3D emulators.
+
+### Limits of the Intel HD
+
+What a user of this card has to know:
+
+- **No native low resolutions.** The card can't generate a pixel clock under about 25 MHz, so a 320x240 game is shown as 2560x240 (same lines, same refresh, wider). On a CRT the picture is almost the same. The boot, the Setup and the frontend are in 1280x480i by default: interlaced, so thin horizontal lines flicker. The 1280x240 option above is the way out, once it is checked on a tube.
+- **OpenGL 2.1 and OpenGL ES 2.0 only** (Ironlake; the Mesa driver is `crocus`). Everything that asks for OpenGL 3 does not run:
+  - **EmulationStation-DE does not open** (it needs OpenGL 3.3 or OpenGL ES 3.0). Setup > Games > Frontend marks it with a red X and a warning, asks before choosing it, and the installer refuses to build it. Pegasus (Qt, OpenGL ES 2.0) is not affected.
+  - **RetroArch uses its `gl` driver instead of `glcore`**: `fliperos-kms-run` checks the card and switches by itself. A core or a shader that needs OpenGL 3 will not work.
+  - **The 480i flicker filter and the software colour adjustments are off** (the log says `OpenGL 3.0 or newer is needed; filter off for this program`). Setup > Video Setup > 480i hacks has no effect on this card.
+- **No Vulkan on Ironlake.** Emulators that need it (the Vulkan renderers of Flycast, Dolphin, PCSX2, DuckStation) are not usable, and the Vulkan-by-driver switch of the Setup only acts on `amdgpu`. Not tested; it follows from the hardware. The same goes for the 3D emulators on a card from 2010: not tried.
+- **The processor must have graphics.** The VGA port of a board only works with a CPU that has them: Clarkdale (Core i3 5xx, i5 6xx) does; Lynnfield (Core i7 8xx, i5 7xx) does not, and the board shows no video device at all (seen on an i7 870).
+- **Changing the video card on an installed system is not detected.** The kernel line and `/etc/fliperos/fliperos.conf` keep the settings of the previous card (a `320x240` mode, the AMD driver options), and the system may boot without a picture. Install FliperOS with the card it will use.
+
+### Intel-specific workarounds in FliperOS
+
+Three things only the Intel showed, fixed in the code:
+
+- **The screen was not released after a program closed it.** On Ironlake the Mesa leaves descriptors of `/dev/dri/card0` open after `pygame.display.quit()`, so the process stayed the owner (DRM master) of the screen: RetroArch failed with `Error when switching mode` and the frontend could not reopen (`kmsdrm not available`). `gui/drmmaster.py` drops the master after the display is closed (frontend and Setup).
+- **Attract-Mode Plus showed a black screen** because SFML makes its buffer in ARGB8888, which Ironlake refuses to scan out (`Failed to create fb`). The package `fliperos-attractplus` carries two SFML patches: a fallback to XRGB8888 (`0002`) and the same drop of the master when its context is cleaned up (`0003`).
+- **The frontend chooser** marks what the card can't run (see above).
 
 ## Several cards
 
