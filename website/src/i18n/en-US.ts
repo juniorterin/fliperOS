@@ -87,7 +87,7 @@ const enUS = {
     viewOnGithub: 'View on GitHub',
   },
   hero: {
-    eyebrow: 'fliperos 0.14 · in development',
+    eyebrow: 'fliperos 0.15 · in development',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Built for CRT.',
     description:
@@ -234,7 +234,7 @@ const enUS = {
       { id: 'pc', title: 'An ordinary 64-bit PC', text: '2 cores and 4 GB of RAM play up to PlayStation 1; 4 cores and 16 GB play everything in the image.' },
       { id: 'network', title: 'Open over the network', text: 'Copy games from any PC to \\\\fliperos\\roms. SSH is on from the first boot.' },
       { id: 'updates', title: 'Updates at boot', text: 'Updates come over the network and show what they change before asking. No new ISO needed.' },
-      { id: 'status', title: 'Still in development', text: 'Version 0.14. Some features, like the vertical monitor and the LED displays, have not been seen on real hardware yet.' },
+      { id: 'status', title: 'Still in development', text: 'Version 0.15. Some features, like the vertical monitor and the LED displays, have not been seen on real hardware yet.' },
     ],
     cta: 'Full requirements',
   },
@@ -380,7 +380,7 @@ const enUS = {
     ],
     cta: 'Every page of the web panel, in the documentation',
     controller: {
-      badge: 'New in 0.14',
+      badge: 'New in 0.15',
       title: 'Your controller, live on the stream.',
       text: 'The stick and the buttons light up on your stream while you press them on the cabinet, like the input displays of fighting game streams. Viewers see every motion and every button. Copy the address from the Live page, paste it in an OBS Browser Source, and it sits over the game with a transparent background.',
       points: [

@@ -7,10 +7,10 @@ h1,h2,h3{line-height:1.25;color:#8fd5bb}h1{margin-top:3em;border-top:1px solid #
 pre{overflow:auto;background:#202b36;padding:20px;border-radius:6px}code{font-size:.9em}
 table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1px solid #405060;text-align:left;padding:12px}
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
-</style><main><h1 id="fliperos-014">FliperOS 0.14</h1>
+</style><main><h1 id="fliperos-015">FliperOS 0.15</h1>
 <p><strong>English</strong> | <a href="README.pt-BR.md">Português</a></p>
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
-<p>In development: 0.14 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
+<p>In development: 0.15 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
 <h2 id="whats-included">What's included</h2>
 <ul>
 <li><strong>Video</strong>: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.</li>
@@ -48,8 +48,8 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </ul>
 <h3 id="2-download-the-iso">2. Download the ISO</h3>
 <ol>
-<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.14.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
-<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.14.iso</code> on Linux, <code>Get-FileHash fliperos-0.14.iso</code> in Windows PowerShell.</li>
+<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.15.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
+<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.15.iso</code> on Linux, <code>Get-FileHash fliperos-0.15.iso</code> in Windows PowerShell.</li>
 </ol>
 <h3 id="3-write-the-usb-stick">3. Write the USB stick</h3>
 <p>The ISO must be written <strong>byte for byte</strong>. Programs that rebuild the stick's boot structure break it: <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work.</strong></p>
@@ -59,7 +59,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Linux</strong>: find the stick with <code>lsblk</code> (here <code>/dev/sdX</code>; the wrong device erases the wrong disk) and run:</li>
 </ul>
 <p><code>bash
-  sudo dd if=fliperos-0.14.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+  sudo dd if=fliperos-0.15.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
 <h3 id="4-prepare-the-cabinets-bios">4. Prepare the cabinet's BIOS</h3>
 <p>Enter the BIOS/UEFI setup (usually <strong>Del</strong>, <strong>F2</strong> or <strong>F10</strong> right after power-on) and:</p>
 <ol>
@@ -304,7 +304,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="build-and-tests">Build and tests</h2>
 <p>Always in Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> explains why).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.14.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.15.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -377,6 +377,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>The cards CRT_EmuDriver covers on Windows, with VGA or DVI-I: the HD 2000 series to the R7/R9 200 and 300 with GCN 1.0. The 15 kHz kernel patches cover <code>radeon</code> and <code>amdgpu</code> (DCE and DCN 1 to 3): native boot at <code>640x480iS</code> and every game at its own resolution, in GroovyMAME, RetroArch and the frontends.</p>
 <p>Good, cheap choices: <strong>HD 5450, HD 6450, HD 7750, R7 240, R7 250</strong>.</p>
 <p>SI and CIK cards (HD 7000, R7/R9) work on both drivers; the Setup picks <code>radeon</code> by default and offers <code>amdgpu</code> (with Vulkan) in <em>Video Setup &gt; Video driver</em>.</p>
+<p>The emulators follow the driver the card runs on, checked at every session start: on <code>amdgpu</code>, Flycast goes to the Vulkan renderer that matches its OpenGL one (per-pixel or per-triangle) and Dolphin to Vulkan; PCSX2 and DuckStation stay on Automatic, which already picks Vulkan there. Back on <code>radeon</code> (no Vulkan), each goes back to its factory renderer: Flycast to OpenGL with per-pixel transparency, Dolphin to OpenGL. RetroArch stays on <code>glcore</code> on both: its Vulkan output can't switch the CRT's modes. A choice made in an emulator is kept until the driver changes again.</p>
 <p>Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an <strong>active DisplayPort or HDMI to VGA converter</strong>. The card generates the low clocks; whether they reach the tube depends on the converter's chip, so pick one that the GroovyMAME community reports for 15 kHz.</p>
 <h2 id="nvidia">NVIDIA</h2>
 <p>NVIDIA cards run on the open driver, <strong>nouveau</strong>, out of the box. On the installed system, <em>Setup &gt; Video Setup &gt; Video driver</em> can switch to <strong>NVIDIA's own driver</strong> (see below).</p>
@@ -452,7 +453,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <h2 id="writing-the-media">Writing the media</h2>
 <p>Write the ISO <strong>byte for byte</strong> to a USB stick and disable Secure Boot (the 15 kHz kernel is custom and unsigned).</p>
 <p>The ISO uses the <strong>Limine</strong> bootloader and is <strong>hybrid</strong> (<code>xorriso</code> + <code>limine bios-install</code>): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work</strong>. Use <strong>balenaEtcher</strong>, or Rufus in "DD Image mode", or <code>dd</code>:</p>
-<pre><code class="language-bash">sudo dd if=fliperos-0.14.iso of=/dev/sdX bs=4M status=progress conv=fsync
+<pre><code class="language-bash">sudo dd if=fliperos-0.15.iso of=/dev/sdX bs=4M status=progress conv=fsync
 </code></pre>
 <p>Check <code>/dev/sdX</code> with <code>lsblk</code> first: the wrong device erases the wrong disk.</p>
 <h2 id="boot-menu">Boot menu</h2>
@@ -578,8 +579,12 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p><strong>Controller in the menus:</strong> with the setup menu on screen, the controller acts as the keyboard — D-pad, hat or analog stick = arrows (repeat while held), button 1 / A / Start = Enter, button 2 / B / Select = Esc, button 3 / X / Y = Space (toggles in checklists), L / R = Page Up / Page Down.</p>
 <p>It works with arcade encoders (digital axis 0–255), gamepads and USB joysticks; light guns are left out (aiming would move through the menu).</p>
 <p>The <code>fliperos-padkeys</code> service (pure Python, the kernel's <code>uinput</code>) only translates while <code>/run/fliperos/padkeys</code> exists, which the setup creates when it opens and deletes when it exits: frontends, emulators and the desktop read the controller by themselves, without a button counting twice.</p>
-<p><strong>First boot:</strong> <em>Choose default launcher</em>, with the generated list of the launchers actually installed (Attract-Mode Plus, RetroArch, EmulationStation..., LXDE) and <em>FliperOS Setup</em> itself. Change it later in Setup &gt; Games &gt; Frontend.</p>
-<p>Right after it, the first boot installs the web panel's <strong>Live screen</strong> and turns it on (go2rtc from its GitHub, a pinned version checked by sha256; ffmpeg is already in the image). Without internet it offers the Wi-Fi first; if it still can't download, it says so and the Live screen stays in Setup &gt; Games &gt; Extras &gt; Live screen.</p>
+<p><strong>First boot:</strong> nothing to choose for what opens at power on: it is the FliperOS frontend (change it later in Setup &gt; Games &gt; Frontend). A short wizard gets the cabinet ready:</p>
+<ul>
+<li><strong>Wi-Fi:</strong> only when the network cable brings no internet and there is a Wi-Fi adapter. It asks again after a failed connection, until you say no (later: Setup &gt; Network Setup).</li>
+<li><strong>Controls:</strong> the Button mapping of Setup &gt; Joysticks, which every emulator and the frontend use. A mapping that already exists is kept.</li>
+<li><strong>Live screen:</strong> the web panel's Live screen is installed and turned on (go2rtc from its GitHub, a pinned version checked by sha256; ffmpeg is already in the image). If it can't download, it says so and the Live screen stays in Setup &gt; Games &gt; Extras &gt; Live screen.</li>
+</ul>
 <p><strong>FliperOS updates (without a new ISO):</strong> at every boot with internet, before the launcher, tty1 asks the repository whether there are FliperOS updates (<code>fliperos-update check</code>, waiting for NetworkManager and, with a cable plugged in or a saved Wi-Fi network, up to 30 s for the connection, since Wi-Fi connects after NetworkManager starts; offline or with GitHub out of reach, the boot goes on as always).</p>
 <p>Connecting to a Wi-Fi network in <em>Setup &gt; Network Setup</em> runs the same check right after the connection, without waiting for the next boot. With one pending, a screen says what it brings and asks: <strong>Apply now</strong> or <strong>Not now</strong> (asked again at the next boot).</p>
 <p>Before asking it lists the <strong>files changed on this machine that the update replaces</strong> (up to six on screen, the rest in <em>View the files</em>): it rehearses the update in an overlay over <code>/</code> and compares each file it would write with what FliperOS itself installed (<code>/var/lib/fliperos/update/manifest</code>, the sha256 of each file, recorded by the ISO and by each update).</p>
@@ -769,7 +774,8 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>From inside a game it therefore takes two presses to power off. For 3 seconds after a press the next ones don't count, so a second press given too early (or a board that reports one press through two devices) can't close the game and power off at once.</p>
 <p>The game gets a <code>SIGTERM</code>, the same as closing it normally, so RetroArch still writes its saves; a game that stays open is killed (<code>SIGKILL</code>) by the next press. Holding the button for 4 seconds still cuts the power: that is the motherboard, not FliperOS.</p>
 <p>How it works: <code>systemd-logind</code> ignores the button (<code>HandlePowerKey=ignore</code> in <code>/etc/systemd/logind.conf.d/fliperos.conf</code>; by default it would power off at every press), and triggerhappy, which already reads the volume keys, runs <code>config/fliperos-powerkey</code> on <code>KEY_POWER</code> (<code>config/fliperos-power.triggers</code>).</p>
-<p>The script finds the open game through the <code>FLIPEROS_POWERKEY</code> variable that <code>fliperos-session</code> gives what it opens: <code>frontend</code> (the game is whatever runs below it), <code>game</code> (an emulator opened from the desktop) or <code>games:FILE</code> (Fightcade, whose emulators are not its children, lists their PIDs in <code>FILE</code>).</p>
+<p>The script finds the open game through the <code>FLIPEROS_POWERKEY</code> variable that <code>fliperos-session</code> gives what it opens: <code>frontend</code> (the game is whatever runs below it), <code>game</code> (an emulator opened from the desktop) or <code>games:FILE</code> (the game is the PIDs listed in <code>FILE</code> and what runs below them). Fightcade, whose emulators are not its children, and the FliperOS frontend, whose other children (the video player, the scraper) are not games, use <code>FILE</code>. <code>hold</code> in it means the button does nothing while that game is open (the FliperOS frontend's Power closes game option, off).</p>
+<p><strong>Shutting down.</strong> No service holds the reboot or the power off for long: every system and user service that doesn't stop on <code>SIGTERM</code> gets <code>SIGKILL</code> after 10 seconds (<code>DefaultTimeoutStopSec=10s</code> in <code>/etc/systemd/system.conf.d</code> and <code>user.conf.d</code>, <code>config/fliperos-stop-timeout.conf</code>), instead of systemd's 90. The session on tty1 has the same 10 seconds. Only applying a pending update at power off gets more (20 minutes, in its own unit).</p>
 <p><strong>Volume keys:</strong> the keyboard's volume keys (or those of a panel encoder programmed to send them) work on any screen — emulator in KMS, desktop, console.</p>
 <p><code>triggerhappy</code> reads <code>/dev/input</code> and calls <code>fliperos-setup --volume up|down|mute</code> (5% steps on the Audio Setup card, saved on every press because cabinets are usually switched off at the wall); <code>config/fliperos-volume.triggers</code> says which keys. The LXDE panel only handles the mouse, so the volume doesn't change twice. No volume bar appears during a game (nothing draws on top of an emulator in KMS).</p>
 <h2 id="web-panel">Web panel</h2>
@@ -837,7 +843,8 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 - <strong>Status:</strong> now playing and the screen at the top, then video, CPU, GPU, memory, storage, network, processes and logs;
 - <strong>Terminal.</strong></p>
 <p>The status refreshes every second. What each part shows:
-- <strong>Now playing:</strong> the game open (emulator, file, RetroArch core) and the frontend, with the <strong>FPS</strong> and a graph of the last minute. The FPS comes from the OpenGL layer of the flicker filter, which counts the frames of whatever game is open. The minute of history stays in the browser.
+- <strong>Now playing:</strong> the game open (emulator, file, RetroArch core) and the frontend, with the <strong>FPS</strong> and a graph of the last minute. The FPS comes from the OpenGL layer of the flicker filter, which counts the frames of whatever game is open, and for games in Vulkan (Flycast, PCSX2, Dolphin, DuckStation on amdgpu) from a small implicit Vulkan layer (<code>config/fliperos-vkfps.c</code>, on with <code>FLIPEROS_VK_FPS=1</code>) that counts their frames the same way. The minute of history stays in the browser.</p>
+<p>The browser never keeps the panel: its pages, code, icons and fonts are sent with <code>Cache-Control: no-store</code>, so every visit gets the version on the cabinet, right after an update. The games' pictures and videos are checked each time (<code>no-cache</code> with an ETag), so new art from a scrape shows at once.
 - <strong>Video:</strong> what Video Setup asks (monitor, frequency, resolution, connector, orientation) next to what is on screen now: the mode, the horizontal kHz and vertical Hz, interlaced or progressive, and the full <strong>modeline</strong> of each active output, read from DRM by <code>fliperos-video-check</code>.
 - <strong>CPU:</strong> the total, each core and the load, plus the temperatures of the sensors.
 - <strong>GPU:</strong> the name and the driver, plus whatever the card reports: use, VRAM, clock, temperature, power.
@@ -1168,7 +1175,21 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
   - Rename, with an on-screen keyboard;
   - Scrape this game: its information, pictures, logo and video, right away;
   - Delete this game: after a YES/NO question, its file goes away from the folder (for MAME, also the CHD folder of the same name); its art in <code>~/media</code> stays. A clone kept inside its parent's zip has no file of its own to delete.</p>
-<p>Under a line come the <strong>frontend options</strong>: the view mode (list, full screen or grid), changed with left and right and saved at once. Start also switches it.</p>
+<p>Under them come the <strong>frontend options</strong>. The game options and the frontend options are one list that scrolls with the chosen line (always whole lines, never cut in half), with the Auto scrape box fixed at the bottom; the card is 200 pixels tall, so it fits on the tube. Each option is saved at once in <code>~/.config/fliperos/frontend.json</code>:
+  - <strong>View</strong>: list, full screen or grid, with left and right (Start also switches it).
+  - <strong>Show clones</strong> and <strong>Hidden games</strong> (the list of hidden games; button 1 brings one back).
+  - <strong>Exit key</strong>: the keyboard key that closes the game. Button 1 asks for it: press it within 8 seconds; button 2 on a controller cancels. A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing. Left, right or the Delete key turns it off.
+  - <strong>Exit buttons</strong>: panel buttons that close the game when held together for a second. Button 1 asks for them: hold two or more together for a second. Left, right or the Delete key turns it off. In commercial mode the coin can't be one of them.
+  - <strong>Power closes game</strong>: on (the default), the cabinet's power button closes the open game; off, it does nothing while a game is open. With no game open it always powers off.
+  - <strong>Commercial mode</strong> and, with it on, <strong>Minutes per coin</strong> (1 to 60, left and right).</p>
+<p>The exit key and buttons are read alongside the game by <code>fliperos-buttons hotkey</code>, without taking anything from it. The frontend closes the game and what runs under it (the X server, the emulator) with SIGTERM, and SIGKILL after 4 seconds.</p>
+<p><strong>Commercial mode</strong> (Tab &gt; Frontend options), for a cabinet that charges by the time played:
+- Without time, the customer can browse the games but not choose one: button 1 shows INSERT COIN.
+- Each coin (the panel's COIN, also during a game) adds the minutes chosen in Minutes per coin to the time left. The time runs by the clock, also on the menu and with the cabinet off. Turning commercial mode off clears the time left: turned on again, it starts with no coin.
+- When the time runs out during a game, the game closes and the frontend says TIME IS UP.
+- The indicator: without time, a coin going into a slot and INSERT COIN blinking, in a frame. With time, a clock with the minutes left (the seconds, in red, in the last minute). In the list it sits under the game's control icons; in full screen in the top left corner; in the grid in the bottom right corner (the logo, the texts and the icons move up a little, the icons in two lines).
+- It is a kiosk: the controller's button 2 never closes the frontend. The Esc key of a real keyboard (the operator's) still asks whether to go back to the FliperOS menu.</p>
+<p><strong>The power button.</strong> With no game open, the cabinet's power button powers off; with a game open it closes the game (Tab &gt; Frontend options &gt; Power closes game). The frontend tells <code>fliperos-powerkey</code> which process is the game through the file named in <code>FLIPEROS_POWERKEY=games:FILE</code> (<code>$XDG_RUNTIME_DIR/fliperos-frontend.game</code>): its other children, the video player and the scraper, are not a game. Before this, the button killed the video and never powered off.</p>
 <p>The buttons are the panel's own, from Setup &gt; Joysticks &gt; Button mapping (<code>/etc/fliperos/buttons.map</code>). Without a mapping, a common pad works, and so does a keyboard encoder in MAME's layout.</p>
 <p>A game opened from the frontend gets the screen, the sound and the controls, and counts in Attract-Mode's play statistics (the Most Played filter).</p>
 <h2 id="setup-games-frontend">Setup &gt; Games &gt; Frontend</h2>
@@ -3367,6 +3388,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>It downloads <strong>only what the filter chooses</strong> — the games, with their parents, BIOS and devices, and the CHDs of those games — never the whole set; the Setup says so when a link is pasted. Before marking anything, Start checks that the whole download fits on the disk; if not, it says how much is needed and how much is free.</p>
 <p><strong>Where the sets are in the torrent</strong> is found from the file list: at its top or in any subfolder (<code>MAME 0.289/ROMs (merged)/</code>, next to Software Lists, readmes or extras) — the folder with the most <code>.zip</code>/<code>.7z</code> sets, or, for CHDs, with the most <code>&lt;game&gt;/&lt;disk&gt;.chd</code> folders; the Setup shows which folder and how many sets, and the rest of the torrent is never downloaded.</p>
 <p>A torrent without any (the CHD link pasted as the romset) is refused. <strong>Transmission</strong> does the download: its own <code>transmission-daemon</code> (<code>fliperos-transmission.service</code>, as the <code>fliperos</code> user, at low CPU and disk priority, RPC only on <code>127.0.0.1:9092</code>; the stock <code>transmission-daemon.service</code> is masked).</p>
+<p>It is set for speed (<code>fliperos-downloader config</code>, at each start): up to 150 peers per torrent and 500 in all (Transmission's default, 50 and 200, left most of a big romset's peers out), a 64 MB write cache, no speed limit, DHT, PEX, local peer discovery, µTP and UPnP on, and a stalled torrent leaves the queue after 5 minutes. The disk priority is the lowest normal one (best-effort 7): the "idle" class it had only wrote while nothing else read the disk, and the frontend's videos read it all the time.</p>
 <p>It never starts at boot: the Setup (or the web panel) starts it when a link is added or a download (or an art pack) is started, and it quits by itself when its last torrent ends. A download stopped by a shutdown shows as <em>stopped</em> and goes on with <strong>Start the download</strong>.</p>
 <p>The link is added running (paused, Transmission doesn't look for peers) and, as soon as the file list arrives, stopped with no file marked; the list goes through <code>fliperos-romclean</code> (<code>scan --names</code>, <code>chds --names --with</code>), only the chosen files are marked, and what is already in the emulator folders isn't downloaded again.</p>
 <p>The terminal shows a <strong>progress bar</strong> (size, peers, speed, time left); any key returns to the menu and the download goes on, even with a game open. When a torrent ends, each file goes to the download folder (the BIOS to <code>~/bios/mame</code>, the CHDs in <code>&lt;game&gt;/</code>) and the torrent leaves Transmission without seeding.</p>
@@ -3818,6 +3840,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>RetroArch's own shortcuts that sit on those keys (Space fast-forward, F fullscreen, K frame advance...) are turned off in <code>buttons.cfg</code>, and Supermodel drops its own default keys, which would be another player's. <strong>Controllers (press each control)</strong> is the mapping below.</p>
 <p>Each player's panel, input by input: up, down, left, right, buttons 1 to 6 in panel order (1 2 3 on top, 4 5 6 below), Start and Coin.</p>
 <p>The first input pressed tells which controller belongs to the player (on a V-USB panel with two identical devices, one per player); with nothing pressed for 8 seconds the input is skipped; the controller-as-keyboard for the menu is off meanwhile.</p>
+<p>Each button does one thing: a button already given to another input (of this player or another one on the same controller) is refused, and the screen says which input has it and asks for another one.</p>
 <p>It is read through SDL (<code>config/fliperos-buttons</code>), and the result goes to both: in <strong>RetroArch</strong>, each player's binds in <code>/etc/fliperos/retroarch/buttons.cfg</code>, which <code>fliperos-kms-run</code> adds to the config (<code>--appendconfig</code>) on top of the controller's automatic profile, with the buttons in the arcade cores' layout (Y X L / B A R, Start and Select on the coin); in <strong>GroovyMAME</strong>, the ctrlr <code>~/.mame/ctrlr/fliperos.cfg</code> (each player's <code>JOYCODE</code>s, together with MAME's default keys) and in <code>mame.ini</code> <code>ctrlr fliperos</code> and <code>joystickprovider sdljoy</code> — with <code>sdlgame</code>, the default, MAME sees the panel through SDL's game controller mapping (A, B, X, Y...), which doesn't follow the button order.</p>
 <p>It also applies to the other emulators: the device's <strong>SDL game controller</strong> mapping (GUID), in fight stick layout (X Y RB on top, A B RT below, coin on Back), in <code>/var/lib/fliperos/gamecontrollerdb-user.txt</code>, which <code>fliperos-controllers</code> puts last in <code>gamecontrollerdb.txt</code> (PCSX2, with Pad1/Pad2 on SDL through <code>fliperos-x11-run</code> while PCSX2 has no SDL bind; DuckStation the same way — it points SDL to its own database, but <code>SDL_GAMECONTROLLERCONFIG_FILE</code> takes priority; KOF Final Attack's Ikemen GO, which adds its own <code>external/gamecontrollerdb.txt</code> after SDL starts, so <code>fliperos-kof</code> hands it that database with the FliperOS one last, <code>save/gamecontrollerdb-fliperos.txt</code>, on every launch; AntiMicroX); in <strong>Dolphin</strong>, <code>GCPad1</code> to <code>GCPad4</code> in <code>GCPadNew.ini</code> with that mapping (4 = A, 1 = B, 5 = X, 2 = Y, 3 = Z, 6 = R, coin on the Triforce Coin) and each player's port enabled in <code>Dolphin.ini</code>; <strong>Flycast</strong> by device name (Dreamcast through SDL; arcade, Naomi and Atomiswave, with the panel's button N on the game's button N and coin on D; a hat D-pad becomes Flycast's hat button code and a trigger goes in its <code>triggers</code> list), and the same files in Fightcade's Flycast Dojo; <strong>Attract-Mode Plus</strong>, the joystick entries of <code>input_map</code> in <code>attract.cfg</code>: each player's directions, Select on button 1 and Back on button 2, plus its default shortcuts (Up + button 1 and so on) for player 1, replacing the old controller's entries (keyboard entries and other commands stay; it is written again every time Attract-Mode opens, so one installed after the mapping gets it too); <strong>Supermodel</strong>, Start, coin, directions and buttons 1 to 4 for players 1 and 2 in <code>Supermodel.ini</code>; <strong>Hypseus Singe</strong>, the <code>[KEYBOARD]</code> of <code>~/.hypseus/hypinput.ini</code> (buttons 1 to 3 and skill 1 to 3, Start and coin for both players); and <strong>OpenBOR</strong>, in each player's keys of <code>Saves/default.cfg</code> and of each pak's <code>.cfg</code> (the <code>s_savedata</code> struct: 1 attack, 2 jump, 3 special, 4 to 6 the other attacks, coin on Esc).</p>
 <p>The map lives in <code>/etc/fliperos/buttons.map</code>, and a system update writes everything again.</p>
@@ -4380,7 +4403,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <h2 id="build">Build</h2>
 <p>Always in Docker (<code>CLAUDE.md</code> forbids chroot with the host's <code>/dev</code> on WSL).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.14.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.15.iso
 </code></pre>
 <table>
 <thead>
@@ -4427,7 +4450,7 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <p>What doesn't exist in Ubuntu 24.04 is downloaded with a pinned version and hash: Limine 11.4.1, Gum 2.0.2 (the <code>.deb</code> stays for the man pages; the binary is built from the same version's source with <code>patches/gum</code>, compiled with Go 1.26.7: ▲/▼ arrows instead of dots in the menus' pagination, the menu sounds and Space toggling in checklists — gum 2.0.2 only knows the key as <code>" "</code>, and its library calls it <code>space</code> —, put in place of <code>/usr/bin/gum</code> with <code>dpkg-divert</code>), AntiMicroX 3.6.1 (official <code>.deb</code> for 24.04), Skyscraper 3.21.0 (Gemba fork, compiled with Qt6).</p>
 <p>Audit of the generated ISO (read-only): checks the boot menu, kernel, setup files, libraries of the compiled programs, EDIDs and BIOS/UEFI boot.</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.14.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.15.iso
 </code></pre>
 <h2 id="release">Release</h2>
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
@@ -4437,16 +4460,16 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
 <p><code>powershell
-   git tag 0.14
-   git push origin 0.14</code></p>
+   git tag 0.15
+   git push origin 0.15</code></p>
 <p>Pushing the tag triggers the GitHub Actions <strong>Release</strong> workflow (<code>.github/workflows/release.yml</code>). It checks that the tag is <code>FLIPEROS_VERSION</code> and that <code>CHANGELOG.md</code> has its section, builds the frontends repository (<code>Dockerfile.packages</code>) and generates the ISO with the same <code>Dockerfile.fliperos</code> as the local build.</p>
 <p>Then it publishes through <code>tools/release-publish.sh</code>, with the workflow's own token. The kernel and frontend <code>.deb</code>s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h).</p>
 <p>If it fails, <code>fliperos-mkiso.log</code> is kept as a workflow artifact. Run by hand (<em>Actions &gt; Release &gt; Run workflow</em>), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.</p>
-<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.14</code>, <code>git push -f origin 0.14</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
+<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.15</code>, <code>git push -f origin 0.15</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
 <p>To publish an ISO generated here, in the audit container:</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.14.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.15.iso
 </code></pre>
 <p><code>gh auth login</code> is a one-time step: the login stays in the <code>fliperos-gh</code> volume.</p>
 <p><code>tools/release-publish.sh</code> only publishes what can go public:</p>
@@ -4461,8 +4484,8 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p>Switchres opens <code>libX11.so</code>, <code>libXrandr.so</code> and <code>libdrm.so</code> by those unversioned names, which belong to the <code>-dev</code> packages: <code>config/fliperos-dlopen-links</code> scans the binaries in <code>/usr/local</code> and <code>/opt</code> for such names and links them in <code>/usr/local/lib</code> to the installed version, and <code>tools/verify-iso.sh</code> checks the three.</p>
 <p>The packages left with nothing depending on them once the <code>-dev</code> are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an <code>apt autoremove</code> on the installed system doesn't take them.</p>
 <p>The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg <code>path-exclude</code> so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.</p>
-<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.14.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
-<p>Also published: <code>fliperos-0.14.sha256</code> (the whole ISO and each part) and <code>fliperos-0.14-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
+<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.15.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
+<p>Also published: <code>fliperos-0.15.sha256</code> (the whole ISO and each part) and <code>fliperos-0.15-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
 <h2 id="tests">Tests</h2>
 <pre><code class="language-powershell">docker build -t fliperos-tests -f tests/Dockerfile tests

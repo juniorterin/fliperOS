@@ -2,6 +2,42 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.15
+
+The first boot is now a short wizard instead of a launcher question: the FliperOS frontend is already what opens, and the wizard offers the Wi-Fi (only when the network cable brings no internet), then the controls. The FliperOS frontend can charge by the time played (commercial mode, with a coin slot on screen), closes a game with a key or a button combination of your choice, and its power button now powers off the cabinet when no game is open. On the AMD amdgpu driver, Flycast and Dolphin run in Vulkan. Booting straight into one game and rebooting are quicker, and the web panel is never kept by the browser. None of the frontend's new options, the Vulkan renderers or the first boot wizard have been seen on a CRT yet.
+
+**System changes:**
+
+- The first boot no longer asks what opens at power on. A wizard offers the Wi-Fi when the cable has no internet and an adapter exists (and asks again after a failed connection), then the Button mapping (a mapping that already exists is kept), then installs the Live screen
+- Button mapping refuses a button already given to another input, of the same player or another one on the same controller, and says which input has it
+- Video driver: on amdgpu, Flycast goes to the Vulkan renderer that matches its OpenGL one and Dolphin to Vulkan; PCSX2 and DuckStation stay on Automatic, which already picks Vulkan. On radeon each goes back to its factory renderer. It is checked at every session start, so a choice made in an emulator stays until the driver changes. RetroArch stays on glcore, because its Vulkan output cannot switch the CRT's modes
+- Vulkan games count in the web panel's FPS: a small implicit Vulkan layer (`FLIPEROS_VK_FPS=1`, set by `fliperos-kms-run` and `fliperos-x11-client`) counts the frames. It shows GroovyMAME's FPS; Flycast's does not show up yet
+- The cabinet's power button with the FliperOS frontend open used to kill the frontend's video player and never power off, because everything below the frontend counted as the game. The frontend now writes the game's PID to the file in `FLIPEROS_POWERKEY=games:FILE`: no game, it powers off; a game, it closes the game and what runs under it
+- Booting straight into one game: the hidden Limine menu waits 1 second, not 3 (a held key still opens it), and the automatic login on tty1 no longer waits for the network. The `pam_lastlog` line that errored at each login is gone
+- Reboot and power off: every system and user service that ignores the stop request is killed after 10 seconds, not systemd's 90. On the last reboot of the project's cabinet the web panel sat 90 seconds in final-sigterm. Applying an update at power off keeps its 20 minutes
+- Web panel: the browser never keeps the pages, code, icons or fonts (`Cache-Control: no-store`), so each visit has the cabinet's current version. Game pictures and videos are checked each time. The Live screen is 4:3 on a phone
+- Downloader (Transmission): up to 150 peers per torrent and 500 in all (were 50 and 200), a 64 MB write cache, no speed limit, and best-effort disk priority 7 instead of idle, which only wrote while the disk was otherwise unused
+
+**Package changes:**
+
+- None: nothing was added to or removed from the image. The Vulkan layer is compiled with the flicker filter and the other native helpers
+
+**fliperos-setup changes:**
+
+- Tab > Frontend options is one scrolling list with the game options, with the Auto scrape box fixed below and no line cut in half. New options: Exit key, Exit buttons (Delete clears them), Power closes game, Commercial mode and Minutes per coin
+- Commercial mode: with no credit a game cannot be chosen; each coin (also during a game) adds the minutes chosen; when the time ends the game closes; the controller's button 2 never leaves the frontend while the keyboard Esc still asks to; turning it off clears the time left. A coin slot with a silver coin and INSERT COIN, or a clock with the minutes left, sits under the controls icons in the list, in the top left corner in full screen and in the bottom right corner in the grid
+- The Setup writes `FLIPEROS_TIMEOUT` of the boot menu from the launcher (`boot_menu_timeout`)
+
+**Tool changes:**
+
+- `fliperos-buttons hotkey`: read alongside the game, it prints `exit` for the chosen key or buttons and `coin` for each coin; the SDL reading of `watch` became the `Sticks` class
+- `fliperos-powerkey` understands `hold` in the games file (the button does nothing while that game is open) and closes the PIDs listed there with what runs under them
+- `config/fliperos-vkfps.c` and `.json`, `config/fliperos-stop-timeout.conf` and `config/fliperos-user-sessions.service`
+
+**Documentation:**
+
+- Frontends page: the options of Tab, commercial mode and the power button. Controls, Video cards, Web panel, ROMs and Installed system pages: the new behaviours above
+
 ## 0.14
 
 NVIDIA cards can now switch from nouveau to NVIDIA's own driver in Video Setup > Video driver. It is downloaded from Ubuntu and compiled for the 15 kHz kernel, and it is the driver Batocera uses for native 320x240 on these cards. A new Lab mode gives a temporary internet address to the web panel, for someone helping you from far away. The live screen in OBS has sound, sound is on from the start and Watch live opens at 60 fps. The 480i flicker filter works on the desktop again and covers Fightcade. The install media's boot menu, invisible on a 15 kHz tube, now boots by itself after 10 seconds instead of 30. The NVIDIA driver has not been seen on an NVIDIA card yet, and Lab mode has only been tried on the project's cabinet.
