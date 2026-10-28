@@ -203,8 +203,13 @@ class Frontend:
         self.mode = cfg.get("mode", "list") if cfg.get("mode") in MODES else "list"
         self.cats = self.lib.categories()
         self.cat = next((i for i, c in enumerate(self.cats) if c["key"] == cfg.get("category")), 0)
-        names = [f["name"] for f in self.lib.filters]
-        self.flt = names.index(cfg.get("filter")) if cfg.get("filter") in names else self.default_filter()
+        # O filtro e de cada romlist (frontend.json filters, pela chave dela):
+        # trocar de romlist traz o filtro que ela tinha. O "filter" de antes,
+        # um so para todas, vale para a romlist em que o frontend estava.
+        self.filter_by = dict(cfg.get("filters") or {})
+        if cfg.get("filter") and self.category() and self.category()["key"] not in self.filter_by:
+            self.filter_by[self.category()["key"]] = cfg["filter"]
+        self.load_filter()
         self.opened = set()        # os jogos pai com os clones abertos (na lista)
         # Tab > Frontend options > Show clones (gravado no frontend.json).
         self.show_clones = cfg.get("clones", True) is not False
@@ -305,6 +310,19 @@ class Frontend:
         drmmaster.drop()
         self.window = None
 
+    def load_filter(self):
+        """O filtro da romlist de agora (sem nota, o All Games)."""
+        cat = self.category()
+        names = [f["name"] for f in self.lib.filters]
+        name = self.filter_by.get(cat["key"]) if cat else None
+        self.flt = names.index(name) if name in names else self.default_filter()
+
+    def set_filter(self, index):
+        self.flt = index
+        cat = self.category()
+        if cat:
+            self.filter_by[cat["key"]] = self.lib.filters[index % len(self.lib.filters)]["name"]
+
     def default_filter(self):
         names = [f["name"].lower() for f in self.lib.filters]
         return names.index("all games") if "all games" in names else 0
@@ -363,7 +381,7 @@ class Frontend:
         g = self.game()
         self.keep_position()
         save_config({"mode": self.mode, "category": (self.category() or {}).get("key"),
-                     "filter": self.lib.filters[self.flt % len(self.lib.filters)]["name"],
+                     "filters": self.filter_by,
                      "game": g["Name"] if g else None, "positions": self.positions,
                      "clones": self.show_clones, "exit_key": self.exit_key, "exit_combo": self.exit_combo,
                      "power_exit": self.power_exit, "commercial": self.commercial,
@@ -401,6 +419,7 @@ class Frontend:
         self.cat_pos = old + step
         self.keep_position()
         self.cat = (self.cat + step) % len(self.cats)
+        self.load_filter()
         # A tela de antes desliza para fora (feview.draw).
         if getattr(self, "last_ui", None) is not None:
             self.slide = (self.last_ui, 1 if step > 0 else -1, time.monotonic())
@@ -626,7 +645,7 @@ class Frontend:
             elif a in ("b1", "b5"):
                 if a == "b1":
                     g = self.game()
-                    self.flt = self.ov["sel"]
+                    self.set_filter(self.ov["sel"])
                     self.cursor = 0
                     self.rebuild(keep=g["Name"] if g else None)
                     self.remember()
@@ -1148,6 +1167,7 @@ class Frontend:
                 key = (self.category() or {}).get("key")
                 self.cats = self.lib.categories()
                 self.cat = next((i for i, c in enumerate(self.cats) if c["key"] == key), 0)
+                self.load_filter()
                 self.rebuild(keep=g["Name"] if g else None)
             if now - self.last_check > 4 and not self.lib.refreshing:
                 self.last_check = now
