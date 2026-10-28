@@ -49,6 +49,9 @@ const SECTIONS: Record<PageSlug, ReactNode> = {
       <OpenHardware />
     </>
   ),
+  install: null,
+  controls: null,
+  cards: null,
 };
 
 async function resolve(params: PageProps<'/[lang]/[page]'>['params']) {

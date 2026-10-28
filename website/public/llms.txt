@@ -9,6 +9,8 @@ Key facts:
 - Frontends: Attract-Mode Plus (Arcadeflow theme), EmulationStation (ES-DE), Pegasus and Fightcade 2 for online matches.
 - Web panel at http://fliperos.local: pick a game and play it on the tube, watch the cabinet live, put the live screen (with sound) and the marquee in OBS, change colour and 480i settings while playing, upload games, filter a MAME romset, download only the games that pass, check the system status, open a terminal.
 - Controller on the stream (new in 0.13): the player's stick and buttons light up on the live stream as they are pressed, as an OBS Browser Source page with a transparent background, restyled in the web panel with a live CSS editor. Guide: https://github.com/juniorterin/fliperOS/wiki/Controller-overlay
+- Intel HD graphics work through the VGA output (0.16), with a boot entry in 1280x240 progressive; the Setup marks with a red X what a card without OpenGL 3 cannot run. NVIDIA cards can switch from nouveau to NVIDIA's own driver (0.14), and AMD cards run Flycast and Dolphin on Vulkan (0.15).
+- Commercial mode (0.15): the frontend charges by time played, with a coin slot on screen. Lab mode (0.14): a temporary internet address to the web panel for remote help.
 - Multi-screen games on two or three CRTs (Darius, The Ninja Warriors, Punch-Out!!, Ferrari F355 Challenge), the GunCon 2 light gun with calibration for the tube, Pixelcade and ZeDMD LED displays with versus scores.
 - The Setup downloads the BIOS your games need; the image ships no games and no BIOS.
 - Installed from a USB stick (ISO from GitHub releases); SSH is on from the first boot (user fliperos).
@@ -16,7 +18,7 @@ Key facts:
 ## Links
 
 - [Website](https://fliperos.juniorter.in): overview in English and Portuguese
-- Website pages (also under /pt): [frontend](https://fliperos.juniorter.in/en/frontend), [Setup](https://fliperos.juniorter.in/en/setup), [ROMs, downloads and BIOS](https://fliperos.juniorter.in/en/games), [CRT and video](https://fliperos.juniorter.in/en/video), [web panel](https://fliperos.juniorter.in/en/web-panel), [emulators](https://fliperos.juniorter.in/en/emulators), [hardware](https://fliperos.juniorter.in/en/hardware)
+- Website pages (also under /pt): [frontend](https://fliperos.juniorter.in/en/frontend), [Setup](https://fliperos.juniorter.in/en/setup), [ROMs, downloads and BIOS](https://fliperos.juniorter.in/en/games), [CRT and video](https://fliperos.juniorter.in/en/video), [web panel](https://fliperos.juniorter.in/en/web-panel), [emulators](https://fliperos.juniorter.in/en/emulators), [hardware](https://fliperos.juniorter.in/en/hardware), [install and updates](https://fliperos.juniorter.in/en/install), [controls and light gun](https://fliperos.juniorter.in/en/controls), [video cards](https://fliperos.juniorter.in/en/cards)
 - [GitHub repository](https://github.com/juniorterin/fliperOS): source code, issues and README with a step-by-step guide
 - [Releases](https://github.com/juniorterin/fliperOS/releases): the ISO
 - [Documentation (wiki)](https://github.com/juniorterin/fliperOS/wiki): install, installed system, web panel, emulators, ROMs and BIOS, controls, latency

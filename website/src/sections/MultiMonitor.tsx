@@ -14,6 +14,12 @@ const POINT_STYLE: Record<string, { icon: LucideIcon; color: string }> = {
   toggle: { icon: ToggleRight, color: 'text-green border-green/40 bg-green/10' },
 };
 
+// Os dois quartos em pixel art, no estilo do logo (tools/site-art).
+const ART = [
+  { src: '/art/arcade-2-screens.png', label: 'twoLabel', alt: 'twoAlt' },
+  { src: '/art/arcade-3-screens.png', label: 'threeLabel', alt: 'threeAlt' },
+] as const;
+
 // Saidas de exemplo, na ordem das telas do jogo (screens= do fliperos.conf).
 const ROW_OUTPUTS = ['DVI-I-1', 'VGA-1', 'DVI-I-2'];
 const STACK_OUTPUTS = ['VGA-1', 'DVI-I-1'];
@@ -49,7 +55,17 @@ export function MultiMonitor() {
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading id="multi-monitor" kicker={m.kicker} title={m.title} intro={m.intro} />
 
-        <div className="mt-14 grid gap-6 lg:grid-cols-3 lg:items-end">
+        <Reveal className="mt-14 grid gap-8 sm:grid-cols-2 lg:mx-auto lg:max-w-4xl">
+          {ART.map(({ src, label, alt }) => (
+            <figure key={src} className="text-center">
+              <Image src={src} alt={m.art[alt]} width={208} height={218} unoptimized className="mx-auto h-auto w-full max-w-sm [image-rendering:pixelated]" />
+              <figcaption className="mt-3 font-mono text-xs tracking-widest text-comment uppercase">{m.art[label]}</figcaption>
+            </figure>
+          ))}
+        </Reveal>
+        <p className="mt-16 font-mono text-xs tracking-widest text-comment uppercase">{m.art.captures}</p>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-3 lg:items-end">
           <Reveal as="figure" className="lg:col-span-2">
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {ROW_OUTPUTS.map((output, i) => (

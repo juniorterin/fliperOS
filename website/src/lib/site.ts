@@ -8,7 +8,11 @@ export const LINKS = {
   latestRelease: `${REPO_URL}/releases/latest`,
   issues: `${REPO_URL}/issues`,
   instagram: 'https://www.instagram.com/juniorter.in/',
+  video: 'https://www.youtube.com/watch?v=W0vrpqgefL0',
 } as const;
+
+// O id do vídeo de apresentação no YouTube (o player só carrega ao clicar).
+export const VIDEO_ID = 'W0vrpqgefL0';
 
 // O repositório abre no README em inglês (o original); o site em português
 // leva direto à tradução, README.pt-BR.md.
@@ -53,7 +57,7 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fliperos.j
 
 // As páginas de detalhe, na ordem do menu e do "Próxima"; o slug é o mesmo
 // nos dois idiomas (/en/frontend, /pt/frontend).
-export const PAGE_SLUGS = ['frontend', 'setup', 'games', 'video', 'web-panel', 'emulators', 'hardware'] as const;
+export const PAGE_SLUGS = ['frontend', 'setup', 'games', 'video', 'web-panel', 'emulators', 'hardware', 'install', 'controls', 'cards'] as const;
 export type PageSlug = (typeof PAGE_SLUGS)[number];
 
 export function isPageSlug(value: string): value is PageSlug {
@@ -68,7 +72,10 @@ export const PAGE_WIKI: Record<PageSlug, string> = {
   video: 'Kernel-15-kHz',
   'web-panel': 'Web-panel',
   emulators: 'Emulators',
-  hardware: 'Video-cards',
+  hardware: 'DIY-hardware',
+  install: 'Install',
+  controls: 'Controls',
+  cards: 'Video-cards',
 };
 
 // Os ids abaixo são caminhos em public/screenshots sem a extensão; os textos
@@ -89,15 +96,53 @@ export const HERO_SHOTS = [
   'desktop',
 ];
 
-// A galeria da home: um grupo por página, com o "ver mais" levando a ela.
-// {lang} vira en ou pt (os prints do painel web têm um por idioma).
-export const HOME_GALLERY: { page: PageSlug; shots: string[] }[] = [
-  { page: 'frontend', shots: ['anim/frontend-grid', 'frontend/list-card', 'anim/frontend-info', 'frontend/full'] },
-  { page: 'setup', shots: ['anim/setup-guncon', 'gui/video', 'anim/install', 'gui/layout-edit'] },
-  { page: 'games', shots: ['anim/downloader', 'gui/filter', 'gui/filter-controls', 'anim/bios'] },
-  { page: 'web-panel', shots: ['web/frontend-{lang}', 'web/phone-{lang}', 'web/status-{lang}'] },
-  { page: 'video', shots: ['multi/darius-1', 'multi/darius-2', 'multi/darius-3', 'multi/punchout-1'] },
+// Os passos da home, do pendrive ao jogo: uma tela cada, com a página que o
+// conta em detalhe. O texto de cada um está em howItWorks.steps, na mesma ordem.
+export const HOME_STEPS: { page: PageSlug; shot: string }[] = [
+  { page: 'install', shot: 'anim/install' },
+  { page: 'controls', shot: 'anim/setup-buttons' },
+  { page: 'games', shot: 'anim/romfilter' },
+  { page: 'frontend', shot: 'anim/frontend-grid' },
 ];
+
+// Os destaques da home, numa grade com tiles de tamanhos diferentes; o texto
+// de cada um está em highlights.items pelo id. {lang} vira en ou pt (os prints
+// do painel web têm um por idioma). Sem arquivo, o tile fica só com o texto.
+export type HighlightId = 'web' | 'multi' | 'gun' | 'live' | 'coin';
+export const HOME_HIGHLIGHTS: { id: HighlightId; page: PageSlug; shot: string; extra?: string; since?: string }[] = [
+  { id: 'web', page: 'web-panel', shot: 'web/phone-{lang}', extra: 'web/frontend-{lang}' },
+  { id: 'multi', page: 'video', shot: 'multi/darius-1' },
+  { id: 'gun', page: 'controls', shot: 'gui/guncon-target1' },
+  { id: 'live', page: 'web-panel', shot: 'web/obs-{lang}', since: '0.13' },
+  { id: 'coin', page: 'frontend', shot: 'frontend/commercial', since: '0.15' },
+];
+
+// A faixa de telas da home: poucas, variadas, que rolam para o lado.
+export const HOME_STRIP = [
+  'anim/frontend-list',
+  'anim/setup-carousel',
+  'anim/setup-guncon',
+  'anim/romfilter',
+  'anim/frontend-info',
+  'anim/setup-colour',
+  'gui/main',
+  'anim/bios',
+];
+
+// As últimas versões na linha do tempo da home (a mais nova primeiro). Os
+// textos de cada uma estão em whatsNew.notes; um release novo entra aqui e lá,
+// junto com FLIPEROS_VERSION.
+export const RELEASES = [
+  { version: '0.16', date: '2026-10-28' },
+  { version: '0.15', date: '2026-10-28' },
+  { version: '0.14', date: '2026-10-26' },
+  { version: '0.13', date: '2026-10-25' },
+] as const;
+export type ReleaseVersion = (typeof RELEASES)[number]['version'];
+
+export function releaseUrl(version: string): string {
+  return `${REPO_URL}/releases/tag/${version}`;
+}
 
 // "Todas as telas" no fim de cada página de detalhe.
 export const PAGE_SHOTS: Record<PageSlug, string[]> = {
@@ -119,30 +164,7 @@ export const PAGE_SHOTS: Record<PageSlug, string[]> = {
     'frontend/grid-card',
     'frontend/grid-options',
   ],
-  setup: [
-    'gui/main',
-    'gui/main-setup',
-    'gui/live',
-    'gui/progress',
-    'gui/setup',
-    'gui/video',
-    'gui/radio',
-    'gui/joysticks',
-    'gui/buttons-players',
-    'gui/buttons-capture',
-    'gui/layout',
-    'gui/layout-edit',
-    'gui/guncon',
-    'gui/guncon-target1',
-    'gui/guncon-target2',
-    'gui/guncon-target3',
-    'gui/guncon-result',
-    'gui/input',
-    'gui/power',
-    'gui/yesno',
-    'gui/error',
-    'desktop',
-  ],
+  setup: ['gui/main-setup', 'gui/setup', 'gui/video', 'gui/radio', 'gui/input', 'gui/power', 'gui/yesno', 'desktop'],
   games: [
     'gui/setup-games',
     'gui/downloader',
@@ -162,10 +184,36 @@ export const PAGE_SHOTS: Record<PageSlug, string[]> = {
   'web-panel': [],
   emulators: [],
   hardware: [],
+  install: ['gui/main', 'gui/progress', 'gui/live', 'gui/error'],
+  controls: [
+    'gui/joysticks',
+    'gui/buttons-players',
+    'gui/buttons-capture',
+    'gui/layout',
+    'gui/layout-edit',
+    'gui/guncon',
+    'gui/guncon-target1',
+    'gui/guncon-target2',
+    'gui/guncon-target3',
+    'gui/guncon-result',
+  ],
+  cards: [],
 };
 
 // Telas usadas só nos blocos das páginas de detalhe.
-const ROW_ONLY_SHOTS = ['anim/frontend-systems', 'anim/setup-colour', 'anim/setup-latency', 'gui/checklist'];
+const ROW_ONLY_SHOTS = [
+  'anim/frontend-systems',
+  'anim/setup-colour',
+  'anim/setup-latency',
+  'anim/firstboot',
+  'gui/checklist',
+  'gui/video-driver',
+  'gui/unsupported',
+  'gui/lab',
+  'frontend/commercial',
+  'frontend/options',
+  'web/obs-{lang}',
+];
 
 const withLang = (id: string) => (id.includes('{lang}') ? ['en', 'pt'].map((l) => id.replace('{lang}', l)) : [id]);
 
@@ -173,9 +221,11 @@ const withLang = (id: string) => (id.includes('{lang}') ? ['en', 'pt'].map((l) =
 export const SCREENSHOT_IDS = [
   ...new Set([
     ...HERO_SHOTS,
-    ...HOME_GALLERY.flatMap((g) => g.shots.flatMap(withLang)),
+    ...HOME_STEPS.map((s) => s.shot),
+    ...HOME_HIGHLIGHTS.flatMap((h) => [h.shot, ...(h.extra ? [h.extra] : [])]).flatMap(withLang),
+    ...HOME_STRIP,
     ...Object.values(PAGE_SHOTS).flat(),
-    ...ROW_ONLY_SHOTS,
+    ...ROW_ONLY_SHOTS.flatMap(withLang),
   ]),
 ];
 // gif vale também: uma animação em GIF entra no lugar do WebP animado.
