@@ -237,9 +237,12 @@ class MonitorTests(Base):
         self.assertEqual(len(full), 7)
         low = self.env.out("monitor_resolutions 15k 0").splitlines()
         self.assertEqual([l.split("|")[0] for l in low], ["1280x480iS"])
+        # Com o EDID do FliperOS (a Intel i915) entra tambem o 240p largo.
+        edid = self.env.out("monitor_resolutions 15k 0 1").splitlines()
+        self.assertEqual([l.split("|")[0] for l in edid], ["1280x480iS", "1280x240p"])
 
     def test_every_listed_mode_has_a_modeline(self):
-        modes = self.env.out("monitor_resolutions 15k; monitor_resolutions 25k; monitor_resolutions 31k")
+        modes = self.env.out("monitor_resolutions 15k; monitor_resolutions 15k 0 1; monitor_resolutions 25k; monitor_resolutions 31k")
         for line in modes.splitlines():
             mode = line.split("|")[0]
             self.env.out("mode_modeline %s" % mode)
@@ -651,6 +654,54 @@ class ResolutionTests(Base):
         self.env.card("card1", "nouveau")
         self.env.out("conf_set card card1")
         self.assertEqual(self.env.out("video_resolution_choices").split("|")[0], "1280x480iS")
+
+    def test_intel_gets_the_progressive_240p_through_an_edid(self):
+        # O i915 nao gera dotclock baixo, e o 240p largo nao esta na tabela
+        # do kernel: o Video Setup oferece o 1280x240 progressivo por um EDID
+        # (26,058 MHz, 15,66 kHz, 60 Hz), so na Intel e num monitor de 15 kHz.
+        self.env.card("card1", "i915")
+        self.env.out("conf_set card card1")
+        self.assertEqual([c.split("|")[0] for c in self.env.out("video_resolution_choices").splitlines()],
+                         ["1280x480iS", "1280x240p"])
+        edid_dir = self.env.dir / "edid"
+        env = {"EDID_DIR": str(edid_dir), "EDID_MODES": str(SETUP.parent / "config" / "fliperos-edid-modes")}
+        self.env.out("video_set_resolution 1280x240p", env)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("kernel_video=video=VGA-1:e drm.edid_firmware=VGA-1:edid/fliperos-1280x240.bin\n", conf)
+        self.assertIn("boot_resolution=1280x240p\n", conf)
+        data = (edid_dir / "fliperos-1280x240.bin").read_bytes()
+        self.assertEqual(len(data), 128)
+        self.assertEqual(sum(data) % 256, 0)
+        # O primeiro modo: 26,058 MHz, 1280 colunas, 240 linhas, progressivo.
+        self.assertEqual(data[54] | data[55] << 8, 2606)
+        self.assertEqual(data[56] | (data[58] >> 4) << 8, 1280)
+        self.assertEqual(data[59] | (data[61] >> 4) << 8, 240)
+        self.assertEqual(data[71] & 0x80, 0)
+        # Voltar a um modo da tabela tira o EDID da linha.
+        self.env.out("video_set_resolution 1280x480iS", env)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("kernel_video=video=VGA-1:1280x480iSe\n", conf)
+        self.assertNotIn("drm.edid_firmware", conf)
+
+    def test_the_progressive_240p_is_only_for_the_intel_i915_at_15_khz(self):
+        for number, driver in enumerate(("radeon", "nouveau"), 1):
+            self.env.card("card%d" % number, driver)
+            self.env.out("conf_set card card%d" % number)
+            self.assertNotIn("1280x240p", self.env.out("video_resolution_choices"), driver)
+        self.env.card("card3", "i915")
+        self.env.out("conf_set card card3; conf_set monitor arcade_31")
+        self.assertNotIn("1280x240p", self.env.out("video_resolution_choices"))
+
+    def test_the_progressive_240p_geometry_and_boot(self):
+        (self.env.etc / "fliperos.conf").write_text("boot_resolution=1280x240p\n")
+        self.assertEqual(self.env.out("geometry_mode").strip(), "1280 240 60")
+        self.assertEqual(self.env.out("mode_pretty 1280x240p").strip(), "1280x240p")
+        # O EDID so vale no initramfs: boot_apply o refaz (e so ele).
+        snippet = ('boot_read_cmdline() { echo q; }; boot_compose() { echo "$1"; }; boot_write_cmdline() { :; }; '
+                   'run_logged() { echo "RUN $*"; }; LIMINE_UPDATE=limine-update; boot_apply')
+        self.assertEqual(self.env.out(snippet).strip(), "RUN update-initramfs -u -k all")
+        (self.env.etc / "fliperos.conf").write_text("boot_resolution=1280x480iS\n")
+        self.assertEqual(self.env.out(snippet).strip(), "RUN limine-update")
 
     def test_custom_edid(self):
         self.env.out("video_set_custom_edid custom_resolution.bin")

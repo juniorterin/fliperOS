@@ -479,7 +479,8 @@ boot_apply() {
   # Um EDID novo (resolucao personalizada) e o modprobe.d de um driver AMD
   # trocado so valem se estiverem no initramfs; o hook do initramfs tambem
   # chama o fliperos-limine-update.
-  if [[ $(conf_get boot_resolution 2> /dev/null) == custom ]] || ((${BOOT_INITRAMFS:-0})); then
+  if [[ $(conf_get boot_resolution 2> /dev/null) == custom || $(conf_get boot_resolution 2> /dev/null) == "$SUPER240_MODE" ]] ||
+    ((${BOOT_INITRAMFS:-0})); then
     run_logged update-initramfs -u -k all
   else
     run_logged "$LIMINE_UPDATE"

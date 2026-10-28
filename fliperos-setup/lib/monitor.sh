@@ -128,8 +128,10 @@ _res_15k() {
 # boot da faixa, na tabela fixa do patch do kernel. Sem suporte a dotclock
 # baixo na placa (Intel, NVIDIA), sobram so as super resolucoes, como o
 # gatools faz ao cair em "super resolutions will be used instead".
+# Com EDID240 (a Intel i915), entra tambem o 240p progressivo largo: nao esta
+# na tabela do kernel, e vem de um EDID proprio (video_set_resolution).
 monitor_resolutions() {
-  local freq=$1 low=${2:-1}
+  local freq=$1 low=${2:-1} edid240=${3:-0}
   case $freq in
     15k)
       if ((low)); then
@@ -142,6 +144,7 @@ monitor_resolutions() {
           "768x576iS|768x576 50 Hz interlaced"
       fi
       echo "1280x480iS|1280x480 60 Hz interlaced (super resolution)"
+      ((edid240)) && echo "1280x240p|1280x240 60 Hz progressive (super resolution, EDID)"
       ;;
     25k)
       ((low)) && echo "512x384S|512x384 59 Hz progressive"
@@ -179,6 +182,7 @@ mode_modeline() {
     768x576iS) echo '"768x576i" 15.627 768 799 872 997 576 583 589 627 Interlace -HSync -VSync' ;;
     800x576iS) echo '"800x576i" 16.302 800 833 910 1040 576 583 589 627 Interlace -HSync -VSync' ;;
     1280x480iS) echo '"1280x480i" 26.108 1280 1332 1455 1664 480 483 489 523 Interlace -HSync -VSync' ;;
+    1280x240p) echo '"1280x240" 26.058 1280 1332 1455 1664 240 241 244 261 -HSync -VSync' ;;
     512x384S) echo '"512x384" 15.973 512 525 589 640 384 391 396 426 -HSync -VSync' ;;
     800x600iS) echo '"800x600i" 24.930 800 820 920 1000 600 687 697 831 Interlace -HSync -VSync' ;;
     1024x768iS) echo '"1024x768i" 31.968 1024 1050 1178 1280 768 855 865 999 Interlace -HSync -VSync' ;;

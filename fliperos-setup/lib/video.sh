@@ -585,18 +585,21 @@ orientation_cmdline() {
 # video_resolution_choices imprime "modo|descricao" validos para o monitor
 # configurado e a placa da saida escolhida.
 video_resolution_choices() {
-  local monitor freq card low=1 min=0 khz=15.66
+  local monitor freq card low=1 min=0 khz=15.66 edid240=0
   monitor=$(conf_get monitor) || monitor=generic_15
   freq=$(monitor_frequency "$monitor") || return 1
   card=$(conf_get card) || card=""
   if [[ -n $card ]]; then
     drm_card_low_dotclock "$card" || low=0
     min=$(video_low_dotclock_min "$card")
+    # O i915 nao tem o 240p progressivo largo na tabela do kernel: ele vem de
+    # um EDID do FliperOS (super240_edid).
+    [[ $freq == 15k && $(drm_card_driver "$card") == i915 ]] && edid240=1
   fi
   case $freq in 25k) khz=25 ;; 31k) khz=31.5 ;; esac
   # Numa NVIDIA que so mostrou um degrau mais largo no grid, sem os modos de
   # boot abaixo do minimo dela (o 320x240 na GTX 980 Ti).
-  monitor_resolutions "$freq" "$low" | awk -F'|' -v min="$min" -v k="$khz" '
+  monitor_resolutions "$freq" "$low" "$edid240" | awk -F'|' -v min="$min" -v k="$khz" '
     { w = $1; sub(/x.*/, "", w) }
     min + 0 == 0 || w * 1.3 * k / 1000 >= min + 0'
 }
@@ -606,6 +609,12 @@ video_resolution_choices() {
 video_set_resolution() {
   local mode=$1 conn params spec opts="" enabled=""
   conn=$(conf_get connector) || return 1
+  # O 240p largo da Intel nao esta na tabela do kernel: vai por um EDID.
+  if [[ $mode == "$SUPER240_MODE" ]]; then
+    super240_edid || return 1
+    video_set_custom_edid "$SUPER240_EDID" "$mode"
+    return
+  fi
   params=$(conf_get kernel_video) || params=""
   if spec=$(cmdline_video_spec "$params" "$conn"); then
     [[ $spec == *,* ]] && opts=,${spec#*,}
@@ -620,16 +629,33 @@ video_set_resolution() {
   log_info "resolucao de boot: $mode ($params)"
 }
 
-# video_set_custom_edid EDID troca o modo de boot por um EDID proprio
-# (resolucao personalizada, gerada pelo Switchres).
+# video_set_custom_edid EDID [MODO] troca o modo de boot por um EDID proprio
+# (resolucao personalizada, gerada pelo Switchres; ou o MODO do FliperOS,
+# como o 1280x240p da Intel).
 video_set_custom_edid() {
-  local edid=$1 conn params
+  local edid=$1 label=${2:-custom} conn params
   conn=$(conf_get connector) || return 1
   params=$(conf_get kernel_video) || params=""
   params=$(cmdline_without_video "$params")
   params="video=$conn:e drm.edid_firmware=$conn:edid/$edid ${params}"
   conf_set kernel_video "${params% }"
-  conf_set boot_resolution "custom"
+  conf_set boot_resolution "$label"
+}
+
+# O 240p progressivo da Intel i915, que nao gera dotclock abaixo de 25 MHz:
+# 1280x240 a 15,66 kHz (26 MHz), os tempos horizontais do 1280x480i e os
+# verticais do 640x240 da tabela do kernel. O kernel so conhece o modo da
+# linha video=; o EDID do FliperOS (config/fliperos-edid-modes) o traz.
+SUPER240_MODE=1280x240p
+SUPER240_EDID=${SUPER240_EDID:-fliperos-1280x240.bin}
+
+# super240_edid grava o EDID com o modo 1280x240p. Entra no initramfs pelo
+# fliperos-edid-hook (boot_apply refaz o initramfs).
+super240_edid() {
+  local modeline
+  modeline=$(mode_modeline "$SUPER240_MODE") || return 1
+  mkdir -p "$EDID_DIR"
+  printf '%s\n' "$modeline" | "$EDID_MODES" "$EDID_DIR/$SUPER240_EDID" 2>> "$FLIPEROS_LOG"
 }
 
 # ── Geometria ────────────────────────────────────────────────────

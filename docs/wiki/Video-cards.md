@@ -78,6 +78,8 @@ Details of the switch:
 
 Intel integrated graphics use the **Intel 15 kHz** boot entry, always in super resolution (`1280x480iS`): `i915` doesn't generate the low clocks.
 
+In Setup > Video Setup > Resolution an Intel card also lists **1280x240 60 Hz progressive** (240p, no interlace flicker in the menus). It is not in the kernel's mode table, so the Setup writes an EDID with that mode (`fliperos-1280x240.bin`, 26.058 MHz, 15.66 kHz), puts it in the initramfs and points `drm.edid_firmware` at it. Pick the 480i entry again to go back. Tested on an Ironlake (Core i3-540): the EDID and the kernel line are generated and checked; the picture of this mode has not been seen on the tube yet.
+
 On **Gen9** (Skylake, Kaby Lake, Coffee Lake, Comet Lake) patch 09 enables interlace, with `i915.no_ytiled_scanout=1` on the kernel line. Other generations have no interlace patch: 240p works, 480i may not.
 
 The VGA port of many motherboards is a DisplayPort to VGA bridge chip on the board, so results vary by motherboard.
