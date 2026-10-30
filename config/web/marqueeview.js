@@ -101,26 +101,34 @@ function mqDrawHiList() {
 // pisca duas vezes (stream.css, o mesmo tempo do Pixelcade e do ZeDMD). Fica
 // ate o proximo evento. fresh: o evento acabou de chegar (ao abrir a pagina o
 // logotipo so aparece parado).
-let mqFresh = false;
+// Sem jogo aberto e sem evento que desenhe algo (o jogo acabou de fechar e o
+// frontend ainda nao mandou o sistema), fica o ultimo logotipo de sistema, e
+// nao o nome FLIPEROS.
+let mqFresh = false, mqLastSys = "";
 function mqDrawLogo(box) {
   const wrap = box.querySelector(".mq-syslogo"), s = mqState;
   if (!wrap) return;
-  const on = s.event === "system" && !!s.logo;
+  if (s.event === "system" && s.logo) mqLastSys = s.logo;
+  const open = typeof cabGame !== "undefined" && cabOnline && !!cabGame;
+  const hold = !open && !!mqLastSys && !["system", "attract", "versus"].includes(s.event);
+  const on = (s.event === "system" && !!s.logo) || hold;
   wrap.hidden = !on;
   box.classList.toggle("sys", on);
   if (!on) { delete box.dataset.logoKey; return; }
-  const k = s.logo + "|" + s.time;
-  if (box.dataset.logoKey === k) return;
+  const name = hold ? mqLastSys : s.logo;
+  const k = name + "|" + (hold ? "hold" : s.time);
+  if (box.dataset.logoKey === k || (hold && box.dataset.logoKey && box.dataset.logoKey.startsWith(name + "|"))) return;
   box.dataset.logoKey = k;
   const [gone, now] = wrap.querySelectorAll("img");
   const url = (n) => "/api/marquee/logo?name=" + encodeURIComponent(n);
-  now.src = url(s.logo);
-  gone.hidden = !(mqFresh && s.old);
+  now.src = url(name);
+  const slide = mqFresh && !hold;
+  gone.hidden = !(slide && s.old);
   if (!gone.hidden) gone.src = url(s.old);
   wrap.style.setProperty("--side", s.step === "-1" ? "-1" : "1");
   wrap.classList.remove("go");
   void wrap.offsetWidth;
-  if (mqFresh) wrap.classList.add("go");
+  if (slide) wrap.classList.add("go");
 }
 
 // O marquee parado: o evento attract (o frontend do FliperOS sem apertos por
@@ -254,6 +262,8 @@ function mqPaint(game) {
     box.style.setProperty("--cols", String(dev.cols));
     box.querySelector(".mq-tag").textContent = dev.name + " " + dev.size;
     mqShow(box, urls, title.replace(/\s*\(.*$/, "").toUpperCase(), sub.toUpperCase());
+    // O jogo abriu ou fechou: o logotipo e a animacao na hora, sem esperar o proximo estado.
+    mqDrawState(box);
   });
 }
 

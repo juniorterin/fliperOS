@@ -6263,6 +6263,9 @@ class WebPanelTests(unittest.TestCase):
         view, obs = (web / 'marqueeview.js').read_text(), (web / 'overlay.js').read_text()
         self.assertIn('/api/marquee/idle?t=', view)
         self.assertIn('const on = mqState.event === "attract";', view)
+        # Sem jogo e sem evento que desenhe (o jogo acabou de fechar), fica o
+        # ultimo logotipo de sistema, e nao o nome FLIPEROS.
+        self.assertIn('const hold = !open && !!mqLastSys && !["system", "attract", "versus"].includes(s.event);', view)
         self.assertIn('/api/overlay/idle?key=', obs)
         self.assertIn('s.event === "attract"', obs)
         self.assertIn('id="idle"', (web / 'overlay.html').read_text())
