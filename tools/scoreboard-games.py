@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Gera docs/wiki/Scoreboard-games.md: os jogos com placar versus no display.
+"""Gera docs/wiki/Scoreboard-games.md: os jogos e os dados que o display mostra.
 
-A lista sai dos detectores do Fightcade (baixados por `fliperos-versus fetch`,
-nunca guardados no repositorio) lidos pelo proprio config/fliperos-versus, e
-cruzados com os sets que cada emulador tem: o `groovymame -listfull` e o
-gamelist.txt do core FBNeo (github.com/libretro/FBNeo):
+Vitorias e personagens saem dos detectores do Fightcade (baixados por
+`fliperos-versus fetch`, nunca guardados no repositorio) lidos pelo proprio
+config/fliperos-versus, cruzados com os sets que cada emulador tem: o
+`groovymame -listfull` e o gamelist.txt do core FBNeo (github.com/libretro/FBNeo).
+Os recordes saem do hiscore.dat do MAME (onde esta a tabela de cada jogo)
+cruzado com a lista do hi2txt (`hi2txt.jar -l`, os jogos que ele sabe
+decodificar):
 
     tools/scoreboard-games.py --detectors PASTA --names listfull.txt \
-        --fbneo gamelist.txt --output docs/wiki/Scoreboard-games.md
+        --fbneo gamelist.txt --hiscore hiscore.dat --hi2txt hi2txt-list.txt \
+        --output docs/wiki/Scoreboard-games.md
 """
 import argparse
 import importlib.machinery
@@ -18,23 +22,35 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-HEAD = """\
-Every game shows on the LED display (ZeDMD or Pixelcade): its artwork or name when it is selected and when it opens, see [Frontends](Frontends.md). This page lists the games that also have the **scoreboard mode**: the two characters and each side's wins in the session, described in [Versus score on the LED display](Frontends.md#versus-score-on-the-led-display).
+# Os jogos do Model 2 que o SM2-Emu (com o patch do FliperOS) publica os
+# rounds de cada lado: config/sm2-emu-patches.
+MODEL2 = ('vf2', 'fvipers', 'schamp', 'lastbrnx', 'doa')
 
-The list is the set of games [Fightcade](https://www.fightcade.com) has a detector for ([fightcade-detectors](https://github.com/fightcadeorg/fightcade-detectors), commit `{commit}`), crossed with the sets each emulator has: {total} ROM sets. The set name is the one the detector was written for: a clone without a detector of its own has no scoreboard. Fightcade's other detectors ({dropped}) are for console games and for hacks that neither emulator has under that name.
+HEAD = """\
+Every game shows on the LED display (ZeDMD or Pixelcade) and in the marquee preview of the [web panel](Web-panel.md): its artwork or name when it is selected and when it opens, see [Frontends](Frontends.md). This page lists the games that also have more data, and which data each one has.
+
+**The data**
+
+- **Artwork or name**: every game. The ZeDMD looks for `~/media/dmd`, `marquee` and `logo`; the Pixelcade for `marquee` and `logo`; without art, the game's name.
+- **Wins**: the rounds or matches each side has won in the session, in [Versus score on the LED display](Frontends.md#versus-score-on-the-led-display). It comes from a [Fightcade](https://www.fightcade.com) detector ([fightcade-detectors](https://github.com/fightcadeorg/fightcade-detectors), commit `{commit}`), read from the game's memory by GroovyMAME or by the FBNeo core of RetroArch, or, for Model 2, published by the emulator itself.
+- **Characters**: the detector also tells who each side is playing; without it the scoreboard shows the wins only.
+- **Points** (each player's score): the code reads them from a line of `config/versus-games.conf`, but **no game has one yet**: a game only goes in after its address was watched in a real match.
+- **High scores**: the top of the high score table, for GroovyMAME. The address of the table of each game is in MAME's `hiscore.dat`; the `hiscore` plugin keeps the `.hi` file and [hi2txt](https://greatstoneex.github.io/hi2txt-doc/doc/index.html) decodes it. Only the sets in both lists are here.
+
+**What was checked.** Wins and characters were seen in a played match on the test cabinet, in GroovyMAME, for `sf2ce`, `kof98`, `mk2`, `sfiii3nr1` and `sfa3` (in `sfa3` the characters were read too). `sfa2` was played and the detector did not count a win. The other sets are listed because their detector reads as one this code handles, not because each was played. The high scores were checked with a test `.hi` file of `pacman` (the decoding gives the right score); no game was played with a real table. Nothing here was seen on a real LED display yet.
+
+**Wins and characters.** The list is the set of games Fightcade has a detector for, crossed with the sets each emulator has: {total_wins} ROM sets. The set name is the one the detector was written for: a clone without a detector of its own has no scoreboard. Fightcade's other detectors ({dropped}) are for console games and for hacks that neither emulator has under that name.
 
 - **GroovyMAME**: {mame} sets (the ones in MAME 0.289).
 - **RetroArch (FBNeo core)**: {retroarch} sets (the ones in the core's game list). Detectors written as CPU addresses can't be read there.
-- **Characters**: the detector also tells who each side is playing; without it the scoreboard shows the wins only.
+- **Model 2 (SM2-Emu)** is outside the Fightcade list: the emulator itself publishes the rounds each side has taken, with FliperOS's patch, for `vf2`, `fvipers`, `schamp`, `lastbrnx` and `doa` ([DIY hardware](DIY-hardware.md#model-2-game-outputs)). The scoreboard shows the session wins, without the characters.
 
-Checked in a played match on the test cabinet, in GroovyMAME: `sf2ce`, `kof98`, `mk2` and `sfiii3nr1`. The others are listed because their detector reads as one this code handles, not because each was played. Nothing here was seen on a real LED display yet.
-
-**Model 2 (SM2-Emu)** is outside the table: the emulator itself publishes the rounds each side has taken, with FliperOS's patch, for `vf2`, `fvipers`, `schamp`, `lastbrnx` and `doa` ([DIY hardware](DIY-hardware.md#model-2-game-outputs)). The scoreboard shows the session wins, without the characters.
+**High scores.** {hi} sets have both the address of the table (`hiscore.dat`, {dat} sets) and a description in hi2txt ({h2t} names): Pac-Man, Galaga, Donkey Kong, 1942, TMNT, Gradius and so on. {both} of them also have wins. Most fighting games have wins but no high scores: `hiscore.dat` has a table but hi2txt has no description for them (`sf2ce`, `sfa3`), or the other way round (`kof98`, `mk2`).
 
 This page is generated by `tools/scoreboard-games.py`.
 
-| Game | ROM set | GroovyMAME | RetroArch (FBNeo) | Characters |
-|---|---|:-:|:-:|:-:|
+| Game | ROM set | Wins (GroovyMAME) | Wins (RetroArch FBNeo) | Characters | Wins (Model 2) | High scores |
+|---|---|:-:|:-:|:-:|:-:|:-:|
 """
 
 
@@ -68,38 +84,74 @@ def read_fbneo(path):
     return names
 
 
+# read_hiscore: os sets do hiscore.dat que tem ao menos uma faixa de memoria
+# ("@:maincpu,program,4e88,04,00,00"). Os nomes ("pacman:") vem em linhas
+# seguidas e valem para as faixas que vem depois, como no plugin do MAME.
+def read_hiscore(path):
+    sets, names, ranges = set(), [], []
+    for line in Path(path).read_text(encoding='latin-1').splitlines():
+        line = re.sub(r'[ \t\r\n]*;.*$', '', line)
+        if line.startswith('@'):
+            ranges.append(line)
+        elif re.fullmatch(r'[a-z0-9_]+:', line.strip()):
+            if ranges:
+                sets.update(names)
+                names, ranges = [], []
+            names.append(line.strip()[:-1])
+    if ranges:
+        sets.update(names)
+    return sets
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--detectors', required=True)
     parser.add_argument('--names', required=True)
     parser.add_argument('--fbneo', required=True)
+    parser.add_argument('--hiscore', required=True)
+    parser.add_argument('--hi2txt', required=True)
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
 
     versus = load_versus(args.detectors)
     names = read_names(args.names)
     fbneo = read_fbneo(args.fbneo)
-    rows = []
+    dat = read_hiscore(args.hiscore)
+    h2t = set(Path(args.hi2txt).read_text(encoding='utf-8', errors='replace').split())
+    hi = {g for g in dat & h2t if g in names}
+
+    # game -> [nome, GroovyMAME, RetroArch, personagens, Model 2, recordes]
+    rows = {}
     detectors = sorted(Path(args.detectors).glob('*.inf'))
+    wins = 0
     for inf in detectors:
         game = inf.stem
         mame = versus.read_detector(game, 'mame') if game in names else None
         retroarch = versus.read_detector(game, 'retroarch') if game in fbneo else None
         if not (mame or retroarch):
             continue
-        chars = bool((mame or retroarch)['chars'])
-        rows.append((names.get(game) or fbneo[game], game, bool(mame), bool(retroarch), chars))
-    rows.sort(key=lambda r: (r[0].lower(), r[1]))
+        wins += 1
+        rows[game] = [names.get(game) or fbneo[game], bool(mame), bool(retroarch), bool((mame or retroarch)['chars']),
+                      False, False]
+    for game in MODEL2:
+        row = rows.setdefault(game, [names.get(game, game), False, False, False, False, False])
+        row[4] = True
+    for game in hi:
+        row = rows.setdefault(game, [names[game], False, False, False, False, False])
+        row[5] = True
+    ordered = sorted(rows.items(), key=lambda r: (r[1][0].lower(), r[0]))
 
     yes = lambda flag: 'yes' if flag else ''
-    count = lambda column: sum(r[column] for r in rows)
-    text = HEAD.format(commit=versus.DETECTORS_COMMIT[:7], total=len(rows), dropped=len(detectors) - len(rows),
-                       mame=count(2), retroarch=count(3))
-    for name, game, mame, retroarch, chars in rows:
-        text += '| %s | `%s` | %s | %s | %s |\n' % (name.replace('|', '/'), game, yes(mame), yes(retroarch), yes(chars))
+    count = lambda column: sum(r[column] for r in rows.values())
+    text = HEAD.format(commit=versus.DETECTORS_COMMIT[:7], total_wins=wins, dropped=len(detectors) - wins,
+                       mame=count(1), retroarch=count(2), hi=len(hi), dat=len(dat), h2t=len(h2t),
+                       both=sum(1 for r in rows.values() if r[5] and (r[1] or r[2] or r[4])))
+    for game, (name, mame, retroarch, chars, model2, record) in ordered:
+        text += '| %s | `%s` | %s | %s | %s | %s | %s |\n' % (
+            name.replace('|', '/'), game, yes(mame), yes(retroarch), yes(chars), yes(model2), yes(record))
     Path(args.output).write_text(text, encoding='utf-8', newline='\n')
-    print('%d sets: %d GroovyMAME, %d RetroArch, %d detectors left out' % (
-        len(rows), count(2), count(3), len(detectors) - len(rows)))
+    print('%d sets: %d GroovyMAME, %d RetroArch, %d Model 2, %d high scores, %d detectors left out' % (
+        len(rows), count(1), count(2), count(4), count(5), len(detectors) - wins))
 
 
 if __name__ == '__main__':
