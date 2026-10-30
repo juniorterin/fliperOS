@@ -5619,28 +5619,14 @@ class DeflickerTests(unittest.TestCase):
             ini = tmp / '.config/PCSX2/inis/PCSX2.ini'
             return out, ini.read_text() if ini.exists() else ''
 
-    def test_opengl_pinned_in_480i_with_the_filter_on(self):
-        out, _ = self.run_x11(['--mode', '640x480@59.94', 'dolphin-emu'], '')
-        self.assertIn('-C Dolphin.Core.GFXBackend=OGL', out)
-        _, ini = self.run_x11(['--mode', '640x480@59.94', 'pcsx2'], 'deflicker=strong\n')
-        self.assertRegex(ini, r'\[EmuCore/GS\][^\[]*Renderer = 12\n')
-        # 240p, filtro desligado ou sem a biblioteca: o renderizador fica.
-        for args, conf, lib in ((['dolphin-emu'], '', True),
-                                (['--mode', '640x480@59.94', 'dolphin-emu'], 'deflicker=off\n', True),
-                                (['--mode', '640x480@59.94', 'dolphin-emu'], '', False)):
-            self.assertNotIn('GFXBackend', self.run_x11(args, conf, lib)[0], (args, conf, lib))
-        self.assertNotIn('Renderer = 12', self.run_x11(['pcsx2'], '')[1])
-        # O nivel do proprio programa passa o de todos.
-        hd = ['--mode', '640x480@59.94', 'dolphin-emu']
-        self.assertNotIn('GFXBackend', self.run_x11(hd, 'deflicker=medium\ndeflicker_dolphin-emu=off\n')[0])
-        self.assertIn('GFXBackend=OGL', self.run_x11(hd, 'deflicker=off\ndeflicker_dolphin-emu=strong\n')[0])
-        # Flycast com Vulkan (4, 5) vira o OpenGL equivalente (0, 3); o OpenGL fica.
-        fc = ['--mode', '640x480@59.94', 'flycast']
-        self.assertIn('config:pvr.rend=0', self.run_x11(fc, '', flycast_rend=4)[0])
-        self.assertIn('config:pvr.rend=3', self.run_x11(fc, '', flycast_rend=5)[0])
-        self.assertNotIn('pvr.rend', self.run_x11(fc, '', flycast_rend=3)[0])
-        self.assertNotIn('pvr.rend', self.run_x11(['flycast'], '', flycast_rend=5)[0])
-        self.assertNotIn('pvr.rend', self.run_x11(fc, 'deflicker=off\n', flycast_rend=5)[0])
+    def test_vulkan_stays_in_480i_with_the_filter_on(self):
+        # A camada do Vulkan (config/fliperos-vkfps.c) filtra: nada de trocar o
+        # renderizador do emulador por causa do filtro.
+        hd = ['--mode', '640x480@59.94']
+        self.assertNotIn('GFXBackend', self.run_x11(hd + ['dolphin-emu'], '')[0])
+        self.assertNotIn('Renderer = 12', self.run_x11(hd + ['pcsx2'], 'deflicker=strong\n')[1])
+        self.assertNotIn('pvr.rend', self.run_x11(hd + ['flycast'], '', flycast_rend=4)[0])
+        self.assertNotIn('deflicker_on', (ROOT / 'config/fliperos-x11-run').read_text())
 
     def test_480i_per_program_on_15khz(self):
         # Setup > Video Setup > 480i hacks: com filtro ou puro, o modo da
@@ -9526,20 +9512,21 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertIn('Cross = SDL-0/B\n', ini)
             self.assertIn('StartFullscreen = true\n', ini)
             self.assertIn('-nocursor', out)
-            # 480i com o filtro: o OpenGL (a camada nao alcanca o Vulkan).
+            # 480i com o filtro: o renderizador fica (a camada do Vulkan filtra).
             with tempfile.TemporaryDirectory() as tmp:
                 (Path(tmp) / 'lib.so').write_text('')
-                self.run_x11(['--mode', '640x480@59.94', 'duckstation'], home=home,
-                             extra=dict(extra, FLIPEROS_DEFLICKER_LIB=str(Path(tmp) / 'lib.so')))
-                self.assertRegex(ini_path.read_text(), r'\[GPU\][^\[]*\nRenderer = OpenGL\n')
-                # Sem o filtro, o automatico de novo (o Vulkan onde ha).
-                self.run_x11(['duckstation'], home=home,
-                             extra=dict(extra, FLIPEROS_DEFLICKER_LIB=str(Path(tmp) / 'lib.so')))
+                extra_lib = dict(extra, FLIPEROS_DEFLICKER_LIB=str(Path(tmp) / 'lib.so'))
+                self.run_x11(['--mode', '640x480@59.94', 'duckstation'], home=home, extra=extra_lib)
+                self.assertNotIn('Renderer = OpenGL', ini_path.read_text())
+                # Quem o filtro de antes deixou no OpenGL volta ao automatico.
+                ini_path.write_text(ini_path.read_text() + '[GPU]\nRenderer = OpenGL\n')
+                (ini_path.parent / '.fliperos-opengl').write_text('')
+                self.run_x11(['duckstation'], home=home, extra=extra_lib)
                 self.assertRegex(ini_path.read_text(), r'\[GPU\][^\[]*\nRenderer = Automatic\n')
+                self.assertFalse((ini_path.parent / '.fliperos-opengl').exists())
                 # Escolhido na mao no DuckStation, fica.
                 ini_path.write_text(ini_path.read_text().replace('Renderer = Automatic', 'Renderer = OpenGL'))
-                self.run_x11(['duckstation'], home=home,
-                             extra=dict(extra, FLIPEROS_DEFLICKER_LIB=str(Path(tmp) / 'lib.so')))
+                self.run_x11(['duckstation'], home=home, extra=extra_lib)
                 self.assertIn('Renderer = OpenGL\n', ini_path.read_text())
 
     def test_supermodel_finds_its_game_list(self):
@@ -14213,6 +14200,256 @@ class VulkanFpsLayerTests(unittest.TestCase):
                       (ROOT / 'tools/cabinet-update.sh').read_text())
         self.assertIn('export FLIPEROS_VK_FPS=1', (ROOT / 'config/fliperos-kms-run').read_text())
         self.assertIn('env FLIPEROS_VK_FPS=1 $emulator_command', (ROOT / 'config/fliperos-x11-client').read_text())
+
+    def test_filter_hooks_only_what_it_needs(self):
+        import ctypes
+        source = (ROOT / 'config/fliperos-vkfps.c').read_text()
+        # Os mesmos pesos da camada OpenGL.
+        gl = (ROOT / 'config/fliperos-deflicker.c').read_text()
+        for line in ('weights[0] = 0.15f, weights[1] = 0.70f, weights[2] = 0.15f;',
+                     'weights[0] = 0.33f, weights[1] = 0.34f, weights[2] = 0.33f;'):
+            self.assertIn(line, source)
+            self.assertIn(line, gl)
+        # O teste de verdade (lavapipe, validacao) e o tools/vkfps-test.sh.
+        for path in ('tools/vkfps-test.sh', 'tests/vkfps_test.c'):
+            self.assertTrue((ROOT / path).is_file(), path)
+        # Sem filtrar, nada e alocado: os recursos so no primeiro quadro filtrado.
+        self.assertEqual(source.count('chain_build('), 2)
+        self.assertIn('static int chain_ready(', source)
+
+
+def atom_load():
+    return load_script('fliperos_atom15', 'config/fliperos-atom15')
+
+
+def atom_rom(device=0x6613, size=0x10000, legacy=0xe000, efi=False, fill_blank=False):
+    """Uma BIOS ATOM de mentira, com o que o patch le: a entrada, o INT 10h, a
+    tabela de modos padrao, os timings VESA 640x480 e 1024x768."""
+    rom = bytearray(size)
+    rom[0:3] = bytes((0x55, 0xaa, legacy // 512))
+    rom[3] = 0xe9
+    struct.pack_into('<H', rom, 4, 0x100 - 6)
+    rom[0x100:0x103] = bytes((0xa3, 0x1a, 0x02))
+    struct.pack_into('<H', rom, 0x48, 0x200)
+    rom[0x204:0x208] = b'ATOM'
+    struct.pack_into('<H', rom, 0x200 + 18, 0x300)
+    struct.pack_into('<H', rom, 0x200 + 28, 0x400)
+    struct.pack_into('<H', rom, 0x200 + 32, 0x500)
+    rom[0x400:0x404] = b'PCIR'
+    struct.pack_into('<HH', rom, 0x404, 0x1002, device)
+    struct.pack_into('<H', rom, 0x500 + 10, 0x600)
+    struct.pack_into('<H', rom, 0x500 + 30, 0x800)
+    # INT 10h: o desvio VESA e os dois call do original.
+    rom[0x300:0x303] = bytes((0x80, 0xfc, 0x4f))
+    rom[0x305] = 0xe8
+    struct.pack_into('<H', rom, 0x306, 0x350 - 0x308)
+    rom[0x30a] = 0xe8
+    struct.pack_into('<H', rom, 0x30b, 0x360 - 0x30d)
+    # Timings (DTD): 640x480 e 1024x768.
+    struct.pack_into('<H', rom, 0x600, 4 + 2 * 28)
+    for i, (number, w, h) in enumerate(((18, 640, 480), (20, 1024, 768))):
+        struct.pack_into('<11HBBHBB', rom, 0x604 + i * 28, 2517, w, 160, h, 45, 16, 96, 10, 2, 0, 0, 0, 0, 0, number, 60)
+    # A tabela VESA -> interno: 640x480 e 1024x768 em 8 bits.
+    struct.pack_into('<H', rom, 0x800, 4 + 2 * 4)
+    struct.pack_into('<HH', rom, 0x804, 0x101, 18 << 8 | 2)
+    struct.pack_into('<HH', rom, 0x808, 0x105, 20 << 8 | 2)
+    # A Video Parameter Table, do formato novo: so os modos 1, 3 e 12h.
+    vpt = 0x1000
+    for i, columns in ((1, 40), (3, 80), (27, 80)):
+        rom[vpt + i * 64] = columns
+    rom[vpt:vpt + 4] = bytes((0x28, 0x18, 0x08, 0x00))
+    if efi:
+        rom[legacy] = 0x55
+        rom[legacy + 1] = 0xaa
+        rom[legacy + 2] = (size - legacy) // 512
+        rom[legacy + 28:legacy + 32] = b'PCIR'
+    if fill_blank:
+        rom[0xe000:0xffff] = b'\x5a' * (0xffff - 0xe000)
+    rom[0x50] = (-sum(rom[:rom[2] * 512])) & 0xff
+    return bytes(rom)
+
+
+class AtomPatchTests(unittest.TestCase):
+    """O ATOM-15 traduzido (config/fliperos-atom15). A comparacao com uma BIOS
+    feita pelo atom-15.exe e o tools/atom15-check.py: a BIOS nao vem no repositorio."""
+
+    def setUp(self):
+        self.atom = atom_load()
+
+    def test_hook_is_the_size_of_the_original(self):
+        self.assertEqual(len(self.atom.HOOK), 532)
+        self.assertEqual(self.atom.HOOK_LABELS['hook_end'], 532)
+        self.assertEqual(self.atom.HOOK_LABELS['vesa_modes'] - self.atom.HOOK_LABELS['standard_modes'], 20)
+        self.assertIn(self.atom.HOOK_MARK, self.atom.HOOK)
+
+    def test_hook_matches_its_source(self):
+        if not shutil.which('nasm'):
+            self.skipTest('no nasm in this image')
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'hook.bin'
+            subprocess.run(['nasm', '-f', 'bin', '-o', str(out), str(ROOT / 'tools/atom15-hook.asm')], check=True)
+            self.assertEqual(out.read_bytes(), self.atom.HOOK)
+
+    def test_registers_by_card(self):
+        # R7 240 (Oland): DCE6, o mesmo caminho do DCE4. HD 5450, HD 4670 e R9 290.
+        for device, kind in ((0x6613, 'dce4'), (0x68f9, 'dce4'), (0x9498, 'avivo'), (0x67b0, 'dce8'), (0x6938, 'dce8')):
+            self.assertEqual(self.atom.pci_class(device), kind, hex(device))
+        self.assertIsNone(self.atom.pci_class(0x1234))
+
+    def test_modes_at_15_khz_as_the_real_tool(self):
+        out, log = self.atom.patch(atom_rom(), {15})
+        b = self.atom.Bios(out)
+        # 640x480: os valores da BIOS feita pelo atom-15.exe do gabinete.
+        ml = self.atom.timing_read(b, 0x604)
+        self.assertEqual((ml['pclock'], ml['htotal'], ml['hbegin'], ml['hend'], ml['vtotal'], ml['vbegin'], ml['vend']),
+                         (1300, 832, 664, 728, 521, 483, 489))
+        self.assertEqual(ml['interlace'], 1)
+        self.assertEqual(ml['number'], 18)
+        # 1024x768 nao cabe em 15 kHz: sai do timing e da lista VESA.
+        self.assertEqual(out[0x604 + 28 + 26], 0)
+        self.assertEqual(struct.unpack_from('<H', out, 0x800)[0], 4 + 4)
+        self.assertEqual(struct.unpack_from('<HH', out, 0x804), (0x101, 18 << 8 | 2))
+        self.assertEqual(struct.unpack_from('<HH', out, 0x808), (0xffff, 0xffff))
+        self.assertTrue(any('640x480' in line for line in log))
+
+    def test_31_khz_keeps_480_progressive(self):
+        out, _ = self.atom.patch(atom_rom(), {15, 31})
+        ml = self.atom.timing_read(self.atom.Bios(out), 0x604)
+        self.assertEqual(ml['interlace'], 0)
+
+    def test_hook_is_wired_and_the_sum_is_kept(self):
+        rom = atom_rom()
+        out, _ = self.atom.patch(rom, {15})
+        label = self.atom.HOOK_LABELS
+        at = out.find(self.atom.HOOK_MARK) - (label['vesa_bios_service_mod'] + 2)
+        self.assertGreaterEqual(at, 0xe000)
+        self.assertEqual(self.atom.checksum(out), self.atom.checksum(rom))
+        self.assertEqual(self.atom.checksum(out) & 0xff, 0)
+
+        def call(where):
+            return (struct.unpack_from('<H', out, where + 1)[0] + where + 3) & 0xffff
+
+        # Os dois call da BIOS entram no hook, e o hook chama os de antes.
+        self.assertEqual(call(0x30a), at + label['standard_bios_hook'])
+        self.assertEqual(call(0x305), at + label['vesa_bios_hook'])
+        self.assertEqual(call(at + label['standard_bios_service']), 0x360)
+        self.assertEqual(call(at + label['vesa_bios_service']), 0x350)
+        self.assertEqual(call(at + label['call_crtc3']), at + label['crtc_program_registers'])
+        self.assertEqual(struct.unpack_from('<H', out, at + label['get_pci_bus'] + 3)[0], 0x21a)
+        self.assertEqual(struct.unpack_from('<H', out, at + label['crtc1_enable_interlace'] + 1)[0], 0xc00)
+        self.assertEqual(struct.unpack_from('<H', out, at + label['crtc_interlace_control_reg'] + 2)[0], 0x6e78)
+        # 640x480 (o modo 101h) entrelacado; 1024x768 fora.
+        table = at + label['vesa_modes']
+        self.assertEqual(out[table + 1] & 1, 1)
+        self.assertEqual(out[table + 5] & 1, 0)
+
+    def test_composite_sync(self):
+        out, _ = self.atom.patch(atom_rom(), {15}, csync=True)
+        label = self.atom.HOOK_LABELS
+        at = out.find(self.atom.HOOK_MARK) - (label['vesa_bios_service_mod'] + 2)
+        self.assertEqual(out[at + label['crtc_enable_composite_sync']:at + label['crtc_enable_composite_sync'] + 2], b'\x90\x90')
+
+    def test_refuses(self):
+        rom = atom_rom()
+        patched, _ = self.atom.patch(rom, {15})
+        bad_sum = bytearray(rom)
+        bad_sum[0x51] ^= 1
+        no_entry = bytearray(rom)
+        no_entry[3] = 0xeb
+        no_entry[0x50] = (no_entry[0x50] + 0xe9 - 0xeb) & 0xff
+        for image, text in ((patched, 'already has the ATOM-15 hook'),
+                            (b'\0' * 4096, 'no 55 AA'),
+                            (bytes(bad_sum), 'checksum'),
+                            (bytes(no_entry), 'entry point'),
+                            (atom_rom(device=0x1234), 'not in the ATOM-15 list'),
+                            (atom_rom(fill_blank=True), 'No room for the hook')):
+            with self.assertRaises(self.atom.Atom15Error) as e:
+                self.atom.patch(image, {15})
+            self.assertIn(text, str(e.exception))
+        with self.assertRaises(self.atom.Atom15Error):
+            self.atom.patch(rom, {20})
+
+    def test_hook_never_lands_on_the_efi_part(self):
+        # O branco so existe depois do fim da parte legada: dentro do EFI.
+        rom = bytearray(atom_rom(legacy=0xd000, efi=True))
+        with self.assertRaises(self.atom.Atom15Error) as e:
+            self.atom.patch(bytes(rom), {15})
+        self.assertIn('EFI part', str(e.exception))
+
+    def test_efi_part_moves_when_it_can(self):
+        # Parte legada ate 0xE200 sem branco; o GOP logo depois e empurrado.
+        rom = bytearray(0x20000)
+        base = atom_rom(legacy=0xe200, size=0x20000, efi=True, fill_blank=False)
+        rom[:] = base
+        rom[0xe000:0xe1f0] = b'\x5a' * 0x1f0
+        rom[0xe200 + 32:0xffff] = b'\x5a' * (0xffff - (0xe200 + 32))
+        rom[0xe1f0:0xe200] = bytes(16)
+        rom[0xe200 + 2] = 16    # o GOP com 8 KB
+        interior = bytearray(rom)
+        rom[0xe203:0xe21c] = b'\x5a' * 25
+        rom[0x50] = 0
+        rom[0x50] = (-sum(rom[:rom[2] * 512])) & 0xff
+        block = bytes(rom[0xe200:0xe200 + 16 * 512])
+        # O maior branco de dentro do GOP: nao da para por o hook ali.
+        interior[0x50] = 0
+        interior[0x50] = (-sum(interior[:interior[2] * 512])) & 0xff
+        with self.assertRaises(self.atom.Atom15Error) as e:
+            self.atom.patch(bytes(interior), {15})
+        self.assertIn('EFI part', str(e.exception))
+        out, _ = self.atom.patch(bytes(rom), {15})
+        b = self.atom.Bios(out)
+        self.assertGreater(b.data[2] * 512, 0xe200)
+        self.assertEqual(out[b.data[2] * 512 + 28:b.data[2] * 512 + 32], b'PCIR')
+        self.assertEqual(out[b.data[2] * 512:b.data[2] * 512 + len(block)], block)
+
+    def run_tool(self, *args, stdin=None):
+        return subprocess.run(['python3', '-B', str(ROOT / 'config/fliperos-atom15'), *args], input=stdin,
+                              capture_output=True, text=True)
+
+    def test_command_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rom, out, log = Path(tmp) / 'a.rom', Path(tmp) / 'b.rom', Path(tmp) / 'b.log'
+            rom.write_bytes(atom_rom())
+            r = self.run_tool('info', str(rom))
+            self.assertIn('device=6613\n', r.stdout)
+            self.assertIn('class=dce4\n', r.stdout)
+            self.assertIn('patched=0\n', r.stdout)
+            r = self.run_tool('patch', str(rom), str(out), '--ranges', '15', '--log', str(log))
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(len(out.read_bytes()), 0x10000)
+            self.assertIn('640x480', log.read_text())
+            self.assertIn('patched=1\n', self.run_tool('info', str(out)).stdout)
+            r = self.run_tool('patch', str(out), str(rom))
+            self.assertEqual(r.returncode, 1)
+            self.assertIn('already has', r.stderr)
+
+    def test_flash_tool_list(self):
+        old = ('adapter bn dn dID       asic           flash      romsize test    bios p/n    \n'
+               '======= == == ==== =============== ============== ======= ==== ================\n'
+               '   0    01 00 6613 Oland           W25X20          40000 pass  113-C4400100-X04\n'
+               '   1    02 00 68F9 Cedar           M25P10/c        20000 fail  113-X\n')
+        new = ('adapter seg  bn dn dID       asic           flash      romsize test    bios p/n    \n'
+               '======= ==== == == ==== =============== ============== ======= ==== ================\n'
+               '   0    0000 0A 00 67DF Polaris10       GD25Q80        100000 pass  113-1E3660E\n')
+        self.assertEqual(self.run_tool('adapter', '01', '00', stdin=old).stdout, '0 262144 pass\n')
+        self.assertEqual(self.run_tool('adapter', '02', '00', stdin=old).stdout, '1 131072 fail\n')
+        self.assertEqual(self.run_tool('adapter', '0a', '00', stdin=new).stdout, '0 1048576 pass\n')
+        self.assertEqual(self.run_tool('adapter', '03', '00', stdin=old).returncode, 1)
+        self.assertEqual(self.run_tool('adapter', '01', '00', stdin='no adapters\n').returncode, 1)
+
+    def test_installed_and_on_the_iso_check(self):
+        self.assertIn('install -Dm755 "$src/config/fliperos-atom15" "$root/opt/fliperos/bin/fliperos-atom15"', ROOTFS)
+        self.assertIn('multi-user.target.wants/fliperos-atom15-guard.service', ROOTFS)
+        verify = (ROOT / 'tools/verify-iso.sh').read_text()
+        self.assertIn('opt/fliperos/bin/fliperos-atom15', verify)
+        self.assertIn('etc/systemd/system/fliperos-atom15-guard.service', verify)
+
+    def test_flash_tool_is_never_downloaded_or_shipped(self):
+        # A AMD nao publica o amdvbflash: a pessoa traz o arquivo.
+        for path in ('fliperos-setup/lib/atom15.sh', 'fliperos-setup/screens/atom15.sh', 'fliperos-rootfs.sh', 'fliperos-mkiso.sh'):
+            text = (ROOT / path).read_text()
+            self.assertNotIn('github.com/stylesuxx', text, path)
+            self.assertNotRegex(text, r'(curl|wget)[^\n]*amdvbflash', path)
 
 
 class MkisoFunctionsTests(unittest.TestCase):

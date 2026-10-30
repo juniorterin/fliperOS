@@ -177,7 +177,7 @@ build_native "Live screen DRM guard (fliperos-dropmaster)" "$src/config/fliperos
   /usr/local/lib/fliperos/libfliperos-dropmaster.so
 build_native "GroovyMAME sound on the ALSA default (fliperos-sdl-audio)" "$src/config/fliperos-sdl-audio.c" \
   /usr/local/lib/fliperos/libfliperos-sdl-audio.so
-build_native "FPS of Vulkan programs for the web panel (fliperos-vkfps)" "$src/config/fliperos-vkfps.c" \
+build_native "FPS and flicker filter of Vulkan programs (fliperos-vkfps)" "$src/config/fliperos-vkfps.c" \
   /usr/local/lib/fliperos/libfliperos-vkfps.so
 # O painel web roda o codigo que leu ao subir: o novo vale ja (so se ele
 # estava no ar).

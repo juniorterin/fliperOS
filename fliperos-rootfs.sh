@@ -94,7 +94,7 @@ install -Dm644 "$src/config/openbox-black-themerc" "$root/usr/share/themes/Flipe
 # (fliperos-desktop-deflicker) e o unico compositor.
 install -Dm644 "$src/config/picom-autostart-hidden.desktop" "$root/etc/fliperos/xdg/autostart/picom.desktop"
 # O FPS dos emuladores em Vulkan para o painel web: a camada implicita
-# (config/fliperos-vkfps.c, compilada com o filtro de flicker), que so entra
+# (config/fliperos-vkfps.c, compilada com o filtro de flicker; tambem o filtro), que so entra
 # com FLIPEROS_VK_FPS=1 (o fliperos-kms-run e o fliperos-x11-client).
 install -Dm644 "$src/config/fliperos-vkfps.json" "$root/usr/share/vulkan/implicit_layer.d/fliperos-vkfps.json"
 # Modo de video de cada emulador do fliperos-x11-run (640x240 nos de 480i

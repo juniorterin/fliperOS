@@ -1158,7 +1158,7 @@ bash /tmp/fliperos-deflicker-build /tmp/fliperos-color.c /usr/local/bin/fliperos
 bash /tmp/fliperos-deflicker-build /tmp/fliperos-dropmaster.c /usr/local/lib/fliperos/libfliperos-dropmaster.so
 # O GroovyMAME no "default" do ALSA (config/fliperos-groovymame).
 bash /tmp/fliperos-deflicker-build /tmp/fliperos-sdl-audio.c /usr/local/lib/fliperos/libfliperos-sdl-audio.so
-# O FPS dos emuladores em Vulkan para o painel web (a camada do Vulkan).
+# O FPS e o filtro de flicker dos emuladores em Vulkan (a camada do Vulkan).
 bash /tmp/fliperos-deflicker-build /tmp/fliperos-vkfps.c /usr/local/lib/fliperos/libfliperos-vkfps.so
 rm -f /tmp/fliperos-deflicker.c /tmp/fliperos-color.c /tmp/fliperos-dropmaster.c /tmp/fliperos-sdl-audio.c \
   /tmp/fliperos-vkfps.c /tmp/fliperos-deflicker-build

@@ -3,7 +3,7 @@
 # biblioteca que o fliperos-kms-run e o fliperos-x11-client carregam nos
 # emuladores, e a calibracao de cor (config/fliperos-color.c) no programa
 # fliperos-color; e a fliperos-dropmaster.c (a tela ao vivo devolve a tela
-# ao abrir a placa) numa biblioteca. Usado pelo fliperos-mkiso.sh (no chroot da imagem), pelo
+# ao abrir a placa) e a fliperos-vkfps.c (a camada do Vulkan) em bibliotecas. Usado pelo fliperos-mkiso.sh (no chroot da imagem), pelo
 # tools/cabinet-update.sh e pelo tools/deflicker-test.sh.
 #
 #   fliperos-deflicker-build FONTE SAIDA

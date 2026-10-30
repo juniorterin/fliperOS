@@ -218,7 +218,9 @@ It is not loaded into Xorg or into Switchres: `fliperos-x11-run` takes it out of
 
 It copies the frame, draws it back through a three-tap vertical filter and restores the GL state the emulator had. It checks the CRTC mode of every card (`/dev/dri/card0` to `card7`, since the monitor's card is not always `card0`) through DRM every 30 frames: in a progressive mode (240p, 31 kHz, LCD) it does nothing.
 
-The filter works with OpenGL (compatibility, core and GLES), not with Vulkan, so when it is on for them and the mode is interlaced, `fliperos-x11-run` puts PCSX2 (`Renderer = 12`), Dolphin (`GFXBackend=OGL`), DuckStation (`Renderer = OpenGL`) and Flycast (Vulkan `pvr.rend` 4 and 5 become OpenGL's 0 and 3, for that launch only) on OpenGL.
+Programs in **Vulkan** (PCSX2, Dolphin, DuckStation and Flycast on `amdgpu`) get the same filter from the implicit Vulkan layer `config/fliperos-vkfps.c`, on with `FLIPEROS_VK_FPS=1`. Before each present, in an interlaced mode, it copies the image and draws it back with the same weights and the same level. They stay on Vulkan: the layer asks the swapchain for what it needs and allocates nothing until the first filtered frame.
+
+The layer was tested on Mesa's software driver (lavapipe) with the Khronos validation layers on (`tools/vkfps-test.sh`). The software saturation and hue of the colour calibration stay out of it, since only `radeon` uses them and it has no Vulkan.
 
 The LXDE desktop draws without OpenGL, so it gets the same filter through **picom** with a window shader (`config/fliperos-desktop-deflicker --watch`, started by `fliperos-lxde`, at the Desktop row's level `deflicker_desktop=`). It checks the screen mode every 2 seconds and runs picom only while it is interlaced, so a change in Screen Resolution counts at once. Ubuntu's own picom autostart (`/etc/xdg/autostart/picom.desktop`, without the shader) would take the screen first, since only one compositor runs at a time: `fliperos-lxde` puts `/etc/fliperos/xdg` first in `XDG_CONFIG_DIRS`, where a `picom.desktop` with `Hidden=true` hides it.
 
@@ -248,7 +250,7 @@ Choosing one that is not installed installs it (`config/fliperos-emulators`):
 
   Each launch (`fliperos-x11-run`) sets full screen, `AspectRatio = Stretch To Fill` and the BIOS folder; the first one also skips its setup wizard and puts both panels on SDL (Cross/Circle/Square/Triangle on A/B/X/Y, as in PCSX2).
 
-  Its renderer stays on Automatic, which picks **Vulkan** where there is one (amdgpu, Intel; radeon has none, and it uses OpenGL); with the [480i flicker filter](#480i-flicker-filter) on, that launch uses OpenGL, which the filter reaches, and the next one without the filter goes back to Automatic.
+  Its renderer stays on Automatic, which picks **Vulkan** where there is one (amdgpu, Intel; radeon has none, and it uses OpenGL); the [480i flicker filter](#480i-flicker-filter) works on either.
 
   A renderer chosen in DuckStation itself stays. Esc or Select+Start opens its menu. Opened from a frontend it closes with the game (`-batch`); from the desktop menu it opens in Big Picture. Not seen on the CRT yet.
 - **KOF Final Attack (Ikemen GO, 4:3)**: below.

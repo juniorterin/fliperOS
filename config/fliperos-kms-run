@@ -132,8 +132,9 @@ export SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/var/lib/
 # calibracao de cor).
 deflicker=${FLIPEROS_DEFLICKER_LIB:-/usr/local/lib/fliperos/libfliperos-deflicker.so}
 [[ -f $deflicker ]] && export LD_PRELOAD="$deflicker${LD_PRELOAD:+:$LD_PRELOAD}"
-# O FPS do painel web num programa em Vulkan: a camada do Vulkan
-# (config/fliperos-vkfps.c) conta os quadros que a do OpenGL nao ve.
+# Um programa em Vulkan: a camada do Vulkan (config/fliperos-vkfps.c) conta
+# os quadros para o painel web e faz o filtro de flicker, o que a do OpenGL nao
+# alcanca.
 export FLIPEROS_VK_FPS=1
 # A calibracao de cor na placa antes do programa virar o dono do video (um
 # X que fechou devolve a tabela de gama que achou).

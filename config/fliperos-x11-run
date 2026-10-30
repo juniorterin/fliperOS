@@ -83,15 +83,6 @@ stretch=$((300 * FLIPEROS_RES_W / (4 * FLIPEROS_RES_H)))
 # da tabela (deflicker_NOME= no fliperos.conf), mesmo quando o comando e um
 # script que abre outro binario.
 export FLIPEROS_DEFLICKER_APP=$name
-# deflicker_on: o filtro vale para este jogo? A biblioteca instalada, o
-# filtro nao desligado para ele no Video Setup e um modo entrelacado (mais
-# de 300 linhas num monitor de 15 kHz).
-deflicker_on() {
-  [[ -f ${FLIPEROS_DEFLICKER_LIB:-/usr/local/lib/fliperos/libfliperos-deflicker.so} ]] || return 1
-  [[ $(awk -F= -v k="deflicker_$name" '$1 == "deflicker" && !own { v = $2 } $1 == k { v = $2; own = 1 }
-    END { print v }' "$CONF" 2> /dev/null) != off ]] || return 1
-  [[ $(sed -n 's/^frequency=//p' "$CONF" 2> /dev/null) == 15* ]] && ((FLIPEROS_RES_H > 300))
-}
 
 case $name in
   flycast)
@@ -105,17 +96,7 @@ case $name in
     # As saidas do jogo pela rede, se ha quem as leia (config/fliperos-outputs).
     netout=""
     [[ -x $outputs ]] && "$outputs" installed && netout=",network:NetworkOutput=yes"
-    # Com o filtro de flicker do 480i ligado, o Vulkan escolhido no Flycast
-    # (pvr.rend 4 e 5) vira o OpenGL equivalente (0 e 3) so nesta abertura:
-    # a camada nao alcanca o Vulkan.
-    rend=""
-    if deflicker_on; then
-      case $(sed -n 's/^pvr\.rend *= *//p' "${FLIPEROS_FLYCAST_CFG:-$HOME/.config/flycast/emu.cfg}" 2> /dev/null | head -1) in
-        4) rend=",config:pvr.rend=0" ;;
-        5) rend=",config:pvr.rend=3" ;;
-      esac
-    fi
-    set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch$netout$rend" "${@:2}"
+    set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch$netout" "${@:2}"
     # Jogos de varias placas NAOMI (Games[].multiboard no naomi_roms.cpp do
     # Flycast: esquerda, centro e direita) com 3 monitores e os jogos de
     # varias telas ligados: uma placa em cada monitor (fliperos-multiscreen).
@@ -142,9 +123,6 @@ case $name in
     "$iniset" "$gfx" Hardware VSync True 2> /dev/null || true
     # Sem os avisos do emulador na tela ao abrir o jogo.
     "$iniset" "${gfx%/*}/Dolphin.ini" Interface OnScreenDisplayMessages False 2> /dev/null || true
-    # Com o filtro de flicker do 480i ligado, o OpenGL: a camada
-    # (config/fliperos-deflicker.c) nao alcanca o Vulkan.
-    deflicker_on && set -- "$1" -C Dolphin.Core.GFXBackend=OGL "${@:2}"
     ;;
   pcsx2)
     # Sem PCSX2.ini, o de partida do FliperOS (/etc/fliperos/pcsx2.ini): com
@@ -156,9 +134,6 @@ case $name in
     [[ -f $ini ]] || install -Dm600 "${FLIPEROS_PCSX2_INI:-/etc/fliperos/pcsx2.ini}" "$ini" 2> /dev/null || true
     if [[ -f $ini ]]; then
       "$iniset" "$ini" EmuCore/GS AspectRatio Stretch
-      # O OpenGL (12) com o filtro de flicker do 480i ligado: a camada nao
-      # alcanca o Vulkan, que o automatico escolhe nas placas novas.
-      deflicker_on && "$iniset" "$ini" EmuCore/GS Renderer 12
       "$iniset" "$ini" UI SetupWizardIncomplete false
       "$iniset" "$ini" UI StartFullscreen true
       "$iniset" "$ini" UI StartBigPictureMode true
@@ -246,16 +221,10 @@ INI
       "$iniset" "$ini" Main ConfirmPowerOff false
       "$iniset" "$ini" BIOS SearchDirectory "$HOME/bios"
       "$iniset" "$ini" Display AspectRatio "Stretch To Fill"
-      # O OpenGL com o filtro de flicker do 480i ligado: a camada nao alcanca
-      # o Vulkan, que o automatico escolhe onde ha (amdgpu, Intel). So nesta
-      # abertura: sem o filtro volta o automatico. O renderizador escolhido no
-      # proprio DuckStation fica.
-      if deflicker_on; then
-        if ! grep -q '^Renderer = OpenGL' "$ini"; then
-          "$iniset" "$ini" GPU Renderer OpenGL
-          : > "${ini%/*}/.fliperos-opengl"
-        fi
-      elif [[ -e ${ini%/*}/.fliperos-opengl ]]; then
+      # O filtro de flicker do 480i pedia o OpenGL ate a camada do Vulkan
+      # filtrar tambem (config/fliperos-vkfps.c): quem ficou nele por isso volta
+      # ao automatico. O renderizador escolhido no proprio DuckStation fica.
+      if [[ -e ${ini%/*}/.fliperos-opengl ]]; then
         grep -q '^Renderer = OpenGL' "$ini" && "$iniset" "$ini" GPU Renderer Automatic
         rm -f "${ini%/*}/.fliperos-opengl"
       fi

@@ -6,7 +6,7 @@
         "library_path": "/usr/local/lib/fliperos/libfliperos-vkfps.so",
         "api_version": "1.3.0",
         "implementation_version": "1",
-        "description": "FliperOS: frames per second of Vulkan programs for the web panel (config/fliperos-vkfps.c)",
+        "description": "FliperOS: frames per second for the web panel and the 480i flicker filter of Vulkan programs (config/fliperos-vkfps.c)",
         "functions": {
             "vkGetInstanceProcAddr": "fliperos_vkfps_GetInstanceProcAddr",
             "vkGetDeviceProcAddr": "fliperos_vkfps_GetDeviceProcAddr"
