@@ -10060,6 +10060,28 @@ class PixelcadeTests(unittest.TestCase):
         self.assertEqual(self.run_('menu', 'nada'), [])
         self.assertEqual(self.run_('menu', '../x'), [])
 
+    def test_events_from_root_run_as_the_cabinet_user(self):
+        # O menu do FliperOS roda como root (sudo): o evento roda de novo como o
+        # usuario do gabinete, com o XDG_RUNTIME_DIR dele, onde o painel web le o
+        # estado do marquee (antes ia para /tmp e a previa nao o via).
+        self.install()
+        conf = self.tmp / 'fliperos.conf'
+        conf.write_text('marquee_overlay=on\n')
+        runs = self.tmp / 'runuser.log'
+        (self.tmp / 'bin/id').write_text('#!/bin/sh\n[ "$1 $2" = "-u fliperos" ] && echo 1000 && exit 0\nexit 1\n')
+        (self.tmp / 'bin/runuser').write_text('#!/bin/sh\necho "$1 $2" >> %s\nshift 3\nexec "$@"\n' % runs)
+        for tool in ('id', 'runuser'):
+            (self.tmp / 'bin' / tool).chmod(0o755)
+        userrun = self.tmp / 'userrun'
+        (userrun / '1000').mkdir(parents=True)
+        self.env.update(FLIPEROS_CONF=str(conf), PIXELCADE_MENU_DIR=str(ROOT / 'config/web'), PIXELCADE_EUID='0',
+                        FLIPEROS_USER='fliperos', PIXELCADE_USER_RUN=str(userrun))
+        self.run_('menu', 'shell')
+        self.assertEqual(runs.read_text().splitlines(), ['-u fliperos'])
+        self.assertIn('item=shell', (userrun / '1000/fliperos-marquee').read_text().splitlines())
+        self.assertEqual((userrun / '1000/fliperos-pixelcade.last').read_text(), 'menu/shell\n')
+        self.assertFalse((self.tmp / 'run/fliperos-marquee').exists())
+
     def test_screensaver_plays_the_logo_animation_on_the_pixelcade(self):
         # Com a animacao do logo e a pasta console do pixelweb, o protetor de
         # tela a toca no Pixelcade (como o logotipo do sistema); a volta e igual.

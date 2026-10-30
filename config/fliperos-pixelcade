@@ -1208,6 +1208,15 @@ case $cmd in
     exit 0
     ;;
   launch | esde | attract | game | select | system | logo | end | screensaver | home | menu | achievement | versus | now)
+    # Os eventos sao da sessao do usuario do gabinete: o que o marquee mostra
+    # (e o estado que o painel web le) fica no XDG_RUNTIME_DIR dele. Chamado
+    # como root (o menu do FliperOS roda pelo sudo), roda de novo como ele;
+    # senao gravaria em /tmp e a previa e o OBS nao veriam o evento.
+    if ((${PIXELCADE_EUID:-$EUID} == 0)) && [[ $user != root && -z ${PIXELCADE_AS_USER:-} ]] &&
+      uid=$(id -u "$user" 2> /dev/null); then
+      exec runuser -u "$user" -- env PIXELCADE_AS_USER=1 XDG_RUNTIME_DIR="${PIXELCADE_USER_RUN:-/run/user}/$uid" \
+        "$self" "$cmd" "$@"
+    fi
     # Sem marquee nenhum (nem o do OBS), os eventos nao fazem nada.
     installed || zedmd_installed || overlay_on || exit 0
     case $cmd in
