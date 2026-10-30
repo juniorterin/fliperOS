@@ -231,6 +231,9 @@ details.more .live-actions { margin: 12px 0 8px; }
 @keyframes mq-ticker { to { transform: translateX(-100%); } }
 .mq-led .mq-pop { position: absolute; top: 6%; left: 50%; transform: translateX(-50%); max-width: 92%; padding: 1.5cqw 3cqw; border-radius: 2cqw; background: rgba(25,26,33,.9);
   border: .5cqw solid #bd93f9; font: 4cqw var(--px); color: #f8f8f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mq-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; color: var(--muted); font-size: 14px; }
+.mq-front { display: none; margin-top: 14px; }
+html.mq-on .mq-front { display: flex; }
 .mq-card .mq-led { margin-top: 12px; }
 .mq-live { display: none; margin-top: 14px; }
 .mq-live small { display: block; margin-bottom: 6px; font: 8px var(--px); color: var(--muted); letter-spacing: .1em; }

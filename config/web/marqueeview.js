@@ -12,6 +12,7 @@ Object.assign(TEXT.en, {
   mq_pixelcade: "Pixelcade (LED 128×32)", mq_zedmd: "ZeDMD (128×32, shown on 256×64)",
   mq_art_pixelcade: "Art: marquee, then logo, then the name.", mq_art_zedmd: "Art: dmd, then marquee, then logo, then the name.",
   mq_live: "Marquee as it will appear",
+  mq_show: "When both exist, the marquee shows", mq_show_art: "Art", mq_show_score: "Scoreboard",
 });
 Object.assign(TEXT.pt, {
   mq_title: "Prévia do marquee", mq_on: "Modo prévia do marquee", mq_device: "Mostrar o marquee do",
@@ -19,6 +20,7 @@ Object.assign(TEXT.pt, {
   mq_pixelcade: "Pixelcade (LED 128×32)", mq_zedmd: "ZeDMD (128×32, em painel 256×64)",
   mq_art_pixelcade: "Arte: marquee, depois logo, depois o nome.", mq_art_zedmd: "Arte: dmd, depois marquee, depois logo, depois o nome.",
   mq_live: "O marquee como vai aparecer",
+  mq_show: "Quando existem os dois, o marquee mostra", mq_show_art: "Arte", mq_show_score: "Placar",
 });
 
 // O que cada painel desenha: as letras de arte (campo "art" dos jogos) na
@@ -30,10 +32,16 @@ const MQ_DEVICES = {
 const MQ_KINDS = { d: "dmd", m: "marquee", l: "logo" };
 const MQ_STORE = "fliperos-marquee-preview";
 
-let mq = { on: false, device: "pixelcade" };
+// show: o que o marquee mostra quando ha arte e placar (score: o placar, o
+// texto de abertura e as conquistas; art: so a arte).
+let mq = { on: false, device: "pixelcade", show: "score" };
 try {
   const saved = JSON.parse(localStorage.getItem(MQ_STORE) || "null");
-  if (saved) { mq.on = !!saved.on; if (MQ_DEVICES[saved.device]) mq.device = saved.device; }
+  if (saved) {
+    mq.on = !!saved.on;
+    if (MQ_DEVICES[saved.device]) mq.device = saved.device;
+    if (saved.show === "art" || saved.show === "score") mq.show = saved.show;
+  }
 } catch (e) { /* sem armazenamento */ }
 
 function mqSave() {
@@ -58,7 +66,7 @@ function mqBuild(box) {
 let mqState = {}, mqLastTime = null, mqPopTimer = null, mqTried = false;
 
 function mqDrawState(box) {
-  const s = mqState, versus = s.event === "versus";
+  const s = mqState, versus = s.event === "versus" && mq.show === "score";
   box.classList.toggle("vs", versus);
   const vs = box.querySelector(".mq-versus");
   vs.hidden = !versus;
@@ -76,7 +84,7 @@ function mqEvents(s, first) {
   if (s.time === mqLastTime) return;
   mqLastTime = s.time;
   // Na primeira leitura nada rola: o texto ja era velho quando a pagina abriu.
-  if (first || !s.text) return;
+  if (first || !s.text || mq.show !== "score") return;
   document.querySelectorAll(".mq-led").forEach((box) => {
     if (box.hidden) return;
     if (s.event === "achievement") {
@@ -171,7 +179,17 @@ function mqControls() {
   $("mq-device").value = mq.device;
   $("mq-device").disabled = !mq.on;
   $("mq-art").textContent = t("mq_art_" + mq.device);
+  document.querySelectorAll(".mq-show button").forEach((b) => b.classList.toggle("on", b.dataset.show === mq.show));
 }
+// Arte ou placar (no Frontend e no Status): o texto e a conquista que
+// estavam rolando saem, e o placar volta ou some na hora.
+document.querySelectorAll(".mq-show button").forEach((b) => b.addEventListener("click", () => {
+  mq.show = b.dataset.show;
+  mqSave();
+  mqControls();
+  if (mq.show !== "score") document.querySelectorAll(".mq-ticker, .mq-pop").forEach((n) => { n.hidden = true; });
+  mqPoll();
+}));
 function mqChanged() {
   mq.on = $("mq-on").checked;
   mq.device = MQ_DEVICES[$("mq-device").value] ? $("mq-device").value : "pixelcade";

@@ -139,6 +139,9 @@
               <button id="close-game" class="btn red" type="button" hidden><svg class="g"><use href="icons.svg#g-power"/></svg><span data-t="close_game"></span></button>
             </div>
             <p class="now-note"><label class="check"><input id="shot-auto" type="checkbox" checked> <span data-t="shot_auto"></span></label> <span id="shot-note" role="status"></span></p>
+            <!-- Arte ou placar no marquee (marqueeview.js); so no modo previa. -->
+            <div class="mq-row mq-front"><span data-t="mq_show"></span>
+              <div class="fps-pick mq-show" role="group"><button type="button" data-show="art" data-t="mq_show_art"></button><button type="button" data-show="score" data-t="mq_show_score"></button></div></div>
           </div>
           <div class="mini-cards">
             <div class="mini volume">
@@ -625,6 +628,8 @@
             <label class="mq-pick"><span data-t="mq_device"></span>
               <select id="mq-device"><option value="pixelcade" data-t="mq_pixelcade"></option><option value="zedmd" data-t="mq_zedmd"></option></select></label>
             <p id="mq-art" class="dim"></p>
+            <div class="mq-row"><span data-t="mq_show"></span>
+              <div class="fps-pick mq-show" role="group"><button type="button" data-show="art" data-t="mq_show_art"></button><button type="button" data-show="score" data-t="mq_show_score"></button></div></div>
             <div class="mq-led" id="mq-status" hidden></div>
           </section>
           <section class="dcard" aria-labelledby="h-cpu">
