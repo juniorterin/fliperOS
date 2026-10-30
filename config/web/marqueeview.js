@@ -66,6 +66,7 @@ function mqBuild(box) {
     el("div", { class: "mq-ticker", hidden: "" }, el("span")), el("div", { class: "mq-pop", hidden: "" }),
     el("span", { class: "mq-hi", hidden: "" }),
     el("div", { class: "mq-syslogo", hidden: "" }, el("img", { class: "old", alt: "", hidden: "" }), el("img", { class: "new", alt: "" })),
+    el("img", { class: "mq-idle", alt: "", hidden: "" }),
     el("i", { class: "mq-dots" }), el("small", { class: "mq-tag" }));
 }
 
@@ -122,7 +123,26 @@ function mqDrawLogo(box) {
   if (mqFresh) wrap.classList.add("go");
 }
 
+// O ZeDMD parado: o evento attract (o frontend do FliperOS sem apertos por 30 s,
+// ou o protetor de tela do ES-DE e do Attract-Mode Plus). O painel toca a
+// animacao do logo (o GIF 128x32 que o ZeDMD toca), recomecando a cada evento;
+// ela e do ZeDMD, entao so aparece nesse modo.
+function mqDrawIdle(box) {
+  const img = box.querySelector(".mq-idle");
+  if (!img) return;
+  const on = mq.device === "zedmd" && mqState.event === "attract";
+  img.hidden = !on;
+  box.classList.toggle("ani", on);
+  if (!on) { delete box.dataset.idleKey; return; }
+  const k = String(mqState.time);
+  if (box.dataset.idleKey === k) return;
+  box.dataset.idleKey = k;
+  img.onerror = () => { img.hidden = true; box.classList.remove("ani"); };
+  img.src = "/api/marquee/idle?t=" + encodeURIComponent(k);
+}
+
 function mqDrawState(box) {
+  mqDrawIdle(box);
   mqDrawLogo(box);
   mqDrawHi(box);
   const s = mqState.event === "versus" || !mqLive ? mqState : Object.assign({ left: "P1", right: "P2" }, mqLive);

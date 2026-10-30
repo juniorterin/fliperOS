@@ -5623,6 +5623,7 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_STREAM_API='http://127.0.0.1:%d' % cls.adb.server_address[1],
                    FLIPEROS_LAB=str(lab), FLIPEROS_LAB_RUN=str(tmp / 'lab'),
                    FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_SYSLOGO=str(syslogo),
+                   FLIPEROS_IDLE_GIF=str(ROOT / 'config/zedmd-fliperos.gif'),
                    FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'),
                    FLIPEROS_EMULATORS=str(emulators), FLIPEROS_PIXELCADE=str(pixelcade),
                    FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'),
@@ -6177,6 +6178,30 @@ class WebPanelTests(unittest.TestCase):
         # As duas paginas sabem desenha-lo.
         for name, url in (('overlay.js', '/api/overlay/logo?key='), ('marqueeview.js', '/api/marquee/logo?name=')):
             self.assertIn(url, (ROOT / 'config/web' / name).read_text(), name)
+
+    def test_idle_animation_for_the_preview_and_the_obs_page(self):
+        # O ZeDMD parado (o evento attract) toca a animacao do logo: o painel (com
+        # login) e a pagina do OBS (pela chave) pedem o GIF de 128x32.
+        cookie = self.login()
+        key = json.loads(self.request('GET', '/api/overlay', cookie=cookie)[2])['path'].split('key=')[1]
+        gif = (ROOT / 'config/zedmd-fliperos.gif').read_bytes()
+        status, _, data = self.request('GET', '/api/marquee/idle', cookie=cookie)
+        self.assertEqual((status, data, self.last_headers['Content-Type']), (200, gif, 'image/gif'))
+        self.assertEqual(data[:6], b'GIF89a')
+        self.assertEqual(self.request('GET', '/api/marquee/idle')[0], 401)
+        status, _, data = self.request('GET', '/api/overlay/idle?key=' + key)
+        self.assertEqual((status, data), (200, gif))
+        self.assertEqual(self.request('GET', '/api/overlay/idle?key=wrong')[0], 403)
+        self.assertEqual(self.request('GET', '/api/overlay/idle')[0], 403)
+        # As duas paginas desenham o evento attract com ele (a previa, so no modo ZeDMD).
+        web = ROOT / 'config/web'
+        view, obs = (web / 'marqueeview.js').read_text(), (web / 'overlay.js').read_text()
+        self.assertIn('/api/marquee/idle?t=', view)
+        self.assertIn('mq.device === "zedmd" && mqState.event === "attract"', view)
+        self.assertIn('/api/overlay/idle?key=', obs)
+        self.assertIn('s.event === "attract"', obs)
+        self.assertIn('id="idle"', (web / 'overlay.html').read_text())
+        self.assertIn('.mq-led.ani', (web / 'stream.css').read_text())
 
     def test_obs_controls_page_and_its_css(self):
         import http.client

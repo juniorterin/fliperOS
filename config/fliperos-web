@@ -85,9 +85,10 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/stream/offer {"fps": 15|30|60, "sdp"}: a resposta SDP do go2rtc
     POST /api/stream/install  instala o go2rtc e o ffmpeg (tarefa)
     GET  /api/overlay     o endereco do marquee para o OBS; POST {"action": "newkey"}
-    GET  /overlay/marquee?key=  a pagina do OBS; /api/overlay/state, /art e
-                      /logo?name= (sem login, pela chave); com login,
-                      /api/marquee/logo?name= (o logotipo do sistema, PNG)
+    GET  /overlay/marquee?key=  a pagina do OBS; /api/overlay/state, /art,
+                      /logo?name= e /idle (sem login, pela chave); com login,
+                      /api/marquee/logo?name= (o logotipo do sistema, PNG) e
+                      /api/marquee/idle (a animacao do ZeDMD parado, GIF)
     GET  /overlay/live?key=&fps=  a tela ao vivo para o OBS; POST
                       /api/overlay/offer?key= {"fps", "sdp"} (sem login, pela chave)
     GET  /overlay/input?key=&players=1,2  o controle para o OBS; pela chave:
@@ -1853,6 +1854,8 @@ def stream_answer(fps, offer):
 OVERLAY_KEY = ENV("FLIPEROS_OVERLAY_KEY", "/etc/fliperos/overlay.key")
 DMD = ENV("FLIPEROS_DMD", BIN + "/fliperos-dmd")
 SYSLOGO = ENV("FLIPEROS_SYSLOGO", BIN + "/fliperos-syslogo")
+# A animacao que o ZeDMD toca com o frontend parado (config/zedmd-fliperos.gif).
+IDLE_GIF = ENV("FLIPEROS_IDLE_GIF", "/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif")
 ART_TYPES = {".png": "image/png", ".gif": "image/gif", ".webp": "image/webp", ".jpg": "image/jpeg",
              ".jpeg": "image/jpeg"}
 
@@ -2756,7 +2759,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.lab_login(parse_qs(url.query))
         if not url.path.startswith("/api/"):
             return self.send(404, {"error": "not found"})
-        if url.path in ("/api/overlay/state", "/api/overlay/art", "/api/overlay/logo"):
+        if url.path in ("/api/overlay/state", "/api/overlay/art", "/api/overlay/logo", "/api/overlay/idle"):
             return self.overlay_data(url)
         if url.path in ("/api/overlay/input/events", "/api/overlay/input/css"):
             if not overlay_allowed(parse_qs(url.query)):
@@ -2937,6 +2940,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, overlay_paths(overlay_key()))
         if url.path == "/api/marquee/logo":
             return self.system_logo((parse_qs(url.query).get("name") or [""])[0])
+        if url.path == "/api/marquee/idle":
+            return self.idle_animation()
         if url.path == "/api/marquee/state":
             # O estado do marquee para a previa do painel (Status), pelo login.
             on = overlay_enabled()
@@ -3461,6 +3466,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(404, {"error": "no logo for this system"})
         return self.send(200, data, "image/png")
 
+    def idle_animation(self):
+        """A animacao do logo que o ZeDMD toca com o frontend parado (o evento
+        attract), para a previa do painel e o marquee do OBS: o GIF de 128x32."""
+        try:
+            with open(IDLE_GIF, "rb") as f:
+                data = f.read(8 << 20)
+        except OSError:
+            return self.send(404, {"error": "no idle animation"})
+        return self.send(200, data, "image/gif")
+
     def overlay_data(self, url):
         """O marquee para o OBS, pela chave do endereco: o estado (state) e
         a imagem do jogo que esta nele (art; so ela, pelo id)."""
@@ -3469,6 +3484,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403, {"error": "wrong or missing key"})
         if url.path == "/api/overlay/logo":
             return self.system_logo((query.get("name") or [""])[0])
+        if url.path == "/api/overlay/idle":
+            return self.idle_animation()
         state = marquee_state() if overlay_enabled() else {}
         path = None
         if state.get("system") or state.get("rom"):

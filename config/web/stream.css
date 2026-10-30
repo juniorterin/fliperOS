@@ -222,6 +222,9 @@ details.more .live-actions { margin: 12px 0 8px; }
    a curva da tela do frontend) e pisca duas vezes depois de uma pausa, como no
    Pixelcade e no ZeDMD (config/fliperos-syslogo). --side: 1 entra pela direita. */
 .mq-led.sys > img, .mq-led.sys > .mq-name { display: none; }
+/* O ZeDMD parado: a animacao do logo (GIF 128x32, sem cortar) no lugar da arte e do nome. */
+.mq-led.ani > img:not(.mq-idle), .mq-led.ani > .mq-name { display: none; }
+.mq-led > img.mq-idle { object-fit: contain; filter: none; padding: 0; }
 .mq-led .mq-syslogo { position: absolute; inset: 0; overflow: hidden; }
 .mq-led .mq-syslogo[hidden] { display: none; }
 .mq-led .mq-syslogo img { position: absolute; left: 8%; top: 12%; width: 84%; height: 76%; object-fit: contain; }

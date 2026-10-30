@@ -79,13 +79,29 @@ function showLogo(s, fresh) {
   if (fresh) wrap.classList.add("go");
 }
 
+// O ZeDMD parado (o evento attract: o frontend sem apertos por 30 s, ou o
+// protetor de tela do ES-DE e do Attract-Mode Plus): a animacao do logo, o GIF
+// 128x32 que o ZeDMD toca, recomecando a cada evento.
+let idleKey = "";
+function showIdle(s) {
+  const img = $("idle"), on = !!s;
+  img.hidden = !on;
+  if (!on) { idleKey = ""; render.title(); return; }
+  const k = String(s.time);
+  if (k === idleKey) return;
+  idleKey = k;
+  img.onerror = () => { img.hidden = true; render.title(); };
+  img.src = "/api/overlay/idle?key=" + encodeURIComponent(key) + "&t=" + encodeURIComponent(k);
+  render.title();
+}
+
 const render = {
   state: {},
   title() {
     // O nome do jogo (ou do sistema) so quando nao ha arte.
     const s = render.state, title = $("title");
     const versus = s.event === "versus";
-    title.hidden = versus || !$("syslogo").hidden || !$("art").hidden || !showText || !(s.title || s.system);
+    title.hidden = versus || !$("syslogo").hidden || !$("idle").hidden || !$("art").hidden || !showText || !(s.title || s.system);
     setText(title, s.title || (s.system || "").toUpperCase());
     title.classList.toggle("system", s.event === "system");
   },
@@ -106,7 +122,9 @@ function apply(data) {
   }
   const system = data.enabled && s.event === "system" && !!s.logo;
   showLogo(system ? s : null, lastTime !== null && s.time !== lastTime);
-  showArt(versus || system || !data.enabled ? null : data.art || null);
+  const idle = data.enabled && s.event === "attract";
+  showIdle(idle ? s : null);
+  showArt(versus || system || idle || !data.enabled ? null : data.art || null);
   render.title();
   if (s.time !== lastTime) {
     const first = lastTime === null;
