@@ -4772,7 +4772,8 @@ class FrontendDataTests(unittest.TestCase):
             tool.chmod(0o755)
             fm.PIXELCADE_TOOL = str(tool)
             self.assertEqual(fm.IDLE_SECONDS, 30.0)
-            fe = types.SimpleNamespace(shot=None, last_input=100.0, idle=False)
+            fe = types.SimpleNamespace(shot=None, last_input=100.0, idle=False, category=lambda: None)
+            fe.marquee_logo = lambda *a: fm.Frontend.marquee_logo(fe, *a)
             idle = lambda now, active=False: fm.Frontend.marquee_idle(fe, now, active)
 
             def calls(wait=0.0):
@@ -4791,7 +4792,7 @@ class FrontendDataTests(unittest.TestCase):
             idle(200.0)
             time.sleep(0.3)
             self.assertEqual(calls(), ['bg screensaver start'])
-            # O primeiro toque: o stop, tambem em segundo plano (nao trava o menu).
+            # O primeiro toque sem sistema (sem listas): o stop, em segundo plano.
             idle(210.0, True)
             deadline = time.time() + 5
             while len(calls()) < 2 and time.time() < deadline:
@@ -4799,6 +4800,17 @@ class FrontendDataTests(unittest.TestCase):
             self.assertEqual(calls(), ['bg screensaver start', 'bg screensaver stop'])
             idle(212.0)
             self.assertEqual(len(calls()), 2)
+            # Com o sistema de agora: o toque manda o logotipo dele (que tambem
+            # tira o protetor de tela), sem depender do que estava gravado.
+            fe.category = lambda: {'name': 'Naomi'}
+            idle(250.0)
+            idle(260.0, True)
+            deadline = time.time() + 5
+            while len(calls()) < 4 and time.time() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(calls()[2:], ['bg screensaver start', 'bg logo Naomi  1'])
+            self.assertEqual(fe.announced, 'Naomi')
+            fe.category = lambda: None
             # Desligado (0) ou nos prints (--shot), nao manda nada; sem o programa, sem erro.
             fm.IDLE_SECONDS = 0.0
             idle(1000.0)
@@ -4809,7 +4821,7 @@ class FrontendDataTests(unittest.TestCase):
             fe.idle = False
             fm.PIXELCADE_TOOL = str(Path(tmp) / 'nenhum')
             idle(3000.0)
-            self.assertEqual(len(calls()), 2)
+            self.assertEqual(len(calls()), 4)
 
     def test_exit_key_table_and_panel_keys(self):
         import types
@@ -9976,6 +9988,15 @@ class PixelcadeTests(unittest.TestCase):
         self.assertEqual(self.run_('end', 'naomi', 'mvsc2'), ['console/stream/Naomi'])
         self.assertEqual(state.read_text().splitlines()[:2], ['event=system', 'system=Naomi'])
         self.assertFalse((self.tmp / 'run/fliperos-pixelcade.last.system').exists())
+        # O system (ES-DE, a volta do protetor de tela) leva o logotipo para a
+        # previa quando o tema o tem.
+        syslogo = self.tmp / 'bin/syslogo-ok'
+        syslogo.write_text('#!/bin/sh\n[ "$1" = find ] && exit 0\nexit 1\n')
+        syslogo.chmod(0o755)
+        self.env['FLIPEROS_SYSLOGO'] = str(syslogo)
+        self.run_('system', 'Naomi')
+        self.assertIn('logo=Naomi', state.read_text().splitlines())
+        self.env['FLIPEROS_SYSLOGO'] = str(self.tmp / 'bin/no-syslogo')
         # Um jogo aberto a partir de uma selecao (ES-DE, Attract-Mode Plus): o
         # jogo volta como selecao, como antes.
         self.run_('select', 'mame', 'sf2')
