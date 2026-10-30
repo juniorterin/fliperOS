@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Gera docs/wiki/Scoreboard-games.md: os jogos e os dados que o display mostra.
 
-Vitorias e personagens saem dos detectores do Fightcade (baixados por
-`fliperos-versus fetch`, nunca guardados no repositorio) lidos pelo proprio
-config/fliperos-versus, cruzados com os sets que cada emulador tem: o
+Vitorias e personagens saem dos detectores do Fightcade (a copia do commit
+fixado fica em third-party/fightcade-detectors; o gabinete os baixa por
+`fliperos-versus fetch`) lidos pelo proprio config/fliperos-versus, cruzados
+com os sets que cada emulador tem: o
 `groovymame -listfull` e o gamelist.txt do core FBNeo (github.com/libretro/FBNeo).
 Os recordes saem do hiscore.dat do MAME (onde esta a tabela de cada jogo)
 cruzado com a lista do hi2txt (`hi2txt.jar -l`, os jogos que ele sabe
 decodificar):
 
-    tools/scoreboard-games.py --detectors PASTA --names listfull.txt \
+    tools/scoreboard-games.py --names listfull.txt \
         --fbneo gamelist.txt --hiscore hiscore.dat --hi2txt hi2txt-list.txt \
         --output docs/wiki/Scoreboard-games.md
+
+(--detectors PASTA troca a pasta dos detectores.)
 """
 import argparse
 import importlib.machinery
@@ -105,7 +108,8 @@ def read_hiscore(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--detectors', required=True)
+    parser.add_argument('--detectors', default=str(ROOT / 'third-party/fightcade-detectors'),
+                        help='a pasta dos .inf (padrao: a copia deste repositorio)')
     parser.add_argument('--names', required=True)
     parser.add_argument('--fbneo', required=True)
     parser.add_argument('--hiscore', required=True)

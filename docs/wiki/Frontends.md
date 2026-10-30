@@ -219,7 +219,7 @@ What was checked on a FliperOS cabinet, with Fightcade's own detectors and no pi
 
 - **Where the score comes from**: the game only draws it on the screen, so it is read from the game's memory. The map is [Fightcade's detectors](https://github.com/fightcadeorg/fightcade-detectors), one file per game saying where a match starts, where each side wins and which character each side chose.
 
-  It is the map Fightcade uses to know who won each online match. Its repository has no license, so the files aren't in the image: Extras > Pixelcade and Extras > ZeDMD download them (a pinned version) into `~/.local/share/fliperos/versus-detectors`. `fliperos-versus fetch` downloads them again.
+  It is the map Fightcade uses to know who won each online match. Its repository has no license, so the files aren't in the image: Extras > Pixelcade and Extras > ZeDMD download them (a pinned version) into `~/.local/share/fliperos/versus-detectors`. `fliperos-versus fetch` downloads them again. The repository keeps a reference copy of the same version in [`third-party/fightcade-detectors`](https://github.com/juniorterin/fliperOS/tree/main/third-party/fightcade-detectors) (not installed by anything).
 - **Which games**: the CPS1 and CPS2 games (Street Fighter II, Alpha 3, Marvel vs. Capcom...), the Neo Geo ones (The King of Fighters, Garou, Samurai Shodown...) the CPS3 ones (Street Fighter III, JoJo, Red Earth) and the ones whose detector uses the CPU's own addresses (Mortal Kombat II and many others; these only in GroovyMAME). A clone uses its parent's detector.
 - **How it is read**: for a game with a detector, the `groovymame` command turns on the `fliperos-versus` plugin.
 

@@ -10629,8 +10629,22 @@ class VersusTests(unittest.TestCase):
         self.assertRegex(source, r"DETECTORS_COMMIT = '[0-9a-f]{40}'")
         self.assertIn("'https://codeload.github.com/fightcadeorg/fightcade-detectors/tar.gz/' + DETECTORS_COMMIT",
                       source)
-        # Sem licenca no repositorio deles: baixados, nunca na imagem nem neste repositorio.
+        # Sem licenca no repositorio deles: o gabinete os baixa, nunca vao na imagem
+        # (nada em config/). Este repositorio guarda so uma copia do mesmo commit, para consulta.
         self.assertFalse(list(ROOT.glob('config/**/*.inf')))
+        copy = ROOT / 'third-party/fightcade-detectors'
+        commit = re.search(r"DETECTORS_COMMIT = '([0-9a-f]{40})'", source).group(1)
+        self.assertGreaterEqual(len(list(copy.glob('*.inf'))), 300)
+        self.assertIn(commit, (copy / 'README.md').read_text())
+        self.assertNotIn('third-party', (ROOT / 'fliperos-rootfs.sh').read_text())
+        # A copia le como os detectores que o gabinete baixa.
+        before = self.versus.DETECTORS
+        self.versus.DETECTORS = str(copy)
+        try:
+            found = self.versus.read_detector('samsho2', 'mame')
+        finally:
+            self.versus.DETECTORS = before
+        self.assertTrue(found and found['chars'] and found['names'][0] == 'Haohmaru')
         self.assertIn('"$versus" fetch >&2', (ROOT / 'config/fliperos-pixelcade').read_text())
         folder = self.detectors(old='x')
         package = self.tmp / 'detectors.tar.gz'

@@ -29,3 +29,5 @@ updates/** text eol=lf
 *.gif binary
 *.ico binary
 config/openbor-legacy/OpenBOR-3.0 binary
+# Os detectores do Fightcade ficam como o autor os escreveu (sem conversao de linhas).
+third-party/fightcade-detectors/** -text
