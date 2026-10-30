@@ -1520,6 +1520,10 @@ def draw_filter(fe, ui, now):
         W.scrollbar(ui, px + pw - 10, y0 - 2, rows * 13, top, rows, len(filters))
 
 
+RIBBON_WIDE = 2.2        # o azulejo com logotipo vai ate 2,2 vezes a altura
+RIBBON_STEP = 112        # entre os centros (o do meio, largo, mais um vao)
+
+
 def draw_ribbon(fe, ui, now):
     band_y, band_h = 70, 104
     W.block(ui, (0, band_y, WW, band_h), T.BG_DEEP, None)
@@ -1537,29 +1541,39 @@ def draw_ribbon(fe, ui, now):
         if abs(d) > 2.6 or (n < 2 and abs(d) > 0.5):
             continue
         tiles.append((abs(d), d, (fe.cat + round(base + k - getattr(fe, "cat_pos", fe.cat))) % n))
+    badges = []
     for dist, d, idx in sorted(tiles, reverse=True):
         c = fe.cats[idx]
         size = round(56 - 16 * dist if dist <= 1 else max(32, 40 - 8 * (dist - 1)))
         on = dist < 0.5
-        cx = round(WW / 2 + d * 66)
-        x, y = cx - size // 2, band_y + 20 + (56 - size) // 2
-        tile_frame(ui, (x, y, size, size), on, now)
-        pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, y, size, size), 2 if on else 1)
+        # Os azulejos com logotipo sao fluidos: a largura acompanha a proporcao
+        # do logotipo (de 1 a RIBBON_WIDE vezes a altura), que ocupa 80% dele.
+        src = logo_source(c["name"])
+        w = size
+        if src is not None:
+            w = round(max(size, min(RIBBON_WIDE * size, 0.45 * size * src.get_width() / src.get_height() / 0.8)))
+        cx = round(WW / 2 + d * RIBBON_STEP)
+        x, y = cx - w // 2, band_y + 20 + (56 - size) // 2
+        tile_frame(ui, (x, y, w, size), on, now)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, y, w, size), 2 if on else 1)
         name = system_icon(c)
         alpha = round(255 - 145 * min(1.0, dist)) if dist > 0.05 else None
-        logo = system_logo(c["name"], size - 8, round(size * 0.34))
+        logo = system_logo(c["name"], round(w * 0.8), round(size * 0.8)) if src is not None else None
         if logo is not None:
-            # O logotipo escrito do sistema em cima e o icone do emulador no
-            # canto de baixo, a direita, um pouco para dentro.
-            parts = [(logo, (x + (size - logo.get_width()) // 2, y + round(size * 0.36) - logo.get_height() // 2))]
+            # O logotipo escrito do sistema no meio, e o icone do emulador em
+            # cima da borda, no canto de baixo a direita, quase vazando.
+            if alpha is not None:
+                logo = logo.copy()
+                logo.set_alpha(alpha)
+            ui.blit(logo, (x + (w - logo.get_width()) // 2, y + (size - logo.get_height()) // 2))
             badge = T.icon(name, 1) if name else None
             if badge is not None:
-                parts.append((badge, (x + size - badge.get_width() - 5, y + size - badge.get_height() - 5)))
-            for img, (bx, by) in parts:
+                # Por cima de todos os azulejos (um vizinho nao o cobre).
                 if alpha is not None:
-                    img = img.copy()
-                    img.set_alpha(alpha)
-                ui.blit(img, (bx, by))
+                    badge = badge.copy()
+                    badge.set_alpha(max(alpha, 200))
+                badges.append((badge, (x + w - round(badge.get_width() * 0.65),
+                                       y + size - round(badge.get_height() * 0.65))))
             continue
         icon = T.icon(name, 2 if size >= 44 else 1) if name else None
         if icon is None:
@@ -1568,11 +1582,16 @@ def draw_ribbon(fe, ui, now):
             icon = icon.copy()
             icon.set_alpha(alpha)
         blit_center(ui, icon, x, y, size, size)
+    for badge, at in badges:
+        ui.blit(badge, at)
+    # O nome do sistema ja esta no logotipo do azulejo; so sem logotipo ele vem escrito.
     c = fe.cats[fe.cat % n]
-    label = fit(c["name"], WW - 20)
-    ui.blit(W.big(label, 1, W.LABEL), ((WW - W.width(label)) // 2, band_y + 80))
-    count = len(fe.rows)
-    tiny.centered(ui, "%d GAMES" % count, T.CYAN, WW // 2, band_y + 93)
+    count_y = band_y + 84
+    if logo_source(c["name"]) is None:
+        label = fit(c["name"], WW - 20)
+        ui.blit(W.big(label, 1, W.LABEL), ((WW - W.width(label)) // 2, band_y + 80))
+        count_y = band_y + 93
+    tiny.centered(ui, "%d GAMES" % len(fe.rows), T.CYAN, WW // 2, count_y)
 
 
 # O logotipo escrito de cada sistema (o do Arcadeflow, config/fliperos-syslogo)
@@ -1610,6 +1629,22 @@ def logo_file(name):
 def system_logo(name, w, h):
     """O logotipo do sistema dentro de w x h, ou None (ainda sendo feito, ou sem
     logotipo)."""
+    got = logo_source(name)
+    if got is None:
+        return None
+    key = (name, w, h)
+    if key not in _fitted:
+        k = min(w / got.get_width(), h / got.get_height())
+        size = (max(1, round(got.get_width() * k)), max(1, round(got.get_height() * k)))
+        _fitted[key] = pygame.transform.smoothscale(got.convert_alpha() if pygame.display.get_surface() else got, size)
+        if len(_fitted) > 400:
+            _fitted.clear()
+    return _fitted[key]
+
+
+def logo_source(name):
+    """O logotipo do sistema no tamanho em que foi feito (para a proporcao), ou
+    None (ainda sendo feito, ou sem logotipo). Na primeira vez, comeca a faze-lo."""
     got = _logos.get(name)
     if got is None and name not in _logos:
         _logos[name] = "..."
@@ -1626,16 +1661,7 @@ def system_logo(name, w, h):
         import threading
         threading.Thread(target=work, daemon=True).start()
         return None
-    if not isinstance(got, pygame.Surface):
-        return None
-    key = (name, w, h)
-    if key not in _fitted:
-        k = min(w / got.get_width(), h / got.get_height())
-        size = (max(1, round(got.get_width() * k)), max(1, round(got.get_height() * k)))
-        _fitted[key] = pygame.transform.smoothscale(got.convert_alpha() if pygame.display.get_surface() else got, size)
-        if len(_fitted) > 400:
-            _fitted.clear()
-    return _fitted[key]
+    return got if isinstance(got, pygame.Surface) else None
 
 
 def system_icon(cat):

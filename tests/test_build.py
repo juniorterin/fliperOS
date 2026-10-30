@@ -4747,8 +4747,11 @@ class FrontendDataTests(unittest.TestCase):
             finally:
                 feview.SYSLOGO, feview.SYSLOGO_CACHE = old
         src = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
-        self.assertIn('system_logo(c["name"], size - 8, round(size * 0.34))', src)
-        self.assertIn('x + size - badge.get_width() - 5, y + size - badge.get_height() - 5', src)
+        # O logotipo ocupa 80% do azulejo fluido, o icone fica na borda do canto
+        # e o nome escrito so aparece sem logotipo.
+        self.assertIn('system_logo(c["name"], round(w * 0.8), round(size * 0.8))', src)
+        self.assertIn('x + w - round(badge.get_width() * 0.65)', src)
+        self.assertIn('if logo_source(c["name"]) is None:', src)
 
     def test_idle_frontend_starts_the_marquee_screensaver_and_a_press_stops_it(self):
         import types
