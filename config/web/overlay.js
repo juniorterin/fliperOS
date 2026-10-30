@@ -101,6 +101,23 @@ function showIdle(s) {
   render.title();
 }
 
+// O nome que nao cabe numa linha roda sem parar, como um letreiro de LED.
+function runTitle(title) {
+  const text = title.dataset.text || "";
+  title.classList.remove("run");
+  title.textContent = text;
+  if (title.hidden || title.scrollWidth <= title.clientWidth + 1) return;
+  // Entra pela direita (a folga de 92vw) e sai pela esquerda; o atraso negativo
+  // comeca com o nome ja no lugar, a partir da esquerda.
+  const textW = title.scrollWidth, room = window.innerWidth * 0.92, time = Math.max(6, text.length * 0.45);
+  const span = document.createElement("span");
+  span.textContent = text;
+  title.replaceChildren(span);
+  title.style.setProperty("--time", time + "s");
+  title.style.setProperty("--delay", (-time * room / (room + textW)).toFixed(2) + "s");
+  title.classList.add("run");
+}
+
 const render = {
   state: {},
   title() {
@@ -108,7 +125,16 @@ const render = {
     const s = render.state, title = $("title");
     const versus = s.event === "versus";
     title.hidden = versus || !$("syslogo").hidden || !$("idle").hidden || !$("art").hidden || !showText || !(s.title || s.system);
-    setText(title, s.title || (s.system || "").toUpperCase());
+    const text = s.title || (s.system || "").toUpperCase();
+    // Mede de novo so quando o nome (ou se ele aparece) muda: a rolagem nao recomeca a cada segundo.
+    const key = text + "|" + title.hidden;
+    if (title.dataset.key !== key) {
+      title.dataset.key = key;
+      title.dataset.text = text;
+      title.textContent = text;
+      title.classList.remove("run");
+      document.fonts.ready.then(() => requestAnimationFrame(() => runTitle(title)));
+    }
     title.classList.toggle("system", s.event === "system");
   },
 };

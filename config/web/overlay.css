@@ -9,7 +9,11 @@ body { font: 800 16px/1.1 system-ui, -apple-system, "Segoe UI", Roboto, sans-ser
 .art { width: 100%; height: 100%; object-fit: contain; }
 .art.pixel { image-rendering: pixelated; }
 .title { padding: 0 4vw; text-align: center; font-size: min(18vh, 9vw); color: #ffb86c;
-  text-shadow: 0 0 2vh rgba(255, 184, 108, .6), 0 .4vh 0 #191a21; overflow-wrap: anywhere; }
+  text-shadow: 0 0 2vh rgba(255, 184, 108, .6), 0 .4vh 0 #191a21; white-space: nowrap; overflow: hidden; max-width: 92vw; }
+/* O nome que nao cabe numa linha roda sem parar (overlay.js runTitle). */
+.title.run { text-align: left; }
+.title.run span { display: inline-block; padding-left: 92vw; animation: run var(--time, 8s) linear var(--delay, 0s) infinite; }
+@keyframes run { to { transform: translateX(-100%); } }
 .title.system { color: #8be9fd; text-shadow: 0 0 2vh rgba(139, 233, 253, .6), 0 .4vh 0 #191a21; }
 /* A troca de sistema do frontend: o logotipo escrito entra deslizando (0,32 s)
    e pisca duas vezes, como no Pixelcade e no ZeDMD. --side: 1 entra pela direita. */

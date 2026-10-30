@@ -6262,6 +6262,16 @@ class WebPanelTests(unittest.TestCase):
         web = ROOT / 'config/web'
         view, obs = (web / 'marqueeview.js').read_text(), (web / 'overlay.js').read_text()
         self.assertIn('if (s.event === "attract") return "/api/marquee/idle";', view)
+        # O nome que nao cabe numa linha roda sem parar (antes ficava cortado):
+        # na previa, no letreiro do desenho do gabinete e na pagina do OBS.
+        # Mede depois de a letra de pixel carregar (antes dela o nome parece caber).
+        self.assertIn('document.fonts.ready.then(() => requestAnimationFrame(() => mqRun(name)));', view)
+        self.assertIn('.mq-led .mq-name b.run span', (web / 'stream.css').read_text())
+        self.assertIn('document.fonts.ready.then(() => requestAnimationFrame(() => cabRun(box)));',
+                      (web / 'cabinet.js').read_text())
+        self.assertIn('.marquee-art.run span', (web / 'cabinet.css').read_text())
+        self.assertIn('document.fonts.ready.then(() => requestAnimationFrame(() => runTitle(title)));', obs)
+        self.assertIn('.title.run span', (web / 'overlay.css').read_text())
         # Sem jogo e sem evento que desenhe (o jogo acabou de fechar), fica o
         # ultimo logotipo de sistema, e nao o nome FLIPEROS.
         self.assertIn('const hold = !open && !!mqLastSys && !["system", "attract", "versus", "menu"].includes(s.event);',
@@ -11477,6 +11487,20 @@ class ZeDMDTests(unittest.TestCase):
         self.run_('text', 'SF2')
         self.assertEqual(scroll.wait(timeout=5), 0)
         self.assertFalse((self.tmp / 'run/fliperos-dmd.pid').exists())
+
+    def test_long_game_name_scrolls_in_big_letters(self):
+        # Um nome que nao cabe numa linha (o de antes ia em duas linhas
+        # pequenas) roda sem parar ate o proximo evento, como um letreiro.
+        scroll = subprocess.Popen([sys.executable, str(self.SCRIPT), 'text', 'Virtua Fighter 4 Evolution Version B'],
+                                  env=self.env)
+        self.addCleanup(scroll.kill)
+        time.sleep(1)
+        self.assertIsNone(scroll.poll())
+        self.assertGreater(len(self.frames(self.received[0])), 3)
+        self.run_('text', 'SF2')
+        self.assertEqual(scroll.wait(timeout=5), 0)
+        # Um nome curto continua parado, num quadro so.
+        self.assertEqual(len(self.run_('text', 'Virtua Fighter 4')), 1)
 
     def test_quiet_without_the_server(self):
         env = dict(self.env, DMD_SERVER='127.0.0.1:1')

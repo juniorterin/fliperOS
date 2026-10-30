@@ -232,16 +232,38 @@ function mqWatch() {
 function mqShow(box, urls, title, sub) {
   const img = box.querySelector("img"), name = box.querySelector(".mq-name");
   name.replaceChildren(el("b", {}, title), sub ? el("small", {}, sub) : "");
-  name.classList.toggle("long", title.length > 18);
   let n = 0;
   const next = () => {
-    if (n >= urls.length) { img.hidden = true; img.removeAttribute("src"); name.hidden = false; box.classList.remove("logo"); return; }
+    if (n >= urls.length) {
+      img.hidden = true; img.removeAttribute("src"); name.hidden = false; box.classList.remove("logo");
+      // Mede com a letra de pixel ja carregada (antes dela o nome parece caber).
+      document.fonts.ready.then(() => requestAnimationFrame(() => mqRun(name)));
+      return;
+    }
     const u = urls[n++];
     img.onload = () => { img.hidden = false; name.hidden = true; box.classList.toggle("logo", u.logo); };
     img.onerror = next;
     img.src = u.url;
   };
   next();
+}
+
+// O nome que nao cabe numa linha roda sem parar, como um letreiro de LED, na
+// mesma letra grande (antes ficava cortado nas duas pontas).
+function mqRun(name) {
+  const b = name.querySelector("b");
+  if (!b || name.hidden) return;
+  const text = b.textContent;
+  b.classList.remove("run");
+  b.replaceChildren(text);
+  if (!name.clientWidth || b.scrollWidth <= name.clientWidth * 0.94) return;
+  // A volta: o nome entra pela direita (a folga de 92cqw) e sai pela esquerda.
+  // O atraso negativo a comeca com o nome ja no lugar, a partir da esquerda.
+  const textW = b.scrollWidth, room = name.clientWidth * 0.92, time = Math.max(6, text.length * 0.45);
+  b.replaceChildren(el("span", {}, text));
+  b.classList.add("run");
+  b.style.setProperty("--time", time + "s");
+  b.style.setProperty("--delay", (-time * room / (room + textW)).toFixed(2) + "s");
 }
 
 let mqKey = "", mqStarted = false;

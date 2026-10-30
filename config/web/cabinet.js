@@ -357,9 +357,33 @@ function marquee(game) {
   }
   box.hidden = !!url;
   const title = game ? game.title || game.name || game.file || game.program : cabFront ? frontName(cabFront.program) : "FliperOS";
-  box.firstChild.textContent = title.replace(/\s*\(.*$/, "").toUpperCase();
+  const text = title.replace(/\s*\(.*$/, "").toUpperCase();
   box.lastChild.textContent = game ? [game.manufacturer, game.year].filter(Boolean).join(" · ").toUpperCase() : "";
-  box.classList.toggle("long", title.length > 18);
+  // Mede de novo so quando o nome (ou se ele aparece) muda: o status chega a
+  // cada poucos segundos e a rolagem nao pode recomecar.
+  const key = text + "|" + box.hidden;
+  if (box.dataset.key !== key) {
+    box.dataset.key = key;
+    box.firstChild.textContent = text;
+    document.fonts.ready.then(() => requestAnimationFrame(() => cabRun(box)));
+  }
+}
+
+// O nome que nao cabe no letreiro roda sem parar, como um letreiro de LED.
+function cabRun(box) {
+  const span = box.firstChild;
+  box.classList.remove("run");
+  if (box.hidden || !box.clientWidth) return;
+  const room = box.getBoundingClientRect(), r = span.getBoundingClientRect();
+  if (r.width <= room.width - 20) return;
+  // Da direita (fora) ate sumir pela esquerda; o atraso negativo comeca com o
+  // nome ja no lugar, a partir da esquerda do letreiro.
+  const from = room.right - r.left, to = room.left - r.right, time = Math.max(6, span.textContent.length * 0.45);
+  span.style.setProperty("--from", from + "px");
+  span.style.setProperty("--to", to + "px");
+  span.style.setProperty("--time", time + "s");
+  span.style.setProperty("--delay", (-time * (room.left + 10 - r.left - from) / (to - from)).toFixed(2) + "s");
+  box.classList.add("run");
 }
 
 // ── Os nomes dos frontends ───────────────────────────────────────

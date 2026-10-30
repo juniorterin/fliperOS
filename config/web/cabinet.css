@@ -29,7 +29,11 @@
   filter: drop-shadow(2px 2px 0 #3a0610) drop-shadow(0 0 8px rgba(255,200,80,.55)); }
 .cab[data-state="attract"] .marquee-art span, .cab[data-state="front"] .marquee-art span {
   background: none; color: #ffe3f5; filter: none; text-shadow: 0 0 4px #fff, 0 0 12px var(--pink), 0 0 26px var(--purple); }
-.marquee-art.long span { font-size: 13px; }
+.marquee-art span { white-space: nowrap; }
+/* O nome que nao cabe roda sem parar (cabinet.js cabRun). */
+.marquee-art.run { overflow: hidden; }
+.marquee-art.run span { animation: cab-run var(--time, 8s) linear var(--delay, 0s) infinite; }
+@keyframes cab-run { from { transform: translateX(var(--from)); } to { transform: translateX(var(--to)); } }
 .marquee-art small { font: 8px var(--px); color: #ffe3a8; letter-spacing: .2em; text-shadow: 0 0 6px #ff9d3a; }
 .sweep { position: absolute; inset: 0; pointer-events: none; transform: translateX(-100%);
   background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.28) 50%, transparent 65%); animation: sweep 7s ease-in-out infinite 1s; }

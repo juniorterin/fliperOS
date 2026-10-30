@@ -190,26 +190,8 @@ def text_frames(text, color):
             img, draw = canvas()
             draw_line(draw, text, f, (H - h) // 2, color)
             return [(img.tobytes(), 1000)]
-    words = text.split()
-    if len(words) > 1:
-        for size in range(14, 8, -1):
-            f = font(size)
-            best = None
-            for i in range(1, len(words)):
-                a, b = ' '.join(words[:i]), ' '.join(words[i:])
-                wa, ha = size_of(a, f)
-                wb, hb = size_of(b, f)
-                if wa <= W - 2 and wb <= W - 2 and ha + hb + 2 <= H:
-                    widest = max(wa, wb)
-                    if best is None or widest < best[0]:
-                        best = (widest, a, b, ha, hb)
-            if best:
-                _, a, b, ha, hb = best
-                img, draw = canvas()
-                top = (H - ha - hb - 2) // 2
-                draw_line(draw, a, f, top, color)
-                draw_line(draw, b, f, top + ha + 2, color)
-                return [(img.tobytes(), 1000)]
+    # Nao cabe numa linha: o nome roda sem parar em letra grande, como um
+    # letreiro de LED (antes ia em duas linhas pequenas, dificeis de ler).
     return scroll_frames(text, color)
 
 

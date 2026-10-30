@@ -210,7 +210,10 @@ details.more .live-actions { margin: 12px 0 8px; }
 .mq-led.logo > img { object-fit: contain; padding: 6% 0; }
 .mq-led .mq-name { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 0 4%; gap: 2%;
   font: 700 8cqw/1.1 var(--px); color: #ffb86c; text-shadow: 0 0 .6cqw #ff8a2a; white-space: nowrap; overflow: hidden; }
-.mq-led .mq-name.long { font-size: 5cqw; }
+/* O nome que nao cabe numa linha roda sem parar (marqueeview.js mqRun). */
+.mq-led .mq-name b.run { display: block; width: 92cqw; overflow: hidden; }
+.mq-led .mq-name b.run span { display: inline-block; padding-left: 92cqw; animation: mq-run var(--time, 8s) linear var(--delay, 0s) infinite; }
+@keyframes mq-run { to { transform: translateX(-100%); } }
 .mq-led .mq-name small { font: 2.6cqw var(--px); color: #8be9fd; letter-spacing: .15em; }
 .mq-led .mq-name[hidden] { display: none; }
 .mq-led .mq-dots { position: absolute; inset: 0; pointer-events: none; --d: calc(100cqw / var(--cols, 128));
