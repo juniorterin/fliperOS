@@ -964,13 +964,13 @@ IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 VIDEO_EXTS = (".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv")
 # Os videos que o navegador toca.
 WEB_VIDEO_EXTS = (".mp4", ".webm", ".mov")
-MEDIA_EXTS = {"snap": IMAGE_EXTS, "box": IMAGE_EXTS, "logo": IMAGE_EXTS, "marquee": IMAGE_EXTS,
+MEDIA_EXTS = {"snap": IMAGE_EXTS, "box": IMAGE_EXTS, "logo": IMAGE_EXTS, "marquee": IMAGE_EXTS, "dmd": IMAGE_EXTS,
               "preview": WEB_VIDEO_EXTS, "texto": (".txt",)}
 MEDIA_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
                ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
                ".txt": "text/plain; charset=utf-8"}
 # A letra de cada tipo no campo "art" dos jogos (/api/games).
-ART_LETTERS = (("snap", "s"), ("box", "b"), ("logo", "l"), ("marquee", "m"), ("preview", "v"), ("texto", "t"))
+ART_LETTERS = (("snap", "s"), ("box", "b"), ("logo", "l"), ("marquee", "m"), ("dmd", "d"), ("preview", "v"), ("texto", "t"))
 
 
 def media_dir(kind, key):

@@ -84,6 +84,7 @@
             <div class="marquee" id="cab-marquee">
               <img id="cab-marquee-img" alt="" hidden>
               <div class="marquee-art" id="cab-marquee-text"><span>FLIPEROS</span><small></small></div>
+              <div class="mq-led" id="cab-mq" hidden></div>
               <i class="sweep"></i>
             </div>
             <div class="rainbow"></div>
@@ -237,6 +238,10 @@
                 <button id="live-play" type="button" class="live-play" hidden><svg class="g"><use href="icons.svg#g-play"/></svg><span data-t="live_start"></span></button>
               </div>
             </div>
+            <div class="mq-live">
+              <small data-t="mq_live"></small>
+              <div class="mq-led" id="mq-live"></div>
+            </div>
           </div>
           <div class="tv-controls">
             <button id="live-start" class="btn hot" type="button"><svg class="g"><use href="icons.svg#g-play"/></svg><span data-t="live_start"></span></button>
@@ -320,6 +325,10 @@
         <section class="obs-panel" data-obs="marquee" aria-labelledby="h-ovl">
           <h2 id="h-ovl" class="obs-title" data-t="overlay"></h2>
           <p class="dim" data-t="overlay_note"></p>
+          <div class="mq-live">
+            <small data-t="mq_live"></small>
+            <div class="mq-led" id="mq-obs"></div>
+          </div>
           <label class="switch big"><input id="ovl-on" type="checkbox"><i></i><span data-t="overlay_on"></span></label>
           <div id="ovl-box" class="obs-flow" hidden>
             <div class="step"><i>1</i><div>
@@ -608,6 +617,16 @@
               <div class="table-wrap"><table id="video-table"></table></div>
             </details>
           </section>
+          <!-- A previa do marquee (marqueeview.js): o modo e o dispositivo. -->
+          <section class="dcard mq-card" aria-labelledby="h-mq">
+            <h2 id="h-mq"><svg class="px"><use href="icons.svg#px-romlist"/></svg><span data-t="mq_title"></span></h2>
+            <p class="dim" data-t="mq_note"></p>
+            <label class="switch big"><input id="mq-on" type="checkbox"><i></i><span data-t="mq_on"></span></label>
+            <label class="mq-pick"><span data-t="mq_device"></span>
+              <select id="mq-device"><option value="pixelcade" data-t="mq_pixelcade"></option><option value="zedmd" data-t="mq_zedmd"></option></select></label>
+            <p id="mq-art" class="dim"></p>
+            <div class="mq-led" id="mq-status" hidden></div>
+          </section>
           <section class="dcard" aria-labelledby="h-cpu">
             <h2 id="h-cpu"><svg class="px"><use href="icons.svg#px-chip"/></svg>CPU</h2>
             <div class="ring-row"><div class="ring" id="cpu-ring"></div><div class="ring-text"><b id="cpu-total" class="big">-</b><span id="load" class="dim"></span></div></div>
@@ -733,6 +752,7 @@
 <script src="tasks.js"></script>
 <script src="stream.js"></script>
 <script src="cabinet.js"></script>
+<script src="marqueeview.js"></script>
 <script src="games.js"></script>
 <script src="library.js"></script>
 <script src="romfilter.js"></script>

@@ -196,3 +196,36 @@ details.more .live-actions { margin: 12px 0 8px; }
 .dcard { animation: enter .5s cubic-bezier(.2, .8, .2, 1) both; }
 .dcard:nth-child(2) { animation-delay: .06s; } .dcard:nth-child(3) { animation-delay: .12s; } .dcard:nth-child(4) { animation-delay: .18s; }
 .dcard:nth-child(5) { animation-delay: .24s; } .dcard:nth-child(n+6) { animation-delay: .3s; }
+
+/* ── A previa do marquee (marqueeview.js): um painel de LED 4:1, a arte ou o
+   nome do jogo, os pontos por cima (mais finos no ZeDMD, que tem o dobro de
+   colunas). Fora do modo previa nada disso aparece. ── */
+.mq-card .mq-pick { display: grid; gap: 6px; margin: 12px 0 4px; color: var(--muted); font-size: 14px; }
+.mq-card .mq-pick select:disabled { opacity: .5; }
+.mq-led { position: relative; width: 100%; aspect-ratio: 4 / 1; overflow: hidden; container-type: inline-size; border-radius: 6px;
+  background: #020204; box-shadow: inset 0 0 0 2px #000, 0 0 0 2px #2a2b36, 0 0 22px rgba(255,150,60,.25); }
+.mq-led[hidden] { display: none; }
+.mq-led > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; filter: saturate(1.25) contrast(1.1); }
+.mq-led > img[hidden] { display: none; }
+.mq-led.logo > img { object-fit: contain; padding: 6% 0; }
+.mq-led .mq-name { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 0 4%; gap: 2%;
+  font: 700 8cqw/1.1 var(--px); color: #ffb86c; text-shadow: 0 0 .6cqw #ff8a2a; white-space: nowrap; overflow: hidden; }
+.mq-led .mq-name.long { font-size: 5cqw; }
+.mq-led .mq-name small { font: 2.6cqw var(--px); color: #8be9fd; letter-spacing: .15em; }
+.mq-led .mq-name[hidden] { display: none; }
+.mq-led .mq-dots { position: absolute; inset: 0; pointer-events: none; --d: calc(100cqw / var(--cols, 128));
+  background: radial-gradient(circle at center, transparent 34%, rgba(0,0,0,.88) 62%) 0 0 / var(--d) var(--d); }
+.mq-led[data-device="zedmd"] .mq-dots { background: radial-gradient(circle at center, transparent 42%, rgba(0,0,0,.8) 78%) 0 0 / var(--d) var(--d); }
+.mq-led .mq-tag { position: absolute; right: 1.5%; bottom: 3%; padding: 0 1.5cqw; border-radius: 3px; background: rgba(0,0,0,.65);
+  font: 2.4cqw var(--px); color: #8be9fd; letter-spacing: .08em; }
+.mq-card .mq-led { margin-top: 12px; }
+.mq-live { display: none; margin-top: 14px; }
+.mq-live small { display: block; margin-bottom: 6px; font: 8px var(--px); color: var(--muted); letter-spacing: .1em; }
+html.mq-on .mq-live { display: block; }
+.obs-panel .mq-live { margin: 8px 0 12px; max-width: 640px; }
+/* No gabinete desenhado o painel toma o lugar da arte do letreiro. */
+.cab .marquee.mq-on > img, .cab .marquee.mq-on > .marquee-art { display: none; }
+.cab .marquee .mq-led { position: absolute; inset: 0; height: 100%; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
+.cab .marquee .mq-led .mq-tag { display: none; }
+/* Na previa do OBS o painel de LED substitui a pagina (que desenharia a arte do ZeDMD). */
+html.mq-on #ovl-preview { display: none; }

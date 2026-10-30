@@ -485,6 +485,7 @@ function renderCabinet(s) {
   }
   $("cab-pwr").classList.toggle("off", !online);
   marquee(online ? cabGame : null);
+  mqPaint(online ? cabGame : null);
   const fps = s && s.fps;
   led($("fps-led"), fps ? fps.fps.toFixed(1).padStart(4, " ") : " --");
   $("fps-led").className = "led " + (!fps ? "" : fps.fps >= 58 ? "good" : fps.fps >= 45 ? "warn" : "bad");

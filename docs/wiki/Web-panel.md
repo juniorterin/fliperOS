@@ -28,7 +28,7 @@ The panel has ten pages, tabs at the top, each with its own address (`#frontend`
 - **Install:** the emulators and the extras, installed or updated;
 - **Files:** files and tasks;
 - **Settings:** colour values are sliders;
-- **Status:** now playing and the screen at the top, then video, CPU, GPU, memory, storage, network, processes and logs;
+- **Status:** now playing and the screen at the top, then video, the marquee preview, CPU, GPU, memory, storage, network, processes and logs;
 - **Terminal.**
 
 The status refreshes every second. What each part shows:
@@ -115,6 +115,7 @@ The browser never keeps the panel: its pages, code, icons and fonts are sent wit
   - The page has a transparent background. It shows the game's art, the same as the ZeDMD uses: `~/media/dmd`, `marquee` or `logo` (Pixelcade's art may only be used on its own hardware). Without art it shows the name.
 
     The opening text (the high scores, or "Now Playing") scrolls once, achievements pop up and the versus score shows each side's name and wins. `&led=1` draws it as LED dots and `&text=0` leaves out the texts. In OBS: width 1280, height 320.
+  - **Marquee preview mode:** in **System > Status**, the *Marquee preview* card has a switch and a list with **Pixelcade** or **ZeDMD**. With it on, the panel draws an LED marquee (128 columns of dots for the Pixelcade, 256 for the ZeDMD) with what that device would show for the game that is open, with no hardware: in the card, under the screen in **Live**, in place of the preview of the page in **Live > OBS > Marquee**, and in the marquee of the cabinet drawing in **Frontend**. The ZeDMD looks for `~/media/dmd`, then `marquee`, then `logo`; the Pixelcade for `marquee`, then `logo`; without art, the game's name. The choice stays in the browser.
   - How it works: `fliperos-pixelcade`, which already gets every event (kms-run, x11-run, GroovyMAME, the Attract-Mode Plus plugin and the ES-DE scripts, installed when the page is turned on), writes the current marquee to `$XDG_RUNTIME_DIR/fliperos-marquee`. The page asks the panel for it every second; the art comes from `fliperos-dmd art`.
   - The OBS pages can't sign in, so their address carries a key, created on first use in `/etc/fliperos/overlay.key` (root only). *New address* makes another key and the old address stops working, the live screen's and the controller's included. The key only opens the marquee state, the current game's picture, the live screen and the controller.
 - <a id="controller-for-obs"></a>**Controller for OBS:** the player's controller on the stream, `/overlay/input?key=…`. Its own page, with the OBS steps and CSS examples: [Controller on the stream](Controller-overlay.md). The stick and the six buttons (1 2 3 on top, 4 5 6 below), Start and Coin light up while they are pressed on the cabinet.
