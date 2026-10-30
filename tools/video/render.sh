@@ -6,6 +6,8 @@
 #   sh tools/video/render.sh library IP          a biblioteca de amostra, do gabinete
 #   sh tools/video/render.sh scenes [CENA]       as cenas do CRT (todas ou uma)
 #   sh tools/video/render.sh web IP              o painel no tablet e o tubo (abre o SF2!)
+#   sh tools/video/render.sh gifs [CENA]         as animacoes do site que nao sao o painel
+#   sh tools/video/render.sh gifs-live IP        as animacoes do painel com o SF2 (abre o SF2!)
 #   sh tools/video/render.sh compose [TRECHO]    o video final (ou so um trecho)
 #   sh tools/video/render.sh all IP              tudo, em ordem
 #
@@ -88,6 +90,41 @@ web() {
   run fliperos-video python3 /t/sync.py
 }
 
+# As animacoes do site (website/public/screenshots/anim) que o frontend de
+# verdade grava sozinho: uma cena por arquivo de tools/video/gifs, no mesmo
+# formato das cenas do video (TIMELINE), e a saida em .shots/video/gifs.
+gifs() {
+  [ -f "$work/demo.tar" ] || { echo "No $work/demo.tar: run 'render.sh library IP' first." >&2; exit 1; }
+  mkdir -p "$work/gifs"
+  for scene in tools/video/gifs/*.py; do
+    name=$(basename "$scene" .py)
+    [ -z "$arg" ] || [ "$arg" = "$name" ] || continue
+    echo "== $name"
+    run fliperos-video bash /t/rig.sh /t/fe_rec.py "/v/gifs/$name.mkv" "/t/gifs/$name.py"
+  done
+}
+
+# O painel web no desktop, com o Street Fighter II rodando e os botoes sendo
+# apertados (controles virtuais, vpad.py): as animacoes do site em
+# .shots/video/gifs/web-*.webp. Mexe no gabinete: abre o SF2 (fecha no fim) e
+# solta os dois Xbox 360 do driver enquanto grava; sempre os religa.
+gifs_live() {
+  need_cabinet
+  sudo_cab() { cab "echo '$pass' | sudo -S -p '' bash /tmp/pads.sh $1"; }
+  run fliperos-video sshpass -p "$pass" scp $opts /t/vpad.py /t/pads.sh "$user@$cabinet:/tmp/"
+  trap 'sudo_cab bind' EXIT
+  sudo_cab unbind
+  rm -rf "$work/webgifs"
+  mkdir -p "$work/webgifs" "$work/gifs"
+  # STOP_AT=marca e SKIP_PLAY=1 (o jogo ja aberto) servem para ensaiar.
+  run --shm-size=2g -e FLIPEROS_USER="$user" -e FLIPEROS_PASSWORD="$pass" -e STOP_AT="${STOP_AT:-}" -e SKIP_PLAY="${SKIP_PLAY:-}" \
+    fliperos-video-web \
+    python3 /t/web_gifs.py "http://$cabinet:8081" /v/webgifs "$cabinet" || echo "the recording failed" >&2
+  sudo_cab bind
+  trap - EXIT
+  run fliperos-video python3 /t/web_gifs_cut.py /v/webgifs /v/gifs
+}
+
 compose() {
   run -e ONLY="$arg" fliperos-video python3 /t/compose.py
   [ -n "$arg" ] || ls -la "$work/out/"fliperos-apresentacao*
@@ -98,6 +135,8 @@ case $step in
   library) library ;;
   scenes) scenes ;;
   web) web ;;
+  gifs) gifs ;;
+  gifs-live) gifs_live ;;
   compose) compose ;;
   all)
     need_cabinet
@@ -110,5 +149,5 @@ case $step in
     arg=""
     compose
     ;;
-  *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

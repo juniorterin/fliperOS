@@ -29,13 +29,15 @@ the interface changes, run it again and convert them all.
 
 `desktop.webp` is the LXDE desktop with the Dracula theme.
 
-`web/` holds the web panel, one capture per language (`-en`, `-pt`).
+`web/` holds the web panel, one capture per language (`-en`, `-pt`): `frontend`, `phone`, `status` and `obs` (the Controller for OBS card), made by `tools/web-shots.py --demo` (the repository's panel with example data) and scaled to 1280 px (780x1688 on the phone).
+
+`anim/web-*.webp` are the web panel on the real cabinet with Street Fighter II running and the buttons being pressed (`sh tools/video/render.sh gifs-live IP`: virtual Xbox 360 pads, 1280x800 desktop, English panel), and `anim/frontend-commercial.webp` is the commercial mode with two coins two seconds apart (`render.sh gifs commercial`).
 
 `multi/` holds the multi-monitor examples: MAME snaps of Darius and Punch-Out!!
 cut into one image per screen (4x nearest-neighbour, lossless WebP).
 
 Captures must be 4:3: the frame shows the whole image without cropping it.
 
-Ids used in a row of a page with no file yet are simply left out (the row becomes a card with the text only). Waiting for a capture: `gui/video-driver`, `gui/unsupported` and `gui/lab` (Setup screens, to add to `tools/gui-shots.sh`), `frontend/commercial` and `frontend/options` (the `--shot` rig of the frontend) and `web/obs-en` / `web/obs-pt` (the Controller for OBS page, by `tools/web-shots.py`). An empty file never counts: `npm run build` fails on one.
+Ids used in a row of a page with no file yet are simply left out (the row becomes a card with the text only). Waiting for a capture: `gui/video-driver`, `gui/unsupported` and `gui/lab` (Setup screens, to add to `tools/gui-shots.sh`) and `frontend/options` (the `--shot` rig of the frontend). An empty file never counts: `npm run build` fails on one.
 
 The pixel-art rooms of the home are not captures: they live in `public/art` and are drawn by `node tools/site-art/iso-arcade.mjs`.

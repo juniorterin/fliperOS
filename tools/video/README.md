@@ -22,6 +22,8 @@ Ou etapa por etapa:
 | `library IP` | Copia do gabinete a biblioteca de amostra do frontend: jogos conhecidos com tela, capa, logo, marquee, vídeo e informação (~750 MB, em `.shots/video/demo.tar`) | sim |
 | `scenes [CENA]` | Grava as cenas do CRT em `.shots/video/clips` (todas, ou só a cena dada) | não |
 | `web IP` | Grava o painel web no tablet e, ao mesmo tempo, a tela do gabinete | sim |
+| `gifs [CENA]` | Grava as animações do site que não são o painel (`tools/video/gifs/`): hoje o modo comercial, com duas fichas | não |
+| `gifs-live IP` | Grava o painel web no desktop com o Street Fighter II rodando e os botões sendo apertados, e corta as animações do site | sim |
 | `compose [TRECHO]` | Monta o vídeo (ou só um trecho, para conferir) | não |
 
 Mudou só um texto? Basta rodar `compose` de novo. Mudou uma cena? Rode `scenes NOME` e depois `compose`.
@@ -54,3 +56,13 @@ Durante a gravação, o painel:
 4. fecha o jogo.
 
 A tela do gabinete é gravada no próprio gabinete, a partir da tela ao vivo do painel (go2rtc), por 190 s. Depois, `sync.py` alinha o tubo com o tablet pela abertura do SF2, que aparece nos dois.
+
+## As animações do painel web para o site
+
+`sh tools/video/render.sh gifs-live IP` grava `web-library`, `web-frontend`, `web-live`, `web-controller` e `web-settings` em `.shots/video/gifs`, prontas para `website/public/screenshots/anim`. Mexe no gabinete como a etapa `web`: abre o SF2 pelo painel, fecha no fim e deixa a saturação como estava.
+
+Quem aperta os botões é o `vpad.py`, que roda no gabinete e cria um Xbox 360 virtual (uinput) por controle do Button mapping, com o mesmo VID/PID e os mesmos eixos de um xpad de verdade. O SDL numera os controles na ordem em que aparecem e o mapa fala em 0 e 1, então o `pads.sh` solta os Xbox 360 de verdade do driver `xpad` enquanto grava, e o `render.sh` os religa no fim, mesmo se a gravação falhar. O `fliperos-buttons watch` (o controle do OBS), a página do gabinete e o MAME enxergam os controles virtuais como os do painel de verdade.
+
+- **`web_gifs.py`** é o roteiro: biblioteca (busca e Jogar), a página do gabinete, Ao vivo, o controle do OBS, os ajustes de cor e o fechamento do jogo. O lutador do SF2 está nele, com golpes longos o bastante para aparecerem a 12 quadros por segundo. `STOP_AT=marca` e `SKIP_PLAY=1` servem para ensaiar sem repetir tudo.
+- **`web_gifs_cut.py`** corta cada par de marcas `nome:start` / `nome:end` em um WebP animado.
+- **`gifs/commercial.py`** é a cena do frontend em modo comercial (`render.sh gifs commercial`, com a biblioteca de amostra e sem o gabinete): INSERT COIN, duas fichas com 2 s entre elas e o relógio.

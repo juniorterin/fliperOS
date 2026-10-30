@@ -114,7 +114,7 @@ export const HOME_HIGHLIGHTS: { id: HighlightId; page: PageSlug; shot: string; e
   { id: 'multi', page: 'video', shot: 'multi/darius-1' },
   { id: 'gun', page: 'controls', shot: 'gui/guncon-target1' },
   { id: 'live', page: 'web-panel', shot: 'web/obs-{lang}', since: '0.13' },
-  { id: 'coin', page: 'frontend', shot: 'frontend/commercial', since: '0.15' },
+  { id: 'coin', page: 'frontend', shot: 'anim/frontend-commercial', since: '0.15' },
 ];
 
 // A faixa de telas da home: poucas, variadas, que rolam para o lado.
@@ -209,7 +209,11 @@ const ROW_ONLY_SHOTS = [
   'gui/video-driver',
   'gui/unsupported',
   'gui/lab',
-  'frontend/commercial',
+  'anim/web-library',
+  'anim/web-frontend',
+  'anim/web-live',
+  'anim/web-controller',
+  'anim/web-settings',
   'frontend/options',
   'web/obs-{lang}',
 ];
