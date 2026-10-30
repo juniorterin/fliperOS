@@ -123,14 +123,14 @@ function mqDrawLogo(box) {
   if (mqFresh) wrap.classList.add("go");
 }
 
-// O ZeDMD parado: o evento attract (o frontend do FliperOS sem apertos por 30 s,
-// ou o protetor de tela do ES-DE e do Attract-Mode Plus). O painel toca a
-// animacao do logo (o GIF 128x32 que o ZeDMD toca), recomecando a cada evento;
-// ela e do ZeDMD, entao so aparece nesse modo.
+// O marquee parado: o evento attract (o frontend do FliperOS sem apertos por
+// 30 s, ou o protetor de tela do ES-DE e do Attract-Mode Plus). O Pixelcade e o
+// ZeDMD tocam a animacao do logo (o GIF 128x32), e a previa tambem, recomecando
+// a cada evento.
 function mqDrawIdle(box) {
   const img = box.querySelector(".mq-idle");
   if (!img) return;
-  const on = mq.device === "zedmd" && mqState.event === "attract";
+  const on = mqState.event === "attract";
   img.hidden = !on;
   box.classList.toggle("ani", on);
   if (!on) { delete box.dataset.idleKey; return; }

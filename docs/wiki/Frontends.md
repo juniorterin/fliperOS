@@ -107,7 +107,7 @@ The events below are the ones of Pixelcade's own EmulationStation scripts ([alin
   In **Attract-Mode Plus**, through FliperOS's *Pixelcade* plugin, which is copied to `~/.attract/plugins` and turned on in `plugins.cfg`. Pegasus has no event hooks, so it only shows the game that was opened.
 
   The service writes these frontend settings at every boot; if the frontend is open at that moment, they wait for the next boot.
-- **Screensaver**: when the screensaver of ES-DE (`screensaver-start` and `screensaver-end` scripts) or Attract-Mode Plus starts, the marquee goes into Pixelcade's attract mode, a playlist you set up on the settings page. When it ends, the marquee shows the selected game or system again.
+- **Screensaver**: when the FliperOS frontend is idle for 30 seconds, or the screensaver of ES-DE (`screensaver-start` and `screensaver-end` scripts) or Attract-Mode Plus starts, the marquee plays the FliperOS logo animation (the same as the ZeDMD's, copied to `~/pixelcade/console/fliperos-idle.gif`). Without it, the marquee goes into Pixelcade's attract mode, a playlist you set up on the settings page. When it ends, the marquee shows the selected game or system again.
 - **Achievements**: with RetroAchievements turned on in RetroArch (`cheevos_enable = "true"`), each unlocked achievement shows on the marquee, and then the game's marquee comes back.
 
   RetroArch has no event for this, so `fliperos-kms-run` opens it with `--verbose` and the helper reads the `[RCHEEVOS] Awarding achievement` lines from `/opt/fliperos/logs/retroarch.log`. In debug mode the log goes to the screen and no achievement is shown.

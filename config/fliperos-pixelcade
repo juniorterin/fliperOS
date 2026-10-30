@@ -64,6 +64,8 @@ HI2TXT_JAR_SHA256="2ae74fd71e4fd0c8fa0cb52c6e9d18dfdb2c3aa0ca387f941138b3ef9f7c4
 HI2TXT_ZIP_SHA256="84c5a0667e224186ebe513d613675c98d0c70ff5323145b9943b34e852aed7df"
 # O logo do FliperOS que o marquee mostra ao ligar (fliperos-rootfs.sh).
 logo=${PIXELCADE_LOGO:-/usr/local/share/fliperos/pixelcade/fliperos.png}
+# A animacao do logo, no protetor de tela (o frontend parado) do Pixelcade e do ZeDMD.
+idle_gif=${PIXELCADE_IDLE:-/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif}
 # Onde os emuladores gravam os recordes (.hi): o GroovyMAME (plugin hiscore)
 # e os cores de arcade do RetroArch.
 hi_dirs=${HISCORE_DIRS:-/home/fliperos/.mame/hiscore:/opt/fliperos/saves/retroarch}
@@ -875,6 +877,10 @@ achievement() {
 # screensaver start|stop: o protetor de tela do frontend. No Pixelcade, o
 # modo attract dele (a lista se monta em http://<ip>:8080); no ZeDMD, as
 # artes de ~/media. Ao sair volta o que estava selecionado.
+#
+# Hoje os dois tocam a animacao do logo ($idle_gif): o ZeDMD pelo
+# fliperos-dmd attract, o Pixelcade pela pasta console (como o logotipo do
+# sistema). Sem a animacao, o Pixelcade volta ao modo attract dele.
 screensaver() {
   local last
   last=$(cat "$last_file" 2> /dev/null)
@@ -884,7 +890,12 @@ screensaver() {
       printf 'screensaver:%s\n' "$last" > "$last_file" 2> /dev/null
       zedmd attract
       overlay attract
-      call "attract?nointerrupt"
+      if installed && [[ -f $idle_gif && -d $dir/console ]] &&
+        cp -f "$idle_gif" "$dir/console/fliperos-idle.gif" 2> /dev/null; then
+        call "console/stream/fliperos-idle"
+      else
+        call "attract?nointerrupt"
+      fi
       ;;
     stop)
       [[ $last == screensaver:* ]] || return 0

@@ -6238,11 +6238,12 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual((status, data), (200, gif))
         self.assertEqual(self.request('GET', '/api/overlay/idle?key=wrong')[0], 403)
         self.assertEqual(self.request('GET', '/api/overlay/idle')[0], 403)
-        # As duas paginas desenham o evento attract com ele (a previa, so no modo ZeDMD).
+        # As duas paginas desenham o evento attract com ele (a previa, no modo
+        # Pixelcade e no ZeDMD: os dois tocam a animacao).
         web = ROOT / 'config/web'
         view, obs = (web / 'marqueeview.js').read_text(), (web / 'overlay.js').read_text()
         self.assertIn('/api/marquee/idle?t=', view)
-        self.assertIn('mq.device === "zedmd" && mqState.event === "attract"', view)
+        self.assertIn('const on = mqState.event === "attract";', view)
         self.assertIn('/api/overlay/idle?key=', obs)
         self.assertIn('s.event === "attract"', obs)
         self.assertIn('id="idle"', (web / 'overlay.html').read_text())
@@ -9971,6 +9972,18 @@ class PixelcadeTests(unittest.TestCase):
         self.assertEqual(self.run_('screensaver', 'start'), ['attract?nointerrupt event=attract'])
         self.assertEqual(self.run_('screensaver', 'stop'),
                          ['attract/stop event=select', 'arcade/stream/mame/sf2?event=FEScroll event=select'])
+
+    def test_screensaver_plays_the_logo_animation_on_the_pixelcade(self):
+        # Com a animacao do logo e a pasta console do pixelweb, o protetor de
+        # tela a toca no Pixelcade (como o logotipo do sistema); a volta e igual.
+        self.install()
+        (self.tmp / 'pixelcade/console').mkdir()
+        self.env['PIXELCADE_IDLE'] = str(ROOT / 'config/zedmd-fliperos.gif')
+        self.run_('system', 'dreamcast')
+        self.assertEqual(self.run_('screensaver', 'start'), ['console/stream/fliperos-idle'])
+        self.assertEqual((self.tmp / 'pixelcade/console/fliperos-idle.gif').read_bytes(),
+                         (ROOT / 'config/zedmd-fliperos.gif').read_bytes())
+        self.assertEqual(self.run_('screensaver', 'stop'), ['attract/stop', 'console/stream/dreamcast'])
 
     def test_screensaver_is_the_attract_mode(self):
         self.install()
