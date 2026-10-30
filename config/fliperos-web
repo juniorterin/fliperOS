@@ -85,8 +85,9 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/stream/offer {"fps": 15|30|60, "sdp"}: a resposta SDP do go2rtc
     POST /api/stream/install  instala o go2rtc e o ffmpeg (tarefa)
     GET  /api/overlay     o endereco do marquee para o OBS; POST {"action": "newkey"}
-    GET  /overlay/marquee?key=  a pagina do OBS; /api/overlay/state e /art (sem
-                      login, pela chave)
+    GET  /overlay/marquee?key=  a pagina do OBS; /api/overlay/state, /art e
+                      /logo?name= (sem login, pela chave); com login,
+                      /api/marquee/logo?name= (o logotipo do sistema, PNG)
     GET  /overlay/live?key=&fps=  a tela ao vivo para o OBS; POST
                       /api/overlay/offer?key= {"fps", "sdp"} (sem login, pela chave)
     GET  /overlay/input?key=&players=1,2  o controle para o OBS; pela chave:
@@ -126,6 +127,7 @@ import signal
 import socket
 import struct
 import subprocess
+import tempfile
 import termios
 import threading
 import time
@@ -1850,6 +1852,7 @@ def stream_answer(fps, offer):
 # Browser Source do OBS, sem login: vale a chave do endereco (/etc/fliperos).
 OVERLAY_KEY = ENV("FLIPEROS_OVERLAY_KEY", "/etc/fliperos/overlay.key")
 DMD = ENV("FLIPEROS_DMD", BIN + "/fliperos-dmd")
+SYSLOGO = ENV("FLIPEROS_SYSLOGO", BIN + "/fliperos-syslogo")
 ART_TYPES = {".png": "image/png", ".gif": "image/gif", ".webp": "image/webp", ".jpg": "image/jpeg",
              ".jpeg": "image/jpeg"}
 
@@ -1953,6 +1956,46 @@ class ArtCache:
             while len(self.items) > 200:
                 self.items.popitem(last=False)
         return path
+
+
+class LogoCache:
+    """O logotipo escrito de um sistema (o do menu de telas do Arcadeflow, um
+    caractere da fonte do tema) como PNG na cor do marquee do sistema, pelo
+    fliperos-syslogo, para a previa do painel e o marquee do OBS desenharem a
+    troca de sistema do frontend. Sem o tema, ou sem o sistema nele, None."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.items = collections.OrderedDict()
+
+    def get(self, name):
+        if not re.fullmatch(r"[^\x00-\x1f\x7f]{1,80}", name or ""):
+            return None
+        with self.lock:
+            if name in self.items:
+                return self.items[name]
+        fd, path = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        data = None
+        try:
+            env = dict(os.environ, ATTRACT_DIR=attract_dir())
+            rc = subprocess.run([SYSLOGO, "png", name, path, "96", "8BE9FD"], capture_output=True, timeout=20,
+                                env=env).returncode
+            if rc == 0:
+                with open(path, "rb") as f:
+                    data = f.read(1 << 20)
+        except (OSError, subprocess.SubprocessError):
+            data = None
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        with self.lock:
+            self.items[name] = data
+            while len(self.items) > 100:
+                self.items.popitem(last=False)
+        return data
 
 
 class HiCache:
@@ -2484,6 +2527,7 @@ class Panel:
         self.romcount, self.romscan = RomCount(), RomCount()
         self.stream = Cached(5, stream_status)
         self.art = ArtCache()
+        self.logos = LogoCache()
         self.hi = HiCache()
         self.input = InputWatch()
         self.mouse = VirtualMouse()
@@ -2712,7 +2756,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.lab_login(parse_qs(url.query))
         if not url.path.startswith("/api/"):
             return self.send(404, {"error": "not found"})
-        if url.path in ("/api/overlay/state", "/api/overlay/art"):
+        if url.path in ("/api/overlay/state", "/api/overlay/art", "/api/overlay/logo"):
             return self.overlay_data(url)
         if url.path in ("/api/overlay/input/events", "/api/overlay/input/css"):
             if not overlay_allowed(parse_qs(url.query)):
@@ -2891,6 +2935,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, self.panel.stream.get())
         if url.path == "/api/overlay":
             return self.send(200, overlay_paths(overlay_key()))
+        if url.path == "/api/marquee/logo":
+            return self.system_logo((parse_qs(url.query).get("name") or [""])[0])
         if url.path == "/api/marquee/state":
             # O estado do marquee para a previa do painel (Status), pelo login.
             on = overlay_enabled()
@@ -3409,12 +3455,20 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             watch.leave()
 
+    def system_logo(self, name):
+        data = self.panel.logos.get(name)
+        if not data:
+            return self.send(404, {"error": "no logo for this system"})
+        return self.send(200, data, "image/png")
+
     def overlay_data(self, url):
         """O marquee para o OBS, pela chave do endereco: o estado (state) e
         a imagem do jogo que esta nele (art; so ela, pelo id)."""
         query = parse_qs(url.query)
         if not overlay_allowed(query):
             return self.send(403, {"error": "wrong or missing key"})
+        if url.path == "/api/overlay/logo":
+            return self.system_logo((query.get("name") or [""])[0])
         state = marquee_state() if overlay_enabled() else {}
         path = None
         if state.get("system") or state.get("rom"):

@@ -11,6 +11,16 @@ body { font: 800 16px/1.1 system-ui, -apple-system, "Segoe UI", Roboto, sans-ser
 .title { padding: 0 4vw; text-align: center; font-size: min(18vh, 9vw); color: #ffb86c;
   text-shadow: 0 0 2vh rgba(255, 184, 108, .6), 0 .4vh 0 #191a21; overflow-wrap: anywhere; }
 .title.system { color: #8be9fd; text-shadow: 0 0 2vh rgba(139, 233, 253, .6), 0 .4vh 0 #191a21; }
+/* A troca de sistema do frontend: o logotipo escrito entra deslizando (0,32 s)
+   e pisca duas vezes, como no Pixelcade e no ZeDMD. --side: 1 entra pela direita. */
+.syslogo { position: absolute; inset: 0; overflow: hidden; }
+.syslogo img { position: absolute; left: 8vw; top: 12vh; width: 84vw; height: 76vh; object-fit: contain; }
+.syslogo img[hidden] { display: none; }
+.syslogo.go img.new { animation: slide-in .32s cubic-bezier(.215, .61, .355, 1) both, blink 1.12s steps(1) both; }
+.syslogo.go img.old { animation: slide-out .32s cubic-bezier(.215, .61, .355, 1) both; }
+@keyframes slide-in { from { transform: translateX(calc(var(--side, 1) * 100vw)); } to { transform: none; } }
+@keyframes slide-out { from { transform: none; } to { transform: translateX(calc(var(--side, 1) * -100vw)); } }
+@keyframes blink { 0% { opacity: 1; } 46.4% { opacity: 0; } 57.1% { opacity: 1; } 73.2% { opacity: 0; } 83.9% { opacity: 1; } }
 .led .stage { -webkit-mask-image: radial-gradient(circle, #000 52%, transparent 60%);
   mask-image: radial-gradient(circle, #000 52%, transparent 60%);
   -webkit-mask-size: calc(100vw / 128) calc(100vh / 32); mask-size: calc(100vw / 128) calc(100vh / 32); }

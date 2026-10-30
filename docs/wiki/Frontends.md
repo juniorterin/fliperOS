@@ -120,6 +120,8 @@ The events below are the ones of Pixelcade's own EmulationStation scripts ([alin
   The logos are the ones of the Arcadeflow's displays menu: each is a character of the theme's font, drawn when needed by `fliperos-syslogo` from `~/.attract/layouts/Arcadeflow` (the Setup downloads the theme; Arcadeflow has no license, so none of it is in the image). Without the theme, or for a system that isn't in it, the marquee shows the system's art as before.
 
   The ZeDMD gets the frames straight from `fliperos-dmd slide`. The Pixelcade only shows files, so the logo goes in a GIF in `~/pixelcade/console` (`fliperos-logo-*`, replaced at each switch). `fliperos-syslogo export DIR` writes every logo as a PNG.
+
+  The marquee preview of the [web panel](Web-panel.md) and the marquee page for OBS draw the same logo with the same slide and blinks (the panel serves it as a PNG, `/api/marquee/logo?name=`), as long as **marquee_overlay** is on; the preview turns it on by itself.
 - **Systems**: the arcade folders (`mame`, `naomi`, `naomi2`, `atomiswave`, `model2`, `model3`, and the MAME and FBNeo cores) use Pixelcade's `mame` artwork. The RetroArch cores go by their system (`snes`, `genesis`, `psx`...). Other folders go by their name.
 
 ### DOFLinx (effects during the game)

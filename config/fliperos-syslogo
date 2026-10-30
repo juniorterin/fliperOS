@@ -22,7 +22,7 @@
 # em feview.SLIDE) e pisca duas vezes. Fica o ultimo quadro aceso.
 #
 #   fliperos-syslogo find NOME                     U+XXXX do sistema (status 1 sem logotipo)
-#   fliperos-syslogo png NOME ARQUIVO [ALTURA]     o logotipo, branco em fundo transparente
+#   fliperos-syslogo png NOME ARQUIVO [ALTURA [RRGGBB]]   o logotipo, branco (ou da cor) em fundo transparente
 #   fliperos-syslogo export PASTA [ALTURA]         o de todos os sistemas, um PNG por nome
 #   fliperos-syslogo gif NOME ARQUIVO [ANTERIOR [PASSO [LARGURAxALTURA]]]
 #                                                  a animacao num GIF (o Pixelcade so mostra arquivos)
@@ -182,8 +182,11 @@ def main(argv):
             return 1
         print('U+%X' % cp)
         return 0
-    if cmd == 'png' and len(args) in (2, 3):
-        img = render(args[0], int(args[2]) if len(args) == 3 else None)
+    if cmd == 'png' and 2 <= len(args) <= 4:
+        color = (255, 255, 255)
+        if len(args) == 4 and re.fullmatch(r'[0-9A-Fa-f]{6}', args[3]):
+            color = tuple(int(args[3][i:i + 2], 16) for i in (0, 2, 4))
+        img = render(args[0], int(args[2]) if len(args) > 2 and args[2].isdigit() else None, color)
         if img is None:
             return 1
         img.save(args[1])
@@ -224,7 +227,7 @@ def main(argv):
             return 1
         write_gif(args[1], anim)
         return 0
-    sys.stderr.write('usage: fliperos-syslogo find NAME | png NAME FILE [HEIGHT] | export DIR [HEIGHT]\n'
+    sys.stderr.write('usage: fliperos-syslogo find NAME | png NAME FILE [HEIGHT [RRGGBB]] | export DIR [HEIGHT]\n'
                      '       fliperos-syslogo gif NAME FILE [PREVIOUS [STEP [WIDTHxHEIGHT]]]\n')
     return 2
 

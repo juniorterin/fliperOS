@@ -65,6 +65,7 @@ function mqBuild(box) {
       el("span", { class: "mq-side" }, el("b"), el("small"))),
     el("div", { class: "mq-ticker", hidden: "" }, el("span")), el("div", { class: "mq-pop", hidden: "" }),
     el("span", { class: "mq-hi", hidden: "" }),
+    el("div", { class: "mq-syslogo", hidden: "" }, el("img", { class: "old", alt: "", hidden: "" }), el("img", { class: "new", alt: "" })),
     el("i", { class: "mq-dots" }), el("small", { class: "mq-tag" }));
 }
 
@@ -93,7 +94,36 @@ function mqDrawHiList() {
     "#" + (r.rank || i + 1) + " " + mqScore(r.score) + (r.name ? " " + r.name : "")).join("  ·  ") : "";
 }
 
+// A troca de sistema no frontend do FliperOS: o logotipo escrito do sistema
+// (o do Arcadeflow, desenhado no gabinete pelo fliperos-syslogo) entra
+// deslizando pelo lado para onde a lista andou, com o de antes saindo, e
+// pisca duas vezes (stream.css, o mesmo tempo do Pixelcade e do ZeDMD). Fica
+// ate o proximo evento. fresh: o evento acabou de chegar (ao abrir a pagina o
+// logotipo so aparece parado).
+let mqFresh = false;
+function mqDrawLogo(box) {
+  const wrap = box.querySelector(".mq-syslogo"), s = mqState;
+  if (!wrap) return;
+  const on = s.event === "system" && !!s.logo;
+  wrap.hidden = !on;
+  box.classList.toggle("sys", on);
+  if (!on) { delete box.dataset.logoKey; return; }
+  const k = s.logo + "|" + s.time;
+  if (box.dataset.logoKey === k) return;
+  box.dataset.logoKey = k;
+  const [gone, now] = wrap.querySelectorAll("img");
+  const url = (n) => "/api/marquee/logo?name=" + encodeURIComponent(n);
+  now.src = url(s.logo);
+  gone.hidden = !(mqFresh && s.old);
+  if (!gone.hidden) gone.src = url(s.old);
+  wrap.style.setProperty("--side", s.step === "-1" ? "-1" : "1");
+  wrap.classList.remove("go");
+  void wrap.offsetWidth;
+  if (mqFresh) wrap.classList.add("go");
+}
+
 function mqDrawState(box) {
+  mqDrawLogo(box);
   mqDrawHi(box);
   const s = mqState.event === "versus" || !mqLive ? mqState : Object.assign({ left: "P1", right: "P2" }, mqLive);
   const versus = (mqState.event === "versus" || !!mqLive) && mq.show === "score";
@@ -151,6 +181,7 @@ async function mqPoll() {
     mqLive = data.live && data.live.rom ? data.live : null;
     mqHi = Array.isArray(data.hi) ? data.hi : [];
     mqDrawHiList();
+    mqFresh = !first && mqState.time !== mqLastTime;
     mqEvents(mqState, first);
     document.querySelectorAll(".mq-led").forEach((box) => { if (!box.hidden && box.firstChild) mqDrawState(box); });
   } catch (e) { /* o gabinete desligado: fica o que estava */ }

@@ -945,7 +945,9 @@ logo() {
   if zedmd_installed && [[ -x $dmd ]]; then
     setsid "$dmd" slide "$name" "$old" "$step" < /dev/null > /dev/null 2>&1 &
   fi
-  overlay system "$name" "" "$name"
+  # O marquee do OBS e a previa do painel web desenham o mesmo logotipo e a
+  # mesma animacao (logo= o sistema, old= o de antes, step= o sentido).
+  overlay system "$name" "" "$name" "" "logo=$name" "old=$old" "step=$step"
 }
 
 # launch PROGRAMA [ARGS...]: a linha de comando que o fliperos-kms-run ou o

@@ -218,6 +218,19 @@ details.more .live-actions { margin: 12px 0 8px; }
 .mq-led[data-device="zedmd"] .mq-dots { background: radial-gradient(circle at center, transparent 42%, rgba(0,0,0,.8) 78%) 0 0 / var(--d) var(--d); }
 .mq-led .mq-tag { position: absolute; right: 1.5%; bottom: 3%; padding: 0 1.5cqw; border-radius: 3px; background: rgba(0,0,0,.65);
   font: 2.4cqw var(--px); color: #8be9fd; letter-spacing: .08em; }
+/* A troca de sistema do frontend: o logotipo escrito entra deslizando (0,32 s,
+   a curva da tela do frontend) e pisca duas vezes depois de uma pausa, como no
+   Pixelcade e no ZeDMD (config/fliperos-syslogo). --side: 1 entra pela direita. */
+.mq-led.sys > img, .mq-led.sys > .mq-name { display: none; }
+.mq-led .mq-syslogo { position: absolute; inset: 0; overflow: hidden; }
+.mq-led .mq-syslogo[hidden] { display: none; }
+.mq-led .mq-syslogo img { position: absolute; left: 8%; top: 12%; width: 84%; height: 76%; object-fit: contain; }
+.mq-led .mq-syslogo img[hidden] { display: none; }
+.mq-led .mq-syslogo.go img.new { animation: mq-in .32s cubic-bezier(.215, .61, .355, 1) both, mq-blink 1.12s steps(1) both; }
+.mq-led .mq-syslogo.go img.old { animation: mq-out .32s cubic-bezier(.215, .61, .355, 1) both; }
+@keyframes mq-in { from { transform: translateX(calc(var(--side, 1) * 100cqw)); } to { transform: none; } }
+@keyframes mq-out { from { transform: none; } to { transform: translateX(calc(var(--side, 1) * -100cqw)); } }
+@keyframes mq-blink { 0% { opacity: 1; } 46.4% { opacity: 0; } 57.1% { opacity: 1; } 73.2% { opacity: 0; } 83.9% { opacity: 1; } }
 /* O placar: o versus no lugar da arte, o texto rolando uma vez e a conquista. */
 .mq-led.vs > img, .mq-led.vs > .mq-name { display: none; }
 .mq-led .mq-versus { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 3cqw; padding: 0 3cqw; }

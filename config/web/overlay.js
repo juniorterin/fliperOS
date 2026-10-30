@@ -55,13 +55,37 @@ function showArt(url) {
   next.src = url;
 }
 
+// A troca de sistema do frontend do FliperOS: o logotipo escrito do sistema
+// (o do Arcadeflow, desenhado no gabinete pelo fliperos-syslogo) entra
+// deslizando pelo lado para onde a lista andou, com o de antes saindo, e pisca
+// duas vezes; fica ate o proximo evento. fresh: o evento acabou de chegar (ao
+// abrir a pagina, o logotipo aparece parado).
+let logoKey = "";
+function showLogo(s, fresh) {
+  const wrap = $("syslogo"), on = !!s;
+  wrap.hidden = !on;
+  if (!on) { logoKey = ""; return; }
+  const k = s.logo + "|" + s.time;
+  if (k === logoKey) return;
+  logoKey = k;
+  const [gone, now] = wrap.querySelectorAll("img");
+  const url = (n) => "/api/overlay/logo?key=" + encodeURIComponent(key) + "&name=" + encodeURIComponent(n);
+  now.src = url(s.logo);
+  gone.hidden = !(fresh && s.old);
+  if (!gone.hidden) gone.src = url(s.old);
+  wrap.style.setProperty("--side", s.step === "-1" ? "-1" : "1");
+  wrap.classList.remove("go");
+  void wrap.offsetWidth;
+  if (fresh) wrap.classList.add("go");
+}
+
 const render = {
   state: {},
   title() {
     // O nome do jogo (ou do sistema) so quando nao ha arte.
     const s = render.state, title = $("title");
     const versus = s.event === "versus";
-    title.hidden = versus || !$("art").hidden || !showText || !(s.title || s.system);
+    title.hidden = versus || !$("syslogo").hidden || !$("art").hidden || !showText || !(s.title || s.system);
     setText(title, s.title || (s.system || "").toUpperCase());
     title.classList.toggle("system", s.event === "system");
   },
@@ -80,7 +104,9 @@ function apply(data) {
     setText($("vs-score-left"), s.score_left && s.score_left !== "-" ? s.score_left : "");
     setText($("vs-score-right"), s.score_right && s.score_right !== "-" ? s.score_right : "");
   }
-  showArt(versus || !data.enabled ? null : data.art || null);
+  const system = data.enabled && s.event === "system" && !!s.logo;
+  showLogo(system ? s : null, lastTime !== null && s.time !== lastTime);
+  showArt(versus || system || !data.enabled ? null : data.art || null);
   render.title();
   if (s.time !== lastTime) {
     const first = lastTime === null;

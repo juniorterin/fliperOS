@@ -5542,6 +5542,11 @@ class WebPanelTests(unittest.TestCase):
         dmd = tmp / 'fake-dmd'
         dmd.write_text('#!/bin/sh\n[ "$1 $2 $3" = "art mame sf2" ] && echo %s && exit 0\nexit 1\n' % cls.art)
         dmd.chmod(0o755)
+        # O fliperos-syslogo falso: "png Naomi ARQUIVO 96 8BE9FD" escreve o PNG do
+        # logotipo; os outros sistemas nao tem.
+        syslogo = tmp / 'fake-syslogo'
+        syslogo.write_text('#!/bin/sh\n[ "$1 $2 $4 $5" = "png Naomi 96 8BE9FD" ] && printf "\\211PNG logo" > "$3" && exit 0\nexit 1\n')
+        syslogo.chmod(0o755)
         # O fliperos-buttons watch falso: o jogador 1 aperta cima e o botao 1.
         buttons = tmp / 'fake-buttons'
         buttons.write_text('#!/bin/sh\necho "$*" > %s/buttons.log\necho \'{"1": ["up", "b1"], "2": []}\'\n'
@@ -5572,7 +5577,8 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_ROMSET_PLACES=str(tmp / 'mnt'), FLIPEROS_STREAM=str(stream),
                    FLIPEROS_STREAM_API='http://127.0.0.1:%d' % cls.adb.server_address[1],
                    FLIPEROS_LAB=str(lab), FLIPEROS_LAB_RUN=str(tmp / 'lab'),
-                   FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'),
+                   FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_SYSLOGO=str(syslogo),
+                   FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'),
                    FLIPEROS_EMULATORS=str(emulators), FLIPEROS_PIXELCADE=str(pixelcade),
                    FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'),
                    FLIPEROS_WEB_GUI=str(ROOT / 'fliperos-setup/gui'))
@@ -6108,6 +6114,24 @@ class WebPanelTests(unittest.TestCase):
         self.assertNotEqual(new, info['path'])
         self.assertEqual(self.request('GET', '/api/overlay/state?key=' + key)[0], 403)
         self.assertEqual(self.request('GET', '/api/overlay/state?key=' + new.split('key=')[1])[0], 200)
+
+    def test_system_logo_for_the_preview_and_the_obs_page(self):
+        # A troca de sistema do frontend: o painel (com login) e a pagina do OBS
+        # (pela chave) pedem o logotipo do sistema, em PNG; sem logotipo, 404.
+        cookie = self.login()
+        key = json.loads(self.request('GET', '/api/overlay', cookie=cookie)[2])['path'].split('key=')[1]
+        status, _, data = self.request('GET', '/api/marquee/logo?name=Naomi', cookie=cookie)
+        self.assertEqual((status, data, self.last_headers['Content-Type']), (200, b'\x89PNG logo', 'image/png'))
+        self.assertEqual(self.request('GET', '/api/marquee/logo?name=Naomi')[0], 401)
+        self.assertEqual(self.request('GET', '/api/marquee/logo?name=Nada', cookie=cookie)[0], 404)
+        self.assertEqual(self.request('GET', '/api/marquee/logo', cookie=cookie)[0], 404)
+        status, _, data = self.request('GET', '/api/overlay/logo?key=%s&name=Naomi' % key)
+        self.assertEqual((status, data), (200, b'\x89PNG logo'))
+        self.assertEqual(self.request('GET', '/api/overlay/logo?key=wrong&name=Naomi')[0], 403)
+        self.assertEqual(self.request('GET', '/api/overlay/logo?key=%s&name=Nada' % key)[0], 404)
+        # As duas paginas sabem desenha-lo.
+        for name, url in (('overlay.js', '/api/overlay/logo?key='), ('marqueeview.js', '/api/marquee/logo?name=')):
+            self.assertIn(url, (ROOT / 'config/web' / name).read_text(), name)
 
     def test_obs_controls_page_and_its_css(self):
         import http.client
@@ -9622,6 +9646,15 @@ class PixelcadeTests(unittest.TestCase):
         self.run_('logo', 'Atomiswave', 'Naomi 2', '1')
         self.assertFalse((self.tmp / 'pixelcade/console/fliperos-logo-1.gif').exists())
         self.assertEqual(self.dmd_calls(2)[1], 'slide Atomiswave Naomi 2 1')
+        # O marquee do OBS e a previa do painel web recebem o mesmo evento, com o
+        # logotipo, o de antes e o sentido.
+        conf = self.tmp / 'fliperos.conf'
+        conf.write_text('marquee_overlay=on\n')
+        self.env['FLIPEROS_CONF'] = str(conf)
+        self.run_('logo', 'Naomi 2', 'Naomi', '-1')
+        lines = (self.tmp / 'run/fliperos-marquee').read_text().splitlines()
+        self.assertEqual(lines[:2], ['event=system', 'system=Naomi 2'])
+        self.assertEqual(lines[5:8], ['logo=Naomi 2', 'old=Naomi', 'step=-1'])
         # Sem o logotipo no tema: a arte do sistema, como antes.
         self.dmd_log.unlink()
         self.assertEqual(self.run_('logo', 'Nada', 'Naomi', '1'), ['console/stream/Nada'])
