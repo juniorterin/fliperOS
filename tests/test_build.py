@@ -4717,6 +4717,9 @@ class FrontendDataTests(unittest.TestCase):
         src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
         run = src.split('    def run(self, keys=()):')[1].split('        while True:')[0]
         self.assertIn('self.marquee_logo((self.category() or {}).get("name", ""), "", 1)', run)
+        # E de novo quando o jogo fecha (a volta do launch).
+        back = src.split('if r == "launch":')[1].split('self.tick(now)')[0]
+        self.assertIn('self.marquee_logo((self.category() or {}).get("name", ""), "", 1)', back)
 
     def test_ribbon_tiles_get_the_system_logo_once(self):
         # Os azulejos da tira de romlists: o logotipo escrito do sistema
@@ -10008,6 +10011,13 @@ class PixelcadeTests(unittest.TestCase):
         self.assertEqual((self.tmp / 'pixelcade/console/fliperos-idle.gif').read_bytes(),
                          (ROOT / 'config/zedmd-fliperos.gif').read_bytes())
         self.assertEqual(self.run_('screensaver', 'stop'), ['attract/stop', 'console/stream/dreamcast'])
+        # Saiu do frontend (home): a mesma animacao, sem ficar no protetor de
+        # tela (o proximo "start" nao e engolido).
+        self.assertEqual(self.run_('home'), ['console/stream/fliperos-idle'])
+        self.assertFalse((self.tmp / 'run/fliperos-pixelcade.last').exists())
+        self.assertEqual(self.run_('screensaver', 'start'), ['console/stream/fliperos-idle'])
+        src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('[PIXELCADE_TOOL, "bg", "home"]', src.split('if r == "quit":')[1].split('return 0')[0])
 
     def test_screensaver_is_the_attract_mode(self):
         self.install()

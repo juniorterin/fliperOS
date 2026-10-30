@@ -1198,10 +1198,23 @@ class Frontend:
                 r = self.act(a)
                 if r == "quit":
                     self.remember()
+                    # Fora do frontend (o menu): o marquee sai do sistema e toca
+                    # a animacao do logo.
+                    if not self.shot:
+                        try:
+                            subprocess.Popen([PIXELCADE_TOOL, "bg", "home"], stdin=subprocess.DEVNULL,
+                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                             start_new_session=True)
+                        except OSError:
+                            pass
                     return 0
                 if r == "launch":
                     self.launch()
                     self.last_input = time.monotonic()
+                    # O jogo fechou: o marquee volta ao logotipo do sistema (o
+                    # "end" do vigia do jogo nem sempre chega, e um atrasado
+                    # acha o estado ja trocado e nao mexe nele).
+                    self.marquee_logo((self.category() or {}).get("name", ""), "", 1)
             self.tick(now)
             self.capture_tick(now)
             # O tempo do modo comercial acabou aqui no frontend.

@@ -45,6 +45,7 @@
 #   fliperos-pixelcade system SISTEMA              o marquee do sistema
 #   fliperos-pixelcade logo SISTEMA [ANTERIOR [PASSO]]   a troca de sistema no frontend do FliperOS: o logotipo entra deslizando e pisca duas vezes
 #   fliperos-pixelcade screensaver start|stop      o modo attract, no protetor de tela do frontend
+#   fliperos-pixelcade home                        saiu do frontend: a animacao do logo
 #   fliperos-pixelcade achievement ID TITULO [DESCRICAO]   uma conquista do jogo aberto
 #   fliperos-pixelcade cheevos                     status 0 se o RetroArch deve registrar as conquistas no log
 #   fliperos-pixelcade versus V1 V2 P1 P2          o placar de uma partida versus (vitorias e pontos de cada lado)
@@ -898,6 +899,25 @@ achievement() {
 # Hoje os dois tocam a animacao do logo ($idle_gif): o ZeDMD pelo
 # fliperos-dmd attract, o Pixelcade pela pasta console (como o logotipo do
 # sistema). Sem a animacao, o Pixelcade volta ao modo attract dele.
+idle_show() {
+  zedmd attract
+  overlay attract
+  if installed && [[ -f $idle_gif && -d $dir/console ]] &&
+    cp -f "$idle_gif" "$dir/console/fliperos-idle.gif" 2> /dev/null; then
+    call "console/stream/fliperos-idle"
+  else
+    call "attract?nointerrupt"
+  fi
+}
+
+# home: saiu do frontend (o menu do FliperOS): a animacao do logo, como o
+# protetor de tela, mas sem ele (nada para voltar; o frontend que abrir manda
+# o sistema dele).
+home() {
+  rm -f "$last_file" "$last_file.system"
+  idle_show
+}
+
 screensaver() {
   local last
   last=$(cat "$last_file" 2> /dev/null)
@@ -905,14 +925,7 @@ screensaver() {
     start)
       [[ $last == screensaver:* ]] && return 0
       printf 'screensaver:%s\n' "$last" > "$last_file" 2> /dev/null
-      zedmd attract
-      overlay attract
-      if installed && [[ -f $idle_gif && -d $dir/console ]] &&
-        cp -f "$idle_gif" "$dir/console/fliperos-idle.gif" 2> /dev/null; then
-        call "console/stream/fliperos-idle"
-      else
-        call "attract?nointerrupt"
-      fi
+      idle_show
       ;;
     stop)
       [[ $last == screensaver:* ]] || return 0
@@ -1162,7 +1175,7 @@ case $cmd in
     setsid "$self" "$@" < /dev/null > /dev/null 2>&1 &
     exit 0
     ;;
-  launch | esde | attract | game | select | system | logo | end | screensaver | achievement | versus | now)
+  launch | esde | attract | game | select | system | logo | end | screensaver | home | achievement | versus | now)
     # Sem marquee nenhum (nem o do OBS), os eventos nao fazem nada.
     installed || zedmd_installed || overlay_on || exit 0
     case $cmd in
