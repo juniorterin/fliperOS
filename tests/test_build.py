@@ -4741,9 +4741,10 @@ class FrontendDataTests(unittest.TestCase):
                 self.assertEqual(Path(path).read_bytes(), b'png')
                 self.assertEqual(feview.logo_file('Naomi 2'), path)
                 self.assertIsNone(feview.logo_file('Super Nintendo'))
+                # O temporario termina em .png (o Pillow do fliperos-syslogo escolhe o formato por ela).
                 self.assertEqual(seen.read_text().splitlines(),
-                                 ['png Naomi 2 %s.tmp 48 f8f8f2' % path,
-                                  'png Super Nintendo %s/cache/Super_Nintendo-48.png.tmp 48 f8f8f2' % tmp])
+                                 ['png Naomi 2 %s/cache/Naomi_2-48.tmp.png 48 f8f8f2' % tmp,
+                                  'png Super Nintendo %s/cache/Super_Nintendo-48.tmp.png 48 f8f8f2' % tmp])
             finally:
                 feview.SYSLOGO, feview.SYSLOGO_CACHE = old
         src = (ROOT / 'fliperos-setup/gui/feview.py').read_text()

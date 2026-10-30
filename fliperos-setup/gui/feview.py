@@ -1613,16 +1613,19 @@ def logo_file(name):
     path = os.path.join(SYSLOGO_CACHE, "%s-%d.png" % (safe, SYSLOGO_HEIGHT))
     if os.path.isfile(path):
         return path
+    # O temporario termina em .png: o fliperos-syslogo (Pillow) escolhe o
+    # formato pela extensao.
+    tmp = path[:-len(".png")] + ".tmp.png"
     try:
         os.makedirs(SYSLOGO_CACHE, exist_ok=True)
-        r = subprocess.run([SYSLOGO, "png", name, path + ".tmp", str(SYSLOGO_HEIGHT), "f8f8f2"],
+        r = subprocess.run([SYSLOGO, "png", name, tmp, str(SYSLOGO_HEIGHT), "f8f8f2"],
                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                            timeout=20)
     except (OSError, subprocess.SubprocessError):
         return None
-    if r.returncode != 0 or not os.path.isfile(path + ".tmp"):
+    if r.returncode != 0 or not os.path.isfile(tmp):
         return None
-    os.replace(path + ".tmp", path)
+    os.replace(tmp, path)
     return path
 
 
