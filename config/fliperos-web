@@ -2803,6 +2803,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, self.panel.stream.get())
         if url.path == "/api/overlay":
             return self.send(200, overlay_paths(overlay_key()))
+        if url.path == "/api/marquee/state":
+            # O estado do marquee para a previa do painel (Status), pelo login.
+            on = overlay_enabled()
+            return self.send(200, {"enabled": on, "state": marquee_state() if on else {}})
         if url.path == "/api/overlay/input/style":
             return self.send(200, {"css": input_css(), "custom": os.path.isfile(INPUT_CSS),
                                    "default": read(os.path.join(STATIC, "input.css"))})

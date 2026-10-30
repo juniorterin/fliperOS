@@ -44,7 +44,81 @@ function mqSave() {
 // pontos por cima e o selo com o dispositivo.
 function mqBuild(box) {
   if (box.firstChild) return;
-  box.append(el("img", { alt: "", hidden: "" }), el("span", { class: "mq-name" }), el("i", { class: "mq-dots" }), el("small", { class: "mq-tag" }));
+  box.append(el("img", { alt: "", hidden: "" }), el("span", { class: "mq-name" }),
+    el("div", { class: "mq-versus", hidden: "" }, el("span", { class: "mq-side" }, el("b"), el("small")), el("span", { class: "mq-wins" }),
+      el("span", { class: "mq-side" }, el("b"), el("small"))),
+    el("div", { class: "mq-ticker", hidden: "" }, el("span")), el("div", { class: "mq-pop", hidden: "" }),
+    el("i", { class: "mq-dots" }), el("small", { class: "mq-tag" }));
+}
+
+// ── O placar ─────────────────────────────────────────────────────
+// O mesmo estado do marquee do OBS (/api/marquee/state, que o
+// fliperos-pixelcade grava com marquee_overlay=on): o placar versus no lugar
+// da arte, o texto de abertura (os recordes) rolando uma vez e as conquistas.
+let mqState = {}, mqLastTime = null, mqPopTimer = null, mqTried = false;
+
+function mqDrawState(box) {
+  const s = mqState, versus = s.event === "versus";
+  box.classList.toggle("vs", versus);
+  const vs = box.querySelector(".mq-versus");
+  vs.hidden = !versus;
+  if (!versus) return;
+  const num = (v) => (v && v !== "-" ? v : "");
+  const sides = vs.querySelectorAll(".mq-side");
+  sides[0].firstChild.textContent = s.left || "P1";
+  sides[0].lastChild.textContent = num(s.score_left);
+  sides[1].firstChild.textContent = s.right || "P2";
+  sides[1].lastChild.textContent = num(s.score_right);
+  vs.querySelector(".mq-wins").textContent = (num(s.wins_left) || "0") + " – " + (num(s.wins_right) || "0");
+}
+
+function mqEvents(s, first) {
+  if (s.time === mqLastTime) return;
+  mqLastTime = s.time;
+  // Na primeira leitura nada rola: o texto ja era velho quando a pagina abriu.
+  if (first || !s.text) return;
+  document.querySelectorAll(".mq-led").forEach((box) => {
+    if (box.hidden) return;
+    if (s.event === "achievement") {
+      const pop = box.querySelector(".mq-pop");
+      pop.textContent = "🏆 " + s.text;
+      pop.hidden = false;
+      clearTimeout(mqPopTimer);
+      mqPopTimer = setTimeout(() => { document.querySelectorAll(".mq-pop").forEach((p) => { p.hidden = true; }); }, 8000);
+    } else if (s.event === "game") {
+      const tick = box.querySelector(".mq-ticker"), span = tick.firstChild;
+      span.style.animation = "none";
+      span.textContent = s.text;
+      span.style.setProperty("--time", Math.max(8, Math.min(40, s.text.length * 0.35)) + "s");
+      tick.hidden = false;
+      void span.offsetWidth;
+      span.style.animation = "";
+      span.onanimationend = () => { tick.hidden = true; };
+    }
+  });
+}
+
+async function mqPoll() {
+  if (!mq.on) return;
+  try {
+    const res = await api("/api/marquee/state");
+    const data = await res.json();
+    if (!data.enabled && !mqTried) {
+      // Sem marquee_overlay o fliperos-pixelcade nao grava o placar: liga uma vez.
+      mqTried = true;
+      await api("/api/settings", { method: "POST", body: JSON.stringify({ key: "marquee_overlay", value: "on" }) });
+    }
+    const first = mqLastTime === null;
+    mqState = data.state || {};
+    mqEvents(mqState, first);
+    document.querySelectorAll(".mq-led").forEach((box) => { if (!box.hidden && box.firstChild) mqDrawState(box); });
+  } catch (e) { /* o gabinete desligado: fica o que estava */ }
+}
+let mqTimer = null;
+function mqWatch() {
+  clearInterval(mqTimer);
+  mqTimer = mq.on ? setInterval(mqPoll, 1000) : null;
+  if (mq.on) mqPoll();
 }
 
 // A imagem do jogo para o dispositivo, tentando uma arte depois da outra e,
@@ -64,9 +138,11 @@ function mqShow(box, urls, title, sub) {
   next();
 }
 
-let mqKey = "";
+let mqKey = "", mqStarted = false;
 function mqPaint(game) {
   document.documentElement.classList.toggle("mq-on", mq.on);
+  // O placar so e pedido depois do login (o primeiro status chega aqui).
+  if (!mqStarted) { mqStarted = true; mqWatch(); }
   const front = typeof cabFront !== "undefined" && cabFront ? cabFront.program : "";
   const key = [mq.on, mq.device, lang, game ? game.system + "/" + game.name + "/" + (game.art || "") : "-", front].join("|");
   if (key === mqKey) return;
@@ -103,6 +179,7 @@ function mqChanged() {
   mqControls();
   mqKey = "";
   mqPaint(cabOnline ? cabGame : null);
+  mqWatch();
 }
 $("mq-on").addEventListener("change", mqChanged);
 $("mq-device").addEventListener("change", mqChanged);
