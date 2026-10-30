@@ -79,6 +79,8 @@ Details of the switch:
 
 Intel integrated graphics use the **Intel 15 kHz** boot entry, always in super resolution (`1280x480iS`): `i915` doesn't generate the low clocks.
 
+**You need a monitor at a standard frequency first.** The boot menu and the installation are drawn at 31 kHz, so on an Intel HD connect a regular VGA monitor (an LCD or a PC monitor), boot the media, install FliperOS and set the video with it. Only then power off, move the cable to the CRT and turn the cabinet on.
+
 In Setup > Video Setup > Resolution an Intel card also lists **1280x240 60 Hz progressive** (240p, no interlace flicker in the menus). It is not in the kernel's mode table, so the Setup writes an EDID with that mode (`fliperos-1280x240.bin`, 26.058 MHz, 15.66 kHz), puts it in the initramfs and points `drm.edid_firmware` at it. Pick the 480i entry again to go back. **Seen on the tube** (Core i3-540, VGA).
 
 The same mode is in the media's boot menu as **Intel 15 kHz 240p** (next to *Intel 15 kHz*): the installer, the Setup and the frontend already come up in progressive 240p, and the installed system keeps it. The image builds the EDID (`fliperos-rebuild-edids`); on the installed disk it goes into the initramfs.

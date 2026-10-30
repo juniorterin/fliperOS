@@ -30,6 +30,8 @@ The same options as GroovyArcade (`os/groovyarcade/syslinux/syslinux.cfg`). Here
 | EDID progressive | `drm.edid_firmware=edid/generic_15_super_resp.bin video=e` | Switchres EDID, all outputs forced |
 | EDID interlaced | `drm.edid_firmware=edid/generic_15_super_resi.bin video=e` | Same, interlaced |
 
+**Intel HD:** the boot menu is drawn at 31 kHz and the card makes no low clocks, so do the whole installation on a monitor at a standard frequency (an LCD or a PC monitor) and connect the CRT only afterwards, with the cabinet powered off. See [Video cards](Video-cards.md#intel).
+
 The `S` at the end of the mode comes from the 15 kHz patch: it uses the kernel's fixed table of low-dotclock modes (`drm_modes_low_dotclock.c`), and `i` means interlaced. Every entry carries `quiet splash consoleblank=0` and `radeon` on SI/CIK cards.
 
 **30-second timer.** With no key pressed, the **15 kHz** entry boots, which is the safe one for a cabinet: an LCD receiving 15 kHz only shows "out of range", but 31 kHz on a 15 kHz-only tube can damage it.
