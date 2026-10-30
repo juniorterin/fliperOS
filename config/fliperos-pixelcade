@@ -741,6 +741,15 @@ game() {
     (($(date +%s) - $(stat -c %Y "$last_file" 2> /dev/null || echo 0) < 10)); then
     return 1
   fi
+  # O sistema escolhido no frontend do FliperOS (ele so manda o sistema): o
+  # "end" o traz de volta, e nao o jogo como selecao.
+  local before
+  before=$(cat "$last_file" 2> /dev/null)
+  if [[ $before == system/* ]]; then
+    printf '%s\n' "${before#system/}" > "$last_file.system" 2> /dev/null
+  else
+    rm -f "$last_file.system"
+  fi
   printf 'game:%s/%s\n' "$1" "$2" > "$last_file" 2> /dev/null
   rm -f "$last_file.versus"
   title=$(title_of "$2" "${3:-}")
@@ -761,12 +770,20 @@ game() {
 }
 
 # end SISTEMA ROM: o jogo fechou. O painel volta para o pixelweb e o
-# dmdserver (dmd_hold), e o marquee para o do jogo como selecao do frontend:
-# o Pegasus nao avisa o que esta selecionado.
+# dmdserver (dmd_hold), e o marquee para o sistema que o frontend do FliperOS
+# tinha escolhido (o logotipo dele) ou, nos outros, para o do jogo como selecao
+# do frontend: o Pegasus nao avisa o que esta selecionado.
 game_end() {
+  local system
   rm -f "$hold_file"
   [[ $(cat "$last_file" 2> /dev/null) == "game:${1:-}/${2:-}" ]] || return 0
   rm -f "$last_file"
+  system=$(cat "$last_file.system" 2> /dev/null)
+  rm -f "$last_file.system"
+  if [[ -n $system ]]; then
+    logo "$system"
+    return 0
+  fi
   select_game "$1" "$2"
 }
 

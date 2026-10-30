@@ -9955,6 +9955,26 @@ class PixelcadeTests(unittest.TestCase):
         self.run_('system', 'dreamcast')
         self.assertEqual(self.run_('end', 'mame', 'digdug'), [])
 
+    def test_game_end_brings_back_the_system_of_the_fliperos_frontend(self):
+        # O frontend do FliperOS so manda o sistema (logo): o jogo que ele abre,
+        # ao fechar, devolve esse sistema ao marquee, e nao o jogo como selecao.
+        self.install()
+        conf = self.tmp / 'fliperos.conf'
+        conf.write_text('marquee_overlay=on\n')
+        self.env['FLIPEROS_CONF'] = str(conf)
+        self.env['FLIPEROS_SYSLOGO'] = str(self.tmp / 'bin/no-syslogo')       # sem o tema: o system
+        state = self.tmp / 'run/fliperos-marquee'
+        self.run_('logo', 'Naomi')
+        self.run_('game', 'naomi', 'mvsc2')
+        self.assertEqual(self.run_('end', 'naomi', 'mvsc2'), ['console/stream/Naomi'])
+        self.assertEqual(state.read_text().splitlines()[:2], ['event=system', 'system=Naomi'])
+        self.assertFalse((self.tmp / 'run/fliperos-pixelcade.last.system').exists())
+        # Um jogo aberto a partir de uma selecao (ES-DE, Attract-Mode Plus): o
+        # jogo volta como selecao, como antes.
+        self.run_('select', 'mame', 'sf2')
+        self.run_('game', 'mame', 'sf2')
+        self.assertEqual(self.run_('end', 'mame', 'sf2'), ['arcade/stream/mame/sf2?event=FEScroll'])
+
     def test_preview_and_zedmd_do_not_wait_for_the_pixelcade(self):
         # Um pixelweb sem o painel ligado so responde no fim dos 3 s do curl: o
         # estado do marquee (a previa do painel e o OBS) ja esta gravado quando
