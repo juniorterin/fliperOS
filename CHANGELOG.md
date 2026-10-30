@@ -26,6 +26,7 @@ FliperOS now runs on Intel HD graphics. On a Core i3-540 (Ironlake, first genera
 - Items the card can't run get a red X (the text menus show `(not supported)`), the reason (`Needs OpenGL 3.3 or Vulkan, and this video card gives OpenGL 2.1 and OpenGL ES 2.0`) and a question before they open, with *No* as the default: EmulationStation-DE in Games > Frontend, 480i hacks in Video Setup, and PCSX2, Dolphin and DuckStation in Games > Emulators & Games. The check reads the card with `eglinfo`; without it nothing is marked
 - Games > Frontend: choosing EmulationStation-DE or Pegasus says that it will be built on this machine (network, time) and asks. ES-DE is refused before the build on a card without OpenGL 3.3 or OpenGL ES 3.0
 - The installer takes the Intel 240p EDID to the disk (`install_configure_video`), and `boot_apply` rebuilds the initramfs when that mode is chosen
+- Pixelcade and ZeDMD marquee: switching the game list in the FliperOS frontend shows the system's written logo (the one of Arcadeflow's displays menu, drawn from the theme's font) sliding in with the screen and blinking twice. New `fliperos-syslogo`; no Arcadeflow file is shipped
 
 **Tool changes:**
 

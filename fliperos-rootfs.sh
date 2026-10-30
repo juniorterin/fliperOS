@@ -193,6 +193,9 @@ ln -sfn /etc/systemd/system/fliperos-doflinx.service \
 # ZeDMD (DMD de LED open source): os mesmos eventos, desenhados pelo
 # fliperos-dmd. O dmdserver (libdmdutil) e o Pillow vem pelo Setup > Games > Extras.
 install -Dm755 "$src/config/fliperos-dmd" "$root/opt/fliperos/bin/fliperos-dmd"
+# O logotipo escrito de cada sistema no marquee, da fonte do tema Arcadeflow
+# (que o Setup baixa: nada dele vem na imagem).
+install -Dm755 "$src/config/fliperos-syslogo" "$root/opt/fliperos/bin/fliperos-syslogo"
 # A abertura do ZeDMD: a animacao de pinball do logo (tools/zedmd-pinball-anim.py).
 install -Dm644 "$src/config/zedmd-fliperos.gif" "$root/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif"
 install -Dm644 "$src/config/fliperos-zedmd.service" "$root/etc/systemd/system/fliperos-zedmd.service"

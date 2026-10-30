@@ -43,6 +43,7 @@
 #   fliperos-pixelcade game|select SISTEMA ROM [TITULO]   o marquee do jogo (aberto | selecionado)
 #   fliperos-pixelcade end SISTEMA ROM             o jogo fechou: volta ao marquee da selecao
 #   fliperos-pixelcade system SISTEMA              o marquee do sistema
+#   fliperos-pixelcade logo SISTEMA [ANTERIOR [PASSO]]   a troca de sistema no frontend do FliperOS: o logotipo entra deslizando e pisca duas vezes
 #   fliperos-pixelcade screensaver start|stop      o modo attract, no protetor de tela do frontend
 #   fliperos-pixelcade achievement ID TITULO [DESCRICAO]   uma conquista do jogo aberto
 #   fliperos-pixelcade cheevos                     status 0 se o RetroArch deve registrar as conquistas no log
@@ -92,6 +93,7 @@ doflinx_url=${DOFLINX_URL:-https://codeload.github.com/DOFLinx/CurrentExecutable
 doflinx_cfg_url=${DOFLINX_CFG_URL:-https://github.com/alinke/pixelcade-linux-builds/raw/main/rcade}
 ra_doflinx=${RA_DOFLINX_CFG:-/etc/fliperos/retroarch/doflinx.cfg}
 dmd=${FLIPEROS_DMD:-/opt/fliperos/bin/fliperos-dmd}
+syslogo=${FLIPEROS_SYSLOGO:-/opt/fliperos/bin/fliperos-syslogo}
 user=${FLIPEROS_USER:-fliperos}
 roms=${ROMS_DIR:-/home/fliperos/roms}
 ra_info=${RA_INFO_DIR:-/opt/fliperos/retroarch/info}
@@ -913,6 +915,39 @@ system() {
   overlay system "$1" "" "${2:-}"
 }
 
+# logo SISTEMA [ANTERIOR [PASSO]]: a troca de sistema no frontend do FliperOS.
+# O logotipo escrito do sistema (config/fliperos-syslogo) entra deslizando, no
+# sentido em que a lista andou (PASSO 1 ou -1), com o de ANTERIOR saindo, e
+# pisca duas vezes, como a tela do frontend. No ZeDMD os quadros vao direto
+# ao painel (fliperos-dmd slide); o Pixelcade so mostra arquivos, entao o
+# logotipo vai num GIF, em ~/pixelcade/console (o "console/stream/NOME" o
+# procura la), que e apagado quando o proximo chega. Sem o logotipo (o tema
+# Arcadeflow nao esta instalado, ou o sistema nao esta nele), o de antes: a
+# arte do sistema.
+logo() {
+  local name=${1:-} old=${2:-} step=${3:-1} gif art
+  [[ -n $name ]] || return 0
+  printf 'system/%s\n' "$name" > "$last_file" 2> /dev/null
+  if ! "$syslogo" find "$name" > /dev/null 2>&1; then
+    system "$name"
+    return 0
+  fi
+  if installed; then
+    art=$dir/console
+    gif=fliperos-logo-$$
+    if [[ -d $art ]] && "$syslogo" gif "$name" "$art/$gif.gif" "$old" "$step" "${PIXELCADE_LOGO_SIZE:-128x32}" 2> /dev/null; then
+      find "$art" -maxdepth 1 -name 'fliperos-logo-*.gif' ! -name "$gif.gif" -delete 2> /dev/null
+      call "console/stream/$gif"
+    else
+      call "console/stream/$(urlencode "$name")"
+    fi
+  fi
+  if zedmd_installed && [[ -x $dmd ]]; then
+    setsid "$dmd" slide "$name" "$old" "$step" < /dev/null > /dev/null 2>&1 &
+  fi
+  overlay system "$name" "" "$name"
+}
+
 # launch PROGRAMA [ARGS...]: a linha de comando que o fliperos-kms-run ou o
 # fliperos-x11-run recebeu. O jogo e o ultimo argumento: um arquivo de
 # ~/roms, ou o nome do set no GroovyMAME e no Model 2 (o [name] dos
@@ -1081,7 +1116,7 @@ case $cmd in
     setsid "$self" "$@" < /dev/null > /dev/null 2>&1 &
     exit 0
     ;;
-  launch | esde | attract | game | select | system | end | screensaver | achievement | versus | now)
+  launch | esde | attract | game | select | system | logo | end | screensaver | achievement | versus | now)
     # Sem marquee nenhum (nem o do OBS), os eventos nao fazem nada.
     installed || zedmd_installed || overlay_on || exit 0
     case $cmd in

@@ -4690,6 +4690,30 @@ class FrontendDataTests(unittest.TestCase):
                 else:
                     os.environ['FLIPEROS_POWERKEY'] = old
 
+    def test_changing_system_sends_the_logo_to_the_marquee(self):
+        import types
+        fm = self.frontend_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            tool, seen = Path(tmp) / 'pixelcade', Path(tmp) / 'seen'
+            tool.write_text('#!/bin/sh\necho "$@" > %s\n' % seen)
+            tool.chmod(0o755)
+            fm.PIXELCADE_TOOL = str(tool)
+            fe = types.SimpleNamespace(shot=None)
+            fm.Frontend.marquee_logo(fe, 'Naomi', 'Atomiswave', -1)
+            deadline = time.time() + 5
+            while not seen.exists() and time.time() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(seen.read_text(), 'bg logo Naomi Atomiswave -1\n')
+            # Os prints (--shot) nao mandam nada, e sem o programa nao ha erro.
+            seen.unlink()
+            fe.shot = 'x'
+            fm.Frontend.marquee_logo(fe, 'Naomi', 'Atomiswave', 1)
+            time.sleep(0.3)
+            self.assertFalse(seen.exists())
+            fe.shot = None
+            fm.PIXELCADE_TOOL = str(Path(tmp) / 'nenhum')
+            fm.Frontend.marquee_logo(fe, 'Naomi', 'Atomiswave', 1)
+
     def test_exit_key_table_and_panel_keys(self):
         import types
         fm = self.frontend_module()
@@ -9572,6 +9596,37 @@ class PixelcadeTests(unittest.TestCase):
         self.calls.unlink(missing_ok=True)
         return [c.replace('http://pc/', '') for c in calls]
 
+    def test_logo_slides_the_system_in_on_both_panels(self):
+        # A troca de sistema no frontend do FliperOS: o logotipo escrito do
+        # Arcadeflow. O Pixelcade so mostra arquivos (um GIF em
+        # ~/pixelcade/console que o "console/stream" acha); o ZeDMD recebe os
+        # quadros do fliperos-dmd slide. Sem logotipo, a arte do sistema.
+        self.install()
+        self.install_zedmd()
+        (self.tmp / 'pixelcade/console').mkdir()
+        gifs = self.tmp / 'gifs'
+        syslogo = self.tmp / 'bin/fliperos-syslogo'
+        syslogo.write_text('#!/bin/sh\n[ "$1" = find ] && [ "$2" != Nada ] && exit 0\n'
+                           '[ "$1" = gif ] && { echo "$*" >> %s; : > "$3"; exit 0; }\nexit 1\n' % gifs)
+        syslogo.chmod(0o755)
+        self.env['FLIPEROS_SYSLOGO'] = str(syslogo)
+        calls = self.run_('logo', 'Naomi 2', 'Naomi', '-1')
+        self.assertEqual(len(calls), 1)
+        name = re.fullmatch(r'console/stream/(fliperos-logo-\d+)', calls[0]).group(1)
+        self.assertTrue((self.tmp / 'pixelcade/console' / (name + '.gif')).is_file())
+        self.assertTrue(gifs.read_text().startswith('gif Naomi 2 '))
+        self.assertTrue(gifs.read_text().rstrip().endswith('Naomi -1 128x32'))
+        self.assertEqual(self.dmd_calls(1), ['slide Naomi 2 Naomi -1'])
+        # O seguinte apaga o GIF de antes.
+        (self.tmp / 'pixelcade/console/fliperos-logo-1.gif').write_text('')
+        self.run_('logo', 'Atomiswave', 'Naomi 2', '1')
+        self.assertFalse((self.tmp / 'pixelcade/console/fliperos-logo-1.gif').exists())
+        self.assertEqual(self.dmd_calls(2)[1], 'slide Atomiswave Naomi 2 1')
+        # Sem o logotipo no tema: a arte do sistema, como antes.
+        self.dmd_log.unlink()
+        self.assertEqual(self.run_('logo', 'Nada', 'Naomi', '1'), ['console/stream/Nada'])
+        self.assertEqual(self.dmd_calls(1), ['show system Nada  '])
+
     def test_obs_marquee_state_without_any_panel(self):
         # Sem Pixelcade nem ZeDMD, com marquee_overlay=on: os eventos gravam o
         # que o marquee do OBS mostra (o painel web le o arquivo).
@@ -10060,6 +10115,7 @@ class PixelcadeTests(unittest.TestCase):
 
     def test_zedmd_installed_into_the_image(self):
         self.assertIn('install -Dm755 "$src/config/fliperos-dmd" "$root/opt/fliperos/bin/fliperos-dmd"', ROOTFS)
+        self.assertIn('install -Dm755 "$src/config/fliperos-syslogo" "$root/opt/fliperos/bin/fliperos-syslogo"', ROOTFS)
         self.assertIn('multi-user.target.wants/fliperos-zedmd.service', ROOTFS)
         self.assertIn('99-fliperos-zedmd.rules', ROOTFS)
         unit = (ROOT / 'config/fliperos-zedmd.service').read_text()
@@ -11108,6 +11164,107 @@ class ZeDMDTests(unittest.TestCase):
                              timeout=30)
         self.assertEqual(out.returncode, 0)
         self.assertEqual(out.stderr, b'')
+
+
+class SysLogoTests(unittest.TestCase):
+    """config/fliperos-syslogo: o logotipo escrito do sistema (um caractere
+    da fonte do tema Arcadeflow) deslizando no marquee e piscando duas vezes."""
+    DATA = ('null,0,0,NULL\n\nnaomi,0,0,NAOM,CRT,NONE,-4,3,ARCADE,Sega,1998,Naomi,56\nsega naomi\n\n'
+            'atomiswave,0,0,ATW\nsammy atomiswave\n')
+    DEJAVU = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+
+    def setUp(self):
+        try:
+            from PIL import Image, ImageFont
+        except ImportError:
+            self.skipTest('python3-pil')
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        theme = self.tmp / 'layouts/Arcadeflow'
+        theme.mkdir(parents=True)
+        (theme / 'data_systems.txt').write_text(self.DATA)
+        old = dict(os.environ)
+        os.environ.update(ATTRACT_DIR=str(self.tmp))
+        try:
+            self.mod = load_script('fliperos_syslogo', 'config/fliperos-syslogo')
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+        # A fonte do tema tem os logotipos em U+E900...; aqui, as letras do
+        # DejaVu (FIRST = "N" faz o primeiro sistema da lista ser o N).
+        self.mod.FIRST = ord('N')
+        self.mod.font = lambda size: ImageFont.truetype(self.DEJAVU, size)
+        # Para a animacao, um logotipo largo e liso (a letra e estreita demais
+        # para aparecer na borda do quadro).
+        self.mod.fitted = lambda name, w, h, color=None: Image.new('RGBA', (100, 24), (255, 255, 255, 255))
+
+    @staticmethod
+    def lit(img):
+        return img.convert('L').point(lambda v: 255 if v > 40 else 0).getbbox()
+
+    def test_the_character_is_the_count_of_blank_lines(self):
+        table = self.mod.table()
+        self.assertEqual(table['naomi'], ord('N'))
+        self.assertEqual(table['sega naomi'], table['naomi'])        # um apelido e o mesmo logotipo
+        self.assertEqual(table['atomiswave'], ord('N') + 1)
+        self.assertEqual(table['sammy atomiswave'], table['atomiswave'])
+        self.assertNotIn('null', table)
+
+    def test_lookup_ignores_case_and_what_is_in_parentheses(self):
+        self.assertEqual(self.mod.lookup('NAOMI'), ord('N'))
+        self.assertEqual(self.mod.lookup('Naomi (World)'), ord('N'))
+        self.assertIsNone(self.mod.lookup('Nao Existe'))
+        self.assertIsNone(self.mod.render('Nao Existe'))
+        self.assertEqual(self.mod.render('Naomi', 20).height, 20)
+
+    def test_without_the_theme_there_is_no_logo(self):
+        self.mod.THEME = str(self.tmp / 'nenhum')
+        self.assertIsNone(self.mod.lookup('Naomi'))
+        self.assertIsNone(self.mod.render('Naomi'))
+
+    def test_the_logo_slides_in_from_the_side_the_list_moved_to(self):
+        for step in (1, -1):
+            anim = self.mod.frames('Naomi', None, step)
+            x0, _, x1, _ = self.lit(anim[0][0])
+            if step > 0:
+                self.assertGreater(x0, 64)       # entra pela direita
+            else:
+                self.assertLess(x1, 64)          # entra pela esquerda
+            x0, _, x1, _ = self.lit(anim[len(self.mod.timeline()) - self.mod.BLINKS * 2 - 1][0])
+            self.assertEqual((x0, x1), (14, 114))
+
+    def test_the_previous_logo_leaves_the_other_way(self):
+        anim = self.mod.frames('Naomi', 'Atomiswave', 1)
+        x0, _, x1, _ = self.lit(anim[0][0])
+        self.assertLess(x0, 20)                  # o de antes, saindo pela esquerda
+        self.assertEqual(x1, 128)                # e o novo chegando pela direita
+
+    def test_blinks_twice_and_ends_lit(self):
+        anim = self.mod.frames('Naomi', None, 1)
+        dark = [i for i, (img, _) in enumerate(anim) if not self.lit(img)]
+        self.assertEqual(len(dark), self.mod.BLINKS)
+        self.assertGreater(min(dark), 0)
+        self.assertNotIn(len(anim) - 1, dark)
+        self.assertTrue(self.lit(anim[-1][0]))
+        slide = sum(ms for _, ms in anim[:len(anim) - self.mod.BLINKS * 2]) / 1000
+        self.assertAlmostEqual(slide, self.mod.SLIDE + self.mod.HOLD, delta=0.05)
+
+    def test_gif_stops_on_the_last_frame(self):
+        from PIL import Image, ImageSequence
+        gif = self.tmp / 'naomi.gif'
+        self.mod.write_gif(str(gif), self.mod.frames('Naomi', 'Atomiswave', 1))
+        times = [f.info['duration'] for f in ImageSequence.Iterator(Image.open(gif))]
+        self.assertGreaterEqual(times[-1], 60000)
+        self.assertLess(max(times[:-1]), 1000)
+
+    def test_command_line(self):
+        env = dict(os.environ, ATTRACT_DIR=str(self.tmp))
+        run = lambda *a: subprocess.run([sys.executable, str(ROOT / 'config/fliperos-syslogo'), *a], env=env,
+                                        capture_output=True, text=True, timeout=60)
+        self.assertEqual(run('find', 'Nao Existe').returncode, 1)
+        # Sem a fonte do tema, o sistema esta na lista mas nao ha desenho.
+        self.assertEqual(run('find', 'Naomi').returncode, 1)
+        self.assertEqual(run('gif', 'Naomi', str(self.tmp / 'x.gif')).returncode, 1)
 
 
 class AutomountTests(unittest.TestCase):

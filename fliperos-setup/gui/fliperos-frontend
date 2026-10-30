@@ -67,6 +67,8 @@ OPT_MODE, OPT_CLONES, OPT_HIDDEN, OPT_EXIT_KEY, OPT_EXIT_PAD, OPT_POWER, OPT_COM
 # O atalho que fecha o jogo e as fichas do modo comercial, lidos junto com o
 # jogo (config/fliperos-buttons hotkey).
 BUTTONS_TOOL = os.environ.get("FLIPEROS_BUTTONS_TOOL", "/opt/fliperos/bin/fliperos-buttons")
+# O marquee (Pixelcade, ZeDMD): o logotipo do sistema ao trocar de romlist.
+PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/fliperos-pixelcade")
 # Os botoes do atalho do painel, segurados juntos por EXIT_HOLD segundos
 # (no jogo e na hora de escolher). CAPTURE_WAIT: sem apertar, a escolha sai.
 EXIT_HOLD, CAPTURE_WAIT = 1.0, 8.0
@@ -410,6 +412,19 @@ class Frontend:
         else:
             self.cursor = max(0, min(last, self.cursor + step))
 
+    def marquee_logo(self, name, before, step):
+        """O logotipo do sistema novo no marquee (Pixelcade e ZeDMD): entra
+        deslizando para o lado em que a lista andou, como a tela, e pisca duas
+        vezes. Em segundo plano; sem marquee, o fliperos-pixelcade nao faz nada."""
+        if self.shot or not name:
+            return
+        try:
+            subprocess.Popen([PIXELCADE_TOOL, "bg", "logo", name, before, "-1" if step < 0 else "1"],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        except OSError:
+            pass
+
     def switch_category(self, step):
         if len(self.cats) < 2:
             return
@@ -418,7 +433,9 @@ class Frontend:
         self.anim.setdefault("ribbon", (old, time.monotonic()))
         self.cat_pos = old + step
         self.keep_position()
+        before = (self.category() or {}).get("name", "")
         self.cat = (self.cat + step) % len(self.cats)
+        self.marquee_logo((self.category() or {}).get("name", ""), before, step)
         self.load_filter()
         # A tela de antes desliza para fora (feview.draw).
         if getattr(self, "last_ui", None) is not None:

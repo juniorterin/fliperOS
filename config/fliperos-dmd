@@ -13,6 +13,7 @@
 # imagem, o nome do jogo em texto (rolando se nao cabe).
 #
 #   fliperos-dmd show game|select|system SISTEMA ROM [TITULO] [ABERTURA]
+#   fliperos-dmd slide SISTEMA [ANTERIOR [PASSO]]   o logotipo do sistema entrando e piscando duas vezes
 #   fliperos-dmd image ARQUIVO
 #   fliperos-dmd text TEXTO
 #   fliperos-dmd attract              as artes de ~/media, uma depois da outra
@@ -293,7 +294,7 @@ def nap(seconds):
 # play: a abertura (intro) uma vez e depois os quadros; um so fica no painel,
 # varios (GIF, texto rolando) repetem ate o proximo evento. retry: segundos
 # esperando o dmdserver abrir.
-def play(frames, intro=(), retry=0):
+def play(frames, intro=(), retry=0, once=False):
     if not (frames or intro) or not mine():
         return
     sock = connect()
@@ -311,6 +312,15 @@ def play(frames, intro=(), retry=0):
                 return
         if len(frames) == 1:
             sock.sendall(header(len(frames[0][0]), first) + frames[0][0])
+            return
+        if once:
+            # Uma vez so, e o painel fica no ultimo quadro (a animacao da
+            # troca de sistema).
+            for i, (data, ms) in enumerate(frames):
+                sock.sendall(header(len(data), first) + data)
+                first = False
+                if i < len(frames) - 1 and not nap(ms / 1000):
+                    return
             return
         while frames and mine():
             for data, ms in frames:
@@ -416,6 +426,28 @@ def startup_frames():
     return text_frames('FliperOS', COLOR['system'])
 
 
+# slide_frames: a troca de sistema na lista do frontend. O logotipo (o do
+# Arcadeflow, desenhado por config/fliperos-syslogo) entra deslizando e pisca
+# duas vezes; step e o sentido em que a lista andou (-1 ou 1) e old o sistema
+# de antes, que sai. Sem o logotipo (o tema nao esta instalado, ou o sistema
+# nao esta nele), o nome em texto. Os quadros vao direto ao dmdserver: nao ha
+# GIF nem arquivo.
+def slide_frames(name, old, step):
+    path = os.environ.get('SYSLOGO', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fliperos-syslogo'))
+    try:
+        from importlib.machinery import SourceFileLoader
+        from importlib.util import module_from_spec, spec_from_loader
+        spec = spec_from_loader('fliperos_syslogo', SourceFileLoader('fliperos_syslogo', path))
+        syslogo = module_from_spec(spec)
+        spec.loader.exec_module(syslogo)
+        anim = syslogo.frames(name, old, step, (W, H), COLOR['system'])
+    except (ImportError, OSError, SyntaxError, AttributeError):
+        anim = []
+    if not anim:
+        return text_frames(name.upper(), COLOR['system'])
+    return [(fit(img), ms) for img, ms in anim]
+
+
 def show(kind, system, rom, title):
     color = COLOR.get(kind, COLOR['game'])
     if kind == 'system':
@@ -452,12 +484,15 @@ def main(argv):
 
 
 def run(argv):
-    intro, retry = (), 0
+    intro, retry, once = (), 0, False
     try:
         if len(argv) >= 4 and argv[1] == 'show':
             frames = show(argv[2], argv[3], argv[4] if len(argv) > 4 else '', argv[5] if len(argv) > 5 else '')
             if len(argv) > 6 and argv[6]:
                 intro = scroll_frames(argv[6], COLOR['select'])
+        elif len(argv) in (3, 4, 5) and argv[1] == 'slide':
+            frames = slide_frames(argv[2], argv[3] if len(argv) > 3 else '', -1 if len(argv) > 4 and argv[4] == '-1' else 1)
+            once = len(frames) > 1
         elif len(argv) == 3 and argv[1] == 'image':
             frames = image_frames(argv[2])
         elif len(argv) == 3 and argv[1] == 'text':
@@ -472,6 +507,7 @@ def run(argv):
             frames, retry = startup_frames(), 20
         else:
             sys.stderr.write('usage: fliperos-dmd show game|select|system SYSTEM ROM [TITLE] [INTRO]\n'
+                             '       fliperos-dmd slide SYSTEM [PREVIOUS [STEP]]\n'
                              '       fliperos-dmd image FILE\n'
                              '       fliperos-dmd text TEXT\n'
                              '       fliperos-dmd attract | startup\n'
@@ -479,7 +515,7 @@ def run(argv):
                              '       fliperos-dmd title ROM\n'
                              '       fliperos-dmd art SYSTEM [ROM]\n')
             return 1
-        play(frames, intro, retry)
+        play(frames, intro, retry, once)
     except OSError:
         pass
     return 0

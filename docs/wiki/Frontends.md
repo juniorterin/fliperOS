@@ -115,6 +115,11 @@ The events below are the ones of Pixelcade's own EmulationStation scripts ([alin
 
   The udev rule keeps it out of NetworkManager and starts `fliperos-pixelcade-lcd@<interface>.service`, which gives the card the address `169.254.100.2` (the LCD is `169.254.100.1`), sets `lcdMarquee` and `lcdUsbConnected` in `~/pixelcade/pixelcade.ini`, writes the LCD's name there and restarts the service. This is what Pixelcade's installer does; it has not been tested with an LCD marquee yet.
 - **Visual Pinball**: a program whose name starts with `vpinball` draws the display itself, over the same serial port. When it opens, `pixelweb` (and `dmdserver`) close and let go of the port; when it ends, the services open them again. FliperOS doesn't ship Visual Pinball.
+- **Changing the system in the FliperOS frontend**: when you switch the game list (left and right), the system's written logo (NAOMI, ATOMISWAVE, SEGA MODEL 3...) slides in on the marquee from the side the list moved to, with the previous one leaving, and blinks twice. It is the same slide as the frontend's screen.
+
+  The logos are the ones of the Arcadeflow's displays menu: each is a character of the theme's font, drawn when needed by `fliperos-syslogo` from `~/.attract/layouts/Arcadeflow` (the Setup downloads the theme; Arcadeflow has no license, so none of it is in the image). Without the theme, or for a system that isn't in it, the marquee shows the system's art as before.
+
+  The ZeDMD gets the frames straight from `fliperos-dmd slide`. The Pixelcade only shows files, so the logo goes in a GIF in `~/pixelcade/console` (`fliperos-logo-*`, replaced at each switch). `fliperos-syslogo export DIR` writes every logo as a PNG.
 - **Systems**: the arcade folders (`mame`, `naomi`, `naomi2`, `atomiswave`, `model2`, `model3`, and the MAME and FBNeo cores) use Pixelcade's `mame` artwork. The RetroArch cores go by their system (`snes`, `genesis`, `psx`...). Other folders go by their name.
 
 ### DOFLinx (effects during the game)

@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+# O logotipo escrito de cada sistema (NAOMI, ATOMISWAVE, SEGA MODEL 3...) que
+# o Arcadeflow mostra no menu de telas, para o marquee do frontend do FliperOS.
+#
+# O Arcadeflow nao desenha esses logotipos com imagens: cada um e um
+# caractere da fonte dele (fonts/font_Roboto-Allcaps-EXT4X.ttf, a partir de
+# U+E900), e o data_systems.txt do tema diz qual. O Arcadeflow nao tem
+# licenca: nada dele vem na imagem nem no repositorio. Aqui o logotipo e
+# desenhado na hora, da fonte do tema que o Setup > Games > Frontend baixou
+# para ~/.attract/layouts/Arcadeflow. Sem o tema, nao ha logotipo (exit 1) e
+# quem chama usa o nome em texto.
+#
+# O caractere de cada sistema e o do indice dele no data_systems.txt: o tema
+# conta as linhas em branco entre os sistemas (cada um e uma entrada de 16
+# campos e os apelidos, um por linha), e o caractere e U+E900 + contagem - 1.
+# Um nome acha o sistema pela entrada ou por um apelido, em minusculas, o
+# mesmo que o tema faz com o nome da tela (fliperos-arcadeflow systems
+# acrescenta os nomes das telas do FliperOS aos apelidos).
+#
+# A animacao da troca de sistema: o logotipo entra deslizando pelo lado de
+# onde a lista anda (e o de antes sai para o outro, como a tela do frontend
+# em feview.SLIDE) e pisca duas vezes. Fica o ultimo quadro aceso.
+#
+#   fliperos-syslogo find NOME                     U+XXXX do sistema (status 1 sem logotipo)
+#   fliperos-syslogo png NOME ARQUIVO [ALTURA]     o logotipo, branco em fundo transparente
+#   fliperos-syslogo export PASTA [ALTURA]         o de todos os sistemas, um PNG por nome
+#   fliperos-syslogo gif NOME ARQUIVO [ANTERIOR [PASSO [LARGURAxALTURA]]]
+#                                                  a animacao num GIF (o Pixelcade so mostra arquivos)
+import os
+import re
+import sys
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:
+    Image = None
+
+ATTRACT = os.environ.get('ATTRACT_DIR', '/home/fliperos/.attract')
+THEME = os.path.join(ATTRACT, 'layouts', 'Arcadeflow')
+FIRST = 0xE900
+COLOR = (139, 233, 253)       # o do marquee do sistema (fliperos-dmd COLOR['system'])
+
+# O tempo de cada parte (segundos): a mesma curva da troca de tela do
+# frontend (feview.SLIDE e o 1 - (1 - p)**3), e as duas piscadas.
+SLIDE = 0.3
+STEP = 0.04
+HOLD = 0.2
+OFF, ON = 0.12, 0.18
+BLINKS = 2
+
+
+def table(theme=None):
+    """{nome em minusculas: caractere} do data_systems.txt do tema."""
+    out = {}
+    blanks = 0
+    try:
+        with open(os.path.join(theme or THEME, 'data_systems.txt'), encoding='utf-8') as f:
+            lines = f.read().split('\n')
+    except OSError:
+        return out
+    for line in lines:
+        line = line.rstrip('\r')
+        if not line.strip():
+            blanks += 1
+            continue
+        key = line.split(',')[0].strip().lower()
+        if key and key != 'null':
+            out[key] = FIRST + blanks - 1
+    return out
+
+
+def lookup(name, theme=None):
+    """O caractere do sistema (ou None). Alem do nome inteiro, ele sem o que
+    vem entre parenteses ("Arcade (various) (MAME 2010)" -> "Arcade")."""
+    sys_table = table(theme)
+    low = ' '.join(name.lower().split())
+    for key in (low, re.sub(r'\s*\(.*$', '', low)):
+        if key in sys_table and sys_table[key] > FIRST - 1:
+            return sys_table[key]
+    return None
+
+
+def font(size):
+    return ImageFont.truetype(os.path.join(THEME, 'fonts', 'font_Roboto-Allcaps-EXT4X.ttf'), size)
+
+
+def render(name, height=None, color=(255, 255, 255)):
+    """O logotipo recortado (RGBA, so o desenho) com a altura pedida (ou o
+    tamanho em que a fonte o desenha); None sem tema, sem sistema ou sem
+    desenho."""
+    if Image is None:
+        return None
+    cp = lookup(name)
+    if cp is None:
+        return None
+    try:
+        face = font(200)
+    except OSError:
+        return None
+    canvas = Image.new('L', (2400, 400), 0)
+    ImageDraw.Draw(canvas).text((20, 20), chr(cp), font=face, fill=255)
+    box = canvas.getbbox()
+    if not box:
+        return None
+    alpha = canvas.crop(box)
+    if height and height != alpha.height:
+        width = max(1, round(alpha.width * height / alpha.height))
+        alpha = alpha.resize((width, height), Image.LANCZOS)
+    img = Image.new('RGBA', alpha.size, color + (255,))
+    img.putalpha(alpha)
+    return img
+
+
+def fitted(name, w, h, color=COLOR):
+    """O logotipo dentro de w x h (com uma margem), sem deformar."""
+    img = render(name, None, color)
+    if img is None:
+        return None
+    k = min((w - 8) / img.width, (h - 6) / img.height)
+    size = (max(1, round(img.width * k)), max(1, round(img.height * k)))
+    return img.resize(size, Image.LANCZOS)
+
+
+def timeline():
+    """[(deslocamento 0..1 do logotipo novo, aceso, milissegundos)]: o
+    slide (1 = fora da tela, 0 = no lugar) e depois as piscadas."""
+    out = []
+    n = max(1, round(SLIDE / STEP))
+    for i in range(1, n + 1):
+        p = 1 - (1 - i / n) ** 3
+        out.append((1 - p, True, round(STEP * 1000)))
+    out.append((0.0, True, round(HOLD * 1000)))
+    for _ in range(BLINKS):
+        out.append((0.0, False, round(OFF * 1000)))
+        out.append((0.0, True, round(ON * 1000)))
+    return out
+
+
+def frames(name, old=None, step=1, size=(128, 32), color=COLOR):
+    """[(imagem RGBA w x h, milissegundos)]: o logotipo de name entrando
+    (step > 0: pela direita, a lista andou para a frente) e o de old saindo."""
+    w, h = size
+    new = fitted(name, w, h, color)
+    if new is None:
+        return []
+    gone = fitted(old, w, h, color) if old and old.lower() != name.lower() else None
+    side = -1 if step < 0 else 1
+    out = []
+    for off, lit, ms in timeline():
+        img = Image.new('RGBA', (w, h), (0, 0, 0, 255))
+        if lit:
+            if gone is not None and off > 0:
+                x = round(-side * (1 - off) * w) + (w - gone.width) // 2
+                img.paste(gone, (x, (h - gone.height) // 2), gone)
+            x = round(side * off * w) + (w - new.width) // 2
+            img.paste(new, (x, (h - new.height) // 2), new)
+        out.append((img, ms))
+    return out
+
+
+def write_gif(path, anim):
+    """O GIF: o ultimo quadro fica quase 10 minutos (o maximo do formato)
+    para o marquee parar nele, ja que o Pixelcade repete o GIF."""
+    imgs = [i.convert('RGB') for i, _ in anim]
+    times = [ms for _, ms in anim]
+    times[-1] = 600000
+    imgs[0].save(path, save_all=True, append_images=imgs[1:], duration=times, loop=0, optimize=False)
+
+
+def safe(name):
+    return re.sub(r'[^A-Za-z0-9._ -]', '_', name)
+
+
+def main(argv):
+    if Image is None:
+        sys.stderr.write('fliperos-syslogo: needs python3-pil\n')
+        return 1
+    cmd, args = (argv[1] if len(argv) > 1 else ''), argv[2:]
+    if cmd == 'find' and len(args) == 1:
+        cp = lookup(args[0])
+        if cp is None or render(args[0], 8) is None:      # no data_systems.txt e com desenho na fonte
+            return 1
+        print('U+%X' % cp)
+        return 0
+    if cmd == 'png' and len(args) in (2, 3):
+        img = render(args[0], int(args[2]) if len(args) == 3 else None)
+        if img is None:
+            return 1
+        img.save(args[1])
+        return 0
+    if cmd == 'export' and len(args) in (1, 2):
+        os.makedirs(args[0], exist_ok=True)
+        done = set()
+        names = {}
+        try:
+            with open(os.path.join(THEME, 'data_systems.txt'), encoding='utf-8') as f:
+                for line in f.read().split('\n'):
+                    fields = line.rstrip('\r').split(',')
+                    if len(fields) > 11 and fields[0] != 'null':
+                        names.setdefault(fields[0].strip().lower(), fields[11] if fields[11] != 'null' else fields[0])
+        except OSError:
+            return 1
+        for key, label in names.items():
+            cp = lookup(key)
+            if cp in done:
+                continue
+            img = render(key, int(args[1]) if len(args) == 2 else None)
+            if img is None:
+                continue
+            done.add(cp)
+            img.save(os.path.join(args[0], safe(label) + '.png'))
+        print('%d logos' % len(done))
+        return 0 if done else 1
+    if cmd == 'gif' and 2 <= len(args) <= 5:
+        size = (128, 32)
+        if len(args) == 5 and re.fullmatch(r'\d+x\d+', args[4]):
+            size = tuple(int(n) for n in args[4].split('x'))
+        try:
+            step = int(args[3]) if len(args) > 3 else 1
+        except ValueError:
+            step = 1
+        anim = frames(args[0], args[2] if len(args) > 2 else None, step, size)
+        if not anim:
+            return 1
+        write_gif(args[1], anim)
+        return 0
+    sys.stderr.write('usage: fliperos-syslogo find NAME | png NAME FILE [HEIGHT] | export DIR [HEIGHT]\n'
+                     '       fliperos-syslogo gif NAME FILE [PREVIOUS [STEP [WIDTHxHEIGHT]]]\n')
+    return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
