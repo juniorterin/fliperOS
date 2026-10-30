@@ -13,6 +13,10 @@ Object.assign(TEXT.en, {
   mq_art_pixelcade: "Art: marquee, then logo, then the name.", mq_art_zedmd: "Art: dmd, then marquee, then logo, then the name.",
   mq_live: "Marquee as it will appear",
   mq_show: "When both exist, the marquee shows", mq_show_art: "Art", mq_show_score: "Scoreboard",
+  mq_inst_ok: "%s is installed on the cabinet.", mq_inst_no_note: "%s is not installed on the cabinet (the preview works without it).",
+  mq_inst_busy: "Installing %s… (see the tasks)", mq_inst_title: "Install %s?",
+  mq_inst_text: "%s is not installed on the cabinet. The preview here works without it, but the real display needs it. Install it now? It downloads files and takes a while.",
+  mq_inst_yes: "Install", mq_inst_no: "Not now",
 });
 Object.assign(TEXT.pt, {
   mq_title: "Prévia do marquee", mq_on: "Modo prévia do marquee", mq_device: "Mostrar o marquee do",
@@ -21,6 +25,10 @@ Object.assign(TEXT.pt, {
   mq_art_pixelcade: "Arte: marquee, depois logo, depois o nome.", mq_art_zedmd: "Arte: dmd, depois marquee, depois logo, depois o nome.",
   mq_live: "O marquee como vai aparecer",
   mq_show: "Quando existem os dois, o marquee mostra", mq_show_art: "Arte", mq_show_score: "Placar",
+  mq_inst_ok: "%s está instalado no gabinete.", mq_inst_no_note: "%s não está instalado no gabinete (a prévia funciona sem ele).",
+  mq_inst_busy: "Instalando %s… (veja as tarefas)", mq_inst_title: "Instalar o %s?",
+  mq_inst_text: "O %s não está instalado no gabinete. A prévia aqui funciona sem ele, mas o display de verdade precisa dele. Instalar agora? Baixa arquivos e demora um pouco.",
+  mq_inst_yes: "Instalar", mq_inst_no: "Agora não",
 });
 
 // O que cada painel desenha: as letras de arte (campo "art" dos jogos) na
@@ -150,7 +158,7 @@ let mqKey = "", mqStarted = false;
 function mqPaint(game) {
   document.documentElement.classList.toggle("mq-on", mq.on);
   // O placar so e pedido depois do login (o primeiro status chega aqui).
-  if (!mqStarted) { mqStarted = true; mqWatch(); }
+  if (!mqStarted) { mqStarted = true; mqWatch(); if (mq.on) mqCheckInstall(false); }
   const front = typeof cabFront !== "undefined" && cabFront ? cabFront.program : "";
   const key = [mq.on, mq.device, lang, game ? game.system + "/" + game.name + "/" + (game.art || "") : "-", front].join("|");
   if (key === mqKey) return;
@@ -191,6 +199,7 @@ document.querySelectorAll(".mq-show button").forEach((b) => b.addEventListener("
   mqPoll();
 }));
 function mqChanged() {
+  const was = { on: mq.on, device: mq.device };
   mq.on = $("mq-on").checked;
   mq.device = MQ_DEVICES[$("mq-device").value] ? $("mq-device").value : "pixelcade";
   mqSave();
@@ -198,7 +207,53 @@ function mqChanged() {
   mqKey = "";
   mqPaint(cabOnline ? cabGame : null);
   mqWatch();
+  // Ligou ou trocou o dispositivo: ele esta instalado? Se nao, pergunta.
+  if (mq.on && (!was.on || was.device !== mq.device)) mqCheckInstall(true);
 }
+
+// ── O dispositivo esta instalado? ────────────────────────────────
+// Pixelcade e ZeDMD sao "extras" da pagina Install (/api/install). A previa
+// funciona sem eles, mas o display de verdade precisa: ao ligar o modo ou
+// trocar o dispositivo, se falta, um dialogo oferece instalar (a tarefa vai
+// para a gaveta de tarefas, como na pagina Install).
+let mqInstTimer = null;
+
+function mqInstNote(row) {
+  const name = MQ_DEVICES[mq.device].name;
+  $("mq-inst").textContent = t(row.installed ? "mq_inst_ok" : "mq_inst_no_note").replace("%s", name);
+  $("mq-inst-go").hidden = row.installed;
+}
+
+async function mqCheckInstall(offer) {
+  const device = mq.device;
+  let row = null;
+  try {
+    row = ((await (await api("/api/install")).json()).extras || []).find((e) => e.name === device);
+  } catch (e) { return; }
+  if (!row || device !== mq.device) return;
+  mqInstNote(row);
+  if (row.installed || !offer) return;
+  const yes = await ask({ title: t("mq_inst_title").replace("%s", MQ_DEVICES[device].name),
+    text: t("mq_inst_text").replace("%s", MQ_DEVICES[device].name), yes: t("mq_inst_yes"), no: t("mq_inst_no") });
+  if (yes) mqInstall(device);
+}
+
+async function mqInstall(device) {
+  await startTask("/api/install", { group: "extras", name: device });
+  $("mq-inst").textContent = t("mq_inst_busy").replace("%s", MQ_DEVICES[device].name);
+  $("mq-inst-go").hidden = true;
+  // Quando a tarefa termina o aviso vira "instalado" (confere a cada 5 s).
+  clearInterval(mqInstTimer);
+  let tries = 0;
+  mqInstTimer = setInterval(async () => {
+    if (++tries > 120 || device !== mq.device) { clearInterval(mqInstTimer); return; }
+    try {
+      const row = ((await (await api("/api/install")).json()).extras || []).find((e) => e.name === device);
+      if (row && row.installed) { mqInstNote(row); clearInterval(mqInstTimer); }
+    } catch (e) { /* o gabinete reiniciando */ }
+  }, 5000);
+}
+$("mq-inst-go").addEventListener("click", () => mqInstall(mq.device));
 $("mq-on").addEventListener("change", mqChanged);
 $("mq-device").addEventListener("change", mqChanged);
 mqControls();
