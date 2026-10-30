@@ -4714,6 +4714,51 @@ class FrontendDataTests(unittest.TestCase):
             fm.PIXELCADE_TOOL = str(Path(tmp) / 'nenhum')
             fm.Frontend.marquee_logo(fe, 'Naomi', 'Atomiswave', 1)
 
+    def test_idle_frontend_starts_the_marquee_screensaver_and_a_press_stops_it(self):
+        import types
+        fm = self.frontend_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            tool, seen = Path(tmp) / 'pixelcade', Path(tmp) / 'seen'
+            tool.write_text('#!/bin/sh\necho "$@" >> %s\n' % seen)
+            tool.chmod(0o755)
+            fm.PIXELCADE_TOOL = str(tool)
+            self.assertEqual(fm.IDLE_SECONDS, 30.0)
+            fe = types.SimpleNamespace(shot=None, last_input=100.0, idle=False)
+            idle = lambda now, active=False: fm.Frontend.marquee_idle(fe, now, active)
+
+            def calls(wait=0.0):
+                deadline = time.time() + wait
+                while not seen.exists() and time.time() < deadline:
+                    time.sleep(0.05)
+                return seen.read_text().splitlines() if seen.exists() else []
+            # Antes dos 30 s, nada; um botao reinicia a conta.
+            idle(129.0)
+            idle(150.0, True)
+            idle(179.0)
+            self.assertEqual(calls(0.3), [])
+            # Passados os 30 s: o protetor de tela comeca, uma vez so.
+            idle(180.5)
+            self.assertEqual(calls(5), ['bg screensaver start'])
+            idle(200.0)
+            time.sleep(0.3)
+            self.assertEqual(calls(), ['bg screensaver start'])
+            # O primeiro toque: o stop roda e acaba antes de a chamada voltar.
+            idle(210.0, True)
+            self.assertEqual(calls(), ['bg screensaver start', 'screensaver stop'])
+            idle(212.0)
+            self.assertEqual(len(calls()), 2)
+            # Desligado (0) ou nos prints (--shot), nao manda nada; sem o programa, sem erro.
+            fm.IDLE_SECONDS = 0.0
+            idle(1000.0)
+            fe.shot = 'x'
+            fm.IDLE_SECONDS = 30.0
+            idle(2000.0)
+            fe.shot = None
+            fe.idle = False
+            fm.PIXELCADE_TOOL = str(Path(tmp) / 'nenhum')
+            idle(3000.0)
+            self.assertEqual(len(calls()), 2)
+
     def test_exit_key_table_and_panel_keys(self):
         import types
         fm = self.frontend_module()
@@ -11080,7 +11125,7 @@ class ZeDMDTests(unittest.TestCase):
             (self.tmp / 'media' / kind).mkdir(parents=True, exist_ok=True)
             Image.new('RGB', (128, 32), colors[name]).save(self.tmp / 'media' / kind / (name + '.png'))
         env = dict(self.env, DMD_ATTRACT_SECONDS='0.05')
-        proc = subprocess.Popen([sys.executable, str(self.SCRIPT), 'attract'], env=env)
+        proc = subprocess.Popen([sys.executable, str(self.SCRIPT), 'attract', 'art'], env=env)
         self.addCleanup(proc.kill)
         time.sleep(2)
         self.assertIsNone(proc.poll())
@@ -11089,6 +11134,28 @@ class ZeDMDTests(unittest.TestCase):
         self.assertEqual(proc.wait(timeout=10), 0)
         seen = {f[1][:3] for f in self.frames(self.received[0])}
         self.assertEqual(seen, {bytes(c) for c in colors.values()})
+
+    def test_attract_plays_the_logo_animation_until_the_next_event(self):
+        # O protetor de tela (o frontend ocioso) e a animacao do logo, mesmo com artes em ~/media.
+        from PIL import Image
+        art = self.tmp / 'media/marquee/arcade'
+        art.mkdir(parents=True)
+        Image.new('RGB', (128, 32), (255, 0, 0)).save(art / 'a.png')
+        gif = ROOT / 'config/zedmd-fliperos.gif'
+        env = dict(self.env, DMD_STARTUP=str(gif))
+        proc = subprocess.Popen([sys.executable, str(self.SCRIPT), 'attract'], env=env)
+        self.addCleanup(proc.kill)
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and not (self.received and len(self.frames(self.received[0])) >= 12):
+            time.sleep(0.1)
+        frames = self.frames(self.received[0])
+        self.assertGreaterEqual(len(frames), 12)
+        self.assertEqual([f[0][6] for f in frames[:3]], [1, 0, 0])
+        self.assertNotIn(b'\xff\x00\x00', {f[1][:3] for f in frames})
+        self.assertNotEqual(frames[0][1], frames[8][1])
+        self.assertIsNone(proc.poll())
+        self.run_('text', 'SF2')
+        self.assertEqual(proc.wait(timeout=5), 0)
 
     def test_versus_scoreboard_frame(self):
         frames = self.run_('versus', 'YOU', '3', '1', 'RIVAL', '125300', '98700')

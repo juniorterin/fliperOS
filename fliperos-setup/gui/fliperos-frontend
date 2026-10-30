@@ -69,6 +69,10 @@ OPT_MODE, OPT_CLONES, OPT_HIDDEN, OPT_EXIT_KEY, OPT_EXIT_PAD, OPT_POWER, OPT_COM
 BUTTONS_TOOL = os.environ.get("FLIPEROS_BUTTONS_TOOL", "/opt/fliperos/bin/fliperos-buttons")
 # O marquee (Pixelcade, ZeDMD): o logotipo do sistema ao trocar de romlist.
 PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/fliperos-pixelcade")
+# O protetor de tela do marquee: IDLE_SECONDS sem apertar nenhum botao e o ZeDMD
+# toca a animacao do logo (fliperos-pixelcade screensaver start); o primeiro
+# toque traz de volta o sistema selecionado. 0 desliga.
+IDLE_SECONDS = float(os.environ.get("FLIPEROS_IDLE_SECONDS", "30"))
 # Os botoes do atalho do painel, segurados juntos por EXIT_HOLD segundos
 # (no jogo e na hora de escolher). CAPTURE_WAIT: sem apertar, a escolha sai.
 EXIT_HOLD, CAPTURE_WAIT = 1.0, 8.0
@@ -423,6 +427,27 @@ class Frontend:
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                              start_new_session=True)
         except OSError:
+            pass
+
+    def marquee_idle(self, now, active):
+        """O protetor de tela do marquee: active = apertaram algum botao (ou ha um
+        segurado). Passados IDLE_SECONDS sem isso, o ZeDMD toca a animacao do logo;
+        ao primeiro toque o "stop" roda e espera, para a volta do sistema nao
+        correr contra o logotipo do toque que acordou. Sem marquee, nao faz nada."""
+        if active:
+            self.last_input = now
+        idle = bool(IDLE_SECONDS) and now - self.last_input >= IDLE_SECONDS
+        if idle == self.idle or self.shot:
+            return
+        self.idle = idle
+        try:
+            if idle:
+                subprocess.Popen([PIXELCADE_TOOL, "bg", "screensaver", "start"], stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            else:
+                subprocess.run([PIXELCADE_TOOL, "screensaver", "stop"], stdin=subprocess.DEVNULL,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+        except (OSError, subprocess.SubprocessError):
             pass
 
     def switch_category(self, step):
@@ -1162,15 +1187,19 @@ class Frontend:
                 self.draw(time.monotonic())
                 self.pg.image.save(self.back, "%s-%d.png" % (self.shot, i))
             return 0
+        self.last_input, self.idle = time.monotonic(), False
         while True:
             now = time.monotonic()
-            for a in self.input.poll():
+            acts = self.input.poll()
+            self.marquee_idle(now, bool(acts) or bool(self.input.down))
+            for a in acts:
                 r = self.act(a)
                 if r == "quit":
                     self.remember()
                     return 0
                 if r == "launch":
                     self.launch()
+                    self.last_input = time.monotonic()
             self.tick(now)
             self.capture_tick(now)
             # O tempo do modo comercial acabou aqui no frontend.

@@ -16,7 +16,8 @@
 #   fliperos-dmd slide SISTEMA [ANTERIOR [PASSO]]   o logotipo do sistema entrando e piscando duas vezes
 #   fliperos-dmd image ARQUIVO
 #   fliperos-dmd text TEXTO
-#   fliperos-dmd attract              as artes de ~/media, uma depois da outra
+#   fliperos-dmd attract [art]        o protetor de tela: a animacao do logo (com "art",
+#                                     as artes de ~/media, uma depois da outra)
 #   fliperos-dmd startup              o logo do FliperOS (animacao vetorial 3D), quando o dmdserver abre
 #   fliperos-dmd versus ESQ VIT_ESQ VIT_DIR DIR PONTOS_ESQ PONTOS_DIR
 #                                     o placar de uma partida versus: os nomes dos
@@ -330,9 +331,12 @@ def play(frames, intro=(), retry=0, once=False):
                     return
 
 
-# attract: as artes de ~/media (dmd e marquee) em ordem aleatoria, cada uma
-# por ATTRACT_SECONDS; sem nenhuma, o logo.
-def attract():
+# attract: o protetor de tela (o frontend ocioso): a animacao do logo, a mesma
+# da abertura, ate o proximo evento. "attract art": as artes de ~/media (dmd e
+# marquee) em ordem aleatoria, cada uma por ATTRACT_SECONDS; sem nenhuma, o logo.
+def attract(art=False):
+    if not art:
+        return play(startup_frames())
     files = []
     for kind in ('dmd', 'marquee'):
         for ext in EXTS:
@@ -499,8 +503,8 @@ def run(argv):
             frames = text_frames(argv[2], COLOR['game'])
         elif len(argv) == 8 and argv[1] == 'versus':
             frames = versus_frame(*argv[2:8])
-        elif len(argv) == 2 and argv[1] == 'attract':
-            attract()
+        elif argv[1:2] == ['attract'] and argv[2:] in ([], ['art']):
+            attract(art=len(argv) == 3)
             return 0
         elif len(argv) == 2 and argv[1] == 'startup':
             # O dmdserver ainda esta abrindo a porta do painel.
@@ -510,7 +514,7 @@ def run(argv):
                              '       fliperos-dmd slide SYSTEM [PREVIOUS [STEP]]\n'
                              '       fliperos-dmd image FILE\n'
                              '       fliperos-dmd text TEXT\n'
-                             '       fliperos-dmd attract | startup\n'
+                             '       fliperos-dmd attract [art] | startup\n'
                              '       fliperos-dmd versus LEFT WINS_LEFT WINS_RIGHT RIGHT SCORE_LEFT SCORE_RIGHT\n'
                              '       fliperos-dmd title ROM\n'
                              '       fliperos-dmd art SYSTEM [ROM]\n')
