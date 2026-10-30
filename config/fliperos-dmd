@@ -17,7 +17,7 @@
 #   fliperos-dmd image ARQUIVO
 #   fliperos-dmd text TEXTO
 #   fliperos-dmd attract              as artes de ~/media, uma depois da outra
-#   fliperos-dmd startup              o logo do FliperOS (animacao de pinball), quando o dmdserver abre
+#   fliperos-dmd startup              o logo do FliperOS (animacao vetorial 3D), quando o dmdserver abre
 #   fliperos-dmd versus ESQ VIT_ESQ VIT_DIR DIR PONTOS_ESQ PONTOS_DIR
 #                                     o placar de uma partida versus: os nomes dos
 #                                     lados, as vitorias e os pontos ("-" = sem)
@@ -52,8 +52,8 @@ ATTRACT = os.environ.get('ATTRACT_DIR', '/home/fliperos/.attract')
 ESDE = os.environ.get('ESDE_DIR', '/home/fliperos/ES-DE')
 FONT = os.environ.get('DMD_FONT', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
 PIDFILE = os.path.join(os.environ.get('XDG_RUNTIME_DIR') or '/tmp', 'fliperos-dmd.pid')
-# A abertura: a animacao de pinball do logo (config/zedmd-fliperos.gif, feita por
-# tools/zedmd-pinball-anim.py). Sem ela, o logo parado, que o Pixelcade tambem usa.
+# A abertura: a animacao vetorial 3D do logo (config/zedmd-fliperos.gif, feita por
+# tools/zedmd-vector-anim.py). Sem ela, o logo parado, que o Pixelcade tambem usa.
 STARTUP = os.environ.get('DMD_STARTUP', '/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif')
 LOGO = '/usr/local/share/fliperos/pixelcade/fliperos.png'
 ATTRACT_SECONDS = float(os.environ.get('DMD_ATTRACT_SECONDS', '8'))

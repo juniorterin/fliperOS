@@ -196,7 +196,7 @@ install -Dm755 "$src/config/fliperos-dmd" "$root/opt/fliperos/bin/fliperos-dmd"
 # O logotipo escrito de cada sistema no marquee, da fonte do tema Arcadeflow
 # (que o Setup baixa: nada dele vem na imagem).
 install -Dm755 "$src/config/fliperos-syslogo" "$root/opt/fliperos/bin/fliperos-syslogo"
-# A abertura do ZeDMD: a animacao de pinball do logo (tools/zedmd-pinball-anim.py).
+# A abertura do ZeDMD: a animacao vetorial 3D do logo (tools/zedmd-vector-anim.py).
 install -Dm644 "$src/config/zedmd-fliperos.gif" "$root/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif"
 install -Dm644 "$src/config/fliperos-zedmd.service" "$root/etc/systemd/system/fliperos-zedmd.service"
 install -Dm644 "$src/config/99-fliperos-zedmd.rules" "$root/etc/udev/rules.d/99-fliperos-zedmd.rules"

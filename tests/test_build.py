@@ -11127,7 +11127,10 @@ class ZeDMDTests(unittest.TestCase):
         with Image.open(gif) as img:
             self.assertEqual(img.size, (128, 32))
             self.assertGreater(img.n_frames, 100)
-            self.assertTrue(all(20 <= f.info['duration'] <= 100 for f in ImageSequence.Iterator(img)))
+            # Quadros iguais seguidos se fundem em um mais longo; a volta toda dura uns 8 s.
+            durations = [f.info['duration'] for f in ImageSequence.Iterator(img)]
+            self.assertTrue(all(20 <= d <= 1000 for d in durations))
+            self.assertTrue(6000 <= sum(durations) <= 10000)
         # Instalado onde o fliperos-dmd o procura; o logo parado fica de reserva.
         self.assertIn('install -Dm644 "$src/config/zedmd-fliperos.gif" '
                       '"$root/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif"', ROOTFS)
