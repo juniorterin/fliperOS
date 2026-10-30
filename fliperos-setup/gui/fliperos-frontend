@@ -432,8 +432,10 @@ class Frontend:
     def marquee_idle(self, now, active):
         """O protetor de tela do marquee: active = apertaram algum botao (ou ha um
         segurado). Passados IDLE_SECONDS sem isso, o ZeDMD toca a animacao do logo;
-        ao primeiro toque o "stop" roda e espera, para a volta do sistema nao
-        correr contra o logotipo do toque que acordou. Sem marquee, nao faz nada."""
+        o primeiro toque o encerra e o sistema selecionado volta. Em segundo plano
+        (um Pixelcade que nao responde nao trava o menu): a volta e gravada antes do
+        logotipo do toque que acordou, que ainda procura o desenho dele. Sem
+        marquee, nao faz nada."""
         if active:
             self.last_input = now
         idle = bool(IDLE_SECONDS) and now - self.last_input >= IDLE_SECONDS
@@ -441,13 +443,10 @@ class Frontend:
             return
         self.idle = idle
         try:
-            if idle:
-                subprocess.Popen([PIXELCADE_TOOL, "bg", "screensaver", "start"], stdin=subprocess.DEVNULL,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-            else:
-                subprocess.run([PIXELCADE_TOOL, "screensaver", "stop"], stdin=subprocess.DEVNULL,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
-        except (OSError, subprocess.SubprocessError):
+            subprocess.Popen([PIXELCADE_TOOL, "bg", "screensaver", "start" if idle else "stop"],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        except OSError:
             pass
 
     def switch_category(self, step):

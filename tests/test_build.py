@@ -4742,9 +4742,12 @@ class FrontendDataTests(unittest.TestCase):
             idle(200.0)
             time.sleep(0.3)
             self.assertEqual(calls(), ['bg screensaver start'])
-            # O primeiro toque: o stop roda e acaba antes de a chamada voltar.
+            # O primeiro toque: o stop, tambem em segundo plano (nao trava o menu).
             idle(210.0, True)
-            self.assertEqual(calls(), ['bg screensaver start', 'screensaver stop'])
+            deadline = time.time() + 5
+            while len(calls()) < 2 and time.time() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(calls(), ['bg screensaver start', 'bg screensaver stop'])
             idle(212.0)
             self.assertEqual(len(calls()), 2)
             # Desligado (0) ou nos prints (--shot), nao manda nada; sem o programa, sem erro.
@@ -9908,6 +9911,24 @@ class PixelcadeTests(unittest.TestCase):
         self.calls.unlink()
         self.run_('system', 'dreamcast')
         self.assertEqual(self.run_('end', 'mame', 'digdug'), [])
+
+    def test_preview_and_zedmd_do_not_wait_for_the_pixelcade(self):
+        # Um pixelweb sem o painel ligado so responde no fim dos 3 s do curl: o
+        # estado do marquee (a previa do painel e o OBS) ja esta gravado quando
+        # cada pedido ao Pixelcade sai, e a volta do protetor de tela pede o
+        # attract/stop antes da exibicao.
+        self.install()
+        conf = self.tmp / 'fliperos.conf'
+        conf.write_text('marquee_overlay=on\n')
+        self.env['FLIPEROS_CONF'] = str(conf)
+        state = self.tmp / 'run/fliperos-marquee'
+        (self.tmp / 'bin/curl').write_text('#!/bin/sh\nfor a; do last=$a; done\necho "$last $(sed -n 1p %s)" >> %s\n'
+                                           % (state, self.calls))
+        self.assertEqual(self.run_('system', 'dreamcast'), ['console/stream/dreamcast event=system'])
+        self.assertEqual(self.run_('select', 'mame', 'sf2'), ['arcade/stream/mame/sf2?event=FEScroll event=select'])
+        self.assertEqual(self.run_('screensaver', 'start'), ['attract?nointerrupt event=attract'])
+        self.assertEqual(self.run_('screensaver', 'stop'),
+                         ['attract/stop event=select', 'arcade/stream/mame/sf2?event=FEScroll event=select'])
 
     def test_screensaver_is_the_attract_mode(self):
         self.install()
