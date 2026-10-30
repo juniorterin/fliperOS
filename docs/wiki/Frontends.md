@@ -27,7 +27,9 @@ It pauses while a game is open. A game is tried once every 30 days (what a sourc
 
 Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control (a pistol for light-gun games, which Arcadeflow has no icon for) with the buttons.
 
-**Controls.** A guide shows them each time the frontend opens; any button closes it.
+**Controls.** A guide shows them each time the frontend opens; any button closes it. The guide draws the controls as **Frontend controls** (below) left them: each panel button where Setup > Joysticks > Buttons layout puts it, in its function's colour. A button with no function is left out of the drawing, and so is the joystick when no direction has one. Under the buttons come Start and the functions that only have a key.
+
+These are the defaults:
 - Up and down move through the games; past the last one comes the first again, and before the first the last (holding stops at the end, the next press goes around). Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).
   - The letter mode stays after letting go: each tap of up or down moves one letter.
   - Two seconds without touching anything (or any other button) end it, on the first game of that letter.
@@ -44,6 +46,15 @@ Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has bee
   Under them come the **frontend options**. The game options and the frontend options are one list that scrolls with the chosen line (always whole lines, never cut in half), with the Auto scrape box fixed at the bottom; the card is 200 pixels tall, so it fits on the tube. Each option is saved at once in `~/.config/fliperos/frontend.json`:
   - **View**: list, full screen or grid, with left and right (Start also switches it).
   - **Show clones** and **Hidden games** (the list of hidden games; button 1 brings one back).
+  - **Frontend controls**: a screen with the frontend's functions (games up and down, list left and right, select, back, page up and down, favourite, filter, view mode and game options). Each one has a **Panel** column and a **Keyboard** column; left and right switch between them.
+
+    Select asks for the new one: press the panel control (a button, a direction or Start) or the key. A button or key that another function already had swaps: that function gets the old one. The same one again, or Delete, leaves the function with none; any function can have none.
+
+    Nothing pressed for 8 seconds keeps it as it was (Esc, or the panel's back button when choosing a key, cancels). **Reset** brings back the defaults. Each change works at once and is saved in `frontend.json` (`controls`).
+
+    **Panel layout** (left and right) is the shape of the panel that the guide draws: **6 buttons** in two rows (where Buttons layout puts them), **4 in line** like a Neo Geo MVS, **3 in line**, **2 in line** or **2 stacked**. The guide draws only the buttons that shape has, and in this screen a button it doesn't have shows dimmed (its function then works only from the keyboard).
+
+    The coin stays the coin (commercial mode). A key that the panel itself sends (a keyboard encoder: the `k:` entries of the Button mapping, or MAME's keys without them) can't be a keyboard key. Leaving the screen with select or back off the panel shows a warning: without them the menus only open from the keyboard.
   - **Exit key**: the keyboard key that closes the game. Button 1 asks for it: press it within 8 seconds; button 2 on a controller cancels. A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing. Left, right or the Delete key turns it off.
   - **Exit buttons**: panel buttons that close the game when held together for a second. Button 1 asks for them: hold two or more together for a second. Left, right or the Delete key turns it off. In commercial mode the coin can't be one of them.
   - **Power closes game**: on (the default), the cabinet's power button closes the open game; off, it does nothing while a game is open. With no game open it always powers off.

@@ -17,6 +17,10 @@
 #   2  volta       3/6  pagina acima/abaixo   4  favorito   5  filtros
 #   Tab  classificar, renomear, scrape do jogo; e as opcoes do frontend
 #
+# Esse e o padrao: Tab > Frontend options > Frontend controls da a cada
+# funcao o comando do painel e a tecla que o usuario quiser (ou nenhum), e o
+# guia dos controles desenha o que ficou.
+#
 # Tab > Frontend options tambem tem o atalho que fecha o jogo (uma tecla do
 # teclado e/ou botoes do painel segurados juntos), o botao de desligar nos
 # jogos e o modo comercial: sem ficha nao se escolhe jogo, cada ficha soma
@@ -61,8 +65,9 @@ COLS = 3                     # as colunas da grade (o GRID_COLS do feview.py)
 
 
 # As linhas do Tab: 0 a 4 do jogo, e as do frontend (os minutos por ficha so
-# com o modo comercial ligado).
-OPT_MODE, OPT_CLONES, OPT_HIDDEN, OPT_EXIT_KEY, OPT_EXIT_PAD, OPT_POWER, OPT_COMMERCIAL, OPT_COIN = range(5, 13)
+# com o modo comercial ligado). A ordem e a do feview.FE_OPTIONS.
+(OPT_MODE, OPT_CLONES, OPT_HIDDEN, OPT_CONTROLS, OPT_EXIT_KEY, OPT_EXIT_PAD, OPT_POWER, OPT_COMMERCIAL,
+ OPT_COIN) = range(5, 14)
 
 # O atalho que fecha o jogo e as fichas do modo comercial, lidos junto com o
 # jogo (config/fliperos-buttons hotkey).
@@ -175,7 +180,12 @@ class Frontend:
         self.shot = args.shot
         self.window = None
         self.open()
-        self.input = feinput.Input(pygame)
+        cfg = load_config()
+        # As funcoes de cada botao e tecla (Tab > Frontend options > Frontend controls).
+        self.fi = feinput
+        self.input = feinput.Input(pygame, feinput.load_binds(pygame, cfg.get("controls")))
+        # O formato do painel, para o guia (feview.PANEL_LAYOUTS).
+        self.panel_layout = cfg.get("panel_layout") if cfg.get("panel_layout") in feview.PANEL_COUNT else "6"
         self.keytable = evdev_keys(pygame)
         self.nag_at = 0.0
         self.back = pygame.Surface((theme.WIDTH, theme.HEIGHT))
@@ -183,7 +193,6 @@ class Frontend:
         self.start = time.monotonic()
         # As listas levam uns segundos: enquanto isso, o fundo do menu e o
         # aviso na tela (vindo do menu, a tela ficava preta ate aqui).
-        cfg = load_config()
         loaded = {}
 
         def load():
@@ -391,7 +400,8 @@ class Frontend:
                      "game": g["Name"] if g else None, "positions": self.positions,
                      "clones": self.show_clones, "exit_key": self.exit_key, "exit_combo": self.exit_combo,
                      "power_exit": self.power_exit, "commercial": self.commercial,
-                     "coin_minutes": self.coin_minutes, "credit_until": self.credit_until})
+                     "coin_minutes": self.coin_minutes, "credit_until": self.credit_until,
+                     "controls": self.input.binds, "panel_layout": self.panel_layout})
 
     def keep_position(self):
         """O jogo onde o cursor esta, anotado para a game list de agora: ao
@@ -637,6 +647,8 @@ class Frontend:
             if a not in ("up", "down", "left", "right"):
                 self.overlay = None
             return None
+        if o == "controls":
+            return self.controls_act(a)
         if a == "b2" and o not in ("rename", "exitkey", "exitpad"):
             self.overlay = {"more": "popup", "classify": "options"}.get(o)
             if self.overlay == "popup":
@@ -749,6 +761,8 @@ class Frontend:
                 self.say("CLONES SHOWN" if self.show_clones else "CLONES HIDDEN")
             elif sel == OPT_HIDDEN and a == "b1":
                 self.overlay, self.ov = "hidden", {"sel": 0, "rows": self.lib.hidden_games()}
+            elif sel == OPT_CONTROLS and a == "b1":
+                self.overlay, self.ov = "controls", {"sel": 0, "col": 0, "wait": None}
             elif a == "b1" and sel == 3 and self.game():
                 g = self.game()
                 self.lib.set_hidden(g["_system"]["key"], g["Name"], True)
@@ -847,6 +861,89 @@ class Frontend:
             return self.rename_act(a)
         return None
 
+    def controls_act(self, a):
+        """Tab > Frontend options > Frontend controls: as funcoes, cada uma com o
+        comando do painel (coluna 0) e a tecla (coluna 1), o formato do painel
+        (o desenho do guia) e o RESET no fim. O botao 1 pede o novo: o proximo
+        comando apertado no painel ou a proxima tecla. Quem o tinha fica com o
+        de antes da funcao; o mesmo de novo, ou o Delete, a deixa sem nada. Cada
+        troca ja vale e fica gravada."""
+        ov = self.ov
+        funcs = self.fi.FUNCTIONS
+        layout_row, reset_row = len(funcs), len(funcs) + 1
+        if ov["wait"] == "pad":
+            if a.startswith("pad:"):
+                self.bind_control(funcs[ov["sel"]], "pad", a[4:])
+                self.controls_wait(None)
+            elif a == "delete":
+                self.bind_control(funcs[ov["sel"]], "pad", None)
+                self.controls_wait(None)
+            elif a == "esc":
+                self.controls_wait(None)
+            return None
+        if ov["wait"] == "key":
+            if a.startswith("key:"):
+                key = int(a[4:])
+                if key == self.pg.K_DELETE:
+                    self.bind_control(funcs[ov["sel"]], "key", None)
+                elif key in self.input.panel_keys:
+                    self.say("%s IS A PANEL CONTROL" % self.fi.key_name(self.pg, key), 2.4)
+                else:
+                    self.bind_control(funcs[ov["sel"]], "key", key)
+                self.controls_wait(None)
+            elif a == "b2":
+                # Um controle desiste (o teclado esta escolhendo).
+                self.controls_wait(None)
+            return None
+        sel = ov["sel"]
+        if a in ("up", "down"):
+            ov["sel"] = (sel + (1 if a == "down" else -1)) % (reset_row + 1)
+        elif sel == layout_row and a in ("left", "right", "b1"):
+            names = [k for k, _ in self.view.PANEL_LAYOUTS]
+            i = names.index(self.panel_layout) + (-1 if a == "left" else 1)
+            self.panel_layout = names[i % len(names)]
+            self.remember()
+        elif a in ("left", "right"):
+            ov["col"] ^= 1
+        elif a == "b1" and sel == reset_row:
+            self.input.bind(self.fi.default_binds(self.pg))
+            self.remember()
+            self.say("CONTROLS RESET")
+        elif a == "b1":
+            self.controls_wait("pad" if ov["col"] == 0 else "key")
+        elif a == "delete" and sel < len(funcs):
+            self.bind_control(funcs[sel], "pad" if ov["col"] == 0 else "key", None)
+        elif a in ("b2", "esc"):
+            self.overlay, self.ov = "options", {"sel": OPT_CONTROLS}
+            # Sem escolher ou voltar pelo painel, o menu so abre pelo teclado.
+            lost = [self.view.FUNCTION_NAMES[f] for f in ("b1", "b2") if not self.input.binds[f]["pad"]]
+            if lost:
+                self.say("/".join(lost) + ": NO PANEL BUTTON", 2.6)
+        return None
+
+    def controls_wait(self, kind):
+        """Esperando o comando do painel ("pad") ou a tecla ("key") da funcao
+        escolhida; None, de volta a lista."""
+        self.ov["wait"], self.ov["since"] = kind, time.monotonic()
+        self.input.capture_pad = kind == "pad"
+        self.input.capture = kind == "key"
+
+    def bind_control(self, function, kind, value):
+        """A funcao com o comando do painel ou a tecla value (None: nenhum), ja
+        valendo e gravado; o aviso diz o que mudou."""
+        binds = self.input.binds
+        value, other = self.fi.assign(binds, function, kind, value)
+        self.input.bind(binds)
+        self.remember()
+        names = self.view.FUNCTION_NAMES
+        if value is None:
+            self.say("%s: NO %s" % (names[function], "BUTTON" if kind == "pad" else "KEY"), 2)
+        elif other:
+            self.say("SWAPPED WITH " + names[other], 2.2)
+        else:
+            shown = self.fi.pad_name(value) if kind == "pad" else self.fi.key_name(self.pg, value)
+            self.say("%s: %s" % (names[function], shown), 2)
+
     def capture_done(self, overlay, sel):
         """Fim da escolha do atalho: de volta ao Tab, na linha dele."""
         self.input.capture = False
@@ -857,9 +954,12 @@ class Frontend:
         segurados juntos por EXIT_HOLD segundos; CAPTURE_WAIT sem nada, sai
         como estava."""
         o = self.overlay
+        if o == "controls" and self.ov.get("wait") and now - self.ov["since"] > CAPTURE_WAIT:
+            self.say("NOTHING CHANGED")
+            self.controls_wait(None)
         if o not in ("exitkey", "exitpad"):
             return
-        held = frozenset(a for a in COMBO_CONTROLS if self.input.held(a) is not None)
+        held = frozenset(self.input.pad_held())
         if o == "exitpad" and self.commercial and "coin" in held:
             # No modo comercial a ficha soma tempo: ela nao fecha o jogo.
             self.say("IN COMMERCIAL MODE COIN ADDS TIME", 2.4)

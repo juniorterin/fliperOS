@@ -4879,6 +4879,158 @@ class FrontendDataTests(unittest.TestCase):
         finally:
             fi.time.monotonic = real
 
+    @staticmethod
+    def fake_pygame():
+        import types
+        names = ['K_UP', 'K_DOWN', 'K_LEFT', 'K_RIGHT', 'K_RETURN', 'K_ESCAPE', 'K_PAGEUP', 'K_PAGEDOWN', 'K_f',
+                 'K_v', 'K_TAB', 'K_q']
+        pg = types.SimpleNamespace(**{n: 100 + i for i, n in enumerate(names)})
+        codes = {'left ctrl': 1, 'left alt': 2, 'space': 3, 'left shift': 4, 'z': 5, 'x': 6, '1': 7, '5': 8, 'a': 9}
+
+        def key_code(name):
+            if name not in codes:
+                raise ValueError(name)
+            return codes[name]
+        pg.key = types.SimpleNamespace(key_code=key_code, name=lambda k: {pg.K_q: 'q', 1: 'left ctrl'}.get(k, ''))
+        return pg
+
+    def test_frontend_controls_map(self):
+        # Tab > Frontend options > Frontend controls: cada funcao com um
+        # comando do painel e uma tecla. Sem nada gravado, o de sempre.
+        fi, pg = self.fi, self.fake_pygame()
+        binds = fi.default_binds(pg)
+        self.assertEqual(binds['b1'], {'pad': 'b1', 'key': pg.K_RETURN})
+        self.assertEqual(binds['tab'], {'pad': None, 'key': pg.K_TAB})
+        self.assertEqual(binds['b5'], {'pad': 'b5', 'key': None})
+        self.assertEqual(list(binds), list(fi.FUNCTIONS))
+        self.assertNotIn('coin', fi.PAD)
+        # Gravado: por cima do padrao; o que nao vale fica de fora, e um
+        # comando em duas funcoes fica so na primeira.
+        saved = {'tab': {'pad': 'b5'}, 'b5': {'pad': None, 'key': pg.K_q}, 'b4': {'pad': 'coin', 'key': 'x'},
+                 'b6': {'key': True}, 'b3': {'pad': 'b1'}, 'nada': {'pad': 'b2'}}
+        binds = fi.load_binds(pg, saved)
+        self.assertEqual(binds['tab'], {'pad': 'b5', 'key': pg.K_TAB})
+        self.assertEqual(binds['b5'], {'pad': None, 'key': pg.K_q})
+        self.assertEqual(binds['b4'], {'pad': 'b4', 'key': pg.K_f})
+        self.assertEqual(binds['b6']['key'], pg.K_PAGEDOWN)
+        self.assertEqual((binds['b1']['pad'], binds['b3']['pad']), ('b1', None))
+        self.assertEqual(fi.load_binds(pg, 'x'), fi.default_binds(pg))
+        # Dar a uma funcao o botao de outra troca os dois; o mesmo de novo, ou
+        # None, deixa a funcao sem nada (pode, e o guia nao desenha o botao).
+        binds = fi.default_binds(pg)
+        self.assertEqual(fi.assign(binds, 'tab', 'pad', 'b5'), ('b5', 'b5'))
+        self.assertEqual((binds['tab']['pad'], binds['b5']['pad']), ('b5', None))
+        self.assertEqual(fi.assign(binds, 'b4', 'pad', 'b1'), ('b1', 'b1'))
+        self.assertEqual((binds['b4']['pad'], binds['b1']['pad']), ('b1', 'b4'))
+        self.assertEqual(fi.assign(binds, 'b4', 'pad', 'b1'), (None, None))
+        self.assertIsNone(binds['b4']['pad'])
+        self.assertEqual(fi.assign(binds, 'b2', 'key', None), (None, None))
+        self.assertIsNone(binds['b2']['key'])
+        self.assertEqual(fi.assign(binds, 'start', 'key', pg.K_TAB), (pg.K_TAB, 'tab'))
+        self.assertEqual((binds['start']['key'], binds['tab']['key']), (pg.K_TAB, pg.K_v))
+        self.assertEqual([fi.pad_name(c) for c in ('b3', 'start', 'up', None)], ['BUTTON 3', 'START', 'UP', None])
+        self.assertEqual(fi.key_name(pg, pg.K_q), 'Q')
+
+    def test_panel_and_keys_become_the_mapped_functions(self):
+        # O comando do painel faz a funcao que o mapa deu a ele; a ficha e
+        # sempre a ficha; o estado dos comandos (os botoes do atalho que fecha
+        # o jogo) e o do painel, nao o das funcoes.
+        fi, pg = self.fi, self.fake_pygame()
+        inp = object.__new__(fi.Input)
+        inp.down, inp.sources, inp.loose = {}, {}, {}
+        inp.capture_pad = False
+        binds = fi.default_binds(pg)
+        fi.assign(binds, 'tab', 'pad', 'b5')
+        inp.bind(binds)
+        out = []
+        inp.pad_press('b5', ('b', 0, 4), out)
+        inp.pad_press('coin', ('b', 0, 6), out)
+        inp.pad_press('b1', ('b', 0, 0), out)
+        self.assertEqual(out, ['tab', 'coin', 'b1'])
+        self.assertEqual(inp.pad_held(), {'b5', 'coin', 'b1'})
+        self.assertIsNotNone(inp.held('tab'))
+        self.assertIsNone(inp.held('b5'))
+        # Escolhendo o comando de uma funcao: "pad:COMANDO", sem a funcao.
+        inp.capture_pad = True
+        out = []
+        inp.pad_press('b6', ('b', 0, 5), out)
+        self.assertEqual(out, ['pad:b6'])
+        self.assertIsNone(inp.held('b6'))
+        # Um comando sem funcao nao faz nada.
+        inp.capture_pad = False
+        fi.assign(binds, 'b3', 'pad', None)
+        inp.bind(binds)
+        out = []
+        inp.pad_press('b3', ('b', 0, 2), out)
+        self.assertEqual(out, [])
+        # As teclas do encoder: os k: do mapa; sem nenhum, as do MAME.
+        self.assertEqual(fi.panel_keyboard(pg, [('b1', 0, 'k:A'), ('up', 0, 'h0.1')]), {9: 'b1'})
+        mame = fi.panel_keyboard(pg, [('b1', 0, 'b0')])
+        self.assertEqual(mame, {1: 'b1', 2: 'b2', 3: 'b3', 4: 'b4', 5: 'b5', 6: 'b6', 7: 'start', 8: 'coin'})
+
+    def test_frontend_controls_screen_and_guide(self):
+        # A area Frontend controls no Tab, e o guia desenhado pelo mapa: o
+        # botao sem funcao sai do guia.
+        src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('elif sel == OPT_CONTROLS and a == "b1":', src)
+        self.assertIn('"controls": self.input.binds, "panel_layout": self.panel_layout', src)
+        self.assertIn('held = frozenset(self.input.pad_held())', src)
+        view = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
+        self.assertIn('("controls", "FRONTEND CONTROLS")', view)
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        import types
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        import feview
+        fi = self.fi
+        binds = fi.default_binds(pygame)
+        fe = types.SimpleNamespace(pg=pygame, input=types.SimpleNamespace(binds=binds),
+                                   fd=types.SimpleNamespace(web=types.SimpleNamespace(button_layout=lambda n: [1, 2, 3, 4, 5, 6])),
+                                   ov={'sel': 0, 'col': 0, 'wait': None})
+        pad, hints = feview.guide_map(fe)
+        self.assertEqual(pad['b4'], 'b4')
+        self.assertEqual(hints, ['START: VIEW MODE', 'TAB: GAME OPTIONS'])
+        fi.assign(binds, 'tab', 'pad', 'b5')
+        fi.assign(binds, 'b6', 'pad', None)
+        fi.assign(binds, 'start', 'key', None)
+        pad, hints = feview.guide_map(fe)
+        self.assertEqual((pad['b5'], 'b6' in pad), ('tab', False))
+        self.assertEqual(hints, ['START: VIEW MODE', 'PAGE DOWN: PAGE DOWN'])
+        ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+        feview.draw_guide(fe, ui)
+        feview.draw_controls(fe, ui, 1.0)
+        fe.ov['wait'] = 'pad'
+        feview.draw_controls(fe, ui, 1.0)
+        # Sem direcao nenhuma no painel, o direcional nem aparece.
+        for d in ('up', 'down', 'left', 'right'):
+            fi.assign(binds, d, 'pad', None)
+        feview.draw_guide(fe, ui)
+        # O formato do painel: um MVS (4 em linha) nao tem o botao 5, entao a
+        # funcao dele vale so pela tecla.
+        fe.input.binds = fi.default_binds(pygame)
+        fe.panel_layout = '4'
+        pad, hints = feview.guide_map(fe)
+        self.assertNotIn('b5', pad)
+        self.assertNotIn('b6', pad)
+        self.assertIn('PAGE DOWN: PAGE DOWN', hints)
+        slots = feview.panel_slots('4', [1, 2, 3, 4, 5, 6], ['b1', 'b2', 'b3', 'b4'], 30)
+        self.assertEqual([slots['b%d' % n][0] for n in range(1, 5)], [-45, -15, 15, 45])
+        self.assertEqual([slots['b%d' % n][3] for n in range(1, 5)], ['up', 'down', 'up', 'down'])
+        self.assertEqual(feview.panel_slots('2v', [], ['b1', 'b2'], 30), {'b1': (0, 0, 0, 'up', 0),
+                                                                          'b2': (0, 32, 0, 'down', 0)})
+        # No de 6, a posicao do Buttons layout.
+        self.assertEqual(feview.panel_slots('6', [4, 5, 6, 1, 2, 3], ['b1'], 30)['b1'][:2], (-30, 32))
+        for layout, _ in feview.PANEL_LAYOUTS:
+            fe.panel_layout = layout
+            feview.draw_guide(fe, ui)
+        fe.ov = {'sel': len(fi.FUNCTIONS), 'col': 0, 'wait': None}
+        feview.draw_controls(fe, ui, 1.0)
+        fe.panel_layout = 'x'
+        self.assertEqual(feview.panel_layout(fe), '6')
+
     def test_romlists_from_the_setup_and_the_session(self):
         setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
         self.assertIn('FRONTENDS_RESYNC_FULL=1 frontends_lists', setup)

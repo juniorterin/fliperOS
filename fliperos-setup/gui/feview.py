@@ -206,10 +206,13 @@ def back_icon(surf, cx, cy, c):
 
 
 def chevrons(surf, cx, cy, c, up):
+    """As duas setas da pagina, centradas em (cx, cy): cada uma um V de 2
+    pixels de grossura, 5 pixels uma da outra (de cy - 6 a cy + 6)."""
     s = -1 if up else 1
-    for k in (-3, 2):
-        y = cy + k * s
-        pygame.draw.lines(surf, c, False, [(cx - 5, y - 3 * s), (cx, y + 2 * s), (cx + 5, y - 3 * s)], 2)
+    for k in (0, 1):
+        tip = cy + s * (3 - 5 * k)
+        pygame.draw.polygon(surf, c, [(cx - 5, tip - 4 * s), (cx, tip + s), (cx + 5, tip - 4 * s),
+                                      (cx + 5, tip - 2 * s), (cx, tip + 3 * s), (cx - 5, tip - 2 * s)])
 
 
 def funnel(surf, cx, cy, c):
@@ -1155,10 +1158,37 @@ def card(ui, rect):
     pygame.draw.rect(ui, T.PINK, rect, 1)
 
 
-PANEL = [("1", T.GREEN, menu_icon, "MENU"), ("2", T.RED, back_icon, "BACK"),
-         ("3", T.CYAN, lambda s, x, y, c: chevrons(s, x, y, c, True), "PAGE UP"),
-         ("4", T.YELLOW, lambda s, x, y, c: star(s, x, y + 1, c), "FAVOURITE"), ("5", T.PURPLE, funnel, "FILTER"),
-         ("6", T.CYAN, lambda s, x, y, c: chevrons(s, x, y, c, False), "PAGE DOWN")]
+def view_icon(surf, cx, cy, c):
+    """O modo de ver: quatro quadradinhos."""
+    for dx in (-4, 1):
+        for dy in (-4, 1):
+            surf.fill(c, (cx + dx, cy + dy, 4, 4))
+
+
+def options_icon(surf, cx, cy, c):
+    """As opcoes do Tab: tres linhas."""
+    for dy in (-4, 0, 4):
+        surf.fill(c, (cx - 5, cy + dy - 1, 11, 2))
+
+
+# As funcoes do frontend (feinput.FUNCTIONS): o nome, a cor e o desenho no
+# topo do botao, no guia dos controles e no Frontend controls.
+FUNCTION_NAMES = {"up": "GAMES UP", "down": "GAMES DOWN", "left": "LIST LEFT", "right": "LIST RIGHT",
+                  "b1": "SELECT", "b2": "BACK", "b3": "PAGE UP", "b6": "PAGE DOWN", "b4": "FAVOURITE",
+                  "b5": "FILTER", "start": "VIEW MODE", "tab": "GAME OPTIONS"}
+FUNCTION_STYLE = {
+    "up": (T.CYAN, lambda s, x, y, c: arrow(s, x, y, (0, -1), c, 6)),
+    "down": (T.CYAN, lambda s, x, y, c: arrow(s, x, y, (0, 1), c, 6)),
+    "left": (T.PINK, lambda s, x, y, c: arrow(s, x, y, (-1, 0), c, 6)),
+    "right": (T.PINK, lambda s, x, y, c: arrow(s, x, y, (1, 0), c, 6)),
+    "b1": (T.GREEN, menu_icon), "b2": (T.RED, back_icon),
+    "b3": (T.CYAN, lambda s, x, y, c: chevrons(s, x, y, c, True)),
+    "b6": (T.CYAN, lambda s, x, y, c: chevrons(s, x, y, c, False)),
+    "b4": (T.YELLOW, lambda s, x, y, c: star(s, x, y + 1, c)), "b5": (T.PURPLE, funnel),
+    "start": (T.ORANGE, view_icon), "tab": (T.PINK, options_icon)}
+# No direcional, a funcao da propria direcao leva o nome curto (a seta ja diz
+# para onde).
+STICK_NAMES = {"up": "GAMES", "down": "GAMES", "left": "GAME LIST", "right": "GAME LIST"}
 
 
 def shade(color, k):
@@ -1194,7 +1224,65 @@ def button3d(ui, cx, cy, r, color):
     ellipse(ui, shade(color, 0.6), cx, cy, r, ry, 1)
 
 
+# O formato do painel (Frontend controls > Panel layout): seis botoes em duas
+# fileiras, quatro em linha como o do Neo Geo MVS, tres ou dois em linha, ou
+# dois um em cima do outro. O guia so desenha os botoes que ele tem.
+PANEL_LAYOUTS = (("6", "6 BUTTONS"), ("4", "4 IN LINE (MVS)"), ("3", "3 IN LINE"), ("2", "2 IN LINE"),
+                 ("2v", "2 STACKED"))
+PANEL_COUNT = {"6": 6, "4": 4, "3": 3, "2": 2, "2v": 2}
+
+
+def panel_layout(fe):
+    layout = getattr(fe, "panel_layout", "6")
+    return layout if layout in PANEL_COUNT else "6"
+
+
+def panel_slots(layout, where, buttons, step):
+    """Onde cada botao fica no guia: {botao: (dx, dy, subido, lado do nome,
+    alinhamento)}. dx a partir do meio; dy a fileira (0 e 32, ou 16 numa
+    fileira so); os do meio de uma fileira sobem 3 pixels, como num painel.
+    O nome vai em cima ("up") ou embaixo; no de 6 botoes os das pontas
+    encostam do lado de fora (-1, 1), nas fileiras so alternam em cima e
+    embaixo (centrados, 0). No de 6, a posicao e a do Buttons layout (where)."""
+    slots = {}
+    for b in buttons:
+        n = int(b[1:])
+        if layout == "6":
+            i = where[n - 1] - 1
+            col, row = i % 3, i // 3
+            slots[b] = ((col - 1) * step, row * 32, 3 if col == 1 else 0, "down" if row else "up", col - 1)
+        elif layout == "2v":
+            slots[b] = (0, (n - 1) * 32, 0, "down" if n > 1 else "up", 0)
+        else:
+            count, i = PANEL_COUNT[layout], n - 1
+            raised = 3 if 0 < i < count - 1 else 0
+            slots[b] = (round((i - (count - 1) / 2) * step), 16, raised, "down" if i % 2 else "up", 0)
+    return slots
+
+
+def guide_map(fe):
+    """O que o guia desenha, do Frontend controls: {comando do painel: funcao}
+    e as dicas de baixo (o Start e as funcoes que so tem tecla). Um botao que
+    o formato do painel nao tem (o 5 num MVS) e como nenhum."""
+    import feinput
+    binds = fe.input.binds
+    count = PANEL_COUNT[panel_layout(fe)]
+    pad = {b["pad"]: f for f, b in binds.items()
+           if b["pad"] and not (b["pad"][0] == "b" and int(b["pad"][1:]) > count)}
+    hints = []
+    if pad.get("start"):
+        hints.append("START: " + FUNCTION_NAMES[pad["start"]])
+    for f in feinput.FUNCTIONS:
+        if binds[f]["pad"] not in pad and binds[f]["key"] is not None:
+            hints.append("%s: %s" % (feinput.key_name(fe.pg, binds[f]["key"]), FUNCTION_NAMES[f]))
+    return pad, hints
+
+
 def draw_guide(fe, ui):
+    """O guia dos controles, do jeito que o Frontend controls os deixou: o
+    direcional com a funcao de cada direcao e os botoes do painel onde o
+    Buttons layout os poe, cada um na cor da funcao dele. Um comando sem
+    funcao nao aparece (o direcional sem nenhuma, nem ele)."""
     # Deitado, o direcional a esquerda e os botoes a direita; em pe, o
     # direcional em cima e os botoes embaixo.
     vertical = T.VERTICAL is not None
@@ -1205,55 +1293,100 @@ def draw_guide(fe, ui):
     ui.blit(W.big(title, 1, W.LABEL), (px + 10, py + 9))
     for i, c in enumerate(W.RAINBOW):
         pygame.draw.rect(ui, c, (px + 18 + W.width(title), py + 10 + i, pw - 28 - W.width(title), 1))
-    jx, jy = (WW // 2, py + 70) if vertical else (px + 54, py + 70)
-    pygame.draw.circle(ui, T.SPACE, (jx, jy), 21)
-    pygame.draw.circle(ui, T.LINE, (jx, jy), 21, 2)
-    pygame.draw.circle(ui, T.RED, (jx, jy), 9)
-    pygame.draw.circle(ui, (0xff, 0xa0, 0xa0), (jx - 3, jy - 3), 3)
-    for d, color in (((0, -1), T.CYAN), ((0, 1), T.CYAN), ((-1, 0), T.PINK), ((1, 0), T.PINK)):
-        arrow(ui, jx + d[0] * 30, jy + d[1] * 30, d, color, 5)
-    tiny.centered(ui, "GAMES", T.CYAN, jx, jy - 44)
-    tiny.text(ui, "GAME LIST", T.PINK, jx - 19 - tiny.width("GAME LIST"), jy + 9)
-    tiny.text(ui, "GAME LIST", T.PINK, jx + 19, jy + 9)
-    tiny.centered(ui, "GAMES", T.CYAN, jx, jy + 40)
-    tiny.centered(ui, "HOLD: FASTER", T.COMMENT, jx, jy + 49)
-    tiny.centered(ui, "3 S: LETTER BY LETTER", T.COMMENT, jx, jy + 56)
-    if vertical:
-        pygame.draw.line(ui, T.LINE, (px + 10, py + 136), (px + pw - 11, py + 136))
-    else:
-        pygame.draw.line(ui, T.LINE, (px + 112, py + 28), (px + 112, py + ph - 26))
-    # Os seis botoes juntos, como no painel; o nome de cada um fora, em cima
-    # (a fileira de cima) ou embaixo, com uma linha e a seta ate ele.
+    pad, hints = guide_map(fe)
+    stick = [d for d in ("up", "down", "left", "right") if pad.get(d)]
+    # Os botoes que o painel tem (o formato dele) e que fazem alguma coisa.
+    layout = panel_layout(fe)
+    buttons = ["b%d" % n for n in range(1, PANEL_COUNT[layout] + 1) if pad.get("b%d" % n)]
+    # So o direcional, ou so os botoes: o que sobrou fica no meio.
+    split = bool(stick and buttons)
+    jx, jy = (WW // 2, py + 70) if vertical or not split else (px + 54, py + 70)
+    if stick:
+        pygame.draw.circle(ui, T.SPACE, (jx, jy), 21)
+        pygame.draw.circle(ui, T.LINE, (jx, jy), 21, 2)
+        pygame.draw.circle(ui, T.RED, (jx, jy), 9)
+        pygame.draw.circle(ui, (0xff, 0xa0, 0xa0), (jx - 3, jy - 3), 3)
+        for direction, d in (("up", (0, -1)), ("down", (0, 1)), ("left", (-1, 0)), ("right", (1, 0))):
+            f = pad.get(direction)
+            if not f:
+                continue
+            color = FUNCTION_STYLE[f][0]
+            arrow(ui, jx + d[0] * 30, jy + d[1] * 30, d, color, 5)
+            label = STICK_NAMES[f] if f == direction else FUNCTION_NAMES[f]
+            if direction == "up":
+                tiny.centered(ui, label, color, jx, jy - 44)
+            elif direction == "down":
+                tiny.centered(ui, label, color, jx, jy + 40)
+            elif direction == "left":
+                tiny.text(ui, label, color, max(px + 4, jx - 19 - tiny.width(label)), jy + 9)
+            else:
+                tiny.text(ui, label, color, jx + 19, jy + 9)
+        # Segurar acelera o que anda pelos jogos (onde quer que esteja).
+        if pad.get("down") in ("up", "down") or pad.get("up") in ("up", "down"):
+            tiny.centered(ui, "HOLD: FASTER", T.COMMENT, jx, jy + 49)
+            tiny.centered(ui, "3 S: LETTER BY LETTER", T.COMMENT, jx, jy + 56)
+    if split:
+        if vertical:
+            pygame.draw.line(ui, T.LINE, (px + 10, py + 136), (px + pw - 11, py + 136))
+        else:
+            pygame.draw.line(ui, T.LINE, (px + 112, py + 28), (px + 112, py + ph - 26))
+    # Os botoes no formato do painel (Frontend controls > Panel layout), o nome
+    # de cada um fora, em cima ou embaixo, com uma linha e a seta ate ele.
     r, step = 12, 30
     if vertical:
-        bx0, by0 = WW // 2 - step, py + 172
+        mx, by0 = WW // 2, (py + 172 if split else py + 70)
+    elif split:
+        mx, by0 = px + 112 + (pw - 112) // 2, py + 60
     else:
-        bx0, by0 = px + 112 + (pw - 112 - 2 * step) // 2, py + 60
+        mx, by0 = WW // 2, py + 60
     ry = round(r * FLAT)
-    for i, (num, color, draw_icon, label) in enumerate(PANEL):
-        col, row = i % 3, i // 3
-        cx = bx0 + col * step
-        cy = by0 + row * 32 - (3 if col == 1 else 0)
+    try:
+        where = fe.fd.web.button_layout(6)
+    except Exception:  # sem o painel web (os testes): a ordem do painel
+        where = list(range(1, 7))
+    slots = panel_slots(layout, where, buttons, step)
+    # A largura do nome do botao do meio de cada fileira (o de 6 botoes).
+    middle = {dy: tiny.width(b[1:] + " " + FUNCTION_NAMES[pad[b]])
+              for b, (_, dy, _, _, align) in slots.items() if layout == "6" and align == 0}
+    for b in buttons:
+        f = pad[b]
+        color, draw_icon = FUNCTION_STYLE[f]
+        dx, dy, raised, side, align = slots[b]
+        cx, cy = mx + dx, by0 + dy - raised
         button3d(ui, cx, cy, r, color)
         # O desenho no topo, achatado como ele.
         icon = pygame.Surface((24, 24), pygame.SRCALPHA)
         draw_icon(icon, 12, 12, shade(color, 0.3))
         icon = pygame.transform.smoothscale(icon, (24, round(24 * FLAT)))
         ui.blit(icon, (cx - 12, cy - icon.get_height() // 2))
-        text = num + " " + label
+        text = b[1:] + " " + FUNCTION_NAMES[f]
         w = tiny.width(text)
-        tx = {0: cx + 3 - w, 1: cx - w // 2, 2: cx - 3}[col]
+        # Um nome longo no meio (GAME OPTIONS) empurra os dos lados para fora.
+        mid = middle.get(dy, 0) // 2 + 4
+        tx = {-1: min(cx + 3, cx + step - mid) - w, 0: cx - w // 2, 1: max(cx - 3, cx - step + mid)}[align]
         top, bottom = cy - ry - 4, cy + LIFT + ry + 5
-        if row == 0:
-            ty, y0, y1, d = by0 - 30, by0 - 23, top, (0, 1)
+        if side == "up":
+            ty, y0, y1, d = by0 + dy - 30, by0 + dy - 23, top, (0, 1)
         else:
             ty, y0, y1, d = bottom + 13, bottom + 11, bottom, (0, -1)
         tiny.text(ui, text, T.FG, tx, ty)
         pygame.draw.line(ui, T.COMMENT, (cx, y0), (cx, y1 - d[1] * 2))
         arrow(ui, cx, y1, d, T.COMMENT, 3)
-    # Debaixo dos botoes (a esquerda ficam as dicas do direcional).
-    hint_x = WW // 2 if vertical else px + 112 + (pw - 112) // 2
-    tiny.centered(ui, "START: VIEW MODE   TAB: GAME OPTIONS", T.COMMENT, hint_x, py + ph - 30)
+    # Debaixo dos botoes (deitado, a esquerda ficam as dicas do direcional):
+    # o Start e as funcoes que so tem tecla, em uma ou duas linhas.
+    if split and not vertical:
+        hint_x, room = px + 112 + (pw - 112) // 2, pw - 120
+    else:
+        hint_x, room = WW // 2, pw - 16
+    lines = [""]
+    for h in hints:
+        joined = (lines[-1] + "   " + h).strip()
+        if tiny.width(joined) <= room:
+            lines[-1] = joined
+        elif len(lines) < 2:
+            lines.append(h)
+    for k, line in enumerate(lines):
+        tiny.centered(ui, tiny.fit(line, room), T.COMMENT, hint_x, py + ph - 31 + 7 * k)
     msg = "PRESS ANY BUTTON TO START"
     ui.blit(W.big(msg, 1, W.LABEL), (px + (pw - W.width(msg)) // 2, py + ph - 16))
 
@@ -1745,7 +1878,7 @@ def game_option(ui, i, rect, on, now):
 
 def draw_options(fe, ui, now):
     """O menu do Tab: as opcoes do jogo e, debaixo delas, as do frontend (as
-    linhas 5 a 12 do fliperos-frontend, OPT_*), numa lista so que rola com a
+    linhas 5 em diante do fliperos-frontend, OPT_*), numa lista so que rola com a
     escolhida, com os titulos; o andamento do scrape automatico fica fixo
     embaixo. O cartao tem 200 de altura: cabe inteiro no tubo."""
     g = fe.game()
@@ -1764,7 +1897,7 @@ def draw_options(fe, ui, now):
     y += 4
     lines.append((y, 14, "fe-title"))
     y += 14
-    for opt in [5, 6, 7, 8, 9, 10, 11] + ([12] if fe.commercial else []):
+    for opt in range(5, 5 + len(FE_OPTIONS) - (0 if fe.commercial else 1)):
         lines.append((y, 17, opt))
         y += 17
     total = y
@@ -1825,33 +1958,42 @@ def chip(ui, right, y, text, lit, on):
     return right - w
 
 
+# As linhas das opcoes do frontend, da 5 em diante (os OPT_* do
+# fliperos-frontend, na mesma ordem); os minutos por ficha so com o modo
+# comercial ligado.
+FE_OPTIONS = [("mode", "VIEW"), ("clones", "SHOW CLONES"), ("hidden", "HIDDEN GAMES"),
+              ("controls", "FRONTEND CONTROLS"), ("exitkey", "EXIT KEY"), ("exitpad", "EXIT BUTTONS"),
+              ("power", "POWER CLOSES GAME"), ("commercial", "COMMERCIAL MODE"), ("coin", "MINUTES PER COIN")]
+
+
 def draw_option(fe, ui, opt, rect, on, right, now):
     """Uma linha das opcoes do frontend: o rotulo e o valor dela."""
     x, y, _, _ = rect
-    labels = {5: "VIEW", 6: "SHOW CLONES", 7: "HIDDEN GAMES", 8: "EXIT KEY", 9: "EXIT BUTTONS",
-              10: "POWER CLOSES GAME", 11: "COMMERCIAL MODE", 12: "MINUTES PER COIN"}
+    what, label = FE_OPTIONS[opt - 5]
     option_row(ui, rect, "", on, now)
-    W.text(ui, labels[opt], T.FG if on else T.COMMENT, x + 8, y + 4)
-    if opt == 5:
+    W.text(ui, label, T.FG if on else T.COMMENT, x + 8, y + 4)
+    if what == "mode":
         # O modo: os tres lado a lado, o de agora aceso.
         cx = right
         for mode, label in reversed((("list", "LIST"), ("full", "FULL SCREEN"), ("flow", "GRID"))):
             cx = chip(ui, cx, y, label, fe.mode == mode, on) - 3
-    elif opt == 6:
+    elif what == "clones":
         chip(ui, right, y, "ON" if fe.show_clones else "OFF", fe.show_clones, on)
-    elif opt == 7:
+    elif what == "hidden":
         tiny.text(ui, "%d  >" % len(fe.lib.hidden()), T.PINK if on else T.COMMENT, right, y + 6, right=True)
-    elif opt == 8:
+    elif what == "controls":
+        tiny.text(ui, ">", T.PINK if on else T.COMMENT, right, y + 6, right=True)
+    elif what == "exitkey":
         key = fe.exit_key[0] if fe.exit_key else "OFF"
         chip(ui, right, y, key, bool(fe.exit_key), on)
-    elif opt == 9:
+    elif what == "exitpad":
         combo = "+".join(c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper() for c in fe.exit_combo)
         chip(ui, right, y, combo or "OFF", bool(fe.exit_combo), on)
-    elif opt == 10:
+    elif what == "power":
         chip(ui, right, y, "ON" if fe.power_exit else "OFF", fe.power_exit, on)
-    elif opt == 11:
+    elif what == "commercial":
         chip(ui, right, y, "ON" if fe.commercial else "OFF", fe.commercial, on)
-    elif opt == 12:
+    elif what == "coin":
         cx = chip(ui, right - 8, y, "%d" % fe.coin_minutes, True, on)
         if on:
             arrow(ui, cx - 5, y + 8, (-1, 0), T.PINK, 3)
@@ -1887,6 +2029,79 @@ def draw_hidden(fe, ui, now):
             W.text(ui, fit(title, room), T.COMMENT, px + 30, y + 3)
     if len(rows) > shown:
         W.scrollbar(ui, px + pw - 6, py + 26, shown * 15 - 1, top, shown, len(rows))
+
+
+def draw_controls(fe, ui, now):
+    """Tab > Frontend options > Frontend controls: cada funcao com o comando do
+    painel e a tecla dela (um traco: nenhum), a celula escolhida acesa, e o
+    RESET no fim. Esperando o novo, a celula pisca e a dica diz o que fazer."""
+    import feinput
+    W.frame(ui, {}, "Controls", [])
+    ov = fe.ov
+    sel, col, wait = ov["sel"], ov["col"], ov.get("wait")
+    # As colunas da tecla e do painel (em pe, mais estreitas).
+    kw, pw = (58, 40) if T.VERTICAL is not None else (74, 46)
+    kx = SX + SW - kw
+    padx = kx - 4 - pw
+    y0, rh = 42, 12
+    count = PANEL_COUNT[panel_layout(fe)]
+    tiny.centered(ui, "PANEL", T.CYAN if col == 0 else T.COMMENT, padx + pw // 2, 35)
+    tiny.centered(ui, "KEYBOARD", T.CYAN if col == 1 else T.COMMENT, kx + kw // 2, 35)
+    blink = int(now * 3) % 2
+    for i, f in enumerate(feinput.FUNCTIONS):
+        y = y0 + i * rh
+        on = i == sel
+        if on:
+            tile_frame(ui, (SX, y, SW, rh - 1), True, now)
+        color, draw_icon = FUNCTION_STYLE[f]
+        icon = pygame.Surface((14, 14), pygame.SRCALPHA)
+        draw_icon(icon, 7, 7, color)
+        ui.blit(pygame.transform.smoothscale(icon, (10, 10)), (SX + 4, y + 1))
+        W.text(ui, fit(FUNCTION_NAMES[f], padx - SX - 22), T.FG if on else T.COMMENT, SX + 18, y + 2)
+        b = fe.input.binds[f]
+        cells = ((padx, pw, feinput.pad_name(b["pad"])), (kx, kw, feinput.key_name(fe.pg, b["key"])))
+        for c, (cx, cw, value) in enumerate(cells):
+            lit = on and c == col
+            rect = (cx, y, cw, rh - 1)
+            if lit and wait:
+                W.block(ui, rect, T.PINK if blink else T.PURPLE, None)
+                tiny.centered(ui, "?", T.SPACE, cx + cw // 2, y + 3)
+                continue
+            W.block(ui, rect, T.PINK if lit else T.BG_DEEP, None)
+            pygame.draw.rect(ui, T.PINK if lit else T.LINE, rect, 1)
+            shown = tiny.fit(value, cw - 6) if value else "-"
+            # Um botao que o formato do painel nao tem fica apagado.
+            missing = c == 0 and b["pad"] and b["pad"][0] == "b" and int(b["pad"][1:]) > count
+            tiny.centered(ui, shown, T.SPACE if lit else (T.FG if value and not missing else T.LINE),
+                          cx + cw // 2, y + 3)
+    # O formato do painel: esquerda e direita trocam.
+    y = y0 + len(feinput.FUNCTIONS) * rh
+    on = sel == len(feinput.FUNCTIONS)
+    if on:
+        tile_frame(ui, (SX, y, SW, rh - 1), True, now)
+    view_icon(ui, SX + 9, y + 6, T.YELLOW)
+    W.text(ui, fit("PANEL LAYOUT", padx - SX - 22), T.FG if on else T.COMMENT, SX + 18, y + 2)
+    rect = (padx, y, kx + kw - padx, rh - 1)
+    W.block(ui, rect, T.PINK if on else T.BG_DEEP, None)
+    pygame.draw.rect(ui, T.PINK if on else T.LINE, rect, 1)
+    name = dict(PANEL_LAYOUTS)[panel_layout(fe)]
+    tiny.centered(ui, name, T.SPACE if on else T.FG, padx + rect[2] // 2, y + 3)
+    if on:
+        arrow(ui, padx + 6, y + 5, (-1, 0), T.SPACE, 3)
+        arrow(ui, kx + kw - 7, y + 5, (1, 0), T.SPACE, 3)
+    y += rh + 1
+    on = sel == len(feinput.FUNCTIONS) + 1
+    W.button(ui, "RESET", WW // 2, y, on, w=70)
+    if wait == "pad":
+        tips = ("PRESS A PANEL CONTROL - THE SAME ONE AGAIN: NONE", "ESC: CANCEL")
+    elif wait == "key":
+        tips = ("PRESS A KEY - THE SAME KEY OR DELETE: NONE", "BACK ON THE PANEL: CANCEL")
+    elif sel == len(feinput.FUNCTIONS):
+        tips = ("LEFT/RIGHT: THE SHAPE OF THE PANEL", "THE GUIDE DRAWS ONLY THE BUTTONS IT HAS")
+    else:
+        tips = ("SELECT: CHANGE   DELETE: NONE   LEFT/RIGHT: COLUMN", "A BUTTON IN USE SWAPS WITH THE OLD ONE")
+    tiny.centered(ui, tips[0], T.YELLOW if wait else T.COMMENT, WW // 2, y + 23)
+    tiny.centered(ui, tips[1], T.COMMENT, WW // 2, y + 30)
 
 
 def draw_harvest(fe, ui, x, y, w):
@@ -2090,7 +2305,7 @@ def draw(fe, now):
     # "+", o Classify, o Rename). Na lista, os da grade e da tela cheia param.
     fe.abs_now = now
     fe.video_used = False
-    fe.video_ok = fe.overlay not in ("more", "classify", "rename")
+    fe.video_ok = fe.overlay not in ("more", "classify", "rename", "controls")
     if (fe.mode == "list" or not fe.video_ok) and getattr(fe, "grid", None) is not None and fe.grid.videos:
         fe.grid.stop()
     if not fe.rows:
@@ -2127,7 +2342,7 @@ def draw(fe, now):
         draw_ribbon(fe, top, t)
         back.blit(top, (0, 0))
     if o:
-        if o in ("more", "classify", "rename"):
+        if o in ("more", "classify", "rename", "controls"):
             fe.bg.draw(back, t)
         else:
             dim(back, 160 if o != "guide" else 175)
@@ -2144,6 +2359,8 @@ def draw(fe, now):
             draw_options(fe, top, t)
         elif o == "hidden":
             draw_hidden(fe, top, t)
+        elif o == "controls":
+            draw_controls(fe, top, t)
         elif o == "classify":
             draw_classify(fe, top, t)
         elif o == "rename":
