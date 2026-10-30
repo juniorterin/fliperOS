@@ -232,6 +232,10 @@ details.more .live-actions { margin: 12px 0 8px; }
 .mq-led .mq-pop { position: absolute; top: 6%; left: 50%; transform: translateX(-50%); max-width: 92%; padding: 1.5cqw 3cqw; border-radius: 2cqw; background: rgba(25,26,33,.9);
   border: .5cqw solid #bd93f9; font: 4cqw var(--px); color: #f8f8f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mq-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; color: var(--muted); font-size: 14px; }
+.mq-led .mq-hi { position: absolute; left: 1.5%; top: 4%; padding: 0 1.5cqw; border-radius: 3px; background: rgba(0,0,0,.65);
+  font: 3.2cqw var(--px); color: #f1fa8c; letter-spacing: .06em; white-space: nowrap; }
+.mq-led .mq-hi[hidden] { display: none; }
+.mq-card #mq-hi-list { margin: 8px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 .mq-card .mq-led { margin-top: 12px; }
 .mq-live { display: none; margin-top: 14px; }
 .mq-live small { display: block; margin-bottom: 6px; font: 8px var(--px); color: var(--muted); letter-spacing: .1em; }

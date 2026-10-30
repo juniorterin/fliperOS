@@ -16,7 +16,7 @@ Object.assign(TEXT.en, {
   mq_inst_ok: "%s is installed on the cabinet.", mq_inst_no_note: "%s is not installed on the cabinet (the preview works without it).",
   mq_inst_busy: "Installing %s… (see the tasks)", mq_inst_title: "Install %s?",
   mq_inst_text: "%s is not installed on the cabinet. The preview here works without it, but the real display needs it. Install it now? It downloads files and takes a while.",
-  mq_inst_yes: "Install", mq_inst_no: "Not now",
+  mq_inst_yes: "Install", mq_inst_no: "Not now", mq_hi: "High scores:",
 });
 Object.assign(TEXT.pt, {
   mq_title: "Prévia do marquee", mq_on: "Modo prévia do marquee", mq_device: "Mostrar o marquee do",
@@ -28,7 +28,7 @@ Object.assign(TEXT.pt, {
   mq_inst_ok: "%s está instalado no gabinete.", mq_inst_no_note: "%s não está instalado no gabinete (a prévia funciona sem ele).",
   mq_inst_busy: "Instalando %s… (veja as tarefas)", mq_inst_title: "Instalar o %s?",
   mq_inst_text: "O %s não está instalado no gabinete. A prévia aqui funciona sem ele, mas o display de verdade precisa dele. Instalar agora? Baixa arquivos e demora um pouco.",
-  mq_inst_yes: "Instalar", mq_inst_no: "Agora não",
+  mq_inst_yes: "Instalar", mq_inst_no: "Agora não", mq_hi: "Recordes:",
 });
 
 // O que cada painel desenha: as letras de arte (campo "art" dos jogos) na
@@ -64,6 +64,7 @@ function mqBuild(box) {
     el("div", { class: "mq-versus", hidden: "" }, el("span", { class: "mq-side" }, el("b"), el("small")), el("span", { class: "mq-wins" }),
       el("span", { class: "mq-side" }, el("b"), el("small"))),
     el("div", { class: "mq-ticker", hidden: "" }, el("span")), el("div", { class: "mq-pop", hidden: "" }),
+    el("span", { class: "mq-hi", hidden: "" }),
     el("i", { class: "mq-dots" }), el("small", { class: "mq-tag" }));
 }
 
@@ -74,9 +75,26 @@ function mqBuild(box) {
 // Alem do evento versus (que o marquee do LED so manda depois da primeira
 // vitoria), o painel mostra o placar que o detector le agora (data.live),
 // mesmo em 0 x 0: assim se ve que o jogo tem placar desde o comeco.
-let mqState = {}, mqLive = null, mqLastTime = null, mqPopTimer = null, mqTried = false;
+let mqState = {}, mqLive = null, mqHi = [], mqLastTime = null, mqPopTimer = null, mqTried = false;
+
+// Os recordes do jogo (o .hi do plugin hiscore, lido pelo hi2txt no
+// servidor): o primeiro no painel de LED ("HI 19,130 DAA") e os tres
+// primeiros na linha do cartao.
+const mqScore = (s) => Number(s).toLocaleString(locale());
+function mqDrawHi(box) {
+  const hi = box.querySelector(".mq-hi"), top = mqHi[0];
+  hi.hidden = !top || mq.show !== "score";
+  if (top) hi.textContent = "HI " + mqScore(top.score) + (top.name ? " " + top.name : "");
+}
+function mqDrawHiList() {
+  const line = $("mq-hi-list");
+  line.hidden = !mqHi.length;
+  line.textContent = mqHi.length ? t("mq_hi") + " " + mqHi.slice(0, 3).map((r, i) =>
+    "#" + (r.rank || i + 1) + " " + mqScore(r.score) + (r.name ? " " + r.name : "")).join("  ·  ") : "";
+}
 
 function mqDrawState(box) {
+  mqDrawHi(box);
   const s = mqState.event === "versus" || !mqLive ? mqState : Object.assign({ left: "P1", right: "P2" }, mqLive);
   const versus = (mqState.event === "versus" || !!mqLive) && mq.show === "score";
   box.classList.toggle("vs", versus);
@@ -131,6 +149,8 @@ async function mqPoll() {
     const first = mqLastTime === null;
     mqState = data.state || {};
     mqLive = data.live && data.live.rom ? data.live : null;
+    mqHi = Array.isArray(data.hi) ? data.hi : [];
+    mqDrawHiList();
     mqEvents(mqState, first);
     document.querySelectorAll(".mq-led").forEach((box) => { if (!box.hidden && box.firstChild) mqDrawState(box); });
   } catch (e) { /* o gabinete desligado: fica o que estava */ }

@@ -1955,6 +1955,66 @@ class ArtCache:
         return path
 
 
+class HiCache:
+    """Os recordes de um jogo do MAME para a previa do marquee: o .hi que o
+    plugin hiscore do GroovyMAME grava (~/.mame/hiscore/JOGO.hi, a cada
+    mudanca da tabela, com 5 s de carencia), decodificado pelo hi2txt (o do
+    Pixelcade/ZeDMD, ~/pixelcade/hi2txt). O Java leva um tempo: roda numa
+    thread e o pedido recebe o ultimo resultado; so decodifica de novo quando
+    o arquivo muda. Sem o hi2txt, o Java ou o jogo na base dele, lista vazia."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.items = {}
+        self.busy = set()
+
+    def get(self, rom):
+        if not re.fullmatch(r"[A-Za-z0-9_]{1,40}", rom or ""):
+            return []
+        home = player_home()
+        path = os.path.join(home, ".mame", "hiscore", rom + ".hi")
+        try:
+            st = os.stat(path)
+        except OSError:
+            return []
+        stamp = (st.st_mtime_ns, st.st_size)
+        with self.lock:
+            hit = self.items.get(rom)
+            if hit and hit[0] == stamp:
+                return hit[1]
+            if rom not in self.busy:
+                self.busy.add(rom)
+                threading.Thread(target=self.decode, args=(rom, path, stamp, home), daemon=True).start()
+            return hit[1] if hit else []
+
+    def decode(self, rom, path, stamp, home):
+        rows = []
+        folder = os.path.join(home, "pixelcade", "hi2txt")
+        java = shutil.which("java")
+        if java and os.path.isfile(os.path.join(folder, "hi2txt.jar")) and os.path.isfile(os.path.join(folder, "hi2txt.zip")):
+            try:
+                out = subprocess.run([java, "-jar", "hi2txt.jar", "-r", path, "-max-lines", "5", "-max-columns", "3",
+                                      "-keep-field", "SCORE", "-keep-field", "NAME", "-keep-field", "RANK"],
+                                     cwd=folder, capture_output=True, text=True, timeout=30).stdout
+            except (OSError, subprocess.SubprocessError):
+                out = ""
+            head = None
+            for line in out.splitlines():
+                if "|" not in line:
+                    continue
+                cols = line.split("|")
+                if head is None:
+                    head = cols
+                    continue
+                row = dict(zip(head, cols))
+                score = row.get("SCORE", "").strip()
+                if score.isdigit():
+                    rows.append({"rank": row.get("RANK", "").strip(), "score": score, "name": row.get("NAME", "").strip()[:12]})
+        with self.lock:
+            self.items[rom] = (stamp, rows)
+            self.busy.discard(rom)
+
+
 def art_id(path):
     st = os.stat(path)
     return hashlib.sha1(("%s:%d:%d" % (path, st.st_mtime, st.st_size)).encode()).hexdigest()[:16]
@@ -2424,6 +2484,7 @@ class Panel:
         self.romcount, self.romscan = RomCount(), RomCount()
         self.stream = Cached(5, stream_status)
         self.art = ArtCache()
+        self.hi = HiCache()
         self.input = InputWatch()
         self.mouse = VirtualMouse()
         self.tasks = Tasks()
@@ -2834,7 +2895,8 @@ class Handler(BaseHTTPRequestHandler):
             # O estado do marquee para a previa do painel (Status), pelo login.
             on = overlay_enabled()
             state = marquee_state() if on else {}
-            return self.send(200, {"enabled": on, "state": state, "live": versus_live(state.get("rom", ""))})
+            rom = state.get("rom", "")
+            return self.send(200, {"enabled": on, "state": state, "live": versus_live(rom), "hi": self.panel.hi.get(rom)})
         if url.path == "/api/overlay/input/style":
             return self.send(200, {"css": input_css(), "custom": os.path.isfile(INPUT_CSS),
                                    "default": read(os.path.join(STATIC, "input.css"))})
