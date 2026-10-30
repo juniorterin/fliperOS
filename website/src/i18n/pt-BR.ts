@@ -48,7 +48,7 @@ const ptBR: Messages = {
       },
       {
         q: 'Quais placas de vídeo funcionam a 15 kHz?',
-        a: 'As AMD Radeon com saída VGA ou DVI-I, da série HD 2000 até as R7/R9 200 e 300 (GCN 1.0), geram 15 kHz nativamente. Intel e NVIDIA funcionam a 15 kHz com modos de super resolução (uma NVIDIA com VGA ou DVI-I ganha resolução nativa se passar no teste de baixa resolução), e placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA.',
+        a: 'As AMD Radeon com saída VGA ou DVI-I, da série HD 2000 até as R7/R9 200 e 300 (GCN 1.0), geram 15 kHz nativamente. Intel e NVIDIA funcionam a 15 kHz com modos de super resolução (uma NVIDIA com VGA ou DVI-I ganha resolução nativa se passar no teste de baixa resolução), com uma Intel HD você instala e acerta o vídeo antes num monitor de frequência padrão e só depois liga a CRT, e placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA.',
       },
       {
         q: 'Dá para controlar o gabinete pelo celular?',
@@ -285,7 +285,7 @@ const ptBR: Messages = {
     title: 'Antes de baixar.',
     items: [
       { id: 'free', title: 'Grátis e open source', text: 'Sem conta e sem custo. O código e toda ISO estão no GitHub.' },
-      { id: 'gpu', title: 'A placa de vídeo importa', text: 'AMD Radeon com VGA ou DVI-I (da HD 2000 à R7/R9 300) gera 15 kHz nativo. Intel e NVIDIA usam super resoluções; uma NVIDIA com saída analógica pode passar num teste para as nativas. A Intel HD funciona, com limites.' },
+      { id: 'gpu', title: 'A placa de vídeo importa', text: 'AMD Radeon com VGA ou DVI-I (da HD 2000 à R7/R9 300) gera 15 kHz nativo. Intel e NVIDIA usam super resoluções; uma NVIDIA com saída analógica pode passar num teste para as nativas. A Intel HD funciona, com limites: instale antes num monitor de frequência padrão e só depois ligue a CRT.' },
       { id: 'nogames', title: 'Sem jogos, sem BIOS', text: 'A imagem não traz nenhum. O Setup baixa as BIOS que os seus jogos pedem e filtra os romsets que você trouxer.' },
       { id: 'nolcd', title: 'Não precisa de LCD', text: 'O pendrive já sobe em 15 kHz, então você instala o FliperOS no próprio tubo.' },
       { id: 'pc', title: 'Um PC 64 bits comum', text: '2 núcleos e 4 GB de RAM rodam até PlayStation 1; 4 núcleos e 16 GB rodam tudo o que vem na imagem.' },
@@ -463,7 +463,7 @@ const ptBR: Messages = {
       rows: [
         { shot: '', title: 'AMD: 15 kHz nativo', text: 'Radeon HD 2000 a R7/R9 300 com VGA ou DVI-I fazem 15 kHz nativo no radeon ou no amdgpu. Boas escolhas baratas: HD 5450, HD 6450, HD 7750, R7 240, R7 250. As RX e as APUs Ryzen não têm saída analógica e precisam de um conversor ativo de DisplayPort ou HDMI para VGA.', points: ['radeon', 'amdgpu', '320x240 nativo'] },
         { shot: 'gui/video-driver', title: 'NVIDIA: nouveau ou o driver próprio', text: 'O nouveau é o padrão, e um teste no tubo descobre se a placa faz 320x240. O driver próprio da NVIDIA (GTX 900 e mais novas, compilado pelo DKMS para o kernel de 15 kHz) roda o 3D a toda a velocidade. Ele fica em teste: se você não confirmar a imagem, o FliperOS volta ao nouveau.', points: ['Teste de baixa resolução', 'Driver em teste', 'DKMS'] },
-        { shot: '', title: 'Intel HD, com seus limites', text: 'Visto num CRT pela saída VGA de um Core i3-540: o frontend, o Setup, o RetroArch, o GroovyMAME e o Attract-Mode Plus. Uma entrada de boot, Intel 15 kHz 240p, sobe em 1280x240 progressivo. A placa só tem OpenGL 2.1 e não tem Vulkan, e o processador precisa ter vídeo integrado.', points: ['1280x240 progressivo', 'OpenGL 2.1', 'Sem Vulkan'] },
+        { shot: '', title: 'Intel HD, com seus limites', text: 'Instale e acerte o vídeo antes num monitor de frequência padrão e só depois ligue a CRT. Visto num CRT pela saída VGA de um Core i3-540: o frontend, o Setup, o RetroArch, o GroovyMAME e o Attract-Mode Plus. Uma entrada de boot, Intel 15 kHz 240p, sobe em 1280x240 progressivo. A placa só tem OpenGL 2.1 e não tem Vulkan, e o processador precisa ter vídeo integrado.', points: ['1280x240 progressivo', 'OpenGL 2.1', 'Sem Vulkan'] },
         { shot: 'gui/unsupported', title: 'Um X vermelho no que a placa não roda', text: 'O EmulationStation-DE, o filtro de 480i, o PCSX2, o Dolphin e o DuckStation pedem OpenGL 3 ou Vulkan. O Setup os marca com um X vermelho, diz o motivo e pergunta antes de abrir, com Não como padrão.', points: ['ES-DE', 'Filtro 480i', 'PCSX2', 'Dolphin', 'DuckStation'] },
         { shot: '', title: 'Vulkan no AMD', text: 'No amdgpu, o Flycast e o Dolphin rodam em Vulkan, e o PCSX2 e o DuckStation o escolhem sozinhos. O RetroArch fica no glcore, porque a saída Vulkan dele não troca os modos do CRT. De volta ao radeon, cada um volta ao renderizador de fábrica.', points: ['Flycast', 'Dolphin', 'PCSX2', 'DuckStation'] },
         { shot: '', title: 'Trocou a placa? Ele percebe', text: 'A cada boot o sistema confere se a placa de vídeo ainda é a que foi configurada. Se mudou, grava um modo seguro antes de qualquer imagem, reinicia uma vez e oferece o teste das saídas de vídeo de novo.', points: ['Modo seguro', 'Teste das saídas'] },
