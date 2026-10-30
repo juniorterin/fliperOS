@@ -198,6 +198,18 @@ settings_set() {
         runuser -u "$FLIPEROS_USER" -- env XDG_RUNTIME_DIR="/run/user/$(id -u "$FLIPEROS_USER")" \
           "$FLIPEROS_BIN/fliperos-pixelcade" now >> "$FLIPEROS_LOG" 2>&1 || true
       fi
+      # Os detectores de placar do Fightcade (config/fliperos-versus) so eram
+      # baixados ao instalar o Pixelcade ou o ZeDMD: sem eles o marquee e a
+      # previa do painel nunca tinham placar. Em segundo plano (leva segundos
+      # e o pedido nao espera), so se ainda nao estao la.
+      if [[ $value == on && -x $FLIPEROS_BIN/fliperos-versus ]]; then
+        local detectors
+        detectors=$(getent passwd "$FLIPEROS_USER" | cut -d: -f6)/.local/share/fliperos/versus-detectors
+        compgen -G "$detectors/*.inf" > /dev/null || {
+          runuser -u "$FLIPEROS_USER" -- "$FLIPEROS_BIN/fliperos-versus" fetch >> "$FLIPEROS_LOG" 2>&1 < /dev/null &
+          disown
+        }
+      fi
       ;;
     orientation)
       [[ $value =~ ^(horizontal|vertical-cw|vertical-ccw)$ ]] || return 2
