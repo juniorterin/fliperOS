@@ -1,0 +1,848 @@
+#!/usr/bin/env python3
+"""fliperos-atom15: o patch do ATOM-15 na BIOS de uma placa ATI/AMD.
+
+ATOM-15 v1.6 e de Antonio Giner "Calamity" (github.com/antonioginer/ATOM-15):
+esta e uma traducao do atom-15.bas (PowerBASIC, so Windows, sem linha de
+comando) para o Setup do FliperOS (Video Setup > Card firmware, lib/atom15.sh).
+Mexe na BIOS como o original: troca as tabelas de modos (padrao e VESA) pelas
+mesmas contas e poe o mesmo hook (tools/atom15-hook.asm), que liga o entrelacado
+nos registradores da placa. Vale so do POST ate o sistema subir o driver.
+
+Mais rigoroso que o original, porque aqui ninguem esta olhando o resultado num
+editor. Ele recusa:
+  - imagem sem 55 AA, sem ATOM, com a soma errada ou sem o salto na entrada;
+  - placa fora da tabela (o original usaria os registradores das mais antigas);
+  - imagem que ja tem o hook (o patch tem de partir da BIOS original);
+  - hook em cima da parte EFI (GOP) da imagem;
+  - resultado que nao passa nas mesmas conferencias.
+
+  fliperos-atom15 info ROM                 chave=valor da imagem
+  fliperos-atom15 patch ROM SAIDA [--ranges 15,25,31] [--csync] [--log ARQ]
+  fliperos-atom15 adapter BARRAMENTO DISP  (saida do amdvbflash -i na entrada)
+"""
+import argparse
+from fractions import Fraction
+import math
+import struct
+import sys
+
+BIOS_MAX_SIZE = 256 * 1024
+BIOS_MIN_SIZE = 64 * 1024
+BIOS_ENTRY_POINT = 0x0003
+BIOS_HOOK_OFFSET_MIN = 0x0e000
+BIOS_END_OFFSET = 0x0ffff
+DOT_CLOCK_MIN = 8000000
+INTERLACE_ENABLE = 1
+VENDOR_ATI = 0x1002
+
+SCAN_TYPE_0, SCAN_TYPE_1, SCAN_TYPE_2, SCAN_TYPE_3 = 0, 1, 2, 3
+SCAN_INTERLACE = 0x080
+SCAN_TEXT = 0x100
+
+CLOCK_DIV_2 = 0x080
+CLOCK_25175, CLOCK_28322, CLOCK_65000 = 0, 1, 2
+CLOCK_12587 = CLOCK_25175 | CLOCK_DIV_2
+CLOCK_14161 = CLOCK_28322 | CLOCK_DIV_2
+CLOCK_MHZ = (25.175, 28.322, 65.000)
+
+ATOM_INTERLACE = 0x80
+ATOM_V_REPLICATIONBY2 = 0x20
+ATOM_HSYNC_POLARITY = 0x02
+ATOM_VSYNC_POLARITY = 0x04
+
+# Faixas do monitor, as mesmas do atom-15.bas (process_bios): hmin, hmax, vmin,
+# vmax, porch, sync e back porch horizontais (us) e os verticais (ms).
+RANGES = {
+    15: (15625, 16200, 49.50, 60.00, 2.000, 4.700, 8.000, 0.064, 0.192, 1.024),
+    25: (24960, 24960, 49.50, 60.00, 0.800, 4.000, 3.200, 0.080, 0.200, 1.000),
+    31: (31400, 31500, 48.50, 60.00, 0.940, 3.770, 1.890, 0.032, 0.064, 0.763),
+}
+
+# Modos da BIOS na ordem da Video Parameter Table: o formato antigo (20
+# entradas) e o novo (29). -1: reservado.
+STANDARD_OLD = (0x00, 0x03, 0x04, 0x06, 0x07, 0x08, 0x0D, 0x0E, -1, -1, 0x0F, 0x10, 0x00, 0x03, 0x00, 0x03, 0x07,
+                0x11, 0x12, 0x13)
+STANDARD_NEW = (0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+                0x10, 0x0F, 0x10, 0x00, 0x01, 0x02, 0x03, 0x00, 0x03, 0x07, 0x11, 0x12, 0x13)
+
+# Bytes que so existem no hook (and bx, 0x3fff; sub bx, 0x100; add bx, ...),
+# escritos a mao no original: valem tambem para a BIOS feita pelo atom-15.exe.
+HOOK_MARK = bytes.fromhex('81e3ff3f81eb000181c3')
+
+# Registradores (radeon_family.inc, get_registers): interlace, data_format,
+# interleave_enable, hsync_control, composite_enable e o deslocamento de cada
+# CRTC.
+REGISTERS = {
+    'avivo': (0x6088, 0x6528, 0b1, 0x600c, 0x10000, (0x0, 0x800, 0, 0, 0, 0)),
+    'dce4': (0x6e78, 0x6b00, 0b1, 0x6e0c, 0x10000, (0x0, 0xc00, 0x9800, 0xa400, 0xb000, 0xbc00)),
+    'dce8': (0x6e78, 0x6b00, 0b1000, 0x6e0c, 0x10000, (0x0, 0xc00, 0x9800, 0xa400, 0xb000, 0xbc00)),
+}
+
+# Gerado de tools/atom15-hook.asm (nasm 2.16.01; AtomHookTests confere) e da
+# tabela de placas do radeon_family.inc: a classe de registradores de cada uma.
+HOOK = bytes.fromhex(
+    '80fc009ce800009d7401c39c60247f0fb6d881c3ffffeb183c029ce800009d7401c39c6081e3ff3f81eb000181c3ffff'
+    '6633c92e8a0f80e1012e8b1e0000b220e80000a8017505b214e800008af432d26633db680000e80000680000e8000068'
+    '0000e80000680000e80000680000e80000680000e80000619dc3b4808ac766c1e0108ae38ac224fcbaf80c66efbafc0c'
+    '66edc38bec6633db8b5e0251f6c101742466b8000000006603c366b901000000e8000066b8000000006603c366b90000'
+    '0000e80000eb1266b8000000006603c366b900000000e8000059c2020066536650b20066efb20466ed660bc16687c366'
+    '58b20066ef6687c3b20466ef665bc3000000000000000000000000000000000000000000000000000000000000000000'
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+    '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+    '00000000'
+)
+
+HOOK_LABELS = {
+    'hook_start': 0,
+    'standard_bios_hook': 0,
+    'standard_bios_service': 4,
+    'standard_bios_service_mod': 11,
+    'get_standard_modes_offset': 18,
+    'vesa_bios_hook': 24,
+    'vesa_bios_service': 27,
+    'vesa_bios_service_mod': 34,
+    'get_vesa_modes_offset': 44,
+    'set_interlace': 48,
+    'get_pci_bus': 57,
+    'call_get_BAR4': 64,
+    'call_get_BAR1': 73,
+    'found_BAR': 76,
+    'crtc0_enable_interlace': 83,
+    'call_crtc0': 86,
+    'crtc1_enable_interlace': 89,
+    'call_crtc1': 92,
+    'crtc2_enable_interlace': 95,
+    'call_crtc2': 98,
+    'crtc3_enable_interlace': 101,
+    'call_crtc3': 104,
+    'crtc4_enable_interlace': 107,
+    'call_crtc4': 110,
+    'crtc5_enable_interlace': 113,
+    'call_crtc5': 116,
+    'set_interlace_end': 119,
+    'get_BAR': 122,
+    'crtc_program_registers': 147,
+    'crtc_enable_interlace': 156,
+    'crtc_interlace_control_reg': 161,
+    'call_set_value1': 176,
+    'data_format_reg': 179,
+    'interleave_enable_set': 188,
+    'call_set_value2': 194,
+    'crtc_enable_composite_sync': 197,
+    'crtc_h_sync_a_cntl_reg': 199,
+    'crtc_composite_enable_set': 208,
+    'call_set_value3': 214,
+    'crtc_program_registers_exit': 217,
+    'set_value': 221,
+    'checksum_fix': 255,
+    'standard_modes': 256,
+    'vesa_modes': 276,
+    'hook_end': 532,
+}
+
+PCI_CLASSES = {
+    'avivo': (
+        '3150 3151 3152 3154 3155 3e50 3e54 4136 4137 4144 4145 4146 4147 4148 4149 414a 414b 4150 4151 '
+        '4152 4153 4154 4155 4156 4237 4242 4336 4337 4437 4966 4967 4a48 4a49 4a4a 4a4b 4a4c 4a4d 4a4e '
+        '4a4f 4a50 4a54 4b48 4b49 4b4a 4b4b 4b4c 4c57 4c58 4c59 4c5a 4c64 4c66 4c67 4c6e 4e44 4e45 4e46 '
+        '4e47 4e48 4e49 4e4a 4e4b 4e50 4e51 4e52 4e53 4e54 4e56 5144 5145 5146 5147 5148 514c 514d 5157 '
+        '5158 5159 515a 515e 5460 5462 5464 5548 5549 554a 554b 554c 554d 554e 554f 5550 5551 5552 5554 '
+        '564a 564b 564f 5652 5653 5657 5834 5835 5954 5955 5960 5961 5962 5964 5965 5969 5974 5975 5a41 '
+        '5a42 5a61 5a62 5b60 5b62 5b63 5b64 5b65 5c61 5c63 5d48 5d49 5d4a 5d4c 5d4d 5d4e 5d4f 5d50 5d52 '
+        '5d57 5e48 5e4a 5e4b 5e4c 5e4d 5e4f 7100 7101 7102 7103 7104 7105 7106 7108 7109 710a 710b 710c '
+        '710e 710f 7140 7141 7142 7143 7144 7145 7146 7147 7149 714a 714b 714c 714d 714e 714f 7151 7152 '
+        '7153 715e 715f 7180 7181 7183 7186 7187 7188 718a 718b 718c 718d 718f 7193 7196 719b 719f 71c0 '
+        '71c1 71c2 71c3 71c4 71c5 71c6 71c7 71cd 71ce 71d2 71d4 71d5 71d6 71da 71de 7200 7210 7211 7240 '
+        '7243 7244 7245 7246 7247 7248 7249 724a 724b 724c 724d 724e 724f 7280 7281 7283 7284 7287 7288 '
+        '7289 728b 728c 7290 7291 7293 7297 7834 7835 791e 791f 793f 7941 7942 796c 796d 796e 796f 9400 '
+        '9401 9402 9403 9405 940a 940b 940f 9440 9441 9442 9443 9444 9446 944a 944b 944c 944e 9450 9452 '
+        '9456 945a 945b 945e 9460 9462 946a 946b 947a 947b 9480 9487 9488 9489 948a 948f 9490 9491 9495 '
+        '9498 949c 949e 949f 94a0 94a1 94a3 94b1 94b3 94b4 94b5 94b9 94c0 94c1 94c3 94c4 94c5 94c6 94c7 '
+        '94c8 94c9 94cb 94cc 94cd 9500 9501 9504 9505 9506 9507 9508 9509 950f 9511 9515 9517 9519 9540 '
+        '9541 9542 954e 954f 9552 9553 9555 9557 955f 9580 9581 9583 9586 9587 9588 9589 958a 958b 958c '
+        '958d 958e 958f 9590 9591 9593 9595 9596 9597 9598 9599 959b 95c0 95c2 95c4 95c5 95c6 95c7 95c9 '
+        '95cc 95cd 95ce 95cf 9610 9611 9612 9613 9614 9615 9616 9710 9711 9712 9713 9714 9715 '
+    ),
+    'dce4': (
+        '6600 6601 6602 6603 6604 6605 6606 6607 6608 6610 6611 6613 6620 6621 6623 6631 6660 6663 6664 '
+        '6665 6667 666f 6700 6701 6702 6703 6704 6705 6706 6707 6708 6709 6718 6719 671c 671d 671f 6720 '
+        '6721 6722 6723 6724 6725 6726 6727 6728 6729 6738 6739 673e 6740 6741 6742 6743 6744 6745 6746 '
+        '6747 6748 6749 674a 6750 6751 6758 6759 675b 675d 675f 6760 6761 6762 6763 6764 6765 6766 6767 '
+        '6768 6770 6771 6772 6778 6779 677b 6780 6784 6788 678a 6790 6791 6792 6798 6799 679a 679b 679e '
+        '679f 6800 6801 6802 6806 6808 6809 6810 6811 6816 6817 6818 6819 6820 6821 6822 6823 6824 6825 '
+        '6826 6827 6828 6829 682a 682b 682c 682d 682f 6830 6831 6835 6837 6838 6839 683b 683d 683f 6840 '
+        '6841 6842 6843 6849 684c 6850 6858 6859 6880 6888 6889 688a 688c 688d 6898 6899 689b 689c 689d '
+        '689e 68a0 68a1 68a8 68a9 68b0 68b8 68b9 68ba 68be 68bf 68c0 68c1 68c7 68c8 68c9 68d8 68d9 68da '
+        '68de 68e0 68e1 68e4 68e5 68e8 68e9 68f1 68f2 68f8 68f9 68fa 68fe 9640 9641 9642 9643 9644 9645 '
+        '9647 9648 9649 964a 964b 964c 964e 964f 9802 9803 9804 9805 9806 9807 9808 9809 980a 9900 9901 '
+        '9903 9904 9905 9906 9907 9908 9909 990a 990b 990c 990d 990e 990f 9910 9913 9917 9918 9919 9990 '
+        '9991 9992 9993 9994 9995 9996 9997 9998 9999 999a 999b 999c 999d 99a0 99a2 99a4 '
+    ),
+    'dce8': (
+        '1304 1305 1306 1307 1309 130a 130b 130c 130d 130e 130f 1310 1311 1312 1313 1315 1316 1317 1318 '
+        '131b 131c 131d 6640 6641 6646 6647 6649 6650 6651 6658 665c 665d 665f 67a0 67a1 67a2 67a8 67a9 '
+        '67aa 67b0 67b1 67b8 67b9 67ba 67be 6938 6939 9830 9831 9832 9833 9834 9835 9836 9837 9838 9839 '
+        '983a 983b 983c 983d 983e 983f 9850 9851 9852 9853 9854 9855 9856 9857 9858 9859 985a 985b 985c '
+        '985d 985e 985f '
+    ),
+}
+
+
+class Atom15Error(Exception):
+    pass
+
+
+def pci_class(device):
+    """avivo, dce4 ou dce8 (ASIC_IS_DCE4 e ASIC_IS_DCE8); None fora da tabela."""
+    text = '%04x' % device
+    for name, ids in PCI_CLASSES.items():
+        if text in ids.split():
+            return name
+    return None
+
+
+def pb_round(value):
+    """O que o PowerBASIC faz ao gravar um Double num Long: arredonda para o par
+    (o round do Python, o mesmo do Round() dele)."""
+    return int(round(value))
+
+
+def x(value):
+    """O PowerBASIC faz as contas nos 80 bits do x87 e so arredonda para 64 ao
+    gravar a variavel. Sem isso o resultado muda: 15625 * 0.00128 da 19,99... la
+    (o Int dele da 19) e 20.0 num double (uma linha a mais no 640x480, conferida
+    numa BIOS feita pelo atom-15.exe, tools/atom15-check.py). A Fraction e a conta
+    sem perda, o mais perto disso."""
+    return Fraction(value)
+
+
+def word(data, offset):
+    return struct.unpack_from('<H', data, offset)[0]
+
+
+def poke_word(data, offset, value):
+    struct.pack_into('<H', data, offset, value & 0xffff)
+
+
+def poke_dword(data, offset, value):
+    struct.pack_into('<I', data, offset, value & 0xffffffff)
+
+
+def checksum(data):
+    """A soma dos bytes da parte legada, em 16 bits (compute_checksum)."""
+    return sum(data[:data[2] * 512]) & 0xffff
+
+
+class Bios:
+    """A imagem e os ponteiros dela (atombios_get_info)."""
+
+    def __init__(self, image):
+        self.tail = bytes(image[BIOS_MAX_SIZE:])
+        self.length = min(BIOS_MAX_SIZE, len(image))
+        self.data = bytearray(image[:self.length]) + bytearray(BIOS_MAX_SIZE - self.length)
+        data = self.data
+        if self.length < 0x200 or data[0] != 0x55 or data[1] != 0xaa:
+            raise Atom15Error('Not a video BIOS image (no 55 AA signature).')
+        if data[2] == 0 or data[2] * 512 > self.length:
+            raise Atom15Error('The size written in the BIOS image is wrong.')
+        if checksum(data) & 0xff:
+            raise Atom15Error('The checksum of the BIOS image is wrong: a bad read of the card?')
+        if data[BIOS_ENTRY_POINT] != 0xe9:
+            raise Atom15Error('BIOS entry point not recognized.')
+
+        self.rom_header = word(data, 0x48)
+        if self.rom_header + 36 > self.length or bytes(data[self.rom_header + 4:self.rom_header + 8]) != b'ATOM':
+            raise Atom15Error('ATOM signature not found.')
+        self.int10 = word(data, self.rom_header + 18)
+        pci_info = word(data, self.rom_header + 28)
+        master_data = word(data, self.rom_header + 32)
+        self.vendor = word(data, pci_info + 4)
+        self.device = word(data, pci_info + 6)
+        self.vesa_timing = word(data, master_data + 10)
+        self.vesa_lut = word(data, master_data + 30)
+        self.checksum = checksum(data)
+        self.patched = HOOK_MARK in data
+
+        # Numa BIOS ja com o patch a assinatura da tabela pode ter mudado (o modo 0
+        # em 31 kHz tem outra altura de caractere): quem precisa dela e o patch.
+        self.vpt = bytes(data).find(bytes((0x28, 0x18, 0x08, 0x00)))
+        self.old_modes = self.vpt >= 0 and data[self.vpt + 64] == 80
+        self.num_standard = 20 if self.old_modes else 29
+
+        lut_size = word(data, self.vesa_lut)
+        timing_size = word(data, self.vesa_timing)
+        self.num_vesa_modes = (lut_size - 4) // 4
+        self.vesa_old = (timing_size - 4) % 28 != 0
+        self.timing_bytes = 32 if self.vesa_old else 28
+        self.num_vesa_timings = (timing_size - 4) // self.timing_bytes
+
+        vesa_check = bytes(data).find(bytes((0x80, 0xfc, 0x4f)), max(self.int10 - 1, 0))
+        if vesa_check < 0:
+            raise Atom15Error('Vesa check point not found.')
+        self.standard_call = vesa_check + 10
+        if data[self.standard_call] != 0xe8:
+            raise Atom15Error('Standard video service proc not found.')
+        self.standard_proc = (word(data, self.standard_call + 1) + self.standard_call + 3) & 0xffff
+        self.vesa_call = vesa_check + 5
+        if data[self.vesa_call] != 0xe8:
+            raise Atom15Error('Vesa video service proc not found.')
+        self.vesa_proc = (word(data, self.vesa_call + 1) + self.vesa_call + 3) & 0xffff
+
+        init = word(data, BIOS_ENTRY_POINT + 1) + BIOS_ENTRY_POINT + 3
+        at = bytes(data[init:init + 256]).find(b'\xa3')
+        if at < 0:
+            raise Atom15Error('PCI Bus offset not found.')
+        self.pci_bus = word(data, init + at + 1)
+
+        mcuc = bytes(data).find(b'MCuC')
+        self.mcuc_offset = mcuc - 8 if mcuc >= 0 else None
+        self.mcuc_block = struct.unpack_from('<I', data, self.mcuc_offset)[0] if mcuc >= 0 else None
+
+        end = data[2] * 512
+        self.gop = end if bytes(data[end + 28:end + 32]) == b'PCIR' else None
+
+        self.table = bytearray(276)     # standard(19) e vesa(255) do original
+        self.log = []
+
+
+def vertical_times(r):
+    """Os tempos verticais em segundos e a soma deles (set_monitor_range)."""
+    vfp, vsp, vbp = (float(Fraction(str(v)) / 1000) for v in r[7:10])
+    return vfp, vsp, vbp, float(x(vfp) + x(vsp) + x(vbp))
+
+
+def modedef_adjust(m, r, c_dots, c_lines, clock_select, hh, hs, he, ht, vv, scan_type, csync):
+    """As contas de um modo padrao numa faixa. False: fora da faixa."""
+    vmin, vmax = r[2], r[3]
+    vfp, vsp, vbp, blank = vertical_times(r)
+    m['dots_per_char'] = c_dots
+    m['lines_per_char'] = c_lines
+    if scan_type & SCAN_TEXT:
+        m['scan_doubling'] = 0
+        m['maximum_scan_line'] = c_lines - 1
+        m['cursor_end'] = m['maximum_scan_line'] - 1
+        m['cursor_start'] = m['cursor_end'] - 1
+    else:
+        kind = scan_type & 0x07f
+        m['scan_doubling'] = 1 if kind in (SCAN_TYPE_2, SCAN_TYPE_3) else 0
+        m['maximum_scan_line'] = 1 if kind in (SCAN_TYPE_1, SCAN_TYPE_3) else 0
+    m['interlace'] = 1 if scan_type & SCAN_INTERLACE else 0
+    interlace = 2 if m['interlace'] else 1
+
+    m['horizontal_display_end'] = hh - 1
+    m['horizontal_retrace_start'] = hs
+    m['horizontal_retrace_end'] = he
+    m['horizontal_total'] = ht
+    m['horizontal_blanking_start'] = hh + 1
+    m['horizontal_blanking_end'] = ht - 1
+
+    m['clock_select'] = clock_select & 0x07f
+    m['dotclock_div'] = 1 if clock_select & CLOCK_DIV_2 else 0
+    dotclock = x(CLOCK_MHZ[m['clock_select']])
+    hfreq = float(dotclock / (2 if m['dotclock_div'] else 1) * 1000000 / (ht * c_dots))
+    vfreq = float(min(x(hfreq) / (Fraction(vv, interlace) + round(x(hfreq) * x(blank))), x(vmax)))
+    if vfreq < vmin:
+        return False
+    m['hfreq'], m['vfreq'] = hfreq, vfreq
+
+    half = Fraction(1, 2) if interlace == 2 else 0
+    field_active = Fraction(vv, interlace)
+    field_total = round(x(hfreq) / x(vfreq)) + half
+    field_blank = math.floor(x(hfreq) * x(blank)) + half
+    field_padding = field_total - field_blank - field_active
+
+    m['vertical_display_end'] = vv
+    m['vertical_retrace_start'] = pb_round(vv + (max(round(x(hfreq) * x(vfp)), 1) + field_padding / 2) * interlace)
+    m['vertical_retrace_end'] = m['vertical_retrace_start'] + max(round(x(hfreq) * x(vsp)), 1) * interlace
+    m['vertical_total'] = pb_round(field_total * interlace)
+    m['vertical_blanking_start'] = vv + 1
+    m['vertical_blanking_end'] = m['vertical_total'] - 1
+    m['hsync_polarity'] = 1 if csync else 0
+    m['vsync_polarity'] = 1 if csync else 0
+    return True
+
+
+# standard_mode_reprogram: os ranges tentados em ordem (31, 25, 15), cada um com
+# os argumentos do modedef_adjust.
+STANDARD_TABLE = {
+    (0x00, 0x01): ((31, 9, 16, CLOCK_14161, 40, 43, 50, 50, 400, SCAN_TEXT),
+                   (25, 9, 14, CLOCK_14161, 40, 47, 54, 63, 400, SCAN_TEXT),
+                   (15, 8, 8, CLOCK_12587, 40, 68, 72, 100, 200, SCAN_TEXT)),
+    (0x02, 0x03, 0x07): ((31, 9, 16, CLOCK_28322, 80, 85, 97, 100, 400, SCAN_TEXT),
+                         (25, 9, 14, CLOCK_25175, 80, 90, 99, 112, 400, SCAN_TEXT),
+                         (15, 8, 8, CLOCK_12587, 80, 85, 97, 100, 200, SCAN_TEXT)),
+    (0x04, 0x05): ((31, 8, 8, CLOCK_12587, 40, 43, 50, 50, 400, SCAN_TYPE_3),
+                   (25, 8, 8, CLOCK_12587, 40, 47, 54, 63, 400, SCAN_TYPE_3),
+                   (15, 8, 8, CLOCK_12587, 40, 68, 72, 100, 200, SCAN_TYPE_1)),
+    (0x06,): ((31, 8, 8, CLOCK_25175, 80, 84, 96, 100, 400, SCAN_TYPE_3),
+              (25, 8, 8, CLOCK_25175, 80, 95, 110, 126, 400, SCAN_TYPE_3),
+              (15, 8, 8, CLOCK_12587, 80, 84, 96, 100, 200, SCAN_TYPE_1)),
+    (0x0D,): ((31, 8, 8, CLOCK_12587, 40, 43, 68, 50, 400, SCAN_TYPE_2),
+              (25, 8, 8, CLOCK_12587, 40, 47, 54, 63, 400, SCAN_TYPE_2),
+              (15, 8, 8, CLOCK_12587, 40, 68, 72, 100, 200, SCAN_TYPE_0)),
+    (0x0E,): ((31, 8, 8, CLOCK_25175, 80, 84, 96, 100, 400, SCAN_TYPE_2),
+              (25, 8, 8, CLOCK_25175, 80, 95, 110, 126, 400, SCAN_TYPE_2),
+              (15, 8, 8, CLOCK_12587, 80, 84, 96, 100, 200, SCAN_TYPE_0)),
+    (0x0F, 0x10): ((31, 8, 14, CLOCK_25175, 80, 84, 96, 100, 350, SCAN_TYPE_0),
+                   (25, 8, 14, CLOCK_25175, 80, 95, 110, 126, 350, SCAN_TYPE_0),
+                   (15, 8, 14, CLOCK_12587, 80, 84, 96, 100, 350, SCAN_TYPE_0 | SCAN_INTERLACE)),
+    (0x11, 0x12): ((31, 8, 16, CLOCK_25175, 80, 84, 96, 100, 480, SCAN_TYPE_0),
+                   (25, 8, 16, CLOCK_25175, 80, 95, 110, 126, 480, SCAN_TYPE_0 | SCAN_INTERLACE),
+                   (15, 8, 16, CLOCK_12587, 80, 84, 96, 100, 480, SCAN_TYPE_0 | SCAN_INTERLACE)),
+    (0x13,): ((31, 8, 8, CLOCK_25175, 80, 84, 96, 100, 400, SCAN_TYPE_1),
+              (25, 8, 8, CLOCK_25175, 80, 95, 110, 126, 400, SCAN_TYPE_1),
+              (15, 8, 8, CLOCK_12587, 80, 84, 96, 100, 200, SCAN_TYPE_0)),
+}
+
+
+def standard_mode_write(data, at, m):
+    """standard_mode_from_modedef: o modo de volta nos bytes da tabela."""
+    crtc = at + 10
+
+    def bit(value, position, on):
+        return (value & ~(1 << position) & 0xff) | (int(bool(on)) << position)
+
+    data[at + 2] = m['lines_per_char'] & 0xff
+    poke_word(data, at + 3, m['buffer_size'])
+    seq = data[at + 5]
+    seq = bit(seq, 0, m['dots_per_char'] == 8)
+    seq = bit(seq, 3, m['dotclock_div'])
+    data[at + 5] = seq
+    misc = (data[at + 9] & 0b11110011) | (m['clock_select'] * 4)
+    misc = bit(misc, 7, not m['vsync_polarity'])
+    misc = bit(misc, 6, not m['hsync_polarity'])
+    data[at + 9] = misc
+
+    ht, vt = m['horizontal_total'], m['vertical_total']
+    vde = m['vertical_display_end'] - 1
+    vrs, vbs, lc = m['vertical_retrace_start'], m['vertical_blanking_start'], m['line_compare']
+    hbe = m['horizontal_blanking_end']
+    data[crtc + 0x00] = (ht - 5) & 0xff
+    data[crtc + 0x01] = m['horizontal_display_end'] & 0xff
+    data[crtc + 0x02] = m['horizontal_blanking_start'] & 0xff
+    data[crtc + 0x03] = (hbe & 0b11111) + 0b10000000
+    data[crtc + 0x04] = m['horizontal_retrace_start'] & 0xff
+    data[crtc + 0x05] = (m['horizontal_retrace_end'] & 0b11111) + (hbe & 0b100000) * 4
+    data[crtc + 0x06] = vt & 0xff
+    data[crtc + 0x07] = ((vt & 0x100) // 256 + (vde & 0x100) // 128 + (vrs & 0x100) // 64 + (vbs & 0x100) // 32 +
+                         (lc & 0x100) // 16 + (vt & 0x200) // 16 + (vde & 0x200) // 8 + (vrs & 0x200) // 4) & 0xff
+    data[crtc + 0x09] = (m['maximum_scan_line'] + (vbs & 0x200) // 16 + (lc & 0x200) // 8 +
+                         m['scan_doubling'] * 128) & 0xff
+    data[crtc + 0x0a] = m['cursor_start'] & 0xff
+    data[crtc + 0x0b] = m['cursor_end'] & 0xff
+    data[crtc + 0x10] = vrs & 0xff
+    data[crtc + 0x11] = (m['vertical_retrace_end'] & 0b1111) + (data[crtc + 0x11] & 0b11110000)
+    data[crtc + 0x12] = vde & 0xff
+    data[crtc + 0x13] = m['line_pitch'] & 0xff
+    data[crtc + 0x15] = vbs & 0xff
+    data[crtc + 0x16] = (m['vertical_blanking_end'] & 0b01111111) + (data[crtc + 0x16] & 0b10000000)
+    data[crtc + 0x18] = lc & 0xff
+
+
+def process_standard_modes(b, ranges, csync):
+    data = b.data
+    numbers = STANDARD_OLD if b.old_modes else STANDARD_NEW
+    for i in range(b.num_standard):
+        at = b.vpt + i * 64
+        if data[at] == 0:
+            continue
+        number = numbers[i]
+        options = next((v for k, v in STANDARD_TABLE.items() if number in k), None)
+        if options is None:
+            b.log.append('Standard mode %02Xh: not reprogrammed' % max(number, 0))
+            continue
+        crtc = at + 10
+        m = {
+            'buffer_size': word(data, at + 3),
+            'line_pitch': data[crtc + 0x13],
+            'line_compare': data[crtc + 0x18] + (data[crtc + 0x07] & 0b10000) * 16 + (data[crtc + 0x09] & 0b1000000) * 8,
+            'cursor_start': 0, 'cursor_end': 0, 'interlace': 0,
+        }
+        for option in options:
+            if option[0] in ranges and modedef_adjust(m, RANGES[option[0]], *option[1:], csync):
+                standard_mode_write(data, at, m)
+                b.table[number] = INTERLACE_ENABLE if m['interlace'] else 0
+                b.log.append('Standard mode %02Xh: %.3f kHz, %.3f Hz%s' % (
+                    number, m['hfreq'] / 1000, m['vfreq'], ' interlaced' if m['interlace'] else ''))
+                break
+        else:
+            raise Atom15Error('Mode %02Xh is out of range for the chosen monitor.' % number)
+
+
+def modeline_adjust(ml, r, csync):
+    """As contas de um modo VESA numa faixa (modeline_adjust). False: nao cabe."""
+    hmin, hmax, vmin, vmax, hfp, hsp, hbp = r[:7]
+    vfp, vsp, vbp, blank = vertical_times(r)
+    xres, yres = ml['width'], ml['height']
+
+    interlace = 1
+    vfreq = float(x(hmax) / (Fraction(yres, interlace) + round(x(hmax) * x(blank))))
+    if vfreq < vmin:
+        interlace = 2
+        vfreq = float(x(hmax) / (Fraction(yres, interlace) + round(x(hmax) * x(blank))))
+        if vfreq < vmin:
+            return False
+
+    vfreq = min(vfreq, vmax)
+    hfreq = float(x(vfreq) * yres / (interlace * (1 - x(vfreq) * x(blank))))
+    hfreq = max(hfreq, hmin)
+
+    line_time = float(1 / x(hfreq) * 1000000)
+    hfp_min, hsp_min, hbp_min = float(x(hfp) * x(0.9)), float(x(hsp) * x(0.9)), float(x(hbp) * x(0.9))
+    hh = round(Fraction(xres, 8))
+    hs = he = ht = 1
+    while True:
+        char_time = x(float(x(line_time) / (hh + hs + he + ht)))
+        if hs * char_time < x(hfp_min) or abs((hs + 1) * char_time - x(hfp)) < abs(hs * char_time - x(hfp)):
+            hs += 1
+        if he * char_time < x(hsp_min) or abs((he + 1) * char_time - x(hsp)) < abs(he * char_time - x(hsp)):
+            he += 1
+        if ht * char_time < x(hbp_min) or abs((ht + 1) * char_time - x(hbp)) < abs(ht * char_time - x(hbp)):
+            ht += 1
+        if x(float(x(line_time) / (hh + hs + he + ht))) == char_time:
+            break
+
+    dotclock = pb_round(x(hfreq) * (hh + hs + he + ht) * 8)
+    if dotclock < DOT_CLOCK_MIN:
+        return False
+
+    half = Fraction(1, 2) if interlace == 2 else 0
+    field_active = Fraction(yres, interlace)
+    field_total = round(x(hfreq) / x(vfreq)) + half
+    field_blank = math.floor(x(hfreq) * x(blank)) + half
+    field_padding = field_total - field_blank - field_active
+    doublescan = 0
+    if field_padding >= field_active:
+        doublescan = 1
+        field_padding -= field_active
+
+    ml['pclock'] = pb_round(Fraction(dotclock, 10000))
+    ml['hactive'] = xres
+    ml['hbegin'] = (hh + hs) * 8
+    ml['hend'] = (hh + hs + he) * 8
+    ml['htotal'] = (hh + hs + he + ht) * 8
+    ml['vactive'] = yres
+    ml['vbegin'] = pb_round(yres + (max(round(x(hfreq) * x(vfp)), 1) + field_padding / 2) * interlace)
+    ml['vend'] = ml['vbegin'] + max(round(x(hfreq) * x(vsp)), 1) * interlace
+    ml['vtotal'] = pb_round(field_total * interlace)
+    ml['interlace'] = 1 if interlace == 2 else 0
+    ml['doublescan'] = doublescan
+    ml['refresh'] = math.floor(vfreq)
+    ml['hsync'] = 1 if csync else 0
+    ml['vsync'] = 1 if csync else 0
+    return True
+
+
+def timing_read(b, at):
+    """vesa_timing_to_modeline."""
+    data = b.data
+    if b.vesa_old:
+        f = struct.unpack_from('<9HH', data, at)
+        ml = {'pclock': f[8], 'htotal': f[0], 'hactive': f[1], 'hbegin': f[2], 'hend': f[2] + f[3],
+              'vtotal': f[4], 'vactive': f[5], 'vbegin': f[6], 'vend': f[6] + f[7]}
+        misc = f[9]
+        ml['number'], ml['refresh'] = data[at + 30], data[at + 31]
+    else:
+        f = struct.unpack_from('<9H', data, at)
+        ml = {'pclock': f[0], 'htotal': f[1] + f[2], 'hactive': f[1], 'hbegin': f[1] + f[5],
+              'hend': f[1] + f[5] + f[6], 'vtotal': f[3] + f[4], 'vactive': f[3], 'vbegin': f[3] + f[7],
+              'vend': f[3] + f[7] + f[8]}
+        misc = word(data, at + 24)
+        ml['number'], ml['refresh'] = data[at + 26], data[at + 27]
+    ml['interlace'] = (misc >> 7) & 1
+    ml['doublescan'] = (misc >> 5) & 1
+    ml['hsync'] = ((misc >> 1) & 1) ^ 1
+    ml['vsync'] = ((misc >> 2) & 1) ^ 1
+    ml['width'], ml['height'] = ml['hactive'], ml['vactive']
+    return ml
+
+
+def timing_write(b, at, ml):
+    """vesa_timing_from_modeline: o resto da entrada fica zerado."""
+    misc = (ATOM_INTERLACE if ml['interlace'] else 0) | (ATOM_V_REPLICATIONBY2 if ml['doublescan'] else 0)
+    misc |= (0 if ml['hsync'] else ATOM_HSYNC_POLARITY) | (0 if ml['vsync'] else ATOM_VSYNC_POLARITY)
+    if b.vesa_old:
+        out = struct.pack('<9HH5HBB', ml['htotal'], ml['hactive'], ml['hbegin'], ml['hend'] - ml['hbegin'],
+                          ml['vtotal'], ml['vactive'], ml['vbegin'], ml['vend'] - ml['vbegin'], ml['pclock'], misc,
+                          0, 0, 0, 0, 0, ml['number'], ml['refresh'])
+    else:
+        out = struct.pack('<11HBBHBB', ml['pclock'], ml['hactive'], ml['htotal'] - ml['hactive'], ml['vactive'],
+                          ml['vtotal'] - ml['vactive'], ml['hbegin'] - ml['hactive'], ml['hend'] - ml['hbegin'],
+                          ml['vbegin'] - ml['vactive'], ml['vend'] - ml['vbegin'], 0, 0, 0, 0, misc, ml['number'],
+                          ml['refresh'])
+    b.data[at:at + len(out)] = out
+
+
+def timing_describe(ml):
+    if not ml['htotal'] or not ml['vtotal']:
+        return '%dx%d' % (ml['width'], ml['height'])
+    hfreq = ml['pclock'] * 10000 / ml['htotal']
+    vfreq = hfreq / ml['vtotal'] * (2 if ml['interlace'] else 1)
+    return '%dx%d %.3f kHz %.3f Hz%s' % (ml['width'], ml['height'], hfreq / 1000, vfreq,
+                                         ' interlaced' if ml['interlace'] else '')
+
+
+def process_vesa_modes(b, ranges, csync):
+    data = b.data
+    first = b.vesa_timing + 4
+    for i in range(b.num_vesa_timings):
+        at = first + i * b.timing_bytes
+        ml = timing_read(b, at)
+        before = timing_describe(ml)
+        order = {200: (15, 31), 240: (15, 31), 350: (25, 31), 384: (25, 31), 768: (25, 31), 400: (31, 25, 15),
+                 480: (31, 25, 15), 600: (31, 25, 15), 864: (31,), 960: (31,)}.get(ml['height'], ())
+        for r in order:
+            if r in ranges and modeline_adjust(ml, RANGES[r], csync):
+                timing_write(b, at, ml)
+                b.log.append('VESA timing %s -> %s' % (before, timing_describe(ml)))
+                break
+        else:
+            # Sem faixa: o modo sai da lista (vesa_timing_disable).
+            data[at + (30 if b.vesa_old else 26)] = 0
+            b.log.append('VESA timing %s -> disabled' % before)
+
+    # A tabela VESA -> modo interno: so os modos que ainda tem timing, juntos no
+    # comeco, e o resto em branco.
+    lut = b.vesa_lut + 4
+    j = 0
+    for i in range(b.num_vesa_modes):
+        mode, extended = struct.unpack_from('<HH', data, lut + i * 4)
+        if not mode:
+            continue
+        number = extended // 256
+        at = next((first + t * b.timing_bytes for t in range(b.num_vesa_timings)
+                   if data[first + t * b.timing_bytes + (30 if b.vesa_old else 26)] == number), None)
+        if at is None:
+            struct.pack_into('<HH', data, lut + i * 4, 0, 0)
+            continue
+        if 0x100 <= mode < 0x200:
+            b.table[20 + mode - 0x100] = INTERLACE_ENABLE if timing_read(b, at)['interlace'] else 0
+        struct.pack_into('<HH', data, lut + j * 4, mode, extended)
+        j += 1
+    for i in range(j, b.num_vesa_modes):
+        struct.pack_into('<HH', data, lut + i * 4, 0xffff, 0xffff)
+    poke_word(data, b.vesa_lut, j * 4 + 4)
+
+
+def find_blank(data, start, end, size):
+    """find_blank_space: uma sequencia de 00 e FF. O deslocamento ou None."""
+    region = bytes(data[start:end]).replace(b'\xff', b'\x00')
+    at = region.find(bytes(size))
+    return None if at < 0 else at + start
+
+
+def bios_hook(b, csync):
+    data = b.data
+    legacy = data[2] * 512
+    size = len(HOOK)
+    start = min(b.length, BIOS_HOOK_OFFSET_MIN)
+    if b.length < BIOS_MIN_SIZE:
+        for i in range(b.length, BIOS_MIN_SIZE):
+            data[i] = 0
+        b.length = BIOS_MIN_SIZE
+        legacy = BIOS_MIN_SIZE
+
+    offset = find_blank(data, start, BIOS_END_OFFSET, size)
+    if offset is None:
+        if b.gop is None:
+            raise Atom15Error('No room for the hook: not enough blank space below 0xFFFF.')
+        # BIOS legada + EFI: abre espaco empurrando o bloco GOP para baixo.
+        block_start = b.gop
+        block_end = block_start + data[b.gop + 2] * 512
+        if block_start >= 0x10000:
+            raise Atom15Error('No room for the hook: GOP reallocation failed.')
+        shift = 0
+        while shift < size - 1:
+            shift += 1
+            offset = find_blank(data, start, BIOS_END_OFFSET, size - shift)
+            if offset is not None:
+                break
+        new_legacy = math.ceil((legacy + shift) / 512) * 512
+        shift = new_legacy - legacy
+        if b.mcuc_block:
+            block_end = b.mcuc_block + word(data, b.mcuc_block + 10) + 320
+        block_size = block_end - block_start
+        if 0x20000 - 0x100 - block_end < shift or offset is None or block_end + shift > b.length:
+            raise Atom15Error('No room for the hook: GOP reallocation failed.')
+        block = bytes(data[block_start:block_start + block_size])
+        data[block_start + shift:block_start + shift + block_size] = block
+        data[block_start:block_start + shift] = bytes(shift)
+        if b.mcuc_block:
+            b.mcuc_block += shift
+            poke_dword(data, b.mcuc_offset, b.mcuc_block)
+        legacy = new_legacy
+        # O branco achado pode ser de dentro do GOP: o hook teria de caber no que
+        # ficou livre, senao o original cresce a parte legada por cima do EFI.
+        if offset + size > legacy:
+            raise Atom15Error('No room for the hook: the blank space is inside the EFI part of this BIOS.')
+    elif b.gop is not None and offset + size > legacy:
+        # Depois do fim da parte legada comeca o EFI: o original cresceria por
+        # cima dele (e o trecho em branco pode ser de dentro do GOP).
+        raise Atom15Error('No room for the hook: the blank space is inside the EFI part of this BIOS.')
+
+    if offset + size > legacy:
+        legacy = math.ceil((offset + size) / 512) * 512
+    data[2] = legacy // 512
+    data[offset:offset + size] = HOOK
+    label = HOOK_LABELS
+
+    def poke_at(name, delta, value):
+        poke_word(data, offset + label[name] + delta, value)
+
+    def poke_call(name, target):
+        poke_at(name, 1, target - (offset + label[name] + 3))
+
+    data[offset + label['standard_modes']:offset + label['standard_modes'] + 276] = b.table
+    poke_word(data, b.standard_call + 1, offset + label['standard_bios_hook'] - (b.standard_call + 3))
+    poke_word(data, b.vesa_call + 1, offset + label['vesa_bios_hook'] - (b.vesa_call + 3))
+    poke_at('get_standard_modes_offset', 2, offset + label['standard_modes'])
+    poke_call('standard_bios_service', b.standard_proc)
+    poke_at('get_vesa_modes_offset', 2, offset + label['vesa_modes'])
+    poke_call('vesa_bios_service', b.vesa_proc)
+    poke_at('get_pci_bus', 3, b.pci_bus)
+    for name in ('call_get_BAR4', 'call_get_BAR1'):
+        poke_call(name, offset + label['get_BAR'])
+    for name in ('call_set_value1', 'call_set_value2', 'call_set_value3'):
+        poke_call(name, offset + label['set_value'])
+
+    interlace, data_format, interleave, hsync, composite, crtcs = REGISTERS[pci_class(b.device)]
+    poke_at('crtc_interlace_control_reg', 2, interlace)
+    poke_at('data_format_reg', 2, data_format)
+    poke_at('interleave_enable_set', 2, interleave)
+    if csync:
+        poke_at('crtc_enable_composite_sync', 0, 0x9090)
+    poke_at('crtc_h_sync_a_cntl_reg', 2, hsync)
+    poke_dword(data, offset + label['crtc_composite_enable_set'] + 2, composite)
+    for n, off in enumerate(crtcs):
+        poke_at('crtc%d_enable_interlace' % n, 1, off)
+        poke_call('call_crtc%d' % n, offset + label['crtc_program_registers'])
+    return offset + label['checksum_fix']
+
+
+def fix_checksum(b, fix):
+    """Devolve a soma de antes: os bytes da tabela trocam com FE (o entrelacado
+    e so o bit 0, que nao muda), e um byte proprio fecha a conta."""
+    data = b.data
+    diff = (b.checksum - checksum(data)) & 0xffff
+    for i in range(1, diff // 0xfe + 1):
+        data[fix + i] ^= 0xfe
+    data[fix] = (b.checksum - checksum(data)) & 0xff
+
+
+def patch(image, ranges, csync=False):
+    """A imagem nova e o log; Atom15Error se ela nao pode ser feita."""
+    b = Bios(image)
+    if b.vendor != VENDOR_ATI:
+        raise Atom15Error('Not an ATI/AMD BIOS.')
+    if pci_class(b.device) is None:
+        raise Atom15Error('This card (%04x) is not in the ATOM-15 list.' % b.device)
+    if b.patched:
+        raise Atom15Error('This BIOS already has the ATOM-15 hook: start from the original one.')
+    if b.vpt < 0:
+        raise Atom15Error('Video parameter table not found.')
+    if not ranges or not set(ranges) <= set(RANGES):
+        raise Atom15Error('Choose the monitor ranges: 15, 25 and/or 31 kHz.')
+    process_vesa_modes(b, ranges, csync)
+    process_standard_modes(b, ranges, csync)
+    fix_checksum(b, bios_hook(b, csync))
+    out = bytes(b.data[:b.length]) + b.tail
+
+    # O resultado passa pelas mesmas conferencias, e a soma tem de ser a de antes.
+    check = Bios(out)
+    if check.device != b.device or not check.patched or checksum(check.data) != b.checksum:
+        raise Atom15Error('The patched image did not pass the check. Nothing was written.')
+    if out[0x48:0x4a] != bytes(image[0x48:0x4a]):
+        raise Atom15Error('The patched image did not pass the check. Nothing was written.')
+    return out, b.log
+
+
+def info(image):
+    b = Bios(image)
+    print('device=%04x' % b.device)
+    print('vendor=%04x' % b.vendor)
+    print('class=%s' % (pci_class(b.device) or 'unknown'))
+    print('size=%d' % len(image))
+    print('legacy_size=%d' % (b.data[2] * 512))
+    print('efi=%d' % (0 if b.gop is None else 1))
+    print('patched=%d' % int(b.patched))
+
+
+def adapter(text, bus, dev):
+    """A linha da placa na lista do amdvbflash -i: o numero, o tamanho da ROM e
+    o teste dele. As colunas de nome (asic, flash) tem espacos, entao o tamanho e
+    o que vem antes do teste; com ou sem a coluna do segmento:
+      adapter bn dn dID       asic           flash      romsize test    bios p/n
+      ======= == == ==== =============== ============== ======= ==== ============
+         0    01 00 6613 Oland           W25X20          40000 pass  113-...
+    """
+    columns = None
+    found = []
+    for line in text.splitlines():
+        fields = line.split()
+        if {'adapter', 'bn', 'dn'} <= set(fields):
+            columns = fields
+            continue
+        if not columns or not fields or not fields[0].isdigit() or len(fields) <= columns.index('dn'):
+            continue
+        try:
+            if int(fields[columns.index('bn')], 16) != bus or int(fields[columns.index('dn')], 16) != dev:
+                continue
+        except ValueError:
+            continue
+        size, test = 0, '-'
+        for i in range(len(fields) - 1, columns.index('dn'), -1):
+            if fields[i].lower() in ('pass', 'fail', 'failed', 'bad', 'error'):
+                test = fields[i].lower()
+                try:
+                    size = int(fields[i - 1], 16)
+                except ValueError:
+                    size = 0
+                break
+        found.append('%s %d %s' % (fields[0], size, test))
+    if len(found) != 1:
+        raise Atom15Error('The flash tool does not list this card (%02x:%02x).' % (bus, dev))
+    print(found[0])
+
+
+def main():
+    parser = argparse.ArgumentParser(description='ATOM-15 BIOS patch')
+    sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('info')
+    p.add_argument('rom')
+    p = sub.add_parser('patch')
+    p.add_argument('rom')
+    p.add_argument('out')
+    p.add_argument('--ranges', default='15')
+    p.add_argument('--csync', action='store_true')
+    p.add_argument('--log')
+    p = sub.add_parser('adapter')
+    p.add_argument('bus')
+    p.add_argument('dev')
+    args = parser.parse_args()
+    try:
+        if args.command == 'adapter':
+            adapter(sys.stdin.read(), int(args.bus, 16), int(args.dev, 16))
+            return 0
+        with open(args.rom, 'rb') as f:
+            image = f.read()
+        if args.command == 'info':
+            info(image)
+            return 0
+        ranges = {int(r) for r in args.ranges.split(',') if r}
+        out, log = patch(image, ranges, args.csync)
+        with open(args.out, 'wb') as f:
+            f.write(out)
+        if args.log:
+            with open(args.log, 'w') as f:
+                f.write('\n'.join(log) + '\n')
+    except (Atom15Error, OSError, ValueError, struct.error, IndexError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

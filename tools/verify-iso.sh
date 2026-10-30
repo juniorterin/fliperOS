@@ -324,7 +324,9 @@ for name in fliperos-downloader:opt/fliperos/bin/fliperos-downloader \
 done
 for path in usr/bin/transmission-daemon usr/local/lib/fliperos-setup/lib/downloader.sh \
   usr/local/lib/fliperos-setup/screens/downloader.sh usr/local/lib/fliperos-setup/lib/mediapacks.sh \
-  usr/local/lib/fliperos-setup/screens/mediapacks.sh; do
+  usr/local/lib/fliperos-setup/screens/mediapacks.sh usr/local/lib/fliperos-setup/lib/atom15.sh \
+  usr/local/lib/fliperos-setup/screens/atom15.sh opt/fliperos/bin/fliperos-atom15 \
+  etc/systemd/system/fliperos-atom15-guard.service; do
   has "$path"
 done
 grep -E 'etc/systemd/system/transmission-daemon.service ->' "$work/links.txt" | grep -q '/dev/null' \

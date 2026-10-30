@@ -1,0 +1,17 @@
+# Vigia do ATOM-15 (Setup > Video Setup > Card firmware): com uma BIOS nova em
+# teste, o boot seguinte pede para confirmar antes do launcher (fliperos-setup
+# --atom15-confirm). Se ninguem confirma em 5 minutos (a tela nem abriu, ou
+# ninguem a viu), ou se o boot de teste anterior travou, este servico grava a BIOS
+# original de volta e reinicia (atom15_boot em fliperos-setup/lib/atom15.sh). Sem
+# BIOS em teste nem sobe.
+[Unit]
+Description=FliperOS video card firmware trial
+After=systemd-modules-load.service local-fs.target
+ConditionPathExists=/var/lib/fliperos/atom15/trial
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/fliperos-setup --atom15-boot
+
+[Install]
+WantedBy=multi-user.target

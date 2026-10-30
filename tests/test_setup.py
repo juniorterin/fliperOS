@@ -6971,6 +6971,378 @@ class WhatsNewTests(Base):
         self.assertIn('source "$SETUP_DIR/screens/whatsnew.sh"', setup)
 
 
+def load_atom():
+    """O patcher, carregado do config/fliperos-atom15 (sem extensao .py)."""
+    from importlib.machinery import SourceFileLoader
+    from importlib.util import module_from_spec, spec_from_loader
+    loader = SourceFileLoader("fliperos_atom15", str(ROOT / "config/fliperos-atom15"))
+    module = module_from_spec(spec_from_loader("fliperos_atom15", loader))
+    loader.exec_module(module)
+    return module
+
+
+def load_atom_patch(image):
+    return load_atom().patch(image, {15})[0]
+
+
+def atom_rom(device=0x6613):
+    """Uma BIOS ATOM de mentira, a mesma ideia da do AtomPatchTests (test_build)."""
+    import struct
+    rom = bytearray(0x10000)
+    rom[0:3] = bytes((0x55, 0xaa, 0xe000 // 512))
+    rom[3] = 0xe9
+    struct.pack_into("<H", rom, 4, 0x100 - 6)
+    rom[0x100:0x103] = bytes((0xa3, 0x1a, 0x02))
+    struct.pack_into("<H", rom, 0x48, 0x200)
+    rom[0x204:0x208] = b"ATOM"
+    struct.pack_into("<H", rom, 0x200 + 18, 0x300)
+    struct.pack_into("<H", rom, 0x200 + 28, 0x400)
+    struct.pack_into("<H", rom, 0x200 + 32, 0x500)
+    rom[0x400:0x404] = b"PCIR"
+    struct.pack_into("<HH", rom, 0x404, 0x1002, device)
+    struct.pack_into("<H", rom, 0x500 + 10, 0x600)
+    struct.pack_into("<H", rom, 0x500 + 30, 0x800)
+    rom[0x300:0x303] = bytes((0x80, 0xfc, 0x4f))
+    rom[0x305] = 0xe8
+    struct.pack_into("<H", rom, 0x306, 0x350 - 0x308)
+    rom[0x30a] = 0xe8
+    struct.pack_into("<H", rom, 0x30b, 0x360 - 0x30d)
+    struct.pack_into("<H", rom, 0x600, 4 + 28)
+    struct.pack_into("<11HBBHBB", rom, 0x604, 2517, 640, 160, 480, 45, 16, 96, 10, 2, 0, 0, 0, 0, 0, 18, 60)
+    struct.pack_into("<H", rom, 0x800, 4 + 4)
+    struct.pack_into("<HH", rom, 0x804, 0x101, 18 << 8 | 2)
+    rom[0x1000:0x1004] = bytes((0x28, 0x18, 0x08, 0x00))
+    rom[0x1000 + 64] = 40
+    rom[0x50] = (-sum(rom[:rom[2] * 512])) & 0xff
+    return bytes(rom)
+
+
+class Atom15Tests(Base):
+    """Video Setup > Card firmware: backup, gravacao, o teste no boot seguinte
+    e a volta, com um amdvbflash de mentira que grava num arquivo."""
+    PRELUDE = """
+        source %s/lib/atom15.sh
+        source %s/screens/atom15.sh
+        ui_info() { :; }
+        ui_msg() { echo "MSG: $*"; }
+        ui_bad() { printf '%%s' "$1"; }
+        ui_yes() { printf '%%s' "$1"; }
+        ui_fields() { printf '%%s\\n' "$@"; }
+        speak() { :; }
+        screen_power_now() { systemctl "$1"; }
+    """ % (SETUP, SETUP)
+
+    def setUp(self):
+        super().setUp()
+        self.env.cmdline.write_text("quiet splash\n")
+        (self.env.etc / "installed").write_text("")
+        self.env.card("card0", "amdgpu")
+        dev = self.env.drm / "card0" / "device"
+        (dev / "vendor").write_text("0x1002\n")
+        (dev / "device").write_text("0x6613\n")
+        (dev / "boot_vga").write_text("1\n")
+        self.state = self.env.dir / "state"
+        self.dir = self.env.dir / "vbios"
+        self.dir.mkdir()
+        self.chip = self.env.dir / "chip.rom"
+        self.chip.write_bytes(atom_rom())
+        self.original = self.chip.read_bytes()
+        self.flashes = self.env.dir / "flashes"
+        self.flashes.write_text("")
+        self.flasher()
+        self.env.stub("systemctl", 'echo "systemctl $*" >> "%s/systemctl"' % self.env.dir)
+        self.env.stub("chown", ":")
+        self.vars = {"ATOM15_STATE": str(self.state), "ATOM15_DIR": str(self.dir),
+                     "ATOM15_BIN": str(ROOT / "config/fliperos-atom15"), "FLIPEROS_USER": "root",
+                     "ATOM15_EFIVARS": str(self.env.dir / "efivars"), "SETUP_REMOTE": "0"}
+
+    def flasher(self, write=None, read=None, listing=None):
+        """O amdvbflash: -i, -s N ARQ (le o chip) e -p N ARQ (grava o chip)."""
+        chip = self.chip
+        tool = self.dir / "amdvbflash"
+        tool.write_text(
+            "#!/bin/bash\n"
+            "case $1 in\n"
+            "  -i) cat <<'EOF'\n" +
+            (listing or
+             "adapter bn dn dID       asic           flash      romsize test    bios p/n\n"
+             "======= == == ==== =============== ============== ======= ==== ================\n"
+             "   0    00 00 6613 Oland           W25X20          40000 pass  113-C44\n") +
+            "EOF\n"
+            "    ;;\n"
+            "  -s) " + (read or 'cp "%s" "$3"' % chip) + " ;;\n"
+            "  -p) echo \"$3\" >> \"%s\"; " % self.flashes + (write or 'cp "$3" "%s"' % chip) + " ;;\n"
+            "esac\n")
+        tool.chmod(0o755)
+
+    def run_screen(self, script):
+        return self.env.out(self.PRELUDE + script, env=self.vars)
+
+    def conf(self):
+        path = self.env.etc / "fliperos.conf"
+        return dict(l.split("=", 1) for l in path.read_text().split("\n") if "=" in l) if path.exists() else {}
+
+    def rebooted(self):
+        path = self.env.dir / "systemctl"
+        return path.exists() and "reboot" in path.read_text()
+
+    def applied(self):
+        """O caminho inteiro ate o reboot: toda pergunta respondida com sim."""
+        return self.run_screen("""
+            ui_yesno() { echo "ASK: $2"; return 0; }
+            ui_radio() { printf '%s' "$3"; }
+            screen_atom15_apply
+        """)
+
+    def flashed(self):
+        return [l for l in self.flashes.read_text().split("\n") if l]
+
+    def test_full_path_backup_then_flash_and_reboot(self):
+        out = self.applied()
+        # Os avisos, com a responsabilidade da pessoa, antes de tudo.
+        self.assertIn("rewrites the BIOS chip", out)
+        self.assertIn("You take this risk yourself", out)
+        self.assertLess(out.index("rewrites the BIOS chip"), out.index("Backup of the original BIOS saved"))
+        # O backup e igual ao que estava na placa, e a pessoa ve onde esta.
+        backups = list(self.dir.glob("original-6613-*.rom"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_bytes(), self.original)
+        self.assertIn(backups[0].name, out)
+        # Na tela o caminho vem em duas linhas: uma linha so seria cortada.
+        self.assertEqual(self.run_screen('atom15_where /home/root/vbios/original-6613-1a2b3c4d.rom'),
+                         '~/vbios/\noriginal-6613-1a2b3c4d.rom')
+        self.assertEqual((self.state / "original.rom").read_bytes(), self.original)
+        # Gravou a BIOS com o patch, e o teste esta aberto.
+        self.assertEqual(len(self.flashed()), 1)
+        self.assertNotEqual(self.chip.read_bytes(), self.original)
+        self.assertIn(b"\x81\xe3\xff\x3f\x81\xeb\x00\x01", self.chip.read_bytes())
+        self.assertTrue((self.state / "trial").exists())
+        self.assertTrue((self.state / "flashed").exists())
+        self.assertEqual(self.conf()["atom15_trial"], "1")
+        self.assertEqual(self.conf()["atom15_backup"], str(backups[0]))
+        self.assertTrue(self.rebooted())
+        self.assertTrue(list(self.dir.glob("atom15-6613-15khz.rom")))
+        self.assertTrue(list(self.dir.glob("atom15-6613-15khz.log")))
+
+    def test_each_refusal_leaves_the_card_alone(self):
+        script = """
+            ui_yesno() { %s }
+            ui_radio() { printf '%%s' "$3"; }
+            screen_atom15_apply
+        """
+        # O primeiro nao (aceitar o risco) e o ultimo (gravar agora).
+        out = self.run_screen(script % "return 1;")
+        self.assertEqual(self.flashed(), [])
+        self.assertFalse(list(self.dir.glob("original-*")))
+        out = self.run_screen(script % 'case $2 in Last*) return 1 ;; esac; return 0;')
+        self.assertIn("Nothing was flashed", out)
+        self.assertEqual(self.flashed(), [])
+        self.assertEqual(self.chip.read_bytes(), self.original)
+        self.assertFalse((self.state / "trial").exists())
+
+    def test_questions_default_to_no(self):
+        text = (SETUP / "screens/atom15.sh").read_text()
+        for question in ("Do you accept it?", "Flash the patched BIOS now?", "Flash the original BIOS back"):
+            line = next(l for l in text.split("\n") if question in l)
+            self.assertTrue(line.rstrip().endswith(" no") or " no ||" in line or line.rstrip().endswith(' no ||'), line)
+
+    def test_without_the_flash_tool_says_where_to_put_it(self):
+        (self.dir / "amdvbflash").unlink()
+        out = self.applied()
+        self.assertIn("%s/\namdvbflash" % self.dir, out)
+        self.assertIn("flash tool is missing", out)
+        self.assertEqual(self.flashed(), [])
+
+    def test_card_that_already_has_atom15_is_refused(self):
+        # O caso do gabinete: a placa ja saiu do atom-15.exe.
+        patched = load_atom_patch(self.original)
+        self.chip.write_bytes(patched)
+        out = self.applied()
+        self.assertIn("already has an ATOM-15 BIOS", out)
+        self.assertEqual(self.flashed(), [])
+        self.assertFalse((self.state / "original.rom").exists())
+
+    def test_reads_that_differ_are_not_a_backup(self):
+        self.flasher(read='head -c 70000 /dev/urandom > "$3"')
+        out = self.applied()
+        self.assertIn("came out different", out)
+        self.assertEqual(self.flashed(), [])
+
+    def test_bad_read_of_another_card_is_refused(self):
+        self.chip.write_bytes(atom_rom(device=0x68f9))
+        out = self.applied()
+        self.assertIn("does not belong to this card", out)
+        self.assertEqual(self.flashed(), [])
+
+    def test_chip_test_failure_stops(self):
+        self.flasher(listing="adapter bn dn dID       asic           flash      romsize test    bios p/n\n"
+                             "======= == == ==== =============== ============== ======= ==== ================\n"
+                             "   0    00 00 6613 Oland           W25X20          40000 fail  113-C44\n")
+        out = self.applied()
+        self.assertIn("problem with the card's BIOS chip (fail)", out)
+        self.assertEqual(self.flashed(), [])
+
+    def test_flash_that_does_not_check_out_goes_back_at_once(self):
+        # A primeira gravacao nao pega; a do original, sim.
+        self.flasher(write='case $3 in *original*) cp "$3" "%s" ;; esac' % self.chip)
+        out = self.applied()
+        self.assertEqual(len(self.flashed()), 2)
+        self.assertIn("original BIOS was written back and checked", out)
+        self.assertEqual(self.chip.read_bytes(), self.original)
+        self.assertFalse((self.state / "trial").exists())
+        self.assertFalse(self.rebooted())
+
+    def test_both_flashes_failing_keeps_the_trial_and_warns(self):
+        self.flasher(write=":")
+        self.chip.write_bytes(self.original)
+        # O chip nao muda: gravar o original "confere" se ele ja esta la. Aqui a
+        # leitura volta sempre errada depois da primeira gravacao.
+        self.flasher(write='echo x > "%s.broken"' % self.chip,
+                     read='if [ -e "%s.broken" ]; then head -c 65536 /dev/urandom > "$3"; else cp "%s" "$3"; fi' % (self.chip, self.chip))
+        out = self.applied()
+        self.assertIn("could not be confirmed", out)
+        self.assertIn("DO NOT turn the computer off", out)
+        self.assertTrue((self.state / "trial").exists())
+        self.assertFalse(self.rebooted())
+
+    def test_enter_keeps_it_and_says_where_the_backup_is(self):
+        self.applied()
+        (self.env.dir / "systemctl").unlink()
+        out = self.run_screen('ui_timed_confirm() { echo "TIMED $2 s"; return 0; }\nscreen_atom15_confirm')
+        self.assertIn("TIMED 90 s", out)
+        self.assertIn("ATOM-15 stays on the card", out)
+        self.assertIn("original-6613-", out)
+        self.assertFalse(self.rebooted())
+        self.assertNotEqual(self.chip.read_bytes(), self.original)
+        self.assertFalse((self.state / "trial").exists())
+        conf = self.conf()
+        self.assertNotIn("atom15_trial", conf)
+        self.assertIn("atom15_applied", conf)
+
+    def test_no_answer_or_esc_flashes_the_original_and_restarts(self):
+        for rc in (124, 1):
+            with self.subTest(rc=rc):
+                self.setUp()
+                self.applied()
+                (self.env.dir / "systemctl").unlink()
+                self.run_screen('ui_timed_confirm() { return %d; }\nscreen_atom15_confirm' % rc)
+                self.assertEqual(self.chip.read_bytes(), self.original)
+                self.assertTrue(self.rebooted())
+                self.assertFalse((self.state / "trial").exists())
+                self.assertNotIn("atom15_trial", self.conf())
+
+    def test_failed_revert_keeps_the_trial_for_the_next_boot(self):
+        self.applied()
+        (self.env.dir / "systemctl").unlink()
+        self.flasher(write=":")
+        out = self.run_screen('ui_timed_confirm() { return 124; }\nscreen_atom15_confirm')
+        self.assertIn("Could not flash the original BIOS", out)
+        self.assertTrue((self.state / "trial").exists())
+        self.assertFalse(self.rebooted())
+
+    def test_power_cut_during_the_flash_never_asks(self):
+        # A marca do teste vai antes da gravacao; a "flashed" so depois de conferir.
+        self.applied()
+        (self.state / "flashed").unlink()
+        (self.env.dir / "systemctl").unlink()
+        out = self.run_screen('ui_timed_confirm() { echo ASKED; return 0; }\nscreen_atom15_confirm')
+        self.assertNotIn("ASKED", out)
+        self.assertEqual(self.chip.read_bytes(), self.original)
+
+    def test_guard_reverts_when_nobody_answered(self):
+        self.applied()
+        (self.env.dir / "systemctl").unlink()
+        self.run_screen("atom15_boot")
+        self.assertEqual(self.chip.read_bytes(), self.original)
+        self.assertTrue(self.rebooted())
+
+    def test_guard_leaves_a_confirmed_bios(self):
+        self.applied()
+        (self.env.dir / "systemctl").unlink()
+        self.run_screen("sleep() { atom15_confirm; }\natom15_boot")
+        self.assertNotEqual(self.chip.read_bytes(), self.original)
+        self.assertFalse(self.rebooted())
+
+    def test_guard_reverts_at_once_after_a_hung_test_boot(self):
+        self.applied()
+        (self.env.dir / "systemctl").unlink()
+        out = self.run_screen("sleep() { echo SLEPT; atom15_confirm; }\natom15_boot")
+        self.assertIn("SLEPT", out)
+        # Outro teste, e o boot anterior nem confirmou nem voltou.
+        self.setUp()
+        self.applied()
+        (self.env.dir / "systemctl").unlink()
+        self.run_screen("conf_set atom15_trial_boots 1\n"
+                        "sleep() { echo SLEPT; }\natom15_boot > %s/out" % self.env.dir)
+        self.assertNotIn("SLEPT", (self.env.dir / "out").read_text())
+        self.assertEqual(self.chip.read_bytes(), self.original)
+        self.assertTrue(self.rebooted())
+
+    def test_guard_without_a_trial_does_nothing(self):
+        self.run_screen("sleep() { echo SLEPT; }\natom15_boot")
+        self.assertEqual(self.flashed(), [])
+
+    def test_restore_from_the_menu(self):
+        self.applied()
+        self.run_screen('ui_timed_confirm() { return 0; }\nscreen_atom15_confirm')
+        (self.env.dir / "systemctl").unlink()
+        out = self.run_screen('ui_yesno() { echo "ASK: $2"; return 0; }\nscreen_atom15_restore')
+        self.assertIn("Flash the original BIOS back", out)
+        self.assertIn("original-6613-", out)
+        self.assertEqual(self.chip.read_bytes(), self.original)
+        self.assertTrue(self.rebooted())
+        self.assertNotIn("atom15_applied", self.conf())
+
+    def test_blocked_over_ssh_on_the_media_and_with_secure_boot(self):
+        script = 'screen_atom15_blocked && echo BLOCKED'
+        self.assertNotIn("BLOCKED", self.run_screen('screen_atom15_blocked || echo FREE'))
+        self.assertIn("at the cabinet", self.env.out(self.PRELUDE + script, env=dict(self.vars, SETUP_REMOTE="1")))
+        efi = self.env.dir / "efivars"
+        efi.mkdir()
+        (efi / "SecureBoot-8be4df61").write_bytes(bytes((6, 0, 0, 0, 1)))
+        self.assertIn("Secure Boot", self.run_screen(script))
+        (efi / "SecureBoot-8be4df61").write_bytes(bytes((6, 0, 0, 0, 0)))
+        self.assertNotIn("Secure Boot", self.run_screen('screen_atom15_blocked || echo FREE'))
+        self.env.cmdline.write_text("boot=live quiet\n")
+        self.assertIn("installed system", self.run_screen(script))
+
+    def test_not_while_a_driver_change_waits(self):
+        (self.env.etc / "fliperos.conf").write_text("amd_driver_trial=amdgpu\n")
+        self.assertIn("driver change", self.run_screen('screen_atom15_blocked && echo BLOCKED'))
+
+    def test_menu_only_with_an_amd_card(self):
+        self.assertEqual(self.run_screen("atom15_card").strip(), "card0")
+        (self.env.drm / "card0" / "device" / "vendor").write_text("0x8086\n")
+        self.assertEqual(self.env.run(self.PRELUDE + "atom15_card", env=self.vars).returncode, 1)
+        text = (SETUP / "screens/video-setup.sh").read_text()
+        self.assertIn('"${firmware[@]}"', text)
+        self.assertIn("firmware) screen_atom15 ;;", text)
+
+    def test_wired_into_boot(self):
+        tty1 = (ROOT / "config/fliperos-tty1").read_text()
+        self.assertLess(tty1.index("fliperos-setup --atom15-confirm"), tty1.index("fliperos-setup --driver-confirm"))
+        # O tty1 roda como o usuario, que nao entra na pasta do estado (so root):
+        # o sinal para abrir a tela vem do fliperos.conf, gravado junto da marca.
+        self.assertIn("grep -q '^atom15_trial=' \"$ETC/fliperos.conf\"", tty1)
+        self.assertNotIn("/var/lib/fliperos/atom15", tty1)
+        main = (SETUP / "fliperos-setup").read_text()
+        self.assertIn('source "$SETUP_DIR/lib/atom15.sh"', main)
+        self.assertIn('source "$SETUP_DIR/screens/atom15.sh"', main)
+        self.assertIn("--atom15-boot)\n      # A vigia da BIOS em teste (fliperos-atom15-guard.service).\n      atom15_boot", main)
+        self.assertIn("--atom15-confirm)\n      screen_atom15_confirm", main)
+        unit = (ROOT / "config/fliperos-atom15-guard.service").read_text()
+        self.assertIn("ExecStart=/usr/local/bin/fliperos-setup --atom15-boot", unit)
+        self.assertIn("ConditionPathExists=/var/lib/fliperos/atom15/trial", unit)
+        self.assertIn("Type=simple", unit)
+
+    def test_the_flash_has_no_timeout(self):
+        # Cortar a gravacao no meio e o jeito certo de perder a placa.
+        text = (SETUP / "lib/atom15.sh").read_text()
+        self.assertIn('"$flasher" -p "$adapter" "$image"', text)
+        self.assertNotRegex(text, r'timeout[^\n]*-p ')
+        self.assertNotIn(' -f -p', text)
+
+
 class AmdDriverTests(Base):
     """radeon ou amdgpu nas placas que aceitam os dois (Video Setup > Video driver)."""
     RADEON = "radeon.si_support=1 radeon.cik_support=1 amdgpu.si_support=0 amdgpu.cik_support=0"
@@ -7241,7 +7613,7 @@ class AmdDriverTests(Base):
         # Em Video Setup, nao mais em System.
         video = (SETUP / "screens/video-setup.sh").read_text().split("screen_video_setup() {")[1]
         self.assertIn("driver) screen_video_driver ;;", video)
-        self.assertIn('"${driver[@]}" \\\n      "${lowdot[@]}" \\\n      "return|', video)
+        self.assertIn('"${driver[@]}" \\\n      "${lowdot[@]}" \\\n      "${firmware[@]}" \\\n      "return|', video)
         self.assertNotIn("screen_amd_driver", (SETUP / "screens/setup-menu.sh").read_text())
         # Na midia so grava a escolha, e a instalacao nao pergunta de novo.
         self.assertIn("is_live && mode=install", (SETUP / "screens/amd-driver.sh").read_text())

@@ -95,7 +95,7 @@ Without a CTM (the cabinet's Radeon R7 240 on the `radeon` driver has only the 2
 
     Also **480i hacks**: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, 480i with the flicker filter at its own level (with a preview on the tube), or pure 480i ([Emulators](Emulators.md#480i-hacks-640x240-filter-or-pure-480i)).
 
-    Changes in that table are saved as they are made; there is no Save step. Also **Colour calibration** (below). Also **Video driver**, only with an AMD card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240).
+    Changes in that table are saved as they are made; there is no Save step. Also **Colour calibration** (below). Also **Card firmware**, with an AMD card: [ATOM-15 in the card's BIOS](Video-cards.md#atom-15-15-khz-from-power-on), at your own risk. Also **Video driver**, only with an AMD card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240).
 
     The card name comes from `lspci`, and whether both drivers take it comes from the modules' own PCI ID tables (`modprobe -R` on the card's modalias). **radeon** is the recommended choice and the default, as on GroovyArcade: 15 kHz was validated on it; OpenGL only.
 

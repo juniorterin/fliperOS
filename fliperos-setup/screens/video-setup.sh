@@ -630,6 +630,10 @@ screen_video_setup() {
   local lowdot=()
   drm_card_low_dotclock_testable "$(conf_get card 2> /dev/null)" 2> /dev/null &&
     lowdot=("lowdot|Low resolutions|NVIDIA: test if this card shows native 15 kHz modes.")
+  # O ATOM-15 so numa placa AMD, e so no sistema instalado.
+  local firmware=()
+  is_installed && ! is_live && atom15_card > /dev/null 2>&1 &&
+    firmware=("firmware|Card firmware|15 kHz from power on. Rewrites the card's BIOS: at your own risk.")
   while true; do
     # Ate 5 linhas na interface grafica, ou o carrossel de icones vira lista:
     # a orientacao vai junto da resolucao, e Monitors so com mais de um.
@@ -659,6 +663,7 @@ screen_video_setup() {
       "retest|Test the video outputs|Run the output test again after a card change." \
       "${driver[@]}" \
       "${lowdot[@]}" \
+      "${firmware[@]}" \
       "return|Return|Save and leave. New video settings need a reboot.") || choice="return"
     last=$choice
     case $choice in
@@ -677,6 +682,7 @@ screen_video_setup() {
       retest) screen_video_retest_request ;;
       driver) screen_video_driver ;;
       lowdot) screen_low_dotclock_retest ;;
+      firmware) screen_atom15 ;;
       return) break ;;
     esac
   done

@@ -585,6 +585,13 @@ install -Dm644 "$src/config/fliperos-driver-trial.service" "$root/etc/systemd/sy
 ln -sfn /etc/systemd/system/fliperos-driver-trial.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-driver-trial.service"
 
+# ── Teste da BIOS da placa (Setup > Video Setup > Card firmware) ─────
+# Sem confirmar no boot seguinte, volta a BIOS original.
+install -Dm755 "$src/config/fliperos-atom15" "$root/opt/fliperos/bin/fliperos-atom15"
+install -Dm644 "$src/config/fliperos-atom15-guard.service" "$root/etc/systemd/system/fliperos-atom15-guard.service"
+ln -sfn /etc/systemd/system/fliperos-atom15-guard.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-atom15-guard.service"
+
 # ── Servicos (Setup > System > Services, lib/services.sh) ─────────
 # O Wi-Fi em "After boot"/"Off" desligado antes do NetworkManager; os "After
 # boot" sobem depois da primeira tela (fliperos-services-screen.timer, ligado

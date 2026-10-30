@@ -814,6 +814,8 @@ class RootfsRunTests(unittest.TestCase):
             self.assertTrue(os.access(self.root / path, os.X_OK), path)
         self.assertTrue((self.root / 'usr/local/share/applications/fliperos-resolution.desktop').is_file())
         self.assertTrue((self.root / 'usr/local/share/applications/org.gnome.Software.desktop').is_file())
+        self.assertTrue(os.access(self.root / 'home/fliperos/Desktop/app-store.desktop', os.X_OK))
+        self.assertTrue(os.access(self.root / 'opt/fliperos/bin/fliperos-atom15', os.X_OK))
         self.assertTrue((self.root / 'usr/share/glib-2.0/schemas/90_fliperos-software.gschema.override').is_file())
         self.assertTrue((self.root / 'home/fliperos/.config/alacritty/alacritty.toml').is_file())
         for path in ('opt/fliperos/bin/fliperos-calibrate', 'opt/fliperos/bin/fliperos-roms'):
