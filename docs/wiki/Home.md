@@ -19,7 +19,7 @@ The screens belong to **`fliperos-setup`**, written in Bash with [Gum](https://g
 | [Scoreboard games](Scoreboard-games.md) | The fighting games whose match-up score shows on the ZeDMD or Pixelcade display, in GroovyMAME and in RetroArch |
 | [Emulators](Emulators.md) | Each emulator and the video mode it opens in, GroovyMAME, RetroArch, running a program at 640x240, laserdisc, Model 2, Steam and GOG |
 | [Fightcade 2](Fightcade-2.md) | Online matches: download through the Setup, ROMs, the lobby, matches in each game's native resolution, keys |
-| [ROMs, BIOS and artwork](ROMs.md) | The folders in `~` (`roms`, `bios`, `media`, `config`), the MAME ROM Cleaner, the CHD Cleaner, the free games |
+| [ROMs, BIOS and artwork](ROMs.md) | The folders in `~` (`roms`, `bios`, `media`, `nvram`, `save`, `config`), the MAME ROM Cleaner, the CHD Cleaner, the free games |
 | [Scraper](Scraper.md) | Covers, screenshots, logos, videos and descriptions of the games, for every frontend |
 | [Adding games](Adding-games.md) | Step by step: games, real names and artwork in Attract-Mode Plus and ES-DE, emulator command lines in KMS or X11, adding a new emulator |
 | [Controls](Controls.md) | Each player's buttons, the GunCon 2 light gun (driver and calibration), wheel and pedals, parallel port, USB quirks, how SDL sees each controller |

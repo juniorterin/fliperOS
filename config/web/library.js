@@ -294,7 +294,7 @@ function installBox(group, item) {
 }
 
 // ── Arquivos: as pastas do gabinete ──────────────────────────────
-// roms, bios, media e splashscreen de ~: entrar nas pastas, baixar,
+// roms, bios, media, nvram, save e splashscreen de ~: entrar nas pastas, baixar,
 // enviar (um de cada vez, com o progresso; tambem soltando na lista), criar
 // pasta e apagar.
 

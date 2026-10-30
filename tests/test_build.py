@@ -1095,6 +1095,39 @@ class RomFoldersTests(unittest.TestCase):
             self.assertEqual((old / 'roms/srallyc.zip').read_text(), 'rom')
         self.assertIn('cfglink model2 "$HOME/.config/sm2-emu"', (ROOT / 'config/fliperos-roms').read_text())
 
+    def test_nvram_and_save_folders_take_over_the_old_ones(self):
+        # ~/nvram e ~/save existem, e as pastas de antes (do MAME, do RetroArch e
+        # do PCSX2) viram links para elas com o que tinham dentro.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            old = home / 'opt/saves'
+            for d, name, text in (('.mame/nvram/sf2', 'sf2.nv', 'nv'), ('.mame/sta/sf2', '1.sta', 'sta'),
+                                  ('opt/saves/retroarch/MAME 2010/mame2010/cfg', 'default.cfg', 'cfg'),
+                                  ('.config/PCSX2/memcards', 'Mcd001.ps2', 'card')):
+                (home / d).mkdir(parents=True)
+                (home / d / name).write_text(text)
+            env = dict(os.environ, HOME=str(home), FLIPEROS_CORE_INFO=str(home / 'nada'),
+                       FLIPEROS_SAVES_OLD=str(old), FIGHTCADE_DIR=str(home / 'nenhum'))
+            for _ in range(2):
+                subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            for d in ('nvram', 'save', 'save/retroarch', 'save/mame', 'save/ps2'):
+                self.assertTrue((home / d / '_info.txt').is_file(), d)
+            self.assertEqual((home / 'nvram/sf2/sf2.nv').read_text(), 'nv')
+            self.assertEqual((home / 'save/mame/sf2/1.sta').read_text(), 'sta')
+            self.assertEqual((home / 'save/retroarch/MAME 2010/mame2010/cfg/default.cfg').read_text(), 'cfg')
+            self.assertEqual((home / 'save/ps2/Mcd001.ps2').read_text(), 'card')
+            # Os caminhos de antes seguem valendo.
+            self.assertEqual(os.readlink(home / '.mame/nvram'), str(home / 'nvram'))
+            self.assertEqual(os.readlink(home / '.mame/sta'), str(home / 'save/mame'))
+            self.assertEqual(os.readlink(old / 'retroarch'), str(home / 'save/retroarch'))
+            self.assertEqual(os.readlink(home / '.config/PCSX2/memcards'), str(home / 'save/ps2'))
+        ini = (ROOT / 'config/mame.ini').read_text()
+        self.assertIn('nvram_directory $HOME/nvram\n', ini)
+        self.assertIn('state_directory $HOME/save/mame\n', ini)
+        cfg = (ROOT / 'config/retroarch.cfg').read_text()
+        self.assertIn('savefile_directory = "/home/fliperos/save/retroarch"', cfg)
+        self.assertIn('savestate_directory = "/home/fliperos/save/retroarch"', cfg)
+
     def test_duckstation_folder_only_with_duckstation(self):
         # Sem o DuckStation (baixado no Setup), nenhuma segunda pasta de PS1 ao
         # lado da do core do RetroArch.
@@ -1263,7 +1296,7 @@ class RomFoldersTests(unittest.TestCase):
         self.assertIn('Dreamcast.BiosPath = /home/fliperos/bios/dc', flycast)
         self.assertIn('FLYCAST_BIOS_PATH=', (ROOT / 'config/fliperos-x11-run').read_text())
         smb = (ROOT / 'config/smb.conf').read_text()
-        for share in ('roms', 'bios', 'media', 'config', 'splashscreen'):
+        for share in ('roms', 'bios', 'media', 'nvram', 'save', 'config', 'splashscreen'):
             self.assertIn('[%s]\n' % share, smb)
             self.assertIn('path = /home/fliperos/%s\n' % share, smb)
         self.assertIn('wide links = yes', smb)
@@ -6224,7 +6257,7 @@ class WebPanelTests(unittest.TestCase):
     def test_files_browse_upload_download_and_delete(self):
         cookie = self.login()
         listing = json.loads(self.request('GET', '/api/files?root=roms&path=', cookie=cookie)[2])
-        self.assertEqual(listing['roots'], ['roms', 'bios', 'media', 'splashscreen', 'home'])
+        self.assertEqual(listing['roots'], ['roms', 'bios', 'media', 'nvram', 'save', 'splashscreen', 'home'])
         # A pasta pessoal inteira (~): sem os ocultos e sem sair dela.
         home = json.loads(self.request('GET', '/api/files?root=home&path=', cookie=cookie)[2])
         self.assertIn('roms', [e['name'] for e in home['entries']])

@@ -113,7 +113,7 @@ export const HOME_HIGHLIGHTS: { id: HighlightId; page: PageSlug; shot: string; e
   { id: 'web', page: 'web-panel', shot: 'web/phone-{lang}', extra: 'web/frontend-{lang}' },
   { id: 'multi', page: 'video', shot: 'multi/darius-1' },
   { id: 'gun', page: 'controls', shot: 'gui/guncon-target1' },
-  { id: 'live', page: 'web-panel', shot: 'web/obs-{lang}', since: '0.13' },
+  { id: 'live', page: 'web-panel', shot: 'anim/web-controller', since: '0.13' },
   { id: 'coin', page: 'frontend', shot: 'anim/frontend-commercial', since: '0.15' },
 ];
 
@@ -212,7 +212,6 @@ const ROW_ONLY_SHOTS = [
   'anim/web-library',
   'anim/web-frontend',
   'anim/web-live',
-  'anim/web-controller',
   'anim/web-settings',
   'frontend/options',
   'web/obs-{lang}',

@@ -13,7 +13,7 @@ In development: 0.16 is tested in QEMU and on a 15 kHz CRT cabinet. Full documen
 - **Frontends**: FliperOS's own frontend by default (in the look of the Setup menu: list, full screen and grid; clones folded under each game; letter-by-letter scrolling), plus Attract-Mode Plus, EmulationStation (ES-DE), Pegasus and Fightcade 2, whose online matches play in each game's native resolution on the tube.
 - **Light gun**: GunCon 2 out of the box (driver via DKMS), calibrated for the tube in Setup > Joysticks. Wheels too.
 - **Setup**: video, geometry, audio, network, scraper, ROM lists, MAME romset cleaning, controls and latency.
-- **Folders** `roms`, `bios`, `media` and `config` in `~` and over the network (Samba); LXDE desktop with an app store.
+- **Folders** `roms`, `bios`, `media`, `nvram`, `save` and `config` in `~` and over the network (Samba); LXDE desktop with an app store.
 - **SSH** on from the first boot (`ssh fliperos@fliperos.local`, password `fliperos`). Under the menus it's a regular Ubuntu, so an AI assistant can configure it over SSH.
 
 ## Web panel: the cabinet from your phone
@@ -121,7 +121,7 @@ Use only games you have the right to use (your own dumps, or the free homebrew f
 
 **Use the LXDE desktop.** Plug a USB mouse and keyboard into the cabinet and choose **Start desktop** in the FliperOS menu. It is a regular desktop, and it makes all the work with games easier:
 
-- **Folders**: the file manager opens your home folder, with `roms`, `bios`, `media` and `config`. You see where each file goes and can create, rename and move files with the mouse.
+- **Folders**: the file manager opens your home folder, with `roms`, `bios`, `media`, `nvram`, `save` and `config`. You see where each file goes and can create, rename and move files with the mouse.
 - **Browser**: *Falkon (browser)* in the desktop menu, to search for the torrents of your games.
 - **Torrents**: *Transmission (torrent)* opens the `.torrent` files and magnet links from the browser. When the download finishes, move the files from `Downloads` to the right folder in `roms`.
 - **External storage**: plug in a USB stick or an external disk. It is mounted by itself and gets an icon on the desktop: open it, copy the files and paste them into the right folder in `roms` (or `bios`).
@@ -251,7 +251,7 @@ The items come in the order of setting up a cabinet: picture, sound, network, co
   - *Emulators & Games*: the emulators of the desktop menu, each marked *installed* or *not installed*.
 
     Choose one that is not installed to install it: **Model 2** (SM2-Emu, downloaded and built on the machine, several minutes), **Fightcade 2** (downloaded from its site) and **KOF Final Attack** on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with `Final Attack.exe`, on a USB disk or the network) and it downloads the [4:3 patch](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) and Ikemen GO and makes a converted copy. The others come in the image.
-  - *Folders*: the folders FliperOS uses (`roms`, `bios`, `media`, `splashscreen`) and the ones inside them: each emulator, each RetroArch core, each type of art.
+  - *Folders*: the folders FliperOS uses (`roms`, `bios`, `media`, `nvram`, `save`, `splashscreen`) and the ones inside them: each emulator, each RetroArch core, each type of art.
 
     Choose one and *Link this to another folder* to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): `~/roms/mame` becomes a link to it and the folder used until then is kept as `~/roms/old-mame`. Each folder can point to a different place. *Unlink the custom folder* brings the previous one back.
   - *Downloader*:

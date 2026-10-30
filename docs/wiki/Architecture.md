@@ -132,7 +132,7 @@ Setting one (`lib/splash.sh`) copies its folder with `ImageDir` and `ScriptFile`
 
 `tools/cabinet-update.sh` rebuilds the initramfs when the boot theme's files change. The build can also use `evangelion` (202 frames, with a **seizure risk** declared by the author and no license in the package) or none.
 
-**Network.** Samba (`\\<ip>\FliperOS` → `/opt/fliperos`, and `\\<ip>\roms`, `bios`, `media` and `config` → the folders of the same name in `~`, writable only with the `fliperos` user; `config/smb.conf`), SSH/SFTP and Avahi (`fliperos.local`).
+**Network.** Samba (`\\<ip>\FliperOS` → `/opt/fliperos`, and `\\<ip>\roms`, `bios`, `media`, `nvram`, `save` and `config` → the folders of the same name in `~`, writable only with the `fliperos` user; `config/smb.conf`), SSH/SFTP and Avahi (`fliperos.local`).
 
 Default user `fliperos` with password `fliperos`, like GroovyArcade's user `arcade` with password `arcade` (see [Installed system](Installed-system.md)).
 
@@ -166,7 +166,7 @@ The clock comes from the network (`systemd-timesyncd`). On the first test on the
 | `config/zshrc`, `config/fliperos-tty1`, `config/fliperos-menu` | The user's zsh; tty1 flow (first boot, launcher, the menu loop); from the shell back to the menu |
 | `config/fliperos-padkeys`, `config/fliperos-padkeys.service` | Controller as keyboard in the setup menus |
 | `config/fliperos-calibrate` | GunCon 2 and wheel/pedals/analog calibration (Setup > Joysticks) and its reapplication by udev |
-| `config/fliperos-roms`, `config/smb.conf`, `config/flycast-emu.cfg` | Folders in `~` (`roms`, `bios`, `media`, `config`); Samba (FliperOS, roms, bios, media, config); initial Flycast settings |
+| `config/fliperos-roms`, `config/smb.conf`, `config/flycast-emu.cfg` | Folders in `~` (`roms`, `bios`, `media`, `nvram`, `save`, `config`); Samba (FliperOS, roms, bios, media, nvram, save, config); initial Flycast settings |
 | `config/fliperos-controllers`, `config/fliperos-controllers.service` | Completes SDL2's (and Flycast's) automatic mapping of connected controllers |
 | `config/lxde/alacritty/alacritty.toml`, `config/fliperos-software.gschema.override`, `config/applications/org.gnome.Software.desktop` | The desktop's terminal (Alacritty) and App Store |
 | `fliperos-setup/lib/debug.sh` | Debug mode: boot and programs with or without text |

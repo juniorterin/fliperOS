@@ -342,7 +342,7 @@ span.inl { display: inline-grid; font-size: 9px; }
   .sys { flex-basis: 168px; } .sys .mosaic { height: 96px; }
   .rail .game { flex-basis: 148px; }
   .toolbar { top: 62px; }
-  .fchips { flex-basis: 100%; order: 3; } .search { flex-basis: calc(100% - 100px); }
+  .fchips { flex-basis: 100%; order: 3; } .search { flex-basis: calc(100% - 100px); } #clones-toggle { order: 2; }
   .search .shown { display: none; }
   .games { grid-template-columns: 1fr 1fr; gap: 12px; }
   .game .meta { padding: 8px 10px 10px; } .game .meta b { font-size: 13px; }

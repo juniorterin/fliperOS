@@ -13,7 +13,7 @@ Em desenvolvimento: a 0.16 é testada no QEMU e num gabinete com CRT de 15 kHz. 
 - **Frontends**: o frontend do próprio FliperOS como padrão (no visual do menu do Setup: lista, tela cheia e grade; clones agrupados sob cada jogo; rolagem de letra em letra), além de Attract-Mode Plus, EmulationStation (ES-DE), Pegasus e Fightcade 2, cujas partidas online rodam na resolução nativa de cada jogo no tubo.
 - **Pistola de luz**: GunCon 2 pronta para usar (driver por DKMS), calibrada para o tubo no Setup > Joysticks. Volantes também.
 - **Setup**: vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência.
-- **Pastas** `roms`, `bios`, `media` e `config` em `~` e pela rede (Samba); desktop LXDE com loja de aplicativos.
+- **Pastas** `roms`, `bios`, `media`, `nvram`, `save` e `config` em `~` e pela rede (Samba); desktop LXDE com loja de aplicativos.
 - **SSH** ligado desde o primeiro boot (`ssh fliperos@fliperos.local`, senha `fliperos`). Por baixo dos menus é um Ubuntu comum, então um assistente de IA consegue configurá-lo pelo SSH.
 
 ## Painel web: o gabinete pelo celular
@@ -121,7 +121,7 @@ Use só jogos que você tem direito de usar (cópias dos seus originais, ou os j
 
 **Use o desktop LXDE.** Ligue um mouse e um teclado USB no gabinete e escolha **Start desktop** no menu do FliperOS. É um desktop comum, e ele facilita todo o trabalho com os jogos:
 
-- **Pastas**: o gerenciador de arquivos abre a sua pasta pessoal, com `roms`, `bios`, `media` e `config`. Você vê onde vai cada arquivo e cria, renomeia e move arquivos com o mouse.
+- **Pastas**: o gerenciador de arquivos abre a sua pasta pessoal, com `roms`, `bios`, `media`, `nvram`, `save` e `config`. Você vê onde vai cada arquivo e cria, renomeia e move arquivos com o mouse.
 - **Navegador**: *Falkon (browser)* no menu do desktop, para procurar os torrents dos seus jogos.
 - **Torrents**: o *Transmission (torrent)* abre os arquivos `.torrent` e os links magnet do navegador. Quando o download terminar, mova os arquivos de `Downloads` para a pasta certa em `roms`.
 - **Armazenamento externo**: ligue um pendrive ou um disco externo. Ele é montado sozinho e ganha um ícone no desktop: abra-o, copie os arquivos e cole-os na pasta certa em `roms` (ou `bios`).

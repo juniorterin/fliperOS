@@ -12,6 +12,8 @@ FliperOS now runs on Intel HD graphics. On a Core i3-540 (Ironlake, first genera
 - Boot menu: new entry **Intel 15 kHz 240p** (`drm.edid_firmware=edid/fliperos-1280x240.bin`). The image builds the EDID (26.058 MHz, 15.66 kHz, 60 Hz) and checks it; the installer and the installed system keep the mode, with the EDID in the initramfs. Seen on a CRT with an Ironlake
 - EmulationStation-DE and Pegasus are not in the image or in its local repository any more. Setup > Games > Frontend builds the one you choose the first time, with its patches (the horizontal stretch of ES-DE, the KMS patch of Pegasus). It needs the network and takes a while
 - Attract-Mode Plus on Intel Ironlake: its SFML makes the screen buffer in ARGB8888, which the card refuses to show, so the screen stayed black (`Failed to create fb`). The package carries two SFML patches: a fallback to XRGB8888 and the release of the screen master when the context is cleaned up
+- New folders `~/nvram` and `~/save` (and the `nvram` and `save` shares on the network, and in Setup > Games > Folders and in the web panel's Files). `~/nvram` holds what the MAME games remember without power; `~/save` has one folder per emulator: `retroarch` (saves and states), `mame` (states) and `ps2` (PCSX2 memory cards). The old folders (`~/.mame/nvram`, `~/.mame/sta`, `/opt/fliperos/saves/retroarch`, `~/.config/PCSX2/memcards`) are moved there with what they had inside and become links, so nothing is lost and the old paths keep working
+- Web panel, Frontend > games: a **Clones** button next to the filters. Clones are hidden by default (only when their original game is in the list; favourites and most played always show), and the choice is remembered in the browser
 
 **Package changes:**
 
@@ -34,6 +36,7 @@ FliperOS now runs on Intel HD graphics. On a Core i3-540 (Ironlake, first genera
 **Documentation:**
 
 - Video cards page: what was tested on the Intel HD, its limits (no native low resolutions, OpenGL 2.1, no Vulkan, the processor must have graphics, Recovery Mode for a changed card) and what the Setup marks. Install page: the new boot entry. Frontends page: building ES-DE and Pegasus on the cabinet
+- ROMs page and the READMEs: the `nvram` and `save` folders. Web panel page: Files and Clones. Website: the web panel page shows the panel on the real cabinet with Street Fighter II running and the buttons being pressed, and the commercial mode with two coins
 
 ## 0.15
 

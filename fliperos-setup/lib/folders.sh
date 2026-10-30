@@ -15,7 +15,7 @@
 FOLDERS_HOME=${FOLDERS_HOME:-/home/$FLIPEROS_USER}
 # As raizes. A ~/config fica de fora: so tem links para as configuracoes,
 # que o fliperos-roms refaz.
-FOLDERS_NAMES="roms bios media splashscreen"
+FOLDERS_NAMES="roms bios media nvram save splashscreen"
 # Onde o fliperos-automount monta os discos: o navegador de pastas abre ali.
 FOLDERS_MOUNTS=${FOLDERS_MOUNTS:-/media/$FLIPEROS_USER}
 FOLDERS_SCRIPT=${FOLDERS_SCRIPT:-/opt/fliperos/bin/fliperos-roms}
@@ -70,6 +70,8 @@ folders_description() {
     roms) echo "The games: one folder per emulator and one per RetroArch core." ;;
     bios) echo "The BIOS files of RetroArch and of the other emulators." ;;
     media) echo "The art and texts the frontends show, one folder per type." ;;
+    nvram) echo "The arcade memory the MAME games keep without power: dip settings, credits, scores." ;;
+    save) echo "The saves and states, one folder per emulator." ;;
     splashscreen) echo "The boot splash themes." ;;
     roms/retroarch) echo "The games of RetroArch: one folder per core." ;;
     media/*/retroarch) echo "The art of the RetroArch games: one folder per core, as in ~/roms/retroarch." ;;

@@ -6751,7 +6751,7 @@ class FoldersTests(Base):
 
     def test_shares_follow_the_links(self):
         smb = (ROOT / "config/smb.conf").read_text()
-        for name in ("roms", "bios", "media", "splashscreen"):
+        for name in ("roms", "bios", "media", "nvram", "save", "splashscreen"):
             share = smb.split("[%s]\n" % name)[1].split("\n[")[0]
             self.assertIn("wide links = yes", share, name)
 
@@ -6806,7 +6806,7 @@ class FoldersTests(Base):
             self.assertIn('source "$SETUP_DIR/%s/folders.sh"' % part, main)
         # As pastas da lista sao as que o fliperos-roms cria e a rede mostra.
         names = self.env.out("folders_list", self.vars).split()
-        self.assertEqual(names, ["roms", "bios", "media", "splashscreen"])
+        self.assertEqual(names, ["roms", "bios", "media", "nvram", "save", "splashscreen"])
         smb = (ROOT / "config/smb.conf").read_text()
         for name in names:
             self.assertIn("path = /home/fliperos/%s\n" % name, smb)

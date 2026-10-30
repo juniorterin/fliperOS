@@ -25,6 +25,10 @@ RetroArch opens its file browser in `~/roms`, GroovyMAME looks in `~/roms/mame`,
 - **`~/config`** (`\\fliperos\config`) — links to the configuration of each installed emulator and frontend: `retroarch`, `groovymame` (`/etc/fliperos/mame`, with `mame.ini` and `ui.ini`), `flycast`, `pcsx2`, `dolphin`, `supermodel`, `openbor` (the `.cfg` files in `~/roms/openbor/Saves`), `hypseus`, `model2`, `attractmode`, `es-de`, `pegasus` and `skyscraper`.
 
   Each link appears once the program has created its configuration (usually after being opened once); a deleted one comes back at the next login, and one left without a target (the program was removed) goes away.
+- **`~/nvram`** (`\\fliperos\nvram`) — what the arcade games remember without power: the MAME nvram (dip settings, credits, the scores a game saves), one folder per game set. GroovyMAME writes here (`nvram_directory` in `mame.ini`). To start a game from zero, delete its folder.
+- **`~/save`** (`\\fliperos\save`) — what you save while you play, one folder per emulator: `retroarch` (the game saves, `.srm`, and the save states), `mame` (the save states) and `ps2` (the PCSX2 memory cards).
+
+  An installation from before these folders is moved by itself at the next login: `~/.mame/nvram`, `~/.mame/sta`, `/opt/fliperos/saves/retroarch` and `~/.config/PCSX2/memcards` become links to the new folders, with what they had inside, so the old paths keep working.
 - **`~/splashscreen`** (`\\fliperos\splashscreen`) — the boot splash themes (Plymouth), one folder per theme with its `.plymouth` file.
 
   The bundled ones (`fliperos`, `fliperos-text`, `cogwheel`, `into-it` and `windoze95`) are copied there when missing and follow the new versions of the image while left untouched (a hidden `.bundled` file keeps the copy's checksum); to change one, copy its folder with a new name.
@@ -33,7 +37,7 @@ RetroArch opens its file browser in `~/roms`, GroovyMAME looks in `~/roms/mame`,
 
 ## Custom folders
 
-Setup > Games > **Folders** shows the whole structure: `~/roms`, `~/bios`, `~/media` and `~/splashscreen` and, inside them, the folder of each emulator (`~/roms/mame`, `~/roms/model2`), of each RetroArch core (`~/roms/retroarch/mame2010`), of each Fightcade emulator, of each BIOS subfolder and of each type of art (`~/media/snap`, and inside it the same folders as `~/roms`: `~/media/snap/mame`, `~/media/snap/model2`, `~/media/snap/retroarch/mame2010`).
+Setup > Games > **Folders** shows the whole structure: `~/roms`, `~/bios`, `~/media`, `~/nvram`, `~/save` and `~/splashscreen` and, inside them, the folder of each emulator (`~/roms/mame`, `~/roms/model2`), of each RetroArch core (`~/roms/retroarch/mame2010`), of each Fightcade emulator, of each BIOS subfolder and of each type of art (`~/media/snap`, and inside it the same folders as `~/roms`: `~/media/snap/mame`, `~/media/snap/model2`, `~/media/snap/retroarch/mame2010`).
 
 Any of them can have its own **custom folder**: another folder used in its place, for when the ROMs, the art or the BIOS are on external storage (a USB disk, a second drive; the disks are mounted by themselves in `/media/fliperos/<label>`, where the folder browser opens).
 

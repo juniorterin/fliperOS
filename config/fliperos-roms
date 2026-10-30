@@ -9,6 +9,9 @@
 #             procura em outro lugar.
 #   ~/media   a arte e os textos dos frontends (lib/scraper.sh do Setup): uma
 #             pasta por tipo e, dentro, as mesmas pastas de ~/roms.
+#   ~/nvram   a nvram do MAME (o que o arcade lembra sem energia).
+#   ~/save    os saves e os estados: uma pasta por emulador (retroarch, mame,
+#             ps2).
 #   ~/config  links para as configuracoes de cada emulador e frontend
 #             instalado (os que ja criaram a sua).
 #   ~/splashscreen  os temas do splash (Plymouth), um por pasta.
@@ -187,6 +190,30 @@ for type in snap preview logo box marquee dmd texto; do
     [[ -e $media/$type/$name || -L $media/$type/$name ]] || mkdir -p "$media/$type/$name" 2> /dev/null
   done
 done
+
+# ── ~/nvram e ~/save ────────────────────────────────────────────────
+# ~/nvram guarda o que os arcades lembram sem a energia (a nvram do MAME: as
+# configuracoes de dip, os creditos e os recordes que o jogo grava) e ~/save o
+# que o jogador salva: os saves e os estados do RetroArch, os estados do MAME
+# e os cartoes de memoria do PCSX2. As pastas de antes (~/.mame/nvram,
+# ~/.mame/sta, /opt/fliperos/saves/retroarch, ~/.config/PCSX2/memcards) viram
+# links para as novas, com o que tinham dentro, e os caminhos antigos
+# (mame.ini, retroarch.cfg, Pixelcade, MAME 2010) continuam valendo.
+nvram=${FLIPEROS_NVRAM:-$HOME/nvram}
+save=${FLIPEROS_SAVE:-$HOME/save}
+mame_home=${FLIPEROS_MAME_HOME:-$HOME/.mame}
+saves_old=${FLIPEROS_SAVES_OLD:-/opt/fliperos/saves}
+folder "$nvram" "Arcade memory kept without power: the MAME nvram (dip settings, credits, scores the game saves), one folder per game set. GroovyMAME writes here."
+folder "$save" "What you save while you play, one folder per emulator: RetroArch saves and states, MAME states, PlayStation 2 memory cards."
+folder "$save/retroarch" "RetroArch: the game saves (.srm) and the save states (.state), also the MAME 2010 settings."
+folder "$save/mame" "GroovyMAME: the save states (F7 saves, F8 loads), one folder per game set."
+folder "$save/ps2" "PCSX2: the memory cards (.ps2) and their folders."
+link_dir "$mame_home/nvram" "$nvram"
+link_dir "$mame_home/sta" "$save/mame"
+[[ -d $saves_old/retroarch ]] && link_dir "$saves_old/retroarch" "$save/retroarch"
+if command -v pcsx2 > /dev/null 2>&1 || [[ -d $HOME/.config/PCSX2 ]]; then
+  link_dir "$HOME/.config/PCSX2/memcards" "$save/ps2"
+fi
 
 # ── ~/splashscreen ──────────────────────────────────────────────────
 # Os temas do Plymouth, um por pasta. Os da imagem entram se faltam (um

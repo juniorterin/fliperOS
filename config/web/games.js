@@ -12,9 +12,10 @@
 const INFO_KEY = "fliperos-info:";
 const INFO_DAYS = 30;
 let systemsList = [], gameSystem = null, allGames = [], gameFilters = [], foundGames = [];
-let gameChip = "", gameView = "grid", searchTimer = null;
+let gameChip = "", gameView = "grid", searchTimer = null, showClones = false;
 try {
   gameView = localStorage.getItem("fliperos-view") === "list" ? "list" : "grid";
+  showClones = localStorage.getItem("fliperos-clones") === "1";
 } catch (e) { /* sem armazenamento */ }
 
 // ── As pastas ────────────────────────────────────────────────────
@@ -179,6 +180,12 @@ const gameTitle = (g) => g.Title || g.Name;
 function renderGames() {
   const query = $("game-search").value.trim().toLowerCase();
   let found = applyFilter(allGames, currentFilter());
+  // Sem os clones: so some um clone cujo jogo original esta na lista (sem o
+  // original ele e o unico a jogar); favoritos e mais jogados ficam sempre.
+  if (!showClones) {
+    const names = new Set(allGames.map((g) => g.Name));
+    found = found.filter((g) => !g.CloneOf || !names.has(g.CloneOf) || g.Favourite || g.PlayedCount);
+  }
   if (query) found = found.filter((g) => gameTitle(g).toLowerCase().includes(query) || g.Name.toLowerCase().includes(query));
   foundGames = found;
   const grid = $("games");
@@ -356,6 +363,17 @@ $("game-search").addEventListener("input", () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(renderGames, 150);
 });
+function clonesButton() {
+  $("clones-toggle").classList.toggle("on", showClones);
+  $("clones-toggle").setAttribute("aria-pressed", String(showClones));
+}
+$("clones-toggle").addEventListener("click", () => {
+  showClones = !showClones;
+  try { localStorage.setItem("fliperos-clones", showClones ? "1" : "0"); } catch (e) { /* sem armazenamento */ }
+  clonesButton();
+  renderGames();
+});
+clonesButton();
 for (const [id, view] of [["view-grid", "grid"], ["view-list", "list"]]) {
   $(id).addEventListener("click", () => {
     gameView = view;

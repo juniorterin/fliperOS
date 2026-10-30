@@ -47,7 +47,7 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     GET  /api/files?root=roms&path=PASTA   GET /api/download?root=&path=
     POST /api/upload?root=&path=&name=[&overwrite=1] (o corpo e o arquivo)
     POST /api/mkdir {"root", "path", "name"}   POST /api/delete {"root", "path"}
-    (root: roms, bios, media ou splashscreen, as pastas de ~)
+    (root: roms, bios, media, nvram, save ou splashscreen, as pastas de ~)
     GET  /api/screenshot  um PNG do que esta na tela (o jogo, o frontend,
                       o menu grafico pela camada OpenGL; o desktop pelo X)
     GET  /api/terminal    WebSocket: o shell do usuario num pty (binario =
@@ -156,7 +156,7 @@ BIN = ENV("FLIPEROS_BIN", "/opt/fliperos/bin")
 # Os comandos que o painel abre: os mesmos lancadores dos frontends.
 LAUNCHERS = (BIN + "/fliperos-kms-run", BIN + "/fliperos-x11-run")
 # As pastas de ~ que o painel mostra em Files.
-FILE_ROOTS = ENV("FLIPEROS_WEB_FILE_ROOTS", "roms bios media splashscreen home").split()
+FILE_ROOTS = ENV("FLIPEROS_WEB_FILE_ROOTS", "roms bios media nvram save splashscreen home").split()
 SESSION_HOURS = 12
 # O modo lab (config/fliperos-lab): a chave do endereco temporario, no /run.
 LAB = ENV("FLIPEROS_LAB", BIN + "/fliperos-lab")

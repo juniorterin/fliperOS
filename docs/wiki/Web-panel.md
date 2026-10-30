@@ -47,6 +47,7 @@ The browser never keeps the panel: its pages, code, icons and fonts are sent wit
 
     Files the list doesn't know (copied after it was made, or a folder without a list) show by file name. An arcade list made by AttractPlus ROM List leaves out the BIOS files.
   - At the end of the search box is the **filter**: FliperOS's own game filters (All Games, Most Played, the genres, manufacturers and years), the same set the Setup writes into each Attract-Mode display (`fliperos-setup --filters`), plus *Favourites*.
+  - Next to it, the **Clones** button. Off (the default), the list shows only the original games: a clone is hidden when its original game is in the list (a clone left without its original stays, and so do favourites and the most played). On, every version shows. The choice is remembered in the browser.
 
     They are applied the way Attract-Mode applies them: the rules in order, exceptions, the regular expressions, sorting and the limit. The panel copies these filters; it doesn't read the frontend's displays, so a later frontend of FliperOS's own can use the same ones.
   - Each game opens like an accordion, one at a time. It shows what the list knows (file, year, manufacturer, genre, players, buttons, control, screen, emulation status, parent, how many times and how long it was played) and what the internet knows:
@@ -179,7 +180,7 @@ The browser never keeps the panel: its pages, code, icons and fonts are sent wit
   - It is a login shell in a pseudo-terminal (`setsid -c`, so Ctrl+C and job control work). `~/.zprofile` only starts the tty1 flow on `/dev/tty1`, so the shell opens normally. The shell runs at normal priority, not the service's `Nice=15`.
   - The page talks to it over a WebSocket (`/api/terminal`). Only the panel's own page can open it (the `Origin` must be the panel's address), and only after the login.
   - The screen is drawn by [xterm.js](https://xtermjs.org) 5.5.0 with its fit addon (MIT, `config/web/xterm-LICENSE.txt`). It ships inside the panel and loads only when the terminal opens.
-- **Files:** the folders `~/roms`, `~/bios`, `~/media` and `~/splashscreen`. You can open folders (inside one, the `..` folder at the top of the list goes back up), download a file, and upload several files with their progress (also by dropping them on the list). You can also create a folder and delete a file or an empty folder.
+- **Files:** the folders `~/roms`, `~/bios`, `~/media`, `~/nvram`, `~/save` and `~/splashscreen`. You can open folders (inside one, the `..` folder at the top of the list goes back up), download a file, and upload several files with their progress (also by dropping them on the list). You can also create a folder and delete a file or an empty folder.
   - An upload is written to a hidden `.part` file in the same folder and renamed at the end, so a cut upload doesn't leave a broken game under the right name.
   - A file that already exists is only replaced after you confirm.
   - What you send belongs to the `fliperos` user.

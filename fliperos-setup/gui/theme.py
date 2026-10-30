@@ -1193,7 +1193,7 @@ for _alias, _name in {
 }.items():
     ICONS[_alias] = ICONS[_name]
 # As pastas de Setup > Games > Folders (e o link do romset no Downloader).
-for _name in ("roms", "bios", "media", "splashscreen"):
+for _name in ("roms", "bios", "media", "nvram", "save", "splashscreen"):
     ICONS[_name] = ICONS["dest"]
 ICONS["watch"] = ICONS["install"]
 ICONS["monitor"] = ICONS["video"]
