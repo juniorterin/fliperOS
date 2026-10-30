@@ -124,7 +124,7 @@ If yours works on FliperOS, open an [issue](https://github.com/juniorterin/flipe
 
 A card that does not pass the power-on test never reaches the system, so **none of this can undo it**; that is the risk the warning is about. To flash the backup by hand from another card: `amdvbflash -p <adapter> original-<card>-<sum>.rom`.
 
-**How far this was tested:** the patch is a translation of ATOM-15 v1.6 to Python (`config/fliperos-atom15`), because the original is Windows-only, with no command line. Against a BIOS written by the real `atom-15.exe` (R7 240, 15 kHz) all 65536 bytes came out the same (`tools/atom15-check.py`). Other card families, other ranges and the move of the EFI part use the same code but were not compared. **The flash, the test at the next boot and the way back have only run with a fake flash tool**, never on a real card.
+**How far this was tested:** the patch is a translation of ATOM-15 v1.6 to Python (`config/fliperos-atom15`), made with the author's permission, because the original is Windows-only, with no command line. Against a BIOS written by the real `atom-15.exe` (R7 240, 15 kHz) all 65536 bytes came out the same (`tools/atom15-check.py`). Other card families, other ranges and the move of the EFI part use the same code but were not compared. **The flash, the test at the next boot and the way back have only run with a fake flash tool**, never on a real card.
 
 ## NVIDIA
 

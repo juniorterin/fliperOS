@@ -3,7 +3,8 @@
 
 ATOM-15 v1.6 e de Antonio Giner "Calamity" (github.com/antonioginer/ATOM-15):
 esta e uma traducao do atom-15.bas (PowerBASIC, so Windows, sem linha de
-comando) para o Setup do FliperOS (Video Setup > Card firmware, lib/atom15.sh).
+comando) para o Setup do FliperOS (Video Setup > Card firmware, lib/atom15.sh),
+com a autorizacao do autor (o repositorio dele nao declara licenca).
 Mexe na BIOS como o original: troca as tabelas de modos (padrao e VESA) pelas
 mesmas contas e poe o mesmo hook (tools/atom15-hook.asm), que liga o entrelacado
 nos registradores da placa. Vale so do POST ate o sistema subir o driver.
