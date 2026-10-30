@@ -614,10 +614,39 @@ def info_rows(game):
 def frame(fe, ui):
     cat = fe.category()
     W.frame(ui, {}, (cat or {}).get("name", "FliperOS") or "FliperOS", [])
+    if cat and cat.get("name"):
+        title_logo(ui, cat["name"])
     # O filtro em uso, pequeno, debaixo do titulo (o "All Games" nao).
     name = fe.lib.filters[fe.flt % len(fe.lib.filters)]["name"]
     if name.lower() != "all games":
         tiny.text(ui, "FILTER: " + name.replace("©", "(C)"), T.CYAN, SX, 29)
+
+
+def title_logo(ui, name):
+    """O logotipo escrito do sistema no topo, ao lado do nome da romlist: os dois
+    juntos no meio, com as faixas do mesmo tamanho dos dois lados (o letreiro do
+    W.frame, redesenhado). Sem logotipo, fica o do W.frame, so o nome."""
+    up = name.upper()
+    scale = 2 if W.width(up) * 2 <= 240 else 1
+    title = W.big(up, scale, W.MARQUEE)
+    room = T.SAFE_W - title.get_width() - 8 - 2 * 16      # um minimo de faixa de cada lado
+    if room < 20:
+        return
+    logo = system_logo(name, min(96, room), 16)
+    if logo is None:
+        return
+    group = logo.get_width() + 8 + title.get_width()
+    gx = (WW - group) // 2
+    ui.fill((0, 0, 0, 0), (0, 8, WW, 22))
+    ui.blit(logo, (gx, 10 + (16 - logo.get_height()) // 2))
+    tx, ty = gx + logo.get_width() + 8, 10 + (16 - title.get_height()) // 2
+    ui.blit(W.big(up, scale, (0x40, 0x20, 0x70)), (tx + scale, ty + scale))
+    ui.blit(title, (tx, ty))
+    bar = gx - T.SAFE_X - 8
+    if bar >= 8:
+        for i, color in enumerate(W.RAINBOW):
+            pygame.draw.rect(ui, color, (T.SAFE_X, 12 + i * 2, bar, 2))
+            pygame.draw.rect(ui, color, (T.WIDTH - T.SAFE_X - bar, 12 + i * 2, bar, 2))
 
 
 def empty(fe, ui):

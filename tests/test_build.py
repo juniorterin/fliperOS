@@ -4753,6 +4753,8 @@ class FrontendDataTests(unittest.TestCase):
         self.assertIn('system_logo(c["name"], round(w * 0.8), round(size * 0.8))', src)
         self.assertIn('x + w - round(badge.get_width() * 0.65)', src)
         self.assertIn('if logo_source(c["name"]) is None:', src)
+        # E no topo, ao lado do nome da romlist.
+        self.assertIn('title_logo(ui, cat["name"])', src)
 
     def test_idle_frontend_starts_the_marquee_screensaver_and_a_press_stops_it(self):
         import types
