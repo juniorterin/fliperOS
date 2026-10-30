@@ -4979,6 +4979,10 @@ class FrontendDataTests(unittest.TestCase):
         self.assertIn('self.controls_seen = cfg.get("controls_seen") is True', src)
         self.assertIn('self.overlay, self.ov = "controls", {"sel": 0, "col": 0, "wait": None}', src)
         self.assertIn('"controls_seen": self.controls_seen', src)
+        # O SAVE no fim, ao lado do RESET: grava e sai, como o back.
+        self.assertIn('elif a == "b1" and sel == reset_row and ov["col"] == 1:', src)
+        self.assertIn('(("RESET", reset_icon, T.ORANGE), ("SAVE", save_icon, T.GREEN))',
+                      (ROOT / 'fliperos-setup/gui/feview.py').read_text())
         view = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
         self.assertIn('("controls", "FRONTEND CONTROLS")', view)
         # O atalho que fecha o jogo fica dentro do Frontend controls, nao no Tab.

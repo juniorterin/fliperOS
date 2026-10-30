@@ -1177,6 +1177,11 @@ def reset_icon(surf, cx, cy, c):
     pygame.draw.polygon(surf, c, [(cx + 2, cy - 7), (cx + 6, cy - 4), (cx + 2, cy - 2)])
 
 
+def save_icon(surf, cx, cy, c):
+    """Salvar: um visto."""
+    pygame.draw.lines(surf, c, False, [(cx - 5, cy), (cx - 1, cy + 4), (cx + 5, cy - 4)], 3)
+
+
 def options_icon(surf, cx, cy, c):
     """As opcoes do Tab: tres linhas."""
     for dy in (-4, 0, 4):
@@ -2119,8 +2124,19 @@ def draw_controls(fe, ui, now):
     # O formato do painel: esquerda e direita trocam.
     y = label(layout_row, "PANEL LAYOUT", view_icon, T.YELLOW)
     wide(layout_row, y, dict(PANEL_LAYOUTS)[panel_layout(fe)], arrows=True)
-    y = label(reset_row, "RESET", reset_icon, T.ORANGE)
-    wide(reset_row, y, "THE FUNCTIONS' DEFAULTS")
+    # A ultima linha: RESET e SAVE lado a lado (a coluna escolhe).
+    y = y0 + reset_row * rh
+    half = (SW - 4) // 2
+    for c, (text, draw_icon, color) in enumerate((("RESET", reset_icon, T.ORANGE), ("SAVE", save_icon, T.GREEN))):
+        lit = sel == reset_row and c == col
+        rect = (SX + c * (half + 4), y, half, rh - 1)
+        W.block(ui, rect, T.PINK if lit else T.BG_DEEP, None)
+        pygame.draw.rect(ui, T.PINK if lit else (color if c else T.LINE), rect, 1)
+        icon = pygame.Surface((14, 14), pygame.SRCALPHA)
+        draw_icon(icon, 7, 7, T.SPACE if lit else color)
+        tx = rect[0] + (half - W.width(text) - 14) // 2
+        ui.blit(pygame.transform.smoothscale(icon, (10, 10)), (tx, y + 1))
+        W.text(ui, text, T.SPACE if lit else T.FG, tx + 14, y + 2)
     if wait == "pad":
         tips = ("PRESS A PANEL CONTROL - THE SAME ONE AGAIN: NONE", "ESC: CANCEL")
     elif wait == "key":
@@ -2130,6 +2146,8 @@ def draw_controls(fe, ui, now):
                 "IN A GAME THEY CLOSE IT (THE BUTTONS HELD 1 S)")
     elif sel == layout_row:
         tips = ("LEFT/RIGHT: THE SHAPE OF THE PANEL", "THE GUIDE DRAWS ONLY THE BUTTONS IT HAS")
+    elif sel == reset_row and col == 1:
+        tips = ("SELECT: SAVE AND LEAVE", "EACH CHANGE ALREADY WORKS   LEFT: RESET")
     elif sel == reset_row:
         tips = ("SELECT: THE FUNCTIONS GO BACK TO THE DEFAULTS", "THE EXIT SHORTCUT AND THE LAYOUT STAY")
     else:

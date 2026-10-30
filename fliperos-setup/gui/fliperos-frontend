@@ -890,6 +890,9 @@ class Frontend:
         sel = ov["sel"]
         if a in ("up", "down"):
             ov["sel"] = (sel + (1 if a == "down" else -1)) % (reset_row + 1)
+            if ov["sel"] == reset_row:
+                # A ultima linha: RESET e SAVE lado a lado, comecando no SAVE.
+                ov["col"] = 1
         elif sel == layout_row and a in ("left", "right", "b1"):
             names = [k for k, _ in self.view.PANEL_LAYOUTS]
             i = names.index(self.panel_layout) + (-1 if a == "left" else 1)
@@ -897,6 +900,10 @@ class Frontend:
             self.remember()
         elif a in ("left", "right"):
             ov["col"] ^= 1
+        elif a == "b1" and sel == reset_row and ov["col"] == 1:
+            self.remember()
+            self.say("CONTROLS SAVED")
+            self.controls_leave()
         elif a == "b1" and sel == reset_row:
             self.input.bind(self.fi.default_binds(self.pg))
             self.remember()
@@ -919,19 +926,23 @@ class Frontend:
         elif a == "delete" and sel < len(funcs):
             self.bind_control(funcs[sel], "pad" if ov["col"] == 0 else "key", None)
         elif a in ("b2", "esc"):
-            if self.controls_seen:
-                self.overlay, self.ov = "options", {"sel": OPT_CONTROLS}
-            else:
-                # A primeira vez (ao abrir o frontend): depois, o guia ja com o
-                # que ficou; nas proximas aberturas, so o guia.
-                self.controls_seen = True
-                self.overlay, self.ov = "guide", {}
-                self.remember()
-            # Sem escolher ou voltar pelo painel, o menu so abre pelo teclado.
-            lost = [self.view.FUNCTION_NAMES[f] for f in ("b1", "b2") if not self.input.binds[f]["pad"]]
-            if lost:
-                self.say("/".join(lost) + ": NO PANEL BUTTON", 2.6)
+            self.controls_leave()
         return None
+
+    def controls_leave(self):
+        """Sai do Frontend controls (o SAVE ou o back): de volta ao Tab; na
+        primeira vez (ao abrir o frontend), para o guia ja com o que ficou, e
+        nas proximas aberturas so o guia."""
+        if self.controls_seen:
+            self.overlay, self.ov = "options", {"sel": OPT_CONTROLS}
+        else:
+            self.controls_seen = True
+            self.overlay, self.ov = "guide", {}
+            self.remember()
+        # Sem escolher ou voltar pelo painel, o menu so abre pelo teclado.
+        lost = [self.view.FUNCTION_NAMES[f] for f in ("b1", "b2") if not self.input.binds[f]["pad"]]
+        if lost:
+            self.say("/".join(lost) + ": NO PANEL BUTTON", 2.6)
 
     def controls_wait(self, kind):
         """Esperando o comando do painel ("pad") ou a tecla ("key") da funcao

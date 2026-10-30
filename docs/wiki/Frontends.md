@@ -52,7 +52,7 @@ These are the defaults:
 
     Select asks for the new one: press the panel control (a button, a direction or Start) or the key. A button or key that another function already had swaps: that function gets the old one. The same one again, or Delete, leaves the function with none; any function can have none.
 
-    Nothing pressed for 8 seconds keeps it as it was (Esc, or the panel's back button when choosing a key, cancels). **Reset** brings back the functions' defaults (the exit shortcut and the panel layout stay). Each change works at once and is saved in `frontend.json` (`controls`).
+    Nothing pressed for 8 seconds keeps it as it was (Esc, or the panel's back button when choosing a key, cancels). The last line has **Reset** and **Save** side by side (left and right). Reset brings back the functions' defaults (the exit shortcut and the panel layout stay); **Save** saves and leaves the screen, like back. Each change works at once and is saved in `frontend.json` (`controls`).
 
     **Exit game** is the shortcut that closes the open game. In the Panel column, select asks for the buttons: hold two or more together for a second, and in a game the same buttons held for a second close it. In commercial mode the coin can't be one of them. In the Keyboard column, select asks for the key: press it within 8 seconds (back on the panel cancels).
 
