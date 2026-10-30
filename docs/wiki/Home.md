@@ -11,6 +11,8 @@ The screens belong to **`fliperos-setup`**, written in Bash with [Gum](https://g
 | Page | What it covers |
 | --- | --- |
 | [Video cards](Video-cards.md) | Which AMD, NVIDIA and Intel cards work, native resolution or super resolution, the NVIDIA low resolution test |
+| [Monitors](Monitors.md) | Which preset for your tube, centring the picture, what goes between the card and the monitor |
+| [Black screen](Black-screen.md) | What to try when the tube shows nothing or some games go black, getting in without a picture |
 | [Install](Install.md) | Writing the media, the boot menu, the video output test, installing to the HD/SSD, Recovery Mode |
 | [Installed system](Installed-system.md) | The boot, the default launcher, the Setup menu item by item (video, audio, network, debug, update) |
 | [Web panel](Web-panel.md) | The cabinet from a phone or PC at http://fliperos.local: games to play, the live screen and OBS, settings while you play, files, the ROM filter, downloads, the system status, a terminal |

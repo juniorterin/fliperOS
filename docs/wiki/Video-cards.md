@@ -9,14 +9,15 @@ A card that doesn't uses a **super resolution**: the same lines and the same ref
 | Card | Driver | Analog output | 15 kHz |
 | --- | --- | --- | --- |
 | AMD/ATI Radeon HD 2000 to HD 7000, R7/R9 200 and 300 (GCN 1.0) | `radeon` or `amdgpu` | VGA, DVI-I | **Native** (recommended) |
-| AMD Radeon RX and newer, Ryzen APUs | `amdgpu` | None on the card; VGA on some motherboards | Native, through an active DisplayPort/HDMI to VGA converter that accepts low clocks |
+| AMD GCN 2 and 3 with DVI-I (R7 260X, R9 380) | `radeon` or `amdgpu` (GCN 2), `amdgpu` (GCN 3) | DVI-I | Reported by GroovyArcade. [The R9 380 needs a kernel parameter](#amdati) |
+| AMD Radeon RX and newer, Ryzen APUs | `amdgpu` | None on the card; VGA on some motherboards | Native through a [DisplayPort to VGA converter](#converters); super resolution through HDMI |
 | NVIDIA GeForce 8 to GTX 900, Quadro up to K series | `nouveau`, or NVIDIA's own driver (GTX 900) | VGA, DVI-I | Super resolution; **native if the card passes the low resolution test** |
 | NVIDIA GTX 10 and newer (Pascal, Turing, Ampere...) | `nouveau` | None | Super resolution, through a converter |
 | Intel Gen9 (HD/UHD 500 and 600 series: Skylake to Comet Lake) | `i915` | VGA on the motherboard | Super resolution, with interlace (patch 09) |
 | Intel HD Graphics Gen5 (Ironlake: Core i3 5xx, i5 6xx) | `i915` | VGA on the motherboard | Super resolution, 480i, **seen on a CRT**. Only OpenGL 2.1: [no ES-DE, no filter, no Vulkan](#limits-of-the-intel-hd) |
 | Other Intel generations | `i915` | VGA on the motherboard | Super resolution; 480i may not work |
 
-Two cards have been seen on a CRT by the project: an AMD R7 240 (`radeon`) and an Intel HD Graphics (Ironlake, `i915`). The other lines come from the kernel patches and from what the GroovyArcade and Batocera communities report.
+Three cards have been seen on a CRT by the project: an AMD R7 240 (`radeon` and `amdgpu`), an Intel HD Graphics (Ironlake, `i915`) and an NVIDIA GTX 980 Ti (`nouveau`). The other lines come from the kernel patches and from what the GroovyArcade and Batocera communities report ([list below](#reported-by-groovyarcade)).
 
 ## AMD/ATI
 
@@ -28,7 +29,78 @@ SI and CIK cards (HD 7000, R7/R9) work on both drivers; the Setup picks `radeon`
 
 The emulators follow the driver the card runs on, checked at every session start: on `amdgpu`, Flycast goes to the Vulkan renderer that matches its OpenGL one (per-pixel or per-triangle) and Dolphin to Vulkan; PCSX2 and DuckStation stay on Automatic, which already picks Vulkan there. Back on `radeon` (no Vulkan), each goes back to its factory renderer: Flycast to OpenGL with per-pixel transparency, Dolphin to OpenGL. RetroArch stays on `glcore` on both: its Vulkan output can't switch the CRT's modes. A choice made in an emulator is kept until the driver changes again.
 
-Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an **active DisplayPort or HDMI to VGA converter**. The card generates the low clocks; whether they reach the tube depends on the converter's chip, so pick one that the GroovyMAME community reports for 15 kHz.
+Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an **active converter**: see [Converters](#converters).
+
+**GCN 2 and 3 cards with DVI-I.** Not every card after GCN 1.0 lost its analog output: GroovyArcade reports the R7 260X on DVI-I and the R9 380 on DVI-I. None of them has been tried on FliperOS.
+
+- **R9 380 and 380X (GCN 3)** only run on `amdgpu`, and on kernel 6.18 its new display code has no analog output (that came in 6.19). They need `amdgpu.dc=0` on the kernel line, which the Setup doesn't add for them: see [Black screen](Black-screen.md#changing-the-kernel-line-by-hand).
+- **GCN 2, also called 1.1, on `amdgpu`:** GroovyArcade's table says these cards (HD 7790, R7 260, R7 360) don't do interlaced modes on that driver. It wasn't checked with the `amdgpu.dc=0` FliperOS uses. If the picture is lost after switching to `amdgpu`, the [trial](Installed-system.md) goes back to `radeon` by itself.
+
+**APUs.** GroovyArcade reports Wrestler, Kabini, Kaveri and Mullins working out of the box, and Wani with `amdgpu.dc=0` or an EDID. On any APU the Setup sets `interlace_force_even` in Switchres, which AMD APUs need.
+
+**A VGA connector isn't always analog.** On some APUs and motherboards the VGA port is a DisplayPort to VGA bridge chip. It may not switch modes quickly, make low clocks or do interlaced modes, so results vary by motherboard. GroovyArcade found the ASRock DeskMini A300's to be the best so far.
+
+**ArcadeVGA cards.** GroovyArcade's wiki says they "are not supported and won't work", without saying why, and other reports disagree. One forum thread has an ArcadeVGA 5000 running GroovyArcade at half speed; the documentation of another 15 kHz package says they seem to be supported.
+
+On Windows, forum posts say CRT_EmuDriver doesn't support the 3000 and the 5000, even though the 5000 is an HD 5450 with Ultimarc's own BIOS. The cause on Linux isn't documented, and none has been tried on FliperOS. If you are buying a card, a plain HD 5450 is the safer choice.
+
+**ATOM-15 isn't needed.** Flashing a supported Radeon with ATOM-15 makes it start at 15 kHz from the BIOS, which [GroovyArcade's FAQ](https://gitlab.com/groovyarcade/support/-/wikis/1-About-GroovyArcade/1.3-General-FAQ) describes as protection against out-of-range signals at boot. Once the kernel has loaded, 15 kHz is there either way.
+
+## Converters
+
+A card with only digital outputs can drive a CRT through an **active converter** with a DAC chip inside. A passive adapter doesn't work on a digital output.
+
+**DisplayPort is the one to use.** GroovyArcade reports no lower limit for its pixel clock, so a card that makes low clocks can often show games at their native resolution. An HDMI or DVI-D link doesn't go under about 25 MHz, so it only gives super resolutions.
+
+**Recommended by the GroovyArcade community:**
+
+| Converter | Notes |
+| --- | --- |
+| **CableDeconn** DisplayPort to VGA ([one sold on AliExpress](https://a.aliexpress.com/_mPCmfYb), with HDMI and DVI outputs too) | Very fragile VGA connector. 5 V on VGA pin 9 |
+| **Cable Matters** DisplayPort to VGA (product 102026) | Only 3.2 V on VGA pin 9, which matters if the device after it expects 5 V |
+
+Both use a Realtek RTD2168 chip. The community found no processing of the signal and no measurable lag, apart from the mode switch.
+
+The CableDeconn has also been reported working on a FliperOS cabinet, without a record yet of the card, the driver or the modes.
+
+**What to expect, even with these:**
+
+- **Mode switches are slower** than on a native VGA or DVI-I output.
+- **Interlaced modes are hit-or-miss**, mostly misses. So FliperOS' default 15 kHz boot (`640x480iS`) may stay black: use the **EDID progressive** entry of the boot menu, which GroovyArcade calls the most compatible for these outputs, or a progressive mode ([Black screen](Black-screen.md#black-from-the-boot)).
+- **Some modes may be refused.** If only some games go black, raise [`dotclock_min`](Black-screen.md#the-menus-work-some-games-go-black).
+
+**Protecting the CableDeconn's connector.** Users fix a VGA gender changer to it with 4-40 hex screws, so the changer takes the wear of plugging and unplugging. Use screws of 10 or 12 mm: **never longer than 12 mm**.
+
+**In the Setup:** the output test skips a digital output that reports nothing connected. On an AMD card the Setup assumes low clocks on every output, HDMI included, so the main monitor gets a native boot mode and `dotclock_min 0`.
+
+**On HDMI that can leave the tube black.** Boot the **EDID progressive** entry, and set [`dotclock_min 25.0`](Black-screen.md#the-menus-work-some-games-go-black) so games use super resolutions.
+
+For a third monitor on a converter, see [Multiple monitors](Multiple-Monitors.md).
+
+## Reported by GroovyArcade
+
+Cards in the [GroovyArcade wiki's list of tested GPUs](https://gitlab.com/groovyarcade/support/-/wikis/2-Pre-Requisites-and-Installation/2.1-Hardware-Suggestions-General#tested-gpus). They ran on its kernel, not on FliperOS, but it is the same family of 15 kHz patches. Older cards than these should work but aren't recommended.
+
+| Card | Driver | Output | Notes |
+| --- | --- | --- | --- |
+| HD 5450, HD 5570, HD 5750, HD 6450, R7 250 | `radeon` | VGA, DVI-I | Out of the box |
+| HD 6320 (Wrestler) | `radeon` | VGA, DVI-I | Out of the box |
+| HD 8400E (Kabini) | `radeon` | VGA, DVI-I | Out of the box; `dotclock_min 6` for perfect sync in every game |
+| HD 7520G (Trinity) | `radeon` | VGA, DisplayPort | `video=VGA-1:640x240S`, no interlaced modes, `dotclock_min 12` |
+| A8 APU | `radeon` | DisplayPort | With a converter and an EDID; its VGA is a bridge that works badly |
+| R5 (Mullins, GX-242CC) | `radeon` | VGA, DVI-I | With an EDID |
+| R7 260X | `radeon` | DVI-I | With an EDID |
+| R7 350X | `radeon` | DisplayPort | With an EDID |
+| Ryzen 2200G, 2400G | `amdgpu` | VGA, DisplayPort | The bridged VGA may lack low clocks or interlace, depending on the motherboard |
+| Ryzen 2200GE | `amdgpu` | VGA, DisplayPort | Same; disable legacy BIOS boot if the screen goes black at random |
+| Ryzen 3400G | `amdgpu` | VGA | A 1280x240 EDID and `video=DP-1:e` |
+| R7 (Wani, A10-8800E) | `amdgpu` | DisplayPort | EDID `generic_15_super_resp.bin` and `dotclock_min 25` |
+| RX 5700 XT (Navi 10) | `amdgpu` | DisplayPort | With an EDID |
+| R9 380, 380X | `amdgpu` | DVI-I | Needs `amdgpu.dc=0`; to be confirmed since Linux 6.19 |
+
+"With an EDID" means booting the EDID entries of the boot menu, or a monitor's file from `edid/` ([Install](Install.md#boot-menu)).
+
+If yours works on FliperOS, open an [issue](https://github.com/juniorterin/fliperOS/issues) with the card, the driver, the output and what you saw: that is what turns a line here into "seen on FliperOS".
 
 ## NVIDIA
 

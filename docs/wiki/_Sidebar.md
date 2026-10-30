@@ -3,6 +3,8 @@
 Using it
 
 - [Video cards](Video-cards.md)
+- [Monitors](Monitors.md)
+- [Black screen](Black-screen.md)
 - [Install](Install.md)
 - [Installed system](Installed-system.md)
 - [Web panel](Web-panel.md)

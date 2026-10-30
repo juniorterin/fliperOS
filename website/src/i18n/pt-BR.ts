@@ -765,7 +765,8 @@ const ptBR: Messages = {
     cta: 'Hardware recomendado, na documentação',
     adapter: {
       title: 'Placa só com saída digital? Um conversor que funciona',
-      text: 'Este adaptador liga na DisplayPort da placa e entrega VGA. A entrada dele é só DisplayPort: uma placa que só tem HDMI precisa de um conversor de HDMI para VGA. Ele também traz saídas HDMI e DVI, mas use uma de cada vez.',
+      text: 'Este adaptador liga na DisplayPort da placa e entrega VGA. A entrada dele é só DisplayPort: uma placa que só tem HDMI precisa de um conversor de HDMI para VGA. Pelo que relata a comunidade do GroovyArcade, a DisplayPort costuma dar resolução nativa, mas a troca de resolução é mais lenta, o entrelaçado costuma falhar e o conector VGA dele é frágil.',
+      docs: 'Conversores, na documentação',
       alt: 'Adaptador preto CableDeconn com cabo e plugue DisplayPort, e as saídas VGA, áudio, HDMI e DVI.',
       cta: 'Ver no AliExpress',
     },

@@ -763,7 +763,8 @@ const enUS = {
     cta: 'Recommended hardware, in the documentation',
     adapter: {
       title: 'A card with digital outputs only? A converter that works',
-      text: 'This adapter plugs into the card\'s DisplayPort and gives you VGA. Its input is DisplayPort only: a card that only has HDMI needs an HDMI to VGA converter. It also has HDMI and DVI outputs, but use one at a time.',
+      text: 'This adapter plugs into the card\'s DisplayPort and gives you VGA. Its input is DisplayPort only: a card that only has HDMI needs an HDMI to VGA converter. The GroovyArcade community reports that DisplayPort often gives native resolutions, but mode switches are slower, interlaced modes often fail and its VGA connector is fragile.',
+      docs: 'Converters, in the documentation',
       alt: 'Black CableDeconn adapter with a cable and DisplayPort plug, and VGA, audio, HDMI and DVI outputs.',
       cta: 'See it on AliExpress',
     },

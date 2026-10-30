@@ -17,8 +17,8 @@ FliperOS drives **two arcade CRTs** from the analog outputs of one video card, a
 ### Digital outputs with an active converter (experimental)
 
 An HDMI, DVI-D or DisplayPort output can drive a CRT through an **active** converter to VGA (one with a DAC chip inside; passive adapters don't work). The Setup lists these outputs as *digital, active VGA converter, experimental*. This is **not tested yet** on a cabinet:
-- A digital link can't go below about 25 MHz of pixel clock, so the extra monitor boots in the **super resolution** of the monitor's preset (`video=HDMI-A-1:1280x480iSe` at 15 kHz: the same lines and frequencies, with thinner pixels), and the Xorg configuration doesn't give it monitor 1's low-dotclock modeline.
-- Many cheap converters refuse non-standard modes, interlaced modes or low frequencies. If the monitor stays black, try another converter.
+- An HDMI or DVI-D link can't go below about 25 MHz of pixel clock. GroovyArcade reports no such limit on DisplayPort, but the Setup treats every digital output the same: the extra monitor boots in the **super resolution** of the monitor's preset (`video=HDMI-A-1:1280x480iSe` at 15 kHz: the same lines and frequencies, with thinner pixels), and the Xorg configuration doesn't give it monitor 1's low-dotclock modeline.
+- Many cheap converters refuse non-standard modes, interlaced modes or low frequencies. If the monitor stays black, try another converter; see [Converters](Video-cards.md#converters) for the ones the community recommends.
 - GroovyMAME's Switchres makes each game's mode for every screen with the card's own limits; on an AMD card these can go below the converter's minimum, and that screen goes black. Flycast's 3-screen games only use analog outputs for now.
 
 ### A second video card (experimental)

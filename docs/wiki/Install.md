@@ -27,16 +27,18 @@ The same options as GroovyArcade (`os/groovyarcade/syslinux/syslinux.cfg`). Here
 | NVIDIA 15 kHz | `video=1280x480iS` | NVIDIA: super resolution; the output test then tries native modes (see [Video cards](Video-cards.md)) |
 | NTSC | `video=720x480iS` | NTSC TV |
 | PAL | `video=768x576iS` | PAL TV |
-| EDID progressive | `drm.edid_firmware=edid/generic_15_super_resp.bin video=e` | Switchres EDID, all outputs forced |
+| EDID progressive | `drm.edid_firmware=edid/generic_15_super_resp.bin video=e` | Switchres EDID, all outputs forced. For DisplayPort or HDMI through a [converter](Video-cards.md#converters) |
 | EDID interlaced | `drm.edid_firmware=edid/generic_15_super_resi.bin video=e` | Same, interlaced |
 
 **Intel HD:** the boot menu is drawn at 31 kHz and the card makes no low clocks, so do the whole installation on a monitor at a standard frequency (an LCD or a PC monitor) and connect the CRT only afterwards, with the cabinet powered off. See [Video cards](Video-cards.md#intel).
 
 The `S` at the end of the mode comes from the 15 kHz patch: it uses the kernel's fixed table of low-dotclock modes (`drm_modes_low_dotclock.c`), and `i` means interlaced. Every entry carries `quiet splash consoleblank=0` and `radeon` on SI/CIK cards.
 
-**30-second timer.** With no key pressed, the **15 kHz** entry boots, which is the safe one for a cabinet: an LCD receiving 15 kHz only shows "out of range", but 31 kHz on a 15 kHz-only tube can damage it.
+**10-second timer.** With no key pressed, the **15 kHz** entry boots, which is the safe one for a cabinet: an LCD receiving 15 kHz only shows "out of range", but 31 kHz on a 15 kHz-only tube can damage it.
 
-The menu itself **doesn't show on a 15 kHz CRT** — it is drawn in the firmware's text mode (~31 kHz), before the kernel. GroovyArcade is the same. To choose another entry on a 15 kHz-only cabinet, connect an LCD temporarily; with the CRT, wait the 10 s (any key stops the countdown). The first readable thing on the tube is the splash, already in the boot mode.
+The menu itself **doesn't show on a 15 kHz CRT** — it is drawn in the firmware's text mode (~31 kHz), before the kernel. GroovyArcade is the same. To choose another entry on a 15 kHz-only cabinet, connect an LCD temporarily: press a key to stop the countdown, highlight the entry without pressing Enter, move the cable to the CRT, and only then press Enter. With the CRT alone, wait the 10 s. The first readable thing on the tube is the splash, already in the boot mode.
+
+No picture at all? See [Black screen](Black-screen.md).
 
 ## Output test and *Testing Results*
 

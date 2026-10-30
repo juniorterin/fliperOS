@@ -318,7 +318,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_build.py
 </code></pre>
 <h2 id="documentation">Documentation</h2>
-<p><strong>Using it:</strong> <a href="#Video-cards">Video cards</a> · <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Scoreboard-games">Scoreboard games</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Adding-games">Adding games</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a> · <a href="#Multiple-Monitors">Multiple monitors</a> · <a href="#DIY-hardware">DIY hardware</a></p>
+<p><strong>Using it:</strong> <a href="#Video-cards">Video cards</a> · <a href="#Monitors">Monitors</a> · <a href="#Black-screen">Black screen</a> · <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Scoreboard-games">Scoreboard games</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Adding-games">Adding games</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a> · <a href="#Multiple-Monitors">Multiple monitors</a> · <a href="#DIY-hardware">DIY hardware</a></p>
 <p><strong>Hacking on it:</strong> <a href="#Kernel-15-kHz">15 kHz kernel</a> · <a href="#Build-and-tests">Build and tests</a> · <a href="#Architecture">Architecture</a> · <a href="#Sources">Sources</a></p>
 <p>The pages live in <a href="docs/wiki"><code>docs/wiki</code></a> and go to the wiki with <code>bash tools/wiki-publish.sh</code>. <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> is all of it in one file (<code>tools/render-docs.py</code>).</p>
 <h2 id="contributors">Contributors</h2>
@@ -348,10 +348,16 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <td><strong>Native</strong> (recommended)</td>
 </tr>
 <tr>
+<td>AMD GCN 2 and 3 with DVI-I (R7 260X, R9 380)</td>
+<td><code>radeon</code> or <code>amdgpu</code> (GCN 2), <code>amdgpu</code> (GCN 3)</td>
+<td>DVI-I</td>
+<td>Reported by GroovyArcade. <a href="#amdati">The R9 380 needs a kernel parameter</a></td>
+</tr>
+<tr>
 <td>AMD Radeon RX and newer, Ryzen APUs</td>
 <td><code>amdgpu</code></td>
 <td>None on the card; VGA on some motherboards</td>
-<td>Native, through an active DisplayPort/HDMI to VGA converter that accepts low clocks</td>
+<td>Native through a <a href="#converters">DisplayPort to VGA converter</a>; super resolution through HDMI</td>
 </tr>
 <tr>
 <td>NVIDIA GeForce 8 to GTX 900, Quadro up to K series</td>
@@ -385,13 +391,157 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </tr>
 </tbody>
 </table>
-<p>Two cards have been seen on a CRT by the project: an AMD R7 240 (<code>radeon</code>) and an Intel HD Graphics (Ironlake, <code>i915</code>). The other lines come from the kernel patches and from what the GroovyArcade and Batocera communities report.</p>
+<p>Three cards have been seen on a CRT by the project: an AMD R7 240 (<code>radeon</code> and <code>amdgpu</code>), an Intel HD Graphics (Ironlake, <code>i915</code>) and an NVIDIA GTX 980 Ti (<code>nouveau</code>). The other lines come from the kernel patches and from what the GroovyArcade and Batocera communities report (<a href="#reported-by-groovyarcade">list below</a>).</p>
 <h2 id="amdati">AMD/ATI</h2>
 <p>The cards CRT_EmuDriver covers on Windows, with VGA or DVI-I: the HD 2000 series to the R7/R9 200 and 300 with GCN 1.0. The 15 kHz kernel patches cover <code>radeon</code> and <code>amdgpu</code> (DCE and DCN 1 to 3): native boot at <code>640x480iS</code> and every game at its own resolution, in GroovyMAME, RetroArch and the frontends.</p>
 <p>Good, cheap choices: <strong>HD 5450, HD 6450, HD 7750, R7 240, R7 250</strong>.</p>
 <p>SI and CIK cards (HD 7000, R7/R9) work on both drivers; the Setup picks <code>radeon</code> by default and offers <code>amdgpu</code> (with Vulkan) in <em>Video Setup &gt; Video driver</em>.</p>
 <p>The emulators follow the driver the card runs on, checked at every session start: on <code>amdgpu</code>, Flycast goes to the Vulkan renderer that matches its OpenGL one (per-pixel or per-triangle) and Dolphin to Vulkan; PCSX2 and DuckStation stay on Automatic, which already picks Vulkan there. Back on <code>radeon</code> (no Vulkan), each goes back to its factory renderer: Flycast to OpenGL with per-pixel transparency, Dolphin to OpenGL. RetroArch stays on <code>glcore</code> on both: its Vulkan output can't switch the CRT's modes. A choice made in an emulator is kept until the driver changes again.</p>
-<p>Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an <strong>active DisplayPort or HDMI to VGA converter</strong>. The card generates the low clocks; whether they reach the tube depends on the converter's chip, so pick one that the GroovyMAME community reports for 15 kHz.</p>
+<p>Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an <strong>active converter</strong>: see <a href="#converters">Converters</a>.</p>
+<p><strong>GCN 2 and 3 cards with DVI-I.</strong> Not every card after GCN 1.0 lost its analog output: GroovyArcade reports the R7 260X on DVI-I and the R9 380 on DVI-I. None of them has been tried on FliperOS.</p>
+<ul>
+<li><strong>R9 380 and 380X (GCN 3)</strong> only run on <code>amdgpu</code>, and on kernel 6.18 its new display code has no analog output (that came in 6.19). They need <code>amdgpu.dc=0</code> on the kernel line, which the Setup doesn't add for them: see <a href="#Black-screen">Black screen</a>.</li>
+<li><strong>GCN 2, also called 1.1, on <code>amdgpu</code>:</strong> GroovyArcade's table says these cards (HD 7790, R7 260, R7 360) don't do interlaced modes on that driver. It wasn't checked with the <code>amdgpu.dc=0</code> FliperOS uses. If the picture is lost after switching to <code>amdgpu</code>, the <a href="#Installed-system">trial</a> goes back to <code>radeon</code> by itself.</li>
+</ul>
+<p><strong>APUs.</strong> GroovyArcade reports Wrestler, Kabini, Kaveri and Mullins working out of the box, and Wani with <code>amdgpu.dc=0</code> or an EDID. On any APU the Setup sets <code>interlace_force_even</code> in Switchres, which AMD APUs need.</p>
+<p><strong>A VGA connector isn't always analog.</strong> On some APUs and motherboards the VGA port is a DisplayPort to VGA bridge chip. It may not switch modes quickly, make low clocks or do interlaced modes, so results vary by motherboard. GroovyArcade found the ASRock DeskMini A300's to be the best so far.</p>
+<p><strong>ArcadeVGA cards.</strong> GroovyArcade's wiki says they "are not supported and won't work", without saying why, and other reports disagree. One forum thread has an ArcadeVGA 5000 running GroovyArcade at half speed; the documentation of another 15 kHz package says they seem to be supported.</p>
+<p>On Windows, forum posts say CRT_EmuDriver doesn't support the 3000 and the 5000, even though the 5000 is an HD 5450 with Ultimarc's own BIOS. The cause on Linux isn't documented, and none has been tried on FliperOS. If you are buying a card, a plain HD 5450 is the safer choice.</p>
+<p><strong>ATOM-15 isn't needed.</strong> Flashing a supported Radeon with ATOM-15 makes it start at 15 kHz from the BIOS, which <a href="https://gitlab.com/groovyarcade/support/-/wikis/1-About-GroovyArcade/1.3-General-FAQ">GroovyArcade's FAQ</a> describes as protection against out-of-range signals at boot. Once the kernel has loaded, 15 kHz is there either way.</p>
+<h2 id="converters">Converters</h2>
+<p>A card with only digital outputs can drive a CRT through an <strong>active converter</strong> with a DAC chip inside. A passive adapter doesn't work on a digital output.</p>
+<p><strong>DisplayPort is the one to use.</strong> GroovyArcade reports no lower limit for its pixel clock, so a card that makes low clocks can often show games at their native resolution. An HDMI or DVI-D link doesn't go under about 25 MHz, so it only gives super resolutions.</p>
+<p><strong>Recommended by the GroovyArcade community:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Converter</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>CableDeconn</strong> DisplayPort to VGA (<a href="https://a.aliexpress.com/_mPCmfYb">one sold on AliExpress</a>, with HDMI and DVI outputs too)</td>
+<td>Very fragile VGA connector. 5 V on VGA pin 9</td>
+</tr>
+<tr>
+<td><strong>Cable Matters</strong> DisplayPort to VGA (product 102026)</td>
+<td>Only 3.2 V on VGA pin 9, which matters if the device after it expects 5 V</td>
+</tr>
+</tbody>
+</table>
+<p>Both use a Realtek RTD2168 chip. The community found no processing of the signal and no measurable lag, apart from the mode switch.</p>
+<p>The CableDeconn has also been reported working on a FliperOS cabinet, without a record yet of the card, the driver or the modes.</p>
+<p><strong>What to expect, even with these:</strong></p>
+<ul>
+<li><strong>Mode switches are slower</strong> than on a native VGA or DVI-I output.</li>
+<li><strong>Interlaced modes are hit-or-miss</strong>, mostly misses. So FliperOS' default 15 kHz boot (<code>640x480iS</code>) may stay black: use the <strong>EDID progressive</strong> entry of the boot menu, which GroovyArcade calls the most compatible for these outputs, or a progressive mode (<a href="#Black-screen">Black screen</a>).</li>
+<li><strong>Some modes may be refused.</strong> If only some games go black, raise <a href="#Black-screen"><code>dotclock_min</code></a>.</li>
+</ul>
+<p><strong>Protecting the CableDeconn's connector.</strong> Users fix a VGA gender changer to it with 4-40 hex screws, so the changer takes the wear of plugging and unplugging. Use screws of 10 or 12 mm: <strong>never longer than 12 mm</strong>.</p>
+<p><strong>In the Setup:</strong> the output test skips a digital output that reports nothing connected. On an AMD card the Setup assumes low clocks on every output, HDMI included, so the main monitor gets a native boot mode and <code>dotclock_min 0</code>.</p>
+<p><strong>On HDMI that can leave the tube black.</strong> Boot the <strong>EDID progressive</strong> entry, and set <a href="#Black-screen"><code>dotclock_min 25.0</code></a> so games use super resolutions.</p>
+<p>For a third monitor on a converter, see <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
+<h2 id="reported-by-groovyarcade">Reported by GroovyArcade</h2>
+<p>Cards in the <a href="https://gitlab.com/groovyarcade/support/-/wikis/2-Pre-Requisites-and-Installation/2.1-Hardware-Suggestions-General#tested-gpus">GroovyArcade wiki's list of tested GPUs</a>. They ran on its kernel, not on FliperOS, but it is the same family of 15 kHz patches. Older cards than these should work but aren't recommended.</p>
+<table>
+<thead>
+<tr>
+<th>Card</th>
+<th>Driver</th>
+<th>Output</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HD 5450, HD 5570, HD 5750, HD 6450, R7 250</td>
+<td><code>radeon</code></td>
+<td>VGA, DVI-I</td>
+<td>Out of the box</td>
+</tr>
+<tr>
+<td>HD 6320 (Wrestler)</td>
+<td><code>radeon</code></td>
+<td>VGA, DVI-I</td>
+<td>Out of the box</td>
+</tr>
+<tr>
+<td>HD 8400E (Kabini)</td>
+<td><code>radeon</code></td>
+<td>VGA, DVI-I</td>
+<td>Out of the box; <code>dotclock_min 6</code> for perfect sync in every game</td>
+</tr>
+<tr>
+<td>HD 7520G (Trinity)</td>
+<td><code>radeon</code></td>
+<td>VGA, DisplayPort</td>
+<td><code>video=VGA-1:640x240S</code>, no interlaced modes, <code>dotclock_min 12</code></td>
+</tr>
+<tr>
+<td>A8 APU</td>
+<td><code>radeon</code></td>
+<td>DisplayPort</td>
+<td>With a converter and an EDID; its VGA is a bridge that works badly</td>
+</tr>
+<tr>
+<td>R5 (Mullins, GX-242CC)</td>
+<td><code>radeon</code></td>
+<td>VGA, DVI-I</td>
+<td>With an EDID</td>
+</tr>
+<tr>
+<td>R7 260X</td>
+<td><code>radeon</code></td>
+<td>DVI-I</td>
+<td>With an EDID</td>
+</tr>
+<tr>
+<td>R7 350X</td>
+<td><code>radeon</code></td>
+<td>DisplayPort</td>
+<td>With an EDID</td>
+</tr>
+<tr>
+<td>Ryzen 2200G, 2400G</td>
+<td><code>amdgpu</code></td>
+<td>VGA, DisplayPort</td>
+<td>The bridged VGA may lack low clocks or interlace, depending on the motherboard</td>
+</tr>
+<tr>
+<td>Ryzen 2200GE</td>
+<td><code>amdgpu</code></td>
+<td>VGA, DisplayPort</td>
+<td>Same; disable legacy BIOS boot if the screen goes black at random</td>
+</tr>
+<tr>
+<td>Ryzen 3400G</td>
+<td><code>amdgpu</code></td>
+<td>VGA</td>
+<td>A 1280x240 EDID and <code>video=DP-1:e</code></td>
+</tr>
+<tr>
+<td>R7 (Wani, A10-8800E)</td>
+<td><code>amdgpu</code></td>
+<td>DisplayPort</td>
+<td>EDID <code>generic_15_super_resp.bin</code> and <code>dotclock_min 25</code></td>
+</tr>
+<tr>
+<td>RX 5700 XT (Navi 10)</td>
+<td><code>amdgpu</code></td>
+<td>DisplayPort</td>
+<td>With an EDID</td>
+</tr>
+<tr>
+<td>R9 380, 380X</td>
+<td><code>amdgpu</code></td>
+<td>DVI-I</td>
+<td>Needs <code>amdgpu.dc=0</code>; to be confirmed since Linux 6.19</td>
+</tr>
+</tbody>
+</table>
+<p>"With an EDID" means booting the EDID entries of the boot menu, or a monitor's file from <code>edid/</code> (<a href="#Install">Install</a>).</p>
+<p>If yours works on FliperOS, open an <a href="https://github.com/juniorterin/fliperOS/issues">issue</a> with the card, the driver, the output and what you saw: that is what turns a line here into "seen on FliperOS".</p>
 <h2 id="nvidia">NVIDIA</h2>
 <p>NVIDIA cards run on the open driver, <strong>nouveau</strong>, out of the box. On the installed system, <em>Setup &gt; Video Setup &gt; Video driver</em> can switch to <strong>NVIDIA's own driver</strong> (see below).</p>
 <p><strong>With VGA or DVI-I (GeForce 8 to GTX 900, Quadro up to the K series).</strong> Out of the box nouveau refuses every mode under 25 MHz. FliperOS's own kernel patch (<code>10_fliperos_nouveau_analog_low_dotclock.patch</code>) lifts that floor on the analog outputs, but whether each card's PLL actually reaches 6.5 MHz varies.</p>
@@ -530,6 +680,362 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </ul>
 <h2 id="several-cards">Several cards</h2>
 <p>A second card for a second or third monitor works best if it is AMD too. See <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
+<h1 id="Monitors">Monitors</h1>
+<p>Which preset to choose for your tube, how to centre the picture, and what sits between the video card and the monitor.</p>
+<h2 id="choosing-the-preset">Choosing the preset</h2>
+<p>Choose it in <strong>Setup &gt; Video Setup &gt; Monitor Type</strong>. A preset tells Switchres which frequencies the monitor accepts, so it can make a mode for each game.</p>
+<ul>
+<li><strong>Arcade monitor, model unknown:</strong> start with <code>generic_15</code>, the narrowest range. If the picture is stable, <code>arcade_15</code> and then <code>arcade_15ex</code> allow more games at their exact frequency.</li>
+<li><strong>Your model is on the list:</strong> use its preset.</li>
+<li><strong>TV:</strong> <code>generic_15</code> if it accepts it. <code>ntsc</code> or <code>pal</code> only if the TV is strict about one standard: those run at one refresh rate only, so games made for another rate won't match.</li>
+<li><strong>Nothing fits:</strong> <strong>Custom</strong>, made on the Geometry grid (below).</li>
+</ul>
+<p><strong>Mind the "Boots at" column.</strong> A preset for a multi-frequency monitor boots at 31 kHz. On a monitor that only takes 15 kHz, 31 kHz can damage the tube, so never pick one of those just because its list of frequencies includes 15 kHz.</p>
+<table>
+<thead>
+<tr>
+<th>Preset</th>
+<th>Monitor</th>
+<th>Horizontal (kHz)</th>
+<th>Refresh (Hz)</th>
+<th>Boots at</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>generic_15</code></td>
+<td>Generic 15.7 kHz</td>
+<td>15.625-15.75</td>
+<td>49.5-65</td>
+<td>15 kHz</td>
+</tr>
+<tr>
+<td><code>arcade_15</code></td>
+<td>Arcade, standard resolution</td>
+<td>15.625-16.2</td>
+<td>49.5-65</td>
+<td>15 kHz</td>
+</tr>
+<tr>
+<td><code>arcade_15ex</code></td>
+<td>Arcade, extended resolution</td>
+<td>15.625-16.5</td>
+<td>49.5-65</td>
+<td>15 kHz</td>
+</tr>
+<tr>
+<td><code>k7000</code></td>
+<td>Wells Gardner K7000</td>
+<td>15.625-15.8</td>
+<td>49.5-63</td>
+<td>15 kHz</td>
+</tr>
+<tr>
+<td><code>k7131</code></td>
+<td>Wells Gardner 25K7131</td>
+<td>15.625-16.67</td>
+<td>49.5-65</td>
+<td>15 kHz</td>
+</tr>
+<tr>
+<td><code>h9110</code></td>
+<td>Hantarex MTC 9110</td>
+<td>15.625-16.67</td>
+<td>49.5-65</td>
+<td>15 kHz</td>
+</tr>
+<tr>
+<td><code>polo</code></td>
+<td>Hantarex Polo</td>
+<td>15.625-16.67</td>
+<td>49.5-65</td>
+<td>15 kHz</td>
+</tr>
+<tr>
+<td><code>ntsc</code></td>
+<td>NTSC TV</td>
+<td>15.734</td>
+<td>59.94</td>
+<td>15 kHz (720x480i)</td>
+</tr>
+<tr>
+<td><code>pal</code></td>
+<td>PAL TV</td>
+<td>15.625</td>
+<td>50</td>
+<td>15 kHz</td>
+</tr>
+<tr>
+<td><code>arcade_25</code></td>
+<td>Arcade, medium resolution</td>
+<td>24.96</td>
+<td>49.5-65</td>
+<td>25 kHz</td>
+</tr>
+<tr>
+<td><code>arcade_15_25</code></td>
+<td>Arcade dual-sync</td>
+<td>15.625-16.2, 24.96</td>
+<td>49.5-65</td>
+<td>25 kHz</td>
+</tr>
+<tr>
+<td><code>ms929</code></td>
+<td>Nanao MS9-29</td>
+<td>15.45-16.05, 23.9-24.9</td>
+<td>50-65</td>
+<td>25 kHz</td>
+</tr>
+<tr>
+<td><code>arcade_31</code></td>
+<td>Arcade, high resolution</td>
+<td>31.4-31.5</td>
+<td>49.5-65</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>arcade_15_25_31</code></td>
+<td>Arcade tri-sync</td>
+<td>15.625-16.2, 24.96, 31.4-31.5</td>
+<td>49.5-65</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>d9200</code></td>
+<td>Wells Gardner D9200</td>
+<td>15.25-16.5, 23.9-24.42, 31-32, 37-38</td>
+<td>40-80</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>d9400</code></td>
+<td>Wells Gardner D9400</td>
+<td>15.25-19, 20.5-38</td>
+<td>40-80</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>d9800</code></td>
+<td>Wells Gardner D9800</td>
+<td>15.25-19, 20.5-38</td>
+<td>40-80</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>m3129</code></td>
+<td>Wei-Ya M3129</td>
+<td>15.25-16.5, 23.9-24.42, 31-32</td>
+<td>40-80</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>pstar</code></td>
+<td>Hantarex Polostar 25</td>
+<td>15.7-15.8, 16.2-16.3, 25.3-25.4, 31.5-31.6</td>
+<td>50-65</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>ms2930</code></td>
+<td>Nanao MS-2930, MS-2931</td>
+<td>15.45-16.05, 23.9-24.9, 31-32</td>
+<td>50-65</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>r666b</code></td>
+<td>Rodotron 666B-29</td>
+<td>15.45-16.05, 23.9-24.9, 31-32.5</td>
+<td>50-65</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>m2929</code></td>
+<td>Makvision 2929D</td>
+<td>30-40</td>
+<td>47-90</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>pc_31_120</code></td>
+<td>PC CRT, 31 kHz at 120 Hz</td>
+<td>31.4-31.6</td>
+<td>50-65, 100-130</td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>vesa_480</code></td>
+<td>PC CRT, VESA GTF 640x480</td>
+<td></td>
+<td></td>
+<td>31 kHz</td>
+</tr>
+<tr>
+<td><code>vesa_600</code></td>
+<td>PC CRT, VESA GTF 800x600</td>
+<td></td>
+<td></td>
+<td>800x600</td>
+</tr>
+<tr>
+<td><code>vesa_768</code></td>
+<td>PC CRT, VESA GTF 1024x768</td>
+<td></td>
+<td></td>
+<td>1024x768</td>
+</tr>
+<tr>
+<td><code>pc_70_120</code></td>
+<td>PC CRT, up to 70 kHz at 120 Hz</td>
+<td>30-70</td>
+<td>50-65, 100-130</td>
+<td>1024x768</td>
+</tr>
+<tr>
+<td><code>vesa_1024</code></td>
+<td>PC CRT, VESA GTF 1280x1024</td>
+<td></td>
+<td></td>
+<td>1280x1024</td>
+</tr>
+<tr>
+<td><code>lcd</code></td>
+<td>LCD</td>
+<td></td>
+<td></td>
+<td>Its own EDID</td>
+</tr>
+</tbody>
+</table>
+<p>The frequencies are Switchres' presets, as listed in <a href="https://gitlab.com/groovyarcade/support/-/wikis/3-Post-Installation-and-Maintenance/3.5-Monitor-Definitions">GroovyArcade's monitor definitions</a>, with the exact timings of each one. The last column is what <code>lib/monitor.sh</code> does. The project hasn't checked each preset on a real monitor: they are as Switchres defines them.</p>
+<h2 id="centring-the-picture">Centring the picture</h2>
+<ol>
+<li><strong>Put the monitor's own controls back in the middle</strong> first. In most cases Switchres gives a centred picture that fills the screen.</li>
+<li>Use <strong>Setup &gt; Video Setup &gt; Geometry</strong>: it stretches, shrinks and moves the picture on a grid, and saves the result as the <strong>Custom</strong> monitor (<a href="#Install">Install</a>).</li>
+<li><strong>Go in small steps.</strong> Too large a change makes the monitor lose sync.</li>
+<li><strong>Finish on the monitor.</strong> No software changes the vertical size: that is the monitor's V-SIZE, or the service menu on a TV. Arcade monitors take this well; TVs are the most troublesome.</li>
+</ol>
+<p>To check one mode by hand, on the cabinet's own screen (not over SSH), open the grid with the lines and refresh of a game. Tab switches between two patterns. World Rally, for example:</p>
+<pre><code class="language-bash">switchres 368 232 60 -s -l grid
+</code></pre>
+<h2 id="what-the-numbers-mean">What the numbers mean</h2>
+<p>A Custom monitor is one <code>crt_range0</code> line in <code>/etc/switchres.ini</code>, 16 values:</p>
+<pre><code>HfreqMin-HfreqMax, VfreqMin-VfreqMax, HFrontPorch, HSyncPulse, HBackPorch, VFrontPorch, VSyncPulse, VBackPorch, HSyncPol, VSyncPol, ProgressiveLinesMin, ProgressiveLinesMax, InterlacedLinesMin, InterlacedLinesMax
+</code></pre>
+<p>Horizontally, the two porches decide the size and the position:</p>
+<ul>
+<li><strong>Wider picture:</strong> lower both porches by the same amount. <strong>Narrower:</strong> raise both.</li>
+<li><strong>Move left:</strong> lower the front porch and raise the back porch by the same amount. <strong>Move right:</strong> the opposite.</li>
+</ul>
+<p>Vertically they only move the picture. Up: lower the front porch and raise the back porch. Down: the opposite. Switchres takes the vertical porches as minimums, so it may not move as far as you asked.</p>
+<h2 id="between-the-card-and-the-tube">Between the card and the tube</h2>
+<p>The video card gives VGA: red, green, blue and separate horizontal and vertical sync. An arcade monitor usually expects composite sync and its own signal level, so something has to sit in between.</p>
+<ul>
+<li><strong>JAMMA cabinet:</strong> the <a href="https://www.ultimarc.com/control-interfaces/j-pac-en/j-pac-jamma-interface/">Ultimarc J-PAC</a> connects a VGA card and USB to the JAMMA connector and has a video amplifier for arcade monitors. It also works as the keyboard encoder of the panel.</li>
+</ul>
+<p>Forum posts say it makes composite sync from the VGA's two sync lines and checks the frequency before passing it on. It doesn't make the 15 kHz signal: FliperOS does.
+- <strong>SCART TV or monitor:</strong> a VGA to SCART cable. A GTX 980 Ti was seen on a CRT that way (<a href="#Video-cards">Video cards</a>).</p>
+<p>Neither the project nor the GroovyArcade wiki documents the wiring of each monitor, so follow the manual of your monitor and of the interface. Keep the tube off until the card is known to output 15 kHz if you are not sure of the boot mode.</p>
+<h1 id="Black-screen">Black screen</h1>
+<p>What to try when the tube shows nothing, or when only some games go black. Most of this comes from the <a href="https://gitlab.com/groovyarcade/support/-/wikis/home">GroovyArcade wiki</a>, adapted to where FliperOS keeps each thing, so it hasn't all been tried here.</p>
+<p><strong>If the picture rolls or tears at a frequency the monitor can't take, turn the monitor off first.</strong> A 31 kHz signal can damage a 15 kHz tube.</p>
+<h2 id="getting-in-without-a-picture">Getting in without a picture</h2>
+<p>The system usually booted even with a black tube. From another computer on the same network:</p>
+<ul>
+<li><strong>SSH</strong>, on from the first boot: <code>ssh fliperos@fliperos.local</code>.</li>
+<li><strong>The web panel</strong>, at <code>http://fliperos.local</code>, has a terminal page (<a href="#Web-panel">Web panel</a>).</li>
+<li><strong>Recovery Mode</strong> on the media, when the disk doesn't boot (<a href="#Install">Install</a>).</li>
+</ul>
+<p><strong>Debug mode</strong> in the Setup shows the boot messages instead of the splash (<a href="#Installed-system">Installed system</a>).</p>
+<h2 id="what-the-system-sees">What the system sees</h2>
+<p>This lists each video output, whether something is connected, its EDID and its modes, then the card, the driver and what FliperOS saved:</p>
+<pre><code class="language-bash">for c in /sys/class/drm/card?-*; do
+  echo &quot;${c##*/}: $(cat &quot;$c/status&quot;), EDID $(wc -c &lt; &quot;$c/edid&quot;) bytes&quot;
+  cat &quot;$c/modes&quot;
+done
+cat /proc/cmdline
+lspci -nnk | grep -A3 -E 'VGA|Display'
+grep -E '^(driver|connector|detection|monitor|kernel_video)=' /etc/fliperos/fliperos.conf
+</code></pre>
+<p>The name in <code>connector=</code> must be the output your monitor is plugged into. If you moved the cable, <strong>Setup &gt; Video Setup &gt; Test the video outputs</strong> finds it again.</p>
+<h2 id="changing-the-kernel-line-by-hand">Changing the kernel line by hand</h2>
+<p>The Setup writes this line, so use it whenever you can see its menu. Without a picture, change <code>FLIPEROS_CMDLINE</code> in <code>/etc/default/fliperos-boot</code>. FliperOS has no text editor for the terminal, so these commands use <code>sed</code>.</p>
+<p>To replace a part of the line, here the mode:</p>
+<pre><code class="language-bash">grep FLIPEROS_CMDLINE /etc/default/fliperos-boot
+sudo sed -i 's/video=VGA-1:640x480iS/video=VGA-1:640x240S/' /etc/default/fliperos-boot
+</code></pre>
+<p>To add a parameter:</p>
+<pre><code class="language-bash">sudo sed -i 's/^FLIPEROS_CMDLINE=&quot;/&amp;amdgpu.dc=0 /' /etc/default/fliperos-boot
+</code></pre>
+<p>Then write it to the bootloader and restart:</p>
+<pre><code class="language-bash">sudo fliperos-limine-update
+sudo reboot
+</code></pre>
+<p>The next save in Video Setup rewrites the <code>video=</code> part.</p>
+<h2 id="black-from-the-boot">Black from the boot</h2>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Try</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>At the installation</td>
+<td>Another entry of the boot menu: <em>EDID progressive</em>, then <em>EDID interlaced</em>, which force every output on. To choose on a 15 kHz-only tube, see <a href="#Install">Install</a></td>
+</tr>
+<tr>
+<td>Interlaced modes may be the problem (black at <code>640x480iS</code>)</td>
+<td>Change <code>video=VGA-1:640x480iS</code> to <code>video=VGA-1:640x240S</code>. In the Setup it is <strong>Video Setup &gt; Resolution</strong></td>
+</tr>
+<tr>
+<td>Black after moving the cable or booting without it</td>
+<td>Force the output on, with an <code>e</code> at the end of the mode: <code>video=VGA-1:640x480iSe</code></td>
+</tr>
+<tr>
+<td>Through a converter</td>
+<td>Interlaced modes often fail: see <a href="#Video-cards">Converters</a></td>
+</tr>
+<tr>
+<td>AMD with DVI-I that has no <code>radeon</code> driver (R9 380, 380X)</td>
+<td>Add <code>amdgpu.dc=0</code> to the line: on kernel 6.18 amdgpu's new display code has no analog output. See <a href="#Video-cards">Video cards</a></td>
+</tr>
+<tr>
+<td>Ryzen 2200GE with random black screens</td>
+<td>Disable legacy boot (CSM) in the BIOS. Reported by GroovyArcade on this APU</td>
+</tr>
+<tr>
+<td>Motherboard VGA on an APU or Intel</td>
+<td>It may be a DisplayPort bridge chip, which limits low clocks and interlace. See <a href="#Video-cards">Video cards</a></td>
+</tr>
+<tr>
+<td>You changed the video card</td>
+<td>FliperOS notices at boot and offers the output test: see <a href="#Video-cards">Changing the video card</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="splash-shows-then-black-or-a-crash">Splash shows, then black or a crash</h2>
+<p>With two video cards, the frontend may be opening on the wrong one. Set up FliperOS with only the card you will use, and disable the other in the BIOS or pull it out. To try it without opening the case, until the next boot:</p>
+<pre><code class="language-bash">lspci | grep VGA
+echo 1 | sudo tee /sys/bus/pci/devices/0000:XX:00.0/remove    # XX from the line above
+</code></pre>
+<p>For monitors on two cards, see <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
+<h2 id="the-menus-work-some-games-go-black">The menus work, some games go black</h2>
+<p>Some modes are below what the card or the converter generates. <code>dotclock_min</code> tells Switchres the lowest clock to use. Modes under it get a wider picture with the same lines, which looks the same on a CRT.</p>
+<p><strong>On AMD cards</strong> the GroovyArcade wiki says 8 MHz is often needed, and lists 12 and 25 as other common values. The NVIDIA low resolution test finds this value by itself; on other cards it is by hand.</p>
+<p>Set the same value in both files: <code>/etc/switchres.ini</code> for Switchres and the programs that use it, <code>/etc/fliperos/mame/mame.ini</code> for GroovyMAME. For 8 MHz:</p>
+<pre><code class="language-bash">sudo sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/switchres.ini
+sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mame/mame.ini
+</code></pre>
+<p>The Setup keeps a value of yours. It only replaces its own (0, 25, or a step of the NVIDIA test). To see the mode a game gets:</p>
+<pre><code class="language-bash">switchres 320 240 60 -c
+</code></pre>
+<p>To test a resolution with a real game, the GroovyArcade wiki has <a href="https://gitlab.com/groovyarcade/support/-/wikis/4-Issues-and-Troubleshooting/4.4-Video-Mode-Troubleshooting">tables of games by resolution and frequency</a>. Each program's own log is <code>/opt/fliperos/logs/&lt;program&gt;.log</code>.</p>
+<h2 id="the-picture-is-there-but-wrong">The picture is there but wrong</h2>
+<p>Off-centre, too large or too small: <a href="#Monitors">Monitors</a>. Flickering menus: the 480i hacks in <a href="#Emulators">Emulators</a>.</p>
+<h2 id="asking-for-help">Asking for help</h2>
+<p>Open an <a href="https://github.com/juniorterin/fliperOS/issues">issue</a> with the output of the commands in <em>What the system sees</em>, your monitor, and how it is connected, converter included.</p>
 <h1 id="Install">Install</h1>
 <p>From the written media to the system on disk: writing the ISO, the boot menu, the video output test and the installation through <strong>FliperOS Setup</strong>.</p>
 <h2 id="writing-the-media">Writing the media</h2>
@@ -597,7 +1103,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <tr>
 <td>EDID progressive</td>
 <td><code>drm.edid_firmware=edid/generic_15_super_resp.bin video=e</code></td>
-<td>Switchres EDID, all outputs forced</td>
+<td>Switchres EDID, all outputs forced. For DisplayPort or HDMI through a <a href="#Video-cards">converter</a></td>
 </tr>
 <tr>
 <td>EDID interlaced</td>
@@ -608,8 +1114,9 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </table>
 <p><strong>Intel HD:</strong> the boot menu is drawn at 31 kHz and the card makes no low clocks, so do the whole installation on a monitor at a standard frequency (an LCD or a PC monitor) and connect the CRT only afterwards, with the cabinet powered off. See <a href="#Video-cards">Video cards</a>.</p>
 <p>The <code>S</code> at the end of the mode comes from the 15 kHz patch: it uses the kernel's fixed table of low-dotclock modes (<code>drm_modes_low_dotclock.c</code>), and <code>i</code> means interlaced. Every entry carries <code>quiet splash consoleblank=0</code> and <code>radeon</code> on SI/CIK cards.</p>
-<p><strong>30-second timer.</strong> With no key pressed, the <strong>15 kHz</strong> entry boots, which is the safe one for a cabinet: an LCD receiving 15 kHz only shows "out of range", but 31 kHz on a 15 kHz-only tube can damage it.</p>
-<p>The menu itself <strong>doesn't show on a 15 kHz CRT</strong> — it is drawn in the firmware's text mode (~31 kHz), before the kernel. GroovyArcade is the same. To choose another entry on a 15 kHz-only cabinet, connect an LCD temporarily; with the CRT, wait the 10 s (any key stops the countdown). The first readable thing on the tube is the splash, already in the boot mode.</p>
+<p><strong>10-second timer.</strong> With no key pressed, the <strong>15 kHz</strong> entry boots, which is the safe one for a cabinet: an LCD receiving 15 kHz only shows "out of range", but 31 kHz on a 15 kHz-only tube can damage it.</p>
+<p>The menu itself <strong>doesn't show on a 15 kHz CRT</strong> — it is drawn in the firmware's text mode (~31 kHz), before the kernel. GroovyArcade is the same. To choose another entry on a 15 kHz-only cabinet, connect an LCD temporarily: press a key to stop the countdown, highlight the entry without pressing Enter, move the cable to the CRT, and only then press Enter. With the CRT alone, wait the 10 s. The first readable thing on the tube is the splash, already in the boot mode.</p>
+<p>No picture at all? See <a href="#Black-screen">Black screen</a>.</p>
 <h2 id="output-test-and-testing-results">Output test and <em>Testing Results</em></h2>
 <p>Ported from <code>gatools</code> (<code>video/video.sh</code>): as soon as the media boots, <code>fliperos-setup</code>:</p>
 <ol>
@@ -28663,8 +29170,101 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </tr>
 </tbody>
 </table>
-<p>The "Everything" tier follows the <em>Moderate</em> level of the <a href="https://pcsx2.net/docs/setup/requirements">PCSX2 requirements</a>, the heaviest emulator in the ISO; the stronger GPU PCSX2 asks for at that level is for upscaled resolution, which doesn't exist on a CRT. Cards without analog output (AMD after GCN 1.0, recent NVIDIA) need a DisplayPort/HDMI to VGA converter.</p>
+<p>The "Everything" tier follows the <em>Moderate</em> level of the <a href="https://pcsx2.net/docs/setup/requirements">PCSX2 requirements</a>, the heaviest emulator in the ISO; the stronger GPU PCSX2 asks for at that level is for upscaled resolution, which doesn't exist on a CRT. Cards without analog output (AMD RX and newer, recent NVIDIA) need a converter: see <a href="#Video-cards">Converters</a>.</p>
+<p><strong>The CPU's speed decides more than its cores.</strong> For arcade games a faster clock is what lets MAME run heavier games. GroovyArcade notes that above 8 cores MAME generally gains nothing.</p>
 <p><strong>Checking the machine:</strong> Setup &gt; System &gt; Latency shows the CPU, cores, clock, instruction level, memory, GPU and analog outputs, and <strong>Check this computer</strong> compares them with the Low latency mode minimum (<code>lib/hardware.sh</code>: x86-64-v3, 4 threads, 3.0 GHz, 4 GB). Choosing Low latency on a machine below that asks for confirmation.</p>
+<h3 id="small-machines">Small machines</h3>
+<p>A cabinet doesn't need a tower. GroovyArcade <a href="https://gitlab.com/groovyarcade/support/-/wikis/2-Pre-Requisites-and-Installation/2.2-Hardware-Examples">benchmarked these</a> with GroovyMAME, listed from fastest to slowest; its page has the results, photos and manuals. None has been tried on FliperOS. Check that the outputs suit your monitor: many of them have DisplayPort or a bridged VGA (<a href="#Video-cards">Video cards</a>).</p>
+<table>
+<thead>
+<tr>
+<th>Machine</th>
+<th>CPU</th>
+<th>Graphics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mini-ITX, ASRock B550M-ITX/ac</td>
+<td>Ryzen 5 3600XT</td>
+<td>Radeon HD 6450/7450/8450, R5 230</td>
+</tr>
+<tr>
+<td>Mini-ITX, ASRock H110M-DVS</td>
+<td>Core i3-7350K</td>
+<td>Radeon HD 6450/7450/8450, R5 230</td>
+</tr>
+<tr>
+<td>Mini-ITX, ASRock H110M-DVS</td>
+<td>Core i3-6100</td>
+<td>Radeon HD 6450/7450/8450, R5 230</td>
+</tr>
+<tr>
+<td>Mini-ITX, Gigabyte B450 I AORUS PRO WIFI</td>
+<td>Ryzen 5 2400G</td>
+<td>Vega (Raven Ridge)</td>
+</tr>
+<tr>
+<td>Thin client HP Elite t655</td>
+<td>Ryzen Embedded R2314</td>
+<td>Radeon</td>
+</tr>
+<tr>
+<td>Thin client HP t640</td>
+<td>Ryzen R1505G</td>
+<td>Vega 3</td>
+</tr>
+<tr>
+<td>Mini-ITX, Biostar A10N-8800E</td>
+<td>FX-8800P</td>
+<td>R7 (Wani)</td>
+</tr>
+<tr>
+<td>Thin client HP t730</td>
+<td>RX-427BB</td>
+<td>R7</td>
+</tr>
+<tr>
+<td>Advantech AIMB-224</td>
+<td>R-272F</td>
+<td>HD 7520G (Trinity)</td>
+</tr>
+<tr>
+<td>Fujitsu D3313-S63</td>
+<td>GX-424CC</td>
+<td>R4/R5 (Mullins)</td>
+</tr>
+<tr>
+<td>Thin client Fujitsu Futro S930</td>
+<td>GX-424CC</td>
+<td>R4/R5 (Mullins)</td>
+</tr>
+<tr>
+<td>Thin client Fujitsu Futro S920</td>
+<td>GX-222GC</td>
+<td>R4/R5 (Mullins)</td>
+</tr>
+<tr>
+<td>Thin client Dell Wyse 7020</td>
+<td>GX-420CA</td>
+<td>HD 8400E (Kabini)</td>
+</tr>
+<tr>
+<td>Thin client Igel M340C</td>
+<td>GX-424CC</td>
+<td>R4/R5 (Mullins)</td>
+</tr>
+<tr>
+<td>Thin client HP t610</td>
+<td>G-T56N</td>
+<td>HD 6320 (Wrestler)</td>
+</tr>
+</tbody>
+</table>
+<p>To benchmark your own, GroovyArcade's <a href="https://gitlab.com/groovyarcade/tools/mamebench/">mamebench</a> runs a list of games and reports the speed and the frame delay each one reached. It is written for GroovyArcade's folders, though <code>-m</code> and <code>-r</code> set the GroovyMAME program and the ROM folder. It hasn't been tried on FliperOS.</p>
+<h3 id="network">Network</h3>
+<p>Use a cable if the cabinet is near the router: the live screen of the web panel with sound needs it. For Wi-Fi, GroovyArcade recommends Atheros chipsets on Linux, and 802.11n is enough for updates and remote work.</p>
+<p>The test cabinet uses an Atheros AR9271. Of the TP-Link TL-WN722N, only <strong>version 1</strong> has an Atheros chip.</p>
 <h2 id="measuring">Measuring</h2>
 <p>The only reliable comparison is measuring, on the same cabinet, the same game and the same emulator version. Film the button and the screen together with a phone in 240 fps slow motion (~4 ms per video frame), 20 to 30 presses per configuration, and count the video frames between the button going down and the picture reacting.</p>
 <h1 id="Multiple-Monitors">Multiple monitors</h1>
@@ -28682,8 +29282,8 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 - Monitor 1 already chosen by the output test (boot menu or Setup &gt; Video Setup).</p>
 <h3 id="digital-outputs-with-an-active-converter-experimental">Digital outputs with an active converter (experimental)</h3>
 <p>An HDMI, DVI-D or DisplayPort output can drive a CRT through an <strong>active</strong> converter to VGA (one with a DAC chip inside; passive adapters don't work). The Setup lists these outputs as <em>digital, active VGA converter, experimental</em>. This is <strong>not tested yet</strong> on a cabinet:
-- A digital link can't go below about 25 MHz of pixel clock, so the extra monitor boots in the <strong>super resolution</strong> of the monitor's preset (<code>video=HDMI-A-1:1280x480iSe</code> at 15 kHz: the same lines and frequencies, with thinner pixels), and the Xorg configuration doesn't give it monitor 1's low-dotclock modeline.
-- Many cheap converters refuse non-standard modes, interlaced modes or low frequencies. If the monitor stays black, try another converter.
+- An HDMI or DVI-D link can't go below about 25 MHz of pixel clock. GroovyArcade reports no such limit on DisplayPort, but the Setup treats every digital output the same: the extra monitor boots in the <strong>super resolution</strong> of the monitor's preset (<code>video=HDMI-A-1:1280x480iSe</code> at 15 kHz: the same lines and frequencies, with thinner pixels), and the Xorg configuration doesn't give it monitor 1's low-dotclock modeline.
+- Many cheap converters refuse non-standard modes, interlaced modes or low frequencies. If the monitor stays black, try another converter; see <a href="#Video-cards">Converters</a> for the ones the community recommends.
 - GroovyMAME's Switchres makes each game's mode for every screen with the card's own limits; on an AMD card these can go below the converter's minimum, and that screen goes black. Flycast's 3-screen games only use analog outputs for now.</p>
 <h3 id="a-second-video-card-experimental">A second video card (experimental)</h3>
 <p>The extra monitors don't have to be on monitor 1's card: they can be on <strong>another video card</strong>, or on several. If one card doesn't have enough analog outputs, add another; the only limit is how many free PCI/PCIe slots the computer has.</p>
@@ -29455,5 +30055,6 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li><code>os</code> <code>59670f3d476331e7c18bc3a03fea6e7860fa1b7a</code> — boot menu, <code>.bash_profile</code>, LXDE, AntiMicroX, QJoyPad</li>
 <li><code>packages</code> <code>608bd30c3799c6a14c0b21823c53919c40ab8e9a</code> — <code>linux-15khz</code> kernel, <code>switchres</code> (<code>rebuild_edids</code>, <code>geometry</code>), <code>skyscraper</code></li>
 </ul>
+<p>Hardware reports and video troubleshooting: the <a href="https://gitlab.com/groovyarcade/support/-/wikis/home">GroovyArcade wiki</a> <code>224d2e314435a85c02d6e3050229e3e39552ef6a</code>, and its <a href="https://gitlab.com/groovyarcade/tools/mamebench/">mamebench</a>.</p>
 <p>Latency option names checked against current code: <a href="https://github.com/antonioginer/GroovyMAME">GroovyMAME</a> <code>953db38</code> (<code>src/emu/emuopts.h</code>: <code>lowlatency</code>, <code>autoframedelay</code>, <code>framedelay</code>) and <a href="https://github.com/libretro/RetroArch">RetroArch</a> <code>6fe0b87</code> (<code>settings/settings_def_frame_delay.h</code>, <code>settings_def_video_sync.h</code>, <code>configuration.c</code>).</p>
 <p>Also: <a href="https://github.com/antonioginer/switchres">Switchres</a> (<code>geometry.py</code>, <code>edid.cpp</code>, <code>switchres.ini</code>), <a href="https://github.com/D0023R/linux_kernel_15khz">D0023R/linux_kernel_15khz</a> <code>ece6ef15eca9480eaf75870a44764f47118e9cfe</code>, <a href="https://github.com/charmbracelet/gum">Gum</a> v2.0.2 and <a href="https://draculatheme.com">Dracula</a> (<a href="https://github.com/dracula/gtk">dracula/gtk</a> <code>71640b9456110f3bac2130d0b387a3154a9fb4d2</code>, <a href="https://github.com/dracula/zsh">dracula/zsh</a> <code>a3e27d47ea2ed1e3b435f44aa71caf71d3219af6</code>, <a href="https://github.com/ohmyzsh/ohmyzsh">Oh My Zsh</a> <code>4d4cfc287e9d887b81242c0e431b5f49f9cec5c1</code>; the RGUI theme is <code>RGUI_THEME_DRACULA</code> in RetroArch's <code>menu/menu_defines.h</code>; GroovyMAME's UI color options are in <code>src/frontend/mame/ui/moptions.cpp</code>).</p></main><footer>Generated from README.md and docs/wiki by tools/render-docs.py.</footer></html>

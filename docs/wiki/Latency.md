@@ -39,9 +39,41 @@ FliperOS applies the tweaks GA already makes and adds others, in two modes chose
 | **Low latency** | AVX2 (x86-64-v3: 4th-generation Intel Core, AMD Ryzen or newer), 4 threads, 3.0 GHz or more | 4 GB (8 GB better) | same |
 | **Everything** (PS2, Model 3, Dreamcast) | 4 physical cores with AVX2 and single-thread PassMark ≥ 2000 (Core i7-7700, Ryzen 5 3600 or newer) | 16 GB, SSD | same: at CRT resolutions even the R7 240 exceeds PCSX2's minimum (G3D ≥ 600) |
 
-The "Everything" tier follows the *Moderate* level of the [PCSX2 requirements](https://pcsx2.net/docs/setup/requirements), the heaviest emulator in the ISO; the stronger GPU PCSX2 asks for at that level is for upscaled resolution, which doesn't exist on a CRT. Cards without analog output (AMD after GCN 1.0, recent NVIDIA) need a DisplayPort/HDMI to VGA converter.
+The "Everything" tier follows the *Moderate* level of the [PCSX2 requirements](https://pcsx2.net/docs/setup/requirements), the heaviest emulator in the ISO; the stronger GPU PCSX2 asks for at that level is for upscaled resolution, which doesn't exist on a CRT. Cards without analog output (AMD RX and newer, recent NVIDIA) need a converter: see [Converters](Video-cards.md#converters).
+
+**The CPU's speed decides more than its cores.** For arcade games a faster clock is what lets MAME run heavier games. GroovyArcade notes that above 8 cores MAME generally gains nothing.
 
 **Checking the machine:** Setup > System > Latency shows the CPU, cores, clock, instruction level, memory, GPU and analog outputs, and **Check this computer** compares them with the Low latency mode minimum (`lib/hardware.sh`: x86-64-v3, 4 threads, 3.0 GHz, 4 GB). Choosing Low latency on a machine below that asks for confirmation.
+
+### Small machines
+
+A cabinet doesn't need a tower. GroovyArcade [benchmarked these](https://gitlab.com/groovyarcade/support/-/wikis/2-Pre-Requisites-and-Installation/2.2-Hardware-Examples) with GroovyMAME, listed from fastest to slowest; its page has the results, photos and manuals. None has been tried on FliperOS. Check that the outputs suit your monitor: many of them have DisplayPort or a bridged VGA ([Video cards](Video-cards.md#amdati)).
+
+| Machine | CPU | Graphics |
+| --- | --- | --- |
+| Mini-ITX, ASRock B550M-ITX/ac | Ryzen 5 3600XT | Radeon HD 6450/7450/8450, R5 230 |
+| Mini-ITX, ASRock H110M-DVS | Core i3-7350K | Radeon HD 6450/7450/8450, R5 230 |
+| Mini-ITX, ASRock H110M-DVS | Core i3-6100 | Radeon HD 6450/7450/8450, R5 230 |
+| Mini-ITX, Gigabyte B450 I AORUS PRO WIFI | Ryzen 5 2400G | Vega (Raven Ridge) |
+| Thin client HP Elite t655 | Ryzen Embedded R2314 | Radeon |
+| Thin client HP t640 | Ryzen R1505G | Vega 3 |
+| Mini-ITX, Biostar A10N-8800E | FX-8800P | R7 (Wani) |
+| Thin client HP t730 | RX-427BB | R7 |
+| Advantech AIMB-224 | R-272F | HD 7520G (Trinity) |
+| Fujitsu D3313-S63 | GX-424CC | R4/R5 (Mullins) |
+| Thin client Fujitsu Futro S930 | GX-424CC | R4/R5 (Mullins) |
+| Thin client Fujitsu Futro S920 | GX-222GC | R4/R5 (Mullins) |
+| Thin client Dell Wyse 7020 | GX-420CA | HD 8400E (Kabini) |
+| Thin client Igel M340C | GX-424CC | R4/R5 (Mullins) |
+| Thin client HP t610 | G-T56N | HD 6320 (Wrestler) |
+
+To benchmark your own, GroovyArcade's [mamebench](https://gitlab.com/groovyarcade/tools/mamebench/) runs a list of games and reports the speed and the frame delay each one reached. It is written for GroovyArcade's folders, though `-m` and `-r` set the GroovyMAME program and the ROM folder. It hasn't been tried on FliperOS.
+
+### Network
+
+Use a cable if the cabinet is near the router: the live screen of the web panel with sound needs it. For Wi-Fi, GroovyArcade recommends Atheros chipsets on Linux, and 802.11n is enough for updates and remote work.
+
+The test cabinet uses an Atheros AR9271. Of the TP-Link TL-WN722N, only **version 1** has an Atheros chip.
 
 ## Measuring
 

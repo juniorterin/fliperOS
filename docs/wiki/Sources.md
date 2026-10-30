@@ -6,6 +6,8 @@ Current GroovyArcade code, on the `groovyarcade` group's GitLab:
 - `os` `59670f3d476331e7c18bc3a03fea6e7860fa1b7a` — boot menu, `.bash_profile`, LXDE, AntiMicroX, QJoyPad
 - `packages` `608bd30c3799c6a14c0b21823c53919c40ab8e9a` — `linux-15khz` kernel, `switchres` (`rebuild_edids`, `geometry`), `skyscraper`
 
+Hardware reports and video troubleshooting: the [GroovyArcade wiki](https://gitlab.com/groovyarcade/support/-/wikis/home) `224d2e314435a85c02d6e3050229e3e39552ef6a`, and its [mamebench](https://gitlab.com/groovyarcade/tools/mamebench/).
+
 Latency option names checked against current code: [GroovyMAME](https://github.com/antonioginer/GroovyMAME) `953db38` (`src/emu/emuopts.h`: `lowlatency`, `autoframedelay`, `framedelay`) and [RetroArch](https://github.com/libretro/RetroArch) `6fe0b87` (`settings/settings_def_frame_delay.h`, `settings_def_video_sync.h`, `configuration.c`).
 
 Also: [Switchres](https://github.com/antonioginer/switchres) (`geometry.py`, `edid.cpp`, `switchres.ini`), [D0023R/linux_kernel_15khz](https://github.com/D0023R/linux_kernel_15khz) `ece6ef15eca9480eaf75870a44764f47118e9cfe`, [Gum](https://github.com/charmbracelet/gum) v2.0.2 and [Dracula](https://draculatheme.com) ([dracula/gtk](https://github.com/dracula/gtk) `71640b9456110f3bac2130d0b387a3154a9fb4d2`, [dracula/zsh](https://github.com/dracula/zsh) `a3e27d47ea2ed1e3b435f44aa71caf71d3219af6`, [Oh My Zsh](https://github.com/ohmyzsh/ohmyzsh) `4d4cfc287e9d887b81242c0e431b5f49f9cec5c1`; the RGUI theme is `RGUI_THEME_DRACULA` in RetroArch's `menu/menu_defines.h`; GroovyMAME's UI color options are in `src/frontend/mame/ui/moptions.cpp`).

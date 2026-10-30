@@ -98,15 +98,27 @@ export function Requirements() {
             <div>
               <h3 className="font-semibold text-fg">{r.adapter.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted">{r.adapter.text}</p>
-              <a
-                href={LINKS.dpVgaAdapter}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
-              >
-                {r.adapter.cta}
-                <ArrowUpRight className="size-4" aria-hidden="true" />
-              </a>
+              <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+                <a
+                  href={LINKS.dpVgaAdapter}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
+                >
+                  {r.adapter.cta}
+                  <ArrowUpRight className="size-4" aria-hidden="true" />
+                </a>
+                <a
+                  href={`${LINKS.docs}/Video-cards#converters`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
+                >
+                  {r.adapter.docs}
+                  <ArrowUpRight className="size-4" aria-hidden="true" />
+                  <span className="sr-only">{t.a11y.external}</span>
+                </a>
+              </div>
             </div>
           </article>
         </Reveal>
