@@ -1380,6 +1380,7 @@ class Frontend:
                 for kind in ("snap", "box", "marquee", "logo", "preview"):
                     self.media.pop(("path", kind, folder, name), None)
                 self.media.pop(("video", folder, name), None)
+                self.media.pop(("desc", folder, name), None)   # a sinopse (feview.game_description)
                 self.ahead_at = None
             if self.flush:
                 # Um scrape trouxe arquivos: os caminhos e as imagens guardados

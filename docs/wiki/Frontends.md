@@ -25,7 +25,9 @@ It shows the same thing as the [Web panel](Web-panel.md), from the same code:
 
 It pauses while a game is open. A game is tried once every 30 days (what a source does not have stays missing): `~/.local/share/fliperos/scrape-state.json`. Tab > Frontend options shows a progress bar, how many games are left and the torrents' progress.
 
-Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control (a pistol for light-gun games, which Arcadeflow has no icon for) with the buttons.
+Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in one row: the genre, the number of players, the control (a pistol for light-gun games, which Arcadeflow has no icon for) and the buttons. They shrink a little when the row doesn't fit.
+
+Below them, out of commercial mode, the list shows the game's synopsis (the start of its arcade-history text, saved by the scrape in `~/media/info`), scrolling slowly upwards with a transparent fade at the top and the bottom. It starts two seconds after the cursor stops on the game, and goes around from the end to the start. Console games have no synopsis, and with the monitor upright there is no room for it. In commercial mode the coin indicator takes its place.
 
 **Controls.** The first time the frontend opens, it starts in **Frontend controls** (below), so you can say what each button does; back leaves it. From then on, a guide shows the controls each time the frontend opens; any button closes it.
 

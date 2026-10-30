@@ -732,37 +732,9 @@ def draw_list(fe, ui, now):
         y += 12
     W.text(ui, fit(facts_line(game), pw), T.YELLOW, px, y)
     y += 12
-    # Os icones, sem texto, em duas fileiras: o genero e os jogadores (o
-    # boneco e o numero); o controle e os botoes. Sem o icone, o texto
-    # pequeno no lugar dele.
-    rows = icon_rows(fe, game, 20, icons_only=True)
-    genre = [r for r in rows if r[2] == T.CYAN]
-    control = [r for r in rows if r[2] == T.PINK]
-    buttons = [(buttons_icon(fe, game, 13, T.YELLOW), t, c) for _, t, c in rows if c == T.YELLOW]
-    players = (game.get("Players") or "").strip()
-    px_next = px
-    for line in (genre, control + buttons):
-        x = px_next if T.VERTICAL else px
-        for img, text, color in line:
-            if img:
-                if x + img.get_width() > SX + SW:
-                    break
-                ui.blit(img, (x, y + (20 - img.get_height()) // 2))
-                x += img.get_width() + 8
-            else:
-                label = text.upper()
-                if x + tiny.width(label) > SX + SW:
-                    break
-                x += tiny.text(ui, label, color, x, y + 8) + 8
-        if line is genre and players.isdigit() and x + 30 <= SX + SW:
-            ui.blit(players_icon(fe, T.GREEN), (x, y + 2))
-            W.text(ui, players, T.GREEN, x + 19, y + 6)
-        if T.VERTICAL and line is genre:
-            # Em pe, tudo numa fileira so: a lista vem logo embaixo.
-            px_next = x + (38 if players.isdigit() else 0)
-            continue
-        if line or (line is genre and players.isdigit()):
-            y += 24
+    # Os icones numa fileira so: o genero, os jogadores, o controle e os botoes.
+    strip = icon_strip(fe, ui, game, px, y, SX + SW)
+    y += strip + 4 if strip else 0
     if T.VERTICAL:
         # Em pe, o indicador do modo comercial embaixo, a esquerda.
         if fe.commercial:
@@ -777,13 +749,165 @@ def draw_list(fe, ui, now):
     x = px
     for text, color in chips:
         w = tiny.width(text) + 8
-        W.block(ui, (x, y + 2, w, 10), T.BG_DEEP, None)
-        pygame.draw.rect(ui, T.LINE, (x, y + 2, w, 10), 1)
-        tiny.text(ui, text, color, x + 4, y + 5)
+        W.block(ui, (x, y, w, 10), T.BG_DEEP, None)
+        pygame.draw.rect(ui, T.LINE, (x, y, w, 10), 1)
+        tiny.text(ui, text, color, x + 4, y + 3)
         x += w + 4
-    # O modo comercial: o indicador debaixo dos icones dos comandos.
+    if chips:
+        y += 14
+    # O modo comercial: o indicador debaixo dos icones dos comandos; fora
+    # dele, a sinopse do jogo rolando.
     if fe.commercial:
-        coin_box(fe, ui, px, min(y + (16 if chips else 4), HH - COIN_H - 6), now)
+        coin_box(fe, ui, px, min(y + 2, HH - COIN_H - 6), now)
+    else:
+        draw_synopsis(fe, ui, game, (px, y, pw, HH - 6 - y), now)
+
+
+def icon_strip(fe, ui, game, x, y, right):
+    """Os icones do jogo numa fileira so (o modo lista): o genero, os
+    jogadores (o boneco e o numero), o controle e os botoes; sem o icone, o
+    texto pequeno no lugar dele. Na maior altura em que todos cabem ate right
+    (16, 13 ou 10; na menor, o que nao cabe fica de fora). Devolve a altura
+    (0 sem nenhum)."""
+    players = (game.get("Players") or "").strip()
+
+    def width(item):
+        img, text, color = item
+        if color == T.GREEN:
+            return img.get_width() + 2 + W.width(text)
+        return img.get_width() if img else tiny.width(text)
+    for h in (16, 13, 10):
+        items = []
+        for img, text, color in icon_rows(fe, game, h, icons_only=True):
+            if color == T.YELLOW:
+                # O dos botoes e largo: um pouco mais baixo que os outros.
+                img = buttons_icon(fe, game, round(h * 0.75), T.YELLOW)
+            items.append((img, text.upper(), color))
+            if color == T.CYAN and players.isdigit():
+                items.append((players_icon(fe, T.GREEN, h - 2), players, T.GREEN))
+        if players.isdigit() and not any(c == T.GREEN for _, _, c in items):
+            items.insert(0, (players_icon(fe, T.GREEN, h - 2), players, T.GREEN))
+        if not items:
+            return 0
+        if sum(width(i) for i in items) + 6 * (len(items) - 1) <= right - x or h == 10:
+            break
+    for img, text, color in items:
+        if x + width((img, text, color)) > right:
+            break
+        if color == T.GREEN:
+            ui.blit(img, (x, y + (h - img.get_height()) // 2))
+            W.text(ui, text, T.GREEN, x + img.get_width() + 2, y + (h - 8) // 2)
+        elif img:
+            ui.blit(img, (x, y + (h - img.get_height()) // 2))
+        else:
+            tiny.text(ui, text, color, x, y + (h - 5) // 2)
+        x += width((img, text, color)) + 6
+    return h
+
+
+SYNOPSIS_FADE, SYNOPSIS_SPEED, SYNOPSIS_WAIT = 10, 6.0, 2.0  # pixels, pixels por segundo, segundos
+
+
+def game_description(fe, game):
+    """A sinopse do jogo: o comeco da historia do arcade-history, do que o
+    scrape ja salvou em ~/media/info (sem rede); o clone sem a sua usa a do
+    pai. Os jogos de console nao tem: vazia."""
+    system = game["_system"]
+    key = ("desc", system["key"], game["Name"])
+    if key not in fe.media:
+        text = ""
+        for name in (game["Name"], game.get("CloneOf")) if system.get("arcade") else ():
+            path = fe.lib.info.path(system["key"], name, "en") if name else None
+            info = ((fe.lib.info.load(path) if path else None) or {}).get("info")
+            if info:
+                text = fe.fd.web.history_parts(info.get("history"))[0]
+                if text:
+                    break
+        return remember(fe, key, text)
+    return fe.media[key]
+
+
+TINY_SWAP = str.maketrans({'"': "'", "`": "'", ";": ",", "[": "(", "]": ")", "{": "(", "}": ")"})
+
+
+def wrap_tiny(text, w):
+    """O texto em linhas da fonte pequena de ate w pixels. Sem os acentos e
+    com os sinais que ela nao tem trocados por parecidos (senao saem "?")."""
+    import unicodedata
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().translate(TINY_SWAP)
+    lines = []
+    for para in text.split("\n"):
+        line = ""
+        for word in para.split():
+            while tiny.width(word) > w:
+                cut = max(1, w // 4)
+                if line:
+                    lines.append(line)
+                    line = ""
+                lines.append(word[:cut])
+                word = word[cut:]
+            joined = (line + " " + word).strip()
+            if tiny.width(joined) <= w:
+                line = joined
+            else:
+                lines.append(line)
+                line = word
+        lines.append(line)
+    while lines and not lines[-1]:
+        lines.pop()
+    return lines
+
+
+def draw_synopsis(fe, ui, game, box, now):
+    """A sinopse debaixo das informacoes do modo lista, subindo devagar (do
+    fim volta ao comeco, sem emenda), com um degrade transparente em cima e
+    embaixo. Comeca SYNOPSIS_WAIT segundos depois de o cursor parar no jogo;
+    a que cabe inteira fica parada."""
+    x, y, w, h = box
+    text = game_description(fe, game) if h >= 24 else ""
+    if not text:
+        return
+    key = ("desc-img", text, w)
+    img = fe.media.get(key)
+    if img is None:
+        lines = wrap_tiny(text, w - 2)
+        img = pygame.Surface((w, max(1, len(lines) * 7)), pygame.SRCALPHA)
+        for i, line in enumerate(lines):
+            tiny.text(img, line, T.FG, 0, i * 7)
+        remember(fe, key, img)
+    if getattr(fe, "synopsis_game", None) is not game:
+        fe.synopsis_game, fe.synopsis_at = game, now
+    view = pygame.Surface((w, h), pygame.SRCALPHA)
+    if img.get_height() <= h:
+        view.blit(img, (0, 0))
+    else:
+        period = img.get_height() + h // 2
+        moved = int(max(0.0, now - fe.synopsis_at - SYNOPSIS_WAIT) * SYNOPSIS_SPEED)
+        off = moved % period
+        view.blit(img, (0, -off))
+        view.blit(img, (0, period - off))
+        # O degrade de cima aparece aos poucos, com o texto ja subindo: parada,
+        # a primeira linha fica inteira.
+        top = min(SYNOPSIS_FADE, moved)
+        view.blit(fade_mask(w, h, top), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    ui.blit(view, (x, y))
+
+
+FADE_MASKS = {}
+
+
+def fade_mask(w, h, top=SYNOPSIS_FADE):
+    """A mascara do degrade: transparente nas bordas de cima (top pixels) e
+    de baixo (SYNOPSIS_FADE pixels), opaca no meio."""
+    if (w, h, top) not in FADE_MASKS:
+        mask = pygame.Surface((w, h), pygame.SRCALPHA)
+        mask.fill((255, 255, 255, 255))
+        for i in range(SYNOPSIS_FADE):
+            mask.fill((255, 255, 255, round(255 * i / SYNOPSIS_FADE)), (0, h - 1 - i, w, 1))
+        for i in range(top):
+            mask.fill((255, 255, 255, round(255 * i / top)), (0, i, w, 1))
+        FADE_MASKS[(w, h, top)] = mask
+    return FADE_MASKS[(w, h, top)]
 
 
 def looking(ui, x, y, w=None):

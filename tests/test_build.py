@@ -5056,6 +5056,53 @@ class FrontendDataTests(unittest.TestCase):
         fe.panel_layout = 'x'
         self.assertEqual(feview.panel_layout(fe), '6')
 
+    def test_list_mode_icons_in_one_row_and_the_synopsis(self):
+        # O modo lista: os icones numa fileira so e, fora do modo comercial, a
+        # sinopse rolando (o que o scrape salvou em ~/media/info, sem rede).
+        view = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
+        draw = view.split('def draw_list(')[1].split('\ndef ')[0]
+        self.assertIn('strip = icon_strip(fe, ui, game, px, y, SX + SW)', draw)
+        self.assertIn('draw_synopsis(fe, ui, game, (px, y, pw, HH - 6 - y), now)', draw)
+        self.assertLess(draw.index('if fe.commercial:\n        coin_box'), draw.index('draw_synopsis('))
+        src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('self.media.pop(("desc", folder, name), None)', src)
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        import json
+        import types
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        import feview
+        lines = feview.wrap_tiny('Ação "rápida"; [x]\n\nsegundo paragrafo com palavras', 40)
+        self.assertEqual(lines[0], "Acao")
+        self.assertIn("'rapida', (x)", ' '.join(lines))
+        self.assertIn('', lines)
+        self.assertTrue(all(feview.tiny.width(l) <= 40 for l in lines))
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / 'mame').mkdir()
+            hist = 'Street Fighter II (c) 1991 Capcom.\n\nThe World Warrior.\n\n- TECHNICAL -\n\nCPS-1.\n'
+            (Path(tmp) / 'mame/sf2.en.json').write_text(json.dumps({'saved': 1, 'info': {'history': hist}}))
+            system = {'key': 'mame', 'arcade': True}
+            fe = types.SimpleNamespace(media={}, fd=self.fd, lib=types.SimpleNamespace(
+                info=self.fd.web.GameInfo(root=tmp)))
+            self.assertEqual(feview.game_description(fe, {'Name': 'sf2', '_system': system}), 'The World Warrior.')
+            # O clone sem a sua usa a do pai; o console nao tem.
+            self.assertEqual(feview.game_description(fe, {'Name': 'sf2ua', 'CloneOf': 'sf2', '_system': system}),
+                             'The World Warrior.')
+            self.assertEqual(feview.game_description(fe, {'Name': 'mario', '_system': {'key': 'nes'}}), '')
+            ui = pygame.Surface((320, 240), pygame.SRCALPHA)
+            game = {'Name': 'sf2', '_system': system, 'Players': '2', 'Category': 'Fighter / Versus'}
+            for t in (0.0, 30.0):
+                feview.draw_synopsis(fe, ui, game, (200, 160, 100, 30), t)
+            # Cabe na altura maior; num lugar estreito, encolhe.
+            self.assertEqual(feview.icon_strip(fe, ui, game, 200, 140, 304), 16)
+            self.assertLess(feview.icon_strip(fe, ui, game, 200, 140, 236), 16)
+            self.assertEqual(feview.icon_strip(fe, ui, {'Name': 'x', '_system': system}, 200, 140, 304), 0)
+        mask = feview.fade_mask(10, 30, 0)
+        self.assertEqual((mask.get_at((0, 0)).a, mask.get_at((0, 29)).a, mask.get_at((0, 15)).a), (255, 0, 255))
+
     def test_romlists_from_the_setup_and_the_session(self):
         setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
         self.assertIn('FRONTENDS_RESYNC_FULL=1 frontends_lists', setup)
