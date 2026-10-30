@@ -1546,18 +1546,96 @@ def draw_ribbon(fe, ui, now):
         tile_frame(ui, (x, y, size, size), on, now)
         pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, y, size, size), 2 if on else 1)
         name = system_icon(c)
+        alpha = round(255 - 145 * min(1.0, dist)) if dist > 0.05 else None
+        logo = system_logo(c["name"], size - 8, round(size * 0.34))
+        if logo is not None:
+            # O logotipo escrito do sistema em cima e o icone do emulador no
+            # canto de baixo, a direita, um pouco para dentro.
+            parts = [(logo, (x + (size - logo.get_width()) // 2, y + round(size * 0.36) - logo.get_height() // 2))]
+            badge = T.icon(name, 1) if name else None
+            if badge is not None:
+                parts.append((badge, (x + size - badge.get_width() - 5, y + size - badge.get_height() - 5)))
+            for img, (bx, by) in parts:
+                if alpha is not None:
+                    img = img.copy()
+                    img.set_alpha(alpha)
+                ui.blit(img, (bx, by))
+            continue
         icon = T.icon(name, 2 if size >= 44 else 1) if name else None
         if icon is None:
             icon = W.big(c["name"][:1].upper(), 3 if size >= 44 else 2, W.MARQUEE)
-        if dist > 0.05:
+        if alpha is not None:
             icon = icon.copy()
-            icon.set_alpha(round(255 - 145 * min(1.0, dist)))
+            icon.set_alpha(alpha)
         blit_center(ui, icon, x, y, size, size)
     c = fe.cats[fe.cat % n]
     label = fit(c["name"], WW - 20)
     ui.blit(W.big(label, 1, W.LABEL), ((WW - W.width(label)) // 2, band_y + 80))
     count = len(fe.rows)
     tiny.centered(ui, "%d GAMES" % count, T.CYAN, WW // 2, band_y + 93)
+
+
+# O logotipo escrito de cada sistema (o do Arcadeflow, config/fliperos-syslogo)
+# para os azulejos da tira de romlists: feito uma vez por nome, numa thread, e
+# guardado em ~/.cache; sem o tema ou sem o sistema nele, o azulejo fica so com
+# o icone, como antes.
+SYSLOGO = os.environ.get("FLIPEROS_SYSLOGO", "/opt/fliperos/bin/fliperos-syslogo")
+SYSLOGO_CACHE = os.path.join(os.path.expanduser("~"), ".cache", "fliperos", "syslogo")
+SYSLOGO_HEIGHT = 48
+_logos = {}          # nome -> surface, None (sem logotipo) ou "..." (sendo feito)
+_fitted = {}         # (nome, largura, altura) -> surface no tamanho do azulejo
+
+
+def logo_file(name):
+    """O PNG do logotipo do sistema (branco-Dracula, SYSLOGO_HEIGHT de altura),
+    feito pelo fliperos-syslogo na primeira vez; None sem logotipo."""
+    import subprocess
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or "_"
+    path = os.path.join(SYSLOGO_CACHE, "%s-%d.png" % (safe, SYSLOGO_HEIGHT))
+    if os.path.isfile(path):
+        return path
+    try:
+        os.makedirs(SYSLOGO_CACHE, exist_ok=True)
+        r = subprocess.run([SYSLOGO, "png", name, path + ".tmp", str(SYSLOGO_HEIGHT), "f8f8f2"],
+                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0 or not os.path.isfile(path + ".tmp"):
+        return None
+    os.replace(path + ".tmp", path)
+    return path
+
+
+def system_logo(name, w, h):
+    """O logotipo do sistema dentro de w x h, ou None (ainda sendo feito, ou sem
+    logotipo)."""
+    got = _logos.get(name)
+    if got is None and name not in _logos:
+        _logos[name] = "..."
+
+        def work():
+            path = logo_file(name)
+            surf = None
+            if path:
+                try:
+                    surf = pygame.image.load(path)
+                except (pygame.error, OSError):
+                    surf = None
+            _logos[name] = surf
+        import threading
+        threading.Thread(target=work, daemon=True).start()
+        return None
+    if not isinstance(got, pygame.Surface):
+        return None
+    key = (name, w, h)
+    if key not in _fitted:
+        k = min(w / got.get_width(), h / got.get_height())
+        size = (max(1, round(got.get_width() * k)), max(1, round(got.get_height() * k)))
+        _fitted[key] = pygame.transform.smoothscale(got.convert_alpha() if pygame.display.get_surface() else got, size)
+        if len(_fitted) > 400:
+            _fitted.clear()
+    return _fitted[key]
 
 
 def system_icon(cat):

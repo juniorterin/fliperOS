@@ -4714,6 +4714,42 @@ class FrontendDataTests(unittest.TestCase):
             fm.PIXELCADE_TOOL = str(Path(tmp) / 'nenhum')
             fm.Frontend.marquee_logo(fe, 'Naomi', 'Atomiswave', 1)
 
+    def test_ribbon_tiles_get_the_system_logo_once(self):
+        # Os azulejos da tira de romlists: o logotipo escrito do sistema
+        # (fliperos-syslogo png NOME ARQUIVO 48 f8f8f2) e feito uma vez e fica em
+        # ~/.cache; sem logotipo (status 1), None e o azulejo fica com o icone.
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        try:
+            import feview
+        finally:
+            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
+        with tempfile.TemporaryDirectory() as tmp:
+            tool, seen = Path(tmp) / 'syslogo', Path(tmp) / 'seen'
+            tool.write_text('#!/bin/sh\necho "$@" >> %s\n[ "$2" = "Naomi 2" ] || exit 1\nprintf png > "$3"\n' % seen)
+            tool.chmod(0o755)
+            old = feview.SYSLOGO, feview.SYSLOGO_CACHE
+            feview.SYSLOGO, feview.SYSLOGO_CACHE = str(tool), str(Path(tmp) / 'cache')
+            try:
+                path = feview.logo_file('Naomi 2')
+                self.assertEqual(path, str(Path(tmp) / 'cache/Naomi_2-48.png'))
+                self.assertEqual(Path(path).read_bytes(), b'png')
+                self.assertEqual(feview.logo_file('Naomi 2'), path)
+                self.assertIsNone(feview.logo_file('Super Nintendo'))
+                self.assertEqual(seen.read_text().splitlines(),
+                                 ['png Naomi 2 %s.tmp 48 f8f8f2' % path,
+                                  'png Super Nintendo %s/cache/Super_Nintendo-48.png.tmp 48 f8f8f2' % tmp])
+            finally:
+                feview.SYSLOGO, feview.SYSLOGO_CACHE = old
+        src = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
+        self.assertIn('system_logo(c["name"], size - 8, round(size * 0.34))', src)
+        self.assertIn('x + size - badge.get_width() - 5, y + size - badge.get_height() - 5', src)
+
     def test_idle_frontend_starts_the_marquee_screensaver_and_a_press_stops_it(self):
         import types
         fm = self.frontend_module()
