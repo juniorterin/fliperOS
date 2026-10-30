@@ -623,25 +623,15 @@ def frame(fe, ui):
 
 
 def title_logo(ui, name):
-    """O logotipo escrito do sistema no topo, ao lado do nome da romlist: os dois
-    juntos no meio, com as faixas do mesmo tamanho dos dois lados (o letreiro do
-    W.frame, redesenhado). Sem logotipo, fica o do W.frame, so o nome."""
-    up = name.upper()
-    scale = 2 if W.width(up) * 2 <= 240 else 1
-    title = W.big(up, scale, W.MARQUEE)
-    room = T.SAFE_W - title.get_width() - 8 - 2 * 16      # um minimo de faixa de cada lado
-    if room < 20:
-        return
-    logo = system_logo(name, min(96, room), 16)
+    """O logotipo escrito do sistema no topo, no lugar do nome da romlist (que
+    o W.frame escreveu): no meio, com as faixas do mesmo tamanho dos dois lados.
+    Sem logotipo, fica o do W.frame, o nome."""
+    logo = system_logo(name, min(180, T.SAFE_W - 2 * 24), 18)
     if logo is None:
         return
-    group = logo.get_width() + 8 + title.get_width()
-    gx = (WW - group) // 2
+    gx = (WW - logo.get_width()) // 2
     ui.fill((0, 0, 0, 0), (0, 8, WW, 22))
-    ui.blit(logo, (gx, 10 + (16 - logo.get_height()) // 2))
-    tx, ty = gx + logo.get_width() + 8, 10 + (16 - title.get_height()) // 2
-    ui.blit(W.big(up, scale, (0x40, 0x20, 0x70)), (tx + scale, ty + scale))
-    ui.blit(title, (tx, ty))
+    ui.blit(logo, (gx, 9 + (18 - logo.get_height()) // 2))
     bar = gx - T.SAFE_X - 8
     if bar >= 8:
         for i, color in enumerate(W.RAINBOW):
