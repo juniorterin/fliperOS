@@ -56,7 +56,10 @@ apertado (ela pegava a soltura, e o botao ficava apertado no repouso).
 Attract-Mode Plus: no input_map do attract.cfg, o direcional, Select (botao
 1) e Back (botao 2) de cada jogador, e os atalhos padrao dele (Up+botao 1
 etc.) no jogador 1. Saem as entradas de joystick desses comandos e as de
-outro comando no mesmo botao; as de teclado e as outras ficam.
+outro comando no mesmo botao; as de teclado e as outras ficam. O teclado
+padrao do Attract-Mode (setas, Return, Esc, Tab e os atalhos) volta onde
+falta: ele so o poe sozinho com o comando sem entrada, e o joystick gravado
+antes do primeiro save dele o deixava sem teclado.
 
 OpenBOR: as teclas de cada jogador (o codigo do joystick do OpenBOR:
 600 + 1 + aparelho * 64 + botao; os eixos e os hats depois dos botoes) no
@@ -609,6 +612,15 @@ AM_COMBOS = [('prev_letter', ('up', 'b1')), ('next_letter', ('down', 'b1')), ('f
              ('next_filter', ('right', 'b1')), ('configure', ('up', 'b2')), ('edit_game', ('down', 'b2')),
              ('add_favourite', ('b1', 'b2'))]
 AM_SECTION = 'input_map'
+# O teclado que o Attract-Mode poe sozinho (FeInputMap::initialize_mappings):
+# o dos comandos de tela so quando o comando nao tem nenhuma entrada, os
+# atalhos so com o input_map vazio. Com o joystick gravado antes do primeiro
+# save dele, nenhum dos dois entrava e o teclado ficava sem funcionar.
+AM_KEYS_UI = [('back', 'Escape'), ('up', 'Up'), ('down', 'Down'), ('left', 'Left'), ('right', 'Right'),
+              ('select', 'Return'), ('select', 'LControl')]
+AM_KEYS_SHORTCUTS = [('configure', 'Tab'), ('prev_letter', 'Up+LControl'), ('next_letter', 'Down+LControl'),
+                     ('filters_menu', 'Left+LControl'), ('next_filter', 'Right+LControl'),
+                     ('configure', 'Escape+Up'), ('edit_game', 'Escape+Down'), ('add_favourite', 'Escape+LControl')]
 
 
 def abs_codes(lib, index):
@@ -677,7 +689,20 @@ def attract_cfg(text, inputs):
     outro comando que usam um botao deles; as de teclado e as outras ficam."""
     managed = {cmd for cmd, _ in inputs}
     used = {part for _, value in inputs for part in value.split('+')}
-    entries = ['    %-24s%s\n' % (cmd, value) for cmd, value in inputs]
+    # O teclado que a secao tem; o que falta volta (ver AM_KEYS_UI).
+    keyed, section = set(), False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped and not line[:1].isspace():
+            section = stripped == AM_SECTION
+        elif section and stripped:
+            command, _, value = stripped.partition(' ')
+            if command != 'default' and not any(p.strip().startswith('Joy') for p in value.split('+')):
+                keyed.add(command)
+    missing = [(c, k) for c, k in AM_KEYS_UI if c not in keyed]
+    if not keyed:
+        missing += AM_KEYS_SHORTCUTS
+    entries = ['    %-24s%s\n' % (cmd, value) for cmd, value in missing + inputs]
     out, inside = [], False
 
     def flush():

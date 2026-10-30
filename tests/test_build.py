@@ -12951,10 +12951,26 @@ class ButtonMappingTests(unittest.TestCase):
                               '    edit_game               Joy0 Zpos\n'
                               '    next_page               Joy1 Zpos\n'
                               '    back                    Escape\n'
+                              '    up                      Up\n'
+                              '    down                    Down\n'
+                              '    left                    Left\n'
+                              '    right                   Right\n'
+                              '    select                  Return\n'
+                              '    select                  LControl\n'
                               '    select                  Joy0 Button3\n'
                               '    up                      Joy1 Up\n'
                               '    default back            exit\n\nsaver_config\n')
         self.assertEqual(rc.attract_cfg(new, [('select', 'Joy0 Button3'), ('up', 'Joy1 Up')]), new)
+        # So joystick na secao (o Attract-Mode nao poe o teclado sozinho
+        # depois disso): o teclado padrao dele volta, com os atalhos.
+        bare = rc.attract_cfg('input_map\n    select                  Joy0 Button0\n    default back            exit\n',
+                              [('select', 'Joy0 Button0'), ('up', 'Joy0 PovYneg')])
+        for line in ('back                    Escape', 'up                      Up', 'select                  Return',
+                     'configure               Tab', 'prev_letter             Up+LControl',
+                     'add_favourite           Escape+LControl'):
+            self.assertIn('    %s\n' % line, bare)
+        self.assertTrue(bare.endswith('    default back            exit\n'))
+        self.assertEqual(rc.attract_cfg(bare, [('select', 'Joy0 Button0'), ('up', 'Joy0 PovYneg')]), bare)
         # O save grava o attract.cfg que existe, com o dono certo.
         with tempfile.TemporaryDirectory() as tmp:
             os.environ['FLIPEROS_ATTRACT_DIR'] = tmp
