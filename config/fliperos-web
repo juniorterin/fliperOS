@@ -172,7 +172,8 @@ STATIC_ALIASES = {"/": "index.html", "/overlay/marquee": "overlay.html", "/overl
                   "/overlay/input": "input.html"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8",
-         ".png": "image/png", ".webp": "image/webp", ".ttf": "font/ttf", ".json": "application/json",
+         ".png": "image/png", ".gif": "image/gif", ".webp": "image/webp", ".ttf": "font/ttf",
+         ".json": "application/json",
          ".webmanifest": "application/manifest+json"}
 # O painel nunca fica guardado no navegador: o codigo, as paginas, os icones
 # e as fontes vem do gabinete a cada abertura (um update vale na hora, sem

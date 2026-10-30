@@ -254,6 +254,9 @@ function mqPaint(game) {
   const title = game ? (game.title || game.name || game.file || game.program || "") : front ? frontName(front) : "FliperOS";
   const sub = game ? [game.manufacturer, game.year].filter(Boolean).join(" · ") : "";
   const urls = game && game.art ? dev.art.filter((l) => game.art.includes(l)).map((l) => ({ url: mediaUrl(game.system, game.name, MQ_KINDS[l]), logo: l === "l" })) : [];
+  // Sem jogo, no frontend do FliperOS (ou em nenhum): o logotipo animado
+  // (tools/marquee-logo-anim.py) no lugar do nome em texto, que fica de reserva.
+  if (!game && (!front || front === "fliperos-frontend")) urls.push({ url: "marquee-fliperos.gif", logo: false });
   document.querySelectorAll(".mq-led").forEach((box) => {
     box.hidden = !mq.on;
     if (!mq.on) return;

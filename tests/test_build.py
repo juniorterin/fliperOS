@@ -6266,6 +6266,15 @@ class WebPanelTests(unittest.TestCase):
         # Sem jogo e sem evento que desenhe (o jogo acabou de fechar), fica o
         # ultimo logotipo de sistema, e nao o nome FLIPEROS.
         self.assertIn('const hold = !open && !!mqLastSys && !["system", "attract", "versus"].includes(s.event);', view)
+        # O padrao sem jogo (antes o nome FLIPEROS em texto): o logotipo animado,
+        # servido como arquivo do painel (sem login, como o resto da pagina).
+        self.assertIn('urls.push({ url: "marquee-fliperos.gif", logo: false })', view)
+        status, _, data = self.request('GET', '/marquee-fliperos.gif')
+        self.assertEqual((status, self.last_headers['Content-Type']), (200, 'image/gif'))
+        self.assertEqual(data, (web / 'marquee-fliperos.gif').read_bytes())
+        from PIL import Image
+        with Image.open(web / 'marquee-fliperos.gif') as img:
+            self.assertEqual((img.size, img.n_frames > 30), ((128, 32), True))
         self.assertIn('/api/overlay/idle?key=', obs)
         self.assertIn('s.event === "attract"', obs)
         self.assertIn('id="idle"', (web / 'overlay.html').read_text())
