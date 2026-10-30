@@ -1,5 +1,5 @@
-// A previa do marquee: no Status liga-se um modo (Pixelcade ou ZeDMD) e o
-// painel mostra, no Status, no Ao vivo, na previa do marquee para o OBS e no
+// A previa do marquee: no Frontend, ao lado do Jogando agora, liga-se um modo (Pixelcade ou ZeDMD) e o
+// painel mostra, no proprio cartao, no Ao vivo, na previa do marquee para o OBS e no
 // letreiro do gabinete desenhado, o que aquele painel de LED mostraria para
 // o jogo aberto. A arte segue as regras de cada um: o ZeDMD usa dmd/, marquee/
 // e logo/ de ~/media (config/fliperos-dmd); o Pixelcade, marquee/ e logo/.
@@ -186,7 +186,7 @@ function mqPaint(game) {
   });
 }
 
-// Os controles do Status.
+// Os controles do cartao (no Frontend).
 function mqControls() {
   $("mq-on").checked = mq.on;
   $("mq-device").value = mq.device;
@@ -194,7 +194,7 @@ function mqControls() {
   $("mq-art").textContent = t("mq_art_" + mq.device);
   document.querySelectorAll(".mq-show button").forEach((b) => b.classList.toggle("on", b.dataset.show === mq.show));
 }
-// Arte ou placar (no Frontend e no Status): o texto e a conquista que
+// Arte ou placar (no cartao do Frontend): o texto e a conquista que
 // estavam rolando saem, e o placar volta ou some na hora.
 document.querySelectorAll(".mq-show button").forEach((b) => b.addEventListener("click", () => {
   mq.show = b.dataset.show;

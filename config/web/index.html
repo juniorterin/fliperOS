@@ -122,6 +122,7 @@
         </div>
 
         <div class="now">
+         <div class="now-top">
           <div class="now-card" id="now-card">
             <div class="eyebrow"><span class="rec"></span><span id="now-eyebrow"></span></div>
             <h2 class="now-title" id="now-title"></h2>
@@ -139,10 +140,21 @@
               <button id="close-game" class="btn red" type="button" hidden><svg class="g"><use href="icons.svg#g-power"/></svg><span data-t="close_game"></span></button>
             </div>
             <p class="now-note"><label class="check"><input id="shot-auto" type="checkbox" checked> <span data-t="shot_auto"></span></label> <span id="shot-note" role="status"></span></p>
-            <!-- Arte ou placar no marquee (marqueeview.js); so no modo previa. -->
-            <div class="mq-row mq-front"><span data-t="mq_show"></span>
-              <div class="fps-pick mq-show" role="group"><button type="button" data-show="art" data-t="mq_show_art"></button><button type="button" data-show="score" data-t="mq_show_score"></button></div></div>
           </div>
+          <!-- A previa do marquee (marqueeview.js), ao lado do Jogando agora: o modo, o dispositivo, arte ou placar. -->
+          <section class="dcard mq-card" aria-labelledby="h-mq">
+            <h2 id="h-mq"><svg class="px"><use href="icons.svg#px-romlist"/></svg><span data-t="mq_title"></span></h2>
+            <p class="dim" data-t="mq_note"></p>
+            <label class="switch big"><input id="mq-on" type="checkbox"><i></i><span data-t="mq_on"></span></label>
+            <label class="mq-pick"><span data-t="mq_device"></span>
+              <select id="mq-device"><option value="pixelcade" data-t="mq_pixelcade"></option><option value="zedmd" data-t="mq_zedmd"></option></select></label>
+            <p id="mq-art" class="dim"></p>
+            <div class="mq-row"><span id="mq-inst" class="dim"></span><button id="mq-inst-go" class="btn small" type="button" hidden data-t="mq_inst_yes"></button></div>
+            <div class="mq-row"><span data-t="mq_show"></span>
+              <div class="fps-pick mq-show" role="group"><button type="button" data-show="art" data-t="mq_show_art"></button><button type="button" data-show="score" data-t="mq_show_score"></button></div></div>
+            <div class="mq-led" id="mq-status" hidden></div>
+          </section>
+         </div>
           <div class="mini-cards">
             <div class="mini volume">
               <div class="mini-head"><svg class="px"><use href="icons.svg#px-audio"/></svg><b data-t="volume"></b><span class="vol-num" id="vol-value">-</span></div>
@@ -619,19 +631,6 @@
               <summary><svg class="g"><use href="icons.svg#g-chevd"/></svg><span data-t="wanted"></span></summary>
               <div class="table-wrap"><table id="video-table"></table></div>
             </details>
-          </section>
-          <!-- A previa do marquee (marqueeview.js): o modo e o dispositivo. -->
-          <section class="dcard mq-card" aria-labelledby="h-mq">
-            <h2 id="h-mq"><svg class="px"><use href="icons.svg#px-romlist"/></svg><span data-t="mq_title"></span></h2>
-            <p class="dim" data-t="mq_note"></p>
-            <label class="switch big"><input id="mq-on" type="checkbox"><i></i><span data-t="mq_on"></span></label>
-            <label class="mq-pick"><span data-t="mq_device"></span>
-              <select id="mq-device"><option value="pixelcade" data-t="mq_pixelcade"></option><option value="zedmd" data-t="mq_zedmd"></option></select></label>
-            <p id="mq-art" class="dim"></p>
-            <div class="mq-row"><span id="mq-inst" class="dim"></span><button id="mq-inst-go" class="btn small" type="button" hidden data-t="mq_inst_yes"></button></div>
-            <div class="mq-row"><span data-t="mq_show"></span>
-              <div class="fps-pick mq-show" role="group"><button type="button" data-show="art" data-t="mq_show_art"></button><button type="button" data-show="score" data-t="mq_show_score"></button></div></div>
-            <div class="mq-led" id="mq-status" hidden></div>
           </section>
           <section class="dcard" aria-labelledby="h-cpu">
             <h2 id="h-cpu"><svg class="px"><use href="icons.svg#px-chip"/></svg>CPU</h2>
