@@ -1899,6 +1899,33 @@ def marquee_state():
     return state
 
 
+def versus_live(rom):
+    """O placar que o detector do GroovyMAME le agora (o feed do
+    config/fliperos-versus, $XDG_RUNTIME_DIR/fliperos-versus.feed), mesmo em
+    0 x 0: o marquee do LED esconde esse placar, a previa do painel o mostra.
+    So se o jogo do feed e o do marquee (rom) e ele ainda nao parou."""
+    files = glob.glob(os.path.join(RUN_USER, "*", "fliperos-versus.feed"))
+    if not files or not rom:
+        return {}
+    newest = max(files, key=lambda p: os.stat(p).st_mtime if os.path.exists(p) else 0)
+    game, running, values = "", False, {}
+    for line in read(newest).splitlines():
+        key, sep, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if not sep:
+            continue
+        if key == "mame_start":
+            game, running, values = value, True, {}
+        elif key == "mame_stop":
+            running = False
+        elif re.fullmatch(r"fliperos_(wins|score)[12]", key) and re.fullmatch(r"-?\d{1,12}", value):
+            values[key] = value
+    if not running or game != rom or not values:
+        return {}
+    return {"rom": game, "wins_left": values.get("fliperos_wins1", "-"), "wins_right": values.get("fliperos_wins2", "-"),
+            "score_left": values.get("fliperos_score1", "-"), "score_right": values.get("fliperos_score2", "-")}
+
+
 class ArtCache:
     """O arquivo da arte de cada (sistema, jogo), pelo fliperos-dmd art (as
     mesmas regras do ZeDMD: ~/media/dmd, marquee, logo)."""
@@ -2806,7 +2833,8 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/api/marquee/state":
             # O estado do marquee para a previa do painel (Status), pelo login.
             on = overlay_enabled()
-            return self.send(200, {"enabled": on, "state": marquee_state() if on else {}})
+            state = marquee_state() if on else {}
+            return self.send(200, {"enabled": on, "state": state, "live": versus_live(state.get("rom", ""))})
         if url.path == "/api/overlay/input/style":
             return self.send(200, {"css": input_css(), "custom": os.path.isfile(INPUT_CSS),
                                    "default": read(os.path.join(STATIC, "input.css"))})

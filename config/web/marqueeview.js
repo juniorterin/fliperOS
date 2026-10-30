@@ -71,10 +71,14 @@ function mqBuild(box) {
 // O mesmo estado do marquee do OBS (/api/marquee/state, que o
 // fliperos-pixelcade grava com marquee_overlay=on): o placar versus no lugar
 // da arte, o texto de abertura (os recordes) rolando uma vez e as conquistas.
-let mqState = {}, mqLastTime = null, mqPopTimer = null, mqTried = false;
+// Alem do evento versus (que o marquee do LED so manda depois da primeira
+// vitoria), o painel mostra o placar que o detector le agora (data.live),
+// mesmo em 0 x 0: assim se ve que o jogo tem placar desde o comeco.
+let mqState = {}, mqLive = null, mqLastTime = null, mqPopTimer = null, mqTried = false;
 
 function mqDrawState(box) {
-  const s = mqState, versus = s.event === "versus" && mq.show === "score";
+  const s = mqState.event === "versus" || !mqLive ? mqState : Object.assign({ left: "P1", right: "P2" }, mqLive);
+  const versus = (mqState.event === "versus" || !!mqLive) && mq.show === "score";
   box.classList.toggle("vs", versus);
   const vs = box.querySelector(".mq-versus");
   vs.hidden = !versus;
@@ -126,6 +130,7 @@ async function mqPoll() {
     }
     const first = mqLastTime === null;
     mqState = data.state || {};
+    mqLive = data.live && data.live.rom ? data.live : null;
     mqEvents(mqState, first);
     document.querySelectorAll(".mq-led").forEach((box) => { if (!box.hidden && box.firstChild) mqDrawState(box); });
   } catch (e) { /* o gabinete desligado: fica o que estava */ }
