@@ -27,7 +27,9 @@ It pauses while a game is open. A game is tried once every 30 days (what a sourc
 
 Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in two rows: the genre with the number of players beside it, then the control (a pistol for light-gun games, which Arcadeflow has no icon for) with the buttons.
 
-**Controls.** A guide shows them each time the frontend opens; any button closes it. The guide draws the controls as **Frontend controls** (below) left them: each panel button where Setup > Joysticks > Buttons layout puts it, in its function's colour. A button with no function is left out of the drawing, and so is the joystick when no direction has one. Under the buttons come Start and the functions that only have a key.
+**Controls.** The first time the frontend opens, it starts in **Frontend controls** (below), so you can say what each button does; back leaves it. From then on, a guide shows the controls each time the frontend opens; any button closes it.
+
+The guide draws the controls as Frontend controls left them: the joystick and the panel buttons in the panel's shape, each button in its function's colour, both centred in the window. A button with no function is left out of the drawing, and so is the joystick when no direction has one.
 
 These are the defaults:
 - Up and down move through the games; past the last one comes the first again, and before the first the last (holding stops at the end, the next press goes around). Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).

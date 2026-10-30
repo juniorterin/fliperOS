@@ -1273,28 +1273,63 @@ def panel_slots(layout, where, buttons, step):
 
 
 def guide_map(fe):
-    """O que o guia desenha, do Frontend controls: {comando do painel: funcao}
-    e as dicas de baixo (o Start e as funcoes que so tem tecla). Um botao que
-    o formato do painel nao tem (o 5 num MVS) e como nenhum."""
-    import feinput
-    binds = fe.input.binds
+    """O que o guia desenha, do Frontend controls: {comando do painel: funcao}.
+    Um botao que o formato do painel nao tem (o 5 num MVS) e como nenhum."""
     count = PANEL_COUNT[panel_layout(fe)]
-    pad = {b["pad"]: f for f, b in binds.items()
-           if b["pad"] and not (b["pad"][0] == "b" and int(b["pad"][1:]) > count)}
-    hints = []
-    if pad.get("start"):
-        hints.append("START: " + FUNCTION_NAMES[pad["start"]])
-    for f in feinput.FUNCTIONS:
-        if binds[f]["pad"] not in pad and binds[f]["key"] is not None:
-            hints.append("%s: %s" % (feinput.key_name(fe.pg, binds[f]["key"]), FUNCTION_NAMES[f]))
-    return pad, hints
+    return {b["pad"]: f for f, b in fe.input.binds.items()
+            if b["pad"] and not (b["pad"][0] == "b" and int(b["pad"][1:]) > count)}
+
+
+def stick_parts(pad):
+    """O direcional do guia, em volta do centro (0, 0): [(direcao, funcao,
+    nome, cor)] e os limites (esquerda, cima, direita, baixo) com os nomes."""
+    parts = []
+    for direction in ("up", "down", "left", "right"):
+        f = pad.get(direction)
+        if f:
+            parts.append((direction, f, STICK_NAMES[f] if f == direction else FUNCTION_NAMES[f],
+                          FUNCTION_STYLE[f][0]))
+    widths = {d: tiny.width(label) for d, _, label, _ in parts}
+    hold = pad.get("down") in ("up", "down") or pad.get("up") in ("up", "down")
+    side = max([35, widths.get("up", 0) // 2, widths.get("down", 0) // 2]
+               + ([tiny.width("3 S: LETTER BY LETTER") // 2] if hold else []))
+    left = -max(side, 19 + widths.get("left", 0))
+    right = max(side, 19 + widths.get("right", 0))
+    top = -44 if "up" in widths else -35
+    bottom = 61 if hold else (45 if "down" in widths else 35)
+    return parts, hold, (left, top, right, bottom)
+
+
+def button_parts(layout, where, pad, buttons, step=30, r=12):
+    """Os botoes do guia em volta do centro (0, 0) do painel: [(botao,
+    funcao, x, y do topo, nome, x do nome, y do nome, lado)] e os limites
+    (esquerda, cima, direita, baixo) com os nomes."""
+    ry = round(r * FLAT)
+    slots = panel_slots(layout, where, buttons, step)
+    # A largura do nome do botao do meio de cada fileira (o de 6 botoes).
+    middle = {dy: tiny.width(b[1:] + " " + FUNCTION_NAMES[pad[b]])
+              for b, (_, dy, _, _, align) in slots.items() if layout == "6" and align == 0}
+    parts, xs, ys = [], [], []
+    for b in buttons:
+        dx, dy, raised, side, align = slots[b]
+        cy = dy - raised
+        text = b[1:] + " " + FUNCTION_NAMES[pad[b]]
+        w = tiny.width(text)
+        # Um nome longo no meio (GAME OPTIONS) empurra os dos lados para fora.
+        mid = middle.get(dy, 0) // 2 + 4
+        tx = {-1: min(dx + 3, dx + step - mid) - w, 0: dx - w // 2, 1: max(dx - 3, dx - step + mid)}[align]
+        ty = dy - 30 if side == "up" else cy + LIFT + ry + 18
+        parts.append((b, pad[b], dx, cy, text, tx, ty, side))
+        xs += [dx - r - 4, dx + r + 4, tx, tx + w]
+        ys += [cy - ry - 4, cy + LIFT + ry + 4, ty, ty + 5]
+    return parts, ((min(xs), min(ys), max(xs), max(ys)) if parts else (0, 0, 0, 0))
 
 
 def draw_guide(fe, ui):
     """O guia dos controles, do jeito que o Frontend controls os deixou: o
-    direcional com a funcao de cada direcao e os botoes do painel onde o
-    Buttons layout os poe, cada um na cor da funcao dele. Um comando sem
-    funcao nao aparece (o direcional sem nenhuma, nem ele)."""
+    direcional com a funcao de cada direcao e os botoes no formato do painel,
+    cada um na cor da funcao dele. Um comando sem funcao nao aparece (o
+    direcional sem nenhuma, nem ele). Os dois ficam no meio da janela."""
     # Deitado, o direcional a esquerda e os botoes a direita; em pe, o
     # direcional em cima e os botoes embaixo.
     vertical = T.VERTICAL is not None
@@ -1305,100 +1340,75 @@ def draw_guide(fe, ui):
     ui.blit(W.big(title, 1, W.LABEL), (px + 10, py + 9))
     for i, c in enumerate(W.RAINBOW):
         pygame.draw.rect(ui, c, (px + 18 + W.width(title), py + 10 + i, pw - 28 - W.width(title), 1))
-    pad, hints = guide_map(fe)
-    stick = [d for d in ("up", "down", "left", "right") if pad.get(d)]
+    pad = guide_map(fe)
     # Os botoes que o painel tem (o formato dele) e que fazem alguma coisa.
     layout = panel_layout(fe)
     buttons = ["b%d" % n for n in range(1, PANEL_COUNT[layout] + 1) if pad.get("b%d" % n)]
-    # So o direcional, ou so os botoes: o que sobrou fica no meio.
-    split = bool(stick and buttons)
-    jx, jy = (WW // 2, py + 70) if vertical or not split else (px + 54, py + 70)
-    if stick:
+    try:
+        where = fe.fd.web.button_layout(6)
+    except Exception:  # sem o painel web (os testes): a ordem do painel
+        where = list(range(1, 7))
+    sparts, hold, (sl, st, sr, sb) = stick_parts(pad)
+    bparts, (bl, bt, br, bb) = button_parts(layout, where, pad, buttons)
+    split = bool(sparts and bparts)
+    # A area entre o titulo e o "PRESS ANY BUTTON", e o espaco entre os dois.
+    top, bottom, gap = py + 28, py + ph - 22, 24
+    if vertical:
+        # Um em cima do outro, os dois no meio da largura e o par no meio da altura.
+        hs, hb = (sb - st if sparts else 0), (bb - bt if bparts else 0)
+        y = (top + bottom - hs - hb - (gap if split else 0)) // 2
+        jx, jy = WW // 2 - (sl + sr) // 2, y - st
+        mx, by0 = WW // 2 - (bl + br) // 2, y + hs + (gap if split else 0) - bt
+        if split:
+            pygame.draw.line(ui, T.LINE, (px + 10, y + hs + gap // 2), (px + pw - 11, y + hs + gap // 2))
+    else:
+        # Lado a lado, o par no meio da largura; cada um no meio da altura.
+        ws, wb = (sr - sl if sparts else 0), (br - bl if bparts else 0)
+        x = WW // 2 - (ws + wb + (gap if split else 0)) // 2
+        jx, mx = x - sl, x + ws + (gap if split else 0) - bl
+        jy, by0 = (top + bottom) // 2 - (st + sb) // 2, (top + bottom) // 2 - (bt + bb) // 2
+        if split:
+            pygame.draw.line(ui, T.LINE, (x + ws + gap // 2, top), (x + ws + gap // 2, bottom - 4))
+    if sparts:
         pygame.draw.circle(ui, T.SPACE, (jx, jy), 21)
         pygame.draw.circle(ui, T.LINE, (jx, jy), 21, 2)
         pygame.draw.circle(ui, T.RED, (jx, jy), 9)
         pygame.draw.circle(ui, (0xff, 0xa0, 0xa0), (jx - 3, jy - 3), 3)
-        for direction, d in (("up", (0, -1)), ("down", (0, 1)), ("left", (-1, 0)), ("right", (1, 0))):
-            f = pad.get(direction)
-            if not f:
-                continue
-            color = FUNCTION_STYLE[f][0]
+        for direction, f, label, color in sparts:
+            d = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}[direction]
             arrow(ui, jx + d[0] * 30, jy + d[1] * 30, d, color, 5)
-            label = STICK_NAMES[f] if f == direction else FUNCTION_NAMES[f]
             if direction == "up":
                 tiny.centered(ui, label, color, jx, jy - 44)
             elif direction == "down":
                 tiny.centered(ui, label, color, jx, jy + 40)
             elif direction == "left":
-                tiny.text(ui, label, color, max(px + 4, jx - 19 - tiny.width(label)), jy + 9)
+                tiny.text(ui, label, color, jx - 19 - tiny.width(label), jy + 9)
             else:
                 tiny.text(ui, label, color, jx + 19, jy + 9)
         # Segurar acelera o que anda pelos jogos (onde quer que esteja).
-        if pad.get("down") in ("up", "down") or pad.get("up") in ("up", "down"):
+        if hold:
             tiny.centered(ui, "HOLD: FASTER", T.COMMENT, jx, jy + 49)
             tiny.centered(ui, "3 S: LETTER BY LETTER", T.COMMENT, jx, jy + 56)
-    if split:
-        if vertical:
-            pygame.draw.line(ui, T.LINE, (px + 10, py + 136), (px + pw - 11, py + 136))
-        else:
-            pygame.draw.line(ui, T.LINE, (px + 112, py + 28), (px + 112, py + ph - 26))
-    # Os botoes no formato do painel (Frontend controls > Panel layout), o nome
-    # de cada um fora, em cima ou embaixo, com uma linha e a seta ate ele.
-    r, step = 12, 30
-    if vertical:
-        mx, by0 = WW // 2, (py + 172 if split else py + 70)
-    elif split:
-        mx, by0 = px + 112 + (pw - 112) // 2, py + 60
-    else:
-        mx, by0 = WW // 2, py + 60
+    # Os botoes, o nome de cada um fora, em cima ou embaixo, com uma linha e a
+    # seta ate ele.
+    r = 12
     ry = round(r * FLAT)
-    try:
-        where = fe.fd.web.button_layout(6)
-    except Exception:  # sem o painel web (os testes): a ordem do painel
-        where = list(range(1, 7))
-    slots = panel_slots(layout, where, buttons, step)
-    # A largura do nome do botao do meio de cada fileira (o de 6 botoes).
-    middle = {dy: tiny.width(b[1:] + " " + FUNCTION_NAMES[pad[b]])
-              for b, (_, dy, _, _, align) in slots.items() if layout == "6" and align == 0}
-    for b in buttons:
-        f = pad[b]
+    for b, f, dx, dy, text, tx, ty, side in bparts:
         color, draw_icon = FUNCTION_STYLE[f]
-        dx, dy, raised, side, align = slots[b]
-        cx, cy = mx + dx, by0 + dy - raised
+        cx, cy = mx + dx, by0 + dy
         button3d(ui, cx, cy, r, color)
         # O desenho no topo, achatado como ele.
         icon = pygame.Surface((24, 24), pygame.SRCALPHA)
         draw_icon(icon, 12, 12, shade(color, 0.3))
         icon = pygame.transform.smoothscale(icon, (24, round(24 * FLAT)))
         ui.blit(icon, (cx - 12, cy - icon.get_height() // 2))
-        text = b[1:] + " " + FUNCTION_NAMES[f]
-        w = tiny.width(text)
-        # Um nome longo no meio (GAME OPTIONS) empurra os dos lados para fora.
-        mid = middle.get(dy, 0) // 2 + 4
-        tx = {-1: min(cx + 3, cx + step - mid) - w, 0: cx - w // 2, 1: max(cx - 3, cx - step + mid)}[align]
-        top, bottom = cy - ry - 4, cy + LIFT + ry + 5
+        tiny.text(ui, text, T.FG, mx + tx, by0 + ty)
         if side == "up":
-            ty, y0, y1, d = by0 + dy - 30, by0 + dy - 23, top, (0, 1)
+            y0, y1, d = by0 + ty + 7, cy - ry - 4, (0, 1)
         else:
-            ty, y0, y1, d = bottom + 13, bottom + 11, bottom, (0, -1)
-        tiny.text(ui, text, T.FG, tx, ty)
+            y0, y1, d = by0 + ty - 2, cy + LIFT + ry + 5, (0, -1)
         pygame.draw.line(ui, T.COMMENT, (cx, y0), (cx, y1 - d[1] * 2))
         arrow(ui, cx, y1, d, T.COMMENT, 3)
-    # Debaixo dos botoes (deitado, a esquerda ficam as dicas do direcional):
-    # o Start e as funcoes que so tem tecla, em uma ou duas linhas.
-    if split and not vertical:
-        hint_x, room = px + 112 + (pw - 112) // 2, pw - 120
-    else:
-        hint_x, room = WW // 2, pw - 16
-    lines = [""]
-    for h in hints:
-        joined = (lines[-1] + "   " + h).strip()
-        if tiny.width(joined) <= room:
-            lines[-1] = joined
-        elif len(lines) < 2:
-            lines.append(h)
-    for k, line in enumerate(lines):
-        tiny.centered(ui, tiny.fit(line, room), T.COMMENT, hint_x, py + ph - 31 + 7 * k)
     msg = "PRESS ANY BUTTON TO START"
     ui.blit(W.big(msg, 1, W.LABEL), (px + (pw - W.width(msg)) // 2, py + ph - 16))
 
@@ -2123,7 +2133,8 @@ def draw_controls(fe, ui, now):
     elif sel == reset_row:
         tips = ("SELECT: THE FUNCTIONS GO BACK TO THE DEFAULTS", "THE EXIT SHORTCUT AND THE LAYOUT STAY")
     else:
-        tips = ("SELECT: CHANGE   DELETE: NONE   LEFT/RIGHT: COLUMN", "A BUTTON IN USE SWAPS WITH THE OLD ONE")
+        tips = ("SELECT: CHANGE   DELETE: NONE   LEFT/RIGHT: COLUMN",
+                "A BUTTON IN USE SWAPS WITH THE OLD ONE   BACK: DONE")
     y = y0 + (reset_row + 1) * rh
     tiny.centered(ui, tips[0], T.YELLOW if wait else T.COMMENT, WW // 2, y + 3)
     tiny.centered(ui, tips[1], T.COMMENT, WW // 2, y + 10)

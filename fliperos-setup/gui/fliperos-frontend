@@ -245,6 +245,11 @@ class Frontend:
         self.top = 0
         self.overlay = "guide"     # o guia dos controles ao abrir
         self.ov = {}               # o estado do que esta por cima
+        # A primeira vez que o frontend abre: antes do guia, o Frontend
+        # controls, para o usuario dizer o que cada botao faz.
+        self.controls_seen = cfg.get("controls_seen") is True
+        if not self.controls_seen:
+            self.overlay, self.ov = "controls", {"sel": 0, "col": 0, "wait": None}
         self.ribbon_until = 0
         self.letter = None         # (letra, ate quando aparece)
         self.letter_mode = None
@@ -400,7 +405,8 @@ class Frontend:
                      "clones": self.show_clones, "exit_key": self.exit_key, "exit_combo": self.exit_combo,
                      "power_exit": self.power_exit, "commercial": self.commercial,
                      "coin_minutes": self.coin_minutes, "credit_until": self.credit_until,
-                     "controls": self.input.binds, "panel_layout": self.panel_layout})
+                     "controls": self.input.binds, "panel_layout": self.panel_layout,
+                     "controls_seen": self.controls_seen})
 
     def keep_position(self):
         """O jogo onde o cursor esta, anotado para a game list de agora: ao
@@ -913,7 +919,14 @@ class Frontend:
         elif a == "delete" and sel < len(funcs):
             self.bind_control(funcs[sel], "pad" if ov["col"] == 0 else "key", None)
         elif a in ("b2", "esc"):
-            self.overlay, self.ov = "options", {"sel": OPT_CONTROLS}
+            if self.controls_seen:
+                self.overlay, self.ov = "options", {"sel": OPT_CONTROLS}
+            else:
+                # A primeira vez (ao abrir o frontend): depois, o guia ja com o
+                # que ficou; nas proximas aberturas, so o guia.
+                self.controls_seen = True
+                self.overlay, self.ov = "guide", {}
+                self.remember()
             # Sem escolher ou voltar pelo painel, o menu so abre pelo teclado.
             lost = [self.view.FUNCTION_NAMES[f] for f in ("b1", "b2") if not self.input.binds[f]["pad"]]
             if lost:

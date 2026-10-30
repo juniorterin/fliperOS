@@ -4975,6 +4975,10 @@ class FrontendDataTests(unittest.TestCase):
         self.assertIn('elif sel == OPT_CONTROLS and a == "b1":', src)
         self.assertIn('"controls": self.input.binds, "panel_layout": self.panel_layout', src)
         self.assertIn('held = frozenset(self.input.pad_held())', src)
+        # A primeira abertura comeca no Frontend controls; ao sair dele, o guia.
+        self.assertIn('self.controls_seen = cfg.get("controls_seen") is True', src)
+        self.assertIn('self.overlay, self.ov = "controls", {"sel": 0, "col": 0, "wait": None}', src)
+        self.assertIn('"controls_seen": self.controls_seen', src)
         view = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
         self.assertIn('("controls", "FRONTEND CONTROLS")', view)
         # O atalho que fecha o jogo fica dentro do Frontend controls, nao no Tab.
@@ -4996,15 +5000,25 @@ class FrontendDataTests(unittest.TestCase):
                                    fd=types.SimpleNamespace(web=types.SimpleNamespace(button_layout=lambda n: [1, 2, 3, 4, 5, 6])),
                                    ov={'sel': 0, 'col': 0, 'wait': None}, exit_combo=['b1', 'start'],
                                    exit_key=['F12', 88])
-        pad, hints = feview.guide_map(fe)
-        self.assertEqual(pad['b4'], 'b4')
-        self.assertEqual(hints, ['START: VIEW MODE', 'TAB: GAME OPTIONS'])
+        pad = feview.guide_map(fe)
+        self.assertEqual((pad['b4'], 'tab' in pad.values()), ('b4', False))
         fi.assign(binds, 'tab', 'pad', 'b5')
         fi.assign(binds, 'b6', 'pad', None)
-        fi.assign(binds, 'start', 'key', None)
-        pad, hints = feview.guide_map(fe)
+        pad = feview.guide_map(fe)
         self.assertEqual((pad['b5'], 'b6' in pad), ('tab', False))
-        self.assertEqual(hints, ['START: VIEW MODE', 'PAGE DOWN: PAGE DOWN'])
+        # O direcional e os botoes no meio da janela: os dois blocos, com os
+        # nomes, centrados (o par lado a lado, com 24 pixels entre eles).
+        parts, hold, (sl, st, sr, sb) = feview.stick_parts(pad)
+        self.assertTrue(hold)
+        self.assertEqual((sl, sr), (-max(35, 19 + 35), max(42, 19 + 35)))
+        bparts, (bl, bt, br, bb) = feview.button_parts('6', [1, 2, 3, 4, 5, 6], pad,
+                                                       ['b1', 'b2', 'b3', 'b4', 'b5'])
+        self.assertEqual(len(bparts), 5)
+        self.assertLess(bl, -30)
+        view = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
+        guide = view.split('def draw_guide(')[1].split('\ndef ')[0]
+        self.assertIn('x = WW // 2 - (ws + wb + (gap if split else 0)) // 2', guide)
+        self.assertNotIn('START: ', guide)
         ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
         feview.draw_guide(fe, ui)
         feview.draw_controls(fe, ui, 1.0)
@@ -5018,10 +5032,9 @@ class FrontendDataTests(unittest.TestCase):
         # funcao dele vale so pela tecla.
         fe.input.binds = fi.default_binds(pygame)
         fe.panel_layout = '4'
-        pad, hints = feview.guide_map(fe)
+        pad = feview.guide_map(fe)
         self.assertNotIn('b5', pad)
         self.assertNotIn('b6', pad)
-        self.assertIn('PAGE DOWN: PAGE DOWN', hints)
         slots = feview.panel_slots('4', [1, 2, 3, 4, 5, 6], ['b1', 'b2', 'b3', 'b4'], 30)
         self.assertEqual([slots['b%d' % n][0] for n in range(1, 5)], [-45, -15, 15, 45])
         self.assertEqual([slots['b%d' % n][3] for n in range(1, 5)], ['up', 'down', 'up', 'down'])
