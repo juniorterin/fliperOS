@@ -70,7 +70,9 @@ export function Requirements() {
           <p className="rounded-xl border border-line bg-bg-deeper/60 px-5 py-4 text-sm leading-relaxed text-muted">
             <span className="font-semibold text-fg">{r.testedLabel}</span> {r.tested}
           </p>
-          <p className="mt-4 text-sm leading-relaxed text-muted">{r.note}</p>
+          <p className="mt-4 text-sm leading-relaxed text-muted">
+            {r.note} <span className="font-semibold text-fg">{r.checkPath}</span> {r.checkText}
+          </p>
           <a
             href={`${LINKS.docs}/Latency#recommended-hardware`}
             target="_blank"

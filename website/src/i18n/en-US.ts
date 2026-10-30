@@ -757,7 +757,9 @@ const enUS = {
     testedLabel: 'Where it is tested:',
     tested:
       'FliperOS is developed on a cabinet with an Intel Core i7 870, 6 GB of RAM, a Radeon R7 240 on VGA at 15 kHz and an SSD, an older machine than the ideal one.',
-    note: 'On a CRT the video card matters little: at 240 lines even the R7 240 is above what PCSX2 asks for. Cards without an analog output need a DisplayPort or HDMI to VGA converter. Setup > System > Latency > Check this computer compares your PC with these numbers.',
+    note: 'On a CRT the video card matters little: at 240 lines even the R7 240 is above what PCSX2 asks for. Cards without an analog output need a DisplayPort or HDMI to VGA converter.',
+    checkPath: 'Setup > System > Latency > Check this computer',
+    checkText: 'compares your PC with these numbers.',
     cta: 'Recommended hardware, in the documentation',
     adapter: {
       title: 'A card with digital outputs only? A converter that works',

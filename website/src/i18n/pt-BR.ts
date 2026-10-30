@@ -759,7 +759,9 @@ const ptBR: Messages = {
     testedLabel: 'Onde é testado:',
     tested:
       'O FliperOS é feito num gabinete com Intel Core i7 870, 6 GB de RAM, uma Radeon R7 240 na VGA a 15 kHz e um SSD, uma máquina mais antiga que a ideal.',
-    note: 'No CRT a placa de vídeo pesa pouco: em 240 linhas até a R7 240 passa do que o PCSX2 pede. Placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA. Setup > System > Latency > Check this computer compara o seu PC com estes números.',
+    note: 'No CRT a placa de vídeo pesa pouco: em 240 linhas até a R7 240 passa do que o PCSX2 pede. Placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA.',
+    checkPath: 'Setup > System > Latency > Check this computer',
+    checkText: 'compara o seu PC com estes números.',
     cta: 'Hardware recomendado, na documentação',
     adapter: {
       title: 'Placa só com saída digital? Um conversor que funciona',
