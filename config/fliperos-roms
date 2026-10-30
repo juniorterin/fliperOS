@@ -9,7 +9,8 @@
 #             procura em outro lugar.
 #   ~/media   a arte e os textos dos frontends (lib/scraper.sh do Setup): uma
 #             pasta por tipo e, dentro, as mesmas pastas de ~/roms.
-#   ~/nvram   a nvram do MAME (o que o arcade lembra sem energia).
+#   ~/nvram   o que os arcades lembram sem energia: uma pasta por emulador e
+#             uma por core do RetroArch que grava isso, como em ~/roms.
 #   ~/save    os saves e os estados: uma pasta por emulador (retroarch, mame,
 #             ps2).
 #   ~/config  links para as configuracoes de cada emulador e frontend
@@ -192,28 +193,70 @@ for type in snap preview logo box marquee dmd texto; do
 done
 
 # ── ~/nvram e ~/save ────────────────────────────────────────────────
-# ~/nvram guarda o que os arcades lembram sem a energia (a nvram do MAME: as
-# configuracoes de dip, os creditos e os recordes que o jogo grava) e ~/save o
-# que o jogador salva: os saves e os estados do RetroArch, os estados do MAME
-# e os cartoes de memoria do PCSX2. As pastas de antes (~/.mame/nvram,
-# ~/.mame/sta, /opt/fliperos/saves/retroarch, ~/.config/PCSX2/memcards) viram
-# links para as novas, com o que tinham dentro, e os caminhos antigos
-# (mame.ini, retroarch.cfg, Pixelcade, MAME 2010) continuam valendo.
+# ~/nvram guarda o que os arcades lembram sem a energia (as configuracoes de
+# dip, os creditos, os recordes e o que o jogo destravou), uma pasta por
+# emulador e por core, e ~/save o que o jogador salva: os saves e os estados
+# do RetroArch, os estados do MAME e os cartoes de memoria do PCSX2. As pastas
+# de antes (~/.mame/nvram, ~/.mame/sta, /opt/fliperos/saves/retroarch,
+# ~/.config/PCSX2/memcards) viram links para as novas, com o que tinham dentro,
+# e os caminhos antigos (mame.ini, retroarch.cfg, Pixelcade, MAME 2010)
+# continuam valendo. Cada emulador continua gravando no caminho dele, que vira
+# um link para a pasta dele aqui.
 nvram=${FLIPEROS_NVRAM:-$HOME/nvram}
 save=${FLIPEROS_SAVE:-$HOME/save}
 mame_home=${FLIPEROS_MAME_HOME:-$HOME/.mame}
 saves_old=${FLIPEROS_SAVES_OLD:-/opt/fliperos/saves}
-folder "$nvram" "Arcade memory kept without power: the MAME nvram (dip settings, credits, scores the game saves), one folder per game set. GroovyMAME writes here."
+data=${XDG_DATA_HOME:-$HOME/.local/share}
+# ~/nvram era so do MAME, com um conjunto por pasta na raiz: eles vao para
+# ~/nvram/mame, sem sobrescrever. A barra faz o find entrar numa custom folder.
+if [[ -d $nvram && ! -e $nvram/mame ]]; then
+  rm -f "$nvram/_info.txt"
+  mkdir -p "$nvram/mame" 2> /dev/null &&
+    find "$nvram/" -mindepth 1 -maxdepth 1 -type d ! -name mame ! -name flycast ! -name model2 ! -name model3 \
+      ! -name hypseus ! -name retroarch ! -name fightcade ! -name '.*' ! -name 'old-*' ! -name 'old[0-9]*-*' \
+      -exec mv -n -t "$nvram/mame" {} + 2> /dev/null
+fi
+[[ -L $mame_home/nvram && $(readlink -- "$mame_home/nvram") == "$nvram" ]] && rm -f -- "$mame_home/nvram"
+folder "$nvram" "Arcade memory kept without power (dip settings, credits, scores, what a game has unlocked): one folder per emulator and RetroArch core, as in ~/roms."
+folder "$nvram/mame" "GroovyMAME: one folder per game set. To start a game from zero, delete its folder."
+folder "$nvram/flycast" "Flycast: Naomi and Atomiswave memory (<set>.zip.nvmem, .nvmem2, .eeprom) and the Dreamcast memory cards (vmu_save_*.bin)."
+folder "$nvram/model2" "SM2-Emu (Sega Model 2): the NVRAM and EEPROM of each game, and its save states in states/."
+folder "$nvram/model3" "Supermodel (Sega Model 3): one <set>.nv per game."
+folder "$nvram/hypseus" "Hypseus Singe (laserdisc): the memory of each game."
+folder "$nvram/fightcade" "Fightcade 2: one folder per emulator that keeps arcade memory here."
+folder "$nvram/fightcade/flycast" "Fightcade 2, Flycast Dojo: the memory its package brings for each game (the .net files are the ones used online). Separate from ~/nvram/flycast."
+folder "$nvram/retroarch" "RetroArch: one folder per core that keeps arcade memory. Other MAME cores get theirs at the login after their first game."
+folder "$nvram/retroarch/mame2010" "RetroArch, core mame2010: one <set>.nv per game."
+folder "$nvram/retroarch/fbneo" "RetroArch, core fbneo: the memory of its games."
 folder "$save" "What you save while you play, one folder per emulator: RetroArch saves and states, MAME states, PlayStation 2 memory cards."
 folder "$save/retroarch" "RetroArch: the game saves (.srm) and the save states (.state), also the MAME 2010 settings."
 folder "$save/mame" "GroovyMAME: the save states (F7 saves, F8 loads), one folder per game set."
 folder "$save/ps2" "PCSX2: the memory cards (.ps2) and their folders."
-link_dir "$mame_home/nvram" "$nvram"
+link_dir "$mame_home/nvram" "$nvram/mame"
 link_dir "$mame_home/sta" "$save/mame"
 [[ -d $saves_old/retroarch ]] && link_dir "$saves_old/retroarch" "$save/retroarch"
 if command -v pcsx2 > /dev/null 2>&1 || [[ -d $HOME/.config/PCSX2 ]]; then
   link_dir "$HOME/.config/PCSX2/memcards" "$save/ps2"
 fi
+link_dir "$data/flycast" "$nvram/flycast"
+link_dir "$data/sm2-emu/saves" "$nvram/model2"
+link_dir "$data/supermodel/NVRAM" "$nvram/model3"
+link_dir "$roms/hypseus/ram" "$nvram/hypseus"
+[[ -d $fightcade/emulator/flycast/data ]] && link_dir "$fightcade/emulator/flycast/data" "$nvram/fightcade/flycast"
+# Os cores gravam no savefile_directory, numa pasta com o nome que o proprio
+# core da a si mesmo (MAME 2010, nao o "MAME 2010 (0.139)" do .info).
+link_dir "$save/retroarch/MAME 2010/mame2010/nvram" "$nvram/retroarch/mame2010"
+link_dir "$save/retroarch/FinalBurn Neo/fbneo" "$nvram/retroarch/fbneo"
+# Os outros da familia do MAME criam <nome>/<core>/nvram ao abrir o primeiro
+# jogo: a pasta do core nasce no login seguinte, com o que ele ja gravou.
+for dir in "$save"/retroarch/*/*/nvram; do
+  [[ -d $dir && ! -L $dir ]] || continue
+  core=${dir%/nvram}
+  core=${core##*/}
+  core=${core//-/_}
+  folder "$nvram/retroarch/$core" "RetroArch, core $core: one <set>.nv per game."
+  link_dir "$dir" "$nvram/retroarch/$core"
+done
 
 # ── ~/splashscreen ──────────────────────────────────────────────────
 # Os temas do Plymouth, um por pasta. Os da imagem entram se faltam (um

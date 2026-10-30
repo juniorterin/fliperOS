@@ -1112,21 +1112,115 @@ class RomFoldersTests(unittest.TestCase):
                 subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             for d in ('nvram', 'save', 'save/retroarch', 'save/mame', 'save/ps2'):
                 self.assertTrue((home / d / '_info.txt').is_file(), d)
-            self.assertEqual((home / 'nvram/sf2/sf2.nv').read_text(), 'nv')
+            self.assertEqual((home / 'nvram/mame/sf2/sf2.nv').read_text(), 'nv')
             self.assertEqual((home / 'save/mame/sf2/1.sta').read_text(), 'sta')
             self.assertEqual((home / 'save/retroarch/MAME 2010/mame2010/cfg/default.cfg').read_text(), 'cfg')
             self.assertEqual((home / 'save/ps2/Mcd001.ps2').read_text(), 'card')
             # Os caminhos de antes seguem valendo.
-            self.assertEqual(os.readlink(home / '.mame/nvram'), str(home / 'nvram'))
+            self.assertEqual(os.readlink(home / '.mame/nvram'), str(home / 'nvram/mame'))
             self.assertEqual(os.readlink(home / '.mame/sta'), str(home / 'save/mame'))
             self.assertEqual(os.readlink(old / 'retroarch'), str(home / 'save/retroarch'))
             self.assertEqual(os.readlink(home / '.config/PCSX2/memcards'), str(home / 'save/ps2'))
         ini = (ROOT / 'config/mame.ini').read_text()
-        self.assertIn('nvram_directory $HOME/nvram\n', ini)
+        self.assertIn('nvram_directory $HOME/nvram/mame\n', ini)
         self.assertIn('state_directory $HOME/save/mame\n', ini)
         cfg = (ROOT / 'config/retroarch.cfg').read_text()
         self.assertIn('savefile_directory = "/home/fliperos/save/retroarch"', cfg)
         self.assertIn('savestate_directory = "/home/fliperos/save/retroarch"', cfg)
+
+    def nvram_login(self, home):
+        env = dict(os.environ, HOME=str(home), FLIPEROS_CORE_INFO=str(home / 'nada'),
+                   FLIPEROS_SAVES_OLD=str(home / 'nada'), FIGHTCADE_DIR=str(home / 'nenhum'))
+        env.pop('XDG_DATA_HOME', None)
+        subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+
+    def test_nvram_has_a_folder_per_emulator_and_core(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            # O que cada um ja gravou no caminho dele vai junto.
+            for d, name in (('.local/share/flycast', 'kofxi.zip.nvmem'), ('.local/share/sm2-emu/saves', 'daytona.nv'),
+                            ('.local/share/supermodel/NVRAM', 'scud.nv'), ('roms/hypseus/ram', 'ace.gz'),
+                            ('save/retroarch/MAME 2010/mame2010/nvram', 'tekken3.nv'),
+                            ('save/retroarch/FinalBurn Neo/fbneo', 'sf2.fs'),
+                            ('save/retroarch/MAME 2003-Plus/mame2003-plus/nvram', 'dino.nv')):
+                (home / d).mkdir(parents=True)
+                (home / d / name).write_text('mine')
+            for _ in range(2):
+                self.nvram_login(home)
+            for link, target, name in (('.local/share/flycast', 'flycast', 'kofxi.zip.nvmem'),
+                                       ('.local/share/sm2-emu/saves', 'model2', 'daytona.nv'),
+                                       ('.local/share/supermodel/NVRAM', 'model3', 'scud.nv'),
+                                       ('roms/hypseus/ram', 'hypseus', 'ace.gz'),
+                                       ('save/retroarch/MAME 2010/mame2010/nvram', 'retroarch/mame2010', 'tekken3.nv'),
+                                       ('save/retroarch/FinalBurn Neo/fbneo', 'retroarch/fbneo', 'sf2.fs'),
+                                       ('save/retroarch/MAME 2003-Plus/mame2003-plus/nvram', 'retroarch/mame2003_plus',
+                                        'dino.nv')):
+                self.assertEqual(os.readlink(home / link), str(home / 'nvram' / target), link)
+                self.assertEqual((home / 'nvram' / target / name).read_text(), 'mine', link)
+                self.assertTrue((home / 'nvram' / target / '_info.txt').is_file(), target)
+            self.assertTrue((home / 'nvram/fightcade/flycast/_info.txt').is_file())
+            self.assertTrue((home / 'nvram/mame/_info.txt').is_file())
+
+    def test_nvram_of_before_moves_to_the_mame_folder(self):
+        # ~/nvram era so do MAME: os conjuntos saem da raiz, e nada se perde.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / 'nvram/sf2').mkdir(parents=True)
+            (home / 'nvram/sf2/sf2.nv').write_text('nv')
+            (home / 'nvram/_info.txt').write_text('the MAME nvram')
+            (home / 'nvram/old-flycast').mkdir()
+            (home / '.mame').mkdir()
+            (home / '.mame/nvram').symlink_to(home / 'nvram')
+            self.nvram_login(home)
+            self.assertEqual((home / 'nvram/mame/sf2/sf2.nv').read_text(), 'nv')
+            self.assertFalse((home / 'nvram/sf2').exists())
+            # Uma pasta guardada pela custom folder nao e um conjunto: volta ao lugar.
+            self.assertFalse((home / 'nvram/mame/old-flycast').exists())
+            self.assertTrue((home / 'nvram/flycast').is_dir())
+            self.assertNotIn('MAME nvram', (home / 'nvram/_info.txt').read_text())
+            self.assertEqual(os.readlink(home / '.mame/nvram'), str(home / 'nvram/mame'))
+            # A pasta do MAME apagada a mao nao leva as dos outros junto.
+            shutil.rmtree(home / 'nvram/mame')
+            (home / 'nvram/flycast/mvsc2.zip.eeprom').write_text('ee')
+            self.nvram_login(home)
+            self.assertEqual((home / 'nvram/flycast/mvsc2.zip.eeprom').read_text(), 'ee')
+            self.assertFalse((home / 'nvram/mame/flycast').exists())
+
+    def test_nvram_of_before_moves_inside_a_custom_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            disk = Path(tmp) / 'disk'
+            (disk / 'sf2').mkdir(parents=True)
+            (disk / 'sf2/sf2.nv').write_text('nv')
+            home.mkdir()
+            (home / 'nvram').symlink_to(disk)
+            self.nvram_login(home)
+            self.assertTrue((home / 'nvram').is_symlink())
+            self.assertEqual((disk / 'mame/sf2/sf2.nv').read_text(), 'nv')
+
+    def test_updates_keep_the_nvram_folder(self):
+        # O rootfs juntava ~/nvram com o ~/.mame/nvram, um link para ela mesma:
+        # cada arquivo era "o mais velho" e saia. Cada atualizacao apagava tudo.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos/roms/mame', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system', 'etc/fliperos/mame'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            home = root / 'home/fliperos'
+            (home / 'nvram/mame/sf2').mkdir(parents=True)
+            (home / 'nvram/mame/sf2/sf2.nv').write_text('nv')
+            (home / 'nvram/flycast').mkdir()
+            (home / 'nvram/flycast/kofxi.zip.nvmem').write_text('fc')
+            (home / '.mame').mkdir()
+            (home / '.mame/nvram').symlink_to(home / 'nvram/mame')
+            (root / 'etc/fliperos/mame/mame.ini').write_text('nvram_directory           $HOME/.mame/nvram\n')
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            self.assertEqual((home / 'nvram/mame/sf2/sf2.nv').read_text(), 'nv')
+            self.assertEqual((home / 'nvram/flycast/kofxi.zip.nvmem').read_text(), 'fc')
+            self.assertTrue((home / '.mame/nvram').is_symlink())
+            self.assertIn('nvram_directory           $HOME/nvram/mame\n', (root / 'etc/fliperos/mame/mame.ini').read_text())
 
     def test_duckstation_folder_only_with_duckstation(self):
         # Sem o DuckStation (baixado no Setup), nenhuma segunda pasta de PS1 ao
@@ -7156,6 +7250,11 @@ def fightcade_package(path, files=None):
             '[config]\nrend.Resolution = 480\nrend.ScreenStretching = 100\n\n[window]\nfullscreen = no\nheight = 480\n',
         'emulator/flycast/flycast.elf': 'ELF',
         'emulator/flycast/ROMs/.keep': '',
+        'emulator/flycast/data/kofxi.zip.nvmem': 'fc-nvmem',
+        'emulator/flycast/data/kofxi.zip.nvmem2': 'fc-nvmem2',
+        'emulator/flycast/data/kofxi.zip.nvmem.net': 'fc-net',
+        'emulator/flycast/data/mvsc2.zip.eeprom': 'fc-eeprom',
+        'emulator/flycast/data/vmu_save_A1.bin': 'fc-vmu',
         'emulator/snes9x/ROMs/.keep': '',
         'emulator/ggpofba/ROMs/.keep': '',
     }
@@ -8050,10 +8149,37 @@ class FightcadeTests(unittest.TestCase):
                    FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'), XDG_RUNTIME_DIR=str(tmp),
                    FLIPEROS_ESCQUIT=str(tmp / 'nada'), FLIPEROS_BUTTONS=str(ROOT / 'config/fliperos-buttons'),
                    FLIPEROS_BUTTONS_MAP=str(tmp / 'nada'), FIGHTCADE_NATIVE='0', XDG_CACHE_HOME=str(tmp / 'cache'),
-                   FLIPEROS_FLYCAST_MAPPINGS=str(tmp / 'flycast'))
+                   FLIPEROS_FLYCAST_MAPPINGS=str(tmp / 'flycast'),
+                   FLIPEROS_FLYCAST_NVRAM=str(tmp / 'home/nvram/flycast'))
         env.pop('DISPLAY', None)
         env.update(extra)
         return env
+
+    def test_fetch_gives_flycast_the_memory_of_the_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            # Um jogo que a pessoa ja jogou fica como esta, sem o arquivo de outra origem ao lado.
+            own = tmp / 'home/nvram/flycast'
+            own.mkdir(parents=True)
+            (own / 'kofxi.zip.nvmem').write_text('mine')
+            run = self.fetch(tmp)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertEqual((own / 'kofxi.zip.nvmem').read_text(), 'mine')
+            self.assertFalse((own / 'kofxi.zip.nvmem2').exists())
+            self.assertEqual((own / 'mvsc2.zip.eeprom').read_text(), 'fc-eeprom')
+            # So a memoria dos jogos, sem as de partidas online nem o cartao.
+            self.assertFalse((own / 'kofxi.zip.nvmem.net').exists())
+            self.assertFalse((own / 'vmu_save_A1.bin').exists())
+            # A do Fightcade fica na pasta dele, inteira, e sobrevive ao reparo.
+            data = tmp / 'home/nvram/fightcade/flycast'
+            self.assertEqual(os.readlink(tmp / 'fc/emulator/flycast/data'), str(data))
+            self.assertEqual((data / 'kofxi.zip.nvmem.net').read_text(), 'fc-net')
+            (data / 'kofxi.zip.nvmem').write_text('played')
+            run = self.fetch(tmp)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertTrue((tmp / 'fc/emulator/flycast/data').is_symlink())
+            self.assertEqual((data / 'kofxi.zip.nvmem').read_text(), 'played')
 
     def fetch(self, tmp, *args, **extra):
         return subprocess.run(['bash', str(self.SCRIPT), 'fetch'] + list(args), capture_output=True, text=True,

@@ -70,7 +70,7 @@ folders_description() {
     roms) echo "The games: one folder per emulator and one per RetroArch core." ;;
     bios) echo "The BIOS files of RetroArch and of the other emulators." ;;
     media) echo "The art and texts the frontends show, one folder per type." ;;
-    nvram) echo "The arcade memory the MAME games keep without power: dip settings, credits, scores." ;;
+    nvram) echo "The arcade memory games keep without power, one folder per emulator and core." ;;
     save) echo "The saves and states, one folder per emulator." ;;
     splashscreen) echo "The boot splash themes." ;;
     roms/retroarch) echo "The games of RetroArch: one folder per core." ;;
@@ -120,7 +120,7 @@ folders_target() {
 # ~/roms, com a dos cores do RetroArch).
 folders_container() {
   case $1 in
-    roms | bios | media | roms/retroarch | roms/fightcade) return 0 ;;
+    roms | bios | media | nvram | roms/retroarch | roms/fightcade | nvram/retroarch | nvram/fightcade) return 0 ;;
     media/*/retroarch) return 0 ;;
     media/*/*) return 1 ;;
     media/*) return 0 ;;
@@ -209,7 +209,7 @@ folders_populate() {
 # pasta que voltou.
 folders_check() {
   local parent rel path old name
-  local -a parents=("" roms bios media roms/retroarch roms/fightcade)
+  local -a parents=("" roms bios media nvram roms/retroarch roms/fightcade nvram/retroarch nvram/fightcade)
   for path in "$FOLDERS_HOME"/media/*/; do
     [[ -d $path ]] || continue
     path=${path%/}

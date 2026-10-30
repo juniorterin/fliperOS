@@ -25,7 +25,19 @@ RetroArch opens its file browser in `~/roms`, GroovyMAME looks in `~/roms/mame`,
 - **`~/config`** (`\\fliperos\config`) — links to the configuration of each installed emulator and frontend: `retroarch`, `groovymame` (`/etc/fliperos/mame`, with `mame.ini` and `ui.ini`), `flycast`, `pcsx2`, `dolphin`, `supermodel`, `openbor` (the `.cfg` files in `~/roms/openbor/Saves`), `hypseus`, `model2`, `attractmode`, `es-de`, `pegasus` and `skyscraper`.
 
   Each link appears once the program has created its configuration (usually after being opened once); a deleted one comes back at the next login, and one left without a target (the program was removed) goes away.
-- **`~/nvram`** (`\\fliperos\nvram`) — what the arcade games remember without power: the MAME nvram (dip settings, credits, the scores a game saves), one folder per game set. GroovyMAME writes here (`nvram_directory` in `mame.ini`). To start a game from zero, delete its folder.
+- **`~/nvram`** (`\\fliperos\nvram`) — what the arcade games remember without power: dip settings, credits, the scores a game saves and what it has unlocked. It has one folder per emulator and per RetroArch core that keeps this, as in `~/roms`:
+
+  - `mame`: GroovyMAME, one folder per game set (`nvram_directory` in `mame.ini`). To start a game from zero, delete its folder.
+  - `flycast`: Flycast, the Naomi and Atomiswave memory of each game (`kofxi.zip.nvmem`, `mvsc2.zip.eeprom`) and the Dreamcast memory cards (`vmu_save_*.bin`). All systems share one folder because Flycast keeps a single one.
+  - `model2`: SM2-Emu, with its save states in `states`.
+  - `model3`: Supermodel.
+  - `hypseus`: Hypseus Singe.
+  - `fightcade/flycast`: the Flycast of Fightcade 2, separate from the system's. See [Fightcade 2](Fightcade-2.md).
+  - `retroarch/<core>`: `mame2010` and `fbneo` from the start. Other cores of the MAME family get theirs at the login after their first game, with what they have already saved.
+
+  Each emulator still writes to its usual path, which becomes a link to its folder here, with what it had inside. An installation from before these folders has its game sets moved from the root of `~/nvram` to `~/nvram/mame` at the next login.
+
+  To use a file that unlocks content, close the game and put the file in the folder of its emulator with the name that emulator writes: `~/nvram/mame/tekken3/at28c16`, `~/nvram/flycast/kofxi.zip.nvmem`.
 - **`~/save`** (`\\fliperos\save`) — what you save while you play, one folder per emulator: `retroarch` (the game saves, `.srm`, and the save states), `mame` (the save states) and `ps2` (the PCSX2 memory cards).
 
   An installation from before these folders is moved by itself at the next login: `~/.mame/nvram`, `~/.mame/sta`, `/opt/fliperos/saves/retroarch` and `~/.config/PCSX2/memcards` become links to the new folders, with what they had inside, so the old paths keep working.

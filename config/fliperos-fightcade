@@ -44,6 +44,7 @@ switchres_ini=${SWITCHRES_INI:-/etc/switchres.ini}
 flycast_maps=${FLIPEROS_FLYCAST_MAPPINGS:-/home/fliperos/.config/flycast/mappings}
 extras=${FLIPEROS_EXTRAS:-/opt/fliperos/bin/fliperos-extras}
 flycast_cfg=${FLIPEROS_FLYCAST_CFG:-/home/fliperos/.config/flycast/emu.cfg}
+flycast_nvram=${FLIPEROS_FLYCAST_NVRAM:-/home/fliperos/nvram/flycast}
 ini_set=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
 escquit=${FLIPEROS_ESCQUIT:-/opt/fliperos/bin/fliperos-escquit}
 buttons=${FLIPEROS_BUTTONS:-/opt/fliperos/bin/fliperos-buttons}
@@ -61,6 +62,26 @@ say() {
 fail() {
   if ((progress)); then printf '@fail Fightcade|%s\n' "$1"; else printf 'fliperos-fightcade: %s\n' "$1" >&2; fi
   exit 1
+}
+
+# A memoria dos arcades que o pacote traz (emulator/flycast/data) serve tambem
+# ao Flycast do sistema, com o que o Fightcade deixa destravado. So nos jogos
+# que ainda nao tem a sua: o que a pessoa jogou fica, e os dois arquivos de um
+# jogo nao se misturam com os de outra origem. Os .net sao os das partidas
+# online e ficam so no Fightcade.
+seed_flycast_nvram() {
+  local file name
+  local -A own=()
+  mkdir -p "$flycast_nvram" 2> /dev/null || return 0
+  for file in "$flycast_nvram"/*; do
+    name=${file##*/}
+    own[${name%.*}]=1
+  done
+  for file in "$dir"/emulator/flycast/data/*.nvmem "$dir"/emulator/flycast/data/*.nvmem2 "$dir"/emulator/flycast/data/*.eeprom; do
+    name=${file##*/}
+    [[ -f $file && -z ${own[${name%.*}]:-} ]] && cp -- "$file" "$flycast_nvram/"
+  done
+  return 0
 }
 
 fetch() {
@@ -118,6 +139,8 @@ PY
   for link in "$dir"/emulator/*/ROMs; do
     [[ -L $link ]] && keep+=("--exclude=*/emulator/$(basename "$(dirname "$link")")/ROMs/*")
   done
+  # A memoria dos jogos tambem e um link, para ~/nvram/fightcade.
+  [[ -L $dir/emulator/flycast/data ]] && keep+=("--exclude=*/emulator/flycast/data/*")
   if ! tar -xzf "$part" -C "$dir" --strip-components=1 --keep-directory-symlink --no-same-owner "${keep[@]}" \
     2> /dev/null ||
     [[ ! -x $dir/Fightcade2.sh || ! -x $dir/fc2-electron/fc2-electron ]]; then
@@ -133,6 +156,7 @@ PY
   ln -sfn "$self" "$dir/fightcade"
   say 96 "ROM folders in ~/roms/fightcade"
   [[ -x $folders ]] && "$folders"
+  seed_flycast_nvram
   say 100 "Fightcade $(tr -d '[:space:]' < "$dir/VERSION.txt" 2> /dev/null) installed"
 }
 

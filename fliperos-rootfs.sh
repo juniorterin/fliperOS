@@ -320,6 +320,11 @@ done
 # A tela de avisos ao abrir o jogo sai tambem num ui.ini de antes, que ja
 # tem o skip_warnings 0 do -createconfig.
 sed -i 's/^skip_warnings[[:space:]].*/skip_warnings             1/' "$root/etc/fliperos/mame/ui.ini"
+# A nvram do MAME agora fica em ~/nvram/mame (config/fliperos-roms): os
+# caminhos padrao de antes mudam junto; uma pasta escolhida pela pessoa fica.
+[[ ! -f $root/etc/fliperos/mame/mame.ini ]] ||
+  sed -i -E 's#^(nvram_directory[[:space:]]+)(\$HOME|/home/fliperos)(/\.mame)?/nvram/?[[:space:]]*$#\1$HOME/nvram/mame#' \
+    "$root/etc/fliperos/mame/mame.ini"
 # Numa instalacao anterior, o mame.ini e o ui.ini ganham as chaves de
 # config/ que ainda nao tem; as que o Setup, o MAME ou o usuario ja
 # gravaram ficam como estao.
@@ -773,7 +778,9 @@ EOF
     done
     rmdir "$from" 2> /dev/null || true
   }
-  for dir in cfg nvram sta inp diff comments hiscore; do
+  # A nvram nao entra: ~/nvram e a pasta dela (config/fliperos-roms), e o
+  # ~/.mame/nvram e um link para dentro dela. Juntar as duas apagava tudo.
+  for dir in cfg sta inp diff comments hiscore; do
     if [[ -d $home/$dir && ! -L $home/$dir && ! -e $home/.mame/$dir ]]; then
       mv "$home/$dir" "$home/.mame/$dir"
     elif [[ -d $home/$dir && ! -L $home/$dir && -d $home/.mame/$dir ]]; then

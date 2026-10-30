@@ -6811,6 +6811,17 @@ class FoldersTests(Base):
         for name in names:
             self.assertIn("path = /home/fliperos/%s\n" % name, smb)
 
+    def test_nvram_folders_take_a_custom_folder_like_those_of_roms(self):
+        self.login()
+        children = self.env.out("folders_children nvram", self.vars).split()
+        for name in ("mame", "flycast", "model2", "model3", "hypseus", "retroarch", "fightcade"):
+            self.assertIn("nvram/" + name, children)
+        self.assertIn("nvram/retroarch/mame2010", self.env.out("folders_children nvram/retroarch", self.vars).split())
+        self.assertIn("nvram/fightcade/flycast", self.env.out("folders_children nvram/fightcade", self.vars).split())
+        self.env.out('folders_link nvram/retroarch/mame2010 "%s"' % self.disk, self.vars)
+        self.assertTrue((self.home / "nvram/retroarch/mame2010").is_symlink())
+        self.assertTrue((self.home / "nvram/retroarch/old-mame2010").is_dir())
+
 
 class ProgressScreenTests(Base):
     """screens/progress.sh: a tela da barra cabe no console, sem rolar."""

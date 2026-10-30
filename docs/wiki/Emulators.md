@@ -61,7 +61,7 @@ The GroovyArcade options (gasetup's `-createconfig`): `plugin hiscore`, `skip_ga
 
 `modesetting 1` is also GroovyArcade's, with GroovyMAME in X (the "GroovyMAME at native resolution" paragraph).
 
-What GroovyMAME writes (cfg, nvram, hiscore records, savestates) goes to `~/.mame`; `ui.ini` gets GroovyArcade's `infos_text_size 1.00` and `font_rows 20`, together with the Dracula colors — GroovyArcade uses 19, but MAME only accepts 20 to 40 and replaces 19 with the default 30, which at 224 lines leaves the font 7 pixels tall and unreadable; with 20 it is 11.
+What GroovyMAME writes goes to `~/.mame` (cfg, hiscore records), `~/nvram/mame` (nvram) and `~/save/mame` (savestates); `ui.ini` gets GroovyArcade's `infos_text_size 1.00` and `font_rows 20`, together with the Dracula colors — GroovyArcade uses 19, but MAME only accepts 20 to 40 and replaces 19 with the default 30, which at 224 lines leaves the font 7 pixels tall and unreadable; with 20 it is 11.
 
 On an earlier installation, `fliperos-rootfs.sh` only adds to `mame.ini` and `ui.ini` the keys they don't have yet (what was already saved stays, theme included); among the paths, the relative ones (the `.`, `cfg`, `snap` of a plain `-createconfig`: relative to the folder GroovyMAME is opened from, they filled the home folder with `cfg` and `nvram`) are removed, and with no absolute one left, the one from `config/` applies.
 
