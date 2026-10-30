@@ -9,7 +9,7 @@
 Object.assign(TEXT.en, {
   mq_title: "Marquee preview", mq_on: "Marquee preview mode", mq_device: "Show the marquee of",
   mq_note: "Shows on this panel what the LED marquee would display for the game that is open, without the hardware: here, in Live, in the marquee preview and on the cabinet drawing.",
-  mq_pixelcade: "Pixelcade (LED 128×32)", mq_zedmd: "ZeDMD (128×32, shown on 256×64)",
+  mq_pixelcade: "Pixelcade (LED 128×32)", mq_zedmd: "ZeDMD (LED 128×32)",
   mq_art_pixelcade: "Art: marquee, then logo, then the name.", mq_art_zedmd: "Art: dmd, then marquee, then logo, then the name.",
   mq_live: "Marquee as it will appear",
   mq_show: "When both exist, the marquee shows", mq_show_art: "Art", mq_show_score: "Scoreboard",
@@ -21,7 +21,7 @@ Object.assign(TEXT.en, {
 Object.assign(TEXT.pt, {
   mq_title: "Prévia do marquee", mq_on: "Modo prévia do marquee", mq_device: "Mostrar o marquee do",
   mq_note: "Mostra neste painel o que o marquee de LED exibiria para o jogo aberto, sem o hardware: aqui, no Ao vivo, na prévia do marquee e no desenho do gabinete.",
-  mq_pixelcade: "Pixelcade (LED 128×32)", mq_zedmd: "ZeDMD (128×32, em painel 256×64)",
+  mq_pixelcade: "Pixelcade (LED 128×32)", mq_zedmd: "ZeDMD (LED 128×32)",
   mq_art_pixelcade: "Arte: marquee, depois logo, depois o nome.", mq_art_zedmd: "Arte: dmd, depois marquee, depois logo, depois o nome.",
   mq_live: "O marquee como vai aparecer",
   mq_show: "Quando existem os dois, o marquee mostra", mq_show_art: "Arte", mq_show_score: "Placar",
@@ -35,7 +35,7 @@ Object.assign(TEXT.pt, {
 // ordem em que o dispositivo as procura, e as colunas de pontos do painel.
 const MQ_DEVICES = {
   pixelcade: { name: "Pixelcade", size: "128×32", cols: 128, art: ["m", "l"] },
-  zedmd: { name: "ZeDMD", size: "256×64", cols: 256, art: ["d", "m", "l"] },
+  zedmd: { name: "ZeDMD", size: "128×32", cols: 128, art: ["d", "m", "l"] },
 };
 const MQ_KINDS = { d: "dmd", m: "marquee", l: "logo" };
 const MQ_STORE = "fliperos-marquee-preview";
