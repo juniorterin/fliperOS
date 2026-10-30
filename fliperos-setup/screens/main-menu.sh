@@ -45,6 +45,13 @@ screen_reload_if_updated() {
   exec "$SETUP_DIR/fliperos-setup" "${SETUP_ARGS[@]}"
 }
 
+# menu_marquee ITEM: o item do menu no marquee (fliperos-pixelcade menu, a
+# animacao dele). A interface grafica ja o manda a cada troca do cursor; no
+# Setup em texto, so ao entrar no item. O mesmo item de novo nao muda nada.
+menu_marquee() {
+  "${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}" bg menu "$1" > /dev/null 2>&1 || true
+}
+
 screen_main_menu() {
   local choice last="" start
   # Placa AMD no driver que nao e o recomendado: sugere a troca, uma vez so.
@@ -69,6 +76,7 @@ screen_main_menu() {
       "shell|Exit to shell|The command line. Type fliperos-menu to come back." \
       "power|Shutdown / Reboot|Power off or restart the computer.") || continue
     last=$choice
+    menu_marquee "$choice"
     case $choice in
       frontend) screen_start_frontend && return "$SETUP_EXIT_LAUNCH" ;;
       setup) screen_setup_menu ;;

@@ -6261,22 +6261,26 @@ class WebPanelTests(unittest.TestCase):
         # Pixelcade e no ZeDMD: os dois tocam a animacao).
         web = ROOT / 'config/web'
         view, obs = (web / 'marqueeview.js').read_text(), (web / 'overlay.js').read_text()
-        self.assertIn('/api/marquee/idle?t=', view)
-        self.assertIn('const on = mqState.event === "attract";', view)
+        self.assertIn('if (s.event === "attract") return "/api/marquee/idle";', view)
         # Sem jogo e sem evento que desenhe (o jogo acabou de fechar), fica o
         # ultimo logotipo de sistema, e nao o nome FLIPEROS.
-        self.assertIn('const hold = !open && !!mqLastSys && !["system", "attract", "versus"].includes(s.event);', view)
+        self.assertIn('const hold = !open && !!mqLastSys && !["system", "attract", "versus", "menu"].includes(s.event);',
+                      view)
         # O padrao sem jogo (antes o nome FLIPEROS em texto): o logotipo animado,
         # servido como arquivo do painel (sem login, como o resto da pagina).
         self.assertIn('urls.push({ url: "marquee-fliperos.gif", logo: false })', view)
-        status, _, data = self.request('GET', '/marquee-fliperos.gif')
-        self.assertEqual((status, self.last_headers['Content-Type']), (200, 'image/gif'))
-        self.assertEqual(data, (web / 'marquee-fliperos.gif').read_bytes())
         from PIL import Image
-        with Image.open(web / 'marquee-fliperos.gif') as img:
-            self.assertEqual((img.size, img.n_frames > 30), ((128, 32), True))
+        # E o menu do FliperOS (evento menu): a animacao de cada um dos 5 itens.
+        self.assertIn('return "marquee-menu-" + s.item + ".gif";', view)
+        self.assertIn('return "/marquee-menu-" + s.item + ".gif?";', obs)
+        for name in ['marquee-fliperos'] + ['marquee-menu-' + i for i in ('frontend', 'setup', 'desktop', 'shell', 'power')]:
+            status, _, data = self.request('GET', '/%s.gif' % name)
+            self.assertEqual((status, self.last_headers['Content-Type']), (200, 'image/gif'), name)
+            self.assertEqual(data, (web / (name + '.gif')).read_bytes(), name)
+            with Image.open(web / (name + '.gif')) as img:
+                self.assertEqual((img.size, img.n_frames > 30), ((128, 32), True), name)
         self.assertIn('/api/overlay/idle?key=', obs)
-        self.assertIn('s.event === "attract"', obs)
+        self.assertIn('const idle = data.enabled && (s.event === "attract" || s.event === "menu");', obs)
         self.assertIn('id="idle"', (web / 'overlay.html').read_text())
         self.assertIn('.mq-led.ani', (web / 'stream.css').read_text())
 
@@ -10033,6 +10037,29 @@ class PixelcadeTests(unittest.TestCase):
         self.assertEqual(self.run_('screensaver', 'stop'),
                          ['attract/stop event=select', 'arcade/stream/mame/sf2?event=FEScroll event=select'])
 
+    def test_menu_items_play_their_animation(self):
+        # O menu do FliperOS: o item sob o cursor toca a animacao dele no
+        # Pixelcade, no ZeDMD e na previa/OBS; o mesmo item de novo (a volta de
+        # um submenu) nao a reinicia; um item sem animacao nao faz nada.
+        self.install()
+        self.install_zedmd()
+        (self.tmp / 'pixelcade/console').mkdir()
+        conf = self.tmp / 'fliperos.conf'
+        conf.write_text('marquee_overlay=on\n')
+        self.env['FLIPEROS_CONF'] = str(conf)
+        self.env['PIXELCADE_MENU_DIR'] = str(ROOT / 'config/web')
+        state = self.tmp / 'run/fliperos-marquee'
+        gif = ROOT / 'config/web/marquee-menu-setup.gif'
+        self.assertEqual(self.run_('menu', 'setup'), ['console/stream/fliperos-menu-setup'])
+        self.assertEqual(state.read_text().splitlines()[0], 'event=menu')
+        self.assertIn('item=setup', state.read_text().splitlines())
+        self.assertEqual((self.tmp / 'pixelcade/console/fliperos-menu-setup.gif').read_bytes(), gif.read_bytes())
+        self.assertIn('image %s' % gif, self.dmd_calls(1))
+        self.assertEqual(self.run_('menu', 'setup'), [])
+        self.assertEqual(self.run_('menu', 'power'), ['console/stream/fliperos-menu-power'])
+        self.assertEqual(self.run_('menu', 'nada'), [])
+        self.assertEqual(self.run_('menu', '../x'), [])
+
     def test_screensaver_plays_the_logo_animation_on_the_pixelcade(self):
         # Com a animacao do logo e a pasta console do pixelweb, o protetor de
         # tela a toca no Pixelcade (como o logotipo do sistema); a volta e igual.
@@ -11662,6 +11689,63 @@ class DockerfileTests(unittest.TestCase):
     def test_packager_base_matches_iso_base(self):
         self.assertIn('ubuntu:24.04', (ROOT / 'Dockerfile.packages').read_text())
 
+
+
+class GuiMenuMarqueeTests(unittest.TestCase):
+    """O menu do FliperOS no marquee: o servidor da interface grafica manda o
+    item sob o cursor (fliperos-pixelcade menu ITEM) quando ele muda; entrar
+    num item (as telas dos submenus) nao manda nada."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_the_item_under_the_cursor_goes_to_the_marquee(self):
+        import types
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        try:
+            import serve
+            import widgets
+        finally:
+            sys.path.remove(str(self.GUI))
+        with tempfile.TemporaryDirectory() as tmp:
+            tool, seen = Path(tmp) / 'pixelcade', Path(tmp) / 'seen'
+            tool.write_text('#!/bin/sh\necho "$@" >> %s\n' % seen)
+            tool.chmod(0o755)
+
+            def lines(n):
+                deadline = time.time() + 5
+                while time.time() < deadline and len(seen.read_text().splitlines() if seen.exists() else []) < n:
+                    time.sleep(0.05)
+                return seen.read_text().splitlines() if seen.exists() else []
+            old = serve.PIXELCADE_TOOL
+            serve.PIXELCADE_TOOL = str(tool)
+            try:
+                srv = types.SimpleNamespace(W=widgets, shots="")
+                srv.menu_item = lambda screen: serve.Server.menu_item(srv, screen)
+                send = lambda screen: serve.Server.marquee(srv, screen)
+                main = widgets.Menu("FliperOS", [(v, v.title(), "") for v in serve.MENU_ITEMS])
+                send(main)
+                self.assertEqual(lines(1), ['bg menu frontend'])
+                main.key("down")
+                send(main)
+                send(main)
+                self.assertEqual(lines(2), ['bg menu frontend', 'bg menu setup'])
+                # Dentro do Setup nada; de volta ao menu, o item de novo (o
+                # fliperos-pixelcade nao o reinicia).
+                send(widgets.Menu("Setup", [("video", "Video", ""), ("return", "Return", "")]))
+                send(main)
+                self.assertEqual(lines(3), ['bg menu frontend', 'bg menu setup', 'bg menu setup'])
+                # Os prints (FLIPEROS_GUI_SHOTS) nao mandam nada.
+                srv.shots = "x"
+                main.key("down")
+                send(main)
+                time.sleep(0.3)
+                self.assertEqual(len(lines(3)), 3)
+            finally:
+                serve.PIXELCADE_TOOL = old
+        # O Setup em texto manda o item ao entrar nele.
+        self.assertIn('menu_marquee "$choice"', (ROOT / 'fliperos-setup/screens/main-menu.sh').read_text())
 
 
 class GuiNotSupportedTests(unittest.TestCase):

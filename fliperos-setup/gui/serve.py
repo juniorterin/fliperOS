@@ -25,6 +25,12 @@ import signal
 import time
 
 FS, RS, GS = "\x1f", "\x1e", "\x1d"
+# O menu do FliperOS (screens/main-menu.sh) no marquee: o item sob o cursor vai
+# para o fliperos-pixelcade menu, que toca a animacao dele; os submenus nao
+# mandam nada, entao entrar no item a mantem.
+MENU_TITLE = "FliperOS"
+MENU_ITEMS = ("frontend", "setup", "desktop", "shell", "power")
+PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/fliperos-pixelcade")
 SGR = re.compile(r"\x1b\[([0-9;]*)m")
 # Um rotulo com a explicacao entre parenteses no fim.
 NOTE = re.compile(r"^(.*\S) \(([^()]+)\)$")
@@ -137,6 +143,31 @@ class Server:
 
     # O laco -----------------------------------------------------------
 
+    def menu_item(self, screen):
+        """O item do menu do FliperOS sob o cursor, ou None em qualquer outra tela."""
+        if not isinstance(screen, self.W.Menu) or screen.mode != "menu" or screen.title != MENU_TITLE:
+            return None
+        values = [e[0] for e in screen.entries]
+        if not values or not set(values) <= set(MENU_ITEMS):
+            return None
+        return values[screen.cursor]
+
+    def marquee(self, screen):
+        """Manda ao marquee o item do menu sob o cursor quando ele muda (em
+        segundo plano; sem o programa, ou nos prints, nada)."""
+        item = self.menu_item(screen)
+        if item == getattr(self, "marquee_item", None) or self.shots:
+            return
+        self.marquee_item = item
+        if item is None:
+            return
+        try:
+            import subprocess
+            subprocess.Popen([PIXELCADE_TOOL, "bg", "menu", item], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError:
+            pass
+
     def shot(self, name):
         if self.shots:
             self.count += 1
@@ -149,6 +180,7 @@ class Server:
         self.screen = screen
         app.flush()
         self.shot(name)
+        self.marquee(screen)
         redraw = True
         while True:
             # O Setup morto com a tela aberta (o painel web fechando o menu
@@ -165,6 +197,7 @@ class Server:
                 redraw = True
                 if result:
                     return result
+                self.marquee(screen)
             tick = getattr(screen, "tick", None)
             result = tick() if tick else None
             if result == "redraw":

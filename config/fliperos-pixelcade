@@ -46,6 +46,8 @@
 #   fliperos-pixelcade logo SISTEMA [ANTERIOR [PASSO]]   a troca de sistema no frontend do FliperOS: o logotipo entra deslizando e pisca duas vezes
 #   fliperos-pixelcade screensaver start|stop      o modo attract, no protetor de tela do frontend
 #   fliperos-pixelcade home                        saiu do frontend: a animacao do logo
+#   fliperos-pixelcade menu ITEM                   o item do menu do FliperOS sob o cursor (frontend,
+#                                                  setup, desktop, shell, power): a animacao dele
 #   fliperos-pixelcade achievement ID TITULO [DESCRICAO]   uma conquista do jogo aberto
 #   fliperos-pixelcade cheevos                     status 0 se o RetroArch deve registrar as conquistas no log
 #   fliperos-pixelcade versus V1 V2 P1 P2          o placar de uma partida versus (vitorias e pontos de cada lado)
@@ -67,6 +69,9 @@ HI2TXT_ZIP_SHA256="84c5a0667e224186ebe513d613675c98d0c70ff5323145b9943b34e852aed
 logo=${PIXELCADE_LOGO:-/usr/local/share/fliperos/pixelcade/fliperos.png}
 # A animacao do logo, no protetor de tela (o frontend parado) do Pixelcade e do ZeDMD.
 idle_gif=${PIXELCADE_IDLE:-/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif}
+# As animacoes dos itens do menu do FliperOS (tools/marquee-logo-anim.py): as
+# mesmas que a previa do painel web desenha, entre os arquivos dele.
+menu_dir=${PIXELCADE_MENU_DIR:-/usr/local/share/fliperos/web}
 # Onde os emuladores gravam os recordes (.hi): o GroovyMAME (plugin hiscore)
 # e os cores de arcade do RetroArch.
 hi_dirs=${HISCORE_DIRS:-/home/fliperos/.mame/hiscore:/opt/fliperos/saves/retroarch}
@@ -918,6 +923,27 @@ home() {
   idle_show
 }
 
+# menu ITEM: o item do menu do FliperOS sob o cursor (o servidor da interface
+# grafica manda a cada troca; o Setup em texto, ao entrar no item). A animacao
+# dele no ZeDMD, no Pixelcade e na previa/OBS. Os submenus nao mandam nada, entao
+# entrar no item mantem a animacao; o mesmo item de novo (a volta de um
+# submenu) nao a reinicia.
+menu() {
+  local item=${1:-} gif
+  [[ $item =~ ^[a-z]+$ ]] || return 0
+  gif=$menu_dir/marquee-menu-$item.gif
+  [[ -f $gif ]] || return 0
+  [[ $(cat "$last_file" 2> /dev/null) == "menu/$item" ]] && return 0
+  printf 'menu/%s\n' "$item" > "$last_file" 2> /dev/null
+  rm -f "$last_file.system"
+  zedmd image "$gif"
+  overlay menu "" "" "" "" "item=$item"
+  # O pixelweb guarda o GIF pelo nome: um por item (o desenho de cada um nao muda).
+  if installed && [[ -d $dir/console ]] && cp -f "$gif" "$dir/console/fliperos-menu-$item.gif" 2> /dev/null; then
+    call "console/stream/fliperos-menu-$item"
+  fi
+}
+
 screensaver() {
   local last
   last=$(cat "$last_file" 2> /dev/null)
@@ -938,6 +964,7 @@ screensaver() {
       held_calls=() holding=1
       case $last in
         system/*) system "${last#system/}" ;;
+        menu/*) menu "${last#menu/}" ;;
         game:*) ;;
         */*) select_game "${last%%/*}" "${last#*/}" ;;
         *) zedmd startup ;;
@@ -1180,7 +1207,7 @@ case $cmd in
     setsid "$self" "$@" < /dev/null > /dev/null 2>&1 &
     exit 0
     ;;
-  launch | esde | attract | game | select | system | logo | end | screensaver | home | achievement | versus | now)
+  launch | esde | attract | game | select | system | logo | end | screensaver | home | menu | achievement | versus | now)
     # Sem marquee nenhum (nem o do OBS), os eventos nao fazem nada.
     installed || zedmd_installed || overlay_on || exit 0
     case $cmd in

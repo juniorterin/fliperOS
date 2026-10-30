@@ -110,7 +110,7 @@ function mqDrawLogo(box) {
   if (!wrap) return;
   if (s.event === "system" && s.logo) mqLastSys = s.logo;
   const open = typeof cabGame !== "undefined" && cabOnline && !!cabGame;
-  const hold = !open && !!mqLastSys && !["system", "attract", "versus"].includes(s.event);
+  const hold = !open && !!mqLastSys && !["system", "attract", "versus", "menu"].includes(s.event);
   const on = (s.event === "system" && !!s.logo) || hold;
   wrap.hidden = !on;
   box.classList.toggle("sys", on);
@@ -131,22 +131,28 @@ function mqDrawLogo(box) {
   if (slide) wrap.classList.add("go");
 }
 
-// O marquee parado: o evento attract (o frontend do FliperOS sem apertos por
-// 30 s, ou o protetor de tela do ES-DE e do Attract-Mode Plus). O Pixelcade e o
-// ZeDMD tocam a animacao do logo (o GIF 128x32), e a previa tambem, recomecando
-// a cada evento.
+// As animacoes do marquee (GIFs 128x32), recomecando a cada evento, como no
+// Pixelcade e no ZeDMD: o marquee parado (o evento attract: o frontend do
+// FliperOS sem apertos por 30 s, ou o protetor de tela do ES-DE e do
+// Attract-Mode Plus) toca a do logo; o menu do FliperOS (o evento menu), a do
+// item sob o cursor (tools/marquee-logo-anim.py).
+function mqAnimation(s) {
+  if (s.event === "attract") return "/api/marquee/idle";
+  if (s.event === "menu" && /^[a-z]+$/.test(s.item || "")) return "marquee-menu-" + s.item + ".gif";
+  return "";
+}
 function mqDrawIdle(box) {
   const img = box.querySelector(".mq-idle");
   if (!img) return;
-  const on = mqState.event === "attract";
-  img.hidden = !on;
-  box.classList.toggle("ani", on);
-  if (!on) { delete box.dataset.idleKey; return; }
-  const k = String(mqState.time);
+  const src = mqAnimation(mqState);
+  img.hidden = !src;
+  box.classList.toggle("ani", !!src);
+  if (!src) { delete box.dataset.idleKey; return; }
+  const k = src + "|" + mqState.time;
   if (box.dataset.idleKey === k) return;
   box.dataset.idleKey = k;
   img.onerror = () => { img.hidden = true; box.classList.remove("ani"); };
-  img.src = "/api/marquee/idle?t=" + encodeURIComponent(k);
+  img.src = src + "?t=" + encodeURIComponent(String(mqState.time));
 }
 
 function mqDrawState(box) {

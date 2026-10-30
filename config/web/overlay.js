@@ -79,19 +79,25 @@ function showLogo(s, fresh) {
   if (fresh) wrap.classList.add("go");
 }
 
-// O ZeDMD parado (o evento attract: o frontend sem apertos por 30 s, ou o
-// protetor de tela do ES-DE e do Attract-Mode Plus): a animacao do logo, o GIF
-// 128x32 que o ZeDMD toca, recomecando a cada evento.
+// As animacoes do marquee (GIFs 128x32), recomecando a cada evento: o marquee
+// parado (o evento attract: o frontend sem apertos por 30 s, ou o protetor de
+// tela do ES-DE e do Attract-Mode Plus) toca a do logo; o menu do FliperOS (o
+// evento menu), a do item sob o cursor.
+function animation(s) {
+  if (s.event === "attract") return "/api/overlay/idle?key=" + encodeURIComponent(key) + "&";
+  if (s.event === "menu" && /^[a-z]+$/.test(s.item || "")) return "/marquee-menu-" + s.item + ".gif?";
+  return "";
+}
 let idleKey = "";
 function showIdle(s) {
-  const img = $("idle"), on = !!s;
-  img.hidden = !on;
-  if (!on) { idleKey = ""; render.title(); return; }
-  const k = String(s.time);
+  const img = $("idle"), src = s ? animation(s) : "";
+  img.hidden = !src;
+  if (!src) { idleKey = ""; render.title(); return; }
+  const k = src + "|" + s.time;
   if (k === idleKey) return;
   idleKey = k;
   img.onerror = () => { img.hidden = true; render.title(); };
-  img.src = "/api/overlay/idle?key=" + encodeURIComponent(key) + "&t=" + encodeURIComponent(k);
+  img.src = src + "t=" + encodeURIComponent(String(s.time));
   render.title();
 }
 
@@ -122,7 +128,7 @@ function apply(data) {
   }
   const system = data.enabled && s.event === "system" && !!s.logo;
   showLogo(system ? s : null, lastTime !== null && s.time !== lastTime);
-  const idle = data.enabled && s.event === "attract";
+  const idle = data.enabled && (s.event === "attract" || s.event === "menu");
   showIdle(idle ? s : null);
   showArt(versus || system || idle || !data.enabled ? null : data.art || null);
   render.title();
