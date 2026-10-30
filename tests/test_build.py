@@ -11018,6 +11018,46 @@ class ZeDMDTests(unittest.TestCase):
         self.assertIn('install -Dm644 "$src/config/pixelcade-fliperos.png" '
                       '"$root/usr/local/share/fliperos/pixelcade/fliperos.png"', ROOTFS)
 
+    def test_startup_plays_the_animated_logo_until_the_next_event(self):
+        from PIL import Image, ImageSequence
+        gif = ROOT / 'config/zedmd-fliperos.gif'
+        with Image.open(gif) as img:
+            self.assertEqual(img.size, (128, 32))
+            self.assertGreater(img.n_frames, 100)
+            self.assertTrue(all(20 <= f.info['duration'] <= 100 for f in ImageSequence.Iterator(img)))
+        # Instalado onde o fliperos-dmd o procura; o logo parado fica de reserva.
+        self.assertIn('install -Dm644 "$src/config/zedmd-fliperos.gif" '
+                      '"$root/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif"', ROOTFS)
+        script = self.SCRIPT.read_text()
+        self.assertIn("'DMD_STARTUP', '/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif')", script)
+        self.assertIn("LOGO = '/usr/local/share/fliperos/pixelcade/fliperos.png'", script)
+        self.env['DMD_STARTUP'] = str(gif)
+        play = subprocess.Popen([sys.executable, str(self.SCRIPT), 'startup'], env=self.env)
+        self.addCleanup(play.kill)
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and not (self.received and len(self.frames(self.received[0])) >= 12):
+            time.sleep(0.1)
+        frames = self.frames(self.received[0])
+        self.assertGreaterEqual(len(frames), 12)
+        # Os quadros vao um atras do outro: so o primeiro desconecta os outros clientes.
+        self.assertEqual([f[0][6] for f in frames[:3]], [1, 0, 0])
+        self.assertTrue(all(f[0][:6] == (b'DMDStream\0', 1, 2, 128, 32, 1) for f in frames))
+        self.assertNotEqual(frames[0][1], frames[8][1])
+        self.assertIsNone(play.poll())
+        # O proximo evento encerra a animacao.
+        self.run_('text', 'SF2')
+        self.assertEqual(play.wait(timeout=5), 0)
+        # Sem o GIF, o logo parado.
+        old = dict(os.environ)
+        os.environ.update(self.env, DMD_STARTUP=str(self.tmp / 'nenhum.gif'))
+        try:
+            dmd = load_script('fliperos_dmd', 'config/fliperos-dmd')
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+        dmd.LOGO = str(ROOT / 'config/pixelcade-fliperos.png')
+        self.assertEqual(len(dmd.startup_frames()), 1)
+
     def test_title_from_the_frontend_lists(self):
         romlists = self.tmp / 'attract/romlists'
         romlists.mkdir(parents=True)

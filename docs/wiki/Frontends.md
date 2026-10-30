@@ -147,7 +147,7 @@ Pixelcade and ZeDMD can be installed together. The high scores need hi2txt and J
   It looks in `~/media` in this order: `dmd/<games folder>/<rom>.png` or `.gif` (`dmd/mame/sf2.gif`; the same folders as `~/roms`) (art made for the display; GIFs play animated), then the scraped `marquee` and `logo` images (**Setup > Games > Scraper**).
 
   Without any picture it shows the game's name, taken from the Attract-Mode or ES-DE game list, scrolling when it doesn't fit. A system picture goes in `~/media/dmd/<system>.png`.
-- **Screensaver and startup**: during the frontend's screensaver the display cycles through the pictures in `~/media/dmd` and `~/media/marquee`, in random order, 8 seconds each. When the service starts it shows the FliperOS logo.
+- **Screensaver and startup**: during the frontend's screensaver the display cycles through the pictures in `~/media/dmd` and `~/media/marquee`, in random order, 8 seconds each. When the service starts it plays a looping 3D animation of the FliperOS logo: the letters fly in out of a warp, flip one by one like a pinball flipper, then the whole word spins, with glints and sparkles. It goes on until the first game or system event. `tools/zedmd-logo-anim.py` renders it (`config/zedmd-fliperos.gif`, 128x32, about 8 seconds).
 - **Artwork**: Pixelcade's artwork is licensed only for Pixelcade hardware, so FliperOS doesn't use it on the ZeDMD.
 
 ### ZeDMD firmware version

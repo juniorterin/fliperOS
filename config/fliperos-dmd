@@ -16,7 +16,7 @@
 #   fliperos-dmd image ARQUIVO
 #   fliperos-dmd text TEXTO
 #   fliperos-dmd attract              as artes de ~/media, uma depois da outra
-#   fliperos-dmd startup              o logo do FliperOS, quando o dmdserver abre
+#   fliperos-dmd startup              o logo do FliperOS (animacao 3D), quando o dmdserver abre
 #   fliperos-dmd versus ESQ VIT_ESQ VIT_DIR DIR PONTOS_ESQ PONTOS_DIR
 #                                     o placar de uma partida versus: os nomes dos
 #                                     lados, as vitorias e os pontos ("-" = sem)
@@ -51,7 +51,10 @@ ATTRACT = os.environ.get('ATTRACT_DIR', '/home/fliperos/.attract')
 ESDE = os.environ.get('ESDE_DIR', '/home/fliperos/ES-DE')
 FONT = os.environ.get('DMD_FONT', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
 PIDFILE = os.path.join(os.environ.get('XDG_RUNTIME_DIR') or '/tmp', 'fliperos-dmd.pid')
-STARTUP = os.environ.get('DMD_STARTUP', '/usr/local/share/fliperos/pixelcade/fliperos.png')
+# A abertura: o logo em 3D (config/zedmd-fliperos.gif, feito por
+# tools/zedmd-logo-anim.py). Sem ele, o logo parado, que o Pixelcade tambem usa.
+STARTUP = os.environ.get('DMD_STARTUP', '/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif')
+LOGO = '/usr/local/share/fliperos/pixelcade/fliperos.png'
 ATTRACT_SECONDS = float(os.environ.get('DMD_ATTRACT_SECONDS', '8'))
 EXTS = ('gif', 'png', 'webp', 'jpg', 'jpeg')
 COLOR = {'game': (255, 184, 108), 'select': (255, 255, 255), 'system': (139, 233, 253)}
@@ -404,11 +407,12 @@ def versus_frame(left, wins_left, wins_right, right, score_left, score_right):
 
 
 def startup_frames():
-    if os.path.isfile(STARTUP):
-        try:
-            return image_frames(STARTUP)
-        except (OSError, ValueError, SyntaxError):
-            pass
+    for path in (STARTUP, LOGO):
+        if os.path.isfile(path):
+            try:
+                return image_frames(path)
+            except (OSError, ValueError, SyntaxError):
+                pass
     return text_frames('FliperOS', COLOR['system'])
 
 
