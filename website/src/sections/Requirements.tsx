@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { ArrowUpRight, Cpu, Gauge, HardDrive, MemoryStick, Monitor, Network, Usb, type LucideIcon } from 'lucide-react';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
@@ -80,6 +81,32 @@ export function Requirements() {
             <ArrowUpRight className="size-4" aria-hidden="true" />
             <span className="sr-only">{t.a11y.external}</span>
           </a>
+        </Reveal>
+
+        <Reveal className="mt-8">
+          <article className="card flex flex-col gap-5 rounded-2xl p-5 sm:flex-row sm:items-center sm:p-6">
+            <Image
+              src="/art/displayport-vga-adapter.webp"
+              alt={r.adapter.alt}
+              width={740}
+              height={410}
+              unoptimized
+              className="h-auto w-full shrink-0 rounded-xl bg-white sm:w-72"
+            />
+            <div>
+              <h3 className="font-semibold text-fg">{r.adapter.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{r.adapter.text}</p>
+              <a
+                href={LINKS.dpVgaAdapter}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
+              >
+                {r.adapter.cta}
+                <ArrowUpRight className="size-4" aria-hidden="true" />
+              </a>
+            </div>
+          </article>
         </Reveal>
       </div>
     </section>

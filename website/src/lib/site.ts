@@ -9,6 +9,7 @@ export const LINKS = {
   issues: `${REPO_URL}/issues`,
   instagram: 'https://www.instagram.com/juniorter.in/',
   video: 'https://www.youtube.com/watch?v=W0vrpqgefL0',
+  dpVgaAdapter: 'https://a.aliexpress.com/_mPCmfYb',
 } as const;
 
 // O id do vídeo de apresentação no YouTube (o player só carrega ao clicar).

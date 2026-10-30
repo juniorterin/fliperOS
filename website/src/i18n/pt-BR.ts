@@ -761,6 +761,12 @@ const ptBR: Messages = {
       'O FliperOS é feito num gabinete com Intel Core i7 870, 6 GB de RAM, uma Radeon R7 240 na VGA a 15 kHz e um SSD, uma máquina mais antiga que a ideal.',
     note: 'No CRT a placa de vídeo pesa pouco: em 240 linhas até a R7 240 passa do que o PCSX2 pede. Placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA. Setup > System > Latency > Check this computer compara o seu PC com estes números.',
     cta: 'Hardware recomendado, na documentação',
+    adapter: {
+      title: 'Placa só com saída digital? Um conversor que funciona',
+      text: 'Este adaptador liga na DisplayPort da placa e entrega VGA. A entrada dele é só DisplayPort: uma placa que só tem HDMI precisa de um conversor de HDMI para VGA. Ele também traz saídas HDMI e DVI, mas use uma de cada vez.',
+      alt: 'Adaptador preto CableDeconn com cabo e plugue DisplayPort, e as saídas VGA, áudio, HDMI e DVI.',
+      cta: 'Ver no AliExpress',
+    },
   },
   openSource: {
     kicker: 'Código aberto',
