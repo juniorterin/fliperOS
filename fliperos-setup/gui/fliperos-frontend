@@ -1187,6 +1187,9 @@ class Frontend:
                 self.pg.image.save(self.back, "%s-%d.png" % (self.shot, i))
             return 0
         self.last_input, self.idle = time.monotonic(), False
+        # O marquee abre no logotipo do sistema em que o frontend abriu (as
+        # trocas o mandam em switch_category).
+        self.marquee_logo((self.category() or {}).get("name", ""), "", 1)
         while True:
             now = time.monotonic()
             acts = self.input.poll()

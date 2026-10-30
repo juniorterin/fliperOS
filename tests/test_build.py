@@ -4713,6 +4713,10 @@ class FrontendDataTests(unittest.TestCase):
             fe.shot = None
             fm.PIXELCADE_TOOL = str(Path(tmp) / 'nenhum')
             fm.Frontend.marquee_logo(fe, 'Naomi', 'Atomiswave', 1)
+        # Ao abrir, o logotipo do sistema em que o frontend esta (antes do laco).
+        src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        run = src.split('    def run(self, keys=()):')[1].split('        while True:')[0]
+        self.assertIn('self.marquee_logo((self.category() or {}).get("name", ""), "", 1)', run)
 
     def test_ribbon_tiles_get_the_system_logo_once(self):
         # Os azulejos da tira de romlists: o logotipo escrito do sistema
