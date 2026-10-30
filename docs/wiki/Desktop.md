@@ -10,7 +10,7 @@ Dracula theme with the console palette (`config/lxde/alacritty/alacritty.toml`),
 
 Since the `lxde` metapackage depends on `lxterminal`, the image installs its components one by one.
 
-**App Store:** **GNOME Software** with the **Flatpak** plugin and **Flathub** as a source, in the menu (System Tools) and on the panel as *App Store*: Ubuntu packages and Flatpak apps (emulators, games, programs). Ubuntu 24.04's App Center depends on snap, which isn't in the image.
+**App Store:** **GNOME Software** with the **Flatpak** plugin and **Flathub** as a source, in the menu (System Tools), on the panel and on the desktop as *App Store*: Ubuntu packages and Flatpak apps (emulators, games, programs). Ubuntu 24.04's App Center depends on snap, which isn't in the image.
 
 No automatic update downloads and no welcome screen (`config/fliperos-software.gschema.override`): disk and network activity in the middle of a game hurts latency, for the same reason the apt timers are masked. Installing asks for the user's password (`fliperos`), through lxpolkit.
 

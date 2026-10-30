@@ -798,6 +798,9 @@ EOF
   # No desktop, o atalho da pasta pessoal (roms, bios, media, config).
   [[ -d $home/Desktop ]] || install -d -o 1000 -g 1000 "$home/Desktop"
   install -m755 -o 1000 -g 1000 "$src/config/fliperos-home.desktop" "$home/Desktop/home.desktop"
+  # E o da App Store (o mesmo do menu e do painel).
+  install -m755 -o 1000 -g 1000 "$src/config/applications/org.gnome.Software.desktop" \
+    "$home/Desktop/app-store.desktop"
   # Layouts do Attract-Mode Plus (config/attractplus-layouts): os de
   # ~/.attract/layouts valem antes dos de /usr/share/attractplus de mesmo nome.
   mkdir -p "$home/.attract/layouts"

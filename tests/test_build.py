@@ -4360,6 +4360,9 @@ class AppStoreTests(unittest.TestCase):
             self.assertIn(line + '\n', entry)
         self.assertIn('id=org.gnome.Software.desktop', (ROOT / 'config/lxde/lxpanel/LXDE/panels/panel').read_text())
 
+    def test_desktop_icon(self):
+        self.assertIn('"$src/config/applications/org.gnome.Software.desktop" \\\n    "$home/Desktop/app-store.desktop"', ROOTFS)
+
 
 class FrontendThemeTests(unittest.TestCase):
     """Os temas do FliperOS para 240p: config/pegasus-theme-fliperos e
