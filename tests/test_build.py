@@ -4977,6 +4977,11 @@ class FrontendDataTests(unittest.TestCase):
         self.assertIn('held = frozenset(self.input.pad_held())', src)
         view = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
         self.assertIn('("controls", "FRONTEND CONTROLS")', view)
+        # O atalho que fecha o jogo fica dentro do Frontend controls, nao no Tab.
+        self.assertNotIn('"EXIT KEY")', view)
+        self.assertIn('y = label(exit_row, "EXIT GAME", exit_icon, T.RED)', view)
+        self.assertIn('elif a == "b1" and sel == exit_row and ov["col"] == 0:', src)
+        self.assertNotIn('OPT_EXIT', src)
         try:
             import pygame
         except ImportError:
@@ -4989,7 +4994,8 @@ class FrontendDataTests(unittest.TestCase):
         binds = fi.default_binds(pygame)
         fe = types.SimpleNamespace(pg=pygame, input=types.SimpleNamespace(binds=binds),
                                    fd=types.SimpleNamespace(web=types.SimpleNamespace(button_layout=lambda n: [1, 2, 3, 4, 5, 6])),
-                                   ov={'sel': 0, 'col': 0, 'wait': None})
+                                   ov={'sel': 0, 'col': 0, 'wait': None}, exit_combo=['b1', 'start'],
+                                   exit_key=['F12', 88])
         pad, hints = feview.guide_map(fe)
         self.assertEqual(pad['b4'], 'b4')
         self.assertEqual(hints, ['START: VIEW MODE', 'TAB: GAME OPTIONS'])
@@ -5026,8 +5032,10 @@ class FrontendDataTests(unittest.TestCase):
         for layout, _ in feview.PANEL_LAYOUTS:
             fe.panel_layout = layout
             feview.draw_guide(fe, ui)
-        fe.ov = {'sel': len(fi.FUNCTIONS), 'col': 0, 'wait': None}
-        feview.draw_controls(fe, ui, 1.0)
+        # As linhas depois das funcoes: o atalho que fecha o jogo, o formato e o RESET.
+        for row in range(len(fi.FUNCTIONS), len(fi.FUNCTIONS) + 3):
+            fe.ov = {'sel': row, 'col': 1, 'wait': None}
+            feview.draw_controls(fe, ui, 1.0)
         fe.panel_layout = 'x'
         self.assertEqual(feview.panel_layout(fe), '6')
 

@@ -50,13 +50,15 @@ These are the defaults:
 
     Select asks for the new one: press the panel control (a button, a direction or Start) or the key. A button or key that another function already had swaps: that function gets the old one. The same one again, or Delete, leaves the function with none; any function can have none.
 
-    Nothing pressed for 8 seconds keeps it as it was (Esc, or the panel's back button when choosing a key, cancels). **Reset** brings back the defaults. Each change works at once and is saved in `frontend.json` (`controls`).
+    Nothing pressed for 8 seconds keeps it as it was (Esc, or the panel's back button when choosing a key, cancels). **Reset** brings back the functions' defaults (the exit shortcut and the panel layout stay). Each change works at once and is saved in `frontend.json` (`controls`).
+
+    **Exit game** is the shortcut that closes the open game. In the Panel column, select asks for the buttons: hold two or more together for a second, and in a game the same buttons held for a second close it. In commercial mode the coin can't be one of them. In the Keyboard column, select asks for the key: press it within 8 seconds (back on the panel cancels).
+
+    A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing. Delete turns either one off.
 
     **Panel layout** (left and right) is the shape of the panel that the guide draws: **6 buttons** in two rows (where Buttons layout puts them), **4 in line** like a Neo Geo MVS, **3 in line**, **2 in line** or **2 stacked**. The guide draws only the buttons that shape has, and in this screen a button it doesn't have shows dimmed (its function then works only from the keyboard).
 
     The coin stays the coin (commercial mode). A key that the panel itself sends (a keyboard encoder: the `k:` entries of the Button mapping, or MAME's keys without them) can't be a keyboard key. Leaving the screen with select or back off the panel shows a warning: without them the menus only open from the keyboard.
-  - **Exit key**: the keyboard key that closes the game. Button 1 asks for it: press it within 8 seconds; button 2 on a controller cancels. A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing. Left, right or the Delete key turns it off.
-  - **Exit buttons**: panel buttons that close the game when held together for a second. Button 1 asks for them: hold two or more together for a second. Left, right or the Delete key turns it off. In commercial mode the coin can't be one of them.
   - **Power closes game**: on (the default), the cabinet's power button closes the open game; off, it does nothing while a game is open. With no game open it always powers off.
   - **Commercial mode** and, with it on, **Minutes per coin** (1 to 60, left and right).
 

@@ -1165,6 +1165,18 @@ def view_icon(surf, cx, cy, c):
             surf.fill(c, (cx + dx, cy + dy, 4, 4))
 
 
+def exit_icon(surf, cx, cy, c):
+    """Fechar o jogo: um X."""
+    pygame.draw.line(surf, c, (cx - 4, cy - 4), (cx + 4, cy + 4), 3)
+    pygame.draw.line(surf, c, (cx - 4, cy + 4), (cx + 4, cy - 4), 3)
+
+
+def reset_icon(surf, cx, cy, c):
+    """Voltar ao padrao: uma volta com a ponta da seta."""
+    pygame.draw.circle(surf, c, (cx, cy), 5, 2)
+    pygame.draw.polygon(surf, c, [(cx + 2, cy - 7), (cx + 6, cy - 4), (cx + 2, cy - 2)])
+
+
 def options_icon(surf, cx, cy, c):
     """As opcoes do Tab: tres linhas."""
     for dy in (-4, 0, 4):
@@ -1962,8 +1974,8 @@ def chip(ui, right, y, text, lit, on):
 # fliperos-frontend, na mesma ordem); os minutos por ficha so com o modo
 # comercial ligado.
 FE_OPTIONS = [("mode", "VIEW"), ("clones", "SHOW CLONES"), ("hidden", "HIDDEN GAMES"),
-              ("controls", "FRONTEND CONTROLS"), ("exitkey", "EXIT KEY"), ("exitpad", "EXIT BUTTONS"),
-              ("power", "POWER CLOSES GAME"), ("commercial", "COMMERCIAL MODE"), ("coin", "MINUTES PER COIN")]
+              ("controls", "FRONTEND CONTROLS"), ("power", "POWER CLOSES GAME"),
+              ("commercial", "COMMERCIAL MODE"), ("coin", "MINUTES PER COIN")]
 
 
 def draw_option(fe, ui, opt, rect, on, right, now):
@@ -1983,12 +1995,6 @@ def draw_option(fe, ui, opt, rect, on, right, now):
         tiny.text(ui, "%d  >" % len(fe.lib.hidden()), T.PINK if on else T.COMMENT, right, y + 6, right=True)
     elif what == "controls":
         tiny.text(ui, ">", T.PINK if on else T.COMMENT, right, y + 6, right=True)
-    elif what == "exitkey":
-        key = fe.exit_key[0] if fe.exit_key else "OFF"
-        chip(ui, right, y, key, bool(fe.exit_key), on)
-    elif what == "exitpad":
-        combo = "+".join(c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper() for c in fe.exit_combo)
-        chip(ui, right, y, combo or "OFF", bool(fe.exit_combo), on)
     elif what == "power":
         chip(ui, right, y, "ON" if fe.power_exit else "OFF", fe.power_exit, on)
     elif what == "commercial":
@@ -2033,35 +2039,41 @@ def draw_hidden(fe, ui, now):
 
 def draw_controls(fe, ui, now):
     """Tab > Frontend options > Frontend controls: cada funcao com o comando do
-    painel e a tecla dela (um traco: nenhum), a celula escolhida acesa, e o
-    RESET no fim. Esperando o novo, a celula pisca e a dica diz o que fazer."""
+    painel e a tecla dela (um traco: nenhum), o atalho que fecha o jogo (EXIT
+    GAME: os botoes segurados juntos e a tecla), o formato do painel e o
+    RESET, a celula escolhida acesa. Esperando o novo, a celula pisca e a
+    dica diz o que fazer."""
     import feinput
     W.frame(ui, {}, "Controls", [])
     ov = fe.ov
     sel, col, wait = ov["sel"], ov["col"], ov.get("wait")
+    funcs = feinput.FUNCTIONS
+    exit_row, layout_row, reset_row = len(funcs), len(funcs) + 1, len(funcs) + 2
     # As colunas da tecla e do painel (em pe, mais estreitas).
     kw, pw = (58, 40) if T.VERTICAL is not None else (74, 46)
     kx = SX + SW - kw
     padx = kx - 4 - pw
-    y0, rh = 42, 12
+    y0, rh = 40, 12
     count = PANEL_COUNT[panel_layout(fe)]
-    tiny.centered(ui, "PANEL", T.CYAN if col == 0 else T.COMMENT, padx + pw // 2, 35)
-    tiny.centered(ui, "KEYBOARD", T.CYAN if col == 1 else T.COMMENT, kx + kw // 2, 35)
+    tiny.centered(ui, "PANEL", T.CYAN if col == 0 else T.COMMENT, padx + pw // 2, 32)
+    tiny.centered(ui, "KEYBOARD", T.CYAN if col == 1 else T.COMMENT, kx + kw // 2, 32)
     blink = int(now * 3) % 2
-    for i, f in enumerate(feinput.FUNCTIONS):
+
+    def label(i, text, draw_icon, color):
+        """O comeco da linha i: o fundo (escolhida), o icone e o nome."""
         y = y0 + i * rh
-        on = i == sel
-        if on:
+        if i == sel:
             tile_frame(ui, (SX, y, SW, rh - 1), True, now)
-        color, draw_icon = FUNCTION_STYLE[f]
         icon = pygame.Surface((14, 14), pygame.SRCALPHA)
         draw_icon(icon, 7, 7, color)
         ui.blit(pygame.transform.smoothscale(icon, (10, 10)), (SX + 4, y + 1))
-        W.text(ui, fit(FUNCTION_NAMES[f], padx - SX - 22), T.FG if on else T.COMMENT, SX + 18, y + 2)
-        b = fe.input.binds[f]
-        cells = ((padx, pw, feinput.pad_name(b["pad"])), (kx, kw, feinput.key_name(fe.pg, b["key"])))
-        for c, (cx, cw, value) in enumerate(cells):
-            lit = on and c == col
+        W.text(ui, fit(text, padx - SX - 22), T.FG if i == sel else T.COMMENT, SX + 18, y + 2)
+        return y
+
+    def cells(i, y, values, dim=(False, False)):
+        """As duas celulas (painel e tecla) da linha i; dim apaga o valor."""
+        for c, (cx, cw) in enumerate(((padx, pw), (kx, kw))):
+            value, lit = values[c], i == sel and c == col
             rect = (cx, y, cw, rh - 1)
             if lit and wait:
                 W.block(ui, rect, T.PINK if blink else T.PURPLE, None)
@@ -2070,38 +2082,51 @@ def draw_controls(fe, ui, now):
             W.block(ui, rect, T.PINK if lit else T.BG_DEEP, None)
             pygame.draw.rect(ui, T.PINK if lit else T.LINE, rect, 1)
             shown = tiny.fit(value, cw - 6) if value else "-"
-            # Um botao que o formato do painel nao tem fica apagado.
-            missing = c == 0 and b["pad"] and b["pad"][0] == "b" and int(b["pad"][1:]) > count
-            tiny.centered(ui, shown, T.SPACE if lit else (T.FG if value and not missing else T.LINE),
+            tiny.centered(ui, shown, T.SPACE if lit else (T.FG if value and not dim[c] else T.LINE),
                           cx + cw // 2, y + 3)
+
+    def wide(i, y, text, arrows=False):
+        """Uma celula so, da coluna do painel ate a da tecla."""
+        on = i == sel
+        rect = (padx, y, kx + kw - padx, rh - 1)
+        W.block(ui, rect, T.PINK if on else T.BG_DEEP, None)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, rect, 1)
+        tiny.centered(ui, text, T.SPACE if on else T.FG, padx + rect[2] // 2, y + 3)
+        if on and arrows:
+            arrow(ui, padx + 6, y + 5, (-1, 0), T.SPACE, 3)
+            arrow(ui, kx + kw - 7, y + 5, (1, 0), T.SPACE, 3)
+
+    for i, f in enumerate(funcs):
+        y = label(i, FUNCTION_NAMES[f], FUNCTION_STYLE[f][1], FUNCTION_STYLE[f][0])
+        b = fe.input.binds[f]
+        # Um botao que o formato do painel nao tem fica apagado.
+        missing = bool(b["pad"]) and b["pad"][0] == "b" and int(b["pad"][1:]) > count
+        cells(i, y, (feinput.pad_name(b["pad"]), feinput.key_name(fe.pg, b["key"])), (missing, False))
+    # O atalho que fecha o jogo: os botoes segurados juntos e a tecla.
+    y = label(exit_row, "EXIT GAME", exit_icon, T.RED)
+    combo = "+".join(c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper() for c in fe.exit_combo)
+    cells(exit_row, y, (combo, fe.exit_key[0] if fe.exit_key else None))
     # O formato do painel: esquerda e direita trocam.
-    y = y0 + len(feinput.FUNCTIONS) * rh
-    on = sel == len(feinput.FUNCTIONS)
-    if on:
-        tile_frame(ui, (SX, y, SW, rh - 1), True, now)
-    view_icon(ui, SX + 9, y + 6, T.YELLOW)
-    W.text(ui, fit("PANEL LAYOUT", padx - SX - 22), T.FG if on else T.COMMENT, SX + 18, y + 2)
-    rect = (padx, y, kx + kw - padx, rh - 1)
-    W.block(ui, rect, T.PINK if on else T.BG_DEEP, None)
-    pygame.draw.rect(ui, T.PINK if on else T.LINE, rect, 1)
-    name = dict(PANEL_LAYOUTS)[panel_layout(fe)]
-    tiny.centered(ui, name, T.SPACE if on else T.FG, padx + rect[2] // 2, y + 3)
-    if on:
-        arrow(ui, padx + 6, y + 5, (-1, 0), T.SPACE, 3)
-        arrow(ui, kx + kw - 7, y + 5, (1, 0), T.SPACE, 3)
-    y += rh + 1
-    on = sel == len(feinput.FUNCTIONS) + 1
-    W.button(ui, "RESET", WW // 2, y, on, w=70)
+    y = label(layout_row, "PANEL LAYOUT", view_icon, T.YELLOW)
+    wide(layout_row, y, dict(PANEL_LAYOUTS)[panel_layout(fe)], arrows=True)
+    y = label(reset_row, "RESET", reset_icon, T.ORANGE)
+    wide(reset_row, y, "THE FUNCTIONS' DEFAULTS")
     if wait == "pad":
         tips = ("PRESS A PANEL CONTROL - THE SAME ONE AGAIN: NONE", "ESC: CANCEL")
     elif wait == "key":
         tips = ("PRESS A KEY - THE SAME KEY OR DELETE: NONE", "BACK ON THE PANEL: CANCEL")
-    elif sel == len(feinput.FUNCTIONS):
+    elif sel == exit_row:
+        tips = ("SELECT: HOLD THE BUTTONS / PRESS THE KEY   DELETE: OFF",
+                "IN A GAME THEY CLOSE IT (THE BUTTONS HELD 1 S)")
+    elif sel == layout_row:
         tips = ("LEFT/RIGHT: THE SHAPE OF THE PANEL", "THE GUIDE DRAWS ONLY THE BUTTONS IT HAS")
+    elif sel == reset_row:
+        tips = ("SELECT: THE FUNCTIONS GO BACK TO THE DEFAULTS", "THE EXIT SHORTCUT AND THE LAYOUT STAY")
     else:
         tips = ("SELECT: CHANGE   DELETE: NONE   LEFT/RIGHT: COLUMN", "A BUTTON IN USE SWAPS WITH THE OLD ONE")
-    tiny.centered(ui, tips[0], T.YELLOW if wait else T.COMMENT, WW // 2, y + 23)
-    tiny.centered(ui, tips[1], T.COMMENT, WW // 2, y + 30)
+    y = y0 + (reset_row + 1) * rh
+    tiny.centered(ui, tips[0], T.YELLOW if wait else T.COMMENT, WW // 2, y + 3)
+    tiny.centered(ui, tips[1], T.COMMENT, WW // 2, y + 10)
 
 
 def draw_harvest(fe, ui, x, y, w):
@@ -2244,7 +2269,7 @@ def draw_capture(fe, ui, now):
         pygame.draw.rect(ui, T.PINK if int(now * 2) % 2 else T.PURPLE, (kx, ky, 32, 28), 2)
         pygame.draw.rect(ui, T.LINE, (kx + 3, ky + 3, 26, 18), 1)
         W.text(ui, "?", T.YELLOW, kx + 12, ky + 8)
-        tiny.centered(ui, "BUTTON 2 ON A CONTROLLER: CANCEL", T.COMMENT, WW // 2, py + 72)
+        tiny.centered(ui, "BACK ON THE PANEL: CANCEL", T.COMMENT, WW // 2, py + 72)
     else:
         W.centered(ui, "HOLD THE BUTTONS", T.FG, py + 10)
         tiny.centered(ui, "2 OR MORE TOGETHER, FOR 1 SECOND", T.COMMENT, WW // 2, py + 24)
