@@ -125,19 +125,28 @@ screen_resolution() {
   }
   monitor=$(conf_get monitor 2> /dev/null) || monitor=generic_15
   mapfile -t choices < <(video_resolution_choices)
-  if ((${#choices[@]} == 0)); then
-    ui_msg "Resolution" "The $(monitor_label "$monitor") monitor doesn't need a special boot resolution." "" \
-      "The monitor's own EDID defines the video mode."
-    return 0
-  fi
   current=$(conf_get boot_resolution 2> /dev/null) || current=""
-  text="Boot resolution for $conn ($(monitor_label "$monitor"))."
-  drm_output_low_dotclock "$(conf_get card 2> /dev/null)" "$conn" 2> /dev/null ||
-    text+=" This video card or output can't generate low dotclocks: only super resolutions are listed."
-  # Na interface grafica, a lista vertical: os modos se leem e se comparam
-  # melhor um embaixo do outro do que no carrossel.
-  choice=$(UI_STYLE=list ui_menu "Resolution" "$text" "$current" "${choices[@]}" \
-    "custom|Custom resolution (generates an EDID)") || return 0
+  if ((${#choices[@]} == 0)); then
+    # Um monitor sem tabela propria (LCD, VESA): os modos sao os que a saida
+    # lista, do EDID dele.
+    mapfile -t choices < <(video_connector_modes)
+    if ((${#choices[@]} == 0)); then
+      ui_msg "Resolution" "The $(monitor_label "$monitor") monitor doesn't need a special boot resolution." "" \
+        "The monitor's own EDID defines the video mode."
+      return 0
+    fi
+    choice=$(UI_STYLE=list ui_menu "Resolution" \
+      "Boot resolution for $conn ($(monitor_label "$monitor")). These are the modes the monitor reports." \
+      "$current" "${choices[@]}") || return 0
+  else
+    text="Boot resolution for $conn ($(monitor_label "$monitor"))."
+    drm_output_low_dotclock "$(conf_get card 2> /dev/null)" "$conn" 2> /dev/null ||
+      text+=" This video card or output can't generate low dotclocks: only super resolutions are listed."
+    # Na interface grafica, a lista vertical: os modos se leem e se comparam
+    # melhor um embaixo do outro do que no carrossel.
+    choice=$(UI_STYLE=list ui_menu "Resolution" "$text" "$current" "${choices[@]}" \
+      "custom|Custom resolution (generates an EDID)") || return 0
+  fi
   if [[ $choice == custom ]]; then
     screen_custom_resolution
     return 0

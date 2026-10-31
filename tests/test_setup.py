@@ -535,6 +535,15 @@ class OutputTestTests(Base):
         modes = [l.split("|")[0] for l in self.env.out("video_resolution_choices").splitlines()]
         self.assertEqual(modes, ["1280x480iS"])
 
+    def test_monitor_without_a_table_lists_the_modes_the_output_reports(self):
+        # Um LCD nao tem tabela: a lista e a que a saida mostra (o EDID dele),
+        # sem repetir, com o entrelacado marcado.
+        self.env.connector("card0-HDMI-A-1", "connected", modes="1920x1080\n1280x720\n1920x1080i\n1280x720\n")
+        self.env.out("conf_set card card0; conf_set monitor lcd; conf_set connector HDMI-A-1")
+        self.assertNotEqual(self.env.run("video_resolution_choices").returncode, 0)
+        self.assertEqual(self.env.out("video_connector_modes").splitlines(),
+                         ["1920x1080|1920x1080", "1280x720|1280x720", "1920x1080i|1920x1080 interlaced"])
+
     def test_boot_resolution_from_params(self):
         self.assertEqual(self.env.out("video_boot_resolution 'video=VGA-1:640x480iSe,panel_orientation=x'").strip(),
                          "640x480iS")

@@ -886,6 +886,26 @@ class ResolutionAppTests(unittest.TestCase):
     def test_nothing_saved_changes_nothing(self):
         self.assertEqual(self.run_app(None), [])
 
+    def test_extra_modes_are_the_ones_the_output_lists_beyond_the_table(self):
+        # O 640x480i e 320x240 ja estao na tabela do monitor de 15 kHz; o
+        # 800x600 que o EDID lista a mais entra na lista do desktop.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'bin').mkdir()
+            (tmp / 'bin/xrandr').write_text(
+                '#!/bin/bash\n'
+                'echo "VGA-1 connected primary 640x480+0+0 (normal left inverted right x axis y axis)"\n'
+                'echo "   640x480i     59.99*+"\necho "   320x240      60.00"\necho "   800x600      60.00"\n')
+            (tmp / 'bin/xrandr').chmod(0o755)
+            env = dict(os.environ, PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']),
+                       FLIPEROS_SETUP_LIB=str(ROOT / 'fliperos-setup/lib'), FLIPEROS_LOG=str(tmp / 'log'))
+            script = ('source <(sed "/^if \\[\\[ \\${1:-} == --apply-saved/,\\$d" %s)\n'
+                      'video_resolution_choices() { printf "%%s\\n" "320x240S|a" "640x480iS|b"; }\n'
+                      'res_extra_modes VGA-1' % (ROOT / 'config/fliperos-resolution'))
+            out = subprocess.run(['bash', '-c', script], env=env, check=True, timeout=30,
+                                 capture_output=True, text=True).stdout
+            self.assertEqual(out.split(), ['800x600'])
+
     def test_lxde_applies_it_and_the_menu_has_it(self):
         self.assertIn('fliperos-resolution --apply-saved', (ROOT / 'config/fliperos-lxde').read_text())
         entry = (ROOT / 'config/applications/fliperos-resolution.desktop').read_text()

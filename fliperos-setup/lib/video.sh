@@ -755,6 +755,22 @@ video_resolution_choices() {
     min + 0 == 0 || w * 1.3 * k / 1000 >= min + 0'
 }
 
+# video_connector_modes [CARD CONECTOR] imprime "modo|descricao" dos modos que
+# o kernel lista na saida (o EDID do monitor, mais o modo da linha video=),
+# sem repetir. E a lista de um monitor que nao tem tabela propria (LCD, VESA):
+# o que a saida mostra e o que o hardware comporta.
+video_connector_modes() {
+  local card=${1:-} conn=${2:-}
+  [[ -n $card ]] || card=$(conf_get card) || return 1
+  [[ -n $conn ]] || conn=$(conf_get connector) || return 1
+  drm_modes "$card-$conn" | awk '
+    /^[0-9]+x[0-9]+i?$/ && !seen[$0]++ {
+      label = $0
+      if (sub(/i$/, "", label)) label = label " interlaced"
+      print $0 "|" label
+    }'
+}
+
 # video_set_resolution MODO troca o modo de boot da saida configurada,
 # mantendo o "e" (saida forcada) e as opcoes como panel_orientation.
 video_set_resolution() {
