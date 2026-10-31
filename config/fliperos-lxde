@@ -35,4 +35,16 @@ esac
 export XDG_CONFIG_DIRS=/etc/fliperos/xdg:${XDG_CONFIG_DIRS:-/etc/xdg}
 /opt/fliperos/bin/fliperos-desktop-deflicker --watch < /dev/null > /dev/null 2>&1 &
 
+# Servicos do systemd --user e do D-Bus (o blueman-applet que o blueman-manager
+# chama quando ha um adaptador Bluetooth) nao herdam o DISPLAY deste X: sem ele
+# o applet cai e o gerenciador fecha junto.
+if command -v systemctl > /dev/null; then
+  vars=()
+  for name in DISPLAY XAUTHORITY; do [[ -n ${!name:-} ]] && vars+=("$name"); done
+  if ((${#vars[@]})); then
+    systemctl --user import-environment "${vars[@]}" > /dev/null 2>&1
+    dbus-update-activation-environment "${vars[@]}" > /dev/null 2>&1
+  fi
+fi
+
 exec startlxde
