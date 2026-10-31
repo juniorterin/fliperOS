@@ -2,6 +2,8 @@
 
 [English](README.md) | **Português**
 
+[![Grupo no Telegram](https://img.shields.io/badge/Telegram-entre%20no%20grupo-26A5E4?logo=telegram&logoColor=white)](https://t.me/fliperos15khz) Dúvidas, fotos do seu gabinete e ajuda de outros usuários. Cada release é postado lá, com fotos e a explicação de como as novidades funcionam.
+
 Ubuntu 24.04 (amd64) para gabinetes de fliperama com monitor CRT, no estilo do GroovyArcade: **kernel de 15 kHz**, Switchres, emuladores e frontends prontos para jogar e um menu de configuração (`fliperos-setup`) feito para a tela do tubo. Uma alternativa para PC ao GroovyArcade, Batocera, Recalbox, ReplayOS e RGB-Pi para CRTs de fliperama de 15 kHz.
 
 Em desenvolvimento: a 0.18 é testada no QEMU e num gabinete com CRT de 15 kHz. Documentação completa na **[wiki](https://github.com/juniorterin/fliperOS/wiki)** (em inglês). Site: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (código em [`website/`](website)).

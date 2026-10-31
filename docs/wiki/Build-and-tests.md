@@ -32,8 +32,9 @@ docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh
 Every new ISO goes to GitHub [Releases](https://github.com/juniorterin/fliperOS/releases), with the version's changelog, like GroovyArcade's releases ([substring/os](https://github.com/substring/os/releases)): the text by area (system, packages, `fliperos-setup`, tools) and, next to the ISO, the package list.
 
 1. Write in `CHANGELOG.md` the `## VERSION` section with what changed since the previous release (`git log PREVIOUS_VERSION..HEAD` lists the commits). A new ISO after a release needs a new version (`FLIPEROS_VERSION` in `fliperos-mkiso.sh`).
-2. Commit and push.
-3. Tag the version and push the tag (the name is the version, without "v"):
+2. Write `docs/telegram/VERSION.md`, the text for the [Telegram group](https://t.me/fliperos15khz): what the changelog lists, told for the people who use the cabinet, with a picture per new feature and how it works (see below).
+3. Commit and push.
+4. Tag the version and push the tag (the name is the version, without "v"):
 
    ```powershell
    git tag 0.18
@@ -80,6 +81,18 @@ Wine, Steam and Heroic aren't in the image: Setup > Games > Extras installs them
 Also published: `fliperos-0.18.sha256` (the whole ISO and each part) and `fliperos-0.18-pkglist.txt` (package, version and architecture of what's in the image).
 
 `--prerelease` marks it as a pre-release; `--to FOLDER` only prepares the files and the text (`notes.md`), without touching GitHub; `--notes VERSION` shows the version's text.
+
+### Telegram group
+
+Each release is also posted in the group [t.me/fliperos15khz](https://t.me/fliperos15khz), with pictures and an explanation of how each new feature works. `CHANGELOG.md` is the technical list of the GitHub release; the group reads `docs/telegram/VERSION.md`.
+
+The file is a list of messages separated by a line with only `---`. In each one, `![](website/public/screenshots/gui/video.webp)` puts a picture (the path starts at the repository root; an animated WebP or a GIF goes as an animation), and the rest is the text, with `**bold**`, `` `code` ``, `[links](https://...)` and `- ` lists. With a picture, the text is its caption (up to 1024 characters); without one, it is a message of up to 4096.
+
+```sh
+python3 tools/telegram-post.py --dry-run 0.18   # checks the file and the images, sends nothing (needs python3-pil)
+```
+
+The **Release** workflow refuses a tag without that file (or with a broken one) before it starts the build, and when the release is published it calls the **Telegram** workflow (`.github/workflows/telegram.yml`), which runs `tools/telegram-post.py`. To post again without rebuilding the ISO, run it by hand (*Actions > Telegram > Run workflow*, with the version; *dry run* only checks). It needs the repository secret `TELEGRAM_BOT_TOKEN`, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable `TELEGRAM_CHAT_ID`, and `@fliperos15khz` when it is not set. A tag that is moved and redone posts again.
 
 ## Tests
 

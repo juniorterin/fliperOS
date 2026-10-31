@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpen, CircleDot, Package } from 'lucide-react';
+import { BookOpen, CircleDot, Package, Send } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
 import { LogoMark, Wordmark } from '@/components/Logo';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -14,6 +14,7 @@ export function Footer() {
     { href: LINKS.docs, label: f.docs, icon: <BookOpen className="size-4" aria-hidden="true" /> },
     { href: LINKS.releases, label: f.releases, icon: <Package className="size-4" aria-hidden="true" /> },
     { href: LINKS.issues, label: f.issues, icon: <CircleDot className="size-4" aria-hidden="true" /> },
+    { href: LINKS.telegram, label: f.telegram, icon: <Send className="size-4" aria-hidden="true" /> },
   ];
   return (
     <footer className="border-t border-line/70 bg-bg-deeper">

@@ -7,6 +7,9 @@ export const LINKS = {
   // /releases/latest redireciona sempre para o release mais recente.
   latestRelease: `${REPO_URL}/releases/latest`,
   issues: `${REPO_URL}/issues`,
+  // O grupo da comunidade; cada release novo também é postado lá
+  // (tools/telegram-post.py).
+  telegram: 'https://t.me/fliperos15khz',
   instagram: 'https://www.instagram.com/juniorter.in/',
   video: 'https://www.youtube.com/watch?v=W0vrpqgefL0',
   dpVgaAdapter: 'https://a.aliexpress.com/_mPCmfYb',

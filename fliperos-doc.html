@@ -9,6 +9,7 @@ table{border-collapse:collapse;width:100%;font-size:.92em}th,td{border-bottom:1p
 strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </style><main><h1 id="fliperos-018">FliperOS 0.18</h1>
 <p><strong>English</strong> | <a href="README.pt-BR.md">Português</a></p>
+<p><a href="https://t.me/fliperos15khz"><img alt="Telegram group" src="https://img.shields.io/badge/Telegram-join%20the%20group-26A5E4?logo=telegram&amp;logoColor=white" /></a> Questions, photos of your cabinet and help from other users. Each release is posted there with pictures and how the new features work.</p>
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
 <p>In development: 0.18 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>).</p>
 <h2 id="whats-included">What's included</h2>
@@ -29706,6 +29707,7 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
 <ol>
 <li>Write in <code>CHANGELOG.md</code> the <code>## VERSION</code> section with what changed since the previous release (<code>git log PREVIOUS_VERSION..HEAD</code> lists the commits). A new ISO after a release needs a new version (<code>FLIPEROS_VERSION</code> in <code>fliperos-mkiso.sh</code>).</li>
+<li>Write <code>docs/telegram/VERSION.md</code>, the text for the <a href="https://t.me/fliperos15khz">Telegram group</a>: what the changelog lists, told for the people who use the cabinet, with a picture per new feature and how it works (see below).</li>
 <li>Commit and push.</li>
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
@@ -29737,6 +29739,12 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.18.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
 <p>Also published: <code>fliperos-0.18.sha256</code> (the whole ISO and each part) and <code>fliperos-0.18-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
+<h3 id="telegram-group">Telegram group</h3>
+<p>Each release is also posted in the group <a href="https://t.me/fliperos15khz">t.me/fliperos15khz</a>, with pictures and an explanation of how each new feature works. <code>CHANGELOG.md</code> is the technical list of the GitHub release; the group reads <code>docs/telegram/VERSION.md</code>.</p>
+<p>The file is a list of messages separated by a line with only <code>---</code>. In each one, <code>![](website/public/screenshots/gui/video.webp)</code> puts a picture (the path starts at the repository root; an animated WebP or a GIF goes as an animation), and the rest is the text, with <code>**bold**</code>, <code>`code`</code>, <code>[links](https://...)</code> and <code>-</code> lists. With a picture, the text is its caption (up to 1024 characters); without one, it is a message of up to 4096.</p>
+<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.18   # checks the file and the images, sends nothing (needs python3-pil)
+</code></pre>
+<p>The <strong>Release</strong> workflow refuses a tag without that file (or with a broken one) before it starts the build, and when the release is published it calls the <strong>Telegram</strong> workflow (<code>.github/workflows/telegram.yml</code>), which runs <code>tools/telegram-post.py</code>. To post again without rebuilding the ISO, run it by hand (<em>Actions &gt; Telegram &gt; Run workflow</em>, with the version; <em>dry run</em> only checks). It needs the repository secret <code>TELEGRAM_BOT_TOKEN</code>, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable <code>TELEGRAM_CHAT_ID</code>, and <code>@fliperos15khz</code> when it is not set. A tag that is moved and redone posts again.</p>
 <h2 id="tests">Tests</h2>
 <pre><code class="language-powershell">docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py

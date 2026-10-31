@@ -1,11 +1,11 @@
 'use client';
 
-import { BookOpen, Menu, X } from 'lucide-react';
+import { BookOpen, Menu, Send, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { localePath, pagePath } from '@/i18n';
 import { useI18n } from '@/i18n/I18nProvider';
-import { guideUrl, PAGE_SLUGS, readmeUrl } from '@/lib/site';
+import { guideUrl, LINKS, PAGE_SLUGS, readmeUrl } from '@/lib/site';
 import { GithubIcon } from './GithubIcon';
 import { LanguageSwitch } from './LanguageSwitch';
 import { LogoMark, Wordmark } from './Logo';
@@ -104,6 +104,16 @@ export function Header() {
           {t.nav.viewOnGithub}
           <span className="sr-only">{t.a11y.external}</span>
         </a>
+        <a
+          href={LINKS.telegram}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-cyan/60 bg-cyan/10 px-3.5 py-2 text-sm font-medium text-fg transition hover:border-cyan hover:bg-cyan/20 hover:shadow-[0_0_20px_-6px] hover:shadow-cyan"
+        >
+          <Send className="size-4" aria-hidden="true" />
+          {t.nav.telegram}
+          <span className="sr-only">{t.a11y.external}</span>
+        </a>
       </div>
     </aside>
     <header
@@ -188,6 +198,16 @@ export function Header() {
         >
           <GithubIcon className="size-4" />
           {t.nav.viewOnGithub}
+          <span className="sr-only">{t.a11y.external}</span>
+        </a>
+        <a
+          href={LINKS.telegram}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-cyan/60 bg-cyan/10 px-4 py-3 font-medium text-fg"
+        >
+          <Send className="size-4" aria-hidden="true" />
+          {t.nav.telegram}
           <span className="sr-only">{t.a11y.external}</span>
         </a>
       </nav>

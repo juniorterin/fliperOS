@@ -1,11 +1,11 @@
 'use client';
 
-import { GitBranch, GitFork, Star, Tag } from 'lucide-react';
+import { GitBranch, GitFork, Send, Star, Tag } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
 import { Reveal } from '@/components/Reveal';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { RepoStats } from '@/lib/github';
-import { CONTRIBUTORS, readmeUrl } from '@/lib/site';
+import { CONTRIBUTORS, LINKS, readmeUrl } from '@/lib/site';
 
 export function OpenSource({ stats }: { stats: RepoStats | null }) {
   const { t, locale } = useI18n();
@@ -41,6 +41,18 @@ export function OpenSource({ stats }: { stats: RepoStats | null }) {
               >
                 <GithubIcon className="size-6" />
                 {o.cta}
+                <span className="sr-only">{t.a11y.external}</span>
+              </a>
+
+              <p className="mx-auto mt-8 max-w-xl text-pretty text-muted">{o.telegramText}</p>
+              <a
+                href={LINKS.telegram}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center gap-2.5 rounded-xl border border-cyan/60 bg-cyan/10 px-6 py-3 font-semibold text-fg transition hover:-translate-y-0.5 hover:border-cyan hover:bg-cyan/20"
+              >
+                <Send className="size-5 text-cyan" aria-hidden="true" />
+                {o.telegramCta}
                 <span className="sr-only">{t.a11y.external}</span>
               </a>
 

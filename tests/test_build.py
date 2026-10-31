@@ -12661,6 +12661,135 @@ class ReleaseTests(unittest.TestCase):
             self.assertRegex(dockerfile, r'\s%s\s' % re.escape(package))
 
 
+class TelegramTests(unittest.TestCase):
+    """Cada release e postado no grupo do Telegram, com fotos e a explicacao de
+    como funcionam as novidades (tools/telegram-post.py, docs/telegram)."""
+    SCRIPT = ROOT / 'tools/telegram-post.py'
+    GROUP = 'https://t.me/fliperos15khz'
+    VERSION = ReleaseTests.VERSION
+
+    @classmethod
+    def setUpClass(cls):
+        loader = SourceFileLoader('telegram_post', str(cls.SCRIPT))
+        spec = importlib.util.spec_from_loader('telegram_post', loader)
+        cls.post = importlib.util.module_from_spec(spec)
+        loader.exec_module(cls.post)
+
+    def test_every_version_has_its_text_for_the_group(self):
+        # Subir o FLIPEROS_VERSION sem escrever o que contar ao grupo quebra aqui
+        # (e o workflow Release recusa a tag).
+        text = (ROOT / ('docs/telegram/%s.md' % self.VERSION)).read_text(encoding='utf-8')
+        messages = self.post.parse(text)
+        self.assertGreaterEqual(len(messages), 3)
+        self.assertTrue(any(m['images'] for m in messages), 'photos are the point of the post')
+        self.assertIn('/releases/tag/%s' % self.VERSION, text)
+
+    def test_the_text_of_the_version_passes_the_dry_run(self):
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest('Pillow is not installed')
+        result = subprocess.run([sys.executable, str(self.SCRIPT), '--dry-run', self.VERSION],
+                                capture_output=True, text=True, timeout=120)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('messages ok', result.stdout)
+
+    def test_version_without_text_is_refused_and_nothing_goes_out(self):
+        result = subprocess.run([sys.executable, str(self.SCRIPT), '--dry-run', '99.9'],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('docs/telegram/99.9.md', result.stderr)
+
+    def test_markdown_becomes_telegram_html(self):
+        html = self.post.markup('**Bold** and `a<b` & [site](https://x.org/?a=1&b=2)\n- item\n- `**no**`')
+        self.assertEqual(html, '<b>Bold</b> and <code>a&lt;b</code> &amp; '
+                               '<a href="https://x.org/?a=1&amp;b=2">site</a>\n• item\n• <code>**no**</code>')
+
+    def test_messages_split_on_a_line_with_only_dashes(self):
+        messages = self.post.parse('one\n\n---\n\n![](README.md)\ntwo\n\n---\n\n')
+        self.assertEqual([m['text'] for m in messages], ['one', 'two'])
+        self.assertEqual([len(m['images']) for m in messages], [0, 1])
+
+    def test_a_missing_image_or_a_text_too_long_is_an_error_before_posting(self):
+        with self.assertRaises(self.post.PostError):
+            self.post.parse('![](website/public/screenshots/nope.webp)\ntext')
+        with self.assertRaises(self.post.PostError):
+            self.post.parse('![](../../etc/passwd)\ntext')
+        with self.assertRaises(self.post.PostError):
+            self.post.parse('x' * 4097)
+        with self.assertRaises(self.post.PostError):
+            self.post.parse('  \n---\n')
+
+    def test_caption_goes_with_the_photo_and_a_long_one_goes_before_it(self):
+        sent = []
+        saved = (self.post.call, self.post.prepare, self.post.PAUSE)
+        self.post.call = lambda token, method, fields, files=None: sent.append((method, fields, files))
+        self.post.prepare = lambda path, folder: ('photo', Path('shot.png'))
+        self.post.PAUSE = 0
+        try:
+            messages = [{'text': 'short', 'images': [ROOT / 'README.md', ROOT / 'README.md']},
+                        {'text': 'y' * 1025, 'images': [ROOT / 'README.md']},
+                        {'text': 'only text', 'images': []}]
+            self.post.send('TOKEN', '@group', messages, Path('.'))
+        finally:
+            self.post.call, self.post.prepare, self.post.PAUSE = saved
+        self.assertEqual([m for m, _, _ in sent],
+                         ['sendPhoto', 'sendPhoto', 'sendMessage', 'sendPhoto', 'sendMessage'])
+        self.assertEqual(sent[0][1]['caption'], 'short')
+        self.assertNotIn('caption', sent[1][1])
+        self.assertEqual(sent[2][1]['text'], 'y' * 1025)
+        self.assertNotIn('caption', sent[3][1])
+        self.assertTrue(all(f['chat_id'] == '@group' for _, f, _ in sent))
+
+    def test_the_token_never_reaches_an_error_message(self):
+        import urllib.error
+        original = self.post.urllib.request.urlopen
+
+        def refuse(request, timeout=None):
+            raise urllib.error.HTTPError(request.full_url, 400, 'Bad Request', {},
+                                         io.BytesIO(b'{"ok":false,"description":"chat not found"}'))
+
+        self.post.urllib.request.urlopen = refuse
+        try:
+            with self.assertRaises(self.post.PostError) as caught:
+                self.post.call('123:SECRET', 'sendMessage', {'chat_id': '@x', 'text': 'hi'})
+        finally:
+            self.post.urllib.request.urlopen = original
+        self.assertIn('chat not found', str(caught.exception))
+        self.assertNotIn('SECRET', str(caught.exception))
+
+    def test_release_posts_after_publishing_and_refuses_a_tag_without_the_text(self):
+        release = (ROOT / '.github/workflows/release.yml').read_text()
+        self.assertLess(release.index('telegram-post.py --dry-run "$version"'), release.index('name: ISO\n'))
+        self.assertIn('uses: ./.github/workflows/telegram.yml', release)
+        self.assertIn('needs: iso', release)
+        self.assertIn("if: github.ref_type == 'tag'", release[release.index('  telegram:'):])
+        telegram = (ROOT / '.github/workflows/telegram.yml').read_text()
+        self.assertIn('workflow_call:', telegram)
+        self.assertIn('workflow_dispatch:', telegram)
+        self.assertIn('TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}', telegram)
+        self.assertIn('python3 tools/telegram-post.py "$VERSION"', telegram)
+        # Sem o token o workflow so avisa: o release ja saiu.
+        self.assertIn('::warning::', telegram)
+        self.assertIn('@fliperos15khz', self.SCRIPT.read_text())
+
+    def test_the_group_button_is_on_the_site_and_in_the_docs(self):
+        site = (ROOT / 'website/src/lib/site.ts').read_text()
+        self.assertIn("telegram: '%s'" % self.GROUP, site)
+        for page in ('website/src/components/Header.tsx', 'website/src/sections/Footer.tsx',
+                     'website/src/sections/OpenSource.tsx'):
+            self.assertIn('LINKS.telegram', (ROOT / page).read_text(), page)
+        for page in ('README.md', 'README.pt-BR.md', 'docs/wiki/Home.md', 'website/public/llms.txt'):
+            self.assertIn(self.GROUP, (ROOT / page).read_text(encoding='utf-8'), page)
+        # Os textos do botao existem nos dois idiomas: o menu, o rodape e o
+        # cartao da RGB-80 (esse e o grupo do vendedor, outro link).
+        for lang in ('en-US', 'pt-BR'):
+            i18n = (ROOT / ('website/src/i18n/%s.ts' % lang)).read_text(encoding='utf-8')
+            self.assertEqual(len(re.findall(r'^\s+telegram: ', i18n, re.M)), 3, lang)
+            self.assertIn('telegramCta:', i18n)
+            self.assertIn('telegramText:', i18n)
+
+
 class SplashTests(unittest.TestCase):
     THEMES = ROOT / 'config/splashscreen'
 

@@ -185,6 +185,7 @@ The clock comes from the network (`systemd-timesyncd`). On the first test on the
 | `packaging/` | Frontend `.deb`s and the APT repository |
 | `tests/`, `tools/` | Tests and verification tools |
 | `README.md`, `docs/wiki/` | The summary and the full documentation: the pages of this wiki, kept next to the code |
+| `tools/telegram-post.py`, `docs/telegram/` | Posts each release in the Telegram group (t.me/fliperos15khz): `docs/telegram/VERSION.md` has the messages with pictures and how each new feature works; the Release workflow calls it |
 | `tools/wiki-publish.sh`, `tools/render-docs.py` | Publishes `docs/wiki` to the GitHub wiki; builds `fliperos-doc.html` (everything in a single file, for offline reading) |
 | `CHANGELOG.md`, `tools/release-publish.sh` | What changed in each version, in the format of GroovyArcade's releases; publishes the audited ISO to GitHub Releases with the version's section |
 | `docs/wikipedia/FliperOS.wiki` | Draft of a Wikipedia article, in wikitext; its references point to the pages in `docs/wiki` |

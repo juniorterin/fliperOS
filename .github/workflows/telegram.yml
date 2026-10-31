@@ -1,0 +1,61 @@
+# Posta no grupo do Telegram (t.me/fliperos15khz) o texto de uma versao, com
+# fotos e a explicacao de como funcionam as novidades: docs/telegram/VERSAO.md,
+# pelo tools/telegram-post.py.
+#
+# O workflow Release chama este depois de publicar a ISO. Rodar a mao (Actions >
+# Telegram > Run workflow) serve para postar de novo sem refazer a ISO, ou para
+# so conferir o arquivo (dry run).
+#
+# Precisa do secret TELEGRAM_BOT_TOKEN (o bot do @BotFather, administrador do
+# grupo). O destino e a variavel TELEGRAM_CHAT_ID, e na falta dela, @fliperos15khz.
+# Sem o token nada e postado e o workflow so avisa.
+name: Telegram
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versao a postar (a do docs/telegram/VERSAO.md), por exemplo 0.18'
+        required: true
+        type: string
+      dry_run:
+        description: 'So conferir o arquivo e as imagens, sem postar'
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    secrets:
+      TELEGRAM_BOT_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pillow
+        run: sudo apt-get install -y --no-install-recommends python3-pil
+
+      - name: Postar
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+        run: |
+          if [[ $DRY_RUN == true ]]; then
+            python3 tools/telegram-post.py --dry-run "$VERSION"
+          elif [[ -z $TELEGRAM_BOT_TOKEN ]]; then
+            echo "::warning::sem o secret TELEGRAM_BOT_TOKEN: nada foi postado no Telegram"
+            python3 tools/telegram-post.py --dry-run "$VERSION"
+          else
+            python3 tools/telegram-post.py "$VERSION"
+          fi
