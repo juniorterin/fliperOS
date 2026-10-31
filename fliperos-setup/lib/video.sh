@@ -190,15 +190,16 @@ video_suggested_monitor() {
 #     nao gera dotclock baixo; "e" no fim se foi preciso forcar a saida;
 #   - EDID de fabrica com um monitor de CRT escolhido (l): um conversor
 #     DisplayPort/HDMI para VGA devolve o EDID dele, de modos de 31 kHz, e a
-#     saida seria tomada por LCD: sem um modo de boot o menu sobe a 48 kHz e
-#     o tubo fica sem imagem. Vale a super resolucao, mesmo numa placa que
-#     gera dotclock baixo: o conversor pode nao passar o modo nativo.
+#     saida seria tomada por LCD. Um modo "video=" nao basta: o SDL (o
+#     frontend, o Setup) abre o primeiro modo da lista, o de 48 kHz do EDID, e
+#     o Switchres devolve a tela a ele quando um jogo fecha. Troca-se o EDID
+#     por um de 15 kHz do Switchres, como a entrada "EDID progressive" do boot.
 video_kernel_params() {
   local conn=$1 flags=$2 monitor=$3 base enabled="" res="" fw
   base=${flags%a}
   [[ $monitor == lcd ]] && return 0
   [[ $base =~ ^s?e$ ]] && enabled=e
-  if [[ $base =~ ^([er]|s?l)$ ]]; then
+  if [[ $base =~ ^[er]$ ]]; then
     res=$(monitor_kernel_resolution "$monitor" 60 i super) || return 1
   elif [[ $base =~ ^s[er]$ ]]; then
     res=$(monitor_kernel_resolution "$monitor" 60 i) || return 1
@@ -215,6 +216,10 @@ video_kernel_params() {
     echo "video=$conn:e drm.edid_firmware=$conn:edid/$SUPER240_EDID"
   elif cmdline_get "$(< "$PROC_CMDLINE")" drm.edid_firmware > /dev/null; then
     echo "video=$conn:e drm.edid_firmware=$conn:edid/$monitor.bin"
+  elif [[ $base =~ ^s?l$ ]]; then
+    fw=$monitor.bin
+    [[ $MONITORS_15K == *" $monitor "* ]] && fw=generic_15_super_resp.bin
+    echo "video=$conn:e drm.edid_firmware=$conn:edid/$fw"
   elif [[ -n $res ]]; then
     echo "video=$conn:$res$enabled"
   elif [[ -n $enabled ]]; then

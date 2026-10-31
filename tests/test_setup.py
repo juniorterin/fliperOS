@@ -386,11 +386,14 @@ class OutputTestTests(Base):
     def test_factory_edid_with_a_crt_gets_a_boot_mode(self):
         # Um conversor DisplayPort/HDMI para VGA devolve o EDID dele (modos de
         # 31 kHz): a saida vira "l", e sem modo de boot o menu sobe a 48 kHz.
-        self.assertEqual(self.params("l", "generic_15"), "video=VGA-1:1280x480iS")
-        self.assertEqual(self.params("sl", "generic_15"), "video=VGA-1:1280x480iS")
-        self.assertEqual(self.params("sla", "generic_15"), "video=VGA-1:1280x480iS")
-        self.assertEqual(self.params("sl", "arcade_25"), "video=VGA-1:800x600iS")
-        self.assertEqual(self.params("l", "arcade_31"), "video=VGA-1:640x480S")
+        # Um "video=" so nao basta: o SDL abre o primeiro modo da lista, o do
+        # EDID do conversor. Troca-se o EDID, como a entrada "EDID progressive".
+        edid = "video=VGA-1:e drm.edid_firmware=VGA-1:edid/%s"
+        self.assertEqual(self.params("l", "generic_15"), edid % "generic_15_super_resp.bin")
+        self.assertEqual(self.params("sl", "generic_15"), edid % "generic_15_super_resp.bin")
+        self.assertEqual(self.params("sla", "generic_15"), edid % "generic_15_super_resp.bin")
+        self.assertEqual(self.params("sl", "arcade_25"), edid % "arcade_25.bin")
+        self.assertEqual(self.params("l", "arcade_31"), edid % "arcade_31.bin")
 
     def test_lcd_and_switchres_edid_need_no_params(self):
         self.assertEqual(self.params("sl", "lcd"), "")
@@ -489,11 +492,11 @@ class OutputTestTests(Base):
 
     def test_displayport_converter_with_its_own_edid_boots_in_super_resolution(self):
         # DisplayPort para VGA com EDID de fabrica numa placa de dotclock baixo
-        # (Ryzen 5600GT): o boot vai a 1280x480iS, e os jogos seguem nativos.
+        # (Ryzen 5600GT): o EDID do conversor e trocado por um de 15 kHz, e os
+        # jogos seguem nativos.
         conf, ini = self.saved("card0-DP-1", "sl", "generic_15")
         self.assertIn("detection=sl\n", conf)
-        self.assertIn("kernel_video=video=DP-1:1280x480iS\n", conf)
-        self.assertIn("boot_resolution=1280x480iS\n", conf)
+        self.assertIn("kernel_video=video=DP-1:e drm.edid_firmware=DP-1:edid/generic_15_super_resp.bin\n", conf)
         self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+0$")
 
     def test_boot_mode_missing_on_a_cabinet_saved_before_the_rule(self):
@@ -516,7 +519,7 @@ class OutputTestTests(Base):
         self.env.out("video_reconfigure_monitor generic_15")
         conf = (self.env.etc / "fliperos.conf").read_text()
         self.assertIn("detection=l\n", conf)
-        self.assertIn("kernel_video=video=HDMI-A-1:1280x480iS\n", conf)
+        self.assertIn("kernel_video=video=HDMI-A-1:e drm.edid_firmware=HDMI-A-1:edid/generic_15_super_resp.bin\n", conf)
         self.assertRegex((self.env.etc / "switchres.ini").read_text(), r"(?m)^\s*dotclock_min\s+25\.0$")
         self.env.out("video_reconfigure_monitor lcd")
         conf = (self.env.etc / "fliperos.conf").read_text()
