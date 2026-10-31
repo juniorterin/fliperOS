@@ -30,6 +30,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>copy games, BIOS and artwork</strong>, filter a MAME romset and download only what suits your cabinet;</li>
 <li><strong>check the system</strong> (video mode and modeline, temperatures, logs), preview the marquee (Pixelcade or ZeDMD) with no hardware, or open a terminal.</li>
 </ul>
+<p>At the cabinet, hold <strong>Start and Down</strong> for a second in any game to open the <a href="docs/wiki/Installed-system.md#on-screen-menu">on-screen menu</a>: volume, 480i filter, geometry and colour, over the running game.</p>
 <p>Every page in detail: <a href="#Web-panel">Web panel</a>.</p>
 <h3 id="new-your-controller-on-the-stream">New: your controller on the stream</h3>
 <p>The stick and the buttons light up on your live stream while you press them on the cabinet, like the input displays of fighting game streams. It's a page for an OBS Browser Source, with a transparent background: copy its address from <strong>Live &gt; Controller for OBS</strong> and paste it in OBS.</p>
@@ -1289,7 +1290,27 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 - before each program in <code>fliperos-kms-run</code> and <code>fliperos-x11-run</code> (an X server that closes puts back the table it found);
 - in X, in <code>fliperos-x11-client</code> and <code>fliperos-lxde</code>, because Xorg starts with a linear table;
 - when the settings are saved.</p>
-<p>Without a CTM (the cabinet's Radeon R7 240 on the <code>radeon</code> driver has only the 256-point LUT and <code>output_csc</code>), the Setup writes <code>color_ctm=sw</code>. Then saturation and hue go through the same OpenGL layer as the flicker filter (<code>libfliperos-deflicker.so</code>, in every emulator and frontend, and in the Setup's menu), and through picom on the desktop. Only the text console stays without them.</p>
+<p>Without a CTM (the cabinet's Radeon R7 240 has only the 256-point LUT, on <code>radeon</code> and on <code>amdgpu</code>), the Setup writes <code>color_ctm=sw</code>. Then saturation and hue go through the same layers as the flicker filter (<code>libfliperos-deflicker.so</code> in OpenGL, <code>libfliperos-vkfps.so</code> in Vulkan, in every emulator and frontend, and in the Setup's menu), and through picom on the desktop. Only the text console stays without them.</p>
+<h2 id="on-screen-menu">On-screen menu</h2>
+<p>Hold <strong>Start and Down</strong> for a second, or press <strong>Pause</strong> on a keyboard, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.</p>
+<ul>
+<li><strong>Volume</strong>. The volume keys of a keyboard or of a panel also show a bar for 2 seconds, without taking the controls or opening the menu.</li>
+<li><strong>480i filter</strong>: off, light, medium or strong for the program on screen. It only shows in an interlaced mode, and the change counts on the next frame.</li>
+<li><strong>Geometry</strong>: horizontal size and position, and vertical position, with a frame and a cross over the picture. Each change is on the tube at once. <strong>Save</strong> keeps it for every game (the same <code>crt_range</code> as Video Setup &gt; Geometry), and leaving without saving puts the mode back. Switchres stops at what the monitor accepts, and the value on screen goes back to that limit.</li>
+<li><strong>Colour</strong>: every setting of the colour calibration, and back to the defaults.</li>
+</ul>
+<p>The arrows move and change, the first button opens and the second goes back, as in the Setup's menus. In <code>fliperos.conf</code>:</p>
+<ul>
+<li><code>osd=off</code> turns it off. It is also in the web panel, in Video, and it stays closed in the frontend's commercial mode;</li>
+<li><code>osd_combo=start+down</code> is the shortcut, with the controls of the Button mapping;</li>
+<li><code>osd_hold=1.0</code> is how many seconds to hold them;</li>
+<li><code>osd_key=119</code> is the key, as an evdev code. <code>0</code> is no key.</li>
+</ul>
+<p><code>fliperos-osd</code> runs as a service. It reads the shortcut with <code>fliperos-buttons hotkey</code> and writes a 320x240 picture to <code>/run/fliperos-osd/screen</code>, which exists only while the menu is open. The layers of the frame swap draw it before the flicker filter, so its letters don't flicker either: <code>config/fliperos-deflicker.c</code> in OpenGL and <code>config/fliperos-vkfps.c</code> in Vulkan.</p>
+<p>So the menu opens only where one of those layers is writing the FPS. On the LXDE desktop, in Fightcade's Wine emulators and in the Setup, nothing opens and the controls stay with the program. If a layer can't draw (a card below OpenGL 3), it tells the service, which gives the controls back.</p>
+<p>The controls are taken with <code>EVIOCGRAB</code> only after the shortcut is released, or the game would keep those buttons held.</p>
+<p>Settings go through the Setup's functions (<code>--setting</code>, <code>--volume</code>, <code>--geometry</code>), one at a time. Geometry uses Switchres's numbers (<code>switchres -c -g</code>). In a game on X it changes the mode through <code>xrandr</code>, because Xorg undoes a change made directly on the card. In KMS (RetroArch, the frontend) it uses <code>fliperos-color timing</code>.</p>
+<p>To drive it without a controller, write <code>open</code>, <code>close</code>, <code>up</code>, <code>down</code>, <code>left</code>, <code>right</code>, <code>enter</code> or <code>esc</code> to <code>/run/fliperos-osd/control</code> as root.</p>
 <p><strong>Main menu</strong> (gasetup's <code>mainmenu</code>; the title shows <code>host (IP) - N% used on /</code>):</p>
 <ul>
 <li><strong>Start frontend</strong></li>
@@ -28341,7 +28362,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>It is not loaded into Xorg or into Switchres: <code>fliperos-x11-run</code> takes it out of an <code>LD_PRELOAD</code> inherited from a frontend, and <code>fliperos-x11-client</code> puts it back on the emulator alone. The library catches the frame swap (<code>glXSwapBuffers</code>, <code>eglSwapBuffers</code>, including lookups through <code>dlsym</code> and <code>GetProcAddress</code>, as SDL does).</p>
 <p>It copies the frame, draws it back through a three-tap vertical filter and restores the GL state the emulator had. It checks the CRTC mode of every card (<code>/dev/dri/card0</code> to <code>card7</code>, since the monitor's card is not always <code>card0</code>) through DRM every 30 frames: in a progressive mode (240p, 31 kHz, LCD) it does nothing.</p>
 <p>Programs in <strong>Vulkan</strong> (PCSX2, Dolphin, DuckStation and Flycast on <code>amdgpu</code>) get the same filter from the implicit Vulkan layer <code>config/fliperos-vkfps.c</code>, on with <code>FLIPEROS_VK_FPS=1</code>. Before each present, in an interlaced mode, it copies the image and draws it back with the same weights and the same level. They stay on Vulkan: the layer asks the swapchain for what it needs and allocates nothing until the first filtered frame.</p>
-<p>The layer was tested on Mesa's software driver (lavapipe) with the Khronos validation layers on (<code>tools/vkfps-test.sh</code>), and on the cabinet's R7 240 (RADV on <code>amdgpu</code>) in a real interlaced Xorg. There, one-line stripes gave the expected values at each level, and Flycast and PCSX2 ran in Vulkan with it, at the same speed with and without the filter and with no GPU errors. The level changes from the web panel with the game open. Dolphin and DuckStation have not run with it yet. The software saturation and hue of the colour calibration stay out of it, since only <code>radeon</code> uses them and it has no Vulkan.</p>
+<p>The layer was tested on Mesa's software driver (lavapipe) with the Khronos validation layers on (<code>tools/vkfps-test.sh</code>), and on the cabinet's R7 240 (RADV on <code>amdgpu</code>) in a real interlaced Xorg. There, one-line stripes gave the expected values at each level, and Flycast and PCSX2 ran in Vulkan with it, at the same speed with and without the filter and with no GPU errors. The level changes from the web panel with the game open. Dolphin and DuckStation have not run with it yet. The software saturation and hue of the colour calibration go through it too, for cards without a colour matrix.</p>
 <p>The LXDE desktop draws without OpenGL, so it gets the same filter through <strong>picom</strong> with a window shader (<code>config/fliperos-desktop-deflicker --watch</code>, started by <code>fliperos-lxde</code>, at the Desktop row's level <code>deflicker_desktop=</code>). It checks the screen mode every 2 seconds and runs picom only while it is interlaced, so a change in Screen Resolution counts at once. Ubuntu's own picom autostart (<code>/etc/xdg/autostart/picom.desktop</code>, without the shader) would take the screen first, since only one compositor runs at a time: <code>fliperos-lxde</code> puts <code>/etc/fliperos/xdg</code> first in <code>XDG_CONFIG_DIRS</code>, where a <code>picom.desktop</code> with <code>Hidden=true</code> hides it.</p>
 <p>The programs that cannot take the library get the same picom over their whole Xorg: <code>fliperos-x11-client</code> starts it for Fightcade (its lobby is Electron, and FBNeo, SNES9x and FBA are 32-bit Wine programs) and for any <code>wine</code> or <code>.exe</code> command. The Fightcade lobby (512x448, interlaced on a 15 kHz tube) uses the Other programs level; while a Flycast match is open, <code>fliperos-fightcade</code> switches it to the Fightcade Flycast row's level (<code>deflicker_fightcade-flycast=</code>). The Wine matches run at 240 lines, so there picom has nothing to filter and stays off.</p>
 <p>For testing:
@@ -29990,6 +30011,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <tr>
 <td><code>config/fliperos-padkeys</code>, <code>config/fliperos-padkeys.service</code></td>
 <td>Controller as keyboard in the setup menus</td>
+</tr>
+<tr>
+<td><code>config/fliperos-osd</code>, <code>config/fliperos-osd.service</code></td>
+<td>The on-screen menu over games and frontends: volume, 480i filter, geometry and colour</td>
 </tr>
 <tr>
 <td><code>config/fliperos-calibrate</code></td>

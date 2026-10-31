@@ -325,6 +325,16 @@ audio_set_volume() {
   conf_set volume "$pct"
 }
 
+# audio_osd_notice: a barra de volume por cima do jogo (config/fliperos-osd). Abre
+# para ler e escrever: assim nao trava se o servico nao estiver lendo.
+audio_osd_notice() {
+  local fifo=${OSD_CONTROL:-/run/fliperos-osd/control} fd
+  [[ -p $fifo && -w $fifo ]] || return 0
+  exec {fd}<> "$fifo" || return 0
+  printf 'volume\n' >&"$fd"
+  exec {fd}>&-
+}
+
 # audio_step up|down|mute: as teclas de volume do teclado (triggerhappy, ver
 # config/fliperos-volume.triggers), em qualquer tela: KMS, X ou console. O
 # estado e gravado a cada toque, porque gabinete costuma ser desligado na
@@ -359,6 +369,7 @@ audio_step() {
     amixer -q -c "$card" sset "$control" $change > /dev/null 2>&1 || true
   done
   alsactl store "$card" > /dev/null 2>&1 || true
+  audio_osd_notice
 }
 
 # ── Latencia de audio do GroovyMAME (Audio Latency MAME do gasetup) ────

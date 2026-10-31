@@ -25,8 +25,12 @@ geometria vale na hora, com as contas do Switchres, e so fica se for salva: num
 jogo em KMS, pelo fliperos-color timing; num jogo no X, pelo xrandr, como o
 proprio Switchres faz (uma troca direta na placa, o Xorg desfaz).
 
-Por /run/fliperos-osd/control (open, close, up, down, left, right, enter, esc) o
-menu tambem anda sem controle: os testes e o SSH.
+As teclas de volume (o triggerhappy, fliperos-setup --volume) escrevem "volume" em
+/run/fliperos-osd/control, e uma barra aparece por BAR_SECONDS, sem tomar os
+controles.
+
+Pelo mesmo arquivo (open, close, up, down, left, right, enter, esc) o menu tambem
+anda sem controle: os testes e o SSH.
 """
 import fcntl
 import glob
@@ -61,6 +65,8 @@ SETUP_FLAG = os.environ.get("FLIPEROS_PADKEYS_FLAG", "/run/fliperos/padkeys")
 # seria tempo de graca), e o Start+Select ja abre o menu de varios emuladores.
 DEFAULT_COMBO, DEFAULT_KEY, DEFAULT_HOLD = "start+down", 119, 1.0  # 119: a tecla Pause
 IDLE_CLOSE = 20.0
+# Quanto tempo a barra das teclas de volume fica na tela.
+BAR_SECONDS = 2.0
 # Quanto tempo o menu espera soltarem o atalho antes de tomar os controles.
 RELEASE_WAIT = 3.0
 FPS_FRESH = 3.0
@@ -417,6 +423,15 @@ class Worker:
                 self.lock.wait(left)
 
 
+def volume_state():
+    """(porcentagem, mudo) do --volume state; None sem mixer."""
+    out = run([SETUP, "--volume", "state"], timeout=5)
+    fields = out.stdout.split() if out and out.returncode == 0 else []
+    if not fields or not fields[0].isdigit():
+        return None
+    return int(fields[0]), fields[-1] == "off"
+
+
 # ── As paginas ─────────────────────────────────────────────────────
 
 class Row:
@@ -591,9 +606,16 @@ class Menu:
         return out.stdout if out else ""
 
     def volume_state(self):
-        out = run([SETUP, "--volume", "state"], timeout=5)
-        fields = out.stdout.split() if out and out.returncode == 0 else []
-        return int(fields[0]) if fields and fields[0].isdigit() else None
+        state = volume_state()
+        return state[0] if state else None
+
+    def refresh_volume(self):
+        """As teclas de volume com o menu aberto: a linha mostra o valor novo."""
+        state = volume_state()
+        for row in self.stack[0]["rows"]:
+            if state and row.label == "Volume":
+                row.value = state[0]
+                self.dirty = True
 
     # O que as linhas fazem.
     def setter(self, key):
@@ -764,6 +786,24 @@ class Painter:
         if page["top"] + self.VISIBLE < len(rows):
             bottom = y + height - 2
             pg.draw.polygon(surface, t.COMMENT + (255,), [(x + width // 2 - 3, bottom - 2), (x + width // 2 + 3, bottom - 2), (x + width // 2, bottom + 1)])
+        return surface
+
+    def volume_bar(self, percent, muted):
+        """A barra das teclas de volume, no lugar do menu, em RGBA."""
+        pg, t = self.pg, self.theme
+        t.set_orientation(read_conf().get("orientation", ""))
+        surface = pg.Surface((t.WIDTH, t.HEIGHT), pg.SRCALPHA)
+        width, height = t.WIDTH - 2 * t.SAFE_X, 16
+        x, y = (t.WIDTH - width) // 2, t.HEIGHT - t.SAFE_Y - height
+        pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
+        pg.draw.rect(surface, t.PURPLE + (255,), (x, y, width, height), 1)
+        self.text(surface, "Volume", t.PINK, x + 6, y + 4)
+        value = self.font.render("Mute" if muted else "%d%%" % percent, False, t.ORANGE if muted else t.CYAN)
+        surface.blit(value, (x + width - 6 - value.get_width(), y + 4))
+        bar_x, bar_w = x + 6 + 56, width - 6 - 56 - 6 - 8 * 5
+        pg.draw.rect(surface, t.COMMENT + (255,), (bar_x, y + 5, bar_w, 6), 1)
+        fill = t.COMMENT if muted else t.GREEN
+        pg.draw.rect(surface, fill + (255,), (bar_x + 1, y + 6, round((bar_w - 2) * percent / 100), 4))
         return surface
 
     def frame(self, surface):
@@ -955,6 +995,7 @@ class Service:
         self.hotkey = None
         self.hotkey_args = None
         self.running = True
+        self.bar_until = 0.0
         os.makedirs(RUN_DIR, exist_ok=True)
         self.screen_file = Screen(os.path.join(RUN_DIR, "screen"))
         self.control = self.open_control()
@@ -1029,12 +1070,34 @@ class Service:
         self.stop_hotkey()
         return b"exit" in data
 
+    # A barra das teclas de volume.
+    def bar_allowed(self, screen):
+        """So o volume, sem tomar nada: vale tambem no modo comercial."""
+        return bool(screen) and read_conf().get("osd") != "off" and not os.path.exists(SETUP_FLAG)
+
+    def show_bar(self):
+        if not self.bar_allowed(on_screen()):
+            return
+        state = volume_state()
+        if not state:
+            return
+        if self.painter is None:
+            self.painter = Painter()
+        self.screen_file.show(self.painter.pg.image.tobytes(self.painter.theme.upright(self.painter.volume_bar(*state)), "RGBA"))
+        self.bar_until = time.monotonic() + BAR_SECONDS
+
+    def tick_bar(self):
+        if self.bar_until and time.monotonic() >= self.bar_until:
+            self.bar_until = 0.0
+            self.screen_file.hide()
+
     # O menu.
     def open_menu(self):
         screen = on_screen()
         if not self.allowed(screen):
             return
         self.stop_hotkey()
+        self.bar_until = 0.0
         try:
             os.unlink(os.path.join(screen["runtime"], "fliperos-osd-refused"))
         except OSError:
@@ -1072,6 +1135,8 @@ class Service:
                     for word in self.read_control():
                         if word == "close":
                             menu.close()
+                        elif word == "volume":
+                            menu.refresh_volume()
                         elif word in COMMANDS:
                             pressed.append(COMMANDS[word])
                 inputs.keys.tick(time.monotonic())
@@ -1091,8 +1156,12 @@ class Service:
             fds = [self.control]
             if self.hotkey:
                 fds.append(self.hotkey.stdout.fileno())
-            ready = select.select(fds, [], [], 0.5)[0]
-            if self.control in ready and "open" in self.read_control():
+            ready = select.select(fds, [], [], 0.1 if self.bar_until else 0.5)[0]
+            words = self.read_control() if self.control in ready else []
+            if "volume" in words:
+                self.show_bar()
+            self.tick_bar()
+            if "open" in words:
                 self.open_menu()
             elif self.hotkey and self.hotkey.stdout.fileno() in ready and self.hotkey_fired():
                 self.open_menu()
@@ -1107,9 +1176,14 @@ def shot(page, path):
     painter = Painter()
     mode = {"clock": 13038, "h": [640, 666, 727, 831], "v": [480, 483, 489, 523], "interlace": True}
     menu = Menu({"program": "pcsx2", "core": ""}, mode, Worker())
-    if page != "main":
-        menu.open_page(page)
-    surface = painter.theme.upright(painter.panel(menu))
+    if page == "volume":
+        surface = painter.theme.upright(painter.volume_bar(60, False))
+    elif page == "mute":
+        surface = painter.theme.upright(painter.volume_bar(60, True))
+    else:
+        if page != "main":
+            menu.open_page(page)
+        surface = painter.theme.upright(painter.panel(menu))
     backdrop = painter.pg.Surface((WIDTH, HEIGHT))
     backdrop.fill((40, 80, 160))
     backdrop.blit(surface, (0, 0))

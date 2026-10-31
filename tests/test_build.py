@@ -14490,6 +14490,60 @@ class OsdTests(unittest.TestCase):
         (run / 'fliperos-osd-refused').write_text('%d\n' % os.getpid())
         self.assertTrue(self.osd.refused(screen))
 
+    def test_volume_keys_show_a_bar_that_goes_away(self):
+        class FakeImage:
+            @staticmethod
+            def tobytes(surface, kind):
+                return surface
+
+        class FakePg:
+            image = FakeImage
+
+        class FakeTheme:
+            @staticmethod
+            def upright(surface):
+                return surface
+
+        pixels = bytes(self.osd.WIDTH * self.osd.HEIGHT * 4)
+        drawn = []
+
+        class FakePainter:
+            pg, theme = FakePg, FakeTheme
+
+            def volume_bar(self, percent, muted):
+                drawn.append((percent, muted))
+                return pixels
+
+        service = object.__new__(self.osd.Service)
+        service.painter = FakePainter()
+        service.bar_until = 0.0
+        path = Path(self.tmp.name) / 'screen'
+        service.screen_file = self.osd.Screen(str(path))
+        self.osd.SETUP_FLAG = str(Path(self.tmp.name) / 'flag')
+        # Sem camada na tela, nada.
+        self.osd.on_screen = lambda: None
+        service.show_bar()
+        self.assertFalse(path.exists())
+        # Com o jogo, a barra com o volume de agora, e os controles ficam com ele.
+        self.osd.on_screen = lambda: {'pid': 1, 'uid': 1000, 'program': 'x', 'core': '', 'runtime': '/x'}
+        service.show_bar()
+        self.assertEqual(drawn, [(80, False)])
+        self.assertTrue(path.exists())
+        service.tick_bar()
+        self.assertTrue(path.exists())
+        service.bar_until = 1.0
+        service.tick_bar()
+        self.assertFalse(path.exists())
+        self.assertEqual(service.bar_until, 0.0)
+        # Desligada no Setup, ou com o Setup na tela, nada.
+        self.conf.write_text('osd=off\n')
+        service.show_bar()
+        self.assertFalse(path.exists())
+        self.conf.write_text('monitor=generic_15\n')
+        Path(self.osd.SETUP_FLAG).write_text('1\n')
+        service.show_bar()
+        self.assertFalse(path.exists())
+
     def test_layers_and_service_agree_and_it_is_installed(self):
         for path in ('config/fliperos-deflicker.c', 'config/fliperos-vkfps.c'):
             source = (ROOT / path).read_text()

@@ -91,7 +91,7 @@ Without a CTM (the cabinet's Radeon R7 240 has only the 256-point LUT, on `radeo
 
 Hold **Start and Down** for a second, or press **Pause** on a keyboard, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.
 
-- **Volume**.
+- **Volume**. The volume keys of a keyboard or of a panel also show a bar for 2 seconds, without taking the controls or opening the menu.
 - **480i filter**: off, light, medium or strong for the program on screen. It only shows in an interlaced mode, and the change counts on the next frame.
 - **Geometry**: horizontal size and position, and vertical position, with a frame and a cross over the picture. Each change is on the tube at once. **Save** keeps it for every game (the same `crt_range` as Video Setup > Geometry), and leaving without saving puts the mode back. Switchres stops at what the monitor accepts, and the value on screen goes back to that limit.
 - **Colour**: every setting of the colour calibration, and back to the defaults.

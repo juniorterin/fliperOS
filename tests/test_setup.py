@@ -1302,6 +1302,16 @@ class SettingsCliTests(Base):
             self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
         self.assertIn('settings_set "${2:-}" "${3:-}"', (SETUP / "fliperos-setup").read_text())
 
+    def test_volume_keys_tell_the_osd(self):
+        fifo = self.env.dir / "osd-control"
+        env = {"OSD_CONTROL": str(fifo)}
+        # Sem o servico nao ha o arquivo: nada acontece.
+        self.assertEqual(self.env.run("audio_osd_notice", env).returncode, 0)
+        out = self.env.out('mkfifo "$OSD_CONTROL"; exec 3<> "$OSD_CONTROL"; audio_step up; audio_step set 50; '
+                           'audio_step mute; while read -t 0.2 -r word <&3; do echo "$word"; done', env)
+        # As teclas avisam (up e mute); o painel e a propria OSD (set), nao.
+        self.assertEqual(out.split(), ["volume", "volume"])
+
     def test_osd_level_by_program_or_core(self):
         # A OSD (config/fliperos-osd) so conhece o programa aberto ou o core: o
         # nivel vai para a linha da tabela dele, com os mesmos valores.
