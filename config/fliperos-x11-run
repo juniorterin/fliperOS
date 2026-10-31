@@ -136,7 +136,13 @@ case $name in
       "$iniset" "$ini" EmuCore/GS AspectRatio Stretch
       "$iniset" "$ini" UI SetupWizardIncomplete false
       "$iniset" "$ini" UI StartFullscreen true
-      "$iniset" "$ini" UI StartBigPictureMode true
+      # Com um jogo (um frontend) o jogo abre direto, sem passar pelo Big
+      # Picture; sem jogo, o Big Picture, que se usa pelo controle.
+      if (($# > 1)); then
+        "$iniset" "$ini" UI StartBigPictureMode false
+      else
+        "$iniset" "$ini" UI StartBigPictureMode true
+      fi
       "$iniset" "$ini" UI HideMouseCursor true
       # Sem os avisos na tela ao abrir o jogo (0 = None no OsdOverlayPos).
       "$iniset" "$ini" EmuCore/GS OsdMessagesPos 0
@@ -174,7 +180,13 @@ case $name in
         done
       done
     fi
-    set -- "$1" -fullscreen "${@:2}"
+    # Com jogo, -nogui: sem a janela principal nem a lista de jogos antes do
+    # jogo, e fechar o jogo fecha o PCSX2 e volta ao frontend.
+    if (($# > 1)); then
+      set -- "$1" -fullscreen -nogui "${@:2}"
+    else
+      set -- "$1" -fullscreen
+    fi
     # O driver OpenGL do Mesa numa thread propria: a thread GS do PCSX2 e o
     # gargalo num processador fraco (NFS Underground 2 no i3 540: 28 -> 35
     # quadros/s so com isso).

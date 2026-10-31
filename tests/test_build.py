@@ -9483,8 +9483,10 @@ class EmulatorModeTests(unittest.TestCase):
             extra = {'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini'),
                      'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set')}
             out = self.run_x11(['pcsx2', 'game.iso'], home=home, extra=extra).stdout
-            self.assertIn('pcsx2 -fullscreen game.iso', out)
+            # Com jogo, ele abre direto: sem o Big Picture nem a janela antes.
+            self.assertIn('pcsx2 -fullscreen -nogui game.iso', out)
             ini = (Path(home) / '.config/PCSX2/inis/PCSX2.ini').read_text()
+            self.assertIn('StartBigPictureMode = false\n', ini)
             self.assertIn('Bios = %s/bios/ps2\n' % home, ini)
             self.assertIn('Up = SDL-0/DPadUp\n', ini)
             # O direcional do painel tambem no analogico esquerdo (corrida).
@@ -9493,12 +9495,13 @@ class EmulatorModeTests(unittest.TestCase):
             # Mudado pela pessoa, volta a cada abertura; o teclado padrao do
             # analogico vira o painel, outro bind fica.
             ini_path = Path(home) / '.config/PCSX2/inis/PCSX2.ini'
-            ini = ini.replace('StartBigPictureMode = true', 'StartBigPictureMode = false')
             ini = ini.replace('LLeft = SDL-0/DPadLeft', 'LLeft = Keyboard/A')
             ini = ini.replace('LRight = SDL-0/DPadRight', 'LRight = SDL-0/LeftX+')
             ini_path.write_text(ini)
-            self.run_x11(['pcsx2'], home=home, extra=extra)
+            out = self.run_x11(['pcsx2'], home=home, extra=extra).stdout
+            self.assertIn('pcsx2 -fullscreen -- :0', out)
             ini = ini_path.read_text()
+            # Sem jogo, o Big Picture volta.
             self.assertIn('StartBigPictureMode = true\n', ini)
             self.assertIn('LLeft = SDL-0/DPadLeft\n', ini)
             self.assertIn('LRight = SDL-0/LeftX+\n', ini)
