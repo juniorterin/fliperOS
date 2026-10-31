@@ -1650,8 +1650,8 @@ def cmd_watch(args):
 
 def cmd_hotkey(args):
     """Junto com o jogo que o frontend do FliperOS abriu: o atalho que fecha o
-    jogo imprime "exit" e sai. O atalho e uma tecla (--key, o codigo do evdev)
-    ou os comandos do painel segurados juntos por --hold segundos (--combo
+    jogo imprime "exit" e sai. O atalho e uma tecla (--key, o codigo do evdev;
+    repetido, qualquer uma delas) ou os comandos do painel segurados juntos por --hold segundos (--combo
     start+b2, os do Button mapping, de um mesmo jogador). Com --coin, cada
     ficha imprime "coin" (o modo comercial soma o tempo). Nada e tomado do
     jogo: ele le os mesmos controles."""
@@ -1675,7 +1675,7 @@ def cmd_hotkey(args):
                 time.sleep(1 / WATCH_HZ)
             keys = keyboards.down() if keyboards else set()
             # A tecla vale ao ser apertada (segura desde a abertura, nao).
-            key = args.key in keys
+            key = any(code in keys for code in args.key)
             if key and key_was is False:
                 print('exit', flush=True)
                 return 0
@@ -1718,7 +1718,7 @@ def main():
     p.add_argument('map', nargs='?', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
     p.set_defaults(func=cmd_watch)
     p = sub.add_parser('hotkey')
-    p.add_argument('--key', type=int, default=0)
+    p.add_argument('--key', type=int, action='append', default=[])
     p.add_argument('--combo', default='')
     p.add_argument('--hold', type=float, default=1.0)
     p.add_argument('--coin', action='store_true')

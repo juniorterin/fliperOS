@@ -89,7 +89,7 @@ Without a CTM (the cabinet's Radeon R7 240 has only the 256-point LUT, on `radeo
 
 ## On-screen menu
 
-Hold **Start and Down** for a second, or press **Pause** on a keyboard, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.
+Hold **Start and Down** for a second, or press **Pause** on a keyboard or **Play/Pause** on a wireless remote, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.
 
 - **Volume**. The volume keys of a keyboard or of a panel also show a bar for 2 seconds, without taking the controls or opening the menu.
 - **480i filter**: off, light, medium or strong for the program on screen. It only shows in an interlaced mode, and the change counts on the next frame.
@@ -101,7 +101,7 @@ The arrows move and change, the first button opens and the second goes back, as 
 - `osd=off` turns it off. It is also in the web panel, in Video, and it stays closed in the frontend's commercial mode;
 - `osd_combo=start+down` is the shortcut, with the controls of the Button mapping;
 - `osd_hold=1.0` is how many seconds to hold them;
-- `osd_key=119` is the key, as an evdev code. `0` is no key.
+- `osd_key=119,164,201,207` are the keys, as evdev codes: Pause, and the Play/Pause, Pause and Play of a remote. `0` is no key.
 
 `fliperos-osd` runs as a service. It reads the shortcut with `fliperos-buttons hotkey` and writes a 320x240 picture to `/run/fliperos-osd/screen`, which exists only while the menu is open. The layers of the frame swap draw it before the flicker filter, so its letters don't flicker either: `config/fliperos-deflicker.c` in OpenGL and `config/fliperos-vkfps.c` in Vulkan.
 

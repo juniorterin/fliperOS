@@ -14301,6 +14301,19 @@ class OsdTests(unittest.TestCase):
     def labels(self, menu):
         return [row.label for row in menu.page['rows']]
 
+    def test_shortcut_keys_include_the_media_keys_of_a_wireless_remote(self):
+        service = object.__new__(self.osd.Service)
+        command = service.hotkey_command()
+        keys = [command[i + 1] for i, word in enumerate(command) if word == '--key']
+        self.assertEqual(keys, ['119', '164', '201', '207'])
+        self.assertEqual(command[command.index('--combo') + 1], 'start+down')
+        self.conf.write_text('osd_key=88, 0\nosd_combo=\n')
+        self.assertEqual(service.hotkey_command(), [self.osd.BUTTONS, 'hotkey', '--key', '88'])
+        # O fliperos-buttons aceita a opcao repetida, e o frontend continua com uma.
+        source = (ROOT / 'config/fliperos-buttons').read_text()
+        self.assertIn("p.add_argument('--key', type=int, action='append', default=[])", source)
+        self.assertIn('any(code in keys for code in args.key)', source)
+
     def test_parse_switchres_gives_the_mode_and_the_final_range(self):
         result = self.osd.parse_switchres(self.SWITCHRES)
         self.assertEqual(result['mode'], {'clock': 13336, 'h': [640, 665, 727, 850], 'v': [480, 487, 493, 523], 'interlace': True,

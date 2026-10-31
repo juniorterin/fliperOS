@@ -6,7 +6,7 @@ jogo ou do frontend, sem sair deles.
     fliperos-osd --shot PAGINA ARQ  a imagem de uma pagina em PNG (os testes)
 
 O atalho (osd_combo= no fliperos.conf, os comandos do Button mapping segurados
-juntos por osd_hold segundos; osd_key=, o codigo do evdev de uma tecla) e lido
+juntos por osd_hold segundos; osd_key=, os codigos do evdev das teclas) e lido
 pelo fliperos-buttons hotkey, junto com o jogo. O desenho sai por um arquivo em
 /run/fliperos-osd/screen, que as camadas das trocas de quadro poem na tela
 (config/fliperos-deflicker.c no OpenGL, config/fliperos-vkfps.c no Vulkan): uma
@@ -63,7 +63,10 @@ SETUP_FLAG = os.environ.get("FLIPEROS_PADKEYS_FLAG", "/run/fliperos/padkeys")
 
 # O atalho padrao. Start com o direcional: nao poe ficha (no modo comercial
 # seria tempo de graca), e o Start+Select ja abre o menu de varios emuladores.
-DEFAULT_COMBO, DEFAULT_KEY, DEFAULT_HOLD = "start+down", 119, 1.0  # 119: a tecla Pause
+DEFAULT_COMBO, DEFAULT_HOLD = "start+down", 1.0
+# As teclas: Pause do teclado (119) e as de midia dos controles sem fio, Play/Pause
+# (164), Pause (201) e Play (207).
+DEFAULT_KEYS = "119,164,201,207"
 IDLE_CLOSE = 20.0
 # Quanto tempo a barra das teclas de volume fica na tela.
 BAR_SECONDS = 2.0
@@ -1032,9 +1035,9 @@ class Service:
         conf = read_conf()
         combo = conf.get("osd_combo", DEFAULT_COMBO)
         args = [BUTTONS, "hotkey"]
-        key = conf.get("osd_key", str(DEFAULT_KEY))
-        if key.isdigit() and int(key):
-            args += ["--key", key]
+        for key in conf.get("osd_key", DEFAULT_KEYS).split(","):
+            if key.strip().isdigit() and int(key):
+                args += ["--key", key.strip()]
         if combo:
             args += ["--combo", combo, "--hold", conf.get("osd_hold", str(DEFAULT_HOLD))]
         return args

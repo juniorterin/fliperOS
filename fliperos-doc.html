@@ -1292,7 +1292,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 - when the settings are saved.</p>
 <p>Without a CTM (the cabinet's Radeon R7 240 has only the 256-point LUT, on <code>radeon</code> and on <code>amdgpu</code>), the Setup writes <code>color_ctm=sw</code>. Then saturation and hue go through the same layers as the flicker filter (<code>libfliperos-deflicker.so</code> in OpenGL, <code>libfliperos-vkfps.so</code> in Vulkan, in every emulator and frontend, and in the Setup's menu), and through picom on the desktop. Only the text console stays without them.</p>
 <h2 id="on-screen-menu">On-screen menu</h2>
-<p>Hold <strong>Start and Down</strong> for a second, or press <strong>Pause</strong> on a keyboard, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.</p>
+<p>Hold <strong>Start and Down</strong> for a second, or press <strong>Pause</strong> on a keyboard or <strong>Play/Pause</strong> on a wireless remote, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.</p>
 <ul>
 <li><strong>Volume</strong>. The volume keys of a keyboard or of a panel also show a bar for 2 seconds, without taking the controls or opening the menu.</li>
 <li><strong>480i filter</strong>: off, light, medium or strong for the program on screen. It only shows in an interlaced mode, and the change counts on the next frame.</li>
@@ -1304,7 +1304,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <li><code>osd=off</code> turns it off. It is also in the web panel, in Video, and it stays closed in the frontend's commercial mode;</li>
 <li><code>osd_combo=start+down</code> is the shortcut, with the controls of the Button mapping;</li>
 <li><code>osd_hold=1.0</code> is how many seconds to hold them;</li>
-<li><code>osd_key=119</code> is the key, as an evdev code. <code>0</code> is no key.</li>
+<li><code>osd_key=119,164,201,207</code> are the keys, as evdev codes: Pause, and the Play/Pause, Pause and Play of a remote. <code>0</code> is no key.</li>
 </ul>
 <p><code>fliperos-osd</code> runs as a service. It reads the shortcut with <code>fliperos-buttons hotkey</code> and writes a 320x240 picture to <code>/run/fliperos-osd/screen</code>, which exists only while the menu is open. The layers of the frame swap draw it before the flicker filter, so its letters don't flicker either: <code>config/fliperos-deflicker.c</code> in OpenGL and <code>config/fliperos-vkfps.c</code> in Vulkan.</p>
 <p>So the menu opens only where one of those layers is writing the FPS. On the LXDE desktop, in Fightcade's Wine emulators and in the Setup, nothing opens and the controls stay with the program. If a layer can't draw (a card below OpenGL 3), it tells the service, which gives the controls back.</p>

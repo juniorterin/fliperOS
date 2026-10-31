@@ -91,7 +91,7 @@ settings_list() {
     printf 'mm_games|Video|Multi-screen games|choice|%s|on=One screen on each monitor;off=Everything on monitor 1|Games with 2 or 3 screens. Counts after a restart.\n' \
       "$(mm_games_on && echo on || echo off)"
   fi
-  printf 'osd|Video|On-screen menu|choice|%s|on=On;off=Off|Volume, filter, geometry and colour over any game: hold Start and Down for a second, or press Pause on a keyboard.\n' \
+  printf 'osd|Video|On-screen menu|choice|%s|on=On;off=Off|Volume, filter, geometry and colour over any game: hold Start and Down for a second, or press Pause on a keyboard or Play/Pause on a remote.\n' \
     "$([[ $(conf_get osd 2> /dev/null) == off ]] && echo off || echo on)"
   # Audio Setup (o volume fica no Frontend, no gabinete desenhado).
   opts=""
