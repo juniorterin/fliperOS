@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Versao a postar (a do docs/telegram/VERSAO.md), por exemplo 0.18'
+        description: 'Versao a postar, por exemplo 0.18 (ou "all": todas as do CHANGELOG, da mais velha para a mais nova)'
         required: true
         type: string
       dry_run:
@@ -37,7 +37,7 @@ permissions:
 jobs:
   post:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -51,11 +51,13 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
         run: |
+          args=("$VERSION")
+          [[ $VERSION == all ]] && args=(--backfill)
           if [[ $DRY_RUN == true ]]; then
-            python3 tools/telegram-post.py --dry-run "$VERSION"
+            python3 tools/telegram-post.py --dry-run "${args[@]}"
           elif [[ -z $TELEGRAM_BOT_TOKEN ]]; then
             echo "::warning::sem o secret TELEGRAM_BOT_TOKEN: nada foi postado no Telegram"
-            python3 tools/telegram-post.py --dry-run "$VERSION"
+            python3 tools/telegram-post.py --dry-run "${args[@]}"
           else
-            python3 tools/telegram-post.py "$VERSION"
+            python3 tools/telegram-post.py "${args[@]}"
           fi

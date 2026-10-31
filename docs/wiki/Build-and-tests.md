@@ -32,7 +32,7 @@ docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-vmtest bash tools/verify-iso.sh
 Every new ISO goes to GitHub [Releases](https://github.com/juniorterin/fliperOS/releases), with the version's changelog, like GroovyArcade's releases ([substring/os](https://github.com/substring/os/releases)): the text by area (system, packages, `fliperos-setup`, tools) and, next to the ISO, the package list.
 
 1. Write in `CHANGELOG.md` the `## VERSION` section with what changed since the previous release (`git log PREVIOUS_VERSION..HEAD` lists the commits). A new ISO after a release needs a new version (`FLIPEROS_VERSION` in `fliperos-mkiso.sh`).
-2. Write `docs/telegram/VERSION.md`, the text for the [Telegram group](https://t.me/fliperos15khz): what the changelog lists, told for the people who use the cabinet, with a picture per new feature and how it works (see below).
+2. Optional: write `docs/telegram/VERSION.md`, the text for the [Telegram group](https://t.me/fliperos15khz) with a picture per new feature and how it works (see below). Without it the group gets the changelog section.
 3. Commit and push.
 4. Tag the version and push the tag (the name is the version, without "v"):
 
@@ -92,7 +92,7 @@ The file is a list of messages separated by a line with only `---`. In each one,
 python3 tools/telegram-post.py --dry-run 0.18   # checks the file and the images, sends nothing (needs python3-pil)
 ```
 
-The **Release** workflow refuses a tag without that file (or with a broken one) before it starts the build, and when the release is published it calls the **Telegram** workflow (`.github/workflows/telegram.yml`), which runs `tools/telegram-post.py`. To post again without rebuilding the ISO, run it by hand (*Actions > Telegram > Run workflow*, with the version; *dry run* only checks). It needs the repository secret `TELEGRAM_BOT_TOKEN`, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable `TELEGRAM_CHAT_ID`, and `@fliperos15khz` when it is not set. A tag that is moved and redone posts again.
+That file is optional: without it, the group gets the version's section of `CHANGELOG.md` as it is (technical, no pictures), cut into messages of up to 4096 characters. The **Release** workflow checks the text with the dry run before it starts the build, and when the release is published it calls the **Telegram** workflow (`.github/workflows/telegram.yml`), which runs `tools/telegram-post.py`. To post again without rebuilding the ISO, run it by hand (*Actions > Telegram > Run workflow*, with the version; *dry run* only checks). With the version `all` it posts every version of the changelog, oldest first (`--backfill`), which is how the group gets the history. It needs the repository secret `TELEGRAM_BOT_TOKEN`, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable `TELEGRAM_CHAT_ID`, and `@fliperos15khz` when it is not set. A tag that is moved and redone posts again.
 
 ## Tests
 

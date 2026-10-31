@@ -7,7 +7,7 @@
 # o FLIPEROS_VERSION do fliperos-mkiso.sh.
 #
 # Publicada a ISO, o workflow Telegram posta no grupo o docs/telegram/VERSAO.md
-# (fotos e como funcionam as novidades); a tag sem esse arquivo nao comeca.
+# (fotos e como funcionam as novidades) ou, sem ele, a secao do CHANGELOG.
 #
 # Rodar a mao (Actions > Release > Run workflow) gera a ISO da versao atual
 # como artifact, sem publicar.
@@ -50,11 +50,11 @@ jobs:
           fi
           bash tools/release-publish.sh --notes "$version" > /dev/null \
             || { echo "::error::CHANGELOG.md sem a secao \"## $version\""; exit 1; }
-          # O texto do grupo do Telegram (fotos e como funcionam as novidades)
-          # tambem tem de existir, e bem formado, antes de gastar horas de build.
+          # O texto do grupo do Telegram (docs/telegram/VERSAO.md com fotos, ou a
+          # secao do CHANGELOG) tem de estar bem formado antes de gastar horas de build.
           sudo apt-get install -y --no-install-recommends python3-pil > /dev/null
           python3 tools/telegram-post.py --dry-run "$version" > /dev/null \
-            || { echo "::error::docs/telegram/$version.md ausente ou invalido (tools/telegram-post.py --dry-run $version)"; exit 1; }
+            || { echo "::error::texto do Telegram invalido (tools/telegram-post.py --dry-run $version)"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "kernel=$(bash fliperos-kernel.sh key)" >> "$GITHUB_OUTPUT"
 

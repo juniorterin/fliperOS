@@ -12698,7 +12698,33 @@ class TelegramTests(unittest.TestCase):
         result = subprocess.run([sys.executable, str(self.SCRIPT), '--dry-run', '99.9'],
                                 capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 1)
-        self.assertIn('docs/telegram/99.9.md', result.stderr)
+        self.assertIn('CHANGELOG.md has no "## 99.9"', result.stderr)
+
+    def test_without_a_text_of_its_own_the_group_gets_the_changelog_section(self):
+        for version in self.post.changelog_versions():
+            messages = self.post.messages_for(version, True)
+            self.assertTrue(messages, version)
+            self.assertIn('**FliperOS', messages[0]['text'].replace('<b>', '**').replace('</b>', '**'))
+            self.assertIn('/releases/tag/%s' % version, messages[0]['text'])
+            for message in messages:
+                self.assertLessEqual(self.post.visible(message['text']), self.post.TEXT_MAX, version)
+                self.assertEqual(message['images'], [])
+        # O texto com fotos vale no lugar do changelog, se existir.
+        self.assertTrue(self.post.messages_for(self.VERSION, False)[1]['images'] or
+                        any(m['images'] for m in self.post.messages_for(self.VERSION, False)))
+
+    def test_backfill_posts_the_oldest_version_first(self):
+        versions = self.post.changelog_versions()
+        self.assertEqual(versions[0], self.VERSION)
+        self.assertEqual(versions[-1], '0.7')
+        result = subprocess.run([sys.executable, str(self.SCRIPT), '--backfill', '--dry-run'],
+                                capture_output=True, text=True, timeout=300)
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest('Pillow is not installed')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertRegex(result.stdout, r'\d+ messages ok')
 
     def test_markdown_becomes_telegram_html(self):
         html = self.post.markup('**Bold** and `a<b` & [site](https://x.org/?a=1&b=2)\n- item\n- `**no**`')
@@ -12768,7 +12794,8 @@ class TelegramTests(unittest.TestCase):
         self.assertIn('workflow_call:', telegram)
         self.assertIn('workflow_dispatch:', telegram)
         self.assertIn('TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}', telegram)
-        self.assertIn('python3 tools/telegram-post.py "$VERSION"', telegram)
+        self.assertIn('python3 tools/telegram-post.py "${args[@]}"', telegram)
+        self.assertIn('args=(--backfill)', telegram)
         # Sem o token o workflow so avisa: o release ja saiu.
         self.assertIn('::warning::', telegram)
         self.assertIn('@fliperos15khz', self.SCRIPT.read_text())

@@ -2,12 +2,14 @@
 """Posta no grupo do Telegram (t.me/fliperos15khz) o texto de uma versao: fotos
 e a explicacao de como funciona cada novidade.
 
-    python3 tools/telegram-post.py VERSAO              posta docs/telegram/VERSAO.md
-    python3 tools/telegram-post.py --dry-run VERSAO    so confere o arquivo e as imagens, sem rede nem token
+    python3 tools/telegram-post.py VERSAO              posta docs/telegram/VERSAO.md, ou a secao do CHANGELOG.md se nao houver
+    python3 tools/telegram-post.py --changelog VERSAO  posta a secao do CHANGELOG.md mesmo havendo o arquivo
+    python3 tools/telegram-post.py --backfill          posta todas as versoes do CHANGELOG.md, da mais velha para a mais nova
+    python3 tools/telegram-post.py --dry-run ...       so confere o texto e as imagens, sem rede nem token
 
-O CHANGELOG.md e a lista tecnica do release do GitHub; o docs/telegram/VERSAO.md
-e o que o grupo le: escrito para quem usa o gabinete, com uma foto por novidade.
-Cada release novo escreve o seu antes da tag (o workflow Release confere).
+O CHANGELOG.md e a lista tecnica do release do GitHub, e o grupo pode le-la como
+esta (sem fotos). O docs/telegram/VERSAO.md, quando existe, vai no lugar dela:
+as novidades contadas uma a uma, com uma foto cada.
 
 O arquivo e uma lista de mensagens separadas por uma linha so com "---". Dentro
 de cada uma, "![](caminho)" poe uma imagem (o caminho parte da raiz do
@@ -191,17 +193,63 @@ def send(token, chat, messages, folder):
             post('sendPhoto' if kind == 'photo' else 'sendAnimation', fields, {kind: path})
 
 
+RELEASES = 'https://github.com/juniorterin/fliperOS/releases/tag/'
+
+
+def changelog_versions():
+    """As versoes do CHANGELOG.md, da mais nova para a mais velha."""
+    return re.findall(r'(?m)^## (\S+)$', (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8'))
+
+
+def changelog_messages(version):
+    """A secao do CHANGELOG.md da versao, em mensagens de ate 4096 caracteres,
+    cortadas nos limites de linha (sem fotos: e a lista tecnica do release)."""
+    text = (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
+    found = re.search(r'(?ms)^## %s\n(.*?)(?=^## |\Z)' % re.escape(version), text)
+    if not found or not found.group(1).strip():
+        raise PostError('CHANGELOG.md has no "## %s" section' % version)
+    head = '**FliperOS %s**\n[Release no GitHub](%s%s)\n\n' % (version, RELEASES, version)
+    chunks, current = [], head
+    for line in found.group(1).strip().splitlines():
+        if current.strip() and visible(markup(current + line + '\n')) > TEXT_MAX - 50 and current != head:
+            chunks.append(current.strip())
+            current = ''
+        current += line + '\n'
+    chunks.append(current.strip())
+    messages = []
+    for chunk in chunks:
+        chunk = re.sub(r'\n{3,}', '\n\n', chunk)
+        rendered = markup(chunk)
+        if visible(rendered) > TEXT_MAX:
+            raise PostError('a line of the %s section is over %d characters' % (version, TEXT_MAX))
+        messages.append({'text': rendered, 'images': []})
+    return messages
+
+
+def messages_for(version, changelog_only):
+    """O docs/telegram/VERSAO.md (com fotos), ou o CHANGELOG.md da versao."""
+    source = POSTS / ('%s.md' % version)
+    if changelog_only or not source.is_file():
+        return changelog_messages(version)
+    return parse(source.read_text(encoding='utf-8'))
+
+
 def main():
     parser = argparse.ArgumentParser(description='Post a release to the FliperOS Telegram group')
-    parser.add_argument('version')
+    parser.add_argument('version', nargs='?')
     parser.add_argument('--dry-run', action='store_true', help='check the file and the images, send nothing')
+    parser.add_argument('--changelog', action='store_true',
+                        help='post the CHANGELOG.md section even when docs/telegram has a text for the version')
+    parser.add_argument('--backfill', action='store_true',
+                        help='post every version of the CHANGELOG.md, oldest first (docs/telegram text when it exists)')
     args = parser.parse_args()
-    source = POSTS / ('%s.md' % args.version)
     try:
-        if not source.is_file():
-            raise PostError('%s does not exist: write what to tell the group about %s before publishing it'
-                            % (source.relative_to(ROOT), args.version))
-        messages = parse(source.read_text(encoding='utf-8'))
+        if args.backfill:
+            messages = [m for version in reversed(changelog_versions()) for m in messages_for(version, False)]
+        elif args.version:
+            messages = messages_for(args.version, args.changelog)
+        else:
+            parser.error('a version or --backfill')
         with tempfile.TemporaryDirectory() as folder:
             if args.dry_run:
                 for number, message in enumerate(messages, 1):
