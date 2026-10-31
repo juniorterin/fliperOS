@@ -1,10 +1,10 @@
-# FliperOS 0.16
+# FliperOS 0.18
 
 [English](README.md) | **Português**
 
 Ubuntu 24.04 (amd64) para gabinetes de fliperama com monitor CRT, no estilo do GroovyArcade: **kernel de 15 kHz**, Switchres, emuladores e frontends prontos para jogar e um menu de configuração (`fliperos-setup`) feito para a tela do tubo. Uma alternativa para PC ao GroovyArcade, Batocera, Recalbox, ReplayOS e RGB-Pi para CRTs de fliperama de 15 kHz.
 
-Em desenvolvimento: a 0.16 é testada no QEMU e num gabinete com CRT de 15 kHz. Documentação completa na **[wiki](https://github.com/juniorterin/fliperOS/wiki)** (em inglês). Site: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (código em [`website/`](website)).
+Em desenvolvimento: a 0.18 é testada no QEMU e num gabinete com CRT de 15 kHz. Documentação completa na **[wiki](https://github.com/juniorterin/fliperOS/wiki)** (em inglês). Site: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (código em [`website/`](website)).
 
 ## O que vem nele
 
@@ -53,8 +53,8 @@ Este guia vai do gabinete vazio até um jogo na tela. Cada passo diz o que vai a
 
 ### 2. Baixe a ISO
 
-1. Abra os [Releases](https://github.com/juniorterin/fliperOS/releases) e baixe o `fliperos-0.16.iso` da versão mais recente (o que mudou está no [CHANGELOG.md](CHANGELOG.md), em inglês).
-2. Se o release trouxer um SHA-256, confira: `sha256sum fliperos-0.16.iso` no Linux, `Get-FileHash fliperos-0.16.iso` no PowerShell do Windows.
+1. Abra os [Releases](https://github.com/juniorterin/fliperOS/releases) e baixe o `fliperos-0.18.iso` da versão mais recente (o que mudou está no [CHANGELOG.md](CHANGELOG.md), em inglês).
+2. Se o release trouxer um SHA-256, confira: `sha256sum fliperos-0.18.iso` no Linux, `Get-FileHash fliperos-0.18.iso` no PowerShell do Windows.
 
 ### 3. Grave o pendrive
 
@@ -65,7 +65,7 @@ A ISO tem de ser gravada **byte a byte**. Programas que refazem a estrutura de b
 - **Linux**: descubra o pendrive com `lsblk` (aqui `/dev/sdX`; o dispositivo errado apaga o disco errado) e rode:
 
   ```bash
-  sudo dd if=fliperos-0.16.iso of=/dev/sdX bs=4M status=progress conv=fsync
+  sudo dd if=fliperos-0.18.iso of=/dev/sdX bs=4M status=progress conv=fsync
   ```
 
 ### 4. Prepare a BIOS do gabinete
@@ -293,7 +293,7 @@ Sempre no Docker (o [`CLAUDE.md`](CLAUDE.md) explica por quê).
 
 ```powershell
 docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.16.iso
+docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.18.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_setup.py

@@ -2,20 +2,54 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.18
+
+A fix for DisplayPort and HDMI to VGA converters (the menu and the games now open at 15 kHz), an on-screen menu over any game, the Vulkan version of the 480i filter, and a lot more on the Pixelcade and ZeDMD marquee.
+
+**System changes:**
+
+- On-screen menu over any game or frontend: hold Start and Down for a second, or press Pause on a keyboard or Play/Pause on a remote, for volume, the 480i filter, geometry and colour. Geometry changes on the tube at once and stays only if saved. The game keeps running and doesn't see the controls while the menu is open, and the volume keys show a bar for 2 seconds (`config/fliperos-osd`). Seen working over PCSX2 in Vulkan and over the frontend
+- The 480i flicker filter and the software saturation and hue now work in Vulkan too (`config/fliperos-vkfps.c`): the emulators stay on Vulkan instead of going back to OpenGL
+- New folders `~/nvram` and `~/save` (and the `nvram` and `save` shares on the network, and in Setup > Games > Folders and in the web panel's Files). `~/nvram` holds what the MAME games remember without power; `~/save` has one folder per emulator: `retroarch` (saves and states), `mame` (states) and `ps2` (PCSX2 memory cards). The old folders (`~/.mame/nvram`, `~/.mame/sta`, `/opt/fliperos/saves/retroarch`, `~/.config/PCSX2/memcards`) are moved there with what they had inside and become links, so nothing is lost and the old paths keep working
+- Web panel, Frontend > games: a **Clones** button next to the filters. Clones are hidden by default (only when their original game is in the list; favourites and most played always show), and the choice is remembered in the browser
+- DisplayPort and HDMI to VGA converters: a converter reports an EDID of its own, with 31 to 48 kHz modes, so the output test took the output for an LCD and saved no boot mode. The menu, the frontend and the screen after leaving a game then opened at 48 kHz and the tube lost the picture, even though the games, which set their own modes, were fine. With a CRT monitor chosen, the Setup now replaces the converter's EDID with a 15 kHz one (`generic_15_super_resp.bin`, the file of the *EDID progressive* boot entry) and forces the output. Seen on a Ryzen 5 5600GT cabinet with a CableDeconn-type converter: native modes from 224 to 640 pixels wide and from 712 up showed on the tube; modes between about 13.1 and 14.4 MHz and below 4 MHz gave no signal on that converter
+- HDMI or DVI-D with a CRT: the Setup uses super resolutions by itself, even on an AMD card (`1280x480iS` at boot and `dotclock_min 25.0`), because that link doesn't go under about 25 MHz. An LCD on those outputs isn't affected
+- `~/nvram` has one folder per emulator and core, and an update no longer erases the nvram (the step that rebuilds the root file system wiped it on every update)
+- Frontend: a **Frontend controls** area (Tab > Frontend options > Frontend controls) to map buttons and keys, with SAVE and RESET; the shortcut that closes the game moved into it, it opens the first time, and the guide follows the map. List mode shows the icons in one row and scrolls the synopsis. The roms list tiles and the top bar show the written logo of the system. Attract-Mode Plus no longer loses the keyboard after Button mapping
+- Desktop: the App Store icon is on the desktop
+- ZeDMD: the opening animation is a minimalist 3D vector logo in two colours (cyan and magenta), and the logo animation is what shows when the machine sits idle for 30 seconds. Pixelcade and ZeDMD show the system logo when the frontend opens, when the lists finish loading, when the idle animation ends, when a game closes and in ES-DE; each item of the FliperOS menu has its own animation; a game name that doesn't fit on one line scrolls. The ZeDMD no longer waits for the Pixelcade to answer, and the marquee events called as root run as the cabinet user
+- Web panel: a marquee preview next to Playing now (Pixelcade, or ZeDMD in 128x32 dots) that shows the system logo, the score of the game (GroovyMAME from 0 x 0, versus, high scores, achievements) or the art, and checks that the Pixelcade or ZeDMD is installed; the OBS marquee page plays the same animations. With the marquee overlay on, the cabinet downloads the score detectors at start
+
+**Package changes:**
+
+- None: the packages are the ones of 0.16
+
+**fliperos-setup changes:**
+
+- Pixelcade and ZeDMD marquee: switching the game list in the FliperOS frontend shows the system's written logo (the one of Arcadeflow's displays menu, drawn from the theme's font) sliding in with the screen and blinking twice. New `fliperos-syslogo`; no Arcadeflow file is shipped. The web panel's marquee preview and the OBS marquee page draw it too
+- Video Setup > Monitor Type: choosing the monitor that is already set writes the boot mode again when it is missing, which is how a cabinet saved before the converter rule gets it
+- Video Setup > Card firmware: the ATOM-15 firmware (with the author's permission for the translation) goes into the BIOS of an AMD card, with a test at the next boot and a way back to the original BIOS. The menu reads the card's BIOS when it opens and says what it has. The real flash has not been run on a card yet. "Test the video outputs" and "Card firmware" have their icons
+
+**Tool changes:**
+
+- `tools/zedmd-vector-anim.py` draws the ZeDMD opening animation, and `tools/marquee-logo-anim.py` the animations of the menu items
+- `third-party/fightcade-detectors`: a copy of the score detectors of Fightcade is kept in the repository
+
+**Documentation:**
+
+- ROMs page and the READMEs: the `nvram` and `save` folders. Web panel page: Files and Clones. Website: the web panel page shows the panel on the real cabinet with Street Fighter II running and the buttons being pressed, and the commercial mode with two coins
+- Install and Video cards pages: what to choose with a DisplayPort or HDMI to VGA converter, and what the numbered test cards showed on one. The website's Hardware section says the same, and has the RGB-80 board (VGA to component video, from Art Repair 80, not tested with FliperOS). The wiki list of games has the data each one has on the display and its files
+
 ## 0.16
 
 FliperOS now runs on Intel HD graphics. On a Core i3-540 (Ironlake, first generation) with the VGA output, the FliperOS frontend, the Setup, RetroArch, GroovyMAME and Attract-Mode Plus work, and the boot menu has a new **Intel 15 kHz 240p** entry that comes up in progressive 1280x240 instead of 1280x480 interlaced. The Setup marks with a red X what a card without OpenGL 3 can't run (EmulationStation-DE, the 480i filter, PCSX2, Dolphin, DuckStation) and asks before opening it. EmulationStation-DE and Pegasus are no longer in the image: the Setup builds the one you choose, on the cabinet, with FliperOS's patches. The limits of the Intel HD are in the Video cards page of the wiki.
 
 **System changes:**
 
-- On-screen menu over any game or frontend: hold Start and Down for a second, or press Pause on a keyboard or Play/Pause on a remote, for volume, the 480i filter, geometry and colour. Geometry changes on the tube at once and stays only if saved. The game keeps running and doesn't see the controls while the menu is open, and the volume keys show a bar for 2 seconds (`config/fliperos-osd`). Seen working over PCSX2 in Vulkan and over the frontend
-- The 480i flicker filter and the software saturation and hue now work in Vulkan too (`config/fliperos-vkfps.c`): the emulators stay on Vulkan instead of going back to OpenGL
 - Intel HD graphics: the screen is released when a program closes it. On Ironlake the Mesa leaves descriptors of `/dev/dri/card0` open after `pygame.display.quit()`, so the process stayed the master of the screen: RetroArch failed with `Error when switching mode` and the frontend could not reopen (`kmsdrm not available`). The frontend and the graphic Setup now drop the master (`gui/drmmaster.py`)
 - Boot menu: new entry **Intel 15 kHz 240p** (`drm.edid_firmware=edid/fliperos-1280x240.bin`). The image builds the EDID (26.058 MHz, 15.66 kHz, 60 Hz) and checks it; the installer and the installed system keep the mode, with the EDID in the initramfs. Seen on a CRT with an Ironlake
 - EmulationStation-DE and Pegasus are not in the image or in its local repository any more. Setup > Games > Frontend builds the one you choose the first time, with its patches (the horizontal stretch of ES-DE, the KMS patch of Pegasus). It needs the network and takes a while
 - Attract-Mode Plus on Intel Ironlake: its SFML makes the screen buffer in ARGB8888, which the card refuses to show, so the screen stayed black (`Failed to create fb`). The package carries two SFML patches: a fallback to XRGB8888 and the release of the screen master when the context is cleaned up
-- New folders `~/nvram` and `~/save` (and the `nvram` and `save` shares on the network, and in Setup > Games > Folders and in the web panel's Files). `~/nvram` holds what the MAME games remember without power; `~/save` has one folder per emulator: `retroarch` (saves and states), `mame` (states) and `ps2` (PCSX2 memory cards). The old folders (`~/.mame/nvram`, `~/.mame/sta`, `/opt/fliperos/saves/retroarch`, `~/.config/PCSX2/memcards`) are moved there with what they had inside and become links, so nothing is lost and the old paths keep working
-- Web panel, Frontend > games: a **Clones** button next to the filters. Clones are hidden by default (only when their original game is in the list; favourites and most played always show), and the choice is remembered in the browser
 
 **Package changes:**
 
@@ -28,7 +62,6 @@ FliperOS now runs on Intel HD graphics. On a Core i3-540 (Ironlake, first genera
 - Items the card can't run get a red X (the text menus show `(not supported)`), the reason (`Needs OpenGL 3.3 or Vulkan, and this video card gives OpenGL 2.1 and OpenGL ES 2.0`) and a question before they open, with *No* as the default: EmulationStation-DE in Games > Frontend, 480i hacks in Video Setup, and PCSX2, Dolphin and DuckStation in Games > Emulators & Games. The check reads the card with `eglinfo`; without it nothing is marked
 - Games > Frontend: choosing EmulationStation-DE or Pegasus says that it will be built on this machine (network, time) and asks. ES-DE is refused before the build on a card without OpenGL 3.3 or OpenGL ES 3.0
 - The installer takes the Intel 240p EDID to the disk (`install_configure_video`), and `boot_apply` rebuilds the initramfs when that mode is chosen
-- Pixelcade and ZeDMD marquee: switching the game list in the FliperOS frontend shows the system's written logo (the one of Arcadeflow's displays menu, drawn from the theme's font) sliding in with the screen and blinking twice. New `fliperos-syslogo`; no Arcadeflow file is shipped. The web panel's marquee preview and the OBS marquee page draw it too
 
 **Tool changes:**
 
@@ -39,7 +72,6 @@ FliperOS now runs on Intel HD graphics. On a Core i3-540 (Ironlake, first genera
 **Documentation:**
 
 - Video cards page: what was tested on the Intel HD, its limits (no native low resolutions, OpenGL 2.1, no Vulkan, the processor must have graphics, Recovery Mode for a changed card) and what the Setup marks. Install page: the new boot entry. Frontends page: building ES-DE and Pegasus on the cabinet
-- ROMs page and the READMEs: the `nvram` and `save` folders. Web panel page: Files and Clones. Website: the web panel page shows the panel on the real cabinet with Street Fighter II running and the buttons being pressed, and the commercial mode with two coins
 
 ## 0.15
 
