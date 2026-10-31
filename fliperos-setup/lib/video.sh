@@ -184,16 +184,21 @@ video_suggested_monitor() {
 # video_kernel_params NOME FLAGS MONITOR imprime os parametros de video do
 # kernel para o sistema, como o configure_from_connector do gatools:
 #   - LCD: nenhum (vale o EDID do proprio monitor);
-#   - EDID do Switchres (o, l): nenhum, o EDID manda;
+#   - EDID do Switchres (o): nenhum, o EDID manda;
 #   - EDID forcado no boot (d) ou boot por EDID: EDID do preset na saida;
 #   - sem EDID (r, e): o modo de boot do preset; super resolucao se a placa
-#     nao gera dotclock baixo; "e" no fim se foi preciso forcar a saida.
+#     nao gera dotclock baixo; "e" no fim se foi preciso forcar a saida;
+#   - EDID de fabrica com um monitor de CRT escolhido (l): um conversor
+#     DisplayPort/HDMI para VGA devolve o EDID dele, de modos de 31 kHz, e a
+#     saida seria tomada por LCD: sem um modo de boot o menu sobe a 48 kHz e
+#     o tubo fica sem imagem. Vale a super resolucao, mesmo numa placa que
+#     gera dotclock baixo: o conversor pode nao passar o modo nativo.
 video_kernel_params() {
   local conn=$1 flags=$2 monitor=$3 base enabled="" res="" fw
   base=${flags%a}
   [[ $monitor == lcd ]] && return 0
   [[ $base =~ ^s?e$ ]] && enabled=e
-  if [[ $base =~ ^[er]$ ]]; then
+  if [[ $base =~ ^([er]|s?l)$ ]]; then
     res=$(monitor_kernel_resolution "$monitor" 60 i super) || return 1
   elif [[ $base =~ ^s[er]$ ]]; then
     res=$(monitor_kernel_resolution "$monitor" 60 i) || return 1
@@ -216,6 +221,20 @@ video_kernel_params() {
     echo "video=$conn:e"
   fi
   return 0
+}
+
+# video_boot_mode_missing: o fliperos.conf gravado antes de o "l" ganhar um
+# modo de boot (um conversor com EDID proprio e um CRT escolhido) esta sem
+# kernel_video, e o menu sobe a 48 kHz. Status 0 quando o modo de agora
+# existe e o gravado nao: escolher o mesmo monitor de novo o regrava.
+video_boot_mode_missing() {
+  local conn flags monitor params
+  conn=$(conf_get connector 2> /dev/null) || return 1
+  flags=$(conf_get detection 2> /dev/null) || return 1
+  monitor=$(conf_get monitor 2> /dev/null) || return 1
+  [[ -z $(conf_get kernel_video 2> /dev/null) ]] || return 1
+  params=$(video_kernel_params "$conn" "$flags" "$monitor" 2> /dev/null) || return 1
+  [[ -n $params ]]
 }
 
 # video_boot_resolution PARAMS imprime o modo (640x480iS) de um conjunto de

@@ -38,7 +38,7 @@ screen_monitor_type() {
       return 0
     fi
   fi
-  [[ $monitor == "$current" ]] && return 0
+  [[ $monitor == "$current" ]] && ! video_boot_mode_missing && return 0
   video_reconfigure_monitor "$monitor" || {
     ui_msg "Monitor Type" "Could not configure $(monitor_label "$monitor")."
     return 0

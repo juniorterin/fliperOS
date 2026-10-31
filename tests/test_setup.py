@@ -383,8 +383,18 @@ class OutputTestTests(Base):
         self.assertEqual(self.params("se", "pal"), "video=VGA-1:768x576iSe")
         self.assertEqual(self.params("sr", "arcade_31"), "video=VGA-1:640x480S")
 
+    def test_factory_edid_with_a_crt_gets_a_boot_mode(self):
+        # Um conversor DisplayPort/HDMI para VGA devolve o EDID dele (modos de
+        # 31 kHz): a saida vira "l", e sem modo de boot o menu sobe a 48 kHz.
+        self.assertEqual(self.params("l", "generic_15"), "video=VGA-1:1280x480iS")
+        self.assertEqual(self.params("sl", "generic_15"), "video=VGA-1:1280x480iS")
+        self.assertEqual(self.params("sla", "generic_15"), "video=VGA-1:1280x480iS")
+        self.assertEqual(self.params("sl", "arcade_25"), "video=VGA-1:800x600iS")
+        self.assertEqual(self.params("l", "arcade_31"), "video=VGA-1:640x480S")
+
     def test_lcd_and_switchres_edid_need_no_params(self):
         self.assertEqual(self.params("sl", "lcd"), "")
+        self.assertEqual(self.params("l", "lcd"), "")
         self.assertEqual(self.params("se", "lcd"), "")
         self.assertEqual(self.params("so", "arcade_15"), "")
 
@@ -477,6 +487,25 @@ class OutputTestTests(Base):
         self.assertIn("kernel_video=video=DP-1:640x480iS\n", conf)
         self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+0$")
 
+    def test_displayport_converter_with_its_own_edid_boots_in_super_resolution(self):
+        # DisplayPort para VGA com EDID de fabrica numa placa de dotclock baixo
+        # (Ryzen 5600GT): o boot vai a 1280x480iS, e os jogos seguem nativos.
+        conf, ini = self.saved("card0-DP-1", "sl", "generic_15")
+        self.assertIn("detection=sl\n", conf)
+        self.assertIn("kernel_video=video=DP-1:1280x480iS\n", conf)
+        self.assertIn("boot_resolution=1280x480iS\n", conf)
+        self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+0$")
+
+    def test_boot_mode_missing_on_a_cabinet_saved_before_the_rule(self):
+        # O fliperos.conf de um conversor com EDID proprio, gravado sem modo de
+        # boot: escolher o mesmo monitor no Video Setup o regrava.
+        self.env.out("conf_set connector DP-1; conf_set detection sl; conf_set monitor generic_15; conf_set kernel_video ''")
+        self.assertEqual(self.env.run("video_boot_mode_missing").returncode, 0)
+        self.env.out("conf_set kernel_video video=DP-1:1280x480iS")
+        self.assertEqual(self.env.run("video_boot_mode_missing").returncode, 1)
+        self.env.out("conf_set kernel_video ''; conf_set monitor lcd")
+        self.assertEqual(self.env.run("video_boot_mode_missing").returncode, 1)
+
     def test_lcd_on_hdmi_is_not_touched(self):
         conf, ini = self.saved("card0-HDMI-A-1", "sl", "lcd")
         self.assertIn("detection=sl\n", conf)
@@ -487,9 +516,12 @@ class OutputTestTests(Base):
         self.env.out("video_reconfigure_monitor generic_15")
         conf = (self.env.etc / "fliperos.conf").read_text()
         self.assertIn("detection=l\n", conf)
+        self.assertIn("kernel_video=video=HDMI-A-1:1280x480iS\n", conf)
         self.assertRegex((self.env.etc / "switchres.ini").read_text(), r"(?m)^\s*dotclock_min\s+25\.0$")
         self.env.out("video_reconfigure_monitor lcd")
-        self.assertIn("detection=sl\n", (self.env.etc / "fliperos.conf").read_text())
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("detection=sl\n", conf)
+        self.assertNotIn("kernel_video=video=", conf)
 
     def test_resolution_choices_follow_the_output(self):
         self.env.out("conf_set card card0; conf_set monitor generic_15; conf_set connector VGA-1")

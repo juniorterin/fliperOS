@@ -59,7 +59,18 @@ Once validated, gatools' `configure_from_connector` applies:
 
 - Switchres EDID (dongle) → the monitor comes from the EDID itself;
 - otherwise, the monitor type is **mandatory** (the list opens on the suggestion of the boot entry);
-- the kernel line comes from the monitor: `video=VGA-1:640x480iSe` (the `e` when the output had to be forced); a card without low dotclock (Intel, NVIDIA that didn't pass the grid), or a CRT on HDMI or DVI-D → super resolution `1280x480iS` and `dotclock_min 25.0` in Switchres; APU → `interlace_force_even 1`; EDID boot → `drm.edid_firmware=CONNECTOR:edid/<monitor>.bin`; LCD → nothing (its EDID applies).
+- the kernel line comes from the monitor: `video=VGA-1:640x480iSe` (the `e` when the output had to be forced); a card without low dotclock (Intel, NVIDIA that didn't pass the grid), or a CRT on HDMI or DVI-D, or behind a converter with its own EDID (see below) → super resolution `1280x480iS` and `dotclock_min 25.0` in Switchres; APU → `interlace_force_even 1`; EDID boot → `drm.edid_firmware=CONNECTOR:edid/<monitor>.bin`; LCD → nothing (its EDID applies).
+
+### With a DisplayPort or HDMI to VGA converter
+
+A converter reports an EDID of its own, with 31 kHz modes, so the *Testing Results* screen says **Monitor detection: LCD OR MODERN CRT**. That is expected, not a failure. What you do:
+
+1. **Boot menu:** start with the default **15 kHz** entry. If the screen stays black, restart with **EDID progressive** (interlaced modes often fail on converters; see [Video cards](Video-cards.md#converters)).
+2. **Output test:** press ENTER on the output where you can see the screen (the DisplayPort or HDMI one).
+3. **Testing Results:** read it and choose **Validate settings**.
+4. **Monitor Type:** pick your **CRT** (`generic_15` for a TV or an ordinary 15 kHz arcade monitor). This is the choice that matters: the Setup can't tell a CRT behind a converter from an LCD, and only your answer says it is a tube. Choosing *LCD* here writes no video mode and leaves the output at the converter's own 31 kHz mode.
+
+With a CRT chosen, the installed system boots in super resolution (`1280x480iS`), and the games use native modes when the card makes low dotclocks. A cabinet installed before this rule has no boot mode saved: **Setup > Video Setup > Monitor Type**, choose the same monitor again, and reboot.
 
 Everything is saved in **`/etc/fliperos/fliperos.conf`** (GPU, driver, connector, detection, monitor, range, boot mode, kernel parameters, orientation, launcher), the equivalent of `ga.conf`, and in `switchres.ini`/`mame.ini`.
 
