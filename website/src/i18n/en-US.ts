@@ -787,6 +787,7 @@ const enUS = {
       title: 'A PC to JAMMA board for a cabinet harness',
       text: 'Sold on AliExpress as "PC to JAMMA / JVS board for arcade games": a long board with the JAMMA edge connector, VGA and RCA video outputs and audio outputs, to connect a PC to the wiring of an arcade cabinet.',
       note: 'Tested with FliperOS and it works; the description above is from the listing.',
+      alt: 'A long black board with a JAMMA edge connector, two VGA connectors, RCA and BNC video jacks, audio jacks and two small USB boards.',
       cta: 'See it on AliExpress',
     },
     gpu: {

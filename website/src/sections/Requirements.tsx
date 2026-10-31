@@ -154,20 +154,30 @@ export function Requirements() {
         </Reveal>
 
         <Reveal className="mt-8">
-          <article className="card rounded-2xl p-5 sm:p-6">
-            <h3 className="font-semibold text-fg">{r.jamma.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-muted">{r.jamma.text}</p>
-            <p className="mt-2 text-sm leading-relaxed text-muted">{r.jamma.note}</p>
-            <a
-              href={LINKS.jammaBoard}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
-            >
-              {r.jamma.cta}
-              <ArrowUpRight className="size-4" aria-hidden="true" />
-              <span className="sr-only">{t.a11y.external}</span>
-            </a>
+          <article className="card flex flex-col gap-5 rounded-2xl p-5 sm:flex-row sm:items-center sm:p-6">
+            <Image
+              src="/art/jamma-board.webp"
+              alt={r.jamma.alt}
+              width={800}
+              height={800}
+              unoptimized
+              className="h-auto w-full shrink-0 rounded-xl bg-white sm:w-56"
+            />
+            <div>
+              <h3 className="font-semibold text-fg">{r.jamma.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{r.jamma.text}</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{r.jamma.note}</p>
+              <a
+                href={LINKS.jammaBoard}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
+              >
+                {r.jamma.cta}
+                <ArrowUpRight className="size-4" aria-hidden="true" />
+                <span className="sr-only">{t.a11y.external}</span>
+              </a>
+            </div>
           </article>
         </Reveal>
 

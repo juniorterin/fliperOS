@@ -789,6 +789,7 @@ const ptBR: Messages = {
       title: 'Uma placa PC para JAMMA, para o chicote do gabinete',
       text: 'Vendida no AliExpress como "Placa PC para Jamma / Placa JVS para jogos de arcade": uma placa comprida com o conector JAMMA, saídas de vídeo VGA e RCA e saídas de áudio, para ligar um PC à fiação de um gabinete de fliperama.',
       note: 'Testada com o FliperOS e funciona; a descrição acima é do anúncio.',
+      alt: 'Uma placa preta comprida com conector JAMMA, dois conectores VGA, saídas de vídeo RCA e BNC, saídas de áudio e duas placas USB pequenas.',
       cta: 'Ver no AliExpress',
     },
     gpu: {
