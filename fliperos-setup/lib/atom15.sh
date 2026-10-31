@@ -24,6 +24,7 @@ ATOM15_DIR=${ATOM15_DIR:-/home/$FLIPEROS_USER/vbios}
 ATOM15_SECONDS=${ATOM15_SECONDS:-90}
 ATOM15_GRACE=${ATOM15_GRACE:-300}
 ATOM15_EFIVARS=${ATOM15_EFIVARS:-/sys/firmware/efi/efivars}
+ATOM15_DEBUGFS=${ATOM15_DEBUGFS:-/sys/kernel/debug/dri}
 
 # atom15_where ARQUIVO: onde esta um arquivo, para a tela: a pasta numa linha e o
 # nome em outra (a tela de 320 pontos corta uma linha sem espacos).
@@ -115,54 +116,73 @@ atom15_user_copy() {
   return 0
 }
 
-# atom15_backup CARD ADAPTADOR: a BIOS da placa, lida duas vezes e conferida,
-# vira o backup (ATOM15_DIR e ATOM15_STATE), com o caminho em ATOM15_RESULT. Uma
-# copia que ja existe nao e trocada. Status 1 com o motivo em ATOM15_ERROR.
-ATOM15_ERROR=""
-ATOM15_RESULT=""
-atom15_backup() {
-  local card=$1 adapter=$2 first second device sum dest
-  install -d -m 700 "$ATOM15_STATE" 2>> "$FLIPEROS_LOG" || {
-    ATOM15_ERROR="Could not create $ATOM15_STATE."
-    return 1
-  }
-  first=$ATOM15_STATE/read1.rom
-  second=$ATOM15_STATE/read2.rom
-  if ! atom15_read "$adapter" "$first" || ! atom15_read "$adapter" "$second"; then
-    ATOM15_ERROR="The flash tool could not read the BIOS of this card."
-    rm -f "$first" "$second"
-    return 1
-  fi
-  if ! cmp -s "$first" "$second"; then
-    ATOM15_ERROR="Two reads of the BIOS came out different: the read cannot be trusted."
-    rm -f "$first" "$second"
-    return 1
-  fi
-  rm -f "$second"
-  device=$(atom15_device "$card") || device=""
-  if [[ $(atom15_info "$first" device) != "$device" || -z $device ]]; then
+# atom15_rom_switch 0|1 ROM: liga e desliga a leitura do arquivo rom do PCI.
+atom15_rom_switch() {
+  printf '%s' "$1" > "$2"
+}
+
+# atom15_kernel_read CARD ARQUIVO: a copia da BIOS que o kernel tem, sem o
+# amdvbflash: a do amdgpu no debugfs ou o arquivo rom do PCI. E a BIOS deste boot:
+# diz o que a placa tem, mas nunca e gravada de volta (isso so a leitura do chip).
+atom15_kernel_read() {
+  local card=$1 out=$2 pci path rom
+  pci=$(drm_card_pci "$card") || pci=none
+  for path in "$ATOM15_DEBUGFS/$pci/amdgpu_vbios" "$ATOM15_DEBUGFS/${card#card}/amdgpu_vbios"; do
+    [[ -r $path ]] || continue
+    cat "$path" > "$out" 2>> "$FLIPEROS_LOG" && [[ -s $out ]] && return 0
+  done
+  rom=$DRM_SYSFS/$card/device/rom
+  [[ -e $rom ]] || return 1
+  atom15_rom_switch 1 "$rom" 2>> "$FLIPEROS_LOG" || return 1
+  cat "$rom" > "$out" 2>> "$FLIPEROS_LOG"
+  atom15_rom_switch 0 "$rom" 2>> "$FLIPEROS_LOG"
+  [[ -s $out ]]
+}
+
+# atom15_belongs CARD ARQUIVO: a imagem e uma ATOMBIOS desta placa?
+atom15_belongs() {
+  local device
+  device=$(atom15_device "$1") || device=""
+  if [[ $(atom15_info "$2" device) != "$device" || -z $device ]]; then
     ATOM15_ERROR="The BIOS that was read does not belong to this card (or is not an ATOMBIOS)."
-    rm -f "$first"
     return 1
   fi
-  if [[ $(atom15_info "$first" patched) == 1 ]]; then
-    ATOM15_ERROR="This card already has an ATOM-15 BIOS. The patch has to start from the original one."
-    rm -f "$first"
+}
+
+# atom15_read_checked CARD ADAPTADOR ARQUIVO: le o chip duas vezes e confere.
+# Status 1 sem o arquivo, com o motivo em ATOM15_ERROR.
+atom15_read_checked() {
+  local card=$1 adapter=$2 file=$3 again=$3.again
+  if ! atom15_read "$adapter" "$file" || ! atom15_read "$adapter" "$again"; then
+    ATOM15_ERROR="The flash tool could not read the BIOS of this card."
+    rm -f "$file" "$again"
     return 1
   fi
-  sum=$(sha256sum "$first" | cut -c1-8)
-  dest=$ATOM15_DIR/original-$device-$sum.rom
-  [[ -e $ATOM15_STATE/original.rom ]] || cp "$first" "$ATOM15_STATE/original.rom"
-  if ! cmp -s "$first" "$ATOM15_STATE/original.rom"; then
-    # Outra placa nesta maquina, sem nada em teste: a copia antiga nao vale mais.
-    cp "$first" "$ATOM15_STATE/original.rom"
+  if ! cmp -s "$file" "$again"; then
+    ATOM15_ERROR="Two reads of the BIOS came out different: the read cannot be trusted."
+    rm -f "$file" "$again"
+    return 1
   fi
-  [[ -e $dest ]] || atom15_user_copy "$first" "$dest" || {
-    ATOM15_ERROR="Could not write the backup to $ATOM15_DIR."
-    rm -f "$first"
+  rm -f "$again"
+  atom15_belongs "$card" "$file" || {
+    rm -f "$file"
     return 1
   }
-  rm -f "$first"
+}
+
+# atom15_save_original IMAGEM DEVICE: a leitura do chip, sem o patch, vira o
+# backup (ATOM15_DIR e ATOM15_STATE), com o caminho em ATOM15_RESULT. Uma copia
+# que ja existe nao e trocada.
+atom15_save_original() {
+  local image=$1 device=$2 sum dest
+  sum=$(sha256sum "$image" | cut -c1-8)
+  dest=$ATOM15_DIR/original-$device-$sum.rom
+  # Outra placa nesta maquina, sem nada em teste: a copia antiga nao vale mais.
+  cmp -s "$image" "$ATOM15_STATE/original.rom" || cp "$image" "$ATOM15_STATE/original.rom"
+  [[ -e $dest ]] || atom15_user_copy "$image" "$dest" || {
+    ATOM15_ERROR="Could not write the backup to $ATOM15_DIR."
+    return 1
+  }
   if ! cmp -s "$dest" "$ATOM15_STATE/original.rom"; then
     ATOM15_ERROR="The backup in $ATOM15_DIR does not match the BIOS that was read."
     return 1
@@ -170,6 +190,96 @@ atom15_backup() {
   sync
   conf_set atom15_backup "$dest"
   ATOM15_RESULT=$dest
+}
+
+# atom15_backup CARD ADAPTADOR: a BIOS original da placa, antes de gravar. Status
+# 1 com o motivo em ATOM15_ERROR.
+ATOM15_ERROR=""
+ATOM15_RESULT=""
+atom15_backup() {
+  local card=$1 adapter=$2 first rc=0
+  install -d -m 700 "$ATOM15_STATE" 2>> "$FLIPEROS_LOG" || {
+    ATOM15_ERROR="Could not create $ATOM15_STATE."
+    return 1
+  }
+  first=$ATOM15_STATE/read1.rom
+  atom15_read_checked "$card" "$adapter" "$first" || return 1
+  if [[ $(atom15_info "$first" patched) == 1 ]]; then
+    ATOM15_ERROR="This card already has an ATOM-15 BIOS. The patch has to start from the original one."
+    rc=1
+  else
+    atom15_save_original "$first" "$(atom15_device "$card")" || rc=1
+  fi
+  rm -f "$first"
+  return "$rc"
+}
+
+# atom15_inspect CARD: ao abrir o item, le a BIOS da placa e guarda uma copia, para
+# que o menu diga o que esta la e nao o que o Setup lembra (a placa pode ter vindo
+# com o ATOM-15). Com o amdvbflash le o chip, senao a copia do kernel. So uma
+# leitura do chip sem o patch, fora de um teste, pode virar a original; o resto vai
+# para card-DEVICE-SOMA.rom. Status 1 quando nao deu para ler. Deixa:
+#   ATOM15_FIRMWARE   atom15, other ou vazio
+#   ATOM15_READ_FROM  chip, kernel ou vazio
+#   ATOM15_COPY       a copia em ATOM15_DIR (vazio com o motivo em ATOM15_ERROR)
+#   ATOM15_COPY_NEW   1 se a copia foi feita agora
+ATOM15_FIRMWARE=""
+ATOM15_READ_FROM=""
+ATOM15_COPY=""
+ATOM15_COPY_NEW=0
+atom15_inspect() {
+  local card=$1 file adapter device sum dest
+  ATOM15_FIRMWARE="" ATOM15_READ_FROM="" ATOM15_COPY="" ATOM15_COPY_NEW=0 ATOM15_ERROR=""
+  install -d -m 700 "$ATOM15_STATE" 2>> "$FLIPEROS_LOG" || {
+    ATOM15_ERROR="Could not create $ATOM15_STATE."
+    return 1
+  }
+  file=$ATOM15_STATE/card.rom
+  rm -f "$file"
+  if atom15_flasher > /dev/null; then
+    read -r adapter _ <<< "$(atom15_adapter "$card")"
+    [[ -n $adapter ]] && atom15_read_checked "$card" "$adapter" "$file" && ATOM15_READ_FROM=chip
+  fi
+  if [[ -z $ATOM15_READ_FROM ]]; then
+    if atom15_kernel_read "$card" "$file" && atom15_belongs "$card" "$file"; then
+      ATOM15_READ_FROM=kernel
+      ATOM15_ERROR=""
+    else
+      [[ -n $ATOM15_ERROR ]] || ATOM15_ERROR="The system has no copy of this card's BIOS."
+      log_warn "atom15: sem leitura da BIOS: $ATOM15_ERROR"
+      rm -f "$file"
+      return 1
+    fi
+  fi
+
+  device=$(atom15_device "$card")
+  sum=$(sha256sum "$file" | cut -c1-8)
+  ATOM15_FIRMWARE=other
+  [[ $(atom15_info "$file" patched) == 1 ]] && ATOM15_FIRMWARE=atom15
+  log_info "atom15: placa lida ($ATOM15_READ_FROM, $sum): $ATOM15_FIRMWARE"
+  if [[ $ATOM15_READ_FROM == chip && $ATOM15_FIRMWARE == other ]] && ! atom15_trial_active; then
+    # O chip e a verdade: uma marca antiga de "aplicado" nao vale mais.
+    conf_unset atom15_applied
+    dest=$ATOM15_DIR/original-$device-$sum.rom
+    [[ -e $dest ]] || ATOM15_COPY_NEW=1
+    if atom15_save_original "$file" "$device"; then
+      ATOM15_COPY=$ATOM15_RESULT
+    else
+      ATOM15_COPY_NEW=0
+    fi
+  else
+    dest=$ATOM15_DIR/card-$device-$sum.rom
+    if [[ -e $dest ]]; then
+      ATOM15_COPY=$dest
+    elif atom15_user_copy "$file" "$dest"; then
+      ATOM15_COPY=$dest
+      ATOM15_COPY_NEW=1
+    else
+      ATOM15_ERROR="Could not write the backup to $ATOM15_DIR."
+    fi
+  fi
+  rm -f "$file"
+  return 0
 }
 
 # atom15_prepare RANGES: faz a BIOS com o patch a partir da original. O caminho

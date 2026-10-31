@@ -110,7 +110,9 @@ If yours works on FliperOS, open an [issue](https://github.com/juniorterin/flipe
 
 *Video Setup > Card firmware* appears with an AMD card on the installed system, at the cabinet (not over SSH, since you have to watch the next boot).
 
-**You need the flash tool.** `amdvbflash` is AMD's, closed, and AMD does not publish it, so FliperOS does not ship or download it. Get the 64-bit Linux version yourself (the TechPowerUp forums have it) and put the file at `~/vbios/amdvbflash`. It runs as root, so use a copy you trust. It does not work with Secure Boot on.
+**Opening it reads the card first.** The menu says what the BIOS on the card has (*ATOM-15* or *No ATOM-15*), even if the card came that way, and saves a copy in `~/vbios`. With the flash tool it reads the chip. Without it, it uses the copy the system has from this boot, in `~/vbios/card-<card>-<sum>.rom`, which is only for checking: only a read of the chip, with no ATOM-15 in it, can be flashed back as the original. A card that already has ATOM-15 has nothing to apply, and *Restore* only appears if the original BIOS was saved on this computer.
+
+**To flash, you need the flash tool.** `amdvbflash` is AMD's, closed, and AMD does not publish it, so FliperOS does not ship or download it. Get the 64-bit Linux version yourself (the TechPowerUp forums have it) and put the file at `~/vbios/amdvbflash`. It runs as root, so use a copy you trust. It does not work with Secure Boot on.
 
 **What the Setup does, in order:**
 

@@ -7054,7 +7054,25 @@ class Atom15Tests(Base):
         self.env.stub("chown", ":")
         self.vars = {"ATOM15_STATE": str(self.state), "ATOM15_DIR": str(self.dir),
                      "ATOM15_BIN": str(ROOT / "config/fliperos-atom15"), "FLIPEROS_USER": "root",
-                     "ATOM15_EFIVARS": str(self.env.dir / "efivars"), "SETUP_REMOTE": "0"}
+                     "ATOM15_EFIVARS": str(self.env.dir / "efivars"), "SETUP_REMOTE": "0",
+                     "ATOM15_DEBUGFS": str(self.env.dir / "dri")}
+
+    def kernel_copy(self, image):
+        """A copia da BIOS que o amdgpu mostra no debugfs."""
+        path = self.env.dir / "dri" / "0"
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "amdgpu_vbios").write_bytes(image)
+
+    def opened(self, flasher=True):
+        """Abre o item: o que foi dito e o menu, sem escolher nada."""
+        if not flasher:
+            (self.dir / "amdvbflash").unlink(missing_ok=True)
+        return self.run_screen("""
+            MENU_LOG=$(mktemp)
+            ui_menu_hints() { { printf 'MENU %s\\n' "$2"; shift 3; printf 'ITEM %s\\n' "$@"; } >> "$MENU_LOG"; return 1; }
+            screen_atom15
+            cat "$MENU_LOG"
+        """)
 
     def flasher(self, write=None, read=None, listing=None):
         """O amdvbflash: -i, -s N ARQ (le o chip) e -p N ARQ (grava o chip)."""
@@ -7161,6 +7179,142 @@ class Atom15Tests(Base):
         self.assertIn("already has an ATOM-15 BIOS", out)
         self.assertEqual(self.flashed(), [])
         self.assertFalse((self.state / "original.rom").exists())
+
+    def test_opening_finds_atom15_without_the_flash_tool(self):
+        # O caso do gabinete: a placa veio com o ATOM-15, sem nada gravado aqui.
+        patched = load_atom_patch(self.original)
+        self.kernel_copy(patched)
+        out = self.opened(flasher=False)
+        self.assertIn("Firmware|ATOM-15", out)
+        self.assertNotIn("No ATOM-15", out)
+        self.assertIn("Read from|the system's copy", out)
+        self.assertNotIn("ITEM apply|", out)
+        self.assertIn("No copy of the original BIOS here", out)
+        copies = list(self.dir.glob("card-6613-*.rom"))
+        self.assertEqual(len(copies), 1)
+        self.assertEqual(copies[0].read_bytes(), patched)
+        self.assertIn("Backup of the card's BIOS saved", out)
+        self.assertIn(copies[0].name, out)
+        self.assertIn("not the factory BIOS", out)
+        # Nunca como a original, de que a volta depende.
+        self.assertFalse(list(self.dir.glob("original-*")))
+        self.assertFalse((self.state / "original.rom").exists())
+        self.assertNotIn("atom15_backup", self.conf())
+        self.assertEqual(self.flashed(), [])
+
+    def test_opening_again_does_not_repeat_the_message(self):
+        self.kernel_copy(load_atom_patch(self.original))
+        self.opened(flasher=False)
+        out = self.opened(flasher=False)
+        self.assertNotIn("Backup of the card's BIOS saved", out)
+        self.assertIn("Backup|in ", out)
+        self.assertEqual(len(list(self.dir.glob("card-6613-*.rom"))), 1)
+
+    def test_opening_without_the_tool_never_makes_an_original(self):
+        # A copia do kernel e a BIOS do boot: serve para ver, nao para gravar.
+        self.kernel_copy(self.original)
+        out = self.opened(flasher=False)
+        self.assertIn("Firmware|No ATOM-15", out)
+        self.assertIn("ITEM apply|", out)
+        self.assertNotIn("ITEM restore|", out)
+        self.assertIn("Flashing reads the chip first", out)
+        self.assertEqual(len(list(self.dir.glob("card-6613-*.rom"))), 1)
+        self.assertFalse((self.state / "original.rom").exists())
+
+    def test_opening_falls_back_to_the_pci_rom_file(self):
+        rom = self.env.drm / "card0" / "device" / "rom"
+        rom.write_bytes(self.original)
+        (self.dir / "amdvbflash").unlink()
+        out = self.run_screen("""
+            MENU_LOG=$(mktemp)
+            atom15_rom_switch() { echo "SWITCH $1"; }
+            ui_menu_hints() { printf 'MENU %s\\n' "$2" >> "$MENU_LOG"; return 1; }
+            screen_atom15
+            cat "$MENU_LOG"
+        """)
+        self.assertLess(out.index("SWITCH 1"), out.index("SWITCH 0"))
+        self.assertIn("Firmware|No ATOM-15", out)
+
+    def test_opening_with_the_tool_saves_the_original_from_the_chip(self):
+        out = self.opened()
+        self.assertIn("Firmware|No ATOM-15", out)
+        self.assertIn("Read from|the card's chip", out)
+        backups = list(self.dir.glob("original-6613-*.rom"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_bytes(), self.original)
+        self.assertEqual((self.state / "original.rom").read_bytes(), self.original)
+        self.assertEqual(self.conf()["atom15_backup"], str(backups[0]))
+        self.assertIn(backups[0].name, out)
+        self.assertFalse(list(self.dir.glob("card-*")))
+        self.assertEqual(self.flashed(), [])
+
+    def test_opening_with_the_tool_and_atom15_on_the_chip(self):
+        # O chip manda, mesmo com a copia do kernel dizendo outra coisa.
+        patched = load_atom_patch(self.original)
+        self.chip.write_bytes(patched)
+        self.kernel_copy(self.original)
+        out = self.opened()
+        self.assertIn("Firmware|ATOM-15", out)
+        self.assertIn("Read from|the card's chip", out)
+        self.assertNotIn("ITEM apply|", out)
+        self.assertFalse((self.state / "original.rom").exists())
+        self.assertEqual([p.read_bytes() for p in self.dir.glob("card-6613-*.rom")], [patched])
+
+    def test_atom15_on_the_card_with_the_original_kept_offers_restore(self):
+        self.applied()
+        self.run_screen('ui_timed_confirm() { return 0; }\nscreen_atom15_confirm')
+        out = self.opened()
+        self.assertIn("Firmware|ATOM-15", out)
+        self.assertNotIn("ITEM apply|", out)
+        self.assertIn("ITEM restore|", out)
+        self.assertEqual((self.state / "original.rom").read_bytes(), self.original)
+
+    def test_opening_clears_an_old_applied_mark(self):
+        # A placa foi trocada ou regravada fora do Setup: vale o que o chip diz.
+        (self.env.etc / "fliperos.conf").write_text("atom15_applied=abc\n")
+        out = self.opened()
+        self.assertIn("Firmware|No ATOM-15", out)
+        self.assertNotIn("atom15_applied", self.conf())
+
+    def test_opening_during_a_test_keeps_the_original(self):
+        self.applied()
+        original = (self.state / "original.rom").read_bytes()
+        # Outra BIOS valida no chip, sem o patch, com o teste ainda aberto: nao
+        # pode tomar o lugar da original.
+        other = bytearray(self.original)
+        other[0x2000] ^= 1
+        other[0x50] = (other[0x50] - 1) & 0xff
+        self.chip.write_bytes(bytes(other))
+        out = self.opened()
+        self.assertIn("Firmware|No ATOM-15", out)
+        self.assertEqual((self.state / "original.rom").read_bytes(), original)
+        self.assertEqual([p.read_bytes() for p in self.dir.glob("card-6613-*.rom")], [bytes(other)])
+        self.assertTrue((self.state / "trial").exists())
+
+    def test_opening_when_nothing_can_be_read(self):
+        out = self.opened(flasher=False)
+        self.assertIn("Could not read this card's BIOS", out)
+        self.assertIn("Firmware|Unknown (not read)", out)
+        self.assertIn("ITEM apply|", out)
+        self.assertFalse(list(self.dir.glob("*.rom")))
+        # Sem leitura, sobra o que o Setup lembra, dito como tal.
+        (self.env.etc / "fliperos.conf").write_text("atom15_applied=abc\n")
+        self.assertIn("Firmware|ATOM-15 (not read now)", self.opened(flasher=False))
+
+    def test_opening_refuses_the_bios_of_another_card(self):
+        self.kernel_copy(atom_rom(device=0x68f9))
+        out = self.opened(flasher=False)
+        self.assertIn("does not belong to this card", out)
+        self.assertIn("Firmware|Unknown (not read)", out)
+        self.assertFalse(list(self.dir.glob("*.rom")))
+
+    def test_opening_with_a_broken_tool_uses_the_kernel_copy(self):
+        self.flasher(read=":")
+        patched = load_atom_patch(self.original)
+        self.kernel_copy(patched)
+        out = self.opened()
+        self.assertIn("Firmware|ATOM-15", out)
+        self.assertIn("Read from|the system's copy", out)
 
     def test_reads_that_differ_are_not_a_backup(self):
         self.flasher(read='head -c 70000 /dev/urandom > "$3"')

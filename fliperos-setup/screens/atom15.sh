@@ -144,10 +144,30 @@ screen_atom15_restore() {
   fi
 }
 
-# screen_atom15: o menu. Sem nada que impeca, aplicar e voltar; onde ficam os
-# arquivos aparece sempre.
+# screen_atom15_read CARD: a leitura ao abrir o item, e onde ficou a copia (so na
+# primeira vez de cada BIOS: depois o menu diz a pasta).
+screen_atom15_read() {
+  local title="Card firmware" note=""
+  ui_info "$title" "Reading the card's BIOS..."
+  if ! atom15_inspect "$1"; then
+    ui_msg "$title" "$(ui_bad "Could not read this card's BIOS, so what it has is unknown.")" "" "$ATOM15_ERROR" "" "Details in $FLIPEROS_LOG."
+    return 0
+  fi
+  if [[ -z $ATOM15_COPY ]]; then
+    ui_msg "$title" "$(ui_bad "The card was read, but no backup could be saved.")" "" "$ATOM15_ERROR" "" "Details in $FLIPEROS_LOG."
+    return 0
+  fi
+  ((ATOM15_COPY_NEW)) || return 0
+  [[ $ATOM15_FIRMWARE == atom15 ]] && note="It has ATOM-15, so it is not the factory BIOS."
+  [[ $ATOM15_READ_FROM == kernel ]] && note+="${note:+ }This is the system's copy of it. Flashing reads the chip first."
+  ui_msg "$title" "$(ui_yes "Backup of the card's BIOS saved:")" "$(atom15_where "$ATOM15_COPY")" "" \
+    "${note:-It is the BIOS read from the chip.}" "" "Copy it off this computer (USB stick, network)."
+}
+
+# screen_atom15: le a placa e abre o menu: o que ela tem vem dessa leitura. Com o
+# ATOM-15 ja nela nao ha o que aplicar; onde ficam os arquivos aparece sempre.
 screen_atom15() {
-  local title="Card firmware" why card status backup choice last="" entries
+  local title="Card firmware" why card status backup choice last="" entries fields back
   if why=$(screen_atom15_blocked); then
     ui_msg "$title" "$why"
     return 0
@@ -156,16 +176,37 @@ screen_atom15() {
     ui_msg "$title" "ATOM-15 is for AMD/ATI video cards, and the main card here is another one."
     return 0
   fi
+  screen_atom15_read "$card"
   while true; do
-    status="Original BIOS (as far as FliperOS knows)"
-    atom15_applied && status="ATOM-15 applied"
+    case $ATOM15_FIRMWARE in
+      atom15) status="ATOM-15" ;;
+      other) status="No ATOM-15" ;;
+      *)
+        status="Unknown (not read)"
+        atom15_applied && status="ATOM-15 (not read now)"
+        ;;
+    esac
+    fields=("Card|$(drm_card_name "$card")" "Firmware|$status")
+    case $ATOM15_READ_FROM in
+      chip) fields+=("Read from|the card's chip") ;;
+      kernel) fields+=("Read from|the system's copy") ;;
+    esac
     backup="none yet"
-    conf_get atom15_backup > /dev/null 2>&1 && backup="in $(atom15_where "$ATOM15_DIR/x" | head -1)"
-    entries=("apply|Apply ATOM-15|Backup, patch, flash, restart and test. At your own risk.")
-    [[ -s $ATOM15_STATE/original.rom ]] &&
+    if [[ -n $ATOM15_COPY ]] || conf_get atom15_backup > /dev/null 2>&1; then
+      backup="in $(atom15_where "$ATOM15_DIR/x" | head -1)"
+    fi
+    fields+=("Backup|$backup")
+    entries=()
+    back="Back to Video Setup."
+    [[ $ATOM15_FIRMWARE == atom15 ]] ||
+      entries+=("apply|Apply ATOM-15|Backup, patch, flash, restart and test. At your own risk.")
+    if [[ -s $ATOM15_STATE/original.rom ]]; then
       entries+=("restore|Restore the original BIOS|Flash the backup back to the card.")
-    entries+=("return|Return|Back to Video Setup.")
-    choice=$(ui_menu_hints "$title" "$(ui_fields "Card|$(drm_card_name "$card")" "Firmware|$status" "Backup|$backup")" "$last" \
+    elif [[ $ATOM15_FIRMWARE == atom15 ]]; then
+      back="Already applied. No copy of the original BIOS here."
+    fi
+    entries+=("return|Return|$back")
+    choice=$(ui_menu_hints "$title" "$(ui_fields "${fields[@]}")" "$last" \
       "${entries[@]}") || return 0
     last=$choice
     case $choice in
