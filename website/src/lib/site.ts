@@ -11,7 +11,6 @@ export const LINKS = {
   video: 'https://www.youtube.com/watch?v=W0vrpqgefL0',
   dpVgaAdapter: 'https://a.aliexpress.com/_mPCmfYb',
   artRepairTelegram: 'https://t.me/+1XiiRQtrBVFkNGEx',
-  artRepairEmail: 'mailto:art.repair80@gmail.com',
 } as const;
 
 // O id do vídeo de apresentação no YouTube (o player só carrega ao clicar).

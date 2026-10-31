@@ -7011,7 +7011,7 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn('password nova senha\n', secret.read_text())
         self.assertNotIn('nova senha', self.volume_log.read_text())
         text = json.loads(self.request('GET', '/api/whatsnew', cookie=cookie)[2])['text']
-        self.assertIn('update 34', text)
+        self.assertIn('update 36', text)
 
     def test_downloader_and_tasks(self):
         cookie = self.login()
@@ -13490,7 +13490,7 @@ class ButtonMappingTests(unittest.TestCase):
         rc.Keyboards = Keys
         out = io.StringIO()
         try:
-            args = argparse.Namespace(key=0, combo='', hold=1.0, coin=False, map='/nonexistent')
+            args = argparse.Namespace(key=[], combo='', hold=1.0, coin=False, map='/nonexistent')
             vars(args).update(opts)
             with contextlib.redirect_stdout(out):
                 self.assertEqual(rc.cmd_hotkey(args), 0)
@@ -13502,9 +13502,9 @@ class ButtonMappingTests(unittest.TestCase):
         # O frontend do FliperOS le, junto com o jogo, o atalho que o fecha e
         # (modo comercial) as fichas. Sem mapa, o painel e o teclado do MAME:
         # o Start 1 e a tecla 1 (evdev 2), a ficha a 5 (evdev 6).
-        self.assertEqual(self.hotkey([set(), {1}], key=1), ['exit'])
+        self.assertEqual(self.hotkey([set(), {1}], key=[1]), ['exit'])
         # A tecla ja apertada ao abrir o jogo nao vale; solta e de novo, sim.
-        self.assertEqual(self.hotkey([{1}, {1}, set()], key=1), [])
+        self.assertEqual(self.hotkey([{1}, {1}, set()], key=[1]), [])
         self.assertEqual(self.hotkey([set(), {2, 6}, {2, 6}], combo='start+coin', hold=0), ['exit'])
         self.assertEqual(self.hotkey([set(), {2}, set()], combo='start+coin', hold=0), [])
         self.assertEqual(self.hotkey([set(), {6}, {6}, set(), {6}], coin=True), ['coin', 'coin'])

@@ -147,12 +147,7 @@ export function Requirements() {
                 <ArrowUpRight className="size-4" aria-hidden="true" />
                 <span className="sr-only">{t.a11y.external}</span>
               </a>
-              <a
-                href={LINKS.artRepairEmail}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
-              >
-                {r.rgb80.email}
-              </a>
+              <span className="text-sm text-muted">{r.rgb80.email}</span>
               <span className="text-sm text-muted">{r.rgb80.youtube}</span>
             </div>
           </article>
