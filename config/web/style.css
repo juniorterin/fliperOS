@@ -176,7 +176,6 @@ svg.g { width: 16px; height: 16px; flex: none; }
 .crt-form > * { position: relative; }
 .crt-form.shake { animation: shake .4s; }
 @keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
-.p1 { font: 12px var(--px); color: var(--yellow); text-align: center; text-shadow: 0 0 8px rgba(241,250,140,.6); }
 .crt-form label { display: grid; gap: 6px; font-size: 13px; color: #9ff5bf; font-weight: 600; }
 .crt-form input { height: 46px; border-radius: 10px; border: 1px solid rgba(80,250,123,.45); background: rgba(0,0,0,.45); color: #d7ffe5;
   font: 16px system-ui; padding: 0 12px; outline: none; }
