@@ -9,6 +9,7 @@ import base64
 import hashlib
 import importlib.util
 import io
+import itertools
 import json
 import os
 from pathlib import Path
@@ -14449,6 +14450,7 @@ class OsdTests(unittest.TestCase):
         self.calls = []
         self.osd.run = self.fake_run
         self.osd.process_env = lambda pid: {}
+        self.osd.X11Modes.counter = itertools.count(1)
 
     MODE = {'clock': 13038, 'h': [640, 666, 727, 831], 'v': [480, 483, 489, 523], 'interlace': True}
 
@@ -14580,7 +14582,7 @@ class OsdTests(unittest.TestCase):
         worker.wait()
         self.assertEqual(self.calls[-1], base)
         self.assertFalse([c for c in self.calls if '--geometry' in c])
-        # Salvo, o crt_range vai para o Setup e sair nao desfaz.
+        # Salvo, os ajustes desta resolucao vao para o Setup e sair nao desfaz.
         self.calls.clear()
         menu.open_page('geometry')
         menu.key(self.osd.KEY_DOWN)
@@ -14589,14 +14591,91 @@ class OsdTests(unittest.TestCase):
         menu.page['cursor'] = 3
         menu.key(self.osd.KEY_ENTER)
         worker.wait()
-        self.assertIn([self.osd.SETUP, '--geometry', 'set',
-                       '15625.00-15750.00,49.50-65.00,1.875,4.649,9.223,0.446,0.382,1.211,0,0,192,288,448,576'], self.calls)
+        self.assertIn([self.osd.SETUP, '--geometry', 'set-res', '640x480i', '0.900:5:-2'], self.calls)
         self.assertEqual(menu.status, 'SAVED')
-        self.assertEqual([row.value for row in menu.page['rows'][:3]], [1.0, 0, 0])
+        self.assertEqual([row.value for row in menu.page['rows'][:3]], [0.9, 5, -2])
         self.calls.clear()
         menu.key(self.osd.KEY_ESC)
         worker.wait()
         self.assertFalse([c for c in self.calls if base == c])
+
+    def test_geometry_page_says_which_resolution_it_adjusts(self):
+        menu, _ = self.menu()
+        self.assertEqual(menu.title(), 'FLIPEROS')
+        menu.open_page('geometry')
+        self.assertEqual(menu.title(), 'GEOMETRY 640x480i')
+        self.assertEqual(self.labels(menu),
+                         ['H size', 'H position', 'V position', 'Save', 'Use the default', 'Back'])
+        menu, _ = self.menu(mode=dict(self.MODE, h=[320, 336, 368, 416], v=[240, 241, 244, 262], interlace=False))
+        menu.open_page('geometry')
+        self.assertEqual(menu.title(), 'GEOMETRY 320x240p')
+        self.assertEqual(self.osd.resolution_key(self.MODE), '640x480i')
+
+    def test_each_resolution_starts_from_its_own_saved_geometry(self):
+        self.conf.write_text('monitor=generic_15\ngeometry_640x480i=1.050:3:-2\ngeometry_320x240p=0.900:-4:1\n')
+        self.assertEqual(self.osd.saved_geometry(self.osd.read_conf(), '640x480i'), (1.05, 3, -2))
+        menu, _ = self.menu()
+        menu.open_page('geometry')
+        self.assertEqual([row.value for row in menu.page['rows'][:3]], [1.05, 3, -2])
+        menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
+        menu.open_page('geometry')
+        self.assertEqual([row.value for row in menu.page['rows'][:3]], [1.0, 0, 0])
+        for text in ('', 'x', '1.0:2', '1.0:a:3'):
+            self.conf.write_text('geometry_640x480i=%s\n' % text)
+            self.assertIsNone(self.osd.saved_geometry(self.osd.read_conf(), '640x480i'))
+
+    def test_using_the_default_forgets_the_resolution(self):
+        self.conf.write_text('monitor=generic_15\ngeometry_640x480i=1.050:3:-2\n')
+        menu, worker = self.menu()
+        menu.open_page('geometry')
+        menu.page['cursor'] = 4
+        menu.key(self.osd.KEY_ENTER)
+        worker.wait()
+        self.assertIn([self.osd.SETUP, '--geometry', 'reset-res', '640x480i'], self.calls)
+        self.assertFalse([c for c in self.calls if 'set-res' in c])
+        self.assertEqual(menu.status, 'DEFAULT')
+        self.assertEqual([row.value for row in menu.page['rows'][:3]], [1.0, 0, 0])
+
+    def test_a_game_opening_in_a_saved_resolution_gets_its_geometry(self):
+        service = object.__new__(self.osd.Service)
+        service.geometry_seen, service.geometry_polled = None, 0.0
+        screen = {'pid': 7, 'program': 'retroarch', 'core': ''}
+        timing = [self.osd.COLOR, 'timing', '13336', '640', '665', '727', '850', '480', '487', '493', '523']
+        # Sem geometria guardada nao se mexe na placa.
+        service.apply_saved_geometry(screen)
+        self.assertEqual([c for c in self.calls if 'timing' in c], [])
+        self.conf.write_text('monitor=generic_15\ngeometry_640x480i=0.900:5:-2\n')
+        service.geometry_polled = 0.0
+        service.apply_saved_geometry(screen)
+        self.assertEqual([c for c in self.calls if 'timing' in c], [timing])
+        self.assertIn([self.osd.SWITCHRES, '640', '480', '%.6f' % self.osd.mode_refresh(self.MODE), '-c', '-v', '-g',
+                       '0.900:5:-2'], self.calls)
+        # O mesmo jogo na mesma resolucao: uma vez so.
+        service.geometry_polled = 0.0
+        service.apply_saved_geometry(screen)
+        self.assertEqual(len([c for c in self.calls if 'timing' in c]), 1)
+        # Outro jogo na mesma resolucao, e o jogo fechado: de novo.
+        service.geometry_polled = 0.0
+        service.apply_saved_geometry(None)
+        self.assertIsNone(service.geometry_seen)
+        service.geometry_polled = 0.0
+        service.apply_saved_geometry(dict(screen, pid=8))
+        self.assertEqual(len([c for c in self.calls if 'timing' in c]), 2)
+
+    def test_a_resolution_without_geometry_is_left_alone(self):
+        service = object.__new__(self.osd.Service)
+        service.geometry_seen, service.geometry_polled = None, 0.0
+        self.conf.write_text('monitor=generic_15\ngeometry_320x240p=0.900:5:-2\n')
+        service.apply_saved_geometry({'pid': 7, 'program': 'retroarch', 'core': ''})
+        self.assertEqual(service.geometry_seen, (7, '640x480i'))
+        self.assertEqual([c for c in self.calls if 'timing' in c or self.osd.SWITCHRES in c], [])
+
+    def test_geometry_without_adjustment_needs_no_adjusted_line(self):
+        plain = ('Switchres: Monitor range 15625.00-15750.00,49.50-65.00,2.000,4.700,8.000,0.064,0.192,1.024,0,0,192,288,448,576\n'
+                 'Switchres: Modeline "640x480_60i 15.690000KHz 60.000000Hz" 13.336500 640 665 727 850 480 487 493 523 interlace  -hsync -vsync\n')
+        result = self.osd.parse_switchres(plain)
+        self.assertEqual((result['geometry'], result['range']), (None, None))
+        self.assertEqual(result['mode']['h'], [640, 665, 727, 850])
 
     def test_geometry_of_a_game_in_x_goes_through_xrandr(self):
         # Uma troca direta na placa, o Xorg desfaz: la vai pelo xrandr.

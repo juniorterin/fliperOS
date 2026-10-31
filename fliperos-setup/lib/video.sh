@@ -267,6 +267,7 @@ video_apply_monitor() {
   local monitor=$1 sr=$1
   if [[ $(conf_get monitor 2> /dev/null) != "$monitor" ]]; then
     video_custom_drop
+    geometry_res_clear
   elif video_custom_active; then
     sr=custom
   fi
@@ -900,8 +901,43 @@ geometry_reset() {
   [[ -n $monitor && $monitor != custom ]] || monitor=generic_15
   ini_set "$SWITCHRES_INI" crt_range0 auto
   conf_unset geometry
+  geometry_res_clear
   video_apply_monitor "$monitor"
   log_info "geometria: padrao do monitor $monitor"
+}
+
+# ── Geometria por resolucao ──────────────────────────────────────
+# A OSD guarda a geometria de cada resolucao que o jogo usa, em
+# geometry_<LARGURA>x<ALTURA><p|i>= (640x480i, 320x240p...) no fliperos.conf:
+# so os tres ajustes, "H_SIZE:H_SHIFT:V_SHIFT" (1.050:3:-2), que o Switchres
+# aplica em cima do monitor em uso. Sem a chave vale o crt_range de todas.
+
+geometry_res_key_valid() {
+  [[ ${1:-} =~ ^[0-9]+x[0-9]+[pi]$ ]]
+}
+
+geometry_res_value_valid() {
+  [[ ${1:-} =~ ^[0-9]+(\.[0-9]+)?:-?[0-9]+:-?[0-9]+$ ]]
+}
+
+# geometry_res_list imprime "RESOLUCAO=H_SIZE:H_SHIFT:V_SHIFT", uma por linha.
+geometry_res_list() {
+  local line
+  [[ -f $FLIPEROS_CONF ]] || return 0
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line == geometry_*=* ]] && printf '%s\n' "${line#geometry_}"
+  done < "$FLIPEROS_CONF"
+  return 0
+}
+
+# geometry_res_clear esquece a geometria de todas as resolucoes (outro
+# monitor, ou a geometria de volta ao padrao).
+geometry_res_clear() {
+  local item
+  while IFS= read -r item; do
+    conf_unset "geometry_${item%%=*}"
+  done < <(geometry_res_list)
+  return 0
 }
 
 # ── Monitor custom ───────────────────────────────────────────────
@@ -933,23 +969,39 @@ video_monitor_label() {
   fi
 }
 
-# geometry_cli status|reset|set RANGE: a geometria pelo painel web, pelas
-# mesmas funcoes das telas. status imprime monitor=, label=, range= (o
-# crt_range salvo; vazio, o do preset vale), preset= e tool= (1: o grid do
-# Switchres existe). set grava um crt_range digitado, como o Custom monitor:
-# status 2 se nao e um crt_range (ou o monitor e LCD), 3 se e de outra faixa
-# de frequencia que a do monitor escolhido.
+# geometry_cli status|reset|set RANGE|set-res RES AJUSTES|reset-res RES: a
+# geometria pelo painel web e pela OSD, pelas mesmas funcoes das telas. status
+# imprime monitor=, label=, range= (o crt_range salvo; vazio, o do preset
+# vale), preset=, tool= (1: o grid do Switchres existe) e resolutions= (as
+# geometrias por resolucao, "640x480i=1.050:3:-2" separadas por espaco). set
+# grava um crt_range digitado, como o Custom monitor: status 2 se nao e um
+# crt_range (ou o monitor e LCD), 3 se e de outra faixa de frequencia que a do
+# monitor escolhido. set-res/reset-res guardam e apagam a geometria de uma
+# resolucao (status 2 se a resolucao ou os ajustes estao mal escritos); reset
+# apaga tambem as de todas as resolucoes.
 geometry_cli() {
   local base range rfreq bfreq
   base=$(conf_get monitor 2> /dev/null) || base=""
   case ${1:-} in
     status)
-      printf 'monitor=%s\nlabel=%s\nrange=%s\npreset=%s\ntool=%s\n' "$base" "$(video_monitor_label 2> /dev/null)" \
-        "$(conf_get geometry 2> /dev/null)" "$(video_preset_range "$base" 2> /dev/null)" "$(have geometry && echo 1 || echo 0)"
+      printf 'monitor=%s\nlabel=%s\nrange=%s\npreset=%s\ntool=%s\nresolutions=%s\n' "$base" "$(video_monitor_label 2> /dev/null)" \
+        "$(conf_get geometry 2> /dev/null)" "$(video_preset_range "$base" 2> /dev/null)" "$(have geometry && echo 1 || echo 0)" \
+        "$(geometry_res_list | paste -sd' ' -)"
       ;;
     reset)
-      conf_get geometry > /dev/null 2>&1 || return 0
-      geometry_reset
+      if conf_get geometry > /dev/null 2>&1; then
+        geometry_reset
+      else
+        geometry_res_clear
+      fi
+      ;;
+    set-res)
+      geometry_res_key_valid "${2:-}" && geometry_res_value_valid "${3:-}" || return 2
+      conf_set "geometry_$2" "$3"
+      ;;
+    reset-res)
+      geometry_res_key_valid "${2:-}" || return 2
+      conf_unset "geometry_$2"
       ;;
     set)
       range=${2//[[:space:]]/}

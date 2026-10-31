@@ -1465,6 +1465,39 @@ class SettingsCliTests(Base):
         self.env.out("geometry_cli reset", env)
         self.assertNotIn("geometry=", (self.env.etc / "fliperos.conf").read_text())
 
+    def test_geometry_of_each_resolution(self):
+        # A OSD guarda os tres ajustes de cada resolucao; o reset apaga todos.
+        env = {"COLOR_BIN": str(self.env.dir / "none")}
+        conf = self.env.etc / "fliperos.conf"
+        self.env.out("conf_set monitor generic_15", env)
+        self.assertEqual(self.env.run("geometry_cli set-res 640x480i 1.050:3:-2", env).returncode, 0)
+        self.assertEqual(self.env.run("geometry_cli set-res 320x240p 0.900:-4:0", env).returncode, 0)
+        self.assertEqual(self.env.run("geometry_cli set-res 640x480i 1.100:3:-2", env).returncode, 0)
+        text = conf.read_text()
+        self.assertIn("geometry_640x480i=1.100:3:-2\n", text)
+        self.assertEqual(text.count("geometry_640x480i="), 1)
+        status = dict(line.split("=", 1) for line in self.env.out("geometry_cli status", env).splitlines())
+        self.assertEqual(sorted(status["resolutions"].split()), ["320x240p=0.900:-4:0", "640x480i=1.100:3:-2"])
+        self.assertEqual(status["range"], "")
+        for args in ("640x480 1.0:0:0", "640x480i 1.0:0", "640x480i abc", "640x480x 1.0:0:0", "''  1.0:0:0"):
+            self.assertEqual(self.env.run("geometry_cli set-res " + args, env).returncode, 2, args)
+        self.assertEqual(self.env.run("geometry_cli reset-res 320x240p", env).returncode, 0)
+        self.assertNotIn("geometry_320x240p", conf.read_text())
+        self.assertIn("geometry_640x480i=1.100:3:-2\n", conf.read_text())
+        self.env.out("geometry_cli reset", env)
+        self.assertNotIn("geometry_", conf.read_text())
+        self.assertIn("monitor=generic_15\n", conf.read_text())
+
+    def test_another_monitor_drops_the_geometry_of_resolutions(self):
+        (self.env.etc / "switchres.ini").write_text("\tmonitor                   generic_15\n"
+                                                    "\tcrt_range0                auto\n")
+        (self.env.etc / "mame.ini").write_text("monitor generic_15\nswitchres_ini 0\n")
+        self.env.out("conf_set monitor generic_15; conf_set geometry_640x480i 1.050:3:-2")
+        self.env.out("video_apply_monitor generic_15")
+        self.assertIn("geometry_640x480i=", (self.env.etc / "fliperos.conf").read_text())
+        self.env.out("video_apply_monitor arcade_15")
+        self.assertNotIn("geometry_640x480i", (self.env.etc / "fliperos.conf").read_text())
+
     def test_live_screen_quality(self):
         # A qualidade da tela ao vivo so aparece (e muda) com o go2rtc instalado.
         go2rtc = self.env.dir / "go2rtc"

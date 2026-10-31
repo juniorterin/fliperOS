@@ -93,7 +93,7 @@ Hold **Start and Down** for a second, or press **Pause** on a keyboard or **Play
 
 - **Volume**. The volume keys of a keyboard or of a panel also show a bar for 2 seconds, without taking the controls or opening the menu.
 - **480i filter**: off, light, medium or strong for the program on screen. It only shows in an interlaced mode, and the change counts on the next frame.
-- **Geometry**: horizontal size and position, and vertical position, with a frame and a cross over the picture. Each change is on the tube at once. **Save** keeps it for every game (the same `crt_range` as Video Setup > Geometry), and leaving without saving puts the mode back. Switchres stops at what the monitor accepts, and the value on screen goes back to that limit.
+- **Geometry**: horizontal size and position, and vertical position, with a frame and a cross over the picture. The title says which resolution is being adjusted (`GEOMETRY 640x480i`, `GEOMETRY 320x240p`), because each resolution has its own geometry. Each change is on the tube at once. **Save** keeps it for that resolution only, in every game that uses it; **Use the default** takes the resolution back to the geometry of all the others (the `crt_range` of Video Setup > Geometry, or the monitor's preset). Leaving without saving puts the mode back. Switchres stops at what the monitor accepts, and the value on screen goes back to that limit. When a game opens, or changes resolution, in a mode with a saved geometry, the service puts that geometry on the tube within a second.
 - **Colour**: every setting of the colour calibration, and back to the defaults.
 
 The arrows move and change, the first button opens and the second goes back, as in the Setup's menus. In `fliperos.conf`:
@@ -101,7 +101,8 @@ The arrows move and change, the first button opens and the second goes back, as 
 - `osd=off` turns it off. It is also in the web panel, in Video, and it stays closed in the frontend's commercial mode;
 - `osd_combo=start+down` is the shortcut, with the controls of the Button mapping;
 - `osd_hold=1.0` is how many seconds to hold them;
-- `osd_key=119,164,201,207` are the keys, as evdev codes: Pause, and the Play/Pause, Pause and Play of a remote. `0` is no key.
+- `osd_key=119,164,201,207` are the keys, as evdev codes: Pause, and the Play/Pause, Pause and Play of a remote. `0` is no key;
+- `geometry_640x480i=1.050:3:-2` is the geometry of one resolution (`WIDTHxLINES` and `p` or `i`): H size, H position and V position. Written by **Save** (`fliperos-setup --geometry set-res|reset-res`); another monitor type or **Reset Geometry** in the Setup erases them all.
 
 `fliperos-osd` runs as a service. It reads the shortcut with `fliperos-buttons hotkey` and writes a 320x240 picture to `/run/fliperos-osd/screen`, which exists only while the menu is open. The layers of the frame swap draw it before the flicker filter, so its letters don't flicker either: `config/fliperos-deflicker.c` in OpenGL and `config/fliperos-vkfps.c` in Vulkan.
 

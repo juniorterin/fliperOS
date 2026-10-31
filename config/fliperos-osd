@@ -25,6 +25,11 @@ geometria vale na hora, com as contas do Switchres, e so fica se for salva: num
 jogo em KMS, pelo fliperos-color timing; num jogo no X, pelo xrandr, como o
 proprio Switchres faz (uma troca direta na placa, o Xorg desfaz).
 
+Cada resolucao (640x480i, 320x240p...) tem a sua geometria: a pagina diz qual esta
+sendo ajustada, e salvar guarda os tres ajustes so dela (geometry_<resolucao>= no
+fliperos.conf). Quando um jogo abre, ou troca de resolucao, num modo com geometria
+guardada, o servico a poe na placa.
+
 As teclas de volume (o triggerhappy, fliperos-setup --volume) escrevem "volume" em
 /run/fliperos-osd/control, e uma barra aparece por BAR_SECONDS, sem tomar os
 controles.
@@ -36,6 +41,7 @@ import fcntl
 import glob
 import importlib.machinery
 import importlib.util
+import itertools
 import json
 import os
 import pwd
@@ -73,6 +79,8 @@ BAR_SECONDS = 2.0
 # Quanto tempo o menu espera soltarem o atalho antes de tomar os controles.
 RELEASE_WAIT = 3.0
 FPS_FRESH = 3.0
+# De quantos em quantos segundos se confere a resolucao do jogo na tela.
+GEOMETRY_POLL = 1.0
 
 # O arquivo das camadas: o cabecalho e os pixels RGBA de cima para baixo. seq
 # impar: gravando.
@@ -213,6 +221,18 @@ def mode_refresh(mode):
     return rate * 2 if mode["interlace"] else rate
 
 
+def resolution_key(mode):
+    """A resolucao de um modo, como a geometria a guarda: 640x480i, 320x240p."""
+    return "%dx%d%s" % (mode["h"][0], mode["v"][0], "i" if mode["interlace"] else "p")
+
+
+def saved_geometry(conf, key):
+    """Os ajustes (h_size, h_shift, v_shift) guardados para a resolucao, ou None.
+    O Setup grava geometry_<resolucao>=H_SIZE:H_SHIFT:V_SHIFT."""
+    m = re.fullmatch(r"(\d+(?:\.\d+)?):(-?\d+):(-?\d+)", conf.get("geometry_" + key, ""))
+    return (float(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+
+
 def timing_args(mode):
     return [str(mode["clock"])] + [str(v) for v in mode["h"] + mode["v"]]
 
@@ -235,6 +255,9 @@ class X11Modes:
     para voltar."""
 
     PREFIX = "FliperOS-OSD-"
+    # Um numero por modo criado no servico: cada jogo abre um X11Modes novo, e um
+    # nome repetido faria o --newmode falhar com o modo antigo ainda em uso.
+    counter = itertools.count(1)
 
     def __init__(self, env):
         self.env = dict(os.environ, DISPLAY=env["DISPLAY"])
@@ -243,7 +266,6 @@ class X11Modes:
         out = self.xrandr("--current")
         found = parse_xrandr(out.stdout) if out and out.returncode == 0 else None
         self.output, self.original = found if found else (None, None)
-        self.count = 0
         self.current = None
 
     def xrandr(self, *args):
@@ -253,8 +275,7 @@ class X11Modes:
         return self.output is not None
 
     def apply(self, mode):
-        self.count += 1
-        name = "%s%d-%d" % (self.PREFIX, os.getpid(), self.count)
+        name = "%s%d-%d" % (self.PREFIX, os.getpid(), next(self.counter))
         timings = ["%.3f" % (mode["clock"] / 1000)] + [str(v) for v in mode["h"] + mode["v"]]
         flags = (["Interlace"] if mode["interlace"] else []) + mode.get("sync", ["-HSync", "-VSync"])
         for args in (["--newmode", name] + timings + flags, ["--addmode", self.output, name],
@@ -302,33 +323,40 @@ def parse_switchres(text):
                      r"V: ([\d.]+), ([\d.]+), ([\d.]+)", line)
         if m:
             adjusted = m.groups()
-    if not mode or not adjusted or not monitor:
+    if not mode:
         return None
-    parts = monitor.split(",")
-    if len(parts) != 14:
-        return None
-    parts[2:8] = list(adjusted[3:9])
-    return {"mode": mode, "geometry": (float(adjusted[0]), int(adjusted[1]), int(adjusted[2])), "range": ",".join(parts)}
+    # Sem ajuste (1.000:0:0) o Switchres pode nao imprimir a geometria: o modo e o
+    # do monitor como esta.
+    result = {"mode": mode, "geometry": None, "range": None}
+    parts = monitor.split(",") if monitor else []
+    if adjusted:
+        result["geometry"] = (float(adjusted[0]), int(adjusted[1]), int(adjusted[2]))
+        if len(parts) == 14:
+            parts[2:8] = list(adjusted[3:9])
+            result["range"] = ",".join(parts)
+    return result
 
 
 class Geometry:
-    """A geometria da pagina: vale na hora e so fica se for salva. Sair sem salvar
-    volta o modo como estava."""
+    """A geometria da resolucao em uso: vale na hora e so fica se for salva. Cada
+    resolucao (640x480i, 320x240p...) tem a sua; sem uma salva vale o crt_range de
+    todas. Sair sem salvar volta o modo como estava."""
 
-    def __init__(self, screen=None):
-        self.base = current_mode()
-        self.value = (1.0, 0, 0)
+    NEUTRAL = (1.0, 0, 0)
+
+    def __init__(self, screen=None, mode=None):
+        self.base = mode or current_mode()
+        self.key = resolution_key(self.base) if self.base else None
+        self.value = (saved_geometry(read_conf(), self.key) if self.key else None) or self.NEUTRAL
         self.result = None
         self.saved = False
+        self.touched = False
         # Um jogo no X: quem troca o modo e o proprio X.
         env = process_env(screen["pid"]) if screen and screen.get("pid") else {}
         self.x11 = X11Modes(env) if env.get("DISPLAY") else None
 
     def valid(self):
         return self.base is not None and (self.x11 is None or self.x11.valid())
-
-    def changed(self):
-        return self.value != (1.0, 0, 0)
 
     def compute(self):
         """O modelo do Switchres para a geometria pedida; ele reduz ao que o
@@ -355,25 +383,31 @@ class Geometry:
             if not out or out.returncode != 0:
                 return None
         self.result = result
-        return result["geometry"]
+        self.touched = True
+        return result["geometry"] or self.value
 
     def restore(self):
         """O modo de quando a pagina abriu."""
         if self.x11:
             self.x11.restore()
-        elif self.base and self.changed() and not self.saved:
+        elif self.base and self.touched and not self.saved:
             run([COLOR, "timing"] + timing_args(self.base), timeout=5)
 
     def save(self):
-        if not self.result:
+        """Guarda os ajustes desta resolucao (os da tela: o Switchres ja os reduziu
+        ao que o monitor aceita). Sem ajuste nenhum, a resolucao volta a seguir o
+        crt_range de todas."""
+        if not self.result or not self.key:
             return False
-        out = run([SETUP, "--geometry", "set", self.result["range"]], timeout=20)
+        if self.value == self.NEUTRAL:
+            command = ["reset-res", self.key]
+        else:
+            command = ["set-res", self.key, "%.3f:%d:%d" % self.value]
+        out = run([SETUP, "--geometry"] + command, timeout=20)
         self.saved = bool(out and out.returncode == 0)
         if self.saved:
-            # O crt_range ja traz a geometria: o proximo ajuste comeca do zero, e
-            # sair sem salvar volta para este modo.
+            # Sair sem salvar volta para este modo.
             self.base = self.result["mode"]
-            self.value = (1.0, 0, 0)
             if self.x11:
                 self.x11.keep()
         return self.saved
@@ -540,7 +574,11 @@ class Menu:
         return self.stack[-1]
 
     def title(self):
-        return {"main": "FLIPEROS", "colour": "COLOUR", "geometry": "GEOMETRY"}.get(self.page["name"], "")
+        name = self.page["name"]
+        if name == "geometry" and self.geometry and self.geometry.key:
+            # A geometria e de uma resolucao: qual, fica a vista enquanto se ajusta.
+            return "GEOMETRY " + self.geometry.key
+        return {"main": "FLIPEROS", "colour": "COLOUR", "geometry": "GEOMETRY"}.get(name, "")
 
     def rows_of(self, name):
         return getattr(self, "rows_" + name)()
@@ -587,7 +625,7 @@ class Menu:
         return rows
 
     def rows_geometry(self):
-        self.geometry = Geometry(self.screen)
+        self.geometry = Geometry(self.screen, self.mode)
         if not self.geometry.valid():
             self.status = "NO VIDEO MODE TO ADJUST"
             return [Row("action", "Back", action=self.back)]
@@ -600,6 +638,7 @@ class Menu:
             Row("number", "V position", v_shift, V_SHIFT[0], V_SHIFT[1], V_SHIFT[2], pretty=signed,
                 change=lambda v: self.set_geometry(2, v)),
             Row("action", "Save", action=self.save_geometry),
+            Row("action", "Use the default", action=self.reset_geometry),
             Row("action", "Back", action=self.back),
         ]
 
@@ -662,6 +701,28 @@ class Menu:
             self.status = "SAVED" if saved else "NOT SAVED"
             rows = self.page["rows"] if self.page["name"] == "geometry" else []
             if saved:
+                for row, value_now in zip(rows[:3], geometry.value):
+                    row.value = value_now
+            self.dirty = True
+        self.worker.wait()
+        self.status = "SAVING"
+        self.dirty = True
+        self.worker.put("geometry-save", apply)
+
+    def reset_geometry(self):
+        """Esta resolucao volta a seguir o crt_range de todas: na placa e no Setup."""
+        geometry = self.geometry
+        geometry.value = geometry.NEUTRAL
+        geometry.saved = False
+
+        def apply():
+            accepted = geometry.apply()
+            if accepted is None:
+                self.status = "THE CARD REFUSED THIS MODE"
+            else:
+                saved = geometry.save()
+                self.status = "DEFAULT" if saved else "NOT SAVED"
+                rows = self.page["rows"] if self.page["name"] == "geometry" else []
                 for row, value_now in zip(rows[:3], geometry.value):
                     row.value = value_now
             self.dirty = True
@@ -999,6 +1060,9 @@ class Service:
         self.hotkey_args = None
         self.running = True
         self.bar_until = 0.0
+        # (programa, resolucao) cuja geometria ja foi posta, e quando se olhou.
+        self.geometry_seen = None
+        self.geometry_polled = 0.0
         os.makedirs(RUN_DIR, exist_ok=True)
         self.screen_file = Screen(os.path.join(RUN_DIR, "screen"))
         self.control = self.open_control()
@@ -1072,6 +1136,34 @@ class Service:
             data = b""
         self.stop_hotkey()
         return b"exit" in data
+
+    # A geometria de cada resolucao.
+    def apply_saved_geometry(self, screen):
+        """O jogo abriu (ou trocou de resolucao) num modo com geometria guardada: ela
+        vai para a placa. O emulador so conhece o crt_range de todas as resolucoes,
+        e o modo dele sai desse; aqui o ajuste da resolucao entra por cima, uma vez
+        por jogo e resolucao."""
+        now = time.monotonic()
+        if not screen:
+            self.geometry_seen = None
+            return
+        if now - self.geometry_polled < GEOMETRY_POLL:
+            return
+        self.geometry_polled = now
+        conf = read_conf()
+        if not any(key.startswith("geometry_") for key in conf):
+            return
+        mode = current_mode()
+        if not mode:
+            return
+        seen = (screen["pid"], resolution_key(mode))
+        if seen == self.geometry_seen:
+            return
+        self.geometry_seen = seen
+        if saved_geometry(conf, seen[1]):
+            geometry = Geometry(screen, mode)
+            if geometry.valid():
+                geometry.apply()
 
     # A barra das teclas de volume.
     def bar_allowed(self, screen):
@@ -1156,6 +1248,7 @@ class Service:
         while self.running:
             screen = on_screen()
             self.watch_hotkey(screen)
+            self.apply_saved_geometry(screen)
             fds = [self.control]
             if self.hotkey:
                 fds.append(self.hotkey.stdout.fileno())
