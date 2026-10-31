@@ -186,8 +186,7 @@ svg.g { width: 16px; height: 16px; flex: none; }
   box-shadow: 0 6px 0 #1f8a40, 0 0 20px rgba(80,250,123,.5); display: flex; gap: 10px; align-items: center; justify-content: center; }
 .btn-start:active { transform: translateY(4px); box-shadow: 0 2px 0 #1f8a40; }
 .insert { font: 11px var(--px); color: var(--yellow); animation: blink 1s steps(1) infinite; }
-.login .insert { display: block; margin: 22px 0 8px; }
-.login-note { color: var(--dim); margin: 0; }
+.login-note { color: var(--dim); margin: 22px 0 0; }
 
 /* ── A gaveta das tarefas ── */
 .drawer-back { position: fixed; inset: 0; z-index: 40; background: rgba(8,8,12,.5); }
