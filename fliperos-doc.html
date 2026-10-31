@@ -29707,7 +29707,7 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
 <ol>
 <li>Write in <code>CHANGELOG.md</code> the <code>## VERSION</code> section with what changed since the previous release (<code>git log PREVIOUS_VERSION..HEAD</code> lists the commits). A new ISO after a release needs a new version (<code>FLIPEROS_VERSION</code> in <code>fliperos-mkiso.sh</code>).</li>
-<li>Write <code>docs/telegram/VERSION.md</code>, the text for the <a href="https://t.me/fliperos15khz">Telegram group</a>: what the changelog lists, told for the people who use the cabinet, with a picture per new feature and how it works (see below).</li>
+<li>Optional: write <code>docs/telegram/VERSION.md</code>, the text for the <a href="https://t.me/fliperos15khz">Telegram group</a> with a picture per new feature and how it works (see below). Without it the group gets the changelog section.</li>
 <li>Commit and push.</li>
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
@@ -29741,10 +29741,10 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
 <h3 id="telegram-group">Telegram group</h3>
 <p>Each release is also posted in the group <a href="https://t.me/fliperos15khz">t.me/fliperos15khz</a>, with pictures and an explanation of how each new feature works. <code>CHANGELOG.md</code> is the technical list of the GitHub release; the group reads <code>docs/telegram/VERSION.md</code>.</p>
-<p>The file is a list of messages separated by a line with only <code>---</code>. In each one, <code>![](website/public/screenshots/gui/video.webp)</code> puts a picture (the path starts at the repository root; an animated WebP or a GIF goes as an animation), and the rest is the text, with <code>**bold**</code>, <code>`code`</code>, <code>[links](https://...)</code> and <code>-</code> lists. With a picture, the text is its caption (up to 1024 characters); without one, it is a message of up to 4096.</p>
+<p>The file is a list of messages separated by a line with only <code>---</code>. In each one, a line made of <code>!</code>, <code>[]</code> and a path in parentheses, such as <code>(website/public/screenshots/gui/video.webp)</code>, puts a picture (the path starts at the repository root; an animated WebP or a GIF goes as an animation), and the rest is the text, with <code>**bold**</code>, <code>`code`</code>, <code>[links](https://...)</code> and <code>-</code> lists. With a picture, the text is its caption (up to 1024 characters); without one, it is a message of up to 4096.</p>
 <pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.18   # checks the file and the images, sends nothing (needs python3-pil)
 </code></pre>
-<p>The <strong>Release</strong> workflow refuses a tag without that file (or with a broken one) before it starts the build, and when the release is published it calls the <strong>Telegram</strong> workflow (<code>.github/workflows/telegram.yml</code>), which runs <code>tools/telegram-post.py</code>. To post again without rebuilding the ISO, run it by hand (<em>Actions &gt; Telegram &gt; Run workflow</em>, with the version; <em>dry run</em> only checks). It needs the repository secret <code>TELEGRAM_BOT_TOKEN</code>, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable <code>TELEGRAM_CHAT_ID</code>, and <code>@fliperos15khz</code> when it is not set. A tag that is moved and redone posts again.</p>
+<p>That file is optional: without it, the group gets the version's section of <code>CHANGELOG.md</code> as it is (technical, no pictures), cut into messages of up to 4096 characters. The <strong>Release</strong> workflow checks the text with the dry run before it starts the build, and when the release is published it calls the <strong>Telegram</strong> workflow (<code>.github/workflows/telegram.yml</code>), which runs <code>tools/telegram-post.py</code>. To post again without rebuilding the ISO, run it by hand (<em>Actions &gt; Telegram &gt; Run workflow</em>, with the version; <em>dry run</em> only checks). With the version <code>all</code> it posts every version of the changelog, oldest first (<code>--backfill</code>), which is how the group gets the history. It needs the repository secret <code>TELEGRAM_BOT_TOKEN</code>, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable <code>TELEGRAM_CHAT_ID</code>, and <code>@fliperos15khz</code> when it is not set. A tag that is moved and redone posts again.</p>
 <h2 id="tests">Tests</h2>
 <pre><code class="language-powershell">docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -30107,6 +30107,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <tr>
 <td><code>README.md</code>, <code>docs/wiki/</code></td>
 <td>The summary and the full documentation: the pages of this wiki, kept next to the code</td>
+</tr>
+<tr>
+<td><code>tools/telegram-post.py</code>, <code>docs/telegram/</code></td>
+<td>Posts each release in the Telegram group (t.me/fliperos15khz): <code>docs/telegram/VERSION.md</code> has the messages with pictures and how each new feature works; the Release workflow calls it</td>
 </tr>
 <tr>
 <td><code>tools/wiki-publish.sh</code>, <code>tools/render-docs.py</code></td>
