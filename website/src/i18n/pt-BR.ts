@@ -795,7 +795,7 @@ const ptBR: Messages = {
     gpu: {
       title: 'Uma placa de vídeo com saída VGA: a SOYO Radeon R7 240',
       text: 'Uma Radeon R7 240 de perfil baixo, com 4 GB de GDDR3, 128 bits, PCIe 3.0 x8 e saídas VGA, DVI e HDMI. A R7 240 é a placa em que o FliperOS é desenvolvido, a 15 kHz na VGA, com radeon e amdgpu.',
-      note: 'O anúncio é do modelo da SOYO; o projeto não viu este modelo exato num tubo.',
+      note: 'Testada com o FliperOS e funciona; as especificações acima são do anúncio.',
       alt: 'A placa SOYO Radeon R7 240, com dissipador e ventoinha, e o espelho com saídas VGA, DVI e HDMI.',
       cta: 'Ver no AliExpress',
       docs: 'Placas de vídeo, na documentação',
