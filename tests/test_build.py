@@ -12136,6 +12136,33 @@ class GuiMenuMarqueeTests(unittest.TestCase):
         self.assertIn('menu_marquee "$choice"', (ROOT / 'fliperos-setup/screens/main-menu.sh').read_text())
 
 
+class GuiMenuIconTests(unittest.TestCase):
+    """Todo item de menu do Setup tem um icone (gui/theme.py ou gui/icons):
+    sem ele, o carrossel mostra so a inicial do rotulo."""
+
+    def test_every_menu_item_has_an_icon(self):
+        # O theme.py so usa o pygame nas funcoes: o de mentira basta para ler
+        # os icones, com os apelidos, numa imagem de teste sem pygame.
+        saved = sys.modules.get('pygame')
+        sys.modules['pygame'] = type(sys)('pygame')
+        try:
+            theme = SourceFileLoader('fliperos_theme', str(ROOT / 'fliperos-setup/gui/theme.py')).load_module()
+        finally:
+            del sys.modules['pygame']
+            if saved:
+                sys.modules['pygame'] = saved
+        pictures = {p.stem for p in (ROOT / 'fliperos-setup/gui/icons').glob('*.png')}
+        known = set(theme.ICONS) | pictures | set(theme.IMAGES)
+        # "valor|Rotulo|Dica", o item de ui_menu_hints.
+        item = re.compile(r'"([a-zA-Z_+-][\w+-]*)\|[^|"]*\|[^|"]*"')
+        missing = {}
+        for path in sorted((ROOT / 'fliperos-setup/screens').glob('*.sh')):
+            for value in item.findall(path.read_text()):
+                if value not in known:
+                    missing.setdefault(value, path.name)
+        self.assertEqual(missing, {}, 'draw these in gui/theme.py, or alias them to an existing icon')
+
+
 class GuiNotSupportedTests(unittest.TestCase):
     """Um item "(not supported)" de um menu do Setup grafico: a dica traz o
     motivo e o Menu desenha um X vermelho no icone (gui/serve.py, widgets.py)."""

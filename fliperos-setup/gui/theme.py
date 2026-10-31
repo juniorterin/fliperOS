@@ -1158,6 +1158,44 @@ MMPDDDDDYYYYDDP.
 ................
 ................
 """,
+    # Test the video outputs: um tubo com o certo verde.
+    "retest": """
+................
+.PPPPPPPPPPPPPP.
+.PDDDDDDDDDDDDP.
+.PDDDDDDDDDGGDP.
+.PDDDDDDDDGGGDP.
+.PDDDDDDDGGGDDP.
+.PDDGGDDGGGDDDP.
+.PDDGGGGGGDDDDP.
+.PDDDGGGGDDDDDP.
+.PDDDDGGDDDDDDP.
+.PPPPPPPPPPPPPP.
+.......PP.......
+.....PPPPPP.....
+................
+................
+................
+""",
+    # Card firmware: a placa de video, com o raio no chip da BIOS.
+    "firmware": """
+................
+................
+.MMGGGGGGGGGGGG.
+.MMGGGGGGGGGGGG.
+.MMGGDDDDDDDGGG.
+.MMGGDDDDYYDGRG.
+.MMGGDDDYYDDGGG.
+.MMGGDDYYYYDGRG.
+.MMGGDDDDYDDGGG.
+.MMGGDDDYDDDGRG.
+.MMGGDDDDDDDGGG.
+.MMGGGGGGGGGGGG.
+.M..YYYYYYYYYY..
+.M..Y.Y.Y.Y.Y...
+................
+................
+""",
 })
 for _alias, _name in {
     "scrape": "scraper", "source": "network", "cleaner": "filter", "folders": "dest", "downloader": "install",
@@ -1190,6 +1228,10 @@ for _alias, _name in {
     "calibrate": "colour", "values": "romlist",
     # Video Setup > Video driver (radeon ou amdgpu).
     "driver": "system", "radeon": "video", "amdgpu": "video",
+    # Low resolutions, a faixa do RGB, comparar os drivers, o KOF (baixar ou
+    # uma pasta) e o Scraper com um site.
+    "lowdot": "outputs", "range": "colour", "compare": "romlist", "download": "install", "folder": "dest",
+    "site": "scraper",
 }.items():
     ICONS[_alias] = ICONS[_name]
 # As pastas de Setup > Games > Folders (e o link do romset no Downloader).

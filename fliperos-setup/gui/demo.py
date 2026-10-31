@@ -48,6 +48,8 @@ def video():
         ("geometry", "Geometry", "Center and size the picture on the tube."),
         ("reset", "Reset Geometry", "Back to the geometry of the monitor type."),
         ("outputs", "Multiple Monitors", "Which video outputs are on."),
+        ("retest", "Test the video outputs", "Run the output test again after a card change."),
+        ("firmware", "Card firmware", "15 kHz from power on. Rewrites the card's BIOS: at your own risk."),
         ("return", "Return"),
     ], "monitor")
 
