@@ -775,7 +775,7 @@ const enUS = {
       text: 'Art Repair 80, a Brazilian vintage games and parts repair shop, sells the RGB-80, a small board that takes the VGA output of a PC and gives component video for a CRT TV. Its flyer, "Want a fliperama at home for those incredible moments with family and friends?", describes the build:',
       parts: ['A PC with a VGA video card.', 'A tube TV with component video input.', 'An RGB-80 board.'],
       native: 'Games at their native resolution, "as only a tube TV can show". It comes with a leaflet of instructions.',
-      note: 'Not tested with FliperOS yet; the information is from the seller\'s flyer.',
+      note: 'Tested with FliperOS and it works; the description above is from the seller\'s flyer.',
       contactLabel: 'Questions, from the seller:',
       telegram: 'Telegram group',
       email: 'art.repair80@gmail.com',

@@ -777,7 +777,7 @@ const ptBR: Messages = {
       text: 'A Art Repair 80, uma oficina brasileira de games antigos, peças e serviços, vende a RGB-80, uma placa pequena que pega a saída VGA de um PC e entrega vídeo componente para uma TV de tubo. O folheto dela, "Tem vontade de ter um fliperama em casa para aqueles momentos incríveis com a família e amigos?", descreve a montagem:',
       parts: ['Um PC com placa VGA.', 'Uma TV de tubo com entrada de vídeo componente.', 'Uma placa RGB-80.'],
       native: 'Jogos na resolução nativa, "como só a TV de tubo consegue exibir". Acompanha um folheto com instruções.',
-      note: 'Ainda não foi testada com o FliperOS; as informações são do folheto do vendedor.',
+      note: 'Testada com o FliperOS e funciona; a descrição acima é do folheto do vendedor.',
       contactLabel: 'Dúvidas, com o vendedor:',
       telegram: 'Grupo no Telegram',
       email: 'art.repair80@gmail.com',

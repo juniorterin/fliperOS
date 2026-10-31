@@ -38,7 +38,7 @@ A fix for DisplayPort and HDMI to VGA converters (the menu and the games now ope
 **Documentation:**
 
 - ROMs page and the READMEs: the `nvram` and `save` folders. Web panel page: Files and Clones. Website: the web panel page shows the panel on the real cabinet with Street Fighter II running and the buttons being pressed, and the commercial mode with two coins
-- Install and Video cards pages: what to choose with a DisplayPort or HDMI to VGA converter, and what the numbered test cards showed on one. The website's Hardware section says the same, and has the RGB-80 board (VGA to component video, from Art Repair 80, not tested with FliperOS). The wiki list of games has the data each one has on the display and its files
+- Install and Video cards pages: what to choose with a DisplayPort or HDMI to VGA converter, and what the numbered test cards showed on one. The website's Hardware section says the same, and has the RGB-80 board (VGA to component video, from Art Repair 80, tested with FliperOS and it works). The wiki list of games has the data each one has on the display and its files
 
 ## 0.16
 
