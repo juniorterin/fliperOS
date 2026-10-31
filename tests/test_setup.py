@@ -450,6 +450,56 @@ class OutputTestTests(Base):
         self.assertIn("kernel_video=video=VGA-1:1280x480iSe\n", conf)
         self.assertIn("fb_map=1\n", conf)
 
+    def saved(self, conn, flags, monitor):
+        (self.env.etc / "switchres.ini").write_text("\tdotclock_min              0\n")
+        self.env.connector(conn, "connected")
+        self.env.out("video_save_result %s %s %s" % (conn, flags, monitor))
+        return (self.env.etc / "fliperos.conf").read_text(), (self.env.etc / "switchres.ini").read_text()
+
+    def test_crt_on_hdmi_or_dvi_d_gets_super_resolution(self):
+        # O link TMDS nao desce abaixo de 25 MHz, mesmo numa placa AMD.
+        for conn, name in (("card0-HDMI-A-1", "HDMI-A-1"), ("card0-DVI-D-1", "DVI-D-1")):
+            conf, ini = self.saved(conn, "sr", "generic_15")
+            self.assertIn("detection=r\n", conf)
+            self.assertIn("kernel_video=video=%s:1280x480iS\n" % name, conf)
+            self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+25\.0$")
+
+    def test_edid_boot_on_hdmi_also_uses_super_resolution(self):
+        self.env.cmdline.write_text("boot=live drm.edid_firmware=edid/generic_15_super_resp.bin video=e\n")
+        conf, ini = self.saved("card0-HDMI-A-1", "sdo", "generic_15")
+        self.assertIn("detection=do\n", conf)
+        self.assertIn("video=HDMI-A-1:e drm.edid_firmware=HDMI-A-1:", conf)
+        self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+25\.0$")
+
+    def test_displayport_keeps_the_low_dotclock(self):
+        conf, ini = self.saved("card0-DP-1", "sr", "generic_15")
+        self.assertIn("detection=sr\n", conf)
+        self.assertIn("kernel_video=video=DP-1:640x480iS\n", conf)
+        self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+0$")
+
+    def test_lcd_on_hdmi_is_not_touched(self):
+        conf, ini = self.saved("card0-HDMI-A-1", "sl", "lcd")
+        self.assertIn("detection=sl\n", conf)
+        self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+0$")
+
+    def test_monitor_change_on_hdmi_redoes_the_result(self):
+        self.saved("card0-HDMI-A-1", "sl", "lcd")
+        self.env.out("video_reconfigure_monitor generic_15")
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("detection=l\n", conf)
+        self.assertRegex((self.env.etc / "switchres.ini").read_text(), r"(?m)^\s*dotclock_min\s+25\.0$")
+        self.env.out("video_reconfigure_monitor lcd")
+        self.assertIn("detection=sl\n", (self.env.etc / "fliperos.conf").read_text())
+
+    def test_resolution_choices_follow_the_output(self):
+        self.env.out("conf_set card card0; conf_set monitor generic_15; conf_set connector VGA-1")
+        self.assertIn("320x240S|", self.env.out("video_resolution_choices"))
+        self.env.out("conf_set connector DP-1")
+        self.assertIn("320x240S|", self.env.out("video_resolution_choices"))
+        self.env.out("conf_set connector HDMI-A-1")
+        modes = [l.split("|")[0] for l in self.env.out("video_resolution_choices").splitlines()]
+        self.assertEqual(modes, ["1280x480iS"])
+
     def test_boot_resolution_from_params(self):
         self.assertEqual(self.env.out("video_boot_resolution 'video=VGA-1:640x480iSe,panel_orientation=x'").strip(),
                          "640x480iS")

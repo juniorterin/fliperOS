@@ -44,7 +44,7 @@ Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an **acti
 
 On Windows, forum posts say CRT_EmuDriver doesn't support the 3000 and the 5000, even though the 5000 is an HD 5450 with Ultimarc's own BIOS. The cause on Linux isn't documented, and none has been tried on FliperOS. If you are buying a card, a plain HD 5450 is the safer choice.
 
-**ATOM-15 isn't needed.** Flashing a supported Radeon with ATOM-15 makes it start at 15 kHz from the BIOS, which [GroovyArcade's FAQ](https://gitlab.com/groovyarcade/support/-/wikis/1-About-GroovyArcade/1.3-General-FAQ) describes as protection against out-of-range signals at boot. Once the kernel has loaded, 15 kHz is there either way.
+**ATOM-15 isn't needed.** Flashing a supported Radeon with [ATOM-15](#atom-15-15-khz-from-power-on) makes it start at 15 kHz from the BIOS, which [GroovyArcade's FAQ](https://gitlab.com/groovyarcade/support/-/wikis/1-About-GroovyArcade/1.3-General-FAQ) describes as protection against out-of-range signals at boot. Once the kernel has loaded, 15 kHz is there either way.
 
 ## Converters
 
@@ -71,9 +71,9 @@ The CableDeconn has also been reported working on a FliperOS cabinet, without a 
 
 **Protecting the CableDeconn's connector.** Users fix a VGA gender changer to it with 4-40 hex screws, so the changer takes the wear of plugging and unplugging. Use screws of 10 or 12 mm: **never longer than 12 mm**.
 
-**In the Setup:** the output test skips a digital output that reports nothing connected. On an AMD card the Setup assumes low clocks on every output, HDMI included, so the main monitor gets a native boot mode and `dotclock_min 0`.
+**In the Setup:** the output test skips a digital output that reports nothing connected.
 
-**On HDMI that can leave the tube black.** Boot the **EDID progressive** entry, and set [`dotclock_min 25.0`](Black-screen.md#the-menus-work-some-games-go-black) so games use super resolutions.
+On HDMI or DVI-D with a CRT preset, the Setup uses super resolutions by itself, even on an AMD card: `1280x480iS` at boot and `dotclock_min 25.0`. An LCD on those outputs isn't affected. On DisplayPort an AMD card stays native. This hasn't been seen on a real converter yet.
 
 For a third monitor on a converter, see [Multiple monitors](Multiple-Monitors.md).
 

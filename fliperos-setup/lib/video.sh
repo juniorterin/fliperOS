@@ -131,10 +131,15 @@ speech_connector() {
 # video_reconfigure_monitor MONITOR troca o monitor e, se o teste de saidas
 # ja escolheu a saida, recalcula os parametros de video para ele.
 video_reconfigure_monitor() {
-  local monitor=$1 conn flags params
+  local monitor=$1 conn flags params card
   video_apply_monitor "$monitor"
   conn=$(conf_get connector 2> /dev/null) || return 0
   flags=$(conf_get detection 2> /dev/null) || return 0
+  # Em HDMI ou DVI-D, LCD e CRT pedem resultados diferentes (video_output_flags).
+  if drm_is_tmds "$conn" && card=$(conf_get card 2> /dev/null); then
+    video_save_result "$card-$conn" "$flags" "$monitor"
+    return
+  fi
   params=$(video_kernel_params "$conn" "$flags" "$monitor") || return 1
   conf_set kernel_video "$params"
   conf_set boot_resolution "$(video_boot_resolution "$params" || true)"
@@ -391,12 +396,26 @@ video_low_dotclock_apply() {
   video_save_result "$card-$conn" "$flags" "$monitor"
 }
 
+# video_output_flags CARD NOME FLAGS MONITOR: o resultado do teste para esta
+# saida. Um CRT em HDMI ou DVI-D (por um conversor ativo) nao recebe dotclock
+# baixo, mesmo de uma placa que o gera: sem o "s", ele fica na super resolucao.
+# Num LCD o modo vem do EDID dele, e o "s" fica como a placa manda.
+video_output_flags() {
+  local card=$1 name=$2 flags=$3 monitor=$4
+  if drm_is_tmds "$name"; then
+    flags=${flags#s}
+    [[ $monitor == lcd ]] && drm_card_low_dotclock "$card" && flags=s$flags
+  fi
+  printf '%s\n' "$flags"
+}
+
 # video_save_result CONECTOR FLAGS MONITOR grava o resultado validado do
 # teste de saidas para o instalador e para o sistema instalado.
 video_save_result() {
   local c=$1 flags=$2 monitor=$3 card name base params min id
   card=$(drm_card "$c")
   name=$(drm_name "$c")
+  flags=$(video_output_flags "$card" "$name" "$flags" "$monitor")
   base=${flags%a}
   params=$(video_kernel_params "$name" "$flags" "$monitor") || return 1
   # Outra placa ou outra saida principal: os monitores extras sao escolhidos
@@ -423,8 +442,9 @@ video_save_result() {
   # o framebuffer dela desde o boot (fbcon=map).
   conf_set fb_map "$(drm_card_fb "$card" 2> /dev/null || echo 0)"
   video_apply_monitor "$monitor"
-  # Sem dotclock baixo, o Switchres e o MAME trabalham com super resolucao.
-  if [[ $base =~ ^[er]$ ]]; then
+  # Sem dotclock baixo, o Switchres e o MAME trabalham com super resolucao,
+  # tambem quando o modo de boot vem de um EDID.
+  if [[ $base =~ ^(e|r|o|do|l)$ && $monitor != lcd ]]; then
     ini_set "$SWITCHRES_INI" dotclock_min 25.0
     [[ -f $MAME_INI ]] && ini_set "$MAME_INI" dotclock_min 25.0
   elif [[ $base == s* ]]; then
@@ -697,7 +717,7 @@ video_resolution_choices() {
   freq=$(monitor_frequency "$monitor") || return 1
   card=$(conf_get card) || card=""
   if [[ -n $card ]]; then
-    drm_card_low_dotclock "$card" || low=0
+    drm_output_low_dotclock "$card" "$(conf_get connector 2> /dev/null)" || low=0
     min=$(video_low_dotclock_min "$card")
     # O i915 nao tem o 240p progressivo largo na tabela do kernel: ele vem de
     # um EDID do FliperOS (super240_edid).

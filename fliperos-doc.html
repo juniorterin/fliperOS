@@ -407,7 +407,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p><strong>A VGA connector isn't always analog.</strong> On some APUs and motherboards the VGA port is a DisplayPort to VGA bridge chip. It may not switch modes quickly, make low clocks or do interlaced modes, so results vary by motherboard. GroovyArcade found the ASRock DeskMini A300's to be the best so far.</p>
 <p><strong>ArcadeVGA cards.</strong> GroovyArcade's wiki says they "are not supported and won't work", without saying why, and other reports disagree. One forum thread has an ArcadeVGA 5000 running GroovyArcade at half speed; the documentation of another 15 kHz package says they seem to be supported.</p>
 <p>On Windows, forum posts say CRT_EmuDriver doesn't support the 3000 and the 5000, even though the 5000 is an HD 5450 with Ultimarc's own BIOS. The cause on Linux isn't documented, and none has been tried on FliperOS. If you are buying a card, a plain HD 5450 is the safer choice.</p>
-<p><strong>ATOM-15 isn't needed.</strong> Flashing a supported Radeon with ATOM-15 makes it start at 15 kHz from the BIOS, which <a href="https://gitlab.com/groovyarcade/support/-/wikis/1-About-GroovyArcade/1.3-General-FAQ">GroovyArcade's FAQ</a> describes as protection against out-of-range signals at boot. Once the kernel has loaded, 15 kHz is there either way.</p>
+<p><strong>ATOM-15 isn't needed.</strong> Flashing a supported Radeon with <a href="#atom-15-15-khz-from-power-on">ATOM-15</a> makes it start at 15 kHz from the BIOS, which <a href="https://gitlab.com/groovyarcade/support/-/wikis/1-About-GroovyArcade/1.3-General-FAQ">GroovyArcade's FAQ</a> describes as protection against out-of-range signals at boot. Once the kernel has loaded, 15 kHz is there either way.</p>
 <h2 id="converters">Converters</h2>
 <p>A card with only digital outputs can drive a CRT through an <strong>active converter</strong> with a DAC chip inside. A passive adapter doesn't work on a digital output.</p>
 <p><strong>DisplayPort is the one to use.</strong> GroovyArcade reports no lower limit for its pixel clock, so a card that makes low clocks can often show games at their native resolution. An HDMI or DVI-D link doesn't go under about 25 MHz, so it only gives super resolutions.</p>
@@ -439,8 +439,8 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li><strong>Some modes may be refused.</strong> If only some games go black, raise <a href="#Black-screen"><code>dotclock_min</code></a>.</li>
 </ul>
 <p><strong>Protecting the CableDeconn's connector.</strong> Users fix a VGA gender changer to it with 4-40 hex screws, so the changer takes the wear of plugging and unplugging. Use screws of 10 or 12 mm: <strong>never longer than 12 mm</strong>.</p>
-<p><strong>In the Setup:</strong> the output test skips a digital output that reports nothing connected. On an AMD card the Setup assumes low clocks on every output, HDMI included, so the main monitor gets a native boot mode and <code>dotclock_min 0</code>.</p>
-<p><strong>On HDMI that can leave the tube black.</strong> Boot the <strong>EDID progressive</strong> entry, and set <a href="#Black-screen"><code>dotclock_min 25.0</code></a> so games use super resolutions.</p>
+<p><strong>In the Setup:</strong> the output test skips a digital output that reports nothing connected.</p>
+<p>On HDMI or DVI-D with a CRT preset, the Setup uses super resolutions by itself, even on an AMD card: <code>1280x480iS</code> at boot and <code>dotclock_min 25.0</code>. An LCD on those outputs isn't affected. On DisplayPort an AMD card stays native. This hasn't been seen on a real converter yet.</p>
 <p>For a third monitor on a converter, see <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
 <h2 id="reported-by-groovyarcade">Reported by GroovyArcade</h2>
 <p>Cards in the <a href="https://gitlab.com/groovyarcade/support/-/wikis/2-Pre-Requisites-and-Installation/2.1-Hardware-Suggestions-General#tested-gpus">GroovyArcade wiki's list of tested GPUs</a>. They ran on its kernel, not on FliperOS, but it is the same family of 15 kHz patches. Older cards than these should work but aren't recommended.</p>
@@ -1149,7 +1149,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <ul>
 <li>Switchres EDID (dongle) → the monitor comes from the EDID itself;</li>
 <li>otherwise, the monitor type is <strong>mandatory</strong> (the list opens on the suggestion of the boot entry);</li>
-<li>the kernel line comes from the monitor: <code>video=VGA-1:640x480iSe</code> (the <code>e</code> when the output had to be forced); a card without low dotclock (Intel, NVIDIA that didn't pass the grid) → super resolution <code>1280x480iS</code> and <code>dotclock_min 25.0</code> in Switchres; APU → <code>interlace_force_even 1</code>; EDID boot → <code>drm.edid_firmware=CONNECTOR:edid/&lt;monitor&gt;.bin</code>; LCD → nothing (its EDID applies).</li>
+<li>the kernel line comes from the monitor: <code>video=VGA-1:640x480iSe</code> (the <code>e</code> when the output had to be forced); a card without low dotclock (Intel, NVIDIA that didn't pass the grid), or a CRT on HDMI or DVI-D → super resolution <code>1280x480iS</code> and <code>dotclock_min 25.0</code> in Switchres; APU → <code>interlace_force_even 1</code>; EDID boot → <code>drm.edid_firmware=CONNECTOR:edid/&lt;monitor&gt;.bin</code>; LCD → nothing (its EDID applies).</li>
 </ul>
 <p>Everything is saved in <strong><code>/etc/fliperos/fliperos.conf</code></strong> (GPU, driver, connector, detection, monitor, range, boot mode, kernel parameters, orientation, launcher), the equivalent of <code>ga.conf</code>, and in <code>switchres.ini</code>/<code>mame.ini</code>.</p>
 <h2 id="fliperos-setup">FliperOS Setup</h2>

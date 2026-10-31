@@ -153,6 +153,21 @@ drm_card_low_dotclock() {
   return 1
 }
 
+# drm_is_tmds NOME: HDMI e DVI-D, cujo link nao desce abaixo de 25 MHz, seja
+# qual for a placa. A DisplayPort nao tem esse piso.
+drm_is_tmds() {
+  case $1 in
+    HDMI-* | DVI-D-*) return 0 ;;
+  esac
+  return 1
+}
+
+# drm_output_low_dotclock CARD NOME: a placa gera dotclock baixo e a saida o
+# deixa passar.
+drm_output_low_dotclock() {
+  ! drm_is_tmds "$2" && drm_card_low_dotclock "$1"
+}
+
 # drm_card_low_dotclock_testable CARD: placa em que o grid de dotclock baixo
 # vale a pena: o nouveau. Na Intel o driver nao tem o patch, e o KMS do
 # driver da NVIDIA so aceita os modos progressivos do EDID (o Switchres nao

@@ -145,7 +145,10 @@ screen_testing_results() {
     freq="$(printf '%.2f' "$khz") kHz"
   fi
 
-  if [[ $flags == s* && $(video_low_dotclock_min "$card") != 0 ]]; then
+  if drm_is_tmds "$name" && [[ $base != *l ]]; then
+    lowres=$(ui_no "NO (super resolutions)")
+    notes+=("HDMI and DVI-D don't go below 25 MHz: on a CRT, super resolutions will be used, with the same picture.")
+  elif [[ $flags == s* && $(video_low_dotclock_min "$card") != 0 ]]; then
     lowres=$(ui_yes "YES (from $(video_low_dotclock_min "$card") MHz)")
     notes+=("Native 15 kHz resolutions will be used from $(video_low_dotclock_min "$card") MHz. Narrower games are shown at double width, with the same picture on a CRT.")
   elif [[ $flags == s* ]]; then
