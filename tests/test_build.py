@@ -14247,6 +14247,272 @@ class VulkanFpsLayerTests(unittest.TestCase):
         self.assertIn('static int chain_ready(', source)
 
 
+class OsdTests(unittest.TestCase):
+    """A OSD (config/fliperos-osd): o menu por cima do jogo, as contas da
+    geometria e o arquivo que as camadas leem. O desenho nas camadas e testado por
+    tools/deflicker-test.sh e tools/vkfps-test.sh."""
+
+    SWITCHRES = (
+        'Switchres: Monitor range 15625.00-15750.00,49.50-65.00,2.000,4.700,8.000,0.064,0.192,1.024,0,0,192,288,448,576\n'
+        'Switchres: Calculating best video mode for 640x480@60.000000 orientation: normal\n'
+        'Switchres: Modeline "640x480_60i 15.690000KHz 60.000000Hz" 13.336500 640 665 727 850 480 487 493 523 interlace  -hsync -vsync\n'
+        'Adjusted geometry (0.900:5:-2) H: 1.875, 4.649, 9.223 V: 0.446, 0.382, 1.211\n')
+
+    def setUp(self):
+        import importlib.machinery
+        import importlib.util
+        loader = importlib.machinery.SourceFileLoader('fliperos_osd', str(ROOT / 'config/fliperos-osd'))
+        spec = importlib.util.spec_from_loader('fliperos_osd', loader)
+        self.osd = importlib.util.module_from_spec(spec)
+        loader.exec_module(self.osd)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.conf = Path(self.tmp.name) / 'fliperos.conf'
+        self.conf.write_text('monitor=generic_15\n')
+        self.osd.CONF = str(self.conf)
+        self.calls = []
+        self.osd.run = self.fake_run
+        self.osd.process_env = lambda pid: {}
+
+    MODE = {'clock': 13038, 'h': [640, 666, 727, 831], 'v': [480, 483, 489, 523], 'interlace': True}
+
+    def fake_run(self, args, timeout=30, env=None):
+        self.calls.append(args)
+        out, code = '', 0
+        if args[0] == self.osd.XRANDR and args[1:] == ['--current']:
+            out = ('Screen 0: minimum 320 x 200, current 640 x 480\nVGA-1 connected 640x480+0+0 (normal) 0mm x 0mm\n'
+                   '   SR-1_640x480@60.00i  60.00*\n   640x240  60.00 +\nHDMI-A-1 disconnected (normal)\n')
+        if args[1:] == ['--volume', 'state']:
+            out = '80 on\n'
+        elif args[1:] == ['--settings']:
+            out = ('color.brightness|Colour|Brightness|number|0|-50..50:1|h\ncolor.gamma|Colour|Gamma|number|100|50..200:5|h\n'
+                   'color.range|Colour|RGB range|choice|default|default=Card default;full=Full|h\n'
+                   'color.reset|Colour|Back|action|||h\nlatency|System|Latency|choice|low|low=Low|h\n')
+        elif args[1:] == ['mode']:
+            out = '13038 640 666 727 831 480 483 489 523 1\n'
+        elif args[0] == self.osd.SWITCHRES:
+            out = self.SWITCHRES
+        return subprocess.CompletedProcess(args, code, out, '')
+
+    def menu(self, screen=None, mode=None):
+        worker = self.osd.Worker()
+        return self.osd.Menu(screen or {'program': 'pcsx2', 'core': ''}, mode or self.MODE, worker), worker
+
+    def labels(self, menu):
+        return [row.label for row in menu.page['rows']]
+
+    def test_parse_switchres_gives_the_mode_and_the_final_range(self):
+        result = self.osd.parse_switchres(self.SWITCHRES)
+        self.assertEqual(result['mode'], {'clock': 13336, 'h': [640, 665, 727, 850], 'v': [480, 487, 493, 523], 'interlace': True,
+                                          'sync': ['-HSync', '-VSync']})
+        self.assertEqual(result['geometry'], (0.9, 5, -2))
+        # As faixas do monitor ficam; so os seis tempos mudam (o geometry.py do Switchres).
+        self.assertEqual(result['range'],
+                         '15625.00-15750.00,49.50-65.00,1.875,4.649,9.223,0.446,0.382,1.211,0,0,192,288,448,576')
+        self.assertIsNone(self.osd.parse_switchres('Switchres: nothing here\n'))
+
+    def test_parse_mode_and_refresh_of_an_interlaced_mode(self):
+        mode = self.osd.parse_mode('13038 640 666 727 831 480 483 489 523 1\n')
+        self.assertEqual(mode, self.MODE)
+        self.assertAlmostEqual(self.osd.mode_refresh(mode), 60.0, places=0)
+        self.assertIsNone(self.osd.parse_mode('no mode\n'))
+
+    def test_filter_level_is_the_one_the_layer_uses(self):
+        conf = {'deflicker': 'light', 'deflicker_pcsx2': 'strong', 'deflicker_mame2010': 'off'}
+        self.assertEqual(self.osd.filter_level(conf, 'pcsx2', ''), 'strong')
+        self.assertEqual(self.osd.filter_level(conf, 'retroarch', 'mame2010'), 'off')
+        self.assertEqual(self.osd.filter_level(conf, 'other', ''), 'light')
+        self.assertEqual(self.osd.filter_level({}, 'other', ''), 'medium')
+
+    def test_rows_stop_at_the_limits(self):
+        changes = []
+        row = self.osd.Row('number', 'x', 95, 0, 100, 5, change=changes.append)
+        self.assertTrue(row.move(1))
+        self.assertFalse(row.move(1))
+        self.assertEqual((row.value, changes), (100, [100]))
+        choice = self.osd.Row('choice', 'y', 'off', options=[('off', 'Off'), ('on', 'On')])
+        self.assertFalse(choice.move(-1))
+        self.assertTrue(choice.move(1))
+        self.assertEqual(choice.text(), 'On')
+
+    def test_main_page_shows_the_filter_only_in_an_interlaced_mode(self):
+        menu, _ = self.menu()
+        self.assertEqual(self.labels(menu), ['Volume', '480i filter', 'Geometry', 'Colour', 'Close'])
+        menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
+        self.assertEqual(self.labels(menu), ['Volume', 'Geometry', 'Colour', 'Close'])
+        # Num LCD nao ha geometria para ajustar.
+        self.conf.write_text('monitor=lcd\n')
+        menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
+        self.assertEqual(self.labels(menu), ['Volume', 'Colour', 'Close'])
+
+    def test_settings_go_through_the_setup_with_the_program_or_the_core(self):
+        menu, worker = self.menu()
+        keys = self.osd
+        menu.key(keys.KEY_LEFT)     # o volume
+        menu.key(keys.KEY_DOWN)
+        menu.key(keys.KEY_RIGHT)    # medium -> strong
+        worker.wait()
+        self.assertIn([self.osd.SETUP, '--volume', 'set', '75'], self.calls)
+        self.assertIn([self.osd.SETUP, '--setting', 'level.pcsx2', 'strong'], self.calls)
+        menu, worker = self.menu({'program': 'retroarch', 'core': 'pcsx_rearmed'})
+        menu.key(keys.KEY_DOWN)
+        menu.key(keys.KEY_LEFT)
+        worker.wait()
+        self.assertIn([self.osd.SETUP, '--setting', 'level.pcsx_rearmed', 'light'], self.calls)
+
+    def test_colour_page_comes_from_the_setup_settings(self):
+        menu, worker = self.menu()
+        menu.open_colour()
+        self.assertEqual(self.labels(menu), ['Brightness', 'Gamma', 'RGB range', 'Back to the defaults', 'Back'])
+        menu.key(self.osd.KEY_RIGHT)
+        menu.key(self.osd.KEY_RIGHT)
+        worker.wait()
+        self.assertIn([self.osd.SETUP, '--setting', 'color.brightness', '2'], self.calls)
+        # Esc volta a pagina; na principal, fecha.
+        menu.key(self.osd.KEY_ESC)
+        self.assertEqual(menu.page['name'], 'main')
+        self.assertFalse(menu.closing)
+        menu.key(self.osd.KEY_ESC)
+        self.assertTrue(menu.closing)
+
+    def test_geometry_is_live_and_only_stays_when_saved(self):
+        timing = [self.osd.COLOR, 'timing', '13336', '640', '665', '727', '850', '480', '487', '493', '523']
+        base = [self.osd.COLOR, 'timing', '13038', '640', '666', '727', '831', '480', '483', '489', '523']
+        menu, worker = self.menu()
+        menu.open_page('geometry')
+        menu.key(self.osd.KEY_DOWN)
+        menu.key(self.osd.KEY_RIGHT)
+        worker.wait()
+        self.assertIn(timing, self.calls)
+        # O Switchres aceitou outra geometria: e ela que aparece.
+        self.assertEqual([row.value for row in menu.page['rows'][:3]], [0.9, 5, -2])
+        # Sem salvar, a placa volta ao modo de antes e nada vai para o Setup.
+        menu.key(self.osd.KEY_ESC)
+        worker.wait()
+        self.assertEqual(self.calls[-1], base)
+        self.assertFalse([c for c in self.calls if '--geometry' in c])
+        # Salvo, o crt_range vai para o Setup e sair nao desfaz.
+        self.calls.clear()
+        menu.open_page('geometry')
+        menu.key(self.osd.KEY_DOWN)
+        menu.key(self.osd.KEY_RIGHT)
+        worker.wait()
+        menu.page['cursor'] = 3
+        menu.key(self.osd.KEY_ENTER)
+        worker.wait()
+        self.assertIn([self.osd.SETUP, '--geometry', 'set',
+                       '15625.00-15750.00,49.50-65.00,1.875,4.649,9.223,0.446,0.382,1.211,0,0,192,288,448,576'], self.calls)
+        self.assertEqual(menu.status, 'SAVED')
+        self.assertEqual([row.value for row in menu.page['rows'][:3]], [1.0, 0, 0])
+        self.calls.clear()
+        menu.key(self.osd.KEY_ESC)
+        worker.wait()
+        self.assertFalse([c for c in self.calls if base == c])
+
+    def test_geometry_of_a_game_in_x_goes_through_xrandr(self):
+        # Uma troca direta na placa, o Xorg desfaz: la vai pelo xrandr.
+        self.osd.process_env = lambda pid: {'DISPLAY': ':0', 'XAUTHORITY': '/home/x/.Xauthority'}
+        xrandr = self.osd.XRANDR
+        geometry = self.osd.Geometry({'pid': 1})
+        self.assertEqual((geometry.x11.output, geometry.x11.original), ('VGA-1', 'SR-1_640x480@60.00i'))
+        geometry.value = (1.0, 1, 0)
+        self.assertEqual(geometry.apply(), (0.9, 5, -2))
+        first = '%s%d-1' % (self.osd.X11Modes.PREFIX, os.getpid())
+        self.assertIn([xrandr, '--newmode', first, '13.336', '640', '665', '727', '850', '480', '487', '493', '523',
+                       'Interlace', '-HSync', '-VSync'], self.calls)
+        self.assertIn([xrandr, '--addmode', 'VGA-1', first], self.calls)
+        self.assertIn([xrandr, '--output', 'VGA-1', '--mode', first], self.calls)
+        self.assertFalse([c for c in self.calls if 'timing' in c])
+        # O proximo troca o modo e apaga o anterior.
+        self.assertTrue(geometry.apply())
+        self.assertIn([xrandr, '--rmmode', first], self.calls)
+        # Voltar poe o modo de antes e nao deixa nada para tras.
+        second = '%s%d-2' % (self.osd.X11Modes.PREFIX, os.getpid())
+        geometry.restore()
+        self.assertIn([xrandr, '--output', 'VGA-1', '--mode', 'SR-1_640x480@60.00i'], self.calls)
+        self.assertIn([xrandr, '--delmode', 'VGA-1', second], self.calls)
+        self.assertIn([xrandr, '--rmmode', second], self.calls)
+        self.assertEqual(self.calls[-1][1], '--rmmode')
+        # Salvo, sair nao desfaz.
+        self.calls.clear()
+        geometry.value = (1.0, 1, 0)
+        geometry.apply()
+        self.assertTrue(geometry.save())
+        self.calls.clear()
+        geometry.restore()
+        self.assertEqual(self.calls, [])
+
+    def test_geometry_of_another_mode_is_not_applied(self):
+        geometry = self.osd.Geometry()
+        geometry.base = dict(self.MODE, interlace=False)
+        geometry.value = (1.0, 1, 0)
+        self.assertIsNone(geometry.apply())
+        self.assertFalse([c for c in self.calls if 'timing' in c])
+
+    def test_screen_file_for_the_layers(self):
+        path = Path(self.tmp.name) / 'screen'
+        screen = self.osd.Screen(str(path))
+        pixels = bytes(self.osd.WIDTH * self.osd.HEIGHT * 4)
+        screen.show(pixels)
+        header = self.osd.HEADER.unpack(path.read_bytes()[:self.osd.HEADER.size])
+        self.assertEqual((header[0], header[2], header[3], header[4]), (self.osd.MAGIC, 1, 320, 240))
+        self.assertEqual(header[1] % 2, 0)
+        self.assertEqual(path.stat().st_size, self.osd.FILE_SIZE)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o644)
+        first = header[1]
+        screen.show(pixels)
+        second = self.osd.HEADER.unpack(path.read_bytes()[:self.osd.HEADER.size])[1]
+        self.assertGreater(second, first)
+        self.assertEqual(second % 2, 0)
+        screen.hide()
+        self.assertFalse(path.exists())
+        # A camada guarda o ultimo numero que copiou: numa nova abertura ele sobe.
+        screen.show(pixels)
+        self.assertGreater(self.osd.HEADER.unpack(path.read_bytes()[:self.osd.HEADER.size])[1], second)
+        screen.hide()
+
+    def test_no_menu_without_a_layer_drawing_or_in_commercial_mode(self):
+        run = Path(self.tmp.name) / 'run/1000'
+        run.mkdir(parents=True)
+        self.osd.RUN_USER = str(run.parent)
+        self.assertIsNone(self.osd.on_screen())
+        fps = run / 'fliperos-fps'
+        fps.write_text('%d 59.9 pcsx2 - 1\n' % os.getpid())
+        screen = self.osd.on_screen()
+        self.assertEqual((screen['pid'], screen['program'], screen['core'], screen['uid']), (os.getpid(), 'pcsx2', '', 1000))
+        # Um arquivo velho: a camada parou de gravar.
+        os.utime(fps, (1, 1))
+        self.assertIsNone(self.osd.on_screen())
+        # A camada avisou que nao consegue desenhar.
+        os.utime(fps)
+        screen = self.osd.on_screen()
+        self.assertFalse(self.osd.refused(screen))
+        (run / 'fliperos-osd-refused').write_text('%d\n' % os.getpid())
+        self.assertTrue(self.osd.refused(screen))
+
+    def test_layers_and_service_agree_and_it_is_installed(self):
+        for path in ('config/fliperos-deflicker.c', 'config/fliperos-vkfps.c'):
+            source = (ROOT / path).read_text()
+            self.assertIn('#define OSD_MAGIC 0x%08xu' % self.osd.MAGIC, source)
+            self.assertIn('#define OSD_W %d' % self.osd.WIDTH, source)
+            self.assertIn('#define OSD_H %d' % self.osd.HEIGHT, source)
+            self.assertIn('"/run/fliperos-osd/screen"', source)
+            self.assertIn('fliperos-osd-refused', source)
+        self.assertEqual(self.osd.RUN_DIR, '/run/fliperos-osd')
+        unit = (ROOT / 'config/fliperos-osd.service').read_text()
+        self.assertIn('RuntimeDirectory=fliperos-osd', unit)
+        self.assertIn('RuntimeDirectoryMode=0755', unit)    # as camadas rodam como o jogador
+        self.assertIn('"$src/config/fliperos-osd" "$root/opt/fliperos/bin/fliperos-osd"', ROOTFS)
+        self.assertIn('multi-user.target.wants/fliperos-osd.service', ROOTFS)
+        self.assertIn('systemctl restart fliperos-osd.service', (ROOT / 'tools/cabinet-update.sh').read_text())
+
+    def test_colour_tool_only_changes_timings_of_the_same_size(self):
+        source = (ROOT / 'config/fliperos-color.c').read_text()
+        self.assertIn('crtc->mode.hdisplay == v[1] && crtc->mode.vdisplay == v[5]', source)
+        self.assertIn('static int mode_timing(', source)
+        self.assertIn('"mode"', source)
+
+
 def atom_load():
     return load_script('fliperos_atom15', 'config/fliperos-atom15')
 

@@ -1,0 +1,1137 @@
+#!/usr/bin/env python3
+"""A OSD do FliperOS: volume, filtro de flicker, geometria e cores por cima do
+jogo ou do frontend, sem sair deles.
+
+    fliperos-osd                    o servico
+    fliperos-osd --shot PAGINA ARQ  a imagem de uma pagina em PNG (os testes)
+
+O atalho (osd_combo= no fliperos.conf, os comandos do Button mapping segurados
+juntos por osd_hold segundos; osd_key=, o codigo do evdev de uma tecla) e lido
+pelo fliperos-buttons hotkey, junto com o jogo. O desenho sai por um arquivo em
+/run/fliperos-osd/screen, que as camadas das trocas de quadro poem na tela
+(config/fliperos-deflicker.c no OpenGL, config/fliperos-vkfps.c no Vulkan): uma
+imagem de 320x240, como a tela logica da interface grafica. Por isso a OSD so
+abre com uma dessas camadas gravando o FPS (/run/user/*/fliperos-fps): no desktop
+ou num programa que elas nao alcancam, nada abre e os controles ficam com ele.
+
+Com o menu aberto, os controles ficam so com ele (EVIOCGRAB): o jogo nao ve os
+botoes, e continua rodando. Antes de tomar, espera soltar o atalho, ou o jogo
+ficaria com os botoes presos. Sair do menu, o jogo fechar ou 20 s sem mexer
+devolvem os controles.
+
+Os ajustes vao pelas funcoes do Setup (fliperos-setup --setting, --volume,
+--geometry), um por vez numa fila: segurar a seta nao empilha chamadas. A
+geometria vale na hora, com as contas do Switchres, e so fica se for salva: num
+jogo em KMS, pelo fliperos-color timing; num jogo no X, pelo xrandr, como o
+proprio Switchres faz (uma troca direta na placa, o Xorg desfaz).
+
+Por /run/fliperos-osd/control (open, close, up, down, left, right, enter, esc) o
+menu tambem anda sem controle: os testes e o SSH.
+"""
+import fcntl
+import glob
+import importlib.machinery
+import importlib.util
+import json
+import os
+import pwd
+import re
+import select
+import signal
+import struct
+import subprocess
+import sys
+import threading
+import time
+
+BIN = os.environ.get("FLIPEROS_BIN", "/opt/fliperos/bin")
+SETUP = os.environ.get("FLIPEROS_SETUP", "/usr/local/bin/fliperos-setup")
+COLOR = os.environ.get("FLIPEROS_COLOR", "/usr/local/bin/fliperos-color")
+SWITCHRES = os.environ.get("FLIPEROS_SWITCHRES", "/usr/local/bin/switchres")
+XRANDR = os.environ.get("FLIPEROS_XRANDR", "/usr/bin/xrandr")
+BUTTONS = os.environ.get("FLIPEROS_BUTTONS_TOOL", BIN + "/fliperos-buttons")
+PADKEYS = os.environ.get("FLIPEROS_PADKEYS", BIN + "/fliperos-padkeys")
+GUI = os.environ.get("FLIPEROS_GUI", "/usr/local/lib/fliperos-setup/gui")
+CONF = os.environ.get("FLIPEROS_CONF", "/etc/fliperos/fliperos.conf")
+RUN_DIR = os.environ.get("FLIPEROS_OSD_DIR", "/run/fliperos-osd")
+RUN_USER = os.environ.get("FLIPEROS_RUN_USER", "/run/user")
+SETUP_FLAG = os.environ.get("FLIPEROS_PADKEYS_FLAG", "/run/fliperos/padkeys")
+
+# O atalho padrao. Start com o direcional: nao poe ficha (no modo comercial
+# seria tempo de graca), e o Start+Select ja abre o menu de varios emuladores.
+DEFAULT_COMBO, DEFAULT_KEY, DEFAULT_HOLD = "start+down", 119, 1.0  # 119: a tecla Pause
+IDLE_CLOSE = 20.0
+# Quanto tempo o menu espera soltarem o atalho antes de tomar os controles.
+RELEASE_WAIT = 3.0
+FPS_FRESH = 3.0
+
+# O arquivo das camadas: o cabecalho e os pixels RGBA de cima para baixo. seq
+# impar: gravando.
+MAGIC = 0x44534F46
+HEADER = struct.Struct("<5I")
+WIDTH, HEIGHT = 320, 240
+FILE_SIZE = HEADER.size + WIDTH * HEIGHT * 4
+
+EV_KEY, EV_ABS = 0x01, 0x03
+KEY_UP, KEY_LEFT, KEY_RIGHT, KEY_DOWN = 103, 105, 106, 108
+KEY_ESC, KEY_ENTER, KEY_SPACE, KEY_LCTRL, KEY_LALT, KEY_KPENTER = 1, 28, 57, 29, 56, 96
+# As teclas que andam no menu (um painel que se diz teclado manda as do MAME:
+# Ctrl e Alt sao os botoes 1 e 2).
+KEYBOARD = {KEY_UP: KEY_UP, KEY_DOWN: KEY_DOWN, KEY_LEFT: KEY_LEFT, KEY_RIGHT: KEY_RIGHT,
+            KEY_ENTER: KEY_ENTER, KEY_KPENTER: KEY_ENTER, KEY_SPACE: KEY_ENTER, KEY_LCTRL: KEY_ENTER,
+            KEY_ESC: KEY_ESC, KEY_LALT: KEY_ESC}
+COMMANDS = {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "enter": KEY_ENTER, "esc": KEY_ESC}
+VOLUME_STEP = 5
+# Ate onde vai a geometria: o Switchres ainda reduz ao que o monitor aceita.
+H_SIZE = (0.80, 1.20, 0.01)
+H_SHIFT = (-40, 40, 1)
+V_SHIFT = (-20, 20, 1)
+FILTER_LEVELS = ("off", "light", "medium", "strong")
+LABELS = {"off": "Off", "light": "Light", "medium": "Medium", "strong": "Strong"}
+
+
+def load_padkeys():
+    """O fliperos-padkeys como modulo: o mesmo controle dos menus do Setup, com a
+    mesma repeticao e o mesmo cuidado com o repique do direcional."""
+    loader = importlib.machinery.SourceFileLoader("fliperos_padkeys", PADKEYS)
+    spec = importlib.util.spec_from_loader("fliperos_padkeys", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+# ── O fliperos.conf ────────────────────────────────────────────────
+
+def read_conf(path=None):
+    values = {}
+    try:
+        with open(path or CONF, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                key, sep, value = line.strip().partition("=")
+                if sep:
+                    values[key] = value
+    except OSError:
+        pass
+    return values
+
+
+def filter_level(conf, program, core):
+    """O nivel que a camada usa: o do core, o do programa, o de todos, medium."""
+    for key in ("deflicker_" + core if core else "", "deflicker_" + program if program else "", "deflicker"):
+        if key and key in conf:
+            value = conf[key].lower()
+            return value if value in FILTER_LEVELS else "medium"
+    return "medium"
+
+
+# ── O que esta na tela ─────────────────────────────────────────────
+
+def on_screen():
+    """{"pid", "program", "core", "uid", "runtime"} do programa cuja camada gravou
+    o FPS agora ha pouco; None sem nenhum."""
+    best = None
+    for path in glob.glob(os.path.join(RUN_USER, "*", "fliperos-fps")):
+        try:
+            age = time.time() - os.path.getmtime(path)
+            with open(path, encoding="utf-8", errors="replace") as f:
+                fields = f.read().split()
+        except OSError:
+            continue
+        if len(fields) < 4 or age > FPS_FRESH or not fields[0].isdigit() or not os.path.exists("/proc/" + fields[0]):
+            continue
+        if best is None or age < best[0]:
+            runtime = os.path.dirname(path)
+            best = (age, {"pid": int(fields[0]), "program": fields[2], "core": "" if fields[3] == "-" else fields[3],
+                          "runtime": runtime, "uid": int(os.path.basename(runtime)) if os.path.basename(runtime).isdigit() else 0})
+    return best[1] if best else None
+
+
+def commercial(uid):
+    """O modo comercial do frontend: quem joga nao mexe no gabinete."""
+    try:
+        home = pwd.getpwuid(uid).pw_dir
+        with open(os.path.join(home, ".config", "fliperos", "frontend.json"), encoding="utf-8") as f:
+            return json.load(f).get("commercial") is True
+    except (OSError, KeyError, ValueError):
+        return False
+
+
+def refused(screen):
+    """A camada do programa disse que nao consegue desenhar?"""
+    try:
+        with open(os.path.join(screen["runtime"], "fliperos-osd-refused"), encoding="utf-8") as f:
+            return f.read().strip() == str(screen["pid"])
+    except OSError:
+        return False
+
+
+def run(args, timeout=30, env=None):
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def process_env(pid):
+    """As variaveis do programa aberto."""
+    try:
+        with open("/proc/%d/environ" % pid, "rb") as f:
+            items = f.read().split(b"\0")
+    except OSError:
+        return {}
+    pairs = (item.decode("utf-8", "replace").partition("=") for item in items)
+    return {key: value for key, sep, value in pairs if sep}
+
+
+# ── O modo de video e a geometria ──────────────────────────────────
+
+def parse_mode(text):
+    """A saida do fliperos-color mode: {"clock", "h": [4], "v": [4], "interlace"}."""
+    fields = text.split()
+    if len(fields) != 10 or not all(f.isdigit() for f in fields):
+        return None
+    n = [int(f) for f in fields]
+    return {"clock": n[0], "h": n[1:5], "v": n[5:9], "interlace": bool(n[9])}
+
+
+def current_mode():
+    out = run([COLOR, "mode"], timeout=5)
+    return parse_mode(out.stdout) if out and out.returncode == 0 else None
+
+
+def mode_refresh(mode):
+    rate = mode["clock"] * 1000.0 / (mode["h"][3] * mode["v"][3])
+    return rate * 2 if mode["interlace"] else rate
+
+
+def timing_args(mode):
+    return [str(mode["clock"])] + [str(v) for v in mode["h"] + mode["v"]]
+
+
+def parse_xrandr(text):
+    """A saida do xrandr --current: (a saida ligada, o nome do modo dela na tela)."""
+    output = None
+    for line in text.splitlines():
+        m = re.match(r"(\S+) connected", line)
+        if m:
+            output = m.group(1)
+        elif output and "*" in line and line.startswith(" "):
+            return output, line.split()[0]
+    return None
+
+
+class X11Modes:
+    """Os modos da geometria num Xorg aberto: o xrandr cria cada um e o poe na
+    tela, como o Switchres faz ao abrir o jogo. O nome do modo antigo fica guardado
+    para voltar."""
+
+    PREFIX = "FliperOS-OSD-"
+
+    def __init__(self, env):
+        self.env = dict(os.environ, DISPLAY=env["DISPLAY"])
+        if env.get("XAUTHORITY"):
+            self.env["XAUTHORITY"] = env["XAUTHORITY"]
+        out = self.xrandr("--current")
+        found = parse_xrandr(out.stdout) if out and out.returncode == 0 else None
+        self.output, self.original = found if found else (None, None)
+        self.count = 0
+        self.current = None
+
+    def xrandr(self, *args):
+        return run([XRANDR] + list(args), timeout=10, env=self.env)
+
+    def valid(self):
+        return self.output is not None
+
+    def apply(self, mode):
+        self.count += 1
+        name = "%s%d-%d" % (self.PREFIX, os.getpid(), self.count)
+        timings = ["%.3f" % (mode["clock"] / 1000)] + [str(v) for v in mode["h"] + mode["v"]]
+        flags = (["Interlace"] if mode["interlace"] else []) + mode.get("sync", ["-HSync", "-VSync"])
+        for args in (["--newmode", name] + timings + flags, ["--addmode", self.output, name],
+                     ["--output", self.output, "--mode", name]):
+            out = self.xrandr(*args)
+            if not out or out.returncode != 0:
+                self.remove(name)
+                return False
+        self.remove(self.current)
+        self.current = name
+        return True
+
+    def remove(self, name):
+        if name:
+            self.xrandr("--delmode", self.output, name)
+            self.xrandr("--rmmode", name)
+
+    def keep(self):
+        """O modo salvo fica: o proximo Voltar vem para ele, nao o de antes."""
+        self.original, self.current = self.current, None
+
+    def restore(self):
+        if self.output and self.original and self.current:
+            self.xrandr("--output", self.output, "--mode", self.original)
+            self.remove(self.current)
+            self.current = None
+
+
+def parse_switchres(text):
+    """A saida do switchres -c -v -g: a temporizacao (como o fliperos-color mode),
+    a geometria que ele aceitou e o crt_range final, a mesma conta do geometry.py
+    do Switchres (as faixas do monitor com os tempos ajustados)."""
+    mode = adjusted = monitor = None
+    for line in text.splitlines():
+        m = re.search(r'Modeline "[^"]*"\s+([\d.]+)\s+(\d+) (\d+) (\d+) (\d+)\s+(\d+) (\d+) (\d+) (\d+)(.*)', line)
+        if m and mode is None:
+            tail = m.group(10)
+            mode = {"clock": round(float(m.group(1)) * 1000), "h": [int(m.group(i)) for i in range(2, 6)],
+                    "v": [int(m.group(i)) for i in range(6, 10)], "interlace": "interlace" in tail,
+                    "sync": ["+HSync" if "+hsync" in tail else "-HSync", "+VSync" if "+vsync" in tail else "-VSync"]}
+        m = re.search(r"Monitor range (\S+)", line)
+        if m and monitor is None:
+            monitor = m.group(1)
+        m = re.match(r"(?:Switchres: )?Adjusted geometry \(([\d.]+):(-?\d+):(-?\d+)\) H: ([\d.]+), ([\d.]+), ([\d.]+) "
+                     r"V: ([\d.]+), ([\d.]+), ([\d.]+)", line)
+        if m:
+            adjusted = m.groups()
+    if not mode or not adjusted or not monitor:
+        return None
+    parts = monitor.split(",")
+    if len(parts) != 14:
+        return None
+    parts[2:8] = list(adjusted[3:9])
+    return {"mode": mode, "geometry": (float(adjusted[0]), int(adjusted[1]), int(adjusted[2])), "range": ",".join(parts)}
+
+
+class Geometry:
+    """A geometria da pagina: vale na hora e so fica se for salva. Sair sem salvar
+    volta o modo como estava."""
+
+    def __init__(self, screen=None):
+        self.base = current_mode()
+        self.value = (1.0, 0, 0)
+        self.result = None
+        self.saved = False
+        # Um jogo no X: quem troca o modo e o proprio X.
+        env = process_env(screen["pid"]) if screen and screen.get("pid") else {}
+        self.x11 = X11Modes(env) if env.get("DISPLAY") else None
+
+    def valid(self):
+        return self.base is not None and (self.x11 is None or self.x11.valid())
+
+    def changed(self):
+        return self.value != (1.0, 0, 0)
+
+    def compute(self):
+        """O modelo do Switchres para a geometria pedida; ele reduz ao que o
+        monitor aceita, e essa e a que fica."""
+        base = self.base
+        command = [SWITCHRES, str(base["h"][0]), str(base["v"][0]), "%.6f" % mode_refresh(base), "-c", "-v",
+                   "-g", "%.3f:%d:%d" % self.value]
+        out = run(command, timeout=10)
+        return parse_switchres(out.stdout + "\n" + out.stderr) if out else None
+
+    def apply(self):
+        """Na placa, com o jogo aberto. Devolve a geometria que o Switchres aceitou
+        (None se o modo nao serve aqui: outro tamanho ou o progressivo trocado)."""
+        result = self.compute()
+        base = self.base
+        if not result or result["mode"]["h"][0] != base["h"][0] or result["mode"]["v"][0] != base["v"][0] \
+                or result["mode"]["interlace"] != base["interlace"]:
+            return None
+        if self.x11:
+            if not self.x11.apply(result["mode"]):
+                return None
+        else:
+            out = run([COLOR, "timing"] + timing_args(result["mode"]), timeout=5)
+            if not out or out.returncode != 0:
+                return None
+        self.result = result
+        return result["geometry"]
+
+    def restore(self):
+        """O modo de quando a pagina abriu."""
+        if self.x11:
+            self.x11.restore()
+        elif self.base and self.changed() and not self.saved:
+            run([COLOR, "timing"] + timing_args(self.base), timeout=5)
+
+    def save(self):
+        if not self.result:
+            return False
+        out = run([SETUP, "--geometry", "set", self.result["range"]], timeout=20)
+        self.saved = bool(out and out.returncode == 0)
+        if self.saved:
+            # O crt_range ja traz a geometria: o proximo ajuste comeca do zero, e
+            # sair sem salvar volta para este modo.
+            self.base = self.result["mode"]
+            self.value = (1.0, 0, 0)
+            if self.x11:
+                self.x11.keep()
+        return self.saved
+
+
+# ── A fila dos ajustes ─────────────────────────────────────────────
+
+class Worker:
+    """Um ajuste por vez, sem travar o menu: de cada chave vale o ultimo pedido."""
+
+    def __init__(self):
+        self.lock = threading.Condition()
+        self.pending = {}
+        self.order = []
+        self.busy = False
+        thread = threading.Thread(target=self.loop, daemon=True)
+        thread.start()
+
+    def put(self, key, action):
+        with self.lock:
+            if key not in self.pending:
+                self.order.append(key)
+            self.pending[key] = action
+            self.lock.notify_all()
+
+    def loop(self):
+        while True:
+            with self.lock:
+                while not self.order:
+                    self.lock.wait()
+                key = self.order.pop(0)
+                action = self.pending.pop(key)
+                self.busy = True
+            try:
+                action()
+            except Exception as exc:  # um ajuste que falha nao derruba o servico
+                print("fliperos-osd: %s: %s" % (key, exc), file=sys.stderr, flush=True)
+            with self.lock:
+                self.busy = False
+                self.lock.notify_all()
+
+    def wait(self, timeout=8.0):
+        """Espera a fila acabar (antes de voltar o modo, de ler os valores de novo)."""
+        end = time.monotonic() + timeout
+        with self.lock:
+            while self.order or self.busy:
+                left = end - time.monotonic()
+                if left <= 0:
+                    return
+                self.lock.wait(left)
+
+
+# ── As paginas ─────────────────────────────────────────────────────
+
+class Row:
+    """Uma linha: kind number (minimo, maximo, passo), choice (options), page ou
+    action (Enter). change(valor) aplica."""
+
+    def __init__(self, kind, label, value=None, low=0, high=0, step=1, options=(), pretty=str, change=None, action=None):
+        self.kind, self.label, self.value = kind, label, value
+        self.low, self.high, self.step = low, high, step
+        self.options, self.pretty, self.change, self.action = options, pretty, change, action
+
+    def text(self):
+        if self.kind == "choice":
+            for value, label in self.options:
+                if value == self.value:
+                    return label
+            return str(self.value)
+        if self.kind == "number":
+            return self.pretty(self.value)
+        return ""
+
+    def fraction(self):
+        if self.kind != "number" or self.high <= self.low:
+            return None
+        return max(0.0, min(1.0, (self.value - self.low) / (self.high - self.low)))
+
+    def move(self, direction):
+        """Muda o valor pela seta; True se mudou."""
+        if self.kind == "number":
+            value = round(max(self.low, min(self.high, self.value + direction * self.step)), 4)
+        elif self.kind == "choice" and self.options:
+            values = [v for v, _ in self.options]
+            where = values.index(self.value) if self.value in values else 0
+            value = values[max(0, min(len(values) - 1, where + direction))]
+        else:
+            return False
+        if value == self.value:
+            return False
+        self.value = value
+        if self.change:
+            self.change(value)
+        return True
+
+
+def signed(value):
+    return "%+d" % value if value else "0"
+
+
+def pretty_color(key):
+    """O valor como o Setup mostra (color_pretty em lib/video.sh)."""
+    if key.endswith("gamma"):
+        return lambda v: "%.2f" % (v / 100)
+    if key.endswith("temperature"):
+        return lambda v: "%d K" % v
+    if key.endswith(("contrast", "gain", "saturation")):
+        return lambda v: "%d%%" % v
+    if key.endswith("hue"):
+        return lambda v: "%d deg" % v
+    return signed
+
+
+def parse_settings(text):
+    """As linhas do fliperos-setup --settings: chave|grupo|rotulo|tipo|valor|opcoes|ajuda."""
+    rows = {}
+    for line in text.splitlines():
+        parts = line.split("|", 6)
+        if len(parts) == 7:
+            rows[parts[0]] = {"key": parts[0], "group": parts[1], "label": parts[2], "type": parts[3],
+                              "value": parts[4], "options": parts[5]}
+    return rows
+
+
+def number_options(text):
+    """"MIN..MAX:PASSO" -> (minimo, maximo, passo)."""
+    m = re.fullmatch(r"(-?[\d.]+)\.\.(-?[\d.]+):([\d.]+)", text)
+    return tuple(float(g) for g in m.groups()) if m else None
+
+
+def choice_options(text):
+    return [tuple(item.split("=", 1)) for item in text.split(";") if "=" in item]
+
+
+class Menu:
+    """As paginas do menu e o que cada linha faz."""
+
+    def __init__(self, screen, mode, worker):
+        self.screen, self.mode, self.worker = screen or {}, mode, worker
+        self.stack = []
+        self.geometry = None
+        self.status = ""
+        self.closing = False
+        self.dirty = True
+        self.open_page("main")
+
+    # O que aparece.
+    def open_page(self, name):
+        self.stack.append({"name": name, "rows": self.rows_of(name), "cursor": 0, "top": 0})
+        self.status = ""
+        self.dirty = True
+
+    @property
+    def page(self):
+        return self.stack[-1]
+
+    def title(self):
+        return {"main": "FLIPEROS", "colour": "COLOUR", "geometry": "GEOMETRY"}.get(self.page["name"], "")
+
+    def rows_of(self, name):
+        return getattr(self, "rows_" + name)()
+
+    def rows_main(self):
+        rows = []
+        volume = self.volume_state()
+        if volume is not None:
+            rows.append(Row("number", "Volume", volume, 0, 100, VOLUME_STEP, pretty=lambda v: "%d%%" % v,
+                            change=self.set_volume))
+        if self.mode and self.mode["interlace"]:
+            conf = read_conf()
+            program, core = self.screen.get("program", ""), self.screen.get("core", "")
+            rows.append(Row("choice", "480i filter", filter_level(conf, program, core),
+                            options=[(v, LABELS[v]) for v in FILTER_LEVELS], change=self.set_filter))
+        if read_conf().get("monitor", "") != "lcd" and self.mode:
+            rows.append(Row("page", "Geometry", action=lambda: self.open_page("geometry")))
+        rows.append(Row("page", "Colour", action=self.open_colour))
+        rows.append(Row("action", "Close", action=self.close))
+        return rows
+
+    def open_colour(self):
+        # Os valores de agora: o que estava na fila tem de chegar antes.
+        self.worker.wait()
+        self.open_page("colour")
+
+    def rows_colour(self):
+        rows = []
+        settings = parse_settings(self.settings_text())
+        for key, row in settings.items():
+            if not key.startswith("color.") or row["type"] == "action":
+                continue
+            if row["type"] == "number":
+                limits = number_options(row["options"])
+                if limits:
+                    low, high, step = limits
+                    rows.append(Row("number", row["label"], int(float(row["value"])), int(low), int(high), int(step),
+                                    pretty=pretty_color(key), change=self.setter(key)))
+            elif row["type"] == "choice":
+                rows.append(Row("choice", row["label"], row["value"], options=choice_options(row["options"]),
+                                change=self.setter(key)))
+        rows.append(Row("action", "Back to the defaults", action=self.reset_colour))
+        rows.append(Row("action", "Back", action=self.back))
+        return rows
+
+    def rows_geometry(self):
+        self.geometry = Geometry(self.screen)
+        if not self.geometry.valid():
+            self.status = "NO VIDEO MODE TO ADJUST"
+            return [Row("action", "Back", action=self.back)]
+        h_size, h_shift, v_shift = self.geometry.value
+        return [
+            Row("number", "H size", h_size, H_SIZE[0], H_SIZE[1], H_SIZE[2], pretty=lambda v: "%.2f" % v,
+                change=lambda v: self.set_geometry(0, v)),
+            Row("number", "H position", h_shift, H_SHIFT[0], H_SHIFT[1], H_SHIFT[2], pretty=signed,
+                change=lambda v: self.set_geometry(1, v)),
+            Row("number", "V position", v_shift, V_SHIFT[0], V_SHIFT[1], V_SHIFT[2], pretty=signed,
+                change=lambda v: self.set_geometry(2, v)),
+            Row("action", "Save", action=self.save_geometry),
+            Row("action", "Back", action=self.back),
+        ]
+
+    def settings_text(self):
+        """Os ajustes do Setup, os mesmos do painel web."""
+        out = run([SETUP, "--settings"], timeout=20)
+        return out.stdout if out else ""
+
+    def volume_state(self):
+        out = run([SETUP, "--volume", "state"], timeout=5)
+        fields = out.stdout.split() if out and out.returncode == 0 else []
+        return int(fields[0]) if fields and fields[0].isdigit() else None
+
+    # O que as linhas fazem.
+    def setter(self, key):
+        def change(value):
+            self.worker.put(key, lambda: run([SETUP, "--setting", key, str(value)], timeout=20))
+        return change
+
+    def set_volume(self, value):
+        self.worker.put("volume", lambda: run([SETUP, "--volume", "set", str(value)], timeout=10))
+
+    def set_filter(self, value):
+        program = self.screen.get("core") or self.screen.get("program", "")
+        self.worker.put("filter", lambda: run([SETUP, "--setting", "level." + program, value], timeout=20))
+
+    def set_geometry(self, index, value):
+        geometry = self.geometry
+        current = list(geometry.value)
+        current[index] = value
+        geometry.value = tuple(current)
+        geometry.saved = False
+
+        def apply():
+            accepted = geometry.apply()
+            if accepted is None:
+                self.status = "THE CARD REFUSED THIS MODE"
+            else:
+                self.status = ""
+                # O limite do monitor: o valor na tela volta ao que vale.
+                geometry.value = accepted
+                rows = self.page["rows"] if self.page["name"] == "geometry" else []
+                for row, value_now in zip(rows[:3], accepted):
+                    row.value = value_now
+            self.dirty = True
+        self.worker.put("geometry", apply)
+
+    def save_geometry(self):
+        geometry = self.geometry
+
+        def apply():
+            saved = geometry.save()
+            self.status = "SAVED" if saved else "NOT SAVED"
+            rows = self.page["rows"] if self.page["name"] == "geometry" else []
+            if saved:
+                for row, value_now in zip(rows[:3], geometry.value):
+                    row.value = value_now
+            self.dirty = True
+        self.worker.wait()
+        self.status = "SAVING"
+        self.dirty = True
+        self.worker.put("geometry-save", apply)
+
+    def reset_colour(self):
+        def apply():
+            run([SETUP, "--setting", "color.reset", "1"], timeout=20)
+            if self.page["name"] == "colour":
+                self.page["rows"] = self.rows_colour()
+            self.dirty = True
+        self.worker.put("colour-reset", apply)
+
+    def leave_geometry(self):
+        if self.geometry:
+            self.worker.wait()
+            self.geometry.restore()
+            self.geometry = None
+
+    def back(self):
+        if self.page["name"] == "geometry":
+            self.leave_geometry()
+        if len(self.stack) == 1:
+            self.close()
+            return
+        self.stack.pop()
+        self.status = ""
+        # Um ajuste de outra pagina pode ter mudado o que esta aqui.
+        self.dirty = True
+
+    def close(self):
+        self.leave_geometry()
+        self.closing = True
+
+    def key(self, key):
+        """Uma tecla do menu (os codigos do evdev)."""
+        page = self.page
+        rows = page["rows"]
+        if key == KEY_ESC:
+            self.back()
+        elif not rows:
+            pass
+        elif key in (KEY_UP, KEY_DOWN):
+            page["cursor"] = (page["cursor"] + (1 if key == KEY_DOWN else -1)) % len(rows)
+            self.dirty = True
+        elif key in (KEY_LEFT, KEY_RIGHT):
+            if rows[page["cursor"]].move(1 if key == KEY_RIGHT else -1):
+                self.dirty = True
+        elif key == KEY_ENTER:
+            row = rows[page["cursor"]]
+            if row.action:
+                row.action()
+            elif row.kind in ("number", "choice"):
+                pass
+            self.dirty = True
+
+
+# ── O desenho ──────────────────────────────────────────────────────
+
+class Painter:
+    """A pagina numa imagem de 320x240, com as cores e a letra da interface
+    grafica. O pygame so entra na primeira vez que o menu abre."""
+
+    VISIBLE = 7     # as linhas que cabem sem cobrir a imagem que se esta ajustando
+    ROW = 11
+
+    def __init__(self):
+        if GUI not in sys.path:
+            sys.path.insert(0, GUI)
+        os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+        import pygame
+        import theme
+        pygame.font.init()
+        self.pg, self.theme = pygame, theme
+        self.font = theme.font()
+
+    def text(self, surface, text, color, x, y):
+        surface.blit(self.font.render(text, False, color), (x, y))
+
+    def panel(self, menu):
+        pg, t = self.pg, self.theme
+        t.set_orientation(read_conf().get("orientation", ""))
+        surface = pg.Surface((t.WIDTH, t.HEIGHT), pg.SRCALPHA)
+        page = menu.page
+        rows = page["rows"]
+        if page["name"] == "geometry":
+            self.frame(surface)
+        # O cursor sempre a vista.
+        if page["cursor"] < page["top"]:
+            page["top"] = page["cursor"]
+        elif page["cursor"] >= page["top"] + self.VISIBLE:
+            page["top"] = page["cursor"] - self.VISIBLE + 1
+        shown = rows[page["top"]:page["top"] + self.VISIBLE]
+        width, height = t.WIDTH - 2 * t.SAFE_X, 18 + len(shown) * self.ROW + 4
+        x, y = (t.WIDTH - width) // 2, t.HEIGHT - t.SAFE_Y - height
+        pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
+        pg.draw.rect(surface, t.PURPLE + (255,), (x, y, width, height), 1)
+        self.text(surface, menu.title(), t.PINK, x + 6, y + 5)
+        if menu.status:
+            status = self.font.render(menu.status, False, t.CYAN)
+            surface.blit(status, (x + width - 6 - status.get_width(), y + 5))
+        for i, row in enumerate(shown):
+            top = y + 17 + i * self.ROW
+            chosen = page["top"] + i == page["cursor"]
+            if chosen:
+                pg.draw.rect(surface, t.LINE + (255,), (x + 2, top, width - 4, self.ROW))
+            self.text(surface, row.label, t.PINK if chosen else t.FG, x + 6, top + 2)
+            if row.kind == "page":
+                self.text(surface, ">", t.COMMENT, x + width - 14, top + 2)
+            value = row.text()
+            if value:
+                image = self.font.render(value, False, t.CYAN)
+                surface.blit(image, (x + width - 6 - image.get_width(), top + 2))
+            fraction = row.fraction()
+            if fraction is not None and len(row.label) <= 10 and width > 240:
+                bar_x, bar_w = x + 6 + 88, width - 6 - 88 - 6 - 8 * 7
+                pg.draw.rect(surface, t.COMMENT + (255,), (bar_x, top + 3, bar_w, 5), 1)
+                pg.draw.rect(surface, t.GREEN + (255,), (bar_x + 1, top + 4, round((bar_w - 2) * fraction), 3))
+        # Ha mais linhas acima ou abaixo.
+        if page["top"] > 0:
+            pg.draw.polygon(surface, t.COMMENT + (255,), [(x + width // 2 - 3, y + 15), (x + width // 2 + 3, y + 15), (x + width // 2, y + 12)])
+        if page["top"] + self.VISIBLE < len(rows):
+            bottom = y + height - 2
+            pg.draw.polygon(surface, t.COMMENT + (255,), [(x + width // 2 - 3, bottom - 2), (x + width // 2 + 3, bottom - 2), (x + width // 2, bottom + 1)])
+        return surface
+
+    def frame(self, surface):
+        """A moldura e a cruz do meio: para ver os cantos enquanto ajusta."""
+        pg, t = self.pg, self.theme
+        color = t.FG + (255,)
+        w, h = t.WIDTH, t.HEIGHT
+        pg.draw.rect(surface, color, (0, 0, w, h), 1)
+        pg.draw.rect(surface, t.CYAN + (255,), (t.SAFE_X, t.SAFE_Y, w - 2 * t.SAFE_X, h - 2 * t.SAFE_Y), 1)
+        pg.draw.line(surface, color, (w // 2, 0), (w // 2, h - 1))
+        pg.draw.line(surface, color, (0, h // 2), (w - 1, h // 2))
+
+    def rgba(self, menu):
+        return self.pg.image.tobytes(self.theme.upright(self.panel(menu)), "RGBA")
+
+
+class Screen:
+    """O arquivo que as camadas leem. Aberto, existe; fechado, nao."""
+
+    def __init__(self, path):
+        self.path = path
+        # Sempre subindo, mesmo entre aberturas e depois de reiniciar o servico: a
+        # camada so copia a imagem quando o numero muda. Par: nao esta gravando.
+        self.seq = (int(time.time()) & 0x3FFFFFFF) * 2
+        self.fd = None
+
+    def show(self, pixels):
+        """Grava a imagem, com seq impar durante a gravacao. Um arquivo novo a cada
+        abertura: as camadas reconhecem pelo numero dele."""
+        if self.fd is None:
+            tmp = self.path + ".tmp"
+            self.fd = os.open(tmp, os.O_RDWR | os.O_CREAT | os.O_TRUNC, 0o644)
+            os.fchmod(self.fd, 0o644)
+            self.seq += 2
+            os.pwrite(self.fd, HEADER.pack(MAGIC, self.seq, 1, WIDTH, HEIGHT) + pixels, 0)
+            os.rename(tmp, self.path)
+            return
+        os.pwrite(self.fd, struct.pack("<I", self.seq + 1), 4)
+        os.pwrite(self.fd, pixels, HEADER.size)
+        self.seq += 2
+        os.pwrite(self.fd, struct.pack("<I", self.seq), 4)
+
+    def hide(self):
+        if self.fd is None:
+            return
+        # O aviso primeiro: as camadas param no quadro seguinte.
+        os.pwrite(self.fd, struct.pack("<I", 0), 8)
+        os.close(self.fd)
+        self.fd = None
+        try:
+            os.unlink(self.path)
+        except OSError:
+            pass
+
+
+# ── Os controles ───────────────────────────────────────────────────
+
+class Inputs:
+    """Os controles e os teclados: primeiro espera soltarem tudo, depois os toma
+    (EVIOCGRAB) e traduz para as teclas do menu."""
+
+    EVIOCGRAB = None
+
+    def __init__(self, padkeys, emit):
+        self.pk = padkeys
+        self.keys = padkeys.Keys(emit)
+        self.devices = {}
+        self.grabbed = False
+        self.since = time.monotonic()
+        Inputs.EVIOCGRAB = padkeys._ioc(1, "E", 0x90, 4)
+        self.scan()
+
+    def is_keyboard(self, keys):
+        return KEY_ENTER in keys and KEY_ESC in keys and self.pk.BTN_LEFT not in keys
+
+    def scan(self):
+        for path in sorted(glob.glob(os.environ.get("FLIPEROS_INPUT_EVENTS", "/dev/input/event*"))):
+            if path in self.devices:
+                continue
+            try:
+                fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+            except OSError:
+                continue
+            try:
+                name = bytearray(256)
+                fcntl.ioctl(fd, self.pk.EVIOCGNAME, name)
+                name = bytes(name).split(b"\0")[0]
+                keys = self.pk.bits(fd, EV_KEY, 0x300)
+                pad, keyboard = self.pk.is_pad(name, keys), name != self.pk.NAME and self.is_keyboard(keys)
+                if not pad and not keyboard:
+                    os.close(fd)
+                    continue
+                ranges = {}
+                for axis in self.pk.bits(fd, EV_ABS, 0x40) & {self.pk.ABS_X, self.pk.ABS_Y}:
+                    info = bytearray(24)
+                    fcntl.ioctl(fd, self.pk.eviocgabs(axis), info)
+                    _value, low, high = struct.unpack("6i", info)[:3]
+                    ranges[axis] = (low, high)
+                self.devices[path] = {"fd": fd, "mapper": self.pk.Mapper(ranges), "keyboard": keyboard, "pad": pad}
+                if self.grabbed:
+                    self.grab(self.devices[path])
+            except OSError:
+                os.close(fd)
+
+    def held(self, device):
+        """Tem alguma coisa apertada neste aparelho?"""
+        fd, mapper = device["fd"], device["mapper"]
+        buf = bytearray(0x300 // 8)
+        fcntl.ioctl(fd, self.pk._ioc(2, "E", 0x18, len(buf)), buf)
+        if any(buf):
+            return True
+        for axis in self.pk.bits(fd, EV_ABS, 0x40) & set(self.pk.AXES):
+            info = bytearray(24)
+            fcntl.ioctl(fd, self.pk.eviocgabs(axis), info)
+            if mapper.direction(axis, struct.unpack("6i", info)[0]):
+                return True
+        return False
+
+    def all_released(self):
+        try:
+            return not any(self.held(d) for d in self.devices.values())
+        except OSError:
+            return True
+
+    def grab(self, device):
+        try:
+            fcntl.ioctl(device["fd"], Inputs.EVIOCGRAB, 1)
+        except OSError:
+            pass
+
+    def poll_grab(self):
+        """Toma os controles quando soltarem o atalho (ou passado o tempo)."""
+        if self.grabbed:
+            return
+        if self.all_released() or time.monotonic() - self.since > RELEASE_WAIT:
+            for device in self.devices.values():
+                self.grab(device)
+            self.grabbed = True
+
+    def fds(self):
+        return [d["fd"] for d in self.devices.values()]
+
+    def read(self, ready):
+        now = time.monotonic()
+        for path, device in list(self.devices.items()):
+            if device["fd"] not in ready:
+                continue
+            try:
+                data = os.read(device["fd"], self.pk.EVENT.size * 64)
+            except BlockingIOError:
+                continue
+            except OSError:
+                data = b""
+            if not data:
+                for key, value in device["mapper"].release():
+                    self.keys.apply(key, value, now)
+                os.close(device["fd"])
+                del self.devices[path]
+                continue
+            if not self.grabbed:
+                continue
+            for i in range(0, len(data) - self.pk.EVENT.size + 1, self.pk.EVENT.size):
+                etype, code, value = self.pk.EVENT.unpack_from(data, i)[2:]
+                if device["keyboard"] and etype == EV_KEY and code in KEYBOARD:
+                    if value in (0, 1):
+                        self.keys.apply(KEYBOARD[code], value, now)
+                    continue
+                for key, pressed in device["mapper"].event(etype, code, value):
+                    # O Page Up/Down e o Espaco dos menus do Setup nao fazem nada aqui.
+                    if key in (KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_ESC):
+                        self.keys.apply(key, pressed, now)
+
+    def close(self):
+        for device in self.devices.values():
+            try:
+                os.close(device["fd"])  # fechar solta o EVIOCGRAB
+            except OSError:
+                pass
+        self.devices.clear()
+
+
+# ── O servico ──────────────────────────────────────────────────────
+
+class Service:
+    def __init__(self):
+        self.padkeys = load_padkeys()
+        self.worker = Worker()
+        self.painter = None
+        self.hotkey = None
+        self.hotkey_args = None
+        self.running = True
+        os.makedirs(RUN_DIR, exist_ok=True)
+        self.screen_file = Screen(os.path.join(RUN_DIR, "screen"))
+        self.control = self.open_control()
+        try:
+            os.unlink(self.screen_file.path)
+        except OSError:
+            pass
+
+    def open_control(self):
+        path = os.path.join(RUN_DIR, "control")
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        os.mkfifo(path, 0o600)
+        # O+W: o FIFO nao "fecha" quando quem escreveu sai.
+        return os.open(path, os.O_RDWR | os.O_NONBLOCK)
+
+    def read_control(self):
+        try:
+            data = os.read(self.control, 4096)
+        except OSError:
+            return []
+        return data.decode("ascii", "replace").split()
+
+    # O atalho.
+    def allowed(self, screen):
+        conf = read_conf()
+        if conf.get("osd") == "off" or not screen or os.path.exists(SETUP_FLAG):
+            return False
+        return not commercial(screen["uid"])
+
+    def hotkey_command(self):
+        conf = read_conf()
+        combo = conf.get("osd_combo", DEFAULT_COMBO)
+        args = [BUTTONS, "hotkey"]
+        key = conf.get("osd_key", str(DEFAULT_KEY))
+        if key.isdigit() and int(key):
+            args += ["--key", key]
+        if combo:
+            args += ["--combo", combo, "--hold", conf.get("osd_hold", str(DEFAULT_HOLD))]
+        return args
+
+    def stop_hotkey(self):
+        if self.hotkey:
+            try:
+                self.hotkey.terminate()
+                self.hotkey.wait(timeout=2)
+            except (OSError, subprocess.SubprocessError):
+                self.hotkey.kill()
+            self.hotkey = None
+
+    def watch_hotkey(self, screen):
+        wanted = self.allowed(screen)
+        command = self.hotkey_command() if wanted else None
+        if self.hotkey and (not wanted or command != self.hotkey_args or self.hotkey.poll() is not None):
+            self.stop_hotkey()
+        if wanted and not self.hotkey:
+            try:
+                self.hotkey = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                               stderr=subprocess.DEVNULL)
+                self.hotkey_args = command
+            except OSError:
+                self.hotkey = None
+
+    def hotkey_fired(self):
+        """O fliperos-buttons hotkey imprimiu "exit" e saiu."""
+        try:
+            data = os.read(self.hotkey.stdout.fileno(), 256)
+        except OSError:
+            data = b""
+        self.stop_hotkey()
+        return b"exit" in data
+
+    # O menu.
+    def open_menu(self):
+        screen = on_screen()
+        if not self.allowed(screen):
+            return
+        self.stop_hotkey()
+        try:
+            os.unlink(os.path.join(screen["runtime"], "fliperos-osd-refused"))
+        except OSError:
+            pass
+        if self.painter is None:
+            self.painter = Painter()
+        menu = Menu(screen, current_mode(), self.worker)
+        pressed = []
+        inputs = Inputs(self.padkeys, lambda key, value: pressed.append(key) if value else None)
+        last = time.monotonic()
+        scanned = last
+        try:
+            while self.running and not menu.closing:
+                now = time.monotonic()
+                inputs.poll_grab()
+                if now - scanned >= 2:
+                    scanned = now
+                    inputs.scan()
+                # O jogo fechou, ou a camada dele nao consegue desenhar: os
+                # controles voltam na hora.
+                current = on_screen()
+                if not current or current["pid"] != screen["pid"] or refused(screen):
+                    menu.close()
+                    break
+                if now - last > IDLE_CLOSE:
+                    menu.close()
+                    break
+                if menu.dirty:
+                    menu.dirty = False
+                    self.screen_file.show(self.painter.rgba(menu))
+                timeout = inputs.keys.timeout(now, 0.1)
+                ready = select.select(inputs.fds() + [self.control], [], [], timeout)[0]
+                inputs.read(ready)
+                if self.control in ready:
+                    for word in self.read_control():
+                        if word == "close":
+                            menu.close()
+                        elif word in COMMANDS:
+                            pressed.append(COMMANDS[word])
+                inputs.keys.tick(time.monotonic())
+                for key in pressed:
+                    menu.key(key)
+                    last = time.monotonic()
+                del pressed[:]
+        finally:
+            menu.leave_geometry()
+            self.screen_file.hide()
+            inputs.close()
+
+    def loop(self):
+        while self.running:
+            screen = on_screen()
+            self.watch_hotkey(screen)
+            fds = [self.control]
+            if self.hotkey:
+                fds.append(self.hotkey.stdout.fileno())
+            ready = select.select(fds, [], [], 0.5)[0]
+            if self.control in ready and "open" in self.read_control():
+                self.open_menu()
+            elif self.hotkey and self.hotkey.stdout.fileno() in ready and self.hotkey_fired():
+                self.open_menu()
+
+    def stop(self, *_):
+        self.running = False
+
+
+def shot(page, path):
+    """A imagem de uma pagina, sem jogo e sem controle (os testes do desenho)."""
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    painter = Painter()
+    mode = {"clock": 13038, "h": [640, 666, 727, 831], "v": [480, 483, 489, 523], "interlace": True}
+    menu = Menu({"program": "pcsx2", "core": ""}, mode, Worker())
+    if page != "main":
+        menu.open_page(page)
+    surface = painter.theme.upright(painter.panel(menu))
+    backdrop = painter.pg.Surface((WIDTH, HEIGHT))
+    backdrop.fill((40, 80, 160))
+    backdrop.blit(surface, (0, 0))
+    painter.pg.image.save(painter.pg.transform.scale(backdrop, (WIDTH * 2, HEIGHT * 2)), path)
+
+
+def main():
+    if len(sys.argv) == 4 and sys.argv[1] == "--shot":
+        shot(sys.argv[2], sys.argv[3])
+        return 0
+    service = Service()
+    signal.signal(signal.SIGTERM, service.stop)
+    signal.signal(signal.SIGINT, service.stop)
+    try:
+        service.loop()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        service.stop_hotkey()
+        service.screen_file.hide()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

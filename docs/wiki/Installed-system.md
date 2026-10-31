@@ -85,7 +85,33 @@ Where FliperOS applies them:
 - in X, in `fliperos-x11-client` and `fliperos-lxde`, because Xorg starts with a linear table;
 - when the settings are saved.
 
-Without a CTM (the cabinet's Radeon R7 240 on the `radeon` driver has only the 256-point LUT and `output_csc`), the Setup writes `color_ctm=sw`. Then saturation and hue go through the same OpenGL layer as the flicker filter (`libfliperos-deflicker.so`, in every emulator and frontend, and in the Setup's menu), and through picom on the desktop. Only the text console stays without them.
+Without a CTM (the cabinet's Radeon R7 240 has only the 256-point LUT, on `radeon` and on `amdgpu`), the Setup writes `color_ctm=sw`. Then saturation and hue go through the same layers as the flicker filter (`libfliperos-deflicker.so` in OpenGL, `libfliperos-vkfps.so` in Vulkan, in every emulator and frontend, and in the Setup's menu), and through picom on the desktop. Only the text console stays without them.
+
+## On-screen menu
+
+Hold **Start and Down** for a second, or press **Pause** on a keyboard, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.
+
+- **Volume**.
+- **480i filter**: off, light, medium or strong for the program on screen. It only shows in an interlaced mode, and the change counts on the next frame.
+- **Geometry**: horizontal size and position, and vertical position, with a frame and a cross over the picture. Each change is on the tube at once. **Save** keeps it for every game (the same `crt_range` as Video Setup > Geometry), and leaving without saving puts the mode back. Switchres stops at what the monitor accepts, and the value on screen goes back to that limit.
+- **Colour**: every setting of the colour calibration, and back to the defaults.
+
+The arrows move and change, the first button opens and the second goes back, as in the Setup's menus. In `fliperos.conf`:
+
+- `osd=off` turns it off. It is also in the web panel, in Video, and it stays closed in the frontend's commercial mode;
+- `osd_combo=start+down` is the shortcut, with the controls of the Button mapping;
+- `osd_hold=1.0` is how many seconds to hold them;
+- `osd_key=119` is the key, as an evdev code. `0` is no key.
+
+`fliperos-osd` runs as a service. It reads the shortcut with `fliperos-buttons hotkey` and writes a 320x240 picture to `/run/fliperos-osd/screen`, which exists only while the menu is open. The layers of the frame swap draw it before the flicker filter, so its letters don't flicker either: `config/fliperos-deflicker.c` in OpenGL and `config/fliperos-vkfps.c` in Vulkan.
+
+So the menu opens only where one of those layers is writing the FPS. On the LXDE desktop, in Fightcade's Wine emulators and in the Setup, nothing opens and the controls stay with the program. If a layer can't draw (a card below OpenGL 3), it tells the service, which gives the controls back.
+
+The controls are taken with `EVIOCGRAB` only after the shortcut is released, or the game would keep those buttons held.
+
+Settings go through the Setup's functions (`--setting`, `--volume`, `--geometry`), one at a time. Geometry uses Switchres's numbers (`switchres -c -g`). In a game on X it changes the mode through `xrandr`, because Xorg undoes a change made directly on the card. In KMS (RetroArch, the frontend) it uses `fliperos-color timing`.
+
+To drive it without a controller, write `open`, `close`, `up`, `down`, `left`, `right`, `enter` or `esc` to `/run/fliperos-osd/control` as root.
 
 **Main menu** (gasetup's `mainmenu`; the title shows `host (IP) - N% used on /`):
 

@@ -26,6 +26,8 @@ Open **http://fliperos.local** on a phone or PC on the same network (user `flipe
 - **copy games, BIOS and artwork**, filter a MAME romset and download only what suits your cabinet;
 - **check the system** (video mode and modeline, temperatures, logs), preview the marquee (Pixelcade or ZeDMD) with no hardware, or open a terminal.
 
+At the cabinet, hold **Start and Down** for a second in any game to open the [on-screen menu](docs/wiki/Installed-system.md#on-screen-menu): volume, 480i filter, geometry and colour, over the running game.
+
 Every page in detail: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 
 ### New: your controller on the stream

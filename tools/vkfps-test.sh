@@ -27,7 +27,7 @@ text = open(source).read()
 comment = text[text.index(' * #version 450'):text.index(' */\nstatic const uint32_t vert_spv')]
 lines = [re.sub(r'^ \* ?', '', line) for line in comment.splitlines()]
 glsl = '\n'.join(lines).split('\n--\n')
-for name, stage, src in (('vert', 'vert', glsl[0]), ('frag', 'frag', glsl[1])):
+for name, stage, src in (('vert', 'vert', glsl[0]), ('frag', 'frag', glsl[1]), ('osd', 'frag', glsl[2])):
     path = '%s/%s.%s' % (out, name, stage)
     open(path, 'w').write(src + '\n')
     subprocess.run(['glslangValidator', '-V', '--quiet', '-o', path + '.spv', path], check=True)
@@ -85,4 +85,23 @@ case $(cat $b/fps 2> /dev/null) in
   *" vkfps_test - 1") ;;
   *) echo "FPS line without the filter column"; fail=1 ;;
 esac
+# A saturacao por software (a placa sem CTM), mesmo sem modo entrelacado: o
+# vermelho sem saturacao vira o cinza da luminancia dele (0.213 = 54).
+printf 'color_ctm=sw\ncolor_saturation=0\ndeflicker=off\n' > $b/conf
+run saturacao 54 0 FLIPEROS_VK_FPS=1 FLIPEROS_CONF=$b/conf VKFPS_TEST_RED=1
+# A OSD (config/fliperos-osd): a imagem do arquivo por cima do quadro, sem filtro
+# e com ele. A metade de cima do arquivo e verde opaca, a de baixo transparente:
+# em cima, o verde; embaixo, as listras como estavam.
+python3 -c "
+import struct, sys
+rows = bytes((0, 255, 0, 255)) * 320 * 120 + bytes(4) * 320 * 120
+open('$b/osd', 'wb').write(struct.pack('<5I', 0x44534f46, 2, 1, 320, 240) + rows)"
+run osd 255 0 FLIPEROS_VK_FPS=1 FLIPEROS_OSD_FILE=$b/osd VKFPS_TEST_OSD=1
+run osd-medium 127 127 FLIPEROS_VK_FPS=1 FLIPEROS_OSD_FILE=$b/osd VKFPS_TEST_OSD=1 FLIPEROS_DEFLICKER_FORCE=1
+# Com o aviso de fechar, nada e desenhado.
+python3 -c "
+d = bytearray(open('$b/osd', 'rb').read())
+d[8] = 0
+open('$b/osd', 'wb').write(d)"
+run osd-fechada 255 0 FLIPEROS_VK_FPS=1 FLIPEROS_OSD_FILE=$b/osd
 exit $fail

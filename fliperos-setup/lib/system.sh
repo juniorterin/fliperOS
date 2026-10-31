@@ -91,6 +91,8 @@ settings_list() {
     printf 'mm_games|Video|Multi-screen games|choice|%s|on=One screen on each monitor;off=Everything on monitor 1|Games with 2 or 3 screens. Counts after a restart.\n' \
       "$(mm_games_on && echo on || echo off)"
   fi
+  printf 'osd|Video|On-screen menu|choice|%s|on=On;off=Off|Volume, filter, geometry and colour over any game: hold Start and Down for a second, or press Pause on a keyboard.\n' \
+    "$([[ $(conf_get osd 2> /dev/null) == off ]] && echo off || echo on)"
   # Audio Setup (o volume fica no Frontend, no gabinete desenhado).
   opts=""
   while IFS='|' read -r name desc; do
@@ -259,6 +261,21 @@ settings_set() {
     deflicker.*)
       [[ -n $(mode480_field "${key#deflicker.}" 1) && " light medium strong " == *" $value "* ]] || return 2
       mode480_set "${key#deflicker.}" "$(mode480_state "${key#deflicker.}")" "$value"
+      ;;
+    level.*)
+      # A OSD (config/fliperos-osd): o nivel pelo nome do programa aberto ou
+      # do core, que a camada conhece; a linha "other" e a dos outros.
+      [[ " $DEFLICKER_LEVELS " == *" $value "* ]] || return 2
+      name=$(mode480_key_of "${key#level.}")
+      if [[ $value == off ]]; then
+        mode480_set "$name" pure || return 2
+      else
+        mode480_set "$name" filter "$value" || return 2
+      fi
+      ;;
+    osd)
+      [[ $value == on || $value == off ]] || return 2
+      conf_set osd "$value"
       ;;
     color.reset)
       color_reset

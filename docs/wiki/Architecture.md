@@ -166,6 +166,7 @@ The clock comes from the network (`systemd-timesyncd`). On the first test on the
 | `config/zshrc`, `config/fliperos-tty1`, `config/fliperos-menu` | The user's zsh; tty1 flow (first boot, launcher, the menu loop); from the shell back to the menu |
 | `config/fliperos-atom15`, `tools/atom15-hook.asm`, `tools/atom15-check.py`, `fliperos-setup/lib/atom15.sh`, `fliperos-setup/screens/atom15.sh`, `config/fliperos-atom15-guard.service` | ATOM-15 in the card's BIOS (Video Setup > Card firmware): the patch, backup, flash and the test at the next boot |
 | `config/fliperos-padkeys`, `config/fliperos-padkeys.service` | Controller as keyboard in the setup menus |
+| `config/fliperos-osd`, `config/fliperos-osd.service` | The on-screen menu over games and frontends: volume, 480i filter, geometry and colour |
 | `config/fliperos-calibrate` | GunCon 2 and wheel/pedals/analog calibration (Setup > Joysticks) and its reapplication by udev |
 | `config/fliperos-roms`, `config/smb.conf`, `config/flycast-emu.cfg` | Folders in `~` (`roms`, `bios`, `media`, `nvram`, `save`, `config`); Samba (FliperOS, roms, bios, media, nvram, save, config); initial Flycast settings |
 | `config/fliperos-controllers`, `config/fliperos-controllers.service` | Completes SDL2's (and Flycast's) automatic mapping of connected controllers |

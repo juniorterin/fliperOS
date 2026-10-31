@@ -1,0 +1,14 @@
+[Unit]
+Description=FliperOS: on-screen menu over games and frontends
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/fliperos/bin/fliperos-osd
+RuntimeDirectory=fliperos-osd
+RuntimeDirectoryMode=0755
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

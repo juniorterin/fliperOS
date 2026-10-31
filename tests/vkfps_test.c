@@ -8,6 +8,10 @@
  * Linhas pares brancas, impares pretas. Sem filtro: 255 e 0. Com o medium (a
  * media com a linha de cima): 127 ou 128 nas duas. O programa nao sabe da
  * camada, como um emulador. Sai 0 se bate (com folga de 2 valores).
+ *
+ * VKFPS_TEST_RED=1: listras vermelhas (a saturacao e o matiz). VKFPS_TEST_OSD=1:
+ * a OSD cobre a metade de cima de verde; o verde e conferido la, e as listras so
+ * na metade de baixo.
  */
 #define VK_USE_PLATFORM_XLIB_KHR
 #include <stdio.h>
@@ -99,8 +103,13 @@ int main(int argc, char **argv)
     CHECK(vkBindBufferMemory(device, buffer, memory, 0));
     unsigned char *pixels;
     CHECK(vkMapMemory(device, memory, 0, VK_WHOLE_SIZE, 0, (void **)&pixels));
-    for (int y = 0; y < H; y++)
+    int red = getenv("VKFPS_TEST_RED") != NULL, osd = getenv("VKFPS_TEST_OSD") != NULL;
+    for (int y = 0; y < H; y++) {
         memset(pixels + y * W * 4, y % 2 ? 0 : 255, W * 4);
+        /* O formato e BGRA: so o ultimo canal de cor. */
+        for (int x = 0; red && x < W; x++)
+            pixels[y * W * 4 + x * 4] = pixels[y * W * 4 + x * 4 + 1] = 0;
+    }
 
     VkCommandPoolCreateInfo cpi = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT};
     VkCommandPool pool;
@@ -158,15 +167,28 @@ int main(int argc, char **argv)
     if (!shot)
         return 5;
     int bad = 0;
-    /* A linha 0 nao tem de cima: a primeira que vale e a 2. */
-    for (int y = 2; y < H - 2; y++) {
+    /* O canal que a listra acende: com a saturacao, o vermelho vira cinza. */
+    /* A linha 0 nao tem de cima: a primeira que vale e a 2; com a OSD, a primeira
+     * longe da beira dela. */
+    int first = osd ? H / 2 + 2 : 2;
+    first += first % 2;
+    for (int y = first; y < H - 2; y++) {
         int value = (int)(XGetPixel(shot, W / 2, y) & 0xff), want = y % 2 ? want_dark : want_light;
         if (abs(value - want) > 2) {
             if (bad++ < 4)
                 fprintf(stderr, "line %d: %d, wanted %d\n", y, value, want);
         }
     }
-    printf("lines 2,3: %lu %lu; wrong lines: %d\n", XGetPixel(shot, W / 2, 2) & 0xff, XGetPixel(shot, W / 2, 3) & 0xff, bad);
+    if (osd) {
+        /* O verde da OSD em cima, longe da beira de baixo dela. */
+        for (int y = 2; y < H / 2 - 2; y++) {
+            unsigned long pixel = XGetPixel(shot, W / 2, y) & 0xffffff;
+            if (pixel != 0x00ff00 && bad++ < 4)
+                fprintf(stderr, "line %d: %06lx, wanted the green of the OSD\n", y, pixel);
+        }
+    }
+    printf("lines %d,%d: %lu %lu; wrong lines: %d\n", first, first + 1, XGetPixel(shot, W / 2, first) & 0xff,
+           XGetPixel(shot, W / 2, first + 1) & 0xff, bad);
 
     /* A troca de swapchain e o fim: a camada libera o que fez. */
     vkDeviceWaitIdle(device);

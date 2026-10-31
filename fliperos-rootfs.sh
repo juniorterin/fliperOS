@@ -85,6 +85,11 @@ install -Dm644 "$src/config/fliperos-padkeys.service" "$root/etc/systemd/system/
 mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
 ln -sfn /etc/systemd/system/fliperos-padkeys.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-padkeys.service"
+# A OSD: volume, filtro, geometria e cores por cima do jogo (config/fliperos-osd).
+install -Dm755 "$src/config/fliperos-osd" "$root/opt/fliperos/bin/fliperos-osd"
+install -Dm644 "$src/config/fliperos-osd.service" "$root/etc/systemd/system/fliperos-osd.service"
+ln -sfn /etc/systemd/system/fliperos-osd.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-osd.service"
 # O openbox do fliperos-x11-run (encaixa a janela na tela a cada troca de
 # modo; config/fliperos-x11-client).
 install -Dm644 "$src/config/openbox-x11-run.xml" "$root/etc/fliperos/openbox-x11-run.xml"

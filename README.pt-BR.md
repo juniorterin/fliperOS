@@ -26,6 +26,8 @@ Abra **http://fliperos.local** no celular ou no PC da mesma rede (usuário `flip
 - **copiar jogos, BIOS e imagens**, filtrar um romset do MAME e baixar só o que combina com o seu gabinete;
 - **ver o sistema** (modo de vídeo e modeline, temperaturas, logs), ver uma prévia do marquee (Pixelcade ou ZeDMD) sem o aparelho ou abrir um terminal.
 
+No gabinete, segure **Start e Baixo** por um segundo em qualquer jogo para abrir o [menu na tela](docs/wiki/Installed-system.md#on-screen-menu): volume, filtro do 480i, geometria e cores, por cima do jogo aberto.
+
 Cada página em detalhe: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 
 ### Novo: o seu controle na transmissão

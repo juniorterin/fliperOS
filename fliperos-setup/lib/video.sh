@@ -1010,6 +1010,14 @@ mode480_field() {
   mode480_table | awk -F'|' -v k="$1" -v n="$2" '$1 == k { print $n; exit }'
 }
 
+# mode480_key_of PROGRAMA: a chave da linha do programa ou do core na tabela;
+# fora dela, a "other".
+mode480_key_of() {
+  local key
+  key=$(mode480_table | awk -F'|' -v p="$1" '{ n = split($3, a, " "); for (i = 1; i <= n; i++) if (a[i] == p) { print $1; exit } }')
+  printf '%s\n' "${key:-other}"
+}
+
 # mode480_installed CHAVE: a aplicacao esta neste computador?
 mode480_installed() {
   local kind prog

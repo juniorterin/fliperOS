@@ -20,10 +20,14 @@
  * mesmos niveis da camada OpenGL (Setup > Video Setup > 480i hacks): do
  * FLIPEROS_DEFLICKER_FILE, do FLIPEROS_DEFLICKER, do deflicker_PROGRAMA= e do
  * deflicker= no fliperos.conf; FLIPEROS_DEFLICKER_FORCE=1 filtra sem modo
- * entrelacado. Sem filtrar nada e alocado e o quadro passa direto. A saturacao
- * e o matiz por software (color_ctm=sw) nao entram: so o radeon, que nao tem
- * Vulkan, precisa deles. Se algo falha ao preparar, o programa segue sem o
- * filtro.
+ * entrelacado. A saturacao e o matiz por software (color_ctm=sw, a placa sem a
+ * matriz de cor, como uma SI no amdgpu) vao na mesma passada, em qualquer modo.
+ * Sem filtrar nada e alocado e o quadro passa direto. Se algo falha ao preparar,
+ * o programa segue sem o filtro.
+ *
+ * A OSD (config/fliperos-osd) tambem e desenhada aqui, antes do filtro: a imagem
+ * vem do arquivo /run/fliperos-osd/screen (FLIPEROS_OSD_FILE), que so existe com
+ * ela aberta, como na camada OpenGL.
  *
  * Os poucos tipos do Vulkan que ela usa estao aqui: compila so com o gcc, a
  * libc e o libdrm (o libvulkan-dev nao vem na imagem nem no gabinete).
@@ -34,12 +38,14 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -111,7 +117,7 @@ typedef uint64_t Handle;
 /* Os sType. */
 enum {
     ST_SUBMIT_INFO = 4, ST_MEMORY_ALLOCATE_INFO = 5, ST_FENCE_CREATE_INFO = 8, ST_SEMAPHORE_CREATE_INFO = 9,
-    ST_IMAGE_CREATE_INFO = 14, ST_IMAGE_VIEW_CREATE_INFO = 15, ST_SHADER_MODULE_CREATE_INFO = 16,
+    ST_BUFFER_CREATE_INFO = 12, ST_IMAGE_CREATE_INFO = 14, ST_IMAGE_VIEW_CREATE_INFO = 15, ST_SHADER_MODULE_CREATE_INFO = 16,
     ST_PIPELINE_SHADER_STAGE_CREATE_INFO = 18, ST_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO = 19,
     ST_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO = 20, ST_PIPELINE_VIEWPORT_STATE_CREATE_INFO = 22,
     ST_PIPELINE_RASTERIZATION_STATE_CREATE_INFO = 23, ST_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO = 24,
@@ -132,11 +138,14 @@ enum {
 enum {
     USAGE_TRANSFER_SRC = 0x1, USAGE_TRANSFER_DST = 0x2, USAGE_SAMPLED = 0x4, USAGE_COLOR_ATTACHMENT = 0x10,
     ACCESS_SHADER_READ = 0x20, ACCESS_COLOR_WRITE = 0x100, ACCESS_TRANSFER_READ = 0x800,
-    ACCESS_TRANSFER_WRITE = 0x1000, ACCESS_MEMORY_WRITE = 0x10000,
+    ACCESS_TRANSFER_WRITE = 0x1000, ACCESS_MEMORY_WRITE = 0x10000, ACCESS_COLOR_READ = 0x80, ACCESS_MEMORY_READ = 0x8000,
     STAGE_TOP = 0x1, STAGE_FRAGMENT = 0x80, STAGE_COLOR_OUTPUT = 0x400, STAGE_TRANSFER = 0x1000,
     STAGE_BOTTOM = 0x2000, STAGE_ALL = 0x10000,
-    ASPECT_COLOR = 0x1, QUEUE_GRAPHICS = 0x1, MEMORY_DEVICE_LOCAL = 0x1,
+    ASPECT_COLOR = 0x1, QUEUE_GRAPHICS = 0x1, MEMORY_DEVICE_LOCAL = 0x1, MEMORY_HOST_VISIBLE = 0x2, MEMORY_HOST_COHERENT = 0x4,
     SHADER_VERTEX = 0x1, SHADER_FRAGMENT = 0x10,
+    FORMAT_RGBA8_UNORM = 37, FORMAT_RGBA8_SRGB = 43, FORMAT_BGRA8_SRGB = 50, FORMAT_ABGR8_SRGB = 57,
+    BLEND_ZERO = 0, BLEND_ONE = 1, BLEND_SRC_ALPHA = 6, BLEND_ONE_MINUS_SRC_ALPHA = 7,
+    LOAD_OP_LOAD = 0,
 };
 
 typedef struct { uint32_t width, height; } Extent2D;
@@ -181,6 +190,14 @@ typedef struct {
     uint32_t initialLayout;
 } ImageCreateInfo;
 typedef struct { VkStructureType sType; const void *pNext; uint64_t allocationSize; uint32_t memoryTypeIndex; } MemoryAllocateInfo;
+typedef struct {
+    VkStructureType sType; const void *pNext; uint32_t flags; uint64_t size; uint32_t usage, sharingMode,
+        queueFamilyIndexCount; const uint32_t *pQueueFamilyIndices;
+} BufferCreateInfo;
+typedef struct {
+    uint64_t bufferOffset; uint32_t bufferRowLength, bufferImageHeight; SubresourceLayers imageSubresource;
+    Offset3D imageOffset; Extent3D imageExtent;
+} BufferImageCopy;
 typedef struct {
     VkStructureType sType; const void *pNext; uint32_t flags; Handle image; uint32_t viewType, format;
     uint32_t components[4]; SubresourceRange subresourceRange;
@@ -291,14 +308,23 @@ typedef struct {
  * --
  * #version 450
  * layout(set = 0, binding = 0) uniform sampler2D tex;
- * layout(push_constant) uniform Push { vec4 w; } push;  // w.xyz os pesos, w.w a altura
+ * layout(push_constant) uniform Push { vec4 w; vec4 m0; vec4 m1; vec4 m2; } push;  // w.xyz os pesos, w.w a altura, m a matriz de cor
  * layout(location = 0) out vec4 color;
  * void main() {
  *     ivec2 p = ivec2(gl_FragCoord.xy);
  *     vec4 up = texelFetch(tex, ivec2(p.x, max(p.y - 1, 0)), 0);
  *     vec4 mid = texelFetch(tex, p, 0);
  *     vec4 down = texelFetch(tex, ivec2(p.x, min(p.y + 1, int(push.w.w) - 1)), 0);
- *     color = up * push.w.x + mid * push.w.y + down * push.w.z;
+ *     vec4 c = up * push.w.x + mid * push.w.y + down * push.w.z;
+ *     color = vec4(clamp(mat3(push.m0.xyz, push.m1.xyz, push.m2.xyz) * c.rgb, 0.0, 1.0), c.a);
+ * }
+ * --
+ * #version 450
+ * layout(set = 0, binding = 0) uniform sampler2D tex;
+ * layout(push_constant) uniform Push { vec4 size; } push;  // size.xy o tamanho do quadro
+ * layout(location = 0) out vec4 color;
+ * void main() {
+ *     color = texture(tex, gl_FragCoord.xy / push.size.xy);
  * }
  */
 static const uint32_t vert_spv[] = {
@@ -339,65 +365,127 @@ static const uint32_t vert_spv[] = {
     0x000100fd, 0x00010038,
 };
 static const uint32_t frag_spv[] = {
-    0x07230203, 0x00010000, 0x0008000b, 0x00000052, 0x00000000, 0x00020011, 0x00000001, 0x0006000b,
+    0x07230203, 0x00010000, 0x0008000b, 0x0000007d, 0x00000000, 0x00020011, 0x00000001, 0x0006000b,
     0x00000001, 0x4c534c47, 0x6474732e, 0x3035342e, 0x00000000, 0x0003000e, 0x00000000, 0x00000001,
-    0x0007000f, 0x00000004, 0x00000004, 0x6e69616d, 0x00000000, 0x0000000d, 0x00000042, 0x00030010,
+    0x0007000f, 0x00000004, 0x00000004, 0x6e69616d, 0x00000000, 0x0000000d, 0x00000052, 0x00030010,
     0x00000004, 0x00000007, 0x00030003, 0x00000002, 0x000001c2, 0x00040005, 0x00000004, 0x6e69616d,
     0x00000000, 0x00030005, 0x00000009, 0x00000070, 0x00060005, 0x0000000d, 0x465f6c67, 0x43676172,
     0x64726f6f, 0x00000000, 0x00030005, 0x00000013, 0x00007075, 0x00030005, 0x00000017, 0x00786574,
     0x00030005, 0x00000028, 0x0064696d, 0x00040005, 0x0000002d, 0x6e776f64, 0x00000000, 0x00040005,
-    0x00000034, 0x68737550, 0x00000000, 0x00040006, 0x00000034, 0x00000000, 0x00000077, 0x00040005,
-    0x00000036, 0x68737570, 0x00000000, 0x00040005, 0x00000042, 0x6f6c6f63, 0x00000072, 0x00040047,
-    0x0000000d, 0x0000000b, 0x0000000f, 0x00040047, 0x00000017, 0x00000021, 0x00000000, 0x00040047,
-    0x00000017, 0x00000022, 0x00000000, 0x00030047, 0x00000034, 0x00000002, 0x00050048, 0x00000034,
-    0x00000000, 0x00000023, 0x00000000, 0x00040047, 0x00000042, 0x0000001e, 0x00000000, 0x00020013,
-    0x00000002, 0x00030021, 0x00000003, 0x00000002, 0x00040015, 0x00000006, 0x00000020, 0x00000001,
-    0x00040017, 0x00000007, 0x00000006, 0x00000002, 0x00040020, 0x00000008, 0x00000007, 0x00000007,
-    0x00030016, 0x0000000a, 0x00000020, 0x00040017, 0x0000000b, 0x0000000a, 0x00000004, 0x00040020,
-    0x0000000c, 0x00000001, 0x0000000b, 0x0004003b, 0x0000000c, 0x0000000d, 0x00000001, 0x00040017,
-    0x0000000e, 0x0000000a, 0x00000002, 0x00040020, 0x00000012, 0x00000007, 0x0000000b, 0x00090019,
-    0x00000014, 0x0000000a, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000000,
-    0x0003001b, 0x00000015, 0x00000014, 0x00040020, 0x00000016, 0x00000000, 0x00000015, 0x0004003b,
-    0x00000016, 0x00000017, 0x00000000, 0x00040015, 0x00000019, 0x00000020, 0x00000000, 0x0004002b,
-    0x00000019, 0x0000001a, 0x00000000, 0x00040020, 0x0000001b, 0x00000007, 0x00000006, 0x0004002b,
-    0x00000019, 0x0000001e, 0x00000001, 0x0004002b, 0x00000006, 0x00000021, 0x00000001, 0x0004002b,
-    0x00000006, 0x00000023, 0x00000000, 0x0003001e, 0x00000034, 0x0000000b, 0x00040020, 0x00000035,
-    0x00000009, 0x00000034, 0x0004003b, 0x00000035, 0x00000036, 0x00000009, 0x0004002b, 0x00000019,
-    0x00000037, 0x00000003, 0x00040020, 0x00000038, 0x00000009, 0x0000000a, 0x00040020, 0x00000041,
-    0x00000003, 0x0000000b, 0x0004003b, 0x00000041, 0x00000042, 0x00000003, 0x0004002b, 0x00000019,
-    0x0000004d, 0x00000002, 0x00050036, 0x00000002, 0x00000004, 0x00000000, 0x00000003, 0x000200f8,
-    0x00000005, 0x0004003b, 0x00000008, 0x00000009, 0x00000007, 0x0004003b, 0x00000012, 0x00000013,
-    0x00000007, 0x0004003b, 0x00000012, 0x00000028, 0x00000007, 0x0004003b, 0x00000012, 0x0000002d,
-    0x00000007, 0x0004003d, 0x0000000b, 0x0000000f, 0x0000000d, 0x0007004f, 0x0000000e, 0x00000010,
-    0x0000000f, 0x0000000f, 0x00000000, 0x00000001, 0x0004006e, 0x00000007, 0x00000011, 0x00000010,
-    0x0003003e, 0x00000009, 0x00000011, 0x0004003d, 0x00000015, 0x00000018, 0x00000017, 0x00050041,
-    0x0000001b, 0x0000001c, 0x00000009, 0x0000001a, 0x0004003d, 0x00000006, 0x0000001d, 0x0000001c,
-    0x00050041, 0x0000001b, 0x0000001f, 0x00000009, 0x0000001e, 0x0004003d, 0x00000006, 0x00000020,
-    0x0000001f, 0x00050082, 0x00000006, 0x00000022, 0x00000020, 0x00000021, 0x0007000c, 0x00000006,
-    0x00000024, 0x00000001, 0x0000002a, 0x00000022, 0x00000023, 0x00050050, 0x00000007, 0x00000025,
-    0x0000001d, 0x00000024, 0x00040064, 0x00000014, 0x00000026, 0x00000018, 0x0007005f, 0x0000000b,
-    0x00000027, 0x00000026, 0x00000025, 0x00000002, 0x00000023, 0x0003003e, 0x00000013, 0x00000027,
-    0x0004003d, 0x00000015, 0x00000029, 0x00000017, 0x0004003d, 0x00000007, 0x0000002a, 0x00000009,
-    0x00040064, 0x00000014, 0x0000002b, 0x00000029, 0x0007005f, 0x0000000b, 0x0000002c, 0x0000002b,
-    0x0000002a, 0x00000002, 0x00000023, 0x0003003e, 0x00000028, 0x0000002c, 0x0004003d, 0x00000015,
-    0x0000002e, 0x00000017, 0x00050041, 0x0000001b, 0x0000002f, 0x00000009, 0x0000001a, 0x0004003d,
-    0x00000006, 0x00000030, 0x0000002f, 0x00050041, 0x0000001b, 0x00000031, 0x00000009, 0x0000001e,
-    0x0004003d, 0x00000006, 0x00000032, 0x00000031, 0x00050080, 0x00000006, 0x00000033, 0x00000032,
-    0x00000021, 0x00060041, 0x00000038, 0x00000039, 0x00000036, 0x00000023, 0x00000037, 0x0004003d,
-    0x0000000a, 0x0000003a, 0x00000039, 0x0004006e, 0x00000006, 0x0000003b, 0x0000003a, 0x00050082,
-    0x00000006, 0x0000003c, 0x0000003b, 0x00000021, 0x0007000c, 0x00000006, 0x0000003d, 0x00000001,
-    0x00000027, 0x00000033, 0x0000003c, 0x00050050, 0x00000007, 0x0000003e, 0x00000030, 0x0000003d,
-    0x00040064, 0x00000014, 0x0000003f, 0x0000002e, 0x0007005f, 0x0000000b, 0x00000040, 0x0000003f,
-    0x0000003e, 0x00000002, 0x00000023, 0x0003003e, 0x0000002d, 0x00000040, 0x0004003d, 0x0000000b,
-    0x00000043, 0x00000013, 0x00060041, 0x00000038, 0x00000044, 0x00000036, 0x00000023, 0x0000001a,
-    0x0004003d, 0x0000000a, 0x00000045, 0x00000044, 0x0005008e, 0x0000000b, 0x00000046, 0x00000043,
-    0x00000045, 0x0004003d, 0x0000000b, 0x00000047, 0x00000028, 0x00060041, 0x00000038, 0x00000048,
-    0x00000036, 0x00000023, 0x0000001e, 0x0004003d, 0x0000000a, 0x00000049, 0x00000048, 0x0005008e,
-    0x0000000b, 0x0000004a, 0x00000047, 0x00000049, 0x00050081, 0x0000000b, 0x0000004b, 0x00000046,
-    0x0000004a, 0x0004003d, 0x0000000b, 0x0000004c, 0x0000002d, 0x00060041, 0x00000038, 0x0000004e,
-    0x00000036, 0x00000023, 0x0000004d, 0x0004003d, 0x0000000a, 0x0000004f, 0x0000004e, 0x0005008e,
-    0x0000000b, 0x00000050, 0x0000004c, 0x0000004f, 0x00050081, 0x0000000b, 0x00000051, 0x0000004b,
-    0x00000050, 0x0003003e, 0x00000042, 0x00000051, 0x000100fd, 0x00010038,
+    0x00000034, 0x68737550, 0x00000000, 0x00040006, 0x00000034, 0x00000000, 0x00000077, 0x00040006,
+    0x00000034, 0x00000001, 0x0000306d, 0x00040006, 0x00000034, 0x00000002, 0x0000316d, 0x00040006,
+    0x00000034, 0x00000003, 0x0000326d, 0x00040005, 0x00000036, 0x68737570, 0x00000000, 0x00030005,
+    0x00000041, 0x00000063, 0x00040005, 0x00000052, 0x6f6c6f63, 0x00000072, 0x00040047, 0x0000000d,
+    0x0000000b, 0x0000000f, 0x00040047, 0x00000017, 0x00000021, 0x00000000, 0x00040047, 0x00000017,
+    0x00000022, 0x00000000, 0x00030047, 0x00000034, 0x00000002, 0x00050048, 0x00000034, 0x00000000,
+    0x00000023, 0x00000000, 0x00050048, 0x00000034, 0x00000001, 0x00000023, 0x00000010, 0x00050048,
+    0x00000034, 0x00000002, 0x00000023, 0x00000020, 0x00050048, 0x00000034, 0x00000003, 0x00000023,
+    0x00000030, 0x00040047, 0x00000052, 0x0000001e, 0x00000000, 0x00020013, 0x00000002, 0x00030021,
+    0x00000003, 0x00000002, 0x00040015, 0x00000006, 0x00000020, 0x00000001, 0x00040017, 0x00000007,
+    0x00000006, 0x00000002, 0x00040020, 0x00000008, 0x00000007, 0x00000007, 0x00030016, 0x0000000a,
+    0x00000020, 0x00040017, 0x0000000b, 0x0000000a, 0x00000004, 0x00040020, 0x0000000c, 0x00000001,
+    0x0000000b, 0x0004003b, 0x0000000c, 0x0000000d, 0x00000001, 0x00040017, 0x0000000e, 0x0000000a,
+    0x00000002, 0x00040020, 0x00000012, 0x00000007, 0x0000000b, 0x00090019, 0x00000014, 0x0000000a,
+    0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000000, 0x0003001b, 0x00000015,
+    0x00000014, 0x00040020, 0x00000016, 0x00000000, 0x00000015, 0x0004003b, 0x00000016, 0x00000017,
+    0x00000000, 0x00040015, 0x00000019, 0x00000020, 0x00000000, 0x0004002b, 0x00000019, 0x0000001a,
+    0x00000000, 0x00040020, 0x0000001b, 0x00000007, 0x00000006, 0x0004002b, 0x00000019, 0x0000001e,
+    0x00000001, 0x0004002b, 0x00000006, 0x00000021, 0x00000001, 0x0004002b, 0x00000006, 0x00000023,
+    0x00000000, 0x0006001e, 0x00000034, 0x0000000b, 0x0000000b, 0x0000000b, 0x0000000b, 0x00040020,
+    0x00000035, 0x00000009, 0x00000034, 0x0004003b, 0x00000035, 0x00000036, 0x00000009, 0x0004002b,
+    0x00000019, 0x00000037, 0x00000003, 0x00040020, 0x00000038, 0x00000009, 0x0000000a, 0x0004002b,
+    0x00000019, 0x0000004c, 0x00000002, 0x00040020, 0x00000051, 0x00000003, 0x0000000b, 0x0004003b,
+    0x00000051, 0x00000052, 0x00000003, 0x00040017, 0x00000053, 0x0000000a, 0x00000003, 0x00040020,
+    0x00000054, 0x00000009, 0x0000000b, 0x0004002b, 0x00000006, 0x00000058, 0x00000002, 0x0004002b,
+    0x00000006, 0x0000005c, 0x00000003, 0x00040018, 0x00000060, 0x00000053, 0x00000003, 0x0004002b,
+    0x0000000a, 0x00000061, 0x3f800000, 0x0004002b, 0x0000000a, 0x00000062, 0x00000000, 0x00040020,
+    0x00000076, 0x00000007, 0x0000000a, 0x00050036, 0x00000002, 0x00000004, 0x00000000, 0x00000003,
+    0x000200f8, 0x00000005, 0x0004003b, 0x00000008, 0x00000009, 0x00000007, 0x0004003b, 0x00000012,
+    0x00000013, 0x00000007, 0x0004003b, 0x00000012, 0x00000028, 0x00000007, 0x0004003b, 0x00000012,
+    0x0000002d, 0x00000007, 0x0004003b, 0x00000012, 0x00000041, 0x00000007, 0x0004003d, 0x0000000b,
+    0x0000000f, 0x0000000d, 0x0007004f, 0x0000000e, 0x00000010, 0x0000000f, 0x0000000f, 0x00000000,
+    0x00000001, 0x0004006e, 0x00000007, 0x00000011, 0x00000010, 0x0003003e, 0x00000009, 0x00000011,
+    0x0004003d, 0x00000015, 0x00000018, 0x00000017, 0x00050041, 0x0000001b, 0x0000001c, 0x00000009,
+    0x0000001a, 0x0004003d, 0x00000006, 0x0000001d, 0x0000001c, 0x00050041, 0x0000001b, 0x0000001f,
+    0x00000009, 0x0000001e, 0x0004003d, 0x00000006, 0x00000020, 0x0000001f, 0x00050082, 0x00000006,
+    0x00000022, 0x00000020, 0x00000021, 0x0007000c, 0x00000006, 0x00000024, 0x00000001, 0x0000002a,
+    0x00000022, 0x00000023, 0x00050050, 0x00000007, 0x00000025, 0x0000001d, 0x00000024, 0x00040064,
+    0x00000014, 0x00000026, 0x00000018, 0x0007005f, 0x0000000b, 0x00000027, 0x00000026, 0x00000025,
+    0x00000002, 0x00000023, 0x0003003e, 0x00000013, 0x00000027, 0x0004003d, 0x00000015, 0x00000029,
+    0x00000017, 0x0004003d, 0x00000007, 0x0000002a, 0x00000009, 0x00040064, 0x00000014, 0x0000002b,
+    0x00000029, 0x0007005f, 0x0000000b, 0x0000002c, 0x0000002b, 0x0000002a, 0x00000002, 0x00000023,
+    0x0003003e, 0x00000028, 0x0000002c, 0x0004003d, 0x00000015, 0x0000002e, 0x00000017, 0x00050041,
+    0x0000001b, 0x0000002f, 0x00000009, 0x0000001a, 0x0004003d, 0x00000006, 0x00000030, 0x0000002f,
+    0x00050041, 0x0000001b, 0x00000031, 0x00000009, 0x0000001e, 0x0004003d, 0x00000006, 0x00000032,
+    0x00000031, 0x00050080, 0x00000006, 0x00000033, 0x00000032, 0x00000021, 0x00060041, 0x00000038,
+    0x00000039, 0x00000036, 0x00000023, 0x00000037, 0x0004003d, 0x0000000a, 0x0000003a, 0x00000039,
+    0x0004006e, 0x00000006, 0x0000003b, 0x0000003a, 0x00050082, 0x00000006, 0x0000003c, 0x0000003b,
+    0x00000021, 0x0007000c, 0x00000006, 0x0000003d, 0x00000001, 0x00000027, 0x00000033, 0x0000003c,
+    0x00050050, 0x00000007, 0x0000003e, 0x00000030, 0x0000003d, 0x00040064, 0x00000014, 0x0000003f,
+    0x0000002e, 0x0007005f, 0x0000000b, 0x00000040, 0x0000003f, 0x0000003e, 0x00000002, 0x00000023,
+    0x0003003e, 0x0000002d, 0x00000040, 0x0004003d, 0x0000000b, 0x00000042, 0x00000013, 0x00060041,
+    0x00000038, 0x00000043, 0x00000036, 0x00000023, 0x0000001a, 0x0004003d, 0x0000000a, 0x00000044,
+    0x00000043, 0x0005008e, 0x0000000b, 0x00000045, 0x00000042, 0x00000044, 0x0004003d, 0x0000000b,
+    0x00000046, 0x00000028, 0x00060041, 0x00000038, 0x00000047, 0x00000036, 0x00000023, 0x0000001e,
+    0x0004003d, 0x0000000a, 0x00000048, 0x00000047, 0x0005008e, 0x0000000b, 0x00000049, 0x00000046,
+    0x00000048, 0x00050081, 0x0000000b, 0x0000004a, 0x00000045, 0x00000049, 0x0004003d, 0x0000000b,
+    0x0000004b, 0x0000002d, 0x00060041, 0x00000038, 0x0000004d, 0x00000036, 0x00000023, 0x0000004c,
+    0x0004003d, 0x0000000a, 0x0000004e, 0x0000004d, 0x0005008e, 0x0000000b, 0x0000004f, 0x0000004b,
+    0x0000004e, 0x00050081, 0x0000000b, 0x00000050, 0x0000004a, 0x0000004f, 0x0003003e, 0x00000041,
+    0x00000050, 0x00050041, 0x00000054, 0x00000055, 0x00000036, 0x00000021, 0x0004003d, 0x0000000b,
+    0x00000056, 0x00000055, 0x0008004f, 0x00000053, 0x00000057, 0x00000056, 0x00000056, 0x00000000,
+    0x00000001, 0x00000002, 0x00050041, 0x00000054, 0x00000059, 0x00000036, 0x00000058, 0x0004003d,
+    0x0000000b, 0x0000005a, 0x00000059, 0x0008004f, 0x00000053, 0x0000005b, 0x0000005a, 0x0000005a,
+    0x00000000, 0x00000001, 0x00000002, 0x00050041, 0x00000054, 0x0000005d, 0x00000036, 0x0000005c,
+    0x0004003d, 0x0000000b, 0x0000005e, 0x0000005d, 0x0008004f, 0x00000053, 0x0000005f, 0x0000005e,
+    0x0000005e, 0x00000000, 0x00000001, 0x00000002, 0x00050051, 0x0000000a, 0x00000063, 0x00000057,
+    0x00000000, 0x00050051, 0x0000000a, 0x00000064, 0x00000057, 0x00000001, 0x00050051, 0x0000000a,
+    0x00000065, 0x00000057, 0x00000002, 0x00050051, 0x0000000a, 0x00000066, 0x0000005b, 0x00000000,
+    0x00050051, 0x0000000a, 0x00000067, 0x0000005b, 0x00000001, 0x00050051, 0x0000000a, 0x00000068,
+    0x0000005b, 0x00000002, 0x00050051, 0x0000000a, 0x00000069, 0x0000005f, 0x00000000, 0x00050051,
+    0x0000000a, 0x0000006a, 0x0000005f, 0x00000001, 0x00050051, 0x0000000a, 0x0000006b, 0x0000005f,
+    0x00000002, 0x00060050, 0x00000053, 0x0000006c, 0x00000063, 0x00000064, 0x00000065, 0x00060050,
+    0x00000053, 0x0000006d, 0x00000066, 0x00000067, 0x00000068, 0x00060050, 0x00000053, 0x0000006e,
+    0x00000069, 0x0000006a, 0x0000006b, 0x00060050, 0x00000060, 0x0000006f, 0x0000006c, 0x0000006d,
+    0x0000006e, 0x0004003d, 0x0000000b, 0x00000070, 0x00000041, 0x0008004f, 0x00000053, 0x00000071,
+    0x00000070, 0x00000070, 0x00000000, 0x00000001, 0x00000002, 0x00050091, 0x00000053, 0x00000072,
+    0x0000006f, 0x00000071, 0x00060050, 0x00000053, 0x00000073, 0x00000062, 0x00000062, 0x00000062,
+    0x00060050, 0x00000053, 0x00000074, 0x00000061, 0x00000061, 0x00000061, 0x0008000c, 0x00000053,
+    0x00000075, 0x00000001, 0x0000002b, 0x00000072, 0x00000073, 0x00000074, 0x00050041, 0x00000076,
+    0x00000077, 0x00000041, 0x00000037, 0x0004003d, 0x0000000a, 0x00000078, 0x00000077, 0x00050051,
+    0x0000000a, 0x00000079, 0x00000075, 0x00000000, 0x00050051, 0x0000000a, 0x0000007a, 0x00000075,
+    0x00000001, 0x00050051, 0x0000000a, 0x0000007b, 0x00000075, 0x00000002, 0x00070050, 0x0000000b,
+    0x0000007c, 0x00000079, 0x0000007a, 0x0000007b, 0x00000078, 0x0003003e, 0x00000052, 0x0000007c,
+    0x000100fd, 0x00010038,
+};
+static const uint32_t osd_spv[] = {
+    0x07230203, 0x00010000, 0x0008000b, 0x0000001f, 0x00000000, 0x00020011, 0x00000001, 0x0006000b,
+    0x00000001, 0x4c534c47, 0x6474732e, 0x3035342e, 0x00000000, 0x0003000e, 0x00000000, 0x00000001,
+    0x0007000f, 0x00000004, 0x00000004, 0x6e69616d, 0x00000000, 0x00000009, 0x00000010, 0x00030010,
+    0x00000004, 0x00000007, 0x00030003, 0x00000002, 0x000001c2, 0x00040005, 0x00000004, 0x6e69616d,
+    0x00000000, 0x00040005, 0x00000009, 0x6f6c6f63, 0x00000072, 0x00030005, 0x0000000d, 0x00786574,
+    0x00060005, 0x00000010, 0x465f6c67, 0x43676172, 0x64726f6f, 0x00000000, 0x00040005, 0x00000014,
+    0x68737550, 0x00000000, 0x00050006, 0x00000014, 0x00000000, 0x657a6973, 0x00000000, 0x00040005,
+    0x00000016, 0x68737570, 0x00000000, 0x00040047, 0x00000009, 0x0000001e, 0x00000000, 0x00040047,
+    0x0000000d, 0x00000021, 0x00000000, 0x00040047, 0x0000000d, 0x00000022, 0x00000000, 0x00040047,
+    0x00000010, 0x0000000b, 0x0000000f, 0x00030047, 0x00000014, 0x00000002, 0x00050048, 0x00000014,
+    0x00000000, 0x00000023, 0x00000000, 0x00020013, 0x00000002, 0x00030021, 0x00000003, 0x00000002,
+    0x00030016, 0x00000006, 0x00000020, 0x00040017, 0x00000007, 0x00000006, 0x00000004, 0x00040020,
+    0x00000008, 0x00000003, 0x00000007, 0x0004003b, 0x00000008, 0x00000009, 0x00000003, 0x00090019,
+    0x0000000a, 0x00000006, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000000,
+    0x0003001b, 0x0000000b, 0x0000000a, 0x00040020, 0x0000000c, 0x00000000, 0x0000000b, 0x0004003b,
+    0x0000000c, 0x0000000d, 0x00000000, 0x00040020, 0x0000000f, 0x00000001, 0x00000007, 0x0004003b,
+    0x0000000f, 0x00000010, 0x00000001, 0x00040017, 0x00000011, 0x00000006, 0x00000002, 0x0003001e,
+    0x00000014, 0x00000007, 0x00040020, 0x00000015, 0x00000009, 0x00000014, 0x0004003b, 0x00000015,
+    0x00000016, 0x00000009, 0x00040015, 0x00000017, 0x00000020, 0x00000001, 0x0004002b, 0x00000017,
+    0x00000018, 0x00000000, 0x00040020, 0x00000019, 0x00000009, 0x00000007, 0x00050036, 0x00000002,
+    0x00000004, 0x00000000, 0x00000003, 0x000200f8, 0x00000005, 0x0004003d, 0x0000000b, 0x0000000e,
+    0x0000000d, 0x0004003d, 0x00000007, 0x00000012, 0x00000010, 0x0007004f, 0x00000011, 0x00000013,
+    0x00000012, 0x00000012, 0x00000000, 0x00000001, 0x00050041, 0x00000019, 0x0000001a, 0x00000016,
+    0x00000018, 0x0004003d, 0x00000007, 0x0000001b, 0x0000001a, 0x0007004f, 0x00000011, 0x0000001c,
+    0x0000001b, 0x0000001b, 0x00000000, 0x00000001, 0x00050088, 0x00000011, 0x0000001d, 0x00000013,
+    0x0000001c, 0x00050057, 0x00000007, 0x0000001e, 0x0000000e, 0x0000001d, 0x0003003e, 0x00000009,
+    0x0000001e, 0x000100fd, 0x00010038,
 };
 
 /* ── O nivel e o modo da tela (os mesmos do fliperos-deflicker.c) ─ */
@@ -436,7 +524,7 @@ static void load_conf(void)
     size_t used = 0;
     while (f && fgets(line, sizeof(line), f)) {
         size_t n = strlen(line);
-        if (strncmp(line, "deflicker", 9) || used + n + 1 >= sizeof(conf_lines))
+        if ((strncmp(line, "deflicker", 9) && strncmp(line, "color_", 6)) || used + n + 1 >= sizeof(conf_lines))
             continue;
         memcpy(conf_lines + used, line, n);
         used += n;
@@ -496,6 +584,54 @@ static void read_level(void)
         fprintf(stderr, "fliperos-vkfps: level %s (program %s)\n", value, app);
 }
 
+/* A matriz da saturacao e do matiz por coluna, a mesma do fliperos-color.c e
+ * da camada OpenGL. */
+static float matrix[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+static int matrix_on;
+
+static void read_matrix(void)
+{
+    char value[32];
+    int sat = 100, hue = 0, sw = 0;
+    const char *file = getenv("FLIPEROS_COLOR_FILE");
+    if (file) {
+        FILE *f = fopen(file, "r");
+        char line[128];
+        while (f && fgets(line, sizeof(line), f)) {
+            sscanf(line, "color_saturation=%d", &sat);
+            sscanf(line, "color_hue=%d", &hue);
+        }
+        if (f)
+            fclose(f);
+        sw = 1;
+    } else {
+        if (conf_value("color_ctm", value, sizeof(value)))
+            sw = !strcmp(value, "sw");
+        if (conf_value("color_saturation", value, sizeof(value)))
+            sat = atoi(value);
+        if (conf_value("color_hue", value, sizeof(value)))
+            hue = atoi(value);
+    }
+    sat = sat < 0 ? 0 : sat > 200 ? 200 : sat;
+    hue = hue < -180 ? -180 : hue > 180 ? 180 : hue;
+    matrix_on = sw && (sat != 100 || hue != 0);
+    const double lr = 0.213, lg = 0.715, lb = 0.072;
+    double s = sat / 100.0, a = hue * M_PI / 180.0, cs = cos(a), sn = sin(a);
+    double st[9] = {lr + (1 - lr) * s, lg - lg * s, lb - lb * s,
+                    lr - lr * s, lg + (1 - lg) * s, lb - lb * s,
+                    lr - lr * s, lg - lg * s, lb + (1 - lb) * s};
+    double hu[9] = {lr + cs * (1 - lr) - sn * lr, lg - cs * lg - sn * lg, lb - cs * lb + sn * (1 - lb),
+                    lr - cs * lr + sn * 0.143, lg + cs * (1 - lg) + sn * 0.140, lb - cs * lb - sn * 0.283,
+                    lr - cs * lr - sn * (1 - lr), lg - cs * lg + sn * lg, lb + cs * (1 - lb) + sn * lb};
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++) {
+            double v = 0;
+            for (int k = 0; k < 3; k++)
+                v += hu[i * 3 + k] * st[k * 3 + j];
+            matrix[j * 3 + i] = (float)v;
+        }
+}
+
 #define CARDS 8
 static int interlaced(void)
 {
@@ -527,8 +663,9 @@ static int interlaced(void)
     return state;
 }
 
-/* filter_wanted: filtrar este quadro? A cada 30 quadros rele o fliperos.conf
- * (quando muda) e o arquivo do preview. */
+/* filter_wanted: o que fazer neste quadro: 1 = o filtro de flicker, 2 = a matriz
+ * de cor (0 = nada). A cada 30 quadros rele o fliperos.conf (quando muda) e os
+ * arquivos do preview e do calibrador. */
 static int filter_wanted(void)
 {
     static int init, frames;
@@ -539,6 +676,7 @@ static int filter_wanted(void)
         env = getenv("FLIPEROS_DEFLICKER_FORCE");
         forced = env && *env == '1';
         read_level();
+        read_matrix();
         init = 1;
     } else if (!(++frames % 30)) {
         int changed = conf_changed();
@@ -546,8 +684,75 @@ static int filter_wanted(void)
             load_conf();
         if (changed || getenv("FLIPEROS_DEFLICKER_FILE"))
             read_level();
+        if (changed || getenv("FLIPEROS_COLOR_FILE"))
+            read_matrix();
     }
-    return !level_off && interlaced();
+    return (!level_off && interlaced() ? 1 : 0) | (matrix_on ? 2 : 0);
+}
+
+/* ── A imagem da OSD (a mesma da camada OpenGL) ────────────────── */
+
+#define OSD_MAGIC 0x44534f46u /* "FOSD" */
+#define OSD_W 320
+#define OSD_H 240
+struct osd_file {
+    uint32_t magic, seq, visible, width, height;
+    unsigned char pixels[];
+};
+static const volatile struct osd_file *osd_map;
+static size_t osd_size;
+static ino_t osd_ino;
+static int osd_refused;
+
+/* osd_refuse: nao da para desenhar neste programa. O arquivo avisa o
+ * fliperos-osd, que entao solta os controles em vez de deixar um menu invisivel
+ * com eles presos. */
+static void osd_refuse(void)
+{
+    const char *dir = getenv("XDG_RUNTIME_DIR");
+    char path[300];
+    osd_refused = 1;
+    if (!dir || !*dir)
+        return;
+    snprintf(path, sizeof(path), "%s/fliperos-osd-refused", dir);
+    FILE *f = fopen(path, "w");
+    if (f) {
+        fprintf(f, "%d\n", (int)getpid());
+        fclose(f);
+    }
+}
+
+/* osd_visible: a OSD esta aberta? O arquivo e procurado a cada 15 quadros;
+ * com ele aberto, o aviso de fechar vale no quadro seguinte. */
+static int osd_visible(void)
+{
+    static int frames;
+    if (!(frames++ % 15)) {
+        const char *env = getenv("FLIPEROS_OSD_FILE");
+        struct stat st;
+        int have = !stat(env && *env ? env : "/run/fliperos-osd/screen", &st);
+        if (osd_map && (!have || st.st_ino != osd_ino || !osd_map->visible)) {
+            munmap((void *)osd_map, osd_size);
+            osd_map = NULL;
+        }
+        if (!osd_map && have && st.st_size >= (off_t)(sizeof(struct osd_file) + OSD_W * OSD_H * 4)) {
+            int fd = open(env && *env ? env : "/run/fliperos-osd/screen", O_RDONLY | O_CLOEXEC);
+            void *map = fd < 0 ? MAP_FAILED : mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+            if (fd >= 0)
+                close(fd);
+            if (map != MAP_FAILED) {
+                const struct osd_file *f = map;
+                if (f->magic == OSD_MAGIC && f->width == OSD_W && f->height == OSD_H) {
+                    osd_map = map;
+                    osd_size = (size_t)st.st_size;
+                    osd_ino = st.st_ino;
+                } else {
+                    munmap(map, (size_t)st.st_size);
+                }
+            }
+        }
+    }
+    return !osd_refused && osd_map && osd_map->visible;
 }
 
 /* ── A cadeia de camadas ────────────────────────────────────────── */
@@ -563,7 +768,8 @@ static int filter_wanted(void)
     X(AllocateCommandBuffers) X(BeginCommandBuffer) X(EndCommandBuffer) X(ResetCommandBuffer) X(CmdPipelineBarrier) \
     X(CmdCopyImage) X(CmdBeginRenderPass) X(CmdEndRenderPass) X(CmdBindPipeline) X(CmdBindDescriptorSets) \
     X(CmdPushConstants) X(CmdSetViewport) X(CmdSetScissor) X(CmdDraw) X(CreateFence) X(DestroyFence) X(WaitForFences) \
-    X(ResetFences) X(CreateSemaphore) X(DestroySemaphore) X(QueueSubmit)
+    X(ResetFences) X(CreateSemaphore) X(DestroySemaphore) X(QueueSubmit) X(CreateBuffer) X(DestroyBuffer) \
+    X(GetBufferMemoryRequirements) X(BindBufferMemory) X(MapMemory) X(CmdCopyBufferToImage)
 
 /* Os ponteiros vem do GetDeviceProcAddr, com o tipo de cada chamada na hora de
  * usar (o macro V). */
@@ -666,6 +872,12 @@ typedef struct Chain {
     VkCommandBuffer commands[MAX_IMAGES];
     Handle copy, copy_memory, copy_view, sampler, set_layout, descriptor_pool, descriptor_set, pipeline_layout;
     Handle render_pass, pipeline, command_pool;
+    /* A OSD: a imagem dela, o buffer de onde ela e copiada e a passada que
+     * desenha por cima do quadro. */
+    Handle osd_image, osd_memory, osd_view, osd_buffer, osd_buffer_memory, osd_set, osd_pass, osd_pipeline;
+    void *osd_pixels;
+    uint32_t osd_seq;
+    int osd_ready;
 } Chain;
 
 static Chain *chains[SLOTS];
@@ -681,7 +893,9 @@ static Chain *chain_of(Handle swapchain)
     return c;
 }
 
-static int memory_type(Dev *d, uint32_t bits)
+/* memory_type: o tipo de memoria com WANT; sem ele, um que sirva, a nao ser que
+ * so WANT sirva (STRICT, a que a CPU escreve). */
+static int memory_type(Dev *d, uint32_t bits, uint32_t want, int strict)
 {
     MemoryProperties props;
     void (*get)(VkPhysicalDevice, MemoryProperties *) =
@@ -690,9 +904,9 @@ static int memory_type(Dev *d, uint32_t bits)
         return -1;
     get(d->gpu, &props);
     for (uint32_t i = 0; i < props.memoryTypeCount; i++)
-        if ((bits & (1u << i)) && (props.memoryTypes[i].propertyFlags & MEMORY_DEVICE_LOCAL))
+        if ((bits & (1u << i)) && (props.memoryTypes[i].propertyFlags & want) == want)
             return (int)i;
-    for (uint32_t i = 0; i < props.memoryTypeCount; i++)
+    for (uint32_t i = 0; !strict && i < props.memoryTypeCount; i++)
         if (bits & (1u << i))
             return (int)i;
     return -1;
@@ -709,6 +923,99 @@ static Handle shader_module(Dev *d, const uint32_t *code, size_t size)
     if (CREATE(ShaderModule, ShaderModuleCreateInfo, info, &module) != VK_SUCCESS)
         return 0;
     return module;
+}
+
+/* As dependencias das duas passadas (a da OSD e a do filtro): iguais, para os
+ * framebuffers de uma servirem na outra. */
+static const SubpassDependency pass_deps[2] = {
+    {~0u, 0, STAGE_ALL, STAGE_COLOR_OUTPUT, ACCESS_MEMORY_WRITE, ACCESS_COLOR_READ | ACCESS_COLOR_WRITE, 0},
+    {0, ~0u, STAGE_COLOR_OUTPUT, STAGE_ALL, ACCESS_COLOR_WRITE, ACCESS_MEMORY_READ, 0},
+};
+
+/* graphics_pipeline: um triangulo que cobre a tela, com o shader FRAG e BLEND. */
+static Handle graphics_pipeline(Chain *c, const uint32_t *frag, size_t frag_size, const ColorBlendAttachment *blend, Handle pass)
+{
+    Dev *d = c->dev;
+    Handle vs = shader_module(d, vert_spv, sizeof(vert_spv)), fs = shader_module(d, frag, frag_size), pipeline = 0;
+    if (vs && fs) {
+        ShaderStageCreateInfo stages[2] = {{ST_PIPELINE_SHADER_STAGE_CREATE_INFO, NULL, 0, SHADER_VERTEX, vs, "main", NULL},
+                                           {ST_PIPELINE_SHADER_STAGE_CREATE_INFO, NULL, 0, SHADER_FRAGMENT, fs, "main", NULL}};
+        VertexInputState vertex = {ST_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, NULL, 0, 0, NULL, 0, NULL};
+        InputAssemblyState assembly = {ST_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO, NULL, 0, 3 /* triangle list */, 0};
+        ViewportState viewport = {ST_PIPELINE_VIEWPORT_STATE_CREATE_INFO, NULL, 0, 1, NULL, 1, NULL};
+        RasterizationState raster = {ST_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, NULL, 0, 0, 0, 0 /* fill */, 0 /* no cull */,
+                                     0, 0, 0, 0, 0, 1.0f};
+        MultisampleState multi = {ST_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, NULL, 0, 1, 0, 0, NULL, 0, 0};
+        ColorBlendState blending = {ST_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO, NULL, 0, 0, 0, 1, blend, {0, 0, 0, 0}};
+        uint32_t dynamic_states[2] = {0 /* viewport */, 1 /* scissor */};
+        DynamicState dynamic = {ST_PIPELINE_DYNAMIC_STATE_CREATE_INFO, NULL, 0, 2, dynamic_states};
+        GraphicsPipelineCreateInfo info = {ST_GRAPHICS_PIPELINE_CREATE_INFO, NULL, 0, 2, stages, &vertex, &assembly, NULL,
+                                           &viewport, &raster, &multi, NULL, &blending, &dynamic, c->pipeline_layout,
+                                           pass, 0, 0, -1};
+        if (V(VkResult, CreateGraphicsPipelines, VkDevice, Handle, uint32_t, const GraphicsPipelineCreateInfo *, const void *,
+              Handle *)(d->device, 0, 1, &info, NULL, &pipeline) != VK_SUCCESS)
+            pipeline = 0;
+    }
+    if (vs)
+        V(void, DestroyShaderModule, VkDevice, Handle, const void *)(d->device, vs, NULL);
+    if (fs)
+        V(void, DestroyShaderModule, VkDevice, Handle, const void *)(d->device, fs, NULL);
+    return pipeline;
+}
+
+/* osd_build: a imagem e a passada da OSD (no sRGB, a mesma conversao de ida e de
+ * volta: as cores saem como vieram). */
+static int osd_build(Chain *c)
+{
+    Dev *d = c->dev;
+    int srgb = c->format == FORMAT_RGBA8_SRGB || c->format == FORMAT_BGRA8_SRGB || c->format == FORMAT_ABGR8_SRGB;
+    uint32_t format = srgb ? FORMAT_RGBA8_SRGB : FORMAT_RGBA8_UNORM;
+    ImageCreateInfo image = {ST_IMAGE_CREATE_INFO, NULL, 0, 1 /* 2D */, format, {OSD_W, OSD_H, 1}, 1, 1, 1,
+                             0 /* optimal */, USAGE_TRANSFER_DST | USAGE_SAMPLED, 0, 0, NULL, LAYOUT_UNDEFINED};
+    CHECK(CREATE(Image, ImageCreateInfo, image, &c->osd_image));
+    MemoryRequirements req;
+    V(void, GetImageMemoryRequirements, VkDevice, Handle, MemoryRequirements *)(d->device, c->osd_image, &req);
+    int type = memory_type(d, req.memoryTypeBits, MEMORY_DEVICE_LOCAL, 0);
+    if (type < 0)
+        return 0;
+    MemoryAllocateInfo alloc = {ST_MEMORY_ALLOCATE_INFO, NULL, req.size, (uint32_t)type};
+    CHECK(V(VkResult, AllocateMemory, VkDevice, const MemoryAllocateInfo *, const void *, Handle *)(d->device, &alloc, NULL,
+                                                                                                    &c->osd_memory));
+    CHECK(V(VkResult, BindImageMemory, VkDevice, Handle, Handle, uint64_t)(d->device, c->osd_image, c->osd_memory, 0));
+    ImageViewCreateInfo view = {ST_IMAGE_VIEW_CREATE_INFO, NULL, 0, c->osd_image, 1 /* 2D */, format, {0, 0, 0, 0},
+                                {ASPECT_COLOR, 0, 1, 0, 1}};
+    CHECK(CREATE(ImageView, ImageViewCreateInfo, view, &c->osd_view));
+
+    BufferCreateInfo buffer = {ST_BUFFER_CREATE_INFO, NULL, 0, OSD_W * OSD_H * 4, USAGE_TRANSFER_SRC, 0, 0, NULL};
+    CHECK(CREATE(Buffer, BufferCreateInfo, buffer, &c->osd_buffer));
+    V(void, GetBufferMemoryRequirements, VkDevice, Handle, MemoryRequirements *)(d->device, c->osd_buffer, &req);
+    type = memory_type(d, req.memoryTypeBits, MEMORY_HOST_VISIBLE | MEMORY_HOST_COHERENT, 1);
+    if (type < 0)
+        return 0;
+    MemoryAllocateInfo host = {ST_MEMORY_ALLOCATE_INFO, NULL, req.size, (uint32_t)type};
+    CHECK(V(VkResult, AllocateMemory, VkDevice, const MemoryAllocateInfo *, const void *, Handle *)(d->device, &host, NULL,
+                                                                                                    &c->osd_buffer_memory));
+    CHECK(V(VkResult, BindBufferMemory, VkDevice, Handle, Handle, uint64_t)(d->device, c->osd_buffer, c->osd_buffer_memory, 0));
+    CHECK(V(VkResult, MapMemory, VkDevice, Handle, uint64_t, uint64_t, uint32_t, void **)(d->device, c->osd_buffer_memory, 0,
+                                                                                          ~0ull, 0, &c->osd_pixels));
+
+    DescriptorSetAllocateInfo set_alloc = {ST_DESCRIPTOR_SET_ALLOCATE_INFO, NULL, c->descriptor_pool, 1, &c->set_layout};
+    CHECK(V(VkResult, AllocateDescriptorSets, VkDevice, const DescriptorSetAllocateInfo *, Handle *)(d->device, &set_alloc,
+                                                                                                     &c->osd_set));
+    DescriptorImageInfo image_info = {c->sampler, c->osd_view, LAYOUT_SHADER_READ};
+    WriteDescriptorSet write = {ST_WRITE_DESCRIPTOR_SET, NULL, c->osd_set, 0, 0, 1, 1, &image_info, NULL, NULL};
+    V(void, UpdateDescriptorSets, VkDevice, uint32_t, const WriteDescriptorSet *, uint32_t, const void *)(d->device, 1, &write,
+                                                                                                          0, NULL);
+    /* Mantem o que o jogo desenhou: a imagem chega pronta e sai pronta. */
+    AttachmentDescription attachment = {0, c->format, 1, LOAD_OP_LOAD, 0 /* store */, 2, 1, LAYOUT_PRESENT_SRC, LAYOUT_PRESENT_SRC};
+    AttachmentReference reference = {0, LAYOUT_COLOR_ATTACHMENT};
+    SubpassDescription subpass = {0, 0, 0, NULL, 1, &reference, NULL, NULL, 0, NULL};
+    RenderPassCreateInfo pass = {ST_RENDER_PASS_CREATE_INFO, NULL, 0, 1, &attachment, 1, &subpass, 2, pass_deps};
+    CHECK(CREATE(RenderPass, RenderPassCreateInfo, pass, &c->osd_pass));
+    /* A cor com a transparencia dela; o alfa da imagem fica. */
+    ColorBlendAttachment blend = {1, BLEND_SRC_ALPHA, BLEND_ONE_MINUS_SRC_ALPHA, 0, BLEND_ZERO, BLEND_ONE, 0, 0xf};
+    c->osd_pipeline = graphics_pipeline(c, osd_spv, sizeof(osd_spv), &blend, c->osd_pass);
+    return c->osd_pipeline != 0;
 }
 
 /* chain_build: os recursos da swapchain. 0 se algo falhou (chain_free limpa). */
@@ -728,7 +1035,7 @@ static int chain_build(Chain *c, uint32_t family)
     CHECK(CREATE(Image, ImageCreateInfo, image, &c->copy));
     MemoryRequirements req;
     V(void, GetImageMemoryRequirements, VkDevice, Handle, MemoryRequirements *)(d->device, c->copy, &req);
-    int type = memory_type(d, req.memoryTypeBits);
+    int type = memory_type(d, req.memoryTypeBits, MEMORY_DEVICE_LOCAL, 0);
     if (type < 0)
         return 0;
     MemoryAllocateInfo alloc = {ST_MEMORY_ALLOCATE_INFO, NULL, req.size, (uint32_t)type};
@@ -744,11 +1051,7 @@ static int chain_build(Chain *c, uint32_t family)
                                         LAYOUT_TRANSFER_SRC, LAYOUT_PRESENT_SRC};
     AttachmentReference reference = {0, LAYOUT_COLOR_ATTACHMENT};
     SubpassDescription subpass = {0, 0, 0, NULL, 1, &reference, NULL, NULL, 0, NULL};
-    SubpassDependency deps[2] = {
-        {~0u, 0, STAGE_TRANSFER, STAGE_COLOR_OUTPUT, ACCESS_TRANSFER_READ, ACCESS_COLOR_WRITE, 0},
-        {0, ~0u, STAGE_COLOR_OUTPUT, STAGE_BOTTOM, ACCESS_COLOR_WRITE, 0, 0},
-    };
-    RenderPassCreateInfo pass = {ST_RENDER_PASS_CREATE_INFO, NULL, 0, 1, &attachment, 1, &subpass, 2, deps};
+    RenderPassCreateInfo pass = {ST_RENDER_PASS_CREATE_INFO, NULL, 0, 1, &attachment, 1, &subpass, 2, pass_deps};
     CHECK(CREATE(RenderPass, RenderPassCreateInfo, pass, &c->render_pass));
 
     SamplerCreateInfo sampler = {ST_SAMPLER_CREATE_INFO, NULL, 0, 0, 0, 0, 2, 2, 2, 0, 0, 1, 0, 0, 0, 0, 0, 0};
@@ -756,8 +1059,9 @@ static int chain_build(Chain *c, uint32_t family)
     DescriptorSetLayoutBinding binding = {0, 1 /* combined */, 1, SHADER_FRAGMENT, NULL};
     DescriptorSetLayoutCreateInfo set_layout = {ST_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, NULL, 0, 1, &binding};
     CHECK(CREATE(DescriptorSetLayout, DescriptorSetLayoutCreateInfo, set_layout, &c->set_layout));
-    DescriptorPoolSize pool_size = {1, 1};
-    DescriptorPoolCreateInfo pool = {ST_DESCRIPTOR_POOL_CREATE_INFO, NULL, 0, 1, 1, &pool_size};
+    /* Duas imagens para ler: a copia do quadro e a da OSD. */
+    DescriptorPoolSize pool_size = {1, 2};
+    DescriptorPoolCreateInfo pool = {ST_DESCRIPTOR_POOL_CREATE_INFO, NULL, 0, 2, 1, &pool_size};
     CHECK(CREATE(DescriptorPool, DescriptorPoolCreateInfo, pool, &c->descriptor_pool));
     DescriptorSetAllocateInfo set_alloc = {ST_DESCRIPTOR_SET_ALLOCATE_INFO, NULL, c->descriptor_pool, 1, &c->set_layout};
     CHECK(V(VkResult, AllocateDescriptorSets, VkDevice, const DescriptorSetAllocateInfo *, Handle *)(d->device, &set_alloc,
@@ -766,36 +1070,14 @@ static int chain_build(Chain *c, uint32_t family)
     WriteDescriptorSet write = {ST_WRITE_DESCRIPTOR_SET, NULL, c->descriptor_set, 0, 0, 1, 1, &image_info, NULL, NULL};
     V(void, UpdateDescriptorSets, VkDevice, uint32_t, const WriteDescriptorSet *, uint32_t, const void *)(d->device, 1, &write,
                                                                                                           0, NULL);
-    PushConstantRange push = {SHADER_FRAGMENT, 0, 16};
+    /* Os pesos e a altura, e as tres colunas da matriz de cor. */
+    PushConstantRange push = {SHADER_FRAGMENT, 0, 64};
     PipelineLayoutCreateInfo layout = {ST_PIPELINE_LAYOUT_CREATE_INFO, NULL, 0, 1, &c->set_layout, 1, &push};
     CHECK(CREATE(PipelineLayout, PipelineLayoutCreateInfo, layout, &c->pipeline_layout));
 
-    Handle vs = shader_module(d, vert_spv, sizeof(vert_spv)), fs = shader_module(d, frag_spv, sizeof(frag_spv));
-    int ok = 0;
-    if (vs && fs) {
-        ShaderStageCreateInfo stages[2] = {{ST_PIPELINE_SHADER_STAGE_CREATE_INFO, NULL, 0, SHADER_VERTEX, vs, "main", NULL},
-                                           {ST_PIPELINE_SHADER_STAGE_CREATE_INFO, NULL, 0, SHADER_FRAGMENT, fs, "main", NULL}};
-        VertexInputState vertex = {ST_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, NULL, 0, 0, NULL, 0, NULL};
-        InputAssemblyState assembly = {ST_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO, NULL, 0, 3 /* triangle list */, 0};
-        ViewportState viewport = {ST_PIPELINE_VIEWPORT_STATE_CREATE_INFO, NULL, 0, 1, NULL, 1, NULL};
-        RasterizationState raster = {ST_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, NULL, 0, 0, 0, 0 /* fill */, 0 /* no cull */,
-                                     0, 0, 0, 0, 0, 1.0f};
-        MultisampleState multi = {ST_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, NULL, 0, 1, 0, 0, NULL, 0, 0};
-        ColorBlendAttachment blend = {0, 0, 0, 0, 0, 0, 0, 0xf};
-        ColorBlendState blending = {ST_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO, NULL, 0, 0, 0, 1, &blend, {0, 0, 0, 0}};
-        uint32_t dynamic_states[2] = {0 /* viewport */, 1 /* scissor */};
-        DynamicState dynamic = {ST_PIPELINE_DYNAMIC_STATE_CREATE_INFO, NULL, 0, 2, dynamic_states};
-        GraphicsPipelineCreateInfo info = {ST_GRAPHICS_PIPELINE_CREATE_INFO, NULL, 0, 2, stages, &vertex, &assembly, NULL,
-                                           &viewport, &raster, &multi, NULL, &blending, &dynamic, c->pipeline_layout,
-                                           c->render_pass, 0, 0, -1};
-        ok = V(VkResult, CreateGraphicsPipelines, VkDevice, Handle, uint32_t, const GraphicsPipelineCreateInfo *, const void *,
-               Handle *)(d->device, 0, 1, &info, NULL, &c->pipeline) == VK_SUCCESS;
-    }
-    if (vs)
-        V(void, DestroyShaderModule, VkDevice, Handle, const void *)(d->device, vs, NULL);
-    if (fs)
-        V(void, DestroyShaderModule, VkDevice, Handle, const void *)(d->device, fs, NULL);
-    if (!ok)
+    ColorBlendAttachment blend = {0, 0, 0, 0, 0, 0, 0, 0xf};
+    c->pipeline = graphics_pipeline(c, frag_spv, sizeof(frag_spv), &blend, c->render_pass);
+    if (!c->pipeline || !osd_build(c))
         return 0;
 
     CommandPoolCreateInfo command_pool = {ST_COMMAND_POOL_CREATE_INFO, NULL, 0x2 /* reset */, family};
@@ -842,6 +1124,20 @@ static void chain_free(Chain *c)
         DESTROY(ImageView, c->views[i]);
     }
     DESTROY(CommandPool, c->command_pool);
+    DESTROY(Pipeline, c->osd_pipeline);
+    DESTROY(RenderPass, c->osd_pass);
+    DESTROY(Buffer, c->osd_buffer);
+    if (c->osd_buffer_memory)
+        V(void, FreeMemory, VkDevice, Handle, const void *)(d->device, c->osd_buffer_memory, NULL);
+    c->osd_buffer_memory = 0;
+    c->osd_pixels = NULL;
+    DESTROY(ImageView, c->osd_view);
+    DESTROY(Image, c->osd_image);
+    if (c->osd_memory)
+        V(void, FreeMemory, VkDevice, Handle, const void *)(d->device, c->osd_memory, NULL);
+    c->osd_memory = 0;
+    c->osd_set = 0;
+    c->osd_ready = 0;
     DESTROY(Pipeline, c->pipeline);
     DESTROY(PipelineLayout, c->pipeline_layout);
     DESTROY(DescriptorPool, c->descriptor_pool);
@@ -857,15 +1153,48 @@ static void chain_free(Chain *c)
 #undef DESTROY
 }
 
-/* chain_record: copia a imagem pronta e a desenha de volta pelo filtro. */
-static int chain_record(Chain *c, uint32_t index)
+/* chain_record: a OSD por cima da imagem pronta (osd; upload: a imagem dela
+ * mudou), depois a copia e o desenho de volta pelo filtro (what, 0 = sem filtro). */
+static int chain_record(Chain *c, uint32_t index, int what, int osd, int upload)
 {
     Dev *d = c->dev;
     VkCommandBuffer cmd = c->commands[index];
     SubresourceRange range = {ASPECT_COLOR, 0, 1, 0, 1};
+    Rect2D area = {{0, 0}, {c->width, c->height}};
+    Viewport viewport = {0, 0, (float)c->width, (float)c->height, 0, 1};
     CommandBufferBeginInfo begin = {ST_COMMAND_BUFFER_BEGIN_INFO, NULL, 0x1 /* one time */, NULL};
     CHECK(V(VkResult, ResetCommandBuffer, VkCommandBuffer, uint32_t)(cmd, 0));
     CHECK(V(VkResult, BeginCommandBuffer, VkCommandBuffer, const CommandBufferBeginInfo *)(cmd, &begin));
+
+    if (upload) {
+        ImageMemoryBarrier to_dst = {ST_IMAGE_MEMORY_BARRIER, NULL, 0, ACCESS_TRANSFER_WRITE, LAYOUT_UNDEFINED, LAYOUT_TRANSFER_DST, ~0u, ~0u,
+                                     c->osd_image, range};
+        V(void, CmdPipelineBarrier, VkCommandBuffer, uint32_t, uint32_t, uint32_t, uint32_t, const void *, uint32_t, const void *,
+          uint32_t, const ImageMemoryBarrier *)(cmd, STAGE_ALL, STAGE_TRANSFER, 0, 0, NULL, 0, NULL, 1, &to_dst);
+        BufferImageCopy copy = {0, 0, 0, {ASPECT_COLOR, 0, 0, 1}, {0, 0, 0}, {OSD_W, OSD_H, 1}};
+        V(void, CmdCopyBufferToImage, VkCommandBuffer, Handle, Handle, uint32_t, uint32_t, const BufferImageCopy *)(
+            cmd, c->osd_buffer, c->osd_image, LAYOUT_TRANSFER_DST, 1, &copy);
+        ImageMemoryBarrier to_read = {ST_IMAGE_MEMORY_BARRIER, NULL, ACCESS_TRANSFER_WRITE, ACCESS_SHADER_READ, LAYOUT_TRANSFER_DST,
+                                      LAYOUT_SHADER_READ, ~0u, ~0u, c->osd_image, range};
+        V(void, CmdPipelineBarrier, VkCommandBuffer, uint32_t, uint32_t, uint32_t, uint32_t, const void *, uint32_t, const void *,
+          uint32_t, const ImageMemoryBarrier *)(cmd, STAGE_TRANSFER, STAGE_FRAGMENT, 0, 0, NULL, 0, NULL, 1, &to_read);
+    }
+    if (osd) {
+        RenderPassBeginInfo pass = {ST_RENDER_PASS_BEGIN_INFO, NULL, c->osd_pass, c->framebuffers[index], area, 0, NULL};
+        V(void, CmdBeginRenderPass, VkCommandBuffer, const RenderPassBeginInfo *, uint32_t)(cmd, &pass, 0);
+        V(void, CmdBindPipeline, VkCommandBuffer, uint32_t, Handle)(cmd, 0, c->osd_pipeline);
+        V(void, CmdBindDescriptorSets, VkCommandBuffer, uint32_t, Handle, uint32_t, uint32_t, const Handle *, uint32_t,
+          const uint32_t *)(cmd, 0, c->pipeline_layout, 0, 1, &c->osd_set, 0, NULL);
+        V(void, CmdSetViewport, VkCommandBuffer, uint32_t, uint32_t, const Viewport *)(cmd, 0, 1, &viewport);
+        V(void, CmdSetScissor, VkCommandBuffer, uint32_t, uint32_t, const Rect2D *)(cmd, 0, 1, &area);
+        float size[4] = {(float)c->width, (float)c->height, 0, 0};
+        V(void, CmdPushConstants, VkCommandBuffer, Handle, uint32_t, uint32_t, uint32_t, const void *)(
+            cmd, c->pipeline_layout, SHADER_FRAGMENT, 0, sizeof(size), size);
+        V(void, CmdDraw, VkCommandBuffer, uint32_t, uint32_t, uint32_t, uint32_t)(cmd, 3, 1, 0, 0);
+        V(void, CmdEndRenderPass, VkCommandBuffer)(cmd);
+    }
+    if (!what)
+        return V(VkResult, EndCommandBuffer, VkCommandBuffer)(cmd) == VK_SUCCESS;
 
     ImageMemoryBarrier before[2] = {
         {ST_IMAGE_MEMORY_BARRIER, NULL, ACCESS_MEMORY_WRITE, ACCESS_TRANSFER_READ, LAYOUT_PRESENT_SRC, LAYOUT_TRANSFER_SRC, ~0u, ~0u,
@@ -883,16 +1212,17 @@ static int chain_record(Chain *c, uint32_t index)
     V(void, CmdPipelineBarrier, VkCommandBuffer, uint32_t, uint32_t, uint32_t, uint32_t, const void *, uint32_t, const void *,
       uint32_t, const ImageMemoryBarrier *)(cmd, STAGE_TRANSFER, STAGE_FRAGMENT, 0, 0, NULL, 0, NULL, 1, &after);
 
-    Rect2D area = {{0, 0}, {c->width, c->height}};
     RenderPassBeginInfo pass = {ST_RENDER_PASS_BEGIN_INFO, NULL, c->render_pass, c->framebuffers[index], area, 0, NULL};
     V(void, CmdBeginRenderPass, VkCommandBuffer, const RenderPassBeginInfo *, uint32_t)(cmd, &pass, 0);
     V(void, CmdBindPipeline, VkCommandBuffer, uint32_t, Handle)(cmd, 0, c->pipeline);
     V(void, CmdBindDescriptorSets, VkCommandBuffer, uint32_t, Handle, uint32_t, uint32_t, const Handle *, uint32_t,
       const uint32_t *)(cmd, 0, c->pipeline_layout, 0, 1, &c->descriptor_set, 0, NULL);
-    Viewport viewport = {0, 0, (float)c->width, (float)c->height, 0, 1};
     V(void, CmdSetViewport, VkCommandBuffer, uint32_t, uint32_t, const Viewport *)(cmd, 0, 1, &viewport);
     V(void, CmdSetScissor, VkCommandBuffer, uint32_t, uint32_t, const Rect2D *)(cmd, 0, 1, &area);
-    float push[4] = {weights[0], weights[1], weights[2], (float)c->height};
+    /* So a propria linha sem o modo entrelacado: a matriz de cor sozinha. */
+    int deflick = what & 1;
+    float push[16] = {deflick ? weights[0] : 0.0f, deflick ? weights[1] : 1.0f, deflick ? weights[2] : 0.0f, (float)c->height,
+                      matrix[0], matrix[1], matrix[2], 0, matrix[3], matrix[4], matrix[5], 0, matrix[6], matrix[7], matrix[8], 0};
     V(void, CmdPushConstants, VkCommandBuffer, Handle, uint32_t, uint32_t, uint32_t, const void *)(
         cmd, c->pipeline_layout, SHADER_FRAGMENT, 0, sizeof(push), push);
     V(void, CmdDraw, VkCommandBuffer, uint32_t, uint32_t, uint32_t, uint32_t)(cmd, 3, 1, 0, 0);
@@ -944,22 +1274,49 @@ static int chain_ready(Chain *c, Dev *d, VkQueue queue)
     return 1;
 }
 
-/* filter_present: cada imagem da swapchain passa pelo filtro antes do present,
- * que passa a esperar os semaforos daqui. Devolve quantos semaforos pos em
- * waits; o primeiro comando espera os do programa. Imagem que nao passou (sem
- * recursos, erro) vai direto: se nenhuma passou, o present segue como veio. */
-static uint32_t filter_present(Dev *d, VkQueue queue, const PresentInfo *info, Handle *waits, int *filtered)
+/* osd_upload: a imagem nova da OSD no buffer, depois que todo comando em
+ * andamento terminou (eles podem estar lendo dele). 1 se ha o que copiar. */
+static int osd_upload(Chain *c)
+{
+    Dev *d = c->dev;
+    uint32_t seq = osd_map->seq;
+    if ((seq & 1) || (c->osd_ready && seq == c->osd_seq))
+        return 0;
+    V(VkResult, WaitForFences, VkDevice, uint32_t, const Handle *, uint32_t, uint64_t)(d->device, c->count, c->fences, 1,
+                                                                                       1000000000ull);
+    memcpy(c->osd_pixels, (const void *)osd_map->pixels, OSD_W * OSD_H * 4);
+    /* Se ele regravou durante a copia, copia de novo no proximo quadro. */
+    if (osd_map->seq == seq)
+        c->osd_seq = seq;
+    return 1;
+}
+
+/* filter_present: cada imagem da swapchain ganha a OSD (osd) e passa pelo filtro
+ * (what) antes do present, que passa a esperar os semaforos daqui. Devolve
+ * quantos semaforos pos em waits; o primeiro comando espera os do programa.
+ * Imagem que nao passou (sem recursos, erro) vai direto: se nenhuma passou, o
+ * present segue como veio. */
+static uint32_t filter_present(Dev *d, VkQueue queue, const PresentInfo *info, Handle *waits, int what, int osd, int *filtered)
 {
     uint32_t done = 0, wait_count = info->waitSemaphoreCount;
     const Handle *wait = info->pWaitSemaphores;
     for (uint32_t i = 0; i < info->swapchainCount && done < MAX_IMAGES; i++) {
         Chain *c = chain_of(info->pSwapchains[i]);
         uint32_t index = info->pImageIndices[i];
-        if (!c || !chain_ready(c, d, queue) || index >= c->count)
+        if (!c || !chain_ready(c, d, queue) || index >= c->count) {
+            if (osd)
+                osd_refuse();
+            continue;
+        }
+        int upload = osd && osd_upload(c);
+        if (upload)
+            c->osd_ready = 1;
+        int draw = osd && c->osd_ready;
+        if (!what && !draw)
             continue;
         V(VkResult, WaitForFences, VkDevice, uint32_t, const Handle *, uint32_t, uint64_t)(d->device, 1, &c->fences[index], 1,
                                                                                            1000000000ull);
-        if (!chain_record(c, index))
+        if (!chain_record(c, index, what, draw, upload))
             continue;
         V(VkResult, ResetFences, VkDevice, uint32_t, const Handle *)(d->device, 1, &c->fences[index]);
         uint32_t stages[16];
@@ -976,7 +1333,7 @@ static uint32_t filter_present(Dev *d, VkQueue queue, const PresentInfo *info, H
         wait_count = 0;
         wait = NULL;
         waits[done++] = c->semaphores[index];
-        *filtered = 1;
+        *filtered = what & 1;
     }
     return done;
 }
@@ -1207,9 +1564,9 @@ static VkResult layer_QueuePresentKHR(VkQueue queue, const void *present_info)
     const PresentInfo *info = present_info;
     PresentInfo mine = *info;
     Handle waits[MAX_IMAGES];
-    int filtering = 0;
-    if (filter_wanted() && d->vk.QueueSubmit) {
-        uint32_t count = filter_present(d, queue, info, waits, &filtering);
+    int filtering = 0, what = filter_wanted(), osd = osd_visible();
+    if ((what || osd) && d->vk.QueueSubmit) {
+        uint32_t count = filter_present(d, queue, info, waits, what, osd, &filtering);
         if (count) {
             mine.waitSemaphoreCount = count;
             mine.pWaitSemaphores = waits;
@@ -1287,6 +1644,14 @@ AT(SwapchainCreateInfo, oldSwapchain, VkSwapchainCreateInfoKHR, oldSwapchain);
 SAME(PresentInfo, VkPresentInfoKHR); AT(PresentInfo, pImageIndices, VkPresentInfoKHR, pImageIndices);
 SAME(ImageCreateInfo, VkImageCreateInfo); AT(ImageCreateInfo, initialLayout, VkImageCreateInfo, initialLayout);
 SAME(MemoryAllocateInfo, VkMemoryAllocateInfo); SAME(ImageViewCreateInfo, VkImageViewCreateInfo);
+SAME(BufferCreateInfo, VkBufferCreateInfo); AT(BufferCreateInfo, size, VkBufferCreateInfo, size);
+SAME(BufferImageCopy, VkBufferImageCopy); AT(BufferImageCopy, imageExtent, VkBufferImageCopy, imageExtent);
+NUM(ST_BUFFER_CREATE_INFO, VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO); NUM(FORMAT_RGBA8_UNORM, VK_FORMAT_R8G8B8A8_UNORM);
+NUM(FORMAT_RGBA8_SRGB, VK_FORMAT_R8G8B8A8_SRGB); NUM(FORMAT_BGRA8_SRGB, VK_FORMAT_B8G8R8A8_SRGB);
+NUM(FORMAT_ABGR8_SRGB, VK_FORMAT_A8B8G8R8_SRGB_PACK32); NUM(BLEND_SRC_ALPHA, VK_BLEND_FACTOR_SRC_ALPHA);
+NUM(BLEND_ONE_MINUS_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA); NUM(LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD);
+NUM(MEMORY_HOST_VISIBLE, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT); NUM(MEMORY_HOST_COHERENT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+NUM(ACCESS_COLOR_READ, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT); NUM(ACCESS_MEMORY_READ, VK_ACCESS_MEMORY_READ_BIT);
 AT(ImageViewCreateInfo, subresourceRange, VkImageViewCreateInfo, subresourceRange);
 SAME(AttachmentDescription, VkAttachmentDescription); SAME(SubpassDescription, VkSubpassDescription);
 SAME(SubpassDependency, VkSubpassDependency); SAME(RenderPassCreateInfo, VkRenderPassCreateInfo);

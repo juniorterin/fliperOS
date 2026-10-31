@@ -38,6 +38,10 @@
  * fliperos-color, em qualquer modo de video. FLIPEROS_COLOR_FILE: um
  * arquivo com essas linhas, relido a cada 30 quadros (o calibrador).
  *
+ * A OSD (config/fliperos-osd, volume, filtro, geometria e cores por cima do
+ * jogo) tambem e desenhada aqui, antes do filtro: a imagem dela vem do arquivo
+ * /run/fliperos-osd/screen (FLIPEROS_OSD_FILE), que so existe com ela aberta.
+ *
  * O SDL e outros abrem a libGL por dlopen e pegam o glXSwapBuffers por
  * dlsym: o dlsym tambem passa por aqui. O estado do OpenGL do programa e
  * guardado e devolvido em volta do filtro.
@@ -50,9 +54,11 @@
 #include <fcntl.h>
 #include <link.h>
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -311,6 +317,73 @@ static int interlaced(void)
     return state;
 }
 
+/* ── A imagem da OSD ────────────────────────────────────────────── */
+
+/* O arquivo do config/fliperos-osd: o cabecalho e os pixels RGBA de cima para
+ * baixo. seq impar: o desenho esta sendo gravado. */
+#define OSD_MAGIC 0x44534f46u /* "FOSD" */
+#define OSD_W 320
+#define OSD_H 240
+struct osd_file {
+    uint32_t magic, seq, visible, width, height;
+    unsigned char pixels[];
+};
+static const volatile struct osd_file *osd_map;
+static size_t osd_size;
+static ino_t osd_ino;
+static int osd_refused;
+
+/* osd_refuse: nao da para desenhar neste programa. O arquivo avisa o
+ * fliperos-osd, que entao solta os controles em vez de deixar um menu invisivel
+ * com eles presos. */
+static void osd_refuse(void)
+{
+    const char *dir = getenv("XDG_RUNTIME_DIR");
+    char path[300];
+    osd_refused = 1;
+    if (!dir || !*dir)
+        return;
+    snprintf(path, sizeof(path), "%s/fliperos-osd-refused", dir);
+    FILE *f = fopen(path, "w");
+    if (f) {
+        fprintf(f, "%d\n", (int)getpid());
+        fclose(f);
+    }
+}
+
+/* osd_visible: a OSD esta aberta? O arquivo e procurado a cada 15 quadros;
+ * com ele aberto, o aviso de fechar vale no quadro seguinte. */
+static int osd_visible(void)
+{
+    static int frames;
+    if (!(frames++ % 15)) {
+        const char *env = getenv("FLIPEROS_OSD_FILE");
+        struct stat st;
+        int have = !stat(env && *env ? env : "/run/fliperos-osd/screen", &st);
+        if (osd_map && (!have || st.st_ino != osd_ino || !osd_map->visible)) {
+            munmap((void *)osd_map, osd_size);
+            osd_map = NULL;
+        }
+        if (!osd_map && have && st.st_size >= (off_t)(sizeof(struct osd_file) + OSD_W * OSD_H * 4)) {
+            int fd = open(env && *env ? env : "/run/fliperos-osd/screen", O_RDONLY | O_CLOEXEC);
+            void *map = fd < 0 ? MAP_FAILED : mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+            if (fd >= 0)
+                close(fd);
+            if (map != MAP_FAILED) {
+                const struct osd_file *f = map;
+                if (f->magic == OSD_MAGIC && f->width == OSD_W && f->height == OSD_H) {
+                    osd_map = map;
+                    osd_size = (size_t)st.st_size;
+                    osd_ino = st.st_ino;
+                } else {
+                    munmap(map, (size_t)st.st_size);
+                }
+            }
+        }
+    }
+    return osd_map && osd_map->visible;
+}
+
 /* ── O filtro (OpenGL) ──────────────────────────────────────────── */
 
 typedef void *(*getproc_fn)(const char *);
@@ -326,6 +399,7 @@ static struct {
     F(CompileShader) F(GetShaderiv) F(CreateProgram) F(AttachShader) F(LinkProgram) F(GetProgramiv)
     F(GetUniformLocation) F(Uniform1i) F(Uniform3f) F(GenVertexArrays) F(BindVertexArray) F(BindSampler)
     F(DrawArrays) F(UniformMatrix3fv) F(ReadPixels) F(PixelStorei) F(BindBuffer)
+    F(TexSubImage2D) F(BlendFuncSeparate) F(BlendEquationSeparate) F(Uniform2f)
 } gl;
 #undef F
 
@@ -339,6 +413,9 @@ static struct ctx {
     int tw, th;
     int gles, core;
     int tw_logged;
+    GLuint osd_prog, osd_tex;
+    GLint osd_u_tex, osd_u_size;
+    uint32_t osd_seq;
 } ctxs[CONTEXTS];
 
 static int load_gl(getproc_fn get)
@@ -351,6 +428,7 @@ static int load_gl(getproc_fn get)
     L(AttachShader); L(LinkProgram); L(GetProgramiv); L(GetUniformLocation); L(Uniform1i);
     L(Uniform3f); L(GenVertexArrays); L(BindVertexArray); L(BindSampler); L(DrawArrays); L(UniformMatrix3fv);
     L(ReadPixels); L(PixelStorei); L(BindBuffer);
+    L(TexSubImage2D); L(BlendFuncSeparate); L(BlendEquationSeparate); L(Uniform2f);
 #undef L
     return gl.GetIntegerv && gl.GetString && gl.CopyTexSubImage2D && gl.CreateShader && gl.DrawArrays &&
            gl.BindFramebuffer && gl.UseProgram && gl.Uniform3f && gl.UniformMatrix3fv;
@@ -367,6 +445,19 @@ static const char *frag_body =
     "    vec4 down = texelFetch(tex, ivec2(p.x, max(p.y - 1, 0)), 0);\n"
     "    vec4 c = up * w.x + mid * w.y + down * w.z;\n"
     "    OUT = vec4(clamp(m * c.rgb, 0.0, 1.0), c.a);\n"
+    "}\n";
+
+/* A OSD: a imagem de 320x240 esticada no quadro (cada pixel dela vira 2x1 em
+ * 640x240, 2x2 em 640x480), com a transparencia. O OpenGL conta de baixo. */
+static const char *osd_frag_body =
+    "void main() {\n"
+    "    OUT = texture(tex, vec2(gl_FragCoord.x / size.x, 1.0 - gl_FragCoord.y / size.y));\n"
+    "}\n";
+
+static const char *vert_body =
+    "void main() {\n"
+    "    vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);\n"
+    "    gl_Position = vec4(p, 0.0, 1.0);\n"
     "}\n";
 
 static GLuint shader(GLenum type, const char *head, const char *body)
@@ -407,11 +498,7 @@ static int setup(struct ctx *c)
         vhead = "#version 130\n";
         fhead = "#version 130\nuniform sampler2D tex;\nuniform vec3 w;\nuniform mat3 m;\n#define OUT gl_FragColor\n";
     }
-    GLuint vs = shader(GL_VERTEX_SHADER, vhead,
-                       "void main() {\n"
-                       "    vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);\n"
-                       "    gl_Position = vec4(p, 0.0, 1.0);\n"
-                       "}\n");
+    GLuint vs = shader(GL_VERTEX_SHADER, vhead, vert_body);
     GLuint fs = shader(GL_FRAGMENT_SHADER, fhead, frag_body);
     GLint ok = 0;
     if (!vs || !fs) {
@@ -436,6 +523,110 @@ static int setup(struct ctx *c)
     return 1;
 }
 
+/* osd_setup: o programa e a textura da OSD neste contexto. */
+static int osd_setup(struct ctx *c)
+{
+    const char *vhead, *fhead;
+    GLint ok = 0;
+    if (c->gles) {
+        vhead = "#version 300 es\n";
+        fhead = "#version 300 es\nprecision highp float;\nuniform highp sampler2D tex;\nuniform vec2 size;\n"
+                "out vec4 color;\n#define OUT color\n";
+    } else if (c->core) {
+        vhead = "#version 150\n";
+        fhead = "#version 150\nuniform sampler2D tex;\nuniform vec2 size;\nout vec4 color;\n#define OUT color\n";
+    } else {
+        vhead = "#version 130\n";
+        fhead = "#version 130\nuniform sampler2D tex;\nuniform vec2 size;\n#define OUT gl_FragColor\n";
+    }
+    if (!gl.TexSubImage2D || !gl.BlendFuncSeparate || !gl.BlendEquationSeparate || !gl.Uniform2f)
+        return 0;
+    GLuint vs = shader(GL_VERTEX_SHADER, vhead, vert_body), fs = shader(GL_FRAGMENT_SHADER, fhead, osd_frag_body);
+    if (!vs || !fs)
+        return 0;
+    c->osd_prog = gl.CreateProgram();
+    gl.AttachShader(c->osd_prog, vs);
+    gl.AttachShader(c->osd_prog, fs);
+    gl.LinkProgram(c->osd_prog);
+    gl.GetProgramiv(c->osd_prog, GL_LINK_STATUS, &ok);
+    if (!ok)
+        return 0;
+    c->osd_u_tex = gl.GetUniformLocation(c->osd_prog, "tex");
+    c->osd_u_size = gl.GetUniformLocation(c->osd_prog, "size");
+    /* A textura fica ligada na unidade 0 (filter() guardou a do programa). */
+    gl.GenTextures(1, &c->osd_tex);
+    gl.BindTexture(GL_TEXTURE_2D, c->osd_tex);
+    gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, OSD_W, OSD_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    return 1;
+}
+
+/* osd_draw: a OSD por cima do back buffer (ligado e sem os testes, ver filter). */
+static void osd_draw(struct ctx *c, int w, int h)
+{
+    if (osd_refused)
+        return;
+    if (!c->osd_prog && !osd_setup(c)) {
+        log_once("could not prepare the on-screen menu in this program");
+        osd_refuse();
+        return;
+    }
+    gl.BindTexture(GL_TEXTURE_2D, c->osd_tex);
+    uint32_t seq = osd_map->seq;
+    if (!(seq & 1) && seq != c->osd_seq) {
+        /* O estado de leitura de pixels do programa nao vale aqui. */
+        GLint pbo = 0, align = 4, row = 0, skip_rows = 0, skip_pixels = 0;
+        if (gl.BindBuffer) {
+            gl.GetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &pbo);
+            if (pbo)
+                gl.BindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        }
+        gl.GetIntegerv(GL_UNPACK_ALIGNMENT, &align);
+        gl.GetIntegerv(GL_UNPACK_ROW_LENGTH, &row);
+        gl.GetIntegerv(GL_UNPACK_SKIP_ROWS, &skip_rows);
+        gl.GetIntegerv(GL_UNPACK_SKIP_PIXELS, &skip_pixels);
+        gl.PixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        gl.PixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        gl.PixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+        gl.PixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+        gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, OSD_W, OSD_H, GL_RGBA, GL_UNSIGNED_BYTE, (const void *)osd_map->pixels);
+        gl.PixelStorei(GL_UNPACK_ALIGNMENT, align);
+        gl.PixelStorei(GL_UNPACK_ROW_LENGTH, row);
+        gl.PixelStorei(GL_UNPACK_SKIP_ROWS, skip_rows);
+        gl.PixelStorei(GL_UNPACK_SKIP_PIXELS, skip_pixels);
+        if (gl.BindBuffer && pbo)
+            gl.BindBuffer(GL_PIXEL_UNPACK_BUFFER, (GLuint)pbo);
+        /* Se ele regravou durante a copia, copia de novo no proximo quadro. */
+        if (osd_map->seq == seq)
+            c->osd_seq = seq;
+    }
+    GLint src_rgb, dst_rgb, src_a, dst_a, eq_rgb, eq_a;
+    gl.GetIntegerv(GL_BLEND_SRC_RGB, &src_rgb);
+    gl.GetIntegerv(GL_BLEND_DST_RGB, &dst_rgb);
+    gl.GetIntegerv(GL_BLEND_SRC_ALPHA, &src_a);
+    gl.GetIntegerv(GL_BLEND_DST_ALPHA, &dst_a);
+    gl.GetIntegerv(GL_BLEND_EQUATION_RGB, &eq_rgb);
+    gl.GetIntegerv(GL_BLEND_EQUATION_ALPHA, &eq_a);
+    gl.Enable(GL_BLEND);
+    gl.BlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+    gl.BlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+    gl.ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    gl.Viewport(0, 0, w, h);
+    gl.UseProgram(c->osd_prog);
+    gl.Uniform1i(c->osd_u_tex, 0);
+    gl.Uniform2f(c->osd_u_size, (float)w, (float)h);
+    if (gl.BindSampler)
+        gl.BindSampler(0, 0);
+    if (c->vao)
+        gl.BindVertexArray(c->vao);
+    gl.DrawArrays(GL_TRIANGLES, 0, 3);
+    gl.BlendFuncSeparate((GLenum)src_rgb, (GLenum)dst_rgb, (GLenum)src_a, (GLenum)dst_a);
+    gl.BlendEquationSeparate((GLenum)eq_rgb, (GLenum)eq_a);
+    gl.Disable(GL_BLEND);
+}
+
 static struct ctx *context(void *id)
 {
     struct ctx *free_slot = NULL;
@@ -452,9 +643,10 @@ static struct ctx *context(void *id)
     return free_slot;
 }
 
-/* filter: a imagem do quadro (o back buffer, LARGURA x ALTURA) passa pelo
- * filtro, no proprio back buffer: as tres linhas com o modo entrelacado
- * (deflick), so a propria linha sem ele (a matriz de cor sozinha). */
+/* filter: a imagem do quadro (o back buffer, LARGURA x ALTURA) ganha a OSD
+ * (osd) e passa pelo filtro (pass), no proprio back buffer: as tres linhas com
+ * o modo entrelacado (deflick), so a propria linha sem ele (a matriz de cor
+ * sozinha). A OSD antes do filtro: a letra dela tambem nao treme. */
 static int gl_ready(getproc_fn get)
 {
     static int loaded = -1;
@@ -463,14 +655,17 @@ static int gl_ready(getproc_fn get)
     return loaded;
 }
 
-static void filter(void *ctx_id, getproc_fn get, int w, int h, int deflick)
+static void filter(void *ctx_id, getproc_fn get, int w, int h, int pass, int deflick, int osd)
 {
     struct ctx *c;
     if (!gl_ready(get) || !ctx_id || w <= 0 || h <= 0)
         return;
     c = context(ctx_id);
-    if (c->broken)
+    if (c->broken) {
+        if (osd && !osd_refused)
+            osd_refuse();
         return;
+    }
     if (!c->prog && !setup(c)) {
         c->broken = 1;
         return;
@@ -507,39 +702,44 @@ static void filter(void *ctx_id, getproc_fn get, int w, int h, int deflick)
         gl.DrawBuffer(GL_BACK);
     }
 
-    /* A imagem numa textura do tamanho do quadro. */
-    gl.BindTexture(GL_TEXTURE_2D, c->tex);
-    if (c->tw != w || c->th != h) {
-        /* RGB: no OpenGL ES, um framebuffer sem alfa nao copia numa
-         * textura com alfa. */
-        gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-        c->tw = w, c->th = h;
-    }
-    gl.CopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
-    if (gl.BindSampler)
-        gl.BindSampler(0, 0);
-
     for (int i = 0; i < ncaps; i++)
         gl.Disable(caps[i]);
-    gl.ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    gl.Viewport(0, 0, w, h);
-    gl.UseProgram(c->prog);
-    gl.Uniform1i(c->u_tex, 0);
-    if (deflick)
-        gl.Uniform3f(c->u_w, weights[0], weights[1], weights[2]);
-    else
-        gl.Uniform3f(c->u_w, 0.0f, 1.0f, 0.0f);
-    gl.UniformMatrix3fv(c->u_m, 1, GL_FALSE, matrix);
-    if (c->vao)
-        gl.BindVertexArray(c->vao);
-    gl.DrawArrays(GL_TRIANGLES, 0, 3);
-    if (!c->tw_logged && getenv("FLIPEROS_DEFLICKER_DEBUG")) {
-        fprintf(stderr, "fliperos-deflicker: filtering %dx%d (%s)\n", w, h,
-                c->gles ? "GLES" : c->core ? "core" : "compat");
-        c->tw_logged = 1;
+    if (osd)
+        osd_draw(c, w, h);
+
+    if (pass) {
+        /* A imagem numa textura do tamanho do quadro. */
+        gl.BindTexture(GL_TEXTURE_2D, c->tex);
+        if (c->tw != w || c->th != h) {
+            /* RGB: no OpenGL ES, um framebuffer sem alfa nao copia numa
+             * textura com alfa. */
+            gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+            gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+            c->tw = w, c->th = h;
+        }
+        gl.CopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        if (gl.BindSampler)
+            gl.BindSampler(0, 0);
+
+        gl.ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        gl.Viewport(0, 0, w, h);
+        gl.UseProgram(c->prog);
+        gl.Uniform1i(c->u_tex, 0);
+        if (deflick)
+            gl.Uniform3f(c->u_w, weights[0], weights[1], weights[2]);
+        else
+            gl.Uniform3f(c->u_w, 0.0f, 1.0f, 0.0f);
+        gl.UniformMatrix3fv(c->u_m, 1, GL_FALSE, matrix);
+        if (c->vao)
+            gl.BindVertexArray(c->vao);
+        gl.DrawArrays(GL_TRIANGLES, 0, 3);
+        if (!c->tw_logged && getenv("FLIPEROS_DEFLICKER_DEBUG")) {
+            fprintf(stderr, "fliperos-deflicker: filtering %dx%d (%s)\n", w, h,
+                    c->gles ? "GLES" : c->core ? "core" : "compat");
+            c->tw_logged = 1;
+        }
     }
 
     /* De volta como estava. */
@@ -741,9 +941,9 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable)
     static void (*real)(Display *, GLXDrawable);
     if (!real)
         real = sym("glXSwapBuffers");
-    int what = active(), shot = shot_wanted();
+    int what = active(), shot = shot_wanted(), osd = osd_visible();
     fps_tick(what);
-    if (what || shot) {
+    if (what || shot || osd) {
         static GLXContext (*current)(void);
         static void (*query)(Display *, GLXDrawable, int, unsigned int *);
         unsigned int w = 0, h = 0;
@@ -756,8 +956,8 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable)
             query(dpy, drawable, GLX_HEIGHT, &h);
             if (shot)
                 shot_take(glx_getproc, (int)w, (int)h);
-            if (what)
-                filter((void *)current(), glx_getproc, (int)w, (int)h, what & 1);
+            if (what || osd)
+                filter((void *)current(), glx_getproc, (int)w, (int)h, what, what & 1, osd);
         }
     }
     if (real)
@@ -769,9 +969,9 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     static EGLBoolean (*real)(EGLDisplay, EGLSurface);
     if (!real)
         real = sym("eglSwapBuffers");
-    int what = active(), shot = shot_wanted();
+    int what = active(), shot = shot_wanted(), osd = osd_visible();
     fps_tick(what);
-    if (what || shot) {
+    if (what || shot || osd) {
         static EGLContext (*current)(void);
         static EGLBoolean (*query)(EGLDisplay, EGLSurface, EGLint, EGLint *);
         EGLint w = 0, h = 0;
@@ -782,8 +982,8 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         if (current && query && query(dpy, surface, EGL_WIDTH, &w) && query(dpy, surface, EGL_HEIGHT, &h)) {
             if (shot)
                 shot_take(egl_getproc, (int)w, (int)h);
-            if (what)
-                filter((void *)current(), egl_getproc, (int)w, (int)h, what & 1);
+            if (what || osd)
+                filter((void *)current(), egl_getproc, (int)w, (int)h, what, what & 1, osd);
         }
     }
     return real ? real(dpy, surface) : EGL_FALSE;

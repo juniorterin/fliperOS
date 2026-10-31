@@ -20,6 +20,12 @@
  *                              root, com um jogo aberto, pelo descritor dele)
  *   fliperos-color x11         aplica a tabela de gama no X ($DISPLAY)
  *   fliperos-color lut [N]     imprime a tabela de N pontos e a matriz (testes)
+ *   fliperos-color mode        o modo na tela: "CLOCK HD HSS HSE HT VD VSS VSE
+ *                              VT 0|1" (CLOCK em kHz; 1 = entrelacado)
+ *   fliperos-color timing CLOCK HD HSS HSE HT VD VSS VSE VT
+ *                              troca as temporizacoes do modo na tela, com o
+ *                              jogo aberto (a geometria da OSD): o tamanho em
+ *                              pixels nao muda, entao o jogo nem percebe
  *
  * --conf ARQUIVO (ou FLIPEROS_CONF) troca o fliperos.conf. FLIPEROS_DRM_CARD
  * troca o /dev/dri/card0.
@@ -395,6 +401,98 @@ static int apply_kms(const struct params *p)
     return fails ? 1 : 0;
 }
 
+/* ── O modo na tela ─────────────────────────────────────────────── */
+
+/* active_crtc: o primeiro CRTC com modo na placa; NULL se nao ha. */
+static drmModeCrtcPtr active_crtc(int fd)
+{
+    drmModeResPtr res = drmModeGetResources(fd);
+    drmModeCrtcPtr found = NULL;
+    for (int i = 0; res && i < res->count_crtcs && !found; i++) {
+        drmModeCrtcPtr crtc = drmModeGetCrtc(fd, res->crtcs[i]);
+        if (crtc && crtc->mode_valid)
+            found = crtc;
+        else
+            drmModeFreeCrtc(crtc);
+    }
+    drmModeFreeResources(res);
+    return found;
+}
+
+static int mode_show(void)
+{
+    int fd = open_card();
+    drmModeCrtcPtr crtc = fd < 0 ? NULL : active_crtc(fd);
+    if (!crtc) {
+        fprintf(stderr, "fliperos-color: no mode on the screen\n");
+        return 1;
+    }
+    const drmModeModeInfo *m = &crtc->mode;
+    printf("%u %u %u %u %u %u %u %u %u %d\n", m->clock, m->hdisplay, m->hsync_start, m->hsync_end, m->htotal, m->vdisplay,
+           m->vsync_start, m->vsync_end, m->vtotal, (m->flags & DRM_MODE_FLAG_INTERLACE) ? 1 : 0);
+    drmModeFreeCrtc(crtc);
+    close(fd);
+    return 0;
+}
+
+/* mode_timing: as temporizacoes novas no CRTC, com a imagem que esta nele. So
+ * o mesmo tamanho em pixels: o quadro do jogo continua servindo. */
+static int mode_timing(int argc, char **argv)
+{
+    if (argc != 11) {
+        fprintf(stderr, "Usage: fliperos-color timing CLOCK HD HSS HSE HT VD VSS VSE VT\n");
+        return 2;
+    }
+    int v[9];
+    for (int i = 0; i < 9; i++)
+        v[i] = atoi(argv[i + 2]);
+    /* Na ordem de um modo de verdade, ou a placa pode ficar sem imagem. */
+    if (v[0] <= 0 || v[1] <= 0 || v[1] >= v[2] || v[2] >= v[3] || v[3] >= v[4] || v[5] <= 0 || v[5] >= v[6] || v[6] >= v[7] ||
+        v[7] >= v[8]) {
+        fprintf(stderr, "fliperos-color: these timings are not a video mode\n");
+        return 2;
+    }
+    int fd = open_card(), owner, status = 1;
+    if (fd < 0) {
+        perror("fliperos-color: /dev/dri/card0");
+        return 1;
+    }
+    if ((owner = master_fd(fd)) >= 0) {
+        close(fd);
+        fd = owner;
+    }
+    drmModeResPtr res = drmModeGetResources(fd);
+    drmModeCrtcPtr crtc = active_crtc(fd);
+    if (crtc && crtc->mode.hdisplay == v[1] && crtc->mode.vdisplay == v[5]) {
+        drmModeModeInfo mode = crtc->mode;
+        mode.clock = (uint32_t)v[0];
+        mode.hsync_start = (uint16_t)v[2], mode.hsync_end = (uint16_t)v[3], mode.htotal = (uint16_t)v[4];
+        mode.vsync_start = (uint16_t)v[6], mode.vsync_end = (uint16_t)v[7], mode.vtotal = (uint16_t)v[8];
+        double rate = v[0] * 1000.0 / ((double)v[4] * v[8]);
+        mode.vrefresh = (uint32_t)lround((mode.flags & DRM_MODE_FLAG_INTERLACE) ? rate * 2 : rate);
+        /* O conector que mostra este CRTC. */
+        uint32_t connector = 0;
+        for (int i = 0; res && i < res->count_connectors && !connector; i++) {
+            drmModeConnectorPtr c = drmModeGetConnector(fd, res->connectors[i]);
+            drmModeEncoderPtr e = c && c->encoder_id ? drmModeGetEncoder(fd, c->encoder_id) : NULL;
+            if (e && e->crtc_id == crtc->crtc_id)
+                connector = c->connector_id;
+            drmModeFreeEncoder(e);
+            drmModeFreeConnector(c);
+        }
+        if (connector && !drmModeSetCrtc(fd, crtc->crtc_id, crtc->buffer_id, crtc->x, crtc->y, &connector, 1, &mode))
+            status = 0;
+        else
+            fprintf(stderr, "fliperos-color: the card refused these timings\n");
+    } else {
+        fprintf(stderr, "fliperos-color: the screen is not in a mode of %dx%d\n", v[1], v[5]);
+    }
+    drmModeFreeCrtc(crtc);
+    drmModeFreeResources(res);
+    close(fd);
+    return status;
+}
+
 /* ── X ──────────────────────────────────────────────────────────── */
 
 static int apply_x11(const struct params *p)
@@ -429,6 +527,10 @@ int main(int argc, char **argv)
     const char *cmd = argc > 1 ? argv[1] : "";
     int n = 16;
     struct params p;
+    if (!strcmp(cmd, "mode"))
+        return mode_show();
+    if (!strcmp(cmd, "timing"))
+        return mode_timing(argc, argv);
     for (int i = 2; i < argc; i++) {
         if (!strcmp(argv[i], "--conf") && i + 1 < argc)
             conf = argv[++i];
@@ -460,6 +562,6 @@ int main(int argc, char **argv)
         free(lut);
         return 0;
     }
-    fprintf(stderr, "Usage: fliperos-color caps|apply|x11|lut [N] [--conf FILE]\n");
+    fprintf(stderr, "Usage: fliperos-color caps|apply|x11|mode|timing|lut [N] [--conf FILE]\n");
     return 2;
 }

@@ -1302,6 +1302,28 @@ class SettingsCliTests(Base):
             self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
         self.assertIn('settings_set "${2:-}" "${3:-}"', (SETUP / "fliperos-setup").read_text())
 
+    def test_osd_level_by_program_or_core(self):
+        # A OSD (config/fliperos-osd) so conhece o programa aberto ou o core: o
+        # nivel vai para a linha da tabela dele, com os mesmos valores.
+        env = {"COLOR_BIN": str(self.env.dir / "none"), "RA_HOME": str(self.env.dir / "ra")}
+        self.env.out("settings_set level.dolphin-emu strong; settings_set level.flycast off", env)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        for line in ("mode480_dolphin-emu=filter", "deflicker_dolphin-emu=strong", "deflicker_level_dolphin-emu=strong",
+                     "mode480_flycast=pure", "deflicker_flycast=off"):
+            self.assertIn(line + "\n", conf)
+        # O core do RetroArch e, fora da tabela, a linha dos outros programas.
+        self.env.out("settings_set level.pcsx_rearmed light; settings_set level.fliperos-frontend strong", env)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        for line in ("deflicker_pcsx_rearmed=light", "deflicker=strong"):
+            self.assertIn(line + "\n", conf)
+        self.assertEqual(self.env.run("settings_set level.flycast blur", env).returncode, 2)
+        # Ligar e desligar a OSD.
+        keys = [line.split("|")[0] for line in self.env.out("settings_list", env).splitlines()]
+        self.assertIn("osd", keys)
+        self.env.out("settings_set osd off", env)
+        self.assertIn("osd=off\n", (self.env.etc / "fliperos.conf").read_text())
+        self.assertEqual(self.env.run("settings_set osd maybe", env).returncode, 2)
+
     def test_video_audio_and_power_rows(self):
         # O que faltava do Video Setup e do Audio Setup no painel, e desligar.
         env = {"COLOR_BIN": str(self.env.dir / "none"), "ASOUND_CONF": str(self.env.dir / "asound.conf"),

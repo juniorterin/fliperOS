@@ -51,6 +51,19 @@ run $pre FLIPEROS_DEFLICKER_APP=flycast $b/deflicker_test link
 run $pre DEFLICKER_TEST_DLOPEN=$b/mame2010_libretro.so $b/deflicker_test link
 run $pre FLIPEROS_DEFLICKER_APP=flycast FLIPEROS_DEFLICKER_FILE=$b/level $b/deflicker_test link
 
+# A OSD (config/fliperos-osd): a metade de cima do arquivo e verde opaca, a de
+# baixo transparente. Em cima o vermelho vai a 0, embaixo as listras seguem; com
+# o filtro, misturadas. O estado do programa volta (scissor-kept: 1).
+python3 -c "
+import struct
+rows = bytes((0, 255, 0, 255)) * 320 * 120 + bytes(4) * 320 * 120
+open('$b/osd', 'wb').write(struct.pack('<5I', 0x44534f46, 2, 1, 320, 240) + rows)"
+for mode in "link compat" "link core" egl; do
+  # shellcheck disable=SC2086 # o modo e o contexto, uma palavra cada
+  run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_OSD_FILE=$b/osd $b/deflicker_test $mode
+done
+run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_OSD_FILE=$b/osd FLIPEROS_DEFLICKER_FORCE=1 $b/deflicker_test link
+
 # O FPS para o painel web (config/fliperos-web): a camada grava a cada
 # segundo "pid fps programa core filtrando", mesmo sem filtrar.
 run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_FPS_FILE=$b/fps FLIPEROS_DEFLICKER_APP=flycast \
