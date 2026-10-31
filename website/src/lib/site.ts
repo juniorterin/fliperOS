@@ -34,7 +34,10 @@ export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorteri
 
 // Quem ajudou o projeto (código, testes no próprio hardware, ideias). A mesma
 // lista está no fim dos dois READMEs: um nome novo entra nos três.
-export const CONTRIBUTORS = [{ name: 'ultimatevga-dot', url: 'https://github.com/ultimatevga-dot' }] as const;
+export const CONTRIBUTORS = [
+  { name: 'ultimatevga-dot', url: 'https://github.com/ultimatevga-dot' },
+  { name: 'theblackk62', url: 'https://github.com/theblackk62' },
+] as const;
 
 export const FLIPEROS_VERSION = '0.16';
 

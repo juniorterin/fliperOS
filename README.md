@@ -316,3 +316,4 @@ The pages live in [`docs/wiki`](docs/wiki) and go to the wiki with `bash tools/w
 People who helped FliperOS with code, tests on their own hardware or ideas:
 
 - [ultimatevga-dot](https://github.com/ultimatevga-dot)
+- [theblackk62](https://github.com/theblackk62)

@@ -315,3 +315,4 @@ As páginas ficam em [`docs/wiki`](docs/wiki) e vão para a wiki com `bash tools
 Pessoas que ajudaram o FliperOS com código, testes no próprio hardware ou ideias:
 
 - [ultimatevga-dot](https://github.com/ultimatevga-dot)
+- [theblackk62](https://github.com/theblackk62)
