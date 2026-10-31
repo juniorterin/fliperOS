@@ -783,6 +783,20 @@ const enUS = {
       youtube: 'YouTube channel: Art Repair 80',
       alt: 'The RGB-80 board: a small board with a VGA connector and green, blue and red component video jacks.',
     },
+    jamma: {
+      title: 'A PC to JAMMA board for a cabinet harness',
+      text: 'Sold on AliExpress as "PC to JAMMA / JVS board for arcade games": a long board with the JAMMA edge connector, VGA and RCA video outputs and audio outputs, to connect a PC to the wiring of an arcade cabinet.',
+      note: 'Tested with FliperOS and it works; the description above is from the listing.',
+      cta: 'See it on AliExpress',
+    },
+    gpu: {
+      title: 'A video card with a VGA output: the SOYO Radeon R7 240',
+      text: 'A low-profile Radeon R7 240 with 4 GB of GDDR3, 128 bit, PCIe 3.0 x8, and VGA, DVI and HDMI outputs. The R7 240 is the card FliperOS is developed on, at 15 kHz on VGA, with radeon and amdgpu.',
+      note: 'The listing is for the SOYO model; the project has not seen this exact one on a tube.',
+      alt: 'The SOYO Radeon R7 240 card, with a heatsink and fan, and a VGA, DVI and HDMI bracket.',
+      cta: 'See it on AliExpress',
+      docs: 'Video cards, in the documentation',
+    },
   },
   openSource: {
     kicker: 'Open source',

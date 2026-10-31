@@ -13,6 +13,8 @@ export const LINKS = {
   instagram: 'https://www.instagram.com/juniorter.in/',
   video: 'https://www.youtube.com/watch?v=W0vrpqgefL0',
   dpVgaAdapter: 'https://a.aliexpress.com/_mPCmfYb',
+  jammaBoard: 'https://pt.aliexpress.com/item/1005010778265464.html',
+  soyoR7240: 'https://pt.aliexpress.com/item/1005012468296916.html',
   artRepairTelegram: 'https://t.me/+1XiiRQtrBVFkNGEx',
 } as const;
 

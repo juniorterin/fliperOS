@@ -785,6 +785,20 @@ const ptBR: Messages = {
       youtube: 'Canal no YouTube: Art Repair 80',
       alt: 'A placa RGB-80: uma placa pequena com conector VGA e saídas de vídeo componente verde, azul e vermelha.',
     },
+    jamma: {
+      title: 'Uma placa PC para JAMMA, para o chicote do gabinete',
+      text: 'Vendida no AliExpress como "Placa PC para Jamma / Placa JVS para jogos de arcade": uma placa comprida com o conector JAMMA, saídas de vídeo VGA e RCA e saídas de áudio, para ligar um PC à fiação de um gabinete de fliperama.',
+      note: 'Testada com o FliperOS e funciona; a descrição acima é do anúncio.',
+      cta: 'Ver no AliExpress',
+    },
+    gpu: {
+      title: 'Uma placa de vídeo com saída VGA: a SOYO Radeon R7 240',
+      text: 'Uma Radeon R7 240 de perfil baixo, com 4 GB de GDDR3, 128 bits, PCIe 3.0 x8 e saídas VGA, DVI e HDMI. A R7 240 é a placa em que o FliperOS é desenvolvido, a 15 kHz na VGA, com radeon e amdgpu.',
+      note: 'O anúncio é do modelo da SOYO; o projeto não viu este modelo exato num tubo.',
+      alt: 'A placa SOYO Radeon R7 240, com dissipador e ventoinha, e o espelho com saídas VGA, DVI e HDMI.',
+      cta: 'Ver no AliExpress',
+      docs: 'Placas de vídeo, na documentação',
+    },
   },
   openSource: {
     kicker: 'Código aberto',

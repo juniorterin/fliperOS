@@ -152,6 +152,64 @@ export function Requirements() {
             </div>
           </article>
         </Reveal>
+
+        <Reveal className="mt-8">
+          <article className="card rounded-2xl p-5 sm:p-6">
+            <h3 className="font-semibold text-fg">{r.jamma.title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{r.jamma.text}</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{r.jamma.note}</p>
+            <a
+              href={LINKS.jammaBoard}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
+            >
+              {r.jamma.cta}
+              <ArrowUpRight className="size-4" aria-hidden="true" />
+              <span className="sr-only">{t.a11y.external}</span>
+            </a>
+          </article>
+        </Reveal>
+
+        <Reveal className="mt-8">
+          <article className="card flex flex-col gap-5 rounded-2xl p-5 sm:flex-row sm:items-center sm:p-6">
+            <Image
+              src="/art/soyo-r7-240.webp"
+              alt={r.gpu.alt}
+              width={740}
+              height={740}
+              unoptimized
+              className="h-auto w-full shrink-0 rounded-xl bg-white sm:w-56"
+            />
+            <div>
+              <h3 className="font-semibold text-fg">{r.gpu.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{r.gpu.text}</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{r.gpu.note}</p>
+              <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+                <a
+                  href={LINKS.soyoR7240}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
+                >
+                  {r.gpu.cta}
+                  <ArrowUpRight className="size-4" aria-hidden="true" />
+                  <span className="sr-only">{t.a11y.external}</span>
+                </a>
+                <a
+                  href={`${LINKS.docs}/Video-cards`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
+                >
+                  {r.gpu.docs}
+                  <ArrowUpRight className="size-4" aria-hidden="true" />
+                  <span className="sr-only">{t.a11y.external}</span>
+                </a>
+              </div>
+            </div>
+          </article>
+        </Reveal>
       </div>
     </section>
   );
