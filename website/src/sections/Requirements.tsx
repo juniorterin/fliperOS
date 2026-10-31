@@ -98,6 +98,7 @@ export function Requirements() {
             <div>
               <h3 className="font-semibold text-fg">{r.adapter.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted">{r.adapter.text}</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{r.adapter.seen}</p>
               <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
                 <a
                   href={LINKS.dpVgaAdapter}
@@ -119,6 +120,40 @@ export function Requirements() {
                   <span className="sr-only">{t.a11y.external}</span>
                 </a>
               </div>
+            </div>
+          </article>
+        </Reveal>
+
+        <Reveal className="mt-8">
+          <article className="card rounded-2xl p-5 sm:p-6">
+            <h3 className="font-semibold text-fg">{r.rgb80.title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{r.rgb80.text}</p>
+            <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm leading-relaxed text-muted">
+              {r.rgb80.parts.map((part) => (
+                <li key={part}>{part}</li>
+              ))}
+            </ol>
+            <p className="mt-3 text-sm leading-relaxed text-muted">{r.rgb80.native}</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{r.rgb80.note}</p>
+            <p className="mt-4 text-sm text-fg">{r.rgb80.contactLabel}</p>
+            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+              <a
+                href={LINKS.artRepairTelegram}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
+              >
+                {r.rgb80.telegram}
+                <ArrowUpRight className="size-4" aria-hidden="true" />
+                <span className="sr-only">{t.a11y.external}</span>
+              </a>
+              <a
+                href={LINKS.artRepairEmail}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
+              >
+                {r.rgb80.email}
+              </a>
+              <span className="text-sm text-muted">{r.rgb80.youtube}</span>
             </div>
           </article>
         </Reveal>

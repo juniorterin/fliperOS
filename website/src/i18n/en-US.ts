@@ -764,9 +764,22 @@ const enUS = {
     adapter: {
       title: 'A card with digital outputs only? A converter that works',
       text: 'This adapter plugs into the card\'s DisplayPort and gives you VGA. Its input is DisplayPort only: a card that only has HDMI needs an HDMI to VGA converter. The GroovyArcade community reports that DisplayPort often gives native resolutions, but mode switches are slower, interlaced modes often fail and its VGA connector is fragile.',
+      seen: 'Tested on a Ryzen 5 5600GT with this kind of adapter: native modes from 224 to 640 pixels wide, and from 712 up, showed on the tube, and so did 1280x480 interlaced. Modes between about 13 and 14.4 MHz (672 to 704 wide) gave no signal. At install, press ENTER on the output you can see, validate the test and pick your CRT in Monitor Type: the adapter looks like an LCD to the Setup, and your answer is what makes it boot at 15 kHz.',
       docs: 'Converters, in the documentation',
       alt: 'Black CableDeconn adapter with a cable and DisplayPort plug, and VGA, audio, HDMI and DVI outputs.',
       cta: 'See it on AliExpress',
+    },
+    rgb80: {
+      title: 'A tube TV with component input? The RGB-80 board',
+      text: 'Art Repair 80, a Brazilian vintage games and parts repair shop, sells the RGB-80, a small board that takes the VGA output of a PC and gives component video for a CRT TV. Its flyer, "Want a fliperama at home for those incredible moments with family and friends?", describes the build:',
+      parts: ['A PC with a VGA video card.', 'A tube TV with component video input.', 'An RGB-80 board.'],
+      native: 'Games at their native resolution, "as only a tube TV can show". It comes with a leaflet of instructions.',
+      note: 'Not tested with FliperOS yet; the information is from the seller\'s flyer.',
+      contactLabel: 'Questions, from the seller:',
+      telegram: 'Telegram group',
+      email: 'art.repair80@gmail.com',
+      youtube: 'YouTube channel: Art Repair 80',
+      alt: 'The RGB-80 board: a small board with a VGA connector and green, blue and red component video jacks.',
     },
   },
   openSource: {

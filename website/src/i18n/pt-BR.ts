@@ -766,9 +766,22 @@ const ptBR: Messages = {
     adapter: {
       title: 'Placa só com saída digital? Um conversor que funciona',
       text: 'Este adaptador liga na DisplayPort da placa e entrega VGA. A entrada dele é só DisplayPort: uma placa que só tem HDMI precisa de um conversor de HDMI para VGA. Pelo que relata a comunidade do GroovyArcade, a DisplayPort costuma dar resolução nativa, mas a troca de resolução é mais lenta, o entrelaçado costuma falhar e o conector VGA dele é frágil.',
+      seen: 'Testado com um Ryzen 5 5600GT e esse tipo de adaptador: apareceram no tubo os modos nativos de 224 a 640 pontos de largura e de 712 para cima, e também o 1280x480 entrelaçado. Os modos entre cerca de 13 e 14,4 MHz (672 a 704 de largura) ficaram sem sinal. Na instalação, aperte ENTER na saída em que você vê a imagem, valide o teste e escolha a sua CRT em Monitor Type: para o Setup o adaptador parece um LCD, e é a sua resposta que faz o gabinete iniciar em 15 kHz.',
       docs: 'Conversores, na documentação',
       alt: 'Adaptador preto CableDeconn com cabo e plugue DisplayPort, e as saídas VGA, áudio, HDMI e DVI.',
       cta: 'Ver no AliExpress',
+    },
+    rgb80: {
+      title: 'TV de tubo com entrada componente? A placa RGB-80',
+      text: 'A Art Repair 80, uma oficina brasileira de games antigos, peças e serviços, vende a RGB-80, uma placa pequena que pega a saída VGA de um PC e entrega vídeo componente para uma TV de tubo. O folheto dela, "Tem vontade de ter um fliperama em casa para aqueles momentos incríveis com a família e amigos?", descreve a montagem:',
+      parts: ['Um PC com placa VGA.', 'Uma TV de tubo com entrada de vídeo componente.', 'Uma placa RGB-80.'],
+      native: 'Jogos na resolução nativa, "como só a TV de tubo consegue exibir". Acompanha um folheto com instruções.',
+      note: 'Ainda não foi testada com o FliperOS; as informações são do folheto do vendedor.',
+      contactLabel: 'Dúvidas, com o vendedor:',
+      telegram: 'Grupo no Telegram',
+      email: 'art.repair80@gmail.com',
+      youtube: 'Canal no YouTube: Art Repair 80',
+      alt: 'A placa RGB-80: uma placa pequena com conector VGA e saídas de vídeo componente verde, azul e vermelha.',
     },
   },
   openSource: {
