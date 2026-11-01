@@ -1210,15 +1210,17 @@ class Frontend:
             net = bool(prof.get("netplay"))
             word = ("PARTY", "NET PLAY") if net else ("LINK", "LINK PLAY")
             parties = self.link.parties_for(g["_system"]["key"], g["Name"])
+            local = self.link.local_players
             for p in parties:
                 if p["state"] == "lobby" and p["used"] < (p["max"] or 0):
-                    tiles.append({"kind": "join", "label": "JOIN " + word[0], "party": p, "lit": True, "net": net})
+                    tiles.append({"kind": "join", "label": "JOIN " + word[0], "party": p, "lit": True, "net": net,
+                                  "take": max(1, min(local, (p["max"] or 0) - p["used"]))})
             for p in parties:
                 if not (p["state"] == "lobby" and p["used"] < (p["max"] or 0)):
                     tiles.append({"kind": "closed", "label": "STARTED" if p["state"] == "playing" else "FULL",
                                   "party": p, "lit": True, "net": net})
             tiles.append({"kind": "new" if parties else "link", "label": "NEW " + word[0] if parties else word[1],
-                          "max": prof["max"], "lit": False, "net": net})
+                          "max": prof["max"], "lit": False, "net": net, "take": min(local, prof["max"])})
         fav = g is not None and g.get("Favourite") == "1"
         tiles.append({"kind": "fav", "label": "UNFAVOURITE" if fav else "FAVOURITE"})
         tiles.append({"kind": "more", "label": "MORE"})

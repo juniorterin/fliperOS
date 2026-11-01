@@ -269,6 +269,25 @@ def cabinet_row(surf, x, y, filled, total, you=None, w=5, h=8, gap=1):
     return x + total * (w + gap) - gap
 
 
+def person_icon(surf, x, y, lit, color=None):
+    """Um jogador (10x12): a cabeca e os ombros; aceso, verde."""
+    c = color or (T.GREEN if lit else T.LINE)
+    pygame.draw.circle(surf, c, (x + 5, y + 3), 3)
+    surf.fill(c, (x + 1, y + 7, 9, 5))
+
+
+def slots_row(surf, x, y, used, total, ring=None, step=14):
+    """Os jogadores de um jogo de net play: `used` acesos (os ja ocupados) e o
+    resto apagado; ring = (primeiro, quantos), de 1, leva o aro rosa: os
+    lugares deste gabinete (um por controle). Devolve onde acaba."""
+    for i in range(total):
+        person_icon(surf, x + i * step, y, i < used)
+    if ring:
+        first, take = ring
+        pygame.draw.rect(surf, T.PINK, (x + (first - 1) * step - 2, y - 2, take * step - 2, 16), 1)
+    return x + total * step - (step - 10)
+
+
 def pads_icon(surf, cx, cy, lit=True, small=False):
     """O net play: dois controles ligados por uma linha (small: o da lista)."""
     c = T.CYAN if lit else T.LINE
@@ -1735,8 +1754,18 @@ def draw_popup(fe, ui, now):
         # comecou, nenhum.
         filled = used if kind in ("join", "closed") else 1
         you = {"link": 0, "new": 0, "join": used}.get(kind)
-        width = total * 11 - 3
-        cabinet_row(ui, px + (pw - width) // 2, ty + size + 26, filled, total, you=you, w=8, h=12, gap=3)
+        if tiles[sel].get("net"):
+            # Os jogadores: este gabinete ocupa um por controle configurado
+            # (take); acesos os que ja tem dono, o aro nos deste.
+            take = tiles[sel].get("take", 1)
+            lit = used if kind in ("join", "closed") else take
+            first = used + 1 if kind == "join" else 1
+            width = total * 14 - 4
+            slots_row(ui, px + (pw - width) // 2, ty + size + 24, lit, total,
+                      None if kind == "closed" else (first, take))
+        else:
+            width = total * 11 - 3
+            cabinet_row(ui, px + (pw - width) // 2, ty + size + 26, filled, total, you=you, w=8, h=12, gap=3)
 
 
 def draw_lobby(fe, ui, now):
@@ -1755,7 +1784,11 @@ def draw_lobby(fe, ui, now):
         pads_icon(ui, px + pw - 14, py + 12, True)
     else:
         globe_icon(ui, px + pw - 14, py + 12, 7, True)
-    total, members = lob["max"], len(lob["members"])
+    net = bool(lob["profile"].get("netplay"))
+    members = len(lob["members"])
+    # No net play so os gabinetes que ja entraram (cada um com os seus jogadores)
+    # e, embaixo, os jogadores do jogo.
+    total = max(1, members) if net else lob["max"]
     cols = 4
     cw = (pw - 16) // cols
     rows = (total + cols - 1) // cols
@@ -1768,13 +1801,23 @@ def draw_lobby(fe, ui, now):
         W.block(ui, (cx, cy, cw - 6, ch), T.BG_DEEP, None)
         pygame.draw.rect(ui, T.GREEN if lit else T.LINE, (cx, cy, cw - 6, ch), 1)
         cabinet_icon(ui, cx + (cw - 6) // 2 - 7, cy + 5, 14, 22, lit)
-        W.text(ui, "#%d" % (i + 1), T.GREEN if lit else T.LINE, cx + (cw - 6 - W.width("#%d" % (i + 1))) // 2, cy + 33)
+        label = "#%d" % (i + 1)
+        if net and i < members:
+            m = lob["members"][i]
+            label = "P%d" % m["first"] if m["take"] == 1 else "P%d-%d" % (m["first"], m["first"] + m["take"] - 1)
+        W.text(ui, label, T.GREEN if lit else T.LINE, cx + (cw - 6 - W.width(label)) // 2, cy + 33)
         if you:
             pygame.draw.rect(ui, T.PINK, (cx - 2, cy - 2, cw - 2, ch + 4), 1)
     y = y0 + rows * (ch + 4) + 4
-    globe_icon(ui, px + pw // 2 - 22, y + 6, 7, True)
-    W.text(ui, "%d/%d" % (members, total), T.GREEN, px + pw // 2 - 10, y + 2)
-    y += 22
+    if net:
+        cap = lob["capacity"]
+        width = cap * 14 - 4
+        slots_row(ui, px + (pw - width) // 2, y, lob["slots"], cap, (lob["first"], lob["take"]))
+        y += 20
+    else:
+        globe_icon(ui, px + pw // 2 - 22, y + 6, 7, True)
+        W.text(ui, "%d/%d" % (members, total), T.GREEN, px + pw // 2 - 10, y + 2)
+        y += 22
     left = lob["left"]
     if left is not None:
         word, color = ("STARTING %d" % math.ceil(left) if left > 0 else "STARTING"), T.GREEN

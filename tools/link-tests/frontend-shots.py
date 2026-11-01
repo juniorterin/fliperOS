@@ -129,6 +129,9 @@ def main():
          "party": "c1", "slot": 2, "max": 4, "state": "playing"},
         {"v": 1, "id": "c3", "name": "CABINET-E", "ip": "10.9.9.6", "game": "ssf2tb", "system": "mame", "link": "ssf2tb",
          "party": "c1", "slot": 3, "max": 4, "state": "playing"},
+        # Um net play do X-Men (4 jogadores) aberto por um gabinete de 2 controles: ocupa 2 dos 4.
+        {"v": 1, "id": "f1", "name": "CABINET-F", "ip": "10.9.9.7", "game": "xmen", "system": "mame", "link": "netplay",
+         "party": "f1", "slot": 1, "take": 2, "max": 4, "state": "lobby"},
     ]}
     path = os.path.join(HOME, "net.json")
     with open(path, "w") as f:
@@ -204,6 +207,27 @@ def main():
     for g in guests:
         g.leave()
     link.leave()
+
+    # O net play: este gabinete (2 controles) abre o X-Men e outro de 2 controles entra: ocupam P1-P2 e P3-P4.
+    link2 = felink.Link(HOME, wire=felink.Wire("lo", "127.0.0.1", "255.0.0.0", "127.255.255.255"), ident="me1", name="THIS",
+                        ports={"presence": 55511, "party": 55512, "files": 55513}, local_players=2)
+    link2.presence = felink.FakePresence([])
+
+    def host2(fe):
+        fe.link = link2
+        fe.act("right")
+        fe.act("b1")
+
+    def join2(fe):
+        g = felink.PartyGuest(link2.wire, "g9", "CAB-9", port=55512)
+        g.join("127.0.0.1", "xmen", want=2)
+        guests.append(g)
+        time.sleep(0.5)
+
+    shots("lobby-net", ["b1", host2, join2], setup=on_row("xmen"))
+    for g in guests:
+        g.leave()
+    link2.leave()
     print("ok")
 
 

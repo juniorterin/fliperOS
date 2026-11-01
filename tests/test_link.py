@@ -611,6 +611,7 @@ class FrontendLinkTests(unittest.TestCase):
         import types
         link = mock.Mock()
         link.available.return_value = True
+        link.local_players = 2
         link.profile_of.side_effect = lambda system, name: (
             felink.Profiles().get("scud") if (system, name) == profiled else None)
         link.parties_for.side_effect = lambda system, name: [p for p in parties if (p["system"], p["game"]) == (system, name)]
@@ -658,6 +659,10 @@ class FrontendLinkTests(unittest.TestCase):
         fe2 = self.stub([party])
         self.assertEqual(self.kinds(fe2, "xmen"), ["play", "join", "new", "fav", "more"])
         self.assertEqual([t["label"] for t in fe2.popup_tiles()[1:3]], ["JOIN PARTY", "NEW PARTY"])
+        # Este gabinete tem 2 controles: ocupa 2 jogadores, ou os que sobrarem.
+        self.assertEqual([t["take"] for t in fe2.popup_tiles()[1:3]], [2, 2])
+        fe2.link.parties_for.side_effect = lambda s, n: [dict(party, used=3)]
+        self.assertEqual(fe2.popup_tiles()[1]["take"], 1)
 
     def test_a_started_or_full_party_is_shown_but_cannot_be_joined(self):
         fe = self.stub([self.party("playing"), self.party("lobby", used=8)])
@@ -689,6 +694,133 @@ class FrontendLinkTests(unittest.TestCase):
         del fe.link
         fe.rebuild()
         self.assertEqual(len(fe.rows), 4)
+
+
+class SlotsTests(unittest.TestCase):
+    """O net play ocupa um jogador por controle configurado."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.prof = felink.netplay_profile("mame", "xmen", "6", 2, frozenset({"xmen"}))
+        self.port = free_port()
+
+    def host(self, take=2):
+        host = felink.PartyHost(LOOP, self.prof, "xmen", "h", "H", port=self.port, take=take)
+        host.open()
+        self.addCleanup(host.close)
+        return host
+
+    def guest(self, name, want):
+        g = felink.PartyGuest(LOOP, name, name, port=self.port)
+        self.addCleanup(g.leave)
+        return g, g.join("127.0.0.1", "xmen", want=want)
+
+    def test_the_local_players_are_the_players_of_the_button_map(self):
+        path = os.path.join(self.tmp.name, "buttons.map")
+        Path(path).write_text("1 up 0 h0.1 Pad\n1 b1 0 b0 Pad\n2 up 1 h0.1 Pad\n3 coin 1 b9 Pad\n")
+        self.assertEqual(felink.local_players(path), 3)
+        Path(path).write_text("1 up 0 h0.1 Pad\n")
+        self.assertEqual(felink.local_players(path), 1)
+        self.assertEqual(felink.local_players(os.path.join(self.tmp.name, "nenhum")), 2)
+        os.environ["FLIPEROS_LOCAL_PLAYERS"] = "4"
+        self.addCleanup(os.environ.pop, "FLIPEROS_LOCAL_PLAYERS")
+        self.assertEqual(felink.local_players(path), 4)
+
+    def test_each_cabinet_takes_as_many_slots_as_it_has_controls(self):
+        host = self.host(take=2)
+        g2, ok2 = self.guest("g2", 2)
+        g3, ok3 = self.guest("g3", 1)
+        self.assertTrue(ok2 and ok3)
+        members = host.snapshot()["members"]
+        self.assertEqual([(m["number"], m["first"], m["take"]) for m in members], [(1, 1, 2), (2, 3, 2), (3, 5, 1)])
+        self.assertEqual((g2.number, felink.Link.mine(g2.party, g2.number)["first"]), (2, 3))
+        self.assertEqual(host.used(), 5)
+        self.assertFalse(host.full())
+
+    def test_a_cabinet_gets_the_slots_that_are_left_and_the_party_fills_by_slots(self):
+        host = self.host(take=2)
+        self.guest("g2", 2)
+        g3, ok = self.guest("g3", 2)
+        self.assertTrue(ok)
+        self.assertEqual(host.snapshot()["members"][2]["take"], 2)        # 2 + 2 + 2 = 6: fechou
+        self.assertTrue(host.full())
+        g4, ok4 = self.guest("g4", 2)
+        self.assertFalse(ok4)
+        self.assertEqual(g4.refused, "full")
+
+    def test_a_late_cabinet_with_more_controls_than_slots_left_takes_what_is_left(self):
+        host = self.host(take=2)
+        self.guest("g2", 2)
+        self.guest("g3", 1)                                               # 5 de 6
+        g4, ok = self.guest("g4", 2)
+        self.assertTrue(ok)
+        self.assertEqual([m["take"] for m in host.snapshot()["members"]][3], 1)
+        self.assertTrue(host.full())
+
+    def test_the_plan_and_the_presence_carry_the_slots(self):
+        host = self.host(take=2)
+        self.guest("g2", 2)
+        plan = host.start()
+        self.assertEqual([(m["number"], m["first"], m["take"]) for m in plan["members"]], [(1, 1, 2), (2, 3, 2)])
+        table = [{"id": "h", "ip": "10.0.0.1", "party": "h", "slot": 1, "take": 2, "max": 6, "game": "xmen", "system": "mame",
+                  "state": "lobby", "name": "H"},
+                 {"id": "g", "ip": "10.0.0.2", "party": "h", "slot": 2, "take": 2, "max": 6, "game": "xmen",
+                  "system": "mame", "state": "lobby", "name": "G"}]
+        party = felink.parties(table)[0]
+        self.assertEqual((party["used"], party["max"], party["numbers"]), (4, 6, [1, 2]))
+
+    def test_the_retroarch_config_requests_a_device_per_slot_of_this_cabinet(self):
+        text = felink.netplay_cfg(self.prof, range(3, 5))
+        self.assertIn('netplay_request_device_p3 = "true"', text)
+        self.assertIn('netplay_request_device_p4 = "true"', text)
+        self.assertNotIn("netplay_request_device_p1", text)
+        self.assertIn('netplay_max_connections = "6"', text)
+
+    def test_the_link_of_a_two_control_cabinet_hosts_with_two_players_and_a_guest_takes_the_next_pair(self):
+        a = felink.Link(self.tmp.name + "/a", wire=LOOP, ident="aaa", name="A", ports={"presence": free_port(), "party": self.port,
+                                                                                    "files": free_port()}, local_players=2)
+        b = felink.Link(self.tmp.name + "/b", wire=LOOP, ident="bbb", name="B", ports=a.ports, local_players=2)
+        for link in (a, b):
+            os.makedirs(link.home)
+            self.assertTrue(link.start())
+            self.addCleanup(link.stop)
+        self.assertTrue(a.host_game(self.prof, "mame", "xmen", [], "/r/xmen.zip"))
+        self.assertEqual(a.take, 2)
+        self.assertTrue(wait(lambda: b.parties_for("mame", "xmen")))
+        party = b.parties_for("mame", "xmen")[0]
+        self.assertEqual((party["used"], party["max"]), (2, 6))
+        self.assertTrue(b.join_party(party, self.prof, "mame", "xmen", "/r/xmen.zip"))
+        self.assertEqual((b.number, b.take), (2, 2))
+        self.assertTrue(a.start_now())
+        self.assertTrue(wait(lambda: b.guest.plan is not None))
+        b.tick()
+        self.assertEqual(b.lobby()["first"], 3)
+        cfg_b = " ".join(b.command(["ignored"]))
+        text = Path(b.home, ".config", "fliperos", "netplay.cfg").read_text()
+        self.assertIn('netplay_request_device_p3 = "true"', text)
+        self.assertIn('netplay_request_device_p4 = "true"', text)
+        a.command(["ignored"])
+        host_text = Path(a.home, ".config", "fliperos", "netplay.cfg").read_text()
+        self.assertIn('netplay_request_device_p1 = "true"', host_text)
+        self.assertIn('netplay_request_device_p2 = "true"', host_text)
+        self.assertNotIn("netplay_request_device_p3", host_text)
+
+    def test_a_netplay_party_starts_by_itself_when_every_slot_is_taken(self):
+        a = felink.Link(self.tmp.name + "/a", wire=LOOP, ident="aaa", name="A", ports={"presence": free_port(), "party": self.port,
+                                                                                    "files": free_port()}, local_players=3)
+        os.makedirs(a.home)
+        self.assertTrue(a.start())
+        self.addCleanup(a.stop)
+        prof = felink.netplay_profile("mame", "xmen", "4", 2, frozenset({"xmen"}))
+        a.host_game(prof, "mame", "xmen", [], "/r/xmen.zip")
+        self.assertEqual(a.take, 3)
+        self.assertIsNone(a.tick())
+        g, ok = self.guest("g", 3)
+        self.assertTrue(ok)
+        self.assertEqual(felink.Link.mine(g.party, g.number)["take"], 1)     # sobrou 1 de 4
+        self.assertIsNone(a.tick())                                          # o tick que comeca devolve None
+        self.assertIsNotNone(a.plan)
 
 
 class NetplayTests(unittest.TestCase):

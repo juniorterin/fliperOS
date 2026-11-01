@@ -44,6 +44,7 @@ PORT_PRESENCE, PORT_PARTY, PORT_FILES = 55436, 55437, 55438
 # O net play e o do RetroArch: o core do FBNeo, pelo fliperos-kms-run. A
 # lista dos sets do FBNeo vem do indice que o Setup baixa (config/fliperos-fbneo).
 PORT_NETPLAY = 55435
+BUTTONS_MAP = os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
 KMS_RUN = os.environ.get("FLIPEROS_KMS_RUN", "/opt/fliperos/bin/fliperos-kms-run")
 NETPLAY_CORE = os.environ.get("FLIPEROS_NETPLAY_CORE", "/opt/fliperos/retroarch/cores/fbneo_libretro.so")
 FBNEO_INDEX = os.environ.get("FLIPEROS_FBNEO_INDEX", "/usr/local/share/fliperos/fbneo-sets.tsv.xz")
@@ -268,15 +269,16 @@ def parties(table):
             continue
         p = out.setdefault(pid, {"party": pid, "game": rec.get("game"), "system": rec.get("system"),
                                  "link": rec.get("link"), "max": rec.get("max"), "state": rec.get("state"),
-                                 "host_ip": None, "host": None, "numbers": []})
+                                 "host_ip": None, "host": None, "numbers": [], "slots": 0})
         if rec.get("slot") == 1:
             p["host_ip"], p["host"] = rec.get("ip"), rec.get("name")
             p["max"], p["state"] = rec.get("max"), rec.get("state")
         if rec.get("slot"):
             p["numbers"].append(rec["slot"])
+            p["slots"] += rec.get("take") or 1
     for p in out.values():
         p["numbers"].sort()
-        p["used"] = len(p["numbers"])
+        p["used"] = p.pop("slots")
     return sorted(out.values(), key=lambda p: (p["state"] != "playing", p["game"] or ""))
 
 
@@ -293,7 +295,8 @@ def make_plan(profile, members):
         order = list(numbers)
     step = profile.get("step", 6)
     return {"profile": profile["id"], "n": n, "order": order, "step": step,
-            "members": [{"number": m["number"], "name": m["name"], "ip": m["ip"]} for m in members],
+            "members": [{"number": m["number"], "name": m["name"], "ip": m["ip"], "take": m.get("take", 1),
+                         "first": m.get("first", m["number"])} for m in members],
             "delays": {str(num): order.index(num) * step for num in numbers}}
 
 
@@ -328,11 +331,11 @@ class PartyHost:
     """A festa de quem abre o jogo: o numero 1. Escuta quem quer entrar, mantem
     a sala e, no start(), fixa os numeros e manda o plano a todos."""
 
-    def __init__(self, wire, profile, game, ident, name, port=PORT_PARTY, on_change=None):
+    def __init__(self, wire, profile, game, ident, name, port=PORT_PARTY, on_change=None, take=1):
         self.wire, self.profile, self.game = wire, profile, game
         self.ident, self.name, self.port = ident, name, port
         self.on_change = on_change or (lambda: None)
-        self.members = [{"id": ident, "name": name, "ip": wire.ip, "conn": None}]
+        self.members = [{"id": ident, "name": name, "ip": wire.ip, "conn": None, "take": max(1, take)}]
         self.state = "lobby"
         self.plan = None
         self.lock = threading.Lock()
@@ -346,14 +349,34 @@ class PartyHost:
         self.sock.settimeout(0.3)
         threading.Thread(target=self.accept, daemon=True).start()
 
+    def numbered(self):
+        """Os gabinetes da festa em ordem, cada um com o numero, quantos
+        jogadores ocupa (take) e o primeiro deles (first). Num jogo de link cada
+        gabinete e um; no net play, tantos quantos os controles dele."""
+        out, first = [], 1
+        for i, m in enumerate(self.members):
+            out.append({"number": i + 1, "name": m["name"], "ip": m["ip"], "take": m["take"], "first": first})
+            first += m["take"]
+        return out
+
     def snapshot(self):
         with self.lock:
             return {"party": self.ident, "profile": self.profile["id"], "game": self.game, "state": self.state,
                     "min": self.profile["min"], "max": self.profile["max"], "fixed": self.profile["fixed"],
-                    "members": [{"number": i + 1, "name": m["name"], "ip": m["ip"]} for i, m in enumerate(self.members)]}
+                    "capacity": self.capacity(), "members": self.numbered()}
 
     def count(self):
         return len(self.members)
+
+    def capacity(self):
+        """As vagas: os jogadores do jogo no net play, os gabinetes no link."""
+        return self.profile.get("players") or self.profile["max"]
+
+    def used(self):
+        return sum(m["take"] for m in self.members)
+
+    def full(self):
+        return self.used() >= self.capacity()
 
     def ready(self):
         """Pode comecar: o minimo chegou (os de tamanho fixo, so com todos)."""
@@ -381,12 +404,22 @@ class PartyHost:
                 with self.lock:
                     if self.state != "lobby":
                         why = "closed"
-                    elif len(self.members) >= self.profile["max"]:
+                    elif self.full():
                         why = "full"
                     elif msg.get("game") != self.game:
                         why = "game"
                     else:
-                        member = {"id": msg.get("id"), "name": str(msg.get("name") or src)[:24], "ip": src, "conn": conn}
+                        take = 1
+                        if self.profile.get("netplay"):
+                            # Um gabinete ocupa um jogador por controle que tem,
+                            # ate onde ha vagas.
+                            try:
+                                want = int(msg.get("want") or 1)
+                            except (TypeError, ValueError):
+                                want = 1
+                            take = max(1, min(want, self.capacity() - self.used()))
+                        member = {"id": msg.get("id"), "name": str(msg.get("name") or src)[:24], "ip": src, "conn": conn,
+                                  "take": take}
                         self.members.append(member)
                 if why:
                     send_line(conn, {"op": "refused", "why": why})
@@ -427,7 +460,7 @@ class PartyHost:
             if self.state != "lobby" or not self.ready():
                 return None
             self.state = "playing"
-            members = [{"number": i + 1, "name": m["name"], "ip": m["ip"]} for i, m in enumerate(self.members)]
+            members = self.numbered()
         self.plan = make_plan(self.profile, members)
         for i, m in enumerate(self.members[1:], 2):
             send_line(m["conn"], {"op": "start", "number": i, "plan": self.plan})
@@ -462,7 +495,7 @@ class PartyGuest:
         self.closed = False
         self.changed = threading.Event()
 
-    def join(self, host_ip, game, timeout=3.0):
+    def join(self, host_ip, game, timeout=3.0, want=1):
         """Entra. True se o anfitriao aceitou; senao self.refused diz porque
         (closed, full, game, ou down se nem atendeu)."""
         try:
@@ -471,7 +504,7 @@ class PartyGuest:
             self.refused = "down"
             return False
         self.conn.settimeout(None)
-        send_line(self.conn, {"op": "join", "id": self.ident, "name": self.name, "game": game})
+        send_line(self.conn, {"op": "join", "id": self.ident, "name": self.name, "game": game, "want": want})
         threading.Thread(target=self.listen, daemon=True).start()
         if not self.changed.wait(timeout):
             self.refused = self.refused or "down"
@@ -554,6 +587,25 @@ def command(profile, base, plan, number, game):
     return argv[:-1] + extra + argv[-1:]
 
 
+def local_players(path=None):
+    """Quantos jogadores este gabinete tem configurados (os controles do Button
+    mapping: os jogadores do /etc/fliperos/buttons.map). FLIPEROS_LOCAL_PLAYERS
+    manda; sem mapa, 2."""
+    forced = os.environ.get("FLIPEROS_LOCAL_PLAYERS")
+    if forced and forced.isdigit() and int(forced) > 0:
+        return int(forced)
+    players = set()
+    try:
+        with open(path or BUTTONS_MAP, encoding="utf-8") as f:
+            for line in f:
+                head = line.split(None, 1)[0] if line.strip() else ""
+                if head.isdigit():
+                    players.add(int(head))
+    except OSError:
+        pass
+    return len(players) or 2
+
+
 _fbneo = {}
 
 
@@ -587,8 +639,8 @@ def netplay_profile(system_key, name, players, local, sets=None):
     if (system_key or "").split("/")[0] != "mame" or n <= local or name not in sets:
         return None
     return {"id": "netplay", "title": name, "emulator": "retroarch", "systems": ["mame"], "sets": [name],
-            "min": 2, "max": n, "fixed": False, "order": "master-first", "step": 6, "port": PORT_NETPLAY,
-            "netplay": True}
+            "min": 2, "max": n, "players": n, "fixed": False, "order": "master-first", "step": 6,
+            "port": PORT_NETPLAY, "netplay": True}
 
 
 NETPLAY_CFG = """# O net play do FliperOS: so a rede local, so pelo cabo. Nada de servidor
@@ -602,6 +654,13 @@ netplay_check_frames = "600"
 netplay_allow_slaves = "false"
 netplay_max_connections = "%d"
 """
+
+
+def netplay_cfg(profile, slots):
+    """A config do net play deste gabinete: a de cima e os jogadores que ele
+    ocupa (netplay_request_device_pN), um por controle configurado."""
+    text = NETPLAY_CFG % profile["max"]
+    return text + "".join('netplay_request_device_p%d = "true"\n' % k for k in slots)
 
 
 def netplay_command(profile, plan, number, rom, name, cfg, core=None):
@@ -885,7 +944,7 @@ class Link:
     def __init__(self, home, profiles=None, wire=False, ident=None, name=None, ports=None, clock=time.monotonic,
                  local_players=None):
         self.home = home
-        self.local_players = local_players or int(os.environ.get("FLIPEROS_LOCAL_PLAYERS") or 2)
+        self.local_players = local_players or globals()["local_players"]()
         self.profiles = profiles or Profiles()
         self.wire = wired() if wire is False else wire
         self.ident = ident or machine_id()
@@ -902,6 +961,7 @@ class Link:
         self.guest = None             # o PartyGuest
         self.files = None             # o FileServer (so o anfitriao)
         self.profile = self.game = self.system = self.rom = None
+        self.take = 1              # quantos jogadores este gabinete ocupa (net play: os controles dele)
         self.plan = self.number = None
         self.launch_at = None
         self.undo = []
@@ -979,15 +1039,17 @@ class Link:
         host = self.party
         self.presence.say(game=self.game, system=self.system, link=self.profile["id"],
                           party=host.ident if host else self.guest.party["party"], slot=self.number or 1,
-                          max=self.profile["max"], state=state)
+                          take=self.take, max=self.profile["players"] if self.profile.get("netplay") else self.profile["max"],
+                          state=state)
 
     def host_game(self, profile, system_key, name, files, rom=None):
         """Abre a festa deste gabinete (o numero 1) e serve os arquivos do jogo.
         files: os caminhos (relativos ao home) que quem entra sem o jogo copia."""
         self.leave()
         try:
+            take = min(self.local_players, profile["players"]) if profile.get("netplay") else 1
             party = PartyHost(self.wire, profile, name, self.ident, self.name, port=self.ports.get("party", PORT_PARTY),
-                              on_change=self.say)
+                              on_change=self.say, take=take)
             party.open()
         except OSError:
             self.message = "COULD NOT OPEN THE PARTY"
@@ -999,6 +1061,7 @@ class Link:
             server = None
         self.role, self.party, self.files = "host", party, server
         self.profile, self.game, self.system, self.number, self.rom = profile, name, system_key, 1, rom
+        self.take = take
         self.say()
         return party
 
@@ -1006,13 +1069,20 @@ class Link:
         """Entra na festa de outro gabinete. False (e self.message) se nao deu."""
         self.leave()
         guest = PartyGuest(self.wire, self.ident, self.name, port=self.ports.get("party", PORT_PARTY))
-        if not guest.join(party["host_ip"], name):
+        want = self.local_players if profile.get("netplay") else 1
+        if not guest.join(party["host_ip"], name, want=want):
             self.message = REASONS.get(guest.refused, REASONS["down"])
             return False
         self.role, self.guest = "guest", guest
         self.profile, self.game, self.system, self.number, self.rom = profile, name, system_key, guest.number, rom
+        self.take = self.mine(guest.party, guest.number)["take"]
         self.say()
         return True
+
+    @staticmethod
+    def mine(snap, number):
+        """O gabinete de numero `number` na sala (take, first), ou take 1."""
+        return next((m for m in (snap or {}).get("members", []) if m["number"] == number), {"take": 1, "first": number})
 
     def leave(self):
         """Sai da festa (a do anfitriao fecha para todos) e volta ao normal."""
@@ -1045,9 +1115,13 @@ class Link:
             ready = len(snap["members"]) >= self.profile["min"]
             plan = self.guest.plan
             closed = self.guest.closed and not plan
+        me = self.mine(snap, self.number)
         return {"role": self.role, "profile": self.profile, "game": self.game, "members": snap["members"],
                 "number": self.number, "min": self.profile["min"], "max": self.profile["max"],
                 "fixed": self.profile["fixed"], "ready": ready, "plan": plan, "closed": closed,
+                "slots": sum(m.get("take", 1) for m in snap["members"]),
+                "capacity": self.profile.get("players") or self.profile["max"],
+                "take": me["take"], "first": me["first"],
                 "left": None if self.launch_at is None else max(0.0, self.launch_at - now)}
 
     def start_now(self):
@@ -1076,7 +1150,7 @@ class Link:
             # comeca sozinha; a de tamanho flexivel o anfitriao comeca antes,
             # com o botao.
             if not self.plan and self.party.state == "lobby" and (
-                    self.party.count() >= self.profile["max"] or (self.profile["fixed"] and self.party.ready())):
+                    self.party.full() or (self.profile["fixed"] and self.party.ready())):
                 self.start_now()
         else:
             if self.guest.plan and not self.plan:
@@ -1085,6 +1159,7 @@ class Link:
                 return "closed"
             elif self.guest.number != self.number and not self.plan:
                 self.number = self.guest.number
+                self.take = self.mine(self.guest.party, self.number)["take"]
                 self.say()
         if self.plan and self.launch_at is not None and now >= self.launch_at:
             self.launch_at = None
@@ -1100,8 +1175,9 @@ class Link:
             # O net play nao tem NVRAM por numero: o RetroArch com o que a festa pede.
             cfg = os.path.join(self.home, ".config", "fliperos", "netplay.cfg")
             os.makedirs(os.path.dirname(cfg), exist_ok=True)
+            me = self.mine(plan, number)
             with open(cfg, "w") as f:
-                f.write(NETPLAY_CFG % prof["max"])
+                f.write(netplay_cfg(prof, range(me["first"], me["first"] + me["take"])))
             return netplay_command(prof, plan, number, self.rom, self.name, cfg)
         argv = command(prof, base, plan, number, self.game)
         items = [(dest, origin) for origin, dest in nvram_files(prof, number, self.home)]
