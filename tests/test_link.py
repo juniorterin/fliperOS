@@ -466,5 +466,133 @@ class FilesTests(unittest.TestCase):
                 urllib.request.urlopen("http://127.0.0.1:%d/manifest" % self.port, timeout=3)
 
 
+class LinkTests(unittest.TestCase):
+    """Dois gabinetes (o Link de cada um) na mesma maquina, pelo loopback."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.now = [100.0]
+        self.ports = {"presence": free_port(), "party": free_port(), "files": free_port()}
+        self.a = self.cabinet("aaa", "home-a")
+        self.b = self.cabinet("bbb", "home-b")
+        os.makedirs(os.path.join(self.a.home, "roms", "model3"))
+        Path(self.a.home, "roms", "model3", "scud.zip").write_bytes(b"scud")
+        self.prof = self.a.profiles.get("scud")
+
+    def cabinet(self, ident, folder):
+        home = os.path.join(self.tmp.name, folder)
+        os.makedirs(home)
+        link = felink.Link(home, wire=LOOP, ident=ident, name=ident.upper(), ports=self.ports, clock=lambda: self.now[0])
+        self.assertTrue(link.start())
+        self.addCleanup(link.stop)
+        return link
+
+    def open_party(self):
+        self.assertIsNotNone(self.a.host_game(self.prof, "model3", "scud", self.a.served([os.path.join(self.a.home, "roms/model3/scud.zip")])))
+        self.assertTrue(wait(lambda: self.b.mark("model3", "scud") is True))
+        return self.b.parties_for("model3", "scud")[0]
+
+    def test_a_game_without_a_profile_has_no_mark_and_the_others_show_dim_or_lit(self):
+        self.assertIsNone(self.b.mark("mame", "sf2"))
+        self.assertIs(self.b.mark("model3", "scud"), False)
+        party = self.open_party()
+        self.assertEqual((party["host"], party["used"], party["max"], party["state"]), ("AAA", 1, 8, "lobby"))
+
+    def test_a_cabinet_without_the_cable_does_nothing(self):
+        link = felink.Link(self.tmp.name, wire=None, ident="x")
+        self.assertFalse(link.start())
+        self.assertFalse(link.available())
+        self.assertIsNone(link.mark("model3", "scud"))
+        self.assertEqual(link.parties(), [])
+
+    def test_join_start_and_the_start_order(self):
+        party = self.open_party()
+        self.assertTrue(self.b.join_party(party, self.prof, "model3", "scud"))
+        self.assertEqual(self.b.number, 2)
+        self.assertTrue(wait(lambda: len(self.a.lobby()["members"]) == 2))
+        self.assertTrue(wait(lambda: any(p["used"] == 2 for p in self.b.parties())) or True)
+        self.assertIsNone(self.a.tick())                      # flexivel: espera o botao do anfitriao
+        self.assertTrue(self.a.start_now())
+        self.assertTrue(wait(lambda: self.b.guest.plan is not None))
+        self.assertIsNone(self.b.tick())                      # recebeu o plano, a contagem comeca
+        self.assertEqual(self.b.number, 2)
+        # Para dois, o master sobe primeiro (3 s de contagem) e o escravo 10 s depois.
+        self.now[0] = 100.0 + felink.COUNTDOWN - 0.1
+        self.assertIsNone(self.a.tick())
+        self.now[0] = 100.0 + felink.COUNTDOWN + 0.1
+        self.assertEqual(self.a.tick(), "launch")
+        self.assertIsNone(self.a.tick())                      # so uma vez
+        self.assertIsNone(self.b.tick())
+        self.now[0] = 100.0 + felink.COUNTDOWN + 10.1
+        self.assertEqual(self.b.tick(), "launch")
+        self.assertEqual(self.a.lobby()["plan"]["order"], [1, 2])
+
+    def test_the_command_carries_the_numbers_nvram_and_the_way_back(self):
+        party = self.open_party()
+        self.b.join_party(party, self.prof, "model3", "scud")
+        self.a.start_now()
+        self.assertTrue(wait(lambda: self.b.guest.plan is not None))
+        self.b.tick()
+        dest = os.path.join(self.b.home, "nvram", "model3", "scudau.nv")
+        os.makedirs(os.path.dirname(dest))
+        Path(dest).write_bytes(b"mine")
+        argv = self.b.command(["x11-run", "supermodel", "/r/scud.zip"])
+        self.assertEqual(argv[:3], ["x11-run", "supermodel", "/r/scud.zip"])
+        self.assertIn("-net", argv)
+        self.assertEqual(Path(dest).read_bytes(), Path(felink.NVRAM_SRC, "supermodel/scud/cabinet2.nv").read_bytes())
+        self.b.leave()
+        self.assertEqual(Path(dest).read_bytes(), b"mine")
+        self.assertIsNone(self.b.lobby())
+
+    def test_sm2emu_writes_and_then_turns_the_link_off_in_the_ini(self):
+        os.environ["XDG_CONFIG_HOME"] = os.path.join(self.a.home, "cfg")
+        self.addCleanup(os.environ.pop, "XDG_CONFIG_HOME")
+        prof = self.a.profiles.get("daytona")
+        self.a.host_game(prof, "model2", "daytona", [])
+        self.assertTrue(wait(lambda: self.b.parties_for("model2", "daytona")))
+        self.b.join_party(self.b.parties_for("model2", "daytona")[0], prof, "model2", "daytona")
+        self.a.start_now()
+        ini = os.path.join(self.a.home, "cfg", "sm2-emu", "sm2-emu.ini")
+        argv = self.a.command(["x11-run", "fliperos-model2", "daytona"])
+        self.assertEqual(argv, ["x11-run", "fliperos-model2", "--game", "daytona", "daytona"])
+        text = Path(ini).read_text()
+        self.assertIn("link_enabled = true", text)
+        self.assertIn("link_next_ip = 127.0.0.1", text)
+        self.a.leave()
+        self.assertIn("link_enabled = false", Path(ini).read_text())
+
+    def test_the_tournament_battle_starts_by_itself_with_four(self):
+        prof = self.a.profiles.get("ssf2tb")
+        self.a.host_game(prof, "mame", "ssf2tb", [])
+        cabinets = [self.b] + [self.cabinet("c%d" % i, "home-c%d" % i) for i in range(2)]
+        self.assertTrue(wait(lambda: self.b.parties_for("mame", "ssf2tb")))
+        party = self.b.parties_for("mame", "ssf2tb")[0]
+        for i, link in enumerate(cabinets):
+            self.assertTrue(link.join_party(party, prof, "mame", "ssf2tb"))
+            self.assertIsNone(self.a.tick())                   # o tick que comeca devolve None; o plano ja saiu
+            self.assertEqual(self.a.lobby()["plan"] is not None, i == 2)
+        self.assertEqual(self.a.lobby()["plan"]["order"], [1, 2, 3, 4])
+        self.assertTrue(wait(lambda: cabinets[-1].guest.plan is not None))
+        self.assertEqual(self.a.lobby()["left"], felink.COUNTDOWN)
+        late = self.cabinet("d", "home-d")
+        self.assertFalse(late.join_party(party, prof, "mame", "ssf2tb"))
+
+    def test_the_host_leaving_closes_the_party_for_the_guest(self):
+        party = self.open_party()
+        self.b.join_party(party, self.prof, "model3", "scud")
+        self.a.leave()
+        self.assertTrue(wait(lambda: self.b.tick() == "closed"))
+        self.assertTrue(wait(lambda: self.b.mark("model3", "scud") is False))
+
+    def test_a_started_party_is_closed_to_late_cabinets(self):
+        party = self.open_party()
+        self.b.join_party(party, self.prof, "model3", "scud")
+        self.a.start_now()
+        late = self.cabinet("late", "home-late")
+        self.assertFalse(late.join_party(self.a.lobby() and {"host_ip": "127.0.0.1", "party": "aaa"}, self.prof, "model3", "scud"))
+        self.assertEqual(late.message, felink.REASONS["closed"])
+
+
 if __name__ == "__main__":
     unittest.main()

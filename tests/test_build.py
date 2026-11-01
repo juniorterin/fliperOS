@@ -10071,6 +10071,24 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertNotIn('wine', helper)
         self.assertNotIn('WINEPREFIX=', helper)
 
+    def test_model2_wrapper_keeps_the_value_of_an_option(self):
+        # --game daytona (o set de um zip com varias revisoes) nao vira o
+        # caminho do zip: so o nome solto do jogo vira. O link play do
+        # frontend abre o Daytona assim (gui/felink.py).
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            src, roms = tmp / 'src', tmp / 'roms'
+            (src / 'build' / 'bin').mkdir(parents=True)
+            roms.mkdir()
+            (roms / 'daytona.zip').write_text('x')
+            (src / 'build' / 'bin' / 'sm2-emu').write_text('#!/bin/sh\nfor a in "$@"; do echo "$a"; done > "$HOME/args"\n')
+            (src / 'build' / 'bin' / 'sm2-emu').chmod(0o755)
+            env = dict(os.environ, FLIPEROS_SM2_SRC=str(src), FLIPEROS_MODEL2_DIR=str(roms), HOME=str(tmp))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-model2'), '--game', 'daytona', '--nvram', 'saves',
+                            'daytona'], env=env, check=True, timeout=30)
+            self.assertEqual((tmp / 'args').read_text().splitlines(),
+                             ['--game', 'daytona', '--nvram', 'saves', '%s/daytona.zip' % roms])
+
 
 class PixelcadeTests(unittest.TestCase):
     """config/fliperos-pixelcade: o marquee do Pixelcade pelo pixelweb (baixado

@@ -14,11 +14,22 @@ if [[ ! -x $bin ]]; then
   exit 1
 fi
 args=()
+prev=
 for arg in "$@"; do
-  if [[ $arg != -* && ! -e $arg && -f $roms/$arg.zip ]]; then
-    args+=("$roms/$arg.zip")
-  else
-    args+=("$arg")
-  fi
+  # O valor de uma opcao (--game daytona, --nvram dir) fica como veio: so o
+  # nome solto do jogo vira o caminho do .zip.
+  case $prev in
+    --game | --config | --nvram | --rom-dir | --gpu | --graphics-backend | --log-level | --screenshot-dir | --render-scale | --load-state)
+      args+=("$arg")
+      ;;
+    *)
+      if [[ $arg != -* && ! -e $arg && -f $roms/$arg.zip ]]; then
+        args+=("$roms/$arg.zip")
+      else
+        args+=("$arg")
+      fi
+      ;;
+  esac
+  prev=$arg
 done
 exec "$bin" "${args[@]}"

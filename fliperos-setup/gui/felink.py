@@ -574,26 +574,49 @@ def nvram_files(profile, number, home, src=None):
     return out
 
 
-def install_nvram(profile, number, home, src=None):
-    """Poe a NVRAM do numero onde o emulador a le. O arquivo que la havia vai
-    para NOME.solo (so o primeiro: um .solo que ja existe e o da pessoa) e
-    volta no restore(). A lista do que foi mexido fica em ~/nvram/.link-active,
-    para um frontend que reabre depois de uma queda desfazer (recover)."""
+def place_files(home, items):
+    """Poe cada (destino, origem) no lugar: origem e o caminho de um arquivo ou
+    os bytes do que se grava. O arquivo que la havia vai para NOME.solo (so o
+    primeiro: um .solo que ja existe e o da pessoa) e volta no restore(). A
+    lista do que foi mexido fica em ~/nvram/.link-active, para um frontend que
+    reabre depois de uma queda desfazer (recover)."""
     import shutil
-    files = nvram_files(profile, number, home, src)
+    marker = os.path.join(home, "nvram", ".link-active")
     done = []
-    for origin, dest in files:
+    try:
+        with open(marker) as f:
+            done = json.load(f)
+    except (OSError, ValueError):
+        pass
+    for dest, origin in items:
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         if os.path.exists(dest) and not os.path.exists(dest + SOLO):
             os.replace(dest, dest + SOLO)
-        shutil.copyfile(origin, dest)
-        done.append(dest)
-    marker = os.path.join(home, "nvram", ".link-active")
+        if isinstance(origin, bytes):
+            with open(dest, "wb") as f:
+                f.write(origin)
+        else:
+            shutil.copyfile(origin, dest)
+        if dest not in done:
+            done.append(dest)
     if done:
         os.makedirs(os.path.dirname(marker), exist_ok=True)
         with open(marker, "w") as f:
             json.dump(done, f)
     return lambda: recover(home)
+
+
+def install_nvram(profile, number, home, src=None):
+    """Poe a NVRAM do numero onde o emulador a le (place_files)."""
+    return place_files(home, [(dest, origin) for origin, dest in nvram_files(profile, number, home, src)])
+
+
+def mame_cfg(tag, value, game):
+    """O cfg de um jogo do MAME com um so item da Machine Configuration ligado
+    (o :comm:CFG do Tournament Battle; o dois pontos do comeco e parte do tag)."""
+    return ('<?xml version="1.0"?>\n<mamecfg version="10">\n    <system name="%s">\n        <input>\n'
+            '            <port tag="%s" type="CONFIG" mask="1" defvalue="0" value="%s" />\n'
+            '        </input>\n    </system>\n</mamecfg>\n' % (game, tag, value)).encode()
 
 
 def recover(home):
@@ -699,17 +722,20 @@ class FileServer:
         self.httpd.server_close()
 
 
-def fetch_files(host_ip, home, wanted, port=PORT_FILES, progress=None):
+def fetch_files(host_ip, home, wanted=None, port=PORT_FILES, progress=None):
     """Copia do anfitriao os arquivos que faltam ou diferem (wanted: os
-    caminhos relativos que o jogo pede). Cada um vem para NOME.part, e so vira
-    o arquivo depois de conferido (o sha256 do manifesto); uma queda retoma
-    do que ja veio. progress(feitos, total, caminho). Devolve (ok, faltou)."""
+    caminhos relativos que o jogo pede; sem ele, tudo o que o anfitriao
+    serve). Cada um vem para NOME.part, e so vira o arquivo depois de
+    conferido (o sha256 do manifesto); uma queda retoma do que ja veio.
+    progress(feitos, total, caminho). Devolve (ok, faltou)."""
     import urllib.request
     try:
         with urllib.request.urlopen("http://%s:%d/manifest" % (host_ip, port), timeout=5) as r:
             manifest = {m["path"]: m for m in json.load(r)}
     except (OSError, ValueError):
-        return False, list(wanted)
+        return False, list(wanted or [])
+    if wanted is None:
+        wanted = list(manifest)
     todo = [manifest[p] for p in wanted if p in manifest]
     missing = [p for p in wanted if p not in manifest]
     total = sum(m["size"] for m in todo)
@@ -754,3 +780,258 @@ def sha256_of(path):
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+# ── O link deste gabinete, para o frontend ─────────────────────────
+
+COUNTDOWN = 3.0          # segundos de "STARTING" depois que a festa manda o plano
+WIRE_CHECK = 5.0         # de quantos em quantos segundos olha se o cabo mudou
+REASONS = {"closed": "THE PARTY ALREADY STARTED", "full": "THE PARTY IS FULL", "game": "NOT THE SAME GAME",
+           "down": "NO ANSWER FROM THE OTHER CABINET"}
+
+
+def machine_id():
+    try:
+        with open("/etc/machine-id") as f:
+            return f.read().strip()[:12]
+    except OSError:
+        return socket.gethostname()
+
+
+class Link:
+    """O que o frontend usa: presenca na rede cabeada, a festa deste gabinete
+    (anfitriao ou convidado), a contagem do comeco e o comando do jogo em
+    link. Sem cabo, available() e falso e nada mais faz nada."""
+
+    def __init__(self, home, profiles=None, wire=False, ident=None, name=None, ports=None, clock=time.monotonic):
+        self.home = home
+        self.profiles = profiles or Profiles()
+        self.wire = wired() if wire is False else wire
+        self.ident = ident or machine_id()
+        self.name = name or "CABINET-%s" % self.ident[:4].upper()
+        self.ports = ports or {}
+        self.clock = clock
+        self.presence = None
+        self.checked = clock()
+        self.reset()
+
+    def reset(self):
+        self.role = None              # "host", "guest" ou None
+        self.party = None             # a PartyHost
+        self.guest = None             # o PartyGuest
+        self.files = None             # o FileServer (so o anfitriao)
+        self.profile = self.game = self.system = None
+        self.plan = self.number = None
+        self.launch_at = None
+        self.undo = []
+        self.message = None
+
+    # ── Ligar e desligar ──
+    def start(self):
+        """Abre a presenca na interface cabeada. False sem cabo."""
+        if not self.wire or self.presence:
+            return bool(self.presence)
+        try:
+            self.presence = Presence(self.wire, self.ident, self.name, port=self.ports.get("presence", PORT_PRESENCE))
+            self.presence.start()
+        except OSError:
+            self.presence = None
+            return False
+        self.presence.say(state="idle")
+        return True
+
+    def stop(self):
+        self.leave()
+        if self.presence:
+            self.presence.stop()
+            self.presence = None
+
+    def available(self):
+        return self.presence is not None
+
+    def poll(self, now):
+        """O cabo solto ou posto: a presenca e a festa saem, ou voltam."""
+        if now - self.checked < WIRE_CHECK:
+            return
+        self.checked = now
+        wire = wired()
+        if wire != self.wire:
+            self.stop()
+            self.wire = wire
+            self.start()
+
+    # ── O que se ve ──
+    def profile_of(self, system_key, name):
+        return self.profiles.find(system_key, name) if self.available() else None
+
+    def table(self):
+        return self.presence.table() if self.presence else []
+
+    def parties(self):
+        return parties(self.table())
+
+    def parties_for(self, system_key, name):
+        key = (system_key or "").split("/")[0]
+        return [p for p in self.parties() if p["game"] == name and (p["system"] or "").split("/")[0] == key]
+
+    def mark(self, system_key, name):
+        """None: o jogo nao tem link. False: tem, e ninguem joga. True: alguem joga."""
+        if not self.profile_of(system_key, name):
+            return None
+        return bool(self.parties_for(system_key, name))
+
+    # ── A festa ──
+    def say(self):
+        """Diz na rede o que este gabinete faz (ou que nao faz nada)."""
+        if not self.presence:
+            return
+        if not self.role:
+            self.presence.say(game=None, system=None, link=None, party=None, slot=None, max=None, state="idle")
+            return
+        state = "playing" if self.plan else "lobby"
+        host = self.party
+        self.presence.say(game=self.game, system=self.system, link=self.profile["id"],
+                          party=host.ident if host else self.guest.party["party"], slot=self.number or 1,
+                          max=self.profile["max"], state=state)
+
+    def host_game(self, profile, system_key, name, files):
+        """Abre a festa deste gabinete (o numero 1) e serve os arquivos do jogo.
+        files: os caminhos (relativos ao home) que quem entra sem o jogo copia."""
+        self.leave()
+        try:
+            party = PartyHost(self.wire, profile, name, self.ident, self.name, port=self.ports.get("party", PORT_PARTY),
+                              on_change=self.say)
+            party.open()
+        except OSError:
+            self.message = "COULD NOT OPEN THE PARTY"
+            return None
+        try:
+            server = FileServer(self.wire, self.home, files, port=self.ports.get("files", PORT_FILES))
+            server.start()
+        except OSError:
+            server = None
+        self.role, self.party, self.files = "host", party, server
+        self.profile, self.game, self.system, self.number = profile, name, system_key, 1
+        self.say()
+        return party
+
+    def join_party(self, party, profile, system_key, name):
+        """Entra na festa de outro gabinete. False (e self.message) se nao deu."""
+        self.leave()
+        guest = PartyGuest(self.wire, self.ident, self.name, port=self.ports.get("party", PORT_PARTY))
+        if not guest.join(party["host_ip"], name):
+            self.message = REASONS.get(guest.refused, REASONS["down"])
+            return False
+        self.role, self.guest = "guest", guest
+        self.profile, self.game, self.system, self.number = profile, name, system_key, guest.number
+        self.say()
+        return True
+
+    def leave(self):
+        """Sai da festa (a do anfitriao fecha para todos) e volta ao normal."""
+        for undo in self.undo:
+            try:
+                undo()
+            except OSError:
+                pass
+        if self.party:
+            self.party.close()
+        if self.files:
+            self.files.stop()
+        if self.guest:
+            self.guest.leave()
+        self.reset()
+        self.say()
+
+    def lobby(self, now=None):
+        """O que a sala mostra, ou None fora de uma festa."""
+        if not self.role:
+            return None
+        now = self.clock() if now is None else now
+        if self.role == "host":
+            snap = self.party.snapshot()
+            ready = self.party.ready()
+            plan = self.party.plan
+            closed = False
+        else:
+            snap = self.guest.party or {"members": []}
+            ready = len(snap["members"]) >= self.profile["min"]
+            plan = self.guest.plan
+            closed = self.guest.closed and not plan
+        return {"role": self.role, "profile": self.profile, "game": self.game, "members": snap["members"],
+                "number": self.number, "min": self.profile["min"], "max": self.profile["max"],
+                "fixed": self.profile["fixed"], "ready": ready, "plan": plan, "closed": closed,
+                "left": None if self.launch_at is None else max(0.0, self.launch_at - now)}
+
+    def start_now(self):
+        """O anfitriao comeca a festa (so se o minimo chegou)."""
+        if self.role != "host" or not self.party:
+            return False
+        plan = self.party.start()
+        if not plan:
+            return False
+        self.take_plan(plan, 1)
+        return True
+
+    def take_plan(self, plan, number):
+        self.plan, self.number = plan, number
+        self.launch_at = self.clock() + COUNTDOWN + plan["delays"].get(str(number), 0)
+        self.say()
+
+    def tick(self, now=None):
+        """Chamado do laco do frontend. Devolve "launch" na hora de abrir o
+        jogo, "closed" se a festa acabou (o anfitriao saiu) e None no resto."""
+        if not self.role:
+            return None
+        now = self.clock() if now is None else now
+        if self.role == "host":
+            # Com todas as vagas cheias, ou de tamanho fixo com todos, a festa
+            # comeca sozinha; a de tamanho flexivel o anfitriao comeca antes,
+            # com o botao.
+            if not self.plan and self.party.state == "lobby" and (
+                    self.party.count() >= self.profile["max"] or (self.profile["fixed"] and self.party.ready())):
+                self.start_now()
+        else:
+            if self.guest.plan and not self.plan:
+                self.take_plan(self.guest.plan, self.guest.number)
+            elif self.guest.closed and not self.plan:
+                return "closed"
+            elif self.guest.number != self.number and not self.plan:
+                self.number = self.guest.number
+                self.say()
+        if self.plan and self.launch_at is not None and now >= self.launch_at:
+            self.launch_at = None
+            return "launch"
+        return None
+
+    # ── O jogo ──
+    def command(self, base):
+        """O comando do jogo em link (o base e o do frontend), com a NVRAM, o
+        cfg e o ini deste numero no lugar; leave() desfaz tudo."""
+        prof, plan, number = self.profile, self.plan, self.number
+        argv = command(prof, base, plan, number, self.game)
+        items = [(dest, origin) for origin, dest in nvram_files(prof, number, self.home)]
+        if prof["emulator"] == "groovymame" and prof.get("cfg"):
+            cfgdir = os.environ.get("FLIPEROS_MAME_CFG_DIR") or os.path.join(self.home, ".mame", "cfg")
+            items.append((os.path.join(cfgdir, self.game + ".cfg"),
+                          mame_cfg(prof["cfg"]["tag"], prof["cfg"]["value"], self.game)))
+        self.undo.append(place_files(self.home, items))
+        if prof["emulator"] == "sm2emu":
+            cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.join(self.home, ".config")
+            ini = os.path.join(cfg, "sm2-emu", "sm2-emu.ini")
+            ini_set(ini, sm2_keys(prof, plan, number, self.wire.ip))
+            self.undo.append(lambda: ini_set(ini, {"link_enabled": "false"}))
+        return argv
+
+    def served(self, rom_files):
+        """Os arquivos que o jogo pede, relativos ao home: os da pasta do
+        jogo (e o pai, num clone) e os extras do perfil que existem."""
+        out = []
+        for path in rom_files:
+            rel = os.path.relpath(path, self.home)
+            if not rel.startswith("..") and os.path.isfile(path):
+                out.append(rel)
+        for rel in (self.profile or {}).get("extra", []):
+            if os.path.isfile(os.path.join(self.home, rel)):
+                out.append(rel)
+        return out

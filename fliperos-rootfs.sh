@@ -308,6 +308,11 @@ install -Dm644 "$src/config/fliperos-media-torrents" "$root/usr/local/share/flip
 # pastas, uma a uma, do pacote de referencia (um torrent do archive.org).
 install -Dm755 "$src/config/fliperos-bios" "$root/opt/fliperos/bin/fliperos-bios"
 install -Dm644 "$src/config/fliperos-bios-pack" "$root/usr/local/share/fliperos/bios-pack"
+# Link play do frontend (gui/felink.py): a NVRAM de cada numero de gabinete dos
+# jogos de link (mestre e escravos), que o frontend poe onde o emulador a le.
+rm -rf "$root/usr/local/share/fliperos/link-nvram"
+mkdir -p "$root/usr/local/share/fliperos"
+cp -r "$src/config/link-nvram" "$root/usr/local/share/fliperos/link-nvram"
 # Updates sem ISO nova (patches do updates/index, em ordem), perguntados no
 # boot pelo fliperos-tty1.
 install -Dm755 "$src/config/fliperos-update" "$root/opt/fliperos/bin/fliperos-update"
