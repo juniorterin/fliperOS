@@ -20,7 +20,7 @@ Every row says how it was checked. **Tested** means two or more instances were l
 | Wave Runner | SM2-Emu | not checked | 1 | 1 | Network Type + Cabinet ID | not checked | Solo |
 | Cyber Troopers Virtual-On Twin | SM2-Emu | not checked | 1 | 1 | Network Link Attribute | not checked | Solo |
 | Super GT 24h | SM2-Emu | set by Link Max | 1 | 1 | Link Type | **Yes** (Link Max) | Solo |
-| Scud Race | Supermodel | not checked | 1 | 1 | Yes (starts as master) | not checked | Solo |
+| Scud Race | Supermodel | 2 (more not checked) | 1 | 1 | Yes (Link ID in the test menu, starts as master) | No (found when the link starts) | **Tested** with 2 |
 | Daytona USA 2 | Supermodel | not checked | 1 | 1 | Yes (starts as master) | not checked | Solo |
 | Dirt Devils | Supermodel | not checked | 1 | 1 | Yes (starts as slave) | not checked | Solo |
 | Spikeout | Supermodel | not checked | 2 | 1 | not checked | not checked | Solo |
@@ -50,7 +50,7 @@ A few things apply to all of them:
 - **Start the machines close together.** The order matters, and it is not the same everywhere: see each emulator below.
 - **The machines must run at the same speed.** One that is fast-forwarded, or much slower, loses the link.
 - **Open the ports.** The cabinet has no firewall. On a Windows PC, allow the emulator through the firewall if the link does not form.
-- **Do not count on joining late.** In MAME the ring boards do not reconnect after the link drops (the source marks the link dead). Joining a game already running was not tested.
+- **Do not count on joining late.** In MAME the ring boards do not reconnect after the link drops (the source marks the link dead). In Supermodel a machine that was restarted did not rejoin, and the other had to be restarted too. A game already running was not joined by a third machine in any emulator.
 
 ## SM2-Emu: Sega Model 2
 
@@ -113,7 +113,23 @@ Alone, with and without `-net`:
 | Ski Champ | "Drive board trouble FF" | Same |
 | Virtual-On 2 | Warning screen | Black screen |
 
-Two Supermodel instances were **not** linked here. The table only says which games wait for a partner. Ski Champ and Virtual-On 2 could not be judged.
+The table only says which games wait for a partner. Ski Champ and Virtual-On 2 could not be judged.
+
+**Scud Race with two machines** was linked and raced, as two Supermodel windows on one PC. Each instance needs its own folder, so the NVRAM does not clash.
+
+- **Set the slave first.** Run the game with `-net`, press Test (`6`) twice to reach the test menu, and use Service (`5`) to move. Game Assignments is the 8th item counted from Exit. Its first two rows, Link ID and Car Number, are above the visible part of the window, so they are changed blind: Service from Exit goes to Link ID, then Car Number, and Test changes the value. One Test on Link ID makes it Slave. One Test on Car Number makes it 2. Leave through Exit twice. The "Network Checking" screen that follows shows the values. Close the emulator normally so the NVRAM is saved.
+- **Start the machines:**
+
+```sh
+supermodel scud.zip -net -port-in=1970 -port-out=1971 -address-out=127.0.0.1   # master, car 1
+supermodel scud.zip -net -port-in=1971 -port-out=1970 -address-out=127.0.0.1   # slave, car 2
+```
+
+  The master was started first, six seconds before the slave. The other order was not tried. Both TCP links come up, both leave "Network Checking" and show "Up to 2 players may race at once". After a coin and Start on each, both pick a course and a transmission and race: the master showed 1st of 2, the slave 2nd of 2, with the lap times 0.04 seconds apart.
+- **If the slave leaves during a race,** the master keeps racing. A little later it goes back to "Network Checking".
+- **A machine that restarts does not rejoin.** With the slave restarted, only its connection to the master came back. The master did not connect to it again, and the same happened the other way round. Both stayed on "Network Checking". Restart both machines.
+
+Daytona USA 2 and Dirt Devils were not linked in pairs. Dirt Devils starts as slave, so a pair needs one of the two set to master.
 
 ## GroovyMAME
 
@@ -184,6 +200,6 @@ Gaelco's Speed Up, Surf Planet, Radikal Bikers and Football Power link through s
 
 ## How this was checked
 
-Between 31 October and 1 November 2026. The emulators were GroovyMAME gm0289sr222f (MAME 0.289), SM2-Emu 0.9.56, and Supermodel 0.3a at the same commit as the cabinet's (1481545). The Model 2 and CPS-2 links ran with one instance in a window on a PC and the other on the cabinet's CRT (Daytona), or all on the PC (Tournament Battle).
+Between 31 October and 1 November 2026. The emulators were GroovyMAME gm0289sr222f (MAME 0.289), SM2-Emu 0.9.56, and Supermodel 0.3a at the same commit as the cabinet's (1481545). The Daytona link ran with one instance in a window on a PC and the other on the cabinet's CRT. The Tournament Battle (four instances) and the Scud Race (two) ran all on the PC.
 
 The "Source" rows and the lists of boards come from MAME 0.289's source and its game list (`mame -listxml`).

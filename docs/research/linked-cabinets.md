@@ -117,6 +117,15 @@ Ten games, 60 seconds, without and with `-net`:
 - Ski Champ: "Drive board trouble, code FF" (a drive board check), the same with and without.
 - Virtual-On 2: the warning screen without, a black screen with.
 
+### Scud Race pair in Supermodel (done, on 1 November, all on the PC)
+
+- Two copies of the Supermodel folder (`A` and `B`, each with `Config`, `Assets`, `NVRAM`), the ROMs in a shared folder. The NVRAM file is `scudau.nv` (the `scud` zip loads the `scudau` set).
+- **Slave settings.** `-net` alone shows "This is master controller". Test (`6`) once shows a video test menu, a second time the main test menu (cursor on Exit). Service (`5`) moves down, Test selects, and in Game Assignments Test changes the value of the item under the cursor. The first rows (Link ID, Car Number) are above the visible area of the window, so the cursor is invisible when it is on them. From Exit, Service goes to Link ID, then Car Number. One Test on Link ID gave SLAVE, one Test on Car Number gave 2. Game Assignments is the 8th item from Exit in the main menu, and Exit is 4 presses after it. Leaving the menu restarts the game on the "Network Checking" screen, which shows the values.
+- **Link.** Master `-port-in=1970 -port-out=1971`, slave `-port-in=1971 -port-out=1970`, both `-address-out=127.0.0.1`, master first and the slave six seconds later: both TCP connections up, "Up to 2 players may race at once" in attract, then course select, transmission, and the race with 1st of 2 and 2nd of 2. Lap times 00'24"88 and 00'24"84.
+- **Slave killed in the race:** the master kept racing and its timer kept running; some seconds later it was back on "Network Checking" (not seen exactly when, the race may have ended).
+- **Slave started again:** only the slave's connection to the master came back, the master's connection to the slave did not, after more than a minute. The same when only the master was restarted. Both machines have to restart.
+- Windows note: the SDL window and the console are separate windows of the same process. Find the game window by its title with `EnumWindows`, because `Process.MainWindowHandle` is the console.
+
 ### Model 1 and System 32 in MAME (menus only)
 
 `vr`, `f1lap`, `orunners`, `radr`, `scross` and `gunbustr` load in MAME 0.289 from the 0.283 set and their test menus open. Gunbuster's has MONITOR, SWITCH, SOUND, CONFIGURATION, GUN ADJUSTMENT, FACTORY SETTING and COMMUNICATION TEST. Rad Rally's has a Network Test item and the title "Individual". `swa` and `wingwar` fail the checksum of `315-5711.bin` in 0.283 (and Wing War needs `hd44780`). No link was tried.
@@ -161,7 +170,7 @@ If the user quits the game on the CRT, the script resumes the loop and the Setup
 
 Roughly in order of value.
 
-1. **Supermodel pairs.** Scud Race, Daytona USA 2 and Dirt Devils: set the roles in the test menu (keys 6 and 5), link two instances in a ring on one PC (each in its own folder so the NVRAM does not clash), then on the PC and the cabinet. Players, cabinets and what the second cabinet needs.
+1. **Supermodel pairs.** Scud Race is done on one PC. Left: Daytona USA 2 and Dirt Devils (it starts as slave: one of the two needs the master role), the other start order (slave first), three or four instances in the ring, and the PC with the cabinet. Players, cabinets and what the second cabinet needs.
 2. **Model 2 roles.** Set MASTER in each game that has a link item and see which ones wait for a partner. Then pairs: Touring Car, Indy 500, Motor Raid, Wave Runner, Virtual-On Twin, Super GT 24h (read the range of Link Max). Read Sega Rally, Over Rev and Desert Tank, and find out what the Manx TT motion slider check wants.
 3. **Late join and leaving.** A third cabinet in a Daytona ring, one cabinet leaving, in MAME, SM2-Emu (UDP, "best effort") and Supermodel. For the Tournament Battle, a fourth instance joining late and one leaving (the source says it reconnects).
 4. **Gunbuster pair** with the procedure in the header comment, then Model 1 (`vr`, `vformula`, and fix `swa` and `wingwar`) and System 32 (`radr`, `f1lap`, `orunners`, `scross`, the Kokology games).

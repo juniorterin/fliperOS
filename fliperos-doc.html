@@ -29221,12 +29221,12 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <tr>
 <td>Scud Race</td>
 <td>Supermodel</td>
-<td>not checked</td>
+<td>2 (more not checked)</td>
 <td>1</td>
 <td>1</td>
-<td>Yes (starts as master)</td>
-<td>not checked</td>
-<td>Solo</td>
+<td>Yes (Link ID in the test menu, starts as master)</td>
+<td>No (found when the link starts)</td>
+<td><strong>Tested</strong> with 2</td>
 </tr>
 <tr>
 <td>Daytona USA 2</td>
@@ -29332,7 +29332,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <li><strong>Start the machines close together.</strong> The order matters, and it is not the same everywhere: see each emulator below.</li>
 <li><strong>The machines must run at the same speed.</strong> One that is fast-forwarded, or much slower, loses the link.</li>
 <li><strong>Open the ports.</strong> The cabinet has no firewall. On a Windows PC, allow the emulator through the firewall if the link does not form.</li>
-<li><strong>Do not count on joining late.</strong> In MAME the ring boards do not reconnect after the link drops (the source marks the link dead). Joining a game already running was not tested.</li>
+<li><strong>Do not count on joining late.</strong> In MAME the ring boards do not reconnect after the link drops (the source marks the link dead). In Supermodel a machine that was restarted did not rejoin, and the other had to be restarted too. A game already running was not joined by a third machine in any emulator.</li>
 </ul>
 <h2 id="sm2-emu-sega-model-2">SM2-Emu: Sega Model 2</h2>
 <p>The link is a UDP ring. In <code>sm2-emu.ini</code> (or in F10 &gt; Network):</p>
@@ -29458,7 +29458,19 @@ link_next_port = 15112
 </tr>
 </tbody>
 </table>
-<p>Two Supermodel instances were <strong>not</strong> linked here. The table only says which games wait for a partner. Ski Champ and Virtual-On 2 could not be judged.</p>
+<p>The table only says which games wait for a partner. Ski Champ and Virtual-On 2 could not be judged.</p>
+<p><strong>Scud Race with two machines</strong> was linked and raced, as two Supermodel windows on one PC. Each instance needs its own folder, so the NVRAM does not clash.</p>
+<ul>
+<li><strong>Set the slave first.</strong> Run the game with <code>-net</code>, press Test (<code>6</code>) twice to reach the test menu, and use Service (<code>5</code>) to move. Game Assignments is the 8th item counted from Exit. Its first two rows, Link ID and Car Number, are above the visible part of the window, so they are changed blind: Service from Exit goes to Link ID, then Car Number, and Test changes the value. One Test on Link ID makes it Slave. One Test on Car Number makes it 2. Leave through Exit twice. The "Network Checking" screen that follows shows the values. Close the emulator normally so the NVRAM is saved.</li>
+<li><strong>Start the machines:</strong></li>
+</ul>
+<pre><code class="language-sh">supermodel scud.zip -net -port-in=1970 -port-out=1971 -address-out=127.0.0.1   # master, car 1
+supermodel scud.zip -net -port-in=1971 -port-out=1970 -address-out=127.0.0.1   # slave, car 2
+</code></pre>
+<p>The master was started first, six seconds before the slave. The other order was not tried. Both TCP links come up, both leave "Network Checking" and show "Up to 2 players may race at once". After a coin and Start on each, both pick a course and a transmission and race: the master showed 1st of 2, the slave 2nd of 2, with the lap times 0.04 seconds apart.
+- <strong>If the slave leaves during a race,</strong> the master keeps racing. A little later it goes back to "Network Checking".
+- <strong>A machine that restarts does not rejoin.</strong> With the slave restarted, only its connection to the master came back. The master did not connect to it again, and the same happened the other way round. Both stayed on "Network Checking". Restart both machines.</p>
+<p>Daytona USA 2 and Dirt Devils were not linked in pairs. Dirt Devils starts as slave, so a pair needs one of the two set to master.</p>
 <h2 id="groovymame">GroovyMAME</h2>
 <p>The link uses four options. They are the same for every board:</p>
 <table>
@@ -29517,7 +29529,7 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <p>The Model 3 boards in MAME (and the NAOMI ones that share the same board) and the Chihiro network board are stubs. The Konami network PCBs and the Namco C139 serial chip are stubs too.</p>
 <p>Gaelco's Speed Up, Surf Planet, Radikal Bikers and Football Power link through shared memory between two instances, and only if MAME is rebuilt with a source switch. The normal build cannot do it.</p>
 <h2 id="how-this-was-checked">How this was checked</h2>
-<p>Between 31 October and 1 November 2026. The emulators were GroovyMAME gm0289sr222f (MAME 0.289), SM2-Emu 0.9.56, and Supermodel 0.3a at the same commit as the cabinet's (1481545). The Model 2 and CPS-2 links ran with one instance in a window on a PC and the other on the cabinet's CRT (Daytona), or all on the PC (Tournament Battle).</p>
+<p>Between 31 October and 1 November 2026. The emulators were GroovyMAME gm0289sr222f (MAME 0.289), SM2-Emu 0.9.56, and Supermodel 0.3a at the same commit as the cabinet's (1481545). The Daytona link ran with one instance in a window on a PC and the other on the cabinet's CRT. The Tournament Battle (four instances) and the Scud Race (two) ran all on the PC.</p>
 <p>The "Source" rows and the lists of boards come from MAME 0.289's source and its game list (<code>mame -listxml</code>).</p>
 <h1 id="Latency">Latency</h1>
 <p>What weighs most in the delay between pressing the button and the picture changing is the same on FliperOS and on GroovyArcade: the same kernel patches (the same video output on radeon/amdgpu), the same Switchres and GroovyMAME, and the CRT, which doesn't process the image.</p>
