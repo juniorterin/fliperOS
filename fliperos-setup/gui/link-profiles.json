@@ -1,0 +1,31 @@
+{
+  "_": "Os jogos de link do FliperOS: um perfil por familia de jogo (gui/felink.py). Tudo o que se sabe de cada um vem dos testes de docs/research/linked-cabinets.md. nvram: a pasta em config/link-nvram (cabinetN.EXT), onde cada arquivo vai (relativo a ~) e o nome que o emulador espera. order: master-first (o master sobe primeiro: SM2-Emu), slaves-first (os escravos primeiro, na ordem contraria a do anel, e o master por ultimo: Supermodel) ou chain (a cabeca primeiro, os outros na ordem da cadeia: GroovyMAME). step: os segundos entre uma maquina e a seguinte. fixed: so comeca com max maquinas.",
+  "games": [
+    {
+      "id": "daytona", "title": "Daytona USA", "emulator": "sm2emu", "systems": ["model2"], "sets": ["daytona"],
+      "min": 2, "max": 8, "fixed": false, "order": "master-first", "step": 6, "port": 15112,
+      "nvram": {"dir": "sm2emu/daytona", "dest": "nvram/model2", "files": {"nv": "daytona.nv", "eeprom": "daytona.eeprom"}}
+    },
+    {
+      "id": "scud", "title": "Scud Race", "emulator": "supermodel", "systems": ["model3"], "sets": ["scud"],
+      "min": 2, "max": 8, "fixed": false, "order": "slaves-first", "step": 10, "port": 1970,
+      "nvram": {"dir": "supermodel/scud", "dest": "nvram/model3", "files": {"nv": "scudau.nv"}}
+    },
+    {
+      "id": "daytona2", "title": "Daytona USA 2", "emulator": "supermodel", "systems": ["model3"], "sets": ["daytona2"],
+      "min": 2, "max": 8, "fixed": false, "order": "slaves-first", "step": 10, "port": 1970,
+      "nvram": {"dir": "supermodel/daytona2", "dest": "nvram/model3", "files": {"nv": "daytona2.nv"}}
+    },
+    {
+      "id": "dirtdvls", "title": "Dirt Devils", "emulator": "supermodel", "systems": ["model3"], "sets": ["dirtdvls"],
+      "min": 2, "max": 2, "fixed": false, "order": "master-first", "step": 10, "port": 1970,
+      "nvram": {"dir": "supermodel/dirtdvls", "dest": "nvram/model3", "files": {"nv": "dirtdvlsau.nv"}}
+    },
+    {
+      "id": "ssf2tb", "title": "Super Street Fighter II: The Tournament Battle", "emulator": "groovymame", "systems": ["mame"],
+      "sets": ["ssf2tb", "ssf2tba", "ssf2tbh", "ssf2tbj", "ssf2tbj1", "ssf2tbr1", "ssf2tbu"],
+      "min": 4, "max": 4, "fixed": true, "order": "chain", "step": 6, "port": 1234,
+      "cfg": {"tag": ":comm:CFG", "value": "1"}
+    }
+  ]
+}
