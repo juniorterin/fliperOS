@@ -18,6 +18,7 @@ Using it
 - [Adding games](Adding-games.md)
 - [Controls](Controls.md)
 - [Desktop and theme](Desktop.md)
+- [Linked cabinets](Linked-cabinets.md)
 - [Latency](Latency.md)
 - [Multiple monitors](Multiple-Monitors.md)
 - [DIY hardware](DIY-hardware.md)

@@ -320,7 +320,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_build.py
 </code></pre>
 <h2 id="documentation">Documentation</h2>
-<p><strong>Using it:</strong> <a href="#Video-cards">Video cards</a> · <a href="#Monitors">Monitors</a> · <a href="#Black-screen">Black screen</a> · <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Scoreboard-games">Scoreboard games</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Adding-games">Adding games</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a> · <a href="#Multiple-Monitors">Multiple monitors</a> · <a href="#DIY-hardware">DIY hardware</a></p>
+<p><strong>Using it:</strong> <a href="#Video-cards">Video cards</a> · <a href="#Monitors">Monitors</a> · <a href="#Black-screen">Black screen</a> · <a href="#Install">Install</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#Scoreboard-games">Scoreboard games</a> · <a href="#Emulators">Emulators</a> · <a href="#Fightcade-2">Fightcade 2</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Scraper">Scraper</a> · <a href="#Adding-games">Adding games</a> · <a href="#Controls">Controls</a> · <a href="#Desktop">Desktop and theme</a> · <a href="#Latency">Latency</a> · <a href="#Multiple-Monitors">Multiple monitors</a> · <a href="#Linked-cabinets">Linked cabinets</a> · <a href="#DIY-hardware">DIY hardware</a></p>
 <p><strong>Hacking on it:</strong> <a href="#Kernel-15-kHz">15 kHz kernel</a> · <a href="#Build-and-tests">Build and tests</a> · <a href="#Architecture">Architecture</a> · <a href="#Sources">Sources</a></p>
 <p>The pages live in <a href="docs/wiki"><code>docs/wiki</code></a> and go to the wiki with <code>bash tools/wiki-publish.sh</code>. <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> is all of it in one file (<code>tools/render-docs.py</code>).</p>
 <h2 id="contributors">Contributors</h2>
@@ -29117,6 +29117,408 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>The Linux console only has 16 colors, and the background only accepts the first 8.</p>
 <p>The VT palette is reprogrammed with the Dracula tones at boot (<code>/etc/vtrgb</code>, applied by Ubuntu's <code>setvtrgb.service</code>, with <code>config/vtrgb-dracula</code> as a higher-priority alternative) and again by <code>fliperos-setup</code>; Gum's styles use the palette <strong>indices</strong>, not hexadecimal colors.</p>
 <p>That way the tube and a graphical terminal show the same thing. The console font (Lat15/Uni2) has the rounded borders, the bar blocks and the arrows the screens use.</p>
+<h1 id="Linked-cabinets">Linked cabinets</h1>
+<h1 id="linked-cabinets">Linked cabinets</h1>
+<p>Some arcade games were built to be played on several machines at once: racing cabinets joined by a link cable, or a fighting game that needs four cabinets for its tournament mode.</p>
+<p>This page lists those games, how the link works in each emulator FliperOS ships, and what each game needs to start: how many cabinets, how many players and screens, whether one cabinet must be master, and whether you tell the game how many cabinets there are.</p>
+<p><strong>There is no Setup screen for linked play yet.</strong> Everything here is set by hand in the emulator: a command line, an ini file, or the game's own test menu.</p>
+<h2 id="at-a-glance">At a glance</h2>
+<p>Every row says how it was checked. <strong>Tested</strong> means two or more instances were linked and played here. <strong>Solo</strong> means the game was only started alone, with the link on. <strong>Source</strong> means it comes from reading the emulator's code.</p>
+<table>
+<thead>
+<tr>
+<th>Game</th>
+<th>Emulator</th>
+<th>Cabinets</th>
+<th>Players per cabinet</th>
+<th>Screens</th>
+<th>Master / slave</th>
+<th>Cabinets set in the game</th>
+<th>Checked</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Daytona USA</td>
+<td>SM2-Emu, GroovyMAME</td>
+<td>2 to 8</td>
+<td>1</td>
+<td>1</td>
+<td>Yes (Link ID)</td>
+<td>No (found when the link starts)</td>
+<td><strong>Tested</strong> with 2</td>
+</tr>
+<tr>
+<td>Super Street Fighter II: The Tournament Battle</td>
+<td>GroovyMAME</td>
+<td>4</td>
+<td>2</td>
+<td>1</td>
+<td>No (the first one has an empty remote host)</td>
+<td>No (the game finds its place in the chain)</td>
+<td><strong>Tested</strong> with 4</td>
+</tr>
+<tr>
+<td>Sega Touring Car Championship</td>
+<td>SM2-Emu</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>Link Type</td>
+<td>not checked</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Indy 500</td>
+<td>SM2-Emu</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>Network Type + Cabinet ID</td>
+<td>not checked</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Motor Raid</td>
+<td>SM2-Emu</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>Network Type + Cabinet ID</td>
+<td>not checked</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Wave Runner</td>
+<td>SM2-Emu</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>Network Type + Cabinet ID</td>
+<td>not checked</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Cyber Troopers Virtual-On Twin</td>
+<td>SM2-Emu</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>Network Link Attribute</td>
+<td>not checked</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Super GT 24h</td>
+<td>SM2-Emu</td>
+<td>set by Link Max</td>
+<td>1</td>
+<td>1</td>
+<td>Link Type</td>
+<td><strong>Yes</strong> (Link Max)</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Scud Race</td>
+<td>Supermodel</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>Yes (starts as master)</td>
+<td>not checked</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Daytona USA 2</td>
+<td>Supermodel</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>Yes (starts as master)</td>
+<td>not checked</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Dirt Devils</td>
+<td>Supermodel</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>Yes (starts as slave)</td>
+<td>not checked</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Spikeout</td>
+<td>Supermodel</td>
+<td>not checked</td>
+<td>2</td>
+<td>1</td>
+<td>not checked</td>
+<td>not checked</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Sega Rally 2, Le Mans 24, Harley-Davidson</td>
+<td>Supermodel</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>not checked</td>
+<td>not checked</td>
+<td>Solo</td>
+</tr>
+<tr>
+<td>Gunbuster</td>
+<td>GroovyMAME</td>
+<td>2</td>
+<td>2</td>
+<td>1</td>
+<td>Yes (ID 0 and ID 1)</td>
+<td>No</td>
+<td>Source</td>
+</tr>
+<tr>
+<td>Virtua Racing, Virtua Formula</td>
+<td>GroovyMAME</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>Set by the game</td>
+<td>No</td>
+<td>Source</td>
+</tr>
+<tr>
+<td>Wing War</td>
+<td>GroovyMAME</td>
+<td>not checked</td>
+<td>1</td>
+<td>2</td>
+<td>Set by the game</td>
+<td>No</td>
+<td>Source</td>
+</tr>
+<tr>
+<td>F1 Super Lap, Rad Rally</td>
+<td>GroovyMAME</td>
+<td>not checked</td>
+<td>1</td>
+<td>1</td>
+<td>Set by the game</td>
+<td>No</td>
+<td>Source</td>
+</tr>
+<tr>
+<td>OutRunners, Stadium Cross</td>
+<td>GroovyMAME</td>
+<td>not checked</td>
+<td>2</td>
+<td>2</td>
+<td>Set by the game</td>
+<td>No</td>
+<td>Source</td>
+</tr>
+</tbody>
+</table>
+<p>"Not checked" means the answer was not found, not that the game has no limit. The sections below say what each emulator needs.</p>
+<h2 id="which-emulator">Which emulator</h2>
+<p><strong>Model 2 goes to SM2-Emu.</strong> GroovyMAME emulates Model 2 poorly, and SM2-Emu has its own link.</p>
+<p><strong>Model 3 goes to Supermodel.</strong> MAME's Model 3 communication board is an empty stub: the network code in it is commented out, so no data crosses between two MAME instances.</p>
+<p><strong>Model 1, System 32, CPS-2 and Gunbuster go to GroovyMAME.</strong> These are the boards whose link MAME really emulates.</p>
+<h2 id="how-a-link-starts">How a link starts</h2>
+<p>Most links are a <strong>ring</strong>: each machine listens on its own port and connects to the next one, and the last connects back to the first. For two machines, each points at the other.</p>
+<p>A few things apply to all of them:</p>
+<ul>
+<li><strong>Start the machines close together.</strong> The order matters, and it is not the same everywhere: see each emulator below.</li>
+<li><strong>The machines must run at the same speed.</strong> One that is fast-forwarded, or much slower, loses the link.</li>
+<li><strong>Open the ports.</strong> The cabinet has no firewall. On a Windows PC, allow the emulator through the firewall if the link does not form.</li>
+<li><strong>Do not count on joining late.</strong> In MAME the ring boards do not reconnect after the link drops (the source marks the link dead). Joining a game already running was not tested.</li>
+</ul>
+<h2 id="sm2-emu-sega-model-2">SM2-Emu: Sega Model 2</h2>
+<p>The link is a UDP ring. In <code>sm2-emu.ini</code> (or in F10 &gt; Network):</p>
+<pre><code class="language-ini">[network]
+link_enabled = true
+link_local_ip =
+link_port = 15112
+link_next_ip = 192.168.1.11
+link_next_port = 15112
+</code></pre>
+<p><code>link_next_ip</code> is the next machine in the ring. For two machines each one points at the other, and the changes take effect on the next game launch. With the link off, the game starts alone as a standalone cabinet.</p>
+<p><strong>Start the master first, then the slave.</strong> A slave that waits too long for the master gives up and shows CANCELLED.</p>
+<p><strong>The role is set in the game's test menu</strong>, not in the ini. The keys are <code>0</code> for Test and <code>9</code> for Service. In most Model 2 menus, Service moves the cursor and Test selects. Daytona and Desert Tank use the VR buttons to move (<code>B</code> and <code>N</code>) and Start (<code>1</code>) to select. The menus differ from game to game.</p>
+<table>
+<thead>
+<tr>
+<th>Game</th>
+<th>Link settings in the test menu</th>
+<th>Default</th>
+<th>Alone with the link on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Daytona USA</td>
+<td>Link ID: Master, Single or Slave. Car Number: 1 to 8</td>
+<td><strong>Master</strong></td>
+<td>Waits on "Network Checking". Choose Single to play alone</td>
+</tr>
+<tr>
+<td>Sega Touring Car Championship</td>
+<td>Link Type</td>
+<td>Stand alone</td>
+<td>Plays normally</td>
+</tr>
+<tr>
+<td>Indy 500, Motor Raid, Wave Runner</td>
+<td>Network Type and Cabinet ID</td>
+<td>Stand alone, ID 1</td>
+<td>Plays normally</td>
+</tr>
+<tr>
+<td>Cyber Troopers Virtual-On Twin</td>
+<td>Network Link Attribute</td>
+<td>No link</td>
+<td>Plays normally</td>
+</tr>
+<tr>
+<td>Super GT 24h</td>
+<td>Link Type and <strong>Link Max</strong></td>
+<td>Not link</td>
+<td>Plays normally</td>
+</tr>
+<tr>
+<td>Sega Water Ski</td>
+<td>none found</td>
+<td></td>
+<td>Plays normally</td>
+</tr>
+<tr>
+<td>Sega Rally Championship, Over Rev, Desert Tank</td>
+<td>not read</td>
+<td></td>
+<td>Plays normally</td>
+</tr>
+<tr>
+<td>Manx TT Superbike</td>
+<td>not read</td>
+<td></td>
+<td>Stops at the motion slider check, which has nothing to do with the link</td>
+</tr>
+</tbody>
+</table>
+<p>Daytona is the only one tested with two machines. The others were started alone, with the link on and the default role, to see which ones wait for a partner. Only Daytona does. Setting each game to master and looking again was not done.</p>
+<p><strong>Daytona with two machines.</strong> On the slave, open the test menu, go to Game System, set Link ID to Slave and Car Number to 2, and leave the menu. Start the master (Link ID Master, car 1) first, then the slave. Both leave the "Network Checking" screen and show "up to 2 players" in attract mode. Insert a coin and press Start on each one to race.</p>
+<p>Two races were played this way, one machine on a PC and one on the cabinet's CRT. Both ran at 57.5 frames a second, the other car showed on each screen, and the start was within a second or two on both. Car Number goes up to 8, but only two machines were tried.</p>
+<p><strong>Daytona in GroovyMAME</strong> links the same way, with the <code>-comm_*</code> options below. There the order is the other way round: start the slave first, then the master. Two masters never link: both stay on "Network Checking".</p>
+<h2 id="supermodel-sega-model-3">Supermodel: Sega Model 3</h2>
+<p>Supermodel's games with a net board are Daytona USA 2 (and Power Edition), Dirt Devils, Harley-Davidson, Le Mans 24, Scud Race (and Plus), Ski Champ, Spikeout (and Final Edition), Sega Rally 2 and Virtual-On 2. The Lost World has none.</p>
+<p>The link is a TCP ring, set on the command line:</p>
+<pre><code class="language-sh">supermodel scud.zip -net -port-in=1970 -port-out=1971 -address-out=192.168.1.11
+</code></pre>
+<p><code>-port-in</code> is this machine's port, <code>-port-out</code> and <code>-address-out</code> are the next machine's. The defaults are 1970, 1971 and 127.0.0.1.</p>
+<p>Alone, with and without <code>-net</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Game</th>
+<th>Without <code>-net</code></th>
+<th>With <code>-net</code>, no partner</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scud Race, Daytona USA 2</td>
+<td>"CANCELLED, network board not present"</td>
+<td>Waits as MASTER ("This is master controller")</td>
+</tr>
+<tr>
+<td>Dirt Devils</td>
+<td>Attract mode</td>
+<td>Waits as SLAVE (a diagnostic screen: mode, packet size, synch gap)</td>
+</tr>
+<tr>
+<td>Spikeout</td>
+<td>The game window never opened</td>
+<td>Attract mode</td>
+</tr>
+<tr>
+<td>Sega Rally 2, Le Mans 24, Harley-Davidson</td>
+<td>Attract mode</td>
+<td>Attract mode</td>
+</tr>
+<tr>
+<td>Ski Champ</td>
+<td>"Drive board trouble FF"</td>
+<td>Same</td>
+</tr>
+<tr>
+<td>Virtual-On 2</td>
+<td>Warning screen</td>
+<td>Black screen</td>
+</tr>
+</tbody>
+</table>
+<p>Two Supermodel instances were <strong>not</strong> linked here. The table only says which games wait for a partner. Ski Champ and Virtual-On 2 could not be judged.</p>
+<h2 id="groovymame">GroovyMAME</h2>
+<p>The link uses four options. They are the same for every board:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-comm_localhost</code>, <code>-comm_localport</code></td>
+<td>The address and port this machine listens on</td>
+</tr>
+<tr>
+<td><code>-comm_remotehost</code>, <code>-comm_remoteport</code></td>
+<td>The address and port of the machine it connects to</td>
+</tr>
+<tr>
+<td><code>-comm_framesync</code></td>
+<td>Wait for the vertical sync (on or off)</td>
+</tr>
+</tbody>
+</table>
+<p>The role and the switch that turns the board on are <strong>not</strong> command line options. For most boards they come from the game's test menu. For CPS-2 and Gunbuster they are a Machine Configuration setting, which can be saved in the game's <code>.cfg</code> file.</p>
+<p>GroovyMAME shows a warning screen for imperfect games, and the game waits on it. A mouse click on the window closes it. <code>-skip_gameinfo</code> does not.</p>
+<h3 id="super-street-fighter-ii-the-tournament-battle">Super Street Fighter II: The Tournament Battle</h3>
+<p>The sets are <code>ssf2tb</code>, <code>ssf2tba</code>, <code>ssf2tbh</code>, <code>ssf2tbj</code>, <code>ssf2tbj1</code>, <code>ssf2tbr1</code> and <code>ssf2tbu</code>. The bootleg <code>ssf2tbd</code> has the board but no link.</p>
+<p>It needs <strong>four cabinets</strong>, in a <strong>chain, not a ring</strong>. Turn on Machine Configuration &gt; Communication on each one. There is no master or slave: the first machine is the one with an empty remote host, and the last has an empty local host.</p>
+<pre><code class="language-sh">mame ssf2tb -comm_localhost 0.0.0.0 -comm_localport 1234 -comm_remotehost &quot;&quot;
+mame ssf2tb -comm_localhost 0.0.0.0 -comm_localport 1235 -comm_remotehost 127.0.0.1 -comm_remoteport 1234
+mame ssf2tb -comm_localhost 0.0.0.0 -comm_localport 1236 -comm_remotehost 127.0.0.1 -comm_remoteport 1235
+mame ssf2tb -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remoteport 1236
+</code></pre>
+<p>Replace 127.0.0.1 with the previous machine's address when they are on different PCs. Insert a coin and press Start on all four: each screen then shows "The Tournament Battle, Battle 1" with a different match, eight fighters in all.</p>
+<p>The game finds its place in the chain by itself, so you do not tell it how many cabinets there are. With fewer than four it stays on a blinking TERMINAL CHECK. That was seen with two and three machines joined in a ring, which is the wrong layout, so fewer than four in a chain was not tested.</p>
+<h3 id="gunbuster">Gunbuster</h3>
+<p>Two cabinets, two players each. Turn on Machine Configuration &gt; Link Simulation. In the test menu, Configuration, set Link Play to On and the ID Number to 0 on one and 1 on the other.</p>
+<pre><code class="language-sh">mame gunbustr -comm_localhost 0.0.0.0 -comm_localport 1234 -comm_remotehost &quot;&quot;
+mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remoteport 1234
+</code></pre>
+<p>Reset both at about the same time. The game shows COMMUNICATION ERROR if the other cabinet is missing, and COMMUNICATION CUT if the frame counter stops for sixteen frames. This comes from the source, and it was not tested.</p>
+<h3 id="model-1-and-system-32">Model 1 and System 32</h3>
+<p>Both are rings, with the master, slave or relay role written by the game into the board's shared memory. How many machines there are is found when the link starts: the master numbers the others as the setup frame goes round the ring.</p>
+<ul>
+<li><strong>Model 1:</strong> Virtua Racing, Virtua Formula and Wing War (and its R360 version).</li>
+<li><strong>System 32:</strong> F1 Super Lap, OutRunners, Rad Rally, Stadium Cross (<code>scrossa</code> is the "linkable" set) and the two Soreike Kokology games. The board is in every System 32 game, but only these ones set a link type. The Rad Rally test menu has a Network Test item.</li>
+</ul>
+<p>Virtua Racing, Rad Rally, OutRunners and Stadium Cross were started in MAME 0.289 and their test menus opened. The other games here were not tried. No link between two instances was tried for any of them.</p>
+<h2 id="flycast-naomi">Flycast: NAOMI</h2>
+<p><strong>Games that use several boards in one cabinet</strong> are not a link between machines. Ferrari F355 Challenge, Airline Pilots and Sega Strike Fighter run each board as its own Flycast window, one per monitor. See <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
+<p><strong>Linking two cabinets.</strong> Flycast's own LAN link is turned on in its advanced settings (Broadband adapter and Naomi network): one instance is the server, and the other types its IP. This comes from reports on the web, and it was not tested here. Reports say two machines work and a third can fail with a country error. The F355 "twin" sets are the ones made for a battle cable between two cabinets.</p>
+<p>The Derby Owners Club, World Club Champion Football and Mushiking sets are online and card games, and were not tried.</p>
+<h2 id="what-cannot-be-linked">What cannot be linked</h2>
+<p>MAME marks 309 sets (107 games) as having a network or serial link that is not emulated: Namco's Ridge Racer, Final Lap, Cyber Cycles and Alpine Racer 2 and others, Konami's GTI Club, Midnight Run, Racing Jam and Thrill Drive, Taito's Battle Gear and Chase Bombers, Midway's Cruis'n Exotica and Atari's Road Riot 4WD. No MAME code reads the link options for them, so there is nothing to turn on.</p>
+<p>The Model 3 boards in MAME (and the NAOMI ones that share the same board) and the Chihiro network board are stubs. The Konami network PCBs and the Namco C139 serial chip are stubs too.</p>
+<p>Gaelco's Speed Up, Surf Planet, Radikal Bikers and Football Power link through shared memory between two instances, and only if MAME is rebuilt with a source switch. The normal build cannot do it.</p>
+<h2 id="how-this-was-checked">How this was checked</h2>
+<p>Between 31 October and 1 November 2026. The emulators were GroovyMAME gm0289sr222f (MAME 0.289), SM2-Emu 0.9.56, and Supermodel 0.3a at the same commit as the cabinet's (1481545). The Model 2 and CPS-2 links ran with one instance in a window on a PC and the other on the cabinet's CRT (Daytona), or all on the PC (Tournament Battle).</p>
+<p>The "Source" rows and the lists of boards come from MAME 0.289's source and its game list (<code>mame -listxml</code>).</p>
 <h1 id="Latency">Latency</h1>
 <p>What weighs most in the delay between pressing the button and the picture changing is the same on FliperOS and on GroovyArcade: the same kernel patches (the same video output on radeon/amdgpu), the same Switchres and GroovyMAME, and the CRT, which doesn't process the image.</p>
 <p>FliperOS applies the tweaks GA already makes and adds others, in two modes chosen in <strong>Setup &gt; System &gt; Latency</strong> (<code>fliperos-setup/lib/latency.sh</code>).</p>
