@@ -97,7 +97,8 @@ A game with more players than this cabinet has controls gets the same window wit
 ![Net play](link-frontend-mockups/07-netplay-party.png)
 
 - For a game with more players than this cabinet's controls. The user joins another cabinet's party and takes a free slot (P2, P3 and so on). The host sees the slots fill.
-- Net play uses RetroArch's netplay with an FBNeo core, and it is the only way for fighting games of two players or more to be played across cabinets. It does not link the boards: the Tournament Battle's eight-player bracket still needs its four-cabinet link.
+- The example is X-Men (6 Players, Konami 1992), a six-player game. Each cabinet can take as many slots as it has controls, so a cabinet with two controls takes a pair.
+- Net play needs an emulator core that supports netplay (RetroArch), so which games get it depends on the cores. It does not link boards: the Tournament Battle's eight-player bracket still needs its four-cabinet link.
 
 ### Missing game files
 

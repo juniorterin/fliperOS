@@ -161,7 +161,7 @@ def list_screen(band):
     cv.d.line([(14, y)] + [(190, y)], fill=LINE)
     y += 8
     rows = [("1944: THE LOOP MAST", None), ("3 COUNT BOUT", None), ("AEROFIGHTERS 2", None), ("SCUD RACE", "link"),
-            ("SEGA RALLY", "link"), ("KOF 2002 UNLIMITED", "net"), ("ALIEN STORM", None)]
+            ("SEGA RALLY", "link"), ("X-MEN (6 PLAYERS)", "net"), ("ALIEN STORM", None)]
     for name, kind in rows:
         sel = name == "SCUD RACE"
         if kind == "link":
@@ -186,7 +186,7 @@ def list_screen(band):
 def grid_screen(band):
     cv = Canvas(band)
     tiles = [(26, 38), (116, 38), (206, 38), (26, 120), (116, 120), (206, 120)]
-    names = ["PUZZLE BOBBLE", "SCUD RACE", "SF2 TOURNAMENT", "ALIEN STORM", "KOF 2002", "SEGA RALLY"]
+    names = ["PUZZLE BOBBLE", "SCUD RACE", "SF2 TOURNAMENT", "ALIEN STORM", "X-MEN 6P", "SEGA RALLY"]
     kinds = [None, "link", "linklive", None, "net", "link"]
     for (x, y), name, kind in zip(tiles, names, kinds):
         cv.box(x, y, x + 80, y + 70, fill=BG_DEEP, outline=LINE)
@@ -252,11 +252,11 @@ def options_screen(band, joined):
 def options_netplay_screen(band):
     """A game with more players than this cabinet has controls: play here, or join a party."""
     cv = Canvas(band)
-    cv.center(36, "KOF 2002 UNLIMITED", YELLOW)
-    cv.center(48, "2002 SNK PLAYMORE", CYAN)
+    cv.center(36, "X-MEN (6 PLAYERS)", YELLOW)
+    cv.center(48, "1992 KONAMI", CYAN)
     cv.box(14, 62, 134, 142, fill=BG_DEEP, outline=PINK)
     cv.center(98, "(ART)", COMMENT, 14, 134)
-    cv.text(14, 152, "4 PLAYERS", COMMENT)
+    cv.text(14, 152, "6 PLAYERS", COMMENT)
     cv.text(14, 162, "2 CONTROLS HERE", COMMENT)
     cv.paste_icon(pads(True).resize((12, 12), Image.NEAREST), 14, 176)
     cv.text(30, 178, "NET PLAY", CYAN)
@@ -269,8 +269,8 @@ def options_netplay_screen(band):
     cv.paste_icon(pads(True), 152, 98)
     cv.text(176, 102, "NET PLAY", FG)
     cv.text(150, 126, "PARTY OF CABINET-1", GREEN)
-    cv.text(150, 138, "P1 TAKEN  P2 FREE", YELLOW)
-    cv.text(150, 148, "P3 FREE   P4 FREE", YELLOW)
+    cv.text(150, 138, "P1-P2 TAKEN", YELLOW)
+    cv.text(150, 148, "P3-P6 FREE", YELLOW)
     cv.box(146, 162, 308, 182, fill=BG_DEEP, outline=LINE)
     cv.text(154, 168, "+ NEW PARTY", LIST_TEXT)
     return cv
@@ -305,23 +305,24 @@ def lobby_screen(band, flags, starting=False):
 
 def netplay_screen(band):
     cv = Canvas(band)
-    cv.center(36, "KOF 2002 UNLIMITED", YELLOW)
-    cv.paste_icon(pads(True), 148, 48)
-    cv.center(68, "NET PLAY", FG)
-    cv.center(82, "THIS GAME HAS 4 PLAYERS. THIS", COMMENT)
-    cv.center(92, "CABINET HAS 2 CONTROLS", COMMENT)
-    cv.text(26, 112, "PARTY OF CABINET-1", CYAN)
-    rows = [("P1", "CABINET-1 (HOST)", True), ("P2", "FREE", False), ("P3", "FREE", False), ("P4", "FREE", False)]
-    y = 128
+    cv.center(36, "X-MEN (6 PLAYERS)", YELLOW)
+    cv.paste_icon(pads(True), 148, 46)
+    cv.center(66, "NET PLAY", FG)
+    cv.center(80, "THIS GAME HAS 6 PLAYERS.", COMMENT)
+    cv.center(90, "THIS CABINET HAS 2 CONTROLS", COMMENT)
+    cv.text(26, 104, "PARTY OF CABINET-1", CYAN)
+    rows = [("P1", "CABINET-1 (HOST)", True), ("P2", "CABINET-1 (HOST)", True), ("P3", "FREE", False),
+            ("P4", "FREE", False), ("P5", "FREE", False), ("P6", "FREE", False)]
+    y = 118
     for i, (p, who, taken) in enumerate(rows):
-        sel = i == 2
-        cv.box(26, y - 3, 294, y + 10, fill=(0x2c, 0x2c, 0x3c) if sel else BG_DEEP, outline=PINK if sel else LINE)
+        sel = i in (2, 3)   # two controls here: the guest takes a pair of slots
+        cv.box(26, y - 2, 294, y + 10, fill=(0x2c, 0x2c, 0x3c) if sel else BG_DEEP, outline=PINK if sel else LINE)
         cv.text(34, y, p, GREEN if taken else FG)
         cv.text(70, y, who, FG if taken else (YELLOW if sel else COMMENT))
         if sel:
             cv.text(238, y, "< YOU", PINK)
-        y += 17
-    cv.text(26, 202, "PICK A FREE SLOT TO JOIN", COMMENT)
+        y += 15
+    cv.text(26, 210, "THIS CABINET TAKES 2 SLOTS", COMMENT)
     cv.text(26, 226, "A: JOIN   B: BACK", COMMENT)
     return cv
 
