@@ -215,6 +215,10 @@ Virtua Racing, Rad Rally, OutRunners and Stadium Cross were started in MAME 0.28
 
 **Linking two cabinets.** Flycast's own LAN link is turned on in its advanced settings (Broadband adapter and Naomi network): one instance is the server, and the other types its IP. This comes from reports on the web, and it was not tested here. Reports say two machines work and a third can fail with a country error. The F355 "twin" sets are the ones made for a battle cable between two cabinets.
 
+**Net play (rollback)** is another thing: the Flycast of FliperOS has GGPO options (`GGPO`, `GGPODelay`, `ActAsServer`) for NAOMI and Atomiswave games, found in the program and not run here yet.
+
+**Which sets have a network board.** The romset of MAME 0.289 marks these NAOMI sets, among others: `f355`, `f355twin`, `f355twn2` (Ferrari F355 Challenge), `initd`, `initdexp`, `initdv2j`, `initdv3e`, `initdv3j`, `inidv3cy` (Initial D), `clubk2k3`, `clubkcyc`, `clubkprz`, `clubkpzb`, `clubkrt` (Club Kart), `18wheelr`, `crzytaxi` and `vstrik3`. All of them were downloaded to the cabinet on 1 November 2026 with the Downloader's Flycast filter (the "Everything that works" preset, all control types), but none was linked yet.
+
 The Derby Owners Club, World Club Champion Football and Mushiking sets are online and card games, and were not tried.
 
 ## What cannot be linked
