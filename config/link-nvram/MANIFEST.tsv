@@ -1,0 +1,37 @@
+emulator	game	cabinet	file	install as	role	number	sha256	checked
+supermodel	scud	1	supermodel/scud/cabinet1.nv	scudau.nv	master	car 1	02268ea0b49a21c72cab6e40a95ef0563f10c4ee438606a553a5cacaf86a8acf	network screen
+supermodel	daytona2	1	supermodel/daytona2/cabinet1.nv	daytona2.nv	master	car 1	84abceb5093a3908031356e448e7d2135cbf76b862fd444bc5d8a0a8d4dffe50	network screen
+supermodel	dirtdvls	1	supermodel/dirtdvls/cabinet1.nv	dirtdvlsau.nv	master	machine ID 1	195712b06d54c54b187d9094022355bfbe6f7c063134e2a677ac54cbe12675fe	Machine ID page
+sm2emu	daytona	1	sm2emu/daytona/cabinet1.nv	daytona.nv	master	car 1	56a5b67385f14e1b3cf39a964a02b8a26367833bc166f0043e21ca464aa8a224	network screen
+sm2emu	daytona	1	sm2emu/daytona/cabinet1.eeprom	daytona.eeprom	master	car 1	0119be47d6bb6e09cdde3d9158b65f4ba6216ae9d8cfb97731272135241cedf0	network screen
+supermodel	scud	2	supermodel/scud/cabinet2.nv	scudau.nv	slave	car 2	1a115e88d1f8f1a53348a28903b5da148c0f7734534a3a2280f8fb561efa9703	ring of four
+supermodel	daytona2	2	supermodel/daytona2/cabinet2.nv	daytona2.nv	slave	car 2	056c09343a1645550737914aed1ed1f3f3d53417fa4af6a39e57bd68ca3e547a	network screen, ring of four
+supermodel	dirtdvls	2	supermodel/dirtdvls/cabinet2.nv	dirtdvlsau.nv	slave	machine ID 2	57dcf0e49a13792902d5138f349694d00d1dc78d7b2855c733c9f7e08e634564	Machine ID page
+sm2emu	daytona	2	sm2emu/daytona/cabinet2.nv	daytona.nv	slave	car 2	c41a9e1da4dafc18c7828378e7212fcdf1f8dec0978f539d030119dacd6077fa	network screen
+sm2emu	daytona	2	sm2emu/daytona/cabinet2.eeprom	daytona.eeprom	slave	car 2	72ed9ead0a68c0231c0db4cd6b6060533f1df20e636d23d68c66235b30066722	network screen
+supermodel	scud	3	supermodel/scud/cabinet3.nv	scudau.nv	slave	car 3	9ce541deca8dc0dc4c92ff1a6528ec12897d533f70d3aaeb6b0af3b9250808b7	ring of four
+supermodel	daytona2	3	supermodel/daytona2/cabinet3.nv	daytona2.nv	slave	car 3	bc3fa04f77a694150bccd304b680d4c88601a1e0df02b37e941a9f9f65603a33	network screen, ring of four
+supermodel	dirtdvls	3	supermodel/dirtdvls/cabinet3.nv	dirtdvlsau.nv	slave	machine ID 3	6aad17dc330a4dc0c81d734574019748d75c741cb25a487dbf6528ea7e828e3c	Machine ID page
+sm2emu	daytona	3	sm2emu/daytona/cabinet3.nv	daytona.nv	slave	car 3	edbe5a258469eb2d7eff3a50ed967bc3d792c3e56ba23d83fbc4ad5730d87ab9	network screen
+sm2emu	daytona	3	sm2emu/daytona/cabinet3.eeprom	daytona.eeprom	slave	car 3	799501b9175be992a5750ea375df6a51bb07f874022099145bf0d2dcd6d7327f	network screen
+supermodel	scud	4	supermodel/scud/cabinet4.nv	scudau.nv	slave	car 4	9d061a5bdda9fa95e9a059cd5b3892a1fad131c783fc7f726fab666683cfc72f	ring of four
+supermodel	daytona2	4	supermodel/daytona2/cabinet4.nv	daytona2.nv	slave	car 4	4267b9040ddfe1953b89782bae97949593db4471993bf1190bbf0dee580e4d7f	network screen, ring of four
+supermodel	dirtdvls	4	supermodel/dirtdvls/cabinet4.nv	dirtdvlsau.nv	slave	machine ID 4	44c3972478355437295d2e5d13da1dfe740f0c8d09c7139a17215d5b734ec6a7	Machine ID page
+sm2emu	daytona	4	sm2emu/daytona/cabinet4.nv	daytona.nv	slave	car 4	66160bd5bce242e7308d79617e39faa4dfdf33e9e13fd48fbdd907e058bbda35	network screen
+sm2emu	daytona	4	sm2emu/daytona/cabinet4.eeprom	daytona.eeprom	slave	car 4	7a7e16f08e3cb12491de73c7bb46da35f7f204262d0356f58f8cd8bd444ec081	network screen
+supermodel	scud	5	supermodel/scud/cabinet5.nv	scudau.nv	slave	car 5	d600ca6e5909beba03ef87ae25131a0f9d293df83dd82a26b59e7b062887a21a	network screen
+supermodel	daytona2	5	supermodel/daytona2/cabinet5.nv	daytona2.nv	slave	car 5	f2bc3ab03e77f263626fb2933c39e7a762ec44a302ebe9610bd87b19df91c3ae	network screen
+sm2emu	daytona	5	sm2emu/daytona/cabinet5.nv	daytona.nv	slave	car 5	5e2fde23e9c3919431e9e5dc9ecc6b5864a2e2c6db698b6a629df606d95ba6dc	network screen
+sm2emu	daytona	5	sm2emu/daytona/cabinet5.eeprom	daytona.eeprom	slave	car 5	0f0ea8ab096e6074b18356e2664f3639ad46a253f40803c6277a49a4360eb508	network screen
+supermodel	scud	6	supermodel/scud/cabinet6.nv	scudau.nv	slave	car 6	6ce4aa8dd852e8c4b5a550b303731870826cec9912a5ba8333f3053128407c1b	network screen
+supermodel	daytona2	6	supermodel/daytona2/cabinet6.nv	daytona2.nv	slave	car 6	71e5cf19ad1c15293111fd34fa40b8a83001fb18a2de4a437b15a83bd9db47bc	network screen
+sm2emu	daytona	6	sm2emu/daytona/cabinet6.nv	daytona.nv	slave	car 6	9a5724dd3798ebb52e468fa0fabfa59e4d76e34c35e7424d8158c955c8acead5	network screen
+sm2emu	daytona	6	sm2emu/daytona/cabinet6.eeprom	daytona.eeprom	slave	car 6	a3d77c1703ce0b7167890240d5950de94ac79ba5c8f6d674957e5c2f3e951115	network screen
+supermodel	scud	7	supermodel/scud/cabinet7.nv	scudau.nv	slave	car 7	b57e6bd904b289d6114764ae07320e6678cb89979e16ec14d4c97c3093acee40	network screen
+supermodel	daytona2	7	supermodel/daytona2/cabinet7.nv	daytona2.nv	slave	car 7	30222558ff91329a47323f99678f1a460d459f82c1b1bc738dbccbc73bd5e3af	network screen
+sm2emu	daytona	7	sm2emu/daytona/cabinet7.nv	daytona.nv	slave	car 7	1231ffab0a0ef4565e5f401bc1bc36300fd9d0cbb8e5019a030457ca9bc0dd19	network screen
+sm2emu	daytona	7	sm2emu/daytona/cabinet7.eeprom	daytona.eeprom	slave	car 7	af536944d2bfddc7f92b4eeda2f757a2a70176c07805fceeb8ada97712fa2c39	network screen
+supermodel	scud	8	supermodel/scud/cabinet8.nv	scudau.nv	slave	car 8	9b8e28a1d730f2360d4ab9621fd93ab21378ad92ec4266f07cfe320db101e36e	network screen
+supermodel	daytona2	8	supermodel/daytona2/cabinet8.nv	daytona2.nv	slave	car 8	b1e19944c8a6bb171280a29d2e80c5f378f925662a3787b192eb2e3a9fba4023	network screen
+sm2emu	daytona	8	sm2emu/daytona/cabinet8.nv	daytona.nv	slave	car 8	aa1e37b130247e964577e26a16a13bc4bdb5149534350c2d3518ad3d18b1624e	network screen
+sm2emu	daytona	8	sm2emu/daytona/cabinet8.eeprom	daytona.eeprom	slave	car 8	52eec5eb9f7a95b67739b99504db7f8e017709f6b8f33117187410fcb03d51c3	network screen

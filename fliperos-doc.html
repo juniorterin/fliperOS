@@ -29221,32 +29221,32 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <tr>
 <td>Scud Race</td>
 <td>Supermodel</td>
-<td>2 (more not checked)</td>
+<td>2 to 8 (car numbers 1 to 8)</td>
 <td>1</td>
 <td>1</td>
 <td>Yes (Link ID in the test menu, starts as master)</td>
 <td>No (found when the link starts)</td>
-<td><strong>Tested</strong> with 2</td>
+<td><strong>Tested</strong> with 2 and 4</td>
 </tr>
 <tr>
 <td>Daytona USA 2</td>
 <td>Supermodel</td>
-<td>not checked</td>
+<td>2 to 8 (car numbers 1 to 8)</td>
 <td>1</td>
 <td>1</td>
-<td>Yes (starts as master)</td>
-<td>not checked</td>
-<td>Solo</td>
+<td>Yes (Link ID, starts as master)</td>
+<td>No (found when the link starts)</td>
+<td><strong>Tested</strong> with 2 and 4</td>
 </tr>
 <tr>
 <td>Dirt Devils</td>
 <td>Supermodel</td>
-<td>not checked</td>
+<td>2 (four did not link)</td>
 <td>1</td>
 <td>1</td>
-<td>Yes (starts as slave)</td>
-<td>not checked</td>
-<td>Solo</td>
+<td>Yes (Communication Mode, starts as slave, and Machine ID)</td>
+<td>No</td>
+<td><strong>Tested</strong> with 2</td>
 </tr>
 <tr>
 <td>Spikeout</td>
@@ -29467,10 +29467,28 @@ link_next_port = 15112
 <pre><code class="language-sh">supermodel scud.zip -net -port-in=1970 -port-out=1971 -address-out=127.0.0.1   # master, car 1
 supermodel scud.zip -net -port-in=1971 -port-out=1970 -address-out=127.0.0.1   # slave, car 2
 </code></pre>
-<p>The master was started first, six seconds before the slave. The other order was not tried. Both TCP links come up, both leave "Network Checking" and show "Up to 2 players may race at once". After a coin and Start on each, both pick a course and a transmission and race: the master showed 1st of 2, the slave 2nd of 2, with the lap times 0.04 seconds apart.
+<p>The master was started first, six seconds before the slave. Both TCP links come up, both leave "Network Checking" and show "Up to 2 players may race at once". After a coin and Start on each, both pick a course and a transmission and race: the master showed 1st of 2, the slave 2nd of 2, with the lap times 0.04 seconds apart.
 - <strong>If the slave leaves during a race,</strong> the master keeps racing. A little later it goes back to "Network Checking".
 - <strong>A machine that restarts does not rejoin.</strong> With the slave restarted, only its connection to the master came back. The master did not connect to it again, and the same happened the other way round. Both stayed on "Network Checking". Restart both machines.</p>
-<p>Daytona USA 2 and Dirt Devils were not linked in pairs. Dirt Devils starts as slave, so a pair needs one of the two set to master.</p>
+<p><strong>Car numbers.</strong> The Car Number of Scud Race and Daytona USA 2 goes from 1 to 8, and one more press after 8 goes back to 1. The cabinet number you give each machine is the car number.</p>
+<p><strong>Four machines in Scud Race.</strong> Four instances formed a ring and all four showed "Up to 4 players may race at once". Each machine only connects to the next one after it receives the connection of the one before, so <strong>in a ring of three or more, start the slaves first and the master last</strong>, in the reverse order of the ring (the machine just before the master first). With the master first, the link between the last two machines never came up. For two machines the master first also works.</p>
+<h3 id="daytona-usa-2">Daytona USA 2</h3>
+<p>Same method as Scud Race, with a different test menu. Press Test (<code>6</code>) four times to get to it: a diagnostic screen, the network check screen, then the menu with the cursor on Exit. Game Assignments is the 8th item counted from Exit.</p>
+<ul>
+<li><strong>Link ID</strong> goes round four values, one for each press of Test: Master, Slave, Live and Single. It starts as Master. Use Master and Slave for a link.</li>
+<li>Once the machine is a slave, the list shrinks to five rows: Link ID, Car Number, Cabinet Type, Motor Power and Exit.</li>
+<li>Leave through Exit. Closing the emulator while still inside the menu does <strong>not</strong> save the changes.</li>
+</ul>
+<p>A pair raced, with lap times 0.01 seconds apart. Four instances formed a ring (eight connections) and went together up to the car selection, starting the slaves first and the master last.</p>
+<h3 id="dirt-devils">Dirt Devils</h3>
+<p>It starts as a <strong>slave</strong>, so one machine of the pair needs the master role. Press Test (<code>6</code>) once to open the test menu. Game Assignments is the 7th item counted from Exit, and its page fits the window, so the values can be read.</p>
+<ul>
+<li><strong>Communication Mode</strong> goes round Slave, Satellite, No Link and Master.</li>
+<li><strong>Machine ID</strong> is 1 on the master and 2 and up on the others. Ids 1 to 4 were set and read. The highest value was not looked for.</li>
+</ul>
+<p>A pair raced (ID 1 master, ID 2 slave), with lap times 0'20"96 and 0'21"03. <strong>Four instances did not link:</strong> only two of the four links came up, in both start orders. This was not solved, so treat two as the limit.</p>
+<h2 id="one-nvram-for-each-cabinet-number">One NVRAM for each cabinet number</h2>
+<p>The role of a cabinet (master or slave, car number or machine ID) is saved in the game's NVRAM, so each cabinet number needs its own file. The repository keeps them in <code>config/link-nvram</code>: SM2-Emu Daytona USA, and Supermodel Scud Race, Daytona USA 2 and Dirt Devils. The README there says what each file holds and how to use it.</p>
 <h2 id="groovymame">GroovyMAME</h2>
 <p>The link uses four options. They are the same for every board:</p>
 <table>
@@ -29529,7 +29547,7 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <p>The Model 3 boards in MAME (and the NAOMI ones that share the same board) and the Chihiro network board are stubs. The Konami network PCBs and the Namco C139 serial chip are stubs too.</p>
 <p>Gaelco's Speed Up, Surf Planet, Radikal Bikers and Football Power link through shared memory between two instances, and only if MAME is rebuilt with a source switch. The normal build cannot do it.</p>
 <h2 id="how-this-was-checked">How this was checked</h2>
-<p>Between 31 October and 1 November 2026. The emulators were GroovyMAME gm0289sr222f (MAME 0.289), SM2-Emu 0.9.56, and Supermodel 0.3a at the same commit as the cabinet's (1481545). The Daytona link ran with one instance in a window on a PC and the other on the cabinet's CRT. The Tournament Battle (four instances) and the Scud Race (two) ran all on the PC.</p>
+<p>Between 31 October and 1 November 2026. The emulators were GroovyMAME gm0289sr222f (MAME 0.289), SM2-Emu 0.9.56, and Supermodel 0.3a at the same commit as the cabinet's (1481545). The Daytona link ran with one instance in a window on a PC and the other on the cabinet's CRT. The Tournament Battle (four instances) and the Supermodel games (Scud Race and Daytona USA 2 in pairs and in fours, Dirt Devils in a pair) ran all on the PC.</p>
 <p>The "Source" rows and the lists of boards come from MAME 0.289's source and its game list (<code>mame -listxml</code>).</p>
 <h1 id="Latency">Latency</h1>
 <p>What weighs most in the delay between pressing the button and the picture changing is the same on FliperOS and on GroovyArcade: the same kernel patches (the same video output on radeon/amdgpu), the same Switchres and GroovyMAME, and the CRT, which doesn't process the image.</p>

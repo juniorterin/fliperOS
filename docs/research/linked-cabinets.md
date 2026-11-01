@@ -126,6 +126,20 @@ Ten games, 60 seconds, without and with `-net`:
 - **Slave started again:** only the slave's connection to the master came back, the master's connection to the slave did not, after more than a minute. The same when only the master was restarted. Both machines have to restart.
 - Windows note: the SDL window and the console are separate windows of the same process. Find the game window by its title with `EnumWindows`, because `Process.MainWindowHandle` is the console.
 
+### Daytona USA 2, Dirt Devils and rings of four in Supermodel (done, 1 November, all on the PC)
+
+- **Daytona USA 2 menu.** Test (`6`) four times: the diagnostic screen, the network check screen, then the test menu with the cursor on Exit. Game Assignments is the 8th item from Exit. Link ID goes round Master, Slave, Live, Single with each Test (blind edits left it on Live and Single twice: read the values on the network screen). Once it is a slave the list has five rows: Link ID, Car Number, Cabinet Type, Motor Power, Exit. Car Number goes 1 to 8.
+- **Daytona USA 2 pair:** raced, lap times 0.01 s apart. For two machines the master first also worked.
+- **Scud Race ring of four.** With the master first the link between the third and fourth machine never came up. With the slaves first (the machine before the master first) and the master last, all four showed "Up to 4 Players may race at once". Car Number goes 1 to 8 and 8 goes back to 1.
+- **Daytona USA 2 ring of four:** 8 connections, the games went together to the car selection, started slaves first and master last.
+- **Why the order.** Each machine connects to the next only after it receives the connection of the previous one. The master starts the chain, so every other machine must be listening already.
+- **Dirt Devils.** Starts as slave (Communication Mode). The values are Slave, Satellite, No Link, Master. Test once opens the menu, Game Assignments is the 7th item from Exit, the Machine ID row is on the visible part of the page. Pair: ID 1 master, ID 2 slave, master first, raced with lap times 0'20"96 and 0'21"03. Ring of four: only two of the four links came up in both start orders (not solved).
+- **Saving.** Closing the emulator while still in the test menu does not save the settings. Leave through Exit.
+
+### The NVRAM of each cabinet number (done)
+
+`tools/link-tests/nvram-supermodel.ps1` and `nvram-sm2emu.ps1` made one NVRAM for every cabinet number: Supermodel Scud Race (1 to 8, `scudau.nv`), Daytona USA 2 (1 to 8, `daytona2.nv`) and Dirt Devils (1 to 4, `dirtdvlsau.nv`), and SM2-Emu Daytona USA (1 to 8, `daytona.nv` and `daytona.eeprom`). Cabinet 1 is the master. The others are slaves, and the cabinet number is the car number (the Machine ID for Dirt Devils). Each file was checked by starting the game with it and reading the role on the screen. They are in `config/link-nvram` with a manifest.
+
 ### Model 1 and System 32 in MAME (menus only)
 
 `vr`, `f1lap`, `orunners`, `radr`, `scross` and `gunbustr` load in MAME 0.289 from the 0.283 set and their test menus open. Gunbuster's has MONITOR, SWITCH, SOUND, CONFIGURATION, GUN ADJUSTMENT, FACTORY SETTING and COMMUNICATION TEST. Rad Rally's has a Network Test item and the title "Individual". `swa` and `wingwar` fail the checksum of `315-5711.bin` in 0.283 (and Wing War needs `hd44780`). No link was tried.
@@ -170,12 +184,12 @@ If the user quits the game on the CRT, the script resumes the loop and the Setup
 
 Roughly in order of value.
 
-1. **Supermodel pairs.** Scud Race is done on one PC. Left: Daytona USA 2 and Dirt Devils (it starts as slave: one of the two needs the master role), the other start order (slave first), three or four instances in the ring, and the PC with the cabinet. Players, cabinets and what the second cabinet needs.
+1. **Supermodel.** Pairs and rings of four are done on one PC for Scud Race and Daytona USA 2, and a pair for Dirt Devils. Left: the Dirt Devils ring of four (only two links came up) and its highest Machine ID, and a pair with the PC and the cabinet.
 2. **Model 2 roles.** Set MASTER in each game that has a link item and see which ones wait for a partner. Then pairs: Touring Car, Indy 500, Motor Raid, Wave Runner, Virtual-On Twin, Super GT 24h (read the range of Link Max). Read Sega Rally, Over Rev and Desert Tank, and find out what the Manx TT motion slider check wants.
 3. **Late join and leaving.** A third cabinet in a Daytona ring, one cabinet leaving, in MAME, SM2-Emu (UDP, "best effort") and Supermodel. For the Tournament Battle, a fourth instance joining late and one leaving (the source says it reconnects).
 4. **Gunbuster pair** with the procedure in the header comment, then Model 1 (`vr`, `vformula`, and fix `swa` and `wingwar`) and System 32 (`radr`, `f1lap`, `orunners`, `scross`, the Kokology games).
 5. **Flycast.** The LAN link (Broadband adapter and Naomi network, server and IP), the F355 battle cable, the claim that 2.6 added a match-code server and 2.7 multiscreen. Needs ROMs the cabinet does not have (F355, Initial D, Club Kart).
-6. **More than two cabinets.** Daytona with 3 or more, Supermodel with 3 or 4.
+6. **More than two cabinets.** SM2-Emu Daytona with 3 or more (its NVRAMs for 1 to 8 exist, the ring was only tried with two), and the maximum of the Model 2 games (Cabinet ID and Link Max ranges).
 7. **Numbers.** The real maximum of cabinets per game, from operator manuals. A web search found none.
 8. **A Setup screen.** Generate the `.ini`, the options and the NVRAM for each game, with the role, the next machine's address and the order of start, and open the firewall.
 

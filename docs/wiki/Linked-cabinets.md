@@ -20,9 +20,9 @@ Every row says how it was checked. **Tested** means two or more instances were l
 | Wave Runner | SM2-Emu | not checked | 1 | 1 | Network Type + Cabinet ID | not checked | Solo |
 | Cyber Troopers Virtual-On Twin | SM2-Emu | not checked | 1 | 1 | Network Link Attribute | not checked | Solo |
 | Super GT 24h | SM2-Emu | set by Link Max | 1 | 1 | Link Type | **Yes** (Link Max) | Solo |
-| Scud Race | Supermodel | 2 (more not checked) | 1 | 1 | Yes (Link ID in the test menu, starts as master) | No (found when the link starts) | **Tested** with 2 |
-| Daytona USA 2 | Supermodel | not checked | 1 | 1 | Yes (starts as master) | not checked | Solo |
-| Dirt Devils | Supermodel | not checked | 1 | 1 | Yes (starts as slave) | not checked | Solo |
+| Scud Race | Supermodel | 2 to 8 (car numbers 1 to 8) | 1 | 1 | Yes (Link ID in the test menu, starts as master) | No (found when the link starts) | **Tested** with 2 and 4 |
+| Daytona USA 2 | Supermodel | 2 to 8 (car numbers 1 to 8) | 1 | 1 | Yes (Link ID, starts as master) | No (found when the link starts) | **Tested** with 2 and 4 |
+| Dirt Devils | Supermodel | 2 (four did not link) | 1 | 1 | Yes (Communication Mode, starts as slave, and Machine ID) | No | **Tested** with 2 |
 | Spikeout | Supermodel | not checked | 2 | 1 | not checked | not checked | Solo |
 | Sega Rally 2, Le Mans 24, Harley-Davidson | Supermodel | not checked | 1 | 1 | not checked | not checked | Solo |
 | Gunbuster | GroovyMAME | 2 | 2 | 1 | Yes (ID 0 and ID 1) | No | Source |
@@ -125,11 +125,36 @@ supermodel scud.zip -net -port-in=1970 -port-out=1971 -address-out=127.0.0.1   #
 supermodel scud.zip -net -port-in=1971 -port-out=1970 -address-out=127.0.0.1   # slave, car 2
 ```
 
-  The master was started first, six seconds before the slave. The other order was not tried. Both TCP links come up, both leave "Network Checking" and show "Up to 2 players may race at once". After a coin and Start on each, both pick a course and a transmission and race: the master showed 1st of 2, the slave 2nd of 2, with the lap times 0.04 seconds apart.
+  The master was started first, six seconds before the slave. Both TCP links come up, both leave "Network Checking" and show "Up to 2 players may race at once". After a coin and Start on each, both pick a course and a transmission and race: the master showed 1st of 2, the slave 2nd of 2, with the lap times 0.04 seconds apart.
 - **If the slave leaves during a race,** the master keeps racing. A little later it goes back to "Network Checking".
 - **A machine that restarts does not rejoin.** With the slave restarted, only its connection to the master came back. The master did not connect to it again, and the same happened the other way round. Both stayed on "Network Checking". Restart both machines.
 
-Daytona USA 2 and Dirt Devils were not linked in pairs. Dirt Devils starts as slave, so a pair needs one of the two set to master.
+**Car numbers.** The Car Number of Scud Race and Daytona USA 2 goes from 1 to 8, and one more press after 8 goes back to 1. The cabinet number you give each machine is the car number.
+
+**Four machines in Scud Race.** Four instances formed a ring and all four showed "Up to 4 players may race at once". Each machine only connects to the next one after it receives the connection of the one before, so **in a ring of three or more, start the slaves first and the master last**, in the reverse order of the ring (the machine just before the master first). With the master first, the link between the last two machines never came up. For two machines the master first also works.
+
+### Daytona USA 2
+
+Same method as Scud Race, with a different test menu. Press Test (`6`) four times to get to it: a diagnostic screen, the network check screen, then the menu with the cursor on Exit. Game Assignments is the 8th item counted from Exit.
+
+- **Link ID** goes round four values, one for each press of Test: Master, Slave, Live and Single. It starts as Master. Use Master and Slave for a link.
+- Once the machine is a slave, the list shrinks to five rows: Link ID, Car Number, Cabinet Type, Motor Power and Exit.
+- Leave through Exit. Closing the emulator while still inside the menu does **not** save the changes.
+
+A pair raced, with lap times 0.01 seconds apart. Four instances formed a ring (eight connections) and went together up to the car selection, starting the slaves first and the master last.
+
+### Dirt Devils
+
+It starts as a **slave**, so one machine of the pair needs the master role. Press Test (`6`) once to open the test menu. Game Assignments is the 7th item counted from Exit, and its page fits the window, so the values can be read.
+
+- **Communication Mode** goes round Slave, Satellite, No Link and Master.
+- **Machine ID** is 1 on the master and 2 and up on the others. Ids 1 to 4 were set and read. The highest value was not looked for.
+
+A pair raced (ID 1 master, ID 2 slave), with lap times 0'20"96 and 0'21"03. **Four instances did not link:** only two of the four links came up, in both start orders. This was not solved, so treat two as the limit.
+
+## One NVRAM for each cabinet number
+
+The role of a cabinet (master or slave, car number or machine ID) is saved in the game's NVRAM, so each cabinet number needs its own file. The repository keeps them in `config/link-nvram`: SM2-Emu Daytona USA, and Supermodel Scud Race, Daytona USA 2 and Dirt Devils. The README there says what each file holds and how to use it.
 
 ## GroovyMAME
 
@@ -200,6 +225,6 @@ Gaelco's Speed Up, Surf Planet, Radikal Bikers and Football Power link through s
 
 ## How this was checked
 
-Between 31 October and 1 November 2026. The emulators were GroovyMAME gm0289sr222f (MAME 0.289), SM2-Emu 0.9.56, and Supermodel 0.3a at the same commit as the cabinet's (1481545). The Daytona link ran with one instance in a window on a PC and the other on the cabinet's CRT. The Tournament Battle (four instances) and the Scud Race (two) ran all on the PC.
+Between 31 October and 1 November 2026. The emulators were GroovyMAME gm0289sr222f (MAME 0.289), SM2-Emu 0.9.56, and Supermodel 0.3a at the same commit as the cabinet's (1481545). The Daytona link ran with one instance in a window on a PC and the other on the cabinet's CRT. The Tournament Battle (four instances) and the Supermodel games (Scud Race and Daytona USA 2 in pairs and in fours, Dirt Devils in a pair) ran all on the PC.
 
 The "Source" rows and the lists of boards come from MAME 0.289's source and its game list (`mame -listxml`).
