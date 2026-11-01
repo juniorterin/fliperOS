@@ -120,6 +120,14 @@ def pads(lit=True):
     return im
 
 
+def play_icon(color=FG):
+    """The play triangle of the solo option."""
+    im = Image.new("RGBA", (12, 12), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.polygon([(2, 0), (2, 11), (10, 5)], fill=color)
+    return im
+
+
 def slots(cv, x, y, filled, total, w=6, h=9, gap=2):
     for i in range(total):
         cv.paste_icon(cabinet(i < filled, w, h), x + i * (w + gap), y)
@@ -213,7 +221,8 @@ def options_screen(band, joined):
     cv.text(30, 178, "LINK 2-8", GREEN)
     cv.text(14, 226, "A:SELECT B:BACK", COMMENT)
     cv.box(146, 62, 308, 86, fill=(0x2c, 0x2c, 0x3c), outline=PINK if not joined else LINE)
-    cv.text(158, 70, "> PLAY", FG)
+    cv.paste_icon(play_icon(FG if not joined else LIST_TEXT), 154, 68)
+    cv.text(174, 70, "PLAY", FG if not joined else LIST_TEXT)
     cv.text(230, 70, "SOLO", COMMENT)
     y = 94
     if not joined:
@@ -237,6 +246,33 @@ def options_screen(band, joined):
         cv.text(222, y + 66, "2/4", GREEN)
         cv.box(146, y + 86, 308, y + 106, fill=BG_DEEP, outline=LINE)
         cv.text(154, y + 92, "+ NEW LINK", LIST_TEXT)
+    return cv
+
+
+def options_netplay_screen(band):
+    """A game with more players than this cabinet has controls: play here, or join a party."""
+    cv = Canvas(band)
+    cv.center(36, "KOF 2002 UNLIMITED", YELLOW)
+    cv.center(48, "2002 SNK PLAYMORE", CYAN)
+    cv.box(14, 62, 134, 142, fill=BG_DEEP, outline=PINK)
+    cv.center(98, "(ART)", COMMENT, 14, 134)
+    cv.text(14, 152, "4 PLAYERS", COMMENT)
+    cv.text(14, 162, "2 CONTROLS HERE", COMMENT)
+    cv.paste_icon(pads(True).resize((12, 12), Image.NEAREST), 14, 176)
+    cv.text(30, 178, "NET PLAY", CYAN)
+    cv.text(14, 226, "A:SELECT B:BACK", COMMENT)
+    cv.box(146, 62, 308, 86, fill=BG_DEEP, outline=LINE)
+    cv.paste_icon(play_icon(LIST_TEXT), 154, 68)
+    cv.text(174, 70, "PLAY", LIST_TEXT)
+    cv.text(230, 70, "SOLO", COMMENT)
+    cv.box(146, 94, 308, 118, fill=(0x2c, 0x2c, 0x3c), outline=PINK)
+    cv.paste_icon(pads(True), 152, 98)
+    cv.text(176, 102, "NET PLAY", FG)
+    cv.text(150, 126, "PARTY OF CABINET-1", GREEN)
+    cv.text(150, 138, "P1 TAKEN  P2 FREE", YELLOW)
+    cv.text(150, 148, "P3 FREE   P4 FREE", YELLOW)
+    cv.box(146, 162, 308, 182, fill=BG_DEEP, outline=LINE)
+    cv.text(154, 168, "+ NEW PARTY", LIST_TEXT)
     return cv
 
 
@@ -316,6 +352,7 @@ def main():
         "02-grid-link-badges": grid_screen(band),
         "03-options-new-link": options_screen(band, joined=False),
         "04-options-join-link": options_screen(band, joined=True),
+        "03b-options-netplay": options_netplay_screen(band),
         "05-lobby-waiting": lobby_screen(band, [True, True, True, False]),
         "06-lobby-all-here": lobby_screen(band, [True, True, True, True], starting=True),
         "07-netplay-party": netplay_screen(band),

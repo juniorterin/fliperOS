@@ -71,9 +71,14 @@ Joining a link that already exists:
 
 ![Join link](link-frontend-mockups/04-options-join-link.png)
 
-- "Play" (solo) is always first. The second entry is the globe: "link play" when nobody is playing (this cabinet becomes #1, the master), "join link" when a party is waiting (this cabinet becomes the next free number).
+- **This window appears only when the user presses play on one of these games** (a link game, or a game with more players than this cabinet has controls). Every other game starts straight away, as it does today.
+- "Play" (solo) is always first, with the play triangle. The second entry is the globe: "link play" when nobody is playing (this cabinet becomes #1, the master), "join link" when a party is waiting (this cabinet becomes the next free number).
 - The cabinet icons show who is in and which place this cabinet would take. If a party is closed or full, "join" is replaced by the state and a new party can still be started.
 - A game with more than one open party lists them, one line each, with the host's name.
+
+A game with more players than this cabinet has controls gets the same window with the two-controller icon instead of the globe. Net play shows the party's slots, free or taken:
+
+![Net play options](link-frontend-mockups/03b-options-netplay.png)
 
 ### The waiting room
 
