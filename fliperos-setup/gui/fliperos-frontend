@@ -301,6 +301,7 @@ class Frontend:
         self.link = felink.Link(fedata.web.player_home(), wire=None if self.shot else False)
         self.link_game = None      # o jogo da festa (a sala e a copia dos arquivos)
         self.link_sig = ()         # o que a rede mostra, para refazer a lista quando muda
+        self.players_seen = None   # os jogadores de agora, para avisar quando um controle sai ou volta
         if self.shot:
             felink.fake_link(self.link, os.environ.get("FLIPEROS_LINK_FAKE"))
         else:
@@ -1288,6 +1289,12 @@ class Frontend:
         if self.shot:
             return
         link.poll(now)
+        # Um controle solto ou ligado: o numero de jogadores muda (os que o net
+        # play ocupa), e a tela avisa.
+        players = link.local_players
+        if self.players_seen is not None and players != self.players_seen:
+            self.say("%d PLAYER%s" % (players, "" if players == 1 else "S"), 2.5)
+        self.players_seen = players
         if not link.available():
             if self.overlay in ("lobby", "transfer"):
                 self.overlay = None

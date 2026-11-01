@@ -10,6 +10,10 @@
       o mesmo para um encoder que se diz teclado (I-PAC e afins), com as
       teclas padrao do MAME de cada jogador (MAME_KEYS) no lugar do controle:
       o mapa ganha linhas "JOGADOR CONTROLE -1 k:TECLA Keyboard"
+  fliperos-buttons players [MAPA]
+      quantos jogadores do mapa tem o controle ligado agora ("mapped=",
+      "connected=", "active=" e "playerN=on|off"): o que se desliga ou volta
+      a ser ligado muda o resultado, sem refazer o mapa
   fliperos-buttons attract MAPA
       so o Attract-Mode Plus (abaixo), que o Setup chama ao abri-lo
   fliperos-buttons watch [MAPA]
@@ -190,6 +194,34 @@ TRIGGER_REST = 30000
 def is_key(element):
     """O elemento e uma tecla (k:TECLA, nome do MAME), nao um do SDL?"""
     return element.startswith('k:')
+
+
+INPUT_DEVICES = os.environ.get('FLIPEROS_INPUT_DEVICES', '/proc/bus/input/devices')
+
+
+def connected_joysticks(path=None):
+    """Quantos joysticks estao ligados agora: os aparelhos do /proc/bus/input/devices
+    que tem um js (o SDL conta os controles na mesma ordem em que aparecem)."""
+    count = 0
+    try:
+        with open(path or INPUT_DEVICES, encoding='utf-8', errors='replace') as f:
+            for line in f:
+                if line.startswith('H: Handlers=') and re.search(r'\bjs\d+\b', line):
+                    count += 1
+    except OSError:
+        return 0
+    return count
+
+
+def active_players(players, connected):
+    """{jogador: ligado?}. Um jogador de teclado (encoder que se diz teclado) esta
+    sempre ligado; o de controle, se o aparelho dele existe (o indice do SDL que o
+    mapa guardou e menor que os joysticks ligados)."""
+    out = {}
+    for player, binds in players.items():
+        indexes = [index for index, _ in binds.values()]
+        out[player] = all(i < 0 for i in indexes) or all(i < connected for i in indexes if i >= 0)
+    return out
 
 
 def mame_code(index, element):
@@ -1619,6 +1651,21 @@ class Sticks:
             self.lib.SDL_Quit()
 
 
+def cmd_players(args):
+    """Os jogadores do mapa que tem o controle ligado agora (ver a ajuda)."""
+    try:
+        players, _ = read_map(args.map)
+    except OSError:
+        players = {}
+    connected = connected_joysticks()
+    active = active_players(players, connected)
+    print('mapped=%d' % len(players))
+    print('connected=%d' % connected)
+    print('active=%d' % sum(active.values()))
+    for player in sorted(players):
+        print('player%d=%s' % (player, 'on' if active[player] else 'off'))
+
+
 def cmd_watch(args):
     # Roda junto com o jogo: abaixo dele na fila da CPU.
     try:
@@ -1714,6 +1761,9 @@ def main():
     p = sub.add_parser('attract')
     p.add_argument('map')
     p.set_defaults(func=cmd_attract)
+    p = sub.add_parser('players')
+    p.add_argument('map', nargs='?', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
+    p.set_defaults(func=cmd_players)
     p = sub.add_parser('watch')
     p.add_argument('map', nargs='?', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
     p.set_defaults(func=cmd_watch)

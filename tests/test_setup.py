@@ -3332,6 +3332,47 @@ class ButtonMappingNoRepeatTests(Base):
         self.assertEqual(rows[1][:4], ["1", "down", "0", "b1"])
 
 
+class ButtonPlayersTests(Base):
+    """Setup > Joysticks: os jogadores de agora, pelos controles que estao ligados."""
+
+    def tool(self, connected, active, mapped=2):
+        d = self.env.dir
+        (d / "buttons.map").write_text("1 up 0 h0.1 Pad\n2 up 1 h0.1 Pad\n")
+        (d / "buttons").write_text('#!/bin/sh\necho "mapped=%d"; echo "connected=%d"; echo "active=%d"\n' % (mapped, connected, active))
+        (d / "buttons").chmod(0o755)
+        return {"BUTTONS": str(d / "buttons"), "BUTTONS_MAP": str(d / "buttons.map")}
+
+    def test_the_line_says_how_many_players_have_a_controller(self):
+        env = self.tool(2, 2)
+        self.assertEqual(self.env.out("buttons_players_line", env).strip(),
+                         "Players now: 2 of 2 mapped (controllers connected: 2)")
+        env = self.tool(1, 1)
+        self.assertEqual(self.env.out("buttons_players_line", env).strip(),
+                         "Players now: 1 of 2 mapped (controllers connected: 1)")
+
+    def test_no_line_without_a_map_or_the_tool(self):
+        self.assertEqual(self.env.out("buttons_players_line", {"BUTTONS": "/nao/existe", "BUTTONS_MAP": "/nao/existe"}).strip(), "")
+
+    def test_the_suggestion_for_how_many_players_is_the_controllers_connected(self):
+        for connected, want in ((0, "1"), (1, "1"), (3, "3"), (6, "4")):
+            self.assertEqual(self.env.out("buttons_players_connected", self.tool(connected, connected)).strip(), want)
+
+    def test_the_joysticks_menu_shows_the_line_and_the_picker_starts_on_the_connected(self):
+        env = self.tool(3, 3, 3)
+        log = self.env.dir / "calls"
+        self.env.out("""
+            source %s/screens/joysticks.sh
+            ui_menu_hints() { echo "hints [$2]" >> %s; return 1; }
+            screen_joysticks
+            ui_menu() { echo "menu [$3]" >> %s; return 1; }
+            ui_menu_hints() { echo panel; }
+            screen_buttons
+        """ % (SETUP, log, log), env)
+        calls = log.read_text()
+        self.assertIn("hints [Players now: 3 of 3 mapped (controllers connected: 3)]", calls)
+        self.assertIn("menu [3]", calls)
+
+
 class ButtonsLayoutTests(Base):
     """Setup > Joysticks > Buttons layout: onde ficam no painel os botoes dos jogos de 1 a 5 botoes."""
 

@@ -9,7 +9,7 @@ CALIBRATE=${CALIBRATE:-/opt/fliperos/bin/fliperos-calibrate}
 screen_joysticks() {
   local choice last=""
   while true; do
-    choice=$(ui_menu_hints "Joysticks" "" "$last" \
+    choice=$(ui_menu_hints "Joysticks" "$(buttons_players_line)" "$last" \
       "buttons|Button mapping (all emulators)|Teach FliperOS the panel: press each control when asked." \
       "layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel." \
       "guncon|Calibrate GunCon 2 (light gun)|Shoot the targets so the gun hits where it points." \
@@ -49,7 +49,7 @@ screen_buttons() {
   esac
   players=$(ui_menu "$title" \
     "Map the panel for all emulators, one player at a time: press each control when asked. How many players?" \
-    "" "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
+    "$(buttons_players_connected)" "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
   [[ $players == return ]] && return 0
   map=$(mktemp)
   padkeys_off

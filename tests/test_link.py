@@ -716,16 +716,59 @@ class SlotsTests(unittest.TestCase):
         self.addCleanup(g.leave)
         return g, g.join("127.0.0.1", "xmen", want=want)
 
-    def test_the_local_players_are_the_players_of_the_button_map(self):
+    def devices(self, n, keyboard=True):
+        """Um /proc/bus/input/devices com n joysticks (js) e um teclado."""
+        path = os.path.join(self.tmp.name, "devices-%d" % n)
+        text = "I: Bus=0011 Vendor=0001\nN: Name=\"AT keyboard\"\nH: Handlers=sysrq kbd event3 leds\n\n"
+        for i in range(n):
+            text += "I: Bus=0003 Vendor=045e\nN: Name=\"Xbox 360 Controller\"\nH: Handlers=event%d js%d\n\n" % (5 + i, i)
+        Path(path).write_text(text)
+        return path
+
+    def test_the_local_players_are_the_mapped_players_with_a_controller_connected(self):
         path = os.path.join(self.tmp.name, "buttons.map")
-        Path(path).write_text("1 up 0 h0.1 Pad\n1 b1 0 b0 Pad\n2 up 1 h0.1 Pad\n3 coin 1 b9 Pad\n")
-        self.assertEqual(felink.local_players(path), 3)
+        Path(path).write_text("1 up 0 h0.1 Pad\n1 b1 0 b0 Pad\n2 up 1 h0.1 Pad\n3 coin 2 b9 Pad\n")
+        self.assertEqual(felink.connected_joysticks(self.devices(2)), 2)
+        self.assertEqual(felink.local_players(path, self.devices(3)), 3)
+        # Soltar o controle de um jogador tira o jogador; ligar de volta o devolve.
+        self.assertEqual(felink.local_players(path, self.devices(2)), 2)
+        self.assertEqual(felink.local_players(path, self.devices(1)), 1)
+        self.assertEqual(felink.local_players(path, self.devices(3)), 3)
+        # Sem controle nenhum, ao menos 1 (o teclado joga).
+        self.assertEqual(felink.local_players(path, self.devices(0)), 1)
+
+    def test_a_keyboard_encoder_player_is_always_there(self):
+        path = os.path.join(self.tmp.name, "buttons.map")
+        Path(path).write_text("1 up -1 k:UP Keyboard\n1 b1 -1 k:LCTRL Keyboard\n2 up -1 k:R Keyboard\n")
+        self.assertEqual(felink.local_players(path, self.devices(0)), 2)
+
+    def test_no_map_means_two_and_no_device_list_means_the_whole_map(self):
+        self.assertEqual(felink.local_players(os.path.join(self.tmp.name, "nenhum"), self.devices(0)), 2)
+        path = os.path.join(self.tmp.name, "buttons.map")
+        Path(path).write_text("1 up 0 h0.1 Pad\n2 up 1 h0.1 Pad\n")
+        self.assertEqual(felink.local_players(path, os.path.join(self.tmp.name, "sem-lista")), 2)
         Path(path).write_text("1 up 0 h0.1 Pad\n")
-        self.assertEqual(felink.local_players(path), 1)
-        self.assertEqual(felink.local_players(os.path.join(self.tmp.name, "nenhum")), 2)
         os.environ["FLIPEROS_LOCAL_PLAYERS"] = "4"
         self.addCleanup(os.environ.pop, "FLIPEROS_LOCAL_PLAYERS")
-        self.assertEqual(felink.local_players(path), 4)
+        self.assertEqual(felink.local_players(path, self.devices(1)), 4)
+
+    def test_the_link_rereads_the_players_when_a_controller_comes_or_goes(self):
+        path = os.path.join(self.tmp.name, "buttons.map")
+        Path(path).write_text("1 up 0 h0.1 Pad\n2 up 1 h0.1 Pad\n")
+        now = [0.0]
+        link = felink.Link(self.tmp.name, wire=LOOP, ident="x", clock=lambda: now[0])
+        seen = [2]
+        with mock.patch.object(felink, "local_players", side_effect=lambda *a: seen[0]):
+            self.assertEqual(link.local_players, 2)
+            seen[0] = 1                          # soltou um controle
+            self.assertEqual(link.local_players, 2)   # a conta e guardada por 2 s
+            now[0] = 2.1
+            self.assertEqual(link.local_players, 1)
+            seen[0] = 2                          # ligou de volta
+            now[0] = 4.3
+            self.assertEqual(link.local_players, 2)
+            link.local_players = 3               # os testes fixam
+            self.assertEqual(link.local_players, 3)
 
     def test_each_cabinet_takes_as_many_slots_as_it_has_controls(self):
         host = self.host(take=2)

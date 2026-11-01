@@ -13688,6 +13688,51 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertEqual(self.hotkey([set(), {6}, {6}, set(), {6}], coin=True), ['coin', 'coin'])
         self.assertIn("'hotkey'", (ROOT / 'config/fliperos-buttons').read_text())
 
+    def test_players_follow_the_controllers_that_are_connected(self):
+        # fliperos-buttons players: os jogadores do mapa cujo controle esta ligado.
+        # Soltar um controle tira o jogador dele; ligado de volta, ele volta; o de
+        # teclado (encoder que se diz teclado) conta sempre.
+        import argparse
+        import contextlib
+        rc = self.rc
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+
+            def devices(n):
+                text = 'N: Name="AT keyboard"\nH: Handlers=sysrq kbd event3 leds\n\n'
+                for i in range(n):
+                    text += 'N: Name="Pad"\nH: Handlers=event%d js%d\n\n' % (5 + i, i)
+                (tmp / 'devices').write_text(text)
+                return str(tmp / 'devices')
+
+            mapa = tmp / 'buttons.map'
+            mapa.write_text('1 up 0 h0.1 Pad\n1 b1 0 b0 Pad\n2 up 1 h0.1 Pad\n2 b1 1 b0 Pad\n')
+            self.assertEqual(rc.connected_joysticks(devices(0)), 0)
+            self.assertEqual(rc.connected_joysticks(devices(2)), 2)
+            self.assertEqual(rc.connected_joysticks(str(tmp / 'nenhum')), 0)
+            players, _ = rc.read_map(str(mapa))
+            self.assertEqual(rc.active_players(players, 2), {1: True, 2: True})
+            self.assertEqual(rc.active_players(players, 1), {1: True, 2: False})
+            self.assertEqual(rc.active_players(players, 0), {1: False, 2: False})
+            kb = tmp / 'kb.map'
+            kb.write_text('1 up -1 k:UP Keyboard\n2 up -1 k:R Keyboard\n')
+            players, _ = rc.read_map(str(kb))
+            self.assertEqual(rc.active_players(players, 0), {1: True, 2: True})
+
+            def run(n):
+                out = io.StringIO()
+                old = rc.INPUT_DEVICES
+                rc.INPUT_DEVICES = devices(n)
+                try:
+                    with contextlib.redirect_stdout(out):
+                        rc.cmd_players(argparse.Namespace(map=str(mapa)))
+                finally:
+                    rc.INPUT_DEVICES = old
+                return out.getvalue().split()
+            self.assertEqual(run(2), ['mapped=2', 'connected=2', 'active=2', 'player1=on', 'player2=on'])
+            self.assertEqual(run(1), ['mapped=2', 'connected=1', 'active=1', 'player1=on', 'player2=off'])
+            self.assertEqual(run(2)[2], 'active=2')
+
     def test_sdl_leaves_sigterm_alone(self):
         # O SDL trocava o SIGTERM por um SDL_QUIT: o watch do painel web nao
         # saia, e o gabinete ficava 90 s no plymouth-poweroff ao desligar.

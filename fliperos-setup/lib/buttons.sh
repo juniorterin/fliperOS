@@ -47,6 +47,31 @@ buttons_attract() {
   return 0
 }
 
+# buttons_players_line imprime os jogadores de agora: os do Button mapping que
+# tem o controle ligado (fliperos-buttons players) e quantos controles ha. Solta
+# um controle, o jogador dele sai da conta; ligado de volta, volta. Vazio sem
+# mapa. buttons_players_connected imprime so quantos controles estao ligados
+# (de 1 a 4), a sugestao de "How many players?".
+buttons_players_line() {
+  local out mapped connected active
+  [[ -x $BUTTONS && -r $BUTTONS_MAP ]] || return 0
+  out=$("$BUTTONS" players "$BUTTONS_MAP" 2> /dev/null) || return 0
+  mapped=$(sed -n 's/^mapped=//p' <<< "$out")
+  connected=$(sed -n 's/^connected=//p' <<< "$out")
+  active=$(sed -n 's/^active=//p' <<< "$out")
+  [[ -n $mapped && $mapped != 0 ]] || return 0
+  printf 'Players now: %s of %s mapped (controllers connected: %s)\n' "$active" "$mapped" "$connected"
+}
+
+buttons_players_connected() {
+  local n
+  n=$("$BUTTONS" players "${BUTTONS_MAP:-/nonexistent}" 2> /dev/null | sed -n 's/^connected=//p')
+  [[ $n =~ ^[0-9]+$ ]] || n=2
+  ((n < 1)) && n=1
+  ((n > 4)) && n=4
+  printf '%s\n' "$n"
+}
+
 # buttons_keyboard JOGADORES grava, no lugar do controle, as teclas padrao do
 # MAME de cada jogador em todos os emuladores: o encoder que se diz teclado
 # (I-PAC e afins) ja vem nesse layout, e nada precisa ser apertado.

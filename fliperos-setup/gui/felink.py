@@ -587,23 +587,48 @@ def command(profile, base, plan, number, game):
     return argv[:-1] + extra + argv[-1:]
 
 
-def local_players(path=None):
-    """Quantos jogadores este gabinete tem configurados (os controles do Button
-    mapping: os jogadores do /etc/fliperos/buttons.map). FLIPEROS_LOCAL_PLAYERS
-    manda; sem mapa, 2."""
+INPUT_DEVICES = os.environ.get("FLIPEROS_INPUT_DEVICES", "/proc/bus/input/devices")
+
+
+def connected_joysticks(path=None):
+    """Quantos joysticks estao ligados agora (os aparelhos com js do
+    /proc/bus/input/devices; a mesma conta do fliperos-buttons players)."""
+    count = 0
+    try:
+        with open(path or INPUT_DEVICES, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if line.startswith("H: Handlers=") and any(w.startswith("js") and w[2:].isdigit() for w in line.split()):
+                    count += 1
+    except OSError:
+        return None
+    return count
+
+
+def local_players(path=None, proc=None):
+    """Quantos jogadores este gabinete tem agora: os do Button mapping
+    (/etc/fliperos/buttons.map) cujo controle esta ligado. Soltar um controle
+    tira o jogador dele, e ligar de volta o devolve; o de teclado (encoder que
+    se diz teclado) conta sempre. FLIPEROS_LOCAL_PLAYERS manda; sem mapa, 2; e
+    nunca menos de 1 (o gabinete ainda joga, ao menos pelo teclado)."""
     forced = os.environ.get("FLIPEROS_LOCAL_PLAYERS")
     if forced and forced.isdigit() and int(forced) > 0:
         return int(forced)
-    players = set()
+    index = {}
     try:
         with open(path or BUTTONS_MAP, encoding="utf-8") as f:
             for line in f:
-                head = line.split(None, 1)[0] if line.strip() else ""
-                if head.isdigit():
-                    players.add(int(head))
+                parts = line.split(None, 3)
+                if len(parts) >= 3 and parts[0].isdigit() and parts[2].lstrip("-").isdigit():
+                    index.setdefault(int(parts[0]), []).append(int(parts[2]))
     except OSError:
         pass
-    return len(players) or 2
+    if not index:
+        return 2
+    connected = connected_joysticks(proc)
+    if connected is None:
+        return len(index)
+    active = [p for p, idx in index.items() if all(i < 0 for i in idx) or all(i < connected for i in idx if i >= 0)]
+    return max(1, len(active))
 
 
 _fbneo = {}
@@ -944,7 +969,8 @@ class Link:
     def __init__(self, home, profiles=None, wire=False, ident=None, name=None, ports=None, clock=time.monotonic,
                  local_players=None):
         self.home = home
-        self.local_players = local_players or globals()["local_players"]()
+        self.fixed_players = local_players       # os testes fixam; sem isso, segue os controles ligados
+        self.seen_players = (None, 0.0)
         self.profiles = profiles or Profiles()
         self.wire = wired() if wire is False else wire
         self.ident = ident or machine_id()
@@ -954,6 +980,23 @@ class Link:
         self.presence = None
         self.checked = clock()
         self.reset()
+
+    @property
+    def local_players(self):
+        """Os jogadores deste gabinete agora (local_players): a conta e relida de
+        2 em 2 segundos, para soltar ou ligar um controle valer sem reabrir nada."""
+        if self.fixed_players:
+            return self.fixed_players
+        n, at = self.seen_players
+        now = self.clock()
+        if n is None or now - at >= 2.0:
+            n = globals()["local_players"]()
+            self.seen_players = (n, now)
+        return n
+
+    @local_players.setter
+    def local_players(self, value):
+        self.fixed_players = value
 
     def reset(self):
         self.role = None              # "host", "guest" ou None
