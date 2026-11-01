@@ -30,6 +30,7 @@ The scripts read these environment variables, and have defaults you will probabl
 | `devscan.py` | Counts every device in `mame -listxml` whose name looks like a network or serial link |
 | `xkeys.py` | Sends keys to an X server with XTest (`KEYSYM:SECONDS`, `wait:SECONDS`, `down:`, `up:`). Used on the cabinet, as root, with `DISPLAY=:0` |
 | `xgrab.py` | Saves the X root window as a PPM. It shows **stale frames** for OpenGL windows, so use the emulator's own screenshot key instead |
+| `frontend-mockups.py` | Draws the mock-ups of `docs/research/link-frontend-plan.md` with the frontend's font, palette and Arcadeflow icons. `python3 frontend-mockups.py OUT_DIR REAL_LIST_PNG ART_DIR`: the list screenshot gives the title band, ART_DIR holds the cabinet's snaps (`~/media/snap/<system>/<game>.png`) named `snap_<system>_<game>.png`. The art is not in the repo. Run it in the `fliperos-tests-pil` image |
 
 ## Things that cost time
 

@@ -1,6 +1,8 @@
 # Link play in the FliperOS frontend: plan
 
-A plan, not an implementation. It turns the link research (`docs/research/linked-cabinets.md`, wiki page *Linked cabinets*) into screens and a protocol for the frontend (`gui/fliperos-frontend`). The mock-ups are in `docs/research/link-frontend-mockups/`, drawn with the frontend's own font and palette (`tools/link-tests/frontend-mockups.py`).
+A plan, not an implementation. It turns the link research (`docs/research/linked-cabinets.md`, wiki page *Linked cabinets*) into screens and a protocol for the frontend (`gui/fliperos-frontend`). The mock-ups are in `docs/research/link-frontend-mockups/`, drawn with the frontend's own font and palette (`tools/link-tests/frontend-mockups.py`). They use the real art scraped on the cabinet and the Arcadeflow icons the frontend already ships (genre, controls, buttons), and the card has the look of the frontend's own play card.
+
+**No description text on these games.** A link or net play game is shown with its art, its title, the year and maker, and the same icons as any other game (genre, players, controls, buttons), plus the globe and the cabinet icons. The state is told by icons, lit or dim, and by numbers. The only words are the title, the name of the selected tile (as the card already does with PLAY) and a state word in the waiting room.
 
 ## What was asked
 
@@ -51,15 +53,21 @@ All drawn at 320x240 and shown here at 3x.
 ![List](link-frontend-mockups/01-list-link-badges.png)
 
 - The globe is to the left of the title. **Dim** when nobody is playing the game on another cabinet, **lit** (with white nodes) when someone is. The two-controller icon marks a game with more players than this cabinet has controls.
-- A group at the top, "playing now elsewhere", lists what the other cabinets are playing. For each: the lit globe, the title, and the cabinets in the link as small lit and dim icons with the count. It is empty when nothing is being played, and then it takes no space.
-- The right panel says "nobody is playing it" or who is.
+- A group at the top, "playing now elsewhere", lists what the other cabinets are playing. For each: the lit globe, the title, and the cabinets in the link as small lit and dim icons. It is empty when nothing is being played, and then it takes no space.
+- The right panel is the usual one: art, year and maker, genre, players, controls and buttons icons. A link game adds the globe to the first icon row, dim here (nobody is in it).
+
+When the selected game is being played elsewhere, the globe is lit and the panel shows the cabinets of the link, lit for the ones that are in, with the count:
+
+![List, game being played](link-frontend-mockups/01b-list-link-playing.png)
 
 ### Grid and full screen: the mark has no title to sit next to
 
 ![Grid](link-frontend-mockups/02-grid-link-badges.png)
 
-- In the grid the mark is a small badge in the top-left corner of the tile. A tile of a game being played also shows the cabinet icons along its bottom edge.
-- In full screen the mark goes in the information line under the title, next to the players and buttons icons, with the same lit and dim states.
+- In the grid the mark is a small badge in the top-left corner of the tile (the globe, or the two controllers for net play). A tile of a game being played also shows the cabinet icons and the count along its bottom edge. The line under the grid is the selected game's: title, year and maker, then icons only.
+- In full screen the mark goes in the information line under the title, next to the players, controls and buttons icons, with the same lit and dim states, and the cabinets of the link when someone is playing:
+
+![Full screen](link-frontend-mockups/02b-full-link-mark.png)
 
 ### Choosing how to play
 
@@ -72,11 +80,11 @@ Joining a link that already exists:
 ![Join link](link-frontend-mockups/04-options-join-link.png)
 
 - **This window appears only when the user presses play on one of these games** (a link game, or a game with more players than this cabinet has controls). Every other game starts straight away, as it does today.
-- "Play" (solo) is always first, with the play triangle. The second entry is the globe: "link play" when nobody is playing (this cabinet becomes #1, the master), "join link" when a party is waiting (this cabinet becomes the next free number).
-- The cabinet icons show who is in and which place this cabinet would take. If a party is closed or full, "join" is replaced by the state and a new party can still be started.
-- A game with more than one open party lists them, one line each, with the host's name.
+- It is the frontend's own card (title, a row of tiles, the name of the selected one under them) over the dimmed full screen, with the game's art and its info icons behind it. The first tile is "play", the green triangle, for solo. The second is the globe: "link play" when nobody is playing (a dim globe; this cabinet becomes #1, the master), "join link" when a party is waiting (a lit globe; this cabinet becomes the next free number). The star and the plus are the card's usual favourite and more tiles.
+- Under the name, the cabinet icons show who is in (lit) and which place this cabinet would take (the pink ring). Nothing else is written.
+- If a party is already waiting, a third tile, the dim globe with a plus, starts a new link next to it. A game with more than one open party gets one tile per party, in the order they started. If a party is closed or full, its tile is dim with the state, and a new party can still be started.
 
-A game with more players than this cabinet has controls gets the same window with the two-controller icon instead of the globe. Net play shows the party's slots, free or taken:
+A game with more players than this cabinet has controls gets the same card with the two-controller icon instead of the globe. Under it, the party's player slots: taken ones lit, free ones dim, and the pink ring on the pair this cabinet would take (it has two controls):
 
 ![Net play options](link-frontend-mockups/03b-options-netplay.png)
 
@@ -86,7 +94,7 @@ A game with more players than this cabinet has controls gets the same window wit
 
 ![All here](link-frontend-mockups/06-lobby-all-here.png)
 
-- One screen for every link game. The cabinet icons light as machines come in. Each shows its number, and "you" marks this one.
+- One screen for every link game, over the dimmed art. The title and the info icons are at the top. The cabinet icons light as machines come in. Each shows its number, and the pink ring marks this one. Below, the globe with the count, and one word: waiting, or starting with the countdown.
 - **Fixed size** (Tournament Battle, 4; Gunbuster, 2): the party starts by itself when the last one arrives, after a short countdown.
 - **Flexible size** (Daytona, Scud Race and the others, 2 to 8): the host chooses when to start. It starts by itself when the maximum is reached. Until the minimum is there, the start is not offered.
 - Everyone enters together: at the start the lobby runs each machine's emulator in the right order and with the right NVRAM, and shows "starting". After that no one can join.
@@ -97,14 +105,14 @@ A game with more players than this cabinet has controls gets the same window wit
 ![Net play](link-frontend-mockups/07-netplay-party.png)
 
 - For a game with more players than this cabinet's controls. The user joins another cabinet's party and takes a free slot (P2, P3 and so on). The host sees the slots fill.
-- The example is X-Men (6 Players, Konami 1992), a six-player game. Each cabinet can take as many slots as it has controls, so a cabinet with two controls takes a pair.
+- The example is X-Men (6 Players, Konami 1992), a six-player game. Each cabinet can take as many slots as it has controls, so a cabinet with two controls takes a pair. The header is icons: the players the game has (6), the net play mark, and the controls this cabinet has (2). Each row is a slot with the cabinet that holds it.
 - Net play needs an emulator core that supports netplay (RetroArch), so which games get it depends on the cores. It does not link boards: the Tournament Battle's eight-player bracket still needs its four-cabinet link.
 
 ### Missing game files
 
 ![ROM transfer](link-frontend-mockups/08-rom-transfer.png)
 
-- If this cabinet does not have the game, the host sends the files: the zip, its parent, the BIOS, the device ROMs and the CHDs, only the ones the game needs. The cabinet checks them and then goes on to the lobby.
+- If this cabinet does not have the game, the host sends the files: the zip, its parent, the BIOS, the device ROMs and the CHDs, only the ones the game needs. The screen shows the host and this cabinet with the arrows between them, the progress, and the file names. The cabinet checks the files and then goes on to the lobby.
 - The transfer is between the user's own cabinets on the cable. Nothing leaves the local network.
 
 ## How it would work
