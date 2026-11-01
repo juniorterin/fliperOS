@@ -294,6 +294,18 @@ class Frontend:
             self.harvest.start()
         self.generation = self.lib.generation
         self.last_check = time.monotonic()
+        # O link play (gui/felink.py): quem esta na rede cabeada, a festa e o
+        # comando dos jogos de link. Sem cabo, ele fica desligado.
+        import felink
+        self.felink = felink
+        self.link = felink.Link(fedata.web.player_home(), wire=None if self.shot else False)
+        self.link_game = None      # o jogo da festa (a sala e a copia dos arquivos)
+        self.link_sig = ()         # o que a rede mostra, para refazer a lista quando muda
+        if self.shot:
+            felink.fake_link(self.link, os.environ.get("FLIPEROS_LINK_FAKE"))
+        else:
+            self.link.start()
+            atexit.register(self.link.stop)
         self.rows = []
         # Onde o cursor parou em cada game list (frontend.json positions).
         self.positions = dict(cfg.get("positions") or {})
@@ -377,11 +389,24 @@ class Frontend:
             else:
                 rows.append((game, 0, clones))
                 rows.extend((c, 1, game) for c in clones or ())
+        # Na lista, no alto, os jogos que outros gabinetes jogam agora (o link):
+        # uma linha por jogo, a que abre o menu com o JOIN.
+        link = getattr(self, "link", None)
+        if self.mode == "list" and link and link.available():
+            here = {(g["_system"]["key"], g["Name"]): g for g in games}
+            top = []
+            for p in link.parties():
+                g = here.get((p["system"], p["game"]))
+                if g is not None and not any(r[0] is g for r in top):
+                    top.append((g, 0, "elsewhere"))
+            rows = top + rows
         self.rows = rows
         if keep:
             # O mesmo jogo, onde ele estiver agora (trocar de modo muda a
-            # posicao dos clones): a linha dele mesmo, nao a "MAIN SET".
-            found = [i for i, (g, _, extra) in enumerate(rows) if g["Name"] == keep and extra != "main"]
+            # posicao dos clones): a linha dele mesmo, nao a "MAIN SET" nem a
+            # que repete o jogo no alto.
+            found = [i for i, (g, _, extra) in enumerate(rows)
+                     if g["Name"] == keep and extra != "main" and extra != "elsewhere"]
             if found:
                 self.cursor = min(found, key=lambda i: (abs(i - self.cursor) if rows[i][1] else -1))
             else:
@@ -565,7 +590,7 @@ class Frontend:
             g, level, clones = self.rows[self.cursor] if self.rows else (None, 0, None)
             if g is None:
                 return None
-            if self.mode == "list" and level == 0 and clones:
+            if self.mode == "list" and level == 0 and isinstance(clones, list) and clones:
                 if g["Name"] in self.opened:
                     self.opened.discard(g["Name"])
                 else:
@@ -654,10 +679,12 @@ class Frontend:
             return None
         if o == "controls":
             return self.controls_act(a)
+        if o in ("lobby", "transfer"):
+            return self.link_act(a)
         if a == "b2" and o not in ("rename", "exitkey", "exitpad"):
             self.overlay = {"more": "popup", "classify": "options"}.get(o)
             if self.overlay == "popup":
-                self.ov = {"sel": 2}
+                self.ov = {"sel": len(self.popup_tiles()) - 1}
             elif self.overlay == "options":
                 self.ov = {"sel": 0}
             return None
@@ -670,20 +697,28 @@ class Frontend:
                 self.overlay = None
             return None
         if o == "popup":
+            tiles = self.popup_tiles()
             if a in ("left", "right"):
-                self.ov["sel"] = (self.ov["sel"] + (1 if a == "right" else -1)) % 3
+                self.ov["sel"] = (self.ov["sel"] + (1 if a == "right" else -1)) % len(tiles)
             elif a == "b4":
                 self.toggle_fav()
             elif a == "b1":
-                sel = self.ov["sel"]
-                if sel == 0:
+                tile = tiles[self.ov["sel"] % len(tiles)]
+                kind = tile["kind"]
+                if kind == "play":
                     self.overlay = None
                     return "launch"
-                if sel == 1:
+                if kind == "fav":
                     self.toggle_fav()
                     self.overlay = None
-                else:
+                elif kind == "more":
                     self.open_more()
+                elif kind in ("link", "new"):
+                    self.link_host()
+                elif kind == "join":
+                    self.link_join(tile["party"])
+                else:
+                    self.say(tile["label"])
             return None
         if o == "more":
             if a in ("up", "down"):
@@ -1133,9 +1168,154 @@ class Frontend:
         threading.Thread(target=work, daemon=True).start()
 
     # ── Jogar ──
-    def launch(self):
+    # ── O link play (gui/felink.py) ──
+    def link_mark(self, g):
+        """None: o jogo nao tem link. False: tem, e ninguem joga. True: alguem joga."""
+        return self.link.mark(g["_system"]["key"], g["Name"]) if g else None
+
+    def link_party(self, g):
+        """A festa de outro gabinete nesse jogo (a que ainda aceita gente primeiro)."""
+        parties = self.link.parties_for(g["_system"]["key"], g["Name"]) if g else []
+        parties.sort(key=lambda p: (p["state"] != "lobby", p["host"] or ""))
+        return parties[0] if parties else None
+
+    def popup_tiles(self):
+        """Os azulejos do menu do jogo. Num jogo de link, depois do PLAY: JOIN
+        de cada festa aberta, as que nao aceitam mais gente (apagadas, so o
+        estado) e NEW LINK; sem festa nenhuma, o LINK PLAY (este gabinete e o
+        primeiro)."""
         g = self.game()
+        tiles = [{"kind": "play", "label": "PLAY"}]
+        prof = self.link.profile_of(g["_system"]["key"], g["Name"]) if g else None
+        if prof:
+            parties = self.link.parties_for(g["_system"]["key"], g["Name"])
+            for p in parties:
+                if p["state"] == "lobby" and p["used"] < (p["max"] or 0):
+                    tiles.append({"kind": "join", "label": "JOIN LINK", "party": p, "lit": True})
+            for p in parties:
+                if not (p["state"] == "lobby" and p["used"] < (p["max"] or 0)):
+                    tiles.append({"kind": "closed", "label": "STARTED" if p["state"] == "playing" else "FULL",
+                                  "party": p, "lit": True})
+            tiles.append({"kind": "new" if parties else "link", "label": "NEW LINK" if parties else "LINK PLAY",
+                          "max": prof["max"], "lit": False})
+        fav = g is not None and g.get("Favourite") == "1"
+        tiles.append({"kind": "fav", "label": "UNFAVOURITE" if fav else "FAVOURITE"})
+        tiles.append({"kind": "more", "label": "MORE"})
+        return tiles
+
+    def link_files(self, g):
+        """Os arquivos do jogo que a festa serve a quem entra sem eles: o do
+        jogo, o pai (num clone) e os extras do perfil (os que existem)."""
+        system = g["_system"]
+        paths = list(self.lib.rom_files(g))
+        parent = g.get("CloneOf")
+        for ext in (system.get("extensions") or [".zip"]) if parent else ():
+            path = os.path.join(system["folder"], parent + ext)
+            if os.path.isfile(path):
+                paths.append(path)
+        return self.link.served(paths)
+
+    def link_host(self):
+        """NEW LINK / LINK PLAY: este gabinete abre a festa (e o numero 1)."""
+        g = self.game()
+        prof = self.link.profile_of(g["_system"]["key"], g["Name"])
+        if not self.link.host_game(prof, g["_system"]["key"], g["Name"], self.link_files(g)):
+            self.say(self.link.message or "CANNOT OPEN THE PARTY", 3)
+            return
+        self.link_game = g
+        self.overlay, self.ov = "lobby", {}
+
+    def link_join(self, party):
+        """JOIN LINK: primeiro os arquivos (so copia o que falta, do anfitriao),
+        depois a entrada na festa."""
+        g = self.game()
+        self.link_game = g
+        self.overlay, self.ov = "transfer", {"progress": (0, 0, ""), "party": party, "result": None}
+        ov = self.ov
+
+        def work():
+            def progress(done, total, name):
+                ov["progress"] = (done, total, name)
+            ok, _ = self.felink.fetch_files(party["host_ip"], self.link.home, None, progress=progress)
+            ov["result"] = ok
+        threading.Thread(target=work, daemon=True).start()
+
+    def link_act(self, a):
+        """A sala e a copia: B sai; na sala, A comeca (o anfitriao, num jogo
+        de tamanho flexivel, com o minimo)."""
+        if self.overlay == "transfer":
+            if a == "b2":
+                self.ov["result"] = "cancel"
+                self.overlay = None
+            return None
+        if a == "b2":
+            self.link.leave()
+            self.overlay = None
+        elif a == "b1":
+            lob = self.link.lobby()
+            if lob and lob["role"] == "host" and not lob["plan"] and not self.link.start_now():
+                self.say("WAITING FOR MORE CABINETS")
+        return None
+
+    def link_tick(self, now):
+        """O cabo, a rede e a festa, a cada volta do laco: a lista de cima
+        refeita quando outro gabinete abre ou fecha uma festa, a copia dos
+        arquivos que acabou e a hora de abrir o jogo."""
+        link = self.link
+        if self.shot:
+            return
+        link.poll(now)
+        if not link.available():
+            if self.overlay in ("lobby", "transfer"):
+                self.overlay = None
+                self.say("NO NETWORK CABLE", 3)
+            return
+        sig = tuple((p["system"], p["game"], p["used"], p["state"]) for p in link.parties())
+        if sig != self.link_sig:
+            self.link_sig = sig
+            if not self.overlay or self.overlay == "popup":
+                g = self.game()
+                self.rebuild(keep=g["Name"] if g else None)
+        if self.overlay == "transfer" and self.ov.get("result") not in (None, "cancel"):
+            ok = self.ov["result"]
+            party = self.ov["party"]
+            g = self.link_game
+            self.overlay = None
+            if not ok:
+                self.say("COULD NOT COPY THE GAME FILES", 3)
+            elif link.join_party(party, link.profile_of(g["_system"]["key"], g["Name"]), g["_system"]["key"], g["Name"]):
+                self.overlay, self.ov = "lobby", {}
+            else:
+                self.say(link.message or "COULD NOT JOIN", 3)
+        r = link.tick(now)
+        if r == "launch":
+            self.launch_link()
+        elif r == "closed":
+            link.leave()
+            self.overlay = None
+            self.say("THE PARTY CLOSED", 3)
+
+    def launch_link(self):
+        """A festa chegou na hora: o jogo abre com o comando, a NVRAM e o ini
+        deste numero, e a festa acaba junto com ele."""
+        g = self.link_game
         argv = self.lib.command(g) if g else None
+        if not argv:
+            self.link.leave()
+            self.overlay = None
+            self.say("CANNOT OPEN THIS GAME")
+            return
+        argv = self.link.command(argv)
+        self.overlay = None
+        self.launch(argv, g)
+        self.link.leave()
+        self.link_game = None
+        self.last_input = time.monotonic()
+        self.marquee_logo((self.category() or {}).get("name", ""), "", 1)
+
+    def launch(self, argv=None, game=None):
+        g = game or self.game()
+        argv = argv or (self.lib.command(g) if g else None)
         if not argv:
             self.say("CANNOT OPEN THIS GAME")
             return
@@ -1346,6 +1526,7 @@ class Frontend:
                     # acha o estado ja trocado e nao mexe nele).
                     self.marquee_logo((self.category() or {}).get("name", ""), "", 1)
             self.tick(now)
+            self.link_tick(now)
             self.capture_tick(now)
             # O tempo do modo comercial acabou aqui no frontend.
             paid = self.commercial and self.left() > 0

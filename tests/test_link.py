@@ -594,5 +594,89 @@ class LinkTests(unittest.TestCase):
         self.assertEqual(late.message, felink.REASONS["closed"])
 
 
+class FrontendLinkTests(unittest.TestCase):
+    """O que o gui/fliperos-frontend faz com o link: os azulejos do menu do
+    jogo e as linhas do alto da lista (sem desenhar nada)."""
+
+    @classmethod
+    def setUpClass(cls):
+        from importlib.machinery import SourceFileLoader
+        import types
+        loader = SourceFileLoader("fliperos_frontend_link", str(ROOT / "fliperos-setup/gui/fliperos-frontend"))
+        cls.fm = types.ModuleType(loader.name)
+        cls.fm.__file__ = loader.path
+        loader.exec_module(cls.fm)
+
+    def stub(self, parties=(), profiled=("model3", "scud")):
+        import types
+        link = mock.Mock()
+        link.available.return_value = True
+        link.profile_of.side_effect = lambda system, name: (
+            felink.Profiles().get("scud") if (system, name) == profiled else None)
+        link.parties_for.side_effect = lambda system, name: [p for p in parties if (p["system"], p["game"]) == (system, name)]
+        link.parties.return_value = list(parties)
+        games = [{"Name": n, "Title": n, "_system": {"key": k}} for k, n in (("mame", "sf2"), ("model3", "scud"), ("model3", "daytona2"))]
+        fe = types.SimpleNamespace(link=link, games=games, mode="list", show_clones=True, opened=set(), cursor=0,
+                                   fd=types.SimpleNamespace(tree=lambda gs: [(g, []) for g in gs]), filtered=lambda: games,
+                                   rows=[], game=lambda: fe.rows[fe.cursor][0])
+        fe.rebuild = lambda keep=None: self.fm.Frontend.rebuild(fe, keep)
+        for name in ("popup_tiles",):
+            setattr(fe, name, lambda name=name: getattr(self.fm.Frontend, name)(fe))
+        return fe
+
+    def party(self, state="lobby", used=2, mx=8):
+        return {"party": "p", "game": "scud", "system": "model3", "state": state, "used": used, "max": mx, "host": "A",
+                "host_ip": "10.0.0.2", "numbers": list(range(1, used + 1))}
+
+    def kinds(self, fe, name):
+        fe.rebuild(keep=name)
+        return [t["kind"] for t in fe.popup_tiles()]
+
+    def test_the_menu_of_a_normal_game_is_the_old_three_tiles(self):
+        fe = self.stub()
+        self.assertEqual(self.kinds(fe, "sf2"), ["play", "fav", "more"])
+
+    def test_a_link_game_nobody_plays_offers_link_play(self):
+        fe = self.stub()
+        self.assertEqual(self.kinds(fe, "scud"), ["play", "link", "fav", "more"])
+
+    def test_an_open_party_offers_join_and_a_new_link(self):
+        fe = self.stub([self.party()])
+        self.assertEqual(self.kinds(fe, "scud"), ["play", "join", "new", "fav", "more"])
+        join = fe.popup_tiles()[1]
+        self.assertEqual((join["label"], join["party"]["host_ip"]), ("JOIN LINK", "10.0.0.2"))
+
+    def test_a_started_or_full_party_is_shown_but_cannot_be_joined(self):
+        fe = self.stub([self.party("playing"), self.party("lobby", used=8)])
+        self.assertEqual(self.kinds(fe, "scud"), ["play", "closed", "closed", "new", "fav", "more"])
+        self.assertEqual([t["label"] for t in fe.popup_tiles()[1:3]], ["STARTED", "FULL"])
+
+    def test_the_games_other_cabinets_play_come_first_in_the_list_only(self):
+        fe = self.stub([self.party()])
+        fe.rebuild()
+        self.assertEqual([(r[0]["Name"], r[2]) for r in fe.rows[:2]], [("scud", "elsewhere"), ("sf2", [])])
+        self.assertEqual(len(fe.rows), 4)
+        fe.rebuild(keep="scud")      # o mesmo jogo, na lista de baixo: nao a linha do alto
+        self.assertEqual(fe.rows[fe.cursor][2], [])
+        fe.mode = "flow"
+        fe.rebuild()
+        self.assertEqual(len(fe.rows), 3)
+
+    def test_a_party_of_a_game_this_cabinet_does_not_have_adds_no_row(self):
+        party = dict(self.party(), game="outrogame")
+        fe = self.stub([party])
+        fe.rebuild()
+        self.assertEqual(len(fe.rows), 3)
+
+    def test_the_frontend_without_the_link_or_the_cable_still_builds_the_list(self):
+        fe = self.stub()
+        fe.link.available.return_value = False
+        fe.rebuild()
+        self.assertEqual(len(fe.rows), 3)
+        del fe.link
+        fe.rebuild()
+        self.assertEqual(len(fe.rows), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

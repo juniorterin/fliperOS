@@ -1035,3 +1035,33 @@ class Link:
             if os.path.isfile(os.path.join(self.home, rel)):
                 out.append(rel)
         return out
+
+
+class FakePresence:
+    """A tabela de mentira dos testes de tela (fliperos-frontend --shot)."""
+
+    def __init__(self, table):
+        self.rows = table
+
+    def table(self):
+        return self.rows
+
+    def say(self, **info):
+        pass
+
+    def stop(self):
+        pass
+
+
+def fake_link(link, path):
+    """Liga o link de um Frontend em --shot a uma rede de mentira: o JSON do
+    caminho tem {"table": [os registros da presenca dos outros gabinetes]}.
+    Sem caminho, o cabo esta solto."""
+    if not path:
+        link.wire = None
+        return
+    with open(path) as f:
+        data = json.load(f)
+    link.wire = Wire("fake", "10.9.9.9", "255.255.255.0", "10.9.9.255")
+    link.presence = FakePresence(data.get("table", []))
+

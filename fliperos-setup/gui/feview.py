@@ -195,6 +195,80 @@ def plus_icon(surf, cx, cy, c):
     surf.fill(c, (cx - 10, cy - 2, 21, 5))
 
 
+# O link: um globo de linhas verdes (apagado quando ninguem joga o jogo em
+# outro gabinete, aceso, com tres nos brancos, quando alguem joga) e os
+# gabinetes do link, acesos os que estao nele.
+GREEN_DIM, GREEN_MID = (0x2E, 0x5E, 0x40), (0x3C, 0xB0, 0x5C)
+
+
+def globe_icon(surf, cx, cy, r, lit, unlit=None):
+    c = T.GREEN if lit else (unlit or GREEN_DIM)
+    pygame.draw.circle(surf, c, (cx, cy), r, 1)
+    pygame.draw.ellipse(surf, c, (cx - round(r * 0.5), cy - r, 2 * round(r * 0.5) + 1, 2 * r + 1), 1)
+    pygame.draw.line(surf, c, (cx - r, cy), (cx + r, cy))
+    pygame.draw.line(surf, c, (cx, cy - r), (cx, cy + r))
+    off = round(r * 0.5)
+    half = round(r * 0.87)
+    pygame.draw.line(surf, c, (cx - half, cy - off), (cx + half, cy - off))
+    pygame.draw.line(surf, c, (cx - half, cy + off), (cx + half, cy + off))
+    if lit:
+        for dx, dy in ((-half + 1, -off), (half - 1, off), (half - 2, -off)):
+            surf.fill(T.FG, (cx + dx, cy + dy, 1, 1))
+
+
+def link_mark(fe, g):
+    """None: o jogo nao tem link. False: tem, e ninguem joga. True: alguem joga."""
+    f = getattr(fe, "link_mark", None)
+    return f(g) if f and g else None
+
+
+def link_party(fe, g):
+    f = getattr(fe, "link_party", None)
+    return f(g) if f and g else None
+
+
+def link_badge(fe, ui, g, x, y, w, h):
+    """A marca do link no canto da miniatura (a grade e a tela cheia): o globo
+    e, se alguem joga o jogo, os gabinetes da festa na beirada de baixo."""
+    lit = link_mark(fe, g)
+    if lit is None:
+        return
+    ui.fill((0x10, 0x12, 0x18), (x, y, 13, 13))
+    globe_icon(ui, x + 6, y + 6, 5, lit)
+    party = link_party(fe, g) if lit else None
+    if party and h >= 30:
+        ui.fill((0x10, 0x12, 0x18), (x, y + h - 11, w, 11))
+        cabinet_row(ui, x + 3, y + h - 9, party["used"], party["max"] or 1, w=5, h=7, gap=1)
+
+
+def cabinet_icon(surf, x, y, w, h, lit):
+    """Um gabinetezinho: a tela e o painel (aceso: verde e ciano)."""
+    c = T.GREEN if lit else T.LINE
+    pygame.draw.rect(surf, c, (x, y, w, h), 1)
+    surf.fill(T.CYAN if lit else T.BG_DEEP, (x + 1, y + 1, w - 2, h // 2 - 1))
+    pygame.draw.line(surf, c, (x + 1, y + h // 2 + 1), (x + w - 2, y + h // 2 + 1))
+    surf.fill(c, (x + w // 2, y + h // 2 + 3, 1, 1))
+
+
+def cabinet_row(surf, x, y, filled, total, you=None, w=5, h=8, gap=1):
+    """Os gabinetes de um link, da esquerda: `filled` acesos, o resto apagado;
+    `you` (de 0) leva o aro rosa: o lugar deste gabinete. Devolve onde acaba."""
+    for i in range(total):
+        cabinet_icon(surf, x + i * (w + gap), y, w, h, i < filled)
+    if you is not None:
+        pygame.draw.rect(surf, T.PINK, (x + you * (w + gap) - 2, y - 2, w + 4, h + 4), 1)
+    return x + total * (w + gap) - gap
+
+
+def pads_icon(surf, cx, cy, lit=True):
+    """O net play: dois controles ligados por uma linha."""
+    c = T.CYAN if lit else T.LINE
+    link = T.GREEN if lit else GREEN_DIM
+    pygame.draw.rect(surf, c, (cx - 9, cy + 1, 8, 6), 1)
+    pygame.draw.rect(surf, c, (cx + 1, cy - 8, 8, 6), 1)
+    pygame.draw.lines(surf, link, False, [(cx - 5, cy), (cx - 5, cy - 1), (cx + 2, cy - 1)])
+
+
 def menu_icon(surf, cx, cy, c):
     for dy in (-4, 0, 4):
         surf.fill(c, (cx - 5, cy + dy - 1, 11, 2))
@@ -671,9 +745,25 @@ def draw_list(fe, ui, now):
         game, level, extra = fe.rows[i]
         y = y0 + (i - fe.top) * 14
         on = i == fe.cursor
-        if level == 0:
-            x = lx + 14 if extra else lx
-            if extra:
+        # Os clones do jogo pai; "elsewhere" (um jogo que outro gabinete joga
+        # agora, no alto da lista) nao e uma lista deles.
+        clones = extra if isinstance(extra, list) else None
+        party = link_party(fe, game) if extra == "elsewhere" else None
+        if party:
+            globe_icon(ui, lx + 5, y + 6, 5, True)
+            x = lx + 14
+            label, color = fe.fd.short_title(game), T.YELLOW
+            total = party["max"] or 1
+            sw = total * 6 - 1
+            cabinet_row(ui, lx + lw - 14 - sw, y + 2, party["used"], total, w=5, h=8, gap=1)
+            room = lx + lw - x - 12 - sw - 6
+            if i + 1 < len(fe.rows) and fe.rows[i + 1][2] != "elsewhere":
+                pygame.draw.line(ui, T.LINE, (lx, y + 13), (lx + lw - 2, y + 13))
+        elif level == 0:
+            room = None
+            lmark = link_mark(fe, game)
+            x = lx + 14 if clones else lx
+            if clones:
                 # O [+] do jogo pai, um pouco transparente (aberto, menos).
                 opened = game["Name"] in fe.opened
                 mark = pygame.Surface((10, 10), pygame.SRCALPHA)
@@ -684,9 +774,14 @@ def draw_list(fe, ui, now):
                     mark.fill(T.COMMENT, (4, 2, 2, 6))
                 mark.set_alpha(190 if opened else 120)
                 ui.blit(mark, (lx, y + 1))
+            if lmark is not None:
+                # O link: o globo ao lado do titulo, apagado ou aceso.
+                globe_icon(ui, x + 5, y + 6, 5, lmark)
+                x += 14
             label = fe.fd.short_title(game)
             color = T.FG if game["Name"] in fe.opened else T.COMMENT
         else:
+            room = None
             x = lx + 26
             last = i + 1 >= len(fe.rows) or fe.rows[i + 1][1] == 0
             pygame.draw.line(ui, T.LINE, (lx + 5, y - 3), (lx + 5, y + (5 if last else 14)))
@@ -699,11 +794,12 @@ def draw_list(fe, ui, now):
             color = T.FG
         if game.get("Favourite") == "1" and level == 0:
             star(ui, lx + lw - 6, y + 6, T.YELLOW, 4)
+        room = lx + lw - x - 12 if room is None else room
         if on:
             # O escolhido inteiro: o que nao cabe corre em circulo.
-            ticker(ui, text_img(label.upper(), color), x, y + 2, lx + lw - x - 12, now)
+            ticker(ui, text_img(label.upper(), color), x, y + 2, room, now)
         else:
-            W.text(ui, fit(label, lx + lw - x - 12), color, x, y + 2)
+            W.text(ui, fit(label, room), color, x, y + 2)
     if len(fe.rows) > rows:
         W.scrollbar(ui, lx + lw + 4, y0, rows * 14 - 2, fe.top, rows, len(fe.rows))
     W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.LINE, lx + lw, y0 + rows * 14 + 1, right=True)
@@ -735,6 +831,13 @@ def draw_list(fe, ui, now):
     # Os icones numa fileira so: o genero, os jogadores, o controle e os botoes.
     strip = icon_strip(fe, ui, game, px, y, SX + SW)
     y += strip + 4 if strip else 0
+    if link_mark(fe, game) is not None:
+        # Um jogo de link: o globo (aceso se alguem joga) e os gabinetes dessa festa.
+        party = link_party(fe, game)
+        globe_icon(ui, px + 7, y + 7, 7, party is not None)
+        if party:
+            cabinet_row(ui, px + 22, y + 3, party["used"], party["max"] or 1, w=5, h=8, gap=1)
+        y += 18
     if T.VERTICAL:
         # Em pe, o indicador do modo comercial embaixo, a esquerda.
         if fe.commercial:
@@ -1054,6 +1157,7 @@ def draw_full(fe, ui, back, now):
         if g.get("Favourite") == "1":
             # No clone a estrela vai para a esquerda: a direita e do selo.
             star(ui, tx + 6 if clone else tx + tw - 6, y + 6, T.YELLOW, 4)
+        link_badge(fe, ui, g, tx + 1, y + 1, tw - 2, th - 2)
     y = round(ty + (fsel - ftop) * step)
     pygame.draw.rect(ui, T.PINK, (tx, y, tw, th), 2)
     ui.set_clip(None)
@@ -1074,6 +1178,11 @@ def draw_full(fe, ui, back, now):
         ui.blit(W.big(fit(fe.fd.short_title(game), right - SX), 1, W.LABEL), (SX, y))
     W.text(ui, fit(facts_line(game), right - SX), T.CYAN, SX, y + 12)
     icon_line(fe, ui, game, SX, y + 24, right, 12)
+    lit = link_mark(fe, game)
+    if lit is not None:
+        # O link, no fim da linha dos icones (os gabinetes da festa ficam nas
+        # miniaturas): o globo, aceso se alguem joga.
+        globe_icon(ui, right - 8, y + 30, 6, lit)
 
 
 def grid_image(fe, g, w, h):
@@ -1188,6 +1297,7 @@ def draw_flow(fe, ui, now):
         if g.get("Favourite") == "1":
             # No clone a estrela vai para a esquerda: a direita e do selo.
             star(ui, x + 6 if clone else x + tw - 6, y + 6, T.YELLOW, 4)
+        link_badge(fe, ui, g, x + 1, y + 1, tw - 2, th - 2)
         if fe.scraping is g:
             looking(ui, x + 2, y + th - 12, tw - 4)
     grid_videos(fe, top_row, rows_shown, tw - 2, th - 2)
@@ -1542,27 +1652,141 @@ def draw_guide(fe, ui):
     ui.blit(W.big(msg, 1, W.LABEL), (px + (pw - W.width(msg)) // 2, py + ph - 16))
 
 
+LINK_KINDS = ("link", "join", "new", "closed")
+
+
+def popup_icon(ui, kind, cx, cy, on, lit=False):
+    """O icone de um azulejo do menu do jogo."""
+    if kind == "play":
+        play_icon(ui, cx, cy, T.GREEN if on else T.COMMENT)
+    elif kind in ("link", "join", "new", "closed"):
+        globe_icon(ui, cx, cy, 10, lit, GREEN_MID if on else GREEN_DIM)
+        if kind == "new":
+            ui.fill(T.GREEN, (cx + 4, cy + 6, 7, 2))
+            ui.fill(T.GREEN, (cx + 6, cy + 4, 2, 7))
+    elif kind == "net":
+        pads_icon(ui, cx, cy, on)
+    elif kind == "fav":
+        star(ui, cx, cy, T.YELLOW if on else T.COMMENT, 11, outline=False)
+    else:
+        plus_icon(ui, cx, cy, T.CYAN if on else T.COMMENT)
+
+
 def draw_popup(fe, ui, now):
+    """O menu do jogo: os azulejos (jogar, o link se o jogo tem, os favoritos e
+    o "+") com o nome do escolhido embaixo. Um jogo de link ainda mostra, sob o
+    nome, os gabinetes da festa: acesos os que estao nela e o aro rosa no lugar
+    deste."""
     g = fe.game()
-    pw, ph = 216, 104
+    tiles = fe.popup_tiles() if hasattr(fe, "popup_tiles") else [
+        {"kind": "play", "label": "PLAY"},
+        {"kind": "fav", "label": "UNFAVOURITE" if g.get("Favourite") == "1" else "FAVOURITE"},
+        {"kind": "more", "label": "MORE"}]
+    n = len(tiles)
+    gap = 12 if n <= 3 else 6
+    size = 52 if n <= 3 else min(40, (WW - 4 - 28 - gap * (n - 1)) // n)
+    pw = max(216, n * size + (n - 1) * gap + 28) if n <= 3 else min(WW - 4, n * size + (n - 1) * gap + 28)
+    sel = fe.ov["sel"] % n
+    kind = tiles[sel]["kind"]
+    ph = 28 + size + 28 + (22 if kind in LINK_KINDS else 0)
     px, py = (WW - pw) // 2, (HH - ph) // 2 - 4
     card(ui, (px, py, pw, ph))
     W.text(ui, fit(fe.fd.short_title(g), pw - 16), T.YELLOW, px + 8, py + 8)
-    fav = g.get("Favourite") == "1"
-    tiles = [("PLAY", play_icon, T.GREEN), ("UNFAVOURITE" if fav else "FAVOURITE",
-                                            lambda s, x, y, c: star(s, x, y, c, 11, outline=False), T.YELLOW),
-             ("MORE", plus_icon, T.CYAN)]
-    size, gap = 52, 12
-    tx0 = px + (pw - (3 * size + 2 * gap)) // 2
+    tx0 = px + (pw - (n * size + (n - 1) * gap)) // 2
     ty = py + 24
-    for i, (label, draw_icon, color) in enumerate(tiles):
+    for i, tile in enumerate(tiles):
         x = tx0 + i * (size + gap)
-        on = i == fe.ov["sel"]
+        on = i == sel
         tile_frame(ui, (x, ty, size, size), on, now)
         pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, ty, size, size), 2 if on else 1)
-        draw_icon(ui, x + size // 2, ty + size // 2, color if on else T.COMMENT)
-    label = tiles[fe.ov["sel"]][0]
+        popup_icon(ui, tile["kind"], x + size // 2, ty + size // 2, on, tile.get("lit", False))
+    label = tiles[sel]["label"]
     ui.blit(W.big(label, 1, W.LABEL), (px + (pw - W.width(label)) // 2, ty + size + 10))
+    if kind in LINK_KINDS:
+        party = tiles[sel].get("party")
+        total = (party or {}).get("max") or tiles[sel].get("max") or 2
+        used = party["used"] if party else 0
+        # Quem esta (acesos) e o lugar deste gabinete (o aro): o primeiro, numa
+        # festa nova, ou o proximo livre, numa que ja existe; numa que ja
+        # comecou, nenhum.
+        filled = used if kind in ("join", "closed") else 1
+        you = {"link": 0, "new": 0, "join": used}.get(kind)
+        width = total * 11 - 3
+        cabinet_row(ui, px + (pw - width) // 2, ty + size + 26, filled, total, you=you, w=8, h=12, gap=3)
+
+
+def draw_lobby(fe, ui, now):
+    """A sala de espera do link: os gabinetes da festa acendem conforme chegam
+    (o aro rosa e este), o contador do comeco e uma palavra de estado. So os
+    icones, o titulo e os numeros: nada de frase."""
+    lob = fe.link.lobby()
+    g = fe.link_game
+    if not lob or not g:
+        return
+    pw, ph = WW - 16, HH - 24
+    px, py = 8, 12
+    card(ui, (px, py, pw, ph))
+    W.text(ui, fit(fe.fd.short_title(g), pw - 40), T.YELLOW, px + 8, py + 8)
+    globe_icon(ui, px + pw - 14, py + 12, 7, True)
+    total, members = lob["max"], len(lob["members"])
+    cols = 4
+    cw = (pw - 16) // cols
+    rows = (total + cols - 1) // cols
+    ch = 52
+    y0 = py + 28
+    for i in range(total):
+        cx, cy = px + 8 + (i % cols) * cw, y0 + (i // cols) * (ch + 4)
+        lit = i < members
+        you = i + 1 == lob["number"]
+        W.block(ui, (cx, cy, cw - 6, ch), T.BG_DEEP, None)
+        pygame.draw.rect(ui, T.GREEN if lit else T.LINE, (cx, cy, cw - 6, ch), 1)
+        cabinet_icon(ui, cx + (cw - 6) // 2 - 7, cy + 5, 14, 22, lit)
+        W.text(ui, "#%d" % (i + 1), T.GREEN if lit else T.LINE, cx + (cw - 6 - W.width("#%d" % (i + 1))) // 2, cy + 33)
+        if you:
+            pygame.draw.rect(ui, T.PINK, (cx - 2, cy - 2, cw - 2, ch + 4), 1)
+    y = y0 + rows * (ch + 4) + 4
+    globe_icon(ui, px + pw // 2 - 22, y + 6, 7, True)
+    W.text(ui, "%d/%d" % (members, total), T.GREEN, px + pw // 2 - 10, y + 2)
+    y += 22
+    left = lob["left"]
+    if left is not None:
+        word, color = ("STARTING %d" % math.ceil(left) if left > 0 else "STARTING"), T.GREEN
+    elif lob["closed"]:
+        word, color = "CLOSED", T.RED
+    else:
+        word, color = "WAITING", T.FG
+    W.text(ui, word, color, px + (pw - W.width(word)) // 2, y)
+    hint = "B:LEAVE"
+    if lob["role"] == "host" and not lob["fixed"] and lob["ready"] and left is None:
+        hint = "A:START  B:LEAVE"
+    W.text(ui, hint, T.COMMENT, px + 8, py + ph - 14)
+
+
+def draw_transfer(fe, ui, now):
+    """A copia dos arquivos do jogo do anfitriao: os dois gabinetes, a seta e
+    o andamento."""
+    g = fe.link_game
+    pw, ph = WW - 16, 120
+    px, py = 8, (HH - ph) // 2
+    card(ui, (px, py, pw, ph))
+    if g:
+        W.text(ui, fit(fe.fd.short_title(g), pw - 16), T.YELLOW, px + 8, py + 8)
+    done, total, name = fe.ov.get("progress", (0, 0, ""))
+    cabinet_icon(ui, px + 24, py + 26, 18, 26, True)
+    cabinet_icon(ui, px + pw - 42, py + 26, 18, 26, False)
+    pygame.draw.rect(ui, T.PINK, (px + pw - 45, py + 23, 24, 32), 1)
+    for i in range(5):
+        on = (int(now * 4) % 6) == i
+        x = px + 62 + i * 16
+        pygame.draw.polygon(ui, T.GREEN if on else GREEN_DIM, [(x, py + 32), (x, py + 46), (x + 9, py + 39)])
+    bar = (px + 12, py + 64, pw - 24, 12)
+    pygame.draw.rect(ui, T.LINE, bar, 1)
+    pct = (done / total) if total else 0
+    ui.fill(T.GREEN, (bar[0] + 2, bar[1] + 2, round((bar[2] - 4) * min(1.0, pct)), bar[3] - 4))
+    W.text(ui, "%d%%" % round(pct * 100), T.FG, px + (pw - W.width("%d%%" % round(pct * 100))) // 2, py + 82)
+    if name:
+        W.text(ui, fit(os.path.basename(name), pw - 16), T.COMMENT, px + 8, py + 96)
+    W.text(ui, "B:CANCEL", T.COMMENT, px + 8, py + ph - 12)
 
 
 # O letreiro de um texto que nao cabe: parado com "..." por MARQUEE_HOLD
@@ -2533,6 +2757,10 @@ def draw(fe, now):
             draw_more(fe, top, t)
         elif o == "filter":
             draw_filter(fe, top, t)
+        elif o == "lobby":
+            draw_lobby(fe, top, t)
+        elif o == "transfer":
+            draw_transfer(fe, top, t)
         elif o == "options":
             draw_options(fe, top, t)
         elif o == "hidden":
