@@ -15,6 +15,7 @@ The scripts read these environment variables, and have defaults you will probabl
 | `MAME_HOME` | The folder with `mame.exe` (official MAME for Windows) | `C:\mame0289\mame` |
 | `SM2_HOME` | The folder with the SM2-Emu Windows release unpacked in `app` | `C:\sm2-emu-win` |
 | `SUPERMODEL_HOME` | The Supermodel Windows release folder | `C:\supermodel-win\app\supermodel-0.3a-20261025-git-1481545` |
+| `SUPERMODEL_COPIES` | The folder with the copies `A` to `D` of the Supermodel release (each with `Config`, `Assets`, `NVRAM`) and the shared `roms` folder, for the role scripts | `C:\supermodel-win` |
 
 ## Files
 
@@ -31,6 +32,10 @@ The scripts read these environment variables, and have defaults you will probabl
 | `xkeys.py` | Sends keys to an X server with XTest (`KEYSYM:SECONDS`, `wait:SECONDS`, `down:`, `up:`). Used on the cabinet, as root, with `DISPLAY=:0` |
 | `xgrab.py` | Saves the X root window as a PPM. It shows **stale frames** for OpenGL windows, so use the emulator's own screenshot key instead |
 | `frontend-mockups.py` | Draws the mock-ups of `docs/research/link-frontend-plan.md` with the frontend's font, palette and Arcadeflow icons. `python3 frontend-mockups.py OUT_DIR REAL_LIST_PNG ART_DIR`: the list screenshot gives the title band, ART_DIR holds the cabinet's snaps (`~/media/snap/<system>/<game>.png`) named `snap_<system>_<game>.png`. The art is not in the repo. Run it in the `fliperos-tests-pil` image |
+| `kb.ps1`, `kb2.ps1` | Helpers to dot-source: key presses with scan codes (`Tap`), window focus, window captures, finding the SDL window of a process (`GameWin`) |
+| `roles.ps1` | Supermodel role helpers: start one of the copies A to D with `-net` and its ports (`Start-SM`), set the role and car number of Scud Race (`Set-ScudRole`), Daytona USA 2 (`Set-Daytona2Role`) and Dirt Devils (`Set-DirtRole`) through the test menu. Reads `SUPERMODEL_COPIES` |
+| `nvram-supermodel.ps1` | Collects the NVRAM of each cabinet number of Scud Race, Daytona USA 2 and Dirt Devils into `$LINK_TESTS_OUT\nvram\supermodel`. Cabinets 1 to 4 are the files the four-copy tests left in the copies, 5 to 8 are made by raising the car number |
+| `nvram-sm2emu.ps1` | Makes the SM2-Emu NVRAM of Daytona USA for cabinets 1 to 8 and checks each one on the network screen |
 
 ## Things that cost time
 

@@ -108,6 +108,21 @@ A game with more players than this cabinet has controls gets the same card with 
 - The example is X-Men (6 Players, Konami 1992), a six-player game. Each cabinet can take as many slots as it has controls, so a cabinet with two controls takes a pair. The header is icons: the players the game has (6), the net play mark, and the controls this cabinet has (2). Each row is a slot with the cabinet that holds it.
 - Net play needs an emulator core that supports netplay (RetroArch), so which games get it depends on the cores. It does not link boards: the Tournament Battle's eight-player bracket still needs its four-cabinet link.
 
+#### How net play works, and what has it
+
+This comes from the emulators' own documentation and design, not from a measurement on the cabinets. It must be tested (see the open questions).
+
+- **RetroArch.** One cabinet hosts (`--host`, TCP port 55435), the others connect (`--connect IP`). Only the players' inputs travel, not the picture: every cabinet runs the game itself, so the core must be deterministic and every cabinet must have the same core version and the same game files. The method is rollback: each cabinet runs ahead with a guess of the other's input, and when the real input arrives and differs it loads the last save state and runs the frames again. The core must therefore save and load a state fast, every frame. A small input delay (`netplay_input_latency_frames_min` and `_range`) hides most of the corrections. Spectators can join, and a client takes a free player slot. Whether one cabinet can hold two slots with its two controls, and how to choose the slot from the command line, are to be tested.
+- **Cores in the image.** FBNeo (CPS1, CPS2, CPS3, Neo Geo, Konami and the rest of its arcade list) is the arcade core built for netplay. MAME 2003-Plus can work for the games whose driver saves state well. MAME 2010, the other arcade core, is not a netplay candidate (the same state problem). GroovyMAME and MAME have no netplay: their only network is the board link tested for the link games.
+- **Flycast Dojo.** Naomi, Atomiswave and Dreamcast games have netplay in Fightcade's Flycast (Dojo), with delay and rollback. The Flycast of the image has none. Fightcade 2 itself is Internet matchmaking with rollback and is not in the image.
+- **No netplay:** Supermodel and SM2-Emu (they link boards, see the link games), PCSX2, DuckStation, Hypseus and OpenBOR. Dolphin has its own netplay, without rollback, for the GameCube and Wii only.
+
+**Local and wired only.** Net play and link play both run on the local network, on the cable, and nowhere else. The frontend starts the host on the wired interface's address only, connects only to a cabinet seen on the wired network, and offers neither when the cable is down. A Wi-Fi link and the Internet are never used, so the options of the emulators for relays and public servers stay off.
+
+**Latency.** A frame is 16.7 ms at 60 Hz. On the cable between two cabinets the round trip is under a millisecond, so the remote input arrives in a fraction of a frame: net play needs no input delay, and a rollback is rare. What the user feels is the same as playing alone, plus the CPU cost of saving a state every frame and, when a guess was wrong, running a few frames again in one. The cabinets of one game should use the same video mode: net play runs both at the same speed, so a cabinet whose CRT refresh is a little slower holds the other one back.
+
+Board link is different: there is no rollback, the games talk to each other at their own pace. The tests ran on the wired network and on loopback.
+
 ### Missing game files
 
 ![ROM transfer](link-frontend-mockups/08-rom-transfer.png)
