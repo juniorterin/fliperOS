@@ -18,7 +18,6 @@
 #
 # Nada aqui depende do pygame: o frontend so chama e desenha.
 
-import fcntl
 import hashlib
 import json
 import os
@@ -29,6 +28,11 @@ import time
 from collections import namedtuple
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote, unquote
+
+try:
+    import fcntl
+except ImportError:           # fora do Linux (so os testes de bancada); wired() pede FLIPEROS_LINK_WIRE
+    fcntl = None
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROFILES = os.environ.get("FLIPEROS_LINK_PROFILES") or os.path.join(HERE, "link-profiles.json")
@@ -48,6 +52,8 @@ Wire = namedtuple("Wire", "name ip mask broadcast")
 # ── A interface cabeada ────────────────────────────────────────────
 
 def iface_addr(name, request):
+    if fcntl is None:
+        return None
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         packed = fcntl.ioctl(s.fileno(), request, struct.pack("256s", name.encode()[:15]))
@@ -157,8 +163,13 @@ class Presence:
         if hasattr(socket, "SO_REUSEPORT"):
             self.rx.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         # Presa ao broadcast da sub-rede cabeada: o que vem de outra interface
-        # nao chega aqui.
-        self.rx.bind((self.wire.broadcast, self.port))
+        # nao chega aqui. Onde nao se prende ao endereco de broadcast (o
+        # Windows, dos testes de bancada), recebe de todas e hear() confere de
+        # que sub-rede veio.
+        try:
+            self.rx.bind((self.wire.broadcast, self.port))
+        except OSError:
+            self.rx.bind(("", self.port))
         self.rx.settimeout(0.3)
         self.tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.tx.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
