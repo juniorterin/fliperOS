@@ -20,6 +20,7 @@
 
 import hashlib
 import json
+import lzma
 import os
 import socket
 import struct
@@ -40,6 +41,12 @@ NVRAM_SRC = os.environ.get("FLIPEROS_LINK_NVRAM") or next(
     (p for p in ("/usr/local/share/fliperos/link-nvram", os.path.join(HERE, "..", "..", "config", "link-nvram"))
      if os.path.isdir(p)), "/usr/local/share/fliperos/link-nvram")
 PORT_PRESENCE, PORT_PARTY, PORT_FILES = 55436, 55437, 55438
+# O net play e o do RetroArch: o core do FBNeo, pelo fliperos-kms-run. A
+# lista dos sets do FBNeo vem do indice que o Setup baixa (config/fliperos-fbneo).
+PORT_NETPLAY = 55435
+KMS_RUN = os.environ.get("FLIPEROS_KMS_RUN", "/opt/fliperos/bin/fliperos-kms-run")
+NETPLAY_CORE = os.environ.get("FLIPEROS_NETPLAY_CORE", "/opt/fliperos/retroarch/cores/fbneo_libretro.so")
+FBNEO_INDEX = os.environ.get("FLIPEROS_FBNEO_INDEX", "/usr/local/share/fliperos/fbneo-sets.tsv.xz")
 INTERVAL, EXPIRE = 1.0, 4.0
 SOLO = ".solo"
 # Os nomes de interface que nao sao a cabeada, mesmo com um dispositivo atras
@@ -547,6 +554,67 @@ def command(profile, base, plan, number, game):
     return argv[:-1] + extra + argv[-1:]
 
 
+_fbneo = {}
+
+
+def fbneo_sets(path=None):
+    """Os sets de arcade do FBNeo (o indice do fliperos-fbneo: "pasta<TAB>set<TAB>pai<TAB>crcs",
+    pasta vazia = arcade). Vazio se nao ha indice: sem ele nenhum jogo tem net play."""
+    path = path or FBNEO_INDEX
+    if path not in _fbneo:
+        sets = set()
+        try:
+            with lzma.open(path, "rt", encoding="utf-8") as f:
+                for line in f:
+                    parts = line.rstrip("\n").split("\t")
+                    if len(parts) >= 2 and parts[0] == "":
+                        sets.add(parts[1])
+        except (OSError, lzma.LZMAError, EOFError):
+            pass
+        _fbneo[path] = frozenset(sets)
+    return _fbneo[path]
+
+
+def netplay_profile(system_key, name, players, local, sets=None):
+    """O perfil de net play de um jogo, ou None: tem mais jogadores do que
+    controles aqui e o FBNeo o roda (so ele salva o estado do jeito que o net
+    play pede). Cada gabinete entra com um jogador; quem abre e o primeiro."""
+    try:
+        n = int(players)
+    except (TypeError, ValueError):
+        return None
+    sets = fbneo_sets() if sets is None else sets
+    if (system_key or "").split("/")[0] != "mame" or n <= local or name not in sets:
+        return None
+    return {"id": "netplay", "title": name, "emulator": "retroarch", "systems": ["mame"], "sets": [name],
+            "min": 2, "max": n, "fixed": False, "order": "master-first", "step": 6, "port": PORT_NETPLAY,
+            "netplay": True}
+
+
+NETPLAY_CFG = """# O net play do FliperOS: so a rede local, so pelo cabo. Nada de servidor
+# publico, de retransmissao nem de travessia de NAT.
+netplay_public_announce = "false"
+netplay_use_mitm_server = "false"
+netplay_nat_traversal = "false"
+netplay_input_latency_frames_min = "0"
+netplay_input_latency_frames_range = "0"
+netplay_check_frames = "600"
+netplay_allow_slaves = "false"
+netplay_max_connections = "%d"
+"""
+
+
+def netplay_command(profile, plan, number, rom, name, cfg, core=None):
+    """O RetroArch do net play: o numero 1 abre o jogo (--host) e os outros se
+    conectam a ele (--connect), depois de o plano dar o atraso de cada um."""
+    argv = [KMS_RUN, "retroarch", "-L", core or NETPLAY_CORE, rom, "--appendconfig", cfg, "--nick", name,
+            "--port", str(profile["port"])]
+    if number == 1:
+        return argv + ["--host"]
+    host = next(m["ip"] for m in plan["members"] if m["number"] == 1)
+    return argv + ["--connect", host]
+
+
 def ini_set(path, keys):
     """Troca (ou acrescenta) as chaves no ini; devolve o texto de antes, para voltar."""
     try:
@@ -814,8 +882,10 @@ class Link:
     (anfitriao ou convidado), a contagem do comeco e o comando do jogo em
     link. Sem cabo, available() e falso e nada mais faz nada."""
 
-    def __init__(self, home, profiles=None, wire=False, ident=None, name=None, ports=None, clock=time.monotonic):
+    def __init__(self, home, profiles=None, wire=False, ident=None, name=None, ports=None, clock=time.monotonic,
+                 local_players=None):
         self.home = home
+        self.local_players = local_players or int(os.environ.get("FLIPEROS_LOCAL_PLAYERS") or 2)
         self.profiles = profiles or Profiles()
         self.wire = wired() if wire is False else wire
         self.ident = ident or machine_id()
@@ -831,7 +901,7 @@ class Link:
         self.party = None             # a PartyHost
         self.guest = None             # o PartyGuest
         self.files = None             # o FileServer (so o anfitriao)
-        self.profile = self.game = self.system = None
+        self.profile = self.game = self.system = self.rom = None
         self.plan = self.number = None
         self.launch_at = None
         self.undo = []
@@ -875,6 +945,12 @@ class Link:
     def profile_of(self, system_key, name):
         return self.profiles.find(system_key, name) if self.available() else None
 
+    def netplay_of(self, system_key, name, players):
+        """O perfil de net play do jogo (so com cabo), ou None."""
+        if not self.available() or self.profiles.find(system_key, name):
+            return None
+        return netplay_profile(system_key, name, players, self.local_players)
+
     def table(self):
         return self.presence.table() if self.presence else []
 
@@ -905,7 +981,7 @@ class Link:
                           party=host.ident if host else self.guest.party["party"], slot=self.number or 1,
                           max=self.profile["max"], state=state)
 
-    def host_game(self, profile, system_key, name, files):
+    def host_game(self, profile, system_key, name, files, rom=None):
         """Abre a festa deste gabinete (o numero 1) e serve os arquivos do jogo.
         files: os caminhos (relativos ao home) que quem entra sem o jogo copia."""
         self.leave()
@@ -922,11 +998,11 @@ class Link:
         except OSError:
             server = None
         self.role, self.party, self.files = "host", party, server
-        self.profile, self.game, self.system, self.number = profile, name, system_key, 1
+        self.profile, self.game, self.system, self.number, self.rom = profile, name, system_key, 1, rom
         self.say()
         return party
 
-    def join_party(self, party, profile, system_key, name):
+    def join_party(self, party, profile, system_key, name, rom=None):
         """Entra na festa de outro gabinete. False (e self.message) se nao deu."""
         self.leave()
         guest = PartyGuest(self.wire, self.ident, self.name, port=self.ports.get("party", PORT_PARTY))
@@ -934,7 +1010,7 @@ class Link:
             self.message = REASONS.get(guest.refused, REASONS["down"])
             return False
         self.role, self.guest = "guest", guest
-        self.profile, self.game, self.system, self.number = profile, name, system_key, guest.number
+        self.profile, self.game, self.system, self.number, self.rom = profile, name, system_key, guest.number, rom
         self.say()
         return True
 
@@ -1020,6 +1096,13 @@ class Link:
         """O comando do jogo em link (o base e o do frontend), com a NVRAM, o
         cfg e o ini deste numero no lugar; leave() desfaz tudo."""
         prof, plan, number = self.profile, self.plan, self.number
+        if prof.get("netplay"):
+            # O net play nao tem NVRAM por numero: o RetroArch com o que a festa pede.
+            cfg = os.path.join(self.home, ".config", "fliperos", "netplay.cfg")
+            os.makedirs(os.path.dirname(cfg), exist_ok=True)
+            with open(cfg, "w") as f:
+                f.write(NETPLAY_CFG % prof["max"])
+            return netplay_command(prof, plan, number, self.rom, self.name, cfg)
         argv = command(prof, base, plan, number, self.game)
         items = [(dest, origin) for origin, dest in nvram_files(prof, number, self.home)]
         if prof["emulator"] == "groovymame" and prof.get("cfg"):

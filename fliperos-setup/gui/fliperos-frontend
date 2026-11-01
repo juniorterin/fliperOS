@@ -1169,9 +1169,28 @@ class Frontend:
 
     # ── Jogar ──
     # ── O link play (gui/felink.py) ──
+    def link_profile(self, g):
+        """O perfil de link do jogo (os que ligam gabinetes) ou o de net play
+        (mais jogadores do que controles aqui, num jogo que o FBNeo roda)."""
+        if not g:
+            return None
+        key = g["_system"]["key"]
+        return self.link.profile_of(key, g["Name"]) or self.link.netplay_of(key, g["Name"], g.get("Players"))
+
+    def link_kind(self, g):
+        prof = self.link_profile(g)
+        return None if not prof else ("net" if prof.get("netplay") else "link")
+
     def link_mark(self, g):
-        """None: o jogo nao tem link. False: tem, e ninguem joga. True: alguem joga."""
-        return self.link.mark(g["_system"]["key"], g["Name"]) if g else None
+        """None: o jogo nao tem link nem net play. False: tem, e ninguem joga. True: alguem joga."""
+        if not self.link_profile(g):
+            return None
+        return bool(self.link.parties_for(g["_system"]["key"], g["Name"]))
+
+    def link_rom(self, g):
+        """O arquivo do jogo (o zip do set), que o RetroArch do net play abre."""
+        files = self.lib.rom_files(g)
+        return files[0] if files else None
 
     def link_party(self, g):
         """A festa de outro gabinete nesse jogo (a que ainda aceita gente primeiro)."""
@@ -1186,18 +1205,20 @@ class Frontend:
         primeiro)."""
         g = self.game()
         tiles = [{"kind": "play", "label": "PLAY"}]
-        prof = self.link.profile_of(g["_system"]["key"], g["Name"]) if g else None
+        prof = self.link_profile(g)
         if prof:
+            net = bool(prof.get("netplay"))
+            word = ("PARTY", "NET PLAY") if net else ("LINK", "LINK PLAY")
             parties = self.link.parties_for(g["_system"]["key"], g["Name"])
             for p in parties:
                 if p["state"] == "lobby" and p["used"] < (p["max"] or 0):
-                    tiles.append({"kind": "join", "label": "JOIN LINK", "party": p, "lit": True})
+                    tiles.append({"kind": "join", "label": "JOIN " + word[0], "party": p, "lit": True, "net": net})
             for p in parties:
                 if not (p["state"] == "lobby" and p["used"] < (p["max"] or 0)):
                     tiles.append({"kind": "closed", "label": "STARTED" if p["state"] == "playing" else "FULL",
-                                  "party": p, "lit": True})
-            tiles.append({"kind": "new" if parties else "link", "label": "NEW LINK" if parties else "LINK PLAY",
-                          "max": prof["max"], "lit": False})
+                                  "party": p, "lit": True, "net": net})
+            tiles.append({"kind": "new" if parties else "link", "label": "NEW " + word[0] if parties else word[1],
+                          "max": prof["max"], "lit": False, "net": net})
         fav = g is not None and g.get("Favourite") == "1"
         tiles.append({"kind": "fav", "label": "UNFAVOURITE" if fav else "FAVOURITE"})
         tiles.append({"kind": "more", "label": "MORE"})
@@ -1218,8 +1239,8 @@ class Frontend:
     def link_host(self):
         """NEW LINK / LINK PLAY: este gabinete abre a festa (e o numero 1)."""
         g = self.game()
-        prof = self.link.profile_of(g["_system"]["key"], g["Name"])
-        if not self.link.host_game(prof, g["_system"]["key"], g["Name"], self.link_files(g)):
+        prof = self.link_profile(g)
+        if not self.link.host_game(prof, g["_system"]["key"], g["Name"], self.link_files(g), self.link_rom(g)):
             self.say(self.link.message or "CANNOT OPEN THE PARTY", 3)
             return
         self.link_game = g
@@ -1283,7 +1304,7 @@ class Frontend:
             self.overlay = None
             if not ok:
                 self.say("COULD NOT COPY THE GAME FILES", 3)
-            elif link.join_party(party, link.profile_of(g["_system"]["key"], g["Name"]), g["_system"]["key"], g["Name"]):
+            elif link.join_party(party, self.link_profile(g), g["_system"]["key"], g["Name"], self.link_rom(g)):
                 self.overlay, self.ov = "lobby", {}
             else:
                 self.say(link.message or "COULD NOT JOIN", 3)

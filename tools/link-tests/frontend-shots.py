@@ -31,6 +31,11 @@ HOME = tempfile.mkdtemp()
 os.environ["HOME"] = HOME
 os.environ["FLIPEROS_HOME"] = HOME
 os.environ["FLIPEROS_LINK_NVRAM"] = os.path.join(ROOT, "config", "link-nvram")
+# O FBNeo roda o X-Men: o jogo de 4 jogadores tem net play num gabinete de 2 controles.
+import lzma
+with lzma.open(os.path.join(HOME, "fbneo.tsv.xz"), "wt") as f:
+    f.write("\txmen\t\t\n")
+os.environ["FLIPEROS_FBNEO_INDEX"] = os.path.join(HOME, "fbneo.tsv.xz")
 
 # (sistema, set, titulo, ano, fabricante, categoria, jogadores, controle, botoes, arte)
 GAMES = [
@@ -170,6 +175,8 @@ def main():
     shots("popup-new", ["b1", "right"], setup=on_row("dirtdvls"))
     shots("popup-join", ["b1", "right"], setup=on_row("daytona"))
     shots("popup-started", ["b1", "right"], setup=on_row("ssf2tb"))
+    shots("popup-net", ["b1", "right"], setup=on_row("xmen"))
+    shots("list-net", [], setup=on_row("xmen"))
     # A sala: este gabinete abre a festa de verdade, no loopback, e dois outros entram.
     link = felink.Link(HOME, wire=felink.Wire("lo", "127.0.0.1", "255.0.0.0", "127.255.255.255"), ident="me0", name="THIS",
                        ports={"presence": 55501, "party": 55502, "files": 55503})

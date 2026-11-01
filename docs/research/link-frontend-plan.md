@@ -110,7 +110,17 @@ A game with more players than this cabinet has controls gets the same card with 
 
 #### How net play works, and what has it
 
-This comes from the emulators' own documentation and design, not from a measurement on the cabinets. It must be tested (see the open questions).
+This is what the emulators' design says, plus what was tested on 1 November 2026: RetroArch 1.22.2 on the cabinet, a host and a client on the loopback with the null video, audio and input drivers (no screen), 23 seconds each.
+
+| Core | Game | Result |
+| --- | --- | --- |
+| FBNeo (in the image) | `xmen.zip` | Host and client connected: "joined as player 2 (ping 2 to 6 ms)" |
+| MAME, the current libretro core (nightly, 415 MB, **not** in the image) | `xmen.zip` of the 0.289 merged romset | Connected: "joined as player 2 (ping 4 to 8 ms)". No desync report with `netplay_check_frames = 30` |
+| MAME 2010 (in the image) | `doapp.zip` | **"Core does not support netplay."** It cannot host or join |
+
+The wired round trip between the Windows PC and the cabinet is under 1 ms (20 pings: minimum, average and maximum 0 ms). Not tested: a real game played on two screens, the input delay a person feels, and a client choosing a player slot other than the first free one (RetroArch gives each cabinet the first free player, so the frontend takes **one slot per cabinet**; the cabinet with two controls taking a pair is not done).
+
+**What the frontend does.** A game of the MAME folder with more players than this cabinet has controls (2 by default, `FLIPEROS_LOCAL_PLAYERS`), and that FBNeo runs (the set list of `fliperos-fbneo`), gets the net play mark (two controllers instead of the globe) and the menu tiles NET PLAY, JOIN PARTY and NEW PARTY. It uses the same party and waiting room as link play. When it starts, the host opens `retroarch -L fbneo_libretro.so GAME --host` and each guest `--connect HOST`, after its start delay, with a config that turns off the public lobby, the relay and the NAT traversal (`~/.config/fliperos/netplay.cfg`).
 
 - **RetroArch.** One cabinet hosts (`--host`, TCP port 55435), the others connect (`--connect IP`). Only the players' inputs travel, not the picture: every cabinet runs the game itself, so the core must be deterministic and every cabinet must have the same core version and the same game files. The method is rollback: each cabinet runs ahead with a guess of the other's input, and when the real input arrives and differs it loads the last save state and runs the frames again. The core must therefore save and load a state fast, every frame. A small input delay (`netplay_input_latency_frames_min` and `_range`) hides most of the corrections. Spectators can join, and a client takes a free player slot. Whether one cabinet can hold two slots with its two controls, and how to choose the slot from the command line, are to be tested.
 - **Cores in the image.** FBNeo (CPS1, CPS2, CPS3, Neo Geo, Konami and the rest of its arcade list) is the arcade core built for netplay. MAME 2003-Plus can work for the games whose driver saves state well. MAME 2010, the other arcade core, is not a netplay candidate (the same state problem). GroovyMAME and MAME have no netplay: their only network is the board link tested for the link games.
@@ -164,7 +174,7 @@ One NVRAM per cabinet number and game (`config/link-nvram`, with a README and a 
 2. **Presence and marks.** Done: the announcements on the wired subnet, the table, the marks in the list, the grid and the full screen, and the "playing elsewhere" rows.
 3. **Waiting room and launcher.** Done in the frontend and tested with two cabinets on the real wired network (the cabinet and a Windows PC): join, plan, start order, NVRAM and the emulator command. Not yet seen: a real game started this way on the cabinet's CRT.
 4. **Files transfer.** Done: the host serves the game's files over HTTP on the cable, with a check and a resume (25 MB at 10 MB/s between the PC and the cabinet).
-5. **Net play.** Not done.
+5. **Net play.** Done for FBNeo (the same party, waiting room and menu; the RetroArch command and its config). Headless host and client tested on the cabinet; a real two-screen game is not. A cabinet takes one slot.
 6. **More games**, after each one is tested in pairs.
 
 Each phase is tested on the real cabinets with two machines, and on four for the games that need them.

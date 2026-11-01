@@ -222,6 +222,12 @@ def link_mark(fe, g):
     return f(g) if f and g else None
 
 
+def link_kind(fe, g):
+    """"link" (o jogo liga gabinetes), "net" (net play: mais jogadores do que controles) ou None."""
+    f = getattr(fe, "link_kind", None)
+    return f(g) if f and g else None
+
+
 def link_party(fe, g):
     f = getattr(fe, "link_party", None)
     return f(g) if f and g else None
@@ -234,7 +240,10 @@ def link_badge(fe, ui, g, x, y, w, h):
     if lit is None:
         return
     ui.fill((0x10, 0x12, 0x18), (x, y, 13, 13))
-    globe_icon(ui, x + 6, y + 6, 5, lit)
+    if link_kind(fe, g) == "net":
+        pads_icon(ui, x + 6, y + 6, lit, small=True)
+    else:
+        globe_icon(ui, x + 6, y + 6, 5, lit)
     party = link_party(fe, g) if lit else None
     if party and h >= 30:
         ui.fill((0x10, 0x12, 0x18), (x, y + h - 11, w, 11))
@@ -260,10 +269,15 @@ def cabinet_row(surf, x, y, filled, total, you=None, w=5, h=8, gap=1):
     return x + total * (w + gap) - gap
 
 
-def pads_icon(surf, cx, cy, lit=True):
-    """O net play: dois controles ligados por uma linha."""
+def pads_icon(surf, cx, cy, lit=True, small=False):
+    """O net play: dois controles ligados por uma linha (small: o da lista)."""
     c = T.CYAN if lit else T.LINE
     link = T.GREEN if lit else GREEN_DIM
+    if small:
+        pygame.draw.rect(surf, c, (cx - 5, cy + 1, 5, 4), 1)
+        pygame.draw.rect(surf, c, (cx, cy - 4, 5, 4), 1)
+        pygame.draw.lines(surf, link, False, [(cx - 3, cy), (cx - 3, cy - 1), (cx + 1, cy - 1)])
+        return
     pygame.draw.rect(surf, c, (cx - 9, cy + 1, 8, 6), 1)
     pygame.draw.rect(surf, c, (cx + 1, cy - 8, 8, 6), 1)
     pygame.draw.lines(surf, link, False, [(cx - 5, cy), (cx - 5, cy - 1), (cx + 2, cy - 1)])
@@ -775,8 +789,12 @@ def draw_list(fe, ui, now):
                 mark.set_alpha(190 if opened else 120)
                 ui.blit(mark, (lx, y + 1))
             if lmark is not None:
-                # O link: o globo ao lado do titulo, apagado ou aceso.
-                globe_icon(ui, x + 5, y + 6, 5, lmark)
+                # O link: o globo (ou, no net play, os dois controles) ao lado
+                # do titulo, apagado ou aceso.
+                if link_kind(fe, game) == "net":
+                    pads_icon(ui, x + 5, y + 6, lmark, small=True)
+                else:
+                    globe_icon(ui, x + 5, y + 6, 5, lmark)
                 x += 14
             label = fe.fd.short_title(game)
             color = T.FG if game["Name"] in fe.opened else T.COMMENT
@@ -834,7 +852,10 @@ def draw_list(fe, ui, now):
     if link_mark(fe, game) is not None:
         # Um jogo de link: o globo (aceso se alguem joga) e os gabinetes dessa festa.
         party = link_party(fe, game)
-        globe_icon(ui, px + 7, y + 7, 7, party is not None)
+        if link_kind(fe, game) == "net":
+            pads_icon(ui, px + 7, y + 7, party is not None)
+        else:
+            globe_icon(ui, px + 7, y + 7, 7, party is not None)
         if party:
             cabinet_row(ui, px + 22, y + 3, party["used"], party["max"] or 1, w=5, h=8, gap=1)
         y += 18
@@ -1655,12 +1676,15 @@ def draw_guide(fe, ui):
 LINK_KINDS = ("link", "join", "new", "closed")
 
 
-def popup_icon(ui, kind, cx, cy, on, lit=False):
-    """O icone de um azulejo do menu do jogo."""
+def popup_icon(ui, kind, cx, cy, on, lit=False, net=False):
+    """O icone de um azulejo do menu do jogo (net: os controles, no lugar do globo)."""
     if kind == "play":
         play_icon(ui, cx, cy, T.GREEN if on else T.COMMENT)
     elif kind in ("link", "join", "new", "closed"):
-        globe_icon(ui, cx, cy, 10, lit, GREEN_MID if on else GREEN_DIM)
+        if net:
+            pads_icon(ui, cx, cy, lit or on)
+        else:
+            globe_icon(ui, cx, cy, 10, lit, GREEN_MID if on else GREEN_DIM)
         if kind == "new":
             ui.fill(T.GREEN, (cx + 4, cy + 6, 7, 2))
             ui.fill(T.GREEN, (cx + 6, cy + 4, 2, 7))
@@ -1699,7 +1723,7 @@ def draw_popup(fe, ui, now):
         on = i == sel
         tile_frame(ui, (x, ty, size, size), on, now)
         pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, ty, size, size), 2 if on else 1)
-        popup_icon(ui, tile["kind"], x + size // 2, ty + size // 2, on, tile.get("lit", False))
+        popup_icon(ui, tile["kind"], x + size // 2, ty + size // 2, on, tile.get("lit", False), tile.get("net", False))
     label = tiles[sel]["label"]
     ui.blit(W.big(label, 1, W.LABEL), (px + (pw - W.width(label)) // 2, ty + size + 10))
     if kind in LINK_KINDS:
@@ -1727,7 +1751,10 @@ def draw_lobby(fe, ui, now):
     px, py = 8, 12
     card(ui, (px, py, pw, ph))
     W.text(ui, fit(fe.fd.short_title(g), pw - 40), T.YELLOW, px + 8, py + 8)
-    globe_icon(ui, px + pw - 14, py + 12, 7, True)
+    if lob["profile"].get("netplay"):
+        pads_icon(ui, px + pw - 14, py + 12, True)
+    else:
+        globe_icon(ui, px + pw - 14, py + 12, 7, True)
     total, members = lob["max"], len(lob["members"])
     cols = 4
     cw = (pw - 16) // cols

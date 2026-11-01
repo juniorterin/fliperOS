@@ -615,13 +615,16 @@ class FrontendLinkTests(unittest.TestCase):
             felink.Profiles().get("scud") if (system, name) == profiled else None)
         link.parties_for.side_effect = lambda system, name: [p for p in parties if (p["system"], p["game"]) == (system, name)]
         link.parties.return_value = list(parties)
-        games = [{"Name": n, "Title": n, "_system": {"key": k}} for k, n in (("mame", "sf2"), ("model3", "scud"), ("model3", "daytona2"))]
+        link.netplay_of.side_effect = lambda system, name, players: felink.netplay_profile(system, name, players, 2, sets={"xmen"})
+        games = [{"Name": n, "Title": n, "_system": {"key": k}, "Players": pl}
+                 for k, n, pl in (("mame", "sf2", "2"), ("model3", "scud", "1"), ("model3", "daytona2", "1"))]
+        games.append({"Name": "xmen", "Title": "xmen", "_system": {"key": "mame"}, "Players": "4"})
         fe = types.SimpleNamespace(link=link, games=games, mode="list", show_clones=True, opened=set(), cursor=0,
                                    fd=types.SimpleNamespace(tree=lambda gs: [(g, []) for g in gs]), filtered=lambda: games,
                                    rows=[], game=lambda: fe.rows[fe.cursor][0])
         fe.rebuild = lambda keep=None: self.fm.Frontend.rebuild(fe, keep)
-        for name in ("popup_tiles",):
-            setattr(fe, name, lambda name=name: getattr(self.fm.Frontend, name)(fe))
+        for name in ("popup_tiles", "link_profile"):
+            setattr(fe, name, lambda *a, name=name: getattr(self.fm.Frontend, name)(fe, *a))
         return fe
 
     def party(self, state="lobby", used=2, mx=8):
@@ -646,6 +649,16 @@ class FrontendLinkTests(unittest.TestCase):
         join = fe.popup_tiles()[1]
         self.assertEqual((join["label"], join["party"]["host_ip"]), ("JOIN LINK", "10.0.0.2"))
 
+    def test_a_game_with_more_players_than_controls_offers_net_play(self):
+        fe = self.stub()
+        self.assertEqual(self.kinds(fe, "xmen"), ["play", "link", "fav", "more"])
+        tile = fe.popup_tiles()[1]
+        self.assertEqual((tile["label"], tile["net"]), ("NET PLAY", True))
+        party = dict(self.party(), game="xmen", system="mame", max=4)
+        fe2 = self.stub([party])
+        self.assertEqual(self.kinds(fe2, "xmen"), ["play", "join", "new", "fav", "more"])
+        self.assertEqual([t["label"] for t in fe2.popup_tiles()[1:3]], ["JOIN PARTY", "NEW PARTY"])
+
     def test_a_started_or_full_party_is_shown_but_cannot_be_joined(self):
         fe = self.stub([self.party("playing"), self.party("lobby", used=8)])
         self.assertEqual(self.kinds(fe, "scud"), ["play", "closed", "closed", "new", "fav", "more"])
@@ -655,27 +668,82 @@ class FrontendLinkTests(unittest.TestCase):
         fe = self.stub([self.party()])
         fe.rebuild()
         self.assertEqual([(r[0]["Name"], r[2]) for r in fe.rows[:2]], [("scud", "elsewhere"), ("sf2", [])])
-        self.assertEqual(len(fe.rows), 4)
+        self.assertEqual(len(fe.rows), 5)
         fe.rebuild(keep="scud")      # o mesmo jogo, na lista de baixo: nao a linha do alto
         self.assertEqual(fe.rows[fe.cursor][2], [])
         fe.mode = "flow"
         fe.rebuild()
-        self.assertEqual(len(fe.rows), 3)
+        self.assertEqual(len(fe.rows), 4)
 
     def test_a_party_of_a_game_this_cabinet_does_not_have_adds_no_row(self):
         party = dict(self.party(), game="outrogame")
         fe = self.stub([party])
         fe.rebuild()
-        self.assertEqual(len(fe.rows), 3)
+        self.assertEqual(len(fe.rows), 4)
 
     def test_the_frontend_without_the_link_or_the_cable_still_builds_the_list(self):
         fe = self.stub()
         fe.link.available.return_value = False
         fe.rebuild()
-        self.assertEqual(len(fe.rows), 3)
+        self.assertEqual(len(fe.rows), 4)
         del fe.link
         fe.rebuild()
-        self.assertEqual(len(fe.rows), 3)
+        self.assertEqual(len(fe.rows), 4)
+
+
+class NetplayTests(unittest.TestCase):
+    SETS = frozenset({"xmen", "sf2"})
+
+    def test_only_a_game_with_more_players_than_controls_that_fbneo_runs(self):
+        prof = felink.netplay_profile("mame", "xmen", "4", 2, self.SETS)
+        self.assertEqual((prof["id"], prof["min"], prof["max"], prof["port"]), ("netplay", 2, 4, 55435))
+        self.assertTrue(prof["netplay"] and not prof["fixed"])
+        self.assertIsNone(felink.netplay_profile("mame", "sf2", "2", 2, self.SETS))       # cabe nos controles daqui
+        self.assertIsNone(felink.netplay_profile("mame", "gaiaone", "4", 2, self.SETS))   # o FBNeo nao roda
+        self.assertIsNone(felink.netplay_profile("model2", "xmen", "4", 2, self.SETS))    # so os sets do MAME
+        self.assertIsNone(felink.netplay_profile("mame", "xmen", "", 2, self.SETS))
+        self.assertIsNotNone(felink.netplay_profile("mame", "xmen", "4", 3, self.SETS))
+        self.assertIsNone(felink.netplay_profile("mame", "xmen", "4", 4, self.SETS))
+
+    def test_the_fbneo_index_is_read_from_the_xz(self):
+        import lzma
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "sets.tsv.xz")
+            with lzma.open(path, "wt") as f:
+                f.write("\txmen\t\t\nmegadrive\tsonic\t\t\n\tsf2ce\tsf2\t\n")
+            self.assertEqual(felink.fbneo_sets(path), frozenset({"xmen", "sf2ce"}))
+            self.assertEqual(felink.fbneo_sets(os.path.join(d, "nenhum")), frozenset())
+
+    def test_the_command_hosts_for_number_1_and_connects_the_others_to_it(self):
+        prof = felink.netplay_profile("mame", "xmen", "4", 2, self.SETS)
+        plan = felink.make_plan(prof, [{"number": i, "name": "C%d" % i, "ip": "10.0.0.%d" % i} for i in (1, 2, 3)])
+        self.assertEqual(plan["order"], [1, 2, 3])
+        host = felink.netplay_command(prof, plan, 1, "/r/xmen.zip", "C1", "/c/n.cfg", core="/core.so")
+        self.assertEqual(host, [felink.KMS_RUN, "retroarch", "-L", "/core.so", "/r/xmen.zip", "--appendconfig", "/c/n.cfg",
+                                "--nick", "C1", "--port", "55435", "--host"])
+        guest = felink.netplay_command(prof, plan, 3, "/r/xmen.zip", "C3", "/c/n.cfg", core="/core.so")
+        self.assertEqual(guest[-2:], ["--connect", "10.0.0.1"])
+        self.assertNotIn("--host", guest)
+
+    def test_the_config_keeps_it_off_the_internet(self):
+        text = felink.NETPLAY_CFG % 4
+        for key in ("netplay_public_announce", "netplay_use_mitm_server", "netplay_nat_traversal"):
+            self.assertIn('%s = "false"' % key, text)
+        self.assertIn('netplay_max_connections = "4"', text)
+
+    def test_a_link_command_for_a_netplay_party_writes_the_config_and_has_no_nvram(self):
+        with tempfile.TemporaryDirectory() as home:
+            prof = felink.netplay_profile("mame", "xmen", "4", 2, self.SETS)
+            link = felink.Link(home, wire=LOOP, ident="aaa")
+            link.profile, link.game, link.rom, link.number = prof, "xmen", "/r/xmen.zip", 1
+            link.plan = felink.make_plan(prof, [{"number": 1, "name": "A", "ip": "127.0.0.1"},
+                                                {"number": 2, "name": "B", "ip": "127.0.0.2"}])
+            argv = link.command(["ignored"])
+            self.assertEqual(argv[1:3], ["retroarch", "-L"])
+            self.assertIn("--host", argv)
+            cfg = Path(home, ".config", "fliperos", "netplay.cfg").read_text()
+            self.assertIn('netplay_nat_traversal = "false"', cfg)
+            self.assertFalse(os.path.exists(os.path.join(home, "nvram", ".link-active")))
 
 
 if __name__ == "__main__":
