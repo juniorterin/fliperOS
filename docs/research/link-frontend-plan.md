@@ -40,6 +40,7 @@ These facts decide the design. They come from the tests of 31 October to 1 Novem
 | Scud Race | Supermodel | for 2, master first. For 4, the slaves first (last of the ring first), the master last | 2, 4 | cars 1 to 8 |
 | Daytona USA 2 | Supermodel | slaves first, master last (for 2: master first also worked) | 2, 4 | cars 1 to 8 |
 | Dirt Devils | Supermodel | master first | 2 (4 only formed two of four links) | machine IDs to be checked |
+| Club Kart | Flycast | the server first (`ActAsServer`), the client 6 s later | 2 | 2 |
 | Tournament Battle | GroovyMAME | the head first (empty remote host), the others in chain order | 4 | 4 |
 
 The reason for the Supermodel order: each machine connects to the next one only after it receives the connection from the previous one. The master starts the chain, so every other machine must already be listening.

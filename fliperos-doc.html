@@ -29122,7 +29122,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <h1 id="linked-cabinets">Linked cabinets</h1>
 <p>Some arcade games were built to be played on several machines at once: racing cabinets joined by a link cable, or a fighting game that needs four cabinets for its tournament mode.</p>
 <p>This page lists those games, how the link works in each emulator FliperOS ships, and what each game needs to start: how many cabinets, how many players and screens, whether one cabinet must be master, and whether you tell the game how many cabinets there are.</p>
-<p><strong>The FliperOS frontend does link play for five games on its own</strong>: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the <strong>network cable only</strong> (never Wi-Fi) and needs the cabinets on the same network.</p>
+<p><strong>The FliperOS frontend does link play for six games on its own</strong>: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart: European Session and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the <strong>network cable only</strong> (never Wi-Fi) and needs the cabinets on the same network.</p>
 <p>For every other game, and to know what the frontend does underneath, everything on this page is set by hand in the emulator: a command line, an ini file, or the game's own test menu.</p>
 <h2 id="at-a-glance">At a glance</h2>
 <p>Every row says how it was checked. <strong>Tested</strong> means two or more instances were linked and played here. <strong>Solo</strong> means the game was only started alone, with the link on. <strong>Source</strong> means it comes from reading the emulator's code.</p>
@@ -29269,6 +29269,16 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td>not checked</td>
 <td>not checked</td>
 <td>Solo</td>
+</tr>
+<tr>
+<td>Club Kart: European Session</td>
+<td>Flycast</td>
+<td>2</td>
+<td>1</td>
+<td>1</td>
+<td>Yes (the first is the server)</td>
+<td>No</td>
+<td><strong>Tested</strong> with 2</td>
 </tr>
 <tr>
 <td>Gunbuster</td>
@@ -29542,7 +29552,7 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <p>Virtua Racing, Rad Rally, OutRunners and Stadium Cross were started in MAME 0.289 and their test menus opened. The other games here were not tried. No link between two instances was tried for any of them.</p>
 <h2 id="flycast-naomi">Flycast: NAOMI</h2>
 <p><strong>Games that use several boards in one cabinet</strong> are not a link between machines. Ferrari F355 Challenge, Airline Pilots and Sega Strike Fighter run each board as its own Flycast window, one per monitor. See <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
-<p><strong>Linking two cabinets.</strong> Flycast's own LAN link is turned on in its advanced settings (Broadband adapter and Naomi network): one instance is the server, and the other types its IP. This comes from reports on the web, and it was not tested here. Reports say two machines work and a third can fail with a country error. The F355 "twin" sets are the ones made for a battle cable between two cabinets.</p>
+<p><strong>Linking two cabinets</strong> works for Club Kart: European Session (<code>clubk2k3</code>). It was tested on 1 November 2026 with the cabinet's Flycast as the server and Flycast 2.7 on a Windows PC as the client, on the wired network. The link is UDP on port 37391. The options go on the command line (<code>-config</code>) or in <code>emu.cfg</code>, section <code>[network]</code>: <code>network:Enable=yes</code> on all of them, <code>network:ActAsServer=yes</code> on the first one, and on the others <code>network:ActAsServer=no</code> and <code>network:server=IP-of-the-first</code>. Start the server first. Also set <code>network:EnableUPnP=no</code>: without it Flycast asks the router, and so the Internet, to open the port. The server shows a dialog, "Waiting for players" with a Start Now button. The client showed "CHECKING NETWORK NOW, MODE: SLAVE, SEQUENCE: SYNCING", and a few seconds later the attract mode. Two Flycast on one machine do not work, because both want port 37391. Not tested: a race with two players, Initial D, F355, and a third machine (reports say Club Kart takes two). The F355 "twin" sets are the ones made for a battle cable between two cabinets.</p>
 <p><strong>Net play (rollback)</strong> is another thing: the Flycast of FliperOS has GGPO options (<code>GGPO</code>, <code>GGPODelay</code>, <code>ActAsServer</code>) for NAOMI and Atomiswave games, found in the program and not run here yet.</p>
 <p><strong>Which sets have a network board.</strong> The romset of MAME 0.289 marks these NAOMI sets, among others: <code>f355</code>, <code>f355twin</code>, <code>f355twn2</code> (Ferrari F355 Challenge), <code>initd</code>, <code>initdexp</code>, <code>initdv2j</code>, <code>initdv3e</code>, <code>initdv3j</code>, <code>inidv3cy</code> (Initial D), <code>clubk2k3</code>, <code>clubkcyc</code>, <code>clubkprz</code>, <code>clubkpzb</code>, <code>clubkrt</code> (Club Kart), <code>18wheelr</code>, <code>crzytaxi</code> and <code>vstrik3</code>. All of them were downloaded to the cabinet on 1 November 2026 with the Downloader's Flycast filter (the "Everything that works" preset, all control types), but none was linked yet.</p>
 <p>The Derby Owners Club, World Club Champion Football and Mushiking sets are online and card games, and were not tried.</p>

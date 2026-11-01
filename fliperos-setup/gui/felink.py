@@ -560,6 +560,13 @@ def link_args(profile, plan, number):
     emu = profile["emulator"]
     if emu == "supermodel":
         return ["-net", "-port-in=%d" % port, "-port-out=%d" % port, "-address-out=%s" % nxt]
+    if emu == "flycast":
+        # A rede do Naomi do Flycast (UDP, porta 37391): o numero 1 e o servidor, os outros se
+        # conectam a ele. O UPnP fica desligado: nada de pedir ao roteador (e a Internet) que
+        # abra a porta.
+        role = "network:Enable=yes,network:ActAsServer=yes" if number == 1 else \
+            "network:Enable=yes,network:ActAsServer=no,network:server=%s" % plan["members"][0]["ip"]
+        return ["-config", role + ",network:EnableUPnP=no"]
     if emu == "groovymame":
         # A cadeia: a cabeca nao conecta ninguem e o fim nao escuta.
         return ["-comm_localhost", "" if number == plan["n"] else "0.0.0.0", "-comm_localport", str(port),

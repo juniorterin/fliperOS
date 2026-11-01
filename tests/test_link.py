@@ -166,6 +166,19 @@ class CommandTests(unittest.TestCase):
         keys = felink.sm2_keys(prof, plan, 2, "10.0.0.2")
         self.assertEqual((keys["link_enabled"], keys["link_next_ip"], keys["link_port"]), ("true", "10.0.0.1", "15112"))
 
+    def test_flycast_naomi_network_server_and_client(self):
+        prof = self.p.get("clubk2k3")
+        self.assertEqual((prof["emulator"], prof["min"], prof["max"], prof["port"]), ("flycast", 2, 2, 37391))
+        plan = felink.make_plan(prof, self.members[:2])
+        base = ["x11-run", "flycast", "/r/clubk2k3.zip"]
+        server = felink.command(prof, base, plan, 1, "clubk2k3")
+        self.assertEqual(server, ["x11-run", "flycast", "-config",
+                                  "network:Enable=yes,network:ActAsServer=yes,network:EnableUPnP=no", "/r/clubk2k3.zip"])
+        client = felink.command(prof, base, plan, 2, "clubk2k3")
+        self.assertEqual(client[3], "network:Enable=yes,network:ActAsServer=no,network:server=10.0.0.1,network:EnableUPnP=no")
+        self.assertEqual(client[-1], "/r/clubk2k3.zip")
+        self.assertEqual(plan["order"], [1, 2])         # o servidor primeiro
+
     def test_groovymame_chain_options(self):
         prof = self.p.get("ssf2tb")
         plan = felink.make_plan(prof, self.members)

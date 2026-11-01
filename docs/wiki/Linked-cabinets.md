@@ -4,7 +4,7 @@ Some arcade games were built to be played on several machines at once: racing ca
 
 This page lists those games, how the link works in each emulator FliperOS ships, and what each game needs to start: how many cabinets, how many players and screens, whether one cabinet must be master, and whether you tell the game how many cabinets there are.
 
-**The FliperOS frontend does link play for five games on its own**: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the **network cable only** (never Wi-Fi) and needs the cabinets on the same network.
+**The FliperOS frontend does link play for six games on its own**: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart: European Session and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the **network cable only** (never Wi-Fi) and needs the cabinets on the same network.
 
 For every other game, and to know what the frontend does underneath, everything on this page is set by hand in the emulator: a command line, an ini file, or the game's own test menu.
 
@@ -27,6 +27,7 @@ Every row says how it was checked. **Tested** means two or more instances were l
 | Dirt Devils | Supermodel | 2 (four did not link) | 1 | 1 | Yes (Communication Mode, starts as slave, and Machine ID) | No | **Tested** with 2 |
 | Spikeout | Supermodel | not checked | 2 | 1 | not checked | not checked | Solo |
 | Sega Rally 2, Le Mans 24, Harley-Davidson | Supermodel | not checked | 1 | 1 | not checked | not checked | Solo |
+| Club Kart: European Session | Flycast | 2 | 1 | 1 | Yes (the first is the server) | No | **Tested** with 2 |
 | Gunbuster | GroovyMAME | 2 | 2 | 1 | Yes (ID 0 and ID 1) | No | Source |
 | Virtua Racing, Virtua Formula | GroovyMAME | not checked | 1 | 1 | Set by the game | No | Source |
 | Wing War | GroovyMAME | not checked | 1 | 2 | Set by the game | No | Source |
@@ -213,7 +214,7 @@ Virtua Racing, Rad Rally, OutRunners and Stadium Cross were started in MAME 0.28
 
 **Games that use several boards in one cabinet** are not a link between machines. Ferrari F355 Challenge, Airline Pilots and Sega Strike Fighter run each board as its own Flycast window, one per monitor. See [Multiple monitors](Multiple-Monitors.md).
 
-**Linking two cabinets.** Flycast's own LAN link is turned on in its advanced settings (Broadband adapter and Naomi network): one instance is the server, and the other types its IP. This comes from reports on the web, and it was not tested here. Reports say two machines work and a third can fail with a country error. The F355 "twin" sets are the ones made for a battle cable between two cabinets.
+**Linking two cabinets** works for Club Kart: European Session (`clubk2k3`). It was tested on 1 November 2026 with the cabinet's Flycast as the server and Flycast 2.7 on a Windows PC as the client, on the wired network. The link is UDP on port 37391. The options go on the command line (`-config`) or in `emu.cfg`, section `[network]`: `network:Enable=yes` on all of them, `network:ActAsServer=yes` on the first one, and on the others `network:ActAsServer=no` and `network:server=IP-of-the-first`. Start the server first. Also set `network:EnableUPnP=no`: without it Flycast asks the router, and so the Internet, to open the port. The server shows a dialog, "Waiting for players" with a Start Now button. The client showed "CHECKING NETWORK NOW, MODE: SLAVE, SEQUENCE: SYNCING", and a few seconds later the attract mode. Two Flycast on one machine do not work, because both want port 37391. Not tested: a race with two players, Initial D, F355, and a third machine (reports say Club Kart takes two). The F355 "twin" sets are the ones made for a battle cable between two cabinets.
 
 **Net play (rollback)** is another thing: the Flycast of FliperOS has GGPO options (`GGPO`, `GGPODelay`, `ActAsServer`) for NAOMI and Atomiswave games, found in the program and not run here yet.
 

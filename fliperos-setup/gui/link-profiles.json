@@ -22,6 +22,11 @@
       "nvram": {"dir": "supermodel/dirtdvls", "dest": "nvram/model3", "files": {"nv": "dirtdvlsau.nv"}}
     },
     {
+      "id": "clubk2k3", "title": "Club Kart: European Session", "emulator": "flycast", "systems": ["naomi", "naomi2"],
+      "sets": ["clubk2k3"],
+      "min": 2, "max": 2, "fixed": false, "order": "master-first", "step": 6, "port": 37391
+    },
+    {
       "id": "ssf2tb", "title": "Super Street Fighter II: The Tournament Battle", "emulator": "groovymame", "systems": ["mame"],
       "sets": ["ssf2tb", "ssf2tba", "ssf2tbh", "ssf2tbj", "ssf2tbj1", "ssf2tbr1", "ssf2tbu"],
       "min": 4, "max": 4, "fixed": true, "order": "chain", "step": 6, "port": 1234, "extra": ["bios/mame/qsound.zip"],
