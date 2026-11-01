@@ -4,7 +4,9 @@ Some arcade games were built to be played on several machines at once: racing ca
 
 This page lists those games, how the link works in each emulator FliperOS ships, and what each game needs to start: how many cabinets, how many players and screens, whether one cabinet must be master, and whether you tell the game how many cabinets there are.
 
-**There is no Setup screen for linked play yet.** Everything here is set by hand in the emulator: a command line, an ini file, or the game's own test menu.
+**The FliperOS frontend does link play for five games on its own**: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the **network cable only** (never Wi-Fi) and needs the cabinets on the same network.
+
+For every other game, and to know what the frontend does underneath, everything on this page is set by hand in the emulator: a command line, an ini file, or the game's own test menu.
 
 ## At a glance
 

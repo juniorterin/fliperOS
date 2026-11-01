@@ -160,11 +160,11 @@ One NVRAM per cabinet number and game (`config/link-nvram`, with a README and a 
 
 ## Phases
 
-1. **Data.** The link profiles and the NVRAMs for every game with two or more cabinets. Done for part of the games.
-2. **Presence and marks.** The announcements, the table, the marks in the list, the grid and the full-screen mode, and the "playing elsewhere" group.
-3. **Waiting room and launcher** for the games already tested: Daytona, Scud Race, Daytona USA 2 and the Tournament Battle.
-4. **Files transfer.**
-5. **Net play.**
+1. **Data.** The link profiles (`gui/link-profiles.json`) and the NVRAMs (`config/link-nvram`). Done for the five tested games.
+2. **Presence and marks.** Done: the announcements on the wired subnet, the table, the marks in the list, the grid and the full screen, and the "playing elsewhere" rows.
+3. **Waiting room and launcher.** Done in the frontend and tested with two cabinets on the real wired network (the cabinet and a Windows PC): join, plan, start order, NVRAM and the emulator command. Not yet seen: a real game started this way on the cabinet's CRT.
+4. **Files transfer.** Done: the host serves the game's files over HTTP on the cable, with a check and a resume (25 MB at 10 MB/s between the PC and the cabinet).
+5. **Net play.** Not done.
 6. **More games**, after each one is tested in pairs.
 
 Each phase is tested on the real cabinets with two machines, and on four for the games that need them.

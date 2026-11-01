@@ -29121,7 +29121,8 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <h1 id="linked-cabinets">Linked cabinets</h1>
 <p>Some arcade games were built to be played on several machines at once: racing cabinets joined by a link cable, or a fighting game that needs four cabinets for its tournament mode.</p>
 <p>This page lists those games, how the link works in each emulator FliperOS ships, and what each game needs to start: how many cabinets, how many players and screens, whether one cabinet must be master, and whether you tell the game how many cabinets there are.</p>
-<p><strong>There is no Setup screen for linked play yet.</strong> Everything here is set by hand in the emulator: a command line, an ini file, or the game's own test menu.</p>
+<p><strong>The FliperOS frontend does link play for five games on its own</strong>: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the <strong>network cable only</strong> (never Wi-Fi) and needs the cabinets on the same network.</p>
+<p>For every other game, and to know what the frontend does underneath, everything on this page is set by hand in the emulator: a command line, an ini file, or the game's own test menu.</p>
 <h2 id="at-a-glance">At a glance</h2>
 <p>Every row says how it was checked. <strong>Tested</strong> means two or more instances were linked and played here. <strong>Solo</strong> means the game was only started alone, with the link on. <strong>Source</strong> means it comes from reading the emulator's code.</p>
 <table>
