@@ -94,7 +94,7 @@ const ptBR: Messages = {
     telegram: 'Entrar no grupo do Telegram',
   },
   hero: {
-    eyebrow: 'fliperos 0.18 · em desenvolvimento',
+    eyebrow: 'fliperos 0.19 · em desenvolvimento',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Feito para CRT.',
     description:
@@ -236,6 +236,7 @@ const ptBR: Messages = {
     current: 'Atual',
     all: 'Todas as versões no GitHub',
     notes: {
+      '0.19': ['Jogos em link pelo frontend, no cabo de rede', 'Net play com um jogador por controle', 'Cada resolução guarda a sua geometria'],
       '0.18': ['Menu na tela por cima de qualquer jogo', 'Conversores DisplayPort para VGA funcionam do menu ao jogo', 'Logotipos animados no ZeDMD e no Pixelcade'],
       '0.16': ['Roda em placas Intel HD', 'Nova entrada de boot: Intel 15 kHz 240p', 'Um X vermelho no que a placa não roda'],
       '0.15': ['Primeiro boot com Wi-Fi e controles', 'Modo comercial com entrada de ficha', 'Vulkan no AMD e boot mais rápido'],
@@ -293,7 +294,7 @@ const ptBR: Messages = {
       { id: 'pc', title: 'Um PC 64 bits comum', text: '2 núcleos e 4 GB de RAM rodam até PlayStation 1; 4 núcleos e 16 GB rodam tudo o que vem na imagem.' },
       { id: 'network', title: 'Aberto pela rede', text: 'Copie jogos de qualquer PC para \\\\fliperos\\roms. O SSH vem ligado desde o primeiro boot.' },
       { id: 'updates', title: 'Updates no boot', text: 'Os updates chegam pela rede e mostram o que mudam antes de perguntar. Não precisa de ISO nova.' },
-      { id: 'status', title: 'Ainda em desenvolvimento', text: 'Versão 0.18. Alguns recursos, como o monitor vertical e os displays de LED, ainda não foram vistos em hardware de verdade.' },
+      { id: 'status', title: 'Ainda em desenvolvimento', text: 'Versão 0.19. Alguns recursos, como o monitor vertical e os displays de LED, ainda não foram vistos em hardware de verdade.' },
     ],
     cta: 'Requisitos completos',
   },

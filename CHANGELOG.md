@@ -2,15 +2,44 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.19
+
+Cabinets on the same wired network can start the games that link machines from the frontend, and play together the games that have more players than one cabinet has controls (net play). The number of players follows the connected controllers, and each resolution keeps its own geometry.
+
+**System changes:**
+
+- **Link play in the frontend**, on the wired network only (never Wi-Fi or the Internet). Games that link cabinets (Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart: European Session, the Super Street Fighter II Tournament Battle) get a green globe next to the title (dim when nobody plays it, lit when another cabinet does), the games other cabinets are playing come first in the list with their cabinets, and the game menu gains LINK PLAY, or JOIN LINK for each waiting party. The waiting room fills as cabinets arrive, starts by itself for the Tournament Battle (four cabinets) and with A for the others, starts the machines in the order each emulator needs, and puts the right NVRAM in place for each cabinet number (`config/link-nvram`; yours comes back after the game). A cabinet without the game copies it from the host first. Seen working: Daytona USA started from the frontend on a cabinet with a Windows PC as the second machine; Scud Race and Daytona USA 2 in pairs and in fours, Dirt Devils in a pair (four did not link) and the Tournament Battle in a chain of four, all on a PC; Club Kart between the cabinet's Flycast and the PC's. Initial D Ver. 3 and F355 Challenge started their network link between two Flycast on one cabinet (the server logs "Master starting: 1 slaves"), but what their screens showed was not seen, and they are not in the frontend's list. Not seen: two people racing
+- **Net play** for a game that has more players than the cabinet has controls and that FBNeo runs: the game menu gains NET PLAY (or JOIN PARTY), with the same party and waiting room, through RetroArch's net play (no public lobby, no relay, no NAT traversal). Each cabinet takes as many players as it has controls configured in the Button mapping, so two cabinets with two controls fill the four players of X-Men, and the party starts by itself when every player has an owner. Seen with X-Men: the frontend of the cabinet hosted players 1 and 2, and a Windows PC joined with two RetroArch windows, one player each (3 and 4), with a ping of about 15 ms; the coin, start and character selection of each player showed on that player on all three screens. RetroArch warns when the machines don't run the same version, and turns its desync check off when the builds of the core differ, so every cabinet should run the same release
+- The number of players follows the connected controllers: Setup > Joysticks says how many players of the Button mapping have their controller connected right now, and "How many players?" starts on the number of controllers; unplug one and its player leaves the count, plug it back and it returns (`fliperos-buttons players`). The frontend says "1 PLAYER" or "2 PLAYERS" when it changes, and net play takes that many player slots
+- On-screen menu: each resolution has its own geometry. The Geometry page says which one it is adjusting (for example `GEOMETRY 640x480i`), Save keeps the three adjustments of that resolution only, and "Use the default" takes the resolution back to the monitor's range. When a game opens, or changes resolution, in a mode that has a saved geometry, the service puts it on the card (KMS with `fliperos-color timing`, X with `xrandr`), once for each game and resolution. Choosing another monitor, or Reset Geometry, erases them all
+- PCSX2: started with a game, it opens the game directly (`-nogui`, without the Big Picture first), and closing the game closes PCSX2 and goes back to the frontend; started without a game, it opens the Big Picture
+- Web panel: the login screen no longer shows the PLAYER 1 and INSERT COIN lines
+- The Model 2 wrapper (`fliperos-model2`) leaves the value of `--game`, `--nvram` and the other options as they came, and turns only a bare game name into the path of its zip
+
+**Package changes:**
+
+- None: the packages are the ones of 0.18
+
+**fliperos-setup changes:**
+
+- `gui/felink.py` is the link: it says on the wired network what each cabinet plays (UDP broadcast on the subnet of the cable), opens the party (TCP), serves the files of a game and gives each emulator its command, with one profile for each game in `gui/link-profiles.json` (order of the machines, delays, ports). The frontend (`gui/fliperos-frontend`, `gui/feview.py`) draws the globes, the tiles, the waiting room and the copy of a missing game
+- Setup > Joysticks says "Players now: 2 of 2 mapped (controllers connected: 2)", and "How many players?" starts on the number of controllers
+
+**Tool changes:**
+
+- `tools/link-tests/`: the scripts used to test the links (the NVRAM files of each cabinet number, key presses on Windows, screenshots and mock-ups of the frontend) and a README that says how they were run
+
+**Documentation:**
+
+- New wiki page **Linked cabinets**: the games that link machines, how each emulator sets the link up, how a link and net play start from the frontend, and what was tested on real machines and what was not. The Controls page says how the number of players follows the controllers. Research notes in `docs/research/` (`linked-cabinets.md`, `link-frontend-plan.md` and `mame-link-sets.md`)
+
 ## 0.18
 
 A fix for DisplayPort and HDMI to VGA converters (the menu and the games now open at 15 kHz), an on-screen menu over any game, the Vulkan version of the 480i filter, and a lot more on the Pixelcade and ZeDMD marquee.
 
 **System changes:**
 
-- The number of players follows the connected controllers: Setup > Joysticks says how many players of the Button mapping have their controller connected right now, and "How many players?" starts on the number of controllers; unplug one and its player leaves the count, plug it back and it returns (`fliperos-buttons players`). The frontend says "1 PLAYER" or "2 PLAYERS" when it changes, and net play takes that many player slots
-- **Link play in the frontend**, on the wired network only. Games that link cabinets (Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart: European Session, the Super Street Fighter II Tournament Battle) get a green globe next to the title (dim when nobody plays it, lit when another cabinet does), the games other cabinets are playing come first in the list with their cabinets, and the game menu gains LINK PLAY, or JOIN LINK for each waiting party. The waiting room fills as cabinets arrive, starts by itself for the Tournament Battle (four cabinets) and with A for the others, starts the machines in the order each emulator needs, and puts the right NVRAM in place for each cabinet number (`config/link-nvram`; yours comes back after the game). A cabinet without the game copies it from the host first. A game with more players than the cabinet has controls (and that FBNeo runs) gets **net play** with the same menu, party and waiting room, through RetroArch's netplay (no public lobby, no relay): each cabinet takes as many players as it has controls configured in the Button mapping. It needs the network cable: with Wi-Fi only, nothing shows
-- On-screen menu over any game or frontend: hold Start and Down for a second, or press Pause on a keyboard or Play/Pause on a remote, for volume, the 480i filter, geometry and colour. Geometry changes on the tube at once and stays only if saved; each resolution has its own geometry, and the menu says which one (for example `GEOMETRY 640x480i`) is being adjusted. The game keeps running and doesn't see the controls while the menu is open, and the volume keys show a bar for 2 seconds (`config/fliperos-osd`). Seen working over PCSX2 in Vulkan and over the frontend
+- On-screen menu over any game or frontend: hold Start and Down for a second, or press Pause on a keyboard or Play/Pause on a remote, for volume, the 480i filter, geometry and colour. Geometry changes on the tube at once and stays only if saved. The game keeps running and doesn't see the controls while the menu is open, and the volume keys show a bar for 2 seconds (`config/fliperos-osd`). Seen working over PCSX2 in Vulkan and over the frontend
 - The 480i flicker filter and the software saturation and hue now work in Vulkan too (`config/fliperos-vkfps.c`): the emulators stay on Vulkan instead of going back to OpenGL
 - New folders `~/nvram` and `~/save` (and the `nvram` and `save` shares on the network, and in Setup > Games > Folders and in the web panel's Files). `~/nvram` holds what the MAME games remember without power; `~/save` has one folder per emulator: `retroarch` (saves and states), `mame` (states) and `ps2` (PCSX2 memory cards). The old folders (`~/.mame/nvram`, `~/.mame/sta`, `/opt/fliperos/saves/retroarch`, `~/.config/PCSX2/memcards`) are moved there with what they had inside and become links, so nothing is lost and the old paths keep working
 - Web panel, Frontend > games: a **Clones** button next to the filters. Clones are hidden by default (only when their original game is in the list; favourites and most played always show), and the choice is remembered in the browser

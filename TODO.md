@@ -75,5 +75,5 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
 
 A fase 1 (as saídas dos jogos) está feita. O placar já lê vitórias e personagens pelos detectores do Fightcade, mas ainda não foi visto num display de LED de verdade.
 - **Fase 2:** os pontos ao vivo dependem de `config/versus-games.conf`, que está vazio. É preciso descobrir os endereços de memória de cada jogo.
-- **Fase 3:** netplay na rede local (Setup > Network > Versus link, mDNS, `--host`/`--connect`).
+- **Fase 3:** o netplay na rede local entrou no frontend na 0.19 (NET PLAY e os jogos em link, só pelo cabo de rede, com a presença por broadcast UDP em vez de mDNS). Falta ligar o placar versus a ele.
 - **Fase 4:** um PC com dois monitores (GroovyMAME `-numscreens 2` para jogos de uma tela).

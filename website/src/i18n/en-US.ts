@@ -91,7 +91,7 @@ const enUS = {
     telegram: 'Join the Telegram group',
   },
   hero: {
-    eyebrow: 'fliperos 0.18 · in development',
+    eyebrow: 'fliperos 0.19 · in development',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Built for CRT.',
     description:
@@ -234,6 +234,7 @@ const enUS = {
     current: 'Current',
     all: 'All releases on GitHub',
     notes: {
+      '0.19': ['Linked games from the frontend, over the network cable', 'Net play with a player for each control', 'Each resolution keeps its own geometry'],
       '0.18': ['On-screen menu over any game', 'DisplayPort to VGA converters work from the menu to the game', 'Animated logos on the ZeDMD and Pixelcade'],
       '0.16': ['Runs on Intel HD graphics', 'New boot entry: Intel 15 kHz 240p', 'A red X on what the card can’t run'],
       '0.15': ['First boot with Wi-Fi and controls', 'Commercial mode with a coin slot', 'Vulkan on AMD and a faster boot'],
@@ -291,7 +292,7 @@ const enUS = {
       { id: 'pc', title: 'An ordinary 64-bit PC', text: '2 cores and 4 GB of RAM play up to PlayStation 1; 4 cores and 16 GB play everything in the image.' },
       { id: 'network', title: 'Open over the network', text: 'Copy games from any PC to \\\\fliperos\\roms. SSH is on from the first boot.' },
       { id: 'updates', title: 'Updates at boot', text: 'Updates come over the network and show what they change before asking. No new ISO needed.' },
-      { id: 'status', title: 'Still in development', text: 'Version 0.18. Some features, like the vertical monitor and the LED displays, have not been seen on real hardware yet.' },
+      { id: 'status', title: 'Still in development', text: 'Version 0.19. Some features, like the vertical monitor and the LED displays, have not been seen on real hardware yet.' },
     ],
     cta: 'Full requirements',
   },
