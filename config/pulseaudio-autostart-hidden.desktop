@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=PulseAudio Sound System
+# O FliperOS toca direto no ALSA, sem servidor de som (fliperos-rootfs.sh).
+Hidden=true

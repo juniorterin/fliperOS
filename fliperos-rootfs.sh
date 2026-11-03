@@ -507,6 +507,24 @@ install -Dm644 "$src/config/fliperos-power.triggers" "$root/etc/triggerhappy/tri
 mkdir -p "$root/etc/systemd/logind.conf.d"
 printf '[Login]\nHandlePowerKey=ignore\n' > "$root/etc/systemd/logind.conf.d/fliperos.conf"
 
+# ── Sem servidor de som ───────────────────────────────────────────
+# Tudo toca direto no ALSA (o dmix do /etc/asound.conf). Um pacote instalado
+# depois pode trazer o PulseAudio ou o PipeWire (o blueman recomenda o
+# pulseaudio-module-bluetooth): o servico do usuario subia no login, o SDL2 e
+# o "default" do ALSA passavam por ele, e ele escolhia a placa Loopback do
+# Live como saida — o frontend e os emuladores ficavam mudos, so o teste do
+# Audio Setup (que abre a placa direto) tocava. Aqui os servicos ficam
+# mascarados para todo usuario e o cliente nao sobe o daemon sozinho.
+mkdir -p "$root/etc/systemd/user" "$root/etc/pulse/client.conf.d"
+for unit in pulseaudio.service pulseaudio.socket pipewire.service pipewire.socket \
+  pipewire-pulse.service pipewire-pulse.socket wireplumber.service; do
+  ln -sfn /dev/null "$root/etc/systemd/user/$unit"
+done
+printf 'autospawn = no\n' > "$root/etc/pulse/client.conf.d/99-fliperos.conf"
+# O autostart do pacote no desktop roda "pulseaudio --start", que nao olha o
+# autospawn: o do /etc/fliperos/xdg (antes no XDG_CONFIG_DIRS) o esconde.
+install -Dm644 "$src/config/pulseaudio-autostart-hidden.desktop" "$root/etc/fliperos/xdg/autostart/pulseaudio.desktop"
+
 # ── Rede ──────────────────────────────────────────────────────────
 # O Ubuntu manda o NetworkManager entregar o DNS ao systemd-resolved, que nao
 # esta na imagem: o /etc/resolv.conf nunca era atualizado (ficava o DNS do
