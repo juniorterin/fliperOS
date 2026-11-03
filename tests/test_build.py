@@ -12748,6 +12748,32 @@ class TelegramTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertRegex(result.stdout, r'\d+ messages ok')
 
+    def test_every_published_update_has_a_text_for_the_group(self):
+        # O push do updates/index posta o update (workflow Telegram): cada um
+        # tem de caber, com o titulo do index e o changelog dele.
+        numbers = [int(line.split('\t')[0]) for line in (ROOT / 'updates/index').read_text().splitlines()
+                   if line[:1].isdigit()]
+        self.assertTrue(numbers)
+        for number in numbers[-5:]:
+            messages = self.post.update_messages(number)
+            self.assertIn('Atualização %d do FliperOS' % number, messages[0]['text'])
+            for message in messages:
+                self.assertLessEqual(self.post.visible(message['text']), self.post.TEXT_MAX, number)
+        with self.assertRaises(self.post.PostError):
+            self.post.update_messages(99999)
+        result = subprocess.run([sys.executable, str(self.SCRIPT), '--dry-run', '--update', str(numbers[-1])],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_the_push_of_the_update_index_posts_the_new_updates(self):
+        workflow = (ROOT / '.github/workflows/telegram.yml').read_text()
+        self.assertIn('paths: [updates/index]', workflow)
+        self.assertIn('--update "$n"', workflow)
+        # Chamado pelo Release (o evento e o push da tag), posta a versao.
+        self.assertIn("if: inputs.version == ''", workflow)
+        self.assertIn("if: inputs.version != ''", workflow)
+        self.assertIn('telegram-post.py --dry-run --update', (ROOT / 'tools/make-update.sh').read_text())
+
     def test_markdown_becomes_telegram_html(self):
         html = self.post.markup('**Bold** and `a<b` & [site](https://x.org/?a=1&b=2)\n- item\n- `**no**`')
         self.assertEqual(html, '<b>Bold</b> and <code>a&lt;b</code> &amp; '

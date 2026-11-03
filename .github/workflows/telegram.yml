@@ -9,13 +9,20 @@
 # Precisa do secret TELEGRAM_BOT_TOKEN (o bot do @BotFather, administrador do
 # grupo). O destino e a variavel TELEGRAM_CHAT_ID, e na falta dela, @fliperos15khz.
 # Sem o token nada e postado e o workflow so avisa.
+#
+# Os updates pela rede tambem vao ao grupo: o push que acrescenta linhas ao
+# updates/index (tools/make-update.sh) posta cada update novo, com o
+# docs/telegram/update-NNNN.md ou o titulo e o updates/notes/NNNN.md.
 name: Telegram
 
 on:
+  push:
+    branches: [main]
+    paths: [updates/index]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Versao a postar, por exemplo 0.18 (ou "all": todas as do CHANGELOG, da mais velha para a mais nova)'
+        description: 'Versao a postar, por exemplo 0.18, ou um update, por exemplo update-38 (ou "all": todas as versoes do CHANGELOG, da mais velha para a mais nova)'
         required: true
         type: string
       dry_run:
@@ -35,7 +42,43 @@ permissions:
   contents: read
 
 jobs:
+  # Chamado pelo Release (workflow_call), o evento tambem e um push (o da
+  # tag): quem separa os dois casos e a versao pedida.
+  update:
+    if: inputs.version == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pillow
+        run: sudo apt-get install -y --no-install-recommends python3-pil
+
+      - name: Postar os updates novos
+        env:
+          BEFORE: ${{ github.event.before }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+        run: |
+          # As linhas que o push acrescentou ao index; num push que nao tem o
+          # commit anterior (branch novo, force push), nenhuma.
+          git cat-file -e "$BEFORE^{commit}" 2> /dev/null || { echo "sem o commit anterior: nada a postar"; exit 0; }
+          args=()
+          for n in $(git diff "$BEFORE" HEAD -- updates/index | sed -n 's/^+\([0-9][0-9]*\)\t.*/\1/p'); do
+            args+=(--update "$n")
+          done
+          ((${#args[@]})) || { echo "nenhum update novo"; exit 0; }
+          if [[ -z $TELEGRAM_BOT_TOKEN ]]; then
+            echo "::warning::sem o secret TELEGRAM_BOT_TOKEN: nada foi postado no Telegram"
+            python3 tools/telegram-post.py --dry-run "${args[@]}"
+          else
+            python3 tools/telegram-post.py "${args[@]}"
+          fi
+
   post:
+    if: inputs.version != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -53,6 +96,7 @@ jobs:
         run: |
           args=("$VERSION")
           [[ $VERSION == all ]] && args=(--backfill)
+          [[ $VERSION =~ ^update-?0*([0-9]+)$ ]] && args=(--update "${BASH_REMATCH[1]}")
           if [[ $DRY_RUN == true ]]; then
             python3 tools/telegram-post.py --dry-run "${args[@]}"
           elif [[ -z $TELEGRAM_BOT_TOKEN ]]; then

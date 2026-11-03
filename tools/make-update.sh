@@ -9,7 +9,9 @@
 # O commit atual tem de estar no origin/main (o gabinete o baixa do
 # GitHub). Passos extras so deste update vao em updates/NNNN.sh, no mesmo
 # commit; o changelog dele, obrigatorio, em updates/notes/NNNN.md (o gabinete
-# o mostra antes de perguntar se aplica). Roda onde houver python3 de Linux
+# o mostra antes de perguntar se aplica). O push posta o update no grupo do
+# Telegram: com o docs/telegram/update-NNNN.md (portugues, fotos) se existir,
+# senao com o titulo e o changelog. Roda onde houver python3 de Linux
 # (no Windows, pelo WSL).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -60,6 +62,12 @@ PY
 )
 
 printf '%d\t%s\t%s\t%s\t%s\n' "$n" "$commit" "$tree" "$reboot" "$title" >> updates/index
+# O push posta o update no grupo do Telegram (.github/workflows/telegram.yml):
+# o texto tem de passar antes, ou o update sai sem o aviso.
+if ! python3 tools/telegram-post.py --dry-run --update "$n" > /dev/null; then
+  "$git" checkout -q -- updates/index
+  die "the Telegram text of update $n does not pass (python3 tools/telegram-post.py --dry-run --update $n)"
+fi
 printf 'Update %d: %s\n\nPublica o commit %s como o update %d (updates/index).\n' \
   "$n" "$title" "${commit:0:7}" "$n" > "$tmp/msg"
 "$git" add updates/index
