@@ -1,0 +1,94 @@
+From: Ademir Terin Junior <juniorterin@gmail.com>
+Date: Tue, 3 Nov 2026 20:50:00 -0300
+Subject: [PATCH] lightgun (evdev): hold the aim over a missed beam
+
+A light gun that misses the beam for a frame reports a value far outside
+its calibrated range: a GunCon 2 sends x 0/1, y 5. On a CRT it does so every
+few frames even over a bright picture (a quarter of the reports in a House
+of the Dead session, a third of the trigger presses), and a shot taken in
+that frame went off screen, which the gun titles read as a reload: the shot
+was lost and the crosshair jumped away.
+
+A report outside the axis range (with an eighth of it to spare) now keeps
+the last position that saw the screen, for up to 150 ms; longer than that
+the gun really points off screen and the off-screen reload still works. The
+misses over a lit picture last 1-4 reports and almost never past 8. Guns
+that never leave their range (a Sinden, a mouse-like gun) are unaffected.
+
+diff --git a/src/osd/evdev_gun.cpp b/src/osd/evdev_gun.cpp
+index d1c1aa0..47b5d70 100644
+--- a/src/osd/evdev_gun.cpp
++++ b/src/osd/evdev_gun.cpp
+@@ -96,7 +96,14 @@ struct Device {
+     int         fd = -1;
+     std::array<int, 2> raw_min{};    ///< ABS_X, ABS_Y minimums.
+     std::array<int, 2> raw_range{};  ///< ABS_X, ABS_Y ranges (max - min).
+-    std::array<int, 2> raw{};        ///< latest raw ABS values.
++    std::array<int, 2> raw{};        ///< latest raw ABS values that saw the screen.
++    std::array<int, 2> sample{};     ///< ABS values of the report being read.
++    /// Event time (ms) of the last report that saw the screen. A light gun
++    /// that misses the beam for a frame reports a value far outside its
++    /// calibrated range (a GunCon 2 sends x 0/1, y 5), and does so every few
++    /// frames even over a bright picture: taken at face value, a shot in that
++    /// frame lands off screen, which the gun titles read as a reload.
++    u64 seen_ms = 0;
+     LightGuns::Gun state;
+     /// Force feedback: the uploaded rumble effect id, or -1 if the device
+     /// has no motor or the effect could not be created. Set at strength 0
+@@ -109,6 +116,27 @@ struct Device {
+     std::vector<u16> latched;
+ };
+ 
++/// How long a missed beam keeps the last position that saw the screen. On a
++/// GunCon 2 the misses over a lit picture last 1-4 reports (up to ~70 ms) and
++/// almost never past 8 (~140 ms); longer, the gun is pointing off screen.
++constexpr u64 kMissedBeamMs = 150;
++
++/// Whether the report being read saw the screen: both axes inside their range,
++/// with an eighth of it to spare for a picture that overscans the calibration.
++/// A gun with no "missed" value (a Sinden, a mouse-like gun) always does.
++[[nodiscard]] bool sees_screen(const Device& device)
++{
++    for (usize axis = 0; axis < 2; ++axis) {
++        const int margin = device.raw_range[axis] / 8;
++        const int value  = device.sample[axis];
++        if (value < device.raw_min[axis] - margin
++            || value > device.raw_min[axis] + device.raw_range[axis] + margin) {
++            return false;
++        }
++    }
++    return true;
++}
++
+ }  // namespace
+ 
+ struct LightGuns::Impl {
+@@ -269,6 +297,7 @@ bool LightGuns::Impl::open_gun(const std::string& node)
+     // pointing off screen before it has been moved.
+     device.raw[0] = abs_x.minimum + device.raw_range[0] / 2;
+     device.raw[1] = abs_y.minimum + device.raw_range[1] / 2;
++    device.sample = device.raw;
+ 
+     char name[256];
+     if (ioctl(fd, EVIOCGNAME(sizeof name), name) >= 0) {
+@@ -399,9 +428,18 @@ void LightGuns::Impl::read_device(Device& device)
+             const input_event& event = events[i];
+             if (event.type == EV_ABS) {
+                 if (event.code == ABS_X) {
+-                    device.raw[0] = event.value;
++                    device.sample[0] = event.value;
+                 } else if (event.code == ABS_Y) {
+-                    device.raw[1] = event.value;
++                    device.sample[1] = event.value;
++                }
++            } else if (event.type == EV_SYN && event.code == SYN_REPORT) {
++                const u64 at = static_cast<u64>(event.input_event_sec) * 1000
++                             + static_cast<u64>(event.input_event_usec) / 1000;
++                if (sees_screen(device)) {
++                    device.raw     = device.sample;
++                    device.seen_ms = at;
++                } else if (at - device.seen_ms > kMissedBeamMs) {
++                    device.raw = device.sample;  // really off screen: reload
+                 }
+             } else if (event.type == EV_KEY) {
+                 const auto fresh_end = fresh.begin() + static_cast<std::ptrdiff_t>(fresh_count);
