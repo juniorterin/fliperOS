@@ -9346,6 +9346,36 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertIn('-fullscreen -res=640,240 -stretch game.zip', out)
         self.assertIn('-res=496,384', self.run_x11(['supermodel'], frequency='31k').stdout)
 
+    def test_supermodel_takes_the_mode_switchres_made(self):
+        # No 15 kHz o Switchres faz do 496x384 do 480i um 661x496 entrelacado:
+        # com o -res da tabela o jogo ficava num quadrado no meio da tela. O
+        # comando passa pelo printf %q do fliperos-x11-client e pelo sh do
+        # Switchres, como no gabinete.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            bin_dir = tmp / 'bin'
+            bin_dir.mkdir()
+            (bin_dir / 'xinit').write_text('#!/bin/bash\nshift\nargs=()\nwhile [[ $1 != -- ]]; do args+=("$1"); shift; done\n'
+                                           'sh -c "$(printf \'%q \' "${args[@]}")"\n')
+            (bin_dir / 'supermodel').write_text('#!/bin/sh\necho "SM=$*"\n')
+            (bin_dir / 'xrandr').write_text('#!/bin/sh\necho "HDMI-1 disconnected primary (normal left)"\n'
+                                            'echo "VGA-1 connected primary 661x496+0+0 (0x3c8) normal (normal left)"\n'
+                                            'echo "   640x240  60.00 +"\n')
+            for p in bin_dir.iterdir():
+                p.chmod(0o755)
+            (tmp / 'fliperos.conf').write_text('frequency=15k\nmode480_supermodel=filter\n')
+            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), HOME=str(tmp),
+                       FLIPEROS_CONF=str(tmp / 'fliperos.conf'),
+                       FLIPEROS_MODES=str(ROOT / 'config/fliperos-emulator-modes.conf'),
+                       FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'), FLIPEROS_LOGS=str(tmp))
+            env.pop('DISPLAY', None)
+            run = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-x11-run'), 'supermodel', 'fv2.zip'],
+                                         capture_output=True, text=True, env=env).stdout + (tmp / 'supermodel.log').read_text()
+            self.assertIn('SM=-fullscreen -res=496,384 -stretch fv2.zip -res=661,496', run())
+            # Sem o xrandr, o tamanho da tabela.
+            (bin_dir / 'xrandr').write_text('#!/bin/sh\nexit 1\n')
+            self.assertIn('SM=-fullscreen -res=496,384 -stretch fv2.zip\n', run())
+
     def test_stretched_200_percent_at_640x240(self):
         # 640x240 tem pixels 8:3; para o 4:3 encher o tubo, cada emulador estica
         # a imagem para a largura toda (o "200%").

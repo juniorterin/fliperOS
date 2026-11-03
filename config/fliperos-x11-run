@@ -308,6 +308,16 @@ INI
     netout=()
     [[ -x $outputs ]] && "$outputs" installed && netout=(-outputs=net)
     set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${ppc[@]}" "${netout[@]}" "${@:2}"
+    # O Switchres nem sempre cria o modo pedido: no 15 kHz o 496x384 do 480i
+    # vira 661x496 entrelacado (as linhas que cabem, na mesma proporcao), e o
+    # Supermodel desenhava os 496x384 do -res num quadrado no meio da tela.
+    # Depois da troca, o -res do modo na tela (o ultimo -res vale). Numa
+    # linha so: o printf %q do fliperos-x11-client poria a quebra num $'\n',
+    # que o sh do Switchres nao entende.
+    # shellcheck disable=SC2016 # o $ e do awk
+    fit='/ connected/ { for (i = 3; i <= NF; i++) if ($i ~ /^[0-9]+x[0-9]+[+]/) { split($i, a, /[x+]/); print a[1] "," a[2]; exit } }'
+    # shellcheck disable=SC2016 # o $ e do sh -c, depois da troca de modo
+    set -- sh -c 'res=$(xrandr --current 2> /dev/null | awk "$0"); exec "$@" ${res:+-res=$res}' "$fit" "$@"
     ;;
   fliperos-model2 | sm2-emu)
     cfg=${XDG_CONFIG_HOME:-$HOME/.config}/sm2-emu
