@@ -307,7 +307,15 @@ INI
     # As saidas do jogo pela rede, se ha quem as leia (config/fliperos-outputs).
     netout=()
     [[ -x $outputs ]] && "$outputs" installed && netout=(-outputs=net)
-    set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${ppc[@]}" "${netout[@]}" "${@:2}"
+    # Os quads de verdade (o padrao do Supermodel, por geometry shader)
+    # quebram poligonos nas Radeon antigas: no gabinete (Oland, radeonsi) o
+    # Fighting Vipers 2 tinha triangulos pretos e brancos e texturas vazadas,
+    # e com triangulos ainda chegou aos 57,5 quadros/s. O QuadRendering
+    # escrito no Supermodel.ini fica.
+    quads=()
+    grep -qE '^[[:space:]]*QuadRendering[[:space:]]*=' "$HOME/.config/supermodel/Config/Supermodel.ini" 2> /dev/null ||
+      quads=(-no-quad-rendering)
+    set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${quads[@]}" "${ppc[@]}" "${netout[@]}" "${@:2}"
     # O Switchres nem sempre cria o modo pedido: no 15 kHz o 496x384 do 480i
     # vira 661x496 entrelacado (as linhas que cabem, na mesma proporcao), e o
     # Supermodel desenhava os 496x384 do -res num quadrado no meio da tela.

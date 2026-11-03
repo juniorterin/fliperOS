@@ -9343,7 +9343,7 @@ class EmulatorModeTests(unittest.TestCase):
                 self.assertLessEqual(height, 480 if line.split()[0] == 'fightcade' else 240, line)
         out = self.run_x11(['supermodel', 'game.zip']).stdout
         self.assertIn('MODE=640 240 57.524', out)
-        self.assertIn('-fullscreen -res=640,240 -stretch game.zip', out)
+        self.assertIn('-fullscreen -res=640,240 -stretch -no-quad-rendering game.zip', out)
         self.assertIn('-res=496,384', self.run_x11(['supermodel'], frequency='31k').stdout)
 
     def test_supermodel_takes_the_mode_switchres_made(self):
@@ -9371,9 +9371,15 @@ class EmulatorModeTests(unittest.TestCase):
             env.pop('DISPLAY', None)
             run = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-x11-run'), 'supermodel', 'fv2.zip'],
                                          capture_output=True, text=True, env=env).stdout + (tmp / 'supermodel.log').read_text()
-            self.assertIn('SM=-fullscreen -res=496,384 -stretch fv2.zip -res=661,496', run())
+            self.assertIn('SM=-fullscreen -res=496,384 -stretch -no-quad-rendering fv2.zip -res=661,496', run())
             # Sem o xrandr, o tamanho da tabela.
             (bin_dir / 'xrandr').write_text('#!/bin/sh\nexit 1\n')
+            self.assertIn('SM=-fullscreen -res=496,384 -stretch -no-quad-rendering fv2.zip\n', run())
+            # Quads quebram poligonos nas Radeon antigas: desligados, a nao ser
+            # que o Supermodel.ini da pessoa diga outra coisa.
+            ini = tmp / '.config/supermodel/Config/Supermodel.ini'
+            ini.parent.mkdir(parents=True, exist_ok=True)
+            ini.write_text('[ Global ]\nQuadRendering = 1\n')
             self.assertIn('SM=-fullscreen -res=496,384 -stretch fv2.zip\n', run())
 
     def test_stretched_200_percent_at_640x240(self):
@@ -9601,10 +9607,10 @@ class EmulatorModeTests(unittest.TestCase):
             for rom, ppc in (('/r/fvipers2.zip', True), ('/r/fvipers2o.zip', True), ('/r/vf3.zip', False),
                              ('/r/outro.zip', False)):
                 out = self.run_x11(['supermodel', rom], extra=extra).stdout
-                self.assertEqual('-stretch -ppc-frequency=75 %s' % rom in out, ppc, out)
+                self.assertEqual('-no-quad-rendering -ppc-frequency=75 %s' % rom in out, ppc, out)
             out = self.run_x11(['supermodel', '/r/fvipers2.zip'],
                                extra=dict(extra, FLIPEROS_SUPERMODEL_PPC='0')).stdout
-            self.assertIn('-stretch /r/fvipers2.zip', out)
+            self.assertIn('-no-quad-rendering /r/fvipers2.zip', out)
         self.assertIn('for f in Config/Games.xml Config/Music.xml; do', x11)
         self.assertIn('ln -s "$share/Assets" "$HOME/.local/share/supermodel/Assets"', x11)
         # Pelo menu do desktop, sem jogo, o .zip se escolhe antes, numa lista
