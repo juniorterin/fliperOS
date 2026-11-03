@@ -5,7 +5,7 @@ e a explicacao de como funciona cada novidade.
     python3 tools/telegram-post.py VERSAO              posta docs/telegram/VERSAO.md, ou a secao do CHANGELOG.md se nao houver
     python3 tools/telegram-post.py --changelog VERSAO  posta a secao do CHANGELOG.md mesmo havendo o arquivo
     python3 tools/telegram-post.py --backfill          posta todas as versoes do CHANGELOG.md, da mais velha para a mais nova
-    python3 tools/telegram-post.py --update N          posta o update N (docs/telegram/update-NNNN.md, ou o titulo e o updates/notes/NNNN.md)
+    python3 tools/telegram-post.py --update N          posta o update N (docs/telegram/update-NNNN.md, ou o titulo e as notas em updates/notes/pt-BR/NNNN.md e NNNN.md)
     python3 tools/telegram-post.py --dry-run ...       so confere o texto e as imagens, sem rede nem token
 
 O CHANGELOG.md e a lista tecnica do release do GitHub, e o grupo pode le-la como
@@ -18,6 +18,10 @@ repositorio; WebP animado e GIF vao como animacao, em MP4 se houver ffmpeg) e o 
 **negrito**, `codigo`, [links](https://...) e listas com "- ". Com imagem, o
 texto vai na legenda dela (ate 1024 caracteres; maior que isso, vai antes, como
 mensagem). Sem imagem, e uma mensagem de texto (ate 4096).
+
+Toda mensagem vai em portugues e em ingles: o texto de cada uma tem uma parte
+que comeca com uma linha "🇧🇷 ..." e outra com uma linha "🇺🇸 ...". Sem as
+duas, o arquivo e recusado antes de postar.
 
 Precisa de TELEGRAM_BOT_TOKEN (o bot do @BotFather, administrador do grupo) no
 ambiente; o destino e TELEGRAM_CHAT_ID, e na falta dele, @fliperos15khz.
@@ -49,6 +53,7 @@ TEXT_MAX = 4096
 # O grupo aceita 20 mensagens por minuto; folga de sobra.
 PAUSE = 4.0
 IMAGE = re.compile(r'^!\[[^\]]*\]\(([^)\s]+)\)\s*$')
+PT, EN = '🇧🇷', '🇺🇸'
 
 
 class PostError(Exception):
@@ -76,6 +81,12 @@ def visible(text_html):
     return len(html.unescape(re.sub(r'<[^>]+>', '', text_html)))
 
 
+def bilingual(text):
+    """O texto tem a parte em portugues e a em ingles."""
+    starts = [line.lstrip()[:2] for line in text.splitlines()]
+    return PT in starts and EN in starts
+
+
 def parse(source):
     """As mensagens do arquivo: [{'text': html, 'images': [Path]}]."""
     messages = []
@@ -90,9 +101,13 @@ def parse(source):
                 images.append(path)
             else:
                 lines.append(line)
-        text = markup(re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip())
+        raw = re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
+        text = markup(raw)
         if not text and not images:
             continue
+        if text and not bilingual(raw):
+            raise PostError('every message is in Portuguese and English (a "%s" line and a "%s" line): %.40s...'
+                            % (PT, EN, raw))
         if visible(text) > TEXT_MAX:
             raise PostError('a message has %d characters, Telegram takes up to %d: %.40s...'
                             % (visible(text), TEXT_MAX, html.unescape(re.sub(r'<[^>]+>', '', text))))
@@ -209,7 +224,10 @@ def changelog_messages(version):
     found = re.search(r'(?ms)^## %s\n(.*?)(?=^## |\Z)' % re.escape(version), text)
     if not found or not found.group(1).strip():
         raise PostError('CHANGELOG.md has no "## %s" section' % version)
-    head = '**FliperOS %s**\n[Release no GitHub](%s%s)\n\n' % (version, RELEASES, version)
+    # A lista tecnica e so em ingles; o cabecalho diz isso nos dois idiomas.
+    head = ('%s **FliperOS %s**: a lista de mudanças do release, em inglês ([no GitHub](%s%s))\n'
+            '%s **FliperOS %s**: the release changelog ([on GitHub](%s%s))\n\n'
+            % (PT, version, RELEASES, version, EN, version, RELEASES, version))
     chunks, current = [], head
     for line in found.group(1).strip().splitlines():
         if current.strip() and visible(markup(current + line + '\n')) > TEXT_MAX - 50 and current != head:
@@ -240,8 +258,10 @@ UPDATES = ROOT / 'updates'
 
 def update_messages(number):
     """O texto do update N (o que chega pela rede, sem ISO nova): o
-    docs/telegram/update-NNNN.md (com fotos), ou o titulo do updates/index com
-    o updates/notes/NNNN.md, o mesmo changelog que o gabinete mostra."""
+    docs/telegram/update-NNNN.md (com fotos), ou as notas nos dois idiomas:
+    updates/notes/pt-BR/NNNN.md e o updates/notes/NNNN.md (o mesmo changelog
+    que o gabinete mostra) com o titulo do updates/index. Numa mensagem
+    quando cabem, senao uma por idioma."""
     name = '%04d' % number
     source = POSTS / ('update-%s.md' % name)
     if source.is_file():
@@ -253,16 +273,23 @@ def update_messages(number):
             title = fields[4]
     if title is None:
         raise PostError('updates/index has no update %d' % number)
-    notes = UPDATES / 'notes' / ('%s.md' % name)
-    if not notes.is_file():
-        raise PostError('updates/notes/%s.md does not exist' % name)
-    head = ('**Atualização %d do FliperOS:** %s\n\nQuem já tem o FliperOS instalado recebe pela atualização '
-            'do próprio Setup, sem ISO nova.\n\n' % (number, title))
-    text = markup(re.sub(r'\n{3,}', '\n\n', head + notes.read_text(encoding='utf-8').strip()))
-    if visible(text) > TEXT_MAX:
-        raise PostError('update %d has %d characters, Telegram takes up to %d: write docs/telegram/update-%s.md'
-                        % (number, visible(text), TEXT_MAX, name))
-    return [{'text': text, 'images': []}]
+    notes = []
+    for path in ('notes/pt-BR/%s.md' % name, 'notes/%s.md' % name):
+        if not (UPDATES / path).is_file():
+            raise PostError('updates/%s does not exist' % path)
+        notes.append((UPDATES / path).read_text(encoding='utf-8').strip())
+    parts = ['%s **Atualização %d do FliperOS**\n\n%s\n\nQuem já tem o FliperOS instalado recebe pela '
+             'atualização do próprio Setup, sem ISO nova.' % (PT, number, notes[0]),
+             '%s **FliperOS update %d:** %s\n\n%s\n\nInstalled cabinets get it from the Setup\'s own update, '
+             'no new ISO.' % (EN, number, title, notes[1])]
+    together, *apart = [markup(re.sub(r'\n{3,}', '\n\n', part)) for part in ['\n\n'.join(parts)] + parts]
+    if visible(together) <= TEXT_MAX:
+        return [{'text': together, 'images': []}]
+    for text in apart:
+        if visible(text) > TEXT_MAX:
+            raise PostError('update %d has %d characters in one language, Telegram takes up to %d: '
+                            'write docs/telegram/update-%s.md' % (number, visible(text), TEXT_MAX, name))
+    return [{'text': text, 'images': []} for text in apart]
 
 
 def main():

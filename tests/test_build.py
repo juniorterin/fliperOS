@@ -12741,6 +12741,8 @@ class TelegramTests(unittest.TestCase):
         self.assertGreaterEqual(len(messages), 3)
         self.assertTrue(any(m['images'] for m in messages), 'photos are the point of the post')
         self.assertIn('/releases/tag/%s' % self.VERSION, text)
+        # Em portugues e em ingles, cada mensagem (o parse recusa sem os dois).
+        self.assertTrue(all(self.post.EN in m['text'] and self.post.PT in m['text'] for m in messages if m['text']))
 
     def test_the_text_of_the_version_passes_the_dry_run(self):
         try:
@@ -12764,6 +12766,7 @@ class TelegramTests(unittest.TestCase):
             self.assertTrue(messages, version)
             self.assertIn('**FliperOS', messages[0]['text'].replace('<b>', '**').replace('</b>', '**'))
             self.assertIn('/releases/tag/%s' % version, messages[0]['text'])
+            self.assertTrue(self.post.bilingual(messages[0]['text']), version)
             for message in messages:
                 self.assertLessEqual(self.post.visible(message['text']), self.post.TEXT_MAX, version)
                 self.assertEqual(message['images'], [])
@@ -12793,10 +12796,16 @@ class TelegramTests(unittest.TestCase):
         for number in numbers[-5:]:
             messages = self.post.update_messages(number)
             self.assertIn('Atualização %d do FliperOS' % number, messages[0]['text'])
+            # Em portugues e em ingles: juntas, ou uma mensagem de cada.
+            self.assertIn('FliperOS update %d:' % number, messages[-1]['text'])
+            self.assertTrue(self.post.bilingual('\n'.join(m['text'] for m in messages)), number)
             for message in messages:
                 self.assertLessEqual(self.post.visible(message['text']), self.post.TEXT_MAX, number)
         with self.assertRaises(self.post.PostError):
             self.post.update_messages(99999)
+        # O 34 nao cabe numa mensagem com os dois idiomas: vai uma de cada.
+        self.assertEqual(len(self.post.update_messages(34)), 2)
+        self.assertEqual(len(self.post.update_messages(37)), 1)
         result = subprocess.run([sys.executable, str(self.SCRIPT), '--dry-run', '--update', str(numbers[-1])],
                                 capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -12816,9 +12825,36 @@ class TelegramTests(unittest.TestCase):
                                '<a href="https://x.org/?a=1&amp;b=2">site</a>\n• item\n• <code>**no**</code>')
 
     def test_messages_split_on_a_line_with_only_dashes(self):
-        messages = self.post.parse('one\n\n---\n\n![](README.md)\ntwo\n\n---\n\n')
-        self.assertEqual([m['text'] for m in messages], ['one', 'two'])
+        messages = self.post.parse('🇧🇷 um\n🇺🇸 one\n\n---\n\n![](README.md)\n🇧🇷 dois\n\n🇺🇸 two\n\n---\n\n')
+        self.assertEqual([m['text'] for m in messages], ['🇧🇷 um\n🇺🇸 one', '🇧🇷 dois\n\n🇺🇸 two'])
         self.assertEqual([len(m['images']) for m in messages], [0, 1])
+
+    def test_a_message_in_one_language_is_refused(self):
+        for text in ('só português', '🇧🇷 só português', '🇺🇸 English only', 'a 🇧🇷 mid-line\n🇺🇸 one'):
+            with self.assertRaises(self.post.PostError, msg=text):
+                self.post.parse(text)
+        # Uma mensagem so de imagem nao tem texto para traduzir.
+        self.assertEqual(self.post.parse('![](README.md)')[0]['text'], '')
+
+    def test_an_update_without_its_portuguese_notes_is_refused(self):
+        saved = self.post.UPDATES
+        self.post.UPDATES = Path(tempfile.mkdtemp())
+        try:
+            (self.post.UPDATES / 'notes').mkdir()
+            (self.post.UPDATES / 'index').write_text('1\tabc\tdef\tno\tTitle\n')
+            (self.post.UPDATES / 'notes' / '0001.md').write_text('- English notes\n')
+            with self.assertRaises(self.post.PostError) as caught:
+                self.post.update_messages(1)
+            self.assertIn('notes/pt-BR/0001.md', str(caught.exception))
+            (self.post.UPDATES / 'notes' / 'pt-BR').mkdir()
+            (self.post.UPDATES / 'notes' / 'pt-BR' / '0001.md').write_text('- Notas em português\n')
+            text = self.post.update_messages(1)[0]['text']
+        finally:
+            shutil.rmtree(self.post.UPDATES)
+            self.post.UPDATES = saved
+        self.assertLess(text.index('Notas em português'), text.index('English notes'))
+        self.assertIn('FliperOS update 1:</b> Title', text)
+        self.assertIn('pt-BR/%04d.md', (ROOT / 'tools/make-update.sh').read_text())
 
     def test_a_missing_image_or_a_text_too_long_is_an_error_before_posting(self):
         with self.assertRaises(self.post.PostError):

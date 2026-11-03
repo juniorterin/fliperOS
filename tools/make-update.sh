@@ -10,8 +10,9 @@
 # GitHub). Passos extras so deste update vao em updates/NNNN.sh, no mesmo
 # commit; o changelog dele, obrigatorio, em updates/notes/NNNN.md (o gabinete
 # o mostra antes de perguntar se aplica). O push posta o update no grupo do
-# Telegram: com o docs/telegram/update-NNNN.md (portugues, fotos) se existir,
-# senao com o titulo e o changelog. Roda onde houver python3 de Linux
+# Telegram, em portugues e ingles: com o docs/telegram/update-NNNN.md (fotos)
+# se existir, senao com o titulo e o changelog nos dois idiomas
+# (updates/notes/pt-BR/NNNN.md e NNNN.md). Roda onde houver python3 de Linux
 # (no Windows, pelo WSL).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -40,6 +41,11 @@ fi
 notes=$(printf 'updates/notes/%04d.md' "$n")
 "$git" cat-file -e "$commit:$notes" 2> /dev/null ||
   die "write $notes (what changes, in English, shown on the cabinet) and commit it first"
+# O Telegram recebe as notas em portugues e em ingles; o
+# docs/telegram/update-NNNN.md, quando existe, ja traz os dois.
+pt_notes=$(printf 'updates/notes/pt-BR/%04d.md' "$n")
+[[ -f $(printf 'docs/telegram/update-%04d.md' "$n") ]] || "$git" cat-file -e "$commit:$pt_notes" 2> /dev/null ||
+  die "write $pt_notes (the same notes in Portuguese, for the Telegram group) and commit it first"
 
 # O treehash da arvore que o gabinete baixa (o git archive do commit, como
 # o tar do GitHub), pela mesma funcao do fliperos-update. Sem o autocrlf:

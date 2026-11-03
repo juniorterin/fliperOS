@@ -12,7 +12,8 @@
 #
 # Os updates pela rede tambem vao ao grupo: o push que acrescenta linhas ao
 # updates/index (tools/make-update.sh) posta cada update novo, com o
-# docs/telegram/update-NNNN.md ou o titulo e o updates/notes/NNNN.md.
+# docs/telegram/update-NNNN.md ou o titulo e as notas em portugues e ingles
+# (updates/notes/pt-BR/NNNN.md e NNNN.md). Toda mensagem vai nos dois idiomas.
 name: Telegram
 
 on:
