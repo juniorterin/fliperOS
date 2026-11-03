@@ -403,7 +403,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an <strong>active converter</strong>: see <a href="#converters">Converters</a>.</p>
 <p><strong>GCN 2 and 3 cards with DVI-I.</strong> Not every card after GCN 1.0 lost its analog output: GroovyArcade reports the R7 260X on DVI-I and the R9 380 on DVI-I. None of them has been tried on FliperOS.</p>
 <ul>
-<li><strong>R9 380 and 380X (GCN 3)</strong> only run on <code>amdgpu</code>, and on kernel 6.18 its new display code has no analog output (that came in 6.19). They need <code>amdgpu.dc=0</code> on the kernel line, which the Setup doesn't add for them: see <a href="#Black-screen">Black screen</a>.</li>
+<li><strong>R9 380 and 380X (GCN 3)</strong> only run on <code>amdgpu</code>, and on kernel 6.18 its new display code has no analog output (that came in 6.19). They need <code>amdgpu.dc=0</code> on the kernel line (the R9 285 too, same chip). The installed system adds it by itself when it finds one of these cards, and after a card swap it reboots once with it before looking for the CRT output. The installation media doesn't have it: to see the install on the DVI-I, add it by hand (see <a href="#Black-screen">Black screen</a>), or install through the HDMI.</li>
 <li><strong>GCN 2, also called 1.1, on <code>amdgpu</code>:</strong> GroovyArcade's table says these cards (HD 7790, R7 260, R7 360) don't do interlaced modes on that driver. It wasn't checked with the <code>amdgpu.dc=0</code> FliperOS uses. If the picture is lost after switching to <code>amdgpu</code>, the <a href="#Installed-system">trial</a> goes back to <code>radeon</code> by itself.</li>
 </ul>
 <p><strong>APUs.</strong> GroovyArcade reports Wrestler, Kabini, Kaveri and Mullins working out of the box, and Wani with <code>amdgpu.dc=0</code> or an EDID. On any APU the Setup sets <code>interlace_force_even</code> in Switchres, which AMD APUs need.</p>
@@ -538,10 +538,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <td>With an EDID</td>
 </tr>
 <tr>
-<td>R9 380, 380X</td>
+<td>R9 285, 380, 380X</td>
 <td><code>amdgpu</code></td>
 <td>DVI-I</td>
-<td>Needs <code>amdgpu.dc=0</code>; to be confirmed since Linux 6.19</td>
+<td>Needs <code>amdgpu.dc=0</code> (the installed system adds it); to be confirmed since Linux 6.19</td>
 </tr>
 </tbody>
 </table>
@@ -1020,8 +1020,8 @@ sudo reboot
 <td>Interlaced modes often fail: see <a href="#Video-cards">Converters</a></td>
 </tr>
 <tr>
-<td>AMD with DVI-I that has no <code>radeon</code> driver (R9 380, 380X)</td>
-<td>Add <code>amdgpu.dc=0</code> to the line: on kernel 6.18 amdgpu's new display code has no analog output. See <a href="#Video-cards">Video cards</a></td>
+<td>AMD with DVI-I that has no <code>radeon</code> driver (R9 285, 380, 380X)</td>
+<td>The line needs <code>amdgpu.dc=0</code>: on kernel 6.18 amdgpu's new display code has no analog output. The installed system adds it by itself, so reboot once; at the installation, add it by hand. See <a href="#Video-cards">Video cards</a></td>
 </tr>
 <tr>
 <td>Ryzen 2200GE with random black screens</td>

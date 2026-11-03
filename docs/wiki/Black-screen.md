@@ -62,7 +62,7 @@ The next save in Video Setup rewrites the `video=` part.
 | Interlaced modes may be the problem (black at `640x480iS`) | Change `video=VGA-1:640x480iS` to `video=VGA-1:640x240S`. In the Setup it is **Video Setup > Resolution** |
 | Black after moving the cable or booting without it | Force the output on, with an `e` at the end of the mode: `video=VGA-1:640x480iSe` |
 | Through a converter | Interlaced modes often fail: see [Converters](Video-cards.md#converters) |
-| AMD with DVI-I that has no `radeon` driver (R9 380, 380X) | Add `amdgpu.dc=0` to the line: on kernel 6.18 amdgpu's new display code has no analog output. See [Video cards](Video-cards.md#amdati) |
+| AMD with DVI-I that has no `radeon` driver (R9 285, 380, 380X) | The line needs `amdgpu.dc=0`: on kernel 6.18 amdgpu's new display code has no analog output. The installed system adds it by itself, so reboot once; at the installation, add it by hand. See [Video cards](Video-cards.md#amdati) |
 | Ryzen 2200GE with random black screens | Disable legacy boot (CSM) in the BIOS. Reported by GroovyArcade on this APU |
 | Motherboard VGA on an APU or Intel | It may be a DisplayPort bridge chip, which limits low clocks and interlace. See [Video cards](Video-cards.md#amdati) |
 | You changed the video card | FliperOS notices at boot and offers the output test: see [Changing the video card](Video-cards.md#changing-the-video-card) |

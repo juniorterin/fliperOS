@@ -241,12 +241,24 @@ screen_video_detection() {
 # refaz o teste de saidas. O Video Setup pode pedir o teste (hw_retest) para o
 # proximo boot: o teste precisa da tela livre, sem a interface grafica aberta.
 HW_CHECK_MAX_ASKS=${HW_CHECK_MAX_ASKS:-3}
-HW_FLAGS="hw_changed hw_old_gpu hw_safe_boot hw_check_asked hw_retest"
+HW_FLAGS="hw_changed hw_old_gpu hw_safe_boot hw_dc_boot hw_check_asked hw_retest"
 
 # screen_hw_retest_apply: o teste de saidas, e o que ele decidiu no sistema
-# instalado (Xorg, linha do kernel, Limine), como o fim do Video Setup.
+# instalado (Xorg, linha do kernel, Limine), como o fim do Video Setup. Sem o
+# amdgpu.dc=0 de que a placa precisa, a saida analogica nem existe: grava a
+# linha, reinicia e o teste fica pedido para o boot seguinte.
 screen_hw_retest_apply() {
   local key
+  if amdgpu_dc_pending; then
+    conf_set hw_retest 1
+    if ! boot_apply; then
+      ui_msg "Video output test" "Could not update the boot settings (see the log)."
+      return 1
+    fi
+    ui_msg "Video output test" "This card only shows its VGA or DVI-I output after a reboot with a new boot setting. FliperOS reboots now and asks for the test again."
+    screen_reboot_now
+    return 0
+  fi
   if ! screen_video_detection; then
     ui_msg "Video output test" "The test did not finish. The video settings were not changed."
     return 1

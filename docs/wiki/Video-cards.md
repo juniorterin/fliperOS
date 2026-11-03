@@ -33,7 +33,7 @@ Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an **acti
 
 **GCN 2 and 3 cards with DVI-I.** Not every card after GCN 1.0 lost its analog output: GroovyArcade reports the R7 260X on DVI-I and the R9 380 on DVI-I. None of them has been tried on FliperOS.
 
-- **R9 380 and 380X (GCN 3)** only run on `amdgpu`, and on kernel 6.18 its new display code has no analog output (that came in 6.19). They need `amdgpu.dc=0` on the kernel line, which the Setup doesn't add for them: see [Black screen](Black-screen.md#changing-the-kernel-line-by-hand).
+- **R9 380 and 380X (GCN 3)** only run on `amdgpu`, and on kernel 6.18 its new display code has no analog output (that came in 6.19). They need `amdgpu.dc=0` on the kernel line (the R9 285 too, same chip). The installed system adds it by itself when it finds one of these cards, and after a card swap it reboots once with it before looking for the CRT output. The installation media doesn't have it: to see the install on the DVI-I, add it by hand (see [Black screen](Black-screen.md#changing-the-kernel-line-by-hand)), or install through the HDMI.
 - **GCN 2, also called 1.1, on `amdgpu`:** GroovyArcade's table says these cards (HD 7790, R7 260, R7 360) don't do interlaced modes on that driver. It wasn't checked with the `amdgpu.dc=0` FliperOS uses. If the picture is lost after switching to `amdgpu`, the [trial](Installed-system.md) goes back to `radeon` by itself.
 
 **APUs.** GroovyArcade reports Wrestler, Kabini, Kaveri and Mullins working out of the box, and Wani with `amdgpu.dc=0` or an EDID. On any APU the Setup sets `interlace_force_even` in Switchres, which AMD APUs need.
@@ -100,7 +100,7 @@ Cards in the [GroovyArcade wiki's list of tested GPUs](https://gitlab.com/groovy
 | Ryzen 3400G | `amdgpu` | VGA | A 1280x240 EDID and `video=DP-1:e` |
 | R7 (Wani, A10-8800E) | `amdgpu` | DisplayPort | EDID `generic_15_super_resp.bin` and `dotclock_min 25` |
 | RX 5700 XT (Navi 10) | `amdgpu` | DisplayPort | With an EDID |
-| R9 380, 380X | `amdgpu` | DVI-I | Needs `amdgpu.dc=0`; to be confirmed since Linux 6.19 |
+| R9 285, 380, 380X | `amdgpu` | DVI-I | Needs `amdgpu.dc=0` (the installed system adds it); to be confirmed since Linux 6.19 |
 
 "With an EDID" means booting the EDID entries of the boot menu, or a monitor's file from `edid/` ([Install](Install.md#boot-menu)).
 

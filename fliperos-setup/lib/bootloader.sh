@@ -116,6 +116,49 @@ amd_driver_apply() {
   log_info "driver AMD: $1"
 }
 
+# ── amdgpu.dc=0 nas placas so do amdgpu com DVI-I ────────────────
+# A Tonga (R9 285, 380, 380X: GCN 3) so tem o amdgpu, e no kernel 6.18 o
+# codigo de video novo dele (DC) nao tem saida analogica: o DVI-I fica sem
+# sinal e so o HDMI e a DisplayPort acendem. Com o amdgpu.dc=0 vale o codigo
+# antigo, que tem. IDs: os CHIP_TONGA da tabela do amdgpu_drv.c.
+AMDGPU_NO_DC_IDS="1002:6920 1002:6921 1002:6928 1002:6929 1002:692b 1002:692f 1002:6930 1002:6938 1002:6939"
+
+amdgpu_dc_off_needed() {
+  local card id
+  for card in $(drm_cards); do
+    id=$(drm_card_id "$card") || continue
+    [[ " $AMDGPU_NO_DC_IDS " == *" ${id,,} "* ]] && return 0
+  done
+  return 1
+}
+
+# amdgpu_dc_cmdline LINHA poe o amdgpu.dc=0 quando a placa precisa dele.
+amdgpu_dc_cmdline() {
+  if [[ " $1 " != *" amdgpu.dc=0 "* ]] && amdgpu_dc_off_needed; then
+    words "$(cmdline_remove "$1" amdgpu.dc) amdgpu.dc=0"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
+# amdgpu_dc_pending: a placa precisa do amdgpu.dc=0 e este boot nao o teve
+# (a saida analogica nem aparece no sysfs).
+amdgpu_dc_pending() {
+  [[ " $(< "$PROC_CMDLINE") " != *" amdgpu.dc=0 "* ]] && amdgpu_dc_off_needed
+}
+
+# boot_amdgpu_dc_check (uma vez por boot, pelo --services-late): grava o
+# amdgpu.dc=0 no sistema instalado quando falta, para o proximo boot.
+boot_amdgpu_dc_check() {
+  local line
+  is_installed && ! is_live || return 0
+  line=$(boot_read_cmdline) || return 0
+  [[ " $line " == *" amdgpu.dc=0 "* ]] && return 0
+  amdgpu_dc_off_needed || return 0
+  log_info "amdgpu: placa sem saida analogica no DC, amdgpu.dc=0 na linha do kernel"
+  boot_apply
+}
+
 # ── Driver das placas NVIDIA ─────────────────────────────────────
 # nouveau (o padrao, ja no kernel) ou o driver da NVIDIA, baixado do apt
 # pelo config/fliperos-nvidia. Os dois ficam instalados e a linha do kernel
@@ -357,6 +400,7 @@ boot_compose() {
   done
   line=$(latency_cmdline "${out[*]}")
   line=$(amd_driver_cmdline "$line")
+  line=$(amdgpu_dc_cmdline "$line")
   line=$(nvidia_driver_cmdline "$line")
   line=$(i915_driver_cmdline "$line")
   line=$(quirks_cmdline "$line")

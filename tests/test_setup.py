@@ -847,6 +847,38 @@ class HardwareChangeTests(Base):
         self.assertIn("kernel_video=video=VGA-1:640x480iSe\n", conf)
         self.assertIn("gpu_id=1002:6613\n", conf)
 
+    TONGA = ("1002", "6939")
+
+    def test_a_tonga_gets_amdgpu_dc_off_on_the_kernel_line(self):
+        # R9 380: no 6.18 o DC do amdgpu nao tem saida analogica.
+        self.gpu("card0", "amdgpu", self.TONGA, boot=True)
+        self.assertEqual(self.env.out("amdgpu_dc_cmdline 'quiet amdgpu.dc=1'").split(), ["quiet", "amdgpu.dc=0"])
+        self.assertEqual(self.env.out("amdgpu_dc_cmdline 'quiet amdgpu.dc=0'").split(), ["quiet", "amdgpu.dc=0"])
+        shutil.rmtree(self.env.drm / "card0")
+        self.gpu("card0", "radeon", self.AMD, boot=True)
+        self.assertEqual(self.env.out("amdgpu_dc_cmdline quiet").split(), ["quiet"])
+
+    def test_boot_reboots_a_tonga_into_amdgpu_dc_off_before_the_safe_mode(self):
+        self.gpu("card0", "amdgpu", self.TONGA, boot=True)
+        self.env.connector("card0-HDMI-A-1", "connected")
+        self.installed()
+        self.saved(ids=("10de", "17c8"), gpu="NVIDIA GeForce GTX 980 Ti", driver="nouveau")
+        out = self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"})
+        self.assertEqual(out.split(), ["BOOT_APPLY", "RUN", "systemctl", "reboot"])
+        conf = self.read_conf()
+        self.assertIn("hw_dc_boot=1002:6939\n", conf)
+        self.assertNotIn("hw_safe_boot", conf)
+        # Sem o amdgpu.dc=0 de novo (a linha nao pegou): nao reinicia em laco.
+        self.assertEqual(self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"}).strip(), "")
+        # Com ele, o DVI-I aparece e ganha o modo seguro.
+        self.saved(ids=("10de", "17c8"), gpu="NVIDIA GeForce GTX 980 Ti", driver="nouveau")
+        self.env.cmdline.write_text("quiet amdgpu.dc=0\n")
+        self.env.connector("card0-DVI-I-1", "connected")
+        out = self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"})
+        self.assertEqual(out.split(), ["BOOT_APPLY", "RUN", "systemctl", "reboot"])
+        self.assertIn("hw_safe_boot=1002:6939\n", self.read_conf())
+        self.assertIn("kernel_video=video=DVI-I-1:", self.read_conf())
+
     def test_boot_without_an_analog_output_only_marks_the_change(self):
         self.gpu("card0", "i915", self.INTEL, boot=True)
         self.env.connector("card0-HDMI-A-1", "connected")

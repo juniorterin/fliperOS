@@ -567,6 +567,15 @@ video_hw_boot_check() {
   # O nome da placa antiga, para o aviso: o modo seguro grava o da nova.
   conf_set hw_old_gpu "${change%%|*}"
   conf_set hw_changed 1
+  # A saida analogica da placa nova so aparece com o amdgpu.dc=0 (a Tonga,
+  # lib/bootloader.sh): reinicia uma vez com ele antes de procurar a saida
+  # (hw_dc_boot impede o laco).
+  if amdgpu_dc_pending && [[ $(conf_get hw_dc_boot 2> /dev/null) != "$id" ]]; then
+    conf_set hw_dc_boot "$id"
+    boot_apply || return 1
+    run_logged systemctl reboot
+    return 0
+  fi
   conf_set hw_safe_boot "$id"
   monitor=$(conf_get monitor 2> /dev/null) || monitor=generic_15
   conn=$(video_hw_safe_connector "$card") || return 0
