@@ -180,10 +180,10 @@ if [[ -z ${DISPLAY:-} ]]; then
   # O botao de desligar (config/fliperos-powerkey) fecha a partida aberta,
   # pelos PIDs do arquivo busy (abaixo); na sala, desliga.
   export FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.busy"
-  # O filtro de flicker do 480i neste X e o picom (config/fliperos-x11-client):
+  # O filtro de flicker do entrelacado neste X e o picom (config/fliperos-x11-client):
   # o laco abaixo grava nele o programa aberto, a sala (fightcade, o nivel
   # dos outros programas) ou o Flycast (a linha Fightcade Flycast do
-  # Setup > Video Setup > 480i hacks).
+  # Setup > Video Setup > Interlaced hacks).
   export FLIPEROS_DEFLICKER_APP_FILE="${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.app"
   rm -f "$FLIPEROS_DEFLICKER_APP_FILE"
   exec "$x11run" "$dir/fightcade" "$@"
@@ -229,8 +229,8 @@ fi
 
 # ── O modo de cada emulador ───────────────────────────────────────
 # table_mode NOME: o modo de NOME na tabela (LARGURAxALTURA@HZ), na coluna
-# do monitor escolhido no Setup, como o fliperos-x11-run (com o 480i de
-# Setup > Video Setup > 480i hacks, a coluna dos outros monitores).
+# do monitor escolhido no Setup, como o fliperos-x11-run (com o entrelacado de
+# Setup > Video Setup > Interlaced hacks, a coluna dos outros monitores).
 table_mode() {
   local column=3
   [[ $(sed -n 's/^frequency=//p' "$conf" 2> /dev/null) == 15* ]] && column=2

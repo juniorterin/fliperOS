@@ -209,7 +209,7 @@ What a user of this card has to know:
 - **OpenGL 2.1 and OpenGL ES 2.0 only** (Ironlake; the Mesa driver is `crocus`). Everything that asks for OpenGL 3 does not run:
   - **EmulationStation-DE does not open** (it needs OpenGL 3.3 or OpenGL ES 3.0). Setup > Games > Frontend marks it with a red X and a warning, asks before choosing it, and the installer refuses to build it. Pegasus (Qt, OpenGL ES 2.0) is not affected.
   - **RetroArch uses its `gl` driver instead of `glcore`**: `fliperos-kms-run` checks the card and switches by itself. A core or a shader that needs OpenGL 3 will not work.
-  - **The 480i flicker filter and the software colour adjustments are off** (the log says `OpenGL 3.0 or newer is needed; filter off for this program`). Setup > Video Setup > 480i hacks has no effect on this card.
+  - **The interlaced flicker filter and the software colour adjustments are off** (the log says `OpenGL 3.0 or newer is needed; filter off for this program`). Setup > Video Setup > Interlaced hacks has no effect on this card.
 - **No Vulkan on Ironlake.** Emulators that need it (the Vulkan renderers of Flycast, Dolphin, PCSX2, DuckStation) are not usable, and the Vulkan-by-driver switch of the Setup only acts on `amdgpu`. Not tested; it follows from the hardware. The same goes for the 3D emulators on a card from 2010: not tried.
 - **The processor must have graphics.** The VGA port of a board only works with a CPU that has them: Clarkdale (Core i3 5xx, i5 6xx) does; Lynnfield (Core i7 8xx, i5 7xx) does not, and the board shows no video device at all (seen on an i7 870).
 - **Changing the video card (or the CPU that has the graphics) is noticed at boot.** See [Changing the video card](#changing-the-video-card) below. **Recovery Mode** of the media (see [Install](Install.md)) stays as the last resort.
@@ -234,7 +234,7 @@ On a card that gives less than OpenGL 3, the Setup marks the item with a red X (
 | Where | Item | Needs |
 | --- | --- | --- |
 | Games > Frontend | EmulationStation-DE | OpenGL 3.3 or OpenGL ES 3.0 |
-| Video Setup | 480i hacks (the flicker filter) | OpenGL 3.0 |
+| Video Setup | Interlaced hacks (the flicker filter) | OpenGL 3.0 |
 | Games > Emulators & Games | PCSX2, Dolphin, DuckStation | OpenGL 3.3 or Vulkan (each project's own minimum) |
 
 Flycast, Supermodel and the other emulators are not marked: their minimum was not checked against this card.

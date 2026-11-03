@@ -1,4 +1,4 @@
-# O preview do filtro de flicker do 480i (Setup > Video Setup > 480i hacks):
+# O preview do filtro de flicker do entrelacado (Setup > Video Setup > Interlaced hacks):
 # uma tela feita para tremer num modo entrelacado (linhas de um pixel, letra
 # pequena, xadrez, bordas finas, uma linha que anda), aberta pelo
 # fliperos-x11-run em 640x480 com a camada do config/fliperos-deflicker.c.

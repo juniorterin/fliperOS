@@ -365,7 +365,7 @@ const enUS = {
     video: {
       meta: {
         title: 'CRT, 15 kHz, Switchres and low latency on FliperOS',
-        description: 'FliperOS drives an arcade CRT natively: a 6.18 LTS kernel with the 15 kHz patches, Switchres with each game’s own mode, colour and 480i settings, a low latency mode, a vertical monitor and two or three CRTs for multi-screen games.',
+        description: 'FliperOS drives an arcade CRT natively: a 6.18 LTS kernel with the 15 kHz patches, Switchres with each game’s own mode, colour and interlace settings, a low latency mode, a vertical monitor and two or three CRTs for multi-screen games.',
       },
       kicker: 'CRT, 15 kHz and video',
       title: 'Pixel perfect on a real tube.',
@@ -373,7 +373,7 @@ const enUS = {
       rows: [
         { shot: 'gui/radio', title: 'CRT and 15 kHz', text: 'A 6.18 LTS kernel with the 15 kHz patches. The installation ISO already comes up at 15 kHz, and the boot can be set for 15, 25 or 31 kHz monitors, or an LCD.', points: ['15 kHz', '25 kHz', '31 kHz', 'LCD'] },
         { shot: '', title: 'Switchres', text: 'Each game gets its own mode: the resolution and refresh rate are generated on the fly to match the original hardware as closely as possible.', points: [] },
-        { shot: 'anim/setup-colour', title: 'Colour and 480i', text: 'Gamma and colour change on screen as you move them, and the 480-line games can get a flicker filter, per program.', points: [] },
+        { shot: 'anim/setup-colour', title: 'Colour and interlace', text: 'Gamma and colour change on screen as you move them, and interlaced games can get a flicker filter, per program.', points: [] },
         { shot: 'anim/setup-latency', title: 'Low latency', text: 'Two modes in Setup > System > Latency. Standard polls USB at 1000 Hz and tunes GroovyMAME and RetroArch; Low latency adds full kernel preemption, automatic frame delay and preemptive frames. Check this computer compares your PC with what it needs.', points: ['1000 Hz USB', 'Frame delay', 'Preemptive frames'] },
         { shot: '', title: 'Vertical monitor', text: 'Turn the tube on its side and the frontend, the Setup menu, the boot screen and the terminal stand upright with it. Not seen on a real tube yet.', points: [] },
       ],
@@ -465,7 +465,7 @@ const enUS = {
         { shot: '', title: 'AMD: native 15 kHz', text: 'Radeon HD 2000 to R7/R9 300 with VGA or DVI-I make native 15 kHz on radeon or amdgpu. Good cheap choices: HD 5450, HD 6450, HD 7750, R7 240, R7 250. RX cards and Ryzen APUs have no analog output and need an active DisplayPort or HDMI to VGA converter.', points: ['radeon', 'amdgpu', 'Native 320x240'] },
         { shot: 'gui/video-driver', title: 'NVIDIA: nouveau or its own driver', text: 'nouveau is the default, and a test on the tube finds out whether the card makes 320x240. NVIDIA’s own driver (GTX 900 and newer, built by DKMS for the 15 kHz kernel) runs 3D at full speed. It is on trial: if you don’t confirm the picture, FliperOS goes back to nouveau.', points: ['Low resolution test', 'Driver on trial', 'DKMS'] },
         { shot: '', title: 'Intel HD, with its limits', text: 'Install and set the video on a monitor at a standard frequency first, then connect the CRT. Seen on a CRT through the VGA output of a Core i3-540: the frontend, the Setup, RetroArch, GroovyMAME and Attract-Mode Plus. A boot entry, Intel 15 kHz 240p, comes up in 1280x240 progressive. The card has only OpenGL 2.1 and no Vulkan, and the processor must have graphics.', points: ['1280x240 progressive', 'OpenGL 2.1', 'No Vulkan'] },
-        { shot: 'gui/unsupported', title: 'A red X on what the card can’t run', text: 'EmulationStation-DE, the 480i filter, PCSX2, Dolphin and DuckStation need OpenGL 3 or Vulkan. The Setup marks them with a red X, says why and asks before opening, with No as the default.', points: ['ES-DE', '480i filter', 'PCSX2', 'Dolphin', 'DuckStation'] },
+        { shot: 'gui/unsupported', title: 'A red X on what the card can’t run', text: 'EmulationStation-DE, the Interlaced filter, PCSX2, Dolphin and DuckStation need OpenGL 3 or Vulkan. The Setup marks them with a red X, says why and asks before opening, with No as the default.', points: ['ES-DE', 'Interlaced filter', 'PCSX2', 'Dolphin', 'DuckStation'] },
         { shot: '', title: 'Vulkan on AMD', text: 'On amdgpu, Flycast and Dolphin run on Vulkan, and PCSX2 and DuckStation pick it by themselves. RetroArch stays on glcore, because its Vulkan output can’t switch the CRT’s modes. Back on radeon, each goes back to its factory renderer.', points: ['Flycast', 'Dolphin', 'PCSX2', 'DuckStation'] },
         { shot: '', title: 'Changed the card? It notices', text: 'At each boot the system checks that the video card is still the one it was set up for. If it changed, it writes a safe mode before any picture, reboots once and offers the video output test again.', points: ['Safe mode', 'Output test'] },
       ],
@@ -491,7 +491,7 @@ const enUS = {
       { id: 'play', title: 'Pick a game, play it', text: 'Search every system’s games with your filters and favourites, see the pictures, buttons and history of each arcade game, and press Play: it opens on the tube.' },
       { id: 'live', title: 'Watch it live', text: 'The cabinet’s screen in the browser at 15, 30 or 60 frames per second, plus the FPS of the game and a screenshot of the tube.' },
       { id: 'obs', title: 'Ready for OBS', text: 'Addresses for an OBS Browser Source: the live screen in 4:3 with sound, the marquee of the game being played, with high scores and versus scores, and your controller lighting up on screen.' },
-      { id: 'settings', title: 'Settings while you play', text: 'Colour sliders that change the game on screen as you move them, 480i hacks per emulator, services, latency mode and volume.' },
+      { id: 'settings', title: 'Settings while you play', text: 'Colour sliders that change the game on screen as you move them, Interlaced hacks per emulator, services, latency mode and volume.' },
       { id: 'files', title: 'Your games in the browser', text: 'Upload and download games, BIOS, artwork and splash screens, with progress, straight to the right folder.' },
       { id: 'romfilter', title: 'Games, BIOS and art', text: 'Filter a MAME romset for your cabinet’s controls and screen, download only the games that pass and the BIOS they lack, scrape their art with your site login typed on a real keyboard, and install or update emulators.' },
       { id: 'status', title: 'Status of everything', text: 'The video mode and modeline on the tube, CPU, GPU, temperatures, memory, disks, network, processes and logs.' },

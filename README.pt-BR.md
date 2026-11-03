@@ -24,11 +24,11 @@ Abra **http://fliperos.local** no celular ou no PC da mesma rede (usuário `flip
 
 - **escolher um jogo e jogar** no tubo, com as imagens, a história e os botões de cada jogo de arcade do Arcade Database;
 - **ver o gabinete ao vivo** no navegador, e pôr a tela ao vivo e o marquee do jogo no OBS;
-- **mudar a cor, os jogos 480i e outros ajustes** com o jogo aberto;
+- **mudar a cor, os hacks de entrelaçado e outros ajustes** com o jogo aberto;
 - **copiar jogos, BIOS e imagens**, filtrar um romset do MAME e baixar só o que combina com o seu gabinete;
 - **ver o sistema** (modo de vídeo e modeline, temperaturas, logs), ver uma prévia do marquee (Pixelcade ou ZeDMD) sem o aparelho ou abrir um terminal.
 
-No gabinete, segure **Start e Baixo** por um segundo em qualquer jogo para abrir o [menu na tela](docs/wiki/Installed-system.md#on-screen-menu): volume, filtro do 480i, geometria e cores, por cima do jogo aberto.
+No gabinete, segure **Start e Baixo** por um segundo em qualquer jogo para abrir o [menu na tela](docs/wiki/Installed-system.md#on-screen-menu): volume, filtro do entrelaçado, geometria e cores, por cima do jogo aberto.
 
 Cada página em detalhe: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 
@@ -45,7 +45,7 @@ Este guia vai do gabinete vazio até um jogo na tela. Cada passo diz o que vai a
 ### 1. O que você precisa
 
 - **Um PC (amd64)** para o gabinete. Para fliperama até os anos 90 e consoles até o PlayStation, bastam um processador de 2 núcleos, 4 GB de RAM e um disco de 16 GB. Para PS2, Model 3 e Dreamcast, um processador de 4 núcleos com AVX2 (Core i7-7700, Ryzen 5 3600 ou mais novo), 16 GB e SSD. O disco onde você instalar é **apagado por inteiro**.
-- **Uma placa de vídeo com saída analógica.** A melhor opção é uma **AMD Radeon com VGA ou DVI-I**, da série HD 2000 até as R7/R9 (GCN 1.0), que gera 15 kHz nativamente. Intel e NVIDIA funcionam em 15 kHz com os modos de "super resolução" (uma Intel HD de primeira geração tem só OpenGL 2.1: sem EmulationStation-DE, sem o filtro de flicker do 480i e sem Vulkan; os limites estão na wiki); uma NVIDIA com VGA ou DVI-I (GeForce 8 até GTX 900) ganha resolução nativa se passar no teste de baixa resolução. Placas sem saída analógica precisam de um conversor DisplayPort/HDMI para VGA. A lista completa está em [Video cards](https://github.com/juniorterin/fliperOS/wiki/Video-cards).
+- **Uma placa de vídeo com saída analógica.** A melhor opção é uma **AMD Radeon com VGA ou DVI-I**, da série HD 2000 até as R7/R9 (GCN 1.0), que gera 15 kHz nativamente. Intel e NVIDIA funcionam em 15 kHz com os modos de "super resolução" (uma Intel HD de primeira geração tem só OpenGL 2.1: sem EmulationStation-DE, sem o filtro de flicker do entrelacado e sem Vulkan; os limites estão na wiki); uma NVIDIA com VGA ou DVI-I (GeForce 8 até GTX 900) ganha resolução nativa se passar no teste de baixa resolução. Placas sem saída analógica precisam de um conversor DisplayPort/HDMI para VGA. A lista completa está em [Video cards](https://github.com/juniorterin/fliperOS/wiki/Video-cards).
   - **Intel HD: antes você precisa de um monitor em frequência padrão.** O menu de boot e a instalação são desenhados em 31 kHz, e uma placa Intel não gera clocks baixos. Instale o FliperOS e acerte o vídeo com um monitor VGA comum (um LCD ou monitor de PC) e só depois desligue e ligue a CRT.
 - **O monitor**: um CRT de fliperama (15 kHz), uma TV por um adaptador VGA para SCART/componente ou um monitor de 25/31 kHz. LCD também funciona.
 - **Um pendrive de 4 GB ou mais** (ele será apagado).

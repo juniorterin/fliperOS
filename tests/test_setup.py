@@ -1029,14 +1029,14 @@ class GpuCapabilityTests(Base):
         self.assertEqual(self.env.run("gpu_needs 3.3", {"FLIPEROS_EGLINFO": str(self.env.dir / "nada")}).returncode, 1)
 
     def test_the_label_carries_the_reason_and_the_mark(self):
-        self.assertEqual(self.env.out('gpu_unsupported_label "480i hacks" "Needs OpenGL 3.0, and no"').strip(),
-                         "480i hacks (Needs OpenGL 3.0, and no) (not supported)")
+        self.assertEqual(self.env.out('gpu_unsupported_label "Interlaced hacks" "Needs OpenGL 3.0, and no"').strip(),
+                         "Interlaced hacks (Needs OpenGL 3.0, and no) (not supported)")
 
     def test_the_screens_mark_and_ask_before_opening(self):
         video = (SETUP / "screens" / "video-setup.sh").read_text()
-        self.assertIn('mode480_label=$(gpu_unsupported_label "480i hacks" "$mode480_why")', video)
+        self.assertIn('mode480_label=$(gpu_unsupported_label "Interlaced hacks" "$mode480_why")', video)
         self.assertIn('"mode480|$mode480_label|', video)
-        self.assertIn('gpu_unsupported_ok "480i hacks" "480i hacks" "$mode480_why"', video)
+        self.assertIn('gpu_unsupported_ok "Interlaced hacks" "Interlaced hacks" "$mode480_why"', video)
         menu = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_emulators() {")[1].split("\n}\n")[0]
         self.assertIn('pcsx2 | dolphin | duckstation)', menu)
         self.assertIn('gpu_needs 3.3 "or Vulkan"', menu)
@@ -1225,8 +1225,8 @@ class DeflickerTests(Base):
         self.assertEqual(allowed["desktop"], "filter,pure")
         self.assertEqual(allowed["fightcade"], "240p,filter,pure")
         self.assertEqual(allowed["other"], "filter,pure")
-        self.assertTrue(all(r[3].endswith(("Now: 640x240. Not installed.", "Now: 480i, filter medium.",
-                                           "Now: 640x240.", "Now: 480i, filter medium. Not installed."))
+        self.assertTrue(all(r[3].endswith(("Now: 640x240. Not installed.", "Now: interlaced, filter medium.",
+                                           "Now: 640x240.", "Now: interlaced, filter medium. Not installed."))
                             for r in rows), rows)
 
     def test_method_and_level_per_program(self):
@@ -1328,10 +1328,10 @@ class DeflickerTests(Base):
         self.assertTrue((ROOT / "fliperos-setup/gui/color-calibrate.py").is_file())
         self.assertIn('"mode480|$mode480_label|', screen)
         self.assertIn("screen_mode480\n", screen)
-        self.assertIn('gpu_unsupported_ok "480i hacks" "480i hacks" "$mode480_why"', screen)
+        self.assertIn('gpu_unsupported_ok "Interlaced hacks" "Interlaced hacks" "$mode480_why"', screen)
         body = screen.split("screen_mode480()")[1]
         self.assertIn("UI_GRID_LIVE=1", body)
-        self.assertIn('"240p|640x240;filter|480i filter;pure|480i pure"', body)
+        self.assertIn('"240p|640x240;filter|Interlaced filter;pure|Interlaced pure"', body)
         dialog = screen.split("screen_deflicker_level()")[1]
         for level in ("preview", "light", "medium", "strong"):
             self.assertIn('"%s|' % level, dialog)
@@ -1358,8 +1358,8 @@ class SettingsCliTests(Base):
         gamma = rows[keys.index("color.gamma")]
         # O passo vai junto (o slider do painel anda de 5 em 5 no gama).
         self.assertEqual((gamma[1], gamma[3], gamma[5]), ("Colour", "number", "50..200:5"))
-        self.assertIn("240p=640x240;filter=480i filter;pure=480i pure", rows[keys.index("mode480.flycast")][5])
-        self.assertIn("filter=480i filter;pure=480i pure", rows[keys.index("mode480.desktop")][5])
+        self.assertIn("240p=640x240;filter=Interlaced filter;pure=Interlaced pure", rows[keys.index("mode480.flycast")][5])
+        self.assertIn("filter=Interlaced filter;pure=Interlaced pure", rows[keys.index("mode480.desktop")][5])
         # Mudar: pelas funcoes do Setup; chave ou valor que nao existe, 2.
         self.env.out("settings_set color.gamma 130; settings_set mode480.flycast pure; settings_set deflicker.pcsx2 strong",
                      env)

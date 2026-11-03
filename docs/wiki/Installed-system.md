@@ -92,7 +92,7 @@ Without a CTM (the cabinet's Radeon R7 240 has only the 256-point LUT, on `radeo
 Hold **Start and Down** for a second, or press **Pause** on a keyboard or **Play/Pause** on a wireless remote, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.
 
 - **Volume**. The volume keys of a keyboard or of a panel also show a bar for 2 seconds, without taking the controls or opening the menu.
-- **480i filter**: off, light, medium or strong for the program on screen. It only shows in an interlaced mode, and the change counts on the next frame.
+- **Interlaced filter**: off, light, medium or strong for the program on screen. It only shows in an interlaced mode (any size: 480i, 448i, 576i...), and the change counts on the next frame.
 - **Geometry**: horizontal size and position, and vertical position, with a frame and a cross over the picture. The title says which resolution is being adjusted (`GEOMETRY 640x480i`, `GEOMETRY 320x240p`), because each resolution has its own geometry. Each change is on the tube at once. **Save** keeps it for that resolution only, in every game that uses it; **Use the default** takes the resolution back to the geometry of all the others (the `crt_range` of Video Setup > Geometry, or the monitor's preset). Leaving without saving puts the mode back. Switchres stops at what the monitor accepts, and the value on screen goes back to that limit. When a game opens, or changes resolution, in a mode with a saved geometry, the service puts that geometry on the tube within a second.
 - **Colour**: every setting of the colour calibration, and back to the defaults.
 
@@ -120,7 +120,7 @@ To drive it without a controller, write `open`, `close`, `up`, `down`, `left`, `
 - **Setup** — the items come in the order of setting up a cabinet, and a balloon under the list says what the item under the cursor is for (FliperOS's gum, `patches/gum/0004-choose-balao.patch`: framed at 80 columns, two lines of text in place of the key help at 40):
   - **Video Setup** — the same as in the installation, including [Multiple monitors](Multiple-Monitors.md); saves the kernel line and offers to reboot.
 
-    Also **480i hacks**: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, 480i with the flicker filter at its own level (with a preview on the tube), or pure 480i ([Emulators](Emulators.md#480i-hacks-640x240-filter-or-pure-480i)).
+    Also **Interlaced hacks**: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, interlaced with the flicker filter at its own level (with a preview on the tube), or pure interlaced ([Emulators](Emulators.md#interlaced-hacks-640x240-filter-or-pure-interlaced)).
 
     Changes in that table are saved as they are made; there is no Save step. Also **Colour calibration** (below). Also **Card firmware**, with an AMD card: [ATOM-15 in the card's BIOS](Video-cards.md#atom-15-15-khz-from-power-on), at your own risk. Also **Video driver**, only with an AMD card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240).
 

@@ -27,11 +27,11 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <ul>
 <li><strong>pick a game and play it</strong> on the tube, with the pictures, history and buttons of each arcade game from the Arcade Database;</li>
 <li><strong>watch the cabinet live</strong> in the browser, and put the live screen and the game's marquee in OBS;</li>
-<li><strong>change colour, 480i hacks and other settings</strong> while a game runs;</li>
+<li><strong>change colour, Interlaced hacks and other settings</strong> while a game runs;</li>
 <li><strong>copy games, BIOS and artwork</strong>, filter a MAME romset and download only what suits your cabinet;</li>
 <li><strong>check the system</strong> (video mode and modeline, temperatures, logs), preview the marquee (Pixelcade or ZeDMD) with no hardware, or open a terminal.</li>
 </ul>
-<p>At the cabinet, hold <strong>Start and Down</strong> for a second in any game to open the <a href="docs/wiki/Installed-system.md#on-screen-menu">on-screen menu</a>: volume, 480i filter, geometry and colour, over the running game.</p>
+<p>At the cabinet, hold <strong>Start and Down</strong> for a second in any game to open the <a href="docs/wiki/Installed-system.md#on-screen-menu">on-screen menu</a>: volume, Interlaced filter, geometry and colour, over the running game.</p>
 <p>Every page in detail: <a href="#Web-panel">Web panel</a>.</p>
 <h3 id="new-your-controller-on-the-stream">New: your controller on the stream</h3>
 <p>The stick and the buttons light up on your live stream while you press them on the cabinet, like the input displays of fighting game streams. It's a page for an OBS Browser Source, with a transparent background: copy its address from <strong>Live &gt; Controller for OBS</strong> and paste it in OBS.</p>
@@ -41,7 +41,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h3 id="1-what-you-need">1. What you need</h3>
 <ul>
 <li><strong>A PC (amd64)</strong> for the cabinet. For arcade games up to the 90s and consoles up to the PlayStation, a 2-core CPU, 4 GB of RAM and a 16 GB disk are enough. For PS2, Model 3 and Dreamcast, a 4-core CPU with AVX2 (Core i7-7700, Ryzen 5 3600 or newer), 16 GB and an SSD. The disk you install to is <strong>erased completely</strong>.</li>
-<li><strong>A graphics card with analog output.</strong> The best fit is an <strong>AMD Radeon with VGA or DVI-I</strong> from the HD 2000 series to the R7/R9 (GCN 1.0), which generates 15 kHz natively. Intel and NVIDIA work at 15 kHz with "super resolution" modes (an Intel HD of the first generation has only OpenGL 2.1: no EmulationStation-DE, no 480i flicker filter, no Vulkan; see its limits in the wiki); an NVIDIA with VGA or DVI-I (GeForce 8 to GTX 900) gets native resolutions if it passes the low resolution test. Cards without an analog output need a DisplayPort/HDMI to VGA converter. The full list is in <a href="#Video-cards">Video cards</a>.</li>
+<li><strong>A graphics card with analog output.</strong> The best fit is an <strong>AMD Radeon with VGA or DVI-I</strong> from the HD 2000 series to the R7/R9 (GCN 1.0), which generates 15 kHz natively. Intel and NVIDIA work at 15 kHz with "super resolution" modes (an Intel HD of the first generation has only OpenGL 2.1: no EmulationStation-DE, no interlaced flicker filter, no Vulkan; see its limits in the wiki); an NVIDIA with VGA or DVI-I (GeForce 8 to GTX 900) gets native resolutions if it passes the low resolution test. Cards without an analog output need a DisplayPort/HDMI to VGA converter. The full list is in <a href="#Video-cards">Video cards</a>.</li>
 <li><strong>Intel HD: you need a monitor at a standard frequency first.</strong> The boot menu and the installation are drawn at 31 kHz, and an Intel card does not make low clocks. Install FliperOS and set the video with a regular VGA monitor (an LCD or a PC monitor), and only then power off and connect the CRT.</li>
 <li><strong>The monitor</strong>: an arcade CRT (15 kHz), a TV through a VGA to SCART/component adapter, or a 25/31 kHz monitor. An LCD also works.</li>
 <li><strong>A USB stick of 4 GB or more</strong> (it will be erased).</li>
@@ -650,7 +650,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li><strong>OpenGL 2.1 and OpenGL ES 2.0 only</strong> (Ironlake; the Mesa driver is <code>crocus</code>). Everything that asks for OpenGL 3 does not run:</li>
 <li><strong>EmulationStation-DE does not open</strong> (it needs OpenGL 3.3 or OpenGL ES 3.0). Setup &gt; Games &gt; Frontend marks it with a red X and a warning, asks before choosing it, and the installer refuses to build it. Pegasus (Qt, OpenGL ES 2.0) is not affected.</li>
 <li><strong>RetroArch uses its <code>gl</code> driver instead of <code>glcore</code></strong>: <code>fliperos-kms-run</code> checks the card and switches by itself. A core or a shader that needs OpenGL 3 will not work.</li>
-<li><strong>The 480i flicker filter and the software colour adjustments are off</strong> (the log says <code>OpenGL 3.0 or newer is needed; filter off for this program</code>). Setup &gt; Video Setup &gt; 480i hacks has no effect on this card.</li>
+<li><strong>The interlaced flicker filter and the software colour adjustments are off</strong> (the log says <code>OpenGL 3.0 or newer is needed; filter off for this program</code>). Setup &gt; Video Setup &gt; Interlaced hacks has no effect on this card.</li>
 <li><strong>No Vulkan on Ironlake.</strong> Emulators that need it (the Vulkan renderers of Flycast, Dolphin, PCSX2, DuckStation) are not usable, and the Vulkan-by-driver switch of the Setup only acts on <code>amdgpu</code>. Not tested; it follows from the hardware. The same goes for the 3D emulators on a card from 2010: not tried.</li>
 <li><strong>The processor must have graphics.</strong> The VGA port of a board only works with a CPU that has them: Clarkdale (Core i3 5xx, i5 6xx) does; Lynnfield (Core i7 8xx, i5 7xx) does not, and the board shows no video device at all (seen on an i7 870).</li>
 <li><strong>Changing the video card (or the CPU that has the graphics) is noticed at boot.</strong> See <a href="#changing-the-video-card">Changing the video card</a> below. <strong>Recovery Mode</strong> of the media (see <a href="#Install">Install</a>) stays as the last resort.</li>
@@ -682,7 +682,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </tr>
 <tr>
 <td>Video Setup</td>
-<td>480i hacks (the flicker filter)</td>
+<td>Interlaced hacks (the flicker filter)</td>
 <td>OpenGL 3.0</td>
 </tr>
 <tr>
@@ -1055,7 +1055,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </code></pre>
 <p>To test a resolution with a real game, the GroovyArcade wiki has <a href="https://gitlab.com/groovyarcade/support/-/wikis/4-Issues-and-Troubleshooting/4.4-Video-Mode-Troubleshooting">tables of games by resolution and frequency</a>. Each program's own log is <code>/opt/fliperos/logs/&lt;program&gt;.log</code>.</p>
 <h2 id="the-picture-is-there-but-wrong">The picture is there but wrong</h2>
-<p>Off-centre, too large or too small: <a href="#Monitors">Monitors</a>. Flickering menus: the 480i hacks in <a href="#Emulators">Emulators</a>.</p>
+<p>Off-centre, too large or too small: <a href="#Monitors">Monitors</a>. Flickering menus: the Interlaced hacks in <a href="#Emulators">Emulators</a>.</p>
 <h2 id="asking-for-help">Asking for help</h2>
 <p>Open an <a href="https://github.com/juniorterin/fliperOS/issues">issue</a> with the output of the commands in <em>What the system sees</em>, your monitor, and how it is connected, converter included.</p>
 <h1 id="Install">Install</h1>
@@ -1308,7 +1308,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <p>Hold <strong>Start and Down</strong> for a second, or press <strong>Pause</strong> on a keyboard or <strong>Play/Pause</strong> on a wireless remote, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.</p>
 <ul>
 <li><strong>Volume</strong>. The volume keys of a keyboard or of a panel also show a bar for 2 seconds, without taking the controls or opening the menu.</li>
-<li><strong>480i filter</strong>: off, light, medium or strong for the program on screen. It only shows in an interlaced mode, and the change counts on the next frame.</li>
+<li><strong>Interlaced filter</strong>: off, light, medium or strong for the program on screen. It only shows in an interlaced mode (any size: 480i, 448i, 576i...), and the change counts on the next frame.</li>
 <li><strong>Geometry</strong>: horizontal size and position, and vertical position, with a frame and a cross over the picture. The title says which resolution is being adjusted (<code>GEOMETRY 640x480i</code>, <code>GEOMETRY 320x240p</code>), because each resolution has its own geometry. Each change is on the tube at once. <strong>Save</strong> keeps it for that resolution only, in every game that uses it; <strong>Use the default</strong> takes the resolution back to the geometry of all the others (the <code>crt_range</code> of Video Setup &gt; Geometry, or the monitor's preset). Leaving without saving puts the mode back. Switchres stops at what the monitor accepts, and the value on screen goes back to that limit. When a game opens, or changes resolution, in a mode with a saved geometry, the service puts that geometry on the tube within a second.</li>
 <li><strong>Colour</strong>: every setting of the colour calibration, and back to the defaults.</li>
 </ul>
@@ -1331,7 +1331,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <li><strong>Setup</strong> — the items come in the order of setting up a cabinet, and a balloon under the list says what the item under the cursor is for (FliperOS's gum, <code>patches/gum/0004-choose-balao.patch</code>: framed at 80 columns, two lines of text in place of the key help at 40):</li>
 <li>
 <p><strong>Video Setup</strong> — the same as in the installation, including <a href="#Multiple-Monitors">Multiple monitors</a>; saves the kernel line and offers to reboot.</p>
-<p>Also <strong>480i hacks</strong>: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, 480i with the flicker filter at its own level (with a preview on the tube), or pure 480i (<a href="#Emulators">Emulators</a>).</p>
+<p>Also <strong>Interlaced hacks</strong>: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, interlaced with the flicker filter at its own level (with a preview on the tube), or pure interlaced (<a href="#Emulators">Emulators</a>).</p>
 <p>Changes in that table are saved as they are made; there is no Save step. Also <strong>Colour calibration</strong> (below). Also <strong>Card firmware</strong>, with an AMD card: <a href="#Video-cards">ATOM-15 in the card's BIOS</a>, at your own risk. Also <strong>Video driver</strong>, only with an AMD card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240).</p>
 <p>The card name comes from <code>lspci</code>, and whether both drivers take it comes from the modules' own PCI ID tables (<code>modprobe -R</code> on the card's modalias). <strong>radeon</strong> is the recommended choice and the default, as on GroovyArcade: 15 kHz was validated on it; OpenGL only.</p>
 <p><strong>amdgpu</strong> adds Vulkan (PCSX2, Dolphin, Flycast, DuckStation); it was seen working at 15 kHz on the cabinet's R7 240 (2026-10-16), not yet on other cards. RetroArch is built with Vulkan as well, but stays on <code>glcore</code>: without X its Vulkan context is <code>khr_display</code>, which does not switch the CRT's mode.</p>
@@ -1467,7 +1467,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <li><strong>Pick a game and play it</strong> on the tube, with the pictures, the history and the buttons of each arcade game from the Arcade Database, your favourites and the game filters.</li>
 <li><strong>See what is playing</strong>, with the FPS, and take a screenshot of the tube.</li>
 <li><strong>Watch the cabinet live</strong> in the browser, and put the live screen and the game's marquee in OBS.</li>
-<li><strong>Change settings while you play</strong>: colour, 480i hacks, services, latency mode, volume.</li>
+<li><strong>Change settings while you play</strong>: colour, Interlaced hacks, services, latency mode, volume.</li>
 <li><strong>Copy games, BIOS and artwork</strong> through the browser: upload, download, new folders.</li>
 <li><strong>Filter a MAME romset</strong> and <strong>download</strong> only the games that suit your cabinet, plus the <strong>BIOS</strong> your games lack.</li>
 <li><strong>Scrape the art</strong> of your games, typing the site's login on a real keyboard, and download the art packs.</li>
@@ -1576,10 +1576,10 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
   - The card has a CSS editor with syntax colours. The preview follows each key you type, and <em>Demo in the preview</em> presses the buttons by itself, so the look can be tried with nobody at the cabinet. <em>Format</em> lays the CSS out with one property per line (Ctrl+Z undoes it). <em>Save</em> writes it to <code>/etc/fliperos/input-overlay.css</code>, and the pages open in OBS take it at once, with no need to refresh the source; <em>Factory CSS</em> goes back to <code>input.css</code>.
   - The classes: <code>.pad</code> (<code>.p1</code>, <code>.p2</code>, <code>.active</code> while something is pressed), <code>.label</code>, <code>.stick</code> (<code>.up</code> <code>.down</code> <code>.left</code> <code>.right</code>, and <code>data-dir</code> such as <code>up-left</code>) with <code>.gate</code> and <code>.ball</code>, and <code>.button</code> (<code>.b1</code> to <code>.b6</code>, <code>.start</code>, <code>.coin</code>; <code>.on</code> while pressed). The sizes use <code>--u</code>: one panel is 200 × 100 <code>--u</code>.
   - How it works: while at least one controller page is open, the panel runs one <code>fliperos-buttons watch</code> at low priority. It sends the panel a line each time the pressed controls change, and the panel passes it to the pages as Server-Sent Events. It stops when the last page closes.
-- <strong>Settings:</strong> the Setup settings that are safe to change over the network, grouped as System, Services, 480i hacks and Colour.
+- <strong>Settings:</strong> the Setup settings that are safe to change over the network, grouped as System, Services, Interlaced hacks and Colour.
   - System: the default launcher, latency mode, debug mode, the volume leveler and menu sounds.
   - Services: the whole services table.
-  - 480i hacks: a card per program, with an explanation of each method at the top. The method is a row of buttons (640x240, 480i with filter, 480i pure), and the filter strength (light, medium, strong) shows only when the filter is on.
+  - Interlaced hacks: a card per program, with an explanation of each method at the top. The method is a row of buttons (640x240, Interlaced with filter, Interlaced pure), and the filter strength (light, medium, strong) shows only when the filter is on.
   - Colour: every colour calibration value and <strong>Back to the defaults</strong>. A slider saves while it moves, so the game on screen changes with it; the <strong>−</strong> and <strong>+</strong> on its sides move it one step per tap (a run of taps saves once, just after the last).
   - Each change is saved and applied at once, through the same functions as the Setup screens (<code>fliperos-setup --settings</code> and <code>--setting KEY VALUE</code>, <code>lib/system.sh</code>). Debug and latency rewrite the kernel line the way their screens do; their kernel part counts after a restart.
   - Monitor, resolution and video driver are not here, since a wrong choice can leave the cabinet without a picture. They stay in the Setup, on the cabinet screen.
@@ -28233,7 +28233,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p><strong>Reset Geometry</strong>, or choosing a preset in Monitor Type, undoes it: Switchres goes back to the chosen monitor's preset, which applies to GroovyMAME (<code>switchres_ini 1</code>, as in GroovyArcade) and to RetroArch's mode 4, which read the same file.</p>
 <p><strong>Multiple monitors (2 or 3 screens).</strong> Setup &gt; Video Setup &gt; <strong>Multiple Monitors</strong> adds a second and a third arcade monitor on the other outputs of the same card (analog; digital through an active converter is experimental).</p>
 <p>With <strong>Multi-Screen Games</strong> on, GroovyMAME opens each screen of Darius, The Ninja Warriors or Punch-Out!! on its own monitor, and Flycast does the same with the NAOMI multi-board games (F355 Challenge, Airline Pilots, Sega Strike Fighter) on 3 monitors. The other emulators and the frontends stay on monitor 1. Details in <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
-<p><strong>Nothing interlaced at 15 kHz, by default.</strong> On a 15 kHz tube no <code>fliperos-x11-run</code> emulator opens at 480i unless it is chosen for it in <a href="#480i-hacks-640x240-filter-or-pure-480i">480i hacks</a> (the exception is the Fightcade 2 lobby, which doesn't fit in 240 lines; its matches do): the 480-line ones and the 384-line ones (Model 2 and 3) run at <strong>640x240 progressive</strong>, <strong>stretched to 200%</strong> horizontally — 640x240 has 8:3 pixels, and the 4:3 image only fills the tube when stretched: Flycast <code>rend.ScreenStretching=200</code> (300·W/4H), PCSX2 <code>AspectRatio = Stretch</code>, Dolphin <code>AspectRatio=3</code>, Supermodel <code>-fullscreen -res=640,240 -stretch</code>, Hypseus <code>-x 640 -y 240 -ignore_aspect_ratio</code> (options at the end of the line: Hypseus reads the game and the player first), and Model 2 (SM2-Emu) with <code>aspect_mode = stretch</code> set on every launch when the mode is wider than 4:3 (its settings file starts at 4:3).</p>
+<p><strong>Nothing interlaced at 15 kHz, by default.</strong> On a 15 kHz tube no <code>fliperos-x11-run</code> emulator opens interlaced unless it is chosen for it in <a href="#interlaced-hacks-640x240-filter-or-pure-interlaced">Interlaced hacks</a> (the exception is the Fightcade 2 lobby, which doesn't fit in 240 lines; its matches do): the 480-line ones and the 384-line ones (Model 2 and 3) run at <strong>640x240 progressive</strong>, <strong>stretched to 200%</strong> horizontally — 640x240 has 8:3 pixels, and the 4:3 image only fills the tube when stretched: Flycast <code>rend.ScreenStretching=200</code> (300·W/4H), PCSX2 <code>AspectRatio = Stretch</code>, Dolphin <code>AspectRatio=3</code>, Supermodel <code>-fullscreen -res=640,240 -stretch</code>, Hypseus <code>-x 640 -y 240 -ignore_aspect_ratio</code> (options at the end of the line: Hypseus reads the game and the player first), and Model 2 (SM2-Emu) with <code>aspect_mode = stretch</code> set on every launch when the mode is wider than 4:3 (its settings file starts at 4:3).</p>
 <p>On the cabinet Flycast opened at 640x480i: the setup saves <code>frequency=15k</code>, and the script only recognized <code>15</code>, so every emulator fell into the 31 kHz column.</p>
 <p><strong>Cards without low dotclocks (Intel, NVIDIA that didn't pass the grid; see <a href="#Video-cards">Video cards</a>).</strong> They cannot generate the ~12 MHz pixel clock of a 640x240 mode at 15 kHz, so the Setup writes <code>dotclock_min 25.0</code> to <code>/etc/switchres.ini</code>.</p>
 <p>With it, <code>fliperos-x11-run</code> asks for the super resolution width (<code>super_width</code>, 2560) instead of the table's, as RetroArch does: the lines and the frequencies are the same, only the pixels are thinner.</p>
@@ -28283,22 +28283,22 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>Set the program to <strong>stretch/fill the screen</strong> — for Flycast (<code>rend.ScreenStretching = 200</code>, via <code>-config</code>), Dolphin (<code>AspectRatio = 3</code>, via <code>-C</code>), PCSX2 (<code>AspectRatio = Stretch</code>, in <code>PCSX2.ini</code> from the second launch on) and Model 2 (<code>aspect_mode = stretch</code>) <code>fliperos-x11-run</code> already does it by itself. The math, for another mode: stretch by <code>300 × width ÷ (4 × height)</code> percent.</p>
 <p><strong>GroovyMAME and RetroArch</strong> don't go through here: they switch modes by themselves on every game. In GroovyMAME, <code>interlace 0</code> in <code>/etc/fliperos/mame/mame.ini</code> makes Switchres never choose an interlaced mode (480-line games come out at 240p).</p>
 <p>In RetroArch, the <strong>MAME 2010</strong> core already ships that way: CRT SwitchRes reads a <code>switchres.ini</code> of the core only, on top of <code>/etc/switchres.ini</code>, in <code>~/.config/retroarch/config/MAME 2010/MAME 2010.switchres.ini</code> (from <code>config/retroarch-switchres</code>), with <code>interlace 0</code> — a 640x480 game (Namco System 12) opens at 640x240 progressive, with the image shrunk vertically, instead of 480i.</p>
-<p>The same file named after another core (<code>config/&lt;Core&gt;/&lt;Core&gt;.switchres.ini</code>) does the same for it; to go back to 480i, <code>interlace 1</code> and without the <code># FliperOS</code> line at the top (updates only rewrite the file that has it).</p>
-<h2 id="480i-hacks-640x240-filter-or-pure-480i">480i hacks: 640x240, filter or pure 480i</h2>
-<p><strong>Setup &gt; Video Setup &gt; 480i hacks</strong> is a table with one row per program and three columns, one mark per row, like the Services table. It sets how each program shows games with more than 240 lines on a 15 kHz tube:</p>
+<p>The same file named after another core (<code>config/&lt;Core&gt;/&lt;Core&gt;.switchres.ini</code>) does the same for it; to go back to interlaced, <code>interlace 1</code> and without the <code># FliperOS</code> line at the top (updates only rewrite the file that has it).</p>
+<h2 id="interlaced-hacks-640x240-filter-or-pure-interlaced">Interlaced hacks: 640x240, filter or pure interlaced</h2>
+<p><strong>Setup &gt; Video Setup &gt; Interlaced hacks</strong> is a table with one row per program and three columns, one mark per row, like the Services table. It sets how each program shows games with more than 240 lines on a 15 kHz tube:</p>
 <ul>
 <li><strong>640x240</strong>: the 640x240 progressive mode described above. No flicker, half the lines.</li>
-<li><strong>480i filter</strong>: true 480i (the program's 640x480 line in <code>emulator-modes.conf</code>, which Switchres makes interlaced on the tube) with the flicker filter at that program's level.</li>
-<li><strong>480i pure</strong>: true 480i without the filter. Sharpest, with the flicker.</li>
+<li><strong>Interlaced filter</strong>: all the lines, interlaced (the program's 25/31 kHz line in <code>emulator-modes.conf</code>, 640x480 or 496x384, which Switchres makes interlaced on the tube; GroovyMAME and RetroArch pick each game's own interlaced mode, such as 448i, 480i or 576i) with the flicker filter at that program's level.</li>
+<li><strong>Interlaced pure</strong>: the same interlaced mode without the filter. Sharpest, with the flicker.</li>
 </ul>
-<p>Marking <strong>480i filter</strong> on a row opens that program's level (light, medium, strong) and <strong>Preview on the screen</strong>. The preview opens a test screen at 640x480i through the same path as the emulators.</p>
+<p>Marking <strong>Interlaced filter</strong> on a row opens that program's level (light, medium, strong) and <strong>Preview on the screen</strong>. The preview opens a test screen at 640x480i through the same path as the emulators.</p>
 <p>It is made to flicker: one-pixel stripes and a checkerboard, small text, thin frames and a grid, a moving line and a scrolling marquee. The arrows change the level while it is on the tube, and Enter keeps it (off makes the row pure). To choose another level for a row already on the filter, mark pure and then the filter again.</p>
 <table>
 <thead>
 <tr>
 <th>Row</th>
 <th>640x240 means</th>
-<th>480i means</th>
+<th>Interlaced means</th>
 <th>Default</th>
 </tr>
 </thead>
@@ -28319,13 +28319,13 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <td>GroovyMAME</td>
 <td><code>interlace 0</code> in <code>mame.ini</code>: Switchres never picks an interlaced mode</td>
 <td><code>interlace 1</code></td>
-<td>480i filter</td>
+<td>Interlaced filter</td>
 </tr>
 <tr>
 <td>RetroArch PS1, SNES, Mega Drive, FBNeo</td>
 <td><code>interlace 0</code> in the core's own <code>switchres.ini</code></td>
 <td><code>interlace 1</code></td>
-<td>480i filter</td>
+<td>Interlaced filter</td>
 </tr>
 <tr>
 <td>RetroArch MAME 2010</td>
@@ -28343,13 +28343,13 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <td>Desktop</td>
 <td>none (the resolution comes from Screen Resolution)</td>
 <td>picom with or without the filter</td>
-<td>480i filter</td>
+<td>Interlaced filter</td>
 </tr>
 <tr>
 <td>Other programs</td>
 <td>none</td>
-<td>custom games and anything else in a 480i mode</td>
-<td>480i filter</td>
+<td>custom games and anything else in an interlaced mode</td>
+<td>Interlaced filter</td>
 </tr>
 </tbody>
 </table>
@@ -28358,13 +28358,13 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 - <code>deflicker_PROGRAM=light|medium|strong|off</code>, which the filter reads;
 - <code>deflicker=</code> for the Other programs row.</p>
 <p>PROGRAM is the command name in <code>emulator-modes.conf</code>, or the RetroArch core without <code>_libretro.so</code>. The core files are written as <code>~/.config/retroarch/config/&lt;Core&gt;/&lt;Core&gt;.switchres.ini</code> without the <code># FliperOS</code> header, so updates leave them alone. Everything counts from the next game.</p>
-<h2 id="480i-flicker-filter">480i flicker filter</h2>
-<p>When a game does run interlaced (480i on a 15 kHz tube), a line one pixel tall exists in only one of the two fields, so it is drawn 30 times a second and flickers. The filter blends each line with its neighbour before the frame goes out. Then every detail is in both fields: the flicker goes away and the image is a little softer.
+<h2 id="interlaced-flicker-filter">Interlaced flicker filter</h2>
+<p>When a game does run interlaced (any interlaced mode, whatever its size: 480i, 448i, 576i, the 496-line one Switchres makes for Model 3), a line one pixel tall exists in only one of the two fields, so it is drawn 30 times a second and flickers. The filter blends each line with its neighbour before the frame goes out. Then every detail is in both fields: the flicker goes away and the image is a little softer.
 - <strong>Medium</strong>, the default, averages each line with the next one. That is RePlayOS's "Interlaced Flicker Reduction", which samples between two lines.
 - <strong>Light</strong> (15/70/15) keeps more detail.
 - <strong>Strong</strong> (a third each from the line above, the line and the line below) hides the most.
 - <strong>Off</strong> leaves the picture sharp, with the flicker.</p>
-<p>The level is per program, in the 480i hacks table above.</p>
+<p>The level is per program, in the Interlaced hacks table above.</p>
 <p>The filter finds the level from the first of these that is set:
 1. a file named by <code>FLIPEROS_DEFLICKER_FILE</code>, re-read every 30 frames (the preview);
 2. <code>FLIPEROS_DEFLICKER</code>;
@@ -28396,7 +28396,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 - <strong>DuckStation</strong> (PlayStation): its license (CC BY-NC-ND 4.0) doesn't allow it in the image, so the official AppImage is downloaded from its GitHub (the <code>latest</code> release) and unpacked in <code>/opt/duckstation</code> (<code>config/fliperos-duckstation</code>). Chosen again when installed, it updates.</p>
 <p>Its games go in <code>~/roms/duckstation</code> (created once it is installed; a <code>~/roms/psx</code> from before is moved there), and it also lists the ones in <code>~/roms/retroarch/pcsx_rearmed</code>; the BIOS is the one in <code>~/bios</code>, the same as RetroArch's.</p>
 <p>Each launch (<code>fliperos-x11-run</code>) sets full screen, <code>AspectRatio = Stretch To Fill</code> and the BIOS folder; the first one also skips its setup wizard and puts both panels on SDL (Cross/Circle/Square/Triangle on A/B/X/Y, as in PCSX2).</p>
-<p>Its renderer stays on Automatic, which picks <strong>Vulkan</strong> where there is one (amdgpu, Intel; radeon has none, and it uses OpenGL); the <a href="#480i-flicker-filter">480i flicker filter</a> works on either.</p>
+<p>Its renderer stays on Automatic, which picks <strong>Vulkan</strong> where there is one (amdgpu, Intel; radeon has none, and it uses OpenGL); the <a href="#interlaced-flicker-filter">interlaced flicker filter</a> works on either.</p>
 <p>A renderer chosen in DuckStation itself stays. Esc or Select+Start opens its menu. Opened from a frontend it closes with the game (<code>-batch</code>); from the desktop menu it opens in Big Picture. Not seen on the CRT yet.
 - <strong>KOF Final Attack (Ikemen GO, 4:3)</strong>: below.
 - The others come compiled in the image; one that is missing (an image built without it) can't be installed from here.</p>
@@ -30489,7 +30489,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </tr>
 <tr>
 <td><code>config/fliperos-osd</code>, <code>config/fliperos-osd.service</code></td>
-<td>The on-screen menu over games and frontends: volume, 480i filter, geometry and colour</td>
+<td>The on-screen menu over games and frontends: volume, Interlaced filter, geometry and colour</td>
 </tr>
 <tr>
 <td><code>config/fliperos-calibrate</code></td>

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# O filtro de flicker do 480i e a saturacao/matiz por software no desktop
+# O filtro de flicker do entrelacado e a saturacao/matiz por software no desktop
 # (LXDE) e nos X onde a camada dos emuladores nao entra (o Fightcade: o Wine
 # e de 32 bits, o Electron nao a aceita): as mesmas contas da camada
 # (config/fliperos-deflicker.c), como shader de janela do picom. O desktop
 # desenha pelo X, sem OpenGL: a camada nao o alcanca, o compositor sim.
 #   - o filtro: so com o modo da tela entrelacado e o filtro ligado para o
-#     programa (Setup > Video Setup > 480i hacks: deflicker_NOME= no
+#     programa (Setup > Video Setup > Interlaced hacks: deflicker_NOME= no
 #     fliperos.conf; fora do desktop, sem a linha dele, o deflicker= dos
 #     outros programas, como na camada);
 #   - a matriz de cor: so numa placa sem CTM (color_ctm=sw, de Setup > Video

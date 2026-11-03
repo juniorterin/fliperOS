@@ -35,7 +35,7 @@ args=()
 # shellcheck disable=SC2206 # uma opcao por palavra
 args+=(${FLIPEROS_SWITCHRES_OPTS:-})
 emulator_command=$(printf '%q ' "$@")
-# O filtro de flicker do 480i (config/fliperos-deflicker.c): so no emulador,
+# O filtro de flicker do entrelacado (config/fliperos-deflicker.c): so no emulador,
 # nao no Xorg nem no Switchres. Os do Wine (Fightcade) sao de 32 bits e nao
 # carregam a camada de 64, e o Electron da sala do Fightcade nao a aceita:
 # neles o filtro e o do picom, o mesmo do desktop, por cima da tela toda

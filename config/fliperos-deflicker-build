@@ -1,5 +1,5 @@
 #!/bin/bash
-# Compila o filtro de flicker do 480i (config/fliperos-deflicker.c) na
+# Compila o filtro de flicker do entrelacado (config/fliperos-deflicker.c) na
 # biblioteca que o fliperos-kms-run e o fliperos-x11-client carregam nos
 # emuladores, e a calibracao de cor (config/fliperos-color.c) no programa
 # fliperos-color; e a fliperos-dropmaster.c (a tela ao vivo devolve a tela

@@ -367,7 +367,7 @@ const ptBR: Messages = {
     video: {
       meta: {
         title: 'CRT, 15 kHz, Switchres e baixa latência no FliperOS',
-        description: 'O FliperOS controla um CRT de arcade nativamente: kernel 6.18 LTS com os patches de 15 kHz, Switchres com o modo de cada jogo, ajustes de cor e 480i, modo de baixa latência, monitor vertical e dois ou três CRTs para jogos de várias telas.',
+        description: 'O FliperOS controla um CRT de arcade nativamente: kernel 6.18 LTS com os patches de 15 kHz, Switchres com o modo de cada jogo, ajustes de cor e de entrelaçado, modo de baixa latência, monitor vertical e dois ou três CRTs para jogos de várias telas.',
       },
       kicker: 'CRT, 15 kHz e vídeo',
       title: 'Pixel perfeito num tubo de verdade.',
@@ -375,7 +375,7 @@ const ptBR: Messages = {
       rows: [
         { shot: 'gui/radio', title: 'CRT e 15 kHz', text: 'Kernel 6.18 LTS com os patches de 15 kHz. A ISO de instalação já sobe em 15 kHz, e o boot pode ser configurado para monitores de 15, 25 ou 31 kHz, ou para LCD.', points: ['15 kHz', '25 kHz', '31 kHz', 'LCD'] },
         { shot: '', title: 'Switchres', text: 'Cada jogo ganha o seu modo: resolução e taxa de atualização são geradas na hora para ficar o mais perto possível do hardware original.', points: [] },
-        { shot: 'anim/setup-colour', title: 'Cor e 480i', text: 'Gama e cor mudam na tela enquanto você ajusta, e os jogos de 480 linhas podem ganhar um filtro de flicker, por programa.', points: [] },
+        { shot: 'anim/setup-colour', title: 'Cor e entrelaçado', text: 'Gama e cor mudam na tela enquanto você ajusta, e os jogos entrelaçados podem ganhar um filtro de flicker, por programa.', points: [] },
         { shot: 'anim/setup-latency', title: 'Baixa latência', text: 'Dois modos em Setup > System > Latency. O Standard lê o USB a 1000 Hz e ajusta GroovyMAME e RetroArch; o Low latency soma preempção total do kernel, frame delay automático e preemptive frames. O Check this computer compara o seu PC com o que ele pede.', points: ['USB a 1000 Hz', 'Frame delay', 'Preemptive frames'] },
         { shot: '', title: 'Monitor vertical', text: 'Deite o tubo de lado e o frontend, o menu do Setup, a tela de boot e o terminal ficam em pé com ele. Ainda não visto num tubo de verdade.', points: [] },
       ],
@@ -467,7 +467,7 @@ const ptBR: Messages = {
         { shot: '', title: 'AMD: 15 kHz nativo', text: 'Radeon HD 2000 a R7/R9 300 com VGA ou DVI-I fazem 15 kHz nativo no radeon ou no amdgpu. Boas escolhas baratas: HD 5450, HD 6450, HD 7750, R7 240, R7 250. As RX e as APUs Ryzen não têm saída analógica e precisam de um conversor ativo de DisplayPort ou HDMI para VGA.', points: ['radeon', 'amdgpu', '320x240 nativo'] },
         { shot: 'gui/video-driver', title: 'NVIDIA: nouveau ou o driver próprio', text: 'O nouveau é o padrão, e um teste no tubo descobre se a placa faz 320x240. O driver próprio da NVIDIA (GTX 900 e mais novas, compilado pelo DKMS para o kernel de 15 kHz) roda o 3D a toda a velocidade. Ele fica em teste: se você não confirmar a imagem, o FliperOS volta ao nouveau.', points: ['Teste de baixa resolução', 'Driver em teste', 'DKMS'] },
         { shot: '', title: 'Intel HD, com seus limites', text: 'Instale e acerte o vídeo antes num monitor de frequência padrão e só depois ligue a CRT. Visto num CRT pela saída VGA de um Core i3-540: o frontend, o Setup, o RetroArch, o GroovyMAME e o Attract-Mode Plus. Uma entrada de boot, Intel 15 kHz 240p, sobe em 1280x240 progressivo. A placa só tem OpenGL 2.1 e não tem Vulkan, e o processador precisa ter vídeo integrado.', points: ['1280x240 progressivo', 'OpenGL 2.1', 'Sem Vulkan'] },
-        { shot: 'gui/unsupported', title: 'Um X vermelho no que a placa não roda', text: 'O EmulationStation-DE, o filtro de 480i, o PCSX2, o Dolphin e o DuckStation pedem OpenGL 3 ou Vulkan. O Setup os marca com um X vermelho, diz o motivo e pergunta antes de abrir, com Não como padrão.', points: ['ES-DE', 'Filtro 480i', 'PCSX2', 'Dolphin', 'DuckStation'] },
+        { shot: 'gui/unsupported', title: 'Um X vermelho no que a placa não roda', text: 'O EmulationStation-DE, o filtro do entrelaçado, o PCSX2, o Dolphin e o DuckStation pedem OpenGL 3 ou Vulkan. O Setup os marca com um X vermelho, diz o motivo e pergunta antes de abrir, com Não como padrão.', points: ['ES-DE', 'Filtro 480i', 'PCSX2', 'Dolphin', 'DuckStation'] },
         { shot: '', title: 'Vulkan no AMD', text: 'No amdgpu, o Flycast e o Dolphin rodam em Vulkan, e o PCSX2 e o DuckStation o escolhem sozinhos. O RetroArch fica no glcore, porque a saída Vulkan dele não troca os modos do CRT. De volta ao radeon, cada um volta ao renderizador de fábrica.', points: ['Flycast', 'Dolphin', 'PCSX2', 'DuckStation'] },
         { shot: '', title: 'Trocou a placa? Ele percebe', text: 'A cada boot o sistema confere se a placa de vídeo ainda é a que foi configurada. Se mudou, grava um modo seguro antes de qualquer imagem, reinicia uma vez e oferece o teste das saídas de vídeo de novo.', points: ['Modo seguro', 'Teste das saídas'] },
       ],
@@ -493,7 +493,7 @@ const ptBR: Messages = {
       { id: 'play', title: 'Escolha um jogo e jogue', text: 'Busque os jogos de cada sistema com os seus filtros e favoritos, veja as imagens, os botões e a história de cada jogo de arcade, e aperte Jogar: ele abre no tubo.' },
       { id: 'live', title: 'Veja ao vivo', text: 'A tela do gabinete no navegador a 15, 30 ou 60 quadros por segundo, mais o FPS do jogo e um screenshot do tubo.' },
       { id: 'obs', title: 'Pronto para o OBS', text: 'Endereços para uma Browser Source do OBS: a tela ao vivo em 4:3 com som, o marquee do jogo em andamento, com os recordes e o placar do versus, e o seu controle acendendo na tela.' },
-      { id: 'settings', title: 'Ajustes com o jogo aberto', text: 'Sliders de cor que mudam o jogo na tela enquanto você mexe, os jogos 480i de cada emulador, os serviços, o modo de latência e o volume.' },
+      { id: 'settings', title: 'Ajustes com o jogo aberto', text: 'Sliders de cor que mudam o jogo na tela enquanto você mexe, os hacks de entrelaçado de cada emulador, os serviços, o modo de latência e o volume.' },
       { id: 'files', title: 'Seus jogos pelo navegador', text: 'Envie e baixe jogos, BIOS, imagens e telas de boot, com o andamento, direto na pasta certa.' },
       { id: 'romfilter', title: 'Jogos, BIOS e arte', text: 'Filtre um romset do MAME pelos controles e pela tela do seu gabinete, baixe só os jogos que passam e as BIOS que faltam, busque a arte deles com o login do site digitado num teclado de verdade, e instale ou atualize emuladores.' },
       { id: 'status', title: 'O estado de tudo', text: 'O modo de vídeo e a modeline no tubo, CPU, GPU, temperaturas, memória, discos, rede, processos e logs.' },

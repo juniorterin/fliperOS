@@ -114,10 +114,10 @@ settings_list() {
   while IFS='|' read -r key label state help allowed; do
     opts=""
     [[ ,$allowed, == *,240p,* ]] && opts+="240p=640x240;"
-    [[ ,$allowed, == *,filter,* ]] && opts+="filter=480i filter;"
-    [[ ,$allowed, == *,pure,* ]] && opts+="pure=480i pure;"
-    printf 'mode480.%s|480i hacks|%s|choice|%s|%s|%s\n' "$key" "$label" "$state" "${opts%;}" "$help"
-    printf 'deflicker.%s|480i hacks|%s: filter level|choice|%s|light=Light;medium=Medium;strong=Strong|The flicker filter level when 480i filter is marked.\n' \
+    [[ ,$allowed, == *,filter,* ]] && opts+="filter=Interlaced filter;"
+    [[ ,$allowed, == *,pure,* ]] && opts+="pure=Interlaced pure;"
+    printf 'mode480.%s|Interlaced hacks|%s|choice|%s|%s|%s\n' "$key" "$label" "$state" "${opts%;}" "$help"
+    printf 'deflicker.%s|Interlaced hacks|%s: filter level|choice|%s|light=Light;medium=Medium;strong=Strong|The flicker filter level when Interlaced filter is marked.\n' \
       "$key" "$label" "$(mode480_level "$key")"
   done < <(mode480_rows)
   while IFS='|' read -r key label min max _ step help; do

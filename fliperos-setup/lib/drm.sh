@@ -298,7 +298,7 @@ gpu_needs() {
 }
 
 # gpu_unsupported_label ROTULO MOTIVO imprime o rotulo de um menu com o
-# motivo e a marca: "480i hacks (Needs OpenGL 3.0, ...) (not supported)".
+# motivo e a marca: "Interlaced hacks (Needs OpenGL 3.0, ...) (not supported)".
 gpu_unsupported_label() {
   printf '%s (%s) (not supported)\n' "$1" "$2"
 }

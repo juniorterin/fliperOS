@@ -592,7 +592,7 @@ class Menu:
         if self.mode and self.mode["interlace"]:
             conf = read_conf()
             program, core = self.screen.get("program", ""), self.screen.get("core", "")
-            rows.append(Row("choice", "480i filter", filter_level(conf, program, core),
+            rows.append(Row("choice", "Interlaced filter", filter_level(conf, program, core),
                             options=[(v, LABELS[v]) for v in FILTER_LEVELS], change=self.set_filter))
         if read_conf().get("monitor", "") != "lcd" and self.mode:
             rows.append(Row("page", "Geometry", action=lambda: self.open_page("geometry")))

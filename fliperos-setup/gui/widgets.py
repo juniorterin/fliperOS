@@ -72,6 +72,22 @@ def wrap(s, w):
     return lines
 
 
+def hyphenate(s, w):
+    """wrap, e a palavra mais larga que w quebrada com hifen (INTER- LACED
+    no cabecalho estreito de uma coluna). So palavras de letras: 640X240
+    fica inteiro."""
+    words = []
+    for word in s.split():
+        while word.isalpha() and width(word) > w and len(word) > 2:
+            cut = len(word) - 1
+            while cut > 1 and width(word[:cut] + "-") > w:
+                cut -= 1
+            words.append(word[:cut] + "-")
+            word = word[cut:]
+        words.append(word)
+    return wrap(" ".join(words), w)
+
+
 def big(s, scale, colors):
     """O texto ampliado, com uma cor por linha de pixels (colors e uma cor
     ou uma lista, de cima para baixo)."""
@@ -1637,11 +1653,12 @@ class Grid:
         scrolls = pitch < self.PITCH
         right = T.SAFE_X + T.SAFE_W - (12 if scrolls else 0)
         x0 = right - col_w * len(self.columns)
-        for i, (_, label) in enumerate(self.columns):
-            for j, part in enumerate(wrap(label.upper(), col_w - 4)[:2]):
+        heads = [hyphenate(label.upper(), col_w - 4)[:3] for _, label in self.columns]
+        for i, parts in enumerate(heads):
+            for j, part in enumerate(parts):
                 cx = x0 + i * col_w + col_w // 2
                 text(surf, part, T.CYAN, cx - width(part) // 2, y + j * 9)
-        y += 22
+        y += 4 + 9 * max(2, max(len(parts) for parts in heads))
         if scrolls:
             # A linha escolhida sempre a vista.
             pitch = self.PITCH

@@ -407,23 +407,23 @@ screen_mm_changed() {
 
 # screen_video_setup e o menu; ao sair, no sistema instalado, grava a linha
 # do kernel e oferece reiniciar.
-# screen_mode480: o metodo de cada aplicacao para os jogos de 480 linhas
+# screen_mode480: o metodo de cada aplicacao para os jogos entrelacados
 # (lib/video.sh, mode480_*), na tabela com uma marca por linha, como a dos
 # servicos. Cada mudanca e gravada na hora (UI_GRID_LIVE), sem Enter: marcar
-# "480i filter" abre antes o nivel do filtro daquela aplicacao
+# "Interlaced filter" abre antes o nivel do filtro daquela aplicacao
 # (screen_deflicker_level), com o preview, e cancelar deixa a linha como
 # estava. A tabela volta na mesma linha; Esc sai.
 screen_mode480() {
-  local title="480i hacks" text result key state level
+  local title="Interlaced hacks" text result key state level
   local -a rows
-  text="How each program shows 480-line games. Changes save at once."
+  text="How each program shows interlaced games. Changes save at once."
   [[ $(conf_get frequency 2> /dev/null) == 15* ]] ||
     text="Not a 15 kHz monitor: these only count on one."
   key=""
   while true; do
     mapfile -t rows < <(mode480_rows)
     result=$(UI_GRID_LIVE=1 UI_GRID_CURSOR=$key ui_grid "$title" "$text" \
-      "240p|640x240;filter|480i filter;pure|480i pure" "${rows[@]}")
+      "240p|640x240;filter|Interlaced filter;pure|Interlaced pure" "${rows[@]}")
     (($? == 2)) || return 0
     key=${result%%$'\n'*}
     state=$(tr ',' '\n' <<< "${result#*$'\n'}" | sed -n "s/^$key=//p")
@@ -562,7 +562,7 @@ screen_deflicker_level() {
   label=$(mode480_field "$key" 2)
   while true; do
     choice=$(ui_radio "Flicker filter: $label" \
-      "In 480i a thin line exists in one field only and flickers. The filter blends each line with its neighbour: no flicker, a little softer." \
+      "Interlaced, a thin line exists in one field only and flickers. The filter blends each line with its neighbour: no flicker, a little softer." \
       "$level" \
       "preview|Preview on the screen (arrows change the level)" \
       "light|Light (sharpest)" \
@@ -648,12 +648,12 @@ screen_video_setup() {
     # a orientacao vai junto da resolucao, e Monitors so com mais de um.
     monitors=()
     (($(mm_count) > 1)) && monitors=("Monitors|$(mm_count)")
-    # O filtro de flicker do 480i pede OpenGL 3.0 (o log do programa diz "OpenGL
+    # O filtro de flicker do entrelacado pede OpenGL 3.0 (o log do programa diz "OpenGL
     # 3.0 or newer is needed; filter off"): numa Intel HD de 1a geracao ele
     # fica desligado, e a tela leva a marca de nao suportado.
-    mode480_label="480i hacks"
+    mode480_label="Interlaced hacks"
     if mode480_why=$(gpu_needs 3.0); then
-      mode480_label=$(gpu_unsupported_label "480i hacks" "$mode480_why")
+      mode480_label=$(gpu_unsupported_label "Interlaced hacks" "$mode480_why")
     fi
     summary=$(ui_fields \
       "Monitor|$(video_monitor_label)" \
@@ -667,7 +667,7 @@ screen_video_setup() {
       "geometry|Geometry|Center and size the picture on the tube, with a test grid." \
       "geometry_reset|Reset Geometry|Undo the geometry: back to the monitor preset." \
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
-      "mode480|$mode480_label|For each program: 640x240, 480i with the flicker filter, or pure 480i." \
+      "mode480|$mode480_label|Per program: 640x240, or interlaced with or without the filter." \
       "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour and hue." \
       "retest|Test the video outputs|Run the output test again after a card change." \
       "${driver[@]}" \
@@ -683,7 +683,7 @@ screen_video_setup() {
       geometry_reset) screen_geometry_reset ;;
       monitors) screen_multi_monitor ;;
       mode480)
-        if [[ -z $mode480_why ]] || gpu_unsupported_ok "480i hacks" "480i hacks" "$mode480_why"; then
+        if [[ -z $mode480_why ]] || gpu_unsupported_ok "Interlaced hacks" "Interlaced hacks" "$mode480_why"; then
           screen_mode480
         fi
         ;;

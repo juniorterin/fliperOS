@@ -24,11 +24,11 @@ Open **http://fliperos.local** on a phone or PC on the same network (user `flipe
 
 - **pick a game and play it** on the tube, with the pictures, history and buttons of each arcade game from the Arcade Database;
 - **watch the cabinet live** in the browser, and put the live screen and the game's marquee in OBS;
-- **change colour, 480i hacks and other settings** while a game runs;
+- **change colour, Interlaced hacks and other settings** while a game runs;
 - **copy games, BIOS and artwork**, filter a MAME romset and download only what suits your cabinet;
 - **check the system** (video mode and modeline, temperatures, logs), preview the marquee (Pixelcade or ZeDMD) with no hardware, or open a terminal.
 
-At the cabinet, hold **Start and Down** for a second in any game to open the [on-screen menu](docs/wiki/Installed-system.md#on-screen-menu): volume, 480i filter, geometry and colour, over the running game.
+At the cabinet, hold **Start and Down** for a second in any game to open the [on-screen menu](docs/wiki/Installed-system.md#on-screen-menu): volume, Interlaced filter, geometry and colour, over the running game.
 
 Every page in detail: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 
@@ -45,7 +45,7 @@ This guide goes from an empty cabinet to a game on screen. Each step says what y
 ### 1. What you need
 
 - **A PC (amd64)** for the cabinet. For arcade games up to the 90s and consoles up to the PlayStation, a 2-core CPU, 4 GB of RAM and a 16 GB disk are enough. For PS2, Model 3 and Dreamcast, a 4-core CPU with AVX2 (Core i7-7700, Ryzen 5 3600 or newer), 16 GB and an SSD. The disk you install to is **erased completely**.
-- **A graphics card with analog output.** The best fit is an **AMD Radeon with VGA or DVI-I** from the HD 2000 series to the R7/R9 (GCN 1.0), which generates 15 kHz natively. Intel and NVIDIA work at 15 kHz with "super resolution" modes (an Intel HD of the first generation has only OpenGL 2.1: no EmulationStation-DE, no 480i flicker filter, no Vulkan; see its limits in the wiki); an NVIDIA with VGA or DVI-I (GeForce 8 to GTX 900) gets native resolutions if it passes the low resolution test. Cards without an analog output need a DisplayPort/HDMI to VGA converter. The full list is in [Video cards](https://github.com/juniorterin/fliperOS/wiki/Video-cards).
+- **A graphics card with analog output.** The best fit is an **AMD Radeon with VGA or DVI-I** from the HD 2000 series to the R7/R9 (GCN 1.0), which generates 15 kHz natively. Intel and NVIDIA work at 15 kHz with "super resolution" modes (an Intel HD of the first generation has only OpenGL 2.1: no EmulationStation-DE, no interlaced flicker filter, no Vulkan; see its limits in the wiki); an NVIDIA with VGA or DVI-I (GeForce 8 to GTX 900) gets native resolutions if it passes the low resolution test. Cards without an analog output need a DisplayPort/HDMI to VGA converter. The full list is in [Video cards](https://github.com/juniorterin/fliperOS/wiki/Video-cards).
   - **Intel HD: you need a monitor at a standard frequency first.** The boot menu and the installation are drawn at 31 kHz, and an Intel card does not make low clocks. Install FliperOS and set the video with a regular VGA monitor (an LCD or a PC monitor), and only then power off and connect the CRT.
 - **The monitor**: an arcade CRT (15 kHz), a TV through a VGA to SCART/component adapter, or a 25/31 kHz monitor. An LCD also works.
 - **A USB stick of 4 GB or more** (it will be erased).

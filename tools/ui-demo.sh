@@ -127,8 +127,8 @@ demo_services() {
   screen_services
 }
 
-# Video Setup > 480i hacks num gabinete de 15 kHz, com tudo instalado e
-# alguns programas ja em 480i.
+# Video Setup > Interlaced hacks num gabinete de 15 kHz, com tudo instalado e
+# alguns programas ja entrelacados.
 demo_mode480() {
   export RA_HOME=$FAKE/retroarch
   mode480_installed() { return 0; }

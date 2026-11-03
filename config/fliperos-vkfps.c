@@ -1,6 +1,6 @@
 /*
  * fliperos-vkfps: a camada dos programas em Vulkan: o FPS para o painel web
- * (config/fliperos-web) e o filtro de flicker do 480i.
+ * (config/fliperos-web) e o filtro de flicker do entrelacado.
  *
  * A camada OpenGL (config/fliperos-deflicker.c) conta as trocas de quadro do
  * OpenGL e filtra a imagem delas; um emulador em Vulkan (o Flycast, o PCSX2, o
@@ -17,7 +17,7 @@
  *
  * O filtro: com o modo de video da tela entrelacado (o DRM diz), antes de ir
  * para a tela a imagem e copiada e desenhada de volta pelos mesmos pesos e os
- * mesmos niveis da camada OpenGL (Setup > Video Setup > 480i hacks): do
+ * mesmos niveis da camada OpenGL (Setup > Video Setup > Interlaced hacks): do
  * FLIPEROS_DEFLICKER_FILE, do FLIPEROS_DEFLICKER, do deflicker_PROGRAMA= e do
  * deflicker= no fliperos.conf; FLIPEROS_DEFLICKER_FORCE=1 filtra sem modo
  * entrelacado. A saturacao e o matiz por software (color_ctm=sw, a placa sem a

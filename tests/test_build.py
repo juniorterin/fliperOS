@@ -5559,7 +5559,7 @@ class PanningTests(unittest.TestCase):
 
 
 class DeflickerTests(unittest.TestCase):
-    """O filtro de flicker do 480i: a camada de OpenGL (config/fliperos-deflicker.c)
+    """O filtro de flicker do entrelacado: a camada de OpenGL (config/fliperos-deflicker.c)
     no LD_PRELOAD dos emuladores, o picom com o mesmo filtro no desktop e o
     OpenGL fixo no PCSX2 e no Dolphin. O filtro em si (as listras na tela) e
     o tools/deflicker-test.sh, num Xvfb."""
@@ -5601,7 +5601,7 @@ class DeflickerTests(unittest.TestCase):
         self.assertLess(MKISO.index('\nbuild_flycast_chroot\n'), MKISO.index('\nbuild_deflicker_chroot\n'))
         update = (ROOT / 'tools/cabinet-update.sh').read_text()
         # Recompilado quando o fonte muda (pelo sha256, nao pela data).
-        self.assertIn('build_native "480i flicker filter (fliperos-deflicker)" "$src/config/fliperos-deflicker.c"',
+        self.assertIn('build_native "Interlaced flicker filter (fliperos-deflicker)" "$src/config/fliperos-deflicker.c"',
                       update)
         self.assertIn('$(cat "$out.source-sha256" 2> /dev/null) == "$sum"', update)
         for pkg in ('libdrm-dev', 'libgl-dev', 'libegl-dev', 'picom'):
@@ -5652,7 +5652,7 @@ class DeflickerTests(unittest.TestCase):
         self.assertNotIn('deflicker_on', (ROOT / 'config/fliperos-x11-run').read_text())
 
     def test_480i_per_program_on_15khz(self):
-        # Setup > Video Setup > 480i hacks: com filtro ou puro, o modo da
+        # Setup > Video Setup > Interlaced hacks: com filtro ou puro, o modo da
         # coluna dos outros monitores (640x480, entrelacado no tubo); sem
         # nada ou em 240p, o 640x240 de sempre. Supermodel no seu 496x384.
         for conf, mode in (('', 'MODE=640 240 60'), ('mode480_flycast=240p\n', 'MODE=640 240 60'),
@@ -5694,7 +5694,7 @@ class DeflickerTests(unittest.TestCase):
         # Medio por padrao: a media de duas linhas, como no RePlayOS.
         self.assertIn('const vec3 w = vec3(0.50, 0.50, 0.00);', shader)
         self.assertIn('default_post_processing(', shader)
-        # O nivel da linha Desktop da tabela 480i hacks; o deflicker= e o dos
+        # O nivel da linha Desktop da tabela Interlaced hacks; o deflicker= e o dos
         # outros programas.
         self.assertIn('vec3(0.15, 0.70, 0.15)', self.desktop('deflicker=off\ndeflicker_desktop=light\n')[1])
         self.assertEqual(self.desktop('deflicker_desktop=off\n'), ('', ''))
@@ -12241,6 +12241,32 @@ class GuiMenuIconTests(unittest.TestCase):
         self.assertEqual(missing, {}, 'draw these in gui/theme.py, or alias them to an existing icon')
 
 
+class GuiGridHeaderTests(unittest.TestCase):
+    """O cabecalho de uma coluna do ui_grid grafico (52 px): a palavra mais
+    larga que a coluna (INTERLACED, de Interlaced hacks) quebra com hifen em
+    vez de invadir a coluna do lado."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_long_words_break_with_a_hyphen(self):
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        try:
+            import pygame
+            import widgets
+        finally:
+            sys.path.remove(str(self.GUI))
+        pygame.font.init()
+        parts = widgets.hyphenate("INTERLACED FILTER", 48)
+        self.assertEqual(parts, ["INTER-", "LACED", "FILTER"])
+        self.assertTrue(all(widgets.width(p) <= 48 for p in parts))
+        self.assertEqual(widgets.hyphenate("640X240", 48), ["640X240"])
+        self.assertEqual(widgets.hyphenate("AFTER BOOT", 48), widgets.wrap("AFTER BOOT", 48))
+        self.assertIn('"240p|640x240;filter|Interlaced filter;pure|Interlaced pure"',
+                      (ROOT / 'fliperos-setup/screens/video-setup.sh').read_text())
+
+
 class GuiNotSupportedTests(unittest.TestCase):
     """Um item "(not supported)" de um menu do Setup grafico: a dica traz o
     motivo e o Menu desenha um X vermelho no icone (gui/serve.py, widgets.py)."""
@@ -14692,7 +14718,7 @@ class OsdTests(unittest.TestCase):
 
     def test_main_page_shows_the_filter_only_in_an_interlaced_mode(self):
         menu, _ = self.menu()
-        self.assertEqual(self.labels(menu), ['Volume', '480i filter', 'Geometry', 'Colour', 'Close'])
+        self.assertEqual(self.labels(menu), ['Volume', 'Interlaced filter', 'Geometry', 'Colour', 'Close'])
         menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
         self.assertEqual(self.labels(menu), ['Volume', 'Geometry', 'Colour', 'Close'])
         # Num LCD nao ha geometria para ajustar.

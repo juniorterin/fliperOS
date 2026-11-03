@@ -5,7 +5,7 @@ What you can do from the couch:
 - **Pick a game and play it** on the tube, with the pictures, the history and the buttons of each arcade game from the Arcade Database, your favourites and the game filters.
 - **See what is playing**, with the FPS, and take a screenshot of the tube.
 - **Watch the cabinet live** in the browser, and put the live screen and the game's marquee in OBS.
-- **Change settings while you play**: colour, 480i hacks, services, latency mode, volume.
+- **Change settings while you play**: colour, Interlaced hacks, services, latency mode, volume.
 - **Copy games, BIOS and artwork** through the browser: upload, download, new folders.
 - **Filter a MAME romset** and **download** only the games that suit your cabinet, plus the **BIOS** your games lack.
 - **Scrape the art** of your games, typing the site's login on a real keyboard, and download the art packs.
@@ -126,10 +126,10 @@ The browser never keeps the panel: its pages, code, icons and fonts are sent wit
   - The card has a CSS editor with syntax colours. The preview follows each key you type, and *Demo in the preview* presses the buttons by itself, so the look can be tried with nobody at the cabinet. *Format* lays the CSS out with one property per line (Ctrl+Z undoes it). *Save* writes it to `/etc/fliperos/input-overlay.css`, and the pages open in OBS take it at once, with no need to refresh the source; *Factory CSS* goes back to `input.css`.
   - The classes: `.pad` (`.p1`, `.p2`, `.active` while something is pressed), `.label`, `.stick` (`.up` `.down` `.left` `.right`, and `data-dir` such as `up-left`) with `.gate` and `.ball`, and `.button` (`.b1` to `.b6`, `.start`, `.coin`; `.on` while pressed). The sizes use `--u`: one panel is 200 × 100 `--u`.
   - How it works: while at least one controller page is open, the panel runs one `fliperos-buttons watch` at low priority. It sends the panel a line each time the pressed controls change, and the panel passes it to the pages as Server-Sent Events. It stops when the last page closes.
-- **Settings:** the Setup settings that are safe to change over the network, grouped as System, Services, 480i hacks and Colour.
+- **Settings:** the Setup settings that are safe to change over the network, grouped as System, Services, Interlaced hacks and Colour.
   - System: the default launcher, latency mode, debug mode, the volume leveler and menu sounds.
   - Services: the whole services table.
-  - 480i hacks: a card per program, with an explanation of each method at the top. The method is a row of buttons (640x240, 480i with filter, 480i pure), and the filter strength (light, medium, strong) shows only when the filter is on.
+  - Interlaced hacks: a card per program, with an explanation of each method at the top. The method is a row of buttons (640x240, Interlaced with filter, Interlaced pure), and the filter strength (light, medium, strong) shows only when the filter is on.
   - Colour: every colour calibration value and **Back to the defaults**. A slider saves while it moves, so the game on screen changes with it; the **−** and **+** on its sides move it one step per tap (a run of taps saves once, just after the last).
   - Each change is saved and applied at once, through the same functions as the Setup screens (`fliperos-setup --settings` and `--setting KEY VALUE`, `lib/system.sh`). Debug and latency rewrite the kernel line the way their screens do; their kernel part counts after a restart.
   - Monitor, resolution and video driver are not here, since a wrong choice can leave the cabinet without a picture. They stay in the Setup, on the cabinet screen.

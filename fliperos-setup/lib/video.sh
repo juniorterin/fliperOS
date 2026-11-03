@@ -1059,13 +1059,15 @@ video_preset_range() {
     sed -n 's/^Switchres: Monitor range //p' | head -1 | grep .
 }
 
-# ── Jogos de 480 linhas num tubo de 15 kHz ───────────────────────
-# Setup > Video Setup > 480i hacks: o metodo de cada aplicacao para o que tem
-# 480 linhas, numa tabela de tres colunas:
+# ── Jogos entrelacados num tubo de 15 kHz ────────────────────────
+# Setup > Video Setup > Interlaced hacks: o metodo de cada aplicacao para o
+# que tem mais de 240 linhas (480, 448, 384...), numa tabela de tres colunas:
 #   240p    o hack de 640x240 progressivo (sem flicker, metade das linhas)
-#   filter  480i com o filtro de flicker (config/fliperos-deflicker.c), no
-#           nivel da aplicacao (light, medium, strong)
-#   pure    480i sem o filtro (nitido, com o flicker)
+#   filter  entrelacado com o filtro de flicker (config/fliperos-deflicker.c),
+#           no nivel da aplicacao (light, medium, strong)
+#   pure    entrelacado sem o filtro (nitido, com o flicker)
+# O filtro liga em qualquer modo entrelacado (o flag do modo no DRM ou no
+# xrandr), de qualquer altura, nao so no 640x480i.
 # Gravado no fliperos.conf: mode480_PROGRAMA=240p|filter|pure, que o
 # fliperos-x11-run (o modo), o fliperos-fightcade e o
 # fliperos-desktop-deflicker leem, e deflicker_PROGRAMA=nivel|off, que a
@@ -1089,7 +1091,7 @@ mode480_table() {
   cat << 'TABLE'
 flycast|Flycast|flycast|240p,filter,pure|240p|x11|Dreamcast, Naomi, Atomiswave.
 pcsx2|PCSX2|pcsx2|240p,filter,pure|240p|x11|PlayStation 2.
-duckstation|DuckStation|duckstation|240p,filter,pure|240p|x11|PlayStation (the few 480i games, like Tekken 3 menus or Tobal 2).
+duckstation|DuckStation|duckstation|240p,filter,pure|240p|x11|PlayStation (the few interlaced games, like Tekken 3 menus or Tobal 2).
 dolphin|Dolphin|dolphin-emu|240p,filter,pure|240p|x11|GameCube and Wii.
 laserdisc|Hypseus Singe|hypseus singe|240p,filter,pure|240p|x11|Laserdisc games.
 model3|Supermodel|supermodel|240p,filter,pure|240p|x11|Sega Model 3 (384 lines).
@@ -1101,8 +1103,8 @@ snes|RetroArch SNES|snes9x|240p,filter,pure|filter|core:Snes9x|The few interlace
 megadrive|RA Mega Drive|genesis_plus_gx|240p,filter,pure|filter|core:Genesis Plus GX|Interlaced Mega Drive games, like Sonic 2 split screen (Genesis Plus GX core).
 fbneo|RetroArch FBNeo|fbneo|240p,filter,pure|filter|core:FinalBurn Neo|Arcade games with more than 240 lines in the FBNeo core.
 fightcade|Fightcade Flycast|fightcade-flycast|240p,filter,pure|240p|fightcade|Flycast matches in Fightcade 2.
-desktop|Desktop|desktop|filter,pure|filter|desktop|The LXDE desktop, when Screen Resolution puts it in a 480-line mode.
-other|Other programs|other|filter,pure|filter|other|Custom games and any other program in a 480i mode.
+desktop|Desktop|desktop|filter,pure|filter|desktop|The LXDE desktop, when Screen Resolution puts it in an interlaced mode.
+other|Other programs|other|filter,pure|filter|other|Custom games and any other program in an interlaced mode.
 TABLE
 }
 
@@ -1173,8 +1175,8 @@ mode480_rows() {
     state=$(mode480_state "$key")
     case $state in
       240p) now="Now: 640x240." ;;
-      filter) now="Now: 480i, filter $(mode480_level "$key")." ;;
-      *) now="Now: 480i, no filter." ;;
+      filter) now="Now: interlaced, filter $(mode480_level "$key")." ;;
+      *) now="Now: interlaced, no filter." ;;
     esac
     mode480_installed "$key" || now+=" Not installed."
     printf '%s|%s|%s|%s|%s\n' "$key" "$label" "$state" "$help $now" "$allowed"
@@ -1207,7 +1209,7 @@ mode480_set() {
       ;;
     core:*) mode480_core_ini "${kind#core:}" "$([[ $state == 240p ]] && echo 0 || echo 1)" ;;
   esac
-  log_info "480i: $key = $state ($level)"
+  log_info "Interlaced: $key = $state ($level)"
 }
 
 # mode480_core_ini NOME 0|1 grava o switchres.ini do core: o CRT SwitchRes
@@ -1218,7 +1220,7 @@ mode480_core_ini() {
   dir="$RA_HOME/config/$name"
   file="$dir/$name.switchres.ini"
   mkdir -p "$dir" || return 1
-  printf '# Setup > Video Setup > 480i hacks: interlace 0 = 240p, 1 = 480i.\ninterlace %s\n' "$2" > "$file" || return 1
+  printf '# Setup > Video Setup > Interlaced hacks: interlace 0 = 240p, 1 = interlaced.\ninterlace %s\n' "$2" > "$file" || return 1
   chown "$FLIPEROS_USER:" "$RA_HOME/config" "$dir" "$file" 2> /dev/null || true
 }
 

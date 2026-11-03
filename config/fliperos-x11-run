@@ -34,7 +34,7 @@ if [[ -z $mode ]]; then
   # O setup grava "15k" (e versoes antigas "15"). Comparar so com "15" fazia
   # todo emulador cair na coluna de 31 kHz: 640x480, entrelacado no tubo.
   [[ $(sed -n 's/^frequency=//p' "$CONF" 2> /dev/null) == 15* ]] && column=2
-  # Setup > Video Setup > 480i hacks: com o 480i (filtro ou puro) escolhido
+  # Setup > Video Setup > Interlaced hacks: com o entrelacado (filtro ou puro)
   # para o programa, o modo da coluna dos outros monitores (640x480, que no
   # tubo de 15 kHz sai entrelacado) em vez do 640x240.
   if ((column == 2)); then
@@ -78,7 +78,7 @@ fi
 # largura. stretch e quanto esticar na horizontal para o 4:3 preencher o modo.
 stretch=$((300 * FLIPEROS_RES_W / (4 * FLIPEROS_RES_H)))
 
-# O filtro de flicker do 480i (config/fliperos-deflicker.c, que o
+# O filtro de flicker do entrelacado (config/fliperos-deflicker.c, que o
 # fliperos-x11-client poe no LD_PRELOAD) acha o nivel do programa pelo nome
 # da tabela (deflicker_NOME= no fliperos.conf), mesmo quando o comando e um
 # script que abre outro binario.
@@ -233,7 +233,7 @@ INI
       "$iniset" "$ini" Main ConfirmPowerOff false
       "$iniset" "$ini" BIOS SearchDirectory "$HOME/bios"
       "$iniset" "$ini" Display AspectRatio "Stretch To Fill"
-      # O filtro de flicker do 480i pedia o OpenGL ate a camada do Vulkan
+      # O filtro de flicker do entrelacado pedia o OpenGL ate a camada do Vulkan
       # filtrar tambem (config/fliperos-vkfps.c): quem ficou nele por isso volta
       # ao automatico. O renderizador escolhido no proprio DuckStation fica.
       if [[ -e ${ini%/*}/.fliperos-opengl ]]; then
@@ -316,7 +316,7 @@ INI
     grep -qE '^[[:space:]]*QuadRendering[[:space:]]*=' "$HOME/.config/supermodel/Config/Supermodel.ini" 2> /dev/null ||
       quads=(-no-quad-rendering)
     set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${quads[@]}" "${ppc[@]}" "${netout[@]}" "${@:2}"
-    # O Switchres nem sempre cria o modo pedido: no 15 kHz o 496x384 do 480i
+    # O Switchres nem sempre cria o modo pedido: no 15 kHz o 496x384 do entrelacado
     # vira 661x496 entrelacado (as linhas que cabem, na mesma proporcao), e o
     # Supermodel desenhava os 496x384 do -res num quadrado no meio da tela.
     # Depois da troca, o -res do modo na tela (o ultimo -res vale). Numa

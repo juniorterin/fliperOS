@@ -115,7 +115,7 @@ packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-pl
 packages+=(python3-pygame xclip)
 # O compressor do Volume leveler (Setup > Audio Setup, lib/audio.sh).
 packages+=(swh-plugins)
-# Para compilar o filtro de flicker do 480i e a calibracao de cor
+# Para compilar o filtro de flicker do entrelacado e a calibracao de cor
 # (config/fliperos-deflicker-build).
 packages+=(gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev libx11-dev libxrandr-dev)
 # E o compositor que leva o filtro ao desktop LXDE (config/fliperos-desktop-deflicker).
@@ -154,7 +154,7 @@ else
 fi
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo ||
   echo "warning: Flathub was not added"
-# O filtro de flicker do 480i e a calibracao de cor: compilados aqui, como no
+# O filtro de flicker do entrelacado e a calibracao de cor: compilados aqui, como no
 # build da imagem, quando o fonte mudou. Pelo sha256 do fonte (gravado ao
 # lado do que saiu), nao pela data: o pacote traz a data do arquivo no PC
 # de quem enviou, e uma biblioteca compilada depois, de um fonte mais velho,
@@ -170,7 +170,7 @@ build_native() {
     echo "warning: $name did not compile"
   fi
 }
-build_native "480i flicker filter (fliperos-deflicker)" "$src/config/fliperos-deflicker.c" \
+build_native "Interlaced flicker filter (fliperos-deflicker)" "$src/config/fliperos-deflicker.c" \
   /usr/local/lib/fliperos/libfliperos-deflicker.so
 build_native "Colour calibration (fliperos-color)" "$src/config/fliperos-color.c" /usr/local/bin/fliperos-color
 build_native "Live screen DRM guard (fliperos-dropmaster)" "$src/config/fliperos-dropmaster.c" \

@@ -293,7 +293,7 @@ apt-get update -qq
 # p7zip-full: o fullset do progetto-SNAPS traz as capturas num 7z
 # (config/fliperos-snaps), mesmo numa imagem sem Skyscraper.
 # transmission-daemon: o Setup > Games > Downloader (config/fliperos-downloader).
-# picom: o filtro de flicker do 480i no desktop (config/fliperos-desktop-deflicker).
+# picom: o filtro de flicker do entrelacado no desktop (config/fliperos-desktop-deflicker).
 # mesa-va-drivers: a tela ao vivo (config/fliperos-stream) le a tela das AMD
 # pelo VA-API (sem ele o hwdownload da EPERM); na imagem, a tela ao vivo do
 # primeiro boot nao depende do apt.
@@ -1137,13 +1137,13 @@ install_fbneo_sets() {
 # (pvr.rend 3 no config/flycast-emu.cfg).
 # ── Filtro de flicker do 480i (config/fliperos-deflicker.c) ─────
 # A camada que o fliperos-kms-run e o fliperos-x11-client carregam nos
-# emuladores (Setup > Video Setup > 480i hacks), e a calibracao de cor
+# emuladores (Setup > Video Setup > Interlaced hacks), e a calibracao de cor
 # (config/fliperos-color.c, Setup > Video Setup > Colour calibration). Sem
 # elas a ISO sai igual, so sem o filtro e sem a calibracao.
 build_deflicker_chroot() {
   local here
   here=$(dirname "$(realpath "$0")")
-  step "Compiling the 480i flicker filter and the colour calibration"
+  step "Compiling the interlaced flicker filter and the colour calibration"
   cp "$here/config/fliperos-deflicker.c" "$here/config/fliperos-color.c" "$here/config/fliperos-dropmaster.c" \
     "$here/config/fliperos-sdl-audio.c" "$here/config/fliperos-vkfps.c" "$here/config/fliperos-deflicker-build" \
     "$CHROOT_DIR/tmp/"
@@ -1165,8 +1165,8 @@ rm -f /tmp/fliperos-deflicker.c /tmp/fliperos-color.c /tmp/fliperos-dropmaster.c
 DFSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-deflicker.sh"
   chroot "$CHROOT_DIR" /tmp/build-deflicker.sh >> "$LOG_FILE" 2>&1 \
-    && ok "480i flicker filter compiled" \
-    || warn "The 480i flicker filter did not compile: the image goes without it"
+    && ok "Interlaced flicker filter compiled" \
+    || warn "The interlaced flicker filter did not compile: the image goes without it"
 }
 
 build_flycast_chroot() {

@@ -288,7 +288,7 @@ $("log-refresh").addEventListener("click", showLog);
 const openGroups = new Set(["System"]);
 // Os icones do Setup em cada grupo e em cada ajuste (os do carrossel no tubo).
 const GROUP_ICONS = { System: "px-system", Video: "px-video", Audio: "px-audio", Power: "px-power", Services: "px-services",
-  "480i hacks": "px-mode480", Colour: "px-colour" };
+  "Interlaced hacks": "px-mode480", Colour: "px-colour" };
 const SETTING_ICONS = [["launcher", "px-frontend"], ["latency", "px-latency"], ["debug", "px-debug"], ["leveler", "px-audio"],
   ["menu_sounds", "px-audio"], ["stream_audio", "px-audio"], ["stream_quality", "px-video"], ["marquee_overlay", "px-outputs"],
   ["orientation", "px-orientation"], ["splash", "px-desktop"], ["mm_games", "px-outputs"], ["audio_card", "px-audio"],
@@ -311,7 +311,7 @@ async function loadSettings() {
     details.addEventListener("toggle", () => {
       details.open ? openGroups.add(group) : openGroups.delete(group);
     });
-    if (group === "480i hacks") details.append(...mode480Rows(items));
+    if (group === "Interlaced hacks") details.append(...mode480Rows(items));
     else for (const row of items) details.append(settingRow(row));
     boxes.push(details);
   }
@@ -560,9 +560,9 @@ function settingRow(row) {
   return el("div", { class: "setting" }, el("label", { for: id }, icon(settingIcon(row.key)), row.label), field, about);
 }
 
-// Os jogos 480i: um cartao por emulador, com o modo em botoes (640x240,
-// 480i com filtro, 480i puro) e, so no 480i com filtro, o nivel do filtro
-// logo embaixo. O Setup manda duas linhas por emulador (mode480.CHAVE e
+// Os jogos entrelacados: um cartao por emulador, com o modo em botoes
+// (640x240, entrelacado com filtro, entrelacado puro) e, so no com filtro, o
+// nivel do filtro logo embaixo. O Setup manda duas linhas por emulador (mode480.CHAVE e
 // deflicker.CHAVE); aqui elas viram uma so.
 function mode480Rows(items) {
   const levels = new Map(items.filter((r) => r.key.startsWith("deflicker.")).map((r) => [r.key.slice(10), r]));
