@@ -6,6 +6,7 @@ FliperOS plays light gun games on the tube with Namco's **GunCon 2** (the PlaySt
 
 - **The driver.** GunCon 2 has no driver in the mainline kernel. The build compiles [beardypig/guncon2](https://github.com/beardypig/guncon2) through DKMS for the system's kernel and loads it at boot (`/etc/modules-load.d/fliperos-guncon2.conf`): plug the gun into USB and it shows up as an input device.
 - **The calibration.** The raw position the gun reports depends on the tube and on where the cabinet's gun sits, and evdev forgets the range on every reconnection. **Setup > Joysticks > Calibrate GunCon 2** measures it on your monitor once (below), and the udev rule `99-fliperos-input.rules` reapplies it (`fliperos-guncon2-calibrate`) every time the gun is plugged in.
+- **Marked as a gun.** The same rule tags the GunCon 2 `ID_INPUT_GUN=1`, so the Model 2 emulator (SM2-Emu) reads the gun itself instead of the mouse pointer. A CRT gun misses the beam for a frame every now and then (a GunCon 2 then reports x 0, y 5); through the pointer that frame jumped the aim to the corner and a shot in the middle of the screen became a reload. SM2-Emu keeps the last position that saw the screen for up to 150 ms (FliperOS patch `config/sm2-emu-patches/0002`).
 - **The menus.** The controller-as-keyboard of the Setup menus leaves light guns out, so aiming doesn't move through the menu.
 - **The games.** In the [MAME ROM Cleaner](ROMs.md), tell it the cabinet has a **Light gun** among its controls, and the gun games of the romset are kept along with the others.
 

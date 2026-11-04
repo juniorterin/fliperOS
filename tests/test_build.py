@@ -8828,6 +8828,13 @@ class InputDriverTests(unittest.TestCase):
         self.assertIn('0b9a', rules)
         self.assertIn('016a', rules)
         self.assertIn('fliperos-guncon2-calibrate', rules)
+        # Marcada como pistola em todo evento: sem a marca o SM2-Emu le a
+        # mira pelo ponteiro do X, e um quadro sem feixe vira reload.
+        tag = [line for line in rules.replace('\\\n', ' ').splitlines()
+               if 'ID_INPUT_GUN' in line and not line.startswith('#')]
+        self.assertTrue(tag)
+        self.assertIn('ENV{ID_INPUT_GUN}="1"', tag[0])
+        self.assertNotIn('ACTION', tag[0])
 
     def test_guncon2_and_wheel_drivers_build_by_default(self):
         self.assertIn('SKIP_INPUT_DRIVERS=false', MKISO)
