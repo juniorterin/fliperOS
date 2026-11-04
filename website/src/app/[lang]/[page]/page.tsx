@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, ResolvingMetadata } from 'next';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Header } from '@/components/Header';
@@ -62,13 +62,16 @@ async function resolve(params: PageProps<'/[lang]/[page]'>['params']) {
   return { locale, page };
 }
 
-export async function generateMetadata({ params }: PageProps<'/[lang]/[page]'>): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<'/[lang]/[page]'>, parent: ResolvingMetadata): Promise<Metadata> {
   const { locale, page } = await resolve(params);
   const { meta } = messages[locale].pages[page];
   const languages = {
     ...Object.fromEntries(LOCALES.map((l) => [l, pagePath(l, page)])),
     'x-default': pagePath('en-US', page),
   };
+  // O openGraph/twitter daqui substitui o do layout inteiro: sem isto a página
+  // perde o card do idioma (opengraph-image.tsx) ao ser compartilhada.
+  const { openGraph, twitter } = await parent;
   return {
     title: meta.title,
     description: meta.description,
@@ -80,8 +83,9 @@ export async function generateMetadata({ params }: PageProps<'/[lang]/[page]'>):
       title: meta.title,
       description: meta.description,
       locale: OG_LOCALE[locale],
+      images: openGraph?.images,
     },
-    twitter: { card: 'summary_large_image', title: meta.title, description: meta.description },
+    twitter: { card: 'summary_large_image', title: meta.title, description: meta.description, images: twitter?.images },
   };
 }
 

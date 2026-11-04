@@ -1,8 +1,13 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { ImageResponse } from 'next/og';
 import { LOCALES, LOCALE_SEGMENT, localeFromSegment, messages, DEFAULT_LOCALE } from '@/i18n';
 
-export const size = { width: 1200, height: 630 };
+export const size = { width: 1024, height: 541 };
 export const contentType = 'image/png';
+
+// A sala isométrica do gabinete, sem texto: o título entra por cima em cada idioma.
+const room = `data:image/png;base64,${await readFile(join(process.cwd(), 'public/art/og-room.png'), 'base64')}`;
 
 export function generateStaticParams() {
   return LOCALES.map((l) => ({ lang: LOCALE_SEGMENT[l] }));
@@ -16,6 +21,7 @@ export async function generateImageMetadata({ params }: { params: Promise<{ lang
 
 // Card do Open Graph/Twitter gerado no build: arte do site, sem screenshot e
 // sem a versao (redes sociais guardam o card antigo por muito tempo).
+// O título fica no canto de cima e o slogan no de baixo, fora da sala.
 export default async function OpengraphImage({ params }: { params: Promise<{ lang: string }> }) {
   const t = messages[localeFromSegment((await params).lang) ?? DEFAULT_LOCALE];
   return new ImageResponse(
@@ -25,44 +31,33 @@ export default async function OpengraphImage({ params }: { params: Promise<{ lan
           width: '100%',
           height: '100%',
           display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          padding: '80px',
-          background: 'radial-gradient(circle at 30% 0%, #3b3254 0%, #21222c 55%, #191a21 100%)',
+          position: 'relative',
+          background: '#21222c',
           color: '#f8f8f2',
           fontFamily: 'sans-serif',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', fontSize: 34, color: '#50fa7b' }}>
-          <div style={{ display: 'flex', width: 18, height: 18, borderRadius: 9, background: '#50fa7b' }} />
-          fliperos
-        </div>
-        <div style={{ display: 'flex', fontSize: 120, fontWeight: 800, marginTop: 24, letterSpacing: -3 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={room} width={1024} height={541} alt="" style={{ position: 'absolute', top: 0, left: 0 }} />
+        <div style={{ position: 'absolute', top: 34, left: 44, display: 'flex', fontSize: 72, fontWeight: 800, letterSpacing: -2 }}>
           <span>Fliper</span>
           <span style={{ color: '#bd93f9' }}>OS</span>
         </div>
-        <div style={{ display: 'flex', fontSize: 54, marginTop: 8, color: '#ff79c6' }}>
-          {t.hero.titleLine1} {t.hero.titleLine2}
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: 48, fontSize: 26, color: '#bfc2d4' }}>
-          {t.badges.items.map((b) => (
-            <div
-              key={b}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                height: 52,
-                marginRight: 14,
-                marginBottom: 14,
-                padding: '0 22px',
-                border: '2px solid #44475a',
-                borderRadius: 26,
-                background: '#21222c',
-              }}
-            >
-              {b}
-            </div>
-          ))}
+        <div
+          style={{
+            position: 'absolute',
+            right: 44,
+            bottom: 30,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            fontSize: 34,
+            fontWeight: 700,
+            lineHeight: 1.15,
+          }}
+        >
+          <span>{t.hero.titleLine1}</span>
+          <span style={{ color: '#ff79c6' }}>{t.hero.titleLine2}</span>
         </div>
       </div>
     ),
