@@ -1,8 +1,8 @@
 // Gera as artes do site em pixel art isométrico, no estilo do logo: um quarto
 // em corte com gabinetes dentro. Uma tem o Super Punch-Out!! (duas telas
 // empilhadas), outra um gabinete de corrida com três telas; as do link têm
-// quatro Super Street Fighter II: The Tournament Battle em corrente e dois
-// gabinetes de corrida duplos ligados.
+// quatro Super Street Fighter II: The Tournament Battle em corrente e quatro
+// gabinetes de corrida em forma de carro de F1 ligados.
 //
 //   node tools/site-art/iso-arcade.mjs [pasta-de-saida] [so-esta-arte]
 //
@@ -579,23 +579,6 @@ function arcadeB() {
   return cv;
 }
 
-// ---------- um cabo de rede no chão ----------
-// Uma curva baixa de (x0, y0) a (x1, y1), pendendo para x = sag (para a frente
-// da sala): blocos pequenos, com a cor do cabo e o conector ciano nas pontas.
-function cable(cv, x0, y0, x1, y1, sag) {
-  const id = cv.next();
-  const n = 40;
-  for (let i = 0; i <= n; i++) {
-    const t = i / n;
-    const x = (1 - t) ** 2 * x0 + 2 * (1 - t) * t * sag + t ** 2 * x1;
-    const y = y0 + (y1 - y0) * t;
-    const end = i < 3 || i > n - 3;
-    const col = end ? C.cyan : C.blue;
-    cv.faceX(x + 0.6, y, y + 0.6, 0, 0.7, () => mul(col, 0.8), id);
-    cv.top(0.7, x, x + 0.6, y, y + 0.6, () => col, id);
-  }
-}
-
 // ---------- uma captura de verdade numa tela ----------
 // Lê um PNG de 8 bits, RGB ou RGBA, sem entrelaçamento (o que o PIL grava) e
 // devolve tex(u, v) com a cor do ponto mais perto.
@@ -817,80 +800,186 @@ function arcadeLink4() {
   return cv;
 }
 
-// ---------- dois gabinetes de corrida duplos ligados (como o Virtua Racing Twin) ----------
-// Cada um tem dois lugares lado a lado, com um monitor para cada e um letreiro
-// comprido por cima. As duas telas de um gabinete juntam uma cena só da demo.
-function twinRacer(cv, Y0, Y1, first) {
-  const BODY = hex('#e8e8f0');
+// ---------- quatro gabinetes de corrida em forma de carro de F1 ligados (como o Virtua Racing DX) ----------
+// Cada gabinete é um Fórmula 1 vermelho de um lugar sobre uma base preta: o
+// piloto senta no cockpit, de frente para o monitor dentro de uma cúpula
+// vermelha encostada na parede, com o letreiro aceso por cima (a bandeira
+// quadriculada e o número do carro). Os quatro ficam lado a lado e um cabo de
+// rede liga a traseira de um à do próximo.
+const F1W = 19; // a largura da cúpula do monitor, em unidades
+
+// As quatro telas mostram a mesma corrida, cada carro num ponto da pista: a
+// reta da largada, a curva da praia, a serra e a cidade ao pôr do sol. Embaixo
+// o carro do jogador, por trás, na cor dele, e mais à frente o de outro jogador.
+const GRASS = [[47, 140, 80], [56, 172, 98]];
+const F1_CARS = [C.red, hex('#4f7bff'), C.yellow, C.green]; // os carros 1 a 4 no jogo
+const F1_SCENES = [
+  { top: C.blue, bottom: C.cyan, bend: 0, side: 'stand', rival: 2 },
+  { top: C.blue, bottom: C.cyan, bend: -0.35, side: 'sea', rival: 0 },
+  { top: hex('#4d5c8f'), bottom: hex('#b8c8f0'), bend: 0.35, side: 'mountains', rival: 3 },
+  { top: hex('#6a4c93'), bottom: C.orange, bend: 0.12, side: 'city', rival: 1 },
+];
+const rnd = (x, y) => hash(x, y) + 0.5; // hash() vai de -0.5 a 0.5
+
+function f1Screen(n, { top, bottom, bend, side, rival }) {
+  const h = 0.42;
+  const car = F1_CARS[n - 1];
+  const center = (d) => 0.5 + bend * (1 - d) ** 2; // o meio da pista, que faz a curva longe
+  const rivalU = center(0.31) + 0.06;
+  return (u, v) => {
+    if (v < h) {
+      if (side === 'stand' && v > h - 0.24) {
+        if (v < h - 0.2) return mul(C.white, 0.85); // o teto da arquibancada
+        if (v > h - 0.03) return mul(C.body, 1.2);
+        return rnd(u * 40, v * 60) > 0.5 ? [C.pink, C.yellow, C.white, C.cyan][Math.floor(rnd(u * 13, v * 31) * 4)] : mul(C.body, 1.4);
+      }
+      if (side === 'mountains') {
+        const mh = 0.2 + 0.1 * Math.sin(u * 9 + 1) + 0.05 * Math.sin(u * 23);
+        if (v > h - mh) return v < h - mh + 0.04 ? C.white : mix(C.blueDark, C.purpleL, 0.3);
+      }
+      if (side === 'city') {
+        const hb = 0.07 + rnd(Math.floor(u * 11), 7) * 0.2;
+        if (v > h - hb) return rnd(Math.floor(u * 33), Math.floor(v * 30)) > 0.86 ? C.yellow : mul(C.dark, 1.1);
+        if (ell(u, v, 0.7, h - 0.06, 0.12, 0.12)) return C.yellow; // o sol
+      }
+      if (side === 'sea' && v > h - 0.06 && u < 0.4 - (h - v) * 3) return mix(C.green, C.dark, 0.3); // o morro da praia
+      return mix(top, bottom, v / h);
+    }
+    const d = (v - h) / (1 - h);
+    const zz = 1 / (d + 0.06);
+    const band = Math.floor(zz * 1.6) % 2;
+    const half = 0.025 + 0.4 * d;
+    const dist = u - center(d);
+    if (u > 0.34 && u < 0.66 && v > 0.74 && v < 0.93) return v > 0.88 ? C.line : v < 0.8 ? mul(car, 0.8) : u > 0.46 && u < 0.54 && v < 0.84 ? C.white : car;
+    if (Math.abs(u - rivalU) < 0.07 && v > 0.57 && v < 0.63) return v > 0.61 ? C.line : F1_CARS[rival];
+    if (Math.abs(dist) < half) {
+      if (side === 'stand' && zz > 4 && zz < 5) return (Math.floor(u * 24) + Math.floor(zz * 4)) % 2 ? C.white : C.line; // a largada
+      if (Math.abs(dist) < 0.012 + 0.012 * d && band) return C.white;
+      if (Math.abs(dist) > half - 0.02 - 0.03 * d) return band ? C.red : C.white;
+      return band ? mul(C.blueDark, 1.3) : mul(C.blueDark, 1.1);
+    }
+    if (side === 'sea' && dist > 0) {
+      if (dist < 0.06 + 0.08 * d) return mix(C.yellow, C.orange, 0.3); // a areia
+      return rnd(u * 50, v * 50) > 0.88 ? C.white : hex('#2e9bd6'); // o mar
+    }
+    if (side === 'city') return band ? mul(C.body, 1.7) : mul(C.body, 1.9); // a calçada
+    return band ? GRASS[0] : GRASS[1];
+  };
+}
+
+function f1Racer(cv, y0, n) {
   const RED = hex('#d8323c');
   const BLK = hex('#23242f');
   const STEEL = hex('#9aa0b8');
-  const w = Y1 - Y0;
-  const seatW = w / 2;
-  cv.box(3, 40, Y0 - 1, Y1 + 1, 0, 1.5, C.dark, { top: mul(C.body, 0.95) });
-  // o corpo dos monitores: branco com a faixa vermelha, e as duas telas
-  cv.box(4, 14, Y0, Y1, 1.5, 30, BODY, {
-    left: (y, z) => {
-      const k = Math.floor((Y1 - y) / seatW); // 0: o lugar da esquerda
-      const u0 = (Y1 - y - k * seatW - 1.2) / (seatW - 2.4);
-      if (z >= 14 && z < 27 && u0 >= 0 && u0 <= 1) {
-        // as duas telas juntas mostram uma cena só (a do meio da demo, com o
-        // carro na junção): a da esquerda é a metade esquerda
-        return mul(raceScreen(1)(u0 * 0.5 + k * 0.5, (27 - z) / 13), Math.floor(z * 4) % 2 ? 0.88 : 1);
-      }
-      if (z >= 13 && z < 28 && u0 > -0.15 && u0 < 1.15) return BLK; // a moldura
-      if (z > 6 && z < 9) return RED;
-      if (z > 9 && z < 10) return C.yellow;
-      return mul(BODY, 0.98);
+  const TIRE = hex('#2b2d3a');
+  const LIT = hex('#ffb347');
+  const y1 = y0 + F1W;
+  const mid = (y0 + y1) / 2;
+  const skirt = (z, c) => (z < 2.5 ? mul(BLK, 1.1) : c);
+
+  // a cúpula do monitor, com a faixa branca e amarela na lateral
+  cv.box(2, 14, y0, y1, 0, 31, RED, {
+    left: (y, z) => skirt(z, mul(RED, 0.9)),
+    right: (x, z) => {
+      if (z < 2.5) return mul(BLK, 0.9);
+      const band = z - x * 1.1;
+      if (band > 11 && band < 13) return C.white;
+      if (band > 13 && band < 14) return C.yellow;
+      return mul(RED, 0.78);
     },
-    right: mul(BODY, 0.75),
-    top: mul(BODY, 1.05),
   });
-  // o letreiro comprido, vermelho, com os números dos dois carros
-  cv.box(4, 16, Y0 - 0.5, Y1 + 0.5, 30, 37, RED, {
+  cv.faceX(14, y0 + 1, y1 - 1, 12.5, 28.5, () => BLK, cv.next());
+  screen(cv, 14, y0 + 2, y1 - 2, 14, 27.5, f1Screen(n, F1_SCENES[n - 1]));
+  // as paredes da cúpula, que avançam em volta da tela, e a pala por cima
+  cv.box(14, 16, y0, y0 + 1, 12, 28.5, RED);
+  cv.box(14, 16, y1 - 1, y1, 12, 28.5, RED, { right: mul(RED, 0.78) });
+  cv.box(14, 16, y0, y1, 28.5, 31, RED, { top: mul(RED, 1.18) });
+  // o letreiro aceso: a bandeira quadriculada dos dois lados e o número no meio
+  cv.box(7, 13, y0 + 1, y1 - 1, 31, 38.5, LIT, {
     left: (y, z) => {
-      const k = Math.floor((Y1 + 0.5 - y) / ((w + 1) / 2));
-      const a = Y1 + 0.5 - y - k * ((w + 1) / 2) - ((w + 1) / 2 - 3) / 2;
-      const t = textTex(String(first + k), C.white, null, 1)(a, 37 - z - 0.5);
-      if (t) return t;
-      if (z < 31) return C.yellow;
-      return RED;
+      const a = y1 - 1 - y;
+      const b = 38.5 - z;
+      if (a < 0.8 || a > F1W - 2.8 || b < 0.8 || b > 6.7) return mul(LIT, 0.85);
+      if (a >= 6.5 && a < 10.5) return textTex(String(n), RED, C.yellow)(a - 7, b - 0.5);
+      return (Math.floor(a) + Math.floor(b)) % 2 ? C.line : C.white;
     },
-    right: mul(RED, 0.7),
-    top: mul(RED, 1.2),
+    right: mul(LIT, 0.7),
+    top: mul(LIT, 1.15),
   });
-  // os dois lugares: o painel com o volante, o câmbio e o banco
-  for (let k = 0; k < 2; k++) {
-    const s1 = Y1 - k * seatW;
-    const mid = s1 - seatW / 2;
-    cv.box(14, 19, mid - 4, mid + 4, 1.5, 11, BODY, { left: mul(BODY, 0.9), top: mul(BLK, 1.4) });
-    cv.faceX(19.6, mid - 3.2, mid + 3.2, 9, 16, (y, z) => {
-      const r = Math.hypot(y - mid, z - 12.5);
-      if (r < 0.9) return RED;
-      if (r < 3 && r > 2.1) return C.line;
-      if ((Math.abs(y - mid) < 0.4 || Math.abs(z - 12.5) < 0.4) && r < 3) return C.line;
-      return null;
-    }, cv.next());
-    cv.box(18.6, 19.3, mid - 0.3, mid + 0.3, 10, 12.5, STEEL);
-    cv.box(22, 23, mid - 4.6, mid - 3.8, 1.5, 8, STEEL);
-    cv.box(21.6, 23.4, mid - 4.9, mid - 3.5, 8, 9.4, RED, { top: mul(RED, 1.3) });
-    cv.box(25, 33, mid - 3.6, mid + 3.6, 1.5, 6, BLK, { top: mul(k ? C.blue : RED, 0.8) });
-    cv.box(31.5, 34, mid - 3.6, mid + 3.6, 6, 17, k ? C.blue : RED, { left: mul(k ? C.blue : RED, 1.1) });
-  }
+
+  // os pneus: a banda de rodagem, o cubo de metal no lado de fora
+  const tire = (x0, x1, yA, yB, h) =>
+    cv.box(x0, x1, yA, yB, 0, h, TIRE, {
+      left: (y, z) => mul(TIRE, Math.floor(z * 2) % 2 ? 1.05 : 1.25),
+      right: (x, z) => (Math.hypot(x - (x0 + x1) / 2, z - h / 2) < h * 0.26 ? STEEL : mul(TIRE, 0.85)),
+      top: mul(TIRE, 1.5),
+    });
+  // a base preta do gabinete, debaixo do carro
+  cv.box(15, 41, mid - 5, mid + 5, 0, 1.5, BLK, { top: mul(BLK, 1.3) });
+  // a asa da frente, com as placas nas pontas, e os pneus do lado de trás
+  cv.box(14.5, 17.5, mid - 8.6, mid - 8, 0.6, 3, BLK);
+  cv.box(14.5, 17.5, mid - 8, mid + 8, 0.6, 1.8, RED, { top: mul(RED, 1.15), left: C.white });
+  cv.box(14.5, 17.5, mid + 8, mid + 8.6, 0.6, 3, BLK);
+  tire(18, 23, mid - 8.5, mid - 5.5, 4.5);
+  tire(35, 41, mid - 8.5, mid - 5.5, 5.5);
+  // o sidepod de trás, o monocoque estreito com o cockpit aberto e o bico fino
+  const pod = (yA, yB, side) =>
+    cv.box(25, 35, yA, yB, 1.5, 4.5, RED, {
+      left: mul(RED, 0.95),
+      right: (x, z) => {
+        if (!side) return mul(RED, 0.78);
+        if (Math.abs(x - 29.2) < 1.7 && z > 1.6 && z < 4.4) return textTex(String(n), C.line, C.white, 0.5)(x - 28.5, 4.4 - z - 0.3);
+        return z > 3.8 ? C.white : mul(RED, 0.78);
+      },
+      top: (x) => (x < 26 ? mul(BLK, 1.4) : mul(RED, 1.15)), // a boca do sidepod
+    });
+  pod(mid - 6.2, mid - 2.6);
+  cv.box(17, 23, mid - 1.6, mid + 1.6, 1.5, 4, RED, { top: mul(RED, 1.15), left: C.white });
+  cv.box(23, 37, mid - 2.6, mid + 2.6, 1.5, 6, RED, {
+    left: mul(RED, 0.95),
+    right: (x, z) => (z > 5.4 ? C.white : mul(RED, 0.78)),
+    top: (x, y) => (x >= 28.5 && x < 34 && Math.abs(y - mid) < 1.8 ? mul(BLK, 1.3) : mul(RED, 1.15)),
+  });
+  // a carenagem na frente do piloto e o volante saindo dela
+  cv.box(24.5, 28.5, mid - 2.6, mid + 2.6, 6, 7.5, RED, { top: mul(RED, 1.25) });
+  cv.faceX(28.6, mid - 2.4, mid + 2.4, 6.5, 11.5, (y, z) => {
+    const r = Math.hypot(y - mid, z - 9);
+    if (r < 0.7) return RED;
+    if (r < 2.3 && r > 1.5) return C.line;
+    if ((Math.abs(y - mid) < 0.35 || Math.abs(z - 9) < 0.35) && r < 2.3) return C.line;
+    return null;
+  }, cv.next());
+  // o encosto do banco, a tomada de ar atrás da cabeça e a tampa do motor
+  cv.box(33.2, 34.6, mid - 1.8, mid + 1.8, 6, 9, BLK, { left: mul(C.blue, 0.9), top: mul(BLK, 1.7) });
+  cv.box(34.6, 37.5, mid - 1.6, mid + 1.6, 6, 10, RED, { top: mul(RED, 1.2), left: (y, z) => (z > 8.2 && Math.abs(y - mid) < 0.9 ? C.line : RED) });
+  cv.box(37, 40.5, mid - 2.2, mid + 2.2, 1.5, 5.5, RED, { top: mul(RED, 1.15) });
+  pod(mid + 2.6, mid + 6.2, true);
+  tire(18, 23, mid + 5.5, mid + 8.5, 4.5);
+  tire(35, 41, mid + 5.5, mid + 8.5, 5.5);
+  // a asa de trás, sobre um pilar, com as placas nas pontas
+  cv.box(39.5, 40.3, mid - 0.4, mid + 0.4, 6.5, 8.8, BLK);
+  cv.box(38.3, 41.5, mid - 5.6, mid - 5, 5.5, 10.8, BLK);
+  cv.box(38.5, 41.3, mid - 5, mid + 5, 8.8, 10.4, RED, { top: mul(RED, 1.2), left: (y, z) => (z > 9.7 ? C.white : RED) });
+  cv.box(38.3, 41.5, mid + 5, mid + 5.6, 5.5, 10.8, BLK);
 }
 
 function arcadeLinkRace() {
   view(44, 92); // do mesmo tamanho da sala do Tournament (288x258)
   const cv = new Canvas();
+  const cars = [2.5, 25, 47.5, 70]; // o carro 1 é o da esquerda (o de y maior)
   room(cv, {
-    glow: [{ x0: 14, x1: 30, y0: 6, y1: 86, color: C.cyan }],
-    shadows: [{ x0: 2, x1: 36, y0: 4, y1: 88 }],
+    glow: [{ x0: 14, x1: 26, y0: 2, y1: 90, color: C.cyan }],
+    shadows: cars.map((y0) => ({ x0: 14, x1: 42, y0: y0 - 1.5, y1: y0 + F1W + 1.5 })),
     sign: textTex('RACE LINK', C.cyan, mul(C.dark, 0.7)),
     signArea: [27, 27 + 37, 46, 46 + 7],
   });
-  const twins = [[48, 84], [6, 42]]; // o carro 1 e o 2 à esquerda, o 3 e o 4 à direita
-  twins.forEach(([y0, y1], i) => twinRacer(cv, y0, y1, 1 + i * 2));
-  cable(cv, 14.5, twins[1][1] + 0.5, 14.5, twins[0][0] - 0.5, 22);
+  // de trás para a frente: cada cabo sai da traseira de um carro para a do
+  // próximo, desenhado antes dele para o próximo o cobrir
+  cars.forEach((y0, i) => {
+    f1Racer(cv, y0, cars.length - i);
+    const mid = y0 + F1W / 2;
+    if (i < cars.length - 1) floorCable(cv, [41.2, mid], [44.5, mid + (cars[i + 1] - y0) / 2], [41.2, mid + cars[i + 1] - y0]);
+  });
   cv.outline();
   return cv;
 }

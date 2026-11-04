@@ -241,7 +241,7 @@ const ptBR: Messages = {
         title: 'Gabinetes em link',
         text: 'Ligue gabinetes com um cabo de rede: o torneio de Street Fighter de quatro gabinetes, corridas de até oito e net play.',
         fourAlt: 'Pixel art de quatro gabinetes Capcom de Super Street Fighter II: The Tournament Battle num canto de sala com piso azulejado, dois em cada parede e um banco comprido de dois lugares na frente de cada um, manches vermelhos de bola e três botões por jogador, cada tela na sua seleção de lutadores com os seus dois lugares acesos, ligados por cabos de rede no chão.',
-        raceAlt: 'Pixel art de dois gabinetes de corrida duplos de sentar, carros 1 a 4 nos letreiros, as duas telas de cada gabinete mostrando uma corrida só, ligados por um cabo de rede.',
+        raceAlt: 'Pixel art de quatro gabinetes de corrida em forma de carro de Fórmula 1, carros 1 a 4 nos letreiros, cada tela mostrando um ponto diferente da mesma corrida com o carro do jogador na cor dele, ligados por cabos de rede.',
       },
     },
   },
