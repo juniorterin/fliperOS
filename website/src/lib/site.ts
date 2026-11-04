@@ -67,7 +67,7 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fliperos.j
 
 // As páginas de detalhe, na ordem do menu e do "Próxima"; o slug é o mesmo
 // nos dois idiomas (/en/frontend, /pt/frontend).
-export const PAGE_SLUGS = ['frontend', 'setup', 'games', 'video', 'web-panel', 'emulators', 'hardware', 'install', 'controls', 'cards'] as const;
+export const PAGE_SLUGS = ['frontend', 'setup', 'games', 'video', 'web-panel', 'emulators', 'link', 'hardware', 'install', 'controls', 'cards'] as const;
 export type PageSlug = (typeof PAGE_SLUGS)[number];
 
 export function isPageSlug(value: string): value is PageSlug {
@@ -82,6 +82,7 @@ export const PAGE_WIKI: Record<PageSlug, string> = {
   video: 'Kernel-15-kHz',
   'web-panel': 'Web-panel',
   emulators: 'Emulators',
+  link: 'Linked-cabinets',
   hardware: 'DIY-hardware',
   install: 'Install',
   controls: 'Controls',
@@ -118,13 +119,14 @@ export const HOME_STEPS: { page: PageSlug; shot: string }[] = [
 // Os destaques da home, numa grade com tiles de tamanhos diferentes; o texto
 // de cada um está em highlights.items pelo id. {lang} vira en ou pt (os prints
 // do painel web têm um por idioma). Sem arquivo, o tile fica só com o texto.
-export type HighlightId = 'web' | 'multi' | 'gun' | 'live' | 'coin';
+export type HighlightId = 'web' | 'multi' | 'gun' | 'live' | 'coin' | 'link';
 export const HOME_HIGHLIGHTS: { id: HighlightId; page: PageSlug; shot: string; extra?: string; since?: string }[] = [
   { id: 'web', page: 'web-panel', shot: 'web/phone-{lang}', extra: 'web/frontend-{lang}' },
   { id: 'multi', page: 'video', shot: 'multi/darius-1' },
   { id: 'gun', page: 'controls', shot: 'gui/guncon-target1' },
   { id: 'live', page: 'web-panel', shot: 'anim/web-controller', since: '0.13' },
   { id: 'coin', page: 'frontend', shot: 'anim/frontend-commercial', since: '0.15' },
+  { id: 'link', page: 'link', shot: 'anim/ssf2tb-{lang}', since: '0.19' },
 ];
 
 // A faixa de telas da home: poucas, variadas, que rolam para o lado.
@@ -193,6 +195,7 @@ export const PAGE_SHOTS: Record<PageSlug, string[]> = {
   video: [],
   'web-panel': [],
   emulators: [],
+  link: [],
   hardware: [],
   install: ['gui/main', 'gui/progress', 'gui/live', 'gui/error'],
   controls: [
@@ -225,6 +228,10 @@ const ROW_ONLY_SHOTS = [
   'anim/web-settings',
   'frontend/options',
   'web/obs-{lang}',
+  // As animações do link: gabinetes em pixel art com as telas reais
+  // (tools/link-tests/netplay-anim.py e ssf2tb-anim.py), uma por idioma.
+  'anim/netplay-{lang}',
+  'anim/ssf2tb-{lang}',
 ];
 
 const withLang = (id: string) => (id.includes('{lang}') ? ['en', 'pt'].map((l) => id.replace('{lang}', l)) : [id]);

@@ -18,7 +18,7 @@ Key facts:
 ## Links
 
 - [Website](https://fliperos.juniorter.in): overview in English and Portuguese
-- Website pages (also under /pt): [frontend](https://fliperos.juniorter.in/en/frontend), [Setup](https://fliperos.juniorter.in/en/setup), [ROMs, downloads and BIOS](https://fliperos.juniorter.in/en/games), [CRT and video](https://fliperos.juniorter.in/en/video), [web panel](https://fliperos.juniorter.in/en/web-panel), [emulators](https://fliperos.juniorter.in/en/emulators), [hardware](https://fliperos.juniorter.in/en/hardware), [install and updates](https://fliperos.juniorter.in/en/install), [controls and light gun](https://fliperos.juniorter.in/en/controls), [video cards](https://fliperos.juniorter.in/en/cards)
+- Website pages (also under /pt): [frontend](https://fliperos.juniorter.in/en/frontend), [Setup](https://fliperos.juniorter.in/en/setup), [ROMs, downloads and BIOS](https://fliperos.juniorter.in/en/games), [CRT and video](https://fliperos.juniorter.in/en/video), [web panel](https://fliperos.juniorter.in/en/web-panel), [emulators](https://fliperos.juniorter.in/en/emulators), [linked cabinets and net play](https://fliperos.juniorter.in/en/link), [hardware](https://fliperos.juniorter.in/en/hardware), [install and updates](https://fliperos.juniorter.in/en/install), [controls and light gun](https://fliperos.juniorter.in/en/controls), [video cards](https://fliperos.juniorter.in/en/cards)
 - [GitHub repository](https://github.com/juniorterin/fliperOS): source code, issues and README with a step-by-step guide
 - [Releases](https://github.com/juniorterin/fliperOS/releases): the ISO
 - [Telegram group](https://t.me/fliperos15khz): questions, help from other users, and every release posted with pictures and how the new features work

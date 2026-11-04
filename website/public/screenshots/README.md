@@ -18,6 +18,13 @@ ffmpeg -ss 87 -t 11 -i .shots/video/clips/s5_frontend.mkv -an -vf fps=12 \
   -c:v libwebp_anim -lossless 0 -quality 55 -loop 0 anim/frontend-grid.webp
 ```
 
+`anim/netplay-{en,pt}.webp` and `anim/ssf2tb-{en,pt}.webp` are the illustrations of the
+Linked cabinets page: pixel art cabinets joined by network cables, 1200x900, with the
+real frontend screens and the real game on their tubes (Escape Kids net play on two
+cabinets; the four-cabinet Super Street Fighter II: The Tournament Battle, recorded from
+four linked MAME). Made by `tools/link-tests/netplay-anim.py` and `ssf2tb-anim.py`; the
+steps are in `tools/link-tests/README.md`.
+
 `frontend/` holds the FliperOS frontend in its three views, each with what
 opens in it: 320x240 captures of `fliperos-frontend` (the `--shot` rig),
 scaled 3x nearest-neighbour to 960x720 and saved as lossless WebP.

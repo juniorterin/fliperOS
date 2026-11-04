@@ -1,14 +1,17 @@
-// Gera as duas artes do site em pixel art isométrico, no estilo do logo: um
-// quarto em corte com um gabinete dentro. Uma tem o Super Punch-Out!! (duas
-// telas empilhadas), a outra um gabinete de corrida com três telas.
+// Gera as artes do site em pixel art isométrico, no estilo do logo: um quarto
+// em corte com gabinetes dentro. Uma tem o Super Punch-Out!! (duas telas
+// empilhadas), outra um gabinete de corrida com três telas; as do link têm
+// quatro Super Street Fighter II: The Tournament Battle em corrente e dois
+// gabinetes de corrida duplos ligados.
 //
-//   node tools/site-art/iso-arcade.mjs [pasta-de-saida]
+//   node tools/site-art/iso-arcade.mjs [pasta-de-saida] [so-esta-arte]
 //
 // Sem dependências: o PNG é codificado aqui mesmo. A saída padrão é
-// website/public/art/ (arcade-2-screens.png e arcade-3-screens.png).
-import { mkdirSync, writeFileSync } from 'node:fs';
+// website/public/art/ (arcade-2-screens.png, arcade-3-screens.png,
+// arcade-link-4.png e arcade-link-race.png).
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { deflateSync } from 'node:zlib';
+import { deflateSync, inflateSync } from 'node:zlib';
 
 const OUT = process.argv[2] ?? path.resolve(import.meta.dirname, '..', '..', 'website', 'public', 'art');
 
@@ -63,6 +66,18 @@ const FONT = {
   3: ['###', '..#', '###', '..#', '###'],
   5: ['###', '#..', '###', '..#', '###'],
   '-': ['...', '...', '###', '...', '...'],
+  ' ': ['...', '...', '...', '...', '...'],
+  B: ['##.', '#.#', '##.', '#.#', '##.'],
+  L: ['#..', '#..', '#..', '#..', '###'],
+  M: ['#.#', '###', '###', '#.#', '#.#'],
+  S: ['###', '#..', '###', '..#', '###'],
+  V: ['#.#', '#.#', '#.#', '#.#', '.#.'],
+  1: ['.#.', '##.', '.#.', '.#.', '###'],
+  2: ['###', '..#', '###', '#..', '###'],
+  4: ['#.#', '#.#', '###', '..#', '..#'],
+  6: ['###', '#..', '###', '#.#', '###'],
+  7: ['###', '..#', '..#', '.#.', '.#.'],
+  8: ['###', '#.#', '###', '#.#', '###'],
 };
 // Uma função de textura que escreve `text` em colunas de `scale` unidades
 // (1 por padrão; 0.5 dá letras de um pixel); (a, b) são as coordenadas em
@@ -79,12 +94,18 @@ function textTex(text, on, off, scale = 1) {
 }
 
 // ---------- o canvas isométrico ----------
-const W = 208;
-const H = 218;
-const OX = 104;
-const OY = 112;
-const N = 48; // lado do piso, em unidades
+// O piso tem NX unidades de fundo (a parede da direita) e NY de comprimento (a
+// da esquerda); view() acerta o canvas para ele. O padrão, 48 x 48, dá 208x218.
+let W, H, OX, OY, NX, NY;
 const HW = 54; // altura das paredes
+function view(nx = 48, ny = 48) {
+  [NX, NY] = [nx, ny];
+  W = 2 * (nx + ny) + 16;
+  H = 112 + nx + ny + 10;
+  OX = 2 * ny + 8;
+  OY = 112;
+}
+view();
 const px = (x, y, z) => [OX + (x - y) * 2, OY + (x + y) - z * 2];
 
 class Canvas {
@@ -234,13 +255,13 @@ function room(cv, { glow = [], shadows = [], sign, signArea, poster, posterArea 
   const T = 3;
   // paredes
   let id = cv.next();
-  cv.faceX(0, 0, N, -T, HW, (y, z) => wall(y, z, true), id);
-  cv.top(HW, -2, 0, -2, N, () => C.cap, id);
-  cv.faceY(N, -2, 0, -T, HW, (x, z) => mul(C.wallL, 0.8), id);
+  cv.faceX(0, 0, NY, -T, HW, (y, z) => wall(y, z, true), id);
+  cv.top(HW, -2, 0, -2, NY, () => C.cap, id);
+  cv.faceY(NY, -2, 0, -T, HW, (x, z) => mul(C.wallL, 0.8), id);
   id = cv.next();
-  cv.faceY(0, 0, N, -T, HW, (x, z) => wall(x, z, false), id);
-  cv.top(HW, 0, N, -2, 0, () => mul(C.cap, 1.1), id);
-  cv.faceX(N, -2, 0, -T, HW, (y, z) => mul(C.wallR, 0.8), id);
+  cv.faceY(0, 0, NX, -T, HW, (x, z) => wall(x, z, false), id);
+  cv.top(HW, 0, NX, -2, 0, () => mul(C.cap, 1.1), id);
+  cv.faceX(NX, -2, 0, -T, HW, (y, z) => mul(C.wallR, 0.8), id);
   // cartaz e letreiro nas paredes (painéis soltos, na mesma textura)
   if (sign) {
     const [y0, y1, z0, z1] = signArea;
@@ -252,9 +273,9 @@ function room(cv, { glow = [], shadows = [], sign, signArea, poster, posterArea 
   }
   // piso, com a laje de baixo
   id = cv.next();
-  cv.faceX(N, 0, N, -T, 0, () => mul(C.wallL, 0.85), id);
-  cv.faceY(N, 0, N, -T, 0, () => mul(C.wallR, 0.7), id);
-  cv.top(0, 0, N, 0, N, (x, y) => floor(x, y, glow, shadows), id);
+  cv.faceX(NX, 0, NY, -T, 0, () => mul(C.wallL, 0.85), id);
+  cv.faceY(NY, 0, NX, -T, 0, () => mul(C.wallR, 0.7), id);
+  cv.top(0, 0, NX, 0, NY, (x, y) => floor(x, y, glow, shadows), id);
 }
 
 function wall(a, z, left) {
@@ -359,6 +380,7 @@ function fightScreen(u, v) {
 }
 
 function arcadeA() {
+  view();
   const cv = new Canvas();
   room(cv, {
     glow: [{ x0: 34, x1: 48, y0: 10, y1: 38, color: C.cyan }],
@@ -474,6 +496,7 @@ function raceScreen(si) {
 }
 
 function arcadeB() {
+  view();
   const cv = new Canvas();
   room(cv, {
     glow: [{ x0: 27, x1: 48, y0: 6, y1: 46, color: C.cyan }],
@@ -542,6 +565,245 @@ function arcadeB() {
   return cv;
 }
 
+// ---------- um cabo de rede no chão ----------
+// Uma curva baixa de (x0, y0) a (x1, y1), pendendo para x = sag (para a frente
+// da sala): blocos pequenos, com a cor do cabo e o conector ciano nas pontas.
+function cable(cv, x0, y0, x1, y1, sag) {
+  const id = cv.next();
+  const n = 40;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const x = (1 - t) ** 2 * x0 + 2 * (1 - t) * t * sag + t ** 2 * x1;
+    const y = y0 + (y1 - y0) * t;
+    const end = i < 3 || i > n - 3;
+    const col = end ? C.cyan : C.blue;
+    cv.faceX(x + 0.6, y, y + 0.6, 0, 0.7, () => mul(col, 0.8), id);
+    cv.top(0.7, x, x + 0.6, y, y + 0.6, () => col, id);
+  }
+}
+
+// ---------- uma captura de verdade numa tela ----------
+// Lê um PNG de 8 bits, RGB ou RGBA, sem entrelaçamento (o que o PIL grava) e
+// devolve tex(u, v) com a cor do ponto mais perto.
+function pngTexture(file) {
+  const buf = readFileSync(file);
+  let pos = 8;
+  let w = 0;
+  let h = 0;
+  let type = 2;
+  const idat = [];
+  while (pos < buf.length) {
+    const len = buf.readUInt32BE(pos);
+    const kind = buf.toString('ascii', pos + 4, pos + 8);
+    const data = buf.subarray(pos + 8, pos + 8 + len);
+    if (kind === 'IHDR') [w, h, type] = [data.readUInt32BE(0), data.readUInt32BE(4), data[9]];
+    if (kind === 'IDAT') idat.push(data);
+    pos += len + 12;
+  }
+  const bpp = type === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = w * bpp;
+  const out = Buffer.alloc(h * stride);
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * (stride + 1)];
+    for (let x = 0; x < stride; x++) {
+      const v = raw[y * (stride + 1) + 1 + x];
+      const a = x >= bpp ? out[y * stride + x - bpp] : 0;
+      const b = y ? out[(y - 1) * stride + x] : 0;
+      const c = x >= bpp && y ? out[(y - 1) * stride + x - bpp] : 0;
+      const p = a + b - c;
+      const pr = Math.abs(p - a) <= Math.abs(p - b) && Math.abs(p - a) <= Math.abs(p - c) ? a : Math.abs(p - b) <= Math.abs(p - c) ? b : c;
+      out[y * stride + x] = (v + [0, a, b, (a + b) >> 1, pr][f]) & 255;
+    }
+  }
+  return (u, v) => {
+    const x = Math.min(w - 1, Math.max(0, Math.floor(u * w)));
+    const y = Math.min(h - 1, Math.max(0, Math.floor(v * h)));
+    const i = y * stride + x * bpp;
+    return [out[i], out[i + 1], out[i + 2]];
+  };
+}
+
+// ---------- Super Street Fighter II: The Tournament Battle (Capcom, 1993) ----------
+// Quatro uprights da Capcom lado a lado, ligados em corrente como no torneio:
+// o letreiro com o logo, o monitor deitado para trás com a tela de seleção
+// daquela máquina, o painel de dois jogadores com seis botões cada, a porta das
+// fichas e a lateral pintada.
+function capcomUpright(cv, Y0, Y1, slot, slotColor) {
+  const BODY = hex('#1d1f2b');
+  const BLUE = hex('#2c4fa3');
+  const STEEL = hex('#9aa0b8');
+  const w = Y1 - Y0;
+  const slope = 0.14;
+  const front = (z) => 23 - Math.max(0, z - 18) * slope; // o frontal inclinado, de x=23 em z=18
+  const a0 = 23 + slope * 18;
+  cv.box(6, 20, Y0 + 0.5, Y1 - 0.5, 0, 46, BODY);
+  // a lateral: o perfil do upright, azul com o friso, e a arte (um raio e o número da máquina)
+  cv.faceY(Y1 - 0.5, 6, 27, 0, 52, (x, z) => {
+    const inside = z < 3 ? x < 23 : z < 15 ? x < 23.5 : z < 18 ? x < 27 : z < 46 ? x < front(z) : x < 25;
+    if (!inside) return null;
+    const edge = z < 15 ? x > 22.5 : z < 18 ? x > 26 : z < 46 ? x > front(z) - 0.8 : x > 24;
+    if (edge || z > 51) return mul(slotColor, 0.9); // o friso na cor do lugar
+    if (z < 3) return mul(BODY, 0.6);
+    const bolt = Math.abs(x - 8 - (z - 6) * 0.35 - (Math.floor(z / 6) % 2) * 2) < 1.2 && z > 6 && z < 40;
+    if (bolt) return C.yellow;
+    if (z > 22 && z < 28 && x > 10 && x < 18) return textTex(String(slot + 1), C.white, mul(BLUE, 0.85), 1)(x - 12.5, 28 - z);
+    return z > 40 ? mul(BLUE, 0.7) : mul(BLUE, 0.85 + 0.15 * ((z / 46) * 1));
+  }, cv.next());
+  // a base: a grade do alto-falante e a porta das fichas, com as duas luzes
+  cv.faceX(23, Y0 + 0.5, Y1 - 0.5, 0, 15, (y, z) => {
+    if (z < 3) return mul(BODY, 0.55);
+    const mid = (Y0 + Y1) / 2;
+    if (Math.abs(y - mid) < 3.2 && z >= 4 && z < 11.5) {
+      if (z > 7.5 && z < 10.5 && (Math.abs(y - mid + 1.4) < 0.5 || Math.abs(y - mid - 1.4) < 0.5)) return C.red;
+      return z < 5 ? mul(STEEL, 0.7) : STEEL;
+    }
+    if (z > 12 && z < 14 && Math.floor(y * 2) % 2) return mul(BODY, 0.6);
+    return mul(BODY, 1.15);
+  }, cv.next());
+  // o painel: dois jogadores, cada um com a alavanca e seis botões em duas fileiras
+  const half = w / 2;
+  const players = [Y0 + 0.5, Y0 + half];
+  cv.box(23, 27, Y0 + 0.5, Y1 - 0.5, 15, 18, BODY, {
+    left: (y, z) => (z > 16.2 && z < 16.8 ? slotColor : mul(STEEL, 0.5)),
+    top: (x, y) => {
+      for (const p0 of players) {
+        if (Math.hypot(x - 25, y - (p0 + 1.6)) < 0.9) return C.line;
+        for (let i = 0; i < 3; i++) {
+          for (const [bx, col] of [[24.3, [C.blue, C.yellow, C.red][i]], [25.8, [C.white, C.green, C.pink][i]]]) {
+            const r = Math.hypot(x - bx, y - (p0 + 3.4 + i * 1.25));
+            if (r < 0.48) return col;
+            if (r < 0.62) return C.line;
+          }
+        }
+      }
+      return x > 26.3 ? mul(slotColor, 0.85) : hex('#2a2d3e');
+    },
+  });
+  for (const [p0, col] of [[players[0], C.red], [players[1], C.blue]]) {
+    cv.box(24.7, 25.3, p0 + 1.3, p0 + 1.9, 18, 19.6, STEEL);
+    cv.box(24.3, 25.7, p0 + 0.9, p0 + 2.3, 19.6, 20.8, col, { top: mul(col, 1.3) });
+  }
+  // o frontal inclinado, o monitor e o painel de vidro escuro em volta
+  cv.slantX(a0, -slope, Y0 + 0.5, Y1 - 0.5, 18.2, 46, (y, z) => (z > 43 ? mul(STEEL, 0.6) : mul(BODY, 1.2)), cv.next());
+  // a tela de seleção de verdade desta máquina (a gravação dos quatro MAME
+  // ligados, tools/link-tests/ssf2tb-tournament.sh): os lugares dela acesos
+  const select = pngTexture(path.resolve(import.meta.dirname, `ssf2tb-select-${slot + 1}.png`));
+  cv.slantX(a0, -slope, Y0 + 1.6, Y1 - 1.6, 20.5, 37, (y, z) => {
+    const u = (Y1 - 1.6 - y) / (w - 3.2);
+    const v = (37 - z) / 16.5;
+    return mul(select(u, v), Math.floor(z * 4) % 2 ? 0.88 : 1);
+  }, cv.next());
+  // o letreiro: SUPER em laranja sobre o azul, como o logo
+  cv.box(6, 25, Y0, Y1, 46, 52, BLUE, {
+    left: (y, z) => {
+      const a = Y1 - y - (w - 19 * 0.5) / 2;
+      const t = textTex('SUPER', C.orange, null, 0.5)(a, 52 - z - 0.5);
+      if (t) return t;
+      if (z > 46.4 && z < 47.4) return C.yellow;
+      return (Math.floor(y) + Math.floor(z)) % 7 === 0 ? mul(BLUE, 1.35) : BLUE;
+    },
+    right: mul(BODY, 0.8),
+    top: mul(BODY, 1.4),
+  });
+}
+
+function arcadeLink4() {
+  view(34, 100);
+  const cv = new Canvas();
+  room(cv, {
+    glow: [{ x0: 27, x1: 34, y0: 4, y1: 96, color: C.purpleHi }],
+    shadows: [{ x0: 4, x1: 28, y0: 4, y1: 97 }],
+    sign: textTex('TOURNAMENT BATTLE', C.pink, mul(C.dark, 0.7)),
+    signArea: [14, 14 + 69, 46, 46 + 7],
+  });
+  // as cores dos lugares 1, 3, 5 e 7 da tela de entrada do jogo
+  const colors = [C.red, C.yellow, C.purpleHi, C.orange];
+  const spans = [[4, 26], [27, 49], [50, 72], [73, 95]];
+  spans.forEach(([y0, y1], i) => capcomUpright(cv, y0, y1, 3 - i, colors[3 - i])); // o 1 à esquerda
+  for (let i = 0; i < 3; i++) cable(cv, 23.5, spans[i][1] - 2, 23.5, spans[i + 1][0] + 2, 31);
+  cv.outline();
+  return cv;
+}
+
+// ---------- dois gabinetes de corrida duplos ligados (como o Virtua Racing Twin) ----------
+// Cada um tem dois lugares lado a lado, com um monitor para cada e um letreiro
+// comprido por cima. As duas telas de um gabinete juntam uma cena só da demo.
+function twinRacer(cv, Y0, Y1, first) {
+  const BODY = hex('#e8e8f0');
+  const RED = hex('#d8323c');
+  const BLK = hex('#23242f');
+  const STEEL = hex('#9aa0b8');
+  const w = Y1 - Y0;
+  const seatW = w / 2;
+  cv.box(3, 40, Y0 - 1, Y1 + 1, 0, 1.5, C.dark, { top: mul(C.body, 0.95) });
+  // o corpo dos monitores: branco com a faixa vermelha, e as duas telas
+  cv.box(4, 14, Y0, Y1, 1.5, 30, BODY, {
+    left: (y, z) => {
+      const k = Math.floor((Y1 - y) / seatW); // 0: o lugar da esquerda
+      const u0 = (Y1 - y - k * seatW - 1.2) / (seatW - 2.4);
+      if (z >= 14 && z < 27 && u0 >= 0 && u0 <= 1) {
+        // as duas telas juntas mostram uma cena só (a do meio da demo, com o
+        // carro na junção): a da esquerda é a metade esquerda
+        return mul(raceScreen(1)(u0 * 0.5 + k * 0.5, (27 - z) / 13), Math.floor(z * 4) % 2 ? 0.88 : 1);
+      }
+      if (z >= 13 && z < 28 && u0 > -0.15 && u0 < 1.15) return BLK; // a moldura
+      if (z > 6 && z < 9) return RED;
+      if (z > 9 && z < 10) return C.yellow;
+      return mul(BODY, 0.98);
+    },
+    right: mul(BODY, 0.75),
+    top: mul(BODY, 1.05),
+  });
+  // o letreiro comprido, vermelho, com os números dos dois carros
+  cv.box(4, 16, Y0 - 0.5, Y1 + 0.5, 30, 37, RED, {
+    left: (y, z) => {
+      const k = Math.floor((Y1 + 0.5 - y) / ((w + 1) / 2));
+      const a = Y1 + 0.5 - y - k * ((w + 1) / 2) - ((w + 1) / 2 - 3) / 2;
+      const t = textTex(String(first + k), C.white, null, 1)(a, 37 - z - 0.5);
+      if (t) return t;
+      if (z < 31) return C.yellow;
+      return RED;
+    },
+    right: mul(RED, 0.7),
+    top: mul(RED, 1.2),
+  });
+  // os dois lugares: o painel com o volante, o câmbio e o banco
+  for (let k = 0; k < 2; k++) {
+    const s1 = Y1 - k * seatW;
+    const mid = s1 - seatW / 2;
+    cv.box(14, 19, mid - 4, mid + 4, 1.5, 11, BODY, { left: mul(BODY, 0.9), top: mul(BLK, 1.4) });
+    cv.faceX(19.6, mid - 3.2, mid + 3.2, 9, 16, (y, z) => {
+      const r = Math.hypot(y - mid, z - 12.5);
+      if (r < 0.9) return RED;
+      if (r < 3 && r > 2.1) return C.line;
+      if ((Math.abs(y - mid) < 0.4 || Math.abs(z - 12.5) < 0.4) && r < 3) return C.line;
+      return null;
+    }, cv.next());
+    cv.box(18.6, 19.3, mid - 0.3, mid + 0.3, 10, 12.5, STEEL);
+    cv.box(22, 23, mid - 4.6, mid - 3.8, 1.5, 8, STEEL);
+    cv.box(21.6, 23.4, mid - 4.9, mid - 3.5, 8, 9.4, RED, { top: mul(RED, 1.3) });
+    cv.box(25, 33, mid - 3.6, mid + 3.6, 1.5, 6, BLK, { top: mul(k ? C.blue : RED, 0.8) });
+    cv.box(31.5, 34, mid - 3.6, mid + 3.6, 6, 17, k ? C.blue : RED, { left: mul(k ? C.blue : RED, 1.1) });
+  }
+}
+
+function arcadeLinkRace() {
+  view(44, 90);
+  const cv = new Canvas();
+  room(cv, {
+    glow: [{ x0: 14, x1: 30, y0: 6, y1: 86, color: C.cyan }],
+    shadows: [{ x0: 2, x1: 36, y0: 4, y1: 88 }],
+    sign: textTex('RACE LINK', C.cyan, mul(C.dark, 0.7)),
+    signArea: [27, 27 + 37, 46, 46 + 7],
+  });
+  const twins = [[48, 84], [6, 42]]; // o carro 1 e o 2 à esquerda, o 3 e o 4 à direita
+  twins.forEach(([y0, y1], i) => twinRacer(cv, y0, y1, 1 + i * 2));
+  cable(cv, 14.5, twins[1][1] + 0.5, 14.5, twins[0][0] - 0.5, 22);
+  cv.outline();
+  return cv;
+}
+
 // ---------- PNG ----------
 const crcTable = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -575,7 +837,9 @@ function png(rgba) {
 }
 
 mkdirSync(OUT, { recursive: true });
-for (const [name, make] of [['arcade-2-screens', arcadeA], ['arcade-3-screens', arcadeB]]) {
+const ONLY = process.argv[3]; // só uma arte (o nome sem .png), para não refazer as outras
+for (const [name, make] of [['arcade-2-screens', arcadeA], ['arcade-3-screens', arcadeB], ['arcade-link-4', arcadeLink4], ['arcade-link-race', arcadeLinkRace]]) {
+  if (ONLY && ONLY !== name) continue;
   const file = path.join(OUT, `${name}.png`);
   writeFileSync(file, png(make().rgba));
   console.log(file, `${W}x${H}`);

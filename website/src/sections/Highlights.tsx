@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, Coins, Columns3, Crosshair, Radio, Smartphone, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Coins, Columns3, Crosshair, Network, Radio, Smartphone, type LucideIcon } from 'lucide-react';
 import Image from 'next/image';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
@@ -19,20 +19,34 @@ const ICON: Record<HighlightId, LucideIcon> = {
   gun: Crosshair,
   live: Radio,
   coin: Coins,
+  link: Network,
 };
 
-// Os dois quartos em pixel art do tile de várias telas (tools/site-art).
+// Os quartos em pixel art (tools/site-art): o tile de várias telas e o do link.
 const ART = ['/art/arcade-2-screens.png', '/art/arcade-3-screens.png'] as const;
+const LINK_ART = ['/art/arcade-link-4.png', '/art/arcade-link-race.png'] as const;
 
 function Visual({ item }: { item: Highlight }) {
   const { t } = useI18n();
   const Icon = ICON[item.id];
-  if (item.id === 'multi') {
+  if (item.id === 'multi' || item.id === 'link') {
     const a = t.multiMonitor.art;
+    const l = t.highlights.items.link;
+    const link = item.id === 'link';
+    const art = link ? LINK_ART : ART;
+    const alts = link ? [l.fourAlt, l.raceAlt] : [a.twoAlt, a.threeAlt];
     return (
       <span className="grid grid-cols-2 gap-1">
-        {ART.map((src, i) => (
-          <Image key={src} src={src} alt={i ? a.threeAlt : a.twoAlt} width={208} height={218} unoptimized className="h-auto w-full [image-rendering:pixelated]" />
+        {art.map((src, i) => (
+          <Image
+            key={src}
+            src={src}
+            alt={alts[i]}
+            width={link ? 284 : 208}
+            height={link ? 256 : 218}
+            unoptimized
+            className="h-auto w-full [image-rendering:pixelated]"
+          />
         ))}
       </span>
     );
@@ -54,7 +68,13 @@ export function Highlights({ items }: { items: Highlight[] }) {
   const h = t.highlights;
   const web = items.find((i) => i.id === 'web');
   const rest = items.filter((i) => i.id !== 'web');
-  const span: Record<string, string> = { multi: 'md:col-span-2', gun: 'md:col-span-2', live: 'md:col-span-3', coin: 'md:col-span-3' };
+  const span: Record<string, string> = {
+    multi: 'md:col-span-2',
+    gun: 'md:col-span-2',
+    live: 'md:col-span-2',
+    coin: 'md:col-span-2',
+    link: 'md:col-span-2',
+  };
   return (
     <section id="highlights" aria-labelledby="highlights-title" className="relative py-16 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

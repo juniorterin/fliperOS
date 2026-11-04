@@ -42,6 +42,7 @@ const SECTIONS: Record<PageSlug, ReactNode> = {
   ),
   'web-panel': <WebPanel />,
   emulators: <Emulators />,
+  link: null,
   hardware: (
     <>
       <Requirements />

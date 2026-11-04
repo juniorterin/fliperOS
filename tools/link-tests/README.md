@@ -36,6 +36,11 @@ The scripts read these environment variables, and have defaults you will probabl
 | `roles.ps1` | Supermodel role helpers: start one of the copies A to D with `-net` and its ports (`Start-SM`), set the role and car number of Scud Race (`Set-ScudRole`), Daytona USA 2 (`Set-Daytona2Role`) and Dirt Devils (`Set-DirtRole`) through the test menu. Reads `SUPERMODEL_COPIES` |
 | `nvram-supermodel.ps1` | Collects the NVRAM of each cabinet number of Scud Race, Daytona USA 2 and Dirt Devils into `$LINK_TESTS_OUT\nvram\supermodel`. Cabinets 1 to 4 are the files the four-copy tests left in the copies, 5 to 8 are made by raising the car number |
 | `nvram-sm2emu.ps1` | Makes the SM2-Emu NVRAM of Daytona USA for cabinets 1 to 8 and checks each one on the network screen |
+| `ssf2tb-tournament.sh` | Four Super Street Fighter II: The Tournament Battle in a chain, headless, in the `fliperos-linktest` image: a coin and Start on each, and each machine's screen saved as PNG (12 a second) through the tournament intro and the start of the fights. Uses `rec.lua` |
+| `rec.lua` | A MAME Lua script that presses ports and saves snapshots every N frames, from the plan in the file named by `REC_FILE` |
+| `link-story.py` | The real frontend's link screens on every cabinet, for the site animations: `netplay` (Escape Kids, 2 cabinets) or `ssf2tb` (4 cabinets). A fake library with the cabinet's art and a real party on the loopback. Run it in the `fliperos-guitest` image |
+| `pixelcab.py` | The drawing shared by the two animations: pixel art cabinets, the network cables with pulses, the CRT screens and the captions |
+| `netplay-anim.py`, `ssf2tb-anim.py` | The site animations `anim/netplay-{en,pt}.webp` and `anim/ssf2tb-{en,pt}.webp` (plus GIFs), 1200x900, from the screens of `link-story.py` and the game (the cabinet's preview video of Escape Kids, the PNGs of `ssf2tb-tournament.sh`). Run them in the `fliperos-video` image; `PREVIEW=t1,t2` saves only those instants |
 
 ## Things that cost time
 

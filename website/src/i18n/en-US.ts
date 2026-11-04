@@ -81,6 +81,7 @@ const enUS = {
       video: 'CRT & video',
       'web-panel': 'Web panel',
       emulators: 'Emulators',
+      link: 'Linked cabinets',
       hardware: 'Hardware',
       install: 'Install & updates',
       controls: 'Controls & light gun',
@@ -192,6 +193,14 @@ const enUS = {
     'anim/frontend-commercial': { title: 'Commercial mode', caption: 'A coin slot on screen: each coin adds minutes, and the game closes when the time ends.' },
     'frontend/options': { title: 'Frontend options', caption: 'Exit key, exit buttons, power button and commercial mode, in one list.' },
     'web/obs-{lang}': { title: 'Controller for OBS', caption: 'The stick and buttons of each player lighting up on the stream.' },
+    'anim/netplay-{lang}': {
+      title: 'Net play between two cabinets',
+      caption: 'Escape Kids, four players: cabinet 1 opens NET PLAY, cabinet 2 finds the game at the top of its list, copies it over the cable and joins. Real frontend screens and the real game.',
+    },
+    'anim/ssf2tb-{lang}': {
+      title: 'Four linked cabinets',
+      caption: 'Super Street Fighter II: The Tournament Battle: four cabinets join the party, open the game down the chain, and each machine shows its own bracket. Four real MAME machines linked.',
+    },
     'anim/web-library': { title: 'Web panel: play a game', caption: 'Search for Street Fighter II, open its sheet and press Play: it opens on the cabinet.' },
     'anim/web-frontend': { title: 'Web panel: the cabinet', caption: 'The game on the tube, live, with the stick and buttons lighting up as they are pressed.' },
     'anim/web-live': { title: 'Web panel: Live', caption: 'Street Fighter II streamed from the tube, with the fight going on.' },
@@ -226,6 +235,12 @@ const enUS = {
       gun: { title: 'Light gun on the tube', text: 'GunCon 2 with its driver built in and a calibration made for the CRT.' },
       live: { title: 'Live, with the controller on screen', text: 'Stream the cabinet in OBS with sound, and the stick and buttons lighting up on the picture.' },
       coin: { title: 'Commercial mode', text: 'Charge by time played: each coin adds minutes, and the game closes when they end.' },
+      link: {
+        title: 'Linked cabinets',
+        text: 'Join cabinets with a network cable: the four-cabinet Street Fighter tournament, races of up to eight, and net play.',
+        fourAlt: 'Pixel art of four Capcom cabinets of Super Street Fighter II: The Tournament Battle side by side, each screen on its own fighter select with its two player slots lit, joined by network cables on the floor.',
+        raceAlt: 'Pixel art of two twin sit-down racing cabinets, cars 1 to 4 on their marquees, the two screens of each cabinet showing one race, joined by a network cable.',
+      },
     },
   },
   whatsNew: {
@@ -405,6 +420,23 @@ const enUS = {
       intro: 'Arcade, consoles and Sega boards, set up for the monitor you chose, with the frontend you prefer.',
       rows: [
         { shot: 'gui/checklist', title: 'Install and update from the Setup', text: 'Updates come over the network at boot and show what they change before asking. Each emulator in Setup > Emulators & Games shows its version and what its update brings, and the ones left out of the image, like DuckStation, are installed from the same list.', points: [] },
+      ],
+    },
+    link: {
+      meta: {
+        title: 'Linked cabinets and net play on FliperOS: arcade link games over a network cable',
+        description: 'Join FliperOS cabinets with a network cable: link play for Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart and the four-cabinet Super Street Fighter II Tournament Battle, and local net play for games with more players than controls.',
+      },
+      kicker: 'Linked cabinets',
+      title: 'Two cabinets, one game. Or four.',
+      intro: 'Put a network cable between FliperOS cabinets and play together: the racing and fighting games that were made to link, and net play for games with more players than one cabinet has controls.',
+      rows: [
+        { shot: 'anim/netplay-{lang}', title: 'Net play: more players than controls', text: 'Escape Kids has four players and a cabinet has two controls. Cabinet 1 opens NET PLAY and waits. The game shows up at the top of cabinet 2’s list, JOIN PARTY copies it over the cable, and both play: players 1 and 2 on one cabinet, 3 and 4 on the other.', points: ['FBNeo and other RetroArch cores', 'Flycast GGPO', 'A player per control'] },
+        { shot: 'anim/ssf2tb-{lang}', title: 'The four-cabinet tournament', text: 'Super Street Fighter II: The Tournament Battle needs four linked boards. Each cabinet joins the party, the frontend opens the game on each one down the chain, and the tournament shows a bracket of its own on every machine: four fights at once, eight fighters.', points: ['4 cabinets', 'GroovyMAME', 'Chain link'] },
+        { shot: '', title: 'Six link games in the frontend', text: 'Daytona USA, Scud Race and Daytona USA 2 with up to eight cabinets, Dirt Devils and Club Kart: European Session with two, and the Tournament Battle with four. A green globe marks them in the list, and the waiting room starts the machines in the right order, each with the NVRAM of its cabinet number.', points: ['SM2-Emu', 'Supermodel', 'Flycast', 'GroovyMAME'] },
+        { shot: '', title: 'The game comes over the cable', text: 'A cabinet that joins without the game copies it from the cabinet that opened the party: only the files it lacks, with a progress bar.', points: ['Only what is missing'] },
+        { shot: '', title: 'Network cable only', text: 'The cabinets find each other on the wired network, with no internet, server or account. Wi-Fi is never used: a link wants every frame on time.', points: ['No internet', 'No Wi-Fi'] },
+        { shot: '', title: 'As fast as playing alone', text: 'Your own controls get no delay. In a link game each cabinet runs its own board and sees the others a frame or two late, as in the arcade. In net play, rollback fixes the other players’ moves within a frame.', points: ['No input delay', 'Rollback in net play'] },
       ],
     },
     hardware: {

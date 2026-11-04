@@ -84,6 +84,7 @@ const ptBR: Messages = {
       video: 'CRT e vídeo',
       'web-panel': 'Painel web',
       emulators: 'Emuladores',
+      link: 'Gabinetes em link',
       hardware: 'Hardware',
       install: 'Instalar e atualizar',
       controls: 'Controles e pistola',
@@ -194,6 +195,14 @@ const ptBR: Messages = {
     'anim/frontend-commercial': { title: 'Modo comercial', caption: 'Uma entrada de ficha na tela: cada ficha soma minutos, e o jogo fecha quando o tempo acaba.' },
     'frontend/options': { title: 'Opções do frontend', caption: 'Tecla de saída, botões de saída, botão de desligar e modo comercial, numa lista só.' },
     'web/obs-{lang}': { title: 'Controle para o OBS', caption: 'O direcional e os botões de cada jogador acendendo na transmissão.' },
+    'anim/netplay-{lang}': {
+      title: 'Net play entre dois gabinetes',
+      caption: 'Escape Kids, quatro jogadores: o gabinete 1 abre o NET PLAY, o gabinete 2 acha o jogo no alto da lista, copia pelo cabo e entra. Telas reais do frontend e o jogo de verdade.',
+    },
+    'anim/ssf2tb-{lang}': {
+      title: 'Quatro gabinetes em link',
+      caption: 'Super Street Fighter II: The Tournament Battle: quatro gabinetes entram na festa, abrem o jogo em corrente e cada máquina mostra a sua chave. Quatro MAME de verdade ligados.',
+    },
     'anim/web-library': { title: 'Painel web: jogar um jogo', caption: 'Busque Street Fighter II, abra a ficha e aperte Jogar: ele abre no gabinete.' },
     'anim/web-frontend': { title: 'Painel web: o gabinete', caption: 'O jogo no tubo, ao vivo, com o direcional e os botões acendendo quando apertados.' },
     'anim/web-live': { title: 'Painel web: Ao vivo', caption: 'Street Fighter II transmitido do tubo, com a luta acontecendo.' },
@@ -228,6 +237,12 @@ const ptBR: Messages = {
       gun: { title: 'Pistola no tubo', text: 'GunCon 2 com o driver já incluso e uma calibração feita para o CRT.' },
       live: { title: 'Ao vivo, com o controle na tela', text: 'Transmita o gabinete no OBS com som, e o direcional e os botões acendendo na imagem.' },
       coin: { title: 'Modo comercial', text: 'Cobre por tempo jogado: cada ficha soma minutos, e o jogo fecha quando eles acabam.' },
+      link: {
+        title: 'Gabinetes em link',
+        text: 'Ligue gabinetes com um cabo de rede: o torneio de Street Fighter de quatro gabinetes, corridas de até oito e net play.',
+        fourAlt: 'Pixel art de quatro gabinetes Capcom de Super Street Fighter II: The Tournament Battle lado a lado, cada tela na sua seleção de lutadores com os seus dois lugares acesos, ligados por cabos de rede no chão.',
+        raceAlt: 'Pixel art de dois gabinetes de corrida duplos de sentar, carros 1 a 4 nos letreiros, as duas telas de cada gabinete mostrando uma corrida só, ligados por um cabo de rede.',
+      },
     },
   },
   whatsNew: {
@@ -407,6 +422,23 @@ const ptBR: Messages = {
       intro: 'Arcade, consoles e placas da Sega, configurados para o monitor que você escolheu, com o frontend que você preferir.',
       rows: [
         { shot: 'gui/checklist', title: 'Instale e atualize pelo Setup', text: 'Os updates chegam pela rede no boot e mostram o que mudam antes de perguntar. Cada emulador em Setup > Emulators & Games mostra a sua versão e o que o update dele traz, e os que ficam fora da imagem, como o DuckStation, são instalados pela mesma lista.', points: [] },
+      ],
+    },
+    link: {
+      meta: {
+        title: 'Gabinetes em link e net play no FliperOS: jogos de arcade em link pelo cabo de rede',
+        description: 'Ligue gabinetes FliperOS com um cabo de rede: link para Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart e o Super Street Fighter II Tournament Battle de quatro gabinetes, e net play local para jogos com mais jogadores do que controles.',
+      },
+      kicker: 'Gabinetes em link',
+      title: 'Dois gabinetes, um jogo. Ou quatro.',
+      intro: 'Passe um cabo de rede entre gabinetes FliperOS e joguem juntos: os jogos de corrida e de luta que foram feitos para ligar, e net play para jogos com mais jogadores do que um gabinete tem controles.',
+      rows: [
+        { shot: 'anim/netplay-{lang}', title: 'Net play: mais jogadores do que controles', text: 'Escape Kids tem quatro jogadores e um gabinete tem dois controles. O gabinete 1 abre o NET PLAY e espera. O jogo aparece no alto da lista do gabinete 2, o JOIN PARTY copia o jogo pelo cabo, e os dois jogam: jogadores 1 e 2 num gabinete, 3 e 4 no outro.', points: ['FBNeo e outros cores do RetroArch', 'GGPO do Flycast', 'Um jogador por controle'] },
+        { shot: 'anim/ssf2tb-{lang}', title: 'O torneio de quatro gabinetes', text: 'Super Street Fighter II: The Tournament Battle precisa de quatro placas ligadas. Cada gabinete entra na festa, o frontend abre o jogo em cada um, em corrente, e o torneio mostra uma chave própria em cada máquina: quatro lutas ao mesmo tempo, oito lutadores.', points: ['4 gabinetes', 'GroovyMAME', 'Link em corrente'] },
+        { shot: '', title: 'Seis jogos de link no frontend', text: 'Daytona USA, Scud Race e Daytona USA 2 com até oito gabinetes, Dirt Devils e Club Kart: European Session com dois, e o Tournament Battle com quatro. Um globo verde marca cada um na lista, e a sala de espera abre as máquinas na ordem certa, cada uma com a NVRAM do seu número de gabinete.', points: ['SM2-Emu', 'Supermodel', 'Flycast', 'GroovyMAME'] },
+        { shot: '', title: 'O jogo vem pelo cabo', text: 'Um gabinete que entra sem o jogo copia do gabinete que abriu a festa: só os arquivos que faltam, com uma barra de progresso.', points: ['Só o que falta'] },
+        { shot: '', title: 'Só pelo cabo de rede', text: 'Os gabinetes se acham na rede cabeada, sem internet, servidor ou conta. O Wi-Fi nunca é usado: um link quer cada quadro na hora.', points: ['Sem internet', 'Sem Wi-Fi'] },
+        { shot: '', title: 'Rápido como jogar sozinho', text: 'Os seus controles não ganham atraso. Num jogo de link cada gabinete roda a sua placa e vê os outros um ou dois quadros depois, como no fliperama. No net play, o rollback acerta os movimentos dos outros jogadores em menos de um quadro.', points: ['Sem atraso nos controles', 'Rollback no net play'] },
       ],
     },
     hardware: {
