@@ -5340,6 +5340,21 @@ class SessionTableTests(unittest.TestCase):
             self.assertNotIn('log=/var/log', (ROOT / 'config/fliperos-session').read_text())
             self.assertFalse((tmp / 'logs/Xorg-failed.log').exists())
 
+    def test_home_belongs_to_the_user(self):
+        # ISO 0.18/0.19: o fliperos-roms rodava como root no build e deixava
+        # ~/.local de root; o X sem ~/.local/share/xorg nao abria (desktop,
+        # GroovyMAME, Flycast). O build o roda como a pessoa e o update
+        # devolve a home a quem ja instalou.
+        mkiso = (ROOT / 'fliperos-mkiso.sh').read_text()
+        self.assertIn('chroot "$CHROOT_DIR" runuser -u fliperos -- env HOME=/home/fliperos '
+                      '/opt/fliperos/bin/fliperos-roms', mkiso)
+        self.assertNotIn('chroot "$CHROOT_DIR" env HOME=/home/fliperos /opt/fliperos/bin/fliperos-roms', mkiso)
+        self.assertLess(mkiso.index('chroot "$CHROOT_DIR" chown -R fliperos:fliperos /home/fliperos\n'),
+                        mkiso.index('runuser -u fliperos -- env HOME=/home/fliperos'))
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        fix = update.index('find /home/fliperos -xdev -user 0 -exec chown -h fliperos:fliperos {} +')
+        self.assertLess(fix, update.index('runuser -u fliperos -- /opt/fliperos/bin/fliperos-roms'))
+
     def test_programs_fetched_from_their_site(self):
         # "fetch:COMANDO" na coluna do pacote: o que nao pode vir na imagem. O
         # comando vem na imagem, e o binario da linha so existe depois do fetch.

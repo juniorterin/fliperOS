@@ -329,6 +329,11 @@ echo "== FBNeo sets (the system of each one, for the RetroArch core)"
 /opt/fliperos/bin/fliperos-fbneo fetch /usr/local/share/fliperos/fbneo-sets.tsv.xz || echo "failed (no network?)"
 
 echo "== Folders in ~ (roms, bios, media, config)"
+# A home e da pessoa: a ISO 0.18/0.19 trouxe ~/.local, ~/nvram e ~/save de
+# root (fliperos-mkiso.sh), e sem gravar em ~/.local/share/xorg o X do
+# desktop e dos emuladores nao abria. -xdev e sem seguir links: as pastas
+# escolhidas pela pessoa em outro disco ficam como estao.
+find /home/fliperos -xdev -user 0 -exec chown -h fliperos:fliperos {} + 2> /dev/null || true
 runuser -u fliperos -- /opt/fliperos/bin/fliperos-roms
 ls -ld /opt/fliperos/roms /opt/fliperos/bios
 echo "core folders: $(find /home/fliperos/roms/retroarch -mindepth 1 -maxdepth 1 -type d | wc -l)"

@@ -1730,11 +1730,12 @@ build_dolphin_chroot
 prepare_extras_chroot
 # Pastas do usuario (~/roms, ~/bios, ~/media, ~/config): uma por emulador e
 # por core do RetroArch, das informacoes dos cores que o build do RetroArch
-# deixou. O chown -R muda os links de ~/config, nao o que eles apontam.
-chroot "$CHROOT_DIR" env HOME=/home/fliperos /opt/fliperos/bin/fliperos-roms >> "$LOG_FILE" 2>&1
-chroot "$CHROOT_DIR" chown -R fliperos:fliperos /home/fliperos/roms /home/fliperos/bios /home/fliperos/media \
-  /home/fliperos/config
-[[ -e $CHROOT_DIR/home/fliperos/.config/PCSX2 ]] && chroot "$CHROOT_DIR" chown -R fliperos:fliperos /home/fliperos/.config/PCSX2
+# deixou. Roda como a pessoa, com a home inteira ja dela: como root, o que ele
+# passou a criar (~/nvram, ~/save, ~/.local/share/...) saia de root na ISO
+# 0.18/0.19, e sem gravar em ~/.local/share/xorg o X do desktop e dos
+# emuladores nao abria. O chown -R muda os links, nao o que eles apontam.
+chroot "$CHROOT_DIR" chown -R fliperos:fliperos /home/fliperos
+chroot "$CHROOT_DIR" runuser -u fliperos -- env HOME=/home/fliperos /opt/fliperos/bin/fliperos-roms >> "$LOG_FILE" 2>&1
 slim_rootfs_chroot
 rm -f "$CHROOT_DIR/usr/sbin/policy-rc.d"
 unmount_chroot
