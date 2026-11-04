@@ -211,7 +211,7 @@ const ptBR: Messages = {
   },
   badges: {
     label: 'Destaques técnicos',
-    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'AMD · NVIDIA · Intel', 'GroovyMAME', 'Frontend FliperOS', 'Fightcade 2', 'Painel web', 'Ao vivo + OBS', 'Monitor vertical', 'Multimonitor', 'Baixa latência', 'Vulkan', 'GunCon 2', 'Pixelcade', 'ZeDMD', 'Modo comercial', 'Lab mode', 'Updates OTA', 'Open Source'],
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', 'Limine', '15 kHz', 'Switchres', 'CRT Ready', 'AMD · NVIDIA · Intel', 'DP/HDMI para VGA', 'GroovyMAME', 'RetroArch', 'Flycast', 'Supermodel', 'PCSX2 · Dolphin', 'Frontend FliperOS', 'Fightcade 2', 'Gabinetes em link', 'Net play', 'Painel web', 'Ao vivo + OBS', 'Menu na tela', 'Filtro de entrelaçado', 'Scanlines 31 kHz', 'Monitor vertical', 'Multimonitor', 'Baixa latência', 'Vulkan', 'GunCon 2', 'LEDSpicer', 'Pixelcade', 'ZeDMD', 'Filtro de ROMs', 'Download BIOS', 'Scraper', 'Samba + SSH', 'Modo comercial', 'Lab mode', 'Updates OTA', 'Open Source'],
   },
   howItWorks: {
     kicker: 'Como funciona',

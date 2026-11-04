@@ -209,7 +209,7 @@ const enUS = {
   },
   badges: {
     label: 'Technical highlights',
-    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', '15 kHz', 'Switchres', 'CRT Ready', 'AMD · NVIDIA · Intel', 'GroovyMAME', 'FliperOS frontend', 'Fightcade 2', 'Web panel', 'Live + OBS', 'Vertical monitor', 'Multi-monitor', 'Low latency', 'Vulkan', 'GunCon 2', 'Pixelcade', 'ZeDMD', 'Commercial mode', 'Lab mode', 'OTA updates', 'Open Source'],
+    items: ['Ubuntu 24.04', 'Kernel 6.18 LTS', 'Limine', '15 kHz', 'Switchres', 'CRT Ready', 'AMD · NVIDIA · Intel', 'DP/HDMI to VGA', 'GroovyMAME', 'RetroArch', 'Flycast', 'Supermodel', 'PCSX2 · Dolphin', 'FliperOS frontend', 'Fightcade 2', 'Linked cabinets', 'Net play', 'Web panel', 'Live + OBS', 'On-screen menu', 'Interlaced filter', 'Scanlines 31 kHz', 'Vertical monitor', 'Multi-monitor', 'Low latency', 'Vulkan', 'GunCon 2', 'LEDSpicer', 'Pixelcade', 'ZeDMD', 'ROM filter', 'Download BIOS', 'Scraper', 'Samba + SSH', 'Commercial mode', 'Lab mode', 'OTA updates', 'Open Source'],
   },
   howItWorks: {
     kicker: 'How it works',
