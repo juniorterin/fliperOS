@@ -1,22 +1,88 @@
-# FliperOS 0.19
+<p align="center">
+  <a href="https://fliperos.juniorter.in"><img src="website/public/art/og-room.png" width="100%" alt="Pixel art de um gabinete de fliperama branco numa sala com luz roxa, um jogo de luta no CRT e o PC ao lado"></a>
+</p>
 
-[English](README.md) | **Português**
+<h1 align="center">FliperOS 0.19</h1>
 
-[![Grupo no Telegram](https://img.shields.io/badge/Telegram-entre%20no%20grupo-26A5E4?logo=telegram&logoColor=white)](https://t.me/fliperos15khz) Dúvidas, fotos do seu gabinete e ajuda de outros usuários. Cada release é postado lá, com fotos e a explicação de como as novidades funcionam.
+<p align="center">
+  <b>Arcade Linux. Feito para CRT.</b><br>
+  Ubuntu 24.04 para gabinetes de fliperama com tubo de 15 kHz, configurado no próprio gabinete.
+</p>
+
+<p align="center">
+  <a href="https://github.com/juniorterin/fliperOS/releases/latest"><img alt="Versão mais recente" src="https://img.shields.io/github/v/release/juniorterin/fliperOS?label=vers%C3%A3o&style=for-the-badge&color=ff79c6&labelColor=282a36"></a>
+  <a href="https://github.com/juniorterin/fliperOS/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/juniorterin/fliperOS/total?label=downloads&style=for-the-badge&color=50fa7b&labelColor=282a36"></a>
+  <a href="https://github.com/juniorterin/fliperOS/stargazers"><img alt="Estrelas" src="https://img.shields.io/github/stars/juniorterin/fliperOS?label=estrelas&style=for-the-badge&color=f1fa8c&labelColor=282a36"></a>
+  <a href="https://github.com/juniorterin/fliperOS/commits/main"><img alt="Último commit" src="https://img.shields.io/github/last-commit/juniorterin/fliperOS?label=%C3%BAltimo%20commit&style=for-the-badge&color=8be9fd&labelColor=282a36"></a>
+</p>
+
+<p align="center">
+  <img alt="Ubuntu 24.04" src="https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu&logoColor=white">
+  <img alt="Kernel 6.18 LTS" src="https://img.shields.io/badge/kernel-6.18%20LTS-FCC624?logo=linux&logoColor=black">
+  <img alt="15 kHz" src="https://img.shields.io/badge/CRT-15%20kHz-bd93f9">
+  <img alt="Switchres" src="https://img.shields.io/badge/modos-Switchres-ff79c6">
+  <img alt="AMD, NVIDIA e Intel" src="https://img.shields.io/badge/placa-AMD%20%C2%B7%20NVIDIA%20%C2%B7%20Intel-ff5555">
+  <img alt="amd64" src="https://img.shields.io/badge/arq-amd64-6272a4">
+  <img alt="Limine" src="https://img.shields.io/badge/boot-Limine-ffb86c">
+</p>
+
+<p align="center">
+  <a href="https://t.me/fliperos15khz"><img alt="Grupo no Telegram" src="https://img.shields.io/badge/Telegram-entre%20no%20grupo-26A5E4?logo=telegram&logoColor=white"></a>
+  <a href="https://fliperos.juniorter.in"><img alt="Site" src="https://img.shields.io/badge/site-fliperos.juniorter.in-50fa7b?logo=googlechrome&logoColor=white"></a>
+  <a href="https://github.com/juniorterin/fliperOS/wiki"><img alt="Wiki" src="https://img.shields.io/badge/docs-wiki-8be9fd?logo=github&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/juniorterin/fliperOS/releases/latest"><b>Baixar</b></a> ·
+  <a href="https://fliperos.juniorter.in">Site</a> ·
+  <a href="https://github.com/juniorterin/fliperOS/wiki">Wiki</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://t.me/fliperos15khz">Telegram</a>
+  <br>
+  <a href="README.md">English</a> · <b>Português</b>
+</p>
 
 Ubuntu 24.04 (amd64) para gabinetes de fliperama com monitor CRT, no estilo do GroovyArcade: **kernel de 15 kHz**, Switchres, emuladores e frontends prontos para jogar e um menu de configuração (`fliperos-setup`) feito para a tela do tubo. Uma alternativa para PC ao GroovyArcade, Batocera, Recalbox, ReplayOS e RGB-Pi para CRTs de fliperama de 15 kHz.
 
-Em desenvolvimento: a 0.19 é testada no QEMU e num gabinete com CRT de 15 kHz. Documentação completa na **[wiki](https://github.com/juniorterin/fliperOS/wiki)** (em inglês). Site: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (código em [`website/`](website)).
+Em desenvolvimento: a 0.19 é testada no QEMU e num gabinete com CRT de 15 kHz. Documentação completa na **[wiki](https://github.com/juniorterin/fliperOS/wiki)** (em inglês). Site: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (código em [`website/`](website)). No **[grupo do Telegram](https://t.me/fliperos15khz)** tem dúvidas, fotos de gabinetes e ajuda de outros usuários; cada release é postado lá, com fotos e a explicação de como as novidades funcionam.
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="website/public/screenshots/frontend/full.webp" width="240" alt="Frontend do FliperOS em tela cheia: Aggressors of Dark Kombat com o vídeo ao fundo e o nome, ano e controles na frente"><br><sub><b>Tela cheia</b>: o vídeo do jogo ao fundo, o nome e as informações na frente</sub></td>
+    <td align="center" width="33%"><img src="website/public/screenshots/frontend/grid.webp" width="240" alt="Frontend do FliperOS em grade: seis jogos de arcade, três por fileira"><br><sub><b>Grade</b>: três por fileira, cada jogo à vista tocando o seu vídeo</sub></td>
+    <td align="center" width="33%"><img src="website/public/screenshots/frontend/list.webp" width="240" alt="Frontend do FliperOS em lista: os nomes dos jogos à esquerda, a imagem e as informações à direita"><br><sub><b>Lista</b>: os jogos à esquerda, a imagem, o logo e as informações à direita</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="website/public/screenshots/gui/setup.webp" width="240" alt="Carrossel do FliperOS Setup no Video Setup"><br><sub><b>Setup</b>: todo menu é um carrossel arcade desenhado em 320x240</sub></td>
+    <td align="center"><img src="website/public/screenshots/anim/frontend-play.webp" width="240" alt="Animação: o cartão de um jogo abre, Jogar, e o jogo começa"><br><sub><b>Jogar</b>: o cartão abre, Jogar, e o jogo está no tubo</sub></td>
+    <td align="center"><img src="website/public/screenshots/anim/romfilter.webp" width="240" alt="Animação: o filtro de ROMs do MAME, o número de jogos mudando a cada quadro ajustado"><br><sub><b>Filtro de ROMs</b>: jogos e tamanho mudam a cada quadro que você ajusta</sub></td>
+  </tr>
+</table>
+
+<sub>Capturas reais em 320x240, do jeito que o tubo mostra.</sub>
 
 ## O que vem nele
 
-- **Vídeo**: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.
-- **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, SM2-Emu (Model 2), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Games > Extras.
-- **Frontends**: o frontend do próprio FliperOS como padrão (no visual do menu do Setup: lista, tela cheia e grade; clones agrupados sob cada jogo; rolagem de letra em letra), além de Attract-Mode Plus, EmulationStation (ES-DE) e Pegasus (compilados no gabinete na primeira vez que você os escolhe) e Fightcade 2, cujas partidas online rodam na resolução nativa de cada jogo no tubo.
-- **Pistola de luz**: GunCon 2 pronta para usar (driver por DKMS), calibrada para o tubo no Setup > Joysticks. Volantes também.
-- **Setup**: vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência.
-- **Pastas** `roms`, `bios`, `media`, `nvram`, `save` e `config` em `~` e pela rede (Samba); desktop LXDE com loja de aplicativos.
-- **SSH** ligado desde o primeiro boot (`ssh fliperos@fliperos.local`, senha `fliperos`). Por baixo dos menus é um Ubuntu comum, então um assistente de IA consegue configurá-lo pelo SSH.
+- 📺 **Vídeo**: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.
+- 🕹️ **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, SM2-Emu (Model 2), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Games > Extras.
+- 🎮 **Frontends**: o frontend do próprio FliperOS como padrão (no visual do menu do Setup: lista, tela cheia e grade; clones agrupados sob cada jogo; rolagem de letra em letra), além de Attract-Mode Plus, EmulationStation (ES-DE) e Pegasus (compilados no gabinete na primeira vez que você os escolhe) e Fightcade 2, cujas partidas online rodam na resolução nativa de cada jogo no tubo.
+- 🔫 **Pistola de luz**: GunCon 2 pronta para usar (driver por DKMS), calibrada para o tubo no Setup > Joysticks. Volantes também.
+- ⚙️ **Setup**: vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência.
+- 📁 **Pastas** `roms`, `bios`, `media`, `nvram`, `save` e `config` em `~` e pela rede (Samba); desktop LXDE com loja de aplicativos.
+- 🔑 **SSH** ligado desde o primeiro boot (`ssh fliperos@fliperos.local`, senha `fliperos`). Por baixo dos menus é um Ubuntu comum, então um assistente de IA consegue configurá-lo pelo SSH.
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="website/public/art/arcade-link-4.png" width="288" alt="Pixel art de quatro gabinetes de Super Street Fighter II ligados por cabos de rede"><br><b>Gabinetes em link</b><br><sub>Um cabo de rede entre gabinetes: o torneio de Street Fighter de quatro gabinetes, corridas de até oito e net play.</sub></td>
+    <td align="center" width="33%"><img src="website/public/art/arcade-3-screens.png" width="208" alt="Pixel art de um gabinete de corrida sentado com três CRTs lado a lado"><br><b>Duas ou três telas</b><br><sub>Darius, Punch-Out!! e F355 Challenge, cada tela no seu próprio CRT.</sub></td>
+    <td align="center" width="33%"><img src="website/public/screenshots/anim/setup-guncon.webp" width="240" alt="Animação: a calibração da GunCon 2, tiros nos cantos e um no centro"><br><b>Pistola no tubo</b><br><sub>GunCon 2 com o driver já incluso e uma calibração feita para o CRT.</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="website/public/screenshots/anim/frontend-commercial.webp" width="240" alt="Animação: o modo comercial, duas fichas somando minutos na tela"><br><b>Modo comercial</b><br><sub>Cada ficha soma minutos, e o jogo fecha quando eles acabam.</sub></td>
+    <td align="center"><img src="website/public/screenshots/anim/setup-colour.webp" width="240" alt="Animação: gama e cor mudando na tela no Setup"><br><b>Cor e entrelaçado</b><br><sub>Gama e cor mudam enquanto você ajusta; os jogos entrelaçados ganham um filtro de flicker.</sub></td>
+    <td align="center"><img src="website/public/screenshots/anim/setup-latency.webp" width="240" alt="Animação: a tela de latência do Setup, modos Standard e Low latency"><br><b>Baixa latência</b><br><sub>USB a 1000 Hz, preempção do kernel, frame delay e preemptive frames.</sub></td>
+  </tr>
+</table>
 
 ## Painel web: o gabinete pelo celular
 
@@ -28,6 +94,11 @@ Abra **http://fliperos.local** no celular ou no PC da mesma rede (usuário `flip
 - **copiar jogos, BIOS e imagens**, filtrar um romset do MAME e baixar só o que combina com o seu gabinete;
 - **ver o sistema** (modo de vídeo e modeline, temperaturas, logs), ver uma prévia do marquee (Pixelcade ou ZeDMD) sem o aparelho ou abrir um terminal.
 
+<p align="center">
+  <img src="website/public/screenshots/web/frontend-pt.webp" width="600" alt="Painel web no navegador: Street Fighter II jogando agora no gabinete, a 15,688 kHz, com o volume e os sistemas de jogos">
+  <img src="website/public/screenshots/web/phone-pt.webp" width="173" alt="Painel web no celular: jogando agora a 59,6 FPS e a lista de jogos com busca">
+</p>
+
 No gabinete, segure **Start e Baixo** por um segundo em qualquer jogo para abrir o [menu na tela](docs/wiki/Installed-system.md#on-screen-menu): volume, filtro do entrelaçado, geometria e cores, por cima do jogo aberto.
 
 Cada página em detalhe: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
@@ -37,6 +108,10 @@ Cada página em detalhe: [Web panel](https://github.com/juniorterin/fliperOS/wik
 O direcional e os botões acendem na sua live enquanto você aperta no gabinete, como os input displays das transmissões de jogos de luta. É uma página para a fonte Navegador do OBS, com fundo transparente: copie o endereço em **Ao vivo > Controle para o OBS** e cole no OBS.
 
 Ela lê os controles do Button mapping, joysticks e encoders de teclado, de um ou dois jogadores. O visual muda no próprio painel, num editor de CSS com prévia ao vivo, e o estilo salvo aparece no OBS na hora. Passo a passo e exemplos de CSS: [Controller on the stream](https://github.com/juniorterin/fliperOS/wiki/Controller-overlay) (em inglês).
+
+<p align="center">
+  <img src="website/public/screenshots/anim/web-controller.webp" width="600" alt="Animação: a página Controle para o OBS, o direcional dos dois jogadores inclinando e os botões acendendo enquanto se joga Street Fighter II no gabinete">
+</p>
 
 ## Do zero ao jogo: passo a passo
 
@@ -105,6 +180,11 @@ Abre o menu **FliperOS Setup** (Install to HD/SSD, Recovery Mode, Terminal, Shut
 5. **Installing FliperOS**: uma barra de progresso com a etapa atual. Leva alguns minutos.
 6. **Installation completed successfully**: tire o pendrive e escolha **Reboot now**. Numa **Intel HD**, desligue em vez de reiniciar: passe o cabo do monitor comum para a CRT e então ligue o gabinete.
 
+<p align="center">
+  <img src="website/public/screenshots/anim/install.webp" width="320" alt="Animação: a instalação no tubo, escolhendo o monitor e o disco, e depois a barra de progresso">
+  <br><sub>A instalação no tubo (2x mais rápido).</sub>
+</p>
+
 ### 7. Primeiro boot do sistema instalado
 
 1. O gabinete vai direto para o splash, sem texto.
@@ -112,6 +192,11 @@ Abre o menu **FliperOS Setup** (Install to HD/SSD, Recovery Mode, Terminal, Shut
 3. Quando você sai do frontend (Esc), aparece o **menu do FliperOS**: *Start frontend*, *Setup*, *Start desktop*, *Exit to shell*, *Shutdown / Reboot*. O título mostra o IP do gabinete. Cada item é explicado em [Os menus, item por item](#os-menus-item-por-item).
 4. **Rede**: o cabo de rede funciona sozinho. Para Wi-Fi: *Setup > Network Setup*, escolha a rede e digite a senha. Conectado, o IP aparece no título do menu.
 5. **Atualizações**: a cada boot com internet, se houver uma atualização do FliperOS, uma tela diz o que ela traz e pergunta **Apply now** (aplicar agora) ou **Not now** (agora não).
+
+<p align="center">
+  <img src="website/public/screenshots/gui/main.webp" width="400" alt="O menu do FliperOS: Start frontend selecionado no carrossel, o endereço de rede e o uso do disco no alto">
+  <br><sub>O menu do FliperOS, com o IP do gabinete no alto.</sub>
+</p>
 
 ### 8. Configure os controles
 
@@ -121,6 +206,11 @@ Nos menus, o painel ou um controle já funciona como teclado: direcional = setas
 2. Para cada jogador, aperte o que ele pede, nesta ordem: cima, baixo, esquerda, direita, **botões 1 a 6** na ordem do painel (1 2 3 na fileira de cima, 4 5 6 na de baixo), **Start** e **Ficha** (Coin). O primeiro comando apertado diz qual controle é daquele jogador. Sem nada apertado por 8 segundos, aquele comando fica de fora.
 3. O mapeamento vai para todos os emuladores de uma vez (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Hypseus e OpenBOR).
 4. Pistola de luz (GunCon 2), volante e pedais têm calibradores no mesmo menu, e o *Setup > System > Quirks* corrige aparelhos USB que chegam errados (por exemplo, um encoder duplo que aparece como um jogador só). Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
+
+<p align="center">
+  <img src="website/public/screenshots/anim/setup-buttons.webp" width="320" alt="Animação: o Button mapping, quantos jogadores e depois cada botão pedido na sua vez">
+  <br><sub>Button mapping: aperte cada botão quando ele pedir; o layout segue o seu painel.</sub>
+</p>
 
 ### 9. Copie os seus jogos
 
@@ -133,6 +223,11 @@ Use só jogos que você tem direito de usar (cópias dos seus originais, ou os j
 - **Torrents**: o *Transmission (torrent)* abre os arquivos `.torrent` e os links magnet do navegador. Quando o download terminar, mova os arquivos de `Downloads` para a pasta certa em `roms`.
 - **Armazenamento externo**: ligue um pendrive ou um disco externo. Ele é montado sozinho e ganha um ícone no desktop: abra-o, copie os arquivos e cole-os na pasta certa em `roms` (ou `bios`).
 - **Para voltar aos jogos**: *Logout* no menu do desktop > voltar ao menu do FliperOS.
+
+<p align="center">
+  <img src="website/public/screenshots/desktop.webp" width="480" alt="O desktop LXDE com o tema Dracula e um papel de parede de cidade em pixel art">
+  <br><sub>O desktop LXDE: tema Dracula, menu Games, loja de aplicativos e um ícone para cada disco.</sub>
+</p>
 
 **Pela rede**, de outro computador na mesma rede:
 
@@ -168,6 +263,11 @@ Tem um romset completo do MAME? *Setup > Games > Cleaner > MAME ROM Cleaner* dei
 3. **Se você usa o Attract-Mode Plus**: *Setup > Games > Frontend* > escolha-o (o Setup cria um sistema para cada pasta que tem jogos; faça isso de novo sempre que uma pasta receber os primeiros jogos) e rode o *Setup > Games > AttractPlus ROM List* para os nomes de verdade. Para jogos colocados depois, rode de novo a ROM List ou o Scraper.
 
 Detalhes em [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends) e [Adding games](https://github.com/juniorterin/fliperOS/wiki/Adding-games).
+
+<p align="center">
+  <img src="website/public/screenshots/anim/frontend-info.webp" width="320" alt="Animação: o cartão de um jogo no frontend (Jogar, favoritar, mais) e depois a página dele com botões, fotos e história">
+  <br><sub>A página de cada jogo: os botões dele no seu painel, fotos e a história.</sub>
+</p>
 
 ### 11. Jogue
 
@@ -222,6 +322,14 @@ Aparece quando você sai do frontend (Esc). O título mostra o nome do gabinete,
 ### Setup
 
 Os itens vêm na ordem de quem arruma um gabinete: imagem, som, rede, controles, jogos e o resto do sistema. Embaixo da lista, um balão diz para que serve o item sob o cursor.
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="website/public/screenshots/gui/video.webp" width="240" alt="Setup, menu Video Setup"><br><sub><b>Video Setup</b>: tipo de monitor, orientação, resolução e geometria</sub></td>
+    <td align="center" width="33%"><img src="website/public/screenshots/gui/joysticks.webp" width="240" alt="Setup, menu Joysticks"><br><sub><b>Joysticks</b>: mapeamento de botões, layout, GunCon 2 e os outros controles</sub></td>
+    <td align="center" width="33%"><img src="website/public/screenshots/gui/setup-games.webp" width="240" alt="Setup, menu Games"><br><sub><b>Games</b>: frontend, emuladores, pastas, downloader e scraper</sub></td>
+  </tr>
+</table>
 
 - **Video Setup**: como a imagem sai no monitor. O topo da tela mostra o que está configurado agora.
   - *Monitor Type*: o tipo de monitor (CRT arcade 15 kHz, 25 kHz, 31 kHz, TV, LCD...). Ele decide quais modos de vídeo são permitidos;
@@ -316,5 +424,14 @@ As páginas ficam em [`docs/wiki`](docs/wiki) e vão para a wiki com `bash tools
 
 Pessoas que ajudaram o FliperOS com código, testes no próprio hardware ou ideias:
 
-- [ultimatevga-dot](https://github.com/ultimatevga-dot)
-- [theblackk62](https://github.com/theblackk62)
+<table>
+  <tr>
+    <td align="center"><a href="https://github.com/ultimatevga-dot"><img src="https://github.com/ultimatevga-dot.png?size=128" width="64" alt=""><br><sub>ultimatevga-dot</sub></a></td>
+    <td align="center"><a href="https://github.com/theblackk62"><img src="https://github.com/theblackk62.png?size=128" width="64" alt=""><br><sub>theblackk62</sub></a></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="website/public/fliperos-logo.png" width="101" alt="Logo do FliperOS: um gabinete de fliperama em pixel art numa pequena sala isométrica">
+  <br><sub>Gratuito e sem conta: o código e todas as ISOs estão no GitHub.</sub>
+</p>

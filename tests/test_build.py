@@ -12813,9 +12813,9 @@ class DocsTests(unittest.TestCase):
     def test_readmes_guide_from_install_to_play_in_both_languages(self):
         english = (ROOT / 'README.md').read_text(encoding='utf-8')
         portuguese = (ROOT / 'README.pt-BR.md').read_text(encoding='utf-8')
-        # Um leva ao outro, logo no topo.
-        self.assertIn('(README.pt-BR.md)', english.split('\n## ')[0])
-        self.assertIn('(README.md)', portuguese.split('\n## ')[0])
+        # Um leva ao outro, logo no topo (link Markdown ou HTML do cabecalho centralizado).
+        self.assertRegex(english.split('\n## ')[0], r'\(README\.pt-BR\.md\)|href="README\.pt-BR\.md"')
+        self.assertRegex(portuguese.split('\n## ')[0], r'\(README\.md\)|href="README\.md"')
         for readme in (english, portuguese):
             # Leva a cada pagina da wiki, e so a paginas que existem.
             linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
