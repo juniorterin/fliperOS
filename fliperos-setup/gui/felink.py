@@ -41,9 +41,12 @@ NVRAM_SRC = os.environ.get("FLIPEROS_LINK_NVRAM") or next(
     (p for p in ("/usr/local/share/fliperos/link-nvram", os.path.join(HERE, "..", "..", "config", "link-nvram"))
      if os.path.isdir(p)), "/usr/local/share/fliperos/link-nvram")
 PORT_PRESENCE, PORT_PARTY, PORT_FILES = 55436, 55437, 55438
-# O net play e o do RetroArch: o core do FBNeo, pelo fliperos-kms-run. A
-# lista dos sets do FBNeo vem do indice que o Setup baixa (config/fliperos-fbneo).
+# O net play e o do RetroArch: o core do FBNeo, pelo fliperos-kms-run, so com
+# os jogos da pasta dele (~/roms/retroarch/fbneo, o romset do FBNeo): um zip do
+# romset do MAME nem sempre tem os dumps que o FBNeo pede. A lista dos sets do
+# FBNeo vem do indice que o Setup baixa (config/fliperos-fbneo).
 PORT_NETPLAY = 55435
+NETPLAY_SYSTEM = "retroarch/fbneo"
 BUTTONS_MAP = os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
 KMS_RUN = os.environ.get("FLIPEROS_KMS_RUN", "/opt/fliperos/bin/fliperos-kms-run")
 NETPLAY_CORE = os.environ.get("FLIPEROS_NETPLAY_CORE", "/opt/fliperos/retroarch/cores/fbneo_libretro.so")
@@ -661,16 +664,17 @@ def fbneo_sets(path=None):
 
 def netplay_profile(system_key, name, players, local, sets=None):
     """O perfil de net play de um jogo, ou None: tem mais jogadores do que
-    controles aqui e o FBNeo o roda (so ele salva o estado do jeito que o net
-    play pede). Cada gabinete entra com um jogador; quem abre e o primeiro."""
+    controles aqui, esta na pasta do FBNeo e e um arcade dele (so ele salva o
+    estado do jeito que o net play pede). Cada gabinete entra com um jogador;
+    quem abre e o primeiro."""
     try:
         n = int(players)
     except (TypeError, ValueError):
         return None
     sets = fbneo_sets() if sets is None else sets
-    if (system_key or "").split("/")[0] != "mame" or n <= local or name not in sets:
+    if system_key != NETPLAY_SYSTEM or n <= local or name not in sets:
         return None
-    return {"id": "netplay", "title": name, "emulator": "retroarch", "systems": ["mame"], "sets": [name],
+    return {"id": "netplay", "title": name, "emulator": "retroarch", "systems": [NETPLAY_SYSTEM], "sets": [name],
             "min": 2, "max": n, "players": n, "fixed": False, "order": "master-first", "step": 6,
             "port": PORT_NETPLAY, "netplay": True}
 

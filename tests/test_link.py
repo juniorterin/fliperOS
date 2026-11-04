@@ -632,7 +632,7 @@ class FrontendLinkTests(unittest.TestCase):
         link.netplay_of.side_effect = lambda system, name, players: felink.netplay_profile(system, name, players, 2, sets={"xmen"})
         games = [{"Name": n, "Title": n, "_system": {"key": k}, "Players": pl}
                  for k, n, pl in (("mame", "sf2", "2"), ("model3", "scud", "1"), ("model3", "daytona2", "1"))]
-        games.append({"Name": "xmen", "Title": "xmen", "_system": {"key": "mame"}, "Players": "4"})
+        games.append({"Name": "xmen", "Title": "xmen", "_system": {"key": "retroarch/fbneo"}, "Players": "4"})
         fe = types.SimpleNamespace(link=link, games=games, mode="list", show_clones=True, opened=set(), cursor=0,
                                    fd=types.SimpleNamespace(tree=lambda gs: [(g, []) for g in gs]), filtered=lambda: games,
                                    rows=[], game=lambda: fe.rows[fe.cursor][0])
@@ -668,7 +668,7 @@ class FrontendLinkTests(unittest.TestCase):
         self.assertEqual(self.kinds(fe, "xmen"), ["play", "link", "fav", "more"])
         tile = fe.popup_tiles()[1]
         self.assertEqual((tile["label"], tile["net"]), ("NET PLAY", True))
-        party = dict(self.party(), game="xmen", system="mame", max=4)
+        party = dict(self.party(), game="xmen", system="retroarch/fbneo", max=4)
         fe2 = self.stub([party])
         self.assertEqual(self.kinds(fe2, "xmen"), ["play", "join", "new", "fav", "more"])
         self.assertEqual([t["label"] for t in fe2.popup_tiles()[1:3]], ["JOIN PARTY", "NEW PARTY"])
@@ -715,7 +715,7 @@ class SlotsTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.prof = felink.netplay_profile("mame", "xmen", "6", 2, frozenset({"xmen"}))
+        self.prof = felink.netplay_profile("retroarch/fbneo", "xmen", "6", 2, frozenset({"xmen"}))
         self.port = free_port()
 
     def host(self, take=2):
@@ -819,10 +819,10 @@ class SlotsTests(unittest.TestCase):
         self.guest("g2", 2)
         plan = host.start()
         self.assertEqual([(m["number"], m["first"], m["take"]) for m in plan["members"]], [(1, 1, 2), (2, 3, 2)])
-        table = [{"id": "h", "ip": "10.0.0.1", "party": "h", "slot": 1, "take": 2, "max": 6, "game": "xmen", "system": "mame",
+        table = [{"id": "h", "ip": "10.0.0.1", "party": "h", "slot": 1, "take": 2, "max": 6, "game": "xmen", "system": "retroarch/fbneo",
                   "state": "lobby", "name": "H"},
                  {"id": "g", "ip": "10.0.0.2", "party": "h", "slot": 2, "take": 2, "max": 6, "game": "xmen",
-                  "system": "mame", "state": "lobby", "name": "G"}]
+                  "system": "retroarch/fbneo", "state": "lobby", "name": "G"}]
         party = felink.parties(table)[0]
         self.assertEqual((party["used"], party["max"], party["numbers"]), (4, 6, [1, 2]))
 
@@ -841,12 +841,12 @@ class SlotsTests(unittest.TestCase):
             os.makedirs(link.home)
             self.assertTrue(link.start())
             self.addCleanup(link.stop)
-        self.assertTrue(a.host_game(self.prof, "mame", "xmen", [], "/r/xmen.zip"))
+        self.assertTrue(a.host_game(self.prof, "retroarch/fbneo", "xmen", [], "/r/xmen.zip"))
         self.assertEqual(a.take, 2)
-        self.assertTrue(wait(lambda: b.parties_for("mame", "xmen")))
-        party = b.parties_for("mame", "xmen")[0]
+        self.assertTrue(wait(lambda: b.parties_for("retroarch/fbneo", "xmen")))
+        party = b.parties_for("retroarch/fbneo", "xmen")[0]
         self.assertEqual((party["used"], party["max"]), (2, 6))
-        self.assertTrue(b.join_party(party, self.prof, "mame", "xmen", "/r/xmen.zip"))
+        self.assertTrue(b.join_party(party, self.prof, "retroarch/fbneo", "xmen", "/r/xmen.zip"))
         self.assertEqual((b.number, b.take), (2, 2))
         self.assertTrue(a.start_now())
         self.assertTrue(wait(lambda: b.guest.plan is not None))
@@ -868,8 +868,8 @@ class SlotsTests(unittest.TestCase):
         os.makedirs(a.home)
         self.assertTrue(a.start())
         self.addCleanup(a.stop)
-        prof = felink.netplay_profile("mame", "xmen", "4", 2, frozenset({"xmen"}))
-        a.host_game(prof, "mame", "xmen", [], "/r/xmen.zip")
+        prof = felink.netplay_profile("retroarch/fbneo", "xmen", "4", 2, frozenset({"xmen"}))
+        a.host_game(prof, "retroarch/fbneo", "xmen", [], "/r/xmen.zip")
         self.assertEqual(a.take, 3)
         self.assertIsNone(a.tick())
         g, ok = self.guest("g", 3)
@@ -883,15 +883,16 @@ class NetplayTests(unittest.TestCase):
     SETS = frozenset({"xmen", "sf2"})
 
     def test_only_a_game_with_more_players_than_controls_that_fbneo_runs(self):
-        prof = felink.netplay_profile("mame", "xmen", "4", 2, self.SETS)
+        prof = felink.netplay_profile("retroarch/fbneo", "xmen", "4", 2, self.SETS)
         self.assertEqual((prof["id"], prof["min"], prof["max"], prof["port"]), ("netplay", 2, 4, 55435))
         self.assertTrue(prof["netplay"] and not prof["fixed"])
-        self.assertIsNone(felink.netplay_profile("mame", "sf2", "2", 2, self.SETS))       # cabe nos controles daqui
-        self.assertIsNone(felink.netplay_profile("mame", "gaiaone", "4", 2, self.SETS))   # o FBNeo nao roda
-        self.assertIsNone(felink.netplay_profile("model2", "xmen", "4", 2, self.SETS))    # so os sets do MAME
-        self.assertIsNone(felink.netplay_profile("mame", "xmen", "", 2, self.SETS))
-        self.assertIsNotNone(felink.netplay_profile("mame", "xmen", "4", 3, self.SETS))
-        self.assertIsNone(felink.netplay_profile("mame", "xmen", "4", 4, self.SETS))
+        self.assertIsNone(felink.netplay_profile("retroarch/fbneo", "sf2", "2", 2, self.SETS))       # cabe nos controles daqui
+        self.assertIsNone(felink.netplay_profile("retroarch/fbneo", "gaiaone", "4", 2, self.SETS))   # o FBNeo nao roda
+        self.assertIsNone(felink.netplay_profile("model2", "xmen", "4", 2, self.SETS))    # so a pasta do FBNeo
+        self.assertIsNone(felink.netplay_profile("mame", "xmen", "4", 2, self.SETS))      # nem o romset do MAME
+        self.assertIsNone(felink.netplay_profile("retroarch/fbneo", "xmen", "", 2, self.SETS))
+        self.assertIsNotNone(felink.netplay_profile("retroarch/fbneo", "xmen", "4", 3, self.SETS))
+        self.assertIsNone(felink.netplay_profile("retroarch/fbneo", "xmen", "4", 4, self.SETS))
 
     def test_the_fbneo_index_is_read_from_the_xz(self):
         import lzma
@@ -903,7 +904,7 @@ class NetplayTests(unittest.TestCase):
             self.assertEqual(felink.fbneo_sets(os.path.join(d, "nenhum")), frozenset())
 
     def test_the_command_hosts_for_number_1_and_connects_the_others_to_it(self):
-        prof = felink.netplay_profile("mame", "xmen", "4", 2, self.SETS)
+        prof = felink.netplay_profile("retroarch/fbneo", "xmen", "4", 2, self.SETS)
         plan = felink.make_plan(prof, [{"number": i, "name": "C%d" % i, "ip": "10.0.0.%d" % i} for i in (1, 2, 3)])
         self.assertEqual(plan["order"], [1, 2, 3])
         host = felink.netplay_command(prof, plan, 1, "/r/xmen.zip", "C1", "/c/n.cfg", core="/core.so")
@@ -921,7 +922,7 @@ class NetplayTests(unittest.TestCase):
 
     def test_a_link_command_for_a_netplay_party_writes_the_config_and_has_no_nvram(self):
         with tempfile.TemporaryDirectory() as home:
-            prof = felink.netplay_profile("mame", "xmen", "4", 2, self.SETS)
+            prof = felink.netplay_profile("retroarch/fbneo", "xmen", "4", 2, self.SETS)
             link = felink.Link(home, wire=LOOP, ident="aaa")
             link.profile, link.game, link.rom, link.number = prof, "xmen", "/r/xmen.zip", 1
             link.plan = felink.make_plan(prof, [{"number": 1, "name": "A", "ip": "127.0.0.1"},
