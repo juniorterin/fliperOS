@@ -1754,7 +1754,13 @@ def draw_popup(fe, ui, now):
     pw = max(216, n * size + (n - 1) * gap + 28) if n <= 3 else min(WW - 4, n * size + (n - 1) * gap + 28)
     sel = fe.ov["sel"] % n
     kind = tiles[sel]["kind"]
-    ph = 28 + size + 28 + (22 if kind in LINK_KINDS else 0)
+    # Net play com mais de um controle aqui: a seta embaixo do azulejo chama
+    # para baixo, onde as setas dos lados escolhem quantos jogadores este
+    # gabinete fornece (fe.ov["row"] 1); o resto desce para dar lugar a ela.
+    pick = tiles[sel].get("net") and (tiles[sel].get("most") or 1) > 1 and kind != "closed"
+    row = pick and fe.ov.get("row")
+    drop = 8 if pick else 0
+    ph = 28 + size + 28 + drop + (22 if kind in LINK_KINDS else 0)
     px, py = (WW - pw) // 2, (HH - ph) // 2 - 4
     card(ui, (px, py, pw, ph))
     W.text(ui, fit(fe.fd.short_title(g), pw - 16), T.YELLOW, px + 8, py + 8)
@@ -1767,15 +1773,10 @@ def draw_popup(fe, ui, now):
         pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, ty, size, size), 2 if on else 1)
         popup_icon(ui, tile["kind"], x + size // 2, ty + size // 2, on, tile.get("lit", False), tile.get("net", False))
     label = tiles[sel]["label"]
-    ui.blit(W.big(label, 1, W.LABEL), (px + (pw - W.width(label)) // 2, ty + size + 10))
-    # Net play com mais de um controle aqui: a seta embaixo do azulejo chama
-    # para baixo, onde as setas dos lados escolhem quantos jogadores este
-    # gabinete fornece (fe.ov["row"] 1).
-    pick = tiles[sel].get("net") and (tiles[sel].get("most") or 1) > 1 and kind != "closed"
-    row = pick and fe.ov.get("row")
+    ui.blit(W.big(label, 1, W.LABEL), (px + (pw - W.width(label)) // 2, ty + size + 10 + drop))
     blink = int(now * 2.5) % 2 == 0
     if pick and not row and blink:
-        arrow(ui, tx0 + sel * (size + gap) + size // 2, ty + size + 5, (0, 1), T.PINK, 4)
+        arrow(ui, tx0 + sel * (size + gap) + size // 2, ty + size + 9, (0, 1), T.PINK, 4)
     if kind in LINK_KINDS:
         party = tiles[sel].get("party")
         total = (party or {}).get("max") or tiles[sel].get("max") or 2
@@ -1792,12 +1793,12 @@ def draw_popup(fe, ui, now):
             lit = used if kind in ("join", "closed") else take
             first = used + 1 if kind == "join" else 1
             width = total * 14 - 4
-            slots_row(ui, px + (pw - width) // 2, ty + size + 24, lit, total,
+            slots_row(ui, px + (pw - width) // 2, ty + size + 24 + drop, lit, total,
                       None if kind == "closed" else (first, take))
             if row and blink:
                 sx = px + (pw - width) // 2
-                arrow(ui, sx - 9, ty + size + 30, (-1, 0), T.PINK, 4)
-                arrow(ui, sx + width + 8, ty + size + 30, (1, 0), T.PINK, 4)
+                arrow(ui, sx - 12, ty + size + 30 + drop, (-1, 0), T.PINK, 4)
+                arrow(ui, sx + width + 11, ty + size + 30 + drop, (1, 0), T.PINK, 4)
         else:
             width = total * 11 - 3
             cabinet_row(ui, px + (pw - width) // 2, ty + size + 26, filled, total, you=you, w=8, h=12, gap=3)
