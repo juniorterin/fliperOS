@@ -238,7 +238,7 @@ const enUS = {
       link: {
         title: 'Linked cabinets',
         text: 'Join cabinets with a network cable: the four-cabinet Street Fighter tournament, races of up to eight, and net play.',
-        fourAlt: 'Pixel art of four Capcom cabinets of Super Street Fighter II: The Tournament Battle in a blue-tiled corner room, two on each wall with a stool in front of each, every screen on its own fighter select with its two player slots lit, joined by network cables on the floor.',
+        fourAlt: 'Pixel art of four Capcom cabinets of Super Street Fighter II: The Tournament Battle in a blue-tiled corner room, two on each wall with a long two-seat bench in front of each, red ball-top joysticks and three buttons per player, every screen on its own fighter select with its two player slots lit, joined by network cables on the floor.',
         raceAlt: 'Pixel art of two twin sit-down racing cabinets, cars 1 to 4 on their marquees, the two screens of each cabinet showing one race, joined by a network cable.',
       },
     },

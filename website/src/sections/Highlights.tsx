@@ -42,8 +42,8 @@ function Visual({ item }: { item: Highlight }) {
             key={src}
             src={src}
             alt={alts[i]}
-            width={link ? 284 : 208}
-            height={link ? 256 : 218}
+            width={link ? 288 : 208}
+            height={link ? 258 : 218}
             unoptimized
             className="h-auto w-full [image-rendering:pixelated]"
           />

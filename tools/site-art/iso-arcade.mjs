@@ -685,27 +685,25 @@ function candy(cv, face, w0, slot) {
       return z > 12.4 ? mul(BODY, 0.8) : mul(BODY, 0.97);
     },
   });
-  // o painel: duas alavancas, três botões em cada fileira para cada jogador
-  const players = [w0 + 3, w0 + 11.2];
+  // o painel: dois jogadores, cada um com um manche vermelho clássico à esquerda
+  // e três botões em fila à direita dele. As medidas (sl) contam da esquerda da
+  // tela, nas duas paredes, para o manche ficar sempre do lado esquerdo.
+  const wAt = (sl) => (X ? w1 - sl : w0 + sl);
+  const stickAt = [2.4, 11.4];
   box(14, 19, w0, w1, 14, 16.5, DARK, {
     front: (w, z) => (z > 15.4 && z < 16 ? TEAL : mul(DARK, 1.2)),
     top: (d, w) => {
-      for (const p of players) {
-        if (Math.hypot(d - 15.8, w - p) < 0.9) return C.line;
+      const sl = ltr(w, w0, w1);
+      for (const s0 of stickAt) {
+        if (Math.hypot(d - 16.5, sl - s0) < 1.2) return C.line;
         for (let i = 0; i < 3; i++) {
-          for (const [bd, col] of [[16.4, [C.yellow, C.green, C.pink][i]], [17.9, [C.white, C.cyan, C.red][i]]]) {
-            const r = Math.hypot(d - bd, w - (p + 2.2 + i * 1.3));
-            if (r < 0.5) return col;
-            if (r < 0.62) return C.line;
-          }
+          const r = Math.hypot(d - 16.5, sl - (s0 + 2.7 + i * 1.6));
+          if (r < 0.6) return [C.yellow, C.green, C.pink][i];
+          if (r < 0.75) return C.line;
         }
       }
       return d > 18.2 ? TEAL : mul(DARK, 1.5);
     },
-  });
-  [[players[0], C.red], [players[1], C.blue]].forEach(([p, col]) => {
-    box(15.5, 16.1, p - 0.3, p + 0.3, 16.5, 19, STEEL);
-    box(15.2, 16.4, p - 0.6, p + 0.6, 19, 20.2, col, { top: mul(col, 1.3) });
   });
   // o corpo de cima, com o monitor deitado para trás dentro de uma moldura escura
   box(0, 11.4, w0, w1, 16.5, 38, BODY);
@@ -717,6 +715,14 @@ function candy(cv, face, w0, slot) {
     const u = ltr(w, w0 + 2.5, w1 - 2.5) / (CW - 5);
     return mul(select(u, (32.5 - z) / 10.5), Math.floor(z * 4) % 2 ? 0.88 : 1);
   });
+  // os manches vermelhos clássicos, depois do monitor: a bola se projeta sobre ele
+  // e, desenhada antes, o monitor a cobriria
+  for (const s0 of stickAt) {
+    const p = wAt(s0);
+    box(16.2, 16.8, p - 0.3, p + 0.3, 16.5, 19.5, STEEL);
+    box(15.4, 17.6, p - 1.1, p + 1.1, 19.5, 22, C.red, { top: mul(C.red, 1.3) }); // a bola
+    box(15.9, 16.5, p - 0.8, p - 0.2, 21.2, 21.8, hex('#ffb3b3')); // o brilho dela
+  }
   // a cabeça arredondada, em degraus, e o letreiro verde aceso na frente dela
   box(0, 12, w0 + 0.5, w1 - 0.5, 38, 43, BODY);
   box(1, 10, w0 + 1.8, w1 - 1.8, 43, 45.5, BODY, { top: mul(BODY, 1.25) });
@@ -745,18 +751,22 @@ function candy(cv, face, w0, slot) {
   });
 }
 
-// um banquinho de assento marrom, de quatro pernas e um aro, no ponto (cx, cy) do piso
-function stool(cv, cx, cy) {
+// um banco de largura dupla (para os dois jogadores do gabinete), de assento
+// marrom, quatro pernas e um aro, no ponto (cx, cy) do piso: 14 ao longo da
+// parede (along: 'y' na da esquerda, 'x' na da direita) e 6 de fundo
+function stool(cv, cx, cy, along) {
   const STEEL = hex('#8a90a8');
   const SEAT = hex('#7a4b3e');
-  const x0 = cx - 3.5;
-  const y0 = cy - 3.5;
-  for (const [dx, dy] of [[0, 0], [6, 0], [0, 6], [6, 6]]) cv.box(x0 + dx, x0 + dx + 1, y0 + dy, y0 + dy + 1, 0, 8, STEEL);
-  cv.box(x0, x0 + 7, y0, y0 + 1, 3, 3.8, STEEL);
-  cv.box(x0, x0 + 7, y0 + 6, y0 + 7, 3, 3.8, STEEL);
-  cv.box(x0, x0 + 1, y0, y0 + 7, 3, 3.8, STEEL);
-  cv.box(x0 + 6, x0 + 7, y0, y0 + 7, 3, 3.8, STEEL);
-  cv.box(x0 - 0.5, x0 + 7.5, y0 - 0.5, y0 + 7.5, 8, 10.5, SEAT, { top: mul(SEAT, 1.25) });
+  const x0 = cx - (along === 'y' ? 3 : 7);
+  const x1 = cx + (along === 'y' ? 3 : 7);
+  const y0 = cy - (along === 'y' ? 7 : 3);
+  const y1 = cy + (along === 'y' ? 7 : 3);
+  for (const [x, y] of [[x0, y0], [x1 - 1, y0], [x0, y1 - 1], [x1 - 1, y1 - 1]]) cv.box(x, x + 1, y, y + 1, 0, 8, STEEL);
+  cv.box(x0, x1, y0, y0 + 1, 3, 3.8, STEEL);
+  cv.box(x0, x1, y1 - 1, y1, 3, 3.8, STEEL);
+  cv.box(x0, x0 + 1, y0, y1, 3, 3.8, STEEL);
+  cv.box(x1 - 1, x1, y0, y1, 3, 3.8, STEEL);
+  cv.box(x0 - 0.5, x1 + 0.5, y0 - 0.5, y1 + 0.5, 8, 10.5, SEAT, { top: mul(SEAT, 1.25) });
 }
 
 // um cabo de rede no piso, uma curva de p0 a p1 puxada para o ponto c; as pontas
@@ -768,38 +778,41 @@ function floorCable(cv, p0, c, p1) {
     const t = i / n;
     const x = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * c[0] + t ** 2 * p1[0];
     const y = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * c[1] + t ** 2 * p1[1];
-    const col = i < 3 || i > n - 3 ? C.cyan : hex('#8aa4ff');
+    const col = i < 3 || i > n - 3 ? C.cyan : hex('#2f5fc4');
     cv.faceX(x + 0.9, y, y + 0.9, 0, 1.1, () => mul(col, 0.8), id);
     cv.top(1.1, x, x + 0.9, y, y + 0.9, () => col, id);
   }
 }
 
 function arcadeLink4() {
-  view(67, 67);
+  view(68, 68);
   const cv = new Canvas();
   room(cv, {
     tint: [hex('#c6dff0'), hex('#a7c6e0')],
     glow: [
-      { x0: 19, x1: 36, y0: 19, y1: 60, color: C.cyan },
-      { x0: 19, x1: 60, y0: 19, y1: 36, color: C.cyan, along: 'y' },
+      { x0: 19, x1: 36, y0: 22, y1: 63, color: C.cyan },
+      { x0: 22, x1: 63, y0: 19, y1: 36, color: C.cyan, along: 'y' },
     ],
-    shadows: [{ x0: 0, x1: 22, y0: 18, y1: 60 }, { x0: 18, x1: 60, y0: 0, y1: 22 }],
+    shadows: [{ x0: 0, x1: 22, y0: 21, y1: 63 }, { x0: 21, x1: 63, y0: 0, y1: 22 }],
   });
-  // do mais longe ao mais perto: o 2 e o 3 junto ao canto, depois o 1 e o 4
-  candy(cv, 'x', 19, 1);
-  candy(cv, 'y', 19, 2);
-  stool(cv, 25, 32.5);
-  stool(cv, 32.5, 25);
-  candy(cv, 'x', 40, 0);
-  candy(cv, 'y', 40, 3);
-  // a corrente 1-2-3-4, pelo piso, passando pelos vãos entre os banquinhos
-  floorCable(cv, [14.6, 42.5], [36, 39], [14.6, 35.5]);
-  floorCable(cv, [14.6, 21.5], [30, 30], [21.5, 14.6]);
-  floorCable(cv, [35.5, 14.6], [39, 36], [42.5, 14.6]);
-  stool(cv, 25.5, 49.5);
-  stool(cv, 49.5, 25.5);
-  chair(cv, 2, 61);
-  plant(cv, 61, 2);
+  // os gabinetes: o 1 e o 2 na parede da esquerda, o 3 e o 4 na da direita, o 2 e o
+  // 3 junto ao canto. Os bancos de largura dupla ficam um pouco para o lado de fora
+  // do centro do gabinete, para os dois do meio não se tocarem no canto.
+  candy(cv, 'x', 22, 1);
+  candy(cv, 'y', 22, 2);
+  candy(cv, 'x', 43, 0);
+  candy(cv, 'y', 43, 3);
+  // a corrente 1-2-3-4 pelo chão, entre os gabinetes e antes dos bancos: eles a
+  // cobrem, e nenhum cabo passa por cima de um banco
+  floorCable(cv, [14.6, 45.5], [46, 45.5], [14.6, 38.5]);
+  floorCable(cv, [14.6, 24.5], [27, 27], [24.5, 14.6]);
+  floorCable(cv, [38.5, 14.6], [45.5, 46], [45.5, 14.6]);
+  stool(cv, 25, 35.5, 'y');
+  stool(cv, 35.5, 25, 'x');
+  stool(cv, 25, 56.5, 'y');
+  stool(cv, 56.5, 25, 'x');
+  chair(cv, 2, 62.5);
+  plant(cv, 62.5, 2);
   cv.outline();
   return cv;
 }
@@ -867,7 +880,7 @@ function twinRacer(cv, Y0, Y1, first) {
 }
 
 function arcadeLinkRace() {
-  view(44, 90);
+  view(44, 92); // do mesmo tamanho da sala do Tournament (288x258)
   const cv = new Canvas();
   room(cv, {
     glow: [{ x0: 14, x1: 30, y0: 6, y1: 86, color: C.cyan }],
