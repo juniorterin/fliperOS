@@ -1154,13 +1154,20 @@ class Link:
                           take=self.take, max=self.profile["players"] if self.profile.get("netplay") else self.profile["max"],
                           state=state)
 
-    def host_game(self, profile, system_key, name, files, rom=None):
+    def max_take(self, profile):
+        """Quantos jogadores este gabinete pode ocupar: no net play, um por
+        controle daqui (no GGPO, um so); num jogo de link, um."""
+        if not (profile or {}).get("netplay"):
+            return 1
+        return max(1, min(self.local_players, profile.get("take") or profile["players"]))
+
+    def host_game(self, profile, system_key, name, files, rom=None, take=None):
         """Abre a festa deste gabinete (o numero 1) e serve os arquivos do jogo.
-        files: os caminhos (relativos ao home) que quem entra sem o jogo copia."""
+        files: os caminhos (relativos ao home) que quem entra sem o jogo copia.
+        take: os jogadores que este gabinete fornece (de 1 a max_take; None, todos)."""
         self.leave()
         try:
-            # No net play, um jogador por controle daqui (no GGPO, um so).
-            take = min(self.local_players, profile.get("take") or profile["players"]) if profile.get("netplay") else 1
+            take = max(1, min(self.max_take(profile), take or 99))
             party = PartyHost(self.wire, profile, name, self.ident, self.name, port=self.ports.get("party", PORT_PARTY),
                               on_change=self.say, take=take)
             party.open()
@@ -1178,11 +1185,12 @@ class Link:
         self.say()
         return party
 
-    def join_party(self, party, profile, system_key, name, rom=None):
-        """Entra na festa de outro gabinete. False (e self.message) se nao deu."""
+    def join_party(self, party, profile, system_key, name, rom=None, take=None):
+        """Entra na festa de outro gabinete. False (e self.message) se nao deu.
+        take: os jogadores que este gabinete pede (None, um por controle)."""
         self.leave()
         guest = PartyGuest(self.wire, self.ident, self.name, port=self.ports.get("party", PORT_PARTY))
-        want = min(self.local_players, profile.get("take") or self.local_players) if profile.get("netplay") else 1
+        want = max(1, min(self.max_take(profile), take or 99))
         if not guest.join(party["host_ip"], name, want=want):
             self.message = REASONS.get(guest.refused, REASONS["down"])
             return False

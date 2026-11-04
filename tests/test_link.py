@@ -652,6 +652,7 @@ class FrontendLinkTests(unittest.TestCase):
         link = mock.Mock()
         link.available.return_value = True
         link.local_players = 2
+        link.max_take.side_effect = lambda prof: felink.Link.max_take(link, prof)
         link.profile_of.side_effect = lambda system, name: (
             felink.Profiles().get("scud") if (system, name) == profiled else None)
         link.parties_for.side_effect = lambda system, name: [p for p in parties if (p["system"], p["game"]) == (system, name)]
@@ -660,11 +661,11 @@ class FrontendLinkTests(unittest.TestCase):
         games = [{"Name": n, "Title": n, "_system": {"key": k}, "Players": pl}
                  for k, n, pl in (("mame", "sf2", "2"), ("model3", "scud", "1"), ("model3", "daytona2", "1"))]
         games.append({"Name": "xmen", "Title": "xmen", "_system": {"key": "retroarch/fbneo"}, "Players": "4"})
-        fe = types.SimpleNamespace(link=link, games=games, mode="list", show_clones=True, opened=set(), cursor=0,
+        fe = types.SimpleNamespace(link=link, games=games, mode="list", show_clones=True, opened=set(), cursor=0, overlay=None, ov={},
                                    fd=types.SimpleNamespace(tree=lambda gs: [(g, []) for g in gs]), filtered=lambda: games,
                                    rows=[], game=lambda: fe.rows[fe.cursor][0])
         fe.rebuild = lambda keep=None: self.fm.Frontend.rebuild(fe, keep)
-        for name in ("popup_tiles", "link_profile"):
+        for name in ("popup_tiles", "link_profile", "overlay_act", "link_host", "link_join"):
             setattr(fe, name, lambda *a, name=name: getattr(self.fm.Frontend, name)(fe, *a))
         return fe
 
@@ -703,6 +704,35 @@ class FrontendLinkTests(unittest.TestCase):
         self.assertEqual([t["take"] for t in fe2.popup_tiles()[1:3]], [2, 2])
         fe2.link.parties_for.side_effect = lambda s, n: [dict(party, used=3)]
         self.assertEqual(fe2.popup_tiles()[1]["take"], 1)
+
+    def test_down_on_a_net_play_tile_picks_how_many_players_this_cabinet_gives(self):
+        fe = self.stub()
+        fe.rebuild(keep="xmen")
+        fe.overlay, fe.ov = "popup", {"sel": 1}
+        fe.say = lambda *a: None
+        fe.link_files = fe.link_rom = lambda g: None
+        self.assertEqual((fe.popup_tiles()[1]["most"], fe.popup_tiles()[1]["take"]), (2, 2))
+        fe.overlay_act("left")                       # na linha dos azulejos: troca de azulejo
+        self.assertEqual(fe.ov["sel"], 0)
+        fe.overlay_act("down")                       # PLAY nao tem jogadores
+        self.assertFalse(fe.ov.get("row"))
+        fe.overlay_act("right")
+        fe.overlay_act("down")
+        self.assertEqual(fe.ov["row"], 1)
+        fe.overlay_act("left")                       # 2 controles, so 1 jogador
+        self.assertEqual((fe.ov["sel"], fe.popup_tiles()[1]["take"]), (1, 1))
+        fe.overlay_act("left")
+        self.assertEqual(fe.popup_tiles()[1]["take"], 1)
+        fe.overlay_act("b1")
+        self.assertEqual(fe.link.host_game.call_args.kwargs["take"], 1)
+        fe.overlay, fe.ov = "popup", {"sel": 1, "row": 1, "take": 1}
+        fe.overlay_act("right")
+        self.assertEqual(fe.popup_tiles()[1]["take"], 2)
+        fe.overlay_act("right")                      # nunca mais que os controles
+        self.assertEqual(fe.popup_tiles()[1]["take"], 2)
+        fe.overlay_act("up")
+        fe.overlay_act("right")
+        self.assertEqual((fe.ov["sel"], fe.ov["row"]), (2, 0))
 
     def test_a_started_or_full_party_is_shown_but_cannot_be_joined(self):
         fe = self.stub([self.party("playing"), self.party("lobby", used=8)])
@@ -888,6 +918,29 @@ class SlotsTests(unittest.TestCase):
         self.assertIn('netplay_request_device_p1 = "true"', host_text)
         self.assertIn('netplay_request_device_p2 = "true"', host_text)
         self.assertNotIn("netplay_request_device_p3", host_text)
+
+    def test_a_two_control_cabinet_can_give_just_one_player(self):
+        a = felink.Link(self.tmp.name + "/a", wire=LOOP, ident="aaa", name="A", ports={"presence": free_port(), "party": self.port,
+                                                                                    "files": free_port()}, local_players=2)
+        b = felink.Link(self.tmp.name + "/b", wire=LOOP, ident="bbb", name="B", ports=a.ports, local_players=2)
+        for link in (a, b):
+            os.makedirs(link.home)
+            self.assertTrue(link.start())
+            self.addCleanup(link.stop)
+        self.assertEqual(a.max_take(self.prof), 2)
+        self.assertTrue(a.host_game(self.prof, "retroarch/fbneo", "xmen", [], "/r/xmen.zip", take=1))
+        self.assertEqual(a.take, 1)
+        self.assertTrue(wait(lambda: b.parties_for("retroarch/fbneo", "xmen")))
+        party = b.parties_for("retroarch/fbneo", "xmen")[0]
+        self.assertTrue(b.join_party(party, self.prof, "retroarch/fbneo", "xmen", "/r/xmen.zip", take=1))
+        self.assertEqual((b.number, b.take), (2, 1))
+        self.assertTrue(a.start_now())
+        self.assertTrue(wait(lambda: b.guest.plan is not None))
+        b.tick()
+        b.command(["ignored"])
+        text = Path(b.home, ".config", "fliperos", "netplay.cfg").read_text()
+        self.assertIn('netplay_request_device_p2 = "true"', text)
+        self.assertNotIn("netplay_request_device_p3", text)
 
     def test_a_netplay_party_starts_by_itself_when_every_slot_is_taken(self):
         a = felink.Link(self.tmp.name + "/a", wire=LOOP, ident="aaa", name="A", ports={"presence": free_port(), "party": self.port,

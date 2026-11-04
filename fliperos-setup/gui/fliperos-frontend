@@ -753,12 +753,24 @@ class Frontend:
             return None
         if o == "popup":
             tiles = self.popup_tiles()
-            if a in ("left", "right"):
+            tile = tiles[self.ov["sel"] % len(tiles)]
+            # Num azulejo de net play com mais de um controle aqui, para baixo vai
+            # aos jogadores (row 1): esquerda/direita escolhem quantos este
+            # gabinete fornece; para cima volta aos azulejos.
+            more = tile.get("net") and (tile.get("most") or 1) > 1
+            if self.ov.get("row") and not more:
+                self.ov["row"] = 0
+            if a == "down" and more:
+                self.ov["row"] = 1
+            elif a == "up":
+                self.ov["row"] = 0
+            elif a in ("left", "right") and self.ov.get("row"):
+                self.ov["take"] = max(1, min(tile["most"], tile["take"] + (1 if a == "right" else -1)))
+            elif a in ("left", "right"):
                 self.ov["sel"] = (self.ov["sel"] + (1 if a == "right" else -1)) % len(tiles)
             elif a == "b4":
                 self.toggle_fav()
             elif a == "b1":
-                tile = tiles[self.ov["sel"] % len(tiles)]
                 kind = tile["kind"]
                 if kind == "play":
                     self.overlay = None
@@ -769,9 +781,9 @@ class Frontend:
                 elif kind == "more":
                     self.open_more()
                 elif kind in ("link", "new"):
-                    self.link_host()
+                    self.link_host(tile.get("take"))
                 elif kind == "join":
-                    self.link_join(tile["party"])
+                    self.link_join(tile["party"], tile.get("take"))
                 else:
                     self.say(tile["label"])
             return None
@@ -1273,17 +1285,22 @@ class Frontend:
             net = bool(prof.get("netplay"))
             word = ("PARTY", "NET PLAY") if net else ("LINK", "LINK PLAY")
             parties = self.link.parties_for(g["_system"]["key"], g["Name"])
-            local = self.link.local_players
+            # Os jogadores que este gabinete fornece: ate um por controle (most);
+            # o escolhido na linha de baixo (ov["take"]) vale para todos os azulejos.
+            local = self.link.max_take(prof)
+            pick = (self.ov or {}).get("take") if self.overlay == "popup" else None
             for p in parties:
                 if p["state"] == "lobby" and p["used"] < (p["max"] or 0):
+                    most = max(1, min(local, (p["max"] or 0) - p["used"]))
                     tiles.append({"kind": "join", "label": "JOIN " + word[0], "party": p, "lit": True, "net": net,
-                                  "take": max(1, min(local, (p["max"] or 0) - p["used"]))})
+                                  "most": most, "take": min(pick or most, most)})
             for p in parties:
                 if not (p["state"] == "lobby" and p["used"] < (p["max"] or 0)):
                     tiles.append({"kind": "closed", "label": "STARTED" if p["state"] == "playing" else "FULL",
                                   "party": p, "lit": True, "net": net})
             tiles.append({"kind": "new" if parties else "link", "label": "NEW " + word[0] if parties else word[1],
-                          "max": prof["max"], "lit": False, "net": net, "take": min(local, prof["max"])})
+                          "max": prof["max"], "lit": False, "net": net, "most": min(local, prof["max"]),
+                          "take": min(pick or local, local, prof["max"])})
         fav = g is not None and g.get("Favourite") == "1"
         tiles.append({"kind": "fav", "label": "UNFAVOURITE" if fav else "FAVOURITE"})
         tiles.append({"kind": "more", "label": "MORE"})
@@ -1301,22 +1318,23 @@ class Frontend:
                 paths.append(path)
         return self.link.served(paths)
 
-    def link_host(self):
-        """NEW LINK / LINK PLAY: este gabinete abre a festa (e o numero 1)."""
+    def link_host(self, take=None):
+        """NEW LINK / LINK PLAY: este gabinete abre a festa (e o numero 1);
+        take: os jogadores que ele fornece (os escolhidos no menu)."""
         g = self.game()
         prof = self.link_profile(g)
-        if not self.link.host_game(prof, g["_system"]["key"], g["Name"], self.link_files(g), self.link_rom(g)):
+        if not self.link.host_game(prof, g["_system"]["key"], g["Name"], self.link_files(g), self.link_rom(g), take=take):
             self.say(self.link.message or "CANNOT OPEN THE PARTY", 3)
             return
         self.link_game = g
         self.overlay, self.ov = "lobby", {}
 
-    def link_join(self, party):
+    def link_join(self, party, take=None):
         """JOIN LINK: primeiro os arquivos (so copia o que falta, do anfitriao),
         depois a entrada na festa."""
         g = self.game()
         self.link_game = g
-        self.overlay, self.ov = "transfer", {"progress": (0, 0, ""), "party": party, "result": None}
+        self.overlay, self.ov = "transfer", {"progress": (0, 0, ""), "party": party, "result": None, "take": take}
         ov = self.ov
 
         def work():
@@ -1375,7 +1393,8 @@ class Frontend:
             self.overlay = None
             if not ok:
                 self.say("COULD NOT COPY THE GAME FILES", 3)
-            elif link.join_party(party, self.link_profile(g), g["_system"]["key"], g["Name"], self.link_rom(g)):
+            elif link.join_party(party, self.link_profile(g), g["_system"]["key"], g["Name"], self.link_rom(g),
+                                 take=self.ov.get("take")):
                 self.overlay, self.ov = "lobby", {}
             else:
                 self.say(link.message or "COULD NOT JOIN", 3)

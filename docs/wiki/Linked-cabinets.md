@@ -248,7 +248,7 @@ Every cabinet of the party needs the same game file.
 
 In the frontend such a game has a **NET PLAY** tile in its menu, with a row of player icons. The lit ones are the players this cabinet takes. The other cabinets see **JOIN PARTY**.
 
-**Each cabinet takes as many players as it has controls configured** (see [Controls](Controls.md)), so two cabinets with two controls fill the four players of X-Men. The party starts by itself when every player has an owner.
+**Each cabinet takes as many players as it has controls configured** (see [Controls](Controls.md)), so two cabinets with two controls fill the four players of X-Men. To give fewer (two controls, but only one person playing), press down on the NET PLAY or JOIN PARTY tile: blinking arrows appear beside the player icons, and left or right picks how many this cabinet gives. Up goes back to the tiles. The party starts by itself when every player has an owner.
 
 Only the network cable is used. The public lobby, the relay and the NAT traversal of RetroArch are off, and so is Flycast's UPnP. The party's own ports are UDP 55436 (who plays what), TCP 55437 (the party) and TCP 55438 (the game's files). RetroArch's net play is on TCP 55435, Flycast's GGPO on UDP 19713.
 

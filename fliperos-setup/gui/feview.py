@@ -1768,6 +1768,14 @@ def draw_popup(fe, ui, now):
         popup_icon(ui, tile["kind"], x + size // 2, ty + size // 2, on, tile.get("lit", False), tile.get("net", False))
     label = tiles[sel]["label"]
     ui.blit(W.big(label, 1, W.LABEL), (px + (pw - W.width(label)) // 2, ty + size + 10))
+    # Net play com mais de um controle aqui: a seta embaixo do azulejo chama
+    # para baixo, onde as setas dos lados escolhem quantos jogadores este
+    # gabinete fornece (fe.ov["row"] 1).
+    pick = tiles[sel].get("net") and (tiles[sel].get("most") or 1) > 1 and kind != "closed"
+    row = pick and fe.ov.get("row")
+    blink = int(now * 2.5) % 2 == 0
+    if pick and not row and blink:
+        arrow(ui, tx0 + sel * (size + gap) + size // 2, ty + size + 5, (0, 1), T.PINK, 4)
     if kind in LINK_KINDS:
         party = tiles[sel].get("party")
         total = (party or {}).get("max") or tiles[sel].get("max") or 2
@@ -1786,6 +1794,10 @@ def draw_popup(fe, ui, now):
             width = total * 14 - 4
             slots_row(ui, px + (pw - width) // 2, ty + size + 24, lit, total,
                       None if kind == "closed" else (first, take))
+            if row and blink:
+                sx = px + (pw - width) // 2
+                arrow(ui, sx - 9, ty + size + 30, (-1, 0), T.PINK, 4)
+                arrow(ui, sx + width + 8, ty + size + 30, (1, 0), T.PINK, 4)
         else:
             width = total * 11 - 3
             cabinet_row(ui, px + (pw - width) // 2, ty + size + 26, filled, total, you=you, w=8, h=12, gap=3)
