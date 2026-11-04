@@ -28,6 +28,7 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
 - **Video Setup > Interlaced hacks:** um emulador marcado em "Interlaced filter" ou "Interlaced pure", e o preview do filtro (o Setup abre um Xorg só dele: se a tela ficar preta ou não voltar ao menu, é aí).
 - **Video Setup > Colour calibration:** os padrões de teste e as mudanças ao vivo; se a cor fica depois de sair do calibrador, ao abrir um jogo e ao voltar ao menu.
 - **OSD (2026-10-31):** testada no gabinete por teclado virtual e pelo FIFO, com a imagem do X capturada. Falta o atalho Start + Baixo no painel de verdade, a leitura da letra no tubo, e a geometria num jogo do RetroArch (em KMS, só foi testada no frontend).
+- **Video Setup > Scanlines (2026-11-03, bf511c6):** só aparecem com monitor de 31 kHz; testadas no Docker (OpenGL e Vulkan, o preview pela camada). Falta ver num tubo de 31 kHz: o escuro e o brilho num jogo de 240 linhas em 480p, e o preview abrindo no modo do monitor.
 
 ## Modo Tour/Welcome (fase 4)
 
