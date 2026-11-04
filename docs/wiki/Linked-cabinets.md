@@ -6,7 +6,7 @@ This page lists those games, how the link works in each emulator FliperOS ships,
 
 **The FliperOS frontend does link play for six games on its own**: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart: European Session and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the **network cable only** (never Wi-Fi) and needs the cabinets on the same network.
 
-Games that have more players than a cabinet has controls, and that FBNeo runs, get **net play** in the same menu: see Net play below.
+Games of the FBNeo folder (`~/roms/retroarch/fbneo`) that have more players than a cabinet has controls get **net play** in the same menu: see Net play below.
 
 For every other game, and to know what the frontend does underneath, everything on this page is set by hand in the emulator: a command line, an ini file, or the game's own test menu.
 
@@ -56,6 +56,16 @@ A few things apply to all of them:
 - **The machines must run at the same speed.** One that is fast-forwarded, or much slower, loses the link.
 - **Open the ports.** The cabinet has no firewall. On a Windows PC, allow the emulator through the firewall if the link does not form.
 - **Do not count on joining late.** In MAME the ring boards do not reconnect after the link drops (the source marks the link dead). In Supermodel a machine that was restarted did not rejoin, and the other had to be restarted too. A game already running was not joined by a third machine in any emulator.
+
+### Latency of a link
+
+**Your own controls are as fast as playing alone.** Each cabinet runs its own copy of the game, and only that copy reads its controls. The link adds nothing to them.
+
+**The other cars or players are seen with the delay of the original boards.** The games exchange their state at the pace of the frames (the ring boards of MAME send one VSYNC packet a frame). So you see the other cabinet a frame or two late, as in the arcade. On the network cable a packet takes well under a millisecond (a frame is 16.7 ms at 60 Hz), so the cable adds almost nothing to it. In a ring of more machines, a packet goes through each machine on its way, as it did on the real boards.
+
+**There is no rollback and no input delay to tune.** The games wait for each other by themselves. When the network stops, the game says so (COMMUNICATION ERROR, or the link drops) and does not catch up later. That is why the link is on the cable only.
+
+This comes from the emulators' source and from how the games behaved in the tests. The delay was not measured with a camera.
 
 ## SM2-Emu: Sega Model 2
 
@@ -228,6 +238,8 @@ The Derby Owners Club, World Club Champion Football and Mushiking sets are onlin
 
 Some games have more players than a cabinet has controls: X-Men has four players, and FBNeo runs it. For these, RetroArch's net play lets cabinets share one game. There is no emulator link and no NVRAM per cabinet: every machine runs the same game, and the inputs travel over the network.
 
+**Only the games of the FBNeo folder get net play**: `~/roms/retroarch/fbneo`, with FBNeo's own romset. The MAME romset in `~/roms/mame` is not used for it, even for a game that has the same name in both: FBNeo checks each file by its CRC, and some sets of MAME 0.289 have dumps that FBNeo does not take. Every cabinet of the party needs the same zip.
+
 In the frontend such a game has a **NET PLAY** tile in its menu, with a row of player icons. The lit ones are the players this cabinet takes. The other cabinets see **JOIN PARTY**.
 
 **Each cabinet takes as many players as it has controls configured** (see [Controls](Controls.md)), so two cabinets with two controls fill the four players of X-Men. The party starts by itself when every player has an owner.
@@ -236,7 +248,38 @@ Only the network cable is used. The public lobby, the relay and the NAT traversa
 
 **Run the same release on every cabinet.** RetroArch warns when two machines run different versions. When the builds of the core differ, it turns the desync check off, so a real desync would not be reported.
 
-Tested on 1 November 2026: the frontend of the cabinet hosted X-Men with players 1 and 2, and a Windows PC joined with two RetroArch windows, one player each (players 3 and 4), with a ping of 13 to 18 ms. The coin, start and character selection of each player showed on that player, the same on the cabinet and on both windows. RetroArch 1.22.2 for Windows (the stable build) crashed when it connected; the nightly build worked. Not tested: two people playing a whole credit, and any core other than FBNeo (the MAME core has no net play).
+Tested on 1 November 2026: the frontend of the cabinet hosted X-Men with players 1 and 2, and a Windows PC joined with two RetroArch windows, one player each (players 3 and 4), with a ping of 13 to 18 ms. The coin, start and character selection of each player showed on that player, the same on the cabinet and on both windows. RetroArch 1.22.2 for Windows (the stable build) crashed when it connected; the nightly build worked. Not tested: two people playing a whole credit, and any core other than FBNeo.
+
+### Latency of net play
+
+**Your own controls are as fast as playing alone.** RetroArch's net play is rollback: each cabinet runs the game at once with its own controls and guesses the others' (it repeats their last input). When the real input arrives and differs, it loads the state of a few frames back and runs those frames again, in one frame.
+
+FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` are 0). On the cable the other cabinet's input arrives in a fraction of a frame, so a rollback is rare and is one frame long at most. You see the other players' moves within a frame. The ping that RetroArch shows (13 to 18 ms in the test) counts its own handling, not just the cable, where the round trip is under 1 ms.
+
+**Run-ahead is off during net play.** RetroArch does not run run-ahead or preemptive frames while net play is on. A latency mode that uses them loses that gain in a party.
+
+**Every cabinet runs at the speed of the slowest.** Use the same video mode on all of them: a CRT whose refresh is a little slower holds the others back.
+
+### Cores and emulators with net play
+
+**The frontend's net play uses FBNeo only.** The others work only by hand, in RetroArch's menu (Netplay) or with `retroarch --host` and `--connect IP`, and they were not tested on FliperOS unless the table says so. A RetroArch core needs a state that it saves and loads quickly and always the same way. A core that cannot do that refuses net play, or loses the sync.
+
+| Core or emulator | Systems | Net play | Checked |
+| --- | --- | --- | --- |
+| FBNeo (RetroArch) | Arcade: CPS1, CPS2, CPS3, Neo Geo, Konami, Toaplan and the rest of its list | **Yes, in the frontend** | **Tested**: X-Men, cabinet and PC |
+| Snes9x (RetroArch) | Super Nintendo | Yes, by hand | libretro documentation |
+| Genesis Plus GX (RetroArch) | Mega Drive, Master System, Game Gear, Sega CD | Yes, by hand | libretro documentation |
+| FCEUmm (RetroArch) | NES, Famicom Disk System | Yes, by hand | libretro documentation |
+| mGBA (RetroArch) | Game Boy Advance | Yes, by hand (one screen shared, not the link cable) | libretro documentation |
+| PCSX ReARMed (RetroArch) | PlayStation | Works, but heavier and loses the sync more easily | libretro documentation |
+| MAME 2010 (RetroArch) | Arcade (MAME 0.139) | **No**: "Core does not support netplay" | **Tested** |
+| MAME, current core (RetroArch) | Arcade (MAME 0.289) | Yes, but many drivers do not save their state well. Not in the image (415 MB) | Connected once (X-Men) |
+| Flycast | NAOMI, Atomiswave | GGPO rollback, set in `emu.cfg` (see Flycast above). Not in the frontend | Two Flycast linked on the cabinet, game screen not seen |
+| Dolphin | GameCube, Wii | Its own net play, with input delay and no rollback | Not tested |
+| GroovyMAME, Supermodel, SM2-Emu | Arcade, Model 3, Model 2 | **No net play.** Their network is the board link of the link games above | Source |
+| PCSX2, DuckStation, Hypseus Singe, OpenBOR | PS2, PS1, Laserdisc, beat 'em ups | **No** | Source |
+
+Fightcade 2 has its own rollback (FBNeo, Flycast and others), but over the Internet with its own matchmaking: it is not part of the cabinets' link or net play.
 
 ## What cannot be linked
 

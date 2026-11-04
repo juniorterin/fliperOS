@@ -1,10 +1,19 @@
 'use client';
 
 import Image from 'next/image';
-import { Download, LayoutGrid } from 'lucide-react';
+import { ArrowUpRight, Download, LayoutGrid, Network } from 'lucide-react';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
 import { useI18n } from '@/i18n/I18nProvider';
+import { LINKS } from '@/lib/site';
+
+// A cor de cada nível de net play na tabela.
+const LEVEL: Record<string, string> = {
+  frontend: 'border-green/60 bg-green/10 text-green',
+  hand: 'border-cyan/60 text-cyan',
+  partial: 'border-orange/60 text-orange',
+  no: 'border-line text-comment',
+};
 
 // Ícones oficiais de cada projeto (public/icons, origem no README de lá).
 const ICON: Record<string, string> = {
@@ -108,6 +117,49 @@ export function Emulators() {
             </Reveal>
           ))}
         </ul>
+
+        <Reveal className="mt-16 rounded-2xl border border-line p-6 sm:p-8">
+          <h3 className="flex items-center gap-2.5 text-2xl font-semibold text-fg">
+            <Network className="size-6 text-green" aria-hidden="true" />
+            {e.netplayTitle}
+          </h3>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted">{e.netplayIntro}</p>
+          <table className="mt-6 w-full text-left text-sm">
+            <thead className="hidden font-mono text-xs tracking-wider text-comment uppercase sm:table-header-group">
+              <tr className="border-b border-line">
+                <th scope="col" className="py-2 pr-4 font-normal">{e.netplayHead.name}</th>
+                <th scope="col" className="py-2 pr-4 font-normal">{e.netplayHead.systems}</th>
+                <th scope="col" className="py-2 font-normal">{e.netplayHead.status}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {e.netplay.map((row) => (
+                <tr key={row.id} className="flex flex-col gap-1 border-b border-line/60 py-3 sm:table-row sm:py-0">
+                  <th scope="row" className="font-semibold text-fg sm:py-2.5 sm:pr-4">{row.name}</th>
+                  <td className="text-cyan sm:py-2.5 sm:pr-4">{row.systems}</td>
+                  <td className="sm:py-2.5">
+                    <span
+                      className={`inline-block rounded border px-1.5 py-0.5 font-mono text-[10px] tracking-wider uppercase ${LEVEL[row.level]}`}
+                    >
+                      {e.netplayLevels[row.level as keyof typeof e.netplayLevels]}
+                    </span>
+                    {row.note && <span className="ml-2 text-xs text-muted">{row.note}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <a
+            href={`${LINKS.docs}/Linked-cabinets`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg border border-green/60 bg-green/10 px-4 py-2.5 text-sm font-medium text-fg transition hover:border-green hover:bg-green/20"
+          >
+            {e.netplayCta}
+            <ArrowUpRight className="size-4" aria-hidden="true" />
+            <span className="sr-only">{t.a11y.external}</span>
+          </a>
+        </Reveal>
 
         <div className="mt-16 rounded-2xl border border-line bg-gradient-to-br from-bg to-bg-deeper p-6 sm:p-8">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
