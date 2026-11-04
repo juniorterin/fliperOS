@@ -1698,6 +1698,23 @@ def draw_guide(fe, ui):
     ui.blit(W.big(msg, 1, W.LABEL), (px + (pw - W.width(msg)) // 2, py + ph - 16))
 
 
+def button_hint(ui, x, y, items):
+    """As dicas de uma janela com os botoes do guia: para cada (funcao, nome),
+    o botao pequeno na cor da funcao, com o desenho dela no topo, e o nome ao
+    lado. (x, y) e o canto de cima a esquerda da linha."""
+    r = 9
+    for f, label in items:
+        color, draw_icon = FUNCTION_STYLE[f]
+        cx, cy = x + r + 1, y + 3
+        button3d(ui, cx, cy, r, color)
+        icon = pygame.Surface((24, 24), pygame.SRCALPHA)
+        draw_icon(icon, 12, 12, shade(color, 0.3))
+        icon = pygame.transform.smoothscale(icon, (18, round(18 * FLAT)))
+        ui.blit(icon, (cx - 9, cy - icon.get_height() // 2))
+        W.text(ui, label, T.COMMENT, cx + r + 4, y)
+        x = cx + r + 4 + W.width(label) + 10
+
+
 LINK_KINDS = ("link", "join", "new", "closed")
 
 
@@ -1832,17 +1849,17 @@ def draw_lobby(fe, ui, now):
     else:
         word, color = "WAITING", T.FG
     W.text(ui, word, color, px + (pw - W.width(word)) // 2, y)
-    hint = "B:LEAVE"
+    hint = [("b2", "LEAVE")]
     if lob["role"] == "host" and not lob["fixed"] and lob["ready"] and left is None:
-        hint = "A:START  B:LEAVE"
-    W.text(ui, hint, T.COMMENT, px + 8, py + ph - 14)
+        hint = [("b1", "START")] + hint
+    button_hint(ui, px + 8, py + ph - 20, hint)
 
 
 def draw_transfer(fe, ui, now):
     """A copia dos arquivos do jogo do anfitriao: os dois gabinetes, a seta e
     o andamento."""
     g = fe.link_game
-    pw, ph = WW - 16, 120
+    pw, ph = WW - 16, 136
     px, py = 8, (HH - ph) // 2
     card(ui, (px, py, pw, ph))
     if g:
@@ -1862,7 +1879,7 @@ def draw_transfer(fe, ui, now):
     W.text(ui, "%d%%" % round(pct * 100), T.FG, px + (pw - W.width("%d%%" % round(pct * 100))) // 2, py + 82)
     if name:
         W.text(ui, fit(os.path.basename(name), pw - 16), T.COMMENT, px + 8, py + 96)
-    W.text(ui, "B:CANCEL", T.COMMENT, px + 8, py + ph - 12)
+    button_hint(ui, px + 8, py + ph - 20, [("b2", "CANCEL")])
 
 
 # O letreiro de um texto que nao cabe: parado com "..." por MARQUEE_HOLD
