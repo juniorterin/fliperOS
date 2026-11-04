@@ -284,7 +284,8 @@ def slots_row(surf, x, y, used, total, ring=None, step=14):
         person_icon(surf, x + i * step, y, i < used)
     if ring:
         first, take = ring
-        pygame.draw.rect(surf, T.PINK, (x + (first - 1) * step - 2, y - 2, take * step - 2, 16), 1)
+        # 2 pixels livres dos quatro lados (o boneco ocupa x+1..x+9, y..y+11).
+        pygame.draw.rect(surf, T.PINK, (x + (first - 1) * step - 2, y - 3, (take - 1) * step + 15, 18), 1)
     return x + total * step - (step - 10)
 
 
