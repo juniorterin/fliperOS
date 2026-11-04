@@ -2,64 +2,47 @@
 
 O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai daqui e o que mudou vai para o [CHANGELOG](CHANGELOG.md).
 
-## Pedidos de 2026-10-23
+## Frontend do FliperOS
 
-Menu e Setup:
-- **Boot lento:** subir só sob demanda o que não precisa estar no boot. Em andamento: há mudanças ainda não commitadas (os serviços depois da primeira tela, o Transmission só quando um download é pedido).
-
-Frontend próprio (o padrão no futuro), **primeiro mostrar o design:**
-- três modos: lista com mídia e informações (ícones à direita); tela cheia com a mídia ao fundo e o nome e as informações na frente; flow (como o Arcadeflow hoje);
-- o mesmo desenho do menu de hoje, que ele vai integrar;
-- ícones e logotipos do Arcadeflow.
-
-**Construído em 2026-10-23 (c5bc185) e já é o padrão no gabinete.** Foi visto rodando no CRT (o guia dos controles), mas ainda não foi usado com o controle: falta conferir a rolagem acelerada, o modo letra, a abertura de um jogo e a volta, os botões do painel e o Tab. O que foi decidido no desenho:
-- sem textos de instrução na tela;
-- ao abrir, um guia mostra o que faz o direcional e cada botão; qualquer botão fecha;
-- direcional: cima e baixo andam pelos jogos; esquerda e direita trocam de romlist (os displays do AttractPlus, um por sistema). No modo grade, esquerda e direita andam pela grade, e só trocam de romlist com o jogo escolhido já encostado na lateral (uma aba na borda mostra a próxima romlist);
-- botão 1: cartão flutuante com Jogar, Favoritar e "+"; "+" abre a página do jogo com o scrape, que fica salvo em `~/media/info` (o mesmo arquivo do painel web);
-- botão 2: voltar; botões 3 e 6: página para cima e para baixo; botão 4: favoritar e desfavoritar; botão 5: filtros (os do Setup, mais Favoritos);
-- Tab num jogo abre um menu: classificar (gênero, jogadores, botões, controle, ano, fabricante, tela, série; gravado junto da informação do jogo e usado pelos filtros), renomear (com teclado na tela para o joystick) e fazer o scrape só daquele jogo;
-- no modo lista, o jogo com clones tem um "+" à esquerda; o botão 1 nele abre os clones logo embaixo, num galho, cada um com o que muda no nome (a região, o set, bootleg);
-- segurar uma direção acelera a rolagem aos poucos (de 6 a 30 jogos/s) e, aos 3 s, entra no modo letra: a letra grande no centro, devagar no começo e mais rápido depois de pouco tempo segurando. Os ícones e logotipos do Arcadeflow não têm licença: como o próprio Arcadeflow, teriam de ser baixados pelo Setup, não ir na imagem.
+É o padrão desde 2026-10-23 (c5bc185), e o que foi decidido no desenho está na wiki ([Frontends](docs/wiki/Frontends.md)). Falta conferir com o painel de verdade, segurando o direcional, a rolagem que acelera aos poucos e o modo letra.
 
 ## Vídeo: conferir no tubo
 
-Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
+Feito e testado só no Docker ou sem olhar a tela; falta ver no CRT:
 - **Video Setup > Interlaced hacks:** um emulador marcado em "Interlaced filter" ou "Interlaced pure", e o preview do filtro (o Setup abre um Xorg só dele: se a tela ficar preta ou não voltar ao menu, é aí).
 - **Video Setup > Colour calibration:** os padrões de teste e as mudanças ao vivo; se a cor fica depois de sair do calibrador, ao abrir um jogo e ao voltar ao menu.
 - **OSD (2026-10-31):** testada no gabinete por teclado virtual e pelo FIFO, com a imagem do X capturada. Falta o atalho Start + Baixo no painel de verdade, a leitura da letra no tubo, e a geometria num jogo do RetroArch (em KMS, só foi testada no frontend).
 - **Video Setup > Scanlines (2026-11-03, bf511c6):** só aparecem com monitor de 31 kHz; testadas no Docker (OpenGL e Vulkan, o preview pela camada). Falta ver num tubo de 31 kHz: o escuro e o brilho num jogo de 240 linhas em 480p, e o preview abrindo no modo do monitor.
+- **Monitor vertical (2026-10-24):** o frontend e o Setup em 240x320 girados, o Plymouth já girado e o console em 480i pelo EDID próprio de dois modos. Nunca visto num tubo vertical.
 
-## Modo Tour/Welcome (fase 4)
+## Placas de vídeo
 
-**Adiado em 2026-10-16; talvez nem seja feito.** Seria uma tela animada na interface gráfica que apresentaria o menu, os botões e as seções, oferecida no primeiro boot e no Setup.
+- **Driver da NVIDIA:** o que se mediu numa GTX 980 Ti com o driver 580 (2026-10-26) ainda não entrou no Setup:
+  - o KMS dele (`nvidia-drm`) só aceita os modos progressivos do EDID, e um EDID só com 1280x480i deixa o boot preto. Com esse driver, o boot precisa de um EDID com modos progressivos (1280x240 e 640x240 funcionaram);
+  - o `xorg.conf` só ganha a seção `Driver "nvidia"` com o `ModeValidation` quando há um modeline ou outra tela (`fliperos-setup/lib/xorg.sh`). Subindo pelo EDID, o X fica sem ela, e é ela que deixa passar os modos de 15 kHz.
+- **Card firmware (ATOM-15):** a gravação de verdade nunca rodou numa placa, só com um `amdvbflash` falso nos testes. Precisa de uma placa AMD de reserva, sem ATOM-15, e do `amdvbflash` em `~/vbios`. Também nunca foram comparadas com o `atom-15.exe` as opções Avivo/DCE8, 25 e 31 kHz, o sync composto e a mudança do GOP.
+
+## Jogos em rede: link e net play
+
+O link e o net play pelo frontend entraram na 0.19; depois, o net play ganhou todo core do RetroArch marcado "deterministic", o GGPO do Flycast e o Dolphin (com o patch próprio). Falta:
+- **Duas pessoas jogando de verdade:** uma corrida inteira em link e um crédito inteiro em net play. Até aqui, as telas e as entradas de cada lado foram conferidas com teclas por script e controles virtuais.
+- **Net play com outro core além do FBNeo:** os outros aparecem no frontend, mas nenhum foi jogado entre duas máquinas.
+- **GGPO do Flycast:** nenhuma partida foi aberta pelo frontend ainda. Entre o gabinete e um PC com Windows, o lado do cliente não foi provado (dois Flycast do gabinete ligaram, numa rede de teste dentro da mesma máquina).
+- **Initial D Ver. 3 e F355 Challenge:** o link entre dois Flycast começou numa máquina só, mas as telas não foram vistas, e os dois não estão na lista do frontend.
+- **Dirt Devils em quatro** não ligou nos testes; o perfil dele diz dois.
+- **Mais jogos em link**, cada um depois de testado em pares: os outros do Model 2 (o papel de cada máquina fica no menu de teste de cada jogo), Gunbuster, Model 1 e System 32.
+- **Perguntas em aberto** do plano ([link-frontend-plan](docs/research/link-frontend-plan.md)): começar com menos máquinas que o máximo, duas festas do mesmo jogo, mandar as ROMs sem perguntar ao dono do outro gabinete, recusar sets de regiões diferentes.
 
 ## Painel web e API REST (fase 5)
 
-- **5a (leitura) e 5b (controle) feitas em 2026-10-17:** http://fliperos.local:8081 (era a 8080 até 2026-10-22). Cada parte foi testada no gabinete pela API (abrir e fechar jogos, FPS, screenshot, arquivos, terminal, trackball, Downloader, configurações). Falta conferir num navegador de verdade, no PC e no celular: o layout, o terminal no Chrome e o trackball no toque.
-- **Trackball pelo celular:** pronto, mas desligado por enquanto (2026-10-17, a pedido). O cartão está escondido e `FLIPEROS_WEB_TRACKBALL=1` no serviço liga de novo.
-- **5c feita em 2026-10-22, falta ver no gabinete** (ele estava desligado). Testada no Docker de ponta a ponta: go2rtc, WebRTC e o Chromium, com um padrão de teste no lugar da tela. Chegaram H.264 e Opus, 640x240 a 61 fps, com 10 a 40 ms no buffer. Partes:
-  - a tela ao vivo no painel e o endereço dela para o OBS;
-  - o marquee para o OBS.
-
-  No gabinete, em 2026-10-22, a imagem funcionou: o Attract-Mode ao vivo no navegador do PC, 640x240 a 59 fps, com 13 ms no buffer, e a página do OBS também. O x264 roda a 62 fps no i7 870. O `hwdownload` direto falha no AMD (EPERM ao mapear o buffer); o quadro passa pelo VA-API e funciona. Falta conferir:
-  - **Live screen sound ainda não funciona no gabinete** (HDA Intel, 2026-10-22). Ao ligar, o Setup testa o `default` e, como ele não abriu, voltou sozinho para desligado; o som dos jogos não foi afetado. Testes com um asound.conf à parte:
-    - o `dmix` padrão do loopback não abre ("Sample format non available");
-    - o `timer_source` na placa deixa o loopback ocupado, e o `hrtimer` não abre;
-    - um `dmix` próprio na placa dá "busy" quando o `dmix` do sistema (chave 5678293, S32_LE, 48000, 1024/16384) já está aberto por quem toca;
-    - entrando no mesmo `dmix` do sistema (a mesma chave), cada parte abre sozinha, mas o `multi` dos dois recusa ("Slave PCM not usable");
-    - só funcionou com o cartão livre e os dois em S16/4096: 31 s sem xrun.
-
-    Opções:
-    - **(a)** continuar no ALSA (o `multi` com outros tamanhos, ou o plugin `file` num FIFO com um leitor sempre aberto);
-    - **(b)** PipeWire só para a transmissão (o monitor da saída), mexendo na pilha de áudio dos jogos;
-    - **(c)** ficar sem som na transmissão.
-  - **A carga com um jogo pesado aberto** (o serviço roda com Nice=10).
-  - **Remote play:** ficou para depois, a pedido. Seria um controle virtual alimentado pelo navegador.
+As fases 5a (leitura), 5b (controle) e 5c (a tela ao vivo e o marquee para o OBS, com som desde o update 27) estão feitas e rodam no gabinete, em http://fliperos.local:8081. Falta:
+- **Trackball pelo celular:** pronto, mas desligado desde 2026-10-17, a pedido. O cartão está escondido e `FLIPEROS_WEB_TRACKBALL=1` no serviço liga de novo.
+- **A carga da tela ao vivo com um jogo pesado aberto** (o serviço roda com Nice=10).
+- **Remote play:** ficou para depois, a pedido. Seria um controle virtual alimentado pelo navegador.
 
 ## Bugs
 
-- **Atalhos de teclado do RetroArch não funcionam no master de 2026-10-12.** Num jogo o teclado chega ao core (as setas movem), mas nenhum atalho funciona (Esc, F1, F2). Isso acontece com linuxraw e com udev, mesmo com um `retroarch.cfg` vazio. O master está no meio da reescrita da entrada (teclado por jogador, `input_hotkey_follows_player1`, `input_hotkey_port_seen`). Opções:
+- **Atalhos de teclado do RetroArch não funcionam no master de 2026-10-12.** Num jogo o teclado chega ao core (as setas movem), mas nenhum atalho funciona (Esc, F1, F2). Isso acontece com linuxraw e com udev, mesmo com um `retroarch.cfg` vazio. O master está no meio da reescrita da entrada (teclado por jogador, `input_hotkey_follows_player1`, `input_hotkey_port_seen`). Não foi conferido de novo: o build da ISO ainda pega o master do dia (`git clone --depth=1`). Opções:
   - **(a)** achar por bisect o commit que quebrou e fixar um commit do master anterior a ele (mantém o motor de modelines do CRT dentro do RetroArch);
   - **(b)** a versão estável v1.22.2, que usa a libswitchres no lugar desse motor (validar o 15 kHz de novo);
   - **(c)** esperar.
@@ -70,11 +53,32 @@ Feito em 2026-10-16 e testado só no Docker; falta ver no CRT do gabinete:
 
 ## Downloader
 
-- **Um filtro de torrent por vez.** Aplicar o filtro de outro emulador enquanto um download ainda corre desmarca os arquivos pendentes do anterior. Falta um filtro por emulador. Desde a2d67bb, a limpeza só mexe nas pastas do filtro atual, então trocar de emulador não apaga mais os jogos do outro.
+- **Um filtro de torrent por vez.** Aplicar o filtro de outro emulador enquanto um download ainda corre desmarca os arquivos pendentes do anterior, e salvar um filtro novo substitui o que estava salvo. Falta um filtro por emulador. Desde a2d67bb, a limpeza só mexe nas pastas do filtro atual, então trocar de emulador não apaga mais os jogos do outro.
 
 ## Placar versus entre dois gabinetes
 
 A fase 1 (as saídas dos jogos) está feita. O placar já lê vitórias e personagens pelos detectores do Fightcade, mas ainda não foi visto num display de LED de verdade.
 - **Fase 2:** os pontos ao vivo dependem de `config/versus-games.conf`, que está vazio. É preciso descobrir os endereços de memória de cada jogo.
-- **Fase 3:** o netplay na rede local entrou no frontend na 0.19 (NET PLAY e os jogos em link, só pelo cabo de rede, com a presença por broadcast UDP em vez de mDNS). Falta ligar o placar versus a ele.
+- **Fase 3:** o netplay na rede local já está no frontend (ver "Jogos em rede" acima), só pelo cabo de rede, com a presença por broadcast UDP em vez de mDNS. Falta ligar o placar versus a ele.
 - **Fase 4:** um PC com dois monitores (GroovyMAME `-numscreens 2` para jogos de uma tela).
+
+## HUD do ZeDMD por estilo de jogo
+
+Hoje o ZeDMD mostra arte, texto e o placar de luta (`versus_frame` em `config/fliperos-dmd`). Vidas, munição e recoil do Model 2 já saem pela porta 8000, mas ninguém os desenha. Falta um layout por estilo e um estado de entrada normalizado. Decidido: layouts e contrato primeiro, leitores depois.
+- **Estilos (128x32):** `fighter` (nomes e personagens, barra de vida, vitórias, pontos), `lightgun` (vidas, pente em barras, créditos), `racing` (posição, volta, tempo, velocidade), `shmup` (pontos, vidas, bombas, power, stage), `platform`, `puzzle`, `sports` e `generic` (placar e créditos, o padrão). O estilo vem do gênero do `catver.ini` e da família `lightgun` (`annotate()` em `config/fliperos-romclean`).
+- **Telas de evento por cima do HUD:** INSERT COIN piscando, ficha entrou (CREDIT +1), contador de CONTINUE (9 a 0 com barra), ganhou, perdeu, game over e hi-score.
+- **Entrada:** o arquivo `$XDG_RUNTIME_DIR/fliperos-hud`, em `chave=valor` como o `fliperos-marquee`. Os nomes seguem o vocabulário do SM2-Emu em minúsculas: `style`, `state` (attract/play/continue/over), `credits`, `stage`, `time`, `hi`, `p1_`/`p2_` + `score life life_max lives ammo ammo_max bombs power combo wins rounds char name`, e os de cada estilo (`speed lap laps pos pos_of round level lines next`). Eventos: `event` (coin/start/win/lose/continue/gameover/hiscore), `event_side`, `event_seq` (repete o mesmo evento) e `continue` (segundos restantes). Ausente = omitido; inválido ou desconhecido = ignorado; `style` desconhecido = `generic`.
+- **Eventos que o próprio `hud` deduz:** `credits` subiu → ficha; `wins` subiu → ganhou ou perdeu (em rede, "YOU" ou "RIVAL" pelo `versus_side`); `life` zerou → perdeu; `lives` zerou → game over. Um `event` explícito vence o deduzido.
+- **Código:** em `config/fliperos-dmd` (Pillow, DMDStream RGB24 128x32): fonte bitmap 5x7 própria (referência: `GLYPHS` em `website/src/components/LedMatrix.tsx`), leitura tolerante do arquivo, uma função de layout por estilo, subcomando `hud` (relê o arquivo só quando muda, ~10 fps), `hud --demo ESTILO`, `hud --demo-events` e `hud --sheet SAIDA.png` (folha de prévia em 4x). Testes em `ZeDMDTests` (imagem `fliperos-tests-pil`).
+- **Fontes que já existem:** o `config/fliperos-versus` já reúne Fightcade (detectores `.inf`), GroovyMAME (plugin, `fliperos-versus.feed`), RetroArch/FBNeo (UDP 55355) e Model 2 (`P1_Wins`) em `wins1/wins2/score1/score2/char1/char2`. Falta só gravar também o arquivo do HUD (`style=fighter`): a luta fica pronta de ponta a ponta sem leitor novo.
+- **Sem fonte hoje:** vidas, munição, recoil e créditos fora do Model 2 (precisa de um leitor genérico da porta 8000, que só abre com HOTR, QMamehook ou LEDSpicer, ver `fliperos-x11-run`) e o **contador de continue** (precisa do endereço de memória de cada jogo na `versus-games.conf` ou de uma saída do jogo). Corrida, shmup, plataforma, puzzle e esportes também dependem dos endereços de cada jogo (fase 2 do versus).
+- Nunca visto num LED de verdade.
+
+## Site
+
+- **Prints a refazer:** os de `gui/` são de 2026-10-15 e os de `frontend/` de 2026-10-24, antes das mudanças das últimas versões. Faltam `gui/video-driver`, `gui/unsupported`, `gui/lab` e `frontend/options`, que hoje aparecem como cartões só de texto.
+- **Vídeo de apresentação:** a cena do primeiro boot ainda é a pergunta antiga (o que abrir ao ligar), não o assistente de primeiro boot da 0.15.
+
+## Modo Tour/Welcome (fase 4)
+
+**Adiado em 2026-10-16; talvez nem seja feito.** Seria uma tela animada na interface gráfica que apresentaria o menu, os botões e as seções, oferecida no primeiro boot e no Setup.
