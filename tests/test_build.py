@@ -8917,8 +8917,45 @@ class LightGunTests(unittest.TestCase):
 
     def test_gunkeys_start_and_select_per_player(self):
         G = gunkeys
-        self.assertEqual(G.PLAYER_KEYS[0], {G.BTN_START: 2, G.BTN_SELECT: 6})    # 1 e 5
-        self.assertEqual(G.PLAYER_KEYS[1], {G.BTN_START: 3, G.BTN_SELECT: 7})    # 2 e 6
+        self.assertEqual(G.game_keys(0, G.EV_KEY, G.BTN_START, 1), [(2, True)])     # 1
+        self.assertEqual(G.game_keys(0, G.EV_KEY, G.BTN_SELECT, 0), [(6, False)])   # 5
+        self.assertEqual(G.game_keys(1, G.EV_KEY, G.BTN_START, 1), [(3, True)])     # 2
+        self.assertEqual(G.game_keys(1, G.EV_KEY, G.BTN_SELECT, 1), [(7, True)])    # 6
+        self.assertEqual(G.game_keys(2, G.EV_KEY, G.BTN_START, 1), [])
+        # Na interface: gatilho e Start Enter, B e Select Esc, A/C paginam, o
+        # direcional anda; a mira (ABS_X/Y) e o botao direito nao.
+        self.assertEqual(G.nav_keys(G.EV_KEY, G.BTN_LEFT, 1), [(G.KEY_ENTER, True)])
+        self.assertEqual(G.nav_keys(G.EV_KEY, G.BTN_SELECT, 1), [(G.KEY_ESC, True)])
+        self.assertEqual(G.nav_keys(G.EV_KEY, G.BTN_SELECT, 1, esc=False), [])
+        self.assertEqual(G.nav_keys(G.EV_KEY, G.BTN_C, 1), [(G.KEY_PAGEDOWN, True)])
+        self.assertEqual(G.nav_keys(G.EV_KEY, 0x111, 1), [])
+        self.assertEqual(G.nav_keys(G.EV_ABS, 0, 400), [])
+        self.assertEqual(G.nav_keys(G.EV_ABS, G.ABS_HAT0Y, -1), [(G.KEY_UP, True), (G.KEY_DOWN, False)])
+        self.assertEqual(G.nav_keys(G.EV_ABS, G.ABS_HAT0Y, 0), [(G.KEY_UP, False), (G.KEY_DOWN, False)])
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            proc = tmp / 'proc'
+            def process(pid, *argv):
+                (proc / str(pid)).mkdir(parents=True)
+                (proc / str(pid) / 'cmdline').write_bytes(b'\0'.join(a.encode() for a in argv) + b'\0')
+            process(1, '/sbin/init')
+            saved = G.PROC, G.MENU_FLAG, G.FRONTEND_GAME, G.FRONTEND_CONFIG
+            G.PROC, G.MENU_FLAG = str(proc), str(tmp / 'padkeys')
+            G.FRONTEND_GAME, G.FRONTEND_CONFIG = str(tmp / 'game'), str(tmp / 'frontend.json')
+            try:
+                self.assertEqual(G.mode(), 'game')
+                process(20, 'python3', '/usr/local/lib/fliperos-setup/gui/fliperos-frontend')
+                self.assertEqual(G.mode(), 'frontend')
+                (tmp / 'frontend.json').write_text('{"commercial": true}')
+                self.assertEqual(G.mode(), 'commercial')
+                (tmp / 'game').write_text('123\n')
+                self.assertEqual(G.mode(), 'game')
+                (tmp / 'padkeys').write_text('9\n')
+                self.assertEqual(G.mode(), 'menu')
+                process(30, '/usr/bin/python3', '/opt/fliperos/bin/fliperos-calibrate', 'guncon2', '/dev/input/event6')
+                self.assertEqual(G.mode(), 'off')
+            finally:
+                G.PROC, G.MENU_FLAG, G.FRONTEND_GAME, G.FRONTEND_CONFIG = saved
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             self.sysfs(tmp, [('event9', 'usb9/9-1', [], None), ('event6', 'usb2/2-4', [], None),

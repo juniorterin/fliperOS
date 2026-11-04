@@ -1,40 +1,68 @@
 #!/usr/bin/env python3
-"""O Start e o Select de cada pistola de luz como as teclas de Start e ficha
-do jogador dela, nos jogos:
+"""Os botoes das pistolas de luz como teclas. A pistola chega como mouse
+(config/99-fliperos-input.rules): o X e o driver udev do RetroArch so passam
+os botoes de mouse, e o menu e o frontend do FliperOS nao a leem.
+
+Nos jogos, o Start e o Select de cada pistola sao o Start e a ficha do
+jogador dela (as teclas padrao do MAME, do MAME 2010 e do SM2-Emu):
 
     pistola 1  Start = 1  Select = 5
     pistola 2  Start = 2  Select = 6
 
-(as teclas padrao do MAME, do MAME 2010 e do SM2-Emu). A pistola chega como
-mouse (config/99-fliperos-input.rules), e o X e o driver udev do RetroArch
-so passam os botoes de mouse: o Start e o Select dela nao chegavam ao jogo.
-Os jogadores seguem a ordem do caminho no /sys, como no fliperos-lightgun.
+No menu do Setup (/run/fliperos/padkeys, o fliperos-padkeys) e no frontend
+do FliperOS sem jogo aberto (o arquivo do jogo dele, FLIPEROS_POWERKEY no
+config/fliperos-session), qualquer pistola anda pela interface:
 
-Roda como servico (root, por causa do /dev/uinput). Com um menu do FliperOS
-aberto (/run/fliperos/padkeys, o fliperos-padkeys) fica parado: no menu as
-teclas 1 e 5 nao significam nada.
+    direcional        setas (repetem segurando)
+    gatilho / Start   Enter
+    B / Select        Esc
+    A / C             Page Up / Page Down
+
+A mira nao anda pelo menu. No modo comercial do frontend o B e o Select nao
+sao Esc (la o Esc e a tecla do operador, que fecha o frontend), e com a
+calibracao da pistola aberta (fliperos-calibrate) nada sai. Os jogadores
+seguem a ordem do caminho no /sys, como no fliperos-lightgun.
+
+Roda como servico (root, por causa do /dev/uinput).
 Sem dependencias: o evdev e o uinput sao lidos e escritos com struct.
 """
 import errno
 import fcntl
 import glob
+import json
 import os
 import select
 import struct
 import time
 
 MENU_FLAG = os.environ.get('FLIPEROS_PADKEYS_FLAG', '/run/fliperos/padkeys')
+FRONTEND_GAME = os.environ.get('FLIPEROS_FRONTEND_GAME', '/run/user/1000/fliperos-frontend.game')
+FRONTEND_CONFIG = os.environ.get('FLIPEROS_FRONTEND_CONFIG', '/home/fliperos/.config/fliperos/frontend.json')
+PROC = os.environ.get('FLIPEROS_PROC', '/proc')
 INPUT_CLASS = os.environ.get('FLIPEROS_INPUT_CLASS', '/sys/class/input')
 UDEV_DATA = os.environ.get('FLIPEROS_UDEV_DATA', '/run/udev/data')
 NAME = b'FliperOS gun keys'
 
-EV_SYN, EV_KEY = 0x00, 0x01
+EV_SYN, EV_KEY, EV_ABS = 0x00, 0x01, 0x03
+ABS_HAT0X, ABS_HAT0Y = 0x10, 0x11
+BTN_LEFT, BTN_MIDDLE = 0x110, 0x112
+BTN_A, BTN_B, BTN_C = 0x130, 0x131, 0x132
 BTN_SELECT, BTN_START = 0x13a, 0x13b
-KEY_1, KEY_2, KEY_5, KEY_6 = 2, 3, 6, 7
-# [jogador][botao da pistola] -> tecla
+KEY_ESC, KEY_1, KEY_2, KEY_5, KEY_6, KEY_ENTER = 1, 2, 3, 6, 7, 28
+KEY_UP, KEY_PAGEUP, KEY_LEFT, KEY_RIGHT, KEY_DOWN, KEY_PAGEDOWN = 103, 104, 105, 106, 108, 109
+# Nos jogos: [jogador][botao da pistola] -> tecla
 PLAYER_KEYS = ({BTN_START: KEY_1, BTN_SELECT: KEY_5},
                {BTN_START: KEY_2, BTN_SELECT: KEY_6})
-KEYS = sorted({key for keys in PLAYER_KEYS for key in keys.values()})
+# Na interface. O A e o C tambem saem como botao direito (BTN_RIGHT) e o B
+# como o do meio: so os codigos proprios contam, para nao valer duas vezes.
+NAV_KEYS = {BTN_LEFT: KEY_ENTER, BTN_START: KEY_ENTER, BTN_B: KEY_ESC, BTN_SELECT: KEY_ESC,
+            BTN_A: KEY_PAGEUP, BTN_C: KEY_PAGEDOWN}
+NAV_HATS = {ABS_HAT0X: (KEY_LEFT, KEY_RIGHT), ABS_HAT0Y: (KEY_UP, KEY_DOWN)}
+REPEAT = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT}
+# Como no fliperos-padkeys: num modo entrelacado o menu redesenha devagar.
+REPEAT_DELAY, REPEAT_RATE = 0.50, 0.12
+KEYS = sorted({key for keys in PLAYER_KEYS for key in keys.values()} | set(NAV_KEYS.values())
+              | {key for pair in NAV_HATS.values() for key in pair})
 EVENT = struct.Struct('llHHi')
 
 
@@ -65,8 +93,62 @@ def guns():
     return [path for _, path in sorted(found)]
 
 
-def menu_open():
-    return os.path.exists(MENU_FLAG)
+def running(*names):
+    """Os nomes (de script, o 2o argumento: python3 SCRIPT) que estao rodando."""
+    found = set()
+    for cmdline in glob.glob(os.path.join(PROC, '[0-9]*', 'cmdline')):
+        try:
+            with open(cmdline, 'rb') as f:
+                script = os.path.basename(f.read().split(b'\0', 2)[1]).decode(errors='replace')
+        except (OSError, IndexError):
+            continue
+        if script in names:
+            found.add(script)
+    return found
+
+
+def commercial():
+    """O modo comercial do frontend: o Esc la e a tecla do operador (fecha o
+    frontend), e o jogador nao a tem pela pistola."""
+    try:
+        with open(FRONTEND_CONFIG) as f:
+            return json.load(f).get('commercial') is True
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def mode():
+    """'off' com a calibracao da pistola aberta (os tiros nos alvos nao sao
+    Enter), 'menu' com o menu do Setup na tela, 'frontend' com o frontend do
+    FliperOS sem jogo (no modo comercial, 'commercial'), senao 'game'."""
+    found = running('fliperos-calibrate', 'fliperos-frontend')
+    if 'fliperos-calibrate' in found:
+        return 'off'
+    if os.path.exists(MENU_FLAG):
+        return 'menu'
+    if not os.path.exists(FRONTEND_GAME) and 'fliperos-frontend' in found:
+        return 'commercial' if commercial() else 'frontend'
+    return 'game'
+
+
+def nav_keys(etype, code, value, esc=True):
+    """[(tecla, apertada)] de um evento da pistola na interface; sem o Esc
+    com esc=False."""
+    if etype == EV_KEY and code in NAV_KEYS and value in (0, 1):
+        if NAV_KEYS[code] == KEY_ESC and not esc:
+            return []
+        return [(NAV_KEYS[code], value == 1)]
+    if etype == EV_ABS and code in NAV_HATS:
+        low, high = NAV_HATS[code]
+        return [(low, value < 0), (high, value > 0)]
+    return []
+
+
+def game_keys(player, etype, code, value):
+    """[(tecla, apertada)] de um evento da pistola do jogador num jogo."""
+    if player < len(PLAYER_KEYS) and etype == EV_KEY and code in PLAYER_KEYS[player] and value in (0, 1):
+        return [(PLAYER_KEYS[player][code], value == 1)]
+    return []
 
 
 def uinput_open():
@@ -82,33 +164,36 @@ def uinput_open():
 
 def main():
     out = uinput_open()
-    held = set()
+    held = {}   # tecla -> quando repete de novo (ou None)
 
     def emit(key, value):
-        if value:
-            held.add(key)
-        else:
-            held.discard(key)
         os.write(out, EVENT.pack(0, 0, EV_KEY, key, value) + EVENT.pack(0, 0, EV_SYN, 0, 0))
+
+    def press(key, pressed, now):
+        if pressed and key not in held:
+            held[key] = now + REPEAT_DELAY if key in REPEAT else None
+            emit(key, 1)
+        elif not pressed and key in held:
+            del held[key]
+            emit(key, 0)
 
     def release_all():
         for key in list(held):
+            del held[key]
             emit(key, 0)
 
     open_guns = {}   # caminho -> fd
     order = []
     scanned = 0.0
+    where = None
     while True:
-        if menu_open():
-            for fd in open_guns.values():
-                os.close(fd)
-            open_guns.clear()
-            release_all()
-            time.sleep(0.5)
-            continue
         now = time.monotonic()
-        if now - scanned >= 2:
+        if now - scanned >= 1:
             scanned = now
+            current = mode()
+            if current != where:
+                release_all()
+                where = current
             order = guns()
             for path in list(open_guns):
                 if path not in order:
@@ -120,11 +205,14 @@ def main():
                         open_guns[path] = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
                     except OSError:
                         pass
-        ready, _, _ = select.select(list(open_guns.values()), [], [], 0.5)
+        due = [t for t in held.values() if t is not None]
+        wait = max(0.0, min([0.5] + [t - now for t in due]))
+        ready, _, _ = select.select(list(open_guns.values()), [], [], wait)
+        now = time.monotonic()
         for path, fd in list(open_guns.items()):
             if fd not in ready:
                 continue
-            player = order.index(path) if path in order else 2
+            player = order.index(path) if path in order else len(PLAYER_KEYS)
             try:
                 data = os.read(fd, EVENT.size * 64)
                 if not data:
@@ -135,13 +223,20 @@ def main():
                 os.close(open_guns.pop(path))
                 release_all()
                 continue
-            if player > 1:
-                continue
             for i in range(0, len(data) - EVENT.size + 1, EVENT.size):
                 etype, code, value = EVENT.unpack_from(data, i)[2:]
-                key = PLAYER_KEYS[player].get(code) if etype == EV_KEY else None
-                if key is not None and value in (0, 1):
-                    emit(key, value)
+                if where == 'off':
+                    keys = []
+                elif where == 'game':
+                    keys = game_keys(player, etype, code, value)
+                else:
+                    keys = nav_keys(etype, code, value, esc=where != 'commercial')
+                for key, pressed in keys:
+                    press(key, pressed, now)
+        for key, when in list(held.items()):
+            if when is not None and now >= when:
+                emit(key, 2)   # repeticao, como a do teclado
+                held[key] = now + REPEAT_RATE
 
 
 if __name__ == '__main__':
