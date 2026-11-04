@@ -154,6 +154,17 @@ class Canvas {
       return fn(y, z);
     }, id);
   }
+  // o mesmo de frente para y: y = a + b*z; fn(x, z)
+  slantY(a, b, x0, x1, z0, z1, fn, id = this.cur) {
+    const xs = [px(x0, a + b * z0, z0), px(x1, a + b * z0, z0), px(x0, a + b * z1, z1), px(x1, a + b * z1, z1)];
+    this.scan(xs, (sx, sy) => {
+      const d = (sx - OX) / 2;
+      const z = (OY + 2 * a + d - sy) / (2 - 2 * b);
+      const x = d + a + b * z;
+      if (x < x0 || x >= x1 || z < z0 || z >= z1) return null;
+      return fn(x, z);
+    }, id);
+  }
   // painel vertical em ângulo: o ponto (x0 + dx*s, y0 + dy*s), s0 <= s < s1; fn(s, z)
   faceV(x0, y0, dx, dy, s0, s1, z0, z1, fn, id = this.cur) {
     const xs = [s0, s1].flatMap((s) => [z0, z1].map((z) => px(x0 + dx * s, y0 + dy * s, z)));
@@ -251,7 +262,7 @@ class Canvas {
 }
 
 // ---------- o quarto ----------
-function room(cv, { glow = [], shadows = [], sign, signArea, poster, posterArea }) {
+function room(cv, { glow = [], shadows = [], sign, signArea, poster, posterArea, tint }) {
   const T = 3;
   // paredes
   let id = cv.next();
@@ -275,7 +286,7 @@ function room(cv, { glow = [], shadows = [], sign, signArea, poster, posterArea 
   id = cv.next();
   cv.faceX(NX, 0, NY, -T, 0, () => mul(C.wallL, 0.85), id);
   cv.faceY(NY, 0, NX, -T, 0, () => mul(C.wallR, 0.7), id);
-  cv.top(0, 0, NX, 0, NY, (x, y) => floor(x, y, glow, shadows), id);
+  cv.top(0, 0, NX, 0, NY, (x, y) => floor(x, y, glow, shadows, tint), id);
 }
 
 function wall(a, z, left) {
@@ -289,12 +300,15 @@ function wall(a, z, left) {
   return mul(slate, 0.96 + n * 0.08);
 }
 
-function floor(x, y, glow, shadows) {
-  let c = (Math.floor(x / 4) + Math.floor(y / 4)) % 2 === 0 ? C.floorA : C.floorB;
+// tint: as duas cores dos ladrilhos no lugar do branco e do cinza (um piso azulado)
+function floor(x, y, glow, shadows, tint) {
+  const even = (Math.floor(x / 4) + Math.floor(y / 4)) % 2 === 0;
+  let c = tint ? tint[even ? 0 : 1] : even ? C.floorA : C.floorB;
   c = mul(c, 0.97 + hash(x * 2, y * 2) * 0.05);
   for (const g of glow) {
     if (x >= g.x0 && x < g.x1 && y >= g.y0 && y < g.y1) {
-      const fall = 1 - (x - g.x0) / (g.x1 - g.x0);
+      // along: 'y' faz o brilho se apagar ao longo de y (na frente dos gabinetes da parede da direita)
+      const fall = g.along === 'y' ? 1 - (y - g.y0) / (g.y1 - g.y0) : 1 - (x - g.x0) / (g.x1 - g.x0);
       const dither = [0.15, 0.55, 0.85, 0.35][(Math.floor(x * 2) & 1) + 2 * (Math.floor(y * 2) & 1)];
       if (fall > dither) c = mix(c, g.color, 0.28);
     }
@@ -625,103 +639,167 @@ function pngTexture(file) {
 }
 
 // ---------- Super Street Fighter II: The Tournament Battle (Capcom, 1993) ----------
-// Quatro uprights da Capcom lado a lado, ligados em corrente como no torneio:
-// o letreiro com o logo, o monitor deitado para trás com a tela de seleção
-// daquela máquina, o painel de dois jogadores com seis botões cada, a porta das
-// fichas e a lateral pintada.
-function capcomUpright(cv, Y0, Y1, slot, slotColor) {
-  const BODY = hex('#1d1f2b');
-  const BLUE = hex('#2c4fa3');
+// Quatro gabinetes "candy" japoneses, como no esboço: claros, de topo
+// arredondado, com o letreiro verde aceso, dois em cada parede e um banquinho
+// na frente de cada um. Cada tela mostra a seleção de lutadores de verdade
+// daquela máquina (a gravação dos quatro MAME ligados, ssf2tb-tournament.sh),
+// e cabos de rede ligam um gabinete ao outro pelo chão.
+const CW = 19; // a largura de um gabinete, em unidades
+
+// face 'x': de frente para +x, na parede da esquerda (a largura corre em y);
+// face 'y': de frente para +y, na da direita (a largura corre em x). A
+// profundidade d conta da parede, nos dois casos.
+function candy(cv, face, w0, slot) {
+  const X = face === 'x';
+  const w1 = w0 + CW;
+  const mid = (w0 + w1) / 2;
+  const BODY = hex('#c3c7d3');
+  const DARK = hex('#2b2e3f');
+  const TEAL = hex('#2fb3a1');
+  const GREEN = hex('#5ae88b');
   const STEEL = hex('#9aa0b8');
-  const w = Y1 - Y0;
-  const slope = 0.14;
-  const front = (z) => 23 - Math.max(0, z - 18) * slope; // o frontal inclinado, de x=23 em z=18
-  const a0 = 23 + slope * 18;
-  cv.box(6, 20, Y0 + 0.5, Y1 - 0.5, 0, 46, BODY);
-  // a lateral: o perfil do upright, azul com o friso, e a arte (um raio e o número da máquina)
-  cv.faceY(Y1 - 0.5, 6, 27, 0, 52, (x, z) => {
-    const inside = z < 3 ? x < 23 : z < 15 ? x < 23.5 : z < 18 ? x < 27 : z < 46 ? x < front(z) : x < 25;
-    if (!inside) return null;
-    const edge = z < 15 ? x > 22.5 : z < 18 ? x > 26 : z < 46 ? x > front(z) - 0.8 : x > 24;
-    if (edge || z > 51) return mul(slotColor, 0.9); // o friso na cor do lugar
-    if (z < 3) return mul(BODY, 0.6);
-    const bolt = Math.abs(x - 8 - (z - 6) * 0.35 - (Math.floor(z / 6) % 2) * 2) < 1.2 && z > 6 && z < 40;
-    if (bolt) return C.yellow;
-    if (z > 22 && z < 28 && x > 10 && x < 18) return textTex(String(slot + 1), C.white, mul(BLUE, 0.85), 1)(x - 12.5, 28 - z);
-    return z > 40 ? mul(BLUE, 0.7) : mul(BLUE, 0.85 + 0.15 * ((z / 46) * 1));
-  }, cv.next());
-  // a base: a grade do alto-falante e a porta das fichas, com as duas luzes
-  cv.faceX(23, Y0 + 0.5, Y1 - 0.5, 0, 15, (y, z) => {
-    if (z < 3) return mul(BODY, 0.55);
-    const mid = (Y0 + Y1) / 2;
-    if (Math.abs(y - mid) < 3.2 && z >= 4 && z < 11.5) {
-      if (z > 7.5 && z < 10.5 && (Math.abs(y - mid + 1.4) < 0.5 || Math.abs(y - mid - 1.4) < 0.5)) return C.red;
-      return z < 5 ? mul(STEEL, 0.7) : STEEL;
-    }
-    if (z > 12 && z < 14 && Math.floor(y * 2) % 2) return mul(BODY, 0.6);
-    return mul(BODY, 1.15);
-  }, cv.next());
-  // o painel: dois jogadores, cada um com a alavanca e seis botões em duas fileiras
-  const half = w / 2;
-  const players = [Y0 + 0.5, Y0 + half];
-  cv.box(23, 27, Y0 + 0.5, Y1 - 0.5, 15, 18, BODY, {
-    left: (y, z) => (z > 16.2 && z < 16.8 ? slotColor : mul(STEEL, 0.5)),
-    top: (x, y) => {
-      for (const p0 of players) {
-        if (Math.hypot(x - 25, y - (p0 + 1.6)) < 0.9) return C.line;
+  const slope = 0.12;
+  const a0 = 14 + slope * 16.5; // o monitor deitado para trás: d = a0 - slope * z
+  const ltr = (w, from, to) => (X ? to - w : w - from); // a posição da esquerda para a direita na tela
+  const box = (d0, d1, p0, p1, z0, z1, base, o = {}) =>
+    X
+      ? cv.box(d0, d1, p0, p1, z0, z1, base, { left: o.front, right: o.side, top: o.top })
+      : cv.box(p0, p1, d0, d1, z0, z1, base, {
+          left: o.side,
+          right: o.front,
+          top: typeof o.top === 'function' ? (x, y) => o.top(y, x) : o.top,
+        });
+  const slant = (p0, p1, z0, z1, fn) =>
+    X ? cv.slantX(a0, -slope, p0, p1, z0, z1, fn, cv.next()) : cv.slantY(a0, -slope, p0, p1, z0, z1, fn, cv.next());
+  const sideFace = (d0, d1, z0, z1, fn) =>
+    X ? cv.faceY(w1, d0, d1, z0, z1, fn, cv.next()) : cv.faceX(w1, d0, d1, z0, z1, fn, cv.next());
+
+  // a base, com a porta das fichas
+  box(0, 14, w0, w1, 0, 14, BODY, {
+    front: (w, z) => {
+      if (z < 2.4) return mul(DARK, 1.1);
+      if (Math.abs(w - mid) < 4.2 && z > 4 && z < 11) {
+        const slots = Math.abs(w - mid + 1.7) < 0.6 || Math.abs(w - mid - 1.7) < 0.6;
+        return slots && z > 7.5 && z < 9.5 ? C.red : mul(DARK, 1.3);
+      }
+      return z > 12.4 ? mul(BODY, 0.8) : mul(BODY, 0.97);
+    },
+  });
+  // o painel: duas alavancas, três botões em cada fileira para cada jogador
+  const players = [w0 + 3, w0 + 11.2];
+  box(14, 19, w0, w1, 14, 16.5, DARK, {
+    front: (w, z) => (z > 15.4 && z < 16 ? TEAL : mul(DARK, 1.2)),
+    top: (d, w) => {
+      for (const p of players) {
+        if (Math.hypot(d - 15.8, w - p) < 0.9) return C.line;
         for (let i = 0; i < 3; i++) {
-          for (const [bx, col] of [[24.3, [C.blue, C.yellow, C.red][i]], [25.8, [C.white, C.green, C.pink][i]]]) {
-            const r = Math.hypot(x - bx, y - (p0 + 3.4 + i * 1.25));
-            if (r < 0.48) return col;
+          for (const [bd, col] of [[16.4, [C.yellow, C.green, C.pink][i]], [17.9, [C.white, C.cyan, C.red][i]]]) {
+            const r = Math.hypot(d - bd, w - (p + 2.2 + i * 1.3));
+            if (r < 0.5) return col;
             if (r < 0.62) return C.line;
           }
         }
       }
-      return x > 26.3 ? mul(slotColor, 0.85) : hex('#2a2d3e');
+      return d > 18.2 ? TEAL : mul(DARK, 1.5);
     },
   });
-  for (const [p0, col] of [[players[0], C.red], [players[1], C.blue]]) {
-    cv.box(24.7, 25.3, p0 + 1.3, p0 + 1.9, 18, 19.6, STEEL);
-    cv.box(24.3, 25.7, p0 + 0.9, p0 + 2.3, 19.6, 20.8, col, { top: mul(col, 1.3) });
-  }
-  // o frontal inclinado, o monitor e o painel de vidro escuro em volta
-  cv.slantX(a0, -slope, Y0 + 0.5, Y1 - 0.5, 18.2, 46, (y, z) => (z > 43 ? mul(STEEL, 0.6) : mul(BODY, 1.2)), cv.next());
-  // a tela de seleção de verdade desta máquina (a gravação dos quatro MAME
-  // ligados, tools/link-tests/ssf2tb-tournament.sh): os lugares dela acesos
+  [[players[0], C.red], [players[1], C.blue]].forEach(([p, col]) => {
+    box(15.5, 16.1, p - 0.3, p + 0.3, 16.5, 19, STEEL);
+    box(15.2, 16.4, p - 0.6, p + 0.6, 19, 20.2, col, { top: mul(col, 1.3) });
+  });
+  // o corpo de cima, com o monitor deitado para trás dentro de uma moldura escura
+  box(0, 11.4, w0, w1, 16.5, 38, BODY);
+  slant(w0, w1, 16.5, 38, () => mul(BODY, 0.95));
+  slant(w0 + 1.5, w1 - 1.5, 20, 34.5, () => DARK);
+  // a tela de seleção de verdade desta máquina: os lugares dela acesos
   const select = pngTexture(path.resolve(import.meta.dirname, `ssf2tb-select-${slot + 1}.png`));
-  cv.slantX(a0, -slope, Y0 + 1.6, Y1 - 1.6, 20.5, 37, (y, z) => {
-    const u = (Y1 - 1.6 - y) / (w - 3.2);
-    const v = (37 - z) / 16.5;
-    return mul(select(u, v), Math.floor(z * 4) % 2 ? 0.88 : 1);
-  }, cv.next());
-  // o letreiro: SUPER em laranja sobre o azul, como o logo
-  cv.box(6, 25, Y0, Y1, 46, 52, BLUE, {
-    left: (y, z) => {
-      const a = Y1 - y - (w - 19 * 0.5) / 2;
-      const t = textTex('SUPER', C.orange, null, 0.5)(a, 52 - z - 0.5);
-      if (t) return t;
-      if (z > 46.4 && z < 47.4) return C.yellow;
-      return (Math.floor(y) + Math.floor(z)) % 7 === 0 ? mul(BLUE, 1.35) : BLUE;
-    },
-    right: mul(BODY, 0.8),
-    top: mul(BODY, 1.4),
+  slant(w0 + 2.5, w1 - 2.5, 22, 32.5, (w, z) => {
+    const u = ltr(w, w0 + 2.5, w1 - 2.5) / (CW - 5);
+    return mul(select(u, (32.5 - z) / 10.5), Math.floor(z * 4) % 2 ? 0.88 : 1);
+  });
+  // a cabeça arredondada, em degraus, e o letreiro verde aceso na frente dela
+  box(0, 12, w0 + 0.5, w1 - 0.5, 38, 43, BODY);
+  box(1, 10, w0 + 1.8, w1 - 1.8, 43, 45.5, BODY, { top: mul(BODY, 1.25) });
+  box(9, 15.5, w0 + 1.2, w1 - 1.2, 38.5, 44, GREEN, {
+    front: (w, z) => textTex('SF2', hex('#1d4a2c'), mul(GREEN, 1.05), 1)(ltr(w, w0 + 1.2, w1 - 1.2) - 2.8, 44 - z),
+    side: mul(GREEN, 0.7),
+    top: mul(GREEN, 1.15),
+  });
+  // a lateral, com o perfil do gabinete e as listras verde-água na diagonal
+  sideFace(0, 19.5, 0, 46, (d, z) => {
+    let inside;
+    if (z < 2) inside = d < 13;
+    else if (z < 14) inside = d < 14;
+    else if (z < 16.5) inside = d < 19;
+    else if (z < 38) inside = d < a0 - slope * z;
+    else if (z < 38.5) inside = d < 12;
+    else if (z < 43) inside = d < 15.5;
+    else if (z < 44) inside = d >= 1 && d < 15.5;
+    else if (z < 45.5) inside = d >= 1 && d < 10;
+    else inside = false;
+    if (!inside) return null;
+    if (z >= 38.5 && z < 44 && d >= 9) return mul(GREEN, 0.7); // a ponta do letreiro aceso
+    if (z < 2.4) return mul(DARK, 1.1);
+    if ((d * 0.8 + z * 0.55) % 11 < 2.2 && z > 3 && z < 37) return TEAL;
+    return mul(BODY, 0.96 + 0.06 * Math.sin(z * 0.9));
   });
 }
 
+// um banquinho de assento marrom, de quatro pernas e um aro, no ponto (cx, cy) do piso
+function stool(cv, cx, cy) {
+  const STEEL = hex('#8a90a8');
+  const SEAT = hex('#7a4b3e');
+  const x0 = cx - 3.5;
+  const y0 = cy - 3.5;
+  for (const [dx, dy] of [[0, 0], [6, 0], [0, 6], [6, 6]]) cv.box(x0 + dx, x0 + dx + 1, y0 + dy, y0 + dy + 1, 0, 8, STEEL);
+  cv.box(x0, x0 + 7, y0, y0 + 1, 3, 3.8, STEEL);
+  cv.box(x0, x0 + 7, y0 + 6, y0 + 7, 3, 3.8, STEEL);
+  cv.box(x0, x0 + 1, y0, y0 + 7, 3, 3.8, STEEL);
+  cv.box(x0 + 6, x0 + 7, y0, y0 + 7, 3, 3.8, STEEL);
+  cv.box(x0 - 0.5, x0 + 7.5, y0 - 0.5, y0 + 7.5, 8, 10.5, SEAT, { top: mul(SEAT, 1.25) });
+}
+
+// um cabo de rede no piso, uma curva de p0 a p1 puxada para o ponto c; as pontas
+// são o conector ciano
+function floorCable(cv, p0, c, p1) {
+  const id = cv.next();
+  const n = 48;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const x = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * c[0] + t ** 2 * p1[0];
+    const y = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * c[1] + t ** 2 * p1[1];
+    const col = i < 3 || i > n - 3 ? C.cyan : hex('#8aa4ff');
+    cv.faceX(x + 0.9, y, y + 0.9, 0, 1.1, () => mul(col, 0.8), id);
+    cv.top(1.1, x, x + 0.9, y, y + 0.9, () => col, id);
+  }
+}
+
 function arcadeLink4() {
-  view(34, 100);
+  view(67, 67);
   const cv = new Canvas();
   room(cv, {
-    glow: [{ x0: 27, x1: 34, y0: 4, y1: 96, color: C.purpleHi }],
-    shadows: [{ x0: 4, x1: 28, y0: 4, y1: 97 }],
-    sign: textTex('TOURNAMENT BATTLE', C.pink, mul(C.dark, 0.7)),
-    signArea: [14, 14 + 69, 46, 46 + 7],
+    tint: [hex('#c6dff0'), hex('#a7c6e0')],
+    glow: [
+      { x0: 19, x1: 36, y0: 19, y1: 60, color: C.cyan },
+      { x0: 19, x1: 60, y0: 19, y1: 36, color: C.cyan, along: 'y' },
+    ],
+    shadows: [{ x0: 0, x1: 22, y0: 18, y1: 60 }, { x0: 18, x1: 60, y0: 0, y1: 22 }],
   });
-  // as cores dos lugares 1, 3, 5 e 7 da tela de entrada do jogo
-  const colors = [C.red, C.yellow, C.purpleHi, C.orange];
-  const spans = [[4, 26], [27, 49], [50, 72], [73, 95]];
-  spans.forEach(([y0, y1], i) => capcomUpright(cv, y0, y1, 3 - i, colors[3 - i])); // o 1 à esquerda
-  for (let i = 0; i < 3; i++) cable(cv, 23.5, spans[i][1] - 2, 23.5, spans[i + 1][0] + 2, 31);
+  // do mais longe ao mais perto: o 2 e o 3 junto ao canto, depois o 1 e o 4
+  candy(cv, 'x', 19, 1);
+  candy(cv, 'y', 19, 2);
+  stool(cv, 25, 32.5);
+  stool(cv, 32.5, 25);
+  candy(cv, 'x', 40, 0);
+  candy(cv, 'y', 40, 3);
+  // a corrente 1-2-3-4, pelo piso, passando pelos vãos entre os banquinhos
+  floorCable(cv, [14.6, 42.5], [36, 39], [14.6, 35.5]);
+  floorCable(cv, [14.6, 21.5], [30, 30], [21.5, 14.6]);
+  floorCable(cv, [35.5, 14.6], [39, 36], [42.5, 14.6]);
+  stool(cv, 25.5, 49.5);
+  stool(cv, 49.5, 25.5);
+  chair(cv, 2, 61);
+  plant(cv, 61, 2);
   cv.outline();
   return cv;
 }
