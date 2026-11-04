@@ -17,3 +17,14 @@ The PNGs are scaled down to 128 px. Programs with no icon of their own
 | `es-de.svg` | ES-DE, `es-app/assets/org.es_de.frontend.svg` |
 | `pegasus.png` | Pegasus Frontend, `assets/icon.png` |
 | `fightcade.png` | Fightcade, `fightcade.com/favicon.ico` (128 px frame) |
+| `duckstation.png` | DuckStation, `data/resources/images/duck.png` |
+| `limine.png` | Limine, `logo.png` of its repository |
+| `hotr.png`, `pixelcade.png` | The Setup's copies (`fliperos-setup/gui/icons`, sources in its README) |
+| `ubuntu.svg`, `linux.svg`, `obs.svg`, `nvidia.svg` | [Simple Icons](https://simpleicons.org) (`ubuntu`, `linux`, `obsstudio`, `nvidia`), filled with the brand colour (white for Tux and OBS, on the dark site) |
+| `amd.svg` | Simple Icons `amd`, cut down to the arrow, in white |
+| `intel.svg` | Simple Icons `intel` (the wordmark is the whole logo), cropped, in Intel's energy blue |
+
+`pixel.svg` is not a logo: it is the sprite of FliperOS's own 16x16 pixel
+icons used by the technical highlights bar (`src/sections/BadgeBar.tsx`),
+the Setup's icons plus the ones drawn for the bar. `tools/web-icons.py`
+writes it; draw new ones there (`SITE_ICONS`), never in this file.

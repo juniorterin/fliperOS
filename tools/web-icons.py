@@ -3,9 +3,11 @@
 do Setup (ICONS de fliperos-setup/gui/theme.py, os do carrossel no tubo),
 id "px-NOME", e os glifos 12x12 de uma cor so do painel (GLYPHS, abaixo),
 id "g-NOME", que pegam a cor do texto. Tambem os PNG do icone para
-"Adicionar a tela inicial" (o joystick do Setup).
+"Adicionar a tela inicial" (o joystick do Setup), e o sprite de pixel do
+site (website/public/icons/pixel.svg): os icones do Setup que a faixa de
+destaques tecnicos usa e os desenhados so para ela (SITE_ICONS).
 
-    python3 tools/web-icons.py           grava config/web/icons.svg e os PNG
+    python3 tools/web-icons.py           grava config/web/icons.svg, os PNG e o do site
     python3 tools/web-icons.py --check   so confere se estao em dia (teste)
 
 O theme.py e lido com ast (ele importa o pygame)."""
@@ -18,6 +20,236 @@ import zlib
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 THEME = os.path.join(ROOT, "fliperos-setup", "gui", "theme.py")
 WEB = os.path.join(ROOT, "config", "web")
+SITE = os.path.join(ROOT, "website", "public", "icons", "pixel.svg")
+
+# Os icones do Setup que a faixa de destaques do site usa
+# (website/src/sections/BadgeBar.tsx), cada um no item que ele ja marca no
+# Setup: resolution (Switchres), retest (CRT pronto), firmware (ATOM-15),
+# outputs (Multiple Monitors), chip (Download BIOS), reset (atualizacao)...
+SITE_SETUP = ("frontend", "retest", "resolution", "orientation", "outputs", "mode480", "colour", "scanlines",
+              "guncon", "filter", "chip", "scraper", "services", "lab", "reset", "latency", "firmware")
+
+# Os desenhados so para a faixa, no mesmo 16x16 e nas mesmas letras de cor do
+# theme.py (ICON_COLORS), para o que nao tem icone no Setup nem icone proprio.
+SITE_ICONS = {
+    # 15 kHz: a onda quadrada do sinal num osciloscopio.
+    "khz": """
+................
+................
+.MMMMMMMMMMMMMM.
+.MDDDDDDDDDDDDM.
+.MDDGGGGDDGGGGM.
+.MDDGDDGDDGDDDM.
+.MDDGDDGDDGDDDM.
+.MDDGDDGDDGDDDM.
+.MGGGDDGGGGDDDM.
+.MDDDDDDDDDDDDM.
+.MMMMMMMMMMMMMM.
+.MMOMMOMMMMKKMM.
+.MMMMMMMMMMMMMM.
+................
+................
+................""",
+    # Conversor DP/HDMI para VGA: o conector VGA de frente, tres fileiras de pinos.
+    "vga": """
+................
+................
+................
+................
+.MMMMMMMMMMMMM..
+.MCCCCCCCCCCCM..
+.MCDCDCDCDCDCM..
+.MCCCCCCCCCCCM..
+..MCDCDCDCDCM...
+..MCCCCCCCCCM...
+..MDCDCDCDCDM...
+...MMMMMMMMM....
+................
+................
+................
+................""",
+    # Gabinetes em link: o globo verde que o frontend poe nos jogos de link
+    # (GLOBE_SMALL de gui/feview.py), no tamanho dos outros icones.
+    "globe": """
+................
+.....GGGGG......
+...GG.G.G.GG....
+..G..G...G..G...
+..G..G...G..G...
+.G..G.....G..G..
+.G..G.....G..G..
+.GGGGGGGGGGGGG..
+.G..G.....G..G..
+.G..G.....G..G..
+..G..G...G..G...
+..G..G...G..G...
+...GG.G.G.GG....
+.....GGGGG......
+................
+................""",
+    # Net play: dois manches ligados por um cabo.
+    "netplay": """
+................
+................
+................
+..RR........KK..
+.RRRR......KKKK.
+.RRRR......KKKK.
+..RR........KK..
+..FF........FF..
+..FF........FF..
+..FF........FF..
+PPPPPP....PPPPPP
+PPPPPPYYYYPPPPPP
+MMMMMM....MMMMMM
+................
+................
+................""",
+    # Painel web: o celular com o joystick do FliperOS e o botao de jogar.
+    "web": """
+................
+...MMMMMMMMMM...
+...MDDDDDDDDM...
+...MDDDRRDDDM...
+...MDDRRRRDDM...
+...MDDDRRDDDM...
+...MDDDFFDDDM...
+...MDDDFFDDDM...
+...MDDPPPPDDM...
+...MDPPPPPPDM...
+...MDDDDDDDDM...
+...MDGGGGGGDM...
+...MDDDDDDDDM...
+...MMMMFFMMMM...
+...MMMMMMMMMM...
+................""",
+    # Menu na tela: a caixa com os ajustes por cima do jogo.
+    "osd": """
+................
+.MMMMMMMMMMMMMM.
+.MCCCCCCCCCCCCM.
+.MCKKKKKKKKKKCM.
+.MCKDDDDDDDDKCM.
+.MCKDFFFFYDDKCM.
+.MCKDDDDDDDDKCM.
+.MGKDFFYFFDDKGM.
+.MGKDDDDDDDDKGM.
+.MGKKKKKKKKKKGM.
+.MGGGGGGGGGGGGM.
+.MMMMMMMMMMMMMM.
+......MMMM......
+....MMMMMMMM....
+................
+................""",
+    # Modo comercial: a ficha de um credito.
+    "coin": """
+................
+................
+.....OOOOOO.....
+...OOYYYYYYOO...
+..OYFFYYYYYYYO..
+..OYFYYYYYYYYO..
+.OYYYYYOOYYYYYO.
+.OYYYYOOOYYYYYO.
+.OYYYYYOOYYYYYO.
+.OYYYYYOOYYYYYO.
+..OYYYOOOOYYYO..
+..OYYYYYYYYYYO..
+...OOYYYYYYOO...
+.....OOOOOO.....
+................
+................""",
+    # ZeDMD: um painel de LEDs laranja, todos acesos.
+    "dmd": """
+................
+................
+................
+................
+.MMMMMMMMMMMMM..
+.MDDDDDDDDDDDM..
+.MDODODODODODM..
+.MDDDDDDDDDDDM..
+.MDODODODODODM..
+.MDDDDDDDDDDDM..
+.MDODODODODODM..
+.MDDDDDDDDDDDM..
+.MMMMMMMMMMMMM..
+................
+................
+................""",
+    # LEDSpicer: os botoes do painel, o do meio aceso.
+    "ledbutton": """
+................
+................
+................
+................
+....Y..YY..Y....
+.....Y.YY.Y.....
+................
+MMRRMMMYYMMMCCMM
+MRRRRMYYYYMCCCCM
+MRRRRMYYYYMCCCCM
+MMRRMMMYYMMMCCMM
+MMMMMMMMMMMMMMMM
+................
+................
+................
+................""",
+    # Hypseus Singe: o laserdisc, com o brilho de arco-iris.
+    "laserdisc": """
+................
+.....FFFFFF.....
+...FFCCFFFFFF...
+..FCCKKFFFFFFF..
+..CKKYFFFFFFFF..
+.FCKYFFFFFFFFFF.
+.CKYFFMMMMFFFFF.
+.CKYFFMDDMFFFFF.
+.FFFFFMDDMFFFFF.
+.FFFFFMMMMFFFFF.
+.FFFFFFFFFFYKCF.
+..FFFFFFFFYKKC..
+..FFFFFFFKKCCF..
+...FFFFFFCCFF...
+.....FFFFFF.....
+................""",
+    # Supermodel: a placa do Model 3, com o 3 no chip.
+    "model3": """
+................
+................
+.GGGGGGGGGGGGGG.
+.GGGGGGGGGGGGGG.
+.GGGDDDDDDDDGGG.
+.GGMDDFFFDDDMGG.
+.GGGDDDDDFDDGGG.
+.GGMDDDDDFDDMGG.
+.GGGDDDFFDDDGGG.
+.GGMDDDDDFDDMGG.
+.GGGDDDDDFDDGGG.
+.GGMDDFFFDDDMGG.
+.GGGDDDDDDDDGGG.
+.GYYGYYGGYYGYYG.
+................
+................""",
+    # Vulkan: so tem o nome como logotipo; o V no vermelho dele.
+    "vulkan": """
+................
+................
+.RRR........RRR.
+.RRR........RRR.
+..RRR......RRR..
+..RRR......RRR..
+...RRR....RRR...
+...RRR....RRR...
+....RRR..RRR....
+....RRR..RRR....
+.....RRRRRR.....
+.....RRRRRR.....
+......RRRR......
+.......RR.......
+................
+................""",
+}
 
 # Os glifos do painel: "#" e o traco, na cor do texto.
 GLYPHS = {
@@ -505,22 +737,42 @@ def runs(rows, on):
             x += w
 
 
+def symbol(name, rows, letters):
+    """O <symbol> "px-NOME" de um icone 16x16, um <path> por cor."""
+    paths = {}
+    for x, y, w, c in runs(rows, lambda c: c in letters):
+        paths.setdefault(letters[c], []).append("M%d %dh%dv1h-%dz" % (x, y, w, w))
+    body = "".join('<path fill="%s" d="%s"/>' % (color, "".join(d)) for color, d in paths.items())
+    return '<symbol id="px-%s" viewBox="0 0 16 16" shape-rendering="crispEdges">%s</symbol>' % (name, body)
+
+
 def sprite():
     icons, letters = theme_icons()
     out = ['<svg xmlns="http://www.w3.org/2000/svg" style="display:none">',
            "<!-- Gerado por tools/web-icons.py: os icones do Setup (theme.py) e os glifos do painel. -->"]
     for name, rows in icons.items():
-        paths = {}
-        for x, y, w, c in runs(rows, lambda c: c in letters):
-            paths.setdefault(letters[c], []).append("M%d %dh%dv1h-%dz" % (x, y, w, w))
-        body = "".join('<path fill="%s" d="%s"/>' % (color, "".join(d)) for color, d in paths.items())
-        out.append('<symbol id="px-%s" viewBox="0 0 16 16" shape-rendering="crispEdges">%s</symbol>' % (name, body))
+        out.append(symbol(name, rows, letters))
     for name, art in GLYPHS.items():
         rows = [r for r in art.split("\n") if r.strip()]
         assert [len(r) for r in rows] == [12] * 12, name
         d = "".join("M%d %dh%dv1h-%dz" % (x, y, w, w) for x, y, w, _ in runs(rows, lambda c: c == "#"))
         out.append('<symbol id="g-%s" viewBox="0 0 12 12" shape-rendering="crispEdges" fill="currentColor">'
                    '<path d="%s"/></symbol>' % (name, d))
+    out.append("</svg>")
+    return ("\n".join(out) + "\n").encode()
+
+
+def site_sprite():
+    icons, letters = theme_icons()
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" style="display:none">',
+           "<!-- Gerado por tools/web-icons.py: os icones de pixel da faixa de destaques do site. -->"]
+    for name in SITE_SETUP:
+        out.append(symbol(name, icons[name], letters))
+    for name, art in SITE_ICONS.items():
+        rows = art.split()
+        assert name not in icons and [len(r) for r in rows] == [16] * 16, name
+        assert set("".join(rows)) <= set(letters) | {"."}, name
+        out.append(symbol(name, rows, letters))
     out.append("</svg>")
     return ("\n".join(out) + "\n").encode()
 
@@ -550,15 +802,18 @@ def png(size, scale):
 
 
 def outputs():
-    return {"icons.svg": sprite(), "icon-192.png": png(192, 9), "icon-512.png": png(512, 24),
-            "apple-touch-icon.png": png(180, 9)}
+    web = {"icons.svg": sprite(), "icon-192.png": png(192, 9), "icon-512.png": png(512, 24),
+           "apple-touch-icon.png": png(180, 9)}
+    files = {os.path.join(WEB, name): data for name, data in web.items()}
+    files[SITE] = site_sprite()
+    return files
 
 
 def main():
     check = "--check" in sys.argv[1:]
     stale = []
-    for name, data in outputs().items():
-        path = os.path.join(WEB, name)
+    for path, data in outputs().items():
+        name = os.path.relpath(path, ROOT)
         try:
             with open(path, "rb") as f:
                 same = f.read() == data
