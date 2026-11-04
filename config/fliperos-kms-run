@@ -94,7 +94,17 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
     "$versus" has retroarch "${game%.*}" "$core"; then
     appendconfig+="|$versus_cfg"
   fi
-  set -- "$1" --appendconfig "$appendconfig" "${@:2}"
+  # Um --appendconfig de quem chama (o net play do frontend) vai para o fim
+  # da lista: o RetroArch so fica com o ultimo, e os daqui se perdiam.
+  args=()
+  for ((i = 2; i <= $#; i++)); do
+    case ${!i} in
+      --appendconfig) next=$((i + 1)) && appendconfig+="|${!next}" && i=$next ;;
+      --appendconfig=*) appendconfig+="|${!i#--appendconfig=}" ;;
+      *) args+=("${!i}") ;;
+    esac
+  done
+  set -- "$1" --appendconfig "$appendconfig" "${args[@]}"
   # As conquistas (RetroAchievements) no marquee: o fliperos-pixelcade as le
   # do log, onde o RetroArch so as escreve com --verbose.
   if [[ -x $pixelcade ]] && "$pixelcade" cheevos; then

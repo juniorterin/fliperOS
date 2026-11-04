@@ -1233,7 +1233,8 @@ class Frontend:
     # ── O link play (gui/felink.py) ──
     def link_profile(self, g):
         """O perfil de link do jogo (os que ligam gabinetes) ou o de net play
-        (mais jogadores do que controles aqui, num jogo que o FBNeo roda)."""
+        (felink.netplay_profile: um core do RetroArch que faz net play, ou o GGPO
+        do Flycast no Naomi e no Atomiswave)."""
         if not g:
             return None
         key = g["_system"]["key"]

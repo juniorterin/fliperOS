@@ -41,15 +41,20 @@ NVRAM_SRC = os.environ.get("FLIPEROS_LINK_NVRAM") or next(
     (p for p in ("/usr/local/share/fliperos/link-nvram", os.path.join(HERE, "..", "..", "config", "link-nvram"))
      if os.path.isdir(p)), "/usr/local/share/fliperos/link-nvram")
 PORT_PRESENCE, PORT_PARTY, PORT_FILES = 55436, 55437, 55438
-# O net play e o do RetroArch: o core do FBNeo, pelo fliperos-kms-run, so com
-# os jogos da pasta dele (~/roms/retroarch/fbneo, o romset do FBNeo): um zip do
-# romset do MAME nem sempre tem os dumps que o FBNeo pede. A lista dos sets do
-# FBNeo vem do indice que o Setup baixa (config/fliperos-fbneo).
+# O net play e o do RetroArch, pelo fliperos-kms-run, com os jogos das pastas
+# dos cores que o fazem (~/roms/retroarch/<core>, netplay_core). A pasta do
+# MAME nao entra: um zip do romset do MAME nem sempre tem os dumps que o FBNeo
+# pede. A lista dos sets do FBNeo vem do indice que o Setup baixa
+# (config/fliperos-fbneo).
 PORT_NETPLAY = 55435
-NETPLAY_SYSTEM = "retroarch/fbneo"
+# O Flycast tem o net play dele, o GGPO (rollback, UDP 19713), nos jogos de
+# Naomi e Atomiswave: dois jogadores, um em cada gabinete.
+PORT_GGPO = 19713
+GGPO_SYSTEMS = ("naomi", "naomi2", "atomiswave")
 BUTTONS_MAP = os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
 KMS_RUN = os.environ.get("FLIPEROS_KMS_RUN", "/opt/fliperos/bin/fliperos-kms-run")
-NETPLAY_CORE = os.environ.get("FLIPEROS_NETPLAY_CORE", "/opt/fliperos/retroarch/cores/fbneo_libretro.so")
+RA_CORES = os.environ.get("FLIPEROS_RA_CORES", "/opt/fliperos/retroarch/cores")
+RA_INFO = os.environ.get("FLIPEROS_RA_INFO", "/opt/fliperos/retroarch/info")
 FBNEO_INDEX = os.environ.get("FLIPEROS_FBNEO_INDEX", "/usr/local/share/fliperos/fbneo-sets.tsv.xz")
 INTERVAL, EXPIRE = 1.0, 4.0
 SOLO = ".solo"
@@ -563,6 +568,13 @@ def link_args(profile, plan, number):
     emu = profile["emulator"]
     if emu == "supermodel":
         return ["-net", "-port-in=%d" % port, "-port-out=%d" % port, "-address-out=%s" % nxt]
+    if emu == "flycast" and profile.get("ggpo"):
+        # O GGPO: cada lado manda para o IP do outro (network:server, nos dois: vazio e o
+        # 127.0.0.1) e o servidor e o jogador 1. Sem atraso de entrada: no cabo o
+        # rollback e raro. O UPnP fica desligado.
+        other = next(m["ip"] for m in plan["members"] if m["number"] != number)
+        return ["-config", "network:GGPO=yes,network:ActAsServer=%s,network:server=%s,network:GGPODelay=0,"
+                "network:EnableUPnP=no" % ("yes" if number == 1 else "no", other)]
     if emu == "flycast":
         # A rede do Naomi do Flycast (UDP, porta 37391): o numero 1 e o servidor, os outros se
         # conectam a ele. O UPnP fica desligado: nada de pedir ao roteador (e a Internet) que
@@ -645,8 +657,10 @@ _fbneo = {}
 
 
 def fbneo_sets(path=None):
-    """Os sets de arcade do FBNeo (o indice do fliperos-fbneo: "pasta<TAB>set<TAB>pai<TAB>crcs",
-    pasta vazia = arcade). Vazio se nao ha indice: sem ele nenhum jogo tem net play."""
+    """Os sets do FBNeo, de todos os sistemas (o indice do fliperos-fbneo:
+    "pasta<TAB>set<TAB>pai<TAB>crcs"; um de console o fliperos-kms-run poe na
+    pasta do sistema). Vazio se nao ha indice: sem ele nenhum jogo do FBNeo tem
+    net play."""
     path = path or FBNEO_INDEX
     if path not in _fbneo:
         sets = set()
@@ -654,7 +668,7 @@ def fbneo_sets(path=None):
             with lzma.open(path, "rt", encoding="utf-8") as f:
                 for line in f:
                     parts = line.rstrip("\n").split("\t")
-                    if len(parts) >= 2 and parts[0] == "":
+                    if len(parts) >= 2:
                         sets.add(parts[1])
         except (OSError, lzma.LZMAError, EOFError):
             pass
@@ -662,21 +676,58 @@ def fbneo_sets(path=None):
     return _fbneo[path]
 
 
+_states = {}
+
+
+def netplay_core(system_key):
+    """O core de uma pasta do RetroArch (retroarch/<core>) que faz net play, ou
+    None: instalado e com savestate_features = "deterministic" no .info, que e
+    o que o proprio RetroArch pede para o net play (o MAME 2010 nao salva
+    estado, o Flycast so "serialized")."""
+    if not (system_key or "").startswith("retroarch/"):
+        return None
+    core = system_key.split("/", 1)[1]
+    so = os.path.join(RA_CORES, core + "_libretro.so")
+    info = os.path.join(RA_INFO, core + "_libretro.info")
+    if info not in _states:
+        state = ""
+        try:
+            with open(info, encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    key, _, value = line.partition("=")
+                    if key.strip() == "savestate_features":
+                        state = value.strip().strip('"')
+        except OSError:
+            pass
+        _states[info] = state
+    return so if _states[info] == "deterministic" and os.path.isfile(so) else None
+
+
 def netplay_profile(system_key, name, players, local, sets=None):
-    """O perfil de net play de um jogo, ou None: tem mais jogadores do que
-    controles aqui, esta na pasta do FBNeo e e um arcade dele (so ele salva o
-    estado do jeito que o net play pede). Cada gabinete entra com um jogador;
-    quem abre e o primeiro."""
+    """O perfil de net play de um jogo, ou None. Numa pasta de core do
+    RetroArch que faz net play (netplay_core; na do FBNeo, so um set que o
+    FBNeo conhece), um jogo com mais jogadores do que controles aqui: cada
+    gabinete entra com os jogadores dos seus controles. No Naomi e no
+    Atomiswave, o GGPO do Flycast: um jogo de dois ou mais jogadores, dois
+    gabinetes com um jogador cada. Quem abre e o primeiro."""
     try:
         n = int(players)
     except (TypeError, ValueError):
         return None
-    sets = fbneo_sets() if sets is None else sets
-    if system_key != NETPLAY_SYSTEM or n <= local or name not in sets:
+    if (system_key or "").split("/")[0] in GGPO_SYSTEMS:
+        if n < 2:
+            return None
+        return {"id": "netplay", "title": name, "emulator": "flycast", "systems": [system_key], "sets": [name],
+                "min": 2, "max": 2, "players": 2, "take": 1, "fixed": True, "order": "master-first", "step": 6,
+                "port": PORT_GGPO, "netplay": True, "ggpo": True}
+    core = netplay_core(system_key)
+    if not core or n <= local:
         return None
-    return {"id": "netplay", "title": name, "emulator": "retroarch", "systems": [NETPLAY_SYSTEM], "sets": [name],
+    if system_key == "retroarch/fbneo" and name not in (fbneo_sets() if sets is None else sets):
+        return None
+    return {"id": "netplay", "title": name, "emulator": "retroarch", "systems": [system_key], "sets": [name],
             "min": 2, "max": n, "players": n, "fixed": False, "order": "master-first", "step": 6,
-            "port": PORT_NETPLAY, "netplay": True}
+            "port": PORT_NETPLAY, "netplay": True, "core": core}
 
 
 NETPLAY_CFG = """# O net play do FliperOS: so a rede local, so pelo cabo. Nada de servidor
@@ -701,13 +752,15 @@ def netplay_cfg(profile, slots):
 
 def netplay_command(profile, plan, number, rom, name, cfg, core=None):
     """O RetroArch do net play: o numero 1 abre o jogo (--host) e os outros se
-    conectam a ele (--connect), depois de o plano dar o atraso de cada um."""
-    argv = [KMS_RUN, "retroarch", "-L", core or NETPLAY_CORE, rom, "--appendconfig", cfg, "--nick", name,
+    conectam a ele (--connect), depois de o plano dar o atraso de cada um. A
+    ROM vai por ultimo: o fliperos-kms-run le o jogo dali (os botoes dele, o
+    set de console do FBNeo na pasta do sistema)."""
+    argv = [KMS_RUN, "retroarch", "-L", core or profile["core"], "--appendconfig", cfg, "--nick", name,
             "--port", str(profile["port"])]
     if number == 1:
-        return argv + ["--host"]
+        return argv + ["--host", rom]
     host = next(m["ip"] for m in plan["members"] if m["number"] == 1)
-    return argv + ["--connect", host]
+    return argv + ["--connect", host, rom]
 
 
 def ini_set(path, keys):
@@ -1072,8 +1125,13 @@ class Link:
         return parties(self.table())
 
     def parties_for(self, system_key, name):
-        key = (system_key or "").split("/")[0]
-        return [p for p in self.parties() if p["game"] == name and (p["system"] or "").split("/")[0] == key]
+        """As festas do jogo. Uma pasta de core do RetroArch e um sistema
+        inteiro (o "sonic" do Mega Drive nao e o do FBNeo); as outras valem
+        pela primeira parte da chave."""
+        def key(k):
+            k = k or ""
+            return k if k.startswith("retroarch/") else k.split("/")[0]
+        return [p for p in self.parties() if p["game"] == name and key(p["system"]) == key(system_key)]
 
     def mark(self, system_key, name):
         """None: o jogo nao tem link. False: tem, e ninguem joga. True: alguem joga."""
@@ -1101,7 +1159,8 @@ class Link:
         files: os caminhos (relativos ao home) que quem entra sem o jogo copia."""
         self.leave()
         try:
-            take = min(self.local_players, profile["players"]) if profile.get("netplay") else 1
+            # No net play, um jogador por controle daqui (no GGPO, um so).
+            take = min(self.local_players, profile.get("take") or profile["players"]) if profile.get("netplay") else 1
             party = PartyHost(self.wire, profile, name, self.ident, self.name, port=self.ports.get("party", PORT_PARTY),
                               on_change=self.say, take=take)
             party.open()
@@ -1123,7 +1182,7 @@ class Link:
         """Entra na festa de outro gabinete. False (e self.message) se nao deu."""
         self.leave()
         guest = PartyGuest(self.wire, self.ident, self.name, port=self.ports.get("party", PORT_PARTY))
-        want = self.local_players if profile.get("netplay") else 1
+        want = min(self.local_players, profile.get("take") or self.local_players) if profile.get("netplay") else 1
         if not guest.join(party["host_ip"], name, want=want):
             self.message = REASONS.get(guest.refused, REASONS["down"])
             return False
@@ -1225,6 +1284,9 @@ class Link:
         """O comando do jogo em link (o base e o do frontend), com a NVRAM, o
         cfg e o ini deste numero no lugar; leave() desfaz tudo."""
         prof, plan, number = self.profile, self.plan, self.number
+        if prof.get("ggpo"):
+            # O GGPO do Flycast: o comando do jogo com as opcoes dele, sem NVRAM por numero.
+            return command(prof, base, plan, number, self.game)
         if prof.get("netplay"):
             # O net play nao tem NVRAM por numero: o RetroArch com o que a festa pede.
             cfg = os.path.join(self.home, ".config", "fliperos", "netplay.cfg")

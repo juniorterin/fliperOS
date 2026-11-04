@@ -40,6 +40,33 @@ def wait(cond, seconds=3.0):
     return cond()
 
 
+# Os cores do RetroArch de mentira: o fbneo, o snes9x e o pcsx_rearmed fazem
+# net play ("deterministic"), o mame2010 nao salva estado, o flycast so
+# "serialized" e o genesis_plus_gx tem o .info mas nao o .so.
+_ra = None
+
+
+def setUpModule():
+    global _ra
+    _ra = tempfile.TemporaryDirectory()
+    cores, info = os.path.join(_ra.name, "cores"), os.path.join(_ra.name, "info")
+    os.makedirs(cores)
+    os.makedirs(info)
+    for core, state, so in (("fbneo", "deterministic", True), ("snes9x", "deterministic", True),
+                            ("pcsx_rearmed", "deterministic", True), ("mame2010", "null", True),
+                            ("flycast", "serialized", True), ("genesis_plus_gx", "deterministic", False)):
+        with open(os.path.join(info, core + "_libretro.info"), "w") as fh:
+            fh.write('corename = "%s"\nsavestate = "true"\nsavestate_features = "%s"\n' % (core, state))
+        if so:
+            Path(cores, core + "_libretro.so").touch()
+    felink._states.clear()
+    felink.RA_CORES, felink.RA_INFO = cores, info
+
+
+def tearDownModule():
+    _ra.cleanup()
+
+
 class ProfilesTests(unittest.TestCase):
     def setUp(self):
         self.p = felink.Profiles()
@@ -894,13 +921,75 @@ class NetplayTests(unittest.TestCase):
         self.assertIsNotNone(felink.netplay_profile("retroarch/fbneo", "xmen", "4", 3, self.SETS))
         self.assertIsNone(felink.netplay_profile("retroarch/fbneo", "xmen", "4", 4, self.SETS))
 
+    def test_every_retroarch_core_that_does_net_play(self):
+        so = felink.netplay_core("retroarch/snes9x")
+        self.assertEqual(so, os.path.join(felink.RA_CORES, "snes9x_libretro.so"))
+        prof = felink.netplay_profile("retroarch/snes9x", "Bomberman 2", "4", 2)
+        self.assertEqual((prof["emulator"], prof["core"], prof["systems"], prof["max"]), ("retroarch", so, ["retroarch/snes9x"], 4))
+        self.assertIsNotNone(felink.netplay_profile("retroarch/pcsx_rearmed", "Crash Team Racing", "4", 2))
+        self.assertIsNone(felink.netplay_core("retroarch/mame2010"))          # nao salva estado
+        self.assertIsNone(felink.netplay_core("retroarch/flycast"))           # so "serialized"
+        self.assertIsNone(felink.netplay_core("retroarch/genesis_plus_gx"))   # sem o .so
+        self.assertIsNone(felink.netplay_core("retroarch/nada"))
+        self.assertIsNone(felink.netplay_core("mame"))
+        self.assertIsNone(felink.netplay_profile("retroarch/mame2010", "xmen", "4", 2))
+        # Fora do FBNeo nao ha lista de sets: o nome nao importa.
+        self.assertIsNotNone(felink.netplay_profile("retroarch/snes9x", "gaiaone", "4", 2, self.SETS))
+
+    def test_naomi_and_atomiswave_get_flycast_ggpo_one_player_per_cabinet(self):
+        for system in ("naomi", "naomi2", "atomiswave"):
+            prof = felink.netplay_profile(system, "kofnw", "2", 2)
+            self.assertEqual((prof["emulator"], prof["max"], prof["players"], prof["take"], prof["port"]),
+                             ("flycast", 2, 2, 1, 19713))
+            self.assertTrue(prof["ggpo"] and prof["netplay"])
+        self.assertIsNone(felink.netplay_profile("naomi", "f355", "1", 2))
+        self.assertIsNone(felink.netplay_profile("naomi", "kofnw", "", 2))
+
+    def test_the_ggpo_command_points_each_side_at_the_other(self):
+        prof = felink.netplay_profile("atomiswave", "kofnw", "2", 2)
+        plan = felink.make_plan(prof, [{"number": i, "name": "C%d" % i, "ip": "10.0.0.%d" % i} for i in (1, 2)])
+        base = ["/opt/fliperos/bin/fliperos-x11-run", "flycast", "/r/kofnw.zip"]
+        host = felink.command(prof, base, plan, 1, "kofnw")
+        guest = felink.command(prof, base, plan, 2, "kofnw")
+        self.assertEqual(host[-1], "/r/kofnw.zip")
+        self.assertIn("network:GGPO=yes,network:ActAsServer=yes,network:server=10.0.0.2", host[-2])
+        self.assertIn("network:ActAsServer=no,network:server=10.0.0.1", guest[-2])
+        self.assertIn("network:EnableUPnP=no", guest[-2])
+
+    def test_a_ggpo_party_takes_one_player_from_each_cabinet(self):
+        prof = felink.netplay_profile("naomi", "mvsc2", "2", 2)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        a = felink.Link(tmp.name + "/a", wire=LOOP, ident="aaa", name="A", ports={"presence": free_port(), "party": free_port(),
+                                                                               "files": free_port()}, local_players=2)
+        b = felink.Link(tmp.name + "/b", wire=LOOP, ident="bbb", name="B", ports=a.ports, local_players=2)
+        for link in (a, b):
+            os.makedirs(link.home)
+            self.assertTrue(link.start())
+            self.addCleanup(link.stop)
+        self.assertTrue(a.host_game(prof, "naomi", "mvsc2", []))
+        self.assertEqual(a.take, 1)
+        self.assertTrue(wait(lambda: b.parties_for("naomi", "mvsc2")))
+        party = b.parties_for("naomi", "mvsc2")[0]
+        self.assertEqual((party["used"], party["max"]), (1, 2))
+        self.assertTrue(b.join_party(party, prof, "naomi", "mvsc2"))
+        self.assertEqual((b.number, b.take), (2, 1))
+
+    def test_a_retroarch_folder_is_its_own_system_for_the_parties(self):
+        link = felink.Link(tempfile.mkdtemp(), wire=LOOP, ident="p1")
+        rows = [{"game": "sonic", "system": "retroarch/genesis_plus_gx"}, {"game": "ssf2tb", "system": "mame/x"}]
+        with mock.patch.object(link, "parties", return_value=rows):
+            self.assertEqual(link.parties_for("retroarch/genesis_plus_gx", "sonic"), rows[:1])
+            self.assertEqual(link.parties_for("retroarch/fbneo", "sonic"), [])
+            self.assertEqual(link.parties_for("mame", "ssf2tb"), rows[1:])
+
     def test_the_fbneo_index_is_read_from_the_xz(self):
         import lzma
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "sets.tsv.xz")
             with lzma.open(path, "wt") as f:
                 f.write("\txmen\t\t\nmegadrive\tsonic\t\t\n\tsf2ce\tsf2\t\n")
-            self.assertEqual(felink.fbneo_sets(path), frozenset({"xmen", "sf2ce"}))
+            self.assertEqual(felink.fbneo_sets(path), frozenset({"xmen", "sonic", "sf2ce"}))
             self.assertEqual(felink.fbneo_sets(os.path.join(d, "nenhum")), frozenset())
 
     def test_the_command_hosts_for_number_1_and_connects_the_others_to_it(self):
@@ -908,10 +997,10 @@ class NetplayTests(unittest.TestCase):
         plan = felink.make_plan(prof, [{"number": i, "name": "C%d" % i, "ip": "10.0.0.%d" % i} for i in (1, 2, 3)])
         self.assertEqual(plan["order"], [1, 2, 3])
         host = felink.netplay_command(prof, plan, 1, "/r/xmen.zip", "C1", "/c/n.cfg", core="/core.so")
-        self.assertEqual(host, [felink.KMS_RUN, "retroarch", "-L", "/core.so", "/r/xmen.zip", "--appendconfig", "/c/n.cfg",
-                                "--nick", "C1", "--port", "55435", "--host"])
+        self.assertEqual(host, [felink.KMS_RUN, "retroarch", "-L", "/core.so", "--appendconfig", "/c/n.cfg",
+                                "--nick", "C1", "--port", "55435", "--host", "/r/xmen.zip"])
         guest = felink.netplay_command(prof, plan, 3, "/r/xmen.zip", "C3", "/c/n.cfg", core="/core.so")
-        self.assertEqual(guest[-2:], ["--connect", "10.0.0.1"])
+        self.assertEqual(guest[-3:], ["--connect", "10.0.0.1", "/r/xmen.zip"])
         self.assertNotIn("--host", guest)
 
     def test_the_config_keeps_it_off_the_internet(self):
