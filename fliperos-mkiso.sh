@@ -1403,7 +1403,11 @@ apt-get install -y --no-install-recommends \
   libxi-dev libxrandr-dev libudev-dev libevdev-dev libsfml-dev libminiupnpc-dev \
   libmbedtls-dev libcurl4-openssl-dev libhidapi-dev libsystemd-dev libbluetooth-dev \
   libasound2-dev libpulse-dev libpugixml-dev libbz2-dev libzstd-dev liblzo2-dev \
-  libpng-dev libusb-1.0-0-dev gettext
+  libpng-dev libusb-1.0-0-dev gettext \
+  libegl-dev libgl-dev libgles-dev libwayland-dev
+# Sem os -dev do EGL/GL o cmake so avisa e o Dolphin sai sem o video OpenGL
+# ("Failed to initialize video backend!" no gabinete, 4 de novembro de 2026):
+# o chroot os tinha de outros passos, um container limpo nao.
 git clone --depth=1 --branch __DOLPHIN_TAG__ https://github.com/dolphin-emu/dolphin /tmp/dolphin
 cd /tmp/dolphin
 git submodule update --init --recursive --depth 1
