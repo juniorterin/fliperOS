@@ -181,6 +181,66 @@ def apply_filter(games, flt):
     return out
 
 
+def has_games(games, flt):
+    """Se o filtro deixa ao menos um jogo (o limite nao conta): o menu de
+    filtros so mostra os que tem jogo na romlist."""
+    for g in games:
+        for rule in flt.get("rules", []):
+            if rule_matches(rule, g) == rule.get("exception", False):
+                if rule.get("exception", False):
+                    return True
+                break
+        else:
+            return True
+    return False
+
+
+# Os tipos de controle do filtro do frontend, na ordem do menu: as familias
+# do fliperos-romclean (--controls), pelo campo Control da romlist como o
+# Attract-Mode o escreve ("joystick (8-way), trackball").
+CONTROL_TYPES = ("Joystick 8-way", "Joystick 4-way", "Joystick 2-way", "Twin joystick", "Analog stick",
+                 "Trackball", "Spinner", "Paddle", "Positional", "Pedal", "Lightgun", "Keyboard", "Mahjong")
+
+
+def control_kind(part):
+    """Um controle do campo Control no tipo do filtro (None: so botoes)."""
+    c = part.strip().lower()
+    if not c or c in ("only_buttons", "buttons"):
+        return None
+    if "joy" in c:
+        if c.startswith(("double", "triple")):
+            return "Twin joystick"
+        ways = re.search(r"(\d+)", c)
+        n = int(ways.group(1)) if ways else 8
+        return "Joystick 8-way" if n in (5, 8, 16) else "Joystick 4-way" if n in (3, 4) else "Joystick 2-way"
+    for words, kind in ((("gun",), "Lightgun"), (("trackball", "mouse"), "Trackball"),
+                        (("dial", "spinner"), "Spinner"), (("paddle",), "Paddle"),
+                        (("positional", "wheel", "steering"), "Positional"), (("pedal",), "Pedal"),
+                        (("stick", "analog"), "Analog stick"), (("keyboard", "keypad"), "Keyboard"),
+                        (("mahjong", "hanafuda", "gambling"), "Mahjong")):
+        if any(w in c for w in words):
+            return kind
+    return part.strip().capitalize()
+
+
+def control_kinds(game):
+    """Os tipos de controle do jogo (um jogo pode ter mais de um)."""
+    return {k for k in map(control_kind, (game.get("Control") or "").split(",")) if k}
+
+
+def controls_present(games):
+    """Os tipos de controle que algum jogo da romlist tem, na ordem do menu."""
+    found = set()
+    for g in games:
+        found |= control_kinds(g)
+    order = {k: i for i, k in enumerate(CONTROL_TYPES)}
+    return sorted(found, key=lambda k: (order.get(k, len(order)), k))
+
+
+def apply_control(games, kind):
+    return [g for g in games if kind in control_kinds(g)] if kind else games
+
+
 FAVOURITES = {"name": "Favourites", "rules": [{"field": "Favourite", "op": "equals", "what": "1"}],
               "sort_by": "", "reverse": False, "limit": 0}
 

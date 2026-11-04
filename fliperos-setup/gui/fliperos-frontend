@@ -223,6 +223,8 @@ class Frontend:
         self.filter_by = dict(cfg.get("filters") or {})
         if cfg.get("filter") and self.category() and self.category()["key"] not in self.filter_by:
             self.filter_by[self.category()["key"]] = cfg["filter"]
+        # O tipo de controle (o 5 > CONTROL), tambem de cada romlist.
+        self.ctrl_by = dict(cfg.get("control_filters") or {})
         self.load_filter()
         self.opened = set()        # os jogos pai com os clones abertos (na lista)
         # Tab > Frontend options > Show clones (gravado no frontend.json).
@@ -348,6 +350,32 @@ class Frontend:
         names = [f["name"] for f in self.lib.filters]
         name = self.filter_by.get(cat["key"]) if cat else None
         self.flt = names.index(name) if name in names else self.default_filter()
+        self.ctrl = self.ctrl_by.get(cat["key"]) if cat else None
+
+    def set_control(self, kind):
+        """O tipo de controle da romlist de agora (None: todos)."""
+        self.ctrl = kind
+        cat = self.category()
+        if cat:
+            if kind:
+                self.ctrl_by[cat["key"]] = kind
+            else:
+                self.ctrl_by.pop(cat["key"], None)
+
+    def open_filters(self):
+        """O menu do 5: a linha CONTROL (os tipos que algum jogo da romlist
+        tem) e os filtros que deixam ao menos um jogo nela (o de agora fica
+        sempre, para o visto mostrar onde se esta)."""
+        cat = self.category()
+        hidden = self.lib.hidden()
+        games = [g for g in self.lib.games(cat) if (g["_system"]["key"], g["Name"]) not in hidden] if cat else []
+        now = self.flt % len(self.lib.filters)
+        items = [i for i, f in enumerate(self.lib.filters) if i == now or self.fd.has_games(games, f)]
+        ctrls = [None] + self.fd.controls_present(games)
+        if self.ctrl and self.ctrl not in ctrls:
+            ctrls.append(self.ctrl)
+        self.overlay, self.ov = "filter", {"items": items, "sel": 1 + items.index(now), "top": 0,
+                                           "ctrls": ctrls, "ctrl": ctrls.index(self.ctrl)}
 
     def set_filter(self, index):
         self.flt = index
@@ -369,6 +397,7 @@ class Frontend:
             return []
         hidden = self.lib.hidden()
         games = [g for g in self.lib.games(cat) if (g["_system"]["key"], g["Name"]) not in hidden]
+        games = self.fd.apply_control(games, self.ctrl)
         return self.fd.apply_filter(games, self.lib.filters[self.flt % len(self.lib.filters)])
 
     def rebuild(self, keep=None):
@@ -426,7 +455,7 @@ class Frontend:
         g = self.game()
         self.keep_position()
         save_config({"mode": self.mode, "category": (self.category() or {}).get("key"),
-                     "filters": self.filter_by,
+                     "filters": self.filter_by, "control_filters": self.ctrl_by,
                      "game": g["Name"] if g else None, "positions": self.positions,
                      "clones": self.show_clones, "exit_key": self.exit_key, "exit_combo": self.exit_combo,
                      "power_exit": self.power_exit, "commercial": self.commercial,
@@ -623,7 +652,7 @@ class Frontend:
         elif a == "b4":
             self.toggle_fav()
         elif a == "b5":
-            self.overlay, self.ov = "filter", {"sel": self.flt % len(self.lib.filters), "top": 0}
+            self.open_filters()
         elif a == "start":
             self.set_mode(1)
             self.say(MODE_NAMES[self.mode])
@@ -736,15 +765,22 @@ class Frontend:
                 self.toggle_fav()
             return None
         if o == "filter":
-            n = len(self.lib.filters)
+            # Linha 0: CONTROL (esquerda/direita trocam o tipo); depois os
+            # filtros. O 1 aplica os dois, o 5 sai sem mudar nada.
+            n = 1 + len(self.ov["items"])
             if a in ("up", "down"):
                 self.ov["sel"] = (self.ov["sel"] + (1 if a == "down" else -1)) % n
             elif a in ("b3", "b6"):
                 self.ov["sel"] = max(0, min(n - 1, self.ov["sel"] + (-10 if a == "b3" else 10)))
+            elif a in ("left", "right"):
+                self.ov["sel"] = 0
+                self.ov["ctrl"] = (self.ov["ctrl"] + (1 if a == "right" else -1)) % len(self.ov["ctrls"])
             elif a in ("b1", "b5"):
                 if a == "b1":
                     g = self.game()
-                    self.set_filter(self.ov["sel"])
+                    if self.ov["sel"]:
+                        self.set_filter(self.ov["items"][self.ov["sel"] - 1])
+                    self.set_control(self.ov["ctrls"][self.ov["ctrl"]])
                     self.cursor = 0
                     self.rebuild(keep=g["Name"] if g else None)
                     self.remember()

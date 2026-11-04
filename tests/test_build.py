@@ -4538,6 +4538,38 @@ class FrontendDataTests(unittest.TestCase):
         self.assertEqual(names(flts[3]), ['1944'])
         self.assertEqual(names(flts[4]), ['sf2', 'samsho'])
         self.assertEqual(names(fd.FAVOURITES), ['samsho'])
+        # O menu de filtros so mostra os que deixam algum jogo na romlist.
+        self.assertTrue(fd.has_games(games, flts[0]))
+        none = fd.web.parse_filters('\tfilter "Sega"\n\t\trule Manufacturer contains Sega\n')[0]
+        self.assertFalse(fd.has_games(games, none))
+        for text in ('\tfilter "x"\n\t\trule Year equals 1991\n\t\texception Name equals sf2\n',
+                     '\tfilter "y"\n\t\trule Year equals 1980\n\t\texception Name equals 1944\n',
+                     '\tfilter "z"\n\t\texception Name equals none\n\t\trule Year equals 1980\n'):
+            flt = fd.web.parse_filters(text)[0]
+            self.assertEqual(fd.has_games(games, flt), bool(fd.apply_filter(games, flt)), text)
+
+    def test_control_filter(self):
+        # O 5 > CONTROL: o campo Control da romlist nas familias do
+        # fliperos-romclean; so os tipos que algum jogo tem.
+        fd = self.fd
+        games = [{'Name': 'sf2', 'Control': 'joystick (8-way)'},
+                 {'Name': 'pacman', 'Control': 'joystick (4-way)'},
+                 {'Name': 'mspacman', 'Control': 'vjoy2way'},
+                 {'Name': 'robotron', 'Control': 'double joystick (8-way)'},
+                 {'Name': 'opwolf', 'Control': 'lightgun'},
+                 {'Name': 'arkanoid', 'Control': 'dial, paddle'},
+                 {'Name': 'outrun', 'Control': 'positional, pedal'},
+                 {'Name': 'mameplus', 'Control': ''}]
+        self.assertEqual(fd.controls_present(games),
+                         ['Joystick 8-way', 'Joystick 4-way', 'Joystick 2-way', 'Twin joystick',
+                          'Spinner', 'Paddle', 'Positional', 'Pedal', 'Lightgun'])
+        names = lambda k: [g['Name'] for g in fd.apply_control(games, k)]
+        self.assertEqual(names('Paddle'), ['arkanoid'])
+        self.assertEqual(names('Pedal'), ['outrun'])
+        self.assertEqual(names('Joystick 2-way'), ['mspacman'])
+        self.assertEqual(len(names(None)), len(games))
+        self.assertEqual(fd.control_kind('analog stick'), 'Analog stick')
+        self.assertEqual(fd.control_kind('trackball'), 'Trackball')
 
     def test_auto_scrape_only_missing(self):
         # O scrape sozinho (2 s parado no jogo, em qualquer modo) so baixa a

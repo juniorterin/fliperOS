@@ -726,10 +726,14 @@ def frame(fe, ui):
     W.frame(ui, {}, (cat or {}).get("name", "FliperOS") or "FliperOS", [])
     if cat and cat.get("name"):
         title_logo(ui, cat["name"])
-    # O filtro em uso, pequeno, debaixo do titulo (o "All Games" nao).
+    # O filtro e o controle em uso, pequenos, debaixo do titulo (o "All
+    # Games" e todos os controles nao).
     name = fe.lib.filters[fe.flt % len(fe.lib.filters)]["name"]
-    if name.lower() != "all games":
-        tiny.text(ui, "FILTER: " + name.replace("©", "(C)"), T.CYAN, SX, 29)
+    parts = ["FILTER: " + name.replace("©", "(C)")] if name.lower() != "all games" else []
+    if getattr(fe, "ctrl", None):
+        parts.append("CONTROL: " + fe.ctrl)
+    if parts:
+        tiny.text(ui, "  ".join(parts), T.CYAN, SX, 29)
 
 
 def title_logo(ui, name):
@@ -752,6 +756,8 @@ def title_logo(ui, name):
 def empty(fe, ui):
     frame(fe, ui)
     flt = fe.lib.filters[fe.flt % len(fe.lib.filters)]["name"]
+    if getattr(fe, "ctrl", None):
+        flt += ", control: " + fe.ctrl
     W.paragraph(ui, ["No games here.", "", "Filter: " + flt,
                      "Copy games to the folders in ~/roms (the network share \\\\fliperos\\roms)."], 80)
 
@@ -2093,19 +2099,35 @@ def draw_filter(fe, ui, now):
     px, py = (WW - pw) // 2, 30
     card(ui, (px, py, pw, ph))
     ui.blit(W.big("FILTER", 1, W.LABEL), (px + (pw - W.width("FILTER")) // 2, py + 7))
-    filters = fe.lib.filters
-    rows = 13
-    sel = fe.ov["sel"]
+    # A linha do tipo de controle (esquerda/direita), e debaixo os filtros
+    # que tem jogo na romlist (fe.ov["items"], os indices em fe.lib.filters).
+    y = py + 22
+    on = fe.ov["sel"] == 0
+    if on:
+        tile_frame(ui, (px + 6, y - 2, pw - 12, 12), True, now)
+        pygame.draw.rect(ui, T.PINK, (px + 6, y - 2, pw - 12, 12), 1)
+    W.text(ui, "CONTROL", T.PINK, px + 10, y)
+    kind = fe.ov["ctrls"][fe.ov["ctrl"]] or "All"
+    lx, rx = px + 80, px + pw - 14
+    arrow(ui, lx, y + 4, (-1, 0), T.CYAN if on else T.COMMENT, 4)
+    arrow(ui, rx, y + 4, (1, 0), T.CYAN if on else T.COMMENT, 4)
+    label = fit(kind, rx - lx - 14)
+    W.text(ui, label, T.FG if on else T.COMMENT, (lx + rx - W.width(label)) // 2, y)
+    pygame.draw.line(ui, T.COMMENT, (px + 8, y + 13), (px + pw - 8, y + 13))
+    filters, items = fe.lib.filters, fe.ov["items"]
+    rows = 12
+    sel = fe.ov["sel"] - 1
     top = fe.ov.get("top", 0)
-    if sel < top:
+    if 0 <= sel < top:
         top = sel
     if sel >= top + rows:
         top = sel - rows + 1
     fe.ov["top"] = top
-    y0 = py + 22
-    for i in range(top, min(len(filters), top + rows)):
-        y = y0 + (i - top) * 13
-        on = i == sel
+    y0 = py + 39
+    for n in range(top, min(len(items), top + rows)):
+        i = items[n]
+        y = y0 + (n - top) * 13
+        on = n == sel
         if on:
             tile_frame(ui, (px + 6, y - 2, pw - 22, 12), True, now)
             pygame.draw.rect(ui, T.PINK, (px + 6, y - 2, pw - 22, 12), 1)
@@ -2113,8 +2135,8 @@ def draw_filter(fe, ui, now):
         W.text(ui, fit(label, pw - 52), T.FG if on else T.COMMENT, px + 26, y)
         if i == fe.flt % len(filters):
             pygame.draw.lines(ui, T.GREEN, False, [(px + 10, y + 4), (px + 13, y + 7), (px + 18, y)], 2)
-    if len(filters) > rows:
-        W.scrollbar(ui, px + pw - 10, y0 - 2, rows * 13, top, rows, len(filters))
+    if len(items) > rows:
+        W.scrollbar(ui, px + pw - 10, y0 - 2, rows * 13, top, rows, len(items))
 
 
 RIBBON_WIDE = 2.2        # o azulejo com logotipo vai ate 2,2 vezes a altura
