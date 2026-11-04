@@ -776,14 +776,19 @@ def list_geom():
 def draw_list(fe, ui, now):
     frame(fe, ui)
     (lx, lw, y0, rows), (px, py, pw, sh) = list_geom()
+    # Os jogos que outros gabinetes jogam (no alto) e o resto: um vao de sep
+    # pixels com a linha no meio; uma linha a menos na lista para caber.
+    sep = 8 if fe.rows and fe.rows[0][2] == "elsewhere" else 0
+    rows -= 1 if sep else 0
     if fe.cursor < fe.top:
         fe.top = fe.cursor
     if fe.cursor >= fe.top + rows:
         fe.top = fe.cursor - rows + 1
     fe.top = max(0, min(fe.top, max(0, len(fe.rows) - rows)))
+    shown = sep and fe.rows[fe.top][2] == "elsewhere"
     for i in range(fe.top, min(len(fe.rows), fe.top + rows)):
         game, level, extra = fe.rows[i]
-        y = y0 + (i - fe.top) * 14
+        y = y0 + (i - fe.top) * 14 + (sep if shown and extra != "elsewhere" else 0)
         on = i == fe.cursor
         # Os clones do jogo pai; "elsewhere" (um jogo que outro gabinete joga
         # agora, no alto da lista) nao e uma lista deles.
@@ -798,7 +803,7 @@ def draw_list(fe, ui, now):
             cabinet_row(ui, lx + lw - 14 - sw, y + 2, party["used"], total, w=5, h=8, gap=1)
             room = lx + lw - x - 12 - sw - 6
             if i + 1 < len(fe.rows) and fe.rows[i + 1][2] != "elsewhere":
-                pygame.draw.line(ui, T.LINE, (lx, y + 13), (lx + lw - 2, y + 13))
+                pygame.draw.line(ui, T.LINE, (lx, y + 13 + sep // 2), (lx + lw - 2, y + 13 + sep // 2))
         elif level == 0:
             room = None
             lmark = link_mark(fe, game)
@@ -845,7 +850,7 @@ def draw_list(fe, ui, now):
         else:
             W.text(ui, fit(label, room), color, x, y + 2)
     if len(fe.rows) > rows:
-        W.scrollbar(ui, lx + lw + 4, y0, rows * 14 - 2, fe.top, rows, len(fe.rows))
+        W.scrollbar(ui, lx + lw + 4, y0, rows * 14 - 2 + (14 if sep else 0), fe.top, rows, len(fe.rows))
     W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.LINE, lx + lw, y0 + rows * 14 + 1, right=True)
     # A imagem, o logo e as informacoes (a direita, ou em cima em pe).
     game = fe.game()
