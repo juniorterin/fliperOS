@@ -13,6 +13,14 @@ SUBSYSTEM=="input", ATTRS{idVendor}=="0b9a", ATTRS{idProduct}=="016a", \
 # marca a apagaria.
 SUBSYSTEM=="input", ATTRS{idVendor}=="0b9a", ATTRS{idProduct}=="016a", \
   ENV{ID_INPUT_GUN}="1"
+# Duas pistolas: o X junta os mouses num ponteiro so, de onde o GroovyMAME, o
+# Supermodel e o Flycast leem a mira, entao so a primeira (a do jogador 1,
+# config/fliperos-lightgun) fica no X; a do jogador 2 puxaria a mira dele.
+# Quando uma chega ou sai, as outras sao reavaliadas.
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_GUN}=="1", \
+  IMPORT{program}="/opt/fliperos/bin/fliperos-lightgun udev-x %S%p"
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_GUN}=="1", ACTION=="add|remove", \
+  RUN+="/opt/fliperos/bin/fliperos-lightgun udev-retrigger %S%p"
 
 # Controle ligado: o fliperos-controllers completa o mapeamento automatico do
 # SDL (botoes que sobram, direcional digital mandado como eixos).

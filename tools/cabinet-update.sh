@@ -177,8 +177,37 @@ build_native "Live screen DRM guard (fliperos-dropmaster)" "$src/config/fliperos
   /usr/local/lib/fliperos/libfliperos-dropmaster.so
 build_native "GroovyMAME sound on the ALSA default (fliperos-sdl-audio)" "$src/config/fliperos-sdl-audio.c" \
   /usr/local/lib/fliperos/libfliperos-sdl-audio.so
+build_native "Light gun in the GroovyMAME lightgun (fliperos-sdl-gun)" "$src/config/fliperos-sdl-gun.c" \
+  /usr/local/lib/fliperos/libfliperos-sdl-gun.so
 build_native "FPS and flicker filter of Vulkan programs (fliperos-vkfps)" "$src/config/fliperos-vkfps.c" \
   /usr/local/lib/fliperos/libfliperos-vkfps.so
+# O driver do GunCon 2 com os patches do FliperOS (config/guncon2-patches):
+# refeito quando eles mudam, para cada kernel instalado, e recarregado.
+gc2=/usr/src/guncon2-1.0
+if [[ -d $gc2/.git ]]; then
+  gc2_sum=$(cat "$src"/config/guncon2-patches/*.patch 2> /dev/null | sha256sum | cut -d' ' -f1)
+  if [[ $(cat "$gc2/.fliperos-patches" 2> /dev/null) != "$gc2_sum" ]]; then
+    echo "== GunCon 2 driver (FliperOS patches)"
+    gc2_ok=1
+    git -c safe.directory="$gc2" -C "$gc2" checkout -- . || gc2_ok=0
+    for patch in "$src"/config/guncon2-patches/*.patch; do
+      [[ -f $patch ]] || continue
+      git -c safe.directory="$gc2" -C "$gc2" apply "$patch" || gc2_ok=0
+    done
+    for kdir in /lib/modules/*/build; do
+      [[ -d $kdir ]] || continue
+      kver=$(basename "$(dirname "$kdir")")
+      { dkms build -m guncon2 -v 1.0 -k "$kver" --force && dkms install -m guncon2 -v 1.0 -k "$kver" --force; } \
+        > /dev/null 2>&1 || gc2_ok=0
+    done
+    if ((gc2_ok)); then
+      printf '%s\n' "$gc2_sum" > "$gc2/.fliperos-patches"
+      modprobe -r guncon2 2> /dev/null && modprobe guncon2 2> /dev/null || true
+    else
+      echo "warning: the GunCon 2 driver did not build with the FliperOS patches"
+    fi
+  fi
+fi
 # O painel web roda o codigo que leu ao subir: o novo vale ja (so se ele
 # estava no ar).
 systemctl try-restart fliperos-web.service 2> /dev/null || true
@@ -349,6 +378,8 @@ systemctl start fliperos-controllers.service 2> /dev/null || true
 echo "SDL mappings: $(grep -vc '^#' /var/lib/fliperos/gamecontrollerdb.txt 2> /dev/null || echo 0)"
 systemctl enable fliperos-padkeys.service > /dev/null 2>&1 || true
 systemctl restart fliperos-padkeys.service
+systemctl enable fliperos-gunkeys.service > /dev/null 2>&1 || true
+systemctl restart fliperos-gunkeys.service
 systemctl enable fliperos-osd.service > /dev/null 2>&1 || true
 systemctl restart fliperos-osd.service
 # O botao de desligar (config/fliperos-powerkey): o triggerhappy rele as
@@ -357,6 +388,7 @@ systemctl restart fliperos-osd.service
 systemctl restart triggerhappy.service 2> /dev/null || true
 systemctl kill -s HUP systemd-logind.service 2> /dev/null || true
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
+echo "fliperos-gunkeys: $(systemctl is-active fliperos-gunkeys.service)"
 echo "fliperos-osd: $(systemctl is-active fliperos-osd.service)"
 # Pixelcade: so sobe com o pixelweb baixado (Setup > Games > Extras).
 systemctl restart fliperos-pixelcade.service 2> /dev/null || true

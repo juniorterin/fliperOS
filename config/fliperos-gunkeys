@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""O Start e o Select de cada pistola de luz como as teclas de Start e ficha
+do jogador dela, nos jogos:
+
+    pistola 1  Start = 1  Select = 5
+    pistola 2  Start = 2  Select = 6
+
+(as teclas padrao do MAME, do MAME 2010 e do SM2-Emu). A pistola chega como
+mouse (config/99-fliperos-input.rules), e o X e o driver udev do RetroArch
+so passam os botoes de mouse: o Start e o Select dela nao chegavam ao jogo.
+Os jogadores seguem a ordem do caminho no /sys, como no fliperos-lightgun.
+
+Roda como servico (root, por causa do /dev/uinput). Com um menu do FliperOS
+aberto (/run/fliperos/padkeys, o fliperos-padkeys) fica parado: no menu as
+teclas 1 e 5 nao significam nada.
+Sem dependencias: o evdev e o uinput sao lidos e escritos com struct.
+"""
+import errno
+import fcntl
+import glob
+import os
+import select
+import struct
+import time
+
+MENU_FLAG = os.environ.get('FLIPEROS_PADKEYS_FLAG', '/run/fliperos/padkeys')
+INPUT_CLASS = os.environ.get('FLIPEROS_INPUT_CLASS', '/sys/class/input')
+UDEV_DATA = os.environ.get('FLIPEROS_UDEV_DATA', '/run/udev/data')
+NAME = b'FliperOS gun keys'
+
+EV_SYN, EV_KEY = 0x00, 0x01
+BTN_SELECT, BTN_START = 0x13a, 0x13b
+KEY_1, KEY_2, KEY_5, KEY_6 = 2, 3, 6, 7
+# [jogador][botao da pistola] -> tecla
+PLAYER_KEYS = ({BTN_START: KEY_1, BTN_SELECT: KEY_5},
+               {BTN_START: KEY_2, BTN_SELECT: KEY_6})
+KEYS = sorted({key for keys in PLAYER_KEYS for key in keys.values()})
+EVENT = struct.Struct('llHHi')
+
+
+def _ioc(direction, kind, nr, size):
+    return (direction << 30) | (size << 16) | (ord(kind) << 8) | nr
+
+
+UI_DEV_CREATE = _ioc(0, 'U', 1, 0)
+UI_DEV_SETUP = _ioc(1, 'U', 3, 92)
+UI_SET_EVBIT = _ioc(1, 'U', 100, 4)
+UI_SET_KEYBIT = _ioc(1, 'U', 101, 4)
+
+
+def guns():
+    """Os /dev/input/eventN das pistolas (ID_INPUT_GUN no banco do udev), na
+    ordem do caminho no /sys."""
+    found = []
+    for node in glob.glob(os.path.join(INPUT_CLASS, 'event*')):
+        try:
+            with open(os.path.join(node, 'dev')) as f:
+                dev = f.read().strip()
+            with open(os.path.join(UDEV_DATA, 'c' + dev)) as f:
+                if 'E:ID_INPUT_GUN=1\n' not in f.read():
+                    continue
+        except OSError:
+            continue
+        found.append((os.path.realpath(node), '/dev/input/' + os.path.basename(node)))
+    return [path for _, path in sorted(found)]
+
+
+def menu_open():
+    return os.path.exists(MENU_FLAG)
+
+
+def uinput_open():
+    fd = os.open('/dev/uinput', os.O_WRONLY | os.O_NONBLOCK)
+    fcntl.ioctl(fd, UI_SET_EVBIT, EV_KEY)
+    for key in KEYS:
+        fcntl.ioctl(fd, UI_SET_KEYBIT, key)
+    # BUS_VIRTUAL; vendor/produto sem significado.
+    fcntl.ioctl(fd, UI_DEV_SETUP, struct.pack('HHHH80sI', 0x06, 0x1209, 0x0002, 1, NAME, 0))
+    fcntl.ioctl(fd, UI_DEV_CREATE)
+    return fd
+
+
+def main():
+    out = uinput_open()
+    held = set()
+
+    def emit(key, value):
+        if value:
+            held.add(key)
+        else:
+            held.discard(key)
+        os.write(out, EVENT.pack(0, 0, EV_KEY, key, value) + EVENT.pack(0, 0, EV_SYN, 0, 0))
+
+    def release_all():
+        for key in list(held):
+            emit(key, 0)
+
+    open_guns = {}   # caminho -> fd
+    order = []
+    scanned = 0.0
+    while True:
+        if menu_open():
+            for fd in open_guns.values():
+                os.close(fd)
+            open_guns.clear()
+            release_all()
+            time.sleep(0.5)
+            continue
+        now = time.monotonic()
+        if now - scanned >= 2:
+            scanned = now
+            order = guns()
+            for path in list(open_guns):
+                if path not in order:
+                    os.close(open_guns.pop(path))
+                    release_all()
+            for path in order:
+                if path not in open_guns:
+                    try:
+                        open_guns[path] = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+                    except OSError:
+                        pass
+        ready, _, _ = select.select(list(open_guns.values()), [], [], 0.5)
+        for path, fd in list(open_guns.items()):
+            if fd not in ready:
+                continue
+            player = order.index(path) if path in order else 2
+            try:
+                data = os.read(fd, EVENT.size * 64)
+                if not data:
+                    raise OSError(errno.ENODEV, 'desligada')
+            except BlockingIOError:
+                continue
+            except OSError:
+                os.close(open_guns.pop(path))
+                release_all()
+                continue
+            if player > 1:
+                continue
+            for i in range(0, len(data) - EVENT.size + 1, EVENT.size):
+                etype, code, value = EVENT.unpack_from(data, i)[2:]
+                key = PLAYER_KEYS[player].get(code) if etype == EV_KEY else None
+                if key is not None and value in (0, 1):
+                    emit(key, value)
+
+
+if __name__ == '__main__':
+    main()

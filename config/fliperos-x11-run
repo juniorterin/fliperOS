@@ -28,6 +28,11 @@ pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
 # Hook Of The Reaper e o LEDSpicer instalados, nada).
 outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
 [[ -x $outputs ]] && { "$outputs" launch "$@" < /dev/null > /dev/null 2>&1 & }
+# As pistolas de luz ligadas (config/fliperos-lightgun): com uma, nenhum
+# emulador desenha mira nem a seta do X por cima do jogo.
+lightgun=${FLIPEROS_LIGHTGUN:-/opt/fliperos/bin/fliperos-lightgun}
+guns=""
+[[ -x $lightgun ]] && guns=$("$lightgun" guns 2> /dev/null)
 
 if [[ -z $mode ]]; then
   column=3
@@ -96,7 +101,10 @@ case $name in
     # As saidas do jogo pela rede, se ha quem as leia (config/fliperos-outputs).
     netout=""
     [[ -x $outputs ]] && "$outputs" installed && netout=",network:NetworkOutput=yes"
-    set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch$netout" "${@:2}"
+    # Com uma pistola, sem a mira das armas de luz (cor 0 nao desenha).
+    nocross=""
+    [[ -n $guns ]] && nocross=",config:rend.CrossHairColor1=0,config:rend.CrossHairColor2=0,config:rend.CrossHairColor3=0,config:rend.CrossHairColor4=0"
+    set -- "$1" -config "window:fullscreen=yes,config:rend.ScreenStretching=$stretch$netout$nocross" "${@:2}"
     # Jogos de varias placas NAOMI (Games[].multiboard no naomi_roms.cpp do
     # Flycast: esquerda, centro e direita) com 3 monitores e os jogos de
     # varias telas ligados: uma placa em cada monitor (fliperos-multiscreen).
@@ -315,7 +323,11 @@ INI
     quads=()
     grep -qE '^[[:space:]]*QuadRendering[[:space:]]*=' "$HOME/.config/supermodel/Config/Supermodel.ini" 2> /dev/null ||
       quads=(-no-quad-rendering)
-    set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${quads[@]}" "${ppc[@]}" "${netout[@]}" "${@:2}"
+    # Com uma pistola, sem a mira dos jogos de pistola.
+    nocross=()
+    [[ -n $guns ]] && nocross=(-crosshairs=0)
+    set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${quads[@]}" "${ppc[@]}" "${netout[@]}" \
+      "${nocross[@]}" "${@:2}"
     # O Switchres nem sempre cria o modo pedido: no 15 kHz o 496x384 do entrelacado
     # vira 661x496 entrelacado (as linhas que cabem, na mesma proporcao), e o
     # Supermodel desenhava os 496x384 do -res num quadrado no meio da tela.
@@ -369,6 +381,25 @@ INI
     elif [[ -e $cfg/.fliperos-outputs ]]; then
       sm2_set outputs_network false
       rm -f "$cfg/.fliperos-outputs"
+    fi
+    # Pistola de luz: o modo dela (le cada pistola direto, a primeira e o
+    # jogador 1) sem a mira do emulador. Os botoes do GunCon 2 sao padrao:
+    # gatilho, A ou C recarrega, Start, Select e a ficha, sem direcional (os
+    # padroes do emulador sao os da Sinden). Uma vez so: quem mudar no menu
+    # do F10 fica com a escolha.
+    if [[ -n $guns ]]; then
+      sm2_set lightgun true
+      sm2_set lightgun_crosshair false
+      if [[ ! -e $cfg/.fliperos-guncon ]] && "$lightgun" guncon; then
+        for p in 1 2; do
+          sm2_set "gun${p}_button_trigger" 272
+          sm2_set "gun${p}_button_reload" 273
+          sm2_set "gun${p}_button_coin" 314
+          sm2_set "gun${p}_button_start" 315
+          for hat in up down left right; do sm2_set "gun${p}_button_hat_$hat" 0; done
+        done
+        : > "$cfg/.fliperos-guncon"
+      fi
     fi
     # Setup > Joysticks > Button mapping e Buttons layout: o mapeamento de
     # game controller do Model 2 (config/fliperos-buttons), o do numero de
@@ -437,7 +468,9 @@ vt=${vt#/dev/tty}
 # abre no Big Picture, que se usa pelo controle; os demais abrem direto no jogo.
 cursor=(-nocursor)
 case $name in
-  flycast | fightcade | fliperos-browser) cursor=() ;;
+  # Com uma pistola a seta seguiria a mira por cima do jogo.
+  flycast) [[ -n $guns ]] || cursor=() ;;
+  fightcade | fliperos-browser) cursor=() ;;
   dolphin-emu) [[ " $* " == *" -e "* || " $* " == *" --exec"* ]] || cursor=() ;;
 esac
 export FLIPEROS_X11_CURSOR=$((${#cursor[@]} == 0))

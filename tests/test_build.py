@@ -54,6 +54,7 @@ limine_update = load('limine_update', 'fliperos-limine-update.py')
 padkeys = load_script('padkeys', 'config/fliperos-padkeys')
 calibrate = load_script('calibrate', 'config/fliperos-calibrate')
 controllers = load_script('controllers', 'config/fliperos-controllers')
+gunkeys = load_script('gunkeys', 'config/fliperos-gunkeys')
 MKISO = (ROOT / 'fliperos-mkiso.sh').read_text()
 ROOTFS = (ROOT / 'fliperos-rootfs.sh').read_text()
 EXTRAS = (ROOT / 'config/fliperos-extras').read_text()
@@ -8819,6 +8820,154 @@ class FightcadeTests(unittest.TestCase):
             self.assertTrue((root / 'usr/local/share/applications/fliperos-fightcade.desktop').is_file())
 
 
+class LightGunTests(unittest.TestCase):
+    """Pistolas de luz como mouse nos emuladores (config/fliperos-lightgun,
+    config/fliperos-gunkeys): os jogadores na ordem do caminho no /sys."""
+
+    def sysfs(self, tmp, devices):
+        """devices: [(evento, caminho sob devices/, propriedades, (vendor, produto) ou None)].
+        Um udevadm falso le as propriedades do arquivo props de cada evento."""
+        cls = tmp / 'class'
+        cls.mkdir()
+        for event, sub, props, usb in devices:
+            node = tmp / 'devices' / sub / 'input' / ('input' + event[5:]) / event
+            node.mkdir(parents=True)
+            (node / 'props').write_text(''.join('%s\n' % p for p in props))
+            (node / 'dev').write_text('13:%d\n' % (64 + int(event[5:])))
+            (node / 'device').symlink_to(node.parent)
+            if usb:
+                (tmp / 'devices' / sub).joinpath('idVendor').write_text(usb[0] + '\n')
+                (tmp / 'devices' / sub).joinpath('idProduct').write_text(usb[1] + '\n')
+            (cls / event).symlink_to(node)
+        bin_dir = tmp / 'bin'
+        bin_dir.mkdir()
+        udevadm = bin_dir / 'udevadm'
+        udevadm.write_text('#!/bin/sh\nif [ "$1" = trigger ]; then echo "$3" >> "%s"; exit 0; fi\n'
+                           'cat "$5/props"\n' % (tmp / 'triggered'))
+        udevadm.chmod(0o755)
+        return dict(os.environ, FLIPEROS_INPUT_CLASS=str(cls), PATH='%s:%s' % (bin_dir, os.environ['PATH']),
+                    FLIPEROS_RA_CONFIG_DIR=str(tmp / 'ra'), FLIPEROS_MAME2010_CROSSHAIRS=str(tmp / 'cross'),
+                    FLIPEROS_BLANK_CROSSHAIRS=str(tmp / 'blank'), XDG_RUNTIME_DIR=str(tmp))
+
+    def run_gun(self, env, *args):
+        return subprocess.run(['bash', str(ROOT / 'config/fliperos-lightgun')] + list(args), env=env,
+                              capture_output=True, text=True)
+
+    def test_players_follow_the_sys_path_and_mice_count_for_retroarch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            gun = ['ID_INPUT=1', 'ID_INPUT_MOUSE=1', 'ID_INPUT_GUN=1']
+            env = self.sysfs(tmp, [
+                ('event3', 'usb8/8-1', ['ID_INPUT_MOUSE=1'], None),           # mouse do painel
+                ('event2', 'usb8/8-1k', ['ID_INPUT_KEYBOARD=1'], None),       # teclado: nao conta
+                ('event9', 'usb2/2-4', gun, ('0b9a', '016a')),                # pistola 1 (usb2 < usb8)
+                ('event7', 'usb9/9-1', gun, ('0b9a', '016a')),                # pistola 2
+            ])
+            guns = self.run_gun(env, 'guns').stdout.split()
+            self.assertEqual([g.rsplit('/', 1)[1] for g in guns], ['event9', 'event7'])
+            # Ordem dos mouses: pistola 1 (0), mouse do painel (1), pistola 2 (2).
+            self.assertEqual(self.run_gun(env, 'mice').stdout.split(), ['0', '2'])
+            self.assertEqual(self.run_gun(env, 'guncon').returncode, 0)
+            # So a primeira fica no X.
+            self.assertEqual(self.run_gun(env, 'udev-x', guns[0]).stdout, 'LIBINPUT_IGNORE_DEVICE=0\n')
+            self.assertEqual(self.run_gun(env, 'udev-x', guns[1]).stdout, 'LIBINPUT_IGNORE_DEVICE=1\n')
+            self.run_gun(env, 'udev-retrigger', guns[0])
+            self.assertEqual((tmp / 'triggered').read_text(), guns[1] + '\n')
+
+    def test_a_gun_game_of_mame2010_gets_udev_lightgun_mode_and_no_crosshair(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            gun = ['ID_INPUT_MOUSE=1', 'ID_INPUT_GUN=1']
+            env = self.sysfs(tmp, [('event6', 'usb2/2-4', gun, ('0b9a', '016a')),
+                                   ('event8', 'usb3/3-1', gun, ('1234', '5678'))])
+            xml = tmp / 'mame2010.xml'
+            xml.write_text('<mame>\n<game name="sf2">\n<input players="2">\n'
+                           '<control type="joy8way"/>\n</input>\n</game>\n'
+                           '<game name="ghlpanic">\n<input players="2">\n'
+                           '<control type="lightgun" minimum="0"/>\n</input>\n</game>\n</mame>\n')
+            subprocess.run(['xz', '-k', str(xml)], check=True)
+            env['FLIPEROS_MAME2010_XML'] = str(xml) + '.xz'
+            blank = tmp / 'blank'
+            blank.mkdir()
+            for n in range(1, 9):
+                (blank / ('cross%d.png' % n)).write_bytes(b'png')
+            opts = tmp / 'ra' / 'MAME 2010'
+            opts.mkdir(parents=True)
+            (opts / 'MAME 2010.opt').write_text('mame_current_xy_type = "mouse"\nmame_current_frame_skip = "0"\n')
+            # Jogo sem pistola: nada.
+            self.assertEqual(self.run_gun(env, 'retroarch-mame2010', 'sf2').stdout, '')
+            out = self.run_gun(env, 'retroarch-mame2010', 'ghlpanic').stdout.strip()
+            self.assertEqual(Path(out).read_text(), 'input_driver = "udev"\ninput_player1_mouse_index = "0"\n'
+                                                   'input_player2_mouse_index = "1"\n')
+            self.assertEqual((opts / 'ghlpanic.opt').read_text(),
+                             'mame_current_xy_type = "lightgun"\nmame_current_frame_skip = "0"\n')
+            self.assertIn('mame_current_xy_type = "mouse"', (opts / 'MAME 2010.opt').read_text())
+            self.assertEqual(os.readlink(tmp / 'cross' / 'cross1.png'), str(blank / 'cross1.png'))
+            # A pistola desligada: as miras transparentes saem; a do usuario fica.
+            (tmp / 'cross' / 'cross8.png').unlink()
+            (tmp / 'cross' / 'cross8.png').write_bytes(b'minha')
+            for event in ('event6', 'event8'):
+                (tmp / 'class' / event).unlink()
+            self.assertEqual(self.run_gun(env, 'retroarch-mame2010', 'ghlpanic').stdout, '')
+            self.assertEqual(sorted(p.name for p in (tmp / 'cross').iterdir()), ['cross8.png'])
+            # Uma pistola que nao e GunCon 2.
+            (tmp / 'outro').mkdir()
+            env = self.sysfs(tmp / 'outro', [('event8', 'usb3/3-1', gun, ('1234', '5678'))])
+            self.assertEqual(self.run_gun(env, 'guncon').returncode, 1)
+
+    def test_gunkeys_start_and_select_per_player(self):
+        G = gunkeys
+        self.assertEqual(G.PLAYER_KEYS[0], {G.BTN_START: 2, G.BTN_SELECT: 6})    # 1 e 5
+        self.assertEqual(G.PLAYER_KEYS[1], {G.BTN_START: 3, G.BTN_SELECT: 7})    # 2 e 6
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.sysfs(tmp, [('event9', 'usb9/9-1', [], None), ('event6', 'usb2/2-4', [], None),
+                             ('event3', 'usb1/1-1', [], None)])
+            data = tmp / 'udev'
+            data.mkdir()
+            (data / 'c13:73').write_text('E:ID_INPUT_MOUSE=1\nE:ID_INPUT_GUN=1\n')
+            (data / 'c13:70').write_text('E:ID_INPUT_GUN=1\n')
+            (data / 'c13:67').write_text('E:ID_INPUT_MOUSE=1\n')
+            old = G.INPUT_CLASS, G.UDEV_DATA
+            G.INPUT_CLASS, G.UDEV_DATA = str(tmp / 'class'), str(data)
+            try:
+                self.assertEqual(G.guns(), ['/dev/input/event6', '/dev/input/event9'])
+            finally:
+                G.INPUT_CLASS, G.UDEV_DATA = old
+        self.assertIn('multi-user.target.wants/fliperos-gunkeys.service', ROOTFS)
+        self.assertIn('crosshair-blank.png', ROOTFS)
+
+    def test_emulators_hide_the_crosshair_with_a_gun(self):
+        x11 = (ROOT / 'config/fliperos-x11-run').read_text()
+        self.assertIn('nocross=(-crosshairs=0)', x11)
+        self.assertIn('config:rend.CrossHairColor1=0', x11)
+        self.assertIn('sm2_set lightgun_crosshair false', x11)
+        self.assertIn('flycast) [[ -n $guns ]] || cursor=() ;;', x11)
+        gm = (ROOT / 'config/fliperos-groovymame').read_text()
+        self.assertIn('set -- -crosshairpath "$crosshairs" "$@"', gm)
+        rules = (ROOT / 'config/99-fliperos-input.rules').read_text()
+        self.assertIn('IMPORT{program}="/opt/fliperos/bin/fliperos-lightgun udev-x %S%p"', rules)
+        self.assertIn('fliperos-sdl-gun.c', MKISO)
+        kms = (ROOT / 'config/fliperos-kms-run').read_text()
+        self.assertIn('"$lightgun" retroarch-mame2010', kms)
+
+    def test_guncon2_driver_patches_reach_the_iso_and_the_update(self):
+        patches = sorted((ROOT / 'config/guncon2-patches').glob('*.patch'))
+        self.assertTrue(patches)
+        for patch in patches:
+            data = patch.read_bytes()
+            self.assertNotIn(b'\r', data, patch.name)
+            self.assertEqual(re.findall(r'(?m)^diff --git a/(\S+) b/', data.decode()), ['guncon2.c'])
+        text = patches[0].read_text()
+        self.assertIn('module_param(hold_ms, uint, 0644);', text)
+        self.assertIn('module_param(offscreen_reload, bool, 0644);', text)
+        self.assertIn('git -C /usr/src/guncon2-1.0 apply "$patch"', MKISO)
+        self.assertIn('config/guncon2-patches/*.patch "$CHROOT_DIR/tmp/guncon2-patches/"', MKISO)
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn('"$src"/config/guncon2-patches/*.patch', update)
+        self.assertIn('dkms install -m guncon2 -v 1.0 -k "$kver" --force', update)
+
+
 class InputDriverTests(unittest.TestCase):
     """GunCon 2 (fora do mainline) e os drivers de volante hid-tmff2 e
     new-lg4ff entram sempre; --skip-* os deixa de fora."""
@@ -10941,6 +11090,9 @@ class OutputsTests(unittest.TestCase):
                         QMH_DIR=str(t / 'qmamehook'), FLIPEROS_CONF=str(t / 'fliperos.conf'),
                         ROMS_DIR=str(self.roms), FLIPEROS_LOGS=str(t / 'logs'), FLIPEROS_USER='root',
                         FLIPEROS_GAME_PID=str(self.game.pid))
+        # O console do gabinete, sem tela: o DISPLAY de quem roda os testes
+        # (o WSLg) abriria o Hook Of The Reaper de verdade.
+        self.env.pop('DISPLAY', None)
 
     def install_hotr(self):
         """O programa "baixado" e um Wine e um xvfb-run de mentira."""

@@ -140,6 +140,16 @@ if opens_video "$@" && [[ -f $sdlaudio ]]; then
     : > "$cfgdir/.fliperos-sound-default"
   fi
 fi
+# Uma pistola de luz ligada (config/fliperos-lightgun): o MAME le a mira do
+# ponteiro, sem o modo relativo do SDL (config/fliperos-sdl-gun.c), e nao
+# desenha mira por cima do jogo (as cross1-8.png transparentes).
+sdlgun=${FLIPEROS_SDL_GUN:-/usr/local/lib/fliperos/libfliperos-sdl-gun.so}
+lightgun=${FLIPEROS_LIGHTGUN:-/opt/fliperos/bin/fliperos-lightgun}
+crosshairs=${FLIPEROS_BLANK_CROSSHAIRS:-/usr/local/share/fliperos/crosshair}
+if opens_video "$@" && [[ -f $sdlgun && -x $lightgun && -n $("$lightgun" guns 2> /dev/null) ]]; then
+  export LD_PRELOAD="${LD_PRELOAD:+$LD_PRELOAD:}$sdlgun"
+  [[ -d $crosshairs ]] && set -- -crosshairpath "$crosshairs" "$@"
+fi
 if [[ -n $restore_primary ]]; then
   "$real" "$@"
   rc=$?

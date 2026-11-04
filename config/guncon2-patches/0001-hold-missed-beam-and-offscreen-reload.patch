@@ -1,0 +1,120 @@
+From: Ademir Terin Junior <juniorterin@gmail.com>
+Date: Tue, 3 Nov 2026 23:50:00 -0300
+Subject: [PATCH] Hold the aim over a missed beam; off screen, the trigger
+ also reloads
+
+When the gun misses the beam it reports a position far outside the screen
+(x 0 or 1, y 5), and on a CRT it does so every few frames even over a lit
+picture: a quarter of the reports in a House of the Dead session. Passed on,
+the aim jumps to a corner for that frame and a shot fired in it lands off
+screen, which the gun games read as a reload. Such a report now keeps the
+last position that saw the screen (inside the calibrated range, with an
+eighth of it to spare) for up to hold_ms (150); past that the gun really
+points off screen and the report goes through.
+
+A pointer cannot leave the screen, so through the X server an off-screen
+aim stopped at the edge and Flycast never reloaded. Off screen the trigger
+now also presses the right button, the reload of Flycast, RetroArch and
+SM2-Emu (offscreen_reload, on by default).
+
+diff --git a/guncon2.c b/guncon2.c
+index 96dd5d9..b750141 100644
+--- a/guncon2.c
++++ b/guncon2.c
+@@ -37,6 +37,30 @@
+ #define Y_MIN 20
+ #define Y_MAX 240
+ 
++/*
++ * When the gun misses the beam it reports a position far outside the screen
++ * (x 0 or 1, y 5), and on a CRT it does so every few frames even over a lit
++ * picture. Passed on, the aim jumps to a corner for that frame and a shot
++ * fired in it lands off screen, which the gun games read as a reload. Such a
++ * report keeps the last position that saw the screen for up to hold_ms; past
++ * that the gun really points off screen and the report goes through.
++ */
++static unsigned int hold_ms = 150;
++module_param(hold_ms, uint, 0644);
++MODULE_PARM_DESC(hold_ms, "ms a missed beam keeps the last on-screen aim (0 = off)");
++
++/*
++ * A pointer cannot leave the screen: through the X server (and so in Flycast,
++ * Supermodel, RetroArch) an aim off the screen stops at its edge, and a game
++ * that reloads on an off-screen shot never sees one. Off screen (past
++ * hold_ms) the trigger also presses the right button, the reload of those
++ * emulators; the trigger itself still goes out, for the games that read the
++ * edge as off screen.
++ */
++static bool offscreen_reload = true;
++module_param(offscreen_reload, bool, 0644);
++MODULE_PARM_DESC(offscreen_reload, "off screen, the trigger also presses the right button (reload)");
++
+ struct guncon2 {
+     struct input_dev *input_device;
+     struct usb_interface *intf;
+@@ -44,8 +68,19 @@ struct guncon2 {
+     struct mutex pm_mutex;
+     bool is_open;
+     char phys[64];
++    unsigned long seen; /* jiffies of the last report that saw the screen */
+ };
+ 
++/* Inside the calibrated range, with an eighth of it to spare for overscan. */
++static bool guncon2_sees_screen(struct input_dev *dev, int x, int y) {
++    int x_min = input_abs_get_min(dev, ABS_X), x_max = input_abs_get_max(dev, ABS_X);
++    int y_min = input_abs_get_min(dev, ABS_Y), y_max = input_abs_get_max(dev, ABS_Y);
++    int x_margin = (x_max - x_min) / 8, y_margin = (y_max - y_min) / 8;
++
++    return x >= x_min - x_margin && x <= x_max + x_margin &&
++           y >= y_min - y_margin && y <= y_max + y_margin;
++}
++
+ struct gc_mode {
+     unsigned short a;
+     unsigned char b;
+@@ -58,6 +93,7 @@ static void guncon2_usb_irq(struct urb *urb) {
+     struct guncon2 *guncon2 = urb->context;
+     unsigned char *data = urb->transfer_buffer;
+     int error, buttons;
++    bool offscreen;
+     unsigned short x, y;
+     signed char hat_x = 0;
+     signed char hat_y = 0;
+@@ -91,8 +127,17 @@ static void guncon2_usb_irq(struct urb *urb) {
+         x = (data[3] << 8) | data[2];
+         y = data[4];
+ 
+-        input_report_abs(guncon2->input_device, ABS_X, x);
+-        input_report_abs(guncon2->input_device, ABS_Y, y);
++        offscreen = false;
++        if (guncon2_sees_screen(guncon2->input_device, x, y)) {
++            guncon2->seen = jiffies;
++            input_report_abs(guncon2->input_device, ABS_X, x);
++            input_report_abs(guncon2->input_device, ABS_Y, y);
++        } else if (!hold_ms ||
++                   time_after(jiffies, guncon2->seen + msecs_to_jiffies(hold_ms))) {
++            offscreen = true;
++            input_report_abs(guncon2->input_device, ABS_X, x);
++            input_report_abs(guncon2->input_device, ABS_Y, y);
++        }
+ 
+         /* Buttons */
+         buttons = ((data[0] << 8) | data[1]) ^ 0xffff;
+@@ -115,7 +160,8 @@ static void guncon2_usb_irq(struct urb *urb) {
+ 
+         // main buttons
+         input_report_key(guncon2->input_device, BTN_LEFT, buttons & GUNCON2_TRIGGER);
+-        input_report_key(guncon2->input_device, BTN_RIGHT, buttons & GUNCON2_BTN_A || buttons & GUNCON2_BTN_C);
++        input_report_key(guncon2->input_device, BTN_RIGHT, buttons & GUNCON2_BTN_A || buttons & GUNCON2_BTN_C ||
++                         (offscreen_reload && offscreen && buttons & GUNCON2_TRIGGER));
+         input_report_key(guncon2->input_device, BTN_MIDDLE, buttons & GUNCON2_BTN_B);
+         input_report_key(guncon2->input_device, BTN_A, buttons & GUNCON2_BTN_A);
+         input_report_key(guncon2->input_device, BTN_B, buttons & GUNCON2_BTN_B);
+@@ -210,6 +256,7 @@ static int guncon2_probe(struct usb_interface *intf,
+ 
+     mutex_init(&guncon2->pm_mutex);
+     guncon2->intf = intf;
++    guncon2->seen = jiffies - msecs_to_jiffies(hold_ms) - 1;
+ 
+     usb_set_intfdata(guncon2->intf, guncon2);
+ 

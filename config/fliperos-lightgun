@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# Pistolas de luz nos emuladores. A pistola e marcada ID_INPUT_GUN pela regra
+# do udev (config/99-fliperos-input.rules) e chega como um mouse de posicao
+# absoluta. Os jogadores seguem a ordem do caminho no /sys (a porta USB): a
+# primeira pistola e o jogador 1, a segunda o 2, em todos os emuladores.
+#
+#   fliperos-lightgun guns
+#     o evento de cada pistola ligada, uma por linha, na ordem dos jogadores.
+#   fliperos-lightgun guncon
+#     status 0 se uma das pistolas e um GunCon 2 (os botoes dele sao padrao).
+#   fliperos-lightgun mice
+#     o indice de mouse de cada pistola (no maximo duas), na ordem em que o
+#     driver udev do RetroArch acha os mouses: a do caminho no /sys, contando
+#     mouses e touchpads.
+#   fliperos-lightgun retroarch-mame2010 SET
+#     num jogo de pistola do MAME 2010 com uma pistola ligada, escreve a
+#     config que o fliperos-kms-run soma (--appendconfig) e diz o caminho
+#     dela; senao nao diz nada. O linuxraw do retroarch.cfg nao le mouse
+#     nenhum: so nesse jogo entram o driver udev e cada pistola como o mouse
+#     de um jogador. O core vai para o modo lightgun nas opcoes do jogo (o
+#     padrao, mouse, e o dos jogos de trackball), e a mira dele some (as
+#     cross1-8.png transparentes na pasta crosshairs; sem pistola elas saem).
+#   fliperos-lightgun udev-x SYSPATH
+#     para a regra do udev (IMPORT): LIBINPUT_IGNORE_DEVICE=1 numa pistola
+#     que nao e a primeira. O X junta todos os mouses num ponteiro so, e o
+#     GroovyMAME, o Supermodel e o Flycast leem a mira desse ponteiro: a
+#     pistola do jogador 2 puxaria a mira do jogador 1. Na primeira, =0.
+#   fliperos-lightgun udev-retrigger SYSPATH
+#     reavalia as outras pistolas quando uma chega (a primeira pode mudar).
+set -uo pipefail
+INPUT_CLASS=${FLIPEROS_INPUT_CLASS:-/sys/class/input}
+MAME2010_XML=${FLIPEROS_MAME2010_XML:-/usr/local/share/fliperos/mame2010.xml.xz}
+RA_CONFIG=${FLIPEROS_RA_CONFIG_DIR:-${HOME:-}/.config/retroarch/config}
+MAME2010_CROSSHAIRS=${FLIPEROS_MAME2010_CROSSHAIRS:-${HOME:-}/bios/mame2010/crosshairs}
+BLANK_CROSSHAIRS=${FLIPEROS_BLANK_CROSSHAIRS:-/usr/local/share/fliperos/crosshair}
+RUNTIME=${XDG_RUNTIME_DIR:-/tmp}
+
+# events: "caminho tipo" de cada evento de entrada, na ordem do caminho;
+# tipo e gun, mouse (mouse ou touchpad) ou -. SELF (opcional) conta como
+# pistola: na regra do udev a marca dele ainda nao esta no banco.
+events() {
+  local self=${1:-} path props kind
+  while read -r path; do
+    props=$(udevadm info -q property -p "$path" 2> /dev/null) || continue
+    kind=-
+    grep -qxE 'ID_INPUT_(MOUSE|TOUCHPAD)=1' <<< "$props" && kind=mouse
+    if grep -qx 'ID_INPUT_GUN=1' <<< "$props" || [[ $path == "$self" ]]; then
+      kind=gun
+    fi
+    echo "$path $kind"
+  done < <(for node in "$INPUT_CLASS"/event*; do [[ -e $node ]] && realpath "$node"; done | sort)
+}
+
+guns() {
+  events "${1:-}" | awk '$2 == "gun" { print $1 }'
+}
+
+gun_mice() {
+  # A pistola tambem e mouse para o udev (ID_INPUT_MOUSE): conta nos dois.
+  events | awk '$2 != "-" { if ($2 == "gun" && guns++ < 2) print n; n++ } BEGIN { n = 0 }'
+}
+
+# lightgun_set XML SET: status 0 se o jogo tem uma pistola no -listxml.
+lightgun_set() {
+  [[ -f $1 ]] || return 1
+  xz -dcf "$1" | awk -v set="$2" '
+    /<game name=|<machine name=/ { match($0, /name="[^"]*"/); name = substr($0, RSTART + 6, RLENGTH - 7) }
+    name == set && /<control type="lightgun"/ { found = 1; exit }
+    END { exit !found }'
+  # O awk sai no jogo, e o xz que ainda escrevia morre de SIGPIPE: vale o awk.
+  return "${PIPESTATUS[1]}"
+}
+
+# blank_crosshairs on|off: as cross1-8.png transparentes (links) na pasta de
+# miras do MAME 2010, ou fora dela. Uma mira do usuario (arquivo) fica.
+blank_crosshairs() {
+  local n file
+  for n in 1 2 3 4 5 6 7 8; do
+    file=$MAME2010_CROSSHAIRS/cross$n.png
+    if [[ $1 == on ]]; then
+      [[ -e $file || ! -f $BLANK_CROSSHAIRS/cross$n.png ]] && continue
+      mkdir -p "$MAME2010_CROSSHAIRS" && ln -s "$BLANK_CROSSHAIRS/cross$n.png" "$file"
+    elif [[ -L $file && $(readlink "$file") == "$BLANK_CROSSHAIRS"/* ]]; then
+      rm -f "$file"
+    fi
+  done
+}
+
+case ${1:-} in
+  guns)
+    guns
+    ;;
+  guncon)
+    while read -r path; do
+      dev=$(realpath "$path/device" 2> /dev/null) || continue
+      # O evento fica sob inputN, que fica sob a interface USB: o idVendor e
+      # do aparelho, acima dela.
+      while [[ -n $dev && ! -f $dev/idVendor ]]; do dev=${dev%/*}; done
+      [[ -f $dev/idVendor && $(< "$dev/idVendor") == 0b9a && $(< "$dev/idProduct") == 016a ]] && exit 0
+    done < <(guns)
+    exit 1
+    ;;
+  mice)
+    gun_mice
+    ;;
+  retroarch-mame2010)
+    set=${2:?Usage: fliperos-lightgun retroarch-mame2010 SET}
+    mapfile -t mice < <(gun_mice)
+    if ((${#mice[@]} == 0)) || ! lightgun_set "$MAME2010_XML" "$set"; then
+      blank_crosshairs off
+      exit 0
+    fi
+    blank_crosshairs on
+    cfg=$RUNTIME/fliperos-retroarch-lightgun.cfg
+    {
+      echo 'input_driver = "udev"'
+      for i in "${!mice[@]}"; do
+        echo "input_player$((i + 1))_mouse_index = \"${mice[i]}\""
+      done
+    } > "$cfg"
+    # As opcoes do jogo: as do core (as do usuario) com o modo lightgun.
+    dir="$RA_CONFIG/MAME 2010"
+    mkdir -p "$dir"
+    opt="$dir/$set.opt"
+    [[ -f $opt ]] || cp "$dir/MAME 2010.opt" "$opt" 2> /dev/null || : > "$opt"
+    if grep -q '^mame_current_xy_type = ' "$opt"; then
+      sed -i 's/^mame_current_xy_type = .*/mame_current_xy_type = "lightgun"/' "$opt"
+    else
+      echo 'mame_current_xy_type = "lightgun"' >> "$opt"
+    fi
+    echo "$cfg"
+    ;;
+  udev-x)
+    self=${2:?Usage: fliperos-lightgun udev-x SYSPATH}
+    first=$(guns "$self" | head -1)
+    if [[ -n $first && $first != "$self" ]]; then
+      echo LIBINPUT_IGNORE_DEVICE=1
+    else
+      echo LIBINPUT_IGNORE_DEVICE=0
+    fi
+    ;;
+  udev-retrigger)
+    self=${2:?Usage: fliperos-lightgun udev-retrigger SYSPATH}
+    while read -r path; do
+      [[ $path == "$self" ]] || udevadm trigger --action=change "$path"
+    done < <(guns "$self")
+    exit 0
+    ;;
+  *)
+    echo "Usage: fliperos-lightgun guns | guncon | mice | retroarch-mame2010 SET | udev-x SYSPATH | udev-retrigger SYSPATH" >&2
+    exit 2
+    ;;
+esac

@@ -739,6 +739,11 @@ echo "Compiling for kernel $KVER"
 # GunCon 2 (0b9a:016a). O repo nao traz dkms.conf, entao escrevemos um; o
 # Makefile dele aceita KVERSION, que e o nome que o dkms expande em $kernelver.
 git clone --depth 1 https://github.com/beardypig/guncon2 /usr/src/guncon2-1.0
+# Os patches do FliperOS (config/guncon2-patches): a mira segura nos quadros
+# em que a pistola nao ve o feixe, e fora da tela o gatilho tambem recarrega.
+for patch in /tmp/guncon2-patches/*.patch; do
+  [ -f "$patch" ] && git -C /usr/src/guncon2-1.0 apply "$patch"
+done
 cat > /usr/src/guncon2-1.0/dkms.conf << 'DKMSCONF'
 PACKAGE_NAME="guncon2"
 PACKAGE_VERSION="1.0"
@@ -799,6 +804,8 @@ WHEELSCRIPT
   fi
 
   chmod +x "$CHROOT_DIR/tmp/build-input.sh"
+  mkdir -p "$CHROOT_DIR/tmp/guncon2-patches"
+  cp "$(dirname "$(realpath "$0")")"/config/guncon2-patches/*.patch "$CHROOT_DIR/tmp/guncon2-patches/" 2> /dev/null || true
   if chroot "$CHROOT_DIR" /tmp/build-input.sh >> "$LOG_FILE" 2>&1; then
     ok "GunCon 2 built via DKMS"
     if $WITH_WHEEL_DRIVERS; then
@@ -1145,7 +1152,8 @@ build_deflicker_chroot() {
   here=$(dirname "$(realpath "$0")")
   step "Compiling the interlaced flicker filter and the colour calibration"
   cp "$here/config/fliperos-deflicker.c" "$here/config/fliperos-color.c" "$here/config/fliperos-dropmaster.c" \
-    "$here/config/fliperos-sdl-audio.c" "$here/config/fliperos-vkfps.c" "$here/config/fliperos-deflicker-build" \
+    "$here/config/fliperos-sdl-audio.c" "$here/config/fliperos-sdl-gun.c" "$here/config/fliperos-vkfps.c" \
+    "$here/config/fliperos-deflicker-build" \
     "$CHROOT_DIR/tmp/"
   cat > "$CHROOT_DIR/tmp/build-deflicker.sh" << 'DFSCRIPT'
 #!/bin/bash
@@ -1158,9 +1166,11 @@ bash /tmp/fliperos-deflicker-build /tmp/fliperos-color.c /usr/local/bin/fliperos
 bash /tmp/fliperos-deflicker-build /tmp/fliperos-dropmaster.c /usr/local/lib/fliperos/libfliperos-dropmaster.so
 # O GroovyMAME no "default" do ALSA (config/fliperos-groovymame).
 bash /tmp/fliperos-deflicker-build /tmp/fliperos-sdl-audio.c /usr/local/lib/fliperos/libfliperos-sdl-audio.so
+# A pistola de luz no lightgun do GroovyMAME, sem o modo relativo do SDL.
+bash /tmp/fliperos-deflicker-build /tmp/fliperos-sdl-gun.c /usr/local/lib/fliperos/libfliperos-sdl-gun.so
 # O FPS e o filtro de flicker dos emuladores em Vulkan (a camada do Vulkan).
 bash /tmp/fliperos-deflicker-build /tmp/fliperos-vkfps.c /usr/local/lib/fliperos/libfliperos-vkfps.so
-rm -f /tmp/fliperos-deflicker.c /tmp/fliperos-color.c /tmp/fliperos-dropmaster.c /tmp/fliperos-sdl-audio.c \
+rm -f /tmp/fliperos-deflicker.c /tmp/fliperos-color.c /tmp/fliperos-dropmaster.c /tmp/fliperos-sdl-audio.c /tmp/fliperos-sdl-gun.c \
   /tmp/fliperos-vkfps.c /tmp/fliperos-deflicker-build
 DFSCRIPT
   chmod +x "$CHROOT_DIR/tmp/build-deflicker.sh"

@@ -83,6 +83,13 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
     rom=$("$fbneo" path "${*: -1}" 2> /dev/null) || rom=""
     [[ -n $rom && -f $rom ]] && set -- "${@:1:$#-1}" "$rom"
   fi
+  # Uma pistola de luz num jogo de pistola do MAME 2010: o driver udev e a
+  # pistola como mouse so nesse jogo (config/fliperos-lightgun).
+  lightgun=${FLIPEROS_LIGHTGUN:-/opt/fliperos/bin/fliperos-lightgun}
+  if [[ ${core##*/} == mame2010_libretro.so && -x $lightgun ]]; then
+    gun_cfg=$("$lightgun" retroarch-mame2010 "${game%.*}" 2> /dev/null) || gun_cfg=""
+    [[ -n $gun_cfg && -f $gun_cfg ]] && appendconfig+="|$gun_cfg"
+  fi
   if [[ -f $versus_cfg && -x $versus && -x $pixelcade ]] && "$pixelcade" panel &&
     "$versus" has retroarch "${game%.*}" "$core"; then
     appendconfig+="|$versus_cfg"

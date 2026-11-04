@@ -85,6 +85,17 @@ install -Dm644 "$src/config/fliperos-padkeys.service" "$root/etc/systemd/system/
 mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
 ln -sfn /etc/systemd/system/fliperos-padkeys.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-padkeys.service"
+# O Start e o Select da pistola de luz como as teclas do jogador dela nos
+# jogos (config/fliperos-gunkeys).
+install -Dm755 "$src/config/fliperos-gunkeys" "$root/opt/fliperos/bin/fliperos-gunkeys"
+install -Dm644 "$src/config/fliperos-gunkeys.service" "$root/etc/systemd/system/fliperos-gunkeys.service"
+ln -sfn /etc/systemd/system/fliperos-gunkeys.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-gunkeys.service"
+# As miras transparentes (cross1-8.png): com uma pistola ligada, os MAME nao
+# desenham a mira por cima do jogo (config/fliperos-lightgun, fliperos-groovymame).
+for n in 1 2 3 4 5 6 7 8; do
+  install -Dm644 "$src/config/crosshair-blank.png" "$root/usr/local/share/fliperos/crosshair/cross$n.png"
+done
 # A OSD: volume, filtro, geometria e cores por cima do jogo (config/fliperos-osd).
 install -Dm755 "$src/config/fliperos-osd" "$root/opt/fliperos/bin/fliperos-osd"
 install -Dm644 "$src/config/fliperos-osd.service" "$root/etc/systemd/system/fliperos-osd.service"
@@ -251,6 +262,8 @@ install -Dm755 "$src/config/fliperos-romclean" "$root/opt/fliperos/bin/fliperos-
 # O sistema de cada set do FBNeo: o fliperos-kms-run abre os de console que
 # estao soltos na pasta dos arcades.
 install -Dm755 "$src/config/fliperos-fbneo" "$root/opt/fliperos/bin/fliperos-fbneo"
+# A pistola de luz como mouse num jogo de pistola do RetroArch (fliperos-kms-run).
+install -Dm755 "$src/config/fliperos-lightgun" "$root/opt/fliperos/bin/fliperos-lightgun"
 # Setup > Games > Downloader > Free games: homebrew de codigo aberto para as pastas de ~/roms.
 install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-freeroms"
 # Setup > Games > Scraper > progetto-SNAPS: as capturas dos jogos de arcade.
@@ -866,7 +879,9 @@ if [[ -x "$root/usr/bin/zsh" ]]; then
   sed -i 's|^\(fliperos:.*:\)/bin/bash$|\1/usr/bin/zsh|' "$root/etc/passwd"
 fi
 # fliperos-setup sem senha tambem cobre o --session-start/--session-end que
-# o fliperos-session chama em volta do launcher (governador da CPU).
+# o fliperos-session chama em volta do launcher (governador da CPU). O 440 da
+# vez anterior nao deixa um usuario comum reescrever (os testes): sai antes.
+rm -f "$root/etc/sudoers.d/fliperos-setup"
 cat > "$root/etc/sudoers.d/fliperos-setup" << 'EOF'
 fliperos ALL=(root) NOPASSWD: /usr/local/bin/fliperos-setup, /usr/bin/setterm, /usr/bin/plymouth quit
 EOF
