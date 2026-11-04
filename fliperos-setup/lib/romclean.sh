@@ -158,12 +158,11 @@ romclean_own_emulator() {
 # romclean_screen_orientation imprime o filtro Screen que combina com o
 # monitor (Setup > Video Setup > Monitor Orientation): so os jogos deitados
 # num monitor deitado, so os em pe num monitor em pe. Sem orientacao
-# escolhida, as duas.
+# escolhida, o monitor e deitado (o padrao do Video Setup).
 romclean_screen_orientation() {
   case $(conf_get orientation 2> /dev/null) in
-    horizontal) echo horizontal ;;
     vertical-cw | vertical-ccw) echo vertical ;;
-    *) romclean_all orientation ;;
+    *) echo horizontal ;;
   esac
 }
 

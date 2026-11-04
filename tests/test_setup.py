@@ -5730,6 +5730,18 @@ class RomCleanerTests(Base):
                 for v in value.split(",") if value else ():
                     self.assertIn(v, options, (preset, key))
         self.assertNotEqual(self.env.run("romclean_preset outro").returncode, 0)
+        # O Screen vem so com a orientacao do monitor (Video Setup), deitado
+        # se nao foi escolhida; o "all" nao filtra.
+        conf = self.env.etc / "fliperos.conf"
+        for value, screen in ((None, "horizontal"), ("horizontal", "horizontal"), ("vertical-cw", "vertical"),
+                              ("vertical-ccw", "vertical")):
+            text = conf.read_text() if conf.exists() else ""
+            text = "".join(l for l in text.splitlines(True) if not l.startswith("orientation="))
+            conf.write_text(text + ("orientation=%s\n" % value if value else ""))
+            for preset in ("cabinet", "working", "psx"):
+                self.assertIn("orientation=%s\n" % screen, self.env.out("romclean_preset %s" % preset), (value, preset))
+            self.assertIn("orientation=horizontal,vertical\n", self.env.out("romclean_preset all"))
+        conf.write_text("".join(l for l in conf.read_text().splitlines(True) if not l.startswith("orientation=")))
         # No Flycast o status do MAME nao filtra.
         self.assertIn("status=all\n", self.env.out("romclean_preset cabinet flycast"))
         self.assertIn("status=imperfect\n", self.env.out("romclean_preset cabinet groovymame"))
@@ -5746,7 +5758,8 @@ class RomCleanerTests(Base):
         # Sem o catver.ini e o nplayers.ini os filtros deles nao entram; uma
         # lista com tudo marcado nao filtra.
         self.assertEqual(cabinet, ["--arcade-only", "--status", "imperfect", "--max-players", "2", "--max-buttons",
-                                   "6", "--controls", "joy8,joy4,joy2,twin", "--clones", "1g1r", "--regions",
+                                   "6", "--controls", "joy8,joy4,joy2,twin", "--orientation", "horizontal",
+                                   "--clones", "1g1r", "--regions",
                                    "World,USA,Europe,Brazil,Hispanic,Oceania,Asia,Japan,Unknown", "--no-bootlegs",
                                    "--no-prototypes", "--exclude", "flycast"])
         flycast = self.env.out('mapfile -t kv < <(romclean_preset cabinet flycast); romclean_args flycast "${kv[@]}"',
