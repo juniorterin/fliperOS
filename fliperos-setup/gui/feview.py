@@ -201,19 +201,59 @@ def plus_icon(surf, cx, cy, c):
 GREEN_DIM, GREEN_MID = (0x2E, 0x5E, 0x40), (0x3C, 0xB0, 0x5C)
 
 
-def globe_icon(surf, cx, cy, r, lit, unlit=None):
-    c = T.GREEN if lit else (unlit or GREEN_DIM)
-    pygame.draw.circle(surf, c, (cx, cy), r, 1)
-    pygame.draw.ellipse(surf, c, (cx - round(r * 0.5), cy - r, 2 * round(r * 0.5) + 1, 2 * r + 1), 1)
-    pygame.draw.line(surf, c, (cx - r, cy), (cx + r, cy))
-    pygame.draw.line(surf, c, (cx, cy - r), (cx, cy + r))
-    off = round(r * 0.5)
-    half = round(r * 0.87)
-    pygame.draw.line(surf, c, (cx - half, cy - off), (cx + half, cy - off))
-    pygame.draw.line(surf, c, (cx - half, cy + off), (cx + half, cy + off))
+_globes = {}
+# O globo pequeno (a lista, r ate 6), pixel a pixel: o contorno, o equador e
+# um meridiano em lente. Reduzido, o desenho grande vira um borrao.
+GLOBE_SMALL = ("...#####...",
+               ".##..#..##.",
+               ".#..#.#..#.",
+               "#..#...#..#",
+               "#..#...#..#",
+               "###########",
+               "#..#...#..#",
+               "#..#...#..#",
+               ".#..#.#..#.",
+               ".##..#..##.",
+               "...#####...")
+
+
+def globe_small(c, lit):
+    img = pygame.Surface((11, 11), pygame.SRCALPHA)
     if lit:
-        for dx, dy in ((-half + 1, -off), (half - 1, off), (half - 2, -off)):
-            surf.fill(T.FG, (cx + dx, cy + dy, 1, 1))
+        pygame.draw.circle(img, (*c[:3], 70), (5, 5), 5)
+    for y, line in enumerate(GLOBE_SMALL):
+        for x, ch in enumerate(line):
+            if ch == "#":
+                img.set_at((x, y), c)
+    return img
+
+
+def globe_icon(surf, cx, cy, r, lit, unlit=None):
+    """O globo do link: pequeno, o desenho a mao (GLOBE_SMALL); grande,
+    desenhado 4 vezes maior e reduzido com suavizacao (linhas finas, sem
+    degraus), com duas latitudes. Aceso, o fundo um pouco cheio."""
+    c = T.GREEN if lit else (unlit or GREEN_DIM)
+    key = (r, tuple(c), bool(lit))
+    img = _globes.get(key)
+    if img is None and r <= 6:
+        img = _globes[key] = globe_small(c, lit)
+    if img is None:
+        k, size = 4, 2 * r + 1
+        big = pygame.Surface((size * k, size * k), pygame.SRCALPHA)
+        o, R, w = size * k / 2, r * k + k / 2 - 1, k
+        if lit:
+            pygame.draw.circle(big, (*c[:3], 60), (o, o), R)
+        pygame.draw.circle(big, c, (o, o), R, w)
+        mw = R * (0.55 if r < 8 else 0.5)
+        pygame.draw.ellipse(big, c, (o - mw, o - R, 2 * mw, 2 * R), w)
+        pygame.draw.line(big, c, (o - R, o), (o + R, o), w)
+        if r >= 8:
+            pygame.draw.line(big, c, (o, o - R), (o, o + R), w)
+            for dy in (-0.5, 0.5):
+                half = R * 0.84
+                pygame.draw.line(big, c, (o - half, o + dy * R), (o + half, o + dy * R), w)
+        img = _globes[key] = pygame.transform.smoothscale(big, (size, size))
+    surf.blit(img, (cx - img.get_width() // 2, cy - img.get_height() // 2))
 
 
 def link_mark(fe, g):
