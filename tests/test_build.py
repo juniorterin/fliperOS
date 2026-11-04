@@ -5297,6 +5297,46 @@ class SessionTableTests(unittest.TestCase):
         self.assertIn('[[ $backend == none ]] && exit 0', script)
         self.assertNotIn('fliperos-launcher', script)
 
+    def test_x_failure_shows_this_attempts_errors(self):
+        # Foto de um usuario (2026-11-04): o desktop nao abriu e a tela listou
+        # so os (EE) inofensivos de um Xorg.0.log de outra vez. Vale o que o X
+        # e o xinit disseram nesta tentativa, sem esse ruido.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            for d in ('bin', 'logs', 'run', 'home/.local/share/xorg'):
+                (tmp / d).mkdir(parents=True)
+            old = tmp / 'home/.local/share/xorg/Xorg.0.log'
+            old.write_text('[  2208.494] (EE) AMDGPU(0): an old error\n')
+            os.utime(old, (1, 1))
+            for name, body in (('fakelxde', 'exit 0\n'),
+                               ('xinit', 'cat >&2 << "EOF"\n'
+                                         '> Warning:          Could not resolve keysym XF86NavInfo\n'
+                                         '(EE) Failed to load module "ati" (module does not exist, 0)\n'
+                                         '(EE) AMDGPU(0): drmmode_do_crtc_dpms cannot get last vblank counter\n'
+                                         '(EE) \nFatal server error:\n'
+                                         '(EE) Cannot open log file "/home/x/.local/share/xorg/Xorg.0.log"\n'
+                                         '(EE) \nxinit: giving up\nEOF\nexit 1\n')):
+                (tmp / 'bin' / name).write_text('#!/bin/bash\n' + body)
+                (tmp / 'bin' / name).chmod(0o755)
+            (tmp / 'sessions.conf').write_text('lxde|x|%s|lxde|LXDE desktop\n' % (tmp / 'bin/fakelxde'))
+            env = dict(os.environ, FLIPEROS_SESSIONS=str(tmp / 'sessions.conf'), FLIPEROS_LOGS=str(tmp / 'logs'),
+                       FLIPEROS_CUSTOM_SESSIONS=str(tmp / 'none.conf'), FLIPEROS_BIN=str(tmp / 'bin'),
+                       HOME=str(tmp / 'home'), XDG_RUNTIME_DIR=str(tmp / 'run'),
+                       PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']))
+            env.pop('XDG_DATA_HOME', None)
+            run = subprocess.run(['bash', str(ROOT / 'config/fliperos-session'), 'lxde'], env=env,
+                                 capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+            self.assertEqual(run.returncode, 1, run.stderr)
+            self.assertIn('The X server did not start (exit code 1)', run.stdout)
+            errors = run.stdout.split('Errors:')[1]
+            for line in ('Fatal server error', '(EE) Cannot open log file', 'xinit: giving up',
+                         'Full output: %s' % (tmp / 'logs/desktop.log')):
+                self.assertIn(line, errors)
+            for noise in ('an old error', 'module does not exist', 'vblank counter', 'XF86NavInfo'):
+                self.assertNotIn(noise, run.stdout)
+            self.assertNotIn('log=/var/log', (ROOT / 'config/fliperos-session').read_text())
+            self.assertFalse((tmp / 'logs/Xorg-failed.log').exists())
+
     def test_programs_fetched_from_their_site(self):
         # "fetch:COMANDO" na coluna do pacote: o que nao pode vir na imagem. O
         # comando vem na imagem, e o binario da linha so existe depois do fetch.

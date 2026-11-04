@@ -10,6 +10,7 @@ TABLE=${FLIPEROS_SESSIONS:-/etc/fliperos/sessions.conf}
 CUSTOM=${FLIPEROS_CUSTOM_SESSIONS:-/etc/fliperos/sessions.custom.conf}
 CHOICE_FILE=${FLIPEROS_SESSION:-/etc/fliperos/session}
 BIN=${FLIPEROS_BIN:-/opt/fliperos/bin}
+LOGS=${FLIPEROS_LOGS:-/opt/fliperos/logs}
 
 choice=${1:-}
 if [[ -z $choice ]]; then
@@ -52,18 +53,38 @@ fi
   exit 0
 }
 
-# O X caiu logo ao abrir: os erros do log dele ficam na tela (para uma
-# foto) ate o Enter, em vez de o menu voltar sem explicacao. Uma copia do
-# log vai para /opt/fliperos/logs.
+# x_errors: as linhas de erro do X e do xinit, sem a hora do log e sem os
+# (EE) de toda vez (os drivers ati/fbdev/vesa que o X procura e nao acha, o
+# contador de vblank do amdgpu).
+x_errors() {
+  sed -E 's/^\[ *[0-9.]+\] //' |
+    grep -E '^\(EE\) |^xinit:|^Fatal server error' |
+    grep -v -E '^\(EE\) *$|module does not exist|cannot get last vblank counter' |
+    tail -n 12
+}
+
+# O X caiu logo ao abrir: o motivo fica na tela (para uma foto) ate o Enter,
+# em vez de o menu voltar sem explicacao. So vale o que esta tentativa
+# escreveu (desde SINCE, a partir do byte OFFSET do desktop.log): a saida do
+# X e do xinit, que traz o "Fatal server error" mesmo quando o X cai antes de
+# abrir o log dele, e no modo debug o log do Xorg, se for desta vez. O
+# /var/log/Xorg.0.log e de um X como root, nunca deste, que roda como a
+# pessoa: numa foto de um usuario ele so mostrou erros velhos e inofensivos.
+# Uma copia do log do Xorg vai para o $LOGS.
 x_failed() {
-  local log=${XDG_DATA_HOME:-$HOME/.local/share}/xorg/Xorg.0.log
-  [[ -r $log ]] || log=/var/log/Xorg.0.log
-  printf '\n\e[1;31mThe X server did not start (exit code %s).\e[0m\n' "$1"
-  if [[ -r $log ]]; then
-    printf 'Errors in %s:\n\n' "$log"
-    grep -E '^\[ *[0-9.]+\] \(EE\) +[^ ]' "$log" | tail -n 12
-    cp -f "$log" /opt/fliperos/logs/Xorg-failed.log 2> /dev/null
+  local rc=$1 since=$2 offset=$3 log errors=""
+  log=${XDG_DATA_HOME:-$HOME/.local/share}/xorg/Xorg.0.log
+  [[ -r $log ]] && (($(stat -c %Y "$log" 2> /dev/null || echo 0) >= since)) || log=""
+  printf '\n\e[1;31mThe X server did not start (exit code %s).\e[0m\n' "$rc"
+  [[ $xlog != /dev/stdout ]] && errors=$(tail -c "+$((offset + 1))" "$xlog" 2> /dev/null | x_errors)
+  [[ -z $errors && -n $log ]] && errors=$(x_errors < "$log")
+  if [[ -n $errors ]]; then
+    printf 'Errors:\n\n%s\n' "$errors"
+  else
+    printf 'The X server gave no error message.\n'
   fi
+  [[ $xlog != /dev/stdout ]] && printf '\nFull output: %s\n' "$xlog"
+  [[ -n $log ]] && cp -f "$log" "$LOGS/Xorg-failed.log" 2> /dev/null
   printf '\nPress Enter to return to the menu.'
   read -r -t 600 _ || true
 }
@@ -160,8 +181,8 @@ case $backend in
     # Saida do X e da sessao: no log, nao na tela (o modo debug do Setup a
     # mostra; o x_failed le o log do proprio Xorg).
     xlog=/dev/stdout
-    if [[ ! -f /etc/fliperos/debug ]] && { : > /opt/fliperos/logs/desktop.log; } 2> /dev/null; then
-      xlog=/opt/fliperos/logs/desktop.log
+    if [[ ! -f /etc/fliperos/debug ]] && { : > "$LOGS/desktop.log"; } 2> /dev/null; then
+      xlog=$LOGS/desktop.log
     fi
     while true; do
       # Os monitores extras, que um programa em KMS pode ter desligado.
@@ -172,10 +193,12 @@ case $backend in
       # o abre, e o desktop volta depois dele.
       [[ -s ${FLIPEROS_WEB_LAUNCH:-${XDG_RUNTIME_DIR:-/tmp}/fliperos-web-launch} ]] && break
       started=$SECONDS
+      printf -v since '%(%s)T' -1
+      offset=$(stat -c %s "$xlog" 2> /dev/null) || offset=0
       xinit "$binary" -- :0 -nolisten tcp "vt$vt" -keeptty >> "$xlog" 2>&1
       rc=$?
       if ((rc != 0 && SECONDS - started < 20)); then
-        x_failed "$rc"
+        x_failed "$rc" "$since" "$offset"
         break
       fi
       [[ -s $request ]] || break
