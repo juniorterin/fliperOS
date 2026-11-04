@@ -121,6 +121,41 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 
   `tools/cabinet-push.sh` sends the setup, `config/`, `fliperos-rootfs.sh` and the frontends repository; there, `tools/cabinet-update.sh` keeps a copy of what changes in `/root/fliperos-backup-DATE.tgz`, runs the same `fliperos-rootfs.sh` as the build and applies what comes from outside it: `fliperos-limine-update`, automatic login, DNS, clock, new packages (through apt), kernel line and services. At the end it restarts tty1.
 
+## Frontend emulator
+
+The FliperOS frontend running on any PC with Docker, with no cabinet and no Python. It is the real `fliperos-setup/gui/fliperos-frontend` from the repository, on a virtual X screen (Xvfb). You watch and drive it in the browser through noVNC.
+
+From Git Bash, at the root of the repository:
+
+```sh
+sh tools/fe-emulator/run.sh
+```
+
+The first run builds the `fliperos-fe-emulator` image (about 3 minutes). Then the browser opens at `http://localhost:6080/vnc.html?autoconnect=1&resize=scale`. Click the screen once so it takes the keyboard.
+
+| Command | What it does |
+| --- | --- |
+| `sh tools/fe-emulator/run.sh` | Opens the emulator (and rebuilds the image if a file in `tools/fe-emulator` changed) |
+| `sh tools/fe-emulator/run.sh reset` | Throws away the emulator's home folder (favourites, positions, scraped art) and opens it again |
+| `sh tools/fe-emulator/run.sh log` | Shows what the cabinets on the network have open: games, lobbies, who left (Ctrl+C quits) |
+| `sh tools/fe-emulator/run.sh stop` | Closes it |
+
+`FE_EMU_PORT` changes the browser port (6080) and `FE_EMU_SIZE` the screen size (`960x720`, 3x the cabinet's 320x240).
+
+**The keys** are the frontend's default keyboard: arrows move, Enter selects, Esc goes back, Page Up/Page Down jump a page, F marks a favourite, G opens the filters, V changes the view and Tab opens the game options. Esc on the list closes the frontend, and it opens again by itself.
+
+**The games.** With `.shots/video/demo.tar` (the sample library copied from the cabinet by `tools/video/render.sh library IP`), the emulator has those games with snap, box, logo, marquee and video. Without it, a small sample with names only; the frontend's auto-scrape fetches the art from the internet, as on the cabinet. The library lives in the `fliperos-fe-emulator-home` Docker volume, built once.
+
+Opening a game does not run any emulator. The launcher (`tools/fe-emulator/fake-run`) writes the command the cabinet would run to the log and returns to the frontend after 3 seconds.
+
+**The code.** The frontend is read from the repository every time it opens. After changing it, press Esc on the list and the change is there.
+
+**Lobbies on the network.** The emulator shows the lobbies that the cabinets on the same network have open, at the top of the list, as on a cabinet ([Linked cabinets](Linked-cabinets.md)). Each cabinet broadcasts its presence over UDP 55436. Docker forwards that port to `tools/fe-emulator/lan-relay.py`, which writes the table the frontend reads (`FLIPEROS_LINK_FAKE`).
+
+A lobby game that the emulator's library does not have gets an empty file in that system's folder, so its row shows up. `run.sh log` prints each cabinet, its IP and its lobby (game, slot, players).
+
+The emulator only watches. It does not announce itself, and every cabinet's address becomes `192.0.2.1`, an address that does not exist, so a JOIN from the emulator can never take a seat in a real lobby. If no cabinet shows up, Windows may be blocking UDP 55436: allow Docker Desktop in the firewall.
+
 ## Website
 
 The project website lives in [`website/`](https://github.com/juniorterin/fliperOS/tree/main/website) (Next.js, server-rendered, English and Portuguese). `npm run dev` inside the folder serves it locally; the `Dockerfile` there builds the standalone server that Coolify (or any Docker host) runs on port 3000. Its README has the details.

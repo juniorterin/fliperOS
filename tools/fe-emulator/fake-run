@@ -1,0 +1,6 @@
+#!/bin/sh
+# O "jogo" do emulador do frontend: no lugar do fliperos-x11-run e do
+# fliperos-kms-run, so diz o comando que o gabinete rodaria e volta ao
+# frontend depois de FE_EMU_GAME_SECONDS segundos.
+echo "fe-emulator: o gabinete rodaria: $*" >&2
+sleep "${FE_EMU_GAME_SECONDS:-3}"

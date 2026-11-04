@@ -1841,6 +1841,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 - <strong>Full screen</strong>: the game's video or picture behind (it slides to the next game with the cursor; the videos of the 3 games before and after are opened ahead, held on their first frame), the name and information in front, and on the right the list as four stacked thumbnails, with arrows above and below while there are more games that way; the column slides to its new place. The pictures of the games around the cursor are read ahead, so changing game is instant. The clones come right after their parent: each clone thumbnail carries a <strong>CLONE</strong> badge with an up arrow in its top-right corner, the title shows what differs in its name after the title, and button 2 goes back to the parent.
 - <strong>Grid</strong>: three thumbnails a row, two rows, all the same size: 4:3 with the game's screenshot (or its cover), 3:4 when Video Setup has the monitor vertical. The chosen one has a pink frame that slides to it, and the rows slide too. Every visible game plays its video at once, silent except the chosen one; the videos of the 3 rows above and below are opened and held on their first frame, so a new row starts playing at once. A scrollbar in the corner, with a small arrow above and below it while there are more rows that way. The clones come right after their parent, with the same <strong>CLONE</strong> badge as in full screen; button 2 on a clone goes back to the parent.</p>
 <p><strong>The game's video.</strong> In the three views, the game's video (<code>~/media/preview/&lt;folder&gt;/&lt;set&gt;.mp4</code>) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. In any view, a game missing some of its art (screenshot, cover, marquee, logo or video) gets the missing pieces scraped by itself when the cursor stays on it for 2 seconds, once per game; they land in the same <code>~/media</code> folders the scraper uses. The logo comes from the Arcade Database too (its "decals"); what it lacks comes one file at a time from the archive.org packs of Setup &gt; Games &gt; Scraper &gt; Art packs by torrent, without downloading the pack.</p>
+<p><strong>Attract mode.</strong> After a minute without a button pressed, the cursor jumps to a random game of the list (a parent, not an unfolded clone) and its video plays; every 30 seconds it jumps to another one. The first press only wakes the frontend, on the game it stopped at, without doing what the button does. The controls guide doesn't hold it (it closes); any other open menu does. <code>FLIPEROS_ATTRACT_SECONDS</code> (0 turns it off) and <code>FLIPEROS_ATTRACT_STEP</code> change the two times.</p>
 <p><strong>Automatic scrape.</strong> While the frontend is open, it fetches in the background, one game at a time, what each game in the folders still lacks:
 - arcade: the information, screenshot, flyer, marquee and logo from the Arcade Database;
 - consoles: the cover and screenshot from libretro-thumbnails;
@@ -29023,6 +29024,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <ul>
 <li><strong>The driver.</strong> GunCon 2 has no driver in the mainline kernel. The build compiles <a href="https://github.com/beardypig/guncon2">beardypig/guncon2</a> through DKMS for the system's kernel and loads it at boot (<code>/etc/modules-load.d/fliperos-guncon2.conf</code>): plug the gun into USB and it shows up as an input device.</li>
 <li><strong>The calibration.</strong> The raw position the gun reports depends on the tube and on where the cabinet's gun sits, and evdev forgets the range on every reconnection. <strong>Setup &gt; Joysticks &gt; Calibrate GunCon 2</strong> measures it on your monitor once (below), and the udev rule <code>99-fliperos-input.rules</code> reapplies it (<code>fliperos-guncon2-calibrate</code>) every time the gun is plugged in.</li>
+<li><strong>Marked as a gun.</strong> The same rule tags the GunCon 2 <code>ID_INPUT_GUN=1</code>, so the Model 2 emulator (SM2-Emu) reads the gun itself instead of the mouse pointer. A CRT gun misses the beam for a frame every now and then (a GunCon 2 then reports x 0, y 5); through the pointer that frame jumped the aim to the corner and a shot in the middle of the screen became a reload. SM2-Emu keeps the last position that saw the screen for up to 150 ms (FliperOS patch <code>config/sm2-emu-patches/0002</code>).</li>
 <li><strong>The menus.</strong> The controller-as-keyboard of the Setup menus leaves light guns out, so aiming doesn't move through the menu.</li>
 <li><strong>The games.</strong> In the <a href="#ROMs">MAME ROM Cleaner</a>, tell it the cabinet has a <strong>Light gun</strong> among its controls, and the gun games of the romset are kept along with the others.</li>
 </ul>
@@ -29158,7 +29160,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>Some arcade games were built to be played on several machines at once: racing cabinets joined by a link cable, or a fighting game that needs four cabinets for its tournament mode.</p>
 <p>This page lists those games, how the link works in each emulator FliperOS ships, and what each game needs to start: how many cabinets, how many players and screens, whether one cabinet must be master, and whether you tell the game how many cabinets there are.</p>
 <p><strong>The FliperOS frontend does link play for six games on its own</strong>: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart: European Session and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the <strong>network cable only</strong> (never Wi-Fi) and needs the cabinets on the same network.</p>
-<p>Games that have more players than a cabinet has controls, and that FBNeo runs, get <strong>net play</strong> in the same menu: see Net play below.</p>
+<p>Games of a RetroArch core that does net play, with more players than a cabinet has controls, and the NAOMI and Atomiswave games of Flycast (GGPO, one player on each of two cabinets) get <strong>net play</strong> in the same menu: see Net play below.</p>
 <p>For every other game, and to know what the frontend does underneath, everything on this page is set by hand in the emulator: a command line, an ini file, or the game's own test menu.</p>
 <h2 id="at-a-glance">At a glance</h2>
 <p>Every row says how it was checked. <strong>Tested</strong> means two or more instances were linked and played here. <strong>Solo</strong> means the game was only started alone, with the link on. <strong>Source</strong> means it comes from reading the emulator's code.</p>
@@ -29382,6 +29384,11 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <li><strong>Open the ports.</strong> The cabinet has no firewall. On a Windows PC, allow the emulator through the firewall if the link does not form.</li>
 <li><strong>Do not count on joining late.</strong> In MAME the ring boards do not reconnect after the link drops (the source marks the link dead). In Supermodel a machine that was restarted did not rejoin, and the other had to be restarted too. A game already running was not joined by a third machine in any emulator.</li>
 </ul>
+<h3 id="latency-of-a-link">Latency of a link</h3>
+<p><strong>Your own controls are as fast as playing alone.</strong> Each cabinet runs its own copy of the game, and only that copy reads its controls. The link adds nothing to them.</p>
+<p><strong>The other cars or players are seen with the delay of the original boards.</strong> The games exchange their state at the pace of the frames (the ring boards of MAME send one VSYNC packet a frame). So you see the other cabinet a frame or two late, as in the arcade. On the network cable a packet takes well under a millisecond (a frame is 16.7 ms at 60 Hz), so the cable adds almost nothing to it. In a ring of more machines, a packet goes through each machine on its way, as it did on the real boards.</p>
+<p><strong>There is no rollback and no input delay to tune.</strong> The games wait for each other by themselves. When the network stops, the game says so (COMMUNICATION ERROR, or the link drops) and does not catch up later. That is why the link is on the cable only.</p>
+<p>This comes from the emulators' source and from how the games behaved in the tests. The delay was not measured with a camera.</p>
 <h2 id="sm2-emu-sega-model-2">SM2-Emu: Sega Model 2</h2>
 <p>The link is a UDP ring. In <code>sm2-emu.ini</code> (or in F10 &gt; Network):</p>
 <pre><code class="language-ini">[network]
@@ -29589,16 +29596,117 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <h2 id="flycast-naomi">Flycast: NAOMI</h2>
 <p><strong>Games that use several boards in one cabinet</strong> are not a link between machines. Ferrari F355 Challenge, Airline Pilots and Sega Strike Fighter run each board as its own Flycast window, one per monitor. See <a href="#Multiple-Monitors">Multiple monitors</a>.</p>
 <p><strong>Linking two cabinets</strong> works for Club Kart: European Session (<code>clubk2k3</code>). It was tested on 1 November 2026 with the cabinet's Flycast as the server and Flycast 2.7 on a Windows PC as the client, on the wired network. The link is UDP on port 37391. The options go on the command line (<code>-config</code>) or in <code>emu.cfg</code>, section <code>[network]</code>: <code>network:Enable=yes</code> on all of them, <code>network:ActAsServer=yes</code> on the first one, and on the others <code>network:ActAsServer=no</code> and <code>network:server=IP-of-the-first</code>. Start the server first. Also set <code>network:EnableUPnP=no</code>: without it Flycast asks the router, and so the Internet, to open the port. The server shows a dialog, "Waiting for players" with a Start Now button. The client showed "CHECKING NETWORK NOW, MODE: SLAVE, SEQUENCE: SYNCING", and a few seconds later the attract mode. Two Flycast on one machine do not work, because both want port 37391. Initial D Arcade Stage Ver. 3 (<code>initdv3e</code>) and Ferrari F355 Challenge (<code>f355</code>) were started the same way, with two Flycast on the cabinet (the second in a network namespace): the server logged "Waiting for slave connections" and then "Master starting: 1 slaves", and each side sent 3 UDP packets. What the games showed was not seen, so they are not in the frontend. Not tested: a race with two players, and a third machine (reports say Club Kart takes two). The F355 "twin" sets are the ones made for a battle cable between two cabinets.</p>
-<p><strong>Net play (rollback)</strong> is another thing: the Flycast of FliperOS has GGPO options (<code>network:GGPO</code>, <code>network:GGPODelay</code>, <code>network:ActAsServer</code>, <code>network:server</code>) for NAOMI and Atomiswave games, on UDP port 19713. <strong>Both machines need <code>network:server</code>, the server too.</strong> In Flycast's source (<code>core/network/ggpo.cpp</code>) each side sends to the address in <code>network:server</code> (empty means 127.0.0.1) and takes packets only from it, and <code>network:ActAsServer</code> only chooses the local port (19713) and the player (1). The first try, with KOF Neo Wave (Atomiswave) between the cabinet's Flycast and Flycast 2.7 on a Windows PC, left <code>network:server</code> empty on the cabinet, so the cabinet sent to itself and ignored the PC: the PC sent 96 packets in 90 seconds, got no answer and stayed on "Starting network". With the right options, two Flycast of the cabinet's own build did link (KOF Neo Wave, the second one in a network namespace of the cabinet): about 35 UDP packets a second each way for a minute, where the failed try had 2 a second in one direction. The try with Flycast 2.7 on the PC was not repeated, and the screen of the game was not captured, so what the game showed is not seen. GGPO is not in the frontend yet.</p>
+<p><strong>Net play (rollback)</strong> is another thing: the Flycast of FliperOS has GGPO options (<code>network:GGPO</code>, <code>network:GGPODelay</code>, <code>network:ActAsServer</code>, <code>network:server</code>) for NAOMI and Atomiswave games, on UDP port 19713. <strong>Both machines need <code>network:server</code>, the server too.</strong> In Flycast's source (<code>core/network/ggpo.cpp</code>) each side sends to the address in <code>network:server</code> (empty means 127.0.0.1) and takes packets only from it, and <code>network:ActAsServer</code> only chooses the local port (19713) and the player (1). The first try, with KOF Neo Wave (Atomiswave) between the cabinet's Flycast and Flycast 2.7 on a Windows PC, left <code>network:server</code> empty on the cabinet, so the cabinet sent to itself and ignored the PC: the PC sent 96 packets in 90 seconds, got no answer and stayed on "Starting network". With the right options, two Flycast of the cabinet's own build did link (KOF Neo Wave, the second one in a network namespace of the cabinet): about 35 UDP packets a second each way for a minute, where the failed try had 2 a second in one direction. The try with Flycast 2.7 on the PC was not repeated, and the screen of the game was not captured, so what the game showed is not seen. The frontend now starts GGPO for NAOMI and Atomiswave games: see Flycast GGPO under Net play.</p>
 <p><strong>Which sets have a network board.</strong> The romset of MAME 0.289 marks these NAOMI sets, among others: <code>f355</code>, <code>f355twin</code>, <code>f355twn2</code> (Ferrari F355 Challenge), <code>initd</code>, <code>initdexp</code>, <code>initdv2j</code>, <code>initdv3e</code>, <code>initdv3j</code>, <code>inidv3cy</code> (Initial D), <code>clubk2k3</code>, <code>clubkcyc</code>, <code>clubkprz</code>, <code>clubkpzb</code>, <code>clubkrt</code> (Club Kart), <code>18wheelr</code>, <code>crzytaxi</code> and <code>vstrik3</code>. All of them were downloaded to the cabinet on 1 November 2026 with the Downloader's Flycast filter (the "Everything that works" preset, all control types), but only Club Kart, Initial D Ver. 3 and F355 were started as a pair so far.</p>
 <p>The Derby Owners Club, World Club Champion Football and Mushiking sets are online and card games, and were not tried.</p>
 <h2 id="net-play-more-players-than-controls">Net play: more players than controls</h2>
 <p>Some games have more players than a cabinet has controls: X-Men has four players, and FBNeo runs it. For these, RetroArch's net play lets cabinets share one game. There is no emulator link and no NVRAM per cabinet: every machine runs the same game, and the inputs travel over the network.</p>
+<p><strong>Which games get it:</strong></p>
+<ul>
+<li><strong>Every RetroArch core that does net play</strong>, in its own folder (<code>~/roms/retroarch/&lt;core&gt;</code>), for a game with more players than this cabinet has controls. A core does net play when its <code>.info</code> file says <code>savestate_features = "deterministic"</code>, which is what RetroArch itself asks for: in the image that is FBNeo, Snes9x, Genesis Plus GX, FCEUmm, mGBA and PCSX ReARMed. A core installed later counts too. The game needs its number of players in the list (the MAME ones come with it; a console game gets it from the scraper, or from Classify in the frontend).</li>
+<li><strong>FBNeo uses its own folder only</strong>: <code>~/roms/retroarch/fbneo</code>, with FBNeo's own romset, and only the sets FBNeo knows. The MAME romset in <code>~/roms/mame</code> is not used for it, even for a game that has the same name in both: FBNeo checks each file by its CRC, and some sets of MAME 0.289 have dumps that FBNeo does not take.</li>
+<li><strong>NAOMI, NAOMI 2 and Atomiswave games in Flycast</strong>, through Flycast's GGPO, for any game of two or more players. GGPO has two players, so it is two cabinets with one player each: a versus between two cabinets. See Flycast GGPO below.</li>
+</ul>
+<p>Every cabinet of the party needs the same game file.</p>
 <p>In the frontend such a game has a <strong>NET PLAY</strong> tile in its menu, with a row of player icons. The lit ones are the players this cabinet takes. The other cabinets see <strong>JOIN PARTY</strong>.</p>
-<p><strong>Each cabinet takes as many players as it has controls configured</strong> (see <a href="#Controls">Controls</a>), so two cabinets with two controls fill the four players of X-Men. The party starts by itself when every player has an owner.</p>
-<p>Only the network cable is used. The public lobby, the relay and the NAT traversal of RetroArch are off. The party's own ports are UDP 55436 (who plays what), TCP 55437 (the party) and TCP 55438 (the game's files), and RetroArch's net play is on TCP 55435.</p>
+<p><strong>Each cabinet takes as many players as it has controls configured</strong> (see <a href="#Controls">Controls</a>), so two cabinets with two controls fill the four players of X-Men. To give fewer (two controls, but only one person playing), press down on the NET PLAY or JOIN PARTY tile: blinking arrows appear beside the player icons, and left or right picks how many this cabinet gives. Up goes back to the tiles. The party starts by itself when every player has an owner.</p>
+<p>Only the network cable is used. The public lobby, the relay and the NAT traversal of RetroArch are off, and so is Flycast's UPnP. The party's own ports are UDP 55436 (who plays what), TCP 55437 (the party) and TCP 55438 (the game's files). RetroArch's net play is on TCP 55435, Flycast's GGPO on UDP 19713.</p>
 <p><strong>Run the same release on every cabinet.</strong> RetroArch warns when two machines run different versions. When the builds of the core differ, it turns the desync check off, so a real desync would not be reported.</p>
-<p>Tested on 1 November 2026: the frontend of the cabinet hosted X-Men with players 1 and 2, and a Windows PC joined with two RetroArch windows, one player each (players 3 and 4), with a ping of 13 to 18 ms. The coin, start and character selection of each player showed on that player, the same on the cabinet and on both windows. RetroArch 1.22.2 for Windows (the stable build) crashed when it connected; the nightly build worked. Not tested: two people playing a whole credit, and any core other than FBNeo (the MAME core has no net play).</p>
+<p>Tested on 1 November 2026: the frontend of the cabinet hosted X-Men with players 1 and 2, and a Windows PC joined with two RetroArch windows, one player each (players 3 and 4), with a ping of 13 to 18 ms. The coin, start and character selection of each player showed on that player, the same on the cabinet and on both windows. RetroArch 1.22.2 for Windows (the stable build) crashed when it connected; the nightly build worked. Not tested: two people playing a whole credit, and any core other than FBNeo.</p>
+<h3 id="flycast-ggpo">Flycast GGPO</h3>
+<p>The frontend opens Flycast with <code>network:GGPO=yes</code>, <code>network:GGPODelay=0</code> and <code>network:EnableUPnP=no</code>. The cabinet that opened the party has <code>network:ActAsServer=yes</code> and is player 1. <strong>Both have <code>network:server</code> set to the other cabinet's IP</strong>: Flycast sends only to that address and takes packets only from it, so an empty one (the loopback) never links. Two Flycast of the cabinet's own build linked this way (see the Flycast section). A party started from the frontend has not been tried yet.</p>
+<h3 id="latency-of-net-play">Latency of net play</h3>
+<p><strong>Your own controls are as fast as playing alone.</strong> RetroArch's net play and Flycast's GGPO are both rollback: each cabinet runs the game at once with its own controls and guesses the others' (it repeats their last input). When the real input arrives and differs, it loads the state of a few frames back and runs those frames again, in one frame.</p>
+<p>FliperOS sets no input delay (<code>netplay_input_latency_frames_min</code> and <code>_range</code> are 0 in RetroArch, <code>GGPODelay</code> is 0 in Flycast). On the cable the other cabinet's input arrives in a fraction of a frame, so a rollback is rare and is one frame long at most. You see the other players' moves within a frame. The ping that RetroArch shows (13 to 18 ms in the test) counts its own handling, not just the cable, where the round trip is under 1 ms.</p>
+<p><strong>Run-ahead is off during net play.</strong> RetroArch does not run run-ahead or preemptive frames while net play is on. A latency mode that uses them loses that gain in a party.</p>
+<p><strong>Every cabinet runs at the speed of the slowest.</strong> Use the same video mode on all of them: a CRT whose refresh is a little slower holds the others back.</p>
+<h3 id="cores-and-emulators-with-net-play">Cores and emulators with net play</h3>
+<p><strong>The frontend offers net play with every RetroArch core marked "deterministic" and with Flycast's GGPO.</strong> A RetroArch core needs a state that it saves and loads quickly and always the same way. A core that cannot do that refuses net play, or loses the sync. Only FBNeo has been played between two machines so far: the others are in the frontend but not yet tested on FliperOS.</p>
+<table>
+<thead>
+<tr>
+<th>Core or emulator</th>
+<th>Systems</th>
+<th>Net play</th>
+<th>Checked</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FBNeo (RetroArch)</td>
+<td>Arcade: CPS1, CPS2, CPS3, Neo Geo, Konami, Toaplan and the rest of its list</td>
+<td><strong>Yes, in the frontend</strong></td>
+<td><strong>Tested</strong>: X-Men, cabinet and PC</td>
+</tr>
+<tr>
+<td>Snes9x (RetroArch)</td>
+<td>Super Nintendo</td>
+<td><strong>Yes, in the frontend</strong></td>
+<td>Its .info; not tested</td>
+</tr>
+<tr>
+<td>Genesis Plus GX (RetroArch)</td>
+<td>Mega Drive, Master System, Game Gear, Sega CD</td>
+<td><strong>Yes, in the frontend</strong></td>
+<td>Its .info; not tested</td>
+</tr>
+<tr>
+<td>FCEUmm (RetroArch)</td>
+<td>NES, Famicom Disk System</td>
+<td><strong>Yes, in the frontend</strong></td>
+<td>Its .info; not tested</td>
+</tr>
+<tr>
+<td>mGBA (RetroArch)</td>
+<td>Game Boy Advance</td>
+<td><strong>Yes, in the frontend</strong> (one screen shared, not the link cable)</td>
+<td>Its .info; not tested</td>
+</tr>
+<tr>
+<td>PCSX ReARMed (RetroArch)</td>
+<td>PlayStation</td>
+<td><strong>Yes, in the frontend</strong>, but heavier and loses the sync more easily</td>
+<td>Its .info; not tested</td>
+</tr>
+<tr>
+<td>MAME 2010 (RetroArch)</td>
+<td>Arcade (MAME 0.139)</td>
+<td><strong>No</strong>: "Core does not support netplay"</td>
+<td><strong>Tested</strong></td>
+</tr>
+<tr>
+<td>MAME, current core (RetroArch)</td>
+<td>Arcade (MAME 0.289)</td>
+<td>Yes, but many drivers do not save their state well. Not in the image (415 MB)</td>
+<td>Connected once (X-Men)</td>
+</tr>
+<tr>
+<td>Flycast</td>
+<td>NAOMI, NAOMI 2, Atomiswave</td>
+<td><strong>Yes, in the frontend</strong>: GGPO rollback, two cabinets, one player each</td>
+<td>Two Flycast linked on the cabinet by hand, game screen not seen</td>
+</tr>
+<tr>
+<td>Dolphin</td>
+<td>GameCube, Wii</td>
+<td>Its own net play, with input delay and no rollback. Not in the frontend: Dolphin has no command-line option to host or join, only its windows</td>
+<td>Not tested</td>
+</tr>
+<tr>
+<td>GroovyMAME, Supermodel, SM2-Emu</td>
+<td>Arcade, Model 3, Model 2</td>
+<td><strong>No net play.</strong> Their network is the board link of the link games above</td>
+<td>Source</td>
+</tr>
+<tr>
+<td>PCSX2, DuckStation, Hypseus Singe, OpenBOR</td>
+<td>PS2, PS1, Laserdisc, beat 'em ups</td>
+<td><strong>No</strong></td>
+<td>Source</td>
+</tr>
+</tbody>
+</table>
+<p>Fightcade 2 has its own rollback (FBNeo, Flycast and others), but over the Internet with its own matchmaking: it is not part of the cabinets' link or net play.</p>
 <h2 id="what-cannot-be-linked">What cannot be linked</h2>
 <p>MAME marks 309 sets (107 games) as having a network or serial link that is not emulated: Namco's Ridge Racer, Final Lap, Cyber Cycles and Alpine Racer 2 and others, Konami's GTI Club, Midnight Run, Racing Jam and Thrill Drive, Taito's Battle Gear and Chase Bombers, Midway's Cruis'n Exotica and Atari's Road Riot 4WD. No MAME code reads the link options for them, so there is nothing to turn on.</p>
 <p>The Model 3 boards in MAME (and the NAOMI ones that share the same board) and the Chihiro network board are stubs. The Konami network PCBs and the Namco C139 serial chip are stubs too.</p>
@@ -30254,6 +30362,46 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
   docker build -t fliperos-ssh -f tools/Dockerfile.ssh tools
   docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-ssh sh tools/cabinet-push.sh 192.168.1.111</code></p>
 <p><code>tools/cabinet-push.sh</code> sends the setup, <code>config/</code>, <code>fliperos-rootfs.sh</code> and the frontends repository; there, <code>tools/cabinet-update.sh</code> keeps a copy of what changes in <code>/root/fliperos-backup-DATE.tgz</code>, runs the same <code>fliperos-rootfs.sh</code> as the build and applies what comes from outside it: <code>fliperos-limine-update</code>, automatic login, DNS, clock, new packages (through apt), kernel line and services. At the end it restarts tty1.</p>
+<h2 id="frontend-emulator">Frontend emulator</h2>
+<p>The FliperOS frontend running on any PC with Docker, with no cabinet and no Python. It is the real <code>fliperos-setup/gui/fliperos-frontend</code> from the repository, on a virtual X screen (Xvfb). You watch and drive it in the browser through noVNC.</p>
+<p>From Git Bash, at the root of the repository:</p>
+<pre><code class="language-sh">sh tools/fe-emulator/run.sh
+</code></pre>
+<p>The first run builds the <code>fliperos-fe-emulator</code> image (about 3 minutes). Then the browser opens at <code>http://localhost:6080/vnc.html?autoconnect=1&amp;resize=scale</code>. Click the screen once so it takes the keyboard.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sh tools/fe-emulator/run.sh</code></td>
+<td>Opens the emulator (and rebuilds the image if a file in <code>tools/fe-emulator</code> changed)</td>
+</tr>
+<tr>
+<td><code>sh tools/fe-emulator/run.sh reset</code></td>
+<td>Throws away the emulator's home folder (favourites, positions, scraped art) and opens it again</td>
+</tr>
+<tr>
+<td><code>sh tools/fe-emulator/run.sh log</code></td>
+<td>Shows what the cabinets on the network have open: games, lobbies, who left (Ctrl+C quits)</td>
+</tr>
+<tr>
+<td><code>sh tools/fe-emulator/run.sh stop</code></td>
+<td>Closes it</td>
+</tr>
+</tbody>
+</table>
+<p><code>FE_EMU_PORT</code> changes the browser port (6080) and <code>FE_EMU_SIZE</code> the screen size (<code>960x720</code>, 3x the cabinet's 320x240).</p>
+<p><strong>The keys</strong> are the frontend's default keyboard: arrows move, Enter selects, Esc goes back, Page Up/Page Down jump a page, F marks a favourite, G opens the filters, V changes the view and Tab opens the game options. Esc on the list closes the frontend, and it opens again by itself.</p>
+<p><strong>The games.</strong> With <code>.shots/video/demo.tar</code> (the sample library copied from the cabinet by <code>tools/video/render.sh library IP</code>), the emulator has those games with snap, box, logo, marquee and video. Without it, a small sample with names only; the frontend's auto-scrape fetches the art from the internet, as on the cabinet. The library lives in the <code>fliperos-fe-emulator-home</code> Docker volume, built once.</p>
+<p>Opening a game does not run any emulator. The launcher (<code>tools/fe-emulator/fake-run</code>) writes the command the cabinet would run to the log and returns to the frontend after 3 seconds.</p>
+<p><strong>The code.</strong> The frontend is read from the repository every time it opens. After changing it, press Esc on the list and the change is there.</p>
+<p><strong>Lobbies on the network.</strong> The emulator shows the lobbies that the cabinets on the same network have open, at the top of the list, as on a cabinet (<a href="#Linked-cabinets">Linked cabinets</a>). Each cabinet broadcasts its presence over UDP 55436. Docker forwards that port to <code>tools/fe-emulator/lan-relay.py</code>, which writes the table the frontend reads (<code>FLIPEROS_LINK_FAKE</code>).</p>
+<p>A lobby game that the emulator's library does not have gets an empty file in that system's folder, so its row shows up. <code>run.sh log</code> prints each cabinet, its IP and its lobby (game, slot, players).</p>
+<p>The emulator only watches. It does not announce itself, and every cabinet's address becomes <code>192.0.2.1</code>, an address that does not exist, so a JOIN from the emulator can never take a seat in a real lobby. If no cabinet shows up, Windows may be blocking UDP 55436: allow Docker Desktop in the firewall.</p>
 <h2 id="website">Website</h2>
 <p>The project website lives in <a href="https://github.com/juniorterin/fliperOS/tree/main/website"><code>website/</code></a> (Next.js, server-rendered, English and Portuguese). <code>npm run dev</code> inside the folder serves it locally; the <code>Dockerfile</code> there builds the standalone server that Coolify (or any Docker host) runs on port 3000. Its README has the details.</p>
 <h1 id="Architecture">Architecture</h1>

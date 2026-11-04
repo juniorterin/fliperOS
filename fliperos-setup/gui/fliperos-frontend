@@ -311,7 +311,10 @@ class Frontend:
         self.link_game = None      # o jogo da festa (a sala e a copia dos arquivos)
         self.link_sig = ()         # o que a rede mostra, para refazer a lista quando muda
         self.players_seen = None   # os jogadores de agora, para avisar quando um controle sai ou volta
-        if self.shot:
+        # FLIPEROS_LINK_FAKE: a rede de mentira (os testes de tela e o
+        # emulador do frontend, tools/fe-emulator, que so olha a rede).
+        self.link_fake = bool(os.environ.get("FLIPEROS_LINK_FAKE"))
+        if self.shot or self.link_fake:
             felink.fake_link(self.link, os.environ.get("FLIPEROS_LINK_FAKE"))
         else:
             self.link.start()
@@ -1368,7 +1371,8 @@ class Frontend:
         link = self.link
         if self.shot:
             return
-        link.poll(now)
+        if not self.link_fake:
+            link.poll(now)
         # Um controle solto ou ligado: o numero de jogadores muda (os que o net
         # play ocupa), e a tela avisa.
         players = link.local_players

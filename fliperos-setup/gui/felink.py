@@ -1332,12 +1332,23 @@ class Link:
 
 
 class FakePresence:
-    """A tabela de mentira dos testes de tela (fliperos-frontend --shot)."""
+    """A tabela de mentira dos testes de tela (fliperos-frontend --shot) e do
+    emulador do frontend (tools/fe-emulator, que a reescreve com o que os
+    gabinetes da rede dizem): com path, e lida de novo quando o arquivo muda."""
 
-    def __init__(self, table):
-        self.rows = table
+    def __init__(self, table, path=None):
+        self.rows, self.path, self.mtime = table, path, None
 
     def table(self):
+        if self.path:
+            try:
+                mtime = os.stat(self.path).st_mtime_ns
+                if mtime != self.mtime:
+                    with open(self.path) as f:
+                        self.rows = json.load(f).get("table", [])
+                    self.mtime = mtime
+            except (OSError, ValueError):
+                pass
         return self.rows
 
     def say(self, **info):
@@ -1348,14 +1359,18 @@ class FakePresence:
 
 
 def fake_link(link, path):
-    """Liga o link de um Frontend em --shot a uma rede de mentira: o JSON do
-    caminho tem {"table": [os registros da presenca dos outros gabinetes]}.
-    Sem caminho, o cabo esta solto."""
+    """Liga o link de um Frontend em --shot (ou do emulador do frontend) a uma
+    rede de mentira: o JSON do caminho tem {"table": [os registros da
+    presenca dos outros gabinetes]}, lido de novo quando muda. Sem caminho, o
+    cabo esta solto."""
     if not path:
         link.wire = None
         return
-    with open(path) as f:
-        data = json.load(f)
+    try:
+        with open(path) as f:
+            table = json.load(f).get("table", [])
+    except (OSError, ValueError):
+        table = []
     link.wire = Wire("fake", "10.9.9.9", "255.255.255.0", "10.9.9.255")
-    link.presence = FakePresence(data.get("table", []))
+    link.presence = FakePresence(table, path)
 
