@@ -610,6 +610,15 @@ cat > "$root/etc/modprobe.d/fliperos.conf" << 'EOF'
 options radeon dpm=1
 options snd_hda_intel power_save=0 power_save_controller=N
 EOF
+# amdgpu.dc=0 nas Tonga (R9 285, 380, 380X) ja no boot da midia, antes de
+# qualquer Setup (config/fliperos-amdgpu-load). Sem o script, ou se ele
+# falhar, o amdgpu carrega como sempre: um erro aqui apagaria toda placa
+# AMD do amdgpu. O hook leva o script para o initramfs.
+install -Dm755 "$src/config/fliperos-amdgpu-load" "$root/opt/fliperos/bin/fliperos-amdgpu-load"
+install -Dm755 "$src/config/fliperos-initramfs-amdgpu" "$root/etc/initramfs-tools/hooks/fliperos-amdgpu"
+cat > "$root/etc/modprobe.d/fliperos-amdgpu.conf" << 'EOF'
+install amdgpu /bin/sh /opt/fliperos/bin/fliperos-amdgpu-load $CMDLINE_OPTS || /sbin/modprobe --ignore-install amdgpu $CMDLINE_OPTS
+EOF
 # O live-config do Debian criaria um usuario padrao no mesmo UID 1000.
 ln -sf /dev/null "$root/etc/systemd/system/live-config.service"
 

@@ -113,6 +113,10 @@ grep -q 'plymouth/themes' "$work/initrd.txt" || fail "splash theme missing from 
 grep -qE 'firmware/nvidia/|drm/nouveau/' "$work/initrd.txt" && fail "the initramfs carries nouveau or the NVIDIA firmware"
 grep -q 'drm/radeon/radeon.ko' "$work/initrd.txt" || fail "radeon missing from the initramfs"
 echo "initramfs without nouveau and the NVIDIA firmware (they load from the disk)"
+# O amdgpu.dc=0 das Tonga no boot da midia (config/fliperos-amdgpu-load).
+grep -q 'etc/modprobe.d/fliperos-amdgpu.conf$' "$work/initrd.txt" || fail "amdgpu modprobe rule missing from the initramfs"
+grep -q 'opt/fliperos/bin/fliperos-amdgpu-load$' "$work/initrd.txt" || fail "fliperos-amdgpu-load missing from the initramfs"
+echo "amdgpu loader for the Tonga cards in the initramfs"
 grep -q 'multi-user.target.wants/ssh.service' "$work/files.txt" || fail "ssh.service not enabled"
 grep -E 'etc/systemd/system/default.target ->' "$work/links.txt" | grep -q 'multi-user.target' \
   || fail "default.target does not point to multi-user"

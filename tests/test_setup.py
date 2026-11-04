@@ -114,6 +114,7 @@ class Env:
             "SESSIONS_TABLE": str(self.etc / "sessions.conf"),
             "SESSION_FILE": str(self.etc / "session"),
             "DRM_MODULE_PARAMS": str(self.dir / "drmparams"),
+            "AMDGPU_DC_PARAM": str(self.dir / "amdgpu-dc"),
             "FBCON_SYSFS": str(self.dir / "fbcon"),
             "RETROARCH_CFG": str(self.etc / "retroarch.cfg"),
             "PROC_CPUINFO": str(self.dir / "cpuinfo"),
@@ -878,6 +879,25 @@ class HardwareChangeTests(Base):
         self.assertEqual(out.split(), ["BOOT_APPLY", "RUN", "systemctl", "reboot"])
         self.assertIn("hw_safe_boot=1002:6939\n", self.read_conf())
         self.assertIn("kernel_video=video=DVI-I-1:", self.read_conf())
+
+    def test_a_tonga_loaded_with_dc_off_needs_no_reboot(self):
+        # O fliperos-amdgpu-load ja carregou o amdgpu com o dc=0, sem ele na
+        # linha do kernel: o DVI-I existe e nao precisa reiniciar.
+        self.gpu("card0", "amdgpu", self.TONGA, boot=True)
+        self.env.cmdline.write_text("quiet\n")
+        self.assertEqual(self.env.run("amdgpu_dc_pending").returncode, 0)
+        (self.env.dir / "amdgpu-dc").write_text("-1\n")
+        self.assertEqual(self.env.run("amdgpu_dc_pending").returncode, 0)
+        (self.env.dir / "amdgpu-dc").write_text("0\n")
+        self.assertEqual(self.env.run("amdgpu_dc_pending").returncode, 1)
+        self.env.connector("card0-DVI-I-1", "connected")
+        self.installed()
+        self.saved(ids=("10de", "17c8"), gpu="NVIDIA GeForce GTX 980 Ti", driver="nouveau")
+        out = self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"})
+        self.assertEqual(out.split(), ["BOOT_APPLY", "RUN", "systemctl", "reboot"])
+        conf = self.read_conf()
+        self.assertNotIn("hw_dc_boot", conf)
+        self.assertIn("kernel_video=video=DVI-I-1:", conf)
 
     def test_boot_without_an_analog_output_only_marks_the_change(self):
         self.gpu("card0", "i915", self.INTEL, boot=True)

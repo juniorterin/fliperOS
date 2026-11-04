@@ -1,0 +1,16 @@
+#!/bin/sh
+# Hook do initramfs-tools: leva o fliperos-amdgpu-load para o initramfs. O
+# amdgpu carrega ali (MODULES=most), e o "install amdgpu" do modprobe.d, que
+# o initramfs-tools copia, chama o script; sem ele no initramfs a linha
+# cairia no modprobe comum (ver o .conf), sem o dc=0 das placas Tonga.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+  prereqs) prereqs; exit 0 ;;
+esac
+
+script=/opt/fliperos/bin/fliperos-amdgpu-load
+[ -f "$script" ] || exit 0
+mkdir -p "${DESTDIR}/opt/fliperos/bin"
+cp -p "$script" "${DESTDIR}$script"
+exit 0

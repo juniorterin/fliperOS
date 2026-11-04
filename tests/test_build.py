@@ -818,6 +818,9 @@ class RootfsRunTests(unittest.TestCase):
         self.assertTrue((self.root / 'usr/local/share/applications/org.gnome.Software.desktop').is_file())
         self.assertTrue(os.access(self.root / 'home/fliperos/Desktop/app-store.desktop', os.X_OK))
         self.assertTrue(os.access(self.root / 'opt/fliperos/bin/fliperos-atom15', os.X_OK))
+        self.assertTrue(os.access(self.root / 'opt/fliperos/bin/fliperos-amdgpu-load', os.X_OK))
+        self.assertTrue(os.access(self.root / 'etc/initramfs-tools/hooks/fliperos-amdgpu', os.X_OK))
+        self.assertIn('install amdgpu ', (self.root / 'etc/modprobe.d/fliperos-amdgpu.conf').read_text())
         self.assertTrue((self.root / 'usr/share/glib-2.0/schemas/90_fliperos-software.gschema.override').is_file())
         self.assertTrue((self.root / 'home/fliperos/.config/alacritty/alacritty.toml').is_file())
         for path in ('opt/fliperos/bin/fliperos-calibrate', 'opt/fliperos/bin/fliperos-roms'):
@@ -13362,6 +13365,65 @@ class SplashTests(unittest.TestCase):
     def test_splash_is_generated_for_the_boot_mode(self):
         geometry = MKISO.split('splash_mode_geometry()')[1].split('}')[0]
         self.assertIn('640x480', geometry)
+
+
+class AmdgpuLoadTests(unittest.TestCase):
+    """config/fliperos-amdgpu-load: o dc=0 das Tonga (R9 380) desde a midia."""
+
+    SCRIPT = ROOT / 'config/fliperos-amdgpu-load'
+
+    def load(self, devices, cmdline='boot=live quiet', args=()):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            for n, (vendor, device) in enumerate(devices):
+                dev = tmp / 'pci' / ('0000:0%d:00.0' % n)
+                dev.mkdir(parents=True)
+                (dev / 'vendor').write_text(vendor + '\n')
+                (dev / 'device').write_text(device + '\n')
+            (tmp / 'pci').mkdir(exist_ok=True)
+            (tmp / 'cmdline').write_text(cmdline + '\n')
+            modprobe = tmp / 'modprobe'
+            modprobe.write_text('#!/bin/sh\necho "$@"\n')
+            modprobe.chmod(0o755)
+            # sh: no initramfs e no udev o install do modprobe.d roda no sh.
+            r = subprocess.run(['sh', str(self.SCRIPT), *args], capture_output=True, text=True,
+                               env=dict(os.environ, PCI_SYSFS=str(tmp / 'pci'), PROC_CMDLINE=str(tmp / 'cmdline'),
+                                        MODPROBE=str(modprobe)))
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return r.stdout.split()
+
+    def test_a_tonga_loads_with_dc_off(self):
+        self.assertEqual(self.load([('0x8086', '0x0042'), ('0x1002', '0x6939')], args=['si_support=0']),
+                         ['--ignore-install', 'amdgpu', 'si_support=0', 'dc=0'])
+        self.assertEqual(self.load([('0x1002', '0x6938')]), ['--ignore-install', 'amdgpu', 'dc=0'])
+
+    def test_other_cards_and_the_kernel_line_keep_the_default(self):
+        # Polaris (RX 580) e Vega nao tem saida analogica; Vega e as mais
+        # novas nem tem video sem o DC.
+        self.assertEqual(self.load([('0x1002', '0x67df')]), ['--ignore-install', 'amdgpu'])
+        self.assertEqual(self.load([('0x10de', '0x6939')]), ['--ignore-install', 'amdgpu'])
+        self.assertEqual(self.load([('0x1002', '0x6939')], cmdline='quiet amdgpu.dc=1'),
+                         ['--ignore-install', 'amdgpu'])
+        self.assertEqual(self.load([]), ['--ignore-install', 'amdgpu'])
+
+    def test_ids_match_the_setup(self):
+        setup = (ROOT / 'fliperos-setup/lib/bootloader.sh').read_text()
+        ids = re.search(r'AMDGPU_NO_DC_IDS="([^"]*)"', setup).group(1).split()
+        script = self.SCRIPT.read_text()
+        listed = re.search(r'^\s*(0x6920 \|[^)]*)\)', script, re.M).group(1).replace('|', ' ').split()
+        self.assertEqual(['1002:' + i[2:] for i in listed], ids)
+
+    def test_the_modprobe_rule_falls_back_to_a_plain_load(self):
+        conf = ROOTFS.split('fliperos-amdgpu.conf" <<')[1].split('\nEOF')[0]
+        self.assertIn('install amdgpu /bin/sh /opt/fliperos/bin/fliperos-amdgpu-load $CMDLINE_OPTS'
+                      ' || /sbin/modprobe --ignore-install amdgpu $CMDLINE_OPTS', conf)
+
+    def test_the_hook_puts_the_script_in_the_initramfs(self):
+        hook = ROOT / 'config/fliperos-initramfs-amdgpu'
+        self.assertEqual(subprocess.run(['sh', str(hook), 'prereqs'], capture_output=True, text=True).stdout, '\n')
+        self.assertIn('script=/opt/fliperos/bin/fliperos-amdgpu-load\n', hook.read_text())
+        verify = (ROOT / 'tools/verify-iso.sh').read_text()
+        self.assertIn("grep -q 'opt/fliperos/bin/fliperos-amdgpu-load$' \"$work/initrd.txt\"", verify)
 
 
 class WallpaperTests(unittest.TestCase):

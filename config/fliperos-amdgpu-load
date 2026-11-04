@@ -1,0 +1,33 @@
+#!/bin/sh
+# Carrega o amdgpu no lugar do modprobe (o "install amdgpu" do
+# /etc/modprobe.d/fliperos-amdgpu.conf, fliperos-rootfs.sh), com o dc=0 nas
+# placas Tonga (R9 285, 380, 380X: GCN 3). No kernel 6.18 o codigo de video
+# novo do amdgpu (DC) nao tem saida analogica e o DVI-I dessas placas fica
+# sem sinal; o antigo tem. A linha do kernel do Limine na midia e fixa e nao
+# conhece a placa: sem isto o instalador nao tinha imagem nelas.
+#
+# Um amdgpu.dc= na linha do kernel vence. Os IDs sao os do AMDGPU_NO_DC_IDS
+# (fliperos-setup/lib/bootloader.sh). Roda no initramfs (o hook
+# fliperos-amdgpu o leva): so sh e comandos internos dele.
+PCI_SYSFS=${PCI_SYSFS:-/sys/bus/pci/devices}
+PROC_CMDLINE=${PROC_CMDLINE:-/proc/cmdline}
+MODPROBE=${MODPROBE:-/sbin/modprobe}
+
+dc=
+cmdline=
+read -r cmdline < "$PROC_CMDLINE" 2> /dev/null
+case " $cmdline " in
+  *" amdgpu.dc="*) ;;
+  *)
+    for dev in "$PCI_SYSFS"/*; do
+      read -r vendor < "$dev/vendor" 2> /dev/null || continue
+      [ "$vendor" = 0x1002 ] || continue
+      read -r device < "$dev/device" 2> /dev/null || continue
+      case $device in
+        0x6920 | 0x6921 | 0x6928 | 0x6929 | 0x692b | 0x692f | 0x6930 | 0x6938 | 0x6939) dc=dc=0 ;;
+      esac
+    done
+    ;;
+esac
+# --ignore-install: sem ele o modprobe chamaria este script de novo.
+exec "$MODPROBE" --ignore-install amdgpu "$@" $dc

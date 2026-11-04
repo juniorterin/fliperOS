@@ -120,7 +120,10 @@ amd_driver_apply() {
 # A Tonga (R9 285, 380, 380X: GCN 3) so tem o amdgpu, e no kernel 6.18 o
 # codigo de video novo dele (DC) nao tem saida analogica: o DVI-I fica sem
 # sinal e so o HDMI e a DisplayPort acendem. Com o amdgpu.dc=0 vale o codigo
-# antigo, que tem. IDs: os CHIP_TONGA da tabela do amdgpu_drv.c.
+# antigo, que tem. IDs: os CHIP_TONGA da tabela do amdgpu_drv.c, os mesmos
+# do config/fliperos-amdgpu-load, que ja carrega o amdgpu com o dc=0 desde o
+# boot da midia; a linha do kernel o deixa explicito no sistema instalado.
+AMDGPU_DC_PARAM=${AMDGPU_DC_PARAM:-/sys/module/amdgpu/parameters/dc}
 AMDGPU_NO_DC_IDS="1002:6920 1002:6921 1002:6928 1002:6929 1002:692b 1002:692f 1002:6930 1002:6938 1002:6939"
 
 amdgpu_dc_off_needed() {
@@ -142,9 +145,13 @@ amdgpu_dc_cmdline() {
 }
 
 # amdgpu_dc_pending: a placa precisa do amdgpu.dc=0 e este boot nao o teve
-# (a saida analogica nem aparece no sysfs).
+# (a saida analogica nem aparece no sysfs). O fliperos-amdgpu-load o poe sem
+# a linha do kernel: vale o que o amdgpu carregou.
 amdgpu_dc_pending() {
-  [[ " $(< "$PROC_CMDLINE") " != *" amdgpu.dc=0 "* ]] && amdgpu_dc_off_needed
+  local dc
+  [[ " $(< "$PROC_CMDLINE") " == *" amdgpu.dc=0 "* ]] && return 1
+  dc=$(< "$AMDGPU_DC_PARAM") 2> /dev/null && [[ $dc == 0 ]] && return 1
+  amdgpu_dc_off_needed
 }
 
 # boot_amdgpu_dc_check (uma vez por boot, pelo --services-late): grava o
