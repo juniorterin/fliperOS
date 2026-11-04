@@ -18,6 +18,8 @@ It shows the same thing as the [Web panel](Web-panel.md), from the same code:
 
 **The game's video.** In the three views, the game's video (`~/media/preview/<folder>/<set>.mp4`) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. In any view, a game missing some of its art (screenshot, cover, marquee, logo or video) gets the missing pieces scraped by itself when the cursor stays on it for 2 seconds, once per game; they land in the same `~/media` folders the scraper uses. The logo comes from the Arcade Database too (its "decals"); what it lacks comes one file at a time from the archive.org packs of Setup > Games > Scraper > Art packs by torrent, without downloading the pack.
 
+**Attract mode.** After a minute without a button pressed, the cursor jumps to a random game of the list (a parent, not an unfolded clone) and its video plays; every 30 seconds it jumps to another one. The first press only wakes the frontend, on the game it stopped at, without doing what the button does. The controls guide doesn't hold it (it closes); any other open menu does. `FLIPEROS_ATTRACT_SECONDS` (0 turns it off) and `FLIPEROS_ATTRACT_STEP` change the two times.
+
 **Automatic scrape.** While the frontend is open, it fetches in the background, one game at a time, what each game in the folders still lacks:
 - arcade: the information, screenshot, flyer, marquee and logo from the Arcade Database;
 - consoles: the cover and screenshot from libretro-thumbnails;

@@ -36,6 +36,7 @@ import argparse
 import atexit
 import json
 import os
+import random
 import signal
 import subprocess
 import sys
@@ -77,6 +78,12 @@ PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/flipero
 # toca a animacao do logo (fliperos-pixelcade screensaver start); o primeiro
 # toque traz de volta o sistema selecionado. 0 desliga.
 IDLE_SECONDS = float(os.environ.get("FLIPEROS_IDLE_SECONDS", "30"))
+# O modo atracao: ATTRACT_SECONDS sem apertar nenhum botao e o cursor vai para
+# um jogo sorteado da lista (com o video dele), e troca de jogo a cada
+# ATTRACT_STEP segundos. O primeiro toque so acorda o frontend, no jogo em que
+# parou, sem fazer o que o botao faz. 0 desliga.
+ATTRACT_SECONDS = float(os.environ.get("FLIPEROS_ATTRACT_SECONDS", "60"))
+ATTRACT_STEP = max(1.0, float(os.environ.get("FLIPEROS_ATTRACT_STEP", "30")))
 # Os botoes do atalho do painel, segurados juntos por EXIT_HOLD segundos
 # (no jogo e na hora de escolher). CAPTURE_WAIT: sem apertar, a escolha sai.
 EXIT_HOLD, CAPTURE_WAIT = 1.0, 8.0
@@ -523,6 +530,24 @@ class Frontend:
                              start_new_session=True)
         except OSError:
             pass
+
+    def attract_tick(self, now):
+        """O modo atracao: passados ATTRACT_SECONDS sem botao, o cursor salta
+        para um jogo sorteado da lista de agora (so os pais, nao os clones
+        abertos) e de novo a cada ATTRACT_STEP segundos. O guia dos controles
+        aberto nao segura (ele fecha); os outros menus seguram, alguem esta
+        no meio de algo."""
+        if (not ATTRACT_SECONDS or now - self.last_input < ATTRACT_SECONDS
+                or self.overlay not in (None, "guide") or self.letter_mode):
+            self.attract_next = None
+            return
+        if self.attract_next is not None and now < self.attract_next:
+            return
+        self.attract_next = now + ATTRACT_STEP
+        picks = [i for i, (_, level, _) in enumerate(self.rows) if not level and i != self.cursor]
+        if picks:
+            self.overlay = None
+            self.cursor = random.choice(picks)
 
     def switch_category(self, step):
         if len(self.cats) < 2:
@@ -1563,13 +1588,20 @@ class Frontend:
                 self.pg.image.save(self.back, "%s-%d.png" % (self.shot, i))
             return 0
         self.last_input, self.idle = time.monotonic(), False
+        self.attract_next = None
         # O marquee abre no logotipo do sistema em que o frontend abriu (as
         # trocas o mandam em switch_category).
         self.marquee_logo((self.category() or {}).get("name", ""), "", 1)
         while True:
             now = time.monotonic()
             acts = self.input.poll()
+            woke = bool(acts) and self.attract_next is not None
             self.marquee_idle(now, bool(acts) or bool(self.input.down))
+            if woke:
+                # O modo atracao passava os jogos: o toque so acorda, no jogo
+                # em que parou (o quit, que vem do sistema, ainda vale).
+                self.attract_next = None
+                acts = [a for a in acts if a == "quit"]
             for a in acts:
                 r = self.act(a)
                 if r == "quit":
@@ -1591,6 +1623,7 @@ class Frontend:
                     # "end" do vigia do jogo nem sempre chega, e um atrasado
                     # acha o estado ja trocado e nao mexe nele).
                     self.marquee_logo((self.category() or {}).get("name", ""), "", 1)
+            self.attract_tick(now)
             self.tick(now)
             self.link_tick(now)
             self.capture_tick(now)
