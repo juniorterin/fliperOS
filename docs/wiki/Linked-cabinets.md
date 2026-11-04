@@ -6,7 +6,7 @@ This page lists those games, how the link works in each emulator FliperOS ships,
 
 **The FliperOS frontend does link play for six games on its own**: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart: European Session and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the **network cable only** (never Wi-Fi) and needs the cabinets on the same network.
 
-Games of the FBNeo folder (`~/roms/retroarch/fbneo`) that have more players than a cabinet has controls get **net play** in the same menu: see Net play below.
+Games of a RetroArch core that does net play, with more players than a cabinet has controls, and the NAOMI and Atomiswave games of Flycast (GGPO, one player on each of two cabinets) get **net play** in the same menu: see Net play below.
 
 For every other game, and to know what the frontend does underneath, everything on this page is set by hand in the emulator: a command line, an ini file, or the game's own test menu.
 
@@ -228,7 +228,7 @@ Virtua Racing, Rad Rally, OutRunners and Stadium Cross were started in MAME 0.28
 
 **Linking two cabinets** works for Club Kart: European Session (`clubk2k3`). It was tested on 1 November 2026 with the cabinet's Flycast as the server and Flycast 2.7 on a Windows PC as the client, on the wired network. The link is UDP on port 37391. The options go on the command line (`-config`) or in `emu.cfg`, section `[network]`: `network:Enable=yes` on all of them, `network:ActAsServer=yes` on the first one, and on the others `network:ActAsServer=no` and `network:server=IP-of-the-first`. Start the server first. Also set `network:EnableUPnP=no`: without it Flycast asks the router, and so the Internet, to open the port. The server shows a dialog, "Waiting for players" with a Start Now button. The client showed "CHECKING NETWORK NOW, MODE: SLAVE, SEQUENCE: SYNCING", and a few seconds later the attract mode. Two Flycast on one machine do not work, because both want port 37391. Initial D Arcade Stage Ver. 3 (`initdv3e`) and Ferrari F355 Challenge (`f355`) were started the same way, with two Flycast on the cabinet (the second in a network namespace): the server logged "Waiting for slave connections" and then "Master starting: 1 slaves", and each side sent 3 UDP packets. What the games showed was not seen, so they are not in the frontend. Not tested: a race with two players, and a third machine (reports say Club Kart takes two). The F355 "twin" sets are the ones made for a battle cable between two cabinets.
 
-**Net play (rollback)** is another thing: the Flycast of FliperOS has GGPO options (`network:GGPO`, `network:GGPODelay`, `network:ActAsServer`, `network:server`) for NAOMI and Atomiswave games, on UDP port 19713. **Both machines need `network:server`, the server too.** In Flycast's source (`core/network/ggpo.cpp`) each side sends to the address in `network:server` (empty means 127.0.0.1) and takes packets only from it, and `network:ActAsServer` only chooses the local port (19713) and the player (1). The first try, with KOF Neo Wave (Atomiswave) between the cabinet's Flycast and Flycast 2.7 on a Windows PC, left `network:server` empty on the cabinet, so the cabinet sent to itself and ignored the PC: the PC sent 96 packets in 90 seconds, got no answer and stayed on "Starting network". With the right options, two Flycast of the cabinet's own build did link (KOF Neo Wave, the second one in a network namespace of the cabinet): about 35 UDP packets a second each way for a minute, where the failed try had 2 a second in one direction. The try with Flycast 2.7 on the PC was not repeated, and the screen of the game was not captured, so what the game showed is not seen. GGPO is not in the frontend yet.
+**Net play (rollback)** is another thing: the Flycast of FliperOS has GGPO options (`network:GGPO`, `network:GGPODelay`, `network:ActAsServer`, `network:server`) for NAOMI and Atomiswave games, on UDP port 19713. **Both machines need `network:server`, the server too.** In Flycast's source (`core/network/ggpo.cpp`) each side sends to the address in `network:server` (empty means 127.0.0.1) and takes packets only from it, and `network:ActAsServer` only chooses the local port (19713) and the player (1). The first try, with KOF Neo Wave (Atomiswave) between the cabinet's Flycast and Flycast 2.7 on a Windows PC, left `network:server` empty on the cabinet, so the cabinet sent to itself and ignored the PC: the PC sent 96 packets in 90 seconds, got no answer and stayed on "Starting network". With the right options, two Flycast of the cabinet's own build did link (KOF Neo Wave, the second one in a network namespace of the cabinet): about 35 UDP packets a second each way for a minute, where the failed try had 2 a second in one direction. The try with Flycast 2.7 on the PC was not repeated, and the screen of the game was not captured, so what the game showed is not seen. The frontend now starts GGPO for NAOMI and Atomiswave games: see Flycast GGPO under Net play.
 
 **Which sets have a network board.** The romset of MAME 0.289 marks these NAOMI sets, among others: `f355`, `f355twin`, `f355twn2` (Ferrari F355 Challenge), `initd`, `initdexp`, `initdv2j`, `initdv3e`, `initdv3j`, `inidv3cy` (Initial D), `clubk2k3`, `clubkcyc`, `clubkprz`, `clubkpzb`, `clubkrt` (Club Kart), `18wheelr`, `crzytaxi` and `vstrik3`. All of them were downloaded to the cabinet on 1 November 2026 with the Downloader's Flycast filter (the "Everything that works" preset, all control types), but only Club Kart, Initial D Ver. 3 and F355 were started as a pair so far.
 
@@ -238,23 +238,33 @@ The Derby Owners Club, World Club Champion Football and Mushiking sets are onlin
 
 Some games have more players than a cabinet has controls: X-Men has four players, and FBNeo runs it. For these, RetroArch's net play lets cabinets share one game. There is no emulator link and no NVRAM per cabinet: every machine runs the same game, and the inputs travel over the network.
 
-**Only the games of the FBNeo folder get net play**: `~/roms/retroarch/fbneo`, with FBNeo's own romset. The MAME romset in `~/roms/mame` is not used for it, even for a game that has the same name in both: FBNeo checks each file by its CRC, and some sets of MAME 0.289 have dumps that FBNeo does not take. Every cabinet of the party needs the same zip.
+**Which games get it:**
+
+- **Every RetroArch core that does net play**, in its own folder (`~/roms/retroarch/<core>`), for a game with more players than this cabinet has controls. A core does net play when its `.info` file says `savestate_features = "deterministic"`, which is what RetroArch itself asks for: in the image that is FBNeo, Snes9x, Genesis Plus GX, FCEUmm, mGBA and PCSX ReARMed. A core installed later counts too. The game needs its number of players in the list (the MAME ones come with it; a console game gets it from the scraper, or from Classify in the frontend).
+- **FBNeo uses its own folder only**: `~/roms/retroarch/fbneo`, with FBNeo's own romset, and only the sets FBNeo knows. The MAME romset in `~/roms/mame` is not used for it, even for a game that has the same name in both: FBNeo checks each file by its CRC, and some sets of MAME 0.289 have dumps that FBNeo does not take.
+- **NAOMI, NAOMI 2 and Atomiswave games in Flycast**, through Flycast's GGPO, for any game of two or more players. GGPO has two players, so it is two cabinets with one player each: a versus between two cabinets. See Flycast GGPO below.
+
+Every cabinet of the party needs the same game file.
 
 In the frontend such a game has a **NET PLAY** tile in its menu, with a row of player icons. The lit ones are the players this cabinet takes. The other cabinets see **JOIN PARTY**.
 
 **Each cabinet takes as many players as it has controls configured** (see [Controls](Controls.md)), so two cabinets with two controls fill the four players of X-Men. The party starts by itself when every player has an owner.
 
-Only the network cable is used. The public lobby, the relay and the NAT traversal of RetroArch are off. The party's own ports are UDP 55436 (who plays what), TCP 55437 (the party) and TCP 55438 (the game's files), and RetroArch's net play is on TCP 55435.
+Only the network cable is used. The public lobby, the relay and the NAT traversal of RetroArch are off, and so is Flycast's UPnP. The party's own ports are UDP 55436 (who plays what), TCP 55437 (the party) and TCP 55438 (the game's files). RetroArch's net play is on TCP 55435, Flycast's GGPO on UDP 19713.
 
 **Run the same release on every cabinet.** RetroArch warns when two machines run different versions. When the builds of the core differ, it turns the desync check off, so a real desync would not be reported.
 
 Tested on 1 November 2026: the frontend of the cabinet hosted X-Men with players 1 and 2, and a Windows PC joined with two RetroArch windows, one player each (players 3 and 4), with a ping of 13 to 18 ms. The coin, start and character selection of each player showed on that player, the same on the cabinet and on both windows. RetroArch 1.22.2 for Windows (the stable build) crashed when it connected; the nightly build worked. Not tested: two people playing a whole credit, and any core other than FBNeo.
 
+### Flycast GGPO
+
+The frontend opens Flycast with `network:GGPO=yes`, `network:GGPODelay=0` and `network:EnableUPnP=no`. The cabinet that opened the party has `network:ActAsServer=yes` and is player 1. **Both have `network:server` set to the other cabinet's IP**: Flycast sends only to that address and takes packets only from it, so an empty one (the loopback) never links. Two Flycast of the cabinet's own build linked this way (see the Flycast section). A party started from the frontend has not been tried yet.
+
 ### Latency of net play
 
-**Your own controls are as fast as playing alone.** RetroArch's net play is rollback: each cabinet runs the game at once with its own controls and guesses the others' (it repeats their last input). When the real input arrives and differs, it loads the state of a few frames back and runs those frames again, in one frame.
+**Your own controls are as fast as playing alone.** RetroArch's net play and Flycast's GGPO are both rollback: each cabinet runs the game at once with its own controls and guesses the others' (it repeats their last input). When the real input arrives and differs, it loads the state of a few frames back and runs those frames again, in one frame.
 
-FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` are 0). On the cable the other cabinet's input arrives in a fraction of a frame, so a rollback is rare and is one frame long at most. You see the other players' moves within a frame. The ping that RetroArch shows (13 to 18 ms in the test) counts its own handling, not just the cable, where the round trip is under 1 ms.
+FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` are 0 in RetroArch, `GGPODelay` is 0 in Flycast). On the cable the other cabinet's input arrives in a fraction of a frame, so a rollback is rare and is one frame long at most. You see the other players' moves within a frame. The ping that RetroArch shows (13 to 18 ms in the test) counts its own handling, not just the cable, where the round trip is under 1 ms.
 
 **Run-ahead is off during net play.** RetroArch does not run run-ahead or preemptive frames while net play is on. A latency mode that uses them loses that gain in a party.
 
@@ -262,20 +272,20 @@ FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` ar
 
 ### Cores and emulators with net play
 
-**The frontend's net play uses FBNeo only.** The others work only by hand, in RetroArch's menu (Netplay) or with `retroarch --host` and `--connect IP`, and they were not tested on FliperOS unless the table says so. A RetroArch core needs a state that it saves and loads quickly and always the same way. A core that cannot do that refuses net play, or loses the sync.
+**The frontend offers net play with every RetroArch core marked "deterministic" and with Flycast's GGPO.** A RetroArch core needs a state that it saves and loads quickly and always the same way. A core that cannot do that refuses net play, or loses the sync. Only FBNeo has been played between two machines so far: the others are in the frontend but not yet tested on FliperOS.
 
 | Core or emulator | Systems | Net play | Checked |
 | --- | --- | --- | --- |
 | FBNeo (RetroArch) | Arcade: CPS1, CPS2, CPS3, Neo Geo, Konami, Toaplan and the rest of its list | **Yes, in the frontend** | **Tested**: X-Men, cabinet and PC |
-| Snes9x (RetroArch) | Super Nintendo | Yes, by hand | libretro documentation |
-| Genesis Plus GX (RetroArch) | Mega Drive, Master System, Game Gear, Sega CD | Yes, by hand | libretro documentation |
-| FCEUmm (RetroArch) | NES, Famicom Disk System | Yes, by hand | libretro documentation |
-| mGBA (RetroArch) | Game Boy Advance | Yes, by hand (one screen shared, not the link cable) | libretro documentation |
-| PCSX ReARMed (RetroArch) | PlayStation | Works, but heavier and loses the sync more easily | libretro documentation |
+| Snes9x (RetroArch) | Super Nintendo | **Yes, in the frontend** | Its .info; not tested |
+| Genesis Plus GX (RetroArch) | Mega Drive, Master System, Game Gear, Sega CD | **Yes, in the frontend** | Its .info; not tested |
+| FCEUmm (RetroArch) | NES, Famicom Disk System | **Yes, in the frontend** | Its .info; not tested |
+| mGBA (RetroArch) | Game Boy Advance | **Yes, in the frontend** (one screen shared, not the link cable) | Its .info; not tested |
+| PCSX ReARMed (RetroArch) | PlayStation | **Yes, in the frontend**, but heavier and loses the sync more easily | Its .info; not tested |
 | MAME 2010 (RetroArch) | Arcade (MAME 0.139) | **No**: "Core does not support netplay" | **Tested** |
 | MAME, current core (RetroArch) | Arcade (MAME 0.289) | Yes, but many drivers do not save their state well. Not in the image (415 MB) | Connected once (X-Men) |
-| Flycast | NAOMI, Atomiswave | GGPO rollback, set in `emu.cfg` (see Flycast above). Not in the frontend | Two Flycast linked on the cabinet, game screen not seen |
-| Dolphin | GameCube, Wii | Its own net play, with input delay and no rollback | Not tested |
+| Flycast | NAOMI, NAOMI 2, Atomiswave | **Yes, in the frontend**: GGPO rollback, two cabinets, one player each | Two Flycast linked on the cabinet by hand, game screen not seen |
+| Dolphin | GameCube, Wii | Its own net play, with input delay and no rollback. Not in the frontend: Dolphin has no command-line option to host or join, only its windows | Not tested |
 | GroovyMAME, Supermodel, SM2-Emu | Arcade, Model 3, Model 2 | **No net play.** Their network is the board link of the link games above | Source |
 | PCSX2, DuckStation, Hypseus Singe, OpenBOR | PS2, PS1, Laserdisc, beat 'em ups | **No** | Source |
 
