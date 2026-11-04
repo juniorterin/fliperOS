@@ -69,6 +69,21 @@ An install older than this system gets it with `curl -fsSL https://raw.githubuse
 
 Up and down pick a setting and left and right change it while you look at the tube. Space hides the bar, Enter keeps the settings and Esc goes back to the previous ones. **Settings in numbers** changes each setting by its number (it also works over SSH), and **Back to the defaults** clears them all, the RGB range included (it goes back to the card's own default).
 
+<a id="scanlines"></a>**Scanlines** (Setup > Video Setup, only with a 31 kHz monitor). A 31 kHz tube shows a 240-line game with every line doubled, so it has no dark gaps between lines like a 15 kHz tube. Turned on, the last screen line of each game line gets darker in every OpenGL and Vulkan game, through the same layers as the flicker filter. A change counts at once, even with a game open.
+
+The settings are saved in `fliperos.conf` as `scanlines=on` and `scanlines_NAME=`:
+
+| Setting | Range | What it does |
+| --- | --- | --- |
+| Darkness | 5 to 100 % (50) | how dark the gaps are |
+| Thickness | 10 to 90 % (50) | how much of each game line is dark; it counts only with 3 or more screen lines per game line |
+| Line height | automatic, or 2 to 8 screen lines per game line | automatic goes by the height of the picture: 2 at 480 lines, none at 240 (a tri-sync monitor showing real 240p gets none) |
+| Brightness boost | 100 to 200 % (115) | makes up for the light the gaps take away |
+
+**Adjust on the screen** opens a game-like test picture (320x240 doubled) in the monitor's mode. Up and down pick a setting, left and right change it, Space turns the scanlines off and on to compare, Enter keeps the settings and turns the scanlines on, and Esc leaves them as they were. **Settings in numbers** works over SSH too. The web panel has the same settings in its Scanlines group.
+
+The layers read these keys only with `frequency=31k`, so a monitor changed to 15 kHz doesn't keep them. A native 480-line game (PS2, Dreamcast in VGA mode) also gets them, because the layer only sees the screen's height. The desktop and the Wine programs (Fightcade) have no scanlines: their filter is picom's.
+
 A change made with a game open (from the web panel or over SSH) shows in that game at once:
 - the gamma table goes through the screen owner's own descriptor: `fliperos-color`, as root, takes a copy of it with `pidfd_getfd` (a card refuses the table from anyone but the program that owns the screen);
 - software saturation and hue come from the OpenGL layer, which reads `fliperos.conf` again when it changes.
@@ -122,7 +137,7 @@ To drive it without a controller, write `open`, `close`, `up`, `down`, `left`, `
 
     Also **Interlaced hacks**: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, interlaced with the flicker filter at its own level (with a preview on the tube), or pure interlaced ([Emulators](Emulators.md#interlaced-hacks-640x240-filter-or-pure-interlaced)).
 
-    Changes in that table are saved as they are made; there is no Save step. Also **Colour calibration** (below). Also **Card firmware**, with an AMD card: [ATOM-15 in the card's BIOS](Video-cards.md#atom-15-15-khz-from-power-on), at your own risk. Also **Video driver**, only with an AMD card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240).
+    Changes in that table are saved as they are made; there is no Save step. Also **Colour calibration** (below). Also [**Scanlines**](#scanlines), with a 31 kHz monitor. Also **Card firmware**, with an AMD card: [ATOM-15 in the card's BIOS](Video-cards.md#atom-15-15-khz-from-power-on), at your own risk. Also **Video driver**, only with an AMD card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240).
 
     The card name comes from `lspci`, and whether both drivers take it comes from the modules' own PCI ID tables (`modprobe -R` on the card's modalias). **radeon** is the recommended choice and the default, as on GroovyArcade: 15 kHz was validated on it; OpenGL only.
 

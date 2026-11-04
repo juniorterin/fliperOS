@@ -128,6 +128,15 @@ settings_list() {
       "$(r=$(color_range); echo "${r:-default}")"
   fi
   printf 'color.reset|Colour|Back to the defaults|action|||Every colour setting back to the default: the picture exactly as the card sends it.\n'
+  # As scanlines, so com um monitor de 31 kHz (como no Video Setup).
+  if scanlines_available; then
+    printf 'scanlines|Scanlines|Scanlines|choice|%s|off=Off;on=On|Dark gaps between the game lines, as on a 15 kHz tube. Counts at once, even in a game that is open.\n' \
+      "$(scanlines_on && echo on || echo off)"
+    while IFS='|' read -r key label min max _ step help; do
+      printf 'scanline.%s|Scanlines|%s|number|%s|%s..%s:%s|%s\n' "$key" "$label" "$(scanline_get "$key")" "$min" "$max" "$step" "$help"
+    done < <(scanline_table)
+    printf 'scanline.reset|Scanlines|Back to the defaults|action|||Darkness, thickness, line height and boost back to the default.\n'
+  fi
 }
 
 # settings_boot: a linha do kernel de novo (o debug, a latencia), como as
@@ -292,6 +301,17 @@ settings_set() {
       # descritor do dono do video); a saturacao e o matiz por software, a
       # camada GL do jogo rele do fliperos.conf.
       color_apply > /dev/null 2>&1 || true
+      ;;
+    scanlines)
+      scanlines_available && scanlines_set_on "$value" || return 2
+      ;;
+    scanline.reset)
+      scanlines_available || return 2
+      scanline_reset
+      ;;
+    scanline.*)
+      # A camada GL ou Vulkan do jogo aberto rele do fliperos.conf.
+      scanlines_available && scanline_set "${key#scanline.}" "$value" || return 2
       ;;
     *) return 2 ;;
   esac

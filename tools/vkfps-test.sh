@@ -89,6 +89,19 @@ esac
 # vermelho sem saturacao vira o cinza da luminancia dele (0.213 = 54).
 printf 'color_ctm=sw\ncolor_saturation=0\ndeflicker=off\n' > $b/conf
 run saturacao 54 0 FLIPEROS_VK_FPS=1 FLIPEROS_CONF=$b/conf VKFPS_TEST_RED=1
+# As scanlines num quadro todo branco: 2 linhas da tela por linha do jogo, a de
+# baixo de cada par (as impares) escura; com o brilho de 120%, 153. Pelo
+# fliperos.conf so com frequency=31k; o automatico nao as poe em 240 linhas.
+printf 'scanlines_height=2\nscanlines_brightness=100\n' > $b/scan
+run scanlines 255 127 FLIPEROS_VK_FPS=1 VKFPS_TEST_SOLID=1 FLIPEROS_SCANLINES_FILE=$b/scan
+printf 'scanlines_height=2\nscanlines_strength=50\nscanlines_brightness=120\n' > $b/scan
+run scanlines-brilho 255 153 FLIPEROS_VK_FPS=1 VKFPS_TEST_SOLID=1 FLIPEROS_SCANLINES_FILE=$b/scan
+printf 'scanlines=on\nfrequency=31k\nscanlines_height=2\nscanlines_strength=100\nscanlines_brightness=100\n' > $b/conf
+run scanlines-conf 255 0 FLIPEROS_VK_FPS=1 VKFPS_TEST_SOLID=1 FLIPEROS_CONF=$b/conf
+printf 'scanlines=on\nfrequency=15k\nscanlines_height=2\n' > $b/conf
+run scanlines-15k 255 255 FLIPEROS_VK_FPS=1 VKFPS_TEST_SOLID=1 FLIPEROS_CONF=$b/conf
+printf 'scanlines=on\nfrequency=31k\n' > $b/conf
+run scanlines-240 255 255 FLIPEROS_VK_FPS=1 VKFPS_TEST_SOLID=1 FLIPEROS_CONF=$b/conf
 # A OSD (config/fliperos-osd): a imagem do arquivo por cima do quadro, sem filtro
 # e com ele. A metade de cima do arquivo e verde opaca, a de baixo transparente:
 # em cima, o verde; embaixo, as listras como estavam.

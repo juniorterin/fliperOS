@@ -1382,3 +1382,82 @@ color_changed() {
   done < <(color_table)
   [[ -n $(color_range) ]]
 }
+
+# ── Scanlines num monitor de 31 kHz ──────────────────────────────
+# Setup > Video Setup > Scanlines, so com um monitor de 31 kHz: num jogo de
+# 240 linhas dobrado para 480, a ultima linha da tela de cada linha do jogo
+# escurece, como o espaco entre as linhas de um tubo de 15 kHz. As camadas
+# config/fliperos-deflicker.c (OpenGL) e config/fliperos-vkfps.c (Vulkan) leem
+# no fliperos.conf scanlines=on|off e scanlines_CHAVE=, so com frequency=31k (o
+# monitor trocado para 15 kHz nao fica com elas), e o mudado vale na hora,
+# mesmo com o jogo aberto. O preview (gui/scanline-preview.py) passa os
+# valores pelo arquivo de FLIPEROS_SCANLINES_FILE.
+
+# scanline_table: chave|rotulo|minimo|maximo|padrao|passo|ajuda (a mesma
+# forma do color_table; o passo e o das setas do preview).
+scanline_table() {
+  cat << 'TABLE'
+strength|Darkness|5|100|50|5|How dark the gaps between the game lines are.
+thickness|Thickness|10|90|50|10|The dark part of each game line (only with 3+ screen lines per game line).
+height|Line height|0|8|0|1|Screen lines per game line. 0 = automatic: 2 at 480 lines, none at 240.
+brightness|Brightness boost|100|200|115|5|Makes up for the light the dark lines take away.
+TABLE
+}
+
+scanline_field() {
+  scanline_table | awk -F'|' -v k="$1" -v n="$2" '$1 == k { print $n; exit }'
+}
+
+# scanline_get CHAVE: o valor gravado, ou o padrao.
+scanline_get() {
+  local value
+  value=$(conf_get "scanlines_$1" 2> /dev/null) || value=""
+  [[ $value =~ ^[0-9]+$ ]] || value=$(scanline_field "$1" 5)
+  printf '%s\n' "$value"
+}
+
+# scanline_set CHAVE VALOR: grava dentro da faixa (a altura 1 vira 2: uma
+# linha da tela por linha do jogo nao deixa espaco entre elas). Status 1 =
+# chave ou valor invalido.
+scanline_set() {
+  local key=$1 value=$2 min max
+  min=$(scanline_field "$key" 3)
+  max=$(scanline_field "$key" 4)
+  [[ -n $min && $value =~ ^[0-9]+$ ]] || return 1
+  ((value < min)) && value=$min
+  ((value > max)) && value=$max
+  [[ $key == height && $value == 1 ]] && value=2
+  conf_set "scanlines_$key" "$value"
+}
+
+# scanline_pretty CHAVE VALOR: o valor como a tela mostra.
+scanline_pretty() {
+  case $1 in
+    height) (($2 == 0)) && echo "Automatic" || printf '%s screen lines\n' "$2" ;;
+    *) printf '%s%%\n' "$2" ;;
+  esac
+}
+
+# scanlines_available: o monitor e de 31 kHz?
+scanlines_available() {
+  [[ $(conf_get frequency 2> /dev/null) == 31k ]]
+}
+
+scanlines_on() {
+  [[ $(conf_get scanlines 2> /dev/null) == on ]]
+}
+
+# scanlines_set_on on|off
+scanlines_set_on() {
+  [[ $1 == on || $1 == off ]] || return 1
+  conf_set scanlines "$1"
+  log_info "Scanlines: $1"
+}
+
+# scanline_reset: os ajustes voltam ao padrao (ligadas ou nao, fica como esta).
+scanline_reset() {
+  local key
+  while IFS='|' read -r key _; do
+    conf_unset "scanlines_$key"
+  done < <(scanline_table)
+}

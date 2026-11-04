@@ -38,6 +38,18 @@
  * fliperos-color, em qualquer modo de video. FLIPEROS_COLOR_FILE: um
  * arquivo com essas linhas, relido a cada 30 quadros (o calibrador).
  *
+ * As scanlines de um monitor de 31 kHz (Setup > Video Setup > Scanlines) vao
+ * na mesma passada: num jogo de 240 linhas dobrado para 480, a ultima linha da
+ * tela de cada linha do jogo escurece, como o espaco entre as linhas de um tubo
+ * de 15 kHz. Do fliperos.conf, so com frequency=31k: scanlines=on,
+ * scanlines_strength= (0 a 100, o quanto escurece), scanlines_thickness= (10 a
+ * 90, a parte escura de cada linha do jogo, que so conta com 3 ou mais linhas
+ * da tela por linha do jogo), scanlines_height= (linhas da tela por linha do
+ * jogo; 0 = pela altura do quadro: 480 da 2, 240 nada, como num monitor
+ * tri-sync que abre o 240p nativo) e scanlines_brightness= (100 a 200, o brilho
+ * que compensa o escuro). FLIPEROS_SCANLINES_FILE: um arquivo com essas linhas,
+ * relido a cada 30 quadros e ligado em qualquer monitor (o preview).
+ *
  * A OSD (config/fliperos-osd, volume, filtro, geometria e cores por cima do
  * jogo) tambem e desenhada aqui, antes do filtro: a imagem dela vem do arquivo
  * /run/fliperos-osd/screen (FLIPEROS_OSD_FILE), que so existe com ela aberta.
@@ -112,7 +124,8 @@ static void log_once(const char *msg)
     fprintf(stderr, "fliperos-deflicker: %s\n", msg);
 }
 
-/* As linhas "deflicker...=" e "color_...=" do fliperos.conf. Relidas
+/* As linhas "deflicker...=", "color_...=", "scanlines...=" e "frequency=" do
+ * fliperos.conf. Relidas
  * quando o arquivo muda (conf_changed): a cor mudada pelo painel web ou
  * pelo SSH com o jogo aberto vale na hora. */
 static char conf_lines[4096];
@@ -143,7 +156,9 @@ static void load_conf(void)
     size_t used = 0;
     while (f && fgets(line, sizeof(line), f)) {
         size_t n = strlen(line);
-        if ((strncmp(line, "deflicker", 9) && strncmp(line, "color_", 6)) || used + n + 1 >= sizeof(conf_lines))
+        if ((strncmp(line, "deflicker", 9) && strncmp(line, "color_", 6) && strncmp(line, "scanlines", 9) &&
+             strncmp(line, "frequency=", 10)) ||
+            used + n + 1 >= sizeof(conf_lines))
             continue;
         memcpy(conf_lines + used, line, n);
         used += n;
@@ -155,13 +170,13 @@ static void load_conf(void)
         fclose(f);
 }
 
-/* conf_value CHAVE: o valor da ultima linha "CHAVE=valor" em out; 0 se nao
- * houver a chave. */
-static int conf_value(const char *key, char *out, size_t size)
+/* lines_value LINHAS CHAVE: o valor da ultima linha "CHAVE=valor" em out; 0 se
+ * nao houver a chave. conf_value: nas do fliperos.conf. */
+static int lines_value(const char *lines, const char *key, char *out, size_t size)
 {
     size_t k = strlen(key);
     int found = 0;
-    for (const char *p = conf_lines; *p;) {
+    for (const char *p = lines; *p;) {
         const char *end = strchr(p, '\n');
         if (!strncmp(p, key, k) && p[k] == '=') {
             sscanf(p + k + 1, "%31s", out);
@@ -171,6 +186,11 @@ static int conf_value(const char *key, char *out, size_t size)
         p = end ? end + 1 : p + strlen(p);
     }
     return found;
+}
+
+static int conf_value(const char *key, char *out, size_t size)
+{
+    return lines_value(conf_lines, key, out, size);
 }
 
 static char app[64], core[64];
@@ -279,6 +299,59 @@ static void read_matrix(void)
                 v += hu[i * 3 + k] * st[k * 3 + j];
             matrix[j * 3 + i] = (float)v;
         }
+}
+
+/* As scanlines (ver o comeco): ligadas, o escuro (0 a 1), a parte escura de
+ * cada linha do jogo (%), as linhas da tela por linha do jogo (0 = pela altura)
+ * e o brilho que compensa. */
+static int scan_on, scan_thickness = 50, scan_height;
+static float scan_strength = 0.5f, scan_boost = 1.15f;
+
+static int scan_int(const char *lines, const char *key, int def, int lo, int hi)
+{
+    char value[32];
+    int v = def;
+    if (lines_value(lines, key, value, sizeof(value)))
+        v = atoi(value);
+    return v < lo ? lo : v > hi ? hi : v;
+}
+
+static void read_scanlines(void)
+{
+    char file_lines[1024] = "", value[32];
+    const char *lines = conf_lines, *file = getenv("FLIPEROS_SCANLINES_FILE");
+    if (file) {
+        FILE *f = fopen(file, "r");
+        size_t n = f ? fread(file_lines, 1, sizeof(file_lines) - 1, f) : 0;
+        file_lines[n] = 0;
+        if (f)
+            fclose(f);
+        lines = file_lines;
+        scan_on = !(lines_value(lines, "scanlines", value, sizeof(value)) && !strcmp(value, "off"));
+    } else {
+        scan_on = conf_value("scanlines", value, sizeof(value)) && !strcmp(value, "on") &&
+                  conf_value("frequency", value, sizeof(value)) && !strcmp(value, "31k");
+    }
+    scan_strength = scan_int(lines, "scanlines_strength", 50, 0, 100) / 100.0f;
+    scan_thickness = scan_int(lines, "scanlines_thickness", 50, 10, 90);
+    scan_height = scan_int(lines, "scanlines_height", 0, 0, 8);
+    scan_boost = scan_int(lines, "scanlines_brightness", 115, 100, 200) / 100.0f;
+    if (scan_strength <= 0.0f)
+        scan_on = 0;
+}
+
+/* scan_rows ALTURA: as linhas da tela por linha do jogo em rows (0 = sem
+ * scanlines nesta altura) e quantas delas, as de baixo, escurecem em dark. */
+static void scan_rows(int h, float *rows, float *dark)
+{
+    int n = scan_height ? scan_height : (int)(h / 224.0 + 0.1), d;
+    if (n < 2) {
+        *rows = 0.0f, *dark = 0.0f;
+        return;
+    }
+    d = (int)(n * scan_thickness / 100.0 + 0.5);
+    d = d < 1 ? 1 : d > n - 1 ? n - 1 : d;
+    *rows = (float)n, *dark = (float)d;
 }
 
 /* interlaced: o modo ativo de alguma saida e entrelacado? Pergunta ao DRM
@@ -409,7 +482,7 @@ static struct ctx {
     void *id;
     int broken;
     GLuint prog, tex, vao;
-    GLint u_tex, u_w, u_m;
+    GLint u_tex, u_w, u_m, u_s;
     int tw, th;
     int gles, core;
     int tw_logged;
@@ -435,7 +508,8 @@ static int load_gl(getproc_fn get)
 }
 
 /* As tres linhas: a de cima (y+1 no OpenGL, que conta de baixo), a propria
- * e a de baixo, pelos pesos. */
+ * e a de baixo, pelos pesos. As scanlines (s: o escuro, as linhas da tela por
+ * linha do jogo, as escuras), contando as linhas de cima para baixo. */
 static const char *frag_body =
     "void main() {\n"
     "    ivec2 p = ivec2(gl_FragCoord.xy);\n"
@@ -444,6 +518,8 @@ static const char *frag_body =
     "    vec4 mid = texelFetch(tex, p, 0);\n"
     "    vec4 down = texelFetch(tex, ivec2(p.x, max(p.y - 1, 0)), 0);\n"
     "    vec4 c = up * w.x + mid * w.y + down * w.z;\n"
+    "    if (s.y > 1.5 && mod(float(top - p.y), s.y) >= s.y - s.z - 0.5)\n"
+    "        c.rgb *= 1.0 - s.x;\n"
     "    OUT = vec4(clamp(m * c.rgb, 0.0, 1.0), c.a);\n"
     "}\n";
 
@@ -489,14 +565,15 @@ static int setup(struct ctx *c)
     if (c->gles) {
         vhead = "#version 300 es\n";
         fhead = "#version 300 es\nprecision highp float;\nuniform highp sampler2D tex;\nuniform vec3 w;\n"
-                "uniform mat3 m;\nout vec4 color;\n#define OUT color\n";
+                "uniform mat3 m;\nuniform vec3 s;\nout vec4 color;\n#define OUT color\n";
     } else if (c->core) {
         vhead = "#version 150\n";
-        fhead = "#version 150\nuniform sampler2D tex;\nuniform vec3 w;\nuniform mat3 m;\nout vec4 color;\n"
-                "#define OUT color\n";
+        fhead = "#version 150\nuniform sampler2D tex;\nuniform vec3 w;\nuniform mat3 m;\nuniform vec3 s;\n"
+                "out vec4 color;\n#define OUT color\n";
     } else {
         vhead = "#version 130\n";
-        fhead = "#version 130\nuniform sampler2D tex;\nuniform vec3 w;\nuniform mat3 m;\n#define OUT gl_FragColor\n";
+        fhead = "#version 130\nuniform sampler2D tex;\nuniform vec3 w;\nuniform mat3 m;\nuniform vec3 s;\n"
+                "#define OUT gl_FragColor\n";
     }
     GLuint vs = shader(GL_VERTEX_SHADER, vhead, vert_body);
     GLuint fs = shader(GL_FRAGMENT_SHADER, fhead, frag_body);
@@ -517,6 +594,7 @@ static int setup(struct ctx *c)
     c->u_tex = gl.GetUniformLocation(c->prog, "tex");
     c->u_w = gl.GetUniformLocation(c->prog, "w");
     c->u_m = gl.GetUniformLocation(c->prog, "m");
+    c->u_s = gl.GetUniformLocation(c->prog, "s");
     gl.GenTextures(1, &c->tex);
     if (gl.GenVertexArrays)
         gl.GenVertexArrays(1, &c->vao);
@@ -644,9 +722,10 @@ static struct ctx *context(void *id)
 }
 
 /* filter: a imagem do quadro (o back buffer, LARGURA x ALTURA) ganha a OSD
- * (osd) e passa pelo filtro (pass), no proprio back buffer: as tres linhas com
- * o modo entrelacado (deflick), so a propria linha sem ele (a matriz de cor
- * sozinha). A OSD antes do filtro: a letra dela tambem nao treme. */
+ * (osd) e passa pelo filtro (pass, o que active() deu), no proprio back
+ * buffer: as tres linhas com o modo entrelacado (deflick), so a propria linha
+ * sem ele (a matriz de cor e as scanlines). A OSD antes do filtro: a letra dela
+ * tambem nao treme. */
 static int gl_ready(getproc_fn get)
 {
     static int loaded = -1;
@@ -670,6 +749,19 @@ static void filter(void *ctx_id, getproc_fn get, int w, int h, int pass, int def
         c->broken = 1;
         return;
     }
+    /* As scanlines nesta altura (num 240p nativo, nenhuma) e a matriz: a de
+     * cor (ou nenhuma) vezes o brilho que compensa o escuro. */
+    float rows = 0.0f, dark = 0.0f, m[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    if (pass & 4)
+        scan_rows(h, &rows, &dark);
+    if (rows < 2.0f)
+        pass &= ~4;
+    if (pass & 2)
+        memcpy(m, matrix, sizeof(m));
+    for (int i = 0; (pass & 4) && i < 9; i++)
+        m[i] *= scan_boost;
+    if (!pass && !osd)
+        return;
 
     /* O estado do programa, para devolver. */
     GLint prog, vao = 0, draw_fb, read_fb, active, tex, sampler = 0, viewport[4], read_buf = 0, draw_buf = 0;
@@ -731,7 +823,8 @@ static void filter(void *ctx_id, getproc_fn get, int w, int h, int pass, int def
             gl.Uniform3f(c->u_w, weights[0], weights[1], weights[2]);
         else
             gl.Uniform3f(c->u_w, 0.0f, 1.0f, 0.0f);
-        gl.UniformMatrix3fv(c->u_m, 1, GL_FALSE, matrix);
+        gl.UniformMatrix3fv(c->u_m, 1, GL_FALSE, m);
+        gl.Uniform3f(c->u_s, scan_strength, rows, dark);
         if (c->vao)
             gl.BindVertexArray(c->vao);
         gl.DrawArrays(GL_TRIANGLES, 0, 3);
@@ -764,9 +857,9 @@ static void filter(void *ctx_id, getproc_fn get, int w, int h, int pass, int def
 }
 
 /* active: o que fazer neste quadro: 1 = o filtro de flicker, 2 = a matriz
- * de cor (0 = nada). A cada 30 quadros confere se o core do RetroArch mudou
- * (o nivel pode ser outro) e rele os arquivos do preview e do calibrador,
- * e o fliperos.conf quando ele muda. */
+ * de cor, 4 = as scanlines (0 = nada). A cada 30 quadros confere se o core do
+ * RetroArch mudou (o nivel pode ser outro) e rele os arquivos dos previews e
+ * do calibrador, e o fliperos.conf quando ele muda. */
 static int active(void)
 {
     static int init, frames;
@@ -779,6 +872,7 @@ static int active(void)
         dl_iterate_phdr(find_core, core);
         read_level();
         read_matrix();
+        read_scanlines();
         init = 1;
     } else if (!(++frames % 30)) {
         char now[sizeof(core)] = "";
@@ -792,8 +886,10 @@ static int active(void)
         }
         if (changed || getenv("FLIPEROS_COLOR_FILE"))
             read_matrix();
+        if (changed || getenv("FLIPEROS_SCANLINES_FILE"))
+            read_scanlines();
     }
-    return (!level_off && interlaced() ? 1 : 0) | (matrix_on ? 2 : 0);
+    return (!level_off && interlaced() ? 1 : 0) | (matrix_on ? 2 : 0) | (scan_on ? 4 : 0);
 }
 
 /* fps_tick: o FPS do programa para o painel web (config/fliperos-web): as

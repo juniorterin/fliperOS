@@ -1341,6 +1341,71 @@ class DeflickerTests(Base):
         self.assertTrue((ROOT / "fliperos-setup/gui/flicker-preview.py").is_file())
 
 
+class ScanlineTests(Base):
+    """Video Setup > Scanlines, so com um monitor de 31 kHz (lib/video.sh,
+    scanline_*). O desenho nas camadas e testado por tools/deflicker-test.sh e
+    tools/vkfps-test.sh."""
+
+    def conf(self):
+        return (self.env.etc / "fliperos.conf").read_text()
+
+    def test_settings_with_limits_and_defaults(self):
+        keys = [r.split("|")[0] for r in self.env.out("scanline_table").splitlines()]
+        self.assertEqual(keys, ["strength", "thickness", "height", "brightness"])
+        self.assertEqual(self.env.out("scanline_get strength").strip(), "50")
+        self.assertEqual(self.env.out("scanline_get height").strip(), "0")
+        # Fora da faixa: o limite; a altura 1 (sem espaco entre as linhas) vira 2.
+        self.env.out("scanline_set strength 300; scanline_set brightness 20; scanline_set height 1")
+        for line in ("scanlines_strength=100", "scanlines_brightness=100", "scanlines_height=2"):
+            self.assertIn(line + "\n", self.conf())
+        self.assertNotEqual(self.env.run("scanline_set strength dark").returncode, 0)
+        self.assertNotEqual(self.env.run("scanline_set blur 3").returncode, 0)
+        self.assertEqual(self.env.out("scanline_pretty height 0").strip(), "Automatic")
+        self.assertEqual(self.env.out("scanline_pretty height 3").strip(), "3 screen lines")
+        self.assertEqual(self.env.out("scanline_pretty strength 50").strip(), "50%")
+        # Ligar e desligar fica fora do voltar ao padrao.
+        self.env.out("scanlines_set_on on; scanline_reset")
+        self.assertEqual(self.env.run("scanlines_on").returncode, 0)
+        self.assertNotIn("scanlines_", self.conf())
+        self.assertNotEqual(self.env.run("scanlines_set_on maybe").returncode, 0)
+
+    def test_only_with_a_31khz_monitor(self):
+        env = {"COLOR_BIN": str(self.env.dir / "none")}
+        keys = lambda: [line.split("|")[0] for line in self.env.out("settings_list", env).splitlines()]
+        self.env.out("conf_set frequency 15k")
+        self.assertNotEqual(self.env.run("scanlines_available").returncode, 0)
+        self.assertNotIn("scanlines", keys())
+        self.assertEqual(self.env.run("settings_set scanlines on", env).returncode, 2)
+        self.env.out("conf_set frequency 31k")
+        self.assertIn("scanlines", keys())
+        self.assertIn("scanline.strength", keys())
+        rows = {r.split("|")[0]: r.split("|") for r in self.env.out("settings_list", env).splitlines()}
+        self.assertEqual(rows["scanline.strength"][1:6], ["Scanlines", "Darkness", "number", "50", "5..100:5"])
+        self.env.out("settings_set scanlines on; settings_set scanline.height 3", env)
+        self.assertIn("scanlines=on\n", self.conf())
+        self.assertIn("scanlines_height=3\n", self.conf())
+        self.env.out("settings_set scanline.reset 1", env)
+        self.assertNotIn("scanlines_height", self.conf())
+        self.assertEqual(self.env.run("settings_set scanline.strength abc", env).returncode, 2)
+
+    def test_in_video_setup(self):
+        screen = (ROOT / "fliperos-setup/screens/video-setup.sh").read_text()
+        menu = screen.split("screen_video_setup() {")[1]
+        self.assertIn("if scanlines_available; then", menu)
+        self.assertIn('"${scanlines[@]}"', menu)
+        self.assertIn('gpu_unsupported_ok "Scanlines" "Scanlines" "$mode480_why"', menu)
+        adjust = screen.split("screen_scanlines_adjust() {")[1]
+        self.assertIn('python3 "$SETUP_DIR/gui/scanline-preview.py"', adjust)
+        self.assertIn("FLIPEROS_SCANLINES_FILE=", adjust)
+        self.assertTrue((ROOT / "fliperos-setup/gui/scanline-preview.py").is_file())
+        # As camadas leem as mesmas chaves e so ligam num monitor de 31 kHz.
+        for layer in ("config/fliperos-deflicker.c", "config/fliperos-vkfps.c"):
+            source = (ROOT / layer).read_text()
+            for key in ('"scanlines_strength"', '"scanlines_thickness"', '"scanlines_height"',
+                        '"scanlines_brightness"', '!strcmp(value, "31k")', "FLIPEROS_SCANLINES_FILE"):
+                self.assertIn(key, source, layer)
+
+
 class SettingsCliTests(Base):
     """fliperos-setup --settings / --setting (lib/system.sh): os ajustes que
     o painel web muda."""

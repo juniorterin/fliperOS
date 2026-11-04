@@ -104,8 +104,10 @@ int main(int argc, char **argv)
     unsigned char *pixels;
     CHECK(vkMapMemory(device, memory, 0, VK_WHOLE_SIZE, 0, (void **)&pixels));
     int red = getenv("VKFPS_TEST_RED") != NULL, osd = getenv("VKFPS_TEST_OSD") != NULL;
+    /* VKFPS_TEST_SOLID=1: tudo branco, sem listras (as scanlines). */
+    int solid = getenv("VKFPS_TEST_SOLID") != NULL;
     for (int y = 0; y < H; y++) {
-        memset(pixels + y * W * 4, y % 2 ? 0 : 255, W * 4);
+        memset(pixels + y * W * 4, y % 2 && !solid ? 0 : 255, W * 4);
         /* O formato e BGRA: so o ultimo canal de cor. */
         for (int x = 0; red && x < W; x++)
             pixels[y * W * 4 + x * 4] = pixels[y * W * 4 + x * 4 + 1] = 0;

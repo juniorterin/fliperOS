@@ -494,6 +494,26 @@ ICONS.update({
 ................
 ................
 """,
+    # Scanlines: um tubo com as linhas acesas e, entre elas, as escuras, na
+    # tela toda.
+    "scanlines": """
+................
+.PPPPPPPPPPPPPP.
+.PCCCCCCCCCCCCP.
+.PDDDDDDDDDDDDP.
+.PCCCCCCCCCCCCP.
+.PDDDDDDDDDDDDP.
+.PKKKKKKKKKKKKP.
+.PDDDDDDDDDDDDP.
+.PFFFFFFFFFFFFP.
+.PDDDDDDDDDDDDP.
+.PPPPPPPPPPPPPP.
+.......PP.......
+.....PPPPPP.....
+................
+................
+................
+""",
 })
 # Setup > Joysticks.
 ICONS.update({
@@ -1226,6 +1246,8 @@ for _alias, _name in {
     "+add": "add", "+new": "addfolder", "+edit": "edit", "custom": "games", "leveler": "audio",
     # Colour calibration: na tela (as barras de cor) ou pelos numeros.
     "calibrate": "colour", "values": "romlist",
+    # Scanlines: ligar e desligar, e o ajuste na tela.
+    "toggle": "scanlines", "adjust": "scanlines",
     # Video Setup > Video driver (radeon ou amdgpu).
     "driver": "system", "radeon": "video", "amdgpu": "video",
     # Low resolutions, a faixa do RGB, comparar os drivers, o KOF (baixar ou

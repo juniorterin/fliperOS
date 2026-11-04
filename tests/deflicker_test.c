@@ -40,7 +40,8 @@ static void stripes(void)
         glClearColor(1, 0, 0, 1);
     else
         glClearColor(1, 1, 1, 1);
-    for (int y = 0; y < H; y += 2) {
+    /* DEFLICKER_TEST_SOLID=1: tudo da cor, sem listras (as scanlines). */
+    for (int y = 0; y < H; y += getenv("DEFLICKER_TEST_SOLID") ? 1 : 2) {
         glScissor(0, y, W, 1);
         glClear(GL_COLOR_BUFFER_BIT);
     }

@@ -554,6 +554,98 @@ screen_colour_values() {
   done
 }
 
+# screen_scanlines: as scanlines de um monitor de 31 kHz (lib/video.sh,
+# scanline_*): ligar e desligar, ajustar na tela com o preview, ou cada valor
+# em numeros (o caminho pelo SSH). Tudo vale na hora, mesmo com um jogo aberto.
+screen_scanlines() {
+  local title="Scanlines" choice last="" state summary key
+  local -a fields
+  while true; do
+    state=Off
+    scanlines_on && state=On
+    fields=("Scanlines|$state")
+    while IFS='|' read -r key _; do
+      fields+=("$(scanline_field "$key" 2)|$(scanline_pretty "$key" "$(scanline_get "$key")")")
+    done < <(scanline_table)
+    summary=$(ui_fields "${fields[@]}")
+    choice=$(ui_menu_hints "$title" "$summary" "$last" \
+      "toggle|Turn $([[ $state == On ]] && echo off || echo on)|Dark gaps between the game lines, as on a 15 kHz tube." \
+      "adjust|Adjust on the screen|A test picture; the arrows change each setting." \
+      "values|Settings in numbers|Each setting by its number (also over SSH)." \
+      "reset|Back to the defaults|Darkness, thickness, line height and boost." \
+      "return|Return|Back to Video Setup.") || return 0
+    last=$choice
+    case $choice in
+      toggle)
+        if [[ $state == On ]]; then scanlines_set_on off; else scanlines_set_on on; fi
+        ;;
+      adjust) screen_scanlines_adjust ;;
+      values) screen_scanline_values ;;
+      reset)
+        ui_yesno "$title" "Every scanline setting back to the default?" no || continue
+        scanline_reset
+        ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_scanlines_adjust: o preview (gui/scanline-preview.py) no modo do
+# monitor, pelo fliperos-x11-run com a camada: as setas mudam o arquivo que a
+# camada rele, Enter grava (e liga as scanlines), Esc deixa como estava.
+screen_scanlines_adjust() {
+  local title="Scanlines" dir w h r key value rc
+  if ((SETUP_REMOTE == 1)) || [[ -n ${DISPLAY:-} ]]; then
+    ui_msg "$title" "The test picture opens on the cabinet screen, from the FliperOS menu (not over SSH or inside the desktop)." \
+      "" "Over SSH, use Settings in numbers."
+    return 0
+  fi
+  if [[ ! -f $DEFLICKER_LIB ]]; then
+    ui_msg "$title" "The scanlines are not installed on this system (a FliperOS update builds them)."
+    return 0
+  fi
+  dir=$(mktemp -d) || return 0
+  scanline_table > "$dir/table"
+  while IFS='|' read -r key _; do
+    printf 'scanlines_%s=%s\n' "$key" "$(scanline_get "$key")"
+  done < <(scanline_table) > "$dir/scanlines.conf"
+  read -r w h r <<< "$(geometry_mode)"
+  ui_text env FLIPEROS_SCANLINES_FILE="$dir/scanlines.conf" \
+    "$DEFLICKER_X11_RUN" --mode "${w}x${h}@${r}" python3 "$SETUP_DIR/gui/scanline-preview.py" \
+    --table "$dir/table" --conf "$dir/scanlines.conf" --out "$dir/out" >> "$FLIPEROS_LOG" 2>&1
+  rc=$?
+  ui_flush_input
+  if ((rc == 0)) && [[ -s $dir/out ]]; then
+    while IFS='=' read -r key value; do
+      scanline_set "${key#scanlines_}" "$value"
+    done < "$dir/out"
+    scanlines_set_on on
+    ui_msg "$title" "Saved: the scanlines are on in every game."
+  fi
+  rm -rf "$dir"
+}
+
+# screen_scanline_values: cada valor pelo numero.
+screen_scanline_values() {
+  local key label min max help choice value last=""
+  local -a entries
+  while true; do
+    entries=()
+    while IFS='|' read -r key label min max _ _ help; do
+      entries+=("$key|$label: $(scanline_pretty "$key" "$(scanline_get "$key")")|$help ($min to $max)")
+    done < <(scanline_table)
+    entries+=("return|Return|Back.")
+    choice=$(ui_menu_hints "Scanline settings" "Changes count right away, even in a game that is open." "$last" "${entries[@]}") ||
+      return 0
+    last=$choice
+    [[ $choice == return ]] && return 0
+    value=$(ui_input "$(scanline_field "$choice" 2)" \
+      "$(scanline_field "$choice" 7) From $(scanline_field "$choice" 3) to $(scanline_field "$choice" 4)." \
+      "$(scanline_get "$choice")") || continue
+    scanline_set "$choice" "$value" || ui_msg "Scanline settings" "Not a number: $value"
+  done
+}
+
 # screen_deflicker_level CHAVE NIVEL: o nivel do filtro de uma aplicacao.
 # Imprime light, medium, strong ou off (o preview com o filtro desligado);
 # status 1 = cancelado.
@@ -625,7 +717,7 @@ screen_video_retest_request() {
 }
 
 screen_video_setup() {
-  local choice last="" summary monitors=() mode480_label mode480_why=""
+  local choice last="" summary monitors=() mode480_label mode480_why="" scanlines=() scanlines_label
   VIDEO_CHANGED=0
   # Video driver so aparece com uma placa que tem escolha: AMD que aceita os
   # dois drivers, ou NVIDIA (nouveau ou o driver dela).
@@ -655,6 +747,14 @@ screen_video_setup() {
     if mode480_why=$(gpu_needs 3.0); then
       mode480_label=$(gpu_unsupported_label "Interlaced hacks" "$mode480_why")
     fi
+    # As scanlines so com um monitor de 31 kHz (no de 15 kHz o tubo ja as tem),
+    # e pela mesma camada do filtro: o mesmo OpenGL 3.0.
+    scanlines=()
+    if scanlines_available; then
+      scanlines_label=Scanlines
+      [[ -n $mode480_why ]] && scanlines_label=$(gpu_unsupported_label "Scanlines" "$mode480_why")
+      scanlines=("scanlines|$scanlines_label|Dark gaps between the game lines, as on a 15 kHz tube.")
+    fi
     summary=$(ui_fields \
       "Monitor|$(video_monitor_label)" \
       "Resolution|$(mode_pretty "$(conf_get boot_resolution 2> /dev/null || echo "boot menu")"), $(orientation_short "$(conf_get orientation 2> /dev/null || echo horizontal)")" \
@@ -669,6 +769,7 @@ screen_video_setup() {
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
       "mode480|$mode480_label|Per program: 640x240, or interlaced with or without the filter." \
       "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour and hue." \
+      "${scanlines[@]}" \
       "retest|Test the video outputs|Run the output test again after a card change." \
       "${driver[@]}" \
       "${lowdot[@]}" \
@@ -688,6 +789,11 @@ screen_video_setup() {
         fi
         ;;
       colour) screen_colour ;;
+      scanlines)
+        if [[ -z $mode480_why ]] || gpu_unsupported_ok "Scanlines" "Scanlines" "$mode480_why"; then
+          screen_scanlines
+        fi
+        ;;
       retest) screen_video_retest_request ;;
       driver) screen_video_driver ;;
       lowdot) screen_low_dotclock_retest ;;

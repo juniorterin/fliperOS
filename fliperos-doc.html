@@ -1290,6 +1290,41 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 - red, green, blue and grey ramps;
 - the 24 ColorChecker patches.</p>
 <p>Up and down pick a setting and left and right change it while you look at the tube. Space hides the bar, Enter keeps the settings and Esc goes back to the previous ones. <strong>Settings in numbers</strong> changes each setting by its number (it also works over SSH), and <strong>Back to the defaults</strong> clears them all, the RGB range included (it goes back to the card's own default).</p>
+<p><a id="scanlines"></a><strong>Scanlines</strong> (Setup &gt; Video Setup, only with a 31 kHz monitor). A 31 kHz tube shows a 240-line game with every line doubled, so it has no dark gaps between lines like a 15 kHz tube. Turned on, the last screen line of each game line gets darker in every OpenGL and Vulkan game, through the same layers as the flicker filter. A change counts at once, even with a game open.</p>
+<p>The settings are saved in <code>fliperos.conf</code> as <code>scanlines=on</code> and <code>scanlines_NAME=</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Range</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Darkness</td>
+<td>5 to 100 % (50)</td>
+<td>how dark the gaps are</td>
+</tr>
+<tr>
+<td>Thickness</td>
+<td>10 to 90 % (50)</td>
+<td>how much of each game line is dark; it counts only with 3 or more screen lines per game line</td>
+</tr>
+<tr>
+<td>Line height</td>
+<td>automatic, or 2 to 8 screen lines per game line</td>
+<td>automatic goes by the height of the picture: 2 at 480 lines, none at 240 (a tri-sync monitor showing real 240p gets none)</td>
+</tr>
+<tr>
+<td>Brightness boost</td>
+<td>100 to 200 % (115)</td>
+<td>makes up for the light the gaps take away</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Adjust on the screen</strong> opens a game-like test picture (320x240 doubled) in the monitor's mode. Up and down pick a setting, left and right change it, Space turns the scanlines off and on to compare, Enter keeps the settings and turns the scanlines on, and Esc leaves them as they were. <strong>Settings in numbers</strong> works over SSH too. The web panel has the same settings in its Scanlines group.</p>
+<p>The layers read these keys only with <code>frequency=31k</code>, so a monitor changed to 15 kHz doesn't keep them. A native 480-line game (PS2, Dreamcast in VGA mode) also gets them, because the layer only sees the screen's height. The desktop and the Wine programs (Fightcade) have no scanlines: their filter is picom's.</p>
 <p>A change made with a game open (from the web panel or over SSH) shows in that game at once:
 - the gamma table goes through the screen owner's own descriptor: <code>fliperos-color</code>, as root, takes a copy of it with <code>pidfd_getfd</code> (a card refuses the table from anyone but the program that owns the screen);
 - software saturation and hue come from the OpenGL layer, which reads <code>fliperos.conf</code> again when it changes.</p>
@@ -1332,7 +1367,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <li>
 <p><strong>Video Setup</strong> — the same as in the installation, including <a href="#Multiple-Monitors">Multiple monitors</a>; saves the kernel line and offers to reboot.</p>
 <p>Also <strong>Interlaced hacks</strong>: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, interlaced with the flicker filter at its own level (with a preview on the tube), or pure interlaced (<a href="#Emulators">Emulators</a>).</p>
-<p>Changes in that table are saved as they are made; there is no Save step. Also <strong>Colour calibration</strong> (below). Also <strong>Card firmware</strong>, with an AMD card: <a href="#Video-cards">ATOM-15 in the card's BIOS</a>, at your own risk. Also <strong>Video driver</strong>, only with an AMD card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240).</p>
+<p>Changes in that table are saved as they are made; there is no Save step. Also <strong>Colour calibration</strong> (below). Also <a href="#scanlines"><strong>Scanlines</strong></a>, with a 31 kHz monitor. Also <strong>Card firmware</strong>, with an AMD card: <a href="#Video-cards">ATOM-15 in the card's BIOS</a>, at your own risk. Also <strong>Video driver</strong>, only with an AMD card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240).</p>
 <p>The card name comes from <code>lspci</code>, and whether both drivers take it comes from the modules' own PCI ID tables (<code>modprobe -R</code> on the card's modalias). <strong>radeon</strong> is the recommended choice and the default, as on GroovyArcade: 15 kHz was validated on it; OpenGL only.</p>
 <p><strong>amdgpu</strong> adds Vulkan (PCSX2, Dolphin, Flycast, DuckStation); it was seen working at 15 kHz on the cabinet's R7 240 (2026-10-16), not yet on other cards. RetroArch is built with Vulkan as well, but stays on <code>glcore</code>: without X its Vulkan context is <code>khr_display</code>, which does not switch the CRT's mode.</p>
 <p>It goes in with <code>amdgpu.dc=0</code>, because the 6.18 kernel has no analog output (VGA, DVI-I) in amdgpu's new display code for these cards (that came in 6.19). Only the kernel line chooses (<code>amd_driver=</code> in <code>fliperos.conf</code>, <code>AMD_DRIVER_KEYS</code> in <code>lib/bootloader.sh</code>).</p>

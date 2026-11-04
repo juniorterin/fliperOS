@@ -107,6 +107,26 @@ run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=$b/conf DEFLICKER_TEST_
 printf 'color_saturation=0\n' > $b/color-live
 run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=/dev/null FLIPEROS_COLOR_FILE=$b/color-live \
   DEFLICKER_TEST_RED=1 $b/deflicker_test link
+# As scanlines (Setup > Video Setup > Scanlines, monitor de 31 kHz) num quadro
+# todo branco, as linhas de baixo para cima: 2 linhas da tela por linha do jogo,
+# a de baixo de cada par escura (127 com 50%, 153 com o brilho de 120%); 4 por
+# linha do jogo com 50% de espessura, as 2 de baixo. Pelo fliperos.conf so com
+# frequency=31k, e o automatico nao poe scanlines em 16 linhas.
+solid="LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=/dev/null DEFLICKER_TEST_SOLID=1"
+printf 'scanlines_height=2\nscanlines_brightness=100\n' > $b/scan
+run $solid FLIPEROS_SCANLINES_FILE=$b/scan $b/deflicker_test link
+printf 'scanlines_height=2\nscanlines_brightness=120\n' > $b/scan
+run $solid FLIPEROS_SCANLINES_FILE=$b/scan $b/deflicker_test link
+printf 'scanlines_height=4\nscanlines_thickness=50\nscanlines_brightness=100\n' > $b/scan
+run $solid FLIPEROS_SCANLINES_FILE=$b/scan $b/deflicker_test core
+printf 'scanlines=off\nscanlines_height=2\n' > $b/scan
+run $solid FLIPEROS_SCANLINES_FILE=$b/scan $b/deflicker_test link
+printf 'scanlines=on\nfrequency=31k\nscanlines_height=2\nscanlines_strength=100\nscanlines_brightness=100\n' > $b/conf
+run $solid FLIPEROS_CONF=$b/conf $b/deflicker_test egl
+printf 'scanlines=on\nfrequency=15k\nscanlines_height=2\n' > $b/conf
+run $solid FLIPEROS_CONF=$b/conf $b/deflicker_test link
+printf 'scanlines=on\nfrequency=31k\n' > $b/conf
+run $solid FLIPEROS_CONF=$b/conf $b/deflicker_test link
 # O desktop: o picom com o shader do config/fliperos-desktop-deflicker (sem a
 # camada no programa), e a tela que o compositor pintou (import). Com o
 # shader, as listras saem misturadas; sem o picom, puras.
@@ -187,3 +207,37 @@ sleep 2
 xdotool key Return
 sleep 2
 echo "== calibrator saved: $(tr '\n' ' ' < $b/cal.out 2> /dev/null)"
+
+# O ajuste das scanlines (fliperos-setup/gui/scanline-preview.py) em 640x480:
+# a imagem de 320x240 dobrada, e na barra branca as linhas alternam o branco e
+# o escuro (50% com o brilho de 115%: 147); a seta muda o arquivo que a camada
+# rele, o Espaco as desliga para comparar e o Enter grava os valores.
+cat > $b/table << 'EOF'
+strength|Darkness|5|100|50|5|How dark the gaps between the game lines are.
+thickness|Thickness|10|90|50|10|The dark part of each game line (only with 3+ screen lines per game line).
+height|Line height|0|8|0|1|Screen lines per game line. 0 = automatic: 2 at 480 lines, none at 240.
+brightness|Brightness boost|100|200|115|5|Makes up for the light the dark lines take away.
+EOF
+printf 'scanlines_strength=50\n' > $b/scan.conf
+bar_rows() {
+  import -window root $b/scan.png 2> /dev/null &&
+    convert $b/scan.png -crop 1x6+10+258 -depth 8 txt:- | sed -n '2,$p' | awk '{ printf " %s", $3 } END { print "" }'
+}
+LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=/dev/null FLIPEROS_SCANLINES_FILE=$b/scan.conf \
+  python3 fliperos-setup/gui/scanline-preview.py --table $b/table --conf $b/scan.conf --out $b/scan.out 2> $b/scan.log &
+sleep 4
+echo "== scanline preview, 50%:$(bar_rows)"
+[ -d /out ] && cp $b/scan.png /out/scanlines-50.png
+xdotool key Right Right Right Right Right Right
+sleep 2
+echo "== scanline preview, 80%:$(bar_rows)"
+[ -d /out ] && cp $b/scan.png /out/scanlines-80.png
+xdotool key space
+sleep 2
+echo "== scanline preview, off:$(bar_rows)"
+xdotool key space Down Down Right Right
+sleep 2
+echo "== scanline preview file: $(tr '\n' ' ' < $b/scan.conf)"
+xdotool key Return
+sleep 2
+echo "== scanline preview saved: $(tr '\n' ' ' < $b/scan.out 2> /dev/null)"
