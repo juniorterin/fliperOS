@@ -243,6 +243,7 @@ Some games have more players than a cabinet has controls: X-Men has four players
 - **Every RetroArch core that does net play**, in its own folder (`~/roms/retroarch/<core>`), for a game with more players than this cabinet has controls. A core does net play when its `.info` file says `savestate_features = "deterministic"`, which is what RetroArch itself asks for: in the image that is FBNeo, Snes9x, Genesis Plus GX, FCEUmm, mGBA and PCSX ReARMed. A core installed later counts too. The game needs its number of players in the list (the MAME ones come with it; a console game gets it from the scraper, or from Classify in the frontend).
 - **FBNeo uses its own folder only**: `~/roms/retroarch/fbneo`, with FBNeo's own romset, and only the sets FBNeo knows. The MAME romset in `~/roms/mame` is not used for it, even for a game that has the same name in both: FBNeo checks each file by its CRC, and some sets of MAME 0.289 have dumps that FBNeo does not take.
 - **NAOMI, NAOMI 2 and Atomiswave games in Flycast**, through Flycast's GGPO, for any game of two or more players. GGPO has two players, so it is two cabinets with one player each: a versus between two cabinets. See Flycast GGPO below.
+- **GameCube and Wii games in Dolphin** (`~/roms/dolphin`), for any game of two or more players: two to four cabinets, one player each. See Dolphin net play below.
 
 Every cabinet of the party needs the same game file.
 
@@ -250,7 +251,7 @@ In the frontend such a game has a **NET PLAY** tile in its menu, with a row of p
 
 **Each cabinet takes as many players as it has controls configured** (see [Controls](Controls.md)), so two cabinets with two controls fill the four players of X-Men. To give fewer (two controls, but only one person playing), press down on the NET PLAY or JOIN PARTY tile: blinking arrows appear beside the player icons, and left or right picks how many this cabinet gives. Up goes back to the tiles. The party starts by itself when every player has an owner.
 
-Only the network cable is used. The public lobby, the relay and the NAT traversal of RetroArch are off, and so is Flycast's UPnP. The party's own ports are UDP 55436 (who plays what), TCP 55437 (the party) and TCP 55438 (the game's files). RetroArch's net play is on TCP 55435, Flycast's GGPO on UDP 19713.
+Only the network cable is used. The public lobby, the relay and the NAT traversal of RetroArch are off, and so are the UPnP of Flycast and Dolphin and Dolphin's traversal server. The party's own ports are UDP 55436 (who plays what), TCP 55437 (the party) and TCP 55438 (the game's files). RetroArch's net play is on TCP 55435, Flycast's GGPO on UDP 19713, Dolphin's net play on TCP 2626.
 
 **Run the same release on every cabinet.** RetroArch warns when two machines run different versions. When the builds of the core differ, it turns the desync check off, so a real desync would not be reported.
 
@@ -260,11 +261,21 @@ Tested on 1 November 2026: the frontend of the cabinet hosted X-Men with players
 
 The frontend opens Flycast with `network:GGPO=yes`, `network:GGPODelay=0` and `network:EnableUPnP=no`. The cabinet that opened the party has `network:ActAsServer=yes` and is player 1. **Both have `network:server` set to the other cabinet's IP**: Flycast sends only to that address and takes packets only from it, so an empty one (the loopback) never links. Two Flycast of the cabinet's own build linked this way (see the Flycast section). A party started from the frontend has not been tried yet.
 
+### Dolphin net play
+
+Dolphin opens net play only from its windows, so FliperOS builds it with a patch (`config/dolphin-patches`) that adds two command-line options: `--netplay host` or `--netplay join`, and `--netplay_players N`. The cabinet that opened the party hosts and starts the game by itself when the N cabinets of the party have it. The others connect to it, and retry for 20 seconds while it opens.
+
+The address, port and nickname go in with `-C Dolphin.NetPlay.*`: direct connection (no traversal server), no UPnP, TCP port 2626, buffer 2. Dolphin is opened with `-b`, so it closes when the game ends or the connection drops, and the frontend comes back.
+
+Each cabinet plays with its controller 1, in the order the cabinets joined: the host is player 1. The frontend offers it only when the installed Dolphin has the patch (the ISO build applies it); an older Dolphin gets no NET PLAY tile.
+
 ### Latency of net play
 
-**Your own controls are as fast as playing alone.** RetroArch's net play and Flycast's GGPO are both rollback: each cabinet runs the game at once with its own controls and guesses the others' (it repeats their last input). When the real input arrives and differs, it loads the state of a few frames back and runs those frames again, in one frame.
+**Your own controls are as fast as playing alone**, except in Dolphin (below). RetroArch's net play and Flycast's GGPO are both rollback: each cabinet runs the game at once with its own controls and guesses the others' (it repeats their last input). When the real input arrives and differs, it loads the state of a few frames back and runs those frames again, in one frame.
 
 FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` are 0 in RetroArch, `GGPODelay` is 0 in Flycast). On the cable the other cabinet's input arrives in a fraction of a frame, so a rollback is rare and is one frame long at most. You see the other players' moves within a frame. The ping that RetroArch shows (13 to 18 ms in the test) counts its own handling, not just the cable, where the round trip is under 1 ms.
+
+**Dolphin has no rollback.** Every cabinet waits for everyone's input of the same frame, with a buffer that holds a few inputs ahead. FliperOS sets the buffer to 2 (Dolphin's default is 5): about one frame of delay on your own controls too, the same for everyone. If the game stutters, the buffer is too small for that network.
 
 **Run-ahead is off during net play.** RetroArch does not run run-ahead or preemptive frames while net play is on. A latency mode that uses them loses that gain in a party.
 
@@ -272,7 +283,7 @@ FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` ar
 
 ### Cores and emulators with net play
 
-**The frontend offers net play with every RetroArch core marked "deterministic" and with Flycast's GGPO.** A RetroArch core needs a state that it saves and loads quickly and always the same way. A core that cannot do that refuses net play, or loses the sync. Only FBNeo has been played between two machines so far: the others are in the frontend but not yet tested on FliperOS.
+**The frontend offers net play with every RetroArch core marked "deterministic", with Flycast's GGPO and with Dolphin.** A RetroArch core needs a state that it saves and loads quickly and always the same way. A core that cannot do that refuses net play, or loses the sync. Only FBNeo has been played between two machines so far: the others are in the frontend but not yet tested on FliperOS.
 
 | Core or emulator | Systems | Net play | Checked |
 | --- | --- | --- | --- |
@@ -285,7 +296,7 @@ FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` ar
 | MAME 2010 (RetroArch) | Arcade (MAME 0.139) | **No**: "Core does not support netplay" | **Tested** |
 | MAME, current core (RetroArch) | Arcade (MAME 0.289) | Yes, but many drivers do not save their state well. Not in the image (415 MB) | Connected once (X-Men) |
 | Flycast | NAOMI, NAOMI 2, Atomiswave | **Yes, in the frontend**: GGPO rollback, two cabinets, one player each | Two Flycast linked on the cabinet by hand, game screen not seen |
-| Dolphin | GameCube, Wii | Its own net play, with input delay and no rollback. Not in the frontend: Dolphin has no command-line option to host or join, only its windows | Not tested |
+| Dolphin | GameCube, Wii | **Yes, in the frontend** (FliperOS patch): two to four cabinets, one player each; input delay, no rollback | Patched build compiled; not played between two machines |
 | GroovyMAME, Supermodel, SM2-Emu | Arcade, Model 3, Model 2 | **No net play.** Their network is the board link of the link games above | Source |
 | PCSX2, DuckStation, Hypseus Singe, OpenBOR | PS2, PS1, Laserdisc, beat 'em ups | **No** | Source |
 

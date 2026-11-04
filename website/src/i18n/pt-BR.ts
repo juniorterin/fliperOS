@@ -598,7 +598,7 @@ const ptBR: Messages = {
       { id: 'mgba', name: 'mGBA', systems: 'Game Boy Advance', level: 'frontend', note: '' },
       { id: 'pcsx', name: 'PCSX ReARMed', systems: 'PlayStation', level: 'frontend', note: 'Mais pesado, perde a sincronia com mais facilidade' },
       { id: 'flycast', name: 'Flycast', systems: 'Naomi, Naomi 2, Atomiswave', level: 'frontend', note: 'GGPO: dois gabinetes, um jogador em cada' },
-      { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', level: 'partial', note: 'Net play próprio, com atraso de entrada; ainda não está no frontend' },
+      { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', level: 'frontend', note: 'Net play próprio, por um patch do FliperOS: até 4 gabinetes, um jogador em cada; atraso de entrada, sem rollback' },
       { id: 'mame2010', name: 'MAME 2010', systems: 'Arcade', level: 'no', note: '' },
       { id: 'boards', name: 'GroovyMAME, Supermodel, SM2-Emu', systems: 'Arcade, Model 3, Model 2', level: 'no', note: 'Em vez disso ligam as placas, nos jogos de link' },
       { id: 'others', name: 'PCSX2, DuckStation, Hypseus, OpenBOR', systems: 'PS2, PS1, Laserdisc, beat ’em ups', level: 'no', note: '' },

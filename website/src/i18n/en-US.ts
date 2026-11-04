@@ -596,7 +596,7 @@ const enUS = {
       { id: 'mgba', name: 'mGBA', systems: 'Game Boy Advance', level: 'frontend', note: '' },
       { id: 'pcsx', name: 'PCSX ReARMed', systems: 'PlayStation', level: 'frontend', note: 'Heavier, loses the sync more easily' },
       { id: 'flycast', name: 'Flycast', systems: 'Naomi, Naomi 2, Atomiswave', level: 'frontend', note: 'GGPO: two cabinets, one player each' },
-      { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', level: 'partial', note: 'Its own net play, with input delay; not in the frontend yet' },
+      { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', level: 'frontend', note: 'Its own net play through a FliperOS patch: up to 4 cabinets, one player each; input delay, no rollback' },
       { id: 'mame2010', name: 'MAME 2010', systems: 'Arcade', level: 'no', note: '' },
       { id: 'boards', name: 'GroovyMAME, Supermodel, SM2-Emu', systems: 'Arcade, Model 3, Model 2', level: 'no', note: 'They link boards instead, for the link games' },
       { id: 'others', name: 'PCSX2, DuckStation, Hypseus, OpenBOR', systems: 'PS2, PS1, Laserdisc, beat ’em ups', level: 'no', note: '' },

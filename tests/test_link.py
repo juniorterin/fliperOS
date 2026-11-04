@@ -61,6 +61,9 @@ def setUpModule():
             Path(cores, core + "_libretro.so").touch()
     felink._states.clear()
     felink.RA_CORES, felink.RA_INFO = cores, info
+    # O Dolphin com o patch do --netplay (a opcao no meio do binario).
+    felink.DOLPHIN = os.path.join(_ra.name, "dolphin-emu")
+    Path(felink.DOLPHIN).write_bytes(b"\0" * (1 << 20) + b"--netplay_players" + b"\0" * 64)
 
 
 def tearDownModule():
@@ -1008,6 +1011,38 @@ class NetplayTests(unittest.TestCase):
         self.assertIn("network:GGPO=yes,network:ActAsServer=yes,network:server=10.0.0.2", host[-2])
         self.assertIn("network:ActAsServer=no,network:server=10.0.0.1", guest[-2])
         self.assertIn("network:EnableUPnP=no", guest[-2])
+
+    def test_dolphin_games_get_net_play_one_player_per_cabinet_up_to_four(self):
+        prof = felink.netplay_profile("dolphin", "Mario Kart Double Dash", "4", 2)
+        self.assertEqual((prof["emulator"], prof["min"], prof["max"], prof["take"], prof["port"], prof["fixed"]),
+                         ("dolphin", 2, 4, 1, 2626, False))
+        self.assertEqual(felink.netplay_profile("dolphin", "Smash", "8", 1)["max"], 4)
+        self.assertIsNone(felink.netplay_profile("dolphin", "Zelda", "1", 1))
+        old = felink.DOLPHIN
+        try:
+            felink.DOLPHIN = os.path.join(_ra.name, "plain-dolphin")
+            Path(felink.DOLPHIN).write_bytes(b"\0" * 4096)           # sem o patch: nada
+            self.assertIsNone(felink.netplay_profile("dolphin", "Mario Kart Double Dash", "4", 2))
+            felink.DOLPHIN = os.path.join(_ra.name, "missing")
+            self.assertIsNone(felink.netplay_profile("dolphin", "Mario Kart Double Dash", "4", 2))
+        finally:
+            felink.DOLPHIN = old
+
+    def test_the_dolphin_command_hosts_on_one_and_joins_on_the_others(self):
+        prof = felink.netplay_profile("dolphin", "mkdd", "4", 2)
+        plan = felink.make_plan(prof, [{"number": i, "name": "C%d" % i, "ip": "10.0.0.%d" % i} for i in (1, 2, 3)])
+        base = ["/opt/fliperos/bin/fliperos-x11-run", "dolphin-emu", "-e", "/r/mkdd.rvz"]
+        host = felink.command(prof, base, plan, 1, "mkdd")
+        guest = felink.command(prof, base, plan, 3, "mkdd")
+        self.assertEqual(host[:2] + host[-2:], base)
+        self.assertEqual(guest[-2:], ["-e", "/r/mkdd.rvz"])
+        self.assertEqual(host[2:7], ["-b", "--netplay", "host", "--netplay_players", "3"])
+        self.assertEqual(guest[4], "join")
+        for argv in (host, guest):
+            for opt in ("Dolphin.NetPlay.TraversalChoice=direct", "Dolphin.NetPlay.UseUPNP=False",
+                        "Dolphin.NetPlay.HostPort=2626", "Dolphin.NetPlay.ConnectPort=2626",
+                        "Dolphin.NetPlay.Address=10.0.0.1"):
+                self.assertEqual(argv[argv.index(opt) - 1], "-C")
 
     def test_a_ggpo_party_takes_one_player_from_each_cabinet(self):
         prof = felink.netplay_profile("naomi", "mvsc2", "2", 2)

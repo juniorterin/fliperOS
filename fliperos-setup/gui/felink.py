@@ -51,6 +51,12 @@ PORT_NETPLAY = 55435
 # Naomi e Atomiswave: dois jogadores, um em cada gabinete.
 PORT_GGPO = 19713
 GGPO_SYSTEMS = ("naomi", "naomi2", "atomiswave")
+# O Dolphin (GameCube e Wii, ~/roms/dolphin) com o patch do FliperOS
+# (config/dolphin-patches: --netplay host|join): ate quatro gabinetes, um
+# jogador em cada (o controle 1 de cada um), na porta TCP dele.
+PORT_DOLPHIN = 2626
+DOLPHIN_SYSTEMS = ("dolphin",)
+DOLPHIN = os.environ.get("FLIPEROS_DOLPHIN", "/usr/local/bin/dolphin-emu")
 BUTTONS_MAP = os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
 KMS_RUN = os.environ.get("FLIPEROS_KMS_RUN", "/opt/fliperos/bin/fliperos-kms-run")
 RA_CORES = os.environ.get("FLIPEROS_RA_CORES", "/opt/fliperos/retroarch/cores")
@@ -575,6 +581,18 @@ def link_args(profile, plan, number):
         other = next(m["ip"] for m in plan["members"] if m["number"] != number)
         return ["-config", "network:GGPO=yes,network:ActAsServer=%s,network:server=%s,network:GGPODelay=0,"
                 "network:EnableUPnP=no" % ("yes" if number == 1 else "no", other)]
+    if emu == "dolphin":
+        # O net play do Dolphin pela linha de comando (o patch): o numero 1 abre a
+        # sessao e comeca quando os gabinetes da festa chegam; os outros se
+        # conectam a ele (e tentam de novo ate ele abrir). Direto, sem o servidor
+        # de travessia nem UPnP; -b: o Dolphin fecha quando o jogo acaba.
+        host = next(m["ip"] for m in plan["members"] if m["number"] == 1)
+        args = ["-b", "--netplay", "host" if number == 1 else "join", "--netplay_players", str(plan["n"])]
+        # BufferSize: o atraso de entrada do Dolphin (sem rollback); 5 de fabrica, 2 no cabo.
+        for key, value in (("TraversalChoice", "direct"), ("UseUPNP", "False"), ("BufferSize", 2), ("HostPort", port),
+                           ("ConnectPort", port), ("Address", host), ("Nickname", "P%d" % number)):
+            args += ["-C", "Dolphin.NetPlay.%s=%s" % (key, value)]
+        return args
     if emu == "flycast":
         # A rede do Naomi do Flycast (UDP, porta 37391): o numero 1 e o servidor, os outros se
         # conectam a ele. O UPnP fica desligado: nada de pedir ao roteador (e a Internet) que
@@ -606,6 +624,9 @@ def command(profile, base, plan, number, game):
     if profile["emulator"] == "sm2emu":
         # --game antes do jogo: o x11-run le o ultimo argumento como o jogo.
         return argv[:-1] + ["--game", game] + argv[-1:]
+    if len(argv) > 1 and argv[-2] in ("-e", "--exec"):
+        # O Dolphin: o arquivo vem depois do -e.
+        return argv[:-2] + extra + argv[-2:]
     return argv[:-1] + extra + argv[-1:]
 
 
@@ -703,13 +724,37 @@ def netplay_core(system_key):
     return so if _states[info] == "deterministic" and os.path.isfile(so) else None
 
 
+_dolphin = {}
+
+
+def dolphin_netplay(path=None):
+    """O Dolphin instalado tem o --netplay do patch do FliperOS? (procura a
+    opcao no binario, uma vez por arquivo e data)."""
+    path = path or DOLPHIN
+    try:
+        key = (path, os.stat(path).st_mtime)
+    except OSError:
+        return False
+    if key not in _dolphin:
+        found, tail = False, b""
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                if b"netplay_players" in tail + chunk:
+                    found = True
+                    break
+                tail = chunk[-32:]
+        _dolphin[key] = found
+    return _dolphin[key]
+
+
 def netplay_profile(system_key, name, players, local, sets=None):
     """O perfil de net play de um jogo, ou None. Numa pasta de core do
     RetroArch que faz net play (netplay_core; na do FBNeo, so um set que o
     FBNeo conhece), um jogo com mais jogadores do que controles aqui: cada
     gabinete entra com os jogadores dos seus controles. No Naomi e no
     Atomiswave, o GGPO do Flycast: um jogo de dois ou mais jogadores, dois
-    gabinetes com um jogador cada. Quem abre e o primeiro."""
+    gabinetes com um jogador cada. No Dolphin, de dois a quatro gabinetes,
+    um jogador cada. Quem abre e o primeiro."""
     try:
         n = int(players)
     except (TypeError, ValueError):
@@ -720,6 +765,12 @@ def netplay_profile(system_key, name, players, local, sets=None):
         return {"id": "netplay", "title": name, "emulator": "flycast", "systems": [system_key], "sets": [name],
                 "min": 2, "max": 2, "players": 2, "take": 1, "fixed": True, "order": "master-first", "step": 6,
                 "port": PORT_GGPO, "netplay": True, "ggpo": True}
+    if (system_key or "").split("/")[0] in DOLPHIN_SYSTEMS:
+        if n < 2 or not dolphin_netplay():
+            return None
+        return {"id": "netplay", "title": name, "emulator": "dolphin", "systems": [system_key], "sets": [name],
+                "min": 2, "max": min(n, 4), "players": min(n, 4), "take": 1, "fixed": False,
+                "order": "master-first", "step": 3, "port": PORT_DOLPHIN, "netplay": True, "dolphin": True}
     core = netplay_core(system_key)
     if not core or n <= local:
         return None
@@ -1292,8 +1343,9 @@ class Link:
         """O comando do jogo em link (o base e o do frontend), com a NVRAM, o
         cfg e o ini deste numero no lugar; leave() desfaz tudo."""
         prof, plan, number = self.profile, self.plan, self.number
-        if prof.get("ggpo"):
-            # O GGPO do Flycast: o comando do jogo com as opcoes dele, sem NVRAM por numero.
+        if prof.get("ggpo") or prof.get("dolphin"):
+            # O GGPO do Flycast e o net play do Dolphin: o comando do jogo com as opcoes
+            # deles, sem NVRAM por numero.
             return command(prof, base, plan, number, self.game)
         if prof.get("netplay"):
             # O net play nao tem NVRAM por numero: o RetroArch com o que a festa pede.

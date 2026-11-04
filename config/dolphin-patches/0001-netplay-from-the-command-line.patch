@@ -1,0 +1,246 @@
+diff --git a/Source/Core/DolphinQt/Main.cpp b/Source/Core/DolphinQt/Main.cpp
+index 7f8f9b9..d362f10 100644
+--- a/Source/Core/DolphinQt/Main.cpp
++++ b/Source/Core/DolphinQt/Main.cpp
+@@ -275,9 +275,27 @@ int main(int argc, char* argv[])
+     Settings::Instance().InitDefaultPalette();
+     Settings::Instance().ApplyStyle();
+ 
++    // --netplay: the game is not booted here; the session boots it on every machine.
++    std::string netplay_game;
++    if (options.is_set("netplay"))
++    {
++      if (options.is_set("exec"))
++        netplay_game = options.all("exec").front();
++      else if (!args.empty())
++        netplay_game = args.front();
++      boot.reset();
++    }
++
+     MainWindow win{Core::System::GetInstance(), std::move(boot),
+                    static_cast<const char*>(options.get("movie"))};
+ 
++    if (options.is_set("netplay"))
++    {
++      win.StartNetPlayFromCommandLine(
++          std::string(static_cast<const char*>(options.get("netplay"))) == "host", netplay_game,
++          static_cast<int>(options.get("netplay_players")));
++    }
++
+ #if defined(USE_ANALYTICS) && USE_ANALYTICS
+     if (!Config::Get(Config::MAIN_ANALYTICS_PERMISSION_ASKED))
+     {
+diff --git a/Source/Core/DolphinQt/MainWindow.cpp b/Source/Core/DolphinQt/MainWindow.cpp
+index 688ae6f..185e630 100644
+--- a/Source/Core/DolphinQt/MainWindow.cpp
++++ b/Source/Core/DolphinQt/MainWindow.cpp
+@@ -15,6 +15,7 @@
+ #include <QMimeData>
+ #include <QStackedWidget>
+ #include <QStyleHints>
++#include <QTimer>
+ #include <QVBoxLayout>
+ #include <QWindow>
+ 
+@@ -43,6 +44,7 @@
+ 
+ #include "Core/AchievementManager.h"
+ #include "Core/Boot/Boot.h"
++#include "Common/Logging/Log.h"
+ #include "Core/BootManager.h"
+ #include "Core/CommonTitles.h"
+ #include "Core/Config/AchievementSettings.h"
+@@ -1755,6 +1757,37 @@ bool MainWindow::NetPlayHost(const UICommon::GameFile& game)
+   return NetPlayJoin();
+ }
+ 
++// --netplay host|join: no dialogs to click. The host starts the game when `players` have it;
++// a guest retries for a while (the host may still be opening). Dolphin quits if it fails.
++void MainWindow::StartNetPlayFromCommandLine(bool host, const std::string& game_path,
++                                             int players)
++{
++  auto game = std::make_shared<UICommon::GameFile>(game_path);
++  if (!game->IsValid())
++  {
++    ERROR_LOG_FMT(NETPLAY, "--netplay: cannot read the game {}", game_path);
++    QTimer::singleShot(0, this, [] { QGuiApplication::exit(1); });
++    return;
++  }
++  m_netplay_dialog->SetCommandLineGame(game, host ? std::max(players, 1) : 0);
++  auto attempt = std::make_shared<std::function<void(int)>>();
++  *attempt = [this, host, game, weak = std::weak_ptr(attempt)](int left) {
++    if (host ? NetPlayHost(*game) : NetPlayJoin())
++      return;
++    if (host || left <= 0)
++    {
++      QGuiApplication::exit(1);
++      return;
++    }
++    QTimer::singleShot(1000, this, [weak, left] {
++      if (const auto next = weak.lock())
++        (*next)(left - 1);
++    });
++  };
++  m_netplay_retry = attempt;
++  QTimer::singleShot(0, this, [attempt] { (*attempt)(20); });
++}
++
+ void MainWindow::NetPlayQuit()
+ {
+   Settings::Instance().ResetNetPlayClient();
+diff --git a/Source/Core/DolphinQt/MainWindow.h b/Source/Core/DolphinQt/MainWindow.h
+index 93490ea..520cff1 100644
+--- a/Source/Core/DolphinQt/MainWindow.h
++++ b/Source/Core/DolphinQt/MainWindow.h
+@@ -7,6 +7,7 @@
+ #include <QStringList>
+ 
+ #include <array>
++#include <functional>
+ #include <memory>
+ #include <optional>
+ #include <string>
+@@ -94,6 +95,7 @@ public:
+   QMenu* createPopupMenu() override;
+ 
+   void ShowTriforceWindow();
++  void StartNetPlayFromCommandLine(bool host, const std::string& game_path, int players);
+ 
+ signals:
+   void ReadOnlyModeChanged(bool read_only);
+@@ -196,6 +198,7 @@ private:
+   void NetPlayInit();
+   bool NetPlayJoin();
+   bool NetPlayHost(const UICommon::GameFile& game);
++  std::shared_ptr<std::function<void(int)>> m_netplay_retry;
+   void NetPlayQuit();
+ 
+   void OnBootGameCubeIPL(DiscIO::Region region);
+diff --git a/Source/Core/DolphinQt/NetPlay/NetPlayDialog.cpp b/Source/Core/DolphinQt/NetPlay/NetPlayDialog.cpp
+index 733ba76..62db6e5 100644
+--- a/Source/Core/DolphinQt/NetPlay/NetPlayDialog.cpp
++++ b/Source/Core/DolphinQt/NetPlay/NetPlayDialog.cpp
+@@ -21,6 +21,7 @@
+ #include <QSplitter>
+ #include <QTableWidget>
+ #include <QTextBrowser>
++#include <QTimer>
+ 
+ #include <algorithm>
+ #include <utility>
+@@ -460,6 +461,14 @@ void NetPlayDialog::OnIndexRefreshFailed(const std::string error)
+   DisplayMessage(QString::fromStdString(error), "red");
+ }
+ 
++void NetPlayDialog::SetCommandLineGame(std::shared_ptr<const UICommon::GameFile> game,
++                                       int auto_start)
++{
++  m_command_line_game = std::move(game);
++  m_auto_start_players = auto_start;
++  m_auto_started = false;
++}
++
+ void NetPlayDialog::OnStart()
+ {
+   if (!Settings::Instance().GetNetPlayClient()->DoAllPlayersHaveGame())
+@@ -614,6 +623,19 @@ void NetPlayDialog::UpdateGUI()
+ 
+   m_player_count = static_cast<int>(players.size());
+ 
++  if (server && m_auto_start_players > 0 && !m_auto_started &&
++      m_player_count >= m_auto_start_players && client->DoAllPlayersHaveGame())
++  {
++    m_auto_started = true;
++    QTimer::singleShot(500, this, [this] {
++      const auto srv = Settings::Instance().GetNetPlayServer();
++      if (srv && srv->RequestStartGame())
++        SetOptionsEnabled(false);
++      else
++        m_auto_started = false;
++    });
++  }
++
+   const int selection_pid = m_players_list->currentItem() ?
+                                 m_players_list->currentItem()->data(Qt::UserRole).toInt() :
+                                 -1;
+@@ -966,10 +988,25 @@ void NetPlayDialog::OnDesync(u32 frame, const std::string& player)
+ void NetPlayDialog::OnConnectionLost()
+ {
+   DisplayMessage(tr("Lost connection to NetPlay server..."), "red");
++  if (m_command_line_game)
++  {
++    QueueOnObject(this, [this] {
++      if (Core::IsRunning(Core::System::GetInstance()))
++        emit Stop();
++      else
++        QApplication::exit(1);
++    });
++  }
+ }
+ 
+ void NetPlayDialog::OnConnectionError(const std::string& message)
+ {
++  // --netplay retries by itself: no message box to click.
++  if (m_command_line_game)
++  {
++    WARN_LOG_FMT(NETPLAY, "Failed to connect to server: {}", message);
++    return;
++  }
+   QueueOnObject(this, [this, message] {
+     ModalMessageBox::critical(this, tr("Error"),
+                               tr("Failed to connect to server: %1").arg(tr(message.c_str())));
+@@ -1053,6 +1090,12 @@ NetPlayDialog::FindGameFile(const NetPlay::SyncIdentifier& sync_identifier,
+     found = &temp;
+ 
+   *found = NetPlay::SyncIdentifierComparison::DifferentGame;
++  if (m_command_line_game)
++  {
++    *found = m_command_line_game->CompareSyncIdentifier(sync_identifier);
++    if (*found == NetPlay::SyncIdentifierComparison::SameGame)
++      return m_command_line_game;
++  }
+ 
+   const std::optional<std::shared_ptr<const UICommon::GameFile>> game_file =
+       RunOnObject(this, [this, &sync_identifier, found] {
+diff --git a/Source/Core/DolphinQt/NetPlay/NetPlayDialog.h b/Source/Core/DolphinQt/NetPlay/NetPlayDialog.h
+index 54cc111..36c0341 100644
+--- a/Source/Core/DolphinQt/NetPlay/NetPlayDialog.h
++++ b/Source/Core/DolphinQt/NetPlay/NetPlayDialog.h
+@@ -85,6 +85,9 @@ public:
+                              int device_number) override;
+ 
+   void LoadSettings();
++  // --netplay: the game given on the command line (found even outside the game list) and,
++  // when hosting, how many players start the game by themselves.
++  void SetCommandLineGame(std::shared_ptr<const UICommon::GameFile> game, int auto_start);
+   void SaveSettings();
+ 
+   void ShowGameDigestDialog(const std::string& title) override;
+@@ -181,4 +184,7 @@ private:
+   bool m_host_input_authority = false;
+ 
+   StartGameCallback m_start_game_callback;
++  std::shared_ptr<const UICommon::GameFile> m_command_line_game;
++  int m_auto_start_players = 0;
++  bool m_auto_started = false;
+ };
+diff --git a/Source/Core/UICommon/CommandLineParse.cpp b/Source/Core/UICommon/CommandLineParse.cpp
+index 6b85545..52fc6dd 100644
+--- a/Source/Core/UICommon/CommandLineParse.cpp
++++ b/Source/Core/UICommon/CommandLineParse.cpp
+@@ -115,6 +115,15 @@ std::unique_ptr<optparse::OptionParser> CreateParser(ParserOptions options)
+         .action("store_true")
+         .help("Run Dolphin without the user interface (Requires --exec or --nand-title)");
+     parser->add_option("-c", "--confirm").action("store_true").help("Set Confirm on Stop");
++    parser->add_option("--netplay")
++        .choices({"host", "join"})
++        .help("Host or join a NetPlay session with the --exec game (address, port and "
++              "nickname from Dolphin.NetPlay.* via --config); quits when it ends");
++    parser->add_option("--netplay_players")
++        .action("store")
++        .type("int")
++        .set_default(2)
++        .help("With --netplay host: start the game once this many players have it");
+   }
+ 
+   parser->set_defaults("video_backend", "");

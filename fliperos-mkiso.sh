@@ -1407,6 +1407,14 @@ apt-get install -y --no-install-recommends \
 git clone --depth=1 --branch __DOLPHIN_TAG__ https://github.com/dolphin-emu/dolphin /tmp/dolphin
 cd /tmp/dolphin
 git submodule update --init --recursive --depth 1
+# Os patches do FliperOS (config/dolphin-patches): o net play aberto pela
+# linha de comando (--netplay host|join), que o frontend usa. A versao e
+# fixa, entao o patch tem de encaixar.
+for patch in /tmp/dolphin-patches/*.patch; do
+  [[ -f $patch ]] || continue
+  git apply "$patch"
+  echo "Dolphin patch: ${patch##*/}"
+done
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
   -DENABLE_AUTOUPDATE=OFF -DENABLE_ANALYTICS=OFF -DENABLE_TESTS=OFF -DENABLE_VULKAN=ON
 cmake --build build -j"$(nproc)"
@@ -1414,11 +1422,13 @@ cmake --install build
 rm -f /usr/local/share/applications/dolphin-emu.desktop
 install -Dm644 Data/dolphin-emu.png /usr/local/share/pixmaps/dolphin-emu.png
 cd /
-rm -rf /tmp/dolphin
+rm -rf /tmp/dolphin /tmp/dolphin-patches
 echo "Dolphin OK"
 DOLSCRIPT
   sed -i "s|__DOLPHIN_TAG__|${DOLPHIN_TAG}|g" "$CHROOT_DIR/tmp/build-dolphin.sh"
   chmod +x "$CHROOT_DIR/tmp/build-dolphin.sh"
+  mkdir -p "$CHROOT_DIR/tmp/dolphin-patches"
+  cp "$(dirname "$(realpath "$0")")"/config/dolphin-patches/*.patch "$CHROOT_DIR/tmp/dolphin-patches/"
   chroot "$CHROOT_DIR" /tmp/build-dolphin.sh >> "$LOG_FILE" 2>&1 \
     && ok "Dolphin compilado" \
     || err "Dolphin failed; use --skip-dolphin for an ISO without it"
