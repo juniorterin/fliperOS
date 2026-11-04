@@ -39,7 +39,7 @@ The scripts read these environment variables, and have defaults you will probabl
 | `ssf2tb-tournament.sh` | Four Super Street Fighter II: The Tournament Battle in a chain, headless, in the `fliperos-linktest` image: a coin and Start on each, and each machine's screen saved as PNG (12 a second) through the tournament intro and the start of the fights. Uses `rec.lua` |
 | `rec.lua` | A MAME Lua script that presses ports and saves snapshots every N frames, from the plan in the file named by `REC_FILE` |
 | `link-story.py` | The real frontend's link screens on every cabinet, for the site animations: `netplay` (Escape Kids, 2 cabinets) or `ssf2tb` (4 cabinets). A fake library with the cabinet's art and a real party on the loopback. Run it in the `fliperos-guitest` image |
-| `pixelcab.py` | The drawing shared by the two animations: pixel art cabinets, the network cables with pulses, the CRT screens and the captions |
+| `pixelcab.py` | The drawing shared by the two animations: Japanese candy cabinets in pixel art (light body with a rounded top, lit green marquee, black glass around the monitor, red ball-top joysticks with three buttons per player, coin door), the network cables lying on the floor with pulses, the CRT screens and the captions |
 | `netplay-anim.py`, `ssf2tb-anim.py` | The site animations `anim/netplay-{en,pt}.webp` and `anim/ssf2tb-{en,pt}.webp` (plus GIFs), 1200x900, from the screens of `link-story.py` and the game (the cabinet's preview video of Escape Kids, the PNGs of `ssf2tb-tournament.sh`). Run them in the `fliperos-video` image; `PREVIEW=t1,t2` saves only those instants |
 
 ## Things that cost time

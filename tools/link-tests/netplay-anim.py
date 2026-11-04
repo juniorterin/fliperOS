@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A animacao do net play para o site: dois gabinetes em pixel art (pixelcab.py)
+"""A animacao do net play para o site: dois gabinetes candy em pixel art (pixelcab.py)
 ligados por um cabo de rede, com as telas REAIS do frontend (link-story.py
 netplay) e o jogo rodando (o video de previa do gabinete). O gabinete 1 escolhe
 o Escape Kids e abre a festa, espera; o gabinete 2 ve o jogo no alto da lista,
@@ -68,8 +68,8 @@ PRESSES = [[(0.5, "down"), (1.0, "down"), (1.5, "down"), (2.5, "a"), (3.4, "righ
 STEP_AT = [(0.0, 0), (4.6, 1), (7.6, 2), (11.8, 3), (T_LOBBY, 4), (T_GAME_B, 5)]
 ACTING = [(0.0, 0), (7.6, 1), (T_LOBBY, None)]
 
-CABS = [Cab(52, 45, 34, 160, (72, 54), side=1), Cab(188, 45, 34, 160, (72, 54), side=-1)]
-CABLES = chain(CABS, 182)
+CABS = [Cab(52, 47, 30, 166, (72, 54)), Cab(188, 47, 30, 166, (72, 54))]
+CABLES = chain(CABS)
 
 
 def pulses(t):
@@ -121,7 +121,7 @@ def main():
         return cache[name], at(SCREENS[i], t) == "game"
 
     f_cap, f_num, f8 = font(24), font(24), font(8)
-    bases = {lit: background(LW, LH, CABS, lit, globes=[(120, 72)]) for lit in (None, 0, 1)}
+    bases = {lit: background(LW, LH, CABS, lit, globes=[(120, 66)]) for lit in (None, 0, 1)}
     preview = [float(x) for x in os.environ.get("PREVIEW", "").split(",") if x]
     for lang in ("pt",) if preview else ("pt", "en"):
         frames = os.path.join(work, lang)
@@ -143,7 +143,7 @@ def main():
                     logos.append(box)
                 label(d, cab, "P1-2" if i == 0 else "P3-4", f8)
                 press = next((k for when, k in PRESSES[i] if when <= tt < when + 0.3), None)
-                controls(d, cab, press, C["red"] if i == 0 else C["cyan"])
+                controls(d, cab, press)
             im = low.resize((W, H), Image.NEAREST)
             for i, cab in enumerate(CABS):
                 im.paste(scrs[i], cab.screen_box(PX), mask)

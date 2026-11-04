@@ -1,9 +1,10 @@
 """O desenho das animacoes de link do site (netplay-anim.py, ssf2tb-anim.py):
-gabinetes em pixel art (contorno escuro, sombreado em degraus, lambri roxo e
-piso xadrez, como a arte isometrica do site) ligados por cabos de rede, com as
-capturas reais por cima das telas. Tudo em pixels da arte (W/PX x H/PX),
-ampliado sem suavizar no fim; as telas, os logos e a legenda vao na resolucao
-cheia."""
+gabinetes candy japoneses em pixel art (corpo claro de topo arredondado,
+letreiro verde aceso, vidro preto em volta do monitor, painel saliente com
+manches vermelhos, porta das fichas e rodape escuro, como a arte isometrica da
+home) ligados por cabos de rede, com as capturas reais por cima das telas. Tudo
+em pixels da arte (W/PX x H/PX), ampliado sem suavizar no fim; as telas, os
+logos e a legenda vao na resolucao cheia."""
 import os
 import subprocess
 
@@ -21,11 +22,23 @@ C = {k: hexc(v) for k, v in {
     "orange": "#ffb86c", "red": "#ff5555", "fg": "#f8f8f2",
     "wall": "#2b2d3a", "wallline": "#262834", "wain": "#4a3d6b", "wainhi": "#6a5a96", "wainlo": "#3b3157",
     "floora": "#23242f", "floorb": "#1c1d26", "pinkfloor": "#5c2f50",
-    "body": "#353849", "bodyhi": "#4a4e66", "bodylo": "#2c2e3d", "side": "#3d3256", "sidehi": "#54467a",
-    "panel": "#4b4f66", "panelhi": "#60657f", "strip": "#3f4257", "bezel": "#101116", "glass": "#0a0a0e",
-    "mq1": "#7b4fb0", "mq2": "#9466c9", "mq3": "#ad80dd", "mqp1": "#2a1d48", "mqp2": "#3a2862",
-    "metal": "#c8c8d2", "cable": "#6272a4", "cablehi": "#8a9ad0", "door": "#22232d"}.items()}
-BALLS = (C["red"], C["cyan"], C["yellow"], C["green"])
+    # o gabinete candy
+    "body": "#d7dae4", "bodyhi": "#f3f4f8", "bodymid": "#bfc3cf", "bodylo": "#9da2b3", "teal": "#2fb3a1",
+    "mqg": "#5ae88b", "mqghi": "#aaf7c5", "mqglo": "#3cbf73", "mqtext": "#1d4a2c", "mqp1": "#2a1d48", "mqp2": "#3a2862",
+    "panel": "#2b2e3f", "panelhi": "#3d4157", "glass": "#121319", "glasshi": "#2a2c3a", "tube": "#07070a",
+    "kick": "#2b2e3f", "kickhi": "#3d4157", "steel": "#9aa0b8", "steello": "#6e7489",
+    "metal": "#c8c8d2", "ballhi": "#ffc4c4", "balllo": "#c03a42", "cable": "#7b8fd4"}.items()}
+
+# Uma fonte de 3x5 pixels, a da arte isometrica da home, para as plaquinhas.
+FONT3 = {
+    "P": ["###", "#.#", "###", "#..", "#.."], "-": ["...", "...", "###", "...", "..."],
+    "#": ["#.#", "###", "#.#", "###", "#.#"],
+    "0": ["###", "#.#", "#.#", "#.#", "###"], "1": [".#.", "##.", ".#.", ".#.", "###"],
+    "2": ["###", "..#", "###", "#..", "###"], "3": ["###", "..#", "###", "..#", "###"],
+    "4": ["#.#", "#.#", "###", "..#", "..#"], "5": ["###", "#..", "###", "..#", "###"],
+    "6": ["###", "#..", "###", "#.#", "###"], "7": ["###", "..#", "..#", ".#.", ".#."],
+    "8": ["###", "#.#", "###", "#.#", "###"], "9": ["###", "#.#", "###", "..#", "###"],
+}
 
 
 def font(size):
@@ -45,31 +58,41 @@ def rect(d, box, fill, outline=None):
     d.rectangle(box, fill=fill, outline=outline)
 
 
+def tiny(d, x, y, text, fill):
+    """Texto na fonte de 3x5 pixels, a partir do canto (x, y)."""
+    for i, ch in enumerate(text):
+        for r, row in enumerate(FONT3.get(ch, ())):
+            for c, v in enumerate(row):
+                if v == "#":
+                    d.point((x + i * 4 + c, y + r), fill=fill)
+
+
 class Cab:
-    """Um gabinete, em pixels da arte: o centro, a meia largura, o topo, o chao,
-    a tela (largura, altura) e para que lado aparece a lateral (0: nenhum)."""
+    """Um gabinete de frente, em pixels da arte: o centro, a meia largura, o
+    topo, o chao e a tela (largura, altura). cp_out: quanto o painel de controle
+    passa do corpo de cada lado (0 para gabinetes encostados um no outro)."""
 
-    def __init__(self, cx, half, top, floor, scr, side=0, socket="side"):
-        self.cx, self.half, self.top, self.floor, self.scr, self.side = cx, half, top, floor, scr, side
+    def __init__(self, cx, half, top, floor, scr, cp_out=None):
+        self.cx, self.half, self.top, self.floor, self.scr = cx, half, top, floor, scr
         self.x0, self.x1 = cx - half, cx + half - 1
+        big = half >= 40
+        self.rim = 4                               # a borda clara de cada lado do vidro
+        self.radius = 9 if big else 7              # o topo arredondado
+        self.cp_out = (3 if big else 1) if cp_out is None else cp_out
+        self.head = top + 19                       # onde acaba a cabeca (o letreiro) e comeca o vidro
         self.scr_y = top + 22
-        self.panel = self.scr_y + scr[1] + 5
-        self.label_y = self.panel + 15
-        self.socket = socket
-
-    @property
-    def edge(self):
-        return self.x1 if self.side > 0 else self.x0
+        self.panel = self.scr_y + scr[1] + 5       # o painel de controle
+        self.lower = self.panel + 14               # a parte de baixo
+        self.label_y = self.lower + 5
 
     def screen_box(self, px):
         x = (self.cx - self.scr[0] // 2) * px
         return x, self.scr_y * px
 
     def plug(self, toward):
-        """Onde o cabo entra: na lateral (embaixo) ou na frente, no canto do lado do vizinho."""
-        if self.socket == "side":
-            return self.edge + 4 * self.side, self.floor - 8
-        return (self.x1 - 7 if toward > 0 else self.x0 + 7), self.floor - 7
+        """De onde o cabo sai: de baixo do gabinete, no chao, perto do canto do
+        lado do vizinho."""
+        return (self.x1 - 8 if toward > 0 else self.x0 + 8), self.floor + 1
 
 
 def background(lw, lh, cabs, lit=None, globes=()):
@@ -113,95 +136,119 @@ def globe(d, cx, cy, r=9):
 
 
 def cabinet(d, cab):
-    """O corpo: a lateral, a frente, o letreiro (vazio), a moldura da tela, o
-    painel e a porta das fichas."""
-    cx, x0, x1, top, floor, s = cab.cx, cab.x0, cab.x1, cab.top, cab.floor, cab.side
+    """Um gabinete candy japones, de frente: o corpo claro de topo arredondado,
+    o letreiro (aceso a cada quadro por marquee), o vidro preto do monitor, o
+    painel de controle saliente, a porta das fichas e o rodape escuro."""
+    cx, x0, x1, top, floor = cab.cx, cab.x0, cab.x1, cab.top, cab.floor
     sw, sh = cab.scr
-    panel = cab.panel
-    rect(d, (x0 - 3, floor, x1 + 3, floor + 1), C["ink"])     # a sombra no chao
-    if s:
-        edge = cab.edge
-        outer = edge + 7 * s
-        rect(d, (min(edge, outer) - 3, floor, max(edge, outer) + 3, floor + 1), C["ink"])
-        d.polygon([(edge, top), (outer, top + 3), (outer, floor - 1), (edge, floor - 1)], fill=C["side"], outline=C["ink"])
-        d.line([(outer - s, top + 4), (outer - s, floor - 2)], fill=C["pink"])
-        d.line([(edge + 2 * s, top + 60), (outer - 2 * s, top + 56)], fill=C["sidehi"])
-        d.line([(edge + 2 * s, top + 61), (outer - 2 * s, top + 57)], fill=C["sidehi"])
-        d.polygon([(edge, panel), (outer, panel + 1), (outer + 2 * s, panel + 9), (edge + 3 * s, panel + 8)],
-                  fill=C["panel"], outline=C["ink"])
-        rect(d, (min(edge, outer + 2 * s), panel + 9, max(edge, outer + 2 * s), panel + 13), C["strip"])
-    # A frente
-    rect(d, (x0, top, x1, floor - 1), C["body"], C["ink"])
-    d.line([(x0 + 1, top + 1), (x0 + 1, floor - 2)], fill=C["bodyhi"])
-    d.line([(x1 - 1, top + 1), (x1 - 1, floor - 2)], fill=C["bodylo"])
-    d.line([(x0 + 1, top + 1), (x1 - 1, top + 1)], fill=C["bodyhi"])
-    # O letreiro e a moldura da tela
-    rect(d, (x0 + 2, top + 3, x1 - 2, top + 17), C["mq1"], C["ink"])
-    rect(d, (x0 + 2, top + 19, x1 - 2, panel - 2), C["bezel"], C["ink"])
+    rim, r, panel, out, lower = cab.rim, cab.radius, cab.panel, cab.cp_out, cab.lower
+    ink = C["ink"]
+    rect(d, (x0 - 1 - out, floor, x1 + 1 + out, floor + 1), ink)     # a sombra no chao
+    # o corpo, com o topo arredondado, o brilho em cima e a esquerda e a sombra a direita
+    d.rounded_rectangle((x0, top, x1, floor - 1), radius=r, fill=C["body"], outline=ink,
+                        corners=(True, True, False, False))
+    d.arc((x0 + 1, top + 1, x0 + 2 * r - 1, top + 2 * r - 1), 180, 270, fill=C["bodyhi"])
+    d.line([(x0 + r, top + 1), (x1 - r, top + 1)], fill=C["bodyhi"])
+    d.arc((x1 - 2 * r + 1, top + 1, x1 - 1, top + 2 * r - 1), 270, 360, fill=C["bodymid"])
+    d.line([(x0 + 1, top + r), (x0 + 1, floor - 7)], fill=C["bodyhi"])
+    d.line([(x1 - 1, top + r), (x1 - 1, floor - 7)], fill=C["bodylo"])
+    # a moldura do letreiro e a sombra embaixo dele
+    d.rounded_rectangle((x0 + rim - 1, top + 3, x1 - rim + 1, top + 17), radius=3, fill=ink)
+    d.line([(x0 + rim, top + 18), (x1 - rim, top + 18)], fill=C["bodylo"])
+    # o vidro preto do monitor, entre as bordas claras, com um brilho no canto
+    rect(d, (x0 + rim, cab.head, x1 - rim, panel - 1), C["glass"])
+    d.line([(x0 + rim, cab.head), (x1 - rim, cab.head)], fill=ink)
+    d.line([(x0 + rim - 1, cab.head), (x0 + rim - 1, panel - 1)], fill=C["bodylo"])
+    d.line([(x1 - rim + 1, cab.head), (x1 - rim + 1, panel - 1)], fill=C["bodymid"])
     sx0, sx1 = cx - sw // 2, cx + sw // 2 - 1
-    rect(d, (sx0 - 2, cab.scr_y - 2, sx1 + 2, cab.scr_y + sh + 1), C["glass"])
-    d.line([(sx0 - 2, cab.scr_y + sh + 2), (sx1 + 2, cab.scr_y + sh + 2)], fill=C["line"])
-    # O painel de controle: inclinado, sai para a frente
-    d.polygon([(x0, panel), (x1, panel), (x1 + 3, panel + 8), (x0 - 3, panel + 8)], fill=C["panel"], outline=C["ink"])
+    if sx0 - (x0 + rim) >= 5:                    # o reflexo do vidro, na margem da esquerda
+        gx = x0 + rim + 1
+        for i, (a, b) in enumerate(((6, 2), (11, 4))):
+            d.line([(gx, cab.head + a + 4), (gx + b, cab.head + a + 4 - b)], fill=C["glasshi"])
+    rect(d, (sx0 - 1, cab.scr_y - 1, sx1 + 1, cab.scr_y + sh), C["tube"])
+    # o painel de controle: o tampo escuro inclinado e a frente clara com o friso verde-agua
+    d.polygon([(x0, panel), (x1, panel), (x1 + out, panel + 8), (x0 - out, panel + 8)], fill=C["panel"], outline=ink)
     d.line([(x0 + 1, panel + 1), (x1 - 1, panel + 1)], fill=C["panelhi"])
-    rect(d, (x0 - 3, panel + 9, x1 + 3, panel + 13), C["strip"], C["ink"])
-    d.line([(x0 - 2, panel + 10), (x1 + 2, panel + 10)], fill=C["pink"])
-    # A porta das fichas, perto do chao, e o rodape
-    door = floor - 20
-    rect(d, (cx - 14, door, cx + 14, floor - 4), C["door"], C["line"])
-    for x in (cx - 7, cx + 5):
-        rect(d, (x - 1, door + 3, x + 2, door + 10), C["ink"])
-        rect(d, (x, door + 4, x + 1, door + 9), C["red"])
-    d.line([(cx - 10, door + 13), (cx + 10, door + 13)], fill=C["ink"])
-    rect(d, (x0 + 1, floor - 3, x1 - 1, floor - 2), C["bodylo"])
-    if s == 0 and door - cab.label_y > 20:        # um gabinete alto: uma faixa na frente
-        y = (cab.label_y + 10 + door) // 2
-        d.line([(x0 + 2, y), (x1 - 2, y)], fill=C["pink"])
-        d.line([(x0 + 2, y + 2), (x1 - 2, y + 2)], fill=C["purple"])
+    rect(d, (x0 - out, panel + 9, x1 + out, panel + 13), C["body"], ink)
+    d.line([(x0 - out + 1, panel + 10), (x1 + out - 1, panel + 10)], fill=C["bodyhi"])
+    d.line([(x0 - out + 1, panel + 11), (x1 + out - 1, panel + 11)], fill=C["teal"])
+    # a parte de baixo: a sombra do painel e a porta
+    rect(d, (x0 + 1, lower, x1 - 1, lower + 1), C["bodylo"])
+    for x in range(x0 + 1, x1, 2):
+        d.point((x, lower + 2), fill=C["bodylo"])
+    d.rectangle((x0 + rim, lower + 4, x1 - rim, floor - 8), outline=C["bodymid"])
+    # a porta das fichas: as luzes laranja das entradas, as fendas e a devolucao
+    dw = 11 if cab.half >= 40 else 10
+    dy1 = floor - 9
+    dy0 = max(cab.label_y + 12, dy1 - 18)
+    rect(d, (cx - dw, dy0, cx + dw, dy1), C["steel"], ink)
+    d.rectangle((cx - dw + 2, dy0 + 2, cx + dw - 2, dy1 - 2), outline=C["steello"])
+    for x in (cx - 5, cx + 4):
+        rect(d, (x - 1, dy0 + 4, x + 1, dy0 + 5), C["orange"])
+        rect(d, (x, dy0 + 7, x, dy0 + 10), ink)
+    rect(d, (cx - 2, dy1 - 4, cx + 1, dy1 - 3), ink)
+    # num gabinete alto, a grade do alto-falante entre a plaquinha e a porta
+    gap = dy0 - (cab.label_y + 10)
+    if gap > 14:
+        gy = cab.label_y + 10 + gap // 2 - 3
+        for k in range(4):
+            d.line([(cx - 12, gy + k * 2), (cx + 12, gy + k * 2)], fill=C["bodylo"])
+    # o rodape
+    rect(d, (x0 + 1, floor - 6, x1 - 1, floor - 2), C["kick"])
+    d.line([(x0 + 1, floor - 6), (x1 - 1, floor - 6)], fill=C["kickhi"])
 
 
 def marquee(d, cab, text, playing, f8):
-    """O fundo do letreiro (roxo; escuro quando o jogo roda) e o texto, em
-    pixels; devolve a caixa, para o logo do jogo ir por cima em resolucao cheia."""
-    box = (cab.x0 + 3, cab.top + 4, cab.x1 - 3, cab.top + 16)
-    h = box[3] - box[1] + 1
-    bands = (C["mqp1"], C["mqp2"]) if playing else (C["mq1"], C["mq2"], C["mq3"])
-    for i, y in enumerate(range(box[1], box[3] + 1)):
-        d.line([(box[0], y), (box[2], y)], fill=bands[min(len(bands) - 1, i * len(bands) // h)])
-    if not playing and text:
-        w = box[2] - box[0] + 1
+    """O letreiro: verde aceso com o texto (o numero do gabinete), ou escuro
+    quando o jogo roda; devolve a caixa, para o logo do jogo ir por cima em
+    resolucao cheia."""
+    box = (cab.x0 + cab.rim, cab.top + 4, cab.x1 - cab.rim, cab.top + 16)
+    x0, y0, x1, y1 = box
+    if playing:
+        d.rounded_rectangle(box, radius=2, fill=C["mqp1"])
+        d.line([(x0 + 2, y0 + 1), (x1 - 2, y0 + 1)], fill=C["mqp2"])
+        return box
+    d.rounded_rectangle(box, radius=2, fill=C["mqg"])
+    d.line([(x0 + 2, y0 + 1), (x1 - 2, y0 + 1)], fill=C["mqghi"])
+    d.line([(x0 + 1, y0 + 2), (x1 - 1, y0 + 2)], fill=C["mqghi"])
+    d.line([(x0 + 2, y1 - 1), (x1 - 2, y1 - 1)], fill=C["mqglo"])
+    if text:
         tw = int(d.textlength(text, font=f8))
-        tx, ty = box[0] + (w - tw) // 2, box[1] + (h - 8) // 2
-        d.text((tx + 1, ty + 1), text, font=f8, fill=C["ink"])
-        d.text((tx, ty), text, font=f8, fill=C["yellow"])
+        d.text((x0 + (x1 - x0 + 1 - tw) // 2, y0 + 3), text, font=f8, fill=C["mqtext"])
     return box
 
 
-def label(d, cab, text, f8):
-    d.text((cab.cx - int(d.textlength(text, font=f8)) // 2, cab.label_y), text, font=f8, fill=C["green"])
+def label(d, cab, text, f8=None):
+    """A plaquinha embaixo do painel com os jogadores do gabinete (P1-2...)."""
+    tw = len(text) * 4 - 1
+    x = cab.cx - tw // 2
+    rect(d, (x - 3, cab.label_y, x + tw + 2, cab.label_y + 8), C["ink"])
+    tiny(d, x, cab.label_y + 2, text, C["green"])
 
 
-def controls(d, cab, press, balls):
-    """As duas alavancas (balls: a cor de cada uma, ou uma so para as duas) e os
-    botoes; a do jogador 1 mexe e o botao acende num aperto."""
-    cx, panel = cab.cx, cab.panel
-    off = int(cab.half * 0.58)
-    if not isinstance(balls[0], tuple):
-        balls = (balls, balls)
-    for p, jx in enumerate((cx - off, cx + int(cab.half * 0.13))):
-        ball = balls[p]
+def controls(d, cab, press, balls=None):
+    """Os dois jogadores do gabinete: cada um com um manche vermelho classico a
+    esquerda e tres botoes em fila a direita dele. O manche do jogador 1 mexe e
+    o primeiro botao dele acende num aperto."""
+    panel = cab.panel
+    for p, (a, b) in enumerate(((cab.x0, cab.cx - 1), (cab.cx, cab.x1))):
+        bx = a + (b - a + 1 - 22) // 2
+        jx = bx + 2
         dx, dy = {"down": (0, 1), "up": (0, -1), "right": (2, 0), "left": (-2, 0)}.get(press, (0, 0)) if p == 0 else (0, 0)
-        rect(d, (jx - 3, panel + 4, jx + 3, panel + 5), C["ink"])
-        d.line([(jx, panel + 4), (jx + dx // 2, panel + 1 + dy)], fill=C["metal"])
-        bx, by = jx + dx, panel - 2 + dy
-        rect(d, (bx - 2, by - 1, bx + 2, by + 1), ball)
-        rect(d, (bx - 1, by - 2, bx + 1, by + 2), ball)
-        d.point((bx - 1, by - 1), fill=C["fg"])
+        rect(d, (jx - 2, panel + 4, jx + 2, panel + 6), C["ink"])                  # a base
+        d.line([(jx, panel + 4), (jx + dx // 2, panel - 1 + dy)], fill=C["metal"])  # a haste
+        ox, oy = jx + dx, panel - 3 + dy
+        d.ellipse((ox - 2, oy - 2, ox + 2, oy + 2), fill=C["red"])                 # a bola
+        d.point((ox - 1, oy - 1), fill=C["ballhi"])
+        d.point((ox + 1, oy + 1), fill=C["balllo"])
         for i, col in enumerate((C["yellow"], C["green"], C["pink"])):
-            x, y = jx + 6 + i * 4, panel + 2 + (i % 2)
+            x, y = bx + 8 + i * 5, panel + 3
             on = p == 0 and i == 0 and press == "a"
-            rect(d, (x, y + 1, x + 2, y + 2), C["ink"])
-            rect(d, (x, y + (1 if on else 0), x + 2, y + (1 if on else 0) + 1), C["fg"] if on else col)
+            rect(d, (x, y + 1, x + 3, y + 3), C["ink"])
+            cy = y + (1 if on else 0)
+            rect(d, (x, cy, x + 3, cy + 1), C["fg"] if on else col)
+            d.point((x, cy), fill=C["panel"])        # os cantos de cima, para o botao ficar redondo
+            d.point((x + 3, cy), fill=C["panel"])
 
 
 def bezier(a, b, sag):
@@ -218,27 +265,24 @@ def bezier(a, b, sag):
     return out
 
 
-def chain(cabs, sag):
-    """Os cabos de um gabinete ao seguinte."""
-    return [bezier(cabs[i].plug(1), cabs[i + 1].plug(-1), sag) for i in range(len(cabs) - 1)]
+def chain(cabs):
+    """Os cabos de um gabinete ao seguinte, deitados no chao: saem de baixo de
+    um e chegam embaixo do outro numa curva rasa, um pouco para a frente."""
+    return [bezier(cabs[i].plug(1), cabs[i + 1].plug(-1), cabs[i].floor + 6) for i in range(len(cabs) - 1)]
 
 
 def draw_cables(d, cables, dots):
-    """Os cabos e os pulsos: dots = [(cabo, posicao 0..1, cor), ...]."""
+    """Os cabos (um pixel azul com o contorno escuro) e os pulsos que andam
+    neles: dots = [(cabo, posicao 0..1, cor), ...]."""
     for pts in cables:
         for x, y in pts:
-            rect(d, (x - 1, y - 2, x + 1, y + 2), C["ink"])
+            rect(d, (x - 1, y - 1, x + 1, y + 1), C["ink"])
     for pts in cables:
         for x, y in pts:
-            rect(d, (x, y - 1, x, y + 1), C["cable"])
-            d.point((x, y - 1), fill=C["cablehi"])
-        for x, y in (pts[0], pts[-1]):            # os conectores
-            rect(d, (x - 2, y - 3, x + 2, y + 1), C["cyan"], C["ink"])
+            d.point((x, y), fill=C["cable"])
     for i, p, col in dots:
         pts = cables[i]
         x, y = pts[max(0, min(len(pts) - 1, int(round(p * (len(pts) - 1)))))]
-        dim = tuple(int(c * 0.45 + b * 0.55) for c, b in zip(col, C["bg"]))
-        rect(d, (x - 2, y - 2, x + 2, y + 2), dim)
         rect(d, (x - 1, y - 1, x + 1, y + 1), col)
         d.point((x, y), fill=C["fg"])
 

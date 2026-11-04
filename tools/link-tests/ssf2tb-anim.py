@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A animacao do link de quatro gabinetes para o site: Super Street Fighter II:
-The Tournament Battle, em pixel art (pixelcab.py), quatro gabinetes numa
-corrente de cabos como a do jogo. As telas do frontend sao as reais
+The Tournament Battle, quatro gabinetes candy em pixel art (pixelcab.py)
+lado a lado, numa corrente de cabos como a do jogo. As telas do frontend sao as reais
 (link-story.py ssf2tb): o 1 escolhe o jogo e abre o LINK PLAY, o jogo aparece no
 alto da lista dos outros, cada um entra, e cada um abre o jogo seis segundos
 depois do anterior. O jogo e o de verdade, quatro MAME ligados
@@ -51,12 +51,11 @@ STEPS = {
            "Four fights at once, eight fighters"],
 }
 SLOTS = ["P1-2", "P3-4", "P5-6", "P7-8"]
-# As cores dos oito lugares do jogo (a tela de entrada): uma alavanca de cada.
-BALLS = [((255, 85, 85), (98, 114, 255)), ((241, 250, 140), (80, 250, 123)),
-         ((189, 147, 249), (139, 233, 253)), ((255, 184, 108), (200, 200, 210))]
 
-CABS = [Cab(39 + 74 * i, 35, 46, 198, (64, 48), side=0, socket="front") for i in range(4)]
-CABLES = chain(CABS, 222)
+# Os quatro candy encostados um no outro, como numa fileira de fliperama japones
+# (o painel nao passa do corpo, para nao invadir o vizinho).
+CABS = [Cab(39 + 74 * i, 37, 46, 198, (64, 48), cp_out=0) for i in range(4)]
+CABLES = chain(CABS)
 
 # ── O roteiro ─────────────────────────────────────────────────────
 JOIN = [(6.6, 9.4), (9.6, 12.2), (12.4, 15.0)]   # cada um que entra: comeca a agir, entra na sala
@@ -199,7 +198,7 @@ def main():
                     logos.append(box)
                 label(d, cab, SLOTS[i], f8)
                 press = next((k for when, k in PRESSES[i] if when <= tt < when + 0.3), None)
-                controls(d, cab, press, BALLS[i])
+                controls(d, cab, press)
             im = low.resize((W, H), Image.NEAREST)
             for i, cab in enumerate(CABS):
                 im.paste(scrs[i], cab.screen_box(PX), mask)

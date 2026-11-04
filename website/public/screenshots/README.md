@@ -19,7 +19,8 @@ ffmpeg -ss 87 -t 11 -i .shots/video/clips/s5_frontend.mkv -an -vf fps=12 \
 ```
 
 `anim/netplay-{en,pt}.webp` and `anim/ssf2tb-{en,pt}.webp` are the illustrations of the
-Linked cabinets page: pixel art cabinets joined by network cables, 1200x900, with the
+Linked cabinets page: Japanese candy cabinets in pixel art (as in the isometric room of the
+home) joined by network cables on the floor, 1200x900, with the
 real frontend screens and the real game on their tubes (Escape Kids net play on two
 cabinets; the four-cabinet Super Street Fighter II: The Tournament Battle, recorded from
 four linked MAME). Made by `tools/link-tests/netplay-anim.py` and `ssf2tb-anim.py`; the
