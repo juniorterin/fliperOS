@@ -28,6 +28,7 @@ inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/mame}
 x11run=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
 kmsrun=${FLIPEROS_KMS_RUN_BIN:-/opt/fliperos/bin/fliperos-kms-run}
 kmssdl=${FLIPEROS_SDL2_KMS:-/usr/local/lib/fliperos/sdl2-kms}
+color=${FLIPEROS_COLOR:-/usr/local/bin/fliperos-color}
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 screens_gen=${FLIPEROS_MAME_SCREENS:-/opt/fliperos/bin/fliperos-mame-screens}
 multiscreen=${FLIPEROS_MULTISCREEN:-/opt/fliperos/bin/fliperos-multiscreen}
@@ -44,9 +45,16 @@ opens_video() {
   return 0
 }
 
-# use_kms: abre no KMS (o cabecalho diz quando fica no X).
+# use_kms: abre no KMS (o cabecalho diz quando fica no X). Tambem fica no X
+# com a tela sem modo nenhum: o frontend do FliperOS (o SDL do Ubuntu) solta a
+# tela antes do jogo sem devolver o modo ("Could not restore CRTC"), e o
+# Switchres acha o CRTC pelo conector: sem ele, "no crtc found" e o jogo nao
+# abria. O Xorg acende a tela sozinho.
 use_kms() {
   [[ -f $kmssdl/libSDL2-2.0.so.0 ]] || return 1
+  if [[ -x $color ]] && ! "$color" mode > /dev/null 2>&1; then
+    return 1
+  fi
   grep -q '^groovymame_video=x11' "$conf" 2> /dev/null && return 1
   if grep -q '^screens=.*,' "$conf" 2> /dev/null && ! grep -q '^multiscreen=off' "$conf" 2> /dev/null; then
     return 1

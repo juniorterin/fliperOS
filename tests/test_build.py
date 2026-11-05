@@ -1716,6 +1716,15 @@ class GroovyMameTests(unittest.TestCase):
             self.assertEqual(self.run_wrapper('mvsc', display=None, kms_sdl=True, conf=conf)[0][0], 'x11-run', conf)
         self.assertEqual(self.run_wrapper('mvsc', display=None, kms_sdl=True,
                                           conf='screens=VGA-1,HDMI-A-1\nmultiscreen=off\n')[0][0], 'kms-run')
+        # A tela sem modo (o frontend soltou a tela sem devolver o modo): o
+        # Switchres nao acha o CRTC no KMS, entao vai para o X.
+        with tempfile.TemporaryDirectory() as tmp:
+            color = Path(tmp) / 'fliperos-color'
+            for status, where in ((1, 'x11-run'), (0, 'kms-run')):
+                color.write_text('#!/bin/sh\n[ "$1" = mode ] && exit %d\nexit 2\n' % status)
+                color.chmod(0o755)
+                self.assertEqual(self.run_wrapper('mvsc', display=None, kms_sdl=True,
+                                                  env_extra={'FLIPEROS_COLOR': str(color)})[0][0], where, status)
         # Vindo do X que ele mesmo escolheu, nao volta para o KMS.
         self.assertEqual(self.run_wrapper('mvsc', display=None, kms_sdl=True,
                                           env_extra={'FLIPEROS_GROOVYMAME_X11': '1'})[0][0], 'x11-run')
