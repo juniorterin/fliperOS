@@ -64,6 +64,21 @@ for mode in "link compat" "link core" egl; do
 done
 run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_OSD_FILE=$b/osd FLIPEROS_DEFLICKER_FORCE=1 $b/deflicker_test link
 
+# O flash da pistola de luz: um tiro (BTN_LEFT=1 num arquivo no lugar da
+# pistola) deixa o quadro inteiro claro (rows: 255); com gun_flash=off, as
+# listras de sempre; com gun_flash_level=50, 127. O estado volta (scissor-kept: 1).
+python3 -c "
+import struct
+open('$b/gun', 'wb').write(struct.pack('llHHi', 0, 0, 1, 0x110, 1) + struct.pack('llHHi', 0, 0, 0, 0, 0))"
+for mode in "link compat" "link core" egl; do
+  # shellcheck disable=SC2086 # o modo e o contexto, uma palavra cada
+  run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=/dev/null FLIPEROS_GUN_DEVICES=$b/gun $b/deflicker_test $mode
+done
+printf 'gun_flash=off\n' > $b/gunconf
+run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=$b/gunconf FLIPEROS_GUN_DEVICES=$b/gun $b/deflicker_test link
+printf 'gun_flash_level=50\n' > $b/gunconf
+run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=$b/gunconf FLIPEROS_GUN_DEVICES=$b/gun $b/deflicker_test link
+
 # O FPS para o painel web (config/fliperos-web): a camada grava a cada
 # segundo "pid fps programa core filtrando", mesmo sem filtrar.
 run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_FPS_FILE=$b/fps FLIPEROS_DEFLICKER_APP=flycast \

@@ -117,4 +117,14 @@ d = bytearray(open('$b/osd', 'rb').read())
 d[8] = 0
 open('$b/osd', 'wb').write(d)"
 run osd-fechada 255 0 FLIPEROS_VK_FPS=1 FLIPEROS_OSD_FILE=$b/osd
+# O flash da pistola de luz: o gatilho apertado (BTN_LEFT=1 num arquivo no lugar
+# da pistola) com gun_flash=hold deixa toda linha clara ate o ultimo quadro; com
+# off, as listras como estavam (o pulse dura dois quadros, o teste olha o 45o).
+python3 -c "
+import struct
+open('$b/gun', 'wb').write(struct.pack('llHHi', 0, 0, 1, 0x110, 1) + struct.pack('llHHi', 0, 0, 0, 0, 0))"
+printf 'gun_flash=hold\n' > $b/conf
+run flash 255 255 FLIPEROS_VK_FPS=1 FLIPEROS_CONF=$b/conf FLIPEROS_GUN_DEVICES=$b/gun
+printf 'gun_flash=off\n' > $b/conf
+run flash-off 255 0 FLIPEROS_VK_FPS=1 FLIPEROS_CONF=$b/conf FLIPEROS_GUN_DEVICES=$b/gun
 exit $fail

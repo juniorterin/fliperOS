@@ -1,0 +1,119 @@
+From: Ademir Terin Junior <juniorterin@gmail.com>
+Date: Thu, 5 Nov 2026 05:10:00 -0300
+Subject: [PATCH] A trigger pulled without light waits for the screen flash
+
+A CRT gun finds the aim only where the picture is lit: over a dark part of
+it the shot went out on the held aim, or off the screen once the hold ran
+out (in Area 51, reloads while shooting at the dark floor). With the
+screen flash of FliperOS (the GL and Vulkan layers light the whole picture
+for two frames on a shot, like RePlayOS's GCON2 FLASH), a trigger pulled
+while the gun sees nothing now waits up to flash_ms for a report that sees
+the lit screen and goes out there; if none comes, the gun points off the
+screen and the shot goes out off screen at once. flash_ms 0 (the default)
+keeps the trigger as it comes.
+---
+diff --git a/guncon2.c b/guncon2.c
+index 1dd2224..225cbb0 100644
+--- a/guncon2.c
++++ b/guncon2.c
+@@ -73,6 +73,19 @@ static bool offscreen_reload = true;
+ module_param(offscreen_reload, bool, 0644);
+ MODULE_PARM_DESC(offscreen_reload, "off screen, the trigger also presses the right button (reload)");
+ 
++/*
++ * With the screen flash on (FliperOS: Setup > Joysticks > Light gun flash, the
++ * GL and Vulkan layers light the whole picture for two frames on a shot), a
++ * trigger pressed while the gun sees nothing waits up to flash_ms for a report
++ * that sees the lit screen: then the shot goes out there, at the real aim even
++ * over a dark part of the picture; if none comes the gun points off the
++ * screen, and the shot goes out off screen at once, without the hold. 0: no
++ * flash, the trigger goes out as it comes.
++ */
++static unsigned int flash_ms;
++module_param(flash_ms, uint, 0644);
++MODULE_PARM_DESC(flash_ms, "ms a trigger pulled without light waits for the screen flash (0 = no flash)");
++
+ struct guncon2 {
+     struct input_dev *input_device;
+     struct usb_interface *intf;
+@@ -82,6 +95,8 @@ struct guncon2 {
+     char phys[64];
+     unsigned long seen; /* jiffies of the last report that saw the screen */
+     int seen_x, seen_y; /* and where it was */
++    bool shot_waiting, shot; /* a trigger waiting for the flash; the trigger sent */
++    unsigned long shot_since; /* jiffies of the trigger that waits */
+     struct work_struct clear_halt; /* a stalled endpoint, cleared out of the irq */
+ };
+ 
+@@ -132,7 +147,7 @@ static void guncon2_usb_irq(struct urb *urb) {
+     struct guncon2 *guncon2 = urb->context;
+     unsigned char *data = urb->transfer_buffer;
+     int error, buttons;
+-    bool offscreen;
++    bool offscreen, sees, trigger;
+     unsigned short x, y;
+     signed char hat_x = 0;
+     signed char hat_y = 0;
+@@ -177,7 +192,8 @@ static void guncon2_usb_irq(struct urb *urb) {
+         y = data[4];
+ 
+         offscreen = false;
+-        if (guncon2_sees_screen(guncon2->input_device, x, y)) {
++        sees = guncon2_sees_screen(guncon2->input_device, x, y);
++        if (sees) {
+             guncon2->seen = jiffies;
+             guncon2->seen_x = x;
+             guncon2->seen_y = y;
+@@ -193,6 +209,40 @@ static void guncon2_usb_irq(struct urb *urb) {
+         /* Buttons */
+         buttons = ((data[0] << 8) | data[1]) ^ 0xffff;
+ 
++        /* The trigger, waiting for the screen flash when the gun sees nothing
++         * (flash_ms). A trigger released before the wait ends still goes out,
++         * and is released on the next report. */
++        trigger = buttons & GUNCON2_TRIGGER;
++        if (!flash_ms) {
++            guncon2->shot = trigger;
++            guncon2->shot_waiting = false;
++        } else {
++            if (!trigger && !guncon2->shot_waiting)
++                guncon2->shot = false;
++            if (trigger && !guncon2->shot && !guncon2->shot_waiting) {
++                if (sees) {
++                    guncon2->shot = true;
++                } else {
++                    guncon2->shot_waiting = true;
++                    guncon2->shot_since = jiffies;
++                }
++            }
++            if (guncon2->shot_waiting) {
++                if (sees) {
++                    guncon2->shot_waiting = false;
++                    guncon2->shot = true;
++                } else if (time_after(jiffies, guncon2->shot_since + msecs_to_jiffies(flash_ms))) {
++                    /* Not even the flash lit it: off the screen. */
++                    guncon2->shot_waiting = false;
++                    guncon2->shot = true;
++                    if (!offscreen) {
++                        offscreen = true;
++                        guncon2_report_offscreen(guncon2->input_device);
++                    }
++                }
++            }
++        }
++
+         // d-pad
+         if (buttons & GUNCON2_DPAD_LEFT) {// left
+             hat_x -= 1;
+@@ -210,9 +260,9 @@ static void guncon2_usb_irq(struct urb *urb) {
+         input_report_abs(guncon2->input_device, ABS_HAT0Y, hat_y);
+ 
+         // main buttons
+-        input_report_key(guncon2->input_device, BTN_LEFT, buttons & GUNCON2_TRIGGER);
++        input_report_key(guncon2->input_device, BTN_LEFT, guncon2->shot);
+         input_report_key(guncon2->input_device, BTN_RIGHT, buttons & GUNCON2_BTN_A || buttons & GUNCON2_BTN_C ||
+-                         (offscreen_reload && offscreen && buttons & GUNCON2_TRIGGER));
++                         (offscreen_reload && offscreen && guncon2->shot));
+         input_report_key(guncon2->input_device, BTN_MIDDLE, buttons & GUNCON2_BTN_B);
+         input_report_key(guncon2->input_device, BTN_A, buttons & GUNCON2_BTN_A);
+         input_report_key(guncon2->input_device, BTN_B, buttons & GUNCON2_BTN_B);

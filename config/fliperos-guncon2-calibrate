@@ -27,3 +27,14 @@ command -v evdev-joystick >/dev/null \
 
 evdev-joystick --e "$device" -m "$X_MIN" -M "$X_MAX" -a 0 >/dev/null 2>&1
 evdev-joystick --e "$device" -m "$Y_MIN" -M "$Y_MAX" -a 1 >/dev/null 2>&1
+
+# O flash da tela no tiro (Setup > Joysticks > Light gun flash; gun_flash= no
+# fliperos.conf, pulse sem a linha): o driver espera a leitura que o flash
+# ilumina antes de soltar um tiro dado sem luz (flash_ms,
+# config/guncon2-patches/0005). Desligado, o tiro sai como vem.
+flash=$(sed -n 's/^gun_flash=//p' "${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}" 2> /dev/null | tail -n 1)
+param=${GUNCON2_FLASH_PARAM:-/sys/module/guncon2/parameters/flash_ms}
+if [[ -w $param ]]; then
+  [[ $flash == off ]] && echo 0 > "$param" || echo 100 > "$param"
+fi
+exit 0

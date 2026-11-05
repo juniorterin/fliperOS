@@ -54,6 +54,17 @@
  * jogo) tambem e desenhada aqui, antes do filtro: a imagem dela vem do arquivo
  * /run/fliperos-osd/screen (FLIPEROS_OSD_FILE), que so existe com ela aberta.
  *
+ * O flash da pistola de luz (Setup > Joysticks > Light gun flash), como o
+ * GCON2 FLASH do RePlayOS: no tiro de uma pistola (os eventos com
+ * ID_INPUT_GUN no udev, lidos sem prender o aparelho), a tela fica clara por
+ * dois quadros (pulse) ou enquanto o gatilho esta apertado (hold). Uma pistola
+ * de CRT so acha a mira onde a tela tem luz: numa parte escura ela nao via
+ * nada, e o tiro saia na mira guardada ou fora da tela. O driver do GunCon 2
+ * espera a leitura do flash antes de soltar o tiro (flash_ms,
+ * config/guncon2-patches). Do fliperos.conf: gun_flash=pulse (o padrao),
+ * hold ou off, e gun_flash_level= (10 a 100, o brilho). FLIPEROS_GUN_DEVICES:
+ * os eventos lidos, separados por ":" (os testes).
+ *
  * O SDL e outros abrem a libGL por dlopen e pegam o glXSwapBuffers por
  * dlsym: o dlsym tambem passa por aqui. O estado do OpenGL do programa e
  * guardado e devolvido em volta do filtro.
@@ -74,6 +85,8 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+
+#include <linux/input.h>
 
 #include <EGL/egl.h>
 #include <GL/gl.h>
@@ -124,8 +137,8 @@ static void log_once(const char *msg)
     fprintf(stderr, "fliperos-deflicker: %s\n", msg);
 }
 
-/* As linhas "deflicker...=", "color_...=", "scanlines...=" e "frequency=" do
- * fliperos.conf. Relidas
+/* As linhas "deflicker...=", "color_...=", "scanlines...=", "frequency=" e
+ * "gun_flash...=" do fliperos.conf. Relidas
  * quando o arquivo muda (conf_changed): a cor mudada pelo painel web ou
  * pelo SSH com o jogo aberto vale na hora. */
 static char conf_lines[4096];
@@ -157,7 +170,7 @@ static void load_conf(void)
     while (f && fgets(line, sizeof(line), f)) {
         size_t n = strlen(line);
         if ((strncmp(line, "deflicker", 9) && strncmp(line, "color_", 6) && strncmp(line, "scanlines", 9) &&
-             strncmp(line, "frequency=", 10)) ||
+             strncmp(line, "frequency=", 10) && strncmp(line, "gun_flash", 9)) ||
             used + n + 1 >= sizeof(conf_lines))
             continue;
         memcpy(conf_lines + used, line, n);
@@ -457,6 +470,102 @@ static int osd_visible(void)
     return osd_map && osd_map->visible;
 }
 
+/* ── O flash da pistola de luz (ver o comeco) ──────────────────────── */
+
+#define GUN_MAX 4
+#define GUN_FLASH_FRAMES 2
+static int gun_fd[GUN_MAX], gun_count;
+static int gun_mode = 1; /* 0 desligado, 1 pulse, 2 hold */
+static float gun_level = 1.0f;
+static int gun_frames, gun_held;
+
+static void read_gun_flash(void)
+{
+    char value[32];
+    gun_mode = 1;
+    if (conf_value("gun_flash", value, sizeof(value)))
+        gun_mode = !strcmp(value, "off") ? 0 : !strcmp(value, "hold") ? 2 : 1;
+    int level = conf_value("gun_flash_level", value, sizeof(value)) ? atoi(value) : 100;
+    gun_level = (level < 10 ? 10 : level > 100 ? 100 : level) / 100.0f;
+}
+
+/* gun_tagged N: o /dev/input/eventN e uma pistola (ID_INPUT_GUN no udev). */
+static int gun_tagged(int n)
+{
+    char path[64], line[128];
+    int gun = 0;
+    snprintf(path, sizeof(path), "/run/udev/data/c13:%d", 64 + n);
+    FILE *f = fopen(path, "r");
+    while (f && !gun && fgets(line, sizeof(line), f))
+        gun = !strncmp(line, "E:ID_INPUT_GUN=1", 16);
+    if (f)
+        fclose(f);
+    return gun;
+}
+
+static void gun_open(const char *path)
+{
+    int fd = gun_count < GUN_MAX ? open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC) : -1;
+    if (fd >= 0)
+        gun_fd[gun_count++] = fd;
+}
+
+static void gun_scan(void)
+{
+    char path[64];
+    const char *env = getenv("FLIPEROS_GUN_DEVICES");
+    while (gun_count > 0)
+        close(gun_fd[--gun_count]);
+    if (env && *env) {
+        char list[512], *save = NULL;
+        snprintf(list, sizeof(list), "%s", env);
+        for (char *p = strtok_r(list, ":", &save); p; p = strtok_r(NULL, ":", &save))
+            gun_open(p);
+        return;
+    }
+    for (int n = 0; n < 32 && gun_count < GUN_MAX; n++) {
+        if (gun_tagged(n)) {
+            snprintf(path, sizeof(path), "/dev/input/event%d", n);
+            gun_open(path);
+        }
+    }
+}
+
+/* gun_flash: o brilho do flash neste quadro (0: sem flash). Sem pistola
+ * aberta, procura uma a cada 120 quadros; a que sai (ENODEV) e procurada de
+ * novo. */
+static float gun_flash(void)
+{
+    static int frames;
+    struct input_event ev;
+    if (!gun_mode)
+        return 0.0f;
+    if (gun_count <= 0 && !(frames++ % 120))
+        gun_scan();
+    for (int i = 0; i < gun_count; i++) {
+        ssize_t n;
+        while ((n = read(gun_fd[i], &ev, sizeof(ev))) == (ssize_t)sizeof(ev)) {
+            if (ev.type == EV_KEY && ev.code == BTN_LEFT && ev.value == 1)
+                gun_held = 1, gun_frames = GUN_FLASH_FRAMES;
+            else if (ev.type == EV_KEY && ev.code == BTN_LEFT && ev.value == 0)
+                gun_held = 0;
+        }
+        if (n < 0 && errno == ENODEV) {
+            while (gun_count > 0)
+                close(gun_fd[--gun_count]);
+            gun_held = 0;
+            break;
+        }
+    }
+    if (gun_mode == 2 && gun_held)
+        return gun_level;
+    if (gun_frames > 0) {
+        gun_frames--;
+        return gun_level;
+    }
+    return 0.0f;
+}
+
 /* ── O filtro (OpenGL) ──────────────────────────────────────────── */
 
 typedef void *(*getproc_fn)(const char *);
@@ -473,6 +582,7 @@ static struct {
     F(GetUniformLocation) F(Uniform1i) F(Uniform3f) F(GenVertexArrays) F(BindVertexArray) F(BindSampler)
     F(DrawArrays) F(UniformMatrix3fv) F(ReadPixels) F(PixelStorei) F(BindBuffer)
     F(TexSubImage2D) F(BlendFuncSeparate) F(BlendEquationSeparate) F(Uniform2f)
+    F(ClearColor) F(Clear) F(GetFloatv)
 } gl;
 #undef F
 
@@ -502,6 +612,7 @@ static int load_gl(getproc_fn get)
     L(Uniform3f); L(GenVertexArrays); L(BindVertexArray); L(BindSampler); L(DrawArrays); L(UniformMatrix3fv);
     L(ReadPixels); L(PixelStorei); L(BindBuffer);
     L(TexSubImage2D); L(BlendFuncSeparate); L(BlendEquationSeparate); L(Uniform2f);
+    L(ClearColor); L(Clear); L(GetFloatv);
 #undef L
     return gl.GetIntegerv && gl.GetString && gl.CopyTexSubImage2D && gl.CreateShader && gl.DrawArrays &&
            gl.BindFramebuffer && gl.UseProgram && gl.Uniform3f && gl.UniformMatrix3fv;
@@ -734,7 +845,7 @@ static int gl_ready(getproc_fn get)
     return loaded;
 }
 
-static void filter(void *ctx_id, getproc_fn get, int w, int h, int pass, int deflick, int osd)
+static void filter(void *ctx_id, getproc_fn get, int w, int h, int pass, int deflick, int osd, float flash)
 {
     struct ctx *c;
     if (!gl_ready(get) || !ctx_id || w <= 0 || h <= 0)
@@ -760,7 +871,7 @@ static void filter(void *ctx_id, getproc_fn get, int w, int h, int pass, int def
         memcpy(m, matrix, sizeof(m));
     for (int i = 0; (pass & 4) && i < 9; i++)
         m[i] *= scan_boost;
-    if (!pass && !osd)
+    if (!pass && !osd && flash <= 0.0f)
         return;
 
     /* O estado do programa, para devolver. */
@@ -835,6 +946,16 @@ static void filter(void *ctx_id, getproc_fn get, int w, int h, int pass, int def
         }
     }
 
+    /* O flash da pistola por cima de tudo: o quadro inteiro claro. */
+    if (flash > 0.0f && gl.ClearColor && gl.Clear && gl.GetFloatv) {
+        GLfloat clear[4];
+        gl.GetFloatv(GL_COLOR_CLEAR_VALUE, clear);
+        gl.ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        gl.ClearColor(flash, flash, flash, 1.0f);
+        gl.Clear(GL_COLOR_BUFFER_BIT);
+        gl.ClearColor(clear[0], clear[1], clear[2], clear[3]);
+    }
+
     /* De volta como estava. */
     if (gl.BindVertexArray)
         gl.BindVertexArray((GLuint)vao);
@@ -873,6 +994,7 @@ static int active(void)
         read_level();
         read_matrix();
         read_scanlines();
+        read_gun_flash();
         init = 1;
     } else if (!(++frames % 30)) {
         char now[sizeof(core)] = "";
@@ -888,6 +1010,8 @@ static int active(void)
             read_matrix();
         if (changed || getenv("FLIPEROS_SCANLINES_FILE"))
             read_scanlines();
+        if (changed)
+            read_gun_flash();
     }
     return (!level_off && interlaced() ? 1 : 0) | (matrix_on ? 2 : 0) | (scan_on ? 4 : 0);
 }
@@ -1038,8 +1162,9 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable)
     if (!real)
         real = sym("glXSwapBuffers");
     int what = active(), shot = shot_wanted(), osd = osd_visible();
+    float flash = gun_flash();
     fps_tick(what);
-    if (what || shot || osd) {
+    if (what || shot || osd || flash > 0.0f) {
         static GLXContext (*current)(void);
         static void (*query)(Display *, GLXDrawable, int, unsigned int *);
         unsigned int w = 0, h = 0;
@@ -1052,8 +1177,8 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable)
             query(dpy, drawable, GLX_HEIGHT, &h);
             if (shot)
                 shot_take(glx_getproc, (int)w, (int)h);
-            if (what || osd)
-                filter((void *)current(), glx_getproc, (int)w, (int)h, what, what & 1, osd);
+            if (what || osd || flash > 0.0f)
+                filter((void *)current(), glx_getproc, (int)w, (int)h, what, what & 1, osd, flash);
         }
     }
     if (real)
@@ -1066,8 +1191,9 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     if (!real)
         real = sym("eglSwapBuffers");
     int what = active(), shot = shot_wanted(), osd = osd_visible();
+    float flash = gun_flash();
     fps_tick(what);
-    if (what || shot || osd) {
+    if (what || shot || osd || flash > 0.0f) {
         static EGLContext (*current)(void);
         static EGLBoolean (*query)(EGLDisplay, EGLSurface, EGLint, EGLint *);
         EGLint w = 0, h = 0;
@@ -1078,8 +1204,8 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         if (current && query && query(dpy, surface, EGL_WIDTH, &w) && query(dpy, surface, EGL_HEIGHT, &h)) {
             if (shot)
                 shot_take(egl_getproc, (int)w, (int)h);
-            if (what || osd)
-                filter((void *)current(), egl_getproc, (int)w, (int)h, what, what & 1, osd);
+            if (what || osd || flash > 0.0f)
+                filter((void *)current(), egl_getproc, (int)w, (int)h, what, what & 1, osd, flash);
         }
     }
     return real ? real(dpy, surface) : EGL_FALSE;

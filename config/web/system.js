@@ -288,13 +288,13 @@ $("log-refresh").addEventListener("click", showLog);
 const openGroups = new Set(["System"]);
 // Os icones do Setup em cada grupo e em cada ajuste (os do carrossel no tubo).
 const GROUP_ICONS = { System: "px-system", Video: "px-video", Audio: "px-audio", Power: "px-power", Services: "px-services",
-  "Interlaced hacks": "px-mode480", Colour: "px-colour", Scanlines: "px-scanlines" };
+  "Interlaced hacks": "px-mode480", Colour: "px-colour", Scanlines: "px-scanlines", Joysticks: "px-joysticks" };
 const SETTING_ICONS = [["launcher", "px-frontend"], ["latency", "px-latency"], ["debug", "px-debug"], ["leveler", "px-audio"],
   ["menu_sounds", "px-audio"], ["stream_audio", "px-audio"], ["stream_quality", "px-video"], ["marquee_overlay", "px-outputs"],
   ["orientation", "px-orientation"], ["splash", "px-desktop"], ["mm_games", "px-outputs"], ["audio_card", "px-audio"],
   ["mame_latency", "px-latency"], ["audio.", "px-mixer"], ["power.", "px-power"],
   ["service.", "px-services"], ["mode480.", "px-mode480"], ["color.", "px-colour"], ["scanlines", "px-scanlines"],
-  ["scanline.", "px-scanlines"]];
+  ["scanline.", "px-scanlines"], ["gun_flash", "px-guncon"]];
 const settingIcon = (key) => (SETTING_ICONS.find(([k]) => key === k || (k.endsWith(".") && key.startsWith(k))) || [0, "px-setup"])[1];
 
 async function loadSettings() {

@@ -1231,6 +1231,8 @@ for _alias, _name in {
     # Latency, LPT joysticks, Recovery, Cleaner e Video Setup.
     "low": "latency", "ideal": "freeroms", "standard": "setup", "db9": "lpt", "gamecon": "lpt",
     "turbografx": "lpt", "bootloader": "system", "chdcleaner": "chds", "romcleaner": "filter",
+    # O flash da pistola de luz (Joysticks).
+    "gunflash": "guncon", "pulse": "guncon", "hold": "guncon",
     "clones": "filter", "filters": "filter", "preset": "filter", "copy": "dest", "move": "link",
     "local": "disk", "mounted": "network", "missing": "network", "horizontal": "video",
     "vertical-cw": "orientation", "vertical-ccw": "orientation",

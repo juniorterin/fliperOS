@@ -13,6 +13,7 @@ screen_joysticks() {
       "buttons|Button mapping (all emulators)|Teach FliperOS the panel: press each control when asked." \
       "layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel." \
       "guncon|Calibrate GunCon 2 (light gun)|Shoot the targets so the gun hits where it points." \
+      "gunflash|Light gun flash: $(gunflash_mode)|The screen lights up on a shot, so the gun sees dark parts too." \
       "axes|Calibrate wheel, pedals or analog stick|Set the range and the center of each axis." \
       "lpt|LPT joysticks (parallel port)|Arcade sticks and console pads wired to the parallel port." \
       "return|Return|Back to Setup.") || return 0
@@ -21,11 +22,25 @@ screen_joysticks() {
       buttons) screen_buttons ;;
       layout) screen_buttons_layout ;;
       guncon) screen_calibrate guncon ;;
+      gunflash) screen_gunflash ;;
       axes) screen_calibrate axes ;;
       lpt) screen_lpt ;;
       return) return 0 ;;
     esac
   done
+}
+
+# screen_gunflash: o flash da tela no tiro da pistola de luz (lib/buttons.sh).
+screen_gunflash() {
+  local choice
+  choice=$(ui_menu_hints "Light gun flash" \
+    "A CRT gun only finds its aim where the screen is lit. The flash lights it on a shot." "$(gunflash_mode)" \
+    "pulse|Pulse (recommended)|Two light frames per shot: dark parts hit, off screen reloads." \
+    "hold|Hold|The screen stays light while the trigger is held." \
+    "off|Off|No flash: a shot on a dark part can miss or reload." \
+    "return|Return|Back to Joysticks.") || return 0
+  [[ $choice == return ]] && return 0
+  gunflash_set "$choice"
 }
 
 # screen_buttons: quantos jogadores e, de cada um, os comandos na ordem do

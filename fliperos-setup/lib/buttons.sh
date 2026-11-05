@@ -173,3 +173,29 @@ buttons_layout_apply() {
   FLIPEROS_BUTTONS_LAYOUT=$BUTTONS_LAYOUT FLIPEROS_GAME_BUTTONS=$GAME_BUTTONS \
     "$BUTTONS" save "$BUTTONS_MAP" >> "$FLIPEROS_LOG" 2>&1
 }
+
+# O flash da tela no tiro da pistola de luz (Setup > Joysticks > Light gun
+# flash), como o GCON2 FLASH do RePlayOS: uma pistola de CRT so acha a mira
+# onde a tela tem luz, e numa parte escura o tiro saia na mira guardada ou
+# fora da tela. As camadas OpenGL e Vulkan dos emuladores
+# (config/fliperos-deflicker.c, config/fliperos-vkfps.c) leem o gun_flash= do
+# fliperos.conf: pulse (o padrao, dois quadros claros no tiro), hold (claro
+# com o gatilho apertado) ou off. O driver do GunCon 2 espera a leitura do
+# flash antes de soltar um tiro sem luz (flash_ms): ajustado aqui na hora, e
+# pelo fliperos-guncon2-calibrate quando a pistola chega.
+GUNFLASH_PARAM=${GUNFLASH_PARAM:-/sys/module/guncon2/parameters/flash_ms}
+
+gunflash_mode() {
+  local mode
+  mode=$(conf_get gun_flash 2> /dev/null)
+  [[ $mode == off || $mode == hold ]] && echo "$mode" || echo pulse
+}
+
+gunflash_set() {
+  [[ $1 =~ ^(off|pulse|hold)$ ]] || return 2
+  conf_set gun_flash "$1"
+  if [[ -w $GUNFLASH_PARAM ]]; then
+    if [[ $1 == off ]]; then echo 0 > "$GUNFLASH_PARAM"; else echo 100 > "$GUNFLASH_PARAM"; fi
+  fi
+  log_info "flash da pistola: $1"
+}

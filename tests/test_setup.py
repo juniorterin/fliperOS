@@ -1463,6 +1463,27 @@ class SettingsCliTests(Base):
             self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
         self.assertIn('settings_set "${2:-}" "${3:-}"', (SETUP / "fliperos-setup").read_text())
 
+    def test_light_gun_flash(self):
+        # O flash da tela no tiro (Setup > Joysticks > Light gun flash): pulse
+        # sem a linha; mudar grava o fliperos.conf (as camadas GL e Vulkan o
+        # leem) e o flash_ms do driver do GunCon 2 na hora.
+        param = self.env.dir / "flash_ms"
+        param.write_text("0\n")
+        env = {"COLOR_BIN": str(self.env.dir / "none"), "GUNFLASH_PARAM": str(param)}
+        rows = {r.split("|")[0]: r.split("|") for r in self.env.out("settings_list", env).splitlines()}
+        self.assertEqual(rows["gun_flash"][1:5], ["Joysticks", "Light gun flash", "choice", "pulse"])
+        self.assertEqual([o.split("=")[0] for o in rows["gun_flash"][5].split(";")], ["pulse", "hold", "off"])
+        self.env.out("settings_set gun_flash off", env)
+        self.assertIn("gun_flash=off\n", (self.env.etc / "fliperos.conf").read_text())
+        self.assertEqual(param.read_text().strip(), "0")
+        self.env.out("settings_set gun_flash hold", env)
+        self.assertEqual(param.read_text().strip(), "100")
+        self.assertEqual(self.env.out("gunflash_mode", env).strip(), "hold")
+        self.assertEqual(self.env.run("settings_set gun_flash blink", env).returncode, 2)
+        # Quando a pistola chega, o calibrador poe o mesmo flash_ms.
+        calibrate = (ROOT / "config/fliperos-guncon2-calibrate").read_text()
+        self.assertIn('[[ $flash == off ]] && echo 0 > "$param" || echo 100 > "$param"', calibrate)
+
     def test_volume_keys_tell_the_osd(self):
         fifo = self.env.dir / "osd-control"
         env = {"OSD_CONTROL": str(fifo)}

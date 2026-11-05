@@ -30,6 +30,10 @@
  * A OSD (config/fliperos-osd) tambem e desenhada aqui, antes do filtro: a imagem
  * vem do arquivo /run/fliperos-osd/screen (FLIPEROS_OSD_FILE), que so existe com
  * ela aberta, como na camada OpenGL.
+ * O flash da pistola de luz (gun_flash= e gun_flash_level= no fliperos.conf,
+ * FLIPEROS_GUN_DEVICES nos testes) e o da camada OpenGL: no tiro, a imagem
+ * inteira clara por dois quadros (pulse) ou com o gatilho apertado (hold),
+ * por um vkCmdClearAttachments depois do filtro.
  *
  * Os poucos tipos do Vulkan que ela usa estao aqui: compila so com o gcc, a
  * libc e o libdrm (o libvulkan-dev nao vem na imagem nem no gabinete).
@@ -50,6 +54,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <linux/input.h>
 #include <unistd.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
@@ -156,6 +161,8 @@ typedef struct { int32_t x, y; } Offset2D;
 typedef struct { int32_t x, y, z; } Offset3D;
 typedef struct { Offset2D offset; Extent2D extent; } Rect2D;
 typedef struct { float x, y, width, height, minDepth, maxDepth; } Viewport;
+typedef struct { uint32_t aspectMask, colorAttachment; float color[4]; } ClearAttachment;
+typedef struct { Rect2D rect; uint32_t baseArrayLayer, layerCount; } ClearRect;
 typedef struct { uint32_t aspectMask, baseMipLevel, levelCount, baseArrayLayer, layerCount; } SubresourceRange;
 typedef struct { uint32_t aspectMask, mipLevel, baseArrayLayer, layerCount; } SubresourceLayers;
 typedef struct { SubresourceLayers srcSubresource; Offset3D srcOffset; SubresourceLayers dstSubresource; Offset3D dstOffset; Extent3D extent; } ImageCopy;
@@ -555,7 +562,7 @@ static void load_conf(void)
     while (f && fgets(line, sizeof(line), f)) {
         size_t n = strlen(line);
         if ((strncmp(line, "deflicker", 9) && strncmp(line, "color_", 6) && strncmp(line, "scanlines", 9) &&
-             strncmp(line, "frequency=", 10)) ||
+             strncmp(line, "frequency=", 10) && strncmp(line, "gun_flash", 9)) ||
             used + n + 1 >= sizeof(conf_lines))
             continue;
         memcpy(conf_lines + used, line, n);
@@ -749,6 +756,102 @@ static int interlaced(void)
     return state;
 }
 
+/* ── O flash da pistola de luz (o mesmo da camada OpenGL) ─────────── */
+
+#define GUN_MAX 4
+#define GUN_FLASH_FRAMES 2
+static int gun_fd[GUN_MAX], gun_count;
+static int gun_mode = 1; /* 0 desligado, 1 pulse, 2 hold */
+static float gun_level = 1.0f;
+static int gun_frames, gun_held;
+
+static void read_gun_flash(void)
+{
+    char value[32];
+    gun_mode = 1;
+    if (conf_value("gun_flash", value, sizeof(value)))
+        gun_mode = !strcmp(value, "off") ? 0 : !strcmp(value, "hold") ? 2 : 1;
+    int level = conf_value("gun_flash_level", value, sizeof(value)) ? atoi(value) : 100;
+    gun_level = (level < 10 ? 10 : level > 100 ? 100 : level) / 100.0f;
+}
+
+/* gun_tagged N: o /dev/input/eventN e uma pistola (ID_INPUT_GUN no udev). */
+static int gun_tagged(int n)
+{
+    char path[64], line[128];
+    int gun = 0;
+    snprintf(path, sizeof(path), "/run/udev/data/c13:%d", 64 + n);
+    FILE *f = fopen(path, "r");
+    while (f && !gun && fgets(line, sizeof(line), f))
+        gun = !strncmp(line, "E:ID_INPUT_GUN=1", 16);
+    if (f)
+        fclose(f);
+    return gun;
+}
+
+static void gun_open(const char *path)
+{
+    int fd = gun_count < GUN_MAX ? open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC) : -1;
+    if (fd >= 0)
+        gun_fd[gun_count++] = fd;
+}
+
+static void gun_scan(void)
+{
+    char path[64];
+    const char *env = getenv("FLIPEROS_GUN_DEVICES");
+    while (gun_count > 0)
+        close(gun_fd[--gun_count]);
+    if (env && *env) {
+        char list[512], *save = NULL;
+        snprintf(list, sizeof(list), "%s", env);
+        for (char *p = strtok_r(list, ":", &save); p; p = strtok_r(NULL, ":", &save))
+            gun_open(p);
+        return;
+    }
+    for (int n = 0; n < 32 && gun_count < GUN_MAX; n++) {
+        if (gun_tagged(n)) {
+            snprintf(path, sizeof(path), "/dev/input/event%d", n);
+            gun_open(path);
+        }
+    }
+}
+
+/* gun_flash: o brilho do flash neste quadro (0: sem flash). Sem pistola
+ * aberta, procura uma a cada 120 quadros; a que sai (ENODEV) e procurada de
+ * novo. */
+static float gun_flash(void)
+{
+    static int frames;
+    struct input_event ev;
+    if (!gun_mode)
+        return 0.0f;
+    if (gun_count <= 0 && !(frames++ % 120))
+        gun_scan();
+    for (int i = 0; i < gun_count; i++) {
+        ssize_t n;
+        while ((n = read(gun_fd[i], &ev, sizeof(ev))) == (ssize_t)sizeof(ev)) {
+            if (ev.type == EV_KEY && ev.code == BTN_LEFT && ev.value == 1)
+                gun_held = 1, gun_frames = GUN_FLASH_FRAMES;
+            else if (ev.type == EV_KEY && ev.code == BTN_LEFT && ev.value == 0)
+                gun_held = 0;
+        }
+        if (n < 0 && errno == ENODEV) {
+            while (gun_count > 0)
+                close(gun_fd[--gun_count]);
+            gun_held = 0;
+            break;
+        }
+    }
+    if (gun_mode == 2 && gun_held)
+        return gun_level;
+    if (gun_frames > 0) {
+        gun_frames--;
+        return gun_level;
+    }
+    return 0.0f;
+}
+
 /* filter_wanted: o que fazer neste quadro: 1 = o filtro de flicker, 2 = a matriz
  * de cor, 4 = as scanlines (0 = nada). A cada 30 quadros rele o fliperos.conf
  * (quando muda) e os arquivos dos previews e do calibrador. */
@@ -764,6 +867,7 @@ static int filter_wanted(void)
         read_level();
         read_matrix();
         read_scanlines();
+        read_gun_flash();
         init = 1;
     } else if (!(++frames % 30)) {
         int changed = conf_changed();
@@ -775,6 +879,8 @@ static int filter_wanted(void)
             read_matrix();
         if (changed || getenv("FLIPEROS_SCANLINES_FILE"))
             read_scanlines();
+        if (changed)
+            read_gun_flash();
     }
     return (!level_off && interlaced() ? 1 : 0) | (matrix_on ? 2 : 0) | (scan_on ? 4 : 0);
 }
@@ -858,7 +964,7 @@ static int osd_visible(void)
     X(CmdCopyImage) X(CmdBeginRenderPass) X(CmdEndRenderPass) X(CmdBindPipeline) X(CmdBindDescriptorSets) \
     X(CmdPushConstants) X(CmdSetViewport) X(CmdSetScissor) X(CmdDraw) X(CreateFence) X(DestroyFence) X(WaitForFences) \
     X(ResetFences) X(CreateSemaphore) X(DestroySemaphore) X(QueueSubmit) X(CreateBuffer) X(DestroyBuffer) \
-    X(GetBufferMemoryRequirements) X(BindBufferMemory) X(MapMemory) X(CmdCopyBufferToImage)
+    X(GetBufferMemoryRequirements) X(BindBufferMemory) X(MapMemory) X(CmdCopyBufferToImage) X(CmdClearAttachments)
 
 /* Os ponteiros vem do GetDeviceProcAddr, com o tipo de cada chamada na hora de
  * usar (o macro V). */
@@ -961,6 +1067,8 @@ typedef struct Chain {
     VkCommandBuffer commands[MAX_IMAGES];
     Handle copy, copy_memory, copy_view, sampler, set_layout, descriptor_pool, descriptor_set, pipeline_layout;
     Handle render_pass, pipeline, command_pool;
+    /* O flash da pistola: a imagem pronta chega e sai pronta, so limpa. */
+    Handle flash_pass;
     /* A OSD: a imagem dela, o buffer de onde ela e copiada e a passada que
      * desenha por cima do quadro. */
     Handle osd_image, osd_memory, osd_view, osd_buffer, osd_buffer_memory, osd_set, osd_pass, osd_pipeline;
@@ -1142,6 +1250,11 @@ static int chain_build(Chain *c, uint32_t family)
     SubpassDescription subpass = {0, 0, 0, NULL, 1, &reference, NULL, NULL, 0, NULL};
     RenderPassCreateInfo pass = {ST_RENDER_PASS_CREATE_INFO, NULL, 0, 1, &attachment, 1, &subpass, 2, pass_deps};
     CHECK(CREATE(RenderPass, RenderPassCreateInfo, pass, &c->render_pass));
+    /* A do flash: a imagem chega e sai pronta para a tela (como a da OSD). */
+    AttachmentDescription flash_attachment = {0, c->format, 1, LOAD_OP_LOAD, 0 /* store */, 2, 1, LAYOUT_PRESENT_SRC,
+                                              LAYOUT_PRESENT_SRC};
+    RenderPassCreateInfo flash_pass = {ST_RENDER_PASS_CREATE_INFO, NULL, 0, 1, &flash_attachment, 1, &subpass, 2, pass_deps};
+    CHECK(CREATE(RenderPass, RenderPassCreateInfo, flash_pass, &c->flash_pass));
 
     SamplerCreateInfo sampler = {ST_SAMPLER_CREATE_INFO, NULL, 0, 0, 0, 0, 2, 2, 2, 0, 0, 1, 0, 0, 0, 0, 0, 0};
     CHECK(CREATE(Sampler, SamplerCreateInfo, sampler, &c->sampler));
@@ -1233,6 +1346,7 @@ static void chain_free(Chain *c)
     DESTROY(DescriptorSetLayout, c->set_layout);
     DESTROY(Sampler, c->sampler);
     DESTROY(RenderPass, c->render_pass);
+    DESTROY(RenderPass, c->flash_pass);
     DESTROY(ImageView, c->copy_view);
     DESTROY(Image, c->copy);
     if (c->copy_memory)
@@ -1244,7 +1358,23 @@ static void chain_free(Chain *c)
 
 /* chain_record: a OSD por cima da imagem pronta (osd; upload: a imagem dela
  * mudou), depois a copia e o desenho de volta pelo filtro (what, 0 = sem filtro). */
-static int chain_record(Chain *c, uint32_t index, int what, int osd, int upload)
+/* flash_record: o flash da pistola por cima de tudo, a imagem inteira clara. */
+static void flash_record(Chain *c, VkCommandBuffer cmd, uint32_t index, float flash)
+{
+    Dev *d = c->dev;
+    if (flash <= 0.0f || !d->vk.CmdClearAttachments)
+        return;
+    Rect2D area = {{0, 0}, {c->width, c->height}};
+    RenderPassBeginInfo pass = {ST_RENDER_PASS_BEGIN_INFO, NULL, c->flash_pass, c->framebuffers[index], area, 0, NULL};
+    ClearAttachment clear = {ASPECT_COLOR, 0, {flash, flash, flash, 1.0f}};
+    ClearRect rect = {area, 0, 1};
+    V(void, CmdBeginRenderPass, VkCommandBuffer, const RenderPassBeginInfo *, uint32_t)(cmd, &pass, 0);
+    V(void, CmdClearAttachments, VkCommandBuffer, uint32_t, const ClearAttachment *, uint32_t, const ClearRect *)(
+        cmd, 1, &clear, 1, &rect);
+    V(void, CmdEndRenderPass, VkCommandBuffer)(cmd);
+}
+
+static int chain_record(Chain *c, uint32_t index, int what, int osd, int upload, float flash)
 {
     Dev *d = c->dev;
     VkCommandBuffer cmd = c->commands[index];
@@ -1282,8 +1412,10 @@ static int chain_record(Chain *c, uint32_t index, int what, int osd, int upload)
         V(void, CmdDraw, VkCommandBuffer, uint32_t, uint32_t, uint32_t, uint32_t)(cmd, 3, 1, 0, 0);
         V(void, CmdEndRenderPass, VkCommandBuffer)(cmd);
     }
-    if (!what)
+    if (!what) {
+        flash_record(c, cmd, index, flash);
         return V(VkResult, EndCommandBuffer, VkCommandBuffer)(cmd) == VK_SUCCESS;
+    }
 
     ImageMemoryBarrier before[2] = {
         {ST_IMAGE_MEMORY_BARRIER, NULL, ACCESS_MEMORY_WRITE, ACCESS_TRANSFER_READ, LAYOUT_PRESENT_SRC, LAYOUT_TRANSFER_SRC, ~0u, ~0u,
@@ -1325,6 +1457,7 @@ static int chain_record(Chain *c, uint32_t index, int what, int osd, int upload)
         cmd, c->pipeline_layout, SHADER_FRAGMENT, 0, sizeof(push), push);
     V(void, CmdDraw, VkCommandBuffer, uint32_t, uint32_t, uint32_t, uint32_t)(cmd, 3, 1, 0, 0);
     V(void, CmdEndRenderPass, VkCommandBuffer)(cmd);
+    flash_record(c, cmd, index, flash);
     return V(VkResult, EndCommandBuffer, VkCommandBuffer)(cmd) == VK_SUCCESS;
 }
 
@@ -1395,7 +1528,7 @@ static int osd_upload(Chain *c)
  * Imagem que nao passou (sem recursos, erro) vai direto: se nenhuma passou, o
  * present segue como veio. */
 static uint32_t filter_present(Dev *d, VkQueue queue, const PresentInfo *info, Handle *waits, int what_all, int osd,
-                               int *filtered)
+                               float flash, int *filtered)
 {
     uint32_t done = 0, wait_count = info->waitSemaphoreCount;
     const Handle *wait = info->pWaitSemaphores;
@@ -1409,7 +1542,7 @@ static uint32_t filter_present(Dev *d, VkQueue queue, const PresentInfo *info, H
             scan_rows((int)c->height, &rows, &dark);
         if (rows < 2.0f)
             what &= ~4;
-        if (!what && !osd)
+        if (!what && !osd && flash <= 0.0f)
             continue;
         if (!c || !chain_ready(c, d, queue) || index >= c->count) {
             if (osd)
@@ -1420,11 +1553,11 @@ static uint32_t filter_present(Dev *d, VkQueue queue, const PresentInfo *info, H
         if (upload)
             c->osd_ready = 1;
         int draw = osd && c->osd_ready;
-        if (!what && !draw)
+        if (!what && !draw && flash <= 0.0f)
             continue;
         V(VkResult, WaitForFences, VkDevice, uint32_t, const Handle *, uint32_t, uint64_t)(d->device, 1, &c->fences[index], 1,
                                                                                            1000000000ull);
-        if (!chain_record(c, index, what, draw, upload))
+        if (!chain_record(c, index, what, draw, upload, flash))
             continue;
         V(VkResult, ResetFences, VkDevice, uint32_t, const Handle *)(d->device, 1, &c->fences[index]);
         uint32_t stages[16];
@@ -1673,8 +1806,9 @@ static VkResult layer_QueuePresentKHR(VkQueue queue, const void *present_info)
     PresentInfo mine = *info;
     Handle waits[MAX_IMAGES];
     int filtering = 0, what = filter_wanted(), osd = osd_visible();
-    if ((what || osd) && d->vk.QueueSubmit) {
-        uint32_t count = filter_present(d, queue, info, waits, what, osd, &filtering);
+    float flash = gun_flash();
+    if ((what || osd || flash > 0.0f) && d->vk.QueueSubmit) {
+        uint32_t count = filter_present(d, queue, info, waits, what, osd, flash, &filtering);
         if (count) {
             mine.waitSemaphoreCount = count;
             mine.pWaitSemaphores = waits;
@@ -1762,6 +1896,8 @@ NUM(MEMORY_HOST_VISIBLE, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT); NUM(MEMORY_HOST_C
 NUM(ACCESS_COLOR_READ, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT); NUM(ACCESS_MEMORY_READ, VK_ACCESS_MEMORY_READ_BIT);
 AT(ImageViewCreateInfo, subresourceRange, VkImageViewCreateInfo, subresourceRange);
 SAME(AttachmentDescription, VkAttachmentDescription); SAME(SubpassDescription, VkSubpassDescription);
+SAME(ClearAttachment, VkClearAttachment); AT(ClearAttachment, color, VkClearAttachment, clearValue);
+SAME(ClearRect, VkClearRect);
 SAME(SubpassDependency, VkSubpassDependency); SAME(RenderPassCreateInfo, VkRenderPassCreateInfo);
 SAME(FramebufferCreateInfo, VkFramebufferCreateInfo); SAME(SamplerCreateInfo, VkSamplerCreateInfo);
 AT(SamplerCreateInfo, unnormalizedCoordinates, VkSamplerCreateInfo, unnormalizedCoordinates);

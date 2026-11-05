@@ -93,6 +93,8 @@ settings_list() {
   fi
   printf 'osd|Video|On-screen menu|choice|%s|on=On;off=Off|Volume, filter, geometry and colour over any game: hold Start and Down for a second, or press Pause on a keyboard or Play/Pause on a remote.\n' \
     "$([[ $(conf_get osd 2> /dev/null) == off ]] && echo off || echo on)"
+  printf 'gun_flash|Joysticks|Light gun flash|choice|%s|pulse=Pulse (two light frames on each shot);hold=Hold (light while the trigger is held);off=Off|A CRT gun only finds its aim where the screen is lit: the flash lights it on a shot, so dark parts hit and off screen reloads. Counts at once, even in a game that is open.\n' \
+    "$(gunflash_mode)"
   # Audio Setup (o volume fica no Frontend, no gabinete desenhado).
   opts=""
   while IFS='|' read -r name desc; do
@@ -251,6 +253,9 @@ settings_set() {
       ;;
     mame_latency)
       audio_set_mame_latency "$value" || return 2
+      ;;
+    gun_flash)
+      gunflash_set "$value" || return 2
       ;;
     audio.test)
       audio_test
