@@ -1,0 +1,47 @@
+From: Ademir Terin Junior <juniorterin@gmail.com>
+Date: Thu, 5 Nov 2026 02:40:00 -0300
+Subject: [PATCH] Off the screen, both axes out of the calibrated range
+
+The gun's own off-screen report (x 0 or 1, y 5) went out as it came, and a
+range calibrated from below 5 on the Y axis has y 5 inside it. MAME clamps
+the aim to the range, so in Area 51 a shot off the screen became a shot at
+the top of the picture and did not reload (with the minimum moved above 5
+it reloaded, seen on the cabinet). Off the screen both axes now go out
+past the calibrated range and its overscan margin.
+---
+diff --git a/guncon2.c b/guncon2.c
+index bbea6f4..1dd2224 100644
+--- a/guncon2.c
++++ b/guncon2.c
+@@ -105,6 +105,21 @@ static bool guncon2_near_edge(struct input_dev *dev, int x, int y) {
+                         y < y_min + y_band || y > y_max - y_band);
+ }
+ 
++/*
++ * Off the screen, both axes out of the calibrated range and past its
++ * overscan margin. The gun's own off-screen report (x 0 or 1, y 5) can have
++ * y inside a range calibrated from below 5: MAME clamps the aim to the range,
++ * and Area 51 read such a shot as on the screen, at its top, and did not
++ * reload.
++ */
++static void guncon2_report_offscreen(struct input_dev *dev) {
++    int x_min = input_abs_get_min(dev, ABS_X), x_max = input_abs_get_max(dev, ABS_X);
++    int y_min = input_abs_get_min(dev, ABS_Y), y_max = input_abs_get_max(dev, ABS_Y);
++
++    input_report_abs(dev, ABS_X, x_min - (x_max - x_min) / 8 - 1);
++    input_report_abs(dev, ABS_Y, y_min - (y_max - y_min) / 8 - 1);
++}
++
+ struct gc_mode {
+     unsigned short a;
+     unsigned char b;
+@@ -172,8 +187,7 @@ static void guncon2_usb_irq(struct urb *urb) {
+                    guncon2_near_edge(guncon2->input_device, guncon2->seen_x, guncon2->seen_y) ||
+                    time_after(jiffies, guncon2->seen + msecs_to_jiffies(hold_ms))) {
+             offscreen = true;
+-            input_report_abs(guncon2->input_device, ABS_X, x);
+-            input_report_abs(guncon2->input_device, ABS_Y, y);
++            guncon2_report_offscreen(guncon2->input_device);
+         }
+ 
+         /* Buttons */
