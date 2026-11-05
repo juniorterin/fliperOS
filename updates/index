@@ -42,3 +42,4 @@
 39	6acae9e88c19cd58001ab79c5395d88baa5711b6	a6d36f516359e551b971e66ee1d6acfe24446505a7a662588accdb982d78d499	no	Desktop and emulators open again on fresh 0.18/0.19 installs
 40	7e8139aa8a5498603a6f8aa73f02a6003e427342	784b1474765d551379345d46ec192216bf39157754b86191f80150d79bac8e94	yes	Custom monitor menus match the games, light gun screen flash and GunCon 2 menu, GroovyMAME fixes
 41	00c4d3b0feb416b4e0828d67aa960c19124ecbb1	4f4bc2afe083f59d740c3f2c424c9bc5163d1d959e132049bba9be7f703eeb01	no	GroovyMAME in KMS when opened from the frontend
+42	c0d446ded5b512709132da4e672a45cf24759364	bf8716a10dc17456b75dc4affd3e308135f513545c03cebf1c0c316eff43af56	no	Packages from the latest ISO over the network: Attract-Mode Plus fliperos4, GroovyMAME KMS SDL
