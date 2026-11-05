@@ -1,0 +1,74 @@
+From: Ademir Terin Junior <juniorterin@gmail.com>
+Date: Thu, 5 Nov 2026 02:10:00 -0300
+Subject: [PATCH] A miss right after an aim near the edge is off screen at once
+
+The gun sends the same report for a dark part of the picture and for an
+aim off the screen (x 0 or 1, y 5; the sixth byte is always 0, seen with
+usbmon on the cabinet), so a miss kept the last aim for hold_ms either way:
+a shot fired right after leaving the screen landed on that aim, and Area 51
+hardly reloaded. To point off the screen the gun crosses its edge, so when
+the last report that saw the screen was within edge_pct (12) of the
+calibrated range from an edge, the miss is off screen at once; in the
+middle of the picture the hold still applies.
+---
+diff --git a/guncon2.c b/guncon2.c
+index a6858ad..bbea6f4 100644
+--- a/guncon2.c
++++ b/guncon2.c
+@@ -49,6 +49,18 @@ static unsigned int hold_ms = 150;
+ module_param(hold_ms, uint, 0644);
+ MODULE_PARM_DESC(hold_ms, "ms a missed beam keeps the last on-screen aim (0 = off)");
+ 
++/*
++ * A missed beam over a dark part of the picture and an aim off the screen
++ * send the same report, but to point off the screen the gun crosses its
++ * edge. When the last report that saw the screen was within edge_pct of the
++ * calibrated range from an edge, the miss is taken as off screen at once, so
++ * a shot fired right after leaving the screen reloads instead of landing on
++ * the held aim; in the middle of the picture the hold still applies.
++ */
++static unsigned int edge_pct = 12;
++module_param(edge_pct, uint, 0644);
++MODULE_PARM_DESC(edge_pct, "a miss right after an aim this close to an edge (% of the range) is off screen at once (0 = off)");
++
+ /*
+  * A pointer cannot leave the screen: through the X server (and so in Flycast,
+  * Supermodel, RetroArch) an aim off the screen stops at its edge, and a game
+@@ -69,6 +81,7 @@ struct guncon2 {
+     bool is_open;
+     char phys[64];
+     unsigned long seen; /* jiffies of the last report that saw the screen */
++    int seen_x, seen_y; /* and where it was */
+     struct work_struct clear_halt; /* a stalled endpoint, cleared out of the irq */
+ };
+ 
+@@ -82,6 +95,16 @@ static bool guncon2_sees_screen(struct input_dev *dev, int x, int y) {
+            y >= y_min - y_margin && y <= y_max + y_margin;
+ }
+ 
++/* Within edge_pct of the calibrated range from one of its edges. */
++static bool guncon2_near_edge(struct input_dev *dev, int x, int y) {
++    int x_min = input_abs_get_min(dev, ABS_X), x_max = input_abs_get_max(dev, ABS_X);
++    int y_min = input_abs_get_min(dev, ABS_Y), y_max = input_abs_get_max(dev, ABS_Y);
++    int x_band = (x_max - x_min) * (int)edge_pct / 100, y_band = (y_max - y_min) * (int)edge_pct / 100;
++
++    return edge_pct && (x < x_min + x_band || x > x_max - x_band ||
++                        y < y_min + y_band || y > y_max - y_band);
++}
++
+ struct gc_mode {
+     unsigned short a;
+     unsigned char b;
+@@ -141,9 +164,12 @@ static void guncon2_usb_irq(struct urb *urb) {
+         offscreen = false;
+         if (guncon2_sees_screen(guncon2->input_device, x, y)) {
+             guncon2->seen = jiffies;
++            guncon2->seen_x = x;
++            guncon2->seen_y = y;
+             input_report_abs(guncon2->input_device, ABS_X, x);
+             input_report_abs(guncon2->input_device, ABS_Y, y);
+         } else if (!hold_ms ||
++                   guncon2_near_edge(guncon2->input_device, guncon2->seen_x, guncon2->seen_y) ||
+                    time_after(jiffies, guncon2->seen + msecs_to_jiffies(hold_ms))) {
+             offscreen = true;
+             input_report_abs(guncon2->input_device, ABS_X, x);
